@@ -85,7 +85,22 @@
       "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx tsc --noEmit 2>&1 | tail -10)",
       "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -10)",
       "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -10)",
-      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1 | tail -10)"
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1 | tail -10)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp\" && npx tsc --noEmit -p packages/shared/tsconfig.json 2>&1 | head -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run src/modules/accounts/__tests__/accounts.service.spec.ts 2>&1 | tail -30)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run src/modules/accounts/__tests__/accounts.service.spec.ts 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run test/accounts-role.e2e-spec.ts 2>&1 | tail -25)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --reporter=verbose test/accounts-role.e2e-spec.ts 2>&1 | head -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts test/accounts-role.e2e-spec.ts 2>&1 | tail -30)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts test/accounts-role.e2e-spec.ts 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run 2>&1 | tail -10)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -10)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/change-role-dialog.test.tsx 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/change-role-dialog.test.tsx 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/account-list-page.test.tsx 2>&1 | tail -25)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/account-list-page.test.tsx 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/account-list-page.test.tsx 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx tsc --noEmit 2>&1 | tail -5; echo \"---\"; cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx tsc --noEmit 2>&1 | tail -5)"
     ]
   }
 }
