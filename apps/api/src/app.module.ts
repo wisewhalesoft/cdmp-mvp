@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
+import { AccountsModule } from './modules/accounts/accounts.module';
 import { User } from './database/entities/user.entity';
 
 @Module({
@@ -46,6 +47,7 @@ import { User } from './database/entities/user.entity';
       },
     ]),
     AuthModule,
+    AccountsModule,
   ],
   providers: [
     {

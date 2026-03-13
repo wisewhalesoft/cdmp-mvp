@@ -7,7 +7,12 @@ import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
-import { ADMIN_ACTIVE, ADMIN_DISABLED } from '../../../../test/seeds/test-data';
+import {
+  ADMIN_ACTIVE,
+  ADMIN_DISABLED,
+  USER_ACTIVE,
+  USER_DISABLED,
+} from '../../../../test/seeds/test-data';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -181,6 +186,102 @@ describe('AuthService', () => {
     } catch (error: any) {
       expect(error.response.error).toBe(ERROR_CODES.ACCOUNT_DISABLED);
       expect(error.response.message).toBe(ERROR_MESSAGES.ACCOUNT_DISABLED);
+    }
+  });
+
+  // TS-F002-001: User 正確憑證登入 → token + user.role='user'
+  it('should return token and user info for valid user credentials', async () => {
+    mockUserRepository.findOne.mockResolvedValue({
+      ...USER_ACTIVE,
+      password_hash: hashedPassword,
+    });
+
+    const result = await authService.login({
+      email: USER_ACTIVE.email,
+      password: USER_ACTIVE.password,
+    });
+
+    expect(result).toHaveProperty('token');
+    expect(result.user.id).toBe(USER_ACTIVE.id);
+    expect(result.user.email).toBe(USER_ACTIVE.email);
+    expect(result.user.name).toBe(USER_ACTIVE.name);
+    expect(result.user.role).toBe('user');
+    expect(result.token).toBe('mock-jwt-token');
+
+    expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
+      userId: USER_ACTIVE.id,
+      role: 'user',
+      rememberMe: false,
+    });
+  });
+
+  // TS-F002-002: User rememberMe=true → JWT generateToken 帶 rememberMe=true
+  it('should pass rememberMe=true to JWT generation for user', async () => {
+    mockUserRepository.findOne.mockResolvedValue({
+      ...USER_ACTIVE,
+      password_hash: hashedPassword,
+    });
+
+    await authService.login({
+      email: USER_ACTIVE.email,
+      password: USER_ACTIVE.password,
+      rememberMe: true,
+    });
+
+    expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
+      userId: USER_ACTIVE.id,
+      role: 'user',
+      rememberMe: true,
+    });
+  });
+
+  // TS-F002-005: User 帳號已停用 → ForbiddenException
+  it('should throw ForbiddenException for disabled user account', async () => {
+    mockUserRepository.findOne.mockResolvedValue({
+      ...USER_DISABLED,
+      password_hash: hashedPassword,
+    });
+
+    await expect(
+      authService.login({
+        email: USER_DISABLED.email,
+        password: USER_DISABLED.password,
+      }),
+    ).rejects.toThrow(ForbiddenException);
+
+    try {
+      await authService.login({
+        email: USER_DISABLED.email,
+        password: USER_DISABLED.password,
+      });
+    } catch (error: any) {
+      expect(error.response.error).toBe(ERROR_CODES.ACCOUNT_DISABLED);
+      expect(error.response.message).toBe(ERROR_MESSAGES.ACCOUNT_DISABLED);
+    }
+  });
+
+  // TS-F002-006: User 錯誤密碼 → UnauthorizedException
+  it('should throw UnauthorizedException for wrong user password', async () => {
+    mockUserRepository.findOne.mockResolvedValue({
+      ...USER_ACTIVE,
+      password_hash: hashedPassword,
+    });
+
+    await expect(
+      authService.login({
+        email: USER_ACTIVE.email,
+        password: 'WrongPassword123',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+
+    try {
+      await authService.login({
+        email: USER_ACTIVE.email,
+        password: 'WrongPassword123',
+      });
+    } catch (error: any) {
+      expect(error.response.error).toBe(ERROR_CODES.INVALID_CREDENTIALS);
+      expect(error.response.message).toBe(ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
   });
 

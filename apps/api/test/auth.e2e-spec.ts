@@ -8,10 +8,16 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { AuthModule } from '@/modules/auth/auth.module';
+import { AccountsModule } from '@/modules/accounts/accounts.module';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
-import { ADMIN_ACTIVE, ADMIN_DISABLED } from './seeds/test-data';
+import {
+  ADMIN_ACTIVE,
+  ADMIN_DISABLED,
+  USER_ACTIVE,
+  USER_DISABLED,
+} from './seeds/test-data';
 
 async function createTestApp(throttleLimit: number): Promise<INestApplication> {
   const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -38,6 +44,7 @@ async function createTestApp(throttleLimit: number): Promise<INestApplication> {
         },
       ]),
       AuthModule,
+      AccountsModule,
     ],
     providers: [
       {
@@ -80,6 +87,22 @@ async function createTestApp(throttleLimit: number): Promise<INestApplication> {
       password_hash: hashedPassword,
       role: ADMIN_DISABLED.role,
       status: ADMIN_DISABLED.status,
+    }),
+    userRepo.create({
+      id: USER_ACTIVE.id,
+      name: USER_ACTIVE.name,
+      email: USER_ACTIVE.email,
+      password_hash: hashedPassword,
+      role: USER_ACTIVE.role,
+      status: USER_ACTIVE.status,
+    }),
+    userRepo.create({
+      id: USER_DISABLED.id,
+      name: USER_DISABLED.name,
+      email: USER_DISABLED.email,
+      password_hash: hashedPassword,
+      role: USER_DISABLED.role,
+      status: USER_DISABLED.status,
     }),
   ]);
 
@@ -196,6 +219,120 @@ describe('Auth E2E - Functional (POST /api/v1/auth/login)', () => {
     const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
     const diff = payload.exp - payload.iat;
     expect(diff).toBe(30 * 24 * 60 * 60); // 30 days
+  });
+});
+
+describe('Auth E2E - F002 User Login (POST /api/v1/auth/login)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    app = await createTestApp(100);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F002-001: User 正確憑證 → 200, role=user
+  it('should return 200 with token and user for valid user credentials', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('token');
+    expect(response.body.user.id).toBe(USER_ACTIVE.id);
+    expect(response.body.user.email).toBe(USER_ACTIVE.email);
+    expect(response.body.user.role).toBe('user');
+    expect(response.body.user).not.toHaveProperty('password_hash');
+  });
+
+  // TS-F002-002: User rememberMe → 200, JWT 30d
+  it('should return 200 with 30d JWT expiry for user rememberMe=true', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+        rememberMe: true,
+      });
+
+    expect(response.status).toBe(200);
+    const token = response.body.token;
+    const payloadBase64 = token.split('.')[1];
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+    const diff = payload.exp - payload.iat;
+    expect(diff).toBe(30 * 24 * 60 * 60);
+  });
+
+  // TS-F002-005: User 停用 → 403
+  it('should return 403 for disabled user account', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_DISABLED.email,
+        password: USER_DISABLED.password,
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('AUTH_ACCOUNT_DISABLED');
+  });
+
+  // TS-F002-006: User 錯誤密碼 → 401
+  it('should return 401 for wrong user password', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: 'WrongPassword',
+      });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('AUTH_INVALID_CREDENTIALS');
+  });
+
+  // TS-F002-003: User token 存取 Admin API → 403 FORBIDDEN
+  it('should return 403 when user token accesses admin-only endpoint', async () => {
+    // First login as user to get token
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+    const userToken = loginResponse.body.token;
+
+    // Try to access admin-only endpoint
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/accounts')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('AUTH_FORBIDDEN');
+    expect(response.body.message).toBe('您沒有權限執行此操作。');
+  });
+
+  it('should allow admin token to access admin-only endpoint', async () => {
+    // Login as admin
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: ADMIN_ACTIVE.email,
+        password: ADMIN_ACTIVE.password,
+      });
+
+    const adminToken = loginResponse.body.token;
+
+    // Access admin-only endpoint
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/accounts')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
   });
 });
 
