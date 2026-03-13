@@ -73,6 +73,20 @@ export interface UpdateStatusResponse {
   updated_at: string;
 }
 
+// F008: Change Role
+export interface UpdateRoleRequest {
+  role: 'admin' | 'user';
+}
+
+export interface UpdateRoleResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  updated_at: string;
+}
+
 // F005: Account List
 export interface AccountListQuery {
   page?: number;
@@ -111,6 +125,8 @@ export const ERROR_CODES = {
   ACCOUNT_EMAIL_IN_USE: 'ACCOUNT_EMAIL_IN_USE',
   ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
   ACCOUNT_SELF_DISABLE: 'ACCOUNT_SELF_DISABLE',
+  ACCOUNT_LAST_ADMIN: 'ACCOUNT_LAST_ADMIN',
+  VALIDATION_INVALID_ROLE: 'VALIDATION_INVALID_ROLE',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -128,4 +144,6 @@ export const ERROR_MESSAGES = {
   ACCOUNT_EMAIL_IN_USE: '此 Email 已被使用',
   ACCOUNT_NOT_FOUND: '找不到指定的帳號',
   ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
+  ACCOUNT_LAST_ADMIN: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
+  VALIDATION_INVALID_ROLE: '角色必須為 admin 或 user',
 } as const;

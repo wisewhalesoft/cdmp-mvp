@@ -6,6 +6,7 @@ import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
 @Controller('accounts')
@@ -38,5 +39,13 @@ export class AccountsController {
   ) {
     const currentUserId = req.user.userId;
     return this.accountsService.toggleStatus(id, dto.status, currentUserId);
+  }
+
+  @Patch(':id/role')
+  async changeRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateRoleDto,
+  ) {
+    return this.accountsService.changeRole(id, dto.role);
   }
 }

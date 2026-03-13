@@ -43,6 +43,15 @@ export interface AccountListResult {
   limit: number;
 }
 
+export interface ChangeRoleResult {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  updated_at: Date;
+}
+
 export interface ToggleStatusResult {
   id: string;
   name: string;
@@ -209,6 +218,56 @@ export class AccountsService {
 
     // Update status
     user.status = status;
+    const saved = await this.userRepository.save(user);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      email: saved.email,
+      role: saved.role,
+      status: saved.status,
+      updated_at: saved.updated_at,
+    };
+  }
+
+  async changeRole(
+    id: string,
+    role: 'admin' | 'user',
+  ): Promise<ChangeRoleResult> {
+    // Find the account
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ACCOUNT_NOT_FOUND,
+        message: ERROR_MESSAGES.ACCOUNT_NOT_FOUND,
+      });
+    }
+
+    // Idempotent: same role → return immediately without admin count check
+    if (user.role === role) {
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        updated_at: user.updated_at,
+      };
+    }
+
+    // Last Admin protection: only when downgrading admin → user
+    if (user.role === 'admin' && role === 'user') {
+      const adminCount = await this.userRepository.count({ where: { role: 'admin' } });
+      if (adminCount <= 1) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.ACCOUNT_LAST_ADMIN,
+          message: ERROR_MESSAGES.ACCOUNT_LAST_ADMIN,
+        });
+      }
+    }
+
+    // Update role
+    user.role = role;
     const saved = await this.userRepository.save(user);
 
     return {
