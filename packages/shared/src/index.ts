@@ -43,6 +43,31 @@ export interface CreateAccountResponse {
   created_at: string;
 }
 
+// F005: Account List
+export interface AccountListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: 'admin' | 'user';
+  status?: 'active' | 'disabled';
+}
+
+export interface AccountListItem {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  created_at: string;
+}
+
+export interface AccountListResponse {
+  data: AccountListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
