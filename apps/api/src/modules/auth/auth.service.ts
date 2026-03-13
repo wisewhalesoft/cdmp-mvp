@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { User } from '@/database/entities/user.entity';
+import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
@@ -26,7 +28,10 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(TokenBlocklist)
+    private readonly tokenBlocklistRepository: Repository<TokenBlocklist>,
     private readonly jwtUtil: JwtUtil,
+    private readonly jwtService: JwtService,
   ) {}
 
   async login(dto: LoginDto): Promise<LoginResult> {
@@ -84,5 +89,34 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  async logout(token: string, userId: string): Promise<void> {
+    // Decode JWT to get expiration time
+    const decoded = this.jwtService.decode(token) as { exp?: number };
+    const expiresAt = decoded?.exp
+      ? new Date(decoded.exp * 1000)
+      : new Date(Date.now() + 8 * 60 * 60 * 1000);
+
+    // Upsert: ignore if token already in blocklist (idempotent)
+    const existing = await this.tokenBlocklistRepository.findOne({
+      where: { token },
+    });
+    if (!existing) {
+      await this.tokenBlocklistRepository.save(
+        this.tokenBlocklistRepository.create({
+          token,
+          user_id: userId,
+          expires_at: expiresAt,
+        }),
+      );
+    }
+  }
+
+  async isTokenRevoked(token: string): Promise<boolean> {
+    const entry = await this.tokenBlocklistRepository.findOne({
+      where: { token },
+    });
+    return entry !== null;
   }
 }

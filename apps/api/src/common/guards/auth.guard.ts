@@ -5,20 +5,28 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Request } from 'express';
+import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    @InjectRepository(TokenBlocklist)
+    private readonly tokenBlocklistRepository: Repository<TokenBlocklist>,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const authHeader = request.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException({
-        error: 'AUTH_UNAUTHORIZED',
-        message: '請先登入。',
+        error: ERROR_CODES.TOKEN_MISSING,
+        message: ERROR_MESSAGES.TOKEN_MISSING,
       });
     }
 
@@ -26,12 +34,37 @@ export class AuthGuard implements CanActivate {
 
     try {
       const payload = this.jwtService.verify(token);
+
+      // Check token blocklist
+      const revoked = await this.tokenBlocklistRepository.findOne({
+        where: { token },
+      });
+      if (revoked) {
+        throw new UnauthorizedException({
+          error: ERROR_CODES.TOKEN_REVOKED,
+          message: ERROR_MESSAGES.TOKEN_REVOKED,
+        });
+      }
+
       (request as any).user = {
         userId: payload.userId,
         role: payload.role,
       };
       return true;
-    } catch {
+    } catch (error: any) {
+      // Re-throw if already an UnauthorizedException (blocklist check)
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      // Differentiate JWT errors
+      if (error?.name === 'TokenExpiredError') {
+        throw new UnauthorizedException({
+          error: ERROR_CODES.TOKEN_EXPIRED,
+          message: ERROR_MESSAGES.TOKEN_EXPIRED,
+        });
+      }
+
       throw new UnauthorizedException({
         error: 'AUTH_UNAUTHORIZED',
         message: '請先登入。',

@@ -6,6 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { User } from './database/entities/user.entity';
+import { TokenBlocklist } from './database/entities/token-blocklist.entity';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { User } from './database/entities/user.entity';
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User],
+            entities: [User, TokenBlocklist],
             synchronize: true,
           };
         }
@@ -34,7 +35,7 @@ import { User } from './database/entities/user.entity';
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User],
+          entities: [User, TokenBlocklist],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },
