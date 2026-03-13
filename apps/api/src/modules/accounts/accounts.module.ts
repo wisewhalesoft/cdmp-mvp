@@ -3,11 +3,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { AccountsController } from './accounts.controller';
+import { AccountsService } from './accounts.service';
+import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TokenBlocklist]),
+    TypeOrmModule.forFeature([User, TokenBlocklist]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -16,5 +18,6 @@ import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
     }),
   ],
   controllers: [AccountsController],
+  providers: [AccountsService],
 })
 export class AccountsModule {}
