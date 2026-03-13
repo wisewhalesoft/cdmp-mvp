@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Database, LogOut, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getAccounts, updateAccountStatus } from '@/api/accounts';
+import { getAccounts, updateAccountStatus, updateAccountRole } from '@/api/accounts';
 import { Button } from '@/components/ui/button';
 import { CreateAccountModal } from './create-account-modal';
 import { EditAccountModal } from './edit-account-modal';
 import { ToggleStatusDialog } from './toggle-status-dialog';
+import { ChangeRoleDialog } from './change-role-dialog';
 import type { AccountListItem } from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
@@ -54,6 +55,9 @@ export function AccountListPage() {
   const [toggleTarget, setToggleTarget] = useState<AccountListItem | null>(null);
   const [toggleMode, setToggleMode] = useState<'disable' | 'enable'>('disable');
   const [toggleLoading, setToggleLoading] = useState(false);
+  const [showRoleDialog, setShowRoleDialog] = useState(false);
+  const [roleTarget, setRoleTarget] = useState<AccountListItem | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
 
   // List state
   const [accounts, setAccounts] = useState<AccountListItem[]>([]);
@@ -157,6 +161,26 @@ export function AccountListPage() {
       // Error handling — graceful degradation
     } finally {
       setToggleLoading(false);
+    }
+  };
+
+  const handleRoleClick = (account: AccountListItem) => {
+    setRoleTarget(account);
+    setShowRoleDialog(true);
+  };
+
+  const handleRoleConfirm = async (newRole: 'admin' | 'user') => {
+    if (!roleTarget) return;
+    setRoleLoading(true);
+    try {
+      await updateAccountRole(roleTarget.id, { role: newRole });
+      setShowRoleDialog(false);
+      setRoleTarget(null);
+      fetchAccounts();
+    } catch {
+      // Error handling — graceful degradation
+    } finally {
+      setRoleLoading(false);
     }
   };
 
@@ -326,7 +350,12 @@ export function AccountListPage() {
                                 啟用
                               </button>
                             )}
-                            <button className="text-xs text-gray-400 font-medium">變更角色</button>
+                            <button
+                              onClick={() => handleRoleClick(account)}
+                              className="text-xs text-primary hover:text-blue-700 font-medium"
+                            >
+                              變更角色
+                            </button>
                             <button className="text-xs text-primary hover:text-blue-700 font-medium">
                               重設密碼
                             </button>
@@ -394,6 +423,16 @@ export function AccountListPage() {
         loading={toggleLoading}
         onConfirm={handleToggleConfirm}
         onCancel={() => { setShowToggleDialog(false); setToggleTarget(null); }}
+      />
+
+      {/* Change Role Dialog */}
+      <ChangeRoleDialog
+        open={showRoleDialog}
+        accountName={roleTarget?.name ?? ''}
+        currentRole={roleTarget?.role ?? 'user'}
+        loading={roleLoading}
+        onConfirm={handleRoleConfirm}
+        onCancel={() => { setShowRoleDialog(false); setRoleTarget(null); }}
       />
     </div>
   );

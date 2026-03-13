@@ -5,6 +5,8 @@ import type {
   UpdateAccountResponse,
   UpdateStatusRequest,
   UpdateStatusResponse,
+  UpdateRoleRequest,
+  UpdateRoleResponse,
   AccountListQuery,
   AccountListResponse,
 } from '@cdmp/shared';
@@ -34,5 +36,10 @@ export async function updateAccount(id: string, data: UpdateAccountRequest): Pro
 
 export async function updateAccountStatus(id: string, data: UpdateStatusRequest): Promise<UpdateStatusResponse> {
   const response = await apiClient.patch<UpdateStatusResponse>(`/accounts/${id}/status`, data);
+  return response.data;
+}
+
+export async function updateAccountRole(id: string, data: UpdateRoleRequest): Promise<UpdateRoleResponse> {
+  const response = await apiClient.patch<UpdateRoleResponse>(`/accounts/${id}/role`, data);
   return response.data;
 }
