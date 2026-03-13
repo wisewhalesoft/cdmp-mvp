@@ -17,6 +17,7 @@ const mockedGetAccounts = vi.mocked(accountsApi.getAccounts);
 const mockedCreateAccount = vi.mocked(accountsApi.createAccount);
 const mockedUpdateAccount = vi.mocked(accountsApi.updateAccount);
 const mockedUpdateAccountStatus = vi.mocked(accountsApi.updateAccountStatus);
+const mockedUpdateAccountRole = vi.mocked(accountsApi.updateAccountRole);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -449,6 +450,97 @@ describe('AccountListPage', () => {
       });
 
       expect(mockedUpdateAccountStatus).toHaveBeenCalledWith('3', { status: 'active' });
+    });
+  });
+
+  describe('變更角色整合 (F008)', () => {
+    it('顯示「變更角色」按鈕', async () => {
+      await renderAndLoad();
+      const roleButtons = screen.getAllByText('變更角色');
+      expect(roleButtons.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('點擊「變更角色」按鈕開啟角色變更對話框', async () => {
+      await renderAndLoad();
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[0]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(screen.getByText('變更角色', { selector: 'h3' })).toBeInTheDocument();
+      expect(screen.getByText('目前角色')).toBeInTheDocument();
+    });
+
+    it('對話框顯示正確的帳號名稱', async () => {
+      await renderAndLoad();
+      // Click role change for the second row (Normal User)
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // The dialog shows the account name next to "帳號名稱" label
+      const label = screen.getByText('帳號名稱');
+      const nameText = label.parentElement?.querySelector('p');
+      expect(nameText?.textContent).toBe('Normal User');
+    });
+
+    it('確認變更後呼叫 updateAccountRole API 並刷新清單', async () => {
+      mockedUpdateAccountRole.mockResolvedValue({
+        id: '2',
+        name: 'Normal User',
+        email: 'user@cdmp.test',
+        role: 'admin',
+        status: 'active',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad();
+
+      const initialCalls = mockedGetAccounts.mock.calls.length;
+
+      // Click role change for Normal User (second row, role=user)
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // Confirm in dialog — click "確認變更"
+      fireEvent.click(screen.getByRole('button', { name: '確認變更' }));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountRole).toHaveBeenCalledWith('2', { role: 'admin' });
+      // List should be refreshed
+      expect(mockedGetAccounts.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+
+    it('取消對話框不呼叫 API', async () => {
+      await renderAndLoad();
+
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[0]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // Click cancel
+      fireEvent.click(screen.getByRole('button', { name: '取消' }));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(mockedUpdateAccountRole).not.toHaveBeenCalled();
     });
   });
 

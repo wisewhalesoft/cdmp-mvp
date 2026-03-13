@@ -12,6 +12,7 @@ describe('AccountsService', () => {
     findOne: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     save: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -19,6 +20,7 @@ describe('AccountsService', () => {
       findOne: vi.fn(),
       create: vi.fn((data) => ({ ...data, id: 'new-uuid', created_at: new Date() })),
       save: vi.fn((entity) => Promise.resolve(entity)),
+      count: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -329,6 +331,105 @@ describe('AccountsService', () => {
 
       expect(result.status).toBe('disabled');
       expect(result.id).toBe('user-uuid-1');
+    });
+  });
+
+  // ===== F008: changeRole =====
+
+  describe('changeRole', () => {
+    const userAccount = {
+      id: 'user-uuid-1',
+      name: 'Test User',
+      email: 'test@example.com',
+      password_hash: '$2b$10$hashedpassword',
+      role: 'user' as const,
+      status: 'active' as const,
+      created_at: new Date('2025-01-01'),
+      updated_at: new Date('2025-01-01'),
+    };
+
+    const adminAccount = {
+      ...userAccount,
+      id: 'admin-uuid-1',
+      name: 'Admin User',
+      email: 'admin@example.com',
+      role: 'admin' as const,
+    };
+
+    it('should upgrade User to Admin (TS-F008-001)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...userAccount });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'admin');
+
+      expect(result.role).toBe('admin');
+      expect(result.id).toBe('user-uuid-1');
+      expect(result.name).toBe('Test User');
+      expect(result.email).toBe('test@example.com');
+      expect(result).toHaveProperty('updated_at');
+      expect(result).not.toHaveProperty('password_hash');
+    });
+
+    it('should downgrade Admin to User when system has >= 2 Admins (TS-F008-002)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.count.mockResolvedValueOnce(2);
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('admin-uuid-1', 'user');
+
+      expect(result.role).toBe('user');
+      expect(result.id).toBe('admin-uuid-1');
+      expect(result).not.toHaveProperty('password_hash');
+    });
+
+    it('should throw 422 UnprocessableEntityException for last Admin protection (TS-F008-003)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.count.mockResolvedValueOnce(1);
+
+      await expect(
+        service.changeRole('admin-uuid-1', 'user'),
+      ).rejects.toThrow(UnprocessableEntityException);
+
+      // Verify role was NOT saved
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should throw 404 NotFoundException when account does not exist (TS-F008-004)', async () => {
+      userRepository.findOne.mockResolvedValueOnce(null);
+
+      await expect(
+        service.changeRole('nonexistent-uuid', 'admin'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should return 200 idempotently when setting same role (TS-F008-006)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('admin-uuid-1', 'admin');
+
+      expect(result.role).toBe('admin');
+      expect(result.id).toBe('admin-uuid-1');
+      // Should NOT check admin count for idempotent operation
+      expect(userRepository.count).not.toHaveBeenCalled();
+    });
+
+    it('should downgrade Admin to User when system has 3 Admins', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.count.mockResolvedValueOnce(3);
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('admin-uuid-1', 'user');
+
+      expect(result.role).toBe('user');
     });
   });
 });
