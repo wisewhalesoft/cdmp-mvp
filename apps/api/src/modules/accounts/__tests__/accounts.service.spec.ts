@@ -258,4 +258,77 @@ describe('AccountsService', () => {
       expect(result.status).toBe('disabled');
     });
   });
+
+  // ===== F007: toggleStatus =====
+
+  describe('toggleStatus', () => {
+    const existingUser = {
+      id: 'user-uuid-1',
+      name: 'Test User',
+      email: 'test@example.com',
+      password_hash: '$2b$10$hashedpassword',
+      role: 'user' as const,
+      status: 'active' as const,
+      created_at: new Date('2025-01-01'),
+      updated_at: new Date('2025-01-01'),
+    };
+
+    it('should set status to disabled and return updated user (TS-F007-001)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...existingUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.toggleStatus('user-uuid-1', 'disabled', 'admin-uuid');
+
+      expect(result.status).toBe('disabled');
+      expect(result.id).toBe('user-uuid-1');
+      expect(result.name).toBe('Test User');
+      expect(result.email).toBe('test@example.com');
+      expect(result.role).toBe('user');
+      expect(result).toHaveProperty('updated_at');
+      expect(result).not.toHaveProperty('password_hash');
+    });
+
+    it('should set status to active and return updated user (TS-F007-004)', async () => {
+      const disabledUser = { ...existingUser, status: 'disabled' as const };
+      userRepository.findOne.mockResolvedValueOnce({ ...disabledUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.toggleStatus('user-uuid-1', 'active', 'admin-uuid');
+
+      expect(result.status).toBe('active');
+      expect(result.id).toBe('user-uuid-1');
+      expect(result).not.toHaveProperty('password_hash');
+    });
+
+    it('should throw 422 UnprocessableEntityException for self-disable (TS-F007-005)', async () => {
+      await expect(
+        service.toggleStatus('admin-uuid', 'disabled', 'admin-uuid'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should throw 404 NotFoundException for non-existent account (TS-F007-006)', async () => {
+      userRepository.findOne.mockResolvedValueOnce(null);
+
+      await expect(
+        service.toggleStatus('nonexistent-uuid', 'disabled', 'admin-uuid'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should return 200 idempotently when disabling already-disabled account (TS-F007-007)', async () => {
+      const disabledUser = { ...existingUser, status: 'disabled' as const };
+      userRepository.findOne.mockResolvedValueOnce({ ...disabledUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.toggleStatus('user-uuid-1', 'disabled', 'admin-uuid');
+
+      expect(result.status).toBe('disabled');
+      expect(result.id).toBe('user-uuid-1');
+    });
+  });
 });

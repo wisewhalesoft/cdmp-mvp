@@ -7,6 +7,7 @@ describe('AuthGuard', () => {
   let guard: AuthGuard;
   let mockJwtService: Record<string, any>;
   let mockTokenBlocklistRepository: Record<string, any>;
+  let mockUserRepository: Record<string, any>;
 
   function createMockContext(authHeader?: string): ExecutionContext {
     const request: any = {
@@ -26,9 +27,13 @@ describe('AuthGuard', () => {
     mockTokenBlocklistRepository = {
       findOne: vi.fn().mockResolvedValue(null),
     };
+    mockUserRepository = {
+      findOne: vi.fn().mockResolvedValue({ id: 'user-123', status: 'active' }),
+    };
     guard = new AuthGuard(
       mockJwtService as any,
       mockTokenBlocklistRepository as any,
+      mockUserRepository as any,
     );
   });
 
@@ -90,6 +95,42 @@ describe('AuthGuard', () => {
     } catch (error: any) {
       expect(error).toBeInstanceOf(UnauthorizedException);
       expect(error.response.error).toBe('AUTH_UNAUTHORIZED');
+    }
+  });
+
+  it('should throw AUTH_TOKEN_REVOKED when user account is disabled', async () => {
+    mockJwtService.verify.mockReturnValue({
+      userId: 'user-123',
+      role: 'admin',
+    });
+    mockUserRepository.findOne.mockResolvedValue({ id: 'user-123', status: 'disabled' });
+
+    const context = createMockContext('Bearer valid-token');
+
+    try {
+      await guard.canActivate(context);
+      expect.fail('should have thrown');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.response.error).toBe(ERROR_CODES.TOKEN_REVOKED);
+    }
+  });
+
+  it('should throw AUTH_TOKEN_REVOKED when user not found in DB', async () => {
+    mockJwtService.verify.mockReturnValue({
+      userId: 'user-123',
+      role: 'admin',
+    });
+    mockUserRepository.findOne.mockResolvedValue(null);
+
+    const context = createMockContext('Bearer valid-token');
+
+    try {
+      await guard.canActivate(context);
+      expect.fail('should have thrown');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.response.error).toBe(ERROR_CODES.TOKEN_REVOKED);
     }
   });
 
