@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UnauthorizedException, ExecutionContext } from '@nestjs/common';
 import { AuthGuard } from '../guards/auth.guard';
+import { ERROR_CODES } from '../errors/error-codes';
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
   let mockJwtService: Record<string, any>;
+  let mockTokenBlocklistRepository: Record<string, any>;
 
   function createMockContext(authHeader?: string): ExecutionContext {
     const request: any = {
@@ -21,17 +23,23 @@ describe('AuthGuard', () => {
     mockJwtService = {
       verify: vi.fn(),
     };
-    guard = new AuthGuard(mockJwtService as any);
+    mockTokenBlocklistRepository = {
+      findOne: vi.fn().mockResolvedValue(null),
+    };
+    guard = new AuthGuard(
+      mockJwtService as any,
+      mockTokenBlocklistRepository as any,
+    );
   });
 
-  it('should inject request.user and return true for valid token', () => {
+  it('should inject request.user and return true for valid token', async () => {
     mockJwtService.verify.mockReturnValue({
       userId: 'user-123',
       role: 'admin',
     });
 
     const context = createMockContext('Bearer valid-token');
-    const result = guard.canActivate(context);
+    const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
     const request = context.switchToHttp().getRequest() as any;
@@ -39,19 +47,69 @@ describe('AuthGuard', () => {
     expect(mockJwtService.verify).toHaveBeenCalledWith('valid-token');
   });
 
-  it('should throw 401 when no Authorization header', () => {
+  it('should throw AUTH_TOKEN_MISSING when no Authorization header', async () => {
     const context = createMockContext();
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    try {
+      await guard.canActivate(context);
+      expect.fail('should have thrown');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.response.error).toBe(ERROR_CODES.TOKEN_MISSING);
+    }
   });
 
-  it('should throw 401 when token is expired or invalid', () => {
+  it('should throw AUTH_TOKEN_EXPIRED when token is expired', async () => {
+    const expiredError = new Error('jwt expired');
+    (expiredError as any).name = 'TokenExpiredError';
     mockJwtService.verify.mockImplementation(() => {
-      throw new Error('jwt expired');
+      throw expiredError;
     });
 
     const context = createMockContext('Bearer expired-token');
 
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    try {
+      await guard.canActivate(context);
+      expect.fail('should have thrown');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.response.error).toBe(ERROR_CODES.TOKEN_EXPIRED);
+    }
+  });
+
+  it('should throw AUTH_UNAUTHORIZED when token is invalid', async () => {
+    mockJwtService.verify.mockImplementation(() => {
+      throw new Error('invalid signature');
+    });
+
+    const context = createMockContext('Bearer invalid-token');
+
+    try {
+      await guard.canActivate(context);
+      expect.fail('should have thrown');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.response.error).toBe('AUTH_UNAUTHORIZED');
+    }
+  });
+
+  it('should throw AUTH_TOKEN_REVOKED when token is in blocklist', async () => {
+    mockJwtService.verify.mockReturnValue({
+      userId: 'user-123',
+      role: 'admin',
+    });
+    mockTokenBlocklistRepository.findOne.mockResolvedValue({
+      token: 'revoked-token',
+    });
+
+    const context = createMockContext('Bearer revoked-token');
+
+    try {
+      await guard.canActivate(context);
+      expect.fail('should have thrown');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.response.error).toBe(ERROR_CODES.TOKEN_REVOKED);
+    }
   });
 });

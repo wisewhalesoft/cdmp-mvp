@@ -11,6 +11,7 @@ import { AuthModule } from '@/modules/auth/auth.module';
 import { AccountsModule } from '@/modules/accounts/accounts.module';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { User } from '@/database/entities/user.entity';
+import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import {
   ADMIN_ACTIVE,
@@ -33,7 +34,7 @@ async function createTestApp(throttleLimit: number): Promise<INestApplication> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [User],
+        entities: [User, TokenBlocklist],
         synchronize: true,
       }),
       ThrottlerModule.forRoot([
@@ -333,6 +334,119 @@ describe('Auth E2E - F002 User Login (POST /api/v1/auth/login)', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('Auth E2E - F003 Logout (POST /api/v1/auth/logout)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    app = await createTestApp(100);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F003-001: Admin 成功登出
+  it('should return 200 for admin logout', async () => {
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: ADMIN_ACTIVE.email,
+        password: ADMIN_ACTIVE.password,
+      });
+
+    const token = loginResponse.body.token;
+
+    const logoutResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(logoutResponse.status).toBe(200);
+    expect(logoutResponse.body.message).toBe('登出成功');
+  });
+
+  // TS-F003-002: User 成功登出
+  it('should return 200 for user logout', async () => {
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+    const token = loginResponse.body.token;
+
+    const logoutResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(logoutResponse.status).toBe(200);
+    expect(logoutResponse.body.message).toBe('登出成功');
+  });
+
+  // TS-F003-003: 登出後舊 Token 被拒絕
+  it('should reject old token after logout', async () => {
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: ADMIN_ACTIVE.email,
+        password: ADMIN_ACTIVE.password,
+      });
+
+    const token = loginResponse.body.token;
+
+    // Logout
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${token}`);
+
+    // Try to access protected endpoint with old token
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/accounts')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('AUTH_TOKEN_REVOKED');
+    expect(response.body.message).toBe('Session 已失效，請重新登入。');
+  });
+
+  // TS-F003-004: 無 Token 嘗試登出
+  it('should return 401 AUTH_TOKEN_MISSING when no token provided', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('AUTH_TOKEN_MISSING');
+    expect(response.body.message).toBe('請先登入。');
+  });
+
+  // TS-F003: 登出後可重新登入並取得新 token
+  it('should allow re-login after logout with a new valid token', async () => {
+    // Login with rememberMe to ensure unique token
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+        rememberMe: true,
+      });
+
+    const oldToken = loginResponse.body.token;
+
+    // Logout
+    const logoutResp = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${oldToken}`);
+    expect(logoutResp.status).toBe(200);
+
+    // Old token is rejected
+    const rejectedResp = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${oldToken}`);
+    expect(rejectedResp.status).toBe(401);
+    expect(rejectedResp.body.error).toBe('AUTH_TOKEN_REVOKED');
   });
 });
 

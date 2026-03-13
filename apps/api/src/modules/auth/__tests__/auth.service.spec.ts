@@ -4,8 +4,10 @@ import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AuthService } from '../auth.service';
 import { User } from '@/database/entities/user.entity';
+import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
+import { JwtService } from '@nestjs/jwt';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import {
   ADMIN_ACTIVE,
@@ -17,7 +19,9 @@ import {
 describe('AuthService', () => {
   let authService: AuthService;
   let mockUserRepository: Record<string, any>;
+  let mockTokenBlocklistRepository: Record<string, any>;
   let mockJwtUtil: Record<string, any>;
+  let mockJwtService: Record<string, any>;
 
   // Pre-hashed password for test seeds
   let hashedPassword: string;
@@ -29,8 +33,18 @@ describe('AuthService', () => {
       findOne: vi.fn(),
     };
 
+    mockTokenBlocklistRepository = {
+      findOne: vi.fn(),
+      save: vi.fn(),
+      create: vi.fn((data: any) => data),
+    };
+
     mockJwtUtil = {
       generateToken: vi.fn().mockReturnValue('mock-jwt-token'),
+    };
+
+    mockJwtService = {
+      decode: vi.fn().mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 }),
     };
 
     const module = await Test.createTestingModule({
@@ -41,8 +55,16 @@ describe('AuthService', () => {
           useValue: mockUserRepository,
         },
         {
+          provide: getRepositoryToken(TokenBlocklist),
+          useValue: mockTokenBlocklistRepository,
+        },
+        {
           provide: JwtUtil,
           useValue: mockJwtUtil,
+        },
+        {
+          provide: JwtService,
+          useValue: mockJwtService,
         },
       ],
     }).compile();
@@ -301,6 +323,67 @@ describe('AuthService', () => {
     // Verify TypeORM findOne was called with the raw string (parameterized)
     expect(mockUserRepository.findOne).toHaveBeenCalledWith({
       where: { email: sqlInjectionEmail.toLowerCase() },
+    });
+  });
+
+  // TS-F003: Logout tests
+  describe('logout', () => {
+    it('should save token to blocklist', async () => {
+      mockTokenBlocklistRepository.findOne.mockResolvedValue(null);
+      mockTokenBlocklistRepository.save.mockResolvedValue(undefined);
+
+      await authService.logout('some-jwt-token', 'user-123');
+
+      expect(mockTokenBlocklistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'some-jwt-token',
+          user_id: 'user-123',
+        }),
+      );
+      expect(mockTokenBlocklistRepository.save).toHaveBeenCalled();
+    });
+
+    it('should set expires_at from JWT exp claim', async () => {
+      const futureExp = Math.floor(Date.now() / 1000) + 7200;
+      mockJwtService.decode.mockReturnValue({ exp: futureExp });
+      mockTokenBlocklistRepository.findOne.mockResolvedValue(null);
+      mockTokenBlocklistRepository.save.mockResolvedValue(undefined);
+
+      await authService.logout('token-with-exp', 'user-123');
+
+      expect(mockTokenBlocklistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expires_at: new Date(futureExp * 1000),
+        }),
+      );
+    });
+
+    it('should be idempotent — skip if token already in blocklist', async () => {
+      mockTokenBlocklistRepository.findOne.mockResolvedValue({
+        token: 'already-revoked',
+      });
+
+      await authService.logout('already-revoked', 'user-123');
+
+      expect(mockTokenBlocklistRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isTokenRevoked', () => {
+    it('should return true if token is in blocklist', async () => {
+      mockTokenBlocklistRepository.findOne.mockResolvedValue({
+        token: 'revoked-token',
+      });
+
+      const result = await authService.isTokenRevoked('revoked-token');
+      expect(result).toBe(true);
+    });
+
+    it('should return false if token is not in blocklist', async () => {
+      mockTokenBlocklistRepository.findOne.mockResolvedValue(null);
+
+      const result = await authService.isTokenRevoked('valid-token');
+      expect(result).toBe(false);
     });
   });
 });
