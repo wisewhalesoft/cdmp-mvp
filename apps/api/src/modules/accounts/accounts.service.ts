@@ -5,6 +5,7 @@ import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateAccountDto } from './dto/create-account.dto';
+import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
 export interface CreateAccountResult {
   id: string;
@@ -15,12 +16,80 @@ export interface CreateAccountResult {
   created_at: Date;
 }
 
+export interface AccountListItem {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  created_at: Date;
+}
+
+export interface AccountListResult {
+  data: AccountListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 @Injectable()
 export class AccountsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
+
+  async findAll(query: ListAccountsQueryDto): Promise<AccountListResult> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.name',
+        'user.email',
+        'user.role',
+        'user.status',
+        'user.created_at',
+      ]);
+
+    if (query.search) {
+      const searchTerm = `%${query.search.toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    if (query.role) {
+      qb.andWhere('user.role = :role', { role: query.role });
+    }
+
+    if (query.status) {
+      qb.andWhere('user.status = :status', { status: query.status });
+    }
+
+    qb.orderBy('user.created_at', 'DESC');
+    qb.skip((page - 1) * limit);
+    qb.take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data: data.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        created_at: user.created_at,
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
 
   async createAccount(dto: CreateAccountDto): Promise<CreateAccountResult> {
     const email = dto.email.toLowerCase();
