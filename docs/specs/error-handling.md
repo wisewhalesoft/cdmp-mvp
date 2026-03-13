@@ -1,0 +1,219 @@
+---
+spec-id: error-handling
+title: 錯誤處理規範
+version: "1.0"
+date: 2026-03-06
+status: Draft
+---
+
+# 錯誤處理規範
+
+## HTTP 狀態碼使用規範
+
+| 狀態碼 | 意義 | 使用場景 |
+|--------|------|----------|
+| 200 OK | 請求成功 | GET、PUT、PATCH 操作成功 |
+| 201 Created | 資源建立成功 | POST 建立新資源成功 |
+| 400 Bad Request | 請求格式錯誤 | JSON 格式錯誤、缺少必要欄位 |
+| 401 Unauthorized | 未驗證或 Token 失效 | 未提供 Token、Token 過期、Token 已在 blocklist |
+| 403 Forbidden | 無存取權限 | User 角色嘗試存取 Admin 端點 |
+| 404 Not Found | 資源不存在 | 帳號 ID 或資料來源 ID 不存在 |
+| 409 Conflict | 資源衝突 | Email 重複、資料來源名稱重複 |
+| 422 Unprocessable Entity | 驗證失敗 | 欄位格式不正確、業務規則違反 |
+| 500 Internal Server Error | 伺服器內部錯誤 | 非預期錯誤、系統故障 |
+
+---
+
+## 標準錯誤回應格式
+
+所有 API 錯誤回應必須遵循以下 JSON 結構：
+
+```json
+{
+  "error": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "Email 或密碼錯誤",
+    "details": []
+  }
+}
+```
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| error.code | string | 是 | 機器可讀的錯誤碼，格式：`{DOMAIN}_{ERROR_NAME}` |
+| error.message | string | 是 | 人類可讀的錯誤訊息（繁體中文） |
+| error.details | array | 否 | 欄位層級的驗證錯誤明細（僅用於 422） |
+
+### 欄位驗證錯誤格式（422）
+
+當回傳 HTTP 422 時，`details` 陣列包含各欄位的驗證錯誤：
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "輸入資料驗證失敗",
+    "details": [
+      {
+        "field": "email",
+        "message": "Email 格式不正確"
+      },
+      {
+        "field": "password",
+        "message": "密碼長度不得少於 8 個字元"
+      }
+    ]
+  }
+}
+```
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| details[].field | string | 發生錯誤的欄位名稱 |
+| details[].message | string | 該欄位的具體錯誤訊息 |
+
+---
+
+## 錯誤碼目錄
+
+### AUTH 領域 — 驗證與登入 {#auth-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| AUTH_INVALID_CREDENTIALS | 401 | Email 或密碼錯誤 | 登入時 Email 不存在或密碼錯誤。安全原則：不揭露具體錯誤原因 | F001, F002 |
+| AUTH_ACCOUNT_DISABLED | 403 | 您的帳號已被停用，請聯絡管理員。 | 帳號 status = disabled 時嘗試登入 | F001, F002 |
+| AUTH_TOKEN_EXPIRED | 401 | Session 已過期，請重新登入 | JWT Token 已超過有效期限 | 所有需驗證端點 |
+| AUTH_TOKEN_REVOKED | 401 | Session 已失效，請重新登入 | Token 已被加入 blocklist（登出、帳號停用、密碼重設） | 所有需驗證端點 |
+| AUTH_TOKEN_MISSING | 401 | 請先登入 | 請求未攜帶 Authorization header | 所有需驗證端點 |
+| AUTH_TOKEN_INVALID | 401 | 驗證資訊無效，請重新登入 | Token 格式錯誤或簽章驗證失敗 | 所有需驗證端點 |
+| AUTH_FORBIDDEN | 403 | 您沒有權限執行此操作 | User 角色嘗試存取 Admin 端點 | F004-F008, F010-F016 |
+| AUTH_RESET_TOKEN_EXPIRED | 422 | 此連結已過期，請重新申請密碼重設 | 密碼重設 Token 已超過 24 小時有效期 | F009 |
+| AUTH_RESET_TOKEN_USED | 422 | 此連結已失效 | 密碼重設 Token 已被使用過 | F009 |
+| AUTH_RESET_TOKEN_INVALID | 422 | 重設連結無效 | 密碼重設 Token 不存在或格式錯誤 | F009 |
+
+**安全原則**：
+
+- 登入失敗時，無論是 Email 不存在或密碼錯誤，一律回傳相同的 `AUTH_INVALID_CREDENTIALS` 錯誤，不揭露 Email 是否已註冊
+- 密碼重設請求時，無論 Email 是否存在，一律回傳成功訊息「若此 Email 存在，重設連結已寄出」
+
+---
+
+### ACCOUNT 領域 — 帳號管理 {#account-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| ACCOUNT_EMAIL_EXISTS | 409 | 此 Email 已有帳號存在 | 建立帳號時 Email 重複（大小寫不敏感） | F004 |
+| ACCOUNT_EMAIL_IN_USE | 409 | 此 Email 已被使用 | 編輯帳號時 Email 與其他帳號重複 | F006 |
+| ACCOUNT_NOT_FOUND | 404 | 找不到指定的帳號 | 帳號 ID 不存在 | F006, F007, F008, F010 |
+| ACCOUNT_SELF_DISABLE | 422 | 您無法停用自己的帳號 | Admin 嘗試停用自己 | F007 |
+| ACCOUNT_LAST_ADMIN | 422 | 無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。 | 嘗試降級唯一的 Admin | F008 |
+| ACCOUNT_SELF_RESET | 422 | 請透過個人設定變更您自己的密碼 | Admin 嘗試透過管理功能重設自己密碼 | F010 |
+
+---
+
+### DATASOURCE 領域 — 資料來源管理 {#datasource-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| DS_NAME_EXISTS | 409 | 此名稱的資料來源已存在 | 資料來源名稱重複 | F011, F013 |
+| DS_NOT_FOUND | 404 | 找不到指定的資料來源 | 資料來源 ID 不存在或已軟刪除 | F013, F014, F015 |
+| DS_CONNECTION_SUCCESS | — | 連線成功，回應時間 {responseTime}ms | 連線測試成功（非錯誤，為資訊性訊息） | F015 |
+| DS_CONNECTION_REFUSED | — | 連線被拒：無法連至主機 {host}:{port} | 目標主機拒絕連線 | F015 |
+| DS_AUTH_FAILED | — | 驗證失敗：憑證不正確 | 資料庫帳號密碼錯誤 | F015 |
+| DS_CONNECTION_TIMEOUT | — | 連線逾時（10 秒） | 10 秒內無回應 | F015 |
+| DS_DATABASE_NOT_FOUND | — | 找不到指定的資料庫：{databaseName} | 資料庫名稱不存在 | F015 |
+| DS_UNKNOWN_ERROR | — | 連線失敗：{errorDetail} | 其他未分類的連線錯誤 | F015 |
+
+**連線測試回應格式**：
+
+連線測試端點 `POST /api/datasources/:id/test` 的回應格式獨立於標準錯誤格式：
+
+```json
+{
+  "success": true,
+  "message": "連線成功，回應時間 120ms",
+  "responseTime": 120
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "連線被拒：無法連至主機 192.168.1.100:3306",
+  "responseTime": null
+}
+```
+
+---
+
+### VALIDATION 領域 — 通用驗證 {#validation-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| VALIDATION_ERROR | 422 | 輸入資料驗證失敗 | 一個或多個欄位驗證未通過，詳見 details | 所有含表單的功能 |
+| VALIDATION_REQUIRED | 422 | {field} 為必填欄位 | 必填欄位為空 | 所有含表單的功能 |
+| VALIDATION_EMAIL_FORMAT | 422 | Email 格式不正確 | Email 不符合 RFC 5322 基礎規範 | F004, F006 |
+| VALIDATION_PASSWORD_LENGTH | 422 | 密碼長度不得少於 8 個字元 | 密碼短於 8 字元 | F004, F009, F010 |
+| VALIDATION_PORT_RANGE | 422 | 連接埠必須介於 1 到 65535 之間 | 連接埠超出有效範圍 | F011, F013 |
+| VALIDATION_PORT_NUMBER | 422 | 連接埠必須為數字 | 連接埠為非數值 | F011, F013 |
+| VALIDATION_INVALID_ROLE | 422 | 角色必須為 admin 或 user | 角色值不在允許的列舉範圍內 | F004, F008 |
+| VALIDATION_INVALID_TYPE | 422 | 資料來源類型必須為 mysql、postgresql 或 sqlserver | 類型值不在允許的列舉範圍內 | F011, F013 |
+| VALIDATION_INVALID_STATUS | 422 | 狀態必須為 active 或 disabled | 帳號狀態值不在允許的列舉範圍內 | F007 |
+
+---
+
+### SYSTEM 領域 — 系統錯誤 {#system-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| SYSTEM_INTERNAL_ERROR | 500 | 系統發生非預期錯誤，請稍後再試 | 伺服器內部錯誤 | 所有功能 |
+| SYSTEM_EMAIL_SEND_FAILED | 500 | 郵件發送失敗，請稍後再試 | Email 服務不可用 | F009 |
+
+---
+
+## 安全性錯誤處理原則
+
+### 1. 不揭露帳號存在與否
+
+以下場景必須使用通用回應，不透露 Email 是否已註冊：
+
+| 場景 | 回應行為 |
+|------|----------|
+| 登入 — Email 不存在 | 回傳 `AUTH_INVALID_CREDENTIALS`（與密碼錯誤相同） |
+| 登入 — 密碼錯誤 | 回傳 `AUTH_INVALID_CREDENTIALS`（與 Email 不存在相同） |
+| 密碼重設 — Email 不存在 | 回傳成功訊息「若此 Email 存在，重設連結已寄出」（不寄出 Email） |
+| 密碼重設 — Email 存在 | 回傳成功訊息「若此 Email 存在，重設連結已寄出」（寄出 Email） |
+
+### 2. 不洩漏技術細節
+
+- 500 錯誤回傳通用訊息，具體錯誤資訊僅記錄於伺服器日誌
+- 資料庫錯誤訊息不直接回傳至用戶端
+- Stack trace 絕不出現在 API 回應中
+
+### 3. 憑證保護
+
+- 密碼（使用者密碼、資料庫連線密碼）絕不出現在 API 回應或日誌中
+- 資料來源密碼在 API 回應中以遮罩方式呈現（例如 `****`）
+- 連線測試錯誤訊息不包含資料庫連線密碼
+
+---
+
+## 錯誤處理行為矩陣
+
+| 場景 | HTTP | 錯誤碼 | 使用者看到的訊息 | 系統行為 |
+|------|------|--------|-----------------|----------|
+| 登入成功 | 200 | — | 導向對應首頁 | 發行 JWT Token |
+| 登入失敗（憑證錯誤） | 401 | AUTH_INVALID_CREDENTIALS | Email 或密碼錯誤 | 不發行 Token |
+| 登入失敗（帳號停用） | 403 | AUTH_ACCOUNT_DISABLED | 您的帳號已被停用，請聯絡管理員。 | 不發行 Token |
+| 未驗證存取 | 401 | AUTH_TOKEN_MISSING | 請先登入 | 拒絕請求 |
+| Token 過期 | 401 | AUTH_TOKEN_EXPIRED | Session 已過期，請重新登入 | 拒絕請求 |
+| 權限不足 | 403 | AUTH_FORBIDDEN | 您沒有權限執行此操作 | 拒絕請求，記錄日誌 |
+| 建立帳號 Email 重複 | 409 | ACCOUNT_EMAIL_EXISTS | 此 Email 已有帳號存在 | 不建立帳號 |
+| 編輯帳號 Email 重複 | 409 | ACCOUNT_EMAIL_IN_USE | 此 Email 已被使用 | 不儲存變更 |
+| 停用自己的帳號 | 422 | ACCOUNT_SELF_DISABLE | 您無法停用自己的帳號 | 不執行停用 |
+| 降級最後一位 Admin | 422 | ACCOUNT_LAST_ADMIN | 無法移除最後一位 Admin... | 不執行降級 |
+| 資料來源名稱重複 | 409 | DS_NAME_EXISTS | 此名稱的資料來源已存在 | 不建立/更新 |
+| 連線測試逾時 | 200 | — | 連線逾時（10 秒） | success: false，狀態設為 disconnected |
+| 密碼重設 Token 過期 | 422 | AUTH_RESET_TOKEN_EXPIRED | 此連結已過期，請重新申請密碼重設 | 不重設密碼 |
+| 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
+| 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |
