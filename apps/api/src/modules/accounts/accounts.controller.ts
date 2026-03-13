@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
+import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
 @Controller('accounts')
@@ -21,5 +22,10 @@ export class AccountsController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateAccountDto) {
     return this.accountsService.createAccount(dto);
+  }
+
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() dto: UpdateAccountDto) {
+    return this.accountsService.updateAccount(id, dto);
   }
 }

@@ -1,10 +1,11 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateAccountDto } from './dto/create-account.dto';
+import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
 export interface CreateAccountResult {
@@ -14,6 +15,16 @@ export interface CreateAccountResult {
   role: 'admin' | 'user';
   status: 'active' | 'disabled';
   created_at: Date;
+}
+
+export interface UpdateAccountResult {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface AccountListItem {
@@ -124,6 +135,44 @@ export class AccountsService {
       role: saved.role,
       status: saved.status,
       created_at: saved.created_at,
+    };
+  }
+
+  async updateAccount(id: string, dto: UpdateAccountDto): Promise<UpdateAccountResult> {
+    // Find the account
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ACCOUNT_NOT_FOUND,
+        message: ERROR_MESSAGES.ACCOUNT_NOT_FOUND,
+      });
+    }
+
+    const email = dto.email.toLowerCase();
+
+    // Check email uniqueness (exclude self — BR-3)
+    const existing = await this.userRepository.findOne({ where: { email } });
+    if (existing && existing.id !== id) {
+      throw new ConflictException({
+        error: ERROR_CODES.ACCOUNT_EMAIL_IN_USE,
+        message: ERROR_MESSAGES.ACCOUNT_EMAIL_IN_USE,
+      });
+    }
+
+    // Update fields
+    user.name = dto.name;
+    user.email = email;
+
+    const saved = await this.userRepository.save(user);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      email: saved.email,
+      role: saved.role,
+      status: saved.status,
+      created_at: saved.created_at,
+      updated_at: saved.updated_at,
     };
   }
 }

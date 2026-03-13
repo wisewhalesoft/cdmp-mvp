@@ -8,6 +8,8 @@ export const ERROR_CODES = {
   TOKEN_REVOKED: 'AUTH_TOKEN_REVOKED',
   TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
   TOKEN_MISSING: 'AUTH_TOKEN_MISSING',
+  ACCOUNT_EMAIL_IN_USE: 'ACCOUNT_EMAIL_IN_USE',
+  ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -22,4 +24,6 @@ export const ERROR_MESSAGES = {
   TOKEN_REVOKED: 'Session 已失效，請重新登入。',
   TOKEN_EXPIRED: 'Session 已過期，請重新登入。',
   TOKEN_MISSING: '請先登入。',
+  ACCOUNT_EMAIL_IN_USE: '此 Email 已被使用',
+  ACCOUNT_NOT_FOUND: '找不到指定的帳號',
 } as const;
