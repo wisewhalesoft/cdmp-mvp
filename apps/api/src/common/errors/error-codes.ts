@@ -4,6 +4,9 @@ export const ERROR_CODES = {
   ACCOUNT_DISABLED: 'AUTH_ACCOUNT_DISABLED',
   FORBIDDEN: 'AUTH_FORBIDDEN',
   RATE_LIMITED: 'RATE_LIMITED',
+  TOKEN_REVOKED: 'AUTH_TOKEN_REVOKED',
+  TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
+  TOKEN_MISSING: 'AUTH_TOKEN_MISSING',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -14,4 +17,7 @@ export const ERROR_MESSAGES = {
   INVALID_EMAIL: '請輸入有效的 Email 地址',
   PASSWORD_REQUIRED: '請輸入密碼',
   VALIDATION_ERROR: '請提供有效的 Email 與密碼',
+  TOKEN_REVOKED: 'Session 已失效，請重新登入。',
+  TOKEN_EXPIRED: 'Session 已過期，請重新登入。',
+  TOKEN_MISSING: '請先登入。',
 } as const;
