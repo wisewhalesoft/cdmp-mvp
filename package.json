@@ -1,0 +1,22 @@
+{
+  "name": "cdmp-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api:dev": "npm run dev --workspace=apps/api",
+    "api:test": "npm run test --workspace=apps/api",
+    "api:build": "npm run build --workspace=apps/api",
+    "web:dev": "npm run dev --workspace=apps/web",
+    "web:test": "npm run test --workspace=apps/web",
+    "web:build": "npm run build --workspace=apps/web",
+    "test": "npm run test --workspaces --if-present",
+    "dev": "concurrently \"npm run api:dev\" \"npm run web:dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

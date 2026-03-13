@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cdmp-postgres
+    environment:
+      POSTGRES_DB: cdmp_dev
+      POSTGRES_USER: cdmp
+      POSTGRES_PASSWORD: cdmp_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdmp -d cdmp_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-api
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: cdmp
+      DB_PASSWORD: cdmp_secret
+      DB_NAME: cdmp_dev
+      JWT_SECRET: cdmp-dev-jwt-secret-key-2026
+      PORT: 3000
+    volumes:
+      - ./apps/api/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      target: dev
+    container_name: cdmp-web
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://api:3000
+    volumes:
+      - ./apps/web/src:/app/src
+    depends_on:
+      - api
+
+  seed:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-seed
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: cdmp
+      DB_PASSWORD: cdmp_secret
+      DB_NAME: cdmp_dev
+    command: npx ts-node -r tsconfig-paths/register src/database/seeds/seed.ts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - seed
+
+volumes:
+  pgdata:

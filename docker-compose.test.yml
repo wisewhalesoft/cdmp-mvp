@@ -1,0 +1,72 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: cdmp-postgres-test
+    environment:
+      POSTGRES_DB: cdmp_test
+      POSTGRES_USER: cdmp
+      POSTGRES_PASSWORD: cdmp_secret
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdmp -d cdmp_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api-test:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-api-test
+    environment:
+      NODE_ENV: test
+      DB_TYPE: postgres
+      DB_HOST: postgres-test
+      DB_PORT: 5432
+      DB_USERNAME: cdmp
+      DB_PASSWORD: cdmp_secret
+      DB_NAME: cdmp_test
+      JWT_SECRET: cdmp-test-jwt-secret-key
+      PORT: 3001
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    command: npx vitest run
+    profiles:
+      - unit
+
+  api-e2e:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-api-e2e
+    environment:
+      NODE_ENV: test
+      DB_TYPE: sqlite
+      JWT_SECRET: cdmp-test-jwt-secret-key
+    command: npx vitest run --config vitest.e2e.config.ts
+    profiles:
+      - e2e
+
+  web-test:
+    build:
+      context: ./apps/web
+      target: dev
+    container_name: cdmp-web-test
+    command: npx vitest run
+    profiles:
+      - unit
+
+  test-all:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-test-all
+    environment:
+      NODE_ENV: test
+      DB_TYPE: sqlite
+      JWT_SECRET: cdmp-test-jwt-secret-key
+    command: sh -c "npx vitest run && npx vitest run --config vitest.e2e.config.ts"
+    profiles:
+      - all
