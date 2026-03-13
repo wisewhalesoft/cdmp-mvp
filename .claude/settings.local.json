@@ -3,7 +3,28 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(find /c/Users/cacab/Claude/cdmp-mvp -type f -iname \"*test*\" -o -iname \"*qa*\" -o -iname \"*acceptance*\" 2>/dev/null | head -20)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(ls -la \"C:/Users/cacab/Claude/cdmp-mvp/\" && echo \"---\" && find \"C:/Users/cacab/Claude/cdmp-mvp/\" -name \"package.json\" -not -path \"*/node_modules/*\" 2>/dev/null && echo \"---\" && find \"C:/Users/cacab/Claude/cdmp-mvp/apps\" -type f 2>/dev/null | head -30)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp\" && mkdir -p apps/api/src apps/api/test apps/web/src apps/web/test packages/shared/src)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npm install 2>&1 | tail -5)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm install 2>&1 | tail -5)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm install --workspace=apps/api 2>&1 | tail -10)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm install --workspace=apps/api --save-dev better-sqlite3 @types/better-sqlite3 2>&1 | tail -5)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --reporter=verbose 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts --reporter=verbose 2>&1)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp\" && npm install 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run 2>&1)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts 2>&1)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp\" && docker compose up -d 2>&1)",
+      "Bash(docker info:*)",
+      "Bash(docker compose:*)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx ts-node -r tsconfig-paths/register src/database/seeds/seed.ts 2>&1)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && DB_PORT=5433 DB_NAME=cdmp_test npx ts-node -r tsconfig-paths/register src/database/seeds/seed.ts 2>&1)",
+      "Bash(curl -s -X POST http://localhost:3001/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@cdmp.test\",\"password\":\"P@ssw0rd123\"}' 2>&1)",
+      "Bash(taskkill //f //im node.exe 2>/dev/null; echo \"done\")",
+      "Bash(taskkill //F //IM \"node.exe\" 2>/dev/null; echo \"done\")",
+      "Bash(git status:*)"
     ]
   }
 }
