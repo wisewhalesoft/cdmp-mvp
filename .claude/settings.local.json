@@ -64,7 +64,28 @@
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run test/accounts-edit.e2e-spec.ts --config vitest.e2e.config.ts --reporter=verbose 2>&1 | tail -30)",
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/accounts/__tests__/edit-account-modal.test.tsx --reporter=verbose 2>&1 | tail -20)",
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/accounts/__tests__/edit-account-modal.test.tsx --reporter=verbose 2>&1 | tail -35)",
-      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/accounts/__tests__/ --reporter=verbose 2>&1 | tail -60)"
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/accounts/__tests__/ --reporter=verbose 2>&1 | tail -60)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx jest --testPathPattern=\"accounts.service.spec\" --no-coverage 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --reporter=verbose src/modules/accounts/__tests__/accounts.service.spec.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx jest --testPathPattern=\"accounts-toggle-status\" --no-coverage 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --reporter=verbose test/accounts-toggle-status.e2e-spec.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts --reporter=verbose test/accounts-toggle-status.e2e-spec.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run --reporter=verbose 2>&1 | grep -E \"FAIL|✓|×|❌|✗|PASS|fail\" | head -40)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run --reporter=verbose 2>&1 | tail -30)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx jest --no-coverage 2>&1 | tail -40)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1 | tail -40)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx jest --no-coverage 2>&1 | head -30)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx jest --no-coverage 2>&1 | tail -30)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx jest --no-coverage 2>&1 | head -40)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -30)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -30)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx tsc --noEmit 2>&1 | tail -20)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx tsc --noEmit 2>&1 | tail -20)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx tsc --noEmit 2>&1 | tail -10)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx tsc --noEmit 2>&1 | tail -10)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -10)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -10)",
+      "Bash(cd /c/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1 | tail -10)"
     ]
   }
 }
