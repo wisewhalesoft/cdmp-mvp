@@ -4,8 +4,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { DataSource } from 'typeorm';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { AccountsModule } from '@/modules/accounts/accounts.module';
@@ -46,12 +45,6 @@ async function createTestApp(throttleLimit: number): Promise<INestApplication> {
       ]),
       AuthModule,
       AccountsModule,
-    ],
-    providers: [
-      {
-        provide: APP_GUARD,
-        useClass: ThrottlerGuard,
-      },
     ],
   }).compile();
 

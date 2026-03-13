@@ -7,6 +7,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
 import { AuthService, LoginResult } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -18,6 +19,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
   async login(@Body() dto: LoginDto): Promise<LoginResult> {
     return this.authService.login(dto);
   }
