@@ -26,12 +26,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Handle class-validator errors (BadRequestException with message array)
     // NestJS default format: { statusCode, message: [...], error: 'Bad Request' }
+    // Return 422 for validation errors per error-handling.md spec
     if (
       status === HttpStatus.BAD_REQUEST &&
       (Array.isArray(exceptionResponse?.message) ||
         exceptionResponse?.error === 'Bad Request')
     ) {
-      return response.status(status).json({
+      return response.status(HttpStatus.UNPROCESSABLE_ENTITY).json({
         error: ERROR_CODES.VALIDATION_ERROR,
         message:
           Array.isArray(exceptionResponse?.message)

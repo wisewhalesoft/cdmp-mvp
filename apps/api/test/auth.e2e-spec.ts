@@ -178,7 +178,7 @@ describe('Auth E2E - Functional (POST /api/v1/auth/login)', () => {
     expect(response.body.message).toBe('您的帳號已被停用，請聯絡管理員。');
   });
 
-  it('should return 400 for empty email', async () => {
+  it('should return 422 for empty email', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({
@@ -186,11 +186,11 @@ describe('Auth E2E - Functional (POST /api/v1/auth/login)', () => {
         password: 'P@ssw0rd123',
       });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     expect(response.body.error).toBe('VALIDATION_ERROR');
   });
 
-  it('should return 400 for empty password', async () => {
+  it('should return 422 for empty password', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({
@@ -198,7 +198,7 @@ describe('Auth E2E - Functional (POST /api/v1/auth/login)', () => {
         password: '',
       });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     expect(response.body.error).toBe('VALIDATION_ERROR');
   });
 
