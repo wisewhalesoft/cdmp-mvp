@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Request } from 'express';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 @Injectable()
@@ -17,6 +18,8 @@ export class AuthGuard implements CanActivate {
     private readonly jwtService: JwtService,
     @InjectRepository(TokenBlocklist)
     private readonly tokenBlocklistRepository: Repository<TokenBlocklist>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -40,6 +43,18 @@ export class AuthGuard implements CanActivate {
         where: { token },
       });
       if (revoked) {
+        throw new UnauthorizedException({
+          error: ERROR_CODES.TOKEN_REVOKED,
+          message: ERROR_MESSAGES.TOKEN_REVOKED,
+        });
+      }
+
+      // Check if user account is disabled
+      const user = await this.userRepository.findOne({
+        where: { id: payload.userId },
+        select: ['id', 'status'],
+      });
+      if (!user || user.status === 'disabled') {
         throw new UnauthorizedException({
           error: ERROR_CODES.TOKEN_REVOKED,
           message: ERROR_MESSAGES.TOKEN_REVOKED,

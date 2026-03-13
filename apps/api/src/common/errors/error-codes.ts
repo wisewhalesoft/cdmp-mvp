@@ -10,6 +10,7 @@ export const ERROR_CODES = {
   TOKEN_MISSING: 'AUTH_TOKEN_MISSING',
   ACCOUNT_EMAIL_IN_USE: 'ACCOUNT_EMAIL_IN_USE',
   ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
+  ACCOUNT_SELF_DISABLE: 'ACCOUNT_SELF_DISABLE',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -26,4 +27,5 @@ export const ERROR_MESSAGES = {
   TOKEN_MISSING: '請先登入。',
   ACCOUNT_EMAIL_IN_USE: '此 Email 已被使用',
   ACCOUNT_NOT_FOUND: '找不到指定的帳號',
+  ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
 } as const;

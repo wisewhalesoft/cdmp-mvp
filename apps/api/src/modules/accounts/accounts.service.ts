@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@/database/entities/user.entity';
@@ -41,6 +41,15 @@ export interface AccountListResult {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface ToggleStatusResult {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  updated_at: Date;
 }
 
 @Injectable()
@@ -172,6 +181,42 @@ export class AccountsService {
       role: saved.role,
       status: saved.status,
       created_at: saved.created_at,
+      updated_at: saved.updated_at,
+    };
+  }
+
+  async toggleStatus(
+    id: string,
+    status: 'active' | 'disabled',
+    currentUserId: string,
+  ): Promise<ToggleStatusResult> {
+    // Self-disable check (before DB lookup)
+    if (status === 'disabled' && id === currentUserId) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.ACCOUNT_SELF_DISABLE,
+        message: ERROR_MESSAGES.ACCOUNT_SELF_DISABLE,
+      });
+    }
+
+    // Find the account
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ACCOUNT_NOT_FOUND,
+        message: ERROR_MESSAGES.ACCOUNT_NOT_FOUND,
+      });
+    }
+
+    // Update status
+    user.status = status;
+    const saved = await this.userRepository.save(user);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      email: saved.email,
+      role: saved.role,
+      status: saved.status,
       updated_at: saved.updated_at,
     };
   }
