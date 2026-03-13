@@ -24,7 +24,12 @@
       "Bash(curl -s -X POST http://localhost:3001/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@cdmp.test\",\"password\":\"P@ssw0rd123\"}' 2>&1)",
       "Bash(taskkill //f //im node.exe 2>/dev/null; echo \"done\")",
       "Bash(taskkill //F //IM \"node.exe\" 2>/dev/null; echo \"done\")",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp -type f -name \"*implementation*log*\" 2>/dev/null | head -20)",
+      "Bash(find /c/Users/cacab/Claude/cdmp-mvp/packages -name \"*shared*\" -o -name \"*types*\" 2>/dev/null | head -20)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps -type f -name \"*login*\" -o -name \"*auth*\" 2>/dev/null | head -20)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps/web -type f -name \"*login*\" -o -name \"*auth*\" 2>/dev/null | head -20)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run --reporter=verbose 2>&1 | tail -80)"
     ]
   }
 }
