@@ -6,6 +6,7 @@ import { logout } from '@/api/auth';
 import { getAccounts } from '@/api/accounts';
 import { Button } from '@/components/ui/button';
 import { CreateAccountModal } from './create-account-modal';
+import { EditAccountModal } from './edit-account-modal';
 import type { AccountListItem } from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
@@ -46,6 +47,8 @@ export function AccountListPage() {
   const navigate = useNavigate();
   const user = getUser();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AccountListItem | null>(null);
 
   // List state
   const [accounts, setAccounts] = useState<AccountListItem[]>([]);
@@ -115,6 +118,17 @@ export function AccountListPage() {
 
   const handleCreateSuccess = () => {
     setShowCreateModal(false);
+    fetchAccounts();
+  };
+
+  const handleEditClick = (account: AccountListItem) => {
+    setEditingAccount(account);
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    setEditingAccount(null);
     fetchAccounts();
   };
 
@@ -255,7 +269,10 @@ export function AccountListPage() {
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
-                            <button className="text-xs text-primary hover:text-blue-700 font-medium">
+                            <button
+                              onClick={() => handleEditClick(account)}
+                              className="text-xs text-primary hover:text-blue-700 font-medium"
+                            >
                               編輯
                             </button>
                             <button className="text-xs text-gray-400 font-medium">停用</button>
@@ -309,6 +326,14 @@ export function AccountListPage() {
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateSuccess}
+      />
+
+      {/* Edit Account Modal */}
+      <EditAccountModal
+        open={showEditModal}
+        account={editingAccount}
+        onClose={() => { setShowEditModal(false); setEditingAccount(null); }}
+        onSuccess={handleEditSuccess}
       />
     </div>
   );

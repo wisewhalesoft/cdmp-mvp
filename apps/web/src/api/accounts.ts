@@ -1,6 +1,8 @@
 import type {
   CreateAccountRequest,
   CreateAccountResponse,
+  UpdateAccountRequest,
+  UpdateAccountResponse,
   AccountListQuery,
   AccountListResponse,
 } from '@cdmp/shared';
@@ -20,5 +22,10 @@ export async function getAccounts(query?: AccountListQuery): Promise<AccountList
   if (query?.status) params.status = query.status;
 
   const response = await apiClient.get<AccountListResponse>('/accounts', { params });
+  return response.data;
+}
+
+export async function updateAccount(id: string, data: UpdateAccountRequest): Promise<UpdateAccountResponse> {
+  const response = await apiClient.put<UpdateAccountResponse>(`/accounts/${id}`, data);
   return response.data;
 }
