@@ -27,11 +27,28 @@ export interface LogoutResponse {
   message: string;
 }
 
+export interface CreateAccountRequest {
+  name: string;
+  email: string;
+  password: string;
+  role: 'admin' | 'user';
+}
+
+export interface CreateAccountResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active';
+  created_at: string;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   ACCOUNT_DISABLED: 'AUTH_ACCOUNT_DISABLED',
   FORBIDDEN: 'AUTH_FORBIDDEN',
+  ACCOUNT_EMAIL_EXISTS: 'ACCOUNT_EMAIL_EXISTS',
   RATE_LIMITED: 'RATE_LIMITED',
   TOKEN_REVOKED: 'AUTH_TOKEN_REVOKED',
   TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
@@ -44,6 +61,7 @@ export const ERROR_MESSAGES = {
   ACCOUNT_DISABLED: '您的帳號已被停用，請聯絡管理員。',
   FORBIDDEN: '您沒有權限執行此操作。',
   RATE_LIMITED: '登入嘗試過於頻繁，請稍後再試。',
+  ACCOUNT_EMAIL_EXISTS: '此 Email 已有帳號存在',
   INVALID_EMAIL: '請輸入有效的 Email 地址',
   PASSWORD_REQUIRED: '請輸入密碼',
   TOKEN_REVOKED: 'Session 已失效，請重新登入。',
