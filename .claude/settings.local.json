@@ -29,7 +29,9 @@
       "Bash(find /c/Users/cacab/Claude/cdmp-mvp/packages -name \"*shared*\" -o -name \"*types*\" 2>/dev/null | head -20)",
       "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps -type f -name \"*login*\" -o -name \"*auth*\" 2>/dev/null | head -20)",
       "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps/web -type f -name \"*login*\" -o -name \"*auth*\" 2>/dev/null | head -20)",
-      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run --reporter=verbose 2>&1 | tail -80)"
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run --reporter=verbose 2>&1 | tail -80)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm run api:test -- -- --config vitest.e2e.config.ts 2>&1 | tail -40)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm run api:test -- -- --config vitest.e2e.config.ts 2>&1 | tail -15)"
     ]
   }
 }

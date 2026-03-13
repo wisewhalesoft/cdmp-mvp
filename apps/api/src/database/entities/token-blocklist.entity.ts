@@ -11,6 +11,6 @@ export class TokenBlocklist {
   @CreateDateColumn()
   revoked_at: Date;
 
-  @Column({ type: 'datetime' })
+  @Column()
   expires_at: Date;
 }
