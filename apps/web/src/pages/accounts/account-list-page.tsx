@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Database, LogOut, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getAccounts } from '@/api/accounts';
+import { getAccounts, updateAccountStatus } from '@/api/accounts';
 import { Button } from '@/components/ui/button';
 import { CreateAccountModal } from './create-account-modal';
 import { EditAccountModal } from './edit-account-modal';
+import { ToggleStatusDialog } from './toggle-status-dialog';
 import type { AccountListItem } from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
@@ -49,6 +50,10 @@ export function AccountListPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountListItem | null>(null);
+  const [showToggleDialog, setShowToggleDialog] = useState(false);
+  const [toggleTarget, setToggleTarget] = useState<AccountListItem | null>(null);
+  const [toggleMode, setToggleMode] = useState<'disable' | 'enable'>('disable');
+  const [toggleLoading, setToggleLoading] = useState(false);
 
   // List state
   const [accounts, setAccounts] = useState<AccountListItem[]>([]);
@@ -130,6 +135,29 @@ export function AccountListPage() {
     setShowEditModal(false);
     setEditingAccount(null);
     fetchAccounts();
+  };
+
+  const handleToggleClick = (account: AccountListItem, mode: 'disable' | 'enable') => {
+    setToggleTarget(account);
+    setToggleMode(mode);
+    setShowToggleDialog(true);
+  };
+
+  const handleToggleConfirm = async () => {
+    if (!toggleTarget) return;
+    setToggleLoading(true);
+    try {
+      await updateAccountStatus(toggleTarget.id, {
+        status: toggleMode === 'disable' ? 'disabled' : 'active',
+      });
+      setShowToggleDialog(false);
+      setToggleTarget(null);
+      fetchAccounts();
+    } catch {
+      // Error handling — graceful degradation
+    } finally {
+      setToggleLoading(false);
+    }
   };
 
   const handleRoleChange = (value: string) => {
@@ -275,7 +303,29 @@ export function AccountListPage() {
                             >
                               編輯
                             </button>
-                            <button className="text-xs text-gray-400 font-medium">停用</button>
+                            {account.status === 'active' && account.id === user?.id ? (
+                              <button
+                                disabled
+                                className="text-xs text-gray-300 cursor-not-allowed font-medium"
+                                title="無法停用自己的帳號"
+                              >
+                                停用
+                              </button>
+                            ) : account.status === 'active' ? (
+                              <button
+                                onClick={() => handleToggleClick(account, 'disable')}
+                                className="text-xs text-warning hover:text-amber-600 font-medium"
+                              >
+                                停用
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleClick(account, 'enable')}
+                                className="text-xs text-success hover:text-green-600 font-medium"
+                              >
+                                啟用
+                              </button>
+                            )}
                             <button className="text-xs text-gray-400 font-medium">變更角色</button>
                             <button className="text-xs text-primary hover:text-blue-700 font-medium">
                               重設密碼
@@ -334,6 +384,16 @@ export function AccountListPage() {
         account={editingAccount}
         onClose={() => { setShowEditModal(false); setEditingAccount(null); }}
         onSuccess={handleEditSuccess}
+      />
+
+      {/* Toggle Status Dialog */}
+      <ToggleStatusDialog
+        open={showToggleDialog}
+        mode={toggleMode}
+        accountName={toggleTarget?.name ?? ''}
+        loading={toggleLoading}
+        onConfirm={handleToggleConfirm}
+        onCancel={() => { setShowToggleDialog(false); setToggleTarget(null); }}
       />
     </div>
   );

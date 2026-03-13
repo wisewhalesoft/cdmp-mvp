@@ -16,6 +16,7 @@ vi.mock('@/stores/auth-store');
 const mockedGetAccounts = vi.mocked(accountsApi.getAccounts);
 const mockedCreateAccount = vi.mocked(accountsApi.createAccount);
 const mockedUpdateAccount = vi.mocked(accountsApi.updateAccount);
+const mockedUpdateAccountStatus = vi.mocked(accountsApi.updateAccountStatus);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -292,7 +293,7 @@ describe('AccountListPage', () => {
         created_at: '2025-04-01T00:00:00.000Z',
       });
 
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
       render(
         <BrowserRouter>
@@ -333,6 +334,121 @@ describe('AccountListPage', () => {
 
       // After success, getAccounts should be called again (refresh)
       expect(mockedGetAccounts.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+  });
+
+  describe('停用／啟用帳號整合', () => {
+    it('active 帳號顯示「停用」按鈕', async () => {
+      await renderAndLoad();
+      // accounts[1] (Normal User) is active and not the current user (id '1')
+      const disableButtons = screen.getAllByText('停用');
+      expect(disableButtons.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('disabled 帳號顯示「啟用」按鈕', async () => {
+      await renderAndLoad();
+      // accounts[2] (Disabled User) has status 'disabled'
+      expect(screen.getByText('啟用')).toBeInTheDocument();
+    });
+
+    it('當前 Admin 自己的帳號停用按鈕為 disabled 狀態', async () => {
+      await renderAndLoad();
+      // Current user id='1', accounts[0] id='1' — self-disable should be disabled
+      const disableButtons = screen.getAllByText('停用');
+      // The first "停用" in the table should be the self-disable (disabled) button
+      const selfDisableBtn = disableButtons[0];
+      expect(selfDisableBtn).toBeDisabled();
+      expect(selfDisableBtn).toHaveAttribute('title', '無法停用自己的帳號');
+    });
+
+    it('點擊停用按鈕彈出確認對話框', async () => {
+      await renderAndLoad();
+      // Click the disable button for Normal User (second row, not self)
+      const disableButtons = screen.getAllByText('停用');
+      // Find the enabled one (not the self-disable)
+      const enabledDisableBtn = disableButtons.find((btn) => !btn.hasAttribute('disabled'));
+      fireEvent.click(enabledDisableBtn!);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(screen.getByText('停用帳號')).toBeInTheDocument();
+      expect(screen.getByText(/您確定要停用 Normal User 的帳號嗎/)).toBeInTheDocument();
+    });
+
+    it('確認停用後呼叫 updateAccountStatus API', async () => {
+      mockedUpdateAccountStatus.mockResolvedValue({
+        id: '2',
+        name: 'Normal User',
+        email: 'user@cdmp.test',
+        role: 'user',
+        status: 'disabled',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad();
+
+      const disableButtons = screen.getAllByText('停用');
+      const enabledDisableBtn = disableButtons.find((btn) => !btn.hasAttribute('disabled'));
+      fireEvent.click(enabledDisableBtn!);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // Confirm in dialog
+      const dialogConfirmButtons = screen.getAllByRole('button', { name: '停用' });
+      // The dialog confirm button is the last one (inside dialog)
+      fireEvent.click(dialogConfirmButtons[dialogConfirmButtons.length - 1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountStatus).toHaveBeenCalledWith('2', { status: 'disabled' });
+    });
+
+    it('點擊啟用按鈕彈出確認對話框', async () => {
+      await renderAndLoad();
+
+      fireEvent.click(screen.getByText('啟用'));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(screen.getByText('啟用帳號')).toBeInTheDocument();
+      expect(screen.getByText(/確定要啟用 Disabled User 的帳號嗎/)).toBeInTheDocument();
+    });
+
+    it('確認啟用後呼叫 updateAccountStatus API', async () => {
+      mockedUpdateAccountStatus.mockResolvedValue({
+        id: '3',
+        name: 'Disabled User',
+        email: 'disabled@cdmp.test',
+        role: 'user',
+        status: 'active',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad();
+
+      fireEvent.click(screen.getByText('啟用'));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // Confirm in dialog — the "啟用" button inside dialog
+      const enableButtons = screen.getAllByRole('button', { name: '啟用' });
+      fireEvent.click(enableButtons[enableButtons.length - 1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountStatus).toHaveBeenCalledWith('3', { status: 'active' });
     });
   });
 
