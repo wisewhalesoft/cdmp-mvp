@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find /c/Users/cacab/Claude/cdmp-mvp -type f -iname \"*test*\" -o -iname \"*qa*\" -o -iname \"*acceptance*\" 2>/dev/null | head -20)",
+      "Bash(git add:*)"
+    ]
+  }
+}
