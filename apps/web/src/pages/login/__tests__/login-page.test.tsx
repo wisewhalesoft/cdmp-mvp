@@ -8,6 +8,12 @@ import * as authApi from '@/api/auth';
 vi.mock('@/api/auth');
 const mockedLogin = vi.mocked(authApi.login);
 
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
 function renderLoginPage() {
   return render(
     <BrowserRouter>
@@ -138,6 +144,38 @@ describe('LoginPage', () => {
 
       await user.click(screen.getByRole('button', { name: '隱藏密碼' }));
       expect(passwordInput).toHaveAttribute('type', 'password');
+    });
+  });
+
+  describe('登入後角色導向', () => {
+    it('User 登入成功 → 導向 /user-info', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'user-token',
+        user: { id: 'u1', name: 'User', email: 'user@test.com', role: 'user' },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email'), 'user@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/user-info');
+      });
+    });
+
+    it('Admin 登入成功 → 導向 /', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'admin-token',
+        user: { id: 'a1', name: 'Admin', email: 'admin@test.com', role: 'admin' },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email'), 'admin@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
     });
   });
 });

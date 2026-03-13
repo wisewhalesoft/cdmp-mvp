@@ -30,3 +30,8 @@ export function clearAuth(): void {
 export function isAuthenticated(): boolean {
   return getToken() !== null;
 }
+
+export function getUserRole(): 'admin' | 'user' | null {
+  const user = getUser();
+  return user?.role ?? null;
+}

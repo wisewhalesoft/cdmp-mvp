@@ -40,7 +40,7 @@ export function LoginPage() {
         rememberMe: data.rememberMe,
       });
       setAuth(result.token, result.user);
-      navigate('/');
+      navigate(result.user.role === 'user' ? '/user-info' : '/');
     } catch (err: unknown) {
       const error = err as { response?: { status?: number } };
       const status = error.response?.status;
