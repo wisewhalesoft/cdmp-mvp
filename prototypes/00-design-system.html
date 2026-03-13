@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CDMP 設計系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563EB',
+            danger: '#EF4444',
+            success: '#22C55E',
+            warning: '#F59E0B',
+            unknown: '#9CA3AF',
+            surface: '#FFFFFF',
+            border: '#E5E7EB',
+            bg: '#F9FAFB',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen text-gray-900">
+  <div class="max-w-6xl mx-auto p-8 space-y-12">
+
+    <!-- Title -->
+    <div>
+      <h1 class="text-3xl font-bold">CDMP 設計系統</h1>
+      <p class="text-gray-500 mt-2">企業客戶資料治理平台 — UI 元件庫與設計規範</p>
+    </div>
+
+    <!-- ==================== 色彩系統 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">色彩系統</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div>
+          <div class="h-20 rounded-lg bg-primary"></div>
+          <p class="mt-2 text-sm font-medium">Primary</p>
+          <p class="text-xs text-gray-500">#2563EB</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-danger"></div>
+          <p class="mt-2 text-sm font-medium">Danger</p>
+          <p class="text-xs text-gray-500">#EF4444</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-success"></div>
+          <p class="mt-2 text-sm font-medium">Success</p>
+          <p class="text-xs text-gray-500">#22C55E</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-warning"></div>
+          <p class="mt-2 text-sm font-medium">Warning</p>
+          <p class="text-xs text-gray-500">#F59E0B</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-unknown"></div>
+          <p class="mt-2 text-sm font-medium">Unknown</p>
+          <p class="text-xs text-gray-500">#9CA3AF</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-bg border border-border"></div>
+          <p class="mt-2 text-sm font-medium">Background</p>
+          <p class="text-xs text-gray-500">#F9FAFB</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-surface border border-border"></div>
+          <p class="mt-2 text-sm font-medium">Surface</p>
+          <p class="text-xs text-gray-500">#FFFFFF</p>
+        </div>
+        <div>
+          <div class="h-20 rounded-lg bg-border"></div>
+          <p class="mt-2 text-sm font-medium">Border</p>
+          <p class="text-xs text-gray-500">#E5E7EB</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 字型層級 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">字型層級</h2>
+      <div class="space-y-4 bg-white p-6 rounded-lg shadow-sm border border-border">
+        <div><h1 class="text-3xl font-bold">H1 — 頁面標題 (text-3xl / 30px)</h1></div>
+        <div><h2 class="text-2xl font-semibold">H2 — 區塊標題 (text-2xl / 24px)</h2></div>
+        <div><h3 class="text-xl font-semibold">H3 — 小標題 (text-xl / 20px)</h3></div>
+        <div><p class="text-base">Body — 內文 (text-base / 16px)</p></div>
+        <div><p class="text-sm text-gray-600">Small — 輔助文字 (text-sm / 14px)</p></div>
+        <div><label class="text-sm font-medium text-gray-700">Label — 表單標籤 (text-sm font-medium)</label></div>
+      </div>
+    </section>
+
+    <!-- ==================== 按鈕變體 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">按鈕變體</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-4">
+        <div class="flex flex-wrap gap-3 items-center">
+          <button class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">Primary</button>
+          <button class="px-4 py-2 bg-white text-gray-700 border border-border rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">Secondary</button>
+          <button class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600 transition-colors">Danger</button>
+          <button class="px-4 py-2 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-100 transition-colors">Ghost</button>
+          <button class="px-4 py-2 bg-gray-100 text-gray-400 rounded-md text-sm font-medium cursor-not-allowed" disabled>Disabled</button>
+          <button class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium opacity-75 cursor-wait inline-flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            Loading
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-3 items-center">
+          <button class="px-3 py-1.5 bg-primary text-white rounded-md text-xs font-medium hover:bg-blue-700">Small</button>
+          <button class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">Default</button>
+          <button class="px-6 py-2.5 bg-primary text-white rounded-md text-base font-medium hover:bg-blue-700">Large</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 表單元件 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">表單元件</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Text Input -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">文字輸入</label>
+            <input type="text" placeholder="請輸入文字" class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+          </div>
+          <!-- Email Input -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input type="email" placeholder="user@example.com" class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+          </div>
+          <!-- Password Input with Toggle -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">密碼（含可見切換）</label>
+            <div class="relative">
+              <input id="ds-pw" type="password" placeholder="請輸入密碼" class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary pr-10">
+              <button type="button" onclick="togglePassword('ds-pw', 'ds-pw-icon')" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <i id="ds-pw-icon" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">最短長度為 8 個字元</p>
+          </div>
+          <!-- Select -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">下拉選單</label>
+            <select class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+              <option value="">請選擇</option>
+              <option>Admin</option>
+              <option>User</option>
+            </select>
+          </div>
+          <!-- Checkbox -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">核取方塊</label>
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" class="w-4 h-4 text-primary border-border rounded focus:ring-primary">
+              <span>記住我</span>
+            </label>
+          </div>
+          <!-- Textarea -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">文字區域</label>
+            <textarea rows="3" placeholder="請輸入描述" class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"></textarea>
+          </div>
+          <!-- Validation Error State -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">驗證錯誤狀態</label>
+            <input type="text" value="invalid-email" class="w-full px-3 py-2 border-2 border-danger rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-danger focus:border-danger">
+            <p class="text-xs text-danger mt-1">Email 格式不正確</p>
+          </div>
+          <!-- Disabled State -->
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">停用狀態</label>
+            <input type="text" value="無法編輯" disabled class="w-full px-3 py-2 border border-border rounded-md text-sm bg-gray-50 text-gray-400 cursor-not-allowed">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 表格樣式 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">表格樣式</h2>
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-border">
+              <th class="text-left px-4 py-3 font-medium text-gray-600">姓名</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Email</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">角色</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">狀態</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-border hover:bg-gray-50 transition-colors">
+              <td class="px-4 py-3">王小明</td>
+              <td class="px-4 py-3 text-gray-600">admin@example.com</td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">Admin</span></td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">啟用中</span></td>
+              <td class="px-4 py-3"><button class="text-primary hover:underline text-sm">編輯</button></td>
+            </tr>
+            <tr class="border-b border-border hover:bg-gray-50 transition-colors">
+              <td class="px-4 py-3">李小華</td>
+              <td class="px-4 py-3 text-gray-600">user@example.com</td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">User</span></td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">已停用</span></td>
+              <td class="px-4 py-3"><button class="text-primary hover:underline text-sm">編輯</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <!-- Pagination -->
+        <div class="px-4 py-3 border-t border-border flex items-center justify-between bg-gray-50">
+          <p class="text-sm text-gray-600">第 1 頁，共 5 頁</p>
+          <div class="flex items-center gap-1">
+            <button class="px-3 py-1 border border-border rounded-md text-sm text-gray-400 cursor-not-allowed bg-white" disabled>上一頁</button>
+            <button class="px-3 py-1 border border-primary bg-primary text-white rounded-md text-sm">1</button>
+            <button class="px-3 py-1 border border-border rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50">2</button>
+            <button class="px-3 py-1 border border-border rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50">3</button>
+            <button class="px-3 py-1 border border-border rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50">下一頁</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 卡片樣式 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">卡片樣式</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">MySQL 主資料庫</h3>
+            <span class="w-2.5 h-2.5 bg-success rounded-full"></span>
+          </div>
+          <div class="text-sm text-gray-500 space-y-1">
+            <p>類型：MySQL</p>
+            <p>主機：192.168.1.100:3306</p>
+            <p>狀態：<span class="text-success font-medium">connected</span></p>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">PostgreSQL 分析庫</h3>
+            <span class="w-2.5 h-2.5 bg-danger rounded-full"></span>
+          </div>
+          <div class="text-sm text-gray-500 space-y-1">
+            <p>類型：PostgreSQL</p>
+            <p>主機：10.0.0.50:5432</p>
+            <p>狀態：<span class="text-danger font-medium">disconnected</span></p>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">SQL Server 報表庫</h3>
+            <span class="w-2.5 h-2.5 bg-unknown rounded-full"></span>
+          </div>
+          <div class="text-sm text-gray-500 space-y-1">
+            <p>類型：SQL Server</p>
+            <p>主機：db.corp.local:1433</p>
+            <p>狀態：<span class="text-unknown font-medium">unknown</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== Badge ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Badge</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-4">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">狀態 Badge</p>
+          <div class="flex flex-wrap gap-3">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium"><span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>connected</span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium"><span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>disconnected</span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium"><span class="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>unknown</span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">啟用中</span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">已停用</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">角色 Badge</p>
+          <div class="flex flex-wrap gap-3">
+            <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">Admin</span>
+            <span class="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">User</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">資料庫類型 Badge</p>
+          <div class="flex flex-wrap gap-3">
+            <span class="px-2.5 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">MySQL</span>
+            <span class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-medium">PostgreSQL</span>
+            <span class="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">SQL Server</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== Modal/Dialog ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Modal / Dialog</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border">
+        <button onclick="document.getElementById('demo-modal').classList.remove('hidden')" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">開啟 Modal</button>
+        <button onclick="document.getElementById('demo-confirm').classList.remove('hidden')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600 ml-2">開啟確認對話框</button>
+      </div>
+    </section>
+
+    <!-- Demo Modal -->
+    <div id="demo-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('demo-modal').classList.add('hidden')"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Modal 標題</h3>
+          <button onclick="document.getElementById('demo-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <p class="text-sm text-gray-600 mb-6">這是 Modal 的內容區域，可以放置表單或訊息。</p>
+        <div class="flex justify-end gap-3">
+          <button onclick="document.getElementById('demo-modal').classList.add('hidden')" class="px-4 py-2 bg-white text-gray-700 border border-border rounded-md text-sm font-medium hover:bg-gray-50">取消</button>
+          <button onclick="document.getElementById('demo-modal').classList.add('hidden')" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">確認</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Demo Confirm Dialog -->
+    <div id="demo-confirm" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('demo-confirm').classList.add('hidden')"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0"><i data-lucide="alert-triangle" class="w-5 h-5 text-danger"></i></div>
+          <h3 class="text-lg font-semibold">確認刪除</h3>
+        </div>
+        <p class="text-sm text-gray-600 mb-6">您確定要刪除此項目嗎？此操作無法復原。</p>
+        <div class="flex justify-end gap-3">
+          <button onclick="document.getElementById('demo-confirm').classList.add('hidden')" class="px-4 py-2 bg-white text-gray-700 border border-border rounded-md text-sm font-medium hover:bg-gray-50">取消</button>
+          <button onclick="document.getElementById('demo-confirm').classList.add('hidden')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600">刪除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Toast 通知 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Toast 通知</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border">
+        <div class="flex flex-wrap gap-3">
+          <button onclick="showToast('success','操作成功','帳號已建立')" class="px-4 py-2 bg-success text-white rounded-md text-sm font-medium hover:opacity-90">Success Toast</button>
+          <button onclick="showToast('error','操作失敗','此 Email 已有帳號存在')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:opacity-90">Error Toast</button>
+          <button onclick="showToast('warning','警告','連線逾時（10 秒）')" class="px-4 py-2 bg-warning text-white rounded-md text-sm font-medium hover:opacity-90">Warning Toast</button>
+          <button onclick="showToast('info','提示','密碼已重設，使用者需以新密碼重新登入')" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:opacity-90">Info Toast</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+    <!-- ==================== Sidebar + Header 佈局 ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Sidebar 導航 + Header 佈局</h2>
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden" style="height:320px">
+        <div class="flex h-full">
+          <!-- Sidebar -->
+          <aside class="w-56 bg-white border-r border-border flex flex-col">
+            <div class="p-4 border-b border-border">
+              <h2 class="text-lg font-bold text-primary">CDMP</h2>
+              <p class="text-xs text-gray-500">資料治理平台</p>
+            </div>
+            <nav class="flex-1 py-2">
+              <a href="#" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 border-l-[3px] border-transparent">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i>儀表板
+              </a>
+              <a href="#" class="flex items-center gap-3 px-4 py-2.5 text-sm text-primary bg-blue-50 border-l-[3px] border-primary font-medium">
+                <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+              </a>
+              <a href="#" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 border-l-[3px] border-transparent">
+                <i data-lucide="database" class="w-4 h-4"></i>資料來源
+              </a>
+            </nav>
+          </aside>
+          <!-- Main -->
+          <div class="flex-1 flex flex-col">
+            <header class="h-14 border-b border-border flex items-center justify-between px-6">
+              <h1 class="text-lg font-semibold">帳號管理</h1>
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-gray-600">王小明</span>
+                <button class="px-3 py-1.5 text-sm text-gray-600 border border-border rounded-md hover:bg-gray-50 inline-flex items-center gap-1.5">
+                  <i data-lucide="log-out" class="w-3.5 h-3.5"></i>登出
+                </button>
+              </div>
+            </header>
+            <div class="flex-1 p-6 bg-bg">
+              <p class="text-gray-500 text-sm">主要內容區域</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== Empty State ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Empty State</h2>
+      <div class="bg-white rounded-lg shadow-sm border border-border p-12 text-center">
+        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="inbox" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-700 mb-2">找不到帳號</h3>
+        <p class="text-sm text-gray-500 mb-4">目前沒有符合條件的帳號資料</p>
+        <button class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">建立帳號</button>
+      </div>
+    </section>
+
+    <!-- ==================== Loading Skeleton ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Loading Skeleton</h2>
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-border">
+              <th class="text-left px-4 py-3 font-medium text-gray-600">姓名</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Email</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">角色</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-border"><td class="px-4 py-3" colspan="4"><div class="h-4 bg-gray-200 rounded animate-pulse w-full"></div></td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-3" colspan="4"><div class="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div></td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-3" colspan="4"><div class="h-4 bg-gray-200 rounded animate-pulse w-5/6"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Password toggle
+    function togglePassword(inputId, iconId) {
+      const input = document.getElementById(inputId);
+      const icon = document.getElementById(iconId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    // Toast notification system
+    function showToast(type, title, message) {
+      const container = document.getElementById('toast-container');
+      const colors = { success: 'border-success', error: 'border-danger', warning: 'border-warning', info: 'border-primary' };
+      const icons = { success: 'check-circle', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
+      const iconColors = { success: 'text-success', error: 'text-danger', warning: 'text-warning', info: 'text-primary' };
+
+      const toast = document.createElement('div');
+      toast.className = `bg-white border-l-4 ${colors[type]} rounded-lg shadow-lg p-4 min-w-[320px] max-w-md flex items-start gap-3 animate-slide-in`;
+      toast.innerHTML = `
+        <i data-lucide="${icons[type]}" class="w-5 h-5 ${iconColors[type]} flex-shrink-0 mt-0.5"></i>
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-gray-900">${title}</p>
+          <p class="text-sm text-gray-600 mt-0.5">${message}</p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600 flex-shrink-0"><i data-lucide="x" class="w-4 h-4"></i></button>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons();
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 5000);
+    }
+  </script>
+</body>
+</html>

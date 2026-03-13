@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>狀態與互動 — CDMP Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes pulse-bar {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    .skeleton-bar {
+      animation: pulse-bar 1.5s ease-in-out infinite;
+      background-color: #E5E7EB;
+      border-radius: 4px;
+    }
+    .toast-enter {
+      animation: slideInRight 0.3s ease-out forwards;
+    }
+    .toast-exit {
+      animation: slideOutRight 0.3s ease-in forwards;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutRight {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Header -->
+  <div class="bg-surface border-b border-border px-6 py-4">
+    <h1 class="text-xl font-bold text-gray-800">狀態與互動展示</h1>
+    <p class="text-sm text-gray-500 mt-1">錯誤頁面、載入狀態、Toast 通知、Session 過期</p>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="bg-surface border-b border-border px-6">
+    <nav class="flex space-x-1" role="tablist">
+      <button onclick="switchTab('errors')" id="tab-errors"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-primary text-primary"
+        role="tab" aria-selected="true">
+        錯誤頁面
+      </button>
+      <button onclick="switchTab('loading')" id="tab-loading"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+        role="tab" aria-selected="false">
+        載入狀態
+      </button>
+      <button onclick="switchTab('toasts')" id="tab-toasts"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+        role="tab" aria-selected="false">
+        Toast 展示
+      </button>
+      <button onclick="switchTab('session')" id="tab-session"
+        class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+        role="tab" aria-selected="false">
+        Session 過期
+      </button>
+    </nav>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="p-6 max-w-5xl mx-auto">
+
+    <!-- ========== Tab 1: 錯誤頁面 ========== -->
+    <div id="panel-errors" class="tab-panel">
+      <div class="space-y-6">
+
+        <!-- 403 -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">403 Error Page</span>
+          </div>
+          <div class="py-20 flex flex-col items-center justify-center text-center px-4">
+            <div class="w-24 h-24 rounded-full bg-red-50 flex items-center justify-center mb-6">
+              <i data-lucide="shield-alert" class="w-16 h-16 text-danger"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-3">403 — 禁止存取</h2>
+            <p class="text-gray-600 mb-1">您沒有權限存取此頁面。</p>
+            <p class="text-sm text-gray-400 mb-8">如需存取權限，請聯絡系統管理員。</p>
+            <button class="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+              返回首頁
+            </button>
+          </div>
+        </div>
+
+        <!-- 404 -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">404 Error Page</span>
+          </div>
+          <div class="py-20 flex flex-col items-center justify-center text-center px-4">
+            <div class="w-24 h-24 rounded-full bg-amber-50 flex items-center justify-center mb-6">
+              <i data-lucide="search" class="w-16 h-16 text-warning"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-3">404 — 找不到頁面</h2>
+            <p class="text-gray-600 mb-8">您要找的頁面不存在或已被移除。</p>
+            <button class="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+              返回首頁
+            </button>
+          </div>
+        </div>
+
+        <!-- 500 -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">500 Error Page</span>
+          </div>
+          <div class="py-20 flex flex-col items-center justify-center text-center px-4">
+            <div class="w-24 h-24 rounded-full bg-red-50 flex items-center justify-center mb-6">
+              <i data-lucide="server-crash" class="w-16 h-16 text-danger"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-3">500 — 伺服器錯誤</h2>
+            <p class="text-gray-600 mb-1">系統發生非預期的錯誤，請稍後再試。</p>
+            <p class="text-sm text-gray-400 mb-8">若問題持續發生，請聯絡系統管理員。</p>
+            <div class="flex items-center gap-3">
+              <button class="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                重新整理
+              </button>
+              <button class="px-6 py-2.5 bg-white text-gray-700 border border-border rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+                返回首頁
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========== Tab 2: 載入狀態 ========== -->
+    <div id="panel-loading" class="tab-panel hidden">
+      <div class="space-y-6">
+
+        <!-- Full Page Loading -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Full Page Loading</span>
+          </div>
+          <div class="py-24 flex flex-col items-center justify-center">
+            <svg class="spinner w-10 h-10 text-primary mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M12 2a10 10 0 0 1 10 10" />
+            </svg>
+            <p class="text-gray-500 text-sm">載入中...</p>
+          </div>
+        </div>
+
+        <!-- Table Loading Skeleton -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Table Loading Skeleton</span>
+          </div>
+          <div class="p-4">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-border">
+                  <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">帳號</th>
+                  <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">姓名</th>
+                  <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">角色</th>
+                  <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">狀態</th>
+                  <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-border" style="animation-delay: 0s"><td class="py-3 px-4"><div class="skeleton-bar h-4 w-28"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-20"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-16"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-14"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-10"></div></td></tr>
+                <tr class="border-b border-border"><td class="py-3 px-4"><div class="skeleton-bar h-4 w-32" style="animation-delay:.15s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-16" style="animation-delay:.15s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-20" style="animation-delay:.15s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-14" style="animation-delay:.15s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-10" style="animation-delay:.15s"></div></td></tr>
+                <tr class="border-b border-border"><td class="py-3 px-4"><div class="skeleton-bar h-4 w-24" style="animation-delay:.3s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-20" style="animation-delay:.3s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-16" style="animation-delay:.3s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-14" style="animation-delay:.3s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-10" style="animation-delay:.3s"></div></td></tr>
+                <tr class="border-b border-border"><td class="py-3 px-4"><div class="skeleton-bar h-4 w-28" style="animation-delay:.45s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-24" style="animation-delay:.45s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-20" style="animation-delay:.45s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-14" style="animation-delay:.45s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-10" style="animation-delay:.45s"></div></td></tr>
+                <tr><td class="py-3 px-4"><div class="skeleton-bar h-4 w-20" style="animation-delay:.6s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-16" style="animation-delay:.6s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-24" style="animation-delay:.6s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-14" style="animation-delay:.6s"></div></td><td class="py-3 px-4"><div class="skeleton-bar h-4 w-10" style="animation-delay:.6s"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Card Loading Skeleton -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Card Loading Skeleton</span>
+          </div>
+          <div class="p-4 grid grid-cols-3 gap-4">
+            <div class="border border-border rounded-lg p-4 space-y-3">
+              <div class="skeleton-bar h-4 w-3/4"></div>
+              <div class="skeleton-bar h-3 w-full"></div>
+              <div class="skeleton-bar h-3 w-5/6"></div>
+              <div class="skeleton-bar h-8 w-1/2 mt-2"></div>
+            </div>
+            <div class="border border-border rounded-lg p-4 space-y-3">
+              <div class="skeleton-bar h-4 w-2/3" style="animation-delay:.2s"></div>
+              <div class="skeleton-bar h-3 w-full" style="animation-delay:.2s"></div>
+              <div class="skeleton-bar h-3 w-4/5" style="animation-delay:.2s"></div>
+              <div class="skeleton-bar h-8 w-1/2 mt-2" style="animation-delay:.2s"></div>
+            </div>
+            <div class="border border-border rounded-lg p-4 space-y-3">
+              <div class="skeleton-bar h-4 w-1/2" style="animation-delay:.4s"></div>
+              <div class="skeleton-bar h-3 w-full" style="animation-delay:.4s"></div>
+              <div class="skeleton-bar h-3 w-3/4" style="animation-delay:.4s"></div>
+              <div class="skeleton-bar h-8 w-1/2 mt-2" style="animation-delay:.4s"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Loading Skeleton -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Form Loading Skeleton</span>
+          </div>
+          <div class="p-6 max-w-lg space-y-5">
+            <div class="space-y-2">
+              <div class="skeleton-bar h-3 w-16"></div>
+              <div class="skeleton-bar h-10 w-full rounded-md"></div>
+            </div>
+            <div class="space-y-2">
+              <div class="skeleton-bar h-3 w-12" style="animation-delay:.15s"></div>
+              <div class="skeleton-bar h-10 w-full rounded-md" style="animation-delay:.15s"></div>
+            </div>
+            <div class="space-y-2">
+              <div class="skeleton-bar h-3 w-20" style="animation-delay:.3s"></div>
+              <div class="skeleton-bar h-10 w-full rounded-md" style="animation-delay:.3s"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <div class="skeleton-bar h-3 w-14" style="animation-delay:.45s"></div>
+                <div class="skeleton-bar h-10 w-full rounded-md" style="animation-delay:.45s"></div>
+              </div>
+              <div class="space-y-2">
+                <div class="skeleton-bar h-3 w-14" style="animation-delay:.45s"></div>
+                <div class="skeleton-bar h-10 w-full rounded-md" style="animation-delay:.45s"></div>
+              </div>
+            </div>
+            <div class="pt-2">
+              <div class="skeleton-bar h-10 w-24 rounded-md" style="animation-delay:.6s"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Button Loading States -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Button Loading States</span>
+          </div>
+          <div class="p-6 flex flex-wrap items-center gap-4">
+            <button disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary/80 text-white rounded-lg text-sm font-medium cursor-not-allowed">
+              <svg class="spinner w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+              登入中...
+            </button>
+            <button disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-success/80 text-white rounded-lg text-sm font-medium cursor-not-allowed">
+              <svg class="spinner w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+              儲存中...
+            </button>
+            <button disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-danger/80 text-white rounded-lg text-sm font-medium cursor-not-allowed">
+              <svg class="spinner w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+              刪除中...
+            </button>
+            <button disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-500/80 text-white rounded-lg text-sm font-medium cursor-not-allowed">
+              <svg class="spinner w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+              測試中...
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========== Tab 3: Toast 展示 ========== -->
+    <div id="panel-toasts" class="tab-panel hidden">
+      <div class="space-y-6">
+
+        <!-- Toast Type Triggers -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Toast 類型觸發</span>
+          </div>
+          <div class="p-6 flex flex-wrap gap-3">
+            <button onclick="showToast('success','操作成功','帳號已建立')"
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-success text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              Success Toast
+            </button>
+            <button onclick="showToast('error','操作失敗','此 Email 已有帳號存在')"
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-danger text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
+              <i data-lucide="x-circle" class="w-4 h-4"></i>
+              Error Toast
+            </button>
+            <button onclick="showToast('warning','警告','連線逾時（10 秒）')"
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-warning text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors">
+              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+              Warning Toast
+            </button>
+            <button onclick="showToast('info','提示','密碼已重設，使用者需以新密碼重新登入')"
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+              <i data-lucide="info" class="w-4 h-4"></i>
+              Info Toast
+            </button>
+          </div>
+        </div>
+
+        <!-- All Toast Messages -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">所有 Toast 訊息（點擊觸發）</span>
+          </div>
+          <div class="p-6 space-y-2">
+            <button onclick="showToast('success','操作成功','帳號已建立')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">帳號已建立</span>
+            </button>
+            <button onclick="showToast('success','操作成功','帳號已更新')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">帳號已更新</span>
+            </button>
+            <button onclick="showToast('success','操作成功','帳號已停用')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">帳號已停用</span>
+            </button>
+            <button onclick="showToast('success','操作成功','帳號已啟用')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">帳號已啟用</span>
+            </button>
+            <button onclick="showToast('info','提示','密碼已重設，使用者需以新密碼重新登入')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-primary flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">密碼已重設，使用者需以新密碼重新登入</span>
+            </button>
+            <button onclick="showToast('success','操作成功','資料來源已新增')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">資料來源已新增</span>
+            </button>
+            <button onclick="showToast('success','操作成功','資料來源已更新')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">資料來源已更新</span>
+            </button>
+            <button onclick="showToast('success','操作成功','資料來源已成功刪除')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">資料來源已成功刪除</span>
+            </button>
+            <button onclick="showToast('success','連線測試','連線成功，回應時間 120ms')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">連線成功，回應時間 120ms</span>
+            </button>
+            <button onclick="showToast('error','連線測試','連線被拒：無法連至主機 192.168.1.100:3306')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-danger flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">連線被拒：無法連至主機 192.168.1.100:3306</span>
+            </button>
+            <button onclick="showToast('error','連線測試','驗證失敗：憑證不正確')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-danger flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">驗證失敗：憑證不正確</span>
+            </button>
+            <button onclick="showToast('warning','連線測試','連線逾時（10 秒）')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-warning flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">連線逾時（10 秒）</span>
+            </button>
+            <button onclick="showToast('success','操作成功','登出成功')" class="toast-item w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-gray-50 transition-colors flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span class="text-sm text-gray-700">登出成功</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========== Tab 4: Session 過期 ========== -->
+    <div id="panel-session" class="tab-panel hidden">
+      <div class="space-y-6">
+
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">Session 過期 Overlay 模擬</span>
+          </div>
+          <div class="p-6 text-center">
+            <p class="text-sm text-gray-500 mb-4">點擊按鈕顯示 Session 過期的覆蓋層效果。</p>
+            <button onclick="toggleSessionOverlay(true)"
+              class="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+              顯示 Session 過期 Overlay
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline preview -->
+        <div class="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2 border-b border-border">
+            <span class="text-xs font-mono text-gray-400">內嵌預覽（靜態）</span>
+          </div>
+          <div class="relative h-80 bg-gray-100 overflow-hidden">
+            <!-- Simulated page content behind -->
+            <div class="p-6 opacity-30">
+              <div class="h-4 bg-gray-300 rounded w-48 mb-3"></div>
+              <div class="h-3 bg-gray-300 rounded w-full mb-2"></div>
+              <div class="h-3 bg-gray-300 rounded w-5/6 mb-2"></div>
+              <div class="h-3 bg-gray-300 rounded w-2/3 mb-6"></div>
+              <div class="grid grid-cols-3 gap-3">
+                <div class="h-20 bg-gray-300 rounded"></div>
+                <div class="h-20 bg-gray-300 rounded"></div>
+                <div class="h-20 bg-gray-300 rounded"></div>
+              </div>
+            </div>
+            <!-- Overlay -->
+            <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+                <div class="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                  <i data-lucide="clock" class="w-8 h-8 text-warning"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Session 已過期</h3>
+                <p class="text-sm text-gray-500 mb-6">您的登入狀態已過期，請重新登入。</p>
+                <a href="01-login.html" class="inline-block px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                  重新登入
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+  <!-- Session Expired Overlay -->
+  <div id="session-overlay" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="toggleSessionOverlay(false)"></div>
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center relative z-10">
+        <div class="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="clock" class="w-8 h-8 text-warning"></i>
+        </div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Session 已過期</h3>
+        <p class="text-sm text-gray-500 mb-6">您的登入狀態已過期，請重新登入。</p>
+        <a href="01-login.html" class="inline-block px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          重新登入
+        </a>
+        <button onclick="toggleSessionOverlay(false)" class="block mx-auto mt-3 text-xs text-gray-400 hover:text-gray-600">
+          關閉預覽
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // ===== Tab Switching =====
+    function switchTab(tabName) {
+      // Hide all panels
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      // Reset all tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'text-primary');
+        btn.classList.add('border-transparent', 'text-gray-500');
+      });
+      // Show selected panel
+      document.getElementById('panel-' + tabName).classList.remove('hidden');
+      // Activate tab button
+      const activeBtn = document.getElementById('tab-' + tabName);
+      activeBtn.classList.remove('border-transparent', 'text-gray-500');
+      activeBtn.classList.add('border-primary', 'text-primary');
+      // Re-init icons for the newly visible panel
+      lucide.createIcons();
+    }
+
+    // ===== Toast System =====
+    const toastColors = {
+      success: { border: '#22C55E', bg: '#F0FDF4', icon: 'check-circle', iconColor: '#22C55E' },
+      error:   { border: '#EF4444', bg: '#FEF2F2', icon: 'x-circle',     iconColor: '#EF4444' },
+      warning: { border: '#F59E0B', bg: '#FFFBEB', icon: 'alert-triangle', iconColor: '#F59E0B' },
+      info:    { border: '#2563EB', bg: '#EFF6FF', icon: 'info',          iconColor: '#2563EB' }
+    };
+
+    function showToast(type, title, message) {
+      const container = document.getElementById('toast-container');
+      const config = toastColors[type];
+
+      const toast = document.createElement('div');
+      toast.className = 'toast-enter pointer-events-auto';
+      toast.style.cssText = `
+        background: ${config.bg};
+        border: 1px solid #E5E7EB;
+        border-left: 4px solid ${config.border};
+        border-radius: 8px;
+        padding: 14px 16px;
+        min-width: 340px;
+        max-width: 420px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      `;
+
+      toast.innerHTML = `
+        <i data-lucide="${config.icon}" style="width:20px;height:20px;color:${config.iconColor};flex-shrink:0;margin-top:1px;"></i>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1F2937;margin-bottom:2px;">${title}</div>
+          <div style="font-size:13px;color:#6B7280;line-height:1.4;">${message}</div>
+        </div>
+        <button onclick="dismissToast(this.parentElement)" style="flex-shrink:0;color:#9CA3AF;cursor:pointer;background:none;border:none;padding:2px;">
+          <i data-lucide="x" style="width:16px;height:16px;"></i>
+        </button>
+      `;
+
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      // Auto-dismiss after 5s
+      setTimeout(() => dismissToast(toast), 5000);
+    }
+
+    function dismissToast(toast) {
+      if (!toast || !toast.parentElement) return;
+      toast.classList.remove('toast-enter');
+      toast.classList.add('toast-exit');
+      setTimeout(() => {
+        if (toast.parentElement) toast.parentElement.removeChild(toast);
+      }, 300);
+    }
+
+    // ===== Session Overlay =====
+    function toggleSessionOverlay(show) {
+      const overlay = document.getElementById('session-overlay');
+      if (show) {
+        overlay.classList.remove('hidden');
+        lucide.createIcons();
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+  </script>
+
+</body>
+</html>

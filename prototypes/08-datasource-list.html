@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資料來源管理 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    .chart-container { position: relative; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">資料來源管理</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14">
+
+    <!-- Tab Navigation -->
+    <div class="bg-white border-b border-border px-6">
+      <nav class="flex space-x-1" role="tablist">
+        <button onclick="switchMainTab('overview')" id="mainTab-overview"
+          class="main-tab-btn px-5 py-3 text-sm font-medium border-b-2 border-primary text-primary"
+          role="tab" aria-selected="true">
+          <span class="flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4"></i>狀態總覽</span>
+        </button>
+        <button onclick="switchMainTab('list')" id="mainTab-list"
+          class="main-tab-btn px-5 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+          role="tab" aria-selected="false">
+          <span class="flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i>資料來源清單</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: 狀態總覽 (F016) -->
+    <!-- ============================================================ -->
+    <div id="panel-overview" class="main-tab-panel p-6 space-y-6">
+
+      <!-- Summary Cards + Refresh Button -->
+      <div class="flex items-start gap-4">
+        <div class="flex-1 grid grid-cols-4 gap-4">
+          <!-- Total -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-gray-500 mb-2">
+              <i data-lucide="database" class="w-5 h-5"></i>
+              <span class="text-sm">總數</span>
+            </div>
+            <p class="text-3xl font-bold" id="card-total">10</p>
+          </div>
+          <!-- Connected -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-success mb-2">
+              <i data-lucide="check-circle" class="w-5 h-5"></i>
+              <span class="text-sm">已連線</span>
+            </div>
+            <p class="text-3xl font-bold text-success" id="card-connected">7</p>
+          </div>
+          <!-- Disconnected -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-danger mb-2">
+              <i data-lucide="x-circle" class="w-5 h-5"></i>
+              <span class="text-sm">已斷線</span>
+            </div>
+            <p class="text-3xl font-bold text-danger" id="card-disconnected">2</p>
+          </div>
+          <!-- Unknown -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-unknown mb-2">
+              <i data-lucide="help-circle" class="w-5 h-5"></i>
+              <span class="text-sm">未知</span>
+            </div>
+            <p class="text-3xl font-bold text-unknown" id="card-unknown">1</p>
+          </div>
+        </div>
+        <button id="btn-refresh-all" onclick="refreshAll()" class="bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="refresh-cw" class="w-4 h-4" id="refresh-icon"></i>
+          全部重新整理
+        </button>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid grid-cols-2 gap-6">
+        <!-- Pie Chart -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-6">
+          <h3 class="text-base font-semibold mb-4">資料來源類型分佈</h3>
+          <div class="chart-container flex justify-center">
+            <canvas id="pieChart" width="280" height="280"></canvas>
+          </div>
+        </div>
+        <!-- Line Chart -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold">回應時間趨勢</h3>
+          </div>
+          <div class="flex items-center gap-3 mb-4">
+            <div class="flex border border-border rounded-lg overflow-hidden" id="time-range-group">
+              <button onclick="setTimeRange('24h')" class="px-3 py-1.5 text-xs font-medium bg-primary text-white" data-range="24h">24h</button>
+              <button onclick="setTimeRange('7d')" class="px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border-l border-border hover:bg-gray-50" data-range="7d">7d</button>
+              <button onclick="setTimeRange('30d')" class="px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border-l border-border hover:bg-gray-50" data-range="30d">30d</button>
+            </div>
+            <select id="ds-selector" onchange="updateLineChart()" class="border border-border rounded-lg px-3 py-1.5 text-xs text-gray-700 bg-white">
+              <option>MySQL 主資料庫</option>
+              <option>PostgreSQL 分析庫</option>
+              <option>SQL Server 報表庫</option>
+              <option>MySQL 備份庫</option>
+              <option>PostgreSQL 日誌庫</option>
+              <option>SQL Server 客戶庫</option>
+            </select>
+          </div>
+          <div class="chart-container">
+            <canvas id="lineChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Datasource Status Cards -->
+      <div>
+        <h3 class="text-base font-semibold mb-4">資料來源狀態</h3>
+        <div class="grid grid-cols-3 gap-4" id="status-cards"></div>
+      </div>
+
+      <!-- Alert List -->
+      <div>
+        <h3 class="text-base font-semibold mb-4">告警列表</h3>
+        <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden" id="alert-container"></div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: 資料來源清單 (F012) -->
+    <!-- ============================================================ -->
+    <div id="panel-list" class="main-tab-panel hidden p-6">
+
+      <!-- Top Toolbar -->
+      <div class="flex flex-wrap items-center gap-3 mb-5">
+        <a href="09-add-datasource.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>新增資料來源
+        </a>
+        <div class="relative flex-1 min-w-[200px] max-w-xs">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+          <input type="text" id="searchInput" placeholder="搜尋資料來源名稱" class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+        </div>
+        <select id="typeFilter" class="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+          <option value="">全部類型</option>
+          <option value="MySQL">MySQL</option>
+          <option value="PostgreSQL">PostgreSQL</option>
+          <option value="SQL Server">SQL Server</option>
+        </select>
+        <select id="statusFilter" class="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+          <option value="">全部狀態</option>
+          <option value="connected">connected</option>
+          <option value="disconnected">disconnected</option>
+          <option value="unknown">unknown</option>
+        </select>
+        <div class="flex border border-border rounded-lg overflow-hidden">
+          <button id="btnListView" onclick="setView('list')" class="p-2 bg-primary text-white" title="清單檢視">
+            <i data-lucide="list" class="w-4 h-4"></i>
+          </button>
+          <button id="btnCardView" onclick="setView('card')" class="p-2 bg-white text-gray-500 hover:bg-gray-50" title="卡片檢視">
+            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Table View -->
+      <div id="tableView" class="bg-white rounded-xl border border-border overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-border">
+                <th class="text-left px-4 py-3 font-medium text-gray-600">名稱</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">類型</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">主機</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">資料庫名稱</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">狀態</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">最後測試時間</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <!-- Row 1 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">MySQL 主資料庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">MySQL</span></td>
+                <td class="px-4 py-3 text-gray-600">192.168.1.100</td>
+                <td class="px-4 py-3 text-gray-600">production_db</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>connected
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-500">2024-01-15 14:30</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+                    <button onclick="testConnection('MySQL 主資料庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+                    <button onclick="openDeleteModal('MySQL 主資料庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 2 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">PostgreSQL 分析庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-sky-100 text-sky-700">PostgreSQL</span></td>
+                <td class="px-4 py-3 text-gray-600">10.0.0.50</td>
+                <td class="px-4 py-3 text-gray-600">analytics_db</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>connected
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-500">2024-01-15 14:25</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+                    <button onclick="testConnection('PostgreSQL 分析庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+                    <button onclick="openDeleteModal('PostgreSQL 分析庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 3 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">SQL Server 報表庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">SQL Server</span></td>
+                <td class="px-4 py-3 text-gray-600">db.corp.local</td>
+                <td class="px-4 py-3 text-gray-600">reporting_db</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>disconnected
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-500">2024-01-15 14:20</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+                    <button onclick="testConnection('SQL Server 報表庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+                    <button onclick="openDeleteModal('SQL Server 報表庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 4 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">MySQL 備份庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">MySQL</span></td>
+                <td class="px-4 py-3 text-gray-600">192.168.1.101</td>
+                <td class="px-4 py-3 text-gray-600">backup_db</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">
+                    <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>unknown
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-500">從未測試</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+                    <button onclick="testConnection('MySQL 備份庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+                    <button onclick="openDeleteModal('MySQL 備份庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 5 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">PostgreSQL 日誌庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-sky-100 text-sky-700">PostgreSQL</span></td>
+                <td class="px-4 py-3 text-gray-600">log-server.local</td>
+                <td class="px-4 py-3 text-gray-600">logs_db</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>connected
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-500">2024-01-15 13:50</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+                    <button onclick="testConnection('PostgreSQL 日誌庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+                    <button onclick="openDeleteModal('PostgreSQL 日誌庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 6 -->
+              <tr class="hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">SQL Server 客戶庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">SQL Server</span></td>
+                <td class="px-4 py-3 text-gray-600">crm.corp.local</td>
+                <td class="px-4 py-3 text-gray-600">customer_db</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>disconnected
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-500">2024-01-15 12:00</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+                    <button onclick="testConnection('SQL Server 客戶庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+                    <button onclick="openDeleteModal('SQL Server 客戶庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="px-4 py-3 border-t border-border text-sm text-gray-500 text-center">
+          第 1 頁，共 1 頁
+        </div>
+      </div>
+
+      <!-- Card View -->
+      <div id="cardView" class="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Card 1 -->
+          <div class="bg-white rounded-xl border border-border p-5">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="font-medium text-gray-800">MySQL 主資料庫</h3>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">MySQL</span>
+            </div>
+            <div class="space-y-1.5 text-sm text-gray-600 mb-3">
+              <div class="flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5 text-gray-400"></i>192.168.1.100:3306</div>
+              <div class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5 text-gray-400"></i>production_db</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>connected
+              </span>
+              <span class="text-xs text-gray-400">2024-01-15 14:30</span>
+            </div>
+            <div class="flex items-center gap-2 pt-3 border-t border-border">
+              <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+              <button onclick="testConnection('MySQL 主資料庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+              <button onclick="openDeleteModal('MySQL 主資料庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+            </div>
+          </div>
+          <!-- Card 2 -->
+          <div class="bg-white rounded-xl border border-border p-5">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="font-medium text-gray-800">PostgreSQL 分析庫</h3>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-sky-100 text-sky-700">PostgreSQL</span>
+            </div>
+            <div class="space-y-1.5 text-sm text-gray-600 mb-3">
+              <div class="flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5 text-gray-400"></i>10.0.0.50:5432</div>
+              <div class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5 text-gray-400"></i>analytics_db</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>connected
+              </span>
+              <span class="text-xs text-gray-400">2024-01-15 14:25</span>
+            </div>
+            <div class="flex items-center gap-2 pt-3 border-t border-border">
+              <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+              <button onclick="testConnection('PostgreSQL 分析庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+              <button onclick="openDeleteModal('PostgreSQL 分析庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+            </div>
+          </div>
+          <!-- Card 3 -->
+          <div class="bg-white rounded-xl border border-border p-5">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="font-medium text-gray-800">SQL Server 報表庫</h3>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">SQL Server</span>
+            </div>
+            <div class="space-y-1.5 text-sm text-gray-600 mb-3">
+              <div class="flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5 text-gray-400"></i>db.corp.local:1433</div>
+              <div class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5 text-gray-400"></i>reporting_db</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>disconnected
+              </span>
+              <span class="text-xs text-gray-400">2024-01-15 14:20</span>
+            </div>
+            <div class="flex items-center gap-2 pt-3 border-t border-border">
+              <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+              <button onclick="testConnection('SQL Server 報表庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+              <button onclick="openDeleteModal('SQL Server 報表庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+            </div>
+          </div>
+          <!-- Card 4 -->
+          <div class="bg-white rounded-xl border border-border p-5">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="font-medium text-gray-800">MySQL 備份庫</h3>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">MySQL</span>
+            </div>
+            <div class="space-y-1.5 text-sm text-gray-600 mb-3">
+              <div class="flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5 text-gray-400"></i>192.168.1.101:3306</div>
+              <div class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5 text-gray-400"></i>backup_db</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>unknown
+              </span>
+              <span class="text-xs text-gray-400">從未測試</span>
+            </div>
+            <div class="flex items-center gap-2 pt-3 border-t border-border">
+              <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+              <button onclick="testConnection('MySQL 備份庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+              <button onclick="openDeleteModal('MySQL 備份庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+            </div>
+          </div>
+          <!-- Card 5 -->
+          <div class="bg-white rounded-xl border border-border p-5">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="font-medium text-gray-800">PostgreSQL 日誌庫</h3>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-sky-100 text-sky-700">PostgreSQL</span>
+            </div>
+            <div class="space-y-1.5 text-sm text-gray-600 mb-3">
+              <div class="flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5 text-gray-400"></i>log-server.local:5432</div>
+              <div class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5 text-gray-400"></i>logs_db</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>connected
+              </span>
+              <span class="text-xs text-gray-400">2024-01-15 13:50</span>
+            </div>
+            <div class="flex items-center gap-2 pt-3 border-t border-border">
+              <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+              <button onclick="testConnection('PostgreSQL 日誌庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+              <button onclick="openDeleteModal('PostgreSQL 日誌庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+            </div>
+          </div>
+          <!-- Card 6 -->
+          <div class="bg-white rounded-xl border border-border p-5">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="font-medium text-gray-800">SQL Server 客戶庫</h3>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">SQL Server</span>
+            </div>
+            <div class="space-y-1.5 text-sm text-gray-600 mb-3">
+              <div class="flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5 text-gray-400"></i>crm.corp.local:1433</div>
+              <div class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5 text-gray-400"></i>customer_db</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>disconnected
+              </span>
+              <span class="text-xs text-gray-400">2024-01-15 12:00</span>
+            </div>
+            <div class="flex items-center gap-2 pt-3 border-t border-border">
+              <a href="10-edit-datasource.html" class="text-primary hover:text-blue-800 text-xs font-medium">編輯</a>
+              <button onclick="testConnection('SQL Server 客戶庫')" class="text-primary hover:text-blue-800 text-xs font-medium">測試連線</button>
+              <button onclick="openDeleteModal('SQL Server 客戶庫')" class="text-danger hover:text-red-700 text-xs font-medium">刪除</button>
+            </div>
+          </div>
+        </div>
+        <!-- Pagination -->
+        <div class="mt-4 text-sm text-gray-500 text-center">
+          第 1 頁，共 1 頁
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden">
+        <div class="bg-white rounded-xl border border-border p-16 text-center">
+          <i data-lucide="database" class="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+          <h3 class="text-lg font-medium text-gray-700 mb-2">尚未設定任何資料來源</h3>
+          <p class="text-sm text-gray-500 mb-6">新增您的第一個資料來源以開始管理資料</p>
+          <a href="09-add-datasource.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>新增資料來源
+          </a>
+        </div>
+      </div>
+
+      <!-- Loading Skeleton -->
+      <div id="loadingState" class="hidden">
+        <div class="bg-white rounded-xl border border-border overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-border">
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">名稱</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">類型</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">主機</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">資料庫名稱</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">狀態</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">最後測試時間</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-border"><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-32"></div></td><td class="px-4 py-3"><div class="h-5 bg-gray-200 rounded animate-pulse w-16"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-28"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-24"></div></td><td class="px-4 py-3"><div class="h-5 bg-gray-200 rounded animate-pulse w-20"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-32"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-28"></div></td></tr>
+                <tr class="border-b border-border"><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-36"></div></td><td class="px-4 py-3"><div class="h-5 bg-gray-200 rounded animate-pulse w-20"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-24"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-20"></div></td><td class="px-4 py-3"><div class="h-5 bg-gray-200 rounded animate-pulse w-20"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-32"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-28"></div></td></tr>
+                <tr class="border-b border-border"><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-28"></div></td><td class="px-4 py-3"><div class="h-5 bg-gray-200 rounded animate-pulse w-18"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-32"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-22"></div></td><td class="px-4 py-3"><div class="h-5 bg-gray-200 rounded animate-pulse w-20"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-32"></div></td><td class="px-4 py-3"><div class="h-4 bg-gray-200 rounded animate-pulse w-28"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Demo Buttons (at bottom of page) -->
+    <!-- ============================================================ -->
+    <div class="px-6 pb-6 border-t border-border pt-6 mt-2">
+      <p class="text-sm text-gray-400 mb-3">Demo 狀態切換</p>
+      <div class="flex gap-2 flex-wrap">
+        <span class="text-xs text-gray-400 self-center mr-1">狀態總覽:</span>
+        <button onclick="setDemoState('normal')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Normal</button>
+        <button onclick="setDemoState('loading')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Loading</button>
+        <button onclick="setDemoState('allConnected')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">All Connected</button>
+        <span class="text-xs text-gray-300 self-center mx-2">|</span>
+        <span class="text-xs text-gray-400 self-center mr-1">資料來源清單:</span>
+        <button onclick="showListState('normal')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Table View</button>
+        <button onclick="showListState('card')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Card View</button>
+        <button onclick="showListState('empty')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Empty</button>
+        <button onclick="showListState('loading')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Loading</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+      <div class="flex justify-center mb-4">
+        <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-danger"></i>
+        </div>
+      </div>
+      <h3 class="text-lg font-semibold text-gray-800 text-center mb-2">確認刪除</h3>
+      <p class="text-sm text-gray-600 text-center mb-6" id="deleteMessage">您確定要刪除此資料來源嗎？刪除後將不再顯示於清單中。</p>
+      <div class="flex justify-end gap-3">
+        <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+        <button onclick="confirmDelete()" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-lg hover:bg-red-600 transition">刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    lucide.createIcons();
+
+    // ======================== Data ========================
+    const defaultDatasources = [
+      { name: 'MySQL 主資料庫', type: 'MySQL', status: 'connected', lastTested: '2024-01-15 14:30' },
+      { name: 'PostgreSQL 分析庫', type: 'PostgreSQL', status: 'connected', lastTested: '2024-01-15 14:25' },
+      { name: 'SQL Server 報表庫', type: 'SQL Server', status: 'disconnected', lastTested: '2024-01-15 14:20' },
+      { name: 'MySQL 備份庫', type: 'MySQL', status: 'unknown', lastTested: null },
+      { name: 'PostgreSQL 日誌庫', type: 'PostgreSQL', status: 'connected', lastTested: '2024-01-15 13:50' },
+      { name: 'SQL Server 客戶庫', type: 'SQL Server', status: 'disconnected', lastTested: '2024-01-15 12:00' },
+    ];
+
+    const defaultAlerts = [
+      { name: 'SQL Server 報表庫', type: 'SQL Server', failures: 5, firstFail: '2024-01-15 13:00', message: '連線被拒：無法連至主機 db.corp.local:1433' },
+      { name: 'SQL Server 客戶庫', type: 'SQL Server', failures: 3, firstFail: '2024-01-15 11:30', message: '驗證失敗：憑證不正確' },
+    ];
+
+    let datasources = JSON.parse(JSON.stringify(defaultDatasources));
+    let alerts = [...defaultAlerts];
+    let currentTimeRange = '24h';
+
+    // ======================== Main Tab Switching ========================
+    function switchMainTab(tabName) {
+      document.querySelectorAll('.main-tab-panel').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'text-primary');
+        btn.classList.add('border-transparent', 'text-gray-500');
+      });
+      document.getElementById('panel-' + tabName).classList.remove('hidden');
+      const activeBtn = document.getElementById('mainTab-' + tabName);
+      activeBtn.classList.remove('border-transparent', 'text-gray-500');
+      activeBtn.classList.add('border-primary', 'text-primary');
+      lucide.createIcons();
+
+      // Initialize charts when switching to overview tab
+      if (tabName === 'overview' && !pieChart) {
+        setTimeout(() => {
+          initPieChart();
+          initLineChart();
+        }, 50);
+      }
+    }
+
+    // ======================== Type/Status Badges ========================
+    function typeBadge(type) {
+      const map = {
+        'MySQL': { bg: 'bg-orange-100', text: 'text-orange-700' },
+        'PostgreSQL': { bg: 'bg-sky-100', text: 'text-sky-700' },
+        'SQL Server': { bg: 'bg-purple-100', text: 'text-purple-700' },
+      };
+      const c = map[type] || { bg: 'bg-gray-100', text: 'text-gray-700' };
+      return `<span class="inline-block px-2 py-0.5 rounded text-xs font-medium ${c.bg} ${c.text}">${type}</span>`;
+    }
+
+    function statusDot(status) {
+      const map = {
+        connected: { color: 'bg-success', label: '已連線', textColor: 'text-success' },
+        disconnected: { color: 'bg-danger', label: '已斷線', textColor: 'text-danger' },
+        unknown: { color: 'bg-unknown', label: '未知', textColor: 'text-unknown' },
+      };
+      const s = map[status] || map.unknown;
+      return `<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full ${s.color}"></span><span class="text-sm ${s.textColor}">${s.label}</span></span>`;
+    }
+
+    // ======================== Render Status Cards ========================
+    function renderStatusCards() {
+      const container = document.getElementById('status-cards');
+      container.innerHTML = datasources.map((ds, i) => `
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5 space-y-3" id="ds-card-${i}">
+          <div class="flex items-center justify-between">
+            <h4 class="font-semibold text-sm">${ds.name}</h4>
+            ${typeBadge(ds.type)}
+          </div>
+          <div>${statusDot(ds.status)}</div>
+          <p class="text-xs text-gray-400">最後測試：${ds.lastTested || '從未測試'}</p>
+          <button onclick="testDatasource(${i})" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-border bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1.5 ds-test-btn">
+            <i data-lucide="play" class="w-3 h-3"></i>
+            立即測試
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // ======================== Render Alert Table ========================
+    function renderAlerts() {
+      const container = document.getElementById('alert-container');
+      if (alerts.length === 0) {
+        container.innerHTML = `
+          <div class="flex items-center justify-center gap-2 py-10 text-success">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+            <span class="text-sm font-medium">所有資料來源運作正常</span>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+      container.innerHTML = `
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-border">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-500">名稱</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-500">類型</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-500">連續失敗次數</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-500">首次失敗時間</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-500">錯誤訊息</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${alerts.map(a => `
+              <tr class="border-b border-border last:border-0">
+                <td class="px-4 py-3 font-medium">${a.name}</td>
+                <td class="px-4 py-3">${typeBadge(a.type)}</td>
+                <td class="px-4 py-3"><span class="text-danger font-semibold">${a.failures}</span></td>
+                <td class="px-4 py-3 text-gray-500">${a.firstFail}</td>
+                <td class="px-4 py-3 text-gray-600 text-xs">${a.message}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+      lucide.createIcons();
+    }
+
+    // ======================== Update Summary Cards ========================
+    function updateSummaryCards() {
+      const total = datasources.length;
+      const connected = datasources.filter(d => d.status === 'connected').length;
+      const disconnected = datasources.filter(d => d.status === 'disconnected').length;
+      const unknown = datasources.filter(d => d.status === 'unknown').length;
+      document.getElementById('card-total').textContent = total;
+      document.getElementById('card-connected').textContent = connected;
+      document.getElementById('card-disconnected').textContent = disconnected;
+      document.getElementById('card-unknown').textContent = unknown;
+    }
+
+    // ======================== Charts ========================
+    let pieChart, lineChart;
+
+    function initPieChart() {
+      const canvas = document.getElementById('pieChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      pieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['MySQL', 'PostgreSQL', 'SQL Server'],
+          datasets: [{
+            data: [4, 4, 2],
+            backgroundColor: ['#F97316', '#0EA5E9', '#8B5CF6'],
+            borderWidth: 2,
+            borderColor: '#FFFFFF',
+          }]
+        },
+        options: {
+          responsive: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 12 } }
+            }
+          },
+          cutout: '55%',
+        }
+      });
+    }
+
+    function generateLineData(range) {
+      let count, labelFn;
+      const failedIndices = new Set();
+
+      if (range === '24h') {
+        count = 24;
+        labelFn = (i) => `${String(i).padStart(2, '0')}:00`;
+        failedIndices.add(8); failedIndices.add(15);
+      } else if (range === '7d') {
+        count = 7;
+        const days = ['一', '二', '三', '四', '五', '六', '日'];
+        labelFn = (i) => `週${days[i]}`;
+        failedIndices.add(3);
+      } else {
+        count = 30;
+        labelFn = (i) => `${i + 1}日`;
+        failedIndices.add(7); failedIndices.add(22);
+      }
+
+      const labels = [], data = [], pointBg = [], pointRadius = [];
+      for (let i = 0; i < count; i++) {
+        labels.push(labelFn(i));
+        const isFailed = failedIndices.has(i);
+        const base = 80 + Math.random() * 60;
+        const val = isFailed ? 180 + Math.random() * 40 : base;
+        data.push(Math.round(val));
+        pointBg.push(isFailed ? '#EF4444' : '#2563EB');
+        pointRadius.push(isFailed ? 6 : 3);
+      }
+      return { labels, data, pointBg, pointRadius };
+    }
+
+    function initLineChart() {
+      const canvas = document.getElementById('lineChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const { labels, data, pointBg, pointRadius } = generateLineData('24h');
+      lineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: '回應時間 (ms)',
+            data,
+            borderColor: '#2563EB',
+            backgroundColor: 'rgba(37,99,235,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: pointBg,
+            pointRadius: pointRadius,
+            pointHoverRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: false, min: 0, max: 250, title: { display: true, text: 'ms', font: { size: 11 } }, grid: { color: '#F3F4F6' } },
+            x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y} ms` } }
+          }
+        }
+      });
+    }
+
+    function setTimeRange(range) {
+      currentTimeRange = range;
+      document.querySelectorAll('#time-range-group button').forEach(btn => {
+        if (btn.dataset.range === range) {
+          btn.className = 'px-3 py-1.5 text-xs font-medium bg-primary text-white';
+        } else {
+          btn.className = 'px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border-l border-border hover:bg-gray-50';
+        }
+      });
+      updateLineChart();
+    }
+
+    function updateLineChart() {
+      if (!lineChart) return;
+      const { labels, data, pointBg, pointRadius } = generateLineData(currentTimeRange);
+      lineChart.data.labels = labels;
+      lineChart.data.datasets[0].data = data;
+      lineChart.data.datasets[0].pointBackgroundColor = pointBg;
+      lineChart.data.datasets[0].pointRadius = pointRadius;
+      lineChart.update();
+    }
+
+    // ======================== Actions ========================
+    function refreshAll() {
+      const btn = document.getElementById('btn-refresh-all');
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+        重新整理中...
+      `;
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="refresh-cw" class="w-4 h-4"></i>全部重新整理`;
+        lucide.createIcons({ nodes: [btn] });
+        showToast('已重新整理所有資料來源狀態', 'success');
+      }, 1500);
+    }
+
+    function testDatasource(index) {
+      const card = document.getElementById(`ds-card-${index}`);
+      const btn = card.querySelector('.ds-test-btn');
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+        測試中...
+      `;
+      setTimeout(() => {
+        const statuses = ['connected', 'disconnected'];
+        const newStatus = statuses[Math.floor(Math.random() * statuses.length)];
+        datasources[index].status = newStatus;
+        datasources[index].lastTested = new Date().toISOString().replace('T', ' ').slice(0, 16);
+        if (newStatus === 'connected') {
+          alerts = alerts.filter(a => a.name !== datasources[index].name);
+        }
+        updateSummaryCards();
+        renderStatusCards();
+        renderAlerts();
+        const statusText = newStatus === 'connected' ? '已連線' : '已斷線';
+        showToast(`${datasources[index].name}：${statusText}`, newStatus === 'connected' ? 'success' : 'error');
+      }, 1200);
+    }
+
+    // ======================== List Tab: View Toggle ========================
+    let currentView = localStorage.getItem('datasource-view-mode') || 'list';
+
+    function setView(mode) {
+      currentView = mode;
+      localStorage.setItem('datasource-view-mode', mode);
+      updateView();
+    }
+
+    function updateView() {
+      const tableView = document.getElementById('tableView');
+      const cardView = document.getElementById('cardView');
+      const btnList = document.getElementById('btnListView');
+      const btnCard = document.getElementById('btnCardView');
+
+      if (currentView === 'list') {
+        tableView.classList.remove('hidden');
+        cardView.classList.add('hidden');
+        btnList.className = 'p-2 bg-primary text-white';
+        btnCard.className = 'p-2 bg-white text-gray-500 hover:bg-gray-50';
+      } else {
+        tableView.classList.add('hidden');
+        cardView.classList.remove('hidden');
+        btnList.className = 'p-2 bg-white text-gray-500 hover:bg-gray-50';
+        btnCard.className = 'p-2 bg-primary text-white';
+      }
+    }
+
+    updateView();
+
+    // ======================== Delete Modal ========================
+    let deleteTargetName = '';
+
+    function openDeleteModal(name) {
+      deleteTargetName = name;
+      document.getElementById('deleteMessage').textContent = `您確定要刪除 ${name} 嗎？刪除後將不再顯示於清單中。`;
+      document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').classList.add('hidden');
+    }
+
+    function confirmDelete() {
+      closeDeleteModal();
+      showToast(`已刪除 ${deleteTargetName}`, 'success');
+    }
+
+    document.getElementById('deleteModal').addEventListener('click', function(e) {
+      if (e.target === this) closeDeleteModal();
+    });
+
+    // ======================== Test Connection (List Tab) ========================
+    function testConnection(name) {
+      const success = Math.random() > 0.4;
+      if (success) {
+        showToast(`連線成功，回應時間 120ms`, 'success');
+      } else {
+        showToast(`連線被拒：無法連至主機`, 'error');
+      }
+    }
+
+    // ======================== Toast System ========================
+    function showToast(message, type) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+      const iconName = type === 'success' ? 'check-circle' : 'x-circle';
+
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm min-w-[300px]`;
+      toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+
+      container.appendChild(toast);
+      lucide.createIcons({ nodes: [toast] });
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    // ======================== Demo: Overview Tab ========================
+    function setDemoState(state) {
+      switchMainTab('overview');
+      if (state === 'normal') {
+        datasources = JSON.parse(JSON.stringify(defaultDatasources));
+        alerts = [...defaultAlerts];
+        updateSummaryCards();
+        renderStatusCards();
+        renderAlerts();
+      } else if (state === 'loading') {
+        document.querySelectorAll('.ds-test-btn').forEach(btn => {
+          btn.disabled = true;
+          btn.innerHTML = `
+            <svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            測試中...
+          `;
+        });
+        setTimeout(() => {
+          setDemoState('normal');
+          showToast('載入完成', 'success');
+        }, 2000);
+      } else if (state === 'allConnected') {
+        datasources = datasources.map(d => ({ ...d, status: 'connected', lastTested: '2024-01-15 14:30' }));
+        alerts = [];
+        updateSummaryCards();
+        renderStatusCards();
+        renderAlerts();
+      }
+    }
+
+    // ======================== Demo: List Tab ========================
+    function showListState(state) {
+      switchMainTab('list');
+      const tableView = document.getElementById('tableView');
+      const cardView = document.getElementById('cardView');
+      const emptyState = document.getElementById('emptyState');
+      const loadingState = document.getElementById('loadingState');
+
+      tableView.classList.add('hidden');
+      cardView.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      loadingState.classList.add('hidden');
+
+      switch (state) {
+        case 'normal':
+          currentView = 'list';
+          updateView();
+          tableView.classList.remove('hidden');
+          break;
+        case 'card':
+          currentView = 'card';
+          updateView();
+          cardView.classList.remove('hidden');
+          break;
+        case 'empty':
+          emptyState.classList.remove('hidden');
+          lucide.createIcons();
+          break;
+        case 'loading':
+          loadingState.classList.remove('hidden');
+          break;
+      }
+    }
+
+    // ======================== Init ========================
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initPieChart();
+      initLineChart();
+      renderStatusCards();
+      renderAlerts();
+    });
+  </script>
+</body>
+</html>

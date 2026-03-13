@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登入 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+    <div class="bg-surface rounded-2xl shadow-lg border border-border p-8">
+      <!-- Logo / Title -->
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-12 h-12 bg-primary rounded-xl mb-4">
+          <i data-lucide="shield-check" class="w-7 h-7 text-white"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">CDMP</h1>
+        <p class="text-sm text-gray-500 mt-1">臨床數據管理平台</p>
+      </div>
+
+      <!-- Global Error Alert -->
+      <div id="alert-login-error" class="hidden mb-4 p-3 rounded-lg bg-red-50 border border-danger/20 text-danger text-sm flex items-start gap-2">
+        <i data-lucide="alert-circle" class="w-4 h-4 mt-0.5 shrink-0"></i>
+        <span id="alert-login-error-text">Email 或密碼錯誤</span>
+      </div>
+
+      <!-- Form -->
+      <form id="login-form" onsubmit="return false;" class="space-y-5">
+        <!-- Email -->
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+          <input type="email" id="email" placeholder="user@example.com"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition" />
+          <p id="email-error" class="hidden mt-1.5 text-xs text-danger">請輸入有效的 Email 地址</p>
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-1.5">密碼</label>
+          <div class="relative">
+            <input type="password" id="password" placeholder="••••••••"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition pr-10" />
+            <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <i data-lucide="eye" id="eye-icon" class="w-4 h-4"></i>
+              <i data-lucide="eye-off" id="eye-off-icon" class="w-4 h-4 hidden"></i>
+            </button>
+          </div>
+          <p id="password-hint" class="mt-1.5 text-xs text-gray-400">最短長度為 8 個字元</p>
+          <p id="password-error" class="hidden mt-1.5 text-xs text-danger">請輸入密碼</p>
+        </div>
+
+        <!-- Remember Me -->
+        <div class="flex items-center">
+          <input type="checkbox" id="remember" class="w-4 h-4 rounded border-border text-primary focus:ring-primary/30" />
+          <label for="remember" class="ml-2 text-sm text-gray-600">記住我</label>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" id="login-btn"
+          class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+          <svg id="login-spinner" class="hidden animate-spin w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span id="login-btn-text">登入</span>
+        </button>
+      </form>
+
+      <!-- Forgot Password -->
+      <div class="text-center mt-4">
+        <a href="03-forgot-password.html" class="text-sm text-primary hover:text-primary/80 transition">忘記密碼</a>
+      </div>
+    </div>
+
+    <!-- Demo Controls -->
+    <div class="mt-6 bg-surface rounded-xl border border-border p-4">
+      <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Demo 狀態切換</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="setState('normal')" class="px-3 py-1.5 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Normal</button>
+        <button onclick="setState('validation')" class="px-3 py-1.5 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Validation Error</button>
+        <button onclick="setState('login-error')" class="px-3 py-1.5 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Login Error</button>
+        <button onclick="setState('disabled')" class="px-3 py-1.5 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Account Disabled</button>
+        <button onclick="setState('rate-limited')" class="px-3 py-1.5 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Rate Limited</button>
+        <button onclick="setState('loading')" class="px-3 py-1.5 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Loading</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function togglePassword() {
+      const input = document.getElementById('password');
+      const eyeIcon = document.getElementById('eye-icon');
+      const eyeOffIcon = document.getElementById('eye-off-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        eyeIcon.classList.add('hidden');
+        eyeOffIcon.classList.remove('hidden');
+      } else {
+        input.type = 'password';
+        eyeIcon.classList.remove('hidden');
+        eyeOffIcon.classList.add('hidden');
+      }
+    }
+
+    function clearState() {
+      document.getElementById('email-error').classList.add('hidden');
+      document.getElementById('password-error').classList.add('hidden');
+      document.getElementById('password-hint').classList.remove('hidden');
+      document.getElementById('alert-login-error').classList.add('hidden');
+      document.getElementById('email').classList.remove('border-danger');
+      document.getElementById('password').classList.remove('border-danger');
+      document.getElementById('login-btn').disabled = false;
+      document.getElementById('login-spinner').classList.add('hidden');
+      document.getElementById('login-btn-text').textContent = '登入';
+    }
+
+    function setState(state) {
+      clearState();
+      switch (state) {
+        case 'validation':
+          document.getElementById('email-error').classList.remove('hidden');
+          document.getElementById('password-error').classList.remove('hidden');
+          document.getElementById('password-hint').classList.add('hidden');
+          document.getElementById('email').classList.add('border-danger');
+          document.getElementById('password').classList.add('border-danger');
+          break;
+        case 'login-error':
+          document.getElementById('alert-login-error').classList.remove('hidden');
+          document.getElementById('alert-login-error-text').textContent = 'Email 或密碼錯誤';
+          break;
+        case 'disabled':
+          document.getElementById('alert-login-error').classList.remove('hidden');
+          document.getElementById('alert-login-error-text').textContent = '您的帳號已被停用，請聯絡管理員。';
+          break;
+        case 'rate-limited':
+          document.getElementById('alert-login-error').classList.remove('hidden');
+          document.getElementById('alert-login-error-text').textContent = '登入嘗試過於頻繁，請稍後再試。';
+          break;
+        case 'loading':
+          document.getElementById('login-btn').disabled = true;
+          document.getElementById('login-spinner').classList.remove('hidden');
+          document.getElementById('login-btn-text').textContent = '登入中...';
+          break;
+      }
+      lucide.createIcons();
+    }
+
+    lucide.createIcons();
+  </script>
+</body>
+</html>

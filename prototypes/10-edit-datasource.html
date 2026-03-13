@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>編輯資料來源 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">編輯資料來源</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14 p-6">
+
+    <!-- Demo Buttons -->
+    <div class="mb-4 flex gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 self-center mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Normal</button>
+      <button onclick="showDemoState('validation')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Validation Errors</button>
+      <button onclick="showDemoState('loading')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Loading</button>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav class="mb-5 text-sm">
+      <ol class="flex items-center gap-1.5 text-gray-500">
+        <li><a href="08-datasource-list.html" class="hover:text-primary transition">資料來源</a></li>
+        <li class="text-gray-400">/</li>
+        <li class="text-gray-800 font-medium">編輯資料來源</li>
+      </ol>
+    </nav>
+
+    <!-- Form Card -->
+    <div class="max-w-2xl mx-auto">
+      <div class="bg-white rounded-xl border border-border p-6">
+        <form id="editForm" onsubmit="handleSubmit(event)" novalidate>
+          <!-- 名稱 -->
+          <div class="mb-5">
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-1.5">名稱 <span class="text-danger">*</span></label>
+            <input type="text" id="name" name="name" maxlength="100" required value="MySQL 主資料庫"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validateField(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="name-error">此欄位為必填</p>
+          </div>
+
+          <!-- 類型 -->
+          <div class="mb-5">
+            <label for="type" class="block text-sm font-medium text-gray-700 mb-1.5">類型 <span class="text-danger">*</span></label>
+            <select id="type" name="type" required
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+              onchange="autoFillPort()" onblur="validateField(this)">
+              <option value="">請選擇</option>
+              <option value="MySQL" selected>MySQL</option>
+              <option value="PostgreSQL">PostgreSQL</option>
+              <option value="SQL Server">SQL Server</option>
+            </select>
+            <p class="mt-1 text-xs text-danger hidden" id="type-error">此欄位為必填</p>
+          </div>
+
+          <!-- 主機位址 -->
+          <div class="mb-5">
+            <label for="host" class="block text-sm font-medium text-gray-700 mb-1.5">主機位址 <span class="text-danger">*</span></label>
+            <input type="text" id="host" name="host" required value="192.168.1.100" placeholder="例如：192.168.1.100 或 db.example.com"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validateField(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="host-error">此欄位為必填</p>
+          </div>
+
+          <!-- 連接埠 -->
+          <div class="mb-5">
+            <label for="port" class="block text-sm font-medium text-gray-700 mb-1.5">連接埠 <span class="text-danger">*</span></label>
+            <input type="number" id="port" name="port" required min="1" max="65535" value="3306"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validatePort(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="port-error">連接埠必須為 1 至 65535 之間的數字</p>
+          </div>
+
+          <!-- 資料庫名稱 -->
+          <div class="mb-5">
+            <label for="dbname" class="block text-sm font-medium text-gray-700 mb-1.5">資料庫名稱 <span class="text-danger">*</span></label>
+            <input type="text" id="dbname" name="dbname" required value="production_db" placeholder="例如：production_db"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validateField(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="dbname-error">此欄位為必填</p>
+          </div>
+
+          <!-- 使用者名稱 -->
+          <div class="mb-5">
+            <label for="username" class="block text-sm font-medium text-gray-700 mb-1.5">使用者名稱 <span class="text-danger">*</span></label>
+            <input type="text" id="username" name="username" required value="db_admin"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validateField(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="username-error">此欄位為必填</p>
+          </div>
+
+          <!-- 密碼 -->
+          <div class="mb-5">
+            <label for="password" class="block text-sm font-medium text-gray-700 mb-1.5">密碼</label>
+            <div class="relative">
+              <input type="password" id="password" name="password" placeholder="留空以保留現有密碼"
+                class="w-full px-3 py-2 pr-10 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <i data-lucide="eye" id="eyeIcon" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">此密碼將以加密方式儲存</p>
+          </div>
+
+          <!-- 描述 -->
+          <div class="mb-6">
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-1.5">描述</label>
+            <textarea id="description" name="description" maxlength="500" rows="3" placeholder="選填，最多 500 字"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none">主要生產環境資料庫</textarea>
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex justify-end gap-3">
+            <a href="08-datasource-list.html" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition">取消</a>
+            <button type="button" onclick="testConnection()" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition">
+              <i data-lucide="plug" class="w-4 h-4"></i>測試連線
+            </button>
+            <button type="submit" id="submitBtn" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              <span id="submitText">儲存</span>
+              <span id="submitLoading" class="hidden items-center gap-2">
+                <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75"></path></svg>
+                處理中...
+              </span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    lucide.createIcons();
+
+    const portDefaults = { 'MySQL': 3306, 'PostgreSQL': 5432, 'SQL Server': 1433 };
+
+    function autoFillPort() {
+      const type = document.getElementById('type').value;
+      if (portDefaults[type]) {
+        document.getElementById('port').value = portDefaults[type];
+      }
+    }
+
+    function togglePassword() {
+      const input = document.getElementById('password');
+      const icon = document.getElementById('eyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    function validateField(el) {
+      const errorEl = document.getElementById(el.name + '-error');
+      if (!errorEl) return true;
+      if (el.required && !el.value.trim()) {
+        el.classList.add('border-danger');
+        el.classList.remove('border-border');
+        errorEl.classList.remove('hidden');
+        return false;
+      } else {
+        el.classList.remove('border-danger');
+        el.classList.add('border-border');
+        errorEl.classList.add('hidden');
+        return true;
+      }
+    }
+
+    function validatePort(el) {
+      const errorEl = document.getElementById('port-error');
+      const val = parseInt(el.value);
+      if (!el.value.trim() || isNaN(val) || val < 1 || val > 65535) {
+        el.classList.add('border-danger');
+        el.classList.remove('border-border');
+        errorEl.classList.remove('hidden');
+        return false;
+      } else {
+        el.classList.remove('border-danger');
+        el.classList.add('border-border');
+        errorEl.classList.add('hidden');
+        return true;
+      }
+    }
+
+    function testConnection() {
+      const success = Math.random() > 0.4;
+      if (success) {
+        showToast('連線成功，回應時間 120ms', 'success');
+      } else {
+        showToast('連線被拒：無法連至主機', 'error');
+      }
+    }
+
+    function handleSubmit(e) {
+      e.preventDefault();
+      const requiredFields = ['name', 'type', 'host', 'dbname', 'username'];
+      let valid = true;
+      requiredFields.forEach(f => {
+        const el = document.getElementById(f);
+        if (!validateField(el)) valid = false;
+      });
+      if (!validatePort(document.getElementById('port'))) valid = false;
+
+      if (!valid) return;
+
+      // Simulate loading
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      document.getElementById('submitText').classList.add('hidden');
+      document.getElementById('submitLoading').classList.remove('hidden');
+      document.getElementById('submitLoading').classList.add('inline-flex');
+
+      setTimeout(() => {
+        btn.disabled = false;
+        document.getElementById('submitText').classList.remove('hidden');
+        document.getElementById('submitLoading').classList.add('hidden');
+        document.getElementById('submitLoading').classList.remove('inline-flex');
+        showToast('資料來源已更新', 'success');
+      }, 1500);
+    }
+
+    // Toast system
+    function showToast(message, type) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+      const iconName = type === 'success' ? 'check-circle' : 'x-circle';
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm min-w-[300px]`;
+      toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      lucide.createIcons({ nodes: [toast] });
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    // Demo states
+    function showDemoState(state) {
+      // Reset all fields
+      const fields = ['name', 'type', 'host', 'port', 'dbname', 'username'];
+      fields.forEach(f => {
+        const el = document.getElementById(f);
+        el.classList.remove('border-danger');
+        el.classList.add('border-border');
+        const err = document.getElementById(f + '-error');
+        if (err) err.classList.add('hidden');
+      });
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = false;
+      document.getElementById('submitText').classList.remove('hidden');
+      document.getElementById('submitLoading').classList.add('hidden');
+      document.getElementById('submitLoading').classList.remove('inline-flex');
+
+      switch (state) {
+        case 'normal':
+          // Restore pre-filled values
+          document.getElementById('name').value = 'MySQL 主資料庫';
+          document.getElementById('type').value = 'MySQL';
+          document.getElementById('host').value = '192.168.1.100';
+          document.getElementById('port').value = '3306';
+          document.getElementById('dbname').value = 'production_db';
+          document.getElementById('username').value = 'db_admin';
+          document.getElementById('password').value = '';
+          document.getElementById('description').value = '主要生產環境資料庫';
+          break;
+        case 'validation':
+          // Clear required fields and show errors
+          document.getElementById('name').value = '';
+          document.getElementById('type').value = '';
+          document.getElementById('host').value = '';
+          document.getElementById('port').value = '';
+          document.getElementById('dbname').value = '';
+          document.getElementById('username').value = '';
+          fields.forEach(f => {
+            const el = document.getElementById(f);
+            el.classList.add('border-danger');
+            el.classList.remove('border-border');
+            const err = document.getElementById(f + '-error');
+            if (err) err.classList.remove('hidden');
+          });
+          break;
+        case 'loading':
+          btn.disabled = true;
+          document.getElementById('submitText').classList.add('hidden');
+          document.getElementById('submitLoading').classList.remove('hidden');
+          document.getElementById('submitLoading').classList.add('inline-flex');
+          break;
+      }
+    }
+  </script>
+</body>
+</html>
