@@ -1,12 +1,18 @@
 import { useNavigate } from 'react-router-dom';
 import { Inbox, LogOut, ShieldCheck } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
+import { logout } from '@/api/auth';
 
 export function UserInfoPage() {
   const navigate = useNavigate();
   const user = getUser();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // Graceful degradation: clear local session even if API fails
+    }
     clearAuth();
     navigate('/login');
   };
