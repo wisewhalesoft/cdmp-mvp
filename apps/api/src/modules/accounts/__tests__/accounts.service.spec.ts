@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AccountsService } from '../accounts.service';
 import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
@@ -123,5 +123,139 @@ describe('AccountsService', () => {
     expect(result).not.toHaveProperty('password_hash');
     expect(result).toHaveProperty('id');
     expect(result).toHaveProperty('created_at');
+  });
+
+  // ===== F006: updateAccount =====
+
+  describe('updateAccount', () => {
+    const existingUser = {
+      id: 'user-uuid-1',
+      name: 'Original Name',
+      email: 'original@example.com',
+      password_hash: '$2b$10$hashedpassword',
+      role: 'user' as const,
+      status: 'active' as const,
+      created_at: new Date('2025-01-01'),
+      updated_at: new Date('2025-01-01'),
+    };
+
+    it('should update name successfully', async () => {
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...existingUser }) // findOne by id
+        .mockResolvedValueOnce(null); // findOne by email (no duplicate)
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateAccount('user-uuid-1', {
+        name: 'Updated Name',
+        email: 'original@example.com',
+      });
+
+      expect(result.name).toBe('Updated Name');
+      expect(result.email).toBe('original@example.com');
+      expect(result).toHaveProperty('updated_at');
+    });
+
+    it('should update email and convert to lowercase', async () => {
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...existingUser }) // findOne by id
+        .mockResolvedValueOnce(null); // findOne by email (no duplicate)
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateAccount('user-uuid-1', {
+        name: 'Original Name',
+        email: 'NEW@EXAMPLE.COM',
+      });
+
+      expect(result.email).toBe('new@example.com');
+    });
+
+    it('should not trigger duplicate error when email is unchanged (self-exclusion BR-3)', async () => {
+      // findOne by id returns the user
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...existingUser })
+        // findOne by email returns the same user (self)
+        .mockResolvedValueOnce({ ...existingUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateAccount('user-uuid-1', {
+        name: 'Updated Name',
+        email: 'original@example.com',
+      });
+
+      expect(result.name).toBe('Updated Name');
+    });
+
+    it('should throw 409 ConflictException when email is used by another account', async () => {
+      const anotherUser = {
+        id: 'other-uuid-2',
+        email: 'taken@example.com',
+      };
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...existingUser }) // findOne by id
+        .mockResolvedValueOnce(anotherUser); // findOne by email (duplicate)
+
+      await expect(
+        service.updateAccount('user-uuid-1', {
+          name: 'Original Name',
+          email: 'taken@example.com',
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw 404 NotFoundException when account does not exist', async () => {
+      userRepository.findOne.mockResolvedValueOnce(null); // findOne by id
+
+      await expect(
+        service.updateAccount('nonexistent-uuid', {
+          name: 'Test',
+          email: 'test@example.com',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should not include password_hash in response', async () => {
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...existingUser })
+        .mockResolvedValueOnce(null);
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateAccount('user-uuid-1', {
+        name: 'Updated',
+        email: 'original@example.com',
+      });
+
+      expect(result).not.toHaveProperty('password_hash');
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('role');
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('created_at');
+      expect(result).toHaveProperty('updated_at');
+    });
+
+    it('should preserve role and status when updating', async () => {
+      const adminUser = { ...existingUser, role: 'admin' as const, status: 'disabled' as const };
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...adminUser })
+        .mockResolvedValueOnce(null);
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateAccount('user-uuid-1', {
+        name: 'Updated',
+        email: 'original@example.com',
+      });
+
+      expect(result.role).toBe('admin');
+      expect(result.status).toBe('disabled');
+    });
   });
 });

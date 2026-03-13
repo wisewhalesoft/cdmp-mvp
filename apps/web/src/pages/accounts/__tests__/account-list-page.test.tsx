@@ -15,6 +15,7 @@ vi.mock('@/stores/auth-store');
 
 const mockedGetAccounts = vi.mocked(accountsApi.getAccounts);
 const mockedCreateAccount = vi.mocked(accountsApi.createAccount);
+const mockedUpdateAccount = vi.mocked(accountsApi.updateAccount);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -326,6 +327,64 @@ describe('AccountListPage', () => {
       fireEvent.click(submitButtons[submitButtons.length - 1]);
 
       // Flush async operations
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      // After success, getAccounts should be called again (refresh)
+      expect(mockedGetAccounts.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+  });
+
+  describe('編輯帳號整合', () => {
+    it('點擊編輯按鈕後顯示編輯 Modal', async () => {
+      await renderAndLoad();
+
+      // Find all edit buttons — one per row
+      const editButtons = screen.getAllByText('編輯');
+      fireEvent.click(editButtons[0]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(screen.getByText('編輯帳號')).toBeInTheDocument();
+    });
+
+    it('編輯成功後刷新清單', async () => {
+      mockedUpdateAccount.mockResolvedValue({
+        id: '1',
+        name: 'Updated Admin',
+        email: 'admin@cdmp.test',
+        role: 'admin',
+        status: 'active',
+        created_at: '2025-03-01T00:00:00.000Z',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad();
+
+      const initialCalls = mockedGetAccounts.mock.calls.length;
+
+      // Click edit on first row
+      const editButtons = screen.getAllByText('編輯');
+      fireEvent.click(editButtons[0]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // Modal should be open with prefilled data
+      expect(screen.getByText('編輯帳號')).toBeInTheDocument();
+
+      // Change name
+      const nameInput = screen.getByLabelText('姓名');
+      fireEvent.change(nameInput, { target: { value: 'Updated Admin' } });
+
+      // Submit
+      fireEvent.click(screen.getByRole('button', { name: '儲存' }));
+
+      // Flush async
       await act(async () => {
         await vi.advanceTimersByTimeAsync(500);
       });
