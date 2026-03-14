@@ -11,6 +11,7 @@ import { AccountsModule } from '@/modules/accounts/accounts.module';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { PasswordResetToken } from '@/database/entities/password-reset-token.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import {
   ADMIN_ACTIVE,
@@ -33,7 +34,7 @@ async function createTestApp(throttleLimit: number): Promise<INestApplication> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [User, TokenBlocklist],
+        entities: [User, TokenBlocklist, PasswordResetToken],
         synchronize: true,
       }),
       ThrottlerModule.forRoot([

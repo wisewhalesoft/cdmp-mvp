@@ -5,8 +5,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { AuthService } from '../auth.service';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { PasswordResetToken } from '@/database/entities/password-reset-token.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
+import { EmailUtil } from '@/common/email/email.util';
 import { JwtService } from '@nestjs/jwt';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import {
@@ -59,12 +61,20 @@ describe('AuthService', () => {
           useValue: mockTokenBlocklistRepository,
         },
         {
+          provide: getRepositoryToken(PasswordResetToken),
+          useValue: { findOne: vi.fn(), save: vi.fn(), create: vi.fn((d: any) => d) },
+        },
+        {
           provide: JwtUtil,
           useValue: mockJwtUtil,
         },
         {
           provide: JwtService,
           useValue: mockJwtService,
+        },
+        {
+          provide: EmailUtil,
+          useValue: { sendPasswordResetEmail: vi.fn() },
         },
       ],
     }).compile();
