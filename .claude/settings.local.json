@@ -126,7 +126,21 @@
       "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/reset-password-dialog.test.tsx 2>&1 | tail -15)",
       "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/reset-password-dialog.test.tsx 2>&1 | tail -25)",
       "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run 2>&1 | tail -5)",
-      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -5)"
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -5)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run src/common/crypto/crypto.util.spec.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run src/modules/datasource/datasource.service.spec.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts test/datasource.e2e-spec.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts test/accounts.e2e-spec.ts 2>&1 | head -20)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npm ls better-sqlite3 2>&1 | head -5)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && node -e \"\n// TypeORM maps 'datetime' to 'timestamp' for PostgreSQL automatically\n// See: https://github.com/typeorm/typeorm/blob/master/src/driver/postgres/PostgresDriver.ts\nconsole.log\\('TypeORM datetime mapping check: datetime is mapped by TypeORM for PG'\\);\n\" 2>&1)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/datasources/__tests__/add-datasource-page.test.tsx 2>&1)",
+      "Bash(npx vitest:*)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm run dev --prefix apps/api 2>&1 | head -40)",
+      "Bash(taskkill /F /PID 7084 2>/dev/null; taskkill /F /PID 26848 2>/dev/null; echo \"done\")",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm ls sqlite3 better-sqlite3 2>&1 | head -10)",
+      "Bash(openssl rand:*)"
     ]
   }
 }

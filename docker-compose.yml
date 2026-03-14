@@ -32,6 +32,7 @@ services:
       DB_PASSWORD: cdmp_secret
       DB_NAME: cdmp_dev
       JWT_SECRET: cdmp-dev-jwt-secret-key-2026
+      AES_ENCRYPTION_KEY: 2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2
       PORT: 3000
     volumes:
       - ./apps/api/src:/app/src
