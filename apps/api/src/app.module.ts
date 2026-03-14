@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { User } from './database/entities/user.entity';
 import { TokenBlocklist } from './database/entities/token-blocklist.entity';
+import { PasswordResetToken } from './database/entities/password-reset-token.entity';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { TokenBlocklist } from './database/entities/token-blocklist.entity';
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist],
+            entities: [User, TokenBlocklist, PasswordResetToken],
             synchronize: true,
           };
         }
@@ -34,7 +35,7 @@ import { TokenBlocklist } from './database/entities/token-blocklist.entity';
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist],
+          entities: [User, TokenBlocklist, PasswordResetToken],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },

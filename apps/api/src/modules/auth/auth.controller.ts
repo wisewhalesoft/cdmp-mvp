@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
-import { AuthService, LoginResult } from './auth.service';
+import { AuthService, LoginResult, MessageResult } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from '@/common/guards/auth.guard';
 
 @Controller('auth')
@@ -32,5 +34,18 @@ export class AuthController {
     const user = (req as any).user;
     await this.authService.logout(token, user.userId);
     return { message: '登出成功' };
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<MessageResult> {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<MessageResult> {
+    return this.authService.resetPassword(dto);
   }
 }

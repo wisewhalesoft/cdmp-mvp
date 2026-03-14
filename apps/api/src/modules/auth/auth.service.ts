@@ -2,14 +2,18 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'crypto';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { PasswordResetToken } from '@/database/entities/password-reset-token.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
+import { EmailUtil } from '@/common/email/email.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { LoginDto } from './dto/login.dto';
 
@@ -23,6 +27,10 @@ export interface LoginResult {
   };
 }
 
+export interface MessageResult {
+  message: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -30,8 +38,11 @@ export class AuthService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(TokenBlocklist)
     private readonly tokenBlocklistRepository: Repository<TokenBlocklist>,
+    @InjectRepository(PasswordResetToken)
+    private readonly passwordResetTokenRepository: Repository<PasswordResetToken>,
     private readonly jwtUtil: JwtUtil,
     private readonly jwtService: JwtService,
+    private readonly emailUtil: EmailUtil,
   ) {}
 
   async login(dto: LoginDto): Promise<LoginResult> {
@@ -119,4 +130,101 @@ export class AuthService {
     });
     return entry !== null;
   }
+
+  // F009: 忘記密碼 — 建立重設 Token 並寄送 Email
+  async forgotPassword(dto: { email: string }): Promise<MessageResult> {
+    const email = dto.email.toLowerCase();
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    // BR-4: 無論 Email 是否存在，回應一律相同
+    if (user) {
+      const resetToken = randomUUID();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await this.passwordResetTokenRepository.save(
+        this.passwordResetTokenRepository.create({
+          user_id: user.id,
+          token: resetToken,
+          expires_at: expiresAt,
+        }),
+      );
+
+      // 非同步寄送 Email（不阻塞回應）
+      this.emailUtil.sendPasswordResetEmail(email, resetToken).catch(() => {
+        // Email 寄送失敗記錄但不影響回應
+      });
+    }
+
+    return { message: '若此 Email 存在，重設連結已寄出' };
+  }
+
+  // F009: 重設密碼
+  async resetPassword(dto: {
+    token: string;
+    newPassword: string;
+  }): Promise<MessageResult> {
+    // BR-5: 密碼長度驗證 (defense in depth, DTO 已驗證)
+    if (dto.newPassword.length < 8) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_PASSWORD_LENGTH,
+        message: ERROR_MESSAGES.VALIDATION_PASSWORD_LENGTH,
+      });
+    }
+
+    // 查詢 Token
+    const tokenRecord = await this.passwordResetTokenRepository.findOne({
+      where: { token: dto.token },
+    });
+
+    // TS-F009-007: Token 不存在
+    if (!tokenRecord) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.RESET_TOKEN_INVALID,
+        message: ERROR_MESSAGES.RESET_TOKEN_INVALID,
+      });
+    }
+
+    // TS-F009-006: Token 已使用
+    if (tokenRecord.used_at !== null) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.RESET_TOKEN_USED,
+        message: ERROR_MESSAGES.RESET_TOKEN_USED,
+      });
+    }
+
+    // TS-F009-005: Token 已過期
+    if (new Date() > new Date(tokenRecord.expires_at)) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.RESET_TOKEN_EXPIRED,
+        message: ERROR_MESSAGES.RESET_TOKEN_EXPIRED,
+      });
+    }
+
+    // 查詢使用者
+    const user = await this.userRepository.findOne({
+      where: { id: tokenRecord.user_id },
+    });
+
+    if (!user) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.RESET_TOKEN_INVALID,
+        message: ERROR_MESSAGES.RESET_TOKEN_INVALID,
+      });
+    }
+
+    // BR-6: bcrypt hash 新密碼
+    user.password_hash = await HashUtil.hash(dto.newPassword);
+    // BR-7: 設定 password_changed_at 以失效所有舊 Session Token
+    // AuthGuard 會比對 JWT iat (seconds) 與 password_changed_at
+    // 加 1 秒確保在同一秒內發行的 JWT 也會被失效
+    user.password_changed_at = new Date(Date.now() + 1000);
+    await this.userRepository.save(user);
+
+    // BR-2: 標記 Token 已使用
+    tokenRecord.used_at = new Date();
+    await this.passwordResetTokenRepository.save(tokenRecord);
+
+    return { message: '密碼已成功重設，請重新登入' };
+  }
+
 }

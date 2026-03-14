@@ -49,16 +49,32 @@ export class AuthGuard implements CanActivate {
         });
       }
 
-      // Check if user account is disabled
+      // Check if user account is disabled or password was changed after token issued
       const user = await this.userRepository.findOne({
         where: { id: payload.userId },
-        select: ['id', 'status'],
+        select: ['id', 'status', 'password_changed_at'],
       });
       if (!user || user.status === 'disabled') {
         throw new UnauthorizedException({
           error: ERROR_CODES.TOKEN_REVOKED,
           message: ERROR_MESSAGES.TOKEN_REVOKED,
         });
+      }
+
+      // BR-7 (F009): Invalidate tokens issued before password change
+      // password_changed_at is only set on explicit password reset/change
+      // JWT iat is in seconds (floor)
+      if (payload.iat && user.password_changed_at) {
+        const tokenIssuedAtMs = payload.iat * 1000;
+        const passwordChangedAtMs = new Date(
+          user.password_changed_at,
+        ).getTime();
+        if (tokenIssuedAtMs < passwordChangedAtMs) {
+          throw new UnauthorizedException({
+            error: ERROR_CODES.TOKEN_REVOKED,
+            message: ERROR_MESSAGES.TOKEN_REVOKED,
+          });
+        }
       }
 
       (request as any).user = {
