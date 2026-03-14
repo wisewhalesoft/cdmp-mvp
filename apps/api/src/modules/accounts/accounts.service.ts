@@ -52,6 +52,10 @@ export interface ChangeRoleResult {
   updated_at: Date;
 }
 
+export interface AdminResetPasswordResult {
+  message: string;
+}
+
 export interface ToggleStatusResult {
   id: string;
   name: string;
@@ -278,5 +282,48 @@ export class AccountsService {
       status: saved.status,
       updated_at: saved.updated_at,
     };
+  }
+
+  // F010: Admin 重設使用者密碼
+  async adminResetPassword(
+    targetId: string,
+    newPassword: string,
+    currentUserId: string,
+  ): Promise<AdminResetPasswordResult> {
+    // BR-2: Admin 不可透過此功能重設自己的密碼
+    if (targetId === currentUserId) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.ACCOUNT_SELF_RESET,
+        message: ERROR_MESSAGES.ACCOUNT_SELF_RESET,
+      });
+    }
+
+    // BR-3: 密碼長度驗證 (defense in depth, DTO 已驗證)
+    if (newPassword.length < 8) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_PASSWORD_LENGTH,
+        message: ERROR_MESSAGES.VALIDATION_PASSWORD_LENGTH,
+      });
+    }
+
+    // 查詢目標帳號
+    const user = await this.userRepository.findOne({ where: { id: targetId } });
+    if (!user) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ACCOUNT_NOT_FOUND,
+        message: ERROR_MESSAGES.ACCOUNT_NOT_FOUND,
+      });
+    }
+
+    // BR-4: bcrypt hash 新密碼
+    user.password_hash = await HashUtil.hash(newPassword);
+
+    // BR-5: 設定 password_changed_at 以失效所有舊 Session Token
+    // 加 1 秒確保在同一秒內發行的 JWT 也會被失效（沿用 F009 機制）
+    user.password_changed_at = new Date(Date.now() + 1000);
+
+    await this.userRepository.save(user);
+
+    return { message: '密碼已重設，使用者需以新密碼重新登入' };
   }
 }

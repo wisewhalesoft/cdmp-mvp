@@ -7,6 +7,7 @@ import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
 @Controller('accounts')
@@ -47,5 +48,16 @@ export class AccountsController {
     @Body() dto: UpdateRoleDto,
   ) {
     return this.accountsService.changeRole(id, dto.role);
+  }
+
+  @Post(':id/reset-password')
+  @HttpCode(HttpStatus.OK)
+  async adminResetPassword(
+    @Param('id') id: string,
+    @Body() dto: AdminResetPasswordDto,
+    @Req() req: any,
+  ) {
+    const currentUserId = req.user.userId;
+    return this.accountsService.adminResetPassword(id, dto.newPassword, currentUserId);
   }
 }
