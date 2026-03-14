@@ -4,6 +4,8 @@ import { UserInfoPage } from '@/pages/user-info/user-info-page';
 import { AccountListPage } from '@/pages/accounts/account-list-page';
 import { ForgotPasswordPage } from '@/pages/forgot-password/forgot-password-page';
 import { ResetPasswordPage } from '@/pages/reset-password/reset-password-page';
+import { AddDatasourcePage } from '@/pages/datasources/add-datasource-page';
+import { DatasourceListPage } from '@/pages/datasources/datasource-list-page';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
 export function App() {
@@ -18,6 +20,22 @@ export function App() {
           <UserRoute>
             <UserInfoPage />
           </UserRoute>
+        }
+      />
+      <Route
+        path="/datasources"
+        element={
+          <AdminRoute>
+            <DatasourceListPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/datasources/new"
+        element={
+          <AdminRoute>
+            <AddDatasourcePage />
+          </AdminRoute>
         }
       />
       <Route

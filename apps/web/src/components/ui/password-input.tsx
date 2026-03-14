@@ -5,10 +5,11 @@ import { Eye, EyeOff } from 'lucide-react';
 interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;
   error?: string;
+  hint?: string;
 }
 
 const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
-  ({ label, error, className = '', id: externalId, ...props }, ref) => {
+  ({ label, error, hint = '密碼至少 8 個字元', className = '', id: externalId, ...props }, ref) => {
     const [visible, setVisible] = useState(false);
     const generatedId = useId();
     const id = externalId ?? generatedId;
@@ -40,7 +41,7 @@ const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           </button>
         </div>
         {error && <p className="mt-1 text-sm text-danger-600">{error}</p>}
-        <p className="mt-1 text-xs text-gray-400">密碼至少 8 個字元</p>
+        {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
       </div>
     );
   },
