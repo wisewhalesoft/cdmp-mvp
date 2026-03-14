@@ -112,6 +112,24 @@ export interface AccountListResponse {
   limit: number;
 }
 
+// F009: Password Reset
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -127,6 +145,11 @@ export const ERROR_CODES = {
   ACCOUNT_SELF_DISABLE: 'ACCOUNT_SELF_DISABLE',
   ACCOUNT_LAST_ADMIN: 'ACCOUNT_LAST_ADMIN',
   VALIDATION_INVALID_ROLE: 'VALIDATION_INVALID_ROLE',
+  RESET_TOKEN_EXPIRED: 'AUTH_RESET_TOKEN_EXPIRED',
+  RESET_TOKEN_USED: 'AUTH_RESET_TOKEN_USED',
+  RESET_TOKEN_INVALID: 'AUTH_RESET_TOKEN_INVALID',
+  VALIDATION_PASSWORD_LENGTH: 'VALIDATION_PASSWORD_LENGTH',
+  EMAIL_SEND_FAILED: 'SYSTEM_EMAIL_SEND_FAILED',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -146,4 +169,9 @@ export const ERROR_MESSAGES = {
   ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
   ACCOUNT_LAST_ADMIN: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
   VALIDATION_INVALID_ROLE: '角色必須為 admin 或 user',
+  RESET_TOKEN_EXPIRED: '此連結已過期，請重新申請密碼重設',
+  RESET_TOKEN_USED: '此連結已失效',
+  RESET_TOKEN_INVALID: '重設連結無效',
+  VALIDATION_PASSWORD_LENGTH: '密碼長度不得少於 8 個字元',
+  EMAIL_SEND_FAILED: '郵件發送失敗，請稍後再試',
 } as const;
