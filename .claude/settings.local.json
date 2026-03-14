@@ -116,7 +116,17 @@
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/forgot-password/ src/pages/reset-password/ 2>&1 | tail -15)",
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -15 && echo \"---\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -15)",
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -5 && echo \"---\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -5 && echo \"---\" && cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1 | tail -5)",
-      "Bash(sleep 5 && curl -s -X POST http://localhost:3000/api/v1/auth/forgot-password -H \"Content-Type: application/json\" -d '{\"email\":\"peter.yu@wise-whale.com.tw\"}' && echo \"\" && docker logs cdmp-api --tail 10 2>&1)"
+      "Bash(sleep 5 && curl -s -X POST http://localhost:3000/api/v1/auth/forgot-password -H \"Content-Type: application/json\" -d '{\"email\":\"peter.yu@wise-whale.com.tw\"}' && echo \"\" && docker logs cdmp-api --tail 10 2>&1)",
+      "Bash(find \"C:/Users/cacab/Claude/cdmp-mvp/apps/api/test\" -type f -name \"*.ts\" 2>/dev/null | sort)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run src/modules/accounts/__tests__/admin-reset-password.service.spec.ts 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts test/accounts-reset-password.e2e-spec.ts 2>&1 | tail -30)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts test/accounts-reset-password.e2e-spec.ts 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/reset-password-dialog.test.tsx 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/reset-password-dialog.test.tsx 2>&1 | tail -25)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -5)"
     ]
   }
 }
