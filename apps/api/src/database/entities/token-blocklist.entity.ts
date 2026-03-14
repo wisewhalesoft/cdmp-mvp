@@ -1,4 +1,5 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('token_blocklist')
 export class TokenBlocklist {
@@ -11,6 +12,6 @@ export class TokenBlocklist {
   @CreateDateColumn()
   revoked_at: Date;
 
-  @Column()
+  @Column({ type: dateColumnType })
   expires_at: Date;
 }

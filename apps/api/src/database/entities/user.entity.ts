@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('users')
 export class User {
@@ -32,6 +33,6 @@ export class User {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @Column({ type: 'timestamp', nullable: true, default: null })
+  @Column({ type: dateColumnType, nullable: true, default: null })
   password_changed_at: Date | null;
 }

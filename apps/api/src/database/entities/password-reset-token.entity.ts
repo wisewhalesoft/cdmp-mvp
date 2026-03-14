@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
 } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('password_reset_tokens')
 export class PasswordResetToken {
@@ -19,7 +20,7 @@ export class PasswordResetToken {
   @Column()
   expires_at: Date;
 
-  @Column({ type: 'timestamp', nullable: true, default: null })
+  @Column({ type: dateColumnType, nullable: true, default: null })
   used_at: Date | null;
 
   @CreateDateColumn()
