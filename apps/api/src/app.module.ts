@@ -4,9 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
+import { DatasourceModule } from './modules/datasource/datasource.module';
 import { User } from './database/entities/user.entity';
 import { TokenBlocklist } from './database/entities/token-blocklist.entity';
 import { PasswordResetToken } from './database/entities/password-reset-token.entity';
+import { Datasource } from './database/entities/datasource.entity';
 
 @Module({
   imports: [
@@ -23,7 +25,7 @@ import { PasswordResetToken } from './database/entities/password-reset-token.ent
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken],
+            entities: [User, TokenBlocklist, PasswordResetToken, Datasource],
             synchronize: true,
           };
         }
@@ -35,7 +37,7 @@ import { PasswordResetToken } from './database/entities/password-reset-token.ent
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken],
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },
@@ -49,6 +51,7 @@ import { PasswordResetToken } from './database/entities/password-reset-token.ent
     ]),
     AuthModule,
     AccountsModule,
+    DatasourceModule,
   ],
   providers: [],
 })

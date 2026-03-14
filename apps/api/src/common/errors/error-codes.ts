@@ -19,6 +19,11 @@ export const ERROR_CODES = {
   VALIDATION_PASSWORD_LENGTH: 'VALIDATION_PASSWORD_LENGTH',
   EMAIL_SEND_FAILED: 'SYSTEM_EMAIL_SEND_FAILED',
   ACCOUNT_SELF_RESET: 'ACCOUNT_SELF_RESET',
+  // F011: Datasource
+  DS_NAME_EXISTS: 'DS_NAME_EXISTS',
+  DS_NOT_FOUND: 'DS_NOT_FOUND',
+  VALIDATION_INVALID_TYPE: 'VALIDATION_INVALID_TYPE',
+  VALIDATION_PORT_RANGE: 'VALIDATION_PORT_RANGE',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -44,4 +49,9 @@ export const ERROR_MESSAGES = {
   VALIDATION_PASSWORD_LENGTH: '密碼長度不得少於 8 個字元',
   EMAIL_SEND_FAILED: '郵件發送失敗，請稍後再試',
   ACCOUNT_SELF_RESET: '請透過個人設定變更您自己的密碼',
+  // F011: Datasource
+  DS_NAME_EXISTS: '此名稱的資料來源已存在',
+  DS_NOT_FOUND: '找不到指定的資料來源',
+  VALIDATION_INVALID_TYPE: '資料來源類型必須為 mysql、postgresql 或 sqlserver',
+  VALIDATION_PORT_RANGE: '連接埠必須介於 1 到 65535 之間',
 } as const;

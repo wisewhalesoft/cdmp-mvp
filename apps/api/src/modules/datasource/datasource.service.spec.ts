@@ -1,0 +1,218 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConflictException } from '@nestjs/common';
+import { DatasourceService } from './datasource.service';
+import { Datasource } from '@/database/entities/datasource.entity';
+import { CryptoUtil } from '@/common/crypto/crypto.util';
+
+describe('DatasourceService', () => {
+  let service: DatasourceService;
+
+  const mockQueryBuilder = {
+    where: vi.fn().mockReturnThis(),
+    andWhere: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    skip: vi.fn().mockReturnThis(),
+    take: vi.fn().mockReturnThis(),
+    getOne: vi.fn(),
+    getManyAndCount: vi.fn(),
+  };
+
+  const mockRepository = {
+    createQueryBuilder: vi.fn().mockReturnValue(mockQueryBuilder),
+    create: vi.fn((data: any) => ({ id: 'test-uuid', ...data })),
+    save: vi.fn((entity: any) => Promise.resolve({
+      ...entity,
+      id: entity.id || 'test-uuid',
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-01'),
+    })),
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+
+    // Mock CryptoUtil.encrypt
+    vi.spyOn(CryptoUtil, 'encrypt').mockReturnValue('iv-base64:tag-base64:cipher-base64');
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DatasourceService,
+        {
+          provide: getRepositoryToken(Datasource),
+          useValue: mockRepository,
+        },
+      ],
+    }).compile();
+
+    service = module.get<DatasourceService>(DatasourceService);
+  });
+
+  const validDto = {
+    name: 'MySQL Production',
+    type: 'mysql' as const,
+    host: '192.168.1.100',
+    port: 3306,
+    databaseName: 'app_db',
+    username: 'db_admin',
+    password: 'SecretP@ss',
+    description: 'Production MySQL server',
+  };
+
+  it('should create datasource successfully', async () => {
+    mockQueryBuilder.getOne.mockResolvedValue(null); // no duplicate
+
+    const result = await service.createDatasource(validDto, 'user-uuid');
+
+    expect(result).toBeDefined();
+    expect(result.name).toBe('MySQL Production');
+    expect(result.type).toBe('mysql');
+    expect(result.host).toBe('192.168.1.100');
+    expect(result.port).toBe(3306);
+    expect(result.databaseName).toBe('app_db');
+    expect(result.username).toBe('db_admin');
+    expect(result.status).toBe('unknown');
+    expect(result.lastTestedAt).toBeNull();
+    expect(result).not.toHaveProperty('password');
+    expect(result).not.toHaveProperty('encrypted_password');
+    expect(CryptoUtil.encrypt).toHaveBeenCalledWith('SecretP@ss');
+    expect(mockRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encrypted_password: 'iv-base64:tag-base64:cipher-base64',
+        created_by: 'user-uuid',
+      }),
+    );
+  });
+
+  it('should throw ConflictException when name already exists', async () => {
+    mockQueryBuilder.getOne.mockResolvedValue({ id: 'existing-id', name: 'MySQL Production' });
+
+    await expect(service.createDatasource(validDto, 'user-uuid'))
+      .rejects.toThrow(ConflictException);
+
+    await expect(service.createDatasource(validDto, 'user-uuid'))
+      .rejects.toThrow();
+  });
+
+  it('should encrypt password before saving', async () => {
+    mockQueryBuilder.getOne.mockResolvedValue(null);
+
+    await service.createDatasource(validDto, 'user-uuid');
+
+    expect(CryptoUtil.encrypt).toHaveBeenCalledWith('SecretP@ss');
+    expect(mockRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encrypted_password: 'iv-base64:tag-base64:cipher-base64',
+      }),
+    );
+  });
+
+  // F012: findAll tests
+  describe('findAll', () => {
+    const mockDatasources = [
+      {
+        id: 'ds-1',
+        name: 'MySQL 主資料庫',
+        type: 'mysql',
+        host: '192.168.1.100',
+        port: 3306,
+        database_name: 'prod_db',
+        username: 'admin',
+        encrypted_password: 'iv:tag:cipher',
+        description: 'Production MySQL',
+        status: 'connected',
+        last_tested_at: new Date('2026-01-15'),
+        created_at: new Date('2026-01-01'),
+        updated_at: new Date('2026-01-10'),
+        deleted_at: null,
+      },
+      {
+        id: 'ds-2',
+        name: 'PostgreSQL 分析庫',
+        type: 'postgresql',
+        host: '192.168.1.101',
+        port: 5432,
+        database_name: 'analytics_db',
+        username: 'analyst',
+        encrypted_password: 'iv:tag:cipher',
+        description: null,
+        status: 'disconnected',
+        last_tested_at: null,
+        created_at: new Date('2026-01-02'),
+        updated_at: new Date('2026-01-02'),
+        deleted_at: null,
+      },
+    ];
+
+    beforeEach(() => {
+      mockQueryBuilder.getManyAndCount.mockResolvedValue([mockDatasources, 2]);
+    });
+
+    it('should return paginated list with default page=1, limit=20', async () => {
+      const result = await service.findAll({});
+
+      expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith('ds');
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('ds.deleted_at IS NULL');
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('ds.created_at', 'DESC');
+      expect(mockQueryBuilder.skip).toHaveBeenCalledWith(0);
+      expect(mockQueryBuilder.take).toHaveBeenCalledWith(20);
+      expect(result.data).toHaveLength(2);
+      expect(result.pagination).toEqual({ page: 1, limit: 20, total: 2, totalPages: 1 });
+    });
+
+    it('should exclude encrypted_password from results', async () => {
+      const result = await service.findAll({});
+
+      result.data.forEach((item) => {
+        expect(item).not.toHaveProperty('encrypted_password');
+        expect(item).not.toHaveProperty('password');
+      });
+    });
+
+    it('should map entity fields to camelCase', async () => {
+      const result = await service.findAll({});
+
+      expect(result.data[0].databaseName).toBe('prod_db');
+      expect(result.data[0].lastTestedAt).toBeDefined();
+      expect(result.data[0].createdAt).toBeDefined();
+      expect(result.data[0].updatedAt).toBeDefined();
+    });
+
+    it('should apply search filter when provided', async () => {
+      await service.findAll({ search: 'mysql' });
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'LOWER(ds.name) LIKE :search',
+        { search: '%mysql%' },
+      );
+    });
+
+    it('should apply type filter when provided', async () => {
+      await service.findAll({ type: 'postgresql' });
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'ds.type = :type',
+        { type: 'postgresql' },
+      );
+    });
+
+    it('should apply status filter when provided', async () => {
+      await service.findAll({ status: 'connected' });
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'ds.status = :status',
+        { status: 'connected' },
+      );
+    });
+
+    it('should calculate totalPages correctly', async () => {
+      mockQueryBuilder.getManyAndCount.mockResolvedValue([mockDatasources, 45]);
+
+      const result = await service.findAll({ page: 1, limit: 20 });
+
+      expect(result.pagination.totalPages).toBe(3);
+    });
+  });
+});
