@@ -100,7 +100,23 @@
       "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/account-list-page.test.tsx 2>&1 | tail -25)",
       "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/account-list-page.test.tsx 2>&1 | tail -20)",
       "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx vitest run src/pages/accounts/__tests__/account-list-page.test.tsx 2>&1 | tail -15)",
-      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx tsc --noEmit 2>&1 | tail -5; echo \"---\"; cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx tsc --noEmit 2>&1 | tail -5)"
+      "Bash(cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/api\" && npx tsc --noEmit 2>&1 | tail -5; echo \"---\"; cd \"C:/Users/cacab/Claude/cdmp-mvp/apps/web\" && npx tsc --noEmit 2>&1 | tail -5)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps/api/src -type f -name \"*.ts\" 2>/dev/null | head -50)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps/web/src -type f -name \"*.tsx\" -o -name \"*.ts\" 2>/dev/null | head -40)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp/apps/api/test -type f -name \"*.ts\" 2>/dev/null | head -20)",
+      "Bash(find C:/Users/cacab/Claude/cdmp-mvp/packages/shared/src -type f -name \"*.ts\" 2>/dev/null | head -20)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run src/modules/auth/__tests__/password-reset.service.spec.ts 2>&1 | tail -30)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run src/modules/auth/__tests__/ 2>&1 | tail -30)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && for f in apps/api/test/accounts*.e2e-spec.ts; do grep -l \"entities: \\\\[User, TokenBlocklist\\\\]\" \"$f\" && echo \"  -> needs update\"; done)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts test/password-reset.e2e-spec.ts 2>&1 | tail -40)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts test/password-reset.e2e-spec.ts 2>&1 | tail -20)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -20)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -20)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/forgot-password/ src/pages/reset-password/ 2>&1 | tail -30)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run src/pages/forgot-password/ src/pages/reset-password/ 2>&1 | tail -15)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -15 && echo \"---\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -15)",
+      "Bash(cd C:/Users/cacab/Claude/cdmp-mvp/apps/api && npx vitest run 2>&1 | tail -5 && echo \"---\" && npx vitest run --config vitest.e2e.config.ts 2>&1 | tail -5 && echo \"---\" && cd C:/Users/cacab/Claude/cdmp-mvp/apps/web && npx vitest run 2>&1 | tail -5)",
+      "Bash(sleep 5 && curl -s -X POST http://localhost:3000/api/v1/auth/forgot-password -H \"Content-Type: application/json\" -d '{\"email\":\"peter.yu@wise-whale.com.tw\"}' && echo \"\" && docker logs cdmp-api --tail 10 2>&1)"
     ]
   }
 }
