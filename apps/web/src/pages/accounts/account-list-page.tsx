@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Database, LogOut, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getAccounts, updateAccountStatus, updateAccountRole } from '@/api/accounts';
+import { getAccounts, updateAccountStatus, updateAccountRole, adminResetPassword } from '@/api/accounts';
 import { Button } from '@/components/ui/button';
 import { CreateAccountModal } from './create-account-modal';
 import { EditAccountModal } from './edit-account-modal';
 import { ToggleStatusDialog } from './toggle-status-dialog';
 import { ChangeRoleDialog } from './change-role-dialog';
+import { ResetPasswordDialog } from './reset-password-dialog';
 import type { AccountListItem } from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
@@ -58,6 +59,9 @@ export function AccountListPage() {
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [roleTarget, setRoleTarget] = useState<AccountListItem | null>(null);
   const [roleLoading, setRoleLoading] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetTarget, setResetTarget] = useState<AccountListItem | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // List state
   const [accounts, setAccounts] = useState<AccountListItem[]>([]);
@@ -192,6 +196,26 @@ export function AccountListPage() {
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
     setPage(1);
+  };
+
+  const handleResetClick = (account: AccountListItem) => {
+    setResetTarget(account);
+    setShowResetDialog(true);
+  };
+
+  const handleResetConfirm = async (newPassword: string) => {
+    if (!resetTarget) return;
+    setResetLoading(true);
+    try {
+      await adminResetPassword(resetTarget.id, { newPassword });
+      setShowResetDialog(false);
+      setResetTarget(null);
+      fetchAccounts();
+    } catch {
+      // Error handling — graceful degradation
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   return (
@@ -356,9 +380,22 @@ export function AccountListPage() {
                             >
                               變更角色
                             </button>
-                            <button className="text-xs text-primary hover:text-blue-700 font-medium">
-                              重設密碼
-                            </button>
+                            {account.id === user?.id ? (
+                              <button
+                                disabled
+                                className="text-xs text-gray-300 cursor-not-allowed font-medium"
+                                title="請透過個人設定變更您自己的密碼"
+                              >
+                                重設密碼
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleResetClick(account)}
+                                className="text-xs text-primary hover:text-blue-700 font-medium"
+                              >
+                                重設密碼
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -433,6 +470,15 @@ export function AccountListPage() {
         loading={roleLoading}
         onConfirm={handleRoleConfirm}
         onCancel={() => { setShowRoleDialog(false); setRoleTarget(null); }}
+      />
+
+      {/* Reset Password Dialog (F010) */}
+      <ResetPasswordDialog
+        open={showResetDialog}
+        accountName={resetTarget?.name ?? ''}
+        loading={resetLoading}
+        onConfirm={handleResetConfirm}
+        onCancel={() => { setShowResetDialog(false); setResetTarget(null); }}
       />
     </div>
   );

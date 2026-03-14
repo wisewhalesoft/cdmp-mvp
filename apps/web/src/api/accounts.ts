@@ -9,6 +9,8 @@ import type {
   UpdateRoleResponse,
   AccountListQuery,
   AccountListResponse,
+  AdminResetPasswordRequest,
+  AdminResetPasswordResponse,
 } from '@cdmp/shared';
 import { apiClient } from './client';
 
@@ -41,5 +43,10 @@ export async function updateAccountStatus(id: string, data: UpdateStatusRequest)
 
 export async function updateAccountRole(id: string, data: UpdateRoleRequest): Promise<UpdateRoleResponse> {
   const response = await apiClient.patch<UpdateRoleResponse>(`/accounts/${id}/role`, data);
+  return response.data;
+}
+
+export async function adminResetPassword(id: string, data: AdminResetPasswordRequest): Promise<AdminResetPasswordResponse> {
+  const response = await apiClient.post<AdminResetPasswordResponse>(`/accounts/${id}/reset-password`, data);
   return response.data;
 }

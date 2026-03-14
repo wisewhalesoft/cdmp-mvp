@@ -18,6 +18,7 @@ const mockedCreateAccount = vi.mocked(accountsApi.createAccount);
 const mockedUpdateAccount = vi.mocked(accountsApi.updateAccount);
 const mockedUpdateAccountStatus = vi.mocked(accountsApi.updateAccountStatus);
 const mockedUpdateAccountRole = vi.mocked(accountsApi.updateAccountRole);
+const mockedAdminResetPassword = vi.mocked(accountsApi.adminResetPassword);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -598,6 +599,80 @@ describe('AccountListPage', () => {
       });
 
       // After success, getAccounts should be called again (refresh)
+      expect(mockedGetAccounts.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+  });
+
+  describe('重設密碼整合 (F010)', () => {
+    it('其他帳號顯示可點擊的「重設密碼」按鈕', async () => {
+      await renderAndLoad();
+      const resetButtons = screen.getAllByText('重設密碼');
+      // At least one should be enabled (for non-self accounts)
+      const enabledResetBtns = resetButtons.filter((btn) => !btn.hasAttribute('disabled'));
+      expect(enabledResetBtns.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('自己的帳號「重設密碼」按鈕為 disabled', async () => {
+      await renderAndLoad();
+      // Current user id='1', first account id='1'
+      // All "重設密碼" buttons — find the one in the self row
+      const rows = screen.getAllByRole('row');
+      // Row 0 is header; row 1 is account[0] (id='1', self)
+      const selfRow = rows[1];
+      const selfResetBtn = selfRow.querySelector('button[disabled]');
+      // The self row should have a disabled button with title hint
+      const resetBtns = selfRow.querySelectorAll('button');
+      const disabledResetBtn = Array.from(resetBtns).find(
+        (btn) => btn.textContent === '重設密碼' && btn.hasAttribute('disabled'),
+      );
+      expect(disabledResetBtn).toBeTruthy();
+    });
+
+    it('點擊「重設密碼」按鈕開啟重設密碼對話框', async () => {
+      await renderAndLoad();
+      const resetButtons = screen.getAllByText('重設密碼');
+      const enabledResetBtn = resetButtons.find((btn) => !btn.hasAttribute('disabled'));
+      fireEvent.click(enabledResetBtn!);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(screen.getByText('重設使用者密碼')).toBeInTheDocument();
+    });
+
+    it('重設成功後刷新清單', async () => {
+      mockedAdminResetPassword.mockResolvedValue({
+        message: '密碼已重設，使用者需以新密碼重新登入',
+      });
+
+      await renderAndLoad();
+
+      const initialCalls = mockedGetAccounts.mock.calls.length;
+
+      const resetButtons = screen.getAllByText('重設密碼');
+      const enabledResetBtn = resetButtons.find((btn) => !btn.hasAttribute('disabled'));
+      fireEvent.click(enabledResetBtn!);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // Fill in passwords using fireEvent
+      const newPasswordInput = screen.getByLabelText('新密碼');
+      const confirmPasswordInput = screen.getByLabelText('確認密碼');
+      fireEvent.change(newPasswordInput, { target: { value: 'NewPass99' } });
+      fireEvent.change(confirmPasswordInput, { target: { value: 'NewPass99' } });
+
+      // Submit — click the dialog's submit button (last one with name "重設密碼")
+      const resetBtns = screen.getAllByRole('button', { name: '重設密碼' });
+      fireEvent.click(resetBtns[resetBtns.length - 1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedAdminResetPassword).toHaveBeenCalledWith('2', { newPassword: 'NewPass99' });
       expect(mockedGetAccounts.mock.calls.length).toBeGreaterThan(initialCalls);
     });
   });
