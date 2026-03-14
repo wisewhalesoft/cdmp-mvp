@@ -130,6 +130,15 @@ export interface ResetPasswordResponse {
   message: string;
 }
 
+// F010: Admin Reset Password
+export interface AdminResetPasswordRequest {
+  newPassword: string;
+}
+
+export interface AdminResetPasswordResponse {
+  message: string;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -150,6 +159,7 @@ export const ERROR_CODES = {
   RESET_TOKEN_INVALID: 'AUTH_RESET_TOKEN_INVALID',
   VALIDATION_PASSWORD_LENGTH: 'VALIDATION_PASSWORD_LENGTH',
   EMAIL_SEND_FAILED: 'SYSTEM_EMAIL_SEND_FAILED',
+  ACCOUNT_SELF_RESET: 'ACCOUNT_SELF_RESET',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -174,4 +184,5 @@ export const ERROR_MESSAGES = {
   RESET_TOKEN_INVALID: '重設連結無效',
   VALIDATION_PASSWORD_LENGTH: '密碼長度不得少於 8 個字元',
   EMAIL_SEND_FAILED: '郵件發送失敗，請稍後再試',
+  ACCOUNT_SELF_RESET: '請透過個人設定變更您自己的密碼',
 } as const;
