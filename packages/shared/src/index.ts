@@ -169,6 +169,21 @@ export interface CreateDatasourceResponse {
   updatedAt: string;
 }
 
+// F013: Edit Datasource
+export interface UpdateDatasourceRequest {
+  name: string;
+  type: DatasourceType;
+  host: string;
+  port: number;
+  databaseName: string;
+  username: string;
+  password?: string | null;
+  description?: string | null;
+}
+
+// Reuse the same response shape for GET /:id and PUT /:id
+export type DatasourceDetailResponse = CreateDatasourceResponse;
+
 // F012: Datasource List
 export interface DatasourceListQuery {
   page?: number;

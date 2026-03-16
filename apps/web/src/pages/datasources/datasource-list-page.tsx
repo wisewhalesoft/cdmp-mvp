@@ -296,7 +296,12 @@ export function DatasourceListPage() {
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-300 cursor-not-allowed font-medium">編輯</span>
+                            <button
+                              onClick={() => navigate(`/datasources/${ds.id}/edit`)}
+                              className="text-xs text-primary hover:text-blue-700 font-medium"
+                            >
+                              編輯
+                            </button>
                             <span className="text-xs text-gray-300 cursor-not-allowed font-medium">測試連線</span>
                             <span className="text-xs text-gray-300 cursor-not-allowed font-medium">刪除</span>
                           </div>

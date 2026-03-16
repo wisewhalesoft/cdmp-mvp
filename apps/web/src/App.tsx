@@ -5,6 +5,7 @@ import { AccountListPage } from '@/pages/accounts/account-list-page';
 import { ForgotPasswordPage } from '@/pages/forgot-password/forgot-password-page';
 import { ResetPasswordPage } from '@/pages/reset-password/reset-password-page';
 import { AddDatasourcePage } from '@/pages/datasources/add-datasource-page';
+import { EditDatasourcePage } from '@/pages/datasources/edit-datasource-page';
 import { DatasourceListPage } from '@/pages/datasources/datasource-list-page';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
@@ -35,6 +36,14 @@ export function App() {
         element={
           <AdminRoute>
             <AddDatasourcePage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/datasources/:id/edit"
+        element={
+          <AdminRoute>
+            <EditDatasourcePage />
           </AdminRoute>
         }
       />
