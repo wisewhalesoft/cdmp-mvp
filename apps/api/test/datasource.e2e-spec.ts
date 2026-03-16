@@ -782,3 +782,114 @@ describe('F013: Edit Datasource E2E', () => {
     });
   });
 });
+
+describe('F014: Delete Datasource E2E (DELETE /api/v1/datasources/:id)', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let deletableDsId: string;
+
+  const basePayload = {
+    name: 'F014 Delete Target',
+    type: 'mysql',
+    host: '192.168.1.100',
+    port: 3306,
+    databaseName: 'delete_db',
+    username: 'db_admin',
+    password: 'Secret123',
+    description: 'Target for delete tests',
+  };
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+
+    // Create a datasource to delete
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(basePayload);
+    deletableDsId = res.body.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F014-001: 成功軟刪除
+  it('should soft-delete datasource and return 200', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/datasources/${deletableDsId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('資料來源已成功刪除');
+    expect(res.body.id).toBe(deletableDsId);
+
+    // Verify DB: deleted_at is set
+    const dataSource = app.get(DataSource);
+    const dsRepo = dataSource.getRepository(Datasource);
+    const record = await dsRepo.findOne({ where: { id: deletableDsId } });
+    expect(record).toBeDefined();
+    expect(record!.deleted_at).not.toBeNull();
+  });
+
+  // TS-F014-002: 刪除後從清單消失
+  it('should not appear in list after deletion', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const names = res.body.data.map((d: any) => d.name);
+    expect(names).not.toContain('F014 Delete Target');
+  });
+
+  // TS-F014-003: 刪除不存在的資料來源
+  it('should return 404 for non-existent datasource', async () => {
+    const res = await request(app.getHttpServer())
+      .delete('/api/v1/datasources/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('DS_NOT_FOUND');
+  });
+
+  // TS-F014-004: 重複刪除已軟刪除記錄
+  it('should return 404 when deleting already soft-deleted datasource', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/datasources/${deletableDsId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('DS_NOT_FOUND');
+  });
+
+  // TS-F014-005: 刪除後同名資料來源可重新建立
+  it('should allow creating datasource with same name after deletion', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(basePayload);
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('F014 Delete Target');
+  });
+
+  // Non-admin should get 403
+  it('should return 403 for non-admin user', async () => {
+    // Create a new datasource to try deleting
+    const createRes = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: 'F014 Forbidden Delete' });
+    const dsId = createRes.body.id;
+
+    const userToken = await getUserToken(app);
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/datasources/${dsId}`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+});

@@ -339,4 +339,52 @@ describe('DatasourceService', () => {
         .rejects.toThrow(ConflictException);
     });
   });
+
+  // F014: deleteDatasource tests
+  describe('deleteDatasource', () => {
+    const existingEntity = {
+      id: 'ds-1',
+      name: 'MySQL 主資料庫',
+      type: 'mysql',
+      host: '192.168.1.100',
+      port: 3306,
+      database_name: 'prod_db',
+      username: 'admin',
+      encrypted_password: 'iv:tag:cipher',
+      description: 'Production MySQL',
+      status: 'connected',
+      last_tested_at: new Date('2026-01-15'),
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-10'),
+      deleted_at: null,
+    };
+
+    it('should soft-delete datasource successfully', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+
+      const result = await service.deleteDatasource('ds-1');
+
+      expect(result.message).toBe('資料來源已成功刪除');
+      expect(result.id).toBe('ds-1');
+
+      const savedArg = mockRepository.save.mock.calls[0][0];
+      expect(savedArg.deleted_at).toBeInstanceOf(Date);
+      expect(savedArg.deleted_at).not.toBeNull();
+    });
+
+    it('should throw NotFoundException when datasource not found', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      await expect(service.deleteDatasource('nonexistent-id'))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException for already soft-deleted datasource', async () => {
+      // The query already has `deleted_at IS NULL`, so soft-deleted records return null
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      await expect(service.deleteDatasource('ds-deleted'))
+        .rejects.toThrow(NotFoundException);
+    });
+  });
 });
