@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DatasourceService } from './datasource.service';
 import { Datasource } from '@/database/entities/datasource.entity';
 import { CryptoUtil } from '@/common/crypto/crypto.util';
@@ -213,6 +213,130 @@ describe('DatasourceService', () => {
       const result = await service.findAll({ page: 1, limit: 20 });
 
       expect(result.pagination.totalPages).toBe(3);
+    });
+  });
+
+  // F013: findById tests
+  describe('findById', () => {
+    const mockEntity = {
+      id: 'ds-1',
+      name: 'MySQL 主資料庫',
+      type: 'mysql',
+      host: '192.168.1.100',
+      port: 3306,
+      database_name: 'prod_db',
+      username: 'admin',
+      encrypted_password: 'iv:tag:cipher',
+      description: 'Production MySQL',
+      status: 'connected',
+      last_tested_at: new Date('2026-01-15'),
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-10'),
+      deleted_at: null,
+    };
+
+    it('should return datasource by id', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(mockEntity);
+
+      const result = await service.findById('ds-1');
+
+      expect(result.id).toBe('ds-1');
+      expect(result.name).toBe('MySQL 主資料庫');
+      expect(result.databaseName).toBe('prod_db');
+      expect(result).not.toHaveProperty('encrypted_password');
+      expect(result).not.toHaveProperty('password');
+    });
+
+    it('should throw NotFoundException when datasource not found', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      await expect(service.findById('nonexistent-id'))
+        .rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // F013: updateDatasource tests
+  describe('updateDatasource', () => {
+    const existingEntity = {
+      id: 'ds-1',
+      name: 'MySQL 主資料庫',
+      type: 'mysql',
+      host: '192.168.1.100',
+      port: 3306,
+      database_name: 'prod_db',
+      username: 'admin',
+      encrypted_password: 'old-iv:old-tag:old-cipher',
+      description: 'Production MySQL',
+      status: 'connected',
+      last_tested_at: new Date('2026-01-15'),
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-10'),
+      deleted_at: null,
+    };
+
+    const updateDto = {
+      name: 'MySQL 主資料庫',
+      type: 'mysql' as const,
+      host: 'new-host.example.com',
+      port: 3307,
+      databaseName: 'prod_db',
+      username: 'admin',
+      description: 'Updated description',
+    };
+
+    it('should update datasource and reset status to unknown', async () => {
+      // First call: find existing entity; Second call: duplicate check returns null
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(existingEntity)
+        .mockResolvedValueOnce(null);
+
+      const result = await service.updateDatasource('ds-1', updateDto);
+
+      expect(result.host).toBe('new-host.example.com');
+      expect(result.port).toBe(3307);
+      expect(result.status).toBe('unknown');
+      expect(result.description).toBe('Updated description');
+    });
+
+    it('should preserve password when password is null', async () => {
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce({ ...existingEntity })
+        .mockResolvedValueOnce(null);
+
+      await service.updateDatasource('ds-1', { ...updateDto, password: null });
+
+      // CryptoUtil.encrypt should NOT be called for update
+      // (it was called in beforeEach mock setup, so check save arg)
+      const savedArg = mockRepository.save.mock.calls[0][0];
+      expect(savedArg.encrypted_password).toBe('old-iv:old-tag:old-cipher');
+    });
+
+    it('should encrypt and update password when provided', async () => {
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce({ ...existingEntity })
+        .mockResolvedValueOnce(null);
+
+      await service.updateDatasource('ds-1', { ...updateDto, password: 'NewP@ss' });
+
+      expect(CryptoUtil.encrypt).toHaveBeenCalledWith('NewP@ss');
+      const savedArg = mockRepository.save.mock.calls[0][0];
+      expect(savedArg.encrypted_password).toBe('iv-base64:tag-base64:cipher-base64');
+    });
+
+    it('should throw NotFoundException when datasource not found', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      await expect(service.updateDatasource('nonexistent', updateDto))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw ConflictException when name conflicts with another datasource', async () => {
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(existingEntity) // find existing
+        .mockResolvedValueOnce({ id: 'ds-other', name: 'Duplicate' }); // duplicate found
+
+      await expect(service.updateDatasource('ds-1', { ...updateDto, name: 'Duplicate' }))
+        .rejects.toThrow(ConflictException);
     });
   });
 });

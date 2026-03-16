@@ -477,3 +477,308 @@ describe('F011: Create Datasource E2E (POST /api/v1/datasources)', () => {
     });
   });
 });
+
+describe('F013: Edit Datasource E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let createdDsId: string;
+  let anotherDsId: string;
+
+  const basePayload = {
+    name: 'F013 Edit Target',
+    type: 'mysql',
+    host: '192.168.1.100',
+    port: 3306,
+    databaseName: 'edit_db',
+    username: 'db_admin',
+    password: 'OriginalP@ss',
+    description: 'Target for edit tests',
+  };
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+
+    // Create two datasources: one to edit, one for duplicate name test
+    const res1 = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(basePayload);
+    createdDsId = res1.body.id;
+
+    const res2 = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: 'Another Datasource' });
+    anotherDsId = res2.body.id;
+
+    // Create a soft-deleted datasource
+    const res3 = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: 'Soft Deleted For Edit' });
+    const softDeletedId = res3.body.id;
+
+    const dataSource = app.get(DataSource);
+    const dsRepo = dataSource.getRepository(Datasource);
+    await dsRepo.update({ id: softDeletedId }, { deleted_at: new Date() });
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // === GET /api/v1/datasources/:id ===
+
+  describe('GET /api/v1/datasources/:id', () => {
+    it('should return single datasource by id (HTTP 200)', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(createdDsId);
+      expect(res.body.name).toBe('F013 Edit Target');
+      expect(res.body.type).toBe('mysql');
+      expect(res.body.host).toBe('192.168.1.100');
+      expect(res.body.port).toBe(3306);
+      expect(res.body.databaseName).toBe('edit_db');
+      expect(res.body.username).toBe('db_admin');
+      expect(res.body.description).toBe('Target for edit tests');
+      expect(res.body.status).toBe('unknown');
+      expect(res.body).toHaveProperty('createdAt');
+      expect(res.body).toHaveProperty('updatedAt');
+      // Must NOT contain password
+      expect(res.body).not.toHaveProperty('password');
+      expect(res.body).not.toHaveProperty('encrypted_password');
+      expect(res.body).not.toHaveProperty('encryptedPassword');
+    });
+
+    it('should return 404 for non-existent id', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/datasources/00000000-0000-0000-0000-000000000000')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+
+    it('should return 404 for soft-deleted datasource', async () => {
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      const softDeleted = await dsRepo.findOne({ where: { name: 'Soft Deleted For Edit' } });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/datasources/${softDeleted!.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+
+    it('should return 403 for non-admin user', async () => {
+      const userToken = await getUserToken(app);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+    });
+  });
+
+  // === PUT /api/v1/datasources/:id ===
+
+  describe('PUT /api/v1/datasources/:id', () => {
+    const updatePayload = {
+      name: 'F013 Edit Target',
+      type: 'mysql',
+      host: 'new-host.example.com',
+      port: 3307,
+      databaseName: 'edit_db',
+      username: 'db_admin',
+      description: 'Updated description',
+    };
+
+    // TS-F013-001: 成功修改連線參數
+    it('should update datasource and reset status to unknown (HTTP 200)', async () => {
+      // First set status to connected via DB
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      await dsRepo.update({ id: createdDsId }, { status: 'connected', last_tested_at: new Date() });
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(updatePayload);
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(createdDsId);
+      expect(res.body.host).toBe('new-host.example.com');
+      expect(res.body.port).toBe(3307);
+      expect(res.body.description).toBe('Updated description');
+      expect(res.body.status).toBe('unknown'); // BR-4: reset to unknown
+      expect(res.body).toHaveProperty('updatedAt');
+      expect(res.body).not.toHaveProperty('password');
+      expect(res.body).not.toHaveProperty('encrypted_password');
+    });
+
+    // TS-F013-002: 密碼為空保留現有密碼
+    it('should preserve existing password when password is null', async () => {
+      // Record current encrypted_password
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      const before = await dsRepo.findOne({ where: { id: createdDsId } });
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...updatePayload, password: null });
+
+      expect(res.status).toBe(200);
+
+      // Verify password unchanged in DB
+      const after = await dsRepo.findOne({ where: { id: createdDsId } });
+      expect(after!.encrypted_password).toBe(before!.encrypted_password);
+    });
+
+    // TS-F013-002 (variant): password as empty string also preserves
+    it('should preserve existing password when password is empty string', async () => {
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      const before = await dsRepo.findOne({ where: { id: createdDsId } });
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...updatePayload, password: '' });
+
+      expect(res.status).toBe(200);
+
+      const after = await dsRepo.findOne({ where: { id: createdDsId } });
+      expect(after!.encrypted_password).toBe(before!.encrypted_password);
+    });
+
+    // TS-F013-003: 更新密碼
+    it('should update password when new password provided', async () => {
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      const before = await dsRepo.findOne({ where: { id: createdDsId } });
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...updatePayload, password: 'NewSecretP@ss' });
+
+      expect(res.status).toBe(200);
+
+      const after = await dsRepo.findOne({ where: { id: createdDsId } });
+      expect(after!.encrypted_password).not.toBe(before!.encrypted_password);
+      expect(after!.encrypted_password).toContain(':'); // AES-256-GCM format
+    });
+
+    // TS-F013-004: 名稱保留原值不觸發重複
+    it('should allow keeping the same name (self-exclusion)', async () => {
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...updatePayload, name: 'F013 Edit Target' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('F013 Edit Target');
+    });
+
+    // TS-F013-005: 名稱與其他資料來源重複
+    it('should return 409 when name conflicts with another datasource', async () => {
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...updatePayload, name: 'Another Datasource' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('DS_NAME_EXISTS');
+      expect(res.body.message).toBe('此名稱的資料來源已存在');
+    });
+
+    // TS-F013-006: 資料來源不存在
+    it('should return 404 for non-existent datasource', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/api/v1/datasources/00000000-0000-0000-0000-000000000000')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(updatePayload);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+
+    // TS-F013-006 (variant): soft-deleted datasource
+    it('should return 404 for soft-deleted datasource', async () => {
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      const softDeleted = await dsRepo.findOne({ where: { name: 'Soft Deleted For Edit' } });
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${softDeleted!.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(updatePayload);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+
+    // TS-F013-007: 非 Admin 編輯
+    it('should return 403 for non-admin user', async () => {
+      const userToken = await getUserToken(app);
+
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send(updatePayload);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+    });
+
+    // TS-F013-008: Port 邊界值
+    describe('port boundary validation', () => {
+      it('should return 422 for port=0', async () => {
+        const res = await request(app.getHttpServer())
+          .put(`/api/v1/datasources/${createdDsId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ ...updatePayload, port: 0 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toBe('VALIDATION_ERROR');
+      });
+
+      it('should accept port=1', async () => {
+        const res = await request(app.getHttpServer())
+          .put(`/api/v1/datasources/${createdDsId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ ...updatePayload, port: 1 });
+
+        expect(res.status).toBe(200);
+      });
+
+      it('should accept port=65535', async () => {
+        const res = await request(app.getHttpServer())
+          .put(`/api/v1/datasources/${createdDsId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ ...updatePayload, port: 65535 });
+
+        expect(res.status).toBe(200);
+      });
+
+      it('should return 422 for port=65536', async () => {
+        const res = await request(app.getHttpServer())
+          .put(`/api/v1/datasources/${createdDsId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ ...updatePayload, port: 65536 });
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toBe('VALIDATION_ERROR');
+      });
+    });
+  });
+});
