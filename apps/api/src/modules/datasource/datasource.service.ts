@@ -172,6 +172,26 @@ export class DatasourceService {
     return toDatasourceResponse(ds);
   }
 
+  async deleteDatasource(id: string): Promise<{ message: string; id: string }> {
+    const existing = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('ds.id = :id', { id })
+      .andWhere('ds.deleted_at IS NULL')
+      .getOne();
+
+    if (!existing) {
+      throw new NotFoundException({
+        error: ERROR_CODES.DS_NOT_FOUND,
+        message: ERROR_MESSAGES.DS_NOT_FOUND,
+      });
+    }
+
+    existing.deleted_at = new Date();
+    await this.datasourceRepository.save(existing);
+
+    return { message: '資料來源已成功刪除', id };
+  }
+
   async updateDatasource(
     id: string,
     dto: UpdateDatasourceDto,

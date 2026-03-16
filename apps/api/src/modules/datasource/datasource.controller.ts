@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Query, Param, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Query, Param, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
@@ -33,5 +33,10 @@ export class DatasourceController {
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateDatasourceDto) {
     return this.datasourceService.updateDatasource(id, dto);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.datasourceService.deleteDatasource(id);
   }
 }

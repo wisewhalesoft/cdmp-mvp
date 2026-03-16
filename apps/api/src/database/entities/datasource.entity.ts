@@ -15,7 +15,7 @@ export class Datasource {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 100, unique: true })
+  @Column({ length: 100 })
   name: string;
 
   @Column({ type: 'varchar', length: 20 })
