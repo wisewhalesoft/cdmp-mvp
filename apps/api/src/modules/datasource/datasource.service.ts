@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Datasource } from '@/database/entities/datasource.entity';
@@ -6,6 +6,7 @@ import { CryptoUtil } from '@/common/crypto/crypto.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateDatasourceDto } from './dto/create-datasource.dto';
 import { ListDatasourceDto } from './dto/list-datasource.dto';
+import { UpdateDatasourceDto } from './dto/update-datasource.dto';
 
 export interface DatasourceListItemResult {
   id: string;
@@ -32,7 +33,7 @@ export interface DatasourceListResult {
   };
 }
 
-export interface CreateDatasourceResult {
+export interface DatasourceResult {
   id: string;
   name: string;
   type: string;
@@ -45,6 +46,26 @@ export interface CreateDatasourceResult {
   lastTestedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Keep backward compatibility alias
+export type CreateDatasourceResult = DatasourceResult;
+
+function toDatasourceResponse(ds: Datasource): DatasourceResult {
+  return {
+    id: ds.id,
+    name: ds.name,
+    type: ds.type,
+    host: ds.host,
+    port: ds.port,
+    databaseName: ds.database_name,
+    username: ds.username,
+    description: ds.description,
+    status: ds.status,
+    lastTestedAt: ds.last_tested_at,
+    createdAt: ds.created_at,
+    updatedAt: ds.updated_at,
+  };
 }
 
 @Injectable()
@@ -83,20 +104,7 @@ export class DatasourceService {
     const [data, total] = await qb.getManyAndCount();
 
     return {
-      data: data.map((ds) => ({
-        id: ds.id,
-        name: ds.name,
-        type: ds.type,
-        host: ds.host,
-        port: ds.port,
-        databaseName: ds.database_name,
-        username: ds.username,
-        description: ds.description,
-        status: ds.status,
-        lastTestedAt: ds.last_tested_at,
-        createdAt: ds.created_at,
-        updatedAt: ds.updated_at,
-      })),
+      data: data.map(toDatasourceResponse),
       pagination: {
         page,
         limit,
@@ -144,19 +152,78 @@ export class DatasourceService {
 
     const saved = await this.datasourceRepository.save(datasource);
 
-    return {
-      id: saved.id,
-      name: saved.name,
-      type: saved.type,
-      host: saved.host,
-      port: saved.port,
-      databaseName: saved.database_name,
-      username: saved.username,
-      description: saved.description,
-      status: saved.status,
-      lastTestedAt: saved.last_tested_at,
-      createdAt: saved.created_at,
-      updatedAt: saved.updated_at,
-    };
+    return toDatasourceResponse(saved);
+  }
+
+  async findById(id: string): Promise<DatasourceResult> {
+    const ds = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('ds.id = :id', { id })
+      .andWhere('ds.deleted_at IS NULL')
+      .getOne();
+
+    if (!ds) {
+      throw new NotFoundException({
+        error: ERROR_CODES.DS_NOT_FOUND,
+        message: ERROR_MESSAGES.DS_NOT_FOUND,
+      });
+    }
+
+    return toDatasourceResponse(ds);
+  }
+
+  async updateDatasource(
+    id: string,
+    dto: UpdateDatasourceDto,
+  ): Promise<DatasourceResult> {
+    // Find existing datasource (must not be soft-deleted)
+    const existing = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('ds.id = :id', { id })
+      .andWhere('ds.deleted_at IS NULL')
+      .getOne();
+
+    if (!existing) {
+      throw new NotFoundException({
+        error: ERROR_CODES.DS_NOT_FOUND,
+        message: ERROR_MESSAGES.DS_NOT_FOUND,
+      });
+    }
+
+    // Name uniqueness check (exclude self)
+    const duplicate = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('LOWER(ds.name) = LOWER(:name)', { name: dto.name })
+      .andWhere('ds.deleted_at IS NULL')
+      .andWhere('ds.id != :selfId', { selfId: id })
+      .getOne();
+
+    if (duplicate) {
+      throw new ConflictException({
+        error: ERROR_CODES.DS_NAME_EXISTS,
+        message: ERROR_MESSAGES.DS_NAME_EXISTS,
+      });
+    }
+
+    // Update fields
+    existing.name = dto.name;
+    existing.type = dto.type;
+    existing.host = dto.host;
+    existing.port = dto.port;
+    existing.database_name = dto.databaseName;
+    existing.username = dto.username;
+    existing.description = dto.description ?? null;
+
+    // Password: only update if provided (non-null, non-empty)
+    if (dto.password) {
+      existing.encrypted_password = CryptoUtil.encrypt(dto.password);
+    }
+
+    // BR-4: Reset status to unknown after edit
+    existing.status = 'unknown';
+
+    const saved = await this.datasourceRepository.save(existing);
+
+    return toDatasourceResponse(saved);
   }
 }
