@@ -275,4 +275,152 @@ describe('DatasourceListPage', () => {
       expect(screen.getByText('Admin User')).toBeInTheDocument();
     });
   });
+
+  // F014: 刪除功能
+  describe('刪除資料來源', () => {
+    const mockedDeleteDatasource = vi.mocked(datasourcesApi.deleteDatasource);
+
+    beforeEach(() => {
+      mockedDeleteDatasource.mockResolvedValue({
+        message: '資料來源已成功刪除',
+        id: 'ds-1',
+      });
+    });
+
+    it('should have clickable delete buttons (not disabled)', async () => {
+      await renderAndLoad();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      deleteButtons.forEach((btn) => {
+        expect(btn.tagName).toBe('BUTTON');
+        expect(btn).not.toBeDisabled();
+      });
+    });
+
+    it('should show confirmation modal when delete button clicked', async () => {
+      await renderAndLoad();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      await act(async () => {
+        fireEvent.click(deleteButtons[0]);
+      });
+
+      expect(screen.getByText('刪除資料來源')).toBeInTheDocument();
+      expect(screen.getByText(/您確定要刪除/)).toBeInTheDocument();
+      // Name is in a separate <span>, verify it exists in the modal
+      expect(screen.getAllByText('MySQL 主資料庫').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should display datasource name in modal warning text', async () => {
+      await renderAndLoad();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      await act(async () => {
+        fireEvent.click(deleteButtons[0]);
+      });
+
+      // Name is rendered in a <span> inside the paragraph
+      const warningText = screen.getByText(/您確定要刪除/);
+      expect(warningText).toBeInTheDocument();
+      expect(warningText.textContent).toContain('MySQL 主資料庫');
+    });
+
+    it('should close modal when cancel button clicked', async () => {
+      await renderAndLoad();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      await act(async () => {
+        fireEvent.click(deleteButtons[0]);
+      });
+
+      expect(screen.getByText('刪除資料來源')).toBeInTheDocument();
+
+      const cancelButton = screen.getByText('取消');
+      await act(async () => {
+        fireEvent.click(cancelButton);
+      });
+
+      expect(screen.queryByText('刪除資料來源')).not.toBeInTheDocument();
+    });
+
+    it('should call deleteDatasource API when confirm button clicked', async () => {
+      await renderAndLoad();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      await act(async () => {
+        fireEvent.click(deleteButtons[0]);
+      });
+
+      const confirmButton = screen.getByText('確認刪除');
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      expect(mockedDeleteDatasource).toHaveBeenCalledWith('ds-1');
+    });
+
+    it('should remove item from list after successful deletion', async () => {
+      await renderAndLoad();
+
+      expect(screen.getByText('MySQL 主資料庫')).toBeInTheDocument();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      await act(async () => {
+        fireEvent.click(deleteButtons[0]);
+      });
+
+      const confirmButton = screen.getByText('確認刪除');
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      expect(screen.queryByText('MySQL 主資料庫')).not.toBeInTheDocument();
+    });
+
+    it('should show error toast and keep modal open on API failure', async () => {
+      mockedDeleteDatasource.mockRejectedValue({
+        response: { data: { message: '系統發生錯誤' } },
+      });
+
+      await renderAndLoad();
+
+      const deleteButtons = screen.getAllByText('刪除');
+      await act(async () => {
+        fireEvent.click(deleteButtons[0]);
+      });
+
+      const confirmButton = screen.getByText('確認刪除');
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      // Modal should still be visible
+      expect(screen.getByText('刪除資料來源')).toBeInTheDocument();
+    });
+
+    it('should have delete buttons in card view', async () => {
+      await renderAndLoad();
+
+      // Switch to card view
+      const cardBtn = screen.getByLabelText('卡片檢視');
+      await act(async () => {
+        fireEvent.click(cardBtn);
+      });
+
+      const deleteButtons = screen.getAllByText('刪除');
+      expect(deleteButtons.length).toBeGreaterThanOrEqual(3);
+      deleteButtons.forEach((btn) => {
+        expect(btn.tagName).toBe('BUTTON');
+      });
+    });
+  });
 });

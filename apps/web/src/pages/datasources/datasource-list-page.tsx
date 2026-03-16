@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Database, LogOut, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid } from 'lucide-react';
+import { Users, Database, LogOut, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid, AlertTriangle } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getDatasources } from '@/api/datasources';
+import { getDatasources, deleteDatasource } from '@/api/datasources';
 import { Button } from '@/components/ui/button';
 import type { DatasourceListItem, DatasourceType, DatasourceStatus } from '@cdmp/shared';
 
@@ -65,6 +65,11 @@ export function DatasourceListPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'card'>(getInitialViewMode);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<DatasourceListItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Debounce ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +141,22 @@ export function DatasourceListPage() {
       localStorage.setItem('datasource-view-mode', mode);
     } catch {
       // Ignore localStorage errors
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await deleteDatasource(deleteTarget.id);
+      setDatasources((prev) => prev.filter((ds) => ds.id !== deleteTarget.id));
+      setTotal((prev) => prev - 1);
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError('系統發生錯誤，請稍後再試');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -303,7 +324,12 @@ export function DatasourceListPage() {
                               編輯
                             </button>
                             <span className="text-xs text-gray-300 cursor-not-allowed font-medium">測試連線</span>
-                            <span className="text-xs text-gray-300 cursor-not-allowed font-medium">刪除</span>
+                            <button
+                              onClick={() => setDeleteTarget(ds)}
+                              className="text-xs text-red-500 hover:text-red-700 font-medium"
+                            >
+                              刪除
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -362,6 +388,21 @@ export function DatasourceListPage() {
                         最後測試: {ds.lastTestedAt ? formatDate(ds.lastTestedAt) : '-'}
                       </p>
                     </div>
+                    <div className="flex items-center gap-2 pt-3 mt-3 border-t border-gray-200">
+                      <button
+                        onClick={() => navigate(`/datasources/${ds.id}/edit`)}
+                        className="text-xs text-primary hover:text-blue-700 font-medium"
+                      >
+                        編輯
+                      </button>
+                      <span className="text-xs text-gray-300 cursor-not-allowed font-medium">測試連線</span>
+                      <button
+                        onClick={() => setDeleteTarget(ds)}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium"
+                      >
+                        刪除
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -398,6 +439,45 @@ export function DatasourceListPage() {
           )}
         </main>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => { if (e.target === e.currentTarget && !deleteLoading) setDeleteTarget(null); }}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-500" />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 text-center mb-2">刪除資料來源</h3>
+            <p className="text-sm text-gray-600 text-center mb-6">
+              您確定要刪除 <span className="font-semibold">{deleteTarget.name}</span> 嗎？刪除後將不再顯示於清單中。
+            </p>
+            {deleteError && (
+              <p className="text-sm text-red-500 text-center mb-4">{deleteError}</p>
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteError(''); }}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50"
+              >
+                {deleteLoading ? '刪除中...' : '確認刪除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

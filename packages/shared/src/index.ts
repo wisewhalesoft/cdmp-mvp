@@ -184,6 +184,12 @@ export interface UpdateDatasourceRequest {
 // Reuse the same response shape for GET /:id and PUT /:id
 export type DatasourceDetailResponse = CreateDatasourceResponse;
 
+// F014: Delete Datasource
+export interface DeleteDatasourceResponse {
+  message: string;
+  id: string;
+}
+
 // F012: Datasource List
 export interface DatasourceListQuery {
   page?: number;
