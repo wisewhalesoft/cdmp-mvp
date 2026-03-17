@@ -231,6 +231,55 @@ export interface DatasourceListResponse {
   };
 }
 
+// F016: Dashboard
+export interface DashboardSummary {
+  total: number;
+  connected: number;
+  disconnected: number;
+  unknown: number;
+  typeCounts: Record<string, number>;
+}
+
+export interface DashboardDatasource {
+  id: string;
+  name: string;
+  type: DatasourceType;
+  status: DatasourceStatus;
+  lastTestedAt: string | null;
+  consecutiveFailures: number;
+  lastErrorMessage: string | null;
+}
+
+export interface DashboardResponse {
+  summary: DashboardSummary;
+  datasources: DashboardDatasource[];
+}
+
+export interface MetricsDatapoint {
+  timestamp: string;
+  responseTimeMs: number | null;
+  success: boolean;
+}
+
+export interface MetricsResponse {
+  datasourceId: string;
+  range: string;
+  datapoints: MetricsDatapoint[];
+}
+
+export interface AlertItem {
+  datasourceId: string;
+  name: string;
+  type: DatasourceType;
+  consecutiveFailures: number;
+  firstFailureTime: string;
+  lastErrorMessage: string | null;
+}
+
+export interface AlertsResponse {
+  alerts: AlertItem[];
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
