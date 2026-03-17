@@ -48,6 +48,7 @@
 - 顯示模式偏好設定可儲存於 localStorage
 - 類型圖示：MySQL（海豚）、PostgreSQL（大象）、SQL Server（菱形）
 - 狀態值：`connected`（已連線）、`disconnected`（已中斷）、`unknown`（從未測試）
+- 時區處理：後端儲存 UTC 時間，前端顯示時須轉換為 UTC+8（台灣標準時間，Asia/Taipei），包含「最後測試時間」等所有時間欄位
 
 ---
 

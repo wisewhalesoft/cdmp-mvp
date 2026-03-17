@@ -67,6 +67,7 @@
 - 自動檢查與手動「全部重新整理」共用相同的測試邏輯（`POST /api/datasources/:id/test`）
 - 前端儀表板透過 Polling（建議 30 秒間隔）或 WebSocket 取得最新狀態
 - 軟刪除的資料來源（`deleted_at IS NOT NULL`）排除在自動健康檢查範圍外
+- 時區處理：後端儲存 UTC 時間，前端顯示時須轉換為 UTC+8（台灣標準時間，Asia/Taipei），包含「最後測試時間」、「首次失敗時間」、趨勢圖 X 軸時間等所有時間欄位
 - 效能趨勢圖端點：`GET /api/datasources/:id/metrics?range=24h|7d|30d`
 - Response：`{ datapoints: [{ timestamp, responseTimeMs, success }] }`
 - 每次健康檢查需記錄 `responseTimeMs` 至歷史紀錄表（如 `datasource_health_logs`）
