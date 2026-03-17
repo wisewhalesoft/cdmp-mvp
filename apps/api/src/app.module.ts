@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { DatasourceModule } from './modules/datasource/datasource.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { User } from './database/entities/user.entity';
 import { TokenBlocklist } from './database/entities/token-blocklist.entity';
 import { PasswordResetToken } from './database/entities/password-reset-token.entity';
@@ -53,6 +54,7 @@ import { DatasourceHealthLog } from './database/entities/datasource-health-log.e
     AuthModule,
     AccountsModule,
     DatasourceModule,
+    SchedulerModule,
   ],
   providers: [],
 })
