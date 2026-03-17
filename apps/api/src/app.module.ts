@@ -9,6 +9,7 @@ import { User } from './database/entities/user.entity';
 import { TokenBlocklist } from './database/entities/token-blocklist.entity';
 import { PasswordResetToken } from './database/entities/password-reset-token.entity';
 import { Datasource } from './database/entities/datasource.entity';
+import { DatasourceHealthLog } from './database/entities/datasource-health-log.entity';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { Datasource } from './database/entities/datasource.entity';
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken, Datasource],
+            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog],
             synchronize: true,
           };
         }
@@ -37,7 +38,7 @@ import { Datasource } from './database/entities/datasource.entity';
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken, Datasource],
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },

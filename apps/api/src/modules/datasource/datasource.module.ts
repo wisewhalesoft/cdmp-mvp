@@ -5,12 +5,14 @@ import { ConfigService } from '@nestjs/config';
 import { DatasourceController } from './datasource.controller';
 import { DatasourceService } from './datasource.service';
 import { Datasource } from '@/database/entities/datasource.entity';
+import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { User } from '@/database/entities/user.entity';
+import { CONNECTION_TESTER, ConnectionTesterProvider } from './connection-tester.provider';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Datasource, TokenBlocklist, User]),
+    TypeOrmModule.forFeature([Datasource, DatasourceHealthLog, TokenBlocklist, User]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -19,6 +21,12 @@ import { User } from '@/database/entities/user.entity';
     }),
   ],
   controllers: [DatasourceController],
-  providers: [DatasourceService],
+  providers: [
+    DatasourceService,
+    {
+      provide: CONNECTION_TESTER,
+      useClass: ConnectionTesterProvider,
+    },
+  ],
 })
 export class DatasourceModule {}
