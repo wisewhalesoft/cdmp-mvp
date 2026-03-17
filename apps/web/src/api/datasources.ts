@@ -1,4 +1,4 @@
-import type { CreateDatasourceRequest, CreateDatasourceResponse, DeleteDatasourceResponse, DatasourceDetailResponse, UpdateDatasourceRequest, DatasourceListQuery, DatasourceListResponse, TestConnectionResponse } from '@cdmp/shared';
+import type { CreateDatasourceRequest, CreateDatasourceResponse, DeleteDatasourceResponse, DatasourceDetailResponse, UpdateDatasourceRequest, DatasourceListQuery, DatasourceListResponse, TestConnectionResponse, DashboardResponse, MetricsResponse, AlertsResponse } from '@cdmp/shared';
 import { apiClient } from './client';
 
 export async function createDatasource(data: CreateDatasourceRequest): Promise<CreateDatasourceResponse> {
@@ -28,5 +28,21 @@ export async function deleteDatasource(id: string): Promise<DeleteDatasourceResp
 
 export async function testDatasourceConnection(id: string): Promise<TestConnectionResponse> {
   const response = await apiClient.post<TestConnectionResponse>(`/datasources/${id}/test`);
+  return response.data;
+}
+
+// F016: Dashboard APIs
+export async function getDashboard(): Promise<DashboardResponse> {
+  const response = await apiClient.get<DashboardResponse>('/datasources/dashboard');
+  return response.data;
+}
+
+export async function getMetrics(datasourceId: string, range: string = '24h'): Promise<MetricsResponse> {
+  const response = await apiClient.get<MetricsResponse>(`/datasources/${datasourceId}/metrics`, { params: { range } });
+  return response.data;
+}
+
+export async function getAlerts(): Promise<AlertsResponse> {
+  const response = await apiClient.get<AlertsResponse>('/datasources/alerts');
   return response.data;
 }

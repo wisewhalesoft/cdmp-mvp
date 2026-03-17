@@ -15,6 +15,9 @@ vi.mock('@/stores/auth-store');
 
 const mockedGetDatasources = vi.mocked(datasourcesApi.getDatasources);
 const mockedTestConnection = vi.mocked(datasourcesApi.testDatasourceConnection);
+const mockedGetDashboard = vi.mocked(datasourcesApi.getDashboard);
+const mockedGetMetrics = vi.mocked(datasourcesApi.getMetrics);
+const mockedGetAlerts = vi.mocked(datasourcesApi.getAlerts);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -80,6 +83,13 @@ function setupMocks(response: DatasourceListResponse = mockDatasourcesResponse) 
     role: 'admin',
   });
   mockedClearAuth.mockImplementation(() => {});
+  // Mock dashboard APIs to prevent errors from DashboardTab
+  mockedGetDashboard.mockResolvedValue({
+    summary: { total: 0, connected: 0, disconnected: 0, unknown: 0, typeCounts: {} },
+    datasources: [],
+  });
+  mockedGetMetrics.mockResolvedValue({ datasourceId: '', range: '24h', datapoints: [] });
+  mockedGetAlerts.mockResolvedValue({ alerts: [] });
 }
 
 async function renderAndLoad() {
@@ -92,13 +102,20 @@ async function renderAndLoad() {
       </BrowserRouter>,
     );
   });
+
+  // Switch to the "list" tab (default is "overview" / dashboard)
+  const listTab = screen.getByTestId('tab-list');
+  await act(async () => {
+    fireEvent.click(listTab);
+  });
+
   // Advance timers for debounce
   await act(async () => {
     vi.advanceTimersByTime(350);
   });
-  // Wait for async fetch
+  // Wait for async fetch (use advanceTimersByTime to avoid infinite polling loop)
   await act(async () => {
-    await vi.runAllTimersAsync();
+    vi.advanceTimersByTime(1000);
   });
 }
 
@@ -193,7 +210,7 @@ describe('DatasourceListPage', () => {
         vi.advanceTimersByTime(350);
       });
       await act(async () => {
-        await vi.runAllTimersAsync();
+        vi.advanceTimersByTime(1000);
       });
 
       expect(mockedGetDatasources).toHaveBeenCalledWith(
@@ -360,7 +377,7 @@ describe('DatasourceListPage', () => {
         fireEvent.click(confirmButton);
       });
       await act(async () => {
-        await vi.runAllTimersAsync();
+        vi.advanceTimersByTime(1000);
       });
 
       expect(mockedDeleteDatasource).toHaveBeenCalledWith('ds-1');
@@ -381,7 +398,7 @@ describe('DatasourceListPage', () => {
         fireEvent.click(confirmButton);
       });
       await act(async () => {
-        await vi.runAllTimersAsync();
+        vi.advanceTimersByTime(1000);
       });
 
       expect(screen.queryByText('MySQL 主資料庫')).not.toBeInTheDocument();
@@ -404,7 +421,7 @@ describe('DatasourceListPage', () => {
         fireEvent.click(confirmButton);
       });
       await act(async () => {
-        await vi.runAllTimersAsync();
+        vi.advanceTimersByTime(1000);
       });
 
       // Modal should still be visible
@@ -472,7 +489,7 @@ describe('DatasourceListPage', () => {
         fireEvent.click(testButtons[0]);
       });
       await act(async () => {
-        await vi.runAllTimersAsync();
+        vi.advanceTimersByTime(1000);
       });
 
       expect(mockedTestConnection).toHaveBeenCalledWith('ds-1');
