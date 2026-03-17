@@ -2,14 +2,14 @@
 
 > **專案名稱**：CDMP（Customer Data Management Platform）企業客戶資料治理平台
 > **版本**：v1.0 (MVP)
-> **最後更新**：2026-03-06
+> **最後更新**：2026-03-17
 
 ## 快速統計
 
 | 指標 | 數量 |
 |------|------|
-| Epic 總數 | 3 |
-| User Story 總數 | 16 |
+| Epic 總數 | 4 |
+| User Story 總數 | 25 |
 | 非功能需求（NFR）總數 | 2 |
 | 目標階段 | Phase 1（MVP） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
@@ -22,6 +22,7 @@
 | E01 | [驗證與登入](epics/E01-auth-and-login/epic-brief.md) | 1（MVP） | 3 | [epic-brief.md](epics/E01-auth-and-login/epic-brief.md) |
 | E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 7 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
+| E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 9 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 
 ## Story 地圖
 
@@ -43,6 +44,15 @@
 | E03 | [US-023](epics/E03-datasource-management/US-023-delete-datasource.md) | 刪除資料來源 | Should Have |
 | E03 | [US-024](epics/E03-datasource-management/US-024-test-datasource-connection.md) | 測試連線 | Must Have |
 | E03 | [US-025](epics/E03-datasource-management/US-025-datasource-status-dashboard.md) | 狀態監控儀表板 | Should Have |
+| E04 | [US-030](epics/E04-data-extraction/US-030-create-extraction-task.md) | 建立擷取任務 | Must Have |
+| E04 | [US-031](epics/E04-data-extraction/US-031-view-extraction-task-list.md) | 查看擷取任務清單 | Must Have |
+| E04 | [US-032](epics/E04-data-extraction/US-032-edit-extraction-task.md) | 編輯擷取任務 | Must Have |
+| E04 | [US-033](epics/E04-data-extraction/US-033-toggle-extraction-task.md) | 啟用／停用擷取任務 | Must Have |
+| E04 | [US-034](epics/E04-data-extraction/US-034-run-extraction-task.md) | 立即執行／重新執行擷取任務 | Must Have |
+| E04 | [US-035](epics/E04-data-extraction/US-035-view-extraction-logs.md) | 查看擷取日誌 | Must Have |
+| E04 | [US-036](epics/E04-data-extraction/US-036-scheduled-extraction.md) | 排程自動執行 | Must Have |
+| E04 | [US-037](epics/E04-data-extraction/US-037-extraction-dashboard.md) | 擷取監控儀表板 | Should Have |
+| E04 | [US-038](epics/E04-data-extraction/US-038-delete-extraction-task.md) | 刪除擷取任務 | Should Have |
 
 ## 非功能需求（NFR）
 
@@ -54,11 +64,12 @@
 ## 階段規劃
 
 ### Phase 1 — MVP（當前）
-重點：核心 CRUD、驗證登入、基礎 RBAC 權限管控、資料來源管理
+重點：核心 CRUD、驗證登入、基礎 RBAC 權限管控、資料來源管理、資料擷取管理
 
 - E01 全部 Stories（US-001 ~ US-003）
 - E02 全部 Stories（US-010 ~ US-016）
 - E03 全部 Stories（US-020 ~ US-025）
+- E04 全部 Stories（US-030 ~ US-038）
 - NFR-001、NFR-002
 
 ### Phase 2 — 進階規劃（未來）
