@@ -567,4 +567,28 @@ describe('DatasourceListPage', () => {
       expect(screen.getByText('測試連線時發生錯誤')).toBeInTheDocument();
     });
   });
+
+  // TS-F012-008: 時間欄位以 UTC+8 顯示
+  describe('時間欄位 UTC+8 轉換 (TS-F012-008)', () => {
+    it('should display lastTestedAt in UTC+8 in list view', async () => {
+      // mock data: lastTestedAt = '2026-01-15T14:30:00.000Z' (UTC)
+      // Expected UTC+8: '2026-01-15 22:30'
+      await renderAndLoad();
+
+      // Use regex to handle potential Unicode whitespace from Intl.DateTimeFormat
+      expect(screen.getByText(/2026-01-15\s+22:30/)).toBeInTheDocument();
+    });
+
+    it('should display lastTestedAt in UTC+8 in card view', async () => {
+      await renderAndLoad();
+
+      const cardBtn = screen.getByLabelText('卡片檢視');
+      await act(async () => {
+        fireEvent.click(cardBtn);
+      });
+
+      // In card view, format is "最後測試: YYYY-MM-DD HH:mm"
+      expect(screen.getByText(/2026-01-15 22:30/)).toBeInTheDocument();
+    });
+  });
 });

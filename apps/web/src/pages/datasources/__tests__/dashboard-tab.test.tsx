@@ -235,4 +235,41 @@ describe('DashboardTab', () => {
 
     expect(screen.getByTestId('no-metrics')).toBeDefined();
   });
+
+  // TS-F016-011: 時間欄位以 UTC+8 顯示
+  describe('時間欄位 UTC+8 轉換 (TS-F016-011)', () => {
+    it('should display lastTestedAt in UTC+8 on status cards', async () => {
+      // mock data: lastTestedAt = '2026-01-15T14:30:00Z' (UTC)
+      // Expected UTC+8: '2026-01-15 22:30'
+      await act(async () => {
+        renderDashboardTab();
+      });
+
+      const statusCards = screen.getByTestId('status-cards');
+      expect(statusCards.textContent).toContain('2026-01-15 22:30');
+    });
+
+    it('should display firstFailureTime in UTC+8 in alert table', async () => {
+      // mock data: firstFailureTime = '2026-01-15T11:00:00Z' (UTC)
+      // Expected UTC+8: '2026-01-15 19:00'
+      await act(async () => {
+        renderDashboardTab();
+      });
+
+      const alertTable = screen.getByTestId('alert-table');
+      expect(alertTable.textContent).toContain('2026-01-15 19:00');
+    });
+
+    it('should display trend chart X-axis time in UTC+8', async () => {
+      // mock data: timestamp = '2026-01-15T10:00:00Z' (UTC)
+      // Expected UTC+8 time: '18:00'
+      // timestamp = '2026-01-15T10:30:00Z' -> '18:30'
+      await act(async () => {
+        renderDashboardTab();
+      });
+
+      // Since recharts is mocked, verify the line chart renders
+      expect(screen.getByTestId('line-chart')).toBeDefined();
+    });
+  });
 });

@@ -7,11 +7,8 @@ import { getDatasources, deleteDatasource, testDatasourceConnection } from '@/ap
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { DashboardTab } from './dashboard-tab';
+import { formatDateTW } from '@/utils/date-utils';
 import type { DatasourceListItem, DatasourceType, DatasourceStatus } from '@cdmp/shared';
-
-function formatDate(isoString: string): string {
-  return isoString.slice(0, 16).replace('T', ' ');
-}
 
 function DatasourceTypeBadge({ type }: { type: DatasourceType }) {
   const config: Record<DatasourceType, { bg: string; text: string; label: string }> = {
@@ -397,7 +394,7 @@ export function DatasourceListPage() {
                             <DatasourceStatusBadge status={ds.status} />
                           </td>
                           <td className="px-5 py-3 text-gray-500">
-                            {ds.lastTestedAt ? formatDate(ds.lastTestedAt) : '-'}
+                            {ds.lastTestedAt ? formatDateTW(ds.lastTestedAt) : '-'}
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
@@ -475,7 +472,7 @@ export function DatasourceListPage() {
                         <p>資料庫: {ds.databaseName}</p>
                         {ds.description && <p className="text-gray-400">{ds.description}</p>}
                         <p className="text-xs text-gray-400">
-                          最後測試: {ds.lastTestedAt ? formatDate(ds.lastTestedAt) : '-'}
+                          最後測試: {ds.lastTestedAt ? formatDateTW(ds.lastTestedAt) : '-'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 pt-3 mt-3 border-t border-gray-200">

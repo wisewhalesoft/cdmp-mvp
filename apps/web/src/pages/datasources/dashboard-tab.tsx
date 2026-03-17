@@ -3,11 +3,8 @@ import { Database, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-re
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getDashboard, getMetrics, getAlerts, testDatasourceConnection } from '@/api/datasources';
 import { useToast } from '@/components/ui/toast';
+import { formatDateTW, formatTimeTW } from '@/utils/date-utils';
 import type { DashboardResponse, MetricsResponse, AlertsResponse, DashboardDatasource, DatasourceType } from '@cdmp/shared';
-
-function formatDate(isoString: string): string {
-  return isoString.slice(0, 16).replace('T', ' ');
-}
 
 const STATUS_COLORS = {
   connected: '#22C55E',
@@ -184,7 +181,7 @@ export function DashboardTab() {
 
   // Prepare line chart data
   const lineData = metrics?.datapoints.map((dp) => ({
-    time: dp.timestamp.slice(11, 16),
+    time: formatTimeTW(dp.timestamp),
     responseTimeMs: dp.responseTimeMs,
     success: dp.success,
   })) || [];
@@ -354,7 +351,7 @@ export function DashboardTab() {
               <div className="space-y-1 text-sm text-gray-600 mb-3">
                 <DatasourceTypeBadge type={ds.type} />
                 <p className="text-xs text-gray-400 mt-1">
-                  最後測試: {ds.lastTestedAt ? formatDate(ds.lastTestedAt) : '-'}
+                  最後測試: {ds.lastTestedAt ? formatDateTW(ds.lastTestedAt) : '-'}
                 </p>
                 {ds.lastErrorMessage && (
                   <p className="text-xs text-red-500 truncate">{ds.lastErrorMessage}</p>
@@ -397,7 +394,7 @@ export function DashboardTab() {
                     </td>
                     <td className="px-5 py-3 text-red-600 font-semibold">{alert.consecutiveFailures}</td>
                     <td className="px-5 py-3 text-gray-500">
-                      {alert.firstFailureTime ? formatDate(alert.firstFailureTime) : '-'}
+                      {alert.firstFailureTime ? formatDateTW(alert.firstFailureTime) : '-'}
                     </td>
                     <td className="px-5 py-3 text-gray-600 truncate max-w-xs">
                       {alert.lastErrorMessage || '-'}
