@@ -140,7 +140,16 @@
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm run dev --prefix apps/api 2>&1 | head -40)",
       "Bash(taskkill /F /PID 7084 2>/dev/null; taskkill /F /PID 26848 2>/dev/null; echo \"done\")",
       "Bash(cd C:/Users/cacab/Claude/cdmp-mvp && npm ls sqlite3 better-sqlite3 2>&1 | head -10)",
-      "Bash(openssl rand:*)"
+      "Bash(openssl rand:*)",
+      "Bash(find:*)",
+      "Bash(npm run:*)",
+      "Bash(cd:*)",
+      "Bash(sleep:*)",
+      "Bash(curl:*)",
+      "Bash(rm:*)",
+      "Bash(node:*)",
+      "Bash(npx vite:*)",
+      "Bash(npx jest:*)"
     ]
   }
 }
