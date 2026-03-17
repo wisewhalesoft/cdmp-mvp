@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { DatasourceController } from './datasource.controller';
 import { DatasourceService } from './datasource.service';
+import { DashboardService } from './dashboard.service';
 import { Datasource } from '@/database/entities/datasource.entity';
 import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
@@ -23,10 +24,12 @@ import { CONNECTION_TESTER, ConnectionTesterProvider } from './connection-tester
   controllers: [DatasourceController],
   providers: [
     DatasourceService,
+    DashboardService,
     {
       provide: CONNECTION_TESTER,
       useClass: ConnectionTesterProvider,
     },
   ],
+  exports: [DatasourceService],
 })
 export class DatasourceModule {}

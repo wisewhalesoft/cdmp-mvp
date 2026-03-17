@@ -3,15 +3,30 @@ import { AuthGuard } from '@/common/guards/auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { DatasourceService } from './datasource.service';
+import { DashboardService } from './dashboard.service';
 import { CreateDatasourceDto } from './dto/create-datasource.dto';
 import { ListDatasourceDto } from './dto/list-datasource.dto';
 import { UpdateDatasourceDto } from './dto/update-datasource.dto';
+import { MetricsQueryDto } from './dto/metrics-query.dto';
 
 @Controller('datasources')
 @UseGuards(AuthGuard, RolesGuard)
 @Roles('admin')
 export class DatasourceController {
-  constructor(private readonly datasourceService: DatasourceService) {}
+  constructor(
+    private readonly datasourceService: DatasourceService,
+    private readonly dashboardService: DashboardService,
+  ) {}
+
+  @Get('dashboard')
+  async getDashboard() {
+    return this.dashboardService.getDashboard();
+  }
+
+  @Get('alerts')
+  async getAlerts() {
+    return this.dashboardService.getAlerts();
+  }
 
   @Get()
   async findAll(@Query() query: ListDatasourceDto) {
@@ -23,6 +38,11 @@ export class DatasourceController {
   async create(@Body() dto: CreateDatasourceDto, @Req() req: any) {
     const userId = req.user.userId;
     return this.datasourceService.createDatasource(dto, userId);
+  }
+
+  @Get(':id/metrics')
+  async getMetrics(@Param('id') id: string, @Query() query: MetricsQueryDto) {
+    return this.dashboardService.getMetrics(id, query.range || '24h');
   }
 
   @Get(':id')
