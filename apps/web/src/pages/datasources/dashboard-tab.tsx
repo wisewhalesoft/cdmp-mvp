@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-react';
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Sector, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getDashboard, getMetrics, getAlerts, testDatasourceConnection } from '@/api/datasources';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTW, formatTimeTW } from '@/utils/date-utils';
@@ -14,7 +14,7 @@ const STATUS_COLORS = {
 
 const TYPE_COLORS: Record<string, string> = {
   mysql: '#F97316',
-  postgresql: '#3B82F6',
+  postgresql: '#0EA5E9',
   sqlserver: '#8B5CF6',
 };
 
@@ -50,6 +50,9 @@ export function DashboardTab() {
   // Metrics controls
   const [selectedDsId, setSelectedDsId] = useState<string>('');
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+
+  // Pie chart hover
+  const [activePieIndex, setActivePieIndex] = useState<number | undefined>(undefined);
 
   // Refresh / Test state
   const [refreshing, setRefreshing] = useState(false);
@@ -248,15 +251,29 @@ export function DashboardTab() {
                     data={pieData}
                     cx="50%"
                     cy="50%"
+                    innerRadius={60}
                     outerRadius={100}
                     dataKey="value"
-                    label={({ name, value, percent }) => `${name} ${value} (${(percent * 100).toFixed(0)}%)`}
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                    activeIndex={activePieIndex}
+                    activeShape={(props: Record<string, unknown>) => (
+                      <Sector {...props} outerRadius={(props.outerRadius as number) + 6} />
+                    )}
+                    onMouseEnter={(_, index) => setActivePieIndex(index)}
+                    onMouseLeave={() => setActivePieIndex(undefined)}
                   >
                     {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />
                     ))}
                   </Pie>
                   <Tooltip />
+                  <Legend
+                    verticalAlign="bottom"
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ paddingTop: 16, fontSize: 12 }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
