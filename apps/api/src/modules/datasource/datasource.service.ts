@@ -1,12 +1,20 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Datasource } from '@/database/entities/datasource.entity';
+import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
 import { CryptoUtil } from '@/common/crypto/crypto.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateDatasourceDto } from './dto/create-datasource.dto';
 import { ListDatasourceDto } from './dto/list-datasource.dto';
 import { UpdateDatasourceDto } from './dto/update-datasource.dto';
+import { CONNECTION_TESTER, type IConnectionTester } from './connection-tester.provider';
+
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+  responseTime: number | null;
+}
 
 export interface DatasourceListItemResult {
   id: string;
@@ -73,6 +81,10 @@ export class DatasourceService {
   constructor(
     @InjectRepository(Datasource)
     private readonly datasourceRepository: Repository<Datasource>,
+    @InjectRepository(DatasourceHealthLog)
+    private readonly healthLogRepository: Repository<DatasourceHealthLog>,
+    @Inject(CONNECTION_TESTER)
+    private readonly connectionTester: IConnectionTester,
   ) {}
 
   async findAll(query: ListDatasourceDto): Promise<DatasourceListResult> {
@@ -245,5 +257,60 @@ export class DatasourceService {
     const saved = await this.datasourceRepository.save(existing);
 
     return toDatasourceResponse(saved);
+  }
+
+  async testConnection(id: string): Promise<TestConnectionResult> {
+    // Find datasource (must not be soft-deleted)
+    const ds = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('ds.id = :id', { id })
+      .andWhere('ds.deleted_at IS NULL')
+      .getOne();
+
+    if (!ds) {
+      throw new NotFoundException({
+        error: ERROR_CODES.DS_NOT_FOUND,
+        message: ERROR_MESSAGES.DS_NOT_FOUND,
+      });
+    }
+
+    // Decrypt password
+    const decryptedPassword = CryptoUtil.decrypt(ds.encrypted_password);
+
+    // Test connection
+    const result = await this.connectionTester.testConnection({
+      type: ds.type as 'mysql' | 'postgresql' | 'sqlserver',
+      host: ds.host,
+      port: ds.port,
+      database: ds.database_name,
+      username: ds.username,
+      password: decryptedPassword,
+    });
+
+    // Update datasource status + write health log in a transaction
+    const now = new Date();
+    ds.status = result.success ? 'connected' : 'disconnected';
+    ds.last_tested_at = now;
+
+    const healthLog = this.healthLogRepository.create({
+      datasource_id: ds.id,
+      success: result.success,
+      response_time_ms: result.responseTimeMs,
+      error_message: result.success ? null : (result.errorMessage ?? null),
+      checked_at: now,
+    });
+
+    await this.datasourceRepository.manager.transaction(async (em) => {
+      await em.save(ds);
+      await em.save(healthLog);
+    });
+
+    return {
+      success: result.success,
+      message: result.success
+        ? `連線成功 (${result.responseTimeMs}ms)`
+        : (result.errorMessage ?? '連線失敗'),
+      responseTime: result.responseTimeMs,
+    };
   }
 }

@@ -39,4 +39,10 @@ export class DatasourceController {
   async remove(@Param('id') id: string) {
     return this.datasourceService.deleteDatasource(id);
   }
+
+  @Post(':id/test')
+  @HttpCode(HttpStatus.OK)
+  async testConnection(@Param('id') id: string) {
+    return this.datasourceService.testConnection(id);
+  }
 }
