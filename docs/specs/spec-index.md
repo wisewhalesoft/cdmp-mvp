@@ -1,16 +1,16 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-03-17
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：33 份（7 支援文件 + 16 Feature 文件 + 10 圖表文件）
-> **最後更新**：2026-03-06
+> **文件總數**：45 份（7 支援文件 + 25 Feature 文件 + 13 圖表文件）
+> **最後更新**：2026-03-17
 
 ---
 
@@ -22,8 +22,9 @@ status: Draft
 | Feature 文件（E01） | 3 |
 | Feature 文件（E02） | 7 |
 | Feature 文件（E03） | 6 |
-| Mermaid 圖表 | 10 |
-| **總計** | **33** |
+| Feature 文件（E04） | 9 |
+| Mermaid 圖表 | 13 |
+| **總計** | **45** |
 
 ---
 
@@ -74,6 +75,20 @@ status: Draft
 | F015 | [F015-test-datasource-connection.md](features/F015-test-datasource-connection.md) | 測試資料來源連線 | US-024 | P0-MVP |
 | F016 | [F016-datasource-status-dashboard.md](features/F016-datasource-status-dashboard.md) | 資料來源狀態監控儀表板 | US-025 | P1 |
 
+### E04 — 資料擷取管理
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+|------------|------|------|-----------|--------|
+| F017 | [F017-create-extraction-task.md](features/F017-create-extraction-task.md) | 建立擷取任務 | US-030 | P0-MVP |
+| F018 | [F018-view-extraction-task-list.md](features/F018-view-extraction-task-list.md) | 查看擷取任務清單 | US-031 | P0-MVP |
+| F019 | [F019-edit-extraction-task.md](features/F019-edit-extraction-task.md) | 編輯擷取任務 | US-032 | P0-MVP |
+| F020 | [F020-toggle-extraction-task.md](features/F020-toggle-extraction-task.md) | 啟用／停用擷取任務 | US-033 | P0-MVP |
+| F021 | [F021-run-extraction-task.md](features/F021-run-extraction-task.md) | 立即執行／重新執行擷取任務 | US-034 | P0-MVP |
+| F022 | [F022-view-extraction-logs.md](features/F022-view-extraction-logs.md) | 查看擷取日誌 | US-035 | P0-MVP |
+| F023 | [F023-scheduled-extraction.md](features/F023-scheduled-extraction.md) | 排程自動執行 | US-036 | P0-MVP |
+| F024 | [F024-extraction-dashboard.md](features/F024-extraction-dashboard.md) | 擷取監控儀表板 | US-037 | P1 |
+| F025 | [F025-delete-extraction-task.md](features/F025-delete-extraction-task.md) | 刪除擷取任務 | US-038 | P1 |
+
 ---
 
 ## 圖表文件
@@ -95,6 +110,8 @@ status: Draft
 | [diagrams/datasource-crud-flow.md](diagrams/datasource-crud-flow.md) | 資料來源 CRUD 流程 | Sequence | F011, F013, F014 |
 | [diagrams/connection-test-flow.md](diagrams/connection-test-flow.md) | 連線測試流程 | Sequence | F015 |
 | [diagrams/health-check-flow.md](diagrams/health-check-flow.md) | 自動健康檢查流程 | Sequence | F016 |
+| [diagrams/extraction-crud-flow.md](diagrams/extraction-crud-flow.md) | 擷取任務 CRUD 流程 | Sequence | F017, F019, F025 |
+| [diagrams/extraction-execution-flow.md](diagrams/extraction-execution-flow.md) | 擷取任務執行流程 | Sequence | F021, F023 |
 
 ### 狀態圖
 
@@ -102,6 +119,7 @@ status: Draft
 |------|------|---------|-------------|
 | [diagrams/account-states.md](diagrams/account-states.md) | 帳號狀態轉換 | State | F004, F007 |
 | [diagrams/datasource-states.md](diagrams/datasource-states.md) | 資料來源狀態轉換 | State | F011, F013, F014, F015 |
+| [diagrams/extraction-task-states.md](diagrams/extraction-task-states.md) | 擷取任務狀態轉換 | State | F017, F020, F021, F023, F025 |
 
 ---
 
@@ -117,7 +135,7 @@ status: Draft
 ### TDD Agent
 1. 必讀：`data-model.md`, `error-handling.md`, `nfr.md`
 2. 依實作順序載入對應 Feature 文件
-3. 建議順序：F001→F002→F003→F004→F005→F006→F008→F009→F010→F007→F011→F012→F013→F015→F014→F016
+3. 建議順序：F001→F002→F003→F004→F005→F006→F008→F009→F010→F007→F011→F012→F013→F015→F014→F016→F017→F018→F019→F020→F021→F022→F023→F024→F025
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -127,19 +145,19 @@ status: Draft
 ### UI/UX Agent
 1. 必讀：`overview.md`, `error-handling.md`
 2. 依畫面載入對應 Feature 文件的 UI/UX Requirements 區段
-3. 參考圖表：`auth-flow.md`, `account-states.md`, `datasource-states.md`
+3. 參考圖表：`auth-flow.md`, `account-states.md`, `datasource-states.md`, `extraction-task-states.md`
 
 ---
 
 ## 優先級分類
 
-### P0-MVP（Must Have）— 13 個 Feature
+### P0-MVP（Must Have）— 20 個 Feature
 
-F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015
+F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023
 
-### P1（Should Have）— 3 個 Feature
+### P1（Should Have）— 5 個 Feature
 
-F007（停用／啟用帳號）, F014（刪除資料來源）, F016（狀態監控儀表板）
+F007（停用／啟用帳號）, F014（刪除資料來源）, F016（狀態監控儀表板）, F024（擷取監控儀表板）, F025（刪除擷取任務）
 
 ---
 
@@ -148,12 +166,16 @@ F007（停用／啟用帳號）, F014（刪除資料來源）, F016（狀態監�
 ```
 E01（驗證）──封鎖──> E02（帳號管理）
 E01（驗證）──封鎖──> E03（資料來源管理）
+E01（驗證）──封鎖──> E04（資料擷取管理）
+E03（資料來源管理）──封鎖──> E04（資料擷取管理）
 
 F001/F002 ──> F003（登出需登入）
 F004 ──> F005 ──> F006, F007, F008, F010
 F004 ──> F009
 F011 ──> F012 ──> F013, F014
 F011 ──> F015 ──> F016
+F017 ──> F018 ──> F019, F025
+F017 ──> F020, F021 ──> F022, F023, F024
 ```
 
 ---
@@ -163,3 +185,4 @@ F011 ──> F015 ──> F016
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
 | 2026-03-06 | 初版建立，33 份文件索引完成 | Spec Writer Agent |
+| 2026-03-17 | 新增 E04 資料擷取管理 9 個 Feature（F017-F025）、3 個圖表、更新支援文件 | Spec Writer Agent |
