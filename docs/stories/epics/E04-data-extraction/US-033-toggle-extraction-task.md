@@ -42,7 +42,7 @@
 
 ## Technical Notes
 
-- 端點：`PATCH /api/extraction-tasks/:id/toggle`
+- 端點：`PATCH /api/v1/extraction-tasks/:id/toggle`
 - Request body：`{ "enabled": true | false }`
 - Response：`200 OK`，回傳更新後的 ExtractionTask 物件
 - 停用時：`enabled = false`, `status = 'disabled'`

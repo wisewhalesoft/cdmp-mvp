@@ -84,7 +84,7 @@ status: Draft
 ## 8. API 規格
 
 此功能無獨立 API 端點。排程引擎為後端內部元件，複用以下端點的執行邏輯：
-- 執行邏輯同 `POST /api/extraction-tasks/:id/run`（F021）
+- 執行邏輯同 `POST /api/v1/extraction-tasks/:id/run`（F021）
 
 ## 9. 商業規則
 

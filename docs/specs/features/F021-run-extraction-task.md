@@ -63,7 +63,7 @@ status: Draft
 ## 5. 主要流程
 
 1. Admin 在任務清單中點擊「立即執行」或「重新執行」按鈕
-2. 系統發送 `POST /api/extraction-tasks/:id/run`
+2. 系統發送 `POST /api/v1/extraction-tasks/:id/run`
 3. 系統建立 ExtractionLog（`status = 'running'`）
 4. 系統更新 ExtractionTask（`status = 'running'`）
 5. 系統回傳 `202 Accepted`，前端開始 Polling 進度
@@ -85,7 +85,7 @@ status: Draft
 
 ## 8. API 規格
 
-### POST /api/extraction-tasks/:id/run
+### POST /api/v1/extraction-tasks/:id/run
 
 **Request Headers:**
 

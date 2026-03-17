@@ -42,7 +42,7 @@
 
 ## Technical Notes
 
-- 端點：`DELETE /api/extraction-tasks/:id`
+- 端點：`DELETE /api/v1/extraction-tasks/:id`
 - Response：`200 OK`，回傳 `{ "message": "擷取任務已刪除" }`
 - 軟刪除實作：設定 `deleted_at = NOW()`，不實際刪除資料列
 - 當 `status` 為 `running` 時，API 回傳 `409 Conflict`

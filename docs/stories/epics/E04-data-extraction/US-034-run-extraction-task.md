@@ -47,7 +47,7 @@
 
 ## Technical Notes
 
-- 立即執行端點：`POST /api/extraction-tasks/:id/run`
+- 立即執行端點：`POST /api/v1/extraction-tasks/:id/run`
 - Request body：`{ "triggeredBy": "manual" | "retry" }`
 - Response：`202 Accepted`，回傳 ExtractionLog 物件
 - 當 `status` 為 `running` 時，API 回傳 `409 Conflict`

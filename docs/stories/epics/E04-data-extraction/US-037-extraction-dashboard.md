@@ -57,7 +57,7 @@
 
 ## Technical Notes
 
-- 儀表板端點：`GET /api/extraction-tasks/dashboard`
+- 儀表板端點：`GET /api/v1/extraction-tasks/dashboard`
 - Response：
   ```json
   {
@@ -97,7 +97,7 @@
     ]
   }
   ```
-- 趨勢圖端點：`GET /api/extraction-tasks/dashboard/trend?range=7d|14d|30d`
+- 趨勢圖端點：`GET /api/v1/extraction-tasks/dashboard/trend?range=7d|14d|30d`
 - Response：
   ```json
   {

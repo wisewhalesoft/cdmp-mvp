@@ -47,7 +47,7 @@
 
 ## Technical Notes
 
-- 端點：`GET /api/extraction-tasks`
+- 端點：`GET /api/v1/extraction-tasks`
 - Query 參數：`page`, `limit`, `search`, `status`, `mode`, `datasourceId`
 - Response：
   ```json

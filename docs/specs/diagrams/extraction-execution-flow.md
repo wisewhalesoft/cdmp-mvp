@@ -11,7 +11,7 @@ sequenceDiagram
 
     Note over Admin, DB: 手動觸發 (F021)
     Admin->>Frontend: 點擊「立即執行」
-    Frontend->>API: POST /api/extraction-tasks/:id/run
+    Frontend->>API: POST /api/v1/extraction-tasks/:id/run
     API->>DB: 檢查 status != running
     alt 任務執行中
         API-->>Frontend: 409 EXTRACTION_RUNNING
@@ -50,7 +50,7 @@ sequenceDiagram
 
     Note over Admin, Frontend: 前端 Polling 進度
     loop 每 3 秒
-        Frontend->>API: GET /api/extraction-tasks/:id
+        Frontend->>API: GET /api/v1/extraction-tasks/:id
         API-->>Frontend: 回傳最新 progress_percent
         Frontend-->>Admin: 更新進度條
     end

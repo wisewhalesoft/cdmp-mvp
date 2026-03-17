@@ -47,7 +47,7 @@
 
 ## Technical Notes
 
-- 端點：`POST /api/extraction-tasks`
+- 端點：`POST /api/v1/extraction-tasks`
 - Request body：
   ```json
   {

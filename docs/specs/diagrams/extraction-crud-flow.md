@@ -8,7 +8,7 @@ sequenceDiagram
 
     Note over Admin, DB: 建立擷取任務 (F017)
     Admin->>Frontend: 填寫表單並點擊「建立任務」
-    Frontend->>API: POST /api/extraction-tasks
+    Frontend->>API: POST /api/v1/extraction-tasks
     API->>DB: 檢查名稱唯一性
     alt 名稱重複
         DB-->>API: 名稱已存在
@@ -24,11 +24,11 @@ sequenceDiagram
 
     Note over Admin, DB: 編輯擷取任務 (F019)
     Admin->>Frontend: 點擊「編輯」按鈕
-    Frontend->>API: GET /api/extraction-tasks/:id
+    Frontend->>API: GET /api/v1/extraction-tasks/:id
     API-->>Frontend: 回傳任務資料
     Frontend-->>Admin: 顯示編輯表單（預填既有值）
     Admin->>Frontend: 修改欄位並點擊「儲存」
-    Frontend->>API: PATCH /api/extraction-tasks/:id
+    Frontend->>API: PATCH /api/v1/extraction-tasks/:id
     alt 任務執行中
         API-->>Frontend: 409 EXTRACTION_RUNNING
         Frontend-->>Admin: 顯示「任務執行中，無法編輯」
@@ -42,7 +42,7 @@ sequenceDiagram
     Admin->>Frontend: 點擊「刪除」按鈕
     Frontend-->>Admin: 顯示確認對話框
     Admin->>Frontend: 點擊「確認刪除」
-    Frontend->>API: DELETE /api/extraction-tasks/:id
+    Frontend->>API: DELETE /api/v1/extraction-tasks/:id
     alt 任務執行中
         API-->>Frontend: 409 EXTRACTION_RUNNING
         Frontend-->>Admin: 顯示「任務執行中，無法刪除」

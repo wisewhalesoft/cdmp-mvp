@@ -89,7 +89,7 @@ status: Draft
 
 ## 8. API 規格
 
-### POST /api/extraction-tasks
+### POST /api/v1/extraction-tasks
 
 **Request Headers:**
 

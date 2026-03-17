@@ -47,7 +47,7 @@
 
 ## Technical Notes
 
-- 端點：`GET /api/extraction-tasks/:id/logs`
+- 端點：`GET /api/v1/extraction-tasks/:id/logs`
 - Query 參數：`page`, `limit`
 - Response：
   ```json

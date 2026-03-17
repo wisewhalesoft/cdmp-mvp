@@ -62,7 +62,7 @@ status: Draft
 ## 5. 主要流程
 
 1. Admin 在任務清單中點擊某任務的「查看日誌」按鈕
-2. 系統發送 `GET /api/extraction-tasks/:id/logs`
+2. 系統發送 `GET /api/v1/extraction-tasks/:id/logs`
 3. 系統以 Modal 或 Drawer 顯示日誌面板
 4. 日誌按 `started_at DESC` 排序顯示
 5. Admin 可透過分頁控制瀏覽更多紀錄
@@ -79,7 +79,7 @@ status: Draft
 
 ## 8. API 規格
 
-### GET /api/extraction-tasks/:id/logs
+### GET /api/v1/extraction-tasks/:id/logs
 
 **Request Headers:**
 

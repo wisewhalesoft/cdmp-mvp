@@ -74,8 +74,8 @@ status: Draft
 
 1. Admin 導覽至資料擷取頁面（儀表板為預設頁籤）
 2. 系統並行發送以下 API 請求：
-   - `GET /api/extraction-tasks/dashboard`（摘要、執行中任務、今日失敗、效能排名）
-   - `GET /api/extraction-tasks/dashboard/trend?range=7d`（趨勢圖資料）
+   - `GET /api/v1/extraction-tasks/dashboard`（摘要、執行中任務、今日失敗、效能排名）
+   - `GET /api/v1/extraction-tasks/dashboard/trend?range=7d`（趨勢圖資料）
 3. 系統渲染摘要統計卡片
 4. 系統渲染執行趨勢雙色長條圖（預設 7 天）
 5. 系統渲染執行中任務進度條
@@ -85,7 +85,7 @@ status: Draft
 
 ## 6. 替代流程
 
-- **切換趨勢圖時間範圍**：Admin 點擊 7d / 14d / 30d 按鈕，前端發送 `GET /api/extraction-tasks/dashboard/trend?range=14d`，圖表即時更新
+- **切換趨勢圖時間範圍**：Admin 點擊 7d / 14d / 30d 按鈕，前端發送 `GET /api/v1/extraction-tasks/dashboard/trend?range=14d`，圖表即時更新
 - **從失敗清單操作**：Admin 點擊「查看日誌」開啟日誌面板（F022）；點擊「重新執行」觸發重新執行（F021）
 
 ## 7. 邊界情況
@@ -97,7 +97,7 @@ status: Draft
 
 ## 8. API 規格
 
-### GET /api/extraction-tasks/dashboard
+### GET /api/v1/extraction-tasks/dashboard
 
 **Request Headers:**
 
@@ -146,7 +146,7 @@ status: Draft
 }
 ```
 
-### GET /api/extraction-tasks/dashboard/trend
+### GET /api/v1/extraction-tasks/dashboard/trend
 
 **Query 參數：**
 

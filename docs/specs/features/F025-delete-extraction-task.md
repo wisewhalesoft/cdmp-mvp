@@ -59,7 +59,7 @@ status: Draft
 1. Admin 在任務清單中點擊某任務的「刪除」按鈕
 2. 系統顯示確認對話框，包含任務名稱與影響說明
 3. Admin 點擊「確認刪除」
-4. 系統發送 `DELETE /api/extraction-tasks/:id`
+4. 系統發送 `DELETE /api/v1/extraction-tasks/:id`
 5. 系統設定 `deleted_at = NOW()`（UTC 時間）
 6. 系統顯示成功訊息，任務從清單中移除
 
@@ -76,7 +76,7 @@ status: Draft
 
 ## 8. API 規格
 
-### DELETE /api/extraction-tasks/:id
+### DELETE /api/v1/extraction-tasks/:id
 
 **Request Headers:**
 

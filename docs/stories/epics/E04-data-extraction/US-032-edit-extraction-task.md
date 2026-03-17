@@ -42,7 +42,7 @@
 
 ## Technical Notes
 
-- 端點：`PATCH /api/extraction-tasks/:id`
+- 端點：`PATCH /api/v1/extraction-tasks/:id`
 - Request body：僅包含需更新的欄位
   ```json
   {

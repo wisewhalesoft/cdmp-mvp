@@ -57,7 +57,7 @@ status: Draft
 ## 5. 主要流程
 
 1. Admin 在擷取任務清單中點擊某任務的「編輯」按鈕
-2. 系統發送 `GET /api/extraction-tasks/:id` 取得任務詳細資料
+2. 系統發送 `GET /api/v1/extraction-tasks/:id` 取得任務詳細資料
 3. 系統顯示編輯表單，所有欄位預先填入既有值
 4. Admin 修改所需欄位
 5. Admin 點擊「儲存」
@@ -78,7 +78,7 @@ status: Draft
 
 ## 8. API 規格
 
-### PATCH /api/extraction-tasks/:id
+### PATCH /api/v1/extraction-tasks/:id
 
 **Request Headers:**
 

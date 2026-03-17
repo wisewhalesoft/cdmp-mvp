@@ -61,7 +61,7 @@ status: Draft
 ## 5. 主要流程
 
 1. Admin 導覽至擷取任務管理頁面（第二個頁籤）
-2. 系統發送 `GET /api/extraction-tasks` 請求
+2. 系統發送 `GET /api/v1/extraction-tasks` 請求
 3. 系統渲染頂部統計卡片（總任務數、執行中、今日成功、今日失敗、成功率）
 4. 系統渲染任務表格，預設排序為 `updated_at DESC`
 5. Admin 可透過搜尋框、篩選器互動調整顯示結果
@@ -80,7 +80,7 @@ status: Draft
 
 ## 8. API 規格
 
-### GET /api/extraction-tasks
+### GET /api/v1/extraction-tasks
 
 **Request Headers:**
 

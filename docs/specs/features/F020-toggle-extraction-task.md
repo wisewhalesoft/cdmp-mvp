@@ -58,14 +58,14 @@ status: Draft
 1. Admin 在任務清單中點擊某已啟用任務的「停用」按鈕
 2. 系統顯示確認對話框，包含任務名稱與影響說明
 3. Admin 點擊「確認停用」
-4. 系統發送 `PATCH /api/extraction-tasks/:id/toggle`，body: `{ "enabled": false }`
+4. 系統發送 `PATCH /api/v1/extraction-tasks/:id/toggle`，body: `{ "enabled": false }`
 5. 系統更新任務 `enabled = false`、`status = 'disabled'`
 6. 系統顯示成功訊息，清單即時更新
 
 ## 6. 主要流程（啟用）
 
 1. Admin 在任務清單中點擊某已停用任務的「啟用」按鈕
-2. 系統發送 `PATCH /api/extraction-tasks/:id/toggle`，body: `{ "enabled": true }`
+2. 系統發送 `PATCH /api/v1/extraction-tasks/:id/toggle`，body: `{ "enabled": true }`
 3. 系統更新任務 `enabled = true`、`status = 'scheduled'`
 4. 系統顯示成功訊息，清單即時更新
 
@@ -82,7 +82,7 @@ status: Draft
 
 ## 9. API 規格
 
-### PATCH /api/extraction-tasks/:id/toggle
+### PATCH /api/v1/extraction-tasks/:id/toggle
 
 **Request Headers:**
 
