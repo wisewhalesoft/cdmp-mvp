@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: 1.1
+version: 1.2
 status: draft
-last_updated: 2026-03-06
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016]
+last_updated: 2026-03-17
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025]
 ---
 
 # 系統架構規格書
@@ -37,7 +37,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 1.1 架構風格
 
-CDMP MVP 採用 **Modular Monolith** 架構搭配 **SPA（Single Page Application）前端**。後端為單一部署單元，但內部依業務能力切分模組邊界（Auth、Account、Datasource），各模組明確定義職責範圍，避免跨模組直接耦合。
+CDMP MVP 採用 **Modular Monolith** 架構搭配 **SPA（Single Page Application）前端**。後端為單一部署單元，但內部依業務能力切分模組邊界（Auth、Account、Datasource、Extraction），各模組明確定義職責範圍，避免跨模組直接耦合。
 
 ```mermaid
 graph TD
@@ -50,7 +50,8 @@ graph TD
         AuthMod["Auth 模組<br/>登入、登出、密碼重設"]
         AccountMod["Account 模組<br/>帳號 CRUD、角色管理"]
         DatasourceMod["Datasource 模組<br/>連線設定、測試、監控"]
-        Scheduler["Scheduler 模組<br/>健康檢查 Cron Job"]
+        ExtractionMod["Extraction 模組<br/>擷取任務 CRUD、執行調度、日誌管理"]
+        Scheduler["Scheduler 模組<br/>健康檢查、擷取排程掃描、清理 Cron Job"]
     end
 
     subgraph 持久層["持久層"]
@@ -67,19 +68,23 @@ graph TD
     API --> AuthMod
     API --> AccountMod
     API --> DatasourceMod
+    API --> ExtractionMod
     Scheduler --> DatasourceMod
+    Scheduler --> ExtractionMod
     AuthMod --> AppDB
     AuthMod --> TokenStore
     AuthMod --> Email
     AccountMod --> AppDB
     DatasourceMod --> AppDB
     DatasourceMod --> TargetDB
+    ExtractionMod --> AppDB
+    ExtractionMod --> TargetDB
 
     classDef layer fill:#f0f4ff,stroke:#4f6ef7,stroke-width:2px
     classDef module fill:#e8f5e9,stroke:#388e3c,stroke-width:1px
     classDef external fill:#fff3e0,stroke:#e65100,stroke-width:1px
     class Browser layer
-    class API,AuthMod,AccountMod,DatasourceMod,Scheduler module
+    class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,Scheduler module
     class Email,TargetDB,AppDB,TokenStore external
 ```
 
@@ -92,14 +97,16 @@ graph TD
 | API 風格 | RESTful API | 標準、可預測，與 SPA 搭配成熟。規格書已定義所有端點路徑與 HTTP 方法。 |
 | Session 管理 | JWT + Refresh Token | OQ-1 決議。支援無狀態水平擴展，短效 Access Token 降低洩漏風險。 |
 | Token 失效 | Token Blocklist | NFR-001.1 明確要求。用於登出、帳號停用、密碼重設後強制失效。 |
-| 排程 | 內建 Scheduler 模組 | MVP 排程需求單純（每 30 分鐘健康檢查），引入獨立排程服務（如 Bull、Celery）過度複雜。 |
+| 排程 | 內建 Scheduler 模組 | MVP 排程需求包含靜態 Cron（健康檢查每 30 分鐘、清理每日）與動態 Cron 掃描（擷取排程每分鐘），引入獨立排程服務（如 BullMQ）過度複雜。 |
+| 擷取執行模型 | Promise-based 非同步執行 | MVP 擷取為 I/O 密集（資料庫查詢），Node.js 非同步 I/O 足以應對；API 層回傳 `202 Accepted`，前端 Polling 取得進度。 |
 | 技術棧 | Node.js + NestJS + React + PostgreSQL | 詳見第 10 節技術棧決策。 |
 
 ### 1.3 關鍵取捨
 
 - **選擇 Modular Monolith 而非 Microservices**：犧牲部分服務獨立擴展能力，換取顯著較低的開發與運維複雜度。MVP 並發需求（100 人）可由單機處理。
 - **JWT 短效 Access Token + Refresh Token**：比純 blocklist 方案複雜，但安全性更佳，且支援未來 SSO 整合（Phase 2）。
-- **Polling 而非 WebSocket**（儀表板更新）：OQ-9 決議。降低後端實作複雜度，30 秒輪詢對監控場景可接受。
+- **Polling 而非 WebSocket**（儀表板更新）：OQ-9 決議。降低後端實作複雜度，30 秒輪詢對監控場景可接受。擷取任務進度 Polling 採 3 秒間隔（F021/F024）。
+- **Promise-based 非同步執行而非 BullMQ / Worker Thread**（擷取作業）：MVP 擷取任務為 I/O 密集（資料庫批次查詢），Node.js 事件循環可有效處理。BullMQ 引入 Redis 強依賴與額外運維複雜度，不符 MVP 規模。
 
 ---
 
@@ -120,17 +127,17 @@ graph TB
 
     subgraph 外部服務["外部依賴"]
         EmailSvc["Email 服務<br/>SMTP / SendGrid<br/>密碼重設郵件"]
-        MySQL["MySQL 實例<br/>連線測試目標"]
-        PostgreSQL["PostgreSQL 實例<br/>連線測試目標"]
-        SQLServer["SQL Server 實例<br/>連線測試目標"]
+        MySQL["MySQL 實例<br/>連線測試 / 資料擷取目標"]
+        PostgreSQL["PostgreSQL 實例<br/>連線測試 / 資料擷取目標"]
+        SQLServer["SQL Server 實例<br/>連線測試 / 資料擷取目標"]
     end
 
-    Admin -->|"HTTPS — 管理後台<br/>帳號、資料來源、儀表板"| System
+    Admin -->|"HTTPS — 管理後台<br/>帳號、資料來源、擷取任務、儀表板"| System
     User -->|"HTTPS — 登入<br/>查看說明頁面"| System
     System -->|"SMTP/API<br/>密碼重設連結"| EmailSvc
-    System -->|"TCP SELECT 1<br/>連線測試與健康檢查"| MySQL
-    System -->|"TCP SELECT 1<br/>連線測試與健康檢查"| PostgreSQL
-    System -->|"TCP SELECT 1<br/>連線測試與健康檢查"| SQLServer
+    System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| MySQL
+    System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| PostgreSQL
+    System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| SQLServer
 
     classDef actor fill:#dbeafe,stroke:#2563eb,stroke-width:2px
     classDef system fill:#dcfce7,stroke:#16a34a,stroke-width:2px
@@ -156,11 +163,11 @@ graph TB
     end
 
     subgraph TZ_Admin["信任區域：Admin 角色（JWT + role=admin）"]
-        AdminEndpoints["Admin 專屬端點<br/>帳號管理 /api/v1/accounts/**<br/>資料來源管理 /api/v1/datasources/**"]
+        AdminEndpoints["Admin 專屬端點<br/>帳號管理 /api/v1/accounts/**<br/>資料來源管理 /api/v1/datasources/**<br/>擷取任務管理 /api/v1/extraction-tasks/**"]
     end
 
     subgraph TZ_Internal["信任區域：系統內部（不對外暴露）"]
-        Scheduler["Scheduler — 健康檢查排程"]
+        Scheduler["Scheduler — 健康檢查、擷取排程"]
         DB["應用資料庫"]
         TokenStore["Token Blocklist"]
     end
@@ -187,10 +194,12 @@ graph TB
 | 外部依賴 | 通訊方式 | 用途 | 相關 Feature |
 |---------|---------|------|-------------|
 | Email 服務（SMTP / SendGrid） | SMTP 或 HTTPS API | 寄送密碼重設連結 | F009 |
-| MySQL 實例 | TCP（Port 3306）`SELECT 1` | 連線測試與自動健康檢查 | F015, F016 |
-| PostgreSQL 實例 | TCP（Port 5432）`SELECT 1` | 連線測試與自動健康檢查 | F015, F016 |
-| SQL Server 實例 | TCP（Port 1433）`SELECT 1` | 連線測試與自動健康檢查 | F015, F016 |
+| MySQL 實例 | TCP（Port 3306） | 連線測試（`SELECT 1`）、自動健康檢查、資料擷取（批次 SQL Query） | F015, F016, F021, F023 |
+| PostgreSQL 實例 | TCP（Port 5432） | 連線測試（`SELECT 1`）、自動健康檢查、資料擷取（批次 SQL Query） | F015, F016, F021, F023 |
+| SQL Server 實例 | TCP（Port 1433） | 連線測試（`SELECT 1`）、自動健康檢查、資料擷取（批次 SQL Query） | F015, F016, F021, F023 |
 | 瀏覽器 | HTTPS | 使用者介面 | 全部 |
+
+> **注意**：資料擷取（F021/F023）對目標資料庫的流量性質與連線測試（`SELECT 1`）顯著不同——擷取為批次資料讀取（`SELECT * FROM table` 或增量 `WHERE col > value`），可能涉及大量資料傳輸，對目標資料庫的負載影響需評估。
 
 ---
 
@@ -203,7 +212,7 @@ graph TB
     subgraph Frontend["前端 (SPA)"]
         Router["路由層<br/>角色導向 / 守護"]
         AuthPages["驗證頁面<br/>登入、忘記密碼、重設密碼"]
-        AdminPages["Admin 管理頁面<br/>帳號清單、新增帳號、編輯帳號<br/>資料來源清單、新增、編輯<br/>狀態儀表板"]
+        AdminPages["Admin 管理頁面<br/>帳號清單、新增帳號、編輯帳號<br/>資料來源清單、新增、編輯<br/>資料來源狀態儀表板<br/>擷取任務儀表板、任務清單<br/>建立/編輯擷取任務、執行日誌"]
         UserPage["User 說明頁面"]
         APIClient["API Client<br/>JWT 附加、錯誤處理、Retry"]
     end
@@ -226,9 +235,16 @@ graph TB
             DashboardSvc["Dashboard Service<br/>摘要統計、告警計算<br/>效能指標查詢"]
         end
 
+        subgraph ExtractionModule["Extraction 模組"]
+            ExtTaskSvc["ExtractionTask Service<br/>CRUD、啟用/停用、軟刪除"]
+            ExtExecSvc["ExtractionExecution Service<br/>非同步執行引擎、進度更新<br/>手動/排程/重試 共用邏輯"]
+            ExtDashSvc["ExtractionDashboard Service<br/>摘要統計、趨勢圖<br/>效能排名查詢"]
+        end
+
         subgraph SchedulerModule["Scheduler 模組"]
             HealthCron["Health Check Cron<br/>每 30 分鐘<br/>呼叫 Datasource Service"]
-            CleanupCron["Cleanup Cron<br/>清理過期 PasswordResetToken<br/>清理 90 天以上 HealthLog<br/>清理過期 Blocklist 記錄"]
+            ExtractionCron["Extraction Scheduler Cron<br/>每分鐘<br/>掃描動態 Cron 任務"]
+            CleanupCron["Cleanup Cron<br/>清理過期 Token / HealthLog<br/>清理過期 ExtractionLog<br/>修復孤立 running 日誌"]
         end
 
         subgraph SharedInfra["共用基礎建設"]
@@ -241,7 +257,7 @@ graph TB
     end
 
     subgraph Persistence["持久層"]
-        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken<br/>DatasourceHealthLog"]
+        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog"]
         TokenStore["Token Blocklist Store"]
     end
 
@@ -259,14 +275,18 @@ graph TB
     Middleware --> AuthModule
     Middleware --> AccountModule
     Middleware --> DatasourceModule
+    Middleware --> ExtractionModule
     SchedulerModule --> DatasourceModule
+    SchedulerModule --> ExtractionModule
     AuthModule --> SharedInfra
     AccountModule --> SharedInfra
     DatasourceModule --> SharedInfra
+    ExtractionModule --> SharedInfra
     SharedInfra --> AppDB
     SharedInfra --> TokenStore
     EmailUtil --> EmailExt
     DsSvc -->|"TCP 連線測試"| TargetDBs
+    ExtExecSvc -->|"TCP 批次資料擷取"| TargetDBs
 
     classDef frontend fill:#dbeafe,stroke:#2563eb
     classDef module fill:#dcfce7,stroke:#16a34a
@@ -274,7 +294,7 @@ graph TB
     classDef persist fill:#fef9c3,stroke:#ca8a04
     classDef external fill:#fef2f2,stroke:#ef4444
     class Frontend,Router,AuthPages,AdminPages,UserPage,APIClient frontend
-    class AuthModule,AccountModule,DatasourceModule,SchedulerModule module
+    class AuthModule,AccountModule,DatasourceModule,ExtractionModule,SchedulerModule module
     class SharedInfra,CryptoUtil,HashUtil,JWTUtil,EmailUtil,Logger shared
     class AppDB,TokenStore persist
     class EmailExt,TargetDBs external
@@ -288,9 +308,9 @@ graph TB
 |--------|------|------------|
 | 路由層 | 依 JWT 中的 `role` 欄位導向對應頁面；未驗證時導回登入頁 | JWT（localStorage / cookie）→ 路由決策 |
 | 驗證頁面（AuthPages） | 登入表單、忘記密碼、重設密碼頁面；前端欄位驗證 | 使用者輸入 → API 請求 |
-| Admin 管理頁面 | 帳號管理（F004-F010）、資料來源管理（F011-F016）所有 UI | API 回應 → 畫面渲染 |
+| Admin 管理頁面 | 帳號管理（F004-F010）、資料來源管理（F011-F016）、擷取任務管理（F017-F025）所有 UI | API 回應 → 畫面渲染 |
 | User 說明頁面 | 靜態說明內容，無可操作功能（MVP 限制） | — |
-| API Client | 統一附加 `Authorization: Bearer {token}` header；處理 401/403 回應；提供 Loading 狀態管理 | 業務邏輯請求 → HTTP 請求 |
+| API Client | 統一附加 `Authorization: Bearer {token}` header；處理 401/403 回應；提供 Loading 狀態管理；支援不同 Polling 頻率（儀表板 30 秒、擷取進度 3 秒） | 業務邏輯請求 → HTTP 請求 |
 
 **重要設計決策**：Access Token 的儲存位置（`localStorage` vs `httpOnly Cookie`）由實作團隊決定，但需注意：`localStorage` 面臨 XSS 風險；`httpOnly Cookie` 需處理 CSRF 防護。建議使用 `httpOnly Cookie`。
 
@@ -334,14 +354,37 @@ graph TB
 
 **連線測試隔離**：每次連線測試使用獨立的短期連線，不占用應用程式連線池（MVP 不使用連線池，OQ-R9 決議）。AES-256 解密後的密碼僅在記憶體中存在，測試完成後立即釋放。
 
+#### Extraction 模組
+
+| 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
+|------|------|-----------|-------------|
+| ExtractionTask Service | 擷取任務 CRUD；啟用/停用（toggle）；軟刪除；欄位驗證（cron 格式、增量模式必填欄位）；名稱唯一性（排除軟刪除） | Optimistic Locking；`status=running` 時禁止編輯/停用/刪除；cron 表達式以 `cron-parser` 驗證（UTC）；必須參考存在且未刪除的 Datasource | F017, F018, F019, F020, F025 |
+| ExtractionExecution Service | 建立 ExtractionLog（`status=running`）；更新 ExtractionTask（`status=running`）；非同步執行擷取作業；批次更新進度（`extracted_count`、`progress_percent`）；完成後更新統計（`avg_duration_ms`、`execution_count`）；增量模式成功後更新 `last_incremental_value` | 並發控制（`status=running` 時拒絕重複觸發，回傳 409）；執行失敗需捕捉例外並更新狀態為 `failed`；手動觸發可繞過 `enabled` 旗標 | F021, F023 |
+| ExtractionDashboard Service | 摘要統計（今日成功/失敗以 UTC+8 計算）；趨勢圖（7/14/30 天聚合查詢）；效能排名（Top 5 by `avg_duration_ms DESC`）；執行中任務列表 | 軟刪除任務排除；無執行紀錄時成功率回傳 `0.0`；今日起訖以 UTC+8 (Asia/Taipei) 為邊界 | F018（summary）, F024 |
+
+**非同步執行模型**（AD-E04-1）：
+
+`POST /api/v1/extraction-tasks/:id/run` 回傳 `202 Accepted`，擷取作業在背景非同步執行。
+
+- **選擇方案**：Promise-based 背景作業。API 層建立 ExtractionLog 並更新 Task 狀態後，立即回傳 202；擷取邏輯在背景 Promise chain 中執行。
+- **理由**：MVP 擷取為 I/O 密集（非 CPU 密集），Node.js 事件循環可有效處理。BullMQ 需要 Redis 依賴，超出 MVP 規模需求。
+- **進度更新機制**：每批次（預設 `batch_size`，可配置 100-10000，預設 1000）更新 `ExtractionTask.extracted_count` 與 `progress_percent` 至資料庫；前端以 3 秒 Polling 讀取進度。
+- **逾時機制**：擷取執行最長 2 小時（AQ-9 決議）。超時由 Cleanup Cron 偵測並標記為 `failed`。
+- **共用設計**（AD-E04-3）：`ExtractionExecutionService` 為獨立可注入服務，同時被手動觸發 API 端點（F021）與排程 Cron Job（F023）呼叫，差異僅在 `triggered_by` 欄位值（`manual` / `schedule` / `retry`）。
+
+**並發控制**（AD-E04-4）：採用資料庫樂觀檢查（執行前查詢 `status != 'running'`），而非分散式鎖。MVP 單機部署下此方案足夠；水平擴展時需升級為資料庫鎖或分散式鎖（詳見第 8 節）。
+
 #### Scheduler 模組
 
 | Cron Job | 執行頻率 | 職責 |
 |---------|---------|------|
 | Health Check Cron | 每 30 分鐘 | 平行測試所有未軟刪除的資料來源；呼叫 Datasource Service 的測試邏輯；寫入 `DatasourceHealthLog` |
-| Cleanup Cron | 每日（建議） | 清理超過 90 天的 `DatasourceHealthLog`（OQ-10 決議）；清理已過期的 `PasswordResetToken`；清理已過期的 Token Blocklist 記錄 |
+| Extraction Scheduler Cron | 每分鐘 | 掃描 `enabled=true AND deleted_at IS NULL AND status != 'running'` 的擷取任務；以 `cron-parser` 比對 cron 表達式與當前 UTC 時間；觸發符合條件的任務（呼叫 ExtractionExecution Service，`triggered_by='schedule'`） |
+| Cleanup Cron | 每日 | 清理超過 90 天的 `DatasourceHealthLog`（OQ-10 決議）；清理超過 30 天的 `ExtractionLog`（AQ-10 決議）；清理已過期的 `PasswordResetToken`；清理已過期的 Token Blocklist 記錄；修復孤立 running 日誌（AD-E04-7） |
 
-**架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
+**孤立 running 日誌修復**（AD-E04-7）：Cleanup Cron 每次執行時，將 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 ExtractionLog 標記為 `failed`（error_message: `'Execution timeout: exceeded 2 hour limit'`），並同步更新對應 ExtractionTask.status 為 `failed`。
+
+**架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查與重複擷取觸發。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
 
 #### 共用基礎建設（Shared Infrastructure）
 
@@ -415,10 +458,53 @@ erDiagram
         timestamp checked_at
     }
 
+    ExtractionTask {
+        uuid id PK
+        string name "唯一（排除軟刪除，max 255）"
+        uuid datasource_id FK
+        enum mode "full|incremental"
+        enum status "running|scheduled|completed|failed|disabled"
+        string target_table "max 255"
+        string incremental_column "增量模式必填"
+        string incremental_column_type "timestamp|integer|string，預設 timestamp"
+        string last_incremental_value "max 255，string 儲存"
+        string schedule "Cron 表達式（UTC），max 100"
+        integer batch_size "100-10000，預設 1000"
+        timestamp last_execution_at
+        integer extracted_count "最近一次擷取筆數"
+        integer total_count "來源總筆數"
+        decimal progress_percent "0-100"
+        integer avg_duration_ms "平均執行時間"
+        integer execution_count "總執行次數"
+        string error_message "最後錯誤訊息"
+        boolean enabled "預設 true"
+        uuid created_by FK
+        timestamp deleted_at "NULL = 未刪除（軟刪除）"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    ExtractionLog {
+        uuid id PK
+        uuid task_id FK
+        enum status "running|completed|failed"
+        timestamp started_at "UTC"
+        timestamp finished_at "UTC，nullable"
+        integer duration_ms "finish - start"
+        integer extracted_count
+        integer total_count
+        string error_message "失敗時記錄"
+        enum triggered_by "schedule|manual|retry"
+        uuid created_by FK
+    }
+
     User ||--o{ TokenBlocklist : "has revoked tokens"
     User ||--o{ PasswordResetToken : "has reset tokens"
     User ||--o{ Datasource : "creates (created_by)"
+    User ||--o{ ExtractionTask : "creates (created_by)"
     Datasource ||--o{ DatasourceHealthLog : "has health logs"
+    Datasource ||--o{ ExtractionTask : "referenced by"
+    ExtractionTask ||--o{ ExtractionLog : "has execution logs"
 ```
 
 ### 4.2 資料所有權
@@ -428,8 +514,10 @@ erDiagram
 | User | Account 模組 | Auth 模組讀取（驗證登入）；透過服務介面呼叫，不直接存取 Repository |
 | TokenBlocklist | Auth 模組 | Middleware 查詢（驗證請求）；Account 模組透過 Auth Service 寫入（停用帳號） |
 | PasswordResetToken | Auth 模組 | 不對其他模組開放 |
-| Datasource | Datasource 模組 | Dashboard Service 讀取（彙整統計） |
+| Datasource | Datasource 模組 | Dashboard Service 讀取（彙整統計）；Extraction 模組透過 Datasource Service 介面查詢（驗證參照完整性） |
 | DatasourceHealthLog | Datasource 模組 | Dashboard Service 讀取（趨勢圖、告警計算） |
+| ExtractionTask | Extraction 模組 | Scheduler 模組透過 ExtractionExecution Service 介面呼叫 |
+| ExtractionLog | Extraction 模組 | 不對其他模組開放 |
 
 ### 4.3 資料一致性模型
 
@@ -441,6 +529,11 @@ erDiagram
 | 連線測試結果更新 | 強一致性 | 同步更新 Datasource.status + 寫入 DatasourceHealthLog |
 | Email 寄送（密碼重設） | 最終一致性 | 非同步操作；API 在 Email 寄出前即回應成功訊息 |
 | 健康檢查歷史清理 | 最終一致性 | 背景 Cron Job，不影響前台操作 |
+| 觸發擷取執行（建立 Log + 更新 Task status） | 強一致性 | 同一 DB 交易：INSERT ExtractionLog + UPDATE ExtractionTask.status = 'running' |
+| 擷取進度更新（extracted_count） | 最終一致性 | 非交易性批次更新（每 batch_size 筆一次）；Polling 容忍短暫延遲 |
+| 擷取完成（更新 Log + Task） | 強一致性 | 同一 DB 交易：UPDATE ExtractionLog（finished_at, duration_ms）+ UPDATE ExtractionTask（status, last_execution_at, avg_duration_ms, execution_count）；增量模式同時更新 `last_incremental_value` |
+| 排程掃描執行 | 最終一致性 | 掃描失敗記錄日誌，下次掃描重試 |
+| ExtractionLog 清理 | 最終一致性 | 背景 Cron Job，不影響前台操作 |
 
 ### 4.4 資料庫索引建議
 
@@ -457,6 +550,13 @@ erDiagram
 | Datasource | deleted_at | INDEX | 所有清單查詢的過濾條件 |
 | DatasourceHealthLog | datasource_id, checked_at | 複合 INDEX | 趨勢圖查詢、告警計算（NFR-002.4） |
 | DatasourceHealthLog | checked_at | INDEX | 清理超過 90 天紀錄 |
+| ExtractionTask | name, deleted_at | 複合 INDEX | 名稱唯一性檢查（排除軟刪除） |
+| ExtractionTask | status, deleted_at | 複合 INDEX | 排程掃描查詢（每分鐘執行） |
+| ExtractionTask | datasource_id | INDEX | 外鍵查詢；資料來源刪除影響檢查 |
+| ExtractionTask | deleted_at | INDEX | 清單查詢過濾條件 |
+| ExtractionLog | task_id, started_at | 複合 INDEX | 日誌查詢（倒序分頁）、趨勢圖聚合 |
+| ExtractionLog | started_at | INDEX | 今日統計計算、清理查詢 |
+| ExtractionLog | status, started_at | 複合 INDEX | 今日成功/失敗計數（F018 summary, F024 dashboard） |
 
 ### 4.5 資料生命週期
 
@@ -466,6 +566,8 @@ erDiagram
 | PasswordResetToken | 永久保留記錄（已使用/過期不刪除，僅標記狀態），或由 Cron 清理過期未使用的 Token | Cleanup Cron Job |
 | TokenBlocklist | 保留至 `expires_at` 之後，Cron 定期清理 | Cleanup Cron Job |
 | Datasource（軟刪除） | 永久保留（`deleted_at` 非 NULL），不自動清理 | 手動 DBA 操作（如需復原） |
+| ExtractionLog | 30 天（AQ-10 決議） | Cleanup Cron Job 每日執行，刪除 `started_at < NOW() - 30 days` 的記錄 |
+| ExtractionTask（軟刪除） | 永久保留（`deleted_at` 非 NULL），不自動清理 | 手動 DBA 操作（如需復原） |
 
 ---
 
@@ -479,7 +581,8 @@ erDiagram
 | 後端 → 應用資料庫 | 單向 | 同步 | ORM / SQL over TCP |
 | 後端 → Token Blocklist | 雙向 | 同步 | 依實作（DB 或 Redis） |
 | 後端 → Email 服務 | 單向 | 非同步（fire-and-forget） | SMTP / HTTPS |
-| 後端 → 目標資料庫 | 單向 | 同步（含 10 秒逾時） | TCP `SELECT 1` |
+| 後端 → 目標資料庫（連線測試） | 單向 | 同步（含 10 秒逾時） | TCP `SELECT 1` |
+| 後端 → 目標資料庫（資料擷取） | 單向 | 非同步（背景執行，2 小時逾時） | TCP 批次 SQL Query |
 | Scheduler → 後端邏輯 | 內部呼叫 | 同步 | 模組內部方法呼叫 |
 
 ### 5.2 驗證流程（Auth Flow）
@@ -585,7 +688,58 @@ sequenceDiagram
     end
 ```
 
-### 5.5 錯誤處理與韌性
+### 5.5 擷取任務執行流程（F021 / F023）
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器
+    participant API as 後端 API
+    participant DB as 應用資料庫
+    participant TargetDB as 目標資料庫
+    participant Scheduler as Scheduler
+
+    Note over Browser,API: 路徑 A：手動觸發（F021）
+    Browser->>API: POST /api/v1/extraction-tasks/:id/run<br/>{triggeredBy: "manual"}<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證 + RBAC (role=admin)
+    API->>DB: 查詢 ExtractionTask (id, deleted_at IS NULL)
+    alt 任務存在且 status != running
+        API->>DB: 交易：INSERT ExtractionLog (status=running, triggered_by=manual)<br/>UPDATE ExtractionTask (status=running)
+        API-->>Browser: 202 Accepted {logId, status: "running"}
+        Note over API,TargetDB: 以下為背景非同步執行
+    else status = running
+        API-->>Browser: 409 EXTRACTION_RUNNING
+    end
+
+    Note over Scheduler,API: 路徑 B：排程觸發（F023）
+    Scheduler->>DB: 每分鐘掃描 enabled=true<br/>AND deleted_at IS NULL<br/>AND status != running
+    Scheduler->>Scheduler: cron-parser 比對當前 UTC 時間
+    alt Cron 條件符合
+        Scheduler->>DB: 交易：INSERT ExtractionLog (triggered_by=schedule)<br/>UPDATE ExtractionTask (status=running)
+    end
+
+    Note over API,TargetDB: 共用執行邏輯（ExtractionExecution Service）
+    API->>DB: 讀取 Datasource 連線資訊<br/>AES-256 解密 encrypted_password
+    API->>TargetDB: 查詢 total_count (SELECT COUNT)
+    API->>DB: 更新 ExtractionTask.total_count
+
+    loop 批次擷取（每 batch_size 筆）
+        API->>TargetDB: SELECT * FROM table<br/>LIMIT batch_size OFFSET n<br/>（增量模式：WHERE col > last_value）
+        TargetDB-->>API: 批次資料
+        API->>DB: 更新 extracted_count, progress_percent
+    end
+
+    alt 執行成功
+        API->>DB: 交易：UPDATE ExtractionLog (status=completed, finished_at, duration_ms)<br/>UPDATE ExtractionTask (status=completed/scheduled,<br/>last_execution_at, avg_duration_ms, execution_count)<br/>增量模式：更新 last_incremental_value
+    else 執行失敗
+        API->>DB: UPDATE ExtractionLog (status=failed, error_message)<br/>UPDATE ExtractionTask (status=failed, error_message)
+    end
+
+    Note over Browser,API: 前端 Polling（3 秒間隔）
+    Browser->>API: GET /api/v1/extraction-tasks/:id
+    API-->>Browser: 200 {status, progress_percent, extracted_count, total_count}
+```
+
+### 5.6 錯誤處理與韌性
 
 | 整合點 | 失敗場景 | 處理策略 |
 |--------|---------|---------|
@@ -594,8 +748,10 @@ sequenceDiagram
 | 應用資料庫連線失敗 | DB 不可達 | 回傳 SYSTEM_INTERNAL_ERROR（500）；錯誤記錄至 Logger（不含敏感資訊） |
 | Token Blocklist 查詢失敗 | Cache/DB 不可達 | **架構挑戰**：Fail-Open（允許請求通過）vs Fail-Closed（拒絕請求）。建議 Fail-Closed 以優先安全性。詳見第 8 節。 |
 | 健康檢查 Cron 失敗 | 單次執行異常 | 記錄錯誤至日誌；下次排程正常繼續；不影響前台 API |
+| 目標資料庫（資料擷取） | 執行中連線斷開 / 查詢失敗 | 捕捉例外；更新 ExtractionTask.status = 'failed' 與 error_message；更新 ExtractionLog；不自動重試（AD-E04-6），須 Admin 手動重試 |
+| 擷取排程掃描（每分鐘） | DB 查詢失敗 | 記錄 ERROR 日誌；跳過本次掃描；下次掃描正常繼續 |
 
-### 5.6 冪等性考量
+### 5.7 冪等性考量
 
 | 端點 | 冪等性 | 說明 |
 |------|-------|------|
@@ -604,6 +760,9 @@ sequenceDiagram
 | `POST /api/v1/auth/forgot-password` | 冪等（行為一致） | 回應一致；多次呼叫產生多個 PasswordResetToken（舊的仍有效，但 24h 到期） |
 | `POST /api/v1/datasources/:id/test` | 冪等（副作用重複） | 可重複呼叫；每次均產生新的 HealthLog 記錄 |
 | `DELETE /api/v1/datasources/:id` | 冪等 | 重複軟刪除結果相同 |
+| `POST /api/v1/extraction-tasks/:id/run` | 非冪等 | 每次呼叫建立新的 ExtractionLog；`status=running` 時拒絕（409）避免重複觸發 |
+| `PATCH /api/v1/extraction-tasks/:id/toggle` | 冪等 | 停用已停用的任務回傳成功，無額外副作用 |
+| `DELETE /api/v1/extraction-tasks/:id` | 冪等 | 重複軟刪除結果相同 |
 
 ---
 
@@ -657,10 +816,14 @@ graph LR
 | NFR-002.1 API 回應時間 | p95 < 500ms | 資料庫索引（見 4.4）；避免 N+1 查詢；分頁強制執行 |
 | NFR-002.2 並發使用者 | >= 100 人 | Modular Monolith 可於單機處理；JWT 無狀態驗證減少 DB 查詢；Token Blocklist 建議使用高效能存儲（Redis 或帶索引的 DB） |
 | NFR-002.3 連線測試逾時 | <= 10 秒 | Datasource Service 強制 10 秒 TCP 連線 Timeout；每次測試使用獨立短期連線 |
-| NFR-002.4 儀表板載入 | < 2 秒（50 資料來源） | `datasource_health_logs` 上的複合索引（datasource_id, checked_at）；Dashboard Service 使用聚合查詢而非應用層計算；前端 Polling 間隔 30 秒（避免頻繁請求） |
+| NFR-002.4 儀表板載入（資料來源） | < 2 秒（50 資料來源） | `datasource_health_logs` 上的複合索引（datasource_id, checked_at）；Dashboard Service 使用聚合查詢而非應用層計算；前端 Polling 間隔 30 秒（避免頻繁請求） |
 | NFR-002.5 清單搜尋效能 | < 500ms（1,000 筆） | 分頁強制執行（預設 20 筆/頁）；搜尋欄位建立索引；`deleted_at IS NULL` 條件搭配索引 |
+| NFR-002.6 擷取儀表板載入 | < 2 秒（50 任務） | ExtractionLog 上的 `(task_id, started_at)` 與 `(status, started_at)` 複合索引；今日統計使用 DB 聚合查詢（`DATE_TRUNC`）而非應用層計算；趨勢圖使用 `DATE_TRUNC` 聚合 |
+| NFR-002.7 擷取任務清單 | < 500ms（1,000 筆） | 分頁強制執行（預設 10 筆/頁）；`(status, deleted_at)` 複合索引；搜尋欄位索引 |
 
-**效能風險**：`DatasourceHealthLog` 隨時間增長（每 30 分鐘 × 資料來源數），90 天保留期需確保 Cleanup Cron 正常執行，否則查詢效能將逐漸下降。
+**效能風險**：
+- `DatasourceHealthLog` 隨時間增長（每 30 分鐘 × 資料來源數），90 天保留期需確保 Cleanup Cron 正常執行，否則查詢效能將逐漸下降。
+- `ExtractionLog` 保留 30 天（AQ-10 決議），Cleanup Cron 確保不會無限增長。
 
 ### 6.3 可用性與可觀測性
 
@@ -670,6 +833,7 @@ graph LR
 | 日誌（Logging） | 結構化日誌（JSON 格式建議）；敏感欄位自動遮罩；區分 INFO / WARN / ERROR 等級；錯誤包含 request ID 追蹤 |
 | 健康端點 | 建議提供 `GET /api/health` 端點，供 Load Balancer / 部署平台健康檢查 |
 | 監控 | MVP 階段最低需求：應用程式日誌集中收集；若部署雲端，利用雲端原生監控 |
+| 擷取任務孤立狀態偵測 | 若後端 Process 在擷取執行中崩潰，ExtractionLog 將保持 `status=running`。Cleanup Cron 的孤立 running 修復邏輯（AD-E04-7）每日偵測並標記超過 2 小時的孤立記錄為 `failed` |
 
 ### 6.4 可維護性
 
@@ -699,8 +863,8 @@ graph TB
         end
 
         subgraph DataLayer["資料層"]
-            AppDatabase["應用資料庫<br/>（RDBMS — 技術棧待定）"]
-            TokenStore["Token Blocklist<br/>（RDBMS 同庫 或 Redis）"]
+            AppDatabase["應用資料庫<br/>（PostgreSQL 16）"]
+            TokenStore["Token Blocklist<br/>（PostgreSQL 同庫 或 Redis）"]
         end
     end
 
@@ -714,7 +878,7 @@ graph TB
     ReverseProxy -->|"靜態檔案"| StaticServe
     AppServer <-->|"DB 連線"| DataLayer
     AppServer -->|"SMTP / HTTPS"| EmailService
-    AppServer -->|"TCP 連線測試"| TargetDatabases
+    AppServer -->|"TCP 連線測試 / 資料擷取"| TargetDatabases
 
     classDef proxy fill:#dbeafe,stroke:#2563eb
     classDef app fill:#dcfce7,stroke:#16a34a
@@ -739,7 +903,7 @@ graph TB
 | 情境 | 擴展策略 |
 |------|---------|
 | MVP（並發 <= 100 人） | 單機部署，垂直擴展（升級硬體規格） |
-| 未來水平擴展（Phase 2+） | 多後端實例需：Token Blocklist 使用 Redis（跨實例共享）；Scheduler 引入分散式鎖（避免重複健康檢查）；Session 無狀態（JWT 已滿足） |
+| 未來水平擴展（Phase 2+） | 多後端實例需：Token Blocklist 使用 Redis（跨實例共享）；Scheduler 引入分散式鎖（避免重複健康檢查與重複擷取觸發）；Session 無狀態（JWT 已滿足）；擷取並發控制需升級為資料庫 row-level lock 或分散式鎖（避免 status 競爭條件） |
 
 ### 7.4 設定與密鑰管理
 
@@ -792,9 +956,9 @@ Seed 流程：
 
 #### 風險 2：Scheduler 多實例重複執行
 
-**描述**：MVP 為單機部署，Scheduler 無問題。但若未來水平擴展，多個後端實例將各自啟動 Scheduler，導致每 30 分鐘對同一資料來源執行多次健康檢查。
+**描述**：MVP 為單機部署，Scheduler 無問題。但若未來水平擴展，多個後端實例將各自啟動 Scheduler，導致每 30 分鐘對同一資料來源執行多次健康檢查，以及每分鐘重複觸發擷取任務（擷取排程掃描的 `status != 'running'` 檢查存在競爭條件）。
 
-**影響**：DatasourceHealthLog 產生重複記錄；目標資料庫接受多餘連線。
+**影響**：DatasourceHealthLog 產生重複記錄；目標資料庫接受多餘連線；擷取任務可能被多實例同時觸發。
 
 **建議**：MVP 階段忽略此問題。水平擴展前引入分散式鎖（Redis SET NX EX）或改用獨立排程服務（如 BullMQ、Celery）。
 
@@ -812,11 +976,35 @@ Seed 流程：
 
 #### 風險 4：AES 加密金鑰遺失
 
-**描述**：若 `AES_ENCRYPTION_KEY` 遺失，所有已儲存的資料來源密碼將無法解密，導致連線測試全數失敗。
+**描述**：若 `AES_ENCRYPTION_KEY` 遺失，所有已儲存的資料來源密碼將無法解密，導致連線測試與資料擷取全數失敗。
 
 **影響**：所有資料來源連線失效，需逐一重新輸入密碼。
 
 **建議**：加密金鑰存放於安全的密鑰管理系統（企業內部可使用 HashiCorp Vault、AWS KMS 等），並建立金鑰備份程序。
+
+---
+
+#### 風險 5：非同步擷取執行的孤立 Running 狀態
+
+**描述**：F021 採用 Promise-based 背景執行。若 Node.js Process 崩潰（OOM、硬體故障等），正在執行的擷取任務的 ExtractionLog 將永遠保持 `status=running`，`finished_at` 為 null。此孤立狀態會導致排程引擎跳過該任務（因為 `status=running`），且前端儀表板顯示永不完成的任務。
+
+**影響**：受影響的任務無法被排程引擎自動重觸發；Admin 需手動識別並重新執行。
+
+**建議**：Cleanup Cron 新增孤立 running 日誌修復邏輯（AD-E04-7）：將 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 ExtractionLog 標記為 `failed`，並同步更新對應 ExtractionTask.status。
+
+---
+
+#### 風險 6：目標資料庫大量資料擷取的負載影響
+
+**描述**：擷取任務（全量模式）執行時，對目標資料庫執行全表查詢（`SELECT * FROM {target_table}`）。對於大型表（數百萬筆），此查詢可能對目標資料庫造成顯著負載，甚至影響目標資料庫的正常業務查詢。
+
+**影響**：目標資料庫效能下降；若目標資料庫為生產系統，可能影響業務連續性。
+
+**建議**：
+- 擷取使用可配置的 `batch_size`（預設 1000，範圍 100-10000）分批讀取（AQ-11 決議）
+- 建議在低峰時段設定 cron 排程
+- 增量模式可顯著降低此風險（規格書已提供 `incremental` 模式）
+- 擷取連線使用獨立短期連線，不占用應用程式連線池
 
 ---
 
@@ -830,6 +1018,8 @@ Seed 流程：
 | 不使用 Token Blocklist（純 JWT 到期） | NFR-001.1 明確要求 Token 可主動失效（登出、帳號停用、密碼重設）；純到期機制無法滿足 |
 | 使用 Cookie Session（非 JWT） | 規格書 F001 明確定義 JWT Token 機制；Phase 2 SSO 整合（OQ-R3）需要 JWT 相容性 |
 | Redis 作為主要 Token Blocklist | MVP 不強制引入 Redis（增加依賴），以應用資料庫的 TokenBlocklist 表替代；若效能不足可升級 |
+| BullMQ + Redis 作為擷取任務佇列 | 引入 Redis 強依賴；MVP 擷取任務數量有限，Promise-based 非同步足夠；BullMQ 的持久化佇列與重試機制雖有益，但超出 MVP 複雜度預算 |
+| 每個擷取任務使用獨立動態 Cron Job | 任務數量變動時維護複雜（需追蹤每個 Job 的 reference）；不如「每分鐘掃描 + cron-parser 比對」模式穩定；F023 BR-1 明確定義固定頻率掃描方案 |
 
 ### 8.3 需要驗證的領域
 
@@ -839,6 +1029,7 @@ Seed 流程：
 | 連線測試並發安全性 | 中 | F016「Refresh All」觸發平行連線測試，50 個資料來源同時測試的資源消耗需驗證 |
 | Email 非同步可靠性 | 低-中 | 非同步 Email 寄送的重試機制需定義（目前規格書未明確） |
 | AES-256-GCM 實作正確性 | 高 | 加密金鑰管理與 IV（Initialization Vector）處理需要安全性審查 |
+| 擷取任務並發數量 | 中 | 多個大型擷取任務同時執行時，Node.js Event Loop 的 I/O 吞吐量與記憶體使用需驗證 |
 
 ---
 
@@ -853,7 +1044,7 @@ Seed 流程：
 | AQ-1 | Access Token 儲存位置：`localStorage` 或 `httpOnly Cookie`？ | F001, F002, F003，前端整體安全性 | 建議 `httpOnly Cookie`（避免 XSS 風險），但需處理 CORS 和 CSRF 防護 | 開發前確認 |
 | AQ-2 | Token Blocklist 實作：應用 DB 同庫 或 獨立 Redis？ | F003, F007, F009, F010，整體效能 | MVP 使用 DB 同庫；若並發測試顯示效能不足，升級至 Redis | 技術選型後確認 |
 | AQ-3 | 健康端點（`GET /api/health`）的定義與回應格式 | DevOps、部署健康檢查 | 至少回傳 `{"status": "ok", "timestamp": "..."}` | 開發初期定義 |
-| AQ-4 | Scheduler 的實作方式：框架內建 Cron 或 外部服務（BullMQ 等）？ | F016, Cleanup 工作 | MVP 使用框架內建（如 node-cron、APScheduler），降低依賴 | 技術選型後確認 |
+| AQ-4 | Scheduler 的實作方式：框架內建 Cron 或 外部服務（BullMQ 等）？ | F016, F023, Cleanup 工作 | MVP 使用框架內建（`@nestjs/schedule`），降低依賴 | 技術選型後確認 |
 
 ### 9.2 功能層級待決事項
 
@@ -864,7 +1055,19 @@ Seed 流程：
 | AQ-7 | Email 寄送失敗時是否需要重試機制？重試次數與退避策略？ | F009 可靠性 | 建議最多 3 次重試，指數退避 |
 | AQ-8 | 帳號清單（F005）與資料來源清單（F012）的排序規則（預設排序欄位與方向）？ | F005, F012 | 建議預設依 `created_at DESC`，並支援前端指定排序欄位 |
 
-### 9.3 待確認假設
+### 9.3 已決議事項（E04 資料擷取）
+
+> 以下為 E04 架構設計過程中提出並已決議的事項，記錄於此供實作參照。
+
+| # | 問題 | 決議 | 決議日期 |
+|---|------|------|---------|
+| AQ-9 | 擷取執行是否有最長執行時間限制？ | **2 小時**。超時由 Cleanup Cron 偵測並標記為 `failed`（AD-E04-7） | 2026-03-17 |
+| AQ-10 | ExtractionLog 保留策略 | **保留 30 天**。Cleanup Cron 每日清理 `started_at < NOW() - 30 days` 的記錄 | 2026-03-17 |
+| AQ-11 | 批次讀取大小（Batch Size）是否可配置？ | **可配置**。ExtractionTask 新增 `batch_size` 欄位（integer, 預設 1000, 範圍 100-10000） | 2026-03-17 |
+| AQ-12 | API 路徑前綴統一 | **使用 `/api/v1/extraction-tasks`**。依循現行程式碼慣例（`app.setGlobalPrefix('api/v1')`），Controller 宣告 `@Controller('extraction-tasks')` | 2026-03-17 |
+| AQ-13 | `last_incremental_value` 資料型別處理 | **string 儲存 + `incremental_column_type` 欄位**。新增 `incremental_column_type`（enum: `timestamp`/`integer`/`string`，預設 `timestamp`），後端依型別決定 WHERE 比較方式與型別轉換，前端依型別決定顯示格式 | 2026-03-17 |
+
+### 9.4 待確認假設
 
 | 假設 | 風險 | 確認方式 |
 |------|------|---------|
@@ -898,6 +1101,7 @@ graph TB
         TypeORM["TypeORM<br/>（ORM）"]
         Passport["Passport.js + JWT Strategy"]
         NodeCron["node-cron<br/>（排程）"]
+        CronParser["cron-parser<br/>（動態 Cron 解析）"]
     end
 
     subgraph Database["資料層"]
@@ -922,7 +1126,7 @@ graph TB
     classDef db fill:#fef9c3,stroke:#ca8a04
     classDef ops fill:#f3e8ff,stroke:#9333ea
     class React,TypeScript_FE,Vite,TailwindCSS,ReactRouter,TanStack,Recharts fe
-    class Node,TypeScript_BE,NestJS,TypeORM,Passport,NodeCron be
+    class Node,TypeScript_BE,NestJS,TypeORM,Passport,NodeCron,CronParser be
     class PostgreSQL,Redis db
     class Docker,Nginx,PM2,Vitest ops
 ```
@@ -938,14 +1142,15 @@ graph TB
 | 驗證 | Passport.js + `@nestjs/jwt` | — | JWT Strategy 成熟穩定；與 NestJS Guard 機制無縫整合 |
 | 密碼雜湊 | bcrypt（`bcryptjs`） | — | 純 JavaScript 實作，避免原生編譯問題；滿足 NFR-001.3 cost factor >= 10 |
 | 加密 | Node.js 原生 `crypto` 模組 | — | AES-256-GCM 原生支援，無需額外依賴；滿足 NFR-001.4 |
-| 排程 | `@nestjs/schedule`（底層 `node-cron`） | — | NestJS 原生整合；宣告式 `@Cron()` 裝飾器；MVP 排程需求單純，無需獨立排程服務 |
+| 排程 | `@nestjs/schedule`（底層 `node-cron`） | — | NestJS 原生整合；宣告式 `@Cron()` 裝飾器；支援靜態 Cron（健康檢查、清理）與固定頻率掃描（擷取排程每分鐘） |
+| Cron 解析 | `cron-parser` | 4+ | F017 BR-5 和 F023 BR-7 明確指定；用於驗證 cron 表達式格式與每分鐘排程掃描時比對觸發條件 |
 | 驗證（Input） | `class-validator` + `class-transformer` | — | NestJS 內建 ValidationPipe 整合；宣告式 DTO 驗證；自動產生錯誤訊息 |
 | Email | Nodemailer | — | SMTP 支援完整；可透過 adapter 切換至 SendGrid；非同步寄送 |
-| 資料庫驅動 | `pg`（PostgreSQL）、`mysql2`、`mssql` | — | 連線測試需要三種驅動；`pg` 同時作為應用 DB 驅動 |
+| 資料庫驅動 | `pg`（PostgreSQL）、`mysql2`、`mssql` | — | 連線測試與資料擷取需要三種驅動；`pg` 同時作為應用 DB 驅動 |
 
 **NestJS 選擇理由補充**：
 
-規格書定義了明確的模組邊界（Auth、Account、Datasource、Scheduler），NestJS 的 `@Module()` 機制直接對應此設計。相較於 Express.js 需自行建立模組化架構，NestJS 內建結構減少架構決策成本，且強制模組間透過 exports/imports 互動，天然防止跨模組耦合。
+規格書定義了明確的模組邊界（Auth、Account、Datasource、Extraction、Scheduler），NestJS 的 `@Module()` 機制直接對應此設計。相較於 Express.js 需自行建立模組化架構，NestJS 內建結構減少架構決策成本，且強制模組間透過 exports/imports 互動，天然防止跨模組耦合。
 
 **已評估但未採用的替代方案**：
 
@@ -966,9 +1171,9 @@ graph TB
 | 建置工具 | Vite | 5+ | 開發階段 HMR 極快；建置產出最佳化（Tree Shaking、Code Splitting）；ESM 原生支援 |
 | CSS 方案 | Tailwind CSS | 3+ | Utility-first 減少 CSS 檔案膨脹；與元件化開發模式契合；內建 Responsive Design |
 | 路由 | React Router | v6 | SPA 路由標準方案；支援巢狀路由與 Layout；守護路由（Protected Routes）實作直觀 |
-| API 狀態管理 | TanStack Query（React Query） | v5 | 自動快取與失效管理；Loading / Error 狀態內建；儀表板 Polling（`refetchInterval: 30000`）原生支援 |
+| API 狀態管理 | TanStack Query（React Query） | v5 | 自動快取與失效管理；Loading / Error 狀態內建；儀表板 Polling（`refetchInterval: 30000`）與擷取進度 Polling（`refetchInterval: 3000`）原生支援 |
 | 表單管理 | React Hook Form + Zod | — | 表單驗證效能優異（uncontrolled forms）；Zod schema 可與後端 DTO 驗證邏輯對齊 |
-| 圖表 | Recharts | — | React 原生元件；支援圓餅圖（F016 狀態分佈）、折線圖（F016 趨勢圖）；SVG 渲染效能良好 |
+| 圖表 | Recharts | — | React 原生元件；支援圓餅圖（F016 狀態分佈）、折線圖（F016 趨勢圖、F024 擷取趨勢圖）；SVG 渲染效能良好 |
 | HTTP Client | Axios | — | Interceptor 機制適合統一附加 JWT Token 與處理 401 回應；與 TanStack Query 整合良好 |
 | UI 元件庫 | 不強制指定 | — | 由 UI/UX Designer 依設計稿決定（建議 shadcn/ui 或 Ant Design，兩者皆與 Tailwind 相容） |
 
@@ -1024,6 +1229,10 @@ cdmp-mvp/
 │   │   │   │   ├── auth/       # Auth 模組
 │   │   │   │   ├── account/    # Account 模組
 │   │   │   │   ├── datasource/ # Datasource 模組
+│   │   │   │   ├── extraction/ # Extraction 模組
+│   │   │   │   │   ├── extraction-task.service.ts      # 任務 CRUD
+│   │   │   │   │   ├── extraction-execution.service.ts # 執行邏輯（共用）
+│   │   │   │   │   └── extraction-dashboard.service.ts # 儀表板統計
 │   │   │   │   └── scheduler/  # Scheduler 模組
 │   │   │   ├── common/         # 共用基礎建設
 │   │   │   │   ├── crypto/     # AES-256 Util
@@ -1078,5 +1287,5 @@ cdmp-mvp/
 
 ---
 
-*本文件版本 1.1，由 System Architect Agent 依據 CDMP MVP 規格書（spec-index v1.0，2026-03-06）產出。*
+*本文件版本 1.2，由 System Architect Agent 依據 CDMP MVP 規格書（spec-index v1.0，2026-03-06；E04 擷取管理規格，2026-03-17）產出。*
 *如有規格變更，本文件應同步更新。*
