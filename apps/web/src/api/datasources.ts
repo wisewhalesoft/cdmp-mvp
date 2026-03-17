@@ -1,4 +1,4 @@
-import type { CreateDatasourceRequest, CreateDatasourceResponse, DeleteDatasourceResponse, DatasourceDetailResponse, UpdateDatasourceRequest, DatasourceListQuery, DatasourceListResponse } from '@cdmp/shared';
+import type { CreateDatasourceRequest, CreateDatasourceResponse, DeleteDatasourceResponse, DatasourceDetailResponse, UpdateDatasourceRequest, DatasourceListQuery, DatasourceListResponse, TestConnectionResponse } from '@cdmp/shared';
 import { apiClient } from './client';
 
 export async function createDatasource(data: CreateDatasourceRequest): Promise<CreateDatasourceResponse> {
@@ -23,5 +23,10 @@ export async function updateDatasource(id: string, data: UpdateDatasourceRequest
 
 export async function deleteDatasource(id: string): Promise<DeleteDatasourceResponse> {
   const response = await apiClient.delete<DeleteDatasourceResponse>(`/datasources/${id}`);
+  return response.data;
+}
+
+export async function testDatasourceConnection(id: string): Promise<TestConnectionResponse> {
+  const response = await apiClient.post<TestConnectionResponse>(`/datasources/${id}/test`);
   return response.data;
 }

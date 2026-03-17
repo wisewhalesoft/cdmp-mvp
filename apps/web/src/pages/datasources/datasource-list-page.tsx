@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Database, LogOut, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid, AlertTriangle } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getDatasources, deleteDatasource } from '@/api/datasources';
+import { getDatasources, deleteDatasource, testDatasourceConnection } from '@/api/datasources';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import type { DatasourceListItem, DatasourceType, DatasourceStatus } from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
@@ -53,6 +54,7 @@ function getInitialViewMode(): 'list' | 'card' {
 export function DatasourceListPage() {
   const navigate = useNavigate();
   const user = getUser();
+  const { showToast } = useToast();
 
   // List state
   const [datasources, setDatasources] = useState<DatasourceListItem[]>([]);
@@ -70,6 +72,9 @@ export function DatasourceListPage() {
   const [deleteTarget, setDeleteTarget] = useState<DatasourceListItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
+  // Test connection state
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   // Debounce ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,6 +162,39 @@ export function DatasourceListPage() {
       setDeleteError('系統發生錯誤，請稍後再試');
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleTestConnection = async (ds: DatasourceListItem) => {
+    if (testingId) return;
+    setTestingId(ds.id);
+    try {
+      const result = await testDatasourceConnection(ds.id);
+      if (result.success) {
+        showToast(result.message, 'success');
+        setDatasources((prev) =>
+          prev.map((item) =>
+            item.id === ds.id
+              ? { ...item, status: 'connected' as DatasourceStatus, lastTestedAt: new Date().toISOString() }
+              : item,
+          ),
+        );
+      } else {
+        // Check if timeout (warning) or failure (error)
+        const isTimeout = result.message.includes('逾時');
+        showToast(result.message, isTimeout ? 'warning' : 'error');
+        setDatasources((prev) =>
+          prev.map((item) =>
+            item.id === ds.id
+              ? { ...item, status: 'disconnected' as DatasourceStatus, lastTestedAt: new Date().toISOString() }
+              : item,
+          ),
+        );
+      }
+    } catch {
+      showToast('測試連線時發生錯誤', 'error');
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -323,7 +361,13 @@ export function DatasourceListPage() {
                             >
                               編輯
                             </button>
-                            <span className="text-xs text-gray-300 cursor-not-allowed font-medium">測試連線</span>
+                            <button
+                              onClick={() => handleTestConnection(ds)}
+                              disabled={testingId === ds.id}
+                              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {testingId === ds.id ? '測試中...' : '測試連線'}
+                            </button>
                             <button
                               onClick={() => setDeleteTarget(ds)}
                               className="text-xs text-red-500 hover:text-red-700 font-medium"
@@ -395,7 +439,13 @@ export function DatasourceListPage() {
                       >
                         編輯
                       </button>
-                      <span className="text-xs text-gray-300 cursor-not-allowed font-medium">測試連線</span>
+                      <button
+                              onClick={() => handleTestConnection(ds)}
+                              disabled={testingId === ds.id}
+                              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {testingId === ds.id ? '測試中...' : '測試連線'}
+                            </button>
                       <button
                         onClick={() => setDeleteTarget(ds)}
                         className="text-xs text-red-500 hover:text-red-700 font-medium"

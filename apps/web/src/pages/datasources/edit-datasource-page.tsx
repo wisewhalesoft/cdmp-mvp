@@ -4,7 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Users, Database, LogOut, ChevronRight, Plug } from 'lucide-react';
 import { editDatasourceSchema, type EditDatasourceFormData } from './edit-datasource-schema';
-import { getDatasource, updateDatasource } from '@/api/datasources';
+import { getDatasource, updateDatasource, testDatasourceConnection } from '@/api/datasources';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ export function EditDatasourcePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
   const initialTypeRef = useRef<string | null>(null);
 
   const {
@@ -118,6 +119,24 @@ export function EditDatasourcePage() {
     } finally {
       clearAuth();
       navigate('/login');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!id || isTesting) return;
+    setIsTesting(true);
+    try {
+      const result = await testDatasourceConnection(id);
+      if (result.success) {
+        showToast(result.message, 'success');
+      } else {
+        const isTimeout = result.message.includes('逾時');
+        showToast(result.message, isTimeout ? 'warning' : 'error');
+      }
+    } catch {
+      showToast('測試連線時發生錯誤', 'error');
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -325,7 +344,9 @@ export function EditDatasourcePage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  disabled
+                  onClick={handleTestConnection}
+                  loading={isTesting}
+                  loadingText="測試中..."
                   className="inline-flex items-center gap-1.5"
                 >
                   <Plug size={16} />

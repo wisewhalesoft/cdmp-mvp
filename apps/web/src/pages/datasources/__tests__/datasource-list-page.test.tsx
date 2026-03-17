@@ -2,6 +2,7 @@ import { render, screen, cleanup, act, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { DatasourceListPage } from '../datasource-list-page';
+import { ToastProvider } from '@/components/ui/toast';
 import * as datasourcesApi from '@/api/datasources';
 import * as authStore from '@/stores/auth-store';
 import type { DatasourceListResponse } from '@cdmp/shared';
@@ -13,6 +14,7 @@ vi.mock('@/api/auth', () => ({
 vi.mock('@/stores/auth-store');
 
 const mockedGetDatasources = vi.mocked(datasourcesApi.getDatasources);
+const mockedTestConnection = vi.mocked(datasourcesApi.testDatasourceConnection);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -84,7 +86,9 @@ async function renderAndLoad() {
   await act(async () => {
     render(
       <BrowserRouter>
-        <DatasourceListPage />
+        <ToastProvider>
+          <DatasourceListPage />
+        </ToastProvider>
       </BrowserRouter>,
     );
   });
@@ -421,6 +425,129 @@ describe('DatasourceListPage', () => {
       deleteButtons.forEach((btn) => {
         expect(btn.tagName).toBe('BUTTON');
       });
+    });
+  });
+
+  // F015: 測試連線功能
+  describe('測試連線', () => {
+    beforeEach(() => {
+      mockedTestConnection.mockResolvedValue({
+        success: true,
+        message: '連線成功 (42ms)',
+        responseTime: 42,
+      });
+    });
+
+    it('should have clickable test connection buttons in list view', async () => {
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      expect(testButtons.length).toBeGreaterThanOrEqual(3);
+      testButtons.forEach((btn) => {
+        expect(btn.tagName).toBe('BUTTON');
+        expect(btn).not.toBeDisabled();
+      });
+    });
+
+    it('should have clickable test connection buttons in card view', async () => {
+      await renderAndLoad();
+
+      const cardBtn = screen.getByLabelText('卡片檢視');
+      await act(async () => {
+        fireEvent.click(cardBtn);
+      });
+
+      const testButtons = screen.getAllByText('測試連線');
+      expect(testButtons.length).toBeGreaterThanOrEqual(3);
+      testButtons.forEach((btn) => {
+        expect(btn.tagName).toBe('BUTTON');
+      });
+    });
+
+    it('should call testDatasourceConnection API when test button clicked', async () => {
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      await act(async () => {
+        fireEvent.click(testButtons[0]);
+      });
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      expect(mockedTestConnection).toHaveBeenCalledWith('ds-1');
+    });
+
+    it('should show loading state while testing', async () => {
+      mockedTestConnection.mockImplementation(() => new Promise(() => {}));
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      await act(async () => {
+        fireEvent.click(testButtons[0]);
+      });
+
+      expect(screen.getByText('測試中...')).toBeInTheDocument();
+    });
+
+    it('should show success toast on successful connection', async () => {
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      await act(async () => {
+        fireEvent.click(testButtons[0]);
+        // Let the mock resolve
+        await mockedTestConnection.mock.results[0]?.value;
+      });
+
+      expect(screen.getByText('連線成功 (42ms)')).toBeInTheDocument();
+    });
+
+    it('should show error toast on failed connection', async () => {
+      mockedTestConnection.mockResolvedValue({
+        success: false,
+        message: '無法連線至主機',
+        responseTime: 1500,
+      });
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      await act(async () => {
+        fireEvent.click(testButtons[0]);
+        await mockedTestConnection.mock.results[0]?.value;
+      });
+
+      expect(screen.getByText('無法連線至主機')).toBeInTheDocument();
+    });
+
+    it('should show warning toast on connection timeout', async () => {
+      mockedTestConnection.mockResolvedValue({
+        success: false,
+        message: '連線逾時',
+        responseTime: 10000,
+      });
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      await act(async () => {
+        fireEvent.click(testButtons[0]);
+        await mockedTestConnection.mock.results[0]?.value;
+      });
+
+      expect(screen.getByText('連線逾時')).toBeInTheDocument();
+    });
+
+    it('should show error toast on API error', async () => {
+      mockedTestConnection.mockRejectedValue(new Error('Network error'));
+      await renderAndLoad();
+
+      const testButtons = screen.getAllByText('測試連線');
+      await act(async () => {
+        fireEvent.click(testButtons[0]);
+        try { await mockedTestConnection.mock.results[0]?.value; } catch { /* expected */ }
+      });
+
+      expect(screen.getByText('測試連線時發生錯誤')).toBeInTheDocument();
     });
   });
 });

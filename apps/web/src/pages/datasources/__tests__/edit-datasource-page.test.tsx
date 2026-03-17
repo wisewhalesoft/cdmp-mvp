@@ -14,6 +14,7 @@ vi.mock('@/api/auth', () => ({
 
 const mockedGetDatasource = vi.mocked(datasourcesApi.getDatasource);
 const mockedUpdateDatasource = vi.mocked(datasourcesApi.updateDatasource);
+const mockedTestConnection = vi.mocked(datasourcesApi.testDatasourceConnection);
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -121,15 +122,91 @@ describe('EditDatasourcePage', () => {
   });
 
   describe('按鈕列', () => {
-    it('顯示取消、測試連線（disabled）、儲存按鈕', async () => {
+    it('顯示取消、測試連線、儲存按鈕', async () => {
       renderPage();
 
       await waitFor(() => {
         expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
       });
       expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /測試連線/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /測試連線/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /測試連線/ })).not.toBeDisabled();
       expect(screen.getByRole('button', { name: '儲存' })).toBeInTheDocument();
+    });
+  });
+
+  describe('測試連線', () => {
+    it('點擊測試連線成功後顯示成功 Toast', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockResolvedValue({
+        success: true,
+        message: '連線成功 (42ms)',
+        responseTime: 42,
+      });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText('連線成功 (42ms)')).toBeInTheDocument();
+      });
+      expect(mockedTestConnection).toHaveBeenCalledWith('ds-123');
+    });
+
+    it('點擊測試連線失敗後顯示錯誤 Toast', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockResolvedValue({
+        success: false,
+        message: '帳號或密碼錯誤',
+        responseTime: 200,
+      });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText('帳號或密碼錯誤')).toBeInTheDocument();
+      });
+    });
+
+    it('測試連線中顯示載入狀態', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockImplementation(() => new Promise(() => {}));
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '測試中...' })).toBeDisabled();
+      });
+    });
+
+    it('API 錯誤時顯示通用錯誤 Toast', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockRejectedValue(new Error('Network error'));
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText('測試連線時發生錯誤')).toBeInTheDocument();
+      });
     });
   });
 

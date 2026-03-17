@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
-type ToastType = 'success' | 'error';
+type ToastType = 'success' | 'error' | 'warning';
 
 interface Toast {
   id: number;
@@ -42,15 +42,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const bgClassMap: Record<ToastType, string> = {
+  success: 'bg-green-600',
+  error: 'bg-red-600',
+  warning: 'bg-orange-500',
+};
+
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) => void }) {
   useEffect(() => {
     const timer = setTimeout(() => onRemove(toast.id), 3000);
     return () => clearTimeout(timer);
   }, [toast.id, onRemove]);
 
-  const bgClass = toast.type === 'success'
-    ? 'bg-green-600'
-    : 'bg-red-600';
+  const bgClass = bgClassMap[toast.type];
 
   return (
     <div
