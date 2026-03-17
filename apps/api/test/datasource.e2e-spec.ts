@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -16,6 +16,8 @@ import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { PasswordResetToken } from '@/database/entities/password-reset-token.entity';
 import { Datasource } from '@/database/entities/datasource.entity';
+import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
+import { CONNECTION_TESTER } from '@/modules/datasource/connection-tester.provider';
 import { HashUtil } from '@/common/hash/hash.util';
 import { ADMIN_ACTIVE, USER_ACTIVE } from './seeds/test-data';
 
@@ -39,7 +41,7 @@ async function createTestApp(): Promise<INestApplication> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [User, TokenBlocklist, PasswordResetToken, Datasource],
+        entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog],
         synchronize: true,
       }),
       ThrottlerModule.forRoot([
@@ -891,5 +893,276 @@ describe('F014: Delete Datasource E2E (DELETE /api/v1/datasources/:id)', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+});
+
+describe('F015: Test Datasource Connection E2E (POST /api/v1/datasources/:id/test)', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let testDsId: string;
+  let mockConnectionTester: { testConnection: ReturnType<typeof vi.fn> };
+
+  const basePayload = {
+    name: 'F015 Connection Test Target',
+    type: 'mysql',
+    host: '192.168.1.100',
+    port: 3306,
+    databaseName: 'test_db',
+    username: 'db_admin',
+    password: 'Secret123',
+    description: 'Target for connection tests',
+  };
+
+  beforeAll(async () => {
+    // Create mock connection tester
+    mockConnectionTester = {
+      testConnection: vi.fn(),
+    };
+
+    // Set AES key before module creation
+    process.env.AES_ENCRYPTION_KEY = TEST_AES_KEY;
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          load: [
+            () => ({
+              JWT_SECRET: 'test-jwt-secret-key-for-e2e-testing',
+              AES_ENCRYPTION_KEY: TEST_AES_KEY,
+            }),
+          ],
+        }),
+        TypeOrmModule.forRoot({
+          type: 'better-sqlite3',
+          database: ':memory:',
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog],
+          synchronize: true,
+        }),
+        ThrottlerModule.forRoot([
+          {
+            name: 'login',
+            ttl: 60000,
+            limit: 100,
+          },
+        ]),
+        AuthModule,
+        AccountsModule,
+        DatasourceModule,
+      ],
+      providers: [
+        {
+          provide: APP_GUARD,
+          useClass: ThrottlerGuard,
+        },
+      ],
+    })
+      .overrideProvider(CONNECTION_TESTER)
+      .useValue(mockConnectionTester)
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    );
+    app.useGlobalFilters(new HttpExceptionFilter());
+    await app.init();
+
+    // Seed test users
+    const dataSource = moduleFixture.get(DataSource);
+    const userRepo = dataSource.getRepository(User);
+    const hashedPassword = await HashUtil.hash(ADMIN_ACTIVE.password);
+
+    await userRepo.save([
+      userRepo.create({
+        id: ADMIN_ACTIVE.id,
+        name: ADMIN_ACTIVE.name,
+        email: ADMIN_ACTIVE.email,
+        password_hash: hashedPassword,
+        role: ADMIN_ACTIVE.role,
+        status: ADMIN_ACTIVE.status,
+      }),
+      userRepo.create({
+        id: USER_ACTIVE.id,
+        name: USER_ACTIVE.name,
+        email: USER_ACTIVE.email,
+        password_hash: hashedPassword,
+        role: USER_ACTIVE.role,
+        status: USER_ACTIVE.status,
+      }),
+    ]);
+
+    adminToken = await getAdminToken(app);
+
+    // Create a datasource for testing
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(basePayload);
+    testDsId = res.body.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F015-001: 連線成功
+  it('should return 200 with success=true when connection succeeds', async () => {
+    mockConnectionTester.testConnection.mockResolvedValue({
+      success: true,
+      responseTimeMs: 42,
+    });
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBeDefined();
+    expect(res.body.responseTime).toBe(42);
+  });
+
+  // TS-F015-002: 更新 status 為 connected
+  it('should update datasource status to connected on success', async () => {
+    mockConnectionTester.testConnection.mockResolvedValue({
+      success: true,
+      responseTimeMs: 42,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    // Verify via GET
+    const getRes = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(getRes.body.status).toBe('connected');
+    expect(getRes.body.lastTestedAt).not.toBeNull();
+  });
+
+  // TS-F015-003: 連線失敗回傳 success=false（HTTP 仍為 200）
+  it('should return 200 with success=false when connection fails', async () => {
+    mockConnectionTester.testConnection.mockResolvedValue({
+      success: false,
+      responseTimeMs: 1500,
+      errorMessage: '無法連線至主機',
+      errorCode: 'DS_HOST_UNREACHABLE',
+    });
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toContain('無法連線至主機');
+    expect(res.body.responseTime).toBe(1500);
+  });
+
+  // TS-F015-004: 失敗時更新 status 為 disconnected
+  it('should update datasource status to disconnected on failure', async () => {
+    mockConnectionTester.testConnection.mockResolvedValue({
+      success: false,
+      responseTimeMs: 1500,
+      errorMessage: '無法連線至主機',
+      errorCode: 'DS_HOST_UNREACHABLE',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(getRes.body.status).toBe('disconnected');
+    expect(getRes.body.lastTestedAt).not.toBeNull();
+  });
+
+  // TS-F015-005: 寫入 Health Log
+  it('should write DatasourceHealthLog on test', async () => {
+    mockConnectionTester.testConnection.mockResolvedValue({
+      success: true,
+      responseTimeMs: 42,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const dataSource = app.get(DataSource);
+    const logRepo = dataSource.getRepository(DatasourceHealthLog);
+    const logs = await logRepo.find({ where: { datasource_id: testDsId } });
+
+    expect(logs.length).toBeGreaterThanOrEqual(1);
+    const latestLog = logs[logs.length - 1];
+    expect(latestLog.success).toBe(true);
+    expect(latestLog.response_time_ms).toBe(42);
+    expect(latestLog.error_message).toBeNull();
+  });
+
+  // TS-F015-006: 失敗時 Health Log 記錄 error_message
+  it('should write error_message in health log on failure', async () => {
+    mockConnectionTester.testConnection.mockResolvedValue({
+      success: false,
+      responseTimeMs: 200,
+      errorMessage: '帳號或密碼錯誤',
+      errorCode: 'DS_AUTH_FAILED',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const dataSource = app.get(DataSource);
+    const logRepo = dataSource.getRepository(DatasourceHealthLog);
+    const logs = await logRepo.find({
+      where: { datasource_id: testDsId },
+      order: { checked_at: 'DESC' },
+    });
+
+    const latestLog = logs[0];
+    expect(latestLog.success).toBe(false);
+    expect(latestLog.error_message).toContain('帳號或密碼錯誤');
+  });
+
+  // TS-F015-007: 資料來源不存在
+  it('should return 404 for non-existent datasource', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/datasources/00000000-0000-0000-0000-000000000000/test')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('DS_NOT_FOUND');
+  });
+
+  // TS-F015-008: 非 Admin 使用者
+  it('should return 403 for non-admin user', async () => {
+    const userToken = await getUserToken(app);
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F015-009: 未登入使用者
+  it('should return 401 for unauthenticated user', async () => {
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/datasources/${testDsId}/test`);
+
+    expect(res.status).toBe(401);
   });
 });

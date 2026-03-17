@@ -4,7 +4,9 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DatasourceService } from './datasource.service';
 import { Datasource } from '@/database/entities/datasource.entity';
+import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
 import { CryptoUtil } from '@/common/crypto/crypto.util';
+import { CONNECTION_TESTER, type IConnectionTester } from './connection-tester.provider';
 
 describe('DatasourceService', () => {
   let service: DatasourceService;
@@ -29,13 +31,36 @@ describe('DatasourceService', () => {
       created_at: new Date('2026-01-01'),
       updated_at: new Date('2026-01-01'),
     })),
+    manager: {
+      transaction: vi.fn(async (cb: any) => {
+        const em = {
+          save: vi.fn((entity: any) => Promise.resolve({
+            ...entity,
+            id: entity.id || 'test-uuid',
+            created_at: new Date('2026-01-01'),
+            updated_at: new Date('2026-01-01'),
+          })),
+        };
+        return cb(em);
+      }),
+    },
+  };
+
+  const mockHealthLogRepository = {
+    create: vi.fn((data: any) => ({ id: 'log-uuid', ...data })),
+    save: vi.fn((entity: any) => Promise.resolve({ ...entity, id: entity.id || 'log-uuid' })),
+  };
+
+  const mockConnectionTester: IConnectionTester = {
+    testConnection: vi.fn(),
   };
 
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Mock CryptoUtil.encrypt
+    // Mock CryptoUtil.encrypt and decrypt
     vi.spyOn(CryptoUtil, 'encrypt').mockReturnValue('iv-base64:tag-base64:cipher-base64');
+    vi.spyOn(CryptoUtil, 'decrypt').mockReturnValue('decrypted-password');
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -43,6 +68,14 @@ describe('DatasourceService', () => {
         {
           provide: getRepositoryToken(Datasource),
           useValue: mockRepository,
+        },
+        {
+          provide: getRepositoryToken(DatasourceHealthLog),
+          useValue: mockHealthLogRepository,
+        },
+        {
+          provide: CONNECTION_TESTER,
+          useValue: mockConnectionTester,
         },
       ],
     }).compile();
@@ -385,6 +418,222 @@ describe('DatasourceService', () => {
 
       await expect(service.deleteDatasource('ds-deleted'))
         .rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // F015: testConnection tests
+  describe('testConnection', () => {
+    const existingEntity = {
+      id: 'ds-1',
+      name: 'MySQL 主資料庫',
+      type: 'mysql',
+      host: '192.168.1.100',
+      port: 3306,
+      database_name: 'prod_db',
+      username: 'admin',
+      encrypted_password: 'iv:tag:cipher',
+      description: 'Production MySQL',
+      status: 'unknown',
+      last_tested_at: null,
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-01'),
+      deleted_at: null,
+    };
+
+    it('should return success result for MySQL connection', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: true,
+        responseTimeMs: 42,
+      });
+
+      const result = await service.testConnection('ds-1');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('連線成功');
+      expect(result.responseTime).toBe(42);
+      expect(mockConnectionTester.testConnection).toHaveBeenCalledWith({
+        type: 'mysql',
+        host: '192.168.1.100',
+        port: 3306,
+        database: 'prod_db',
+        username: 'admin',
+        password: 'decrypted-password',
+      });
+    });
+
+    it('should return success result for PostgreSQL connection', async () => {
+      const pgEntity = { ...existingEntity, id: 'ds-2', type: 'postgresql', port: 5432 };
+      mockQueryBuilder.getOne.mockResolvedValue(pgEntity);
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: true,
+        responseTimeMs: 38,
+      });
+
+      const result = await service.testConnection('ds-2');
+
+      expect(result.success).toBe(true);
+      expect(result.responseTime).toBe(38);
+    });
+
+    it('should write health log on successful connection', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: true,
+        responseTimeMs: 42,
+      });
+
+      await service.testConnection('ds-1');
+
+      // Verify transaction was used for both DB update and health log
+      expect(mockRepository.manager.transaction).toHaveBeenCalled();
+    });
+
+    it('should update datasource status to connected on success', async () => {
+      const entity = { ...existingEntity };
+      mockQueryBuilder.getOne.mockResolvedValue(entity);
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: true,
+        responseTimeMs: 42,
+      });
+
+      await service.testConnection('ds-1');
+
+      const txCallback = mockRepository.manager.transaction.mock.calls[0][0];
+      const mockEm = { save: vi.fn((e: any) => Promise.resolve(e)) };
+      await txCallback(mockEm);
+
+      // The entity should have status updated
+      expect(entity.status).toBe('connected');
+      expect(entity.last_tested_at).toBeInstanceOf(Date);
+    });
+
+    it('should return failure for host unreachable', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: false,
+        responseTimeMs: 1500,
+        errorMessage: '無法連線至主機',
+        errorCode: 'DS_HOST_UNREACHABLE',
+      });
+
+      const result = await service.testConnection('ds-1');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('無法連線至主機');
+      expect(result.responseTime).toBe(1500);
+    });
+
+    it('should return failure for auth error', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: false,
+        responseTimeMs: 200,
+        errorMessage: '帳號或密碼錯誤',
+        errorCode: 'DS_AUTH_FAILED',
+      });
+
+      const result = await service.testConnection('ds-1');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('帳號或密碼錯誤');
+    });
+
+    it('should return failure for connection timeout', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: false,
+        responseTimeMs: 10000,
+        errorMessage: '連線逾時',
+        errorCode: 'DS_CONNECTION_TIMEOUT',
+      });
+
+      const result = await service.testConnection('ds-1');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('連線逾時');
+      expect(result.responseTime).toBe(10000);
+    });
+
+    it('should throw NotFoundException when datasource not found', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      await expect(service.testConnection('nonexistent'))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    it('should return failure for database not found', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: false,
+        responseTimeMs: 300,
+        errorMessage: '找不到指定的資料庫',
+        errorCode: 'DS_DATABASE_NOT_FOUND',
+      });
+
+      const result = await service.testConnection('ds-1');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('找不到指定的資料庫');
+    });
+
+    it('should update datasource status to disconnected on failure', async () => {
+      const entity = { ...existingEntity };
+      mockQueryBuilder.getOne.mockResolvedValue(entity);
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: false,
+        responseTimeMs: 1500,
+        errorMessage: '無法連線至主機',
+        errorCode: 'DS_HOST_UNREACHABLE',
+      });
+
+      await service.testConnection('ds-1');
+
+      const txCallback = mockRepository.manager.transaction.mock.calls[0][0];
+      const mockEm = { save: vi.fn((e: any) => Promise.resolve(e)) };
+      await txCallback(mockEm);
+
+      expect(entity.status).toBe('disconnected');
+      expect(entity.last_tested_at).toBeInstanceOf(Date);
+    });
+
+    it('should decrypt password before testing connection', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: true,
+        responseTimeMs: 42,
+      });
+
+      await service.testConnection('ds-1');
+
+      expect(CryptoUtil.decrypt).toHaveBeenCalledWith('iv:tag:cipher');
+      expect(mockConnectionTester.testConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ password: 'decrypted-password' }),
+      );
+    });
+
+    it('should not include decrypted password in health log error_message', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue({ ...existingEntity });
+      (mockConnectionTester.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue({
+        success: false,
+        responseTimeMs: 200,
+        errorMessage: '帳號或密碼錯誤',
+        errorCode: 'DS_AUTH_FAILED',
+      });
+
+      await service.testConnection('ds-1');
+
+      const txCallback = mockRepository.manager.transaction.mock.calls[0][0];
+      const mockEm = { save: vi.fn((e: any) => Promise.resolve(e)) };
+      await txCallback(mockEm);
+
+      // Check that the health log saved via the entity manager
+      const healthLogSaveCall = mockEm.save.mock.calls.find(
+        (call: any[]) => call[0]?.error_message !== undefined || call[0]?.success !== undefined,
+      );
+      if (healthLogSaveCall) {
+        expect(healthLogSaveCall[0].error_message).not.toContain('decrypted-password');
+      }
     });
   });
 });
