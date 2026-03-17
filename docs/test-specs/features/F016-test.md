@@ -85,3 +85,4 @@ last_updated: 2026-03-12
 | TS-F016-008 | 排除軟刪除資料來源 | BR-6 | Integration | DS_DELETED 存在 | 1. GET /api/datasources/dashboard | summary 不含已刪除的資料來源 |
 | TS-F016-009 | 自動健康檢查排程 | AC-3 | Integration | 2 個未刪除 + 1 個已刪除 | 1. 觸發排程<br>2. 檢查 health log | 僅 2 個未刪除資料來源新增紀錄 |
 | TS-F016-010 | 無資料時的趨勢圖 | AC-4 | Integration | 無 health log | 1. GET /api/datasources/:id/metrics?range=24h | HTTP 200，datapoints: [] |
+| TS-F016-011 | 時間欄位以 UTC 格式回傳 | BR-10 | Integration | 資料來源有健康檢查紀錄 | 1. GET /api/datasources/dashboard<br>2. GET /api/datasources/alerts<br>3. 檢查 lastTestedAt、firstFailureTime、timestamp 格式 | 所有時間欄位為 ISO 8601 UTC 格式（結尾含 Z 或 +00:00），前端轉換為 UTC+8 顯示 |

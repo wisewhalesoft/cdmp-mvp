@@ -63,3 +63,4 @@ last_updated: 2026-03-12
 | ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
 |----|----------|------------|-----------|---------------|-------|-----------------|
 | TS-F012-007 | 密碼欄位不存在於回應 | BR-3, NFR-001.4 | Integration | 資料來源存在 | 1. GET /api/datasources<br>2. 檢查每筆記錄 | 無 password / encrypted_password 欄位 |
+| TS-F012-008 | 時間欄位以 UTC 格式回傳 | BR-6 | Integration | 資料來源存在 | 1. GET /api/datasources<br>2. 檢查 lastTestedAt、createdAt、updatedAt 格式 | 時間欄位為 ISO 8601 UTC 格式（結尾含 Z 或 +00:00），前端轉換為 UTC+8 顯示 |

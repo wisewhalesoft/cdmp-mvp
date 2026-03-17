@@ -185,6 +185,8 @@ status: Draft
 | BR-7     | 「Refresh All」觸發的測試為平行執行（非逐一序列）                                        |
 | BR-8     | 效能趨勢圖的資料點來源為 `datasource_health_logs` 表                                    |
 | BR-9     | 單一資料來源的「Test Now」按鈕呼叫 F015 的 POST /api/datasources/:id/test                |
+| BR-10    | 後端儲存 UTC 時間，API 回應以 ISO 8601 UTC 格式輸出，前端顯示時轉換為 UTC+8（Asia/Taipei） |
+| BR-11    | 趨勢圖 X 軸、警示清單的時間欄位（firstFailureTime、lastTestedAt）均須以 UTC+8 顯示       |
 
 ## 6. UI/UX 需求
 
@@ -272,6 +274,7 @@ status: Draft
 - GET /api/datasources/alerts 回應時間：< 500ms
 - 「Refresh All」平行測試，不逐一序列執行（總時間受最慢連線限制，上限 10 秒）
 - 前端 polling 間隔：30 秒（避免過多 API 請求）
+- 所有時間欄位後端以 UTC 儲存與回傳，前端須轉換為 UTC+8（Asia/Taipei）顯示，包含趨勢圖 X 軸、lastTestedAt、firstFailureTime、tested_at 等
 - `datasource_health_logs` 表須在 `datasource_id` 與 `tested_at` 上建立複合索引
 
 ## 12. 交叉參考

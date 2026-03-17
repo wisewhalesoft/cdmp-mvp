@@ -118,6 +118,7 @@ status: Draft
 | BR-3     | 密碼欄位在任何回應中均須被排除                                       |
 | BR-4     | 預設排序：依建立時間降序（最新的在最前面）                           |
 | BR-5     | 搜尋為不區分大小寫的模糊比對                                         |
+| BR-6     | 後端儲存 UTC 時間，API 回應以 ISO 8601 UTC 格式輸出，前端顯示時轉換為 UTC+8（Asia/Taipei） |
 
 ## 6. UI/UX 需求
 
@@ -170,6 +171,7 @@ status: Draft
 - 分頁查詢回應時間：< 500ms（參見 NFR-002）
 - 前端應在分頁切換時顯示 loading skeleton 以提升使用體驗
 - 搜尋使用 debounce（建議 300ms）以避免過多 API 請求
+- 時間欄位（lastTestedAt、createdAt、updatedAt）後端以 UTC 儲存與回傳，前端須轉換為 UTC+8（Asia/Taipei）顯示
 
 ## 12. 交叉參考
 
