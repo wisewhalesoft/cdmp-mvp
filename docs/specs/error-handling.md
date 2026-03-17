@@ -146,6 +146,18 @@ status: Draft
 
 ---
 
+### EXTRACTION 領域 — 擷取任務管理 {#extraction-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| EXTRACTION_NAME_EXISTS | 409 | 此名稱的擷取任務已存在 | 擷取任務名稱重複 | F017, F019 |
+| EXTRACTION_NOT_FOUND | 404 | 找不到指定的擷取任務 | 擷取任務 ID 不存在或已軟刪除 | F019, F020, F021, F022, F025 |
+| EXTRACTION_RUNNING | 409 | 任務執行中，無法執行此操作 | 任務 status 為 running 時嘗試編輯、停用、刪除或重複觸發 | F019, F020, F021, F025 |
+| EXTRACTION_DATASOURCE_NOT_FOUND | 422 | 指定的資料來源不存在或已被刪除 | 建立或編輯時指定的 datasourceId 無效 | F017, F019 |
+| EXTRACTION_EXECUTION_FAILED | — | 擷取執行失敗：{errorDetail} | 擷取過程中發生錯誤（非 API 錯誤，記錄於 ExtractionLog） | F021, F023 |
+
+---
+
 ### VALIDATION 領域 — 通用驗證 {#validation-errors}
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
@@ -159,6 +171,9 @@ status: Draft
 | VALIDATION_INVALID_ROLE | 422 | 角色必須為 admin 或 user | 角色值不在允許的列舉範圍內 | F004, F008 |
 | VALIDATION_INVALID_TYPE | 422 | 資料來源類型必須為 mysql、postgresql 或 sqlserver | 類型值不在允許的列舉範圍內 | F011, F013 |
 | VALIDATION_INVALID_STATUS | 422 | 狀態必須為 active 或 disabled | 帳號狀態值不在允許的列舉範圍內 | F007 |
+| VALIDATION_INVALID_MODE | 422 | 擷取模式必須為 full 或 incremental | 模式值不在允許的列舉範圍內 | F017, F019 |
+| VALIDATION_INCREMENTAL_COLUMN_REQUIRED | 422 | 增量模式必須指定增量欄位 | 增量模式下 incrementalColumn 為空 | F017, F019 |
+| VALIDATION_INVALID_CRON | 422 | 排程格式不正確，請輸入合法的 cron 表達式 | cron 表達式格式不合規 | F017, F019 |
 
 ---
 
@@ -215,5 +230,10 @@ status: Draft
 | 資料來源名稱重複 | 409 | DS_NAME_EXISTS | 此名稱的資料來源已存在 | 不建立/更新 |
 | 連線測試逾時 | 200 | — | 連線逾時（10 秒） | success: false，狀態設為 disconnected |
 | 密碼重設 Token 過期 | 422 | AUTH_RESET_TOKEN_EXPIRED | 此連結已過期，請重新申請密碼重設 | 不重設密碼 |
+| 擷取任務名稱重複 | 409 | EXTRACTION_NAME_EXISTS | 此名稱的擷取任務已存在 | 不建立/更新 |
+| 擷取任務執行中 | 409 | EXTRACTION_RUNNING | 任務執行中，無法執行此操作 | 拒絕編輯/停用/刪除/重複觸發 |
+| 擷取任務不存在 | 404 | EXTRACTION_NOT_FOUND | 找不到指定的擷取任務 | 拒絕請求 |
+| 增量模式缺少增量欄位 | 422 | VALIDATION_INCREMENTAL_COLUMN_REQUIRED | 增量模式必須指定增量欄位 | 不提交表單 |
+| Cron 表達式格式錯誤 | 422 | VALIDATION_INVALID_CRON | 排程格式不正確 | 不提交表單 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

@@ -161,13 +161,90 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 
 ---
 
+## ExtractionTask 實體 {#extraction-task-entity}
+
+擷取任務設定，定義從資料來源擷取資料的執行計畫。
+
+| 屬性 | 說明 | 約束 | 備註 |
+|------|------|------|------|
+| id | 唯一識別碼 | 主鍵，系統自動產生 | UUID |
+| name | 任務名稱 | 必填，唯一（排除已軟刪除），最大長度 255 字元 | 用於顯示與識別 |
+| datasource_id | 資料來源 ID | 必填，外鍵關聯 Datasource.id | 不可為已軟刪除的 Datasource |
+| mode | 擷取模式 | 必填，列舉值：`full` / `incremental` | full=全量，incremental=增量 |
+| status | 任務狀態 | 必填，列舉值：`running` / `scheduled` / `completed` / `failed` / `disabled` | 預設值：`scheduled` |
+| target_table | 目標資料表名稱 | 必填，最大長度 255 字元 | 來源資料庫中的表名 |
+| incremental_column | 增量欄位名稱 | 增量模式必填，最大長度 255 字元 | 用於增量擷取的比對欄位 |
+| last_incremental_value | 最後增量值 | 可為空，最大長度 255 字元 | 上次增量擷取的最後值 |
+| schedule | Cron 表達式 | 必填，最大長度 100 字元 | 標準 cron 格式，以 UTC 解析 |
+| last_execution_at | 最後執行時間 | 可為空 | UTC timestamp |
+| extracted_count | 已擷取筆數 | 預設 0 | 最近一次執行的擷取筆數 |
+| total_count | 總筆數 | 預設 0 | 最近一次執行的來源總筆數 |
+| progress_percent | 進度百分比 | 預設 0，範圍 0-100 | DECIMAL(5,2) |
+| avg_duration_ms | 平均執行時間 | 預設 0 | 所有成功執行的平均時間（毫秒） |
+| execution_count | 累計執行次數 | 預設 0 | 所有已完成執行的次數 |
+| error_message | 最後錯誤訊息 | 可為空 | TEXT 類型 |
+| enabled | 是否啟用 | 必填，布林值，預設 `true` | 停用後排程不觸發 |
+| created_by | 建立者 ID | 必填，外鍵關聯 User.id | 記錄建立此任務的 Admin |
+| deleted_at | 軟刪除時間 | 可為空 | 非 NULL 表示已刪除 |
+| created_at | 建立時間 | 必填，系統自動設定 | UTC timestamp |
+| updated_at | 最後更新時間 | 必填，系統自動更新 | UTC timestamp |
+
+**業務規則**：
+
+- 名稱唯一性僅在未刪除的記錄中檢查（`deleted_at IS NULL`）
+- 增量模式下 `incremental_column` 為必填
+- 建立時預設 `status = 'scheduled'`、`enabled = true`
+- 停用時 `enabled = false`、`status = 'disabled'`
+- 啟用時 `enabled = true`、`status = 'scheduled'`
+- `status` 為 `running` 時不允許編輯、停用、刪除
+- 軟刪除後從所有清單、儀表板、排程中排除
+- Cron 表達式以 UTC 時區解析
+- 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
+
+**相關功能**：[F017](features/F017-create-extraction-task.md), [F018](features/F018-view-extraction-task-list.md), [F019](features/F019-edit-extraction-task.md), [F020](features/F020-toggle-extraction-task.md), [F021](features/F021-run-extraction-task.md), [F023](features/F023-scheduled-extraction.md), [F024](features/F024-extraction-dashboard.md), [F025](features/F025-delete-extraction-task.md)
+
+---
+
+## ExtractionLog 實體 {#extraction-log-entity}
+
+擷取任務執行日誌，記錄每次執行的詳細資訊。
+
+| 屬性 | 說明 | 約束 | 備註 |
+|------|------|------|------|
+| id | 唯一識別碼 | 主鍵，系統自動產生 | UUID |
+| task_id | 擷取任務 ID | 必填，外鍵關聯 ExtractionTask.id | |
+| status | 執行狀態 | 必填，列舉值：`running` / `completed` / `failed` | |
+| started_at | 開始時間 | 必填，系統自動設定 | UTC timestamp |
+| finished_at | 結束時間 | 可為空 | 執行完成後設定，UTC timestamp |
+| duration_ms | 執行時間（毫秒） | 可為空 | 執行完成後計算 |
+| extracted_count | 擷取筆數 | 預設 0 | 本次執行的擷取筆數 |
+| total_count | 總筆數 | 預設 0 | 本次執行的來源總筆數 |
+| error_message | 錯誤訊息 | 可為空 | TEXT 類型，失敗時記錄 |
+| triggered_by | 觸發方式 | 必填，列舉值：`schedule` / `manual` / `retry` | |
+| created_by | 執行者 ID | 必填，外鍵關聯 User.id | 排程觸發時為系統帳號或建立者 |
+
+**業務規則**：
+
+- 每次執行（手動、排程、重新執行）均產生一筆記錄
+- 日誌不隨 ExtractionTask 軟刪除而清除，永久保留
+- `duration_ms = finished_at - started_at`（毫秒）
+- `triggered_by` 區分觸發來源：`manual`（手動）、`schedule`（排程）、`retry`（重新執行）
+- 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
+
+**相關功能**：[F021](features/F021-run-extraction-task.md), [F022](features/F022-view-extraction-logs.md), [F023](features/F023-scheduled-extraction.md), [F024](features/F024-extraction-dashboard.md)
+
+---
+
 ## 實體關係
 
 ```
 User (1) ──── creates ────> (*) Datasource
 User (1) ──── has ────> (*) Token Blocklist
 User (1) ──── has ────> (*) PasswordResetToken
+User (1) ──── creates ────> (*) ExtractionTask
 Datasource (1) ──── has ────> (*) DatasourceHealthLog
+Datasource (1) ──── referenced by ──> (*) ExtractionTask
+ExtractionTask (1) ──── has ────> (*) ExtractionLog
 ```
 
 | 關係 | 描述 | 基數 |
@@ -175,7 +252,10 @@ Datasource (1) ──── has ────> (*) DatasourceHealthLog
 | User → Datasource | User（Admin）建立資料來源 | 一對多（`created_by`） |
 | User → Token Blocklist | 使用者的已撤銷 Token | 一對多（`user_id`） |
 | User → PasswordResetToken | 使用者的密碼重設 Token | 一對多（`user_id`） |
+| User → ExtractionTask | User（Admin）建立擷取任務 | 一對多（`created_by`） |
 | Datasource → DatasourceHealthLog | 資料來源的健康檢查記錄 | 一對多（`datasource_id`） |
+| Datasource → ExtractionTask | 資料來源被擷取任務參照 | 一對多（`datasource_id`） |
+| ExtractionTask → ExtractionLog | 擷取任務的執行日誌 | 一對多（`task_id`） |
 
 參見 [diagrams/er-diagram.md](diagrams/er-diagram.md) 取得完整 ER 圖。
 
@@ -222,3 +302,36 @@ disconnected → unknown  （編輯後重設，F013）
 
 - 軟刪除後從所有清單、儀表板、健康檢查中排除
 - 復原僅能透過資料庫層級操作（非 API 功能）
+
+### ExtractionTask 任務狀態 {#extraction-task-status-transitions}
+
+```
+[建立任務] → scheduled                      （F017）
+scheduled → running                          （手動執行 F021 / 排程觸發 F023）
+scheduled → disabled                         （停用 F020）
+running → completed                          （執行成功）
+running → failed                             （執行失敗）
+completed → running                          （手動執行 F021 / 排程觸發 F023）
+completed → disabled                         （停用 F020）
+failed → running                             （重新執行 F021 / 排程觸發 F023）
+failed → disabled                            （停用 F020）
+disabled → scheduled                         （啟用 F020）
+disabled → running                           （手動執行 F021，手動不受停用限制）
+```
+
+- 建立時預設為 `scheduled`
+- `running` 狀態下不可編輯、停用、刪除
+- 停用時 `status` 設為 `disabled`，啟用時 `status` 設為 `scheduled`
+- 手動執行不受 `enabled` 限制（即使停用也可手動觸發）
+- 軟刪除後不再參與狀態更新
+
+參見 [diagrams/extraction-task-states.md](diagrams/extraction-task-states.md) 取得狀態轉換圖。
+
+### ExtractionTask 生命週期 {#extraction-task-lifecycle}
+
+```
+[建立] → 正常使用（排程執行 / 手動執行）→ [軟刪除]（設定 deleted_at）
+```
+
+- 軟刪除後從所有清單、儀表板、排程中排除
+- ExtractionLog 不隨任務刪除而清除
