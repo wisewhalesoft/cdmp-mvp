@@ -460,8 +460,10 @@ export function ExtractionTaskListPage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-1.5">
                               <button
-                                title="編輯"
-                                className="p-1 text-gray-500 hover:text-primary rounded"
+                                title={task.status === 'running' ? '任務執行中，無法編輯' : '編輯'}
+                                disabled={task.status === 'running'}
+                                onClick={() => navigate(`/extraction-tasks/${task.id}/edit`)}
+                                className="p-1 text-gray-500 hover:text-primary rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Pencil size={14} />
                               </button>

@@ -55,6 +55,29 @@ export async function getDatasourceOptions(): Promise<DatasourceOption[]> {
   return response.data.data;
 }
 
+export interface UpdateExtractionTaskRequest {
+  name?: string;
+  datasourceId?: string;
+  mode?: 'full' | 'incremental';
+  targetTable?: string;
+  schedule?: string;
+  incrementalColumn?: string;
+  lastIncrementalValue?: string;
+}
+
+export async function getExtractionTask(id: string): Promise<CreateExtractionTaskResponse> {
+  const response = await apiClient.get<CreateExtractionTaskResponse>(`/extraction-tasks/${id}`);
+  return response.data;
+}
+
+export async function updateExtractionTask(
+  id: string,
+  data: UpdateExtractionTaskRequest,
+): Promise<CreateExtractionTaskResponse> {
+  const response = await apiClient.patch<CreateExtractionTaskResponse>(`/extraction-tasks/${id}`, data);
+  return response.data;
+}
+
 export async function getExtractionTasks(
   query: ExtractionTaskListQuery,
 ): Promise<ExtractionTaskListResponse> {
