@@ -1,17 +1,17 @@
 ---
 type: test-design-index
-version: "1.0"
+version: "1.1"
 status: draft
-last_updated: 2026-03-12
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016]
+last_updated: 2026-03-18
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：20 份（4 策略文件 + 16 Feature 測試文件）
-> **總測試場景數**：117 個
-> **最後更新**：2026-03-12
+> **測試文件總數**：29 份（4 策略文件 + 25 Feature 測試文件）
+> **總測試場景數**：196 個（原 119 + E04 新增 79）
+> **最後更新**：2026-03-18
 
 ---
 
@@ -19,11 +19,12 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 涵蓋範圍
 
-- 16 個 Feature（F001–F016），分屬 3 個 Epic：
+- 25 個 Feature（F001–F025），分屬 4 個 Epic：
   - **E01 驗證與登入**：F001、F002、F003
   - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010
   - **E03 資料來源管理**：F011、F012、F013、F014、F015、F016
-- 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求
+  - **E04 資料擷取**：F017、F018、F019、F020、F021、F022、F023、F024、F025
+- 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程）
 - 49 個錯誤碼的驗證覆蓋
 
 ### 排除項目
@@ -64,7 +65,17 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F014 | 刪除資料來源 | P1 | [F014-test.md](features/F014-test.md) | 5 | Draft |
 | F015 | 測試連線 | P0-MVP | [F015-test.md](features/F015-test.md) | 8 | Draft |
 | F016 | 狀態監控儀表板 | P1 | [F016-test.md](features/F016-test.md) | 10 | Draft |
-| **合計** | | | **16 files** | **119** | |
+| **E04 資料擷取** | | | | | |
+| F017 | 建立擷取任務 | P0-MVP | [F017-test.md](features/F017-test.md) | 9 | Draft |
+| F018 | 查看擷取任務清單 | P0-MVP | [F018-test.md](features/F018-test.md) | 9 | Draft |
+| F019 | 編輯擷取任務 | P0-MVP | [F019-test.md](features/F019-test.md) | 9 | Draft |
+| F020 | 啟用／停用擷取任務 | P0-MVP | [F020-test.md](features/F020-test.md) | 8 | Draft |
+| F021 | 立即執行／重新執行 | P0-MVP | [F021-test.md](features/F021-test.md) | 10 | Draft |
+| F022 | 查看擷取日誌 | P0-MVP | [F022-test.md](features/F022-test.md) | 8 | Draft |
+| F023 | 排程自動執行 | P0-MVP | [F023-test.md](features/F023-test.md) | 8 | Draft |
+| F024 | 擷取監控儀表板 | P1 | [F024-test.md](features/F024-test.md) | 11 | Draft |
+| F025 | 刪除擷取任務 | P1 | [F025-test.md](features/F025-test.md) | 7 | Draft |
+| **合計** | | | **25 files** | **196** | |
 
 ---
 
@@ -74,9 +85,10 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 | 類別 | 場景數 | 說明 |
 |------|--------|------|
-| API 端點測試（Unit + Integration） | ~80 | 所有 CRUD 操作、驗證邏輯、錯誤碼回傳 |
+| API 端點測試（Unit + Integration） | ~120 | 所有 CRUD 操作、驗證邏輯、錯誤碼回傳（含 E04 擷取任務 API） |
 | 安全性測試（RBAC / Token） | ~15 | 角色權限驗證、Token 失效、輸入消毒 |
-| 資料驗證（邊界值、格式） | ~15 | 密碼長度、Port 範圍、Email 格式 |
+| 資料驗證（邊界值、格式） | ~20 | 密碼長度、Port 範圍、Email 格式、cron 格式 |
+| 排程邏輯測試（E04） | ~8 | 使用 scanAndExecute(fakeNow) injectable time 參數直接呼叫排程邏輯 |
 
 ### 需手動或半自動測試的場景
 
@@ -93,6 +105,9 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | 目標資料庫（MySQL / PostgreSQL / SQL Server） | F015、F016 連線測試 | Mock DB Driver 或 Test Container |
 | Email 服務（SMTP / SendGrid） | F009 密碼重設 Email | Mock Email Service |
 | 時鐘 | Token 過期、Reset Token 過期 | Clock Mock / Time Travel |
+| 排程計時器（E04） | F023 排程觸發 | scanAndExecute(fakeNow) injectable time 參數，無需真實計時器 |
+| 非同步執行（E04） | F021 執行結果驗證 | waitForTaskStatus(taskId, status, timeoutMs=5000) polling helper，interval=300ms |
+| 時區（E04） | F018 今日統計、F024 今日統計 | todayInTaipei() 種子資料工廠函式，CI 設定 TZ=Asia/Taipei |
 
 ---
 
@@ -104,7 +119,12 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016
+**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025
+
+**E04 資料擷取特殊注意：**
+- F021 非同步測試使用 `waitForTaskStatus(taskId, expectedStatus, timeoutMs=5000)`（interval=300ms）
+- F023 排程測試使用 `scanAndExecute(fakeNow)` injectable time 參數（不依賴真實計時器）
+- F018 / F024 今日統計種子資料使用 `todayInTaipei()` 工廠函式（CI 設定 TZ=Asia/Taipei）
 
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
@@ -151,3 +171,4 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
 | 2026-03-12 | 初版建立，16 個 Feature 測試設計 + 4 個策略文件 | Test Designer Agent |
+| 2026-03-18 | 新增 E04 資料擷取（F017–F025）9 個 Feature 測試文件，共 79 個測試場景 | Test Designer Agent |

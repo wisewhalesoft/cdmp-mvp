@@ -1,6 +1,6 @@
 ---
 type: test-design-data
-last_updated: 2026-03-12
+last_updated: 2026-03-18
 ---
 
 # 測試資料策略
@@ -40,6 +40,34 @@ last_updated: 2026-03-12
 | RESET_TOKEN_VALID | 有效 | 當前時間 + 23h | NULL | 成功重設密碼測試 |
 | RESET_TOKEN_EXPIRED | 過期 | 當前時間 - 1h | NULL | 過期 Token 測試 |
 | RESET_TOKEN_USED | 已使用 | 當前時間 + 23h | 當前時間 - 1h | 已使用 Token 測試 |
+
+### 1.5 擷取任務（ExtractionTask）
+
+| 任務代號 | name | datasourceId | mode | status | enabled | schedule | 用途 |
+|---------|------|-------------|------|--------|---------|----------|------|
+| ET_SCHEDULED | 每日全量同步 | DS_MYSQL_CONNECTED | full | scheduled | true | `0 2 * * *` | 標準正向場景、排程觸發測試 |
+| ET_INCREMENTAL | 每小時增量同步 | DS_MYSQL_CONNECTED | incremental | scheduled | true | `0 * * * *` | 增量模式測試，incrementalColumn="updated_at" |
+| ET_RUNNING | 執行中任務 | DS_MYSQL_CONNECTED | full | running | true | `0 3 * * *` | 重複觸發拒絕、不可編輯/停用/刪除測試 |
+| ET_FAILED | 最近失敗任務 | DS_PG_DISCONNECTED | full | failed | true | `0 4 * * *` | 重新執行測試，errorMessage 有值 |
+| ET_COMPLETED | 已完成任務 | DS_MYSQL_CONNECTED | full | completed | true | `0 5 * * *` | 執行完成狀態查詢 |
+| ET_DISABLED | 已停用任務 | DS_MYSQL_CONNECTED | full | disabled | false | `0 6 * * *` | 停用狀態、排程跳過、手動仍可執行 |
+| ET_DELETED | 已刪除任務 | DS_MYSQL_CONNECTED | full | scheduled | true | `0 7 * * *` | 軟刪除後不出現於清單、排程排除、日誌保留 |
+
+**建立者規則：** 所有種子 ExtractionTask 的 `createdBy` 均為 ADMIN_ACTIVE.id。
+
+**日期欄位型別：** 所有 `timestamp` 欄位使用 PostgreSQL `timestamp` 型別（不可使用 `datetime`）。
+
+### 1.6 擷取日誌（ExtractionLog）
+
+| 日誌代號 | taskId | status | triggeredBy | startedAt | finishedAt | 用途 |
+|---------|--------|--------|------------|-----------|-----------|------|
+| LOG_COMPLETED_MANUAL | ET_SCHEDULED.id | completed | manual | 今日 UTC+8 10:00 | 今日 UTC+8 10:05 | 今日成功統計、觸發方式驗證 |
+| LOG_COMPLETED_SCHEDULE | ET_SCHEDULED.id | completed | schedule | 今日 UTC+8 02:00 | 今日 UTC+8 02:03 | 排程觸發驗證 |
+| LOG_FAILED_TODAY | ET_FAILED.id | failed | manual | 今日 UTC+8 08:00 | 今日 UTC+8 08:01 | 今日失敗統計、errorMessage="連線被拒絕" |
+| LOG_RUNNING_NOW | ET_RUNNING.id | running | manual | 今日 UTC+8 當前時間 | null | 執行中日誌（finishedAt=null） |
+| LOG_YESTERDAY | ET_SCHEDULED.id | completed | schedule | 昨日 UTC+8 02:00 | 昨日 UTC+8 02:04 | 確認昨日日誌不計入今日統計 |
+
+**時區處理：** `startedAt` 使用 `todayInTaipei()` 工廠函式產生，確保相對於當前台北時間。CI 環境設定 `TZ=Asia/Taipei`。
 
 ### 1.4 健康檢查紀錄（DatasourceHealthLog）
 
@@ -105,10 +133,37 @@ last_updated: 2026-03-12
 | page | `0` | 錯誤 — 最小值為 1 |
 | page | `1` | 通過 |
 | page | 超出總頁數 | 回傳空陣列 |
-| limit | 未提供 | 預設 20 |
+| limit | 未提供 | 預設 20（擷取任務清單預設 10） |
 | limit | `0` | 錯誤 — 最小值為 1 |
 | limit | `100` | 通過 — 最大值 |
 | limit | `101` | 錯誤 — 超出最大值 |
+
+### 2.6 擷取任務欄位邊界值
+
+| 欄位 | 測試值 | 預期結果 | 適用 Feature |
+|------|--------|---------|-------------|
+| name | `""` | 驗證失敗 — 必填 | F017, F019 |
+| name | `A` × 255 | 驗證通過 — 最大長度 | F017, F019 |
+| name | `A` × 256 | 驗證失敗 — 超出最大長度 | F017, F019 |
+| targetTable | `""` | 驗證失敗 — 必填 | F017, F019 |
+| targetTable | `A` × 255 | 驗證通過 — 最大長度 | F017, F019 |
+| incrementalColumn | `A` × 255 | 驗證通過 — 最大長度（增量模式） | F017, F019 |
+| schedule | `"0 2 * * *"` | 驗證通過 — 合法 cron（5 欄位） | F017, F019 |
+| schedule | `"0 2 * * * *"` | 驗證通過 — 合法 cron（6 欄位） | F017, F019 |
+| schedule | `"invalid-cron"` | 驗證失敗 — 非法 cron 格式 | F017, F019 |
+| schedule | `""` | 驗證失敗 — 必填 | F017, F019 |
+
+### 2.7 趨勢圖 range 參數白名單
+
+| 測試值 | 預期結果 | 適用 Feature |
+|--------|---------|-------------|
+| `7d` | 驗證通過 | F024 |
+| `14d` | 驗證通過 | F024 |
+| `30d` | 驗證通過 | F024 |
+| `60d` | 驗證失敗 — HTTP 422，VALIDATION_ERROR | F024 |
+| `1d` | 驗證失敗 — HTTP 422，VALIDATION_ERROR | F024 |
+| `""` | 驗證失敗 — HTTP 422，VALIDATION_ERROR | F024 |
+| 未提供 | 預設 `7d` | F024 |
 
 ---
 
@@ -159,6 +214,23 @@ last_updated: 2026-03-12
 | 50 筆資料來源 | 20 mysql + 20 postgresql + 10 sqlserver、30 connected + 10 disconnected + 10 unknown | 儀表板載入 < 2 秒 |
 | 健康檢查紀錄 | 每個資料來源 90 天 × 每 30 分鐘 ≈ 4,320 筆/來源，共 ~216,000 筆 | 趨勢圖查詢效能 |
 
+### 4.3 擷取任務清單效能測試（NFR-002.6）
+
+| 資料量 | 資料描述 | 用途 |
+|--------|---------|------|
+| 1,000 筆擷取任務 | 500 full + 500 incremental、300 scheduled + 200 completed + 200 failed + 150 disabled + 150 running | 清單 API p95 < 500ms |
+| ExtractionLog | 每個任務平均 30 筆歷史日誌，共 ~30,000 筆 | 今日統計查詢效能 |
+
+**任務名稱生成規則：** `Extraction Task {0001-1000}`
+**scheduleule 生成規則：** 均使用 `0 2 * * *`（測試不觸發實際排程）
+
+### 4.4 擷取監控儀表板效能測試（NFR-002.7）
+
+| 資料量 | 資料描述 | 用途 |
+|--------|---------|------|
+| 50 筆擷取任務 | 30 scheduled + 10 completed + 5 failed + 5 running | 儀表板初始渲染 < 2 秒 |
+| 趨勢圖 ExtractionLog | 過去 30 天每天 20 筆執行紀錄，共 ~600 筆 | 趨勢圖查詢效能 |
+
 ---
 
 ## 5. 時間敏感資料
@@ -173,12 +245,31 @@ last_updated: 2026-03-12
 | Token Blocklist 清理 | expires_at 已過的 Blocklist 記錄 | 直接設定 DB 記錄的 expires_at 為過去時間 |
 | 健康檢查紀錄 90 天清理 | checked_at 為 91 天前的紀錄 | 直接設定 DB 記錄的 checked_at 為 91 天前 |
 
-### 5.2 排程測試
+### 5.2 排程測試（E03 健康檢查）
 
 | 測試場景 | 資料需求 |
 |---------|---------|
 | 自動健康檢查每 30 分鐘執行 | 至少 2 個未刪除的資料來源 |
 | 健康檢查排除已刪除資料來源 | 1 個未刪除 + 1 個已刪除的資料來源 |
+
+### 5.3 擷取任務排程測試（E04）
+
+| 測試場景 | 資料需求 | 時間操控方式 |
+|---------|---------|------------|
+| 排程觸發執行 | ET_SCHEDULED(schedule="0 2 * * *"，enabled=true) | scanAndExecute(new Date("2026-03-18T02:00:00Z")) — injectable time 參數，直接呼叫服務函式 |
+| 排程不符合當前時間，不觸發 | ET_SCHEDULED(schedule="0 2 * * *") | scanAndExecute(new Date("2026-03-18T03:00:00Z")) — 時間不符合 cron，驗證無新日誌 |
+| 停用任務排程跳過 | ET_DISABLED(enabled=false，schedule="0 2 * * *") | scanAndExecute(fakeNow=UTC 02:00) — 驗證 ET_DISABLED 被跳過 |
+| 執行中任務排程跳過 | ET_RUNNING(status=running，schedule="0 2 * * *") | scanAndExecute(fakeNow=UTC 02:00) — 驗證 ET_RUNNING 被跳過 |
+
+### 5.4 擷取任務今日統計時區測試（E04）
+
+| 測試場景 | 資料需求 | 說明 |
+|---------|---------|------|
+| 今日成功統計（UTC+8） | LOG_COMPLETED_MANUAL（startedAt = todayInTaipei() 10:00） | 確認計入今日 |
+| 昨日紀錄不計入今日 | LOG_YESTERDAY（startedAt = todayInTaipei() 減 1 天的 02:00） | 確認不計入今日統計 |
+| UTC+8 午夜跨日邊界 | UTC+8 00:00 前後各一筆日誌 | 確認以台北時區切日，而非 UTC |
+
+**工廠函式定義：** `todayInTaipei()` 回傳以 UTC+8 當日 00:00:00 為起點的 Date 物件，測試時依此計算各筆日誌的 startedAt。
 
 ---
 
@@ -213,6 +304,17 @@ last_updated: 2026-03-12
 | System Clock | 設定為特定時間點 | 排程觸發測試、90 天紀錄清理測試 |
 
 **實作建議：** 業務邏輯中的 `now()` 呼叫應透過可注入的 Clock 介面取得，使測試可以替換為 Fake Clock。
+
+### 6.4 E04 排程引擎 Mock（Injectable Time）
+
+| Mock 對象 | 模擬行為 | 適用場景 |
+|----------|---------|---------|
+| scanAndExecute(fakeNow) | 以指定 Date 物件作為「當前時間」執行排程掃描 | F023 排程觸發、跳過、排除測試 |
+| waitForTaskStatus(taskId, status, 5000) | 以 300ms interval polling ExtractionTask 狀態，達到預期狀態後回傳 | F021 非同步執行結果驗證 |
+| jest.spyOn(Logger, 'error') | 監聽 Logger.error 呼叫，驗證錯誤被記錄 | F023 DB 不可用錯誤處理 |
+| DB 連線 stub | throw Error（模擬 DB 暫時不可用） | F023 TS-F023-007 |
+
+**注意：** `scanAndExecute(fakeNow)` 與 `waitForTaskStatus` 均為純測試工具，不需修改任何 production code。production 的排程函式僅需將「取得當前時間」的邏輯抽取為可注入的依賴即可。
 
 ---
 
