@@ -98,6 +98,7 @@ status: Draft
 | BR-6 | 排程引擎擴展現有 `@nestjs/schedule` 模組 |
 | BR-7 | Cron 表達式解析使用 `cron-parser` 或同等套件 |
 | BR-8 | 伺服器重啟後排程自動恢復，不補執行錯過的排程 |
+| BR-9 | 排程觸發時，ExtractionLog.created_by 使用 `task.createdBy`（即該擷取任務的建立者 User ID）；`triggered_by = 'schedule'` 欄位已足以區分排程觸發與手動觸發，無需另設系統帳號 |
 
 ## 10. 技術設計要點
 
