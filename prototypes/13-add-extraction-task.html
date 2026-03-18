@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新增擷取任務 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">新增擷取任務</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14 p-6">
+
+    <!-- Demo Buttons -->
+    <div class="mb-4 flex gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 self-center mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Normal</button>
+      <button onclick="showDemoState('validation')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Validation Errors</button>
+      <button onclick="showDemoState('loading')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Loading</button>
+      <button onclick="showDemoState('incremental')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">增量模式</button>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav class="mb-5 text-sm">
+      <ol class="flex items-center gap-1.5 text-gray-500">
+        <li><a href="12-extraction-management.html" class="hover:text-primary transition">資料擷取</a></li>
+        <li class="text-gray-400">/</li>
+        <li class="text-gray-800 font-medium">新增擷取任務</li>
+      </ol>
+    </nav>
+
+    <!-- Form Card -->
+    <div class="max-w-2xl mx-auto">
+      <div class="bg-white rounded-xl border border-border p-6">
+        <form id="addForm" onsubmit="handleSubmit(event)" novalidate>
+
+          <!-- 任務名稱 -->
+          <div class="mb-5">
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-1.5">任務名稱 <span class="text-danger">*</span></label>
+            <input type="text" id="name" name="name" maxlength="255" required placeholder="例如：每日客戶同步"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validateField(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="name-error">此欄位為必填</p>
+          </div>
+
+          <!-- 資料來源 -->
+          <div class="mb-5">
+            <label for="datasource" class="block text-sm font-medium text-gray-700 mb-1.5">資料來源 <span class="text-danger">*</span></label>
+            <select id="datasource" name="datasource" required
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+              onblur="validateField(this)">
+              <option value="">請選擇</option>
+              <option value="a1b2c3d4-e5f6-7890-abcd-ef1234567890">MySQL 主資料庫 (MySQL)</option>
+              <option value="b2c3d4e5-f6a7-8901-bcde-f12345678901">PostgreSQL 分析庫 (PostgreSQL)</option>
+              <option value="c3d4e5f6-a7b8-9012-cdef-123456789012">SQL Server 財務庫 (SQL Server)</option>
+            </select>
+            <p class="mt-1 text-xs text-danger hidden" id="datasource-error">此欄位為必填</p>
+          </div>
+
+          <!-- 擷取模式 -->
+          <div class="mb-5">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">擷取模式 <span class="text-danger">*</span></label>
+            <div class="flex gap-3">
+              <label class="flex-1 cursor-pointer">
+                <input type="radio" name="mode" value="full" checked class="hidden peer">
+                <div class="border border-border rounded-lg p-3 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                  <div class="text-sm font-medium text-gray-800">全量</div>
+                  <div class="text-xs text-gray-500 mt-0.5">擷取整個資料表的所有記錄</div>
+                </div>
+              </label>
+              <label class="flex-1 cursor-pointer">
+                <input type="radio" name="mode" value="incremental" class="hidden peer">
+                <div class="border border-border rounded-lg p-3 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                  <div class="text-sm font-medium text-gray-800">增量</div>
+                  <div class="text-xs text-gray-500 mt-0.5">僅擷取自上次擷取後新增或更新的記錄</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- 目標資料表 -->
+          <div class="mb-5">
+            <label for="targetTable" class="block text-sm font-medium text-gray-700 mb-1.5">目標資料表 <span class="text-danger">*</span></label>
+            <input type="text" id="targetTable" name="targetTable" maxlength="255" required placeholder="例如：customers"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onblur="validateField(this)">
+            <p class="mt-1 text-xs text-danger hidden" id="targetTable-error">此欄位為必填</p>
+          </div>
+
+          <!-- 排程設定 -->
+          <div class="mb-5">
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-sm font-medium text-gray-700">排程設定 <span class="text-danger">*</span></label>
+              <button type="button" onclick="toggleScheduleMode()" id="scheduleModeToggle" class="text-xs text-primary hover:underline">
+                切換至進階模式 (Cron 表達式) →
+              </button>
+            </div>
+
+            <!-- 簡易模式 -->
+            <div id="scheduleSimple">
+              <!-- 頻率選擇 -->
+              <div class="mb-3">
+                <select id="schedFrequency" onchange="onFrequencyChange()"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+                  <option value="">請選擇頻率</option>
+                  <option value="hourly">每小時</option>
+                  <option value="daily">每日</option>
+                  <option value="weekly">每週</option>
+                  <option value="monthly">每月</option>
+                </select>
+              </div>
+
+              <!-- 每小時：間隔選擇 -->
+              <div id="freqHourly" class="hidden mb-3">
+                <label class="block text-xs text-gray-500 mb-1">每隔</label>
+                <div class="flex items-center gap-2">
+                  <select id="hourlyInterval"  onchange="buildCronFromSimple()"
+                    class="w-24 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="6">6</option>
+                    <option value="8">8</option>
+                    <option value="12">12</option>
+                  </select>
+                  <span class="text-sm text-gray-600">小時執行一次</span>
+                </div>
+              </div>
+
+              <!-- 每日/每週/每月共用：時間選擇 -->
+              <div id="freqTime" class="hidden mb-3">
+                <label class="block text-xs text-gray-500 mb-1">執行時間</label>
+                <div class="flex items-center gap-1">
+                  <select id="schedHour" onchange="buildCronFromSimple()"
+                    class="w-20 px-2 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white text-center">
+                  </select>
+                  <span class="text-sm text-gray-500 font-medium">:</span>
+                  <select id="schedMinute" onchange="buildCronFromSimple()"
+                    class="w-20 px-2 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white text-center">
+                  </select>
+                </div>
+              </div>
+
+              <!-- 每週：星期選擇 -->
+              <div id="freqWeekly" class="hidden mb-3">
+                <label class="block text-xs text-gray-500 mb-1">選擇星期</label>
+                <div class="flex gap-1.5">
+                  <label class="weekday-btn"><input type="checkbox" value="1" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">一</span></label>
+                  <label class="weekday-btn"><input type="checkbox" value="2" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">二</span></label>
+                  <label class="weekday-btn"><input type="checkbox" value="3" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">三</span></label>
+                  <label class="weekday-btn"><input type="checkbox" value="4" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">四</span></label>
+                  <label class="weekday-btn"><input type="checkbox" value="5" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">五</span></label>
+                  <label class="weekday-btn"><input type="checkbox" value="6" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">六</span></label>
+                  <label class="weekday-btn"><input type="checkbox" value="0" class="hidden peer" onchange="buildCronFromSimple()"><span class="inline-block w-9 h-9 leading-9 text-center text-sm rounded-lg border border-border cursor-pointer peer-checked:bg-primary peer-checked:text-white peer-checked:border-primary hover:bg-gray-50 transition">日</span></label>
+                </div>
+              </div>
+
+              <!-- 每月：日期選擇 -->
+              <div id="freqMonthly" class="hidden mb-3">
+                <label class="block text-xs text-gray-500 mb-1">每月第幾日</label>
+                <select id="schedDayOfMonth" onchange="buildCronFromSimple()"
+                  class="w-24 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+                </select>
+              </div>
+            </div>
+
+            <!-- 進階模式 (hidden by default) -->
+            <div id="scheduleAdvanced" class="hidden">
+              <input type="text" id="scheduleCron" placeholder="例如：0 2 * * *"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+                oninput="onAdvancedCronInput()">
+              <p class="mt-1 text-xs text-gray-400">格式：分 時 日 月 星期（5 個欄位，以空格分隔）</p>
+            </div>
+
+            <!-- Hidden actual value -->
+            <input type="hidden" id="schedule" name="schedule" required>
+
+            <!-- Preview -->
+            <div id="cronPreviewBox" class="hidden mt-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
+              <i data-lucide="calendar-clock" class="w-4 h-4 text-primary shrink-0"></i>
+              <span class="text-sm text-primary" id="cronPreview"></span>
+            </div>
+            <p class="mt-1 text-xs text-danger hidden" id="schedule-error">請設定排程</p>
+          </div>
+
+          <!-- 增量欄位 (conditional) -->
+          <div id="incrementalFields" class="hidden overflow-hidden transition-all duration-300" style="max-height: 0;">
+            <div class="mb-5">
+              <label for="incrementalColumn" class="block text-sm font-medium text-gray-700 mb-1.5">增量欄位 <span class="text-danger">*</span></label>
+              <input type="text" id="incrementalColumn" name="incrementalColumn" maxlength="255" placeholder="例如：updated_at"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                onblur="validateField(this)">
+              <p class="mt-1 text-xs text-danger hidden" id="incrementalColumn-error">增量模式必須指定增量欄位</p>
+            </div>
+            <div class="mb-5">
+              <label for="lastIncrementalValue" class="block text-sm font-medium text-gray-700 mb-1.5">增量起始值</label>
+              <input type="text" id="lastIncrementalValue" name="lastIncrementalValue" maxlength="255" placeholder="選填，例如：2026-01-01 00:00:00"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <p class="mt-1 text-xs text-gray-500">選填，首次擷取時的起始條件值</p>
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex justify-end gap-3">
+            <a href="12-extraction-management.html" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition">取消</a>
+            <button type="submit" id="submitBtn" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              <span id="submitText">建立任務</span>
+              <span id="submitLoading" class="hidden items-center gap-2">
+                <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75"></path></svg>
+                處理中...
+              </span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    lucide.createIcons();
+
+    // ======================== Init Schedule Selects ========================
+    (function initScheduleSelects() {
+      const hourSel = document.getElementById('schedHour');
+      const minSel = document.getElementById('schedMinute');
+      const domSel = document.getElementById('schedDayOfMonth');
+      for (let h = 0; h < 24; h++) {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = String(h).padStart(2, '0');
+        if (h === 2) opt.selected = true;
+        hourSel.appendChild(opt);
+      }
+      for (let m = 0; m < 60; m += 5) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = String(m).padStart(2, '0');
+        if (m === 0) opt.selected = true;
+        minSel.appendChild(opt);
+      }
+      for (let d = 1; d <= 28; d++) {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = `${d} 日`;
+        domSel.appendChild(opt);
+      }
+    })();
+
+    // ======================== Schedule Mode Toggle ========================
+    let isAdvancedMode = false;
+
+    function toggleScheduleMode() {
+      isAdvancedMode = !isAdvancedMode;
+      const toggleBtn = document.getElementById('scheduleModeToggle');
+      const simplePanel = document.getElementById('scheduleSimple');
+      const advancedPanel = document.getElementById('scheduleAdvanced');
+
+      if (isAdvancedMode) {
+        simplePanel.classList.add('hidden');
+        advancedPanel.classList.remove('hidden');
+        toggleBtn.textContent = '← 切換至簡易模式';
+        // Sync current cron value to advanced input
+        document.getElementById('scheduleCron').value = document.getElementById('schedule').value;
+      } else {
+        simplePanel.classList.remove('hidden');
+        advancedPanel.classList.add('hidden');
+        toggleBtn.textContent = '切換至進階模式 (Cron 表達式) →';
+        // Try to parse the cron back to simple mode
+        parseCronToSimple(document.getElementById('schedule').value);
+      }
+    }
+
+    // ======================== Frequency Change ========================
+    function onFrequencyChange() {
+      const freq = document.getElementById('schedFrequency').value;
+      document.getElementById('freqHourly').classList.add('hidden');
+      document.getElementById('freqTime').classList.add('hidden');
+      document.getElementById('freqWeekly').classList.add('hidden');
+      document.getElementById('freqMonthly').classList.add('hidden');
+
+      if (freq === 'hourly') {
+        document.getElementById('freqHourly').classList.remove('hidden');
+      } else if (freq === 'daily') {
+        document.getElementById('freqTime').classList.remove('hidden');
+      } else if (freq === 'weekly') {
+        document.getElementById('freqTime').classList.remove('hidden');
+        document.getElementById('freqWeekly').classList.remove('hidden');
+      } else if (freq === 'monthly') {
+        document.getElementById('freqTime').classList.remove('hidden');
+        document.getElementById('freqMonthly').classList.remove('hidden');
+      }
+      buildCronFromSimple();
+    }
+
+    // ======================== Build Cron from Simple ========================
+    function buildCronFromSimple() {
+      const freq = document.getElementById('schedFrequency').value;
+      if (!freq) {
+        setScheduleValue('');
+        return;
+      }
+
+      const hour = document.getElementById('schedHour').value;
+      const minute = document.getElementById('schedMinute').value;
+      let cron = '';
+
+      switch (freq) {
+        case 'hourly': {
+          const interval = document.getElementById('hourlyInterval').value;
+          cron = interval === '1' ? '0 * * * *' : `0 */${interval} * * *`;
+          break;
+        }
+        case 'daily':
+          cron = `${minute} ${hour} * * *`;
+          break;
+        case 'weekly': {
+          const days = [...document.querySelectorAll('#freqWeekly input:checked')].map(cb => cb.value);
+          if (days.length === 0) { setScheduleValue(''); return; }
+          cron = `${minute} ${hour} * * ${days.join(',')}`;
+          break;
+        }
+        case 'monthly': {
+          const dom = document.getElementById('schedDayOfMonth').value;
+          cron = `${minute} ${hour} ${dom} * *`;
+          break;
+        }
+      }
+      setScheduleValue(cron);
+    }
+
+    // ======================== Advanced Cron Input ========================
+    function onAdvancedCronInput() {
+      const val = document.getElementById('scheduleCron').value.trim();
+      setScheduleValue(val);
+    }
+
+    // ======================== Set Schedule Value + Preview ========================
+    function setScheduleValue(cron) {
+      document.getElementById('schedule').value = cron;
+      const previewBox = document.getElementById('cronPreviewBox');
+      const previewText = document.getElementById('cronPreview');
+      const errorEl = document.getElementById('schedule-error');
+
+      if (!cron) {
+        previewBox.classList.add('hidden');
+        previewText.textContent = '';
+        return;
+      }
+
+      const readable = cronToReadable(cron);
+      if (readable) {
+        previewText.textContent = readable + ' (UTC+8)';
+        previewBox.classList.remove('hidden');
+        errorEl.classList.add('hidden');
+        lucide.createIcons();
+      } else {
+        previewBox.classList.add('hidden');
+      }
+    }
+
+    // ======================== Cron to Human-Readable ========================
+    function cronToReadable(expr) {
+      const parts = expr.trim().split(/\s+/);
+      if (parts.length !== 5) return null;
+      const [min, hour, dom, mon, dow] = parts;
+      const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+
+      // Every N hours
+      if (min === '0' && /^\*\/\d+$/.test(hour) && dom === '*' && mon === '*' && dow === '*') {
+        return `每 ${hour.split('/')[1]} 小時執行`;
+      }
+      if (min === '0' && hour === '*' && dom === '*' && mon === '*' && dow === '*') {
+        return '每小時執行';
+      }
+      // Daily
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && mon === '*' && dow === '*') {
+        return `每日 ${hour.padStart(2, '0')}:${min.padStart(2, '0')} 執行`;
+      }
+      // Weekly
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && mon === '*' && dow !== '*') {
+        const dowParts = dow.split(',');
+        if (dow === '1-5') {
+          return `週一至週五 ${hour.padStart(2, '0')}:${min.padStart(2, '0')} 執行`;
+        }
+        if (dow === '0,6' || dow === '6,0') {
+          return `週六、日 ${hour.padStart(2, '0')}:${min.padStart(2, '0')} 執行`;
+        }
+        const dayLabels = dowParts.map(d => {
+          const ranges = d.split('-');
+          if (ranges.length === 2) {
+            return `${dayNames[ranges[0]]}至${dayNames[ranges[1]]}`;
+          }
+          return `週${dayNames[parseInt(d)]}`;
+        });
+        return `${dayLabels.join('、')} ${hour.padStart(2, '0')}:${min.padStart(2, '0')} 執行`;
+      }
+      // Monthly
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom) && mon === '*' && dow === '*') {
+        return `每月 ${dom} 日 ${hour.padStart(2, '0')}:${min.padStart(2, '0')} 執行`;
+      }
+      return `自定義排程: ${expr}`;
+    }
+
+    // ======================== Parse Cron back to Simple Mode ========================
+    function parseCronToSimple(cron) {
+      if (!cron) return;
+      const parts = cron.trim().split(/\s+/);
+      if (parts.length !== 5) return;
+      const [min, hour, dom, mon, dow] = parts;
+
+      // Reset weekday checkboxes
+      document.querySelectorAll('#freqWeekly input').forEach(cb => cb.checked = false);
+
+      // Hourly
+      if ((min === '0') && (hour === '*' || /^\*\/\d+$/.test(hour)) && dom === '*' && mon === '*' && dow === '*') {
+        document.getElementById('schedFrequency').value = 'hourly';
+        if (/^\*\/\d+$/.test(hour)) {
+          document.getElementById('hourlyInterval').value = hour.split('/')[1];
+        } else {
+          document.getElementById('hourlyInterval').value = '1';
+        }
+        onFrequencyChange();
+        return;
+      }
+      // Daily
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && mon === '*' && dow === '*') {
+        document.getElementById('schedFrequency').value = 'daily';
+        document.getElementById('schedHour').value = parseInt(hour);
+        setClosestMinute(parseInt(min));
+        onFrequencyChange();
+        return;
+      }
+      // Weekly
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && mon === '*' && dow !== '*') {
+        document.getElementById('schedFrequency').value = 'weekly';
+        document.getElementById('schedHour').value = parseInt(hour);
+        setClosestMinute(parseInt(min));
+        // Parse dow
+        const dowVals = expandDow(dow);
+        dowVals.forEach(d => {
+          const cb = document.querySelector(`#freqWeekly input[value="${d}"]`);
+          if (cb) cb.checked = true;
+        });
+        onFrequencyChange();
+        return;
+      }
+      // Monthly
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom) && mon === '*' && dow === '*') {
+        document.getElementById('schedFrequency').value = 'monthly';
+        document.getElementById('schedHour').value = parseInt(hour);
+        setClosestMinute(parseInt(min));
+        document.getElementById('schedDayOfMonth').value = parseInt(dom);
+        onFrequencyChange();
+        return;
+      }
+    }
+
+    function setClosestMinute(min) {
+      // Find closest 5-min increment
+      const rounded = Math.round(min / 5) * 5;
+      document.getElementById('schedMinute').value = rounded >= 60 ? 55 : rounded;
+    }
+
+    function expandDow(dow) {
+      const result = [];
+      dow.split(',').forEach(part => {
+        if (part.includes('-')) {
+          const [start, end] = part.split('-').map(Number);
+          for (let i = start; i <= end; i++) result.push(i);
+        } else {
+          result.push(parseInt(part));
+        }
+      });
+      return result;
+    }
+
+    // ======================== Mode switching (全量/增量) ========================
+    document.querySelectorAll('input[name="mode"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        const container = document.getElementById('incrementalFields');
+        if (this.value === 'incremental') {
+          container.classList.remove('hidden');
+          requestAnimationFrame(() => {
+            container.style.maxHeight = container.scrollHeight + 'px';
+          });
+        } else {
+          container.style.maxHeight = '0';
+          setTimeout(() => container.classList.add('hidden'), 300);
+        }
+      });
+    });
+
+    // ======================== Validation ========================
+    function validateField(el) {
+      const errorEl = document.getElementById(el.name + '-error');
+      if (!errorEl) return true;
+      if (el.required && !el.value.trim()) {
+        el.classList.add('border-danger');
+        el.classList.remove('border-border');
+        errorEl.classList.remove('hidden');
+        return false;
+      } else {
+        el.classList.remove('border-danger');
+        el.classList.add('border-border');
+        errorEl.classList.add('hidden');
+        return true;
+      }
+    }
+
+    function validateSchedule() {
+      const val = document.getElementById('schedule').value.trim();
+      const errorEl = document.getElementById('schedule-error');
+      const parts = val.split(/\s+/);
+      if (!val || parts.length !== 5) {
+        errorEl.classList.remove('hidden');
+        return false;
+      }
+      errorEl.classList.add('hidden');
+      return true;
+    }
+
+    function isIncrementalMode() {
+      return document.querySelector('input[name="mode"]:checked').value === 'incremental';
+    }
+
+    function handleSubmit(e) {
+      e.preventDefault();
+      let valid = true;
+
+      ['name', 'datasource', 'targetTable'].forEach(f => {
+        const el = document.getElementById(f);
+        if (!validateField(el)) valid = false;
+      });
+      if (!validateSchedule()) valid = false;
+
+      if (isIncrementalMode()) {
+        const col = document.getElementById('incrementalColumn');
+        col.required = true;
+        if (!validateField(col)) valid = false;
+      }
+
+      if (!valid) return;
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      document.getElementById('submitText').classList.add('hidden');
+      document.getElementById('submitLoading').classList.remove('hidden');
+      document.getElementById('submitLoading').classList.add('inline-flex');
+
+      setTimeout(() => {
+        btn.disabled = false;
+        document.getElementById('submitText').classList.remove('hidden');
+        document.getElementById('submitLoading').classList.add('hidden');
+        document.getElementById('submitLoading').classList.remove('inline-flex');
+        showToast('擷取任務已建立', 'success');
+      }, 1500);
+    }
+
+    // ======================== Toast ========================
+    function showToast(message, type) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+      const iconName = type === 'success' ? 'check-circle' : 'x-circle';
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm min-w-[300px]`;
+      toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      lucide.createIcons({ nodes: [toast] });
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    // ======================== Demo States ========================
+    function resetScheduleUI() {
+      // Reset to simple mode
+      if (isAdvancedMode) toggleScheduleMode();
+      document.getElementById('schedFrequency').value = '';
+      document.getElementById('freqHourly').classList.add('hidden');
+      document.getElementById('freqTime').classList.add('hidden');
+      document.getElementById('freqWeekly').classList.add('hidden');
+      document.getElementById('freqMonthly').classList.add('hidden');
+      document.querySelectorAll('#freqWeekly input').forEach(cb => cb.checked = false);
+      document.getElementById('schedule').value = '';
+      document.getElementById('cronPreviewBox').classList.add('hidden');
+      document.getElementById('cronPreview').textContent = '';
+      document.getElementById('scheduleCron').value = '';
+    }
+
+    function showDemoState(state) {
+      // Reset all field errors
+      const fieldIds = ['name', 'datasource', 'targetTable', 'incrementalColumn'];
+      fieldIds.forEach(f => {
+        const el = document.getElementById(f);
+        if (el) { el.classList.remove('border-danger'); el.classList.add('border-border'); }
+        const err = document.getElementById(f + '-error');
+        if (err) err.classList.add('hidden');
+      });
+      document.getElementById('schedule-error').classList.add('hidden');
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = false;
+      document.getElementById('submitText').classList.remove('hidden');
+      document.getElementById('submitLoading').classList.add('hidden');
+      document.getElementById('submitLoading').classList.remove('inline-flex');
+
+      switch (state) {
+        case 'normal':
+          document.getElementById('addForm').reset();
+          const incContainer = document.getElementById('incrementalFields');
+          incContainer.style.maxHeight = '0';
+          incContainer.classList.add('hidden');
+          resetScheduleUI();
+          break;
+
+        case 'validation':
+          document.getElementById('addForm').reset();
+          document.getElementById('incrementalFields').style.maxHeight = '0';
+          document.getElementById('incrementalFields').classList.add('hidden');
+          resetScheduleUI();
+          ['name', 'datasource', 'targetTable'].forEach(f => {
+            const el = document.getElementById(f);
+            if (el) { el.classList.add('border-danger'); el.classList.remove('border-border'); }
+            const err = document.getElementById(f + '-error');
+            if (err) err.classList.remove('hidden');
+          });
+          document.getElementById('schedule-error').classList.remove('hidden');
+          break;
+
+        case 'loading':
+          btn.disabled = true;
+          document.getElementById('submitText').classList.add('hidden');
+          document.getElementById('submitLoading').classList.remove('hidden');
+          document.getElementById('submitLoading').classList.add('inline-flex');
+          break;
+
+        case 'incremental':
+          document.getElementById('name').value = '每日客戶同步';
+          document.getElementById('datasource').value = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+          document.getElementById('targetTable').value = 'customers';
+
+          // Set schedule via simple mode
+          if (isAdvancedMode) toggleScheduleMode();
+          document.getElementById('schedFrequency').value = 'daily';
+          document.getElementById('schedHour').value = 2;
+          document.getElementById('schedMinute').value = 0;
+          onFrequencyChange();
+          buildCronFromSimple();
+
+          // Switch to incremental mode
+          document.querySelector('input[name="mode"][value="incremental"]').checked = true;
+          const container = document.getElementById('incrementalFields');
+          container.classList.remove('hidden');
+          requestAnimationFrame(() => { container.style.maxHeight = container.scrollHeight + 'px'; });
+          document.getElementById('incrementalColumn').value = 'updated_at';
+          document.getElementById('lastIncrementalValue').value = '2026-01-01 00:00:00';
+          break;
+      }
+    }
+  </script>
+</body>
+</html>

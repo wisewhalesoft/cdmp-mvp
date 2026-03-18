@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資料擷取管理 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    .chart-container { position: relative; }
+    @keyframes spin-dot { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+    .animate-spin-dot { animation: spin-dot 1.2s ease-in-out infinite; }
+    .log-drawer-enter { transform: translateX(100%); }
+    .log-drawer-active { transform: translateX(0); transition: transform 0.3s ease; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">資料擷取管理</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Buttons -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">正常</button>
+      <button onclick="showDemoState('empty')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">空狀態</button>
+      <button onclick="showDemoState('running')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">執行中</button>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="bg-white border-b border-border px-6">
+      <nav class="flex space-x-1" role="tablist">
+        <button onclick="switchMainTab('dashboard')" id="mainTab-dashboard"
+          class="main-tab-btn px-5 py-3 text-sm font-medium border-b-2 border-primary text-primary"
+          role="tab" aria-selected="true">
+          <span class="flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4"></i>監控儀表板</span>
+        </button>
+        <button onclick="switchMainTab('list')" id="mainTab-list"
+          class="main-tab-btn px-5 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+          role="tab" aria-selected="false">
+          <span class="flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i>任務清單</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: 監控儀表板 (F024) -->
+    <!-- ============================================================ -->
+    <div id="panel-dashboard" class="main-tab-panel p-6 space-y-6">
+
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-5 gap-4" id="dashboardCards">
+        <!-- 總任務數 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-gray-500 mb-2">
+            <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+            <span class="text-sm">總任務數</span>
+          </div>
+          <p class="text-3xl font-bold" id="card-total">12</p>
+        </div>
+        <!-- 執行中 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-blue-500 mb-2">
+            <i data-lucide="loader" class="w-5 h-5"></i>
+            <span class="text-sm">執行中</span>
+            <span class="w-2 h-2 rounded-full bg-blue-500 animate-spin-dot" id="runningDot"></span>
+          </div>
+          <p class="text-3xl font-bold text-blue-500" id="card-running">2</p>
+        </div>
+        <!-- 今日成功 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-success mb-2">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+            <span class="text-sm">今日成功</span>
+          </div>
+          <p class="text-3xl font-bold text-success" id="card-success">8</p>
+        </div>
+        <!-- 今日失敗 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-danger mb-2">
+            <i data-lucide="x-circle" class="w-5 h-5"></i>
+            <span class="text-sm">今日失敗</span>
+          </div>
+          <p class="text-3xl font-bold text-danger" id="card-failed">1</p>
+        </div>
+        <!-- 成功率 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-gray-500 mb-2">
+            <i data-lucide="percent" class="w-5 h-5"></i>
+            <span class="text-sm">成功率</span>
+          </div>
+          <p class="text-3xl font-bold" id="card-rate">88.9%</p>
+        </div>
+      </div>
+
+      <!-- Two-column: Trend Chart + Running Tasks -->
+      <div class="grid grid-cols-2 gap-6">
+        <!-- 執行趨勢 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold">執行趨勢</h3>
+            <div class="flex border border-border rounded-lg overflow-hidden" id="trend-range-group">
+              <button onclick="switchTrendRange('7d')" class="px-3 py-1.5 text-xs font-medium bg-primary text-white" data-range="7d">7d</button>
+              <button onclick="switchTrendRange('14d')" class="px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border-l border-border hover:bg-gray-50" data-range="14d">14d</button>
+              <button onclick="switchTrendRange('30d')" class="px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border-l border-border hover:bg-gray-50" data-range="30d">30d</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="trendChart" height="220"></canvas>
+          </div>
+        </div>
+
+        <!-- 執行中任務 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-6">
+          <h3 class="text-base font-semibold mb-4">執行中任務</h3>
+          <div id="runningTasksContainer" class="space-y-4">
+            <!-- Running Task 1 -->
+            <div class="border border-border rounded-lg p-4 running-task-item">
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <span class="font-medium text-sm text-gray-800">每日客戶同步</span>
+                  <span class="text-xs text-gray-400 ml-2">MySQL 主資料庫</span>
+                </div>
+                <span class="text-sm font-medium text-blue-600" id="progress1-text">65%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: 65%" id="progress1-bar"></div>
+              </div>
+              <p class="text-xs text-gray-400">2,340 / 3,600 筆</p>
+            </div>
+            <!-- Running Task 2 -->
+            <div class="border border-border rounded-lg p-4 running-task-item">
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <span class="font-medium text-sm text-gray-800">商品資料更新</span>
+                  <span class="text-xs text-gray-400 ml-2">PostgreSQL 分析庫</span>
+                </div>
+                <span class="text-sm font-medium text-blue-600" id="progress2-text">30%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: 30%" id="progress2-bar"></div>
+              </div>
+              <p class="text-xs text-gray-400">450 / 1,500 筆</p>
+            </div>
+          </div>
+          <div id="runningTasksEmpty" class="hidden text-center py-10 text-gray-400">
+            <i data-lucide="check-circle" class="w-8 h-8 mx-auto mb-2 text-gray-300"></i>
+            <p class="text-sm">目前無執行中任務</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-column: Failed List + Slowest Top 5 -->
+      <div class="grid grid-cols-2 gap-6">
+        <!-- 今日失敗清單 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-6">
+          <h3 class="text-base font-semibold mb-4">今日失敗清單</h3>
+          <div id="failedListContainer">
+            <div class="border border-red-200 rounded-lg p-4 bg-red-50/30">
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-medium text-sm text-gray-800">發票資料擷取</span>
+                <span class="text-xs text-gray-400">14:23:15</span>
+              </div>
+              <p class="text-xs text-red-600 mb-3">連線逾時：無法連至資料來源</p>
+              <div class="flex items-center gap-2">
+                <button onclick="openLogDrawer('發票資料擷取')" class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-border rounded-lg hover:bg-gray-50">查看日誌</button>
+                <button class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-lg hover:bg-blue-700">重新執行</button>
+              </div>
+            </div>
+          </div>
+          <div id="failedListEmpty" class="hidden text-center py-10 text-gray-400">
+            <i data-lucide="check-circle" class="w-8 h-8 mx-auto mb-2 text-gray-300"></i>
+            <p class="text-sm">今日無失敗紀錄</p>
+          </div>
+        </div>
+
+        <!-- 最慢任務 Top 5 -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-6">
+          <h3 class="text-base font-semibold mb-4">最慢任務 Top 5</h3>
+          <div id="slowestContainer">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border">
+                  <th class="text-left py-2 font-medium text-gray-500">排名</th>
+                  <th class="text-left py-2 font-medium text-gray-500">任務名稱</th>
+                  <th class="text-left py-2 font-medium text-gray-500">平均執行時間</th>
+                  <th class="text-left py-2 font-medium text-gray-500">累計執行次數</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">1</td>
+                  <td class="py-2.5 font-medium text-gray-800">訂單歷史匯入</td>
+                  <td class="py-2.5 text-gray-600">2m 45s</td>
+                  <td class="py-2.5 text-gray-600">156</td>
+                </tr>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">2</td>
+                  <td class="py-2.5 font-medium text-gray-800">每日客戶同步</td>
+                  <td class="py-2.5 text-gray-600">2m 30s</td>
+                  <td class="py-2.5 text-gray-600">203</td>
+                </tr>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">3</td>
+                  <td class="py-2.5 font-medium text-gray-800">庫存盤點匯入</td>
+                  <td class="py-2.5 text-gray-600">1m 50s</td>
+                  <td class="py-2.5 text-gray-600">98</td>
+                </tr>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">4</td>
+                  <td class="py-2.5 font-medium text-gray-800">客服紀錄擷取</td>
+                  <td class="py-2.5 text-gray-600">1m 30s</td>
+                  <td class="py-2.5 text-gray-600">72</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 text-gray-400">5</td>
+                  <td class="py-2.5 font-medium text-gray-800">商品資料更新</td>
+                  <td class="py-2.5 text-gray-600">1m 15s</td>
+                  <td class="py-2.5 text-gray-600">184</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="slowestEmpty" class="hidden text-center py-10 text-gray-400">
+            <p class="text-sm">尚無執行紀錄</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: 任務清單 (F018) -->
+    <!-- ============================================================ -->
+    <div id="panel-list" class="main-tab-panel hidden p-6 space-y-6">
+
+      <!-- Summary Cards (same structure) -->
+      <div class="grid grid-cols-5 gap-4">
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-gray-500 mb-2">
+            <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+            <span class="text-sm">總任務數</span>
+          </div>
+          <p class="text-3xl font-bold">12</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-blue-500 mb-2">
+            <i data-lucide="loader" class="w-5 h-5"></i>
+            <span class="text-sm">執行中</span>
+            <span class="w-2 h-2 rounded-full bg-blue-500 animate-spin-dot"></span>
+          </div>
+          <p class="text-3xl font-bold text-blue-500">2</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-success mb-2">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+            <span class="text-sm">今日成功</span>
+          </div>
+          <p class="text-3xl font-bold text-success">8</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-danger mb-2">
+            <i data-lucide="x-circle" class="w-5 h-5"></i>
+            <span class="text-sm">今日失敗</span>
+          </div>
+          <p class="text-3xl font-bold text-danger">1</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+          <div class="flex items-center gap-2 text-gray-500 mb-2">
+            <i data-lucide="percent" class="w-5 h-5"></i>
+            <span class="text-sm">成功率</span>
+          </div>
+          <p class="text-3xl font-bold">88.9%</p>
+        </div>
+      </div>
+
+      <!-- Search + Filters -->
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="relative flex-1 min-w-[200px] max-w-xs">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+          <input type="text" id="searchInput" placeholder="搜尋任務名稱..." class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+        </div>
+        <select id="statusFilter" class="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+          <option value="">全部狀態</option>
+          <option value="running">running</option>
+          <option value="scheduled">scheduled</option>
+          <option value="completed">completed</option>
+          <option value="failed">failed</option>
+          <option value="disabled">disabled</option>
+        </select>
+        <select id="modeFilter" class="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+          <option value="">全部模式</option>
+          <option value="全量">全量</option>
+          <option value="增量">增量</option>
+        </select>
+        <select id="sourceFilter" class="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+          <option value="">全部資料來源</option>
+          <option value="MySQL 主資料庫">MySQL 主資料庫</option>
+          <option value="PostgreSQL 分析庫">PostgreSQL 分析庫</option>
+          <option value="SQL Server 財務庫">SQL Server 財務庫</option>
+        </select>
+        <a href="13-add-extraction-task.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>新增擷取任務
+        </a>
+      </div>
+
+      <!-- Task Table -->
+      <div id="taskTable" class="bg-white rounded-xl border border-border overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-border">
+                <th class="text-left px-4 py-3 font-medium text-gray-600">名稱</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">資料來源</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">模式</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">狀態</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">排程</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">上次執行</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">擷取筆數</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody">
+              <!-- Row 1 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">每日客戶同步</td>
+                <td class="px-4 py-3 text-gray-600">MySQL 主資料庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">全量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-700"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-spin-dot"></span>running</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 2 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-18 02:00</td>
+                <td class="px-4 py-3 text-gray-600">2,340</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 text-gray-300 cursor-not-allowed rounded" title="立即執行（執行中）" disabled><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('每日客戶同步')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('每日客戶同步')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 text-gray-300 cursor-not-allowed rounded" title="刪除（執行中）" disabled><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 2 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">商品資料更新</td>
+                <td class="px-4 py-3 text-gray-600">PostgreSQL 分析庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">增量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-700"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-spin-dot"></span>running</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 3 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-18 03:00</td>
+                <td class="px-4 py-3 text-gray-600">450</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 text-gray-300 cursor-not-allowed rounded" title="立即執行（執行中）" disabled><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('商品資料更新')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('商品資料更新')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 text-gray-300 cursor-not-allowed rounded" title="刪除（執行中）" disabled><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 3 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">訂單歷史匯入</td>
+                <td class="px-4 py-3 text-gray-600">MySQL 主資料庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">全量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>completed</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 1 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-18 01:00</td>
+                <td class="px-4 py-3 text-gray-600">15,230</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="showToast('已觸發執行「訂單歷史匯入」', 'success')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="立即執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('訂單歷史匯入')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('訂單歷史匯入')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button onclick="openDeleteDialog('訂單歷史匯入')" class="p-1.5 text-gray-400 hover:text-danger rounded hover:bg-gray-100" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 4 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">發票資料擷取</td>
+                <td class="px-4 py-3 text-gray-600">SQL Server 財務庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">增量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>failed</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 4 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-18 04:00</td>
+                <td class="px-4 py-3 text-gray-600">0</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="showToast('已觸發執行「發票資料擷取」', 'success')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="立即執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('發票資料擷取')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('發票資料擷取')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button onclick="openDeleteDialog('發票資料擷取')" class="p-1.5 text-gray-400 hover:text-danger rounded hover:bg-gray-100" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 5 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">員工資料同步</td>
+                <td class="px-4 py-3 text-gray-600">PostgreSQL 分析庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">全量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-700">scheduled</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 6 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-17 06:00</td>
+                <td class="px-4 py-3 text-gray-600">580</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="showToast('已觸發執行「員工資料同步」', 'success')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="立即執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('員工資料同步')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('員工資料同步')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button onclick="openDeleteDialog('員工資料同步')" class="p-1.5 text-gray-400 hover:text-danger rounded hover:bg-gray-100" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 6 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">庫存盤點匯入</td>
+                <td class="px-4 py-3 text-gray-600">MySQL 主資料庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">增量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>completed</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 5 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-18 05:00</td>
+                <td class="px-4 py-3 text-gray-600">3,400</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="showToast('已觸發執行「庫存盤點匯入」', 'success')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="立即執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('庫存盤點匯入')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('庫存盤點匯入')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button onclick="openDeleteDialog('庫存盤點匯入')" class="p-1.5 text-gray-400 hover:text-danger rounded hover:bg-gray-100" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 7 -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">客服紀錄擷取</td>
+                <td class="px-4 py-3 text-gray-600">PostgreSQL 分析庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">全量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-400">disabled</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">0 8 * * *</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-15 08:00</td>
+                <td class="px-4 py-3 text-gray-600">1,200</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="showToast('已觸發執行「客服紀錄擷取」', 'success')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="立即執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('客服紀錄擷取')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="showToast('擷取任務已啟用', 'success')" class="p-1.5 text-gray-400 hover:text-success rounded hover:bg-gray-100" title="啟用"><i data-lucide="toggle-left" class="w-4 h-4"></i></button>
+                    <button onclick="openDeleteDialog('客服紀錄擷取')" class="p-1.5 text-gray-400 hover:text-danger rounded hover:bg-gray-100" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 8 -->
+              <tr class="hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-800">供應商資料同步</td>
+                <td class="px-4 py-3 text-gray-600">SQL Server 財務庫</td>
+                <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-700">增量</span></td>
+                <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-700">scheduled</span></td>
+                <td class="px-4 py-3 text-gray-500 font-mono text-xs">30 7 * * 1-5</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-17 07:30</td>
+                <td class="px-4 py-3 text-gray-600">890</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <a href="14-edit-extraction-task.html" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="showToast('已觸發執行「供應商資料同步」', 'success')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="立即執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="openLogDrawer('供應商資料同步')" class="p-1.5 text-gray-400 hover:text-primary rounded hover:bg-gray-100" title="查看日誌"><i data-lucide="file-text" class="w-4 h-4"></i></button>
+                    <button onclick="openDisableDialog('供應商資料同步')" class="p-1.5 text-gray-400 hover:text-warning rounded hover:bg-gray-100" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <button onclick="openDeleteDialog('供應商資料同步')" class="p-1.5 text-gray-400 hover:text-danger rounded hover:bg-gray-100" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="px-4 py-3 border-t border-border flex items-center justify-between text-sm text-gray-500">
+          <span>顯示 1 - 8 筆，共 8 筆</span>
+          <div class="flex items-center gap-2">
+            <span>第 1 頁，共 1 頁</span>
+            <button class="px-2 py-1 border border-border rounded hover:bg-gray-50 disabled:opacity-40" disabled><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <button class="px-2 py-1 border border-border rounded hover:bg-gray-50 disabled:opacity-40" disabled><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden">
+        <div class="bg-white rounded-xl border border-border p-16 text-center">
+          <i data-lucide="clipboard-list" class="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+          <h3 class="text-lg font-medium text-gray-700 mb-2">尚未建立任何擷取任務</h3>
+          <p class="text-sm text-gray-500 mb-6">建立您的第一個擷取任務以開始擷取資料</p>
+          <a href="13-add-extraction-task.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>建立第一個擷取任務
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- F020 Disable Confirmation Dialog -->
+  <!-- ============================================================ -->
+  <div id="disableDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+      <div class="flex justify-center mb-4">
+        <div class="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i>
+        </div>
+      </div>
+      <h3 class="text-lg font-semibold text-gray-800 text-center mb-2">確認停用擷取任務</h3>
+      <p class="text-sm text-gray-600 text-center mb-6">確定要停用擷取任務「<span id="disableTaskName" class="font-medium">每日客戶同步</span>」嗎？停用後排程將不再自動觸發此任務。</p>
+      <div class="flex justify-end gap-3">
+        <button onclick="closeDisableDialog()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+        <button onclick="confirmDisable()" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-lg hover:bg-red-600 transition">確認停用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- F025 Delete Confirmation Dialog -->
+  <!-- ============================================================ -->
+  <div id="deleteDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+      <div class="flex justify-center mb-4">
+        <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-danger"></i>
+        </div>
+      </div>
+      <h3 class="text-lg font-semibold text-gray-800 text-center mb-2">確認刪除擷取任務</h3>
+      <p class="text-sm text-gray-600 text-center mb-6">確定要刪除擷取任務「<span id="deleteTaskName" class="font-medium">每日客戶同步</span>」嗎？刪除後此任務將停止排程執行，但歷史日誌將保留。</p>
+      <div class="flex justify-end gap-3">
+        <button onclick="closeDeleteDialog()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+        <button onclick="confirmDelete()" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-lg hover:bg-red-600 transition">確認刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- F022 Log Drawer -->
+  <!-- ============================================================ -->
+  <div id="logDrawerBackdrop" class="fixed inset-0 bg-black/30 z-40 hidden" onclick="closeLogDrawer()"></div>
+  <div id="logDrawer" class="fixed top-0 right-0 h-full w-[480px] bg-white shadow-xl z-50 log-drawer-enter flex flex-col" style="display:none;">
+    <!-- Drawer Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+      <h3 class="text-base font-semibold text-gray-800">擷取日誌 — <span id="logTaskName">每日客戶同步</span></h3>
+      <button onclick="closeLogDrawer()" class="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <!-- Drawer Body -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-3" id="logDrawerBody">
+      <!-- Log Entry 1 -->
+      <div class="border border-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>completed</span>
+          <span class="text-xs text-gray-400">排程</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+          <div><span class="text-gray-400">開始時間：</span>2026-03-18 02:00:00</div>
+          <div><span class="text-gray-400">結束時間：</span>2026-03-18 02:02:45</div>
+          <div><span class="text-gray-400">執行時間：</span>2m 45s</div>
+          <div><span class="text-gray-400">擷取筆數：</span>3,600 筆</div>
+        </div>
+      </div>
+      <!-- Log Entry 2 -->
+      <div class="border border-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>completed</span>
+          <span class="text-xs text-gray-400">排程</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+          <div><span class="text-gray-400">開始時間：</span>2026-03-17 02:00:00</div>
+          <div><span class="text-gray-400">結束時間：</span>2026-03-17 02:03:12</div>
+          <div><span class="text-gray-400">執行時間：</span>3m 12s</div>
+          <div><span class="text-gray-400">擷取筆數：</span>3,580 筆</div>
+        </div>
+      </div>
+      <!-- Log Entry 3 (failed) -->
+      <div class="border border-red-200 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>failed</span>
+          <span class="text-xs text-gray-400">排程</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+          <div><span class="text-gray-400">開始時間：</span>2026-03-16 02:00:00</div>
+          <div><span class="text-gray-400">結束時間：</span>2026-03-16 02:01:30</div>
+          <div><span class="text-gray-400">執行時間：</span>1m 30s</div>
+          <div><span class="text-gray-400">擷取筆數：</span>1,200 筆</div>
+        </div>
+        <div class="mt-2 p-2 bg-red-50 rounded text-xs text-red-600">連線逾時：目標主機未回應</div>
+      </div>
+      <!-- Log Entry 4 -->
+      <div class="border border-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>completed</span>
+          <span class="text-xs text-gray-400">手動</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+          <div><span class="text-gray-400">開始時間：</span>2026-03-15 02:00:00</div>
+          <div><span class="text-gray-400">結束時間：</span>2026-03-15 02:02:10</div>
+          <div><span class="text-gray-400">執行時間：</span>2m 10s</div>
+          <div><span class="text-gray-400">擷取筆數：</span>3,550 筆</div>
+        </div>
+      </div>
+      <!-- Log Entry 5 -->
+      <div class="border border-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>completed</span>
+          <span class="text-xs text-gray-400">排程</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+          <div><span class="text-gray-400">開始時間：</span>2026-03-14 02:00:00</div>
+          <div><span class="text-gray-400">結束時間：</span>2026-03-14 02:02:55</div>
+          <div><span class="text-gray-400">執行時間：</span>2m 55s</div>
+          <div><span class="text-gray-400">擷取筆數：</span>3,520 筆</div>
+        </div>
+      </div>
+    </div>
+    <!-- Drawer Empty State (hidden) -->
+    <div id="logDrawerEmpty" class="hidden flex-1 flex items-center justify-center text-gray-400">
+      <div class="text-center">
+        <i data-lucide="file-text" class="w-10 h-10 mx-auto mb-2 text-gray-300"></i>
+        <p class="text-sm">此任務尚無執行紀錄</p>
+      </div>
+    </div>
+    <!-- Drawer Footer -->
+    <div class="px-6 py-3 border-t border-border text-sm text-gray-500 flex items-center justify-between shrink-0">
+      <span>顯示 1-5 筆，共 12 筆</span>
+      <div class="flex items-center gap-2">
+        <button class="px-2 py-1 border border-border rounded hover:bg-gray-50 disabled:opacity-40" disabled><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+        <span class="text-xs">1 / 3</span>
+        <button class="px-2 py-1 border border-border rounded hover:bg-gray-50"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-[60] flex flex-col gap-2"></div>
+
+  <script>
+    lucide.createIcons();
+
+    // ======================== Main Tab Switching ========================
+    let trendChart = null;
+    let currentTrendRange = '7d';
+    let progressInterval = null;
+
+    function switchMainTab(tabName) {
+      document.querySelectorAll('.main-tab-panel').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'text-primary');
+        btn.classList.add('border-transparent', 'text-gray-500');
+      });
+      document.getElementById('panel-' + tabName).classList.remove('hidden');
+      const activeBtn = document.getElementById('mainTab-' + tabName);
+      activeBtn.classList.remove('border-transparent', 'text-gray-500');
+      activeBtn.classList.add('border-primary', 'text-primary');
+      lucide.createIcons();
+
+      if (tabName === 'dashboard' && !trendChart) {
+        setTimeout(() => { initTrendChart(); }, 50);
+      }
+    }
+
+    // ======================== Trend Chart ========================
+    function generateTrendData(range) {
+      let count;
+      if (range === '7d') count = 7;
+      else if (range === '14d') count = 14;
+      else count = 30;
+
+      const labels = [];
+      const successData = [];
+      const failData = [];
+      const today = new Date(2026, 2, 18);
+
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+        const s = 6 + Math.floor(Math.random() * 5);
+        const f = Math.random() > 0.7 ? Math.floor(Math.random() * 3) + 1 : 0;
+        successData.push(s);
+        failData.push(f);
+      }
+      return { labels, successData, failData };
+    }
+
+    function initTrendChart() {
+      const canvas = document.getElementById('trendChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const { labels, successData, failData } = generateTrendData('7d');
+      trendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: '成功',
+              data: successData,
+              backgroundColor: '#22C55E',
+              borderRadius: 3,
+            },
+            {
+              label: '失敗',
+              data: failData,
+              backgroundColor: '#EF4444',
+              borderRadius: 3,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
+            y: { stacked: true, beginAtZero: true, grid: { color: '#F3F4F6' }, ticks: { stepSize: 2, font: { size: 10 } }, title: { display: true, text: '次數', font: { size: 11 } } }
+          },
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 12 } }
+            }
+          }
+        }
+      });
+    }
+
+    function switchTrendRange(range) {
+      currentTrendRange = range;
+      document.querySelectorAll('#trend-range-group button').forEach(btn => {
+        if (btn.dataset.range === range) {
+          btn.className = 'px-3 py-1.5 text-xs font-medium bg-primary text-white';
+        } else {
+          btn.className = 'px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border-l border-border hover:bg-gray-50';
+        }
+      });
+      if (!trendChart) return;
+      const { labels, successData, failData } = generateTrendData(range);
+      trendChart.data.labels = labels;
+      trendChart.data.datasets[0].data = successData;
+      trendChart.data.datasets[1].data = failData;
+      trendChart.update();
+    }
+
+    // ======================== Disable Dialog ========================
+    function openDisableDialog(taskName) {
+      document.getElementById('disableTaskName').textContent = taskName;
+      document.getElementById('disableDialog').classList.remove('hidden');
+    }
+
+    function closeDisableDialog() {
+      document.getElementById('disableDialog').classList.add('hidden');
+    }
+
+    function confirmDisable() {
+      closeDisableDialog();
+      showToast('擷取任務已停用', 'success');
+    }
+
+    document.getElementById('disableDialog').addEventListener('click', function(e) {
+      if (e.target === this) closeDisableDialog();
+    });
+
+    // ======================== Delete Dialog ========================
+    function openDeleteDialog(taskName) {
+      document.getElementById('deleteTaskName').textContent = taskName;
+      document.getElementById('deleteDialog').classList.remove('hidden');
+    }
+
+    function closeDeleteDialog() {
+      document.getElementById('deleteDialog').classList.add('hidden');
+    }
+
+    function confirmDelete() {
+      closeDeleteDialog();
+      showToast('擷取任務已刪除', 'success');
+    }
+
+    document.getElementById('deleteDialog').addEventListener('click', function(e) {
+      if (e.target === this) closeDeleteDialog();
+    });
+
+    // ======================== Log Drawer ========================
+    function openLogDrawer(taskName) {
+      document.getElementById('logTaskName').textContent = taskName;
+      const drawer = document.getElementById('logDrawer');
+      const backdrop = document.getElementById('logDrawerBackdrop');
+      backdrop.classList.remove('hidden');
+      drawer.style.display = 'flex';
+      lucide.createIcons();
+      // Trigger animation
+      requestAnimationFrame(() => {
+        drawer.classList.add('log-drawer-active');
+      });
+    }
+
+    function closeLogDrawer() {
+      const drawer = document.getElementById('logDrawer');
+      const backdrop = document.getElementById('logDrawerBackdrop');
+      drawer.classList.remove('log-drawer-active');
+      setTimeout(() => {
+        drawer.style.display = 'none';
+        backdrop.classList.add('hidden');
+      }, 300);
+    }
+
+    // ======================== Toast System ========================
+    function showToast(message, type) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+      const iconName = type === 'success' ? 'check-circle' : 'x-circle';
+
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm min-w-[300px]`;
+      toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+
+      container.appendChild(toast);
+      lucide.createIcons({ nodes: [toast] });
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    // ======================== Demo State Switching ========================
+    function showDemoState(state) {
+      // Clear any running progress animation
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+
+      if (state === 'normal') {
+        // Dashboard: normal state
+        document.getElementById('card-total').textContent = '12';
+        document.getElementById('card-running').textContent = '2';
+        document.getElementById('card-success').textContent = '8';
+        document.getElementById('card-failed').textContent = '1';
+        document.getElementById('card-rate').textContent = '88.9%';
+        document.getElementById('runningDot').classList.add('animate-spin-dot');
+
+        document.getElementById('runningTasksContainer').classList.remove('hidden');
+        document.getElementById('runningTasksEmpty').classList.add('hidden');
+        document.getElementById('failedListContainer').classList.remove('hidden');
+        document.getElementById('failedListEmpty').classList.add('hidden');
+        document.getElementById('slowestContainer').classList.remove('hidden');
+        document.getElementById('slowestEmpty').classList.add('hidden');
+
+        // List: normal state
+        document.getElementById('taskTable').classList.remove('hidden');
+        document.getElementById('emptyState').classList.add('hidden');
+
+        // Reset progress bars
+        document.getElementById('progress1-bar').style.width = '65%';
+        document.getElementById('progress1-text').textContent = '65%';
+        document.getElementById('progress2-bar').style.width = '30%';
+        document.getElementById('progress2-text').textContent = '30%';
+
+      } else if (state === 'empty') {
+        // Dashboard: empty state
+        document.getElementById('card-total').textContent = '0';
+        document.getElementById('card-running').textContent = '0';
+        document.getElementById('card-success').textContent = '0';
+        document.getElementById('card-failed').textContent = '0';
+        document.getElementById('card-rate').textContent = '0%';
+        document.getElementById('runningDot').classList.remove('animate-spin-dot');
+
+        document.getElementById('runningTasksContainer').classList.add('hidden');
+        document.getElementById('runningTasksEmpty').classList.remove('hidden');
+        document.getElementById('failedListContainer').classList.add('hidden');
+        document.getElementById('failedListEmpty').classList.remove('hidden');
+        document.getElementById('slowestContainer').classList.add('hidden');
+        document.getElementById('slowestEmpty').classList.remove('hidden');
+
+        // List: empty state
+        document.getElementById('taskTable').classList.add('hidden');
+        document.getElementById('emptyState').classList.remove('hidden');
+
+        lucide.createIcons();
+
+      } else if (state === 'running') {
+        // Dashboard: emphasize running
+        document.getElementById('card-total').textContent = '12';
+        document.getElementById('card-running').textContent = '4';
+        document.getElementById('card-success').textContent = '6';
+        document.getElementById('card-failed').textContent = '0';
+        document.getElementById('card-rate').textContent = '100%';
+        document.getElementById('runningDot').classList.add('animate-spin-dot');
+
+        document.getElementById('runningTasksContainer').classList.remove('hidden');
+        document.getElementById('runningTasksEmpty').classList.add('hidden');
+        document.getElementById('failedListContainer').classList.add('hidden');
+        document.getElementById('failedListEmpty').classList.remove('hidden');
+        document.getElementById('slowestContainer').classList.remove('hidden');
+        document.getElementById('slowestEmpty').classList.add('hidden');
+
+        // List: normal
+        document.getElementById('taskTable').classList.remove('hidden');
+        document.getElementById('emptyState').classList.add('hidden');
+
+        lucide.createIcons();
+
+        // Animate progress bars
+        let p1 = 65, p2 = 30;
+        progressInterval = setInterval(() => {
+          p1 = Math.min(p1 + Math.random() * 2, 100);
+          p2 = Math.min(p2 + Math.random() * 1.5, 100);
+          document.getElementById('progress1-bar').style.width = p1.toFixed(0) + '%';
+          document.getElementById('progress1-text').textContent = p1.toFixed(0) + '%';
+          document.getElementById('progress2-bar').style.width = p2.toFixed(0) + '%';
+          document.getElementById('progress2-text').textContent = p2.toFixed(0) + '%';
+
+          if (p1 >= 100 && p2 >= 100) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+            showToast('所有執行中任務已完成', 'success');
+          }
+        }, 500);
+      }
+    }
+
+    // ======================== Init ========================
+    // Initialize chart on page load since dashboard is default tab
+    setTimeout(() => { initTrendChart(); }, 100);
+  </script>
+
+</body>
+</html>
