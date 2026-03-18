@@ -1,4 +1,4 @@
-import { Injectable, Inject, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Datasource } from '@/database/entities/datasource.entity';
@@ -9,6 +9,7 @@ import { CreateDatasourceDto } from './dto/create-datasource.dto';
 import { ListDatasourceDto } from './dto/list-datasource.dto';
 import { UpdateDatasourceDto } from './dto/update-datasource.dto';
 import { CONNECTION_TESTER, type IConnectionTester } from './connection-tester.provider';
+import { EXTRACTION_EXECUTOR, type IExtractionExecutor } from '@/modules/extraction-task/extraction-executor.provider';
 
 export interface TestConnectionResult {
   success: boolean;
@@ -85,6 +86,8 @@ export class DatasourceService {
     private readonly healthLogRepository: Repository<DatasourceHealthLog>,
     @Inject(CONNECTION_TESTER)
     private readonly connectionTester: IConnectionTester,
+    @Inject(EXTRACTION_EXECUTOR)
+    private readonly executor: IExtractionExecutor,
   ) {}
 
   async findAll(query: ListDatasourceDto): Promise<DatasourceListResult> {
@@ -312,5 +315,57 @@ export class DatasourceService {
         : (result.errorMessage ?? '連線失敗'),
       responseTime: result.responseTimeMs,
     };
+  }
+
+  async getSchemas(id: string): Promise<{ schemas: string[] }> {
+    // Verify datasource exists and is not soft-deleted
+    const ds = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('ds.id = :id', { id })
+      .andWhere('ds.deleted_at IS NULL')
+      .getOne();
+
+    if (!ds) {
+      throw new NotFoundException({
+        error: ERROR_CODES.DS_NOT_FOUND,
+        message: ERROR_MESSAGES.DS_NOT_FOUND,
+      });
+    }
+
+    try {
+      const schemas = await this.executor.listSchemas({ datasourceId: id });
+      return { schemas };
+    } catch {
+      throw new ServiceUnavailableException({
+        error: ERROR_CODES.DATASOURCE_SCHEMA_LOAD_FAILED,
+        message: ERROR_MESSAGES.DATASOURCE_SCHEMA_LOAD_FAILED,
+      });
+    }
+  }
+
+  async getTables(id: string, schema: string): Promise<{ tables: string[] }> {
+    // Verify datasource exists and is not soft-deleted
+    const ds = await this.datasourceRepository
+      .createQueryBuilder('ds')
+      .where('ds.id = :id', { id })
+      .andWhere('ds.deleted_at IS NULL')
+      .getOne();
+
+    if (!ds) {
+      throw new NotFoundException({
+        error: ERROR_CODES.DS_NOT_FOUND,
+        message: ERROR_MESSAGES.DS_NOT_FOUND,
+      });
+    }
+
+    try {
+      const tables = await this.executor.listTables({ datasourceId: id, schema });
+      return { tables };
+    } catch {
+      throw new ServiceUnavailableException({
+        error: ERROR_CODES.DATASOURCE_TABLE_LOAD_FAILED,
+        message: ERROR_MESSAGES.DATASOURCE_TABLE_LOAD_FAILED,
+      });
+    }
   }
 }

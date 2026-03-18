@@ -40,6 +40,16 @@ export class DatasourceController {
     return this.datasourceService.createDatasource(dto, userId);
   }
 
+  @Get(':id/schemas')
+  async getSchemas(@Param('id') id: string) {
+    return this.datasourceService.getSchemas(id);
+  }
+
+  @Get(':id/schemas/:schema/tables')
+  async getTables(@Param('id') id: string, @Param('schema') schema: string) {
+    return this.datasourceService.getTables(id, schema);
+  }
+
   @Get(':id/metrics')
   async getMetrics(@Param('id') id: string, @Query() query: MetricsQueryDto) {
     return this.dashboardService.getMetrics(id, query.range || '24h');

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -10,6 +10,7 @@ import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.e
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { User } from '@/database/entities/user.entity';
 import { CONNECTION_TESTER, ConnectionTesterProvider } from './connection-tester.provider';
+import { ExtractionTaskModule } from '@/modules/extraction-task/extraction-task.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CONNECTION_TESTER, ConnectionTesterProvider } from './connection-tester
         secret: configService.get<string>('JWT_SECRET', 'default-dev-secret'),
       }),
     }),
+    forwardRef(() => ExtractionTaskModule),
   ],
   controllers: [DatasourceController],
   providers: [

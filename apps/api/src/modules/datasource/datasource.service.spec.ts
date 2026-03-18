@@ -7,6 +7,7 @@ import { Datasource } from '@/database/entities/datasource.entity';
 import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
 import { CryptoUtil } from '@/common/crypto/crypto.util';
 import { CONNECTION_TESTER, type IConnectionTester } from './connection-tester.provider';
+import { EXTRACTION_EXECUTOR } from '@/modules/extraction-task/extraction-executor.provider';
 
 describe('DatasourceService', () => {
   let service: DatasourceService;
@@ -76,6 +77,13 @@ describe('DatasourceService', () => {
         {
           provide: CONNECTION_TESTER,
           useValue: mockConnectionTester,
+        },
+        {
+          provide: EXTRACTION_EXECUTOR,
+          useValue: {
+            listSchemas: vi.fn().mockResolvedValue(['public']),
+            listTables: vi.fn().mockResolvedValue(['example_table']),
+          },
         },
       ],
     }).compile();
