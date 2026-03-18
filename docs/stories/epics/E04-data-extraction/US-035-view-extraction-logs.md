@@ -33,6 +33,11 @@
 - **When** Admin 點擊該筆日誌或展開詳細
 - **Then** 系統顯示完整的錯誤訊息（error_message）
 
+### AC-6：從日誌連結至 raw data 預覽
+- **Given** 日誌列表中有 completed 狀態的日誌，且 extracted_count > 0
+- **When** Admin 點擊該筆日誌的「預覽資料」連結
+- **Then** 系統導覽至該擷取任務的 raw data 預覽頁面（US-039）
+
 ### AC-4：日誌分頁
 - **Given** 某任務有大量執行日誌
 - **When** Admin 瀏覽日誌面板
@@ -97,7 +102,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-034（需有執行紀錄才有日誌）
-- **Blocks**：無
+- **Blocks**：US-039（日誌提供進入 raw data 預覽的入口）
 - 與 US-037 共用日誌資料（儀表板的失敗清單也讀取 ExtractionLog）
 
 ---
@@ -118,4 +123,4 @@
 ## 相關文件
 
 - **Epic Brief**：[E04 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-034、US-037
+- **相關 Stories**：US-034、US-037、US-039

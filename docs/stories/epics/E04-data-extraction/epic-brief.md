@@ -3,13 +3,13 @@
 > **Epic ID**：E04
 > **優先級**：P0（Critical）
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：9
+> **Stories 數量**：10
 
 ## Epic 目標
 
 讓 Admin 能夠在 CDMP 平台內建立、管理與監控資料擷取任務，支援全量與增量兩種擷取模式，透過排程自動執行或手動觸發，並提供監控儀表板即時追蹤擷取任務的執行狀態與效能。
 
-資料擷取是 CDMP 平台將外部資料來源的資料匯入平台的核心機制，銜接 E03 資料來源管理，為後續資料治理功能提供資料基礎。
+資料擷取是 CDMP 平台的**真正資料搬移機制**：系統連線至外部資料來源，讀取 Admin 指定的來源資料表（`source_table`），將 raw data **實際寫入 CDMP AppDB** 中動態建立的對應資料表（命名：`raw_{task_id_short}`）。資料落地後，Admin 可透過 raw data 預覽功能確認擷取結果，為後續資料治理功能提供資料基礎。
 
 ## User Stories
 
@@ -24,6 +24,7 @@
 | US-036 | 排程自動執行 | Must Have | [US-036-scheduled-extraction.md](US-036-scheduled-extraction.md) |
 | US-037 | 擷取監控儀表板 | Should Have | [US-037-extraction-dashboard.md](US-037-extraction-dashboard.md) |
 | US-038 | 刪除擷取任務 | Should Have | [US-038-delete-extraction-task.md](US-038-delete-extraction-task.md) |
+| US-039 | 查看擷取資料預覽 | Must Have | [US-039-preview-raw-data.md](US-039-preview-raw-data.md) |
 
 ## 依賴關係
 
@@ -42,7 +43,7 @@
 | datasource_id | UUID (FK) | 關聯資料來源 |
 | mode | ENUM('full', 'incremental') | 擷取模式 |
 | status | ENUM('running', 'scheduled', 'completed', 'failed', 'disabled') | 任務狀態 |
-| target_table | VARCHAR(255) | 目標資料表名稱 |
+| source_table | VARCHAR(255) | 來源資料表名稱（外部 DB 中要讀取的表） |
 | incremental_column | VARCHAR(255) | 增量欄位名稱（增量模式必填） |
 | last_incremental_value | VARCHAR(255) | 最後增量值 |
 | schedule | VARCHAR(100) | Cron 表達式 |
@@ -58,6 +59,17 @@
 | created_at | TIMESTAMP | 建立時間 |
 | updated_at | TIMESTAMP | 更新時間 |
 | deleted_at | TIMESTAMP | 軟刪除時間 |
+
+### Raw Data 表（AppDB 動態建立）
+
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| （來源表欄位） | （對應類型） | 從來源表 metadata 自動推斷 |
+| _cdmp_id | SERIAL (PK) | 系統附加，若來源表無主鍵時使用 |
+| _cdmp_extracted_at | TIMESTAMP | 系統附加，記錄該筆資料的擷取時間 |
+
+> **命名規則**：`raw_{task_id 前 8 碼}`（例如：task id 為 `a3f2c1d4-...`，則表名為 `raw_a3f2c1d4`）
+> **建立時機**：擷取任務首次執行時由系統自動建立，無需 Admin 手動操作
 
 ### ExtractionLog
 
@@ -77,13 +89,15 @@
 
 ## 成功標準
 
-- Admin 能夠建立包含所有必要參數的擷取任務
+- Admin 能夠建立包含所有必要參數的擷取任務（含正確命名的 `source_table` 欄位）
 - Admin 能夠查看、編輯、刪除擷取任務
 - Admin 能夠啟用／停用擷取任務
 - Admin 能夠手動觸發執行或重新執行失敗任務
+- 擷取作業執行時，raw data 真正寫入 CDMP AppDB 的動態建立表中
 - 排程引擎能自動依 cron 表達式執行已啟用任務
 - 監控儀表板提供執行狀態與效能的即時總覽
 - 擷取日誌完整記錄每次執行的詳細資訊
+- Admin 能夠預覽已擷取至 AppDB 的 raw data，並支援分頁與欄位排序
 
 ## 待解決問題
 

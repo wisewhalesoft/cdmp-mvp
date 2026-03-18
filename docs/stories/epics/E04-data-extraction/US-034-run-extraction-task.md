@@ -43,6 +43,16 @@
 - **When** 擷取作業完成（成功或失敗）
 - **Then** 系統更新任務 status（`completed` 或 `failed`）、`last_execution_at`、`extracted_count`、`error_message`（若失敗），同時更新對應的 ExtractionLog 記錄
 
+### AC-6：擷取資料真正寫入 AppDB
+- **Given** 擷取任務執行成功
+- **When** 擷取作業完成
+- **Then** 系統確認 CDMP AppDB 中的對應 raw data 表（`raw_{task_id_short}`）已包含從外部資料來源讀取的實際資料，筆數與 `extracted_count` 一致
+
+### AC-7：AppDB raw data 表不存在時自動建立
+- **Given** 某擷取任務的 AppDB raw data 表尚未建立（首次執行）
+- **When** 擷取作業啟動
+- **Then** 系統自動讀取外部來源表的欄位 metadata，於 AppDB 建立對應結構的 raw data 表，再執行資料寫入
+
 ---
 
 ## Technical Notes
@@ -55,8 +65,18 @@
 - 執行流程：
   1. 建立 ExtractionLog（status = 'running'）
   2. 更新 ExtractionTask（status = 'running'）
-  3. 執行擷取作業（非同步）
-  4. 執行完成後更新 ExtractionLog 與 ExtractionTask
+  3. 檢查 AppDB 是否已有對應的 raw data 表（`raw_{task_id_short}`）
+     - 若不存在：連線至外部資料來源，讀取來源表（`source_table`）的欄位 metadata，於 AppDB 建立同結構的 raw data 表
+     - 若已存在：使用現有表（全量模式：先 TRUNCATE 再寫入；增量模式：追加寫入）
+  4. 批次讀取外部來源資料，寫入 AppDB raw data 表（建議批次大小：1,000 筆/批）
+  5. 每批次完成後更新 `extracted_count` 與 `progress_percent`
+  6. 全部批次完成後更新 ExtractionLog（status = 'completed'）與 ExtractionTask（status = 'completed'）
+  7. 如任一步驟失敗：更新 ExtractionLog（status = 'failed', error_message）與 ExtractionTask（status = 'failed'）
+- **動態建表命名規則**：`raw_{task_id 前 8 碼}`（例如：task id 為 `a3f2c1d4-...`，則表名為 `raw_a3f2c1d4`）
+- **全量模式 vs 增量模式**：
+  - 全量（full）：每次執行前 TRUNCATE raw data 表，再重新寫入全部資料
+  - 增量（incremental）：根據 `incremental_column` 與 `last_incremental_value` 篩選新增資料，追加寫入
+- **批次寫入策略**：使用批次 INSERT（每批 1,000 筆），避免大量資料導致記憶體耗盡或資料庫逾時
 - 進度更新：每批次擷取後更新 `extracted_count` 與 `progress_percent`
 - 前端透過 Polling（建議 3 秒間隔）取得進度更新
 - 時區處理：後端儲存 UTC 時間，前端顯示時轉換為 UTC+8（Asia/Taipei）
@@ -76,13 +96,17 @@
 | 7 | 執行成功後 | status 變為 completed，日誌更新 |
 | 8 | 執行失敗後 | status 變為 failed，記錄錯誤訊息 |
 | 9 | 非 Admin 嘗試執行 | 回傳 403 Forbidden |
+| 10 | 首次執行（raw data 表不存在） | AppDB 自動建立 `raw_{task_id_short}` 表，資料正確寫入 |
+| 11 | 全量任務第二次執行 | raw data 表先 TRUNCATE 再重新寫入，筆數正確 |
+| 12 | 增量任務執行 | 僅寫入 `incremental_column` > `last_incremental_value` 的新資料 |
+| 13 | 大量資料（>10,000 筆）執行 | 批次寫入正確完成，`extracted_count` 累計正確 |
 
 ---
 
 ## 依賴關係
 
 - **Blocked By**：US-030（需有擷取任務存在）
-- **Blocks**：US-035（執行後才有日誌可查看）、US-036（排程共用執行邏輯）、US-037（儀表板依賴執行資料）
+- **Blocks**：US-035（執行後才有日誌可查看）、US-036（排程共用執行邏輯）、US-037（儀表板依賴執行資料）、US-039（需有 raw data 才能預覽）
 
 ---
 
@@ -92,6 +116,10 @@
 - [ ] 執行中狀態的進度條顯示
 - [ ] 執行中任務禁止重複觸發
 - [ ] 後端非同步執行擷取作業
+- [ ] 動態建表邏輯：首次執行時讀取來源表 metadata 並於 AppDB 建立 `raw_{task_id_short}` 表
+- [ ] 全量模式：執行前 TRUNCATE raw data 表
+- [ ] 增量模式：根據 incremental_column 篩選並追加寫入
+- [ ] 批次 INSERT 寫入（建議每批 1,000 筆）
 - [ ] ExtractionLog 記錄完整的執行資訊
 - [ ] 執行完成後正確更新任務狀態與日誌
 - [ ] 前端 Polling 機制更新進度

@@ -9,7 +9,7 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 4 |
-| User Story 總數 | 25 |
+| User Story 總數 | 26 |
 | 非功能需求（NFR）總數 | 2 |
 | 目標階段 | Phase 1（MVP） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
@@ -22,7 +22,7 @@
 | E01 | [驗證與登入](epics/E01-auth-and-login/epic-brief.md) | 1（MVP） | 3 | [epic-brief.md](epics/E01-auth-and-login/epic-brief.md) |
 | E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 7 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
-| E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 9 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
+| E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 10 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 
 ## Story 地圖
 
@@ -53,6 +53,7 @@
 | E04 | [US-036](epics/E04-data-extraction/US-036-scheduled-extraction.md) | 排程自動執行 | Must Have |
 | E04 | [US-037](epics/E04-data-extraction/US-037-extraction-dashboard.md) | 擷取監控儀表板 | Should Have |
 | E04 | [US-038](epics/E04-data-extraction/US-038-delete-extraction-task.md) | 刪除擷取任務 | Should Have |
+| E04 | [US-039](epics/E04-data-extraction/US-039-preview-raw-data.md) | 查看擷取資料預覽 | Must Have |
 
 ## 非功能需求（NFR）
 
@@ -69,7 +70,7 @@
 - E01 全部 Stories（US-001 ~ US-003）
 - E02 全部 Stories（US-010 ~ US-016）
 - E03 全部 Stories（US-020 ~ US-025）
-- E04 全部 Stories（US-030 ~ US-038）
+- E04 全部 Stories（US-030 ~ US-039）
 - NFR-001、NFR-002
 
 ### Phase 2 — 進階規劃（未來）
