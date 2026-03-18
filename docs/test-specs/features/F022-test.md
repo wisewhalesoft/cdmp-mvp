@@ -38,11 +38,20 @@ last_updated: 2026-03-18
 | When | 呼叫 GET /logs?page=1&limit=10 |
 | Then | HTTP 200，data.length=10，meta.total=25，meta.totalPages=3 |
 
+### AC-6：從日誌連結至 raw data 預覽
+
+| 項目 | 內容 |
+|------|------|
+| Given | 日誌列表中有 status=completed 且 extractedCount > 0 的 ExtractionLog |
+| When | 前端渲染日誌列表 |
+| Then | 該筆日誌顯示「預覽資料」連結，點擊後導覽至 `/extraction-tasks/:taskId/raw-data`（F026） |
+| 驗證步驟 | 1. 確認 DOM 中存在「預覽資料」連結（非 disabled 狀態）<br>2. 確認連結 href 指向正確的 F026 頁面路徑 |
+
 ---
 
 ## Test Scenarios
 
-### Positive Scenarios
+### Positive Scenarios — 後端 API
 
 | ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
 |----|----------|------------|-----------|---------------|-------|-----------------|
@@ -51,16 +60,31 @@ last_updated: 2026-03-18
 | TS-F022-003 | 執行中日誌欄位為 null | 邊界情況 | Integration | 任務執行中（status=running） | 1. GET /logs | running 日誌的 finishedAt=null，durationMs=null |
 | TS-F022-004 | 觸發方式欄位正確 | AC-2, BR-2 | Integration | 有 manual、schedule、retry 觸發的日誌 | 1. GET /logs | 每筆 triggeredBy 欄位分別為 manual / schedule / retry |
 
-### Negative Scenarios
+### Negative Scenarios — 後端 API
 
 | ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
 |----|----------|------------|-----------|---------------|-------|-----------------|
 | TS-F022-005 | 非 Admin 無權查看 | BR-1 | Integration | USER_ACTIVE 已登入 | 1. 以 User Token 呼叫 GET /logs | HTTP 403，AUTH_FORBIDDEN |
 | TS-F022-006 | 任務不存在 | BR-1 | Integration | 無此 ID | 1. GET /api/v1/extraction-tasks/nonexistent-uuid/logs | HTTP 404，EXTRACTION_NOT_FOUND |
 
-### Boundary Scenarios
+### Boundary Scenarios — 後端 API
 
 | ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
 |----|----------|------------|-----------|---------------|-------|-----------------|
 | TS-F022-007 | 空狀態（尚無執行紀錄） | AC-5 | Integration | ET_SCHEDULED 從未執行過 | 1. GET /logs | HTTP 200，data=[]，meta.total=0 |
 | TS-F022-008 | 軟刪除任務的日誌仍可查詢 | BR-3 | Integration | ET_DELETED 有歷史 ExtractionLog | 1. GET /api/v1/extraction-tasks/ET_DELETED.id/logs | HTTP 200，data 含歷史日誌（日誌不隨任務刪除） |
+
+### Positive Scenarios — 前端（UI 行為）
+
+| ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
+|----|----------|------------|-----------|---------------|-------|-----------------|
+| TS-F022-009 | completed + extractedCount > 0 的日誌顯示「預覽資料」連結 | AC-6 | Frontend | 日誌列表含一筆 status=completed、extractedCount=100 的日誌 | 1. 渲染日誌列表<br>2. 找到該筆日誌所在的 DOM 節點 | 「預覽資料」連結存在且 href 指向 `/extraction-tasks/:taskId/raw-data` |
+| TS-F022-010 | 點擊「預覽資料」連結後導覽至 F026 頁面 | AC-6 | Frontend E2E | 日誌面板開啟，含 completed 日誌 | 1. 點擊「預覽資料」連結 | 頁面導覽至 raw data 預覽頁面（F026） |
+
+### Negative Scenarios — 前端（UI 行為）
+
+| ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
+|----|----------|------------|-----------|---------------|-------|-----------------|
+| TS-F022-011 | failed 日誌不顯示「預覽資料」連結 | AC-6 | Frontend | 日誌列表含一筆 status=failed 的日誌 | 1. 渲染日誌列表<br>2. 查詢 failed 日誌 DOM 節點 | 「預覽資料」連結不存在（DOM 不渲染，而非僅 CSS 隱藏） |
+| TS-F022-012 | completed + extractedCount = 0 的日誌不顯示「預覽資料」連結 | AC-6 | Frontend | 日誌列表含一筆 status=completed、extractedCount=0 的日誌（空表擷取） | 1. 渲染日誌列表<br>2. 查詢該筆日誌 DOM 節點 | 「預覽資料」連結不存在（extractedCount=0 表示無資料可預覽） |
+| TS-F022-013 | running 日誌不顯示「預覽資料」連結 | AC-6 | Frontend | 日誌列表含一筆 status=running 的日誌 | 1. 渲染日誌列表<br>2. 查詢 running 日誌 DOM 節點 | 「預覽資料」連結不存在 |

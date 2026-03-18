@@ -43,19 +43,21 @@ last_updated: 2026-03-18
 
 ### 1.5 擷取任務（ExtractionTask）
 
-| 任務代號 | name | datasourceId | mode | status | enabled | schedule | 用途 |
-|---------|------|-------------|------|--------|---------|----------|------|
-| ET_SCHEDULED | 每日全量同步 | DS_MYSQL_CONNECTED | full | scheduled | true | `0 2 * * *` | 標準正向場景、排程觸發測試 |
-| ET_INCREMENTAL | 每小時增量同步 | DS_MYSQL_CONNECTED | incremental | scheduled | true | `0 * * * *` | 增量模式測試，incrementalColumn="updated_at" |
-| ET_RUNNING | 執行中任務 | DS_MYSQL_CONNECTED | full | running | true | `0 3 * * *` | 重複觸發拒絕、不可編輯/停用/刪除測試 |
-| ET_FAILED | 最近失敗任務 | DS_PG_DISCONNECTED | full | failed | true | `0 4 * * *` | 重新執行測試，errorMessage 有值 |
-| ET_COMPLETED | 已完成任務 | DS_MYSQL_CONNECTED | full | completed | true | `0 5 * * *` | 執行完成狀態查詢 |
-| ET_DISABLED | 已停用任務 | DS_MYSQL_CONNECTED | full | disabled | false | `0 6 * * *` | 停用狀態、排程跳過、手動仍可執行 |
-| ET_DELETED | 已刪除任務 | DS_MYSQL_CONNECTED | full | scheduled | true | `0 7 * * *` | 軟刪除後不出現於清單、排程排除、日誌保留 |
+| 任務代號 | name | datasourceId | mode | status | enabled | schedule | sourceSchema | sourceTable | 用途 |
+|---------|------|-------------|------|--------|---------|----------|-------------|------------|------|
+| ET_SCHEDULED | 每日全量同步 | DS_MYSQL_CONNECTED | full | scheduled | true | `0 2 * * *` | "public" | "customers_src" | 標準正向場景、排程觸發測試 |
+| ET_INCREMENTAL | 每小時增量同步 | DS_MYSQL_CONNECTED | incremental | scheduled | true | `0 * * * *` | "sales" | "transactions_src" | 增量模式測試，incrementalColumn="updated_at" |
+| ET_RUNNING | 執行中任務 | DS_MYSQL_CONNECTED | full | running | true | `0 3 * * *` | "public" | "orders_src" | 重複觸發拒絕、不可編輯/停用/刪除測試 |
+| ET_FAILED | 最近失敗任務 | DS_PG_DISCONNECTED | full | failed | true | `0 4 * * *` | "public" | "logs_src" | 重新執行測試，errorMessage 有值 |
+| ET_COMPLETED | 已完成任務 | DS_MYSQL_CONNECTED | full | completed | true | `0 5 * * *` | "public" | "customers_src" | 執行完成狀態查詢、F026 raw data 預覽 |
+| ET_DISABLED | 已停用任務 | DS_MYSQL_CONNECTED | full | disabled | false | `0 6 * * *` | "analytics" | "reports_src" | 停用狀態、排程跳過、手動仍可執行 |
+| ET_DELETED | 已刪除任務 | DS_MYSQL_CONNECTED | full | scheduled | true | `0 7 * * *` | "public" | "archive_src" | 軟刪除後不出現於清單、排程排除、日誌保留 |
 
 **建立者規則：** 所有種子 ExtractionTask 的 `createdBy` 均為 ADMIN_ACTIVE.id。
 
 **日期欄位型別：** 所有 `timestamp` 欄位使用 PostgreSQL `timestamp` 型別（不可使用 `datetime`）。
+
+**sourceSchema 欄位說明：** v1.2 起 ExtractionTask 增加 `source_schema` 欄位（VARCHAR 255，可為 NULL）。種子資料均提供有效 sourceSchema，以驗證下拉選單正確預選。如需測試 sourceSchema=null 場景，需額外建立測試資料。
 
 ### 1.6 擷取日誌（ExtractionLog）
 
@@ -145,13 +147,34 @@ last_updated: 2026-03-18
 | name | `""` | 驗證失敗 — 必填 | F017, F019 |
 | name | `A` × 255 | 驗證通過 — 最大長度 | F017, F019 |
 | name | `A` × 256 | 驗證失敗 — 超出最大長度 | F017, F019 |
-| targetTable | `""` | 驗證失敗 — 必填 | F017, F019 |
-| targetTable | `A` × 255 | 驗證通過 — 最大長度 | F017, F019 |
+| sourceTable | `""` | 驗證失敗 — 必填 | F017, F019 |
+| sourceTable | `A` × 255 | 驗證通過 — 最大長度 | F017, F019 |
+| sourceSchema | 省略（undefined） | 驗證通過 — 選填欄位，儲存為 null | F017, F019 |
+| sourceSchema | `""` | 驗證通過 — 空字串儲存為 null 或 ""（視實作而定，需確認） | F017, F019 |
+| sourceSchema | `A` × 255 | 驗證通過 — 最大長度 | F017, F019 |
+| sourceSchema | `A` × 256 | 驗證失敗 — 超出最大長度 | F017, F019 |
 | incrementalColumn | `A` × 255 | 驗證通過 — 最大長度（增量模式） | F017, F019 |
 | schedule | `"0 2 * * *"` | 驗證通過 — 合法 cron（5 欄位） | F017, F019 |
 | schedule | `"0 2 * * * *"` | 驗證通過 — 合法 cron（6 欄位） | F017, F019 |
 | schedule | `"invalid-cron"` | 驗證失敗 — 非法 cron 格式 | F017, F019 |
 | schedule | `""` | 驗證失敗 — 必填 | F017, F019 |
+
+### 2.8 F026 raw data 預覽分頁 limit 白名單
+
+| 參數 | 測試值 | 預期結果 | 適用 Feature |
+|------|--------|---------|-------------|
+| limit | 未提供 | 預設 50 | F026 |
+| limit | `50` | 驗證通過 — 最小允許值 | F026 |
+| limit | `100` | 驗證通過 | F026 |
+| limit | `200` | 驗證通過 — 最大允許值 | F026 |
+| limit | `1` | 驗證失敗 — HTTP 422，不在白名單中 | F026 |
+| limit | `300` | 驗證失敗 — HTTP 422，不在白名單中 | F026 |
+| limit | `0` | 驗證失敗 — HTTP 422 | F026 |
+| page | `0` | 驗證失敗 — HTTP 422，最小值為 1 | F026 |
+| page | `1` | 驗證通過 | F026 |
+| sortOrder | `asc` | 驗證通過 | F026 |
+| sortOrder | `desc` | 驗證通過 | F026 |
+| sortOrder | `random` | 驗證失敗 — HTTP 422，僅允許 asc / desc | F026 |
 
 ### 2.7 趨勢圖 range 參數白名單
 
@@ -184,6 +207,8 @@ last_updated: 2026-03-18
 | `' OR '1'='1` | email / password | 參數化查詢阻擋，回傳標準錯誤 |
 | `'; DROP TABLE users; --` | search / name | 參數化查詢阻擋，回傳標準錯誤 |
 | `1; SELECT * FROM users` | port | 型別驗證阻擋 |
+| `col; DROP TABLE users; --` | 來源表欄位名稱（sourceTable 讀取的 metadata） | 欄位名稱 sanitize 阻擋（僅允許字母、數字、底線）；不執行惡意 DDL |
+| `raw_evil; DROP TABLE users; --` | （來源表名稱 — 僅驗證系統不接受使用者直接輸入表名） | raw data 表名由系統根據 task_id 自動生成，使用者無法控制；不存在此注入路徑 |
 
 ### 3.3 空值與格式錯誤
 
@@ -336,3 +361,130 @@ last_updated: 2026-03-18
 | Integration Test | API 整合測試 | 測試資料庫 + 種子資料 |
 | E2E Test | 瀏覽器測試 | 測試資料庫 + 種子資料 + 完整服務 |
 | Performance Test | 效能測試 | 測試資料庫 + 批量資料 |
+
+---
+
+## 8. Raw Data 動態表測試資料策略
+
+> 以下策略專門針對 F021（執行擷取任務，資料落地）與 F026（raw data 預覽）的測試需求。
+
+### 8.1 外部來源資料庫 Mock 策略
+
+F021 的 raw data 落地測試需要一個可受控的「外部來源資料庫」：
+
+| 策略 | 說明 | 適用場景 |
+|------|------|---------|
+| Test Container（推薦） | 以 Docker 啟動真實 MySQL/PostgreSQL 實例，在測試中建立來源表並插入受控資料 | F021 所有 raw data 落地場景 |
+| Driver Mock（備選） | Mock 外部 DB Driver，模擬 `SELECT * FROM source_table`、`INFORMATION_SCHEMA` 查詢回傳固定資料 | 不需驗證真實 DB 互動時的單元測試 |
+
+**雙 Test Container 架構：**
+
+測試環境需同時啟動兩個 Test Container：
+1. **源 DB Container**（外部資料來源，如 MySQL 5.7）：建立來源表、插入測試資料
+2. **AppDB Container**（CDMP AppDB，PostgreSQL 14）：存放 raw data 表，執行後驗證資料落地
+
+### 8.2 來源表種子資料集
+
+| 資料集代號 | 表名 | 欄位結構 | 資料筆數 | 用途 |
+|-----------|------|---------|---------|------|
+| SRC_TABLE_SIMPLE | customers_src | id(INT PK), name(VARCHAR), email(VARCHAR), created_at(DATETIME) | 10 筆 | 基本 raw data 落地驗證 |
+| SRC_TABLE_NO_PK | events_src | event_type(VARCHAR), value(INT), occurred_at(DATETIME) | 10 筆（無主鍵） | `_cdmp_id` 自動附加測試 |
+| SRC_TABLE_LARGE | orders_src | id(INT PK), customer_id(INT), amount(DECIMAL), created_at(DATETIME) | 1,001 筆 | 批次寫入邊界（跨越 1,000 筆邊界） |
+| SRC_TABLE_INCREMENTAL | transactions_src | id(INT PK), amount(DECIMAL), updated_at(DATETIME) | 100 筆，updated_at 橫跨 2026-01-01 ~ 2026-03-18 | 增量模式測試，lastIncrementalValue="2026-02-01" |
+| SRC_TABLE_CHANGED | logs_src（初版：id+message）→（變更後：id+message+severity）| 2 版本的欄位結構 | 5 筆 | 來源表結構變更 → raw data 表重建測試 |
+| SRC_TABLE_EVIL_COLS | malicious_src | id(INT), `col; DROP TABLE users; --`(VARCHAR) | 1 筆 | 欄位名稱 sanitize 安全測試 |
+
+**資料生成規則：** SRC_TABLE_LARGE 的 1,001 筆 orders 資料以 factory 函式生成：`Array.from({length:1001}, (_, i) => ({id: i+1, customer_id: Math.ceil((i+1)/10), amount: ((i+1) * 9.99).toFixed(2), created_at: '2026-01-01 00:00:00'}))。`
+
+### 8.3 AppDB raw data 表驗證策略
+
+測試驗證 AppDB 中 raw data 表正確落地，需驗證以下項目：
+
+| 驗證項目 | 驗證方式 |
+|---------|---------|
+| 表存在 | `SELECT table_name FROM information_schema.tables WHERE table_name = 'raw_{task_id_short}'` |
+| 欄位清單 | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'raw_{task_id_short}'` |
+| `_cdmp_extracted_at` 欄位存在 | 同上，確認 `_cdmp_extracted_at` 在 columns 清單中 |
+| `_cdmp_id` 欄位（無主鍵來源表） | 同上，確認 `_cdmp_id` 在 columns 清單中（SERIAL 類型） |
+| 資料筆數 | `SELECT COUNT(*) FROM raw_{task_id_short}` |
+| 資料抽樣 | `SELECT * FROM raw_{task_id_short} LIMIT 3` — 確認欄位值與來源一致 |
+| 全量 TRUNCATE 驗證 | 執行前記錄舊表 COUNT，執行後驗證 COUNT = 新來源筆數（不保留舊資料） |
+| 增量追加驗證 | 執行前記錄舊表 COUNT，執行後驗證 COUNT = 舊 COUNT + 新增筆數 |
+
+### 8.4 F026 raw data 預覽測試資料集
+
+| 資料集代號 | 說明 | 用途 |
+|-----------|------|------|
+| RAW_DATA_SMALL | `raw_{task_id_short}` 表有 120 筆（4 個欄位：id, name, value, _cdmp_extracted_at） | 基本分頁、排序測試 |
+| RAW_DATA_EMPTY | `raw_{task_id_short}` 表存在但無資料列 | 空資料表測試（AC-5 邊界） |
+| RAW_DATA_LARGE | `raw_{task_id_short}` 表有 1,000,000 筆 | F026 效能測試（僅在 QA 環境執行） |
+| RAW_DATA_WIDE | `raw_{task_id_short}` 表有 25 個欄位 | 水平捲動測試 |
+| RAW_DATA_NO_TABLE | raw data 表不存在 | EXTRACTION_RAW_TABLE_NOT_FOUND 測試 |
+
+**效能測試資料建立方式（RAW_DATA_LARGE）：**
+使用 `INSERT INTO raw_{task_id_short} SELECT generate_series(1, 1000000) AS id, 'name_' || generate_series(1, 1000000)::text AS name, now() AS _cdmp_extracted_at`（PostgreSQL 語法）。需在 QA 環境預先建立，不在 CI 每次執行。
+
+### 8.5 rawTableName 格式驗證規則
+
+所有測試中需驗證 rawTableName 格式的場景，均使用以下正規表達式：
+
+```
+/^raw_[0-9a-f]{8}$/
+```
+
+rawTableName 由系統根據 `task_id`（UUID）的前 8 碼（hex 字元）自動生成。範例：
+- task_id = `a3f2c1d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx` → rawTableName = `raw_a3f2c1d4`
+- task_id = `0098beef-xxxx-xxxx-xxxx-xxxxxxxxxxxx` → rawTableName = `raw_0098beef`
+
+---
+
+## 9. Schema / Table 查詢 API 測試資料策略（F017 v1.2、F019 v1.2）
+
+> 以下策略針對新增的兩個 API 端點：`GET /datasources/:id/schemas` 與 `GET /datasources/:id/schemas/:schema/tables`。
+
+### 9.1 各資料庫類型的 Schema 概念差異
+
+不同資料庫對「schema」的概念不同，測試資料需反映此差異：
+
+| 資料庫類型 | Schema 概念 | Mock 回應範例 |
+|-----------|------------|-------------|
+| PostgreSQL | schema（public, information_schema, pg_catalog, pg_temp） | `{"schemas":["public","analytics","information_schema"]}` |
+| MySQL | database（無 schema，等同 database） | `{"schemas":["cdmp_db","test_db","information_schema"]}` |
+| SQL Server | schema（dbo, sys, guest, INFORMATION_SCHEMA） | `{"schemas":["dbo","sys","INFORMATION_SCHEMA"]}` |
+
+**注意：** 不同 DB 類型回傳的 schema 列表含義不同（MySQL 回傳 database 名稱），但 API 介面統一使用 `schemas` 陣列表示，前端下拉選單統一顯示。
+
+### 9.2 Schema / Table 查詢 API Mock 資料集
+
+| Mock 資料集代號 | 對應 Datasource | GET /schemas 回應 | GET /schemas/:schema/tables 回應 | 用途 |
+|---------------|----------------|------------------|--------------------------------|------|
+| SCHEMA_MOCK_PG | DS_MYSQL_CONNECTED（以 PG 為例） | `{"schemas":["public","analytics","information_schema"]}` | `{"tables":["customers","orders","products"]}` | 標準成功場景（前端下拉載入） |
+| SCHEMA_MOCK_MYSQL | DS_MYSQL_CONNECTED | `{"schemas":["cdmp_db","test_db"]}` | `{"tables":["users","transactions"]}` | MySQL database 概念測試 |
+| SCHEMA_MOCK_EMPTY_TABLES | DS_MYSQL_CONNECTED | `{"schemas":["public"]}` | `{"tables":[]}` | schema 下無任何 table 的邊界情況 |
+| SCHEMA_MOCK_FAIL | DS_PG_DISCONNECTED | HTTP 503，DATASOURCE_SCHEMA_LOAD_FAILED | HTTP 503，DATASOURCE_TABLE_LOAD_FAILED | 連線失敗場景 |
+| TABLE_MOCK_FAIL | DS_PG_DISCONNECTED（schema 存在但 table 載入失敗） | `{"schemas":["public"]}` | HTTP 503，DATASOURCE_TABLE_LOAD_FAILED | schema 載入成功但 table 載入失敗 |
+
+### 9.3 前端連鎖下拉選單測試資料需求
+
+前端測試（F017 FE、F019 FE）使用 mock API，需以下測試資料：
+
+| 場景 | Mock 設定 | 驗證重點 |
+|------|---------|---------|
+| 選定 Datasource → 載入 schemas | GET /schemas stub 回傳 SCHEMA_MOCK_PG | Schema 下拉呈現選項、Table 下拉仍停用 |
+| 選定 Schema → 載入 tables | GET /schemas/:schema/tables stub 回傳 SCHEMA_MOCK_PG | Table 下拉呈現選項、可選擇 |
+| 連線失敗（schema 載入） | GET /schemas stub 回傳 HTTP 503 | 錯誤訊息出現、下拉停用、無手動輸入 |
+| 連線失敗（table 載入） | GET /schemas/:schema/tables stub 回傳 HTTP 503 | 同上（TABLE 層級） |
+| 編輯表單預選 | GET /schemas 含既有 schema，GET /tables 含既有 table | 下拉預選正確值 |
+| 變更 Datasource → 重置 | 切換 Datasource 後 GET /schemas 以新 ID 呼叫 | 舊 schema/table 清空，新 schemas 載入 |
+
+### 9.4 Schema / Table 查詢錯誤碼
+
+| 錯誤碼 | HTTP Status | 觸發場景 | 適用測試 |
+|--------|------------|---------|---------|
+| `DATASOURCE_SCHEMA_LOAD_FAILED` | 503 | 外部 DB 連線失敗（逾時、認證失敗、DB 不可用）→ schema 列表無法取得 | TS-F017-015、F019 FE-005 |
+| `DATASOURCE_TABLE_LOAD_FAILED` | 503 | 外部 DB 連線失敗 → table 列表無法取得 | TS-F017-016 |
+| `DS_NOT_FOUND` | 404 | 指定的 Datasource 不存在或已軟刪除 | TS-F017-014 |
+
+**前端行為要求（BR-11、BR-12）：**
+- 連線失敗時下拉停用，不提供手動輸入 fallback
+- 每次開啟表單均即時查詢（不使用快取）
