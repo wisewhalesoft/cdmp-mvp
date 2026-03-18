@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>擷取資料預覽 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: 4px;
+    }
+    .sort-header { cursor: pointer; user-select: none; }
+    .sort-header:hover { background-color: #F3F4F6; }
+    .cdmp-sys-col { background-color: #F9FAFB; }
+    table th.cdmp-sys-col { background-color: #F3F4F6; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">擷取資料預覽</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14 p-6">
+
+    <!-- Demo Buttons -->
+    <div class="mb-4 flex gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 self-center mr-1">Demo:</span>
+      <button onclick="showDemoState('data')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">有資料</button>
+      <button onclick="showDemoState('empty')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">空狀態</button>
+      <button onclick="showDemoState('loading')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">載入中</button>
+      <button onclick="showDemoState('large')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">大量資料</button>
+    </div>
+
+    <!-- Breadcrumb + Back -->
+    <nav class="mb-5 text-sm">
+      <ol class="flex items-center gap-1.5 text-gray-500">
+        <li><a href="12-extraction-management.html" class="hover:text-primary transition">資料擷取</a></li>
+        <li class="text-gray-400">/</li>
+        <li class="text-gray-800 font-medium">擷取資料預覽</li>
+      </ol>
+    </nav>
+
+    <!-- Back Button -->
+    <div class="mb-5">
+      <a href="12-extraction-management.html" class="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-primary transition">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>返回任務清單
+      </a>
+    </div>
+
+    <!-- Task Summary Card -->
+    <div id="summaryCard" class="bg-white rounded-xl border border-border p-5 mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-6">
+          <div>
+            <div class="text-xs text-gray-400 mb-0.5">任務名稱</div>
+            <div class="text-sm font-semibold text-gray-800" id="summaryTaskName">每日客戶同步</div>
+          </div>
+          <div class="w-px h-10 bg-border"></div>
+          <div>
+            <div class="text-xs text-gray-400 mb-0.5">來源資料表</div>
+            <div class="text-sm font-medium text-gray-700" id="summarySourceTable">dbo.customers</div>
+          </div>
+          <div class="w-px h-10 bg-border"></div>
+          <div>
+            <div class="text-xs text-gray-400 mb-0.5">Raw Data 表名</div>
+            <div class="text-sm font-mono text-gray-600" id="summaryRawTable">raw_a3f2c1d4</div>
+          </div>
+          <div class="w-px h-10 bg-border"></div>
+          <div>
+            <div class="text-xs text-gray-400 mb-0.5">最後更新時間</div>
+            <div class="text-sm text-gray-700" id="summaryLastUpdate">2026-03-18 02:02:45</div>
+          </div>
+          <div class="w-px h-10 bg-border"></div>
+          <div>
+            <div class="text-xs text-gray-400 mb-0.5">總筆數</div>
+            <div class="text-sm font-semibold text-gray-800" id="summaryTotalCount">3,600</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Large Data Warning Banner -->
+    <div id="largeDataBanner" class="hidden mb-4">
+      <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-500 shrink-0"></i>
+        <p class="text-sm text-amber-700">資料量較大（超過 100,000 筆），查詢可能需要較長時間。非索引欄位排序可能影響效能。</p>
+      </div>
+    </div>
+
+    <!-- ====== State: Data Table ====== -->
+    <div id="stateData">
+      <!-- Table Container -->
+      <div class="bg-white rounded-xl border border-border overflow-hidden">
+        <!-- Table Scroll Container -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" id="dataTable">
+            <thead>
+              <tr class="bg-gray-50 border-b border-border">
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cdmp-sys-col" onclick="toggleSort('_cdmp_id')">
+                  <span class="inline-flex items-center gap-1">_cdmp_id <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="_cdmp_id"></i></span>
+                </th>
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" onclick="toggleSort('id')">
+                  <span class="inline-flex items-center gap-1">id <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="id"></i></span>
+                </th>
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" onclick="toggleSort('name')">
+                  <span class="inline-flex items-center gap-1">name <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="name"></i></span>
+                </th>
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" onclick="toggleSort('email')">
+                  <span class="inline-flex items-center gap-1">email <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="email"></i></span>
+                </th>
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" onclick="toggleSort('phone')">
+                  <span class="inline-flex items-center gap-1">phone <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="phone"></i></span>
+                </th>
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" onclick="toggleSort('created_at')">
+                  <span class="inline-flex items-center gap-1">created_at <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="created_at"></i></span>
+                </th>
+                <th class="sort-header px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cdmp-sys-col" onclick="toggleSort('_cdmp_extracted_at')">
+                  <span class="inline-flex items-center gap-1">_cdmp_extracted_at <i data-lucide="chevrons-up-down" class="w-3 h-3 text-gray-400 sort-icon" data-col="_cdmp_extracted_at"></i></span>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-border">
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div class="px-4 py-3 border-t border-border flex items-center justify-between bg-white">
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500" id="paginationInfo">第 1 頁，共 72 頁（共 3,600 筆）</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500">每頁筆數</label>
+              <select id="pageSizeSelect" onchange="changePageSize()" class="text-sm border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button onclick="goToPage('first')" class="px-2 py-1.5 text-sm border border-border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed" id="btnFirst" disabled>
+                <i data-lucide="chevrons-left" class="w-4 h-4"></i>
+              </button>
+              <button onclick="goToPage('prev')" class="px-2 py-1.5 text-sm border border-border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed" id="btnPrev" disabled>
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <span class="px-3 py-1.5 text-sm text-gray-700 font-medium" id="pageIndicator">1 / 72</span>
+              <button onclick="goToPage('next')" class="px-2 py-1.5 text-sm border border-border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed" id="btnNext">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+              <button onclick="goToPage('last')" class="px-2 py-1.5 text-sm border border-border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed" id="btnLast">
+                <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== State: Empty ====== -->
+    <div id="stateEmpty" class="hidden">
+      <div class="bg-white rounded-xl border border-border p-16 text-center">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+          <i data-lucide="database" class="w-8 h-8 text-gray-300"></i>
+        </div>
+        <h3 class="text-base font-semibold text-gray-700 mb-2">尚未執行擷取任務</h3>
+        <p class="text-sm text-gray-400 mb-6">此任務尚無已擷取的資料，請先執行擷取任務以取得資料。</p>
+        <button class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+          <i data-lucide="play" class="w-4 h-4"></i>立即執行
+        </button>
+      </div>
+    </div>
+
+    <!-- ====== State: Loading (Skeleton) ====== -->
+    <div id="stateLoading" class="hidden">
+      <!-- Skeleton Summary -->
+      <div class="bg-white rounded-xl border border-border p-5 mb-6">
+        <div class="flex items-center gap-6">
+          <div class="space-y-2"><div class="skeleton w-16 h-3"></div><div class="skeleton w-28 h-5"></div></div>
+          <div class="w-px h-10 bg-border"></div>
+          <div class="space-y-2"><div class="skeleton w-16 h-3"></div><div class="skeleton w-20 h-5"></div></div>
+          <div class="w-px h-10 bg-border"></div>
+          <div class="space-y-2"><div class="skeleton w-20 h-3"></div><div class="skeleton w-24 h-5"></div></div>
+          <div class="w-px h-10 bg-border"></div>
+          <div class="space-y-2"><div class="skeleton w-20 h-3"></div><div class="skeleton w-32 h-5"></div></div>
+          <div class="w-px h-10 bg-border"></div>
+          <div class="space-y-2"><div class="skeleton w-12 h-3"></div><div class="skeleton w-16 h-5"></div></div>
+        </div>
+      </div>
+      <!-- Skeleton Table -->
+      <div class="bg-white rounded-xl border border-border overflow-hidden">
+        <div class="bg-gray-50 border-b border-border px-4 py-3 flex gap-6">
+          <div class="skeleton w-20 h-4"></div>
+          <div class="skeleton w-12 h-4"></div>
+          <div class="skeleton w-16 h-4"></div>
+          <div class="skeleton w-24 h-4"></div>
+          <div class="skeleton w-20 h-4"></div>
+          <div class="skeleton w-20 h-4"></div>
+          <div class="skeleton w-32 h-4"></div>
+        </div>
+        <div class="divide-y divide-border">
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-36 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-20 h-4"></div><div class="skeleton w-32 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-28 h-4"></div><div class="skeleton w-40 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-16 h-4"></div><div class="skeleton w-36 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-20 h-4"></div><div class="skeleton w-40 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-28 h-4"></div><div class="skeleton w-36 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+          <div class="px-4 py-3.5 flex gap-6"><div class="skeleton w-20 h-4"></div><div class="skeleton w-12 h-4"></div><div class="skeleton w-16 h-4"></div><div class="skeleton w-32 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-4"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    lucide.createIcons();
+
+    // ======================== Mock Data ========================
+    const mockData = [
+      { _cdmp_id: 1, id: 1001, name: '王大明', email: 'wang.daming@example.com', phone: '0912-345-678', created_at: '2025-08-15 10:30:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 2, id: 1002, name: '李小華', email: 'li.xiaohua@example.com', phone: '0923-456-789', created_at: '2025-09-01 14:20:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 3, id: 1003, name: '張美玲', email: 'zhang.meiling@example.com', phone: '0934-567-890', created_at: '2025-09-12 09:15:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 4, id: 1004, name: '陳志豪', email: 'chen.zhihao@example.com', phone: '0945-678-901', created_at: '2025-10-03 16:45:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 5, id: 1005, name: '林雅婷', email: 'lin.yating@example.com', phone: '0956-789-012', created_at: '2025-10-20 11:00:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 6, id: 1006, name: '黃建國', email: 'huang.jianguo@example.com', phone: '0967-890-123', created_at: '2025-11-05 08:30:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 7, id: 1007, name: '劉淑芬', email: 'liu.shufen@example.com', phone: '0978-901-234', created_at: '2025-11-18 13:45:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 8, id: 1008, name: '吳宗翰', email: 'wu.zonghan@example.com', phone: '0989-012-345', created_at: '2025-12-01 07:20:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 9, id: 1009, name: '蔡佳穎', email: 'cai.jiaying@example.com', phone: '0910-123-456', created_at: '2025-12-15 15:10:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 10, id: 1010, name: '許文龍', email: 'xu.wenlong@example.com', phone: '0921-234-567', created_at: '2026-01-02 10:05:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 11, id: 1011, name: '鄭惠如', email: 'zheng.huiru@example.com', phone: '0932-345-678', created_at: '2026-01-10 12:30:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+      { _cdmp_id: 12, id: 1012, name: '謝宜珊', email: 'xie.yishan@example.com', phone: '0943-456-789', created_at: '2026-01-20 09:50:00', _cdmp_extracted_at: '2026-03-18 02:02:45' },
+    ];
+
+    // ======================== State ========================
+    let currentPage = 1;
+    let pageSize = 50;
+    let totalCount = 3600;
+    let sortCol = null;
+    let sortDir = null; // null | 'asc' | 'desc'
+    const sysColumns = ['_cdmp_id', '_cdmp_extracted_at'];
+
+    // ======================== Render Table ========================
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      let data = [...mockData];
+
+      // Simulate sort
+      if (sortCol && sortDir) {
+        data.sort((a, b) => {
+          const va = a[sortCol], vb = b[sortCol];
+          if (typeof va === 'number') return sortDir === 'asc' ? va - vb : vb - va;
+          return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+        });
+      }
+
+      // Show first pageSize rows from mock (simulated page)
+      const pageData = data.slice(0, Math.min(pageSize, data.length));
+
+      pageData.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50 transition';
+        tr.innerHTML = `
+          <td class="px-4 py-3 text-xs font-mono text-gray-400 cdmp-sys-col">${row._cdmp_id}</td>
+          <td class="px-4 py-3 text-sm text-gray-700">${row.id}</td>
+          <td class="px-4 py-3 text-sm text-gray-700">${row.name}</td>
+          <td class="px-4 py-3 text-sm text-gray-700">${row.email}</td>
+          <td class="px-4 py-3 text-sm text-gray-700">${row.phone}</td>
+          <td class="px-4 py-3 text-sm text-gray-500">${row.created_at}</td>
+          <td class="px-4 py-3 text-xs font-mono text-gray-400 cdmp-sys-col">${row._cdmp_extracted_at}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      updatePagination();
+      updateSortIcons();
+    }
+
+    // ======================== Pagination ========================
+    function updatePagination() {
+      const totalPages = Math.ceil(totalCount / pageSize);
+      document.getElementById('paginationInfo').textContent = `第 ${currentPage} 頁，共 ${totalPages} 頁（共 ${totalCount.toLocaleString()} 筆）`;
+      document.getElementById('pageIndicator').textContent = `${currentPage} / ${totalPages}`;
+
+      document.getElementById('btnFirst').disabled = currentPage === 1;
+      document.getElementById('btnPrev').disabled = currentPage === 1;
+      document.getElementById('btnNext').disabled = currentPage === totalPages;
+      document.getElementById('btnLast').disabled = currentPage === totalPages;
+    }
+
+    function goToPage(action) {
+      const totalPages = Math.ceil(totalCount / pageSize);
+      switch (action) {
+        case 'first': currentPage = 1; break;
+        case 'prev': if (currentPage > 1) currentPage--; break;
+        case 'next': if (currentPage < totalPages) currentPage++; break;
+        case 'last': currentPage = totalPages; break;
+      }
+      renderTable();
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+      currentPage = 1;
+      renderTable();
+    }
+
+    // ======================== Sort ========================
+    function toggleSort(col) {
+      if (sortCol === col) {
+        if (sortDir === 'asc') sortDir = 'desc';
+        else if (sortDir === 'desc') { sortCol = null; sortDir = null; }
+      } else {
+        sortCol = col;
+        sortDir = 'asc';
+      }
+      renderTable();
+    }
+
+    function updateSortIcons() {
+      document.querySelectorAll('.sort-icon').forEach(icon => {
+        const col = icon.getAttribute('data-col');
+        if (col === sortCol && sortDir === 'asc') {
+          icon.setAttribute('data-lucide', 'chevron-up');
+          icon.classList.remove('text-gray-400');
+          icon.classList.add('text-primary');
+        } else if (col === sortCol && sortDir === 'desc') {
+          icon.setAttribute('data-lucide', 'chevron-down');
+          icon.classList.remove('text-gray-400');
+          icon.classList.add('text-primary');
+        } else {
+          icon.setAttribute('data-lucide', 'chevrons-up-down');
+          icon.classList.remove('text-primary');
+          icon.classList.add('text-gray-400');
+        }
+      });
+      lucide.createIcons();
+    }
+
+    // ======================== Demo States ========================
+    function showDemoState(state) {
+      const stateData = document.getElementById('stateData');
+      const stateEmpty = document.getElementById('stateEmpty');
+      const stateLoading = document.getElementById('stateLoading');
+      const summaryCard = document.getElementById('summaryCard');
+      const banner = document.getElementById('largeDataBanner');
+
+      // Hide all
+      stateData.classList.add('hidden');
+      stateEmpty.classList.add('hidden');
+      stateLoading.classList.add('hidden');
+      summaryCard.classList.remove('hidden');
+      banner.classList.add('hidden');
+
+      switch (state) {
+        case 'data':
+          totalCount = 3600;
+          currentPage = 1;
+          sortCol = null;
+          sortDir = null;
+          document.getElementById('summaryTotalCount').textContent = '3,600';
+          stateData.classList.remove('hidden');
+          renderTable();
+          break;
+
+        case 'empty':
+          summaryCard.classList.add('hidden');
+          stateEmpty.classList.remove('hidden');
+          break;
+
+        case 'loading':
+          summaryCard.classList.add('hidden');
+          stateLoading.classList.remove('hidden');
+          break;
+
+        case 'large':
+          totalCount = 1250000;
+          currentPage = 1;
+          sortCol = null;
+          sortDir = null;
+          document.getElementById('summaryTotalCount').textContent = '1,250,000';
+          banner.classList.remove('hidden');
+          stateData.classList.remove('hidden');
+          renderTable();
+          break;
+      }
+    }
+
+    // ======================== Init ========================
+    showDemoState('data');
+  </script>
+</body>
+</html>

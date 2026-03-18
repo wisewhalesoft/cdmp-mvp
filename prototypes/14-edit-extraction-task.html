@@ -52,6 +52,9 @@
     <div class="mb-4 flex gap-2 flex-wrap">
       <span class="text-xs text-gray-400 self-center mr-1">Demo:</span>
       <button onclick="showDemoState('normal')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Normal (預填)</button>
+      <button onclick="showDemoState('changeDatasource')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">變更資料來源</button>
+      <button onclick="showDemoState('changeTable')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">變更資料表 (警告)</button>
+      <button onclick="showDemoState('connectionError')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">連線失敗</button>
       <button onclick="showDemoState('running')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">執行中 (Disabled)</button>
       <button onclick="showDemoState('validation')" class="px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Validation Errors</button>
     </div>
@@ -92,11 +95,11 @@
             <label for="datasource" class="block text-sm font-medium text-gray-700 mb-1.5">資料來源 <span class="text-danger">*</span></label>
             <select id="datasource" name="datasource" required
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
-              onblur="validateField(this)">
+              onchange="onDatasourceChange()" onblur="validateField(this)">
               <option value="">請選擇</option>
-              <option value="MySQL 主資料庫" selected>MySQL 主資料庫</option>
-              <option value="PostgreSQL 分析庫">PostgreSQL 分析庫</option>
-              <option value="SQL Server 財務庫">SQL Server 財務庫</option>
+              <option value="a1b2c3d4-e5f6-7890-abcd-ef1234567890" selected>MySQL 主資料庫 (MySQL)</option>
+              <option value="b2c3d4e5-f6a7-8901-bcde-f12345678901">PostgreSQL 分析庫 (PostgreSQL)</option>
+              <option value="c3d4e5f6-a7b8-9012-cdef-123456789012">SQL Server 財務庫 (SQL Server)</option>
             </select>
             <p class="mt-1 text-xs text-danger hidden" id="datasource-error">此欄位為必填</p>
           </div>
@@ -120,13 +123,36 @@
             </div>
           </div>
 
-          <!-- 目標資料表 -->
+          <!-- 來源 Schema -->
           <div class="mb-5">
-            <label for="targetTable" class="block text-sm font-medium text-gray-700 mb-1.5">目標資料表 <span class="text-danger">*</span></label>
-            <input type="text" id="targetTable" name="targetTable" required value="customers"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              onblur="validateField(this)">
-            <p class="mt-1 text-xs text-danger hidden" id="targetTable-error">此欄位為必填</p>
+            <label for="sourceSchema" class="block text-sm font-medium text-gray-700 mb-1.5">來源 Schema</label>
+            <div class="relative">
+              <select id="sourceSchema" name="sourceSchema" disabled
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                onchange="onSchemaChange()">
+                <option value="">載入中...</option>
+              </select>
+              <div id="schemaSpinner" class="hidden absolute right-8 top-1/2 -translate-y-1/2">
+                <svg class="animate-spin w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75"></path></svg>
+              </div>
+            </div>
+            <p class="mt-1 text-xs text-danger hidden" id="sourceSchema-error">無法連線至資料來源，請至資料來源設定頁面確認連線設定</p>
+          </div>
+
+          <!-- 來源資料表 -->
+          <div class="mb-5">
+            <label for="sourceTable" class="block text-sm font-medium text-gray-700 mb-1.5">來源資料表 <span class="text-danger">*</span></label>
+            <div class="relative">
+              <select id="sourceTable" name="sourceTable" required disabled
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                onchange="onTableChange()" onblur="validateField(this)">
+                <option value="">載入中...</option>
+              </select>
+              <div id="tableSpinner" class="hidden absolute right-8 top-1/2 -translate-y-1/2">
+                <svg class="animate-spin w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75"></path></svg>
+              </div>
+            </div>
+            <p class="mt-1 text-xs text-danger hidden" id="sourceTable-error">此欄位為必填</p>
           </div>
 
           <!-- 排程設定 -->
@@ -247,11 +273,172 @@
 
   </main>
 
+  <!-- Change Source Table Warning Modal -->
+  <div id="changeTableModal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeChangeTableModal(false)"></div>
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 relative z-10">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-danger"></i>
+          </div>
+          <h3 class="text-base font-bold text-gray-800">確認變更來源資料表</h3>
+        </div>
+        <p class="text-sm text-gray-600 mb-6 leading-relaxed">變更來源資料表後，下次執行擷取任務時將重建 Raw Data 表，現有已擷取的資料將被清除。確定要繼續嗎？</p>
+        <div class="flex justify-end gap-3">
+          <button onclick="closeChangeTableModal(false)"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-border rounded-lg hover:bg-gray-50 transition-colors">
+            取消
+          </button>
+          <button onclick="closeChangeTableModal(true)"
+            class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-lg hover:bg-red-600 transition-colors">
+            確認變更
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
 
   <script>
     lucide.createIcons();
+
+    // ======================== Mock Data for Cascade Selects ========================
+    const mockSchemas = ['dbo', 'public', 'sys', 'information_schema'];
+    const mockTables = ['customers', 'orders', 'products', 'employees'];
+
+    // Track the original values for change detection
+    const originalValues = { schema: 'dbo', table: 'customers' };
+    let pendingTableValue = null;
+    let pendingSchemaValue = null;
+
+    // ======================== Cascade Select Logic ========================
+    function onDatasourceChange() {
+      const dsVal = document.getElementById('datasource').value;
+      const schemaSelect = document.getElementById('sourceSchema');
+      const tableSelect = document.getElementById('sourceTable');
+
+      // Reset schema and table
+      schemaSelect.innerHTML = '<option value="">載入中...</option>';
+      schemaSelect.disabled = true;
+      tableSelect.innerHTML = '<option value="">請先選擇 Schema</option>';
+      tableSelect.disabled = true;
+
+      // Hide previous errors
+      document.getElementById('sourceSchema-error').classList.add('hidden');
+      schemaSelect.classList.remove('border-danger');
+      schemaSelect.classList.add('border-border');
+
+      if (!dsVal) {
+        schemaSelect.innerHTML = '<option value="">請先選擇資料來源</option>';
+        return;
+      }
+
+      // Show spinner, simulate loading
+      document.getElementById('schemaSpinner').classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('schemaSpinner').classList.add('hidden');
+        schemaSelect.innerHTML = '<option value="">請選擇 Schema</option>';
+        mockSchemas.forEach(s => {
+          schemaSelect.innerHTML += `<option value="${s}">${s}</option>`;
+        });
+        schemaSelect.disabled = false;
+      }, 800);
+    }
+
+    function onSchemaChange() {
+      const schemaVal = document.getElementById('sourceSchema').value;
+      const tableSelect = document.getElementById('sourceTable');
+
+      // Reset table
+      tableSelect.innerHTML = '<option value="">載入中...</option>';
+      tableSelect.disabled = true;
+
+      // Hide previous errors
+      document.getElementById('sourceTable-error').classList.add('hidden');
+      tableSelect.classList.remove('border-danger');
+      tableSelect.classList.add('border-border');
+
+      if (!schemaVal) {
+        tableSelect.innerHTML = '<option value="">請先選擇 Schema</option>';
+        return;
+      }
+
+      // Show spinner, simulate loading
+      document.getElementById('tableSpinner').classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('tableSpinner').classList.add('hidden');
+        tableSelect.innerHTML = '<option value="">請選擇資料表</option>';
+        mockTables.forEach(t => {
+          tableSelect.innerHTML += `<option value="${t}">${t}</option>`;
+        });
+        tableSelect.disabled = false;
+      }, 600);
+    }
+
+    function onTableChange() {
+      const tableSelect = document.getElementById('sourceTable');
+      const newVal = tableSelect.value;
+      if (newVal) {
+        tableSelect.classList.remove('border-danger');
+        tableSelect.classList.add('border-border');
+        document.getElementById('sourceTable-error').classList.add('hidden');
+      }
+      // If value changed from original, show warning modal
+      const currentSchema = document.getElementById('sourceSchema').value;
+      if (newVal && (newVal !== originalValues.table || currentSchema !== originalValues.schema)) {
+        pendingTableValue = newVal;
+        document.getElementById('changeTableModal').classList.remove('hidden');
+        lucide.createIcons();
+      }
+    }
+
+    function closeChangeTableModal(confirmed) {
+      document.getElementById('changeTableModal').classList.add('hidden');
+      if (!confirmed && pendingTableValue !== null) {
+        // Revert to original table value
+        const tableSelect = document.getElementById('sourceTable');
+        tableSelect.value = originalValues.table;
+      }
+      pendingTableValue = null;
+    }
+
+    function populateSchemaSelect(selectedValue) {
+      const schemaSelect = document.getElementById('sourceSchema');
+      schemaSelect.innerHTML = '<option value="">請選擇 Schema</option>';
+      mockSchemas.forEach(s => {
+        schemaSelect.innerHTML += `<option value="${s}"${s === selectedValue ? ' selected' : ''}>${s}</option>`;
+      });
+      schemaSelect.disabled = false;
+    }
+
+    function populateTableSelect(selectedValue) {
+      const tableSelect = document.getElementById('sourceTable');
+      tableSelect.innerHTML = '<option value="">請選擇資料表</option>';
+      mockTables.forEach(t => {
+        tableSelect.innerHTML += `<option value="${t}"${t === selectedValue ? ' selected' : ''}>${t}</option>`;
+      });
+      tableSelect.disabled = false;
+    }
+
+    function resetCascadeSelects() {
+      const schemaSelect = document.getElementById('sourceSchema');
+      const tableSelect = document.getElementById('sourceTable');
+      schemaSelect.innerHTML = '<option value="">請先選擇資料來源</option>';
+      schemaSelect.disabled = true;
+      schemaSelect.classList.remove('border-danger');
+      schemaSelect.classList.add('border-border');
+      tableSelect.innerHTML = '<option value="">請先選擇 Schema</option>';
+      tableSelect.disabled = true;
+      tableSelect.classList.remove('border-danger');
+      tableSelect.classList.add('border-border');
+      document.getElementById('schemaSpinner').classList.add('hidden');
+      document.getElementById('tableSpinner').classList.add('hidden');
+      document.getElementById('sourceSchema-error').classList.add('hidden');
+      document.getElementById('sourceTable-error').classList.add('hidden');
+    }
 
     // ======================== Init Schedule Selects ========================
     (function initScheduleSelects() {
@@ -432,7 +619,15 @@
     function handleSubmit(e) {
       e.preventDefault();
       let valid = true;
-      ['name', 'datasource', 'targetTable'].forEach(f => { if (!validateField(document.getElementById(f))) valid = false; });
+      ['name', 'datasource'].forEach(f => { if (!validateField(document.getElementById(f))) valid = false; });
+      // Validate sourceTable (select)
+      const tableEl = document.getElementById('sourceTable');
+      if (!tableEl.value) {
+        tableEl.classList.add('border-danger');
+        tableEl.classList.remove('border-border');
+        document.getElementById('sourceTable-error').classList.remove('hidden');
+        valid = false;
+      }
       if (!validateSchedule()) valid = false;
       if (!valid) return;
 
@@ -503,7 +698,7 @@
       const form = document.getElementById('editForm');
       const banner = document.getElementById('runningBanner');
       const btn = document.getElementById('submitBtn');
-      const fieldIds = ['name', 'datasource', 'targetTable'];
+      const fieldIds = ['name', 'datasource'];
 
       // Reset field styles
       fieldIds.forEach(f => {
@@ -513,6 +708,7 @@
         if (err) err.classList.add('hidden');
       });
       document.getElementById('schedule-error').classList.add('hidden');
+      resetCascadeSelects();
       document.querySelectorAll('input[name="mode"]').forEach(r => r.disabled = false);
       disableScheduleUI(false);
       form.classList.remove('opacity-50');
@@ -521,15 +717,58 @@
       document.getElementById('submitLoading').classList.add('hidden');
       document.getElementById('submitLoading').classList.remove('inline-flex');
       banner.classList.add('hidden');
+      document.getElementById('changeTableModal').classList.add('hidden');
 
       switch (state) {
         case 'normal':
           document.getElementById('name').value = '每日客戶同步';
-          document.getElementById('datasource').value = 'MySQL 主資料庫';
+          document.getElementById('datasource').value = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
           document.querySelector('input[name="mode"][value="full"]').checked = true;
-          document.getElementById('targetTable').value = 'customers';
+          populateSchemaSelect('dbo');
+          populateTableSelect('customers');
           document.getElementById('incrementalColumn').value = '';
           document.getElementById('incrementalStart').value = '';
+          document.getElementById('incrementalFields').classList.add('hidden');
+          setScheduleToDaily2AM();
+          break;
+
+        case 'changeDatasource':
+          document.getElementById('name').value = '每日客戶同步';
+          document.getElementById('datasource').value = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+          document.querySelector('input[name="mode"][value="full"]').checked = true;
+          // Simulate loading after datasource change
+          document.getElementById('sourceSchema').innerHTML = '<option value="">載入中...</option>';
+          document.getElementById('sourceSchema').disabled = true;
+          document.getElementById('schemaSpinner').classList.remove('hidden');
+          document.getElementById('sourceTable').innerHTML = '<option value="">請先選擇 Schema</option>';
+          document.getElementById('sourceTable').disabled = true;
+          document.getElementById('incrementalFields').classList.add('hidden');
+          setScheduleToDaily2AM();
+          break;
+
+        case 'changeTable':
+          document.getElementById('name').value = '每日客戶同步';
+          document.getElementById('datasource').value = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+          document.querySelector('input[name="mode"][value="full"]').checked = true;
+          populateSchemaSelect('dbo');
+          populateTableSelect('orders');
+          document.getElementById('incrementalFields').classList.add('hidden');
+          setScheduleToDaily2AM();
+          // Show the warning modal
+          document.getElementById('changeTableModal').classList.remove('hidden');
+          break;
+
+        case 'connectionError':
+          document.getElementById('name').value = '每日客戶同步';
+          document.getElementById('datasource').value = 'c3d4e5f6-a7b8-9012-cdef-123456789012';
+          document.querySelector('input[name="mode"][value="full"]').checked = true;
+          document.getElementById('sourceSchema').innerHTML = '<option value="">請先選擇資料來源</option>';
+          document.getElementById('sourceSchema').disabled = true;
+          document.getElementById('sourceSchema').classList.add('border-danger');
+          document.getElementById('sourceSchema').classList.remove('border-border');
+          document.getElementById('sourceSchema-error').classList.remove('hidden');
+          document.getElementById('sourceTable').innerHTML = '<option value="">請先選擇 Schema</option>';
+          document.getElementById('sourceTable').disabled = true;
           document.getElementById('incrementalFields').classList.add('hidden');
           setScheduleToDaily2AM();
           break;
@@ -537,13 +776,18 @@
         case 'running':
           banner.classList.remove('hidden');
           document.getElementById('name').value = '每日客戶同步';
-          document.getElementById('datasource').value = 'MySQL 主資料庫';
+          document.getElementById('datasource').value = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
           document.querySelector('input[name="mode"][value="full"]').checked = true;
-          document.getElementById('targetTable').value = 'customers';
+          populateSchemaSelect('dbo');
+          populateTableSelect('customers');
           document.getElementById('incrementalFields').classList.add('hidden');
           setScheduleToDaily2AM();
 
-          fieldIds.forEach(f => document.getElementById(f).disabled = true);
+          // Disable all fields
+          document.getElementById('name').disabled = true;
+          document.getElementById('datasource').disabled = true;
+          document.getElementById('sourceSchema').disabled = true;
+          document.getElementById('sourceTable').disabled = true;
           document.querySelectorAll('input[name="mode"]').forEach(r => r.disabled = true);
           document.getElementById('incrementalColumn').disabled = true;
           document.getElementById('incrementalStart').disabled = true;
@@ -555,21 +799,28 @@
         case 'validation':
           document.getElementById('name').value = '';
           document.getElementById('datasource').value = '';
-          document.getElementById('targetTable').value = '';
           resetScheduleUI();
-          fieldIds.forEach(f => {
+          ['name', 'datasource'].forEach(f => {
             const el = document.getElementById(f);
             el.classList.add('border-danger'); el.classList.remove('border-border');
             const err = document.getElementById(f + '-error');
             if (err) err.classList.remove('hidden');
           });
+          document.getElementById('sourceTable').classList.add('border-danger');
+          document.getElementById('sourceTable').classList.remove('border-border');
+          document.getElementById('sourceTable-error').classList.remove('hidden');
           document.getElementById('schedule-error').classList.remove('hidden');
           break;
       }
       lucide.createIcons();
     }
 
-    // ======================== Init: set default schedule ========================
+    // ======================== Init: load existing values ========================
+    // Simulate auto-loading existing schema/table on form open
+    (function initEditForm() {
+      populateSchemaSelect('dbo');
+      populateTableSelect('customers');
+    })();
     setScheduleToDaily2AM();
   </script>
 </body>
