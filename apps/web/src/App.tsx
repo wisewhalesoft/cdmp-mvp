@@ -7,6 +7,8 @@ import { ResetPasswordPage } from '@/pages/reset-password/reset-password-page';
 import { AddDatasourcePage } from '@/pages/datasources/add-datasource-page';
 import { EditDatasourcePage } from '@/pages/datasources/edit-datasource-page';
 import { DatasourceListPage } from '@/pages/datasources/datasource-list-page';
+import { AddExtractionTaskPage } from '@/pages/extraction-tasks/add-extraction-task-page';
+import { ExtractionTaskListPage } from '@/pages/extraction-tasks/extraction-task-list-page';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
 export function App() {
@@ -44,6 +46,22 @@ export function App() {
         element={
           <AdminRoute>
             <EditDatasourcePage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/extraction-tasks"
+        element={
+          <AdminRoute>
+            <ExtractionTaskListPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/extraction-tasks/new"
+        element={
+          <AdminRoute>
+            <AddExtractionTaskPage />
           </AdminRoute>
         }
       />

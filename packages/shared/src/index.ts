@@ -280,6 +280,85 @@ export interface AlertsResponse {
   alerts: AlertItem[];
 }
 
+// F017: Extraction Task
+export type ExtractionMode = 'full' | 'incremental';
+export type ExtractionStatus = 'running' | 'scheduled' | 'completed' | 'failed' | 'disabled';
+
+export interface CreateExtractionTaskRequest {
+  name: string;
+  datasourceId: string;
+  mode: ExtractionMode;
+  targetTable: string;
+  schedule: string;
+  incrementalColumn?: string;
+  lastIncrementalValue?: string;
+}
+
+export interface ExtractionTaskResponse {
+  id: string;
+  name: string;
+  datasourceId: string;
+  datasourceName: string;
+  mode: ExtractionMode;
+  status: ExtractionStatus;
+  targetTable: string;
+  incrementalColumn: string | null;
+  lastIncrementalValue: string | null;
+  schedule: string;
+  enabled: boolean;
+  lastExecutionAt: string | null;
+  extractedCount: number;
+  totalCount: number;
+  progressPercent: number;
+  avgDurationMs: number;
+  executionCount: number;
+  errorMessage: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// F018: Extraction Task List
+export interface ExtractionTaskListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: ExtractionStatus;
+  mode?: ExtractionMode;
+  datasourceId?: string;
+}
+
+export interface ExtractionTaskListItem {
+  id: string;
+  name: string;
+  datasourceId: string;
+  datasourceName: string;
+  mode: ExtractionMode;
+  status: ExtractionStatus;
+  schedule: string;
+  lastExecutionAt: string | null;
+  extractedCount: number;
+  totalCount: number;
+  progressPercent: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExtractionTaskListSummary {
+  totalTasks: number;
+  running: number;
+  todaySuccess: number;
+  todayFailed: number;
+  successRate: number;
+}
+
+export interface ExtractionTaskListResponse {
+  data: ExtractionTaskListItem[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+  summary: ExtractionTaskListSummary;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -312,6 +391,9 @@ export const ERROR_CODES = {
   DS_AUTH_FAILED: 'DS_AUTH_FAILED',
   DS_HOST_UNREACHABLE: 'DS_HOST_UNREACHABLE',
   DS_DATABASE_NOT_FOUND: 'DS_DATABASE_NOT_FOUND',
+  // F017: Extraction Task
+  EXTRACTION_NAME_EXISTS: 'EXTRACTION_NAME_EXISTS',
+  EXTRACTION_DATASOURCE_NOT_FOUND: 'EXTRACTION_DATASOURCE_NOT_FOUND',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -348,4 +430,7 @@ export const ERROR_MESSAGES = {
   DS_AUTH_FAILED: '帳號或密碼錯誤',
   DS_HOST_UNREACHABLE: '無法連線至主機',
   DS_DATABASE_NOT_FOUND: '找不到指定的資料庫',
+  // F017: Extraction Task
+  EXTRACTION_NAME_EXISTS: '此名稱的擷取任務已存在',
+  EXTRACTION_DATASOURCE_NOT_FOUND: '指定的資料來源不存在或已被刪除',
 } as const;
