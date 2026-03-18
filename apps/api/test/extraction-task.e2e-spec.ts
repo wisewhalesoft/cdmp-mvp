@@ -644,6 +644,271 @@ describe('F018: List Extraction Tasks E2E (GET /api/v1/extraction-tasks)', () =>
   });
 });
 
+// F019: Edit Extraction Task E2E
+describe('F019: Edit Extraction Task E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let dataSource: DataSource;
+  let scheduledTaskId: string;
+  let completedTaskId: string;
+  let runningTaskId: string;
+  let incrementalTaskId: string;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    dataSource = app.get(DataSource);
+    const taskRepo = dataSource.getRepository(ExtractionTask);
+
+    // Create ET_SCHEDULED (full mode)
+    const res1 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F019 排程任務',
+        datasourceId,
+        mode: 'full',
+        targetTable: 'customers',
+        schedule: '0 2 * * *',
+      });
+    scheduledTaskId = res1.body.id;
+
+    // Create ET_COMPLETED (full mode, for name collision test)
+    const res2 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F019 已完成任務',
+        datasourceId,
+        mode: 'full',
+        targetTable: 'orders',
+        schedule: '0 3 * * *',
+      });
+    completedTaskId = res2.body.id;
+    await taskRepo.update({ id: completedTaskId }, { status: 'completed' });
+
+    // Create ET_RUNNING
+    const res3 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F019 執行中任務',
+        datasourceId,
+        mode: 'full',
+        targetTable: 'invoices',
+        schedule: '0 4 * * *',
+      });
+    runningTaskId = res3.body.id;
+    await taskRepo.update({ id: runningTaskId }, { status: 'running' });
+
+    // Create ET_INCREMENTAL
+    const res4 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F019 增量任務',
+        datasourceId,
+        mode: 'incremental',
+        targetTable: 'products',
+        schedule: '0 5 * * *',
+        incrementalColumn: 'updated_at',
+      });
+    incrementalTaskId = res4.body.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F019-001: 成功編輯任務名稱
+  it('should update task name and return 200 (TS-F019-001)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '新名稱' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('新名稱');
+    expect(res.body.id).toBe(scheduledTaskId);
+    expect(res.body.datasourceId).toBe(datasourceId);
+    expect(res.body.datasourceName).toBe('Test MySQL DS');
+    expect(res.body).toHaveProperty('updatedAt');
+
+    // Verify via GET detail
+    const detail = await request(app.getHttpServer())
+      .get(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.name).toBe('新名稱');
+  });
+
+  // TS-F019-002: 成功修改排程 cron
+  it('should update schedule cron and return 200 (TS-F019-002)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ schedule: '0 3 * * *' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.schedule).toBe('0 3 * * *');
+  });
+
+  // TS-F019-003: 全量切換至增量模式
+  it('should switch from full to incremental mode (TS-F019-003)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ mode: 'incremental', incrementalColumn: 'id' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.mode).toBe('incremental');
+    expect(res.body.incrementalColumn).toBe('id');
+  });
+
+  // TS-F019-004: 名稱唯一性排除自身
+  it('should allow keeping same name (self-exclusion) (TS-F019-004)', async () => {
+    // First restore name for clarity
+    await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'F019 自身名稱測試', mode: 'full' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'F019 自身名稱測試' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('F019 自身名稱測試');
+  });
+
+  // TS-F019-005: 執行中任務無法編輯
+  it('should return 409 for running task (TS-F019-005)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${runningTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'x' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('EXTRACTION_RUNNING');
+  });
+
+  // TS-F019-006: 名稱重複（與其他任務）
+  it('should return 409 for duplicate name with another task (TS-F019-006)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'F019 已完成任務' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('EXTRACTION_NAME_EXISTS');
+  });
+
+  // TS-F019-007: 非 Admin 無權編輯
+  it('should return 403 for non-admin user (TS-F019-007)', async () => {
+    const userToken = await getUserToken(app);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ name: 'x' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F019-008: 任務不存在
+  it('should return 404 for non-existent task (TS-F019-008)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/extraction-tasks/a1b2c3d4-e5f6-4890-abcd-ef1234567890')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'x' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('EXTRACTION_NOT_FOUND');
+  });
+
+  // TS-F019-009: 增量切換至全量（incrementalColumn 保留不清除）
+  it('should preserve incrementalColumn when switching from incremental to full (TS-F019-009)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${incrementalTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ mode: 'full' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.mode).toBe('full');
+    // incrementalColumn should be preserved (not cleared)
+    expect(res.body.incrementalColumn).toBe('updated_at');
+  });
+
+  // TS-F019-010: 成功更新資料來源
+  it('should update datasourceId and return new datasource info (TS-F019-010)', async () => {
+    // Create a second datasource
+    const dsRes = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Second DS',
+        type: 'postgresql',
+        host: '192.168.1.200',
+        port: 5432,
+        databaseName: 'second_db',
+        username: 'admin',
+        password: 'Secret123',
+      });
+    const secondDsId = dsRes.body.id;
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${completedTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ datasourceId: secondDsId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.datasourceId).toBe(secondDsId);
+    expect(res.body.datasourceName).toBe('Second DS');
+
+    // Verify via GET detail
+    const detail = await request(app.getHttpServer())
+      .get(`/api/v1/extraction-tasks/${completedTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.datasourceId).toBe(secondDsId);
+    expect(detail.body.datasourceName).toBe('Second DS');
+  });
+
+  // AC-3: GET /api/v1/extraction-tasks/:id returns full task for form prefill
+  it('should return full task detail via GET /:id (AC-3)', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('id');
+    expect(res.body).toHaveProperty('name');
+    expect(res.body).toHaveProperty('datasourceId');
+    expect(res.body).toHaveProperty('datasourceName');
+    expect(res.body).toHaveProperty('mode');
+    expect(res.body).toHaveProperty('status');
+    expect(res.body).toHaveProperty('targetTable');
+    expect(res.body).toHaveProperty('schedule');
+    expect(res.body).toHaveProperty('incrementalColumn');
+    expect(res.body).toHaveProperty('lastIncrementalValue');
+    expect(res.body).toHaveProperty('enabled');
+    expect(res.body).toHaveProperty('createdAt');
+    expect(res.body).toHaveProperty('updatedAt');
+  });
+
+  // GET /:id returns 404 for non-existent task
+  it('should return 404 via GET for non-existent task', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/extraction-tasks/a1b2c3d4-e5f6-4890-abcd-ef1234567890')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('EXTRACTION_NOT_FOUND');
+  });
+});
+
 // TS-F018-008: Empty list
 describe('F018: Empty List (GET /api/v1/extraction-tasks)', () => {
   let app: INestApplication;
