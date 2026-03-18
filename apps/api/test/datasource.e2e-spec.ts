@@ -18,6 +18,10 @@ import { PasswordResetToken } from '@/database/entities/password-reset-token.ent
 import { Datasource } from '@/database/entities/datasource.entity';
 import { DatasourceHealthLog } from '@/database/entities/datasource-health-log.entity';
 import { CONNECTION_TESTER } from '@/modules/datasource/connection-tester.provider';
+import { EXTRACTION_EXECUTOR } from '@/modules/extraction-task/extraction-executor.provider';
+import { ExtractionTask } from '@/database/entities/extraction-task.entity';
+import { ExtractionLog } from '@/database/entities/extraction-log.entity';
+import { ExtractionTaskModule } from '@/modules/extraction-task/extraction-task.module';
 import { HashUtil } from '@/common/hash/hash.util';
 import { ADMIN_ACTIVE, USER_ACTIVE } from './seeds/test-data';
 
@@ -1162,6 +1166,274 @@ describe('F015: Test Datasource Connection E2E (POST /api/v1/datasources/:id/tes
   it('should return 401 for unauthenticated user', async () => {
     const res = await request(app.getHttpServer())
       .post(`/api/v1/datasources/${testDsId}/test`);
+
+    expect(res.status).toBe(401);
+  });
+});
+
+// === Phase 3: Schema/Table Discovery Endpoints ===
+
+describe('F017: Datasource Schema & Table Discovery E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let testDsId: string;
+  let mockExecutor: {
+    listSchemas: ReturnType<typeof vi.fn>;
+    listTables: ReturnType<typeof vi.fn>;
+    execute: ReturnType<typeof vi.fn>;
+    getSourceTableMetadata: ReturnType<typeof vi.fn>;
+    getSourceCount: ReturnType<typeof vi.fn>;
+    readBatch: ReturnType<typeof vi.fn>;
+  };
+
+  const basePayload = {
+    name: 'Schema Discovery DS',
+    type: 'mysql',
+    host: '192.168.1.100',
+    port: 3306,
+    databaseName: 'discovery_db',
+    username: 'db_admin',
+    password: 'Secret123',
+    description: 'For schema/table discovery tests',
+  };
+
+  beforeAll(async () => {
+    mockExecutor = {
+      listSchemas: vi.fn().mockResolvedValue(['public', 'information_schema', 'pg_catalog']),
+      listTables: vi.fn().mockResolvedValue(['customers', 'orders', 'products']),
+      execute: vi.fn().mockResolvedValue({ totalCount: 0, extractedCount: 0 }),
+      getSourceTableMetadata: vi.fn().mockResolvedValue([
+        { name: 'id', dataType: 'integer', isPrimary: true },
+        { name: 'name', dataType: 'varchar', isPrimary: false },
+      ]),
+      getSourceCount: vi.fn().mockResolvedValue(0),
+      readBatch: vi.fn().mockResolvedValue({ rows: [], hasMore: false }),
+    };
+
+    process.env.AES_ENCRYPTION_KEY = TEST_AES_KEY;
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          load: [
+            () => ({
+              JWT_SECRET: 'test-jwt-secret-key-for-e2e-testing',
+              AES_ENCRYPTION_KEY: TEST_AES_KEY,
+            }),
+          ],
+        }),
+        TypeOrmModule.forRoot({
+          type: 'better-sqlite3',
+          database: ':memory:',
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog],
+          synchronize: true,
+        }),
+        ThrottlerModule.forRoot([
+          {
+            name: 'login',
+            ttl: 60000,
+            limit: 100,
+          },
+        ]),
+        AuthModule,
+        AccountsModule,
+        DatasourceModule,
+        ExtractionTaskModule,
+      ],
+      providers: [
+        {
+          provide: APP_GUARD,
+          useClass: ThrottlerGuard,
+        },
+      ],
+    })
+      .overrideProvider(CONNECTION_TESTER)
+      .useValue({ testConnection: async () => ({ success: true, responseTimeMs: 10 }) })
+      .overrideProvider(EXTRACTION_EXECUTOR)
+      .useValue(mockExecutor)
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    );
+    app.useGlobalFilters(new HttpExceptionFilter());
+    await app.init();
+
+    // Seed test users
+    const dataSource = moduleFixture.get(DataSource);
+    const userRepo = dataSource.getRepository(User);
+    const hashedPassword = await HashUtil.hash(ADMIN_ACTIVE.password);
+
+    await userRepo.save([
+      userRepo.create({
+        id: ADMIN_ACTIVE.id,
+        name: ADMIN_ACTIVE.name,
+        email: ADMIN_ACTIVE.email,
+        password_hash: hashedPassword,
+        role: ADMIN_ACTIVE.role,
+        status: ADMIN_ACTIVE.status,
+      }),
+      userRepo.create({
+        id: USER_ACTIVE.id,
+        name: USER_ACTIVE.name,
+        email: USER_ACTIVE.email,
+        password_hash: hashedPassword,
+        role: USER_ACTIVE.role,
+        status: USER_ACTIVE.status,
+      }),
+    ]);
+
+    adminToken = await getAdminToken(app);
+
+    // Create a datasource
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(basePayload);
+    testDsId = res.body.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F017-007: GET /api/v1/datasources/:id/schemas → 200
+  it('should return schemas list for valid datasource (HTTP 200)', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('schemas');
+    expect(Array.isArray(res.body.schemas)).toBe(true);
+    expect(res.body.schemas).toEqual(['public', 'information_schema', 'pg_catalog']);
+    expect(mockExecutor.listSchemas).toHaveBeenCalledWith({ datasourceId: testDsId });
+  });
+
+  // TS-F017-008: GET /api/v1/datasources/:id/schemas/:schema/tables → 200
+  it('should return tables list for valid datasource and schema (HTTP 200)', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas/public/tables`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('tables');
+    expect(Array.isArray(res.body.tables)).toBe(true);
+    expect(res.body.tables).toEqual(['customers', 'orders', 'products']);
+    expect(mockExecutor.listTables).toHaveBeenCalledWith({ datasourceId: testDsId, schema: 'public' });
+  });
+
+  // TS-F017-009: Admin 認證正確 → 200
+  it('should allow admin to access schemas endpoint', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+  });
+
+  // TS-F017-014: Datasource 不存在 → 404
+  describe('datasource not found (404)', () => {
+    it('should return 404 for schemas when datasource does not exist', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/datasources/00000000-0000-0000-0000-000000000000/schemas')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+
+    it('should return 404 for tables when datasource does not exist', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/datasources/00000000-0000-0000-0000-000000000000/schemas/public/tables')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+
+    it('should return 404 for soft-deleted datasource', async () => {
+      // Create and soft-delete a datasource
+      const createRes = await request(app.getHttpServer())
+        .post('/api/v1/datasources')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...basePayload, name: 'Soft Deleted Schema DS' });
+      const softDeletedId = createRes.body.id;
+
+      const dataSource = app.get(DataSource);
+      const dsRepo = dataSource.getRepository(Datasource);
+      await dsRepo.update({ id: softDeletedId }, { deleted_at: new Date() });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/datasources/${softDeletedId}/schemas`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('DS_NOT_FOUND');
+    });
+  });
+
+  // TS-F017-015: Schema 載入失敗 → 503 DATASOURCE_SCHEMA_LOAD_FAILED
+  it('should return 503 when schema loading fails', async () => {
+    mockExecutor.listSchemas.mockRejectedValueOnce(new Error('Connection refused'));
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('DATASOURCE_SCHEMA_LOAD_FAILED');
+    expect(res.body.message).toBe('無法載入資料來源的 Schema 列表');
+  });
+
+  // TS-F017-016: Table 載入失敗 → 503 DATASOURCE_TABLE_LOAD_FAILED
+  it('should return 503 when table loading fails', async () => {
+    mockExecutor.listTables.mockRejectedValueOnce(new Error('Connection refused'));
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas/public/tables`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('DATASOURCE_TABLE_LOAD_FAILED');
+    expect(res.body.message).toBe('無法載入資料來源的資料表列表');
+  });
+
+  // TS-F017-017: 非 Admin（User token）→ 403
+  it('should return 403 for non-admin user on schemas endpoint', async () => {
+    const userToken = await getUserToken(app);
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  it('should return 403 for non-admin user on tables endpoint', async () => {
+    const userToken = await getUserToken(app);
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas/public/tables`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // Unauthenticated user → 401
+  it('should return 401 for unauthenticated user on schemas endpoint', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/datasources/${testDsId}/schemas`);
 
     expect(res.status).toBe(401);
   });
