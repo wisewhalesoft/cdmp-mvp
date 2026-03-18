@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Datasource } from '@/database/entities/datasource.entity';
 import { IExtractionExecutor } from '../extraction-executor.provider';
@@ -15,6 +16,7 @@ export class ExecutorFactory {
   private readonly executors: Map<string, IExtractionExecutor> = new Map();
 
   constructor(
+    @InjectRepository(Datasource)
     private readonly datasourceRepository: Repository<Datasource>,
   ) {}
 

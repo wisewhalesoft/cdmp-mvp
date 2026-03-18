@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
+import { Repository } from 'typeorm';
 import { ExtractionTaskController } from './extraction-task.controller';
 import { ExtractionTaskService } from './extraction-task.service';
 import { ExtractionExecutionService } from './extraction-execution.service';
@@ -12,6 +13,8 @@ import { Datasource } from '@/database/entities/datasource.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { User } from '@/database/entities/user.entity';
 import { EXTRACTION_EXECUTOR } from './extraction-executor.provider';
+import { ExecutorFactory } from './executors/executor-factory';
+import { DelegatingExecutor } from './executors/delegating-executor';
 
 @Module({
   imports: [
@@ -28,19 +31,12 @@ import { EXTRACTION_EXECUTOR } from './extraction-executor.provider';
     ExtractionTaskService,
     ExtractionExecutionService,
     RawDataService,
+    ExecutorFactory,
     {
       provide: EXTRACTION_EXECUTOR,
-      useValue: {
-        execute: async () => ({ totalCount: 0, extractedCount: 0 }),
-        getSourceTableMetadata: async () => [
-          { name: 'id', dataType: 'integer', isPrimary: true },
-          { name: 'name', dataType: 'varchar', isPrimary: false },
-        ],
-        getSourceCount: async () => 0,
-        readBatch: async () => ({ rows: [], hasMore: false }),
-        listSchemas: async () => ['public'],
-        listTables: async () => ['example_table'],
-      },
+      useFactory: (dsRepo: Repository<Datasource>, factory: ExecutorFactory) =>
+        new DelegatingExecutor(dsRepo, factory),
+      inject: [getRepositoryToken(Datasource), ExecutorFactory],
     },
   ],
   exports: [ExtractionTaskService, ExtractionExecutionService, RawDataService, EXTRACTION_EXECUTOR],
