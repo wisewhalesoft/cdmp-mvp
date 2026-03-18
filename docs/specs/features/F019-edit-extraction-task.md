@@ -5,8 +5,8 @@ feature-id: F019
 source-story: US-032
 epic: E04
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-17
+version: "1.2"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -14,13 +14,13 @@ status: Draft
 
 ## 1. 功能摘要
 
-提供 Admin 編輯已建立的擷取任務設定的功能。Admin 可修改任務名稱、資料來源、擷取模式、目標資料表、排程等參數，但執行中的任務不允許編輯。
+提供 Admin 編輯已建立的擷取任務設定的功能。Admin 可修改任務名稱、資料來源、擷取模式、來源 schema / 資料表（透過下拉選單動態選擇）、排程等參數，但執行中的任務不允許編輯。若變更來源 schema（`sourceSchema`）或資料表（`sourceTable`），下次執行時系統將重新推斷欄位結構並可能重建 AppDB raw data 表。
 
 ## 2. 使用者故事
 
 **As a** Admin（管理者）
-**I want** 編輯已建立的擷取任務設定
-**So that** 我可以調整任務參數以符合變更的需求
+**I want** 編輯已建立的擷取任務設定，並透過下拉選單重新選擇來源 schema 與資料表
+**So that** 我可以調整任務參數以符合變更的需求，且不必擔心手動輸入資料表名稱時因格式錯誤導致執行失敗
 
 ## 3. 前置條件
 
@@ -46,7 +46,7 @@ status: Draft
 
 - **Given** Admin 開啟某任務的編輯表單
 - **When** 表單載入完成
-- **Then** 所有欄位預先填入該任務的目前設定值
+- **Then** 所有欄位預先填入該任務的目前設定值；schema 下拉選單顯示既有 `sourceSchema` 值，資料表下拉選單顯示既有 `sourceTable` 值
 
 ### AC-4: 編輯時的欄位驗證
 
@@ -54,17 +54,49 @@ status: Draft
 - **When** Admin 修改欄位後提交，有必填欄位為空或格式不合規
 - **Then** 系統針對每個不合規欄位顯示具體的驗證錯誤訊息
 
+### AC-5: 編輯表單開啟時載入既有資料來源的 Schema 列表
+
+- **Given** Admin 開啟某任務的編輯表單，任務已有設定的資料來源
+- **When** 表單載入完成
+- **Then** 系統自動呼叫 `GET /api/v1/datasources/:id/schemas` 載入 schema 列表，並將既有的 `sourceSchema` 值設為預選項；同步呼叫 `GET /api/v1/datasources/:id/schemas/:schema/tables` 載入資料表列表，並將既有的 `sourceTable` 值設為預選項
+
+### AC-6: 變更資料來源時重置並重新載入 Schema 與資料表
+
+- **Given** Admin 在編輯表單中，且目前已有選定的資料來源、schema 及資料表
+- **When** Admin 變更資料來源選擇
+- **Then** 系統清除 schema 與資料表的選擇值，顯示 loading 狀態，並重新載入對應新資料來源的 schema 列表
+
+### AC-7: 變更 Schema 時重置並重新載入資料表列表
+
+- **Given** Admin 在編輯表單中，且已選定資料來源與 schema
+- **When** Admin 變更 schema 選擇
+- **Then** 系統清除資料表的選擇值，顯示 loading 狀態，並重新載入對應新 schema 的資料表列表
+
+### AC-8: 載入失敗時顯示錯誤訊息
+
+- **Given** Admin 在編輯表單，但系統無法連線至外部資料庫
+- **When** schema 或資料表列表載入失敗
+- **Then** 系統顯示錯誤訊息（例如：「無法連線至資料來源，請至資料來源設定頁面確認連線設定」），schema 與資料表下拉選單保持停用狀態；不提供手動輸入選項，使用者必須先修復連線設定後重新嘗試
+
+### AC-9: 變更來源資料表時的警告提示
+
+- **Given** Admin 在編輯表單中，且任務先前已成功執行過（`execution_count > 0`）
+- **When** Admin 變更 schema 或資料表選擇（與既有值不同）
+- **Then** 系統顯示警告訊息：「變更來源資料表後，下次執行時系統將重新推斷欄位結構，既有 raw data 表可能被重建」，讓 Admin 確認後再繼續
+
 ## 5. 主要流程
 
 1. Admin 在擷取任務清單中點擊某任務的「編輯」按鈕
 2. 系統發送 `GET /api/v1/extraction-tasks/:id` 取得任務詳細資料
-3. 系統顯示編輯表單，所有欄位預先填入既有值
-4. Admin 修改所需欄位
-5. Admin 點擊「儲存」
-6. 系統執行欄位驗證
-7. 系統檢查名稱唯一性（排除自身）
-8. 系統更新擷取任務
-9. 系統顯示成功訊息，導回任務清單
+3. 系統以任務的 `datasource_id` 呼叫 `GET /api/v1/datasources/:id/schemas`，載入 schema 列表並預選既有 `source_schema`
+4. 系統以任務的 `source_schema` 呼叫 `GET /api/v1/datasources/:id/schemas/:schema/tables`，載入資料表列表並預選既有 `source_table`
+5. 系統顯示編輯表單，所有欄位預先填入既有值（含 schema 與資料表下拉預選）
+6. Admin 修改所需欄位
+7. Admin 點擊「儲存」
+8. 系統執行欄位驗證
+9. 系統檢查名稱唯一性（排除自身）
+10. 系統更新擷取任務
+11. 系統顯示成功訊息，導回任務清單
 
 ## 6. 替代流程
 
@@ -94,7 +126,8 @@ status: Draft
   "name": "string",
   "datasourceId": "uuid",
   "mode": "full | incremental",
-  "targetTable": "string",
+  "sourceSchema": "string",
+  "sourceTable": "string",
   "schedule": "string",
   "incrementalColumn": "string",
   "lastIncrementalValue": "string"
@@ -127,10 +160,21 @@ status: Draft
 | BR-3 | 名稱唯一性驗證須排除自身 |
 | BR-4 | 增量模式下 `incrementalColumn` 為必填 |
 | BR-5 | 時區處理：後端儲存 UTC 時間，前端顯示時轉換為 UTC+8 |
+| BR-6 | 變更 `sourceSchema` 或 `sourceTable` 後，下次執行時系統重新推斷欄位結構並可能重建 AppDB raw data 表 |
+| BR-7 | 編輯表單開啟時，系統自動載入既有資料來源的 schema 列表與 table 列表，並預選既有值 |
+| BR-8 | 變更資料來源時清除 schema / 資料表選擇值並重新載入；變更 schema 時清除資料表選擇值並重新載入 |
+| BR-9 | 連線失敗時不提供手動輸入 fallback，使用者必須修復連線設定後重新嘗試 |
+| BR-10 | 已執行過的任務（`execution_count > 0`）變更 schema 或資料表時，需顯示 raw data 表可能重建的警告 |
 
 ## 10. UI/UX 需求
 
 - 編輯表單與建立表單結構一致，所有欄位預先填入既有值
+- 表單開啟時自動載入既有資料來源的 schema 列表與 table 列表，並預選既有 `sourceSchema` 與 `sourceTable` 值
+- 載入 schema / table 列表期間顯示 loading 狀態，下拉選單停用
+- 變更資料來源時清除 schema / 資料表並重新載入 schema 列表
+- 變更 schema 時清除資料表並重新載入 table 列表
+- 載入失敗時顯示錯誤訊息，schema 與資料表下拉保持停用，不提供手動輸入
+- 已執行過的任務變更 schema 或資料表時，顯示警告訊息：「變更來源資料表後，下次執行時系統將重新推斷欄位結構，既有 raw data 表可能被重建」
 - 執行中任務的編輯按鈕為停用狀態（灰色），hover 時顯示 tooltip「任務執行中，無法編輯」
 - 表單提交期間顯示 loading 狀態，防止重複提交
 
@@ -142,6 +186,8 @@ status: Draft
 | 任務不存在                   | HTTP 404，「找不到指定的擷取任務」                   | error-handling.md#extraction-errors      |
 | 名稱重複                     | HTTP 409，「此名稱的擷取任務已存在」                 | error-handling.md#extraction-errors      |
 | 欄位驗證失敗                 | HTTP 422，附各欄位錯誤訊息                           | error-handling.md#validation-errors      |
+| Schema 列表載入失敗          | 「無法連線至資料來源，請至資料來源設定頁面確認連線設定」 | error-handling.md#datasource-schema-errors |
+| 資料表列表載入失敗           | 「無法連線至資料來源，請至資料來源設定頁面確認連線設定」 | error-handling.md#datasource-schema-errors |
 | 非 Admin 操作                | HTTP 403，「您沒有權限執行此操作」                   | error-handling.md#auth-errors            |
 
 ## 12. 相依性

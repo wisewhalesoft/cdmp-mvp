@@ -5,8 +5,8 @@ feature-id: F022
 source-story: US-035
 epic: E04
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-17
+version: "1.1"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -52,6 +52,12 @@ status: Draft
 - **Given** 某任務有大量執行日誌
 - **When** Admin 瀏覽日誌面板
 - **Then** 系統以分頁方式顯示（預設每頁 10 筆），可切換頁面查看更多歷史紀錄
+
+### AC-6: 從日誌連結至 raw data 預覽
+
+- **Given** 日誌列表中有 `completed` 狀態的日誌，且 `extracted_count > 0`
+- **When** Admin 點擊該筆日誌的「預覽資料」連結
+- **Then** 系統導覽至該擷取任務的 raw data 預覽頁面（F026）
 
 ### AC-5: 無日誌時的空狀態
 
@@ -151,6 +157,7 @@ status: Draft
 - 所有時間欄位以 UTC+8 顯示
 - 分頁控制：顯示總筆數、目前頁碼
 - 空狀態：顯示「此任務尚無執行紀錄」
+- `completed` 且 `extracted_count > 0` 的日誌顯示「預覽資料」連結，點擊導覽至 F026 raw data 預覽頁面
 
 ## 11. 錯誤場景
 
@@ -165,6 +172,7 @@ status: Draft
 - **F021（立即執行／重新執行）**：執行後產生日誌
 - **F023（排程自動執行）**：排程執行後產生日誌
 - **F024（擷取監控儀表板）**：儀表板的失敗清單連結至日誌
+- **F026（查看擷取資料預覽）**：日誌中提供進入 raw data 預覽的連結
 - **認證系統**：需要有效的 Admin 登入 Session/Token
 
 ## 13. 資料需求
@@ -175,4 +183,4 @@ status: Draft
 
 - 資料模型：[data-model.md#extraction-log-entity](../data-model.md#extraction-log-entity)
 - 錯誤處理：[error-handling.md#extraction-errors](../error-handling.md#extraction-errors)
-- 相關功能：[F021](F021-run-extraction-task.md)、[F023](F023-scheduled-extraction.md)、[F024](F024-extraction-dashboard.md)
+- 相關功能：[F021](F021-run-extraction-task.md)、[F023](F023-scheduled-extraction.md)、[F024](F024-extraction-dashboard.md)、[F026](F026-preview-raw-data.md)

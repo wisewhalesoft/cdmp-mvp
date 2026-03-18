@@ -1,8 +1,8 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -123,6 +123,17 @@ status: Draft
 | DS_CONNECTION_TIMEOUT | — | 連線逾時（10 秒） | 10 秒內無回應 | F015 |
 | DS_DATABASE_NOT_FOUND | — | 找不到指定的資料庫：{databaseName} | 資料庫名稱不存在 | F015 |
 | DS_UNKNOWN_ERROR | — | 連線失敗：{errorDetail} | 其他未分類的連線錯誤 | F015 |
+| DATASOURCE_SCHEMA_LOAD_FAILED | 503 | 無法連線至資料來源，schema 列表載入失敗 | 查詢外部資料來源的 schema/database 列表時連線失敗（逾時、認證失敗等） | F017, F019 |
+| DATASOURCE_TABLE_LOAD_FAILED | 503 | 無法連線至資料來源，table 列表載入失敗 | 查詢外部資料來源指定 schema 下的資料表列表時連線失敗（逾時、認證失敗等） | F017, F019 |
+
+{#datasource-schema-errors}
+
+**Schema / Table 查詢錯誤處理**：
+
+- `GET /api/v1/datasources/:id/schemas` 與 `GET /api/v1/datasources/:id/schemas/:schema/tables` 兩個端點在連線失敗時回傳 HTTP 503
+- 前端收到 503 時，顯示錯誤訊息，schema 與資料表下拉選單保持停用狀態
+- 不提供手動輸入 fallback，使用者必須修復連線設定後重新嘗試
+- 逾時設定：10 秒
 
 **連線測試回應格式**：
 
@@ -151,10 +162,14 @@ status: Draft
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
 | EXTRACTION_NAME_EXISTS | 409 | 此名稱的擷取任務已存在 | 擷取任務名稱重複 | F017, F019 |
-| EXTRACTION_NOT_FOUND | 404 | 找不到指定的擷取任務 | 擷取任務 ID 不存在或已軟刪除 | F019, F020, F021, F022, F025 |
+| EXTRACTION_NOT_FOUND | 404 | 找不到指定的擷取任務 | 擷取任務 ID 不存在或已軟刪除 | F019, F020, F021, F022, F025, F026 |
 | EXTRACTION_RUNNING | 409 | 任務執行中，無法執行此操作 | 任務 status 為 running 時嘗試編輯、停用、刪除或重複觸發 | F019, F020, F021, F025 |
 | EXTRACTION_DATASOURCE_NOT_FOUND | 422 | 指定的資料來源不存在或已被刪除 | 建立或編輯時指定的 datasourceId 無效 | F017, F019 |
 | EXTRACTION_EXECUTION_FAILED | — | 擷取執行失敗：{errorDetail} | 擷取過程中發生錯誤（非 API 錯誤，記錄於 ExtractionLog） | F021, F023 |
+| EXTRACTION_TABLE_CREATE_FAILED | — | 動態建表失敗：{errorDetail} | 首次執行時無法建立 raw data 表（metadata 讀取失敗或 DDL 執行失敗） | F021, F023 |
+| EXTRACTION_BATCH_WRITE_FAILED | — | 批次寫入失敗：{errorDetail} | 批次 INSERT 過程中發生錯誤（連線中斷、約束衝突等） | F021, F023 |
+| EXTRACTION_SOURCE_TABLE_NOT_FOUND | — | 來源資料表不存在：{sourceSchema}.{sourceTable} | 外部資料來源中找不到指定的來源 schema / 資料表 | F021, F023 |
+| EXTRACTION_RAW_TABLE_NOT_FOUND | 404 | 此任務尚無已擷取的資料 | raw data 表不存在（任務從未成功執行），預覽 API 時回傳 | F026 |
 
 ---
 
@@ -235,5 +250,11 @@ status: Draft
 | 擷取任務不存在 | 404 | EXTRACTION_NOT_FOUND | 找不到指定的擷取任務 | 拒絕請求 |
 | 增量模式缺少增量欄位 | 422 | VALIDATION_INCREMENTAL_COLUMN_REQUIRED | 增量模式必須指定增量欄位 | 不提交表單 |
 | Cron 表達式格式錯誤 | 422 | VALIDATION_INVALID_CRON | 排程格式不正確 | 不提交表單 |
+| 動態建表失敗 | — | EXTRACTION_TABLE_CREATE_FAILED | 動態建表失敗 | 任務標記 failed，ExtractionLog 記錄錯誤 |
+| 批次寫入失敗 | — | EXTRACTION_BATCH_WRITE_FAILED | 批次寫入失敗 | 任務標記 failed，已寫入資料保留 |
+| 來源資料表不存在 | — | EXTRACTION_SOURCE_TABLE_NOT_FOUND | 來源資料表不存在 | 任務標記 failed，ExtractionLog 記錄錯誤 |
+| Schema 列表載入失敗 | 503 | DATASOURCE_SCHEMA_LOAD_FAILED | 無法連線至資料來源 | 前端顯示錯誤，schema 下拉停用 |
+| Table 列表載入失敗 | 503 | DATASOURCE_TABLE_LOAD_FAILED | 無法連線至資料來源 | 前端顯示錯誤，table 下拉停用 |
+| raw data 表不存在（預覽） | 404 | EXTRACTION_RAW_TABLE_NOT_FOUND | 此任務尚無已擷取的資料 | 顯示空狀態提示 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

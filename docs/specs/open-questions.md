@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -80,6 +80,37 @@ status: Draft
 | OQ-18 | 擷取失敗是否需要自動重試機制？ | **MVP 不提供自動重試**，失敗後 Admin 手動重新執行 | F021, F023 |
 | OQ-19 | 儀表板 Polling 間隔是否需可配置？ | **前端硬編碼 5 秒**，未來可考慮 WebSocket 替代 | F024 |
 
+## E04 來源資料表選擇方式變更 — 已解決問題
+
+以下問題於 2026-03-18 由產品負責人確認：
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-24 | `source_schema` 欄位是否加入 ExtractionTask Entity？還是維持單一 `source_table`？ | **拆分為 `source_schema` + `source_table` 兩個獨立欄位** | F017, F019, F021, F026, data-model.md |
+| OQ-25 | `IExtractionExecutor` 需新增 `listSchemas()` 與 `listTables()` 方法，各資料庫類型的實作方式？ | **由各資料庫 Executor 實作**：MySQL 使用 `SHOW DATABASES` / `SHOW TABLES`；PostgreSQL 使用 `information_schema.schemata` / `information_schema.tables`；SQL Server 使用 `sys.schemas` / `INFORMATION_SCHEMA.TABLES`。新增兩個 Datasource Controller 端點：`GET /api/v1/datasources/:id/schemas` 與 `GET /api/v1/datasources/:id/schemas/:schema/tables` | F017, F019, architecture-spec.md |
+| OQ-26 | 連線失敗時是否需要手動輸入 fallback？ | **不需要**。連線失敗時一律顯示錯誤訊息，要求使用者修復連線設定後重新嘗試 | F017, F019 |
+| OQ-27 | Schema / table 列表是否需要快取機制？ | **不需要**。每次開表單直接向外部資料庫查詢 | F017, F019 |
+
+## E04 Raw Data 落地相關開放問題 — 已解決
+
+以下問題於 2026-03-18 由產品負責人確認，採用建議假設方案：
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-20 | raw data 表的欄位型別映射策略？ | **建立型別映射表**，已知型別精確映射（MySQL→PG, MSSQL→PG），未知型別 fallback 為 `TEXT` | F021, F023, F026 |
+| OQ-21 | 變更 `source_schema` 或 `source_table` 後，現有 raw data 表的處理策略？ | **DROP 舊表 + 重建新結構**，下次執行時自動處理 | F019, F021 |
+| OQ-22 | raw data 表的磁碟空間管理？ | **MVP 不自動管理**，由 DBA 監控 | F021, F024 |
+| OQ-23 | 全量模式 TRUNCATE 失敗後是否需要回復策略？ | **不提供回復**，TRUNCATE 失敗直接標記 failed | F021 |
+
+## E04 來源資料表動態選擇相關開放問題 — 已解決
+
+以下問題於 2026-03-18 由產品負責人確認，採用建議假設方案：
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-28 | 編輯表單的 AC-9 警告提示（變更來源資料表時的 raw data 重建警告）以何種方式呈現？ | **Modal 對話框確認**，需使用者確認才能繼續 | F019 |
+| OQ-29 | 編輯表單開啟時需同時發出 2 支 API 請求（schemas + tables），若外部資料庫回應慢，表單顯示會延遲。是否接受此 UX 取捨？ | **接受延遲**，表單載入完成再啟用下拉 | F019 |
+
 ---
 
 ## 假設清單
@@ -100,6 +131,15 @@ status: Draft
 | A10 | 擷取的批次大小預設 1,000 筆/批次 | 架構設計假設 | ✅ 已確認（OQ-14） |
 | A11 | 擷取日誌永久保留 | 架構設計假設 | ✅ 已確認（OQ-15） |
 | A12 | MVP 不提供擷取失敗自動重試機制 | 架構設計假設 | ✅ 已確認（OQ-18） |
+| A13 | 擷取作業為真正的資料搬移，從外部 DB 讀取資料寫入 CDMP AppDB | E04 epic-brief（更新） | 產品確認 |
+| A14 | raw data 表命名規則：`raw_{task_id 前 8 碼}`，由系統自動生成 | US-030, US-034 | 產品確認 |
+| A15 | raw data 表不納入 ORM Entity 管理，透過動態 SQL 操作 | 架構設計假設 | 架構師確認 |
+| A16 | AppDB 使用 PostgreSQL（raw data 表的型別映射以 PostgreSQL 為目標） | 專案技術棧 | 架構師確認 |
+| A17 | raw data 表在任務軟刪除後保留，不自動刪除 | 架構設計假設 | 產品確認 |
+| A18 | `source_schema` 與 `source_table` 均透過下拉選單從外部資料來源動態載入選擇，不支援手動輸入 | US-030, US-032 決策 | ✅ 已確認（OQ-26） |
+| A19 | Schema / table 列表不使用快取，每次請求即時查詢外部資料庫 | US-030, US-032 決策 | ✅ 已確認（OQ-27） |
+| A20 | 連線失敗時不提供手動輸入 fallback | US-030, US-032 決策 | ✅ 已確認（OQ-26） |
+| A21 | `IExtractionExecutor` 介面新增 `listSchemas()` 與 `listTables()` 方法 | 架構設計需求 | ✅ 已確認（OQ-25） |
 
 ## 更新紀錄
 
@@ -109,3 +149,6 @@ status: Draft
 | 2026-03-06 | OQ-1 ~ OQ-13 全部解決；OQ-7 決議移除稽核日誌，已同步更新 US-014 與 F008 | Product Owner |
 | 2026-03-17 | 新增 E04 相關開放問題 OQ-14 ~ OQ-19、假設 A8 ~ A12、已解決問題 R10 ~ R12 | Spec Writer Agent |
 | 2026-03-17 | OQ-14 ~ OQ-19 全部以建議假設確認解決；A10 ~ A12 標記為已確認 | Product Owner |
+| 2026-03-18 | 新增 OQ-20 ~ OQ-23（raw data 落地相關）；新增假設 A13 ~ A17 | Spec Writer Agent |
+| 2026-03-18 | 新增 OQ-24 ~ OQ-29（來源資料表動態選擇相關）；OQ-24 ~ OQ-27 已解決；新增假設 A18 ~ A21 | Spec Writer Agent |
+| 2026-03-18 | OQ-20 ~ OQ-23、OQ-28 ~ OQ-29 全部以建議假設方案確認解決 | Product Owner |

@@ -1,16 +1,16 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "1.1"
-date: 2026-03-17
+version: "1.3"
+date: 2026-03-18
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：45 份（7 支援文件 + 25 Feature 文件 + 13 圖表文件）
-> **最後更新**：2026-03-17
+> **文件總數**：46 份（7 支援文件 + 26 Feature 文件 + 13 圖表文件）
+> **最後更新**：2026-03-18
 
 ---
 
@@ -22,9 +22,9 @@ status: Draft
 | Feature 文件（E01） | 3 |
 | Feature 文件（E02） | 7 |
 | Feature 文件（E03） | 6 |
-| Feature 文件（E04） | 9 |
+| Feature 文件（E04） | 10 |
 | Mermaid 圖表 | 13 |
-| **總計** | **45** |
+| **總計** | **46** |
 
 ---
 
@@ -79,15 +79,16 @@ status: Draft
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
-| F017 | [F017-create-extraction-task.md](features/F017-create-extraction-task.md) | 建立擷取任務 | US-030 | P0-MVP |
+| F017 | [F017-create-extraction-task.md](features/F017-create-extraction-task.md) | 建立擷取任務（含來源 Schema / 資料表動態選擇） | US-030 | P0-MVP |
 | F018 | [F018-view-extraction-task-list.md](features/F018-view-extraction-task-list.md) | 查看擷取任務清單 | US-031 | P0-MVP |
-| F019 | [F019-edit-extraction-task.md](features/F019-edit-extraction-task.md) | 編輯擷取任務 | US-032 | P0-MVP |
+| F019 | [F019-edit-extraction-task.md](features/F019-edit-extraction-task.md) | 編輯擷取任務（含來源 Schema / 資料表動態選擇） | US-032 | P0-MVP |
 | F020 | [F020-toggle-extraction-task.md](features/F020-toggle-extraction-task.md) | 啟用／停用擷取任務 | US-033 | P0-MVP |
-| F021 | [F021-run-extraction-task.md](features/F021-run-extraction-task.md) | 立即執行／重新執行擷取任務 | US-034 | P0-MVP |
+| F021 | [F021-run-extraction-task.md](features/F021-run-extraction-task.md) | 立即執行／重新執行擷取任務（含動態建表與批次寫入） | US-034 | P0-MVP |
 | F022 | [F022-view-extraction-logs.md](features/F022-view-extraction-logs.md) | 查看擷取日誌 | US-035 | P0-MVP |
 | F023 | [F023-scheduled-extraction.md](features/F023-scheduled-extraction.md) | 排程自動執行 | US-036 | P0-MVP |
 | F024 | [F024-extraction-dashboard.md](features/F024-extraction-dashboard.md) | 擷取監控儀表板 | US-037 | P1 |
 | F025 | [F025-delete-extraction-task.md](features/F025-delete-extraction-task.md) | 刪除擷取任務 | US-038 | P1 |
+| F026 | [F026-preview-raw-data.md](features/F026-preview-raw-data.md) | 查看擷取資料預覽 | US-039 | P0-MVP |
 
 ---
 
@@ -135,7 +136,7 @@ status: Draft
 ### TDD Agent
 1. 必讀：`data-model.md`, `error-handling.md`, `nfr.md`
 2. 依實作順序載入對應 Feature 文件
-3. 建議順序：F001→F002→F003→F004→F005→F006→F008→F009→F010→F007→F011→F012→F013→F015→F014→F016→F017→F018→F019→F020→F021→F022→F023→F024→F025
+3. 建議順序：F001→F002→F003→F004→F005→F006→F008→F009→F010→F007→F011→F012→F013→F015→F014→F016→F017→F018→F019→F020→F021→F022→F023→F024→F025→F026
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -151,9 +152,9 @@ status: Draft
 
 ## 優先級分類
 
-### P0-MVP（Must Have）— 20 個 Feature
+### P0-MVP（Must Have）— 21 個 Feature
 
-F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023
+F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026
 
 ### P1（Should Have）— 5 個 Feature
 
@@ -175,7 +176,7 @@ F004 ──> F009
 F011 ──> F012 ──> F013, F014
 F011 ──> F015 ──> F016
 F017 ──> F018 ──> F019, F025
-F017 ──> F020, F021 ──> F022, F023, F024
+F017 ──> F020, F021 ──> F022, F023, F024, F026
 ```
 
 ---
@@ -186,3 +187,5 @@ F017 ──> F020, F021 ──> F022, F023, F024
 |------|---------|--------|
 | 2026-03-06 | 初版建立，33 份文件索引完成 | Spec Writer Agent |
 | 2026-03-17 | 新增 E04 資料擷取管理 9 個 Feature（F017-F025）、3 個圖表、更新支援文件 | Spec Writer Agent |
+| 2026-03-18 | E04 raw data 落地重大更新：`target_table` → `source_table`、動態建表、批次寫入、新增 F026 查看擷取資料預覽、新增 NFR-002.9/002.10/002.11 | Spec Writer Agent |
+| 2026-03-18 | E04 來源資料表選擇方式變更：`source_table` 單一欄位拆分為 `source_schema` + `source_table`；新增 Datasource Schema/Table 查詢 API 端點；F017/F019 新增動態載入下拉選單；新增 DATASOURCE_SCHEMA_LOAD_FAILED / DATASOURCE_TABLE_LOAD_FAILED 錯誤碼 | Spec Writer Agent |

@@ -5,8 +5,8 @@ feature-id: F021
 source-story: US-034
 epic: E04
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-17
+version: "1.2"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -14,7 +14,7 @@ status: Draft
 
 ## 1. 功能摘要
 
-提供 Admin 手動觸發擷取任務執行或重新執行失敗任務的功能。系統以非同步方式執行擷取作業，建立 ExtractionLog 記錄，並提供執行進度追蹤。
+提供 Admin 手動觸發擷取任務執行或重新執行失敗任務的功能。系統以非同步方式執行擷取作業：連線至外部資料來源，讀取來源資料表（由 `source_schema` + `source_table` 組合定位，執行時組合為 `"source_schema"."source_table"` 格式）的資料，真正寫入 CDMP AppDB 中對應的 raw data 表（`raw_{task_id_short}`）。首次執行時自動建立 raw data 表。支援全量（TRUNCATE + 重寫）與增量（追加寫入）兩種模式，以批次 INSERT（每批 1,000 筆）執行寫入。
 
 ## 2. 使用者故事
 
@@ -60,6 +60,18 @@ status: Draft
 - **When** 擷取作業完成（成功或失敗）
 - **Then** 系統更新任務 `status`（`completed` 或 `failed`）、`last_execution_at`、`extracted_count`、`error_message`（若失敗），同時更新對應的 ExtractionLog 記錄
 
+### AC-6: 擷取資料真正寫入 AppDB
+
+- **Given** 擷取任務執行成功
+- **When** 擷取作業完成
+- **Then** 系統確認 CDMP AppDB 中的對應 raw data 表（`raw_{task_id_short}`）已包含從外部資料來源讀取的實際資料，筆數與 `extracted_count` 一致
+
+### AC-7: AppDB raw data 表不存在時自動建立
+
+- **Given** 某擷取任務的 AppDB raw data 表尚未建立（首次執行）
+- **When** 擷取作業啟動
+- **Then** 系統自動讀取外部來源表的欄位 metadata，於 AppDB 建立對應結構的 raw data 表（含 `_cdmp_extracted_at` 系統欄位；若來源表無主鍵則附加 `_cdmp_id` 欄位），再執行資料寫入
+
 ## 5. 主要流程
 
 1. Admin 在任務清單中點擊「立即執行」或「重新執行」按鈕
@@ -67,11 +79,21 @@ status: Draft
 3. 系統建立 ExtractionLog（`status = 'running'`）
 4. 系統更新 ExtractionTask（`status = 'running'`）
 5. 系統回傳 `202 Accepted`，前端開始 Polling 進度
-6. 系統非同步執行擷取作業
-7. 每批次擷取後更新 `extracted_count` 與 `progress_percent`
+6. 系統非同步執行擷取作業：
+   a. 讀取 Datasource 連線資訊，AES-256 解密 `encrypted_password`
+   b. 連線至外部資料來源
+   c. 檢查 AppDB 是否已有對應的 raw data 表（`raw_{task_id_short}`）
+      - 若不存在：讀取來源表（`"source_schema"."source_table"`）的欄位 metadata，於 AppDB 建立同結構的 raw data 表
+      - 若已存在：使用現有表
+   d. 全量模式：先 TRUNCATE raw data 表
+   e. 查詢 `total_count`（`SELECT COUNT(*) FROM "source_schema"."source_table"`；增量模式加 `WHERE` 條件）
+   f. 批次讀取外部來源資料（每批 1,000 筆），寫入 AppDB raw data 表
+   g. 增量模式：每批次使用 `WHERE incremental_column > last_incremental_value`
+7. 每批次完成後更新 `extracted_count` 與 `progress_percent`
 8. 執行完成後更新 ExtractionLog（`status`、`finished_at`、`duration_ms`、`extracted_count`）
 9. 系統更新 ExtractionTask（`status`、`last_execution_at`、`extracted_count`、`avg_duration_ms`、`execution_count`）
-10. 若失敗，記錄 `error_message`
+10. 增量模式成功完成後更新 `last_incremental_value`
+11. 若任一步驟失敗，記錄 `error_message`，更新狀態為 `failed`
 
 ## 6. 替代流程
 
@@ -79,9 +101,12 @@ status: Draft
 
 ## 7. 邊界情況
 
-- 擷取過程中資料來源連線斷開：任務 `status` 設為 `failed`，ExtractionLog 記錄錯誤訊息
+- 擷取過程中資料來源連線斷開：任務 `status` 設為 `failed`，ExtractionLog 記錄錯誤訊息；全量模式下已 TRUNCATE 的資料不回復（需 Admin 手動重新執行）
 - `total_count` 為 0（空表）：任務正常完成，`progress_percent = 100`，`extracted_count = 0`
 - 增量模式下 `last_incremental_value` 更新：成功完成後更新為本次擷取的最後增量值
+- 動態建表失敗（如 metadata 讀取失敗，或 `source_schema` / `source_table` 在外部資料庫中不存在）：任務 `status` 設為 `failed`，ExtractionLog 記錄錯誤訊息（參見 error-handling.md#extraction-errors）
+- 批次寫入中某批次失敗：已寫入的批次資料保留，任務 `status` 設為 `failed`，`extracted_count` 反映實際已寫入筆數
+- 來源表結構與現有 raw data 表不匹配（來源表欄位變更）：系統嘗試 DROP + 重建 raw data 表；若重建失敗則標記 `failed`
 
 ## 8. API 規格
 
@@ -137,6 +162,11 @@ status: Draft
 | BR-6 | 進度更新：每批次擷取後更新 `extracted_count` 與 `progress_percent` |
 | BR-7 | 執行完成後更新 `avg_duration_ms`：`(avg_duration_ms * (execution_count - 1) + duration_ms) / execution_count` |
 | BR-8 | 增量模式成功完成後更新 `last_incremental_value` |
+| BR-9 | 首次執行時自動建立 raw data 表（`raw_{task_id_short}`），結構從來源表 metadata 推斷 |
+| BR-10 | 全量模式每次執行前 TRUNCATE raw data 表，再重新寫入全部資料 |
+| BR-11 | 增量模式根據 `incremental_column` 與 `last_incremental_value` 篩選新增資料，追加寫入 |
+| BR-12 | 批次寫入使用每批 1,000 筆 INSERT（可透過 `EXTRACTION_BATCH_SIZE` 環境變數配置） |
+| BR-13 | raw data 表名由系統自動生成（`raw_{task_id 前 8 碼}`），不接受使用者輸入，確保 SQL Injection 安全 |
 
 ## 10. UI/UX 需求
 
@@ -154,6 +184,8 @@ status: Draft
 | 任務正在執行中               | HTTP 409，「任務正在執行中，請等待完成」             | error-handling.md#extraction-errors      |
 | 任務不存在                   | HTTP 404，「找不到指定的擷取任務」                   | error-handling.md#extraction-errors      |
 | 擷取過程中連線失敗           | 任務 status 設為 failed，ExtractionLog 記錄錯誤      | error-handling.md#extraction-errors      |
+| 動態建表失敗                 | 任務 status 設為 failed，記錄 EXTRACTION_TABLE_CREATE_FAILED | error-handling.md#extraction-errors |
+| 批次寫入失敗                 | 任務 status 設為 failed，已寫入資料保留，記錄 EXTRACTION_BATCH_WRITE_FAILED | error-handling.md#extraction-errors |
 | 非 Admin 操作                | HTTP 403，「您沒有權限執行此操作」                   | error-handling.md#auth-errors            |
 
 ## 12. 相依性
@@ -161,15 +193,17 @@ status: Draft
 - **F017（建立擷取任務）**：需有擷取任務存在
 - **F022（查看擷取日誌）**：執行後產生日誌
 - **F023（排程自動執行）**：共用執行邏輯
+- **F026（查看擷取資料預覽）**：需有 raw data 存在才能預覽
 - **認證系統**：需要有效的 Admin 登入 Session/Token
 
 ## 13. 資料需求
 
 - ExtractionTask 實體：參見 [data-model.md#extraction-task-entity](../data-model.md#extraction-task-entity)
 - ExtractionLog 實體：參見 [data-model.md#extraction-log-entity](../data-model.md#extraction-log-entity)
+- Raw Data 動態表：參見 [data-model.md#raw-data-table](../data-model.md#raw-data-table)
 
 ## 14. 交叉參考
 
-- 資料模型：[data-model.md#extraction-task-entity](../data-model.md#extraction-task-entity)、[data-model.md#extraction-log-entity](../data-model.md#extraction-log-entity)
+- 資料模型：[data-model.md#extraction-task-entity](../data-model.md#extraction-task-entity)、[data-model.md#extraction-log-entity](../data-model.md#extraction-log-entity)、[data-model.md#raw-data-table](../data-model.md#raw-data-table)
 - 錯誤處理：[error-handling.md#extraction-errors](../error-handling.md#extraction-errors)
-- 相關功能：[F017](F017-create-extraction-task.md)、[F022](F022-view-extraction-logs.md)、[F023](F023-scheduled-extraction.md)、[F024](F024-extraction-dashboard.md)
+- 相關功能：[F017](F017-create-extraction-task.md)、[F022](F022-view-extraction-logs.md)、[F023](F023-scheduled-extraction.md)、[F024](F024-extraction-dashboard.md)、[F026](F026-preview-raw-data.md)

@@ -1,8 +1,8 @@
 ---
 spec-id: DIAG-003
 title: 實體關聯圖 (Entity-Relationship Diagram)
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -59,9 +59,51 @@ erDiagram
         DateTime checked_at "檢查時間"
     }
 
+    ExtractionTask {
+        UUID id PK "主鍵"
+        String name "任務名稱（唯一）"
+        UUID datasource_id FK "資料來源 ID"
+        Enum mode "擷取模式: full / incremental"
+        Enum status "狀態: running / scheduled / completed / failed / disabled"
+        String source_schema "來源 Schema 名稱（nullable）"
+        String source_table "來源資料表名稱"
+        String incremental_column "增量欄位名稱"
+        String last_incremental_value "最後增量值"
+        String schedule "Cron 表達式（UTC）"
+        DateTime last_execution_at "最後執行時間"
+        Integer extracted_count "已擷取筆數"
+        Integer total_count "總筆數"
+        Decimal progress_percent "進度百分比"
+        Integer avg_duration_ms "平均執行時間"
+        Integer execution_count "累計執行次數"
+        String error_message "最後錯誤訊息"
+        Boolean enabled "是否啟用"
+        UUID created_by FK "建立者 User ID"
+        DateTime deleted_at "軟刪除時間（nullable）"
+        DateTime created_at "建立時間"
+        DateTime updated_at "更新時間"
+    }
+
+    ExtractionLog {
+        UUID id PK "主鍵"
+        UUID task_id FK "擷取任務 ID"
+        Enum status "狀態: running / completed / failed"
+        DateTime started_at "開始時間"
+        DateTime finished_at "結束時間（nullable）"
+        Integer duration_ms "執行時間（毫秒）"
+        Integer extracted_count "擷取筆數"
+        Integer total_count "總筆數"
+        String error_message "錯誤訊息（nullable）"
+        Enum triggered_by "觸發方式: schedule / manual / retry"
+        UUID created_by FK "執行者 User ID"
+    }
+
     User ||--o{ Datasource : "建立"
     User ||--o{ PasswordResetToken : "擁有"
+    User ||--o{ ExtractionTask : "建立"
     Datasource ||--o{ DatasourceHealthLog : "產生"
+    Datasource ||--o{ ExtractionTask : "被參照"
+    ExtractionTask ||--o{ ExtractionLog : "產生執行日誌"
 ```
 
 ## 實體說明
@@ -129,10 +171,54 @@ CDMP 管理的外部資料庫連線設定。
 | error_message | String | 否 | 失敗時的錯誤訊息 |
 | checked_at | DateTime | 是 | 檢查執行時間 |
 
+### ExtractionTask（擷取任務）
+
+擷取任務設定，定義從外部資料來源擷取資料至 AppDB 的執行計畫。
+
+| 欄位 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| id | UUID | 是 | 主鍵 |
+| name | String | 是 | 任務名稱（唯一，排除軟刪除） |
+| datasource_id | UUID (FK) | 是 | 關聯資料來源 |
+| mode | Enum | 是 | `full`（全量）/ `incremental`（增量） |
+| status | Enum | 是 | `running` / `scheduled` / `completed` / `failed` / `disabled` |
+| source_schema | String | 否 | 來源 Schema 名稱（PostgreSQL=schema, MySQL=database, SQL Server=schema） |
+| source_table | String | 是 | 外部資料來源中要讀取的來源資料表名稱 |
+| incremental_column | String | 條件 | 增量欄位名稱（增量模式必填） |
+| last_incremental_value | String | 否 | 最後增量值 |
+| schedule | String | 是 | Cron 表達式（UTC 解析） |
+| enabled | Boolean | 是 | 是否啟用（預設 true） |
+| created_by | UUID (FK) | 是 | 建立者 User ID |
+
+### ExtractionLog（擷取執行日誌）
+
+擷取任務每次執行的詳細記錄。
+
+| 欄位 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| id | UUID | 是 | 主鍵 |
+| task_id | UUID (FK) | 是 | 關聯擷取任務 |
+| status | Enum | 是 | `running` / `completed` / `failed` |
+| started_at | DateTime | 是 | 開始時間 |
+| finished_at | DateTime | 否 | 結束時間 |
+| duration_ms | Integer | 否 | 執行時間（毫秒） |
+| extracted_count | Integer | 是 | 本次擷取筆數 |
+| total_count | Integer | 是 | 來源總筆數 |
+| error_message | String | 否 | 失敗時的錯誤訊息 |
+| triggered_by | Enum | 是 | `schedule` / `manual` / `retry` |
+
+### Raw Data 動態表
+
+擷取任務首次執行時於 AppDB 動態建立的 raw data 表。表名格式為 `raw_{task_id 前 8 碼}`，結構從來源表 metadata 推斷。詳見 [data-model.md#raw-data-table](../data-model.md#raw-data-table)。
+
 ## 關聯關係
 
 | 關聯 | 基數 | 說明 |
 |------|------|------|
 | User → Datasource | 1:N | 一個使用者可建立多個資料源 |
 | User → PasswordResetToken | 1:N | 一個使用者可擁有多個重設 Token（歷史紀錄） |
+| User → ExtractionTask | 1:N | 一個使用者可建立多個擷取任務 |
 | Datasource → DatasourceHealthLog | 1:N | 一個資料源可有多筆健康檢查紀錄 |
+| Datasource → ExtractionTask | 1:N | 一個資料來源可被多個擷取任務參照 |
+| ExtractionTask → ExtractionLog | 1:N | 一個擷取任務可有多筆執行日誌 |
+| ExtractionTask → Raw Data Table | 1:1 | 一個擷取任務對應一張 raw data 動態表 |

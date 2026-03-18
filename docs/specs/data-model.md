@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-03-18
 status: Draft
 ---
 
@@ -172,7 +172,8 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 | datasource_id | 資料來源 ID | 必填，外鍵關聯 Datasource.id | 不可為已軟刪除的 Datasource |
 | mode | 擷取模式 | 必填，列舉值：`full` / `incremental` | full=全量，incremental=增量 |
 | status | 任務狀態 | 必填，列舉值：`running` / `scheduled` / `completed` / `failed` / `disabled` | 預設值：`scheduled` |
-| target_table | 目標資料表名稱 | 必填，最大長度 255 字元 | 來源資料庫中的表名 |
+| source_schema | 來源 Schema 名稱 | 可為空，最大長度 255 字元 | 外部資料來源的 schema（或 database）名稱。各資料庫類型對應：PostgreSQL = schema（如 `public`）、MySQL = database name、SQL Server = schema（如 `dbo`）、Oracle = owner/user name。參見下方「各資料庫類型的 Schema 對應」說明 |
+| source_table | 來源資料表名稱 | 必填，最大長度 255 字元 | 外部資料來源中要讀取的表名（從下拉選單選擇，非手動輸入） |
 | incremental_column | 增量欄位名稱 | 增量模式必填，最大長度 255 字元 | 用於增量擷取的比對欄位 |
 | last_incremental_value | 最後增量值 | 可為空，最大長度 255 字元 | 上次增量擷取的最後值 |
 | schedule | Cron 表達式 | 必填，最大長度 100 字元 | 標準 cron 格式，以 UTC 解析 |
@@ -193,6 +194,7 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 
 - 名稱唯一性僅在未刪除的記錄中檢查（`deleted_at IS NULL`）
 - 增量模式下 `incremental_column` 為必填
+- `source_schema` 與 `source_table` 均透過下拉選單從外部資料來源動態載入選擇，不支援手動輸入
 - 建立時預設 `status = 'scheduled'`、`enabled = true`
 - 停用時 `enabled = false`、`status = 'disabled'`
 - 啟用時 `enabled = true`、`status = 'scheduled'`
@@ -200,8 +202,18 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 - 軟刪除後從所有清單、儀表板、排程中排除
 - Cron 表達式以 UTC 時區解析
 - 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
+- 執行 SQL 時，若 `source_schema` 有值，後端組合為 `"source_schema"."source_table"` 格式（各 DB 類型依實際語法處理）
 
-**相關功能**：[F017](features/F017-create-extraction-task.md), [F018](features/F018-view-extraction-task-list.md), [F019](features/F019-edit-extraction-task.md), [F020](features/F020-toggle-extraction-task.md), [F021](features/F021-run-extraction-task.md), [F023](features/F023-scheduled-extraction.md), [F024](features/F024-extraction-dashboard.md), [F025](features/F025-delete-extraction-task.md)
+**各資料庫類型的 Schema 對應** {#schema-mapping}：
+
+| 資料庫類型 | `source_schema` 對應概念 | 範例值 | 說明 |
+|-----------|------------------------|--------|------|
+| PostgreSQL | Schema | `public`, `information_schema` | PostgreSQL 原生 schema 概念；一個 database 下可有多個 schema |
+| MySQL | Database | `mydb`, `sakila` | MySQL 的 schema 等同於 database；Datasource 連線設定的 `database_name` 決定預設 database，但可查詢其他 database |
+| SQL Server | Schema | `dbo`, `HumanResources` | SQL Server 原生 schema 概念；database 由 Datasource 連線設定決定 |
+| Oracle | Schema (Owner) | `HR`, `SCOTT` | Oracle 的 schema 等同於 user/owner name |
+
+**相關功能**：[F017](features/F017-create-extraction-task.md), [F018](features/F018-view-extraction-task-list.md), [F019](features/F019-edit-extraction-task.md), [F020](features/F020-toggle-extraction-task.md), [F021](features/F021-run-extraction-task.md), [F023](features/F023-scheduled-extraction.md), [F024](features/F024-extraction-dashboard.md), [F025](features/F025-delete-extraction-task.md), [F026](features/F026-preview-raw-data.md)
 
 ---
 
@@ -235,6 +247,59 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 
 ---
 
+## Raw Data 動態表 {#raw-data-table}
+
+擷取任務執行時，系統於 CDMP AppDB 中動態建立的 raw data 落地表。每個擷取任務對應一張獨立的 raw data 表，表結構從外部來源表的 metadata 自動推斷。
+
+### 命名規則
+
+表名格式為 `raw_{task_id 前 8 碼}`，例如：task id 為 `a3f2c1d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx`，則表名為 `raw_a3f2c1d4`。
+
+### 表結構
+
+| 欄位 | 來源 | 說明 |
+|------|------|------|
+| （來源表欄位） | 從外部來源表 metadata 自動推斷 | 欄位名稱與資料型別對應來源表的欄位定義 |
+| _cdmp_id | 系統附加，SERIAL 類型 | 若來源表無主鍵，系統自動附加此欄位作為 raw data 表的唯一識別欄位並建立主鍵索引 |
+| _cdmp_extracted_at | 系統附加，TIMESTAMP 類型 | 記錄該筆資料的擷取時間（UTC） |
+
+### 動態建表機制
+
+- **建立時機**：擷取任務首次執行時由系統自動建立，無需 Admin 手動操作
+- **結構推斷**：系統連線至外部資料來源，透過 `INFORMATION_SCHEMA`（或同等機制）讀取來源表（由 `source_schema` + `source_table` 組合定位）的欄位 metadata（欄位名稱、資料型別），於 AppDB 建立同結構的 raw data 表
+- **表名安全性**：表名由系統根據 task_id 自動生成，僅包含 `raw_` 前綴加上 hex 字元，不接受使用者輸入，避免 SQL Injection 風險
+- **欄位名稱安全性**：從來源表讀取的欄位名稱需經過 sanitize 處理（僅允許字母、數字、底線），防止惡意欄位名稱造成 SQL Injection
+
+### 資料寫入模式
+
+| 模式 | 寫入行為 | 說明 |
+|------|---------|------|
+| 全量（full） | 先 TRUNCATE 再寫入 | 每次執行前清空 raw data 表，重新寫入全部資料 |
+| 增量（incremental） | 追加寫入 | 根據 `incremental_column` 與 `last_incremental_value` 篩選新增資料（`WHERE col > last_value`），追加至 raw data 表 |
+
+### 批次寫入策略
+
+- 每批 1,000 筆 INSERT（可透過環境變數 `EXTRACTION_BATCH_SIZE` 配置，範圍 100-10,000）
+- 批次寫入避免大量資料導致記憶體耗盡或資料庫逾時
+- 每批次完成後更新 `ExtractionTask.extracted_count` 與 `progress_percent`
+
+### 索引策略
+
+- `_cdmp_id`（若存在）建立主鍵索引
+- 來源表的主鍵欄位（若有）建立索引，以加速排序與分頁查詢
+- 不自動為所有欄位建立索引（避免寫入效能下降）
+
+### 業務規則
+
+- Raw data 表的生命週期與 ExtractionTask 綁定
+- ExtractionTask 軟刪除後，raw data 表保留（不自動刪除），待 DBA 手動清理
+- 變更 `source_schema` 或 `source_table` 欄位後，下次執行時系統重新推斷欄位結構並可能重建 raw data 表
+- Raw data 表不納入 ORM Entity 管理，透過動態 SQL 操作
+
+**相關功能**：[F021](features/F021-run-extraction-task.md), [F026](features/F026-preview-raw-data.md)
+
+---
+
 ## 實體關係
 
 ```
@@ -245,6 +310,7 @@ User (1) ──── creates ────> (*) ExtractionTask
 Datasource (1) ──── has ────> (*) DatasourceHealthLog
 Datasource (1) ──── referenced by ──> (*) ExtractionTask
 ExtractionTask (1) ──── has ────> (*) ExtractionLog
+ExtractionTask (1) ──── owns ───> (1) Raw Data Table (動態建立)
 ```
 
 | 關係 | 描述 | 基數 |
@@ -256,6 +322,7 @@ ExtractionTask (1) ──── has ────> (*) ExtractionLog
 | Datasource → DatasourceHealthLog | 資料來源的健康檢查記錄 | 一對多（`datasource_id`） |
 | Datasource → ExtractionTask | 資料來源被擷取任務參照 | 一對多（`datasource_id`） |
 | ExtractionTask → ExtractionLog | 擷取任務的執行日誌 | 一對多（`task_id`） |
+| ExtractionTask → Raw Data Table | 擷取任務擁有對應的 raw data 動態表 | 一對一（`raw_{task_id_short}`） |
 
 參見 [diagrams/er-diagram.md](diagrams/er-diagram.md) 取得完整 ER 圖。
 

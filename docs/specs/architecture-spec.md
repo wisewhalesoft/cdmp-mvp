@@ -2,8 +2,8 @@
 type: architecture-spec
 version: 1.2
 status: draft
-last_updated: 2026-03-17
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025]
+last_updated: 2026-03-18
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026]
 ---
 
 # 系統架構規格書
@@ -61,7 +61,7 @@ graph TD
 
     subgraph 外部["外部服務"]
         Email["Email 服務<br/>(SMTP / SendGrid)"]
-        TargetDB["目標資料庫<br/>(MySQL / PostgreSQL / SQL Server)"]
+        TargetDB["外部資料來源<br/>(MySQL / PostgreSQL / SQL Server)"]
     end
 
     Browser -->|"HTTPS REST API"| API
@@ -349,17 +349,29 @@ graph TB
 
 | 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
 |------|------|-----------|-------------|
-| Datasource Service | 資料來源 CRUD；AES-256 加密密碼；執行連線測試（`SELECT 1`，10 秒逾時）；更新狀態與 `last_tested_at`；寫入 `DatasourceHealthLog` | 密碼 API 回應遮罩；編輯後重設狀態為 `unknown`；軟刪除使用 `deleted_at` | F011-F015 |
+| Datasource Service | 資料來源 CRUD；AES-256 加密密碼；執行連線測試（`SELECT 1`，10 秒逾時）；更新狀態與 `last_tested_at`；寫入 `DatasourceHealthLog`；查詢外部資料來源的 schema 列表與 table 列表（透過 `IExtractionExecutor.listSchemas()` / `listTables()`） | 密碼 API 回應遮罩；編輯後重設狀態為 `unknown`；軟刪除使用 `deleted_at`；schema/table 查詢設定 10 秒逾時 | F011-F015, F017, F019 |
 | Dashboard Service | 彙整儀表板摘要統計；計算告警（連續 >= 2 次失敗）；查詢效能趨勢資料 | 軟刪除資料來源排除；告警依 `consecutiveFailures` 降序 | F016 |
 
 **連線測試隔離**：每次連線測試使用獨立的短期連線，不占用應用程式連線池（MVP 不使用連線池，OQ-R9 決議）。AES-256 解密後的密碼僅在記憶體中存在，測試完成後立即釋放。
+
+**Schema / Table 查詢端點**（AD-E04-10）：Datasource Controller 提供兩個端點，供建立/編輯擷取任務時動態載入來源 schema 與 table 列表：
+
+| 端點 | 說明 | 回應格式 |
+|------|------|---------|
+| `GET /api/v1/datasources/:id/schemas` | 查詢指定資料來源的可用 schema（或 database）列表 | `{ schemas: string[] }` |
+| `GET /api/v1/datasources/:id/schemas/:schema/tables` | 查詢指定 schema 下的資料表列表 | `{ tables: string[] }` |
+
+- 兩個端點均透過 `IExtractionExecutor` 介面的 `listSchemas()` 與 `listTables()` 方法連線外部資料庫查詢
+- 設定 10 秒連線逾時；連線失敗時回傳 `503 Service Unavailable`
+- 不使用快取機制，每次請求均即時查詢外部資料庫
+- 僅 Admin 角色可存取
 
 #### Extraction 模組
 
 | 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
 |------|------|-----------|-------------|
 | ExtractionTask Service | 擷取任務 CRUD；啟用/停用（toggle）；軟刪除；欄位驗證（cron 格式、增量模式必填欄位）；名稱唯一性（排除軟刪除） | Optimistic Locking；`status=running` 時禁止編輯/停用/刪除；cron 表達式以 `cron-parser` 驗證（UTC）；必須參考存在且未刪除的 Datasource | F017, F018, F019, F020, F025 |
-| ExtractionExecution Service | 建立 ExtractionLog（`status=running`）；更新 ExtractionTask（`status=running`）；非同步執行擷取作業；批次更新進度（`extracted_count`、`progress_percent`）；完成後更新統計（`avg_duration_ms`、`execution_count`）；增量模式成功後更新 `last_incremental_value` | 並發控制（`status=running` 時拒絕重複觸發，回傳 409）；執行失敗需捕捉例外並更新狀態為 `failed`；手動觸發可繞過 `enabled` 旗標 | F021, F023 |
+| ExtractionExecution Service | 建立 ExtractionLog（`status=running`）；更新 ExtractionTask（`status=running`）；非同步執行擷取作業（含動態建表、批次讀取外部來源、批次寫入 AppDB raw data 表）；批次更新進度（`extracted_count`、`progress_percent`）；完成後更新統計（`avg_duration_ms`、`execution_count`）；增量模式成功後更新 `last_incremental_value` | 並發控制（`status=running` 時拒絕重複觸發，回傳 409）；執行失敗需捕捉例外並更新狀態為 `failed`；手動觸發可繞過 `enabled` 旗標；全量模式先 TRUNCATE 再寫入；增量模式追加寫入 | F021, F023 |
 | ExtractionDashboard Service | 摘要統計（今日成功/失敗以 UTC+8 計算）；趨勢圖（7/14/30 天聚合查詢）；效能排名（Top 5 by `avg_duration_ms DESC`）；執行中任務列表 | 軟刪除任務排除；無執行紀錄時成功率回傳 `0.0`；今日起訖以 UTC+8 (Asia/Taipei) 為邊界 | F018（summary）, F024 |
 
 **非同步執行模型**（AD-E04-1）：
@@ -383,6 +395,15 @@ graph TB
 | Cleanup Cron | 每日 | 清理超過 90 天的 `DatasourceHealthLog`（OQ-10 決議）；清理超過 30 天的 `ExtractionLog`（AQ-10 決議）；清理已過期的 `PasswordResetToken`；清理已過期的 Token Blocklist 記錄；修復孤立 running 日誌（AD-E04-7） |
 
 **孤立 running 日誌修復**（AD-E04-7）：Cleanup Cron 每次執行時，將 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 ExtractionLog 標記為 `failed`（error_message: `'Execution timeout: exceeded 2 hour limit'`），並同步更新對應 ExtractionTask.status 為 `failed`。
+
+**Raw Data 動態表管理**（AD-E04-8）：擷取任務首次執行時，系統自動於 AppDB 建立 raw data 表（`raw_{task_id_short}`）。表結構從外部來源表的 metadata（`INFORMATION_SCHEMA`）推斷。表名由系統自動生成（`raw_` + task_id 前 8 碼），僅包含 hex 字元，不接受使用者輸入，避免 SQL Injection 風險。欄位名稱經 sanitize 處理（僅允許字母、數字、底線）。
+
+**Raw Data 寫入模式**（AD-E04-9）：
+- **全量（full）**：每次執行前 `TRUNCATE TABLE raw_{task_id_short}`，再重新批次寫入全部資料
+- **增量（incremental）**：根據 `incremental_column > last_incremental_value` 篩選新增資料，追加寫入
+- **批次大小**：預設 1,000 筆/批次（可透過 `EXTRACTION_BATCH_SIZE` 環境變數配置，範圍 100-10,000）
+
+**Raw Data 預覽 API**（AD-E04-10）：`GET /api/v1/extraction-tasks/:id/raw-data` 透過動態 SQL 查詢 raw data 表，支援分頁（`LIMIT` + `OFFSET`）與單欄位排序。不使用 ORM Entity，直接以 Raw SQL 操作動態表。百萬筆資料場景下，依賴 `_cdmp_id`（或主鍵）索引確保分頁效能。非索引欄位排序時附帶效能警告。
 
 **架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查與重複擷取觸發。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
 
@@ -464,7 +485,8 @@ erDiagram
         uuid datasource_id FK
         enum mode "full|incremental"
         enum status "running|scheduled|completed|failed|disabled"
-        string target_table "max 255"
+        string source_schema "來源 Schema 名稱，max 255，nullable"
+        string source_table "來源資料表名稱，max 255"
         string incremental_column "增量模式必填"
         string incremental_column_type "timestamp|integer|string，預設 timestamp"
         string last_incremental_value "max 255，string 儲存"
@@ -557,6 +579,7 @@ erDiagram
 | ExtractionLog | task_id, started_at | 複合 INDEX | 日誌查詢（倒序分頁）、趨勢圖聚合 |
 | ExtractionLog | started_at | INDEX | 今日統計計算、清理查詢 |
 | ExtractionLog | status, started_at | 複合 INDEX | 今日成功/失敗計數（F018 summary, F024 dashboard） |
+| raw_{task_id_short} | _cdmp_id（若存在） | PRIMARY KEY INDEX | Raw data 預覽分頁與排序（F026），動態建表時自動建立 |
 
 ### 4.5 資料生命週期
 
@@ -719,12 +742,29 @@ sequenceDiagram
 
     Note over API,TargetDB: 共用執行邏輯（ExtractionExecution Service）
     API->>DB: 讀取 Datasource 連線資訊<br/>AES-256 解密 encrypted_password
-    API->>TargetDB: 查詢 total_count (SELECT COUNT)
+    API->>TargetDB: 連線至外部資料來源
+
+    Note over API,DB: Step 1: 動態建表（首次執行）
+    API->>DB: 檢查 AppDB 是否有 raw_{task_id_short} 表
+    alt raw data 表不存在
+        API->>TargetDB: 讀取 source_schema.source_table 欄位 metadata<br/>(INFORMATION_SCHEMA)
+        TargetDB-->>API: 欄位名稱與資料型別
+        API->>DB: CREATE TABLE raw_{task_id_short}<br/>(來源欄位 + _cdmp_id + _cdmp_extracted_at)
+    end
+
+    Note over API,TargetDB: Step 2: 全量模式先 TRUNCATE
+    alt 全量模式 (mode=full)
+        API->>DB: TRUNCATE TABLE raw_{task_id_short}
+    end
+
+    Note over API,TargetDB: Step 3: 批次讀取與寫入
+    API->>TargetDB: 查詢 total_count<br/>(SELECT COUNT FROM "source_schema"."source_table"<br/>增量：WHERE col > last_value)
     API->>DB: 更新 ExtractionTask.total_count
 
     loop 批次擷取（每 batch_size 筆）
-        API->>TargetDB: SELECT * FROM table<br/>LIMIT batch_size OFFSET n<br/>（增量模式：WHERE col > last_value）
+        API->>TargetDB: SELECT * FROM "source_schema"."source_table"<br/>LIMIT batch_size OFFSET n<br/>（增量模式：WHERE col > last_value）
         TargetDB-->>API: 批次資料
+        API->>DB: INSERT INTO raw_{task_id_short}<br/>(批次 1000 筆)
         API->>DB: 更新 extracted_count, progress_percent
     end
 
@@ -749,6 +789,7 @@ sequenceDiagram
 | Token Blocklist 查詢失敗 | Cache/DB 不可達 | **架構挑戰**：Fail-Open（允許請求通過）vs Fail-Closed（拒絕請求）。建議 Fail-Closed 以優先安全性。詳見第 8 節。 |
 | 健康檢查 Cron 失敗 | 單次執行異常 | 記錄錯誤至日誌；下次排程正常繼續；不影響前台 API |
 | 目標資料庫（資料擷取） | 執行中連線斷開 / 查詢失敗 | 捕捉例外；更新 ExtractionTask.status = 'failed' 與 error_message；更新 ExtractionLog；不自動重試（AD-E04-6），須 Admin 手動重試 |
+| 目標資料庫（Schema/Table 列表查詢） | 逾時 / 拒絕連線 | 10 秒逾時；回傳 503 DATASOURCE_SCHEMA_LOAD_FAILED 或 DATASOURCE_TABLE_LOAD_FAILED；前端顯示錯誤，下拉停用；不使用快取 |
 | 擷取排程掃描（每分鐘） | DB 查詢失敗 | 記錄 ERROR 日誌；跳過本次掃描；下次掃描正常繼續 |
 
 ### 5.7 冪等性考量
@@ -759,6 +800,8 @@ sequenceDiagram
 | `POST /api/v1/auth/logout` | 冪等 | 重複呼叫結果相同（Token 已在 Blocklist） |
 | `POST /api/v1/auth/forgot-password` | 冪等（行為一致） | 回應一致；多次呼叫產生多個 PasswordResetToken（舊的仍有效，但 24h 到期） |
 | `POST /api/v1/datasources/:id/test` | 冪等（副作用重複） | 可重複呼叫；每次均產生新的 HealthLog 記錄 |
+| `GET /api/v1/datasources/:id/schemas` | 冪等 | 唯讀查詢，即時查詢外部資料庫，不使用快取 |
+| `GET /api/v1/datasources/:id/schemas/:schema/tables` | 冪等 | 唯讀查詢，即時查詢外部資料庫，不使用快取 |
 | `DELETE /api/v1/datasources/:id` | 冪等 | 重複軟刪除結果相同 |
 | `POST /api/v1/extraction-tasks/:id/run` | 非冪等 | 每次呼叫建立新的 ExtractionLog；`status=running` 時拒絕（409）避免重複觸發 |
 | `PATCH /api/v1/extraction-tasks/:id/toggle` | 冪等 | 停用已停用的任務回傳成功，無額外副作用 |
@@ -996,7 +1039,7 @@ Seed 流程：
 
 #### 風險 6：目標資料庫大量資料擷取的負載影響
 
-**描述**：擷取任務（全量模式）執行時，對目標資料庫執行全表查詢（`SELECT * FROM {target_table}`）。對於大型表（數百萬筆），此查詢可能對目標資料庫造成顯著負載，甚至影響目標資料庫的正常業務查詢。
+**描述**：擷取任務（全量模式）執行時，對外部資料來源執行全表查詢（`SELECT * FROM "{source_schema}"."{source_table}"`），並將資料批次寫入 AppDB raw data 表。對於大型表（數百萬筆），此查詢可能對外部資料來源造成顯著負載，甚至影響其正常業務查詢。同時，大量批次 INSERT 至 AppDB 也會佔用資料庫資源。
 
 **影響**：目標資料庫效能下降；若目標資料庫為生產系統，可能影響業務連續性。
 
