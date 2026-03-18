@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, ConflictException, UnprocessableEntityException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CronExpressionParser } from 'cron-parser';
@@ -8,6 +8,7 @@ import { Datasource } from '@/database/entities/datasource.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateExtractionTaskDto } from './dto/create-extraction-task.dto';
 import { ListExtractionTaskDto } from './dto/list-extraction-task.dto';
+import { UpdateExtractionTaskDto } from './dto/update-extraction-task.dto';
 
 export interface ExtractionTaskResult {
   id: string;
@@ -251,5 +252,126 @@ export class ExtractionTaskService {
         successRate,
       },
     };
+  }
+
+  async findById(id: string): Promise<ExtractionTaskResult> {
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.datasource', 'ds')
+      .where('task.id = :id', { id })
+      .andWhere('task.deleted_at IS NULL')
+      .getOne();
+
+    if (!task) {
+      throw new NotFoundException({
+        error: ERROR_CODES.EXTRACTION_NOT_FOUND,
+        message: ERROR_MESSAGES.EXTRACTION_NOT_FOUND,
+      });
+    }
+
+    return toExtractionTaskResponse(task, task.datasource?.name ?? '');
+  }
+
+  async updateTask(
+    id: string,
+    dto: UpdateExtractionTaskDto,
+  ): Promise<ExtractionTaskResult> {
+    // Find existing task
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.datasource', 'ds')
+      .where('task.id = :id', { id })
+      .andWhere('task.deleted_at IS NULL')
+      .getOne();
+
+    if (!task) {
+      throw new NotFoundException({
+        error: ERROR_CODES.EXTRACTION_NOT_FOUND,
+        message: ERROR_MESSAGES.EXTRACTION_NOT_FOUND,
+      });
+    }
+
+    // BR-2: Running task cannot be edited
+    if (task.status === 'running') {
+      throw new ConflictException({
+        error: ERROR_CODES.EXTRACTION_RUNNING,
+        message: ERROR_MESSAGES.EXTRACTION_RUNNING,
+      });
+    }
+
+    // Validate cron if schedule is being updated
+    if (dto.schedule !== undefined) {
+      try {
+        CronExpressionParser.parse(dto.schedule, { tz: 'UTC' });
+      } catch {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.EXTRACTION_INVALID_CRON,
+          message: ERROR_MESSAGES.EXTRACTION_INVALID_CRON,
+        });
+      }
+    }
+
+    // Determine final mode for incremental column validation
+    const finalMode = dto.mode ?? task.mode;
+    if (finalMode === 'incremental') {
+      const finalIncrementalColumn = dto.incrementalColumn ?? task.incremental_column;
+      if (!finalIncrementalColumn) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.EXTRACTION_INCREMENTAL_COLUMN_REQUIRED,
+          message: ERROR_MESSAGES.EXTRACTION_INCREMENTAL_COLUMN_REQUIRED,
+        });
+      }
+    }
+
+    // Validate datasource if being changed
+    let datasourceName = task.datasource?.name ?? '';
+    if (dto.datasourceId !== undefined) {
+      const datasource = await this.datasourceRepository
+        .createQueryBuilder('ds')
+        .where('ds.id = :id', { id: dto.datasourceId })
+        .andWhere('ds.deleted_at IS NULL')
+        .getOne();
+
+      if (!datasource) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.EXTRACTION_DATASOURCE_NOT_FOUND,
+          message: ERROR_MESSAGES.EXTRACTION_DATASOURCE_NOT_FOUND,
+        });
+      }
+      datasourceName = datasource.name;
+    }
+
+    // BR-3: Name uniqueness check (exclude self)
+    if (dto.name !== undefined) {
+      const existing = await this.taskRepository
+        .createQueryBuilder('task')
+        .where('LOWER(task.name) = LOWER(:name)', { name: dto.name })
+        .andWhere('task.id != :id', { id })
+        .andWhere('task.deleted_at IS NULL')
+        .getOne();
+
+      if (existing) {
+        throw new ConflictException({
+          error: ERROR_CODES.EXTRACTION_NAME_EXISTS,
+          message: ERROR_MESSAGES.EXTRACTION_NAME_EXISTS,
+        });
+      }
+    }
+
+    // Apply updates (only non-undefined fields)
+    if (dto.name !== undefined) task.name = dto.name;
+    if (dto.datasourceId !== undefined) {
+      task.datasource_id = dto.datasourceId;
+      task.datasource = { id: dto.datasourceId } as Datasource; // Sync relation to prevent TypeORM from overwriting FK
+    }
+    if (dto.mode !== undefined) task.mode = dto.mode;
+    if (dto.targetTable !== undefined) task.target_table = dto.targetTable;
+    if (dto.schedule !== undefined) task.schedule = dto.schedule;
+    if (dto.incrementalColumn !== undefined) task.incremental_column = dto.incrementalColumn;
+    if (dto.lastIncrementalValue !== undefined) task.last_incremental_value = dto.lastIncrementalValue;
+
+    const saved = await this.taskRepository.save(task);
+
+    return toExtractionTaskResponse(saved, datasourceName);
   }
 }
