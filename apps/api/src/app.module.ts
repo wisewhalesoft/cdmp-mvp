@@ -5,12 +5,15 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { DatasourceModule } from './modules/datasource/datasource.module';
+import { ExtractionTaskModule } from './modules/extraction-task/extraction-task.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { User } from './database/entities/user.entity';
 import { TokenBlocklist } from './database/entities/token-blocklist.entity';
 import { PasswordResetToken } from './database/entities/password-reset-token.entity';
 import { Datasource } from './database/entities/datasource.entity';
 import { DatasourceHealthLog } from './database/entities/datasource-health-log.entity';
+import { ExtractionTask } from './database/entities/extraction-task.entity';
+import { ExtractionLog } from './database/entities/extraction-log.entity';
 
 @Module({
   imports: [
@@ -27,7 +30,7 @@ import { DatasourceHealthLog } from './database/entities/datasource-health-log.e
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog],
+            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog],
             synchronize: true,
           };
         }
@@ -39,7 +42,7 @@ import { DatasourceHealthLog } from './database/entities/datasource-health-log.e
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog],
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },
@@ -54,6 +57,7 @@ import { DatasourceHealthLog } from './database/entities/datasource-health-log.e
     AuthModule,
     AccountsModule,
     DatasourceModule,
+    ExtractionTaskModule,
     SchedulerModule,
   ],
   providers: [],
