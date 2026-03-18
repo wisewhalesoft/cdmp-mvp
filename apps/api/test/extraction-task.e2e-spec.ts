@@ -909,6 +909,160 @@ describe('F019: Edit Extraction Task E2E', () => {
   });
 });
 
+// F020: Toggle Extraction Task E2E
+describe('F020: Toggle Extraction Task E2E (PATCH /api/v1/extraction-tasks/:id/toggle)', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let dataSource: DataSource;
+  let enabledTaskId: string;
+  let disabledTaskId: string;
+  let runningTaskId: string;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    dataSource = app.get(DataSource);
+    const taskRepo = dataSource.getRepository(ExtractionTask);
+
+    // Create enabled (scheduled) task
+    const res1 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F020 啟用中任務',
+        datasourceId,
+        mode: 'full',
+        targetTable: 'customers',
+        schedule: '0 2 * * *',
+      });
+    enabledTaskId = res1.body.id;
+
+    // Create disabled task
+    const res2 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F020 停用中任務',
+        datasourceId,
+        mode: 'full',
+        targetTable: 'orders',
+        schedule: '0 3 * * *',
+      });
+    disabledTaskId = res2.body.id;
+    await taskRepo.update({ id: disabledTaskId }, { enabled: false, status: 'disabled' });
+
+    // Create running task
+    const res3 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'F020 執行中任務',
+        datasourceId,
+        mode: 'full',
+        targetTable: 'invoices',
+        schedule: '0 4 * * *',
+      });
+    runningTaskId = res3.body.id;
+    await taskRepo.update({ id: runningTaskId }, { status: 'running' });
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F020-001: 停用啟用中任務
+  it('should disable an enabled task and return 200 (TS-F020-001)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${enabledTaskId}/toggle`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(false);
+    expect(res.body.status).toBe('disabled');
+    expect(res.body.id).toBe(enabledTaskId);
+  });
+
+  // TS-F020-002: 啟用停用中任務
+  it('should enable a disabled task and return 200 (TS-F020-002)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${disabledTaskId}/toggle`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(true);
+    expect(res.body.status).toBe('scheduled');
+    expect(res.body.id).toBe(disabledTaskId);
+  });
+
+  // TS-F020-003: 冪等停用
+  it('should be idempotent when disabling already disabled task (TS-F020-003)', async () => {
+    // enabledTaskId was disabled in TS-F020-001
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${enabledTaskId}/toggle`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(false);
+    expect(res.body.status).toBe('disabled');
+  });
+
+  // TS-F020-004: 冪等啟用
+  it('should be idempotent when enabling already enabled task (TS-F020-004)', async () => {
+    // disabledTaskId was enabled in TS-F020-002
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${disabledTaskId}/toggle`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(true);
+    expect(res.body.status).toBe('scheduled');
+  });
+
+  // TS-F020-005: Running 任務不可停用
+  it('should return 409 when disabling a running task (TS-F020-005)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${runningTaskId}/toggle`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: false });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('EXTRACTION_RUNNING');
+  });
+
+  // TS-F020-006: 非 Admin → 403
+  it('should return 403 for non-admin user (TS-F020-006)', async () => {
+    const userToken = await getUserToken(app);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/extraction-tasks/${enabledTaskId}/toggle`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F020-007: 不存在任務 → 404
+  it('should return 404 for non-existent task (TS-F020-007)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/extraction-tasks/a1b2c3d4-e5f6-4890-abcd-ef1234567890/toggle')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: false });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('EXTRACTION_NOT_FOUND');
+  });
+
+  // TS-F020-008: 排程整合（skip，依賴 F023）
+  it.skip('should integrate with scheduler (TS-F020-008, depends on F023)', () => {
+    // This test will be implemented when F023 (scheduler) is available
+  });
+});
+
 // TS-F018-008: Empty list
 describe('F018: Empty List (GET /api/v1/extraction-tasks)', () => {
   let app: INestApplication;
