@@ -25,10 +25,12 @@ import {
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getExtractionTasks, getDatasourceOptions } from '@/api/extraction-tasks';
+import { getExtractionTasks, getDatasourceOptions, toggleExtractionTask } from '@/api/extraction-tasks';
 import type { DatasourceOption } from '@/api/extraction-tasks';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { formatDateTW } from '@/utils/date-utils';
+import { ToggleTaskDialog } from './toggle-task-dialog';
 import type {
   ExtractionTaskListItem,
   ExtractionTaskListSummary,
@@ -76,9 +78,14 @@ function StatusBadge({ status }: { status: ExtractionStatus }) {
 export function ExtractionTaskListPage() {
   const navigate = useNavigate();
   const user = getUser();
+  const { showToast } = useToast();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('list');
+
+  // Toggle dialog state
+  const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
+  const [toggleTarget, setToggleTarget] = useState<{ id: string; name: string } | null>(null);
 
   // List state
   const [tasks, setTasks] = useState<ExtractionTaskListItem[]>([]);
@@ -180,6 +187,41 @@ export function ExtractionTaskListPage() {
   const handleDatasourceChange = (value: string) => {
     setDatasourceFilter(value);
     setPage(1);
+  };
+
+  const handleToggle = async (task: ExtractionTaskListItem) => {
+    if (task.enabled) {
+      // Disabling → show confirmation dialog
+      setToggleTarget({ id: task.id, name: task.name });
+      setToggleDialogOpen(true);
+    } else {
+      // Enabling → call API directly
+      try {
+        await toggleExtractionTask(task.id, true);
+        showToast('擷取任務已啟用', 'success');
+        fetchTasks();
+      } catch {
+        showToast('發生未知錯誤，請稍後再試', 'error');
+      }
+    }
+  };
+
+  const handleConfirmDisable = async () => {
+    if (!toggleTarget) return;
+    setToggleDialogOpen(false);
+    try {
+      await toggleExtractionTask(toggleTarget.id, false);
+      showToast('擷取任務已停用', 'success');
+      fetchTasks();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      if (error.response?.data?.error === 'EXTRACTION_RUNNING') {
+        showToast('任務執行中，請等待完成後再停用', 'error');
+      } else {
+        showToast('發生未知錯誤，請稍後再試', 'error');
+      }
+    }
+    setToggleTarget(null);
   };
 
   return (
@@ -482,7 +524,9 @@ export function ExtractionTaskListPage() {
                               </button>
                               <button
                                 title={task.enabled ? '停用' : '啟用'}
-                                className="p-1 text-gray-500 hover:text-gray-700 rounded"
+                                disabled={task.status === 'running'}
+                                onClick={() => handleToggle(task)}
+                                className="p-1 text-gray-500 hover:text-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {task.enabled ? (
                                   <ToggleRight size={14} />
@@ -538,6 +582,16 @@ export function ExtractionTaskListPage() {
           </main>
         )}
       </div>
+
+      <ToggleTaskDialog
+        open={toggleDialogOpen}
+        taskName={toggleTarget?.name ?? ''}
+        onConfirm={handleConfirmDisable}
+        onCancel={() => {
+          setToggleDialogOpen(false);
+          setToggleTarget(null);
+        }}
+      />
     </div>
   );
 }

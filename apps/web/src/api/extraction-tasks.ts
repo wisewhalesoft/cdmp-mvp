@@ -78,6 +78,17 @@ export async function updateExtractionTask(
   return response.data;
 }
 
+export async function toggleExtractionTask(
+  id: string,
+  enabled: boolean,
+): Promise<CreateExtractionTaskResponse> {
+  const response = await apiClient.patch<CreateExtractionTaskResponse>(
+    `/extraction-tasks/${id}/toggle`,
+    { enabled },
+  );
+  return response.data;
+}
+
 export async function getExtractionTasks(
   query: ExtractionTaskListQuery,
 ): Promise<ExtractionTaskListResponse> {
