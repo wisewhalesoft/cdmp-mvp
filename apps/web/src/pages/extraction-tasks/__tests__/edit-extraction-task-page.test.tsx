@@ -1,13 +1,15 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { EditExtractionTaskPage } from '../edit-extraction-task-page';
 import * as extractionTasksApi from '@/api/extraction-tasks';
+import * as datasourcesApi from '@/api/datasources';
 import * as authStore from '@/stores/auth-store';
 import { ToastProvider } from '@/components/ui/toast';
 
 vi.mock('@/api/extraction-tasks');
+vi.mock('@/api/datasources');
 vi.mock('@/api/auth', () => ({
   logout: vi.fn().mockResolvedValue({}),
 }));
@@ -15,6 +17,8 @@ vi.mock('@/api/auth', () => ({
 const mockedGetExtractionTask = vi.mocked(extractionTasksApi.getExtractionTask);
 const mockedUpdateExtractionTask = vi.mocked(extractionTasksApi.updateExtractionTask);
 const mockedGetDatasourceOptions = vi.mocked(extractionTasksApi.getDatasourceOptions);
+const mockedGetDatasourceSchemas = vi.mocked(datasourcesApi.getDatasourceSchemas);
+const mockedGetDatasourceTables = vi.mocked(datasourcesApi.getDatasourceTables);
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -37,7 +41,9 @@ const MOCK_TASK = {
   datasourceName: 'MySQL 主資料庫',
   mode: 'full' as const,
   status: 'scheduled',
-  targetTable: 'customers',
+  sourceTable: 'customers',
+  sourceSchema: 'dbo',
+  rawTableName: 'raw_abc123',
   incrementalColumn: null,
   lastIncrementalValue: null,
   schedule: '0 2 * * *',
@@ -47,14 +53,14 @@ const MOCK_TASK = {
   totalCount: 0,
   progressPercent: 0,
   avgDurationMs: 0,
-  executionCount: 0,
+  executionCount: 5,
   errorMessage: null,
   createdBy: 'admin-1',
   createdAt: '2026-03-17T00:00:00.000Z',
   updatedAt: '2026-03-17T00:00:00.000Z',
 };
 
-function renderPage() {
+function renderPage(taskOverrides?: Partial<typeof MOCK_TASK>) {
   vi.spyOn(authStore, 'getUser').mockReturnValue({
     id: 'admin-1',
     name: 'Admin',
@@ -63,7 +69,9 @@ function renderPage() {
   });
 
   mockedGetDatasourceOptions.mockResolvedValue(MOCK_DATASOURCES);
-  mockedGetExtractionTask.mockResolvedValue(MOCK_TASK);
+  mockedGetExtractionTask.mockResolvedValue({ ...MOCK_TASK, ...taskOverrides });
+  mockedGetDatasourceSchemas.mockResolvedValue({ schemas: ['dbo', 'public', 'sys'] });
+  mockedGetDatasourceTables.mockResolvedValue({ tables: ['customers', 'orders', 'products'] });
 
   return render(
     <MemoryRouter initialEntries={['/extraction-tasks/task-1/edit']}>
@@ -90,7 +98,11 @@ describe('EditExtractionTaskPage', () => {
       });
 
       expect(screen.getByLabelText('資料來源')).toHaveValue('ds-1');
-      expect(screen.getByLabelText('目標資料表')).toHaveValue('customers');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).toHaveValue('dbo');
+      });
+      expect(screen.getByLabelText('來源資料表')).toHaveValue('customers');
     });
 
     it('should show correct breadcrumb', async () => {
@@ -207,6 +219,179 @@ describe('EditExtractionTaskPage', () => {
       await user.click(screen.getByText('取消'));
 
       expect(mockNavigate).toHaveBeenCalledWith('/extraction-tasks', { replace: true });
+    });
+  });
+
+  describe('連鎖下拉選單', () => {
+    it('TS-F019-FE-001: 表單開啟時自動載入並預選既有 schema/table', async () => {
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+
+      expect(screen.getByLabelText('來源 Schema')).toHaveValue('dbo');
+      expect(screen.getByLabelText('來源資料表')).toHaveValue('customers');
+    });
+
+    it('TS-F019-FE-002: 表單開啟時並行呼叫 schemas + tables API', async () => {
+      renderPage();
+
+      await waitFor(() => {
+        expect(mockedGetDatasourceSchemas).toHaveBeenCalledWith('ds-1');
+        expect(mockedGetDatasourceTables).toHaveBeenCalledWith('ds-1', 'dbo');
+      });
+    });
+
+    it('TS-F019-FE-003: 變更 Datasource 時重置並重新載入', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+
+      mockedGetDatasourceSchemas.mockClear();
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-2');
+
+      await waitFor(() => {
+        expect(mockedGetDatasourceSchemas).toHaveBeenCalledWith('ds-2');
+      });
+
+      // Table should be reset
+      expect(screen.getByLabelText('來源資料表')).toBeDisabled();
+    });
+
+    it('TS-F019-FE-004: 變更 Schema 時重置 Table 並重新載入', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+
+      mockedGetDatasourceTables.mockClear();
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'public');
+
+      // executionCount > 0 triggers warning modal
+      await waitFor(() => {
+        expect(screen.getByText('確認變更來源資料表')).toBeInTheDocument();
+      });
+      await user.click(screen.getByRole('button', { name: '確認變更' }));
+
+      await waitFor(() => {
+        expect(mockedGetDatasourceTables).toHaveBeenCalledWith('ds-1', 'public');
+      });
+    });
+
+    it('TS-F019-FE-005: 連線失敗時下拉停用', async () => {
+      // Must override before renderPage creates the component
+      mockedGetDatasourceSchemas.mockRejectedValueOnce(new Error('Connection failed'));
+      mockedGetDatasourceTables.mockRejectedValueOnce(new Error('Connection failed'));
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText(/無法連線至資料來源/)).toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('來源 Schema')).toBeDisabled();
+    });
+  });
+
+  describe('變更警告 Modal', () => {
+    it('TS-F019-FE-006: 變更 sourceTable 時顯示警告 Modal（executionCount > 0）', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'orders');
+
+      await waitFor(() => {
+        expect(screen.getByText('確認變更來源資料表')).toBeInTheDocument();
+      });
+    });
+
+    it('TS-F019-FE-007: 變更 sourceSchema 時也觸發警告 Modal', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'public');
+
+      // Wait for tables to load after schema change, then verify modal appeared
+      await waitFor(() => {
+        expect(screen.getByText('確認變更來源資料表')).toBeInTheDocument();
+      });
+    });
+
+    it('TS-F019-FE-008: 點擊「確認變更」→ 值保留', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'orders');
+
+      await waitFor(() => {
+        expect(screen.getByText('確認變更來源資料表')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: '確認變更' }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('確認變更來源資料表')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('來源資料表')).toHaveValue('orders');
+    });
+
+    it('TS-F019-FE-009: 點擊「取消」→ 回復原值', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'orders');
+
+      await waitFor(() => {
+        expect(screen.getByText('確認變更來源資料表')).toBeInTheDocument();
+      });
+
+      // Click the cancel button in the modal (not the form cancel)
+      const modal = screen.getByText('確認變更來源資料表').closest('div[class*="fixed"]')!;
+      const cancelBtn = within(modal).getByRole('button', { name: '取消' });
+      await user.click(cancelBtn);
+
+      await waitFor(() => {
+        expect(screen.queryByText('確認變更來源資料表')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('來源資料表')).toHaveValue('customers');
+    });
+
+    it('TS-F019-FE-010: executionCount = 0 時不顯示警告', async () => {
+      const user = userEvent.setup();
+      renderPage({ executionCount: 0 });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'orders');
+
+      // Modal should NOT appear
+      expect(screen.queryByText('確認變更來源資料表')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('來源資料表')).toHaveValue('orders');
     });
   });
 });

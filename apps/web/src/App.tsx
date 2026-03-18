@@ -10,6 +10,7 @@ import { DatasourceListPage } from '@/pages/datasources/datasource-list-page';
 import { AddExtractionTaskPage } from '@/pages/extraction-tasks/add-extraction-task-page';
 import { EditExtractionTaskPage } from '@/pages/extraction-tasks/edit-extraction-task-page';
 import { ExtractionTaskListPage } from '@/pages/extraction-tasks/extraction-task-list-page';
+import { RawDataPreviewPage } from '@/pages/extraction-tasks/raw-data-preview-page';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
 export function App() {
@@ -71,6 +72,14 @@ export function App() {
         element={
           <AdminRoute>
             <EditExtractionTaskPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/extraction-tasks/:taskId/raw-data"
+        element={
+          <AdminRoute>
+            <RawDataPreviewPage />
           </AdminRoute>
         }
       />

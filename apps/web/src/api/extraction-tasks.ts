@@ -1,11 +1,12 @@
 import { apiClient } from './client';
-import type { ExtractionTaskListQuery, ExtractionTaskListResponse } from '@cdmp/shared';
+import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse } from '@cdmp/shared';
 
 export interface CreateExtractionTaskRequest {
   name: string;
   datasourceId: string;
   mode: 'full' | 'incremental';
-  targetTable: string;
+  sourceTable: string;
+  sourceSchema?: string;
   schedule: string;
   incrementalColumn?: string;
   lastIncrementalValue?: string;
@@ -18,7 +19,9 @@ export interface CreateExtractionTaskResponse {
   datasourceName: string;
   mode: 'full' | 'incremental';
   status: string;
-  targetTable: string;
+  sourceTable: string;
+  sourceSchema: string | null;
+  rawTableName: string | null;
   incrementalColumn: string | null;
   lastIncrementalValue: string | null;
   schedule: string;
@@ -59,7 +62,8 @@ export interface UpdateExtractionTaskRequest {
   name?: string;
   datasourceId?: string;
   mode?: 'full' | 'incremental';
-  targetTable?: string;
+  sourceTable?: string;
+  sourceSchema?: string;
   schedule?: string;
   incrementalColumn?: string;
   lastIncrementalValue?: string;
@@ -89,11 +93,37 @@ export async function toggleExtractionTask(
   return response.data;
 }
 
+export async function runExtractionTask(
+  id: string,
+  triggeredBy: 'manual' | 'retry',
+): Promise<RunExtractionTaskResponse> {
+  const response = await apiClient.post<RunExtractionTaskResponse>(
+    `/extraction-tasks/${id}/run`,
+    { triggeredBy },
+  );
+  return response.data;
+}
+
 export async function getExtractionTasks(
   query: ExtractionTaskListQuery,
 ): Promise<ExtractionTaskListResponse> {
   const response = await apiClient.get<ExtractionTaskListResponse>('/extraction-tasks', {
     params: query,
+  });
+  return response.data;
+}
+
+export async function getRawData(
+  taskId: string,
+  params?: {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  },
+): Promise<RawDataResponse> {
+  const response = await apiClient.get<RawDataResponse>(`/extraction-tasks/${taskId}/raw-data`, {
+    params,
   });
   return response.data;
 }

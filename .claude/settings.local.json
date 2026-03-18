@@ -149,7 +149,30 @@
       "Bash(rm:*)",
       "Bash(node:*)",
       "Bash(npx vite:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Bash(git commit:*)",
+      "Bash(xargs grep:*)",
+      "Bash(while read:*)",
+      "Bash(do sed:*)",
+      "Bash(echo \"Fixed: $f\")",
+      "Bash(done)",
+      "Bash(grep -r extraction /c/Users/cacab/Claude/cdmp-mvp/apps/web/src --include=*.tsx --include=*.ts -l)",
+      "Bash(grep -r \"verify\\\\|validate\\\\|reconcil\\\\|checksum\\\\|integrity\" /c/Users/cacab/Claude/cdmp-mvp/docs/specs --include=*.md)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm rebuild:*)",
+      "Bash(npx --yes prebuild-install)",
+      "Bash(npx --yes node-gyp rebuild)",
+      "Bash(npx tsc:*)",
+      "Bash(npx ts-node -e \":*)",
+      "Bash(npx ts-node -r tsconfig-paths/register -e \":*)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(DB_TYPE=postgres node -e \":*)",
+      "Bash(find /c/Users/cacab/Claude/cdmp-mvp -path */node_modules -prune -o -type f \\\\\\(-name *.e2e* -o -name test-*.ts -o -name *-test.ts \\\\\\) -print)",
+      "Bash(find /c/Users/cacab/Claude/cdmp-mvp -path */node_modules -prune -o -type f \\\\\\(-name *.spec.ts \\\\\\) -path */apps/api/src/* -print)",
+      "Bash(find /c/Users/cacab/Claude/cdmp-mvp -path */node_modules -prune -o -type f \\\\\\(-name README* -o -name *.md \\\\\\) -path */docs/* -print)",
+      "Bash(grep -r \"AllExceptionsFilter\\\\|@Catch\\(\\)\" /c/Users/cacab/Claude/cdmp-mvp/apps/api/src --include=*.ts)",
+      "Bash(docker exec:*)",
+      "Bash(git:*)"
     ]
   }
 }

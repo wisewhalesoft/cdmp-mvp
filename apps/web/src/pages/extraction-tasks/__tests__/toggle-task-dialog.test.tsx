@@ -100,7 +100,7 @@ function setupMocks() {
     datasourceName: 'MySQL 主資料庫',
     mode: 'full',
     status: 'disabled',
-    targetTable: 'customers',
+    sourceTable: 'customers',
     incrementalColumn: null,
     lastIncrementalValue: null,
     schedule: '0 2 * * *',

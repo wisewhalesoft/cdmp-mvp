@@ -4,16 +4,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { AddExtractionTaskPage } from '../add-extraction-task-page';
 import * as extractionTasksApi from '@/api/extraction-tasks';
+import * as datasourcesApi from '@/api/datasources';
 import * as authStore from '@/stores/auth-store';
 import { ToastProvider } from '@/components/ui/toast';
 
 vi.mock('@/api/extraction-tasks');
+vi.mock('@/api/datasources');
 vi.mock('@/api/auth', () => ({
   logout: vi.fn().mockResolvedValue({}),
 }));
 
 const mockedCreateExtractionTask = vi.mocked(extractionTasksApi.createExtractionTask);
 const mockedGetDatasourceOptions = vi.mocked(extractionTasksApi.getDatasourceOptions);
+const mockedGetDatasourceSchemas = vi.mocked(datasourcesApi.getDatasourceSchemas);
+const mockedGetDatasourceTables = vi.mocked(datasourcesApi.getDatasourceTables);
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -51,6 +55,9 @@ function renderPage() {
 describe('AddExtractionTaskPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default cascade mocks for all tests
+    mockedGetDatasourceSchemas.mockResolvedValue({ schemas: ['dbo', 'public'] });
+    mockedGetDatasourceTables.mockResolvedValue({ tables: ['customers', 'orders'] });
   });
 
   describe('渲染測試', () => {
@@ -59,7 +66,7 @@ describe('AddExtractionTaskPage', () => {
 
       expect(screen.getByLabelText('任務名稱')).toBeInTheDocument();
       expect(screen.getByLabelText('資料來源')).toBeInTheDocument();
-      expect(screen.getByLabelText('目標資料表')).toBeInTheDocument();
+      expect(screen.getByLabelText('來源資料表')).toBeInTheDocument();
 
       // 擷取模式 radio cards
       expect(screen.getByText('全量')).toBeInTheDocument();
@@ -226,7 +233,7 @@ describe('AddExtractionTaskPage', () => {
 
       expect(await screen.findByText('請輸入任務名稱')).toBeInTheDocument();
       expect(screen.getByText('請選擇資料來源')).toBeInTheDocument();
-      expect(screen.getByText('請輸入目標資料表')).toBeInTheDocument();
+      expect(screen.getByText('請選擇來源資料表')).toBeInTheDocument();
       expect(screen.getByText('請設定排程')).toBeInTheDocument();
     });
 
@@ -250,7 +257,18 @@ describe('AddExtractionTaskPage', () => {
       await user.type(screen.getByLabelText('任務名稱'), '每日全量同步');
       await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
       // mode defaults to full
-      await user.type(screen.getByLabelText('目標資料表'), 'customers');
+
+      // Wait for schemas to load, then select schema
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'dbo');
+
+      // Wait for tables to load, then select table
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'customers');
 
       // Set schedule via simple mode - daily
       await user.selectOptions(screen.getByLabelText('頻率'), 'daily');
@@ -265,7 +283,9 @@ describe('AddExtractionTaskPage', () => {
         datasourceName: 'MySQL 主資料庫',
         mode: 'full',
         status: 'scheduled',
-        targetTable: 'customers',
+        sourceTable: 'customers',
+        sourceSchema: null,
+        rawTableName: null,
         incrementalColumn: null,
         lastIncrementalValue: null,
         schedule: '0 2 * * *',
@@ -300,7 +320,9 @@ describe('AddExtractionTaskPage', () => {
         datasourceName: 'MySQL 主資料庫',
         mode: 'full',
         status: 'scheduled',
-        targetTable: 'customers',
+        sourceTable: 'customers',
+        sourceSchema: null,
+        rawTableName: null,
         incrementalColumn: null,
         lastIncrementalValue: null,
         schedule: '0 2 * * *',
@@ -325,7 +347,8 @@ describe('AddExtractionTaskPage', () => {
           name: '每日全量同步',
           datasourceId: 'ds-1',
           mode: 'full',
-          targetTable: 'customers',
+          sourceSchema: 'dbo',
+          sourceTable: 'customers',
           schedule: '0 2 * * *',
           incrementalColumn: undefined,
           lastIncrementalValue: undefined,
@@ -353,7 +376,15 @@ describe('AddExtractionTaskPage', () => {
       });
       await user.type(screen.getByLabelText('任務名稱'), '每日全量同步');
       await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
-      await user.type(screen.getByLabelText('目標資料表'), 'customers');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'dbo');
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'customers');
       await user.selectOptions(screen.getByLabelText('頻率'), 'daily');
     }
 
@@ -392,6 +423,142 @@ describe('AddExtractionTaskPage', () => {
       renderPage();
       await user.click(screen.getByRole('button', { name: '取消' }));
       expect(mockNavigate).toHaveBeenCalledWith('/extraction-tasks', { replace: true });
+    });
+  });
+
+  describe('連鎖下拉選單', () => {
+    beforeEach(() => {
+      mockedGetDatasourceSchemas.mockResolvedValue({ schemas: ['dbo', 'public', 'sys'] });
+      mockedGetDatasourceTables.mockResolvedValue({ tables: ['customers', 'orders', 'products'] });
+    });
+
+    it('TS-F017-FE-001: 初始狀態 — Schema 與 Table 下拉 disabled', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDatasourceOptions).toHaveBeenCalled();
+      });
+
+      const schemaSelect = screen.getByLabelText('來源 Schema');
+      const tableSelect = screen.getByLabelText('來源資料表');
+
+      expect(schemaSelect).toBeDisabled();
+      expect(tableSelect).toBeDisabled();
+    });
+
+    it('TS-F017-FE-002: 選定 Datasource 後自動載入 Schema 列表', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDatasourceOptions).toHaveBeenCalled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
+
+      await waitFor(() => {
+        expect(mockedGetDatasourceSchemas).toHaveBeenCalledWith('ds-1');
+      });
+
+      const schemaSelect = screen.getByLabelText('來源 Schema');
+      expect(schemaSelect).not.toBeDisabled();
+      const options = within(schemaSelect).getAllByRole('option');
+      // placeholder + 3 schemas
+      expect(options).toHaveLength(4);
+      expect(options[1]).toHaveTextContent('dbo');
+      expect(options[2]).toHaveTextContent('public');
+      expect(options[3]).toHaveTextContent('sys');
+    });
+
+    it('TS-F017-FE-003: 選定 Schema 後自動載入 Table 列表', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDatasourceOptions).toHaveBeenCalled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'dbo');
+
+      await waitFor(() => {
+        expect(mockedGetDatasourceTables).toHaveBeenCalledWith('ds-1', 'dbo');
+      });
+
+      const tableSelect = screen.getByLabelText('來源資料表');
+      expect(tableSelect).not.toBeDisabled();
+      const options = within(tableSelect).getAllByRole('option');
+      // placeholder + 3 tables
+      expect(options).toHaveLength(4);
+      expect(options[1]).toHaveTextContent('customers');
+    });
+
+    it('TS-F017-FE-004: 變更 Datasource 時重置 Schema 與 Table', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDatasourceOptions).toHaveBeenCalled();
+      });
+
+      // Select ds-1 -> schema -> table
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'dbo');
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源資料表')).not.toBeDisabled();
+      });
+      await user.selectOptions(screen.getByLabelText('來源資料表'), 'customers');
+
+      // Now change datasource to ds-2
+      mockedGetDatasourceSchemas.mockClear();
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-2');
+
+      await waitFor(() => {
+        expect(mockedGetDatasourceSchemas).toHaveBeenCalledWith('ds-2');
+      });
+
+      // Table should be reset and disabled until schema is selected
+      expect(screen.getByLabelText('來源資料表')).toBeDisabled();
+    });
+
+    it('TS-F017-FE-005: Schema 載入失敗顯示錯誤訊息，下拉停用', async () => {
+      mockedGetDatasourceSchemas.mockRejectedValue(new Error('Connection failed'));
+      const user = userEvent.setup();
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDatasourceOptions).toHaveBeenCalled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
+
+      await waitFor(() => {
+        expect(screen.getByText(/無法連線至資料來源/)).toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('來源 Schema')).toBeDisabled();
+    });
+
+    it('TS-F017-FE-006: Table 載入失敗顯示錯誤訊息', async () => {
+      mockedGetDatasourceTables.mockRejectedValue(new Error('Connection failed'));
+      const user = userEvent.setup();
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDatasourceOptions).toHaveBeenCalled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('資料來源'), 'ds-1');
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).not.toBeDisabled();
+      });
+
+      await user.selectOptions(screen.getByLabelText('來源 Schema'), 'dbo');
+
+      await waitFor(() => {
+        expect(screen.getByText(/無法載入資料表/)).toBeInTheDocument();
+      });
     });
   });
 });

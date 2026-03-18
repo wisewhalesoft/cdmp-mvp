@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Users, Database, ArrowDownToLine, LogOut, ChevronRight, CalendarClock } from 'lucide-react';
+import { Users, Database, ArrowDownToLine, LogOut, ChevronRight, CalendarClock, AlertTriangle } from 'lucide-react';
 import {
   createExtractionTaskSchema,
   type CreateExtractionTaskFormData,
@@ -12,7 +12,9 @@ import {
   updateExtractionTask,
   getDatasourceOptions,
   type DatasourceOption,
+  type CreateExtractionTaskResponse,
 } from '@/api/extraction-tasks';
+import { getDatasourceSchemas, getDatasourceTables } from '@/api/datasources';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import { Input } from '@/components/ui/input';
@@ -141,6 +143,25 @@ export function EditExtractionTaskPage() {
   const [dayOfMonth, setDayOfMonth] = useState('1');
   const [advancedCron, setAdvancedCron] = useState('');
 
+  // Cascade dropdown state
+  const [schemas, setSchemas] = useState<string[]>([]);
+  const [tables, setTables] = useState<string[]>([]);
+  const [schemasLoading, setSchemasLoading] = useState(false);
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [schemasError, setSchemasError] = useState<string | null>(null);
+  const [tablesError, setTablesError] = useState<string | null>(null);
+
+  // Warning modal state
+  const [showChangeWarningModal, setShowChangeWarningModal] = useState(false);
+  const [taskData, setTaskData] = useState<CreateExtractionTaskResponse | null>(null);
+  const originalSourceSchema = useRef<string>('');
+  const originalSourceTable = useRef<string>('');
+  const pendingSchemaValue = useRef<string | null>(null);
+  const pendingTableValue = useRef<string | null>(null);
+
+  // Track whether initial load has completed cascade setup
+  const cascadeInitialized = useRef(false);
+
   const {
     register,
     handleSubmit,
@@ -156,7 +177,8 @@ export function EditExtractionTaskPage() {
       name: '',
       datasourceId: '',
       mode: 'full',
-      targetTable: '',
+      sourceSchema: '',
+      sourceTable: '',
       schedule: '',
       incrementalColumn: '',
       lastIncrementalValue: '',
@@ -165,6 +187,8 @@ export function EditExtractionTaskPage() {
 
   const selectedMode = watch('mode');
   const scheduleValue = watch('schedule');
+  const watchedDatasourceId = watch('datasourceId');
+  const watchedSourceSchema = watch('sourceSchema');
 
   // Track whether initial load has set the simple mode state
   const [initialized, setInitialized] = useState(false);
@@ -178,13 +202,34 @@ export function EditExtractionTaskPage() {
           getExtractionTask(id!),
         ]);
         setDatasources(dsOptions);
+        setTaskData(task);
+
+        // Store original values for change detection
+        originalSourceSchema.current = task.sourceSchema ?? '';
+        originalSourceTable.current = task.sourceTable;
+
+        // Load schemas and tables in parallel for pre-selection
+        const taskDsId = task.datasourceId;
+        const taskSchema = task.sourceSchema ?? '';
+
+        try {
+          const [schemasRes, tablesRes] = await Promise.all([
+            getDatasourceSchemas(taskDsId),
+            taskSchema ? getDatasourceTables(taskDsId, taskSchema) : Promise.resolve({ tables: [] }),
+          ]);
+          setSchemas(schemasRes.schemas);
+          setTables(tablesRes.tables);
+        } catch {
+          setSchemasError('無法連線至資料來源，請至資料來源設定頁面確認連線設定');
+        }
 
         // Reset form with task data
         reset({
           name: task.name,
           datasourceId: task.datasourceId,
           mode: task.mode,
-          targetTable: task.targetTable,
+          sourceSchema: task.sourceSchema ?? '',
+          sourceTable: task.sourceTable,
           schedule: task.schedule,
           incrementalColumn: task.incrementalColumn ?? '',
           lastIncrementalValue: task.lastIncrementalValue ?? '',
@@ -205,6 +250,7 @@ export function EditExtractionTaskPage() {
           setIsAdvancedMode(true);
         }
 
+        cascadeInitialized.current = true;
         setInitialized(true);
       } catch {
         showToast('載入任務資料失敗', 'error');
@@ -216,6 +262,117 @@ export function EditExtractionTaskPage() {
 
     loadData();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cascade: reload schemas when datasource changes (user-triggered only)
+  const handleDatasourceChange = useCallback((newDsId: string) => {
+    if (!cascadeInitialized.current) return;
+
+    setValue('datasourceId', newDsId, { shouldValidate: false });
+
+    if (!newDsId) {
+      setSchemas([]);
+      setTables([]);
+      setSchemasError(null);
+      setTablesError(null);
+      setValue('sourceSchema', '', { shouldValidate: false });
+      setValue('sourceTable', '', { shouldValidate: false });
+      return;
+    }
+
+    setSchemasLoading(true);
+    setSchemasError(null);
+    setSchemas([]);
+    setTables([]);
+    setTablesError(null);
+    setValue('sourceSchema', '', { shouldValidate: false });
+    setValue('sourceTable', '', { shouldValidate: false });
+
+    getDatasourceSchemas(newDsId)
+      .then((res) => {
+        setSchemas(res.schemas);
+      })
+      .catch(() => {
+        setSchemasError('無法連線至資料來源，請至資料來源設定頁面確認連線設定');
+      })
+      .finally(() => setSchemasLoading(false));
+  }, [setValue]);
+
+  // Cascade: reload tables when schema changes (user-triggered only)
+  const handleSchemaChange = useCallback((newSchema: string) => {
+    if (!cascadeInitialized.current) return;
+
+    const executionCount = taskData?.executionCount ?? 0;
+
+    // Check if we need a warning modal
+    if (executionCount > 0 && newSchema !== originalSourceSchema.current) {
+      pendingSchemaValue.current = newSchema;
+      pendingTableValue.current = null;
+      setShowChangeWarningModal(true);
+      return;
+    }
+
+    applySchemaChange(newSchema);
+  }, [taskData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applySchemaChange = useCallback((newSchema: string) => {
+    setValue('sourceSchema', newSchema, { shouldValidate: false });
+    setValue('sourceTable', '', { shouldValidate: false });
+    setTables([]);
+    setTablesError(null);
+
+    if (!newSchema || !watchedDatasourceId) return;
+
+    setTablesLoading(true);
+    getDatasourceTables(watchedDatasourceId, newSchema)
+      .then((res) => {
+        setTables(res.tables);
+      })
+      .catch(() => {
+        setTablesError('無法載入資料表列表');
+      })
+      .finally(() => setTablesLoading(false));
+  }, [watchedDatasourceId, setValue]);
+
+  // Handle table change with warning modal
+  const handleTableChange = useCallback((newTable: string) => {
+    const executionCount = taskData?.executionCount ?? 0;
+
+    if (executionCount > 0 && newTable !== originalSourceTable.current) {
+      pendingTableValue.current = newTable;
+      pendingSchemaValue.current = null;
+      setShowChangeWarningModal(true);
+      return;
+    }
+
+    setValue('sourceTable', newTable, { shouldValidate: false });
+  }, [taskData, setValue]);
+
+  // Warning modal handlers
+  const handleConfirmChange = () => {
+    setShowChangeWarningModal(false);
+    if (pendingSchemaValue.current !== null) {
+      applySchemaChange(pendingSchemaValue.current);
+      pendingSchemaValue.current = null;
+    }
+    if (pendingTableValue.current !== null) {
+      setValue('sourceTable', pendingTableValue.current, { shouldValidate: false });
+      pendingTableValue.current = null;
+    }
+  };
+
+  const handleCancelChange = () => {
+    setShowChangeWarningModal(false);
+    if (pendingSchemaValue.current !== null) {
+      // Revert schema to original
+      setValue('sourceSchema', originalSourceSchema.current, { shouldValidate: false });
+      pendingSchemaValue.current = null;
+    }
+    if (pendingTableValue.current !== null) {
+      // Revert table to original
+      setValue('sourceTable', originalSourceTable.current, { shouldValidate: false });
+      pendingTableValue.current = null;
+    }
+  };
 
   // Build cron from simple mode selections
   const buildCronFromSimple = useCallback(() => {
@@ -289,7 +446,8 @@ export function EditExtractionTaskPage() {
         name: data.name,
         datasourceId: data.datasourceId,
         mode: data.mode,
-        targetTable: data.targetTable,
+        sourceSchema: data.sourceSchema || undefined,
+        sourceTable: data.sourceTable,
         schedule: data.schedule,
       };
 
@@ -424,7 +582,8 @@ export function EditExtractionTaskPage() {
                     className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary ${
                       errors.datasourceId ? 'border-danger-600' : 'border-border'
                     }`}
-                    {...register('datasourceId')}
+                    value={watchedDatasourceId}
+                    onChange={(e) => handleDatasourceChange(e.target.value)}
                   >
                     <option value="">請選擇</option>
                     {datasources.map((ds) => (
@@ -433,6 +592,8 @@ export function EditExtractionTaskPage() {
                       </option>
                     ))}
                   </select>
+                  {/* Hidden input to register with react-hook-form */}
+                  <input type="hidden" {...register('datasourceId')} />
                   {errors.datasourceId && (
                     <p className="mt-1 text-sm text-danger-600">{errors.datasourceId.message}</p>
                   )}
@@ -496,14 +657,92 @@ export function EditExtractionTaskPage() {
                   )}
                 />
 
-                {/* 目標資料表 */}
-                <Input
-                  label="目標資料表"
-                  placeholder="例如：customers"
-                  maxLength={255}
-                  error={errors.targetTable?.message}
-                  {...register('targetTable')}
-                />
+                {/* 來源 Schema */}
+                <div className="w-full">
+                  <label htmlFor="sourceSchema" className="block text-sm font-medium text-gray-700 mb-1">
+                    來源 Schema
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="sourceSchema"
+                      disabled={!watchedDatasourceId || schemasLoading || !!schemasError}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                        schemasError ? 'border-red-500' : 'border-border'
+                      }`}
+                      value={watchedSourceSchema || ''}
+                      onChange={(e) => handleSchemaChange(e.target.value)}
+                    >
+                      <option value="">
+                        {schemasLoading
+                          ? '載入中...'
+                          : !watchedDatasourceId
+                            ? '請先選擇資料來源'
+                            : '請選擇'}
+                      </option>
+                      {schemas.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    {/* Hidden input to register with react-hook-form */}
+                    <input type="hidden" {...register('sourceSchema')} />
+                    {schemasLoading && (
+                      <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                        <svg className="animate-spin w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {schemasError && (
+                    <p className="mt-1 text-xs text-red-500">{schemasError}</p>
+                  )}
+                </div>
+
+                {/* 來源資料表 */}
+                <div className="w-full">
+                  <label htmlFor="sourceTable" className="block text-sm font-medium text-gray-700 mb-1">
+                    來源資料表
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="sourceTable"
+                      disabled={!watchedSourceSchema || tablesLoading || !!tablesError}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                        tablesError ? 'border-red-500' : errors.sourceTable ? 'border-danger-600' : 'border-border'
+                      }`}
+                      value={watch('sourceTable') || ''}
+                      onChange={(e) => handleTableChange(e.target.value)}
+                    >
+                      <option value="">
+                        {tablesLoading
+                          ? '載入中...'
+                          : !watchedSourceSchema
+                            ? '請先選擇 Schema'
+                            : '請選擇'}
+                      </option>
+                      {tables.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {/* Hidden input to register with react-hook-form */}
+                    <input type="hidden" {...register('sourceTable')} />
+                    {tablesLoading && (
+                      <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                        <svg className="animate-spin w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {tablesError && (
+                    <p className="mt-1 text-xs text-red-500">{tablesError}</p>
+                  )}
+                  {errors.sourceTable && !tablesError && (
+                    <p className="mt-1 text-sm text-danger-600">{errors.sourceTable.message}</p>
+                  )}
+                </div>
 
                 {/* 排程設定 */}
                 <div className="w-full">
@@ -722,6 +961,42 @@ export function EditExtractionTaskPage() {
           </div>
         </main>
       </div>
+
+      {/* Change Source Table Warning Modal */}
+      {showChangeWarningModal && (
+        <div className="fixed inset-0 z-[100]">
+          <div className="absolute inset-0 bg-black/50" onClick={handleCancelChange} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 relative z-10">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
+                <h3 className="text-base font-bold text-gray-800">確認變更來源資料表</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                變更來源資料表後，下次執行擷取任務時將重建 Raw Data 表，現有已擷取的資料將被清除。確定要繼續嗎？
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelChange}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmChange}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  確認變更
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

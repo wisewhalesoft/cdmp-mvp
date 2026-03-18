@@ -14,10 +14,15 @@ export const createExtractionTaskSchema = z
     mode: z.enum(['full', 'incremental'], {
       errorMap: () => ({ message: '請選擇擷取模式' }),
     }),
-    targetTable: z
+    sourceSchema: z
       .string()
-      .min(1, '請輸入目標資料表')
-      .max(255, '目標資料表最多 255 個字元'),
+      .max(255)
+      .optional()
+      .or(z.literal('')),
+    sourceTable: z
+      .string()
+      .min(1, '請選擇來源資料表')
+      .max(255, '來源資料表最多 255 個字元'),
     schedule: z
       .string()
       .min(1, '請設定排程')

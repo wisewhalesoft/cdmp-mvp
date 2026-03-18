@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Users,
   Database,
@@ -22,10 +22,11 @@ import {
   ToggleRight,
   ToggleLeft,
   Trash2,
+  ExternalLink,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getExtractionTasks, getDatasourceOptions, toggleExtractionTask } from '@/api/extraction-tasks';
+import { getExtractionTasks, getDatasourceOptions, toggleExtractionTask, runExtractionTask } from '@/api/extraction-tasks';
 import type { DatasourceOption } from '@/api/extraction-tasks';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -109,6 +110,9 @@ export function ExtractionTaskListPage() {
   // Datasource options
   const [datasourceOptions, setDatasourceOptions] = useState<DatasourceOption[]>([]);
 
+  // Polling ref
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Debounce ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -162,6 +166,43 @@ export function ExtractionTaskListPage() {
       fetchTasks();
     }
   }, [fetchTasks, activeTab]);
+
+  // Polling: auto-refresh when any task is running
+  useEffect(() => {
+    const hasRunning = tasks.some((t) => t.status === 'running');
+    if (hasRunning) {
+      pollingRef.current = setInterval(() => {
+        fetchTasks();
+      }, 3000);
+    } else {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    }
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [tasks, fetchTasks]);
+
+  const handleRun = async (task: ExtractionTaskListItem) => {
+    const triggeredBy = task.status === 'failed' ? 'retry' : 'manual';
+    try {
+      await runExtractionTask(task.id, triggeredBy);
+      showToast('擷取任務已開始執行', 'success');
+      fetchTasks();
+    } catch (err: unknown) {
+      const error = err as { response?: { status?: number; data?: { error?: string } } };
+      if (error.response?.status === 409) {
+        showToast('任務正在執行中，請等待完成', 'error');
+      } else {
+        showToast('發生未知錯誤，請稍後再試', 'error');
+      }
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -489,6 +530,22 @@ export function ExtractionTaskListPage() {
                           </td>
                           <td className="px-5 py-3">
                             <StatusBadge status={task.status} />
+                            {task.status === 'running' && (
+                              <div className="mt-1" data-testid={`progress-bar-${task.id}`}>
+                                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full"
+                                    style={{
+                                      width: `${task.progressPercent}%`,
+                                      backgroundColor: '#3B82F6',
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-xs text-gray-500 mt-0.5 block">
+                                  {task.extractedCount}/{task.totalCount} ({task.progressPercent}%)
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-5 py-3 font-mono text-xs text-gray-600">
                             {task.schedule}
@@ -497,7 +554,18 @@ export function ExtractionTaskListPage() {
                             {task.lastExecutionAt ? formatDateTW(task.lastExecutionAt) : '-'}
                           </td>
                           <td className="px-5 py-3 text-gray-600">
-                            {task.extractedCount}/{task.totalCount}
+                            <div>{task.extractedCount}/{task.totalCount}</div>
+                            {task.status === 'completed' && task.extractedCount > 0 && (
+                              <div className="mt-1 pt-1 border-t border-gray-100">
+                                <Link
+                                  to={`/extraction-tasks/${task.id}/raw-data`}
+                                  className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  預覽資料
+                                </Link>
+                              </div>
+                            )}
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-1.5">
@@ -510,8 +578,9 @@ export function ExtractionTaskListPage() {
                                 <Pencil size={14} />
                               </button>
                               <button
-                                title="立即執行"
+                                title={task.status === 'failed' ? '重新執行' : '立即執行'}
                                 disabled={task.status === 'running'}
+                                onClick={() => handleRun(task)}
                                 className="p-1 text-gray-500 hover:text-blue-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Play size={14} />

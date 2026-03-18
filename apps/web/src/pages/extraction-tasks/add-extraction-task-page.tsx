@@ -12,6 +12,7 @@ import {
   getDatasourceOptions,
   type DatasourceOption,
 } from '@/api/extraction-tasks';
+import { getDatasourceSchemas, getDatasourceTables } from '@/api/datasources';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import { Input } from '@/components/ui/input';
@@ -81,6 +82,14 @@ export function AddExtractionTaskPage() {
   const [datasources, setDatasources] = useState<DatasourceOption[]>([]);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
 
+  // Cascade dropdown state
+  const [schemas, setSchemas] = useState<string[]>([]);
+  const [tables, setTables] = useState<string[]>([]);
+  const [schemasLoading, setSchemasLoading] = useState(false);
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [schemasError, setSchemasError] = useState<string | null>(null);
+  const [tablesError, setTablesError] = useState<string | null>(null);
+
   // Simple mode state
   const [frequency, setFrequency] = useState<Frequency>('');
   const [hourlyInterval, setHourlyInterval] = useState('1');
@@ -104,7 +113,8 @@ export function AddExtractionTaskPage() {
       name: '',
       datasourceId: '',
       mode: 'full',
-      targetTable: '',
+      sourceSchema: '',
+      sourceTable: '',
       schedule: '',
       incrementalColumn: '',
       lastIncrementalValue: '',
@@ -113,11 +123,60 @@ export function AddExtractionTaskPage() {
 
   const selectedMode = watch('mode');
   const scheduleValue = watch('schedule');
+  const watchedDatasourceId = watch('datasourceId');
+  const watchedSourceSchema = watch('sourceSchema');
 
   // Load datasources
   useEffect(() => {
     getDatasourceOptions().then(setDatasources).catch(() => {});
   }, []);
+
+  // Cascade: load schemas when datasource changes
+  useEffect(() => {
+    if (!watchedDatasourceId) {
+      setSchemas([]);
+      setTables([]);
+      setSchemasError(null);
+      setTablesError(null);
+      return;
+    }
+    setSchemasLoading(true);
+    setSchemasError(null);
+    setSchemas([]);
+    setTables([]);
+    setTablesError(null);
+    setValue('sourceSchema', '', { shouldValidate: false });
+    setValue('sourceTable', '', { shouldValidate: false });
+    getDatasourceSchemas(watchedDatasourceId)
+      .then((res) => {
+        setSchemas(res.schemas);
+      })
+      .catch(() => {
+        setSchemasError('無法連線至資料來源，請至資料來源設定頁面確認連線設定');
+      })
+      .finally(() => setSchemasLoading(false));
+  }, [watchedDatasourceId, setValue]);
+
+  // Cascade: load tables when schema changes
+  useEffect(() => {
+    if (!watchedDatasourceId || !watchedSourceSchema) {
+      setTables([]);
+      setTablesError(null);
+      return;
+    }
+    setTablesLoading(true);
+    setTablesError(null);
+    setTables([]);
+    setValue('sourceTable', '', { shouldValidate: false });
+    getDatasourceTables(watchedDatasourceId, watchedSourceSchema)
+      .then((res) => {
+        setTables(res.tables);
+      })
+      .catch(() => {
+        setTablesError('無法載入資料表列表');
+      })
+      .finally(() => setTablesLoading(false));
+  }, [watchedDatasourceId, watchedSourceSchema, setValue]);
 
   // Build cron from simple mode selections
   const buildCronFromSimple = useCallback(() => {
@@ -192,7 +251,8 @@ export function AddExtractionTaskPage() {
         name: data.name,
         datasourceId: data.datasourceId,
         mode: data.mode,
-        targetTable: data.targetTable,
+        sourceSchema: data.sourceSchema || undefined,
+        sourceTable: data.sourceTable,
         schedule: data.schedule,
         incrementalColumn: data.incrementalColumn || undefined,
         lastIncrementalValue: data.lastIncrementalValue || undefined,
@@ -377,14 +437,86 @@ export function AddExtractionTaskPage() {
                   )}
                 />
 
-                {/* 目標資料表 */}
-                <Input
-                  label="目標資料表"
-                  placeholder="例如：customers"
-                  maxLength={255}
-                  error={errors.targetTable?.message}
-                  {...register('targetTable')}
-                />
+                {/* 來源 Schema */}
+                <div className="w-full">
+                  <label htmlFor="sourceSchema" className="block text-sm font-medium text-gray-700 mb-1">
+                    來源 Schema
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="sourceSchema"
+                      disabled={!watchedDatasourceId || schemasLoading || !!schemasError}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                        schemasError ? 'border-red-500' : 'border-border'
+                      }`}
+                      {...register('sourceSchema')}
+                    >
+                      <option value="">
+                        {schemasLoading
+                          ? '載入中...'
+                          : !watchedDatasourceId
+                            ? '請先選擇資料來源'
+                            : '請選擇'}
+                      </option>
+                      {schemas.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    {schemasLoading && (
+                      <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                        <svg className="animate-spin w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {schemasError && (
+                    <p className="mt-1 text-xs text-red-500">{schemasError}</p>
+                  )}
+                </div>
+
+                {/* 來源資料表 */}
+                <div className="w-full">
+                  <label htmlFor="sourceTable" className="block text-sm font-medium text-gray-700 mb-1">
+                    來源資料表
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="sourceTable"
+                      disabled={!watchedSourceSchema || tablesLoading || !!tablesError}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                        tablesError ? 'border-red-500' : errors.sourceTable ? 'border-danger-600' : 'border-border'
+                      }`}
+                      {...register('sourceTable')}
+                    >
+                      <option value="">
+                        {tablesLoading
+                          ? '載入中...'
+                          : !watchedSourceSchema
+                            ? '請先選擇 Schema'
+                            : '請選擇'}
+                      </option>
+                      {tables.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {tablesLoading && (
+                      <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                        <svg className="animate-spin w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {tablesError && (
+                    <p className="mt-1 text-xs text-red-500">{tablesError}</p>
+                  )}
+                  {errors.sourceTable && !tablesError && (
+                    <p className="mt-1 text-sm text-danger-600">{errors.sourceTable.message}</p>
+                  )}
+                </div>
 
                 {/* 排程設定 */}
                 <div className="w-full">
