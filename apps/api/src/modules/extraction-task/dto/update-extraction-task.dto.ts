@@ -16,10 +16,15 @@ export class UpdateExtractionTaskDto {
   mode?: 'full' | 'incremental';
 
   @IsOptional()
-  @IsString({ message: '目標資料表必須為字串' })
-  @IsNotEmpty({ message: '請輸入目標資料表名稱' })
-  @MaxLength(255, { message: '目標資料表名稱不得超過 255 個字元' })
-  targetTable?: string;
+  @IsString({ message: '來源資料表必須為字串' })
+  @IsNotEmpty({ message: '請輸入來源資料表名稱' })
+  @MaxLength(255, { message: '來源資料表名稱不得超過 255 個字元' })
+  sourceTable?: string;
+
+  @IsOptional()
+  @IsString({ message: '來源 Schema 必須為字串' })
+  @MaxLength(255, { message: '來源 Schema 名稱不得超過 255 個字元' })
+  sourceSchema?: string;
 
   @IsOptional()
   @IsString({ message: '排程必須為字串' })

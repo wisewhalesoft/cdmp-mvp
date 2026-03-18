@@ -280,6 +280,15 @@ export interface AlertsResponse {
   alerts: AlertItem[];
 }
 
+// Datasource Schema/Table Discovery
+export interface DatasourceSchemasResponse {
+  schemas: string[];
+}
+
+export interface DatasourceTablesResponse {
+  tables: string[];
+}
+
 // F017: Extraction Task
 export type ExtractionMode = 'full' | 'incremental';
 export type ExtractionStatus = 'running' | 'scheduled' | 'completed' | 'failed' | 'disabled';
@@ -288,7 +297,8 @@ export interface CreateExtractionTaskRequest {
   name: string;
   datasourceId: string;
   mode: ExtractionMode;
-  targetTable: string;
+  sourceTable: string;
+  sourceSchema?: string;
   schedule: string;
   incrementalColumn?: string;
   lastIncrementalValue?: string;
@@ -301,7 +311,9 @@ export interface ExtractionTaskResponse {
   datasourceName: string;
   mode: ExtractionMode;
   status: ExtractionStatus;
-  targetTable: string;
+  sourceTable: string;
+  sourceSchema: string | null;
+  rawTableName: string | null;
   incrementalColumn: string | null;
   lastIncrementalValue: string | null;
   schedule: string;
@@ -359,6 +371,58 @@ export interface ExtractionTaskListResponse {
   summary: ExtractionTaskListSummary;
 }
 
+// F021: Run Extraction Task
+export type ExtractionTriggeredBy = 'schedule' | 'manual' | 'retry';
+
+export interface RunExtractionTaskRequest {
+  triggeredBy: 'manual' | 'retry';
+}
+
+export interface RunExtractionTaskResponse {
+  logId: string;
+}
+
+export interface ExtractionLogResponse {
+  id: string;
+  taskId: string;
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  extractedCount: number;
+  totalCount: number;
+  errorMessage: string | null;
+  triggeredBy: ExtractionTriggeredBy;
+  createdBy: string;
+  createdAt: string;
+}
+
+// F026: Preview Raw Data
+export interface RawDataColumn {
+  name: string;
+  dataType: string;
+  isSystem: boolean;
+}
+
+export interface RawDataMeta {
+  taskName: string;
+  sourceTable: string;
+  sourceSchema: string | null;
+  rawTableName: string;
+  lastUpdatedAt: string | null;
+  totalCount: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  warning?: string;
+}
+
+export interface RawDataResponse {
+  meta: RawDataMeta;
+  columns: RawDataColumn[];
+  data: Record<string, any>[];
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -394,6 +458,8 @@ export const ERROR_CODES = {
   // F017: Extraction Task
   EXTRACTION_NAME_EXISTS: 'EXTRACTION_NAME_EXISTS',
   EXTRACTION_DATASOURCE_NOT_FOUND: 'EXTRACTION_DATASOURCE_NOT_FOUND',
+  DATASOURCE_SCHEMA_LOAD_FAILED: 'DATASOURCE_SCHEMA_LOAD_FAILED',
+  DATASOURCE_TABLE_LOAD_FAILED: 'DATASOURCE_TABLE_LOAD_FAILED',
 } as const;
 
 export const ERROR_MESSAGES = {

@@ -33,7 +33,13 @@ export class ExtractionTask {
   status: 'running' | 'scheduled' | 'completed' | 'failed' | 'disabled';
 
   @Column({ type: 'varchar', length: 255 })
-  target_table: string;
+  source_table: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, default: null })
+  source_schema: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true, default: null })
+  raw_table_name: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true, default: null })
   incremental_column: string | null;

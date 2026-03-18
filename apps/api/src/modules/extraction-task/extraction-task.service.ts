@@ -18,7 +18,9 @@ export interface ExtractionTaskResult {
   datasourceName: string;
   mode: string;
   status: string;
-  targetTable: string;
+  sourceTable: string;
+  sourceSchema: string | null;
+  rawTableName: string | null;
   incrementalColumn: string | null;
   lastIncrementalValue: string | null;
   schedule: string;
@@ -43,7 +45,9 @@ function toExtractionTaskResponse(task: ExtractionTask, datasourceName: string):
     datasourceName,
     mode: task.mode,
     status: task.status,
-    targetTable: task.target_table,
+    sourceTable: task.source_table,
+    sourceSchema: task.source_schema,
+    rawTableName: task.raw_table_name,
     incrementalColumn: task.incremental_column,
     lastIncrementalValue: task.last_incremental_value,
     schedule: task.schedule,
@@ -127,7 +131,8 @@ export class ExtractionTaskService {
       name: dto.name,
       datasource_id: dto.datasourceId,
       mode: dto.mode,
-      target_table: dto.targetTable,
+      source_table: dto.sourceTable,
+      source_schema: dto.sourceSchema ?? null,
       schedule: dto.schedule,
       incremental_column: dto.incrementalColumn ?? null,
       last_incremental_value: dto.lastIncrementalValue ?? null,
@@ -138,7 +143,11 @@ export class ExtractionTaskService {
 
     const saved = await this.taskRepository.save(task);
 
-    return toExtractionTaskResponse(saved, datasource.name);
+    // Generate raw_table_name from the UUID
+    saved.raw_table_name = 'raw_' + saved.id.replace(/-/g, '').substring(0, 8);
+    const finalSaved = await this.taskRepository.save(saved);
+
+    return toExtractionTaskResponse(finalSaved, datasource.name);
   }
 
   async findAll(query: ListExtractionTaskDto) {
@@ -366,7 +375,8 @@ export class ExtractionTaskService {
       task.datasource = { id: dto.datasourceId } as Datasource; // Sync relation to prevent TypeORM from overwriting FK
     }
     if (dto.mode !== undefined) task.mode = dto.mode;
-    if (dto.targetTable !== undefined) task.target_table = dto.targetTable;
+    if (dto.sourceTable !== undefined) task.source_table = dto.sourceTable;
+    if (dto.sourceSchema !== undefined) task.source_schema = dto.sourceSchema;
     if (dto.schedule !== undefined) task.schedule = dto.schedule;
     if (dto.incrementalColumn !== undefined) task.incremental_column = dto.incrementalColumn;
     if (dto.lastIncrementalValue !== undefined) task.last_incremental_value = dto.lastIncrementalValue;
