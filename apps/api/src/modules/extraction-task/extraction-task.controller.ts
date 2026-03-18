@@ -6,6 +6,7 @@ import { ExtractionTaskService } from './extraction-task.service';
 import { CreateExtractionTaskDto } from './dto/create-extraction-task.dto';
 import { ListExtractionTaskDto } from './dto/list-extraction-task.dto';
 import { UpdateExtractionTaskDto } from './dto/update-extraction-task.dto';
+import { ToggleExtractionTaskDto } from './dto/toggle-extraction-task.dto';
 
 @Controller('extraction-tasks')
 @UseGuards(AuthGuard, RolesGuard)
@@ -30,6 +31,11 @@ export class ExtractionTaskController {
   async create(@Body() dto: CreateExtractionTaskDto, @Req() req: any) {
     const userId = req.user.userId;
     return this.extractionTaskService.createTask(dto, userId);
+  }
+
+  @Patch(':id/toggle')
+  async toggle(@Param('id') id: string, @Body() dto: ToggleExtractionTaskDto) {
+    return this.extractionTaskService.toggleTask(id, dto);
   }
 
   @Patch(':id')

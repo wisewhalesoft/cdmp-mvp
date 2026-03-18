@@ -9,6 +9,7 @@ import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateExtractionTaskDto } from './dto/create-extraction-task.dto';
 import { ListExtractionTaskDto } from './dto/list-extraction-task.dto';
 import { UpdateExtractionTaskDto } from './dto/update-extraction-task.dto';
+import { ToggleExtractionTaskDto } from './dto/toggle-extraction-task.dto';
 
 export interface ExtractionTaskResult {
   id: string;
@@ -373,5 +374,49 @@ export class ExtractionTaskService {
     const saved = await this.taskRepository.save(task);
 
     return toExtractionTaskResponse(saved, datasourceName);
+  }
+
+  async toggleTask(
+    id: string,
+    dto: ToggleExtractionTaskDto,
+  ): Promise<ExtractionTaskResult> {
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.datasource', 'ds')
+      .where('task.id = :id', { id })
+      .andWhere('task.deleted_at IS NULL')
+      .getOne();
+
+    if (!task) {
+      throw new NotFoundException({
+        error: ERROR_CODES.EXTRACTION_NOT_FOUND,
+        message: ERROR_MESSAGES.EXTRACTION_NOT_FOUND,
+      });
+    }
+
+    // Cannot disable a running task
+    if (!dto.enabled && task.status === 'running') {
+      throw new ConflictException({
+        error: ERROR_CODES.EXTRACTION_RUNNING,
+        message: ERROR_MESSAGES.EXTRACTION_RUNNING,
+      });
+    }
+
+    // Idempotent: if already in desired state, return without writing
+    if (dto.enabled === task.enabled) {
+      return toExtractionTaskResponse(task, task.datasource?.name ?? '');
+    }
+
+    if (dto.enabled) {
+      task.enabled = true;
+      task.status = 'scheduled';
+    } else {
+      task.enabled = false;
+      task.status = 'disabled';
+    }
+
+    const saved = await this.taskRepository.save(task);
+
+    return toExtractionTaskResponse(saved, task.datasource?.name ?? '');
   }
 }
