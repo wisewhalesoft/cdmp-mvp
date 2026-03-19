@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTW } from '@/utils/date-utils';
 import { ToggleTaskDialog } from './toggle-task-dialog';
+import { ExtractionLogDrawer } from './extraction-log-drawer';
 import type {
   ExtractionTaskListItem,
   ExtractionTaskListSummary,
@@ -87,6 +88,10 @@ export function ExtractionTaskListPage() {
   // Toggle dialog state
   const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Log drawer state
+  const [logDrawerOpen, setLogDrawerOpen] = useState(false);
+  const [logDrawerTarget, setLogDrawerTarget] = useState<{ id: string; name: string } | null>(null);
 
   // List state
   const [tasks, setTasks] = useState<ExtractionTaskListItem[]>([]);
@@ -587,6 +592,10 @@ export function ExtractionTaskListPage() {
                               </button>
                               <button
                                 title="查看日誌"
+                                onClick={() => {
+                                  setLogDrawerTarget({ id: task.id, name: task.name });
+                                  setLogDrawerOpen(true);
+                                }}
                                 className="p-1 text-gray-500 hover:text-gray-700 rounded"
                               >
                                 <FileText size={14} />
@@ -661,6 +670,18 @@ export function ExtractionTaskListPage() {
           setToggleTarget(null);
         }}
       />
+
+      {logDrawerTarget && (
+        <ExtractionLogDrawer
+          open={logDrawerOpen}
+          taskId={logDrawerTarget.id}
+          taskName={logDrawerTarget.name}
+          onClose={() => {
+            setLogDrawerOpen(false);
+            setLogDrawerTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

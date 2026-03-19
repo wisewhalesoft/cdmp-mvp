@@ -35,3 +35,19 @@ export function formatTimeTW(isoString: string): string {
   const date = new Date(isoString);
   return timeFormatter.format(date);
 }
+
+/**
+ * Format duration in milliseconds to human-readable string (BR-5).
+ * - >= 60000ms → "Xm Ys" (e.g. "3m 45s")
+ * - >= 1000ms → "Xs" (e.g. "45s")
+ * - < 1000ms → "Xms" (e.g. "120ms")
+ * - null → "-"
+ */
+export function formatDuration(ms: number | null): string {
+  if (ms === null) return '-';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${Math.floor(ms / 1000)}s`;
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return `${minutes}m ${seconds}s`;
+}

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse } from '@cdmp/shared';
+import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse, ExtractionLogListResponse } from '@cdmp/shared';
 
 export interface CreateExtractionTaskRequest {
   name: string;
@@ -110,6 +110,17 @@ export async function getExtractionTasks(
   const response = await apiClient.get<ExtractionTaskListResponse>('/extraction-tasks', {
     params: query,
   });
+  return response.data;
+}
+
+export async function getExtractionLogs(
+  taskId: string,
+  params?: { page?: number; limit?: number },
+): Promise<ExtractionLogListResponse> {
+  const response = await apiClient.get<ExtractionLogListResponse>(
+    `/extraction-tasks/${taskId}/logs`,
+    { params },
+  );
   return response.data;
 }
 
