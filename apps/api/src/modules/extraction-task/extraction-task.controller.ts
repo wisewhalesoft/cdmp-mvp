@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Query, Param, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Query, Param, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
@@ -78,5 +78,10 @@ export class ExtractionTaskController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateExtractionTaskDto) {
     return this.extractionTaskService.updateTask(id, dto);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    return this.extractionTaskService.deleteTask(id);
   }
 }

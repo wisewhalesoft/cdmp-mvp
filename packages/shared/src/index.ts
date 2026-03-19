@@ -453,6 +453,11 @@ export interface ExtractionDashboardTrendResponse {
   datapoints: ExtractionDashboardTrendDatapoint[];
 }
 
+// F025: Delete Extraction Task
+export interface DeleteExtractionTaskResponse {
+  message: string;
+}
+
 // F026: Preview Raw Data
 export interface RawDataColumn {
   name: string;

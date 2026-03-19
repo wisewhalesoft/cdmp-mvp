@@ -431,6 +431,35 @@ export class ExtractionTaskService {
     return toExtractionTaskResponse(saved, task.datasource?.name ?? '');
   }
 
+  async deleteTask(id: string): Promise<{ message: string }> {
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.id = :id', { id })
+      .andWhere('task.deleted_at IS NULL')
+      .getOne();
+
+    if (!task) {
+      throw new NotFoundException({
+        error: ERROR_CODES.EXTRACTION_NOT_FOUND,
+        message: ERROR_MESSAGES.EXTRACTION_NOT_FOUND,
+      });
+    }
+
+    // BR-2: Running task cannot be deleted
+    if (task.status === 'running') {
+      throw new ConflictException({
+        error: ERROR_CODES.EXTRACTION_RUNNING,
+        message: '任務執行中，無法刪除',
+      });
+    }
+
+    // BR-3: Soft delete — set deleted_at
+    task.deleted_at = new Date();
+    await this.taskRepository.save(task);
+
+    return { message: '擷取任務已刪除' };
+  }
+
   async findLogs(taskId: string, query: ListExtractionLogsDto) {
     // BR-3: 日誌永久保留 — 查任務時不排除軟刪除
     const task = await this.taskRepository
