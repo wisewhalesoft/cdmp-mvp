@@ -26,12 +26,13 @@ import {
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
-import { getExtractionTasks, getDatasourceOptions, toggleExtractionTask, runExtractionTask } from '@/api/extraction-tasks';
+import { getExtractionTasks, getDatasourceOptions, toggleExtractionTask, runExtractionTask, deleteExtractionTask } from '@/api/extraction-tasks';
 import type { DatasourceOption } from '@/api/extraction-tasks';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTW } from '@/utils/date-utils';
 import { ToggleTaskDialog } from './toggle-task-dialog';
+import { DeleteTaskDialog } from './delete-task-dialog';
 import { ExtractionLogDrawer } from './extraction-log-drawer';
 import { ExtractionDashboardTab } from './extraction-dashboard-tab';
 import type {
@@ -89,6 +90,10 @@ export function ExtractionTaskListPage() {
   // Toggle dialog state
   const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Delete dialog state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Log drawer state
   const [logDrawerOpen, setLogDrawerOpen] = useState(false);
@@ -234,6 +239,21 @@ export function ExtractionTaskListPage() {
   const handleDatasourceChange = (value: string) => {
     setDatasourceFilter(value);
     setPage(1);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      await deleteExtractionTask(deleteTarget.id);
+      showToast('擷取任務已刪除', 'success');
+      fetchTasks();
+    } catch {
+      showToast('發生未知錯誤，請稍後再試', 'error');
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
+    }
   };
 
   const handleToggle = async (task: ExtractionTaskListItem) => {
@@ -614,6 +634,7 @@ export function ExtractionTaskListPage() {
                               <button
                                 title="刪除"
                                 disabled={task.status === 'running'}
+                                onClick={() => setDeleteTarget({ id: task.id, name: task.name })}
                                 className="p-1 text-gray-500 hover:text-red-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Trash2 size={14} />
@@ -668,6 +689,14 @@ export function ExtractionTaskListPage() {
           setToggleDialogOpen(false);
           setToggleTarget(null);
         }}
+      />
+
+      <DeleteTaskDialog
+        open={deleteTarget !== null}
+        taskName={deleteTarget?.name ?? ''}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleteLoading}
       />
 
       {logDrawerTarget && (

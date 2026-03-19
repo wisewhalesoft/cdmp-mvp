@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse, ExtractionLogListResponse, ExtractionDashboardResponse, ExtractionDashboardTrendResponse } from '@cdmp/shared';
+import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse, ExtractionLogListResponse, ExtractionDashboardResponse, ExtractionDashboardTrendResponse, DeleteExtractionTaskResponse } from '@cdmp/shared';
 
 export interface CreateExtractionTaskRequest {
   name: string;
@@ -136,6 +136,13 @@ export async function getExtractionDashboardTrend(
     '/extraction-tasks/dashboard/trend',
     { params: { range } },
   );
+  return response.data;
+}
+
+export async function deleteExtractionTask(
+  id: string,
+): Promise<DeleteExtractionTaskResponse> {
+  const response = await apiClient.delete<DeleteExtractionTaskResponse>(`/extraction-tasks/${id}`);
   return response.data;
 }
 
