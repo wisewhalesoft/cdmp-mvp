@@ -174,6 +174,7 @@ export class ExtractionExecutionService {
       let extractedCount = 0;
       let lastKeyValue: any = undefined;
       const columnNames = metadata.map((c) => this.rawDataService.sanitizeColumnName(c.name));
+      const primaryKeyCol = metadata.find((c) => c.isPrimary)?.name || null;
 
       while (true) {
         const batch = await this.executor.readBatch({
@@ -185,6 +186,7 @@ export class ExtractionExecutionService {
           lastIncrementalValue: task.last_incremental_value,
           batchSize: BATCH_SIZE,
           lastKeyValue,
+          primaryKeyColumn: primaryKeyCol,
         });
 
         if (batch.rows.length === 0) break;

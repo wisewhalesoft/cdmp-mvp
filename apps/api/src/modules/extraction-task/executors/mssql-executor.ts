@@ -140,11 +140,13 @@ export class MSSQLExecutor extends BaseExecutor {
     lastIncrementalValue?: string | null;
     batchSize: number;
     lastKeyValue?: any;
+    primaryKeyColumn?: string | null;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }> {
     return this.withConnection(params.datasourceId, async (pool) => {
       const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
       const conditions: string[] = [];
       const request = pool.request();
+      const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
 
       if (params.mode === 'incremental' && params.incrementalColumn && params.lastIncrementalValue != null) {
         conditions.push(`${this.quoteIdentifier(params.incrementalColumn)} > @lastIncrValue`);
@@ -152,12 +154,9 @@ export class MSSQLExecutor extends BaseExecutor {
       }
 
       if (params.lastKeyValue != null) {
-        const orderCol = params.incrementalColumn || 'id';
         conditions.push(`${this.quoteIdentifier(orderCol)} > @lastKey`);
         request.input('lastKey', params.lastKeyValue);
       }
-
-      const orderCol = params.incrementalColumn || 'id';
 
       let sql = `SELECT * FROM ${tableName}`;
       if (conditions.length > 0) {

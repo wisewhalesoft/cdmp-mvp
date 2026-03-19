@@ -132,6 +132,7 @@ export class PostgreSQLExecutor extends BaseExecutor {
     lastIncrementalValue?: string | null;
     batchSize: number;
     lastKeyValue?: any;
+    primaryKeyColumn?: string | null;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }> {
     return this.withConnection(params.datasourceId, async (client) => {
       const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
@@ -146,7 +147,7 @@ export class PostgreSQLExecutor extends BaseExecutor {
       }
 
       if (params.lastKeyValue != null) {
-        const orderCol = params.incrementalColumn || 'id';
+        const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
         conditions.push(`${this.quoteIdentifier(orderCol)} > $${paramIndex}`);
         values.push(params.lastKeyValue);
         paramIndex++;
@@ -157,7 +158,7 @@ export class PostgreSQLExecutor extends BaseExecutor {
         sql += ` WHERE ${conditions.join(' AND ')}`;
       }
 
-      const orderCol = params.incrementalColumn || 'id';
+      const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
       sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
       sql += ` LIMIT $${paramIndex}`;
       values.push(params.batchSize);

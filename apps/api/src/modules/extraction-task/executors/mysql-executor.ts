@@ -119,6 +119,7 @@ export class MySQLExecutor extends BaseExecutor {
     lastIncrementalValue?: string | null;
     batchSize: number;
     lastKeyValue?: any;
+    primaryKeyColumn?: string | null;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }> {
     return this.withConnection(params.datasourceId, async (conn) => {
       const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
@@ -131,7 +132,7 @@ export class MySQLExecutor extends BaseExecutor {
       }
 
       if (params.lastKeyValue != null) {
-        const orderCol = params.incrementalColumn || 'id';
+        const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
         conditions.push(`${this.quoteIdentifier(orderCol)} > ?`);
         values.push(params.lastKeyValue);
       }
@@ -141,7 +142,7 @@ export class MySQLExecutor extends BaseExecutor {
         sql += ` WHERE ${conditions.join(' AND ')}`;
       }
 
-      const orderCol = params.incrementalColumn || 'id';
+      const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
       sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
       sql += ` LIMIT ?`;
       values.push(params.batchSize);
