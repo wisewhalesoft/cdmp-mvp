@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse, ExtractionLogListResponse } from '@cdmp/shared';
+import type { ExtractionTaskListQuery, ExtractionTaskListResponse, RunExtractionTaskResponse, RawDataResponse, ExtractionLogListResponse, ExtractionDashboardResponse, ExtractionDashboardTrendResponse } from '@cdmp/shared';
 
 export interface CreateExtractionTaskRequest {
   name: string;
@@ -120,6 +120,21 @@ export async function getExtractionLogs(
   const response = await apiClient.get<ExtractionLogListResponse>(
     `/extraction-tasks/${taskId}/logs`,
     { params },
+  );
+  return response.data;
+}
+
+export async function getExtractionDashboard(): Promise<ExtractionDashboardResponse> {
+  const response = await apiClient.get<ExtractionDashboardResponse>('/extraction-tasks/dashboard');
+  return response.data;
+}
+
+export async function getExtractionDashboardTrend(
+  range: '7d' | '14d' | '30d' = '7d',
+): Promise<ExtractionDashboardTrendResponse> {
+  const response = await apiClient.get<ExtractionDashboardTrendResponse>(
+    '/extraction-tasks/dashboard/trend',
+    { params: { range } },
   );
   return response.data;
 }

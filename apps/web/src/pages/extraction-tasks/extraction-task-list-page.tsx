@@ -33,6 +33,7 @@ import { useToast } from '@/components/ui/toast';
 import { formatDateTW } from '@/utils/date-utils';
 import { ToggleTaskDialog } from './toggle-task-dialog';
 import { ExtractionLogDrawer } from './extraction-log-drawer';
+import { ExtractionDashboardTab } from './extraction-dashboard-tab';
 import type {
   ExtractionTaskListItem,
   ExtractionTaskListSummary,
@@ -83,7 +84,7 @@ export function ExtractionTaskListPage() {
   const { showToast } = useToast();
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('list');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('dashboard');
 
   // Toggle dialog state
   const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
@@ -362,9 +363,7 @@ export function ExtractionTaskListPage() {
         {/* Tab Content */}
         {activeTab === 'dashboard' ? (
           <main className="flex-1 p-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center text-gray-400">
-              即將推出
-            </div>
+            <ExtractionDashboardTab />
           </main>
         ) : (
           <main className="flex-1 p-6">
