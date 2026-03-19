@@ -36,6 +36,8 @@ export interface RawDataResponse {
 
 @Injectable()
 export class RawDataService {
+  private readonly isPostgres: boolean;
+
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -43,7 +45,11 @@ export class RawDataService {
     private readonly taskRepository: Repository<ExtractionTask>,
     @InjectRepository(ExtractionLog)
     private readonly logRepository: Repository<ExtractionLog>,
-  ) {}
+  ) {
+    // Detect database type from the TypeORM DataSource driver
+    const driverType = (this.dataSource.options as any).type;
+    this.isPostgres = driverType === 'postgres';
+  }
 
   /**
    * Get raw data for a given extraction task with pagination and sorting.
@@ -70,15 +76,8 @@ export class RawDataService {
 
     const rawTableName = task.raw_table_name;
 
-    // 3. Get column metadata via PRAGMA
-    const pragmaColumns = await this.dataSource.query(
-      `PRAGMA table_info("${rawTableName}")`,
-    );
-    const columns: RawDataColumn[] = pragmaColumns.map((col: any) => ({
-      name: col.name,
-      dataType: col.type || 'TEXT',
-      isSystem: SYSTEM_COLUMNS.includes(col.name),
-    }));
+    // 3. Get column metadata
+    const columns = await this.getColumnMetadata(rawTableName);
 
     // 4. Get total count
     const countResult = await this.dataSource.query(
@@ -103,18 +102,7 @@ export class RawDataService {
 
         // Warning: non-indexed column sort on large datasets
         if (totalCount > 100000) {
-          const indexList = await this.dataSource.query(
-            `PRAGMA index_list("${rawTableName}")`,
-          );
-          const indexedColumns = new Set<string>();
-          for (const idx of indexList) {
-            const indexInfo = await this.dataSource.query(
-              `PRAGMA index_info("${idx.name}")`,
-            );
-            for (const info of indexInfo) {
-              indexedColumns.add(info.name);
-            }
-          }
+          const indexedColumns = await this.getIndexedColumns(rawTableName);
           if (!indexedColumns.has(query.sortBy)) {
             warning = `排序欄位 "${query.sortBy}" 非索引欄位，資料量超過 100,000 筆時可能影響效能`;
           }
@@ -123,10 +111,18 @@ export class RawDataService {
     }
 
     // 7. Query data
-    const data = await this.dataSource.query(
-      `SELECT * FROM "${rawTableName}" ${orderClause} LIMIT ? OFFSET ?`,
-      [limit, offset],
-    );
+    let data: Record<string, any>[];
+    if (this.isPostgres) {
+      data = await this.dataSource.query(
+        `SELECT * FROM "${rawTableName}" ${orderClause} LIMIT $1 OFFSET $2`,
+        [limit, offset],
+      );
+    } else {
+      data = await this.dataSource.query(
+        `SELECT * FROM "${rawTableName}" ${orderClause} LIMIT ? OFFSET ?`,
+        [limit, offset],
+      );
+    }
 
     // 8. Get lastUpdatedAt (latest completed log's finished_at)
     const lastLog = await this.logRepository.findOne({
@@ -162,6 +158,17 @@ export class RawDataService {
   async tableExists(rawTableName: string): Promise<boolean> {
     this.validateTableName(rawTableName);
 
+    if (this.isPostgres) {
+      const result = await this.dataSource.query(
+        `SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = $1
+        ) AS "exists"`,
+        [rawTableName],
+      );
+      return result[0].exists === true || result[0].exists === 't';
+    }
+
     const result = await this.dataSource.query(
       `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
       [rawTableName],
@@ -175,6 +182,16 @@ export class RawDataService {
   async getTableColumns(rawTableName: string): Promise<string[]> {
     this.validateTableName(rawTableName);
 
+    if (this.isPostgres) {
+      const columns = await this.dataSource.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = $1
+         ORDER BY ordinal_position`,
+        [rawTableName],
+      );
+      return columns.map((col: any) => col.column_name);
+    }
+
     const columns = await this.dataSource.query(
       `PRAGMA table_info("${rawTableName}")`,
     );
@@ -184,9 +201,9 @@ export class RawDataService {
   /**
    * Dynamically create a raw data table based on source column metadata.
    * - Sanitizes all column names
-   * - Appends _cdmp_id as PRIMARY KEY AUTOINCREMENT if no primary key exists
-   * - Appends _cdmp_extracted_at with DEFAULT datetime('now')
-   * - Maps external DB types to SQLite types
+   * - Appends _cdmp_id as auto-increment PRIMARY KEY if no primary key exists
+   * - Appends _cdmp_extracted_at with DEFAULT current timestamp
+   * - Maps external DB types to appropriate target types
    */
   async createRawTable(
     rawTableName: string,
@@ -194,28 +211,44 @@ export class RawDataService {
   ): Promise<void> {
     this.validateTableName(rawTableName);
 
-    const hasPrimary = columns.some((c) => c.isPrimary);
+    const primaryColumns = columns.filter((c) => c.isPrimary);
+    const hasPrimary = primaryColumns.length > 0;
     const columnDefs: string[] = [];
 
     // If no primary key in source, add _cdmp_id
     if (!hasPrimary) {
-      columnDefs.push('_cdmp_id INTEGER PRIMARY KEY AUTOINCREMENT');
+      if (this.isPostgres) {
+        columnDefs.push('_cdmp_id SERIAL PRIMARY KEY');
+      } else {
+        columnDefs.push('_cdmp_id INTEGER PRIMARY KEY AUTOINCREMENT');
+      }
     }
 
     for (const col of columns) {
       const safeName = this.sanitizeColumnName(col.name);
-      const sqliteType = this.mapToSqliteType(col.dataType);
-      if (col.isPrimary && hasPrimary) {
-        columnDefs.push(`"${safeName}" ${sqliteType} PRIMARY KEY`);
+      const mappedType = this.isPostgres
+        ? this.mapToPostgresType(col.dataType)
+        : this.mapToSqliteType(col.dataType);
+      // Single PK can use inline PRIMARY KEY; composite PK uses table-level constraint
+      if (col.isPrimary && primaryColumns.length === 1) {
+        columnDefs.push(`"${safeName}" ${mappedType} PRIMARY KEY`);
       } else {
-        columnDefs.push(`"${safeName}" ${sqliteType}`);
+        columnDefs.push(`"${safeName}" ${mappedType}`);
       }
     }
 
     // Always add _cdmp_extracted_at
-    columnDefs.push(
-      `_cdmp_extracted_at TEXT DEFAULT (datetime('now'))`,
-    );
+    if (this.isPostgres) {
+      columnDefs.push(`_cdmp_extracted_at TIMESTAMP DEFAULT NOW()`);
+    } else {
+      columnDefs.push(`_cdmp_extracted_at TEXT DEFAULT (datetime('now'))`);
+    }
+
+    // Composite primary key: add table-level constraint
+    if (primaryColumns.length > 1) {
+      const pkNames = primaryColumns.map((c) => `"${this.sanitizeColumnName(c.name)}"`).join(', ');
+      columnDefs.push(`PRIMARY KEY (${pkNames})`);
+    }
 
     const sql = `CREATE TABLE IF NOT EXISTS "${rawTableName}" (${columnDefs.join(', ')})`;
     await this.dataSource.query(sql);
@@ -234,7 +267,11 @@ export class RawDataService {
    */
   async truncateTable(rawTableName: string): Promise<void> {
     this.validateTableName(rawTableName);
-    await this.dataSource.query(`DELETE FROM "${rawTableName}"`);
+    if (this.isPostgres) {
+      await this.dataSource.query(`TRUNCATE TABLE "${rawTableName}"`);
+    } else {
+      await this.dataSource.query(`DELETE FROM "${rawTableName}"`);
+    }
   }
 
   /**
@@ -251,19 +288,39 @@ export class RawDataService {
     if (rows.length === 0) return 0;
 
     const safeCols = columns.map((c) => this.sanitizeColumnName(c));
-    const placeholders = rows
-      .map(() => `(${safeCols.map(() => '?').join(', ')})`)
-      .join(', ');
 
-    const values: any[] = [];
-    for (const row of rows) {
-      for (const col of columns) {
-        values.push(row[col] ?? null);
+    if (this.isPostgres) {
+      // PostgreSQL uses $1, $2, ... numbered parameters
+      let paramIndex = 1;
+      const placeholders = rows
+        .map(() => `(${safeCols.map(() => `$${paramIndex++}`).join(', ')})`)
+        .join(', ');
+
+      const values: any[] = [];
+      for (const row of rows) {
+        for (const col of columns) {
+          values.push(row[col] ?? null);
+        }
       }
-    }
 
-    const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
-    await this.dataSource.query(sql, values);
+      const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
+      await this.dataSource.query(sql, values);
+    } else {
+      // SQLite uses ? positional parameters
+      const placeholders = rows
+        .map(() => `(${safeCols.map(() => '?').join(', ')})`)
+        .join(', ');
+
+      const values: any[] = [];
+      for (const row of rows) {
+        for (const col of columns) {
+          values.push(row[col] ?? null);
+        }
+      }
+
+      const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
+      await this.dataSource.query(sql, values);
+    }
 
     return rows.length;
   }
@@ -287,6 +344,71 @@ export class RawDataService {
       throw new Error(`Column name is empty after sanitization: "${name}"`);
     }
     return sanitized;
+  }
+
+  /**
+   * Get column metadata (name, dataType, isSystem) for a raw data table.
+   */
+  private async getColumnMetadata(rawTableName: string): Promise<RawDataColumn[]> {
+    if (this.isPostgres) {
+      const pgColumns = await this.dataSource.query(
+        `SELECT column_name, data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = $1
+         ORDER BY ordinal_position`,
+        [rawTableName],
+      );
+      return pgColumns.map((col: any) => ({
+        name: col.column_name,
+        dataType: col.data_type || 'text',
+        isSystem: SYSTEM_COLUMNS.includes(col.column_name),
+      }));
+    }
+
+    // SQLite path
+    const pragmaColumns = await this.dataSource.query(
+      `PRAGMA table_info("${rawTableName}")`,
+    );
+    return pragmaColumns.map((col: any) => ({
+      name: col.name,
+      dataType: col.type || 'TEXT',
+      isSystem: SYSTEM_COLUMNS.includes(col.name),
+    }));
+  }
+
+  /**
+   * Get the set of indexed column names for a given table.
+   */
+  private async getIndexedColumns(rawTableName: string): Promise<Set<string>> {
+    const indexedColumns = new Set<string>();
+
+    if (this.isPostgres) {
+      const result = await this.dataSource.query(
+        `SELECT a.attname AS column_name
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
+         WHERE n.nspname = 'public' AND c.relname = $1`,
+        [rawTableName],
+      );
+      for (const row of result) {
+        indexedColumns.add(row.column_name);
+      }
+    } else {
+      const indexList = await this.dataSource.query(
+        `PRAGMA index_list("${rawTableName}")`,
+      );
+      for (const idx of indexList) {
+        const indexInfo = await this.dataSource.query(
+          `PRAGMA index_info("${idx.name}")`,
+        );
+        for (const info of indexInfo) {
+          indexedColumns.add(info.name);
+        }
+      }
+    }
+
+    return indexedColumns;
   }
 
   /**
@@ -314,6 +436,67 @@ export class RawDataService {
       return 'BLOB';
     }
     // Default: TEXT covers varchar, char, text, date, datetime, timestamp, etc.
+    return 'TEXT';
+  }
+
+  /**
+   * Map external database types to PostgreSQL-compatible types.
+   */
+  private mapToPostgresType(dataType: string): string {
+    const lower = dataType.toLowerCase();
+    if (lower.includes('serial')) {
+      return 'INTEGER';
+    }
+    if (lower.includes('bigint')) {
+      return 'BIGINT';
+    }
+    if (lower.includes('smallint') || lower.includes('tinyint')) {
+      return 'SMALLINT';
+    }
+    if (lower.includes('int')) {
+      return 'INTEGER';
+    }
+    if (lower.includes('bool') || lower.includes('bit')) {
+      return 'BOOLEAN';
+    }
+    if (lower.includes('float') || lower.includes('double')) {
+      return 'DOUBLE PRECISION';
+    }
+    if (
+      lower.includes('decimal') ||
+      lower.includes('numeric') ||
+      lower.includes('money')
+    ) {
+      return 'NUMERIC';
+    }
+    if (lower.includes('real')) {
+      return 'REAL';
+    }
+    if (lower.includes('bytea') || lower.includes('blob') || lower.includes('binary') || lower.includes('image') || lower.includes('varbinary')) {
+      return 'BYTEA';
+    }
+    if (lower.includes('datetime') || lower.includes('timestamp')) {
+      return 'TIMESTAMP';
+    }
+    if (lower === 'date') {
+      return 'DATE';
+    }
+    if (lower === 'time') {
+      return 'TIME';
+    }
+    if (lower.includes('uuid') || lower.includes('uniqueidentifier')) {
+      return 'UUID';
+    }
+    if (lower.includes('json')) {
+      return 'JSONB';
+    }
+    if (lower.includes('xml')) {
+      return 'XML';
+    }
+    if (lower.includes('text') || lower.includes('ntext')) {
+      return 'TEXT';
+    }
+    // Default: VARCHAR for char, varchar, nchar, nvarchar, etc.
     return 'TEXT';
   }
 }
