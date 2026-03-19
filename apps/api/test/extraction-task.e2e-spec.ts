@@ -2725,3 +2725,165 @@ describe('F026: Preview Raw Data (GET /api/v1/extraction-tasks/:id/raw-data)', (
     expect(res.body.data.length).toBe(10);
   });
 });
+
+// ============================================================
+// F025: Delete Extraction Task E2E (DELETE /api/v1/extraction-tasks/:id)
+// ============================================================
+describe('F025: Delete Extraction Task E2E (DELETE /api/v1/extraction-tasks/:id)', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let dataSource: DataSource;
+  let scheduledTaskId: string;
+  let scheduledTaskName: string;
+  let runningTaskId: string;
+  let taskWithLogsId: string;
+
+  const basePayload = {
+    name: '',
+    datasourceId: '',
+    mode: 'full' as const,
+    sourceTable: 'customers',
+    schedule: '0 2 * * *',
+  };
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    dataSource = app.get(DataSource);
+    basePayload.datasourceId = datasourceId;
+
+    // Create a scheduled task for delete tests
+    const res1 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: 'F025 可刪除任務' });
+    expect(res1.status).toBe(201);
+    scheduledTaskId = res1.body.id;
+    scheduledTaskName = res1.body.name;
+
+    // Create a running task
+    const res2 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: 'F025 執行中任務' });
+    expect(res2.status).toBe(201);
+    runningTaskId = res2.body.id;
+    // Set status to running via DB
+    const taskRepo = dataSource.getRepository(ExtractionTask);
+    await taskRepo.update({ id: runningTaskId }, { status: 'running' });
+
+    // Create a task with logs for log retention test
+    const res3 = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: 'F025 有日誌任務' });
+    expect(res3.status).toBe(201);
+    taskWithLogsId = res3.body.id;
+
+    // Insert a log record for this task
+    const logRepo = dataSource.getRepository(ExtractionLog);
+    await logRepo.save({
+      task_id: taskWithLogsId,
+      status: 'completed',
+      started_at: new Date(),
+      finished_at: new Date(),
+      duration_ms: 1500,
+      extracted_count: 10,
+      total_count: 10,
+      triggered_by: 'manual',
+      created_by: ADMIN_ACTIVE.id,
+    });
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F025-001: 成功軟刪除任務
+  it('should soft-delete a scheduled task and return 200 (TS-F025-001)', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('擷取任務已刪除');
+
+    // Verify DB: deleted_at is set
+    const taskRepo = dataSource.getRepository(ExtractionTask);
+    const task = await taskRepo.findOne({ where: { id: scheduledTaskId } });
+    expect(task).not.toBeNull();
+    expect(task!.deleted_at).not.toBeNull();
+  });
+
+  // TS-F025-002: 刪除後從清單移除
+  it('should not appear in task list after soft-delete (TS-F025-002)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((item: any) => item.id);
+    expect(ids).not.toContain(scheduledTaskId);
+  });
+
+  // TS-F025-003: 日誌保留
+  it('should retain extraction logs after task soft-delete (TS-F025-003)', async () => {
+    // First soft-delete the task with logs
+    const delRes = await request(app.getHttpServer())
+      .delete(`/api/v1/extraction-tasks/${taskWithLogsId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(delRes.status).toBe(200);
+
+    // Logs should still be accessible
+    const logRes = await request(app.getHttpServer())
+      .get(`/api/v1/extraction-tasks/${taskWithLogsId}/logs`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(logRes.status).toBe(200);
+    expect(logRes.body.data.length).toBeGreaterThanOrEqual(1);
+    expect(logRes.body.data[0].taskId).toBe(taskWithLogsId);
+  });
+
+  // TS-F025-004: 刪除後名稱可重用
+  it('should allow reuse of deleted task name (TS-F025-004)', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/extraction-tasks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name: scheduledTaskName });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe(scheduledTaskName);
+  });
+
+  // TS-F025-005: 執行中任務不可刪除
+  it('should return 409 for running task (TS-F025-005)', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/extraction-tasks/${runningTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('EXTRACTION_RUNNING');
+  });
+
+  // TS-F025-006: 非 Admin 無權刪除
+  it('should return 403 for non-admin user (TS-F025-006)', async () => {
+    const userToken = await getUserToken(app);
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/extraction-tasks/${runningTaskId}`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F025-007: 已刪除任務再次刪除回傳 404
+  it('should return 404 when deleting an already soft-deleted task (TS-F025-007)', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/extraction-tasks/${scheduledTaskId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('EXTRACTION_NOT_FOUND');
+  });
+});
