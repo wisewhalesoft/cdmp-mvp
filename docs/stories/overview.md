@@ -2,14 +2,14 @@
 
 > **專案名稱**：CDMP（Customer Data Management Platform）企業客戶資料治理平台
 > **版本**：v1.0 (MVP)
-> **最後更新**：2026-03-17
+> **最後更新**：2026-03-19
 
 ## 快速統計
 
 | 指標 | 數量 |
 |------|------|
-| Epic 總數 | 4 |
-| User Story 總數 | 26 |
+| Epic 總數 | 5 |
+| User Story 總數 | 36 |
 | 非功能需求（NFR）總數 | 2 |
 | 目標階段 | Phase 1（MVP） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
@@ -23,6 +23,7 @@
 | E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 7 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 10 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
+| E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 10 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
 
 ## Story 地圖
 
@@ -54,6 +55,16 @@
 | E04 | [US-037](epics/E04-data-extraction/US-037-extraction-dashboard.md) | 擷取監控儀表板 | Should Have |
 | E04 | [US-038](epics/E04-data-extraction/US-038-delete-extraction-task.md) | 刪除擷取任務 | Should Have |
 | E04 | [US-039](epics/E04-data-extraction/US-039-preview-raw-data.md) | 查看擷取資料預覽 | Must Have |
+| E05 | [US-040](epics/E05-etl-pipeline/US-040-pipeline-list.md) | 查看 Pipeline 列表 | Must Have |
+| E05 | [US-041](epics/E05-etl-pipeline/US-041-create-pipeline.md) | 建立 Pipeline | Must Have |
+| E05 | [US-042](epics/E05-etl-pipeline/US-042-pipeline-editor.md) | 視覺化轉換編輯器 | Must Have |
+| E05 | [US-043](epics/E05-etl-pipeline/US-043-execute-pipeline.md) | 執行 Pipeline | Must Have |
+| E05 | [US-044](epics/E05-etl-pipeline/US-044-toggle-pipeline.md) | 啟用／停用 Pipeline | Must Have |
+| E05 | [US-045](epics/E05-etl-pipeline/US-045-pipeline-logs.md) | 查看 Pipeline 日誌 | Must Have |
+| E05 | [US-046](epics/E05-etl-pipeline/US-046-pipeline-version.md) | Pipeline 版本管理 | Should Have |
+| E05 | [US-047](epics/E05-etl-pipeline/US-047-delete-pipeline.md) | 刪除 Pipeline | Should Have |
+| E05 | [US-048](epics/E05-etl-pipeline/US-048-monitor-dashboard.md) | Pipeline 監控儀表板 | Should Have |
+| E05 | [US-049](epics/E05-etl-pipeline/US-049-target-tables.md) | 目標表 Domain-Oriented 規劃 | Could Have |
 
 ## 非功能需求（NFR）
 
@@ -65,12 +76,13 @@
 ## 階段規劃
 
 ### Phase 1 — MVP（當前）
-重點：核心 CRUD、驗證登入、基礎 RBAC 權限管控、資料來源管理、資料擷取管理
+重點：核心 CRUD、驗證登入、基礎 RBAC 權限管控、資料來源管理、資料擷取管理、ETL Pipeline 管理
 
 - E01 全部 Stories（US-001 ~ US-003）
 - E02 全部 Stories（US-010 ~ US-016）
 - E03 全部 Stories（US-020 ~ US-025）
 - E04 全部 Stories（US-030 ~ US-039）
+- E05 全部 Stories（US-040 ~ US-049）
 - NFR-001、NFR-002
 
 ### Phase 2 — 進階規劃（未來）
