@@ -8,6 +8,7 @@ import { Datasource } from '@/database/entities/datasource.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CreateExtractionTaskDto } from './dto/create-extraction-task.dto';
 import { ListExtractionTaskDto } from './dto/list-extraction-task.dto';
+import { ListExtractionLogsDto } from './dto/list-extraction-logs.dto';
 import { UpdateExtractionTaskDto } from './dto/update-extraction-task.dto';
 import { ToggleExtractionTaskDto } from './dto/toggle-extraction-task.dto';
 
@@ -428,5 +429,57 @@ export class ExtractionTaskService {
     const saved = await this.taskRepository.save(task);
 
     return toExtractionTaskResponse(saved, task.datasource?.name ?? '');
+  }
+
+  async findLogs(taskId: string, query: ListExtractionLogsDto) {
+    // BR-3: 日誌永久保留 — 查任務時不排除軟刪除
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.id = :id', { id: taskId })
+      .getOne();
+
+    if (!task) {
+      throw new NotFoundException({
+        error: ERROR_CODES.EXTRACTION_NOT_FOUND,
+        message: ERROR_MESSAGES.EXTRACTION_NOT_FOUND,
+      });
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const qb = this.logRepository
+      .createQueryBuilder('log')
+      .where('log.task_id = :taskId', { taskId })
+      .orderBy('log.started_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [logs, total] = await qb.getManyAndCount();
+
+    const data = logs.map((log) => ({
+      id: log.id,
+      taskId: log.task_id,
+      status: log.status,
+      startedAt: log.started_at,
+      finishedAt: log.finished_at,
+      durationMs: log.duration_ms,
+      extractedCount: log.extracted_count,
+      totalCount: log.total_count,
+      errorMessage: log.error_message,
+      triggeredBy: log.triggered_by,
+      createdBy: log.created_by,
+      createdAt: log.created_at,
+    }));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

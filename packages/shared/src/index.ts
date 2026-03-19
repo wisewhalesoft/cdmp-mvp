@@ -397,6 +397,12 @@ export interface ExtractionLogResponse {
   createdAt: string;
 }
 
+// F022: Extraction Log List
+export interface ExtractionLogListResponse {
+  data: ExtractionLogResponse[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
 // F026: Preview Raw Data
 export interface RawDataColumn {
   name: string;

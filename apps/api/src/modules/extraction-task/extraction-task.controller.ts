@@ -11,6 +11,7 @@ import { UpdateExtractionTaskDto } from './dto/update-extraction-task.dto';
 import { ToggleExtractionTaskDto } from './dto/toggle-extraction-task.dto';
 import { RunExtractionTaskDto } from './dto/run-extraction-task.dto';
 import { GetRawDataDto } from './dto/get-raw-data.dto';
+import { ListExtractionLogsDto } from './dto/list-extraction-logs.dto';
 
 @Controller('extraction-tasks')
 @UseGuards(AuthGuard, RolesGuard)
@@ -25,6 +26,11 @@ export class ExtractionTaskController {
   @Get()
   async findAll(@Query() query: ListExtractionTaskDto) {
     return this.extractionTaskService.findAll(query);
+  }
+
+  @Get(':id/logs')
+  async findLogs(@Param('id') id: string, @Query() query: ListExtractionLogsDto) {
+    return this.extractionTaskService.findLogs(id, query);
   }
 
   @Get(':id/raw-data')
