@@ -27,7 +27,7 @@ export class ExtractionExecutionService {
    */
   async triggerRun(
     taskId: string,
-    triggeredBy: 'manual' | 'retry',
+    triggeredBy: 'manual' | 'retry' | 'schedule',
     userId: string,
   ): Promise<{ logId: string }> {
     // Find task
