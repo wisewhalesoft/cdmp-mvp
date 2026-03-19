@@ -403,6 +403,56 @@ export interface ExtractionLogListResponse {
   meta: { total: number; page: number; limit: number; totalPages: number };
 }
 
+// F024: Extraction Dashboard
+export interface ExtractionDashboardSummary {
+  totalTasks: number;
+  running: number;
+  todaySuccess: number;
+  todayFailed: number;
+  successRate: number;
+}
+
+export interface ExtractionDashboardRunningTask {
+  id: string;
+  name: string;
+  datasourceName: string;
+  extractedCount: number;
+  totalCount: number;
+  progressPercent: number;
+}
+
+export interface ExtractionDashboardFailure {
+  taskId: string;
+  taskName: string;
+  failedAt: string;
+  errorSummary: string;
+  logId: string;
+}
+
+export interface ExtractionDashboardSlowestTask {
+  taskId: string;
+  taskName: string;
+  avgDurationMs: number;
+  executionCount: number;
+}
+
+export interface ExtractionDashboardResponse {
+  summary: ExtractionDashboardSummary;
+  runningTasks: ExtractionDashboardRunningTask[];
+  todayFailures: ExtractionDashboardFailure[];
+  slowestTasks: ExtractionDashboardSlowestTask[];
+}
+
+export interface ExtractionDashboardTrendDatapoint {
+  date: string;
+  success: number;
+  failed: number;
+}
+
+export interface ExtractionDashboardTrendResponse {
+  datapoints: ExtractionDashboardTrendDatapoint[];
+}
+
 // F026: Preview Raw Data
 export interface RawDataColumn {
   name: string;

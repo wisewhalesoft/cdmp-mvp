@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { ExtractionTaskController } from './extraction-task.controller';
 import { ExtractionTaskService } from './extraction-task.service';
 import { ExtractionExecutionService } from './extraction-execution.service';
+import { ExtractionDashboardService } from './extraction-dashboard.service';
 import { RawDataService } from './raw-data.service';
 import { ExtractionTask } from '@/database/entities/extraction-task.entity';
 import { ExtractionLog } from '@/database/entities/extraction-log.entity';
@@ -30,6 +31,7 @@ import { DelegatingExecutor } from './executors/delegating-executor';
   providers: [
     ExtractionTaskService,
     ExtractionExecutionService,
+    ExtractionDashboardService,
     RawDataService,
     ExecutorFactory,
     {

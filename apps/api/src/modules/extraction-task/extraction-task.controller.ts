@@ -4,6 +4,7 @@ import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ExtractionTaskService } from './extraction-task.service';
 import { ExtractionExecutionService } from './extraction-execution.service';
+import { ExtractionDashboardService } from './extraction-dashboard.service';
 import { RawDataService } from './raw-data.service';
 import { CreateExtractionTaskDto } from './dto/create-extraction-task.dto';
 import { ListExtractionTaskDto } from './dto/list-extraction-task.dto';
@@ -12,6 +13,7 @@ import { ToggleExtractionTaskDto } from './dto/toggle-extraction-task.dto';
 import { RunExtractionTaskDto } from './dto/run-extraction-task.dto';
 import { GetRawDataDto } from './dto/get-raw-data.dto';
 import { ListExtractionLogsDto } from './dto/list-extraction-logs.dto';
+import { DashboardTrendDto } from './dto/dashboard-trend.dto';
 
 @Controller('extraction-tasks')
 @UseGuards(AuthGuard, RolesGuard)
@@ -20,8 +22,19 @@ export class ExtractionTaskController {
   constructor(
     private readonly extractionTaskService: ExtractionTaskService,
     private readonly extractionExecutionService: ExtractionExecutionService,
+    private readonly extractionDashboardService: ExtractionDashboardService,
     private readonly rawDataService: RawDataService,
   ) {}
+
+  @Get('dashboard')
+  async getDashboard() {
+    return this.extractionDashboardService.getDashboard();
+  }
+
+  @Get('dashboard/trend')
+  async getDashboardTrend(@Query() query: DashboardTrendDto) {
+    return this.extractionDashboardService.getTrend(query.range ?? '7d');
+  }
 
   @Get()
   async findAll(@Query() query: ListExtractionTaskDto) {
