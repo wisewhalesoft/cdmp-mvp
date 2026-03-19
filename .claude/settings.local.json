@@ -172,7 +172,9 @@
       "Bash(find /c/Users/cacab/Claude/cdmp-mvp -path */node_modules -prune -o -type f \\\\\\(-name README* -o -name *.md \\\\\\) -path */docs/* -print)",
       "Bash(grep -r \"AllExceptionsFilter\\\\|@Catch\\(\\)\" /c/Users/cacab/Claude/cdmp-mvp/apps/api/src --include=*.ts)",
       "Bash(docker exec:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(grep -r \"response\\\\|error\\\\|catch\" /c/Users/cacab/Claude/cdmp-mvp/apps/web/src/api --include=*.ts --include=*.tsx -A 3 -B 1)",
+      "Bash(grep -r \"localStorage\\\\|sessionStorage\" /c/Users/cacab/Claude/cdmp-mvp/apps/web/src --include=*.ts --include=*.tsx)"
     ]
   }
 }
