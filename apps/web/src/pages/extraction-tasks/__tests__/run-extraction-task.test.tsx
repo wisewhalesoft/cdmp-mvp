@@ -16,6 +16,8 @@ vi.mock('@/stores/auth-store');
 const mockedGetExtractionTasks = vi.mocked(extractionTasksApi.getExtractionTasks);
 const mockedGetDatasourceOptions = vi.mocked(extractionTasksApi.getDatasourceOptions);
 const mockedRunExtractionTask = vi.mocked(extractionTasksApi.runExtractionTask);
+const mockedGetDashboard = vi.mocked(extractionTasksApi.getExtractionDashboard);
+const mockedGetTrend = vi.mocked(extractionTasksApi.getExtractionDashboardTrend);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -109,6 +111,13 @@ function setupMocks(response: ExtractionTaskListResponse = mockRunResponse) {
   });
   mockedClearAuth.mockImplementation(() => {});
   mockedRunExtractionTask.mockResolvedValue({ logId: 'log-1' });
+  mockedGetDashboard.mockResolvedValue({
+    summary: { totalTasks: 0, running: 0, todaySuccess: 0, todayFailed: 0, successRate: 0 },
+    runningTasks: [],
+    todayFailures: [],
+    slowestTasks: [],
+  });
+  mockedGetTrend.mockResolvedValue({ datapoints: [] });
 }
 
 async function renderAndLoad() {
@@ -120,6 +129,10 @@ async function renderAndLoad() {
         </ToastProvider>
       </BrowserRouter>,
     );
+  });
+  // Default tab is now 'dashboard' (BR-5), switch to 'list' for list tests
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('tab-list'));
   });
   await act(async () => {
     vi.advanceTimersByTime(350);
@@ -324,6 +337,10 @@ describe('F021: 立即執行／重新執行擷取任務', () => {
             </ToastProvider>
           </BrowserRouter>,
         );
+      });
+      // Default tab is now 'dashboard' (BR-5), switch to 'list' for list tests
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('tab-list'));
       });
       await act(async () => {
         vi.advanceTimersByTime(350);

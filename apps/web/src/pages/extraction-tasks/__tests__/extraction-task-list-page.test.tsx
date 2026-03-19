@@ -15,6 +15,8 @@ vi.mock('@/stores/auth-store');
 
 const mockedGetExtractionTasks = vi.mocked(extractionTasksApi.getExtractionTasks);
 const mockedGetDatasourceOptions = vi.mocked(extractionTasksApi.getDatasourceOptions);
+const mockedGetDashboard = vi.mocked(extractionTasksApi.getExtractionDashboard);
+const mockedGetTrend = vi.mocked(extractionTasksApi.getExtractionDashboardTrend);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -97,6 +99,13 @@ function setupMocks(response: ExtractionTaskListResponse = mockResponse) {
     { id: 'ds-1', name: 'MySQL 主資料庫', type: 'mysql' },
     { id: 'ds-2', name: 'PostgreSQL 分析庫', type: 'postgresql' },
   ]);
+  mockedGetDashboard.mockResolvedValue({
+    summary: { totalTasks: 0, running: 0, todaySuccess: 0, todayFailed: 0, successRate: 0 },
+    runningTasks: [],
+    todayFailures: [],
+    slowestTasks: [],
+  });
+  mockedGetTrend.mockResolvedValue({ datapoints: [] });
   mockedGetUser.mockReturnValue({
     id: '1',
     name: 'Admin User',
@@ -115,6 +124,11 @@ async function renderAndLoad() {
         </ToastProvider>
       </BrowserRouter>,
     );
+  });
+
+  // Default tab is now 'dashboard' (BR-5), switch to 'list' for list tests
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('tab-list'));
   });
 
   // Advance timers for debounce

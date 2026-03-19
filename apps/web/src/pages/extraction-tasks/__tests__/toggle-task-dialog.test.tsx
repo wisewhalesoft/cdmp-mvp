@@ -17,6 +17,8 @@ vi.mock('@/stores/auth-store');
 const mockedGetExtractionTasks = vi.mocked(extractionTasksApi.getExtractionTasks);
 const mockedGetDatasourceOptions = vi.mocked(extractionTasksApi.getDatasourceOptions);
 const mockedToggleExtractionTask = vi.mocked(extractionTasksApi.toggleExtractionTask);
+const mockedGetDashboard = vi.mocked(extractionTasksApi.getExtractionDashboard);
+const mockedGetTrend = vi.mocked(extractionTasksApi.getExtractionDashboardTrend);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -93,6 +95,13 @@ function setupMocks() {
     role: 'admin',
   });
   mockedClearAuth.mockImplementation(() => {});
+  mockedGetDashboard.mockResolvedValue({
+    summary: { totalTasks: 0, running: 0, todaySuccess: 0, todayFailed: 0, successRate: 0 },
+    runningTasks: [],
+    todayFailures: [],
+    slowestTasks: [],
+  });
+  mockedGetTrend.mockResolvedValue({ datapoints: [] });
   mockedToggleExtractionTask.mockResolvedValue({
     id: 'et-enabled',
     name: '啟用中任務',
@@ -127,6 +136,10 @@ async function renderAndLoad() {
         </ToastProvider>
       </BrowserRouter>,
     );
+  });
+  // Default tab is now 'dashboard' (BR-5), switch to 'list' for list tests
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('tab-list'));
   });
   await act(async () => {
     vi.advanceTimersByTime(350);

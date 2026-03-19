@@ -1,4 +1,4 @@
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup, act, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { ExtractionTaskListPage } from '../extraction-task-list-page';
@@ -15,6 +15,8 @@ vi.mock('@/stores/auth-store');
 
 const mockedGetExtractionTasks = vi.mocked(extractionTasksApi.getExtractionTasks);
 const mockedGetDatasourceOptions = vi.mocked(extractionTasksApi.getDatasourceOptions);
+const mockedGetDashboard = vi.mocked(extractionTasksApi.getExtractionDashboard);
+const mockedGetTrend = vi.mocked(extractionTasksApi.getExtractionDashboardTrend);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -107,6 +109,13 @@ function setupMocks() {
     role: 'admin',
   });
   mockedClearAuth.mockImplementation(() => {});
+  mockedGetDashboard.mockResolvedValue({
+    summary: { totalTasks: 0, running: 0, todaySuccess: 0, todayFailed: 0, successRate: 0 },
+    runningTasks: [],
+    todayFailures: [],
+    slowestTasks: [],
+  });
+  mockedGetTrend.mockResolvedValue({ datapoints: [] });
 }
 
 async function renderAndLoad() {
@@ -118,6 +127,10 @@ async function renderAndLoad() {
         </ToastProvider>
       </BrowserRouter>,
     );
+  });
+  // Default tab is now 'dashboard' (BR-5), switch to 'list' for list tests
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('tab-list'));
   });
   await act(async () => {
     vi.advanceTimersByTime(350);
