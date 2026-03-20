@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: 1.2
+version: 1.3
 status: draft
-last_updated: 2026-03-18
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026]
+last_updated: 2026-03-20
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036]
 ---
 
 # 系統架構規格書
@@ -12,11 +12,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構、5. 整合與通訊、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構、4. 資料架構、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
-| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組）、10. 技術棧決策（前端） |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（ETL Pipeline 模組）、5. 整合與通訊（5.6 Pipeline 執行流程）、10. 技術棧決策 |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5）、4. 資料架構（EtlPipeline/Version/Log 實體）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
+| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，Pipeline 視覺化編輯器）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
-| Product Analyst | 8. 風險、取捨與替代方案、9. 待決事項 |
+| Product Analyst | 8. 風險（風險 6-9 為 E05 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設） |
 
 ## 目錄
 
@@ -37,7 +37,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 1.1 架構風格
 
-CDMP MVP 採用 **Modular Monolith** 架構搭配 **SPA（Single Page Application）前端**。後端為單一部署單元，但內部依業務能力切分模組邊界（Auth、Account、Datasource、Extraction），各模組明確定義職責範圍，避免跨模組直接耦合。
+CDMP MVP 採用 **Modular Monolith** 架構搭配 **SPA（Single Page Application）前端**。後端為單一部署單元，但內部依業務能力切分模組邊界（Auth、Account、Datasource、Extraction、ETL Pipeline），各模組明確定義職責範圍，避免跨模組直接耦合。
 
 ```mermaid
 graph TD
@@ -51,7 +51,8 @@ graph TD
         AccountMod["Account 模組<br/>帳號 CRUD、角色管理"]
         DatasourceMod["Datasource 模組<br/>連線設定、測試、監控"]
         ExtractionMod["Extraction 模組<br/>擷取任務 CRUD、執行調度、日誌管理"]
-        Scheduler["Scheduler 模組<br/>健康檢查、擷取排程掃描、清理 Cron Job"]
+        ETLMod["ETL Pipeline 模組<br/>Pipeline CRUD、版本管理<br/>視覺化定義、執行引擎"]
+        Scheduler["Scheduler 模組<br/>健康檢查、擷取排程掃描<br/>Pipeline 排程掃描、清理 Cron Job"]
     end
 
     subgraph 持久層["持久層"]
@@ -69,8 +70,11 @@ graph TD
     API --> AccountMod
     API --> DatasourceMod
     API --> ExtractionMod
+    API --> ETLMod
     Scheduler --> DatasourceMod
     Scheduler --> ExtractionMod
+    Scheduler --> ETLMod
+    ETLMod --> ExtractionMod
     AuthMod --> AppDB
     AuthMod --> TokenStore
     AuthMod --> Email
@@ -79,12 +83,13 @@ graph TD
     DatasourceMod --> TargetDB
     ExtractionMod --> AppDB
     ExtractionMod --> TargetDB
+    ETLMod --> AppDB
 
     classDef layer fill:#f0f4ff,stroke:#4f6ef7,stroke-width:2px
     classDef module fill:#e8f5e9,stroke:#388e3c,stroke-width:1px
     classDef external fill:#fff3e0,stroke:#e65100,stroke-width:1px
     class Browser layer
-    class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,Scheduler module
+    class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,ETLMod,Scheduler module
     class Email,TargetDB,AppDB,TokenStore external
 ```
 
@@ -99,6 +104,9 @@ graph TD
 | Token 失效 | Token Blocklist | NFR-001.1 明確要求。用於登出、帳號停用、密碼重設後強制失效。 |
 | 排程 | 內建 Scheduler 模組 | MVP 排程需求包含靜態 Cron（健康檢查每 30 分鐘、清理每日）與動態 Cron 掃描（擷取排程每分鐘），引入獨立排程服務（如 BullMQ）過度複雜。 |
 | 擷取執行模型 | Promise-based 非同步執行 | MVP 擷取為 I/O 密集（資料庫查詢），Node.js 非同步 I/O 足以應對；API 層回傳 `202 Accepted`，前端 Polling 取得進度。 |
+| Pipeline 定義儲存 | JSONB 欄位 | Pipeline 節點與連線結構為非固定 schema，JSONB 提供靈活儲存並支援 PostgreSQL 原生 JSONB 查詢；版本 Diff 在應用層計算。 |
+| Pipeline 執行引擎 | 同 Monolith 內的 Promise-based 循序執行 | MVP 規模下節點數量有限，I/O 密集型操作，Node.js 非同步 I/O 已足夠；BullMQ 等佇列系統引入 Redis 依賴，不符 MVP 複雜度預算。 |
+| Pipeline 視覺化編輯器 | 前端 React Flow | 規格書 F029 明確建議；SPA 架構下純前端即可實現拖拉畫布；定義以 JSONB 序列化後傳送至後端儲存。 |
 | 技術棧 | Node.js + NestJS + React + PostgreSQL | 詳見第 10 節技術棧決策。 |
 
 ### 1.3 關鍵取捨
@@ -106,7 +114,9 @@ graph TD
 - **選擇 Modular Monolith 而非 Microservices**：犧牲部分服務獨立擴展能力，換取顯著較低的開發與運維複雜度。MVP 並發需求（100 人）可由單機處理。
 - **JWT 短效 Access Token + Refresh Token**：比純 blocklist 方案複雜，但安全性更佳，且支援未來 SSO 整合（Phase 2）。
 - **Polling 而非 WebSocket**（儀表板更新）：OQ-9 決議。降低後端實作複雜度，30 秒輪詢對監控場景可接受。擷取任務進度 Polling 採 3 秒間隔（F021/F024）。
-- **Promise-based 非同步執行而非 BullMQ / Worker Thread**（擷取作業）：MVP 擷取任務為 I/O 密集（資料庫批次查詢），Node.js 事件循環可有效處理。BullMQ 引入 Redis 強依賴與額外運維複雜度，不符 MVP 規模。
+- **Promise-based 非同步執行而非 BullMQ / Worker Thread**（擷取作業與 Pipeline 執行）：MVP 任務為 I/O 密集（資料庫批次查詢），Node.js 事件循環可有效處理。BullMQ 引入 Redis 強依賴與額外運維複雜度，不符 MVP 規模。
+- **Pipeline 定義以 JSONB 儲存而非正規化關聯表**：節點類型有 13 種（13 種 Transform + Extract + Load），各節點設定結構差異大，正規化設計需大量 JOIN 且擴展困難。JSONB 儲存允許應用層解析，版本 Diff 於後端計算後回傳 API。
+- **Pipeline 排程複用 Extraction Scheduler 掃描模式**：每分鐘掃描符合排程條件的 Pipeline，避免引入動態 Cron Job 管理複雜度（每個 Pipeline 獨立 Cron 物件需追蹤生命週期）。
 
 ---
 
@@ -132,7 +142,7 @@ graph TB
         SQLServer["SQL Server 實例<br/>連線測試 / 資料擷取目標"]
     end
 
-    Admin -->|"HTTPS — 管理後台<br/>帳號、資料來源、擷取任務、儀表板"| System
+    Admin -->|"HTTPS — 管理後台<br/>帳號、資料來源、擷取任務、ETL Pipeline"| System
     User -->|"HTTPS — 登入<br/>查看說明頁面"| System
     System -->|"SMTP/API<br/>密碼重設連結"| EmailSvc
     System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| MySQL
@@ -163,11 +173,11 @@ graph TB
     end
 
     subgraph TZ_Admin["信任區域：Admin 角色（JWT + role=admin）"]
-        AdminEndpoints["Admin 專屬端點<br/>帳號管理 /api/v1/accounts/**<br/>資料來源管理 /api/v1/datasources/**<br/>擷取任務管理 /api/v1/extraction-tasks/**"]
+        AdminEndpoints["Admin 專屬端點<br/>帳號管理 /api/v1/accounts/**<br/>資料來源管理 /api/v1/datasources/**<br/>擷取任務管理 /api/v1/extraction-tasks/**<br/>ETL Pipeline 管理 /api/v1/etl/**"]
     end
 
     subgraph TZ_Internal["信任區域：系統內部（不對外暴露）"]
-        Scheduler["Scheduler — 健康檢查、擷取排程"]
+        Scheduler["Scheduler — 健康檢查、擷取排程、Pipeline 排程"]
         DB["應用資料庫"]
         TokenStore["Token Blocklist"]
     end
@@ -199,6 +209,8 @@ graph TB
 | SQL Server 實例 | TCP（Port 1433） | 連線測試（`SELECT 1`）、自動健康檢查、資料擷取（批次 SQL Query） | F015, F016, F021, F023 |
 | 瀏覽器 | HTTPS | 使用者介面 | 全部 |
 
+> **E05 新增說明**：ETL Pipeline 的 Extract 節點讀取 AppDB 內的 raw data 表（不直接連外部資料庫），Load 節點寫入 AppDB 內的 target 表（`customer_core` 等），因此 ETL Pipeline 執行不新增外部依賴，資料流閉合於 AppDB 內部。
+
 > **注意**：資料擷取（F021/F023）對目標資料庫的流量性質與連線測試（`SELECT 1`）顯著不同——擷取為批次資料讀取（`SELECT * FROM table` 或增量 `WHERE col > value`），可能涉及大量資料傳輸，對目標資料庫的負載影響需評估。
 
 ---
@@ -212,7 +224,7 @@ graph TB
     subgraph Frontend["前端 (SPA)"]
         Router["路由層<br/>角色導向 / 守護"]
         AuthPages["驗證頁面<br/>登入、忘記密碼、重設密碼"]
-        AdminPages["Admin 管理頁面<br/>帳號清單、新增帳號、編輯帳號<br/>資料來源清單、新增、編輯<br/>資料來源狀態儀表板<br/>擷取任務儀表板、任務清單<br/>建立/編輯擷取任務、執行日誌"]
+        AdminPages["Admin 管理頁面<br/>帳號清單、新增帳號、編輯帳號<br/>資料來源清單、新增、編輯<br/>資料來源狀態儀表板<br/>擷取任務儀表板、任務清單<br/>建立/編輯擷取任務、執行日誌<br/>Pipeline 列表、視覺化編輯器<br/>Pipeline 日誌、版本管理"]
         UserPage["User 說明頁面"]
         APIClient["API Client<br/>JWT 附加、錯誤處理、Retry"]
     end
@@ -241,10 +253,18 @@ graph TB
             ExtDashSvc["ExtractionDashboard Service<br/>摘要統計、趨勢圖<br/>效能排名查詢"]
         end
 
+        subgraph ETLModule["ETL Pipeline 模組"]
+            PipelineSvc["Pipeline Service<br/>CRUD、啟用/停用、軟刪除<br/>版本管理（建立/回滾/發布）"]
+            PipelineDefSvc["Pipeline Definition Service<br/>儲存/載入 JSONB definition<br/>連線規則驗證、step_count 更新"]
+            PipelineExecSvc["Pipeline Execution Service<br/>非同步執行引擎（節點循序執行）<br/>Extract/Transform/Load 節點執行<br/>進度更新（5 秒 Polling）"]
+            PipelineVersionSvc["Pipeline Version Service<br/>版本 Diff 計算<br/>發布前測試執行驗證"]
+        end
+
         subgraph SchedulerModule["Scheduler 模組"]
             HealthCron["Health Check Cron<br/>每 30 分鐘<br/>呼叫 Datasource Service"]
             ExtractionCron["Extraction Scheduler Cron<br/>每分鐘<br/>掃描動態 Cron 任務"]
-            CleanupCron["Cleanup Cron<br/>清理過期 Token / HealthLog<br/>清理過期 ExtractionLog<br/>修復孤立 running 日誌"]
+            PipelineCron["Pipeline Scheduler Cron<br/>每分鐘<br/>掃描 active + enabled Pipeline"]
+            CleanupCron["Cleanup Cron<br/>清理過期 Token / HealthLog<br/>清理過期 ExtractionLog<br/>清理過期 EtlPipelineLog<br/>修復孤立 running 狀態"]
         end
 
         subgraph SharedInfra["共用基礎建設"]
@@ -257,7 +277,7 @@ graph TB
     end
 
     subgraph Persistence["持久層"]
-        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog"]
+        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog<br/>raw_{task_id_short} 動態表<br/>EtlPipeline / EtlPipelineVersion / EtlPipelineLog<br/>customer_core / customer_interaction<br/>customer_financial / customer_service"]
         TokenStore["Token Blocklist Store"]
     end
 
@@ -276,25 +296,32 @@ graph TB
     Middleware --> AccountModule
     Middleware --> DatasourceModule
     Middleware --> ExtractionModule
+    Middleware --> ETLModule
     SchedulerModule --> DatasourceModule
     SchedulerModule --> ExtractionModule
+    SchedulerModule --> ETLModule
+    ETLModule --> ExtractionModule
     AuthModule --> SharedInfra
     AccountModule --> SharedInfra
     DatasourceModule --> SharedInfra
     ExtractionModule --> SharedInfra
+    ETLModule --> SharedInfra
     SharedInfra --> AppDB
     SharedInfra --> TokenStore
     EmailUtil --> EmailExt
     DsSvc -->|"TCP 連線測試"| TargetDBs
     ExtExecSvc -->|"TCP 批次資料擷取"| TargetDBs
+    PipelineExecSvc -->|"讀取 raw_* 表<br/>寫入 customer_* 表"| AppDB
 
     classDef frontend fill:#dbeafe,stroke:#2563eb
     classDef module fill:#dcfce7,stroke:#16a34a
+    classDef etlmodule fill:#fce7f3,stroke:#db2777
     classDef shared fill:#f3e8ff,stroke:#9333ea
     classDef persist fill:#fef9c3,stroke:#ca8a04
     classDef external fill:#fef2f2,stroke:#ef4444
     class Frontend,Router,AuthPages,AdminPages,UserPage,APIClient frontend
     class AuthModule,AccountModule,DatasourceModule,ExtractionModule,SchedulerModule module
+    class ETLModule,PipelineSvc,PipelineDefSvc,PipelineExecSvc,PipelineVersionSvc etlmodule
     class SharedInfra,CryptoUtil,HashUtil,JWTUtil,EmailUtil,Logger shared
     class AppDB,TokenStore persist
     class EmailExt,TargetDBs external
@@ -308,9 +335,9 @@ graph TB
 |--------|------|------------|
 | 路由層 | 依 JWT 中的 `role` 欄位導向對應頁面；未驗證時導回登入頁 | JWT（localStorage / cookie）→ 路由決策 |
 | 驗證頁面（AuthPages） | 登入表單、忘記密碼、重設密碼頁面；前端欄位驗證 | 使用者輸入 → API 請求 |
-| Admin 管理頁面 | 帳號管理（F004-F010）、資料來源管理（F011-F016）、擷取任務管理（F017-F025）所有 UI | API 回應 → 畫面渲染 |
+| Admin 管理頁面 | 帳號管理（F004-F010）、資料來源管理（F011-F016）、擷取任務管理（F017-F025）、ETL Pipeline 管理（F027-F034, F036）所有 UI | API 回應 → 畫面渲染 |
 | User 說明頁面 | 靜態說明內容，無可操作功能（MVP 限制） | — |
-| API Client | 統一附加 `Authorization: Bearer {token}` header；處理 401/403 回應；提供 Loading 狀態管理；支援不同 Polling 頻率（儀表板 30 秒、擷取進度 3 秒） | 業務邏輯請求 → HTTP 請求 |
+| API Client | 統一附加 `Authorization: Bearer {token}` header；處理 401/403 回應；提供 Loading 狀態管理；支援不同 Polling 頻率（儀表板 30 秒、擷取進度 3 秒、Pipeline 執行進度 5 秒） | 業務邏輯請求 → HTTP 請求 |
 
 **重要設計決策**：Access Token 的儲存位置（`localStorage` vs `httpOnly Cookie`）由實作團隊決定，但需注意：`localStorage` 面臨 XSS 風險；`httpOnly Cookie` 需處理 CSRF 防護。建議使用 `httpOnly Cookie`。
 
@@ -392,7 +419,8 @@ graph TB
 |---------|---------|------|
 | Health Check Cron | 每 30 分鐘 | 平行測試所有未軟刪除的資料來源；呼叫 Datasource Service 的測試邏輯；寫入 `DatasourceHealthLog` |
 | Extraction Scheduler Cron | 每分鐘 | 掃描 `enabled=true AND deleted_at IS NULL AND status != 'running'` 的擷取任務；以 `cron-parser` 比對 cron 表達式與當前 UTC 時間；觸發符合條件的任務（呼叫 ExtractionExecution Service，`triggered_by='schedule'`） |
-| Cleanup Cron | 每日 | 清理超過 90 天的 `DatasourceHealthLog`（OQ-10 決議）；清理超過 30 天的 `ExtractionLog`（AQ-10 決議）；清理已過期的 `PasswordResetToken`；清理已過期的 Token Blocklist 記錄；修復孤立 running 日誌（AD-E04-7） |
+| Pipeline Scheduler Cron | 每分鐘 | 掃描 `enabled=true AND deleted_at IS NULL AND status != 'running'` 且 `status = 'active'` 的 ETL Pipeline；以 `cron-parser` 比對 cron 表達式與當前 UTC 時間；觸發符合條件的 Pipeline（呼叫 Pipeline Execution Service，`triggered_by='schedule'`，使用最新 `published` 版本） |
+| Cleanup Cron | 每日 | 清理超過 90 天的 `DatasourceHealthLog`（OQ-10 決議）；清理超過 30 天的 `ExtractionLog`（AQ-10 決議）；清理超過 30 天的 `EtlPipelineLog`（AQ-14 決議）；清理已過期的 `PasswordResetToken`；清理已過期的 Token Blocklist 記錄；修復孤立 running 日誌——ExtractionLog（AD-E04-7）與 EtlPipelineLog（AD-E05-2） |
 
 **孤立 running 日誌修復**（AD-E04-7）：Cleanup Cron 每次執行時，將 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 ExtractionLog 標記為 `failed`（error_message: `'Execution timeout: exceeded 2 hour limit'`），並同步更新對應 ExtractionTask.status 為 `failed`。
 
@@ -404,6 +432,50 @@ graph TB
 - **批次大小**：預設 1,000 筆/批次（可透過 `EXTRACTION_BATCH_SIZE` 環境變數配置，範圍 100-10,000）
 
 **Raw Data 預覽 API**（AD-E04-10）：`GET /api/v1/extraction-tasks/:id/raw-data` 透過動態 SQL 查詢 raw data 表，支援分頁（`LIMIT` + `OFFSET`）與單欄位排序。不使用 ORM Entity，直接以 Raw SQL 操作動態表。百萬筆資料場景下，依賴 `_cdmp_id`（或主鍵）索引確保分頁效能。非索引欄位排序時附帶效能警告。
+
+#### ETL Pipeline 模組（E05 新增）
+
+| 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
+|------|------|-----------|-------------|
+| Pipeline Service | Pipeline CRUD；啟用/停用（toggle）；軟刪除；名稱唯一性（排除軟刪除）；與 Version 服務協作完成建立與狀態管理 | 建立時同步建立初始 EtlPipelineVersion（version=1, status=draft）；啟用前驗證有 `published` 版本；`status=running` 時禁止刪除；軟刪除後排程自動排除 | F027, F028, F031, F034 |
+| Pipeline Definition Service | 儲存/載入 Pipeline JSONB definition；連線規則驗證（Extract→Transform→Load 方向；禁止逆向循環連線）；更新 `step_count` | 草稿狀態允許不完整設定（節點未填完仍可儲存）；儲存成功後更新 EtlPipeline.step_count 為 nodes 數量 | F029 |
+| Pipeline Execution Service | 建立 EtlPipelineLog（`status=running`）；更新 EtlPipeline.status；非同步節點循序執行（Extract→Transform→Load）；進度更新（`processed_count`）；完成後更新統計；測試執行（`is_test_run=true`）不計入正式統計 | 並發控制：`status=running` 時拒絕重複觸發（409）；手動/排程/測試/重試共用執行邏輯，差異僅在 `triggered_by` 與 `is_test_run`；測試執行成功後更新版本狀態 `draft→testing`；排程執行使用最新 `published` 版本 | F030, F033 |
+| Pipeline Version Service | 版本歷史查詢；Diff 計算（節點增刪改）；回滾（建立新版本，複製舊版本內容）；發布（`testing→published`，驗證有成功測試執行記錄）；更新 EtlPipeline.version | 版本狀態單向流轉：`draft→testing→published`；發布前必須有 `is_test_run=true` 的成功執行記錄；回滾不修改舊版本，建立新版本（版本號遞增）；排程引擎僅使用最新 `published` 版本 | F033 |
+
+**Pipeline 非同步執行模型**（AD-E05-1）：
+
+`POST /api/v1/etl/pipelines/:id/execute` 與 `POST /api/v1/etl/pipelines/:id/test` 均回傳 `202 Accepted`，Pipeline 在背景非同步執行。
+
+- **執行方式**：Promise-based 背景作業；API 層建立 EtlPipelineLog 並更新 Pipeline 狀態後立即回傳 202；節點執行邏輯在背景 Promise chain 中循序執行
+- **節點執行順序**：依 definition 的 edges（有向無環圖 DAG）進行拓撲排序後循序執行
+- **Extract 節點**：讀取 AppDB 內的 `raw_{task_id_short}` 動態表，以 Raw SQL 查詢（不使用 ORM Entity）
+- **Transform 節點**：在應用記憶體中執行 13 種轉換邏輯（Merge/FieldMapping/Format/Conditional/NullHandler/TypeCast/Filter/Deduplicate/Lookup/String/Masking/Aggregate/DerivedColumn）
+- **Load 節點**：以 UPSERT（主鍵衝突時 UPDATE，否則 INSERT）寫入目標表（`customer_core` 等）；自動填充 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）
+- **進度更新**：每個節點執行完成後更新 EtlPipelineLog.node_logs（JSONB）與 processed_count；前端以 5 秒 Polling 讀取進度
+- **逾時機制**：Pipeline 執行最長 2 小時；超時由 Cleanup Cron 偵測並標記為 `failed`
+- **孤立狀態修復**（AD-E05-2）：Cleanup Cron 每日執行時，將 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 EtlPipelineLog 標記為 `failed`，並同步更新對應 EtlPipeline.status
+
+**Pipeline 版本管理設計**（AD-E05-3）：
+
+版本狀態流轉（單向）：`draft` → `testing` → `published`
+
+```
+建立 Pipeline    → 同時建立 version=1, status=draft 的 EtlPipelineVersion
+儲存 definition  → 更新當前 draft 版本的 definition（不建立新版本號）
+測試執行成功     → 版本狀態 draft→testing
+發布             → 版本狀態 testing→published；更新 EtlPipeline.version
+回滾             → 複製舊版本內容，建立新的 draft 版本（版本號遞增）
+```
+
+**節點連線規則**（AD-E05-4）：
+
+| 來源節點類型 | 可連接目標 | 禁止連接 |
+|-------------|-----------|---------|
+| Extract | Transform | Extract、Load、自身 |
+| Transform | Transform、Load | Extract、自身（禁止循環） |
+| Load | 無（終端節點） | Extract、Transform、Load |
+
+**目標表 UPSERT 策略**（AD-E05-5）：Load 節點執行時以各目標表的主鍵（`customer_id`、`interaction_id`、`financial_id`、`service_id`）判斷 INSERT 或 UPDATE（PostgreSQL `ON CONFLICT DO UPDATE`）。目標表不透過 TypeORM Entity 管理，使用動態 SQL 執行寫入操作。
 
 **架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查與重複擷取觸發。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
 
@@ -520,13 +592,63 @@ erDiagram
         uuid created_by FK
     }
 
+    EtlPipeline {
+        uuid id PK
+        string name "唯一（排除軟刪除，max 255）"
+        string description "TEXT，選填"
+        integer version "當前版本號，預設 1"
+        integer step_count "節點數量，預設 0"
+        enum status "draft|active|running|failed|disabled"
+        string schedule "Cron（UTC），max 100，選填"
+        timestamp last_execution_at "nullable"
+        timestamp next_execution_at "nullable"
+        integer processed_count "累計處理筆數，預設 0"
+        integer avg_duration_ms "平均執行時間，預設 0"
+        integer execution_count "累計執行次數，預設 0"
+        boolean enabled "預設 false"
+        uuid created_by FK
+        timestamp deleted_at "NULL=未刪除（軟刪除）"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    EtlPipelineVersion {
+        uuid id PK
+        uuid pipeline_id FK
+        integer version "同 Pipeline 下遞增"
+        jsonb definition "nodes + edges JSONB 結構"
+        enum status "draft|testing|published"
+        string change_summary "max 500，選填"
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    EtlPipelineLog {
+        uuid id PK
+        uuid pipeline_id FK
+        integer version "執行時使用的版本號"
+        enum status "running|completed|failed"
+        timestamp started_at "UTC"
+        timestamp finished_at "UTC，nullable"
+        integer duration_ms "nullable"
+        integer processed_count "預設 0"
+        string error_message "TEXT，nullable"
+        jsonb node_logs "各節點執行記錄 JSONB，nullable"
+        enum triggered_by "schedule|manual|test|retry"
+        boolean is_test_run "預設 false"
+        uuid created_by FK
+    }
+
     User ||--o{ TokenBlocklist : "has revoked tokens"
     User ||--o{ PasswordResetToken : "has reset tokens"
     User ||--o{ Datasource : "creates (created_by)"
     User ||--o{ ExtractionTask : "creates (created_by)"
+    User ||--o{ EtlPipeline : "creates (created_by)"
     Datasource ||--o{ DatasourceHealthLog : "has health logs"
     Datasource ||--o{ ExtractionTask : "referenced by"
     ExtractionTask ||--o{ ExtractionLog : "has execution logs"
+    EtlPipeline ||--o{ EtlPipelineVersion : "has versions"
+    EtlPipeline ||--o{ EtlPipelineLog : "has execution logs"
 ```
 
 ### 4.2 資料所有權
@@ -538,8 +660,12 @@ erDiagram
 | PasswordResetToken | Auth 模組 | 不對其他模組開放 |
 | Datasource | Datasource 模組 | Dashboard Service 讀取（彙整統計）；Extraction 模組透過 Datasource Service 介面查詢（驗證參照完整性） |
 | DatasourceHealthLog | Datasource 模組 | Dashboard Service 讀取（趨勢圖、告警計算） |
-| ExtractionTask | Extraction 模組 | Scheduler 模組透過 ExtractionExecution Service 介面呼叫 |
+| ExtractionTask | Extraction 模組 | Scheduler 模組透過 ExtractionExecution Service 介面呼叫；ETL Pipeline 模組透過 Extraction 模組介面查詢可用 raw data 表（Extract 節點來源選擇，F029 AC-6） |
 | ExtractionLog | Extraction 模組 | 不對其他模組開放 |
+| EtlPipeline | ETL Pipeline 模組 | Scheduler 模組透過 Pipeline Execution Service 介面呼叫 |
+| EtlPipelineVersion | ETL Pipeline 模組 | 不對其他模組開放；Pipeline Execution Service 讀取最新 published 版本的 definition |
+| EtlPipelineLog | ETL Pipeline 模組 | 不對其他模組開放 |
+| 目標表（customer_core 等） | ETL Pipeline 模組（寫入）| 以動態 SQL 操作，不透過 TypeORM Entity；未來可供 BI 工具或下游系統讀取 |
 
 ### 4.3 資料一致性模型
 
@@ -556,6 +682,11 @@ erDiagram
 | 擷取完成（更新 Log + Task） | 強一致性 | 同一 DB 交易：UPDATE ExtractionLog（finished_at, duration_ms）+ UPDATE ExtractionTask（status, last_execution_at, avg_duration_ms, execution_count）；增量模式同時更新 `last_incremental_value` |
 | 排程掃描執行 | 最終一致性 | 掃描失敗記錄日誌，下次掃描重試 |
 | ExtractionLog 清理 | 最終一致性 | 背景 Cron Job，不影響前台操作 |
+| 觸發 Pipeline 執行（建立 Log + 更新狀態） | 強一致性 | 同一 DB 交易：INSERT EtlPipelineLog + UPDATE EtlPipeline.status = 'running' |
+| Pipeline 進度更新（node_logs、processed_count） | 最終一致性 | 每個節點完成後以非交易性更新；前端 5 秒 Polling 容忍短暫延遲 |
+| Pipeline 執行完成（更新 Log + Pipeline） | 強一致性 | 同一 DB 交易：UPDATE EtlPipelineLog（finished_at, duration_ms）+ UPDATE EtlPipeline（status, last_execution_at, processed_count, avg_duration_ms, execution_count）；測試執行同時更新 EtlPipelineVersion.status = 'testing' |
+| Pipeline 版本發布 | 強一致性 | 同一 DB 交易：UPDATE EtlPipelineVersion.status = 'published' + UPDATE EtlPipeline.version |
+| EtlPipelineLog 清理 | 最終一致性 | 背景 Cron Job，不影響前台操作 |
 
 ### 4.4 資料庫索引建議
 
@@ -580,6 +711,16 @@ erDiagram
 | ExtractionLog | started_at | INDEX | 今日統計計算、清理查詢 |
 | ExtractionLog | status, started_at | 複合 INDEX | 今日成功/失敗計數（F018 summary, F024 dashboard） |
 | raw_{task_id_short} | _cdmp_id（若存在） | PRIMARY KEY INDEX | Raw data 預覽分頁與排序（F026），動態建表時自動建立 |
+| etl_pipeline | name, deleted_at | 複合 INDEX | 名稱唯一性檢查（排除軟刪除） |
+| etl_pipeline | status, deleted_at | 複合 INDEX | 排程掃描查詢（每分鐘執行，掃描 active + enabled + not running） |
+| etl_pipeline | deleted_at | INDEX | 清單查詢過濾條件 |
+| etl_pipeline | enabled, deleted_at | 複合 INDEX | 排程掃描輔助條件 |
+| etl_pipeline_version | pipeline_id, version | 複合 INDEX | 版本清單查詢（倒序）；查詢最新 published 版本 |
+| etl_pipeline_version | pipeline_id, status | 複合 INDEX | 查詢最新 published 版本（排程執行）；啟用前驗證是否有 published 版本 |
+| etl_pipeline_log | pipeline_id, started_at | 複合 INDEX | 日誌查詢（倒序分頁）；趨勢圖聚合 |
+| etl_pipeline_log | started_at | INDEX | 今日統計計算；清理查詢（30 天保留） |
+| etl_pipeline_log | status, started_at | 複合 INDEX | 今日成功/失敗計數（F035 dashboard） |
+| etl_pipeline_log | is_test_run, pipeline_id | 複合 INDEX | 版本發布前查詢是否有成功測試執行記錄 |
 
 ### 4.5 資料生命週期
 
@@ -591,6 +732,10 @@ erDiagram
 | Datasource（軟刪除） | 永久保留（`deleted_at` 非 NULL），不自動清理 | 手動 DBA 操作（如需復原） |
 | ExtractionLog | 30 天（AQ-10 決議） | Cleanup Cron Job 每日執行，刪除 `started_at < NOW() - 30 days` 的記錄 |
 | ExtractionTask（軟刪除） | 永久保留（`deleted_at` 非 NULL），不自動清理 | 手動 DBA 操作（如需復原） |
+| EtlPipelineLog | 30 天（AQ-14 決議）| Cleanup Cron Job 每日執行，刪除 `started_at < NOW() - 30 days` 的記錄 |
+| EtlPipeline（軟刪除） | 永久保留（`deleted_at` 非 NULL），不自動清理 | 手動 DBA 操作（如需復原） |
+| EtlPipelineVersion | 永久保留（隨 Pipeline 保留，不自動清理） | 版本紀錄為審計軌跡，不可自動清除 |
+| 目標表資料（customer_core 等） | 永久保留（UPSERT 寫入），不自動清理 | 由 DBA 或下游系統管理 |
 
 ---
 
@@ -606,6 +751,8 @@ erDiagram
 | 後端 → Email 服務 | 單向 | 非同步（fire-and-forget） | SMTP / HTTPS |
 | 後端 → 目標資料庫（連線測試） | 單向 | 同步（含 10 秒逾時） | TCP `SELECT 1` |
 | 後端 → 目標資料庫（資料擷取） | 單向 | 非同步（背景執行，2 小時逾時） | TCP 批次 SQL Query |
+| 後端 → AppDB raw data 表（ETL Extract） | 單向 | 非同步（Pipeline 執行中讀取） | Raw SQL（`SELECT`，Dynamic table name） |
+| 後端 → AppDB target 表（ETL Load） | 單向 | 非同步（Pipeline 執行中寫入） | Raw SQL（`INSERT ON CONFLICT DO UPDATE`） |
 | Scheduler → 後端邏輯 | 內部呼叫 | 同步 | 模組內部方法呼叫 |
 
 ### 5.2 驗證流程（Auth Flow）
@@ -779,7 +926,58 @@ sequenceDiagram
     API-->>Browser: 200 {status, progress_percent, extracted_count, total_count}
 ```
 
-### 5.6 錯誤處理與韌性
+### 5.6 Pipeline 執行流程（F030 / F033）
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器 (SPA)
+    participant API as 後端 API
+    participant DB as 應用資料庫
+
+    Note over Browser,API: 路徑 A：手動執行（active Pipeline）
+    Browser->>API: POST /api/v1/etl/pipelines/:id/execute<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證 + RBAC (role=admin)
+    API->>DB: 查詢 EtlPipeline (id, deleted_at IS NULL)
+    alt Pipeline status = running
+        API-->>Browser: 409 PIPELINE_RUNNING
+    else Pipeline definition 無節點
+        API-->>Browser: 422 PIPELINE_NO_DEFINITION
+    else 可執行
+        API->>DB: 查詢最新 published EtlPipelineVersion
+        API->>DB: 交易：INSERT EtlPipelineLog (status=running, triggered_by=manual)<br/>UPDATE EtlPipeline (status=running)
+        API-->>Browser: 202 Accepted {logId}
+        Note over API,DB: 以下為背景非同步執行
+    end
+
+    Note over Browser,API: 路徑 B：測試執行（draft Pipeline）
+    Browser->>API: POST /api/v1/etl/pipelines/:id/test
+    API->>DB: 交易：INSERT EtlPipelineLog (is_test_run=true, triggered_by=test)<br/>UPDATE EtlPipeline (status=running)
+    API-->>Browser: 202 Accepted {logId}
+
+    Note over API,DB: 共用執行邏輯（Pipeline Execution Service）
+    loop 依 DAG 拓撲排序循序執行各節點
+        alt Extract 節點
+            API->>DB: SELECT * FROM raw_{task_id_short}<br/>（Raw SQL，讀取擷取任務的 raw data 表）
+        else Transform 節點（13 種）
+            API->>API: 在記憶體中執行轉換邏輯<br/>（Merge / FieldMapping / Format 等）
+        else Load 節點
+            API->>DB: INSERT INTO customer_* ... ON CONFLICT DO UPDATE<br/>自動填充：data_source, _etl_loaded_at, _etl_pipeline_id
+        end
+        API->>DB: 更新 EtlPipelineLog.node_logs（JSONB）<br/>更新 EtlPipelineLog.processed_count
+    end
+
+    alt 執行成功
+        API->>DB: 交易：UPDATE EtlPipelineLog (status=completed, finished_at, duration_ms)<br/>UPDATE EtlPipeline (status=active/draft, last_execution_at, processed_count, avg_duration_ms)<br/>若為測試執行：UPDATE EtlPipelineVersion (status=testing)
+    else 執行失敗
+        API->>DB: UPDATE EtlPipelineLog (status=failed, error_message)<br/>UPDATE EtlPipeline (status=failed, error_message)
+    end
+
+    Note over Browser,API: 前端 Polling（5 秒間隔）
+    Browser->>API: GET /api/v1/etl/pipelines/:id/progress
+    API-->>Browser: 200 {status, processedCount, progressPercent, currentNode}
+```
+
+### 5.7 錯誤處理與韌性
 
 | 整合點 | 失敗場景 | 處理策略 |
 |--------|---------|---------|
@@ -791,8 +989,11 @@ sequenceDiagram
 | 目標資料庫（資料擷取） | 執行中連線斷開 / 查詢失敗 | 捕捉例外；更新 ExtractionTask.status = 'failed' 與 error_message；更新 ExtractionLog；不自動重試（AD-E04-6），須 Admin 手動重試 |
 | 目標資料庫（Schema/Table 列表查詢） | 逾時 / 拒絕連線 | 10 秒逾時；回傳 503 DATASOURCE_SCHEMA_LOAD_FAILED 或 DATASOURCE_TABLE_LOAD_FAILED；前端顯示錯誤，下拉停用；不使用快取 |
 | 擷取排程掃描（每分鐘） | DB 查詢失敗 | 記錄 ERROR 日誌；跳過本次掃描；下次掃描正常繼續 |
+| Pipeline 執行（節點執行失敗） | Transform 邏輯錯誤 / Load 寫入失敗 | 捕捉例外；更新失敗節點的 node_logs；更新 EtlPipelineLog.status = 'failed'；更新 EtlPipeline.status = 'failed'；不自動重試，須 Admin 手動重新執行 |
+| Pipeline 排程掃描（每分鐘） | DB 查詢失敗 | 記錄 ERROR 日誌；跳過本次掃描；下次掃描正常繼續 |
+| 版本發布驗證（無測試執行記錄） | 前置條件不滿足 | 回傳 422 PIPELINE_PUBLISH_REQUIRES_TEST；不執行發布操作 |
 
-### 5.7 冪等性考量
+### 5.8 冪等性考量
 
 | 端點 | 冪等性 | 說明 |
 |------|-------|------|
@@ -806,6 +1007,15 @@ sequenceDiagram
 | `POST /api/v1/extraction-tasks/:id/run` | 非冪等 | 每次呼叫建立新的 ExtractionLog；`status=running` 時拒絕（409）避免重複觸發 |
 | `PATCH /api/v1/extraction-tasks/:id/toggle` | 冪等 | 停用已停用的任務回傳成功，無額外副作用 |
 | `DELETE /api/v1/extraction-tasks/:id` | 冪等 | 重複軟刪除結果相同 |
+| `GET /api/v1/etl/pipelines` | 冪等 | 唯讀查詢 |
+| `POST /api/v1/etl/pipelines` | 非冪等 | 每次呼叫建立新 Pipeline；名稱重複時回傳 409 |
+| `POST /api/v1/etl/pipelines/:id/execute` | 非冪等 | 每次呼叫建立新的 EtlPipelineLog；`status=running` 時拒絕（409）|
+| `POST /api/v1/etl/pipelines/:id/test` | 非冪等 | 每次呼叫建立新的測試 EtlPipelineLog；`status=running` 時拒絕（409）|
+| `PATCH /api/v1/etl/pipelines/:id/toggle` | 冪等 | 停用已停用的 Pipeline 回傳成功，無額外副作用 |
+| `DELETE /api/v1/etl/pipelines/:id` | 冪等 | 重複軟刪除結果相同 |
+| `PUT /api/v1/etl/pipelines/:id/definition` | 冪等 | 相同 definition 重複儲存結果相同（覆寫） |
+| `PATCH /api/v1/etl/pipelines/:id/versions/:versionId/publish` | 冪等（重複發布相同版本結果相同） | 已 published 的版本重複發布無副作用 |
+| `POST /api/v1/etl/pipelines/:id/versions/:versionId/rollback` | 非冪等 | 每次呼叫建立新版本 |
 
 ---
 
@@ -863,10 +1073,15 @@ graph LR
 | NFR-002.5 清單搜尋效能 | < 500ms（1,000 筆） | 分頁強制執行（預設 20 筆/頁）；搜尋欄位建立索引；`deleted_at IS NULL` 條件搭配索引 |
 | NFR-002.6 擷取儀表板載入 | < 2 秒（50 任務） | ExtractionLog 上的 `(task_id, started_at)` 與 `(status, started_at)` 複合索引；今日統計使用 DB 聚合查詢（`DATE_TRUNC`）而非應用層計算；趨勢圖使用 `DATE_TRUNC` 聚合 |
 | NFR-002.7 擷取任務清單 | < 500ms（1,000 筆） | 分頁強制執行（預設 10 筆/頁）；`(status, deleted_at)` 複合索引；搜尋欄位索引 |
+| NFR-002.8 Pipeline 列表載入 | < 2 秒（F027） | `(status, deleted_at)` 複合索引；分頁強制執行（預設 10 筆/頁）；統計查詢（today processed）使用 DB 聚合（`DATE_TRUNC`，UTC+8 邊界換算） |
+| NFR-002.9 Pipeline 執行進度查詢 | p95 < 500ms | EtlPipelineLog 主鍵查詢；`(pipeline_id, started_at)` 複合索引；前端 5 秒 Polling |
+| NFR-002.10 Pipeline 版本 Diff | < 2 秒 | Diff 在應用層計算（比對兩個 JSONB definition）；版本數量有限（典型 < 50 版），應用層計算可接受 |
 
 **效能風險**：
 - `DatasourceHealthLog` 隨時間增長（每 30 分鐘 × 資料來源數），90 天保留期需確保 Cleanup Cron 正常執行，否則查詢效能將逐漸下降。
 - `ExtractionLog` 保留 30 天（AQ-10 決議），Cleanup Cron 確保不會無限增長。
+- `EtlPipelineLog` 保留 30 天（AQ-14 決議），若 Pipeline 執行頻繁（多個排程 Pipeline 每小時執行），Log 數量增長需 Cleanup Cron 正常運行。
+- Pipeline Transform 節點在記憶體中執行，大型資料集（數百萬筆）的 Transform 可能導致記憶體壓力。MVP 規模下建議設定合理的 Extract 節點查詢上限。
 
 ### 6.3 可用性與可觀測性
 
@@ -1037,7 +1252,40 @@ Seed 流程：
 
 ---
 
-#### 風險 6：目標資料庫大量資料擷取的負載影響
+#### 風險 6（E05 新增）：Pipeline Transform 記憶體消耗
+
+**描述**：Pipeline Execution Service 在 Node.js 記憶體中執行所有 Transform 節點（Merge、Aggregate、Deduplicate 等）。若 Extract 節點載入數十萬筆 raw data，應用伺服器的 Heap 記憶體可能急遽上升，導致 OOM（Out of Memory）崩潰。
+
+**影響**：Pipeline 執行失敗；若 Process 崩潰（OOM Kill），EtlPipelineLog 留下孤立 `status=running` 狀態，需 Cleanup Cron 修復。
+
+**建議**：
+- MVP 階段建立 Extract 節點的查詢筆數上限（建議 100,000 筆，可透過環境變數 `PIPELINE_MAX_EXTRACT_ROWS` 配置）
+- 監控 Node.js Heap 使用量（PM2 metrics 或 cloud monitoring）
+- 若未來需處理百萬筆資料，考慮升級為 Worker Thread 或獨立 Worker Process（Phase 2）
+
+---
+
+#### 風險 7（E05 新增）：Pipeline 排程與 Extraction 排程的競爭條件
+
+**描述**：Pipeline Scheduler Cron 與 Extraction Scheduler Cron 均每分鐘執行，若兩個 Cron Job 在同一分鐘同時觸發大量任務，可能造成 DB 連線池壓力與 Node.js Event Loop 擁塞。
+
+**影響**：API 請求延遲增加；Cron Job 本身執行時間超過一分鐘導致下次觸發重疊。
+
+**建議**：MVP 階段不使用連線池（OQ-R9 決議），短暫高峰可接受。水平擴展前需評估引入 `pg-pool` 或 Prisma 連線池管理。
+
+---
+
+#### 風險 8（E05 新增）：Pipeline 孤立 running 狀態（Process 崩潰）
+
+**描述**：與擷取任務孤立問題類似（風險 5），若 Node.js Process 在 Pipeline 執行中崩潰，EtlPipelineLog 將保持 `status=running`，導致排程無法再次觸發（掃描條件 `status != 'running'`）。
+
+**影響**：受影響的 Pipeline 無法被排程觸發；Admin 需手動識別並重新執行。
+
+**建議**：Cleanup Cron 的孤立修復邏輯（AD-E05-2）：每日偵測 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 EtlPipelineLog 並標記為 `failed`，同步更新 EtlPipeline.status。
+
+---
+
+#### 風險 9（E05 原有）：目標資料庫大量資料擷取的負載影響
 
 **描述**：擷取任務（全量模式）執行時，對外部資料來源執行全表查詢（`SELECT * FROM "{source_schema}"."{source_table}"`），並將資料批次寫入 AppDB raw data 表。對於大型表（數百萬筆），此查詢可能對外部資料來源造成顯著負載，甚至影響其正常業務查詢。同時，大量批次 INSERT 至 AppDB 也會佔用資料庫資源。
 
@@ -1063,6 +1311,10 @@ Seed 流程：
 | Redis 作為主要 Token Blocklist | MVP 不強制引入 Redis（增加依賴），以應用資料庫的 TokenBlocklist 表替代；若效能不足可升級 |
 | BullMQ + Redis 作為擷取任務佇列 | 引入 Redis 強依賴；MVP 擷取任務數量有限，Promise-based 非同步足夠；BullMQ 的持久化佇列與重試機制雖有益，但超出 MVP 複雜度預算 |
 | 每個擷取任務使用獨立動態 Cron Job | 任務數量變動時維護複雜（需追蹤每個 Job 的 reference）；不如「每分鐘掃描 + cron-parser 比對」模式穩定；F023 BR-1 明確定義固定頻率掃描方案 |
+| Pipeline 定義使用正規化關聯表（節點表 + 連線表） | 13 種節點類型各有不同設定欄位，正規化需大量 JOIN 且擴展困難；JSONB 儲存允許彈性結構，版本 Diff 在應用層計算即可 |
+| Pipeline 執行使用 Worker Thread / Worker Process | 對 I/O 密集的 Transform 操作不必要（CPU 密集才需要 Worker Thread）；增加 IPC（Inter-Process Communication）複雜度；MVP 規模不合理 |
+| Pipeline 視覺化編輯器使用後端渲染 | 拖拉畫布需要豐富的前端互動，規格書 F029 明確建議 React Flow（前端庫）；後端無法實現拖拉式 UX |
+| Pipeline 版本 Diff 使用資料庫層計算 | PostgreSQL JSONB Diff 需複雜 SQL 函數；應用層 JSON 比對更直觀且可維護；版本數有限，應用層計算效能可接受 |
 
 ### 8.3 需要驗證的領域
 
@@ -1073,6 +1325,9 @@ Seed 流程：
 | Email 非同步可靠性 | 低-中 | 非同步 Email 寄送的重試機制需定義（目前規格書未明確） |
 | AES-256-GCM 實作正確性 | 高 | 加密金鑰管理與 IV（Initialization Vector）處理需要安全性審查 |
 | 擷取任務並發數量 | 中 | 多個大型擷取任務同時執行時，Node.js Event Loop 的 I/O 吞吐量與記憶體使用需驗證 |
+| Pipeline Transform 記憶體上限 | 高 | Transform 節點在記憶體中執行，100,000 筆資料的 Merge/Aggregate 操作的記憶體峰值需在開發初期量測，並設定合理上限 |
+| Pipeline + Extraction 排程同時觸發 | 中 | 兩個每分鐘 Cron Job 同時觸發大量任務的 DB 連線壓力與 Event Loop 影響需驗證 |
+| JSONB definition Diff 效能 | 低 | 版本 Diff 在應用層計算，典型 Pipeline 節點數量（< 20）效能可預期；若版本差異極大需確認回應時間 |
 
 ---
 
@@ -1110,7 +1365,28 @@ Seed 流程：
 | AQ-12 | API 路徑前綴統一 | **使用 `/api/v1/extraction-tasks`**。依循現行程式碼慣例（`app.setGlobalPrefix('api/v1')`），Controller 宣告 `@Controller('extraction-tasks')` | 2026-03-17 |
 | AQ-13 | `last_incremental_value` 資料型別處理 | **string 儲存 + `incremental_column_type` 欄位**。新增 `incremental_column_type`（enum: `timestamp`/`integer`/`string`，預設 `timestamp`），後端依型別決定 WHERE 比較方式與型別轉換，前端依型別決定顯示格式 | 2026-03-17 |
 
-### 9.4 待確認假設
+### 9.4 已決議事項（E05 ETL Pipeline）
+
+> 以下為 E05 架構設計過程中提出並已決議的事項，記錄於此供實作參照。
+
+| # | 問題 | 決議 | 決議日期 |
+|---|------|------|---------|
+| AQ-14 | EtlPipelineLog 保留策略 | **保留 30 天**。與 ExtractionLog 一致；Cleanup Cron 每日清理 `started_at < NOW() - 30 days` 的記錄 | 2026-03-20 |
+| AQ-15 | Pipeline 執行最長時間限制 | **2 小時**。與擷取任務一致；超時由 Cleanup Cron 偵測（AD-E05-2） | 2026-03-20 |
+| AQ-16 | ETL Pipeline API 路徑前綴 | **使用 `/api/v1/etl/`**。與擷取任務（`/api/v1/extraction-tasks/`）區隔；Controller 宣告 `@Controller('etl')`；子路由：`/etl/pipelines/**`、`/etl/target-tables/**`、`/etl/logs/**` | 2026-03-20 |
+| AQ-17 | Pipeline Transform 執行位置 | **在 Node.js 主 Process 記憶體中執行**。MVP 規模（資料量 < 100,000 筆）可接受；需設定 `PIPELINE_MAX_EXTRACT_ROWS` 上限環境變數（建議預設 100,000）防止 OOM | 2026-03-20 |
+| AQ-18 | Merge 節點（多輸入）的執行順序 | **左右兩個 Extract/Transform 輸入節點先並行執行，兩者完成後再執行 Merge**。DAG 拓撲排序時偵測多輸入節點，執行引擎使用 `Promise.all()` 等待所有輸入完成 | 2026-03-20 |
+| AQ-19 | Pipeline 版本 Diff 的計算層 | **應用層計算**。後端讀取兩個版本的 JSONB definition，以 JavaScript 比對 nodes（id、type、data 差異）與 edges（source/target 差異），回傳結構化 diff 結果 | 2026-03-20 |
+
+### 9.5 待確認假設（E05 新增）
+
+| 假設 | 風險 | 確認方式 |
+|------|------|---------|
+| Pipeline Transform 節點在記憶體中執行的最大資料筆數（建議 100,000）足以滿足 MVP 業務需求 | 若業務資料量超過此限制，Pipeline 執行將受限或 OOM | 與業務部門確認典型資料量級，並進行記憶體壓力測試 |
+| 目標表 Schema 在 MVP 期間固定不變（Admin 無法自訂欄位）| 若業務需求變更，需透過 DB Migration 修改目標表 Schema | 確認 F036 BR-4（目標表 schema 為靜態定義）在 MVP 範圍內是否有例外 |
+| Pipeline 執行中，所有被 Extract 節點參照的 raw data 表均存在（ExtractionTask 已至少執行一次） | 若 raw data 表不存在，Extract 節點執行時將報錯 | 在 Pipeline 執行前加入前置檢查：驗證所有 Extract 節點參照的 raw data 表存在 |
+
+### 9.6 待確認假設（原有）
 
 | 假設 | 風險 | 確認方式 |
 |------|------|---------|
@@ -1135,6 +1411,7 @@ graph TB
         ReactRouter["React Router v6"]
         TanStack["TanStack Query<br/>（API 狀態管理）"]
         Recharts["Recharts<br/>（儀表板圖表）"]
+        ReactFlow["React Flow<br/>（Pipeline 視覺化編輯器）"]
     end
 
     subgraph Backend["後端"]
@@ -1218,6 +1495,7 @@ graph TB
 | 表單管理 | React Hook Form + Zod | — | 表單驗證效能優異（uncontrolled forms）；Zod schema 可與後端 DTO 驗證邏輯對齊 |
 | 圖表 | Recharts | — | React 原生元件；支援圓餅圖（F016 狀態分佈）、折線圖（F016 趨勢圖、F024 擷取趨勢圖）；SVG 渲染效能良好 |
 | HTTP Client | Axios | — | Interceptor 機制適合統一附加 JWT Token 與處理 401 回應；與 TanStack Query 整合良好 |
+| 視覺化流程圖 | React Flow | 11+ | F029 規格書明確建議；支援拖拉節點、自訂節點類型、箭頭連線、縮放平移；處理 DAG 渲染與互動邏輯；MIT License |
 | UI 元件庫 | 不強制指定 | — | 由 UI/UX Designer 依設計稿決定（建議 shadcn/ui 或 Ant Design，兩者皆與 Tailwind 相容） |
 
 **已評估但未採用的替代方案**：
@@ -1276,6 +1554,16 @@ cdmp-mvp/
 │   │   │   │   │   ├── extraction-task.service.ts      # 任務 CRUD
 │   │   │   │   │   ├── extraction-execution.service.ts # 執行邏輯（共用）
 │   │   │   │   │   └── extraction-dashboard.service.ts # 儀表板統計
+│   │   │   │   ├── etl/        # ETL Pipeline 模組（E05）
+│   │   │   │   │   ├── pipeline.service.ts             # Pipeline CRUD、啟用/停用、軟刪除
+│   │   │   │   │   ├── pipeline-definition.service.ts  # JSONB definition 儲存/載入/驗證
+│   │   │   │   │   ├── pipeline-execution.service.ts   # 非同步執行引擎（節點循序執行）
+│   │   │   │   │   ├── pipeline-version.service.ts     # 版本管理、Diff、回滾、發布
+│   │   │   │   │   ├── target-table.service.ts         # 目標表 schema 查詢（靜態定義）
+│   │   │   │   │   └── transforms/                     # 13 種 Transform 節點實作
+│   │   │   │   │       ├── merge.transform.ts
+│   │   │   │   │       ├── field-mapping.transform.ts
+│   │   │   │   │       └── ...（其餘 11 種）
 │   │   │   │   └── scheduler/  # Scheduler 模組
 │   │   │   ├── common/         # 共用基礎建設
 │   │   │   │   ├── crypto/     # AES-256 Util
@@ -1330,5 +1618,5 @@ cdmp-mvp/
 
 ---
 
-*本文件版本 1.2，由 System Architect Agent 依據 CDMP MVP 規格書（spec-index v1.0，2026-03-06；E04 擷取管理規格，2026-03-17）產出。*
+*本文件版本 1.3，由 System Architect Agent 依據 CDMP MVP 規格書（spec-index v1.4，2026-03-19；E05 ETL Pipeline 管理規格 F027-F036，2026-03-19）更新。*
 *如有規格變更，本文件應同步更新。*
