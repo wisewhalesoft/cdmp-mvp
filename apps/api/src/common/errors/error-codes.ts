@@ -49,6 +49,7 @@ export const ERROR_CODES = {
   // F027: ETL Pipeline
   PIPELINE_NOT_FOUND: 'PIPELINE_NOT_FOUND',
   PIPELINE_NAME_EXISTS: 'PIPELINE_NAME_EXISTS',
+  VALIDATION_INVALID_CRON: 'VALIDATION_INVALID_CRON',
   SYSTEM_INTERNAL_ERROR: 'SYSTEM_INTERNAL_ERROR',
 } as const;
 
@@ -105,5 +106,6 @@ export const ERROR_MESSAGES = {
   // F027: ETL Pipeline
   PIPELINE_NOT_FOUND: '找不到指定的 Pipeline',
   PIPELINE_NAME_EXISTS: '此名稱的 Pipeline 已存在',
+  VALIDATION_INVALID_CRON: '排程格式不正確，請輸入合法的 cron 表達式',
   SYSTEM_INTERNAL_ERROR: '系統發生非預期錯誤，請稍後再試',
 } as const;

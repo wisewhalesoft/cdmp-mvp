@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
+import { CronExpressionParser } from 'cron-parser';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { User } from '@/database/entities/user.entity';
+import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
+import { CreatePipelineDto } from './dto/create-pipeline.dto';
 
 function getTodayRangeUTC() {
   const now = new Date();
@@ -25,9 +29,92 @@ export class EtlPipelineService {
     private readonly pipelineRepository: Repository<EtlPipeline>,
     @InjectRepository(EtlPipelineLog)
     private readonly logRepository: Repository<EtlPipelineLog>,
+    @InjectRepository(EtlPipelineVersion)
+    private readonly versionRepository: Repository<EtlPipelineVersion>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async create(dto: CreatePipelineDto, userId: string) {
+    // Validate cron expression if provided (BR-4: must be 5 or 6 fields)
+    if (dto.schedule) {
+      const fields = dto.schedule.trim().split(/\s+/).length;
+      if (fields < 5 || fields > 6) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.VALIDATION_INVALID_CRON,
+          message: ERROR_MESSAGES.VALIDATION_INVALID_CRON,
+        });
+      }
+      try {
+        CronExpressionParser.parse(dto.schedule, { tz: 'UTC' });
+      } catch {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.VALIDATION_INVALID_CRON,
+          message: ERROR_MESSAGES.VALIDATION_INVALID_CRON,
+        });
+      }
+    }
+
+    // Check name uniqueness (only among non-deleted)
+    const existingPipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.name = :name', { name: dto.name })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (existingPipeline) {
+      throw new ConflictException({
+        error: ERROR_CODES.PIPELINE_NAME_EXISTS,
+        message: ERROR_MESSAGES.PIPELINE_NAME_EXISTS,
+      });
+    }
+
+    // Use transaction to create pipeline + initial version atomically
+    return this.dataSource.transaction(async (manager) => {
+      const pipelineRepo = manager.getRepository(EtlPipeline);
+      const versionRepo = manager.getRepository(EtlPipelineVersion);
+
+      const pipeline = pipelineRepo.create({
+        name: dto.name,
+        description: dto.description ?? null,
+        schedule: dto.schedule ?? null,
+        status: 'draft',
+        version: 1,
+        step_count: 0,
+        enabled: false,
+        processed_count: 0,
+        avg_duration_ms: 0,
+        execution_count: 0,
+        created_by: userId,
+      });
+      const savedPipeline = await pipelineRepo.save(pipeline);
+
+      // Create initial EtlPipelineVersion (v1, draft)
+      const version = versionRepo.create({
+        pipeline_id: savedPipeline.id,
+        version: 1,
+        status: 'draft',
+        definition: { nodes: [], edges: [] },
+        created_by: userId,
+      });
+      await versionRepo.save(version);
+
+      return {
+        id: savedPipeline.id,
+        name: savedPipeline.name,
+        description: savedPipeline.description,
+        version: savedPipeline.version,
+        stepCount: savedPipeline.step_count,
+        status: savedPipeline.status,
+        schedule: savedPipeline.schedule,
+        enabled: savedPipeline.enabled,
+        createdBy: savedPipeline.created_by,
+        createdAt: savedPipeline.created_at.toISOString(),
+        updatedAt: savedPipeline.updated_at.toISOString(),
+      };
+    });
+  }
 
   async getStats() {
     const baseQb = () =>

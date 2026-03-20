@@ -6,12 +6,13 @@ import { EtlPipelineController } from './etl-pipeline.controller';
 import { EtlPipelineService } from './etl-pipeline.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { User } from '@/database/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([EtlPipeline, EtlPipelineLog, TokenBlocklist, User]),
+    TypeOrmModule.forFeature([EtlPipeline, EtlPipelineLog, EtlPipelineVersion, TokenBlocklist, User]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

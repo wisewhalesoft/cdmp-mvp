@@ -528,6 +528,27 @@ export interface PipelineListResponse {
   pagination: PipelineListPagination;
 }
 
+// F028: Create Pipeline
+export interface CreatePipelineRequest {
+  name: string;
+  description?: string | null;
+  schedule?: string | null;
+}
+
+export interface CreatePipelineResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  version: number;
+  stepCount: number;
+  status: EtlPipelineStatus;
+  schedule: string | null;
+  enabled: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -568,6 +589,7 @@ export const ERROR_CODES = {
   // F027: ETL Pipeline
   PIPELINE_NOT_FOUND: 'PIPELINE_NOT_FOUND',
   PIPELINE_NAME_EXISTS: 'PIPELINE_NAME_EXISTS',
+  VALIDATION_INVALID_CRON: 'VALIDATION_INVALID_CRON',
   SYSTEM_INTERNAL_ERROR: 'SYSTEM_INTERNAL_ERROR',
 } as const;
 
