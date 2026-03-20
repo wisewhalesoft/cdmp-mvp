@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "1.1"
-date: 2026-03-18
+version: "1.2"
+date: 2026-03-19
 status: Draft
 ---
 
@@ -113,6 +113,37 @@ status: Draft
 
 ---
 
+## 已解決問題（來自 E05 Stories）
+
+以下問題已於 E05 Product Requirements 階段解決：
+
+| # | 問題 | 決議 | 來源 |
+|---|------|------|------|
+| R13 | 版本管理範疇？ | 完整：查看 + Diff + 回滾 | E05 epic-brief |
+| R14 | 發布流程？ | 草稿 -> 測試執行 -> 發布（三階段） | E05 epic-brief |
+| R15 | 目標表管理方式？ | 系統預先定義 schema，Load 節點直接選擇 | E05 epic-brief |
+| R16 | 草稿可否執行？ | 允許手動測試執行，標記為 test_run，不被排程觸發 | E05 epic-brief |
+| R17 | 目標表規劃方法？ | Domain-Oriented 設計（4 個 Domain Data Product） | E05 epic-brief |
+
+## E05 已解決的開放問題
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-30 | Pipeline 排程引擎實作方式？ | **擴展現有 `@nestjs/schedule` 模組** | F030 |
+| OQ-31 | Pipeline 執行進度更新方式：Polling 或 WebSocket？ | **Polling（5 秒間隔）**，與 E04 保持一致 | F030, F035 |
+| OQ-32 | Pipeline 日誌保留期限？ | **永久保留**，與 E04 ExtractionLog 一致 | F032, F035 |
+| OQ-33 | 目標表寫入策略？ | **UPSERT**（以主鍵判斷 INSERT 或 UPDATE） | F036 |
+| OQ-34 | 測試執行是否影響正式統計？ | **不影響**，測試執行的 processed_count 不計入 Pipeline 累計統計 | F030, F035 |
+| OQ-35 | Pipeline 執行失敗是否需要自動重試？ | **MVP 不提供自動重試**，失敗後 Admin 手動重新執行（與 E04 一致） | F030 |
+
+## E05 相關開放問題 — 已解決
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-36 | Transform 節點的運算式引擎實作方式？（Derived Column 節點的 expression 如何解析執行） | **使用 SQL 層級運算式**，後端將 expression 轉換為 SQL 語句執行 | F029, F030 |
+| OQ-37 | 加密脫敏（Masking）節點的 AES 加密金鑰管理？是否與資料來源密碼使用同一金鑰？ | **使用獨立的環境變數 `ETL_MASKING_KEY`**，與資料來源密碼加密金鑰分離 | F029, F030 |
+| OQ-38 | Pipeline 執行的最大並發數是否需要限制？ | **暫不限制並發數**，各 Pipeline 獨立執行。未來可加入全域最大並發數設定 | F030 |
+
 ## 假設清單
 
 以下為 SPEC 撰寫過程中採用的假設，需於架構設計階段驗證：
@@ -140,6 +171,15 @@ status: Draft
 | A19 | Schema / table 列表不使用快取，每次請求即時查詢外部資料庫 | US-030, US-032 決策 | ✅ 已確認（OQ-27） |
 | A20 | 連線失敗時不提供手動輸入 fallback | US-030, US-032 決策 | ✅ 已確認（OQ-26） |
 | A21 | `IExtractionExecutor` 介面新增 `listSchemas()` 與 `listTables()` 方法 | 架構設計需求 | ✅ 已確認（OQ-25） |
+| A22 | ETL Pipeline 排程引擎擴展現有 `@nestjs/schedule` 模組 | E05 epic-brief | ✅ 已確認（OQ-30） |
+| A23 | Pipeline 執行進度以 Polling（5 秒間隔）更新 | E05 設計決策 | ✅ 已確認（OQ-31） |
+| A24 | Pipeline 日誌永久保留 | E05 設計決策 | ✅ 已確認（OQ-32） |
+| A25 | 目標表使用 UPSERT 策略寫入 | E05 設計決策 | ✅ 已確認（OQ-33） |
+| A26 | 測試執行不影響正式統計 | E05 設計決策 | ✅ 已確認（OQ-34） |
+| A27 | MVP 不提供 Pipeline 執行自動重試 | E05 設計決策 | ✅ 已確認（OQ-35） |
+| A28 | Transform 節點運算式使用 SQL 層級執行 | 架構設計假設 | ✅ 已確認（OQ-36） |
+| A29 | Masking 節點使用獨立環境變數 `ETL_MASKING_KEY` | 架構設計假設 | ✅ 已確認（OQ-37） |
+| A30 | Pipeline 執行暫不限制並發數 | 架構設計假設 | ✅ 已確認（OQ-38） |
 
 ## 更新紀錄
 
@@ -152,3 +192,5 @@ status: Draft
 | 2026-03-18 | 新增 OQ-20 ~ OQ-23（raw data 落地相關）；新增假設 A13 ~ A17 | Spec Writer Agent |
 | 2026-03-18 | 新增 OQ-24 ~ OQ-29（來源資料表動態選擇相關）；OQ-24 ~ OQ-27 已解決；新增假設 A18 ~ A21 | Spec Writer Agent |
 | 2026-03-18 | OQ-20 ~ OQ-23、OQ-28 ~ OQ-29 全部以建議假設方案確認解決 | Product Owner |
+| 2026-03-19 | 新增 E05 相關已解決問題 R13 ~ R17、OQ-30 ~ OQ-35、待決問題 OQ-36 ~ OQ-38、假設 A22 ~ A30 | Spec Writer Agent |
+| 2026-03-19 | OQ-36 ~ OQ-38 以建議假設方案確認解決；A28 ~ A30 標記為已確認 | Product Owner |

@@ -1,8 +1,8 @@
 ---
 spec-id: scope
 title: 範圍定義
-version: "1.1"
-date: 2026-03-18
+version: "1.2"
+date: 2026-03-19
 status: Draft
 ---
 
@@ -18,6 +18,7 @@ status: Draft
 | E02 | 帳號與角色管理 | 7 | Phase 1（MVP） |
 | E03 | 資料來源管理 | 6 | Phase 1（MVP） |
 | E04 | 資料擷取管理 | 10 | Phase 1（MVP） |
+| E05 | ETL Pipeline 管理 | 10 | Phase 1（MVP） |
 
 ### 功能對照表
 
@@ -49,6 +50,16 @@ status: Draft
 | F024 | US-037 | E04 | 擷取監控儀表板 | P1 | 統計卡片、趨勢圖、進度條、失敗清單、效能排名 |
 | F025 | US-038 | E04 | 刪除擷取任務 | P1 | 軟刪除擷取任務，日誌保留 |
 | F026 | US-039 | E04 | 查看擷取資料預覽 | P0-MVP | 分頁瀏覽 AppDB 中已擷取的 raw data，支援欄位排序 |
+| F027 | US-040 | E05 | 查看 Pipeline 列表 | P0-MVP | 統計卡片、分頁清單、搜尋篩選 |
+| F028 | US-041 | E05 | 建立 Pipeline | P0-MVP | 建立 Pipeline，設定名稱、描述、排程 |
+| F029 | US-042 | E05 | 視覺化轉換編輯器 | P0-MVP | 拖拉式編輯器，13 種 Transform 節點，JSONB 定義儲存 |
+| F030 | US-043 | E05 | 執行 Pipeline | P0-MVP | 手動/測試/排程執行，進度 Polling，重新執行 |
+| F031 | US-044 | E05 | 啟用／停用 Pipeline | P0-MVP | 控制排程觸發，啟用需有 published 版本 |
+| F032 | US-045 | E05 | 查看 Pipeline 日誌 | P0-MVP | 執行歷史列表、節點級詳情、測試標記 |
+| F033 | US-046 | E05 | Pipeline 版本管理 | P1 | 版本清單、Diff 比對、回滾、發布流程 |
+| F034 | US-047 | E05 | 刪除 Pipeline | P1 | 軟刪除，日誌保留 |
+| F035 | US-048 | E05 | Pipeline 監控儀表板 | P1 | 統計卡片、趨勢圖、進度條、失敗清單、效能排名 |
+| F036 | US-049 | E05 | 目標表 Domain-Oriented 規劃 | P0-MVP | 4 個 Domain Data Product 目標表，schema API，欄位對應 |
 
 ### 非功能需求
 
@@ -93,17 +104,22 @@ status: Draft
 E01（驗證與登入）
  ├── 封鎖 → E02（帳號管理需要 Admin 已完成驗證）
  ├── 封鎖 → E03（資料來源管理需要 Admin 已完成驗證）
- └── 封鎖 → E04（資料擷取管理需要 Admin 已完成驗證）
+ ├── 封鎖 → E04（資料擷取管理需要 Admin 已完成驗證）
+ └── 封鎖 → E05（ETL Pipeline 管理需要 Admin 已完成驗證）
 E03（資料來源管理）
  └── 封鎖 → E04（擷取任務需要資料來源存在）
+E04（資料擷取管理）
+ └── 封鎖 → E05（ETL Pipeline 需讀取 raw data 表）
 ```
 
 - E01 為基礎 Epic，無外部依賴
 - E02 依賴 E01：Admin 必須完成驗證才能執行帳號管理操作
 - E03 依賴 E01：Admin 必須完成驗證才能執行資料來源管理操作
 - E04 依賴 E01 與 E03：Admin 已驗證且需有資料來源才能建立擷取任務
+- E05 依賴 E01 與 E04：Admin 已驗證且需有擷取任務產生 raw data 表
 - E02 與 E03 之間無直接依賴，可平行開發（前提是 E01 已完成）
 - E04 需 E03 完成後才能開始（前提是 E01 也已完成）
+- E05 需 E04 完成後才能開始（Extract 節點讀取 raw data 表）
 
 ### 功能間依賴（關鍵路徑）
 
@@ -129,6 +145,16 @@ E03（資料來源管理）
 | F024 擷取監控儀表板 | F018, F021, F022 | 無 |
 | F025 刪除擷取任務 | F017, F018 | 無 |
 | F026 查看擷取資料預覽 | F021, F022 | 無 |
+| F027 查看 Pipeline 列表 | 無 | F028 |
+| F028 建立 Pipeline | 無 | F029, F031, F034 |
+| F029 視覺化轉換編輯器 | F028 | F030, F033 |
+| F030 執行 Pipeline | F029 | F032, F035 |
+| F031 啟用／停用 Pipeline | F028, F033 | 無 |
+| F032 查看 Pipeline 日誌 | F030 | 無 |
+| F033 Pipeline 版本管理 | F029, F030 | 無 |
+| F034 刪除 Pipeline | F028 | 無 |
+| F035 Pipeline 監控儀表板 | F030, F032 | 無 |
+| F036 目標表 Domain-Oriented | F029 | 無 |
 
 ### 外部依賴
 

@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.1"
-date: 2026-03-18
+version: "1.2"
+date: 2026-03-19
 status: Draft
 ---
 
@@ -307,10 +307,15 @@ User (1) ──── creates ────> (*) Datasource
 User (1) ──── has ────> (*) Token Blocklist
 User (1) ──── has ────> (*) PasswordResetToken
 User (1) ──── creates ────> (*) ExtractionTask
+User (1) ──── creates ────> (*) EtlPipeline
 Datasource (1) ──── has ────> (*) DatasourceHealthLog
 Datasource (1) ──── referenced by ──> (*) ExtractionTask
 ExtractionTask (1) ──── has ────> (*) ExtractionLog
 ExtractionTask (1) ──── owns ───> (1) Raw Data Table (動態建立)
+EtlPipeline (1) ──── has ────> (*) EtlPipelineVersion
+EtlPipeline (1) ──── has ────> (*) EtlPipelineLog
+EtlPipeline (*) ──── reads ───> (*) Raw Data Table (Extract 節點)
+EtlPipeline (*) ──── writes ──> (*) Target Table (Load 節點)
 ```
 
 | 關係 | 描述 | 基數 |
@@ -319,10 +324,15 @@ ExtractionTask (1) ──── owns ───> (1) Raw Data Table (動態建立
 | User → Token Blocklist | 使用者的已撤銷 Token | 一對多（`user_id`） |
 | User → PasswordResetToken | 使用者的密碼重設 Token | 一對多（`user_id`） |
 | User → ExtractionTask | User（Admin）建立擷取任務 | 一對多（`created_by`） |
+| User → EtlPipeline | User（Admin）建立 Pipeline | 一對多（`created_by`） |
 | Datasource → DatasourceHealthLog | 資料來源的健康檢查記錄 | 一對多（`datasource_id`） |
 | Datasource → ExtractionTask | 資料來源被擷取任務參照 | 一對多（`datasource_id`） |
 | ExtractionTask → ExtractionLog | 擷取任務的執行日誌 | 一對多（`task_id`） |
 | ExtractionTask → Raw Data Table | 擷取任務擁有對應的 raw data 動態表 | 一對一（`raw_{task_id_short}`） |
+| EtlPipeline → EtlPipelineVersion | Pipeline 的版本紀錄 | 一對多（`pipeline_id`） |
+| EtlPipeline → EtlPipelineLog | Pipeline 的執行日誌 | 一對多（`pipeline_id`） |
+| EtlPipeline → Raw Data Table | Pipeline 的 Extract 節點讀取 raw data | 多對多（透過 definition JSONB） |
+| EtlPipeline → Target Table | Pipeline 的 Load 節點寫入目標表 | 多對多（透過 definition JSONB） |
 
 參見 [diagrams/er-diagram.md](diagrams/er-diagram.md) 取得完整 ER 圖。
 
@@ -402,3 +412,312 @@ disabled → running                           （手動執行 F021，手動不�
 
 - 軟刪除後從所有清單、儀表板、排程中排除
 - ExtractionLog 不隨任務刪除而清除
+
+### EtlPipeline 狀態 {#etl-pipeline-status-transitions}
+
+```
+[建立 Pipeline] → draft                          （F028）
+draft → active                                    （啟用 F031，前提為有 published 版本）
+draft → running                                   （測試執行 F030，is_test_run=true）
+active → running                                  （手動執行 F030 / 排程觸發）
+active → disabled                                 （停用 F031）
+running → active                                  （執行成功，若先前為 active）
+running → draft                                   （測試執行成功/失敗，若先前為 draft）
+running → failed                                  （執行失敗）
+failed → running                                  （重新執行 F030）
+failed → disabled                                 （停用 F031）
+disabled → active                                 （啟用 F031）
+```
+
+- 建立時預設為 `draft`
+- `running` 狀態下不可刪除
+- 停用時 `status` 設為 `disabled`，啟用時 `status` 設為 `active`
+- 草稿狀態允許測試執行（`is_test_run = true`），不影響正式排程
+- 手動執行不受 `enabled` 限制（即使停用也可手動觸發 active Pipeline）
+
+參見 [diagrams/pipeline-states.md](diagrams/pipeline-states.md) 取得狀態轉換圖。
+
+### EtlPipeline 生命週期 {#etl-pipeline-lifecycle}
+
+```
+[建立] → 草稿（編輯 / 測試執行）→ 發布（排程執行 / 手動執行）→ [軟刪除]（設定 deleted_at）
+```
+
+- 軟刪除後從所有清單、儀表板、排程中排除
+- EtlPipelineLog 不隨 Pipeline 刪除而清除
+
+### EtlPipelineVersion 版本狀態 {#etl-pipeline-version-status-transitions}
+
+```
+[建立版本 / 儲存編輯] → draft
+draft → testing                                   （發起測試執行 F030）
+testing → published                               （發布 F033，前提為通過測試執行）
+```
+
+- 版本狀態為單向流轉：`draft` -> `testing` -> `published`
+- 發布前必須至少完成一次成功的測試執行
+- 回滾操作建立新版本（內容複製），不修改舊版本狀態
+
+參見 [diagrams/pipeline-version-states.md](diagrams/pipeline-version-states.md) 取得版本狀態轉換圖。
+
+---
+
+## EtlPipeline 實體 {#etl-pipeline-entity}
+
+ETL Pipeline 定義，描述從 raw data 經過轉換後載入目標表的完整資料處理流程。
+
+| 屬性 | 說明 | 約束 | 備註 |
+|------|------|------|------|
+| id | 唯一識別碼 | 主鍵，系統自動產生 | UUID |
+| name | Pipeline 名稱 | 必填，唯一（排除已軟刪除），最大長度 255 字元 | 用於顯示與識別 |
+| description | Pipeline 描述 | 選填，TEXT 類型 | |
+| version | 當前版本號 | 必填，整數，預設 1 | 每次儲存新版本時遞增 |
+| step_count | 節點步驟數 | 預設 0 | 根據 definition 中 nodes 數量計算 |
+| status | Pipeline 狀態 | 必填，列舉值：`draft` / `active` / `running` / `failed` / `disabled` | 預設值：`draft` |
+| schedule | Cron 表達式 | 選填，最大長度 100 字元 | 標準 cron 格式，以 UTC 解析 |
+| last_execution_at | 最後執行時間 | 可為空 | UTC timestamp |
+| next_execution_at | 下次排程時間 | 可為空 | 由排程引擎計算填入，UTC timestamp |
+| processed_count | 累計處理筆數 | 預設 0 | 所有成功執行的總處理筆數 |
+| avg_duration_ms | 平均執行時間 | 預設 0 | 所有成功執行的平均時間（毫秒） |
+| execution_count | 累計執行次數 | 預設 0 | 所有已完成執行的次數 |
+| enabled | 是否啟用 | 必填，布林值，預設 `false` | 停用後排程不觸發 |
+| created_by | 建立者 ID | 必填，外鍵關聯 User.id | 記錄建立此 Pipeline 的 Admin |
+| deleted_at | 軟刪除時間 | 可為空 | 非 NULL 表示已刪除 |
+| created_at | 建立時間 | 必填，系統自動設定 | UTC timestamp |
+| updated_at | 最後更新時間 | 必填，系統自動更新 | UTC timestamp |
+
+**業務規則**：
+
+- 名稱唯一性僅在未刪除的記錄中檢查（`deleted_at IS NULL`）
+- 建立時預設 `status = 'draft'`、`enabled = false`、`version = 1`
+- 停用時 `enabled = false`、`status = 'disabled'`
+- 啟用時需有至少一個 `published` 狀態的 EtlPipelineVersion，啟用後 `enabled = true`、`status = 'active'`
+- `status` 為 `running` 時不允許刪除
+- 軟刪除後從所有清單、儀表板、排程中排除
+- EtlPipelineLog 不隨 Pipeline 軟刪除而清除
+- Cron 表達式以 UTC 時區解析
+- 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
+- 排程執行時使用最新的 `published` 狀態版本
+
+**相關功能**：[F027](features/F027-pipeline-list.md), [F028](features/F028-create-pipeline.md), [F029](features/F029-pipeline-editor.md), [F030](features/F030-execute-pipeline.md), [F031](features/F031-toggle-pipeline.md), [F032](features/F032-pipeline-logs.md), [F033](features/F033-pipeline-version.md), [F034](features/F034-delete-pipeline.md), [F035](features/F035-pipeline-dashboard.md)
+
+---
+
+## EtlPipelineVersion 實體 {#etl-pipeline-version-entity}
+
+Pipeline 版本紀錄，儲存每個版本的完整 Pipeline 定義（節點與連線結構）。
+
+| 屬性 | 說明 | 約束 | 備註 |
+|------|------|------|------|
+| id | 唯一識別碼 | 主鍵，系統自動產生 | UUID |
+| pipeline_id | 關聯 Pipeline | 必填，外鍵關聯 EtlPipeline.id | |
+| version | 版本號 | 必填，整數 | 同一 Pipeline 下遞增 |
+| definition | Pipeline 定義 | 必填，JSONB 類型 | 節點與連線的完整結構（nodes + edges） |
+| status | 版本狀態 | 必填，列舉值：`draft` / `testing` / `published` | 預設值：`draft` |
+| change_summary | 變更摘要 | 選填，最大長度 500 字元 | |
+| created_by | 建立者 ID | 必填，外鍵關聯 User.id | |
+| created_at | 建立時間 | 必填，系統自動設定 | UTC timestamp |
+
+**JSONB definition 結構**：
+
+```json
+{
+  "nodes": [
+    {
+      "id": "string (節點唯一 ID)",
+      "type": "string (節點類型，如 extract / transform-merge / load)",
+      "position": { "x": 0, "y": 0 },
+      "data": { "...節點類型對應的設定資料" }
+    }
+  ],
+  "edges": [
+    {
+      "id": "string (連線唯一 ID)",
+      "source": "string (來源節點 ID)",
+      "target": "string (目標節點 ID)"
+    }
+  ]
+}
+```
+
+**業務規則**：
+
+- 版本狀態流程：`draft` -> `testing` -> `published`
+- 發布前必須至少完成一次成功的測試執行（`is_test_run = true`）
+- 同一 Pipeline 同時間只能有一個 `published` 版本（發布新版本時，舊的 published 版本保留原狀態不變）
+- 回滾操作不修改舊版本，而是建立一個新版本（內容複製自舊版本），狀態為 `draft`
+- 排程引擎僅使用最新的 `published` 版本執行
+- 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
+
+**相關功能**：[F029](features/F029-pipeline-editor.md), [F033](features/F033-pipeline-version.md)
+
+---
+
+## EtlPipelineLog 實體 {#etl-pipeline-log-entity}
+
+Pipeline 執行日誌，記錄每次執行的詳細資訊，包含各節點的執行記錄。
+
+| 屬性 | 說明 | 約束 | 備註 |
+|------|------|------|------|
+| id | 唯一識別碼 | 主鍵，系統自動產生 | UUID |
+| pipeline_id | 關聯 Pipeline | 必填，外鍵關聯 EtlPipeline.id | |
+| version | 執行時的版本號 | 必填，整數 | 記錄執行時使用的版本 |
+| status | 執行狀態 | 必填，列舉值：`running` / `completed` / `failed` | |
+| started_at | 開始時間 | 必填，系統自動設定 | UTC timestamp |
+| finished_at | 結束時間 | 可為空 | 執行完成後設定，UTC timestamp |
+| duration_ms | 執行時間（毫秒） | 可為空 | 執行完成後計算 |
+| processed_count | 處理筆數 | 預設 0 | 本次執行的處理筆數 |
+| error_message | 錯誤訊息 | 可為空 | TEXT 類型，失敗時記錄 |
+| node_logs | 各節點執行記錄 | 可為空，JSONB 類型 | 每個節點的詳細執行紀錄 |
+| triggered_by | 觸發方式 | 必填，列舉值：`schedule` / `manual` / `test` / `retry` | |
+| is_test_run | 是否為測試執行 | 必填，布林值，預設 `false` | 測試執行為 `true` |
+| created_by | 執行者 ID | 必填，外鍵關聯 User.id | 排程觸發時為建立者 |
+
+**JSONB node_logs 結構**：
+
+```json
+[
+  {
+    "nodeId": "string",
+    "nodeName": "string (顯示名稱)",
+    "nodeType": "string (節點類型)",
+    "status": "completed | failed | skipped",
+    "processedCount": 0,
+    "durationMs": 0,
+    "errorMessage": "string | null"
+  }
+]
+```
+
+**業務規則**：
+
+- 每次執行（手動、排程、測試、重新執行）均產生一筆記錄
+- 日誌不隨 EtlPipeline 軟刪除而清除，永久保留
+- `duration_ms = finished_at - started_at`（毫秒）
+- `triggered_by` 區分觸發來源：`manual`（手動）、`schedule`（排程）、`test`（測試）、`retry`（重新執行）
+- `is_test_run = true` 的執行記錄不影響正式資料統計
+- 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
+
+**相關功能**：[F030](features/F030-execute-pipeline.md), [F032](features/F032-pipeline-logs.md), [F035](features/F035-pipeline-dashboard.md)
+
+---
+
+## 目標表（Domain-Oriented Data Products） {#target-tables}
+
+ETL Pipeline 的 Load 節點載入目標。系統預先定義 4 個 Domain Data Product 目標表，採用 Domain-Oriented 設計。目標表不納入 ORM Entity 管理，由系統預先建立並透過 Pipeline 執行時以動態 SQL 寫入。
+
+### 命名規則
+
+| 目標表 | 表名 | Domain | 說明 |
+|--------|------|--------|------|
+| Customer Core | `customer_core` | core | 客戶基本身分與主檔資料 |
+| Customer Interaction | `customer_interaction` | interaction | 客戶行為與接觸紀錄 |
+| Customer Financial | `customer_financial` | financial | 交易與風控資料 |
+| Customer Service | `customer_service` | service | 客服與申訴案件 |
+
+### customer_core 目標表 {#target-customer-core}
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| customer_id | UUID | 否 | 是 | 客戶唯一識別碼 |
+| id_number | VARCHAR | 是 | | 身分證號（加密） |
+| name | VARCHAR | 是 | | 姓名 |
+| gender | VARCHAR | 是 | | 性別 |
+| date_of_birth | DATE | 是 | | 生日 |
+| phone | VARCHAR | 是 | | 電話 |
+| email | VARCHAR | 是 | | Email |
+| address | TEXT | 是 | | 地址 |
+| occupation | VARCHAR | 是 | | 職業 |
+| company_name | VARCHAR | 是 | | 公司名稱 |
+| customer_type | VARCHAR | 是 | | 客戶類型（individual / corporate） |
+| registration_date | TIMESTAMP | 是 | | 建檔日期 |
+| data_source | VARCHAR | 是 | | 資料來源識別 |
+| last_updated_at | TIMESTAMP | 是 | | 最後更新時間 |
+| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
+| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+
+### customer_interaction 目標表 {#target-customer-interaction}
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| interaction_id | UUID | 否 | 是 | 互動唯一識別碼 |
+| customer_id | UUID | 是 | | 關聯客戶 |
+| interaction_type | VARCHAR | 是 | | 接觸類型（call / email / sms / visit / app / web / dm） |
+| channel | VARCHAR | 是 | | 通路 |
+| direction | VARCHAR | 是 | | 方向（inbound / outbound） |
+| interaction_date | TIMESTAMP | 是 | | 接觸時間 |
+| campaign_id | VARCHAR | 是 | | 行銷活動 ID |
+| campaign_name | VARCHAR | 是 | | 行銷活動名稱 |
+| response_status | VARCHAR | 是 | | 回應狀態 |
+| content_summary | TEXT | 是 | | 內容摘要 |
+| agent_id | VARCHAR | 是 | | 處理人員 |
+| data_source | VARCHAR | 是 | | 資料來源識別 |
+| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
+| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+
+### customer_financial 目標表 {#target-customer-financial}
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| financial_id | UUID | 否 | 是 | 財務記錄唯一識別碼 |
+| customer_id | UUID | 是 | | 關聯客戶 |
+| contract_id | VARCHAR | 是 | | 合約編號 |
+| contract_type | VARCHAR | 是 | | 合約類型（loan / lease） |
+| vehicle_model | VARCHAR | 是 | | 車型 |
+| vehicle_year | INTEGER | 是 | | 車輛年份 |
+| principal_amount | DECIMAL | 是 | | 本金金額 |
+| monthly_payment | DECIMAL | 是 | | 月付金 |
+| interest_rate | DECIMAL | 是 | | 利率 |
+| term_months | INTEGER | 是 | | 期數 |
+| payment_status | VARCHAR | 是 | | 還款狀態（current / overdue / default / closed） |
+| overdue_days | INTEGER | 是 | | 逾期天數 |
+| overdue_amount | DECIMAL | 是 | | 逾期金額 |
+| credit_score | INTEGER | 是 | | 信用評分 |
+| risk_level | VARCHAR | 是 | | 風險等級（low / medium / high / critical） |
+| contract_start_date | DATE | 是 | | 合約起始日 |
+| contract_end_date | DATE | 是 | | 合約結束日 |
+| data_source | VARCHAR | 是 | | 資料來源識別 |
+| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
+| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+
+### customer_service 目標表 {#target-customer-service}
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| service_id | UUID | 否 | 是 | 服務案件唯一識別碼 |
+| customer_id | UUID | 是 | | 關聯客戶 |
+| case_number | VARCHAR | 是 | | 案件編號 |
+| case_type | VARCHAR | 是 | | 案件類型（inquiry / complaint / request / dispute） |
+| category | VARCHAR | 是 | | 分類 |
+| priority | VARCHAR | 是 | | 優先級（low / medium / high / urgent） |
+| status | VARCHAR | 是 | | 狀態（open / in_progress / resolved / closed） |
+| channel | VARCHAR | 是 | | 進件通路 |
+| description | TEXT | 是 | | 案件描述 |
+| resolution | TEXT | 是 | | 處理結果 |
+| assigned_to | VARCHAR | 是 | | 指派人員 |
+| opened_at | TIMESTAMP | 是 | | 建立時間 |
+| resolved_at | TIMESTAMP | 是 | | 解決時間 |
+| satisfaction_score | INTEGER | 是 | | 滿意度（1-5） |
+| data_source | VARCHAR | 是 | | 資料來源識別 |
+| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
+| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+
+### 共通 ETL 追蹤欄位
+
+每個目標表都包含以下 3 個追蹤欄位，由 Pipeline 執行時系統自動填充：
+
+| 欄位 | 說明 |
+|------|------|
+| `data_source` | 資料來源識別（來自 Datasource 名稱） |
+| `_etl_loaded_at` | ETL 載入時間（系統自動記錄，UTC timestamp） |
+| `_etl_pipeline_id` | 執行載入的 Pipeline ID（系統自動記錄） |
+
+**業務規則**：
+
+- 目標表由系統 migration 預先建立，不由 Admin 手動建立
+- 目標表不納入 ORM Entity 管理，透過動態 SQL 操作
+- Load 節點執行時自動填充 ETL 追蹤欄位
+- 目標表採用 UPSERT 策略（以主鍵判斷 INSERT 或 UPDATE）
+- 為未來 Data Mesh 擴展預留架構空間（每個 Domain 可獨立演進 schema）
+
+**相關功能**：[F029](features/F029-pipeline-editor.md), [F036](features/F036-target-tables.md)

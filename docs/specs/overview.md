@@ -1,8 +1,8 @@
 ---
 spec-id: overview
 title: 系統總覽
-version: "1.1"
-date: 2026-03-18
+version: "1.2"
+date: 2026-03-19
 status: Draft
 ---
 
@@ -19,7 +19,7 @@ status: Draft
 
 ## 產品願景
 
-CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提供統一的資料來源管理能力。MVP 階段聚焦於四大核心能力：安全驗證與登入、帳號與角色管理、資料來源（資料庫連線）的設定與監控、以及資料擷取管理（從外部資料來源讀取資料並真正搬移至 CDMP AppDB）。
+CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提供統一的資料來源管理能力。MVP 階段聚焦於五大核心能力：安全驗證與登入、帳號與角色管理、資料來源（資料庫連線）的設定與監控、資料擷取管理（從外部資料來源讀取資料並搬移至 CDMP AppDB）、以及 ETL Pipeline 管理（透過視覺化編輯器組合 Extract / Transform / Load 節點，將 raw data 轉換後載入 Domain-Oriented 目標表）。
 
 ## 產品目標
 
@@ -27,7 +27,8 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 2. **提供完整的帳號生命週期管理** — 讓 Admin 能夠建立、查看、編輯、停用帳號及管理角色指派
 3. **實現資料來源的集中化管理** — 支援 MySQL、PostgreSQL、SQL Server 三種資料庫類型的連線設定、測試與健康監控
 4. **實現資料擷取與落地** — 從外部資料來源讀取指定的來源資料表，將 raw data 真正搬移至 CDMP AppDB 的動態建立表中，支援全量與增量兩種擷取模式
-5. **確保憑證安全** — 使用者密碼以 bcrypt 雜湊儲存，資料庫連線密碼以 AES-256 加密儲存
+5. **實現 ETL Pipeline 資料轉換** — 透過視覺化拖拉式編輯器組合 Extract / Transform（13 種轉換節點）/ Load 節點，將 raw data 經轉換處理後載入 Domain-Oriented 目標表（Customer Core / Interaction / Financial / Service），支援版本管理、三階段發布流程、排程自動執行與監控儀表板
+6. **確保憑證安全** — 使用者密碼以 bcrypt 雜湊儲存，資料庫連線密碼以 AES-256 加密儲存
 
 ## 非目標（Non-Goals）
 
@@ -63,6 +64,8 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 - 資料來源 CRUD、連線測試、健康監控
 - 資料擷取任務管理（建立、編輯、執行、排程、監控）
 - Raw data 落地（動態建表、批次寫入 AppDB、分頁預覽）
+- ETL Pipeline 管理（建立、視覺化編輯、執行、排程、版本管理、監控）
+- Domain-Oriented 目標表（customer_core / customer_interaction / customer_financial / customer_service）
 - 密碼重設流程（自助式與 Admin 代為重設）
 
 ### 系統外部（External Dependencies）
@@ -118,7 +121,7 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 ### 文件慣例
 
 - **語言**：所有內容以繁體中文撰寫，技術名詞（API、JWT、bcrypt 等）保留英文
-- **Feature ID**：F001-F026 連續編號，對應 User Story ID
+- **Feature ID**：F001-F036 連續編號，對應 User Story ID
 - **優先級**：P0-MVP（Must Have）、P1（Should Have）
 - **驗收標準格式**：Given / When / Then
 - **交叉參照**：使用相對路徑連結其他檔案

@@ -1,8 +1,8 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.1"
-date: 2026-03-18
+version: "1.2"
+date: 2026-03-19
 status: Draft
 ---
 
@@ -173,6 +173,24 @@ status: Draft
 
 ---
 
+### ETL_PIPELINE 領域 — ETL Pipeline 管理 {#etl-pipeline-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| PIPELINE_NAME_EXISTS | 409 | 此名稱的 Pipeline 已存在 | Pipeline 名稱重複 | F028 |
+| PIPELINE_NOT_FOUND | 404 | 找不到指定的 Pipeline | Pipeline ID 不存在或已軟刪除 | F027, F029, F030, F031, F032, F033, F034 |
+| PIPELINE_RUNNING | 409 | Pipeline 正在執行中，無法執行此操作 | Pipeline status 為 running 時嘗試重複執行或刪除 | F030, F034 |
+| PIPELINE_NO_DEFINITION | 422 | Pipeline 尚未定義節點，無法執行 | 嘗試執行未設定 definition 的 Pipeline | F030 |
+| PIPELINE_DRAFT_CANNOT_ENABLE | 400 | 需先發布 Pipeline 才能啟用 | 嘗試啟用無 published 版本的 Pipeline | F031 |
+| PIPELINE_VERSION_NOT_FOUND | 404 | 找不到指定的版本 | 版本 ID 不存在 | F033 |
+| PIPELINE_PUBLISH_REQUIRES_TEST | 422 | 請先完成測試執行 | 嘗試發布尚未通過測試執行的版本 | F033 |
+| PIPELINE_EXECUTION_FAILED | — | Pipeline 執行失敗：{errorDetail} | 執行過程中發生錯誤（非 API 錯誤，記錄於 EtlPipelineLog） | F030 |
+| PIPELINE_NODE_EXECUTION_FAILED | — | 節點 {nodeName} 執行失敗：{errorDetail} | 特定節點執行失敗 | F030 |
+| PIPELINE_TARGET_TABLE_NOT_FOUND | 404 | 找不到指定的目標表 | 目標表名稱不存在 | F036 |
+| PIPELINE_INVALID_CONNECTION | 422 | 連線規則違反：{detail} | 不合法的節點連線（如 Load 連到 Extract） | F029 |
+
+---
+
 ### VALIDATION 領域 — 通用驗證 {#validation-errors}
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
@@ -256,5 +274,15 @@ status: Draft
 | Schema 列表載入失敗 | 503 | DATASOURCE_SCHEMA_LOAD_FAILED | 無法連線至資料來源 | 前端顯示錯誤，schema 下拉停用 |
 | Table 列表載入失敗 | 503 | DATASOURCE_TABLE_LOAD_FAILED | 無法連線至資料來源 | 前端顯示錯誤，table 下拉停用 |
 | raw data 表不存在（預覽） | 404 | EXTRACTION_RAW_TABLE_NOT_FOUND | 此任務尚無已擷取的資料 | 顯示空狀態提示 |
+| Pipeline 名稱重複 | 409 | PIPELINE_NAME_EXISTS | 此名稱的 Pipeline 已存在 | 不建立/更新 |
+| Pipeline 執行中重複執行 | 409 | PIPELINE_RUNNING | Pipeline 正在執行中 | 拒絕重複執行 |
+| Pipeline 執行中刪除 | 409 | PIPELINE_RUNNING | Pipeline 正在執行中，無法刪除 | 拒絕刪除 |
+| Pipeline 未定義節點即執行 | 422 | PIPELINE_NO_DEFINITION | Pipeline 尚未定義節點 | 拒絕執行 |
+| 草稿 Pipeline 嘗試啟用 | 400 | PIPELINE_DRAFT_CANNOT_ENABLE | 需先發布 Pipeline | 拒絕啟用 |
+| 版本未通過測試即發布 | 422 | PIPELINE_PUBLISH_REQUIRES_TEST | 請先完成測試執行 | 拒絕發布 |
+| Pipeline 不存在 | 404 | PIPELINE_NOT_FOUND | 找不到指定的 Pipeline | 拒絕請求 |
+| Pipeline 節點連線違規 | 422 | PIPELINE_INVALID_CONNECTION | 連線規則違反 | 拒絕儲存 |
+| Pipeline 節點執行失敗 | — | PIPELINE_NODE_EXECUTION_FAILED | 節點執行失敗 | Pipeline 標記 failed，EtlPipelineLog 記錄錯誤 |
+| 目標表不存在 | 404 | PIPELINE_TARGET_TABLE_NOT_FOUND | 找不到指定的目標表 | 拒絕請求 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |
