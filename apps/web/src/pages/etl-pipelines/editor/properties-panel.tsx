@@ -140,12 +140,13 @@ function ExtractProperties({
       <select
         className={selectClass}
         value={selectedTable}
-        onChange={(e) =>
+        onChange={(e) => {
+          const selected = rawTables.find((t) => t.rawTableName === e.target.value);
           onChange({
             rawTable: e.target.value,
-            subtitle: e.target.value || undefined,
-          })
-        }
+            subtitle: selected?.taskName || undefined,
+          });
+        }}
         data-testid="extract-raw-table-select"
       >
         <option value="">選擇 Raw Data 表</option>

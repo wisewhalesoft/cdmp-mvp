@@ -152,7 +152,7 @@ const definitionWithNodes = {
         id: 'extract-1',
         type: 'pipelineNode',
         position: { x: 100, y: 100 },
-        data: { nodeType: 'raw_data_extract', label: 'Raw Data 擷取', subtitle: 'raw_customers' },
+        data: { nodeType: 'raw_data_extract', label: 'Raw Data 擷取', subtitle: '每日客戶同步' },
       },
       {
         id: 'extract-2',
