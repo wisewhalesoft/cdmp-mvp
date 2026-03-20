@@ -23,6 +23,7 @@ import { ExtractionTask } from '@/database/entities/extraction-task.entity';
 import { ExtractionLog } from '@/database/entities/extraction-log.entity';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { CONNECTION_TESTER } from '@/modules/datasource/connection-tester.provider';
 import { EXTRACTION_EXECUTOR } from '@/modules/extraction-task/extraction-executor.provider';
 import { HashUtil } from '@/common/hash/hash.util';
@@ -64,7 +65,7 @@ async function createTestApp(): Promise<INestApplication> {
         entities: [
           User, TokenBlocklist, PasswordResetToken, Datasource,
           DatasourceHealthLog, ExtractionTask, ExtractionLog,
-          EtlPipeline, EtlPipelineLog,
+          EtlPipeline, EtlPipelineLog, EtlPipelineVersion,
         ],
         synchronize: true,
       }),
@@ -625,5 +626,276 @@ describe('F027: Pipeline List E2E', () => {
     const bodyStr = JSON.stringify(res.body);
     expect(bodyStr).not.toContain('Simulated DB failure');
     expect(bodyStr).not.toContain('stack');
+  });
+});
+
+// =============================================
+// F028: 建立 Pipeline E2E
+// =============================================
+
+describe('F028: Create Pipeline E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let userToken: string;
+  let dataSource: DataSource;
+  let pipelineRepo: Repository<EtlPipeline>;
+  let versionRepo: Repository<EtlPipelineVersion>;
+  let logRepo: Repository<EtlPipelineLog>;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    userToken = await getUserToken(app);
+    dataSource = app.get(DataSource);
+    pipelineRepo = dataSource.getRepository(EtlPipeline);
+    versionRepo = dataSource.getRepository(EtlPipelineVersion);
+    logRepo = dataSource.getRepository(EtlPipelineLog);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  beforeEach(async () => {
+    await versionRepo.createQueryBuilder().delete().from(EtlPipelineVersion).execute();
+    await logRepo.createQueryBuilder().delete().from(EtlPipelineLog).execute();
+    await pipelineRepo.createQueryBuilder().delete().from(EtlPipeline).execute();
+  });
+
+  // TS-F028-001: 成功建立 Pipeline（含排程）
+  it('TS-F028-001: should create pipeline with schedule', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '客戶資料同步', description: '每日同步', schedule: '0 2 * * *' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.body.name).toBe('客戶資料同步');
+    expect(res.body.status).toBe('draft');
+    expect(res.body.version).toBe(1);
+    expect(res.body.enabled).toBe(false);
+    expect(res.body.stepCount).toBe(0);
+    expect(res.body.schedule).toBe('0 2 * * *');
+    expect(res.body.createdBy).toBe(ADMIN_ACTIVE.id);
+    expect(res.body.createdAt).toBeDefined();
+    expect(res.body.updatedAt).toBeDefined();
+  });
+
+  // TS-F028-002: 成功建立 Pipeline（不含排程）
+  it('TS-F028-002: should create pipeline without schedule', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '無排程Pipeline', description: null });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('draft');
+    expect(res.body.version).toBe(1);
+    expect(res.body.enabled).toBe(false);
+    expect(res.body.schedule).toBeNull();
+  });
+
+  // TS-F028-003: 成功建立後同步建立 EtlPipelineVersion v1
+  it('TS-F028-003: should create initial EtlPipelineVersion v1', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '版本測試Pipeline' });
+
+    expect(res.status).toBe(201);
+
+    const versions = await versionRepo.find({ where: { pipeline_id: res.body.id } });
+    expect(versions).toHaveLength(1);
+    expect(versions[0].version).toBe(1);
+    expect(versions[0].status).toBe('draft');
+    expect(versions[0].pipeline_id).toBe(res.body.id);
+    expect(versions[0].created_by).toBe(ADMIN_ACTIVE.id);
+  });
+
+  // TS-F028-004: EtlPipelineVersion 初始 definition 為空結構
+  it('TS-F028-004: initial version definition should be empty structure', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Definition測試' });
+
+    expect(res.status).toBe(201);
+
+    const versions = await versionRepo.find({ where: { pipeline_id: res.body.id } });
+    expect(versions[0].definition).toEqual({ nodes: [], edges: [] });
+  });
+
+  // TS-F028-005: createdBy 記錄建立者 ID
+  it('TS-F028-005: createdBy should match admin user ID', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '建立者測試' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.createdBy).toBe(ADMIN_ACTIVE.id);
+
+    const pipeline = await pipelineRepo.findOne({ where: { id: res.body.id } });
+    expect(pipeline!.created_by).toBe(ADMIN_ACTIVE.id);
+  });
+
+  // TS-F028-006: 名稱重複 → 409
+  it('TS-F028-006: duplicate name should return 409', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '重複名稱' });
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '重複名稱' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('PIPELINE_NAME_EXISTS');
+
+    const count = await pipelineRepo
+      .createQueryBuilder('p')
+      .where('p.name = :name', { name: '重複名稱' })
+      .andWhere('p.deleted_at IS NULL')
+      .getCount();
+    expect(count).toBe(1);
+  });
+
+  // TS-F028-007: 軟刪除後名稱可重用
+  it('TS-F028-007: soft-deleted pipeline name should be reusable', async () => {
+    // Create a soft-deleted pipeline directly in DB
+    const softDeleted = pipelineRepo.create({
+      name: '舊Pipeline',
+      version: 1,
+      step_count: 0,
+      status: 'draft',
+      enabled: false,
+      created_by: ADMIN_ACTIVE.id,
+      processed_count: 0,
+      deleted_at: new Date(),
+    });
+    await pipelineRepo.save(softDeleted);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '舊Pipeline' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('舊Pipeline');
+  });
+
+  // TS-F028-008: 名稱空白 → 422
+  it('TS-F028-008: empty name should return 422', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  // TS-F028-009: 名稱缺失（key 未提供）→ 422
+  it('TS-F028-009: missing name key should return 422', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ description: '無名稱' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  // TS-F028-010: 非法 Cron 表達式 → 422
+  it('TS-F028-010: invalid cron should return 422', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Cron錯誤', schedule: '99 99 99 99 99' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_INVALID_CRON');
+  });
+
+  // TS-F028-011: User 角色無權建立 → 403
+  it('TS-F028-011: user role should get 403', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ name: 'User建立測試' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F028-012: 未登入（無 Token）→ 401
+  it('TS-F028-012: no token should return 401', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .send({ name: '未登入測試' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+  });
+
+  // TS-F028-013: 名稱長度 255 字元（邊界值，接受）
+  it('TS-F028-013: name with 255 chars should be accepted', async () => {
+    const longName = 'A'.repeat(255);
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: longName });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe(longName);
+    expect(res.body.name.length).toBe(255);
+  });
+
+  // TS-F028-014: 名稱長度 256 字元（超出上限，拒絕）
+  it('TS-F028-014: name with 256 chars should return 422', async () => {
+    const tooLongName = 'A'.repeat(256);
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: tooLongName });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  // TS-F028-015: Cron 5 欄位標準格式（合法）
+  it('TS-F028-015: 5-field cron should be accepted', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Cron5欄位', schedule: '0 2 * * *' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.schedule).toBe('0 2 * * *');
+  });
+
+  // TS-F028-016: Cron 6 欄位擴充格式（合法）
+  it('TS-F028-016: 6-field cron should be accepted', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Cron6欄位', schedule: '0 0 2 * * *' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.schedule).toBe('0 0 2 * * *');
+  });
+
+  // TS-F028-017: Cron 4 欄位（不合法格式，拒絕）
+  it('TS-F028-017: 4-field cron should return 422', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Cron4欄位', schedule: '2 * * *' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_INVALID_CRON');
   });
 });
