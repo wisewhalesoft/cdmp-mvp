@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Database, ArrowDownToLine, LogOut, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Users, Database, ArrowDownToLine, LogOut, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid, AlertTriangle, BarChart3, Workflow } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import { getDatasources, deleteDatasource, testDatasourceConnection } from '@/api/datasources';
@@ -230,6 +230,13 @@ export function DatasourceListPage() {
           >
             <ArrowDownToLine size={20} />
             資料擷取
+          </a>
+          <a
+            href="/etl-pipelines"
+            className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            <Workflow size={20} />
+            ETL Pipeline
           </a>
         </nav>
       </aside>

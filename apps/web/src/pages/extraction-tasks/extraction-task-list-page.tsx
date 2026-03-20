@@ -23,6 +23,7 @@ import {
   ToggleLeft,
   Trash2,
   ExternalLink,
+  Workflow,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
@@ -321,6 +322,13 @@ export function ExtractionTaskListPage() {
           >
             <ArrowDownToLine size={20} />
             資料擷取
+          </a>
+          <a
+            href="/etl-pipelines"
+            className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            <Workflow size={20} />
+            ETL Pipeline
           </a>
         </nav>
       </aside>

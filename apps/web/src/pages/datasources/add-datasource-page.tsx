@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Users, Database, ArrowDownToLine, LogOut, ChevronRight } from 'lucide-react';
+import { Users, Database, ArrowDownToLine, LogOut, ChevronRight, Workflow } from 'lucide-react';
 import { createDatasourceSchema, type CreateDatasourceFormData } from './create-datasource-schema';
 import { createDatasource } from '@/api/datasources';
 import { clearAuth, getUser } from '@/stores/auth-store';
@@ -124,6 +124,13 @@ export function AddDatasourcePage() {
           >
             <ArrowDownToLine size={20} />
             資料擷取
+          </a>
+          <a
+            href="/etl-pipelines"
+            className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            <Workflow size={20} />
+            ETL Pipeline
           </a>
         </nav>
       </aside>
