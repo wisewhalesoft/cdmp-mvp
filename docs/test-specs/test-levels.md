@@ -1,6 +1,6 @@
 ---
 type: test-design-levels
-last_updated: 2026-03-12
+last_updated: 2026-03-20
 ---
 
 # 測試層級策略
@@ -150,6 +150,123 @@ last_updated: 2026-03-12
 | 日誌遮罩敏感欄位 | 觸發密碼相關操作 → 檢查日誌檔 → 驗證無密碼明文、無資料庫連線密碼 |
 | 未授權存取日誌 | User 嘗試存取 Admin 端點 → 驗證日誌包含 userId、端點、時間戳記 |
 | 稽核日誌完整性 | 帳號停用/密碼重設/資料來源刪除 → 驗證 audit log 記錄存在且不含敏感值 |
+
+---
+
+---
+
+## E05 ETL Pipeline 管理模組測試策略（F027–F036）
+
+> 本章節補充 E05 模組特有的測試層級策略，與前述各層級策略共同適用。
+
+### E05 Unit Tests
+
+| 測試目標 | 風險依據 | 覆蓋重點 |
+|---------|---------|---------|
+| Pipeline 名稱唯一性檢查（排除軟刪除） | F028 AC-2 / BR-2 | 同名未刪除記錄阻擋；軟刪除後名稱可重用 |
+| Cron 表達式驗證邏輯 | F028 BR-4 — 5 欄位（`0 2 * * *`）與 6 欄位（`0 0 2 * * *`）均合法；4 欄位或值超出範圍須拒絕 | 各格式邊界值、白名單驗證（使用 `cron-parser` 或同等套件） |
+| Pipeline 連線驗證規則（BR-2 ~ BR-5） | F029 AC-4 — Extract/Transform/Load 連線方向規則 | 9 種合法/非法組合（含逆向循環、Load 終端節點）；每種組合獨立驗證 |
+| 成功率計算公式 | F035 BR-3 — successRate = success / (success + failed) * 100 | 分母為零回傳 0.0（不除以零）；一位小數四捨五入（75.0、88.9） |
+| progressPercent 計算 | F035 AC-4 — processedCount / totalCount * 100 | totalCount=0 時回傳 0.0；totalCount > 0 時精確計算 |
+| 排程掃描條件（scanAndExecute 篩選邏輯） | F030 BR-4、F033 BR-5 — 僅觸發 status=active 且 enabled=true 且有 published 版本的 Pipeline | draft 不觸發；running 跳過；disabled 跳過；軟刪除排除 |
+| 版本號遞增規則 | F033 AC-4 — 回滾建立新版本，版本號 = max(version) + 1 | 單版本（max=1 → 新版本=2）；多版本（max=5 → 新版本=6）；非依 created_at 排序 |
+| is_test_run 隔離規則 | F030 BR-7、F035 BR-4/BR-5 — 測試執行不計入 Pipeline.processed_count | processed_count 累加邏輯需過濾 is_test_run=true；統計 API 均需排除測試執行 |
+| step_count 更新（BR-6） | F029 AC-9 — PUT definition 後 etl_pipelines.step_count = definition.nodes.length | 0 個節點→step_count=0；3 個節點→step_count=3；覆寫時正確更新 |
+
+### E05 Integration Tests
+
+#### E05 API 端點整合測試
+
+| 端點 | 方法 | 相關 Feature | 驗證重點 |
+|------|------|-------------|---------|
+| `/api/v1/etl/pipelines/stats` | GET | F027 | 統計卡片五欄位數值一致性（total = active+running+draft+failed+disabled）；軟刪除排除；todayProcessed UTC+8 邊界 |
+| `/api/v1/etl/pipelines` | GET | F027 | 狀態篩選（5 種）；關鍵字搜尋（中英文大小寫不敏感）；分頁；軟刪除排除 |
+| `/api/v1/etl/pipelines` | POST | F028 | Pipeline 建立（含/不含排程）；同步建立 EtlPipelineVersion v1；名稱唯一性（排除軟刪除）；Cron 驗證 |
+| `/api/v1/etl/pipelines/:id/definition` | GET | F029 | 空定義還原；含節點與連線的定義還原；各欄位型態 |
+| `/api/v1/etl/pipelines/:id/definition` | PUT | F029 | 連線驗證矩陣（9 種組合）；step_count 同步更新；changeSummary 500/501 字元邊界；JSONB 完整性（Merge/Filter/Masking） |
+| `/api/v1/extraction-tasks/raw-tables` | GET | F029 | 可用 raw data 表清單；空清單（無已完成任務） |
+| `/api/v1/etl/pipelines/:id/execute` | POST | F030 | 202+logId；triggered_by=manual；Pipeline.status→running；重複觸發 409；無 definition 422 |
+| `/api/v1/etl/pipelines/:id/test` | POST | F030 | is_test_run=true；triggered_by=test；版本 draft→testing（成功後）；processed_count 不累加 |
+| `/api/v1/etl/pipelines/:id/progress` | GET | F030 | 執行中完整欄位（processedCount/totalCount/progressPercent/currentNode） |
+| `/api/v1/etl/pipelines/:id/toggle` | PATCH | F031 | active→disabled（removeJob 驗證）；disabled→active（addJob 驗證）；PIPELINE_DRAFT_CANNOT_ENABLE；無排程時不呼叫 removeJob |
+| `/api/v1/etl/pipelines/:id/logs` | GET | F032 | 9 欄位完整性；startedAt 降序；測試執行標記；分頁；軟刪除後日誌仍可存取 |
+| `/api/v1/etl/logs/:logId` | GET | F032 | 12 頂層欄位 + nodeLogs 7 欄位；失敗節點 errorMessage；執行中 finishedAt=null |
+| `/api/v1/etl/pipelines/:id/versions` | GET | F033 | 降序；無 definition 欄位；三種狀態混合 |
+| `/api/v1/etl/pipelines/:id/versions/:versionId` | GET | F033 | 含完整 definition JSONB；深度比對完整性 |
+| `/api/v1/etl/pipelines/:id/versions/diff` | GET | F033 | nodesAdded/nodesRemoved/nodesModified/edgesAdded/edgesRemoved 各獨立場景；from=to 全空差異邊界；路由優先順序（"diff" 不被誤解為 versionId） |
+| `/api/v1/etl/pipelines/:id/versions/:versionId/rollback` | POST | F033 | 新版本號遞增；status=draft；definition 深度複製；原始版本不修改 |
+| `/api/v1/etl/pipelines/:id/versions/:versionId/publish` | PATCH | F033 | testing→published；EtlPipeline.version 同步更新；舊 published 版本不改變；PIPELINE_PUBLISH_REQUIRES_TEST（draft 版本或無成功測試執行） |
+| `/api/v1/etl/pipelines/:id` | DELETE | F034 | 軟刪除（deleted_at IS NOT NULL）；running 不可刪除（409）；日誌保留；名稱唯一性釋放 |
+| `/api/v1/etl/dashboard/stats` | GET | F035 | 五欄位數值；UTC+8 今日邊界；is_test_run 排除；successRate 精度 |
+| `/api/v1/etl/dashboard/trend` | GET | F035 | 7d/14d/30d 資料點數量；is_test_run 排除；range 白名單（422） |
+| `/api/v1/etl/dashboard/running` | GET | F035 | progressPercent 計算；totalCount=0 邊界；Polling fake timer |
+| `/api/v1/etl/dashboard/failures` | GET | F035 | 今日 UTC+8 失敗清單；is_test_run 排除；空陣列 |
+| `/api/v1/etl/dashboard/slowest` | GET | F035 | Top 5 嚴格降序；is_test_run 排除；最多 5 筆 |
+| `/api/v1/etl/target-tables` | GET | F036 | 4 個目標表；columnCount 正確；domain 欄位值 |
+| `/api/v1/etl/target-tables/:tableName/schema` | GET | F036 | columns 陣列長度；isPrimaryKey/isEtlTracking 標示；追蹤欄位 nullable |
+
+#### E05 排程引擎整合測試
+
+| 測試目標 | 驗證方式 |
+|---------|---------|
+| 排程觸發使用最新 published 版本（非舊版） | `scanAndExecute(fakeNow)` + 驗證 EtlPipelineLog.version = max(published version) |
+| draft Pipeline 不被排程觸發 | `scanAndExecute(fakeNow=觸發時間)` + 驗證無新 EtlPipelineLog |
+| running Pipeline 被排程跳過 | `scanAndExecute(fakeNow=觸發時間)` + 驗證不新增 EtlPipelineLog |
+| 停用時排程引擎移除任務（removeJob） | spy 排程引擎 removeJob；PATCH /toggle enabled=false |
+| 啟用時排程引擎重新註冊任務（addJob） | spy 排程引擎 addJob；PATCH /toggle enabled=true |
+| 無排程 Pipeline 停用時不呼叫 removeJob | spy 確認 removeJob 未被呼叫 |
+
+> **Injectable Time 模式**：F030 / F033 排程測試與 F023（E04）採相同 `scanAndExecute(fakeNow: Date)` 模式，不依賴真實計時器。
+>
+> **Polling Helper**：`waitForPipelineStatus(logId, expectedStatus, timeoutMs=10000)` 間隔 300ms polling EtlPipelineLog.status，達到預期狀態後繼續，超時拋出錯誤。
+
+#### E05 版本狀態流轉整合測試
+
+| 狀態流轉 | 觸發操作 | 驗證要點 |
+|---------|---------|---------|
+| draft → testing | 測試執行成功（POST /test + waitForPipelineStatus completed） | EtlPipelineVersion.status = "testing" |
+| testing → published | PATCH /publish | EtlPipelineVersion.status = "published"；EtlPipeline.version 更新 |
+| active → running → active | 手動執行成功 | EtlPipeline.status 執行中=running，完成後=active |
+| draft → running → draft | 測試執行成功 | EtlPipeline.status 完成後回歸 draft（非 active） |
+| running → failed | 執行失敗（stub 節點拋出錯誤） | EtlPipeline.status=failed；EtlPipelineLog.error_message 非空 |
+| active → disabled | PATCH /toggle enabled=false | EtlPipeline.status=disabled、enabled=false |
+| disabled → active | PATCH /toggle enabled=true（需有 published 版本） | EtlPipeline.status=active、enabled=true |
+| failed → disabled | PATCH /toggle enabled=false | EtlPipeline.status=disabled |
+
+### E05 System / E2E Tests
+
+| 流程 | 涵蓋 Feature | 關鍵驗證點 |
+|------|-------------|-----------|
+| 建立 Pipeline → 編輯定義 → 測試執行 → 發布 → 排程觸發 | F028, F029, F030, F033 | 完整 Pipeline 生命週期；版本狀態流轉（draft→testing→published） |
+| Pipeline 列表篩選與搜尋 | F027 | 狀態篩選；關鍵字搜尋；分頁；統計卡片一致性 |
+| 未儲存變更離開確認對話框 | F029 | dirty flag 追蹤；確認/取消對話框 |
+| 非法連線嘗試的視覺提示 | F029 | 紅色提示訊息；連線未建立 |
+| 停用/啟用 Pipeline 列表即時更新 | F031 | Badge 即時更新；按鈕切換；running/draft 按鈕 disabled |
+| 刪除 Pipeline 確認對話框 | F034 | 對話框內容；取消不刪除；running 按鈕停用 |
+| Pipeline 監控儀表板 Polling 更新 | F035 | fake timer 5 秒觸發；進度條更新 |
+| ETL 追蹤欄位自動填充 | F036 | Load 執行後 _etl_loaded_at / _etl_pipeline_id / data_source 非 null |
+
+### E05 Non-Functional Tests
+
+#### 效能閾值
+
+| 測試項目 | 閾值 | 資料量 | 驗證方法 |
+|---------|------|-------|---------|
+| Pipeline 列表 API（GET /pipelines） | P95 < 500ms | 1,000 筆 Pipeline | 負載測試工具 |
+| Pipeline 統計 API（GET /pipelines/stats） | P95 < 500ms | 1,000 筆 Pipeline + 30 天日誌 | 負載測試工具 |
+| Pipeline 監控儀表板（全部 5 個端點） | < 2 秒（含前端渲染） | 50 個 Pipeline | 瀏覽器效能工具 |
+| 排程掃描執行（scanAndExecute） | < 5 秒 | 100 個 active Pipeline | 計時驗證 |
+| 版本 Diff 計算 | P95 < 1 秒 | definition 含 50 個節點 | API 回應時間量測 |
+
+> **注意**：以上閾值來自規格（F035 BR-7：儀表板 < 2 秒；50 個 Pipeline 基準）。Pipeline 列表與排程掃描的精確閾值需向架構師確認後補充至 risks-and-gaps.md（E05-RISK-006）。
+
+#### 安全性測試
+
+| 測試項目 | 驗證方式 |
+|---------|---------|
+| E05 全端點 RBAC（User 403） | User Token 逐一測試 F027–F036 所有受保護端點 |
+| Pipeline definition JSONB 注入 | PUT /definition 傳入含 `$where` / prototype pollution 攻擊向量，驗證 JSONB 儲存後無執行 |
+| 排程引擎表達式安全 | POST /pipelines 傳入含 Shell Injection 的 cron 字串（如 `; rm -rf /`），驗證 cron-parser 拒絕而非執行 |
 
 ---
 

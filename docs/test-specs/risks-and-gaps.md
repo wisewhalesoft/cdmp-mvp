@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-03-18
+last_updated: 2026-03-20
 ---
 
 # 風險與缺口
@@ -402,6 +402,99 @@ last_updated: 2026-03-18
 
 ---
 
+## E05 ETL Pipeline 管理模組風險（F027–F036）
+
+> 以下 8 項風險來自 2026-03-20 的 E05 測試設計過程，整合各 Feature test spec 中 Risks and Notes 提出的問題。
+
+### E05-RISK-001：F029 視覺化編輯器 13 種 Transform 節點測試範圍
+
+- **來源**：F029 AC-7（Transform 節點 JSONB 儲存與還原）
+- **問題**：規格定義 13 種 Transform 節點（FieldMapping、Merge、Filter、Masking、Format、Conditional、NullHandler、TypeCast、Deduplicate、Lookup、String、Aggregate、DerivedColumn），若每種均設計獨立的 JSONB 結構驗證場景，將產生大量重複且維護成本高的測試。目前採用「採樣策略」選取 Merge、Filter、Masking 三種代表性節點進行驗證，其餘 10 種僅依規格文件確認結構。
+- **影響**：10 種未採樣節點的 JSONB 結構若與規格定義不符（例如欄位拼錯、缺少必要欄位），可能在實作層未被測試發現
+- **建議**：①維持採樣策略，要求開發者在 code review 時比對規格；②若日後規格有變動，需將受影響節點加入採樣測試集
+- **風險等級**：低（採樣策略已有效降低風險，規格文件為主要保障）
+
+### E05-RISK-002：F029 循環連線定義不明確
+
+- **來源**：F029 AC-4 / BR-5（禁止逆向循環連線）
+- **問題**：規格描述「禁止逆向循環連線」，但未精確定義「循環」的偵測範圍：
+  - 直接循環（A→B, B→A）：規格有 TS-F029-013 明確覆蓋
+  - 間接循環（A→B, B→C, C→A）：規格未提及，後端連線驗證邏輯是否包含間接循環未定義
+- **影響**：若後端僅驗證直接循環（相鄰節點）而非完整 DAG 拓撲，間接循環可能被接受，導致 ETL 執行時進入無限迴圈
+- **建議**：向 Architecture 確認連線驗證演算法是否支援完整 DAG 拓撲分析（非僅相鄰節點比對）；若是，補充間接循環場景（如 3 個節點相互連線）至 F029 測試設計
+- **風險等級**：中（影響執行時穩定性）
+
+### E05-RISK-003：F030 processed_count 更新粒度與 execution_count 的排除範圍
+
+- **來源**：F030 BR-7（測試執行不計入 processed_count）
+- **問題**：規格明確說明 `is_test_run=true` 的日誌不計入 `EtlPipeline.processed_count`，但未說明：
+  - `EtlPipeline.execution_count` 是否也排除測試執行？（规格無此欄位定義）
+  - `processed_count` 是在每個節點執行後累加，還是在 Load 節點完成後才更新？
+  - 若 Pipeline 執行失敗，已處理的記錄數是否計入 `processed_count`？
+- **影響**：TS-F030-008 僅驗證「processed_count 不增加」，但若 execution_count 行為不同，可能漏測
+- **建議**：向 Product 確認 execution_count 是否排除測試執行；向 Architecture 確認 processed_count 的更新時機（建議：僅在 status=completed 時更新，失敗不更新）
+- **風險等級**：低（功能上不影響核心邏輯，但可能導致統計數字不一致）
+
+### E05-RISK-004：F031 排程引擎同步可測性（Scheduler Engine Testability）
+
+- **來源**：F031 AC-1/AC-2（停用/啟用時排程引擎行為）
+- **問題**：F031 規格要求停用時移除排程任務（removeJob）、啟用時重新註冊（addJob/registerJob），但排程引擎（如 Bull、node-cron、NestJS Schedule）不一定支援測試注入（spy/mock）。若排程引擎是全域單例或無法在測試環境替換，TS-F031-002 / TS-F031-004 / TS-F031-006 將無法自動化驗證。
+- **影響**：相關場景可能只能驗證 DB 狀態（enabled/status 欄位），無法驗證排程引擎是否實際被呼叫
+- **建議**：Architecture 在設計 Pipeline 啟用/停用服務時，將排程引擎依賴設計為可注入的 interface（Dependency Injection）；若無法注入，TS-F031-002/004/006 退為手動整合測試，並補充至 risks-and-gaps.md
+- **風險等級**：中（影響 3 個測試場景的自動化可行性）
+
+### E05-RISK-005：F033 Diff API 路由優先順序衝突
+
+- **來源**：F033 AC-3（Diff 比對）
+- **問題**：`GET /api/v1/etl/pipelines/:id/versions/diff` 與 `GET /api/v1/etl/pipelines/:id/versions/:versionId` 使用相同的路由前綴。若路由器按定義順序匹配，`"diff"` 字串可能被解析為 versionId（UUID），導致路由到錯誤的 handler，回傳 `PIPELINE_VERSION_NOT_FOUND`（404）而非 Diff 結果。
+- **影響**：若路由優先順序錯誤，F033 Diff 端點（TS-F033-006 ~ TS-F033-010）全部失敗，且錯誤訊息為「版本不存在」而非路由問題，難以排查
+- **建議**：① 靜態路由（`/diff`）必須在動態路由（`/:versionId`）之前定義；② 實作層驗證路由順序，加入測試備注；③ 若使用 NestJS，Controller 中確保 `@Get('diff')` 裝飾器優先於 `@Get(':versionId')`
+- **風險等級**：中（實作層問題，需在 code review 中確認，但測試本身能夠揭露此問題）
+
+### E05-RISK-006：E05 效能閾值未在 NFR 規格中明確定義
+
+- **來源**：test-levels.md E05 NFR Tests（效能閾值）
+- **問題**：F035 BR-7 定義「儀表板需在 2 秒內完成載入（50 個 Pipeline 基準）」，但其他 E05 效能需求未在 NFR 規格中明確定義：
+  - Pipeline 列表 API（GET /pipelines）的 P95 閾值
+  - 排程掃描（scanAndExecute）的執行時間上限
+  - 版本 Diff 計算的回應時間上限
+  - 大量版本（如 100 個版本）的版本清單查詢效能
+- **影響**：無法設計可量測的 NFR 測試場景；test-levels.md 中的效能閾值（列表 P95 < 500ms、排程掃描 < 5 秒）為假設值，非規格定義
+- **建議**：請 Architecture / Product 補充 E05 效能需求至 nfr.md；測試設計將依補充後的規格修訂
+- **風險等級**：中（NFR 閾值缺失導致效能測試無法量化驗收）
+
+### E05-RISK-007：F036 目標表 ETL 追蹤欄位自動填充的環境依賴
+
+- **來源**：F036 AC-5（ETL 追蹤欄位自動填充）
+- **問題**：TS-F036-018 / TS-F036-019 為跨模組 E2E 級測試，需要：
+  ① Pipeline 已有合法的已發布版本（含 Load 節點，目標表為 customer_core）
+  ② 完整的 ETL 執行環境（外部來源 DB + AppDB + Pipeline 執行引擎）
+  ③ 目標表（customer_core）已由 migration 建立
+  若任一條件不滿足，這兩個場景無法自動化執行。另外，`data_source` 欄位 nullable=true（AC-5 說「由系統自動填充」），但若 Datasource 名稱未設定，填充值可能為 null，與規格描述矛盾。
+- **影響**：TS-F036-018/019 可能只能在完整整合環境中手動執行；`data_source` 欄位的行為需向 Arch 確認
+- **建議**：① 先以 Unit Test 驗證 Load 節點注入追蹤欄位的邏輯；再以整合測試驗證完整 Pipeline 執行；② 向 Arch 確認：Datasource.name 為 null 時，data_source 填充 null 還是空字串？
+- **風險等級**：中（影響 2 個跨模組場景的可測性）
+
+### E05-RISK-008：F032 / F031 待確認的規格缺口
+
+- **來源**：F032 Risks and Notes；F031 Risks and Notes
+- **問題**：以下兩項規格缺口需向 Architecture 確認後才能完成測試場景設計：
+
+  **F032：**
+  1. `GET /api/v1/etl/pipelines/:id/logs` 在 Pipeline 已軟刪除時，BR-5 說日誌保留（應回 200），但錯誤碼表定義「不存在或已刪除」回傳 404。規格矛盾，目前 TS-F032-015 以 BR-5 精神（200）為假設，若確認為 404 則需修正
+  2. `GET /api/v1/etl/logs/:logId` 的 404 錯誤碼未定義：應為 PIPELINE_LOG_NOT_FOUND（新增）還是複用 PIPELINE_NOT_FOUND？目前 TS-F032-018 預期結果留空待確認
+  3. `nodeLogs` 陣列排列順序：依 definition 節點順序，還是依實際執行起始時間？目前 TS-F032-006 假設按執行順序，若不同需調整
+
+  **F031：**
+  1. 規格未定義 `running` 狀態 Pipeline 的後端 toggle 防護（前端按鈕停用，但後端是否也拒絕？）
+  2. `draft → disabled`（對 draft Pipeline 送出 enabled=false）是否允許？規格未明確
+
+- **影響**：F032 TS-F032-015、TS-F032-018 的預期結果不完整；F031 可能缺少 1~2 個後端防護場景
+- **建議**：向 Architecture 確認上述 5 個問題，更新對應測試場景的預期結果
+- **風險等級**：中（規格缺口直接影響 5 個測試場景的正確性）
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
@@ -410,3 +503,4 @@ last_updated: 2026-03-18
 | 2026-03-18 | 新增 E04 資料擷取模組 6 項風險（E04-RISK-001 至 E04-RISK-006），均已獲核准解決方案 | Test Designer Agent |
 | 2026-03-18 | 新增 raw data 落地需求 6 項風險（RAW-RISK-001 至 RAW-RISK-006）；RAW-RISK-004/005/006 為高風險，需於實作前確認 | Test Designer Agent |
 | 2026-03-18 | 新增連鎖下拉選單需求 4 項風險（SCHEMA-RISK-001 至 SCHEMA-RISK-004）；SCHEMA-RISK-001/002 為中風險，001 影響 CI 穩定性，002 影響前端顯示設計 | Test Designer Agent |
+| 2026-03-20 | 新增 E05 ETL Pipeline 管理模組 8 項風險（E05-RISK-001 至 E05-RISK-008）；整合自 F027~F036 各 test spec 的 Risks and Notes | Test Designer Agent |

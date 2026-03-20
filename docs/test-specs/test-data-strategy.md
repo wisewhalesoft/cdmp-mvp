@@ -1,6 +1,6 @@
 ---
 type: test-design-data
-last_updated: 2026-03-18
+last_updated: 2026-03-20
 ---
 
 # 測試資料策略
@@ -488,3 +488,155 @@ rawTableName 由系統根據 `task_id`（UUID）的前 8 碼（hex 字元）自�
 **前端行為要求（BR-11、BR-12）：**
 - 連線失敗時下拉停用，不提供手動輸入 fallback
 - 每次開啟表單均即時查詢（不使用快取）
+
+---
+
+## 10. E05 ETL Pipeline 管理模組測試資料策略（F027–F036）
+
+> 本章節定義 E05 模組所需的種子資料、狀態工廠、邊界值與時區處理策略。
+
+### 10.1 Pipeline 狀態種子資料
+
+以下種子資料供 E05 測試套件共用，依 Feature 需要選取適當資料集。
+
+#### EtlPipeline 種子資料
+
+| 資料代號 | status | enabled | schedule | deleted_at | 對應 EtlPipelineVersion | 用途 |
+|---------|--------|---------|----------|------------|----------------------|------|
+| PL_DRAFT | draft | false | null | null | v1（status=draft） | 測試執行、無排程場景、草稿不可啟用 |
+| PL_ACTIVE | active | true | `0 2 * * *` | null | v1（status=published） | 手動執行、停用/啟用、列表場景 |
+| PL_ACTIVE_NO_SCHEDULE | active | true | null | null | v1（status=published） | 停用時不呼叫 removeJob |
+| PL_RUNNING | running | true | `0 3 * * *` | null | v1（status=published）+ 1 筆 status=running 的 EtlPipelineLog | 重複觸發 409、排程跳過 |
+| PL_FAILED | failed | true | null | null | v1（status=published） | 重新執行（triggered_by=retry）、停用 failed |
+| PL_DISABLED | disabled | false | `0 4 * * *` | null | v1（status=published） | 啟用場景 |
+| PL_WITH_VERSIONS | active | true | `0 2 * * *` | null | v1（published）、v2（published）、v3（draft） | F033 版本管理、排程最新版本 |
+| PL_WITH_LOGS | active | true | null | null | v1（published）+ 3 筆 EtlPipelineLog | F032 日誌查詢 |
+| PL_SOFT_DELETED | — | — | — | UTC 時間戳記（非 null） | v1（draft）+ 2 筆 EtlPipelineLog | 軟刪除排除、日誌保留驗證 |
+| PL_SCHEDULED | active | true | `0 2 * * *` | null | v1（published）、v2（published，較新） | F030/F033 排程觸發最新版本 |
+
+**建立者規則：** 所有種子 EtlPipeline 的 `created_by` 均為 ADMIN_ACTIVE.id。
+
+**日期欄位型別：** 所有 `timestamp` 欄位使用 PostgreSQL `timestamp` 型別（不可使用 `datetime`）。
+
+#### EtlPipelineVersion 種子資料
+
+| 資料代號 | pipeline_id | version | status | definition | change_summary | 用途 |
+|---------|-------------|---------|--------|-----------|---------------|------|
+| PV_DRAFT | PL_DRAFT.id | 1 | draft | `{"nodes":[],"edges":[]}` | null | 初始狀態 |
+| PV_TESTING | PL_DRAFT.id（另一組）| 1 | testing | 含 1 個節點的 definition | "初次設定" | 發布前置條件驗證 |
+| PV_PUBLISHED | PL_ACTIVE.id | 1 | published | 含 3 個節點、2 條連線的 definition | "發布版本 1" | 標準正向場景 |
+| PV_ROLLBACK_SOURCE | PL_WITH_VERSIONS.id | 1 | published | SEED_DEFINITION_V1（已知結構） | "初版" | F033 回滾來源 |
+| PV_DIFF_V1 | PL_WITH_VERSIONS.id | 1 | published | SEED_DEFINITION_V1 | "v1" | F033 Diff 比對基準 |
+| PV_DIFF_V2 | PL_WITH_VERSIONS.id | 2 | published | SEED_DEFINITION_V2（含明確差異） | "v2" | F033 Diff 比對目標 |
+
+**SEED_DEFINITION_V1 / V2 格式** 請參閱 F033-test.md「Test Data Requirements」章節。
+
+#### EtlPipelineLog 種子資料
+
+| 資料代號 | pipeline_id | version | status | triggered_by | is_test_run | started_at | finished_at | 用途 |
+|---------|-------------|---------|--------|-------------|------------|-----------|------------|------|
+| LOG_MANUAL_COMPLETED | PL_ACTIVE.id | 1 | completed | manual | false | 今日 UTC+8 10:00（`todayInTaipei()`） | 今日 UTC+8 10:05 | 今日成功統計、手動觸發 |
+| LOG_SCHEDULE_COMPLETED | PL_ACTIVE.id | 1 | completed | schedule | false | 今日 UTC+8 02:00（`todayInTaipei()`） | 今日 UTC+8 02:03 | 排程觸發驗證 |
+| LOG_TEST_RUN | PL_DRAFT.id | 1 | completed | test | true | 今日 UTC+8 09:00 | 今日 UTC+8 09:02 | is_test_run 隔離；版本 draft→testing |
+| LOG_FAILED_TODAY | PL_FAILED.id | 1 | failed | manual | false | 今日 UTC+8 08:00 | 今日 UTC+8 08:01 | 今日失敗統計；errorMessage 非空 |
+| LOG_RUNNING_NOW | PL_RUNNING.id | 1 | running | manual | false | 今日 UTC+8 當前時間 | null | 執行中狀態；finishedAt=null |
+| LOG_YESTERDAY | PL_ACTIVE.id | 1 | completed | schedule | false | 昨日 UTC+8 02:00（`todayInTaipei() - 1 day`） | 昨日 UTC+8 02:04 | 確認昨日紀錄不計入今日統計 |
+
+**時區處理**：`started_at` / `finished_at` 使用 `todayInTaipei()` 工廠函式產生，確保相對於當前台北時間。CI 環境設定 `TZ=Asia/Taipei`。
+
+### 10.2 版本狀態流轉測試資料
+
+| 狀態流轉目標 | 前置 EtlPipeline 狀態 | 前置 EtlPipelineVersion 狀態 | 前置 EtlPipelineLog | 操作 |
+|------------|---------------------|---------------------------|------------------|------|
+| draft → testing | draft | draft | 無 | POST /test + waitForPipelineStatus completed |
+| testing → published | draft（有 testing 版本） | testing | is_test_run=true, status=completed | PATCH /versions/:id/publish |
+| published → 排程可觸發 | active | published | — | scanAndExecute(fakeNow=觸發時間) |
+| active → disabled | active | published | — | PATCH /toggle enabled=false |
+| disabled → active | disabled | published | — | PATCH /toggle enabled=true |
+
+### 10.3 今日統計時區邊界種子資料（E05）
+
+與 E04（F018/F024）使用相同的 `todayInTaipei()` 工廠函式模式。
+
+| 場景 | started_at 設定 | 說明 |
+|------|---------------|------|
+| 今日 UTC+8 統計（應計入） | `todayInTaipei() + 1 秒`（UTC+8 今日 00:00:01） | 確認計入今日 |
+| 昨日 UTC+8 統計（不應計入） | `todayInTaipei() - 1 秒`（UTC+8 昨日 23:59:59） | 確認不計入今日 |
+| 午夜跨日邊界 | UTC+8 00:00 前後各一筆（= UTC 前一日 16:00 前後） | 確認以台北時區切日，而非 UTC |
+
+**工廠函式定義：** `todayInTaipei()` 回傳以 UTC+8 當日 00:00:00 為起點的 Date 物件。
+
+### 10.4 邊界值（E05 特有欄位）
+
+| 欄位 | 測試值 | 預期結果 | 適用 Feature |
+|------|--------|---------|-------------|
+| Pipeline name | `""` | 驗證失敗 — 必填 | F028 |
+| Pipeline name | `"A".repeat(255)` | 驗證通過 — 最大長度 | F028 |
+| Pipeline name | `"A".repeat(256)` | 驗證失敗 — 超出上限 | F028 |
+| schedule（Cron） | `"0 2 * * *"` | 驗證通過 — 5 欄位標準 cron | F028 |
+| schedule（Cron） | `"0 0 2 * * *"` | 驗證通過 — 6 欄位擴充 cron | F028 |
+| schedule（Cron） | `"2 * * *"` | 驗證失敗 — 4 欄位，不足 | F028 |
+| schedule（Cron） | `"99 99 99 99 99"` | 驗證失敗 — 所有欄位超出範圍 | F028 |
+| changeSummary | `"A".repeat(500)` | 驗證通過 — 最大長度 | F029 |
+| changeSummary | `"A".repeat(501)` | 驗證失敗 — 超出 500 字元上限（VALIDATION_ERROR） | F029 |
+| version 號遞增 | 回滾時 max(version)+1 | 正確遞增（非依 created_at） | F033 |
+| successRate | todaySuccess=3, todayFailed=1 | successRate=75.0（一位小數） | F035 |
+| successRate | todaySuccess=8, todayFailed=1 | successRate=88.9（四捨五入） | F035 |
+| successRate（分母為零） | todaySuccess=0, todayFailed=0 | successRate=0.0（不除以零） | F035 |
+| progressPercent（分母為零） | totalCount=0 | progressPercent=0.0（不除以零） | F035 |
+| F035 trend range | `"7d"` / `"14d"` / `"30d"` | 驗證通過 | F035 |
+| F035 trend range | `"60d"` | 驗證失敗 — HTTP 422，VALIDATION_ERROR | F035 |
+| columnCount（customer_core） | 16 | 固定值，由 migration 定義 | F036 |
+| columnCount（customer_interaction） | 14 | 固定值，由 migration 定義 | F036 |
+| columnCount（customer_financial） | 20 | 固定值，由 migration 定義 | F036 |
+| columnCount（customer_service） | 17 | 固定值，由 migration 定義 | F036 |
+
+### 10.5 Pipeline 執行排程測試時間點
+
+| 場景 | fakeNow（UTC） | 說明 |
+|------|-------------|------|
+| 排程觸發（cron `0 2 * * *`） | `2026-01-01T02:00:00Z` | 符合觸發時間 |
+| 排程不觸發（cron `0 2 * * *`） | `2026-01-01T03:00:00Z` | 不符合，不應觸發 |
+| 排程觸發時 running Pipeline 跳過 | `2026-01-01T02:00:00Z` | 同觸發時間，驗證 running 被跳過 |
+| 排程觸發時 draft Pipeline 跳過 | `2026-01-01T02:00:00Z` | 同觸發時間，驗證 draft 不觸發 |
+
+### 10.6 E05 Mock 策略
+
+| Mock 對象 | 模擬行為 | 適用場景 |
+|----------|---------|---------|
+| `scanAndExecute(fakeNow)` | injectable time 參數，直接呼叫排程掃描邏輯 | F030/F033 排程觸發、跳過、版本選取 |
+| `waitForPipelineStatus(logId, status, 10000)` | 300ms interval polling EtlPipelineLog.status | F030/F033 非同步執行結果驗證 |
+| 排程引擎 spy（removeJob / addJob） | spy 驗證方法被呼叫，及傳入的 pipelineId 與 schedule 參數 | F031 停用/啟用時排程引擎行為 |
+| DB 查詢 stub（SYSTEM_INTERNAL_ERROR） | stub DB 使查詢拋出例外 | F027/F035 伺服器錯誤降級 |
+| fake timer（sinon / jest fake timers） | 控制 5 秒 Polling 間隔 | F035 TS-F035-021 Polling 測試 |
+| ETL 執行節點 stub（執行失敗） | stub 指定節點拋出 Error | F030 TS-F030-015 執行失敗狀態測試 |
+
+### 10.7 目標表 Schema 測試資料（F036）
+
+F036 測試依賴 Migration 預先建立的靜態 Schema，無需動態建立。測試前置條件：
+
+```
+migration 已執行完成（不需手動插入資料）
+```
+
+各表欄位完整清單請參閱 F036-test.md「測試資料規格」章節。
+
+**DB 驗證查詢（確認 migration 已執行）：**
+
+```sql
+-- 確認 4 個目標表均存在
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name IN ('customer_core','customer_interaction','customer_financial','customer_service')
+ORDER BY table_name;
+-- 期望：4 筆結果
+
+-- 確認追蹤欄位存在（以 customer_core 為例）
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'customer_core'
+  AND column_name IN ('data_source','_etl_loaded_at','_etl_pipeline_id')
+ORDER BY column_name;
+-- 期望：3 筆結果
+```
