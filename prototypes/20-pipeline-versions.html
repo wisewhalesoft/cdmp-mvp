@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pipeline 版本管理 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2 text-sm">
+      <a href="17-pipeline-management.html" class="text-gray-400 hover:text-primary"><i data-lucide="arrow-left" class="w-4 h-4"></i></a>
+      <nav class="flex items-center text-gray-500">
+        <a href="17-pipeline-management.html" class="hover:text-primary">Pipeline 清單</a>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-gray-800 font-medium">客戶資料同步</span>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-primary font-medium">版本管理</span>
+      </nav>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14 p-6">
+
+    <!-- Demo Buttons -->
+    <div class="mb-4 flex gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 self-center mr-1">Demo:</span>
+      <button onclick="showVersionDemo('multi')" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">多版本</button>
+      <button onclick="showVersionDemo('single')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">單版本</button>
+      <button onclick="showVersionDemo('diff')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Diff 視圖</button>
+      <button onclick="showVersionDemo('rollback')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">回滾確認</button>
+      <button onclick="showVersionDemo('publish')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">發布確認</button>
+    </div>
+
+    <!-- Pipeline Summary Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-border p-5 mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800">客戶資料同步</h2>
+          <p class="text-sm text-gray-500 mt-0.5">目前版本：v3</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="text-center">
+            <p class="text-xs text-gray-500">Pipeline 狀態</p>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 mt-1">active</span>
+          </div>
+          <a href="18-pipeline-editor.html" class="px-3 py-1.5 text-sm border border-border rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
+            <i data-lucide="pencil" class="w-4 h-4"></i>編輯器
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Version List Table -->
+    <div id="version-list" class="bg-white rounded-lg shadow-sm border border-border overflow-hidden mb-6">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-border">
+          <tr>
+            <th class="text-left px-4 py-3 font-medium text-gray-500">版號</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-500">建立時間</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-500">變更摘要</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-500">狀態</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-500">建立者</th>
+            <th class="text-right px-4 py-3 font-medium text-gray-500">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-border hover:bg-gray-50 transition">
+            <td class="px-4 py-3 font-medium">v4</td>
+            <td class="px-4 py-3 text-gray-500">2026-03-20 10:30</td>
+            <td class="px-4 py-3 text-gray-600">新增加密脫敏節點處理身分證號</td>
+            <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">draft</span></td>
+            <td class="px-4 py-3 text-gray-500">王小明</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="showDiff()" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="Diff 比對"><i data-lucide="diff" class="w-4 h-4"></i></button>
+                <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled title="請先完成測試執行">
+                  <i data-lucide="rocket" class="w-4 h-4"></i>
+                  <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">請先完成測試執行</span>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr class="border-b border-border hover:bg-gray-50 transition" id="testing-row">
+            <td class="px-4 py-3 font-medium">v3</td>
+            <td class="px-4 py-3 text-gray-500">2026-03-19 14:00</td>
+            <td class="px-4 py-3 text-gray-600">調整 NULL 處理策略為 default_value</td>
+            <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">testing</span></td>
+            <td class="px-4 py-3 text-gray-500">王小明</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="showDiff()" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="Diff 比對"><i data-lucide="diff" class="w-4 h-4"></i></button>
+                <button onclick="openPublishDialog()" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-success" title="發布"><i data-lucide="rocket" class="w-4 h-4"></i></button>
+              </div>
+            </td>
+          </tr>
+          <tr class="border-b border-border hover:bg-gray-50 transition">
+            <td class="px-4 py-3 font-medium">v2</td>
+            <td class="px-4 py-3 text-gray-500">2026-03-15 09:00</td>
+            <td class="px-4 py-3 text-gray-600">新增格式轉換與型別轉換節點</td>
+            <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">published</span></td>
+            <td class="px-4 py-3 text-gray-500">王小明</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="showDiff()" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="Diff 比對"><i data-lucide="diff" class="w-4 h-4"></i></button>
+                <button onclick="openRollbackDialog(2)" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="回滾至此版本"><i data-lucide="history" class="w-4 h-4"></i></button>
+              </div>
+            </td>
+          </tr>
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-4 py-3 font-medium">v1</td>
+            <td class="px-4 py-3 text-gray-500">2026-03-10 16:00</td>
+            <td class="px-4 py-3 text-gray-600">初始版本：Extract + Load</td>
+            <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">published</span></td>
+            <td class="px-4 py-3 text-gray-500">王小明</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-1">
+                <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="最舊版本，無法比對"><i data-lucide="diff" class="w-4 h-4"></i></button>
+                <button onclick="openRollbackDialog(1)" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="回滾至此版本"><i data-lucide="history" class="w-4 h-4"></i></button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Diff View -->
+    <div id="diff-view" class="hidden bg-white rounded-lg shadow-sm border border-border overflow-hidden mb-6">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-gray-50">
+        <h3 class="text-sm font-semibold text-gray-800">版本比對</h3>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 text-sm">
+            <label class="text-gray-500">從</label>
+            <select class="text-sm border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/20">
+              <option>v2</option>
+              <option>v1</option>
+            </select>
+            <label class="text-gray-500">到</label>
+            <select class="text-sm border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/20">
+              <option>v3</option>
+              <option>v4</option>
+            </select>
+          </div>
+          <button onclick="hideDiff()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+
+      <!-- Side-by-side diff -->
+      <div class="grid grid-cols-2 divide-x divide-border">
+        <!-- Left: v2 -->
+        <div>
+          <div class="px-4 py-2 bg-gray-50 border-b border-border text-xs font-semibold text-gray-500">版本 v2</div>
+          <div class="divide-y divide-border text-sm">
+            <div class="px-4 py-2.5 flex items-center gap-2">
+              <i data-lucide="database" class="w-4 h-4 text-blue-500"></i>
+              <span class="text-gray-700">Raw Data 擷取</span>
+              <span class="text-xs text-gray-400 ml-auto">Extract</span>
+            </div>
+            <div class="px-4 py-2.5 flex items-center gap-2 bg-amber-50 border-l-4 border-l-amber-400">
+              <i data-lucide="circle-slash" class="w-4 h-4 text-amber-500"></i>
+              <span class="text-gray-700">NULL 處理</span>
+              <span class="text-xs text-amber-600 ml-auto">strategy: <del class="text-red-500">remove_row</del></span>
+            </div>
+            <div class="px-4 py-2.5 flex items-center gap-2">
+              <i data-lucide="upload" class="w-4 h-4 text-green-500"></i>
+              <span class="text-gray-700">目標表載入</span>
+              <span class="text-xs text-gray-400 ml-auto">Load</span>
+            </div>
+          </div>
+        </div>
+        <!-- Right: v3 -->
+        <div>
+          <div class="px-4 py-2 bg-gray-50 border-b border-border text-xs font-semibold text-gray-500">版本 v3</div>
+          <div class="divide-y divide-border text-sm">
+            <div class="px-4 py-2.5 flex items-center gap-2">
+              <i data-lucide="database" class="w-4 h-4 text-blue-500"></i>
+              <span class="text-gray-700">Raw Data 擷取</span>
+              <span class="text-xs text-gray-400 ml-auto">Extract</span>
+            </div>
+            <div class="px-4 py-2.5 flex items-center gap-2 bg-amber-50 border-l-4 border-l-amber-400">
+              <i data-lucide="circle-slash" class="w-4 h-4 text-amber-500"></i>
+              <span class="text-gray-700">NULL 處理</span>
+              <span class="text-xs text-amber-600 ml-auto">strategy: <ins class="text-green-600 no-underline font-medium">default_value</ins></span>
+            </div>
+            <div class="px-4 py-2.5 flex items-center gap-2 bg-green-50 border-l-4 border-l-green-400">
+              <i data-lucide="type" class="w-4 h-4 text-amber-500"></i>
+              <span class="text-green-700 font-medium">格式轉換</span>
+              <span class="text-xs text-green-600 ml-auto">新增</span>
+            </div>
+            <div class="px-4 py-2.5 flex items-center gap-2 bg-green-50 border-l-4 border-l-green-400">
+              <i data-lucide="repeat" class="w-4 h-4 text-amber-500"></i>
+              <span class="text-green-700 font-medium">型別轉換</span>
+              <span class="text-xs text-green-600 ml-auto">新增</span>
+            </div>
+            <div class="px-4 py-2.5 flex items-center gap-2">
+              <i data-lucide="upload" class="w-4 h-4 text-green-500"></i>
+              <span class="text-gray-700">目標表載入</span>
+              <span class="text-xs text-gray-400 ml-auto">Load</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diff Summary -->
+      <div class="px-4 py-3 border-t border-border bg-gray-50 flex items-center gap-6 text-xs">
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-400"></span>新增 2 個節點</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-400"></span>刪除 0 個節點</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-amber-400"></span>修改 1 個節點</span>
+        <span class="flex items-center gap-1 text-gray-400">新增 2 條連線</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Rollback Dialog -->
+  <div id="rollbackDialog" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeRollbackDialog()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-[440px]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+        <h2 class="text-lg font-semibold">確認回滾版本</h2>
+        <button onclick="closeRollbackDialog()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center flex-shrink-0">
+            <i data-lucide="history" class="w-5 h-5 text-warning"></i>
+          </div>
+          <div>
+            <p class="text-sm text-gray-700">將回滾至版本 <span id="rollbackVersion" class="font-semibold">v2</span>，系統將建立一個新的草稿版本。</p>
+            <p class="text-sm text-gray-500 mt-2">回滾不會修改現有版本，而是複製該版本的定義建立新版本。</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+        <button onclick="closeRollbackDialog()" class="px-4 py-2 text-sm text-gray-600 border border-border rounded-lg hover:bg-gray-50">取消</button>
+        <button onclick="closeRollbackDialog(); showToast('已回滾至 v2', '新版本 v5 (draft) 已建立')" class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-blue-700">確認回滾</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Publish Dialog -->
+  <div id="publishDialog" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closePublishDialog()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-[440px]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+        <h2 class="text-lg font-semibold">確認發布版本</h2>
+        <button onclick="closePublishDialog()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center flex-shrink-0">
+            <i data-lucide="rocket" class="w-5 h-5 text-success"></i>
+          </div>
+          <div>
+            <p class="text-sm text-gray-700">確定要發布版本 <span class="font-semibold">v3</span> 嗎？</p>
+            <p class="text-sm text-gray-500 mt-2">發布後此版本將成為排程執行的版本。Pipeline 狀態將可設為啟用。</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+        <button onclick="closePublishDialog()" class="px-4 py-2 text-sm text-gray-600 border border-border rounded-lg hover:bg-gray-50">取消</button>
+        <button onclick="closePublishDialog(); showToast('版本已發布', 'v3 已發布，Pipeline 現在可以啟用排程')" class="px-4 py-2 text-sm bg-success text-white rounded-lg hover:bg-green-600">確認發布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+    <div class="bg-white rounded-lg shadow-lg border border-border p-4 flex items-start gap-3 min-w-[320px] border-l-4 border-l-success">
+      <i data-lucide="check-circle" class="w-5 h-5 text-success flex-shrink-0 mt-0.5"></i>
+      <div>
+        <p class="text-sm font-medium text-gray-800" id="toastTitle"></p>
+        <p class="text-xs text-gray-500 mt-0.5" id="toastMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---- Demo ----
+    function showVersionDemo(state) {
+      document.querySelectorAll('.demo-btn').forEach(b => {
+        b.classList.remove('border-primary','bg-blue-50','text-primary');
+        b.classList.add('border-gray-300','bg-white');
+      });
+      event.target.classList.add('border-primary','bg-blue-50','text-primary');
+      event.target.classList.remove('border-gray-300','bg-white');
+
+      hideDiff();
+      closeRollbackDialog();
+      closePublishDialog();
+
+      switch(state) {
+        case 'multi': break;
+        case 'single': break;
+        case 'diff': showDiff(); break;
+        case 'rollback': openRollbackDialog(2); break;
+        case 'publish': openPublishDialog(); break;
+      }
+    }
+
+    // ---- Diff ----
+    function showDiff() {
+      document.getElementById('diff-view').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function hideDiff() {
+      document.getElementById('diff-view').classList.add('hidden');
+    }
+
+    // ---- Rollback Dialog ----
+    function openRollbackDialog(ver) {
+      document.getElementById('rollbackVersion').textContent = 'v' + ver;
+      document.getElementById('rollbackDialog').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeRollbackDialog() {
+      document.getElementById('rollbackDialog').classList.add('hidden');
+    }
+
+    // ---- Publish Dialog ----
+    function openPublishDialog() {
+      document.getElementById('publishDialog').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closePublishDialog() {
+      document.getElementById('publishDialog').classList.add('hidden');
+    }
+
+    // ---- Toast ----
+    function showToast(title, msg) {
+      document.getElementById('toastTitle').textContent = title;
+      document.getElementById('toastMsg').textContent = msg;
+      document.getElementById('toast').classList.remove('hidden');
+      lucide.createIcons();
+      setTimeout(() => document.getElementById('toast').classList.add('hidden'), 5000);
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', function() {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

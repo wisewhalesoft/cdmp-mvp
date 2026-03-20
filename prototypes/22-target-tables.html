@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>目標表定義 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    .etl-tracking { background-color: #F9FAFB; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2 text-sm">
+      <a href="17-pipeline-management.html" class="text-gray-400 hover:text-primary"><i data-lucide="arrow-left" class="w-4 h-4"></i></a>
+      <nav class="flex items-center text-gray-500">
+        <a href="17-pipeline-management.html" class="hover:text-primary">ETL Pipeline</a>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-primary font-medium">目標表定義</span>
+      </nav>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14 p-6">
+
+    <!-- Demo Buttons -->
+    <div class="mb-4 flex gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 self-center mr-1">Demo:</span>
+      <button onclick="showTableDemo('collapsed')" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">全部收合</button>
+      <button onclick="showTableDemo('core')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">展開 customer_core</button>
+      <button onclick="showTableDemo('financial')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">展開 customer_financial</button>
+    </div>
+
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-800">Domain-Oriented 目標表定義</h2>
+      <p class="text-sm text-gray-500 mt-1">系統預定義的 4 個 Domain Data Product 目標表，由 ETL Pipeline Load 節點寫入</p>
+    </div>
+
+    <!-- Target Table Cards -->
+    <div class="space-y-4">
+
+      <!-- customer_core -->
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden" id="card-core">
+        <button onclick="toggleTable('core')" class="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition">
+          <div class="flex items-center gap-4">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">core</span>
+            <div class="text-left">
+              <h3 class="text-base font-semibold text-gray-800">customer_core</h3>
+              <p class="text-sm text-gray-500">Customer Core（身分/主檔）- 客戶基本身分與主檔資料</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400">16 欄位</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform" id="chevron-core"></i>
+          </div>
+        </button>
+        <div id="table-core" class="hidden border-t border-border">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-border">
+              <tr>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/4">欄位名稱</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/6">型別</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-20">Nullable</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-16">PK</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500">說明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-border"><td class="px-4 py-2"><span class="text-danger">*</span> <code class="text-xs font-mono">customer_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2 text-center"><span class="text-danger font-bold">PK</span></td><td class="px-4 py-2 text-gray-600">客戶唯一識別碼</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">id_number</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">身分證號（加密）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">name</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">姓名</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">gender</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">性別</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">date_of_birth</code></td><td class="px-4 py-2 text-gray-600">DATE</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">生日</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">phone</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">電話</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">email</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">Email</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">address</code></td><td class="px-4 py-2 text-gray-600">TEXT</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">地址</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">occupation</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">職業</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">company_name</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">公司名稱</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">customer_type</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">客戶類型（individual / corporate）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">registration_date</code></td><td class="px-4 py-2 text-gray-600">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">建檔日期</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">last_updated_at</code></td><td class="px-4 py-2 text-gray-600">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">最後更新時間</td></tr>
+              <!-- ETL Tracking Fields -->
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">data_source</code></td><td class="px-4 py-2 text-gray-500">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">資料來源識別 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_loaded_at</code></td><td class="px-4 py-2 text-gray-500">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">ETL 載入時間 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_pipeline_id</code></td><td class="px-4 py-2 text-gray-500">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">Pipeline ID <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- customer_interaction -->
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden" id="card-interaction">
+        <button onclick="toggleTable('interaction')" class="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition">
+          <div class="flex items-center gap-4">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">interaction</span>
+            <div class="text-left">
+              <h3 class="text-base font-semibold text-gray-800">customer_interaction</h3>
+              <p class="text-sm text-gray-500">Customer Interaction（行為/接觸）- 客戶行為與接觸紀錄</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400">14 欄位</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform" id="chevron-interaction"></i>
+          </div>
+        </button>
+        <div id="table-interaction" class="hidden border-t border-border">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-border">
+              <tr>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/4">欄位名稱</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/6">型別</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-20">Nullable</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-16">PK</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500">說明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-border"><td class="px-4 py-2"><span class="text-danger">*</span> <code class="text-xs font-mono">interaction_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2 text-center"><span class="text-danger font-bold">PK</span></td><td class="px-4 py-2 text-gray-600">互動唯一識別碼</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">customer_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">關聯客戶</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">interaction_type</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">接觸類型（call/email/sms/visit/app/web/dm）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">channel</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">通路</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">direction</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">方向（inbound/outbound）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">interaction_date</code></td><td class="px-4 py-2 text-gray-600">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">接觸時間</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">campaign_id</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">行銷活動 ID</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">campaign_name</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">行銷活動名稱</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">response_status</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">回應狀態</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">content_summary</code></td><td class="px-4 py-2 text-gray-600">TEXT</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">內容摘要</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">agent_id</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">處理人員</td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">data_source</code></td><td class="px-4 py-2 text-gray-500">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">資料來源識別 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_loaded_at</code></td><td class="px-4 py-2 text-gray-500">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">ETL 載入時間 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_pipeline_id</code></td><td class="px-4 py-2 text-gray-500">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">Pipeline ID <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- customer_financial -->
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden" id="card-financial">
+        <button onclick="toggleTable('financial')" class="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition">
+          <div class="flex items-center gap-4">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">financial</span>
+            <div class="text-left">
+              <h3 class="text-base font-semibold text-gray-800">customer_financial</h3>
+              <p class="text-sm text-gray-500">Customer Financial（交易/風控）- 交易與風控資料</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400">20 欄位</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform" id="chevron-financial"></i>
+          </div>
+        </button>
+        <div id="table-financial" class="hidden border-t border-border">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-border">
+              <tr>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/4">欄位名稱</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/6">型別</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-20">Nullable</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-16">PK</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500">說明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-border"><td class="px-4 py-2"><span class="text-danger">*</span> <code class="text-xs font-mono">financial_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2 text-center"><span class="text-danger font-bold">PK</span></td><td class="px-4 py-2 text-gray-600">財務記錄唯一識別碼</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">customer_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">關聯客戶</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">contract_id</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">合約編號</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">contract_type</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">合約類型（loan/lease）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">vehicle_model</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">車型</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">vehicle_year</code></td><td class="px-4 py-2 text-gray-600">INTEGER</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">車輛年份</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">principal_amount</code></td><td class="px-4 py-2 text-gray-600">DECIMAL</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">本金金額</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">monthly_payment</code></td><td class="px-4 py-2 text-gray-600">DECIMAL</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">月付金</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">interest_rate</code></td><td class="px-4 py-2 text-gray-600">DECIMAL</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">利率</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">term_months</code></td><td class="px-4 py-2 text-gray-600">INTEGER</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">期數</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">payment_status</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">還款狀態（current/overdue/default/closed）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">overdue_days</code></td><td class="px-4 py-2 text-gray-600">INTEGER</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">逾期天數</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">overdue_amount</code></td><td class="px-4 py-2 text-gray-600">DECIMAL</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">逾期金額</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">credit_score</code></td><td class="px-4 py-2 text-gray-600">INTEGER</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">信用評分</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">risk_level</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">風險等級（low/medium/high/critical）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">contract_start_date</code></td><td class="px-4 py-2 text-gray-600">DATE</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">合約起始日</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">contract_end_date</code></td><td class="px-4 py-2 text-gray-600">DATE</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">合約結束日</td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">data_source</code></td><td class="px-4 py-2 text-gray-500">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">資料來源識別 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_loaded_at</code></td><td class="px-4 py-2 text-gray-500">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">ETL 載入時間 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_pipeline_id</code></td><td class="px-4 py-2 text-gray-500">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">Pipeline ID <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- customer_service -->
+      <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden" id="card-service">
+        <button onclick="toggleTable('service')" class="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition">
+          <div class="flex items-center gap-4">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">service</span>
+            <div class="text-left">
+              <h3 class="text-base font-semibold text-gray-800">customer_service</h3>
+              <p class="text-sm text-gray-500">Customer Service（客服/申訴）- 客服與申訴案件</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400">17 欄位</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform" id="chevron-service"></i>
+          </div>
+        </button>
+        <div id="table-service" class="hidden border-t border-border">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-border">
+              <tr>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/4">欄位名稱</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500 w-1/6">型別</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-20">Nullable</th>
+                <th class="text-center px-4 py-2.5 font-medium text-gray-500 w-16">PK</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-500">說明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-border"><td class="px-4 py-2"><span class="text-danger">*</span> <code class="text-xs font-mono">service_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2 text-center"><span class="text-danger font-bold">PK</span></td><td class="px-4 py-2 text-gray-600">服務案件唯一識別碼</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">customer_id</code></td><td class="px-4 py-2 text-gray-600">UUID</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">關聯客戶</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">case_number</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">案件編號</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">case_type</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">案件類型（inquiry/complaint/request/dispute）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">category</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">分類</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">priority</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">優先級（low/medium/high/urgent）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">status</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">狀態（open/in_progress/resolved/closed）</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">channel</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">進件通路</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">description</code></td><td class="px-4 py-2 text-gray-600">TEXT</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">案件描述</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">resolution</code></td><td class="px-4 py-2 text-gray-600">TEXT</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">處理結果</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">assigned_to</code></td><td class="px-4 py-2 text-gray-600">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">指派人員</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">opened_at</code></td><td class="px-4 py-2 text-gray-600">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">建立時間</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">resolved_at</code></td><td class="px-4 py-2 text-gray-600">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">解決時間</td></tr>
+              <tr class="border-b border-border"><td class="px-4 py-2"><code class="text-xs font-mono">satisfaction_score</code></td><td class="px-4 py-2 text-gray-600">INTEGER</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">滿意度（1-5）</td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">data_source</code></td><td class="px-4 py-2 text-gray-500">VARCHAR</td><td class="px-4 py-2 text-center text-gray-400">是</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">資料來源識別 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_loaded_at</code></td><td class="px-4 py-2 text-gray-500">TIMESTAMP</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">ETL 載入時間 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+              <tr class="etl-tracking"><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_pipeline_id</code></td><td class="px-4 py-2 text-gray-500">UUID</td><td class="px-4 py-2 text-center text-gray-400">否</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">Pipeline ID <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">系統自動填充</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    function toggleTable(domain) {
+      const table = document.getElementById('table-' + domain);
+      const chevron = document.getElementById('chevron-' + domain);
+      table.classList.toggle('hidden');
+      if (table.classList.contains('hidden')) {
+        chevron.style.transform = '';
+      } else {
+        chevron.style.transform = 'rotate(180deg)';
+      }
+    }
+
+    function showTableDemo(state) {
+      document.querySelectorAll('.demo-btn').forEach(b => {
+        b.classList.remove('border-primary','bg-blue-50','text-primary');
+        b.classList.add('border-gray-300','bg-white');
+      });
+      event.target.classList.add('border-primary','bg-blue-50','text-primary');
+      event.target.classList.remove('border-gray-300','bg-white');
+
+      // Collapse all
+      ['core','interaction','financial','service'].forEach(d => {
+        document.getElementById('table-' + d).classList.add('hidden');
+        document.getElementById('chevron-' + d).style.transform = '';
+      });
+
+      switch(state) {
+        case 'core': toggleTable('core'); break;
+        case 'financial': toggleTable('financial'); break;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

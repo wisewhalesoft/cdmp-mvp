@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETL Pipeline 管理 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    .chart-container { position: relative; }
+    @keyframes progress-pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.7; } }
+    .animate-progress { animation: progress-pulse 2s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">ETL Pipeline 管理</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Buttons -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemo('dashboard-normal')" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">儀表板正常</button>
+      <button onclick="showDemo('dashboard-empty')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">儀表板空狀態</button>
+      <button onclick="showDemo('list-normal')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">清單正常</button>
+      <button onclick="showDemo('list-empty')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">清單空狀態</button>
+      <button onclick="showDemo('list-running')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">執行中</button>
+      <button onclick="showDemo('create-modal')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">建立 Modal</button>
+      <button onclick="showDemo('delete-dialog')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">刪除確認</button>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="bg-white border-b border-border px-6">
+      <nav class="flex space-x-1" role="tablist">
+        <button onclick="switchMainTab('dashboard')" id="mainTab-dashboard"
+          class="main-tab-btn px-5 py-3 text-sm font-medium border-b-2 border-primary text-primary"
+          role="tab" aria-selected="true">
+          <span class="flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4"></i>監控儀表板</span>
+        </button>
+        <button onclick="switchMainTab('list')" id="mainTab-list"
+          class="main-tab-btn px-5 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+          role="tab" aria-selected="false">
+          <span class="flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i>Pipeline 清單</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: 監控儀表板 (F035) -->
+    <!-- ============================================================ -->
+    <div id="panel-dashboard" class="main-tab-panel p-6 space-y-6">
+
+      <!-- Dashboard Normal State -->
+      <div id="dashboard-normal">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-5 gap-4 mb-6">
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-purple-500 mb-2">
+              <i data-lucide="workflow" class="w-5 h-5"></i>
+              <span class="text-sm">總 Pipeline 數</span>
+            </div>
+            <p class="text-3xl font-bold">12</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-blue-500 mb-2">
+              <i data-lucide="loader" class="w-5 h-5"></i>
+              <span class="text-sm">執行中</span>
+            </div>
+            <p class="text-3xl font-bold text-blue-500">2</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-success mb-2">
+              <i data-lucide="check-circle" class="w-5 h-5"></i>
+              <span class="text-sm">今日成功</span>
+            </div>
+            <p class="text-3xl font-bold text-success">8</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-danger mb-2">
+              <i data-lucide="x-circle" class="w-5 h-5"></i>
+              <span class="text-sm">今日失敗</span>
+            </div>
+            <p class="text-3xl font-bold text-danger">1</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-success mb-2">
+              <i data-lucide="percent" class="w-5 h-5"></i>
+              <span class="text-sm">成功率</span>
+            </div>
+            <p class="text-3xl font-bold text-success">88.9%</p>
+          </div>
+        </div>
+
+        <!-- Trend Chart + Running Pipelines -->
+        <div class="grid grid-cols-2 gap-6 mb-6">
+          <!-- Trend Chart -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-gray-800">執行趨勢</h3>
+              <div class="flex gap-1">
+                <button onclick="switchTrend('7d')" id="trend-7d" class="trend-btn px-3 py-1 text-xs rounded bg-primary text-white">7 天</button>
+                <button onclick="switchTrend('14d')" id="trend-14d" class="trend-btn px-3 py-1 text-xs rounded bg-gray-100 text-gray-600 hover:bg-gray-200">14 天</button>
+                <button onclick="switchTrend('30d')" id="trend-30d" class="trend-btn px-3 py-1 text-xs rounded bg-gray-100 text-gray-600 hover:bg-gray-200">30 天</button>
+              </div>
+            </div>
+            <div class="chart-container" style="height:240px;">
+              <canvas id="trendChart"></canvas>
+            </div>
+          </div>
+          <!-- Running Pipelines -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">執行中 Pipeline</h3>
+            <div class="space-y-4" id="runningList">
+              <div class="border border-border rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium">客戶資料同步</span>
+                  <span class="text-xs text-gray-500">開始：2026-03-20 09:00</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 bg-gray-200 rounded-full h-2">
+                    <div class="bg-primary rounded-full h-2 animate-progress" style="width:65%"></div>
+                  </div>
+                  <span class="text-xs font-medium text-primary">65%</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">目前節點：NULL 處理（500/1,000 筆）</p>
+              </div>
+              <div class="border border-border rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium">交易資料匯入</span>
+                  <span class="text-xs text-gray-500">開始：2026-03-20 09:15</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 bg-gray-200 rounded-full h-2">
+                    <div class="bg-primary rounded-full h-2 animate-progress" style="width:30%"></div>
+                  </div>
+                  <span class="text-xs font-medium text-primary">30%</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">目前節點：Extract（300/1,000 筆）</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Failed List + Slowest Top 5 -->
+        <div class="grid grid-cols-2 gap-6">
+          <!-- Today's Failed -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">今日失敗清單</h3>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-left">
+                  <th class="pb-2 font-medium text-gray-500">Pipeline 名稱</th>
+                  <th class="pb-2 font-medium text-gray-500">失敗時間</th>
+                  <th class="pb-2 font-medium text-gray-500">錯誤摘要</th>
+                  <th class="pb-2 font-medium text-gray-500 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="failedTableBody">
+                <tr class="border-b border-border">
+                  <td class="py-3 font-medium">交易資料匯入</td>
+                  <td class="py-3 text-gray-500">2026-03-20 08:30</td>
+                  <td class="py-3 text-danger text-xs">Load 節點寫入目標表失敗：customer_financial</td>
+                  <td class="py-3 text-right">
+                    <a href="19-pipeline-logs.html" class="text-xs text-gray-500 hover:text-primary mr-2">查看日誌</a>
+                    <button class="text-xs bg-primary text-white px-2 py-1 rounded hover:bg-blue-700">重新執行</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Slowest Top 5 -->
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">效能最差 Top 5</h3>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-left">
+                  <th class="pb-2 font-medium text-gray-500 w-8">#</th>
+                  <th class="pb-2 font-medium text-gray-500">Pipeline 名稱</th>
+                  <th class="pb-2 font-medium text-gray-500">平均執行時間</th>
+                  <th class="pb-2 font-medium text-gray-500 text-right">累計執行次數</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">1</td>
+                  <td class="py-2.5 font-medium">客戶資料同步</td>
+                  <td class="py-2.5 text-gray-600">5 分 30 秒</td>
+                  <td class="py-2.5 text-right text-gray-600">156</td>
+                </tr>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">2</td>
+                  <td class="py-2.5 font-medium">交易資料匯入</td>
+                  <td class="py-2.5 text-gray-600">4 分 15 秒</td>
+                  <td class="py-2.5 text-right text-gray-600">98</td>
+                </tr>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">3</td>
+                  <td class="py-2.5 font-medium">互動紀錄整合</td>
+                  <td class="py-2.5 text-gray-600">3 分 45 秒</td>
+                  <td class="py-2.5 text-right text-gray-600">72</td>
+                </tr>
+                <tr class="border-b border-border">
+                  <td class="py-2.5 text-gray-400">4</td>
+                  <td class="py-2.5 font-medium">客服案件同步</td>
+                  <td class="py-2.5 text-gray-600">2 分 50 秒</td>
+                  <td class="py-2.5 text-right text-gray-600">45</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 text-gray-400">5</td>
+                  <td class="py-2.5 font-medium">風控資料更新</td>
+                  <td class="py-2.5 text-gray-600">2 分 10 秒</td>
+                  <td class="py-2.5 text-right text-gray-600">30</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Empty State -->
+      <div id="dashboard-empty" class="hidden">
+        <!-- Stats Cards (zeros) -->
+        <div class="grid grid-cols-5 gap-4 mb-6">
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-purple-500 mb-2"><i data-lucide="workflow" class="w-5 h-5"></i><span class="text-sm">總 Pipeline 數</span></div>
+            <p class="text-3xl font-bold">0</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-blue-500 mb-2"><i data-lucide="loader" class="w-5 h-5"></i><span class="text-sm">執行中</span></div>
+            <p class="text-3xl font-bold text-blue-500">0</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-success mb-2"><i data-lucide="check-circle" class="w-5 h-5"></i><span class="text-sm">今日成功</span></div>
+            <p class="text-3xl font-bold text-success">0</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-danger mb-2"><i data-lucide="x-circle" class="w-5 h-5"></i><span class="text-sm">今日失敗</span></div>
+            <p class="text-3xl font-bold text-danger">0</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <div class="flex items-center gap-2 text-gray-400 mb-2"><i data-lucide="percent" class="w-5 h-5"></i><span class="text-sm">成功率</span></div>
+            <p class="text-3xl font-bold text-gray-400">0%</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-6 mb-6">
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">執行趨勢</h3>
+            <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+              <i data-lucide="bar-chart-3" class="w-12 h-12 mb-3"></i>
+              <p class="text-sm">尚無執行紀錄</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">執行中 Pipeline</h3>
+            <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+              <i data-lucide="loader" class="w-12 h-12 mb-3"></i>
+              <p class="text-sm">目前無執行中的 Pipeline</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-6">
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">今日失敗清單</h3>
+            <div class="flex flex-col items-center justify-center py-8 text-gray-400">
+              <i data-lucide="check-circle" class="w-10 h-10 mb-2"></i>
+              <p class="text-sm">今日無失敗紀錄</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-5">
+            <h3 class="text-sm font-semibold text-gray-800 mb-4">效能最差 Top 5</h3>
+            <div class="flex flex-col items-center justify-center py-8 text-gray-400">
+              <i data-lucide="timer" class="w-10 h-10 mb-2"></i>
+              <p class="text-sm">尚無執行紀錄</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: Pipeline 清單 (F027) -->
+    <!-- ============================================================ -->
+    <div id="panel-list" class="main-tab-panel hidden p-6 space-y-6">
+
+      <!-- List Normal State -->
+      <div id="list-normal">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-5 gap-4 mb-6">
+          <div class="bg-white rounded-lg shadow-sm border border-border p-4">
+            <div class="flex items-center gap-2 text-gray-500 mb-1"><i data-lucide="workflow" class="w-4 h-4"></i><span class="text-xs">總 Pipeline 數</span></div>
+            <p class="text-2xl font-bold">12</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-4">
+            <div class="flex items-center gap-2 text-success mb-1"><i data-lucide="check-circle" class="w-4 h-4"></i><span class="text-xs">啟用中</span></div>
+            <p class="text-2xl font-bold text-success">7</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-4">
+            <div class="flex items-center gap-2 text-blue-500 mb-1"><i data-lucide="loader" class="w-4 h-4"></i><span class="text-xs">執行中</span></div>
+            <p class="text-2xl font-bold text-blue-500">2</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-4">
+            <div class="flex items-center gap-2 text-gray-400 mb-1"><i data-lucide="file-edit" class="w-4 h-4"></i><span class="text-xs">草稿</span></div>
+            <p class="text-2xl font-bold text-gray-500">3</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm border border-border p-4">
+            <div class="flex items-center gap-2 text-purple-500 mb-1"><i data-lucide="hash" class="w-4 h-4"></i><span class="text-xs">今日處理筆數</span></div>
+            <p class="text-2xl font-bold text-purple-600">15,230</p>
+          </div>
+        </div>
+
+        <!-- Search + Filter + Create Button -->
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="relative">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input type="text" placeholder="搜尋 Pipeline 名稱..." class="pl-9 pr-4 py-2 text-sm border border-border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+            <select class="text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option value="">所有狀態</option>
+              <option value="draft">草稿 (draft)</option>
+              <option value="active">啟用中 (active)</option>
+              <option value="running">執行中 (running)</option>
+              <option value="failed">失敗 (failed)</option>
+              <option value="disabled">已停用 (disabled)</option>
+            </select>
+          </div>
+          <button onclick="openCreateModal()" class="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-blue-700 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>建立 Pipeline
+          </button>
+        </div>
+
+        <!-- Pipeline Table -->
+        <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-border">
+              <tr>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">名稱</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">版本</th>
+                <th class="text-center px-4 py-3 font-medium text-gray-500">步驟數</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">狀態</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">排程</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">最後執行</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">下次執行</th>
+                <th class="text-right px-4 py-3 font-medium text-gray-500">處理筆數</th>
+                <th class="text-left px-4 py-3 font-medium text-gray-500">建立者</th>
+                <th class="text-right px-4 py-3 font-medium text-gray-500">操作</th>
+              </tr>
+            </thead>
+            <tbody id="pipelineTableBody">
+              <!-- Row 1: active -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">客戶資料同步</td>
+                <td class="px-4 py-3 text-gray-600">v3</td>
+                <td class="px-4 py-3 text-center text-gray-600">5</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">active</span>
+                </td>
+                <td class="px-4 py-3 text-gray-600">每日 02:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-20 02:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-21 02:00</td>
+                <td class="px-4 py-3 text-right text-gray-600">5,230</td>
+                <td class="px-4 py-3 text-gray-500">王小明</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('客戶資料同步')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 2: running -->
+              <tr class="border-b border-border bg-blue-50/30" id="running-row">
+                <td class="px-4 py-3 font-medium text-gray-900">交易資料匯入</td>
+                <td class="px-4 py-3 text-gray-600">v2</td>
+                <td class="px-4 py-3 text-center text-gray-600">4</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">running</span>
+                </td>
+                <td class="px-4 py-3 text-gray-600">每日 09:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-20 09:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-21 09:00</td>
+                <td class="px-4 py-3 text-right text-gray-600">3,500</td>
+                <td class="px-4 py-3 text-gray-500">王小明</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中無法刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Running progress bar row -->
+              <tr class="border-b border-border bg-blue-50/30" id="running-progress-row">
+                <td colspan="10" class="px-4 pb-3 pt-0">
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5">
+                      <div class="bg-primary rounded-full h-1.5 animate-progress" style="width:45%"></div>
+                    </div>
+                    <span class="text-xs font-medium text-primary">45%</span>
+                    <span class="text-xs text-gray-500">目前節點：格式轉換（450/1,000 筆）</span>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 3: draft -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">互動紀錄整合</td>
+                <td class="px-4 py-3 text-gray-600">v1</td>
+                <td class="px-4 py-3 text-center text-gray-600">3</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">draft</span>
+                </td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-right text-gray-400">0</td>
+                <td class="px-4 py-3 text-gray-500">李小美</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="測試執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled title="需先發布 Pipeline 才能啟用">
+                      <i data-lucide="toggle-left" class="w-4 h-4"></i>
+                      <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">需先發布 Pipeline 才能啟用</span>
+                    </button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('互動紀錄整合')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 4: failed -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">客服案件同步</td>
+                <td class="px-4 py-3 text-gray-600">v2</td>
+                <td class="px-4 py-3 text-center text-gray-600">4</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">failed</span>
+                </td>
+                <td class="px-4 py-3 text-gray-600">每日 06:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-20 06:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-21 06:00</td>
+                <td class="px-4 py-3 text-right text-gray-600">1,200</td>
+                <td class="px-4 py-3 text-gray-500">王小明</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-warning hover:text-orange-600" title="重新執行"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
+                    <button onclick="togglePipeline(this, 'failed')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('客服案件同步')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 5: disabled -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">風控資料更新</td>
+                <td class="px-4 py-3 text-gray-600">v1</td>
+                <td class="px-4 py-3 text-center text-gray-600">3</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">disabled</span>
+                </td>
+                <td class="px-4 py-3 text-gray-600">每週一 03:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-17 03:00</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-right text-gray-600">800</td>
+                <td class="px-4 py-3 text-gray-500">李小美</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="togglePipeline(this, 'disabled')" class="p-1.5 hover:bg-gray-100 rounded text-gray-400" title="啟用"><i data-lucide="toggle-left" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('風控資料更新')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Row 6-10: more active pipelines -->
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">會員等級計算</td>
+                <td class="px-4 py-3 text-gray-600">v4</td>
+                <td class="px-4 py-3 text-center text-gray-600">6</td>
+                <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">active</span></td>
+                <td class="px-4 py-3 text-gray-600">每日 04:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-20 04:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-21 04:00</td>
+                <td class="px-4 py-3 text-right text-gray-600">2,100</td>
+                <td class="px-4 py-3 text-gray-500">王小明</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('會員等級計算')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">逾期通知整合</td>
+                <td class="px-4 py-3 text-gray-600">v2</td>
+                <td class="px-4 py-3 text-center text-gray-600">5</td>
+                <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">active</span></td>
+                <td class="px-4 py-3 text-gray-600">每日 07:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-20 07:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-21 07:00</td>
+                <td class="px-4 py-3 text-right text-gray-600">1,800</td>
+                <td class="px-4 py-3 text-gray-500">李小美</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('逾期通知整合')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">信用評分更新</td>
+                <td class="px-4 py-3 text-gray-600">v1</td>
+                <td class="px-4 py-3 text-center text-gray-600">4</td>
+                <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">draft</span></td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-right text-gray-400">0</td>
+                <td class="px-4 py-3 text-gray-500">王小明</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="測試執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled>
+                      <i data-lucide="toggle-left" class="w-4 h-4"></i>
+                      <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">需先發布 Pipeline 才能啟用</span>
+                    </button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('信用評分更新')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="border-b border-border hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">合約到期提醒</td>
+                <td class="px-4 py-3 text-gray-600">v3</td>
+                <td class="px-4 py-3 text-center text-gray-600">5</td>
+                <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">active</span></td>
+                <td class="px-4 py-3 text-gray-600">每月 1 日 01:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-03-01 01:00</td>
+                <td class="px-4 py-3 text-gray-500">2026-04-01 01:00</td>
+                <td class="px-4 py-3 text-right text-gray-600">500</td>
+                <td class="px-4 py-3 text-gray-500">李小美</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('合約到期提醒')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="hover:bg-gray-50 transition">
+                <td class="px-4 py-3 font-medium text-gray-900">地址正規化</td>
+                <td class="px-4 py-3 text-gray-600">v1</td>
+                <td class="px-4 py-3 text-center text-gray-600">3</td>
+                <td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">draft</span></td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-gray-400">-</td>
+                <td class="px-4 py-3 text-right text-gray-400">0</td>
+                <td class="px-4 py-3 text-gray-500">王小明</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="測試執行"><i data-lucide="play" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled>
+                      <i data-lucide="toggle-left" class="w-4 h-4"></i>
+                      <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">需先發布 Pipeline 才能啟用</span>
+                    </button>
+                    <a href="19-pipeline-logs.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="日誌"><i data-lucide="file-text" class="w-4 h-4"></i></a>
+                    <button onclick="openDeleteDialog('地址正規化')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-danger" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4">
+          <span class="text-sm text-gray-500">共 12 筆，第 1 頁，共 2 頁</span>
+          <div class="flex items-center gap-1">
+            <button class="px-3 py-1.5 text-sm border border-border rounded bg-white text-gray-400 cursor-not-allowed" disabled>上一頁</button>
+            <button class="px-3 py-1.5 text-sm border border-primary rounded bg-primary text-white">1</button>
+            <button class="px-3 py-1.5 text-sm border border-border rounded bg-white text-gray-700 hover:bg-gray-50">2</button>
+            <button class="px-3 py-1.5 text-sm border border-border rounded bg-white text-gray-700 hover:bg-gray-50">下一頁</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- List Empty State -->
+      <div id="list-empty" class="hidden">
+        <div class="bg-white rounded-lg shadow-sm border border-border p-16 text-center">
+          <i data-lucide="workflow" class="w-16 h-16 mx-auto text-gray-300 mb-4"></i>
+          <h3 class="text-lg font-medium text-gray-600 mb-2">尚無 Pipeline</h3>
+          <p class="text-sm text-gray-400 mb-6">建立第一個 ETL Pipeline 開始資料轉換流程</p>
+          <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-blue-700 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>建立第一個 Pipeline
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- Create Pipeline Modal (F028) -->
+  <!-- ============================================================ -->
+  <div id="createModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeCreateModal()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-[520px]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+        <h2 class="text-lg font-semibold">建立 Pipeline</h2>
+        <button onclick="closeCreateModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="px-6 py-5 space-y-5">
+        <!-- Name -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Pipeline 名稱 <span class="text-danger">*</span></label>
+          <input type="text" id="pipelineName" placeholder="輸入 Pipeline 名稱" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" oninput="validateCreateForm()">
+          <p id="nameError" class="text-xs text-danger mt-1 hidden">此欄位為必填</p>
+        </div>
+        <!-- Description -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">描述</label>
+          <textarea placeholder="輸入 Pipeline 描述（選填）" rows="3" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"></textarea>
+        </div>
+        <!-- Schedule (Cron UI) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">排程設定（選填）</label>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <select id="cronFreq" class="text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="updateCronPreview()">
+                <option value="">不設定排程</option>
+                <option value="hourly">每小時</option>
+                <option value="daily" selected>每日</option>
+                <option value="weekly">每週</option>
+                <option value="monthly">每月</option>
+              </select>
+              <div class="flex items-center gap-1">
+                <input type="number" id="cronHour" value="2" min="0" max="23" class="w-16 text-sm border border-border rounded-lg px-2 py-2 text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="updateCronPreview()">
+                <span class="text-gray-500">:</span>
+                <input type="number" id="cronMin" value="0" min="0" max="59" class="w-16 text-sm border border-border rounded-lg px-2 py-2 text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="updateCronPreview()">
+              </div>
+            </div>
+            <!-- Cron Manual Toggle -->
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="cronManualToggle" class="rounded border-gray-300" onchange="toggleCronManual()">
+              <label for="cronManualToggle" class="text-xs text-gray-500">手動輸入 Cron 表達式</label>
+            </div>
+            <div id="cronManualInput" class="hidden">
+              <input type="text" placeholder="0 2 * * *" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+            </div>
+            <!-- Cron Preview -->
+            <div class="bg-gray-50 rounded-lg p-3 text-sm" id="cronPreview">
+              <p class="text-gray-600"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1"></i>每日凌晨 02:00 UTC</p>
+              <p class="text-xs text-gray-400 mt-1">Cron: <code class="bg-gray-200 px-1 rounded">0 2 * * *</code></p>
+              <p class="text-xs text-gray-400 mt-0.5">下次執行：2026-03-21 02:00 (UTC+8)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+        <button onclick="closeCreateModal()" class="px-4 py-2 text-sm text-gray-600 border border-border rounded-lg hover:bg-gray-50">取消</button>
+        <button id="createBtn" class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>建立</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Delete Confirmation Dialog (F034) -->
+  <!-- ============================================================ -->
+  <div id="deleteDialog" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeDeleteDialog()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-[440px]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+        <h2 class="text-lg font-semibold text-danger">確認刪除 Pipeline</h2>
+        <button onclick="closeDeleteDialog()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center flex-shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-danger"></i>
+          </div>
+          <div>
+            <p class="text-sm text-gray-700">確定要刪除 Pipeline「<span id="deletePipelineName" class="font-semibold">客戶資料同步</span>」嗎？</p>
+            <p class="text-sm text-gray-500 mt-2">刪除後排程將停止，歷史日誌將保留。</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+        <button onclick="closeDeleteDialog()" class="px-4 py-2 text-sm text-gray-600 border border-border rounded-lg hover:bg-gray-50">取消</button>
+        <button onclick="closeDeleteDialog()" class="px-4 py-2 text-sm bg-danger text-white rounded-lg hover:bg-red-600">確認刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+    <div class="bg-white rounded-lg shadow-lg border border-border p-4 flex items-start gap-3 min-w-[320px] border-l-4 border-l-success">
+      <i data-lucide="check-circle" class="w-5 h-5 text-success flex-shrink-0 mt-0.5"></i>
+      <div>
+        <p class="text-sm font-medium text-gray-800" id="toastTitle">Pipeline 已建立</p>
+        <p class="text-xs text-gray-500 mt-0.5" id="toastMsg">正在導向編輯器...</p>
+      </div>
+      <button onclick="hideToast()" class="text-gray-400 hover:text-gray-600 ml-auto"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+  </div>
+
+  <script>
+    // ---- Tab switching ----
+    function switchMainTab(tab) {
+      document.querySelectorAll('.main-tab-panel').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.main-tab-btn').forEach(b => {
+        b.classList.remove('border-primary','text-primary');
+        b.classList.add('border-transparent','text-gray-500');
+      });
+      document.getElementById('panel-' + tab).classList.remove('hidden');
+      const btn = document.getElementById('mainTab-' + tab);
+      btn.classList.add('border-primary','text-primary');
+      btn.classList.remove('border-transparent','text-gray-500');
+    }
+
+    // ---- Demo state switching ----
+    function showDemo(state) {
+      // Update demo buttons
+      document.querySelectorAll('.demo-btn').forEach(b => {
+        b.classList.remove('border-primary','bg-blue-50','text-primary');
+        b.classList.add('border-gray-300','bg-white');
+      });
+      event.target.classList.add('border-primary','bg-blue-50','text-primary');
+      event.target.classList.remove('border-gray-300','bg-white');
+
+      // Hide all states
+      document.getElementById('dashboard-normal').classList.add('hidden');
+      document.getElementById('dashboard-empty').classList.add('hidden');
+      document.getElementById('list-normal').classList.add('hidden');
+      document.getElementById('list-empty').classList.add('hidden');
+
+      switch(state) {
+        case 'dashboard-normal':
+          switchMainTab('dashboard');
+          document.getElementById('dashboard-normal').classList.remove('hidden');
+          break;
+        case 'dashboard-empty':
+          switchMainTab('dashboard');
+          document.getElementById('dashboard-empty').classList.remove('hidden');
+          break;
+        case 'list-normal':
+          switchMainTab('list');
+          document.getElementById('list-normal').classList.remove('hidden');
+          break;
+        case 'list-empty':
+          switchMainTab('list');
+          document.getElementById('list-empty').classList.remove('hidden');
+          break;
+        case 'list-running':
+          switchMainTab('list');
+          document.getElementById('list-normal').classList.remove('hidden');
+          break;
+        case 'create-modal':
+          switchMainTab('list');
+          document.getElementById('list-normal').classList.remove('hidden');
+          openCreateModal();
+          break;
+        case 'delete-dialog':
+          switchMainTab('list');
+          document.getElementById('list-normal').classList.remove('hidden');
+          openDeleteDialog('客戶資料同步');
+          break;
+      }
+    }
+
+    // ---- Create Modal ----
+    function openCreateModal() {
+      document.getElementById('createModal').classList.remove('hidden');
+    }
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.add('hidden');
+    }
+    function validateCreateForm() {
+      const name = document.getElementById('pipelineName').value.trim();
+      const btn = document.getElementById('createBtn');
+      const err = document.getElementById('nameError');
+      if (name.length > 0) {
+        btn.disabled = false;
+        err.classList.add('hidden');
+        document.getElementById('pipelineName').classList.remove('border-danger');
+      } else {
+        btn.disabled = true;
+      }
+    }
+
+    // ---- Delete Dialog ----
+    function openDeleteDialog(name) {
+      document.getElementById('deletePipelineName').textContent = name;
+      document.getElementById('deleteDialog').classList.remove('hidden');
+    }
+    function closeDeleteDialog() {
+      document.getElementById('deleteDialog').classList.add('hidden');
+    }
+
+    // ---- Toggle Pipeline (F031) ----
+    function togglePipeline(btn, currentStatus) {
+      const icon = btn.querySelector('[data-lucide]');
+      if (currentStatus === 'active' || currentStatus === 'failed') {
+        // Disable -> show toggle-left, gray
+        btn.setAttribute('title', '啟用');
+        btn.classList.remove('text-success');
+        btn.classList.add('text-gray-400');
+        icon.setAttribute('data-lucide', 'toggle-left');
+        showToast('Pipeline 已停用', '排程已暫停');
+      } else {
+        // Enable -> show toggle-right, green
+        btn.setAttribute('title', '停用');
+        btn.classList.remove('text-gray-400');
+        btn.classList.add('text-success');
+        icon.setAttribute('data-lucide', 'toggle-right');
+        showToast('Pipeline 已啟用', '排程已恢復');
+      }
+      lucide.createIcons();
+    }
+
+    // ---- Toast ----
+    function showToast(title, msg) {
+      document.getElementById('toastTitle').textContent = title;
+      document.getElementById('toastMsg').textContent = msg;
+      document.getElementById('toast').classList.remove('hidden');
+      setTimeout(() => hideToast(), 5000);
+    }
+    function hideToast() {
+      document.getElementById('toast').classList.add('hidden');
+    }
+
+    // ---- Cron UI ----
+    function updateCronPreview() {
+      const freq = document.getElementById('cronFreq').value;
+      const h = document.getElementById('cronHour').value;
+      const m = document.getElementById('cronMin').value;
+      let desc = '', cron = '';
+      const pad = n => String(n).padStart(2, '0');
+      switch(freq) {
+        case 'hourly': desc = `每小時 ${pad(m)} 分`; cron = `${m} * * * *`; break;
+        case 'daily': desc = `每日 ${pad(h)}:${pad(m)} UTC`; cron = `${m} ${h} * * *`; break;
+        case 'weekly': desc = `每週一 ${pad(h)}:${pad(m)} UTC`; cron = `${m} ${h} * * 1`; break;
+        case 'monthly': desc = `每月 1 日 ${pad(h)}:${pad(m)} UTC`; cron = `${m} ${h} 1 * *`; break;
+        default: desc = '不設定排程'; cron = '-';
+      }
+      const preview = document.getElementById('cronPreview');
+      if (freq) {
+        preview.innerHTML = `<p class="text-gray-600"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1"></i>${desc}</p><p class="text-xs text-gray-400 mt-1">Cron: <code class="bg-gray-200 px-1 rounded">${cron}</code></p><p class="text-xs text-gray-400 mt-0.5">下次執行：2026-03-21 ${pad(h)}:${pad(m)} (UTC+8)</p>`;
+      } else {
+        preview.innerHTML = `<p class="text-gray-400">未設定排程</p>`;
+      }
+      lucide.createIcons();
+    }
+    function toggleCronManual() {
+      const manual = document.getElementById('cronManualInput');
+      manual.classList.toggle('hidden');
+    }
+
+    // ---- Trend Chart (Chart.js) ----
+    function switchTrend(range) {
+      document.querySelectorAll('.trend-btn').forEach(b => {
+        b.classList.remove('bg-primary','text-white');
+        b.classList.add('bg-gray-100','text-gray-600');
+      });
+      document.getElementById('trend-' + range).classList.add('bg-primary','text-white');
+      document.getElementById('trend-' + range).classList.remove('bg-gray-100','text-gray-600');
+      renderTrendChart(range);
+    }
+
+    let trendChart = null;
+    function renderTrendChart(range) {
+      const ctx = document.getElementById('trendChart');
+      if (!ctx) return;
+
+      const data7 = {
+        labels: ['03/14','03/15','03/16','03/17','03/18','03/19','03/20'],
+        success: [5,6,4,7,5,8,3],
+        failed: [1,0,2,0,1,0,1]
+      };
+      const data14 = {
+        labels: ['03/07','03/08','03/09','03/10','03/11','03/12','03/13','03/14','03/15','03/16','03/17','03/18','03/19','03/20'],
+        success: [3,5,4,6,5,4,7,5,6,4,7,5,8,3],
+        failed: [0,1,0,1,0,1,0,1,0,2,0,1,0,1]
+      };
+      const data30 = {
+        labels: Array.from({length:30}, (_, i) => { const d = new Date(2026, 1, 19+i); return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }),
+        success: Array.from({length:30}, () => Math.floor(Math.random()*8)+2),
+        failed: Array.from({length:30}, () => Math.floor(Math.random()*3))
+      };
+
+      const d = range === '7d' ? data7 : range === '14d' ? data14 : data30;
+
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: d.labels,
+          datasets: [
+            { label: '成功', data: d.success, backgroundColor: '#22C55E', borderRadius: 3, barPercentage: 0.7 },
+            { label: '失敗', data: d.failed, backgroundColor: '#EF4444', borderRadius: 3, barPercentage: 0.7 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 11 } } }
+          },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
+            y: { stacked: true, beginAtZero: true, ticks: { stepSize: 2, font: { size: 10 } }, grid: { color: '#F3F4F6' } }
+          }
+        }
+      });
+    }
+
+    // ---- Init ----
+    document.addEventListener('DOMContentLoaded', function() {
+      lucide.createIcons();
+      renderTrendChart('7d');
+    });
+  </script>
+</body>
+</html>
