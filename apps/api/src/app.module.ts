@@ -14,6 +14,9 @@ import { Datasource } from './database/entities/datasource.entity';
 import { DatasourceHealthLog } from './database/entities/datasource-health-log.entity';
 import { ExtractionTask } from './database/entities/extraction-task.entity';
 import { ExtractionLog } from './database/entities/extraction-log.entity';
+import { EtlPipeline } from './database/entities/etl-pipeline.entity';
+import { EtlPipelineLog } from './database/entities/etl-pipeline-log.entity';
+import { EtlModule } from './modules/etl/etl.module';
 
 @Module({
   imports: [
@@ -30,7 +33,7 @@ import { ExtractionLog } from './database/entities/extraction-log.entity';
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog],
+            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog],
             synchronize: true,
           };
         }
@@ -42,7 +45,7 @@ import { ExtractionLog } from './database/entities/extraction-log.entity';
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog],
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },
@@ -58,6 +61,7 @@ import { ExtractionLog } from './database/entities/extraction-log.entity';
     AccountsModule,
     DatasourceModule,
     ExtractionTaskModule,
+    EtlModule,
     SchedulerModule,
   ],
   providers: [],

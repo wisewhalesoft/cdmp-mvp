@@ -484,6 +484,50 @@ export interface RawDataResponse {
   data: Record<string, any>[];
 }
 
+// F027: ETL Pipeline
+export type EtlPipelineStatus = 'draft' | 'active' | 'running' | 'failed' | 'disabled';
+
+export interface PipelineStatsResponse {
+  total: number;
+  active: number;
+  running: number;
+  draft: number;
+  todayProcessed: number;
+}
+
+export interface PipelineListItem {
+  id: string;
+  name: string;
+  version: number;
+  stepCount: number;
+  status: EtlPipelineStatus;
+  schedule: string | null;
+  lastExecutionAt: string | null;
+  nextExecutionAt: string | null;
+  processedCount: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface PipelineListQuery {
+  page?: number;
+  pageSize?: number;
+  status?: EtlPipelineStatus;
+  keyword?: string;
+}
+
+export interface PipelineListPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PipelineListResponse {
+  data: PipelineListItem[];
+  pagination: PipelineListPagination;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -521,6 +565,10 @@ export const ERROR_CODES = {
   EXTRACTION_DATASOURCE_NOT_FOUND: 'EXTRACTION_DATASOURCE_NOT_FOUND',
   DATASOURCE_SCHEMA_LOAD_FAILED: 'DATASOURCE_SCHEMA_LOAD_FAILED',
   DATASOURCE_TABLE_LOAD_FAILED: 'DATASOURCE_TABLE_LOAD_FAILED',
+  // F027: ETL Pipeline
+  PIPELINE_NOT_FOUND: 'PIPELINE_NOT_FOUND',
+  PIPELINE_NAME_EXISTS: 'PIPELINE_NAME_EXISTS',
+  SYSTEM_INTERNAL_ERROR: 'SYSTEM_INTERNAL_ERROR',
 } as const;
 
 export const ERROR_MESSAGES = {

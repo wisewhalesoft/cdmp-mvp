@@ -46,6 +46,10 @@ export const ERROR_CODES = {
   // Datasource schema/table loading
   DATASOURCE_SCHEMA_LOAD_FAILED: 'DATASOURCE_SCHEMA_LOAD_FAILED',
   DATASOURCE_TABLE_LOAD_FAILED: 'DATASOURCE_TABLE_LOAD_FAILED',
+  // F027: ETL Pipeline
+  PIPELINE_NOT_FOUND: 'PIPELINE_NOT_FOUND',
+  PIPELINE_NAME_EXISTS: 'PIPELINE_NAME_EXISTS',
+  SYSTEM_INTERNAL_ERROR: 'SYSTEM_INTERNAL_ERROR',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -98,4 +102,8 @@ export const ERROR_MESSAGES = {
   // Datasource schema/table loading
   DATASOURCE_SCHEMA_LOAD_FAILED: '無法載入資料來源的 Schema 列表',
   DATASOURCE_TABLE_LOAD_FAILED: '無法載入資料來源的資料表列表',
+  // F027: ETL Pipeline
+  PIPELINE_NOT_FOUND: '找不到指定的 Pipeline',
+  PIPELINE_NAME_EXISTS: '此名稱的 Pipeline 已存在',
+  SYSTEM_INTERNAL_ERROR: '系統發生非預期錯誤，請稍後再試',
 } as const;
