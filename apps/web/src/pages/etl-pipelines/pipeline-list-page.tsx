@@ -13,10 +13,12 @@ import {
   Loader,
   FileEdit,
   Hash,
+  Plus,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import { getPipelines, getPipelineStats } from '@/api/etl-pipelines';
+import { CreatePipelineModal } from './create-pipeline-modal';
 import type {
   PipelineListItem,
   PipelineStatsResponse,
@@ -65,6 +67,7 @@ export function PipelineListPage() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<EtlPipelineStatus | ''>('');
   const [page, setPage] = useState(1);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -220,7 +223,7 @@ export function PipelineListPage() {
           </div>
         </div>
 
-        {/* Search & Filter */}
+        {/* Search & Filter & Create Button */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -248,6 +251,14 @@ export function PipelineListPage() {
               <option value="disabled">已停用 (disabled)</option>
             </select>
           </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            data-testid="create-pipeline-btn"
+          >
+            <Plus size={16} />
+            建立 Pipeline
+          </button>
         </div>
 
         {/* Pipeline List */}
@@ -349,6 +360,15 @@ export function PipelineListPage() {
         </div>
         </main>
       </div>
+
+      <CreatePipelineModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          fetchData();
+        }}
+      />
     </div>
   );
 }
