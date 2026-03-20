@@ -27,6 +27,8 @@ import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.ent
 import { CONNECTION_TESTER } from '@/modules/datasource/connection-tester.provider';
 import { EXTRACTION_EXECUTOR } from '@/modules/extraction-task/extraction-executor.provider';
 import { HashUtil } from '@/common/hash/hash.util';
+import { ExtractionTask } from '@/database/entities/extraction-task.entity';
+import { Datasource } from '@/database/entities/datasource.entity';
 import { EtlPipelineService } from '@/modules/etl/etl-pipeline.service';
 import { ADMIN_ACTIVE, USER_ACTIVE } from './seeds/test-data';
 
@@ -897,5 +899,728 @@ describe('F028: Create Pipeline E2E', () => {
 
     expect(res.status).toBe(422);
     expect(res.body.error).toBe('VALIDATION_INVALID_CRON');
+  });
+});
+
+// =============================================
+// F029: 視覺化轉換編輯器（後端 API）E2E
+// =============================================
+
+describe('F029: Pipeline Definition Editor E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let userToken: string;
+  let dataSource: DataSource;
+  let pipelineRepo: Repository<EtlPipeline>;
+  let versionRepo: Repository<EtlPipelineVersion>;
+  let logRepo: Repository<EtlPipelineLog>;
+  let taskRepo: Repository<ExtractionTask>;
+  let dsRepo: Repository<Datasource>;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    userToken = await getUserToken(app);
+    dataSource = app.get(DataSource);
+    pipelineRepo = dataSource.getRepository(EtlPipeline);
+    versionRepo = dataSource.getRepository(EtlPipelineVersion);
+    logRepo = dataSource.getRepository(EtlPipelineLog);
+    taskRepo = dataSource.getRepository(ExtractionTask);
+    dsRepo = dataSource.getRepository(Datasource);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  beforeEach(async () => {
+    await versionRepo.createQueryBuilder().delete().from(EtlPipelineVersion).execute();
+    await logRepo.createQueryBuilder().delete().from(EtlPipelineLog).execute();
+    await pipelineRepo.createQueryBuilder().delete().from(EtlPipeline).execute();
+  });
+
+  /** Helper: create pipeline + version v1 via API */
+  async function createPipelineViaApi(name?: string): Promise<{ id: string }> {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: name ?? `Pipeline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
+    return { id: res.body.id };
+  }
+
+  // ========== Positive: GET definition ==========
+
+  // TS-F029-001: 取得空定義（初始狀態）
+  it('TS-F029-001: should return empty definition for newly created pipeline', async () => {
+    const { id } = await createPipelineViaApi('空定義Pipeline');
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.versionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.body.version).toBe(1);
+    expect(res.body.status).toBe('draft');
+    expect(res.body.definition.nodes).toEqual([]);
+    expect(res.body.definition.edges).toEqual([]);
+  });
+
+  // TS-F029-002: 取得含節點與連線的定義
+  it('TS-F029-002: should return saved definition with nodes and edges', async () => {
+    const { id } = await createPipelineViaApi('含定義Pipeline');
+
+    // Save a definition first
+    const definition = {
+      nodes: [
+        { id: 'node-ext-1', type: 'extract', position: { x: 100, y: 200 }, data: { rawTableId: '00000000-0000-0000-0000-000000000001', rawTableName: 'raw_a3f2c1d4', taskName: '每日客戶同步' } },
+        { id: 'node-filter-1', type: 'transform-filter', position: { x: 350, y: 200 }, data: { logic: 'AND', conditions: [{ column: 'age', operator: '>', value: '18' }] } },
+        { id: 'node-load-1', type: 'load', position: { x: 600, y: 200 }, data: { targetTable: 'customer_core', fieldMappings: [] } },
+      ],
+      edges: [
+        { id: 'edge-1', source: 'node-ext-1', target: 'node-filter-1' },
+        { id: 'edge-2', source: 'node-filter-1', target: 'node-load-1' },
+      ],
+    };
+
+    await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.definition.nodes).toHaveLength(3);
+    expect(res.body.definition.edges).toHaveLength(2);
+    // Verify Extract node data
+    const extNode = res.body.definition.nodes.find((n: any) => n.type === 'extract');
+    expect(extNode.data.rawTableId).toBe('00000000-0000-0000-0000-000000000001');
+    // Verify Filter node data
+    const filterNode = res.body.definition.nodes.find((n: any) => n.type === 'transform-filter');
+    expect(filterNode.data.logic).toBe('AND');
+    expect(filterNode.data.conditions).toHaveLength(1);
+  });
+
+  // ========== Positive: PUT definition ==========
+
+  // TS-F029-003: 儲存空定義（草稿允許）
+  it('TS-F029-003: should save empty definition (draft allows)', async () => {
+    const { id } = await createPipelineViaApi('空定義儲存');
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: { nodes: [], edges: [] } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(0);
+    expect(res.body.message).toBe('Pipeline 定義已儲存');
+
+    // DB verification
+    const pipeline = await pipelineRepo.findOne({ where: { id } });
+    expect(pipeline!.step_count).toBe(0);
+  });
+
+  // TS-F029-004: 儲存含節點與連線的定義並更新 step_count
+  it('TS-F029-004: should save definition with nodes/edges and update step_count', async () => {
+    const { id } = await createPipelineViaApi('含節點儲存');
+
+    const definition = {
+      nodes: [
+        { id: 'node-ext', type: 'extract', position: { x: 100, y: 200 }, data: {} },
+        { id: 'node-tf', type: 'transform-filter', position: { x: 350, y: 200 }, data: { logic: 'AND', conditions: [] } },
+        { id: 'node-load', type: 'load', position: { x: 600, y: 200 }, data: { targetTable: 'customer_core' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-ext', target: 'node-tf' },
+        { id: 'e2', source: 'node-tf', target: 'node-load' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(3);
+
+    // DB verification
+    const pipeline = await pipelineRepo.findOne({ where: { id } });
+    expect(pipeline!.step_count).toBe(3);
+
+    const version = await versionRepo.findOne({ where: { pipeline_id: id } });
+    expect(version!.definition.nodes).toHaveLength(3);
+  });
+
+  // TS-F029-005: 儲存含 changeSummary 的定義
+  it('TS-F029-005: should save definition with changeSummary', async () => {
+    const { id } = await createPipelineViaApi('changeSummary測試');
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: { nodes: [], edges: [] }, changeSummary: '清空畫布' });
+
+    expect(res.status).toBe(200);
+
+    const version = await versionRepo.findOne({ where: { pipeline_id: id } });
+    expect(version!.change_summary).toBe('清空畫布');
+  });
+
+  // TS-F029-006: 儲存含不完整設定的節點（草稿允許）
+  it('TS-F029-006: should save incomplete node config (draft allows)', async () => {
+    const { id } = await createPipelineViaApi('不完整節點');
+
+    const definition = {
+      nodes: [
+        { id: 'node-merge', type: 'transform-merge', position: { x: 200, y: 200 }, data: { joinType: 'INNER', leftInput: '', rightInput: '', conditions: [] } },
+      ],
+      edges: [],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(1);
+  });
+
+  // TS-F029-007: 覆寫既有定義
+  it('TS-F029-007: should overwrite existing definition', async () => {
+    const { id } = await createPipelineViaApi('覆寫定義');
+
+    // Save initial definition with 3 nodes
+    const initialDef = {
+      nodes: [
+        { id: 'n1', type: 'extract', position: { x: 100, y: 100 }, data: {} },
+        { id: 'n2', type: 'transform-filter', position: { x: 300, y: 100 }, data: { logic: 'AND', conditions: [] } },
+        { id: 'n3', type: 'load', position: { x: 500, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2' },
+        { id: 'e2', source: 'n2', target: 'n3' },
+      ],
+    };
+
+    await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: initialDef });
+
+    // Overwrite with 1 node
+    const newDef = {
+      nodes: [
+        { id: 'n-only', type: 'extract', position: { x: 100, y: 100 }, data: {} },
+      ],
+      edges: [],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: newDef });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(1);
+
+    const pipeline = await pipelineRepo.findOne({ where: { id } });
+    expect(pipeline!.step_count).toBe(1);
+
+    const version = await versionRepo.findOne({ where: { pipeline_id: id } });
+    expect(version!.definition.nodes).toHaveLength(1);
+  });
+
+  // ========== Positive: GET raw-tables ==========
+
+  // TS-F029-008: 取得可用 raw data 表清單
+  it('TS-F029-008: should return raw tables list', async () => {
+    // Create a datasource
+    const ds = dsRepo.create({
+      name: 'TestDS',
+      type: 'postgresql',
+      host: 'localhost',
+      port: 5432,
+      database_name: 'testdb',
+      username: 'user',
+      encrypted_password: 'enc',
+      status: 'connected',
+      created_by: ADMIN_ACTIVE.id,
+    });
+    const savedDs = await dsRepo.save(ds);
+
+    // Create extraction tasks with raw_table_name
+    const task1 = taskRepo.create({
+      name: '每日客戶同步',
+      datasource_id: savedDs.id,
+      mode: 'full',
+      source_table: 'customers',
+      schedule: '0 2 * * *',
+      raw_table_name: 'raw_a3f2c1d4',
+      status: 'completed',
+      created_by: ADMIN_ACTIVE.id,
+      last_execution_at: new Date(),
+    });
+    const task2 = taskRepo.create({
+      name: '訂單同步',
+      datasource_id: savedDs.id,
+      mode: 'full',
+      source_table: 'orders',
+      schedule: '0 3 * * *',
+      raw_table_name: 'raw_b4e3d2c5',
+      status: 'completed',
+      created_by: ADMIN_ACTIVE.id,
+      last_execution_at: new Date(),
+    });
+    await taskRepo.save([task1, task2]);
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/extraction-tasks/raw-tables')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+    for (const item of res.body.data) {
+      expect(item).toHaveProperty('taskId');
+      expect(item).toHaveProperty('taskName');
+      expect(item).toHaveProperty('rawTableName');
+      expect(item).toHaveProperty('datasourceName');
+      expect(item).toHaveProperty('sourceTable');
+      expect(item).toHaveProperty('lastExecutionAt');
+      expect(item).toHaveProperty('status');
+    }
+
+    // Cleanup
+    await taskRepo.createQueryBuilder().delete().from(ExtractionTask).execute();
+    await dsRepo.delete(savedDs.id);
+  });
+
+  // TS-F029-009: 空 raw data 清單
+  it('TS-F029-009: should return empty raw tables list when no tasks', async () => {
+    // Ensure no tasks with raw_table_name exist
+    await taskRepo.createQueryBuilder().delete().from(ExtractionTask).execute();
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/extraction-tasks/raw-tables')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+  });
+
+  // ========== Negative: Connection Validation ==========
+
+  // TS-F029-010: 非法連線 Load → Extract
+  it('TS-F029-010: should reject Load -> Extract connection', async () => {
+    const { id } = await createPipelineViaApi('非法連線LtoE');
+
+    const definition = {
+      nodes: [
+        { id: 'node-load', type: 'load', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-extract', type: 'extract', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-load', target: 'node-extract' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('PIPELINE_INVALID_CONNECTION');
+    expect(res.body.message).toContain('連線規則違反');
+  });
+
+  // TS-F029-011: 非法連線 Load → Transform
+  it('TS-F029-011: should reject Load -> Transform connection', async () => {
+    const { id } = await createPipelineViaApi('非法連線LtoT');
+
+    const definition = {
+      nodes: [
+        { id: 'node-load', type: 'load', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-tf', type: 'transform-filter', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-load', target: 'node-tf' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('PIPELINE_INVALID_CONNECTION');
+  });
+
+  // TS-F029-012: 非法連線 Extract → Load（跳過 Transform）
+  it('TS-F029-012: should reject Extract -> Load (skipping Transform)', async () => {
+    const { id } = await createPipelineViaApi('非法連線EtoL');
+
+    const definition = {
+      nodes: [
+        { id: 'node-ext', type: 'extract', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-load', type: 'load', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-ext', target: 'node-load' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('PIPELINE_INVALID_CONNECTION');
+  });
+
+  // TS-F029-013: 非法連線（循環連線）
+  it('TS-F029-013: should reject cyclic connections', async () => {
+    const { id } = await createPipelineViaApi('循環連線');
+
+    const definition = {
+      nodes: [
+        { id: 'node-a', type: 'transform-filter', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-b', type: 'transform-field-mapping', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-a', target: 'node-b' },
+        { id: 'e2', source: 'node-b', target: 'node-a' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('PIPELINE_INVALID_CONNECTION');
+  });
+
+  // TS-F029-014: 非法連線 Load → Load
+  it('TS-F029-014: should reject Load -> Load connection', async () => {
+    const { id } = await createPipelineViaApi('非法連線LtoL');
+
+    const definition = {
+      nodes: [
+        { id: 'node-load-a', type: 'load', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-load-b', type: 'load', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-load-a', target: 'node-load-b' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('PIPELINE_INVALID_CONNECTION');
+  });
+
+  // ========== Positive: Valid Connections ==========
+
+  // TS-F029-015: 合法連線 Extract → Transform
+  it('TS-F029-015: should accept Extract -> Transform connection', async () => {
+    const { id } = await createPipelineViaApi('合法EtoT');
+
+    const definition = {
+      nodes: [
+        { id: 'node-ext', type: 'extract', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-tf', type: 'transform-filter', position: { x: 300, y: 100 }, data: { logic: 'AND', conditions: [] } },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-ext', target: 'node-tf' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(2);
+  });
+
+  // TS-F029-016: 合法連線 Transform → Transform
+  it('TS-F029-016: should accept Transform -> Transform connection', async () => {
+    const { id } = await createPipelineViaApi('合法TtoT');
+
+    const definition = {
+      nodes: [
+        { id: 'node-tf1', type: 'transform-filter', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-tf2', type: 'transform-field-mapping', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-tf1', target: 'node-tf2' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(2);
+  });
+
+  // TS-F029-017: 合法連線 Transform → Load
+  it('TS-F029-017: should accept Transform -> Load connection', async () => {
+    const { id } = await createPipelineViaApi('合法TtoL');
+
+    const definition = {
+      nodes: [
+        { id: 'node-tf', type: 'transform-masking', position: { x: 100, y: 100 }, data: {} },
+        { id: 'node-load', type: 'load', position: { x: 300, y: 100 }, data: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'node-tf', target: 'node-load' },
+      ],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(200);
+    expect(res.body.stepCount).toBe(2);
+  });
+
+  // ========== Negative: Duplicate Extract Source ==========
+
+  // TS-F029-018: 重複 Extract 來源
+  it('TS-F029-018: should reject duplicate Extract source (same rawTableId)', async () => {
+    const { id } = await createPipelineViaApi('重複Extract');
+    const sameRawTableId = '00000000-0000-0000-0000-000000000099';
+
+    const definition = {
+      nodes: [
+        { id: 'node-ext-1', type: 'extract', position: { x: 100, y: 100 }, data: { rawTableId: sameRawTableId } },
+        { id: 'node-ext-2', type: 'extract', position: { x: 100, y: 300 }, data: { rawTableId: sameRawTableId } },
+      ],
+      edges: [],
+    };
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('PIPELINE_INVALID_CONNECTION');
+    expect(res.body.message).toContain('重複來源');
+  });
+
+  // ========== Transform JSONB Structure Tests ==========
+
+  // TS-F029-019: transform-merge JSONB 結構儲存與還原
+  it('TS-F029-019: should save and restore transform-merge JSONB structure', async () => {
+    const { id } = await createPipelineViaApi('Merge結構');
+
+    const mergeData = {
+      joinType: 'INNER',
+      leftInput: 'node-a',
+      rightInput: 'node-b',
+      conditions: [{ leftColumn: 'id', rightColumn: 'customer_id', operator: '=' }],
+    };
+
+    const definition = {
+      nodes: [
+        { id: 'node-merge', type: 'transform-merge', position: { x: 200, y: 200 }, data: mergeData },
+      ],
+      edges: [],
+    };
+
+    const putRes = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(getRes.status).toBe(200);
+    const node = getRes.body.definition.nodes[0];
+    expect(node.data.joinType).toBe('INNER');
+    expect(node.data.leftInput).toBe('node-a');
+    expect(node.data.rightInput).toBe('node-b');
+    expect(node.data.conditions[0].operator).toBe('=');
+  });
+
+  // TS-F029-020: transform-filter JSONB 結構儲存與還原
+  it('TS-F029-020: should save and restore transform-filter JSONB structure', async () => {
+    const { id } = await createPipelineViaApi('Filter結構');
+
+    const filterData = {
+      logic: 'AND',
+      conditions: [{ column: 'age', operator: '>', value: '18' }],
+    };
+
+    const definition = {
+      nodes: [
+        { id: 'node-filter', type: 'transform-filter', position: { x: 200, y: 200 }, data: filterData },
+      ],
+      edges: [],
+    };
+
+    const putRes = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(getRes.status).toBe(200);
+    const node = getRes.body.definition.nodes[0];
+    expect(node.data.logic).toBe('AND');
+    expect(node.data.conditions[0].column).toBe('age');
+  });
+
+  // TS-F029-021: transform-masking JSONB 結構儲存與還原
+  it('TS-F029-021: should save and restore transform-masking JSONB structure', async () => {
+    const { id } = await createPipelineViaApi('Masking結構');
+
+    const maskingData = {
+      rules: [{
+        column: 'national_id',
+        method: 'partial_mask',
+        maskPattern: '***-****-{last4}',
+        visibleStart: 0,
+        visibleEnd: 4,
+      }],
+    };
+
+    const definition = {
+      nodes: [
+        { id: 'node-mask', type: 'transform-masking', position: { x: 200, y: 200 }, data: maskingData },
+      ],
+      edges: [],
+    };
+
+    const putRes = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(getRes.status).toBe(200);
+    const node = getRes.body.definition.nodes[0];
+    expect(node.data.rules[0].method).toBe('partial_mask');
+    expect(node.data.rules[0].maskPattern).toBe('***-****-{last4}');
+  });
+
+  // ========== Negative: Pipeline Not Found & RBAC ==========
+
+  // TS-F029-022: GET Pipeline 不存在 → 404
+  it('TS-F029-022: GET definition for non-existent pipeline should return 404', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/etl/pipelines/00000000-0000-0000-0000-000000000000/definition')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('PIPELINE_NOT_FOUND');
+    expect(res.body.message).toBe('找不到指定的 Pipeline');
+  });
+
+  // TS-F029-023: PUT Pipeline 不存在 → 404
+  it('TS-F029-023: PUT definition for non-existent pipeline should return 404', async () => {
+    const res = await request(app.getHttpServer())
+      .put('/api/v1/etl/pipelines/00000000-0000-0000-0000-000000000000/definition')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: { nodes: [], edges: [] } });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('PIPELINE_NOT_FOUND');
+  });
+
+  // TS-F029-024: User 角色無權呼叫 GET definition → 403
+  it('TS-F029-024: user role should get 403 on GET definition', async () => {
+    const { id } = await createPipelineViaApi('RBAC測試GET');
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F029-025: User 角色無權呼叫 PUT definition → 403
+  it('TS-F029-025: user role should get 403 on PUT definition', async () => {
+    const { id } = await createPipelineViaApi('RBAC測試PUT');
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ definition: { nodes: [], edges: [] } });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+  });
+
+  // TS-F029-026: 未登入（無 Token）→ 401
+  it('TS-F029-026: no token should return 401', async () => {
+    const res = await request(app.getHttpServer())
+      .put('/api/v1/etl/pipelines/00000000-0000-0000-0000-000000000000/definition')
+      .send({ definition: { nodes: [], edges: [] } });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+  });
+
+  // ========== Boundary Scenarios ==========
+
+  // TS-F029-027: changeSummary 500 字元（邊界值，接受）
+  it('TS-F029-027: changeSummary with 500 chars should be accepted', async () => {
+    const { id } = await createPipelineViaApi('Summary500');
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: { nodes: [], edges: [] }, changeSummary: 'A'.repeat(500) });
+
+    expect(res.status).toBe(200);
+
+    const version = await versionRepo.findOne({ where: { pipeline_id: id } });
+    expect(version!.change_summary!.length).toBe(500);
+  });
+
+  // TS-F029-028: changeSummary 501 字元（超出上限，拒絕）
+  it('TS-F029-028: changeSummary with 501 chars should return 422', async () => {
+    const { id } = await createPipelineViaApi('Summary501');
+
+    const res = await request(app.getHttpServer())
+      .put(`/api/v1/etl/pipelines/${id}/definition`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ definition: { nodes: [], edges: [] }, changeSummary: 'A'.repeat(501) });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 });
