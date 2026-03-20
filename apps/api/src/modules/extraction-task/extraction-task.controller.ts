@@ -36,6 +36,11 @@ export class ExtractionTaskController {
     return this.extractionDashboardService.getTrend(query.range ?? '7d');
   }
 
+  @Get('raw-tables')
+  async getRawTables() {
+    return this.extractionTaskService.getRawTables();
+  }
+
   @Get()
   async findAll(@Query() query: ListExtractionTaskDto) {
     return this.extractionTaskService.findAll(query);

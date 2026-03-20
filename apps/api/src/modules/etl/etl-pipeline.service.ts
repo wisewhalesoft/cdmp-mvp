@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, ConflictException, UnprocessableEntityException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { CronExpressionParser } from 'cron-parser';
@@ -9,6 +9,7 @@ import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
+import { SaveDefinitionDto } from './dto/save-definition.dto';
 
 function getTodayRangeUTC() {
   const now = new Date();
@@ -201,5 +202,193 @@ export class EtlPipelineService {
         totalPages,
       },
     };
+  }
+
+  async getDefinition(pipelineId: string) {
+    // Find pipeline (not soft-deleted)
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    // Get latest version
+    const version = await this.versionRepository.findOne({
+      where: { pipeline_id: pipelineId },
+      order: { version: 'DESC' },
+    });
+
+    return {
+      versionId: version!.id,
+      version: version!.version,
+      status: version!.status,
+      definition: version!.definition,
+    };
+  }
+
+  async saveDefinition(pipelineId: string, dto: SaveDefinitionDto) {
+    // Find pipeline (not soft-deleted)
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    // Validate connections
+    this.validateConnections(dto.definition);
+
+    // Validate duplicate extract sources
+    this.validateDuplicateExtractSources(dto.definition.nodes);
+
+    // Get current version
+    const version = await this.versionRepository.findOne({
+      where: { pipeline_id: pipelineId },
+      order: { version: 'DESC' },
+    });
+
+    // Update version definition
+    version!.definition = dto.definition;
+    if (dto.changeSummary !== undefined) {
+      version!.change_summary = dto.changeSummary;
+    }
+    await this.versionRepository.save(version!);
+
+    // Update pipeline step_count (BR-6)
+    const stepCount = dto.definition.nodes.length;
+    pipeline.step_count = stepCount;
+    await this.pipelineRepository.save(pipeline);
+
+    return {
+      message: 'Pipeline 定義已儲存',
+      versionId: version!.id,
+      version: version!.version,
+      stepCount,
+    };
+  }
+
+  private getNodeCategory(nodeType: string): 'extract' | 'transform' | 'load' {
+    if (nodeType === 'extract') return 'extract';
+    if (nodeType === 'load') return 'load';
+    return 'transform'; // All transform-* types
+  }
+
+  private validateConnections(definition: { nodes: any[]; edges: any[] }) {
+    const { nodes, edges } = definition;
+    if (!edges || edges.length === 0) return;
+
+    // Build node type map
+    const nodeTypeMap = new Map<string, string>();
+    for (const node of nodes) {
+      nodeTypeMap.set(node.id, node.type);
+    }
+
+    // Connection rules validation (BR-2, BR-3, BR-4)
+    for (const edge of edges) {
+      const sourceType = nodeTypeMap.get(edge.source);
+      const targetType = nodeTypeMap.get(edge.target);
+      if (!sourceType || !targetType) continue;
+
+      const sourceCat = this.getNodeCategory(sourceType);
+      const targetCat = this.getNodeCategory(targetType);
+
+      // BR-4: Load is terminal - cannot connect to anything
+      if (sourceCat === 'load') {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.PIPELINE_INVALID_CONNECTION,
+          message: ERROR_MESSAGES.PIPELINE_INVALID_CONNECTION,
+        });
+      }
+
+      // BR-2: Extract can only connect to Transform
+      if (sourceCat === 'extract' && targetCat !== 'transform') {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.PIPELINE_INVALID_CONNECTION,
+          message: ERROR_MESSAGES.PIPELINE_INVALID_CONNECTION,
+        });
+      }
+
+      // BR-3: Transform can connect to Transform or Load (not Extract)
+      if (sourceCat === 'transform' && targetCat === 'extract') {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.PIPELINE_INVALID_CONNECTION,
+          message: ERROR_MESSAGES.PIPELINE_INVALID_CONNECTION,
+        });
+      }
+    }
+
+    // BR-5: Cycle detection
+    this.detectCycle(nodes, edges);
+  }
+
+  private detectCycle(nodes: any[], edges: any[]) {
+    // Build adjacency list
+    const adjacency = new Map<string, string[]>();
+    for (const node of nodes) {
+      adjacency.set(node.id, []);
+    }
+    for (const edge of edges) {
+      const targets = adjacency.get(edge.source);
+      if (targets) targets.push(edge.target);
+    }
+
+    // DFS-based cycle detection
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+
+    const hasCycle = (nodeId: string): boolean => {
+      if (inStack.has(nodeId)) return true;
+      if (visited.has(nodeId)) return false;
+
+      visited.add(nodeId);
+      inStack.add(nodeId);
+
+      for (const neighbor of adjacency.get(nodeId) ?? []) {
+        if (hasCycle(neighbor)) return true;
+      }
+
+      inStack.delete(nodeId);
+      return false;
+    };
+
+    for (const node of nodes) {
+      if (hasCycle(node.id)) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.PIPELINE_INVALID_CONNECTION,
+          message: `${ERROR_MESSAGES.PIPELINE_INVALID_CONNECTION}：偵測到循環連線`,
+        });
+      }
+    }
+  }
+
+  private validateDuplicateExtractSources(nodes: any[]) {
+    const extractNodes = nodes.filter((n) => n.type === 'extract');
+    const rawTableIds = extractNodes
+      .map((n) => n.data?.rawTableId)
+      .filter((id) => id != null && id !== '');
+
+    const seen = new Set<string>();
+    for (const rawTableId of rawTableIds) {
+      if (seen.has(rawTableId)) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.PIPELINE_INVALID_CONNECTION,
+          message: `${ERROR_MESSAGES.PIPELINE_INVALID_CONNECTION}：重複來源`,
+        });
+      }
+      seen.add(rawTableId);
+    }
   }
 }

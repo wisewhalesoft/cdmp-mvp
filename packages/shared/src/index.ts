@@ -549,6 +549,63 @@ export interface CreatePipelineResponse {
   updatedAt: string;
 }
 
+// F029: Pipeline Definition Editor
+export interface PipelineNodePosition {
+  x: number;
+  y: number;
+}
+
+export interface PipelineNode {
+  id: string;
+  type: string;
+  position: PipelineNodePosition;
+  data: Record<string, any>;
+}
+
+export interface PipelineEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface PipelineDefinition {
+  nodes: PipelineNode[];
+  edges: PipelineEdge[];
+}
+
+export interface GetDefinitionResponse {
+  versionId: string;
+  version: number;
+  status: string;
+  definition: PipelineDefinition;
+}
+
+export interface SaveDefinitionRequest {
+  definition: PipelineDefinition;
+  changeSummary?: string;
+}
+
+export interface SaveDefinitionResponse {
+  message: string;
+  versionId: string;
+  version: number;
+  stepCount: number;
+}
+
+export interface RawTableItem {
+  taskId: string;
+  taskName: string;
+  rawTableName: string;
+  datasourceName: string;
+  sourceTable: string;
+  lastExecutionAt: string | null;
+  status: string;
+}
+
+export interface RawTablesResponse {
+  data: RawTableItem[];
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -589,6 +646,7 @@ export const ERROR_CODES = {
   // F027: ETL Pipeline
   PIPELINE_NOT_FOUND: 'PIPELINE_NOT_FOUND',
   PIPELINE_NAME_EXISTS: 'PIPELINE_NAME_EXISTS',
+  PIPELINE_INVALID_CONNECTION: 'PIPELINE_INVALID_CONNECTION',
   VALIDATION_INVALID_CRON: 'VALIDATION_INVALID_CRON',
   SYSTEM_INTERNAL_ERROR: 'SYSTEM_INTERNAL_ERROR',
 } as const;

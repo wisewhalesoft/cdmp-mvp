@@ -77,6 +77,28 @@ export class ExtractionTaskService {
     private readonly logRepository: Repository<ExtractionLog>,
   ) {}
 
+  async getRawTables() {
+    const tasks = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.datasource', 'ds')
+      .where('task.deleted_at IS NULL')
+      .andWhere('task.raw_table_name IS NOT NULL')
+      .orderBy('task.name', 'ASC')
+      .getMany();
+
+    const data = tasks.map((task) => ({
+      taskId: task.id,
+      taskName: task.name,
+      rawTableName: task.raw_table_name,
+      datasourceName: task.datasource?.name ?? '',
+      sourceTable: task.source_table,
+      lastExecutionAt: task.last_execution_at?.toISOString() ?? null,
+      status: task.status,
+    }));
+
+    return { data };
+  }
+
   async createTask(
     dto: CreateExtractionTaskDto,
     userId: string,
