@@ -11,6 +11,7 @@ import { AddExtractionTaskPage } from '@/pages/extraction-tasks/add-extraction-t
 import { EditExtractionTaskPage } from '@/pages/extraction-tasks/edit-extraction-task-page';
 import { ExtractionTaskListPage } from '@/pages/extraction-tasks/extraction-task-list-page';
 import { RawDataPreviewPage } from '@/pages/extraction-tasks/raw-data-preview-page';
+import { PipelineListPage } from '@/pages/etl-pipelines/pipeline-list-page';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
 export function App() {
@@ -80,6 +81,14 @@ export function App() {
         element={
           <AdminRoute>
             <RawDataPreviewPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/etl-pipelines"
+        element={
+          <AdminRoute>
+            <PipelineListPage />
           </AdminRoute>
         }
       />
