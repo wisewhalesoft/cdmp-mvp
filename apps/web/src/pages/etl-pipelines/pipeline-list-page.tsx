@@ -14,6 +14,7 @@ import {
   FileEdit,
   Hash,
   Plus,
+  Pencil,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
@@ -289,6 +290,7 @@ export function PipelineListPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-500">下次執行</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-500">處理筆數</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">建立者</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-500">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,6 +325,16 @@ export function PipelineListPage() {
                         {pipeline.processedCount.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{pipeline.createdBy}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => navigate(`/etl-pipelines/${pipeline.id}/editor`)}
+                          className="inline-flex items-center gap-1 text-sm text-[#2563EB] hover:text-blue-700"
+                          data-testid={`edit-pipeline-${pipeline.id}`}
+                        >
+                          <Pencil size={14} />
+                          編輯
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
