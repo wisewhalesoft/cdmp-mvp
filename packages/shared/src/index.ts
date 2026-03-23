@@ -608,6 +608,27 @@ export interface RawTablesResponse {
   data: RawTableItem[];
 }
 
+// F030: Execute Pipeline
+export interface ExecutePipelineResponse {
+  logId: string;
+  message: string;
+}
+
+export interface TestPipelineResponse {
+  logId: string;
+  message: string;
+}
+
+export interface PipelineProgressResponse {
+  logId: string | null;
+  status: 'running' | 'completed' | 'failed' | null;
+  processedCount: number;
+  totalCount: number;
+  progressPercent: number;
+  currentNode: string | null;
+  currentNodeName: string | null;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
