@@ -79,17 +79,49 @@ const mockResponse: ExtractionTaskListResponse = {
       status: 'running',
       schedule: '0 5 * * *',
       lastExecutionAt: null,
-      extractedCount: 500,
+      extractedCount: 1200,
       totalCount: 3600,
-      progressPercent: 14,
+      progressPercent: 33,
       enabled: true,
       createdAt: '2026-01-04T00:00:00.000Z',
       updatedAt: '2026-03-18T05:00:00.000Z',
     },
+    {
+      id: 'et-scheduled-with-data',
+      name: '排程中有資料',
+      datasourceId: 'ds-1',
+      datasourceName: 'MySQL 主資料庫',
+      mode: 'full',
+      status: 'scheduled',
+      schedule: '0 2 * * *',
+      lastExecutionAt: '2026-03-19T03:22:18.974Z',
+      extractedCount: 3431000,
+      totalCount: 3431347,
+      progressPercent: 100,
+      enabled: true,
+      createdAt: '2026-01-05T00:00:00.000Z',
+      updatedAt: '2026-03-19T03:22:18.974Z',
+    },
+    {
+      id: 'et-disabled-with-data',
+      name: '停用有資料',
+      datasourceId: 'ds-1',
+      datasourceName: 'MySQL 主資料庫',
+      mode: 'full',
+      status: 'disabled',
+      schedule: '0 6 * * *',
+      lastExecutionAt: '2026-03-17T06:00:00.000Z',
+      extractedCount: 500,
+      totalCount: 500,
+      progressPercent: 100,
+      enabled: false,
+      createdAt: '2026-01-06T00:00:00.000Z',
+      updatedAt: '2026-03-17T06:00:00.000Z',
+    },
   ],
-  meta: { total: 4, page: 1, limit: 10, totalPages: 1 },
+  meta: { total: 6, page: 1, limit: 10, totalPages: 1 },
   summary: {
-    totalTasks: 4,
+    totalTasks: 6,
     running: 1,
     todaySuccess: 2,
     todayFailed: 1,
@@ -177,12 +209,30 @@ describe('F022: 日誌預覽資料連結', () => {
     expect(link).not.toBeInTheDocument();
   });
 
-  it('should not show preview link for running task', async () => {
+  it('should not show preview link for running task even with extractedCount > 0', async () => {
     await renderAndLoad();
 
     const row = screen.getByText('執行中任務').closest('tr')!;
     const link = row.querySelector('a[href*="/raw-data"]');
     expect(link).not.toBeInTheDocument();
+  });
+
+  it('should show preview link for scheduled task with extractedCount > 0', async () => {
+    await renderAndLoad();
+
+    const row = screen.getByText('排程中有資料').closest('tr')!;
+    const link = row.querySelector('a[href="/extraction-tasks/et-scheduled-with-data/raw-data"]');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveTextContent('預覽資料');
+  });
+
+  it('should show preview link for disabled task with extractedCount > 0', async () => {
+    await renderAndLoad();
+
+    const row = screen.getByText('停用有資料').closest('tr')!;
+    const link = row.querySelector('a[href="/extraction-tasks/et-disabled-with-data/raw-data"]');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveTextContent('預覽資料');
   });
 
   it('should have correct href format for preview link', async () => {

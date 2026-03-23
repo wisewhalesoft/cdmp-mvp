@@ -215,9 +215,13 @@ export function PipelineEditorPage() {
 
   // Node data change from properties panel
   const handleNodeDataChange = useCallback(
-    (nodeId: string, data: Record<string, unknown>) => {
+    (nodeId: string, updates: Record<string, unknown>) => {
       setNodes((nds) =>
-        nds.map((n) => (n.id === nodeId ? { ...n, data } : n)),
+        nds.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...(n.data as Record<string, unknown>), ...updates } }
+            : n,
+        ),
       );
       setIsDirty(true);
     },

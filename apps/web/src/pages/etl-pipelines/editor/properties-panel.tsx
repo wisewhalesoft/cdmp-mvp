@@ -55,7 +55,7 @@ export function PropertiesPanel({
   const colors = getCategoryColor(nodeDef.category);
 
   const updateData = (updates: Record<string, unknown>) => {
-    onNodeDataChange(selectedNode.id, { ...nodeData, ...updates });
+    onNodeDataChange(selectedNode.id, updates);
   };
 
   const renderProperties = () => {
@@ -209,6 +209,7 @@ function TagInput({
         value={newTag}
         onChange={(e) => setNewTag(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+        onBlur={handleAdd}
         placeholder={placeholder}
         className="flex-1 min-w-[80px] text-xs outline-none bg-transparent"
         data-testid={testId}
@@ -314,6 +315,7 @@ function NullHandlerProperties({ nodeData, onChange }: SimplePropsBase) {
             value={newCol}
             onChange={(e) => setNewCol(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addColumn()}
+            onBlur={addColumn}
             placeholder="輸入欄位名稱..."
             className="flex-1 min-w-[80px] text-xs outline-none bg-transparent"
             data-testid="null-handler-column-input"

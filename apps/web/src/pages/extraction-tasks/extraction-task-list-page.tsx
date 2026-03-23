@@ -587,7 +587,7 @@ export function ExtractionTaskListPage() {
                           </td>
                           <td className="px-5 py-3 text-gray-600">
                             <div>{task.extractedCount}/{task.totalCount}</div>
-                            {task.status === 'completed' && task.extractedCount > 0 && (
+                            {task.status !== 'running' && task.extractedCount > 0 && (
                               <div className="mt-1 pt-1 border-t border-gray-100">
                                 <Link
                                   to={`/extraction-tasks/${task.id}/raw-data`}
