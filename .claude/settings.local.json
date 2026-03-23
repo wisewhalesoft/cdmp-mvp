@@ -179,7 +179,9 @@
       "Bash(powershell -Command \"Test-NetConnection -ComputerName 172.20.202.221 -Port 1433 -WarningAction SilentlyContinue | Select-Object TcpTestSucceeded,PingSucceeded\" 2>&1)",
       "Bash(powershell -Command \"\\(New-Object Net.Sockets.TcpClient\\).ConnectAsync\\('172.20.202.221',1433\\).Wait\\(5000\\)\" 2>&1)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(PGPASSWORD=cdmp_secret psql -h localhost -U cdmp -d cdmp_dev -c \"SELECT p.id, p.name, v.definition FROM etl_pipelines p JOIN etl_pipeline_versions v ON v.pipeline_id = p.id WHERE p.name LIKE '%客戶基本%' AND p.deleted_at IS NULL ORDER BY v.version DESC LIMIT 1;\" 2>&1)"
     ]
   }
 }
