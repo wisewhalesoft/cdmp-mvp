@@ -9,6 +9,9 @@ import type {
   SaveDefinitionRequest,
   SaveDefinitionResponse,
   RawTablesResponse,
+  ExecutePipelineResponse,
+  TestPipelineResponse,
+  PipelineProgressResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -52,5 +55,26 @@ export async function savePipelineDefinition(
 
 export async function getRawTables(): Promise<RawTablesResponse> {
   const response = await apiClient.get<RawTablesResponse>('/extraction-tasks/raw-tables');
+  return response.data;
+}
+
+export async function executePipeline(id: string): Promise<ExecutePipelineResponse> {
+  const response = await apiClient.post<ExecutePipelineResponse>(
+    `/etl/pipelines/${id}/execute`,
+  );
+  return response.data;
+}
+
+export async function testPipeline(id: string): Promise<TestPipelineResponse> {
+  const response = await apiClient.post<TestPipelineResponse>(
+    `/etl/pipelines/${id}/test`,
+  );
+  return response.data;
+}
+
+export async function getPipelineProgress(id: string): Promise<PipelineProgressResponse> {
+  const response = await apiClient.get<PipelineProgressResponse>(
+    `/etl/pipelines/${id}/progress`,
+  );
   return response.data;
 }
