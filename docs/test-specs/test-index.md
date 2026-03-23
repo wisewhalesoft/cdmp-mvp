@@ -3,15 +3,15 @@ type: test-design-index
 version: "2.0"
 status: draft
 last_updated: 2026-03-20
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036]
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：40 份（4 策略文件 + 36 Feature 測試文件）
-> **總測試場景數**：518 個（E01～E04 共 308 + E05 共 210）
-> **最後更新**：2026-03-20
+> **測試文件總數**：41 份（4 策略文件 + 37 Feature 測試文件）
+> **總測試場景數**：531 個（E01～E04 共 308 + E05 共 223）
+> **最後更新**：2026-03-23
 
 ---
 
@@ -19,14 +19,14 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 涵蓋範圍
 
-- 36 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036），分屬 5 個 Epic：
+- 37 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037），分屬 5 個 Epic：
   - **E01 驗證與登入**：F001、F002、F003
   - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010
   - **E03 資料來源管理**：F011、F012、F013、F014、F015、F016
   - **E04 資料擷取**：F017、F018、F019、F020、F021、F022、F023、F024、F025、F026
-  - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036
+  - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037
 - 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程；新增 F026 raw data 預覽效能）
-- 62 個錯誤碼的驗證覆蓋（新增 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST for F033；累計含 PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
+- 63 個錯誤碼的驗證覆蓋（新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
 
 ### 排除項目
 
@@ -88,8 +88,9 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F034 | 刪除 Pipeline | P1 | [F034-test.md](features/F034-test.md) | 15 | Draft |
 | F035 | Pipeline 監控儀表板 | P1 | [F035-test.md](features/F035-test.md) | 21 | Draft |
 | F036 | 目標表 Domain-Oriented 規劃 | P0-MVP | [F036-test.md](features/F036-test.md) | 20 | Draft |
-| **E05 小計** | | | **10 files** | **210** | |
-| **總合計** | | | **36 files** | **518** | |
+| F037 | 發布 Pipeline 版本 | P0-MVP | [F037-test.md](features/F037-test.md) | 37 | Draft |
+| **E05 小計** | | | **11 files** | **247** | |
+| **總合計** | | | **37 files** | **531** | |
 
 ---
 
@@ -99,7 +100,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 | 類別 | 場景數 | 說明 |
 |------|--------|------|
-| API 端點測試（Unit + Integration） | ~185 | 所有 CRUD 操作、驗證邏輯、錯誤碼回傳（含 E04 擷取任務 API、F026 raw data 預覽 API、新增 GET /datasources/:id/schemas 及 GET /datasources/:id/schemas/:schema/tables；新增 F027 統計 API 與列表 API；新增 F029 GET/PUT definition API、GET raw-tables API；新增 F033 版本清單/詳情/Diff/回滾/發布 5 個端點，涵蓋 PIPELINE_VERSION_NOT_FOUND 與 PIPELINE_PUBLISH_REQUIRES_TEST 錯誤碼） |
+| API 端點測試（Unit + Integration） | ~192 | 所有 CRUD 操作、驗證邏輯、錯誤碼回傳（含 E04 擷取任務 API、F026 raw data 預覽 API、新增 GET /datasources/:id/schemas 及 GET /datasources/:id/schemas/:schema/tables；新增 F027 統計 API 與列表 API；新增 F029 GET/PUT definition API、GET raw-tables API；新增 F033 版本清單/詳情/Diff/回滾/發布 5 個端點，涵蓋 PIPELINE_VERSION_NOT_FOUND 與 PIPELINE_PUBLISH_REQUIRES_TEST 錯誤碼；新增 F037 PATCH publish 端點，涵蓋 PIPELINE_VERSION_ALREADY_PUBLISHED 錯誤碼） |
 | 安全性測試（RBAC / Token / SQL Injection） | ~26 | 角色權限驗證、Token 失效、輸入消毒；新增 raw data 表名安全（BR-13）與欄位名稱 sanitize；F027 RBAC（User 403）；F029 RBAC（User 403 for GET/PUT definition）；F033 RBAC（User 403 for 全部版本管理端點） |
 | 資料驗證（邊界值、格式） | ~26 | 密碼長度、Port 範圍、Email 格式、cron 格式；新增 F026 分頁 limit 白名單驗證；F027 todayProcessed 時區邊界；F029 changeSummary 500 字元邊界 |
 | 排程邏輯測試（E04） | ~8 | 使用 scanAndExecute(fakeNow) injectable time 參數直接呼叫排程邏輯 |
@@ -139,7 +140,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F034 → F035 → F036
+**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036
 
 **E04 資料擷取特殊注意：**
 - F017/F019 連鎖下拉選單：新增 `GET /datasources/:id/schemas` 與 `GET /datasources/:id/schemas/:schema/tables` 兩個端點測試；連線失敗回傳 503（DATASOURCE_SCHEMA_LOAD_FAILED / DATASOURCE_TABLE_LOAD_FAILED）
@@ -182,6 +183,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 - F033 發布後需驗證兩處：etl_pipeline_versions.status="published" 且 etl_pipelines.version=新版本號（BR-6）
 - F033 發布新版本不改變舊 published 版本狀態（同一 Pipeline 可同時有多個 published 版本，排程以最大 version 號為準）
 - F033 排程引擎選版本邏輯（TS-F033-017）：以 version 欄位最大值（非 created_at）選取最新 published 版本，與 F030 TS-F030-010 相同模式
+- F037 發布版本（PATCH /versions/:versionId/publish）：僅允許 testing 狀態版本發布；draft → 422 PIPELINE_PUBLISH_REQUIRES_TEST；published → 422 PIPELINE_VERSION_ALREADY_PUBLISHED（新增錯誤碼）
+- F037 Transaction 原子性（TS-F037-003 / TS-F037-020）：version.status 更新與 pipeline.version 更新必須在同一 Transaction；失敗需完整回滾，驗證需使用 Test Container（不可純 mock）
+- F037 published_at 欄位：現有 EtlPipelineVersion entity 僅有 created_at，規格回應含 publishedAt 欄位；實作前需確認是否新增欄位或重用 created_at，已列為 Risks
+- F037 前端 Toast 計時器（TS-F037-032）：使用 fake timer 控制 3 秒，不依賴真實計時器
+- F037 端到端發布→啟用流程（TS-F037-008）：驗證發布後 F031 toggle 不再阻擋（PIPELINE_DRAFT_CANNOT_ENABLE 消除）
 
 **E05 ETL Pipeline 管理特殊注意（F029）：**
 - F029 連線驗證（BR-2 ~ BR-5）在後端 PUT definition 時執行：Extract 只能連 Transform；Transform 可連 Transform 或 Load；Load 為終端節點；禁止逆向循環連線
@@ -242,3 +248,4 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | 2026-03-18 | 連鎖下拉選單需求變更（v1.2）：sourceTable 單欄位 → sourceSchema + sourceTable；新增 GET /datasources/:id/schemas 與 GET /datasources/:id/schemas/:schema/tables 兩端點測試；更新 F017（+15 場景）、F019（+15 場景）、F021（+3 場景）、F026（+5 場景）；新增 4 項 SCHEMA-RISK；總場景數由 247 增至 294 | Test Designer Agent |
 | 2026-03-20 | 新增 E05 ETL Pipeline 管理模組（F027–F036）共 10 個 Feature 測試文件，合計 210 個測試場景（F027:22、F028:17、F029:31、F030:20、F031:14、F032:21、F033:29、F034:15、F035:21、F036:20）；新增錯誤碼覆蓋：PIPELINE_NAME_EXISTS、VALIDATION_INVALID_CRON、PIPELINE_INVALID_CONNECTION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST；總場景數由 308 增至 518 | Test Designer Agent |
 | 2026-03-20 | 整合 test-index.md（v2.0）：統一版本號、修正場景合計、新增 E05 小計列；更新 test-levels.md（新增 E05 Unit/Integration/E2E/NFR 章節）；更新 test-data-strategy.md（新增 E05 種子資料與邊界值）；更新 risks-and-gaps.md（新增 E05-RISK-001~008） | Test Designer Agent |
+| 2026-03-23 | 新增 F037 發布 Pipeline 版本測試設計（37 個測試場景，含後端 Unit/Integration、前端 Unit、端到端流程、邊界條件）；新增錯誤碼覆蓋：PIPELINE_VERSION_ALREADY_PUBLISHED；總場景數由 518 增至 531 | Test Designer Agent |

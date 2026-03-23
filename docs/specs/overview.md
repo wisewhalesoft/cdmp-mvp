@@ -121,7 +121,7 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 ### 文件慣例
 
 - **語言**：所有內容以繁體中文撰寫，技術名詞（API、JWT、bcrypt 等）保留英文
-- **Feature ID**：F001-F036 連續編號，對應 User Story ID
+- **Feature ID**：F001-F037 連續編號，對應 User Story ID
 - **優先級**：P0-MVP（Must Have）、P1（Should Have）
 - **驗收標準格式**：Given / When / Then
 - **交叉參照**：使用相對路徑連結其他檔案

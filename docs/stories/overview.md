@@ -9,7 +9,7 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 5 |
-| User Story 總數 | 36 |
+| User Story 總數 | 37 |
 | 非功能需求（NFR）總數 | 2 |
 | 目標階段 | Phase 1（MVP） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
@@ -23,7 +23,7 @@
 | E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 7 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 10 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
-| E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 10 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
+| E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 11 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
 
 ## Story 地圖
 
@@ -65,6 +65,7 @@
 | E05 | [US-047](epics/E05-etl-pipeline/US-047-delete-pipeline.md) | 刪除 Pipeline | Should Have |
 | E05 | [US-048](epics/E05-etl-pipeline/US-048-monitor-dashboard.md) | Pipeline 監控儀表板 | Should Have |
 | E05 | [US-049](epics/E05-etl-pipeline/US-049-target-tables.md) | 目標表 Domain-Oriented 規劃 | Could Have |
+| E05 | [US-050](epics/E05-etl-pipeline/US-050-publish-pipeline-version.md) | 發布 Pipeline 版本 | Must Have |
 
 ## 非功能需求（NFR）
 
@@ -82,7 +83,7 @@
 - E02 全部 Stories（US-010 ~ US-016）
 - E03 全部 Stories（US-020 ~ US-025）
 - E04 全部 Stories（US-030 ~ US-039）
-- E05 全部 Stories（US-040 ~ US-049）
+- E05 全部 Stories（US-040 ~ US-050）
 - NFR-001、NFR-002
 
 ### Phase 2 — 進階規劃（未來）

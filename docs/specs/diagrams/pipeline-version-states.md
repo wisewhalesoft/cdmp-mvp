@@ -5,7 +5,7 @@ stateDiagram-v2
 
     draft --> testing : 測試執行成功 (F030)
 
-    testing --> published : 發布 (F033)\n需通過測試執行
+    testing --> published : 發布 (F037)\n需通過測試執行
 
     note right of draft
         草稿狀態

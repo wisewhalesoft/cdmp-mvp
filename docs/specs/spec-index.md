@@ -1,16 +1,16 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "1.4"
-date: 2026-03-19
+version: "1.5"
+date: 2026-03-23
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：62 份（7 支援文件 + 36 Feature 文件 + 19 圖表文件）
-> **最後更新**：2026-03-19
+> **文件總數**：63 份（7 支援文件 + 37 Feature 文件 + 19 圖表文件）
+> **最後更新**：2026-03-23
 
 ---
 
@@ -23,9 +23,9 @@ status: Draft
 | Feature 文件（E02） | 7 |
 | Feature 文件（E03） | 6 |
 | Feature 文件（E04） | 10 |
-| Feature 文件（E05） | 10 |
+| Feature 文件（E05） | 11 |
 | Mermaid 圖表 | 19 |
-| **總計** | **62** |
+| **總計** | **63** |
 
 ---
 
@@ -105,6 +105,7 @@ status: Draft
 | F034 | [F034-delete-pipeline.md](features/F034-delete-pipeline.md) | 刪除 Pipeline | US-047 | P1 |
 | F035 | [F035-pipeline-dashboard.md](features/F035-pipeline-dashboard.md) | Pipeline 監控儀表板 | US-048 | P1 |
 | F036 | [F036-target-tables.md](features/F036-target-tables.md) | 目標表 Domain-Oriented 規劃 | US-049 | P0-MVP |
+| F037 | [F037-publish-pipeline-version.md](features/F037-publish-pipeline-version.md) | 發布 Pipeline 版本 | US-050 | P0-MVP |
 
 ---
 
@@ -141,7 +142,7 @@ status: Draft
 | [diagrams/datasource-states.md](diagrams/datasource-states.md) | 資料來源狀態轉換 | State | F011, F013, F014, F015 |
 | [diagrams/extraction-task-states.md](diagrams/extraction-task-states.md) | 擷取任務狀態轉換 | State | F017, F020, F021, F023, F025 |
 | [diagrams/pipeline-states.md](diagrams/pipeline-states.md) | Pipeline 狀態轉換 | State | F028, F030, F031, F034 |
-| [diagrams/pipeline-version-states.md](diagrams/pipeline-version-states.md) | Pipeline 版本狀態轉換 | State | F029, F030, F033 |
+| [diagrams/pipeline-version-states.md](diagrams/pipeline-version-states.md) | Pipeline 版本狀態轉換 | State | F029, F030, F033, F037 |
 
 ---
 
@@ -157,7 +158,7 @@ status: Draft
 ### TDD Agent
 1. 必讀：`data-model.md`, `error-handling.md`, `nfr.md`
 2. 依實作順序載入對應 Feature 文件
-3. 建議順序：F001->F002->F003->F004->F005->F006->F008->F009->F010->F007->F011->F012->F013->F015->F014->F016->F017->F018->F019->F020->F021->F022->F023->F024->F025->F026->F027->F028->F029->F036->F030->F031->F032->F033->F034->F035
+3. 建議順序：F001->F002->F003->F004->F005->F006->F008->F009->F010->F007->F011->F012->F013->F015->F014->F016->F017->F018->F019->F020->F021->F022->F023->F024->F025->F026->F027->F028->F029->F036->F030->F037->F031->F032->F033->F034->F035
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -173,9 +174,9 @@ status: Draft
 
 ## 優先級分類
 
-### P0-MVP（Must Have）— 28 個 Feature
+### P0-MVP（Must Have）— 29 個 Feature
 
-F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036
+F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037
 
 ### P1（Should Have）— 8 個 Feature
 
@@ -202,7 +203,8 @@ F017 ──> F018 ──> F019, F025
 F017 ──> F020, F021 ──> F022, F023, F024, F026
 F027 ──> F028 ──> F029 ──> F030, F033, F036
 F028 ──> F031, F034
-F030 ──> F032, F035
+F030 ──> F032, F035, F037
+F037 ──> F031（發布後才能啟用）
 ```
 
 ---
@@ -216,3 +218,4 @@ F030 ──> F032, F035
 | 2026-03-18 | E04 raw data 落地重大更新：`target_table` -> `source_table`、動態建表、批次寫入、新增 F026 查看擷取資料預覽、新增 NFR-002.9/002.10/002.11 | Spec Writer Agent |
 | 2026-03-18 | E04 來源資料表選擇方式變更：`source_table` 單一欄位拆分為 `source_schema` + `source_table`；新增 Datasource Schema/Table 查詢 API 端點；F017/F019 新增動態載入下拉選單；新增 DATASOURCE_SCHEMA_LOAD_FAILED / DATASOURCE_TABLE_LOAD_FAILED 錯誤碼 | Spec Writer Agent |
 | 2026-03-19 | 新增 E05 ETL Pipeline 管理 10 個 Feature（F027-F036）、6 個圖表、更新支援文件（data-model、error-handling、scope、overview、open-questions） | Spec Writer Agent |
+| 2026-03-23 | 新增 F037（發布 Pipeline 版本），對應 US-050；新增錯誤碼 PIPELINE_VERSION_ALREADY_PUBLISHED；更新 P0-MVP 為 29 個 Feature | Spec Writer Agent |

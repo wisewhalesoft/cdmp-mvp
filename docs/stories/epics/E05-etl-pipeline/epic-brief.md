@@ -3,7 +3,7 @@
 > **Epic ID**：E05
 > **優先級**：P0（Critical）
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：10
+> **Stories 數量**：11
 
 ## Epic 目標
 
@@ -25,6 +25,7 @@ Pipeline 支援三階段發布流程（草稿 → 測試執行 → 發布）、�
 | US-047 | 刪除 Pipeline | Should Have | [US-047-delete-pipeline.md](US-047-delete-pipeline.md) |
 | US-048 | Pipeline 監控儀表板 | Should Have | [US-048-monitor-dashboard.md](US-048-monitor-dashboard.md) |
 | US-049 | 目標表 Domain-Oriented 規劃 | Could Have | [US-049-target-tables.md](US-049-target-tables.md) |
+| US-050 | 發布 Pipeline 版本 | Must Have | [US-050-publish-pipeline-version.md](US-050-publish-pipeline-version.md) |
 
 ## 依賴關係
 
@@ -114,3 +115,4 @@ Pipeline 支援三階段發布流程（草稿 → 測試執行 → 發布）、�
 - [x] 目標表管理方式？ → **系統預先定義 schema，Load 節點直接選擇**
 - [x] 草稿可否執行？ → **允許手動測試執行，標記為 test_run，不被排程觸發**
 - [x] 目標表規劃方法？ → **Domain-Oriented 設計（非完整 Data Mesh）**
+- [x] 如何將版本狀態推進到 published？ → **新增 US-050（發布 Pipeline 版本）實作 F037，補全 draft → testing → published 最後一步**
