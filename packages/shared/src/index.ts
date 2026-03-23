@@ -566,6 +566,8 @@ export interface PipelineEdge {
   id: string;
   source: string;
   target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
 }
 
 export interface PipelineDefinition {

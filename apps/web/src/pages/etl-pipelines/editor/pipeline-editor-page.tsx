@@ -113,6 +113,8 @@ export function PipelineEditorPage() {
             id: e.id,
             source: e.source,
             target: e.target,
+            sourceHandle: e.sourceHandle ?? undefined,
+            targetHandle: e.targetHandle ?? undefined,
             type: 'default',
             animated: false,
           }));
@@ -287,6 +289,8 @@ export function PipelineEditorPage() {
           id: e.id,
           source: e.source,
           target: e.target,
+          sourceHandle: e.sourceHandle ?? null,
+          targetHandle: e.targetHandle ?? null,
         })),
       };
       const res = await savePipelineDefinition(pipelineId, { definition });
@@ -420,6 +424,8 @@ export function PipelineEditorPage() {
         <PropertiesPanel
           selectedNode={selectedNode}
           rawTables={rawTables}
+          nodes={nodes}
+          edges={edges}
           onNodeDataChange={handleNodeDataChange}
           onDeleteNode={handleDeleteNode}
         />
