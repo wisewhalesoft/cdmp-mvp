@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { EtlPipeline } from './etl-pipeline.entity';
 import { User } from './user.entity';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('etl_pipeline_versions')
 export class EtlPipelineVersion {
@@ -39,6 +40,9 @@ export class EtlPipelineVersion {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   creator: User;
+
+  @Column({ type: dateColumnType, nullable: true, default: null })
+  published_at: Date | null;
 
   @CreateDateColumn()
   created_at: Date;

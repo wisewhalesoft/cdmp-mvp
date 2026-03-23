@@ -629,6 +629,30 @@ export interface PipelineProgressResponse {
   currentNodeName: string | null;
 }
 
+// F037: Publish Pipeline Version
+export interface PublishVersionResponse {
+  id: string;
+  pipelineId: string;
+  version: number;
+  status: 'published';
+  changeSummary: string | null;
+  publishedAt: string;
+}
+
+// F031: Toggle Pipeline
+export interface TogglePipelineRequest {
+  enabled: boolean;
+}
+
+export interface TogglePipelineResponse {
+  id: string;
+  name: string;
+  status: EtlPipelineStatus;
+  enabled: boolean;
+  schedule: string | null;
+  updatedAt: string;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',

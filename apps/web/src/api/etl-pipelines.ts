@@ -12,6 +12,8 @@ import type {
   ExecutePipelineResponse,
   TestPipelineResponse,
   PipelineProgressResponse,
+  TogglePipelineResponse,
+  PublishVersionResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -75,6 +77,24 @@ export async function testPipeline(id: string): Promise<TestPipelineResponse> {
 export async function getPipelineProgress(id: string): Promise<PipelineProgressResponse> {
   const response = await apiClient.get<PipelineProgressResponse>(
     `/etl/pipelines/${id}/progress`,
+  );
+  return response.data;
+}
+
+export async function togglePipeline(id: string, enabled: boolean): Promise<TogglePipelineResponse> {
+  const response = await apiClient.patch<TogglePipelineResponse>(
+    `/etl/pipelines/${id}/toggle`,
+    { enabled },
+  );
+  return response.data;
+}
+
+export async function publishPipelineVersion(
+  pipelineId: string,
+  versionId: string,
+): Promise<PublishVersionResponse> {
+  const response = await apiClient.patch<PublishVersionResponse>(
+    `/etl/pipelines/${pipelineId}/versions/${versionId}/publish`,
   );
   return response.data;
 }

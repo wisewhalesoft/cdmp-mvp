@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnprocessableEntityException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, UnprocessableEntityException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { CronExpressionParser } from 'cron-parser';
@@ -278,6 +278,129 @@ export class EtlPipelineService {
       version: version!.version,
       stepCount,
     };
+  }
+
+  async togglePipeline(pipelineId: string, enabled: boolean) {
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    if (enabled) {
+      // Check if there's a published version
+      const publishedVersion = await this.versionRepository.findOne({
+        where: { pipeline_id: pipelineId, status: 'published' },
+      });
+
+      if (!publishedVersion) {
+        throw new BadRequestException({
+          error: ERROR_CODES.PIPELINE_DRAFT_CANNOT_ENABLE,
+          message: ERROR_MESSAGES.PIPELINE_DRAFT_CANNOT_ENABLE,
+        });
+      }
+
+      pipeline.enabled = true;
+      pipeline.status = 'active';
+    } else {
+      pipeline.enabled = false;
+      pipeline.status = 'disabled';
+    }
+
+    const saved = await this.pipelineRepository.save(pipeline);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      status: saved.status,
+      enabled: saved.enabled,
+      schedule: saved.schedule,
+      updatedAt: saved.updated_at.toISOString(),
+    };
+  }
+
+  async publishVersion(pipelineId: string, versionId: string) {
+    // 1. Validate pipeline exists and not soft-deleted
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    // 2. Validate version exists
+    const version = await this.versionRepository.findOne({
+      where: { id: versionId },
+    });
+
+    if (!version || version.pipeline_id !== pipelineId) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_VERSION_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_VERSION_NOT_FOUND,
+      });
+    }
+
+    // 3. Validate version status
+    if (version.status === 'draft') {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.PIPELINE_PUBLISH_REQUIRES_TEST,
+        message: ERROR_MESSAGES.PIPELINE_PUBLISH_REQUIRES_TEST,
+      });
+    }
+
+    if (version.status === 'published') {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.PIPELINE_VERSION_ALREADY_PUBLISHED,
+        message: ERROR_MESSAGES.PIPELINE_VERSION_ALREADY_PUBLISHED,
+      });
+    }
+
+    // 4. Execute in transaction
+    try {
+      const publishedAt = new Date();
+
+      await this.dataSource.transaction(async (manager) => {
+        const versionRepo = manager.getRepository(EtlPipelineVersion);
+        const pipelineRepo = manager.getRepository(EtlPipeline);
+
+        version.status = 'published';
+        version.published_at = publishedAt;
+        await versionRepo.save(version);
+
+        pipeline.version = version.version;
+        await pipelineRepo.save(pipeline);
+      });
+
+      return {
+        id: version.id,
+        pipelineId: version.pipeline_id,
+        version: version.version,
+        status: version.status as 'published',
+        changeSummary: version.change_summary,
+        publishedAt: publishedAt.toISOString(),
+      };
+    } catch (error) {
+      if (error instanceof UnprocessableEntityException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException({
+        error: ERROR_CODES.SYSTEM_INTERNAL_ERROR,
+        message: ERROR_MESSAGES.SYSTEM_INTERNAL_ERROR,
+      });
+    }
   }
 
   private getNodeCategory(nodeType: string): 'extract' | 'transform' | 'load' {

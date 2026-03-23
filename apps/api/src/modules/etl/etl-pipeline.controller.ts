@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Query, Param, Req, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Query, Param, Req, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
@@ -7,6 +7,7 @@ import { EtlPipelineExecutionService } from './etl-pipeline-execution.service';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
 import { SaveDefinitionDto } from './dto/save-definition.dto';
+import { TogglePipelineDto } from './dto/toggle-pipeline.dto';
 
 @Controller('etl/pipelines')
 @UseGuards(AuthGuard, RolesGuard)
@@ -45,6 +46,11 @@ export class EtlPipelineController {
     return this.executionService.getProgress(id);
   }
 
+  @Patch(':id/toggle')
+  async toggle(@Param('id') id: string, @Body() dto: TogglePipelineDto) {
+    return this.etlPipelineService.togglePipeline(id, dto.enabled);
+  }
+
   @Get(':id/definition')
   async getDefinition(@Param('id') id: string) {
     return this.etlPipelineService.getDefinition(id);
@@ -53,6 +59,14 @@ export class EtlPipelineController {
   @Put(':id/definition')
   async saveDefinition(@Param('id') id: string, @Body() dto: SaveDefinitionDto) {
     return this.etlPipelineService.saveDefinition(id, dto);
+  }
+
+  @Patch(':id/versions/:versionId/publish')
+  async publishVersion(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+  ) {
+    return this.etlPipelineService.publishVersion(id, versionId);
   }
 
   @Get()

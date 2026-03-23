@@ -21,10 +21,12 @@ import {
   Save,
   Play,
   GitBranch,
+  Rocket,
   MousePointerClick,
 } from 'lucide-react';
 import { Toolbox } from './toolbox';
 import { PropertiesPanel } from './properties-panel';
+import { PublishConfirmDialog } from './publish-confirm-dialog';
 import { PipelineNode } from './pipeline-node';
 import { getNodeDef, canConnect } from './node-types';
 import {
@@ -32,6 +34,7 @@ import {
   savePipelineDefinition,
   getRawTables,
   getPipelines,
+  publishPipelineVersion,
 } from '@/api/etl-pipelines';
 import type { RawTableItem, PipelineDefinition } from '@cdmp/shared';
 
@@ -49,9 +52,14 @@ export function PipelineEditorPage() {
   const [rawTables, setRawTables] = useState<RawTableItem[]>([]);
   const [pipelineName, setPipelineName] = useState('');
   const [versionLabel, setVersionLabel] = useState('');
+  const [versionStatus, setVersionStatus] = useState<string>('draft');
+  const [versionNumber, setVersionNumber] = useState<number>(1);
+  const [versionId, setVersionId] = useState<string>('');
   const [showToolbox, setShowToolbox] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
   const [toast, setToast] = useState<{ title: string; message: string } | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -99,6 +107,9 @@ export function PipelineEditorPage() {
         const pipeline = pipelinesRes.data.find((p) => p.id === pipelineId);
         setPipelineName(pipeline?.name || 'Pipeline');
         setVersionLabel(`v${defRes.version} (${defRes.status})`);
+        setVersionStatus(defRes.status);
+        setVersionNumber(defRes.version);
+        setVersionId(defRes.versionId);
 
         // Load definition
         if (defRes.definition.nodes.length > 0) {
@@ -310,6 +321,28 @@ export function PipelineEditorPage() {
     }
   }, [pipelineId, nodes, edges]);
 
+  // Publish
+  const handlePublish = useCallback(async () => {
+    if (!pipelineId || !versionId) return;
+    setPublishing(true);
+    try {
+      const res = await publishPipelineVersion(pipelineId, versionId);
+      setVersionStatus('published');
+      setVersionLabel(`v${res.version} (published)`);
+      setShowPublishDialog(false);
+      setToast({
+        title: '版本已發布',
+        message: `v${res.version} 已發布，Pipeline 現在可以啟用排程`,
+      });
+      setTimeout(() => setToast(null), 3000);
+    } catch {
+      setToast({ title: '發布失敗', message: '請稍後再試' });
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setPublishing(false);
+    }
+  }, [pipelineId, versionId]);
+
   const isEmpty = nodes.length === 0;
 
   return (
@@ -337,7 +370,16 @@ export function PipelineEditorPage() {
             <span className="text-[#2563EB] font-medium">編輯器</span>
           </nav>
           {versionLabel && (
-            <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+            <span
+              className={`ml-3 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                versionStatus === 'published'
+                  ? 'bg-green-100 text-green-700'
+                  : versionStatus === 'testing'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'bg-gray-100 text-gray-600'
+              }`}
+              data-testid="version-badge"
+            >
               {versionLabel}
             </span>
           )}
@@ -359,6 +401,18 @@ export function PipelineEditorPage() {
             <Save className="w-4 h-4" />
             {saving ? '儲存中...' : '儲存'}
           </button>
+          {versionStatus !== 'published' && (
+            <button
+              onClick={() => setShowPublishDialog(true)}
+              disabled={versionStatus !== 'testing'}
+              title={versionStatus === 'draft' ? '請先完成測試執行' : undefined}
+              className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="publish-btn"
+            >
+              <Rocket className="w-4 h-4" />
+              發布
+            </button>
+          )}
           <button
             className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5"
             data-testid="versions-btn"
@@ -446,6 +500,15 @@ export function PipelineEditorPage() {
           </div>
         </div>
       )}
+
+      {/* Publish Confirm Dialog */}
+      <PublishConfirmDialog
+        open={showPublishDialog}
+        versionNumber={versionNumber}
+        loading={publishing}
+        onConfirm={handlePublish}
+        onCancel={() => setShowPublishDialog(false)}
+      />
     </div>
   );
 }
