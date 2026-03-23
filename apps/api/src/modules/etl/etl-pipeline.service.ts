@@ -8,6 +8,7 @@ import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.ent
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
+import { ListPipelineLogsDto } from './dto/list-pipeline-logs.dto';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
 import { SaveDefinitionDto } from './dto/save-definition.dto';
 
@@ -401,6 +402,102 @@ export class EtlPipelineService {
         message: ERROR_MESSAGES.SYSTEM_INTERNAL_ERROR,
       });
     }
+  }
+
+  async getPipelineLogs(pipelineId: string, query: ListPipelineLogsDto) {
+    // Check pipeline exists (including soft-deleted for BR-5)
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+
+    const qb = this.logRepository
+      .createQueryBuilder('log')
+      .where('log.pipeline_id = :pipelineId', { pipelineId })
+      .orderBy('log.started_at', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const [logs, total] = await qb.getManyAndCount();
+    const totalPages = total > 0 ? Math.ceil(total / pageSize) : 0;
+
+    const data = logs.map((log) => ({
+      id: log.id,
+      version: log.version,
+      status: log.status,
+      startedAt: log.started_at instanceof Date ? log.started_at.toISOString() : log.started_at,
+      finishedAt: log.finished_at
+        ? (log.finished_at instanceof Date ? log.finished_at.toISOString() : log.finished_at)
+        : null,
+      durationMs: log.duration_ms,
+      processedCount: log.processed_count,
+      triggeredBy: log.triggered_by,
+      isTestRun: log.is_test_run,
+    }));
+
+    return {
+      data,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  async getLogDetail(logId: string) {
+    const log = await this.logRepository
+      .createQueryBuilder('log')
+      .leftJoinAndSelect('log.pipeline', 'pipeline')
+      .where('log.id = :logId', { logId })
+      .getOne();
+
+    if (!log) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_LOG_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_LOG_NOT_FOUND,
+      });
+    }
+
+    let nodeLogs: any[] = [];
+    if (log.node_logs) {
+      try {
+        nodeLogs = typeof log.node_logs === 'string'
+          ? JSON.parse(log.node_logs)
+          : log.node_logs;
+      } catch {
+        nodeLogs = [];
+      }
+    }
+
+    return {
+      id: log.id,
+      pipelineId: log.pipeline_id,
+      pipelineName: log.pipeline?.name ?? '',
+      version: log.version,
+      status: log.status,
+      startedAt: log.started_at instanceof Date ? log.started_at.toISOString() : log.started_at,
+      finishedAt: log.finished_at
+        ? (log.finished_at instanceof Date ? log.finished_at.toISOString() : log.finished_at)
+        : null,
+      durationMs: log.duration_ms,
+      processedCount: log.processed_count,
+      errorMessage: log.error_message,
+      triggeredBy: log.triggered_by,
+      isTestRun: log.is_test_run,
+      nodeLogs,
+    };
   }
 
   private getNodeCategory(nodeType: string): 'extract' | 'transform' | 'load' {

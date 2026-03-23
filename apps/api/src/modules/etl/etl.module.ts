@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EtlPipelineController } from './etl-pipeline.controller';
+import { EtlLogController } from './etl-log.controller';
 import { EtlPipelineService } from './etl-pipeline.service';
 import { EtlPipelineExecutionService } from './etl-pipeline-execution.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
@@ -21,7 +22,7 @@ import { User } from '@/database/entities/user.entity';
       }),
     }),
   ],
-  controllers: [EtlPipelineController],
+  controllers: [EtlPipelineController, EtlLogController],
   providers: [EtlPipelineService, EtlPipelineExecutionService],
   exports: [EtlPipelineService, EtlPipelineExecutionService],
 })

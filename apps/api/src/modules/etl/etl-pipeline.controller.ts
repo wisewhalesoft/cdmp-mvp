@@ -5,6 +5,7 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { EtlPipelineService } from './etl-pipeline.service';
 import { EtlPipelineExecutionService } from './etl-pipeline-execution.service';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
+import { ListPipelineLogsDto } from './dto/list-pipeline-logs.dto';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
 import { SaveDefinitionDto } from './dto/save-definition.dto';
 import { TogglePipelineDto } from './dto/toggle-pipeline.dto';
@@ -49,6 +50,11 @@ export class EtlPipelineController {
   @Patch(':id/toggle')
   async toggle(@Param('id') id: string, @Body() dto: TogglePipelineDto) {
     return this.etlPipelineService.togglePipeline(id, dto.enabled);
+  }
+
+  @Get(':id/logs')
+  async getPipelineLogs(@Param('id') id: string, @Query() query: ListPipelineLogsDto) {
+    return this.etlPipelineService.getPipelineLogs(id, query);
   }
 
   @Get(':id/definition')

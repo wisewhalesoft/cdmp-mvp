@@ -639,6 +639,58 @@ export interface PublishVersionResponse {
   publishedAt: string;
 }
 
+// F032: Pipeline Logs
+export type PipelineLogStatus = 'running' | 'completed' | 'failed';
+export type PipelineLogTriggeredBy = 'schedule' | 'manual' | 'test' | 'retry';
+
+export interface PipelineLogListItem {
+  id: string;
+  version: number;
+  status: PipelineLogStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  processedCount: number;
+  triggeredBy: PipelineLogTriggeredBy;
+  isTestRun: boolean;
+}
+
+export interface PipelineLogListResponse {
+  data: PipelineLogListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface PipelineLogNodeLog {
+  nodeId: string;
+  nodeName: string;
+  nodeType: string;
+  status: 'completed' | 'failed' | 'running' | 'skipped';
+  processedCount: number;
+  durationMs: number;
+  errorMessage: string | null;
+}
+
+export interface PipelineLogDetailResponse {
+  id: string;
+  pipelineId: string;
+  pipelineName: string;
+  version: number;
+  status: PipelineLogStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  processedCount: number;
+  errorMessage: string | null;
+  triggeredBy: PipelineLogTriggeredBy;
+  isTestRun: boolean;
+  nodeLogs: PipelineLogNodeLog[];
+}
+
 // F031: Toggle Pipeline
 export interface TogglePipelineRequest {
   enabled: boolean;
@@ -696,6 +748,8 @@ export const ERROR_CODES = {
   PIPELINE_INVALID_CONNECTION: 'PIPELINE_INVALID_CONNECTION',
   VALIDATION_INVALID_CRON: 'VALIDATION_INVALID_CRON',
   SYSTEM_INTERNAL_ERROR: 'SYSTEM_INTERNAL_ERROR',
+  // F032: Pipeline Logs
+  PIPELINE_LOG_NOT_FOUND: 'PIPELINE_LOG_NOT_FOUND',
 } as const;
 
 export const ERROR_MESSAGES = {
