@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Node } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
 import { MousePointerClick, Trash2, Plus, Lock } from 'lucide-react';
 import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
 import type { RawTableItem } from '@cdmp/shared';
@@ -7,6 +7,8 @@ import type { RawTableItem } from '@cdmp/shared';
 interface PropertiesPanelProps {
   selectedNode: Node | null;
   rawTables: RawTableItem[];
+  nodes: Node[];
+  edges: Edge[];
   onNodeDataChange: (nodeId: string, data: Record<string, unknown>) => void;
   onDeleteNode: (nodeId: string) => void;
 }
@@ -14,6 +16,8 @@ interface PropertiesPanelProps {
 export function PropertiesPanel({
   selectedNode,
   rawTables,
+  nodes,
+  edges,
   onNodeDataChange,
   onDeleteNode,
 }: PropertiesPanelProps) {
@@ -54,6 +58,43 @@ export function PropertiesPanel({
     onNodeDataChange(selectedNode.id, { ...nodeData, ...updates });
   };
 
+  const renderProperties = () => {
+    switch (nodeType) {
+      case 'raw_data_extract':
+        return <ExtractProperties nodeData={nodeData} rawTables={rawTables} onChange={updateData} />;
+      case 'null_handler':
+        return <NullHandlerProperties nodeData={nodeData} onChange={updateData} />;
+      case 'format_convert':
+        return <FormatProperties nodeData={nodeData} onChange={updateData} />;
+      case 'type_cast':
+        return <TypeCastProperties nodeData={nodeData} onChange={updateData} />;
+      case 'target_load':
+        return <LoadProperties nodeData={nodeData} onChange={updateData} />;
+      case 'merge':
+        return <MergeProperties nodeData={nodeData} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
+      case 'field_mapping':
+        return <FieldMappingProperties nodeData={nodeData} onChange={updateData} />;
+      case 'conditional':
+        return <ConditionalProperties nodeData={nodeData} onChange={updateData} />;
+      case 'filter':
+        return <FilterProperties nodeData={nodeData} onChange={updateData} />;
+      case 'dedup':
+        return <DedupProperties nodeData={nodeData} onChange={updateData} />;
+      case 'lookup':
+        return <LookupProperties nodeData={nodeData} onChange={updateData} />;
+      case 'string_process':
+        return <StringProcessProperties nodeData={nodeData} onChange={updateData} />;
+      case 'encrypt':
+        return <EncryptProperties nodeData={nodeData} onChange={updateData} />;
+      case 'aggregate':
+        return <AggregateProperties nodeData={nodeData} onChange={updateData} />;
+      case 'derived_field':
+        return <DerivedFieldProperties nodeData={nodeData} onChange={updateData} />;
+      default:
+        return <GenericTransformProperties nodeData={nodeData} onChange={updateData} />;
+    }
+  };
+
   return (
     <aside
       className="w-[320px] bg-white border-l border-[#E5E7EB] overflow-y-auto flex-shrink-0"
@@ -84,41 +125,99 @@ export function PropertiesPanel({
 
       {/* Properties Form */}
       <div className="p-4 space-y-4">
-        {nodeType === 'raw_data_extract' && (
-          <ExtractProperties
-            nodeData={nodeData}
-            rawTables={rawTables}
-            onChange={updateData}
-          />
-        )}
-        {nodeType === 'null_handler' && (
-          <NullHandlerProperties nodeData={nodeData} onChange={updateData} />
-        )}
-        {nodeType === 'format_convert' && (
-          <FormatProperties nodeData={nodeData} onChange={updateData} />
-        )}
-        {nodeType === 'type_cast' && (
-          <TypeCastProperties nodeData={nodeData} onChange={updateData} />
-        )}
-        {nodeType === 'target_load' && (
-          <LoadProperties nodeData={nodeData} onChange={updateData} />
-        )}
-        {/* Generic properties for other transform types */}
-        {nodeDef.category === 'transform' &&
-          !['null_handler', 'format_convert', 'type_cast'].includes(nodeType) && (
-            <GenericTransformProperties nodeData={nodeData} onChange={updateData} />
-          )}
+        {renderProperties()}
       </div>
     </aside>
   );
 }
 
-// --- Sub-components for each node type ---
+// --- Shared styles & helpers ---
 
 const inputClass =
   'w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]';
 const selectClass = inputClass;
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1.5';
+const smallInputClass =
+  'w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]';
+const smallLabelClass = 'block text-xs text-gray-500 mb-1';
+
+interface SimplePropsBase {
+  nodeData: Record<string, unknown>;
+  onChange: (updates: Record<string, unknown>) => void;
+}
+
+function AddButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full py-2 text-sm text-[#2563EB] border border-dashed border-[#2563EB] rounded-lg hover:bg-blue-50 flex items-center justify-center gap-1"
+    >
+      <Plus className="w-4 h-4" />
+      {label}
+    </button>
+  );
+}
+
+function ItemHeader({ index, label, onRemove }: { index: number; label: string; onRemove: () => void }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium text-gray-500">{label} {index + 1}</span>
+      <button onClick={onRemove} className="text-gray-400 hover:text-[#EF4444]">
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function TagInput({
+  tags,
+  onAdd,
+  onRemove,
+  placeholder,
+  testId,
+}: {
+  tags: string[];
+  onAdd: (tag: string) => void;
+  onRemove: (tag: string) => void;
+  placeholder: string;
+  testId: string;
+}) {
+  const [newTag, setNewTag] = useState('');
+
+  const handleAdd = () => {
+    if (newTag.trim() && !tags.includes(newTag.trim())) {
+      onAdd(newTag.trim());
+      setNewTag('');
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1.5 p-2 border border-[#E5E7EB] rounded-lg min-h-[36px]">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+        >
+          {tag}
+          <button onClick={() => onRemove(tag)} className="text-gray-400 hover:text-gray-600">
+            &times;
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={newTag}
+        onChange={(e) => setNewTag(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+        placeholder={placeholder}
+        className="flex-1 min-w-[80px] text-xs outline-none bg-transparent"
+        data-testid={testId}
+      />
+    </div>
+  );
+}
+
+// --- Extract Properties ---
 
 function ExtractProperties({
   nodeData,
@@ -172,13 +271,9 @@ function ExtractProperties({
   );
 }
 
-function NullHandlerProperties({
-  nodeData,
-  onChange,
-}: {
-  nodeData: Record<string, unknown>;
-  onChange: (updates: Record<string, unknown>) => void;
-}) {
+// --- NullHandler Properties ---
+
+function NullHandlerProperties({ nodeData, onChange }: SimplePropsBase) {
   const columns = (nodeData.columns as string[]) || [];
   const strategy = (nodeData.strategy as string) || 'default_value';
   const defaultValue = (nodeData.defaultValue as string) || '';
@@ -259,6 +354,8 @@ function NullHandlerProperties({
   );
 }
 
+// --- Format Properties ---
+
 interface FormatRule {
   field: string;
   formatType: string;
@@ -266,13 +363,7 @@ interface FormatRule {
   targetFormat: string;
 }
 
-function FormatProperties({
-  nodeData,
-  onChange,
-}: {
-  nodeData: Record<string, unknown>;
-  onChange: (updates: Record<string, unknown>) => void;
-}) {
+function FormatProperties({ nodeData, onChange }: SimplePropsBase) {
   const rules = (nodeData.rules as FormatRule[]) || [];
 
   const addRule = () => {
@@ -296,28 +387,20 @@ function FormatProperties({
       <div className="text-xs font-medium text-gray-500 mb-2">轉換規則</div>
       {rules.map((rule, index) => (
         <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500">規則 {index + 1}</span>
-            <button
-              onClick={() => removeRule(index)}
-              className="text-gray-400 hover:text-[#EF4444]"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <ItemHeader index={index} label="規則" onRemove={() => removeRule(index)} />
           <div>
-            <label className="block text-xs text-gray-500 mb-1">欄位</label>
+            <label className={smallLabelClass}>欄位</label>
             <input
               type="text"
-              className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              className={smallInputClass}
               value={rule.field}
               onChange={(e) => updateRule(index, { field: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">格式類型</label>
+            <label className={smallLabelClass}>格式類型</label>
             <select
-              className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              className={smallInputClass}
               value={rule.formatType}
               onChange={(e) => updateRule(index, { formatType: e.target.value })}
             >
@@ -328,7 +411,7 @@ function FormatProperties({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">來源格式</label>
+              <label className={smallLabelClass}>來源格式</label>
               <input
                 type="text"
                 className="w-full px-2 py-1.5 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
@@ -337,7 +420,7 @@ function FormatProperties({
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">目標格式</label>
+              <label className={smallLabelClass}>目標格式</label>
               <input
                 type="text"
                 className="w-full px-2 py-1.5 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
@@ -348,16 +431,12 @@ function FormatProperties({
           </div>
         </div>
       ))}
-      <button
-        onClick={addRule}
-        className="w-full py-2 text-sm text-[#2563EB] border border-dashed border-[#2563EB] rounded-lg hover:bg-blue-50 flex items-center justify-center gap-1"
-      >
-        <Plus className="w-4 h-4" />
-        新增規則
-      </button>
+      <AddButton onClick={addRule} label="新增規則" />
     </>
   );
 }
+
+// --- TypeCast Properties ---
 
 interface TypeCastItem {
   field: string;
@@ -365,13 +444,7 @@ interface TypeCastItem {
   targetType: string;
 }
 
-function TypeCastProperties({
-  nodeData,
-  onChange,
-}: {
-  nodeData: Record<string, unknown>;
-  onChange: (updates: Record<string, unknown>) => void;
-}) {
+function TypeCastProperties({ nodeData, onChange }: SimplePropsBase) {
   const casts = (nodeData.casts as TypeCastItem[]) || [];
 
   const addCast = () => {
@@ -390,14 +463,7 @@ function TypeCastProperties({
   };
 
   const TYPE_OPTIONS = [
-    'VARCHAR',
-    'INTEGER',
-    'DECIMAL',
-    'BOOLEAN',
-    'DATE',
-    'TIMESTAMP',
-    'TEXT',
-    'UUID',
+    'VARCHAR', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP', 'TEXT', 'UUID',
   ];
 
   return (
@@ -405,27 +471,19 @@ function TypeCastProperties({
       <div className="text-xs font-medium text-gray-500 mb-2">轉換清單</div>
       {casts.map((cast, index) => (
         <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500">項目 {index + 1}</span>
-            <button
-              onClick={() => removeCast(index)}
-              className="text-gray-400 hover:text-[#EF4444]"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <ItemHeader index={index} label="項目" onRemove={() => removeCast(index)} />
           <div>
-            <label className="block text-xs text-gray-500 mb-1">欄位</label>
+            <label className={smallLabelClass}>欄位</label>
             <input
               type="text"
-              className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              className={smallInputClass}
               value={cast.field}
               onChange={(e) => updateCast(index, { field: e.target.value })}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">來源型別</label>
+              <label className={smallLabelClass}>來源型別</label>
               <input
                 type="text"
                 value={cast.sourceType}
@@ -434,40 +492,28 @@ function TypeCastProperties({
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">目標型別</label>
+              <label className={smallLabelClass}>目標型別</label>
               <select
                 className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
                 value={cast.targetType}
                 onChange={(e) => updateCast(index, { targetType: e.target.value })}
               >
                 {TYPE_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
             </div>
           </div>
         </div>
       ))}
-      <button
-        onClick={addCast}
-        className="w-full py-2 text-sm text-[#2563EB] border border-dashed border-[#2563EB] rounded-lg hover:bg-blue-50 flex items-center justify-center gap-1"
-      >
-        <Plus className="w-4 h-4" />
-        新增轉換
-      </button>
+      <AddButton onClick={addCast} label="新增轉換" />
     </>
   );
 }
 
-function LoadProperties({
-  nodeData,
-  onChange,
-}: {
-  nodeData: Record<string, unknown>;
-  onChange: (updates: Record<string, unknown>) => void;
-}) {
+// --- Load Properties ---
+
+function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
   const targetTable = (nodeData.targetTable as string) || '';
 
   const TARGET_TABLES = [
@@ -477,7 +523,6 @@ function LoadProperties({
     { value: 'customer_service', label: 'Customer Service（客服/申訴）- service' },
   ];
 
-  // Mock field mappings
   const FIELD_MAPPINGS: Record<string, { name: string; type: string; required?: boolean }[]> = {
     customer_core: [
       { name: 'customer_id', type: 'UUID', required: true },
@@ -525,18 +570,14 @@ function LoadProperties({
         >
           <option value="">選擇目標表</option>
           {TARGET_TABLES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
+            <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
         {targetTable && (
-          <>
-            <p className="text-xs text-gray-400 mt-1">
-              {fields.length + ETL_TRACKING_FIELDS.length} 個欄位（含{' '}
-              {ETL_TRACKING_FIELDS.length} 個 ETL 追蹤欄位）
-            </p>
-          </>
+          <p className="text-xs text-gray-400 mt-1">
+            {fields.length + ETL_TRACKING_FIELDS.length} 個欄位（含{' '}
+            {ETL_TRACKING_FIELDS.length} 個 ETL 追蹤欄位）
+          </p>
         )}
       </div>
 
@@ -593,13 +634,1049 @@ function LoadProperties({
   );
 }
 
-function GenericTransformProperties({
+// --- 1. Merge Properties ---
+
+interface MergeCondition {
+  leftColumn: string;
+  rightColumn: string;
+  operator: string;
+}
+
+function MergeProperties({
   nodeData,
   onChange,
-}: {
-  nodeData: Record<string, unknown>;
-  onChange: (updates: Record<string, unknown>) => void;
-}) {
+  nodeId,
+  nodes,
+  edges,
+}: SimplePropsBase & { nodeId: string; nodes: Node[]; edges: Edge[] }) {
+  const joinType = (nodeData.joinType as string) || 'INNER';
+  const conditions = (nodeData.conditions as MergeCondition[]) || [];
+
+  // Derive left/right input from canvas edges connected to this node's handles
+  const leftEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'left-input');
+  const rightEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'right-input');
+
+  const getNodeLabel = (edgeItem: Edge | undefined) => {
+    if (!edgeItem) return null;
+    const node = nodes.find((n) => n.id === edgeItem.source);
+    if (!node) return null;
+    const data = node.data as Record<string, unknown>;
+    return (data.label as string) || edgeItem.source;
+  };
+
+  const leftLabel = getNodeLabel(leftEdge);
+  const rightLabel = getNodeLabel(rightEdge);
+
+  const OPERATORS = ['=', '!=', '>', '<', '>=', '<='];
+
+  const addCondition = () => {
+    onChange({
+      conditions: [...conditions, { leftColumn: '', rightColumn: '', operator: '=' }],
+    });
+  };
+
+  const removeCondition = (index: number) => {
+    onChange({ conditions: conditions.filter((_, i) => i !== index) });
+  };
+
+  const updateCondition = (index: number, updates: Partial<MergeCondition>) => {
+    const newConditions = conditions.map((c, i) => (i === index ? { ...c, ...updates } : c));
+    onChange({ conditions: newConditions });
+  };
+
+  return (
+    <>
+      <div>
+        <label className={labelClass}>JOIN 類型</label>
+        <select
+          className={selectClass}
+          value={joinType}
+          onChange={(e) => onChange({ joinType: e.target.value, subtitle: e.target.value })}
+          data-testid="merge-join-type-select"
+        >
+          <option value="INNER">INNER JOIN</option>
+          <option value="LEFT">LEFT JOIN</option>
+          <option value="RIGHT">RIGHT JOIN</option>
+          <option value="FULL">FULL JOIN</option>
+        </select>
+      </div>
+      <div>
+        <label className={labelClass}>左輸入來源</label>
+        {leftLabel ? (
+          <div className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-50 border border-[#E5E7EB] rounded-lg text-gray-700" data-testid="merge-left-input">
+            <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+            {leftLabel}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 italic px-3 py-2 border border-dashed border-[#E5E7EB] rounded-lg" data-testid="merge-left-input">
+            請從畫布連接上方端口（Left）
+          </p>
+        )}
+      </div>
+      <div>
+        <label className={labelClass}>右輸入來源</label>
+        {rightLabel ? (
+          <div className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-50 border border-[#E5E7EB] rounded-lg text-gray-700" data-testid="merge-right-input">
+            <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+            {rightLabel}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 italic px-3 py-2 border border-dashed border-[#E5E7EB] rounded-lg" data-testid="merge-right-input">
+            請從畫布連接下方端口（Right）
+          </p>
+        )}
+      </div>
+      <div className="text-xs font-medium text-gray-500 mb-2">合併條件</div>
+      {conditions.map((cond, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="條件" onRemove={() => removeCondition(index)} />
+          <div>
+            <label className={smallLabelClass}>左欄位{leftLabel && ` (${leftLabel})`}</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={cond.leftColumn}
+              onChange={(e) => updateCondition(index, { leftColumn: e.target.value })}
+              data-testid={`merge-condition-${index}-left`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>運算子</label>
+            <select
+              className={smallInputClass}
+              value={cond.operator}
+              onChange={(e) => updateCondition(index, { operator: e.target.value })}
+              data-testid={`merge-condition-${index}-operator`}
+            >
+              {OPERATORS.map((op) => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={smallLabelClass}>右欄位{rightLabel && ` (${rightLabel})`}</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={cond.rightColumn}
+              onChange={(e) => updateCondition(index, { rightColumn: e.target.value })}
+              data-testid={`merge-condition-${index}-right`}
+            />
+          </div>
+        </div>
+      ))}
+      <AddButton onClick={addCondition} label="新增條件" />
+    </>
+  );
+}
+
+// --- 2. Field Mapping Properties ---
+
+interface FieldMappingItem {
+  sourceColumn: string;
+  targetColumn: string;
+  defaultValue: string | null;
+}
+
+function FieldMappingProperties({ nodeData, onChange }: SimplePropsBase) {
+  const mappings = (nodeData.mappings as FieldMappingItem[]) || [];
+  const dropUnmapped = (nodeData.dropUnmapped as boolean) || false;
+
+  const addMapping = () => {
+    onChange({
+      mappings: [...mappings, { sourceColumn: '', targetColumn: '', defaultValue: null }],
+    });
+  };
+
+  const removeMapping = (index: number) => {
+    onChange({ mappings: mappings.filter((_, i) => i !== index) });
+  };
+
+  const updateMapping = (index: number, updates: Partial<FieldMappingItem>) => {
+    const newMappings = mappings.map((m, i) => (i === index ? { ...m, ...updates } : m));
+    onChange({ mappings: newMappings, subtitle: `${newMappings.length} 組對應` });
+  };
+
+  return (
+    <>
+      <div className="text-xs font-medium text-gray-500 mb-2">欄位對應表</div>
+      {mappings.map((mapping, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="對應" onRemove={() => removeMapping(index)} />
+          <div>
+            <label className={smallLabelClass}>來源欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={mapping.sourceColumn}
+              onChange={(e) => updateMapping(index, { sourceColumn: e.target.value })}
+              data-testid={`field-mapping-${index}-source`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>目標欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={mapping.targetColumn}
+              onChange={(e) => updateMapping(index, { targetColumn: e.target.value })}
+              data-testid={`field-mapping-${index}-target`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>預設值</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={mapping.defaultValue || ''}
+              onChange={(e) => updateMapping(index, { defaultValue: e.target.value || null })}
+              placeholder="(無)"
+              data-testid={`field-mapping-${index}-default`}
+            />
+          </div>
+        </div>
+      ))}
+      <AddButton onClick={addMapping} label="新增對應" />
+      <div className="flex items-center gap-2 mt-2">
+        <input
+          type="checkbox"
+          checked={dropUnmapped}
+          onChange={(e) => onChange({ dropUnmapped: e.target.checked })}
+          data-testid="field-mapping-drop-unmapped"
+          className="rounded border-gray-300"
+        />
+        <label className="text-sm text-gray-700">丟棄未對應欄位 (dropUnmapped)</label>
+      </div>
+    </>
+  );
+}
+
+// --- 3. Conditional Properties ---
+
+interface ConditionalCondition {
+  when: {
+    column: string;
+    operator: string;
+    value: string | null;
+  };
+  then: string;
+}
+
+function ConditionalProperties({ nodeData, onChange }: SimplePropsBase) {
+  const targetColumn = (nodeData.targetColumn as string) || '';
+  const conditions = (nodeData.conditions as ConditionalCondition[]) || [];
+  const elseValue = (nodeData.elseValue as string) || '';
+
+  const OPERATORS = ['=', '!=', '>', '<', '>=', '<=', 'IS_NULL', 'IS_NOT_NULL', 'CONTAINS', 'STARTS_WITH'];
+
+  const addCondition = () => {
+    onChange({
+      conditions: [
+        ...conditions,
+        { when: { column: '', operator: '=', value: '' }, then: '' },
+      ],
+    });
+  };
+
+  const removeCondition = (index: number) => {
+    onChange({ conditions: conditions.filter((_, i) => i !== index) });
+  };
+
+  const updateConditionWhen = (index: number, updates: Partial<ConditionalCondition['when']>) => {
+    const newConditions = conditions.map((c, i) =>
+      i === index ? { ...c, when: { ...c.when, ...updates } } : c,
+    );
+    onChange({ conditions: newConditions });
+  };
+
+  const updateConditionThen = (index: number, then: string) => {
+    const newConditions = conditions.map((c, i) =>
+      i === index ? { ...c, then } : c,
+    );
+    onChange({ conditions: newConditions });
+  };
+
+  const needsValue = (op: string) => !['IS_NULL', 'IS_NOT_NULL'].includes(op);
+
+  return (
+    <>
+      <div>
+        <label className={labelClass}>目標欄位</label>
+        <input
+          type="text"
+          className={inputClass}
+          value={targetColumn}
+          onChange={(e) => onChange({ targetColumn: e.target.value, subtitle: e.target.value || undefined })}
+          placeholder="輸入目標欄位名稱"
+          data-testid="conditional-target-column"
+        />
+      </div>
+      <div className="text-xs font-medium text-gray-500 mb-2">條件列表</div>
+      {conditions.map((cond, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="IF" onRemove={() => removeCondition(index)} />
+          <div>
+            <label className={smallLabelClass}>欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={cond.when.column}
+              onChange={(e) => updateConditionWhen(index, { column: e.target.value })}
+              data-testid={`conditional-${index}-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>運算子</label>
+            <select
+              className={smallInputClass}
+              value={cond.when.operator}
+              onChange={(e) => updateConditionWhen(index, { operator: e.target.value })}
+              data-testid={`conditional-${index}-operator`}
+            >
+              {OPERATORS.map((op) => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+          </div>
+          {needsValue(cond.when.operator) && (
+            <div>
+              <label className={smallLabelClass}>值</label>
+              <input
+                type="text"
+                className={smallInputClass}
+                value={cond.when.value || ''}
+                onChange={(e) => updateConditionWhen(index, { value: e.target.value || null })}
+                data-testid={`conditional-${index}-value`}
+              />
+            </div>
+          )}
+          <div>
+            <label className={smallLabelClass}>THEN 值</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={cond.then}
+              onChange={(e) => updateConditionThen(index, e.target.value)}
+              data-testid={`conditional-${index}-then`}
+            />
+          </div>
+        </div>
+      ))}
+      <AddButton onClick={addCondition} label="新增條件" />
+      <div>
+        <label className={labelClass}>ELSE 預設值</label>
+        <input
+          type="text"
+          className={inputClass}
+          value={elseValue}
+          onChange={(e) => onChange({ elseValue: e.target.value || null })}
+          placeholder="(無)"
+          data-testid="conditional-else-value"
+        />
+      </div>
+    </>
+  );
+}
+
+// --- 4. Filter Properties ---
+
+interface FilterCondition {
+  column: string;
+  operator: string;
+  value: string | null;
+}
+
+function FilterProperties({ nodeData, onChange }: SimplePropsBase) {
+  const logic = (nodeData.logic as string) || 'AND';
+  const conditions = (nodeData.conditions as FilterCondition[]) || [];
+
+  const OPERATORS = [
+    '=', '!=', '>', '<', '>=', '<=',
+    'IS_NULL', 'IS_NOT_NULL', 'IN', 'NOT_IN',
+    'CONTAINS', 'STARTS_WITH', 'ENDS_WITH',
+  ];
+
+  const addCondition = () => {
+    onChange({
+      conditions: [...conditions, { column: '', operator: '=', value: '' }],
+    });
+  };
+
+  const removeCondition = (index: number) => {
+    onChange({ conditions: conditions.filter((_, i) => i !== index) });
+  };
+
+  const updateCondition = (index: number, updates: Partial<FilterCondition>) => {
+    const newConditions = conditions.map((c, i) => (i === index ? { ...c, ...updates } : c));
+    onChange({ conditions: newConditions });
+  };
+
+  const needsValue = (op: string) => !['IS_NULL', 'IS_NOT_NULL'].includes(op);
+
+  return (
+    <>
+      <div>
+        <label className={labelClass}>邏輯運算子</label>
+        <select
+          className={selectClass}
+          value={logic}
+          onChange={(e) => onChange({ logic: e.target.value, subtitle: e.target.value })}
+          data-testid="filter-logic-select"
+        >
+          <option value="AND">AND</option>
+          <option value="OR">OR</option>
+        </select>
+      </div>
+      <div className="text-xs font-medium text-gray-500 mb-2">篩選條件</div>
+      {conditions.map((cond, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="條件" onRemove={() => removeCondition(index)} />
+          <div>
+            <label className={smallLabelClass}>欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={cond.column}
+              onChange={(e) => updateCondition(index, { column: e.target.value })}
+              data-testid={`filter-condition-${index}-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>運算子</label>
+            <select
+              className={smallInputClass}
+              value={cond.operator}
+              onChange={(e) => updateCondition(index, { operator: e.target.value })}
+              data-testid={`filter-condition-${index}-operator`}
+            >
+              {OPERATORS.map((op) => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+          </div>
+          {needsValue(cond.operator) && (
+            <div>
+              <label className={smallLabelClass}>值</label>
+              <input
+                type="text"
+                className={smallInputClass}
+                value={cond.value || ''}
+                onChange={(e) => updateCondition(index, { value: e.target.value || null })}
+                data-testid={`filter-condition-${index}-value`}
+              />
+            </div>
+          )}
+        </div>
+      ))}
+      <AddButton onClick={addCondition} label="新增條件" />
+    </>
+  );
+}
+
+// --- 5. Dedup Properties ---
+
+function DedupProperties({ nodeData, onChange }: SimplePropsBase) {
+  const keyColumns = (nodeData.keyColumns as string[]) || [];
+  const keepStrategy = (nodeData.keepStrategy as string) || 'first';
+  const timestampColumn = (nodeData.timestampColumn as string) || '';
+
+  return (
+    <>
+      <div>
+        <label className={labelClass}>去重依據欄位</label>
+        <TagInput
+          tags={keyColumns}
+          onAdd={(tag) => {
+            const newCols = [...keyColumns, tag];
+            onChange({ keyColumns: newCols, subtitle: `${newCols.length} 欄位` });
+          }}
+          onRemove={(tag) => {
+            const newCols = keyColumns.filter((c) => c !== tag);
+            onChange({ keyColumns: newCols, subtitle: newCols.length ? `${newCols.length} 欄位` : undefined });
+          }}
+          placeholder="輸入欄位名稱..."
+          testId="dedup-key-column-input"
+        />
+      </div>
+      <div>
+        <label className={labelClass}>保留策略</label>
+        <select
+          className={selectClass}
+          value={keepStrategy}
+          onChange={(e) => onChange({ keepStrategy: e.target.value, subtitle: `keep: ${e.target.value}` })}
+          data-testid="dedup-keep-strategy-select"
+        >
+          <option value="first">保留第一筆 (first)</option>
+          <option value="last">保留最後一筆 (last)</option>
+          <option value="latest_timestamp">依時間戳記 (latest_timestamp)</option>
+        </select>
+      </div>
+      {keepStrategy === 'latest_timestamp' && (
+        <div>
+          <label className={labelClass}>時間戳記欄位</label>
+          <input
+            type="text"
+            className={inputClass}
+            value={timestampColumn}
+            onChange={(e) => onChange({ timestampColumn: e.target.value })}
+            placeholder="輸入時間戳記欄位名稱"
+            data-testid="dedup-timestamp-column"
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+// --- 6. Lookup Properties ---
+
+interface LookupOutputColumn {
+  lookupColumn: string;
+  outputAlias: string;
+}
+
+function LookupProperties({ nodeData, onChange }: SimplePropsBase) {
+  const lookupSource = (nodeData.lookupSource as string) || '';
+  const matchColumn = (nodeData.matchColumn as string) || '';
+  const lookupMatchColumn = (nodeData.lookupMatchColumn as string) || '';
+  const outputColumns = (nodeData.outputColumns as LookupOutputColumn[]) || [];
+  const noMatchStrategy = (nodeData.noMatchStrategy as string) || 'null';
+  const defaultValue = (nodeData.defaultValue as string) || '';
+
+  const addOutputColumn = () => {
+    onChange({
+      outputColumns: [...outputColumns, { lookupColumn: '', outputAlias: '' }],
+    });
+  };
+
+  const removeOutputColumn = (index: number) => {
+    onChange({ outputColumns: outputColumns.filter((_, i) => i !== index) });
+  };
+
+  const updateOutputColumn = (index: number, updates: Partial<LookupOutputColumn>) => {
+    const newCols = outputColumns.map((c, i) => (i === index ? { ...c, ...updates } : c));
+    onChange({ outputColumns: newCols });
+  };
+
+  return (
+    <>
+      <div>
+        <label className={labelClass}>對照來源</label>
+        <input
+          type="text"
+          className={inputClass}
+          value={lookupSource}
+          onChange={(e) => onChange({ lookupSource: e.target.value, subtitle: e.target.value || undefined })}
+          placeholder="輸入對照表名稱"
+          data-testid="lookup-source-input"
+        />
+      </div>
+      <div>
+        <label className={labelClass}>比對欄位（主表）</label>
+        <input
+          type="text"
+          className={inputClass}
+          value={matchColumn}
+          onChange={(e) => onChange({ matchColumn: e.target.value })}
+          placeholder="主表的比對欄位"
+          data-testid="lookup-match-column"
+        />
+      </div>
+      <div>
+        <label className={labelClass}>比對欄位（對照表）</label>
+        <input
+          type="text"
+          className={inputClass}
+          value={lookupMatchColumn}
+          onChange={(e) => onChange({ lookupMatchColumn: e.target.value })}
+          placeholder="對照表的比對欄位"
+          data-testid="lookup-lookup-match-column"
+        />
+      </div>
+      <div className="text-xs font-medium text-gray-500 mb-2">輸出欄位</div>
+      {outputColumns.map((col, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="輸出" onRemove={() => removeOutputColumn(index)} />
+          <div>
+            <label className={smallLabelClass}>對照表欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={col.lookupColumn}
+              onChange={(e) => updateOutputColumn(index, { lookupColumn: e.target.value })}
+              data-testid={`lookup-output-${index}-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>輸出別名</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={col.outputAlias}
+              onChange={(e) => updateOutputColumn(index, { outputAlias: e.target.value })}
+              data-testid={`lookup-output-${index}-alias`}
+            />
+          </div>
+        </div>
+      ))}
+      <AddButton onClick={addOutputColumn} label="新增輸出欄位" />
+      <div>
+        <label className={labelClass}>無匹配策略</label>
+        <select
+          className={selectClass}
+          value={noMatchStrategy}
+          onChange={(e) => onChange({ noMatchStrategy: e.target.value })}
+          data-testid="lookup-no-match-strategy"
+        >
+          <option value="null">填入 NULL</option>
+          <option value="default_value">預設值</option>
+          <option value="skip_row">跳過該列</option>
+        </select>
+      </div>
+      {noMatchStrategy === 'default_value' && (
+        <div>
+          <label className={labelClass}>預設值</label>
+          <input
+            type="text"
+            className={inputClass}
+            value={defaultValue}
+            onChange={(e) => onChange({ defaultValue: e.target.value || null })}
+            data-testid="lookup-default-value"
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+// --- 7. String Process Properties ---
+
+interface StringOperation {
+  column: string;
+  operation: string;
+  params: Record<string, unknown>;
+}
+
+function StringProcessProperties({ nodeData, onChange }: SimplePropsBase) {
+  const operations = (nodeData.operations as StringOperation[]) || [];
+
+  const OPERATIONS = [
+    'trim', 'upper', 'lower', 'substring', 'concat', 'regex_replace', 'normalize',
+  ];
+
+  const addOperation = () => {
+    onChange({
+      operations: [...operations, { column: '', operation: 'trim', params: {} }],
+      subtitle: `${operations.length + 1} 組操作`,
+    });
+  };
+
+  const removeOperation = (index: number) => {
+    const newOps = operations.filter((_, i) => i !== index);
+    onChange({ operations: newOps, subtitle: newOps.length ? `${newOps.length} 組操作` : undefined });
+  };
+
+  const updateOperation = (index: number, updates: Partial<StringOperation>) => {
+    const newOps = operations.map((o, i) => (i === index ? { ...o, ...updates } : o));
+    onChange({ operations: newOps });
+  };
+
+  const updateParams = (index: number, paramUpdates: Record<string, unknown>) => {
+    const newOps = operations.map((o, i) =>
+      i === index ? { ...o, params: { ...o.params, ...paramUpdates } } : o,
+    );
+    onChange({ operations: newOps });
+  };
+
+  return (
+    <>
+      <div className="text-xs font-medium text-gray-500 mb-2">字串操作列表</div>
+      {operations.map((op, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="操作" onRemove={() => removeOperation(index)} />
+          <div>
+            <label className={smallLabelClass}>欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={op.column}
+              onChange={(e) => updateOperation(index, { column: e.target.value })}
+              data-testid={`string-op-${index}-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>操作類型</label>
+            <select
+              className={smallInputClass}
+              value={op.operation}
+              onChange={(e) => updateOperation(index, { operation: e.target.value, params: {} })}
+              data-testid={`string-op-${index}-type`}
+            >
+              {OPERATIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+          {/* Dynamic params based on operation type */}
+          {op.operation === 'substring' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={smallLabelClass}>起始位置</label>
+                <input
+                  type="number"
+                  className={smallInputClass}
+                  value={(op.params.start as number) ?? 0}
+                  onChange={(e) => updateParams(index, { start: parseInt(e.target.value) || 0 })}
+                  data-testid={`string-op-${index}-start`}
+                />
+              </div>
+              <div>
+                <label className={smallLabelClass}>長度</label>
+                <input
+                  type="number"
+                  className={smallInputClass}
+                  value={(op.params.length as number) ?? 10}
+                  onChange={(e) => updateParams(index, { length: parseInt(e.target.value) || 0 })}
+                  data-testid={`string-op-${index}-length`}
+                />
+              </div>
+            </div>
+          )}
+          {op.operation === 'concat' && (
+            <>
+              <div>
+                <label className={smallLabelClass}>連接字元</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={(op.params.concatWith as string) || ''}
+                  onChange={(e) => updateParams(index, { concatWith: e.target.value })}
+                  data-testid={`string-op-${index}-concat-with`}
+                />
+              </div>
+              <div>
+                <label className={smallLabelClass}>連接欄位（逗號分隔）</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={((op.params.concatColumns as string[]) || []).join(', ')}
+                  onChange={(e) =>
+                    updateParams(index, {
+                      concatColumns: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                    })
+                  }
+                  placeholder="col_a, col_b"
+                  data-testid={`string-op-${index}-concat-columns`}
+                />
+              </div>
+            </>
+          )}
+          {op.operation === 'regex_replace' && (
+            <>
+              <div>
+                <label className={smallLabelClass}>正則表達式</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={(op.params.pattern as string) || ''}
+                  onChange={(e) => updateParams(index, { pattern: e.target.value })}
+                  data-testid={`string-op-${index}-pattern`}
+                />
+              </div>
+              <div>
+                <label className={smallLabelClass}>替換值</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={(op.params.replacement as string) || ''}
+                  onChange={(e) => updateParams(index, { replacement: e.target.value })}
+                  data-testid={`string-op-${index}-replacement`}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+      <AddButton onClick={addOperation} label="新增操作" />
+    </>
+  );
+}
+
+// --- 8. Encrypt/Masking Properties ---
+
+interface EncryptRule {
+  column: string;
+  method: string;
+  maskPattern: string | null;
+  visibleStart: number;
+  visibleEnd: number;
+}
+
+function EncryptProperties({ nodeData, onChange }: SimplePropsBase) {
+  const rules = (nodeData.rules as EncryptRule[]) || [];
+
+  const addRule = () => {
+    onChange({
+      rules: [...rules, { column: '', method: 'partial_mask', maskPattern: null, visibleStart: 0, visibleEnd: 0 }],
+      subtitle: `${rules.length + 1} 組規則`,
+    });
+  };
+
+  const removeRule = (index: number) => {
+    const newRules = rules.filter((_, i) => i !== index);
+    onChange({ rules: newRules, subtitle: newRules.length ? `${newRules.length} 組規則` : undefined });
+  };
+
+  const updateRule = (index: number, updates: Partial<EncryptRule>) => {
+    const newRules = rules.map((r, i) => (i === index ? { ...r, ...updates } : r));
+    onChange({ rules: newRules });
+  };
+
+  return (
+    <>
+      <div className="text-xs font-medium text-gray-500 mb-2">加密/脫敏規則</div>
+      {rules.map((rule, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="規則" onRemove={() => removeRule(index)} />
+          <div>
+            <label className={smallLabelClass}>欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={rule.column}
+              onChange={(e) => updateRule(index, { column: e.target.value })}
+              data-testid={`encrypt-rule-${index}-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>方法</label>
+            <select
+              className={smallInputClass}
+              value={rule.method}
+              onChange={(e) => updateRule(index, { method: e.target.value })}
+              data-testid={`encrypt-rule-${index}-method`}
+            >
+              <option value="aes_encrypt">AES 加密</option>
+              <option value="partial_mask">部分遮罩</option>
+            </select>
+          </div>
+          {rule.method === 'partial_mask' && (
+            <>
+              <div>
+                <label className={smallLabelClass}>遮罩模式</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={rule.maskPattern || ''}
+                  onChange={(e) => updateRule(index, { maskPattern: e.target.value || null })}
+                  placeholder="例：***"
+                  data-testid={`encrypt-rule-${index}-pattern`}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={smallLabelClass}>可見起始位置</label>
+                  <input
+                    type="number"
+                    className={smallInputClass}
+                    value={rule.visibleStart}
+                    onChange={(e) => updateRule(index, { visibleStart: parseInt(e.target.value) || 0 })}
+                    data-testid={`encrypt-rule-${index}-visible-start`}
+                  />
+                </div>
+                <div>
+                  <label className={smallLabelClass}>可見結束位置</label>
+                  <input
+                    type="number"
+                    className={smallInputClass}
+                    value={rule.visibleEnd}
+                    onChange={(e) => updateRule(index, { visibleEnd: parseInt(e.target.value) || 0 })}
+                    data-testid={`encrypt-rule-${index}-visible-end`}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+      <AddButton onClick={addRule} label="新增規則" />
+    </>
+  );
+}
+
+// --- 9. Aggregate Properties ---
+
+interface AggregationItem {
+  column: string;
+  function: string;
+  outputAlias: string;
+}
+
+function AggregateProperties({ nodeData, onChange }: SimplePropsBase) {
+  const groupByColumns = (nodeData.groupByColumns as string[]) || [];
+  const aggregations = (nodeData.aggregations as AggregationItem[]) || [];
+
+  const AGG_FUNCTIONS = ['SUM', 'COUNT', 'AVG', 'MAX', 'MIN'];
+
+  const addAggregation = () => {
+    onChange({
+      aggregations: [...aggregations, { column: '', function: 'COUNT', outputAlias: '' }],
+      subtitle: `${aggregations.length + 1} 組聚合`,
+    });
+  };
+
+  const removeAggregation = (index: number) => {
+    const newAggs = aggregations.filter((_, i) => i !== index);
+    onChange({ aggregations: newAggs, subtitle: newAggs.length ? `${newAggs.length} 組聚合` : undefined });
+  };
+
+  const updateAggregation = (index: number, updates: Partial<AggregationItem>) => {
+    const newAggs = aggregations.map((a, i) => (i === index ? { ...a, ...updates } : a));
+    onChange({ aggregations: newAggs });
+  };
+
+  return (
+    <>
+      <div>
+        <label className={labelClass}>GROUP BY 欄位</label>
+        <TagInput
+          tags={groupByColumns}
+          onAdd={(tag) => onChange({ groupByColumns: [...groupByColumns, tag] })}
+          onRemove={(tag) => onChange({ groupByColumns: groupByColumns.filter((c) => c !== tag) })}
+          placeholder="輸入欄位名稱..."
+          testId="aggregate-group-by-input"
+        />
+      </div>
+      <div className="text-xs font-medium text-gray-500 mb-2">聚合函數</div>
+      {aggregations.map((agg, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="聚合" onRemove={() => removeAggregation(index)} />
+          <div>
+            <label className={smallLabelClass}>欄位</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={agg.column}
+              onChange={(e) => updateAggregation(index, { column: e.target.value })}
+              data-testid={`aggregate-${index}-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>函數</label>
+            <select
+              className={smallInputClass}
+              value={agg.function}
+              onChange={(e) => updateAggregation(index, { function: e.target.value })}
+              data-testid={`aggregate-${index}-function`}
+            >
+              {AGG_FUNCTIONS.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={smallLabelClass}>輸出別名</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={agg.outputAlias}
+              onChange={(e) => updateAggregation(index, { outputAlias: e.target.value })}
+              data-testid={`aggregate-${index}-alias`}
+            />
+          </div>
+        </div>
+      ))}
+      <AddButton onClick={addAggregation} label="新增聚合" />
+    </>
+  );
+}
+
+// --- 10. Derived Field Properties ---
+
+interface DerivationItem {
+  outputColumn: string;
+  expression: string;
+  outputType: string;
+}
+
+function DerivedFieldProperties({ nodeData, onChange }: SimplePropsBase) {
+  const derivations = (nodeData.derivations as DerivationItem[]) || [];
+
+  const TYPE_OPTIONS = ['VARCHAR', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP'];
+
+  const addDerivation = () => {
+    onChange({
+      derivations: [...derivations, { outputColumn: '', expression: '', outputType: 'VARCHAR' }],
+      subtitle: `${derivations.length + 1} 組衍生欄位`,
+    });
+  };
+
+  const removeDerivation = (index: number) => {
+    const newDerivations = derivations.filter((_, i) => i !== index);
+    onChange({
+      derivations: newDerivations,
+      subtitle: newDerivations.length ? `${newDerivations.length} 組衍生欄位` : undefined,
+    });
+  };
+
+  const updateDerivation = (index: number, updates: Partial<DerivationItem>) => {
+    const newDerivations = derivations.map((d, i) => (i === index ? { ...d, ...updates } : d));
+    onChange({ derivations: newDerivations });
+  };
+
+  return (
+    <>
+      <div className="text-xs font-medium text-gray-500 mb-2">衍生欄位列表</div>
+      {derivations.map((deriv, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={index} label="欄位" onRemove={() => removeDerivation(index)} />
+          <div>
+            <label className={smallLabelClass}>新欄位名稱</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={deriv.outputColumn}
+              onChange={(e) => updateDerivation(index, { outputColumn: e.target.value })}
+              data-testid={`derived-${index}-output-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>運算式</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={deriv.expression}
+              onChange={(e) => updateDerivation(index, { expression: e.target.value })}
+              placeholder="{column_a} + {column_b}"
+              data-testid={`derived-${index}-expression`}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              使用 {'{'}column_name{'}'} 語法引用欄位
+            </p>
+          </div>
+          <div>
+            <label className={smallLabelClass}>輸出型別</label>
+            <select
+              className={smallInputClass}
+              value={deriv.outputType}
+              onChange={(e) => updateDerivation(index, { outputType: e.target.value })}
+              data-testid={`derived-${index}-output-type`}
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ))}
+      <AddButton onClick={addDerivation} label="新增衍生欄位" />
+    </>
+  );
+}
+
+// --- Generic Fallback ---
+
+function GenericTransformProperties({ nodeData, onChange }: SimplePropsBase) {
   const description = (nodeData.description as string) || '';
 
   return (

@@ -59,12 +59,31 @@ function PipelineNodeComponent({ data, selected }: NodeProps & { data: PipelineN
       data-testid="pipeline-node"
     >
       {/* Input Handle - not for extract nodes */}
-      {nodeDef.category !== 'extract' && (
+      {nodeDef.category !== 'extract' && data.nodeType !== 'merge' && (
         <Handle
           type="target"
           position={Position.Left}
           className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
         />
+      )}
+      {/* Merge node: dual input handles */}
+      {data.nodeType === 'merge' && (
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="left-input"
+            style={{ top: '33%' }}
+            className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="right-input"
+            style={{ top: '67%' }}
+            className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
+          />
+        </>
       )}
 
       <div className="flex items-center gap-2 mb-1">
