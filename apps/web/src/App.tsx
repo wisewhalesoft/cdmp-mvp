@@ -12,6 +12,7 @@ import { EditExtractionTaskPage } from '@/pages/extraction-tasks/edit-extraction
 import { ExtractionTaskListPage } from '@/pages/extraction-tasks/extraction-task-list-page';
 import { RawDataPreviewPage } from '@/pages/extraction-tasks/raw-data-preview-page';
 import { PipelineListPage } from '@/pages/etl-pipelines/pipeline-list-page';
+import { PipelineLogsPage } from '@/pages/etl-pipelines/pipeline-logs-page';
 import { PipelineEditorPage } from '@/pages/etl-pipelines/editor';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
@@ -90,6 +91,14 @@ export function App() {
         element={
           <AdminRoute>
             <PipelineListPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/etl-pipelines/:id/logs"
+        element={
+          <AdminRoute>
+            <PipelineLogsPage />
           </AdminRoute>
         }
       />

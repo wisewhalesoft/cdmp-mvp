@@ -335,8 +335,18 @@ export function PipelineListPage() {
 
         {/* Logs */}
         <button
+          onClick={() =>
+            navigate(`/etl-pipelines/${pipeline.id}/logs`, {
+              state: {
+                pipelineId: pipeline.id,
+                pipelineName: pipeline.name,
+                pipelineStatus: pipeline.status,
+              },
+            })
+          }
           className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-blue-600"
           title="日誌"
+          data-testid={`logs-pipeline-${pipeline.id}`}
         >
           <FileText className="w-4 h-4" />
         </button>

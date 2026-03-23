@@ -14,6 +14,8 @@ import type {
   PipelineProgressResponse,
   TogglePipelineResponse,
   PublishVersionResponse,
+  PipelineLogListResponse,
+  PipelineLogDetailResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -85,6 +87,24 @@ export async function togglePipeline(id: string, enabled: boolean): Promise<Togg
   const response = await apiClient.patch<TogglePipelineResponse>(
     `/etl/pipelines/${id}/toggle`,
     { enabled },
+  );
+  return response.data;
+}
+
+export async function getPipelineLogs(
+  pipelineId: string,
+  query: { page?: number; pageSize?: number } = {},
+): Promise<PipelineLogListResponse> {
+  const response = await apiClient.get<PipelineLogListResponse>(
+    `/etl/pipelines/${pipelineId}/logs`,
+    { params: query },
+  );
+  return response.data;
+}
+
+export async function getLogDetail(logId: string): Promise<PipelineLogDetailResponse> {
+  const response = await apiClient.get<PipelineLogDetailResponse>(
+    `/etl/logs/${logId}`,
   );
   return response.data;
 }
