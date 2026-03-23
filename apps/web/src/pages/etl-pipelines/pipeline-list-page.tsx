@@ -21,6 +21,8 @@ import {
   ToggleLeft,
   FileText,
   Trash2,
+  X,
+  CheckCircle2,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
@@ -30,6 +32,7 @@ import {
   executePipeline,
   testPipeline,
   getPipelineProgress,
+  togglePipeline,
 } from '@/api/etl-pipelines';
 import { CreatePipelineModal } from './create-pipeline-modal';
 import type {
@@ -87,6 +90,19 @@ export function PipelineListPage() {
   const [executingIds, setExecutingIds] = useState<Set<string>>(new Set());
   const [progressMap, setProgressMap] = useState<Record<string, PipelineProgressResponse>>({});
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Toast state
+  const [toast, setToast] = useState<{ title: string; message: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (title: string, message: string) => {
+    setToast({ title, message });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+  };
+
+  // Toggle state
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -199,6 +215,26 @@ export function PipelineListPage() {
     }
   };
 
+  const handleToggle = async (pipelineId: string, enabled: boolean) => {
+    setTogglingIds((prev) => new Set(prev).add(pipelineId));
+    try {
+      await togglePipeline(pipelineId, enabled);
+      showToast(
+        enabled ? 'Pipeline 已啟用' : 'Pipeline 已停用',
+        enabled ? '排程已恢復' : '排程已暫停',
+      );
+      await fetchData();
+    } catch {
+      // Error handled by API client interceptor
+    } finally {
+      setTogglingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pipelineId);
+        return next;
+      });
+    }
+  };
+
   const renderActionButtons = (pipeline: PipelineListItem) => {
     const isRunning = pipeline.status === 'running';
     const isExecuting = executingIds.has(pipeline.id);
@@ -277,15 +313,21 @@ export function PipelineListPage() {
           </button>
         ) : pipeline.status === 'disabled' ? (
           <button
+            onClick={() => handleToggle(pipeline.id, true)}
             className="p-1.5 hover:bg-gray-100 rounded text-gray-400"
             title="啟用"
+            disabled={togglingIds.has(pipeline.id)}
+            data-testid={`toggle-pipeline-${pipeline.id}`}
           >
             <ToggleLeft className="w-4 h-4" />
           </button>
         ) : (
           <button
+            onClick={() => handleToggle(pipeline.id, false)}
             className="p-1.5 hover:bg-gray-100 rounded text-green-500"
             title="停用"
+            disabled={togglingIds.has(pipeline.id)}
+            data-testid={`toggle-pipeline-${pipeline.id}`}
           >
             <ToggleRight className="w-4 h-4" />
           </button>
@@ -612,6 +654,25 @@ export function PipelineListPage() {
           fetchData();
         }}
       />
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50" data-testid="toast">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 flex items-start gap-3 min-w-[320px] border-l-4 border-l-green-500">
+            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-gray-800">{toast.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{toast.message}</p>
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="text-gray-400 hover:text-gray-600 ml-auto"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { PipelineListPage } from '../pipeline-list-page';
@@ -205,5 +205,82 @@ describe('PipelineListPage', () => {
 
     expect(screen.getByText('ETL Pipeline')).toBeDefined();
     expect(screen.getByText('ETL Pipeline 管理')).toBeDefined();
+  });
+
+  // TS-F031-012: running 狀態 Pipeline toggle 按鈕 disabled
+  it('should disable toggle button for running pipeline', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // pl-3 is running
+    const row = screen.getByTestId('pipeline-row-pl-3');
+    const toggleBtn = row.querySelector('button[title="執行中"]');
+    expect(toggleBtn).not.toBeNull();
+    expect((toggleBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // TS-F031-013: draft Pipeline 啟用按鈕 disabled + tooltip
+  it('should disable toggle button for draft pipeline with tooltip', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // pl-2 is draft
+    const row = screen.getByTestId('pipeline-row-pl-2');
+    const toggleBtn = row.querySelector('button[title="需先發布 Pipeline 才能啟用"]');
+    expect(toggleBtn).not.toBeNull();
+    expect((toggleBtn as HTMLButtonElement).disabled).toBe(true);
+    // Tooltip text exists
+    expect(row.querySelector('.pointer-events-none')?.textContent).toBe('需先發布 Pipeline 才能啟用');
+  });
+
+  // TS-F031-014: 停用成功後列表即時更新
+  it('should update list after toggling pipeline off', async () => {
+    const mockedTogglePipeline = vi.mocked(etlPipelinesApi.togglePipeline);
+    mockedTogglePipeline.mockResolvedValue({
+      id: 'pl-1',
+      name: '每日客戶同步 Pipeline',
+      status: 'disabled',
+      enabled: false,
+      schedule: '0 2 * * *',
+      updatedAt: '2026-03-23T00:00:00.000Z',
+    });
+
+    // First render with active pipeline
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // After toggle, return updated list
+    const updatedResponse: PipelineListResponse = {
+      ...mockListResponse,
+      data: mockListResponse.data.map((p) =>
+        p.id === 'pl-1' ? { ...p, status: 'disabled' as const } : p,
+      ),
+    };
+    mockedGetPipelines.mockResolvedValue(updatedResponse);
+
+    // Click toggle button for pl-1 (active → disable)
+    const row = screen.getByTestId('pipeline-row-pl-1');
+    const toggleBtn = row.querySelector('button[title="停用"]') as HTMLButtonElement;
+    expect(toggleBtn).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(toggleBtn);
+    });
+
+    await waitFor(() => {
+      expect(mockedTogglePipeline).toHaveBeenCalledWith('pl-1', false);
+    });
   });
 });
