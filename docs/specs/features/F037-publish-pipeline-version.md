@@ -39,7 +39,7 @@ status: Draft
 
 ### AC-2: 發布後 Pipeline 可以被啟用
 
-- **Given** 一個 Pipeline 已有至少一個 `published` 版本，Pipeline `status` 仍為 `draft`
+- **Given** 一個 Pipeline 版本剛由 F037 從 `testing` 發布為 `published`，且發布前 `pipeline.status` 為 `draft`，發布後系統已自動將 `pipeline.status` 更新為 `disabled`
 - **When** Admin 前往 Pipeline 列表點擊「啟用」
 - **Then** 啟用操作成功，Pipeline `status` 變為 `active`，不再出現 `PIPELINE_DRAFT_CANNOT_ENABLE` 錯誤
 
@@ -53,7 +53,7 @@ status: Draft
 
 - **Given** 版本管理頁面中有一個 `testing` 狀態的版本
 - **When** Admin 點擊該版本的「發布」圖示按鈕（rocket icon）
-- **Then** 系統顯示確認對話框，包含：版本號（如「確定要發布版本 v3 嗎？」）、影響說明（「發布後此版本將成為排程執行的版本。Pipeline 狀態將可設為啟用。」）、「取消」與「確認發布」兩個按鈕
+- **Then** 系統顯示確認對話框，包含：版本號（如「確定要發布版本 v3 嗎？」）、影響說明（「發布後此版本將成為排程執行的版本。若 Pipeline 尚未啟用，狀態將自動切換為停用，您可在列表中手動啟用。」）、「取消」與「確認發布」兩個按鈕
 
 ### AC-5: draft 版本的發布按鈕為停用狀態
 
@@ -88,7 +88,7 @@ status: Draft
 5. 後端驗證 Pipeline 存在且未被軟刪除
 6. 後端驗證版本存在且 `pipeline_id` 匹配
 7. 後端驗證版本狀態為 `testing`
-8. 後端在同一 Transaction 中：更新 `EtlPipelineVersion.status = 'published'`；更新 `EtlPipeline.version = versionNumber`
+8. 後端在同一 Transaction 中：更新 `EtlPipelineVersion.status = 'published'`；更新 `EtlPipeline.version = versionNumber`；若 `EtlPipeline.status === 'draft'`，同步更新 `EtlPipeline.status = 'disabled'`
 9. 後端回傳 200 OK 與更新後的版本資訊
 10. 前端顯示成功 Toast 並更新版本狀態 Badge
 
@@ -102,7 +102,7 @@ status: Draft
 - Pipeline 執行中（`status = running`）時發布：允許（發布操作與執行狀態無衝突）
 - 舊的 `published` 版本：保留原狀態不變（歷史保存），不自動降級
 - 同一 Pipeline 可存在多個 `published` 版本，排程以 `version` 欄位最大值（非 `created_at`）選取最新 published 版本
-- 發布後 Pipeline `status` 不會自動變更；Admin 需另行執行 F031 啟用操作
+- 發布後 Pipeline `status` 處理：若發布前 `pipeline.status === 'draft'`，自動更新為 `disabled`（表示「已有發布版本但尚未啟用」）；若 `pipeline.status` 已為 `disabled`、`active` 或 `running`，則保持不變。`disabled` 狀態後 Admin 可執行 F031 啟用操作
 
 ## 8. API 規格
 
@@ -158,6 +158,7 @@ status: Draft
 4. 於同一 Transaction 中執行：
    - `EtlPipelineVersion.status = 'published'`
    - `EtlPipeline.version = version.version`（版本號碼）
+   - 若 `EtlPipeline.status === 'draft'`：`EtlPipeline.status = 'disabled'`（解除 draft 鎖定，使 F031 啟用操作得以進行）
 
 ## 9. 商業規則
 
@@ -169,7 +170,7 @@ status: Draft
 | BR-4 | 測試執行成功（F030）後版本自動從 `draft` 升為 `testing`，此為發布的前置條件 |
 | BR-5 | 發布時同步更新 `EtlPipeline.version` 為該版本號（同一 Transaction） |
 | BR-6 | 舊的 `published` 版本保留原狀態（歷史保存），不自動降級 |
-| BR-7 | 發布後 Pipeline `status` 不自動變更；Admin 需另行執行 F031 啟用操作 |
+| BR-7 | 發布後若 `pipeline.status === 'draft'`，系統自動將其更新為 `disabled`（同一 Transaction），讓 Admin 可執行 F031 啟用；若 `pipeline.status` 已為其他狀態則保持不變 |
 | BR-8 | 排程引擎選取 published 版本時，以 `version` 欄位最大值為準（非 `created_at`） |
 
 ## 10. UI/UX 需求
@@ -186,7 +187,7 @@ status: Draft
 
 - 標題：「確認發布版本」
 - 圖示：綠色圓形背景的 rocket icon
-- 內容：「確定要發布版本 vN 嗎？」；「發布後此版本將成為排程執行的版本。Pipeline 狀態將可設為啟用。」
+- 內容：「確定要發布版本 vN 嗎？」；「發布後此版本將成為排程執行的版本。若 Pipeline 尚未啟用，狀態將自動切換為停用，您可在列表中手動啟用。」
 - 按鈕：「取消」（灰色框線）、「確認發布」（綠色實心，確認中顯示 Loading spinner 且 disabled）
 
 成功後 Toast 通知：

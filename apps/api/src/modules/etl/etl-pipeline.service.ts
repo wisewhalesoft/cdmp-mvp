@@ -382,6 +382,11 @@ export class EtlPipelineService {
         await versionRepo.save(version);
 
         pipeline.version = version.version;
+        // If pipeline is still draft, transition to disabled (published but not yet enabled)
+        if (pipeline.status === 'draft') {
+          pipeline.status = 'disabled';
+          pipeline.enabled = false;
+        }
         await pipelineRepo.save(pipeline);
       });
 

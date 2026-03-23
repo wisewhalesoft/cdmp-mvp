@@ -209,6 +209,36 @@ describe('EtlPipelineService - publishVersion (F037)', () => {
     expect(() => new Date(result.publishedAt)).not.toThrow();
   });
 
+  // Pipeline status transitions from draft to disabled on publish
+  it('should transition pipeline.status from draft to disabled on publish', async () => {
+    const pipeline = makePipeline({ id: 'pipeline-a', version: 1, status: 'draft', enabled: false });
+    const version = makeVersion({ status: 'testing' });
+
+    mockPipelineQb.getOne.mockResolvedValue(pipeline);
+    mockVersionRepository.findOne.mockResolvedValue(version);
+
+    await service.publishVersion('pipeline-a', version.id);
+
+    const savedPipeline = transactionPipelineSave.mock.calls[0][0];
+    expect(savedPipeline.status).toBe('disabled');
+    expect(savedPipeline.enabled).toBe(false);
+  });
+
+  // Pipeline status does NOT change if already active/failed/disabled
+  it('should not change pipeline.status if it is not draft', async () => {
+    const pipeline = makePipeline({ id: 'pipeline-a', version: 1, status: 'active', enabled: true });
+    const version = makeVersion({ status: 'testing' });
+
+    mockPipelineQb.getOne.mockResolvedValue(pipeline);
+    mockVersionRepository.findOne.mockResolvedValue(version);
+
+    await service.publishVersion('pipeline-a', version.id);
+
+    const savedPipeline = transactionPipelineSave.mock.calls[0][0];
+    expect(savedPipeline.status).toBe('active');
+    expect(savedPipeline.enabled).toBe(true);
+  });
+
   // TS-F037-012: 發布 draft 版本 → 422 PIPELINE_PUBLISH_REQUIRES_TEST
   it('should throw 422 PIPELINE_PUBLISH_REQUIRES_TEST when version is draft', async () => {
     const pipeline = makePipeline();
