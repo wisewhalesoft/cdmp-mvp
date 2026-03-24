@@ -4,8 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EtlPipelineController } from './etl-pipeline.controller';
 import { EtlLogController } from './etl-log.controller';
+import { EtlDashboardController } from './etl-dashboard.controller';
 import { EtlPipelineService } from './etl-pipeline.service';
 import { EtlPipelineExecutionService } from './etl-pipeline-execution.service';
+import { EtlDashboardService } from './etl-dashboard.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
@@ -22,8 +24,8 @@ import { User } from '@/database/entities/user.entity';
       }),
     }),
   ],
-  controllers: [EtlPipelineController, EtlLogController],
-  providers: [EtlPipelineService, EtlPipelineExecutionService],
-  exports: [EtlPipelineService, EtlPipelineExecutionService],
+  controllers: [EtlPipelineController, EtlLogController, EtlDashboardController],
+  providers: [EtlPipelineService, EtlPipelineExecutionService, EtlDashboardService],
+  exports: [EtlPipelineService, EtlPipelineExecutionService, EtlDashboardService],
 })
 export class EtlModule {}

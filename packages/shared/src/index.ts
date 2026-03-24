@@ -784,6 +784,62 @@ export interface DeletePipelineResponse {
   message: string;
 }
 
+// F035: Pipeline Dashboard
+export interface EtlDashboardStatsResponse {
+  totalPipelines: number;
+  running: number;
+  todaySuccess: number;
+  todayFailed: number;
+  successRate: number;
+}
+
+export interface EtlDashboardTrendDatapoint {
+  date: string;
+  success: number;
+  failed: number;
+}
+
+export interface EtlDashboardTrendResponse {
+  datapoints: EtlDashboardTrendDatapoint[];
+}
+
+export interface EtlDashboardRunningItem {
+  id: string;
+  name: string;
+  processedCount: number;
+  totalCount: number;
+  progressPercent: number;
+  startedAt: string;
+  currentNodeName: string | null;
+}
+
+export interface EtlDashboardRunningResponse {
+  data: EtlDashboardRunningItem[];
+}
+
+export interface EtlDashboardFailureItem {
+  pipelineId: string;
+  pipelineName: string;
+  failedAt: string;
+  errorSummary: string;
+  logId: string;
+}
+
+export interface EtlDashboardFailuresResponse {
+  data: EtlDashboardFailureItem[];
+}
+
+export interface EtlDashboardSlowestItem {
+  pipelineId: string;
+  pipelineName: string;
+  avgDurationMs: number;
+  executionCount: number;
+}
+
+export interface EtlDashboardSlowestResponse {
+  data: EtlDashboardSlowestItem[];
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
