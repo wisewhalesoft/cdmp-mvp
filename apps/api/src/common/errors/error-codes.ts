@@ -63,6 +63,8 @@ export const ERROR_CODES = {
   PIPELINE_VERSION_NOT_FOUND: 'PIPELINE_VERSION_NOT_FOUND',
   // F032: Pipeline Logs
   PIPELINE_LOG_NOT_FOUND: 'PIPELINE_LOG_NOT_FOUND',
+  // F036: Target Tables
+  PIPELINE_TARGET_TABLE_NOT_FOUND: 'PIPELINE_TARGET_TABLE_NOT_FOUND',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -132,4 +134,6 @@ export const ERROR_MESSAGES = {
   PIPELINE_VERSION_NOT_FOUND: '找不到指定的版本',
   // F032: Pipeline Logs
   PIPELINE_LOG_NOT_FOUND: '找不到指定的執行日誌',
+  // F036: Target Tables
+  PIPELINE_TARGET_TABLE_NOT_FOUND: '找不到指定的目標表',
 } as const;

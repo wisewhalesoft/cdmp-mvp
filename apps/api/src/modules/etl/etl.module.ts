@@ -5,9 +5,11 @@ import { ConfigService } from '@nestjs/config';
 import { EtlPipelineController } from './etl-pipeline.controller';
 import { EtlLogController } from './etl-log.controller';
 import { EtlDashboardController } from './etl-dashboard.controller';
+import { TargetTableController } from './target-table.controller';
 import { EtlPipelineService } from './etl-pipeline.service';
 import { EtlPipelineExecutionService } from './etl-pipeline-execution.service';
 import { EtlDashboardService } from './etl-dashboard.service';
+import { TargetTableService } from './target-table.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
@@ -24,8 +26,8 @@ import { User } from '@/database/entities/user.entity';
       }),
     }),
   ],
-  controllers: [EtlPipelineController, EtlLogController, EtlDashboardController],
-  providers: [EtlPipelineService, EtlPipelineExecutionService, EtlDashboardService],
-  exports: [EtlPipelineService, EtlPipelineExecutionService, EtlDashboardService],
+  controllers: [EtlPipelineController, EtlLogController, EtlDashboardController, TargetTableController],
+  providers: [EtlPipelineService, EtlPipelineExecutionService, EtlDashboardService, TargetTableService],
+  exports: [EtlPipelineService, EtlPipelineExecutionService, EtlDashboardService, TargetTableService],
 })
 export class EtlModule {}
