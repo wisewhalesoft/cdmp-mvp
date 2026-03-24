@@ -75,6 +75,7 @@ describe('EtlPipelineService - publishVersion (F037)', () => {
     where: vi.fn().mockReturnThis(),
     andWhere: vi.fn().mockReturnThis(),
     getRawOne: vi.fn(),
+    getCount: vi.fn().mockResolvedValue(1),
   };
 
   const mockLogRepository = {
