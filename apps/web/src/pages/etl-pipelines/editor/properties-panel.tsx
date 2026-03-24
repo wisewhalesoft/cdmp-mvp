@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { MousePointerClick, Trash2, Plus, Lock } from 'lucide-react';
 import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
-import type { RawTableItem } from '@cdmp/shared';
+import type { RawTableItem, TargetTableSummary, TargetTableColumn } from '@cdmp/shared';
+import { getTargetTables, getTargetTableSchema } from '@/api/etl-pipelines';
 
 interface PropertiesPanelProps {
   selectedNode: Node | null;
@@ -513,43 +514,36 @@ function TypeCastProperties({ nodeData, onChange }: SimplePropsBase) {
   );
 }
 
-// --- Load Properties ---
+// --- Load Properties (API-driven, F036 AC-3/AC-4) ---
 
 function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
   const targetTable = (nodeData.targetTable as string) || '';
+  const [tables, setTables] = useState<TargetTableSummary[]>([]);
+  const [schemaColumns, setSchemaColumns] = useState<TargetTableColumn[]>([]);
+  const [loadingSchema, setLoadingSchema] = useState(false);
 
-  const TARGET_TABLES = [
-    { value: 'customer_core', label: 'Customer Core（身分/主檔）- core' },
-    { value: 'customer_interaction', label: 'Customer Interaction（行為/接觸）- interaction' },
-    { value: 'customer_financial', label: 'Customer Financial（交易/風控）- financial' },
-    { value: 'customer_service', label: 'Customer Service（客服/申訴）- service' },
-  ];
+  // Load target table list from API
+  useEffect(() => {
+    getTargetTables()
+      .then((res) => setTables(res.data))
+      .catch(() => {});
+  }, []);
 
-  const FIELD_MAPPINGS: Record<string, { name: string; type: string; required?: boolean }[]> = {
-    customer_core: [
-      { name: 'customer_id', type: 'UUID', required: true },
-      { name: 'id_number', type: 'VARCHAR' },
-      { name: 'name', type: 'VARCHAR' },
-      { name: 'gender', type: 'VARCHAR' },
-      { name: 'date_of_birth', type: 'DATE' },
-      { name: 'phone', type: 'VARCHAR' },
-      { name: 'email', type: 'VARCHAR' },
-      { name: 'address', type: 'TEXT' },
-      { name: 'occupation', type: 'VARCHAR' },
-      { name: 'company_name', type: 'VARCHAR' },
-      { name: 'customer_type', type: 'VARCHAR' },
-      { name: 'registration_date', type: 'TIMESTAMP' },
-      { name: 'last_updated_at', type: 'TIMESTAMP' },
-    ],
-  };
+  // Load schema columns when target table changes
+  useEffect(() => {
+    if (!targetTable) {
+      setSchemaColumns([]);
+      return;
+    }
+    setLoadingSchema(true);
+    getTargetTableSchema(targetTable)
+      .then((res) => setSchemaColumns(res.columns))
+      .catch(() => setSchemaColumns([]))
+      .finally(() => setLoadingSchema(false));
+  }, [targetTable]);
 
-  const ETL_TRACKING_FIELDS = [
-    { name: 'data_source', type: 'VARCHAR' },
-    { name: '_etl_loaded_at', type: 'TIMESTAMP' },
-    { name: '_etl_pipeline_id', type: 'UUID' },
-  ];
-
-  const fields = targetTable ? FIELD_MAPPINGS[targetTable] || [] : [];
+  const regularFields = schemaColumns.filter((c) => !c.isEtlTracking);
+  const etlTrackingFields = schemaColumns.filter((c) => c.isEtlTracking);
   const mappings = (nodeData.fieldMappings as Record<string, string>) || {};
 
   return (
@@ -571,19 +565,24 @@ function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
           data-testid="load-target-table-select"
         >
           <option value="">選擇目標表</option>
-          {TARGET_TABLES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+          {tables.map((t) => (
+            <option key={t.tableName} value={t.tableName}>
+              {t.displayName} - {t.domain}
+            </option>
           ))}
         </select>
-        {targetTable && (
+        {targetTable && schemaColumns.length > 0 && (
           <p className="text-xs text-gray-400 mt-1">
-            {fields.length + ETL_TRACKING_FIELDS.length} 個欄位（含{' '}
-            {ETL_TRACKING_FIELDS.length} 個 ETL 追蹤欄位）
+            {schemaColumns.length} 個欄位（含{' '}
+            {etlTrackingFields.length} 個 ETL 追蹤欄位）
           </p>
+        )}
+        {loadingSchema && (
+          <p className="text-xs text-gray-400 mt-1">載入欄位定義中...</p>
         )}
       </div>
 
-      {targetTable && fields.length > 0 && (
+      {targetTable && regularFields.length > 0 && (
         <div>
           <label className={labelClass}>欄位對應</label>
           <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
@@ -592,13 +591,13 @@ function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
               <span>來源欄位</span>
             </div>
             <div className="max-h-[280px] overflow-y-auto">
-              {fields.map((field) => (
+              {regularFields.map((field) => (
                 <div
                   key={field.name}
                   className="grid grid-cols-2 items-center px-3 py-2 border-b border-[#E5E7EB] hover:bg-gray-50"
                 >
                   <span className="text-xs font-medium text-gray-700">
-                    {field.required && <span className="text-[#EF4444]">*</span>}{' '}
+                    {field.isPrimaryKey && <span className="text-[#EF4444]">*</span>}{' '}
                     {field.name} <span className="text-gray-400">({field.type})</span>
                   </span>
                   <input
@@ -614,7 +613,7 @@ function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
                   />
                 </div>
               ))}
-              {ETL_TRACKING_FIELDS.map((field) => (
+              {etlTrackingFields.map((field) => (
                 <div
                   key={field.name}
                   className="grid grid-cols-2 items-center px-3 py-2 border-b border-[#E5E7EB] bg-gray-50"

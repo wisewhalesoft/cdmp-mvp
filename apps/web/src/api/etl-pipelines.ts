@@ -26,6 +26,8 @@ import type {
   EtlDashboardRunningResponse,
   EtlDashboardFailuresResponse,
   EtlDashboardSlowestResponse,
+  TargetTableListResponse,
+  TargetTableSchemaResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -202,5 +204,18 @@ export async function getDashboardFailures(): Promise<EtlDashboardFailuresRespon
 
 export async function getDashboardSlowest(): Promise<EtlDashboardSlowestResponse> {
   const response = await apiClient.get<EtlDashboardSlowestResponse>('/etl/dashboard/slowest');
+  return response.data;
+}
+
+// F036: Target Table APIs
+export async function getTargetTables(): Promise<TargetTableListResponse> {
+  const response = await apiClient.get<TargetTableListResponse>('/etl/target-tables');
+  return response.data;
+}
+
+export async function getTargetTableSchema(tableName: string): Promise<TargetTableSchemaResponse> {
+  const response = await apiClient.get<TargetTableSchemaResponse>(
+    `/etl/target-tables/${tableName}/schema`,
+  );
   return response.data;
 }

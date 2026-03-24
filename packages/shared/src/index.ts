@@ -840,6 +840,36 @@ export interface EtlDashboardSlowestResponse {
   data: EtlDashboardSlowestItem[];
 }
 
+// F036: Target Table types
+export interface TargetTableColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  isPrimaryKey: boolean;
+  isEtlTracking: boolean;
+  description: string;
+}
+
+export interface TargetTableSummary {
+  tableName: string;
+  displayName: string;
+  domain: string;
+  columnCount: number;
+  description: string;
+}
+
+export interface TargetTableListResponse {
+  data: TargetTableSummary[];
+}
+
+export interface TargetTableSchemaResponse {
+  tableName: string;
+  displayName: string;
+  domain: string;
+  description: string;
+  columns: TargetTableColumn[];
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',

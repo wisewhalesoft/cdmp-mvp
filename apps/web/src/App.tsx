@@ -16,6 +16,7 @@ import { PipelineDashboardPage } from '@/pages/etl-pipelines/pipeline-dashboard-
 import { PipelineLogsPage } from '@/pages/etl-pipelines/pipeline-logs-page';
 import { PipelineEditorPage } from '@/pages/etl-pipelines/editor';
 import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
+import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
 export function App() {
@@ -101,6 +102,14 @@ export function App() {
         element={
           <AdminRoute>
             <PipelineListPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/etl-pipelines/target-tables"
+        element={
+          <AdminRoute>
+            <TargetTablesPage />
           </AdminRoute>
         }
       />
