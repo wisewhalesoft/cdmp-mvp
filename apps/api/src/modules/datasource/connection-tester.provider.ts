@@ -127,7 +127,8 @@ export class ConnectionTesterProvider implements IConnectionTester {
           connectTimeout: 10000,
         },
       };
-      pool = await mssql.connect(mssqlConfig);
+      const connectionPool = new mssql.ConnectionPool(mssqlConfig);
+      pool = await connectionPool.connect();
       await pool.request().query('SELECT 1');
       return { success: true, responseTimeMs: Date.now() - startTime };
     } catch (err: any) {
