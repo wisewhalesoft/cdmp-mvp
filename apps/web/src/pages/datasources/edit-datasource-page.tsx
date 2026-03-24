@@ -36,6 +36,8 @@ export function EditDatasourcePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
+  const [testedBeforeSave, setTestedBeforeSave] = useState(false);
   const initialTypeRef = useRef<string | null>(null);
 
   const {
@@ -82,6 +84,7 @@ export function EditDatasourcePage() {
           password: '',
           description: data.description ?? '',
         });
+        setConnectionStatus(data.status);
         setIsLoading(false);
       })
       .catch(() => {
@@ -133,6 +136,9 @@ export function EditDatasourcePage() {
         const isTimeout = result.message.includes('逾時');
         showToast(result.message, isTimeout ? 'warning' : 'error');
       }
+      // Update connection status from authoritative API response
+      setConnectionStatus(result.status);
+      setTestedBeforeSave(true);
     } catch {
       showToast('測試連線時發生錯誤', 'error');
     } finally {
@@ -158,12 +164,21 @@ export function EditDatasourcePage() {
         payload.password = data.password;
       }
       await updateDatasource(id, payload as any);
+      // BR-4: updateDatasource resets status to 'unknown'.
+      // If user tested connection before saving, re-test to persist the status.
+      if (testedBeforeSave) {
+        try {
+          await testDatasourceConnection(id);
+        } catch {
+          // Best-effort re-test; don't block navigation on failure
+        }
+      }
       showToast('資料來源已更新', 'success');
       navigate('/datasources', { replace: true });
     } catch (err: unknown) {
       const error = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
       if (error.response?.status === 409) {
-        showToast('此名稱的資料來源已存在', 'error');
+        showToast('相同資料庫下已存在此名稱的資料來源', 'error');
       } else {
         showToast('發生未知錯誤，請稍後再試', 'error');
       }
@@ -346,6 +361,28 @@ export function EditDatasourcePage() {
                   )}
                 </div>
               </div>
+
+              {connectionStatus && (
+                <div className="mt-4 flex items-center gap-2" data-testid="connection-status">
+                  <span className="text-sm text-gray-600">連線狀態：</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded ${
+                    connectionStatus === 'connected'
+                      ? 'bg-green-100 text-green-700'
+                      : connectionStatus === 'disconnected'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      connectionStatus === 'connected'
+                        ? 'bg-green-500'
+                        : connectionStatus === 'disconnected'
+                          ? 'bg-red-500'
+                          : 'bg-gray-400'
+                    }`} />
+                    {connectionStatus}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
                 <Button

@@ -146,6 +146,8 @@ describe('DashboardTab', () => {
       success: true,
       message: '連線成功 (42ms)',
       responseTime: 42,
+      status: 'connected',
+      lastTestedAt: '2026-01-20T10:00:00.000Z',
     });
 
     await act(async () => {

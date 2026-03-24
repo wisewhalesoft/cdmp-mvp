@@ -142,6 +142,8 @@ describe('EditDatasourcePage', () => {
         success: true,
         message: '連線成功 (42ms)',
         responseTime: 42,
+        status: 'connected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
       });
       renderPage();
 
@@ -157,12 +159,60 @@ describe('EditDatasourcePage', () => {
       expect(mockedTestConnection).toHaveBeenCalledWith('ds-123');
     });
 
+    it('點擊測試連線成功後更新連線狀態為 connected', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockResolvedValue({
+        success: true,
+        message: '連線成功 (42ms)',
+        responseTime: 42,
+        status: 'connected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
+      });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+
+      await waitFor(() => {
+        const statusEl = screen.getByTestId('connection-status');
+        expect(statusEl).toHaveTextContent('connected');
+      });
+    });
+
+    it('點擊測試連線失敗後更新連線狀態為 disconnected', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockResolvedValue({
+        success: false,
+        message: '帳號或密碼錯誤',
+        responseTime: 200,
+        status: 'disconnected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
+      });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+
+      await waitFor(() => {
+        const statusEl = screen.getByTestId('connection-status');
+        expect(statusEl).toHaveTextContent('disconnected');
+      });
+    });
+
     it('點擊測試連線失敗後顯示錯誤 Toast', async () => {
       const user = userEvent.setup();
       mockedTestConnection.mockResolvedValue({
         success: false,
         message: '帳號或密碼錯誤',
         responseTime: 200,
+        status: 'disconnected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
       });
       renderPage();
 
@@ -252,6 +302,55 @@ describe('EditDatasourcePage', () => {
       });
     });
 
+    it('測試連線後儲存，應在儲存後重新測試連線以持久化狀態', async () => {
+      const user = userEvent.setup();
+      mockedTestConnection.mockResolvedValue({
+        success: true,
+        message: '連線成功 (42ms)',
+        responseTime: 42,
+        status: 'connected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
+      });
+      mockedUpdateDatasource.mockResolvedValue({ ...mockDatasource, status: 'unknown' });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      // Step 1: Test connection
+      await user.click(screen.getByRole('button', { name: /測試連線/ }));
+      await waitFor(() => {
+        expect(mockedTestConnection).toHaveBeenCalledTimes(1);
+      });
+
+      // Step 2: Save
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      // Step 3: After save, testConnection should be called again to re-persist status
+      await waitFor(() => {
+        expect(mockedTestConnection).toHaveBeenCalledTimes(2);
+      });
+      expect(mockNavigate).toHaveBeenCalledWith('/datasources', { replace: true });
+    });
+
+    it('未測試連線直接儲存，不應額外呼叫測試連線', async () => {
+      const user = userEvent.setup();
+      mockedUpdateDatasource.mockResolvedValue({ ...mockDatasource, status: 'unknown' });
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('名稱')).toHaveValue('MySQL Production');
+      });
+
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/datasources', { replace: true });
+      });
+      expect(mockedTestConnection).not.toHaveBeenCalled();
+    });
+
     it('密碼為空時不傳送密碼欄位', async () => {
       const user = userEvent.setup();
       mockedUpdateDatasource.mockResolvedValue({ ...mockDatasource, status: 'unknown' });
@@ -281,7 +380,7 @@ describe('EditDatasourcePage', () => {
     it('409 名稱重複顯示 error Toast', async () => {
       const user = userEvent.setup();
       mockedUpdateDatasource.mockRejectedValue({
-        response: { status: 409, data: { error: 'DS_NAME_EXISTS', message: '此名稱的資料來源已存在' } },
+        response: { status: 409, data: { error: 'DS_NAME_EXISTS', message: '相同資料庫下已存在此名稱的資料來源' } },
       });
       renderPage();
 
@@ -292,7 +391,7 @@ describe('EditDatasourcePage', () => {
       await user.click(screen.getByRole('button', { name: '儲存' }));
 
       await waitFor(() => {
-        expect(screen.getByText('此名稱的資料來源已存在')).toBeInTheDocument();
+        expect(screen.getByText('相同資料庫下已存在此名稱的資料來源')).toBeInTheDocument();
       });
     });
 

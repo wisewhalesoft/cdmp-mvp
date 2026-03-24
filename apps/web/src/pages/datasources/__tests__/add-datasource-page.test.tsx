@@ -224,14 +224,14 @@ describe('AddDatasourcePage', () => {
     it('409 名稱重複顯示 error Toast', async () => {
       const user = userEvent.setup();
       mockedCreateDatasource.mockRejectedValue({
-        response: { status: 409, data: { error: 'DS_NAME_EXISTS', message: '此名稱的資料來源已存在' } },
+        response: { status: 409, data: { error: 'DS_NAME_EXISTS', message: '相同資料庫下已存在此名稱的資料來源' } },
       });
       renderPage();
       await fillForm(user);
       await user.click(screen.getByRole('button', { name: '新增資料來源' }));
 
       await waitFor(() => {
-        expect(screen.getByText('此名稱的資料來源已存在')).toBeInTheDocument();
+        expect(screen.getByText('相同資料庫下已存在此名稱的資料來源')).toBeInTheDocument();
       });
     });
 

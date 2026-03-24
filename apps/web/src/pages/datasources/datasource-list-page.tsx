@@ -175,24 +175,18 @@ export function DatasourceListPage() {
       const result = await testDatasourceConnection(ds.id);
       if (result.success) {
         showToast(result.message, 'success');
-        setDatasources((prev) =>
-          prev.map((item) =>
-            item.id === ds.id
-              ? { ...item, status: 'connected' as DatasourceStatus, lastTestedAt: new Date().toISOString() }
-              : item,
-          ),
-        );
       } else {
         const isTimeout = result.message.includes('逾時');
         showToast(result.message, isTimeout ? 'warning' : 'error');
-        setDatasources((prev) =>
-          prev.map((item) =>
-            item.id === ds.id
-              ? { ...item, status: 'disconnected' as DatasourceStatus, lastTestedAt: new Date().toISOString() }
-              : item,
-          ),
-        );
       }
+      // Update status and lastTestedAt from authoritative API response
+      setDatasources((prev) =>
+        prev.map((item) =>
+          item.id === ds.id
+            ? { ...item, status: result.status, lastTestedAt: result.lastTestedAt }
+            : item,
+        ),
+      );
     } catch {
       showToast('測試連線時發生錯誤', 'error');
     } finally {

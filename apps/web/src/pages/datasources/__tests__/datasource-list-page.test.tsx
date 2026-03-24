@@ -452,6 +452,8 @@ describe('DatasourceListPage', () => {
         success: true,
         message: '連線成功 (42ms)',
         responseTime: 42,
+        status: 'connected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
       });
     });
 
@@ -525,6 +527,8 @@ describe('DatasourceListPage', () => {
         success: false,
         message: '無法連線至主機',
         responseTime: 1500,
+        status: 'disconnected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
       });
       await renderAndLoad();
 
@@ -542,6 +546,8 @@ describe('DatasourceListPage', () => {
         success: false,
         message: '連線逾時',
         responseTime: 10000,
+        status: 'disconnected',
+        lastTestedAt: '2026-01-20T10:00:00.000Z',
       });
       await renderAndLoad();
 

@@ -86,7 +86,7 @@ export function AddDatasourcePage() {
     } catch (err: unknown) {
       const error = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
       if (error.response?.status === 409) {
-        showToast('此名稱的資料來源已存在', 'error');
+        showToast('相同資料庫下已存在此名稱的資料來源', 'error');
       } else {
         showToast('發生未知錯誤，請稍後再試', 'error');
       }
