@@ -23,6 +23,7 @@ import {
   Trash2,
   X,
   CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
@@ -33,6 +34,7 @@ import {
   testPipeline,
   getPipelineProgress,
   togglePipeline,
+  deletePipeline,
 } from '@/api/etl-pipelines';
 import { CreatePipelineModal } from './create-pipeline-modal';
 import type {
@@ -103,6 +105,10 @@ export function PipelineListPage() {
 
   // Toggle state
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<PipelineListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -235,6 +241,29 @@ export function PipelineListPage() {
     }
   };
 
+  const handleDeleteClick = (pipeline: PipelineListItem) => {
+    setDeleteTarget(pipeline);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deletePipeline(deleteTarget.id);
+      showToast('Pipeline 已刪除', `${deleteTarget.name} 已成功刪除`);
+      setDeleteTarget(null);
+      await fetchData();
+    } catch {
+      // Error handled by API client interceptor
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteTarget(null);
+  };
+
   const renderActionButtons = (pipeline: PipelineListItem) => {
     const isRunning = pipeline.status === 'running';
     const isExecuting = executingIds.has(pipeline.id);
@@ -358,8 +387,10 @@ export function PipelineListPage() {
           </button>
         ) : (
           <button
+            onClick={() => handleDeleteClick(pipeline)}
             className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-red-500"
             title="刪除"
+            data-testid={`delete-pipeline-${pipeline.id}`}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -664,6 +695,49 @@ export function PipelineListPage() {
           fetchData();
         }}
       />
+
+      {/* Delete Confirmation Dialog (F034) — per prototype 17-pipeline-management.html */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50" data-testid="delete-dialog">
+          <div className="absolute inset-0 bg-black/50" onClick={handleDeleteCancel} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-[440px]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-red-500">確認刪除 Pipeline</h2>
+              <button onClick={handleDeleteCancel} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-700">
+                    確定要刪除 Pipeline「<span className="font-semibold">{deleteTarget.name}</span>」嗎？
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">刪除後排程將停止，歷史日誌將保留。</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={handleDeleteCancel}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+              >
+                確認刪除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

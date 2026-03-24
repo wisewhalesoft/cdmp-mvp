@@ -13,6 +13,7 @@ import type {
   TestPipelineResponse,
   PipelineProgressResponse,
   TogglePipelineResponse,
+  DeletePipelineResponse,
   PublishVersionResponse,
   PipelineLogListResponse,
   PipelineLogDetailResponse,
@@ -84,6 +85,11 @@ export async function getPipelineProgress(id: string): Promise<PipelineProgressR
   const response = await apiClient.get<PipelineProgressResponse>(
     `/etl/pipelines/${id}/progress`,
   );
+  return response.data;
+}
+
+export async function deletePipeline(id: string): Promise<DeletePipelineResponse> {
+  const response = await apiClient.delete<DeletePipelineResponse>(`/etl/pipelines/${id}`);
   return response.data;
 }
 
