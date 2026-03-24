@@ -16,6 +16,10 @@ import type {
   PublishVersionResponse,
   PipelineLogListResponse,
   PipelineLogDetailResponse,
+  PipelineVersionListResponse,
+  PipelineVersionDetailResponse,
+  PipelineVersionDiffResponse,
+  RollbackVersionResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -115,6 +119,47 @@ export async function publishPipelineVersion(
 ): Promise<PublishVersionResponse> {
   const response = await apiClient.patch<PublishVersionResponse>(
     `/etl/pipelines/${pipelineId}/versions/${versionId}/publish`,
+  );
+  return response.data;
+}
+
+export async function getPipelineVersions(
+  pipelineId: string,
+): Promise<PipelineVersionListResponse> {
+  const response = await apiClient.get<PipelineVersionListResponse>(
+    `/etl/pipelines/${pipelineId}/versions`,
+  );
+  return response.data;
+}
+
+export async function getPipelineVersionDetail(
+  pipelineId: string,
+  versionId: string,
+): Promise<PipelineVersionDetailResponse> {
+  const response = await apiClient.get<PipelineVersionDetailResponse>(
+    `/etl/pipelines/${pipelineId}/versions/${versionId}`,
+  );
+  return response.data;
+}
+
+export async function getPipelineVersionDiff(
+  pipelineId: string,
+  from: number,
+  to: number,
+): Promise<PipelineVersionDiffResponse> {
+  const response = await apiClient.get<PipelineVersionDiffResponse>(
+    `/etl/pipelines/${pipelineId}/versions/diff`,
+    { params: { from, to } },
+  );
+  return response.data;
+}
+
+export async function rollbackPipelineVersion(
+  pipelineId: string,
+  versionId: string,
+): Promise<RollbackVersionResponse> {
+  const response = await apiClient.post<RollbackVersionResponse>(
+    `/etl/pipelines/${pipelineId}/versions/${versionId}/rollback`,
   );
   return response.data;
 }

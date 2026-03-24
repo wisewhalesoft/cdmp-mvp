@@ -14,6 +14,7 @@ import { RawDataPreviewPage } from '@/pages/extraction-tasks/raw-data-preview-pa
 import { PipelineListPage } from '@/pages/etl-pipelines/pipeline-list-page';
 import { PipelineLogsPage } from '@/pages/etl-pipelines/pipeline-logs-page';
 import { PipelineEditorPage } from '@/pages/etl-pipelines/editor';
+import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
 import { AdminRoute, UserRoute } from '@/router/protected-route';
 
 export function App() {
@@ -99,6 +100,14 @@ export function App() {
         element={
           <AdminRoute>
             <PipelineLogsPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/etl-pipelines/:id/versions"
+        element={
+          <AdminRoute>
+            <PipelineVersionsPage />
           </AdminRoute>
         }
       />
