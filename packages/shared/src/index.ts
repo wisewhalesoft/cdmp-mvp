@@ -195,6 +195,8 @@ export interface TestConnectionResponse {
   success: boolean;
   message: string;
   responseTime: number | null;
+  status: DatasourceStatus;
+  lastTestedAt: string;
 }
 
 // F012: Datasource List
@@ -941,7 +943,7 @@ export const ERROR_MESSAGES = {
   EMAIL_SEND_FAILED: '郵件發送失敗，請稍後再試',
   ACCOUNT_SELF_RESET: '請透過個人設定變更您自己的密碼',
   // F011: Datasource
-  DS_NAME_EXISTS: '此名稱的資料來源已存在',
+  DS_NAME_EXISTS: '相同資料庫下已存在此名稱的資料來源',
   DS_NOT_FOUND: '找不到指定的資料來源',
   VALIDATION_INVALID_TYPE: '資料來源類型必須為 mysql、postgresql 或 sqlserver',
   VALIDATION_PORT_RANGE: '連接埠必須介於 1 到 65535 之間',

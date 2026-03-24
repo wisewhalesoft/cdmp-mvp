@@ -15,6 +15,8 @@ export interface TestConnectionResult {
   success: boolean;
   message: string;
   responseTime: number | null;
+  status: string;
+  lastTestedAt: string;
 }
 
 export interface DatasourceListItemResult {
@@ -133,10 +135,11 @@ export class DatasourceService {
     dto: CreateDatasourceDto,
     userId: string,
   ): Promise<CreateDatasourceResult> {
-    // Case-insensitive name uniqueness check (exclude soft-deleted)
+    // Case-insensitive name+databaseName composite uniqueness check (exclude soft-deleted)
     const existing = await this.datasourceRepository
       .createQueryBuilder('ds')
       .where('LOWER(ds.name) = LOWER(:name)', { name: dto.name })
+      .andWhere('LOWER(ds.database_name) = LOWER(:databaseName)', { databaseName: dto.databaseName })
       .andWhere('ds.deleted_at IS NULL')
       .getOne();
 
@@ -225,10 +228,11 @@ export class DatasourceService {
       });
     }
 
-    // Name uniqueness check (exclude self)
+    // Name+databaseName composite uniqueness check (exclude self)
     const duplicate = await this.datasourceRepository
       .createQueryBuilder('ds')
       .where('LOWER(ds.name) = LOWER(:name)', { name: dto.name })
+      .andWhere('LOWER(ds.database_name) = LOWER(:databaseName)', { databaseName: dto.databaseName })
       .andWhere('ds.deleted_at IS NULL')
       .andWhere('ds.id != :selfId', { selfId: id })
       .getOne();
@@ -314,6 +318,8 @@ export class DatasourceService {
         ? `連線成功 (${result.responseTimeMs}ms)`
         : (result.errorMessage ?? '連線失敗'),
       responseTime: result.responseTimeMs,
+      status: ds.status,
+      lastTestedAt: now.toISOString(),
     };
   }
 

@@ -127,14 +127,34 @@ describe('DatasourceService', () => {
     );
   });
 
-  it('should throw ConflictException when name already exists', async () => {
-    mockQueryBuilder.getOne.mockResolvedValue({ id: 'existing-id', name: 'MySQL Production' });
+  it('should throw ConflictException when name+databaseName already exists', async () => {
+    mockQueryBuilder.getOne.mockResolvedValue({ id: 'existing-id', name: 'MySQL Production', database_name: 'app_db' });
 
     await expect(service.createDatasource(validDto, 'user-uuid'))
       .rejects.toThrow(ConflictException);
+  });
 
-    await expect(service.createDatasource(validDto, 'user-uuid'))
-      .rejects.toThrow();
+  it('should allow same name with different databaseName (composite uniqueness)', async () => {
+    mockQueryBuilder.getOne.mockResolvedValue(null); // no duplicate for name+databaseName combo
+
+    const dtoWithDifferentDb = { ...validDto, databaseName: 'other_db' };
+    const result = await service.createDatasource(dtoWithDifferentDb, 'user-uuid');
+
+    expect(result).toBeDefined();
+    expect(result.name).toBe('MySQL Production');
+    expect(result.databaseName).toBe('other_db');
+  });
+
+  it('should include databaseName in uniqueness query for create', async () => {
+    mockQueryBuilder.getOne.mockResolvedValue(null);
+
+    await service.createDatasource(validDto, 'user-uuid');
+
+    // Verify that andWhere was called with database_name condition
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'LOWER(ds.database_name) = LOWER(:databaseName)',
+      { databaseName: 'app_db' },
+    );
   });
 
   it('should encrypt password before saving', async () => {
@@ -371,13 +391,39 @@ describe('DatasourceService', () => {
         .rejects.toThrow(NotFoundException);
     });
 
-    it('should throw ConflictException when name conflicts with another datasource', async () => {
+    it('should throw ConflictException when name+databaseName conflicts with another datasource', async () => {
       mockQueryBuilder.getOne
         .mockResolvedValueOnce(existingEntity) // find existing
-        .mockResolvedValueOnce({ id: 'ds-other', name: 'Duplicate' }); // duplicate found
+        .mockResolvedValueOnce({ id: 'ds-other', name: 'Duplicate', database_name: 'prod_db' }); // duplicate found
 
       await expect(service.updateDatasource('ds-1', { ...updateDto, name: 'Duplicate' }))
         .rejects.toThrow(ConflictException);
+    });
+
+    it('should allow updating to same name if databaseName is different', async () => {
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(existingEntity) // find existing
+        .mockResolvedValueOnce(null); // no duplicate for name+databaseName combo
+
+      const result = await service.updateDatasource('ds-1', { ...updateDto, name: 'Duplicate', databaseName: 'other_db' });
+
+      expect(result).toBeDefined();
+      expect(result.name).toBe('Duplicate');
+      expect(result.databaseName).toBe('other_db');
+    });
+
+    it('should include databaseName in uniqueness query for update', async () => {
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(existingEntity)
+        .mockResolvedValueOnce(null);
+
+      await service.updateDatasource('ds-1', updateDto);
+
+      // Verify that andWhere was called with database_name condition
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'LOWER(ds.database_name) = LOWER(:databaseName)',
+        { databaseName: 'prod_db' },
+      );
     });
   });
 
@@ -460,6 +506,8 @@ describe('DatasourceService', () => {
       expect(result.success).toBe(true);
       expect(result.message).toContain('連線成功');
       expect(result.responseTime).toBe(42);
+      expect(result.status).toBe('connected');
+      expect(result.lastTestedAt).toBeDefined();
       expect(mockConnectionTester.testConnection).toHaveBeenCalledWith({
         type: 'mysql',
         host: '192.168.1.100',
@@ -529,6 +577,7 @@ describe('DatasourceService', () => {
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('無法連線至主機');
+      expect(result.status).toBe('disconnected');
       expect(result.responseTime).toBe(1500);
     });
 

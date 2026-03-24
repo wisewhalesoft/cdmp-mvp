@@ -396,26 +396,48 @@ describe('F011: Create Datasource E2E (POST /api/v1/datasources)', () => {
     expect(saved!.encrypted_password).toContain(':'); // AES-256-GCM format: iv:tag:cipher
   });
 
-  // TS-F011-005: 名稱重複
-  it('should return 409 for duplicate name', async () => {
+  // TS-F011-005: 同名同資料庫名稱重複
+  it('should return 409 for duplicate name + same databaseName', async () => {
     const name = 'Duplicate Name Test';
 
     // First creation should succeed
     const first = await request(app.getHttpServer())
       .post('/api/v1/datasources')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ ...basePayload, name });
+      .send({ ...basePayload, name, databaseName: 'same_db' });
     expect(first.status).toBe(201);
 
-    // Second creation with same name should fail
+    // Second creation with same name + same databaseName should fail
     const second = await request(app.getHttpServer())
       .post('/api/v1/datasources')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ ...basePayload, name });
+      .send({ ...basePayload, name, databaseName: 'same_db' });
 
     expect(second.status).toBe(409);
     expect(second.body.error).toBe('DS_NAME_EXISTS');
-    expect(second.body.message).toBe('此名稱的資料來源已存在');
+    expect(second.body.message).toBe('相同資料庫下已存在此名稱的資料來源');
+  });
+
+  // TS-F011-005b: 同名不同資料庫名稱應允許
+  it('should allow same name with different databaseName (201)', async () => {
+    const name = 'Same Name Diff DB';
+
+    // First creation
+    const first = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name, databaseName: 'db_alpha' });
+    expect(first.status).toBe(201);
+
+    // Second creation with same name but different databaseName should succeed
+    const second = await request(app.getHttpServer())
+      .post('/api/v1/datasources')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...basePayload, name, databaseName: 'db_beta' });
+
+    expect(second.status).toBe(201);
+    expect(second.body.name).toBe(name);
+    expect(second.body.databaseName).toBe('db_beta');
   });
 
   // TS-F011-006: 非 Admin 新增
@@ -695,16 +717,28 @@ describe('F013: Edit Datasource E2E', () => {
       expect(res.body.name).toBe('F013 Edit Target');
     });
 
-    // TS-F013-005: 名稱與其他資料來源重複
-    it('should return 409 when name conflicts with another datasource', async () => {
+    // TS-F013-005: 名稱+資料庫名稱與其他資料來源重複
+    it('should return 409 when name+databaseName conflicts with another datasource', async () => {
       const res = await request(app.getHttpServer())
         .put(`/api/v1/datasources/${createdDsId}`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ ...updatePayload, name: 'Another Datasource' });
+        .send({ ...updatePayload, name: 'Another Datasource', databaseName: 'edit_db' });
 
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('DS_NAME_EXISTS');
-      expect(res.body.message).toBe('此名稱的資料來源已存在');
+      expect(res.body.message).toBe('相同資料庫下已存在此名稱的資料來源');
+    });
+
+    // TS-F013-004b: 同名不同資料庫名稱應允許
+    it('should allow updating to same name as another datasource if databaseName differs (200)', async () => {
+      const res = await request(app.getHttpServer())
+        .put(`/api/v1/datasources/${createdDsId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...updatePayload, name: 'Another Datasource', databaseName: 'completely_different_db' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('Another Datasource');
+      expect(res.body.databaseName).toBe('completely_different_db');
     });
 
     // TS-F013-006: 資料來源不存在
@@ -1031,6 +1065,8 @@ describe('F015: Test Datasource Connection E2E (POST /api/v1/datasources/:id/tes
     expect(res.body.success).toBe(true);
     expect(res.body.message).toBeDefined();
     expect(res.body.responseTime).toBe(42);
+    expect(res.body.status).toBe('connected');
+    expect(res.body.lastTestedAt).toBeDefined();
   });
 
   // TS-F015-002: 更新 status 為 connected
@@ -1070,6 +1106,8 @@ describe('F015: Test Datasource Connection E2E (POST /api/v1/datasources/:id/tes
     expect(res.body.success).toBe(false);
     expect(res.body.message).toContain('無法連線至主機');
     expect(res.body.responseTime).toBe(1500);
+    expect(res.body.status).toBe('disconnected');
+    expect(res.body.lastTestedAt).toBeDefined();
   });
 
   // TS-F015-004: 失敗時更新 status 為 disconnected
