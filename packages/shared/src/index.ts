@@ -591,6 +591,7 @@ export interface SaveDefinitionResponse {
   message: string;
   versionId: string;
   version: number;
+  status: PipelineVersionStatus;
   stepCount: number;
 }
 
@@ -689,6 +690,79 @@ export interface PipelineLogDetailResponse {
   triggeredBy: PipelineLogTriggeredBy;
   isTestRun: boolean;
   nodeLogs: PipelineLogNodeLog[];
+}
+
+// F033: Pipeline Version Management
+export type PipelineVersionStatus = 'draft' | 'testing' | 'published';
+
+export interface PipelineVersionListItem {
+  id: string;
+  version: number;
+  status: PipelineVersionStatus;
+  changeSummary: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface PipelineVersionListResponse {
+  data: PipelineVersionListItem[];
+}
+
+export interface PipelineVersionDetailResponse {
+  id: string;
+  pipelineId: string;
+  version: number;
+  status: PipelineVersionStatus;
+  definition: PipelineDefinition;
+  changeSummary: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface PipelineVersionDiffNodeAdded {
+  nodeId: string;
+  nodeType: string;
+  nodeName: string;
+}
+
+export interface PipelineVersionDiffNodeRemoved {
+  nodeId: string;
+  nodeType: string;
+  nodeName: string;
+}
+
+export interface PipelineVersionDiffNodeModified {
+  nodeId: string;
+  field: string;
+  oldValue: any;
+  newValue: any;
+}
+
+export interface PipelineVersionDiffEdgeChange {
+  source: string;
+  target: string;
+}
+
+export interface PipelineVersionDiffChanges {
+  nodesAdded: PipelineVersionDiffNodeAdded[];
+  nodesRemoved: PipelineVersionDiffNodeRemoved[];
+  nodesModified: PipelineVersionDiffNodeModified[];
+  edgesAdded: PipelineVersionDiffEdgeChange[];
+  edgesRemoved: PipelineVersionDiffEdgeChange[];
+}
+
+export interface PipelineVersionDiffResponse {
+  from: number;
+  to: number;
+  changes: PipelineVersionDiffChanges;
+}
+
+export interface RollbackVersionResponse {
+  id: string;
+  version: number;
+  status: 'draft';
+  changeSummary: string;
+  createdAt: string;
 }
 
 // F031: Toggle Pipeline

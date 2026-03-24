@@ -197,9 +197,16 @@ export class EtlPipelineExecutionService {
   ): Promise<EtlPipelineLog> {
     const now = new Date();
 
+    // Use latest version number (not pipeline.version which is the last published version)
+    const latestVersion = await this.versionRepository.findOne({
+      where: { pipeline_id: pipeline.id },
+      order: { version: 'DESC' },
+    });
+    const versionNumber = latestVersion ? latestVersion.version : pipeline.version;
+
     const log = this.logRepository.create({
       pipeline_id: pipeline.id,
-      version: pipeline.version,
+      version: versionNumber,
       status: 'running' as const,
       started_at: now,
       triggered_by: triggeredBy,

@@ -234,7 +234,7 @@ export class EtlPipelineService {
     };
   }
 
-  async saveDefinition(pipelineId: string, dto: SaveDefinitionDto) {
+  async saveDefinition(pipelineId: string, dto: SaveDefinitionDto, userId: string) {
     // Find pipeline (not soft-deleted)
     const pipeline = await this.pipelineRepository
       .createQueryBuilder('p')
@@ -255,18 +255,34 @@ export class EtlPipelineService {
     // Validate duplicate extract sources
     this.validateDuplicateExtractSources(dto.definition.nodes);
 
-    // Get current version
-    const version = await this.versionRepository.findOne({
+    // Get latest version
+    const latestVersion = await this.versionRepository.findOne({
       where: { pipeline_id: pipelineId },
       order: { version: 'DESC' },
     });
 
-    // Update version definition
-    version!.definition = dto.definition;
-    if (dto.changeSummary !== undefined) {
-      version!.change_summary = dto.changeSummary;
+    let savedVersion: EtlPipelineVersion;
+
+    if (latestVersion && latestVersion.status === 'draft') {
+      // Latest version is draft — update in place
+      latestVersion.definition = dto.definition;
+      if (dto.changeSummary !== undefined) {
+        latestVersion.change_summary = dto.changeSummary;
+      }
+      savedVersion = await this.versionRepository.save(latestVersion);
+    } else {
+      // Latest version is testing/published — create new draft version
+      const newVersionNumber = latestVersion ? latestVersion.version + 1 : 1;
+      const newVersion = this.versionRepository.create({
+        pipeline_id: pipelineId,
+        version: newVersionNumber,
+        status: 'draft',
+        definition: dto.definition,
+        change_summary: dto.changeSummary ?? null,
+        created_by: userId,
+      });
+      savedVersion = await this.versionRepository.save(newVersion);
     }
-    await this.versionRepository.save(version!);
 
     // Update pipeline step_count (BR-6)
     const stepCount = dto.definition.nodes.length;
@@ -275,8 +291,9 @@ export class EtlPipelineService {
 
     return {
       message: 'Pipeline 定義已儲存',
-      versionId: version!.id,
-      version: version!.version,
+      versionId: savedVersion.id,
+      version: savedVersion.version,
+      status: savedVersion.status,
       stepCount,
     };
   }
@@ -366,6 +383,22 @@ export class EtlPipelineService {
       throw new UnprocessableEntityException({
         error: ERROR_CODES.PIPELINE_VERSION_ALREADY_PUBLISHED,
         message: ERROR_MESSAGES.PIPELINE_VERSION_ALREADY_PUBLISHED,
+      });
+    }
+
+    // 3.5 Check for successful test run log (BR-3: must have at least one)
+    const testLogCount = await this.logRepository
+      .createQueryBuilder('log')
+      .where('log.pipeline_id = :pipelineId', { pipelineId })
+      .andWhere('log.version = :version', { version: version.version })
+      .andWhere('log.is_test_run = :isTest', { isTest: true })
+      .andWhere('log.status = :status', { status: 'completed' })
+      .getCount();
+
+    if (testLogCount === 0) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.PIPELINE_PUBLISH_REQUIRES_TEST,
+        message: ERROR_MESSAGES.PIPELINE_PUBLISH_REQUIRES_TEST,
       });
     }
 
@@ -616,4 +649,297 @@ export class EtlPipelineService {
       seen.add(rawTableId);
     }
   }
+
+  // =====================================================
+  // F033: Pipeline Version Management
+  // =====================================================
+
+  async getVersions(pipelineId: string) {
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    const versions = await this.versionRepository
+      .createQueryBuilder('v')
+      .leftJoin('v.creator', 'user')
+      .addSelect(['user.name'])
+      .where('v.pipeline_id = :pipelineId', { pipelineId })
+      .orderBy('v.version', 'DESC')
+      .getMany();
+
+    const data = versions.map((v) => ({
+      id: v.id,
+      version: v.version,
+      status: v.status,
+      changeSummary: v.change_summary,
+      createdBy: v.creator?.name ?? '',
+      createdAt: v.created_at instanceof Date ? v.created_at.toISOString() : v.created_at,
+    }));
+
+    return { data };
+  }
+
+  async getVersionDetail(pipelineId: string, versionId: string) {
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    const version = await this.versionRepository.findOne({
+      where: { id: versionId },
+      relations: ['creator'],
+    });
+
+    if (!version || version.pipeline_id !== pipelineId) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_VERSION_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_VERSION_NOT_FOUND,
+      });
+    }
+
+    return {
+      id: version.id,
+      pipelineId: version.pipeline_id,
+      version: version.version,
+      status: version.status,
+      definition: version.definition,
+      changeSummary: version.change_summary,
+      createdBy: version.creator?.name ?? '',
+      createdAt: version.created_at instanceof Date ? version.created_at.toISOString() : version.created_at,
+    };
+  }
+
+  async getVersionDiff(pipelineId: string, fromVersion: number, toVersion: number) {
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    const vFrom = await this.versionRepository.findOne({
+      where: { pipeline_id: pipelineId, version: fromVersion },
+    });
+
+    if (!vFrom) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_VERSION_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_VERSION_NOT_FOUND,
+      });
+    }
+
+    const vTo = await this.versionRepository.findOne({
+      where: { pipeline_id: pipelineId, version: toVersion },
+    });
+
+    if (!vTo) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_VERSION_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_VERSION_NOT_FOUND,
+      });
+    }
+
+    const changes = computeDefinitionDiff(vFrom.definition, vTo.definition);
+
+    return {
+      from: fromVersion,
+      to: toVersion,
+      changes,
+    };
+  }
+
+  async rollbackVersion(pipelineId: string, versionId: string, userId: string) {
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    // Find source version
+    const sourceVersion = await this.versionRepository.findOne({
+      where: { id: versionId },
+    });
+
+    if (!sourceVersion || sourceVersion.pipeline_id !== pipelineId) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_VERSION_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_VERSION_NOT_FOUND,
+      });
+    }
+
+    // Find latest version to determine next version number
+    const latestVersion = await this.versionRepository.findOne({
+      where: { pipeline_id: pipelineId },
+      order: { version: 'DESC' },
+    });
+
+    const nextVersionNumber = (latestVersion?.version ?? 0) + 1;
+
+    // Create new version in transaction
+    return this.dataSource.transaction(async (manager) => {
+      const versionRepo = manager.getRepository(EtlPipelineVersion);
+
+      const newVersion = versionRepo.create({
+        pipeline_id: pipelineId,
+        version: nextVersionNumber,
+        status: 'draft' as const,
+        definition: JSON.parse(JSON.stringify(sourceVersion.definition)),
+        change_summary: `回滾自版本 ${sourceVersion.version}`,
+        created_by: userId,
+      });
+
+      const saved = await versionRepo.save(newVersion);
+
+      return {
+        id: saved.id,
+        version: saved.version,
+        status: saved.status,
+        changeSummary: saved.change_summary,
+        createdAt: saved.created_at instanceof Date ? saved.created_at.toISOString() : (saved.created_at ?? new Date().toISOString()),
+      };
+    });
+  }
+}
+
+// =====================================================
+// Pure function: Compute definition diff
+// =====================================================
+
+export function computeDefinitionDiff(
+  defFrom: { nodes: any[]; edges: any[] },
+  defTo: { nodes: any[]; edges: any[] },
+) {
+  const fromNodeMap = new Map<string, any>();
+  const toNodeMap = new Map<string, any>();
+
+  for (const node of defFrom.nodes) fromNodeMap.set(node.id, node);
+  for (const node of defTo.nodes) toNodeMap.set(node.id, node);
+
+  // Nodes added (in to but not in from)
+  const nodesAdded: { nodeId: string; nodeType: string; nodeName: string }[] = [];
+  for (const node of defTo.nodes) {
+    if (!fromNodeMap.has(node.id)) {
+      nodesAdded.push({
+        nodeId: node.id,
+        nodeType: node.type,
+        nodeName: node.data?.name ?? node.type,
+      });
+    }
+  }
+
+  // Nodes removed (in from but not in to)
+  const nodesRemoved: { nodeId: string; nodeType: string; nodeName: string }[] = [];
+  for (const node of defFrom.nodes) {
+    if (!toNodeMap.has(node.id)) {
+      nodesRemoved.push({
+        nodeId: node.id,
+        nodeType: node.type,
+        nodeName: node.data?.name ?? node.type,
+      });
+    }
+  }
+
+  // Nodes modified (in both, but with differences)
+  const nodesModified: { nodeId: string; field: string; oldValue: any; newValue: any }[] = [];
+  for (const [id, fromNode] of fromNodeMap) {
+    const toNode = toNodeMap.get(id);
+    if (!toNode) continue;
+
+    // Compare all top-level properties using dot notation
+    const diffs = findObjectDiffs('', fromNode, toNode, ['id']);
+    for (const diff of diffs) {
+      nodesModified.push({
+        nodeId: id,
+        field: diff.field,
+        oldValue: diff.oldValue,
+        newValue: diff.newValue,
+      });
+    }
+  }
+
+  // Edges: compare by source+target key
+  const fromEdgeKeys = new Set(defFrom.edges.map((e) => `${e.source}|${e.target}`));
+  const toEdgeKeys = new Set(defTo.edges.map((e) => `${e.source}|${e.target}`));
+
+  const edgesAdded: { source: string; target: string }[] = [];
+  for (const edge of defTo.edges) {
+    const key = `${edge.source}|${edge.target}`;
+    if (!fromEdgeKeys.has(key)) {
+      edgesAdded.push({ source: edge.source, target: edge.target });
+    }
+  }
+
+  const edgesRemoved: { source: string; target: string }[] = [];
+  for (const edge of defFrom.edges) {
+    const key = `${edge.source}|${edge.target}`;
+    if (!toEdgeKeys.has(key)) {
+      edgesRemoved.push({ source: edge.source, target: edge.target });
+    }
+  }
+
+  return { nodesAdded, nodesRemoved, nodesModified, edgesAdded, edgesRemoved };
+}
+
+function findObjectDiffs(
+  prefix: string,
+  oldObj: any,
+  newObj: any,
+  ignoreKeys: string[] = [],
+): { field: string; oldValue: any; newValue: any }[] {
+  const diffs: { field: string; oldValue: any; newValue: any }[] = [];
+
+  const allKeys = new Set([
+    ...Object.keys(oldObj ?? {}),
+    ...Object.keys(newObj ?? {}),
+  ]);
+
+  for (const key of allKeys) {
+    if (ignoreKeys.includes(key)) continue;
+
+    const fieldPath = prefix ? `${prefix}.${key}` : key;
+    const oldVal = oldObj?.[key];
+    const newVal = newObj?.[key];
+
+    if (typeof oldVal === 'object' && oldVal !== null && typeof newVal === 'object' && newVal !== null && !Array.isArray(oldVal) && !Array.isArray(newVal)) {
+      // Recurse into nested objects
+      diffs.push(...findObjectDiffs(fieldPath, oldVal, newVal, []));
+    } else {
+      // Compare primitives and arrays
+      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+        diffs.push({ field: fieldPath, oldValue: oldVal, newValue: newVal });
+      }
+    }
+  }
+
+  return diffs;
 }

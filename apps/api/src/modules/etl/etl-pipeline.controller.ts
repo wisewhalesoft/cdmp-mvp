@@ -63,8 +63,42 @@ export class EtlPipelineController {
   }
 
   @Put(':id/definition')
-  async saveDefinition(@Param('id') id: string, @Body() dto: SaveDefinitionDto) {
-    return this.etlPipelineService.saveDefinition(id, dto);
+  async saveDefinition(@Param('id') id: string, @Body() dto: SaveDefinitionDto, @Req() req: any) {
+    return this.etlPipelineService.saveDefinition(id, dto, req.user.userId);
+  }
+
+  // F033: Version management routes
+  // IMPORTANT: diff must come BEFORE :versionId to avoid path capture
+  @Get(':id/versions/diff')
+  async getVersionDiff(
+    @Param('id') id: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.etlPipelineService.getVersionDiff(id, Number(from), Number(to));
+  }
+
+  @Get(':id/versions/:versionId')
+  async getVersionDetail(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+  ) {
+    return this.etlPipelineService.getVersionDetail(id, versionId);
+  }
+
+  @Post(':id/versions/:versionId/rollback')
+  @HttpCode(HttpStatus.CREATED)
+  async rollbackVersion(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Req() req: any,
+  ) {
+    return this.etlPipelineService.rollbackVersion(id, versionId, req.user.userId);
+  }
+
+  @Get(':id/versions')
+  async getVersions(@Param('id') id: string) {
+    return this.etlPipelineService.getVersions(id);
   }
 
   @Patch(':id/versions/:versionId/publish')
