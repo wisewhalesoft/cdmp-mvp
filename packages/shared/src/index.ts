@@ -779,6 +779,11 @@ export interface TogglePipelineResponse {
   updatedAt: string;
 }
 
+// F034: Delete Pipeline
+export interface DeletePipelineResponse {
+  message: string;
+}
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',

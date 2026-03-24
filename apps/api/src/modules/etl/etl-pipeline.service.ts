@@ -651,6 +651,37 @@ export class EtlPipelineService {
   }
 
   // =====================================================
+  // F034: Delete Pipeline (Soft Delete)
+  // =====================================================
+
+  async deletePipeline(pipelineId: string) {
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    if (pipeline.status === 'running') {
+      throw new ConflictException({
+        error: ERROR_CODES.PIPELINE_RUNNING,
+        message: ERROR_MESSAGES.PIPELINE_RUNNING,
+      });
+    }
+
+    pipeline.deleted_at = new Date();
+    await this.pipelineRepository.save(pipeline);
+
+    return { message: 'Pipeline 已刪除' };
+  }
+
+  // =====================================================
   // F033: Pipeline Version Management
   // =====================================================
 

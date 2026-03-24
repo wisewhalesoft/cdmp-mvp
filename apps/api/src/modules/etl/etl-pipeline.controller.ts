@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Query, Param, Req, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Query, Param, Req, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
@@ -45,6 +45,11 @@ export class EtlPipelineController {
   @Get(':id/progress')
   async getProgress(@Param('id') id: string) {
     return this.executionService.getProgress(id);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    return this.etlPipelineService.deletePipeline(id);
   }
 
   @Patch(':id/toggle')
