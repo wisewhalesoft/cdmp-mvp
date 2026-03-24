@@ -35,6 +35,8 @@ import {
   getRawTables,
   getPipelines,
   publishPipelineVersion,
+  testPipeline,
+  getPipelineProgress,
 } from '@/api/etl-pipelines';
 import type { RawTableItem, PipelineDefinition } from '@cdmp/shared';
 
@@ -60,6 +62,7 @@ export function PipelineEditorPage() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [toast, setToast] = useState<{ title: string; message: string } | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -309,7 +312,10 @@ export function PipelineEditorPage() {
         })),
       };
       const res = await savePipelineDefinition(pipelineId, { definition });
-      setVersionLabel(`v${res.version} (draft)`);
+      setVersionId(res.versionId);
+      setVersionNumber(res.version);
+      setVersionStatus(res.status ?? 'draft');
+      setVersionLabel(`v${res.version} (${res.status ?? 'draft'})`);
       setIsDirty(false);
       setToast({ title: 'Pipeline 已儲存', message: `版本 v${res.version}` });
       setTimeout(() => setToast(null), 3000);
@@ -320,6 +326,54 @@ export function PipelineEditorPage() {
       setSaving(false);
     }
   }, [pipelineId, nodes, edges]);
+
+  // Test execution
+  const handleTestRun = useCallback(async () => {
+    if (!pipelineId) return;
+    // Auto-save before test if dirty
+    if (isDirty) {
+      await handleSave();
+    }
+    setTesting(true);
+    try {
+      const res = await testPipeline(pipelineId);
+      setToast({ title: '測試執行已開始', message: '請稍候...' });
+      setTimeout(() => setToast(null), 3000);
+
+      // Poll progress until completed
+      const pollInterval = setInterval(async () => {
+        try {
+          const progress = await getPipelineProgress(pipelineId);
+          if (progress.status === 'completed') {
+            clearInterval(pollInterval);
+            setTesting(false);
+            // Reload version info to get correct versionId and status
+            try {
+              const defRes = await getPipelineDefinition(pipelineId);
+              setVersionId(defRes.versionId);
+              setVersionNumber(defRes.version);
+              setVersionStatus(defRes.status);
+              setVersionLabel(`v${defRes.version} (${defRes.status})`);
+            } catch { /* keep local state */ }
+            setToast({ title: '測試執行成功', message: `Pipeline 測試通過` });
+            setTimeout(() => setToast(null), 3000);
+          } else if (progress.status === 'failed') {
+            clearInterval(pollInterval);
+            setTesting(false);
+            setToast({ title: '測試執行失敗', message: '請查看日誌了解詳情' });
+            setTimeout(() => setToast(null), 5000);
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setTesting(false);
+        }
+      }, 2000);
+    } catch {
+      setTesting(false);
+      setToast({ title: '測試執行失敗', message: '請稍後再試' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, [pipelineId, isDirty, handleSave, versionNumber]);
 
   // Publish
   const handlePublish = useCallback(async () => {
@@ -386,11 +440,13 @@ export function PipelineEditorPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5"
+            onClick={handleTestRun}
+            disabled={testing || nodes.length === 0}
+            className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="test-run-btn"
           >
             <Play className="w-4 h-4" />
-            測試執行
+            {testing ? '測試中...' : '測試執行'}
           </button>
           <button
             onClick={handleSave}
@@ -414,6 +470,7 @@ export function PipelineEditorPage() {
             </button>
           )}
           <button
+            onClick={() => safeNavigate(`/etl-pipelines/${pipelineId}/versions`)}
             className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5"
             data-testid="versions-btn"
           >

@@ -220,6 +220,7 @@ describe('PipelineEditorPage', () => {
       message: 'OK',
       versionId: 'v-1',
       version: 1,
+      status: 'draft',
       stepCount: 0,
     });
   });
