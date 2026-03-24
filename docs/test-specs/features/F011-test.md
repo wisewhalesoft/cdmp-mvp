@@ -22,13 +22,21 @@ last_updated: 2026-03-12
 | Then | HTTP 201，回應含新建資料來源資訊（status=unknown, lastTestedAt=null） |
 | 驗證步驟 | 1. 回應不含 password 欄位<br>2. status = unknown<br>3. 密碼在 DB 中為 AES-256 加密儲存（非明文）<br>4. 新資料來源出現於 GET /api/datasources 清單 |
 
-### AC-2：名稱重複驗證
+### AC-2：名稱重複驗證（複合唯一性）
 
 | 項目 | 內容 |
 |------|------|
-| Given | 名稱「MySQL Production」已存在 |
-| When | 嘗試以相同名稱建立 |
+| Given | 名稱「MySQL Production」且資料庫名稱「prod_db」的資料來源已存在 |
+| When | 嘗試以相同名稱「MySQL Production」與相同資料庫名稱「prod_db」建立 |
 | Then | HTTP 409，DS_NAME_EXISTS |
+
+### AC-2b：不同資料庫允許相同名稱
+
+| 項目 | 內容 |
+|------|------|
+| Given | 名稱「MySQL Production」且資料庫名稱「prod_db」的資料來源已存在 |
+| When | 以相同名稱「MySQL Production」但資料庫名稱「staging_db」建立 |
+| Then | HTTP 201，建立成功 |
 
 ### AC-3：欄位驗證
 
@@ -55,7 +63,8 @@ last_updated: 2026-03-12
 
 | ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
 |----|----------|------------|-----------|---------------|-------|-----------------|
-| TS-F011-005 | 名稱重複 | AC-2 | Integration | 同名資料來源存在 | 1. POST /api/datasources {name: "MySQL Production"} | HTTP 409，DS_NAME_EXISTS |
+| TS-F011-005 | 名稱＋資料庫名稱重複 | AC-2 | Integration | 名稱「MySQL Production」且 databaseName「prod_db」的資料來源存在 | 1. POST /api/datasources {name: "MySQL Production", databaseName: "prod_db"} | HTTP 409，DS_NAME_EXISTS |
+| TS-F011-005b | 相同名稱不同資料庫允許建立 | AC-2b | Integration | 名稱「MySQL Production」且 databaseName「prod_db」的資料來源存在 | 1. POST /api/datasources {name: "MySQL Production", databaseName: "staging_db"} | HTTP 201，建立成功 |
 | TS-F011-006 | 非 Admin 新增 | BR-1 | Integration | USER_ACTIVE 已登入 | 1. 以 User Token 呼叫 POST /api/datasources | HTTP 403，AUTH_FORBIDDEN |
 | TS-F011-007 | 無效類型 | AC-3 | Integration | Admin 已登入 | 1. POST /api/datasources {type: "oracle"} | HTTP 422，VALIDATION_INVALID_TYPE |
 

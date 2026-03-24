@@ -32,9 +32,15 @@ status: Draft
 
 ### AC-2: 名稱重複驗證
 
-- **Given** 系統中已存在名稱為「ProductionDB」的資料來源
-- **When** 管理員嘗試以相同名稱「ProductionDB」新增資料來源
-- **Then** 系統顯示錯誤訊息「此名稱的資料來源已存在」，不建立新記錄
+- **Given** 系統中已存在名稱為「ProductionDB」且資料庫名稱（databaseName）為「prod_db」的資料來源
+- **When** 管理員嘗試以相同名稱「ProductionDB」與相同資料庫名稱「prod_db」新增資料來源
+- **Then** 系統顯示錯誤訊息「相同資料庫下已存在此名稱的資料來源」，不建立新記錄
+
+### AC-2b: 不同資料庫允許相同名稱
+
+- **Given** 系統中已存在名稱為「ProductionDB」且資料庫名稱（databaseName）為「prod_db」的資料來源
+- **When** 管理員以相同名稱「ProductionDB」但不同資料庫名稱「staging_db」新增資料來源
+- **Then** 系統成功建立新資料來源，不顯示重複錯誤
 
 ### AC-3: 欄位驗證
 
@@ -59,7 +65,7 @@ status: Draft
 
 ```json
 {
-  "name": "string (必填, 唯一, 最大 100 字元)",
+  "name": "string (必填, 最大 100 字元)",
   "type": "string (必填, enum: mysql | postgresql | sqlserver)",
   "host": "string (必填, 最大 255 字元)",
   "port": "integer (必填, 1-65535)",
@@ -96,7 +102,7 @@ status: Draft
 | HTTP Status | 錯誤碼               | 說明                         |
 |-------------|----------------------|------------------------------|
 | 400         | VALIDATION_ERROR     | 欄位驗證失敗（附各欄位錯誤） |
-| 409         | DUPLICATE_NAME       | 資料來源名稱已存在           |
+| 409         | DUPLICATE_NAME       | 相同資料庫下已存在此名稱的資料來源 |
 | 403         | FORBIDDEN            | 非 Admin 角色無權限操作      |
 | 401         | UNAUTHORIZED         | 未登入或 token 無效          |
 | 500         | INTERNAL_ERROR       | 伺服器內部錯誤               |
@@ -106,7 +112,7 @@ status: Draft
 | 規則編號 | 說明                                                                 |
 |----------|----------------------------------------------------------------------|
 | BR-1     | 僅具備 Admin 角色的使用者可新增資料來源                              |
-| BR-2     | 資料來源名稱在系統內必須唯一（不區分大小寫）                        |
+| BR-2     | 「名稱 + 資料庫名稱（databaseName）」的組合在系統內必須唯一（名稱比對不區分大小寫）；不同資料庫下允許存在相同名稱的資料來源 |
 | BR-3     | 密碼必須以 AES-256 加密後儲存，任何 API 回應均不得包含明文密碼      |
 | BR-4     | 支援的資料庫類型：mysql、postgresql、sqlserver                       |
 | BR-5     | 各類型預設 port：MySQL=3306、PostgreSQL=5432、SQL Server=1433        |
@@ -129,7 +135,7 @@ status: Draft
 |------------------------|--------------------------------------------------------|-------------------------------|
 | 必填欄位未填           | 欄位下方顯示「此欄位為必填」                           | error-handling.md#validation  |
 | port 非數值或超出範圍  | 「連接埠必須為 1 至 65535 之間的數字」                 | error-handling.md#validation  |
-| 名稱重複               | 「此名稱的資料來源已存在」                             | error-handling.md#duplicate   |
+| 名稱＋資料庫名稱組合重複 | 「相同資料庫下已存在此名稱的資料來源」                 | error-handling.md#duplicate   |
 | 非 Admin 操作          | HTTP 403，「您沒有權限執行此操作」                     | error-handling.md#auth        |
 | 伺服器錯誤             | 「系統發生錯誤，請稍後再試」                           | error-handling.md#server      |
 
@@ -156,7 +162,7 @@ status: Draft
 ## 11. 效能需求
 
 - API 回應時間：< 500ms（不含選填的連線測試）
-- 名稱唯一性檢查須使用資料庫索引以確保查詢效能
+- 「名稱 + 資料庫名稱」複合唯一性檢查須使用資料庫複合索引（composite index）以確保查詢效能
 
 ## 12. 交叉參考
 

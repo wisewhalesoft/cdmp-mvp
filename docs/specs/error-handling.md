@@ -18,7 +18,7 @@ status: Draft
 | 401 Unauthorized | 未驗證或 Token 失效 | 未提供 Token、Token 過期、Token 已在 blocklist |
 | 403 Forbidden | 無存取權限 | User 角色嘗試存取 Admin 端點 |
 | 404 Not Found | 資源不存在 | 帳號 ID 或資料來源 ID 不存在 |
-| 409 Conflict | 資源衝突 | Email 重複、資料來源名稱重複 |
+| 409 Conflict | 資源衝突 | Email 重複、資料來源名稱＋資料庫名稱組合重複 |
 | 422 Unprocessable Entity | 驗證失敗 | 欄位格式不正確、業務規則違反 |
 | 500 Internal Server Error | 伺服器內部錯誤 | 非預期錯誤、系統故障 |
 
@@ -115,7 +115,7 @@ status: Draft
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
-| DS_NAME_EXISTS | 409 | 此名稱的資料來源已存在 | 資料來源名稱重複 | F011, F013 |
+| DS_NAME_EXISTS | 409 | 相同資料庫下已存在此名稱的資料來源 | 資料來源「名稱＋資料庫名稱（databaseName）」複合重複 | F011, F013 |
 | DS_NOT_FOUND | 404 | 找不到指定的資料來源 | 資料來源 ID 不存在或已軟刪除 | F013, F014, F015 |
 | DS_CONNECTION_SUCCESS | — | 連線成功，回應時間 {responseTime}ms | 連線測試成功（非錯誤，為資訊性訊息） | F015 |
 | DS_CONNECTION_REFUSED | — | 連線被拒：無法連至主機 {host}:{port} | 目標主機拒絕連線 | F015 |
@@ -261,7 +261,7 @@ status: Draft
 | 編輯帳號 Email 重複 | 409 | ACCOUNT_EMAIL_IN_USE | 此 Email 已被使用 | 不儲存變更 |
 | 停用自己的帳號 | 422 | ACCOUNT_SELF_DISABLE | 您無法停用自己的帳號 | 不執行停用 |
 | 降級最後一位 Admin | 422 | ACCOUNT_LAST_ADMIN | 無法移除最後一位 Admin... | 不執行降級 |
-| 資料來源名稱重複 | 409 | DS_NAME_EXISTS | 此名稱的資料來源已存在 | 不建立/更新 |
+| 資料來源名稱＋資料庫名稱組合重複 | 409 | DS_NAME_EXISTS | 相同資料庫下已存在此名稱的資料來源 | 不建立/更新 |
 | 連線測試逾時 | 200 | — | 連線逾時（10 秒） | success: false，狀態設為 disconnected |
 | 密碼重設 Token 過期 | 422 | AUTH_RESET_TOKEN_EXPIRED | 此連結已過期，請重新申請密碼重設 | 不重設密碼 |
 | 擷取任務名稱重複 | 409 | EXTRACTION_NAME_EXISTS | 此名稱的擷取任務已存在 | 不建立/更新 |

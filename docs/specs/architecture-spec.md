@@ -699,7 +699,7 @@ erDiagram
 | TokenBlocklist | user_id | INDEX | 帳號停用批次撤銷 |
 | PasswordResetToken | token | UNIQUE INDEX | 重設流程查詢 |
 | PasswordResetToken | expires_at | INDEX | 定期清理 |
-| Datasource | name, deleted_at | 複合 INDEX | 名稱唯一性檢查（排除軟刪除） |
+| Datasource | name, database_name, deleted_at | 複合 INDEX | 名稱＋資料庫名稱複合唯一性檢查（排除軟刪除） |
 | Datasource | deleted_at | INDEX | 所有清單查詢的過濾條件 |
 | DatasourceHealthLog | datasource_id, checked_at | 複合 INDEX | 趨勢圖查詢、告警計算（NFR-002.4） |
 | DatasourceHealthLog | checked_at | INDEX | 清理超過 90 天紀錄 |

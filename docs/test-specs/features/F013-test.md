@@ -31,13 +31,21 @@ last_updated: 2026-03-12
 | Then | 保留原有密碼不變 |
 | 驗證步驟 | 1. 更新後使用 F015 測試連線 — 仍使用原密碼（連線應成功） |
 
-### AC-3：名稱唯一性檢查
+### AC-3：名稱唯一性檢查（複合唯一性）
 
 | 項目 | 內容 |
 |------|------|
-| Given | 另一資料來源名稱為「ProductionDB」 |
-| When | 將當前資料來源名稱修改為「ProductionDB」 |
+| Given | 另一資料來源名稱為「ProductionDB」且資料庫名稱（databaseName）為「prod_db」 |
+| When | 將當前資料來源名稱修改為「ProductionDB」且資料庫名稱設為「prod_db」 |
 | Then | HTTP 409，DS_NAME_EXISTS |
+
+### AC-3b：不同資料庫允許相同名稱（編輯時）
+
+| 項目 | 內容 |
+|------|------|
+| Given | 另一資料來源名稱為「ProductionDB」且資料庫名稱（databaseName）為「prod_db」 |
+| When | 將當前資料來源名稱修改為「ProductionDB」且資料庫名稱設為「staging_db」 |
+| Then | HTTP 200，更新成功 |
 
 ---
 
@@ -50,13 +58,14 @@ last_updated: 2026-03-12
 | TS-F013-001 | 成功修改連線參數 | AC-1 | Integration | 資料來源存在 | 1. PUT /api/datasources/:id {host: "new-host"} | HTTP 200，host 已更新，status=unknown |
 | TS-F013-002 | 密碼為空保留現有密碼 | AC-2 | Integration | 資料來源存在 | 1. PUT /api/datasources/:id {password: null, ...} | HTTP 200，密碼未變更 |
 | TS-F013-003 | 更新密碼 | AC-2 | Integration | 資料來源存在 | 1. PUT /api/datasources/:id {password: "newpass"} | HTTP 200，密碼已更新（DB 中為新加密值） |
-| TS-F013-004 | 名稱保留原值不觸發重複 | AC-3, BR-5 | Integration | 資料來源名稱為 X | 1. PUT /api/datasources/:id {name: X} | HTTP 200，更新成功（自身排除） |
+| TS-F013-004 | 名稱＋資料庫名稱保留原值不觸發重複 | AC-3, BR-5 | Integration | 資料來源名稱為 X、databaseName 為 Y | 1. PUT /api/datasources/:id {name: X, databaseName: Y} | HTTP 200，更新成功（自身排除複合唯一性檢查） |
+| TS-F013-004b | 相同名稱不同資料庫允許更新 | AC-3b, BR-5 | Integration | 另一資料來源名稱 X、databaseName 為「prod_db」 | 1. PUT /api/datasources/:id {name: X, databaseName: "staging_db"} | HTTP 200，更新成功 |
 
 ### Negative Scenarios
 
 | ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
 |----|----------|------------|-----------|---------------|-------|-----------------|
-| TS-F013-005 | 名稱與其他資料來源重複 | AC-3 | Integration | 另一資料來源名稱已存在 | 1. PUT /api/datasources/:id {name: 重複名稱} | HTTP 409，DS_NAME_EXISTS |
+| TS-F013-005 | 名稱＋資料庫名稱與其他資料來源重複 | AC-3 | Integration | 另一資料來源名稱「ProductionDB」且 databaseName「prod_db」已存在 | 1. PUT /api/datasources/:id {name: "ProductionDB", databaseName: "prod_db"} | HTTP 409，DS_NAME_EXISTS |
 | TS-F013-006 | 資料來源不存在或已刪除 | BR-7 | Integration | ID 不存在 | 1. PUT /api/datasources/nonexist | HTTP 404，DS_NOT_FOUND |
 | TS-F013-007 | 非 Admin 編輯 | BR-1 | Integration | USER_ACTIVE 已登入 | 1. 以 User Token 呼叫 PUT /api/datasources/:id | HTTP 403，AUTH_FORBIDDEN |
 

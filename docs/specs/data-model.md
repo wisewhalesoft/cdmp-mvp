@@ -106,7 +106,7 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 | 屬性 | 說明 | 約束 | 備註 |
 |------|------|------|------|
 | id | 唯一識別碼 | 主鍵，系統自動產生 | |
-| name | 資料來源名稱 | 必填，唯一（排除已軟刪除），最大長度 100 字元 | 用於顯示與識別 |
+| name | 資料來源名稱 | 必填，與 `database_name` 組成複合唯一（排除已軟刪除，大小寫不敏感），最大長度 100 字元 | 用於顯示與識別；不同資料庫下允許相同名稱 |
 | type | 資料庫類型 | 必填，列舉值：`mysql` / `postgresql` / `sqlserver` | |
 | host | 主機位址 | 必填，最大長度 255 字元 | IP 或 hostname |
 | port | 連接埠 | 必填，整數，範圍 1-65535 | 預設值依類型：MySQL=3306, PostgreSQL=5432, SQL Server=1433 |
@@ -123,7 +123,7 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 
 **業務規則**：
 
-- 名稱唯一性僅在未刪除的記錄中檢查（`deleted_at IS NULL`）
+- 「名稱（name）＋ 資料庫名稱（database_name）」複合唯一性僅在未刪除的記錄中檢查（`deleted_at IS NULL`），名稱比對不區分大小寫；不同資料庫下允許存在相同名稱
 - 密碼以 AES-256 加密後儲存，API 回應中絕不回傳明文
 - 編輯時若密碼欄位為空，保留現有密碼
 - 編輯後 `status` 重設為 `unknown`

@@ -38,9 +38,15 @@ status: Draft
 
 ### AC-3: 名稱唯一性檢查
 
-- **Given** 系統中已存在名稱為「ProductionDB」的其他資料來源
-- **When** 管理員將當前資料來源的名稱修改為「ProductionDB」
-- **Then** 系統顯示錯誤訊息「此名稱的資料來源已存在」，不更新記錄
+- **Given** 系統中已存在另一個名稱為「ProductionDB」且資料庫名稱（databaseName）為「prod_db」的資料來源
+- **When** 管理員將當前資料來源的名稱修改為「ProductionDB」且資料庫名稱設為「prod_db」
+- **Then** 系統顯示錯誤訊息「相同資料庫下已存在此名稱的資料來源」，不更新記錄
+
+### AC-3b: 不同資料庫允許相同名稱（編輯時）
+
+- **Given** 系統中已存在另一個名稱為「ProductionDB」且資料庫名稱（databaseName）為「prod_db」的資料來源
+- **When** 管理員將當前資料來源的名稱修改為「ProductionDB」但資料庫名稱設為「staging_db」
+- **Then** 系統成功儲存變更，不顯示重複錯誤
 
 ## 4. API 規格
 
@@ -84,7 +90,7 @@ status: Draft
 
 ```json
 {
-  "name": "string (必填, 唯一, 最大 100 字元)",
+  "name": "string (必填, 最大 100 字元)",
   "type": "string (必填, enum: mysql | postgresql | sqlserver)",
   "host": "string (必填, 最大 255 字元)",
   "port": "integer (必填, 1-65535)",
@@ -120,7 +126,7 @@ status: Draft
 |-------------|------------------|------------------------------|
 | 400         | VALIDATION_ERROR | 欄位驗證失敗（附各欄位錯誤） |
 | 404         | NOT_FOUND        | 資料來源不存在或已被刪除     |
-| 409         | DUPLICATE_NAME   | 資料來源名稱已被其他記錄使用 |
+| 409         | DUPLICATE_NAME   | 相同資料庫下已存在此名稱的資料來源（其他記錄） |
 | 403         | FORBIDDEN        | 非 Admin 角色無權限操作      |
 | 401         | UNAUTHORIZED     | 未登入或 token 無效          |
 | 500         | INTERNAL_ERROR   | 伺服器內部錯誤               |
@@ -133,7 +139,7 @@ status: Draft
 | BR-2     | 密碼欄位為空值或 null 時，保留資料庫中現有的加密密碼                       |
 | BR-3     | 密碼欄位有值時，以 AES-256 加密後覆寫儲存                                 |
 | BR-4     | 編輯成功後，狀態（status）一律重置為 `unknown`，促使管理員重新測試連線     |
-| BR-5     | 名稱唯一性檢查須排除自身記錄（即允許保留原名稱）                           |
+| BR-5     | 「名稱 + 資料庫名稱（databaseName）」的複合唯一性檢查須排除自身記錄（即允許保留原名稱）；不同資料庫下允許存在相同名稱（名稱比對不區分大小寫） |
 | BR-6     | 變更須記錄至 audit log，包含變更的欄位名稱，但不得記錄憑證值（password）   |
 | BR-7     | 不可編輯已軟刪除的資料來源（返回 404）                                     |
 
@@ -153,7 +159,7 @@ status: Draft
 | 場景                         | 系統回應                                               | 參考                          |
 |------------------------------|--------------------------------------------------------|-------------------------------|
 | 資料來源不存在或已被刪除     | HTTP 404，顯示「找不到指定的資料來源」                 | error-handling.md#not-found   |
-| 名稱與其他資料來源重複       | 「此名稱的資料來源已存在」                             | error-handling.md#duplicate   |
+| 名稱＋資料庫名稱組合與其他記錄重複 | 「相同資料庫下已存在此名稱的資料來源」             | error-handling.md#duplicate   |
 | 必填欄位未填                 | 欄位下方顯示「此欄位為必填」                           | error-handling.md#validation  |
 | port 非數值或超出範圍        | 「連接埠必須為 1 至 65535 之間的數字」                 | error-handling.md#validation  |
 | 非 Admin 操作                | HTTP 403，「您沒有權限執行此操作」                     | error-handling.md#auth        |
