@@ -1624,3 +1624,232 @@ describe('F029: Pipeline Definition Editor E2E', () => {
     expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 });
+
+// =====================================================
+// F034: Delete Pipeline E2E Tests
+// =====================================================
+describe('F034: Delete Pipeline E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let userToken: string;
+  let dataSource: DataSource;
+  let pipelineRepo: Repository<EtlPipeline>;
+  let logRepo: Repository<EtlPipelineLog>;
+  let versionRepo: Repository<EtlPipelineVersion>;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    userToken = await getUserToken(app);
+    dataSource = app.get(DataSource);
+    pipelineRepo = dataSource.getRepository(EtlPipeline);
+    logRepo = dataSource.getRepository(EtlPipelineLog);
+    versionRepo = dataSource.getRepository(EtlPipelineVersion);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await logRepo.createQueryBuilder().delete().from(EtlPipelineLog).execute();
+    await versionRepo.createQueryBuilder().delete().from(EtlPipelineVersion).execute();
+    await pipelineRepo.createQueryBuilder().delete().from(EtlPipeline).execute();
+  });
+
+  // ========== Positive Scenarios ==========
+
+  // TS-F034-001: 成功軟刪除 active Pipeline
+  it('TS-F034-001: should soft-delete active pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'active', name: 'Active-Delete-001' });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Pipeline 已刪除');
+
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow).not.toBeNull();
+    expect(dbRow!.deleted_at).not.toBeNull();
+    // deleted_at should be close to now (within 5 seconds)
+    const diff = Math.abs(new Date().getTime() - new Date(dbRow!.deleted_at!).getTime());
+    expect(diff).toBeLessThan(5000);
+  });
+
+  // TS-F034-002: 成功軟刪除 failed Pipeline
+  it('TS-F034-002: should soft-delete failed pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'failed', name: 'Failed-Delete-002' });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.deleted_at).not.toBeNull();
+  });
+
+  // TS-F034-003: 成功軟刪除 disabled Pipeline
+  it('TS-F034-003: should soft-delete disabled pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'disabled', name: 'Disabled-Delete-003' });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.deleted_at).not.toBeNull();
+  });
+
+  // TS-F034-004: 成功軟刪除 draft Pipeline
+  it('TS-F034-004: should soft-delete draft pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'Draft-Delete-004' });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.deleted_at).not.toBeNull();
+  });
+
+  // TS-F034-005: 刪除後從列表消失
+  it('TS-F034-005: deleted pipeline should not appear in list', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'active', name: 'ListGone-005' });
+
+    // Delete it
+    await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    // List should not contain deleted pipeline
+    const listRes = await request(app.getHttpServer())
+      .get('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(listRes.status).toBe(200);
+    const ids = listRes.body.data.map((p: any) => p.id);
+    expect(ids).not.toContain(pipeline.id);
+  });
+
+  // TS-F034-006: 日誌保留（軟刪除後仍可查詢）
+  it('TS-F034-006: pipeline logs should be preserved after soft-delete', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'active', name: 'WithLogs-006' });
+
+    // Create 3 log entries
+    for (let i = 0; i < 3; i++) {
+      await logRepo.save(logRepo.create({
+        pipeline_id: pipeline.id,
+        version: 1,
+        status: 'completed',
+        started_at: new Date(),
+        finished_at: new Date(),
+        duration_ms: 1000,
+        processed_count: 100,
+        triggered_by: 'manual',
+        is_test_run: false,
+        created_by: ADMIN_ACTIVE.id,
+      }));
+    }
+
+    // Delete pipeline
+    await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    // Logs should still exist
+    const logCount = await logRepo.count({ where: { pipeline_id: pipeline.id } });
+    expect(logCount).toBe(3);
+  });
+
+  // TS-F034-007: 名稱唯一性在軟刪除後釋放
+  it('TS-F034-007: name uniqueness released after soft-delete', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'active', name: '可重用名稱' });
+
+    // Delete it
+    await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    // Create new pipeline with same name
+    const createRes = await request(app.getHttpServer())
+      .post('/api/v1/etl/pipelines')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '可重用名稱' });
+
+    expect(createRes.status).toBe(201);
+  });
+
+  // ========== Negative Scenarios ==========
+
+  // TS-F034-008: 執行中 Pipeline 不可刪除 → 409
+  it('TS-F034-008: should return 409 when deleting running pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'running', name: 'Running-008' });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('PIPELINE_RUNNING');
+
+    // Verify not deleted
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.deleted_at).toBeNull();
+  });
+
+  // TS-F034-009: 已軟刪除的 Pipeline 再次刪除 → 404
+  it('TS-F034-009: should return 404 when deleting already-deleted pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, {
+      status: 'active',
+      name: 'AlreadyDeleted-009',
+      deleted_at: new Date(),
+    });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('PIPELINE_NOT_FOUND');
+  });
+
+  // TS-F034-010: 不存在的 Pipeline → 404
+  it('TS-F034-010: should return 404 for non-existent pipeline', async () => {
+    const res = await request(app.getHttpServer())
+      .delete('/api/v1/etl/pipelines/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('PIPELINE_NOT_FOUND');
+  });
+
+  // TS-F034-011: User 角色無權刪除 → 403
+  it('TS-F034-011: user role should get 403', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'active', name: 'Forbidden-011' });
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+
+    // Verify not deleted
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.deleted_at).toBeNull();
+  });
+
+  // TS-F034-012: 未登入（無 Token）→ 401
+  it('TS-F034-012: no token should return 401', async () => {
+    const res = await request(app.getHttpServer())
+      .delete('/api/v1/etl/pipelines/00000000-0000-0000-0000-000000000000');
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+  });
+});

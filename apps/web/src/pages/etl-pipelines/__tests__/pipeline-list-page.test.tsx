@@ -241,6 +241,86 @@ describe('PipelineListPage', () => {
     expect(row.querySelector('.pointer-events-none')?.textContent).toBe('需先發布 Pipeline 才能啟用');
   });
 
+  // =====================================================
+  // F034: Delete Pipeline Frontend Tests
+  // =====================================================
+
+  // TS-F034-013: 確認對話框顯示內容正確
+  it('TS-F034-013: should show delete confirmation dialog with correct content', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // Click delete button for pl-1 (active pipeline)
+    const row = screen.getByTestId('pipeline-row-pl-1');
+    const deleteBtn = row.querySelector('button[title="刪除"]') as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+
+    // Verify dialog content
+    const dialog = screen.getByTestId('delete-dialog');
+    expect(dialog).toBeDefined();
+    expect(dialog.textContent).toContain('確認刪除 Pipeline');
+    expect(dialog.textContent).toContain('每日客戶同步 Pipeline');
+    expect(dialog.textContent).toContain('刪除後排程將停止，歷史日誌將保留。');
+    expect(dialog.textContent).toContain('確認刪除');
+    expect(dialog.textContent).toContain('取消');
+  });
+
+  // TS-F034-014: 點擊取消不刪除 Pipeline
+  it('TS-F034-014: should not delete pipeline when cancel is clicked', async () => {
+    const mockedDeletePipeline = vi.mocked(etlPipelinesApi.deletePipeline);
+
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // Open dialog
+    const row = screen.getByTestId('pipeline-row-pl-1');
+    const deleteBtn = row.querySelector('button[title="刪除"]') as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+
+    // Click cancel button inside the dialog
+    const dialog = screen.getByTestId('delete-dialog');
+    const cancelBtn = Array.from(dialog.querySelectorAll('button')).find(
+      (btn) => btn.textContent === '取消',
+    )!;
+    await act(async () => {
+      fireEvent.click(cancelBtn);
+    });
+
+    // Dialog should be closed, API should not be called
+    expect(screen.queryByTestId('delete-dialog')).toBeNull();
+    expect(mockedDeletePipeline).not.toHaveBeenCalled();
+  });
+
+  // TS-F034-015: 執行中 Pipeline 刪除按鈕停用
+  it('TS-F034-015: should disable delete button for running pipeline', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // pl-3 is running
+    const row = screen.getByTestId('pipeline-row-pl-3');
+    const deleteBtn = row.querySelector('button[title="執行中無法刪除"]') as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+    expect(deleteBtn.disabled).toBe(true);
+  });
+
   // TS-F031-014: 停用成功後列表即時更新
   it('should update list after toggling pipeline off', async () => {
     const mockedTogglePipeline = vi.mocked(etlPipelinesApi.togglePipeline);
