@@ -410,7 +410,7 @@ export function PipelineLogsPage() {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <nav className="flex items-center text-gray-500">
-              <a href="/etl-pipelines" className="hover:text-blue-600">Pipeline 清單</a>
+              <a href="/etl-pipelines/list" className="hover:text-blue-600">Pipeline 清單</a>
               <ChevronRight className="w-4 h-4 mx-1" />
               <span className="text-gray-800 font-medium">{pipelineName}</span>
               <ChevronRight className="w-4 h-4 mx-1" />

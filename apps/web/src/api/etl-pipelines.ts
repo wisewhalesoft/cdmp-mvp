@@ -21,6 +21,11 @@ import type {
   PipelineVersionDetailResponse,
   PipelineVersionDiffResponse,
   RollbackVersionResponse,
+  EtlDashboardStatsResponse,
+  EtlDashboardTrendResponse,
+  EtlDashboardRunningResponse,
+  EtlDashboardFailuresResponse,
+  EtlDashboardSlowestResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -167,5 +172,35 @@ export async function rollbackPipelineVersion(
   const response = await apiClient.post<RollbackVersionResponse>(
     `/etl/pipelines/${pipelineId}/versions/${versionId}/rollback`,
   );
+  return response.data;
+}
+
+// F035: Dashboard API
+export async function getDashboardStats(): Promise<EtlDashboardStatsResponse> {
+  const response = await apiClient.get<EtlDashboardStatsResponse>('/etl/dashboard/stats');
+  return response.data;
+}
+
+export async function getDashboardTrend(
+  range: '7d' | '14d' | '30d' = '7d',
+): Promise<EtlDashboardTrendResponse> {
+  const response = await apiClient.get<EtlDashboardTrendResponse>('/etl/dashboard/trend', {
+    params: { range },
+  });
+  return response.data;
+}
+
+export async function getDashboardRunning(): Promise<EtlDashboardRunningResponse> {
+  const response = await apiClient.get<EtlDashboardRunningResponse>('/etl/dashboard/running');
+  return response.data;
+}
+
+export async function getDashboardFailures(): Promise<EtlDashboardFailuresResponse> {
+  const response = await apiClient.get<EtlDashboardFailuresResponse>('/etl/dashboard/failures');
+  return response.data;
+}
+
+export async function getDashboardSlowest(): Promise<EtlDashboardSlowestResponse> {
+  const response = await apiClient.get<EtlDashboardSlowestResponse>('/etl/dashboard/slowest');
   return response.data;
 }

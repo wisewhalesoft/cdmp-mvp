@@ -24,6 +24,8 @@ import {
   X,
   CheckCircle2,
   AlertTriangle,
+  BarChart3,
+  List,
 } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
@@ -531,6 +533,24 @@ export function PipelineListPage() {
 
         {/* Main Content */}
         <main className="flex-1 p-6 overflow-auto">
+        {/* Tab Navigation */}
+        <div className="flex gap-1 mb-6 border-b border-gray-200" data-testid="pipeline-tabs">
+          <button
+            onClick={() => navigate('/etl-pipelines')}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-gray-500 hover:text-gray-700"
+            data-testid="tab-dashboard"
+          >
+            <BarChart3 className="w-4 h-4" />
+            監控儀表板
+          </button>
+          <button
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px border-primary text-primary"
+            data-testid="tab-list"
+          >
+            <List className="w-4 h-4" />
+            Pipeline 清單
+          </button>
+        </div>
         {/* Stats Cards */}
         <div className="grid grid-cols-5 gap-4 mb-6" data-testid="stats-cards">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
