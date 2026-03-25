@@ -1,7 +1,7 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "1.3"
+version: "1.4"
 date: 2026-03-25
 status: Draft
 ---
@@ -123,7 +123,7 @@ status: Draft
 | R14 | 發布流程？ | 草稿 -> 測試執行 -> 發布（三階段） | E05 epic-brief |
 | R15 | 目標表管理方式？ | 系統預先定義 schema，Load 節點直接選擇 | E05 epic-brief |
 | R16 | 草稿可否執行？ | 允許手動測試執行，標記為 test_run，不被排程觸發 | E05 epic-brief |
-| R17 | 目標表規劃方法？ | Domain-Oriented 設計（4 個 Domain Data Product） | E05 epic-brief |
+| R17 | 目標表規劃方法？ | Domain-Oriented 來源驅動設計（Phase 1 MVP 僅 1 個 customer_core，Phase 2/3 待來源接入後擴充） | E05 epic-brief（US-049 v2 修訂） |
 
 ## E05 已解決的開放問題
 
@@ -153,6 +153,19 @@ status: Draft
 | OQ-39 | `etl_pipelines` 實體是否有 `error_message` 欄位？ | **不新增欄位**。回收時僅更新 `status = 'failed'`，錯誤原因記錄在 `etl_pipeline_logs.error_message` | F038 |
 | OQ-40 | ETL Pipeline 回收後 `status` 應設為 `'failed'` 還是回復為啟動前狀態？ | **統一設為 `'failed'`**，與 extraction tasks 保持一致 | F038 |
 | OQ-41 | 應用程式啟動回收失敗時，是否應中止啟動？ | **記錄錯誤日誌但不中止啟動**。回收失敗不應阻止系統提供其他正常服務 | F038 |
+
+## F036（US-049 v2）已解決的開放問題
+
+以下問題已於 US-049 修訂時決策：
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-42 | Phase 1 MVP 應預建幾個目標表？ | **僅建立 `customer_core` 1 個目標表**，來源驅動設計，不預建無法填充的空表 | F036, data-model.md |
+| OQ-43 | `customer_core` 的來源資料表為何？ | **ZZIP_BAMCUST_M（核心系統）+ MLMCUSTOMER（行銷/租賃系統）**，以身分證字號/統編為共同鍵 | F036 |
+| OQ-44 | 兩來源資料衝突時的解決策略？ | **以 `source_updated_at` 較新者為準**，於 US-042 Pipeline 編輯器 Transform 節點處理 | F036, F029 |
+| OQ-45 | 電話欄位佔位值如何處理？ | **過濾為 NULL**，佔位值包含 `00-0000000000`、區碼或號碼全為 0、空字串 | F036 |
+| OQ-46 | 代碼欄位（education_code、occupation_code 等）的描述如何取得？ | **`_code` 保留原始代碼，`_desc` 由 US-030 代碼對照表轉換**，於 US-042 Transform 節點處理 | F036, F017 |
+| OQ-47 | MLMC 資本額欄位型別轉換？ | **varchar → DECIMAL**，CUSTNOWCAPTIAL 與 CUSTCREATECAPTIAL 均需轉換 | F036 |
 
 ## 假設清單
 
@@ -193,6 +206,10 @@ status: Draft
 | A31 | CDMP MVP 以單一 Node.js 進程運行（無水平擴展/多副本），孤兒回收無需分散式鎖 | F038 設計假設 | 架構師確認 |
 | A32 | E04/E05 的執行邏輯均為 fire-and-forget，進程終止即代表執行中止 | F038 設計假設 | 架構師確認 |
 | A33 | 回收服務執行時 TypeORM DataSource 已初始化，資料庫連線已就緒 | F038 設計假設 | 架構師確認 |
+| A34 | Phase 1 MVP 目標表僅 `customer_core` 1 個，Phase 2/3 目標表待來源系統接入後再建立 | US-049 v2 修訂 | ✅ 已確認（OQ-42） |
+| A35 | 兩來源系統（ZZIP_BAMCUST_M / MLMCUSTOMER）以身分證字號/統編為共同鍵 | US-049 v2 來源定義 | ✅ 已確認（OQ-43） |
+| A36 | 電話欄位佔位值（`00-0000000000`、全零、空字串）過濾為 NULL | US-049 v2 轉換規則 | ✅ 已確認（OQ-45） |
+| A37 | `customer_core` 目標表約 45 欄位，分 A~H 八個分類 | US-049 v2 欄位定義 | ✅ 已確認（OQ-42） |
 
 ## 更新紀錄
 
@@ -208,3 +225,4 @@ status: Draft
 | 2026-03-19 | 新增 E05 相關已解決問題 R13 ~ R17、OQ-30 ~ OQ-35、待決問題 OQ-36 ~ OQ-38、假設 A22 ~ A30 | Spec Writer Agent |
 | 2026-03-19 | OQ-36 ~ OQ-38 以建議假設方案確認解決；A28 ~ A30 標記為已確認 | Product Owner |
 | 2026-03-25 | 新增 F038 已解決的開放問題 OQ-39 ~ OQ-41、假設 A31 ~ A33 | Spec Writer Agent |
+| 2026-03-25 | US-049 v2 修訂：更新 R17 決議（4 表→1 表）、新增 OQ-42 ~ OQ-47（目標表縮減/來源定義/衝突解決/佔位值/代碼轉換/型別轉換）、新增假設 A34 ~ A37 | Spec Writer Agent |

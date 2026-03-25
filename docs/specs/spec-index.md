@@ -1,7 +1,7 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "1.7"
+version: "1.8"
 date: 2026-03-25
 status: Draft
 ---
@@ -9,7 +9,7 @@ status: Draft
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：64 份（7 支援文件 + 38 Feature 文件 + 19 圖表文件）
+> **文件總數**：65 份（7 支援文件 + 38 Feature 文件 + 20 圖表文件）
 > **最後更新**：2026-03-25
 
 ---
@@ -25,8 +25,8 @@ status: Draft
 | Feature 文件（E04） | 10 |
 | Feature 文件（E05） | 11 |
 | Feature 文件（E04/E05 跨模組） | 1 |
-| Mermaid 圖表 | 19 |
-| **總計** | **64** |
+| Mermaid 圖表 | 20 |
+| **總計** | **65** |
 
 ---
 
@@ -105,7 +105,7 @@ status: Draft
 | F033 | [F033-pipeline-version.md](features/F033-pipeline-version.md) | Pipeline 版本管理（Diff/回滾/發布） | US-046 | P1 |
 | F034 | [F034-delete-pipeline.md](features/F034-delete-pipeline.md) | 刪除 Pipeline | US-047 | P1 |
 | F035 | [F035-pipeline-dashboard.md](features/F035-pipeline-dashboard.md) | Pipeline 監控儀表板 | US-048 | P1 |
-| F036 | [F036-target-tables.md](features/F036-target-tables.md) | 目標表 Domain-Oriented 規劃 | US-049 | P0-MVP |
+| F036 | [F036-target-tables.md](features/F036-target-tables.md) | 目標表 Domain-Oriented 規劃（customer_core 約 45 欄位） | US-049 | P0-MVP |
 | F037 | [F037-publish-pipeline-version.md](features/F037-publish-pipeline-version.md) | 發布 Pipeline 版本 | US-050 | P0-MVP |
 
 ### E04/E05 — 跨模組系統維運
@@ -140,6 +140,7 @@ status: Draft
 | [diagrams/pipeline-crud-flow.md](diagrams/pipeline-crud-flow.md) | Pipeline CRUD 流程 | Sequence | F027, F028, F034 |
 | [diagrams/pipeline-execution-flow.md](diagrams/pipeline-execution-flow.md) | Pipeline 執行流程 | Sequence | F030 |
 | [diagrams/pipeline-editor-flow.md](diagrams/pipeline-editor-flow.md) | Pipeline 編輯器流程 | Flowchart | F029 |
+| [diagrams/target-table-etl-flow.md](diagrams/target-table-etl-flow.md) | 目標表 ETL 轉換流程 | Flowchart | F036 |
 
 ### 狀態圖
 
@@ -228,3 +229,4 @@ F037 ──> F031（發布後才能啟用）
 | 2026-03-23 | 新增 F037（發布 Pipeline 版本），對應 US-050；新增錯誤碼 PIPELINE_VERSION_ALREADY_PUBLISHED；更新 P0-MVP 為 29 個 Feature | Spec Writer Agent |
 | 2026-03-25 | 新增 F038（孤兒任務回收），對應生產環境 Bug Fix；跨 E04/E05 模組；P0-MVP；更新總文件數為 64 份 | Product Analyst Agent |
 | 2026-03-25 | F038 規格審閱完善：統一為標準 Feature 格式、修正 AC-4 移除不存在的 error_message 引用、OQ-3 決策（回收失敗不中止啟動）反映至 BR-11/AC-10/替代流程、新增 NFR-002.12 孤兒回收效能、來源 Story 修正為 US-051、OQ 編號對齊全域序列（OQ-39~41）、新增假設 A31~A33 | Spec Writer Agent |
+| 2026-03-25 | F036（US-049）重大更新：4 個目標表縮減為 1 個（customer_core 約 45 欄位）、新增來源資料表定義（ZZIP_BAMCUST_M + MLMCUSTOMER）、新增 ETL 轉換規則（電話合併/衝突解決/代碼描述/型別轉換）、新增依賴（US-030/US-042）、更新 data-model/scope/overview/open-questions、新增 target-table-etl-flow 圖表、文件總數 65 份 | Spec Writer Agent |

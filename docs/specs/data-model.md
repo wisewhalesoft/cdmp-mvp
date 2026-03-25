@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.2"
-date: 2026-03-19
+version: "1.3"
+date: 2026-03-25
 status: Draft
 ---
 
@@ -604,103 +604,135 @@ Pipeline 執行日誌，記錄每次執行的詳細資訊，包含各節點的�
 
 ## 目標表（Domain-Oriented Data Products） {#target-tables}
 
-ETL Pipeline 的 Load 節點載入目標。系統預先定義 4 個 Domain Data Product 目標表，採用 Domain-Oriented 設計。目標表不納入 ORM Entity 管理，由系統預先建立並透過 Pipeline 執行時以動態 SQL 寫入。
+ETL Pipeline 的 Load 節點載入目標。Phase 1 MVP 預先定義 1 個 Domain Data Product 目標表 `customer_core`（約 45 欄位），採用來源驅動（Source-Driven）的 Domain-Oriented 設計。目標表不納入 ORM Entity 管理，由系統預先建立並透過 Pipeline 執行時以動態 SQL 寫入。
+
+Phase 2/3 的 `customer_interaction`、`customer_financial`、`customer_service` 待對應來源系統接入後再建立，不預建無法填充的空表。
 
 ### 命名規則
 
-| 目標表 | 表名 | Domain | 說明 |
-|--------|------|--------|------|
-| Customer Core | `customer_core` | core | 客戶基本身分與主檔資料 |
-| Customer Interaction | `customer_interaction` | interaction | 客戶行為與接觸紀錄 |
-| Customer Financial | `customer_financial` | financial | 交易與風控資料 |
-| Customer Service | `customer_service` | service | 客服與申訴案件 |
+| 目標表 | 表名 | Domain | 說明 | 階段 |
+|--------|------|--------|------|------|
+| Customer Core | `customer_core` | core | 客戶身分、聯絡、職業、財務概況與風控旗標 | Phase 1 MVP |
+| Customer Interaction | `customer_interaction` | interaction | 客戶行為與接觸紀錄 | Phase 2（待 CRM 接入） |
+| Customer Financial | `customer_financial` | financial | 交易與風控資料 | Phase 2（待合約明細系統接入） |
+| Customer Service | `customer_service` | service | 客服與申訴案件 | Phase 3（待客服工單系統接入） |
+
+### 來源資料表 {#target-source-tables}
+
+| 來源表 | 系統 | 說明 | 客戶類型欄位 |
+|--------|------|------|-------------|
+| ZZIP_BAMCUST_M | 核心系統 | 客戶主檔（個人/企業/外籍） | CUSTOM_MK: 01=個人, 02=企業, 04=外籍 |
+| MLMCUSTOMER | 行銷/租賃系統 | 客戶主檔（個人/企業） | CUTYPE: 1=個人, 2=企業 |
+
+兩系統以身分證字號/統一編號作為共同鍵（ZZIP.CUSTO_NO = MLMC.CUSTID）。
 
 ### customer_core 目標表 {#target-customer-core}
 
+約 45 欄位，分 8 個分類。完整欄位定義（含來源對應與轉換邏輯）請參見 [F036-target-tables.md 第 11 節](features/F036-target-tables.md#11-目標表欄位定義--customer_core)。
+
+#### A. 識別與分類（5 欄位）
+
 | 欄位名稱 | 型別 | Nullable | PK | 說明 |
 |----------|------|----------|-----|------|
-| customer_id | UUID | 否 | 是 | 客戶唯一識別碼 |
-| id_number | VARCHAR | 是 | | 身分證號（加密） |
-| name | VARCHAR | 是 | | 姓名 |
-| gender | VARCHAR | 是 | | 性別 |
+| customer_id | UUID | 否 | 是 | 客戶唯一識別碼（代理鍵） |
+| source_customer_no | VARCHAR(20) | 否 | | 來源客戶編號（身分證/統編） |
+| customer_type | VARCHAR(2) | 否 | | 客戶類型（01=個人/02=企業/04=外籍） |
+| name | VARCHAR(100) | 否 | | 姓名/企業名稱 |
+| english_name | VARCHAR(60) | 是 | | 英文姓名 |
+
+#### B. 個人屬性（5 欄位）
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| gender | VARCHAR(1) | 是 | | 性別 |
 | date_of_birth | DATE | 是 | | 生日 |
-| phone | VARCHAR | 是 | | 電話 |
-| email | VARCHAR | 是 | | Email |
-| address | TEXT | 是 | | 地址 |
-| occupation | VARCHAR | 是 | | 職業 |
-| company_name | VARCHAR | 是 | | 公司名稱 |
-| customer_type | VARCHAR | 是 | | 客戶類型（individual / corporate） |
-| registration_date | TIMESTAMP | 是 | | 建檔日期 |
-| data_source | VARCHAR | 是 | | 資料來源識別 |
-| last_updated_at | TIMESTAMP | 是 | | 最後更新時間 |
-| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
-| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+| marital_status | VARCHAR(1) | 是 | | 婚姻狀態 |
+| education_code | VARCHAR(2) | 是 | | 學歷代碼 |
+| education_desc | VARCHAR(50) | 是 | | 學歷描述（US-030 代碼轉換） |
 
-### customer_interaction 目標表 {#target-customer-interaction}
+#### C. 聯絡資訊（6 欄位）
 
 | 欄位名稱 | 型別 | Nullable | PK | 說明 |
 |----------|------|----------|-----|------|
-| interaction_id | UUID | 否 | 是 | 互動唯一識別碼 |
-| customer_id | UUID | 是 | | 關聯客戶 |
-| interaction_type | VARCHAR | 是 | | 接觸類型（call / email / sms / visit / app / web / dm） |
-| channel | VARCHAR | 是 | | 通路 |
-| direction | VARCHAR | 是 | | 方向（inbound / outbound） |
-| interaction_date | TIMESTAMP | 是 | | 接觸時間 |
-| campaign_id | VARCHAR | 是 | | 行銷活動 ID |
-| campaign_name | VARCHAR | 是 | | 行銷活動名稱 |
-| response_status | VARCHAR | 是 | | 回應狀態 |
-| content_summary | TEXT | 是 | | 內容摘要 |
-| agent_id | VARCHAR | 是 | | 處理人員 |
-| data_source | VARCHAR | 是 | | 資料來源識別 |
-| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
-| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+| mobile_phone | VARCHAR(20) | 是 | | 行動電話 |
+| home_phone | VARCHAR(20) | 是 | | 戶籍電話 |
+| contact_phone | VARCHAR(20) | 是 | | 通訊電話 |
+| office_phone | VARCHAR(20) | 是 | | 公司電話 |
+| email | VARCHAR(40) | 是 | | Email |
+| line_account | VARCHAR(50) | 是 | | Line 帳號 |
 
-### customer_financial 目標表 {#target-customer-financial}
+#### D. 地址（6 欄位）
 
 | 欄位名稱 | 型別 | Nullable | PK | 說明 |
 |----------|------|----------|-----|------|
-| financial_id | UUID | 否 | 是 | 財務記錄唯一識別碼 |
-| customer_id | UUID | 是 | | 關聯客戶 |
-| contract_id | VARCHAR | 是 | | 合約編號 |
-| contract_type | VARCHAR | 是 | | 合約類型（loan / lease） |
-| vehicle_model | VARCHAR | 是 | | 車型 |
-| vehicle_year | INTEGER | 是 | | 車輛年份 |
-| principal_amount | DECIMAL | 是 | | 本金金額 |
-| monthly_payment | DECIMAL | 是 | | 月付金 |
-| interest_rate | DECIMAL | 是 | | 利率 |
-| term_months | INTEGER | 是 | | 期數 |
-| payment_status | VARCHAR | 是 | | 還款狀態（current / overdue / default / closed） |
-| overdue_days | INTEGER | 是 | | 逾期天數 |
-| overdue_amount | DECIMAL | 是 | | 逾期金額 |
-| credit_score | INTEGER | 是 | | 信用評分 |
-| risk_level | VARCHAR | 是 | | 風險等級（low / medium / high / critical） |
-| contract_start_date | DATE | 是 | | 合約起始日 |
-| contract_end_date | DATE | 是 | | 合約結束日 |
-| data_source | VARCHAR | 是 | | 資料來源識別 |
-| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
-| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+| residential_zip | VARCHAR(6) | 是 | | 戶籍郵遞區號 |
+| residential_address | VARCHAR(100) | 是 | | 戶籍地址 |
+| mailing_zip | VARCHAR(6) | 是 | | 通訊郵遞區號 |
+| mailing_address | VARCHAR(100) | 是 | | 通訊地址 |
+| company_zip | VARCHAR(6) | 是 | | 公司郵遞區號 |
+| company_address | VARCHAR(100) | 是 | | 公司/營業地址 |
 
-### customer_service 目標表 {#target-customer-service}
+#### E. 職業與就業（10 欄位）
 
 | 欄位名稱 | 型別 | Nullable | PK | 說明 |
 |----------|------|----------|-----|------|
-| service_id | UUID | 否 | 是 | 服務案件唯一識別碼 |
-| customer_id | UUID | 是 | | 關聯客戶 |
-| case_number | VARCHAR | 是 | | 案件編號 |
-| case_type | VARCHAR | 是 | | 案件類型（inquiry / complaint / request / dispute） |
-| category | VARCHAR | 是 | | 分類 |
-| priority | VARCHAR | 是 | | 優先級（low / medium / high / urgent） |
-| status | VARCHAR | 是 | | 狀態（open / in_progress / resolved / closed） |
-| channel | VARCHAR | 是 | | 進件通路 |
-| description | TEXT | 是 | | 案件描述 |
-| resolution | TEXT | 是 | | 處理結果 |
-| assigned_to | VARCHAR | 是 | | 指派人員 |
-| opened_at | TIMESTAMP | 是 | | 建立時間 |
-| resolved_at | TIMESTAMP | 是 | | 解決時間 |
-| satisfaction_score | INTEGER | 是 | | 滿意度（1-5） |
-| data_source | VARCHAR | 是 | | 資料來源識別 |
-| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（系統自動填充） |
-| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（系統自動填充） |
+| company_name | VARCHAR(100) | 是 | | 服務公司/企業名稱 |
+| occupation_code | VARCHAR(4) | 是 | | 職業代碼 |
+| occupation_desc | VARCHAR(50) | 是 | | 職業描述（US-030 代碼轉換） |
+| job_title_code | VARCHAR(4) | 是 | | 職稱代碼 |
+| job_title_desc | VARCHAR(50) | 是 | | 職稱描述（US-030 代碼轉換） |
+| job_level | VARCHAR(2) | 是 | | 職級 |
+| industry_code | VARCHAR(6) | 是 | | 行業代碼 |
+| industry_desc | VARCHAR(100) | 是 | | 行業描述（US-030 代碼轉換） |
+| work_years | DECIMAL(8,2) | 是 | | 年資 |
+| company_scale | VARCHAR(1) | 是 | | 公司規模 |
+
+#### F. 財務與風控（10 欄位）
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| monthly_income | DECIMAL(8,0) | 是 | | 月所得 |
+| approved_income | INTEGER | 是 | | 認定月收入 |
+| income_source | VARCHAR(5) | 是 | | 收入來源代碼 |
+| capital | DECIMAL(12,0) | 是 | | 資本額 |
+| credit_limit | DECIMAL(12,0) | 是 | | 核准額度 |
+| has_real_estate | VARCHAR(1) | 是 | | 自有不動產 |
+| debt_flag | CHAR(1) | 是 | | 消債旗標 |
+| fine_flag | CHAR(1) | 是 | | 違規欠稅旗標 |
+| address_anomaly_flag | SMALLINT | 是 | | 地址異常註記 |
+| mainland_flag | SMALLINT | 是 | | 大陸籍旗標 |
+
+#### G. 企業客戶專屬（7 欄位）
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| owner_name | VARCHAR(50) | 是 | | 負責人姓名 |
+| owner_id | VARCHAR(10) | 是 | | 負責人 ID |
+| owner_birth | DATE | 是 | | 負責人生日 |
+| established_capital | DECIMAL(12,0) | 是 | | 創設資本 |
+| employee_count | VARCHAR(6) | 是 | | 員工數 |
+| is_listed | VARCHAR(6) | 是 | | 是否上市 |
+| parent_customer_id | VARCHAR(10) | 是 | | 母公司客戶 ID |
+
+#### H. 稽核與 ETL 追蹤（5 欄位）
+
+| 欄位名稱 | 型別 | Nullable | PK | 說明 |
+|----------|------|----------|-----|------|
+| source_created_at | TIMESTAMP | 是 | | 來源建檔日期 |
+| source_updated_at | TIMESTAMP | 是 | | 來源最後更新 |
+| data_source | VARCHAR(50) | 否 | | 資料來源識別（ETL 自動填充） |
+| _etl_loaded_at | TIMESTAMP | 否 | | ETL 載入時間（ETL 自動填充） |
+| _etl_pipeline_id | UUID | 否 | | 載入的 Pipeline ID（ETL 自動填充） |
+
+### ETL 轉換規則 {#target-etl-transform-rules}
+
+| 規則 | 說明 |
+|------|------|
+| 電話合併 | `{區碼}-{號碼}` 格式，佔位值（如 `00-0000000000`）過濾為 NULL |
+| 衝突解決 | 同一客戶在兩來源有衝突時，以 `source_updated_at` 較新者為準（於 US-042 處理） |
+| 代碼描述 | `_code` 欄位保留原始代碼，`_desc` 欄位由 US-030 取得對照表、US-042 轉換填入 |
+| 資本額型別 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL：varchar → DECIMAL |
+| 客戶類型對應 | ZZIP.CUSTOM_MK 直接映射；MLMC.CUTYPE 需轉換（1→01, 2→02） |
 
 ### 共通 ETL 追蹤欄位
 
@@ -719,5 +751,6 @@ ETL Pipeline 的 Load 節點載入目標。系統預先定義 4 個 Domain Data 
 - Load 節點執行時自動填充 ETL 追蹤欄位
 - 目標表採用 UPSERT 策略（以主鍵判斷 INSERT 或 UPDATE）
 - 為未來 Data Mesh 擴展預留架構空間（每個 Domain 可獨立演進 schema）
+- Phase 1 MVP 僅建立 `customer_core`，Phase 2/3 目標表待來源系統接入後再建立
 
 **相關功能**：[F029](features/F029-pipeline-editor.md), [F036](features/F036-target-tables.md)

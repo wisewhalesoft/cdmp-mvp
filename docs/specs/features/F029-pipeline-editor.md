@@ -75,7 +75,7 @@ status: Draft
 
 - **Given** Admin 點擊一個 Load 節點
 - **When** 右側屬性面板載入
-- **Then** 顯示目標表選擇（customer_core / customer_interaction / customer_financial / customer_service）及欄位對應設定
+- **Then** 顯示目標表選擇（Phase 1 MVP：customer_core）及欄位對應設定
 
 ### AC-9: 存檔為草稿
 
@@ -472,7 +472,7 @@ status: Draft
 | BR-6 | 儲存時更新 EtlPipeline.step_count 為 nodes 數量 |
 | BR-7 | Pipeline definition 以 JSONB 格式儲存於 EtlPipelineVersion |
 | BR-8 | Extract 節點的資料來源為 E04 ExtractionTask 產生的 raw data 表 |
-| BR-9 | Load 節點的目標表為系統預定義的 4 個 Domain Data Product 表 |
+| BR-9 | Load 節點的目標表為系統預定義的 Domain Data Product 表（Phase 1 MVP：customer_core） |
 | BR-10 | 草稿狀態下允許不完整的設定（節點未完成配置仍可儲存） |
 
 ## 10. UI/UX 需求

@@ -1,8 +1,8 @@
 ---
 spec-id: scope
 title: 範圍定義
-version: "1.2"
-date: 2026-03-19
+version: "1.3"
+date: 2026-03-25
 status: Draft
 ---
 
@@ -59,7 +59,7 @@ status: Draft
 | F033 | US-046 | E05 | Pipeline 版本管理 | P1 | 版本清單、Diff 比對、回滾、發布流程 |
 | F034 | US-047 | E05 | 刪除 Pipeline | P1 | 軟刪除，日誌保留 |
 | F035 | US-048 | E05 | Pipeline 監控儀表板 | P1 | 統計卡片、趨勢圖、進度條、失敗清單、效能排名 |
-| F036 | US-049 | E05 | 目標表 Domain-Oriented 規劃 | P0-MVP | 4 個 Domain Data Product 目標表，schema API，欄位對應 |
+| F036 | US-049 | E05 | 目標表 Domain-Oriented 規劃 | P0-MVP | 1 個 Domain Data Product 目標表（customer_core，約 45 欄位），schema API，欄位對應，來源：ZZIP_BAMCUST_M + MLMCUSTOMER |
 
 ### 非功能需求
 
@@ -154,7 +154,7 @@ E04（資料擷取管理）
 | F033 Pipeline 版本管理 | F029, F030 | 無 |
 | F034 刪除 Pipeline | F028 | 無 |
 | F035 Pipeline 監控儀表板 | F030, F032 | 無 |
-| F036 目標表 Domain-Oriented | F029 | 無 |
+| F036 目標表 Domain-Oriented | F029, F017（US-030 代碼對照表） | 無 |
 
 ### 外部依賴
 

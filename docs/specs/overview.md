@@ -1,8 +1,8 @@
 ---
 spec-id: overview
 title: 系統總覽
-version: "1.2"
-date: 2026-03-19
+version: "1.3"
+date: 2026-03-25
 status: Draft
 ---
 
@@ -27,7 +27,7 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 2. **提供完整的帳號生命週期管理** — 讓 Admin 能夠建立、查看、編輯、停用帳號及管理角色指派
 3. **實現資料來源的集中化管理** — 支援 MySQL、PostgreSQL、SQL Server 三種資料庫類型的連線設定、測試與健康監控
 4. **實現資料擷取與落地** — 從外部資料來源讀取指定的來源資料表，將 raw data 真正搬移至 CDMP AppDB 的動態建立表中，支援全量與增量兩種擷取模式
-5. **實現 ETL Pipeline 資料轉換** — 透過視覺化拖拉式編輯器組合 Extract / Transform（13 種轉換節點）/ Load 節點，將 raw data 經轉換處理後載入 Domain-Oriented 目標表（Customer Core / Interaction / Financial / Service），支援版本管理、三階段發布流程、排程自動執行與監控儀表板
+5. **實現 ETL Pipeline 資料轉換** — 透過視覺化拖拉式編輯器組合 Extract / Transform（13 種轉換節點）/ Load 節點，將 raw data 經轉換處理後載入 Domain-Oriented 目標表（Phase 1 MVP：Customer Core 約 45 欄位，來源為 ZZIP_BAMCUST_M + MLMCUSTOMER），支援版本管理、三階段發布流程、排程自動執行與監控儀表板
 6. **確保憑證安全** — 使用者密碼以 bcrypt 雜湊儲存，資料庫連線密碼以 AES-256 加密儲存
 
 ## 非目標（Non-Goals）
@@ -65,7 +65,7 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 - 資料擷取任務管理（建立、編輯、執行、排程、監控）
 - Raw data 落地（動態建表、批次寫入 AppDB、分頁預覽）
 - ETL Pipeline 管理（建立、視覺化編輯、執行、排程、版本管理、監控）
-- Domain-Oriented 目標表（customer_core / customer_interaction / customer_financial / customer_service）
+- Domain-Oriented 目標表（Phase 1 MVP：customer_core；Phase 2/3：customer_interaction / customer_financial / customer_service）
 - 密碼重設流程（自助式與 Admin 代為重設）
 
 ### 系統外部（External Dependencies）

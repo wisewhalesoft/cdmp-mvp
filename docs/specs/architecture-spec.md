@@ -1,6 +1,6 @@
 ---
 type: architecture-spec
-version: 1.4
+version: 1.5
 status: draft
 last_updated: 2026-03-25
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038]
@@ -212,7 +212,7 @@ graph TB
 | SQL Server 實例 | TCP（Port 1433） | 連線測試（`SELECT 1`）、自動健康檢查、資料擷取（批次 SQL Query） | F015, F016, F021, F023 |
 | 瀏覽器 | HTTPS | 使用者介面 | 全部 |
 
-> **E05 新增說明**：ETL Pipeline 的 Extract 節點讀取 AppDB 內的 raw data 表（不直接連外部資料庫），Load 節點寫入 AppDB 內的 target 表（`customer_core` 等），因此 ETL Pipeline 執行不新增外部依賴，資料流閉合於 AppDB 內部。
+> **E05 新增說明**：ETL Pipeline 的 Extract 節點讀取 AppDB 內的 raw data 表（不直接連外部資料庫），Load 節點寫入 AppDB 內的目標表（Phase 1 MVP 為 `customer_core`，約 45 欄位，整合 ZZIP_BAMCUST_M 與 MLMCUSTOMER 兩個來源），因此 ETL Pipeline 執行不新增外部依賴，資料流閉合於 AppDB 內部。Target Table Registry 為 in-process 靜態定義，無額外依賴。
 
 > **注意**：資料擷取（F021/F023）對目標資料庫的流量性質與連線測試（`SELECT 1`）顯著不同——擷取為批次資料讀取（`SELECT * FROM table` 或增量 `WHERE col > value`），可能涉及大量資料傳輸，對目標資料庫的負載影響需評估。
 
@@ -284,7 +284,7 @@ graph TB
     end
 
     subgraph Persistence["持久層"]
-        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog<br/>raw_{task_id_short} 動態表<br/>EtlPipeline / EtlPipelineVersion / EtlPipelineLog<br/>customer_core / customer_interaction<br/>customer_financial / customer_service"]
+        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog<br/>raw_{task_id_short} 動態表<br/>EtlPipeline / EtlPipelineVersion / EtlPipelineLog<br/>customer_core（Phase 1 MVP 目標表）<br/>Phase 2: customer_financial / customer_interaction<br/>Phase 3: customer_service"]
         TokenStore["Token Blocklist Store"]
     end
 
@@ -452,6 +452,7 @@ graph TB
 | Pipeline Definition Service | 儲存/載入 Pipeline JSONB definition；連線規則驗證（Extract→Transform→Load 方向；禁止逆向循環連線）；更新 `step_count` | 草稿狀態允許不完整設定（節點未填完仍可儲存）；儲存成功後更新 EtlPipeline.step_count 為 nodes 數量 | F029 |
 | Pipeline Execution Service | 建立 EtlPipelineLog（`status=running`）；更新 EtlPipeline.status；非同步節點循序執行（Extract→Transform→Load）；進度更新（`processed_count`）；完成後更新統計；測試執行（`is_test_run=true`）不計入正式統計 | 並發控制：`status=running` 時拒絕重複觸發（409）；手動/排程/測試/重試共用執行邏輯，差異僅在 `triggered_by` 與 `is_test_run`；測試執行成功後更新版本狀態 `draft→testing`；排程執行使用最新 `published` 版本 | F030, F033 |
 | Pipeline Version Service | 版本歷史查詢；Diff 計算（節點增刪改）；回滾（建立新版本，複製舊版本內容）；發布（`testing→published`，驗證有成功測試執行記錄）；更新 EtlPipeline.version | 版本狀態單向流轉：`draft→testing→published`；發布前必須有 `is_test_run=true` 的成功執行記錄；回滾不修改舊版本，建立新版本（版本號遞增）；排程引擎僅使用最新 `published` 版本 | F033 |
+| Target Table Service | 提供目標表清單與 schema 查詢；管理 Target Table Registry（in-process 靜態定義）；為 Load 節點提供欄位對應所需的 schema；標記 ETL 追蹤欄位（`isEtlTracking`）供前端介面識別 | Phase 1 MVP 僅含 `customer_core`（約 45 欄位，分 A~H 八類）；schema 定義為靜態，不支援 Admin 自訂（BR-4）；查詢不存在的表名回傳 404；ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）由系統自動填充，不可手動對應 | F036 |
 
 **Pipeline 非同步執行模型**（AD-E05-1）：
 
@@ -486,7 +487,95 @@ graph TB
 | Transform | Transform、Load | Extract、自身（禁止循環） |
 | Load | 無（終端節點） | Extract、Transform、Load |
 
-**目標表 UPSERT 策略**（AD-E05-5）：Load 節點執行時以各目標表的主鍵（`customer_id`、`interaction_id`、`financial_id`、`service_id`）判斷 INSERT 或 UPDATE（PostgreSQL `ON CONFLICT DO UPDATE`）。目標表不透過 TypeORM Entity 管理，使用動態 SQL 執行寫入操作。
+**目標表 UPSERT 策略**（AD-E05-5）：Load 節點執行時以目標表的主鍵（Phase 1 MVP 僅 `customer_core.customer_id`）判斷 INSERT 或 UPDATE（PostgreSQL `ON CONFLICT DO UPDATE`）。目標表不透過 TypeORM Entity 管理，使用動態 SQL 執行寫入操作。Phase 2/3 新增目標表時，無需修改執行引擎，僅需在 Target Table Registry 中新增 schema 定義。
+
+**Target Table Registry 設計**（AD-E05-6）：
+
+目標表的 schema 定義採用「靜態程式碼內嵌（hardcoded in-process registry）」方式管理，而非資料庫表或外部設定檔。
+
+| 設計元素 | 說明 |
+|---------|------|
+| 實作位置 | `target-table.service.ts` 內以 TypeScript 物件陣列定義 |
+| 擴展機制 | 新增 Phase 2/3 目標表時，在 Registry 陣列中新增一個物件即可；符合開放封閉原則（Open/Closed Principle） |
+| API 讀取 | `TargetTableService.listTables()` 與 `TargetTableService.getSchema(tableName)` 均從 in-process 陣列讀取，無 DB 查詢，回應速度極快 |
+| 冪等性 | GET 端點完全冪等；schema 定義不隨執行狀態改變 |
+| 欄位分類 | `customer_core` 的 45 個欄位依 A~H 八個語意分類組織（識別與分類、個人屬性、聯絡資訊、地址、職業與就業、財務與風控、企業客戶專屬、稽核與 ETL 追蹤） |
+| ETL 追蹤欄位標記 | `isEtlTracking: true` 欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）在欄位對應介面以灰色標示，不可手動對應，由 Pipeline Execution Service 自動填充 |
+
+**選擇靜態 Registry 而非資料庫表的理由**：目標表 schema 在 MVP 階段為靜態定義（BR-4），不支援 Admin 自訂；程式碼版本控制即為 schema 的唯一真實來源（single source of truth）；避免引入 `target_table_definitions` 管理表與對應 CRUD API 的額外複雜度。Phase 2/3 擴展時，透過程式碼變更（Git PR）新增 schema 定義，可享有程式碼審查與測試保護。
+
+**來源資料表至目標表的資料流（F036 / US-049）**：
+
+`customer_core` 整合兩個來源系統的資料，ETL 轉換規則在 Transform 節點中執行，Load 節點負責最終寫入。
+
+```mermaid
+graph TD
+    subgraph 來源系統["來源系統（外部）"]
+        ZZIP["ZZIP_BAMCUST_M<br/>核心系統客戶主檔<br/>（個人/企業/外籍）"]
+        MLMC["MLMCUSTOMER<br/>行銷/租賃系統客戶主檔<br/>（個人/企業）"]
+    end
+
+    subgraph ExtractionLayer["擷取層（E04）"]
+        RawZZIP["raw_{zzip_task_id}<br/>（AppDB 動態表）"]
+        RawMLMC["raw_{mlmc_task_id}<br/>（AppDB 動態表）"]
+    end
+
+    subgraph ETLLayer["ETL Pipeline 層（E05）"]
+        ExtractNode1["Extract 節點<br/>讀取 raw_{zzip_task_id}"]
+        ExtractNode2["Extract 節點<br/>讀取 raw_{mlmc_task_id}"]
+
+        subgraph TransformNodes["Transform 節點群"]
+            MergeNode["Merge 節點<br/>以 身分證/統編 為鍵合併兩來源<br/>衝突以 source_updated_at 較新者為準"]
+            PhoneNode["FieldMapping / NullHandler<br/>電話欄位合併：{區碼}-{號碼}<br/>佔位值 → NULL"]
+            CodeNode["Lookup 節點<br/>_code 欄位 → _desc 欄位<br/>（依賴 US-030 代碼對照表）"]
+            TypeCastNode["TypeCast 節點<br/>varchar → DECIMAL<br/>（capital、established_capital）<br/>CUTYPE 1→01, 2→02"]
+        end
+
+        LoadNode["Load 節點<br/>寫入 customer_core<br/>UPSERT on customer_id<br/>自動填充 ETL 追蹤欄位"]
+    end
+
+    subgraph TargetLayer["目標層（AppDB）"]
+        CustomerCore["customer_core<br/>（約 45 欄位，A~H 八分類）<br/>Phase 1 MVP 目標表"]
+    end
+
+    subgraph Registry["Target Table Registry（in-process）"]
+        TargetSvc["TargetTableService<br/>listTables() / getSchema(tableName)<br/>靜態 TypeScript 定義"]
+    end
+
+    ZZIP -->|"E04 擷取任務"| RawZZIP
+    MLMC -->|"E04 擷取任務"| RawMLMC
+    RawZZIP --> ExtractNode1
+    RawMLMC --> ExtractNode2
+    ExtractNode1 --> MergeNode
+    ExtractNode2 --> MergeNode
+    MergeNode --> PhoneNode
+    PhoneNode --> CodeNode
+    CodeNode --> TypeCastNode
+    TypeCastNode --> LoadNode
+    LoadNode -->|"ON CONFLICT DO UPDATE"| CustomerCore
+    TargetSvc -->|"提供欄位 schema<br/>供 Load 節點選擇器使用"| LoadNode
+
+    classDef source fill:#fff3e0,stroke:#e65100
+    classDef raw fill:#fce4ec,stroke:#c62828
+    classDef etl fill:#e8f5e9,stroke:#2e7d32
+    classDef target fill:#e3f2fd,stroke:#1565c0
+    classDef registry fill:#f3e8ff,stroke:#7b1fa2
+    class ZZIP,MLMC source
+    class RawZZIP,RawMLMC raw
+    class ExtractNode1,ExtractNode2,MergeNode,PhoneNode,CodeNode,TypeCastNode,LoadNode etl
+    class CustomerCore target
+    class TargetSvc registry
+```
+
+**Phase 2/3 擴展路徑**：
+
+| Phase | 新增目標表 | 前提條件 | 擴展方式 |
+|-------|---------|---------|---------|
+| Phase 2 | `customer_financial` | 合約明細系統接入 | Target Table Registry 新增 schema 定義 + DB Migration 建表 |
+| Phase 2 | `customer_interaction` | CRM / 行銷自動化接入 | 同上 |
+| Phase 3 | `customer_service` | 客服工單系統接入 | 同上 |
+
+擴展時執行引擎（Pipeline Execution Service）的 UPSERT 邏輯無需修改，僅需：①在 `target-table.service.ts` Registry 中新增 schema 物件、②執行 DB Migration 建立目標表、③新增對應的擷取任務（E04）。
 
 **架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查與重複擷取觸發。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
 
@@ -709,7 +798,7 @@ erDiagram
 | EtlPipeline | ETL Pipeline 模組 | Scheduler 模組透過 Pipeline Execution Service 介面呼叫 |
 | EtlPipelineVersion | ETL Pipeline 模組 | 不對其他模組開放；Pipeline Execution Service 讀取最新 published 版本的 definition |
 | EtlPipelineLog | ETL Pipeline 模組 | 不對其他模組開放 |
-| 目標表（customer_core 等） | ETL Pipeline 模組（寫入）| 以動態 SQL 操作，不透過 TypeORM Entity；未來可供 BI 工具或下游系統讀取 |
+| 目標表（`customer_core` 等） | ETL Pipeline 模組（寫入）| 以動態 SQL 操作，不透過 TypeORM Entity；Phase 1 MVP 僅含 `customer_core`；Phase 2/3 擴展時新增目標表至 Registry；未來可供 BI 工具或下游系統讀取 |
 
 ### 4.3 資料一致性模型
 
@@ -765,6 +854,9 @@ erDiagram
 | etl_pipeline_log | started_at | INDEX | 今日統計計算；清理查詢（30 天保留） |
 | etl_pipeline_log | status, started_at | 複合 INDEX | 今日成功/失敗計數（F035 dashboard） |
 | etl_pipeline_log | is_test_run, pipeline_id | 複合 INDEX | 版本發布前查詢是否有成功測試執行記錄 |
+| customer_core | customer_id | PRIMARY KEY | UPSERT 主鍵衝突判斷（`ON CONFLICT(customer_id) DO UPDATE`） |
+| customer_core | source_customer_no | UNIQUE INDEX | 身分證/統編唯一性保護；同一客戶來自不同來源時的 Merge 查詢 |
+| customer_core | _etl_pipeline_id | INDEX | 追溯特定 Pipeline 執行載入的客戶筆數；Load 後稽核查詢 |
 
 ### 4.5 資料生命週期
 
@@ -779,7 +871,7 @@ erDiagram
 | EtlPipelineLog | 30 天（AQ-14 決議）| Cleanup Cron Job 每日執行，刪除 `started_at < NOW() - 30 days` 的記錄 |
 | EtlPipeline（軟刪除） | 永久保留（`deleted_at` 非 NULL），不自動清理 | 手動 DBA 操作（如需復原） |
 | EtlPipelineVersion | 永久保留（隨 Pipeline 保留，不自動清理） | 版本紀錄為審計軌跡，不可自動清除 |
-| 目標表資料（customer_core 等） | 永久保留（UPSERT 寫入），不自動清理 | 由 DBA 或下游系統管理 |
+| 目標表資料（`customer_core` 等） | 永久保留（UPSERT 寫入，同一 `customer_id` 會被覆蓋更新），不自動清理 | 由 DBA 或下游系統管理；ETL 追蹤欄位（`_etl_loaded_at`、`_etl_pipeline_id`）記錄最近一次 Load 的時間與 Pipeline |
 
 ---
 
@@ -1087,6 +1179,57 @@ sequenceDiagram
 | `PUT /api/v1/etl/pipelines/:id/definition` | 冪等 | 相同 definition 重複儲存結果相同（覆寫） |
 | `PATCH /api/v1/etl/pipelines/:id/versions/:versionId/publish` | 冪等（重複發布相同版本結果相同） | 已 published 的版本重複發布無副作用 |
 | `POST /api/v1/etl/pipelines/:id/versions/:versionId/rollback` | 非冪等 | 每次呼叫建立新版本 |
+| `GET /api/v1/etl/target-tables` | 冪等 | 唯讀查詢，回傳靜態 Registry 資料，無 DB 查詢 |
+| `GET /api/v1/etl/target-tables/:tableName/schema` | 冪等 | 唯讀查詢，回傳靜態 Registry 資料；不存在的 tableName 回傳 404 |
+
+### 5.10 Target Table Registry API 流程（F036）
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器 (Pipeline 編輯器)
+    participant API as 後端 API
+    participant Registry as TargetTableService<br/>（in-process Registry）
+
+    Note over Browser,API: 開啟 Load 節點屬性面板時
+
+    Browser->>API: GET /api/v1/etl/target-tables<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證 + RBAC (role=admin)
+    API->>Registry: listTables()
+    Registry-->>API: [{tableName, displayName, domain,<br/>columnCount, description}]
+    API-->>Browser: 200 {data: [{tableName: "customer_core",<br/>displayName: "Customer Core（客戶主檔）",<br/>domain: "core", columnCount: 45, ...}]}
+
+    Note over Browser,API: Admin 選擇目標表後，載入欄位 schema
+
+    Browser->>API: GET /api/v1/etl/target-tables/customer_core/schema<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證 + RBAC (role=admin)
+    API->>Registry: getSchema("customer_core")
+    alt tableName 存在於 Registry
+        Registry-->>API: {tableName, displayName, columns: [...45 欄位定義]}
+        API-->>Browser: 200 {tableName, columns:<br/>[{name, type, nullable, isPrimaryKey,<br/>isEtlTracking, description}, ...]}
+        Note over Browser: 前端渲染欄位對應介面<br/>isEtlTracking=true 欄位灰色標示，不可手動對應
+    else tableName 不存在
+        Registry-->>API: null
+        API-->>Browser: 404 PIPELINE_TARGET_TABLE_NOT_FOUND
+    end
+```
+
+**Load 節點執行時的 ETL 追蹤欄位自動填充**（AC-5）：
+
+```mermaid
+sequenceDiagram
+    participant ExecSvc as Pipeline Execution Service
+    participant Registry as TargetTableService
+    participant DB as 應用資料庫 (AppDB)
+
+    ExecSvc->>Registry: getSchema(targetTableName)
+    Registry-->>ExecSvc: columns（含 isEtlTracking 欄位列表）
+
+    ExecSvc->>ExecSvc: 分離使用者對應欄位 vs ETL 追蹤欄位
+    Note over ExecSvc: ETL 追蹤欄位值：<br/>data_source = "cdmp-etl"<br/>_etl_loaded_at = NOW()<br/>_etl_pipeline_id = pipelineId（UUID）
+
+    ExecSvc->>DB: INSERT INTO customer_core<br/>({使用者對應欄位} + {ETL 追蹤欄位})<br/>ON CONFLICT (customer_id) DO UPDATE<br/>SET {所有非 PK 欄位} = EXCLUDED.{欄位}
+    DB-->>ExecSvc: 寫入成功（affected rows）
+```
 
 ---
 
@@ -1369,6 +1512,25 @@ Seed 流程：
 
 ---
 
+#### 風險 11（F036 新增）：來源欄位結構假設與實際不符
+
+**描述**：`customer_core` 的 45 個欄位定義（US-049）基於對 ZZIP_BAMCUST_M 與 MLMCUSTOMER 兩個來源表的欄位假設（如欄位名稱、資料型別、佔位值格式）。若實際來源表的欄位與假設不符（如欄位改名、型別不同、佔位值格式差異），ETL Transform 節點的轉換規則將產生錯誤或無效輸出。
+
+具體高風險點包括：
+- `MLMC.CUSTNOWCAPTIAL` / `CUSTCREATECAPTIAL` 的 varchar 值是否都能合法轉為 DECIMAL（可能含文字說明如「未填寫」）
+- 電話欄位佔位值格式：假設為 `00-0000000000`，實際格式需以真實資料確認
+- `ZZIP.CUSTO_NO` 與 `MLMC.CUSTID` 的值格式是否一致（Merge 鍵的準確性）
+
+**影響**：TypeCast 節點執行時拋出型別轉換例外，導致 Pipeline 執行失敗；或 Merge 節點因鍵格式不一致產生重複客戶記錄。
+
+**建議**：
+- 開發前執行來源表欄位 Profile（`INFORMATION_SCHEMA` 查詢）確認欄位存在性與型別
+- 對 varchar→DECIMAL 欄位執行資料品質掃描（`COUNT(*) WHERE column NOT REGEXP '^[0-9.]+$'`）
+- 以實際資料樣本確認電話佔位值格式與 Merge 鍵格式
+- TypeCast 節點加入錯誤容忍機制（無效值轉換為 NULL 而非拋出例外，可透過 `NullHandler` 節點前置處理）
+
+---
+
 #### 風險 9（E05 原有）：目標資料庫大量資料擷取的負載影響
 
 **描述**：擷取任務（全量模式）執行時，對外部資料來源執行全表查詢（`SELECT * FROM "{source_schema}"."{source_table}"`），並將資料批次寫入 AppDB raw data 表。對於大型表（數百萬筆），此查詢可能對外部資料來源造成顯著負載，甚至影響其正常業務查詢。同時，大量批次 INSERT 至 AppDB 也會佔用資料庫資源。
@@ -1466,8 +1628,10 @@ Seed 流程：
 
 | 假設 | 風險 | 確認方式 |
 |------|------|---------|
-| Pipeline Transform 節點在記憶體中執行的最大資料筆數（建議 100,000）足以滿足 MVP 業務需求 | 若業務資料量超過此限制，Pipeline 執行將受限或 OOM | 與業務部門確認典型資料量級，並進行記憶體壓力測試 |
-| 目標表 Schema 在 MVP 期間固定不變（Admin 無法自訂欄位）| 若業務需求變更，需透過 DB Migration 修改目標表 Schema | 確認 F036 BR-4（目標表 schema 為靜態定義）在 MVP 範圍內是否有例外 |
+| Pipeline Transform 節點在記憶體中執行的最大資料筆數（建議 100,000）足以滿足 MVP 業務需求 | 若業務資料量超過此限制，Pipeline 執行將受限或 OOM | 與業務部門確認典型資料量級（ZZIP_BAMCUST_M 與 MLMCUSTOMER 的客戶總筆數），並進行記憶體壓力測試 |
+| `customer_core` 的約 45 欄位定義（US-049 A~H 分類）與實際來源欄位完全對應 | 若來源系統的欄位名稱或型別與假設不符，ETL 轉換規則需調整 | 在開發前確認 ZZIP_BAMCUST_M 與 MLMCUSTOMER 的實際欄位清單（`INFORMATION_SCHEMA` 驗證）；電話佔位值格式（如 `00-0000000000`）需以實際資料樣本確認 |
+| 目標表 Schema 在 MVP 期間固定不變（Admin 無法自訂欄位）| 若業務需求變更，需透過 DB Migration 修改目標表 Schema 與 Registry 程式碼 | 確認 F036 BR-4（目標表 schema 為靜態定義）在 MVP 範圍內是否有例外 |
+| `ZZIP.CUSTO_NO` 與 `MLMCUSTOMER.CUSTID` 在兩系統中均為身分證字號或統一編號，值格式一致可直接作為 Merge 鍵 | 若兩系統的客戶編號格式不一致（大小寫、空白、前綴差異），Merge 節點會產生重複客戶記錄 | 以實際資料樣本驗證兩欄位值的格式一致性；若有差異，需在 Merge 前加入 String 節點做格式正規化 |
 | Pipeline 執行中，所有被 Extract 節點參照的 raw data 表均存在（ExtractionTask 已至少執行一次） | 若 raw data 表不存在，Extract 節點執行時將報錯 | 在 Pipeline 執行前加入前置檢查：驗證所有 Extract 節點參照的 raw data 表存在 |
 
 ### 9.6 待確認假設（原有）
@@ -1643,7 +1807,12 @@ cdmp-mvp/
 │   │   │   │   │   ├── pipeline-definition.service.ts  # JSONB definition 儲存/載入/驗證
 │   │   │   │   │   ├── pipeline-execution.service.ts   # 非同步執行引擎（節點循序執行）
 │   │   │   │   │   ├── pipeline-version.service.ts     # 版本管理、Diff、回滾、發布
-│   │   │   │   │   ├── target-table.service.ts         # 目標表 schema 查詢（靜態定義）
+│   │   │   │   │   ├── target-table.service.ts         # Target Table Registry（listTables / getSchema）
+│   │   │   │   │   ├── target-table.controller.ts      # GET /api/v1/etl/target-tables（F036）
+│   │   │   │   │   ├── target-tables/                  # Target Table Registry 靜態定義
+│   │   │   │   │   │   ├── index.ts                    # Registry 入口（匯出 ALL_TARGET_TABLES 陣列）
+│   │   │   │   │   │   └── customer-core.definition.ts # customer_core 約 45 欄位定義（A~H 分類）
+│   │   │   │   │   │   # Phase 2/3: customer-financial.definition.ts 等
 │   │   │   │   │   └── transforms/                     # 13 種 Transform 節點實作
 │   │   │   │   │       ├── merge.transform.ts
 │   │   │   │   │       ├── field-mapping.transform.ts
@@ -1705,5 +1874,16 @@ cdmp-mvp/
 *本文件版本 1.3，由 System Architect Agent 依據 CDMP MVP 規格書（spec-index v1.4，2026-03-19；E05 ETL Pipeline 管理規格 F027-F036，2026-03-19）更新。*
 
 *本文件版本 1.4，由 System Architect Agent 依據 F038 孤兒任務回收規格（2026-03-25）更新。新增 `OrphanRecoveryModule` 模組架構、啟動生命週期時序（5.7 節）、NFR-002.12 效能對應、風險 2 緩解補充及風險 10。*
+
+*本文件版本 1.5，由 System Architect Agent 依據 US-049 目標表 Domain-Oriented 規劃重大修訂（2026-03-25）更新。主要變更：*
+- *F036 目標表由 4 個縮減為 1 個（Phase 1 MVP 僅 `customer_core`，約 45 欄位），`customer_financial`、`customer_interaction`、`customer_service` 移至 Phase 2/3*
+- *新增 Target Table Registry 架構設計（AD-E05-6）：in-process 靜態定義方式，擴展機制說明*
+- *新增來源系統整合架構圖（ZZIP_BAMCUST_M + MLMCUSTOMER → customer_core 資料流）*
+- *新增 ETL 轉換規則說明（電話合併、衝突解決、代碼描述轉換、型別轉換）*
+- *新增 5.10 節 Target Table Registry API 流程與 ETL 追蹤欄位自動填充時序圖*
+- *新增 customer_core 資料庫索引建議（source_customer_no UNIQUE、_etl_pipeline_id INDEX）*
+- *新增風險 11：來源欄位結構假設與實際不符的風險與緩解措施*
+- *更新 9.5 待確認假設（新增兩項 F036 特有假設：欄位對應確認、Merge 鍵格式一致性）*
+- *更新 Monorepo 結構：新增 `target-tables/` 子目錄與 `customer-core.definition.ts` 定義檔架構*
 
 *如有規格變更，本文件應同步更新。*
