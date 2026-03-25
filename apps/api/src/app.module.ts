@@ -18,6 +18,7 @@ import { EtlPipeline } from './database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from './database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from './database/entities/etl-pipeline-version.entity';
 import { EtlModule } from './modules/etl/etl.module';
+import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { EtlModule } from './modules/etl/etl.module';
     DatasourceModule,
     ExtractionTaskModule,
     EtlModule,
+    OrphanRecoveryModule,
     SchedulerModule,
   ],
   providers: [],
