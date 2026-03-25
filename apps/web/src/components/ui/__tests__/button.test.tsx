@@ -33,4 +33,12 @@ describe('Button', () => {
     expect(button).toBeDisabled();
     expect(button).toHaveTextContent('登入中...');
   });
+
+  it('套用 text-sm 與 rounded-lg 樣式以符合原型設計', () => {
+    render(<Button>測試</Button>);
+    const button = screen.getByRole('button', { name: '測試' });
+    expect(button.className).toContain('text-sm');
+    expect(button.className).toContain('rounded-lg');
+    expect(button.className).not.toContain('rounded-md');
+  });
 });
