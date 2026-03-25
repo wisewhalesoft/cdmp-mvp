@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "1.2"
-date: 2026-03-19
+version: "1.3"
+date: 2026-03-25
 status: Draft
 ---
 
@@ -144,6 +144,16 @@ status: Draft
 | OQ-37 | 加密脫敏（Masking）節點的 AES 加密金鑰管理？是否與資料來源密碼使用同一金鑰？ | **使用獨立的環境變數 `ETL_MASKING_KEY`**，與資料來源密碼加密金鑰分離 | F029, F030 |
 | OQ-38 | Pipeline 執行的最大並發數是否需要限制？ | **暫不限制並發數**，各 Pipeline 獨立執行。未來可加入全域最大並發數設定 | F030 |
 
+## F038 已解決的開放問題
+
+以下問題已於 F038 規格撰寫階段決策：
+
+| # | 問題 | 決議 | 影響範圍 |
+|---|------|------|---------|
+| OQ-39 | `etl_pipelines` 實體是否有 `error_message` 欄位？ | **不新增欄位**。回收時僅更新 `status = 'failed'`，錯誤原因記錄在 `etl_pipeline_logs.error_message` | F038 |
+| OQ-40 | ETL Pipeline 回收後 `status` 應設為 `'failed'` 還是回復為啟動前狀態？ | **統一設為 `'failed'`**，與 extraction tasks 保持一致 | F038 |
+| OQ-41 | 應用程式啟動回收失敗時，是否應中止啟動？ | **記錄錯誤日誌但不中止啟動**。回收失敗不應阻止系統提供其他正常服務 | F038 |
+
 ## 假設清單
 
 以下為 SPEC 撰寫過程中採用的假設，需於架構設計階段驗證：
@@ -180,6 +190,9 @@ status: Draft
 | A28 | Transform 節點運算式使用 SQL 層級執行 | 架構設計假設 | ✅ 已確認（OQ-36） |
 | A29 | Masking 節點使用獨立環境變數 `ETL_MASKING_KEY` | 架構設計假設 | ✅ 已確認（OQ-37） |
 | A30 | Pipeline 執行暫不限制並發數 | 架構設計假設 | ✅ 已確認（OQ-38） |
+| A31 | CDMP MVP 以單一 Node.js 進程運行（無水平擴展/多副本），孤兒回收無需分散式鎖 | F038 設計假設 | 架構師確認 |
+| A32 | E04/E05 的執行邏輯均為 fire-and-forget，進程終止即代表執行中止 | F038 設計假設 | 架構師確認 |
+| A33 | 回收服務執行時 TypeORM DataSource 已初始化，資料庫連線已就緒 | F038 設計假設 | 架構師確認 |
 
 ## 更新紀錄
 
@@ -194,3 +207,4 @@ status: Draft
 | 2026-03-18 | OQ-20 ~ OQ-23、OQ-28 ~ OQ-29 全部以建議假設方案確認解決 | Product Owner |
 | 2026-03-19 | 新增 E05 相關已解決問題 R13 ~ R17、OQ-30 ~ OQ-35、待決問題 OQ-36 ~ OQ-38、假設 A22 ~ A30 | Spec Writer Agent |
 | 2026-03-19 | OQ-36 ~ OQ-38 以建議假設方案確認解決；A28 ~ A30 標記為已確認 | Product Owner |
+| 2026-03-25 | 新增 F038 已解決的開放問題 OQ-39 ~ OQ-41、假設 A31 ~ A33 | Spec Writer Agent |

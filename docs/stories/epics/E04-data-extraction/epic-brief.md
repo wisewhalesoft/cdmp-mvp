@@ -3,7 +3,7 @@
 > **Epic ID**：E04
 > **優先級**：P0（Critical）
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：10
+> **Stories 數量**：11
 
 ## Epic 目標
 
@@ -25,6 +25,7 @@
 | US-037 | 擷取監控儀表板 | Should Have | [US-037-extraction-dashboard.md](US-037-extraction-dashboard.md) |
 | US-038 | 刪除擷取任務 | Should Have | [US-038-delete-extraction-task.md](US-038-delete-extraction-task.md) |
 | US-039 | 查看擷取資料預覽 | Must Have | [US-039-preview-raw-data.md](US-039-preview-raw-data.md) |
+| US-051 | 孤兒任務回收（系統啟動自動修復） | Must Have | [US-051-orphan-task-recovery.md](US-051-orphan-task-recovery.md) |
 
 ## 依賴關係
 
@@ -98,6 +99,7 @@
 - 監控儀表板提供執行狀態與效能的即時總覽
 - 擷取日誌完整記錄每次執行的詳細資訊
 - Admin 能夠預覽已擷取至 AppDB 的 raw data，並支援分頁與欄位排序
+- 站台重啟後，系統自動回收所有孤兒擷取任務（status 由 running 修復為 failed），Admin 無需手動介入即可正常操作
 
 ## 待解決問題
 
