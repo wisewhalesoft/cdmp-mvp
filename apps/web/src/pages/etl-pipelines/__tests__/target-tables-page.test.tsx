@@ -17,27 +17,39 @@ const mockedGetTargetTables = vi.mocked(etlPipelinesApi.getTargetTables);
 const mockedGetTargetTableSchema = vi.mocked(etlPipelinesApi.getTargetTableSchema);
 const mockedGetUser = vi.mocked(authStore.getUser);
 
+// v2.0: Only 1 target table (customer_core), 54 columns
 const mockTableList: TargetTableListResponse = {
   data: [
-    { tableName: 'customer_core', displayName: 'Customer Core（身分/主檔）', domain: 'core', columnCount: 16, description: '客戶基本身分與主檔資料' },
-    { tableName: 'customer_interaction', displayName: 'Customer Interaction（行為/接觸）', domain: 'interaction', columnCount: 14, description: '客戶行為與接觸紀錄' },
-    { tableName: 'customer_financial', displayName: 'Customer Financial（交易/風控）', domain: 'financial', columnCount: 20, description: '交易與風控資料' },
-    { tableName: 'customer_service', displayName: 'Customer Service（客服/申訴）', domain: 'service', columnCount: 17, description: '客服與申訴案件' },
+    {
+      tableName: 'customer_core',
+      displayName: 'Customer Core（客戶主檔）',
+      domain: 'core',
+      columnCount: 54,
+      description: '客戶身分、聯絡、職業、財務概況與風控旗標',
+    },
   ],
 };
 
 const mockCoreSchema: TargetTableSchemaResponse = {
   tableName: 'customer_core',
-  displayName: 'Customer Core（身分/主檔）',
+  displayName: 'Customer Core（客戶主檔）',
   domain: 'core',
-  description: '客戶基本身分與主檔資料',
+  description: '客戶身分、聯絡、職業、財務概況與風控旗標',
   columns: [
-    { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '客戶唯一識別碼' },
-    { name: 'id_number', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '身分證號（加密）' },
-    { name: 'name', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '姓名' },
-    { name: 'data_source', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: true, description: '資料來源識別' },
+    // A. 識別與分類
+    { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '客戶唯一識別碼（代理鍵）' },
+    { name: 'source_customer_no', type: 'VARCHAR(20)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '來源客戶編號（身分證/統編）' },
+    { name: 'customer_type', type: 'VARCHAR(2)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型' },
+    { name: 'name', type: 'VARCHAR(100)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '姓名/企業名稱' },
+    { name: 'english_name', type: 'VARCHAR(60)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '英文姓名' },
+    // B. representative
+    { name: 'gender', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '性別' },
+    // C. representative
+    { name: 'mobile_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行動電話' },
+    // H. ETL tracking
+    { name: 'data_source', type: 'VARCHAR(50)', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: '資料來源識別（ETL 自動填充）' },
     { name: '_etl_loaded_at', type: 'TIMESTAMP', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: 'ETL 載入時間（系統自動填充）' },
-    { name: '_etl_pipeline_id', type: 'UUID', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: 'Pipeline ID（系統自動填充）' },
+    { name: '_etl_pipeline_id', type: 'UUID', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: '載入的 Pipeline ID（系統自動填充）' },
   ],
 };
 
@@ -49,7 +61,7 @@ function renderPage() {
   );
 }
 
-describe('TargetTablesPage', () => {
+describe('TargetTablesPage (v2.0 — 1 table)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGetUser.mockReturnValue({ id: '1', name: 'Admin', email: 'a@b.c', role: 'admin' });
@@ -57,12 +69,12 @@ describe('TargetTablesPage', () => {
     mockedGetTargetTableSchema.mockResolvedValue(mockCoreSchema);
   });
 
-  it('should render page title and subtitle', async () => {
+  it('should render page title and subtitle (Phase 1 MVP: 1 table)', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('page-title')).toHaveTextContent('Domain-Oriented 目標表定義');
       expect(screen.getByTestId('page-subtitle')).toHaveTextContent(
-        '系統預定義的 4 個 Domain Data Product 目標表，由 ETL Pipeline Load 節點寫入',
+        'Phase 1 MVP 預定義 1 個 Domain Data Product 目標表，由 ETL Pipeline Load 節點寫入',
       );
     });
   });
@@ -71,30 +83,24 @@ describe('TargetTablesPage', () => {
     renderPage();
     await waitFor(() => {
       const breadcrumbLinks = screen.getAllByText('ETL Pipeline');
-      // At least one in breadcrumb (another in sidebar)
       expect(breadcrumbLinks.length).toBeGreaterThanOrEqual(2);
       expect(screen.getByText('目標表定義')).toBeInTheDocument();
     });
   });
 
-  it('should render 4 domain cards with correct badges and column counts', async () => {
+  it('should render 1 domain card (customer_core) with correct badge and column count', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('card-core')).toBeInTheDocument();
-      expect(screen.getByTestId('card-interaction')).toBeInTheDocument();
-      expect(screen.getByTestId('card-financial')).toBeInTheDocument();
-      expect(screen.getByTestId('card-service')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('badge-core')).toHaveTextContent('core');
-    expect(screen.getByTestId('badge-interaction')).toHaveTextContent('interaction');
-    expect(screen.getByTestId('badge-financial')).toHaveTextContent('financial');
-    expect(screen.getByTestId('badge-service')).toHaveTextContent('service');
+    // Only core exists
+    expect(screen.queryByTestId('card-interaction')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('card-financial')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('card-service')).not.toBeInTheDocument();
 
-    expect(screen.getByText('16 欄位')).toBeInTheDocument();
-    expect(screen.getByText('14 欄位')).toBeInTheDocument();
-    expect(screen.getByText('20 欄位')).toBeInTheDocument();
-    expect(screen.getByText('17 欄位')).toBeInTheDocument();
+    expect(screen.getByTestId('badge-core')).toHaveTextContent('core');
+    expect(screen.getByText('54 欄位')).toBeInTheDocument();
   });
 
   it('should expand table on chevron click and show schema columns', async () => {
@@ -105,17 +111,14 @@ describe('TargetTablesPage', () => {
       expect(screen.getByTestId('toggle-core')).toBeInTheDocument();
     });
 
-    // Table should not be visible initially
     expect(screen.queryByTestId('table-core')).not.toBeInTheDocument();
 
-    // Click to expand
     await user.click(screen.getByTestId('toggle-core'));
 
     await waitFor(() => {
       expect(screen.getByTestId('table-core')).toBeInTheDocument();
     });
 
-    // Verify 5 column headers (PK appears in both header and row data, use getAllByText)
     expect(screen.getByText('欄位名稱')).toBeInTheDocument();
     expect(screen.getByText('型別')).toBeInTheDocument();
     expect(screen.getByText('Nullable')).toBeInTheDocument();
@@ -143,7 +146,7 @@ describe('TargetTablesPage', () => {
     expect(pkRow).toHaveTextContent('PK');
   });
 
-  it('should show ETL tracking rows with gray background and auto-fill label', async () => {
+  it('should show ETL tracking rows with auto-fill label', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -159,7 +162,6 @@ describe('TargetTablesPage', () => {
       expect(screen.getByTestId('etl-tracking-row-_etl_pipeline_id')).toBeInTheDocument();
     });
 
-    // Check auto-fill labels
     const labels = screen.getAllByText('系統自動填充');
     expect(labels.length).toBe(3);
   });
@@ -172,20 +174,18 @@ describe('TargetTablesPage', () => {
       expect(screen.getByTestId('toggle-core')).toBeInTheDocument();
     });
 
-    // Expand
     await user.click(screen.getByTestId('toggle-core'));
     await waitFor(() => {
       expect(screen.getByTestId('table-core')).toBeInTheDocument();
     });
 
-    // Collapse
     await user.click(screen.getByTestId('toggle-core'));
     await waitFor(() => {
       expect(screen.queryByTestId('table-core')).not.toBeInTheDocument();
     });
   });
 
-  it('should apply correct domain badge colors', async () => {
+  it('should apply correct domain badge color (blue for core)', async () => {
     renderPage();
 
     await waitFor(() => {
@@ -194,12 +194,6 @@ describe('TargetTablesPage', () => {
 
     expect(screen.getByTestId('badge-core').className).toContain('bg-blue-50');
     expect(screen.getByTestId('badge-core').className).toContain('text-blue-700');
-    expect(screen.getByTestId('badge-interaction').className).toContain('bg-green-50');
-    expect(screen.getByTestId('badge-interaction').className).toContain('text-green-700');
-    expect(screen.getByTestId('badge-financial').className).toContain('bg-amber-50');
-    expect(screen.getByTestId('badge-financial').className).toContain('text-amber-700');
-    expect(screen.getByTestId('badge-service').className).toContain('bg-purple-50');
-    expect(screen.getByTestId('badge-service').className).toContain('text-purple-700');
   });
 
   it('should rotate chevron 180 degrees when expanded', async () => {

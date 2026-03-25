@@ -146,7 +146,7 @@ export function TargetTablesPage() {
               Domain-Oriented 目標表定義
             </h2>
             <p className="text-sm text-gray-500 mt-1" data-testid="page-subtitle">
-              系統預定義的 4 個 Domain Data Product 目標表，由 ETL Pipeline Load 節點寫入
+              Phase 1 MVP 預定義 1 個 Domain Data Product 目標表，由 ETL Pipeline Load 節點寫入
             </p>
           </div>
 

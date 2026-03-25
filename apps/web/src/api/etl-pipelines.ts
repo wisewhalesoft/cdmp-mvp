@@ -74,6 +74,11 @@ export async function getRawTables(): Promise<RawTablesResponse> {
   return response.data;
 }
 
+export async function getRawTableColumns(tableName: string): Promise<{ data: string[] }> {
+  const response = await apiClient.get<{ data: string[] }>(`/extraction-tasks/raw-tables/${tableName}/columns`);
+  return response.data;
+}
+
 export async function executePipeline(id: string): Promise<ExecutePipelineResponse> {
   const response = await apiClient.post<ExecutePipelineResponse>(
     `/etl/pipelines/${id}/execute`,

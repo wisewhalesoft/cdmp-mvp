@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import type { Node, Edge } from '@xyflow/react';
-import { MousePointerClick, Trash2, Plus, Lock } from 'lucide-react';
+import { MousePointerClick, Trash2, Plus, Lock, ChevronDown, CheckCircle, MinusCircle, AlertCircle } from 'lucide-react';
 import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
 import type { RawTableItem, TargetTableSummary, TargetTableColumn } from '@cdmp/shared';
-import { getTargetTables, getTargetTableSchema } from '@/api/etl-pipelines';
+import { getTargetTables, getTargetTableSchema, getRawTableColumns } from '@/api/etl-pipelines';
 
 interface PropertiesPanelProps {
   selectedNode: Node | null;
@@ -70,7 +70,7 @@ export function PropertiesPanel({
       case 'type_cast':
         return <TypeCastProperties nodeData={nodeData} onChange={updateData} />;
       case 'target_load':
-        return <LoadProperties nodeData={nodeData} onChange={updateData} />;
+        return <LoadProperties nodeData={nodeData} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
       case 'merge':
         return <MergeProperties nodeData={nodeData} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
       case 'field_mapping':
@@ -516,11 +516,79 @@ function TypeCastProperties({ nodeData, onChange }: SimplePropsBase) {
 
 // --- Load Properties (API-driven, F036 AC-3/AC-4) ---
 
-function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
+// A~H category definitions for customer_core schema
+interface LoadCategory {
+  id: string;
+  label: string;
+  badgeBg: string;
+  badgeText: string;
+}
+
+const LOAD_CATEGORIES: LoadCategory[] = [
+  { id: 'A', label: '識別與分類', badgeBg: 'bg-blue-100', badgeText: 'text-blue-700' },
+  { id: 'B', label: '個人屬性', badgeBg: 'bg-green-100', badgeText: 'text-green-700' },
+  { id: 'C', label: '聯絡資訊', badgeBg: 'bg-amber-100', badgeText: 'text-amber-700' },
+  { id: 'D', label: '地址', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700' },
+  { id: 'E', label: '職業與就業', badgeBg: 'bg-rose-100', badgeText: 'text-rose-700' },
+  { id: 'F', label: '財務與風控', badgeBg: 'bg-orange-100', badgeText: 'text-orange-700' },
+  { id: 'G', label: '企業客戶專屬', badgeBg: 'bg-teal-100', badgeText: 'text-teal-700' },
+  { id: 'H', label: '稽核與 ETL 追蹤', badgeBg: 'bg-gray-200', badgeText: 'text-gray-600' },
+];
+
+// Category sizes for customer_core: A(5), B(5), C(6), D(6), E(10), F(10), G(7), H(5)
+const CATEGORY_SIZES = [5, 5, 6, 6, 10, 10, 7, 5];
+
+function groupColumnsByCategory(columns: TargetTableColumn[]) {
+  const groups: { category: LoadCategory; columns: TargetTableColumn[] }[] = [];
+  let offset = 0;
+  for (let i = 0; i < LOAD_CATEGORIES.length; i++) {
+    const size = CATEGORY_SIZES[i];
+    groups.push({
+      category: LOAD_CATEGORIES[i],
+      columns: columns.slice(offset, offset + size),
+    });
+    offset += size;
+  }
+  return groups;
+}
+
+function LoadProperties({
+  nodeData,
+  onChange,
+  nodeId,
+  nodes,
+  edges,
+}: SimplePropsBase & { nodeId: string; nodes: Node[]; edges: Edge[] }) {
   const targetTable = (nodeData.targetTable as string) || '';
   const [tables, setTables] = useState<TargetTableSummary[]>([]);
   const [schemaColumns, setSchemaColumns] = useState<TargetTableColumn[]>([]);
+  const [sourceColumns, setSourceColumns] = useState<string[]>([]);
   const [loadingSchema, setLoadingSchema] = useState(false);
+  // Category A expanded by default, B~H collapsed
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({ A: true });
+
+  // Derive upstream raw table name by traversing edges → find Extract node
+  const upstreamRawTable = (() => {
+    const visited = new Set<string>();
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      const node = nodes.find((n) => n.id === current);
+      if (node) {
+        const data = node.data as Record<string, unknown>;
+        if (data.nodeType === 'raw_data_extract' && data.rawTable) {
+          return data.rawTable as string;
+        }
+      }
+      // Find edges that target this node and trace back to their sources
+      edges
+        .filter((e) => e.target === current)
+        .forEach((e) => queue.push(e.source));
+    }
+    return null;
+  })();
 
   // Load target table list from API
   useEffect(() => {
@@ -528,6 +596,17 @@ function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
       .then((res) => setTables(res.data))
       .catch(() => {});
   }, []);
+
+  // Load source columns from upstream raw table
+  useEffect(() => {
+    if (!upstreamRawTable) {
+      setSourceColumns([]);
+      return;
+    }
+    getRawTableColumns(upstreamRawTable)
+      .then((res) => setSourceColumns(res.data))
+      .catch(() => setSourceColumns([]));
+  }, [upstreamRawTable]);
 
   // Load schema columns when target table changes
   useEffect(() => {
@@ -542,9 +621,40 @@ function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
       .finally(() => setLoadingSchema(false));
   }, [targetTable]);
 
-  const regularFields = schemaColumns.filter((c) => !c.isEtlTracking);
   const etlTrackingFields = schemaColumns.filter((c) => c.isEtlTracking);
+  const regularFields = schemaColumns.filter((c) => !c.isEtlTracking);
   const mappings = (nodeData.fieldMappings as Record<string, string>) || {};
+
+  // Compute mapping summary
+  const autoCount = etlTrackingFields.length;
+  const mappedCount = regularFields.filter((f) => mappings[f.name] && mappings[f.name].trim() !== '').length;
+  const unmappedCount = regularFields.filter((f) => !mappings[f.name] || mappings[f.name].trim() === '').length;
+  const requiredUnmappedCount = regularFields.filter(
+    (f) => !f.nullable && !f.isEtlTracking && (!mappings[f.name] || mappings[f.name].trim() === '')
+  ).length;
+
+  const categoryGroups = schemaColumns.length > 0 ? groupColumnsByCategory(schemaColumns) : [];
+
+  const toggleCategory = (catId: string) => {
+    setExpandedCats((prev) => ({ ...prev, [catId]: !prev[catId] }));
+  };
+
+  const expandAll = () => {
+    const all: Record<string, boolean> = {};
+    LOAD_CATEGORIES.forEach((c) => { all[c.id] = true; });
+    setExpandedCats(all);
+  };
+
+  const collapseAll = () => {
+    setExpandedCats({});
+  };
+
+  // Count mapped fields per category (non-ETL only)
+  const getCategoryMappedCount = (columns: TargetTableColumn[]) => {
+    const nonEtl = columns.filter((c) => !c.isEtlTracking);
+    const mapped = nonEtl.filter((c) => mappings[c.name] && mappings[c.name].trim() !== '').length;
+    return { mapped, total: nonEtl.length };
+  };
 
   return (
     <>
@@ -572,62 +682,157 @@ function LoadProperties({ nodeData, onChange }: SimplePropsBase) {
           ))}
         </select>
         {targetTable && schemaColumns.length > 0 && (
-          <p className="text-xs text-gray-400 mt-1">
-            {schemaColumns.length} 個欄位（含{' '}
-            {etlTrackingFields.length} 個 ETL 追蹤欄位）
-          </p>
+          <div className="flex items-center justify-between mt-1.5">
+            <p className="text-xs text-gray-400">
+              約 {schemaColumns.length} 個欄位（含 {autoCount} 個自動填充）· {LOAD_CATEGORIES.length} 個分類
+            </p>
+          </div>
         )}
         {loadingSchema && (
           <p className="text-xs text-gray-400 mt-1">載入欄位定義中...</p>
         )}
       </div>
 
-      {targetTable && regularFields.length > 0 && (
+      {/* Mapping Summary Badges */}
+      {targetTable && schemaColumns.length > 0 && (
+        <div className="flex items-center gap-3 text-xs">
+          <span
+            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-50 text-green-700"
+            data-testid="load-summary-mapped"
+          >
+            <CheckCircle className="w-3 h-3" />已對應 {mappedCount}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-gray-500"
+            data-testid="load-summary-unmapped"
+          >
+            <MinusCircle className="w-3 h-3" />未對應 {unmappedCount}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-50 text-red-600"
+            data-testid="load-summary-required-unmapped"
+          >
+            <AlertCircle className="w-3 h-3" />必填未對應 {requiredUnmappedCount}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-50 text-gray-400"
+            data-testid="load-summary-auto"
+          >
+            <Lock className="w-3 h-3" />自動 {autoCount}
+          </span>
+        </div>
+      )}
+
+      {/* Field Mapping - Categorized */}
+      {targetTable && categoryGroups.length > 0 && (
         <div>
-          <label className={labelClass}>欄位對應</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">欄位對應</label>
+            <div className="flex gap-1">
+              <button onClick={expandAll} className="text-xs text-[#2563EB] hover:underline">全部展開</button>
+              <span className="text-xs text-gray-300">|</span>
+              <button onClick={collapseAll} className="text-xs text-[#2563EB] hover:underline">全部收合</button>
+            </div>
+          </div>
           <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
             <div className="grid grid-cols-2 bg-gray-50 border-b border-[#E5E7EB] text-xs font-medium text-gray-500 px-3 py-2">
               <span>目標欄位</span>
               <span>來源欄位</span>
             </div>
-            <div className="max-h-[280px] overflow-y-auto">
-              {regularFields.map((field) => (
-                <div
-                  key={field.name}
-                  className="grid grid-cols-2 items-center px-3 py-2 border-b border-[#E5E7EB] hover:bg-gray-50"
-                >
-                  <span className="text-xs font-medium text-gray-700">
-                    {field.isPrimaryKey && <span className="text-[#EF4444]">*</span>}{' '}
-                    {field.name} <span className="text-gray-400">({field.type})</span>
-                  </span>
-                  <input
-                    type="text"
-                    className="text-xs border border-[#E5E7EB] rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-[#2563EB]/20"
-                    value={mappings[field.name] || ''}
-                    onChange={(e) =>
-                      onChange({
-                        fieldMappings: { ...mappings, [field.name]: e.target.value },
-                      })
-                    }
-                    placeholder="-- 不對應 --"
-                  />
+
+            {categoryGroups.map(({ category, columns }) => {
+              const isExpanded = !!expandedCats[category.id];
+              const { mapped, total } = getCategoryMappedCount(columns);
+              const etlInCat = columns.filter((c) => c.isEtlTracking);
+              const hasEtl = etlInCat.length > 0;
+              const counterColor = mapped > 0 && mapped === total ? 'text-green-500' : 'text-gray-400';
+
+              // Build counter text
+              let counterText = `${mapped}/${total}`;
+              if (hasEtl) {
+                counterText = `${mapped}+${etlInCat.length}auto`;
+              }
+
+              return (
+                <div key={category.id} className="border-b border-[#E5E7EB] last:border-b-0" data-testid={`load-category-${category.id}`}>
+                  <button
+                    onClick={() => toggleCategory(category.id)}
+                    className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs"
+                    data-testid={`load-category-${category.id}-toggle`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center justify-center w-4 h-4 rounded ${category.badgeBg} ${category.badgeText} text-[10px] font-bold`}
+                        data-testid={`load-category-badge-${category.id}`}
+                      >
+                        {category.id}
+                      </span>
+                      <span className="font-medium text-gray-600">{category.label}</span>
+                      <span className="text-gray-400">({columns.length})</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={counterColor} data-testid={`load-category-${category.id}-counter`}>{counterText}</span>
+                      <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div
+                    className={isExpanded ? '' : 'hidden'}
+                    data-testid={`load-category-${category.id}-content`}
+                  >
+                    {columns.map((field) => {
+                      if (field.isEtlTracking) {
+                        return (
+                          <div
+                            key={field.name}
+                            className="grid grid-cols-2 items-center px-3 py-1.5 border-t border-[#E5E7EB] bg-gray-50"
+                          >
+                            <span className="text-xs text-gray-500">
+                              {field.name} <span className="text-gray-400">({field.type})</span>
+                            </span>
+                            <span className="text-xs text-gray-400 italic flex items-center gap-1">
+                              <Lock className="w-3 h-3" />
+                              系統自動填充
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      const isMapped = mappings[field.name] && mappings[field.name].trim() !== '';
+                      const isRequired = !field.nullable;
+
+                      return (
+                        <div
+                          key={field.name}
+                          className="grid grid-cols-2 items-center px-3 py-1.5 border-t border-[#E5E7EB] hover:bg-gray-50"
+                        >
+                          <span className={`text-xs ${isRequired ? 'font-medium' : ''} text-gray-700`}>
+                            {isRequired && <span className="text-[#EF4444]">*</span>}{' '}
+                            {field.name} <span className="text-gray-400">({field.type})</span>
+                          </span>
+                          <select
+                            className={`text-xs border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-[#2563EB]/20 ${
+                              isMapped ? 'border-green-300 bg-green-50' : 'border-[#E5E7EB]'
+                            }`}
+                            value={mappings[field.name] || ''}
+                            onChange={(e) =>
+                              onChange({
+                                fieldMappings: { ...mappings, [field.name]: e.target.value },
+                              })
+                            }
+                            data-testid={`load-field-select-${field.name}`}
+                          >
+                            <option value="">-- 未對應 --</option>
+                            {sourceColumns.map((col) => (
+                              <option key={col} value={col}>{col}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-              {etlTrackingFields.map((field) => (
-                <div
-                  key={field.name}
-                  className="grid grid-cols-2 items-center px-3 py-2 border-b border-[#E5E7EB] bg-gray-50"
-                >
-                  <span className="text-xs text-gray-500">
-                    {field.name} <span className="text-gray-400">({field.type})</span>
-                  </span>
-                  <span className="text-xs text-gray-400 italic flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    系統自動填充
-                  </span>
-                </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
