@@ -19,9 +19,9 @@
 ## 驗收標準
 
 ### AC-1：目標表清單 API
-- **Given** 系統已預先定義 4 個 Domain Data Product 目標表
+- **Given** 系統已預先定義 1 個 Domain Data Product 目標表（Phase 1 MVP）
 - **When** 我呼叫目標表清單 API
-- **Then** 系統回傳所有目標表的名稱、顯示名稱、所屬 Domain、欄位數量與描述
+- **Then** 系統回傳目標表的名稱、顯示名稱、所屬 Domain、欄位數量與描述
 
 ### AC-2：目標表 Schema API
 - **Given** 我需要了解某個目標表的詳細結構
@@ -43,18 +43,31 @@
 - **When** ETL Pipeline 執行 Load 步驟
 - **Then** 系統自動填充這三個追蹤欄位，無需使用者手動對應
 
-### AC-6：4 類目標表 Schema 預定義正確
+### AC-6：目標表 Schema 預定義正確
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** 包含 `customer_core`、`customer_interaction`、`customer_financial`、`customer_service` 四個目標表，各表欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（約 45 欄位），欄位定義正確
+- **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ---
 
 ## Technical Notes
 
-- 採用 Domain-Oriented 設計，4 個 Domain Data Product
-- 系統預先定義 schema，Load 節點直接選擇目標表
+### 設計原則
+
+- 採用 Domain-Oriented 設計，Phase 1 聚焦 Customer Core 單一 Domain Data Product
+- 來源驅動（Source-Driven）：目標表設計嚴格對應現有來源資料，不預建無法填充的空表
 - 為未來 Data Mesh 擴展預留架構空間（每個 Domain 可獨立演進 schema）
+- Phase 2/3 待互動（CRM）、交易（合約明細）、客服（工單系統）來源接入後再擴充
+
+### 來源資料表
+
+| 來源表 | 系統 | 說明 | 客戶類型 |
+|--------|------|------|---------|
+| ZZIP_BAMCUST_M | 核心系統 | 客戶主檔（個人/企業/外籍） | CUSTOM_MK: 01=個人, 02=企業, 04=外籍 |
+| MLMCUSTOMER | 行銷/租賃系統 | 客戶主檔（個人/企業） | CUTYPE: 1=個人, 2=企業 |
+
+**來源關聯**：兩系統以身分證字號/統一編號作為共同鍵（ZZIP.CUSTO_NO = MLMC.CUSTID）。
 
 ### 端點
 
@@ -68,10 +81,10 @@
   "data": [
     {
       "tableName": "customer_core",
-      "displayName": "Customer Core（身分/主檔）",
+      "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 16,
-      "description": "客戶基本身分與主檔資料"
+      "columnCount": 45,
+      "description": "客戶身分、聯絡、職業、財務概況與風控旗標"
     }
   ]
 }
@@ -82,107 +95,118 @@
 ```json
 {
   "tableName": "customer_core",
-  "displayName": "Customer Core（身分/主檔）",
+  "displayName": "Customer Core（客戶主檔）",
   "columns": [
     {
       "name": "customer_id",
       "type": "UUID",
       "nullable": false,
       "isPrimaryKey": true,
-      "description": "客戶唯一識別碼"
+      "description": "客戶唯一識別碼（代理鍵）"
     }
   ]
 }
 ```
 
-### 目標表定義
+---
 
-#### 1. Customer Core（身分/主檔）— `customer_core`
+## 目標表定義
 
-| 欄位名稱 | 型別 | 說明 |
-|----------|------|------|
-| customer_id | UUID PK | 客戶唯一識別碼 |
-| id_number | VARCHAR | 身分證號（加密） |
-| name | VARCHAR | 姓名 |
-| gender | VARCHAR | 性別 |
-| date_of_birth | DATE | 生日 |
-| phone | VARCHAR | 電話 |
-| email | VARCHAR | Email |
-| address | TEXT | 地址 |
-| occupation | VARCHAR | 職業 |
-| company_name | VARCHAR | 公司名稱 |
-| customer_type | ENUM: individual/corporate | 客戶類型 |
-| registration_date | TIMESTAMP | 建檔日期 |
-| data_source | VARCHAR | 資料來源 |
-| last_updated_at | TIMESTAMP | 最後更新時間 |
-| _etl_loaded_at | TIMESTAMP | ETL 載入時間 |
-| _etl_pipeline_id | UUID | 載入的 Pipeline ID |
+### Customer Core（客戶主檔）— `customer_core`
 
-#### 2. Customer Interaction（行為/接觸）— `customer_interaction`
+#### A. 識別與分類
 
-| 欄位名稱 | 型別 | 說明 |
-|----------|------|------|
-| interaction_id | UUID PK | 互動唯一識別碼 |
-| customer_id | UUID FK | 關聯客戶 |
-| interaction_type | ENUM: call/email/sms/visit/app/web/dm | 接觸類型 |
-| channel | VARCHAR | 通路 |
-| direction | ENUM: inbound/outbound | 方向 |
-| interaction_date | TIMESTAMP | 接觸時間 |
-| campaign_id | VARCHAR | 行銷活動 ID |
-| campaign_name | VARCHAR | 行銷活動名稱 |
-| response_status | VARCHAR | 回應狀態 |
-| content_summary | TEXT | 內容摘要 |
-| agent_id | VARCHAR | 處理人員 |
-| data_source | VARCHAR | 資料來源 |
-| _etl_loaded_at | TIMESTAMP | ETL 載入時間 |
-| _etl_pipeline_id | UUID | 載入的 Pipeline ID |
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| customer_id | UUID | NO | YES | 客戶唯一識別碼（代理鍵） | ETL 生成 |
+| source_customer_no | VARCHAR(20) | NO | | 來源客戶編號（身分證/統編） | ZZIP.CUSTO_NO / MLMC.CUSTID |
+| customer_type | VARCHAR(2) | NO | | 客戶類型（01=個人/02=企業/04=外籍） | ZZIP.CUSTOM_MK / MLMC.CUTYPE |
+| name | VARCHAR(100) | NO | | 姓名/企業名稱 | ZZIP.CUS_NAME / MLMC.CUSTNAME |
+| english_name | VARCHAR(60) | YES | | 英文姓名 | ZZIP.ENG_NAME |
 
-#### 3. Customer Financial（交易/風控）— `customer_financial`
+#### B. 個人屬性
 
-| 欄位名稱 | 型別 | 說明 |
-|----------|------|------|
-| financial_id | UUID PK | 財務記錄唯一識別碼 |
-| customer_id | UUID FK | 關聯客戶 |
-| contract_id | VARCHAR | 合約編號 |
-| contract_type | ENUM: loan/lease | 合約類型（貸款/租賃） |
-| vehicle_model | VARCHAR | 車型 |
-| vehicle_year | INTEGER | 車輛年份 |
-| principal_amount | DECIMAL | 本金金額 |
-| monthly_payment | DECIMAL | 月付金 |
-| interest_rate | DECIMAL | 利率 |
-| term_months | INTEGER | 期數 |
-| payment_status | ENUM: current/overdue/default/closed | 還款狀態 |
-| overdue_days | INTEGER | 逾期天數 |
-| overdue_amount | DECIMAL | 逾期金額 |
-| credit_score | INTEGER | 信用評分 |
-| risk_level | ENUM: low/medium/high/critical | 風險等級 |
-| contract_start_date | DATE | 合約起始日 |
-| contract_end_date | DATE | 合約結束日 |
-| data_source | VARCHAR | 資料來源 |
-| _etl_loaded_at | TIMESTAMP | ETL 載入時間 |
-| _etl_pipeline_id | UUID | 載入的 Pipeline ID |
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| gender | VARCHAR(1) | YES | | 性別 | ZZIP.CUS_SEX |
+| date_of_birth | DATE | YES | | 生日 | ZZIP.BITBE_DATE |
+| marital_status | VARCHAR(1) | YES | | 婚姻狀態 | ZZIP.CMARRY_MK |
+| education_code | VARCHAR(2) | YES | | 學歷代碼 | ZZIP.EDUCAT_BACK |
+| education_desc | VARCHAR(50) | YES | | 學歷描述 | US-030 代碼轉換 |
 
-#### 4. Customer Service（客服/申訴）— `customer_service`
+#### C. 聯絡資訊
 
-| 欄位名稱 | 型別 | 說明 |
-|----------|------|------|
-| service_id | UUID PK | 服務案件唯一識別碼 |
-| customer_id | UUID FK | 關聯客戶 |
-| case_number | VARCHAR | 案件編號 |
-| case_type | ENUM: inquiry/complaint/request/dispute | 案件類型 |
-| category | VARCHAR | 分類 |
-| priority | ENUM: low/medium/high/urgent | 優先級 |
-| status | ENUM: open/in_progress/resolved/closed | 狀態 |
-| channel | VARCHAR | 進件通路 |
-| description | TEXT | 案件描述 |
-| resolution | TEXT | 處理結果 |
-| assigned_to | VARCHAR | 指派人員 |
-| opened_at | TIMESTAMP | 建立時間 |
-| resolved_at | TIMESTAMP | 解決時間 |
-| satisfaction_score | INTEGER | 滿意度（1-5） |
-| data_source | VARCHAR | 資料來源 |
-| _etl_loaded_at | TIMESTAMP | ETL 載入時間 |
-| _etl_pipeline_id | UUID | 載入的 Pipeline ID |
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 | 轉換邏輯 |
+|---------|------|----------|-----|------|---------|---------|
+| mobile_phone | VARCHAR(20) | YES | | 行動電話 | ZZIP.CELLULAR / MLMC.CUSTMOBILE | 直接映射 |
+| home_phone | VARCHAR(20) | YES | | 戶籍電話 | ZZIP.CAREA_NO1 + CTEL_NO1 | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| contact_phone | VARCHAR(20) | YES | | 通訊電話 | ZZIP.CAREA_NO2 + CTEL_NO2 | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| office_phone | VARCHAR(20) | YES | | 公司電話 | ZZIP.CO_CAREA_NO + CO_CTEL_NO / MLMC.BUSINESSTTELCODE + BUSINESSTTEL | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| email | VARCHAR(40) | YES | | Email | ZZIP.E_MAIL | 直接映射 |
+| line_account | VARCHAR(50) | YES | | Line 帳號 | ZZIP.LINE_ACCT | 直接映射 |
+
+#### D. 地址
+
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| residential_zip | VARCHAR(6) | YES | | 戶籍郵遞區號 | ZZIP.HPOST_NUM |
+| residential_address | VARCHAR(100) | YES | | 戶籍地址 | ZZIP.HPOST_ADD |
+| mailing_zip | VARCHAR(6) | YES | | 通訊郵遞區號 | ZZIP.CPOST_NUM / MLMC.CUSTZIPCODE |
+| mailing_address | VARCHAR(100) | YES | | 通訊地址 | ZZIP.COMM_ADD / MLMC.CUSTADDR |
+| company_zip | VARCHAR(6) | YES | | 公司郵遞區號 | ZZIP.CO_NUM / MLMC.BUSINESSZIPCODE |
+| company_address | VARCHAR(100) | YES | | 公司/營業地址 | ZZIP.UNIT_ADD / MLMC.BUSINESSADDR |
+
+#### E. 職業與就業
+
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| company_name | VARCHAR(100) | YES | | 服務公司/企業名稱 | ZZIP.CO_NAME / MLMC.CUSTNAME（企業時） |
+| occupation_code | VARCHAR(4) | YES | | 職業代碼 | ZZIP.VOCATION_CODE |
+| occupation_desc | VARCHAR(50) | YES | | 職業描述 | US-030 代碼轉換 |
+| job_title_code | VARCHAR(4) | YES | | 職稱代碼 | ZZIP.JOB_TITLE |
+| job_title_desc | VARCHAR(50) | YES | | 職稱描述 | US-030 代碼轉換 |
+| job_level | VARCHAR(2) | YES | | 職級 | ZZIP.JOB_LEVEL |
+| industry_code | VARCHAR(6) | YES | | 行業代碼 | ZZIP.INDUSTRY |
+| industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / US-030 代碼轉換 |
+| work_years | DECIMAL(8,2) | YES | | 年資 | ZZIP.N_WORK_YEAR |
+| company_scale | VARCHAR(1) | YES | | 公司規模（1:>=1000萬or公教/2:<1000萬/3:其他） | ZZIP.COMP_DIM |
+
+#### F. 財務與風控
+
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| monthly_income | DECIMAL(8,0) | YES | | 月所得 | ZZIP.INCOME_MON |
+| approved_income | INTEGER | YES | | 認定月收入 | ZZIP.INCOME_APPROVED |
+| income_source | VARCHAR(5) | YES | | 收入來源代碼 | ZZIP.INCOME_SOURCE |
+| capital | DECIMAL(12,0) | YES | | 資本額 | ZZIP.CAPITAL / MLMC.CUSTNOWCAPTIAL（varchar→DECIMAL） |
+| credit_limit | DECIMAL(12,0) | YES | | 核准額度 | MLMC.FAMOUNT |
+| has_real_estate | VARCHAR(1) | YES | | 自有不動產 | ZZIP.IMMOPRO_MK |
+| debt_flag | CHAR(1) | YES | | 消債旗標 | ZZIP.DEBT_FLG |
+| fine_flag | CHAR(1) | YES | | 違規欠稅旗標（>2萬） | ZZIP.FINE_FLG |
+| address_anomaly_flag | SMALLINT | YES | | 地址異常註記 | ZZIP.ADDR_FLG |
+| mainland_flag | SMALLINT | YES | | 大陸籍旗標 | ZZIP.LAND_FLG |
+
+#### G. 企業客戶專屬
+
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| owner_name | VARCHAR(50) | YES | | 負責人姓名 | MLMC.OWNER |
+| owner_id | VARCHAR(10) | YES | | 負責人 ID | MLMC.OWNERID |
+| owner_birth | DATE | YES | | 負責人生日 | MLMC.OWNERBIRTH |
+| established_capital | DECIMAL(12,0) | YES | | 創設資本 | MLMC.CUSTCREATECAPTIAL（varchar→DECIMAL） |
+| employee_count | VARCHAR(6) | YES | | 員工數 | MLMC.EMPLOYEE |
+| is_listed | VARCHAR(6) | YES | | 是否上市 | MLMC.LISTED |
+| parent_customer_id | VARCHAR(10) | YES | | 母公司客戶 ID | MLMC.PARENTCUSTID |
+
+#### H. 稽核與 ETL 追蹤
+
+| 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
+|---------|------|----------|-----|------|---------|
+| source_created_at | TIMESTAMP | YES | | 來源建檔日期 | ZZIP.INSERT_DATE / MLMC.CUSTCREATEDATE |
+| source_updated_at | TIMESTAMP | YES | | 來源最後更新 | ZZIP.UPDATE_DATE / MLMC.U_SYSDT |
+| data_source | VARCHAR(50) | NO | | 資料來源識別 | ETL 自動填充 |
+| _etl_loaded_at | TIMESTAMP | NO | | ETL 載入時間 | ETL 自動填充 |
+| _etl_pipeline_id | UUID | NO | | 載入的 Pipeline ID | ETL 自動填充 |
 
 ### 共通 ETL 追蹤欄位
 
@@ -194,27 +218,57 @@
 | `_etl_loaded_at` | ETL 載入時間（自動記錄） |
 | `_etl_pipeline_id` | 執行載入的 Pipeline ID（自動記錄） |
 
+### ETL 轉換規則
+
+| 規則 | 說明 |
+|------|------|
+| 電話合併 | `{區碼}-{號碼}` 格式，佔位值（如 `00-0000000000`）過濾為 NULL |
+| 衝突解決 | 同一客戶在兩來源有衝突時，以 `source_updated_at` 較新者為準（於 US-042 處理） |
+| 代碼描述 | `_code` 欄位保留原始代碼，`_desc` 欄位由 US-030 取得對照表、US-042 轉換填入 |
+| 資本額型別 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL：varchar → DECIMAL |
+| 客戶類型對應 | ZZIP.CUSTOM_MK 直接映射；MLMC.CUTYPE 需轉換（1→01, 2→02） |
+
+### 刻意不納入 MVP 的來源欄位
+
+| 來源欄位 | 理由 |
+|---------|------|
+| SPOUSE_NM / FATHER_NM / MOTHER_NM | 敏感個資，MVP 暫不需要 |
+| EPRPOST_ADD / EPRPOST_NUM | 滿期寄送地址，屬業務特定流程 |
+| PRINT_FLG / ID_CHECK / ID_CHECK_DATE | 內部作業旗標，非分析必要 |
+| ISSUE_ADD / ISSUE_CLASS / ISSUE_DATE | 發證資訊，MVP 暫不需要 |
+| OLD_P_ID | 舊系統遷移用，非分析必要 |
+| APPLI_MARK / SPON_MARK | 申請人/保證人註記，屬業務流程旗標 |
+
+### Phase 擴展規劃
+
+| Phase | 目標表 | 前提條件 |
+|-------|--------|---------|
+| Phase 1 MVP | customer_core | 已有來源（ZZIP_BAMCUST_M + MLMCUSTOMER） |
+| Phase 2 | customer_financial | 待合約明細系統接入 |
+| Phase 2 | customer_interaction | 待 CRM / 行銷自動化系統接入 |
+| Phase 3 | customer_service | 待客服工單系統接入 |
+
 ---
 
 ## 測試案例
 
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
-| 1 | 呼叫目標表清單 API | 回傳 4 個目標表，各含名稱、Domain、欄位數量 |
-| 2 | 呼叫 customer_core Schema API | 回傳 16 個欄位定義，型別與描述正確 |
-| 3 | 呼叫 customer_interaction Schema API | 回傳 14 個欄位定義，型別與描述正確 |
-| 4 | 呼叫 customer_financial Schema API | 回傳 20 個欄位定義，型別與描述正確 |
-| 5 | 呼叫 customer_service Schema API | 回傳 17 個欄位定義，型別與描述正確 |
-| 6 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
-| 7 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
-| 8 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位自動填充，無需手動對應 |
-| 9 | 呼叫不存在的目標表 Schema API | 回傳 404 Not Found |
+| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量 |
+| 2 | 呼叫 customer_core Schema API | 回傳約 45 個欄位定義，型別與描述正確 |
+| 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
+| 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
+| 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |
+| 6 | 呼叫不存在的目標表 Schema API | 回傳 404 Not Found |
+| 7 | 電話欄位含佔位值 `00-0000000000` | ETL 轉換後為 NULL |
+| 8 | 同一客戶存在兩來源且資料衝突 | 以 source_updated_at 較新者為準 |
+| 9 | MLMC.CUSTNOWCAPTIAL 為 varchar "5000000" | 正確轉換為 DECIMAL 5000000 |
 
 ---
 
 ## 依賴關係
 
-- **Blocked By**：US-042（需有編輯器支援 Load 節點）
+- **Blocked By**：US-042（需有編輯器支援 Load 節點）、US-030（代碼對照表擷取）
 - **Blocks**：無
 
 ---
@@ -223,11 +277,13 @@
 
 - [ ] 目標表清單 API 實作完成並通過單元測試
 - [ ] 目標表 Schema API 實作完成並通過單元測試
-- [ ] 4 個目標表 schema 預定義正確（customer_core、customer_interaction、customer_financial、customer_service）
+- [ ] customer_core 目標表 schema 預定義正確（約 45 欄位，涵蓋 A~H 八個分類）
+- [ ] 來源欄位對應表完整且經業務確認
 - [ ] 前端 Load 節點目標表選擇器實作完成
 - [ ] 前端欄位對應介面實作完成
 - [ ] ETL 追蹤欄位自動填充邏輯實作完成
-- [ ] 架構預留 Data Mesh 擴展空間
+- [ ] ETL 轉換規則實作（電話合併、佔位值過濾、型別轉換）
+- [ ] 架構預留 Data Mesh 擴展空間（Phase 2/3 目標表可獨立新增）
 - [ ] E2E 測試通過
 
 ---
@@ -235,3 +291,4 @@
 ## 相關文件
 
 - **Epic Brief**：[E05 Epic Brief](epic-brief.md)
+- **依賴**：US-030（代碼對照表）、US-042（Pipeline 編輯器 Load 節點）
