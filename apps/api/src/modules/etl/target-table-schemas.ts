@@ -1,6 +1,7 @@
 /**
- * F036: 目標表 Domain-Oriented 靜態 Schema 定義
- * 目標表不納入 ORM Entity 管理，schema 資訊以 TypeScript 常數定義
+ * F036 v2.0: 目標表 Domain-Oriented 靜態 Schema 定義
+ * Phase 1 MVP: 僅 customer_core 一個目標表（54 欄位，A~H 八分類）
+ * Phase 2/3 目標表待對應來源系統接入後再擴充
  */
 
 export interface TargetTableColumn {
@@ -28,101 +29,86 @@ export interface TargetTableSummary {
   description: string;
 }
 
+// H. 稽核與 ETL 追蹤（共用）
 const ETL_TRACKING_COLUMNS: TargetTableColumn[] = [
-  { name: 'data_source', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: true, description: '資料來源識別' },
+  { name: 'data_source', type: 'VARCHAR(50)', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: '資料來源識別（ETL 自動填充）' },
   { name: '_etl_loaded_at', type: 'TIMESTAMP', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: 'ETL 載入時間（系統自動填充）' },
-  { name: '_etl_pipeline_id', type: 'UUID', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: 'Pipeline ID（系統自動填充）' },
+  { name: '_etl_pipeline_id', type: 'UUID', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: '載入的 Pipeline ID（系統自動填充）' },
 ];
 
 export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
   {
     tableName: 'customer_core',
-    displayName: 'Customer Core（身分/主檔）',
+    displayName: 'Customer Core（客戶主檔）',
     domain: 'core',
-    description: '客戶基本身分與主檔資料',
+    description: '客戶身分、聯絡、職業、財務概況與風控旗標',
     columns: [
-      { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '客戶唯一識別碼' },
-      { name: 'id_number', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '身分證號（加密）' },
-      { name: 'name', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '姓名' },
-      { name: 'gender', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '性別' },
+      // A. 識別與分類 (5)
+      { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '客戶唯一識別碼（代理鍵）' },
+      { name: 'source_customer_no', type: 'VARCHAR(20)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '來源客戶編號（身分證/統編）' },
+      { name: 'customer_type', type: 'VARCHAR(2)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型（01=個人/02=企業/04=外籍）' },
+      { name: 'name', type: 'VARCHAR(100)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '姓名/企業名稱' },
+      { name: 'english_name', type: 'VARCHAR(60)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '英文姓名' },
+
+      // B. 個人屬性 (5)
+      { name: 'gender', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '性別' },
       { name: 'date_of_birth', type: 'DATE', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '生日' },
-      { name: 'phone', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '電話' },
-      { name: 'email', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: 'Email' },
-      { name: 'address', type: 'TEXT', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '地址' },
-      { name: 'occupation', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業' },
-      { name: 'company_name', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司名稱' },
-      { name: 'customer_type', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型（individual / corporate）' },
-      { name: 'registration_date', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '建檔日期' },
-      { name: 'last_updated_at', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '最後更新時間' },
-      ...ETL_TRACKING_COLUMNS,
-    ],
-  },
-  {
-    tableName: 'customer_interaction',
-    displayName: 'Customer Interaction（行為/接觸）',
-    domain: 'interaction',
-    description: '客戶行為與接觸紀錄',
-    columns: [
-      { name: 'interaction_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '互動唯一識別碼' },
-      { name: 'customer_id', type: 'UUID', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '關聯客戶' },
-      { name: 'interaction_type', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '接觸類型（call/email/sms/visit/app/web/dm）' },
-      { name: 'channel', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '通路' },
-      { name: 'direction', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '方向（inbound/outbound）' },
-      { name: 'interaction_date', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '接觸時間' },
-      { name: 'campaign_id', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行銷活動 ID' },
-      { name: 'campaign_name', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行銷活動名稱' },
-      { name: 'response_status', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '回應狀態' },
-      { name: 'content_summary', type: 'TEXT', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '內容摘要' },
-      { name: 'agent_id', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '處理人員' },
-      ...ETL_TRACKING_COLUMNS,
-    ],
-  },
-  {
-    tableName: 'customer_financial',
-    displayName: 'Customer Financial（交易/風控）',
-    domain: 'financial',
-    description: '交易與風控資料',
-    columns: [
-      { name: 'financial_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '財務記錄唯一識別碼' },
-      { name: 'customer_id', type: 'UUID', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '關聯客戶' },
-      { name: 'contract_id', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '合約編號' },
-      { name: 'contract_type', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '合約類型（loan/lease）' },
-      { name: 'vehicle_model', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '車型' },
-      { name: 'vehicle_year', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '車輛年份' },
-      { name: 'principal_amount', type: 'DECIMAL', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '本金金額' },
-      { name: 'monthly_payment', type: 'DECIMAL', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '月付金' },
-      { name: 'interest_rate', type: 'DECIMAL', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '利率' },
-      { name: 'term_months', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '期數' },
-      { name: 'payment_status', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '還款狀態（current/overdue/default/closed）' },
-      { name: 'overdue_days', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '逾期天數' },
-      { name: 'overdue_amount', type: 'DECIMAL', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '逾期金額' },
-      { name: 'credit_score', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '信用評分' },
-      { name: 'risk_level', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '風險等級（low/medium/high/critical）' },
-      { name: 'contract_start_date', type: 'DATE', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '合約起始日' },
-      { name: 'contract_end_date', type: 'DATE', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '合約結束日' },
-      ...ETL_TRACKING_COLUMNS,
-    ],
-  },
-  {
-    tableName: 'customer_service',
-    displayName: 'Customer Service（客服/申訴）',
-    domain: 'service',
-    description: '客服與申訴案件',
-    columns: [
-      { name: 'service_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '服務案件唯一識別碼' },
-      { name: 'customer_id', type: 'UUID', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '關聯客戶' },
-      { name: 'case_number', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '案件編號' },
-      { name: 'case_type', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '案件類型（inquiry/complaint/request/dispute）' },
-      { name: 'category', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '分類' },
-      { name: 'priority', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '優先級（low/medium/high/urgent）' },
-      { name: 'status', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '狀態（open/in_progress/resolved/closed）' },
-      { name: 'channel', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '進件通路' },
-      { name: 'description', type: 'TEXT', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '案件描述' },
-      { name: 'resolution', type: 'TEXT', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '處理結果' },
-      { name: 'assigned_to', type: 'VARCHAR', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '指派人員' },
-      { name: 'opened_at', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '建立時間' },
-      { name: 'resolved_at', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '解決時間' },
-      { name: 'satisfaction_score', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '滿意度（1-5）' },
+      { name: 'marital_status', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '婚姻狀態' },
+      { name: 'education_code', type: 'VARCHAR(2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '學歷代碼' },
+      { name: 'education_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '學歷描述' },
+
+      // C. 聯絡資訊 (6)
+      { name: 'mobile_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行動電話' },
+      { name: 'home_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '戶籍電話' },
+      { name: 'contact_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '通訊電話' },
+      { name: 'office_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司電話' },
+      { name: 'email', type: 'VARCHAR(40)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: 'Email' },
+      { name: 'line_account', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: 'Line 帳號' },
+
+      // D. 地址 (6)
+      { name: 'residential_zip', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '戶籍郵遞區號' },
+      { name: 'residential_address', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '戶籍地址' },
+      { name: 'mailing_zip', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '通訊郵遞區號' },
+      { name: 'mailing_address', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '通訊地址' },
+      { name: 'company_zip', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司郵遞區號' },
+      { name: 'company_address', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司/營業地址' },
+
+      // E. 職業與就業 (10)
+      { name: 'company_name', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '服務公司/企業名稱' },
+      { name: 'occupation_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業代碼' },
+      { name: 'occupation_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業描述' },
+      { name: 'job_title_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職稱代碼' },
+      { name: 'job_title_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職稱描述' },
+      { name: 'job_level', type: 'VARCHAR(2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職級' },
+      { name: 'industry_code', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業代碼' },
+      { name: 'industry_desc', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業描述' },
+      { name: 'work_years', type: 'DECIMAL(8,2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '年資' },
+      { name: 'company_scale', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司規模（1:>=1000萬or公教/2:<1000萬/3:其他）' },
+
+      // F. 財務與風控 (10)
+      { name: 'monthly_income', type: 'DECIMAL(8,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '月所得' },
+      { name: 'approved_income', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '認定月收入' },
+      { name: 'income_source', type: 'VARCHAR(5)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '收入來源代碼' },
+      { name: 'capital', type: 'DECIMAL(12,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '資本額' },
+      { name: 'credit_limit', type: 'DECIMAL(12,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '核准額度' },
+      { name: 'has_real_estate', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '自有不動產' },
+      { name: 'debt_flag', type: 'CHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '消債旗標' },
+      { name: 'fine_flag', type: 'CHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '違規欠稅旗標（>2萬）' },
+      { name: 'address_anomaly_flag', type: 'SMALLINT', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '地址異常註記' },
+      { name: 'mainland_flag', type: 'SMALLINT', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '大陸籍旗標' },
+
+      // G. 企業客戶專屬 (7)
+      { name: 'owner_name', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '負責人姓名' },
+      { name: 'owner_id', type: 'VARCHAR(10)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '負責人 ID' },
+      { name: 'owner_birth', type: 'DATE', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '負責人生日' },
+      { name: 'established_capital', type: 'DECIMAL(12,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '創設資本' },
+      { name: 'employee_count', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '員工數' },
+      { name: 'is_listed', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '是否上市' },
+      { name: 'parent_customer_id', type: 'VARCHAR(10)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '母公司客戶 ID' },
+
+      // H. 稽核與 ETL 追蹤 (5) — source_created_at, source_updated_at 是非 ETL tracking 欄位
+      { name: 'source_created_at', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '來源建檔日期' },
+      { name: 'source_updated_at', type: 'TIMESTAMP', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '來源最後更新' },
       ...ETL_TRACKING_COLUMNS,
     ],
   },

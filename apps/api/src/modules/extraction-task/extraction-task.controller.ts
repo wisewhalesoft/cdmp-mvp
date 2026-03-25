@@ -41,6 +41,12 @@ export class ExtractionTaskController {
     return this.extractionTaskService.getRawTables();
   }
 
+  @Get('raw-tables/:tableName/columns')
+  async getRawTableColumns(@Param('tableName') tableName: string) {
+    const columns = await this.rawDataService.getTableColumns(tableName);
+    return { data: columns };
+  }
+
   @Get()
   async findAll(@Query() query: ListExtractionTaskDto) {
     return this.extractionTaskService.findAll(query);

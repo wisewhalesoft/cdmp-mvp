@@ -125,7 +125,7 @@ async function loginAs(
   return res.body.token;
 }
 
-describe('F036: Target Table APIs', () => {
+describe('F036 v2.0: Target Table APIs', () => {
   let app: INestApplication;
   let adminToken: string;
   let userToken: string;
@@ -140,38 +140,25 @@ describe('F036: Target Table APIs', () => {
     await app.close();
   });
 
-  // TS-F036-001: 回傳 4 個目標表清單
+  // ====== 類別一：目標表清單 API ======
+
   describe('GET /api/v1/etl/target-tables', () => {
-    it('TS-F036-001: should return 4 target tables', async () => {
+    it('TS-F036-001: Phase 1 MVP should return exactly 1 target table (customer_core)', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(res.body.data).toHaveLength(4);
-      const tableNames = res.body.data.map((t: any) => t.tableName);
-      expect(tableNames).toContain('customer_core');
-      expect(tableNames).toContain('customer_interaction');
-      expect(tableNames).toContain('customer_financial');
-      expect(tableNames).toContain('customer_service');
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].tableName).toBe('customer_core');
+      // Phase 2/3 tables should NOT exist
+      const names = res.body.data.map((t: any) => t.tableName);
+      expect(names).not.toContain('customer_interaction');
+      expect(names).not.toContain('customer_financial');
+      expect(names).not.toContain('customer_service');
     });
 
-    // TS-F036-002: 各目標表 columnCount 正確
-    it('TS-F036-002: should have correct columnCount for each table', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/etl/target-tables')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
-
-      const byName = (name: string) => res.body.data.find((t: any) => t.tableName === name);
-      expect(byName('customer_core').columnCount).toBe(16);
-      expect(byName('customer_interaction').columnCount).toBe(14);
-      expect(byName('customer_financial').columnCount).toBe(20);
-      expect(byName('customer_service').columnCount).toBe(17);
-    });
-
-    // TS-F036-003: 各目標表回應欄位結構完整
-    it('TS-F036-003: each table object should have complete fields', async () => {
+    it('TS-F036-002: response structure should be complete with exactly 5 properties', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -188,167 +175,155 @@ describe('F036: Target Table APIs', () => {
         expect(typeof table.domain).toBe('string');
         expect(typeof table.columnCount).toBe('number');
         expect(typeof table.description).toBe('string');
-        // No extra fields
         expect(Object.keys(table)).toHaveLength(5);
       }
     });
 
-    // TS-F036-004: domain 欄位值正確對應
-    it('TS-F036-004: domain values should match table names', async () => {
+    it('TS-F036-003: columnCount matches actual schema columns, domain is core', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      const byName = (name: string) => res.body.data.find((t: any) => t.tableName === name);
-      expect(byName('customer_core').domain).toBe('core');
-      expect(byName('customer_interaction').domain).toBe('interaction');
-      expect(byName('customer_financial').domain).toBe('financial');
-      expect(byName('customer_service').domain).toBe('service');
+      const core = res.body.data[0];
+      expect(core.columnCount).toBe(54);
+      expect(core.domain).toBe('core');
+      expect(core.displayName).toContain('Customer Core');
     });
   });
 
-  // Schema API tests
+  // ====== 類別二：Schema API ======
+
   describe('GET /api/v1/etl/target-tables/:tableName/schema', () => {
-    // TS-F036-005: customer_core schema
-    it('TS-F036-005: customer_core schema should have 16 columns with correct PK', async () => {
+    it('TS-F036-004: customer_core schema should have 54 columns (A~H)', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_core/schema')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
       expect(res.body.tableName).toBe('customer_core');
-      expect(res.body.displayName).toBe('Customer Core（身分/主檔）');
-      expect(res.body.columns).toHaveLength(16);
-
-      const pk = res.body.columns.find((c: any) => c.isPrimaryKey);
-      expect(pk.name).toBe('customer_id');
-      expect(pk.type).toBe('UUID');
-      expect(pk.nullable).toBe(false);
-
-      const idNumber = res.body.columns.find((c: any) => c.name === 'id_number');
-      expect(idNumber.type).toBe('VARCHAR');
-      expect(idNumber.nullable).toBe(true);
+      expect(res.body.displayName).toBe('Customer Core（客戶主檔）');
+      expect(res.body.columns).toHaveLength(54);
     });
 
-    // TS-F036-006: customer_interaction schema
-    it('TS-F036-006: customer_interaction schema should have 14 columns', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/etl/target-tables/customer_interaction/schema')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
-
-      expect(res.body.columns).toHaveLength(14);
-      const pk = res.body.columns.find((c: any) => c.isPrimaryKey);
-      expect(pk.name).toBe('interaction_id');
-
-      const fieldNames = res.body.columns.map((c: any) => c.name);
-      expect(fieldNames).toContain('interaction_type');
-      expect(fieldNames).toContain('channel');
-      expect(fieldNames).toContain('direction');
-      expect(fieldNames).toContain('interaction_date');
-      expect(fieldNames).toContain('campaign_id');
-      expect(fieldNames).toContain('campaign_name');
-      expect(fieldNames).toContain('response_status');
-      expect(fieldNames).toContain('content_summary');
-      expect(fieldNames).toContain('agent_id');
-    });
-
-    // TS-F036-007: customer_financial schema
-    it('TS-F036-007: customer_financial schema should have 20 columns', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/etl/target-tables/customer_financial/schema')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
-
-      expect(res.body.columns).toHaveLength(20);
-      const pk = res.body.columns.find((c: any) => c.isPrimaryKey);
-      expect(pk.name).toBe('financial_id');
-
-      const byName = (name: string) => res.body.columns.find((c: any) => c.name === name);
-      expect(byName('principal_amount').type).toBe('DECIMAL');
-      expect(byName('monthly_payment').type).toBe('DECIMAL');
-      expect(byName('interest_rate').type).toBe('DECIMAL');
-      expect(byName('overdue_days').type).toBe('INTEGER');
-      expect(byName('overdue_amount').type).toBe('DECIMAL');
-      expect(byName('credit_score').type).toBe('INTEGER');
-      expect(byName('risk_level').type).toBe('VARCHAR');
-    });
-
-    // TS-F036-008: customer_service schema
-    it('TS-F036-008: customer_service schema should have 17 columns', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/etl/target-tables/customer_service/schema')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
-
-      expect(res.body.columns).toHaveLength(17);
-      const pk = res.body.columns.find((c: any) => c.isPrimaryKey);
-      expect(pk.name).toBe('service_id');
-
-      const fieldNames = res.body.columns.map((c: any) => c.name);
-      expect(fieldNames).toContain('case_number');
-      expect(fieldNames).toContain('case_type');
-      expect(fieldNames).toContain('category');
-      expect(fieldNames).toContain('priority');
-      expect(fieldNames).toContain('status');
-      expect(fieldNames).toContain('channel');
-      expect(fieldNames).toContain('description');
-      expect(fieldNames).toContain('resolution');
-      expect(fieldNames).toContain('assigned_to');
-      expect(fieldNames).toContain('opened_at');
-      expect(fieldNames).toContain('resolved_at');
-      expect(fieldNames).toContain('satisfaction_score');
-    });
-
-    // TS-F036-009: ETL tracking fields marked correctly
-    it('TS-F036-009: ETL tracking fields should be marked isEtlTracking=true', async () => {
+    it('TS-F036-005: A category fields (識別與分類) should be correct', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_core/schema')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      const trackingFields = res.body.columns.filter((c: any) => c.isEtlTracking === true);
-      const trackingNames = trackingFields.map((c: any) => c.name).sort();
-      expect(trackingNames).toEqual(['_etl_loaded_at', '_etl_pipeline_id', 'data_source']);
+      const byName = (name: string) => res.body.columns.find((c: any) => c.name === name);
 
-      const nonTrackingFields = res.body.columns.filter((c: any) => c.isEtlTracking === false);
-      expect(nonTrackingFields.length).toBe(16 - 3);
+      // customer_id: UUID, PK, NOT NULL
+      expect(byName('customer_id').type).toBe('UUID');
+      expect(byName('customer_id').isPrimaryKey).toBe(true);
+      expect(byName('customer_id').nullable).toBe(false);
+
+      // source_customer_no: VARCHAR(20), NOT NULL
+      expect(byName('source_customer_no').type).toBe('VARCHAR(20)');
+      expect(byName('source_customer_no').nullable).toBe(false);
+
+      // customer_type: VARCHAR(2), NOT NULL
+      expect(byName('customer_type').type).toBe('VARCHAR(2)');
+      expect(byName('customer_type').nullable).toBe(false);
+
+      // name: VARCHAR(100), NOT NULL
+      expect(byName('name').type).toBe('VARCHAR(100)');
+      expect(byName('name').nullable).toBe(false);
+
+      // english_name: VARCHAR(60), nullable
+      expect(byName('english_name').type).toBe('VARCHAR(60)');
+      expect(byName('english_name').nullable).toBe(true);
     });
 
-    // TS-F036-010: Primary key field marked correctly
-    it('TS-F036-010: exactly one PK field in customer_financial', async () => {
+    it('TS-F036-006: B category fields (個人屬性) should all be nullable', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/etl/target-tables/customer_financial/schema')
+        .get('/api/v1/etl/target-tables/customer_core/schema')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const byName = (name: string) => res.body.columns.find((c: any) => c.name === name);
+
+      expect(byName('gender').nullable).toBe(true);
+      expect(byName('date_of_birth').type).toBe('DATE');
+      expect(byName('date_of_birth').nullable).toBe(true);
+      expect(byName('marital_status').nullable).toBe(true);
+      expect(byName('education_code').nullable).toBe(true);
+      expect(byName('education_desc').nullable).toBe(true);
+    });
+
+    it('TS-F036-007: C category fields (聯絡資訊) should be 6 VARCHAR nullable fields', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/etl/target-tables/customer_core/schema')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const cFields = ['mobile_phone', 'home_phone', 'contact_phone', 'office_phone', 'email', 'line_account'];
+      for (const name of cFields) {
+        const col = res.body.columns.find((c: any) => c.name === name);
+        expect(col, `${name} should exist`).toBeDefined();
+        expect(col.type).toMatch(/^VARCHAR/);
+        expect(col.nullable).toBe(true);
+      }
+    });
+
+    it('TS-F036-008: F category fields (財務與風控) type definitions correct', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/etl/target-tables/customer_core/schema')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const byName = (name: string) => res.body.columns.find((c: any) => c.name === name);
+
+      expect(byName('monthly_income').type).toBe('DECIMAL(8,0)');
+      expect(byName('capital').type).toBe('DECIMAL(12,0)');
+      expect(byName('credit_limit').type).toBe('DECIMAL(12,0)');
+      expect(byName('address_anomaly_flag').type).toBe('SMALLINT');
+      expect(byName('mainland_flag').type).toBe('SMALLINT');
+      expect(byName('debt_flag').type).toBe('CHAR(1)');
+      expect(byName('fine_flag').type).toBe('CHAR(1)');
+      expect(byName('approved_income').type).toBe('INTEGER');
+    });
+
+    it('TS-F036-009: ETL tracking fields marked correctly', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/etl/target-tables/customer_core/schema')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const tracking = res.body.columns.filter((c: any) => c.isEtlTracking === true);
+      expect(tracking).toHaveLength(3);
+      const trackingNames = tracking.map((c: any) => c.name).sort();
+      expect(trackingNames).toEqual(['_etl_loaded_at', '_etl_pipeline_id', 'data_source']);
+
+      // source_created_at and source_updated_at should NOT be ETL tracking
+      const byName = (name: string) => res.body.columns.find((c: any) => c.name === name);
+      expect(byName('source_created_at').isEtlTracking).toBe(false);
+      expect(byName('source_updated_at').isEtlTracking).toBe(false);
+
+      // Non-tracking count
+      const nonTracking = res.body.columns.filter((c: any) => c.isEtlTracking === false);
+      expect(nonTracking).toHaveLength(54 - 3);
+    });
+
+    it('TS-F036-010: exactly one PK field (customer_id)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/etl/target-tables/customer_core/schema')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
       const pks = res.body.columns.filter((c: any) => c.isPrimaryKey === true);
       expect(pks).toHaveLength(1);
-      expect(pks[0].name).toBe('financial_id');
+      expect(pks[0].name).toBe('customer_id');
       expect(pks[0].nullable).toBe(false);
 
       const nonPks = res.body.columns.filter((c: any) => c.isPrimaryKey === false);
-      expect(nonPks.length).toBe(19);
+      expect(nonPks).toHaveLength(53);
     });
 
-    // TS-F036-011: Tracking fields nullable correctness
-    it('TS-F036-011: tracking field nullable values correct', async () => {
+    it('TS-F036-011: all columns have non-empty description', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_core/schema')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
-
-      const byName = (name: string) => res.body.columns.find((c: any) => c.name === name);
-      expect(byName('_etl_loaded_at').nullable).toBe(false);
-      expect(byName('_etl_pipeline_id').nullable).toBe(false);
-      expect(byName('data_source').nullable).toBe(true);
-    });
-
-    // TS-F036-012: All columns have description
-    it('TS-F036-012: every column in customer_service should have a non-empty description', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/etl/target-tables/customer_service/schema')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -360,10 +335,10 @@ describe('F036: Target Table APIs', () => {
     });
   });
 
-  // Negative scenarios
+  // ====== 類別三：Negative scenarios ======
+
   describe('Negative scenarios', () => {
-    // TS-F036-013: non-existent table returns 404
-    it('TS-F036-013: should return 404 for non-existent target table', async () => {
+    it('TS-F036-012: should return 404 for non-existent target table', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_unknown/schema')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -373,7 +348,17 @@ describe('F036: Target Table APIs', () => {
       expect(res.body.message).toBe('找不到指定的目標表');
     });
 
-    // TS-F036-014: User role gets 403 on list
+    it('TS-F036-013: Phase 2/3 tables should return 404', async () => {
+      for (const table of ['customer_interaction', 'customer_financial', 'customer_service']) {
+        const res = await request(app.getHttpServer())
+          .get(`/api/v1/etl/target-tables/${table}/schema`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .expect(404);
+
+        expect(res.body.error).toBe('PIPELINE_TARGET_TABLE_NOT_FOUND');
+      }
+    });
+
     it('TS-F036-014: user role should get 403 on target table list', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables')
@@ -383,7 +368,6 @@ describe('F036: Target Table APIs', () => {
       expect(res.body.error).toBe('AUTH_FORBIDDEN');
     });
 
-    // TS-F036-015: User role gets 403 on schema
     it('TS-F036-015: user role should get 403 on target table schema', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_core/schema')
@@ -393,7 +377,6 @@ describe('F036: Target Table APIs', () => {
       expect(res.body.error).toBe('AUTH_FORBIDDEN');
     });
 
-    // TS-F036-016: No token returns 401 on list
     it('TS-F036-016: should return 401 without token on list', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables')
@@ -402,7 +385,6 @@ describe('F036: Target Table APIs', () => {
       expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
     });
 
-    // TS-F036-017: No token returns 401 on schema
     it('TS-F036-017: should return 401 without token on schema', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_core/schema')
@@ -410,9 +392,26 @@ describe('F036: Target Table APIs', () => {
 
       expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
     });
+  });
 
-    // TS-F036-020: Empty table name (path segment) returns 404
-    it('TS-F036-020: empty table name should return 404', async () => {
+  // ====== 類別八：Boundary ======
+
+  describe('Boundary scenarios', () => {
+    it('TS-F036-037: special characters in table name should return 404', async () => {
+      const res1 = await request(app.getHttpServer())
+        .get('/api/v1/etl/target-tables/customer%20core/schema')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(404);
+      expect(res1.body.error).toBe('PIPELINE_TARGET_TABLE_NOT_FOUND');
+
+      const res2 = await request(app.getHttpServer())
+        .get('/api/v1/etl/target-tables/customer-core/schema')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(404);
+      expect(res2.body.error).toBe('PIPELINE_TARGET_TABLE_NOT_FOUND');
+    });
+
+    it('TS-F036-038: empty table name should return 404 or route mismatch', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables//schema')
         .set('Authorization', `Bearer ${adminToken}`);
