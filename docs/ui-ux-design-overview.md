@@ -31,7 +31,7 @@ CDMP（企業客戶資料治理平台）MVP 已完成產品需求與系統架構
 | 系統欄位區分 | 灰色背景列 `cdmp-sys-col` | `_cdmp_id`、`_cdmp_extracted_at` 以淺灰背景與一般欄位視覺區分 |
 | Pipeline 管理頁面策略 | 單頁雙頁籤（17），儀表板為預設 | 沿用 08/12 的雙頁籤模式；F035 儀表板已納入範圍，儀表板為預設頁籤（與 E03/E04 一致） |
 | Pipeline 監控儀表板 | 整合於 17 的儀表板頁籤（預設） | F035 規格：5 張統計小卡 + 執行趨勢雙色長條圖（7/14/30 天切換）+ 執行中 Pipeline 進度條 + 今日失敗清單 + 效能最差 Top 5，佈局與 E04 擷取儀表板一致 |
-| 目標表管理 | 整合於 18 的 Load 節點屬性面板 + 獨立頁面（22） | F036 目標表選擇與欄位對應整合於 Pipeline 編輯器 Load 節點屬性面板；目標表 Schema 瀏覽使用獨立頁面（22），展示 4 個 Domain 目標表的完整欄位定義 |
+| 目標表管理 | 整合於 18 的 Load 節點屬性面板 + 獨立頁面（22） | F036/US-049 目標表選擇與欄位對應整合於 Pipeline 編輯器 Load 節點屬性面板；MVP 僅 1 個目標表 `customer_core`（約 45 欄位，8 個分類 A~H），選擇器設計為可擴展下拉。欄位對應面板以分類折疊/展開呈現，每個分類顯示已對應數/總數統計。3 個 ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）標示為「自動填充」灰色鎖定。目標表 Schema 瀏覽使用獨立頁面（22），展示 customer_core 完整 8 分類欄位定義，Phase 2/3 目標表以灰色佔位卡片預示 |
 | Pipeline 建立表單 | Modal Dialog | 欄位少（名稱+描述+排程，共 3 個），F028 明確要求「對話框或表單」，Modal 操作流暢，建立後直接導向編輯器 |
 | Pipeline 視覺化編輯器 | 全頁三欄式佈局（18） | F029 核心功能，左側工具箱+中央畫布+右側屬性面板，需最大化畫布空間。原型以靜態 HTML 模擬 React Flow 畫布佈局 |
 | Pipeline 日誌檢視 | 獨立頁面 + 右側 Drawer（19, 17 內嵌） | 日誌列表為獨立頁面（從列表行操作進入），日誌詳情使用右側 Drawer 展示節點執行記錄 |
@@ -85,7 +85,7 @@ prototypes/
 ├── 19-pipeline-logs.html          # Pipeline 日誌列表 + 日誌詳情 Drawer (F032)
 ├── 20-pipeline-versions.html      # Pipeline 版本管理 - Diff/回滾/發布 (F033)
 ├── 21-pipeline-interactions.html  # Pipeline 互動狀態展示（進度條/執行中/各 Transform 節點屬性面板）
-└── 22-target-tables.html          # 目標表 Schema 瀏覽 - 4 個 Domain 目標表欄位定義 (F036)
+└── 22-target-tables.html          # 目標表 Schema 瀏覽 - customer_core 約45欄位8分類 + Phase 2/3 佔位 (F036/US-049)
 ```
 
 共 **23 個 HTML 檔案**，每個檔案獨立可開啟（Tailwind CDN + Lucide CDN）。
@@ -200,7 +200,7 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 
 | 檔案 | 涵蓋 Feature | 關鍵元素 |
 |------|-------------|---------|
-| `22-target-tables.html` | F036 | **獨立頁面**（從 Sidebar 或編輯器 Load 節點連結進入）。**Breadcrumb**：ETL Pipeline > 目標表定義。**4 張目標表卡片**：customer_core（身分/主檔，16 欄位）/ customer_interaction（行為/接觸，14 欄位）/ customer_financial（交易/風控，20 欄位）/ customer_service（客服/申訴，17 欄位），每張卡片顯示 tableName、displayName、domain 標籤、columnCount、description。**展開式欄位定義**：點擊卡片展開該表的完整欄位清單表格（欄位名稱/型別/是否可為 null/是否主鍵/描述），ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）以灰色背景+「系統自動填充」標籤區分，主鍵欄位以紅色星號標示。**Demo 狀態切換**：全部收合/展開 customer_core/展開 customer_financial |
+| `22-target-tables.html` | F036/US-049 | **獨立頁面**（從編輯器 Load 節點連結進入）。**Breadcrumb**：ETL Pipeline > 目標表定義。**Phase 擴展資訊 Banner**：藍色提示說明 Phase 1 MVP 僅 customer_core，Phase 2/3 擴展規劃。**customer_core 卡片**：domain=core 標籤、約 45 欄位、8 個分類，點擊展開分類列表。**8 個分類折疊區塊**：A.識別與分類(5)/B.個人屬性(5)/C.聯絡資訊(6)/D.地址(6)/E.職業與就業(10)/F.財務與風控(10)/G.企業客戶專屬(7)/H.稽核與ETL追蹤(5)，各分類以色彩圓角標籤（A=藍/B=綠/C=橘/D=紫/E=玫瑰/F=橙/G=青/H=灰）區分。每個分類展開為完整欄位表格（欄位名稱/型別/Nullable/PK/說明/來源對應 6 欄），ETL 追蹤欄位以灰色背景+鎖定圖示+「自動填充」標籤區分，NOT NULL 欄位以紅色星號標示。**來源資料表 Banner**：顯示 ZZIP_BAMCUST_M + MLMCUSTOMER 兩個來源系統。**Phase 2/3 佔位卡片**：customer_financial/customer_interaction/customer_service 以灰色半透明卡片展示，標註 Phase 標籤。**Demo 狀態切換**：全部收合/全部展開/展開 A.識別與分類/展開 F.財務與風控/展開 H.稽核與ETL追蹤 |
 
 ---
 
@@ -239,8 +239,8 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 | Pipeline 執行趨勢圖 | 雙色長條圖：X 軸日期、Y 軸次數，綠色(#22C55E)成功/紅色(#EF4444)失敗。右上角 7天/14天/30天 切換按鈕組，預設 7 天。使用 Chart.js CDN 繪製 |
 | Pipeline 儀表板失敗清單 | 表格顯示：Pipeline 名稱/失敗時間/錯誤摘要。每行含「查看日誌」Ghost 按鈕（連結至 F032）+「重新執行」Primary 按鈕（觸發 F030）。空狀態：「今日無失敗紀錄」 |
 | Pipeline 效能最差 Top 5 | 排名表格：#序號/Pipeline 名稱/平均執行時間（格式化為 秒/分/時）/累計執行次數。空狀態：「尚無執行紀錄」 |
-| 目標表卡片 | 圓角卡片含 Domain 色彩標籤（core=藍/interaction=綠/financial=橘/service=紫）+ 表名 + 說明 + 欄位數 Badge。點擊展開欄位定義表格 |
-| 目標表欄位對應（Load 節點） | 左右兩欄佈局：左側「來源欄位」（上游節點輸出欄位下拉選單）、右側「目標欄位」（目標表欄位名稱+型別）。ETL 追蹤欄位行灰色背景+「系統自動填充」標籤，不可操作。必填欄位（主鍵且非 nullable）紅色星號標示 |
+| 目標表卡片（22） | MVP 僅 customer_core 1 張可展開卡片，含 domain=core 藍色標籤 + 約 45 欄位 + 8 個分類。展開後按 A~H 分類折疊/展開（各分類有色彩圓角字母標籤）。欄位表格含「來源對應」欄位。ETL 追蹤欄位灰色背景+鎖定圖示+「自動填充」標籤。Phase 2/3 目標表以灰色半透明佔位卡片呈現 |
+| 目標表欄位對應（18 Load 節點） | 分類折疊式佈局，8 個分類（A~H）各自可展開/收合。每個分類標題顯示已對應數/總數統計（如 5/5）。每行左側「目標欄位」（欄位名+型別）、右側「來源欄位」下拉選單。已對應欄位下拉框綠色邊框+綠色背景（border-green-300 bg-green-50）。未對應欄位保持預設樣式。3 個 ETL 追蹤欄位行灰色背景+鎖定圖示+「系統自動填充」標籤，不可操作。NOT NULL 欄位以紅色星號標示。面板頂部顯示整體對應統計摘要（已對應/未對應/必填未對應/自動填充 4 個 Badge） |
 
 ---
 
@@ -283,7 +283,7 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 | F033 Pipeline 版本管理 | `20-pipeline-versions.html` | `18-pipeline-editor.html` (工具列版本資訊) |
 | F034 刪除 Pipeline | `17-pipeline-management.html` (dialog) | — |
 | F035 Pipeline 監控儀表板 | `17-pipeline-management.html` (監控儀表板頁籤, 預設) | `21-pipeline-interactions.html` (儀表板空狀態展示) |
-| F036 目標表 Domain-Oriented 規劃 | `22-target-tables.html` | `18-pipeline-editor.html` (Load 節點屬性面板：目標表選擇+欄位對應), `21-pipeline-interactions.html` (欄位對應互動展示) |
+| F036/US-049 目標表 Domain-Oriented 規劃 | `22-target-tables.html` | `18-pipeline-editor.html` (Load 節點屬性面板：目標表選擇+45欄位8分類折疊式對應+對應狀態統計+ETL追蹤欄位自動填充), `21-pipeline-interactions.html` (欄位對應互動展示) |
 
 ---
 
@@ -314,7 +314,8 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 - `specs/diagrams/pipeline-execution-flow.md` — Pipeline 執行流程（含排程觸發與 Polling）
 - `specs/error-handling.md` §ETL_PIPELINE — Pipeline 相關錯誤碼（PIPELINE_NAME_EXISTS / PIPELINE_NOT_FOUND / PIPELINE_RUNNING / PIPELINE_NO_DEFINITION / PIPELINE_DRAFT_CANNOT_ENABLE / PIPELINE_INVALID_CONNECTION / PIPELINE_PUBLISH_REQUIRES_TEST）
 - `specs/features/F035-pipeline-dashboard.md` — Pipeline 監控儀表板佈局、統計小卡、趨勢圖、執行中進度條、失敗清單、效能最差 Top 5
-- `specs/features/F036-target-tables.md` — 目標表 Domain-Oriented 規劃、4 個目標表 Schema 定義、Load 節點欄位對應介面、ETL 追蹤欄位自動填充
+- `specs/features/F036-target-tables.md` — 目標表 Domain-Oriented 規劃、Load 節點欄位對應介面、ETL 追蹤欄位自動填充
+- `docs/stories/epics/E05-etl-pipeline/US-049-target-tables.md` — 目標表 Domain-Oriented 規劃修訂版：MVP 僅 customer_core 1 個目標表（約 45 欄位，8 分類 A~H），含完整來源對應與 ETL 轉換規則
 - `specs/data-model.md` §EtlPipeline / §EtlPipelineVersion / §EtlPipelineLog / §target-tables — Pipeline 相關 Entity 定義與目標表 Schema
 
 ---
@@ -331,4 +332,4 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 8. **連線規則驗證**：編輯器原型展示合法與非法連線的視覺差異
 9. **Sidebar 導航**：所有 E05 頁面的 Sidebar 應有 4 個項目，ETL Pipeline 為 active 狀態
 10. **Pipeline 儀表板覆蓋**：F035 的 5 個區塊（統計小卡/趨勢圖/執行中進度條/失敗清單/效能最差 Top 5）均在 17-pipeline-management.html 儀表板頁籤中呈現，各區塊空狀態可展示
-11. **目標表覆蓋**：F036 的 4 個 Domain 目標表（customer_core/customer_interaction/customer_financial/customer_service）在 22-target-tables.html 中展示完整欄位定義，Load 節點屬性面板在 18-pipeline-editor.html 中展示目標表選擇與欄位對應
+11. **目標表覆蓋**：F036/US-049 的 customer_core 目標表（約 45 欄位，8 分類 A~H）在 22-target-tables.html 中以分類折疊方式展示完整欄位定義（含來源對應欄），ETL 追蹤欄位以灰色+鎖定圖示+自動填充標籤區分。Load 節點屬性面板在 18-pipeline-editor.html 中展示分類式欄位對應（含對應狀態統計 Badge、已對應綠色邊框、分類折疊/展開、ETL 追蹤欄位自動填充）。Phase 2/3 目標表以灰色佔位卡片預示擴展

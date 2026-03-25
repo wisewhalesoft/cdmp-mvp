@@ -370,7 +370,7 @@
         </div>
       </div>
 
-      <!-- Load Properties (F036) -->
+      <!-- Load Properties (F036 / US-049) -->
       <div id="prop-load" class="hidden">
         <div class="px-4 py-3 border-b border-border">
           <div class="flex items-center gap-2 mb-1">
@@ -378,124 +378,242 @@
             <span class="text-sm font-semibold text-gray-800">目標表載入</span>
           </div>
         </div>
-        <div class="p-4 space-y-4">
+        <div class="p-4 space-y-4 overflow-y-auto" style="max-height: calc(100vh - 140px);">
           <!-- Target Table Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">目標表 <span class="text-danger">*</span></label>
             <select class="w-full text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="loadTargetColumns(this.value)">
               <option value="">選擇目標表</option>
-              <option value="customer_core" selected>Customer Core（身分/主檔）- core</option>
-              <option value="customer_interaction">Customer Interaction（行為/接觸）- interaction</option>
-              <option value="customer_financial">Customer Financial（交易/風控）- financial</option>
-              <option value="customer_service">Customer Service（客服/申訴）- service</option>
+              <option value="customer_core" selected>Customer Core（客戶主檔）- core</option>
             </select>
-            <p class="text-xs text-gray-400 mt-1">16 個欄位（含 3 個 ETL 追蹤欄位）</p>
-            <a href="22-target-tables.html" class="text-xs text-primary hover:underline">查看完整目標表定義</a>
+            <div class="flex items-center justify-between mt-1.5">
+              <p class="text-xs text-gray-400">約 45 個欄位（含 3 個自動填充）· 8 個分類</p>
+              <a href="22-target-tables.html" class="text-xs text-primary hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>完整定義</a>
+            </div>
           </div>
 
-          <!-- Field Mapping -->
+          <!-- Mapping Summary -->
+          <div class="flex items-center gap-3 text-xs">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-50 text-green-700"><i data-lucide="check-circle" class="w-3 h-3"></i>已對應 28</span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-gray-500"><i data-lucide="minus-circle" class="w-3 h-3"></i>未對應 11</span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-50 text-red-600"><i data-lucide="alert-circle" class="w-3 h-3"></i>必填未對應 0</span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-50 text-gray-400"><i data-lucide="lock" class="w-3 h-3"></i>自動 3</span>
+          </div>
+
+          <!-- Field Mapping - Categorized -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">欄位對應</label>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-sm font-medium text-gray-700">欄位對應</label>
+              <div class="flex gap-1">
+                <button onclick="toggleAllLoadCats(true)" class="text-xs text-primary hover:underline">全部展開</button>
+                <span class="text-xs text-gray-300">|</span>
+                <button onclick="toggleAllLoadCats(false)" class="text-xs text-primary hover:underline">全部收合</button>
+              </div>
+            </div>
             <div class="border border-border rounded-lg overflow-hidden">
               <div class="grid grid-cols-2 bg-gray-50 border-b border-border text-xs font-medium text-gray-500 px-3 py-2">
                 <span>目標欄位</span>
                 <span>來源欄位</span>
               </div>
-              <div class="max-h-[280px] overflow-y-auto">
-                <!-- PK field -->
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> customer_id <span class="text-gray-400">(UUID)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>id</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">id_number <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>id_number</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">name <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>customer_name</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">gender <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>gender</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">date_of_birth <span class="text-gray-400">(DATE)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>birthday</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">phone <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>phone</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">email <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>email</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">address <span class="text-gray-400">(TEXT)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>address</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">occupation <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option value="">-- 不對應 --</option>
-                    <option>occupation</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">company_name <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option value="">-- 不對應 --</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">customer_type <span class="text-gray-400">(VARCHAR)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>type</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">registration_date <span class="text-gray-400">(TIMESTAMP)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>created_at</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border hover:bg-gray-50">
-                  <span class="text-xs text-gray-700">last_updated_at <span class="text-gray-400">(TIMESTAMP)</span></span>
-                  <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
-                    <option>updated_at</option>
-                  </select>
-                </div>
-                <!-- ETL Tracking Fields -->
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border bg-gray-50">
-                  <span class="text-xs text-gray-500">data_source <span class="text-gray-400">(VARCHAR)</span></span>
-                  <span class="text-xs text-gray-400 italic flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i>系統自動填充</span>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 border-b border-border bg-gray-50">
-                  <span class="text-xs text-gray-500">_etl_loaded_at <span class="text-gray-400">(TIMESTAMP)</span></span>
-                  <span class="text-xs text-gray-400 italic flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i>系統自動填充</span>
-                </div>
-                <div class="grid grid-cols-2 items-center px-3 py-2 bg-gray-50">
-                  <span class="text-xs text-gray-500">_etl_pipeline_id <span class="text-gray-400">(UUID)</span></span>
-                  <span class="text-xs text-gray-400 italic flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i>系統自動填充</span>
+
+              <!-- A. 識別與分類 (5) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('la')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">A</span><span class="font-medium text-gray-600">識別與分類</span><span class="text-gray-400">(5)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">5/5</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-la"></i></div>
+                </button>
+                <div id="lcat-la">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> customer_id <span class="text-gray-400">(UUID PK)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option>-- ETL 自動生成 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> source_customer_no <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUSTO_NO</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> customer_type <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUSTOM_MK</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> name <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUS_NAME</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">english_name <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>ENG_NAME</option><option value="">-- 不對應 --</option></select>
+                  </div>
                 </div>
               </div>
+
+              <!-- B. 個人屬性 (5) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('lb')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-green-100 text-green-700 text-[10px] font-bold">B</span><span class="font-medium text-gray-600">個人屬性</span><span class="text-gray-400">(5)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">5/5</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lb"></i></div>
+                </button>
+                <div id="lcat-lb" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">gender <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUS_SEX</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">date_of_birth <span class="text-gray-400">(DATE)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>BITBE_DATE</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">marital_status <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CMARRY_MK</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">education_code <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>EDUCAT_BACK</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">education_desc <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- C. 聯絡資訊 (6) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('lc')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">C</span><span class="font-medium text-gray-600">聯絡資訊</span><span class="text-gray-400">(6)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">4/6</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lc"></i></div>
+                </button>
+                <div id="lcat-lc" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">mobile_phone <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CELLULAR</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">home_phone <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CAREA_NO1 + CTEL_NO1</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">contact_phone <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CAREA_NO2 + CTEL_NO2</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">office_phone <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CO_CAREA_NO + CO_CTEL_NO</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">email <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>E_MAIL</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">line_account <span class="text-gray-400">(VARCHAR)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>LINE_ACCT</option></select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- D. 地址 (6) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('ld')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-purple-100 text-purple-700 text-[10px] font-bold">D</span><span class="font-medium text-gray-600">地址</span><span class="text-gray-400">(6)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">6/6</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-ld"></i></div>
+                </button>
+                <div id="lcat-ld" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">residential_zip <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>HPOST_NUM</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">residential_address <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>HPOST_ADD</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">mailing_zip <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CPOST_NUM</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">mailing_address <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>COMM_ADD</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">company_zip <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CO_NUM</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">company_address <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>UNIT_ADD</option><option value="">-- 不對應 --</option></select></div>
+                </div>
+              </div>
+
+              <!-- E. 職業與就業 (10) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('le')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">E</span><span class="font-medium text-gray-600">職業與就業</span><span class="text-gray-400">(10)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">7/10</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-le"></i></div>
+                </button>
+                <div id="lcat-le" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">company_name <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CO_NAME</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">occupation_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>VOCATION_CODE</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">occupation_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_title_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>JOB_TITLE</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_title_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_level <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>JOB_LEVEL</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">industry_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>INDUSTRY</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">industry_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>BUSINESS</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">work_years <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>N_WORK_YEAR</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">company_scale <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>COMP_DIM</option></select></div>
+                </div>
+              </div>
+
+              <!-- F. 財務與風控 (10) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('lf')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-orange-100 text-orange-700 text-[10px] font-bold">F</span><span class="font-medium text-gray-600">財務與風控</span><span class="text-gray-400">(10)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-gray-400">0/10</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lf"></i></div>
+                </button>
+                <div id="lcat-lf" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">monthly_income <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_MON</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">approved_income <span class="text-gray-400">(INTEGER)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_APPROVED</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">income_source <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_SOURCE</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">capital <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>CAPITAL</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">credit_limit <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>FAMOUNT</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">has_real_estate <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>IMMOPRO_MK</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">debt_flag <span class="text-gray-400">(CHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>DEBT_FLG</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">fine_flag <span class="text-gray-400">(CHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>FINE_FLG</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">address_anomaly_flag <span class="text-gray-400">(SMALLINT)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>ADDR_FLG</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">mainland_flag <span class="text-gray-400">(SMALLINT)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>LAND_FLG</option></select></div>
+                </div>
+              </div>
+
+              <!-- G. 企業客戶專屬 (7) -->
+              <div class="border-b border-border">
+                <button onclick="toggleLoadCat('lg')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-teal-100 text-teal-700 text-[10px] font-bold">G</span><span class="font-medium text-gray-600">企業客戶專屬</span><span class="text-gray-400">(7)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">6/7</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lg"></i></div>
+                </button>
+                <div id="lcat-lg" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_name <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>OWNER</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_id <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>OWNERID</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_birth <span class="text-gray-400">(DATE)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>OWNERBIRTH</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">established_capital <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUSTCREATECAPTIAL</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">employee_count <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>EMPLOYEE</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">is_listed <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>LISTED</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">parent_customer_id <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>PARENTCUSTID</option></select></div>
+                </div>
+              </div>
+
+              <!-- H. 稽核與 ETL 追蹤 (5) -->
+              <div>
+                <button onclick="toggleLoadCat('lh')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-200 text-gray-600 text-[10px] font-bold">H</span><span class="font-medium text-gray-600">稽核與 ETL 追蹤</span><span class="text-gray-400">(5)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-gray-400">2+3auto</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lh"></i></div>
+                </button>
+                <div id="lcat-lh" class="hidden">
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">source_created_at <span class="text-gray-400">(TIMESTAMP)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>INSERT_DATE</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
+                    <span class="text-xs text-gray-700">source_updated_at <span class="text-gray-400">(TIMESTAMP)</span></span>
+                    <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>UPDATE_DATE</option><option value="">-- 不對應 --</option></select>
+                  </div>
+                  <!-- ETL Tracking Auto-fill -->
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border bg-gray-50">
+                    <span class="text-xs text-gray-500">data_source <span class="text-gray-400">(VARCHAR)</span></span>
+                    <span class="text-xs text-gray-400 italic flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i>系統自動填充</span>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border bg-gray-50">
+                    <span class="text-xs text-gray-500">_etl_loaded_at <span class="text-gray-400">(TIMESTAMP)</span></span>
+                    <span class="text-xs text-gray-400 italic flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i>系統自動填充</span>
+                  </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border bg-gray-50">
+                    <span class="text-xs text-gray-500">_etl_pipeline_id <span class="text-gray-400">(UUID)</span></span>
+                    <span class="text-xs text-gray-400 italic flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i>系統自動填充</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -596,6 +714,30 @@
 
     function loadTargetColumns(val) {
       // Placeholder - in real app this would fetch schema
+    }
+
+    // Load category accordion
+    function toggleLoadCat(id) {
+      const el = document.getElementById('lcat-' + id);
+      const chev = document.getElementById('lchev-' + id);
+      if (el) {
+        el.classList.toggle('hidden');
+        chev.style.transform = el.classList.contains('hidden') ? '' : 'rotate(180deg)';
+      }
+      lucide.createIcons();
+    }
+
+    function toggleAllLoadCats(expand) {
+      const cats = ['la','lb','lc','ld','le','lf','lg','lh'];
+      cats.forEach(id => {
+        const el = document.getElementById('lcat-' + id);
+        const chev = document.getElementById('lchev-' + id);
+        if (el) {
+          if (expand) { el.classList.remove('hidden'); chev.style.transform = 'rotate(180deg)'; }
+          else { el.classList.add('hidden'); chev.style.transform = ''; }
+        }
+      });
+      lucide.createIcons();
     }
 
     // Init
