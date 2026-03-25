@@ -182,27 +182,33 @@ export function PipelineDashboardPage() {
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 p-6 overflow-auto">
         {/* Tab Navigation */}
-        <div className="flex gap-1 mb-6 border-b border-gray-200" data-testid="dashboard-tabs">
-          <button
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px border-primary text-primary"
-            data-testid="tab-dashboard"
-          >
-            <BarChart3 className="w-4 h-4" />
-            監控儀表板
-          </button>
-          <button
-            onClick={() => navigate('/etl-pipelines/list')}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-gray-500 hover:text-gray-700"
-            data-testid="tab-list"
-          >
-            <List className="w-4 h-4" />
-            Pipeline 清單
-          </button>
+        <div className="bg-white border-b border-gray-200 px-6" data-testid="pipeline-tabs">
+          <nav className="flex space-x-1" role="tablist">
+            <button
+              className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-primary text-primary"
+              role="tab"
+              aria-selected="true"
+              data-testid="tab-dashboard"
+            >
+              <BarChart3 className="w-4 h-4" />
+              監控儀表板
+            </button>
+            <button
+              onClick={() => navigate('/etl-pipelines/list')}
+              className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+              role="tab"
+              aria-selected="false"
+              data-testid="tab-list"
+            >
+              <List className="w-4 h-4" />
+              Pipeline 清單
+            </button>
+          </nav>
         </div>
 
+        {/* Main Content */}
+        <main className="flex-1 p-6 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader className="w-8 h-8 text-gray-400 animate-spin" />

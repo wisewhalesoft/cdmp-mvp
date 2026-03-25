@@ -321,6 +321,46 @@ describe('PipelineListPage', () => {
     expect(deleteBtn.disabled).toBe(true);
   });
 
+  // Tab navigation structure tests (aligned with prototype)
+  it('should render tab navigation with list tab active', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // Tab container should exist with unified testid
+    const tabContainer = screen.getByTestId('pipeline-tabs');
+    expect(tabContainer).toBeDefined();
+
+    // Tab container should use <nav> with role="tablist"
+    const nav = tabContainer.querySelector('nav');
+    expect(nav).not.toBeNull();
+    expect(nav!.getAttribute('role')).toBe('tablist');
+    expect(nav!.className).toContain('space-x-1');
+
+    // Buttons should have role="tab" and aria-selected
+    const dashboardTab = screen.getByTestId('tab-dashboard');
+    const listTab = screen.getByTestId('tab-list');
+    expect(dashboardTab.getAttribute('role')).toBe('tab');
+    expect(dashboardTab.getAttribute('aria-selected')).toBe('false');
+    expect(listTab.getAttribute('role')).toBe('tab');
+    expect(listTab.getAttribute('aria-selected')).toBe('true');
+
+    // List tab should have active styling
+    expect(listTab.className).toContain('border-primary');
+    // Buttons should use px-5 py-3 padding
+    expect(dashboardTab.className).toContain('px-5');
+    expect(dashboardTab.className).toContain('py-3');
+    expect(listTab.className).toContain('px-5');
+    expect(listTab.className).toContain('py-3');
+
+    // Tab navigation should be outside <main>
+    const main = tabContainer.closest('main');
+    expect(main).toBeNull();
+  });
+
   // TS-F031-014: 停用成功後列表即時更新
   it('should update list after toggling pipeline off', async () => {
     const mockedTogglePipeline = vi.mocked(etlPipelinesApi.togglePipeline);

@@ -266,10 +266,35 @@ describe('F035: Pipeline Dashboard Page', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('tab-dashboard')).toBeInTheDocument();
+      expect(screen.getByTestId('pipeline-tabs')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('tab-list')).toBeInTheDocument();
+
+    // Tab container should use <nav> with role="tablist"
+    const tabContainer = screen.getByTestId('pipeline-tabs');
+    const nav = tabContainer.querySelector('nav');
+    expect(nav).not.toBeNull();
+    expect(nav!.getAttribute('role')).toBe('tablist');
+    // nav should use space-x-1 layout
+    expect(nav!.className).toContain('space-x-1');
+
+    // Buttons should have role="tab" and aria-selected
+    const dashboardTab = screen.getByTestId('tab-dashboard');
+    const listTab = screen.getByTestId('tab-list');
+    expect(dashboardTab.getAttribute('role')).toBe('tab');
+    expect(dashboardTab.getAttribute('aria-selected')).toBe('true');
+    expect(listTab.getAttribute('role')).toBe('tab');
+    expect(listTab.getAttribute('aria-selected')).toBe('false');
+
     // Dashboard tab should have active styling
-    expect(screen.getByTestId('tab-dashboard').className).toContain('border-primary');
+    expect(dashboardTab.className).toContain('border-primary');
+    // Buttons should use px-5 py-3 padding
+    expect(dashboardTab.className).toContain('px-5');
+    expect(dashboardTab.className).toContain('py-3');
+    expect(listTab.className).toContain('px-5');
+    expect(listTab.className).toContain('py-3');
+
+    // Tab navigation should be outside <main>, between header and main
+    const main = tabContainer.closest('main');
+    expect(main).toBeNull(); // tab nav is NOT inside <main>
   });
 });
