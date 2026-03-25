@@ -3,15 +3,15 @@ type: test-design-index
 version: "2.0"
 status: draft
 last_updated: 2026-03-20
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037]
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：41 份（4 策略文件 + 37 Feature 測試文件）
-> **總測試場景數**：531 個（E01～E04 共 308 + E05 共 223）
-> **最後更新**：2026-03-23
+> **測試文件總數**：42 份（4 策略文件 + 38 Feature 測試文件）
+> **總測試場景數**：576 個（E01～E04 共 308 + E05 共 223 + F038 共 45）
+> **最後更新**：2026-03-25
 
 ---
 
@@ -19,12 +19,13 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 涵蓋範圍
 
-- 37 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037），分屬 5 個 Epic：
+- 38 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038），分屬 5 個 Epic（F038 跨 E04/E05）：
   - **E01 驗證與登入**：F001、F002、F003
   - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010
   - **E03 資料來源管理**：F011、F012、F013、F014、F015、F016
   - **E04 資料擷取**：F017、F018、F019、F020、F021、F022、F023、F024、F025、F026
   - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037
+  - **E04+E05 系統啟動修復**：F038（孤兒任務回收，跨 E04/E05）
 - 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程；新增 F026 raw data 預覽效能）
 - 63 個錯誤碼的驗證覆蓋（新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
 
@@ -90,7 +91,9 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F036 | 目標表 Domain-Oriented 規劃 | P0-MVP | [F036-test.md](features/F036-test.md) | 20 | Draft |
 | F037 | 發布 Pipeline 版本 | P0-MVP | [F037-test.md](features/F037-test.md) | 37 | Draft |
 | **E05 小計** | | | **11 files** | **247** | |
-| **總合計** | | | **37 files** | **531** | |
+| **E04+E05 系統啟動修復** | | | | | |
+| F038 | 孤兒任務回收（系統啟動時自動修復 running 狀態） | P0-MVP | [F038-test.md](features/F038-test.md) | 45 | Draft |
+| **總合計** | | | **38 files** | **576** | |
 
 ---
 
@@ -140,7 +143,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036
+**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038
 
 **E04 資料擷取特殊注意：**
 - F017/F019 連鎖下拉選單：新增 `GET /datasources/:id/schemas` 與 `GET /datasources/:id/schemas/:schema/tables` 兩個端點測試；連線失敗回傳 503（DATASOURCE_SCHEMA_LOAD_FAILED / DATASOURCE_TABLE_LOAD_FAILED）
@@ -198,6 +201,17 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 - F029 前端 E2E 場景（TS-F029-029 ~ 031）：依賴畫布函式庫（建議 React Flow）行為，需搭配 Playwright/Cypress 執行
 - F029 changeSummary 邊界：500 字元合法（TS-F029-027），501 字元回傳 VALIDATION_ERROR（TS-F029-028）
 
+**F038 孤兒任務回收特殊注意（跨 E04/E05）：**
+- F038 無 HTTP 端點，測試入口為 `OrphanRecoveryService.onApplicationBootstrap()`
+- Unit 測試使用 Jest + mock Repository（4 個）+ mock DataSource；Integration 測試使用 Test Container PostgreSQL（僅 AppDB，無需外部 DB）
+- Integration 測試需透過 `@nestjs/testing` 的 `Test.createTestingModule()` 建立完整模組，不可直接 `new OrphanRecoveryService()`
+- `duration_ms` 計算使用 PostgreSQL 專屬語法 `EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000`，SQLite 不相容；Integration 測試只驗證 `IS NOT NULL`（不驗證精確值），需使用 Test Container PostgreSQL
+- `etl_pipelines` 無 `error_message` 欄位（BR-10）：測試需驗證 update `.set()` 中**不含** `error_message` 鍵
+- E04 和 E05 回收各自獨立 Transaction；E04 失敗不阻斷 E05，測試需覆蓋雙向獨立失敗場景（TS-F038-021, TS-F038-022）
+- 冪等性測試（TS-F038-027, TS-F038-044）：第二次執行時 DB 中無 `status='running'` 記錄，回收靜默通過，驗證無副作用
+- Module 順序驗證（TS-F038-040）：`AppModule.imports` 中 `OrphanRecoveryModule` 必須在 `SchedulerModule` 之前（架構靜態驗證）
+- 回收後操作驗證（TS-F038-041 ~ 043）：觸發 `triggerRun`、`deleteTask`、`triggerExecute` 時不應再拋出 `EXTRACTION_RUNNING` / `PIPELINE_RUNNING`，需依賴 E04 和 E05 的業務 Service
+
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
 - `test-levels.md` — 各層級測試策略
@@ -249,3 +263,4 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | 2026-03-20 | 新增 E05 ETL Pipeline 管理模組（F027–F036）共 10 個 Feature 測試文件，合計 210 個測試場景（F027:22、F028:17、F029:31、F030:20、F031:14、F032:21、F033:29、F034:15、F035:21、F036:20）；新增錯誤碼覆蓋：PIPELINE_NAME_EXISTS、VALIDATION_INVALID_CRON、PIPELINE_INVALID_CONNECTION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST；總場景數由 308 增至 518 | Test Designer Agent |
 | 2026-03-20 | 整合 test-index.md（v2.0）：統一版本號、修正場景合計、新增 E05 小計列；更新 test-levels.md（新增 E05 Unit/Integration/E2E/NFR 章節）；更新 test-data-strategy.md（新增 E05 種子資料與邊界值）；更新 risks-and-gaps.md（新增 E05-RISK-001~008） | Test Designer Agent |
 | 2026-03-23 | 新增 F037 發布 Pipeline 版本測試設計（37 個測試場景，含後端 Unit/Integration、前端 Unit、端到端流程、邊界條件）；新增錯誤碼覆蓋：PIPELINE_VERSION_ALREADY_PUBLISHED；總場景數由 518 增至 531 | Test Designer Agent |
+| 2026-03-25 | 新增 F038 孤兒任務回收測試設計（45 個測試場景：Unit 27 個 + Integration 17 個 + 效能 1 個）；涵蓋 E04 擷取任務回收、E05 Pipeline 回收、無孤兒靜默通過、Transaction 原子性、獨立 Transaction 隔離、Logger 驗證、冪等性、回收後操作解鎖（triggerRun/deleteTask/triggerExecute）及 NFR 效能閾值；總場景數由 531 增至 576 | Test Designer Agent |

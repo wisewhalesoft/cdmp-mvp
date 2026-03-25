@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: 1.3
+version: 1.4
 status: draft
-last_updated: 2026-03-20
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036]
+last_updated: 2026-03-25
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038]
 ---
 
 # 系統架構規格書
@@ -53,6 +53,7 @@ graph TD
         ExtractionMod["Extraction 模組<br/>擷取任務 CRUD、執行調度、日誌管理"]
         ETLMod["ETL Pipeline 模組<br/>Pipeline CRUD、版本管理<br/>視覺化定義、執行引擎"]
         Scheduler["Scheduler 模組<br/>健康檢查、擷取排程掃描<br/>Pipeline 排程掃描、清理 Cron Job"]
+        OrphanRecoveryMod["Orphan Recovery 模組<br/>啟動時孤兒任務回收"]
     end
 
     subgraph 持久層["持久層"]
@@ -74,6 +75,8 @@ graph TD
     Scheduler --> DatasourceMod
     Scheduler --> ExtractionMod
     Scheduler --> ETLMod
+    OrphanRecoveryMod --> ExtractionMod
+    OrphanRecoveryMod --> ETLMod
     ETLMod --> ExtractionMod
     AuthMod --> AppDB
     AuthMod --> TokenStore
@@ -89,7 +92,7 @@ graph TD
     classDef module fill:#e8f5e9,stroke:#388e3c,stroke-width:1px
     classDef external fill:#fff3e0,stroke:#e65100,stroke-width:1px
     class Browser layer
-    class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,ETLMod,Scheduler module
+    class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,ETLMod,Scheduler,OrphanRecoveryMod module
     class Email,TargetDB,AppDB,TokenStore external
 ```
 
@@ -267,6 +270,10 @@ graph TB
             CleanupCron["Cleanup Cron<br/>清理過期 Token / HealthLog<br/>清理過期 ExtractionLog<br/>清理過期 EtlPipelineLog<br/>修復孤立 running 狀態"]
         end
 
+        subgraph OrphanRecoveryModule["Orphan Recovery 模組（F038）"]
+            OrphanSvc["OrphanRecovery Service<br/>OnApplicationBootstrap<br/>回收孤兒 ExtractionTask（E04）<br/>回收孤兒 EtlPipeline（E05）"]
+        end
+
         subgraph SharedInfra["共用基礎建設"]
             CryptoUtil["Crypto Util<br/>AES-256 加解密"]
             HashUtil["Hash Util<br/>bcrypt 雜湊/比對"]
@@ -300,6 +307,8 @@ graph TB
     SchedulerModule --> DatasourceModule
     SchedulerModule --> ExtractionModule
     SchedulerModule --> ETLModule
+    OrphanRecoveryModule --> ExtractionModule
+    OrphanRecoveryModule --> ETLModule
     ETLModule --> ExtractionModule
     AuthModule --> SharedInfra
     AccountModule --> SharedInfra
@@ -316,12 +325,14 @@ graph TB
     classDef frontend fill:#dbeafe,stroke:#2563eb
     classDef module fill:#dcfce7,stroke:#16a34a
     classDef etlmodule fill:#fce7f3,stroke:#db2777
+    classDef orphan fill:#e8f4fd,stroke:#2196F3,stroke-width:1px
     classDef shared fill:#f3e8ff,stroke:#9333ea
     classDef persist fill:#fef9c3,stroke:#ca8a04
     classDef external fill:#fef2f2,stroke:#ef4444
     class Frontend,Router,AuthPages,AdminPages,UserPage,APIClient frontend
     class AuthModule,AccountModule,DatasourceModule,ExtractionModule,SchedulerModule module
     class ETLModule,PipelineSvc,PipelineDefSvc,PipelineExecSvc,PipelineVersionSvc etlmodule
+    class OrphanRecoveryModule,OrphanSvc orphan
     class SharedInfra,CryptoUtil,HashUtil,JWTUtil,EmailUtil,Logger shared
     class AppDB,TokenStore persist
     class EmailExt,TargetDBs external
@@ -478,6 +489,39 @@ graph TB
 **目標表 UPSERT 策略**（AD-E05-5）：Load 節點執行時以各目標表的主鍵（`customer_id`、`interaction_id`、`financial_id`、`service_id`）判斷 INSERT 或 UPDATE（PostgreSQL `ON CONFLICT DO UPDATE`）。目標表不透過 TypeORM Entity 管理，使用動態 SQL 執行寫入操作。
 
 **架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查與重複擷取觸發。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
+
+#### Orphan Recovery 模組（F038 新增）
+
+**架構決策 AD-F038-1：獨立 Module 設計**
+
+| 服務 | 職責 | 執行時機 | 相關 Feature |
+|------|------|---------|-------------|
+| OrphanRecovery Service | 在應用程式啟動時一次性回收孤兒任務；批次更新 `ExtractionTask`（E04）與 `EtlPipeline`（E05）的 `status=running` 記錄為 `failed`；同步更新對應的 Log 記錄 | `OnApplicationBootstrap`（HTTP Server 開始接受請求前執行） | F038 |
+
+**為何建立獨立 Module 而非放入 Extraction 或 ETL Module**
+
+- **職責分離**：回收邏輯是啟動時的系統行為，與 `ExtractionTaskModule`（業務 CRUD + 執行）和 `EtlModule`（Pipeline 管理）的業務職責無關。
+- **跨模組依賴**：`OrphanRecoveryModule` 需同時注入 E04（`ExtractionTask`、`ExtractionLog`）與 E05（`EtlPipeline`、`EtlPipelineLog`）四個 Repository；若放入任一現有模組，另一方需被 import，產生不必要的模組耦合。
+- **可測試性**：獨立 Module 可單獨進行整合測試，不需載入完整業務模組。
+- **未來擴展性**：若需加入其他啟動時修復邏輯（如資料一致性檢查），可集中於此 Module。
+
+**為何選擇 `OnApplicationBootstrap` 而非 `OnModuleInit`**
+
+`OnApplicationBootstrap` 在**所有模組 DI 完成後**、HTTP Server 開始接受請求前觸發，確保 TypeORM Repository 均已就緒，且 HTTP 請求在回收完成前不被處理。`OnModuleInit` 在單一模組初始化完成後立即觸發，此時其他模組的 Repository 可能尚未就緒，不適用。
+
+**Transaction 設計（AD-F038-2）**
+
+E04（擷取任務）與 E05（ETL Pipeline）的回收在各自獨立的 Transaction 中執行：
+- Transaction 1（E04）：批次更新 `extraction_tasks` + 批次更新對應 `extraction_logs`
+- Transaction 2（E05）：批次更新 `etl_pipelines` + 批次更新對應 `etl_pipeline_logs`
+- E04 Transaction 失敗不影響 E05 Transaction 的執行
+- 兩組失敗均僅記錄 `Logger.error()`，不拋出例外，不中止應用程式啟動
+
+**AppModule import 順序**
+
+`OrphanRecoveryModule` 須在 `ExtractionTaskModule` 與 `EtlModule` 之後、`SchedulerModule` 之前 import，確保孤兒回收在排程引擎首次掃描前完成。
+
+---
 
 #### 共用基礎建設（Shared Infrastructure）
 
@@ -977,7 +1021,34 @@ sequenceDiagram
     API-->>Browser: 200 {status, processedCount, progressPercent, currentNode}
 ```
 
-### 5.7 錯誤處理與韌性
+### 5.7 應用程式啟動生命週期（F038 新增）
+
+F038 `OrphanRecoveryModule` 透過 NestJS `OnApplicationBootstrap` 生命週期鉤子在啟動時執行孤兒回收，並在 HTTP Server 開始接受請求前完成。
+
+```mermaid
+sequenceDiagram
+    participant NestJS as NestJS Runtime
+    participant ORM as TypeORM DataSource
+    participant ORS as OrphanRecoveryService
+    participant Sched as SchedulerModule
+    participant HTTP as HTTP Server
+
+    NestJS->>ORM: 初始化 DataSource（連線 PostgreSQL）
+    NestJS->>NestJS: 所有 Module DI 完成
+    Note over NestJS: 依 AppModule import 順序依序觸發<br/>OnApplicationBootstrap
+    NestJS->>ORS: onApplicationBootstrap()
+    ORS->>ORS: recoverExtractionTasks()（Transaction 1 — E04）
+    ORS->>ORS: recoverEtlPipelines()（Transaction 2 — E05）
+    ORS->>NestJS: 回收完成（不論成功/失敗皆返回）
+    NestJS->>Sched: SchedulerModule OnApplicationBootstrap<br/>（排程引擎啟動）
+    NestJS->>HTTP: 開始監聽 HTTP 請求
+```
+
+**關鍵設計約束**：
+- `OrphanRecoveryModule` 必須在 `SchedulerModule` **之前** import，確保排程引擎首次掃描時，孤兒狀態已被修復，不會發生「孤兒任務因 `status=running` 被排程器跳過」的問題。
+- `OnApplicationBootstrap` 為同步阻塞執行，回收未完成前 HTTP Server 不會啟動；若回收耗時過長（NFR-002.12 要求 < 5 秒），應記錄警告。
+
+### 5.8 錯誤處理與韌性
 
 | 整合點 | 失敗場景 | 處理策略 |
 |--------|---------|---------|
@@ -993,7 +1064,7 @@ sequenceDiagram
 | Pipeline 排程掃描（每分鐘） | DB 查詢失敗 | 記錄 ERROR 日誌；跳過本次掃描；下次掃描正常繼續 |
 | 版本發布驗證（無測試執行記錄） | 前置條件不滿足 | 回傳 422 PIPELINE_PUBLISH_REQUIRES_TEST；不執行發布操作 |
 
-### 5.8 冪等性考量
+### 5.9 冪等性考量
 
 | 端點 | 冪等性 | 說明 |
 |------|-------|------|
@@ -1076,6 +1147,7 @@ graph LR
 | NFR-002.8 Pipeline 列表載入 | < 2 秒（F027） | `(status, deleted_at)` 複合索引；分頁強制執行（預設 10 筆/頁）；統計查詢（today processed）使用 DB 聚合（`DATE_TRUNC`，UTC+8 邊界換算） |
 | NFR-002.9 Pipeline 執行進度查詢 | p95 < 500ms | EtlPipelineLog 主鍵查詢；`(pipeline_id, started_at)` 複合索引；前端 5 秒 Polling |
 | NFR-002.10 Pipeline 版本 Diff | < 2 秒 | Diff 在應用層計算（比對兩個 JSONB definition）；版本數量有限（典型 < 50 版），應用層計算可接受 |
+| NFR-002.12 孤兒回收耗時（F038） | < 5 秒 | `OrphanRecoveryService` 使用批次 QueryBuilder（`WHERE id IN (...)`）取代逐筆更新；典型場景（0 ~ 數筆孤兒）耗時可忽略不計；若耗時超過 5 秒，Logger 應記錄警告供後續調查 |
 
 **效能風險**：
 - `DatasourceHealthLog` 隨時間增長（每 30 分鐘 × 資料來源數），90 天保留期需確保 Cleanup Cron 正常執行，否則查詢效能將逐漸下降。
@@ -1220,6 +1292,8 @@ Seed 流程：
 
 **建議**：MVP 階段忽略此問題。水平擴展前引入分散式鎖（Redis SET NX EX）或改用獨立排程服務（如 BullMQ、Celery）。
 
+**F038 的部分緩解**：F038 `OrphanRecoveryModule` 在單機架構下能有效處理進程崩潰後遺留的孤兒任務，確保重啟後排程器不會因 `status=running` 而跳過已中斷的任務。然而，F038 本身依賴單一進程假設（啟動時無其他執行中進程），在多副本部署時無法提供保護，反而可能造成多個實例同時執行回收邏輯（詳見風險 10）。
+
 ---
 
 #### 風險 3：Email 服務可用性影響密碼重設流程
@@ -1282,6 +1356,16 @@ Seed 流程：
 **影響**：受影響的 Pipeline 無法被排程觸發；Admin 需手動識別並重新執行。
 
 **建議**：Cleanup Cron 的孤立修復邏輯（AD-E05-2）：每日偵測 `started_at < NOW() - 2 hours AND finished_at IS NULL` 的 EtlPipelineLog 並標記為 `failed`，同步更新 EtlPipeline.status。
+
+---
+
+#### 風險 10（F038 新增）：孤兒回收機制的單進程架構假設
+
+**描述**：`OrphanRecoveryModule.onApplicationBootstrap()` 假設執行時系統中不存在其他正在運行的任務進程（即啟動即表示前一個進程已完全終止）。若未來採用多副本部署（水平擴展），多個實例同時啟動時將各自執行回收邏輯，對同一批孤兒任務進行重複更新（雖然結果冪等，不會造成資料錯誤，但存在不必要的競爭寫入）；更嚴重的是，若某個副本在另一個副本仍在執行任務時崩潰並重啟，回收邏輯可能錯誤地將仍在執行中（由其他副本負責）的任務標記為 `failed`。
+
+**影響**：多副本部署下，孤兒回收可能誤傷正在執行中的任務，造成任務執行中斷與狀態不一致。
+
+**建議**：MVP 單機部署不受影響。水平擴展前需將 `OrphanRecoveryModule` 改為基於**超時判斷**（`started_at < NOW() - 2 hours`，與 Cleanup Cron 的邏輯一致）或引入**分散式鎖**（Redis SET NX EX）確保只有一個實例執行回收。
 
 ---
 
@@ -1619,4 +1703,7 @@ cdmp-mvp/
 ---
 
 *本文件版本 1.3，由 System Architect Agent 依據 CDMP MVP 規格書（spec-index v1.4，2026-03-19；E05 ETL Pipeline 管理規格 F027-F036，2026-03-19）更新。*
+
+*本文件版本 1.4，由 System Architect Agent 依據 F038 孤兒任務回收規格（2026-03-25）更新。新增 `OrphanRecoveryModule` 模組架構、啟動生命週期時序（5.7 節）、NFR-002.12 效能對應、風險 2 緩解補充及風險 10。*
+
 *如有規格變更，本文件應同步更新。*
