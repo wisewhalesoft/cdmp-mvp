@@ -2,7 +2,7 @@
 type: test-design-index
 version: "2.0"
 status: draft
-last_updated: 2026-03-20
+last_updated: 2026-03-25
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038]
 ---
 
@@ -10,7 +10,8 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **測試文件總數**：42 份（4 策略文件 + 38 Feature 測試文件）
-> **總測試場景數**：576 個（E01～E04 共 308 + E05 共 223 + F038 共 45）
+> **總測試場景數**：596 個（E01～E04 共 308 + E05 共 243 + F038 共 45）
+> **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，約 45 欄），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
 > **最後更新**：2026-03-25
 
 ---
@@ -88,12 +89,12 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F033 | Pipeline 版本管理 | P1 | [F033-test.md](features/F033-test.md) | 29 | Draft |
 | F034 | 刪除 Pipeline | P1 | [F034-test.md](features/F034-test.md) | 15 | Draft |
 | F035 | Pipeline 監控儀表板 | P1 | [F035-test.md](features/F035-test.md) | 21 | Draft |
-| F036 | 目標表 Domain-Oriented 規劃 | P0-MVP | [F036-test.md](features/F036-test.md) | 20 | Draft |
+| F036 | 目標表 Domain-Oriented 規劃 | P0-MVP | [F036-test.md](features/F036-test.md) | 40 | Draft |
 | F037 | 發布 Pipeline 版本 | P0-MVP | [F037-test.md](features/F037-test.md) | 37 | Draft |
-| **E05 小計** | | | **11 files** | **247** | |
+| **E05 小計** | | | **11 files** | **267** | |
 | **E04+E05 系統啟動修復** | | | | | |
 | F038 | 孤兒任務回收（系統啟動時自動修復 running 狀態） | P0-MVP | [F038-test.md](features/F038-test.md) | 45 | Draft |
-| **總合計** | | | **38 files** | **576** | |
+| **總合計** | | | **38 files** | **596** | |
 
 ---
 
