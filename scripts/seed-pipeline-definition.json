@@ -1,0 +1,349 @@
+{
+  "definition": {
+    "nodes": [
+      {
+        "id": "e1",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 50 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[和潤]ZZIP",
+          "rawTable": "raw_101f6b3e",
+          "subtitle": "[和潤]小車/機車/商品客戶主檔擷取"
+        }
+      },
+      {
+        "id": "e2",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 200 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[和勁]ZZIP",
+          "rawTable": "raw_35d85504",
+          "subtitle": "[和勁]重車客戶主檔擷取"
+        }
+      },
+      {
+        "id": "m1",
+        "type": "pipelineNode",
+        "position": { "x": 300, "y": 125 },
+        "data": {
+          "nodeType": "merge",
+          "label": "ZZIP合併",
+          "subtitle": "FULL JOIN",
+          "joinType": "FULL",
+          "conditions": [{ "leftColumn": "CUSTO_NO", "rightColumn": "CUSTO_NO", "operator": "=" }]
+        }
+      },
+      {
+        "id": "d1",
+        "type": "pipelineNode",
+        "position": { "x": 500, "y": 125 },
+        "data": {
+          "nodeType": "dedup",
+          "label": "ZZIP去重",
+          "subtitle": "CUSTO_NO",
+          "keyColumns": ["CUSTO_NO"],
+          "keepStrategy": "latest_timestamp",
+          "timestampColumn": "UPDATE_DATE"
+        }
+      },
+      {
+        "id": "df1",
+        "type": "pipelineNode",
+        "position": { "x": 700, "y": 125 },
+        "data": {
+          "nodeType": "derived_field",
+          "label": "ZZIP電話合併",
+          "subtitle": "3 組電話",
+          "expressions": [
+            { "outputColumn": "home_phone", "expression": "mergePhone(CAREA_NO1, CTEL_NO1)" },
+            { "outputColumn": "contact_phone", "expression": "mergePhone(CAREA_NO2, CTEL_NO2)" },
+            { "outputColumn": "office_phone", "expression": "mergePhone(CO_CAREA_NO, CO_CTEL_NO)" }
+          ]
+        }
+      },
+      {
+        "id": "fm1",
+        "type": "pipelineNode",
+        "position": { "x": 900, "y": 125 },
+        "data": {
+          "nodeType": "field_mapping",
+          "label": "ZZIP映射",
+          "subtitle": "38 組對應",
+          "dropUnmapped": true,
+          "mappings": [
+            { "sourceColumn": "CUSTO_NO", "targetColumn": "source_customer_no", "defaultValue": null },
+            { "sourceColumn": "CUSTOM_MK", "targetColumn": "customer_type", "defaultValue": null },
+            { "sourceColumn": "CUS_NAME", "targetColumn": "name", "defaultValue": null },
+            { "sourceColumn": "ENG_NAME", "targetColumn": "english_name", "defaultValue": null },
+            { "sourceColumn": "CUS_SEX", "targetColumn": "gender", "defaultValue": null },
+            { "sourceColumn": "BITBE_DATE", "targetColumn": "date_of_birth", "defaultValue": null },
+            { "sourceColumn": "CMARRY_MK", "targetColumn": "marital_status", "defaultValue": null },
+            { "sourceColumn": "EDUCAT_BACK", "targetColumn": "education_code", "defaultValue": null },
+            { "sourceColumn": "CELLULAR", "targetColumn": "mobile_phone", "defaultValue": null },
+            { "sourceColumn": "home_phone", "targetColumn": "home_phone", "defaultValue": null },
+            { "sourceColumn": "contact_phone", "targetColumn": "contact_phone", "defaultValue": null },
+            { "sourceColumn": "office_phone", "targetColumn": "office_phone", "defaultValue": null },
+            { "sourceColumn": "E_MAIL", "targetColumn": "email", "defaultValue": null },
+            { "sourceColumn": "LINE_ACCT", "targetColumn": "line_account", "defaultValue": null },
+            { "sourceColumn": "HPOST_NUM", "targetColumn": "residential_zip", "defaultValue": null },
+            { "sourceColumn": "HPOST_ADD", "targetColumn": "residential_address", "defaultValue": null },
+            { "sourceColumn": "CPOST_NUM", "targetColumn": "mailing_zip", "defaultValue": null },
+            { "sourceColumn": "COMM_ADD", "targetColumn": "mailing_address", "defaultValue": null },
+            { "sourceColumn": "CO_NUM", "targetColumn": "company_zip", "defaultValue": null },
+            { "sourceColumn": "UNIT_ADD", "targetColumn": "company_address", "defaultValue": null },
+            { "sourceColumn": "CO_NAME", "targetColumn": "company_name", "defaultValue": null },
+            { "sourceColumn": "VOCATION_CODE", "targetColumn": "occupation_code", "defaultValue": null },
+            { "sourceColumn": "JOB_TITLE", "targetColumn": "job_title_code", "defaultValue": null },
+            { "sourceColumn": "JOB_LEVEL", "targetColumn": "job_level", "defaultValue": null },
+            { "sourceColumn": "INDUSTRY", "targetColumn": "industry_code", "defaultValue": null },
+            { "sourceColumn": "N_WORK_YEAR", "targetColumn": "work_years", "defaultValue": null },
+            { "sourceColumn": "COMP_DIM", "targetColumn": "company_scale", "defaultValue": null },
+            { "sourceColumn": "INCOME_MON", "targetColumn": "monthly_income", "defaultValue": null },
+            { "sourceColumn": "INCOME_APPROVED", "targetColumn": "approved_income", "defaultValue": null },
+            { "sourceColumn": "INCOME_SOURCE", "targetColumn": "income_source", "defaultValue": null },
+            { "sourceColumn": "CAPITAL", "targetColumn": "capital", "defaultValue": null },
+            { "sourceColumn": "IMMOPRO_MK", "targetColumn": "has_real_estate", "defaultValue": null },
+            { "sourceColumn": "DEBT_FLG", "targetColumn": "debt_flag", "defaultValue": null },
+            { "sourceColumn": "FINE_FLG", "targetColumn": "fine_flag", "defaultValue": null },
+            { "sourceColumn": "ADDR_FLG", "targetColumn": "address_anomaly_flag", "defaultValue": null },
+            { "sourceColumn": "LAND_FLG", "targetColumn": "mainland_flag", "defaultValue": null },
+            { "sourceColumn": "INSERT_DATE", "targetColumn": "source_created_at", "defaultValue": null },
+            { "sourceColumn": "UPDATE_DATE", "targetColumn": "source_updated_at", "defaultValue": null }
+          ]
+        }
+      },
+      {
+        "id": "e3",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 400 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[和潤]MLMC",
+          "rawTable": "raw_1138803c",
+          "subtitle": "[和潤]企金客戶主檔擷取"
+        }
+      },
+      {
+        "id": "e4",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 550 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[和勁]MLMC",
+          "rawTable": "raw_aec93e7c",
+          "subtitle": "[和勁]企金客戶主檔擷取"
+        }
+      },
+      {
+        "id": "m2",
+        "type": "pipelineNode",
+        "position": { "x": 300, "y": 475 },
+        "data": {
+          "nodeType": "merge",
+          "label": "MLMC合併1",
+          "subtitle": "FULL JOIN",
+          "joinType": "FULL",
+          "conditions": [{ "leftColumn": "CUSTID", "rightColumn": "CUSTID", "operator": "=" }]
+        }
+      },
+      {
+        "id": "e5",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 700 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[興業]MLMC",
+          "rawTable": "raw_50172f04",
+          "subtitle": "[興業]客戶主檔擷取"
+        }
+      },
+      {
+        "id": "m3",
+        "type": "pipelineNode",
+        "position": { "x": 500, "y": 550 },
+        "data": {
+          "nodeType": "merge",
+          "label": "MLMC合併2",
+          "subtitle": "FULL JOIN",
+          "joinType": "FULL",
+          "conditions": [{ "leftColumn": "CUSTID", "rightColumn": "CUSTID", "operator": "=" }]
+        }
+      },
+      {
+        "id": "d2",
+        "type": "pipelineNode",
+        "position": { "x": 700, "y": 550 },
+        "data": {
+          "nodeType": "dedup",
+          "label": "MLMC去重",
+          "subtitle": "CUSTID",
+          "keyColumns": ["CUSTID"],
+          "keepStrategy": "latest_timestamp",
+          "timestampColumn": "U_SYSDT"
+        }
+      },
+      {
+        "id": "tc1",
+        "type": "pipelineNode",
+        "position": { "x": 900, "y": 550 },
+        "data": {
+          "nodeType": "type_cast",
+          "label": "MLMC型別轉換",
+          "subtitle": "2 欄位",
+          "column": "CUSTNOWCAPTIAL",
+          "targetType": "DECIMAL",
+          "castRules": [
+            { "column": "CUSTNOWCAPTIAL", "targetType": "DECIMAL" },
+            { "column": "CUSTCREATECAPTIAL", "targetType": "DECIMAL" }
+          ]
+        }
+      },
+      {
+        "id": "df2",
+        "type": "pipelineNode",
+        "position": { "x": 1100, "y": 550 },
+        "data": {
+          "nodeType": "derived_field",
+          "label": "MLMC轉換",
+          "subtitle": "customer_type + phone",
+          "expressions": [
+            { "outputColumn": "customer_type_mapped", "expression": "padStart(CUTYPE, 2, '0')" },
+            { "outputColumn": "office_phone", "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)" }
+          ]
+        }
+      },
+      {
+        "id": "fm2",
+        "type": "pipelineNode",
+        "position": { "x": 1300, "y": 550 },
+        "data": {
+          "nodeType": "field_mapping",
+          "label": "MLMC映射",
+          "subtitle": "21 組對應",
+          "dropUnmapped": true,
+          "mappings": [
+            { "sourceColumn": "CUSTID", "targetColumn": "source_customer_no", "defaultValue": null },
+            { "sourceColumn": "customer_type_mapped", "targetColumn": "customer_type", "defaultValue": null },
+            { "sourceColumn": "CUSTNAME", "targetColumn": "name", "defaultValue": null },
+            { "sourceColumn": "CUSTMOBILE", "targetColumn": "mobile_phone", "defaultValue": null },
+            { "sourceColumn": "office_phone", "targetColumn": "office_phone", "defaultValue": null },
+            { "sourceColumn": "CUSTZIPCODE", "targetColumn": "mailing_zip", "defaultValue": null },
+            { "sourceColumn": "CUSTADDR", "targetColumn": "mailing_address", "defaultValue": null },
+            { "sourceColumn": "BUSINESSZIPCODE", "targetColumn": "company_zip", "defaultValue": null },
+            { "sourceColumn": "BUSINESSADDR", "targetColumn": "company_address", "defaultValue": null },
+            { "sourceColumn": "BUSINESS", "targetColumn": "industry_desc", "defaultValue": null },
+            { "sourceColumn": "CUSTNOWCAPTIAL", "targetColumn": "capital", "defaultValue": null },
+            { "sourceColumn": "CUSTCREATECAPTIAL", "targetColumn": "established_capital", "defaultValue": null },
+            { "sourceColumn": "FAMOUNT", "targetColumn": "credit_limit", "defaultValue": null },
+            { "sourceColumn": "EMPLOYEE", "targetColumn": "employee_count", "defaultValue": null },
+            { "sourceColumn": "LISTED", "targetColumn": "is_listed", "defaultValue": null },
+            { "sourceColumn": "OWNER", "targetColumn": "owner_name", "defaultValue": null },
+            { "sourceColumn": "OWNERID", "targetColumn": "owner_id", "defaultValue": null },
+            { "sourceColumn": "OWNERBIRTH", "targetColumn": "owner_birth", "defaultValue": null },
+            { "sourceColumn": "PARENTCUSTID", "targetColumn": "parent_customer_id", "defaultValue": null },
+            { "sourceColumn": "CUSTCREATEDATE", "targetColumn": "source_created_at", "defaultValue": null },
+            { "sourceColumn": "U_SYSDT", "targetColumn": "source_updated_at", "defaultValue": null }
+          ]
+        }
+      },
+      {
+        "id": "m4",
+        "type": "pipelineNode",
+        "position": { "x": 1300, "y": 325 },
+        "data": {
+          "nodeType": "merge",
+          "label": "最終合併",
+          "subtitle": "FULL OUTER JOIN",
+          "joinType": "FULL",
+          "conditions": [{ "leftColumn": "source_customer_no", "rightColumn": "source_customer_no", "operator": "=" }]
+        }
+      },
+      {
+        "id": "cd1",
+        "type": "pipelineNode",
+        "position": { "x": 1500, "y": 325 },
+        "data": {
+          "nodeType": "conditional",
+          "label": "衝突解決",
+          "subtitle": "以較新者為準",
+          "rules": [
+            {
+              "targetColumn": "name",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.name" }],
+              "elseValue": "right.name"
+            },
+            {
+              "targetColumn": "mobile_phone",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.mobile_phone" }],
+              "elseValue": "right.mobile_phone"
+            },
+            {
+              "targetColumn": "mailing_address",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.mailing_address" }],
+              "elseValue": "right.mailing_address"
+            },
+            {
+              "targetColumn": "capital",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.capital" }],
+              "elseValue": "right.capital"
+            },
+            {
+              "targetColumn": "office_phone",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.office_phone" }],
+              "elseValue": "right.office_phone"
+            }
+          ]
+        }
+      },
+      {
+        "id": "df3",
+        "type": "pipelineNode",
+        "position": { "x": 1700, "y": 325 },
+        "data": {
+          "nodeType": "derived_field",
+          "label": "data_source標記",
+          "subtitle": "data_source + UUID",
+          "expressions": [
+            { "outputColumn": "data_source", "expression": "CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER' WHEN left.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M' ELSE 'MLMCUSTOMER' END" },
+            { "outputColumn": "customer_id", "expression": "gen_random_uuid()" }
+          ]
+        }
+      },
+      {
+        "id": "tl1",
+        "type": "pipelineNode",
+        "position": { "x": 1900, "y": 325 },
+        "data": {
+          "nodeType": "target_load",
+          "label": "載入 customer_core",
+          "subtitle": "customer_core",
+          "targetTable": "customer_core",
+          "fieldMappings": {}
+        }
+      }
+    ],
+    "edges": [
+      { "id": "edge-e1-m1", "source": "e1", "target": "m1", "targetHandle": "left-input" },
+      { "id": "edge-e2-m1", "source": "e2", "target": "m1", "targetHandle": "right-input" },
+      { "id": "edge-m1-d1", "source": "m1", "target": "d1" },
+      { "id": "edge-d1-df1", "source": "d1", "target": "df1" },
+      { "id": "edge-df1-fm1", "source": "df1", "target": "fm1" },
+      { "id": "edge-e3-m2", "source": "e3", "target": "m2", "targetHandle": "left-input" },
+      { "id": "edge-e4-m2", "source": "e4", "target": "m2", "targetHandle": "right-input" },
+      { "id": "edge-m2-m3", "source": "m2", "target": "m3", "targetHandle": "left-input" },
+      { "id": "edge-e5-m3", "source": "e5", "target": "m3", "targetHandle": "right-input" },
+      { "id": "edge-m3-d2", "source": "m3", "target": "d2" },
+      { "id": "edge-d2-tc1", "source": "d2", "target": "tc1" },
+      { "id": "edge-tc1-df2", "source": "tc1", "target": "df2" },
+      { "id": "edge-df2-fm2", "source": "df2", "target": "fm2" },
+      { "id": "edge-fm1-m4", "source": "fm1", "target": "m4", "targetHandle": "left-input" },
+      { "id": "edge-fm2-m4", "source": "fm2", "target": "m4", "targetHandle": "right-input" },
+      { "id": "edge-m4-cd1", "source": "m4", "target": "cd1" },
+      { "id": "edge-cd1-df3", "source": "cd1", "target": "df3" },
+      { "id": "edge-df3-tl1", "source": "df3", "target": "tl1" }
+    ]
+  },
+  "changeSummary": "初版：5 來源整合策略（2 ZZIP + 3 MLMC → customer_core）"
+}
