@@ -6,7 +6,7 @@ import { BaseExecutor } from './base-executor';
 const CONNECT_TIMEOUT = 10000;
 
 export interface MSSQLDriver {
-  connect(config: any): Promise<any>;
+  ConnectionPool: new (config: any) => any;
 }
 
 export class MSSQLExecutor extends BaseExecutor {
@@ -21,30 +21,32 @@ export class MSSQLExecutor extends BaseExecutor {
     return '[' + name.replace(/\]/g, ']]') + ']';
   }
 
+  /**
+   * Create an isolated ConnectionPool per call to avoid global pool conflicts
+   * when multiple extraction tasks run concurrently.
+   */
   private async withConnection<T>(
     datasourceId: string,
     fn: (pool: any) => Promise<T>,
   ): Promise<T> {
     const connInfo = await this.resolveConnection(datasourceId);
-    let pool: any;
+    const pool = new this.driver.ConnectionPool({
+      server: connInfo.host,
+      port: connInfo.port,
+      database: connInfo.database,
+      user: connInfo.username,
+      password: connInfo.password,
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+        connectTimeout: CONNECT_TIMEOUT,
+      },
+    });
     try {
-      pool = await this.driver.connect({
-        server: connInfo.host,
-        port: connInfo.port,
-        database: connInfo.database,
-        user: connInfo.username,
-        password: connInfo.password,
-        options: {
-          encrypt: false,
-          trustServerCertificate: true,
-          connectTimeout: CONNECT_TIMEOUT,
-        },
-      });
+      await pool.connect();
       return await fn(pool);
     } finally {
-      if (pool) {
-        try { await pool.close(); } catch { /* ignore */ }
-      }
+      try { await pool.close(); } catch { /* ignore */ }
     }
   }
 

@@ -211,6 +211,10 @@ export class RawDataService {
   ): Promise<void> {
     this.validateTableName(rawTableName);
 
+    if (columns.length === 0) {
+      throw new Error(`Cannot create raw table "${rawTableName}" with no business columns — source metadata may be empty`);
+    }
+
     const primaryColumns = columns.filter((c) => c.isPrimary);
     const hasPrimary = primaryColumns.length > 0;
     const columnDefs: string[] = [];
