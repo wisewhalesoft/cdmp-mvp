@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pipeline 節點 Badge + Tooltip 原型 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', muted: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    .canvas-bg {
+      background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
+      background-size: 20px 20px;
+      overflow: auto;
+    }
+
+    /* Node card */
+    .node-card {
+      position: absolute;
+      width: 160px;
+      background: #fff;
+      border: 1.5px solid #E5E7EB;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: box-shadow 0.2s, border-color 0.2s;
+      z-index: 2;
+    }
+    .node-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); border-color: #D1D5DB; }
+
+    /* Node type color bars */
+    .node-bar { height: 4px; border-radius: 8px 8px 0 0; }
+    .node-bar-extract { background: #2563EB; }
+    .node-bar-merge { background: #F59E0B; }
+    .node-bar-dedup { background: #9CA3AF; }
+    .node-bar-derived { background: #22C55E; }
+    .node-bar-mapping { background: #EF4444; }
+    .node-bar-typecast { background: #9CA3AF; }
+    .node-bar-conditional { background: #F59E0B; }
+    .node-bar-load { background: #22C55E; }
+
+    /* Badge */
+    .node-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      line-height: 1;
+      padding: 3px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      cursor: default;
+      position: relative;
+    }
+    .node-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Edge lines */
+    .edge-line {
+      position: absolute;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Tooltip */
+    .badge-tooltip {
+      position: fixed;
+      width: 320px;
+      max-height: 400px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      padding: 12px;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      font-size: 13px;
+      color: #374151;
+    }
+    .badge-tooltip.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .badge-tooltip::-webkit-scrollbar { width: 4px; }
+    .badge-tooltip::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+
+    .tooltip-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #F3F4F6;
+    }
+    .tooltip-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 0;
+      font-size: 12px;
+    }
+    .tooltip-row .field-dot {
+      width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+    }
+    .tooltip-section {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #F3F4F6;
+    }
+    .tooltip-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #9CA3AF;
+      margin-bottom: 4px;
+    }
+    .mapping-arrow { color: #9CA3AF; font-size: 11px; }
+    .expression-code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      background: #F9FAFB;
+      padding: 2px 4px;
+      border-radius: 3px;
+      color: #6B7280;
+      word-break: break-all;
+    }
+    .progress-bar-bg {
+      height: 6px;
+      background: #F3F4F6;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    /* Port dots on node */
+    .port {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #D1D5DB; border: 1.5px solid #fff;
+      position: absolute;
+    }
+    .port-left { left: -5px; top: 50%; transform: translateY(-50%); }
+    .port-right { right: -5px; top: 50%; transform: translateY(-50%); }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Top Bar -->
+  <header class="fixed top-0 left-0 right-0 h-12 bg-white border-b border-border flex items-center justify-between px-4 z-30">
+    <div class="flex items-center gap-3">
+      <span class="text-gray-400"><i data-lucide="arrow-left" class="w-5 h-5"></i></span>
+      <nav class="flex items-center text-sm text-gray-500">
+        <span>Pipeline 清單</span>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-gray-800 font-medium">客戶資料整合</span>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-primary font-medium">編輯器</span>
+      </nav>
+      <span class="ml-3 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">v3 (draft)</span>
+    </div>
+    <div class="flex items-center gap-2 text-sm text-gray-500">
+      <span class="px-2 py-1 rounded bg-blue-50 text-blue-600 text-xs font-medium">Hover 任意 Badge 查看 Tooltip</span>
+    </div>
+  </header>
+
+  <!-- Canvas -->
+  <div id="canvas" class="canvas-bg fixed top-12 left-0 right-0 bottom-0" style="overflow:auto;">
+    <!-- Inner container sized to fit all nodes -->
+    <div id="canvas-inner" style="position:relative; min-width:2120px; min-height:840px;">
+      <!-- SVG for edges -->
+      <svg id="edge-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none;"></svg>
+      <!-- Nodes rendered by JS -->
+    </div>
+  </div>
+
+  <!-- Tooltip Container (shared singleton) -->
+  <div id="tooltip" class="badge-tooltip"></div>
+
+  <script>
+  // ===== DATA =====
+  const NODES = [
+    // Extract
+    { id:'e1', x:40, y:60, type:'extract', label:'[和潤]ZZIP', sub:'小車/機車/商品客戶主檔', fieldCount:53,
+      fields:['CUSTO_NO','CUSTOM_MK','CUS_NAME','ENG_NAME','CUS_SEX','BITBE_DATE','CMARRY_MK','EDUCAT_BACK','CELLULAR','CAREA_NO1','CTEL_NO1','CAREA_NO2','CTEL_NO2','CO_CAREA_NO','CO_CTEL_NO','E_MAIL','LINE_ACCT','HPOST_NUM','HPOST_ADD','CPOST_NUM','COMM_ADD','CO_NUM','UNIT_ADD','CO_NAME','VOCATION_CODE','JOB_TITLE','JOB_LEVEL','INDUSTRY','N_WORK_YEAR','COMP_DIM','INCOME_MON','INCOME_APPROVED','INCOME_SOURCE','CAPITAL','IMMOPRO_MK','DEBT_FLG','FINE_FLG','ADDR_FLG','LAND_FLG','INSERT_DATE','UPDATE_DATE','CUSTO_STAT','CAREA_NO3','CTEL_NO3','TEL_FLG1','TEL_FLG2','TEL_FLG3','ADDR_FLG2','TAX_NO','NATL_CD','CRD_RATING','REMARK','BATCH_NO'] },
+    { id:'e2', x:40, y:200, type:'extract', label:'[和勁]ZZIP', sub:'重車客戶主檔', fieldCount:53,
+      fields:['CUSTO_NO','CUSTOM_MK','CUS_NAME','ENG_NAME','CUS_SEX','BITBE_DATE','CMARRY_MK','EDUCAT_BACK','CELLULAR','CAREA_NO1','CTEL_NO1','CAREA_NO2','CTEL_NO2','CO_CAREA_NO','CO_CTEL_NO','E_MAIL','LINE_ACCT','HPOST_NUM','HPOST_ADD','CPOST_NUM','COMM_ADD','CO_NUM','UNIT_ADD','CO_NAME','VOCATION_CODE','JOB_TITLE','JOB_LEVEL','INDUSTRY','N_WORK_YEAR','COMP_DIM','INCOME_MON','INCOME_APPROVED','INCOME_SOURCE','CAPITAL','IMMOPRO_MK','DEBT_FLG','FINE_FLG','ADDR_FLG','LAND_FLG','INSERT_DATE','UPDATE_DATE','CUSTO_STAT','CAREA_NO3','CTEL_NO3','TEL_FLG1','TEL_FLG2','TEL_FLG3','ADDR_FLG2','TAX_NO','NATL_CD','CRD_RATING','REMARK','BATCH_NO'] },
+    { id:'e3', x:40, y:410, type:'extract', label:'[和潤]MLMC', sub:'企金客戶主檔', fieldCount:47,
+      fields:['CUSTID','CUTYPE','CUSTNAME','CUSTMOBILE','BUSINESSTTELCODE','BUSINESSTTEL','CUSTZIPCODE','CUSTADDR','BUSINESSZIPCODE','BUSINESSADDR','BUSINESS','CUSTNOWCAPTIAL','CUSTCREATECAPTIAL','FAMOUNT','EMPLOYEE','LISTED','OWNER','OWNERID','OWNERBIRTH','PARENTCUSTID','CUSTCREATEDATE','U_SYSDT','CUSTIDNO','CUSTCOUNTRY','CUSTCITY','CUSTDISTRICT','CUSTREGZIPCODE','CUSTREGADDR','CUSTTEL','CUSTTELCODE','CUSTFAX','CUSTFAXCODE','BUSINESSTEL','BUSINESSTELCODE2','BUSINESSFAX','BUSINESSFAXCODE','BUSINESSCITY','BUSINESSDISTRICT','CONTACT1','CONTACTTEL1','CONTACT2','CONTACTTEL2','CUSTTYPE2','CUSTSTATUS','REMARK','TAXID','BATCH_NO'] },
+    { id:'e4', x:40, y:550, type:'extract', label:'[和勁]MLMC', sub:'企金客戶主檔', fieldCount:47,
+      fields:['CUSTID','CUTYPE','CUSTNAME','CUSTMOBILE','BUSINESSTTELCODE','BUSINESSTTEL','CUSTZIPCODE','CUSTADDR','BUSINESSZIPCODE','BUSINESSADDR','BUSINESS','CUSTNOWCAPTIAL','CUSTCREATECAPTIAL','FAMOUNT','EMPLOYEE','LISTED','OWNER','OWNERID','OWNERBIRTH','PARENTCUSTID','CUSTCREATEDATE','U_SYSDT','CUSTIDNO','CUSTCOUNTRY','CUSTCITY','CUSTDISTRICT','CUSTREGZIPCODE','CUSTREGADDR','CUSTTEL','CUSTTELCODE','CUSTFAX','CUSTFAXCODE','BUSINESSTEL','BUSINESSTELCODE2','BUSINESSFAX','BUSINESSFAXCODE','BUSINESSCITY','BUSINESSDISTRICT','CONTACT1','CONTACTTEL1','CONTACT2','CONTACTTEL2','CUSTTYPE2','CUSTSTATUS','REMARK','TAXID','BATCH_NO'] },
+    { id:'e5', x:40, y:700, type:'extract', label:'[興業]MLMC', sub:'客戶主檔', fieldCount:47,
+      fields:['CUSTID','CUTYPE','CUSTNAME','CUSTMOBILE','BUSINESSTTELCODE','BUSINESSTTEL','CUSTZIPCODE','CUSTADDR','BUSINESSZIPCODE','BUSINESSADDR','BUSINESS','CUSTNOWCAPTIAL','CUSTCREATECAPTIAL','FAMOUNT','EMPLOYEE','LISTED','OWNER','OWNERID','OWNERBIRTH','PARENTCUSTID','CUSTCREATEDATE','U_SYSDT','CUSTIDNO','CUSTCOUNTRY','CUSTCITY','CUSTDISTRICT','CUSTREGZIPCODE','CUSTREGADDR','CUSTTEL','CUSTTELCODE','CUSTFAX','CUSTFAXCODE','BUSINESSTEL','BUSINESSTELCODE2','BUSINESSFAX','BUSINESSFAXCODE','BUSINESSCITY','BUSINESSDISTRICT','CONTACT1','CONTACTTEL1','CONTACT2','CONTACTTEL2','CUSTTYPE2','CUSTSTATUS','REMARK','TAXID','BATCH_NO'] },
+
+    // Merge
+    { id:'m1', x:260, y:110, type:'merge', label:'ZZIP合併', sub:'FULL JOIN on CUSTO_NO', leftCount:53, rightCount:53, outputCount:53, overlap:53,
+      joinKey:'CUSTO_NO', joinType:'FULL' },
+    { id:'m2', x:260, y:460, type:'merge', label:'MLMC合併1', sub:'FULL JOIN on CUSTID', leftCount:47, rightCount:47, outputCount:47, overlap:47,
+      joinKey:'CUSTID', joinType:'FULL' },
+    { id:'m3', x:460, y:530, type:'merge', label:'MLMC合併2', sub:'FULL JOIN on CUSTID', leftCount:47, rightCount:47, outputCount:47, overlap:47,
+      joinKey:'CUSTID', joinType:'FULL' },
+
+    // Dedup
+    { id:'d1', x:460, y:110, type:'dedup', label:'ZZIP去重', sub:'CUSTO_NO / latest', outputCount:53,
+      keyCol:'CUSTO_NO', strategy:'latest_timestamp', tsCol:'UPDATE_DATE' },
+    { id:'d2', x:660, y:530, type:'dedup', label:'MLMC去重', sub:'CUSTID / latest', outputCount:47,
+      keyCol:'CUSTID', strategy:'latest_timestamp', tsCol:'U_SYSDT' },
+
+    // Derived field
+    { id:'df1', x:660, y:110, type:'derived', label:'ZZIP電話合併', sub:'+3 衍生欄位',
+      expressions:[
+        { name:'home_phone', expr:'mergePhone(CAREA_NO1, CTEL_NO1)', outType:'VARCHAR' },
+        { name:'contact_phone', expr:'mergePhone(CAREA_NO2, CTEL_NO2)', outType:'VARCHAR' },
+        { name:'office_phone', expr:'mergePhone(CO_CAREA_NO, CO_CTEL_NO)', outType:'VARCHAR' }
+      ]},
+    { id:'df2', x:1060, y:530, type:'derived', label:'MLMC轉換', sub:'+2 衍生欄位',
+      expressions:[
+        { name:'customer_type_mapped', expr:"padStart(CUTYPE, 2, '0')", outType:'VARCHAR' },
+        { name:'office_phone', expr:'mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)', outType:'VARCHAR' }
+      ]},
+    { id:'df3', x:1660, y:310, type:'derived', label:'data_source標記', sub:'+2 衍生欄位',
+      expressions:[
+        { name:'data_source', expr:"CASE WHEN left.src IS NOT NULL AND right.src IS NOT NULL THEN 'ZZIP+MLMC' WHEN left.src IS NOT NULL THEN 'ZZIP' ELSE 'MLMC' END", outType:'VARCHAR' },
+        { name:'customer_id', expr:'gen_random_uuid()', outType:'UUID' }
+      ]},
+
+    // Field mapping
+    { id:'fm1', x:860, y:110, type:'mapping', label:'ZZIP映射', sub:'53 → 38',
+      inputCount:53, outputCount:38, dropCount:15,
+      mappings:[
+        {s:'CUSTO_NO',t:'source_customer_no'},{s:'CUSTOM_MK',t:'customer_type'},{s:'CUS_NAME',t:'name'},
+        {s:'ENG_NAME',t:'english_name'},{s:'CUS_SEX',t:'gender'},{s:'BITBE_DATE',t:'date_of_birth'},
+        {s:'CMARRY_MK',t:'marital_status'},{s:'EDUCAT_BACK',t:'education_code'}
+      ],
+      allMappings:[
+        'CUSTO_NO → source_customer_no','CUSTOM_MK → customer_type','CUS_NAME → name','ENG_NAME → english_name',
+        'CUS_SEX → gender','BITBE_DATE → date_of_birth','CMARRY_MK → marital_status','EDUCAT_BACK → education_code',
+        'CELLULAR → mobile_phone','home_phone → home_phone','contact_phone → contact_phone','office_phone → office_phone',
+        'E_MAIL → email','LINE_ACCT → line_account','HPOST_NUM → residential_zip','HPOST_ADD → residential_address',
+        'CPOST_NUM → mailing_zip','COMM_ADD → mailing_address','CO_NUM → company_zip','UNIT_ADD → company_address',
+        'CO_NAME → company_name','VOCATION_CODE → occupation_code','JOB_TITLE → job_title_code','JOB_LEVEL → job_level',
+        'INDUSTRY → industry_code','N_WORK_YEAR → work_years','COMP_DIM → company_scale','INCOME_MON → monthly_income',
+        'INCOME_APPROVED → approved_income','INCOME_SOURCE → income_source','CAPITAL → capital',
+        'IMMOPRO_MK → has_real_estate','DEBT_FLG → debt_flag','FINE_FLG → fine_flag',
+        'ADDR_FLG → address_anomaly_flag','LAND_FLG → mainland_flag','INSERT_DATE → source_created_at','UPDATE_DATE → source_updated_at'
+      ],
+      dropped:['CUSTO_STAT','CAREA_NO1','CTEL_NO1','CAREA_NO2','CTEL_NO2','CO_CAREA_NO','CO_CTEL_NO','CAREA_NO3','CTEL_NO3','TEL_FLG1','TEL_FLG2','TEL_FLG3','ADDR_FLG2','TAX_NO','NATL_CD']
+    },
+    { id:'fm2', x:1260, y:530, type:'mapping', label:'MLMC映射', sub:'47 → 21',
+      inputCount:47, outputCount:21, dropCount:26,
+      mappings:[
+        {s:'CUSTID',t:'source_customer_no'},{s:'customer_type_mapped',t:'customer_type'},{s:'CUSTNAME',t:'name'},
+        {s:'CUSTMOBILE',t:'mobile_phone'},{s:'office_phone',t:'office_phone'},{s:'CUSTZIPCODE',t:'mailing_zip'},
+        {s:'CUSTADDR',t:'mailing_address'},{s:'BUSINESSZIPCODE',t:'company_zip'}
+      ],
+      allMappings:[
+        'CUSTID → source_customer_no','customer_type_mapped → customer_type','CUSTNAME → name',
+        'CUSTMOBILE → mobile_phone','office_phone → office_phone','CUSTZIPCODE → mailing_zip',
+        'CUSTADDR → mailing_address','BUSINESSZIPCODE → company_zip','BUSINESSADDR → company_address',
+        'BUSINESS → industry_desc','CUSTNOWCAPTIAL → capital','CUSTCREATECAPTIAL → established_capital',
+        'FAMOUNT → credit_limit','EMPLOYEE → employee_count','LISTED → is_listed','OWNER → owner_name',
+        'OWNERID → owner_id','OWNERBIRTH → owner_birth','PARENTCUSTID → parent_customer_id',
+        'CUSTCREATEDATE → source_created_at','U_SYSDT → source_updated_at'
+      ],
+      dropped:['CUSTIDNO','CUSTCOUNTRY','CUSTCITY','CUSTDISTRICT','CUSTREGZIPCODE','CUSTREGADDR','CUSTTEL','CUSTTELCODE','CUSTFAX','CUSTFAXCODE','BUSINESSTEL','BUSINESSTELCODE2','BUSINESSFAX','BUSINESSFAXCODE','BUSINESSCITY','BUSINESSDISTRICT','CONTACT1','CONTACTTEL1','CONTACT2','CONTACTTEL2','CUSTTYPE2','CUSTSTATUS','REMARK','TAXID','BATCH_NO','CUTYPE']
+    },
+
+    // Merge final
+    { id:'m4', x:1260, y:310, type:'merge', label:'最終合併', sub:'FULL OUTER JOIN', leftCount:38, rightCount:21, outputCount:42, overlap:17,
+      joinKey:'source_customer_no', joinType:'FULL OUTER' },
+
+    // Conditional
+    { id:'cd1', x:1460, y:310, type:'conditional', label:'衝突解決', sub:'以較新者為準',
+      rules:[
+        { target:'name', when:'left.source_updated_at >= right.source_updated_at', then:'left.name', else_:'right.name' },
+        { target:'mobile_phone', when:'left.source_updated_at >= right.source_updated_at', then:'left.mobile_phone', else_:'right.mobile_phone' },
+        { target:'mailing_address', when:'left.source_updated_at >= right.source_updated_at', then:'left.mailing_address', else_:'right.mailing_address' },
+        { target:'capital', when:'left.source_updated_at >= right.source_updated_at', then:'left.capital', else_:'right.capital' },
+        { target:'office_phone', when:'left.source_updated_at >= right.source_updated_at', then:'left.office_phone', else_:'right.office_phone' }
+      ]},
+
+    // Type cast
+    { id:'tc1', x:860, y:530, type:'typecast', label:'MLMC型別轉換', sub:'2 欄位',
+      casts:[
+        { col:'CUSTNOWCAPTIAL', from:'VARCHAR', to:'DECIMAL' },
+        { col:'CUSTCREATECAPTIAL', from:'VARCHAR', to:'DECIMAL' }
+      ]},
+
+    // Target load
+    { id:'tl1', x:1860, y:310, type:'load', label:'載入 customer_core', sub:'customer_core',
+      targetTable:'customer_core', fieldCount:49,
+      categories:[
+        {name:'A. 客戶識別',count:4,total:4},{name:'B. 基本資料',count:5,total:5},{name:'C. 聯絡方式',count:7,total:7},
+        {name:'D. 地址',count:6,total:6},{name:'E. 職業/收入',count:10,total:10},{name:'F. 風控',count:5,total:5},
+        {name:'G. 企金資訊',count:7,total:7},{name:'H. 系統欄位',count:5,total:5}
+      ]}
+  ];
+
+  const EDGES = [
+    ['e1','m1'],['e2','m1'],['m1','d1'],['d1','df1'],['df1','fm1'],
+    ['e3','m2'],['e4','m2'],['m2','m3'],['e5','m3'],['m3','d2'],['d2','tc1'],['tc1','df2'],['df2','fm2'],
+    ['fm1','m4'],['fm2','m4'],['m4','cd1'],['cd1','df3'],['df3','tl1']
+  ];
+
+  // Color config per type
+  const TYPE_COLORS = {
+    extract: { hex:'#2563EB', bg:'rgba(37,99,235,0.1)', text:'#2563EB' },
+    merge: { hex:'#F59E0B', bg:'rgba(245,158,11,0.1)', text:'#B45309' },
+    dedup: { hex:'#9CA3AF', bg:'rgba(156,163,175,0.1)', text:'#6B7280' },
+    derived: { hex:'#22C55E', bg:'rgba(34,197,94,0.1)', text:'#16A34A' },
+    mapping: { hex:'#EF4444', bg:'rgba(239,68,68,0.1)', text:'#DC2626' },
+    typecast: { hex:'#9CA3AF', bg:'rgba(156,163,175,0.1)', text:'#6B7280' },
+    conditional: { hex:'#F59E0B', bg:'rgba(245,158,11,0.1)', text:'#B45309' },
+    load: { hex:'#22C55E', bg:'rgba(34,197,94,0.1)', text:'#16A34A' }
+  };
+
+  const TYPE_ICONS = {
+    extract:'database', merge:'git-merge', dedup:'copy-minus', derived:'variable',
+    mapping:'columns-3', typecast:'replace', conditional:'git-branch', load:'hard-drive-upload'
+  };
+
+  const BAR_CLASS = {
+    extract:'node-bar-extract', merge:'node-bar-merge', dedup:'node-bar-dedup', derived:'node-bar-derived',
+    mapping:'node-bar-mapping', typecast:'node-bar-typecast', conditional:'node-bar-conditional', load:'node-bar-load'
+  };
+
+  // Badge text per node
+  function getBadgeText(n) {
+    switch(n.id) {
+      case 'e1': case 'e2': return `→ ${n.fieldCount} 欄位`;
+      case 'e3': case 'e4': case 'e5': return `→ ${n.fieldCount} 欄位`;
+      case 'm1': return `左 53 + 右 53 → 53`;
+      case 'm2': return `左 47 + 右 47 → 47`;
+      case 'm3': return `左 47 + 右 47 → 47`;
+      case 'm4': return `左 38 + 右 21 → 42`;
+      case 'd1': return `→ 53`;
+      case 'd2': return `→ 47`;
+      case 'df1': return `+3 衍生欄位`;
+      case 'df2': return `+2 衍生欄位`;
+      case 'df3': return `+2 衍生欄位`;
+      case 'fm1': return `53 → 38（-15）`;
+      case 'fm2': return `47 → 21（-26）`;
+      case 'tc1': return `2 型別轉換`;
+      case 'cd1': return `5 條件規則`;
+      case 'tl1': return `載入 49 欄位`;
+    }
+  }
+
+  // ===== RENDER =====
+  const canvas = document.getElementById('canvas');
+  const canvasInner = document.getElementById('canvas-inner');
+  const tooltip = document.getElementById('tooltip');
+  let tooltipShowTimer = null;
+  let tooltipHideTimer = null;
+  let currentBadge = null;
+
+  // Build node index
+  const nodeMap = {};
+  NODES.forEach(n => nodeMap[n.id] = n);
+
+  // Render nodes
+  NODES.forEach(n => {
+    const card = document.createElement('div');
+    card.className = 'node-card';
+    card.style.left = n.x + 'px';
+    card.style.top = n.y + 'px';
+    card.id = 'node-' + n.id;
+
+    const colors = TYPE_COLORS[n.type];
+    const icon = TYPE_ICONS[n.type];
+    const barClass = BAR_CLASS[n.type];
+    const badgeText = getBadgeText(n);
+
+    card.innerHTML = `
+      <div class="${barClass} node-bar"></div>
+      <div style="padding:8px 10px 4px;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
+          <i data-lucide="${icon}" style="width:14px;height:14px;color:${colors.hex};flex-shrink:0;"></i>
+          <span style="font-size:12px;font-weight:600;color:#1F2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.label}</span>
+        </div>
+        <div style="font-size:10px;color:#9CA3AF;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.sub}</div>
+      </div>
+      <div style="padding:0 10px 8px;">
+        <span class="node-badge" data-node-id="${n.id}"
+              style="background:${colors.bg};color:${colors.text};">
+          <span class="dot" style="background:${colors.hex};"></span>
+          ${badgeText}
+        </span>
+      </div>
+      <span class="port port-left"></span>
+      <span class="port port-right"></span>
+    `;
+
+    canvasInner.appendChild(card);
+  });
+
+  // Init lucide icons
+  lucide.createIcons();
+
+  // Draw edges as SVG paths
+  function drawEdges() {
+    const svg = document.getElementById('edge-svg');
+    svg.innerHTML = '';
+    EDGES.forEach(([srcId, tgtId]) => {
+      const srcEl = document.getElementById('node-' + srcId);
+      const tgtEl = document.getElementById('node-' + tgtId);
+      if (!srcEl || !tgtEl) return;
+
+      // Use offsetLeft/Top relative to canvasInner (absolute positioned parent)
+      const x1 = srcEl.offsetLeft + srcEl.offsetWidth;
+      const y1 = srcEl.offsetTop + srcEl.offsetHeight / 2;
+      const x2 = tgtEl.offsetLeft;
+      const y2 = tgtEl.offsetTop + tgtEl.offsetHeight / 2;
+
+      const mx = (x1 + x2) / 2;
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+      path.setAttribute('fill','none');
+      path.setAttribute('stroke','#D1D5DB');
+      path.setAttribute('stroke-width','1.5');
+      svg.appendChild(path);
+
+      // Arrowhead
+      const angle = Math.atan2(y2 - y1, x2 - mx) * 0.5;
+      const ax = x2 - 6;
+      const arrowSize = 5;
+      const arrow = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      arrow.setAttribute('points',
+        `${x2},${y2} ${x2-arrowSize*1.5},${y2-arrowSize} ${x2-arrowSize*1.5},${y2+arrowSize}`);
+      arrow.setAttribute('fill','#D1D5DB');
+      svg.appendChild(arrow);
+    });
+  }
+  setTimeout(drawEdges, 150);
+  window.addEventListener('resize', drawEdges);
+  // No need to redraw on scroll since edges use offset-based coordinates within canvasInner
+
+  // ===== TOOLTIP LOGIC =====
+  function showTooltip(badgeEl, nodeId) {
+    const n = nodeMap[nodeId];
+    if (!n) return;
+
+    tooltip.innerHTML = buildTooltipContent(n);
+    tooltip.classList.add('visible');
+
+    // Position
+    const rect = badgeEl.getBoundingClientRect();
+    let top = rect.bottom + 8;
+    let left = rect.left;
+
+    // Flip up if near bottom
+    if (top + 400 > window.innerHeight) {
+      top = rect.top - 8;
+      // Measure tooltip
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = '0px';
+      const th = tooltip.offsetHeight;
+      top = rect.top - th - 8;
+    }
+
+    // Flip left if near right edge
+    if (left + 320 > window.innerWidth) {
+      left = window.innerWidth - 328;
+    }
+    if (left < 8) left = 8;
+    if (top < 8) top = 8;
+
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+  }
+
+  function hideTooltip() {
+    tooltip.classList.remove('visible');
+    currentBadge = null;
+  }
+
+  // Event delegation on badges
+  canvasInner.addEventListener('mouseenter', (e) => {
+    const badge = e.target.closest('.node-badge');
+    if (!badge) return;
+    clearTimeout(tooltipHideTimer);
+    const nodeId = badge.dataset.nodeId;
+    currentBadge = badge;
+    tooltipShowTimer = setTimeout(() => {
+      showTooltip(badge, nodeId);
+    }, 300);
+  }, true);
+
+  canvasInner.addEventListener('mouseleave', (e) => {
+    const badge = e.target.closest('.node-badge');
+    if (!badge) return;
+    clearTimeout(tooltipShowTimer);
+    tooltipHideTimer = setTimeout(hideTooltip, 200);
+  }, true);
+
+  // Keep tooltip visible when hovering it
+  tooltip.addEventListener('mouseenter', () => {
+    clearTimeout(tooltipHideTimer);
+  });
+  tooltip.addEventListener('mouseleave', () => {
+    tooltipHideTimer = setTimeout(hideTooltip, 200);
+  });
+
+  // ===== TOOLTIP CONTENT BUILDERS =====
+  function buildTooltipContent(n) {
+    switch(n.type) {
+      case 'extract': return buildExtractTooltip(n);
+      case 'merge': return buildMergeTooltip(n);
+      case 'dedup': return buildDedupTooltip(n);
+      case 'derived': return buildDerivedTooltip(n);
+      case 'mapping': return buildMappingTooltip(n);
+      case 'typecast': return buildTypecastTooltip(n);
+      case 'conditional': return buildConditionalTooltip(n);
+      case 'load': return buildLoadTooltip(n);
+      default: return '<div>No data</div>';
+    }
+  }
+
+  function buildExtractTooltip(n) {
+    const tableName = n.id === 'e1' ? 'raw_101f6b3e (ZZIP_BAMCUST_M)'
+      : n.id === 'e2' ? 'raw_35d85504 (ZZIP_BAMCUST_M)'
+      : n.id === 'e3' ? 'raw_1138803c (MLMCUSTOMER)'
+      : n.id === 'e4' ? 'raw_aec93e7c (MLMCUSTOMER)'
+      : 'raw_50172f04 (MLMCUSTOMER)';
+
+    const showFields = n.fields.slice(0, 8);
+    const remaining = n.fields.length - 8;
+
+    return `
+      <div class="tooltip-header">Extract - 來源擷取</div>
+      <div style="font-size:12px;color:#6B7280;margin-bottom:6px;">
+        <span style="font-weight:500;color:#374151;">來源表：</span>${tableName}
+      </div>
+      <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">
+        <span style="font-weight:500;color:#374151;">輸出欄位數：</span>
+        <span style="color:#2563EB;font-weight:600;">${n.fieldCount}</span>
+      </div>
+      <div class="tooltip-section-title">欄位列表</div>
+      ${showFields.map(f => `
+        <div class="tooltip-row">
+          <span class="field-dot" style="background:#2563EB;"></span>
+          <span style="font-family:monospace;font-size:11px;">${f}</span>
+        </div>
+      `).join('')}
+      ${remaining > 0 ? `<div style="font-size:11px;color:#9CA3AF;margin-top:4px;padding-left:11px;">... 及其他 ${remaining} 個欄位</div>` : ''}
+    `;
+  }
+
+  function buildMergeTooltip(n) {
+    const onlyLeft = n.leftCount - n.overlap;
+    const onlyRight = n.rightCount - n.overlap;
+    return `
+      <div class="tooltip-header">Merge - 合併</div>
+      <div style="font-size:12px;margin-bottom:6px;">
+        <span style="font-weight:500;color:#374151;">Join 類型：</span>
+        <span style="color:#F59E0B;font-weight:600;">${n.joinType}</span>
+      </div>
+      <div style="font-size:12px;margin-bottom:8px;">
+        <span style="font-weight:500;color:#374151;">Join Key：</span>
+        <span class="expression-code">${n.joinKey}</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;padding:6px 8px;border-radius:6px;background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.15);text-align:center;">
+          <div style="font-size:18px;font-weight:700;color:#2563EB;">${n.leftCount}</div>
+          <div style="font-size:10px;color:#6B7280;">左輸入</div>
+        </div>
+        <div style="flex:1;padding:6px 8px;border-radius:6px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);text-align:center;">
+          <div style="font-size:18px;font-weight:700;color:#F59E0B;">${n.rightCount}</div>
+          <div style="font-size:10px;color:#6B7280;">右輸入</div>
+        </div>
+        <div style="flex:1;padding:6px 8px;border-radius:6px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);text-align:center;">
+          <div style="font-size:18px;font-weight:700;color:#22C55E;">${n.outputCount}</div>
+          <div style="font-size:10px;color:#6B7280;">輸出</div>
+        </div>
+      </div>
+      <div class="tooltip-section-title">欄位分類</div>
+      <div class="tooltip-row"><span class="field-dot" style="background:#9CA3AF;"></span><span>重疊欄位：${n.overlap}</span></div>
+      <div class="tooltip-row"><span class="field-dot" style="background:#2563EB;"></span><span>僅左側：${onlyLeft}</span></div>
+      <div class="tooltip-row"><span class="field-dot" style="background:#F59E0B;"></span><span>僅右側：${onlyRight}</span></div>
+    `;
+  }
+
+  function buildDedupTooltip(n) {
+    return `
+      <div class="tooltip-header">Dedup - 去重</div>
+      <div style="font-size:12px;margin-bottom:6px;">
+        <span style="font-weight:500;color:#374151;">去重鍵：</span>
+        <span class="expression-code">${n.keyCol}</span>
+      </div>
+      <div style="font-size:12px;margin-bottom:6px;">
+        <span style="font-weight:500;color:#374151;">保留策略：</span>
+        <span style="color:#6B7280;">${n.strategy === 'latest_timestamp' ? '保留最新時間戳' : n.strategy}</span>
+      </div>
+      <div style="font-size:12px;margin-bottom:8px;">
+        <span style="font-weight:500;color:#374151;">時間戳欄位：</span>
+        <span class="expression-code">${n.tsCol}</span>
+      </div>
+      <div style="padding:8px;border-radius:6px;background:#F9FAFB;text-align:center;">
+        <div style="font-size:11px;color:#9CA3AF;">輸出欄位數</div>
+        <div style="font-size:20px;font-weight:700;color:#6B7280;">${n.outputCount}</div>
+        <div style="font-size:10px;color:#9CA3AF;">（欄位不變，僅去除重複列）</div>
+      </div>
+    `;
+  }
+
+  function buildDerivedTooltip(n) {
+    return `
+      <div class="tooltip-header">Derived Field - 衍生欄位</div>
+      <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">
+        新增 <span style="color:#22C55E;font-weight:600;">${n.expressions.length}</span> 個衍生欄位
+      </div>
+      ${n.expressions.map(ex => `
+        <div style="padding:6px 8px;border-radius:6px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.12);margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+            <span class="field-dot" style="background:#22C55E;width:6px;height:6px;border-radius:50;display:inline-block;"></span>
+            <span style="font-size:12px;font-weight:600;color:#16A34A;">${ex.name}</span>
+            <span style="font-size:10px;color:#9CA3AF;margin-left:auto;">${ex.outType}</span>
+          </div>
+          <div class="expression-code" style="font-size:10px;line-height:1.4;word-break:break-all;">${ex.expr}</div>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function buildMappingTooltip(n) {
+    const showMappings = n.mappings.slice(0, 8);
+    const remainMap = n.allMappings.length - 8;
+    const showDropped = n.dropped.slice(0, 6);
+    const remainDrop = n.dropped.length - 6;
+
+    return `
+      <div class="tooltip-header">Field Mapping - 欄位對應</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#F9FAFB;">
+          <div style="font-size:16px;font-weight:700;color:#374151;">${n.inputCount}</div>
+          <div style="font-size:10px;color:#9CA3AF;">輸入</div>
+        </div>
+        <div style="display:flex;align-items:center;color:#9CA3AF;font-size:16px;">→</div>
+        <div style="flex:1;text-align:center;padding:4px;border-radius:4px;background:rgba(34,197,94,0.06);">
+          <div style="font-size:16px;font-weight:700;color:#22C55E;">${n.outputCount}</div>
+          <div style="font-size:10px;color:#9CA3AF;">輸出</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:4px;border-radius:4px;background:rgba(239,68,68,0.06);">
+          <div style="font-size:16px;font-weight:700;color:#EF4444;">-${n.dropCount}</div>
+          <div style="font-size:10px;color:#9CA3AF;">丟棄</div>
+        </div>
+      </div>
+      <div class="tooltip-section-title">對應規則（前 8 筆）</div>
+      ${showMappings.map(m => `
+        <div class="tooltip-row">
+          <span class="field-dot" style="background:#22C55E;"></span>
+          <span style="font-family:monospace;font-size:11px;">${m.s}</span>
+          <span class="mapping-arrow">→</span>
+          <span style="font-family:monospace;font-size:11px;color:#16A34A;">${m.t}</span>
+        </div>
+      `).join('')}
+      ${remainMap > 0 ? `<div style="font-size:11px;color:#9CA3AF;padding-left:11px;margin-top:2px;">... 及其他 ${remainMap} 組對應</div>` : ''}
+      <div class="tooltip-section" style="margin-top:8px;">
+        <div class="tooltip-section-title" style="color:#EF4444;">丟棄欄位（前 6 筆）</div>
+        ${showDropped.map(d => `
+          <div class="tooltip-row">
+            <span class="field-dot" style="background:#EF4444;"></span>
+            <span style="font-family:monospace;font-size:11px;color:#EF4444;text-decoration:line-through;">${d}</span>
+          </div>
+        `).join('')}
+        ${remainDrop > 0 ? `<div style="font-size:11px;color:#9CA3AF;padding-left:11px;margin-top:2px;">... 及其他 ${remainDrop} 個丟棄欄位</div>` : ''}
+      </div>
+    `;
+  }
+
+  function buildTypecastTooltip(n) {
+    return `
+      <div class="tooltip-header">Type Cast - 型別轉換</div>
+      <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">
+        共 <span style="font-weight:600;color:#374151;">${n.casts.length}</span> 個欄位需要轉換
+      </div>
+      ${n.casts.map(c => `
+        <div style="padding:6px 8px;border-radius:6px;background:#F9FAFB;border:1px solid #F3F4F6;margin-bottom:6px;">
+          <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:3px;font-family:monospace;">${c.col}</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <span style="padding:1px 6px;border-radius:3px;background:rgba(239,68,68,0.1);color:#EF4444;">${c.from}</span>
+            <span style="color:#9CA3AF;">→</span>
+            <span style="padding:1px 6px;border-radius:3px;background:rgba(34,197,94,0.1);color:#22C55E;">${c.to}</span>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function buildConditionalTooltip(n) {
+    const showRules = n.rules.slice(0, 3);
+    const remaining = n.rules.length - 3;
+    return `
+      <div class="tooltip-header">Conditional - 條件規則</div>
+      <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">
+        共 <span style="font-weight:600;color:#F59E0B;">${n.rules.length}</span> 條衝突解決規則
+      </div>
+      ${showRules.map((r, i) => `
+        <div style="padding:6px 8px;border-radius:6px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+            <span style="font-size:10px;font-weight:700;color:#F59E0B;background:rgba(245,158,11,0.15);padding:1px 5px;border-radius:3px;">#${i+1}</span>
+            <span style="font-size:12px;font-weight:600;color:#374151;font-family:monospace;">${r.target}</span>
+          </div>
+          <div style="font-size:11px;margin-bottom:2px;">
+            <span style="color:#F59E0B;font-weight:500;">WHEN</span>
+            <span class="expression-code" style="margin-left:4px;">${r.when}</span>
+          </div>
+          <div style="font-size:11px;margin-bottom:2px;">
+            <span style="color:#22C55E;font-weight:500;">THEN</span>
+            <span class="expression-code" style="margin-left:4px;">${r.then}</span>
+          </div>
+          <div style="font-size:11px;">
+            <span style="color:#9CA3AF;font-weight:500;">ELSE</span>
+            <span class="expression-code" style="margin-left:4px;">${r.else_}</span>
+          </div>
+        </div>
+      `).join('')}
+      ${remaining > 0 ? `<div style="font-size:11px;color:#9CA3AF;margin-top:2px;">... 及其他 ${remaining} 條規則</div>` : ''}
+    `;
+  }
+
+  function buildLoadTooltip(n) {
+    return `
+      <div class="tooltip-header">Target Load - 載入目標表</div>
+      <div style="font-size:12px;margin-bottom:6px;">
+        <span style="font-weight:500;color:#374151;">目標表：</span>
+        <span style="color:#22C55E;font-weight:600;font-family:monospace;">${n.targetTable}</span>
+      </div>
+      <div style="font-size:12px;margin-bottom:8px;">
+        <span style="font-weight:500;color:#374151;">載入欄位：</span>
+        <span style="color:#22C55E;font-weight:600;">${n.fieldCount}</span>
+      </div>
+      <div class="tooltip-section-title">分類覆蓋率</div>
+      ${n.categories.map(cat => {
+        const pct = Math.round(cat.count / cat.total * 100);
+        return `
+          <div style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
+              <span style="color:#374151;font-weight:500;">${cat.name}</span>
+              <span style="color:#9CA3AF;">${cat.count}/${cat.total}</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width:${pct}%;background:#22C55E;"></div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+      <div style="margin-top:8px;padding:6px 8px;border-radius:6px;background:rgba(34,197,94,0.06);text-align:center;">
+        <span style="font-size:12px;font-weight:600;color:#22C55E;">全部 8 分類 100% 覆蓋</span>
+      </div>
+    `;
+  }
+  </script>
+</body>
+</html>
