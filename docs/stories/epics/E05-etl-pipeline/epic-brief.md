@@ -3,7 +3,7 @@
 > **Epic ID**：E05
 > **優先級**：P0（Critical）
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：11
+> **Stories 數量**：14
 
 ## Epic 目標
 
@@ -26,6 +26,9 @@ Pipeline 支援三階段發布流程（草稿 → 測試執行 → 發布）、�
 | US-048 | Pipeline 監控儀表板 | Should Have | [US-048-monitor-dashboard.md](US-048-monitor-dashboard.md) |
 | US-049 | 目標表 Domain-Oriented 規劃 | Could Have | [US-049-target-tables.md](US-049-target-tables.md) |
 | US-050 | 發布 Pipeline 版本 | Must Have | [US-050-publish-pipeline-version.md](US-050-publish-pipeline-version.md) |
+| US-052 | 節點欄位變化統計 Badge | Must Have | [US-052-node-column-change-badge.md](US-052-node-column-change-badge.md) |
+| US-053 | 節點 Inspector Panel 欄位 Diff | Should Have | [US-053-node-inspector-panel-diff.md](US-053-node-inspector-panel-diff.md) |
+| US-054 | 節點 Badge Hover Tooltip | Could Have | [US-054-node-badge-hover-tooltip.md](US-054-node-badge-hover-tooltip.md) |
 
 ## 依賴關係
 
@@ -100,7 +103,7 @@ Pipeline 支援三階段發布流程（草稿 → 測試執行 → 發布）、�
 ## 成功標準
 
 - Admin 能夠建立、查看、編輯、刪除 Pipeline
-- Admin 能夠透過視覺化拖拉編輯器組合 ETL 節點
+- Admin 能夠透過視覺化拖拉編輯器組合 ETL 節點，並透過節點底部 Badge 一眼掌握欄位轉換變化
 - Pipeline 支援草稿 → 測試執行 → 發布的三階段流程
 - Admin 能夠手動或排程執行已發布的 Pipeline
 - Admin 能夠查看版本歷史、比較差異、回滾版本
