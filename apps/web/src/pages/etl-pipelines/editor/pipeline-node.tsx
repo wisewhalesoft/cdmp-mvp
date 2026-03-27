@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { memo, useCallback } from 'react';
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import {
   Database,
   GitMerge,
@@ -18,6 +18,9 @@ import {
   Upload,
 } from 'lucide-react';
 import { getNodeDef, getCategoryColor, getCategoryLabel, type NodeCategory } from './node-types';
+import { NodeFieldBadge } from './node-field-badge';
+import { useNodeFieldStats } from './use-node-field-stats';
+import { useTooltipManager } from './badge-tooltip';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Database,
@@ -44,14 +47,31 @@ interface PipelineNodeData {
   [key: string]: unknown;
 }
 
-function PipelineNodeComponent({ data, selected }: NodeProps & { data: PipelineNodeData }) {
+function PipelineNodeComponent({ id, data, selected }: NodeProps & { data: PipelineNodeData }) {
   const nodeDef = getNodeDef(data.nodeType);
+  const { getNodes, getEdges } = useReactFlow();
+  const nodes = getNodes();
+  const edges = getEdges();
+  const { badge, loading } = useNodeFieldStats(id, nodes, edges);
+  const tooltipManager = useTooltipManager();
+
   if (!nodeDef) return null;
 
   const colors = getCategoryColor(nodeDef.category);
   const IconComp = ICON_MAP[nodeDef.icon];
   const label = data.label || nodeDef.label;
   const subtitle = data.subtitle || '';
+
+  const handleBadgeMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      tooltipManager.show(id, e.currentTarget);
+    },
+    [id, tooltipManager],
+  );
+
+  const handleBadgeMouseLeave = useCallback(() => {
+    tooltipManager.hide();
+  }, [tooltipManager]);
 
   return (
     <div
@@ -94,6 +114,14 @@ function PipelineNodeComponent({ data, selected }: NodeProps & { data: PipelineN
       </div>
       <p className="text-sm font-medium text-gray-800">{label}</p>
       {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+
+      {/* Field Stats Badge */}
+      <NodeFieldBadge
+        badge={badge}
+        loading={loading}
+        onMouseEnter={handleBadgeMouseEnter}
+        onMouseLeave={handleBadgeMouseLeave}
+      />
 
       {/* Output Handle - not for load nodes */}
       {nodeDef.category !== 'load' && (
