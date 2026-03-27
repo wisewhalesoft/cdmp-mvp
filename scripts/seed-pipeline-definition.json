@@ -57,9 +57,9 @@
           "label": "ZZIP電話合併",
           "subtitle": "3 組電話",
           "expressions": [
-            { "outputColumn": "home_phone", "expression": "mergePhone(CAREA_NO1, CTEL_NO1)" },
-            { "outputColumn": "contact_phone", "expression": "mergePhone(CAREA_NO2, CTEL_NO2)" },
-            { "outputColumn": "office_phone", "expression": "mergePhone(CO_CAREA_NO, CO_CTEL_NO)" }
+            { "outputColumn": "home_phone", "expression": "mergePhone(CAREA_NO1, CTEL_NO1)", "outputType": "VARCHAR" },
+            { "outputColumn": "contact_phone", "expression": "mergePhone(CAREA_NO2, CTEL_NO2)", "outputType": "VARCHAR" },
+            { "outputColumn": "office_phone", "expression": "mergePhone(CO_CAREA_NO, CO_CTEL_NO)", "outputType": "VARCHAR" }
           ]
         }
       },
@@ -195,8 +195,8 @@
           "column": "CUSTNOWCAPTIAL",
           "targetType": "DECIMAL",
           "castRules": [
-            { "column": "CUSTNOWCAPTIAL", "targetType": "DECIMAL" },
-            { "column": "CUSTCREATECAPTIAL", "targetType": "DECIMAL" }
+            { "column": "CUSTNOWCAPTIAL", "sourceType": "VARCHAR", "targetType": "DECIMAL" },
+            { "column": "CUSTCREATECAPTIAL", "sourceType": "VARCHAR", "targetType": "DECIMAL" }
           ]
         }
       },
@@ -209,8 +209,8 @@
           "label": "MLMC轉換",
           "subtitle": "customer_type + phone",
           "expressions": [
-            { "outputColumn": "customer_type_mapped", "expression": "padStart(CUTYPE, 2, '0')" },
-            { "outputColumn": "office_phone", "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)" }
+            { "outputColumn": "customer_type_mapped", "expression": "padStart(CUTYPE, 2, '0')", "outputType": "VARCHAR" },
+            { "outputColumn": "office_phone", "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)", "outputType": "VARCHAR" }
           ]
         }
       },
@@ -306,8 +306,8 @@
           "label": "data_source標記",
           "subtitle": "data_source + UUID",
           "expressions": [
-            { "outputColumn": "data_source", "expression": "CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER' WHEN left.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M' ELSE 'MLMCUSTOMER' END" },
-            { "outputColumn": "customer_id", "expression": "gen_random_uuid()" }
+            { "outputColumn": "data_source", "expression": "CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER' WHEN left.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M' ELSE 'MLMCUSTOMER' END", "outputType": "VARCHAR" },
+            { "outputColumn": "customer_id", "expression": "gen_random_uuid()", "outputType": "VARCHAR" }
           ]
         }
       },

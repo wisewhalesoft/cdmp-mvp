@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { MousePointerClick, Trash2, Plus, Lock, ChevronDown, CheckCircle, MinusCircle, AlertCircle } from 'lucide-react';
 import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
+import { FieldFlowTab } from './field-flow-tab';
 import type { RawTableItem, TargetTableSummary, TargetTableColumn } from '@cdmp/shared';
 import { getTargetTables, getTargetTableSchema, getRawTableColumns } from '@/api/etl-pipelines';
+import { getUpstreamColumns } from './node-field-stats';
 
 interface PropertiesPanelProps {
   selectedNode: Node | null;
@@ -22,6 +24,13 @@ export function PropertiesPanel({
   onNodeDataChange,
   onDeleteNode,
 }: PropertiesPanelProps) {
+  const [activeTab, setActiveTab] = useState<'settings' | 'fields'>('settings');
+
+  // Reset tab when selected node changes
+  useEffect(() => {
+    setActiveTab('settings');
+  }, [selectedNode?.id]);
+
   if (!selectedNode) {
     return (
       <aside
@@ -124,10 +133,40 @@ export function PropertiesPanel({
         </div>
       </div>
 
-      {/* Properties Form */}
-      <div className="p-4 space-y-4">
-        {renderProperties()}
+      {/* Tab Navigation */}
+      <div className="flex border-b border-[#E5E7EB]" data-testid="properties-tabs">
+        <button
+          className={`flex-1 px-4 py-2 text-xs font-medium ${
+            activeTab === 'settings'
+              ? 'text-[#2563EB] border-b-2 border-[#2563EB]'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('settings')}
+          data-testid="tab-settings"
+        >
+          設定
+        </button>
+        <button
+          className={`flex-1 px-4 py-2 text-xs font-medium ${
+            activeTab === 'fields'
+              ? 'text-[#2563EB] border-b-2 border-[#2563EB]'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('fields')}
+          data-testid="tab-fields"
+        >
+          欄位流
+        </button>
       </div>
+
+      {/* Tab Content */}
+      {activeTab === 'settings' ? (
+        <div className="p-4 space-y-4">
+          {renderProperties()}
+        </div>
+      ) : (
+        <FieldFlowTab nodeId={selectedNode.id} nodes={nodes} edges={edges} />
+      )}
     </aside>
   );
 }
@@ -442,27 +481,27 @@ function FormatProperties({ nodeData, onChange }: SimplePropsBase) {
 // --- TypeCast Properties ---
 
 interface TypeCastItem {
-  field: string;
+  column: string;
   sourceType: string;
   targetType: string;
 }
 
 function TypeCastProperties({ nodeData, onChange }: SimplePropsBase) {
-  const casts = (nodeData.casts as TypeCastItem[]) || [];
+  const casts = (nodeData.castRules as TypeCastItem[]) || [];
 
   const addCast = () => {
     onChange({
-      casts: [...casts, { field: '', sourceType: 'VARCHAR', targetType: 'VARCHAR' }],
+      castRules: [...casts, { column: '', sourceType: 'VARCHAR', targetType: 'VARCHAR' }],
     });
   };
 
   const removeCast = (index: number) => {
-    onChange({ casts: casts.filter((_, i) => i !== index) });
+    onChange({ castRules: casts.filter((_, i) => i !== index) });
   };
 
   const updateCast = (index: number, updates: Partial<TypeCastItem>) => {
     const newCasts = casts.map((c, i) => (i === index ? { ...c, ...updates } : c));
-    onChange({ casts: newCasts });
+    onChange({ castRules: newCasts });
   };
 
   const TYPE_OPTIONS = [
@@ -480,8 +519,8 @@ function TypeCastProperties({ nodeData, onChange }: SimplePropsBase) {
             <input
               type="text"
               className={smallInputClass}
-              value={cast.field}
-              onChange={(e) => updateCast(index, { field: e.target.value })}
+              value={cast.column}
+              onChange={(e) => updateCast(index, { column: e.target.value })}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -567,29 +606,6 @@ function LoadProperties({
   // Category A expanded by default, B~H collapsed
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({ A: true });
 
-  // Derive upstream raw table name by traversing edges → find Extract node
-  const upstreamRawTable = (() => {
-    const visited = new Set<string>();
-    const queue = [nodeId];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      if (visited.has(current)) continue;
-      visited.add(current);
-      const node = nodes.find((n) => n.id === current);
-      if (node) {
-        const data = node.data as Record<string, unknown>;
-        if (data.nodeType === 'raw_data_extract' && data.rawTable) {
-          return data.rawTable as string;
-        }
-      }
-      // Find edges that target this node and trace back to their sources
-      edges
-        .filter((e) => e.target === current)
-        .forEach((e) => queue.push(e.source));
-    }
-    return null;
-  })();
-
   // Load target table list from API
   useEffect(() => {
     getTargetTables()
@@ -597,16 +613,25 @@ function LoadProperties({
       .catch(() => {});
   }, []);
 
-  // Load source columns from upstream raw table
+  // Stable fingerprint for upstream column computation
+  const edgeKey = edges.map((e) => `${e.source}>${e.target}`).join(',');
+  const nodeDataKey = nodes.map((n) => {
+    const d = n.data as Record<string, unknown>;
+    return `${n.id}:${d.nodeType}:${d.rawTable || ''}:${d.dropUnmapped || ''}:${JSON.stringify(d.mappings || d.expressions || d.castRules || d.rules || '')}`;
+  }).join(';');
+  const upstreamFingerprint = `${nodeId}|${edgeKey}|${nodeDataKey}`;
+  const prevUpstreamFingerprintRef = useRef('');
+
+  // Compute source columns from the upstream pipeline graph
   useEffect(() => {
-    if (!upstreamRawTable) {
-      setSourceColumns([]);
-      return;
-    }
-    getRawTableColumns(upstreamRawTable)
-      .then((res) => setSourceColumns(res.data))
+    if (upstreamFingerprint === prevUpstreamFingerprintRef.current) return;
+    prevUpstreamFingerprintRef.current = upstreamFingerprint;
+
+    getUpstreamColumns(nodeId, nodes, edges)
+      .then((cols) => setSourceColumns(cols.sort()))
       .catch(() => setSourceColumns([]));
-  }, [upstreamRawTable]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upstreamFingerprint]);
 
   // Load schema columns when target table changes
   useEffect(() => {
@@ -1059,127 +1084,127 @@ function FieldMappingProperties({ nodeData, onChange }: SimplePropsBase) {
 
 // --- 3. Conditional Properties ---
 
-interface ConditionalCondition {
-  when: {
-    column: string;
-    operator: string;
-    value: string | null;
-  };
+interface ConditionalRuleCondition {
+  when: string;
   then: string;
 }
 
+interface ConditionalRule {
+  targetColumn: string;
+  conditions: ConditionalRuleCondition[];
+  elseValue: string;
+}
+
 function ConditionalProperties({ nodeData, onChange }: SimplePropsBase) {
-  const targetColumn = (nodeData.targetColumn as string) || '';
-  const conditions = (nodeData.conditions as ConditionalCondition[]) || [];
-  const elseValue = (nodeData.elseValue as string) || '';
+  const rules = (nodeData.rules as ConditionalRule[]) || [];
 
-  const OPERATORS = ['=', '!=', '>', '<', '>=', '<=', 'IS_NULL', 'IS_NOT_NULL', 'CONTAINS', 'STARTS_WITH'];
-
-  const addCondition = () => {
-    onChange({
-      conditions: [
-        ...conditions,
-        { when: { column: '', operator: '=', value: '' }, then: '' },
-      ],
-    });
+  const addRule = () => {
+    const newRules = [...rules, { targetColumn: '', conditions: [{ when: '', then: '' }], elseValue: '' }];
+    onChange({ rules: newRules, subtitle: `${newRules.length} 條規則` });
   };
 
-  const removeCondition = (index: number) => {
-    onChange({ conditions: conditions.filter((_, i) => i !== index) });
+  const removeRule = (index: number) => {
+    const newRules = rules.filter((_, i) => i !== index);
+    onChange({ rules: newRules, subtitle: newRules.length ? `${newRules.length} 條規則` : undefined });
   };
 
-  const updateConditionWhen = (index: number, updates: Partial<ConditionalCondition['when']>) => {
-    const newConditions = conditions.map((c, i) =>
-      i === index ? { ...c, when: { ...c.when, ...updates } } : c,
-    );
-    onChange({ conditions: newConditions });
+  const updateRule = (index: number, updates: Partial<ConditionalRule>) => {
+    const newRules = rules.map((r, i) => (i === index ? { ...r, ...updates } : r));
+    onChange({ rules: newRules });
   };
 
-  const updateConditionThen = (index: number, then: string) => {
-    const newConditions = conditions.map((c, i) =>
-      i === index ? { ...c, then } : c,
-    );
-    onChange({ conditions: newConditions });
+  const addCondition = (ruleIndex: number) => {
+    const rule = rules[ruleIndex];
+    updateRule(ruleIndex, { conditions: [...rule.conditions, { when: '', then: '' }] });
   };
 
-  const needsValue = (op: string) => !['IS_NULL', 'IS_NOT_NULL'].includes(op);
+  const removeCondition = (ruleIndex: number, condIndex: number) => {
+    const rule = rules[ruleIndex];
+    updateRule(ruleIndex, { conditions: rule.conditions.filter((_, i) => i !== condIndex) });
+  };
+
+  const updateCondition = (ruleIndex: number, condIndex: number, updates: Partial<ConditionalRuleCondition>) => {
+    const rule = rules[ruleIndex];
+    const newConditions = rule.conditions.map((c, i) => (i === condIndex ? { ...c, ...updates } : c));
+    updateRule(ruleIndex, { conditions: newConditions });
+  };
 
   return (
     <>
-      <div>
-        <label className={labelClass}>目標欄位</label>
-        <input
-          type="text"
-          className={inputClass}
-          value={targetColumn}
-          onChange={(e) => onChange({ targetColumn: e.target.value, subtitle: e.target.value || undefined })}
-          placeholder="輸入目標欄位名稱"
-          data-testid="conditional-target-column"
-        />
-      </div>
-      <div className="text-xs font-medium text-gray-500 mb-2">條件列表</div>
-      {conditions.map((cond, index) => (
-        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
-          <ItemHeader index={index} label="IF" onRemove={() => removeCondition(index)} />
+      <div className="text-xs font-medium text-gray-500 mb-2">規則列表</div>
+      {rules.map((rule, ruleIndex) => (
+        <div key={ruleIndex} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3">
+          <ItemHeader index={ruleIndex} label="規則" onRemove={() => removeRule(ruleIndex)} />
           <div>
-            <label className={smallLabelClass}>欄位</label>
+            <label className={smallLabelClass}>目標欄位</label>
             <input
               type="text"
               className={smallInputClass}
-              value={cond.when.column}
-              onChange={(e) => updateConditionWhen(index, { column: e.target.value })}
-              data-testid={`conditional-${index}-column`}
+              value={rule.targetColumn}
+              onChange={(e) => updateRule(ruleIndex, { targetColumn: e.target.value })}
+              data-testid={`conditional-rule-${ruleIndex}-target`}
             />
           </div>
-          <div>
-            <label className={smallLabelClass}>運算子</label>
-            <select
-              className={smallInputClass}
-              value={cond.when.operator}
-              onChange={(e) => updateConditionWhen(index, { operator: e.target.value })}
-              data-testid={`conditional-${index}-operator`}
-            >
-              {OPERATORS.map((op) => (
-                <option key={op} value={op}>{op}</option>
-              ))}
-            </select>
-          </div>
-          {needsValue(cond.when.operator) && (
-            <div>
-              <label className={smallLabelClass}>值</label>
-              <input
-                type="text"
-                className={smallInputClass}
-                value={cond.when.value || ''}
-                onChange={(e) => updateConditionWhen(index, { value: e.target.value || null })}
-                data-testid={`conditional-${index}-value`}
-              />
+          <div className="text-xs font-medium text-gray-400 mb-1 ml-1">條件</div>
+          {rule.conditions.map((cond, condIndex) => (
+            <div key={condIndex} className="ml-2 border-l-2 border-[#E5E7EB] pl-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">IF #{condIndex + 1}</span>
+                {rule.conditions.length > 1 && (
+                  <button
+                    type="button"
+                    className="text-xs text-red-400 hover:text-red-600"
+                    onClick={() => removeCondition(ruleIndex, condIndex)}
+                  >
+                    移除
+                  </button>
+                )}
+              </div>
+              <div>
+                <label className={smallLabelClass}>WHEN 條件式</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={cond.when}
+                  onChange={(e) => updateCondition(ruleIndex, condIndex, { when: e.target.value })}
+                  placeholder="left.col >= right.col"
+                  data-testid={`conditional-rule-${ruleIndex}-cond-${condIndex}-when`}
+                />
+              </div>
+              <div>
+                <label className={smallLabelClass}>THEN 值</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={cond.then}
+                  onChange={(e) => updateCondition(ruleIndex, condIndex, { then: e.target.value })}
+                  placeholder="left.col"
+                  data-testid={`conditional-rule-${ruleIndex}-cond-${condIndex}-then`}
+                />
+              </div>
             </div>
-          )}
+          ))}
+          <button
+            type="button"
+            className="ml-2 text-xs text-[#2563EB] hover:underline"
+            onClick={() => addCondition(ruleIndex)}
+          >
+            + 新增條件
+          </button>
           <div>
-            <label className={smallLabelClass}>THEN 值</label>
+            <label className={smallLabelClass}>ELSE 預設值</label>
             <input
               type="text"
               className={smallInputClass}
-              value={cond.then}
-              onChange={(e) => updateConditionThen(index, e.target.value)}
-              data-testid={`conditional-${index}-then`}
+              value={rule.elseValue}
+              onChange={(e) => updateRule(ruleIndex, { elseValue: e.target.value })}
+              placeholder="right.col"
+              data-testid={`conditional-rule-${ruleIndex}-else`}
             />
           </div>
         </div>
       ))}
-      <AddButton onClick={addCondition} label="新增條件" />
-      <div>
-        <label className={labelClass}>ELSE 預設值</label>
-        <input
-          type="text"
-          className={inputClass}
-          value={elseValue}
-          onChange={(e) => onChange({ elseValue: e.target.value || null })}
-          placeholder="(無)"
-          data-testid="conditional-else-value"
-        />
-      </div>
+      <AddButton onClick={addRule} label="新增規則" />
     </>
   );
 }
@@ -1806,13 +1831,13 @@ interface DerivationItem {
 }
 
 function DerivedFieldProperties({ nodeData, onChange }: SimplePropsBase) {
-  const derivations = (nodeData.derivations as DerivationItem[]) || [];
+  const derivations = (nodeData.expressions as DerivationItem[]) || [];
 
   const TYPE_OPTIONS = ['VARCHAR', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP'];
 
   const addDerivation = () => {
     onChange({
-      derivations: [...derivations, { outputColumn: '', expression: '', outputType: 'VARCHAR' }],
+      expressions: [...derivations, { outputColumn: '', expression: '', outputType: 'VARCHAR' }],
       subtitle: `${derivations.length + 1} 組衍生欄位`,
     });
   };
@@ -1820,14 +1845,14 @@ function DerivedFieldProperties({ nodeData, onChange }: SimplePropsBase) {
   const removeDerivation = (index: number) => {
     const newDerivations = derivations.filter((_, i) => i !== index);
     onChange({
-      derivations: newDerivations,
+      expressions: newDerivations,
       subtitle: newDerivations.length ? `${newDerivations.length} 組衍生欄位` : undefined,
     });
   };
 
   const updateDerivation = (index: number, updates: Partial<DerivationItem>) => {
     const newDerivations = derivations.map((d, i) => (i === index ? { ...d, ...updates } : d));
-    onChange({ derivations: newDerivations });
+    onChange({ expressions: newDerivations });
   };
 
   return (
