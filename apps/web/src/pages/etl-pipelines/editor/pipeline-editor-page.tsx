@@ -28,6 +28,7 @@ import { Toolbox } from './toolbox';
 import { PropertiesPanel } from './properties-panel';
 import { PublishConfirmDialog } from './publish-confirm-dialog';
 import { PipelineNode } from './pipeline-node';
+import { TooltipManagerProvider } from './badge-tooltip';
 import { getNodeDef, canConnect } from './node-types';
 import {
   getPipelineDefinition,
@@ -491,29 +492,31 @@ export function PipelineEditorPage() {
           ref={reactFlowWrapper}
           data-testid="editor-canvas"
         >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={handleEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            onInit={setReactFlowInstance}
-            nodeTypes={nodeTypes}
-            isValidConnection={isValidConnection}
-            fitView
-            className="canvas-bg"
-            data-testid="react-flow"
-          >
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d1d5db" />
-            <Controls
-              showInteractive={false}
-              className="!bg-white !rounded-lg !shadow-md !border !border-[#E5E7EB]"
-            />
-          </ReactFlow>
+          <TooltipManagerProvider nodes={nodes} edges={edges}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              onPaneClick={onPaneClick}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              onInit={setReactFlowInstance}
+              nodeTypes={nodeTypes}
+              isValidConnection={isValidConnection}
+              fitView
+              className="canvas-bg"
+              data-testid="react-flow"
+            >
+              <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d1d5db" />
+              <Controls
+                showInteractive={false}
+                className="!bg-white !rounded-lg !shadow-md !border !border-[#E5E7EB]"
+              />
+            </ReactFlow>
+          </TooltipManagerProvider>
           {isEmpty && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" data-testid="empty-canvas">
               <div className="text-center text-gray-400">
