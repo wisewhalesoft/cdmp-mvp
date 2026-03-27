@@ -1,0 +1,52 @@
+%% F039: 節點欄位 Badge 資料流與元件結構
+%% 描述 Badge 計算邏輯的資料流向，從 React Flow state 到 Badge 渲染
+
+flowchart TD
+    subgraph ReactFlowState["React Flow State"]
+        NODES["nodes[]"]
+        EDGES["edges[]"]
+    end
+
+    subgraph ComputeLayer["計算層 (node-field-stats.ts)"]
+        HOOK["useNodeFieldStats(nodeId)"]
+        COMPUTE_OUT["computeNodeOutputColumns()"]
+        COMPUTE_IN["取得上游節點輸出<br/>(即本節點輸入)"]
+        CALC_STATS["computeNodeFieldStats()"]
+        BADGE_DESC["getBadgeDescriptor()"]
+    end
+
+    subgraph RenderLayer["渲染層"]
+        PN["PipelineNode"]
+        NFB["NodeFieldBadge"]
+    end
+
+    subgraph BadgeVariants["Badge 變體 (依節點類型)"]
+        B_EXT["藍色: -> N 欄位<br/>(raw_data_extract)"]
+        B_MERGE["橘色: 左 N + 右 M -> K<br/>(merge)"]
+        B_DERIVED["綠色: +N 衍生欄位<br/>(derived_field)"]
+        B_MAP_DEL["紅色: N -> M (-K)<br/>(field_mapping 有移除)"]
+        B_MAP_ADD["綠色: N -> M<br/>(field_mapping 無移除)"]
+        B_CAST["灰色: N 型別轉換<br/>(type_cast)"]
+        B_COND["橘色: N 條件規則<br/>(conditional)"]
+        B_LOAD["綠色: 載入 N 欄位<br/>(target_load)"]
+        B_DEDUP["灰色: -> N<br/>(dedup)"]
+    end
+
+    NODES --> HOOK
+    EDGES --> HOOK
+    HOOK --> COMPUTE_OUT
+    HOOK --> COMPUTE_IN
+    COMPUTE_OUT --> CALC_STATS
+    COMPUTE_IN --> CALC_STATS
+    CALC_STATS --> BADGE_DESC
+    BADGE_DESC --> PN
+    PN --> NFB
+    NFB --> B_EXT
+    NFB --> B_MERGE
+    NFB --> B_DERIVED
+    NFB --> B_MAP_DEL
+    NFB --> B_MAP_ADD
+    NFB --> B_CAST
+    NFB --> B_COND
+    NFB --> B_LOAD
+    NFB --> B_DEDUP

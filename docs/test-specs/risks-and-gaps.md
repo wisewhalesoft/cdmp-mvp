@@ -543,6 +543,49 @@ last_updated: 2026-03-20
 
 ---
 
+## F039 節點欄位變化 Badge + Tooltip 風險
+
+### F039-RISK-001：merge 節點左/右輸入識別方式未定義（阻斷性）
+
+- **來源**：F039 Badge 規格（`左 N + 右 M → K`）、TS-F039-005、TS-F039-017、TS-F039-035
+- **問題**：`computeNodeOutputColumns` 在 merge 節點需要區分「左側輸入」與「右側輸入」，以計算各自的欄位數。區分方式可能為：
+  - 依 Handle ID（`left-input` / `right-input`）——需要 edges 攜帶 `targetHandle` 屬性
+  - 依 edges 陣列中的連接順序——但陣列順序不保證穩定
+  - 依節點資料中另存的 `leftSourceId` / `rightSourceId` 欄位
+  目前現有的 `pipeline-node.tsx` 定義了 `id="left-input"` 與 `id="right-input"` 兩個 Handle，但規格未確認 edges 是否攜帶 `targetHandle`。
+- **影響**：若 merge 節點左/右識別方式錯誤，`左 N + 右 M` 的計數會對調，導致 Badge 文字正確但語意錯誤；TS-F039-005 與 TS-F039-017 無法精確定義期望值
+- **建議**：確認 React Flow 的 edge `targetHandle` 欄位在儲存定義時是否被保留；若是，以 `targetHandle === 'left-input'` 區分；若否，需在節點資料中儲存 `leftNodeId` / `rightNodeId`
+- **風險等級**：高（阻斷 merge 相關測試場景最終化）
+
+### F039-RISK-002：dropUnmapped=false 時 field_mapping 的欄位重命名行為未定義
+
+- **來源**：TS-F039-003、TS-F039-015（OQ-F039-001 / OQ-F039-002）
+- **問題**：規格定義「`dropUnmapped=false` 時透傳」，但未說明：
+  - 已設定 mapping 的欄位是否從 `sourceColumn` 改名為 `targetColumn`？
+  - 若改名，Badge 文字應顯示 `5 → 5（改名）` 或仍顯示 `5 → 5（-0）`？
+  - 若不改名，`targetColumn` 的用途為何？
+- **影響**：TS-F039-003 與 TS-F039-015 的預期輸出無法確定
+- **建議**：與前端開發確認 `dropUnmapped=false` 的語意，建議明確定義：「`false` = 透傳，mapping 僅作為欄位重命名提示，`sourceColumn` 改名為 `targetColumn`，未設定 mapping 的欄位保持原名」
+- **風險等級**：中（影響 2 個測試場景，不阻斷主要路徑）
+
+### F039-RISK-003：Tooltip 邊界定位在 JSDOM 環境無法測試
+
+- **來源**：TS-F039-039（OQ-F039-003）
+- **問題**：JSDOM 的 `getBoundingClientRect()` 固定回傳全為 0 的物件，導致邊界定位邏輯（防止 tooltip 超出視窗）在單元/整合測試中無法透過實際計算驗證
+- **影響**：TS-F039-039 無法以標準方式驗證 tooltip 不超出視窗邊界
+- **建議**：將邊界定位邏輯提取為純函式 `clampToViewport(rect, viewportWidth, viewportHeight)`，直接以單元測試驗證數學計算；元件整合測試以 `vi.spyOn(element, 'getBoundingClientRect')` mock 座標驗證元件行為
+- **風險等級**：低（替代測試路徑清晰可行）
+
+### F039-RISK-004：computeNodeOutputColumns 快取策略影響 API 呼叫次數驗證
+
+- **來源**：TS-F039-021（OQ-F039-005）
+- **問題**：若 `computeNodeOutputColumns` 實作快取（同一 nodeId 的計算結果快取），則在測試中驗證「`getRawTableColumns` 僅被呼叫 1 次」是有意義的；但若無快取，則在遞迴圖中同一 extract 節點可能被多次計算，測試中的呼叫次數斷言需隨之調整
+- **影響**：TS-F039-021 的「getRawTableColumns 僅被呼叫 1 次」斷言可能在無快取情境下誤判為失敗
+- **建議**：在實作 `computeNodeOutputColumns` 時確認是否加入 memoization；若加入，測試可驗證 API 呼叫次數；若不加入，則移除此斷言，改為只驗證回傳結果正確
+- **風險等級**：低（不影響功能正確性，僅影響測試斷言精確度）
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
@@ -553,3 +596,4 @@ last_updated: 2026-03-20
 | 2026-03-18 | 新增連鎖下拉選單需求 4 項風險（SCHEMA-RISK-001 至 SCHEMA-RISK-004）；SCHEMA-RISK-001/002 為中風險，001 影響 CI 穩定性，002 影響前端顯示設計 | Test Designer Agent |
 | 2026-03-20 | 新增 E05 ETL Pipeline 管理模組 8 項風險（E05-RISK-001 至 E05-RISK-008）；整合自 F027~F036 各 test spec 的 Risks and Notes | Test Designer Agent |
 | 2026-03-25 | 新增 F036 US-049 修訂風險 5 項（F036-RISK-001 至 F036-RISK-005）；因應目標表由 4 個改為 1 個的重大規格變更；F036-RISK-004 為高風險（migration 策略假設）需向 Architecture 確認 | Test Designer Agent |
+| 2026-03-27 | 新增 F039 節點欄位變化 Badge + Tooltip 4 項風險（F039-RISK-001 至 F039-RISK-004）；F039-RISK-001（merge 左右識別）為高風險，阻斷 merge 相關場景最終化 | Test Designer Agent |

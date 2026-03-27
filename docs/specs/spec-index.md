@@ -1,16 +1,16 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "1.8"
-date: 2026-03-25
+version: "1.9"
+date: 2026-03-27
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：65 份（7 支援文件 + 38 Feature 文件 + 20 圖表文件）
-> **最後更新**：2026-03-25
+> **文件總數**：70 份（7 支援文件 + 41 Feature 文件 + 22 圖表文件）
+> **最後更新**：2026-03-27
 
 ---
 
@@ -23,10 +23,10 @@ status: Draft
 | Feature 文件（E02） | 7 |
 | Feature 文件（E03） | 6 |
 | Feature 文件（E04） | 10 |
-| Feature 文件（E05） | 11 |
+| Feature 文件（E05） | 14 |
 | Feature 文件（E04/E05 跨模組） | 1 |
-| Mermaid 圖表 | 20 |
-| **總計** | **65** |
+| Mermaid 圖表 | 22 |
+| **總計** | **70** |
 
 ---
 
@@ -107,6 +107,9 @@ status: Draft
 | F035 | [F035-pipeline-dashboard.md](features/F035-pipeline-dashboard.md) | Pipeline 監控儀表板 | US-048 | P1 |
 | F036 | [F036-target-tables.md](features/F036-target-tables.md) | 目標表 Domain-Oriented 規劃（customer_core 約 45 欄位） | US-049 | P0-MVP |
 | F037 | [F037-publish-pipeline-version.md](features/F037-publish-pipeline-version.md) | 發布 Pipeline 版本 | US-050 | P0-MVP |
+| F039 | [F039-node-field-badge.md](features/F039-node-field-badge.md) | 節點欄位變化統計 Badge | US-042 (擴充) | P0-MVP |
+| F040 | [F040-field-inspector-diff.md](features/F040-field-inspector-diff.md) | Inspector Panel 欄位 Diff | US-042 (擴充) | P1 |
+| F041 | [F041-badge-hover-tooltip.md](features/F041-badge-hover-tooltip.md) | Badge Hover Tooltip | US-042 (擴充) | P2 |
 
 ### E04/E05 — 跨模組系統維運
 
@@ -141,6 +144,8 @@ status: Draft
 | [diagrams/pipeline-execution-flow.md](diagrams/pipeline-execution-flow.md) | Pipeline 執行流程 | Sequence | F030 |
 | [diagrams/pipeline-editor-flow.md](diagrams/pipeline-editor-flow.md) | Pipeline 編輯器流程 | Flowchart | F029 |
 | [diagrams/target-table-etl-flow.md](diagrams/target-table-etl-flow.md) | 目標表 ETL 轉換流程 | Flowchart | F036 |
+| [diagrams/F039-node-field-badge.mmd](diagrams/F039-node-field-badge.mmd) | 節點欄位 Badge 資料流與元件結構 | Flowchart | F039 |
+| [diagrams/F041-badge-hover-tooltip.mmd](diagrams/F041-badge-hover-tooltip.mmd) | Badge Hover Tooltip 互動時序 | Sequence | F041 |
 
 ### 狀態圖
 
@@ -182,13 +187,17 @@ status: Draft
 
 ## 優先級分類
 
-### P0-MVP（Must Have）— 30 個 Feature
+### P0-MVP（Must Have）— 31 個 Feature
 
-F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038
+F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039
 
-### P1（Should Have）— 8 個 Feature
+### P1（Should Have）— 9 個 Feature
 
-F007（停用／啟用帳號）, F014（刪除資料來源）, F016（狀態監控儀表板）, F024（擷取監控儀表板）, F025（刪除擷取任務）, F033（Pipeline 版本管理）, F034（刪除 Pipeline）, F035（Pipeline 監控儀表板）
+F007（停用／啟用帳號）, F014（刪除資料來源）, F016（狀態監控儀表板）, F024（擷取監控儀表板）, F025（刪除擷取任務）, F033（Pipeline 版本管理）, F034（刪除 Pipeline）, F035（Pipeline 監控儀表板）, F040（Inspector Panel 欄位 Diff）
+
+### P2（Nice to Have）— 1 個 Feature
+
+F041（Badge Hover Tooltip）
 
 ---
 
@@ -213,6 +222,10 @@ F027 ──> F028 ──> F029 ──> F030, F033, F036
 F028 ──> F031, F034
 F030 ──> F032, F035, F037
 F037 ──> F031（發布後才能啟用）
+F029 ──> F039（Badge 依賴編輯器畫布）
+F039 ──> F040（欄位 Diff 共用計算邏輯）
+F039 ──> F041（Tooltip 依賴 Badge）
+F040 ──> F041（點擊查看完整導向欄位流分頁）
 ```
 
 ---
@@ -230,3 +243,4 @@ F037 ──> F031（發布後才能啟用）
 | 2026-03-25 | 新增 F038（孤兒任務回收），對應生產環境 Bug Fix；跨 E04/E05 模組；P0-MVP；更新總文件數為 64 份 | Product Analyst Agent |
 | 2026-03-25 | F038 規格審閱完善：統一為標準 Feature 格式、修正 AC-4 移除不存在的 error_message 引用、OQ-3 決策（回收失敗不中止啟動）反映至 BR-11/AC-10/替代流程、新增 NFR-002.12 孤兒回收效能、來源 Story 修正為 US-051、OQ 編號對齊全域序列（OQ-39~41）、新增假設 A31~A33 | Spec Writer Agent |
 | 2026-03-25 | F036（US-049）重大更新：4 個目標表縮減為 1 個（customer_core 約 45 欄位）、新增來源資料表定義（ZZIP_BAMCUST_M + MLMCUSTOMER）、新增 ETL 轉換規則（電話合併/衝突解決/代碼描述/型別轉換）、新增依賴（US-030/US-042）、更新 data-model/scope/overview/open-questions、新增 target-table-etl-flow 圖表、文件總數 65 份 | Spec Writer Agent |
+| 2026-03-27 | 新增 F039（節點欄位 Badge, P0）、F040（Inspector Panel 欄位 Diff, P1）、F041（Badge Hover Tooltip, P2）；新增 2 個圖表（F039 資料流、F041 互動時序）；US-042 編輯器功能擴充三階段規格；文件總數 70 份 | Spec Writer Agent |

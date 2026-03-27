@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "1.4"
-date: 2026-03-25
+version: "1.5"
+date: 2026-03-27
 status: Draft
 ---
 
@@ -166,6 +166,9 @@ status: Draft
 | OQ-45 | 電話欄位佔位值如何處理？ | **過濾為 NULL**，佔位值包含 `00-0000000000`、區碼或號碼全為 0、空字串 | F036 |
 | OQ-46 | 代碼欄位（education_code、occupation_code 等）的描述如何取得？ | **`_code` 保留原始代碼，`_desc` 由 US-030 代碼對照表轉換**，於 US-042 Transform 節點處理 | F036, F017 |
 | OQ-47 | MLMC 資本額欄位型別轉換？ | **varchar → DECIMAL**，CUSTNOWCAPTIAL 與 CUSTCREATECAPTIAL 均需轉換 | F036 |
+| OQ-48 | Badge 計算是否需要 debounce 或 throttle？ | **[ASSUMPTION] 使用 300ms debounce**，避免連線頻繁變更時大量重複計算。需效能測試驗證閾值是否合適 | F039 |
+| OQ-49 | `computeNodeOutputColumns` 快取策略？ | **[ASSUMPTION] 以 `nodeId + JSON.stringify(data)` 為 cache key 進行 memoization**。需確認是否會因 data 物件順序不同導致快取失效 | F039, F040 |
+| OQ-50 | Tooltip 全域管理方案：React Context vs Zustand? | **[ASSUMPTION] 使用 React Context**，因 Tooltip 狀態僅在 Pipeline Editor 範圍內共享，不需全域 store | F041 |
 
 ## 假設清單
 
@@ -210,6 +213,10 @@ status: Draft
 | A35 | 兩來源系統（ZZIP_BAMCUST_M / MLMCUSTOMER）以身分證字號/統編為共同鍵 | US-049 v2 來源定義 | ✅ 已確認（OQ-43） |
 | A36 | 電話欄位佔位值（`00-0000000000`、全零、空字串）過濾為 NULL | US-049 v2 轉換規則 | ✅ 已確認（OQ-45） |
 | A37 | `customer_core` 目標表約 45 欄位，分 A~H 八個分類 | US-049 v2 欄位定義 | ✅ 已確認（OQ-42） |
+| A38 | Badge 計算使用 300ms debounce 防止效能問題 | F039 設計假設 | 效能測試驗證 |
+| A39 | `computeNodeOutputColumns` 結果以 nodeId + data hash 為 key 進行 memo 快取 | F039/F040 設計假設 | 架構師確認 |
+| A40 | Tooltip 全域狀態管理使用 React Context（非 Zustand） | F041 設計假設 | 架構師確認 |
+| A41 | Badge 計算失敗時靜默降級（不顯示 Badge），不阻斷使用者操作 | F039 設計假設 | 架構師確認 |
 
 ## 更新紀錄
 
@@ -226,3 +233,4 @@ status: Draft
 | 2026-03-19 | OQ-36 ~ OQ-38 以建議假設方案確認解決；A28 ~ A30 標記為已確認 | Product Owner |
 | 2026-03-25 | 新增 F038 已解決的開放問題 OQ-39 ~ OQ-41、假設 A31 ~ A33 | Spec Writer Agent |
 | 2026-03-25 | US-049 v2 修訂：更新 R17 決議（4 表→1 表）、新增 OQ-42 ~ OQ-47（目標表縮減/來源定義/衝突解決/佔位值/代碼轉換/型別轉換）、新增假設 A34 ~ A37 | Spec Writer Agent |
+| 2026-03-27 | 新增 F039/F040/F041 相關開放問題 OQ-48 ~ OQ-50、假設 A38 ~ A41（Badge 計算 debounce/快取/Tooltip 狀態管理/降級策略） | Spec Writer Agent |

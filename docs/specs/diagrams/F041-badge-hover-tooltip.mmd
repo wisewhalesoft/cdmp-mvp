@@ -1,0 +1,60 @@
+%% F041: Badge Hover Tooltip 互動時序
+%% 描述使用者 hover Badge 後 Tooltip 顯示/隱藏的完整互動邏輯
+
+sequenceDiagram
+    actor Admin
+    participant Badge as NodeFieldBadge
+    participant Timer as Hover Timer
+    participant Manager as Tooltip Manager<br/>(Context/Store)
+    participant Portal as BadgeTooltipPortal
+    participant Content as buildTooltipContent()
+    participant Position as useTooltipPosition()
+
+    Note over Admin,Portal: Hover 觸發流程
+    Admin->>Badge: mouseenter
+    Badge->>Timer: 啟動 300ms 計時器
+    Timer-->>Timer: 等待 300ms
+
+    alt 300ms 內移出
+        Admin->>Badge: mouseleave
+        Badge->>Timer: 取消計時器
+    else 300ms 到達
+        Timer->>Manager: requestShow(nodeId)
+        Manager->>Manager: 關閉其他 Tooltip
+        Manager->>Content: 計算 Tooltip 內容(nodeData)
+        Content-->>Manager: BadgeTooltipContent
+        Manager->>Position: 計算定位(badgeRect)
+        Position-->>Manager: {x, y, placement}
+        Manager->>Portal: 渲染 Tooltip
+        Portal-->>Admin: 顯示 Tooltip
+    end
+
+    Note over Admin,Portal: 離開 Badge → 進入 Tooltip
+    Admin->>Badge: mouseleave
+    Badge->>Timer: 啟動 200ms 隱藏計時器
+
+    alt 200ms 內進入 Tooltip
+        Admin->>Portal: mouseenter
+        Portal->>Timer: 取消隱藏計時器
+        Note over Admin,Portal: Tooltip 保持顯示
+    else 200ms 到達
+        Timer->>Manager: requestHide(nodeId)
+        Manager->>Portal: 卸載 Tooltip
+    end
+
+    Note over Admin,Portal: 離開 Tooltip
+    Admin->>Portal: mouseleave
+    Portal->>Timer: 啟動 200ms 隱藏計時器
+
+    alt 200ms 內回到 Badge 或 Tooltip
+        Timer->>Timer: 取消計時器
+    else 200ms 到達
+        Timer->>Manager: requestHide(nodeId)
+        Manager->>Portal: 卸載 Tooltip
+    end
+
+    Note over Admin,Portal: 點擊查看完整
+    Admin->>Portal: click "點擊查看完整"
+    Portal->>Manager: requestHide(nodeId)
+    Portal->>Badge: selectNode(nodeId)
+    Badge->>Badge: 開啟屬性面板 → 欄位流分頁

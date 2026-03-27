@@ -1,18 +1,19 @@
 ---
 type: test-design-index
-version: "2.0"
+version: "2.1"
 status: draft
-last_updated: 2026-03-25
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038]
+last_updated: 2026-03-27
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：42 份（4 策略文件 + 38 Feature 測試文件）
-> **總測試場景數**：596 個（E01～E04 共 308 + E05 共 243 + F038 共 45）
+> **測試文件總數**：47 份（4 策略文件 + 39 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：640 個（E01～E04 共 308 + E05 共 243 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F039-strategy 共 4）
+> **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，約 45 欄），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
-> **最後更新**：2026-03-25
+> **最後更新**：2026-03-27
 
 ---
 
@@ -94,7 +95,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | **E05 小計** | | | **11 files** | **267** | |
 | **E04+E05 系統啟動修復** | | | | | |
 | F038 | 孤兒任務回收（系統啟動時自動修復 running 狀態） | P0-MVP | [F038-test.md](features/F038-test.md) | 45 | Draft |
-| **總合計** | | | **38 files** | **596** | |
+| **ETL Editor 前端功能** | | | | | |
+| F039 | 節點欄位變化統計 Badge | P0-MVP | [F039-test.md](features/F039-test.md) + [F039-test-strategy.md](features/F039-test-strategy.md) | 22 | Draft |
+| F040 | Inspector Panel 欄位 Diff | P1 | [F040-test.md](features/F040-test.md) | 6 | Draft |
+| F041 | Badge Hover Tooltip | P2 | [F041-test.md](features/F041-test.md) | 12 | Draft |
+| **總合計** | | | **39 files** | **634** | |
 
 ---
 
