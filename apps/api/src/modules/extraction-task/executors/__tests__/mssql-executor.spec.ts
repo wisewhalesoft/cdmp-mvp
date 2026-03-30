@@ -52,14 +52,15 @@ describe('MSSQLExecutor', () => {
     lastConnectConfig = null;
 
     mockDriver = {
-      connect: vi.fn().mockImplementation(async (config: any) => {
+      ConnectionPool: vi.fn().mockImplementation((config: any) => {
         lastConnectConfig = config;
         return {
+          connect: vi.fn().mockResolvedValue(undefined),
           request: () => createMockRequest(),
           close: mockClose,
         };
       }),
-    };
+    } as any;
 
     executor = new MSSQLExecutor(
       mockDatasourceRepo as Repository<Datasource>,
