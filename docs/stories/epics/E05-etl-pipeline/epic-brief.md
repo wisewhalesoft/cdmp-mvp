@@ -3,7 +3,7 @@
 > **Epic ID**：E05
 > **優先級**：P0（Critical）
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：14
+> **Stories 數量**：17
 
 ## Epic 目標
 
@@ -29,6 +29,9 @@ Pipeline 支援三階段發布流程（草稿 → 測試執行 → 發布）、�
 | US-052 | 節點欄位變化統計 Badge | Must Have | [US-052-node-column-change-badge.md](US-052-node-column-change-badge.md) |
 | US-053 | 節點 Inspector Panel 欄位 Diff | Should Have | [US-053-node-inspector-panel-diff.md](US-053-node-inspector-panel-diff.md) |
 | US-054 | 節點 Badge Hover Tooltip | Could Have | [US-054-node-badge-hover-tooltip.md](US-054-node-badge-hover-tooltip.md) |
+| US-055 | ETL 執行引擎核心框架 | Must Have | [US-055-etl-execution-engine-core.md](US-055-etl-execution-engine-core.md) |
+| US-056 | ETL 節點實作 — Extract、Merge、Dedup、TypeCast、DerivedField | Must Have | [US-056-etl-nodes-extract-merge-dedup.md](US-056-etl-nodes-extract-merge-dedup.md) |
+| US-057 | ETL 節點實作 — FieldMapping、Conditional、TargetLoad | Must Have | [US-057-etl-nodes-mapping-conditional-load.md](US-057-etl-nodes-mapping-conditional-load.md) |
 
 ## 依賴關係
 

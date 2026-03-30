@@ -9,7 +9,7 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 5 |
-| User Story 總數 | 41 |
+| User Story 總數 | 44 |
 | 非功能需求（NFR）總數 | 2 |
 | 目標階段 | Phase 1（MVP） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
@@ -23,7 +23,7 @@
 | E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 7 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 11 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
-| E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 14 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
+| E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 17 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
 
 ## Story 地圖
 
@@ -70,6 +70,9 @@
 | E05 | [US-052](epics/E05-etl-pipeline/US-052-node-column-change-badge.md) | 節點欄位變化統計 Badge | Must Have |
 | E05 | [US-053](epics/E05-etl-pipeline/US-053-node-inspector-panel-diff.md) | 節點 Inspector Panel 欄位 Diff | Should Have |
 | E05 | [US-054](epics/E05-etl-pipeline/US-054-node-badge-hover-tooltip.md) | 節點 Badge Hover Tooltip | Could Have |
+| E05 | [US-055](epics/E05-etl-pipeline/US-055-etl-execution-engine-core.md) | ETL 執行引擎核心框架 | Must Have |
+| E05 | [US-056](epics/E05-etl-pipeline/US-056-etl-nodes-extract-merge-dedup.md) | ETL 節點實作 — Extract、Merge、Dedup、TypeCast、DerivedField | Must Have |
+| E05 | [US-057](epics/E05-etl-pipeline/US-057-etl-nodes-mapping-conditional-load.md) | ETL 節點實作 — FieldMapping、Conditional、TargetLoad | Must Have |
 
 ## 非功能需求（NFR）
 
@@ -87,7 +90,7 @@
 - E02 全部 Stories（US-010 ~ US-016）
 - E03 全部 Stories（US-020 ~ US-025）
 - E04 全部 Stories（US-030 ~ US-039、US-051）
-- E05 全部 Stories（US-040 ~ US-050、US-052 ~ US-054）
+- E05 全部 Stories（US-040 ~ US-050、US-052 ~ US-057）
 - NFR-001、NFR-002
 
 ### Phase 2 — 進階規劃（未來）
