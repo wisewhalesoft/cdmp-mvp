@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETL Pipeline 執行進度與結果 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', muted: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
+    .canvas-bg {
+      background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
+      background-size: 20px 20px;
+      overflow: auto;
+    }
+
+    /* Node card */
+    .node-card {
+      position: absolute;
+      width: 180px;
+      background: #fff;
+      border: 2px solid #E5E7EB;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: box-shadow 0.3s, border-color 0.3s, background 0.3s;
+      z-index: 2;
+      cursor: pointer;
+    }
+    .node-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+
+    /* Node type color bars */
+    .node-bar { height: 4px; border-radius: 6px 6px 0 0; }
+    .node-bar-extract { background: #2563EB; }
+    .node-bar-merge { background: #F59E0B; }
+    .node-bar-dedup { background: #9CA3AF; }
+    .node-bar-derived { background: #22C55E; }
+    .node-bar-mapping { background: #EF4444; }
+    .node-bar-typecast { background: #9CA3AF; }
+    .node-bar-conditional { background: #F59E0B; }
+    .node-bar-load { background: #22C55E; }
+
+    /* Execution status styles */
+    .node-pending { border-color: #E5E7EB; opacity: 0.6; }
+    .node-running {
+      border-color: #2563EB;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15), 0 4px 12px rgba(37,99,235,0.2);
+    }
+    .node-completed {
+      border-color: #22C55E;
+      box-shadow: 0 0 0 2px rgba(34,197,94,0.12);
+    }
+    .node-failed {
+      border-color: #EF4444;
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
+    }
+    .node-skipped {
+      border-color: #D1D5DB;
+      opacity: 0.5;
+    }
+
+    /* Pulse animation for running nodes */
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.3); }
+      50% { box-shadow: 0 0 0 8px rgba(37,99,235,0); }
+      100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+    }
+    .node-running { animation: pulse-ring 1.5s ease-in-out infinite; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(37,99,235,0.2);
+      border-top-color: #2563EB;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Port dots */
+    .port {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #D1D5DB; border: 1.5px solid #fff;
+      position: absolute;
+    }
+    .port-left { left: -5px; top: 50%; transform: translateY(-50%); }
+    .port-right { right: -5px; top: 50%; transform: translateY(-50%); }
+
+    /* Status badge inside node */
+    .status-indicator {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 500; padding: 2px 6px;
+      border-radius: 4px; white-space: nowrap;
+    }
+
+    /* Result panel */
+    .result-panel {
+      position: fixed;
+      right: 0; top: 48px; bottom: 0;
+      width: 380px;
+      background: #fff;
+      border-left: 1px solid #E5E7EB;
+      box-shadow: -4px 0 16px rgba(0,0,0,0.06);
+      z-index: 20;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      overflow-y: auto;
+    }
+    .result-panel.visible { transform: translateX(0); }
+
+    /* Error detail modal */
+    .error-modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .error-modal-backdrop.visible { display: flex; }
+    .error-modal {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      width: 560px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    /* Progress bar */
+    .progress-track {
+      height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+
+    /* Edge highlight */
+    .edge-completed { stroke: #22C55E !important; stroke-opacity: 0.6; }
+    .edge-running { stroke: #2563EB !important; stroke-opacity: 0.8; }
+    .edge-failed { stroke: #EF4444 !important; stroke-opacity: 0.6; }
+
+    /* Scrollbar */
+    .result-panel::-webkit-scrollbar { width: 4px; }
+    .result-panel::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Top Bar -->
+  <header class="fixed top-0 left-0 right-0 h-12 bg-white border-b border-border flex items-center justify-between px-4 z-30">
+    <div class="flex items-center gap-3">
+      <span class="text-gray-400"><i data-lucide="arrow-left" class="w-5 h-5"></i></span>
+      <nav class="flex items-center text-sm text-gray-500">
+        <span>Pipeline 清單</span>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-gray-800 font-medium">客戶資料整合</span>
+        <i data-lucide="chevron-right" class="w-4 h-4 mx-1"></i>
+        <span class="text-primary font-medium">編輯器</span>
+      </nav>
+      <span class="ml-3 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">v3 (published)</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- Execution controls -->
+      <div id="exec-status-bar" class="flex items-center gap-2 text-sm">
+        <span id="exec-status-text" class="text-gray-500">準備就緒</span>
+      </div>
+      <button id="btn-run-success" onclick="startExecution('success')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-white hover:bg-blue-700 transition-colors">
+        <i data-lucide="play" class="w-4 h-4"></i>
+        模擬成功執行
+      </button>
+      <button id="btn-run-fail" onclick="startExecution('fail')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors">
+        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+        模擬失敗執行
+      </button>
+      <button id="btn-reset" onclick="resetAll()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors" style="display:none;">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        重置
+      </button>
+    </div>
+  </header>
+
+  <!-- Canvas -->
+  <div id="canvas" class="canvas-bg fixed top-12 left-0 right-0 bottom-0">
+    <div id="canvas-inner" style="position:relative; min-width:2200px; min-height:900px;">
+      <svg id="edge-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none;"></svg>
+    </div>
+  </div>
+
+  <!-- Execution Progress Overlay -->
+  <div id="progress-overlay" class="fixed top-16 left-4 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-3" style="display:none; width:260px;">
+    <div class="flex items-center gap-2 mb-2">
+      <div class="spinner" id="progress-spinner"></div>
+      <span class="text-sm font-semibold text-gray-700">執行中...</span>
+      <span id="progress-step" class="text-xs text-gray-400 ml-auto">0/19</span>
+    </div>
+    <div class="progress-track">
+      <div id="progress-fill" class="progress-fill bg-primary" style="width:0%"></div>
+    </div>
+    <div id="progress-node-name" class="text-xs text-gray-500 mt-1.5 truncate">等待開始...</div>
+    <div id="progress-elapsed" class="text-xs text-gray-400 mt-0.5">已耗時: 0s</div>
+  </div>
+
+  <!-- Result Summary Panel (right side) -->
+  <div id="result-panel" class="result-panel">
+    <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="bar-chart-3" class="w-4 h-4 text-gray-500"></i>
+        <span class="font-semibold text-sm text-gray-800">執行結果摘要</span>
+      </div>
+      <button onclick="closeResultPanel()" class="text-gray-400 hover:text-gray-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div id="result-content" class="p-4 space-y-4">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- Error Detail Modal -->
+  <div id="error-modal" class="error-modal-backdrop" onclick="closeErrorModal(event)">
+    <div class="error-modal" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-red-500"></i>
+          </div>
+          <span class="font-semibold text-sm text-gray-800">節點錯誤詳情</span>
+        </div>
+        <button onclick="document.getElementById('error-modal').classList.remove('visible')" class="text-gray-400 hover:text-gray-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="error-modal-body" class="p-5">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ===== PIPELINE DATA (same as prototype 23) =====
+  const NODES = [
+    { id:'e1', x:40,  y:60,  type:'extract',     label:'[和潤]ZZIP',      sub:'小車/機車/商品客戶主檔擷取' },
+    { id:'e2', x:40,  y:200, type:'extract',     label:'[和勁]ZZIP',      sub:'重車客戶主檔擷取' },
+    { id:'m1', x:280, y:115, type:'merge',       label:'ZZIP合併',        sub:'FULL JOIN on CUSTO_NO' },
+    { id:'d1', x:480, y:115, type:'dedup',       label:'ZZIP去重',        sub:'CUSTO_NO / latest' },
+    { id:'df1',x:680, y:115, type:'derived',     label:'ZZIP電話合併',     sub:'+3 衍生欄位' },
+    { id:'fm1',x:880, y:115, type:'mapping',     label:'ZZIP映射',        sub:'53 → 38' },
+    { id:'e3', x:40,  y:410, type:'extract',     label:'[和潤]MLMC',      sub:'企金客戶主檔擷取' },
+    { id:'e4', x:40,  y:550, type:'extract',     label:'[和勁]MLMC',      sub:'企金客戶主檔擷取' },
+    { id:'m2', x:280, y:465, type:'merge',       label:'MLMC合併1',       sub:'FULL JOIN on CUSTID' },
+    { id:'e5', x:40,  y:700, type:'extract',     label:'[興業]MLMC',      sub:'客戶主檔擷取' },
+    { id:'m3', x:480, y:535, type:'merge',       label:'MLMC合併2',       sub:'FULL JOIN on CUSTID' },
+    { id:'d2', x:680, y:535, type:'dedup',       label:'MLMC去重',        sub:'CUSTID / latest' },
+    { id:'tc1',x:880, y:535, type:'typecast',    label:'MLMC型別轉換',     sub:'2 欄位' },
+    { id:'df2',x:1080,y:535, type:'derived',     label:'MLMC轉換',        sub:'+2 衍生欄位' },
+    { id:'fm2',x:1280,y:535, type:'mapping',     label:'MLMC映射',        sub:'47 → 21' },
+    { id:'m4', x:1280,y:315, type:'merge',       label:'最終合併',         sub:'FULL OUTER JOIN' },
+    { id:'cd1',x:1480,y:315, type:'conditional', label:'衝突解決',         sub:'以較新者為準' },
+    { id:'df3',x:1680,y:315, type:'derived',     label:'data_source標記',  sub:'+2 衍生欄位' },
+    { id:'tl1',x:1880,y:315, type:'load',        label:'載入 customer_core',sub:'customer_core' }
+  ];
+
+  const EDGES = [
+    ['e1','m1'],['e2','m1'],['m1','d1'],['d1','df1'],['df1','fm1'],
+    ['e3','m2'],['e4','m2'],['m2','m3'],['e5','m3'],['m3','d2'],['d2','tc1'],['tc1','df2'],['df2','fm2'],
+    ['fm1','m4'],['fm2','m4'],['m4','cd1'],['cd1','df3'],['df3','tl1']
+  ];
+
+  // Topological order for execution
+  const TOPO_ORDER = ['e1','e2','e3','e4','e5','m1','m2','m3','d1','d2','df1','tc1','fm1','df2','fm2','m4','cd1','df3','tl1'];
+
+  // Simulated row counts per node
+  const SIM_DATA = {
+    e1:  { input: 0,       output: 1250000, duration: 3200 },
+    e2:  { input: 0,       output: 420000,  duration: 1800 },
+    e3:  { input: 0,       output: 380000,  duration: 1500 },
+    e4:  { input: 0,       output: 125000,  duration: 800 },
+    e5:  { input: 0,       output: 95000,   duration: 650 },
+    m1:  { input: 1670000, output: 1680000, duration: 4200 },
+    m2:  { input: 505000,  output: 510000,  duration: 2100 },
+    m3:  { input: 605000,  output: 612000,  duration: 2500 },
+    d1:  { input: 1680000, output: 1520000, duration: 3800 },
+    d2:  { input: 612000,  output: 580000,  duration: 2200 },
+    df1: { input: 1520000, output: 1520000, duration: 1200 },
+    tc1: { input: 580000,  output: 580000,  duration: 900 },
+    fm1: { input: 1520000, output: 1520000, duration: 1600 },
+    df2: { input: 580000,  output: 580000,  duration: 700 },
+    fm2: { input: 580000,  output: 580000,  duration: 1100 },
+    m4:  { input: 2100000, output: 2150000, duration: 5200 },
+    cd1: { input: 2150000, output: 2150000, duration: 3100 },
+    df3: { input: 2150000, output: 2150000, duration: 800 },
+    tl1: { input: 2150000, output: 2150000, duration: 6500 }
+  };
+
+  // Fail scenario: m3 fails
+  const FAIL_AT = 'm3';
+  const FAIL_ERROR = {
+    message: 'FULL JOIN 執行失敗：記憶體不足。左側輸入 510,000 筆 x 右側輸入 95,000 筆的笛卡爾積超過可用記憶體上限（2GB）。',
+    stack: `Error: OutOfMemoryError: Java heap space
+    at com.cdmp.etl.engine.MergeNodeHandler.executeFullJoin(MergeNodeHandler.java:142)
+    at com.cdmp.etl.engine.MergeNodeHandler.process(MergeNodeHandler.java:87)
+    at com.cdmp.etl.engine.NodeDispatcher.dispatch(NodeDispatcher.java:56)
+    at com.cdmp.etl.engine.PipelineExecutor.executeNode(PipelineExecutor.java:198)
+    at com.cdmp.etl.engine.PipelineExecutor.run(PipelineExecutor.java:112)
+    at com.cdmp.etl.service.ExecutionService.executePipeline(ExecutionService.java:229)
+    at com.cdmp.etl.controller.PipelineController.triggerExecution(PipelineController.java:89)
+    at java.base/java.lang.Thread.run(Thread.java:829)`
+  };
+
+  // Color config per type
+  const TYPE_COLORS = {
+    extract:     { hex:'#2563EB', bg:'rgba(37,99,235,0.08)' },
+    merge:       { hex:'#F59E0B', bg:'rgba(245,158,11,0.08)' },
+    dedup:       { hex:'#9CA3AF', bg:'rgba(156,163,175,0.08)' },
+    derived:     { hex:'#22C55E', bg:'rgba(34,197,94,0.08)' },
+    mapping:     { hex:'#EF4444', bg:'rgba(239,68,68,0.08)' },
+    typecast:    { hex:'#9CA3AF', bg:'rgba(156,163,175,0.08)' },
+    conditional: { hex:'#F59E0B', bg:'rgba(245,158,11,0.08)' },
+    load:        { hex:'#22C55E', bg:'rgba(34,197,94,0.08)' }
+  };
+
+  const TYPE_ICONS = {
+    extract:'database', merge:'git-merge', dedup:'copy-minus', derived:'variable',
+    mapping:'columns-3', typecast:'replace', conditional:'git-branch', load:'hard-drive-upload'
+  };
+
+  const BAR_CLASS = {
+    extract:'node-bar-extract', merge:'node-bar-merge', dedup:'node-bar-dedup', derived:'node-bar-derived',
+    mapping:'node-bar-mapping', typecast:'node-bar-typecast', conditional:'node-bar-conditional', load:'node-bar-load'
+  };
+
+  // ===== STATE =====
+  let nodeStates = {}; // nodeId -> 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+  let executionTimer = null;
+  let startTime = null;
+  let elapsedInterval = null;
+  let isExecuting = false;
+
+  // ===== RENDER NODES =====
+  const canvasInner = document.getElementById('canvas-inner');
+  const nodeMap = {};
+  NODES.forEach(n => nodeMap[n.id] = n);
+
+  NODES.forEach(n => {
+    const card = document.createElement('div');
+    card.className = 'node-card';
+    card.style.left = n.x + 'px';
+    card.style.top = n.y + 'px';
+    card.id = 'node-' + n.id;
+
+    const colors = TYPE_COLORS[n.type];
+    const icon = TYPE_ICONS[n.type];
+    const barClass = BAR_CLASS[n.type];
+
+    card.innerHTML = `
+      <div class="${barClass} node-bar"></div>
+      <div style="padding:10px 12px 6px;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
+          <i data-lucide="${icon}" style="width:14px;height:14px;color:${colors.hex};flex-shrink:0;"></i>
+          <span style="font-size:12px;font-weight:600;color:#1F2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${n.label}</span>
+          <span class="node-status-icon" data-node="${n.id}" style="display:none;"></span>
+        </div>
+        <div style="font-size:10px;color:#9CA3AF;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.sub}</div>
+      </div>
+      <div class="node-row-counts" data-node="${n.id}" style="padding:0 12px 8px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;">
+          <span class="rows-in text-gray-400"></span>
+          <span class="rows-arrow text-gray-300">→</span>
+          <span class="rows-out text-gray-500 font-medium"></span>
+          <span class="rows-time text-gray-300 ml-1"></span>
+        </div>
+      </div>
+      <div class="port port-left" style="${n.type === 'extract' ? 'display:none' : ''}"></div>
+      <div class="port port-right" style="${n.type === 'load' ? 'display:none' : ''}"></div>
+    `;
+
+    card.addEventListener('click', () => handleNodeClick(n.id));
+    canvasInner.appendChild(card);
+  });
+
+  // ===== RENDER EDGES =====
+  const svg = document.getElementById('edge-svg');
+  const NODE_W = 180, NODE_H = 80;
+
+  function getPortPos(nodeId, side) {
+    const n = nodeMap[nodeId];
+    if (side === 'right') return { x: n.x + NODE_W + 5, y: n.y + NODE_H / 2 };
+    return { x: n.x - 5, y: n.y + NODE_H / 2 };
+  }
+
+  EDGES.forEach(([src, tgt], i) => {
+    const from = getPortPos(src, 'right');
+    const to = getPortPos(tgt, 'left');
+    const midX = (from.x + to.x) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${from.x},${from.y} C${midX},${from.y} ${midX},${to.y} ${to.x},${to.y}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#D1D5DB');
+    path.setAttribute('stroke-width', '1.5');
+    path.id = `edge-${src}-${tgt}`;
+    svg.appendChild(path);
+  });
+
+  lucide.createIcons();
+
+  // ===== EXECUTION LOGIC =====
+  function formatNumber(n) {
+    if (n === 0) return '-';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+    return n.toString();
+  }
+
+  function formatMs(ms) {
+    if (ms < 1000) return ms + 'ms';
+    return (ms / 1000).toFixed(1) + 's';
+  }
+
+  function updateNodeVisual(nodeId, status) {
+    const card = document.getElementById('node-' + nodeId);
+    const statusIcon = card.querySelector('.node-status-icon');
+    const rowCounts = card.querySelector('.node-row-counts');
+
+    // Clear previous states
+    card.classList.remove('node-pending', 'node-running', 'node-completed', 'node-failed', 'node-skipped');
+
+    switch (status) {
+      case 'pending':
+        card.classList.add('node-pending');
+        statusIcon.style.display = 'inline-flex';
+        statusIcon.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:#E5E7EB;display:inline-block;"></span>';
+        break;
+      case 'running':
+        card.classList.add('node-running');
+        statusIcon.style.display = 'inline-flex';
+        statusIcon.innerHTML = '<div class="spinner"></div>';
+        break;
+      case 'completed':
+        card.classList.add('node-completed');
+        statusIcon.style.display = 'inline-flex';
+        statusIcon.innerHTML = '<i data-lucide="check-circle-2" style="width:14px;height:14px;color:#22C55E;"></i>';
+        // Show row counts
+        const sim = SIM_DATA[nodeId];
+        if (sim) {
+          rowCounts.style.display = 'block';
+          rowCounts.querySelector('.rows-in').textContent = sim.input > 0 ? formatNumber(sim.input) + ' 筆' : '';
+          rowCounts.querySelector('.rows-out').textContent = formatNumber(sim.output) + ' 筆';
+          rowCounts.querySelector('.rows-time').textContent = formatMs(sim.duration);
+        }
+        lucide.createIcons({ nodes: [statusIcon] });
+        break;
+      case 'failed':
+        card.classList.add('node-failed');
+        statusIcon.style.display = 'inline-flex';
+        statusIcon.innerHTML = '<i data-lucide="x-circle" style="width:14px;height:14px;color:#EF4444;"></i>';
+        lucide.createIcons({ nodes: [statusIcon] });
+        break;
+      case 'skipped':
+        card.classList.add('node-skipped');
+        statusIcon.style.display = 'inline-flex';
+        statusIcon.innerHTML = '<i data-lucide="minus-circle" style="width:14px;height:14px;color:#9CA3AF;"></i>';
+        lucide.createIcons({ nodes: [statusIcon] });
+        break;
+    }
+
+    nodeStates[nodeId] = status;
+  }
+
+  function updateEdgeVisual(src, tgt, status) {
+    const edge = document.getElementById(`edge-${src}-${tgt}`);
+    if (!edge) return;
+    edge.classList.remove('edge-completed', 'edge-running', 'edge-failed');
+    if (status === 'completed') {
+      edge.classList.add('edge-completed');
+      edge.setAttribute('stroke-width', '2');
+    } else if (status === 'running') {
+      edge.classList.add('edge-running');
+      edge.setAttribute('stroke-width', '2');
+    } else if (status === 'failed') {
+      edge.classList.add('edge-failed');
+      edge.setAttribute('stroke-width', '2');
+    }
+  }
+
+  function getIncomingEdges(nodeId) {
+    return EDGES.filter(([s, t]) => t === nodeId);
+  }
+
+  function startExecution(mode) {
+    if (isExecuting) return;
+    isExecuting = true;
+    startTime = Date.now();
+
+    // Hide run buttons, show reset
+    document.getElementById('btn-run-success').style.display = 'none';
+    document.getElementById('btn-run-fail').style.display = 'none';
+    document.getElementById('btn-reset').style.display = 'none';
+
+    // Show progress overlay
+    const overlay = document.getElementById('progress-overlay');
+    overlay.style.display = 'block';
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('progress-step').textContent = `0/${TOPO_ORDER.length}`;
+    document.getElementById('progress-node-name').textContent = '等待開始...';
+    document.getElementById('exec-status-text').textContent = '執行中...';
+    document.getElementById('exec-status-text').className = 'text-primary font-medium text-sm';
+
+    // Start elapsed timer
+    elapsedInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      document.getElementById('progress-elapsed').textContent = `已耗時: ${elapsed}s`;
+    }, 1000);
+
+    // Mark all nodes as pending
+    TOPO_ORDER.forEach(id => updateNodeVisual(id, 'pending'));
+
+    // Execute nodes one by one
+    let step = 0;
+    const failIndex = mode === 'fail' ? TOPO_ORDER.indexOf(FAIL_AT) : -1;
+
+    function executeNext() {
+      if (step >= TOPO_ORDER.length) {
+        finishExecution('success');
+        return;
+      }
+
+      const nodeId = TOPO_ORDER[step];
+
+      // Check if this node should fail
+      if (mode === 'fail' && step === failIndex) {
+        // Run it first, then fail
+        updateNodeVisual(nodeId, 'running');
+        getIncomingEdges(nodeId).forEach(([s, t]) => updateEdgeVisual(s, t, 'running'));
+        document.getElementById('progress-node-name').textContent = `正在執行: ${nodeMap[nodeId].label}`;
+
+        setTimeout(() => {
+          updateNodeVisual(nodeId, 'failed');
+          getIncomingEdges(nodeId).forEach(([s, t]) => updateEdgeVisual(s, t, 'failed'));
+
+          // Skip all remaining
+          for (let i = step + 1; i < TOPO_ORDER.length; i++) {
+            updateNodeVisual(TOPO_ORDER[i], 'skipped');
+          }
+
+          finishExecution('failed', nodeId);
+        }, 600);
+        return;
+      }
+
+      // Normal execution
+      updateNodeVisual(nodeId, 'running');
+      getIncomingEdges(nodeId).forEach(([s, t]) => updateEdgeVisual(s, t, 'running'));
+      document.getElementById('progress-node-name').textContent = `正在執行: ${nodeMap[nodeId].label}`;
+
+      // Simulate execution time (300-700ms for demo)
+      const delay = 300 + Math.random() * 400;
+      setTimeout(() => {
+        updateNodeVisual(nodeId, 'completed');
+        getIncomingEdges(nodeId).forEach(([s, t]) => updateEdgeVisual(s, t, 'completed'));
+
+        step++;
+        const pct = Math.round((step / TOPO_ORDER.length) * 100);
+        document.getElementById('progress-fill').style.width = pct + '%';
+        document.getElementById('progress-step').textContent = `${step}/${TOPO_ORDER.length}`;
+
+        executeNext();
+      }, delay);
+    }
+
+    executeNext();
+  }
+
+  function finishExecution(result, failedNodeId) {
+    isExecuting = false;
+    clearInterval(elapsedInterval);
+
+    const totalElapsed = Date.now() - startTime;
+    document.getElementById('progress-elapsed').textContent = `總耗時: ${(totalElapsed / 1000).toFixed(1)}s`;
+
+    // Update overlay
+    const overlay = document.getElementById('progress-overlay');
+    const spinner = document.getElementById('progress-spinner');
+
+    if (result === 'success') {
+      spinner.style.display = 'none';
+      overlay.querySelector('.text-sm.font-semibold').textContent = '執行完成';
+      overlay.querySelector('.text-sm.font-semibold').classList.add('text-green-600');
+      document.getElementById('progress-fill').classList.remove('bg-primary');
+      document.getElementById('progress-fill').classList.add('bg-green-500');
+      document.getElementById('progress-fill').style.width = '100%';
+      document.getElementById('progress-step').textContent = `${TOPO_ORDER.length}/${TOPO_ORDER.length}`;
+      document.getElementById('progress-node-name').textContent = '所有節點執行完成';
+      document.getElementById('exec-status-text').textContent = '執行成功';
+      document.getElementById('exec-status-text').className = 'text-green-600 font-medium text-sm';
+    } else {
+      spinner.style.display = 'none';
+      overlay.querySelector('.text-sm.font-semibold').textContent = '執行失敗';
+      overlay.querySelector('.text-sm.font-semibold').classList.add('text-red-500');
+      document.getElementById('progress-fill').classList.remove('bg-primary');
+      document.getElementById('progress-fill').classList.add('bg-red-500');
+      document.getElementById('progress-node-name').textContent = `失敗節點: ${nodeMap[failedNodeId].label}`;
+      document.getElementById('exec-status-text').textContent = '執行失敗';
+      document.getElementById('exec-status-text').className = 'text-red-500 font-medium text-sm';
+    }
+
+    // Show reset button
+    document.getElementById('btn-reset').style.display = 'flex';
+
+    // Show result panel after a brief delay
+    setTimeout(() => showResultPanel(result, failedNodeId, totalElapsed), 500);
+  }
+
+  function showResultPanel(result, failedNodeId, totalElapsed) {
+    const panel = document.getElementById('result-panel');
+    const content = document.getElementById('result-content');
+
+    // Summary header
+    const isSuccess = result === 'success';
+    const statusColor = isSuccess ? 'green' : 'red';
+    const statusIcon = isSuccess ? 'check-circle-2' : 'x-circle';
+    const statusText = isSuccess ? '執行成功' : '執行失敗';
+
+    const completedNodes = TOPO_ORDER.filter(id => nodeStates[id] === 'completed');
+    const failedNodes = TOPO_ORDER.filter(id => nodeStates[id] === 'failed');
+    const skippedNodes = TOPO_ORDER.filter(id => nodeStates[id] === 'skipped');
+
+    // Calculate simulated total duration
+    let simTotalDuration = 0;
+    completedNodes.forEach(id => { simTotalDuration += SIM_DATA[id].duration; });
+
+    // Target write count
+    const targetWritten = isSuccess ? SIM_DATA['tl1'].output : 0;
+
+    let html = `
+      <!-- Overall status -->
+      <div class="p-3 rounded-lg border ${isSuccess ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}">
+        <div class="flex items-center gap-2 mb-2">
+          <i data-lucide="${statusIcon}" class="w-5 h-5 text-${statusColor}-500"></i>
+          <span class="font-semibold text-${statusColor}-700">${statusText}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="flex items-center gap-1.5 text-gray-600">
+            <i data-lucide="clock" class="w-3 h-3"></i>
+            總耗時: <span class="font-medium">${formatMs(simTotalDuration)}</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-gray-600">
+            <i data-lucide="layers" class="w-3 h-3"></i>
+            節點: <span class="font-medium">${completedNodes.length} 完成</span>
+          </div>
+          ${!isSuccess ? `
+          <div class="flex items-center gap-1.5 text-red-600">
+            <i data-lucide="alert-circle" class="w-3 h-3"></i>
+            失敗: <span class="font-medium">${failedNodes.length}</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-gray-400">
+            <i data-lucide="minus-circle" class="w-3 h-3"></i>
+            跳過: <span class="font-medium">${skippedNodes.length}</span>
+          </div>
+          ` : `
+          <div class="flex items-center gap-1.5 text-gray-600">
+            <i data-lucide="database" class="w-3 h-3"></i>
+            目標寫入: <span class="font-medium">${formatNumber(targetWritten)} 筆</span>
+          </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Node details -->
+      <div>
+        <div class="flex items-center gap-1.5 mb-2">
+          <i data-lucide="list" class="w-3.5 h-3.5 text-gray-400"></i>
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">各節點執行結果</span>
+        </div>
+        <div class="space-y-1">
+    `;
+
+    TOPO_ORDER.forEach(id => {
+      const n = nodeMap[id];
+      const state = nodeStates[id];
+      const sim = SIM_DATA[id];
+      const colors = TYPE_COLORS[n.type];
+
+      let stateIcon, stateBg, stateText;
+      switch (state) {
+        case 'completed':
+          stateIcon = '<i data-lucide="check" class="w-3 h-3 text-green-500"></i>';
+          stateBg = 'bg-green-50';
+          stateText = `<span class="text-gray-500">${formatNumber(sim.input)} → ${formatNumber(sim.output)}</span><span class="text-gray-300 mx-1">|</span><span class="text-gray-400">${formatMs(sim.duration)}</span>`;
+          break;
+        case 'failed':
+          stateIcon = '<i data-lucide="x" class="w-3 h-3 text-red-500"></i>';
+          stateBg = 'bg-red-50';
+          stateText = `<span class="text-red-500 cursor-pointer hover:underline" onclick="showErrorDetail('${id}')">查看錯誤</span>`;
+          break;
+        case 'skipped':
+          stateIcon = '<i data-lucide="minus" class="w-3 h-3 text-gray-300"></i>';
+          stateBg = 'bg-gray-50';
+          stateText = '<span class="text-gray-400">已跳過</span>';
+          break;
+        default:
+          stateIcon = '<i data-lucide="circle" class="w-3 h-3 text-gray-300"></i>';
+          stateBg = '';
+          stateText = '';
+      }
+
+      html += `
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded ${stateBg} hover:bg-gray-50 transition-colors cursor-pointer" onclick="scrollToNode('${id}')">
+          <div class="w-4 h-4 flex items-center justify-center flex-shrink-0">${stateIcon}</div>
+          <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:${colors.hex};"></div>
+          <span class="text-xs font-medium text-gray-700 truncate" style="min-width:80px;">${n.label}</span>
+          <div class="flex items-center gap-0 text-[10px] ml-auto flex-shrink-0">${stateText}</div>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+
+    // If success, show target table summary
+    if (isSuccess) {
+      html += `
+        <div class="pt-3 border-t border-gray-100">
+          <div class="flex items-center gap-1.5 mb-2">
+            <i data-lucide="table" class="w-3.5 h-3.5 text-gray-400"></i>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">目標表寫入</span>
+          </div>
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-semibold text-gray-800">customer_core</div>
+                <div class="text-xs text-gray-500 mt-0.5">目標表</div>
+              </div>
+              <div class="text-right">
+                <div class="text-lg font-bold text-green-600">${formatNumber(targetWritten)}</div>
+                <div class="text-xs text-gray-400">筆寫入</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    content.innerHTML = html;
+    panel.classList.add('visible');
+    lucide.createIcons({ nodes: [content] });
+  }
+
+  function closeResultPanel() {
+    document.getElementById('result-panel').classList.remove('visible');
+  }
+
+  function showErrorDetail(nodeId) {
+    const n = nodeMap[nodeId];
+    const modal = document.getElementById('error-modal');
+    const body = document.getElementById('error-modal-body');
+
+    body.innerHTML = `
+      <div class="mb-4">
+        <div class="flex items-center gap-2 mb-1">
+          <div class="w-2 h-2 rounded-full" style="background:${TYPE_COLORS[n.type].hex};"></div>
+          <span class="text-sm font-semibold text-gray-800">${n.label}</span>
+          <span class="text-xs text-gray-400">(${n.id})</span>
+        </div>
+        <div class="text-xs text-gray-500">${n.sub}</div>
+      </div>
+
+      <div class="mb-4">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">錯誤訊息</div>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+          ${FAIL_ERROR.message}
+        </div>
+      </div>
+
+      <div>
+        <button onclick="toggleStack()" class="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 mb-2">
+          <i data-lucide="code" class="w-3 h-3"></i>
+          <span id="stack-toggle-text">展開 Stack Trace</span>
+          <i data-lucide="chevron-down" class="w-3 h-3" id="stack-chevron"></i>
+        </button>
+        <div id="stack-trace" class="hidden">
+          <pre class="bg-gray-900 text-gray-300 rounded-lg p-3 text-xs overflow-x-auto font-mono leading-relaxed">${FAIL_ERROR.stack}</pre>
+        </div>
+      </div>
+    `;
+
+    modal.classList.add('visible');
+    lucide.createIcons({ nodes: [body] });
+  }
+
+  function toggleStack() {
+    const trace = document.getElementById('stack-trace');
+    const text = document.getElementById('stack-toggle-text');
+    const chevron = document.getElementById('stack-chevron');
+    if (trace.classList.contains('hidden')) {
+      trace.classList.remove('hidden');
+      text.textContent = '收合 Stack Trace';
+      chevron.style.transform = 'rotate(180deg)';
+    } else {
+      trace.classList.add('hidden');
+      text.textContent = '展開 Stack Trace';
+      chevron.style.transform = '';
+    }
+  }
+
+  function closeErrorModal(e) {
+    if (e.target === document.getElementById('error-modal')) {
+      document.getElementById('error-modal').classList.remove('visible');
+    }
+  }
+
+  function handleNodeClick(nodeId) {
+    if (nodeStates[nodeId] === 'failed') {
+      showErrorDetail(nodeId);
+    }
+  }
+
+  function scrollToNode(nodeId) {
+    const card = document.getElementById('node-' + nodeId);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      card.style.outline = '3px solid #2563EB';
+      setTimeout(() => { card.style.outline = ''; }, 1500);
+    }
+  }
+
+  function resetAll() {
+    isExecuting = false;
+    clearInterval(elapsedInterval);
+    nodeStates = {};
+
+    // Reset all node visuals
+    NODES.forEach(n => {
+      const card = document.getElementById('node-' + n.id);
+      card.classList.remove('node-pending', 'node-running', 'node-completed', 'node-failed', 'node-skipped');
+      card.querySelector('.node-status-icon').style.display = 'none';
+      card.querySelector('.node-status-icon').innerHTML = '';
+      card.querySelector('.node-row-counts').style.display = 'none';
+    });
+
+    // Reset edges
+    EDGES.forEach(([src, tgt]) => {
+      const edge = document.getElementById(`edge-${src}-${tgt}`);
+      if (edge) {
+        edge.classList.remove('edge-completed', 'edge-running', 'edge-failed');
+        edge.setAttribute('stroke', '#D1D5DB');
+        edge.setAttribute('stroke-width', '1.5');
+      }
+    });
+
+    // Reset progress overlay
+    document.getElementById('progress-overlay').style.display = 'none';
+    const spinner = document.getElementById('progress-spinner');
+    spinner.style.display = 'block';
+    const label = document.getElementById('progress-overlay').querySelector('.text-sm.font-semibold');
+    label.textContent = '執行中...';
+    label.classList.remove('text-green-600', 'text-red-500');
+    label.classList.add('text-gray-700');
+    document.getElementById('progress-fill').classList.remove('bg-green-500', 'bg-red-500');
+    document.getElementById('progress-fill').classList.add('bg-primary');
+
+    // Reset buttons
+    document.getElementById('btn-run-success').style.display = 'flex';
+    document.getElementById('btn-run-fail').style.display = 'flex';
+    document.getElementById('btn-reset').style.display = 'none';
+
+    // Reset status
+    document.getElementById('exec-status-text').textContent = '準備就緒';
+    document.getElementById('exec-status-text').className = 'text-gray-500 text-sm';
+
+    // Close panels
+    closeResultPanel();
+    document.getElementById('error-modal').classList.remove('visible');
+  }
+  </script>
+</body>
+</html>
