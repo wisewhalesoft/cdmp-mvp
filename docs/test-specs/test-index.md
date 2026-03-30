@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.1"
+version: "2.2"
 status: draft
 last_updated: 2026-03-27
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041]
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：47 份（4 策略文件 + 39 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：640 個（E01～E04 共 308 + E05 共 243 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F039-strategy 共 4）
+> **測試文件總數**：50 份（4 策略文件 + 42 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：736 個（E01～E04 共 308 + E05 共 243 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F039-strategy 共 4 + F042 共 21 + F043 共 44 + F044 共 17 + F039-strategy 共 4）
+> **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，約 45 欄），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
 > **最後更新**：2026-03-27
@@ -99,7 +100,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F039 | 節點欄位變化統計 Badge | P0-MVP | [F039-test.md](features/F039-test.md) + [F039-test-strategy.md](features/F039-test-strategy.md) | 22 | Draft |
 | F040 | Inspector Panel 欄位 Diff | P1 | [F040-test.md](features/F040-test.md) | 6 | Draft |
 | F041 | Badge Hover Tooltip | P2 | [F041-test.md](features/F041-test.md) | 12 | Draft |
-| **總合計** | | | **39 files** | **634** | |
+| **E05 ETL 執行引擎** | | | | | |
+| F042 | ETL 執行引擎核心框架 | P0-MVP | [F042-test.md](features/F042-test.md) | 21 | Draft |
+| F043 | ETL 節點執行器（7 種節點） | P0-MVP | [F043-test.md](features/F043-test.md) | 44 | Draft |
+| F044 | ETL Target Load + UPSERT | P0-MVP | [F044-test.md](features/F044-test.md) | 17 | Draft |
+| **總合計** | | | **42 files** | **716** | |
 
 ---
 
@@ -115,6 +120,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | 排程邏輯測試（E04） | ~8 | 使用 scanAndExecute(fakeNow) injectable time 參數直接呼叫排程邏輯 |
 | raw data 落地驗證（E04 F021） | ~12 | 動態建表、批次寫入、全量 TRUNCATE、增量追加，使用 Test Container 驗證 AppDB 資料 |
 | F026 raw data 預覽 API | ~16 | 分頁、排序、錯誤碼；使用 Test Container 建立受控 raw data 表 |
+| F042 ETL 執行引擎核心單元測試 | ~14 | 拓撲排序、Dispatcher 分派、輸入收集邏輯、記憶體回收均為純函數，不需 DB，可全部自動化 |
+| F042 節點狀態回寫整合測試 | ~7 | 需要 Test Container 驗證 node_logs 即時回寫 DB；含 running/completed/failed/skipped 狀態轉移 |
+| F043 節點執行器單元測試 | ~38 | 除 RawDataExtract 外，其他 6 種節點均為 In-Memory 純函數，全部可不依賴 DB 自動化 |
+| F043 RawDataExtract 整合測試 | ~4 | 需 Mock queryRunner 或 Test Container 驗證批次 SELECT 與表存在性檢查 |
+| F044 Target Load 整合測試 | ~13 | UPSERT INSERT/UPDATE、customer_id 不覆蓋、ETL 追蹤欄位、批次邊界均需 Test Container |
 
 ### 需手動或半自動測試的場景
 
@@ -138,6 +148,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | raw data 效能測試（E04 F026） | F026 百萬筆分頁查詢 | Test Container + controlled dataset（1,000,000 筆）；僅於 QA 環境執行，不納入 CI Pipeline |
 | 時區（E04 / E05） | F018 今日統計、F024 今日統計、F027 todayProcessed | todayInTaipei() 種子資料工廠函式，CI 設定 TZ=Asia/Taipei |
 | 視覺化畫布函式庫（F029） | F029 前端 E2E 場景（TS-F029-029 ~ 031） | 依賴 React Flow（或同等函式庫）；建議搭配 Playwright 或 Cypress 進行拖拉操作模擬 |
+| ETL 執行引擎（F042-F044） | 節點狀態回寫、UPSERT 寫入、customer_core 驗證 | Test Container（AppDB PostgreSQL）；F043 RawDataExtract 需額外 raw table 模擬；F044 部分批次失敗需 Mock queryRunner 或注入錯誤觸發機制 |
 
 ---
 
@@ -149,7 +160,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038
+**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044
 
 **E04 資料擷取特殊注意：**
 - F017/F019 連鎖下拉選單：新增 `GET /datasources/:id/schemas` 與 `GET /datasources/:id/schemas/:schema/tables` 兩個端點測試；連線失敗回傳 503（DATASOURCE_SCHEMA_LOAD_FAILED / DATASOURCE_TABLE_LOAD_FAILED）
@@ -206,6 +217,19 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 - F029 重複 Extract 來源（BR-8 邊界）：同一 rawTableId 出現兩次時回傳 PIPELINE_INVALID_CONNECTION（422）；需向 Arch 確認是否有獨立錯誤碼
 - F029 前端 E2E 場景（TS-F029-029 ~ 031）：依賴畫布函式庫（建議 React Flow）行為，需搭配 Playwright/Cypress 執行
 - F029 changeSummary 邊界：500 字元合法（TS-F029-027），501 字元回傳 VALIDATION_ERROR（TS-F029-028）
+
+**E05 ETL 執行引擎特殊注意（F042 / F043 / F044）：**
+- F042 拓撲排序與 Dispatcher 分派邏輯為純函數，不需 DB，可直接以 Vitest 進行單元測試，不需 Test Container
+- F042 節點狀態回寫整合測試需使用 Test Container（AppDB PostgreSQL），驗證 running/completed/failed/skipped 四種 node_logs 狀態轉移
+- F042 循環依賴偵測：排序結果長度 < 節點總數即為循環，驗證 error_message 包含「循環依賴」字樣
+- F043 RawDataExtractExecutor：Mock queryRunner.query 時需分別 Mock 表存在性查詢（information_schema）與資料查詢（SELECT *）兩種 SQL 行為
+- F043 MergeExecutor：FULL JOIN 欄位命名規則為左側欄位保留原名，右側衝突欄位加 `_right` 後綴；JOIN key 同名時僅保留一個欄位（取非 null 者，left 優先）
+- F043 DedupExecutor：null timestampColumn 視為最舊（排在最後，不被保留）；時間戳相同時保留 index 最小者
+- F043 DerivedFieldExecutor：gen_random_uuid 每列產生獨立 UUID，不可複用；CASE WHEN 中 `right.{col}` 對應 `{col}_right` 欄位（_right 後綴為 merge 節點輸出的欄位命名慣例）
+- F044 TargetLoadExecutor：customer_id 不在 DO UPDATE SET 中（保留原值）；_etl_loaded_at 與 _etl_pipeline_id 由引擎自動附加，不從輸入資料列取得
+- F044 批次大小公式：`actualBatchSize = min(configuredBatchSize, floor(65535 / columnsPerRow))`；customer_core 欄位數約 45，實際 batch size ≈ 1456
+- F044 部分批次失敗：已寫入批次不回滾，outputRowCount 記錄已成功筆數；需注入錯誤機制（Mock queryRunner.query 在第 N 次呼叫拋錯）
+- F044 is_test_run=true：目標表存在性仍需驗證（步驟 1-2 執行），僅跳過 UPSERT SQL（步驟 4-8）
 
 **F038 孤兒任務回收特殊注意（跨 E04/E05）：**
 - F038 無 HTTP 端點，測試入口為 `OrphanRecoveryService.onApplicationBootstrap()`

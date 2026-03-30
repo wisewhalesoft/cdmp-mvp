@@ -1,0 +1,57 @@
+%% F042: ETL 執行引擎核心框架 — 執行流程與 Node Dispatcher 架構
+flowchart TD
+    subgraph 觸發["觸發入口"]
+        T1["triggerExecute"]
+        T2["triggerTest"]
+        T3["triggerSchedule"]
+    end
+
+    subgraph 引擎["ETL 執行引擎"]
+        A["取得 Pipeline 定義<br/>(nodes + edges)"]
+        B["拓撲排序<br/>(Kahn's Algorithm)"]
+        C{"循環依賴?"}
+        D["初始化 nodeOutputMap<br/>+ nodeLogs"]
+        E["取出下一節點"]
+        F["收集輸入<br/>(從 nodeOutputMap)"]
+        G["Node Dispatcher<br/>分派節點"]
+        H["NodeExecutor.execute()"]
+        I["存入 nodeOutputMap"]
+        J["回寫 node_logs<br/>(status + metrics)"]
+        K{"還有節點?"}
+        L["Pipeline completed"]
+        M["記憶體回收"]
+    end
+
+    subgraph Dispatcher["Node Dispatcher 註冊表"]
+        N1["raw_data_extract<br/>→ RawDataExtractExecutor"]
+        N2["merge<br/>→ MergeExecutor"]
+        N3["dedup<br/>→ DedupExecutor"]
+        N4["type_cast<br/>→ TypeCastExecutor"]
+        N5["derived_field<br/>→ DerivedFieldExecutor"]
+        N6["field_mapping<br/>→ FieldMappingExecutor"]
+        N7["conditional<br/>→ ConditionalExecutor"]
+        N8["target_load<br/>→ TargetLoadExecutor"]
+    end
+
+    subgraph 錯誤["錯誤處理"]
+        ERR1["Pipeline failed<br/>(循環依賴)"]
+        ERR2["節點 failed<br/>+ 後續 skipped<br/>+ Pipeline failed"]
+    end
+
+    T1 & T2 & T3 --> A
+    A --> B
+    B --> C
+    C -- 是 --> ERR1
+    C -- 否 --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> Dispatcher
+    Dispatcher --> H
+    H --> I
+    I --> J
+    J --> K
+    K -- 是 --> E
+    K -- 否 --> M
+    M --> L
+    H -- 例外 --> ERR2
