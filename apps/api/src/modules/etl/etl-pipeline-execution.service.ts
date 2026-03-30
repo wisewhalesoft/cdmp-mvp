@@ -6,11 +6,25 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import {
+  PipelineRunner,
+  NodeDispatcher,
+  NodeOutputStore,
+  NodeLogEntry,
+  ExtractHandler,
+  MergeHandler,
+  DedupHandler,
+  TypeCastHandler,
+  DerivedFieldHandler,
+  FieldMappingHandler,
+  ConditionalHandler,
+  TargetLoadHandler,
+} from './engine';
 
 @Injectable()
 export class EtlPipelineExecutionService {
@@ -23,7 +37,24 @@ export class EtlPipelineExecutionService {
     private readonly logRepository: Repository<EtlPipelineLog>,
     @InjectRepository(EtlPipelineVersion)
     private readonly versionRepository: Repository<EtlPipelineVersion>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * Create a NodeDispatcher with all registered handlers
+   */
+  private createDispatcher(): NodeDispatcher {
+    const dispatcher = new NodeDispatcher();
+    dispatcher.register(new ExtractHandler());
+    dispatcher.register(new MergeHandler());
+    dispatcher.register(new DedupHandler());
+    dispatcher.register(new TypeCastHandler());
+    dispatcher.register(new DerivedFieldHandler());
+    dispatcher.register(new FieldMappingHandler());
+    dispatcher.register(new ConditionalHandler());
+    dispatcher.register(new TargetLoadHandler());
+    return dispatcher;
+  }
 
   async triggerExecute(
     pipelineId: string,
@@ -238,7 +269,7 @@ export class EtlPipelineExecutionService {
         order: { version: 'DESC' },
       });
 
-      const nodes = version?.definition?.nodes ?? [];
+      const definition = version?.definition ?? { nodes: [], edges: [] };
       let previousStatus = 'active';
 
       // Extract previousStatus from log metadata
@@ -251,65 +282,92 @@ export class EtlPipelineExecutionService {
         } catch { /* ignore */ }
       }
 
-      // Build node_logs array
-      const nodeLogs: any[] = nodes.map((node: any) => ({
-        nodeId: node.id,
-        nodeType: node.type,
-        nodeName: node.data?.label ?? node.data?.taskName ?? node.type,
-        status: 'pending',
-        durationMs: 0,
-      }));
+      // Create engine components
+      const dispatcher = this.createDispatcher();
+      const outputStore = new NodeOutputStore();
+      const runner = new PipelineRunner(dispatcher, outputStore);
 
-      log.node_logs = JSON.stringify(nodeLogs);
-      await this.logRepository.save(log);
+      // Create a QueryRunner for DB operations
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
 
-      // Execute nodes sequentially (simulation for F030)
-      for (let i = 0; i < nodeLogs.length; i++) {
-        nodeLogs[i].status = 'running';
-        log.node_logs = JSON.stringify(nodeLogs);
-        await this.logRepository.save(log);
+      try {
+        // Run the real ETL pipeline
+        const nodeLogs = await runner.run(
+          definition,
+          {
+            batchSize: 10000,
+            upsertBatchSize: 5000,
+            isTestRun: log.is_test_run,
+            pipelineId: pipeline.id,
+            logId: log.id,
+          },
+          queryRunner,
+          async (nodeLogEntries: NodeLogEntry[], status: 'running' | 'completed' | 'failed', errorMessage?: string) => {
+            // Update node_logs in DB
+            log.node_logs = JSON.stringify(nodeLogEntries);
 
-        // Simulate node execution (future: actual ETL logic in F036)
-        nodeLogs[i].status = 'completed';
-        nodeLogs[i].durationMs = Date.now() - startTime;
-        log.processed_count = i + 1;
-        log.node_logs = JSON.stringify(nodeLogs);
-        await this.logRepository.save(log);
-      }
+            // Count completed nodes for processed_count
+            const completedCount = nodeLogEntries.filter((n) => n.status === 'completed').length;
+            log.processed_count = completedCount;
 
-      // Completion
-      const finishedAt = new Date();
-      const durationMs = Date.now() - startTime;
+            if (status === 'failed' && errorMessage) {
+              log.error_message = errorMessage;
+            }
 
-      log.status = 'completed';
-      log.finished_at = finishedAt;
-      log.duration_ms = durationMs;
-      await this.logRepository.save(log);
-
-      // Restore pipeline status
-      if (log.is_test_run) {
-        pipeline.status = previousStatus as any;
-
-        // BR-6: Test run success → version status draft → testing
-        if (version && version.status === 'draft') {
-          version.status = 'testing';
-          await this.versionRepository.save(version);
-        }
-      } else {
-        pipeline.status = 'active';
-
-        // Update pipeline stats (BR-7: test run doesn't count)
-        const newExecutionCount = pipeline.execution_count + 1;
-        const newAvgDurationMs = Math.round(
-          ((pipeline.avg_duration_ms * (newExecutionCount - 1)) + durationMs) / newExecutionCount,
+            await this.logRepository.save(log);
+          },
         );
-        pipeline.processed_count += log.processed_count;
-        pipeline.execution_count = newExecutionCount;
-        pipeline.avg_duration_ms = newAvgDurationMs;
-      }
 
-      pipeline.last_execution_at = finishedAt;
-      await this.pipelineRepository.save(pipeline);
+        const finishedAt = new Date();
+        const durationMs = Date.now() - startTime;
+
+        // Determine final status from nodeLogs
+        const hasFailed = nodeLogs.some((n) => n.status === 'failed');
+
+        if (hasFailed) {
+          log.status = 'failed';
+          log.finished_at = finishedAt;
+          log.duration_ms = durationMs;
+          await this.logRepository.save(log);
+
+          pipeline.status = 'failed';
+          pipeline.last_execution_at = finishedAt;
+          await this.pipelineRepository.save(pipeline);
+        } else {
+          // Success
+          log.status = 'completed';
+          log.finished_at = finishedAt;
+          log.duration_ms = durationMs;
+          await this.logRepository.save(log);
+
+          if (log.is_test_run) {
+            pipeline.status = previousStatus as any;
+
+            // BR-6: Test run success → version status draft → testing
+            if (version && version.status === 'draft') {
+              version.status = 'testing';
+              await this.versionRepository.save(version);
+            }
+          } else {
+            pipeline.status = 'active';
+
+            // Update pipeline stats (BR-7: test run doesn't count)
+            const newExecutionCount = pipeline.execution_count + 1;
+            const newAvgDurationMs = Math.round(
+              ((pipeline.avg_duration_ms * (newExecutionCount - 1)) + durationMs) / newExecutionCount,
+            );
+            pipeline.processed_count += log.processed_count;
+            pipeline.execution_count = newExecutionCount;
+            pipeline.avg_duration_ms = newAvgDurationMs;
+          }
+
+          pipeline.last_execution_at = finishedAt;
+          await this.pipelineRepository.save(pipeline);
+        }
+      } finally {
+        await queryRunner.release();
+      }
     } catch (err: any) {
       const finishedAt = new Date();
       const durationMs = Date.now() - startTime;

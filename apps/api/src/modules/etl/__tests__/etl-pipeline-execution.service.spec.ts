@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { EtlPipelineExecutionService } from '../etl-pipeline-execution.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
@@ -72,9 +73,20 @@ describe('EtlPipelineExecutionService', () => {
     save: vi.fn().mockImplementation((entity) => Promise.resolve(entity)),
   };
 
+  const mockQueryRunner = {
+    connect: vi.fn(),
+    release: vi.fn(),
+    query: vi.fn().mockResolvedValue([]),
+  };
+
+  const mockDataSource = {
+    createQueryRunner: vi.fn().mockReturnValue(mockQueryRunner),
+  };
+
   beforeEach(async () => {
     vi.clearAllMocks();
     mockPipelineRepository.createQueryBuilder.mockReturnValue(mockPipelineQb);
+    mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -82,6 +94,7 @@ describe('EtlPipelineExecutionService', () => {
         { provide: getRepositoryToken(EtlPipeline), useValue: mockPipelineRepository },
         { provide: getRepositoryToken(EtlPipelineLog), useValue: mockLogRepository },
         { provide: getRepositoryToken(EtlPipelineVersion), useValue: mockVersionRepository },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 
