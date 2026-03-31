@@ -5,16 +5,17 @@ feature_name: 目標表 Domain-Oriented 規劃
 priority: P0-MVP
 related_spec: /docs/specs/features/F036-target-tables.md
 related_story: /docs/stories/epics/E05-etl-pipeline/US-049-target-tables.md
-last_updated: 2026-03-25
-version: "2.0"
-changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 customer_core（約 45 欄、A~H 八分類）；新增 ETL 轉換規則測試（電話合併、佔位值、型別轉換、衝突解決、代碼描述）；新增前端欄位對應介面測試"
+last_updated: 2026-03-31
+version: "2.2"
+changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 customer_core（約 45 欄、A~H 八分類）；新增 ETL 轉換規則測試（電話合併、佔位值、型別轉換、衝突解決、代碼描述）；新增前端欄位對應介面測試 | 2026-03-30 v2.1：customer_core 欄位數 54→65（B 5→12、D 6→8、E 10→12）；更新排除欄位清單；monthly_income 來源更正為 MONTH_INCOME | 2026-03-31 v2.2：customer_core 欄位數 65→79（C 6→10、D 8→10、F 10→12、G 7→13）；C 類新增 registered_phone/registered_fax/business_fax/business_mobile；D 類新增 registered_zip/registered_address；F 類新增 highest_transaction_amount/highest_transaction_date；G 類新增 owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name；MLMC 映射 21→37"
 ---
 
-# F036: 目標表 Domain-Oriented 規劃 — 測試設計（v2.0）
+# F036: 目標表 Domain-Oriented 規劃 — 測試設計（v2.2）
 
 > **重要異動說明**：本文件已於 2026-03-25 依 US-049 修訂版全面更新。
-> Phase 1 MVP 目標表由舊版 4 個（customer_core / customer_interaction / customer_financial / customer_service）調整為 **1 個**（`customer_core`，約 45 欄位，分 A~H 八個分類）。
+> Phase 1 MVP 目標表由舊版 4 個（customer_core / customer_interaction / customer_financial / customer_service）調整為 **1 個**（`customer_core`，79 欄位，分 A~H 八個分類）。
 > customer_interaction / customer_financial / customer_service 移至 Phase 2/3，不在本版本測試範圍內。
+> v2.2（2026-03-31）：C 類 6→10、D 類 8→10、F 類 10→12、G 類 7→13，總欄位數 65→79。
 
 ---
 
@@ -27,7 +28,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Given | Admin 已登入；系統 Phase 1 MVP 僅預先定義 `customer_core` 一個目標表 |
 | When | 呼叫 `GET /api/v1/etl/target-tables` |
 | Then | HTTP 200；`data` 陣列含 **1 個**目標表物件；物件含 `tableName`、`displayName`、`domain`、`columnCount`、`description` 欄位 |
-| 驗證步驟 | 1. `data.length === 1`<br>2. `data[0].tableName === "customer_core"`<br>3. `data[0].domain === "core"`<br>4. `data[0].columnCount === 45`（允許 ±1，以實際 schema 定義為準）<br>5. `data[0].displayName` 含「Customer Core」字樣<br>6. `data[0].description` 為非空字串 |
+| 驗證步驟 | 1. `data.length === 1`<br>2. `data[0].tableName === "customer_core"`<br>3. `data[0].domain === "core"`<br>4. `data[0].columnCount === 79`（允許 ±1，以實際 schema 定義為準；A~H 分類加總：5+12+10+10+12+12+13+5 = 79）<br>5. `data[0].displayName` 含「Customer Core」字樣<br>6. `data[0].description` 為非空字串 |
 
 ### AC-2：目標表 Schema API
 
@@ -36,7 +37,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Given | Admin 已登入；指定目標表 `customer_core` 存在 |
 | When | 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema` |
 | Then | HTTP 200；回應含 `tableName`、`displayName`、`columns` 陣列；`columns` 中每個物件含 `name`、`type`、`nullable`、`isPrimaryKey`、`description` |
-| 驗證步驟 | 1. `columns` 陣列長度約 45（以 schema 定義為準）<br>2. 主鍵 `customer_id`：`isPrimaryKey === true`、`nullable === false`、`type === "UUID"`<br>3. 三個 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）均存在<br>4. `_etl_loaded_at.nullable === false`；`_etl_pipeline_id.nullable === false`<br>5. 所有 `columns` 物件均含非空 `description` |
+| 驗證步驟 | 1. `columns` 陣列長度 79（A~H 分類加總 5+12+10+10+12+12+13+5 = 79；以 schema 定義為準）<br>2. 主鍵 `customer_id`：`isPrimaryKey === true`、`nullable === false`、`type === "UUID"`<br>3. 三個 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）均存在<br>4. `_etl_loaded_at.nullable === false`；`_etl_pipeline_id.nullable === false`<br>5. 所有 `columns` 物件均含非空 `description` |
 
 ### AC-3：Load 節點選擇目標表（前端）
 
@@ -71,8 +72,8 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 |------|------|
 | Given | 系統初始化完成（migration 已執行） |
 | When | 查詢 `GET /api/v1/etl/target-tables` 及 `GET /api/v1/etl/target-tables/customer_core/schema` |
-| Then | Phase 1 MVP 僅含 `customer_core` 一個目標表（約 45 欄位），涵蓋 A~H 八個分類，欄位定義與 US-049 規格一致 |
-| 驗證步驟 | 1. `data.length === 1`（不含 Phase 2/3 表）<br>2. 欄位涵蓋 A（識別與分類）、B（個人屬性）、C（聯絡資訊）、D（地址）、E（職業與就業）、F（財務與風控）、G（企業客戶專屬）、H（稽核與 ETL 追蹤）<br>3. 各欄位的 `type`、`nullable`、`isPrimaryKey` 與 US-049 欄位定義表一致 |
+| Then | Phase 1 MVP 僅含 `customer_core` 一個目標表（79 欄位），涵蓋 A~H 八個分類，欄位定義與 US-049 規格一致 |
+| 驗證步驟 | 1. `data.length === 1`（不含 Phase 2/3 表）<br>2. 欄位涵蓋 A（識別與分類，5 欄）、B（個人屬性，12 欄）、C（聯絡資訊，10 欄）、D（地址，10 欄）、E（職業與就業，12 欄）、F（財務與風控，12 欄）、G（企業客戶專屬，13 欄）、H（稽核與 ETL 追蹤，5 欄）<br>3. 各欄位的 `type`、`nullable`、`isPrimaryKey` 與 US-049 欄位定義表一致 |
 
 ---
 
@@ -111,7 +112,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables`
   2. 驗證 `data[0].columnCount` 與 `data[0].domain`
-- **Expected Result**: `columnCount === 45`（以 schema 定義實際值為準，允許微小差異）；`domain === "core"`；`displayName` 含「Customer Core」
+- **Expected Result**: `columnCount === 79`（A~H 分類加總 5+12+10+10+12+12+13+5 = 79；以 schema 定義實際值為準）；`domain === "core"`；`displayName` 含「Customer Core」
 
 ---
 
@@ -125,7 +126,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
   2. 驗證 `columns.length`
-- **Expected Result**: HTTP 200；`tableName === "customer_core"`；`columns.length` 約 45（以 migration schema 實際欄位數為準）
+- **Expected Result**: HTTP 200；`tableName === "customer_core"`；`columns.length === 79`（以 migration schema 實際欄位數為準；A~H 分類加總 5+12+10+10+12+12+13+5 = 79）
 
 ---
 
@@ -153,13 +154,20 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Preconditions**: Admin 已登入
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
-  2. 從 `columns` 中篩選 B 類欄位並逐一驗證
+  2. 從 `columns` 中篩選 B 類欄位並逐一驗證（共 12 欄）
 - **Expected Result**:
   - `gender`：`nullable=true`
   - `date_of_birth`：`type="DATE"`, `nullable=true`
   - `marital_status`：`nullable=true`
   - `education_code`：`nullable=true`
   - `education_desc`：`nullable=true`（US-030 代碼轉換填入）
+  - `spouse_name`：`type` 含 `VARCHAR`, `nullable=true`
+  - `father_name`：`type` 含 `VARCHAR`, `nullable=true`
+  - `mother_name`：`type` 含 `VARCHAR`, `nullable=true`
+  - `id_issue_type`：`type` 含 `VARCHAR`, `nullable=true`
+  - `id_issue_date`：`type="DATE"`, `nullable=true`
+  - `id_issue_address`：`type` 含 `VARCHAR`, `nullable=true`
+  - `driver_license`：`type` 含 `VARCHAR`, `nullable=true`
 
 ---
 
@@ -170,9 +178,13 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Preconditions**: Admin 已登入
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
-  2. 從 `columns` 中篩選 C 類欄位並逐一驗證
+  2. 從 `columns` 中篩選 C 類欄位並逐一驗證（共 10 欄）
 - **Expected Result**:
   - `mobile_phone`、`home_phone`、`contact_phone`、`office_phone`：均 `nullable=true`，`type` 含 `VARCHAR`
+  - `registered_phone`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.CUSTTELCODE + CUSTTEL 合併）
+  - `registered_fax`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.CUSTFAXCODE + CUSTFAX 合併）
+  - `business_fax`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.BUSINESSFAXCODE + BUSINESSFAX 合併）
+  - `business_mobile`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.BUSINESSMOBILE 直接映射）
   - `email`：`nullable=true`，`type` 含 `VARCHAR`
   - `line_account`：`nullable=true`，`type` 含 `VARCHAR`
 
@@ -185,14 +197,59 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Preconditions**: Admin 已登入
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
-  2. 篩選 F 類欄位，驗證 DECIMAL 欄位型別
+  2. 篩選 F 類欄位（共 12 欄），驗證 DECIMAL 欄位型別
 - **Expected Result**:
   - `monthly_income`：`type` 含 `DECIMAL`
   - `capital`：`type` 含 `DECIMAL`
   - `credit_limit`：`type` 含 `DECIMAL`
+  - `highest_transaction_amount`：`type` 含 `DECIMAL`，`nullable=true`（MLMC.HFAMOUNT）
+  - `highest_transaction_date`：`type === "TIMESTAMP"`，`nullable=true`（MLMC.HCDATE）
   - `address_anomaly_flag`：`type === "SMALLINT"` 或 `"INTEGER"`
   - `mainland_flag`：`type === "SMALLINT"` 或 `"INTEGER"`
   - `debt_flag`、`fine_flag`：`type` 含 `CHAR` 或 `VARCHAR`
+
+---
+
+#### TS-F036-008B：地址欄位（D 類）定義正確
+
+- **Related Requirement**: AC-2, AC-6
+- **Test Type**: Integration / Positive
+- **Preconditions**: Admin 已登入
+- **Steps**:
+  1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
+  2. 從 `columns` 中篩選 D 類欄位並逐一驗證（共 10 欄）
+- **Expected Result**:
+  - `residential_zip`、`residential_address`：均 `nullable=true`，`type` 含 `VARCHAR`
+  - `mailing_zip`、`mailing_address`：均 `nullable=true`，`type` 含 `VARCHAR`
+  - `registered_zip`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.CUSTZIPCODE，v2.2 新增）
+  - `registered_address`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.CUSTADDR，v2.2 新增）
+  - `company_zip`、`company_address`：均 `nullable=true`，`type` 含 `VARCHAR`
+  - `maturity_mailing_zip`、`maturity_mailing_address`：均 `nullable=true`，`type` 含 `VARCHAR`
+
+---
+
+#### TS-F036-008C：企業客戶專屬欄位（G 類）定義正確
+
+- **Related Requirement**: AC-2, AC-6
+- **Test Type**: Integration / Positive
+- **Preconditions**: Admin 已登入
+- **Steps**:
+  1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
+  2. 從 `columns` 中篩選 G 類欄位並逐一驗證（共 13 欄）
+- **Expected Result**:
+  - `owner_name`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNER）
+  - `owner_id`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNERID）
+  - `owner_birth`：`nullable=true`，`type === "DATE"`（MLMC.OWNERBIRTH）
+  - `owner_zip`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNERZIPCODE，v2.2 新增）
+  - `owner_address`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNERADDR，v2.2 新增）
+  - `established_capital`：`nullable=true`，`type` 含 `DECIMAL`（MLMC.CUSTCREATECAPTIAL varchar→DECIMAL）
+  - `employee_count`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.EMPLOYEE）
+  - `is_listed`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.LISTED）
+  - `parent_customer_id`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.PARENTCUSTID）
+  - `group_owner`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.GROUPOWNER，v2.2 新增）
+  - `company_attr_code`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.COMPTYPE，v2.2 新增）
+  - `organization_type`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.ORGATYPE，v2.2 新增）
+  - `parent_customer_name`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.PARENTCUSTNAME，v2.2 新增）
 
 ---
 
@@ -592,13 +649,14 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
   2. 驗證各分類欄位存在性
 - **Expected Result**:
   - A 類（5 欄）：`customer_id`、`source_customer_no`、`customer_type`、`name`、`english_name` 均存在
-  - B 類（5 欄）：`gender`、`date_of_birth`、`marital_status`、`education_code`、`education_desc` 均存在
-  - C 類（6 欄）：`mobile_phone`、`home_phone`、`contact_phone`、`office_phone`、`email`、`line_account` 均存在
-  - D 類（6 欄）：`residential_zip`、`residential_address`、`mailing_zip`、`mailing_address`、`company_zip`、`company_address` 均存在
-  - E 類（10 欄）：`company_name`、`occupation_code`、`occupation_desc`、`job_title_code`、`job_title_desc`、`job_level`、`industry_code`、`industry_desc`、`work_years`、`company_scale` 均存在
-  - F 類（10 欄）：`monthly_income`、`approved_income`、`income_source`、`capital`、`credit_limit`、`has_real_estate`、`debt_flag`、`fine_flag`、`address_anomaly_flag`、`mainland_flag` 均存在
-  - G 類（7 欄）：`owner_name`、`owner_id`、`owner_birth`、`established_capital`、`employee_count`、`is_listed`、`parent_customer_id` 均存在
+  - B 類（12 欄）：`gender`、`date_of_birth`、`marital_status`、`education_code`、`education_desc`、`spouse_name`、`father_name`、`mother_name`、`id_issue_type`、`id_issue_date`、`id_issue_address`、`driver_license` 均存在
+  - C 類（10 欄）：`mobile_phone`、`home_phone`、`contact_phone`、`office_phone`、`registered_phone`、`registered_fax`、`business_fax`、`business_mobile`、`email`、`line_account` 均存在
+  - D 類（10 欄）：`residential_zip`、`residential_address`、`mailing_zip`、`mailing_address`、`registered_zip`、`registered_address`、`company_zip`、`company_address`、`maturity_mailing_zip`、`maturity_mailing_address` 均存在
+  - E 類（12 欄）：`company_name`、`occupation_code`、`occupation_desc`、`job_title_code`、`job_title_desc`、`job_level`、`industry_code`、`industry_desc`、`work_years`、`company_scale`、`role_code`、`role_desc` 均存在
+  - F 類（12 欄）：`monthly_income`、`approved_income`、`income_source`、`capital`、`credit_limit`、`highest_transaction_amount`、`highest_transaction_date`、`has_real_estate`、`debt_flag`、`fine_flag`、`address_anomaly_flag`、`mainland_flag` 均存在
+  - G 類（13 欄）：`owner_name`、`owner_id`、`owner_birth`、`owner_zip`、`owner_address`、`established_capital`、`employee_count`、`is_listed`、`parent_customer_id`、`group_owner`、`company_attr_code`、`organization_type`、`parent_customer_name` 均存在
   - H 類（5 欄）：`source_created_at`、`source_updated_at`、`data_source`、`_etl_loaded_at`、`_etl_pipeline_id` 均存在
+  - 總欄位數：5+12+10+10+12+12+13+5 = **79 欄**
 
 ---
 
@@ -610,7 +668,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 讀取 `customer_core` 的欄位名稱清單
   2. 驗證排除欄位不存在
-- **Expected Result**: 以下欄位均不存在於 schema 中：`spouse_nm`（或 `SPOUSE_NM`）、`father_nm`、`mother_nm`、`print_flg`、`id_check`、`id_check_date`、`issue_add`、`issue_class`、`issue_date`、`old_p_id`、`appli_mark`、`spon_mark`；確認敏感個資欄位已排除
+- **Expected Result**: 以下欄位均不存在於 schema 中：`print_flg`、`id_check`、`id_check_date`、`old_p_id`、`appli_mark`、`spon_mark`；確認已刻意排除的欄位不存在（注意：`spouse_name`、`father_name`、`mother_name`、`id_issue_type`、`id_issue_date`、`id_issue_address`、`driver_license`、`maturity_mailing_zip`、`maturity_mailing_address`、`role_code`、`role_desc` 已於 v2.1 正式納入 schema，不在排除清單中）
 
 ---
 
@@ -630,7 +688,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | name | VARCHAR(100) | false | false | 姓名/企業名稱 |
 | english_name | VARCHAR(60) | true | false | 英文姓名 |
 
-**B. 個人屬性（5 欄）**
+**B. 個人屬性（12 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 說明 |
 |----------|------|----------|--------------|------|
@@ -639,70 +697,95 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | marital_status | VARCHAR(1) | true | false | 婚姻狀態 |
 | education_code | VARCHAR(2) | true | false | 學歷代碼（原始值） |
 | education_desc | VARCHAR(50) | true | false | 學歷描述（US-030 轉換） |
+| spouse_name | VARCHAR(60) | true | false | 配偶姓名 |
+| father_name | VARCHAR(60) | true | false | 父親姓名 |
+| mother_name | VARCHAR(60) | true | false | 母親姓名 |
+| id_issue_type | VARCHAR(2) | true | false | 證件核發類別代碼 |
+| id_issue_date | DATE | true | false | 證件核發日期 |
+| id_issue_address | VARCHAR(100) | true | false | 證件核發地址 |
+| driver_license | VARCHAR(20) | true | false | 駕照號碼 |
 
-**C. 聯絡資訊（6 欄）**
+**C. 聯絡資訊（10 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 轉換邏輯 |
 |----------|------|----------|--------------|---------|
 | mobile_phone | VARCHAR(20) | true | false | 直接映射 |
-| home_phone | VARCHAR(20) | true | false | 合併 CAREA_NO1+CTEL_NO1；佔位值→NULL |
-| contact_phone | VARCHAR(20) | true | false | 合併 CAREA_NO2+CTEL_NO2；佔位值→NULL |
-| office_phone | VARCHAR(20) | true | false | 合併 CO_CAREA_NO+CO_CTEL_NO；佔位值→NULL |
+| home_phone | VARCHAR(20) | true | false | mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)；佔位值→NULL |
+| contact_phone | VARCHAR(20) | true | false | mergePhone(CAREA_NO2, CTEL_NO2, CEXTEN_NO2)；佔位值→NULL |
+| office_phone | VARCHAR(20) | true | false | mergePhone(CO_CAREA_NO, CO_CTEL_NO, CO_EXTEN_NO)；佔位值→NULL |
+| registered_phone | VARCHAR(20) | true | false | mergePhone(CUSTTELCODE, CUSTTEL)；佔位值→NULL |
+| registered_fax | VARCHAR(20) | true | false | mergePhone(CUSTFAXCODE, CUSTFAX)；佔位值→NULL |
+| business_fax | VARCHAR(20) | true | false | mergePhone(BUSINESSFAXCODE, BUSINESSFAX)；佔位值→NULL |
+| business_mobile | VARCHAR(20) | true | false | 直接映射 MLMC.BUSINESSMOBILE |
 | email | VARCHAR(40) | true | false | 直接映射 |
 | line_account | VARCHAR(50) | true | false | 直接映射 |
 
-**D. 地址（6 欄）**
+**D. 地址（10 欄）**
 
-| 欄位名稱 | 型別 | Nullable | isPrimaryKey |
-|----------|------|----------|--------------|
-| residential_zip | VARCHAR(6) | true | false |
-| residential_address | VARCHAR(100) | true | false |
-| mailing_zip | VARCHAR(6) | true | false |
-| mailing_address | VARCHAR(100) | true | false |
-| company_zip | VARCHAR(6) | true | false |
-| company_address | VARCHAR(100) | true | false |
+| 欄位名稱 | 型別 | Nullable | isPrimaryKey | 說明 |
+|----------|------|----------|--------------|------|
+| residential_zip | VARCHAR(6) | true | false | 戶籍郵遞區號 |
+| residential_address | VARCHAR(100) | true | false | 戶籍地址 |
+| mailing_zip | VARCHAR(6) | true | false | 通訊郵遞區號 |
+| mailing_address | VARCHAR(100) | true | false | 通訊地址 |
+| registered_zip | VARCHAR(6) | true | false | 公司登記郵遞區號（MLMC.CUSTZIPCODE）|
+| registered_address | VARCHAR(100) | true | false | 公司登記地址（MLMC.CUSTADDR）|
+| company_zip | VARCHAR(6) | true | false | 營業地址郵遞區號 |
+| company_address | VARCHAR(100) | true | false | 營業地址 |
+| maturity_mailing_zip | VARCHAR(6) | true | false | 滿期寄送郵遞區號 |
+| maturity_mailing_address | VARCHAR(100) | true | false | 滿期寄送地址 |
 
-**E. 職業與就業（10 欄）**
+**E. 職業與就業（12 欄）**
 
-| 欄位名稱 | 型別 | Nullable | isPrimaryKey |
-|----------|------|----------|--------------|
-| company_name | VARCHAR(100) | true | false |
-| occupation_code | VARCHAR(4) | true | false |
-| occupation_desc | VARCHAR(50) | true | false |
-| job_title_code | VARCHAR(4) | true | false |
-| job_title_desc | VARCHAR(50) | true | false |
-| job_level | VARCHAR(2) | true | false |
-| industry_code | VARCHAR(6) | true | false |
-| industry_desc | VARCHAR(100) | true | false |
-| work_years | DECIMAL(8,2) | true | false |
-| company_scale | VARCHAR(1) | true | false |
+| 欄位名稱 | 型別 | Nullable | isPrimaryKey | 說明 |
+|----------|------|----------|--------------|------|
+| company_name | VARCHAR(100) | true | false | 任職公司名稱 |
+| occupation_code | VARCHAR(4) | true | false | 職業代碼 |
+| occupation_desc | VARCHAR(50) | true | false | 職業描述 |
+| job_title_code | VARCHAR(4) | true | false | 職稱代碼 |
+| job_title_desc | VARCHAR(50) | true | false | 職稱描述 |
+| job_level | VARCHAR(2) | true | false | 職等 |
+| industry_code | VARCHAR(6) | true | false | 行業代碼 |
+| industry_desc | VARCHAR(100) | true | false | 行業描述 |
+| work_years | DECIMAL(8,2) | true | false | 年資 |
+| company_scale | VARCHAR(1) | true | false | 公司規模 |
+| role_code | VARCHAR(4) | true | false | 職務角色代碼 |
+| role_desc | VARCHAR(50) | true | false | 職務角色描述 |
 
-**F. 財務與風控（10 欄）**
+**F. 財務與風控（12 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 備註 |
 |----------|------|----------|--------------|------|
-| monthly_income | DECIMAL(8,0) | true | false | |
+| monthly_income | DECIMAL(8,0) | true | false | 來源：MONTH_INCOME（非 INCOME_MON） |
 | approved_income | INTEGER | true | false | |
 | income_source | VARCHAR(5) | true | false | |
 | capital | DECIMAL(12,0) | true | false | MLMC.CUSTNOWCAPTIAL varchar→DECIMAL |
-| credit_limit | DECIMAL(12,0) | true | false | |
+| credit_limit | DECIMAL(12,0) | true | false | MLMC.FAMOUNT |
+| highest_transaction_amount | DECIMAL(12,0) | true | false | MLMC.HFAMOUNT（v2.2 新增）|
+| highest_transaction_date | TIMESTAMP | true | false | MLMC.HCDATE（v2.2 新增）|
 | has_real_estate | VARCHAR(1) | true | false | |
 | debt_flag | CHAR(1) | true | false | |
 | fine_flag | CHAR(1) | true | false | |
 | address_anomaly_flag | SMALLINT | true | false | |
 | mainland_flag | SMALLINT | true | false | |
 
-**G. 企業客戶專屬（7 欄）**
+**G. 企業客戶專屬（13 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 備註 |
 |----------|------|----------|--------------|------|
-| owner_name | VARCHAR(50) | true | false | |
-| owner_id | VARCHAR(10) | true | false | |
-| owner_birth | DATE | true | false | |
+| owner_name | VARCHAR(50) | true | false | MLMC.OWNER |
+| owner_id | VARCHAR(10) | true | false | MLMC.OWNERID |
+| owner_birth | DATE | true | false | MLMC.OWNERBIRTH |
+| owner_zip | VARCHAR(6) | true | false | MLMC.OWNERZIPCODE（v2.2 新增）|
+| owner_address | VARCHAR(100) | true | false | MLMC.OWNERADDR（v2.2 新增）|
 | established_capital | DECIMAL(12,0) | true | false | MLMC.CUSTCREATECAPTIAL varchar→DECIMAL |
-| employee_count | VARCHAR(6) | true | false | |
-| is_listed | VARCHAR(6) | true | false | |
-| parent_customer_id | VARCHAR(10) | true | false | |
+| employee_count | VARCHAR(6) | true | false | MLMC.EMPLOYEE |
+| is_listed | VARCHAR(6) | true | false | MLMC.LISTED |
+| parent_customer_id | VARCHAR(10) | true | false | MLMC.PARENTCUSTID |
+| group_owner | VARCHAR(50) | true | false | MLMC.GROUPOWNER（v2.2 新增）|
+| company_attr_code | VARCHAR(6) | true | false | MLMC.COMPTYPE（v2.2 新增）|
+| organization_type | VARCHAR(6) | true | false | MLMC.ORGATYPE（v2.2 新增）|
+| parent_customer_name | VARCHAR(100) | true | false | MLMC.PARENTCUSTNAME（v2.2 新增）|
 
 **H. 稽核與 ETL 追蹤（5 欄）**
 
@@ -721,7 +804,11 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | home_phone | CAREA_NO1 + CTEL_NO1 | `"00"` + `"0000000000"` | NULL |
 | contact_phone | CAREA_NO2 + CTEL_NO2 | `"00"` + `"0000000000"` | NULL |
 | office_phone | CO_CAREA_NO + CO_CTEL_NO | `"00"` + `"0000000000"` | NULL |
+| registered_phone | CUSTTELCODE + CUSTTEL | `"00"` + `"0000000000"` | NULL |
+| registered_fax | CUSTFAXCODE + CUSTFAX | `"00"` + `"0000000000"` | NULL |
+| business_fax | BUSINESSFAXCODE + BUSINESSFAX | `"00"` + `"0000000000"` | NULL |
 | home_phone（正常） | CAREA_NO1 + CTEL_NO1 | `"02"` + `"27123456"` | `"02-27123456"` |
+| registered_phone（正常） | CUSTTELCODE + CUSTTEL | `"02"` + `"87654321"` | `"02-87654321"` |
 
 ### DECIMAL 轉換測試資料
 
@@ -751,7 +838,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | 類別 | 場景數 |
 |------|--------|
 | Positive（目標表清單 API） | 3 |
-| Positive（Schema API — 欄位結構） | 8 |
+| Positive（Schema API — 欄位結構） | 10 |
 | Negative（錯誤與安全） | 6 |
 | Unit（ETL 轉換函式）| 10 |
 | Integration（衝突解決） | 2 |
@@ -759,13 +846,13 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Integration（ETL 追蹤欄位） | 2 |
 | Boundary | 2 |
 | Unit（Schema 定義完整性） | 2 |
-| **總計** | **40** |
+| **總計** | **42** |
 
 ---
 
 ## 風險與注意事項
 
-1. **TS-F036-001 欄位數量驗證（columnCount === 45）**：US-049 規格標注「約 45 欄位」，A~H 分類加總為 49 欄（5+5+6+6+10+10+7+5）。測試時需以 migration 實際建立欄位數為準，測試設計使用「約 45」為合理範圍，建議實作後確認精確值並更新此場景。
+1. **TS-F036-001/003/004 欄位數量驗證（columnCount === 79）**：v2.2 更新後 A~H 分類加總為 79 欄（5+12+10+10+12+12+13+5）。若 migration 實際建立欄位數與此不符，需確認是否有欄位遺漏或 spec 版本差異，建議實作後以 migration 結果為準。
 
 2. **TS-F036-013（Phase 2/3 表回 404）**：需確認 Phase 1 migration 確實不建立 `customer_interaction` 等三個表，以避免測試誤判。若 Phase 2 進行時，此場景需移除或修改。
 

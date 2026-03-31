@@ -315,6 +315,7 @@ sequenceDiagram
 #### DerivedFieldHandler（derived_field）
 
 - 支援四種表達式函數：`mergePhone`、`padStart`、`gen_random_uuid`、`CASE WHEN`
+- `mergePhone` 支援選用第三參數（分機欄位）：`mergePhone(areaCol, telCol)` 或 `mergePhone(areaCol, telCol, extenCol)`；有分機時輸出 `{area}-{tel}#{exten}`，分機為 null/空/全零時不附加 `#exten`
 - 直接呼叫 `etl-transforms.ts` 中已存在的 `mergePhone` 函數
 - `CASE WHEN` 解析 `left.{col}` / `right.{col}` 前綴為列中的實際欄位名
 
@@ -403,7 +404,7 @@ interface DataSet {
 | e1 執行後 | e1 輸出（raw_101f6b3e，210萬筆） | ~420 MB |
 | m1 執行後 | m1 輸出（e1+e2 FULL JOIN，~210萬筆） | ~420 MB，e1/e2 釋放 |
 | d1 執行後 | d1 輸出（去重後，≤210萬筆） | ~420 MB，m1 釋放 |
-| fm1 執行後 | fm1 輸出（38欄位，~210萬筆） | ~300 MB，d1/df1 釋放 |
+| fm1 執行後 | fm1 輸出（48欄位，~210萬筆） | ~300 MB，d1/df1 釋放 |
 | MLMC 路線最大點 | m3 輸出（三來源合併） | ~200 MB |
 | m4 執行前 | fm1 + fm2 同時駐留 | ~500 MB |
 | m4 執行後 | m4 輸出（最終合併） | ~500 MB，fm1/fm2 釋放 |

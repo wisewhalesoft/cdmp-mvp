@@ -13,7 +13,7 @@ version: "2.0"
 
 v1.0 -> v2.0 主要變更：
 - 目標表從 4 個 placeholder 表縮減為 **1 個 customer_core**（Phase 1 MVP）
-- customer_core 欄位從 13 個 generic 欄位擴展為 **54 個 A~H 八分類完整定義**
+- customer_core 欄位從 13 個 generic 欄位擴展為 **79 個 A~H 八分類完整定義**
 - 新增 **ETL 轉換函式**（電話合併、DECIMAL 轉換、客戶類型對應、代碼描述轉換）
 - 新增 **Database Migration**（customer_core 實體表 + 索引）
 - 前端頁面適配 1 表設計
@@ -26,8 +26,8 @@ v1.0 -> v2.0 主要變更：
 |---------|------|------|
 | TS-F036-001 | Phase 1 MVP 僅回傳 1 個目標表 | PASS |
 | TS-F036-002 | 回應結構完整（5 個屬性） | PASS |
-| TS-F036-003 | columnCount=54, domain=core | PASS |
-| TS-F036-004 | Schema 欄位總數 54 | PASS |
+| TS-F036-003 | columnCount=79, domain=core | PASS |
+| TS-F036-004 | Schema 欄位總數 79 | PASS |
 | TS-F036-005 | A 類欄位定義正確 | PASS |
 | TS-F036-006 | B 類欄位定義正確 | PASS |
 | TS-F036-007 | C 類欄位定義正確 | PASS |
@@ -84,7 +84,7 @@ v1.0 -> v2.0 主要變更：
 
 | 檔案路徑 | 變更類型 | 說明 |
 |----------|---------|------|
-| apps/api/src/modules/etl/target-table-schemas.ts | modified | 重寫為 1 表 54 欄位（A~H 八分類完整定義） |
+| apps/api/src/modules/etl/target-table-schemas.ts | modified | 重寫為 1 表 79 欄位（A~H 八分類完整定義） |
 | apps/api/src/modules/etl/etl-transforms.ts | new | ETL 轉換函式（mergePhone, toDecimal, mapCustomerType, lookupCodeDescription） |
 | apps/api/src/modules/etl/__tests__/target-table-schemas.spec.ts | new | Schema 定義 Unit Test（43 項） |
 | apps/api/src/modules/etl/__tests__/target-table.service.spec.ts | new | Service 層 Unit Test（8 項） |
@@ -92,7 +92,7 @@ v1.0 -> v2.0 主要變更：
 | apps/api/test/target-table.e2e-spec.ts | modified | 重寫 E2E 測試以匹配 v2.0（19 項） |
 | apps/api/src/database/migrations/1711360000000-CreateCustomerCore.ts | new | Database Migration（customer_core 表 + 索引） |
 | apps/web/src/pages/etl-pipelines/target-tables-page.tsx | modified | 頁面副標題更新為 Phase 1 MVP 1 表 |
-| apps/web/src/pages/etl-pipelines/__tests__/target-tables-page.test.tsx | modified | 前端測試更新為 1 表 54 欄位 mock data |
+| apps/web/src/pages/etl-pipelines/__tests__/target-tables-page.test.tsx | modified | 前端測試更新為 1 表 79 欄位 mock data |
 | apps/web/src/pages/etl-pipelines/editor/__tests__/load-properties.test.tsx | new | LoadProperties 元件測試（5 項） |
 
 ## 架構決策

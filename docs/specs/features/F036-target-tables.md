@@ -5,8 +5,8 @@ feature-id: F036
 source-story: US-049
 epic: E05
 priority: P0-MVP
-version: "2.0"
-date: 2026-03-25
+version: "2.2"
+date: 2026-03-31
 status: Draft
 ---
 
@@ -14,7 +14,7 @@ status: Draft
 
 ## 1. 功能摘要
 
-系統預先定義 1 個 Domain-Oriented 目標表 `customer_core`（約 45 欄位），提供 API 查詢目標表清單與 schema。Load 節點可選擇目標表並進行欄位對應，ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）由系統自動填充。Phase 2/3 待對應來源系統接入後再擴充 `customer_interaction`、`customer_financial`、`customer_service`。
+系統預先定義 1 個 Domain-Oriented 目標表 `customer_core`（79 欄位），提供 API 查詢目標表清單與 schema。Load 節點可選擇目標表並進行欄位對應，ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）由系統自動填充。Phase 2/3 待對應來源系統接入後再擴充 `customer_interaction`、`customer_financial`、`customer_service`。
 
 ## 2. 使用者故事
 
@@ -81,7 +81,7 @@ status: Draft
 
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（約 45 欄位），欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（79 欄位），欄位定義正確
 - **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ## 7. 主要流程
@@ -122,7 +122,7 @@ status: Draft
       "tableName": "customer_core",
       "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 45,
+      "columnCount": 79,
       "description": "客戶身分、聯絡、職業、財務概況與風控旗標"
     }
   ]
@@ -193,15 +193,26 @@ status: Draft
 | marital_status | VARCHAR(1) | YES | | 婚姻狀態 | ZZIP.CMARRY_MK |
 | education_code | VARCHAR(2) | YES | | 學歷代碼 | ZZIP.EDUCAT_BACK |
 | education_desc | VARCHAR(50) | YES | | 學歷描述 | US-030 代碼轉換 |
+| spouse_name | VARCHAR(100) | YES | | 配偶姓名 | ZZIP.SPOUSE_NM |
+| father_name | VARCHAR(100) | YES | | 父親姓名 | ZZIP.FATHER_NM |
+| mother_name | VARCHAR(100) | YES | | 母親姓名 | ZZIP.MOTHER_NM |
+| id_issue_type | VARCHAR(2) | YES | | 發證類別 | ZZIP.ISSUE_CLASS / MLMC.ISSUE_CLASS |
+| id_issue_date | TIMESTAMP | YES | | 發證日期 | ZZIP.ISSUE_DATE / MLMC.ISSUE_DT |
+| id_issue_address | VARCHAR(100) | YES | | 發證地址 | ZZIP.ISSUE_ADD / MLMC.ISSUE_ADD |
+| driver_license | VARCHAR(20) | YES | | 駕照號碼 | ZZIP.DRIVE_LIC |
 
 ### C. 聯絡資訊
 
 | 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 | 轉換邏輯 |
 |---------|------|----------|-----|------|---------|---------|
 | mobile_phone | VARCHAR(20) | YES | | 行動電話 | ZZIP.CELLULAR / MLMC.CUSTMOBILE | 直接映射 |
-| home_phone | VARCHAR(20) | YES | | 戶籍電話 | ZZIP.CAREA_NO1 + CTEL_NO1 | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
-| contact_phone | VARCHAR(20) | YES | | 通訊電話 | ZZIP.CAREA_NO2 + CTEL_NO2 | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
-| office_phone | VARCHAR(20) | YES | | 公司電話 | ZZIP.CO_CAREA_NO + CO_CTEL_NO / MLMC.BUSINESSTTELCODE + BUSINESSTTEL | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| home_phone | VARCHAR(20) | YES | | 戶籍電話 | ZZIP.CAREA_NO1 + CTEL_NO1 + CEXTEN_NO1 | mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)，佔位值→NULL |
+| contact_phone | VARCHAR(20) | YES | | 通訊電話 | ZZIP.CAREA_NO2 + CTEL_NO2 + CEXTEN_NO2 | mergePhone(CAREA_NO2, CTEL_NO2, CEXTEN_NO2)，佔位值→NULL |
+| office_phone | VARCHAR(20) | YES | | 公司電話 | ZZIP.CO_CAREA_NO + CO_CTEL_NO + CO_CEXTEN_NO / MLMC.BUSINESSTTELCODE + BUSINESSTTEL | mergePhone(CO_CAREA_NO, CO_CTEL_NO, CO_CEXTEN_NO)，佔位值→NULL |
+| registered_phone | VARCHAR(20) | YES | | 公司登記電話 | MLMC.CUSTTELCODE + CUSTTEL | mergePhone 合併 |
+| registered_fax | VARCHAR(20) | YES | | 公司傳真 | MLMC.CUSTFAXCODE + CUSTFAX | mergePhone 合併 |
+| business_fax | VARCHAR(20) | YES | | 營業傳真 | MLMC.BUSINESSFAXCODE + BUSINESSFAX | mergePhone 合併 |
+| business_mobile | VARCHAR(20) | YES | | 營業行動電話 | MLMC.BUSINESSMOBILE | 直接映射 |
 | email | VARCHAR(40) | YES | | Email | ZZIP.E_MAIL | 直接映射 |
 | line_account | VARCHAR(50) | YES | | Line 帳號 | ZZIP.LINE_ACCT | 直接映射 |
 
@@ -211,10 +222,14 @@ status: Draft
 |---------|------|----------|-----|------|---------|
 | residential_zip | VARCHAR(6) | YES | | 戶籍郵遞區號 | ZZIP.HPOST_NUM |
 | residential_address | VARCHAR(100) | YES | | 戶籍地址 | ZZIP.HPOST_ADD |
-| mailing_zip | VARCHAR(6) | YES | | 通訊郵遞區號 | ZZIP.CPOST_NUM / MLMC.CUSTZIPCODE |
-| mailing_address | VARCHAR(100) | YES | | 通訊地址 | ZZIP.COMM_ADD / MLMC.CUSTADDR |
-| company_zip | VARCHAR(6) | YES | | 公司郵遞區號 | ZZIP.CO_NUM / MLMC.BUSINESSZIPCODE |
-| company_address | VARCHAR(100) | YES | | 公司/營業地址 | ZZIP.UNIT_ADD / MLMC.BUSINESSADDR |
+| mailing_zip | VARCHAR(6) | YES | | 通訊郵遞區號 | ZZIP.CPOST_NUM |
+| mailing_address | VARCHAR(100) | YES | | 通訊地址 | ZZIP.COMM_ADD |
+| registered_zip | VARCHAR(6) | YES | | 公司登記郵遞區號 | MLMC.CUSTZIPCODE |
+| registered_address | VARCHAR(100) | YES | | 公司登記地址 | MLMC.CUSTADDR |
+| company_zip | VARCHAR(6) | YES | | 營業地址郵遞區號 | ZZIP.CO_NUM / MLMC.BUSINESSZIPCODE |
+| company_address | VARCHAR(100) | YES | | 營業地址 | ZZIP.UNIT_ADD / MLMC.BUSINESSADDR |
+| maturity_mailing_zip | VARCHAR(6) | YES | | 滿期寄送郵遞區號 | ZZIP.EPRPOST_NUM |
+| maturity_mailing_address | VARCHAR(100) | YES | | 滿期寄送地址 | ZZIP.EPRPOST_ADD |
 
 ### E. 職業與就業
 
@@ -226,20 +241,24 @@ status: Draft
 | job_title_code | VARCHAR(4) | YES | | 職稱代碼 | ZZIP.JOB_TITLE |
 | job_title_desc | VARCHAR(50) | YES | | 職稱描述 | US-030 代碼轉換 |
 | job_level | VARCHAR(2) | YES | | 職級 | ZZIP.JOB_LEVEL |
-| industry_code | VARCHAR(6) | YES | | 行業代碼 | ZZIP.INDUSTRY |
+| industry_code | VARCHAR(6) | YES | | 行業代碼 | ZZIP.INDUSTRY / MLMC.INDUID |
 | industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / US-030 代碼轉換 |
 | work_years | DECIMAL(8,2) | YES | | 年資 | ZZIP.N_WORK_YEAR |
 | company_scale | VARCHAR(1) | YES | | 公司規模（1:>=1000萬or公教/2:<1000萬/3:其他） | ZZIP.COMP_DIM |
+| role_code | VARCHAR(4) | YES | | 客戶角色代碼 | ZZIP.CROLE |
+| role_desc | VARCHAR(50) | YES | | 客戶角色描述 | US-030 代碼轉換 |
 
 ### F. 財務與風控
 
 | 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
 |---------|------|----------|-----|------|---------|
-| monthly_income | DECIMAL(8,0) | YES | | 月所得 | ZZIP.INCOME_MON |
+| monthly_income | DECIMAL(8,0) | YES | | 月所得 | ZZIP.MONTH_INCOME |
 | approved_income | INTEGER | YES | | 認定月收入 | ZZIP.INCOME_APPROVED |
 | income_source | VARCHAR(5) | YES | | 收入來源代碼 | ZZIP.INCOME_SOURCE |
-| capital | DECIMAL(12,0) | YES | | 資本額 | ZZIP.CAPITAL / MLMC.CUSTNOWCAPTIAL（varchar→DECIMAL） |
-| credit_limit | DECIMAL(12,0) | YES | | 核准額度 | MLMC.FAMOUNT |
+| capital | DECIMAL(12,0) | YES | | 實收資本額 | ZZIP.CAPITAL / MLMC.CUSTNOWCAPTIAL（varchar→DECIMAL） |
+| credit_limit | DECIMAL(12,0) | YES | | 額度總額 | MLMC.FAMOUNT |
+| highest_transaction_amount | DECIMAL(12,0) | YES | | 最高往來金額 | MLMC.HFAMOUNT |
+| highest_transaction_date | TIMESTAMP | YES | | 最高往來日期 | MLMC.HCDATE |
 | has_real_estate | VARCHAR(1) | YES | | 自有不動產 | ZZIP.IMMOPRO_MK |
 | debt_flag | CHAR(1) | YES | | 消債旗標 | ZZIP.DEBT_FLG |
 | fine_flag | CHAR(1) | YES | | 違規欠稅旗標（>2萬） | ZZIP.FINE_FLG |
@@ -251,12 +270,18 @@ status: Draft
 | 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
 |---------|------|----------|-----|------|---------|
 | owner_name | VARCHAR(50) | YES | | 負責人姓名 | MLMC.OWNER |
-| owner_id | VARCHAR(10) | YES | | 負責人 ID | MLMC.OWNERID |
+| owner_id | VARCHAR(10) | YES | | 負責人身分證字號 | MLMC.OWNERID |
 | owner_birth | DATE | YES | | 負責人生日 | MLMC.OWNERBIRTH |
-| established_capital | DECIMAL(12,0) | YES | | 創設資本 | MLMC.CUSTCREATECAPTIAL（varchar→DECIMAL） |
-| employee_count | VARCHAR(6) | YES | | 員工數 | MLMC.EMPLOYEE |
-| is_listed | VARCHAR(6) | YES | | 是否上市 | MLMC.LISTED |
+| owner_zip | VARCHAR(6) | YES | | 負責人郵遞區號 | MLMC.OWNERZIPCODE |
+| owner_address | VARCHAR(100) | YES | | 負責人地址 | MLMC.OWNERADDR |
+| established_capital | DECIMAL(12,0) | YES | | 登記資本額 | MLMC.CUSTCREATECAPTIAL（varchar→DECIMAL） |
+| employee_count | VARCHAR(6) | YES | | 員工人數 | MLMC.EMPLOYEE |
+| is_listed | VARCHAR(6) | YES | | 上市櫃 | MLMC.LISTED |
+| group_owner | VARCHAR(50) | YES | | 集團實際負責人 | MLMC.GROUPOWNER |
+| company_attr_code | VARCHAR(6) | YES | | 公司屬性 | MLMC.COMPTYPE |
+| organization_type | VARCHAR(6) | YES | | 組織形態 | MLMC.ORGATYPE |
 | parent_customer_id | VARCHAR(10) | YES | | 母公司客戶 ID | MLMC.PARENTCUSTID |
+| parent_customer_name | VARCHAR(100) | YES | | 母公司名稱 | MLMC.PARENTCUSTNAME |
 
 ### H. 稽核與 ETL 追蹤
 
@@ -272,7 +297,8 @@ status: Draft
 
 | 規則 | 說明 | 處理方式 |
 |------|------|---------|
-| 電話合併 | 區碼與號碼分開儲存的來源欄位需合併 | `{區碼}-{號碼}` 格式，佔位值（如 `00-0000000000`）過濾為 NULL |
+| 電話合併（ZZIP） | 區碼、號碼、分機分開儲存的來源欄位需合併 | `{區碼}-{號碼}#{分機}` 格式；分機為空/null/全零時不加 `#` 後綴；佔位值（如 `00-0000000000`）過濾為 NULL |
+| 電話/傳真合併（MLMC） | MLMC 端區碼+號碼分開儲存的欄位需合併（registered_phone, registered_fax, business_fax） | mergePhone 合併 `{區碼}-{號碼}` 格式；佔位值過濾為 NULL |
 | 衝突解決 | 同一客戶在兩來源有衝突時 | 以 `source_updated_at` 較新者為準（於 US-042 Pipeline 編輯器 Transform 節點處理） |
 | 代碼描述 | `_code` 欄位保留原始代碼，`_desc` 欄位需轉換 | 由 US-030 取得代碼對照表，US-042 Transform 節點轉換填入 |
 | 資本額型別轉換 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL 來源為 varchar | 轉換為 DECIMAL |
@@ -290,10 +316,7 @@ status: Draft
 
 | 來源欄位 | 理由 |
 |---------|------|
-| SPOUSE_NM / FATHER_NM / MOTHER_NM | 敏感個資，MVP 暫不需要 |
-| EPRPOST_ADD / EPRPOST_NUM | 滿期寄送地址，屬業務特定流程 |
 | PRINT_FLG / ID_CHECK / ID_CHECK_DATE | 內部作業旗標，非分析必要 |
-| ISSUE_ADD / ISSUE_CLASS / ISSUE_DATE | 發證資訊，MVP 暫不需要 |
 | OLD_P_ID | 舊系統遷移用，非分析必要 |
 | APPLI_MARK / SPON_MARK | 申請人/保證人註記，屬業務流程旗標 |
 
@@ -330,8 +353,8 @@ status: Draft
 
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
-| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量（45） |
-| 2 | 呼叫 customer_core Schema API | 回傳約 45 個欄位定義，型別與描述正確，涵蓋 A~H 八個分類 |
+| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量（79） |
+| 2 | 呼叫 customer_core Schema API | 回傳 79 個欄位定義，型別與描述正確，涵蓋 A~H 八個分類 |
 | 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
 | 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
 | 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |

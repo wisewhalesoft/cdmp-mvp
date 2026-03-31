@@ -96,7 +96,7 @@
 
 | 函數 | 語法 | 邏輯說明 |
 |------|------|---------|
-| `mergePhone` | `mergePhone(areaCol, telCol)` | 讀取列中 `areaCol` 與 `telCol` 的值，組合為 `{area}-{tel}` 格式；若合併結果為佔位值（如 `00-0000000000`、區碼為空、號碼為空），輸出 null |
+| `mergePhone` | `mergePhone(areaCol, telCol)` 或 `mergePhone(areaCol, telCol, extenCol)` | 讀取列中指定欄位的值，有分機時組合為 `{area}-{tel}#{exten}`，無分機時組合為 `{area}-{tel}`；分機為 null、空字串或全零時不附加 `#exten`；若合併結果為佔位值（如 `00-0000000000`、區碼為空、號碼為空），輸出 null |
 | `padStart` | `padStart(col, length, char)` | 讀取列中 `col` 欄位的值，等同 JS `String(value).padStart(length, char)` |
 | `gen_random_uuid` | `gen_random_uuid()` | 產生 UUID v4 字串 |
 | `CASE WHEN ... THEN ... ELSE ...` | SQL-like CASE 語法 | 支援 `WHEN left.{col} IS NOT NULL AND right.{col} IS NOT NULL THEN '{val}' WHEN left.{col} IS NOT NULL THEN '{val}' ELSE '{val}'` 語法；`left.` / `right.` 前綴對應列中的欄位名稱 |
@@ -175,11 +175,23 @@ CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NO
 - **When**：tc1 節點執行
 - **Then**：輸出列中 CUSTNOWCAPTIAL = null（不拋出例外）
 
-### TC-056-06：mergePhone 正常合併
+### TC-056-06：mergePhone 正常合併（無分機）
 
 - **Given**：列中 CAREA_NO1 = "02"，CTEL_NO1 = "27123456"
 - **When**：df1 執行 `mergePhone(CAREA_NO1, CTEL_NO1)`
 - **Then**：home_phone = "02-27123456"
+
+### TC-056-06b：mergePhone 正常合併（含分機）
+
+- **Given**：列中 CAREA_NO1 = "02"，CTEL_NO1 = "27123456"，CEXTEN_NO1 = "100"
+- **When**：df1 執行 `mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)`
+- **Then**：home_phone = "02-27123456#100"
+
+### TC-056-06c：mergePhone 分機全零不附加
+
+- **Given**：列中 CAREA_NO1 = "02"，CTEL_NO1 = "27123456"，CEXTEN_NO1 = "000"
+- **When**：df1 執行 `mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)`
+- **Then**：home_phone = "02-27123456"（全零分機不附加）
 
 ### TC-056-07：mergePhone 佔位值過濾
 

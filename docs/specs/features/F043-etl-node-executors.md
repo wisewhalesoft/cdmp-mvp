@@ -285,7 +285,7 @@ interface DerivedExpression {
 
 | 函數 | 語法範例 | 處理邏輯 |
 |------|---------|---------|
-| `mergePhone` | `mergePhone(CAREA_NO1, CTEL_NO1)` | 讀取列中指定兩欄位值，組合為 `{area}-{tel}`；佔位值條件成立時回傳 null |
+| `mergePhone` | `mergePhone(CAREA_NO1, CTEL_NO1)` 或 `mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)` | 讀取列中指定欄位值，有分機時組合為 `{area}-{tel}#{exten}`，無分機時組合為 `{area}-{tel}`；分機為 null、空字串或全零時不附加 `#exten`；佔位值條件成立時回傳 null |
 | `padStart` | `padStart(CUTYPE, 2, '0')` | 讀取列中指定欄位值，執行 `String(value).padStart(length, char)` |
 | `gen_random_uuid` | `gen_random_uuid()` | 產生 UUID v4 字串（使用 `crypto.randomUUID()` 或等效實作） |
 | `CASE WHEN...` | `CASE WHEN left.{col} IS NOT NULL THEN '{val}' ELSE '{val}' END` | SQL-like 條件表達式，依序評估 WHEN 子句 |
@@ -293,7 +293,7 @@ interface DerivedExpression {
 **表達式解析規則：**
 
 1. 以正則表達式識別函數名稱與參數
-2. `mergePhone(col1, col2)` — 解析出兩個欄位名稱，從資料列中取值
+2. `mergePhone(col1, col2)` 或 `mergePhone(col1, col2, col3)` — 解析出兩或三個欄位名稱，從資料列中取值；第三參數（分機）為選用
 3. `padStart(col, length, char)` — 解析出欄位名稱、長度（number）、填充字元（string）
 4. `gen_random_uuid()` — 無參數，直接產生 UUID
 5. `CASE WHEN ... END` — 解析 WHEN/THEN/ELSE 子句
@@ -339,8 +339,8 @@ interface DerivedExpression {
 
 | 節點 ID | expressions 摘要 | 說明 |
 |---------|-----------------|------|
-| df1 | mergePhone × 3（home_phone, contact_phone, office_phone） | ZZIP 電話合併 |
-| df2 | padStart(CUTYPE, 2, '0') + mergePhone(BUSINESSTTELCODE, BUSINESSTTEL) | MLMC 類型轉換 + 電話合併 |
+| df1 | mergePhone × 3（home_phone, contact_phone, office_phone，含分機） | ZZIP 電話合併（含分機） |
+| df2 | padStart(CUTYPE, 2, '0') + mergePhone × 4（BUSINESSTTELCODE/BUSINESSTTEL→office_phone, CUSTTELCODE/CUSTTEL→registered_phone, CUSTFAXCODE/CUSTFAX→registered_fax, BUSINESSFAXCODE/BUSINESSFAX→business_fax） | MLMC 類型轉換 + 4 組電話/傳真合併（5 個表達式） |
 | df3 | CASE WHEN（data_source） + gen_random_uuid（customer_id） | 資料來源標記 + UUID 生成 |
 
 ---
@@ -390,8 +390,8 @@ interface FieldMapping {
 
 | 節點 ID | mappings 數量 | dropUnmapped | 說明 |
 |---------|--------------|-------------|------|
-| fm1 | 38 | true | ZZIP 映射（來源→customer_core 欄位） |
-| fm2 | 21 | true | MLMC 映射（來源→customer_core 欄位） |
+| fm1 | 48 | true | ZZIP 映射（來源→customer_core 欄位） |
+| fm2 | 37 | true | MLMC 映射（來源→customer_core 欄位） |
 
 ---
 
@@ -477,12 +477,12 @@ interface ConditionalCondition {
 
 ```
 e1(raw_101f6b3e) ──┐
-                    ├─→ m1(FULL JOIN CUSTO_NO) → d1(dedup CUSTO_NO) → df1(mergePhone×3) → fm1(38 mappings)
+                    ├─→ m1(FULL JOIN CUSTO_NO) → d1(dedup CUSTO_NO) → df1(mergePhone×3,含分機) → fm1(48 mappings)
 e2(raw_35d85504) ──┘                                                                          │
                                                                                                ├─→ m4(FULL JOIN source_customer_no) → cd1(衝突解決×5) → df3(data_source + UUID) → tl1
 e3(raw_1138803c) ──┐                                                                           │
                     ├─→ m2(FULL JOIN CUSTID) ──┐                                               │
-e4(raw_aec93e7c) ──┘                           ├─→ m3(FULL JOIN CUSTID) → d2(dedup CUSTID) → tc1(VARCHAR→DECIMAL) → df2(padStart + mergePhone) → fm2(21 mappings)
+e4(raw_aec93e7c) ──┘                           ├─→ m3(FULL JOIN CUSTID) → d2(dedup CUSTID) → tc1(VARCHAR→DECIMAL) → df2(padStart + mergePhone×4) → fm2(37 mappings)
                                                │
 e5(raw_50172f04) ─────────────────────────────┘
 ```
@@ -553,9 +553,17 @@ e5(raw_50172f04) ─────────────────────
 
 ### AC-9: mergePhone 正常合併
 
-- Given CAREA_NO1 = "02", CTEL_NO1 = "27123456"
+- Given CAREA_NO1 = "02", CTEL_NO1 = "27123456"（無分機）
 - When derived_field 執行 `mergePhone(CAREA_NO1, CTEL_NO1)`
 - Then home_phone = "02-27123456"
+
+- Given CAREA_NO1 = "02", CTEL_NO1 = "27123456", CEXTEN_NO1 = "100"（有分機）
+- When derived_field 執行 `mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)`
+- Then home_phone = "02-27123456#100"
+
+- Given CAREA_NO1 = "02", CTEL_NO1 = "27123456", CEXTEN_NO1 = "000"（分機全零）
+- When derived_field 執行 `mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)`
+- Then home_phone = "02-27123456"（全零分機不附加）
 
 ### AC-10: mergePhone 佔位值過濾
 

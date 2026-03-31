@@ -100,7 +100,7 @@ last_updated: 2026-03-27
 1. **Temp table 命名規則**: `etl_tmp_{nodeId}_{logId前8碼}`，確保並發執行不衝突
 2. **TypeCast 安全轉換**: 使用 regex 驗證後再 CAST，避免 SQL 錯誤（`'^-?[0-9]+(\.[0-9]+)?$'` for DECIMAL）
 3. **Dedup 穩定排序**: 使用 `ctid ASC` 作為 tie-breaker，確保時間戳相同時保留第一筆
-4. **mergePhone SQL 實作**: 完整複製原始 JS 邏輯（null、空字串、全零檢查）為 SQL CASE WHEN
+4. **mergePhone SQL 實作**: 完整複製原始 JS 邏輯（null、空字串、全零檢查）為 SQL CASE WHEN；支援選用第三參數 extenCol（分機），有分機時產生 `CONCAT(area, '-', tel, '#', exten)`，分機為 null/空字串/全零時省略 `#exten` 部分
 5. **TargetLoad 單次 UPSERT**: 不再需要記憶體批次，直接 `INSERT INTO target SELECT FROM temp`
 6. **執行服務無需修改**: `etl-pipeline-execution.service.ts` 公開 API 不變，因 PipelineRunner 內部處理 cleanup
 7. **emptyDataSet**: temp table 為空字串 + rowCount=0，handler 遇到 rowCount=0 直接回傳，不執行 SQL

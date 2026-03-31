@@ -150,9 +150,9 @@ cd1 的輸入來自 m4（FULL OUTER JOIN fm1 與 fm2）。m4 執行後，資料�
 
 ### TC-057-02：field_mapping dropUnmapped 丟棄未映射欄位
 
-- **Given**：輸入列含有 100 個欄位，mappings 只定義 38 組
+- **Given**：輸入列含有 100 個欄位，mappings 只定義 48 組
 - **When**：fm1 執行，`dropUnmapped: true`
-- **Then**：輸出列只有 38 個欄位，其餘 62 個欄位不存在
+- **Then**：輸出列只有 48 個欄位，其餘 52 個欄位不存在
 
 ### TC-057-03：conditional 選擇較新的值
 

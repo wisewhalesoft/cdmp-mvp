@@ -5,7 +5,7 @@ feature_name: ETL 節點執行器
 priority: P0-MVP
 related_spec: /docs/specs/features/F043-etl-node-executors.md
 related_story: US-056, US-057（FieldMapping / Conditional）
-last_updated: 2026-03-27
+last_updated: 2026-03-31
 ---
 
 # F043: ETL 節點執行器 — 測試設計
@@ -83,12 +83,35 @@ const typeCastRows = [
 
 ### DerivedField 測試資料（mergePhone）
 ```typescript
+// 2 參數版本
 const phoneRows = [
   { CAREA_NO1: '02', CTEL_NO1: '27123456' },    // 正常
   { CAREA_NO1: '00', CTEL_NO1: '0000000000' },  // 全零佔位值
   { CAREA_NO1: null, CTEL_NO1: '27123456' },     // null 區碼
   { CAREA_NO1: '', CTEL_NO1: '27123456' },       // 空字串區碼
   { CAREA_NO1: '00', CTEL_NO1: '27123456' },     // 區碼全零
+];
+
+// 3 參數版本（含分機號碼）
+const phoneRowsWithExt = [
+  { CAREA_NO1: '02', CTEL_NO1: '27123456', EXTEN_NO1: '1234' },   // 有分機
+  { CAREA_NO1: '02', CTEL_NO1: '27123456', EXTEN_NO1: null },     // 分機為 null
+  { CAREA_NO1: '02', CTEL_NO1: '27123456', EXTEN_NO1: '' },       // 分機為空字串
+  { CAREA_NO1: '02', CTEL_NO1: '27123456', EXTEN_NO1: '000' },    // 分機全零
+];
+
+// df2 MLMC 2 參數版本（registered_phone / registered_fax / business_fax）
+const df2PhoneRows = [
+  // registered_phone：CUSTTELCODE + CUSTTEL
+  { CUSTTELCODE: '02', CUSTTEL: '87654321' },         // 正常
+  { CUSTTELCODE: '00', CUSTTEL: '0000000000' },        // 全零佔位值 → NULL
+  { CUSTTELCODE: null, CUSTTEL: '87654321' },          // null 區碼 → NULL
+  // registered_fax：CUSTFAXCODE + CUSTFAX
+  { CUSTFAXCODE: '02', CUSTFAX: '87651234' },          // 正常
+  { CUSTFAXCODE: '00', CUSTFAX: '0000000000' },        // 全零佔位值 → NULL
+  // business_fax：BUSINESSFAXCODE + BUSINESSFAX
+  { BUSINESSFAXCODE: '07', BUSINESSFAX: '12345678' },  // 正常
+  { BUSINESSFAXCODE: '00', BUSINESSFAX: '0000000000' },// 全零佔位值 → NULL
 ];
 ```
 
@@ -482,6 +505,48 @@ const conditionalRows = [
 
 ---
 
+### TS-F043-023A: df2 registered_phone — mergePhone(CUSTTELCODE, CUSTTEL) 正常合併
+
+- **Related Requirement**: F043 Section 4.5 / US-049 C 類聯絡資訊（v2.2 新增）
+- **Test Type**: 正向
+- **測試層次**: 單元測試
+- **Preconditions**: CUSTTELCODE = '02', CUSTTEL = '87654321'
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(CUSTTELCODE, CUSTTEL)`，outputColumn = 'registered_phone'
+- **Expected Result**:
+  - 輸出列包含 `registered_phone = '02-87654321'`
+  - 原始欄位 CUSTTELCODE, CUSTTEL 仍然保留
+
+---
+
+### TS-F043-023B: df2 registered_fax — mergePhone(CUSTFAXCODE, CUSTFAX) 正常合併
+
+- **Related Requirement**: F043 Section 4.5 / US-049 C 類聯絡資訊（v2.2 新增）
+- **Test Type**: 正向
+- **測試層次**: 單元測試
+- **Preconditions**: CUSTFAXCODE = '02', CUSTFAX = '87651234'
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(CUSTFAXCODE, CUSTFAX)`，outputColumn = 'registered_fax'
+- **Expected Result**:
+  - 輸出列包含 `registered_fax = '02-87651234'`
+  - 原始欄位 CUSTFAXCODE, CUSTFAX 仍然保留
+
+---
+
+### TS-F043-023C: df2 business_fax — mergePhone(BUSINESSFAXCODE, BUSINESSFAX) 正常合併
+
+- **Related Requirement**: F043 Section 4.5 / US-049 C 類聯絡資訊（v2.2 新增）
+- **Test Type**: 正向
+- **測試層次**: 單元測試
+- **Preconditions**: BUSINESSFAXCODE = '07', BUSINESSFAX = '12345678'
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(BUSINESSFAXCODE, BUSINESSFAX)`，outputColumn = 'business_fax'
+- **Expected Result**:
+  - 輸出列包含 `business_fax = '07-12345678'`
+  - 原始欄位 BUSINESSFAXCODE, BUSINESSFAX 仍然保留
+
+---
+
 ### TS-F043-024: mergePhone 佔位值（全零）回傳 null
 
 - **Related Requirement**: F043 AC-10 / F043 Section 4.5 佔位值過濾規則
@@ -494,6 +559,75 @@ const conditionalRows = [
   4. CAREA_NO1 = null, CTEL_NO1 = '27123456' → 期望 null
   5. CAREA_NO1 = '', CTEL_NO1 = '27123456' → 期望 null
 - **Expected Result**: 以上所有情境均回傳 null
+
+---
+
+### TS-F043-024B: mergePhone 3 參數 — 有分機號碼時附加 `#分機`
+
+- **Related Requirement**: F043 Section 4.5 mergePhone 函數（3 參數版本）
+- **Test Type**: 正向
+- **測試層次**: 單元測試
+- **Preconditions**: CAREA_NO1 = '02', CTEL_NO1 = '27123456', EXTEN_NO1 = '1234'
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(CAREA_NO1, CTEL_NO1, EXTEN_NO1)`，outputColumn = 'home_phone'
+- **Expected Result**:
+  - 輸出列包含 `home_phone = '02-27123456#1234'`（格式：`{區碼}-{號碼}#{分機}`）
+
+---
+
+### TS-F043-024C: mergePhone 3 參數 — 分機為 null 時省略 `#分機`
+
+- **Related Requirement**: F043 Section 4.5 mergePhone 函數（3 參數版本）
+- **Test Type**: 邊界
+- **測試層次**: 單元測試
+- **Preconditions**: CAREA_NO1 = '02', CTEL_NO1 = '27123456', EXTEN_NO1 = null
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(CAREA_NO1, CTEL_NO1, EXTEN_NO1)`，outputColumn = 'home_phone'
+- **Expected Result**:
+  - 輸出列包含 `home_phone = '02-27123456'`（無 `#` 後綴，與 2 參數版本行為一致）
+
+---
+
+### TS-F043-024D: mergePhone 3 參數 — 分機為空字串時省略 `#分機`
+
+- **Related Requirement**: F043 Section 4.5 mergePhone 函數（3 參數版本）
+- **Test Type**: 邊界
+- **測試層次**: 單元測試
+- **Preconditions**: CAREA_NO1 = '02', CTEL_NO1 = '27123456', EXTEN_NO1 = ''
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(CAREA_NO1, CTEL_NO1, EXTEN_NO1)`，outputColumn = 'home_phone'
+- **Expected Result**:
+  - 輸出列包含 `home_phone = '02-27123456'`（空字串分機視同無分機）
+
+---
+
+### TS-F043-024E: mergePhone 3 參數 — 分機為全零時省略 `#分機`
+
+- **Related Requirement**: F043 Section 4.5 mergePhone 函數（3 參數版本，佔位值過濾）
+- **Test Type**: 邊界（佔位值過濾）
+- **測試層次**: 單元測試
+- **Preconditions**: CAREA_NO1 = '02', CTEL_NO1 = '27123456', EXTEN_NO1 = '000'
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，expression = `mergePhone(CAREA_NO1, CTEL_NO1, EXTEN_NO1)`，outputColumn = 'home_phone'
+- **Expected Result**:
+  - 輸出列包含 `home_phone = '02-27123456'`（全零分機視為佔位值，省略 `#` 後綴）
+
+---
+
+### TS-F043-024F: mergePhone 3 參數 — SQL 生成驗證（CASE WHEN 含 `#` 分隔符）
+
+- **Related Requirement**: F043 Section 4.5 mergePhone SQL 產生邏輯
+- **Test Type**: 正向（SQL 產生）
+- **測試層次**: 單元測試（檢驗 SQL AST 或產生的 SQL 字串）
+- **Preconditions**: DerivedFieldExecutor 支援將 `mergePhone(area, tel, exten)` 編譯為 SQL CASE WHEN 表達式
+- **Steps**:
+  1. 呼叫 mergePhone SQL 產生器，傳入 3 個欄位參數（area='CAREA_NO1', tel='CTEL_NO1', exten='EXTEN_NO1'）
+  2. 取得產生的 SQL 字串（或 SQL AST）
+- **Expected Result**:
+  - SQL 包含 `CASE WHEN` 結構
+  - SQL 包含 `'#'` 字面值作為分機分隔符
+  - 當 exten 為 null 或全零時的分支不含 `'#'`（透過 `WHEN exten IS NULL` 或 `WHEN exten = '000'` 判斷）
+  - 基礎格式：`{area}-{tel}` 部分與 2 參數版本 SQL 格式一致
 
 ---
 
@@ -673,6 +807,26 @@ const conditionalRows = [
 - **Expected Result**:
   - 輸出每列為空物件（0 個欄位）
   - rowCount 與輸入相同
+
+---
+
+### TS-F043-037B: fm2 MLMC 映射（37 組映射）完整性驗證
+
+- **Related Requirement**: F043 Section 4.6 / US-049 MLMC 映射（v2.2：37 組，含 registered_phone/registered_fax/business_fax/business_mobile/owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name 等新增欄位）
+- **Test Type**: 正向
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - 輸入 DataSet 含 MLMC 來源欄位（含 v2.2 新增欄位），dropUnmapped = true
+  - fm2 mappings 共 37 組（包含 C 類 4 個新增電話/傳真欄位、D 類 2 個新增地址欄位、G 類 6 個新增企業欄位）
+- **Steps**:
+  1. 建立含 37 組 mappings 的 FieldMappingExecutor 設定
+  2. 以含所有 MLMC 來源欄位的測試列執行
+- **Expected Result**:
+  - 輸出列包含 37 個 targetColumn 欄位（dropUnmapped = true，無 MLMC 原始欄位名稱）
+  - 新增欄位正確映射：`registered_phone`（CUSTTELCODE→CUSTTEL 合併後）、`registered_fax`、`business_fax`、`business_mobile`（BUSINESSMOBILE）
+  - 新增 D 類：`registered_zip`（CUSTZIPCODE）、`registered_address`（CUSTADDR）
+  - 新增 G 類：`owner_zip`（OWNERZIPCODE）、`owner_address`（OWNERADDR）、`group_owner`（GROUPOWNER）、`company_attr_code`（COMPTYPE）、`organization_type`（ORGATYPE）、`parent_customer_name`（PARENTCUSTNAME）
+  - 所有 37 個目標欄位均存在於輸出列中
 
 ---
 
