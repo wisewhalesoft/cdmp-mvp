@@ -574,8 +574,8 @@ const LOAD_CATEGORIES: LoadCategory[] = [
   { id: 'H', label: '稽核與 ETL 追蹤', badgeBg: 'bg-gray-200', badgeText: 'text-gray-600' },
 ];
 
-// Category sizes for customer_core: A(5), B(5), C(6), D(6), E(10), F(10), G(7), H(5)
-const CATEGORY_SIZES = [5, 5, 6, 6, 10, 10, 7, 5];
+// Category sizes for customer_core: A(5), B(12), C(10), D(10), E(12), F(12), G(13), H(5)
+const CATEGORY_SIZES = [5, 12, 10, 10, 12, 12, 13, 5];
 
 function groupColumnsByCategory(columns: TargetTableColumn[]) {
   const groups: { category: LoadCategory; columns: TargetTableColumn[] }[] = [];
