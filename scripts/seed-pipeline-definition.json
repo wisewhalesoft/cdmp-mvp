@@ -64,9 +64,22 @@
         }
       },
       {
+        "id": "tc_zzip",
+        "type": "pipelineNode",
+        "position": { "x": 800, "y": 125 },
+        "data": {
+          "nodeType": "type_cast",
+          "label": "ZZIP型別轉換",
+          "subtitle": "1 欄位",
+          "castRules": [
+            { "column": "MONTH_INCOME", "sourceType": "VARCHAR", "targetType": "DECIMAL" }
+          ]
+        }
+      },
+      {
         "id": "fm1",
         "type": "pipelineNode",
-        "position": { "x": 900, "y": 125 },
+        "position": { "x": 1000, "y": 125 },
         "data": {
           "nodeType": "field_mapping",
           "label": "ZZIP映射",
@@ -358,7 +371,8 @@
       { "id": "edge-e2-m1", "source": "e2", "target": "m1", "targetHandle": "right-input" },
       { "id": "edge-m1-d1", "source": "m1", "target": "d1" },
       { "id": "edge-d1-df1", "source": "d1", "target": "df1" },
-      { "id": "edge-df1-fm1", "source": "df1", "target": "fm1" },
+      { "id": "edge-df1-tc_zzip", "source": "df1", "target": "tc_zzip" },
+      { "id": "edge-tc_zzip-fm1", "source": "tc_zzip", "target": "fm1" },
       { "id": "edge-e3-m2", "source": "e3", "target": "m2", "targetHandle": "left-input" },
       { "id": "edge-e4-m2", "source": "e4", "target": "m2", "targetHandle": "right-input" },
       { "id": "edge-m2-m3", "source": "m2", "target": "m3", "targetHandle": "left-input" },
