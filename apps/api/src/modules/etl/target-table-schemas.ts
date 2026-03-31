@@ -90,14 +90,14 @@ export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
 
       // E. 職業與就業 (12)
       { name: 'company_name', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '服務公司/企業名稱' },
-      { name: 'role_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶角色代碼' },
+      { name: 'role_code', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶角色/職稱（自由文字）' },
       { name: 'role_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶角色描述' },
       { name: 'occupation_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業代碼' },
       { name: 'occupation_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業描述' },
       { name: 'job_title_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職稱代碼' },
       { name: 'job_title_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職稱描述' },
       { name: 'job_level', type: 'VARCHAR(2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職級' },
-      { name: 'industry_code', type: 'VARCHAR(6)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業代碼' },
+      { name: 'industry_code', type: 'VARCHAR(10)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業代碼' },
       { name: 'industry_desc', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業描述' },
       { name: 'work_years', type: 'DECIMAL(8,2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '年資' },
       { name: 'company_scale', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司規模（1:>=1000萬or公教/2:<1000萬/3:其他）' },
