@@ -100,7 +100,7 @@ describe('TargetTablesPage (v2.0 — 1 table)', () => {
     expect(screen.queryByTestId('card-service')).not.toBeInTheDocument();
 
     expect(screen.getByTestId('badge-core')).toHaveTextContent('core');
-    expect(screen.getByText('54 欄位')).toBeInTheDocument();
+    expect(screen.getByText('79 欄位')).toBeInTheDocument();
   });
 
   it('should expand table on chevron click and show schema columns', async () => {

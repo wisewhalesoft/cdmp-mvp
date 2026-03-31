@@ -35,38 +35,55 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('english_name');
     });
 
-    it('B. 個人屬性 (5 columns)', () => {
+    it('B. 個人屬性 (12 columns)', () => {
       const names = columnNames();
       expect(names).toContain('gender');
       expect(names).toContain('date_of_birth');
       expect(names).toContain('marital_status');
       expect(names).toContain('education_code');
       expect(names).toContain('education_desc');
+      expect(names).toContain('spouse_name');
+      expect(names).toContain('father_name');
+      expect(names).toContain('mother_name');
+      expect(names).toContain('id_issue_type');
+      expect(names).toContain('id_issue_date');
+      expect(names).toContain('id_issue_address');
+      expect(names).toContain('driver_license');
     });
 
-    it('C. 聯絡資訊 (6 columns)', () => {
+    it('C. 聯絡資訊 (10 columns)', () => {
       const names = columnNames();
       expect(names).toContain('mobile_phone');
       expect(names).toContain('home_phone');
       expect(names).toContain('contact_phone');
       expect(names).toContain('office_phone');
+      expect(names).toContain('registered_phone');
+      expect(names).toContain('registered_fax');
+      expect(names).toContain('business_fax');
+      expect(names).toContain('business_mobile');
       expect(names).toContain('email');
       expect(names).toContain('line_account');
     });
 
-    it('D. 地址 (6 columns)', () => {
+    it('D. 地址 (10 columns)', () => {
       const names = columnNames();
       expect(names).toContain('residential_zip');
       expect(names).toContain('residential_address');
       expect(names).toContain('mailing_zip');
       expect(names).toContain('mailing_address');
+      expect(names).toContain('registered_zip');
+      expect(names).toContain('registered_address');
       expect(names).toContain('company_zip');
       expect(names).toContain('company_address');
+      expect(names).toContain('maturity_mailing_zip');
+      expect(names).toContain('maturity_mailing_address');
     });
 
-    it('E. 職業與就業 (10 columns)', () => {
+    it('E. 職業與就業 (12 columns)', () => {
       const names = columnNames();
       expect(names).toContain('company_name');
+      expect(names).toContain('role_code');
+      expect(names).toContain('role_desc');
       expect(names).toContain('occupation_code');
       expect(names).toContain('occupation_desc');
       expect(names).toContain('job_title_code');
@@ -78,13 +95,15 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('company_scale');
     });
 
-    it('F. 財務與風控 (10 columns)', () => {
+    it('F. 財務與風控 (12 columns)', () => {
       const names = columnNames();
       expect(names).toContain('monthly_income');
       expect(names).toContain('approved_income');
       expect(names).toContain('income_source');
       expect(names).toContain('capital');
       expect(names).toContain('credit_limit');
+      expect(names).toContain('highest_transaction_amount');
+      expect(names).toContain('highest_transaction_date');
       expect(names).toContain('has_real_estate');
       expect(names).toContain('debt_flag');
       expect(names).toContain('fine_flag');
@@ -92,15 +111,21 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('mainland_flag');
     });
 
-    it('G. 企業客戶專屬 (7 columns)', () => {
+    it('G. 企業客戶專屬 (13 columns)', () => {
       const names = columnNames();
       expect(names).toContain('owner_name');
       expect(names).toContain('owner_id');
       expect(names).toContain('owner_birth');
+      expect(names).toContain('owner_zip');
+      expect(names).toContain('owner_address');
+      expect(names).toContain('group_owner');
       expect(names).toContain('established_capital');
       expect(names).toContain('employee_count');
       expect(names).toContain('is_listed');
+      expect(names).toContain('company_attr_code');
+      expect(names).toContain('organization_type');
       expect(names).toContain('parent_customer_id');
+      expect(names).toContain('parent_customer_name');
     });
 
     it('H. 稽核與 ETL 追蹤 (5 columns)', () => {
@@ -112,17 +137,15 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('_etl_pipeline_id');
     });
 
-    it('total columns = 54 (5+5+6+6+10+10+7+5)', () => {
-      expect(schema!.columns).toHaveLength(54);
+    it('total columns = 79 (5+12+10+10+12+12+13+5)', () => {
+      expect(schema!.columns).toHaveLength(79);
     });
   });
 
   // TS-F036-040: Excluded fields should not exist
   describe('TS-F036-040: excluded fields should not exist', () => {
     const excludedFields = [
-      'spouse_nm', 'father_nm', 'mother_nm',
       'print_flg', 'id_check', 'id_check_date',
-      'issue_add', 'issue_class', 'issue_date',
       'old_p_id', 'appli_mark', 'spon_mark',
       // Also old placeholder fields that no longer exist
       'id_number', 'phone', 'address', 'occupation',

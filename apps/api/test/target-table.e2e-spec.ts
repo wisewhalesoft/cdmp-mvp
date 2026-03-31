@@ -186,7 +186,7 @@ describe('F036 v2.0: Target Table APIs', () => {
         .expect(200);
 
       const core = res.body.data[0];
-      expect(core.columnCount).toBe(54);
+      expect(core.columnCount).toBe(79);
       expect(core.domain).toBe('core');
       expect(core.displayName).toContain('Customer Core');
     });
@@ -195,7 +195,7 @@ describe('F036 v2.0: Target Table APIs', () => {
   // ====== 類別二：Schema API ======
 
   describe('GET /api/v1/etl/target-tables/:tableName/schema', () => {
-    it('TS-F036-004: customer_core schema should have 54 columns (A~H)', async () => {
+    it('TS-F036-004: customer_core schema should have 79 columns (A~H)', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/etl/target-tables/customer_core/schema')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -203,7 +203,7 @@ describe('F036 v2.0: Target Table APIs', () => {
 
       expect(res.body.tableName).toBe('customer_core');
       expect(res.body.displayName).toBe('Customer Core（客戶主檔）');
-      expect(res.body.columns).toHaveLength(54);
+      expect(res.body.columns).toHaveLength(79);
     });
 
     it('TS-F036-005: A category fields (識別與分類) should be correct', async () => {
@@ -303,7 +303,7 @@ describe('F036 v2.0: Target Table APIs', () => {
 
       // Non-tracking count
       const nonTracking = res.body.columns.filter((c: any) => c.isEtlTracking === false);
-      expect(nonTracking).toHaveLength(54 - 3);
+      expect(nonTracking).toHaveLength(79 - 3);
     });
 
     it('TS-F036-010: exactly one PK field (customer_id)', async () => {
@@ -318,7 +318,7 @@ describe('F036 v2.0: Target Table APIs', () => {
       expect(pks[0].nullable).toBe(false);
 
       const nonPks = res.body.columns.filter((c: any) => c.isPrimaryKey === false);
-      expect(nonPks).toHaveLength(53);
+      expect(nonPks).toHaveLength(78);
     });
 
     it('TS-F036-011: all columns have non-empty description', async () => {

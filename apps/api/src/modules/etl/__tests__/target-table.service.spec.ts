@@ -40,7 +40,7 @@ describe('TargetTableService', () => {
       const result = service.getAll();
       const core = result.data[0];
       expect(core.domain).toBe('core');
-      expect(core.columnCount).toBe(54); // A~H: 5+5+6+6+10+10+7+5
+      expect(core.columnCount).toBe(79); // A~H: 5+12+10+10+12+12+13+5
       expect(core.displayName).toContain('Customer Core');
     });
   });

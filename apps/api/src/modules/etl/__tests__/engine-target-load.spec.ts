@@ -14,9 +14,10 @@ function makeDs(tempTable: string, rowCount: number): DataSet {
 function createMockQueryRunner(opts: {
   tableExists?: boolean;
   columns?: string[];
+  rowCount?: number;
   customHandler?: (sql: string, params?: any[]) => any;
 } = {}) {
-  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name'], customHandler } = opts;
+  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name'], rowCount = 0, customHandler } = opts;
   const calls: { sql: string; params?: any[] }[] = [];
 
   const query = vi.fn(async (sql: string, params?: any[]) => {
@@ -31,8 +32,17 @@ function createMockQueryRunner(opts: {
       return tableExists ? [{ table_name: 'customer_core' }] : [];
     }
 
+    if (sql.includes('information_schema.columns') && sql.includes('is_nullable')) {
+      // NOT NULL columns query — return source_customer_no as NOT NULL
+      return [{ column_name: 'source_customer_no' }];
+    }
+
     if (sql.includes('information_schema.columns')) {
       return columns.map((c, i) => ({ column_name: c, ordinal_position: i + 1 }));
+    }
+
+    if (sql.includes('COUNT(*)')) {
+      return [{ cnt: rowCount }];
     }
 
     return [];
@@ -60,7 +70,7 @@ function makeTargetLoadContext(
     columns = ['customer_id', 'source_customer_no', 'name'],
   } = opts;
 
-  const queryRunner = opts.queryRunner ?? createMockQueryRunner({ tableExists, columns });
+  const queryRunner = opts.queryRunner ?? createMockQueryRunner({ tableExists, columns, rowCount: input.rowCount });
 
   return {
     node: {
@@ -182,6 +192,7 @@ describe('TargetLoadHandler - UPSERT', () => {
   // TS-F044-014: UPSERT 失敗
   it('TS-F044-014: UPSERT failure reports error', async () => {
     const qr = createMockQueryRunner({
+      rowCount: 10,
       customHandler: (sql) => {
         if (sql.includes('INSERT INTO')) {
           throw new Error('DB connection lost');
