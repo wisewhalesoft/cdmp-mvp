@@ -65,14 +65,14 @@ export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
       { name: 'driver_license', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '駕照號碼' },
 
       // C. 聯絡資訊 (10)
-      { name: 'mobile_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行動電話' },
-      { name: 'home_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '戶籍電話' },
-      { name: 'contact_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '通訊電話' },
-      { name: 'office_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司電話' },
-      { name: 'registered_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司登記電話' },
-      { name: 'registered_fax', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司傳真' },
-      { name: 'business_fax', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '營業傳真' },
-      { name: 'business_mobile', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '營業行動電話' },
+      { name: 'mobile_phone', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行動電話' },
+      { name: 'home_phone', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '戶籍電話' },
+      { name: 'contact_phone', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '通訊電話' },
+      { name: 'office_phone', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司電話' },
+      { name: 'registered_phone', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司登記電話' },
+      { name: 'registered_fax', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司傳真' },
+      { name: 'business_fax', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '營業傳真' },
+      { name: 'business_mobile', type: 'VARCHAR(30)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '營業行動電話' },
       { name: 'email', type: 'VARCHAR(40)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: 'Email' },
       { name: 'line_account', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: 'Line 帳號' },
 
