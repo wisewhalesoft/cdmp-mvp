@@ -55,11 +55,11 @@
         "data": {
           "nodeType": "derived_field",
           "label": "ZZIP電話合併",
-          "subtitle": "3 組電話",
+          "subtitle": "3 組電話（含分機）",
           "expressions": [
-            { "outputColumn": "home_phone", "expression": "mergePhone(CAREA_NO1, CTEL_NO1)", "outputType": "VARCHAR" },
-            { "outputColumn": "contact_phone", "expression": "mergePhone(CAREA_NO2, CTEL_NO2)", "outputType": "VARCHAR" },
-            { "outputColumn": "office_phone", "expression": "mergePhone(CO_CAREA_NO, CO_CTEL_NO)", "outputType": "VARCHAR" }
+            { "outputColumn": "home_phone", "expression": "mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)", "outputType": "VARCHAR" },
+            { "outputColumn": "contact_phone", "expression": "mergePhone(CAREA_NO2, CTEL_NO2, CEXTEN_NO2)", "outputType": "VARCHAR" },
+            { "outputColumn": "office_phone", "expression": "mergePhone(CO_CAREA_NO, CO_CTEL_NO, CO_CEXTEN_NO)", "outputType": "VARCHAR" }
           ]
         }
       },
@@ -70,7 +70,7 @@
         "data": {
           "nodeType": "field_mapping",
           "label": "ZZIP映射",
-          "subtitle": "38 組對應",
+          "subtitle": "48 組對應",
           "dropUnmapped": true,
           "mappings": [
             { "sourceColumn": "CUSTO_NO", "targetColumn": "source_customer_no", "defaultValue": null },
@@ -81,6 +81,13 @@
             { "sourceColumn": "BITBE_DATE", "targetColumn": "date_of_birth", "defaultValue": null },
             { "sourceColumn": "CMARRY_MK", "targetColumn": "marital_status", "defaultValue": null },
             { "sourceColumn": "EDUCAT_BACK", "targetColumn": "education_code", "defaultValue": null },
+            { "sourceColumn": "SPOUSE_NM", "targetColumn": "spouse_name", "defaultValue": null },
+            { "sourceColumn": "FATHER_NM", "targetColumn": "father_name", "defaultValue": null },
+            { "sourceColumn": "MOTHER_NM", "targetColumn": "mother_name", "defaultValue": null },
+            { "sourceColumn": "ISSUE_CLASS", "targetColumn": "id_issue_type", "defaultValue": null },
+            { "sourceColumn": "ISSUE_DATE", "targetColumn": "id_issue_date", "defaultValue": null },
+            { "sourceColumn": "ISSUE_ADD", "targetColumn": "id_issue_address", "defaultValue": null },
+            { "sourceColumn": "DRIVE_LIC", "targetColumn": "driver_license", "defaultValue": null },
             { "sourceColumn": "CELLULAR", "targetColumn": "mobile_phone", "defaultValue": null },
             { "sourceColumn": "home_phone", "targetColumn": "home_phone", "defaultValue": null },
             { "sourceColumn": "contact_phone", "targetColumn": "contact_phone", "defaultValue": null },
@@ -93,14 +100,17 @@
             { "sourceColumn": "COMM_ADD", "targetColumn": "mailing_address", "defaultValue": null },
             { "sourceColumn": "CO_NUM", "targetColumn": "company_zip", "defaultValue": null },
             { "sourceColumn": "UNIT_ADD", "targetColumn": "company_address", "defaultValue": null },
+            { "sourceColumn": "EPRPOST_NUM", "targetColumn": "maturity_mailing_zip", "defaultValue": null },
+            { "sourceColumn": "EPRPOST_ADD", "targetColumn": "maturity_mailing_address", "defaultValue": null },
             { "sourceColumn": "CO_NAME", "targetColumn": "company_name", "defaultValue": null },
+            { "sourceColumn": "CROLE", "targetColumn": "role_code", "defaultValue": null },
             { "sourceColumn": "VOCATION_CODE", "targetColumn": "occupation_code", "defaultValue": null },
             { "sourceColumn": "JOB_TITLE", "targetColumn": "job_title_code", "defaultValue": null },
             { "sourceColumn": "JOB_LEVEL", "targetColumn": "job_level", "defaultValue": null },
             { "sourceColumn": "INDUSTRY", "targetColumn": "industry_code", "defaultValue": null },
             { "sourceColumn": "N_WORK_YEAR", "targetColumn": "work_years", "defaultValue": null },
             { "sourceColumn": "COMP_DIM", "targetColumn": "company_scale", "defaultValue": null },
-            { "sourceColumn": "INCOME_MON", "targetColumn": "monthly_income", "defaultValue": null },
+            { "sourceColumn": "MONTH_INCOME", "targetColumn": "monthly_income", "defaultValue": null },
             { "sourceColumn": "INCOME_APPROVED", "targetColumn": "approved_income", "defaultValue": null },
             { "sourceColumn": "INCOME_SOURCE", "targetColumn": "income_source", "defaultValue": null },
             { "sourceColumn": "CAPITAL", "targetColumn": "capital", "defaultValue": null },
@@ -207,10 +217,13 @@
         "data": {
           "nodeType": "derived_field",
           "label": "MLMC轉換",
-          "subtitle": "customer_type + phone",
+          "subtitle": "customer_type + 4 組電話/傳真",
           "expressions": [
             { "outputColumn": "customer_type_mapped", "expression": "padStart(CUTYPE, 2, '0')", "outputType": "VARCHAR" },
-            { "outputColumn": "office_phone", "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)", "outputType": "VARCHAR" }
+            { "outputColumn": "office_phone", "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)", "outputType": "VARCHAR" },
+            { "outputColumn": "registered_phone", "expression": "mergePhone(CUSTTELCODE, CUSTTEL)", "outputType": "VARCHAR" },
+            { "outputColumn": "registered_fax", "expression": "mergePhone(CUSTFAXCODE, CUSTFAX)", "outputType": "VARCHAR" },
+            { "outputColumn": "business_fax", "expression": "mergePhone(BUSINESSFAXCODE, BUSINESSFAX)", "outputType": "VARCHAR" }
           ]
         }
       },
@@ -221,7 +234,7 @@
         "data": {
           "nodeType": "field_mapping",
           "label": "MLMC映射",
-          "subtitle": "21 組對應",
+          "subtitle": "37 組對應",
           "dropUnmapped": true,
           "mappings": [
             { "sourceColumn": "CUSTID", "targetColumn": "source_customer_no", "defaultValue": null },
@@ -229,20 +242,36 @@
             { "sourceColumn": "CUSTNAME", "targetColumn": "name", "defaultValue": null },
             { "sourceColumn": "CUSTMOBILE", "targetColumn": "mobile_phone", "defaultValue": null },
             { "sourceColumn": "office_phone", "targetColumn": "office_phone", "defaultValue": null },
-            { "sourceColumn": "CUSTZIPCODE", "targetColumn": "mailing_zip", "defaultValue": null },
-            { "sourceColumn": "CUSTADDR", "targetColumn": "mailing_address", "defaultValue": null },
+            { "sourceColumn": "registered_phone", "targetColumn": "registered_phone", "defaultValue": null },
+            { "sourceColumn": "registered_fax", "targetColumn": "registered_fax", "defaultValue": null },
+            { "sourceColumn": "business_fax", "targetColumn": "business_fax", "defaultValue": null },
+            { "sourceColumn": "BUSINESSMOBILE", "targetColumn": "business_mobile", "defaultValue": null },
+            { "sourceColumn": "CUSTZIPCODE", "targetColumn": "registered_zip", "defaultValue": null },
+            { "sourceColumn": "CUSTADDR", "targetColumn": "registered_address", "defaultValue": null },
             { "sourceColumn": "BUSINESSZIPCODE", "targetColumn": "company_zip", "defaultValue": null },
             { "sourceColumn": "BUSINESSADDR", "targetColumn": "company_address", "defaultValue": null },
             { "sourceColumn": "BUSINESS", "targetColumn": "industry_desc", "defaultValue": null },
+            { "sourceColumn": "INDUID", "targetColumn": "industry_code", "defaultValue": null },
             { "sourceColumn": "CUSTNOWCAPTIAL", "targetColumn": "capital", "defaultValue": null },
             { "sourceColumn": "CUSTCREATECAPTIAL", "targetColumn": "established_capital", "defaultValue": null },
             { "sourceColumn": "FAMOUNT", "targetColumn": "credit_limit", "defaultValue": null },
+            { "sourceColumn": "HFAMOUNT", "targetColumn": "highest_transaction_amount", "defaultValue": null },
+            { "sourceColumn": "HCDATE", "targetColumn": "highest_transaction_date", "defaultValue": null },
             { "sourceColumn": "EMPLOYEE", "targetColumn": "employee_count", "defaultValue": null },
             { "sourceColumn": "LISTED", "targetColumn": "is_listed", "defaultValue": null },
+            { "sourceColumn": "COMPTYPE", "targetColumn": "company_attr_code", "defaultValue": null },
+            { "sourceColumn": "ORGATYPE", "targetColumn": "organization_type", "defaultValue": null },
             { "sourceColumn": "OWNER", "targetColumn": "owner_name", "defaultValue": null },
             { "sourceColumn": "OWNERID", "targetColumn": "owner_id", "defaultValue": null },
             { "sourceColumn": "OWNERBIRTH", "targetColumn": "owner_birth", "defaultValue": null },
+            { "sourceColumn": "OWNERZIPCODE", "targetColumn": "owner_zip", "defaultValue": null },
+            { "sourceColumn": "OWNERADDR", "targetColumn": "owner_address", "defaultValue": null },
+            { "sourceColumn": "GROUPOWNER", "targetColumn": "group_owner", "defaultValue": null },
             { "sourceColumn": "PARENTCUSTID", "targetColumn": "parent_customer_id", "defaultValue": null },
+            { "sourceColumn": "PARENTCUSTNAME", "targetColumn": "parent_customer_name", "defaultValue": null },
+            { "sourceColumn": "ISSUE_CLASS", "targetColumn": "id_issue_type", "defaultValue": null },
+            { "sourceColumn": "ISSUE_DT", "targetColumn": "id_issue_date", "defaultValue": null },
+            { "sourceColumn": "ISSUE_ADD", "targetColumn": "id_issue_address", "defaultValue": null },
             { "sourceColumn": "CUSTCREATEDATE", "targetColumn": "source_created_at", "defaultValue": null },
             { "sourceColumn": "U_SYSDT", "targetColumn": "source_updated_at", "defaultValue": null }
           ]
