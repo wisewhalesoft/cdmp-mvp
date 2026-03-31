@@ -221,11 +221,11 @@
       keyCol:'CUSTID', strategy:'latest_timestamp', tsCol:'U_SYSDT' },
 
     // Derived field
-    { id:'df1', x:660, y:110, type:'derived', label:'ZZIP電話合併', sub:'+3 衍生欄位',
+    { id:'df1', x:660, y:110, type:'derived', label:'ZZIP電話合併', sub:'+3 衍生欄位（含分機）',
       expressions:[
-        { name:'home_phone', expr:'mergePhone(CAREA_NO1, CTEL_NO1)', outType:'VARCHAR' },
-        { name:'contact_phone', expr:'mergePhone(CAREA_NO2, CTEL_NO2)', outType:'VARCHAR' },
-        { name:'office_phone', expr:'mergePhone(CO_CAREA_NO, CO_CTEL_NO)', outType:'VARCHAR' }
+        { name:'home_phone', expr:'mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)', outType:'VARCHAR' },
+        { name:'contact_phone', expr:'mergePhone(CAREA_NO2, CTEL_NO2, CEXTEN_NO2)', outType:'VARCHAR' },
+        { name:'office_phone', expr:'mergePhone(CO_CAREA_NO, CO_CTEL_NO, CO_CEXTEN_NO)', outType:'VARCHAR' }
       ]},
     { id:'df2', x:1060, y:530, type:'derived', label:'MLMC轉換', sub:'+2 衍生欄位',
       expressions:[
@@ -239,8 +239,8 @@
       ]},
 
     // Field mapping
-    { id:'fm1', x:860, y:110, type:'mapping', label:'ZZIP映射', sub:'53 → 38',
-      inputCount:53, outputCount:38, dropCount:15,
+    { id:'fm1', x:860, y:110, type:'mapping', label:'ZZIP映射', sub:'53 → 48',
+      inputCount:53, outputCount:48, dropCount:5,
       mappings:[
         {s:'CUSTO_NO',t:'source_customer_no'},{s:'CUSTOM_MK',t:'customer_type'},{s:'CUS_NAME',t:'name'},
         {s:'ENG_NAME',t:'english_name'},{s:'CUS_SEX',t:'gender'},{s:'BITBE_DATE',t:'date_of_birth'},
@@ -260,8 +260,8 @@
       ],
       dropped:['CUSTO_STAT','CAREA_NO1','CTEL_NO1','CAREA_NO2','CTEL_NO2','CO_CAREA_NO','CO_CTEL_NO','CAREA_NO3','CTEL_NO3','TEL_FLG1','TEL_FLG2','TEL_FLG3','ADDR_FLG2','TAX_NO','NATL_CD']
     },
-    { id:'fm2', x:1260, y:530, type:'mapping', label:'MLMC映射', sub:'47 → 21',
-      inputCount:47, outputCount:21, dropCount:26,
+    { id:'fm2', x:1260, y:530, type:'mapping', label:'MLMC映射', sub:'47 → 37',
+      inputCount:47, outputCount:37, dropCount:10,
       mappings:[
         {s:'CUSTID',t:'source_customer_no'},{s:'customer_type_mapped',t:'customer_type'},{s:'CUSTNAME',t:'name'},
         {s:'CUSTMOBILE',t:'mobile_phone'},{s:'office_phone',t:'office_phone'},{s:'CUSTZIPCODE',t:'mailing_zip'},
@@ -280,7 +280,7 @@
     },
 
     // Merge final
-    { id:'m4', x:1260, y:310, type:'merge', label:'最終合併', sub:'FULL OUTER JOIN', leftCount:38, rightCount:21, outputCount:42, overlap:17,
+    { id:'m4', x:1260, y:310, type:'merge', label:'最終合併', sub:'FULL OUTER JOIN', leftCount:48, rightCount:37, outputCount:68, overlap:17,
       joinKey:'source_customer_no', joinType:'FULL OUTER' },
 
     // Conditional
@@ -302,11 +302,11 @@
 
     // Target load
     { id:'tl1', x:1860, y:310, type:'load', label:'載入 customer_core', sub:'customer_core',
-      targetTable:'customer_core', fieldCount:49,
+      targetTable:'customer_core', fieldCount:79,
       categories:[
-        {name:'A. 客戶識別',count:4,total:4},{name:'B. 基本資料',count:5,total:5},{name:'C. 聯絡方式',count:7,total:7},
-        {name:'D. 地址',count:6,total:6},{name:'E. 職業/收入',count:10,total:10},{name:'F. 風控',count:5,total:5},
-        {name:'G. 企金資訊',count:7,total:7},{name:'H. 系統欄位',count:5,total:5}
+        {name:'A. 識別與分類',count:5,total:5},{name:'B. 個人屬性',count:12,total:12},{name:'C. 聯絡資訊',count:10,total:10},
+        {name:'D. 地址',count:10,total:10},{name:'E. 職業與就業',count:12,total:12},{name:'F. 財務與風控',count:12,total:12},
+        {name:'G. 企業客戶專屬',count:13,total:13},{name:'H. 稽核與 ETL 追蹤',count:5,total:5}
       ]}
   ];
 
@@ -346,17 +346,17 @@
       case 'm1': return `左 53 + 右 53 → 53`;
       case 'm2': return `左 47 + 右 47 → 47`;
       case 'm3': return `左 47 + 右 47 → 47`;
-      case 'm4': return `左 38 + 右 21 → 42`;
+      case 'm4': return `左 48 + 右 37 → 68`;
       case 'd1': return `→ 53`;
       case 'd2': return `→ 47`;
-      case 'df1': return `+3 衍生欄位`;
+      case 'df1': return `+3 衍生欄位（含分機）`;
       case 'df2': return `+2 衍生欄位`;
       case 'df3': return `+2 衍生欄位`;
-      case 'fm1': return `53 → 38（-15）`;
-      case 'fm2': return `47 → 21（-26）`;
+      case 'fm1': return `53 → 48（-5）`;
+      case 'fm2': return `47 → 37（-10）`;
       case 'tc1': return `2 型別轉換`;
       case 'cd1': return `5 條件規則`;
-      case 'tl1': return `載入 49 欄位`;
+      case 'tl1': return `載入 79 欄位`;
     }
   }
 
