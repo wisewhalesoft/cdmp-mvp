@@ -27,7 +27,7 @@ export class TypeCastHandler implements NodeExecutor {
     // Validate cast rules
     for (const rule of castRules) {
       if (!['DECIMAL', 'INTEGER', 'DATE'].includes(rule.targetType)) {
-        throw new Error(`不支援的目標型別：${rule.targetType}`);
+        throw new Error(`不支援的型別轉換：${rule.sourceType} → ${rule.targetType}`);
       }
     }
 
