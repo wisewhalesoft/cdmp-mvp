@@ -11,15 +11,20 @@ function isAllZeros(value: string): boolean {
 }
 
 /**
- * Merge area code and tel number into "{areaCode}-{telNo}" format.
- * Returns null if either part is null/empty or if the result is a placeholder value.
+ * Merge area code, tel number and optional extension into phone string.
+ * Format: "{areaCode}-{telNo}" or "{areaCode}-{telNo}#{exten}" when extension exists.
+ * Returns null if areaCode or telNo is null/empty/all-zeros.
  */
-export function mergePhone(areaCode: string | null, telNo: string | null): string | null {
+export function mergePhone(areaCode: string | null, telNo: string | null, exten?: string | null): string | null {
   if (!areaCode || !telNo) return null;
 
   if (isAllZeros(areaCode) || isAllZeros(telNo)) return null;
 
-  return `${areaCode}-${telNo}`;
+  const base = `${areaCode}-${telNo}`;
+  if (exten && !isAllZeros(exten)) {
+    return `${base}#${exten}`;
+  }
+  return base;
 }
 
 /**

@@ -64,17 +64,24 @@ export class DerivedFieldHandler implements NodeExecutor {
       return 'gen_random_uuid()';
     }
 
-    // mergePhone(col1, col2)
-    const mergePhoneMatch = expression.match(/^mergePhone\((\w+),\s*(\w+)\)$/);
+    // mergePhone(col1, col2) or mergePhone(col1, col2, col3)
+    const mergePhoneMatch = expression.match(/^mergePhone\((\w+),\s*(\w+)(?:,\s*(\w+))?\)$/);
     if (mergePhoneMatch) {
       const areaCol = mergePhoneMatch[1];
       const telCol = mergePhoneMatch[2];
-      // Replicate mergePhone logic: null/empty/all-zeros → null, else area-tel
+      const extenCol = mergePhoneMatch[3]; // optional
+      const baseConcat = `CONCAT("${areaCol}", '-', "${telCol}")`;
+      const fullConcat = extenCol
+        ? `CASE WHEN "${extenCol}" IS NOT NULL AND "${extenCol}" <> '' AND "${extenCol}" !~ '^0+$' ` +
+          `THEN CONCAT("${areaCol}", '-', "${telCol}", '#', "${extenCol}") ` +
+          `ELSE ${baseConcat} END`
+        : baseConcat;
+      // Replicate mergePhone logic: null/empty/all-zeros → null, else area-tel[#exten]
       return `CASE ` +
         `WHEN "${areaCol}" IS NULL OR "${telCol}" IS NULL THEN NULL ` +
         `WHEN "${areaCol}" = '' OR "${telCol}" = '' THEN NULL ` +
         `WHEN "${areaCol}" ~ '^0+$' OR "${telCol}" ~ '^0+$' THEN NULL ` +
-        `ELSE CONCAT("${areaCol}", '-', "${telCol}") END`;
+        `ELSE ${fullConcat} END`;
     }
 
     // padStart(col, length, 'char')

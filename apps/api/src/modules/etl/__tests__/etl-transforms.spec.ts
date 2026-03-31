@@ -55,6 +55,31 @@ describe('mergePhone', () => {
   it('TS-F036-021: tel number empty -> null', () => {
     expect(mergePhone('02', '')).toBeNull();
   });
+
+  // Extension (3rd argument) tests
+  it('with extension: ("02", "27123456", "100") -> "02-27123456#100"', () => {
+    expect(mergePhone('02', '27123456', '100')).toBe('02-27123456#100');
+  });
+
+  it('with null extension: ("02", "27123456", null) -> "02-27123456"', () => {
+    expect(mergePhone('02', '27123456', null)).toBe('02-27123456');
+  });
+
+  it('with empty extension: ("02", "27123456", "") -> "02-27123456"', () => {
+    expect(mergePhone('02', '27123456', '')).toBe('02-27123456');
+  });
+
+  it('with all-zeros extension: ("02", "27123456", "000") -> "02-27123456"', () => {
+    expect(mergePhone('02', '27123456', '000')).toBe('02-27123456');
+  });
+
+  it('with extension but null area code -> null', () => {
+    expect(mergePhone(null, '27123456', '100')).toBeNull();
+  });
+
+  it('without extension arg (backward compat): ("02", "27123456") -> "02-27123456"', () => {
+    expect(mergePhone('02', '27123456')).toBe('02-27123456');
+  });
 });
 
 // Step 7: toDecimal

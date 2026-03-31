@@ -463,6 +463,21 @@ describe('DerivedFieldHandler', () => {
     expect(createCall.sql).toContain("'^0+$'"); // regex for all-zeros
   });
 
+  // mergePhone with extension (3rd argument)
+  it('mergePhone with extension generates CONCAT with # separator', async () => {
+    const ctx = derivedCtx(
+      ['CAREA_NO1', 'CTEL_NO1', 'CEXTEN_NO1'],
+      [{ outputColumn: 'home_phone', expression: 'mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)', outputType: 'VARCHAR' }],
+    );
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall.sql).toContain('"CEXTEN_NO1"');
+    expect(createCall.sql).toContain("'#'");
+    expect(createCall.sql).toContain('AS "home_phone"');
+  });
+
   // TS-F043-025: padStart SQL → LPAD
   it('TS-F043-025: padStart generates LPAD SQL', async () => {
     const ctx = derivedCtx(
