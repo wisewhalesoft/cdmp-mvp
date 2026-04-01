@@ -3,7 +3,7 @@
 > **Epic ID**：E05
 > **優先級**：P0（Critical）
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：17
+> **Stories 數量**：18
 
 ## Epic 目標
 
@@ -32,6 +32,7 @@ Pipeline 支援三階段發布流程（草稿 → 測試執行 → 發布）、�
 | US-055 | ETL 執行引擎核心框架 | Must Have | [US-055-etl-execution-engine-core.md](US-055-etl-execution-engine-core.md) |
 | US-056 | ETL 節點實作 — Extract、Merge、Dedup、TypeCast、DerivedField | Must Have | [US-056-etl-nodes-extract-merge-dedup.md](US-056-etl-nodes-extract-merge-dedup.md) |
 | US-057 | ETL 節點實作 — FieldMapping、Conditional、TargetLoad | Must Have | [US-057-etl-nodes-mapping-conditional-load.md](US-057-etl-nodes-mapping-conditional-load.md) |
+| US-058 | Lookup 節點雙輸入重設計 | Must Have | [US-058-lookup-node-dual-input.md](US-058-lookup-node-dual-input.md) |
 
 ## 依賴關係
 

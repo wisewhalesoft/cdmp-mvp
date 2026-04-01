@@ -43,6 +43,14 @@
 - **When** Admin 點擊某個節點
 - **Then** 右側顯示該節點的屬性編輯面板，包含該節點類型對應的設定表單
 
+### AC-5a：屬性面板可編輯節點名稱
+- **Given** Admin 點擊畫布上的任意節點
+- **When** 右側屬性面板載入
+- **Then** 面板 header 中的節點名稱顯示為可編輯的文字輸入欄位
+- **And** 預設值為工具箱定義的預設名稱（如「查找 (Lookup)」、「NULL 處理」）
+- **And** 輸入欄位的 placeholder 為預設名稱，以便使用者清空後仍能辨識節點類型
+- **And** 修改名稱後，畫布上對應節點的 label 即時更新
+
 ### AC-6：Extract 節點設定
 - **Given** Admin 點擊一個 Extract 節點
 - **When** 右側屬性面板載入
@@ -52,6 +60,40 @@
 - **Given** Admin 點擊一個 Transform 節點
 - **When** 右側屬性面板載入
 - **Then** 根據 Transform 類型（Merge / Field Mapping / Format / Conditional / Null Handler / Type Cast / Filter / Deduplicate / Lookup / String / Masking / Aggregate / Derived Column）顯示對應的設定表單
+
+### AC-7a：Lookup 節點雙輸入端口
+- **Given** Admin 將 Lookup 節點拖拉至畫布
+- **When** 節點出現在畫布上
+- **Then** 節點顯示兩個輸入端：上方端口標示「主資料流（main-input）」、下方端口標示「對照來源（lookup-input）」
+- **And** 節點仍有一個輸出端口（與其他 Transform 節點相同）
+
+### AC-7b：Lookup 節點 lookup-input 連線
+- **Given** 畫布上有 Lookup 節點與另一個 Extract 或 Transform 節點
+- **When** Admin 從上游節點的輸出端拖拉至 Lookup 節點的下方端口（lookup-input）
+- **Then** 連線以「對照來源」的視覺樣式建立（如虛線或不同顏色），區別於主資料流連線
+- **And** 連線的 edge 定義中包含 `targetHandle: "lookup-input"`
+
+### AC-7c：Lookup 節點屬性面板（雙輸入模式）
+- **Given** Lookup 節點的 lookup-input 已有連線（上游節點已連接對照來源）
+- **When** Admin 點擊 Lookup 節點，右側屬性面板載入
+- **Then** 面板顯示：
+  - 「對照來源」欄位顯示已連接的上游節點名稱（唯讀，自動解析）
+  - `matchColumn`（主資料流比對欄位）下拉選單
+  - `lookupMatchColumn`（對照來源比對欄位）下拉選單
+  - `outputColumns`（從對照來源輸出的欄位）多選清單
+- **And** `lookupSource` 文字輸入欄位隱藏（雙輸入模式不需手動輸入 raw table 名稱）
+- **And** `lookupFilter` 過濾條件欄位隱藏（過濾由上游 Filter 節點負責）
+- **And** Lookup 節點在畫布上的副標題（subtitle）自動更新為對照來源節點的名稱（label）
+- **And** 若對照來源節點被重新命名，Lookup 節點的副標題同步更新
+
+### AC-7d：Lookup 節點屬性面板（向下相容模式）
+- **Given** Lookup 節點的 lookup-input 尚未連線（舊版 Pipeline 或尚未接線）
+- **When** Admin 點擊 Lookup 節點，右側屬性面板載入
+- **Then** 面板顯示：
+  - `lookupSource` 文字輸入欄位（手動輸入 raw table 名稱，如 `raw_e5a2345c`）
+  - `lookupFilter` 過濾條件文字欄位（如 `TBL_ID = 'A2'`）
+  - `matchColumn`、`lookupMatchColumn`、`outputColumns` 設定欄位
+- **And** 面板頂部顯示提示訊息：「建議連接對照來源節點以取代手動輸入，可提升視覺化可追溯性」
 
 ### AC-8：Load 節點設定
 - **Given** Admin 點擊一個 Load 節點
@@ -184,18 +226,24 @@
 | 12 | 建立 Field Mapping Transform 節點 | 可設定來源欄位與目標欄位的對應 |
 | 13 | 建立 Filter 節點，設定篩選條件 | 可設定欄位、運算子、值，支援 AND/OR 組合 |
 | 14 | 建立 Deduplicate 節點，設定去重欄位 | 可選擇去重依據欄位與保留策略（首筆/末筆/最新） |
-| 15 | 建立 Lookup 節點，設定對照表 | 可選擇對照來源表、比對欄位、輸出欄位 |
+| 15a | 建立 Lookup 節點（雙輸入模式），連接對照來源節點 | 節點顯示兩個輸入端口（main-input 上方、lookup-input 下方），連接後屬性面板隱藏 lookupSource 與 lookupFilter，僅顯示比對欄位與輸出欄位設定 |
+| 15b | 建立 Lookup 節點（向下相容模式），不連接 lookup-input | 屬性面板顯示 lookupSource 文字欄位、lookupFilter 文字欄位與比對欄位設定，並顯示建議連接對照來源的提示訊息 |
+| 15c | 連線至 Lookup 節點的下方端口（lookup-input） | 連線的 edge 包含 targetHandle: "lookup-input"，與主資料流連線視覺上可區分 |
 | 16 | 建立 String 節點，設定字串操作 | 可選擇操作類型（Trim/大小寫/擷取/串接/正則替換） |
 | 17 | 建立 Masking 節點，設定加密脫敏 | 可選擇加密或遮罩模式，指定目標欄位 |
 | 18 | 建立 Aggregate 節點，設定分組與聚合 | 可設定 GROUP BY 欄位與聚合函數（SUM/COUNT/AVG/MAX/MIN） |
 | 19 | 建立 Derived Column 節點，設定運算式 | 可輸入欄位運算式產生新欄位 |
+| 20 | 點擊節點後在屬性面板修改節點名稱 | 畫布上的節點 label 即時更新為新名稱 |
+| 21 | 清空節點名稱 | 畫布顯示工具箱預設名稱作為 fallback |
+| 22 | Lookup 節點連接 lookup-input 後查看畫布副標題 | 副標題顯示對照來源節點的名稱，而非 raw table 名稱 |
+| 23 | 對照來源節點改名後查看 Lookup 節點副標題 | 副標題同步更新為新名稱 |
 
 ---
 
 ## 依賴關係
 
 - **Blocked By**：US-041（需有 Pipeline 存在）
-- **Blocks**：US-043、US-046、US-049
+- **Blocks**：US-043、US-046、US-049、US-058（Lookup 雙輸入執行邏輯依賴前端 edge 攜帶 targetHandle）
 
 ---
 
@@ -207,7 +255,7 @@
 - [ ] 節點連線與連線驗證規則
 - [ ] 右側屬性編輯面板（所有節點類型）
 - [ ] Extract 節點：串接 raw data table API
-- [ ] Transform 節點：13 種類型的設定表單
+- [ ] Transform 節點：13 種類型的設定表單（含 Lookup 節點雙輸入端口與屬性面板雙模式）
 - [ ] Load 節點：目標表選擇與欄位對應
 - [ ] Pipeline definition JSONB 儲存與載入
 - [ ] 單元測試覆蓋率達標
