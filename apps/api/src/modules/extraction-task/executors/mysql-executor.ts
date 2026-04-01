@@ -120,19 +120,21 @@ export class MySQLExecutor extends BaseExecutor {
     batchSize: number;
     lastKeyValue?: any;
     primaryKeyColumn?: string | null;
+    offset?: number;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }> {
     return this.withConnection(params.datasourceId, async (conn) => {
       const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
       const values: any[] = [];
       const conditions: string[] = [];
 
+      const orderCol = params.incrementalColumn || params.primaryKeyColumn || null;
+
       if (params.mode === 'incremental' && params.incrementalColumn && params.lastIncrementalValue != null) {
         conditions.push(`${this.quoteIdentifier(params.incrementalColumn)} > ?`);
         values.push(params.lastIncrementalValue);
       }
 
-      if (params.lastKeyValue != null) {
-        const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
+      if (params.lastKeyValue != null && orderCol) {
         conditions.push(`${this.quoteIdentifier(orderCol)} > ?`);
         values.push(params.lastKeyValue);
       }
@@ -142,17 +144,22 @@ export class MySQLExecutor extends BaseExecutor {
         sql += ` WHERE ${conditions.join(' AND ')}`;
       }
 
-      const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
-      sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
+      if (orderCol) {
+        sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
+      }
       sql += ` LIMIT ?`;
       values.push(params.batchSize);
+      if (!orderCol) {
+        sql += ` OFFSET ?`;
+        values.push(params.offset || 0);
+      }
 
       const [rows] = await conn.query(sql, values);
       const resultRows = rows as Record<string, any>[];
       const hasMore = resultRows.length === params.batchSize;
 
       let lastKeyVal: any = undefined;
-      if (resultRows.length > 0) {
+      if (resultRows.length > 0 && orderCol) {
         const lastRow = resultRows[resultRows.length - 1];
         lastKeyVal = lastRow[orderCol];
       }

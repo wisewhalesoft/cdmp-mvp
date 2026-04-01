@@ -86,6 +86,8 @@ export abstract class BaseExecutor implements IExtractionExecutor {
     lastIncrementalValue?: string | null;
     batchSize: number;
     lastKeyValue?: any;
+    primaryKeyColumn?: string | null;
+    offset?: number;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }>;
 
   async execute(params: {
@@ -109,6 +111,7 @@ export abstract class BaseExecutor implements IExtractionExecutor {
 
     let extractedCount = 0;
     let lastKeyValue: any = undefined;
+    let offset = 0;
     let lastIncrementalValue: string | null = null;
 
     while (true) {
@@ -121,10 +124,12 @@ export abstract class BaseExecutor implements IExtractionExecutor {
         lastIncrementalValue: params.lastIncrementalValue,
         batchSize: params.batchSize,
         lastKeyValue,
+        offset,
       });
 
       extractedCount += batch.rows.length;
       lastKeyValue = batch.lastKeyValue;
+      offset += batch.rows.length;
 
       if (params.incrementalColumn && batch.rows.length > 0) {
         const lastRow = batch.rows[batch.rows.length - 1];

@@ -133,6 +133,7 @@ export class PostgreSQLExecutor extends BaseExecutor {
     batchSize: number;
     lastKeyValue?: any;
     primaryKeyColumn?: string | null;
+    offset?: number;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }> {
     return this.withConnection(params.datasourceId, async (client) => {
       const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
@@ -140,14 +141,15 @@ export class PostgreSQLExecutor extends BaseExecutor {
       const conditions: string[] = [];
       let paramIndex = 1;
 
+      const orderCol = params.incrementalColumn || params.primaryKeyColumn || null;
+
       if (params.mode === 'incremental' && params.incrementalColumn && params.lastIncrementalValue != null) {
         conditions.push(`${this.quoteIdentifier(params.incrementalColumn)} > $${paramIndex}`);
         values.push(params.lastIncrementalValue);
         paramIndex++;
       }
 
-      if (params.lastKeyValue != null) {
-        const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
+      if (params.lastKeyValue != null && orderCol) {
         conditions.push(`${this.quoteIdentifier(orderCol)} > $${paramIndex}`);
         values.push(params.lastKeyValue);
         paramIndex++;
@@ -158,17 +160,23 @@ export class PostgreSQLExecutor extends BaseExecutor {
         sql += ` WHERE ${conditions.join(' AND ')}`;
       }
 
-      const orderCol = params.incrementalColumn || params.primaryKeyColumn || 'id';
-      sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
+      if (orderCol) {
+        sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
+      }
       sql += ` LIMIT $${paramIndex}`;
       values.push(params.batchSize);
+      paramIndex++;
+      if (!orderCol) {
+        sql += ` OFFSET $${paramIndex}`;
+        values.push(params.offset || 0);
+      }
 
       const result = await client.query(sql, values);
       const resultRows = result.rows as Record<string, any>[];
       const hasMore = resultRows.length === params.batchSize;
 
       let lastKeyVal: any = undefined;
-      if (resultRows.length > 0) {
+      if (resultRows.length > 0 && orderCol) {
         const lastRow = resultRows[resultRows.length - 1];
         lastKeyVal = lastRow[orderCol];
       }

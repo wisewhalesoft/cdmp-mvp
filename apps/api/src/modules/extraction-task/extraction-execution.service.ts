@@ -173,6 +173,7 @@ export class ExtractionExecutionService {
       // 6. Batch read + write loop
       let extractedCount = 0;
       let lastKeyValue: any = undefined;
+      let offset = 0;
       const columnNames = metadata.map((c) => this.rawDataService.sanitizeColumnName(c.name));
       const primaryKeyCol = metadata.find((c) => c.isPrimary)?.name || null;
 
@@ -187,6 +188,7 @@ export class ExtractionExecutionService {
           batchSize: BATCH_SIZE,
           lastKeyValue,
           primaryKeyColumn: primaryKeyCol,
+          offset,
         });
 
         if (batch.rows.length === 0) break;
@@ -208,6 +210,7 @@ export class ExtractionExecutionService {
 
         extractedCount += batch.rows.length;
         lastKeyValue = batch.lastKeyValue;
+        offset += batch.rows.length;
 
         // Update progress
         task.extracted_count = extractedCount;

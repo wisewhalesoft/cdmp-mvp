@@ -67,6 +67,8 @@ export class DelegatingExecutor implements IExtractionExecutor {
     lastIncrementalValue?: string | null;
     batchSize: number;
     lastKeyValue?: any;
+    primaryKeyColumn?: string | null;
+    offset?: number;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }> {
     const executor = await this.resolve(params.datasourceId);
     return executor.readBatch(params);

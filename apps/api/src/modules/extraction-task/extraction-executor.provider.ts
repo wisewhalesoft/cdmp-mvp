@@ -62,6 +62,7 @@ export interface IExtractionExecutor {
     batchSize: number;
     lastKeyValue?: any;
     primaryKeyColumn?: string | null;
+    offset?: number;
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }>;
 
   /**
