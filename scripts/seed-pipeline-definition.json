@@ -24,104 +24,18 @@
         }
       },
       {
-        "id": "e_code1",
-        "type": "pipelineNode",
-        "position": { "x": 50, "y": -100 },
-        "data": {
-          "nodeType": "raw_data_extract",
-          "label": "[和潤]代碼定義",
-          "rawTable": "raw_e5a2345c",
-          "subtitle": "[和潤]代碼對照表擷取"
-        }
-      },
-      {
-        "id": "e_code2",
-        "type": "pipelineNode",
-        "position": { "x": 50, "y": 400 },
-        "data": {
-          "nodeType": "raw_data_extract",
-          "label": "[和勁]代碼定義",
-          "rawTable": "raw_6fce5258",
-          "subtitle": "[和勁]代碼對照表擷取"
-        }
-      },
-      {
-        "id": "f_a2_1",
-        "type": "pipelineNode",
-        "position": { "x": 200, "y": -100 },
-        "data": {
-          "nodeType": "filter",
-          "label": "Filter_A2",
-          "subtitle": "TBL_ID='A2'",
-          "filterExpression": "\"TBL_ID\" = 'A2'"
-        }
-      },
-      {
-        "id": "f_a4_1",
-        "type": "pipelineNode",
-        "position": { "x": 350, "y": -100 },
-        "data": {
-          "nodeType": "filter",
-          "label": "Filter_A4",
-          "subtitle": "TBL_ID='A4'",
-          "filterExpression": "\"TBL_ID\" = 'A4'"
-        }
-      },
-      {
-        "id": "f_a5_1",
-        "type": "pipelineNode",
-        "position": { "x": 500, "y": -100 },
-        "data": {
-          "nodeType": "filter",
-          "label": "Filter_A5",
-          "subtitle": "TBL_ID='A5'",
-          "filterExpression": "\"TBL_ID\" = 'A5'"
-        }
-      },
-      {
-        "id": "f_a2_2",
-        "type": "pipelineNode",
-        "position": { "x": 200, "y": 400 },
-        "data": {
-          "nodeType": "filter",
-          "label": "Filter_A2b",
-          "subtitle": "TBL_ID='A2'",
-          "filterExpression": "\"TBL_ID\" = 'A2'"
-        }
-      },
-      {
-        "id": "f_a4_2",
-        "type": "pipelineNode",
-        "position": { "x": 350, "y": 400 },
-        "data": {
-          "nodeType": "filter",
-          "label": "Filter_A4b",
-          "subtitle": "TBL_ID='A4'",
-          "filterExpression": "\"TBL_ID\" = 'A4'"
-        }
-      },
-      {
-        "id": "f_a5_2",
-        "type": "pipelineNode",
-        "position": { "x": 500, "y": 400 },
-        "data": {
-          "nodeType": "filter",
-          "label": "Filter_A5b",
-          "subtitle": "TBL_ID='A5'",
-          "filterExpression": "\"TBL_ID\" = 'A5'"
-        }
-      },
-      {
         "id": "lk_edu1",
         "type": "pipelineNode",
         "position": { "x": 200, "y": 50 },
         "data": {
           "nodeType": "lookup",
           "label": "Lookup_和潤_edu",
-          "subtitle": "教育程度對照",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'A2'",
           "matchColumn": "EDUCAT_BACK",
-          "lookupMatchColumn": "CODE_NO",
-          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "education_desc" }],
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "education_desc" }],
           "noMatchStrategy": "null"
         }
       },
@@ -132,10 +46,12 @@
         "data": {
           "nodeType": "lookup",
           "label": "Lookup_和潤_occ",
-          "subtitle": "職業對照",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'A4'",
           "matchColumn": "VOCATION_CODE",
-          "lookupMatchColumn": "CODE_NO",
-          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "occupation_desc" }],
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "occupation_desc" }],
           "noMatchStrategy": "null"
         }
       },
@@ -146,10 +62,108 @@
         "data": {
           "nodeType": "lookup",
           "label": "Lookup_和潤_job",
-          "subtitle": "職稱對照",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'A5'",
           "matchColumn": "JOB_TITLE",
-          "lookupMatchColumn": "CODE_NO",
-          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "job_title_desc" }],
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "job_title_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_marry1",
+        "type": "pipelineNode",
+        "position": { "x": 650, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_marry",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = '33'",
+          "matchColumn": "CMARRY_MK",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "marital_status_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_ctype1",
+        "type": "pipelineNode",
+        "position": { "x": 800, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_ctype",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = '55'",
+          "matchColumn": "CUSTOM_MK",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "customer_type_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_incsrc1",
+        "type": "pipelineNode",
+        "position": { "x": 950, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_incsrc",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'Y0'",
+          "matchColumn": "INCOME_SOURCE",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "income_source_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_indus1",
+        "type": "pipelineNode",
+        "position": { "x": 1100, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_indus",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'AA'",
+          "matchColumn": "INDUSTRY",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "industry_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_joblv1",
+        "type": "pipelineNode",
+        "position": { "x": 1250, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_joblv",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'A6'",
+          "matchColumn": "JOB_LEVEL",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "job_level_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_income1",
+        "type": "pipelineNode",
+        "position": { "x": 1400, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_income",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_e5a2345c",
+          "lookupFilter": "\"TBL_ID\" = 'A3'",
+          "matchColumn": "MONTH_INCOME",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "monthly_income_desc" }],
           "noMatchStrategy": "null"
         }
       },
@@ -160,10 +174,12 @@
         "data": {
           "nodeType": "lookup",
           "label": "Lookup_和勁_edu",
-          "subtitle": "教育程度對照",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = 'A2'",
           "matchColumn": "EDUCAT_BACK",
-          "lookupMatchColumn": "CODE_NO",
-          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "education_desc" }],
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "education_desc" }],
           "noMatchStrategy": "null"
         }
       },
@@ -174,10 +190,12 @@
         "data": {
           "nodeType": "lookup",
           "label": "Lookup_和勁_occ",
-          "subtitle": "職業對照",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = 'A4'",
           "matchColumn": "VOCATION_CODE",
-          "lookupMatchColumn": "CODE_NO",
-          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "occupation_desc" }],
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "occupation_desc" }],
           "noMatchStrategy": "null"
         }
       },
@@ -188,17 +206,83 @@
         "data": {
           "nodeType": "lookup",
           "label": "Lookup_和勁_job",
-          "subtitle": "職稱對照",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = 'A5'",
           "matchColumn": "JOB_TITLE",
-          "lookupMatchColumn": "CODE_NO",
-          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "job_title_desc" }],
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "job_title_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_marry2",
+        "type": "pipelineNode",
+        "position": { "x": 650, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_marry",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = '33'",
+          "matchColumn": "CMARRY_MK",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "marital_status_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_ctype2",
+        "type": "pipelineNode",
+        "position": { "x": 800, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_ctype",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = '55'",
+          "matchColumn": "CUSTOM_MK",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "customer_type_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_joblv2",
+        "type": "pipelineNode",
+        "position": { "x": 1250, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_joblv",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = 'A6'",
+          "matchColumn": "JOB_LEVEL",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "job_level_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_income2",
+        "type": "pipelineNode",
+        "position": { "x": 1400, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_income",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_6fce5258",
+          "lookupFilter": "\"TBL_ID\" = 'A3'",
+          "matchColumn": "MONTH_INCOME",
+          "lookupMatchColumn": "TBL_CD",
+          "outputColumns": [{ "lookupColumn": "TBL_DESC1", "outputAlias": "monthly_income_desc" }],
           "noMatchStrategy": "null"
         }
       },
       {
         "id": "m1",
         "type": "pipelineNode",
-        "position": { "x": 650, "y": 150 },
+        "position": { "x": 1550, "y": 150 },
         "data": {
           "nodeType": "merge",
           "label": "ZZIP合併",
@@ -210,7 +294,7 @@
       {
         "id": "d1",
         "type": "pipelineNode",
-        "position": { "x": 850, "y": 150 },
+        "position": { "x": 1750, "y": 150 },
         "data": {
           "nodeType": "dedup",
           "label": "ZZIP去重",
@@ -223,7 +307,7 @@
       {
         "id": "df1",
         "type": "pipelineNode",
-        "position": { "x": 1050, "y": 150 },
+        "position": { "x": 1950, "y": 150 },
         "data": {
           "nodeType": "derived_field",
           "label": "ZZIP電話合併",
@@ -238,7 +322,7 @@
       {
         "id": "tc_zzip",
         "type": "pipelineNode",
-        "position": { "x": 1150, "y": 150 },
+        "position": { "x": 2050, "y": 150 },
         "data": {
           "nodeType": "type_cast",
           "label": "ZZIP型別轉換",
@@ -251,20 +335,20 @@
       {
         "id": "fm1",
         "type": "pipelineNode",
-        "position": { "x": 1350, "y": 150 },
+        "position": { "x": 2250, "y": 150 },
         "data": {
           "nodeType": "field_mapping",
           "label": "ZZIP映射",
-          "subtitle": "51 組對應",
+          "subtitle": "57 組對應",
           "dropUnmapped": true,
           "mappings": [
             { "sourceColumn": "CUSTO_NO", "targetColumn": "source_customer_no", "defaultValue": null },
-            { "sourceColumn": "CUSTOM_MK", "targetColumn": "customer_type", "defaultValue": null },
+            { "sourceColumn": "CUSTOM_MK", "targetColumn": "customer_type_code", "defaultValue": null },
             { "sourceColumn": "CUS_NAME", "targetColumn": "name", "defaultValue": null },
             { "sourceColumn": "ENG_NAME", "targetColumn": "english_name", "defaultValue": null },
             { "sourceColumn": "CUS_SEX", "targetColumn": "gender", "defaultValue": null },
             { "sourceColumn": "BITBE_DATE", "targetColumn": "date_of_birth", "defaultValue": null },
-            { "sourceColumn": "CMARRY_MK", "targetColumn": "marital_status", "defaultValue": null },
+            { "sourceColumn": "CMARRY_MK", "targetColumn": "marital_status_code", "defaultValue": null },
             { "sourceColumn": "EDUCAT_BACK", "targetColumn": "education_code", "defaultValue": null },
             { "sourceColumn": "education_desc", "targetColumn": "education_desc", "defaultValue": null },
             { "sourceColumn": "SPOUSE_NM", "targetColumn": "spouse_name", "defaultValue": null },
@@ -289,18 +373,18 @@
             { "sourceColumn": "EPRPOST_NUM", "targetColumn": "maturity_mailing_zip", "defaultValue": null },
             { "sourceColumn": "EPRPOST_ADD", "targetColumn": "maturity_mailing_address", "defaultValue": null },
             { "sourceColumn": "CO_NAME", "targetColumn": "company_name", "defaultValue": null },
-            { "sourceColumn": "CROLE", "targetColumn": "role_code", "defaultValue": null },
+            { "sourceColumn": "CROLE", "targetColumn": "role", "defaultValue": null },
             { "sourceColumn": "VOCATION_CODE", "targetColumn": "occupation_code", "defaultValue": null },
             { "sourceColumn": "occupation_desc", "targetColumn": "occupation_desc", "defaultValue": null },
             { "sourceColumn": "JOB_TITLE", "targetColumn": "job_title_code", "defaultValue": null },
             { "sourceColumn": "job_title_desc", "targetColumn": "job_title_desc", "defaultValue": null },
-            { "sourceColumn": "JOB_LEVEL", "targetColumn": "job_level", "defaultValue": null },
+            { "sourceColumn": "JOB_LEVEL", "targetColumn": "job_level_code", "defaultValue": null },
             { "sourceColumn": "INDUSTRY", "targetColumn": "industry_code", "defaultValue": null },
             { "sourceColumn": "N_WORK_YEAR", "targetColumn": "work_years", "defaultValue": null },
             { "sourceColumn": "COMP_DIM", "targetColumn": "company_scale", "defaultValue": null },
-            { "sourceColumn": "MONTH_INCOME", "targetColumn": "monthly_income", "defaultValue": null },
+            { "sourceColumn": "MONTH_INCOME", "targetColumn": "monthly_income_code", "defaultValue": null },
             { "sourceColumn": "INCOME_APPROVED", "targetColumn": "approved_income", "defaultValue": null },
-            { "sourceColumn": "INCOME_SOURCE", "targetColumn": "income_source", "defaultValue": null },
+            { "sourceColumn": "INCOME_SOURCE", "targetColumn": "income_source_code", "defaultValue": null },
             { "sourceColumn": "CAPITAL", "targetColumn": "capital", "defaultValue": null },
             { "sourceColumn": "IMMOPRO_MK", "targetColumn": "has_real_estate", "defaultValue": null },
             { "sourceColumn": "DEBT_FLG", "targetColumn": "debt_flag", "defaultValue": null },
@@ -308,7 +392,13 @@
             { "sourceColumn": "ADDR_FLG", "targetColumn": "address_anomaly_flag", "defaultValue": null },
             { "sourceColumn": "LAND_FLG", "targetColumn": "mainland_flag", "defaultValue": null },
             { "sourceColumn": "INSERT_DATE", "targetColumn": "source_created_at", "defaultValue": null },
-            { "sourceColumn": "UPDATE_DATE", "targetColumn": "source_updated_at", "defaultValue": null }
+            { "sourceColumn": "UPDATE_DATE", "targetColumn": "source_updated_at", "defaultValue": null },
+            { "sourceColumn": "marital_status_desc", "targetColumn": "marital_status_desc", "defaultValue": null },
+            { "sourceColumn": "customer_type_desc", "targetColumn": "customer_type_desc", "defaultValue": null },
+            { "sourceColumn": "income_source_desc", "targetColumn": "income_source_desc", "defaultValue": null },
+            { "sourceColumn": "industry_desc", "targetColumn": "industry_desc", "defaultValue": null },
+            { "sourceColumn": "job_level_desc", "targetColumn": "job_level_desc", "defaultValue": null },
+            { "sourceColumn": "monthly_income_desc", "targetColumn": "monthly_income_desc", "defaultValue": null }
           ]
         }
       },
@@ -426,7 +516,7 @@
           "dropUnmapped": true,
           "mappings": [
             { "sourceColumn": "CUSTID", "targetColumn": "source_customer_no", "defaultValue": null },
-            { "sourceColumn": "customer_type_mapped", "targetColumn": "customer_type", "defaultValue": null },
+            { "sourceColumn": "customer_type_mapped", "targetColumn": "customer_type_code", "defaultValue": null },
             { "sourceColumn": "CUSTNAME", "targetColumn": "name", "defaultValue": null },
             { "sourceColumn": "CUSTMOBILE", "targetColumn": "mobile_phone", "defaultValue": null },
             { "sourceColumn": "office_phone", "targetColumn": "office_phone", "defaultValue": null },
@@ -468,7 +558,7 @@
       {
         "id": "m4",
         "type": "pipelineNode",
-        "position": { "x": 1550, "y": 450 },
+        "position": { "x": 2450, "y": 450 },
         "data": {
           "nodeType": "merge",
           "label": "最終合併",
@@ -480,7 +570,7 @@
       {
         "id": "cd1",
         "type": "pipelineNode",
-        "position": { "x": 1750, "y": 450 },
+        "position": { "x": 2650, "y": 450 },
         "data": {
           "nodeType": "conditional",
           "label": "衝突解決",
@@ -517,7 +607,7 @@
       {
         "id": "df3",
         "type": "pipelineNode",
-        "position": { "x": 1950, "y": 450 },
+        "position": { "x": 2850, "y": 450 },
         "data": {
           "nodeType": "derived_field",
           "label": "data_source標記",
@@ -531,7 +621,7 @@
       {
         "id": "tl1",
         "type": "pipelineNode",
-        "position": { "x": 2150, "y": 450 },
+        "position": { "x": 3050, "y": 450 },
         "data": {
           "nodeType": "target_load",
           "label": "載入 customer_core",
@@ -540,12 +630,12 @@
           "fieldMappings": {
             "customer_id": "customer_id",
             "source_customer_no": "source_customer_no",
-            "customer_type": "customer_type",
+            "customer_type_code": "customer_type_code",
             "name": "name",
             "english_name": "english_name",
             "gender": "gender",
             "date_of_birth": "date_of_birth",
-            "marital_status": "marital_status",
+            "marital_status_code": "marital_status_code",
             "education_code": "education_code",
             "education_desc": "education_desc",
             "spouse_name": "spouse_name",
@@ -576,19 +666,19 @@
             "maturity_mailing_zip": "maturity_mailing_zip",
             "maturity_mailing_address": "maturity_mailing_address",
             "company_name": "company_name",
-            "role_code": "role_code",
+            "role": "role",
             "occupation_code": "occupation_code",
             "occupation_desc": "occupation_desc",
             "job_title_code": "job_title_code",
             "job_title_desc": "job_title_desc",
-            "job_level": "job_level",
+            "job_level_code": "job_level_code",
             "industry_code": "industry_code",
             "industry_desc": "industry_desc",
             "work_years": "work_years",
             "company_scale": "company_scale",
-            "monthly_income": "monthly_income",
+            "monthly_income_code": "monthly_income_code",
             "approved_income": "approved_income",
-            "income_source": "income_source",
+            "income_source_code": "income_source_code",
             "capital": "capital",
             "credit_limit": "credit_limit",
             "highest_transaction_amount": "highest_transaction_amount",
@@ -613,32 +703,35 @@
             "parent_customer_name": "parent_customer_name",
             "source_created_at": "source_created_at",
             "source_updated_at": "source_updated_at",
-            "data_source": "data_source"
+            "data_source": "data_source",
+            "marital_status_desc": "marital_status_desc",
+            "customer_type_desc": "customer_type_desc",
+            "income_source_desc": "income_source_desc",
+            "job_level_desc": "job_level_desc",
+            "monthly_income_desc": "monthly_income_desc"
           }
         }
       }
     ],
     "edges": [
-      { "id": "edge-e_code1-f_a2_1", "source": "e_code1", "target": "f_a2_1" },
-      { "id": "edge-e_code1-f_a4_1", "source": "e_code1", "target": "f_a4_1" },
-      { "id": "edge-e_code1-f_a5_1", "source": "e_code1", "target": "f_a5_1" },
-      { "id": "edge-e_code2-f_a2_2", "source": "e_code2", "target": "f_a2_2" },
-      { "id": "edge-e_code2-f_a4_2", "source": "e_code2", "target": "f_a4_2" },
-      { "id": "edge-e_code2-f_a5_2", "source": "e_code2", "target": "f_a5_2" },
-      { "id": "edge-e1-lk_edu1", "source": "e1", "target": "lk_edu1", "targetHandle": "default" },
-      { "id": "edge-f_a2_1-lk_edu1", "source": "f_a2_1", "target": "lk_edu1", "targetHandle": "lookup-input" },
-      { "id": "edge-lk_edu1-lk_occ1", "source": "lk_edu1", "target": "lk_occ1", "targetHandle": "default" },
-      { "id": "edge-f_a4_1-lk_occ1", "source": "f_a4_1", "target": "lk_occ1", "targetHandle": "lookup-input" },
-      { "id": "edge-lk_occ1-lk_job1", "source": "lk_occ1", "target": "lk_job1", "targetHandle": "default" },
-      { "id": "edge-f_a5_1-lk_job1", "source": "f_a5_1", "target": "lk_job1", "targetHandle": "lookup-input" },
-      { "id": "edge-lk_job1-m1", "source": "lk_job1", "target": "m1", "targetHandle": "left-input" },
-      { "id": "edge-e2-lk_edu2", "source": "e2", "target": "lk_edu2", "targetHandle": "default" },
-      { "id": "edge-f_a2_2-lk_edu2", "source": "f_a2_2", "target": "lk_edu2", "targetHandle": "lookup-input" },
-      { "id": "edge-lk_edu2-lk_occ2", "source": "lk_edu2", "target": "lk_occ2", "targetHandle": "default" },
-      { "id": "edge-f_a4_2-lk_occ2", "source": "f_a4_2", "target": "lk_occ2", "targetHandle": "lookup-input" },
-      { "id": "edge-lk_occ2-lk_job2", "source": "lk_occ2", "target": "lk_job2", "targetHandle": "default" },
-      { "id": "edge-f_a5_2-lk_job2", "source": "f_a5_2", "target": "lk_job2", "targetHandle": "lookup-input" },
-      { "id": "edge-lk_job2-m1", "source": "lk_job2", "target": "m1", "targetHandle": "right-input" },
+      { "id": "edge-e1-lk_edu1", "source": "e1", "target": "lk_edu1" },
+      { "id": "edge-lk_edu1-lk_occ1", "source": "lk_edu1", "target": "lk_occ1" },
+      { "id": "edge-lk_occ1-lk_job1", "source": "lk_occ1", "target": "lk_job1" },
+      { "id": "edge-lk_job1-lk_marry1", "source": "lk_job1", "target": "lk_marry1" },
+      { "id": "edge-lk_marry1-lk_ctype1", "source": "lk_marry1", "target": "lk_ctype1" },
+      { "id": "edge-lk_ctype1-lk_incsrc1", "source": "lk_ctype1", "target": "lk_incsrc1" },
+      { "id": "edge-lk_incsrc1-lk_indus1", "source": "lk_incsrc1", "target": "lk_indus1" },
+      { "id": "edge-lk_indus1-lk_joblv1", "source": "lk_indus1", "target": "lk_joblv1" },
+      { "id": "edge-lk_joblv1-lk_income1", "source": "lk_joblv1", "target": "lk_income1" },
+      { "id": "edge-lk_income1-m1", "source": "lk_income1", "target": "m1", "targetHandle": "left-input" },
+      { "id": "edge-e2-lk_edu2", "source": "e2", "target": "lk_edu2" },
+      { "id": "edge-lk_edu2-lk_occ2", "source": "lk_edu2", "target": "lk_occ2" },
+      { "id": "edge-lk_occ2-lk_job2", "source": "lk_occ2", "target": "lk_job2" },
+      { "id": "edge-lk_job2-lk_marry2", "source": "lk_job2", "target": "lk_marry2" },
+      { "id": "edge-lk_marry2-lk_ctype2", "source": "lk_marry2", "target": "lk_ctype2" },
+      { "id": "edge-lk_ctype2-lk_joblv2", "source": "lk_ctype2", "target": "lk_joblv2" },
+      { "id": "edge-lk_joblv2-lk_income2", "source": "lk_joblv2", "target": "lk_income2" },
+      { "id": "edge-lk_income2-m1", "source": "lk_income2", "target": "m1", "targetHandle": "right-input" },
       { "id": "edge-m1-d1", "source": "m1", "target": "d1" },
       { "id": "edge-d1-df1", "source": "d1", "target": "df1" },
       { "id": "edge-df1-tc_zzip", "source": "df1", "target": "tc_zzip" },
@@ -658,5 +751,5 @@
       { "id": "edge-df3-tl1", "source": "df3", "target": "tl1" }
     ]
   },
-  "changeSummary": "v2：新增 Lookup 雙輸入設計 — 2 來源代碼定義 + 6 Filter + 6 Lookup 節點（education/occupation/job_title x 2）"
+  "changeSummary": "v4：移除 filter 節點改用 legacy lookup 模式，擴充婚姻狀態/客戶類型/收入來源/行業/職級/月所得 6 組代碼對照"
 }
