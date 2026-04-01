@@ -24,6 +24,7 @@ import {
   FieldMappingHandler,
   ConditionalHandler,
   TargetLoadHandler,
+  LookupHandler,
 } from './engine';
 
 @Injectable()
@@ -53,6 +54,7 @@ export class EtlPipelineExecutionService {
     dispatcher.register(new FieldMappingHandler());
     dispatcher.register(new ConditionalHandler());
     dispatcher.register(new TargetLoadHandler());
+    dispatcher.register(new LookupHandler());
     return dispatcher;
   }
 

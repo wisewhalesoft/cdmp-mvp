@@ -15,7 +15,7 @@
       {
         "id": "e2",
         "type": "pipelineNode",
-        "position": { "x": 50, "y": 200 },
+        "position": { "x": 50, "y": 250 },
         "data": {
           "nodeType": "raw_data_extract",
           "label": "[和勁]ZZIP",
@@ -24,9 +24,181 @@
         }
       },
       {
+        "id": "e_code1",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": -100 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[和潤]代碼定義",
+          "rawTable": "raw_e5a2345c",
+          "subtitle": "[和潤]代碼對照表擷取"
+        }
+      },
+      {
+        "id": "e_code2",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 400 },
+        "data": {
+          "nodeType": "raw_data_extract",
+          "label": "[和勁]代碼定義",
+          "rawTable": "raw_6fce5258",
+          "subtitle": "[和勁]代碼對照表擷取"
+        }
+      },
+      {
+        "id": "f_a2_1",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": -100 },
+        "data": {
+          "nodeType": "filter",
+          "label": "Filter_A2",
+          "subtitle": "TBL_ID='A2'",
+          "filterExpression": "\"TBL_ID\" = 'A2'"
+        }
+      },
+      {
+        "id": "f_a4_1",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": -100 },
+        "data": {
+          "nodeType": "filter",
+          "label": "Filter_A4",
+          "subtitle": "TBL_ID='A4'",
+          "filterExpression": "\"TBL_ID\" = 'A4'"
+        }
+      },
+      {
+        "id": "f_a5_1",
+        "type": "pipelineNode",
+        "position": { "x": 500, "y": -100 },
+        "data": {
+          "nodeType": "filter",
+          "label": "Filter_A5",
+          "subtitle": "TBL_ID='A5'",
+          "filterExpression": "\"TBL_ID\" = 'A5'"
+        }
+      },
+      {
+        "id": "f_a2_2",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": 400 },
+        "data": {
+          "nodeType": "filter",
+          "label": "Filter_A2b",
+          "subtitle": "TBL_ID='A2'",
+          "filterExpression": "\"TBL_ID\" = 'A2'"
+        }
+      },
+      {
+        "id": "f_a4_2",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": 400 },
+        "data": {
+          "nodeType": "filter",
+          "label": "Filter_A4b",
+          "subtitle": "TBL_ID='A4'",
+          "filterExpression": "\"TBL_ID\" = 'A4'"
+        }
+      },
+      {
+        "id": "f_a5_2",
+        "type": "pipelineNode",
+        "position": { "x": 500, "y": 400 },
+        "data": {
+          "nodeType": "filter",
+          "label": "Filter_A5b",
+          "subtitle": "TBL_ID='A5'",
+          "filterExpression": "\"TBL_ID\" = 'A5'"
+        }
+      },
+      {
+        "id": "lk_edu1",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_edu",
+          "subtitle": "教育程度對照",
+          "matchColumn": "EDUCAT_BACK",
+          "lookupMatchColumn": "CODE_NO",
+          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "education_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_occ1",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_occ",
+          "subtitle": "職業對照",
+          "matchColumn": "VOCATION_CODE",
+          "lookupMatchColumn": "CODE_NO",
+          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "occupation_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_job1",
+        "type": "pipelineNode",
+        "position": { "x": 500, "y": 50 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤_job",
+          "subtitle": "職稱對照",
+          "matchColumn": "JOB_TITLE",
+          "lookupMatchColumn": "CODE_NO",
+          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "job_title_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_edu2",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_edu",
+          "subtitle": "教育程度對照",
+          "matchColumn": "EDUCAT_BACK",
+          "lookupMatchColumn": "CODE_NO",
+          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "education_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_occ2",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_occ",
+          "subtitle": "職業對照",
+          "matchColumn": "VOCATION_CODE",
+          "lookupMatchColumn": "CODE_NO",
+          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "occupation_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_job2",
+        "type": "pipelineNode",
+        "position": { "x": 500, "y": 250 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁_job",
+          "subtitle": "職稱對照",
+          "matchColumn": "JOB_TITLE",
+          "lookupMatchColumn": "CODE_NO",
+          "outputColumns": [{ "lookupColumn": "CODE_NAME", "outputAlias": "job_title_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
         "id": "m1",
         "type": "pipelineNode",
-        "position": { "x": 300, "y": 125 },
+        "position": { "x": 650, "y": 150 },
         "data": {
           "nodeType": "merge",
           "label": "ZZIP合併",
@@ -38,7 +210,7 @@
       {
         "id": "d1",
         "type": "pipelineNode",
-        "position": { "x": 500, "y": 125 },
+        "position": { "x": 850, "y": 150 },
         "data": {
           "nodeType": "dedup",
           "label": "ZZIP去重",
@@ -51,7 +223,7 @@
       {
         "id": "df1",
         "type": "pipelineNode",
-        "position": { "x": 700, "y": 125 },
+        "position": { "x": 1050, "y": 150 },
         "data": {
           "nodeType": "derived_field",
           "label": "ZZIP電話合併",
@@ -66,7 +238,7 @@
       {
         "id": "tc_zzip",
         "type": "pipelineNode",
-        "position": { "x": 800, "y": 125 },
+        "position": { "x": 1150, "y": 150 },
         "data": {
           "nodeType": "type_cast",
           "label": "ZZIP型別轉換",
@@ -79,11 +251,11 @@
       {
         "id": "fm1",
         "type": "pipelineNode",
-        "position": { "x": 1000, "y": 125 },
+        "position": { "x": 1350, "y": 150 },
         "data": {
           "nodeType": "field_mapping",
           "label": "ZZIP映射",
-          "subtitle": "48 組對應",
+          "subtitle": "51 組對應",
           "dropUnmapped": true,
           "mappings": [
             { "sourceColumn": "CUSTO_NO", "targetColumn": "source_customer_no", "defaultValue": null },
@@ -94,6 +266,7 @@
             { "sourceColumn": "BITBE_DATE", "targetColumn": "date_of_birth", "defaultValue": null },
             { "sourceColumn": "CMARRY_MK", "targetColumn": "marital_status", "defaultValue": null },
             { "sourceColumn": "EDUCAT_BACK", "targetColumn": "education_code", "defaultValue": null },
+            { "sourceColumn": "education_desc", "targetColumn": "education_desc", "defaultValue": null },
             { "sourceColumn": "SPOUSE_NM", "targetColumn": "spouse_name", "defaultValue": null },
             { "sourceColumn": "FATHER_NM", "targetColumn": "father_name", "defaultValue": null },
             { "sourceColumn": "MOTHER_NM", "targetColumn": "mother_name", "defaultValue": null },
@@ -118,7 +291,9 @@
             { "sourceColumn": "CO_NAME", "targetColumn": "company_name", "defaultValue": null },
             { "sourceColumn": "CROLE", "targetColumn": "role_code", "defaultValue": null },
             { "sourceColumn": "VOCATION_CODE", "targetColumn": "occupation_code", "defaultValue": null },
+            { "sourceColumn": "occupation_desc", "targetColumn": "occupation_desc", "defaultValue": null },
             { "sourceColumn": "JOB_TITLE", "targetColumn": "job_title_code", "defaultValue": null },
+            { "sourceColumn": "job_title_desc", "targetColumn": "job_title_desc", "defaultValue": null },
             { "sourceColumn": "JOB_LEVEL", "targetColumn": "job_level", "defaultValue": null },
             { "sourceColumn": "INDUSTRY", "targetColumn": "industry_code", "defaultValue": null },
             { "sourceColumn": "N_WORK_YEAR", "targetColumn": "work_years", "defaultValue": null },
@@ -140,7 +315,7 @@
       {
         "id": "e3",
         "type": "pipelineNode",
-        "position": { "x": 50, "y": 400 },
+        "position": { "x": 50, "y": 600 },
         "data": {
           "nodeType": "raw_data_extract",
           "label": "[和潤]MLMC",
@@ -151,7 +326,7 @@
       {
         "id": "e4",
         "type": "pipelineNode",
-        "position": { "x": 50, "y": 550 },
+        "position": { "x": 50, "y": 750 },
         "data": {
           "nodeType": "raw_data_extract",
           "label": "[和勁]MLMC",
@@ -162,7 +337,7 @@
       {
         "id": "m2",
         "type": "pipelineNode",
-        "position": { "x": 300, "y": 475 },
+        "position": { "x": 300, "y": 675 },
         "data": {
           "nodeType": "merge",
           "label": "MLMC合併1",
@@ -174,7 +349,7 @@
       {
         "id": "e5",
         "type": "pipelineNode",
-        "position": { "x": 50, "y": 700 },
+        "position": { "x": 50, "y": 900 },
         "data": {
           "nodeType": "raw_data_extract",
           "label": "[興業]MLMC",
@@ -185,7 +360,7 @@
       {
         "id": "m3",
         "type": "pipelineNode",
-        "position": { "x": 500, "y": 550 },
+        "position": { "x": 500, "y": 750 },
         "data": {
           "nodeType": "merge",
           "label": "MLMC合併2",
@@ -197,7 +372,7 @@
       {
         "id": "d2",
         "type": "pipelineNode",
-        "position": { "x": 700, "y": 550 },
+        "position": { "x": 700, "y": 750 },
         "data": {
           "nodeType": "dedup",
           "label": "MLMC去重",
@@ -210,7 +385,7 @@
       {
         "id": "tc1",
         "type": "pipelineNode",
-        "position": { "x": 900, "y": 550 },
+        "position": { "x": 900, "y": 750 },
         "data": {
           "nodeType": "type_cast",
           "label": "MLMC型別轉換",
@@ -226,7 +401,7 @@
       {
         "id": "df2",
         "type": "pipelineNode",
-        "position": { "x": 1100, "y": 550 },
+        "position": { "x": 1100, "y": 750 },
         "data": {
           "nodeType": "derived_field",
           "label": "MLMC轉換",
@@ -243,7 +418,7 @@
       {
         "id": "fm2",
         "type": "pipelineNode",
-        "position": { "x": 1300, "y": 550 },
+        "position": { "x": 1300, "y": 750 },
         "data": {
           "nodeType": "field_mapping",
           "label": "MLMC映射",
@@ -293,7 +468,7 @@
       {
         "id": "m4",
         "type": "pipelineNode",
-        "position": { "x": 1300, "y": 325 },
+        "position": { "x": 1550, "y": 450 },
         "data": {
           "nodeType": "merge",
           "label": "最終合併",
@@ -305,7 +480,7 @@
       {
         "id": "cd1",
         "type": "pipelineNode",
-        "position": { "x": 1500, "y": 325 },
+        "position": { "x": 1750, "y": 450 },
         "data": {
           "nodeType": "conditional",
           "label": "衝突解決",
@@ -342,7 +517,7 @@
       {
         "id": "df3",
         "type": "pipelineNode",
-        "position": { "x": 1700, "y": 325 },
+        "position": { "x": 1950, "y": 450 },
         "data": {
           "nodeType": "derived_field",
           "label": "data_source標記",
@@ -356,7 +531,7 @@
       {
         "id": "tl1",
         "type": "pipelineNode",
-        "position": { "x": 1900, "y": 325 },
+        "position": { "x": 2150, "y": 450 },
         "data": {
           "nodeType": "target_load",
           "label": "載入 customer_core",
@@ -372,6 +547,7 @@
             "date_of_birth": "date_of_birth",
             "marital_status": "marital_status",
             "education_code": "education_code",
+            "education_desc": "education_desc",
             "spouse_name": "spouse_name",
             "father_name": "father_name",
             "mother_name": "mother_name",
@@ -402,7 +578,9 @@
             "company_name": "company_name",
             "role_code": "role_code",
             "occupation_code": "occupation_code",
+            "occupation_desc": "occupation_desc",
             "job_title_code": "job_title_code",
+            "job_title_desc": "job_title_desc",
             "job_level": "job_level",
             "industry_code": "industry_code",
             "industry_desc": "industry_desc",
@@ -441,8 +619,26 @@
       }
     ],
     "edges": [
-      { "id": "edge-e1-m1", "source": "e1", "target": "m1", "targetHandle": "left-input" },
-      { "id": "edge-e2-m1", "source": "e2", "target": "m1", "targetHandle": "right-input" },
+      { "id": "edge-e_code1-f_a2_1", "source": "e_code1", "target": "f_a2_1" },
+      { "id": "edge-e_code1-f_a4_1", "source": "e_code1", "target": "f_a4_1" },
+      { "id": "edge-e_code1-f_a5_1", "source": "e_code1", "target": "f_a5_1" },
+      { "id": "edge-e_code2-f_a2_2", "source": "e_code2", "target": "f_a2_2" },
+      { "id": "edge-e_code2-f_a4_2", "source": "e_code2", "target": "f_a4_2" },
+      { "id": "edge-e_code2-f_a5_2", "source": "e_code2", "target": "f_a5_2" },
+      { "id": "edge-e1-lk_edu1", "source": "e1", "target": "lk_edu1", "targetHandle": "default" },
+      { "id": "edge-f_a2_1-lk_edu1", "source": "f_a2_1", "target": "lk_edu1", "targetHandle": "lookup-input" },
+      { "id": "edge-lk_edu1-lk_occ1", "source": "lk_edu1", "target": "lk_occ1", "targetHandle": "default" },
+      { "id": "edge-f_a4_1-lk_occ1", "source": "f_a4_1", "target": "lk_occ1", "targetHandle": "lookup-input" },
+      { "id": "edge-lk_occ1-lk_job1", "source": "lk_occ1", "target": "lk_job1", "targetHandle": "default" },
+      { "id": "edge-f_a5_1-lk_job1", "source": "f_a5_1", "target": "lk_job1", "targetHandle": "lookup-input" },
+      { "id": "edge-lk_job1-m1", "source": "lk_job1", "target": "m1", "targetHandle": "left-input" },
+      { "id": "edge-e2-lk_edu2", "source": "e2", "target": "lk_edu2", "targetHandle": "default" },
+      { "id": "edge-f_a2_2-lk_edu2", "source": "f_a2_2", "target": "lk_edu2", "targetHandle": "lookup-input" },
+      { "id": "edge-lk_edu2-lk_occ2", "source": "lk_edu2", "target": "lk_occ2", "targetHandle": "default" },
+      { "id": "edge-f_a4_2-lk_occ2", "source": "f_a4_2", "target": "lk_occ2", "targetHandle": "lookup-input" },
+      { "id": "edge-lk_occ2-lk_job2", "source": "lk_occ2", "target": "lk_job2", "targetHandle": "default" },
+      { "id": "edge-f_a5_2-lk_job2", "source": "f_a5_2", "target": "lk_job2", "targetHandle": "lookup-input" },
+      { "id": "edge-lk_job2-m1", "source": "lk_job2", "target": "m1", "targetHandle": "right-input" },
       { "id": "edge-m1-d1", "source": "m1", "target": "d1" },
       { "id": "edge-d1-df1", "source": "d1", "target": "df1" },
       { "id": "edge-df1-tc_zzip", "source": "df1", "target": "tc_zzip" },
@@ -462,5 +658,5 @@
       { "id": "edge-df3-tl1", "source": "df3", "target": "tl1" }
     ]
   },
-  "changeSummary": "初版：5 來源整合策略（2 ZZIP + 3 MLMC → customer_core）"
+  "changeSummary": "v2：新增 Lookup 雙輸入設計 — 2 來源代碼定義 + 6 Filter + 6 Lookup 節點（education/occupation/job_title x 2）"
 }
