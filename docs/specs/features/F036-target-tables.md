@@ -5,8 +5,8 @@ feature-id: F036
 source-story: US-049
 epic: E05
 priority: P0-MVP
-version: "2.2"
-date: 2026-03-31
+version: "2.3"
+date: 2026-04-01
 status: Draft
 ---
 
@@ -14,7 +14,7 @@ status: Draft
 
 ## 1. 功能摘要
 
-系統預先定義 1 個 Domain-Oriented 目標表 `customer_core`（79 欄位），提供 API 查詢目標表清單與 schema。Load 節點可選擇目標表並進行欄位對應，ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）由系統自動填充。Phase 2/3 待對應來源系統接入後再擴充 `customer_interaction`、`customer_financial`、`customer_service`。
+系統預先定義 1 個 Domain-Oriented 目標表 `customer_core`（83 欄位），提供 API 查詢目標表清單與 schema。Load 節點可選擇目標表並進行欄位對應，ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）由系統自動填充。Phase 2/3 待對應來源系統接入後再擴充 `customer_interaction`、`customer_financial`、`customer_service`。
 
 ## 2. 使用者故事
 
@@ -81,7 +81,7 @@ status: Draft
 
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（79 欄位），欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（83 欄位），欄位定義正確
 - **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ## 7. 主要流程
@@ -122,7 +122,7 @@ status: Draft
       "tableName": "customer_core",
       "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 79,
+      "columnCount": 83,
       "description": "客戶身分、聯絡、職業、財務概況與風控旗標"
     }
   ]
@@ -180,7 +180,8 @@ status: Draft
 |---------|------|----------|-----|------|---------|
 | customer_id | UUID | NO | YES | 客戶唯一識別碼（代理鍵） | ETL 生成 |
 | source_customer_no | VARCHAR(20) | NO | | 來源客戶編號（身分證/統編） | ZZIP.CUSTO_NO / MLMC.CUSTID |
-| customer_type | VARCHAR(2) | NO | | 客戶類型（01=個人/02=企業/04=外籍） | ZZIP.CUSTOM_MK / MLMC.CUTYPE |
+| customer_type_code | VARCHAR(2) | NO | | 客戶類型代碼（01=個人/02=企業/04=外籍） | ZZIP.CUSTOM_MK / MLMC.CUTYPE |
+| customer_type_desc | VARCHAR(50) | YES | | 客戶類型描述 | US-030 代碼轉換 (TBL_ID=55) |
 | name | VARCHAR(100) | NO | | 姓名/企業名稱 | ZZIP.CUS_NAME / MLMC.CUSTNAME |
 | english_name | VARCHAR(60) | YES | | 英文姓名 | ZZIP.ENG_NAME |
 
@@ -190,7 +191,8 @@ status: Draft
 |---------|------|----------|-----|------|---------|
 | gender | VARCHAR(1) | YES | | 性別 | ZZIP.CUS_SEX |
 | date_of_birth | DATE | YES | | 生日 | ZZIP.BITBE_DATE |
-| marital_status | VARCHAR(1) | YES | | 婚姻狀態 | ZZIP.CMARRY_MK |
+| marital_status_code | VARCHAR(1) | YES | | 婚姻狀態代碼 | ZZIP.CMARRY_MK |
+| marital_status_desc | VARCHAR(50) | YES | | 婚姻狀態描述 | US-030 代碼轉換 (TBL_ID=33) |
 | education_code | VARCHAR(2) | YES | | 學歷代碼 | ZZIP.EDUCAT_BACK |
 | education_desc | VARCHAR(50) | YES | | 學歷描述 | US-030 代碼轉換 |
 | spouse_name | VARCHAR(100) | YES | | 配偶姓名 | ZZIP.SPOUSE_NM |
@@ -240,21 +242,23 @@ status: Draft
 | occupation_desc | VARCHAR(50) | YES | | 職業描述 | US-030 代碼轉換 |
 | job_title_code | VARCHAR(4) | YES | | 職稱代碼 | ZZIP.JOB_TITLE |
 | job_title_desc | VARCHAR(50) | YES | | 職稱描述 | US-030 代碼轉換 |
-| job_level | VARCHAR(2) | YES | | 職級 | ZZIP.JOB_LEVEL |
+| job_level_code | VARCHAR(2) | YES | | 職級代碼 | ZZIP.JOB_LEVEL |
+| job_level_desc | VARCHAR(50) | YES | | 職級描述 | US-030 代碼轉換 (TBL_ID=A6) |
 | industry_code | VARCHAR(6) | YES | | 行業代碼 | ZZIP.INDUSTRY / MLMC.INDUID |
-| industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / US-030 代碼轉換 |
+| industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / US-030 代碼轉換 (TBL_ID=AA) |
 | work_years | DECIMAL(8,2) | YES | | 年資 | ZZIP.N_WORK_YEAR |
 | company_scale | VARCHAR(1) | YES | | 公司規模（1:>=1000萬or公教/2:<1000萬/3:其他） | ZZIP.COMP_DIM |
-| role_code | VARCHAR(4) | YES | | 客戶角色代碼 | ZZIP.CROLE |
-| role_desc | VARCHAR(50) | YES | | 客戶角色描述 | US-030 代碼轉換 |
+| role | VARCHAR(10) | YES | | 客戶角色 | ZZIP.CROLE |
 
 ### F. 財務與風控
 
 | 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
 |---------|------|----------|-----|------|---------|
-| monthly_income | DECIMAL(8,0) | YES | | 月所得 | ZZIP.MONTH_INCOME |
+| monthly_income_code | VARCHAR(5) | YES | | 月所得代碼 | ZZIP.MONTH_INCOME |
+| monthly_income_desc | VARCHAR(50) | YES | | 月所得描述 | US-030 代碼轉換 (TBL_ID=A3) |
 | approved_income | INTEGER | YES | | 認定月收入 | ZZIP.INCOME_APPROVED |
-| income_source | VARCHAR(5) | YES | | 收入來源代碼 | ZZIP.INCOME_SOURCE |
+| income_source_code | VARCHAR(5) | YES | | 收入來源代碼 | ZZIP.INCOME_SOURCE |
+| income_source_desc | VARCHAR(50) | YES | | 收入來源描述 | US-030 代碼轉換 (TBL_ID=Y0) |
 | capital | DECIMAL(12,0) | YES | | 實收資本額 | ZZIP.CAPITAL / MLMC.CUSTNOWCAPTIAL（varchar→DECIMAL） |
 | credit_limit | DECIMAL(12,0) | YES | | 額度總額 | MLMC.FAMOUNT |
 | highest_transaction_amount | DECIMAL(12,0) | YES | | 最高往來金額 | MLMC.HFAMOUNT |
@@ -301,8 +305,14 @@ status: Draft
 | 電話/傳真合併（MLMC） | MLMC 端區碼+號碼分開儲存的欄位需合併（registered_phone, registered_fax, business_fax） | mergePhone 合併 `{區碼}-{號碼}` 格式；佔位值過濾為 NULL |
 | 衝突解決 | 同一客戶在兩來源有衝突時 | 以 `source_updated_at` 較新者為準（於 US-042 Pipeline 編輯器 Transform 節點處理） |
 | 代碼描述 | `_code` 欄位保留原始代碼，`_desc` 欄位需轉換 | 由 US-030 取得代碼對照表，US-042 Transform 節點轉換填入 |
+| 婚姻狀態代碼轉換 | `marital_status_code` → `marital_status_desc` | US-030 代碼轉換 (TBL_ID=33) |
+| 客戶類型代碼轉換 | `customer_type_code` → `customer_type_desc` | US-030 代碼轉換 (TBL_ID=55) |
+| 收入來源代碼轉換 | `income_source_code` → `income_source_desc` | US-030 代碼轉換 (TBL_ID=Y0) |
+| 職級代碼轉換 | `job_level_code` → `job_level_desc` | US-030 代碼轉換 (TBL_ID=A6) |
+| 月所得代碼轉換 | `monthly_income_code` → `monthly_income_desc` | US-030 代碼轉換 (TBL_ID=A3) |
+| 行業代碼轉換 | `industry_code` → `industry_desc` | US-030 代碼轉換 (TBL_ID=AA) |
 | 資本額型別轉換 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL 來源為 varchar | 轉換為 DECIMAL |
-| 客戶類型對應 | 兩來源的客戶類型編碼不同 | ZZIP.CUSTOM_MK 直接映射；MLMC.CUTYPE 需轉換（1→01, 2→02） |
+| 客戶類型對應 | 兩來源的客戶類型編碼不同 | ZZIP.CUSTOM_MK 直接映射至 customer_type_code；MLMC.CUTYPE 需轉換（1→01, 2→02） |
 
 ### 佔位值過濾規則
 
@@ -353,8 +363,8 @@ status: Draft
 
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
-| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量（79） |
-| 2 | 呼叫 customer_core Schema API | 回傳 79 個欄位定義，型別與描述正確，涵蓋 A~H 八個分類 |
+| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量（83） |
+| 2 | 呼叫 customer_core Schema API | 回傳 83 個欄位定義，型別與描述正確，涵蓋 A~H 八個分類 |
 | 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
 | 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
 | 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |
@@ -362,7 +372,7 @@ status: Draft
 | 7 | 電話欄位含佔位值 `00-0000000000` | ETL 轉換後為 NULL |
 | 8 | 同一客戶存在兩來源且資料衝突 | 以 source_updated_at 較新者為準 |
 | 9 | MLMC.CUSTNOWCAPTIAL 為 varchar "5000000" | 正確轉換為 DECIMAL 5000000 |
-| 10 | MLMC.CUTYPE = "1" | 正確轉換為 customer_type = "01" |
+| 10 | MLMC.CUTYPE = "1" | 正確轉換為 customer_type_code = "01" |
 
 ## 17. 錯誤場景
 

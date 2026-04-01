@@ -46,7 +46,7 @@
 ### AC-6：目標表 Schema 預定義正確
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（79 欄位），欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（83 欄位），欄位定義正確
 - **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ---
@@ -83,7 +83,7 @@
       "tableName": "customer_core",
       "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 79,
+      "columnCount": 83,
       "description": "客戶身分、個人屬性、聯絡、職業、財務概況與風控旗標"
     }
   ]
@@ -120,7 +120,8 @@
 |---------|------|----------|-----|------|---------|
 | customer_id | UUID | NO | YES | 客戶唯一識別碼（代理鍵） | ETL 生成 |
 | source_customer_no | VARCHAR(20) | NO | | 來源客戶編號（身分證/統編） | ZZIP.CUSTO_NO / MLMC.CUSTID |
-| customer_type | VARCHAR(2) | NO | | 客戶類型（01=個人/02=企業/04=外籍） | ZZIP.CUSTOM_MK / MLMC.CUTYPE |
+| customer_type_code | VARCHAR(2) | NO | | 客戶類型代碼（01=個人/02=企業/04=外籍） | ZZIP.CUSTOM_MK / MLMC.CUTYPE |
+| customer_type_desc | VARCHAR(50) | YES | | 客戶類型描述 | Lookup TBL_ID=55 代碼轉換 |
 | name | VARCHAR(100) | NO | | 姓名/企業名稱 | ZZIP.CUS_NAME / MLMC.CUSTNAME |
 | english_name | VARCHAR(60) | YES | | 英文姓名 | ZZIP.ENG_NAME |
 
@@ -130,7 +131,8 @@
 |---------|------|----------|-----|------|---------|
 | gender | VARCHAR(1) | YES | | 性別 | ZZIP.CUS_SEX |
 | date_of_birth | DATE | YES | | 生日 | ZZIP.BITBE_DATE |
-| marital_status | VARCHAR(1) | YES | | 婚姻狀態 | ZZIP.CMARRY_MK |
+| marital_status_code | VARCHAR(1) | YES | | 婚姻狀態代碼 | ZZIP.CMARRY_MK |
+| marital_status_desc | VARCHAR(50) | YES | | 婚姻狀態描述 | Lookup TBL_ID=33 代碼轉換 |
 | education_code | VARCHAR(2) | YES | | 學歷代碼 | ZZIP.EDUCAT_BACK |
 | education_desc | VARCHAR(50) | YES | | 學歷描述 | US-030 代碼轉換 |
 | spouse_name | VARCHAR(100) | YES | | 配偶姓名 | ZZIP.SPOUSE_NM |
@@ -180,21 +182,23 @@
 | occupation_desc | VARCHAR(50) | YES | | 職業描述 | US-030 代碼轉換 |
 | job_title_code | VARCHAR(4) | YES | | 職稱代碼 | ZZIP.JOB_TITLE |
 | job_title_desc | VARCHAR(50) | YES | | 職稱描述 | US-030 代碼轉換 |
-| job_level | VARCHAR(2) | YES | | 職級 | ZZIP.JOB_LEVEL |
+| job_level_code | VARCHAR(2) | YES | | 職級代碼 | ZZIP.JOB_LEVEL |
+| job_level_desc | VARCHAR(50) | YES | | 職級描述 | Lookup TBL_ID=A6 代碼轉換 |
 | industry_code | VARCHAR(6) | YES | | 行業代碼 | ZZIP.INDUSTRY / MLMC.INDUID（2016年起取代已停用CUROUT，對照表MLSTDINDUMF） |
-| industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / US-030 代碼轉換 |
+| industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / Lookup TBL_ID=AA 代碼轉換 |
 | work_years | DECIMAL(8,2) | YES | | 年資 | ZZIP.N_WORK_YEAR |
 | company_scale | VARCHAR(1) | YES | | 公司規模（1:>=1000萬or公教/2:<1000萬/3:其他） | ZZIP.COMP_DIM |
-| role_code | VARCHAR(4) | YES | | 客戶角色代碼 | ZZIP.CROLE |
-| role_desc | VARCHAR(50) | YES | | 客戶角色描述 | US-030 代碼轉換 |
+| role | VARCHAR(10) | YES | | 客戶角色 | ZZIP.CROLE |
 
 #### F. 財務與風控
 
 | 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 |
 |---------|------|----------|-----|------|---------|
-| monthly_income | DECIMAL(8,0) | YES | | 月所得 | ZZIP.MONTH_INCOME（text→DECIMAL） |
+| monthly_income_code | VARCHAR(5) | YES | | 月所得代碼 | ZZIP.MONTH_INCOME |
+| monthly_income_desc | VARCHAR(50) | YES | | 月所得描述 | Lookup TBL_ID=A3 代碼轉換 |
 | approved_income | INTEGER | YES | | 認定月收入 | ZZIP.INCOME_APPROVED |
-| income_source | VARCHAR(5) | YES | | 收入來源代碼 | ZZIP.INCOME_SOURCE |
+| income_source_code | VARCHAR(5) | YES | | 收入來源代碼 | ZZIP.INCOME_SOURCE |
+| income_source_desc | VARCHAR(50) | YES | | 收入來源描述 | Lookup TBL_ID=Y0 代碼轉換 |
 | capital | DECIMAL(12,0) | YES | | 實收資本額 | ZZIP.CAPITAL / MLMC.CUSTNOWCAPTIAL（varchar→DECIMAL） |
 | credit_limit | DECIMAL(12,0) | YES | | 額度總額 | MLMC.FAMOUNT |
 | highest_transaction_amount | DECIMAL(12,0) | YES | | 最高往來金額 | MLMC.HFAMOUNT |
@@ -251,8 +255,14 @@
 | 電話合併（不含分機，MLMC df2） | mergePhone(區碼, 號碼) 格式：`{區碼}-{號碼}`；佔位值過濾為 NULL。MLMC df2 轉換新增 3 組：registered_phone（CUSTTELCODE, CUSTTEL）、registered_fax（CUSTFAXCODE, CUSTFAX）、business_fax（BUSINESSFAXCODE, BUSINESSFAX）。df2 subtitle 從「customer_type + phone」更新為「customer_type + 4 組電話/傳真」 |
 | 衝突解決 | 同一客戶在兩來源有衝突時，以 `source_updated_at` 較新者為準（於 US-042 處理） |
 | 代碼描述 | `_code` 欄位保留原始代碼，`_desc` 欄位由 US-030 取得對照表、US-042 轉換填入 |
+| Lookup：客戶類型 | customer_type_code → customer_type_desc，對照表 TBL_ID=55 |
+| Lookup：婚姻狀態 | marital_status_code → marital_status_desc，對照表 TBL_ID=33 |
+| Lookup：職級 | job_level_code → job_level_desc，對照表 TBL_ID=A6 |
+| Lookup：行業描述 | industry_code → industry_desc，對照表 TBL_ID=AA |
+| Lookup：月所得 | monthly_income_code → monthly_income_desc，對照表 TBL_ID=A3 |
+| Lookup：收入來源 | income_source_code → income_source_desc，對照表 TBL_ID=Y0 |
 | 資本額型別 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL：varchar → DECIMAL |
-| 月所得型別 | ZZIP.MONTH_INCOME：text → DECIMAL(8,0) |
+| 月所得代碼 | ZZIP.MONTH_INCOME：保留原始代碼至 monthly_income_code VARCHAR(5)，透過 TBL_ID=A3 Lookup 取得描述 |
 | 客戶類型對應 | ZZIP.CUSTOM_MK 直接映射；MLMC.CUTYPE 需轉換（1→01, 2→02） |
 
 ### 刻意不納入 MVP 的來源欄位
@@ -279,7 +289,7 @@
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
 | 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量 |
-| 2 | 呼叫 customer_core Schema API | 回傳 79 個欄位定義，型別與描述正確 |
+| 2 | 呼叫 customer_core Schema API | 回傳 83 個欄位定義，型別與描述正確 |
 | 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
 | 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
 | 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |
@@ -301,7 +311,7 @@
 
 - [ ] 目標表清單 API 實作完成並通過單元測試
 - [ ] 目標表 Schema API 實作完成並通過單元測試
-- [ ] customer_core 目標表 schema 預定義正確（79 欄位，涵蓋 A~H 八個分類）
+- [ ] customer_core 目標表 schema 預定義正確（83 欄位，涵蓋 A~H 八個分類）
 - [ ] 來源欄位對應表完整且經業務確認
 - [ ] 前端 Load 節點目標表選擇器實作完成
 - [ ] 前端欄位對應介面實作完成
