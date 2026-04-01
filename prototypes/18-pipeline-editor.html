@@ -48,6 +48,7 @@
         <button onclick="showEditorDemo('extract')" class="demo-btn px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Extract</button>
         <button onclick="showEditorDemo('transform')" class="demo-btn px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Transform</button>
         <button onclick="showEditorDemo('load')" class="demo-btn px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Load</button>
+        <button onclick="showEditorDemo('lookup')" class="demo-btn px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Lookup</button>
       </div>
       <button class="px-3 py-1.5 text-sm border border-border rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
         <i data-lucide="play" class="w-4 h-4"></i>測試執行
@@ -209,6 +210,190 @@
         </div>
       </div>
 
+      <!-- ========== Lookup Demo Canvas ========== -->
+      <div id="canvasLookup" class="absolute inset-0 hidden">
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index:1;">
+          <defs>
+            <marker id="arrow-lk" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#9CA3AF" />
+            </marker>
+          </defs>
+          <!-- Edge: [和潤]ZZIP Extract -> Lookup education (main-input, 33%) -->
+          <path d="M 280 105 C 380 105, 380 147, 480 147" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: [和潤]代碼定義 Extract -> Filter A2 -->
+          <path d="M 280 310 C 340 310, 340 290, 400 290" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: [和潤]代碼定義 Extract -> Filter A4 -->
+          <path d="M 280 310 C 340 310, 340 400, 400 400" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: [和潤]代碼定義 Extract -> Filter A5 -->
+          <path d="M 280 310 C 340 310, 340 510, 400 510" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: Filter A2 -> Lookup education (lookup-input, 67%) -->
+          <path d="M 560 290 C 620 290, 620 185, 480 185" stroke="#F59E0B" stroke-width="2" fill="none" marker-end="url(#arrow-lk)" stroke-dasharray="6,3"/>
+          <!-- Edge: Filter A4 -> Lookup occupation (lookup-input, 67%) -->
+          <path d="M 560 400 C 620 400, 620 405, 680 405" stroke="#F59E0B" stroke-width="2" fill="none" marker-end="url(#arrow-lk)" stroke-dasharray="6,3"/>
+          <!-- Edge: Filter A5 -> Lookup job_title (lookup-input, 67%) -->
+          <path d="M 560 510 C 620 510, 620 515, 680 515" stroke="#F59E0B" stroke-width="2" fill="none" marker-end="url(#arrow-lk)" stroke-dasharray="6,3"/>
+          <!-- Edge: [和潤]ZZIP Extract -> Lookup occupation (main-input, 33%) -->
+          <path d="M 280 105 C 380 105, 600 367, 680 367" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: [和潤]ZZIP Extract -> Lookup job_title (main-input, 33%) -->
+          <path d="M 280 105 C 380 105, 600 477, 680 477" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: Lookup education -> Load -->
+          <path d="M 660 165 C 740 165, 820 285, 900 285" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: Lookup occupation -> Load -->
+          <path d="M 860 385 C 880 385, 880 305, 900 305" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+          <!-- Edge: Lookup job_title -> Load -->
+          <path d="M 860 495 C 880 495, 880 325, 900 325" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#arrow-lk)"/>
+        </svg>
+
+        <!-- Node: [和潤]ZZIP Extract -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-blue-500 px-4 py-3 w-[180px]" style="left:100px; top:75px; z-index:2;" onclick="selectNode('lookup-dual')">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="database" class="w-4 h-4 text-blue-500"></i>
+            <span class="text-xs font-semibold text-blue-600">Extract</span>
+          </div>
+          <p class="text-sm font-medium text-gray-800">[和潤] ZZIP</p>
+          <p class="text-xs text-gray-400 mt-0.5">主資料流</p>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: [和潤]代碼定義 Extract -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-blue-500 px-4 py-3 w-[180px]" style="left:100px; top:280px; z-index:2;">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="database" class="w-4 h-4 text-blue-500"></i>
+            <span class="text-xs font-semibold text-blue-600">Extract</span>
+          </div>
+          <p class="text-sm font-medium text-gray-800">[和潤] 代碼定義</p>
+          <p class="text-xs text-gray-400 mt-0.5">對照來源 (扇出)</p>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Filter A2 -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-amber-500 px-3 py-2 w-[160px]" style="left:400px; top:265px; z-index:2;">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="filter" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span class="text-xs font-semibold text-amber-600">Filter</span>
+          </div>
+          <p class="text-xs font-medium text-gray-800">TBL_ID = 'A2'</p>
+          <p class="text-[10px] text-gray-400">education</p>
+          <!-- left handle -->
+          <div class="absolute left-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Filter A4 -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-amber-500 px-3 py-2 w-[160px]" style="left:400px; top:375px; z-index:2;">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="filter" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span class="text-xs font-semibold text-amber-600">Filter</span>
+          </div>
+          <p class="text-xs font-medium text-gray-800">TBL_ID = 'A4'</p>
+          <p class="text-[10px] text-gray-400">occupation</p>
+          <!-- left handle -->
+          <div class="absolute left-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Filter A5 -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-amber-500 px-3 py-2 w-[160px]" style="left:400px; top:485px; z-index:2;">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="filter" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span class="text-xs font-semibold text-amber-600">Filter</span>
+          </div>
+          <p class="text-xs font-medium text-gray-800">TBL_ID = 'A5'</p>
+          <p class="text-[10px] text-gray-400">job_title</p>
+          <!-- left handle -->
+          <div class="absolute left-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Lookup education (dual-input) -->
+        <div class="node-card selected absolute bg-white rounded-lg shadow-md border-l-4 border-l-amber-500 px-4 py-3 w-[180px]" style="left:480px; top:120px; z-index:2;" onclick="selectNode('lookup-dual')">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="search" class="w-4 h-4 text-amber-500"></i>
+            <span class="text-xs font-semibold text-amber-600">Lookup</span>
+          </div>
+          <p class="text-sm font-medium text-gray-800">和潤_education</p>
+          <p class="text-xs text-gray-400 mt-0.5">EDUCAT_BACK -> education_desc</p>
+          <!-- Left handles: main-input (33%) and lookup-input (67%) -->
+          <div class="absolute left-[-5px] top-[33%] w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm" title="main-input"></div>
+          <div class="absolute left-[-5px] top-[67%] w-[10px] h-[10px] rounded-full bg-amber-400 border-2 border-white shadow-sm" title="lookup-input"></div>
+          <!-- Labels for handles -->
+          <div class="absolute left-[-80px] top-[33%] -translate-y-1/2 text-[9px] text-gray-400 whitespace-nowrap bg-white/80 px-1 rounded">main</div>
+          <div class="absolute left-[-80px] top-[67%] -translate-y-1/2 text-[9px] text-amber-500 whitespace-nowrap bg-white/80 px-1 rounded">lookup</div>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Lookup occupation (dual-input) -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-amber-500 px-4 py-3 w-[180px]" style="left:680px; top:340px; z-index:2;" onclick="selectNode('lookup-dual')">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="search" class="w-4 h-4 text-amber-500"></i>
+            <span class="text-xs font-semibold text-amber-600">Lookup</span>
+          </div>
+          <p class="text-sm font-medium text-gray-800">和潤_occupation</p>
+          <p class="text-xs text-gray-400 mt-0.5">VOCATION_CODE -> occupation_desc</p>
+          <!-- Left handles: main-input (33%) and lookup-input (67%) -->
+          <div class="absolute left-[-5px] top-[33%] w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm" title="main-input"></div>
+          <div class="absolute left-[-5px] top-[67%] w-[10px] h-[10px] rounded-full bg-amber-400 border-2 border-white shadow-sm" title="lookup-input"></div>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Lookup job_title (dual-input) -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-amber-500 px-4 py-3 w-[180px]" style="left:680px; top:450px; z-index:2;" onclick="selectNode('lookup-dual')">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="search" class="w-4 h-4 text-amber-500"></i>
+            <span class="text-xs font-semibold text-amber-600">Lookup</span>
+          </div>
+          <p class="text-sm font-medium text-gray-800">和潤_job_title</p>
+          <p class="text-xs text-gray-400 mt-0.5">JOB_TITLE -> job_title_desc</p>
+          <!-- Left handles: main-input (33%) and lookup-input (67%) -->
+          <div class="absolute left-[-5px] top-[33%] w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm" title="main-input"></div>
+          <div class="absolute left-[-5px] top-[67%] w-[10px] h-[10px] rounded-full bg-amber-400 border-2 border-white shadow-sm" title="lookup-input"></div>
+          <!-- right handle -->
+          <div class="absolute right-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Node: Load -->
+        <div class="node-card absolute bg-white rounded-lg shadow-md border-l-4 border-l-green-500 px-4 py-3 w-[180px]" style="left:900px; top:260px; z-index:2;">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="upload" class="w-4 h-4 text-green-500"></i>
+            <span class="text-xs font-semibold text-green-600">Load</span>
+          </div>
+          <p class="text-sm font-medium text-gray-800">目標表載入</p>
+          <p class="text-xs text-gray-400 mt-0.5">customer_core</p>
+          <!-- left handle -->
+          <div class="absolute left-[-5px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+        </div>
+
+        <!-- Legend -->
+        <div class="absolute bottom-16 left-4 bg-white rounded-lg shadow-md border border-border p-3 z-10" style="width:260px;">
+          <p class="text-xs font-semibold text-gray-600 mb-2">圖例說明</p>
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2">
+              <div class="w-[10px] h-[10px] rounded-full bg-gray-400 border-2 border-white shadow-sm"></div>
+              <span class="text-xs text-gray-600">main-input (33%) — 主資料流</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-[10px] h-[10px] rounded-full bg-amber-400 border-2 border-white shadow-sm"></div>
+              <span class="text-xs text-gray-600">lookup-input (67%) — 對照來源</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#9CA3AF" stroke-width="2"/></svg>
+              <span class="text-xs text-gray-600">主資料流連線</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" stroke="#F59E0B" stroke-width="2" stroke-dasharray="6,3"/></svg>
+              <span class="text-xs text-gray-600">對照來源連線 (lookup-input)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Zoom Controls -->
       <div class="absolute bottom-4 right-4 flex flex-col gap-1 bg-white rounded-lg shadow-md border border-border z-10">
         <button class="p-2 hover:bg-gray-50 rounded-t-lg border-b border-border"><i data-lucide="plus" class="w-4 h-4 text-gray-600"></i></button>
@@ -231,7 +416,7 @@
         <div class="px-4 py-3 border-b border-border">
           <div class="flex items-center gap-2 mb-1">
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">Extract</span>
-            <span class="text-sm font-semibold text-gray-800">Raw Data 擷取</span>
+            <input type="text" value="Raw Data 擷取" placeholder="擷取 (Extract)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
           </div>
         </div>
         <div class="p-4 space-y-4">
@@ -255,7 +440,7 @@
         <div class="px-4 py-3 border-b border-border">
           <div class="flex items-center gap-2 mb-1">
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">Transform</span>
-            <span class="text-sm font-semibold text-gray-800">NULL 處理</span>
+            <input type="text" value="NULL 處理" placeholder="NULL 處理 (Transform)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
           </div>
         </div>
         <div class="p-4 space-y-4">
@@ -289,7 +474,7 @@
         <div class="px-4 py-3 border-b border-border">
           <div class="flex items-center gap-2 mb-1">
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">Transform</span>
-            <span class="text-sm font-semibold text-gray-800">格式轉換</span>
+            <input type="text" value="格式轉換" placeholder="格式轉換 (Transform)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
           </div>
         </div>
         <div class="p-4 space-y-4">
@@ -335,7 +520,7 @@
         <div class="px-4 py-3 border-b border-border">
           <div class="flex items-center gap-2 mb-1">
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">Transform</span>
-            <span class="text-sm font-semibold text-gray-800">型別轉換</span>
+            <input type="text" value="型別轉換" placeholder="型別轉換 (Transform)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
           </div>
         </div>
         <div class="p-4 space-y-4">
@@ -370,12 +555,226 @@
         </div>
       </div>
 
+      <!-- Lookup Properties: Dual-Input Mode (has lookup-input connection) -->
+      <div id="prop-lookup-dual" class="hidden">
+        <div class="px-4 py-3 border-b border-border">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">Lookup</span>
+            <input type="text" value="和潤_education" placeholder="查找 (Lookup)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
+          </div>
+          <p class="text-xs text-gray-400">代碼對照查找（雙輸入模式）</p>
+          <div class="flex gap-1 mt-2">
+            <button class="px-2 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 font-medium">雙輸入</button>
+            <button onclick="toggleLookupMode('compat')" class="px-2 py-0.5 text-[10px] rounded bg-gray-100 text-gray-500 hover:bg-gray-200">向下相容</button>
+          </div>
+        </div>
+        <div class="p-4 space-y-4 overflow-y-auto" style="max-height: calc(100vh - 180px);">
+
+          <!-- Dual-input indicator -->
+          <div class="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+            <i data-lucide="git-merge" class="w-4 h-4 text-amber-600"></i>
+            <span class="text-xs font-medium text-amber-700">雙輸入模式</span>
+            <span class="ml-auto text-[10px] text-amber-500">2 inputs connected</span>
+          </div>
+
+          <!-- Main input source (read-only) -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">主資料流 (main-input)</label>
+            <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-lg">
+              <div class="w-[8px] h-[8px] rounded-full bg-gray-400 border-2 border-white shadow-sm flex-shrink-0"></div>
+              <i data-lucide="database" class="w-3.5 h-3.5 text-blue-500"></i>
+              <span class="text-sm text-gray-700">[和潤] ZZIP</span>
+              <i data-lucide="link" class="w-3 h-3 text-gray-400 ml-auto"></i>
+            </div>
+          </div>
+
+          <!-- Lookup source (read-only from connection) -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">對照來源 (lookup-input)</label>
+            <div class="flex items-center gap-2 px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-lg">
+              <div class="w-[8px] h-[8px] rounded-full bg-amber-400 border-2 border-white shadow-sm flex-shrink-0"></div>
+              <i data-lucide="filter" class="w-3.5 h-3.5 text-amber-500"></i>
+              <span class="text-sm text-gray-700">Filter: TBL_ID='A2'</span>
+              <i data-lucide="link" class="w-3 h-3 text-amber-400 ml-auto"></i>
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1">自動偵測：來自「[和潤] 代碼定義」篩選後的 A2 子集</p>
+          </div>
+
+          <hr class="border-border">
+
+          <!-- Match fields -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">比對欄位（主表）<span class="text-danger">*</span></label>
+            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option selected>EDUCAT_BACK</option>
+              <option>VOCATION_CODE</option>
+              <option>JOB_TITLE</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">比對欄位（對照表）<span class="text-danger">*</span></label>
+            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option selected>TBL_CONTENT</option>
+              <option>CODE</option>
+              <option>ID</option>
+            </select>
+          </div>
+
+          <!-- Output fields -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">輸出欄位列表</label>
+            <div class="border border-border rounded-lg overflow-hidden">
+              <div class="grid grid-cols-[1fr,auto,1fr] gap-0 bg-gray-50 border-b border-border text-[10px] font-medium text-gray-500 px-3 py-1.5">
+                <span>對照表欄位</span>
+                <span class="px-2">-></span>
+                <span>輸出別名</span>
+              </div>
+              <div class="grid grid-cols-[1fr,auto,1fr] items-center gap-0 px-3 py-2 border-b border-border hover:bg-gray-50">
+                <span class="text-xs text-gray-700">TBL_NAME</span>
+                <span class="text-xs text-gray-400 px-2">-></span>
+                <input type="text" value="education_desc" class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
+              </div>
+              <div class="grid grid-cols-[1fr,auto,1fr] items-center gap-0 px-3 py-2 hover:bg-gray-50">
+                <span class="text-xs text-gray-700">TBL_ENG_NAME</span>
+                <span class="text-xs text-gray-400 px-2">-></span>
+                <input type="text" value="" placeholder="(不輸出)" class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
+              </div>
+            </div>
+            <button class="w-full mt-2 py-1.5 text-xs text-primary border border-dashed border-primary rounded-lg hover:bg-blue-50 flex items-center justify-center gap-1">
+              <i data-lucide="plus" class="w-3 h-3"></i>新增輸出欄位
+            </button>
+          </div>
+
+          <!-- No-match strategy -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">無匹配策略</label>
+            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option selected>保留原值，輸出欄位填 NULL</option>
+              <option>刪除整列 (inner join)</option>
+              <option>填入預設值</option>
+            </select>
+          </div>
+
+          <!-- Preview -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1.5">對應預覽</label>
+            <div class="border border-border rounded-lg overflow-hidden text-xs">
+              <div class="grid grid-cols-3 bg-gray-50 border-b border-border font-medium text-gray-500 px-2 py-1.5">
+                <span>EDUCAT_BACK</span>
+                <span>TBL_CONTENT</span>
+                <span>education_desc</span>
+              </div>
+              <div class="grid grid-cols-3 px-2 py-1 border-b border-border text-gray-600">
+                <span>01</span><span>01</span><span class="text-green-600">國小</span>
+              </div>
+              <div class="grid grid-cols-3 px-2 py-1 border-b border-border text-gray-600">
+                <span>06</span><span>06</span><span class="text-green-600">大學</span>
+              </div>
+              <div class="grid grid-cols-3 px-2 py-1 text-gray-600">
+                <span>99</span><span class="text-gray-300">--</span><span class="text-gray-400 italic">NULL</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lookup Properties: Backward-Compatible Mode (no lookup-input connection) -->
+      <div id="prop-lookup-compat" class="hidden">
+        <div class="px-4 py-3 border-b border-border">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">Lookup</span>
+            <input type="text" value="查找 (Lookup)" placeholder="查找 (Lookup)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
+          </div>
+          <p class="text-xs text-gray-400">向下相容模式 — 手動輸入對照來源</p>
+          <div class="flex gap-1 mt-2">
+            <button onclick="toggleLookupMode('dual')" class="px-2 py-0.5 text-[10px] rounded bg-gray-100 text-gray-500 hover:bg-gray-200">雙輸入</button>
+            <button class="px-2 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 font-medium">向下相容</button>
+          </div>
+        </div>
+        <div class="p-4 space-y-4 overflow-y-auto" style="max-height: calc(100vh - 180px);">
+
+          <!-- Upgrade hint -->
+          <div class="flex items-start gap-2 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+            <i data-lucide="lightbulb" class="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0"></i>
+            <div>
+              <p class="text-xs font-medium text-blue-700">提示：可連接對照來源節點取代手動輸入</p>
+              <p class="text-[10px] text-blue-500 mt-0.5">拖曳一個 Extract 或 Filter 節點到 Lookup 的下方 Handle（lookup-input），即可自動切換為雙輸入模式。</p>
+            </div>
+          </div>
+
+          <!-- Single-input indicator -->
+          <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-lg">
+            <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400"></i>
+            <span class="text-xs font-medium text-gray-500">單輸入模式</span>
+            <span class="ml-auto text-[10px] text-gray-400">1 input connected</span>
+          </div>
+
+          <!-- Lookup source (text input - manual) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">對照來源 <span class="text-danger">*</span></label>
+            <input type="text" value="raw_code_definition" placeholder="輸入來源表名稱" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-xs text-gray-400 mt-1">手動輸入對照資料表名稱</p>
+          </div>
+
+          <!-- Lookup filter (text input - manual) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">過濾條件</label>
+            <input type="text" value="TBL_ID = 'A2'" placeholder="e.g. TBL_ID = 'A2'" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-xs text-gray-400 mt-1">SQL WHERE 條件，篩選對照表子集</p>
+          </div>
+
+          <hr class="border-border">
+
+          <!-- Match fields -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">比對欄位（主表）<span class="text-danger">*</span></label>
+            <input type="text" value="EDUCAT_BACK" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">比對欄位（對照表）<span class="text-danger">*</span></label>
+            <input type="text" value="TBL_CONTENT" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+          </div>
+
+          <!-- Output fields -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">輸出欄位列表</label>
+            <div class="border border-border rounded-lg overflow-hidden">
+              <div class="grid grid-cols-[1fr,auto,1fr] gap-0 bg-gray-50 border-b border-border text-[10px] font-medium text-gray-500 px-3 py-1.5">
+                <span>對照表欄位</span>
+                <span class="px-2">-></span>
+                <span>輸出別名</span>
+              </div>
+              <div class="grid grid-cols-[1fr,auto,1fr] items-center gap-0 px-3 py-2 hover:bg-gray-50">
+                <input type="text" value="TBL_NAME" class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
+                <span class="text-xs text-gray-400 px-2">-></span>
+                <input type="text" value="education_desc" class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20">
+              </div>
+            </div>
+            <button class="w-full mt-2 py-1.5 text-xs text-primary border border-dashed border-primary rounded-lg hover:bg-blue-50 flex items-center justify-center gap-1">
+              <i data-lucide="plus" class="w-3 h-3"></i>新增輸出欄位
+            </button>
+          </div>
+
+          <!-- No-match strategy -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">無匹配策略</label>
+            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option selected>保留原值，輸出欄位填 NULL</option>
+              <option>刪除整列 (inner join)</option>
+              <option>填入預設值</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- Load Properties (F036 / US-049) -->
       <div id="prop-load" class="hidden">
         <div class="px-4 py-3 border-b border-border">
           <div class="flex items-center gap-2 mb-1">
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">Load</span>
-            <span class="text-sm font-semibold text-gray-800">目標表載入</span>
+            <input type="text" value="目標表載入" placeholder="載入 (Load)" class="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-primary focus:outline-none w-full" />
           </div>
         </div>
         <div class="p-4 space-y-4 overflow-y-auto" style="max-height: calc(100vh - 140px);">
@@ -680,35 +1079,51 @@
 
       const canvasEmpty = document.getElementById('canvasEmpty');
       const canvasNodes = document.getElementById('canvasNodes');
+      const canvasLookup = document.getElementById('canvasLookup');
 
-      // Reset
+      // Reset all canvases
       canvasEmpty.classList.add('hidden');
-      canvasNodes.classList.remove('hidden');
+      canvasNodes.classList.add('hidden');
+      canvasLookup.classList.add('hidden');
       document.querySelectorAll('.node-card').forEach(n => n.classList.remove('selected'));
       document.querySelectorAll('[id^="prop-"]').forEach(p => p.classList.add('hidden'));
 
       switch(state) {
         case 'empty':
-          canvasNodes.classList.add('hidden');
           canvasEmpty.classList.remove('hidden');
           document.getElementById('prop-empty').classList.remove('hidden');
           break;
         case 'normal':
+          canvasNodes.classList.remove('hidden');
           document.getElementById('prop-empty').classList.remove('hidden');
           break;
         case 'extract':
-          document.querySelectorAll('.node-card')[0].classList.add('selected');
+          canvasNodes.classList.remove('hidden');
+          document.querySelectorAll('#canvasNodes .node-card')[0].classList.add('selected');
           document.getElementById('prop-extract').classList.remove('hidden');
           break;
         case 'transform':
-          document.querySelectorAll('.node-card')[1].classList.add('selected');
+          canvasNodes.classList.remove('hidden');
+          document.querySelectorAll('#canvasNodes .node-card')[1].classList.add('selected');
           document.getElementById('prop-null-handler').classList.remove('hidden');
           break;
         case 'load':
-          document.querySelectorAll('.node-card')[4].classList.add('selected');
+          canvasNodes.classList.remove('hidden');
+          document.querySelectorAll('#canvasNodes .node-card')[4].classList.add('selected');
           document.getElementById('prop-load').classList.remove('hidden');
           break;
+        case 'lookup':
+          canvasLookup.classList.remove('hidden');
+          document.getElementById('prop-lookup-dual').classList.remove('hidden');
+          break;
       }
+      lucide.createIcons();
+    }
+
+    function toggleLookupMode(mode) {
+      document.getElementById('prop-lookup-dual').classList.add('hidden');
+      document.getElementById('prop-lookup-compat').classList.add('hidden');
+      document.getElementById('prop-lookup-' + mode).classList.remove('hidden');
       lucide.createIcons();
     }
 

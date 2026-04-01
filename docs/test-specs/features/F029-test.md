@@ -4,7 +4,8 @@ feature_id: F029
 feature_name: 視覺化轉換編輯器
 priority: P0-MVP
 related_spec: /docs/specs/features/F029-pipeline-editor.md
-last_updated: 2026-03-20
+related_story: US-042（AC-7a ~ AC-7d Lookup 雙輸入）
+last_updated: 2026-03-31
 ---
 
 # F029: 視覺化轉換編輯器 — 測試設計
@@ -140,6 +141,28 @@ last_updated: 2026-03-20
 | TS-F029-030 | 已儲存狀態離開頁面 — 不顯示確認對話框 | AC-9（替代流程） | E2E（前端） | Admin 已儲存最新定義（無待儲存變更） | 1. 點擊「返回」按鈕 | 直接導向上一頁，不顯示確認對話框 |
 | TS-F029-031 | 非法連線嘗試的視覺提示 | AC-4, BR-4 | E2E（前端） | Admin 已在畫布上放置 Load 節點與 Extract 節點 | 1. 從 Load 節點輸出端拖拉至 Extract 節點輸入端 | 連線未建立；畫布顯示紅色提示訊息（或 toast）說明連線規則；節點之間無箭頭出現 |
 
+### Lookup 節點雙輸入 UI 場景（US-042 AC-7a ~ AC-7d）
+
+| ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
+|----|----------|------------|-----------|---------------|-------|-----------------|
+| TS-F029-032 | Lookup 節點顯示兩個輸入 Handle | AC-7a / US-042 AC-7a | E2E（前端）| Admin 已開啟 Pipeline 編輯器；Lookup 節點已拖拉至畫布 | 1. 觀察 Lookup 節點的端口 | 節點左側顯示兩個輸入端口：上方端口（top: 33%）標示「主資料流」；下方端口（top: 67%）標示「對照來源」；節點右側仍有一個輸出端口 |
+| TS-F029-033 | 拖拉連線至 lookup-input Handle — edge 帶 targetHandle | AC-7b / US-042 AC-7b | E2E（前端）| 畫布上有 Lookup 節點與一個上游 Extract 節點 | 1. 從上游 Extract 節點輸出端拖拉至 Lookup 節點下方端口（lookup-input） | 連線建立成功；edge 的視覺樣式與主資料流連線不同（如虛線或不同顏色）；儲存 definition 後，對應 edge 物件含 `"targetHandle":"lookup-input"` |
+| TS-F029-034 | 雙輸入模式面板：隱藏 lookupSource / lookupFilter | AC-7c / US-042 AC-7c | E2E（前端）| Lookup 節點的 lookup-input 端口已有連線（上游節點已接線）| 1. 點擊 Lookup 節點，開啟右側屬性面板 | 面板顯示：已連接節點名稱（唯讀）、matchColumn 下拉、lookupMatchColumn 下拉、outputColumns 對應表；`lookupSource` 文字輸入欄位不渲染於 DOM（非僅 CSS 隱藏）；`lookupFilter` 欄位不渲染於 DOM |
+| TS-F029-035 | 向下相容模式面板：顯示 lookupSource / lookupFilter | AC-7d / US-042 AC-7d | E2E（前端）| Lookup 節點的 lookup-input 端口**無連線** | 1. 點擊 Lookup 節點，開啟右側屬性面板 | 面板顯示：`lookupSource`（raw data 表下拉或文字輸入）、`lookupFilter`（文字輸入）、matchColumn、lookupMatchColumn、outputColumns、noMatchStrategy；面板頂部顯示升級提示訊息（建議連接對照來源節點） |
+| TS-F029-036 | 刪除 lookup-input 連線後面板回到向下相容模式 | AC-7c, AC-7d / US-042 AC-7c~7d | E2E（前端）| Lookup 節點的 lookup-input 已有連線（雙輸入模式面板狀態） | 1. 刪除 lookup-input 連線（click edge → Delete） 2. 重新點擊 Lookup 節點 | 屬性面板切換回向下相容模式；`lookupSource` 欄位重新出現；`lookupFilter` 欄位重新出現；升級提示訊息重新顯示 |
+| TS-F029-037 | transform-lookup JSONB 結構儲存與還原（雙輸入模式） | AC-7c, AC-9, BR-7 / US-042 AC-7b | Integration | Admin 已登入；Pipeline 存在；有一個 Extract 節點（node-ref）作為對照來源 | 1. PUT body 含 Lookup 節點，edges 中含 `{"id":"edge-lookup","source":"node-ref","target":"node-lookup-1","targetHandle":"lookup-input"}`，節點 data 含 matchColumn, lookupMatchColumn, outputColumns，lookupSource=""，lookupFilter="" 2. GET 同一 definition | PUT 回傳 HTTP 200；GET 後 nodes 中 Lookup 節點 data.matchColumn 正確；edges 中含 targetHandle="lookup-input" 的 edge；data.lookupSource 為空字串（雙輸入模式下不使用但保留欄位） |
+
+### 節點名稱編輯與 Lookup 副標題同步場景
+
+| ID | Scenario | Related Req | Test Type | Preconditions | Steps | Expected Result |
+|----|----------|------------|-----------|---------------|-------|-----------------|
+| TS-F029-050 | 屬性面板節點名稱可編輯 | AC-5a | E2E（前端）| 畫布上有一個 Extract 節點，使用預設名稱 | 1. 點擊該節點 2. 在屬性面板 header 的名稱輸入欄位輸入 "我的資料源" | 畫布上該節點的 label 即時更新為「我的資料源」；`node.data.label` 值為 "我的資料源" |
+| TS-F029-051 | 清空節點名稱恢復預設名稱 | AC-5a | E2E（前端）| 節點已被重新命名為 "我的資料源" | 1. 點擊該節點 2. 清空屬性面板 header 的名稱輸入欄位 | 畫布上該節點顯示工具箱預設名稱（如「Raw Data 擷取」）；`node.data.label` 為空字串或 undefined |
+| TS-F029-052 | 節點名稱儲存與載入 | AC-5a / AC-9 / AC-10 | E2E（前端）| 節點已被重新命名 | 1. 儲存 Pipeline 2. 重新進入編輯器 | 載入後節點顯示自訂名稱 |
+| TS-F029-053 | Lookup 雙輸入模式副標題顯示來源節點名稱 | AC-7c | E2E（前端）| 畫布上有 Lookup 節點與 Filter 節點（名為「教育代碼篩選」） | 1. 從 Filter 節點連線至 Lookup 節點的 lookup-input 端口 | Lookup 節點畫布副標題顯示「教育代碼篩選」（來源節點的 label） |
+| TS-F029-054 | Lookup 副標題隨來源節點改名同步更新 | AC-7c | E2E（前端）| Lookup 節點 lookup-input 已連接 Filter 節點（副標題顯示「教育代碼篩選」） | 1. 點擊 Filter 節點 2. 將名稱改為「A2 子集」 | Lookup 節點畫布副標題同步更新為「A2 子集」 |
+| TS-F029-055 | Lookup 副標題在連線斷開時清空 | AC-7c | E2E（前端）| Lookup 節點 lookup-input 已連接，副標題顯示來源節點名稱 | 1. 刪除 lookup-input 連線 | Lookup 節點副標題清空（或恢復為 lookupSource 值，若有設定） |
+
 ---
 
 ## Test Data Requirements
@@ -227,6 +250,60 @@ last_updated: 2026-03-20
 }
 ```
 
+### Lookup 節點物件範本（雙輸入模式）
+
+```json
+// transform-lookup 節點（雙輸入模式）
+{
+  "id": "node-lookup-1",
+  "type": "transform-lookup",
+  "position": { "x": 600, "y": 200 },
+  "data": {
+    "matchColumn": "CUST_TYPE",
+    "lookupMatchColumn": "CODE",
+    "outputColumns": [
+      { "lookupColumn": "CODE_DESC", "outputAlias": "cust_type_desc" },
+      { "lookupColumn": "CODE_CATEGORY", "outputAlias": "cust_category" }
+    ],
+    "lookupSource": "",
+    "lookupFilter": ""
+  }
+}
+
+// lookup-input 連線 edge（雙輸入模式用）
+{
+  "id": "edge-lookup-input",
+  "source": "node-ref-extract",
+  "target": "node-lookup-1",
+  "targetHandle": "lookup-input"
+}
+
+// 主資料流 edge（Lookup 節點的 default 輸入）
+{
+  "id": "edge-main-to-lookup",
+  "source": "node-filter-1",
+  "target": "node-lookup-1"
+}
+
+// transform-lookup 節點（向下相容模式）
+{
+  "id": "node-lookup-legacy",
+  "type": "transform-lookup",
+  "position": { "x": 600, "y": 200 },
+  "data": {
+    "lookupSource": "raw_e5a2345c",
+    "lookupSourceId": "TASK_UUID",
+    "lookupFilter": "TBL_ID = 'A2'",
+    "matchColumn": "CUST_TYPE",
+    "lookupMatchColumn": "CODE",
+    "outputColumns": [
+      { "lookupColumn": "CODE_DESC", "outputAlias": "cust_type_desc" }
+    ],
+    "noMatchStrategy": "null"
+  }
+}
+```
+
 ### 邊界值測試資料
 
 | 場景 | 測試值 | 說明 |
@@ -275,6 +352,13 @@ LIMIT 1;
 | Load | Transform | 非法（BR-4 終端節點） | TS-F029-011 |
 | Load | Load | 非法（BR-4 終端節點） | TS-F029-014 |
 | A→B + B→A（任意類型） | 逆向循環 | 非法（BR-5） | TS-F029-013 |
+| Extract → Lookup.lookup-input | 對照來源連線 | 合法（BR-2 + Lookup 特殊規則） | TS-F029-033, TS-F029-037 |
+| Transform → Lookup.lookup-input | 對照來源連線（含預篩 Filter） | 合法（Lookup 特殊規則） | TS-F029-037 |
+
+**Lookup 節點特殊連線規則補充**（F029 8.4.9 節）：
+- Lookup 節點可同時接受兩條入邊：一條連接 `default`（主資料流），一條連接 `lookup-input`（對照來源）
+- 兩條入邊的來源節點均可為 Extract 或 Transform（與 Merge 節點相同規則）
+- `lookup-input` 未連線時，面板顯示向下相容模式（AC-7d）；連線後自動切換為雙輸入模式（AC-7c）
 
 ---
 
@@ -288,7 +372,9 @@ LIMIT 1;
 | `transform-filter` | 中等複雜度：含邏輯運算子（AND/OR）與條件陣列（column/operator/value） | TS-F029-020 |
 | `transform-masking` | 含業務敏感欄位：method enum（aes_encrypt/partial_mask）、maskPattern 字串格式 | TS-F029-021 |
 
-其餘 10 種 Transform 節點（FieldMapping、Format、Conditional、NullHandler、TypeCast、Deduplicate、Lookup、String、Aggregate、DerivedColumn）的 JSONB 結構已在規格 8.4 節明確定義，列為「已涵蓋於 JSONB 規格文件，測試時僅驗證 PUT/GET 完整性即可，無需獨立場景」。
+**Lookup 節點（US-042 AC-7a~7d 更新後）**：Lookup 節點因新增雙輸入 Handle 設計（`lookup-input`），已提升至獨立覆蓋層級，補充場景 TS-F029-032 ~ TS-F029-037。
+
+其餘 9 種 Transform 節點（FieldMapping、Format、Conditional、NullHandler、TypeCast、Deduplicate、String、Aggregate、DerivedColumn）的 JSONB 結構已在規格 8.4 節明確定義，列為「已涵蓋於 JSONB 規格文件，測試時僅驗證 PUT/GET 完整性即可，無需獨立場景」。
 
 ---
 

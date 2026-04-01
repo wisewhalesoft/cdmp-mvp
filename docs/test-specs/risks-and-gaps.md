@@ -406,13 +406,15 @@ last_updated: 2026-03-20
 
 > 以下 8 項風險來自 2026-03-20 的 E05 測試設計過程，整合各 Feature test spec 中 Risks and Notes 提出的問題。
 
-### E05-RISK-001：F029 視覺化編輯器 13 種 Transform 節點測試範圍
+### E05-RISK-001：F029 視覺化編輯器 Transform 節點測試範圍（部分已解決）
 
 - **來源**：F029 AC-7（Transform 節點 JSONB 儲存與還原）
-- **問題**：規格定義 13 種 Transform 節點（FieldMapping、Merge、Filter、Masking、Format、Conditional、NullHandler、TypeCast、Deduplicate、Lookup、String、Aggregate、DerivedColumn），若每種均設計獨立的 JSONB 結構驗證場景，將產生大量重複且維護成本高的測試。目前採用「採樣策略」選取 Merge、Filter、Masking 三種代表性節點進行驗證，其餘 10 種僅依規格文件確認結構。
-- **影響**：10 種未採樣節點的 JSONB 結構若與規格定義不符（例如欄位拼錯、缺少必要欄位），可能在實作層未被測試發現
+- **問題**：規格定義 13 種 Transform 節點，若每種均設計獨立的 JSONB 結構驗證場景，將產生大量重複且維護成本高的測試。
+- **2026-03-31 更新**：Lookup 節點因 US-042 AC-7a~7d 雙輸入重設計，已從採樣策略提升至**獨立覆蓋**（TS-F029-032~037，含前端 E2E 與 Integration 場景；F043 TS-F043-045~058 涵蓋後端 LookupExecutor）。採樣策略調整為：Merge（TS-F029-019）、Filter（TS-F029-020）、Masking（TS-F029-021）+ Lookup（TS-F029-037）。
+- **目前狀態**：仍採樣策略，其餘 9 種節點（FieldMapping、Format、Conditional、NullHandler、TypeCast、Deduplicate、String、Aggregate、DerivedColumn）僅依規格文件確認結構。
+- **影響**：9 種未採樣節點的 JSONB 結構若與規格定義不符，可能在實作層未被測試發現
 - **建議**：①維持採樣策略，要求開發者在 code review 時比對規格；②若日後規格有變動，需將受影響節點加入採樣測試集
-- **風險等級**：低（採樣策略已有效降低風險，規格文件為主要保障）
+- **風險等級**：低（採樣策略已有效降低風險；Lookup 缺口已填補）
 
 ### E05-RISK-002：F029 循環連線定義不明確
 
@@ -597,3 +599,34 @@ last_updated: 2026-03-20
 | 2026-03-20 | 新增 E05 ETL Pipeline 管理模組 8 項風險（E05-RISK-001 至 E05-RISK-008）；整合自 F027~F036 各 test spec 的 Risks and Notes | Test Designer Agent |
 | 2026-03-25 | 新增 F036 US-049 修訂風險 5 項（F036-RISK-001 至 F036-RISK-005）；因應目標表由 4 個改為 1 個的重大規格變更；F036-RISK-004 為高風險（migration 策略假設）需向 Architecture 確認 | Test Designer Agent |
 | 2026-03-27 | 新增 F039 節點欄位變化 Badge + Tooltip 4 項風險（F039-RISK-001 至 F039-RISK-004）；F039-RISK-001（merge 左右識別）為高風險，阻斷 merge 相關場景最終化 | Test Designer Agent |
+| 2026-03-31 | 新增 Lookup 節點雙輸入重設計測試場景（F029 TS-F029-032~037，F043 TS-F043-045~058）；更新 E05-RISK-001（Lookup 已從採樣策略提升至獨立覆蓋）；新增 LOOKUP-RISK-001~003 | Test Designer Agent |
+
+---
+
+## Lookup 節點雙輸入重設計風險（F029 / F043 / US-042 / US-058）
+
+> 以下 3 項風險來自 2026-03-31 新增 Lookup 節點雙輸入測試設計過程。
+
+### LOOKUP-RISK-001：lookup-input 連線的視覺樣式規格未定義量測基準
+
+- **來源**：TS-F029-033（AC-7b）
+- **問題**：規格說明 lookup-input 連線「以對照來源的視覺樣式建立，如虛線或不同顏色」，但未具體指定：①虛線的 CSS 樣式值（如 `strokeDasharray`）；②顏色值（hex 或 token）；③前端驗證方法（Canvas 截圖比對、DOM className 或 CSS variable）
+- **影響**：TS-F029-033 的「視覺樣式不同」斷言無法自動化驗證，只能以人工視覺確認或截圖比對工具（如 Percy）實施
+- **建議**：向 Architecture/UI 確認 lookup-input edge 的具體視覺規格（className 或 React Flow edgeType），測試改為驗證 DOM className 或 data attribute 而非像素比對
+- **風險等級**：低（不影響功能正確性，僅影響自動化覆蓋）
+
+### LOOKUP-RISK-002：向下相容模式 noMatchStrategy 在雙輸入模式下的行為未定義
+
+- **來源**：TS-F043-054 / F043 Section 4.8 規格
+- **問題**：規格明確說明雙輸入模式忽略 `noMatchStrategy`（AC-18 / US-058 AC-1），但節點設定 JSONB 中 `noMatchStrategy` 欄位仍存在（向下相容欄位）。如果節點設定同時含有 `noMatchStrategy` 與 `lookup-input` 連線，驗證應：①雙輸入模式強制 LEFT JOIN 語意（所有無匹配列補 null，等同 noMatchStrategy='null'）；②或以 noMatchStrategy 決定行為
+- **影響**：若 LookupExecutor 實作未明確忽略 noMatchStrategy，雙輸入模式的行為可能受舊欄位影響，造成不一致結果
+- **建議**：TS-F043-054 已設計驗證雙輸入模式完全忽略 DB 查詢，但無法間接驗證 noMatchStrategy 被忽略；建議補充測試：雙輸入模式下設定 noMatchStrategy='skip_row'，驗證無匹配列**仍然保留**（不被跳過）
+- **風險等級**：中（設計意圖清晰但實作容易遺漏忽略邏輯）
+
+### LOOKUP-RISK-003：扇出場景（TS-F043-058）依賴 F042 ExecutionEngine 框架完成
+
+- **來源**：TS-F043-058（扇出場景 — 同一 Extract 接多個 Filter 各接不同 Lookup 節點）
+- **問題**：TS-F043-058 為整合測試，需要 F042 ExecutionEngine 的拓撲排序、`collectInputs(edge.targetHandle ?? 'default')`、節點狀態回寫均已正確實作，才能有效驗證扇出場景
+- **影響**：若 F042 尚未完成，TS-F043-058 無法執行；扇出時 `inputs['lookup-input']` 的路由正確性只能在整合層驗證，單元測試無法覆蓋
+- **建議**：①F043 TDD 時先跳過 TS-F043-058，以 TS-F043-045~057 單元測試完成 LookupExecutor 實作；②F042 完成後再補充 TS-F043-058 整合測試；③確認 US-058 Technical Notes 描述的 `collectInputs()` 路由邏輯（`edge.targetHandle ?? 'default'`）已在 F042 測試中覆蓋（TS-F042-xxx 系列）
+- **風險等級**：低（有明確的實作與測試順序，非阻斷性風險）

@@ -1,8 +1,8 @@
 ---
 type: test-design-index
-version: "2.2"
+version: "2.3"
 status: draft
-last_updated: 2026-03-27
+last_updated: 2026-03-31
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044]
 ---
 
@@ -10,11 +10,12 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **測試文件總數**：50 份（4 策略文件 + 42 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：736 個（E01～E04 共 308 + E05 共 243 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F039-strategy 共 4 + F042 共 21 + F043 共 44 + F044 共 17 + F039-strategy 共 4）
+> **總測試場景數**：736 個（E01～E04 共 308 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17；另 F039-strategy 4 個策略場景另計）
+> **F029/F043 更新（2026-03-31）**：新增 Lookup 節點雙輸入重設計測試：F029 補充 6 個前端 Lookup UI 場景（TS-F029-032~037，31→37 場景），F043 補充 14 個 LookupExecutor 場景（TS-F043-045~058，44→58 場景），涵蓋 US-042 AC-7a~7d 與 US-058 AC-1~6
 > **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，約 45 欄），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
-> **最後更新**：2026-03-27
+> **最後更新**：2026-03-31
 
 ---
 
@@ -84,7 +85,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | **E05 ETL Pipeline 管理** | | | | | |
 | F027 | 查看 Pipeline 列表 | P0-MVP | [F027-test.md](features/F027-test.md) | 22 | Draft |
 | F028 | 建立 Pipeline | P0-MVP | [F028-test.md](features/F028-test.md) | 17 | Draft |
-| F029 | 視覺化轉換編輯器 | P0-MVP | [F029-test.md](features/F029-test.md) | 31 | Draft |
+| F029 | 視覺化轉換編輯器 | P0-MVP | [F029-test.md](features/F029-test.md) | 37 | Draft |
 | F030 | 執行 Pipeline | P0-MVP | [F030-test.md](features/F030-test.md) | 20 | Draft |
 | F031 | 啟用／停用 Pipeline | P0-MVP | [F031-test.md](features/F031-test.md) | 14 | Draft |
 | F032 | 查看 Pipeline 日誌 | P0-MVP | [F032-test.md](features/F032-test.md) | 21 | Draft |
@@ -93,7 +94,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F035 | Pipeline 監控儀表板 | P1 | [F035-test.md](features/F035-test.md) | 21 | Draft |
 | F036 | 目標表 Domain-Oriented 規劃 | P0-MVP | [F036-test.md](features/F036-test.md) | 40 | Draft |
 | F037 | 發布 Pipeline 版本 | P0-MVP | [F037-test.md](features/F037-test.md) | 37 | Draft |
-| **E05 小計** | | | **11 files** | **267** | |
+| **E05 小計** | | | **11 files** | **273** | |
 | **E04+E05 系統啟動修復** | | | | | |
 | F038 | 孤兒任務回收（系統啟動時自動修復 running 狀態） | P0-MVP | [F038-test.md](features/F038-test.md) | 45 | Draft |
 | **ETL Editor 前端功能** | | | | | |
@@ -102,9 +103,9 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F041 | Badge Hover Tooltip | P2 | [F041-test.md](features/F041-test.md) | 12 | Draft |
 | **E05 ETL 執行引擎** | | | | | |
 | F042 | ETL 執行引擎核心框架 | P0-MVP | [F042-test.md](features/F042-test.md) | 21 | Draft |
-| F043 | ETL 節點執行器（7 種節點） | P0-MVP | [F043-test.md](features/F043-test.md) | 44 | Draft |
+| F043 | ETL 節點執行器（8 種節點含 Lookup） | P0-MVP | [F043-test.md](features/F043-test.md) | 58 | Draft |
 | F044 | ETL Target Load + UPSERT | P0-MVP | [F044-test.md](features/F044-test.md) | 17 | Draft |
-| **總合計** | | | **42 files** | **716** | |
+| **總合計** | | | **42 files** | **736** | |
 
 ---
 
@@ -122,8 +123,9 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F026 raw data 預覽 API | ~16 | 分頁、排序、錯誤碼；使用 Test Container 建立受控 raw data 表 |
 | F042 ETL 執行引擎核心單元測試 | ~14 | 拓撲排序、Dispatcher 分派、輸入收集邏輯、記憶體回收均為純函數，不需 DB，可全部自動化 |
 | F042 節點狀態回寫整合測試 | ~7 | 需要 Test Container 驗證 node_logs 即時回寫 DB；含 running/completed/failed/skipped 狀態轉移 |
-| F043 節點執行器單元測試 | ~38 | 除 RawDataExtract 外，其他 6 種節點均為 In-Memory 純函數，全部可不依賴 DB 自動化 |
+| F043 節點執行器單元測試 | ~52 | 除 RawDataExtract 外，其他 7 種節點（含 Lookup）均為 In-Memory 純函數，全部可不依賴 DB 自動化；Lookup 向下相容模式需 Mock queryRunner（~10 場景） |
 | F043 RawDataExtract 整合測試 | ~4 | 需 Mock queryRunner 或 Test Container 驗證批次 SELECT 與表存在性檢查 |
+| F043 LookupExecutor 整合測試 | ~2 | TS-F043-058（扇出場景）需 F042 ExecutionEngine 框架支援，屬整合測試範疇 |
 | F044 Target Load 整合測試 | ~13 | UPSERT INSERT/UPDATE、customer_id 不覆蓋、ETL 追蹤欄位、批次邊界均需 Test Container |
 
 ### 需手動或半自動測試的場景
@@ -213,10 +215,17 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 - F029 連線驗證（BR-2 ~ BR-5）在後端 PUT definition 時執行：Extract 只能連 Transform；Transform 可連 Transform 或 Load；Load 為終端節點；禁止逆向循環連線
 - F029 連線驗證錯誤碼：PIPELINE_INVALID_CONNECTION（HTTP 422），detail 欄位說明具體違反規則
 - F029 step_count 更新（BR-6）：每次 PUT definition 後，etl_pipelines.step_count = definition.nodes.length；需同時驗證 API 回應 stepCount 與 DB 欄位
-- F029 Transform 節點採樣策略：13 種 Transform 節點中選取 Merge、Filter、Masking 三種進行 JSONB 儲存/還原完整性驗證（TS-F029-019 ~ 021），其餘節點結構以規格文件為準
+- F029 Transform 節點採樣策略：13 種 Transform 節點中，Lookup 已因雙輸入重設計（US-042 AC-7a~7d）提升為獨立覆蓋（TS-F029-032~037）；其餘採樣 Merge、Filter、Masking 三種進行 JSONB 儲存/還原完整性驗證（TS-F029-019~021），其餘 9 種節點結構以規格文件為準
 - F029 重複 Extract 來源（BR-8 邊界）：同一 rawTableId 出現兩次時回傳 PIPELINE_INVALID_CONNECTION（422）；需向 Arch 確認是否有獨立錯誤碼
-- F029 前端 E2E 場景（TS-F029-029 ~ 031）：依賴畫布函式庫（建議 React Flow）行為，需搭配 Playwright/Cypress 執行
+- F029 前端 E2E 場景（TS-F029-029 ~ 031、TS-F029-032 ~ 036）：依賴畫布函式庫（建議 React Flow）行為，需搭配 Playwright/Cypress 執行
 - F029 changeSummary 邊界：500 字元合法（TS-F029-027），501 字元回傳 VALIDATION_ERROR（TS-F029-028）
+- **F029 Lookup 雙輸入 UI（US-042 AC-7a~7d，2026-03-31 新增）**：
+  - TS-F029-032：Lookup 節點兩個輸入端口（main-input top:33%, lookup-input top:67%）
+  - TS-F029-033：lookup-input 連線後 edge 含 `targetHandle:"lookup-input"`；連線視覺樣式須與主資料流區別
+  - TS-F029-034：雙輸入模式時 `lookupSource` / `lookupFilter` **不渲染於 DOM**（非 CSS 隱藏）
+  - TS-F029-035：向下相容模式顯示 `lookupSource` / `lookupFilter` 及升級提示訊息
+  - TS-F029-036：刪除 lookup-input 連線後面板自動回到向下相容模式
+  - TS-F029-037：雙輸入模式 Lookup JSONB 儲存與還原（Integration，需驗證 edge.targetHandle="lookup-input"）
 
 **E05 ETL 執行引擎特殊注意（F042 / F043 / F044）：**
 - F042 拓撲排序與 Dispatcher 分派邏輯為純函數，不需 DB，可直接以 Vitest 進行單元測試，不需 Test Container
@@ -226,6 +235,12 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 - F043 MergeExecutor：FULL JOIN 欄位命名規則為左側欄位保留原名，右側衝突欄位加 `_right` 後綴；JOIN key 同名時僅保留一個欄位（取非 null 者，left 優先）
 - F043 DedupExecutor：null timestampColumn 視為最舊（排在最後，不被保留）；時間戳相同時保留 index 最小者
 - F043 DerivedFieldExecutor：gen_random_uuid 每列產生獨立 UUID，不可複用；CASE WHEN 中 `right.{col}` 對應 `{col}_right` 欄位（_right 後綴為 merge 節點輸出的欄位命名慣例）
+- **F043 LookupExecutor（US-058，2026-03-31 新增）**：
+  - 雙輸入模式（TS-F043-045~049）：`inputs['lookup-input']` 存在時，LEFT JOIN 純記憶體執行，不查詢 DB；重複 key 取首筆；null key 無匹配補 null；空對照集全部補 null
+  - 向下相容模式（TS-F043-050~052）：`inputs['lookup-input']` 不存在時，Mock queryRunner.query 回傳 lookupSource 表資料；lookupFilter 空字串時不加 WHERE
+  - 模式切換驗證（TS-F043-053~054）：舊版 Pipeline 定義可正常執行；雙輸入模式下 queryRunner 不被呼叫
+  - 錯誤處理（TS-F043-055~057）：主資料流缺失 → `inputs` 無 `default` 亦無 `main-input`；matchColumn 不存在 → message 含欄位名與「主資料集」；lookupMatchColumn 不存在 → message 含欄位名與「對照資料集」
+  - 扇出整合測試（TS-F043-058）：1 Extract → 3 Filter → 3 Lookup（各自 lookup-input 獨立）；需 F042 ExecutionEngine 框架支援
 - F044 TargetLoadExecutor：customer_id 不在 DO UPDATE SET 中（保留原值）；_etl_loaded_at 與 _etl_pipeline_id 由引擎自動附加，不從輸入資料列取得
 - F044 批次大小公式：`actualBatchSize = min(configuredBatchSize, floor(65535 / columnsPerRow))`；customer_core 欄位數約 45，實際 batch size ≈ 1456
 - F044 部分批次失敗：已寫入批次不回滾，outputRowCount 記錄已成功筆數；需注入錯誤機制（Mock queryRunner.query 在第 N 次呼叫拋錯）

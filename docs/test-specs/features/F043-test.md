@@ -4,7 +4,7 @@ feature_id: F043
 feature_name: ETL 節點執行器
 priority: P0-MVP
 related_spec: /docs/specs/features/F043-etl-node-executors.md
-related_story: US-056, US-057（FieldMapping / Conditional）
+related_story: US-056, US-057（FieldMapping / Conditional）, US-058（Lookup 雙輸入）
 last_updated: 2026-03-31
 ---
 
@@ -29,6 +29,17 @@ last_updated: 2026-03-31
 ### 與既有測試的關係
 - `mergePhone`、`toDecimal` 已在 `etl-transforms.spec.ts`（TS-F036 系列）覆蓋
 - F043 測試聚焦在**執行器層面**（DataSet in / DataSet out），不重複覆蓋純函數層
+
+### LookupExecutor 測試策略（US-058 新增）
+
+LookupExecutor 支援兩種執行模式，測試需分別覆蓋：
+
+| 模式 | 觸發條件 | 對照資料來源 | DB 依賴 |
+|------|---------|-------------|---------|
+| 雙輸入模式 | `inputs['lookup-input']` 存在 | 直接使用上游 DataSet | 無（純記憶體） |
+| 向下相容模式 | `inputs['lookup-input']` 不存在 | Mock queryRunner 查詢 `lookupSource` + `lookupFilter` | 需 Mock queryRunner |
+
+雙輸入模式為純記憶體 LEFT JOIN 操作，可全部以**單元測試**覆蓋。向下相容模式需 Mock `queryRunner.query()` 回傳對照資料列。
 
 ---
 
@@ -157,6 +168,53 @@ const conditionalRows = [
     source_customer_no_right: 'M001', source_updated_at_right: '2024-03-01',
     name_right: 'CHEN DAWEI（MLMC）',
   },
+];
+```
+
+### Lookup 測試資料（US-058 新增）
+```typescript
+// 主資料集（5 列，含 CUST_TYPE 比對欄位）
+const lookupMainRows = [
+  { ID: '001', NAME: '王大明', CUST_TYPE: 'A01' },
+  { ID: '002', NAME: '李小華', CUST_TYPE: 'B02' },
+  { ID: '003', NAME: '張三豐', CUST_TYPE: 'A01' },  // 與 001 相同 CUST_TYPE
+  { ID: '004', NAME: '陳大為', CUST_TYPE: 'Z99' },  // 對照表無此 CODE → null
+  { ID: '005', NAME: '劉小雲', CUST_TYPE: null },    // null key → null
+];
+
+// 對照資料集（雙輸入模式使用，3 筆，含重複 key 邊界值）
+const lookupRefRows = [
+  { CODE: 'A01', CODE_DESC: '一般客戶', CODE_CATEGORY: 'INDIVIDUAL' },
+  { CODE: 'B02', CODE_DESC: '企業客戶', CODE_CATEGORY: 'CORPORATE' },
+  { CODE: 'A01', CODE_DESC: '一般客戶（重複）', CODE_CATEGORY: 'INDIVIDUAL_DUP' }, // 重複 key，取首筆
+];
+
+// 空對照資料集（邊界值）
+const emptyRefRows: any[] = [];
+
+// 典型節點設定
+const lookupConfig = {
+  nodeType: 'lookup',
+  matchColumn: 'CUST_TYPE',        // 主資料集的比對欄位
+  lookupMatchColumn: 'CODE',       // 對照資料集的比對欄位
+  outputColumns: [
+    { lookupColumn: 'CODE_DESC', outputAlias: 'cust_type_desc' },
+    { lookupColumn: 'CODE_CATEGORY', outputAlias: 'cust_category' },
+  ],
+};
+
+// 向下相容模式節點設定（含 lookupSource / lookupFilter）
+const lookupLegacyConfig = {
+  ...lookupConfig,
+  lookupSource: 'raw_e5a2345c',    // raw table 名稱
+  lookupFilter: "TBL_ID = 'A2'",  // SQL 過濾條件
+};
+
+// 扇出場景用：3 個 Lookup 節點各自的 context
+const fanoutLookupContexts = [
+  { nodeId: 'lookup-node-1', mainRows: lookupMainRows, refRows: lookupRefRows },
+  { nodeId: 'lookup-node-2', mainRows: lookupMainRows, refRows: lookupRefRows },
+  { nodeId: 'lookup-node-3', mainRows: lookupMainRows, refRows: lookupRefRows },
 ];
 ```
 
@@ -929,4 +987,249 @@ const conditionalRows = [
   1. 對 dedup, type_cast, derived_field, field_mapping, conditional 各節點執行，輸入空 DataSet
 - **Expected Result**:
   - 所有節點輸出 `{ rows: [], rowCount: 0 }`
+
+---
+
+## 測試場景 — LookupExecutor（US-058 新增）
+
+### TS-F043-045: 雙輸入模式 — LEFT JOIN 正確產出結果
+
+- **Related Requirement**: F043 AC-18 / US-058 AC-1, AC-2 / US-058 TC-058-01
+- **Test Type**: 正向
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs['default']` = lookupMainRows（5 列，含 CUST_TYPE）
+  - `context.inputs['lookup-input']` = lookupRefRows（3 筆對照資料，含重複 key）
+  - 節點設定 = lookupConfig（matchColumn: 'CUST_TYPE', lookupMatchColumn: 'CODE', outputColumns 包含 CODE_DESC→cust_type_desc、CODE_CATEGORY→cust_category）
+- **Steps**:
+  1. 建立 LookupExecutor
+  2. 呼叫 execute(context)
+- **Expected Result**:
+  - 輸出 `rowCount = 5`（LEFT JOIN，主資料集列數不變）
+  - ID='001'（CUST_TYPE='A01'）：`cust_type_desc = '一般客戶'`、`cust_category = 'INDIVIDUAL'`（取首筆，忽略重複 key）
+  - ID='002'（CUST_TYPE='B02'）：`cust_type_desc = '企業客戶'`、`cust_category = 'CORPORATE'`
+  - ID='003'（CUST_TYPE='A01'）：同 001，`cust_type_desc = '一般客戶'`
+  - 輸出列保留主資料集所有原始欄位（ID, NAME, CUST_TYPE）
+
+---
+
+### TS-F043-046: 雙輸入模式 — 無匹配 key 的列 outputColumns 補 null
+
+- **Related Requirement**: F043 AC-19 / US-058 AC-2 / US-058 TC-058-02
+- **Test Type**: 正向（LEFT JOIN 語意驗證）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs['default']` 含 ID='004'（CUST_TYPE='Z99'），對照資料集中無此 CODE
+  - `context.inputs['lookup-input']` = lookupRefRows
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - ID='004' 列保留（不被排除）
+  - `cust_type_desc = null`、`cust_category = null`
+  - `rowCount` 仍包含此列
+
+---
+
+### TS-F043-047: 雙輸入模式 — 主資料集 key 為 null 時 outputColumns 補 null
+
+- **Related Requirement**: F043 Section 6 邊界情況（null key）
+- **Test Type**: 邊界
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs['default']` 含 ID='005'（CUST_TYPE=null）
+  - `context.inputs['lookup-input']` = lookupRefRows
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - ID='005' 列保留
+  - `cust_type_desc = null`、`cust_category = null`（null key 不匹配任何對照列）
+
+---
+
+### TS-F043-048: 雙輸入模式 — 對照資料集有重複 key 時取首筆
+
+- **Related Requirement**: F043 Section 6 邊界情況（重複 key）
+- **Test Type**: 邊界
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - 對照資料集中 CODE='A01' 出現兩次（`CODE_DESC` 分別為 '一般客戶' 與 '一般客戶（重複）'）
+  - 主資料集含 CUST_TYPE='A01' 的列
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - CUST_TYPE='A01' 的列：`cust_type_desc = '一般客戶'`（lookup Map 先入為主，取首筆）
+  - `cust_category = 'INDIVIDUAL'`（非重複列的值）
+
+---
+
+### TS-F043-049: 雙輸入模式 — 空對照資料集時所有 outputColumns 為 null
+
+- **Related Requirement**: F043 AC-24 / F043 Section 6 邊界情況
+- **Test Type**: 邊界
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs['default']` = lookupMainRows（5 列）
+  - `context.inputs['lookup-input']` = `{ rows: [], rowCount: 0 }`
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - 輸出 `rowCount = 5`（主資料集列數不變）
+  - 所有列的 `cust_type_desc = null`、`cust_category = null`
+
+---
+
+### TS-F043-050: 向下相容模式 — 無 lookup-input 時使用 lookupSource + lookupFilter 查詢
+
+- **Related Requirement**: F043 AC-20 / US-058 AC-3 / US-058 TC-058-03
+- **Test Type**: 正向
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - `context.inputs` 中只有 `'default'`（無 `'lookup-input'`）
+  - 節點設定 = lookupLegacyConfig（含 lookupSource: 'raw_e5a2345c', lookupFilter: "TBL_ID = 'A2'"）
+  - Mock queryRunner.query 在收到 `SELECT * FROM raw_e5a2345c WHERE TBL_ID = 'A2'` 時回傳 lookupRefRows（2 筆有效資料）
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - Mock queryRunner.query 被呼叫一次，SQL 包含 `FROM raw_e5a2345c` 與 `TBL_ID = 'A2'`
+  - 輸出 rowCount 與主資料集相同（LEFT JOIN 語意）
+  - 有對應對照列的主資料集列，`cust_type_desc` 有值
+
+---
+
+### TS-F043-051: 向下相容模式 — lookupFilter 為空時執行全表查詢
+
+- **Related Requirement**: F043 Section 4.8 處理邏輯（向下相容模式）步驟 2
+- **Test Type**: 正向
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - `context.inputs` 中只有 `'default'`（無 `'lookup-input'`）
+  - 節點設定：lookupSource = 'raw_e5a2345c'，lookupFilter = ''（空字串）
+  - Mock queryRunner.query 回傳 lookupRefRows
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - Mock queryRunner.query 被呼叫一次，SQL 為 `SELECT * FROM raw_e5a2345c`（不含 WHERE）
+  - 節點正常完成，不拋出錯誤
+
+---
+
+### TS-F043-052: 向下相容模式 — lookupSource 表不存在時拋出錯誤
+
+- **Related Requirement**: F043 Section 4.8 錯誤處理 / US-058 AC-5
+- **Test Type**: 負向
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - `context.inputs` 中只有 `'default'`（無 `'lookup-input'`）
+  - Mock queryRunner.query 拋出例外（模擬表不存在）
+- **Steps**:
+  1. 執行 LookupExecutor，lookupSource = 'raw_nonexistent'
+- **Expected Result**:
+  - 拋出例外，message 包含 `對照表 raw_nonexistent 不存在` 或 `對照表查詢失敗`
+
+---
+
+### TS-F043-053: 舊版 Pipeline 定義（含 lookupSource/lookupFilter，無 lookup-input）可正常執行
+
+- **Related Requirement**: F043 AC-21 / US-058 AC-4 / US-058 TC-058-04
+- **Test Type**: 正向（向下相容驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - `context.inputs` 結構模擬舊版：只有 `'default'` key
+  - 節點設定為舊版 Lookup schema（含 lookupSource、lookupFilter，無 lookup-input 相關設定）
+  - Mock queryRunner 回傳 2 筆對照資料
+- **Steps**:
+  1. 執行 LookupExecutor（不帶 lookup-input）
+- **Expected Result**:
+  - 節點正常完成，不拋出錯誤
+  - 結果與雙輸入模式相同邏輯（LEFT JOIN，有對應則填值，無對應則 null）
+
+---
+
+### TS-F043-054: 雙輸入模式忽略 lookupSource / lookupFilter 欄位
+
+- **Related Requirement**: F043 Section 6 邊界情況（雙輸入模式忽略 lookupSource/lookupFilter）
+- **Test Type**: 邊界（模式切換驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - `context.inputs` 同時含有 `'default'` 與 `'lookup-input'`
+  - 節點設定中仍有 lookupSource = 'raw_e5a2345c' 與 lookupFilter = "TBL_ID = 'A2'"
+  - Mock queryRunner 設為可偵測是否被呼叫
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - Mock queryRunner.query **未被呼叫**（雙輸入模式不查詢資料庫）
+  - 輸出資料以 `inputs['lookup-input']` 為對照來源
+
+---
+
+### TS-F043-055: 主資料流缺失時節點標記 failed
+
+- **Related Requirement**: F043 AC-22 / US-058 AC-5 / US-058 TC-058-05
+- **Test Type**: 負向
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs` 為空物件（無 `'default'` 亦無 `'main-input'`）
+- **Steps**:
+  1. 呼叫 LookupExecutor.execute(context)
+- **Expected Result**:
+  - 拋出例外，message = `Lookup 節點缺少主資料流輸入（main-input）`
+
+---
+
+### TS-F043-056: 主資料集 matchColumn 不存在時節點標記 failed
+
+- **Related Requirement**: F043 AC-23 / US-058 AC-6 / US-058 TC-058-06
+- **Test Type**: 負向
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs['default']` = lookupMainRows（欄位：ID, NAME, CUST_TYPE）
+  - `context.inputs['lookup-input']` = lookupRefRows
+  - 節點設定 matchColumn = 'NONEXISTENT_COL'（不存在於主資料集）
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - 拋出例外，message 包含 `NONEXISTENT_COL` 與「主資料集」說明
+
+---
+
+### TS-F043-057: 對照資料集 lookupMatchColumn 不存在時節點標記 failed
+
+- **Related Requirement**: F043 AC-23 / US-058 AC-6
+- **Test Type**: 負向
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - `context.inputs['default']` = lookupMainRows
+  - `context.inputs['lookup-input']` = lookupRefRows（欄位：CODE, CODE_DESC, CODE_CATEGORY）
+  - 節點設定 lookupMatchColumn = 'NONEXISTENT_REF_COL'（不存在於對照資料集）
+- **Steps**:
+  1. 執行 LookupExecutor
+- **Expected Result**:
+  - 拋出例外，message 包含 `NONEXISTENT_REF_COL` 與「對照資料集」說明
+
+---
+
+### TS-F043-058: 扇出場景 — 同一 Extract 接多個 Filter 各接不同 Lookup 節點
+
+- **Related Requirement**: F029 AC-7b（扇出支援）/ F043 Section 4.8 扇出
+- **Test Type**: 整合
+- **測試層次**: 整合測試（需 F042 ExecutionEngine 框架支援）
+- **Preconditions**:
+  - Pipeline 定義包含：
+    - 1 個 Extract 節點（node-ext）
+    - 3 個 Filter Transform 節點（filter-1, filter-2, filter-3）分別連接 Extract 輸出
+    - 3 個 Lookup 節點（lookup-1, lookup-2, lookup-3），各自的 `lookup-input` 分別連接對應 Filter
+  - Edges：
+    - `{source: 'node-ext', target: 'filter-1'}`
+    - `{source: 'node-ext', target: 'filter-2'}`
+    - `{source: 'node-ext', target: 'filter-3'}`
+    - `{source: 'filter-1', target: 'lookup-1', targetHandle: 'lookup-input'}`
+    - `{source: 'filter-2', target: 'lookup-2', targetHandle: 'lookup-input'}`
+    - `{source: 'filter-3', target: 'lookup-3', targetHandle: 'lookup-input'}`
+  - 每個 Lookup 節點也各有一條 `default` 輸入（主資料流）
+- **Steps**:
+  1. 透過 F042 ExecutionEngine 執行完整 Pipeline
+- **Expected Result**:
+  - 三個 Lookup 節點均各自正確取得對應 Filter 的輸出作為 `lookup-input`
+  - 三個 Lookup 節點各自完成 LEFT JOIN，輸出互相獨立
+  - node_logs 中三個 Lookup 節點均記錄 `status='completed'`
   - 節點 status 標記為 `'completed'`，不拋出錯誤
