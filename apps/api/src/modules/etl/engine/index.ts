@@ -16,3 +16,4 @@ export { DerivedFieldHandler } from './handlers/derived-field-handler';
 export { FieldMappingHandler } from './handlers/field-mapping-handler';
 export { ConditionalHandler } from './handlers/conditional-handler';
 export { TargetLoadHandler } from './handlers/target-load-handler';
+export { LookupHandler } from './handlers/lookup-handler';
