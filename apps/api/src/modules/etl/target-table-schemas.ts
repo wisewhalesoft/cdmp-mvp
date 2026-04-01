@@ -1,6 +1,6 @@
 /**
  * F036 v2.0: 目標表 Domain-Oriented 靜態 Schema 定義
- * Phase 1 MVP: 僅 customer_core 一個目標表（79 欄位，A~H 八分類）
+ * Phase 1 MVP: 僅 customer_core 一個目標表（83 欄位，A~H 八分類）
  * Phase 2/3 目標表待對應來源系統接入後再擴充
  */
 
@@ -46,14 +46,16 @@ export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
       // A. 識別與分類 (5)
       { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '客戶唯一識別碼（代理鍵）' },
       { name: 'source_customer_no', type: 'VARCHAR(20)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '來源客戶編號（身分證/統編）' },
-      { name: 'customer_type', type: 'VARCHAR(2)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型（01=個人/02=企業/04=外籍）' },
+      { name: 'customer_type_code', type: 'VARCHAR(2)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型代碼（01=個人/02=企業/04=外籍）' },
+      { name: 'customer_type_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型描述' },
       { name: 'name', type: 'VARCHAR(100)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '姓名/企業名稱' },
       { name: 'english_name', type: 'VARCHAR(60)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '英文姓名' },
 
       // B. 個人屬性 (12)
       { name: 'gender', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '性別' },
       { name: 'date_of_birth', type: 'DATE', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '生日' },
-      { name: 'marital_status', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '婚姻狀態' },
+      { name: 'marital_status_code', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '婚姻狀態代碼' },
+      { name: 'marital_status_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '婚姻狀態描述' },
       { name: 'education_code', type: 'VARCHAR(2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '學歷代碼' },
       { name: 'education_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '學歷描述' },
       { name: 'spouse_name', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '配偶姓名' },
@@ -90,22 +92,24 @@ export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
 
       // E. 職業與就業 (12)
       { name: 'company_name', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '服務公司/企業名稱' },
-      { name: 'role_code', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶角色/職稱（自由文字）' },
-      { name: 'role_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶角色描述' },
+      { name: 'role', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '客戶角色' },
       { name: 'occupation_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業代碼' },
       { name: 'occupation_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職業描述' },
       { name: 'job_title_code', type: 'VARCHAR(4)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職稱代碼' },
       { name: 'job_title_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職稱描述' },
-      { name: 'job_level', type: 'VARCHAR(2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職級' },
+      { name: 'job_level_code', type: 'VARCHAR(2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職級代碼' },
+      { name: 'job_level_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '職級描述' },
       { name: 'industry_code', type: 'VARCHAR(10)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業代碼' },
       { name: 'industry_desc', type: 'VARCHAR(100)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行業描述' },
       { name: 'work_years', type: 'DECIMAL(8,2)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '年資' },
       { name: 'company_scale', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '公司規模（1:>=1000萬or公教/2:<1000萬/3:其他）' },
 
       // F. 財務與風控 (12)
-      { name: 'monthly_income', type: 'DECIMAL(8,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '月所得' },
+      { name: 'monthly_income_code', type: 'VARCHAR(5)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '月所得代碼' },
+      { name: 'monthly_income_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '月所得描述' },
       { name: 'approved_income', type: 'INTEGER', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '認定月收入' },
-      { name: 'income_source', type: 'VARCHAR(5)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '收入來源代碼' },
+      { name: 'income_source_code', type: 'VARCHAR(5)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '收入來源代碼' },
+      { name: 'income_source_desc', type: 'VARCHAR(50)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '收入來源描述' },
       { name: 'capital', type: 'DECIMAL(12,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '實收資本額' },
       { name: 'credit_limit', type: 'DECIMAL(12,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '額度總額' },
       { name: 'highest_transaction_amount', type: 'DECIMAL(12,0)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '最高往來金額' },
