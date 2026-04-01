@@ -52,7 +52,7 @@ status: Draft
 | F026 | US-039 | E04 | 查看擷取資料預覽 | P0-MVP | 分頁瀏覽 AppDB 中已擷取的 raw data，支援欄位排序 |
 | F027 | US-040 | E05 | 查看 Pipeline 列表 | P0-MVP | 統計卡片、分頁清單、搜尋篩選 |
 | F028 | US-041 | E05 | 建立 Pipeline | P0-MVP | 建立 Pipeline，設定名稱、描述、排程 |
-| F029 | US-042 | E05 | 視覺化轉換編輯器 | P0-MVP | 拖拉式編輯器，13 種 Transform 節點，JSONB 定義儲存 |
+| F029 | US-042, US-058 | E05 | 視覺化轉換編輯器 | P0-MVP | 拖拉式編輯器，13 種 Transform 節點，JSONB 定義儲存；Lookup 節點雙輸入模式（lookup-input Handle） |
 | F030 | US-043 | E05 | 執行 Pipeline | P0-MVP | 手動/測試/排程執行，進度 Polling，重新執行 |
 | F031 | US-044 | E05 | 啟用／停用 Pipeline | P0-MVP | 控制排程觸發，啟用需有 published 版本 |
 | F032 | US-045 | E05 | 查看 Pipeline 日誌 | P0-MVP | 執行歷史列表、節點級詳情、測試標記 |
@@ -60,6 +60,14 @@ status: Draft
 | F034 | US-047 | E05 | 刪除 Pipeline | P1 | 軟刪除，日誌保留 |
 | F035 | US-048 | E05 | Pipeline 監控儀表板 | P1 | 統計卡片、趨勢圖、進度條、失敗清單、效能排名 |
 | F036 | US-049 | E05 | 目標表 Domain-Oriented 規劃 | P0-MVP | 1 個 Domain Data Product 目標表（customer_core，約 45 欄位），schema API，欄位對應，來源：ZZIP_BAMCUST_M + MLMCUSTOMER |
+| F037 | US-050 | E05 | 發布 Pipeline 版本 | P0-MVP | 版本狀態從 draft 轉為 published，發布後不可修改 |
+| F038 | US-051 | E04/E05 | 孤兒任務回收 | P0-MVP | 系統啟動時自動修復 running 狀態的孤兒任務 |
+| F039 | US-042 | E05 | 節點欄位變化統計 Badge | P0-MVP | 編輯器節點上顯示欄位數量 Badge |
+| F040 | US-042 | E05 | Inspector Panel 欄位 Diff | P1 | 欄位 Diff 對比面板 |
+| F041 | US-042 | E05 | Badge Hover Tooltip | P2 | Badge 懸停提示框 |
+| F042 | US-055 | E05 | ETL 執行引擎核心框架 | P0-MVP | DAG 拓撲排序、Node Dispatcher、nodeOutputMap、temp table 管理 |
+| F043 | US-056, US-057, US-058 | E05 | ETL 節點執行器 | P0-MVP | 8 種 NodeExecutor（extract, merge, dedup, type_cast, derived_field, field_mapping, conditional, lookup），含 Lookup 雙輸入模式 |
+| F044 | US-057 | E05 | Target Load + UPSERT | P0-MVP | 批次寫入目標表、ETL 追蹤欄位填充、UPSERT 衝突處理 |
 
 ### 非功能需求
 
@@ -154,7 +162,15 @@ E04（資料擷取管理）
 | F033 Pipeline 版本管理 | F029, F030 | 無 |
 | F034 刪除 Pipeline | F028 | 無 |
 | F035 Pipeline 監控儀表板 | F030, F032 | 無 |
-| F036 目標表 Domain-Oriented | F029, F017（US-030 代碼對照表） | 無 |
+| F036 目標表 Domain-Oriented | F029, F017（US-030 代碼對照表） | F044 |
+| F037 發布 Pipeline 版本 | F030 | F031 |
+| F038 孤兒任務回收 | F021, F030 | 無 |
+| F039 節點欄位 Badge | F029 | F040, F041 |
+| F040 Inspector Panel 欄位 Diff | F039 | F041 |
+| F041 Badge Hover Tooltip | F039, F040 | 無 |
+| F042 ETL 執行引擎核心框架 | F030 | F043, F044 |
+| F043 ETL 節點執行器（含 Lookup） | F042 | F044 |
+| F044 Target Load + UPSERT | F042, F043, F036 | 無 |
 
 ### 外部依賴
 

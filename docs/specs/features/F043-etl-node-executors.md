@@ -2,11 +2,11 @@
 spec-id: F043
 title: ETL 節點執行器
 feature-id: F043
-source-story: US-056, US-057
+source-story: US-056, US-057, US-058
 epic: E05
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-27
+version: "1.1"
+date: 2026-03-31
 status: Draft
 ---
 
@@ -16,9 +16,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-03-27
 
 ## 1. 功能摘要
 
-定義 ETL Pipeline 中 7 種節點處理器（NodeExecutor）的業務邏輯：`raw_data_extract`、`merge`、`dedup`、`type_cast`、`derived_field`、`field_mapping`、`conditional`。每種處理器實作 `NodeExecutor` 介面（定義於 [F042](F042-etl-execution-engine.md)），接收 `NodeExecutionContext` 並回傳 `DataSet`。
+定義 ETL Pipeline 中 8 種節點處理器（NodeExecutor）的業務邏輯：`raw_data_extract`、`merge`、`dedup`、`type_cast`、`derived_field`、`field_mapping`、`conditional`、`lookup`。每種處理器實作 `NodeExecutor` 介面（定義於 [F042](F042-etl-execution-engine.md)），接收 `NodeExecutionContext` 並回傳 `DataSet`。
 
-第 8 種節點 `target_load` 因涉及資料庫 UPSERT 與追蹤欄位填充，獨立定義於 [F044](F044-etl-target-load.md)。
+第 9 種節點 `target_load` 因涉及資料庫 UPSERT 與追蹤欄位填充，獨立定義於 [F044](F044-etl-target-load.md)。
 
 ## 2. 前置條件
 
@@ -473,6 +473,102 @@ interface ConditionalCondition {
 |---------|-----------|------|
 | cd1 | 5（name, mobile_phone, mailing_address, capital, office_phone） | 以 source_updated_at 較新者為準解決衝突 |
 
+### 4.8 LookupExecutor (`lookup`)
+
+**節點設定參數：**
+
+```typescript
+interface LookupConfig {
+  nodeType: 'lookup';
+  label: string;
+  matchColumn: string;           // 主資料集的比對欄位
+  lookupMatchColumn: string;     // 對照資料集的比對欄位
+  outputColumns: LookupOutputColumn[];
+  // 向下相容欄位（僅單輸入模式使用）
+  lookupSource?: string;         // raw table 名稱（如 'raw_e5a2345c'）
+  lookupFilter?: string;         // SQL WHERE 條件（如 "TBL_ID = 'A2'"）
+  lookupSourceId?: string;       // taskId（UUID）
+  noMatchStrategy?: 'null' | 'default_value' | 'skip_row';
+  defaultValue?: string | null;
+  subtitle?: string;
+}
+
+interface LookupOutputColumn {
+  lookupColumn: string;   // 對照表欄位名
+  outputAlias: string;    // 輸出別名
+}
+```
+
+**執行模式判斷：**
+
+LookupExecutor 支援兩種執行模式，依 `context.inputs['lookup-input']` 是否存在自動切換：
+
+| 條件 | 模式 | 對照資料來源 |
+|------|------|-------------|
+| `inputs['lookup-input']` 存在 | 雙輸入模式 | 直接使用 `inputs['lookup-input']` DataSet |
+| `inputs['lookup-input']` 不存在 | 向下相容模式 | 從資料庫查詢 `lookupSource` + `lookupFilter` |
+
+**處理邏輯（雙輸入模式）：**
+
+1. 從 `context.inputs['default']`（或 `context.inputs['main-input']`）取得主資料集
+2. 從 `context.inputs['lookup-input']` 取得對照資料集
+3. 忽略節點設定中的 `lookupSource`、`lookupFilter`、`noMatchStrategy`、`defaultValue`
+4. 以 `lookupMatchColumn` 為 key 對對照資料集建立 lookup Map（key → row，首筆為主）
+5. 對主資料集每一列：
+   a. 以 `matchColumn` 的值查找 lookup Map
+   b. 匹配成功：將 `outputColumns` 中指定的欄位從對照列複製至主資料列（以 `outputAlias` 為欄位名）
+   c. 匹配失敗：`outputColumns` 指定的欄位補 null
+6. 輸出 DataSet 的 rowCount 與主資料集相同（LEFT JOIN 語意）
+
+**處理邏輯（向下相容模式）：**
+
+1. 從 `context.inputs['default']`（或 `context.inputs['main-input']`）取得主資料集
+2. 透過 `queryRunner` 執行 `SELECT * FROM {lookupSource} WHERE {lookupFilter}` 取得對照資料集
+   - 若 `lookupFilter` 為空字串或未定義，執行 `SELECT * FROM {lookupSource}`（不加 WHERE）
+3. 後續 JOIN 邏輯與雙輸入模式相同（步驟 4~6）
+4. 支援 `noMatchStrategy`：
+   - `null`：outputColumns 欄位補 null（預設）
+   - `default_value`：outputColumns 欄位補 `defaultValue`
+   - `skip_row`：無匹配的列不輸出（rowCount 可能小於主資料集）
+
+**SQL 等效邏輯（雙輸入模式）：**
+
+```sql
+-- 概念上等同於：
+CREATE TEMP TABLE output AS
+SELECT src.*, lk."{outputColumns[0].lookupColumn}" AS "{outputColumns[0].outputAlias}"
+FROM input_temp src
+LEFT JOIN (SELECT * FROM lookup_temp) lk
+  ON src."{matchColumn}" = lk."{lookupMatchColumn}"
+```
+
+**輸入：**
+- 雙輸入模式：`{ 'default': DataSet, 'lookup-input': DataSet }`
+- 向下相容模式：`{ 'default': DataSet }`
+
+**輸出：** `DataSet`，包含主資料集所有原始欄位加上 `outputColumns` 中定義的 `outputAlias` 欄位
+
+**錯誤處理：**
+
+| 錯誤情境 | errorMessage |
+|---------|-------------|
+| 主資料流缺失（inputs 中無 `default` 亦無 `main-input`） | `Lookup 節點缺少主資料流輸入（main-input）` |
+| `matchColumn` 不存在於主資料集 | `Lookup 節點比對欄位 {matchColumn} 不存在於主資料集中` |
+| `lookupMatchColumn` 不存在於對照資料集 | `Lookup 節點比對欄位 {lookupMatchColumn} 不存在於對照資料集中` |
+| 向下相容模式：`lookupSource` 表不存在 | `對照表 {lookupSource} 不存在` |
+| 向下相容模式：`lookupFilter` 語法錯誤 | `對照表查詢失敗：{error}` |
+
+**Seed Pipeline 中的實例：**
+
+Seed Pipeline 中 Lookup 節點尚未使用（代碼描述查找為後續階段功能），但設計已支援如下典型場景：
+
+| 場景 | matchColumn | lookupMatchColumn | outputColumns | 模式 |
+|------|-------------|-------------------|---------------|------|
+| 教育程度代碼查找 | EDUCAT_BACK | TBL_CD | [{lookupColumn: "TBL_DESC1", outputAlias: "education_desc"}] | 雙輸入 |
+| 行業代碼查找 | INDUSTRY_CODE | CODE | [{lookupColumn: "CODE_DESC", outputAlias: "industry_desc"}] | 雙輸入 |
+
+---
+
 ## 5. 節點間資料流概覽（Seed Pipeline）
 
 ```
@@ -499,6 +595,10 @@ e5(raw_50172f04) ─────────────────────
 | field_mapping sourceColumn 不存在 | field_mapping | targetColumn 設為 null（或 defaultValue） |
 | conditional 所有 when 都不成立 | conditional | 使用 elseValue |
 | merge 一對多 JOIN（左側 key 對應右側多列） | merge | 產生多列結果（笛卡爾乘積） |
+| lookup 對照資料集為空 | lookup | 所有 outputColumns 欄位補 null，rowCount 與主資料集相同 |
+| lookup 主資料集 key 值為 null | lookup | 該列的 outputColumns 欄位補 null（null key 不匹配任何對照列） |
+| lookup 對照資料集有重複 key | lookup | 取首筆匹配列（lookup Map 中先入者為主） |
+| lookup 雙輸入模式忽略 lookupSource/lookupFilter | lookup | 即使設定中仍有 lookupSource 值，雙輸入模式不使用 |
 
 ## 7. 驗收標準
 
@@ -613,11 +713,55 @@ e5(raw_50172f04) ─────────────────────
 - When cd1 執行 `left.source_updated_at >= right.source_updated_at`
 - Then 條件不成立（null 安全），使用 elseValue
 
+### AC-18: lookup 雙輸入模式正確執行 JOIN
+
+- Given 主資料集 100 列（含 `CUST_TYPE` 欄位，值如 "A01"、"B02"）；對照資料集 10 列（含 `CODE`、`CODE_DESC` 欄位）；`inputs["lookup-input"]` 已設定
+- When LookupExecutor 執行
+- Then 輸出 100 列；有對應對照列的資料行 `CODE_DESC` 有值，無對應的 `CODE_DESC` 為 null
+
+### AC-19: lookup 雙輸入模式 — 對照資料集無符合 key
+
+- Given 主資料集中 `CUST_TYPE = "Z99"` 在對照資料集中無對應 `CODE`
+- When LookupExecutor 執行
+- Then 該列保留，`outputColumns` 中的欄位值為 null（LEFT JOIN 語意，不排除列）
+
+### AC-20: lookup 向下相容模式 — 無 lookup-input 時使用 lookupSource
+
+- Given `inputs` 中只有 `default`（無 `lookup-input`）；`lookupSource: "raw_e5a2345c"`；`lookupFilter: "TBL_ID = 'A2'"`
+- When LookupExecutor 執行
+- Then 引擎查詢資料庫取得 `raw_e5a2345c` 中 `TBL_ID = 'A2'` 的資料列作為對照集，JOIN 邏輯正常執行
+
+### AC-21: lookup 舊版 Pipeline 定義可正常執行
+
+- Given 資料庫中的 Pipeline 版本定義使用舊版 Lookup schema（含 `lookupSource`、`lookupFilter`，無 `lookup-input` edge）
+- When 執行該 Pipeline
+- Then LookupExecutor 自動以向下相容模式執行，不拋出錯誤，結果與重設計前相同
+
+### AC-22: lookup 主資料流缺失時標記失敗
+
+- Given `inputs` 為空物件（無任何輸入）
+- When LookupExecutor 執行
+- Then 節點狀態為 `'failed'`，errorMessage 為「Lookup 節點缺少主資料流輸入（main-input）」
+
+### AC-23: lookup 比對欄位不存在時標記失敗
+
+- Given 主資料集欄位中不含 `matchColumn` 指定的欄位名稱
+- When LookupExecutor 執行
+- Then 節點狀態為 `'failed'`，errorMessage 說明欄位名稱與所屬資料集
+
+### AC-24: lookup 空對照資料集
+
+- Given 對照資料集為空（rowCount = 0），主資料集有 50 列
+- When LookupExecutor 執行
+- Then 輸出 50 列，所有 `outputColumns` 欄位均為 null
+
 ## 8. 相關文件
 
 - 執行引擎框架：[F042-etl-execution-engine.md](F042-etl-execution-engine.md)
 - Target Load：[F044-etl-target-load.md](F044-etl-target-load.md)
 - 目標表定義：[F036-target-tables.md](F036-target-tables.md)
+- Pipeline 編輯器（Lookup JSON schema / UI）：[F029-pipeline-editor.md](F029-pipeline-editor.md)（8.4.9 節）
+- Lookup 雙輸入 User Story：US-058（`docs/stories/epics/E05-etl-pipeline/US-058-lookup-node-dual-input.md`）
 - 既有轉換函式：`apps/api/src/modules/etl/etl-transforms.ts`
 - Pipeline 定義：`scripts/seed-pipeline-definition.json`
 - 資料模型：[data-model.md](../data-model.md)

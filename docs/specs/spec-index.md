@@ -2,7 +2,7 @@
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
 version: "2.0"
-date: 2026-03-27
+date: 2026-03-31
 status: Draft
 ---
 
@@ -10,7 +10,7 @@ status: Draft
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **文件總數**：74 份（7 支援文件 + 44 Feature 文件 + 23 圖表文件）
-> **最後更新**：2026-03-27
+> **最後更新**：2026-03-31
 
 ---
 
@@ -98,7 +98,7 @@ status: Draft
 |------------|------|------|-----------|--------|
 | F027 | [F027-pipeline-list.md](features/F027-pipeline-list.md) | 查看 Pipeline 列表 | US-040 | P0-MVP |
 | F028 | [F028-create-pipeline.md](features/F028-create-pipeline.md) | 建立 Pipeline | US-041 | P0-MVP |
-| F029 | [F029-pipeline-editor.md](features/F029-pipeline-editor.md) | 視覺化轉換編輯器（13 種 Transform 節點） | US-042 | P0-MVP |
+| F029 | [F029-pipeline-editor.md](features/F029-pipeline-editor.md) | 視覺化轉換編輯器（13 種 Transform 節點，Lookup 雙輸入模式） | US-042, US-058 | P0-MVP |
 | F030 | [F030-execute-pipeline.md](features/F030-execute-pipeline.md) | 執行 Pipeline（手動/測試/排程） | US-043 | P0-MVP |
 | F031 | [F031-toggle-pipeline.md](features/F031-toggle-pipeline.md) | 啟用／停用 Pipeline | US-044 | P0-MVP |
 | F032 | [F032-pipeline-logs.md](features/F032-pipeline-logs.md) | 查看 Pipeline 日誌 | US-045 | P0-MVP |
@@ -111,7 +111,7 @@ status: Draft
 | F040 | [F040-field-inspector-diff.md](features/F040-field-inspector-diff.md) | Inspector Panel 欄位 Diff | US-042 (擴充) | P1 |
 | F041 | [F041-badge-hover-tooltip.md](features/F041-badge-hover-tooltip.md) | Badge Hover Tooltip | US-042 (擴充) | P2 |
 | F042 | [F042-etl-execution-engine.md](features/F042-etl-execution-engine.md) | ETL 執行引擎核心框架（DAG 排序、Node Dispatcher、nodeOutputMap） | US-055 | P0-MVP |
-| F043 | [F043-etl-node-executors.md](features/F043-etl-node-executors.md) | ETL 節點執行器（7 種節點處理邏輯與 TypeScript interfaces） | US-056, US-057 | P0-MVP |
+| F043 | [F043-etl-node-executors.md](features/F043-etl-node-executors.md) | ETL 節點執行器（8 種節點處理邏輯與 TypeScript interfaces，含 Lookup 雙輸入模式） | US-056, US-057, US-058 | P0-MVP |
 | F044 | [F044-etl-target-load.md](features/F044-etl-target-load.md) | Target Load + UPSERT（批次寫入、ETL 追蹤欄位） | US-057 | P0-MVP |
 
 ### E04/E05 — 跨模組系統維運
@@ -254,3 +254,4 @@ F036 ──> F044（目標表 schema 定義）
 | 2026-03-25 | F036（US-049）重大更新：4 個目標表縮減為 1 個（customer_core 約 45 欄位）、新增來源資料表定義（ZZIP_BAMCUST_M + MLMCUSTOMER）、新增 ETL 轉換規則（電話合併/衝突解決/代碼描述/型別轉換）、新增依賴（US-030/US-042）、更新 data-model/scope/overview/open-questions、新增 target-table-etl-flow 圖表、文件總數 65 份 | Spec Writer Agent |
 | 2026-03-27 | 新增 F039（節點欄位 Badge, P0）、F040（Inspector Panel 欄位 Diff, P1）、F041（Badge Hover Tooltip, P2）；新增 2 個圖表（F039 資料流、F041 互動時序）；US-042 編輯器功能擴充三階段規格；文件總數 70 份 | Spec Writer Agent |
 | 2026-03-27 | 新增 F042（ETL 執行引擎核心框架）、F043（ETL 節點執行器 7 種）、F044（Target Load + UPSERT）；新增 1 個圖表（F042 引擎流程）；對應 US-055/056/057；P0-MVP 增至 34 個 Feature；文件總數 74 份 | Spec Writer Agent |
+| 2026-03-31 | Lookup 節點雙輸入重設計：F029 新增 AC-7a~7d（Lookup 雙輸入 UI）與更新 JSON schema；F043 新增第 8 種節點執行器 LookupExecutor（雙輸入模式 + 向下相容），新增 AC-18~AC-24；對應 US-058 | Spec Writer Agent |

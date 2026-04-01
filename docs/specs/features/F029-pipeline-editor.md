@@ -2,11 +2,11 @@
 spec-id: F029
 title: 視覺化轉換編輯器
 feature-id: F029
-source-story: US-042
+source-story: US-042, US-058
 epic: E05
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-19
+version: "1.1"
+date: 2026-03-31
 status: Draft
 ---
 
@@ -59,6 +59,15 @@ status: Draft
 - **When** Admin 點擊某個節點
 - **Then** 右側顯示該節點的屬性編輯面板，包含該節點類型對應的設定表單
 
+### AC-5a: 屬性面板可編輯節點名稱
+
+- **Given** Admin 點擊畫布上的任意節點
+- **When** 右側屬性面板載入
+- **Then** 面板 header 中的節點名稱為可編輯的文字輸入欄位，預設值為工具箱預設名稱
+- **And** 修改名稱後，`node.data.label` 更新，畫布上節點的顯示名稱即時同步
+- **And** 清空名稱時，畫布以 `nodeDef.label`（工具箱預設名稱）作為 fallback 顯示
+- **And** 輸入欄位的 placeholder 顯示預設名稱
+
 ### AC-6: Extract 節點設定
 
 - **Given** Admin 點擊一個 Extract 節點
@@ -82,6 +91,46 @@ status: Draft
 - **Given** Admin 已編輯 Pipeline 定義（新增節點、連線、設定屬性）
 - **When** 點擊「儲存」按鈕
 - **Then** Pipeline 定義以 JSONB 格式儲存至當前版本，狀態維持 draft，顯示儲存成功提示，`step_count` 更新為節點數量
+
+### AC-7a: Lookup 節點雙輸入端口
+
+- **Given** Admin 將 Lookup 節點拖拉至畫布
+- **When** 節點出現在畫布上
+- **Then** 節點顯示兩個輸入端：上方端口標示「主資料流（main-input）」（top: 33%）、下方端口標示「對照來源（lookup-input）」（top: 67%）
+- **And** 節點仍有一個輸出端口（與其他 Transform 節點相同）
+
+### AC-7b: Lookup 節點 lookup-input 連線
+
+- **Given** 畫布上有 Lookup 節點與另一個 Extract 或 Transform 節點
+- **When** Admin 從上游節點的輸出端拖拉至 Lookup 節點的下方端口（lookup-input）
+- **Then** 連線以「對照來源」的視覺樣式建立（如虛線或不同顏色），區別於主資料流連線
+- **And** 連線的 edge 定義中包含 `targetHandle: "lookup-input"`
+
+### AC-7c: Lookup 節點屬性面板（雙輸入模式）
+
+- **Given** Lookup 節點的 lookup-input 已有連線（上游節點已連接對照來源）
+- **When** Admin 點擊 Lookup 節點，右側屬性面板載入
+- **Then** 面板顯示：
+  - 主資料集比對欄位（`matchColumn`）下拉選單
+  - 對照資料集比對欄位（`lookupMatchColumn`）下拉選單
+  - 輸出欄位對應表格（`outputColumns`：lookupColumn → outputAlias）
+- **And** `lookupSource` 文字輸入欄位隱藏（雙輸入模式不需手動輸入 raw table 名稱）
+- **And** `lookupFilter` 過濾條件欄位隱藏（過濾由上游 Filter 節點負責）
+- **And** Lookup 節點在畫布上的副標題（subtitle）自動設定為對照來源節點的 `label`
+- **And** 當對照來源節點被重新命名時，Lookup 節點的副標題同步更新
+- **And** 當 lookup-input 連線斷開時，副標題清空（切回向下相容模式時，由 lookupSource 值接管）
+
+### AC-7d: Lookup 節點屬性面板（向下相容模式）
+
+- **Given** Lookup 節點的 lookup-input 尚未連線（舊版 Pipeline 或尚未接線）
+- **When** Admin 點擊 Lookup 節點，右側屬性面板載入
+- **Then** 面板顯示：
+  - 對照來源選擇（`lookupSource`：raw data 表下拉）
+  - 過濾條件（`lookupFilter`：文字輸入）
+  - 比對欄位（`matchColumn`、`lookupMatchColumn`）
+  - 輸出欄位對應表格
+  - 無匹配策略（`noMatchStrategy`）
+- **And** 與重設計前的行為完全一致
 
 ### AC-10: 載入已儲存的 Pipeline 定義
 
@@ -349,12 +398,44 @@ status: Draft
 
 #### 8.4.9 查找（Lookup） — `transform-lookup`
 
+Lookup 節點支援**雙輸入模式**與**向下相容模式**（單輸入），比照 Merge 節點設計。
+
+**雙輸入模式（優先）**：Lookup 節點具備兩個輸入端口：
+| 端口名稱 | handle 識別碼 | 位置 | 說明 |
+|---------|--------------|------|------|
+| 主資料流 | `default` | 左側上方（top: 33%） | 主資料流，與現有單輸入相同 |
+| 對照來源 | `lookup-input` | 左側下方（top: 67%） | 新增，對照表資料流入點 |
+
+當 `lookup-input` 有連線時，引擎直接使用上游節點輸出的 DataSet 作為對照資料集，忽略 `lookupSource` 與 `lookupFilter` 欄位。
+
+**向下相容模式**：當 `lookup-input` 無連線時，退回使用 `lookupSource`（raw table 名稱）與 `lookupFilter`（SQL 過濾條件）從資料庫查詢對照資料。此路徑確保舊版 Pipeline 定義不受影響。
+
+**JSONB Schema（雙輸入模式）：**
+
+```json
+{
+  "matchColumn": "string (主資料集的比對欄位)",
+  "lookupMatchColumn": "string (對照資料集的比對欄位)",
+  "outputColumns": [
+    {
+      "lookupColumn": "string (對照表欄位)",
+      "outputAlias": "string (輸出欄位名稱)"
+    }
+  ],
+  "lookupSource": "",
+  "lookupFilter": ""
+}
+```
+
+**JSONB Schema（向下相容模式）：**
+
 ```json
 {
   "lookupSource": "string (raw data 表名或靜態對照表名)",
   "lookupSourceId": "uuid | null (若為 raw data 表則為 taskId)",
-  "matchColumn": "string (當前資料的比對欄位)",
-  "lookupMatchColumn": "string (對照表的比對欄位)",
+  "lookupFilter": "string (SQL WHERE 條件，如 TBL_ID = 'A2')",
+  "matchColumn": "string (主資料集的比對欄位)",
+  "lookupMatchColumn": "string (對照資料集的比對欄位)",
   "outputColumns": [
     {
       "lookupColumn": "string (對照表欄位)",
@@ -366,7 +447,39 @@ status: Draft
 }
 ```
 
-**設定表單**：對照來源選擇（raw data 表下拉）、比對欄位、輸出欄位對應表格、無匹配策略。
+**Edge 定義範例（雙輸入模式）：**
+
+```json
+[
+  {
+    "id": "edge-main",
+    "source": "filter-node-1",
+    "target": "lookup-node-1"
+  },
+  {
+    "id": "edge-lookup",
+    "source": "extract-ref-table",
+    "target": "lookup-node-1",
+    "targetHandle": "lookup-input"
+  }
+]
+```
+
+**設定表單（雙輸入模式 — lookup-input 有連線時）**：
+- 主資料集比對欄位（`matchColumn`）下拉選單
+- 對照資料集比對欄位（`lookupMatchColumn`）下拉選單
+- 輸出欄位對應表格（`outputColumns`：lookupColumn → outputAlias，可新增多組）
+- `lookupSource` 與 `lookupFilter` 欄位隱藏
+
+**設定表單（向下相容模式 — lookup-input 無連線時）**：
+- 對照來源選擇（`lookupSource`：raw data 表下拉）
+- 過濾條件（`lookupFilter`：文字輸入）
+- 主資料集比對欄位（`matchColumn`）
+- 對照資料集比對欄位（`lookupMatchColumn`）
+- 輸出欄位對應表格
+- 無匹配策略（`noMatchStrategy`）
+
+**扇出支援**：一個 Extract 節點可連接多個 Filter 節點，各 Filter 再分別連接不同 Lookup 節點的 `lookup-input`，實現對照表預篩的靈活組合。
 
 #### 8.4.10 字串處理（String） — `transform-string`
 
@@ -446,9 +559,11 @@ status: Draft
 
 | 來源節點類型 | 可連接目標 | 不可連接目標 |
 |-------------|-----------|-------------|
-| Extract | Transform | Extract, Load |
-| Transform | Transform, Load | Extract |
+| Extract | Transform（含 Lookup 的 default 或 lookup-input 端口） | Extract, Load |
+| Transform | Transform（含 Lookup 的 default 或 lookup-input 端口）, Load | Extract |
 | Load | （無，終端節點） | Extract, Transform, Load |
+
+**Lookup 節點特殊規則**：Lookup 節點可接受兩條入邊 — 一條連接 `default` 端口（主資料流），一條連接 `lookup-input` 端口（對照來源）。此行為與 Merge 節點相同。
 
 **錯誤回應：**
 
@@ -486,6 +601,7 @@ status: Draft
 - 右側屬性面板根據選中節點類型動態切換表單
 - 儲存按鈕常駐於頂部工具列
 - 未儲存變更時離開頁面需確認對話框
+- 節點名稱可在屬性面板 header 直接編輯，使用者可自訂節點名稱以區分同類型節點
 - 建議使用 React Flow 實作畫布
 
 ## 11. 錯誤場景

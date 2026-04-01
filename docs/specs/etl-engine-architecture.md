@@ -1,8 +1,8 @@
 ---
 type: etl-engine-architecture
-version: 1.0
+version: 1.1
 status: draft
-last_updated: 2026-03-27
+last_updated: 2026-03-31
 covers: [US-055, US-056, US-057]
 ---
 
@@ -54,6 +54,7 @@ graph TD
             DerivedH["DerivedFieldHandler<br/>derived_field"]
             MappingH["FieldMappingHandler<br/>field_mapping"]
             CondH["ConditionalHandler<br/>conditional"]
+            LookupH["LookupHandler<br/>lookup"]
             LoadH["TargetLoadHandler<br/>target_load"]
         end
     end
@@ -74,6 +75,7 @@ graph TD
     Dispatcher --> DerivedH
     Dispatcher --> MappingH
     Dispatcher --> CondH
+    Dispatcher --> LookupH
     Dispatcher --> LoadH
 
     ExtractH -->|"批次 SELECT"| RawTables
@@ -84,7 +86,7 @@ graph TD
     classDef handler fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px
     classDef infra fill:#fff3e0,stroke:#e65100,stroke-width:1px
     class ExecSvc,Runner,OutputStore,Dispatcher core
-    class ExtractH,MergeH,DedupH,TypeCastH,DerivedH,MappingH,CondH,LoadH handler
+    class ExtractH,MergeH,DedupH,TypeCastH,DerivedH,MappingH,CondH,LookupH,LoadH handler
     class AppDB,RawTables,TargetTable infra
 ```
 
@@ -97,6 +99,8 @@ graph TD
 | 中間結果儲存 | **記憶體 Map（NodeOutputStore）** | 見 5.1 節詳述 |
 | Extract 讀取方式 | **批次分頁讀取，累積至單一 DataSet** | 見 5.2 節詳述 |
 | Target Load 策略 | **批次 UPSERT（INSERT ... ON CONFLICT）** | 見 3.5 節詳述 |
+| Lookup 雙輸入路由 | **泛化 Handle key 機制（`lookup-input`）** | 與 Merge 的 `left-input`/`right-input` 相同模式；`collectInputs()` 已泛化支援任意 targetHandle key |
+| Lookup JOIN 執行位置 | **In-DB（PostgreSQL LEFT JOIN）** | 對照資料已為 temp table，SQL JOIN 零記憶體佔用；避免大型對照表載入 JS 記憶體 |
 
 ---
 
@@ -218,7 +222,7 @@ class PipelineRunner {
 ```typescript
 interface NodeExecutionContext {
   node: PipelineNode;
-  inputs: NodeInputs;           // { default?: DataSet, left?: DataSet, right?: DataSet }
+  inputs: NodeInputs;           // { [targetHandle: string]: DataSet }
   dataSource: DataSource;       // 用於 ExtractHandler 和 TargetLoadHandler
   config: PipelineRunnerConfig;
 }
@@ -227,14 +231,19 @@ interface NodeHandler {
   execute(ctx: NodeExecutionContext): Promise<DataSet>;
 }
 
-// 輸入解析規則（依 edge.targetHandle）：
-// - targetHandle = "left-input"  → inputs.left
-// - targetHandle = "right-input" → inputs.right
-// - 無 targetHandle             → inputs.default（單一上游）
+// 輸入解析規則（依 edge.targetHandle，已泛化為任意 key）：
+// - targetHandle = "left-input"   → inputs['left-input']
+// - targetHandle = "right-input"  → inputs['right-input']
+// - targetHandle = "lookup-input" → inputs['lookup-input']
+// - 無 targetHandle / 其他        → inputs['default']（單一上游）
+//
+// collectInputs() 統一處理：edge.targetHandle ?? 'default' → inputs key
+// Merge 節點使用：inputs['left-input']、inputs['right-input']
+// Lookup 節點使用：inputs['default']（主流）、inputs['lookup-input']（對照資料）
 ```
 
-**支援的 nodeType 清單：**
-`raw_data_extract` | `merge` | `dedup` | `type_cast` | `derived_field` | `field_mapping` | `conditional` | `target_load`
+**支援的 nodeType 清單（共 9 種）：**
+`raw_data_extract` | `merge` | `dedup` | `type_cast` | `derived_field` | `field_mapping` | `conditional` | `lookup` | `target_load`
 
 ### 3.3 NodeOutputStore
 
@@ -331,6 +340,85 @@ sequenceDiagram
 - `left.{col}` 解析為列中的 `{col}` 欄位（無前綴的實際欄位名）
 - `right.{col}` 解析為列中的 `{col}_right` 欄位（_right 後綴）
 - 支援：`>=`、`IS NOT NULL` 運算子；null 安全（任一為 null 則條件不成立）
+
+#### LookupHandler（lookup）
+
+**職責：** 將主資料流（`inputs['default']`）與對照資料（`inputs['lookup-input']` 或 `lookupSource` 文字欄位）進行 LEFT JOIN，將對照欄位附加至輸出。
+
+**雙輸入模式（有 `lookup-input` 連線時）：**
+
+- `inputs['default']`：主資料流（來自上游節點的 DataSet）
+- `inputs['lookup-input']`：對照資料（另一上游節點的 DataSet，已物化為 PostgreSQL 臨時表）
+- JOIN 策略：在 PostgreSQL 執行 LEFT JOIN，零記憶體佔用，無需將對照資料載入 JS 記憶體
+- 向下相容模式的 `lookupFilter` 在此模式中不套用（資料由上游節點自行過濾）
+
+**向下相容模式（無 `lookup-input` 連線時）：**
+
+- 直接查詢節點屬性 `lookupSource` 所指定的 raw table
+- 支援 `lookupFilter` 欄位作為 WHERE 子句對對照資料預先篩選
+
+**Handle 路由機制（與 Merge 類比）：**
+
+```
+edge.targetHandle → inputs key
+─────────────────────────────────────────
+"default"（或無 targetHandle） → inputs['default']     ← 主資料流
+"lookup-input"                → inputs['lookup-input'] ← 對照資料
+```
+
+**SQL 執行策略：**
+
+```sql
+-- 雙輸入模式
+CREATE TEMP TABLE "${outputTable}" AS
+SELECT src.*, lk."${outputCol}" AS "${alias}"
+FROM "${mainTempTable}" src
+LEFT JOIN "${lookupTempTable}" lk
+  ON src."${matchCol}" = lk."${lookupMatchCol}"
+
+-- 向下相容模式（lookupSource 為 raw table 名稱）
+CREATE TEMP TABLE "${outputTable}" AS
+SELECT src.*, lk."${outputCol}" AS "${alias}"
+FROM "${mainTempTable}" src
+LEFT JOIN (
+  SELECT * FROM "${lookupSource}"
+  [WHERE ${lookupFilter}]       -- 僅向下相容模式套用
+) lk
+  ON src."${matchCol}" = lk."${lookupMatchCol}"
+```
+
+**關鍵屬性（來自節點 data 欄位）：**
+
+| 屬性 | 說明 | 適用模式 |
+|------|------|---------|
+| `matchCol` | 主資料流的 JOIN key 欄位 | 兩者 |
+| `lookupMatchCol` | 對照資料的 JOIN key 欄位 | 兩者 |
+| `outputCol` | 從對照資料取出的欄位名稱 | 兩者 |
+| `alias` | 附加至輸出的欄位別名 | 兩者 |
+| `lookupSource` | 對照 raw table 名稱 | 向下相容模式 |
+| `lookupFilter` | 對照資料 WHERE 子句 | 向下相容模式 |
+
+```mermaid
+sequenceDiagram
+    participant Runner
+    participant LookupHandler
+    participant PG as PostgreSQL
+
+    Runner->>Runner: collectInputs()<br/>inputs['default'] ← 主資料流<br/>inputs['lookup-input'] ← 對照資料（可選）
+
+    alt 雙輸入模式（有 lookup-input）
+        Runner->>LookupHandler: execute({ inputs['default'], inputs['lookup-input'], node })
+        LookupHandler->>PG: CREATE TEMP TABLE output AS<br/>SELECT src.*, lk.outputCol AS alias<br/>FROM mainTempTable src<br/>LEFT JOIN lookupTempTable lk ON matchKey
+        PG-->>LookupHandler: 完成
+    else 向下相容模式（無 lookup-input）
+        Runner->>LookupHandler: execute({ inputs['default'], node })
+        LookupHandler->>PG: CREATE TEMP TABLE output AS<br/>SELECT src.*, lk.outputCol AS alias<br/>FROM mainTempTable src<br/>LEFT JOIN (SELECT * FROM lookupSource WHERE filter) lk ON matchKey
+        PG-->>LookupHandler: 完成
+    end
+
+    LookupHandler-->>Runner: DataSet（含附加欄位）
+    Runner->>Runner: NodeOutputStore.set(lookupNodeId, result)
+```
 
 #### TargetLoadHandler（target_load）
 
@@ -555,13 +643,15 @@ ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小
 
 | 決策 | 結論 |
 |------|------|
-| In-DB vs In-Memory | In-Memory（JS）|
+| In-DB vs In-Memory | In-Memory（JS）；Lookup JOIN 例外採 In-DB |
 | DAG 執行方式 | Kahn's algorithm 循序執行 |
 | 中間結果儲存 | 記憶體 Map，完成後釋放 |
 | Extract 讀取方式 | 批次累積，全量 DataSet |
 | UPSERT 策略 | INSERT ON CONFLICT（PostgreSQL 原生支援） |
 | TargetLoad 事務策略 | 批次提交，接受部分寫入，依賴 UPSERT 冪等性 |
 | 測試執行行為 | TargetLoad 節點跳過寫入，其餘節點正常執行 |
+| Lookup 多輸入路由 | 泛化 Handle key（`collectInputs()` 使用 `targetHandle ?? 'default'`） |
+| Lookup 向下相容 | 無 `lookup-input` 連線時退回 `lookupSource` 文字欄位查 raw table |
 
 ### 8.2 風險
 
@@ -582,4 +672,4 @@ ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小
 
 ---
 
-*本文件版本 1.0，涵蓋 US-055、US-056、US-057 的架構設計。US-058 批次策略待定，介面已預留擴充點。*
+*本文件版本 1.1，涵蓋 US-055、US-056、US-057 的架構設計，並補充 Lookup 節點雙輸入模式的架構說明。US-058 批次策略待定，介面已預留擴充點。*
