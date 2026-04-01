@@ -5,17 +5,18 @@ feature_name: 目標表 Domain-Oriented 規劃
 priority: P0-MVP
 related_spec: /docs/specs/features/F036-target-tables.md
 related_story: /docs/stories/epics/E05-etl-pipeline/US-049-target-tables.md
-last_updated: 2026-03-31
-version: "2.2"
-changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 customer_core（約 45 欄、A~H 八分類）；新增 ETL 轉換規則測試（電話合併、佔位值、型別轉換、衝突解決、代碼描述）；新增前端欄位對應介面測試 | 2026-03-30 v2.1：customer_core 欄位數 54→65（B 5→12、D 6→8、E 10→12）；更新排除欄位清單；monthly_income 來源更正為 MONTH_INCOME | 2026-03-31 v2.2：customer_core 欄位數 65→79（C 6→10、D 8→10、F 10→12、G 7→13）；C 類新增 registered_phone/registered_fax/business_fax/business_mobile；D 類新增 registered_zip/registered_address；F 類新增 highest_transaction_amount/highest_transaction_date；G 類新增 owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name；MLMC 映射 21→37"
+last_updated: 2026-04-01
+version: "2.3"
+changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 customer_core（約 45 欄、A~H 八分類）；新增 ETL 轉換規則測試（電話合併、佔位值、型別轉換、衝突解決、代碼描述）；新增前端欄位對應介面測試 | 2026-03-30 v2.1：customer_core 欄位數 54→65（B 5→12、D 6→8、E 10→12）；更新排除欄位清單；monthly_income 來源更正為 MONTH_INCOME | 2026-03-31 v2.2：customer_core 欄位數 65→79（C 6→10、D 8→10、F 10→12、G 7→13）；C 類新增 registered_phone/registered_fax/business_fax/business_mobile；D 類新增 registered_zip/registered_address；F 類新增 highest_transaction_amount/highest_transaction_date；G 類新增 owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name；MLMC 映射 21→37 | 2026-04-01 v2.3：customer_core 欄位數 79→83（A 5→6、B 12→13、F 12→14）；新增 code→desc 對照欄位：marital_status_code/desc(TBL_ID=33)、customer_type_code/desc(TBL_ID=55)、income_source_code/desc(TBL_ID=Y0)、job_level_code/desc(TBL_ID=A6)、monthly_income_code/desc(TBL_ID=A3)；industry_desc 改為 Lookup 查詢(TBL_ID=AA)；role_code/role_desc 移除，改為 role 單欄位(ZZIP.CROLE 直接映射)"
 ---
 
-# F036: 目標表 Domain-Oriented 規劃 — 測試設計（v2.2）
+# F036: 目標表 Domain-Oriented 規劃 — 測試設計（v2.3）
 
 > **重要異動說明**：本文件已於 2026-03-25 依 US-049 修訂版全面更新。
-> Phase 1 MVP 目標表由舊版 4 個（customer_core / customer_interaction / customer_financial / customer_service）調整為 **1 個**（`customer_core`，79 欄位，分 A~H 八個分類）。
+> Phase 1 MVP 目標表由舊版 4 個（customer_core / customer_interaction / customer_financial / customer_service）調整為 **1 個**（`customer_core`，83 欄位，分 A~H 八個分類）。
 > customer_interaction / customer_financial / customer_service 移至 Phase 2/3，不在本版本測試範圍內。
 > v2.2（2026-03-31）：C 類 6→10、D 類 8→10、F 類 10→12、G 類 7→13，總欄位數 65→79。
+> v2.3（2026-04-01）：A 類 5→6、B 類 12→13、F 類 12→14，總欄位數 79→83。新增 code→desc 對照欄位（marital_status、customer_type、income_source、job_level、monthly_income）；industry_desc 改為 Lookup(TBL_ID=AA)；role_code/role_desc 移除，改為 role 單欄位。
 
 ---
 
@@ -28,7 +29,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Given | Admin 已登入；系統 Phase 1 MVP 僅預先定義 `customer_core` 一個目標表 |
 | When | 呼叫 `GET /api/v1/etl/target-tables` |
 | Then | HTTP 200；`data` 陣列含 **1 個**目標表物件；物件含 `tableName`、`displayName`、`domain`、`columnCount`、`description` 欄位 |
-| 驗證步驟 | 1. `data.length === 1`<br>2. `data[0].tableName === "customer_core"`<br>3. `data[0].domain === "core"`<br>4. `data[0].columnCount === 79`（允許 ±1，以實際 schema 定義為準；A~H 分類加總：5+12+10+10+12+12+13+5 = 79）<br>5. `data[0].displayName` 含「Customer Core」字樣<br>6. `data[0].description` 為非空字串 |
+| 驗證步驟 | 1. `data.length === 1`<br>2. `data[0].tableName === "customer_core"`<br>3. `data[0].domain === "core"`<br>4. `data[0].columnCount === 83`（允許 ±1，以實際 schema 定義為準；A~H 分類加總：6+13+10+10+12+14+13+5 = 83）<br>5. `data[0].displayName` 含「Customer Core」字樣<br>6. `data[0].description` 為非空字串 |
 
 ### AC-2：目標表 Schema API
 
@@ -37,7 +38,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Given | Admin 已登入；指定目標表 `customer_core` 存在 |
 | When | 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema` |
 | Then | HTTP 200；回應含 `tableName`、`displayName`、`columns` 陣列；`columns` 中每個物件含 `name`、`type`、`nullable`、`isPrimaryKey`、`description` |
-| 驗證步驟 | 1. `columns` 陣列長度 79（A~H 分類加總 5+12+10+10+12+12+13+5 = 79；以 schema 定義為準）<br>2. 主鍵 `customer_id`：`isPrimaryKey === true`、`nullable === false`、`type === "UUID"`<br>3. 三個 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）均存在<br>4. `_etl_loaded_at.nullable === false`；`_etl_pipeline_id.nullable === false`<br>5. 所有 `columns` 物件均含非空 `description` |
+| 驗證步驟 | 1. `columns` 陣列長度 83（A~H 分類加總 6+13+10+10+12+14+13+5 = 83；以 schema 定義為準）<br>2. 主鍵 `customer_id`：`isPrimaryKey === true`、`nullable === false`、`type === "UUID"`<br>3. 三個 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）均存在<br>4. `_etl_loaded_at.nullable === false`；`_etl_pipeline_id.nullable === false`<br>5. 所有 `columns` 物件均含非空 `description` |
 
 ### AC-3：Load 節點選擇目標表（前端）
 
@@ -72,8 +73,8 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 |------|------|
 | Given | 系統初始化完成（migration 已執行） |
 | When | 查詢 `GET /api/v1/etl/target-tables` 及 `GET /api/v1/etl/target-tables/customer_core/schema` |
-| Then | Phase 1 MVP 僅含 `customer_core` 一個目標表（79 欄位），涵蓋 A~H 八個分類，欄位定義與 US-049 規格一致 |
-| 驗證步驟 | 1. `data.length === 1`（不含 Phase 2/3 表）<br>2. 欄位涵蓋 A（識別與分類，5 欄）、B（個人屬性，12 欄）、C（聯絡資訊，10 欄）、D（地址，10 欄）、E（職業與就業，12 欄）、F（財務與風控，12 欄）、G（企業客戶專屬，13 欄）、H（稽核與 ETL 追蹤，5 欄）<br>3. 各欄位的 `type`、`nullable`、`isPrimaryKey` 與 US-049 欄位定義表一致 |
+| Then | Phase 1 MVP 僅含 `customer_core` 一個目標表（83 欄位），涵蓋 A~H 八個分類，欄位定義與 US-049 規格一致 |
+| 驗證步驟 | 1. `data.length === 1`（不含 Phase 2/3 表）<br>2. 欄位涵蓋 A（識別與分類，6 欄）、B（個人屬性，13 欄）、C（聯絡資訊，10 欄）、D（地址，10 欄）、E（職業與就業，12 欄）、F（財務與風控，14 欄）、G（企業客戶專屬，13 欄）、H（稽核與 ETL 追蹤，5 欄）<br>3. 各欄位的 `type`、`nullable`、`isPrimaryKey` 與 US-049 欄位定義表一致 |
 
 ---
 
@@ -112,7 +113,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables`
   2. 驗證 `data[0].columnCount` 與 `data[0].domain`
-- **Expected Result**: `columnCount === 79`（A~H 分類加總 5+12+10+10+12+12+13+5 = 79；以 schema 定義實際值為準）；`domain === "core"`；`displayName` 含「Customer Core」
+- **Expected Result**: `columnCount === 83`（A~H 分類加總 6+13+10+10+12+14+13+5 = 83；以 schema 定義實際值為準）；`domain === "core"`；`displayName` 含「Customer Core」
 
 ---
 
@@ -126,7 +127,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
   2. 驗證 `columns.length`
-- **Expected Result**: HTTP 200；`tableName === "customer_core"`；`columns.length === 79`（以 migration schema 實際欄位數為準；A~H 分類加總 5+12+10+10+12+12+13+5 = 79）
+- **Expected Result**: HTTP 200；`tableName === "customer_core"`；`columns.length === 83`（以 migration schema 實際欄位數為準；A~H 分類加總 6+13+10+10+12+14+13+5 = 83）
 
 ---
 
@@ -141,7 +142,8 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Expected Result**:
   - `customer_id`：`type="UUID"`, `nullable=false`, `isPrimaryKey=true`
   - `source_customer_no`：`type` 含 `VARCHAR`, `nullable=false`, `isPrimaryKey=false`
-  - `customer_type`：`type` 含 `VARCHAR`, `nullable=false`
+  - `customer_type_code`：`type` 含 `VARCHAR`, `nullable=false`（原始代碼保留；TBL_ID=55 對照）
+  - `customer_type_desc`：`type` 含 `VARCHAR`, `nullable=true`（US-030 對照表 TBL_ID=55 轉換填入）
   - `name`：`type` 含 `VARCHAR`, `nullable=false`
   - `english_name`：`type` 含 `VARCHAR`, `nullable=true`
 
@@ -154,11 +156,12 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Preconditions**: Admin 已登入
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
-  2. 從 `columns` 中篩選 B 類欄位並逐一驗證（共 12 欄）
+  2. 從 `columns` 中篩選 B 類欄位並逐一驗證（共 13 欄）
 - **Expected Result**:
   - `gender`：`nullable=true`
   - `date_of_birth`：`type="DATE"`, `nullable=true`
-  - `marital_status`：`nullable=true`
+  - `marital_status_code`：`nullable=true`（原始代碼保留；TBL_ID=33 對照）
+  - `marital_status_desc`：`nullable=true`（US-030 對照表 TBL_ID=33 轉換填入）
   - `education_code`：`nullable=true`
   - `education_desc`：`nullable=true`（US-030 代碼轉換填入）
   - `spouse_name`：`type` 含 `VARCHAR`, `nullable=true`
@@ -197,9 +200,12 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Preconditions**: Admin 已登入
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
-  2. 篩選 F 類欄位（共 12 欄），驗證 DECIMAL 欄位型別
+  2. 篩選 F 類欄位（共 14 欄），驗證 DECIMAL 欄位型別與 code/desc 對照欄位
 - **Expected Result**:
-  - `monthly_income`：`type` 含 `DECIMAL`
+  - `monthly_income_code`：`type` 含 `VARCHAR`，`nullable=true`（原始代碼保留；TBL_ID=A3 對照）
+  - `monthly_income_desc`：`type` 含 `VARCHAR`，`nullable=true`（US-030 對照表 TBL_ID=A3 轉換填入）
+  - `income_source_code`：`type` 含 `VARCHAR`，`nullable=true`（原始代碼保留；TBL_ID=Y0 對照）
+  - `income_source_desc`：`type` 含 `VARCHAR`，`nullable=true`（US-030 對照表 TBL_ID=Y0 轉換填入）
   - `capital`：`type` 含 `DECIMAL`
   - `credit_limit`：`type` 含 `DECIMAL`
   - `highest_transaction_amount`：`type` 含 `DECIMAL`，`nullable=true`（MLMC.HFAMOUNT）
@@ -442,7 +448,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 
 ---
 
-#### TS-F036-024：客戶類型對應函式 — MLMC.CUTYPE 轉換
+#### TS-F036-024：客戶類型對應函式 — MLMC.CUTYPE 轉換（customer_type_code）
 
 - **Related Requirement**: US-049 ETL 轉換規則（客戶類型對應：MLMC.CUTYPE 需轉換 1→01, 2→02）
 - **Test Type**: Unit / Positive
@@ -450,11 +456,11 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 傳入 MLMC 來源值 `"1"` 呼叫轉換函式
   2. 傳入 MLMC 來源值 `"2"` 呼叫轉換函式
-- **Expected Result**: `"1"` → `"01"`；`"2"` → `"02"`；格式補零確保兩位字元
+- **Expected Result**: `customer_type_code`：`"1"` → `"01"`；`"2"` → `"02"`；格式補零確保兩位字元；`customer_type_desc` 由 US-030 對照表 TBL_ID=55 查詢填入
 
 ---
 
-#### TS-F036-025：客戶類型對應函式 — ZZIP.CUSTOM_MK 直接映射
+#### TS-F036-025：客戶類型對應函式 — ZZIP.CUSTOM_MK 直接映射（customer_type_code）
 
 - **Related Requirement**: US-049 ETL 轉換規則（ZZIP 直接映射）
 - **Test Type**: Unit / Positive
@@ -463,7 +469,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
   1. 傳入 ZZIP 來源值 `"01"`（個人）
   2. 傳入 ZZIP 來源值 `"02"`（企業）
   3. 傳入 ZZIP 來源值 `"04"`（外籍）
-- **Expected Result**: 三個值均直接映射，不需轉換：`"01"` → `"01"`；`"02"` → `"02"`；`"04"` → `"04"`
+- **Expected Result**: `customer_type_code` 三個值均直接映射，不需轉換：`"01"` → `"01"`；`"02"` → `"02"`；`"04"` → `"04"`；`customer_type_desc` 由 US-030 對照表 TBL_ID=55 查詢填入
 
 ---
 
@@ -489,6 +495,107 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
   1. 傳入 `occupation_code = "XXXX"`（對照表中不存在）
   2. 呼叫轉換函式
 - **Expected Result**: `occupation_code === "XXXX"`（保留原始值）；`occupation_desc === null`（或系統定義的預設值，需確認規格）
+
+---
+
+#### TS-F036-041：婚姻狀態代碼描述轉換 — marital_status_code/desc（TBL_ID=33）
+
+- **Related Requirement**: US-049 ETL 轉換規則（代碼描述：TBL_ID=33 婚姻狀態）
+- **Test Type**: Unit / Positive
+- **Preconditions**: 代碼對照表已載入（US-030，TBL_ID=33）；代碼描述轉換函式已實作
+- **Steps**:
+  1. 傳入婚姻狀態來源代碼值呼叫轉換函式
+  2. 驗證 `marital_status_code` 欄位值
+  3. 驗證 `marital_status_desc` 欄位值
+- **Expected Result**: `marital_status_code` 保留原始代碼值；`marital_status_desc` = 對應的婚姻狀態描述字串（由 US-030 對照表 TBL_ID=33 轉換，非空）
+
+---
+
+#### TS-F036-042：客戶類型代碼描述轉換 — customer_type_code/desc（TBL_ID=55）
+
+- **Related Requirement**: US-049 ETL 轉換規則（代碼描述：TBL_ID=55 客戶類型）
+- **Test Type**: Unit / Positive
+- **Preconditions**: 代碼對照表已載入（US-030，TBL_ID=55）；代碼描述轉換函式已實作
+- **Steps**:
+  1. 傳入客戶類型來源代碼值（如 `"01"`）呼叫轉換函式
+  2. 驗證 `customer_type_code` 欄位值
+  3. 驗證 `customer_type_desc` 欄位值
+- **Expected Result**: `customer_type_code === "01"`（原始值保留）；`customer_type_desc` = 對應的客戶類型描述字串（由 US-030 對照表 TBL_ID=55 轉換，非空）
+
+---
+
+#### TS-F036-043：收入來源代碼描述轉換 — income_source_code/desc（TBL_ID=Y0）
+
+- **Related Requirement**: US-049 ETL 轉換規則（代碼描述：TBL_ID=Y0 收入來源）
+- **Test Type**: Unit / Positive
+- **Preconditions**: 代碼對照表已載入（US-030，TBL_ID=Y0）；代碼描述轉換函式已實作
+- **Steps**:
+  1. 傳入收入來源代碼值呼叫轉換函式
+  2. 驗證 `income_source_code` 欄位值
+  3. 驗證 `income_source_desc` 欄位值
+- **Expected Result**: `income_source_code` 保留原始代碼值；`income_source_desc` = 對應的收入來源描述字串（由 US-030 對照表 TBL_ID=Y0 轉換，非空）
+
+---
+
+#### TS-F036-044：行業描述 Lookup 查詢 — industry_desc（TBL_ID=AA）
+
+- **Related Requirement**: US-049 ETL 轉換規則（代碼描述：TBL_ID=AA 行業別）
+- **Test Type**: Unit / Positive
+- **Preconditions**: 代碼對照表已載入（US-030，TBL_ID=AA）；Lookup 查詢已實作
+- **Steps**:
+  1. 傳入 `industry_code` 值呼叫 Lookup 查詢函式
+  2. 驗證 `industry_desc` 欄位值
+- **Expected Result**: `industry_code` 保留原始代碼值；`industry_desc` = 對應的行業描述字串（由 US-030 對照表 TBL_ID=AA Lookup 查詢，非空）
+
+---
+
+#### TS-F036-045：職等代碼描述轉換 — job_level_code/desc（TBL_ID=A6）
+
+- **Related Requirement**: US-049 ETL 轉換規則（代碼描述：TBL_ID=A6 職等）
+- **Test Type**: Unit / Positive
+- **Preconditions**: 代碼對照表已載入（US-030，TBL_ID=A6）；代碼描述轉換函式已實作
+- **Steps**:
+  1. 傳入職等代碼值呼叫轉換函式
+  2. 驗證 `job_level_code` 欄位值
+  3. 驗證 `job_level_desc` 欄位值
+- **Expected Result**: `job_level_code` 保留原始代碼值；`job_level_desc` = 對應的職等描述字串（由 US-030 對照表 TBL_ID=A6 轉換，非空）
+
+---
+
+#### TS-F036-046：月收入代碼描述轉換 — monthly_income_code/desc（TBL_ID=A3）
+
+- **Related Requirement**: US-049 ETL 轉換規則（代碼描述：TBL_ID=A3 月收入）
+- **Test Type**: Unit / Positive
+- **Preconditions**: 代碼對照表已載入（US-030，TBL_ID=A3）；代碼描述轉換函式已實作
+- **Steps**:
+  1. 傳入月收入代碼值呼叫轉換函式
+  2. 驗證 `monthly_income_code` 欄位值
+  3. 驗證 `monthly_income_desc` 欄位值
+- **Expected Result**: `monthly_income_code` 保留原始代碼值；`monthly_income_desc` = 對應的月收入描述字串（由 US-030 對照表 TBL_ID=A3 轉換，非空）
+
+---
+
+#### TS-F036-047：role 欄位直接映射 — ZZIP.CROLE（無 Lookup）
+
+- **Related Requirement**: US-049 ETL 轉換規則（ZZIP.CROLE 直接映射）
+- **Test Type**: Unit / Positive
+- **Preconditions**: ZZIP 來源資料已備妥
+- **Steps**:
+  1. 傳入 ZZIP.CROLE 來源值呼叫映射函式
+  2. 驗證 `role` 欄位值
+- **Expected Result**: `role` = ZZIP.CROLE 原始值（直接映射，無 Lookup 查詢）；確認欄位名稱為 `role`，不再拆分為 `role_code` + `role_desc`
+
+---
+
+#### TS-F036-048：role_code 與 role_desc 欄位已移除驗證
+
+- **Related Requirement**: AC-6（v2.3 欄位異動）
+- **Test Type**: Unit / Negative
+- **Preconditions**: `customer_core` schema 定義已存在（v2.3 以上）
+- **Steps**:
+  1. 讀取 `customer_core` 的欄位名稱清單
+  2. 搜尋 `role_code` 與 `role_desc`
+- **Expected Result**: `role_code` 不存在於 schema 中；`role_desc` 不存在於 schema 中；已由 `role` 單一欄位取代（ZZIP.CROLE 直接映射）
 
 ---
 
@@ -648,15 +755,15 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
   1. 讀取 `customer_core` 的 schema 定義（不透過 API，直接測試 schema 定義層）
   2. 驗證各分類欄位存在性
 - **Expected Result**:
-  - A 類（5 欄）：`customer_id`、`source_customer_no`、`customer_type`、`name`、`english_name` 均存在
-  - B 類（12 欄）：`gender`、`date_of_birth`、`marital_status`、`education_code`、`education_desc`、`spouse_name`、`father_name`、`mother_name`、`id_issue_type`、`id_issue_date`、`id_issue_address`、`driver_license` 均存在
+  - A 類（6 欄）：`customer_id`、`source_customer_no`、`customer_type_code`、`customer_type_desc`、`name`、`english_name` 均存在
+  - B 類（13 欄）：`gender`、`date_of_birth`、`marital_status_code`、`marital_status_desc`、`education_code`、`education_desc`、`spouse_name`、`father_name`、`mother_name`、`id_issue_type`、`id_issue_date`、`id_issue_address`、`driver_license` 均存在
   - C 類（10 欄）：`mobile_phone`、`home_phone`、`contact_phone`、`office_phone`、`registered_phone`、`registered_fax`、`business_fax`、`business_mobile`、`email`、`line_account` 均存在
   - D 類（10 欄）：`residential_zip`、`residential_address`、`mailing_zip`、`mailing_address`、`registered_zip`、`registered_address`、`company_zip`、`company_address`、`maturity_mailing_zip`、`maturity_mailing_address` 均存在
-  - E 類（12 欄）：`company_name`、`occupation_code`、`occupation_desc`、`job_title_code`、`job_title_desc`、`job_level`、`industry_code`、`industry_desc`、`work_years`、`company_scale`、`role_code`、`role_desc` 均存在
-  - F 類（12 欄）：`monthly_income`、`approved_income`、`income_source`、`capital`、`credit_limit`、`highest_transaction_amount`、`highest_transaction_date`、`has_real_estate`、`debt_flag`、`fine_flag`、`address_anomaly_flag`、`mainland_flag` 均存在
+  - E 類（12 欄）：`company_name`、`occupation_code`、`occupation_desc`、`job_title_code`、`job_title_desc`、`job_level_code`、`job_level_desc`、`industry_code`、`industry_desc`、`work_years`、`company_scale`、`role` 均存在
+  - F 類（14 欄）：`monthly_income_code`、`monthly_income_desc`、`approved_income`、`income_source_code`、`income_source_desc`、`capital`、`credit_limit`、`highest_transaction_amount`、`highest_transaction_date`、`has_real_estate`、`debt_flag`、`fine_flag`、`address_anomaly_flag`、`mainland_flag` 均存在
   - G 類（13 欄）：`owner_name`、`owner_id`、`owner_birth`、`owner_zip`、`owner_address`、`established_capital`、`employee_count`、`is_listed`、`parent_customer_id`、`group_owner`、`company_attr_code`、`organization_type`、`parent_customer_name` 均存在
   - H 類（5 欄）：`source_created_at`、`source_updated_at`、`data_source`、`_etl_loaded_at`、`_etl_pipeline_id` 均存在
-  - 總欄位數：5+12+10+10+12+12+13+5 = **79 欄**
+  - 總欄位數：6+13+10+10+12+14+13+5 = **83 欄**
 
 ---
 
@@ -668,7 +775,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 讀取 `customer_core` 的欄位名稱清單
   2. 驗證排除欄位不存在
-- **Expected Result**: 以下欄位均不存在於 schema 中：`print_flg`、`id_check`、`id_check_date`、`old_p_id`、`appli_mark`、`spon_mark`；確認已刻意排除的欄位不存在（注意：`spouse_name`、`father_name`、`mother_name`、`id_issue_type`、`id_issue_date`、`id_issue_address`、`driver_license`、`maturity_mailing_zip`、`maturity_mailing_address`、`role_code`、`role_desc` 已於 v2.1 正式納入 schema，不在排除清單中）
+- **Expected Result**: 以下欄位均不存在於 schema 中：`print_flg`、`id_check`、`id_check_date`、`old_p_id`、`appli_mark`、`spon_mark`、`role_code`、`role_desc`、`marital_status`、`customer_type`、`income_source`、`monthly_income`、`job_level`；確認已刻意排除或已重命名的欄位不存在（注意：`role_code`/`role_desc` 於 v2.3 移除，改為 `role` 單欄位；`marital_status` 改為 `marital_status_code`/`marital_status_desc`；`customer_type` 改為 `customer_type_code`/`customer_type_desc`；`income_source` 改為 `income_source_code`/`income_source_desc`；`monthly_income` 改為 `monthly_income_code`/`monthly_income_desc`；`job_level` 改為 `job_level_code`/`job_level_desc`）
 
 ---
 
@@ -678,23 +785,25 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 
 ### customer_core 欄位完整清單（A~H 分類，供測試驗證對照）
 
-**A. 識別與分類（5 欄）**
+**A. 識別與分類（6 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 說明 |
 |----------|------|----------|--------------|------|
 | customer_id | UUID | false | true | ETL 生成代理鍵 |
 | source_customer_no | VARCHAR(20) | false | false | 來源客戶編號（身分證/統編） |
-| customer_type | VARCHAR(2) | false | false | 01=個人/02=企業/04=外籍 |
+| customer_type_code | VARCHAR(2) | false | false | 客戶類型代碼（原始值保留；TBL_ID=55 對照） |
+| customer_type_desc | VARCHAR(50) | true | false | 客戶類型描述（US-030 對照表 TBL_ID=55 轉換） |
 | name | VARCHAR(100) | false | false | 姓名/企業名稱 |
 | english_name | VARCHAR(60) | true | false | 英文姓名 |
 
-**B. 個人屬性（12 欄）**
+**B. 個人屬性（13 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 說明 |
 |----------|------|----------|--------------|------|
 | gender | VARCHAR(1) | true | false | 性別 |
 | date_of_birth | DATE | true | false | 生日 |
-| marital_status | VARCHAR(1) | true | false | 婚姻狀態 |
+| marital_status_code | VARCHAR(2) | true | false | 婚姻狀態代碼（原始值保留；TBL_ID=33 對照） |
+| marital_status_desc | VARCHAR(50) | true | false | 婚姻狀態描述（US-030 對照表 TBL_ID=33 轉換） |
 | education_code | VARCHAR(2) | true | false | 學歷代碼（原始值） |
 | education_desc | VARCHAR(50) | true | false | 學歷描述（US-030 轉換） |
 | spouse_name | VARCHAR(60) | true | false | 配偶姓名 |
@@ -744,21 +853,23 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | occupation_desc | VARCHAR(50) | true | false | 職業描述 |
 | job_title_code | VARCHAR(4) | true | false | 職稱代碼 |
 | job_title_desc | VARCHAR(50) | true | false | 職稱描述 |
-| job_level | VARCHAR(2) | true | false | 職等 |
+| job_level_code | VARCHAR(2) | true | false | 職等代碼（原始值保留；TBL_ID=A6 對照） |
+| job_level_desc | VARCHAR(50) | true | false | 職等描述（US-030 對照表 TBL_ID=A6 轉換） |
 | industry_code | VARCHAR(6) | true | false | 行業代碼 |
-| industry_desc | VARCHAR(100) | true | false | 行業描述 |
+| industry_desc | VARCHAR(100) | true | false | 行業描述（US-030 對照表 TBL_ID=AA Lookup 查詢） |
 | work_years | DECIMAL(8,2) | true | false | 年資 |
 | company_scale | VARCHAR(1) | true | false | 公司規模 |
-| role_code | VARCHAR(4) | true | false | 職務角色代碼 |
-| role_desc | VARCHAR(50) | true | false | 職務角色描述 |
+| role | VARCHAR(4) | true | false | 職務角色（ZZIP.CROLE 直接映射，無 Lookup） |
 
-**F. 財務與風控（12 欄）**
+**F. 財務與風控（14 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 備註 |
 |----------|------|----------|--------------|------|
-| monthly_income | DECIMAL(8,0) | true | false | 來源：MONTH_INCOME（非 INCOME_MON） |
+| monthly_income_code | VARCHAR(4) | true | false | 月收入代碼（原始值保留；TBL_ID=A3 對照） |
+| monthly_income_desc | VARCHAR(50) | true | false | 月收入描述（US-030 對照表 TBL_ID=A3 轉換） |
 | approved_income | INTEGER | true | false | |
-| income_source | VARCHAR(5) | true | false | |
+| income_source_code | VARCHAR(5) | true | false | 收入來源代碼（原始值保留；TBL_ID=Y0 對照） |
+| income_source_desc | VARCHAR(50) | true | false | 收入來源描述（US-030 對照表 TBL_ID=Y0 轉換） |
 | capital | DECIMAL(12,0) | true | false | MLMC.CUSTNOWCAPTIAL varchar→DECIMAL |
 | credit_limit | DECIMAL(12,0) | true | false | MLMC.FAMOUNT |
 | highest_transaction_amount | DECIMAL(12,0) | true | false | MLMC.HFAMOUNT（v2.2 新增）|
@@ -823,13 +934,13 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 
 ### 客戶類型對應測試資料
 
-| 來源系統 | 來源欄位 | 輸入值 | 預期輸出（customer_type）|
-|---------|---------|--------|------------------------|
-| ZZIP | CUSTOM_MK | `"01"` | `"01"`（直接映射） |
-| ZZIP | CUSTOM_MK | `"02"` | `"02"`（直接映射） |
-| ZZIP | CUSTOM_MK | `"04"` | `"04"`（直接映射） |
-| MLMC | CUTYPE | `"1"` | `"01"`（補零轉換） |
-| MLMC | CUTYPE | `"2"` | `"02"`（補零轉換） |
+| 來源系統 | 來源欄位 | 輸入值 | 預期輸出（customer_type_code）| 預期輸出（customer_type_desc）|
+|---------|---------|--------|-------------------------------|-------------------------------|
+| ZZIP | CUSTOM_MK | `"01"` | `"01"`（直接映射） | US-030 TBL_ID=55 查詢結果 |
+| ZZIP | CUSTOM_MK | `"02"` | `"02"`（直接映射） | US-030 TBL_ID=55 查詢結果 |
+| ZZIP | CUSTOM_MK | `"04"` | `"04"`（直接映射） | US-030 TBL_ID=55 查詢結果 |
+| MLMC | CUTYPE | `"1"` | `"01"`（補零轉換） | US-030 TBL_ID=55 查詢結果 |
+| MLMC | CUTYPE | `"2"` | `"02"`（補零轉換） | US-030 TBL_ID=55 查詢結果 |
 
 ---
 
@@ -841,18 +952,19 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Positive（Schema API — 欄位結構） | 10 |
 | Negative（錯誤與安全） | 6 |
 | Unit（ETL 轉換函式）| 10 |
+| Unit（code→desc 對照轉換）| 8 |
 | Integration（衝突解決） | 2 |
 | Integration（前端介面） | 5 |
 | Integration（ETL 追蹤欄位） | 2 |
 | Boundary | 2 |
 | Unit（Schema 定義完整性） | 2 |
-| **總計** | **42** |
+| **總計** | **50** |
 
 ---
 
 ## 風險與注意事項
 
-1. **TS-F036-001/003/004 欄位數量驗證（columnCount === 79）**：v2.2 更新後 A~H 分類加總為 79 欄（5+12+10+10+12+12+13+5）。若 migration 實際建立欄位數與此不符，需確認是否有欄位遺漏或 spec 版本差異，建議實作後以 migration 結果為準。
+1. **TS-F036-001/003/004 欄位數量驗證（columnCount === 83）**：v2.3 更新後 A~H 分類加總為 83 欄（6+13+10+10+12+14+13+5）。若 migration 實際建立欄位數與此不符，需確認是否有欄位遺漏或 spec 版本差異，建議實作後以 migration 結果為準。
 
 2. **TS-F036-013（Phase 2/3 表回 404）**：需確認 Phase 1 migration 確實不建立 `customer_interaction` 等三個表，以避免測試誤判。若 Phase 2 進行時，此場景需移除或修改。
 
@@ -865,3 +977,5 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 6. **data_source 欄位 nullable 問題**：US-049 規格標注 `data_source nullable = NO`（H 類欄位表格），但 ETL 追蹤欄位說明標記為「ETL 自動填充」。需確認：Pipeline 執行時 `data_source` 是否一定有值（若 Datasource 未設定識別名稱是否允許 null）。建議向 Arch 確認，並在 TS-F036-009 中反映實際規格。
 
 7. **舊版測試場景已廢棄**：原 F036-test.md v1.0 中的 TS-F036-001（4 個目標表）、TS-F036-002（columnCount 16/14/20/17）、TS-F036-005 至 TS-F036-008（四表 schema 驗證）及 TS-F036-020（空字串路徑）均已被本版本場景取代，請勿再參考舊版文件。
+
+8. **v2.3 code→desc 對照欄位異動**：`marital_status`、`customer_type`、`income_source`、`monthly_income`、`job_level` 五個欄位已拆分為 `_code` + `_desc` 對照欄位組；`role_code` + `role_desc` 已移除，改為 `role` 單欄位（ZZIP.CROLE 直接映射）；`industry_desc` 改為 Lookup 查詢（TBL_ID=AA）。所有 code→desc 轉換依賴 US-030 對照表，若 US-030 尚未實作需以 stub 替代。
