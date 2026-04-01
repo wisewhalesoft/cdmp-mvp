@@ -122,8 +122,13 @@ export async function computeNodeOutputColumns(
       case 'string_process':
       case 'encrypt':
       case 'aggregate':
-      case 'lookup':
-        return inputColumns;
+      case 'lookup': {
+        const outCols = (data.outputColumns as Array<{ outputAlias?: string; lookupColumn?: string }>) || [];
+        const added = outCols
+          .map((c) => c.outputAlias || c.lookupColumn || '')
+          .filter(Boolean);
+        return [...inputColumns, ...added];
+      }
       case 'merge':
         return inputColumns;
       default:

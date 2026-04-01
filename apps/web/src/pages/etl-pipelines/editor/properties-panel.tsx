@@ -91,7 +91,7 @@ export function PropertiesPanel({
       case 'dedup':
         return <DedupProperties nodeData={nodeData} onChange={updateData} />;
       case 'lookup':
-        return <LookupProperties nodeData={nodeData} onChange={updateData} />;
+        return <LookupProperties nodeData={nodeData} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
       case 'string_process':
         return <StringProcessProperties nodeData={nodeData} onChange={updateData} />;
       case 'encrypt':
@@ -119,9 +119,14 @@ export function PropertiesPanel({
             >
               {getCategoryLabel(nodeDef.category)}
             </span>
-            <span className="text-sm font-semibold text-gray-800">
-              {(nodeData.label as string) || nodeDef.label}
-            </span>
+            <input
+              type="text"
+              value={(nodeData.label as string) || ''}
+              placeholder={nodeDef.label}
+              onChange={(e) => onNodeDataChange(selectedNode.id, { label: e.target.value })}
+              className="text-sm font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#2563EB] focus:outline-none min-w-0 flex-1"
+              data-testid="node-name-input"
+            />
           </div>
           <button
             onClick={() => onDeleteNode(selectedNode.id)}
@@ -1366,13 +1371,43 @@ interface LookupOutputColumn {
   outputAlias: string;
 }
 
-function LookupProperties({ nodeData, onChange }: SimplePropsBase) {
+function LookupProperties({
+  nodeData,
+  onChange,
+  nodeId,
+  nodes,
+  edges,
+}: SimplePropsBase & { nodeId: string; nodes: Node[]; edges: Edge[] }) {
   const lookupSource = (nodeData.lookupSource as string) || '';
+  const lookupFilter = (nodeData.lookupFilter as string) || '';
   const matchColumn = (nodeData.matchColumn as string) || '';
   const lookupMatchColumn = (nodeData.lookupMatchColumn as string) || '';
   const outputColumns = (nodeData.outputColumns as LookupOutputColumn[]) || [];
   const noMatchStrategy = (nodeData.noMatchStrategy as string) || 'null';
   const defaultValue = (nodeData.defaultValue as string) || '';
+
+  // Detect if a lookup-input edge is connected
+  const lookupEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'lookup-input');
+  const hasLookupInput = !!lookupEdge;
+
+  const getLookupSourceLabel = () => {
+    if (!lookupEdge) return null;
+    const node = nodes.find((n) => n.id === lookupEdge.source);
+    if (!node) return null;
+    const data = node.data as Record<string, unknown>;
+    return (data.label as string) || lookupEdge.source;
+  };
+
+  const lookupSourceLabel = getLookupSourceLabel();
+
+  // Auto-sync subtitle with lookup source node label in dual-input mode
+  useEffect(() => {
+    if (hasLookupInput && lookupSourceLabel) {
+      onChange({ subtitle: lookupSourceLabel });
+    } else if (!hasLookupInput) {
+      onChange({ subtitle: lookupSource || undefined });
+    }
+  }, [hasLookupInput, lookupSourceLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addOutputColumn = () => {
     onChange({
@@ -1391,17 +1426,40 @@ function LookupProperties({ nodeData, onChange }: SimplePropsBase) {
 
   return (
     <>
-      <div>
-        <label className={labelClass}>對照來源</label>
-        <input
-          type="text"
-          className={inputClass}
-          value={lookupSource}
-          onChange={(e) => onChange({ lookupSource: e.target.value, subtitle: e.target.value || undefined })}
-          placeholder="輸入對照表名稱"
-          data-testid="lookup-source-input"
-        />
-      </div>
+      {hasLookupInput ? (
+        <div>
+          <label className={labelClass}>對照來源</label>
+          <div className="text-sm text-gray-700 bg-gray-50 border border-[#E5E7EB] rounded-lg px-3 py-2" data-testid="lookup-source-connected">
+            {lookupSourceLabel || '上游節點'}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className={labelClass}>對照來源</label>
+            <input
+              type="text"
+              className={inputClass}
+              value={lookupSource}
+              onChange={(e) => onChange({ lookupSource: e.target.value, subtitle: e.target.value || undefined })}
+              placeholder="輸入對照表名稱"
+              data-testid="lookup-source-input"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>過濾條件</label>
+            <input
+              type="text"
+              className={inputClass}
+              value={lookupFilter}
+              onChange={(e) => onChange({ lookupFilter: e.target.value })}
+              placeholder="例: TBL_ID = 'A2'"
+              data-testid="lookup-filter-input"
+            />
+          </div>
+          <p className="text-xs text-blue-500 mt-1">提示：可將 Filter 節點連接至 lookup-input 端口以取代手動設定</p>
+        </>
+      )}
       <div>
         <label className={labelClass}>比對欄位（主表）</label>
         <input

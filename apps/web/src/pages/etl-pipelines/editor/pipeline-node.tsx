@@ -79,12 +79,31 @@ function PipelineNodeComponent({ id, data, selected }: NodeProps & { data: Pipel
       data-testid="pipeline-node"
     >
       {/* Input Handle - not for extract nodes */}
-      {nodeDef.category !== 'extract' && data.nodeType !== 'merge' && (
+      {nodeDef.category !== 'extract' && data.nodeType !== 'merge' && data.nodeType !== 'lookup' && (
         <Handle
           type="target"
           position={Position.Left}
           className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
         />
+      )}
+      {/* Lookup node: dual input handles (main data + lookup source) */}
+      {data.nodeType === 'lookup' && (
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="default"
+            style={{ top: '33%' }}
+            className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="lookup-input"
+            style={{ top: '67%' }}
+            className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
+          />
+        </>
       )}
       {/* Merge node: dual input handles */}
       {data.nodeType === 'merge' && (
