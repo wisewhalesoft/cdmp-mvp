@@ -5,7 +5,7 @@ feature-id: F036
 source-story: US-049
 epic: E05
 priority: P0-MVP
-version: "2.3"
+version: "2.4"
 date: 2026-04-01
 status: Draft
 ---
@@ -14,7 +14,7 @@ status: Draft
 
 ## 1. 功能摘要
 
-系統預先定義 1 個 Domain-Oriented 目標表 `customer_core`（83 欄位），提供 API 查詢目標表清單與 schema。Load 節點可選擇目標表並進行欄位對應，ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）由系統自動填充。Phase 2/3 待對應來源系統接入後再擴充 `customer_interaction`、`customer_financial`、`customer_service`。
+系統預先定義 1 個 Domain-Oriented 目標表 `customer_core`（87 欄位），提供 API 查詢目標表清單與 schema。Load 節點可選擇目標表並進行欄位對應，ETL 追蹤欄位（data_source / _etl_loaded_at / _etl_pipeline_id）由系統自動填充。Phase 2/3 待對應來源系統接入後再擴充 `customer_interaction`、`customer_financial`、`customer_service`。
 
 ## 2. 使用者故事
 
@@ -81,7 +81,7 @@ status: Draft
 
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（83 欄位），欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（87 欄位），欄位定義正確
 - **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ## 7. 主要流程
@@ -122,7 +122,7 @@ status: Draft
       "tableName": "customer_core",
       "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 83,
+      "columnCount": 87,
       "description": "客戶身分、聯絡、職業、財務概況與風控旗標"
     }
   ]
@@ -279,10 +279,14 @@ status: Draft
 | owner_zip | VARCHAR(6) | YES | | 負責人郵遞區號 | MLMC.OWNERZIPCODE |
 | owner_address | VARCHAR(100) | YES | | 負責人地址 | MLMC.OWNERADDR |
 | established_capital | DECIMAL(12,0) | YES | | 登記資本額 | MLMC.CUSTCREATECAPTIAL（varchar→DECIMAL） |
-| employee_count | VARCHAR(6) | YES | | 員工人數 | MLMC.EMPLOYEE |
-| is_listed | VARCHAR(6) | YES | | 上市櫃 | MLMC.LISTED |
+| employee_count_code | VARCHAR(6) | YES | | 員工人數代碼 | MLMC.EMPLOYEE |
+| employee_count_desc | VARCHAR(50) | YES | | 員工人數描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=89) |
+| is_listed_code | VARCHAR(6) | YES | | 上市櫃代碼 | MLMC.LISTED |
+| is_listed_desc | VARCHAR(50) | YES | | 上市櫃描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=27) |
 | group_owner | VARCHAR(50) | YES | | 集團實際負責人 | MLMC.GROUPOWNER |
 | company_attr_code | VARCHAR(6) | YES | | 公司屬性 | MLMC.COMPTYPE |
+| company_attr_desc | VARCHAR(50) | YES | | 公司屬性描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=26) |
+| business_item | VARCHAR(100) | YES | | 營業項目 | MLMC.BUSINESS |
 | organization_type | VARCHAR(6) | YES | | 組織形態 | MLMC.ORGATYPE |
 | parent_customer_id | VARCHAR(10) | YES | | 母公司客戶 ID | MLMC.PARENTCUSTID |
 | parent_customer_name | VARCHAR(100) | YES | | 母公司名稱 | MLMC.PARENTCUSTNAME |
@@ -311,6 +315,9 @@ status: Draft
 | 職級代碼轉換 | `job_level_code` → `job_level_desc` | US-030 代碼轉換 (TBL_ID=A6) |
 | 月所得代碼轉換 | `monthly_income_code` → `monthly_income_desc` | US-030 代碼轉換 (TBL_ID=A3) |
 | 行業代碼轉換 | `industry_code` → `industry_desc` | US-030 代碼轉換 (TBL_ID=AA) |
+| 員工人數代碼轉換 | `employee_count_code` → `employee_count_desc` | US-030 代碼轉換 (SYSCD=LL, DATAID=89) |
+| 上市櫃代碼轉換 | `is_listed_code` → `is_listed_desc` | US-030 代碼轉換 (SYSCD=LL, DATAID=27) |
+| 公司屬性代碼轉換 | `company_attr_code` → `company_attr_desc` | US-030 代碼轉換 (SYSCD=LL, DATAID=26) |
 | 資本額型別轉換 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL 來源為 varchar | 轉換為 DECIMAL |
 | 客戶類型對應 | 兩來源的客戶類型編碼不同 | ZZIP.CUSTOM_MK 直接映射至 customer_type_code；MLMC.CUTYPE 需轉換（1→01, 2→02） |
 
@@ -363,8 +370,8 @@ status: Draft
 
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
-| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量（83） |
-| 2 | 呼叫 customer_core Schema API | 回傳 83 個欄位定義，型別與描述正確，涵蓋 A~H 八個分類 |
+| 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量（87） |
+| 2 | 呼叫 customer_core Schema API | 回傳 87 個欄位定義，型別與描述正確，涵蓋 A~H 八個分類 |
 | 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
 | 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
 | 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |

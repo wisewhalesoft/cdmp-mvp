@@ -46,7 +46,7 @@
 ### AC-6：目標表 Schema 預定義正確
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（83 欄位），欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（87 欄位），欄位定義正確
 - **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ---
@@ -83,7 +83,7 @@
       "tableName": "customer_core",
       "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 83,
+      "columnCount": 87,
       "description": "客戶身分、個人屬性、聯絡、職業、財務概況與風控旗標"
     }
   ]
@@ -219,11 +219,15 @@
 | owner_zip | VARCHAR(6) | YES | | 負責人郵遞區號 | MLMC.OWNERZIPCODE |
 | owner_address | VARCHAR(100) | YES | | 負責人地址 | MLMC.OWNERADDR |
 | established_capital | DECIMAL(12,0) | YES | | 登記資本額 | MLMC.CUSTCREATECAPTIAL（varchar→DECIMAL） |
-| employee_count | VARCHAR(6) | YES | | 員工人數 | MLMC.EMPLOYEE |
-| is_listed | VARCHAR(6) | YES | | 上市櫃 | MLMC.LISTED |
+| employee_count_code | VARCHAR(6) | YES | | 員工人數代碼 | MLMC.EMPLOYEE |
+| employee_count_desc | VARCHAR(50) | YES | | 員工人數描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=89) |
+| is_listed_code | VARCHAR(6) | YES | | 上市櫃代碼 | MLMC.LISTED |
+| is_listed_desc | VARCHAR(50) | YES | | 上市櫃描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=27) |
 | parent_customer_id | VARCHAR(10) | YES | | 母公司客戶 ID | MLMC.PARENTCUSTID |
 | group_owner | VARCHAR(50) | YES | | 集團實際負責人 | MLMC.GROUPOWNER |
 | company_attr_code | VARCHAR(6) | YES | | 公司屬性 | MLMC.COMPTYPE |
+| company_attr_desc | VARCHAR(50) | YES | | 公司屬性描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=26) |
+| business_item | VARCHAR(100) | YES | | 營業項目 | MLMC.BUSINESS |
 | organization_type | VARCHAR(6) | YES | | 組織形態（代碼表 LCCODEMF） | MLMC.ORGATYPE |
 | parent_customer_name | VARCHAR(100) | YES | | 母公司名稱 | MLMC.PARENTCUSTNAME |
 
@@ -261,6 +265,9 @@
 | Lookup：行業描述 | industry_code → industry_desc，對照表 TBL_ID=AA |
 | Lookup：月所得 | monthly_income_code → monthly_income_desc，對照表 TBL_ID=A3 |
 | Lookup：收入來源 | income_source_code → income_source_desc，對照表 TBL_ID=Y0 |
+| Lookup：員工人數 | employee_count_code → employee_count_desc，對照表 SYSCD=LL, DATAID=89 |
+| Lookup：上市櫃 | is_listed_code → is_listed_desc，對照表 SYSCD=LL, DATAID=27 |
+| Lookup：公司屬性 | company_attr_code → company_attr_desc，對照表 SYSCD=LL, DATAID=26 |
 | 資本額型別 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL：varchar → DECIMAL |
 | 月所得代碼 | ZZIP.MONTH_INCOME：保留原始代碼至 monthly_income_code VARCHAR(5)，透過 TBL_ID=A3 Lookup 取得描述 |
 | 客戶類型對應 | ZZIP.CUSTOM_MK 直接映射；MLMC.CUTYPE 需轉換（1→01, 2→02） |
@@ -289,7 +296,7 @@
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
 | 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量 |
-| 2 | 呼叫 customer_core Schema API | 回傳 83 個欄位定義，型別與描述正確 |
+| 2 | 呼叫 customer_core Schema API | 回傳 87 個欄位定義，型別與描述正確 |
 | 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
 | 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
 | 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |
@@ -311,7 +318,7 @@
 
 - [ ] 目標表清單 API 實作完成並通過單元測試
 - [ ] 目標表 Schema API 實作完成並通過單元測試
-- [ ] customer_core 目標表 schema 預定義正確（83 欄位，涵蓋 A~H 八個分類）
+- [ ] customer_core 目標表 schema 預定義正確（87 欄位，涵蓋 A~H 八個分類）
 - [ ] 來源欄位對應表完整且經業務確認
 - [ ] 前端 Load 節點目標表選擇器實作完成
 - [ ] 前端欄位對應介面實作完成

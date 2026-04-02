@@ -786,7 +786,7 @@
               <option value="customer_core" selected>Customer Core（客戶主檔）- core</option>
             </select>
             <div class="flex items-center justify-between mt-1.5">
-              <p class="text-xs text-gray-400">約 79 個欄位（含 3 個自動填充）· 8 個分類</p>
+              <p class="text-xs text-gray-400">約 85 個欄位（含 3 個自動填充）· 8 個分類</p>
               <a href="22-target-tables.html" class="text-xs text-primary hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>完整定義</a>
             </div>
           </div>
@@ -794,7 +794,7 @@
           <!-- Mapping Summary -->
           <div class="flex items-center gap-3 text-xs">
             <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-50 text-green-700"><i data-lucide="check-circle" class="w-3 h-3"></i>已對應 48</span>
-            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-gray-500"><i data-lucide="minus-circle" class="w-3 h-3"></i>未對應 28</span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-gray-500"><i data-lucide="minus-circle" class="w-3 h-3"></i>未對應 34</span>
             <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-50 text-red-600"><i data-lucide="alert-circle" class="w-3 h-3"></i>必填未對應 0</span>
             <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-50 text-gray-400"><i data-lucide="lock" class="w-3 h-3"></i>自動 3</span>
           </div>
@@ -815,11 +815,11 @@
                 <span>來源欄位</span>
               </div>
 
-              <!-- A. 識別與分類 (5) -->
+              <!-- A. 識別與分類 (6) -->
               <div class="border-b border-border">
                 <button onclick="toggleLoadCat('la')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
-                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">A</span><span class="font-medium text-gray-600">識別與分類</span><span class="text-gray-400">(5)</span></span>
-                  <div class="flex items-center gap-2"><span class="text-green-500">5/5</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-la"></i></div>
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">A</span><span class="font-medium text-gray-600">識別與分類</span><span class="text-gray-400">(6)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">6/6</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-la"></i></div>
                 </button>
                 <div id="lcat-la">
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
@@ -831,9 +831,10 @@
                     <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUSTO_NO</option><option value="">-- 不對應 --</option></select>
                   </div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
-                    <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> customer_type <span class="text-gray-400">(VARCHAR)</span></span>
+                    <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> customer_type_code <span class="text-gray-400">(VARCHAR)</span></span>
                     <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUSTOM_MK</option><option value="">-- 不對應 --</option></select>
                   </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">customer_type_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
                     <span class="text-xs font-medium text-gray-700"><span class="text-danger">*</span> name <span class="text-gray-400">(VARCHAR)</span></span>
                     <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUS_NAME</option><option value="">-- 不對應 --</option></select>
@@ -845,11 +846,11 @@
                 </div>
               </div>
 
-              <!-- B. 個人屬性 (5) -->
+              <!-- B. 個人屬性 (13) -->
               <div class="border-b border-border">
                 <button onclick="toggleLoadCat('lb')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
-                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-green-100 text-green-700 text-[10px] font-bold">B</span><span class="font-medium text-gray-600">個人屬性</span><span class="text-gray-400">(5)</span></span>
-                  <div class="flex items-center gap-2"><span class="text-green-500">5/5</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lb"></i></div>
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-green-100 text-green-700 text-[10px] font-bold">B</span><span class="font-medium text-gray-600">個人屬性</span><span class="text-gray-400">(13)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">5/13</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lb"></i></div>
                 </button>
                 <div id="lcat-lb" class="hidden">
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
@@ -861,9 +862,10 @@
                     <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>BITBE_DATE</option><option value="">-- 不對應 --</option></select>
                   </div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
-                    <span class="text-xs text-gray-700">marital_status <span class="text-gray-400">(VARCHAR)</span></span>
+                    <span class="text-xs text-gray-700">marital_status_code <span class="text-gray-400">(VARCHAR)</span></span>
                     <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CMARRY_MK</option><option value="">-- 不對應 --</option></select>
                   </div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">marital_status_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50">
                     <span class="text-xs text-gray-700">education_code <span class="text-gray-400">(VARCHAR)</span></span>
                     <select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>EDUCAT_BACK</option><option value="">-- 不對應 --</option></select>
@@ -925,11 +927,11 @@
                 </div>
               </div>
 
-              <!-- E. 職業與就業 (10) -->
+              <!-- E. 職業與就業 (12) -->
               <div class="border-b border-border">
                 <button onclick="toggleLoadCat('le')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
-                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">E</span><span class="font-medium text-gray-600">職業與就業</span><span class="text-gray-400">(10)</span></span>
-                  <div class="flex items-center gap-2"><span class="text-green-500">7/10</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-le"></i></div>
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">E</span><span class="font-medium text-gray-600">職業與就業</span><span class="text-gray-400">(12)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">9/12</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-le"></i></div>
                 </button>
                 <div id="lcat-le" class="hidden">
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">company_name <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CO_NAME</option><option value="">-- 不對應 --</option></select></div>
@@ -937,7 +939,9 @@
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">occupation_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_title_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>JOB_TITLE</option><option value="">-- 不對應 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_title_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
-                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_level <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>JOB_LEVEL</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_level_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>JOB_LEVEL</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">job_level_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">role <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CROLE</option><option value="">-- 不對應 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">industry_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>INDUSTRY</option><option value="">-- 不對應 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">industry_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>BUSINESS</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">work_years <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>N_WORK_YEAR</option></select></div>
@@ -945,16 +949,18 @@
                 </div>
               </div>
 
-              <!-- F. 財務與風控 (12) -->
+              <!-- F. 財務與風控 (14) -->
               <div class="border-b border-border">
                 <button onclick="toggleLoadCat('lf')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
-                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-orange-100 text-orange-700 text-[10px] font-bold">F</span><span class="font-medium text-gray-600">財務與風控</span><span class="text-gray-400">(12)</span></span>
-                  <div class="flex items-center gap-2"><span class="text-gray-400">0/12</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lf"></i></div>
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-orange-100 text-orange-700 text-[10px] font-bold">F</span><span class="font-medium text-gray-600">財務與風控</span><span class="text-gray-400">(14)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-gray-400">0/14</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lf"></i></div>
                 </button>
                 <div id="lcat-lf" class="hidden">
-                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">monthly_income <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_MON</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">monthly_income_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_MON</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">monthly_income_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">approved_income <span class="text-gray-400">(INTEGER)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_APPROVED</option></select></div>
-                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">income_source <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_SOURCE</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">income_source_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>INCOME_SOURCE</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">income_source_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">capital <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>CAPITAL</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">credit_limit <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>FAMOUNT</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">has_real_estate <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>IMMOPRO_MK</option></select></div>
@@ -965,20 +971,28 @@
                 </div>
               </div>
 
-              <!-- G. 企業客戶專屬 (13) -->
+              <!-- G. 企業客戶專屬 (15) -->
               <div class="border-b border-border">
                 <button onclick="toggleLoadCat('lg')" class="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 text-xs">
-                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-teal-100 text-teal-700 text-[10px] font-bold">G</span><span class="font-medium text-gray-600">企業客戶專屬</span><span class="text-gray-400">(13)</span></span>
-                  <div class="flex items-center gap-2"><span class="text-green-500">6/13</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lg"></i></div>
+                  <span class="flex items-center gap-1.5"><span class="inline-flex items-center justify-center w-4 h-4 rounded bg-teal-100 text-teal-700 text-[10px] font-bold">G</span><span class="font-medium text-gray-600">企業客戶專屬</span><span class="text-gray-400">(15)</span></span>
+                  <div class="flex items-center gap-2"><span class="text-green-500">8/15</span><i data-lucide="chevron-down" class="w-3 h-3 text-gray-400 transition-transform" id="lchev-lg"></i></div>
                 </button>
                 <div id="lcat-lg" class="hidden">
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_name <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>OWNER</option><option value="">-- 不對應 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_id <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>OWNERID</option><option value="">-- 不對應 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_birth <span class="text-gray-400">(DATE)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>OWNERBIRTH</option><option value="">-- 不對應 --</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">established_capital <span class="text-gray-400">(DECIMAL)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>CUSTCREATECAPTIAL</option><option value="">-- 不對應 --</option></select></div>
-                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">employee_count <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>EMPLOYEE</option><option value="">-- 不對應 --</option></select></div>
-                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">is_listed <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>LISTED</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">employee_count_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>EMPLOYEE</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">employee_count_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">is_listed_code <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>LISTED</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">is_listed_desc <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>-- 代碼轉換自動產生 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">business_item <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20 border-green-300 bg-green-50"><option>BUSINESS</option><option value="">-- 不對應 --</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_zip <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>OWNER_ZIP</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">owner_address <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>OWNER_ADD</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">group_owner <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>GROUP_OWNER</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">organization_type <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>ORG_TYPE</option></select></div>
                   <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">parent_customer_id <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>PARENTCUSTID</option></select></div>
+                  <div class="grid grid-cols-2 items-center px-3 py-1.5 border-t border-border hover:bg-gray-50"><span class="text-xs text-gray-700">parent_customer_name <span class="text-gray-400">(VARCHAR)</span></span><select class="text-xs border border-border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary/20"><option value="">-- 不對應 --</option><option>PARENTCUSTNAME</option></select></div>
                 </div>
               </div>
 
