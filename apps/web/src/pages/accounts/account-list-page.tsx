@@ -10,23 +10,28 @@ import { EditAccountModal } from './edit-account-modal';
 import { ToggleStatusDialog } from './toggle-status-dialog';
 import { ChangeRoleDialog } from './change-role-dialog';
 import { ResetPasswordDialog } from './reset-password-dialog';
-import type { AccountListItem } from '@cdmp/shared';
+import { type AccountListItem, type UserRole, getRoleDisplayName } from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
   return isoString.slice(0, 10);
 }
 
+const ROLE_BADGE_STYLES: Record<string, string> = {
+  admin: 'bg-blue-100 text-blue-700',
+  user: 'bg-gray-100 text-gray-700',
+  business: 'bg-emerald-100 text-emerald-700',
+  marketing: 'bg-pink-100 text-pink-700',
+  customer_service: 'bg-orange-100 text-orange-700',
+  analyst: 'bg-violet-100 text-violet-700',
+  supervisor: 'bg-indigo-100 text-indigo-700',
+  backend_ops: 'bg-teal-100 text-teal-700',
+};
+
 function RoleBadge({ role }: { role: string }) {
-  if (role === 'admin') {
-    return (
-      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
-        Admin
-      </span>
-    );
-  }
+  const styles = ROLE_BADGE_STYLES[role] ?? 'bg-gray-100 text-gray-700';
   return (
-    <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">
-      User
+    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${styles}`}>
+      {getRoleDisplayName(role as UserRole)}
     </span>
   );
 }
@@ -100,7 +105,7 @@ export function AccountListPage() {
         page,
         limit,
         search: debouncedSearch || undefined,
-        role: (roleFilter as 'admin' | 'user') || undefined,
+        role: (roleFilter as UserRole) || undefined,
         status: (statusFilter as 'active' | 'disabled') || undefined,
       });
       setAccounts(result.data);
@@ -173,7 +178,7 @@ export function AccountListPage() {
     setShowRoleDialog(true);
   };
 
-  const handleRoleConfirm = async (newRole: 'admin' | 'user') => {
+  const handleRoleConfirm = async (newRole: UserRole) => {
     if (!roleTarget) return;
     setRoleLoading(true);
     try {
@@ -304,8 +309,18 @@ export function AccountListPage() {
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">全部角色</option>
-              <option value="admin">Admin</option>
-              <option value="user">User</option>
+              <optgroup label="系統角色">
+                <option value="admin">管理者（Admin）</option>
+                <option value="user">使用者（User）</option>
+              </optgroup>
+              <optgroup label="業務角色">
+                <option value="business">業務</option>
+                <option value="marketing">行銷（企劃）</option>
+                <option value="customer_service">客服</option>
+                <option value="analyst">分析師</option>
+                <option value="supervisor">主管</option>
+                <option value="backend_ops">後端作業（作服）</option>
+              </optgroup>
             </select>
             <select
               value={statusFilter}

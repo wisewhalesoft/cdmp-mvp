@@ -138,11 +138,11 @@ describe('AccountListPage', () => {
       expect(screen.getByText('Disabled User')).toBeInTheDocument();
     });
 
-    it('顯示角色 Badge — Admin 與 User', async () => {
+    it('顯示角色 Badge — 管理者與使用者（中文名稱）', async () => {
       await renderAndLoad();
-      const adminBadges = screen.getAllByText('Admin');
+      const adminBadges = screen.getAllByText('管理者（Admin）');
       expect(adminBadges.length).toBeGreaterThanOrEqual(1);
-      const userBadges = screen.getAllByText('User');
+      const userBadges = screen.getAllByText('使用者（User）');
       expect(userBadges.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -512,7 +512,13 @@ describe('AccountListPage', () => {
         await vi.advanceTimersByTimeAsync(100);
       });
 
-      // Confirm in dialog — click "確認變更"
+      // Two-step flow: first click "下一步", then "確認變更"
+      fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
       fireEvent.click(screen.getByRole('button', { name: '確認變更' }));
 
       await act(async () => {

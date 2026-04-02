@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VALID_ROLES } from '@cdmp/shared';
 
 export const createAccountSchema = z.object({
   name: z
@@ -12,7 +13,7 @@ export const createAccountSchema = z.object({
   password: z
     .string()
     .min(8, '密碼長度至少需要 8 個字元'),
-  role: z.enum(['admin', 'user'], {
+  role: z.enum(VALID_ROLES as unknown as [string, ...string[]], {
     errorMap: () => ({ message: '角色值無效' }),
   }),
 });
