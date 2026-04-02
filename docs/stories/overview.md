@@ -2,28 +2,30 @@
 
 > **專案名稱**：CDMP（Customer Data Management Platform）企業客戶資料治理平台
 > **版本**：v1.0 (MVP)
-> **最後更新**：2026-03-19
+> **最後更新**：2026-04-02
 
 ## 快速統計
 
 | 指標 | 數量 |
 |------|------|
-| Epic 總數 | 5 |
-| User Story 總數 | 45 |
+| Epic 總數 | 6 |
+| User Story 總數 | 55 |
 | 非功能需求（NFR）總數 | 2 |
-| 目標階段 | Phase 1（MVP） |
+| 目標階段 | Phase 1（MVP）+ Phase 2（Customer 360 全功能） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
-| 主要角色 | Admin（管理者）、User（使用者） |
+| 主要角色 | Admin（管理者）、User（使用者）；Phase 1 即建立六種業務角色 Seed Data：業務、行銷（企劃）、客服、分析師、主管、後端作業（作服）（US-017） |
+| 最後更新 | 2026-04-02（Phase 3 合併至 Phase 2，E02 新增 US-017） |
 
 ## Epic 索引
 
 | Epic ID | Epic 名稱 | 階段 | Stories 數量 | Epic Brief |
 |---------|-----------|------|-------------|------------|
 | E01 | [驗證與登入](epics/E01-auth-and-login/epic-brief.md) | 1（MVP） | 3 | [epic-brief.md](epics/E01-auth-and-login/epic-brief.md) |
-| E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 7 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
+| E02 | [帳號與角色管理](epics/E02-account-role-management/epic-brief.md) | 1（MVP） | 8 | [epic-brief.md](epics/E02-account-role-management/epic-brief.md) |
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 11 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 | E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 18 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
+| E06 | [Customer 360](epics/E06-customer-360/epic-brief.md) | 2 | 9 | [epic-brief.md](epics/E06-customer-360/epic-brief.md) |
 
 ## Story 地圖
 
@@ -39,6 +41,7 @@
 | E02 | [US-014](epics/E02-account-role-management/US-014-assign-change-role.md) | 指派／變更角色 | Must Have |
 | E02 | [US-015](epics/E02-account-role-management/US-015-self-service-password-reset.md) | 自助式密碼重設 | Must Have |
 | E02 | [US-016](epics/E02-account-role-management/US-016-admin-reset-password.md) | Admin 重設使用者密碼 | Must Have |
+| E02 | [US-017](epics/E02-account-role-management/US-017-business-role-definitions.md) | 業務角色定義（系統預設角色） | Must Have |
 | E03 | [US-020](epics/E03-datasource-management/US-020-add-datasource.md) | 新增資料來源 | Must Have |
 | E03 | [US-021](epics/E03-datasource-management/US-021-view-datasource-list.md) | 查看資料來源清單 | Must Have |
 | E03 | [US-022](epics/E03-datasource-management/US-022-edit-datasource.md) | 編輯資料來源 | Must Have |
@@ -74,6 +77,15 @@
 | E05 | [US-056](epics/E05-etl-pipeline/US-056-etl-nodes-extract-merge-dedup.md) | ETL 節點實作 — Extract、Merge、Dedup、TypeCast、DerivedField | Must Have |
 | E05 | [US-057](epics/E05-etl-pipeline/US-057-etl-nodes-mapping-conditional-load.md) | ETL 節點實作 — FieldMapping、Conditional、TargetLoad | Must Have |
 | E05 | [US-058](epics/E05-etl-pipeline/US-058-lookup-node-dual-input.md) | Lookup 節點雙輸入重設計 | Must Have |
+| E06 | [US-060](epics/E06-customer-360/US-060-customer-search-list.md) | 客戶搜尋與清單 | Must Have |
+| E06 | [US-061](epics/E06-customer-360/US-061-customer-360-view.md) | 單一客戶 360 檢視 | Must Have |
+| E06 | [US-062](epics/E06-customer-360/US-062-create-tag.md) | 建立標籤 | Must Have |
+| E06 | [US-063](epics/E06-customer-360/US-063-manage-tags.md) | 管理標籤 | Must Have |
+| E06 | [US-064](epics/E06-customer-360/US-064-tag-customer.md) | 為客戶新增／移除標籤 | Must Have |
+| E06 | [US-065](epics/E06-customer-360/US-065-bulk-tag-customers.md) | 批次標記客戶 | Should Have |
+| E06 | [US-066](epics/E06-customer-360/US-066-filter-by-tag.md) | 依標籤篩選客戶 | Must Have |
+| E06 | [US-067](epics/E06-customer-360/US-067-customer-change-history.md) | 客戶資料變更歷史查詢（Phase 2） | Should Have |
+| E06 | [US-068](epics/E06-customer-360/US-068-customer-360-role-access.md) | Customer 360 角色存取設定（Phase 2） | Could Have |
 
 ## 非功能需求（NFR）
 
@@ -85,22 +97,32 @@
 ## 階段規劃
 
 ### Phase 1 — MVP（當前）
-重點：核心 CRUD、驗證登入、基礎 RBAC 權限管控、資料來源管理、資料擷取管理、ETL Pipeline 管理
+重點：核心 CRUD、驗證登入、基礎 RBAC 權限管控、資料來源管理、資料擷取管理、ETL Pipeline 管理、業務角色 Seed Data 建立
 
 - E01 全部 Stories（US-001 ~ US-003）
-- E02 全部 Stories（US-010 ~ US-016）
+- E02 全部 Stories（US-010 ~ US-017）— 含 US-017 業務角色定義（六種業務角色 Seed Data）
 - E03 全部 Stories（US-020 ~ US-025）
 - E04 全部 Stories（US-030 ~ US-039、US-051）
 - E05 全部 Stories（US-040 ~ US-050、US-052 ~ US-058）
 - NFR-001、NFR-002
 
-### Phase 2 — 進階規劃（未來）
-重點：使用者角色功能存取控制、資料同步排程、進階資料來源類型、稽核日誌
+### Phase 2 — Customer 360 全功能
+重點：Customer 360 客戶洞察模組、標籤管理、客戶搜尋與清單、變更歷史查詢、角色細粒度存取控制
 
-- User 角色的功能存取權管控
-- 資料同步排程
-- 進階資料來源類型（API、檔案上傳）
-- 稽核日誌與操作歷程
+**業務決策（2026-04-02）**：原 Phase 3 的 US-067（變更歷史查詢）與 US-068（角色存取設定）合併至 Phase 2，Phase 3 不再獨立存在。
+
+- E06 全部 Stories（US-060 ~ US-068）：
+  - US-060 客戶搜尋與清單
+  - US-061 單一客戶 360 檢視
+  - US-062 建立標籤
+  - US-063 管理標籤
+  - US-064 為客戶新增／移除標籤
+  - US-065 批次標記客戶
+  - US-066 依標籤篩選客戶
+  - US-067 客戶資料變更歷史查詢（原 Phase 3）
+  - US-068 Customer 360 角色存取設定（原 Phase 3，依賴 E02 US-017 的六種業務角色 Seed Data）
+- 多目標表整合（customer_interaction / customer_financial / customer_service）— 規劃中
+- 稽核日誌與操作歷程 — 規劃中
 
 ## AI Agent 導覽指南
 
