@@ -19,6 +19,9 @@ export const ERROR_CODES = {
   VALIDATION_PASSWORD_LENGTH: 'VALIDATION_PASSWORD_LENGTH',
   EMAIL_SEND_FAILED: 'SYSTEM_EMAIL_SEND_FAILED',
   ACCOUNT_SELF_RESET: 'ACCOUNT_SELF_RESET',
+  // F045: Roles
+  ROLE_MODIFICATION_FORBIDDEN: 'ROLE_MODIFICATION_FORBIDDEN',
+  ROLE_NOT_FOUND: 'ROLE_NOT_FOUND',
   // F011: Datasource
   DS_NAME_EXISTS: 'DS_NAME_EXISTS',
   DS_NOT_FOUND: 'DS_NOT_FOUND',
@@ -83,13 +86,16 @@ export const ERROR_MESSAGES = {
   ACCOUNT_NOT_FOUND: '找不到指定的帳號',
   ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
   ACCOUNT_LAST_ADMIN: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
-  VALIDATION_INVALID_ROLE: '角色必須為 admin 或 user',
+  VALIDATION_INVALID_ROLE: '角色值無效，必須為系統定義的 8 種角色之一',
   RESET_TOKEN_EXPIRED: '此連結已過期，請重新申請密碼重設',
   RESET_TOKEN_USED: '此連結已失效',
   RESET_TOKEN_INVALID: '重設連結無效',
   VALIDATION_PASSWORD_LENGTH: '密碼長度不得少於 8 個字元',
   EMAIL_SEND_FAILED: '郵件發送失敗，請稍後再試',
   ACCOUNT_SELF_RESET: '請透過個人設定變更您自己的密碼',
+  // F045: Roles
+  ROLE_MODIFICATION_FORBIDDEN: '角色為系統預設，不支援自訂新增或刪除',
+  ROLE_NOT_FOUND: '找不到指定的角色',
   // F011: Datasource
   DS_NAME_EXISTS: '相同資料庫下已存在此名稱的資料來源',
   DS_NOT_FOUND: '找不到指定的資料來源',

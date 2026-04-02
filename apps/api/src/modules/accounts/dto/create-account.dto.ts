@@ -1,4 +1,5 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { VALID_ROLES, type UserRole } from '@/common/constants/roles';
 
 export class CreateAccountDto {
   @IsString({ message: '姓名必須為字串' })
@@ -15,6 +16,6 @@ export class CreateAccountDto {
   @MinLength(8, { message: '密碼長度至少需要 8 個字元' })
   password: string;
 
-  @IsEnum(['admin', 'user'], { message: '角色值無效，僅允許 admin 或 user' })
-  role: 'admin' | 'user';
+  @IsIn([...VALID_ROLES], { message: '角色值無效，必須為系統定義的 8 種角色之一' })
+  role: UserRole;
 }

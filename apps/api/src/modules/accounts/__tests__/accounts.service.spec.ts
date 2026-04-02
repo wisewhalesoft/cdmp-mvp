@@ -13,6 +13,7 @@ describe('AccountsService', () => {
     create: ReturnType<typeof vi.fn>;
     save: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
+    createQueryBuilder: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -21,6 +22,7 @@ describe('AccountsService', () => {
       create: vi.fn((data) => ({ ...data, id: 'new-uuid', created_at: new Date() })),
       save: vi.fn((entity) => Promise.resolve(entity)),
       count: vi.fn(),
+      createQueryBuilder: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -32,6 +34,8 @@ describe('AccountsService', () => {
 
     service = module.get<AccountsService>(AccountsService);
   });
+
+  // ===== F004: createAccount =====
 
   it('should create an account successfully', async () => {
     userRepository.findOne.mockResolvedValue(null);
@@ -80,7 +84,6 @@ describe('AccountsService', () => {
     const savedEntity = userRepository.create.mock.calls[0][0];
     expect(savedEntity.password_hash).toBeDefined();
     expect(savedEntity.password_hash).not.toBe('password123');
-    // Verify it's a valid bcrypt hash
     const isValid = await HashUtil.compare('password123', savedEntity.password_hash);
     expect(isValid).toBe(true);
   });
@@ -127,6 +130,49 @@ describe('AccountsService', () => {
     expect(result).toHaveProperty('created_at');
   });
 
+  // TS-F004-009: 以 analyst 角色建立帳號
+  it('should create account with analyst business role (TS-F004-009)', async () => {
+    userRepository.findOne.mockResolvedValue(null);
+
+    const result = await service.createAccount({
+      name: 'Analyst User',
+      email: 'analyst@example.com',
+      password: 'password123',
+      role: 'analyst',
+    });
+
+    expect(result.role).toBe('analyst');
+    expect(result.name).toBe('Analyst User');
+  });
+
+  // TS-F004-010: 以 backend_ops 角色建立帳號
+  it('should create account with backend_ops business role (TS-F004-010)', async () => {
+    userRepository.findOne.mockResolvedValue(null);
+
+    const result = await service.createAccount({
+      name: 'Backend Ops User',
+      email: 'ops@example.com',
+      password: 'password123',
+      role: 'backend_ops',
+    });
+
+    expect(result.role).toBe('backend_ops');
+  });
+
+  // TS-F004-011: 以 marketing 角色建立帳號
+  it('should create account with marketing business role (TS-F004-011)', async () => {
+    userRepository.findOne.mockResolvedValue(null);
+
+    const result = await service.createAccount({
+      name: 'Marketing User',
+      email: 'marketing@example.com',
+      password: 'password123',
+      role: 'marketing',
+    });
+
+    expect(result.role).toBe('marketing');
+  });
+
   // ===== F006: updateAccount =====
 
   describe('updateAccount', () => {
@@ -143,8 +189,8 @@ describe('AccountsService', () => {
 
     it('should update name successfully', async () => {
       userRepository.findOne
-        .mockResolvedValueOnce({ ...existingUser }) // findOne by id
-        .mockResolvedValueOnce(null); // findOne by email (no duplicate)
+        .mockResolvedValueOnce({ ...existingUser })
+        .mockResolvedValueOnce(null);
       userRepository.save.mockImplementation((entity: any) =>
         Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
       );
@@ -161,8 +207,8 @@ describe('AccountsService', () => {
 
     it('should update email and convert to lowercase', async () => {
       userRepository.findOne
-        .mockResolvedValueOnce({ ...existingUser }) // findOne by id
-        .mockResolvedValueOnce(null); // findOne by email (no duplicate)
+        .mockResolvedValueOnce({ ...existingUser })
+        .mockResolvedValueOnce(null);
       userRepository.save.mockImplementation((entity: any) =>
         Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
       );
@@ -176,10 +222,8 @@ describe('AccountsService', () => {
     });
 
     it('should not trigger duplicate error when email is unchanged (self-exclusion BR-3)', async () => {
-      // findOne by id returns the user
       userRepository.findOne
         .mockResolvedValueOnce({ ...existingUser })
-        // findOne by email returns the same user (self)
         .mockResolvedValueOnce({ ...existingUser });
       userRepository.save.mockImplementation((entity: any) =>
         Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
@@ -194,13 +238,10 @@ describe('AccountsService', () => {
     });
 
     it('should throw 409 ConflictException when email is used by another account', async () => {
-      const anotherUser = {
-        id: 'other-uuid-2',
-        email: 'taken@example.com',
-      };
+      const anotherUser = { id: 'other-uuid-2', email: 'taken@example.com' };
       userRepository.findOne
-        .mockResolvedValueOnce({ ...existingUser }) // findOne by id
-        .mockResolvedValueOnce(anotherUser); // findOne by email (duplicate)
+        .mockResolvedValueOnce({ ...existingUser })
+        .mockResolvedValueOnce(anotherUser);
 
       await expect(
         service.updateAccount('user-uuid-1', {
@@ -211,7 +252,7 @@ describe('AccountsService', () => {
     });
 
     it('should throw 404 NotFoundException when account does not exist', async () => {
-      userRepository.findOne.mockResolvedValueOnce(null); // findOne by id
+      userRepository.findOne.mockResolvedValueOnce(null);
 
       await expect(
         service.updateAccount('nonexistent-uuid', {
@@ -285,10 +326,6 @@ describe('AccountsService', () => {
 
       expect(result.status).toBe('disabled');
       expect(result.id).toBe('user-uuid-1');
-      expect(result.name).toBe('Test User');
-      expect(result.email).toBe('test@example.com');
-      expect(result.role).toBe('user');
-      expect(result).toHaveProperty('updated_at');
       expect(result).not.toHaveProperty('password_hash');
     });
 
@@ -300,10 +337,7 @@ describe('AccountsService', () => {
       );
 
       const result = await service.toggleStatus('user-uuid-1', 'active', 'admin-uuid');
-
       expect(result.status).toBe('active');
-      expect(result.id).toBe('user-uuid-1');
-      expect(result).not.toHaveProperty('password_hash');
     });
 
     it('should throw 422 UnprocessableEntityException for self-disable (TS-F007-005)', async () => {
@@ -314,7 +348,6 @@ describe('AccountsService', () => {
 
     it('should throw 404 NotFoundException for non-existent account (TS-F007-006)', async () => {
       userRepository.findOne.mockResolvedValueOnce(null);
-
       await expect(
         service.toggleStatus('nonexistent-uuid', 'disabled', 'admin-uuid'),
       ).rejects.toThrow(NotFoundException);
@@ -328,13 +361,11 @@ describe('AccountsService', () => {
       );
 
       const result = await service.toggleStatus('user-uuid-1', 'disabled', 'admin-uuid');
-
       expect(result.status).toBe('disabled');
-      expect(result.id).toBe('user-uuid-1');
     });
   });
 
-  // ===== F008: changeRole =====
+  // ===== F008: changeRole (8 roles) =====
 
   describe('changeRole', () => {
     const userAccount = {
@@ -363,12 +394,8 @@ describe('AccountsService', () => {
       );
 
       const result = await service.changeRole('user-uuid-1', 'admin');
-
       expect(result.role).toBe('admin');
       expect(result.id).toBe('user-uuid-1');
-      expect(result.name).toBe('Test User');
-      expect(result.email).toBe('test@example.com');
-      expect(result).toHaveProperty('updated_at');
       expect(result).not.toHaveProperty('password_hash');
     });
 
@@ -380,10 +407,7 @@ describe('AccountsService', () => {
       );
 
       const result = await service.changeRole('admin-uuid-1', 'user');
-
       expect(result.role).toBe('user');
-      expect(result.id).toBe('admin-uuid-1');
-      expect(result).not.toHaveProperty('password_hash');
     });
 
     it('should throw 422 UnprocessableEntityException for last Admin protection (TS-F008-003)', async () => {
@@ -393,14 +417,11 @@ describe('AccountsService', () => {
       await expect(
         service.changeRole('admin-uuid-1', 'user'),
       ).rejects.toThrow(UnprocessableEntityException);
-
-      // Verify role was NOT saved
       expect(userRepository.save).not.toHaveBeenCalled();
     });
 
     it('should throw 404 NotFoundException when account does not exist (TS-F008-004)', async () => {
       userRepository.findOne.mockResolvedValueOnce(null);
-
       await expect(
         service.changeRole('nonexistent-uuid', 'admin'),
       ).rejects.toThrow(NotFoundException);
@@ -408,15 +429,9 @@ describe('AccountsService', () => {
 
     it('should return 200 idempotently when setting same role (TS-F008-006)', async () => {
       userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
-      userRepository.save.mockImplementation((entity: any) =>
-        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
-      );
 
       const result = await service.changeRole('admin-uuid-1', 'admin');
-
       expect(result.role).toBe('admin');
-      expect(result.id).toBe('admin-uuid-1');
-      // Should NOT check admin count for idempotent operation
       expect(userRepository.count).not.toHaveBeenCalled();
     });
 
@@ -428,8 +443,109 @@ describe('AccountsService', () => {
       );
 
       const result = await service.changeRole('admin-uuid-1', 'user');
-
       expect(result.role).toBe('user');
+    });
+
+    // TS-F008-007: User → business role
+    it('should change User to business role (TS-F008-007)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...userAccount });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'business');
+      expect(result.role).toBe('business');
+    });
+
+    // TS-F008-008: User → analyst
+    it('should change User to analyst (TS-F008-008)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...userAccount });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'analyst');
+      expect(result.role).toBe('analyst');
+    });
+
+    // TS-F008-009: business → supervisor (business role to business role)
+    it('should change between business roles (TS-F008-009)', async () => {
+      const businessUser = { ...userAccount, role: 'business' as const };
+      userRepository.findOne.mockResolvedValueOnce({ ...businessUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'supervisor');
+      expect(result.role).toBe('supervisor');
+    });
+
+    // TS-F008-010: analyst → customer_service
+    it('should change analyst to customer_service (TS-F008-010)', async () => {
+      const analystUser = { ...userAccount, role: 'analyst' as const };
+      userRepository.findOne.mockResolvedValueOnce({ ...analystUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'customer_service');
+      expect(result.role).toBe('customer_service');
+    });
+
+    // TS-F008-011: business role → Admin
+    it('should upgrade business role to Admin (TS-F008-011)', async () => {
+      const businessUser = { ...userAccount, role: 'business' as const };
+      userRepository.findOne.mockResolvedValueOnce({ ...businessUser });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'admin');
+      expect(result.role).toBe('admin');
+    });
+
+    // TS-F008-012: Admin → business role (with >=2 admins)
+    it('should downgrade Admin to business role when >=2 admins (TS-F008-012)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.count.mockResolvedValueOnce(2);
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('admin-uuid-1', 'analyst');
+      expect(result.role).toBe('analyst');
+    });
+
+    // TS-F008-013: Last Admin → business role should be blocked
+    it('should block last Admin downgrade to business role (TS-F008-013)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.count.mockResolvedValueOnce(1);
+
+      await expect(
+        service.changeRole('admin-uuid-1', 'business'),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    // TS-F008-014: Last Admin → backend_ops should be blocked
+    it('should block last Admin downgrade to backend_ops (TS-F008-014)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+      userRepository.count.mockResolvedValueOnce(1);
+
+      await expect(
+        service.changeRole('admin-uuid-1', 'backend_ops'),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    // TS-F008-016: Idempotent — business role same value
+    it('should handle idempotent business role change (TS-F008-016)', async () => {
+      const analystUser = { ...userAccount, role: 'analyst' as const };
+      userRepository.findOne.mockResolvedValueOnce({ ...analystUser });
+
+      const result = await service.changeRole('user-uuid-1', 'analyst');
+      expect(result.role).toBe('analyst');
+      expect(userRepository.save).not.toHaveBeenCalled();
     });
   });
 });

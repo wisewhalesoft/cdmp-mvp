@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { dateColumnType } from '@/common/database/column-types';
+import type { UserRole } from '@/common/constants/roles';
 
 @Entity('users')
 export class User {
@@ -21,8 +22,8 @@ export class User {
   @Column({ length: 255 })
   password_hash: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'user' })
-  role: 'admin' | 'user';
+  @Column({ type: 'varchar', length: 30, default: 'user' })
+  role: UserRole;
 
   @Column({ type: 'varchar', length: 20, default: 'active' })
   status: 'active' | 'disabled';

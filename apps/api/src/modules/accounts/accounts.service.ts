@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import type { UserRole } from '@/common/constants/roles';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
@@ -12,7 +13,7 @@ export interface CreateAccountResult {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -21,7 +22,7 @@ export interface UpdateAccountResult {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   created_at: Date;
   updated_at: Date;
@@ -31,7 +32,7 @@ export interface AccountListItem {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -47,7 +48,7 @@ export interface ChangeRoleResult {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
@@ -60,7 +61,7 @@ export interface ToggleStatusResult {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
@@ -236,7 +237,7 @@ export class AccountsService {
 
   async changeRole(
     id: string,
-    role: 'admin' | 'user',
+    role: UserRole,
   ): Promise<ChangeRoleResult> {
     // Find the account
     const user = await this.userRepository.findOne({ where: { id } });
@@ -259,8 +260,8 @@ export class AccountsService {
       };
     }
 
-    // Last Admin protection: only when downgrading admin → user
-    if (user.role === 'admin' && role === 'user') {
+    // Last Admin protection: when downgrading admin → any non-admin role
+    if (user.role === 'admin' && role !== 'admin') {
       const adminCount = await this.userRepository.count({ where: { role: 'admin' } });
       if (adminCount <= 1) {
         throw new UnprocessableEntityException({

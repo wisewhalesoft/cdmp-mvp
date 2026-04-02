@@ -1,5 +1,47 @@
 // Shared types between API and Web
 
+// ===== F045: Business Role Definitions =====
+export const VALID_ROLES = [
+  'admin',
+  'user',
+  'business',
+  'marketing',
+  'customer_service',
+  'analyst',
+  'supervisor',
+  'backend_ops',
+] as const;
+
+export type UserRole = (typeof VALID_ROLES)[number];
+
+export interface RoleDefinition {
+  roleCode: UserRole;
+  displayName: string;
+  alias: string | null;
+  type: 'system' | 'business';
+}
+
+export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
+  { roleCode: 'admin', displayName: '管理者', alias: 'Admin', type: 'system' },
+  { roleCode: 'user', displayName: '使用者', alias: 'User', type: 'system' },
+  { roleCode: 'business', displayName: '業務', alias: null, type: 'business' },
+  { roleCode: 'marketing', displayName: '行銷', alias: '企劃', type: 'business' },
+  { roleCode: 'customer_service', displayName: '客服', alias: null, type: 'business' },
+  { roleCode: 'analyst', displayName: '分析師', alias: null, type: 'business' },
+  { roleCode: 'supervisor', displayName: '主管', alias: null, type: 'business' },
+  { roleCode: 'backend_ops', displayName: '後端作業', alias: '作服', type: 'business' },
+] as const;
+
+export function getRoleDisplayName(roleCode: UserRole): string {
+  const role = ROLE_DEFINITIONS.find((r) => r.roleCode === roleCode);
+  if (!role) return roleCode;
+  return role.alias ? `${role.displayName}（${role.alias}）` : role.displayName;
+}
+
+export interface RolesResponse {
+  data: RoleDefinition[];
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -15,7 +57,7 @@ export interface UserInfo {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
 }
 
 export interface ApiError {
@@ -31,14 +73,14 @@ export interface CreateAccountRequest {
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'user';
+  role: UserRole;
 }
 
 export interface CreateAccountResponse {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active';
   created_at: string;
 }
@@ -53,7 +95,7 @@ export interface UpdateAccountResponse {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   created_at: string;
   updated_at: string;
@@ -68,21 +110,21 @@ export interface UpdateStatusResponse {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   updated_at: string;
 }
 
 // F008: Change Role
 export interface UpdateRoleRequest {
-  role: 'admin' | 'user';
+  role: UserRole;
 }
 
 export interface UpdateRoleResponse {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   updated_at: string;
 }
@@ -100,7 +142,7 @@ export interface AccountListItem {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   status: 'active' | 'disabled';
   created_at: string;
 }
@@ -894,6 +936,9 @@ export const ERROR_CODES = {
   VALIDATION_PASSWORD_LENGTH: 'VALIDATION_PASSWORD_LENGTH',
   EMAIL_SEND_FAILED: 'SYSTEM_EMAIL_SEND_FAILED',
   ACCOUNT_SELF_RESET: 'ACCOUNT_SELF_RESET',
+  // F045: Roles
+  ROLE_MODIFICATION_FORBIDDEN: 'ROLE_MODIFICATION_FORBIDDEN',
+  ROLE_NOT_FOUND: 'ROLE_NOT_FOUND',
   // F011: Datasource
   DS_NAME_EXISTS: 'DS_NAME_EXISTS',
   DS_NOT_FOUND: 'DS_NOT_FOUND',
@@ -936,13 +981,16 @@ export const ERROR_MESSAGES = {
   ACCOUNT_NOT_FOUND: '找不到指定的帳號',
   ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
   ACCOUNT_LAST_ADMIN: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
-  VALIDATION_INVALID_ROLE: '角色必須為 admin 或 user',
+  VALIDATION_INVALID_ROLE: '角色值無效，必須為系統定義的 8 種角色之一',
   RESET_TOKEN_EXPIRED: '此連結已過期，請重新申請密碼重設',
   RESET_TOKEN_USED: '此連結已失效',
   RESET_TOKEN_INVALID: '重設連結無效',
   VALIDATION_PASSWORD_LENGTH: '密碼長度不得少於 8 個字元',
   EMAIL_SEND_FAILED: '郵件發送失敗，請稍後再試',
   ACCOUNT_SELF_RESET: '請透過個人設定變更您自己的密碼',
+  // F045: Roles
+  ROLE_MODIFICATION_FORBIDDEN: '角色為系統預設，不支援自訂新增或刪除',
+  ROLE_NOT_FOUND: '找不到指定的角色',
   // F011: Datasource
   DS_NAME_EXISTS: '相同資料庫下已存在此名稱的資料來源',
   DS_NOT_FOUND: '找不到指定的資料來源',

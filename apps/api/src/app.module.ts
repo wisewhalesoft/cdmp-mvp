@@ -19,6 +19,8 @@ import { EtlPipelineLog } from './database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from './database/entities/etl-pipeline-version.entity';
 import { EtlModule } from './modules/etl/etl.module';
 import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.module';
+import { RolesModule } from './modules/roles/roles.module';
+import { Role } from './database/entities/role.entity';
 
 @Module({
   imports: [
@@ -35,7 +37,7 @@ import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion],
+            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role],
             synchronize: true,
           };
         }
@@ -47,7 +49,7 @@ import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion],
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },
@@ -61,6 +63,7 @@ import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.
     ]),
     AuthModule,
     AccountsModule,
+    RolesModule,
     DatasourceModule,
     ExtractionTaskModule,
     EtlModule,
