@@ -63,10 +63,10 @@ export class LookupHandler implements NodeExecutor {
 
     const inputTable = mainInput.tempTable;
 
-    // Build lookup sub-query (with optional filter for legacy mode)
+    // Build lookup sub-query with optional filter (applies to both dual-input and legacy modes)
     // Note: PostgreSQL uses hash join for large-table × small-table, no index needed
     let lookupSubQuery = `SELECT * FROM "${lookupTable}"`;
-    if (!lookupInput && lookupFilter.trim()) {
+    if (lookupFilter.trim()) {
       lookupSubQuery += ` WHERE ${lookupFilter}`;
     }
 
@@ -84,15 +84,15 @@ export class LookupHandler implements NodeExecutor {
       // UPDATE matching rows
       const setClauses = outputColumns.map((col) => {
         const alias = col.outputAlias || col.lookupColumn;
-        return `"${alias}" = _lk."${col.lookupColumn}"`;
+        return `"${alias}" = TRIM(_lk."${col.lookupColumn}"::text)`;
       });
       await context.queryRunner.query(
-        `UPDATE "${inputTable}" _src SET ${setClauses.join(', ')} FROM (${lookupSubQuery}) _lk WHERE _src."${matchColumn}" = _lk."${lookupMatchColumn}"`,
+        `UPDATE "${inputTable}" _src SET ${setClauses.join(', ')} FROM (${lookupSubQuery}) _lk WHERE TRIM(_src."${matchColumn}"::text) = TRIM(_lk."${lookupMatchColumn}"::text)`,
       );
 
       // DELETE rows with no match
       await context.queryRunner.query(
-        `DELETE FROM "${inputTable}" _src WHERE NOT EXISTS (SELECT 1 FROM (${lookupSubQuery}) _lk WHERE _src."${matchColumn}" = _lk."${lookupMatchColumn}")`,
+        `DELETE FROM "${inputTable}" _src WHERE NOT EXISTS (SELECT 1 FROM (${lookupSubQuery}) _lk WHERE TRIM(_src."${matchColumn}"::text) = TRIM(_lk."${lookupMatchColumn}"::text))`,
       );
     } else {
       // LEFT JOIN semantics (null / default_value): add columns and update in-place
@@ -106,10 +106,10 @@ export class LookupHandler implements NodeExecutor {
       // UPDATE only matching rows; non-matching rows keep NULL (LEFT JOIN semantics)
       const setClauses = outputColumns.map((col) => {
         const alias = col.outputAlias || col.lookupColumn;
-        return `"${alias}" = _lk."${col.lookupColumn}"`;
+        return `"${alias}" = TRIM(_lk."${col.lookupColumn}"::text)`;
       });
       await context.queryRunner.query(
-        `UPDATE "${inputTable}" _src SET ${setClauses.join(', ')} FROM (${lookupSubQuery}) _lk WHERE _src."${matchColumn}" = _lk."${lookupMatchColumn}"`,
+        `UPDATE "${inputTable}" _src SET ${setClauses.join(', ')} FROM (${lookupSubQuery}) _lk WHERE TRIM(_src."${matchColumn}"::text) = TRIM(_lk."${lookupMatchColumn}"::text)`,
       );
 
       // Handle default_value strategy: fill NULLs with the default
