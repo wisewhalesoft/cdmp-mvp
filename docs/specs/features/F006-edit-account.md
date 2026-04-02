@@ -5,18 +5,18 @@ feature-id: F006
 source-story: US-012
 epic: E02
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-06
+version: "2.0"
+date: 2026-04-02
 status: Draft
 ---
 
 # F006: 編輯帳號
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-03-06
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-02
 
 ## 功能摘要
 
-Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限基本資料的修改，不包含密碼變更（由 F010 處理）與角色變更（由 F008 處理）。
+Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限基本資料的修改，不包含密碼變更（由 F010 處理）與角色變更（由 F008 處理，支援全部 8 種角色）。編輯帳號頁面顯示該帳號目前的角色中文名稱（唯讀）。
 
 ## User Story
 
@@ -132,7 +132,7 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 | BR-2 | Email 在儲存前一律以 `toLowerCase()` 轉為小寫，與 F004 一致 |
 | BR-3 | Email 唯一性檢查須排除自身帳號（同一帳號的 Email 未變更時不應觸發重複錯誤） |
 | BR-4 | 密碼變更不在此功能範圍（由 F010 處理） |
-| BR-5 | 角色變更不在此功能範圍（由 F008 處理） |
+| BR-5 | 角色變更不在此功能範圍（由 F008 處理，支援全部 8 種角色：Admin、User、業務、行銷/企劃、客服、分析師、主管、後端作業/作服） |
 | BR-6 | 僅 Admin 角色可編輯帳號 |
 | BR-7 | 建議使用 Optimistic Locking 防止並發編輯衝突 |
 
@@ -141,7 +141,7 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 | 項目 | 說明 |
 |------|------|
 | 入口 | 帳號清單中每筆帳號的「編輯」操作按鈕 |
-| 表單 | 編輯表單或對話框，預填現有姓名與 Email |
+| 表單 | 編輯表單或對話框，預填現有姓名與 Email；角色以中文名稱唯讀顯示（如「分析師」、「後端作業（作服）」） |
 | 欄位驗證 | 每個欄位在失焦或提交時顯示即時驗證訊息 |
 | 成功回饋 | 顯示成功訊息，變更立即反映於帳號清單或詳細頁面 |
 | 錯誤回饋 | 每個欄位下方顯示對應的驗證錯誤訊息；重複 Email 錯誤顯示於 Email 欄位下方 |
@@ -190,4 +190,4 @@ Email 唯一性由資料庫層級的 unique constraint 保障。
 - Epic Brief：[E02 Epic Brief](../stories/epics/E02-account-role-management/epic-brief.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
-- 相關功能：F004、F005、F008（角色變更）、F010（密碼重設）
+- 相關功能：F004、F005、F008（角色變更）、F010（密碼重設）、F045（角色定義）

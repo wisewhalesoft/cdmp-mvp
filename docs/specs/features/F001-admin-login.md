@@ -104,7 +104,7 @@ status: Draft
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | userId | string (UUID) | 使用者唯一識別碼 |
-| role | string | 角色（`admin` 或 `user`） |
+| role | string | 角色（8 種 role_code 之一，如 `admin`、`user`、`analyst` 等，詳見 F045） |
 | iat | number (Unix timestamp) | Token 發行時間 |
 | exp | number (Unix timestamp) | Token 到期時間 |
 

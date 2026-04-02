@@ -1,8 +1,8 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.2"
-date: 2026-03-19
+version: "1.3"
+date: 2026-04-02
 status: Draft
 ---
 
@@ -111,6 +111,15 @@ status: Draft
 
 ---
 
+### ROLE 領域 — 角色管理 {#role-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| ROLE_MODIFICATION_FORBIDDEN | 403 | 角色為系統預設，不支援自訂新增或刪除 | 嘗試透過 API 新增或刪除系統預設角色 | F045 |
+| ROLE_NOT_FOUND | 404 | 找不到指定的角色 | 查詢角色時 role_code 不存在 | F045 |
+
+---
+
 ### DATASOURCE 領域 — 資料來源管理 {#datasource-errors}
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
@@ -202,7 +211,7 @@ status: Draft
 | VALIDATION_PASSWORD_LENGTH | 422 | 密碼長度不得少於 8 個字元 | 密碼短於 8 字元 | F004, F009, F010 |
 | VALIDATION_PORT_RANGE | 422 | 連接埠必須介於 1 到 65535 之間 | 連接埠超出有效範圍 | F011, F013 |
 | VALIDATION_PORT_NUMBER | 422 | 連接埠必須為數字 | 連接埠為非數值 | F011, F013 |
-| VALIDATION_INVALID_ROLE | 422 | 角色必須為 admin 或 user | 角色值不在允許的列舉範圍內 | F004, F008 |
+| VALIDATION_INVALID_ROLE | 422 | 角色值無效，必須為系統定義的 8 種角色之一 | 角色值不在允許的 8 種 role_code 中（admin、user、business、marketing、customer_service、analyst、supervisor、backend_ops） | F004, F008, F045 |
 | VALIDATION_INVALID_TYPE | 422 | 資料來源類型必須為 mysql、postgresql 或 sqlserver | 類型值不在允許的列舉範圍內 | F011, F013 |
 | VALIDATION_INVALID_STATUS | 422 | 狀態必須為 active 或 disabled | 帳號狀態值不在允許的列舉範圍內 | F007 |
 | VALIDATION_INVALID_MODE | 422 | 擷取模式必須為 full 或 incremental | 模式值不在允許的列舉範圍內 | F017, F019 |
@@ -286,5 +295,7 @@ status: Draft
 | Pipeline 節點連線違規 | 422 | PIPELINE_INVALID_CONNECTION | 連線規則違反 | 拒絕儲存 |
 | Pipeline 節點執行失敗 | — | PIPELINE_NODE_EXECUTION_FAILED | 節點執行失敗 | Pipeline 標記 failed，EtlPipelineLog 記錄錯誤 |
 | 目標表不存在 | 404 | PIPELINE_TARGET_TABLE_NOT_FOUND | 找不到指定的目標表 | 拒絕請求 |
+| 嘗試新增/刪除系統預設角色 | 403 | ROLE_MODIFICATION_FORBIDDEN | 角色為系統預設，不支援自訂新增或刪除 | 拒絕請求 |
+| 角色不存在 | 404 | ROLE_NOT_FOUND | 找不到指定的角色 | 拒絕請求 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

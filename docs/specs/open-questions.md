@@ -177,7 +177,7 @@ status: Draft
 | # | 假設 | 來源 | 驗證方式 |
 |---|------|------|---------|
 | A1 | JWT 為 Session 管理的唯一機制 | US-001 Technical Notes | 架構師確認 |
-| A2 | 系統僅有 Admin 與 User 兩種角色 | stories/overview.md | 產品確認 |
+| A2 | ~~系統僅有 Admin 與 User 兩種角色~~ **已更新（2026-04-02）**：系統共 8 種角色（2 系統 + 6 業務），為 Seed Data 不可自訂增減（US-017） | stories/overview.md, US-017 | ✅ 已確認（US-017） |
 | A3 | 單一 Admin 即可執行所有管理操作（無分級 Admin） | E02 epic-brief | 產品確認 |
 | A4 | 資料來源僅支援三種 RDBMS（MySQL, PostgreSQL, SQL Server） | US-020 | 產品確認 |
 | A5 | 密碼規則僅有最小長度 8 字元（無複雜度要求） | US-010, US-015, US-016 | 產品確認 |

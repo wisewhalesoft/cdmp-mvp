@@ -1,16 +1,16 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "2.0"
-date: 2026-03-31
+version: "2.1"
+date: 2026-04-02
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：74 份（7 支援文件 + 44 Feature 文件 + 23 圖表文件）
-> **最後更新**：2026-03-31
+> **文件總數**：75 份（7 支援文件 + 45 Feature 文件 + 23 圖表文件）
+> **最後更新**：2026-04-02
 
 ---
 
@@ -20,13 +20,13 @@ status: Draft
 |------|------|
 | 核心支援文件 | 7 |
 | Feature 文件（E01） | 3 |
-| Feature 文件（E02） | 7 |
+| Feature 文件（E02） | 8 |
 | Feature 文件（E03） | 6 |
 | Feature 文件（E04） | 10 |
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Mermaid 圖表 | 23 |
-| **總計** | **74** |
+| **總計** | **75** |
 
 ---
 
@@ -62,9 +62,10 @@ status: Draft
 | F005 | [F005-view-account-list.md](features/F005-view-account-list.md) | 查看帳號清單 | US-011 | P0-MVP |
 | F006 | [F006-edit-account.md](features/F006-edit-account.md) | 編輯帳號 | US-012 | P0-MVP |
 | F007 | [F007-disable-enable-account.md](features/F007-disable-enable-account.md) | 停用／啟用帳號 | US-013 | P1 |
-| F008 | [F008-assign-change-role.md](features/F008-assign-change-role.md) | 指派／變更角色 | US-014 | P0-MVP |
+| F008 | [F008-assign-change-role.md](features/F008-assign-change-role.md) | 指派／變更角色（8 種角色） | US-014 | P0-MVP |
 | F009 | [F009-self-service-password-reset.md](features/F009-self-service-password-reset.md) | 自助式密碼重設 | US-015 | P0-MVP |
 | F010 | [F010-admin-reset-password.md](features/F010-admin-reset-password.md) | Admin 重設使用者密碼 | US-016 | P0-MVP |
+| F045 | [F045-business-role-definitions.md](features/F045-business-role-definitions.md) | 業務角色定義（系統預設角色） | US-017 | P0-MVP |
 
 ### E03 — 資料來源管理
 
@@ -175,7 +176,7 @@ status: Draft
 ### TDD Agent
 1. 必讀：`data-model.md`, `error-handling.md`, `nfr.md`
 2. 依實作順序載入對應 Feature 文件
-3. 建議順序：F001->F002->F003->F004->F005->F006->F008->F009->F010->F007->F011->F012->F013->F015->F014->F016->F017->F018->F019->F020->F021->F022->F023->F024->F025->F026->F027->F028->F029->F036->F030->F037->F031->F032->F033->F034->F035->F038->F042->F043->F044
+3. 建議順序：F001->F002->F003->F045->F004->F005->F006->F008->F009->F010->F007->F011->F012->F013->F015->F014->F016->F017->F018->F019->F020->F021->F022->F023->F024->F025->F026->F027->F028->F029->F036->F030->F037->F031->F032->F033->F034->F035->F038->F042->F043->F044
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -191,9 +192,9 @@ status: Draft
 
 ## 優先級分類
 
-### P0-MVP（Must Have）— 34 個 Feature
+### P0-MVP（Must Have）— 35 個 Feature
 
-F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044
+F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044, F045
 
 ### P1（Should Have）— 9 個 Feature
 
@@ -216,6 +217,7 @@ E03（資料來源管理）──封鎖──> E04（資料擷取管理）
 E04（資料擷取管理）──封鎖──> E05（ETL Pipeline 管理）
 
 F001/F002 ──> F003（登出需登入）
+F045 ──> F004, F005, F008（角色 Seed Data）
 F004 ──> F005 ──> F006, F007, F008, F010
 F004 ──> F009
 F011 ──> F012 ──> F013, F014
@@ -255,3 +257,4 @@ F036 ──> F044（目標表 schema 定義）
 | 2026-03-27 | 新增 F039（節點欄位 Badge, P0）、F040（Inspector Panel 欄位 Diff, P1）、F041（Badge Hover Tooltip, P2）；新增 2 個圖表（F039 資料流、F041 互動時序）；US-042 編輯器功能擴充三階段規格；文件總數 70 份 | Spec Writer Agent |
 | 2026-03-27 | 新增 F042（ETL 執行引擎核心框架）、F043（ETL 節點執行器 7 種）、F044（Target Load + UPSERT）；新增 1 個圖表（F042 引擎流程）；對應 US-055/056/057；P0-MVP 增至 34 個 Feature；文件總數 74 份 | Spec Writer Agent |
 | 2026-03-31 | Lookup 節點雙輸入重設計：F029 新增 AC-7a~7d（Lookup 雙輸入 UI）與更新 JSON schema；F043 新增第 8 種節點執行器 LookupExecutor（雙輸入模式 + 向下相容），新增 AC-18~AC-24；對應 US-058 | Spec Writer Agent |
+| 2026-04-02 | E02 角色擴充：新增 F045（業務角色定義，US-017）；更新 F004/F005/F006/F008 支援 8 種角色（2 系統 + 6 業務）；新增 Role 實體至 data-model；新增 ROLE_MODIFICATION_FORBIDDEN/ROLE_NOT_FOUND 錯誤碼；更新 VALIDATION_INVALID_ROLE 訊息；P0-MVP 增至 35 個 Feature；文件總數 75 份 | Spec Writer Agent |

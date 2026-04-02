@@ -1,8 +1,8 @@
 ---
 spec-id: DIAG-003
 title: 實體關聯圖 (Entity-Relationship Diagram)
-version: "1.1"
-date: 2026-03-18
+version: "1.2"
+date: 2026-04-02
 status: Draft
 ---
 
@@ -17,7 +17,7 @@ erDiagram
         String name "使用者名稱"
         String email UK "電子郵件（唯一）"
         String password_hash "bcrypt 密碼雜湊"
-        Enum role "角色: Admin / User"
+        Enum role "角色: admin / user / business / marketing / customer_service / analyst / supervisor / backend_ops"
         Enum status "狀態: Active / Disabled"
         DateTime created_at "建立時間"
         DateTime updated_at "更新時間"
@@ -110,7 +110,7 @@ erDiagram
 
 ### User（使用者）
 
-系統使用者帳號，分為 Admin 與 User 兩種角色。
+系統使用者帳號，支援 8 種預設角色（2 系統角色 + 6 業務角色）。詳見 AD-E02-1（architecture-spec.md）。
 
 | 欄位 | 類型 | 必填 | 說明 |
 |------|------|------|------|
@@ -118,10 +118,12 @@ erDiagram
 | name | String | 是 | 使用者顯示名稱 |
 | email | String | 是 | 唯一，用於登入與密碼重設 |
 | password_hash | String | 是 | bcrypt 雜湊後的密碼 |
-| role | Enum | 是 | `Admin` 或 `User` |
+| role | Enum | 是 | 系統角色：`admin` / `user`；業務角色：`business` / `marketing` / `customer_service` / `analyst` / `supervisor` / `backend_ops` |
 | status | Enum | 是 | `Active` 或 `Disabled` |
 | created_at | DateTime | 是 | 自動產生 |
 | updated_at | DateTime | 是 | 自動更新 |
+
+> **角色 Seed Data**：8 種角色的顯示名稱與別名定義由 `RoleService` 管理，以程式碼常數維護（不建立獨立 roles 資料表）。角色對應關係：`admin`→管理者（Admin）、`user`→使用者（User）、`business`→業務、`marketing`→行銷（企劃）、`customer_service`→客服、`analyst`→分析師、`supervisor`→主管、`backend_ops`→後端作業（作服）。
 
 ### Datasource（資料源）
 
