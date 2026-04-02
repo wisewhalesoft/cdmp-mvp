@@ -15,6 +15,7 @@ CDMP（企業客戶資料治理平台）MVP 已完成產品需求與系統架構
 | 圖示 | Lucide Icons (CDN) | shadcn/ui 原生圖示集 |
 | 語言 | 繁體中文 | 規格書要求 |
 | 視窗 | 主要 1440px 桌面，基本支援 1024px | 企業內部使用 |
+| 角色體系 | 8 種角色（2 系統 + 6 業務） | US-017 定義：系統角色（管理者/使用者）+ 業務角色（業務/行銷/客服/分析師/主管/後端作業）。角色為系統 Seed Data 不可自訂。角色下拉選單以 optgroup 分組（系統角色/業務角色）。角色 Badge 色彩：管理者=藍、使用者=灰、業務=翠綠、行銷=粉紅、客服=橘、分析師=紫、主管=靛藍、後端作業=青。變更角色含二步驟確認對話框（目前角色→新角色），業務角色變更提示 Customer 360 影響 |
 | 帳號表單 | Modal Dialog | 帳號欄位少（2-4 個），Modal 操作流暢 |
 | 資料來源表單 | 獨立頁面 | 欄位多（8 個），獨立頁面空間充裕 |
 | 擷取任務表單 | 獨立頁面（13, 14） | 6-7 個欄位含條件邏輯（增量模式）+ cron 預覽，複雜度近似資料來源表單 |
@@ -105,7 +106,7 @@ prototypes/
 - 表單驗證狀態（紅邊框 + 錯誤文字）
 - 表格樣式（header、hover row、pagination bar）
 - 卡片樣式（白底 + rounded-lg + shadow-sm）
-- Badge（狀態：connected/disconnected/unknown、角色：Admin/User）
+- Badge（狀態：connected/disconnected/unknown、角色：管理者/使用者/業務/行銷（企劃）/客服/分析師/主管/後端作業（作服），系統角色藍+灰色系、業務角色各自獨立色彩）
 - Modal/Dialog 模板（標題 + 內容 + 動作按鈕）
 - Toast 通知（success/error/warning/info，右下角固定）
 - Sidebar 導航 + Header 佈局
@@ -130,7 +131,7 @@ prototypes/
 
 | 檔案 | 涵蓋 Feature | 關鍵元素 |
 |------|-------------|---------|
-| `07-account-list.html` | F004, F005, F006, F003, F007, F008, F010 | Admin 完整佈局（Sidebar+Header+登出）、搜尋欄、角色/狀態篩選、分頁表格、操作按鈕。內嵌 Modal：**建立帳號(F004)**、**編輯帳號(F006)**、停用確認(F007)、角色變更(F008)、重設密碼(F010) |
+| `07-account-list.html` | F004, F005, F006, F003, F007, F008, F010, **US-017** | Admin 完整佈局（Sidebar+Header+登出）、搜尋欄、角色篩選（8 種角色 optgroup 分組：系統角色/業務角色）/狀態篩選、分頁表格（角色欄顯示中文名稱+各角色獨立 Badge 色彩）、操作按鈕。內嵌 Modal：**建立帳號(F004，角色選單含 8 種角色)**、**編輯帳號(F006)**、停用確認(F007)、**角色變更(F008/US-014，二步驟：選擇新角色→確認對話框顯示「目前角色→新角色」，業務角色變更提示 C360 影響)**、重設密碼(F010) |
 
 ### Phase 3：資料來源管理 (F011-F016)
 **檔案：** `08-datasource-list.html` ~ `10-edit-datasource.html`
@@ -210,6 +211,8 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 |------|------|
 | 導航 Sidebar | 四項目：帳號管理(Users)、資料來源(Database)、資料擷取(arrow-down-to-line)、ETL Pipeline(workflow)，active 狀態顯示藍色左/右邊框。資料來源頁、資料擷取頁、Pipeline 頁各含儀表板頁籤（儀表板均為預設頁籤） |
 | 表單驗證 | blur 觸發、紅邊框+紅色錯誤文字、送出按鈕處理中 disabled |
+| 角色 Badge 色彩 | 8 種角色各自色彩：管理者=bg-blue-100/text-blue-700、使用者=bg-gray-100/text-gray-700、業務=bg-emerald-100/text-emerald-700、行銷（企劃）=bg-pink-100/text-pink-700、客服=bg-orange-100/text-orange-700、分析師=bg-violet-100/text-violet-700、主管=bg-indigo-100/text-indigo-700、後端作業（作服）=bg-teal-100/text-teal-700。角色下拉選單使用 optgroup 分組（系統角色/業務角色） |
+| 角色變更確認 | 二步驟流程：(1) 選擇新角色（含系統/業務角色提示切換）(2) 確認對話框顯示「目前角色→新角色」箭頭視覺化。業務角色變更額外提示 Customer 360 存取影響 |
 | 確認對話框 | 破壞性操作必須確認，取消(Secondary)+確認(Danger red) |
 | Toast 通知 | 右下角固定、5 秒自動消失、左邊框色彩區分類型 |
 | 密碼欄位 | 遮罩+眼睛圖示切換可見、8 字元提示 |

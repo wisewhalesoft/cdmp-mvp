@@ -76,8 +76,18 @@
           </div>
           <select class="px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
             <option>全部角色</option>
-            <option>Admin</option>
-            <option>User</option>
+            <optgroup label="系統角色">
+              <option>管理者（Admin）</option>
+              <option>使用者（User）</option>
+            </optgroup>
+            <optgroup label="業務角色">
+              <option>業務</option>
+              <option>行銷（企劃）</option>
+              <option>客服</option>
+              <option>分析師</option>
+              <option>主管</option>
+              <option>後端作業（作服）</option>
+            </optgroup>
           </select>
           <select class="px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
             <option>全部狀態</option>
@@ -105,46 +115,46 @@
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">王小明</td>
                   <td class="px-5 py-3 text-gray-600">admin@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">Admin</span></td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">管理者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-01-15</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
                       <button onclick="openEditModal('王小明','admin@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button disabled class="text-xs text-gray-300 cursor-not-allowed font-medium" title="無法停用自己的帳號">停用</button>
-                      <button disabled class="text-xs text-gray-300 cursor-not-allowed font-medium" title="無法變更自己的角色">變更角色</button>
+                      <button disabled class="text-xs text-gray-300 cursor-not-allowed font-medium" title="無法變更自己的角色">變更角色</button><!-- self: 管理者 -->
                       <button onclick="openResetPasswordModal('王小明')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
-                <!-- Row 2 -->
+                <!-- Row 2: 分析師 -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">李小華</td>
-                  <td class="px-5 py-3 text-gray-600">user1@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">User</span></td>
+                  <td class="px-5 py-3 text-gray-600">analyst1@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-violet-100 text-violet-700">分析師</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-02-10</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('李小華','user1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('李小華','analyst1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('李小華')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
-                      <button onclick="openChangeRoleModal('李小華','User')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('李小華','分析師')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('李小華')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
-                <!-- Row 3 -->
+                <!-- Row 3: 業務 -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">張大偉</td>
-                  <td class="px-5 py-3 text-gray-600">user2@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">User</span></td>
+                  <td class="px-5 py-3 text-gray-600">sales1@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">業務</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">已停用</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-02-20</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('張大偉','user2@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('張大偉','sales1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openEnableModal('張大偉')" class="text-xs text-success hover:text-green-600 font-medium transition-colors">啟用</button>
-                      <button onclick="openChangeRoleModal('張大偉','User')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('張大偉','業務')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('張大偉')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
@@ -153,79 +163,111 @@
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">陳美玲</td>
                   <td class="px-5 py-3 text-gray-600">admin2@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">Admin</span></td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">管理者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-03-05</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
                       <button onclick="openEditModal('陳美玲','admin2@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('陳美玲')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
-                      <button onclick="openChangeRoleModal('陳美玲','Admin')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('陳美玲','管理者')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('陳美玲')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
-                <!-- Row 5 -->
+                <!-- Row 5: 行銷（企劃） -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">林志豪</td>
-                  <td class="px-5 py-3 text-gray-600">user3@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">User</span></td>
+                  <td class="px-5 py-3 text-gray-600">marketing1@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-pink-100 text-pink-700">行銷（企劃）</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-04-12</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('林志豪','user3@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('林志豪','marketing1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('林志豪')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
-                      <button onclick="openChangeRoleModal('林志豪','User')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('林志豪','行銷（企劃）')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('林志豪')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
-                <!-- Row 6 -->
+                <!-- Row 6: 客服 -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">黃雅婷</td>
-                  <td class="px-5 py-3 text-gray-600">user4@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">User</span></td>
+                  <td class="px-5 py-3 text-gray-600">cs1@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">客服</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">已停用</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-05-08</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('黃雅婷','user4@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('黃雅婷','cs1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openEnableModal('黃雅婷')" class="text-xs text-success hover:text-green-600 font-medium transition-colors">啟用</button>
-                      <button onclick="openChangeRoleModal('黃雅婷','User')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('黃雅婷','客服')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('黃雅婷')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
-                <!-- Row 7 -->
+                <!-- Row 7: 主管 -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">劉建國</td>
-                  <td class="px-5 py-3 text-gray-600">admin3@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">Admin</span></td>
+                  <td class="px-5 py-3 text-gray-600">supervisor1@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700">主管</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-06-01</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('劉建國','admin3@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('劉建國','supervisor1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('劉建國')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
-                      <button onclick="openChangeRoleModal('劉建國','Admin')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('劉建國','主管')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('劉建國')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
-                <!-- Row 8 -->
-                <tr class="hover:bg-gray-50/50 transition-colors">
+                <!-- Row 8: 後端作業（作服） -->
+                <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">周怡君</td>
-                  <td class="px-5 py-3 text-gray-600">user5@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">User</span></td>
+                  <td class="px-5 py-3 text-gray-600">backendops1@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700">後端作業（作服）</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-07-18</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('周怡君','user5@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('周怡君','backendops1@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('周怡君')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
-                      <button onclick="openChangeRoleModal('周怡君','User')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('周怡君','後端作業（作服）')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('周怡君')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
+                    </div>
+                  </td>
+                </tr>
+                <!-- Row 9: 使用者 (User) -->
+                <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
+                  <td class="px-5 py-3 font-medium text-gray-900">吳佳蓉</td>
+                  <td class="px-5 py-3 text-gray-600">user6@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">使用者</span></td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
+                  <td class="px-5 py-3 text-gray-500">2025-08-05</td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-2">
+                      <button onclick="openEditModal('吳佳蓉','user6@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openDisableModal('吳佳蓉')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
+                      <button onclick="openChangeRoleModal('吳佳蓉','使用者')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openResetPasswordModal('吳佳蓉')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
+                    </div>
+                  </td>
+                </tr>
+                <!-- Row 10: Admin -->
+                <tr class="hover:bg-gray-50/50 transition-colors">
+                  <td class="px-5 py-3 font-medium text-gray-900">蔡明翰</td>
+                  <td class="px-5 py-3 text-gray-600">admin3@example.com</td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">管理者</span></td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
+                  <td class="px-5 py-3 text-gray-500">2025-09-10</td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-2">
+                      <button onclick="openEditModal('蔡明翰','admin3@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openDisableModal('蔡明翰')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
+                      <button onclick="openChangeRoleModal('蔡明翰','管理者')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openResetPasswordModal('蔡明翰')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
@@ -234,7 +276,7 @@
           </div>
           <!-- Pagination -->
           <div class="flex items-center justify-between px-5 py-3 border-t border-border">
-            <span class="text-sm text-gray-500">第 1 頁，共 3 頁</span>
+            <span class="text-sm text-gray-500">顯示 1-10 筆，共 48 筆 | 第 1 頁，共 3 頁</span>
             <div class="flex items-center gap-1">
               <button disabled class="px-3 py-1.5 text-sm text-gray-300 border border-border rounded-md cursor-not-allowed">上一頁</button>
               <button class="px-3 py-1.5 text-sm text-white bg-primary rounded-md font-medium">1</button>
@@ -293,7 +335,7 @@
             <button onclick="openEditModal('李小華','user1@example.com')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">編輯帳號 Modal</button>
             <button onclick="openDisableModal('李小華')" class="px-3 py-1.5 text-xs font-medium border border-amber-200 rounded-md hover:bg-amber-50 transition-colors text-amber-600">停用帳號 Modal</button>
             <button onclick="openEnableModal('張大偉')" class="px-3 py-1.5 text-xs font-medium border border-green-200 rounded-md hover:bg-green-50 transition-colors text-green-600">啟用帳號 Modal</button>
-            <button onclick="openChangeRoleModal('李小華','User')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">變更角色 Modal</button>
+            <button onclick="openChangeRoleModal('李小華','分析師')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">變更角色 Modal</button>
             <button onclick="openResetPasswordModal('李小華')" class="px-3 py-1.5 text-xs font-medium border border-red-200 rounded-md hover:bg-red-50 transition-colors text-red-600">重設密碼 Modal</button>
           </div>
         </div>
@@ -342,10 +384,20 @@
           </div>
           <!-- 角色 -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">角色</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">角色 <span class="text-danger">*</span></label>
             <select id="createRole" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
-              <option value="User">User</option>
-              <option value="Admin">Admin</option>
+              <optgroup label="系統角色">
+                <option value="admin">管理者（Admin）</option>
+                <option value="user" selected>使用者（User）</option>
+              </optgroup>
+              <optgroup label="業務角色">
+                <option value="business">業務</option>
+                <option value="marketing">行銷（企劃）</option>
+                <option value="customer_service">客服</option>
+                <option value="analyst">分析師</option>
+                <option value="supervisor">主管</option>
+                <option value="backend_ops">後端作業（作服）</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -427,7 +479,7 @@
     </div>
   </div>
 
-  <!-- Modal 5: 變更角色 -->
+  <!-- Modal 5: 變更角色 (Step 1: 選擇新角色) -->
   <div id="changeRoleModal" class="fixed inset-0 z-50 hidden">
     <div class="modal-backdrop absolute inset-0" onclick="closeModal('changeRoleModal')"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -451,18 +503,66 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">新角色</label>
-            <select id="changeRoleSelect" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
-              <option value="Admin">Admin</option>
-              <option value="User">User</option>
+            <select id="changeRoleSelect" onchange="updateRoleChangeWarning()" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+              <optgroup label="系統角色">
+                <option value="管理者">管理者（Admin）</option>
+                <option value="使用者">使用者（User）</option>
+              </optgroup>
+              <optgroup label="業務角色">
+                <option value="業務">業務</option>
+                <option value="行銷（企劃）">行銷（企劃）</option>
+                <option value="客服">客服</option>
+                <option value="分析師">分析師</option>
+                <option value="主管">主管</option>
+                <option value="後端作業（作服）">後端作業（作服）</option>
+              </optgroup>
             </select>
           </div>
-          <div class="flex items-start gap-2 p-3 bg-amber-50 rounded-lg">
+          <!-- 系統角色提示 -->
+          <div id="changeRoleSystemWarning" class="flex items-start gap-2 p-3 bg-amber-50 rounded-lg">
             <i data-lucide="alert-circle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <p class="text-xs text-amber-700">變更角色將立即影響該使用者的系統權限。Admin 擁有完整管理權限，User 僅具備基本操作權限。</p>
+          </div>
+          <!-- 業務角色提示 -->
+          <div id="changeRoleBusinessWarning" class="flex items-start gap-2 p-3 bg-blue-50 rounded-lg hidden">
+            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+            <p class="text-xs text-primary">變更業務角色將影響使用者在 Customer 360 模組中的存取權限，包含欄位可見性、遮罩規則與功能開關。</p>
           </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button onclick="closeModal('changeRoleModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+          <button onclick="showRoleChangeConfirm()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition-colors shadow-sm">下一步</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5b: 變更角色確認對話框 -->
+  <div id="changeRoleConfirmModal" class="fixed inset-0 z-[60] hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('changeRoleConfirmModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-sm relative transform transition-all">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="shield-check" class="w-6 h-6 text-primary"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">確認角色變更</h3>
+          <div class="flex items-center justify-center gap-3 mb-3">
+            <div class="text-center">
+              <p class="text-xs text-gray-400 mb-1">目前角色</p>
+              <span id="confirmCurrentRole" class="inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">-</span>
+            </div>
+            <i data-lucide="arrow-right" class="w-5 h-5 text-gray-400"></i>
+            <div class="text-center">
+              <p class="text-xs text-gray-400 mb-1">新角色</p>
+              <span id="confirmNewRole" class="inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">-</span>
+            </div>
+          </div>
+          <p id="confirmUserName" class="text-sm text-gray-500 mb-1">確定要變更 <strong>-</strong> 的角色嗎？</p>
+          <p id="confirmBusinessNote" class="text-xs text-amber-600 hidden">此變更將影響使用者在 Customer 360 模組中的存取權限</p>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="closeModal('changeRoleConfirmModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition-colors">取消</button>
           <button onclick="handleChangeRole()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition-colors shadow-sm">確認變更</button>
         </div>
       </div>
@@ -541,7 +641,7 @@
     // Close modals on Escape key
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        const modals = ['createModal', 'editModal', 'disableModal', 'enableModal', 'changeRoleModal', 'resetPasswordModal'];
+        const modals = ['createModal', 'editModal', 'disableModal', 'enableModal', 'changeRoleModal', 'changeRoleConfirmModal', 'resetPasswordModal'];
         modals.forEach(id => {
           const modal = document.getElementById(id);
           if (!modal.classList.contains('hidden')) {
@@ -594,19 +694,73 @@
     }
 
     // ===== Change Role Modal =====
+    const businessRoles = ['業務', '行銷（企劃）', '客服', '分析師', '主管', '後端作業（作服）'];
+    const systemRoles = ['管理者', '使用者'];
+
+    function isBusinessRole(role) {
+      return businessRoles.includes(role);
+    }
+
     function openChangeRoleModal(name, currentRole) {
       document.getElementById('changeRoleName').textContent = name;
       document.getElementById('changeRoleCurrent').textContent = currentRole;
       const select = document.getElementById('changeRoleSelect');
-      select.value = currentRole === 'Admin' ? 'User' : 'Admin';
+      // Set default to a different role than current
+      if (currentRole === '管理者') {
+        select.value = '使用者';
+      } else if (currentRole === '使用者') {
+        select.value = '管理者';
+      } else {
+        select.value = '管理者';
+      }
+      updateRoleChangeWarning();
       openModal('changeRoleModal');
+    }
+
+    function updateRoleChangeWarning() {
+      const newRole = document.getElementById('changeRoleSelect').value;
+      const systemWarning = document.getElementById('changeRoleSystemWarning');
+      const businessWarning = document.getElementById('changeRoleBusinessWarning');
+      if (isBusinessRole(newRole)) {
+        systemWarning.classList.add('hidden');
+        businessWarning.classList.remove('hidden');
+      } else {
+        systemWarning.classList.remove('hidden');
+        businessWarning.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function showRoleChangeConfirm() {
+      const name = document.getElementById('changeRoleName').textContent;
+      const currentRole = document.getElementById('changeRoleCurrent').textContent;
+      const newRole = document.getElementById('changeRoleSelect').value;
+
+      if (currentRole === newRole) {
+        showToast('warning', '角色未變更', '新角色與目前角色相同，請選擇不同的角色。');
+        return;
+      }
+
+      document.getElementById('confirmCurrentRole').textContent = currentRole;
+      document.getElementById('confirmNewRole').textContent = newRole;
+      document.getElementById('confirmUserName').innerHTML = `確定要變更 <strong>${name}</strong> 的角色嗎？`;
+
+      const businessNote = document.getElementById('confirmBusinessNote');
+      if (isBusinessRole(newRole) || isBusinessRole(currentRole)) {
+        businessNote.classList.remove('hidden');
+      } else {
+        businessNote.classList.add('hidden');
+      }
+
+      openModal('changeRoleConfirmModal');
     }
 
     function handleChangeRole() {
       const name = document.getElementById('changeRoleName').textContent;
       const newRole = document.getElementById('changeRoleSelect').value;
+      closeModal('changeRoleConfirmModal');
       closeModal('changeRoleModal');
-      showToast('success', '角色已變更', `${name} 的角色已變更為 ${newRole}。`);
+      showToast('success', '角色已變更', `${name} 的角色已變更為${newRole}。`);
     }
 
     // ===== Reset Password Modal =====
@@ -653,7 +807,7 @@
         if (el) el.value = '';
       });
       const role = document.getElementById('createRole');
-      if (role) role.value = 'User';
+      if (role) role.value = 'user';
       ['createNameError', 'createEmailError', 'createPasswordError'].forEach(id => {
         document.getElementById(id)?.classList.add('hidden');
       });
@@ -692,9 +846,10 @@
 
       if (!valid) return;
 
-      const role = document.getElementById('createRole').value;
+      const roleSelect = document.getElementById('createRole');
+      const roleDisplayName = roleSelect.options[roleSelect.selectedIndex].text;
       closeModal('createModal');
-      showToast('success', '帳號已建立', `帳號 ${name} (${role}) 已成功建立。`);
+      showToast('success', '帳號已建立', `帳號 ${name}（${roleDisplayName}）已成功建立。`);
     }
 
     // ===== Password Toggle =====
