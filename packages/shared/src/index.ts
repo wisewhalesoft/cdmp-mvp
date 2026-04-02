@@ -849,6 +849,7 @@ export interface TargetTableColumn {
   nullable: boolean;
   isPrimaryKey: boolean;
   isEtlTracking: boolean;
+  category: string;
   description: string;
 }
 

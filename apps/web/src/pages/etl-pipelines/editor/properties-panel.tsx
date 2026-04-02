@@ -579,21 +579,11 @@ const LOAD_CATEGORIES: LoadCategory[] = [
   { id: 'H', label: '稽核與 ETL 追蹤', badgeBg: 'bg-gray-200', badgeText: 'text-gray-600' },
 ];
 
-// Category sizes for customer_core: A(5), B(12), C(10), D(10), E(12), F(12), G(13), H(5)
-const CATEGORY_SIZES = [5, 12, 10, 10, 12, 12, 13, 5];
-
 function groupColumnsByCategory(columns: TargetTableColumn[]) {
-  const groups: { category: LoadCategory; columns: TargetTableColumn[] }[] = [];
-  let offset = 0;
-  for (let i = 0; i < LOAD_CATEGORIES.length; i++) {
-    const size = CATEGORY_SIZES[i];
-    groups.push({
-      category: LOAD_CATEGORIES[i],
-      columns: columns.slice(offset, offset + size),
-    });
-    offset += size;
-  }
-  return groups;
+  return LOAD_CATEGORIES.map((category) => ({
+    category,
+    columns: columns.filter((c) => c.category === category.id),
+  }));
 }
 
 function LoadProperties({
