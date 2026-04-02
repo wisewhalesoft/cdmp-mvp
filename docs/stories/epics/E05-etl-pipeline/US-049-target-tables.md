@@ -46,7 +46,7 @@
 ### AC-6：目標表 Schema 預定義正確
 - **Given** 系統初始化完成
 - **When** 查詢目標表清單
-- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（87 欄位），欄位定義正確
+- **Then** Phase 1 MVP 包含 `customer_core` 一個目標表（85 欄位），欄位定義正確
 - **Note** `customer_interaction`、`customer_financial`、`customer_service` 移至 Phase 2/3，待對應來源系統接入後實作
 
 ---
@@ -83,7 +83,7 @@
       "tableName": "customer_core",
       "displayName": "Customer Core（客戶主檔）",
       "domain": "core",
-      "columnCount": 87,
+      "columnCount": 85,
       "description": "客戶身分、個人屬性、聯絡、職業、財務概況與風控旗標"
     }
   ]
@@ -147,14 +147,14 @@
 
 | 欄位名稱 | 型別 | nullable | PK | 說明 | 來源對應 | 轉換邏輯 |
 |---------|------|----------|-----|------|---------|---------|
-| mobile_phone | VARCHAR(20) | YES | | 行動電話 | ZZIP.CELLULAR / MLMC.CUSTMOBILE | 直接映射 |
-| home_phone | VARCHAR(20) | YES | | 戶籍電話 | ZZIP.CAREA_NO1 + CTEL_NO1 + CEXTEN_NO1 | 合併為 `{區碼}-{號碼}#{分機}`，無分機時省略 `#{分機}`，佔位值→NULL |
-| contact_phone | VARCHAR(20) | YES | | 通訊電話 | ZZIP.CAREA_NO2 + CTEL_NO2 + CEXTEN_NO2 | 合併為 `{區碼}-{號碼}#{分機}`，無分機時省略 `#{分機}`，佔位值→NULL |
-| office_phone | VARCHAR(20) | YES | | 公司電話 | ZZIP.CO_CAREA_NO + CO_CTEL_NO + CO_EXTEN_NO / MLMC.BUSINESSTTELCODE + BUSINESSTTEL | 合併為 `{區碼}-{號碼}#{分機}`，無分機時省略 `#{分機}`，佔位值→NULL |
-| registered_phone | VARCHAR(20) | YES | | 公司登記電話 | MLMC.CUSTTELCODE + CUSTTEL | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
-| registered_fax | VARCHAR(20) | YES | | 公司傳真 | MLMC.CUSTFAXCODE + CUSTFAX | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
-| business_fax | VARCHAR(20) | YES | | 營業傳真 | MLMC.BUSINESSFAXCODE + BUSINESSFAX | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
-| business_mobile | VARCHAR(20) | YES | | 營業行動電話 | MLMC.BUSINESSMOBILE | 直接映射 |
+| mobile_phone | VARCHAR(30) | YES | | 行動電話 | ZZIP.CELLULAR / MLMC.CUSTMOBILE | 直接映射 |
+| home_phone | VARCHAR(30) | YES | | 戶籍電話 | ZZIP.CAREA_NO1 + CTEL_NO1 + CEXTEN_NO1 | 合併為 `{區碼}-{號碼}#{分機}`，無分機時省略 `#{分機}`，佔位值→NULL |
+| contact_phone | VARCHAR(30) | YES | | 通訊電話 | ZZIP.CAREA_NO2 + CTEL_NO2 + CEXTEN_NO2 | 合併為 `{區碼}-{號碼}#{分機}`，無分機時省略 `#{分機}`，佔位值→NULL |
+| office_phone | VARCHAR(30) | YES | | 公司電話 | ZZIP.CO_CAREA_NO + CO_CTEL_NO + CO_EXTEN_NO / MLMC.BUSINESSTTELCODE + BUSINESSTTEL | 合併為 `{區碼}-{號碼}#{分機}`，無分機時省略 `#{分機}`，佔位值→NULL |
+| registered_phone | VARCHAR(30) | YES | | 公司登記電話 | MLMC.CUSTTELCODE + CUSTTEL | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| registered_fax | VARCHAR(30) | YES | | 公司傳真 | MLMC.CUSTFAXCODE + CUSTFAX | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| business_fax | VARCHAR(30) | YES | | 營業傳真 | MLMC.BUSINESSFAXCODE + BUSINESSFAX | 合併為 `{區碼}-{號碼}`，佔位值→NULL |
+| business_mobile | VARCHAR(30) | YES | | 營業行動電話 | MLMC.BUSINESSMOBILE | 直接映射 |
 | email | VARCHAR(40) | YES | | Email | ZZIP.E_MAIL | 直接映射 |
 | line_account | VARCHAR(50) | YES | | Line 帳號 | ZZIP.LINE_ACCT | 直接映射 |
 
@@ -188,7 +188,7 @@
 | industry_desc | VARCHAR(100) | YES | | 行業描述 | MLMC.BUSINESS / Lookup TBL_ID=AA 代碼轉換 |
 | work_years | DECIMAL(8,2) | YES | | 年資 | ZZIP.N_WORK_YEAR |
 | company_scale | VARCHAR(1) | YES | | 公司規模（1:>=1000萬or公教/2:<1000萬/3:其他） | ZZIP.COMP_DIM |
-| role | VARCHAR(10) | YES | | 客戶角色 | ZZIP.CROLE |
+| role | VARCHAR(50) | YES | | 客戶角色 | ZZIP.CROLE |
 
 #### F. 財務與風控
 
@@ -225,8 +225,6 @@
 | is_listed_desc | VARCHAR(50) | YES | | 上市櫃描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=27) |
 | parent_customer_id | VARCHAR(10) | YES | | 母公司客戶 ID | MLMC.PARENTCUSTID |
 | group_owner | VARCHAR(50) | YES | | 集團實際負責人 | MLMC.GROUPOWNER |
-| company_attr_code | VARCHAR(6) | YES | | 公司屬性 | MLMC.COMPTYPE |
-| company_attr_desc | VARCHAR(50) | YES | | 公司屬性描述 | US-030 代碼轉換 (SYSCD=LL, DATAID=26) |
 | business_item | VARCHAR(100) | YES | | 營業項目 | MLMC.BUSINESS |
 | organization_type | VARCHAR(6) | YES | | 組織形態（代碼表 LCCODEMF） | MLMC.ORGATYPE |
 | parent_customer_name | VARCHAR(100) | YES | | 母公司名稱 | MLMC.PARENTCUSTNAME |
@@ -267,7 +265,6 @@
 | Lookup：收入來源 | income_source_code → income_source_desc，對照表 TBL_ID=Y0 |
 | Lookup：員工人數 | employee_count_code → employee_count_desc，對照表 SYSCD=LL, DATAID=89 |
 | Lookup：上市櫃 | is_listed_code → is_listed_desc，對照表 SYSCD=LL, DATAID=27 |
-| Lookup：公司屬性 | company_attr_code → company_attr_desc，對照表 SYSCD=LL, DATAID=26 |
 | 資本額型別 | MLMC.CUSTNOWCAPTIAL / CUSTCREATECAPTIAL：varchar → DECIMAL |
 | 月所得代碼 | ZZIP.MONTH_INCOME：保留原始代碼至 monthly_income_code VARCHAR(5)，透過 TBL_ID=A3 Lookup 取得描述 |
 | 客戶類型對應 | ZZIP.CUSTOM_MK 直接映射；MLMC.CUTYPE 需轉換（1→01, 2→02） |
@@ -296,7 +293,7 @@
 | # | 測試案例 | 預期結果 |
 |---|---------|---------|
 | 1 | 呼叫目標表清單 API | 回傳 1 個目標表（customer_core），含名稱、Domain、欄位數量 |
-| 2 | 呼叫 customer_core Schema API | 回傳 87 個欄位定義，型別與描述正確 |
+| 2 | 呼叫 customer_core Schema API | 回傳 85 個欄位定義，型別與描述正確 |
 | 3 | 在 Load 節點選擇目標表 | 自動載入目標表欄位定義 |
 | 4 | 進行來源欄位與目標欄位對應 | 支援拖曳或下拉選單一對一對應 |
 | 5 | 執行 Pipeline 的 Load 步驟 | ETL 追蹤欄位（data_source、_etl_loaded_at、_etl_pipeline_id）自動填充 |
@@ -318,7 +315,7 @@
 
 - [ ] 目標表清單 API 實作完成並通過單元測試
 - [ ] 目標表 Schema API 實作完成並通過單元測試
-- [ ] customer_core 目標表 schema 預定義正確（87 欄位，涵蓋 A~H 八個分類）
+- [ ] customer_core 目標表 schema 預定義正確（85 欄位，涵蓋 A~H 八個分類）
 - [ ] 來源欄位對應表完整且經業務確認
 - [ ] 前端 Load 節點目標表選擇器實作完成
 - [ ] 前端欄位對應介面實作完成

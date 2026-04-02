@@ -105,7 +105,7 @@ status: Draft
 | F033 | [F033-pipeline-version.md](features/F033-pipeline-version.md) | Pipeline 版本管理（Diff/回滾/發布） | US-046 | P1 |
 | F034 | [F034-delete-pipeline.md](features/F034-delete-pipeline.md) | 刪除 Pipeline | US-047 | P1 |
 | F035 | [F035-pipeline-dashboard.md](features/F035-pipeline-dashboard.md) | Pipeline 監控儀表板 | US-048 | P1 |
-| F036 | [F036-target-tables.md](features/F036-target-tables.md) | 目標表 Domain-Oriented 規劃（customer_core 約 45 欄位） | US-049 | P0-MVP |
+| F036 | [F036-target-tables.md](features/F036-target-tables.md) | 目標表 Domain-Oriented 規劃（customer_core 85 欄位） | US-049 | P0-MVP |
 | F037 | [F037-publish-pipeline-version.md](features/F037-publish-pipeline-version.md) | 發布 Pipeline 版本 | US-050 | P0-MVP |
 | F039 | [F039-node-field-badge.md](features/F039-node-field-badge.md) | 節點欄位變化統計 Badge | US-042 (擴充) | P0-MVP |
 | F040 | [F040-field-inspector-diff.md](features/F040-field-inspector-diff.md) | Inspector Panel 欄位 Diff | US-042 (擴充) | P1 |

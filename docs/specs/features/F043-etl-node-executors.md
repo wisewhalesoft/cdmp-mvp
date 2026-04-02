@@ -29,7 +29,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-03-27
 
 ```typescript
 interface DataSet {
-  rows: Record<string, unknown>[];
+  tempTable: string;   // temp table 引用（如 "etl_tmp_e1_abc12345"），非記憶體中的資料陣列
   rowCount: number;
 }
 
@@ -508,39 +508,28 @@ LookupExecutor 支援兩種執行模式，依 `context.inputs['lookup-input']` �
 | `inputs['lookup-input']` 存在 | 雙輸入模式 | 直接使用 `inputs['lookup-input']` DataSet |
 | `inputs['lookup-input']` 不存在 | 向下相容模式 | 從資料庫查詢 `lookupSource` + `lookupFilter` |
 
-**處理邏輯（雙輸入模式）：**
+**處理邏輯（In-DB SQL 策略，兩種模式共用）：**
 
-1. 從 `context.inputs['default']`（或 `context.inputs['main-input']`）取得主資料集
-2. 從 `context.inputs['lookup-input']` 取得對照資料集
-3. 忽略節點設定中的 `lookupSource`、`lookupFilter`、`noMatchStrategy`、`defaultValue`
-4. 以 `lookupMatchColumn` 為 key 對對照資料集建立 lookup Map（key → row，首筆為主）
-5. 對主資料集每一列：
-   a. 以 `matchColumn` 的值查找 lookup Map
-   b. 匹配成功：將 `outputColumns` 中指定的欄位從對照列複製至主資料列（以 `outputAlias` 為欄位名）
-   c. 匹配失敗：`outputColumns` 指定的欄位補 null
-6. 輸出 DataSet 的 rowCount 與主資料集相同（LEFT JOIN 語意）
+1. 決定對照表來源：
+   - 雙輸入模式：`lookupTable = inputs['lookup-input'].tempTable`
+   - 向下相容模式：`lookupTable = lookupSource`（raw table 名稱）
+2. 建立 lookup 子查詢：`SELECT * FROM "${lookupTable}" [WHERE ${lookupFilter}]`
+   - `lookupFilter` 若有設定，在**兩種模式中皆套用**（非僅向下相容模式）
+3. 為每個 `outputColumns` 項目在主表新增欄位：`ALTER TABLE "${inputTable}" ADD COLUMN IF NOT EXISTS "${outputAlias}" TEXT`
+4. 以 TRIM() 比對更新匹配列：
+   ```sql
+   UPDATE "${inputTable}" _src
+   SET "${outputAlias}" = TRIM(_lk."${lookupColumn}"::text)
+   FROM (lookupSubQuery) _lk
+   WHERE TRIM(_src."${matchColumn}"::text) = TRIM(_lk."${lookupMatchColumn}"::text)
+   ```
+5. 依 `noMatchStrategy` 處理無匹配列：
+   - `null`（預設）：outputColumns 欄位保持 NULL（LEFT JOIN 語意）
+   - `default_value`：`UPDATE inputTable SET outputAlias = defaultValue WHERE outputAlias IS NULL`
+   - `skip_row`：`DELETE FROM inputTable WHERE NOT EXISTS (...)`（INNER JOIN 語意）
+6. 回傳相同的 temp table 引用（原地修改，不建立新 temp table）
 
-**處理邏輯（向下相容模式）：**
-
-1. 從 `context.inputs['default']`（或 `context.inputs['main-input']`）取得主資料集
-2. 透過 `queryRunner` 執行 `SELECT * FROM {lookupSource} WHERE {lookupFilter}` 取得對照資料集
-   - 若 `lookupFilter` 為空字串或未定義，執行 `SELECT * FROM {lookupSource}`（不加 WHERE）
-3. 後續 JOIN 邏輯與雙輸入模式相同（步驟 4~6）
-4. 支援 `noMatchStrategy`：
-   - `null`：outputColumns 欄位補 null（預設）
-   - `default_value`：outputColumns 欄位補 `defaultValue`
-   - `skip_row`：無匹配的列不輸出（rowCount 可能小於主資料集）
-
-**SQL 等效邏輯（雙輸入模式）：**
-
-```sql
--- 概念上等同於：
-CREATE TEMP TABLE output AS
-SELECT src.*, lk."{outputColumns[0].lookupColumn}" AS "{outputColumns[0].outputAlias}"
-FROM input_temp src
-LEFT JOIN (SELECT * FROM lookup_temp) lk
-  ON src."{matchColumn}" = lk."{lookupMatchColumn}"
-```
+> **TRIM() 說明：** 比對欄位使用 `TRIM(col::text)` 避免 MSSQL CHAR 型別欄位因尾隨空白導致匹配失敗。
 
 **輸入：**
 - 雙輸入模式：`{ 'default': DataSet, 'lookup-input': DataSet }`

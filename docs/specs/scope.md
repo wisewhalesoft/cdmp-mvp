@@ -59,7 +59,7 @@ status: Draft
 | F033 | US-046 | E05 | Pipeline 版本管理 | P1 | 版本清單、Diff 比對、回滾、發布流程 |
 | F034 | US-047 | E05 | 刪除 Pipeline | P1 | 軟刪除，日誌保留 |
 | F035 | US-048 | E05 | Pipeline 監控儀表板 | P1 | 統計卡片、趨勢圖、進度條、失敗清單、效能排名 |
-| F036 | US-049 | E05 | 目標表 Domain-Oriented 規劃 | P0-MVP | 1 個 Domain Data Product 目標表（customer_core，約 45 欄位），schema API，欄位對應，來源：ZZIP_BAMCUST_M + MLMCUSTOMER |
+| F036 | US-049 | E05 | 目標表 Domain-Oriented 規劃 | P0-MVP | 1 個 Domain Data Product 目標表（customer_core，85 欄位），schema API，欄位對應，來源：ZZIP_BAMCUST_M + MLMCUSTOMER |
 | F037 | US-050 | E05 | 發布 Pipeline 版本 | P0-MVP | 版本狀態從 draft 轉為 published，發布後不可修改 |
 | F038 | US-051 | E04/E05 | 孤兒任務回收 | P0-MVP | 系統啟動時自動修復 running 狀態的孤兒任務 |
 | F039 | US-042 | E05 | 節點欄位變化統計 Badge | P0-MVP | 編輯器節點上顯示欄位數量 Badge |

@@ -100,7 +100,7 @@ graph TD
 | Extract 讀取方式 | **批次分頁讀取，累積至單一 DataSet** | 見 5.2 節詳述 |
 | Target Load 策略 | **批次 UPSERT（INSERT ... ON CONFLICT）** | 見 3.5 節詳述 |
 | Lookup 雙輸入路由 | **泛化 Handle key 機制（`lookup-input`）** | 與 Merge 的 `left-input`/`right-input` 相同模式；`collectInputs()` 已泛化支援任意 targetHandle key |
-| Lookup JOIN 執行位置 | **In-DB（PostgreSQL LEFT JOIN）** | 對照資料已為 temp table，SQL JOIN 零記憶體佔用；避免大型對照表載入 JS 記憶體 |
+| Lookup JOIN 執行位置 | **In-DB（ALTER TABLE + UPDATE 原地修改）** | 對照資料已為 temp table，ALTER+UPDATE 零記憶體佔用且不需複製整張表；TRIM() 處理 MSSQL CHAR 欄位尾隨空白 |
 
 ---
 
@@ -349,13 +349,15 @@ sequenceDiagram
 
 - `inputs['default']`：主資料流（來自上游節點的 DataSet）
 - `inputs['lookup-input']`：對照資料（另一上游節點的 DataSet，已物化為 PostgreSQL 臨時表）
-- JOIN 策略：在 PostgreSQL 執行 LEFT JOIN，零記憶體佔用，無需將對照資料載入 JS 記憶體
-- 向下相容模式的 `lookupFilter` 在此模式中不套用（資料由上游節點自行過濾）
+- SQL 策略：ALTER TABLE ADD COLUMN + UPDATE ... FROM ... WHERE TRIM()，原地修改主表不複製
+- `lookupFilter` 若有設定仍會套用（作為對照資料的 WHERE 子句）
 
 **向下相容模式（無 `lookup-input` 連線時）：**
 
 - 直接查詢節點屬性 `lookupSource` 所指定的 raw table
 - 支援 `lookupFilter` 欄位作為 WHERE 子句對對照資料預先篩選
+
+> **TRIM() 說明：** 比對欄位使用 `TRIM(col::text)` 避免 MSSQL CHAR 型別欄位因尾隨空白導致匹配失敗。
 
 **Handle 路由機制（與 Merge 類比）：**
 
@@ -366,37 +368,41 @@ edge.targetHandle → inputs key
 "lookup-input"                → inputs['lookup-input'] ← 對照資料
 ```
 
-**SQL 執行策略：**
+**SQL 執行策略（ALTER TABLE + UPDATE 原地修改）：**
 
 ```sql
--- 雙輸入模式
-CREATE TEMP TABLE "${outputTable}" AS
-SELECT src.*, lk."${outputCol}" AS "${alias}"
-FROM "${mainTempTable}" src
-LEFT JOIN "${lookupTempTable}" lk
-  ON src."${matchCol}" = lk."${lookupMatchCol}"
+-- 步驟 1：為每個 outputColumn 新增欄位
+ALTER TABLE "${inputTable}" ADD COLUMN IF NOT EXISTS "${outputAlias}" TEXT;
 
--- 向下相容模式（lookupSource 為 raw table 名稱）
-CREATE TEMP TABLE "${outputTable}" AS
-SELECT src.*, lk."${outputCol}" AS "${alias}"
-FROM "${mainTempTable}" src
-LEFT JOIN (
-  SELECT * FROM "${lookupSource}"
-  [WHERE ${lookupFilter}]       -- 僅向下相容模式套用
-) lk
-  ON src."${matchCol}" = lk."${lookupMatchCol}"
+-- 步驟 2：UPDATE 匹配列（lookupSubQuery 在兩種模式中皆套用 lookupFilter）
+UPDATE "${inputTable}" _src
+SET "${outputAlias}" = TRIM(_lk."${lookupColumn}"::text)
+FROM (SELECT * FROM "${lookupTable}" [WHERE ${lookupFilter}]) _lk
+WHERE TRIM(_src."${matchColumn}"::text) = TRIM(_lk."${lookupMatchColumn}"::text);
+
+-- 步驟 3（noMatchStrategy = 'skip_row' 時）：刪除無匹配列
+DELETE FROM "${inputTable}" _src
+WHERE NOT EXISTS (
+  SELECT 1 FROM (SELECT * FROM "${lookupTable}" [WHERE ${lookupFilter}]) _lk
+  WHERE TRIM(_src."${matchColumn}"::text) = TRIM(_lk."${lookupMatchColumn}"::text)
+);
+
+-- 步驟 3（noMatchStrategy = 'default_value' 時）：填充預設值
+UPDATE "${inputTable}" SET "${outputAlias}" = '${defaultValue}' WHERE "${outputAlias}" IS NULL;
 ```
+
+> **注意：** 不再建立新的 temp table（無 CREATE TEMP TABLE），而是原地修改 `inputTable`，回傳相同的 temp table 引用。
 
 **關鍵屬性（來自節點 data 欄位）：**
 
 | 屬性 | 說明 | 適用模式 |
 |------|------|---------|
-| `matchCol` | 主資料流的 JOIN key 欄位 | 兩者 |
-| `lookupMatchCol` | 對照資料的 JOIN key 欄位 | 兩者 |
-| `outputCol` | 從對照資料取出的欄位名稱 | 兩者 |
-| `alias` | 附加至輸出的欄位別名 | 兩者 |
+| `matchColumn` | 主資料流的比對欄位 | 兩者 |
+| `lookupMatchColumn` | 對照資料的比對欄位 | 兩者 |
+| `outputColumns` | 輸出欄位陣列，每項含 `{lookupColumn, outputAlias}` | 兩者 |
 | `lookupSource` | 對照 raw table 名稱 | 向下相容模式 |
-| `lookupFilter` | 對照資料 WHERE 子句 | 向下相容模式 |
+| `lookupFilter` | 對照資料 WHERE 子句 | 兩者（有設定時皆套用） |
+| `noMatchStrategy` | 無匹配策略：`null`（預設）/ `default_value` / `skip_row` | 兩者 |
 
 ```mermaid
 sequenceDiagram
@@ -408,11 +414,15 @@ sequenceDiagram
 
     alt 雙輸入模式（有 lookup-input）
         Runner->>LookupHandler: execute({ inputs['default'], inputs['lookup-input'], node })
-        LookupHandler->>PG: CREATE TEMP TABLE output AS<br/>SELECT src.*, lk.outputCol AS alias<br/>FROM mainTempTable src<br/>LEFT JOIN lookupTempTable lk ON matchKey
+        LookupHandler->>PG: ALTER TABLE inputTable ADD COLUMN outputAlias TEXT
+        PG-->>LookupHandler: 完成
+        LookupHandler->>PG: UPDATE inputTable _src SET outputAlias = TRIM(_lk.col::text)<br/>FROM lookupTempTable _lk<br/>WHERE TRIM(_src.matchColumn::text) = TRIM(_lk.lookupMatchColumn::text)
         PG-->>LookupHandler: 完成
     else 向下相容模式（無 lookup-input）
         Runner->>LookupHandler: execute({ inputs['default'], node })
-        LookupHandler->>PG: CREATE TEMP TABLE output AS<br/>SELECT src.*, lk.outputCol AS alias<br/>FROM mainTempTable src<br/>LEFT JOIN (SELECT * FROM lookupSource WHERE filter) lk ON matchKey
+        LookupHandler->>PG: ALTER TABLE inputTable ADD COLUMN outputAlias TEXT
+        PG-->>LookupHandler: 完成
+        LookupHandler->>PG: UPDATE inputTable _src SET outputAlias = TRIM(_lk.col::text)<br/>FROM (SELECT * FROM lookupSource WHERE filter) _lk<br/>WHERE TRIM(_src.matchColumn::text) = TRIM(_lk.lookupMatchColumn::text)
         PG-->>LookupHandler: 完成
     end
 
@@ -473,13 +483,17 @@ DO UPDATE SET
 ### 4.2 DataSet 介面定義
 
 ```typescript
+/**
+ * DataSet 代表一個 temp table 引用，而非記憶體中的資料陣列。
+ * 節點之間透過 temp table 名稱傳遞資料，所有轉換用 SQL 完成。
+ */
 interface DataSet {
-  rows: Record<string, unknown>[];  // 記憶體內資料列
-  rowCount: number;                  // = rows.length（冗餘但方便 logging）
+  tempTable: string;   // e.g. "etl_tmp_e1_abc12345"
+  rowCount: number;
 }
 ```
 
-每個 Node Handler 的輸入與輸出皆為 `DataSet`。`rowCount` 直接等於 `rows.length`，在節點執行完成後寫入 `node_logs[N].outputRowCount`。
+每個 Node Handler 的輸入與輸出皆為 `DataSet`。`DataSet` 為 temp table 引用而非記憶體中的資料陣列，所有節點透過 SQL 在資料庫端完成轉換，避免大量資料載入 JS 記憶體。`rowCount` 在節點執行完成後寫入 `node_logs[N].outputRowCount`。
 
 ---
 

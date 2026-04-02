@@ -212,7 +212,7 @@ status: Draft
 | A34 | Phase 1 MVP 目標表僅 `customer_core` 1 個，Phase 2/3 目標表待來源系統接入後再建立 | US-049 v2 修訂 | ✅ 已確認（OQ-42） |
 | A35 | 兩來源系統（ZZIP_BAMCUST_M / MLMCUSTOMER）以身分證字號/統編為共同鍵 | US-049 v2 來源定義 | ✅ 已確認（OQ-43） |
 | A36 | 電話欄位佔位值（`00-0000000000`、全零、空字串）過濾為 NULL | US-049 v2 轉換規則 | ✅ 已確認（OQ-45） |
-| A37 | `customer_core` 目標表約 45 欄位，分 A~H 八個分類 | US-049 v2 欄位定義 | ✅ 已確認（OQ-42） |
+| A37 | `customer_core` 目標表 85 欄位，分 A~H 八個分類 | US-049 v2 欄位定義 | ✅ 已確認（OQ-42） |
 | A38 | Badge 計算使用 300ms debounce 防止效能問題 | F039 設計假設 | 效能測試驗證 |
 | A39 | `computeNodeOutputColumns` 結果以 nodeId + data hash 為 key 進行 memo 快取 | F039/F040 設計假設 | 架構師確認 |
 | A40 | Tooltip 全域狀態管理使用 React Context（非 Zustand） | F041 設計假設 | 架構師確認 |

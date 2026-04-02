@@ -28,7 +28,7 @@ flowchart LR
     end
 
     subgraph Target["目標表"]
-        CC["customer_core\n約 45 欄位 / 8 分類"]
+        CC["customer_core\n85 欄位 / 8 分類"]
     end
 
     ZZIP --> E1
