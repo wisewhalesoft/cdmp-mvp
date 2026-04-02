@@ -235,12 +235,12 @@ const emptyDataSet = { rows: [], rowCount: 0 };
 - **測試層次**: 整合測試（Test Container）
 - **Preconditions**: 10,000 列不重複的測試資料
 - **Steps**:
-  1. 執行 TargetLoadExecutor，batch size = 1456（欄位數約 45，計算公式：floor(65535/45)）
+  1. 執行 TargetLoadExecutor，batch size = 771（欄位數 85，計算公式：floor(65535/85)）
   2. 完成後查詢 customer_core 筆數
 - **Expected Result**:
   - customer_core 新增 10,000 列
   - 節點 outputRowCount = 10,000
-  - 批次數 = ceil(10000 / 1456) = 7 批（6 批 1456 + 1 批 1264）
+  - 批次數 = ceil(10000 / 771) = 13 批（12 批 771 + 1 批 748）
 
 ---
 
@@ -249,12 +249,12 @@ const emptyDataSet = { rows: [], rowCount: 0 };
 - **Related Requirement**: F044 Section 9 批次大小計算
 - **Test Type**: 邊界
 - **測試層次**: 整合測試（Test Container）
-- **Preconditions**: 輸入 DataSet 恰好 1456 列（= 1 批）
+- **Preconditions**: 輸入 DataSet 恰好 771 列（= 1 批）
 - **Steps**:
   1. 執行 TargetLoadExecutor
 - **Expected Result**:
   - 僅執行 1 批 UPSERT
-  - customer_core 正確寫入 1456 列
+  - customer_core 正確寫入 771 列
 
 ---
 
@@ -263,12 +263,12 @@ const emptyDataSet = { rows: [], rowCount: 0 };
 - **Related Requirement**: F044 Section 9
 - **Test Type**: 邊界
 - **測試層次**: 整合測試（Test Container）
-- **Preconditions**: 輸入 DataSet 1,457 列
+- **Preconditions**: 輸入 DataSet 772 列
 - **Steps**:
   1. 執行 TargetLoadExecutor
 - **Expected Result**:
-  - 執行 2 批（第一批 1456，第二批 1）
-  - customer_core 正確寫入 1,457 列
+  - 執行 2 批（第一批 771，第二批 1）
+  - customer_core 正確寫入 772 列
 
 ---
 
@@ -324,15 +324,15 @@ const emptyDataSet = { rows: [], rowCount: 0 };
 - **Test Type**: 負向
 - **測試層次**: 整合測試（Test Container）
 - **Preconditions**:
-  - 輸入 4,000 列（3 批：1456 + 1456 + 1088）
+  - 輸入 2,000 列（3 批：771 + 771 + 458）
   - Mock 第 3 批 UPSERT 拋出錯誤（模擬 DB 連線中斷）
 - **Steps**:
   1. 執行 TargetLoadExecutor
   2. 查詢 customer_core 筆數
 - **Expected Result**:
-  - customer_core 已有前 2 批寫入（1456 × 2 = 2,912 列）（不回滾）
+  - customer_core 已有前 2 批寫入（771 × 2 = 1,542 列）（不回滾）
   - 節點 status = `'failed'`
-  - `outputRowCount = 2912`（已成功寫入的筆數）
+  - `outputRowCount = 1542`（已成功寫入的筆數）
   - errorMessage 包含失敗批次的起始 offset 與錯誤訊息
 
 ---
@@ -345,10 +345,10 @@ const emptyDataSet = { rows: [], rowCount: 0 };
 - **Test Type**: 正向
 - **測試層次**: 單元測試（純函數）
 - **Steps**:
-  1. 呼叫批次大小計算函式，columnsPerRow = 45，configuredBatchSize = 5000
+  1. 呼叫批次大小計算函式，columnsPerRow = 85，configuredBatchSize = 5000
 - **Expected Result**:
-  - `maxBatchSize = floor(65535 / 45) = 1456`
-  - `actualBatchSize = min(5000, 1456) = 1456`
+  - `maxBatchSize = floor(65535 / 85) = 771`
+  - `actualBatchSize = min(5000, 771) = 771`
 
 ---
 

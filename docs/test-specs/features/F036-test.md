@@ -6,17 +6,18 @@ priority: P0-MVP
 related_spec: /docs/specs/features/F036-target-tables.md
 related_story: /docs/stories/epics/E05-etl-pipeline/US-049-target-tables.md
 last_updated: 2026-04-01
-version: "2.3"
-changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 customer_core（約 45 欄、A~H 八分類）；新增 ETL 轉換規則測試（電話合併、佔位值、型別轉換、衝突解決、代碼描述）；新增前端欄位對應介面測試 | 2026-03-30 v2.1：customer_core 欄位數 54→65（B 5→12、D 6→8、E 10→12）；更新排除欄位清單；monthly_income 來源更正為 MONTH_INCOME | 2026-03-31 v2.2：customer_core 欄位數 65→79（C 6→10、D 8→10、F 10→12、G 7→13）；C 類新增 registered_phone/registered_fax/business_fax/business_mobile；D 類新增 registered_zip/registered_address；F 類新增 highest_transaction_amount/highest_transaction_date；G 類新增 owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name；MLMC 映射 21→37 | 2026-04-01 v2.3：customer_core 欄位數 79→83（A 5→6、B 12→13、F 12→14）；新增 code→desc 對照欄位：marital_status_code/desc(TBL_ID=33)、customer_type_code/desc(TBL_ID=55)、income_source_code/desc(TBL_ID=Y0)、job_level_code/desc(TBL_ID=A6)、monthly_income_code/desc(TBL_ID=A3)；industry_desc 改為 Lookup 查詢(TBL_ID=AA)；role_code/role_desc 移除，改為 role 單欄位(ZZIP.CROLE 直接映射)"
+version: "2.4"
+changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 customer_core（約 45 欄、A~H 八分類）；新增 ETL 轉換規則測試（電話合併、佔位值、型別轉換、衝突解決、代碼描述）；新增前端欄位對應介面測試 | 2026-03-30 v2.1：customer_core 欄位數 54→65（B 5→12、D 6→8、E 10→12）；更新排除欄位清單；monthly_income 來源更正為 MONTH_INCOME | 2026-03-31 v2.2：customer_core 欄位數 65→79（C 6→10、D 8→10、F 10→12、G 7→13）；C 類新增 registered_phone/registered_fax/business_fax/business_mobile；D 類新增 registered_zip/registered_address；F 類新增 highest_transaction_amount/highest_transaction_date；G 類新增 owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name；MLMC 映射 21→37 | 2026-04-01 v2.3：customer_core 欄位數 79→83（A 5→6、B 12→13、F 12→14）；新增 code→desc 對照欄位：marital_status_code/desc(TBL_ID=33)、customer_type_code/desc(TBL_ID=55)、income_source_code/desc(TBL_ID=Y0)、job_level_code/desc(TBL_ID=A6)、monthly_income_code/desc(TBL_ID=A3)；industry_desc 改為 Lookup 查詢(TBL_ID=AA)；role_code/role_desc 移除，改為 role 單欄位(ZZIP.CROLE 直接映射) | 2026-04-01 v2.4：customer_core 欄位數 83→85（G 13→15）；G 類 employee_count→employee_count_code+employee_count_desc、is_listed→is_listed_code+is_listed_desc、移除 company_attr_code、新增 business_item"
 ---
 
-# F036: 目標表 Domain-Oriented 規劃 — 測試設計（v2.3）
+# F036: 目標表 Domain-Oriented 規劃 — 測試設計（v2.4）
 
 > **重要異動說明**：本文件已於 2026-03-25 依 US-049 修訂版全面更新。
-> Phase 1 MVP 目標表由舊版 4 個（customer_core / customer_interaction / customer_financial / customer_service）調整為 **1 個**（`customer_core`，83 欄位，分 A~H 八個分類）。
+> Phase 1 MVP 目標表由舊版 4 個（customer_core / customer_interaction / customer_financial / customer_service）調整為 **1 個**（`customer_core`，85 欄位，分 A~H 八個分類）。
 > customer_interaction / customer_financial / customer_service 移至 Phase 2/3，不在本版本測試範圍內。
 > v2.2（2026-03-31）：C 類 6→10、D 類 8→10、F 類 10→12、G 類 7→13，總欄位數 65→79。
 > v2.3（2026-04-01）：A 類 5→6、B 類 12→13、F 類 12→14，總欄位數 79→83。新增 code→desc 對照欄位（marital_status、customer_type、income_source、job_level、monthly_income）；industry_desc 改為 Lookup(TBL_ID=AA)；role_code/role_desc 移除，改為 role 單欄位。
+> v2.4（2026-04-01）：G 類 13→15，總欄位數 83→85。G 類 employee_count→employee_count_code+employee_count_desc、is_listed→is_listed_code+is_listed_desc、移除 company_attr_code、新增 business_item。
 
 ---
 
@@ -29,7 +30,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Given | Admin 已登入；系統 Phase 1 MVP 僅預先定義 `customer_core` 一個目標表 |
 | When | 呼叫 `GET /api/v1/etl/target-tables` |
 | Then | HTTP 200；`data` 陣列含 **1 個**目標表物件；物件含 `tableName`、`displayName`、`domain`、`columnCount`、`description` 欄位 |
-| 驗證步驟 | 1. `data.length === 1`<br>2. `data[0].tableName === "customer_core"`<br>3. `data[0].domain === "core"`<br>4. `data[0].columnCount === 83`（允許 ±1，以實際 schema 定義為準；A~H 分類加總：6+13+10+10+12+14+13+5 = 83）<br>5. `data[0].displayName` 含「Customer Core」字樣<br>6. `data[0].description` 為非空字串 |
+| 驗證步驟 | 1. `data.length === 1`<br>2. `data[0].tableName === "customer_core"`<br>3. `data[0].domain === "core"`<br>4. `data[0].columnCount === 85`（允許 ±1，以實際 schema 定義為準；A~H 分類加總：6+13+10+10+12+14+15+5 = 85）<br>5. `data[0].displayName` 含「Customer Core」字樣<br>6. `data[0].description` 為非空字串 |
 
 ### AC-2：目標表 Schema API
 
@@ -38,7 +39,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | Given | Admin 已登入；指定目標表 `customer_core` 存在 |
 | When | 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema` |
 | Then | HTTP 200；回應含 `tableName`、`displayName`、`columns` 陣列；`columns` 中每個物件含 `name`、`type`、`nullable`、`isPrimaryKey`、`description` |
-| 驗證步驟 | 1. `columns` 陣列長度 83（A~H 分類加總 6+13+10+10+12+14+13+5 = 83；以 schema 定義為準）<br>2. 主鍵 `customer_id`：`isPrimaryKey === true`、`nullable === false`、`type === "UUID"`<br>3. 三個 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）均存在<br>4. `_etl_loaded_at.nullable === false`；`_etl_pipeline_id.nullable === false`<br>5. 所有 `columns` 物件均含非空 `description` |
+| 驗證步驟 | 1. `columns` 陣列長度 85（A~H 分類加總 6+13+10+10+12+14+15+5 = 85；以 schema 定義為準）<br>2. 主鍵 `customer_id`：`isPrimaryKey === true`、`nullable === false`、`type === "UUID"`<br>3. 三個 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）均存在<br>4. `_etl_loaded_at.nullable === false`；`_etl_pipeline_id.nullable === false`<br>5. 所有 `columns` 物件均含非空 `description` |
 
 ### AC-3：Load 節點選擇目標表（前端）
 
@@ -73,8 +74,8 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 |------|------|
 | Given | 系統初始化完成（migration 已執行） |
 | When | 查詢 `GET /api/v1/etl/target-tables` 及 `GET /api/v1/etl/target-tables/customer_core/schema` |
-| Then | Phase 1 MVP 僅含 `customer_core` 一個目標表（83 欄位），涵蓋 A~H 八個分類，欄位定義與 US-049 規格一致 |
-| 驗證步驟 | 1. `data.length === 1`（不含 Phase 2/3 表）<br>2. 欄位涵蓋 A（識別與分類，6 欄）、B（個人屬性，13 欄）、C（聯絡資訊，10 欄）、D（地址，10 欄）、E（職業與就業，12 欄）、F（財務與風控，14 欄）、G（企業客戶專屬，13 欄）、H（稽核與 ETL 追蹤，5 欄）<br>3. 各欄位的 `type`、`nullable`、`isPrimaryKey` 與 US-049 欄位定義表一致 |
+| Then | Phase 1 MVP 僅含 `customer_core` 一個目標表（85 欄位），涵蓋 A~H 八個分類，欄位定義與 US-049 規格一致 |
+| 驗證步驟 | 1. `data.length === 1`（不含 Phase 2/3 表）<br>2. 欄位涵蓋 A（識別與分類，6 欄）、B（個人屬性，13 欄）、C（聯絡資訊，10 欄）、D（地址，10 欄）、E（職業與就業，12 欄）、F（財務與風控，14 欄）、G（企業客戶專屬，15 欄）、H（稽核與 ETL 追蹤，5 欄）<br>3. 各欄位的 `type`、`nullable`、`isPrimaryKey` 與 US-049 欄位定義表一致 |
 
 ---
 
@@ -113,7 +114,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables`
   2. 驗證 `data[0].columnCount` 與 `data[0].domain`
-- **Expected Result**: `columnCount === 83`（A~H 分類加總 6+13+10+10+12+14+13+5 = 83；以 schema 定義實際值為準）；`domain === "core"`；`displayName` 含「Customer Core」
+- **Expected Result**: `columnCount === 85`（A~H 分類加總 6+13+10+10+12+14+15+5 = 85；以 schema 定義實際值為準）；`domain === "core"`；`displayName` 含「Customer Core」
 
 ---
 
@@ -127,7 +128,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
   2. 驗證 `columns.length`
-- **Expected Result**: HTTP 200；`tableName === "customer_core"`；`columns.length === 83`（以 migration schema 實際欄位數為準；A~H 分類加總 6+13+10+10+12+14+13+5 = 83）
+- **Expected Result**: HTTP 200；`tableName === "customer_core"`；`columns.length === 85`（以 migration schema 實際欄位數為準；A~H 分類加總 6+13+10+10+12+14+15+5 = 85）
 
 ---
 
@@ -241,7 +242,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Preconditions**: Admin 已登入
 - **Steps**:
   1. 呼叫 `GET /api/v1/etl/target-tables/customer_core/schema`
-  2. 從 `columns` 中篩選 G 類欄位並逐一驗證（共 13 欄）
+  2. 從 `columns` 中篩選 G 類欄位並逐一驗證（共 15 欄）
 - **Expected Result**:
   - `owner_name`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNER）
   - `owner_id`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNERID）
@@ -249,11 +250,13 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
   - `owner_zip`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNERZIPCODE，v2.2 新增）
   - `owner_address`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.OWNERADDR，v2.2 新增）
   - `established_capital`：`nullable=true`，`type` 含 `DECIMAL`（MLMC.CUSTCREATECAPTIAL varchar→DECIMAL）
-  - `employee_count`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.EMPLOYEE）
-  - `is_listed`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.LISTED）
+  - `employee_count_code`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.EMPLOYEE，v2.4 更名）
+  - `employee_count_desc`：`nullable=true`，`type` 含 `VARCHAR`（v2.4 新增，代碼描述對照）
+  - `is_listed_code`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.LISTED，v2.4 更名）
+  - `is_listed_desc`：`nullable=true`，`type` 含 `VARCHAR`（v2.4 新增，代碼描述對照）
   - `parent_customer_id`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.PARENTCUSTID）
   - `group_owner`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.GROUPOWNER，v2.2 新增）
-  - `company_attr_code`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.COMPTYPE，v2.2 新增）
+  - `business_item`：`nullable=true`，`type` 含 `VARCHAR`（v2.4 新增）
   - `organization_type`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.ORGATYPE，v2.2 新增）
   - `parent_customer_name`：`nullable=true`，`type` 含 `VARCHAR`（MLMC.PARENTCUSTNAME，v2.2 新增）
 
@@ -761,9 +764,9 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
   - D 類（10 欄）：`residential_zip`、`residential_address`、`mailing_zip`、`mailing_address`、`registered_zip`、`registered_address`、`company_zip`、`company_address`、`maturity_mailing_zip`、`maturity_mailing_address` 均存在
   - E 類（12 欄）：`company_name`、`occupation_code`、`occupation_desc`、`job_title_code`、`job_title_desc`、`job_level_code`、`job_level_desc`、`industry_code`、`industry_desc`、`work_years`、`company_scale`、`role` 均存在
   - F 類（14 欄）：`monthly_income_code`、`monthly_income_desc`、`approved_income`、`income_source_code`、`income_source_desc`、`capital`、`credit_limit`、`highest_transaction_amount`、`highest_transaction_date`、`has_real_estate`、`debt_flag`、`fine_flag`、`address_anomaly_flag`、`mainland_flag` 均存在
-  - G 類（13 欄）：`owner_name`、`owner_id`、`owner_birth`、`owner_zip`、`owner_address`、`established_capital`、`employee_count`、`is_listed`、`parent_customer_id`、`group_owner`、`company_attr_code`、`organization_type`、`parent_customer_name` 均存在
+  - G 類（15 欄）：`owner_name`、`owner_id`、`owner_birth`、`owner_zip`、`owner_address`、`established_capital`、`employee_count_code`、`employee_count_desc`、`is_listed_code`、`is_listed_desc`、`parent_customer_id`、`group_owner`、`business_item`、`organization_type`、`parent_customer_name` 均存在
   - H 類（5 欄）：`source_created_at`、`source_updated_at`、`data_source`、`_etl_loaded_at`、`_etl_pipeline_id` 均存在
-  - 總欄位數：6+13+10+10+12+14+13+5 = **83 欄**
+  - 總欄位數：6+13+10+10+12+14+15+5 = **85 欄**
 
 ---
 
@@ -775,7 +778,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 - **Steps**:
   1. 讀取 `customer_core` 的欄位名稱清單
   2. 驗證排除欄位不存在
-- **Expected Result**: 以下欄位均不存在於 schema 中：`print_flg`、`id_check`、`id_check_date`、`old_p_id`、`appli_mark`、`spon_mark`、`role_code`、`role_desc`、`marital_status`、`customer_type`、`income_source`、`monthly_income`、`job_level`；確認已刻意排除或已重命名的欄位不存在（注意：`role_code`/`role_desc` 於 v2.3 移除，改為 `role` 單欄位；`marital_status` 改為 `marital_status_code`/`marital_status_desc`；`customer_type` 改為 `customer_type_code`/`customer_type_desc`；`income_source` 改為 `income_source_code`/`income_source_desc`；`monthly_income` 改為 `monthly_income_code`/`monthly_income_desc`；`job_level` 改為 `job_level_code`/`job_level_desc`）
+- **Expected Result**: 以下欄位均不存在於 schema 中：`print_flg`、`id_check`、`id_check_date`、`old_p_id`、`appli_mark`、`spon_mark`、`role_code`、`role_desc`、`marital_status`、`customer_type`、`income_source`、`monthly_income`、`job_level`、`company_attr_code`、`employee_count`、`is_listed`；確認已刻意排除或已重命名的欄位不存在（注意：`role_code`/`role_desc` 於 v2.3 移除，改為 `role` 單欄位；`marital_status` 改為 `marital_status_code`/`marital_status_desc`；`customer_type` 改為 `customer_type_code`/`customer_type_desc`；`income_source` 改為 `income_source_code`/`income_source_desc`；`monthly_income` 改為 `monthly_income_code`/`monthly_income_desc`；`job_level` 改為 `job_level_code`/`job_level_desc`；`employee_count` 於 v2.4 改為 `employee_count_code`/`employee_count_desc`；`is_listed` 於 v2.4 改為 `is_listed_code`/`is_listed_desc`；`company_attr_code` 於 v2.4 移除）
 
 ---
 
@@ -880,7 +883,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | address_anomaly_flag | SMALLINT | true | false | |
 | mainland_flag | SMALLINT | true | false | |
 
-**G. 企業客戶專屬（13 欄）**
+**G. 企業客戶專屬（15 欄）**
 
 | 欄位名稱 | 型別 | Nullable | isPrimaryKey | 備註 |
 |----------|------|----------|--------------|------|
@@ -890,11 +893,13 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 | owner_zip | VARCHAR(6) | true | false | MLMC.OWNERZIPCODE（v2.2 新增）|
 | owner_address | VARCHAR(100) | true | false | MLMC.OWNERADDR（v2.2 新增）|
 | established_capital | DECIMAL(12,0) | true | false | MLMC.CUSTCREATECAPTIAL varchar→DECIMAL |
-| employee_count | VARCHAR(6) | true | false | MLMC.EMPLOYEE |
-| is_listed | VARCHAR(6) | true | false | MLMC.LISTED |
+| employee_count_code | VARCHAR(6) | true | false | MLMC.EMPLOYEE（v2.4 更名，原 employee_count）|
+| employee_count_desc | VARCHAR(50) | true | false | 代碼描述對照（v2.4 新增）|
+| is_listed_code | VARCHAR(6) | true | false | MLMC.LISTED（v2.4 更名，原 is_listed）|
+| is_listed_desc | VARCHAR(50) | true | false | 代碼描述對照（v2.4 新增）|
 | parent_customer_id | VARCHAR(10) | true | false | MLMC.PARENTCUSTID |
 | group_owner | VARCHAR(50) | true | false | MLMC.GROUPOWNER（v2.2 新增）|
-| company_attr_code | VARCHAR(6) | true | false | MLMC.COMPTYPE（v2.2 新增）|
+| business_item | VARCHAR(200) | true | false | v2.4 新增 |
 | organization_type | VARCHAR(6) | true | false | MLMC.ORGATYPE（v2.2 新增）|
 | parent_customer_name | VARCHAR(100) | true | false | MLMC.PARENTCUSTNAME（v2.2 新增）|
 
@@ -964,7 +969,7 @@ changelog: "重大修訂：由 4 個目標表（舊版）改為 1 個目標表 c
 
 ## 風險與注意事項
 
-1. **TS-F036-001/003/004 欄位數量驗證（columnCount === 83）**：v2.3 更新後 A~H 分類加總為 83 欄（6+13+10+10+12+14+13+5）。若 migration 實際建立欄位數與此不符，需確認是否有欄位遺漏或 spec 版本差異，建議實作後以 migration 結果為準。
+1. **TS-F036-001/003/004 欄位數量驗證（columnCount === 85）**：v2.4 更新後 A~H 分類加總為 85 欄（6+13+10+10+12+14+15+5）。若 migration 實際建立欄位數與此不符，需確認是否有欄位遺漏或 spec 版本差異，建議實作後以 migration 結果為準。
 
 2. **TS-F036-013（Phase 2/3 表回 404）**：需確認 Phase 1 migration 確實不建立 `customer_interaction` 等三個表，以避免測試誤判。若 Phase 2 進行時，此場景需移除或修改。
 

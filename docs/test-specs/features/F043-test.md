@@ -870,7 +870,7 @@ const fanoutLookupContexts = [
 
 ### TS-F043-037B: fm2 MLMC 映射（37 組映射）完整性驗證
 
-- **Related Requirement**: F043 Section 4.6 / US-049 MLMC 映射（v2.2：37 組，含 registered_phone/registered_fax/business_fax/business_mobile/owner_zip/owner_address/group_owner/company_attr_code/organization_type/parent_customer_name 等新增欄位）
+- **Related Requirement**: F043 Section 4.6 / US-049 MLMC 映射（v2.2+v2.4：含 registered_phone/registered_fax/business_fax/business_mobile/owner_zip/owner_address/group_owner/employee_count_code/employee_count_desc/is_listed_code/is_listed_desc/business_item/organization_type/parent_customer_name 等欄位）
 - **Test Type**: 正向
 - **測試層次**: 單元測試
 - **Preconditions**:
@@ -883,7 +883,7 @@ const fanoutLookupContexts = [
   - 輸出列包含 37 個 targetColumn 欄位（dropUnmapped = true，無 MLMC 原始欄位名稱）
   - 新增欄位正確映射：`registered_phone`（CUSTTELCODE→CUSTTEL 合併後）、`registered_fax`、`business_fax`、`business_mobile`（BUSINESSMOBILE）
   - 新增 D 類：`registered_zip`（CUSTZIPCODE）、`registered_address`（CUSTADDR）
-  - 新增 G 類：`owner_zip`（OWNERZIPCODE）、`owner_address`（OWNERADDR）、`group_owner`（GROUPOWNER）、`company_attr_code`（COMPTYPE）、`organization_type`（ORGATYPE）、`parent_customer_name`（PARENTCUSTNAME）
+  - 新增 G 類：`owner_zip`（OWNERZIPCODE）、`owner_address`（OWNERADDR）、`group_owner`（GROUPOWNER）、`employee_count_code`（EMPLOYEE）、`employee_count_desc`（代碼對照）、`is_listed_code`（LISTED）、`is_listed_desc`（代碼對照）、`business_item`（v2.4 新增）、`organization_type`（ORGATYPE）、`parent_customer_name`（PARENTCUSTNAME）
   - 所有 37 個目標欄位均存在於輸出列中
 
 ---

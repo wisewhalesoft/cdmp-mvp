@@ -14,7 +14,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 > **F029/F043 更新（2026-03-31）**：新增 Lookup 節點雙輸入重設計測試：F029 補充 6 個前端 Lookup UI 場景（TS-F029-032~037，31→37 場景），F043 補充 14 個 LookupExecutor 場景（TS-F043-045~058，44→58 場景），涵蓋 US-042 AC-7a~7d 與 US-058 AC-1~6
 > **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
-> **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，約 45 欄），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
+> **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，85 欄位），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
 > **最後更新**：2026-03-31
 
 ---
@@ -242,7 +242,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
   - 錯誤處理（TS-F043-055~057）：主資料流缺失 → `inputs` 無 `default` 亦無 `main-input`；matchColumn 不存在 → message 含欄位名與「主資料集」；lookupMatchColumn 不存在 → message 含欄位名與「對照資料集」
   - 扇出整合測試（TS-F043-058）：1 Extract → 3 Filter → 3 Lookup（各自 lookup-input 獨立）；需 F042 ExecutionEngine 框架支援
 - F044 TargetLoadExecutor：customer_id 不在 DO UPDATE SET 中（保留原值）；_etl_loaded_at 與 _etl_pipeline_id 由引擎自動附加，不從輸入資料列取得
-- F044 批次大小公式：`actualBatchSize = min(configuredBatchSize, floor(65535 / columnsPerRow))`；customer_core 欄位數約 45，實際 batch size ≈ 1456
+- F044 批次大小公式：`actualBatchSize = min(configuredBatchSize, floor(65535 / columnsPerRow))`；customer_core 欄位數 85，實際 batch size = 771
 - F044 部分批次失敗：已寫入批次不回滾，outputRowCount 記錄已成功筆數；需注入錯誤機制（Mock queryRunner.query 在第 N 次呼叫拋錯）
 - F044 is_test_run=true：目標表存在性仍需驗證（步驟 1-2 執行），僅跳過 UPSERT SQL（步驟 4-8）
 
