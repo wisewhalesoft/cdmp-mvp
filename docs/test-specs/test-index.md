@@ -1,21 +1,22 @@
 ---
 type: test-design-index
-version: "2.3"
+version: "2.4"
 status: draft
-last_updated: 2026-03-31
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044]
+last_updated: 2026-04-02
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：50 份（4 策略文件 + 42 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：736 個（E01～E04 共 308 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17；另 F039-strategy 4 個策略場景另計）
+> **測試文件總數**：51 份（4 策略文件 + 43 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：778 個（E01～E04 共 308 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E02 角色擴充 F004/F005/F008/F045 新增 42；另 F039-strategy 4 個策略場景另計）
+> **E02 角色擴充更新（2026-04-02）**：US-017 業務角色定義（8 種角色）。新增 F045（15 場景）；F004 新增 6 個場景（8→14）；F005 新增 7 個場景（7→14）；F008 新增 14 個場景（6→20）；移除「僅 Admin 與 User 兩種角色」的假設
 > **F029/F043 更新（2026-03-31）**：新增 Lookup 節點雙輸入重設計測試：F029 補充 6 個前端 Lookup UI 場景（TS-F029-032~037，31→37 場景），F043 補充 14 個 LookupExecutor 場景（TS-F043-045~058，44→58 場景），涵蓋 US-042 AC-7a~7d 與 US-058 AC-1~6
 > **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，85 欄位），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
-> **最後更新**：2026-03-31
+> **最後更新**：2026-04-02
 
 ---
 
@@ -23,9 +24,9 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 涵蓋範圍
 
-- 38 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038），分屬 5 個 Epic（F038 跨 E04/E05）：
+- 39 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038、F045），分屬 5 個 Epic（F038 跨 E04/E05）：
   - **E01 驗證與登入**：F001、F002、F003
-  - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010
+  - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010、F045
   - **E03 資料來源管理**：F011、F012、F013、F014、F015、F016
   - **E04 資料擷取**：F017、F018、F019、F020、F021、F022、F023、F024、F025、F026
   - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037
@@ -43,7 +44,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 ### 假設
 
 - JWT 為 Session 管理的唯一機制
-- 系統僅有 Admin 與 User 兩種角色
+- 系統共有 8 種角色：系統角色（admin、user）與六種業務角色（business、marketing、customer_service、analyst、supervisor、backend_ops），均為 Seed Data，不開放 Admin 自訂新增或刪除（US-017）
 - 資料來源僅支援三種 RDBMS（MySQL、PostgreSQL、SQL Server）
 - 密碼規則僅有最小長度 8 字元（無複雜度要求）
 - 前端為 SPA 架構
@@ -58,11 +59,12 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F001 | Admin 登入 | P0-MVP | [F001-test.md](features/F001-test.md) | 8 | Draft |
 | F002 | User 登入 | P0-MVP | [F002-test.md](features/F002-test.md) | 7 | Draft |
 | F003 | 登出 | P0-MVP | [F003-test.md](features/F003-test.md) | 6 | Draft |
-| F004 | 建立帳號 | P0-MVP | [F004-test.md](features/F004-test.md) | 8 | Draft |
-| F005 | 查看帳號清單 | P0-MVP | [F005-test.md](features/F005-test.md) | 7 | Draft |
+| F004 | 建立帳號 | P0-MVP | [F004-test.md](features/F004-test.md) | 14 | Draft |
+| F005 | 查看帳號清單 | P0-MVP | [F005-test.md](features/F005-test.md) | 14 | Draft |
 | F006 | 編輯帳號 | P0-MVP | [F006-test.md](features/F006-test.md) | 8 | Draft |
 | F007 | 停用／啟用帳號 | P1 | [F007-test.md](features/F007-test.md) | 7 | Draft |
-| F008 | 指派／變更角色 | P0-MVP | [F008-test.md](features/F008-test.md) | 6 | Draft |
+| F008 | 指派／變更角色 | P0-MVP | [F008-test.md](features/F008-test.md) | 20 | Draft |
+| F045 | 業務角色定義（系統預設角色） | P0-MVP | [F045-test.md](features/F045-test.md) | 15 | Draft |
 | F009 | 自助式密碼重設 | P0-MVP | [F009-test.md](features/F009-test.md) | 10 | Draft |
 | F010 | Admin 重設使用者密碼 | P0-MVP | [F010-test.md](features/F010-test.md) | 6 | Draft |
 | F011 | 新增資料來源 | P0-MVP | [F011-test.md](features/F011-test.md) | 8 | Draft |
@@ -105,7 +107,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F042 | ETL 執行引擎核心框架 | P0-MVP | [F042-test.md](features/F042-test.md) | 21 | Draft |
 | F043 | ETL 節點執行器（8 種節點含 Lookup） | P0-MVP | [F043-test.md](features/F043-test.md) | 58 | Draft |
 | F044 | ETL Target Load + UPSERT | P0-MVP | [F044-test.md](features/F044-test.md) | 17 | Draft |
-| **總合計** | | | **42 files** | **736** | |
+| **總合計** | | | **43 files** | **778** | |
 
 ---
 
@@ -162,7 +164,15 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → F003 → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044
+**建議載入順序：** F001 → F002 → F003 → **F045** → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044
+
+**E02 角色擴充特殊注意（F045 / F004 / F005 / F008）：**
+- F045 必須先於 F004/F005/F008 載入：F045 的 Seed Data 初始化（TS-F045-001）是後三者所有角色相關測試的前置條件
+- F004 新增業務角色建立場景（TS-F004-009 ~ 011）：role_code 必須為 8 種有效值之一，超出範圍回傳 422 VALIDATION_INVALID_ROLE
+- F005 角色篩選 `?role=` 參數現支援全部 8 種 role_code（含 business / marketing / customer_service / analyst / supervisor / backend_ops）；回傳欄位格式為 `{ roleCode, displayName }` 而非單純字串
+- F008 最後 Admin 保護（AC-2）現涵蓋降級為業務角色的情境（TS-F008-013 / TS-F008-014）；不只保護降級為 user
+- F008 前端確認對話框（TS-F008-FE-002）：對話框須顯示中文顯示名稱（含括號別名），如「業務」→「分析師」，不顯示 role_code
+- alias 的 null vs 空字串（"—"）目前為開放問題，實作前需與 Product/Arch 確認（見 F045 風險與注意事項）
 
 **E04 資料擷取特殊注意：**
 - F017/F019 連鎖下拉選單：新增 `GET /datasources/:id/schemas` 與 `GET /datasources/:id/schemas/:schema/tables` 兩個端點測試；連線失敗回傳 503（DATASOURCE_SCHEMA_LOAD_FAILED / DATASOURCE_TABLE_LOAD_FAILED）
@@ -309,3 +319,4 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | 2026-03-20 | 整合 test-index.md（v2.0）：統一版本號、修正場景合計、新增 E05 小計列；更新 test-levels.md（新增 E05 Unit/Integration/E2E/NFR 章節）；更新 test-data-strategy.md（新增 E05 種子資料與邊界值）；更新 risks-and-gaps.md（新增 E05-RISK-001~008） | Test Designer Agent |
 | 2026-03-23 | 新增 F037 發布 Pipeline 版本測試設計（37 個測試場景，含後端 Unit/Integration、前端 Unit、端到端流程、邊界條件）；新增錯誤碼覆蓋：PIPELINE_VERSION_ALREADY_PUBLISHED；總場景數由 518 增至 531 | Test Designer Agent |
 | 2026-03-25 | 新增 F038 孤兒任務回收測試設計（45 個測試場景：Unit 27 個 + Integration 17 個 + 效能 1 個）；涵蓋 E04 擷取任務回收、E05 Pipeline 回收、無孤兒靜默通過、Transaction 原子性、獨立 Transaction 隔離、Logger 驗證、冪等性、回收後操作解鎖（triggerRun/deleteTask/triggerExecute）及 NFR 效能閾值；總場景數由 531 增至 576 | Test Designer Agent |
+| 2026-04-02 | E02 角色擴充（US-017 業務角色定義）：新增 F045 業務角色定義測試設計（15 個場景）；更新 F004（+6 場景，8→14，新增業務角色建立、無效 role_code、前端角色選單）；更新 F005（+7 場景，7→14，新增依業務角色篩選、角色欄位中文顯示名稱驗證）；更新 F008（+14 場景，6→20，新增業務角色間互相變更、Admin 降級為業務角色、最後 Admin 保護擴充、前端確認對話框）；移除「僅 Admin 與 User 兩種角色」的假設；總場景數由 736 增至 778 | Test Designer Agent |
