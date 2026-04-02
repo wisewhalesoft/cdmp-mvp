@@ -448,6 +448,231 @@
         }
       },
       {
+        "id": "e_mlmc_code1",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 550 },
+        "data": { "nodeType": "raw_data_extract", "label": "[和潤]企金代碼", "rawTable": "raw_8b80671e", "subtitle": "[和潤]企金代碼定義擷取" }
+      },
+      {
+        "id": "e_mlmc_indu1",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 580 },
+        "data": { "nodeType": "raw_data_extract", "label": "[和潤]產業別", "rawTable": "raw_b9558d10", "subtitle": "[和潤]企金產業別代碼定義擷取" }
+      },
+      {
+        "id": "e_mlmc_code2",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 650 },
+        "data": { "nodeType": "raw_data_extract", "label": "[和勁]企金代碼", "rawTable": "raw_9dd0eca5", "subtitle": "[和勁]企金代碼定義擷取" }
+      },
+      {
+        "id": "e_mlmc_indu2",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 680 },
+        "data": { "nodeType": "raw_data_extract", "label": "[和勁]產業別", "rawTable": "raw_3acd58e7", "subtitle": "[和勁]企金產業別代碼定義擷取" }
+      },
+      {
+        "id": "e_mlmc_code3",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 850 },
+        "data": { "nodeType": "raw_data_extract", "label": "[興業]代碼", "rawTable": "raw_9dcaf414", "subtitle": "[興業]代碼定義擷取" }
+      },
+      {
+        "id": "e_mlmc_indu3",
+        "type": "pipelineNode",
+        "position": { "x": 50, "y": 880 },
+        "data": { "nodeType": "raw_data_extract", "label": "[興業]產業別", "rawTable": "raw_afe6a874", "subtitle": "[興業]產業別代碼定義擷取" }
+      },
+      {
+        "id": "lk_m_ctype1",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": 600 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤M_ctype",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_8b80671e",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+          "matchColumn": "CUTYPE",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "customer_type_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_emp1",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": 600 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤M_emp",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_8b80671e",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+          "matchColumn": "EMPLOYEE",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "employee_count_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_listed1",
+        "type": "pipelineNode",
+        "position": { "x": 650, "y": 600 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤M_listed",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_8b80671e",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+          "matchColumn": "LISTED",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "is_listed_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_indus1",
+        "type": "pipelineNode",
+        "position": { "x": 800, "y": 600 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和潤M_indus",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_b9558d10",
+          "matchColumn": "INDUID",
+          "lookupMatchColumn": "INDUID",
+          "outputColumns": [{ "lookupColumn": "INDUNM", "outputAlias": "industry_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_ctype2",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": 750 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁M_ctype",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_9dd0eca5",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+          "matchColumn": "CUTYPE",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "customer_type_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_emp2",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": 750 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁M_emp",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_9dd0eca5",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+          "matchColumn": "EMPLOYEE",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "employee_count_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_listed2",
+        "type": "pipelineNode",
+        "position": { "x": 650, "y": 750 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁M_listed",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_9dd0eca5",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+          "matchColumn": "LISTED",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "is_listed_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_indus2",
+        "type": "pipelineNode",
+        "position": { "x": 800, "y": 750 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_和勁M_indus",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_3acd58e7",
+          "matchColumn": "INDUID",
+          "lookupMatchColumn": "INDUID",
+          "outputColumns": [{ "lookupColumn": "INDUNM", "outputAlias": "industry_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_ctype3",
+        "type": "pipelineNode",
+        "position": { "x": 200, "y": 900 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_興業M_ctype",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_9dcaf414",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+          "matchColumn": "CUTYPE",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "customer_type_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_emp3",
+        "type": "pipelineNode",
+        "position": { "x": 350, "y": 900 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_興業M_emp",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_9dcaf414",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+          "matchColumn": "EMPLOYEE",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "employee_count_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_listed3",
+        "type": "pipelineNode",
+        "position": { "x": 650, "y": 900 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_興業M_listed",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_9dcaf414",
+          "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+          "matchColumn": "LISTED",
+          "lookupMatchColumn": "MCODE",
+          "outputColumns": [{ "lookupColumn": "MNAME1", "outputAlias": "is_listed_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
+        "id": "lk_m_indus3",
+        "type": "pipelineNode",
+        "position": { "x": 800, "y": 900 },
+        "data": {
+          "nodeType": "lookup",
+          "label": "Lookup_興業M_indus",
+          "subtitle": "代碼對照表對照",
+          "lookupSource": "raw_afe6a874",
+          "matchColumn": "INDUID",
+          "lookupMatchColumn": "INDUID",
+          "outputColumns": [{ "lookupColumn": "INDUNM", "outputAlias": "industry_desc" }],
+          "noMatchStrategy": "null"
+        }
+      },
+      {
         "id": "m3",
         "type": "pipelineNode",
         "position": { "x": 500, "y": 750 },
@@ -495,9 +720,8 @@
         "data": {
           "nodeType": "derived_field",
           "label": "MLMC轉換",
-          "subtitle": "customer_type + 4 組電話/傳真",
+          "subtitle": "4 組電話/傳真",
           "expressions": [
-            { "outputColumn": "customer_type_mapped", "expression": "padStart(CUTYPE, 2, '0')", "outputType": "VARCHAR" },
             { "outputColumn": "office_phone", "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)", "outputType": "VARCHAR" },
             { "outputColumn": "registered_phone", "expression": "mergePhone(CUSTTELCODE, CUSTTEL)", "outputType": "VARCHAR" },
             { "outputColumn": "registered_fax", "expression": "mergePhone(CUSTFAXCODE, CUSTFAX)", "outputType": "VARCHAR" },
@@ -516,7 +740,7 @@
           "dropUnmapped": true,
           "mappings": [
             { "sourceColumn": "CUSTID", "targetColumn": "source_customer_no", "defaultValue": null },
-            { "sourceColumn": "customer_type_mapped", "targetColumn": "customer_type_code", "defaultValue": null },
+            { "sourceColumn": "CUTYPE", "targetColumn": "customer_type_code", "defaultValue": null },
             { "sourceColumn": "CUSTNAME", "targetColumn": "name", "defaultValue": null },
             { "sourceColumn": "CUSTMOBILE", "targetColumn": "mobile_phone", "defaultValue": null },
             { "sourceColumn": "office_phone", "targetColumn": "office_phone", "defaultValue": null },
@@ -528,16 +752,15 @@
             { "sourceColumn": "CUSTADDR", "targetColumn": "registered_address", "defaultValue": null },
             { "sourceColumn": "BUSINESSZIPCODE", "targetColumn": "company_zip", "defaultValue": null },
             { "sourceColumn": "BUSINESSADDR", "targetColumn": "company_address", "defaultValue": null },
-            { "sourceColumn": "BUSINESS", "targetColumn": "industry_desc", "defaultValue": null },
+            { "sourceColumn": "BUSINESS", "targetColumn": "business_item", "defaultValue": null },
             { "sourceColumn": "INDUID", "targetColumn": "industry_code", "defaultValue": null },
             { "sourceColumn": "CUSTNOWCAPTIAL", "targetColumn": "capital", "defaultValue": null },
             { "sourceColumn": "CUSTCREATECAPTIAL", "targetColumn": "established_capital", "defaultValue": null },
             { "sourceColumn": "FAMOUNT", "targetColumn": "credit_limit", "defaultValue": null },
             { "sourceColumn": "HFAMOUNT", "targetColumn": "highest_transaction_amount", "defaultValue": null },
             { "sourceColumn": "HCDATE", "targetColumn": "highest_transaction_date", "defaultValue": null },
-            { "sourceColumn": "EMPLOYEE", "targetColumn": "employee_count", "defaultValue": null },
-            { "sourceColumn": "LISTED", "targetColumn": "is_listed", "defaultValue": null },
-            { "sourceColumn": "COMPTYPE", "targetColumn": "company_attr_code", "defaultValue": null },
+            { "sourceColumn": "EMPLOYEE", "targetColumn": "employee_count_code", "defaultValue": null },
+            { "sourceColumn": "LISTED", "targetColumn": "is_listed_code", "defaultValue": null },
             { "sourceColumn": "ORGATYPE", "targetColumn": "organization_type", "defaultValue": null },
             { "sourceColumn": "OWNER", "targetColumn": "owner_name", "defaultValue": null },
             { "sourceColumn": "OWNERID", "targetColumn": "owner_id", "defaultValue": null },
@@ -551,7 +774,11 @@
             { "sourceColumn": "ISSUE_DT", "targetColumn": "id_issue_date", "defaultValue": null },
             { "sourceColumn": "ISSUE_ADD", "targetColumn": "id_issue_address", "defaultValue": null },
             { "sourceColumn": "CUSTCREATEDATE", "targetColumn": "source_created_at", "defaultValue": null },
-            { "sourceColumn": "U_SYSDT", "targetColumn": "source_updated_at", "defaultValue": null }
+            { "sourceColumn": "U_SYSDT", "targetColumn": "source_updated_at", "defaultValue": null },
+            { "sourceColumn": "customer_type_desc", "targetColumn": "customer_type_desc", "defaultValue": null },
+            { "sourceColumn": "employee_count_desc", "targetColumn": "employee_count_desc", "defaultValue": null },
+            { "sourceColumn": "is_listed_desc", "targetColumn": "is_listed_desc", "defaultValue": null },
+            { "sourceColumn": "industry_desc", "targetColumn": "industry_desc", "defaultValue": null }
           ]
         }
       },
@@ -695,9 +922,11 @@
             "owner_address": "owner_address",
             "group_owner": "group_owner",
             "established_capital": "established_capital",
-            "employee_count": "employee_count",
-            "is_listed": "is_listed",
-            "company_attr_code": "company_attr_code",
+            "employee_count_code": "employee_count_code",
+            "employee_count_desc": "employee_count_desc",
+            "is_listed_code": "is_listed_code",
+            "is_listed_desc": "is_listed_desc",
+            "business_item": "business_item",
             "organization_type": "organization_type",
             "parent_customer_id": "parent_customer_id",
             "parent_customer_name": "parent_customer_name",
@@ -736,10 +965,22 @@
       { "id": "edge-d1-df1", "source": "d1", "target": "df1" },
       { "id": "edge-df1-tc_zzip", "source": "df1", "target": "tc_zzip" },
       { "id": "edge-tc_zzip-fm1", "source": "tc_zzip", "target": "fm1" },
-      { "id": "edge-e3-m2", "source": "e3", "target": "m2", "targetHandle": "left-input" },
-      { "id": "edge-e4-m2", "source": "e4", "target": "m2", "targetHandle": "right-input" },
+      { "id": "edge-e3-lk_m_ctype1", "source": "e3", "target": "lk_m_ctype1" },
+      { "id": "edge-lk_m_ctype1-lk_m_emp1", "source": "lk_m_ctype1", "target": "lk_m_emp1" },
+      { "id": "edge-lk_m_emp1-lk_m_listed1", "source": "lk_m_emp1", "target": "lk_m_listed1" },
+      { "id": "edge-lk_m_listed1-lk_m_indus1", "source": "lk_m_listed1", "target": "lk_m_indus1" },
+      { "id": "edge-lk_m_indus1-m2", "source": "lk_m_indus1", "target": "m2", "targetHandle": "left-input" },
+      { "id": "edge-e4-lk_m_ctype2", "source": "e4", "target": "lk_m_ctype2" },
+      { "id": "edge-lk_m_ctype2-lk_m_emp2", "source": "lk_m_ctype2", "target": "lk_m_emp2" },
+      { "id": "edge-lk_m_emp2-lk_m_listed2", "source": "lk_m_emp2", "target": "lk_m_listed2" },
+      { "id": "edge-lk_m_listed2-lk_m_indus2", "source": "lk_m_listed2", "target": "lk_m_indus2" },
+      { "id": "edge-lk_m_indus2-m2", "source": "lk_m_indus2", "target": "m2", "targetHandle": "right-input" },
       { "id": "edge-m2-m3", "source": "m2", "target": "m3", "targetHandle": "left-input" },
-      { "id": "edge-e5-m3", "source": "e5", "target": "m3", "targetHandle": "right-input" },
+      { "id": "edge-e5-lk_m_ctype3", "source": "e5", "target": "lk_m_ctype3" },
+      { "id": "edge-lk_m_ctype3-lk_m_emp3", "source": "lk_m_ctype3", "target": "lk_m_emp3" },
+      { "id": "edge-lk_m_emp3-lk_m_listed3", "source": "lk_m_emp3", "target": "lk_m_listed3" },
+      { "id": "edge-lk_m_listed3-lk_m_indus3", "source": "lk_m_listed3", "target": "lk_m_indus3" },
+      { "id": "edge-lk_m_indus3-m3", "source": "lk_m_indus3", "target": "m3", "targetHandle": "right-input" },
       { "id": "edge-m3-d2", "source": "m3", "target": "d2" },
       { "id": "edge-d2-tc1", "source": "d2", "target": "tc1" },
       { "id": "edge-tc1-df2", "source": "tc1", "target": "df2" },
@@ -751,5 +992,5 @@
       { "id": "edge-df3-tl1", "source": "df3", "target": "tl1" }
     ]
   },
-  "changeSummary": "v4：移除 filter 節點改用 legacy lookup 模式，擴充婚姻狀態/客戶類型/收入來源/行業/職級/月所得 6 組代碼對照"
+  "changeSummary": "v5：擴充 MLMC 分支新增 5 組代碼對照 Lookup x 3（和潤/和勁/興業），新增 employee_count_desc/is_listed_desc/company_attr_desc/business_item 欄位"
 }
