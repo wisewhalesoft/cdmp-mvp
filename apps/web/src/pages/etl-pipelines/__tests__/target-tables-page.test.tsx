@@ -37,19 +37,19 @@ const mockCoreSchema: TargetTableSchemaResponse = {
   description: '客戶身分、聯絡、職業、財務概況與風控旗標',
   columns: [
     // A. 識別與分類
-    { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, description: '客戶唯一識別碼（代理鍵）' },
-    { name: 'source_customer_no', type: 'VARCHAR(20)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '來源客戶編號（身分證/統編）' },
-    { name: 'customer_type', type: 'VARCHAR(2)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '客戶類型' },
-    { name: 'name', type: 'VARCHAR(100)', nullable: false, isPrimaryKey: false, isEtlTracking: false, description: '姓名/企業名稱' },
-    { name: 'english_name', type: 'VARCHAR(60)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '英文姓名' },
+    { name: 'customer_id', type: 'UUID', nullable: false, isPrimaryKey: true, isEtlTracking: false, category: 'A', description: '客戶唯一識別碼（代理鍵）' },
+    { name: 'source_customer_no', type: 'VARCHAR(20)', nullable: false, isPrimaryKey: false, isEtlTracking: false, category: 'A', description: '來源客戶編號（身分證/統編）' },
+    { name: 'customer_type_code', type: 'VARCHAR(2)', nullable: false, isPrimaryKey: false, isEtlTracking: false, category: 'A', description: '客戶類型代碼' },
+    { name: 'name', type: 'VARCHAR(100)', nullable: false, isPrimaryKey: false, isEtlTracking: false, category: 'A', description: '姓名/企業名稱' },
+    { name: 'english_name', type: 'VARCHAR(60)', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'A', description: '英文姓名' },
     // B. representative
-    { name: 'gender', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '性別' },
+    { name: 'gender', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'B', description: '性別' },
     // C. representative
-    { name: 'mobile_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, description: '行動電話' },
+    { name: 'mobile_phone', type: 'VARCHAR(20)', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '行動電話' },
     // H. ETL tracking
-    { name: 'data_source', type: 'VARCHAR(50)', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: '資料來源識別（ETL 自動填充）' },
-    { name: '_etl_loaded_at', type: 'TIMESTAMP', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: 'ETL 載入時間（系統自動填充）' },
-    { name: '_etl_pipeline_id', type: 'UUID', nullable: false, isPrimaryKey: false, isEtlTracking: true, description: '載入的 Pipeline ID（系統自動填充）' },
+    { name: 'data_source', type: 'VARCHAR(50)', nullable: false, isPrimaryKey: false, isEtlTracking: true, category: 'H', description: '資料來源識別（ETL 自動填充）' },
+    { name: '_etl_loaded_at', type: 'TIMESTAMP', nullable: false, isPrimaryKey: false, isEtlTracking: true, category: 'H', description: 'ETL 載入時間（系統自動填充）' },
+    { name: '_etl_pipeline_id', type: 'UUID', nullable: false, isPrimaryKey: false, isEtlTracking: true, category: 'H', description: '載入的 Pipeline ID（系統自動填充）' },
   ],
 };
 
