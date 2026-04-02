@@ -149,15 +149,18 @@ export class MSSQLExecutor extends BaseExecutor {
       const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
       const conditions: string[] = [];
       const request = pool.request();
-      const orderCol = params.incrementalColumn || params.primaryKeyColumn || null;
 
-      if (params.mode === 'incremental' && params.incrementalColumn && params.lastIncrementalValue != null) {
-        conditions.push(`${this.quoteIdentifier(params.incrementalColumn)} > @lastIncrValue`);
+      // Incremental mode: use keyset pagination on the incremental column
+      // Full mode: always use offset pagination to avoid data loss with composite PKs
+      const useKeyset = params.mode === 'incremental' && !!params.incrementalColumn;
+
+      if (useKeyset && params.lastIncrementalValue != null) {
+        conditions.push(`${this.quoteIdentifier(params.incrementalColumn!)} > @lastIncrValue`);
         request.input('lastIncrValue', params.lastIncrementalValue);
       }
 
-      if (params.lastKeyValue != null && orderCol) {
-        conditions.push(`${this.quoteIdentifier(orderCol)} > @lastKey`);
+      if (useKeyset && params.lastKeyValue != null) {
+        conditions.push(`${this.quoteIdentifier(params.incrementalColumn!)} > @lastKey`);
         request.input('lastKey', params.lastKeyValue);
       }
 
@@ -165,8 +168,8 @@ export class MSSQLExecutor extends BaseExecutor {
       if (conditions.length > 0) {
         sql += ` WHERE ${conditions.join(' AND ')}`;
       }
-      if (orderCol) {
-        sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
+      if (useKeyset) {
+        sql += ` ORDER BY ${this.quoteIdentifier(params.incrementalColumn!)} ASC`;
         sql += ` OFFSET 0 ROWS FETCH NEXT @batchSize ROWS ONLY`;
       } else {
         sql += ` ORDER BY (SELECT NULL) OFFSET @offsetVal ROWS FETCH NEXT @batchSize ROWS ONLY`;
@@ -179,9 +182,9 @@ export class MSSQLExecutor extends BaseExecutor {
       const hasMore = resultRows.length === params.batchSize;
 
       let lastKeyVal: any = undefined;
-      if (resultRows.length > 0 && orderCol) {
+      if (resultRows.length > 0 && useKeyset) {
         const lastRow = resultRows[resultRows.length - 1];
-        lastKeyVal = lastRow[orderCol];
+        lastKeyVal = lastRow[params.incrementalColumn!];
       }
 
       return { rows: resultRows, lastKeyValue: lastKeyVal, hasMore };

@@ -127,15 +127,17 @@ export class MySQLExecutor extends BaseExecutor {
       const values: any[] = [];
       const conditions: string[] = [];
 
-      const orderCol = params.incrementalColumn || params.primaryKeyColumn || null;
+      // Incremental mode: use keyset pagination on the incremental column
+      // Full mode: always use offset pagination to avoid data loss with composite PKs
+      const useKeyset = params.mode === 'incremental' && !!params.incrementalColumn;
 
-      if (params.mode === 'incremental' && params.incrementalColumn && params.lastIncrementalValue != null) {
-        conditions.push(`${this.quoteIdentifier(params.incrementalColumn)} > ?`);
+      if (useKeyset && params.lastIncrementalValue != null) {
+        conditions.push(`${this.quoteIdentifier(params.incrementalColumn!)} > ?`);
         values.push(params.lastIncrementalValue);
       }
 
-      if (params.lastKeyValue != null && orderCol) {
-        conditions.push(`${this.quoteIdentifier(orderCol)} > ?`);
+      if (useKeyset && params.lastKeyValue != null) {
+        conditions.push(`${this.quoteIdentifier(params.incrementalColumn!)} > ?`);
         values.push(params.lastKeyValue);
       }
 
@@ -144,12 +146,12 @@ export class MySQLExecutor extends BaseExecutor {
         sql += ` WHERE ${conditions.join(' AND ')}`;
       }
 
-      if (orderCol) {
-        sql += ` ORDER BY ${this.quoteIdentifier(orderCol)} ASC`;
+      if (useKeyset) {
+        sql += ` ORDER BY ${this.quoteIdentifier(params.incrementalColumn!)} ASC`;
       }
       sql += ` LIMIT ?`;
       values.push(params.batchSize);
-      if (!orderCol) {
+      if (!useKeyset) {
         sql += ` OFFSET ?`;
         values.push(params.offset || 0);
       }
@@ -159,9 +161,9 @@ export class MySQLExecutor extends BaseExecutor {
       const hasMore = resultRows.length === params.batchSize;
 
       let lastKeyVal: any = undefined;
-      if (resultRows.length > 0 && orderCol) {
+      if (resultRows.length > 0 && useKeyset) {
         const lastRow = resultRows[resultRows.length - 1];
-        lastKeyVal = lastRow[orderCol];
+        lastKeyVal = lastRow[params.incrementalColumn!];
       }
 
       return { rows: resultRows, lastKeyValue: lastKeyVal, hasMore };
