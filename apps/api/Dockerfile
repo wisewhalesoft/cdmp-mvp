@@ -10,6 +10,7 @@ COPY . .
 
 # Development stage
 FROM base AS dev
+EXPOSE 3000
 CMD ["npx", "nest", "start", "--watch"]
 
 # Build stage

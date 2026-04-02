@@ -51,6 +51,7 @@ services:
       VITE_API_URL: http://api:3000
     volumes:
       - ./apps/web/src:/app/src
+      - ./packages/shared:/packages/shared
     depends_on:
       - api
 

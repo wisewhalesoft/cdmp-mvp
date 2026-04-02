@@ -91,7 +91,7 @@ export function PropertiesPanel({
       case 'dedup':
         return <DedupProperties nodeData={nodeData} onChange={updateData} />;
       case 'lookup':
-        return <LookupProperties nodeData={nodeData} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
+        return <LookupProperties nodeData={nodeData} rawTables={rawTables} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
       case 'string_process':
         return <StringProcessProperties nodeData={nodeData} onChange={updateData} />;
       case 'encrypt':
@@ -1363,11 +1363,12 @@ interface LookupOutputColumn {
 
 function LookupProperties({
   nodeData,
+  rawTables,
   onChange,
   nodeId,
   nodes,
   edges,
-}: SimplePropsBase & { nodeId: string; nodes: Node[]; edges: Edge[] }) {
+}: SimplePropsBase & { rawTables: RawTableItem[]; nodeId: string; nodes: Node[]; edges: Edge[] }) {
   const lookupSource = (nodeData.lookupSource as string) || '';
   const lookupFilter = (nodeData.lookupFilter as string) || '';
   const matchColumn = (nodeData.matchColumn as string) || '';
@@ -1395,7 +1396,8 @@ function LookupProperties({
     if (hasLookupInput && lookupSourceLabel) {
       onChange({ subtitle: lookupSourceLabel });
     } else if (!hasLookupInput) {
-      onChange({ subtitle: lookupSource || undefined });
+      const selected = rawTables.find((t) => t.rawTableName === lookupSource);
+      onChange({ subtitle: selected?.taskName || lookupSource || undefined });
     }
   }, [hasLookupInput, lookupSourceLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1427,14 +1429,40 @@ function LookupProperties({
         <>
           <div>
             <label className={labelClass}>對照來源</label>
-            <input
-              type="text"
-              className={inputClass}
+            <select
+              className={selectClass}
               value={lookupSource}
-              onChange={(e) => onChange({ lookupSource: e.target.value, subtitle: e.target.value || undefined })}
-              placeholder="輸入對照表名稱"
+              onChange={(e) => {
+                const selected = rawTables.find((t) => t.rawTableName === e.target.value);
+                onChange({
+                  lookupSource: e.target.value,
+                  subtitle: selected?.taskName || undefined,
+                });
+              }}
               data-testid="lookup-source-input"
-            />
+            >
+              <option value="">選擇對照表</option>
+              {rawTables.map((t) => (
+                <option key={t.rawTableName} value={t.rawTableName}>
+                  {t.rawTableName}（{t.taskName}）
+                </option>
+              ))}
+            </select>
+            {(() => {
+              const selectedInfo = rawTables.find((t) => t.rawTableName === lookupSource);
+              return selectedInfo ? (
+                <>
+                  <p className="text-xs text-gray-400 mt-1">
+                    來源：{selectedInfo.datasourceName} / {selectedInfo.sourceTable}
+                  </p>
+                  {selectedInfo.lastExecutionAt && (
+                    <p className="text-xs text-gray-400">
+                      最後擷取：{new Date(selectedInfo.lastExecutionAt).toLocaleString('zh-TW')}
+                    </p>
+                  )}
+                </>
+              ) : null;
+            })()}
           </div>
           <div>
             <label className={labelClass}>過濾條件</label>

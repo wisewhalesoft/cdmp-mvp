@@ -50,7 +50,15 @@ async function seed() {
   for (const account of SEED_ACCOUNTS) {
     const existing = await userRepo.findOne({ where: { email: account.email } });
     if (existing) {
-      console.log(`  Skip: ${account.email} (already exists)`);
+      // Update role/status if they drifted (e.g., after schema changes)
+      if (existing.role !== account.role || existing.status !== account.status) {
+        existing.role = account.role;
+        existing.status = account.status;
+        await userRepo.save(existing);
+        console.log(`  Updated: ${account.email} (role=${account.role}, status=${account.status})`);
+      } else {
+        console.log(`  Skip: ${account.email} (already correct)`);
+      }
       continue;
     }
 
