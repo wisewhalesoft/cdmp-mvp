@@ -9,12 +9,12 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 6 |
-| User Story 總數 | 55 |
+| User Story 總數 | 59 |
 | 非功能需求（NFR）總數 | 2 |
 | 目標階段 | Phase 1（MVP）+ Phase 2（Customer 360 全功能） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
 | 主要角色 | Admin（管理者）、User（使用者）；Phase 1 即建立六種業務角色 Seed Data：業務、行銷（企劃）、客服、分析師、主管、後端作業（作服）（US-017） |
-| 最後更新 | 2026-04-02（Phase 3 合併至 Phase 2，E02 新增 US-017） |
+| 最後更新 | 2026-04-03（新增 US-072 客戶群組統計報表、US-073 資料品質回報機制；確認 US-071 互動紀錄可見範圍） |
 
 ## Epic 索引
 
@@ -25,7 +25,7 @@
 | E03 | [資料來源管理](epics/E03-datasource-management/epic-brief.md) | 1（MVP） | 6 | [epic-brief.md](epics/E03-datasource-management/epic-brief.md) |
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 1（MVP） | 11 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 | E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 1（MVP） | 18 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
-| E06 | [Customer 360](epics/E06-customer-360/epic-brief.md) | 2 | 9 | [epic-brief.md](epics/E06-customer-360/epic-brief.md) |
+| E06 | [Customer 360](epics/E06-customer-360/epic-brief.md) | 2 | 13 | [epic-brief.md](epics/E06-customer-360/epic-brief.md) |
 
 ## Story 地圖
 
@@ -86,6 +86,10 @@
 | E06 | [US-066](epics/E06-customer-360/US-066-filter-by-tag.md) | 依標籤篩選客戶 | Must Have |
 | E06 | [US-067](epics/E06-customer-360/US-067-customer-change-history.md) | 客戶資料變更歷史查詢（Phase 2） | Should Have |
 | E06 | [US-068](epics/E06-customer-360/US-068-customer-360-role-access.md) | Customer 360 角色存取設定（Phase 2） | Could Have |
+| E06 | [US-069](epics/E06-customer-360/US-069-export-customer-list.md) | 客戶名單匯出 | Should Have |
+| E06 | [US-071](epics/E06-customer-360/US-071-customer-interaction-log.md) | 客戶互動紀錄 | Should Have |
+| E06 | [US-072](epics/E06-customer-360/US-072-customer-group-report.md) | 客戶群組統計報表 | Could Have |
+| E06 | [US-073](epics/E06-customer-360/US-073-data-quality-report.md) | 資料品質回報機制 | Could Have |
 
 ## 非功能需求（NFR）
 
@@ -111,7 +115,7 @@
 
 **業務決策（2026-04-02）**：原 Phase 3 的 US-067（變更歷史查詢）與 US-068（角色存取設定）合併至 Phase 2，Phase 3 不再獨立存在。
 
-- E06 全部 Stories（US-060 ~ US-068）：
+- E06 全部 Stories（US-060 ~ US-073）：
   - US-060 客戶搜尋與清單
   - US-061 單一客戶 360 檢視
   - US-062 建立標籤
@@ -121,6 +125,10 @@
   - US-066 依標籤篩選客戶
   - US-067 客戶資料變更歷史查詢（原 Phase 3）
   - US-068 Customer 360 角色存取設定（原 Phase 3，依賴 E02 US-017 的六種業務角色 Seed Data）
+  - US-069 客戶名單匯出（CSV 串流下載，5,000 筆上限）
+  - US-071 客戶互動紀錄（業務/客服記錄，僅可見自己紀錄；主管檢視全部；稽核不可刪除）
+  - US-072 客戶群組統計報表（依標籤或篩選條件維度統計，主管與分析師使用）
+  - US-073 資料品質回報機制（後端作業與分析師回報資料異常，建立品質閉環）
 - 多目標表整合（customer_interaction / customer_financial / customer_service）— 規劃中
 - 稽核日誌與操作歷程 — 規劃中
 

@@ -5,6 +5,7 @@
 > **優先級**：Must Have
 > **階段**：Phase 2
 > **預估點數**：8
+> **變更說明（2026-04-07）**：依賴關係 Blocks 補充 US-066、US-069、US-072；移除「Phase 2 暫行預設遮罩」說法，改為依 US-068 角色設定動態遮罩；API Response 欄位命名統一（移除 Masked 後綴）
 
 ---
 
@@ -72,8 +73,8 @@
   - `name`、`english_name`：使用 PostgreSQL Full-Text Search（`tsvector` + `tsquery`），建議在此兩欄建立 GIN 全文搜尋索引
   - `source_customer_no`：精確比對（完整輸入時觸發）
 - 篩選欄位：`customer_type_code`（IN 查詢）
-- 權限：Admin 與 User 皆可存取（Phase 2 暫不區分細粒度角色）
-- 敏感資料遮罩：由 US-068 角色存取設定控制，API 層根據呼叫者角色決定是否遮罩；Phase 2 暫行預設：`source_customer_no` 顯示首 1 碼 + 末 2 碼，`mobile_phone` 顯示前 4 碼 + 末 2 碼
+- 權限：所有已登入角色皆可存取客戶清單
+- 敏感資料遮罩：由 US-068 角色存取設定動態控制，API 層透過統一 Mask Middleware 從 `c360_field_visibility` 讀取呼叫者角色的設定，決定各欄位分類的可見性層級（不使用 Phase 2 暫行預設遮罩）
 - 效能：清單查詢回應時間 < 500ms（1,000 筆以內，含 Tag 資料 JOIN，NFR-002）
 - 時區：後端儲存 UTC，前端顯示轉換為 UTC+8
 
@@ -105,8 +106,8 @@
       "name": "string",
       "customerTypeCode": "01",
       "customerTypeDesc": "個人",
-      "sourceCustomerNoMasked": "A12****89",
-      "mobilePhoneMasked": "0912**56",
+      "sourceCustomerNo": "A12****89",
+      "mobilePhone": "0912**56",
       "tags": [
         { "tagId": "uuid", "name": "VIP", "color": "#3B82F6" }
       ]
@@ -143,7 +144,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-049（customer_core 目標表必須存在）、US-064（標籤 JOIN 顯示需標籤功能）
-- **Blocks**：US-061（客戶搜尋為進入 360 檢視的主要入口）
+- **Blocks**：US-061（客戶搜尋為進入 360 檢視的主要入口）、US-066（依標籤篩選客戶的清單基礎）、US-069（客戶名單匯出依賴清單篩選參數）、US-072（群組統計報表需複用清單篩選條件）
 
 ---
 
@@ -151,7 +152,7 @@
 
 - [ ] 客戶清單 API 實作完成（含統計、分頁、Full-Text Search、篩選）
 - [ ] PostgreSQL GIN 全文搜尋索引建立（name、english_name 欄位）
-- [ ] 敏感資料遮罩邏輯根據角色存取設定（US-068）動態套用（Phase 2 暫行預設遮罩）
+- [ ] 敏感資料遮罩邏輯由統一 Mask Middleware 依角色存取設定（US-068 c360_field_visibility）動態套用
 - [ ] 前端頁面含統計卡片、搜尋框、客戶類型篩選、分頁、標籤 Badge 顯示
 - [ ] 空狀態與無資料說明畫面實作完成
 - [ ] 點擊客戶列可導覽至 US-061
