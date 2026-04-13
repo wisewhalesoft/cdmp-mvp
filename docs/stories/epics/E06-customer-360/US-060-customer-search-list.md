@@ -4,8 +4,8 @@
 > **Epic**：[E06 — Customer 360](epic-brief.md)
 > **優先級**：Must Have
 > **階段**：Phase 2
-> **預估點數**：8
-> **變更說明（2026-04-07）**：依賴關係 Blocks 補充 US-066、US-069、US-072；移除「Phase 2 暫行預設遮罩」說法，改為依 US-068 角色設定動態遮罩；API Response 欄位命名統一（移除 Masked 後綴）
+> **預估點數**：5
+> **變更說明（2026-04-13）**：精簡範圍 — 移除標籤 Badge 顯示與 tagId 篩選；敏感資料遮罩改為 Admin 明碼 / User 固定遮罩（硬編碼）；新增公司名稱欄位；移除 US-064/066/069/072 依賴
 
 ---
 
@@ -42,7 +42,8 @@
 ### AC-5：清單欄位顯示
 - **Given** 客戶清單顯示資料
 - **When** 清單載入完成
-- **Then** 每一列顯示以下欄位：客戶姓名/企業名稱、客戶類型、身分證/統編、行動電話、標籤清單（最多顯示 3 個 Badge，超過顯示 +N）；敏感欄位（身分證/統編、電話）的遮罩顯示由角色存取設定（US-068）控制，不在此 Story 硬編碼
+- **Then** 每一列顯示以下欄位：客戶姓名/企業名稱、客戶類型、身分證/統編、行動電話、公司名稱
+- **And** 敏感欄位（身分證/統編、電話）的遮罩規則：Admin 完整明碼顯示；User 套用固定遮罩
 
 ### AC-6：分頁
 - **Given** 查詢結果超過 20 筆
@@ -73,9 +74,11 @@
   - `name`、`english_name`：使用 PostgreSQL Full-Text Search（`tsvector` + `tsquery`），建議在此兩欄建立 GIN 全文搜尋索引
   - `source_customer_no`：精確比對（完整輸入時觸發）
 - 篩選欄位：`customer_type_code`（IN 查詢）
-- 權限：所有已登入角色皆可存取客戶清單
-- 敏感資料遮罩：由 US-068 角色存取設定動態控制，API 層透過統一 Mask Middleware 從 `c360_field_visibility` 讀取呼叫者角色的設定，決定各欄位分類的可見性層級（不使用 Phase 2 暫行預設遮罩）
-- 效能：清單查詢回應時間 < 500ms（1,000 筆以內，含 Tag 資料 JOIN，NFR-002）
+- 權限：所有已登入角色（Admin / User）皆可存取客戶清單
+- 敏感資料遮罩：硬編碼於 API 層，依呼叫者角色（Admin / User）決定：
+  - Admin：所有欄位完整明碼
+  - User：身分證前 3 碼 + 後 2 碼顯示（例：`A12****89`）；電話前 4 碼 + 後 2 碼顯示（例：`0912***78`）
+- 效能：清單查詢回應時間 < 500ms（1,000 筆以內，NFR-002）
 - 時區：後端儲存 UTC，前端顯示轉換為 UTC+8
 
 ### API 端點
@@ -95,8 +98,8 @@
 
 **客戶清單**
 
-- 端點：`GET /api/v1/c360/customers?keyword=&type=&tagId=&page=1&pageSize=20`
-- Query 參數：`keyword`（模糊搜尋姓名/英文名）、`idNumber`（精確比對身分證/統編）、`type`（01/02/04）、`tagId`（UUID，依標籤篩選）
+- 端點：`GET /api/v1/c360/customers?keyword=&type=&page=1&pageSize=20`
+- Query 參數：`keyword`（模糊搜尋姓名/英文名）、`idNumber`（精確比對身分證/統編）、`type`（01/02/04）
 - Response：
 ```json
 {
@@ -107,10 +110,8 @@
       "customerTypeCode": "01",
       "customerTypeDesc": "個人",
       "sourceCustomerNo": "A12****89",
-      "mobilePhone": "0912**56",
-      "tags": [
-        { "tagId": "uuid", "name": "VIP", "color": "#3B82F6" }
-      ]
+      "mobilePhone": "0912***78",
+      "companyName": "string"
     }
   ],
   "pagination": {
@@ -133,18 +134,19 @@
 | 3 | 搜尋「A123456789」（完整身分證） | 精確比對 source_customer_no，顯示 0 或 1 筆 |
 | 4 | 篩選客戶類型為「企業」 | 僅顯示 customer_type_code = '02' 的客戶 |
 | 5 | 關鍵字搜尋 + 客戶類型篩選組合 | 同時套用兩個條件篩選 |
-| 6 | 清單中的 source_customer_no 為 A123456789（Phase 2 預設遮罩） | 遮罩後顯示 `A12****89`（實際遮罩層級依 US-068 角色設定） |
-| 7 | customer_core 無資料 | 顯示「客戶資料尚未載入」說明訊息 |
-| 8 | 搜尋結果為空 | 顯示空狀態提示與清除篩選按鈕 |
-| 9 | 點擊客戶列 | 導覽至 US-061 客戶 360 檢視頁面 |
-| 10 | 未登入使用者直接存取 URL | 導向登入頁面（401）|
+| 6 | Admin 查看清單中的 source_customer_no | 完整明碼顯示 `A123456789` |
+| 7 | User 查看清單中的 source_customer_no | 固定遮罩顯示 `A12****89` |
+| 8 | customer_core 無資料 | 顯示「客戶資料尚未載入」說明訊息 |
+| 9 | 搜尋結果為空 | 顯示空狀態提示與清除篩選按鈕 |
+| 10 | 點擊客戶列 | 導覽至 US-061 客戶 360 檢視頁面 |
+| 11 | 未登入使用者直接存取 URL | 導向登入頁面（401）|
 
 ---
 
 ## 依賴關係
 
-- **Blocked By**：US-049（customer_core 目標表必須存在）、US-064（標籤 JOIN 顯示需標籤功能）
-- **Blocks**：US-061（客戶搜尋為進入 360 檢視的主要入口）、US-066（依標籤篩選客戶的清單基礎）、US-069（客戶名單匯出依賴清單篩選參數）、US-072（群組統計報表需複用清單篩選條件）
+- **Blocked By**：US-049（customer_core 目標表必須存在）
+- **Blocks**：US-061（客戶搜尋為進入 360 檢視的主要入口）
 
 ---
 
@@ -152,8 +154,9 @@
 
 - [ ] 客戶清單 API 實作完成（含統計、分頁、Full-Text Search、篩選）
 - [ ] PostgreSQL GIN 全文搜尋索引建立（name、english_name 欄位）
-- [ ] 敏感資料遮罩邏輯由統一 Mask Middleware 依角色存取設定（US-068 c360_field_visibility）動態套用
-- [ ] 前端頁面含統計卡片、搜尋框、客戶類型篩選、分頁、標籤 Badge 顯示
+- [ ] 敏感資料遮罩硬編碼於 API 層（Admin 明碼 / User 固定遮罩）
+- [ ] 前端頁面含統計卡片、搜尋框、客戶類型篩選、分頁
+- [ ] 清單欄位包含：客戶姓名、客戶類型、身分證/統編、行動電話、公司名稱
 - [ ] 空狀態與無資料說明畫面實作完成
 - [ ] 點擊客戶列可導覽至 US-061
 - [ ] 效能符合 NFR-002（500ms / 1,000 筆以內）
@@ -166,5 +169,5 @@
 
 - **Epic Brief**：[E06 Epic Brief](epic-brief.md)
 - **依賴**：US-049（customer_core 目標表）
-- **相關 Story**：US-061（客戶 360 檢視）、US-066（依標籤篩選）
+- **相關 Story**：US-061（客戶 360 檢視）
 - **NFR**：[NFR-002 效能](../../non-functional/NFR-002-performance.md)
