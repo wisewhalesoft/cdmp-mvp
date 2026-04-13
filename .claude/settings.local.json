@@ -226,7 +226,17 @@
       "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id, WorkingSet64, CPU, ProcessName | Format-Table -AutoSize\")",
       "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id, @{N='MemMB';E={[math]::Round\\($_.WorkingSet64/1MB,0\\)}}, CPU | Format-Table -AutoSize\")",
       "Bash(powershell -Command \"Get-Process node | Format-Table Id, WorkingSet64, CPU -AutoSize\")",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(grep -l \"ETL Pipeline\" *.html)",
+      "Bash(grep -l \"資料擷取\" *.html)",
+      "Bash(grep -l \"25-c360-customer-list.html\" *.html)",
+      "Bash(claude mcp:*)",
+      "Bash(claude /doctor)",
+      "Bash(npx claude-code:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "mem0"
+  ],
+  "enableAllProjectMcpServers": true
 }
