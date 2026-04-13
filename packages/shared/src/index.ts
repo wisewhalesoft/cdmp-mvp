@@ -1,15 +1,9 @@
 // Shared types between API and Web
 
-// ===== F045: Business Role Definitions =====
+// ===== F045: Role Definitions =====
 export const VALID_ROLES = [
   'admin',
   'user',
-  'business',
-  'marketing',
-  'customer_service',
-  'analyst',
-  'supervisor',
-  'backend_ops',
 ] as const;
 
 export type UserRole = (typeof VALID_ROLES)[number];
@@ -18,18 +12,12 @@ export interface RoleDefinition {
   roleCode: UserRole;
   displayName: string;
   alias: string | null;
-  type: 'system' | 'business';
+  type: 'system';
 }
 
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { roleCode: 'admin', displayName: '管理者', alias: 'Admin', type: 'system' },
   { roleCode: 'user', displayName: '使用者', alias: 'User', type: 'system' },
-  { roleCode: 'business', displayName: '業務', alias: null, type: 'business' },
-  { roleCode: 'marketing', displayName: '行銷', alias: '企劃', type: 'business' },
-  { roleCode: 'customer_service', displayName: '客服', alias: null, type: 'business' },
-  { roleCode: 'analyst', displayName: '分析師', alias: null, type: 'business' },
-  { roleCode: 'supervisor', displayName: '主管', alias: null, type: 'business' },
-  { roleCode: 'backend_ops', displayName: '後端作業', alias: '作服', type: 'business' },
 ] as const;
 
 export function getRoleDisplayName(roleCode: UserRole): string {
@@ -981,7 +969,7 @@ export const ERROR_MESSAGES = {
   ACCOUNT_NOT_FOUND: '找不到指定的帳號',
   ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
   ACCOUNT_LAST_ADMIN: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
-  VALIDATION_INVALID_ROLE: '角色值無效，必須為系統定義的 8 種角色之一',
+  VALIDATION_INVALID_ROLE: '角色值無效，必須為 admin 或 user',
   RESET_TOKEN_EXPIRED: '此連結已過期，請重新申請密碼重設',
   RESET_TOKEN_USED: '此連結已失效',
   RESET_TOKEN_INVALID: '重設連結無效',

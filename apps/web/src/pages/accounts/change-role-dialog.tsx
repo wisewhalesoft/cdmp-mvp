@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Info, ShieldCheck, ArrowRight, X } from 'lucide-react';
+import { AlertCircle, ShieldCheck, ArrowRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type UserRole, getRoleDisplayName } from '@cdmp/shared';
 
@@ -10,19 +10,6 @@ interface ChangeRoleDialogProps {
   loading: boolean;
   onConfirm: (newRole: UserRole) => void;
   onCancel: () => void;
-}
-
-const BUSINESS_ROLES: UserRole[] = [
-  'business',
-  'marketing',
-  'customer_service',
-  'analyst',
-  'supervisor',
-  'backend_ops',
-];
-
-function isBusinessRole(role: UserRole): boolean {
-  return BUSINESS_ROLES.includes(role);
 }
 
 export function ChangeRoleDialog({
@@ -48,8 +35,6 @@ export function ChangeRoleDialog({
 
   const displayCurrentRole = getRoleDisplayName(currentRole);
   const displayNewRole = getRoleDisplayName(selectedRole);
-  const selectedIsBusinessRole = isBusinessRole(selectedRole);
-  const selectedIsSystemRole = !selectedIsBusinessRole;
 
   const handleNextStep = () => {
     if (selectedRole === currentRole) return;
@@ -63,8 +48,6 @@ export function ChangeRoleDialog({
 
   // ===== Step 2: 確認對話框 (max-w-sm, 居中圖標, badge 樣式) =====
   if (showConfirm) {
-    const showBusinessNote = isBusinessRole(selectedRole) || isBusinessRole(currentRole);
-
     return (
       <div className="fixed inset-0 z-[60]">
         <div
@@ -97,11 +80,6 @@ export function ChangeRoleDialog({
               <p className="text-sm text-gray-500 mb-1">
                 確定要變更 <strong className="text-gray-900">{accountName}</strong> 的角色嗎？
               </p>
-              {showBusinessNote && (
-                <p className="text-xs text-amber-600">
-                  此變更將影響使用者在 Customer 360 模組中的存取權限
-                </p>
-              )}
             </div>
             <div className="flex items-center justify-end gap-3 px-6 py-4">
               <button
@@ -165,38 +143,16 @@ export function ChangeRoleDialog({
                 onChange={(e) => setSelectedRole(e.target.value as UserRole)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
               >
-                <optgroup label="系統角色">
-                  <option value="admin">管理者（Admin）</option>
-                  <option value="user">使用者（User）</option>
-                </optgroup>
-                <optgroup label="業務角色">
-                  <option value="business">業務</option>
-                  <option value="marketing">行銷（企劃）</option>
-                  <option value="customer_service">客服</option>
-                  <option value="analyst">分析師</option>
-                  <option value="supervisor">主管</option>
-                  <option value="backend_ops">後端作業（作服）</option>
-                </optgroup>
+                <option value="admin">管理者（Admin）</option>
+                <option value="user">使用者（User）</option>
               </select>
             </div>
-            {/* 系統角色提示 */}
-            {selectedIsSystemRole && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-700">
-                  變更角色將立即影響該使用者的系統權限。Admin 擁有完整管理權限，User 僅具備基本操作權限。
-                </p>
-              </div>
-            )}
-            {/* 業務角色提示 */}
-            {selectedIsBusinessRole && (
-              <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg">
-                <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                <p className="text-xs text-primary">
-                  變更業務角色將影響使用者在 Customer 360 模組中的存取權限，包含欄位可見性、遮罩規則與功能開關。
-                </p>
-              </div>
-            )}
+            <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-700">
+                變更角色將立即影響該使用者的系統權限。Admin 擁有完整管理權限，User 僅具備基本操作權限。
+              </p>
+            </div>
           </div>
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
             <button

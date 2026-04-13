@@ -17,16 +17,8 @@ interface CreateAccountModalProps {
 }
 
 const ROLE_OPTIONS = [
-  { value: '', label: '── 系統角色 ──', disabled: true },
   { value: 'admin', label: '管理者（Admin）' },
   { value: 'user', label: '使用者（User）' },
-  { value: '', label: '── 業務角色 ──', disabled: true },
-  { value: 'business', label: '業務' },
-  { value: 'marketing', label: '行銷（企劃）' },
-  { value: 'customer_service', label: '客服' },
-  { value: 'analyst', label: '分析師' },
-  { value: 'supervisor', label: '主管' },
-  { value: 'backend_ops', label: '後端作業（作服）' },
 ];
 
 export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountModalProps) {

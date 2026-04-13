@@ -232,11 +232,12 @@
       "Bash(grep -l \"25-c360-customer-list.html\" *.html)",
       "Bash(claude mcp:*)",
       "Bash(claude /doctor)",
-      "Bash(npx claude-code:*)"
+      "Bash(npx claude-code:*)",
+      "Bash(npx nx:*)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "mem0"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

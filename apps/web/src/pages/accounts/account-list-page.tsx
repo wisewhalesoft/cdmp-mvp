@@ -19,12 +19,6 @@ function formatDate(isoString: string): string {
 const ROLE_BADGE_STYLES: Record<string, string> = {
   admin: 'bg-blue-100 text-blue-700',
   user: 'bg-gray-100 text-gray-700',
-  business: 'bg-emerald-100 text-emerald-700',
-  marketing: 'bg-pink-100 text-pink-700',
-  customer_service: 'bg-orange-100 text-orange-700',
-  analyst: 'bg-violet-100 text-violet-700',
-  supervisor: 'bg-indigo-100 text-indigo-700',
-  backend_ops: 'bg-teal-100 text-teal-700',
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -309,18 +303,8 @@ export function AccountListPage() {
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">全部角色</option>
-              <optgroup label="系統角色">
-                <option value="admin">管理者（Admin）</option>
-                <option value="user">使用者（User）</option>
-              </optgroup>
-              <optgroup label="業務角色">
-                <option value="business">業務</option>
-                <option value="marketing">行銷（企劃）</option>
-                <option value="customer_service">客服</option>
-                <option value="analyst">分析師</option>
-                <option value="supervisor">主管</option>
-                <option value="backend_ops">後端作業（作服）</option>
-              </optgroup>
+              <option value="admin">管理者（Admin）</option>
+              <option value="user">使用者（User）</option>
             </select>
             <select
               value={statusFilter}

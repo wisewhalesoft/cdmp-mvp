@@ -63,12 +63,12 @@ describe('ChangeRoleDialog', () => {
     expect(roleText?.textContent).toBe('管理者（Admin）');
   });
 
-  it('下拉選單包含全部 8 種角色', () => {
+  it('下拉選單包含全部 2 種角色', () => {
     renderDialog();
     const select = screen.getByRole('combobox');
     expect(select).toBeInTheDocument();
     const options = screen.getAllByRole('option');
-    expect(options).toHaveLength(8);
+    expect(options).toHaveLength(2);
   });
 
   it('目前角色為 User 時下拉選單預設選中 Admin', () => {
@@ -111,23 +111,13 @@ describe('ChangeRoleDialog', () => {
     expect(onConfirm).toHaveBeenCalledWith('admin');
   });
 
-  it('選擇業務角色後確認傳入正確的角色', async () => {
+  it('選擇角色後確認傳入正確的角色', async () => {
     const user = userEvent.setup();
     const { onConfirm } = renderDialog({ currentRole: 'user' });
-    const select = screen.getByRole('combobox');
-    await user.selectOptions(select, 'analyst');
+    // Default selection is 'admin' when current is 'user'
     await user.click(screen.getByRole('button', { name: '下一步' }));
     await user.click(screen.getByRole('button', { name: '確認變更' }));
-    expect(onConfirm).toHaveBeenCalledWith('analyst');
-  });
-
-  it('選擇業務角色後顯示 Customer 360 影響提示', async () => {
-    const user = userEvent.setup();
-    renderDialog({ currentRole: 'user' });
-    const select = screen.getByRole('combobox');
-    await user.selectOptions(select, 'analyst');
-    await user.click(screen.getByRole('button', { name: '下一步' }));
-    expect(screen.getByText(/Customer 360/)).toBeInTheDocument();
+    expect(onConfirm).toHaveBeenCalledWith('admin');
   });
 
   it('確認頁面點擊取消呼叫 onCancel', async () => {
