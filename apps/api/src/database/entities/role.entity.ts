@@ -17,7 +17,7 @@ export class Role {
   alias: string | null;
 
   @Column({ type: 'varchar', length: 10 })
-  type: 'system' | 'business';
+  type: 'system';
 
   @CreateDateColumn()
   created_at: Date;

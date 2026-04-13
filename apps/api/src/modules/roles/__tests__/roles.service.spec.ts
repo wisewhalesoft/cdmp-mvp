@@ -13,12 +13,6 @@ describe('RolesService', () => {
   const seedRoles: Role[] = [
     { role_code: 'admin', display_name: '管理者', alias: 'Admin', type: 'system', created_at: new Date() },
     { role_code: 'user', display_name: '使用者', alias: 'User', type: 'system', created_at: new Date() },
-    { role_code: 'analyst', display_name: '分析師', alias: null, type: 'business', created_at: new Date() },
-    { role_code: 'backend_ops', display_name: '後端作業', alias: '作服', type: 'business', created_at: new Date() },
-    { role_code: 'business', display_name: '業務', alias: null, type: 'business', created_at: new Date() },
-    { role_code: 'customer_service', display_name: '客服', alias: null, type: 'business', created_at: new Date() },
-    { role_code: 'marketing', display_name: '行銷', alias: '企劃', type: 'business', created_at: new Date() },
-    { role_code: 'supervisor', display_name: '主管', alias: null, type: 'business', created_at: new Date() },
   ];
 
   beforeEach(async () => {
@@ -36,19 +30,13 @@ describe('RolesService', () => {
     service = module.get<RolesService>(RolesService);
   });
 
-  // TS-F045-001: Seed Data 完整性驗證 — 8 種角色全部存在
-  it('should return all 8 roles (TS-F045-001)', async () => {
+  // TS-F045-001: Seed Data 完整性驗證 — 2 種角色全部存在
+  it('should return all 2 roles (TS-F045-001)', async () => {
     const result = await service.findAll();
-    expect(result).toHaveLength(8);
+    expect(result).toHaveLength(2);
     const roleCodes = result.map((r) => r.roleCode);
     expect(roleCodes).toContain('admin');
     expect(roleCodes).toContain('user');
-    expect(roleCodes).toContain('business');
-    expect(roleCodes).toContain('marketing');
-    expect(roleCodes).toContain('customer_service');
-    expect(roleCodes).toContain('analyst');
-    expect(roleCodes).toContain('supervisor');
-    expect(roleCodes).toContain('backend_ops');
   });
 
   // TS-F045-003: 系統角色欄位正確性驗證
@@ -71,25 +59,15 @@ describe('RolesService', () => {
     });
   });
 
-  // TS-F045-004: 業務角色欄位正確性驗證（含別名）
-  it('should return correct business role fields with aliases (TS-F045-004)', async () => {
+  // TS-F045-004: 角色別名欄位正確性驗證
+  it('should return correct role alias fields (TS-F045-004)', async () => {
     const result = await service.findAll();
 
-    const marketing = result.find((r) => r.roleCode === 'marketing');
-    expect(marketing?.displayName).toBe('行銷');
-    expect(marketing?.alias).toBe('企劃');
-    expect(marketing?.type).toBe('business');
+    const admin = result.find((r) => r.roleCode === 'admin');
+    expect(admin?.alias).toBe('Admin');
 
-    const backendOps = result.find((r) => r.roleCode === 'backend_ops');
-    expect(backendOps?.displayName).toBe('後端作業');
-    expect(backendOps?.alias).toBe('作服');
-    expect(backendOps?.type).toBe('business');
-
-    const analyst = result.find((r) => r.roleCode === 'analyst');
-    expect(analyst?.alias).toBeNull();
-
-    const business = result.find((r) => r.roleCode === 'business');
-    expect(business?.alias).toBeNull();
+    const user = result.find((r) => r.roleCode === 'user');
+    expect(user?.alias).toBe('User');
   });
 
   // TS-F045-013: Response 不含敏感欄位

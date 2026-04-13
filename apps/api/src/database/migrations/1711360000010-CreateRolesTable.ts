@@ -40,16 +40,10 @@ export class CreateRolesTable1711360000010 implements MigrationInterface {
       true,
     );
 
-    // Seed 8 roles (idempotent: INSERT ... ON CONFLICT DO NOTHING)
+    // Seed 2 roles (idempotent: INSERT ... ON CONFLICT DO NOTHING)
     const roles = [
       { role_code: 'admin', display_name: '管理者', alias: 'Admin', type: 'system' },
       { role_code: 'user', display_name: '使用者', alias: 'User', type: 'system' },
-      { role_code: 'business', display_name: '業務', alias: null, type: 'business' },
-      { role_code: 'marketing', display_name: '行銷', alias: '企劃', type: 'business' },
-      { role_code: 'customer_service', display_name: '客服', alias: null, type: 'business' },
-      { role_code: 'analyst', display_name: '分析師', alias: null, type: 'business' },
-      { role_code: 'supervisor', display_name: '主管', alias: null, type: 'business' },
-      { role_code: 'backend_ops', display_name: '後端作業', alias: '作服', type: 'business' },
     ];
 
     for (const role of roles) {

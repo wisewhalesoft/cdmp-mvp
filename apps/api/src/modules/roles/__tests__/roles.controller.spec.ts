@@ -52,7 +52,7 @@ describe('RolesController', () => {
 
   // TS-F045-009: DELETE /api/roles/:code — 403
   it('should throw ForbiddenException for DELETE /api/roles/:code (TS-F045-009)', async () => {
-    await expect(controller.remove('business')).rejects.toThrow(ForbiddenException);
+    await expect(controller.remove('user')).rejects.toThrow(ForbiddenException);
   });
 
   // TS-F045-010: DELETE /api/roles/admin — 刪除系統角色也被拒

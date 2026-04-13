@@ -8,7 +8,7 @@ export interface RoleDefinition {
   roleCode: UserRole;
   displayName: string;
   alias: string | null;
-  type: 'system' | 'business';
+  type: 'system';
 }
 
 @Injectable()
