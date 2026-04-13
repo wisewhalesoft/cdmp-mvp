@@ -5,18 +5,18 @@ feature-id: F005
 source-story: US-011
 epic: E02
 priority: P0-MVP
-version: "2.0"
-date: 2026-04-02
+version: "3.0"
+date: 2026-04-13
 status: Draft
 ---
 
 # F005: 查看帳號清單
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-02
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-13
 
 ## 功能摘要
 
-Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功能（角色篩選支援全部 8 種角色）。角色欄位以中文顯示名稱呈現（如「分析師」而非 `analyst`）。此清單為帳號管理操作（編輯、停用/啟用、角色變更、密碼重設）的主要入口。
+Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功能（角色篩選支援 Admin / User 兩種角色）。角色欄位以中文顯示名稱呈現。此清單為帳號管理操作（編輯、停用/啟用、角色變更、密碼重設）的主要入口。
 
 ## User Story
 
@@ -30,7 +30,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 
 - Given Admin 已登入且導覽至帳號管理頁面
 - When 頁面載入完成
-- Then 系統顯示分頁帳號清單，每筆包含：姓名、Email、角色（以中文顯示名稱呈現，如「分析師」、「後端作業（作服）」）、狀態（active / disabled）、建立日期（created_at）
+- Then 系統顯示分頁帳號清單，每筆包含：姓名、Email、角色（以中文顯示名稱呈現：「管理者」或「使用者」）、狀態（active / disabled）、建立日期（created_at）
 
 ### AC-2：搜尋與篩選（大小寫不敏感）
 
@@ -38,19 +38,13 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 - When Admin 輸入搜尋關鍵字（例如輸入「john」可匹配「John」或「JOHN」），或選擇篩選條件（依角色或狀態）
 - Then 系統以大小寫不敏感方式比對姓名與 Email，清單更新僅顯示符合條件的帳號
 
-### AC-4：依業務角色篩選
+### AC-3：依角色篩選
 
 - Given Admin 正在查看帳號清單
-- When Admin 從角色篩選下拉選單選擇「分析師」
-- Then 系統僅顯示 role_code 為 `analyst` 的帳號；其他業務角色（業務、行銷、客服、主管、後端作業）同樣可個別篩選
+- When Admin 從角色篩選下拉選單選擇「管理者」或「使用者」
+- Then 系統僅顯示對應 role_code 的帳號
 
-### AC-5：角色欄位顯示中文名稱
-
-- Given 帳號清單中存在業務角色帳號
-- When 清單渲染
-- Then 角色欄位顯示中文名稱（如 `marketing` 顯示「行銷（企劃）」、`backend_ops` 顯示「後端作業（作服）」），不顯示 role_code
-
-### AC-3：無結果空狀態
+### AC-4：無結果空狀態
 
 - Given 目前沒有任何帳號符合搜尋或篩選條件
 - When 清單渲染
@@ -72,7 +66,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 | page | integer | 否 | 1 | 頁碼，最小值 1 |
 | limit | integer | 否 | 20 | 每頁筆數，範圍 1-100 |
 | search | string | 否 | - | 搜尋關鍵字，比對姓名與 Email（大小寫不敏感） |
-| role | string | 否 | - | 篩選角色：`admin`、`user`、`business`、`marketing`、`customer_service`、`analyst`、`supervisor`、`backend_ops` |
+| role | string | 否 | - | 篩選角色：`admin` 或 `user` |
 | status | string | 否 | - | 篩選狀態：`active` 或 `disabled` |
 
 **Response - 200 OK:**
@@ -134,7 +128,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 |------|------|
 | 清單欄位 | 姓名、Email、角色（中文顯示名稱）、狀態、建立日期、操作（編輯/停用/角色變更/重設密碼） |
 | 搜尋 | 搜尋框位於清單上方，支援即時搜尋或按鍵搜尋 |
-| 篩選 | 角色篩選（全部/管理者/使用者/業務/行銷/客服/分析師/主管/後端作業）與狀態篩選（全部/啟用/停用），角色篩選選項由 `GET /api/roles` 動態載入 |
+| 篩選 | 角色篩選（全部/管理者/使用者）與狀態篩選（全部/啟用/停用），角色篩選選項由 `GET /api/roles` 動態載入 |
 | 分頁 | 清單下方顯示分頁控制項，包含當前頁碼、總頁數、每頁筆數選擇 |
 | 狀態標記 | 停用帳號以視覺標記（badge/tag）區分，例如灰色或紅色標籤 |
 | 空狀態 | 無結果時顯示「找不到帳號」文字，附帶建議調整篩選條件的提示 |
@@ -182,9 +176,9 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 
 ## 交叉參考
 
-- User Story：[US-011-view-account-list.md](../stories/epics/E02-account-role-management/US-011-view-account-list.md)
-- Epic Brief：[E02 Epic Brief](../stories/epics/E02-account-role-management/epic-brief.md)
-- NFR：[NFR-002 效能需求](../stories/non-functional/NFR-002-performance.md)
+- User Story：[US-011-view-account-list.md](../../stories/epics/E02-account-role-management/US-011-view-account-list.md)
+- Epic Brief：[E02 Epic Brief](../../stories/epics/E02-account-role-management/epic-brief.md)
+- NFR：[NFR-002 效能需求](../../stories/non-functional/NFR-002-performance.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
 - 相關功能：F004、F006、F007、F008、F010、F045

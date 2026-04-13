@@ -48,7 +48,7 @@ graph TD
     subgraph 後端["後端層 (Modular Monolith)"]
         API["REST API 閘道層<br/>路由、認證中介層、Rate Limiting"]
         AuthMod["Auth 模組<br/>登入、登出、密碼重設"]
-        AccountMod["Account 模組<br/>帳號 CRUD、雙層角色管理<br/>（系統角色 + 業務角色）"]
+        AccountMod["Account 模組<br/>帳號 CRUD、角色管理<br/>（admin / user）"]
         DatasourceMod["Datasource 模組<br/>連線設定、測試、監控"]
         ExtractionMod["Extraction 模組<br/>擷取任務 CRUD、執行調度、日誌管理"]
         ETLMod["ETL Pipeline 模組<br/>Pipeline CRUD、版本管理<br/>視覺化定義、執行引擎"]
@@ -131,7 +131,7 @@ graph TD
 graph TB
     subgraph 內部使用者["內部使用者"]
         Admin["Admin（管理者）<br/>IT 管理員、資料團隊主管"]
-        User["User（一般使用者）<br/>可為業務、行銷、客服、分析師<br/>主管、後端作業等六種業務角色"]
+        User["User（一般使用者）<br/>存取 Customer 360 相關功能"]
     end
 
     subgraph CDMP["CDMP 平台"]
@@ -172,7 +172,7 @@ graph TB
 
     subgraph TZ_Auth["信任區域：已驗證使用者（JWT 必要）"]
         Logout["POST /api/v1/auth/logout"]
-        UserEndpoints["User / 業務角色可存取端點<br/>（Customer 360 相關端點，Phase 2 啟用）"]
+        UserEndpoints["User 可存取端點<br/>（Customer 360 相關端點）"]
     end
 
     subgraph TZ_Admin["信任區域：Admin 角色（JWT + role=admin）"]
@@ -360,7 +360,7 @@ graph TB
 | CORS | 限制允許的 Origin（OQ-12 決議，需要 CORS 設定） | 1 |
 | Rate Limiting | 登入端點：5 次/分鐘/IP（OQ-5 決議）；密碼重設端點：同樣限制 | 2 |
 | JWT 驗證 | 驗證 Bearer Token 格式、簽章、有效期；查詢 Token Blocklist | 3 |
-| RBAC 守衛 | 依端點定義的角色需求比對 JWT payload 中的 `role`；支援 8 種角色（2 系統角色 + 6 業務角色）；業務角色端點（Phase 2 Customer 360）使用業務角色集合守衛 | 4 |
+| RBAC 守衛 | 依端點定義的角色需求比對 JWT payload 中的 `role`；支援 2 種角色（admin / user）；未授權存取回傳 403 | 4 |
 | Input Sanitization | 清除 XSS 與 SQL Injection 惡意字元 | 5 |
 
 #### Auth 模組
@@ -380,33 +380,25 @@ graph TB
 
 | 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
 |------|------|-----------|-------------|
-| Account Service | 帳號 CRUD；雙層角色指派（系統角色 + 業務角色）；停用/啟用；Admin 代為重設密碼 | 最後一位 Admin 保護（ACCOUNT_LAST_ADMIN）；Admin 不可停用自己（ACCOUNT_SELF_DISABLE）；Email 大小寫不敏感唯一性；停用時失效所有 Session；指派角色前驗證 role_code 為有效的預設角色之一 | F004-F010 |
+| Account Service | 帳號 CRUD；角色指派（admin / user）；停用/啟用；Admin 代為重設密碼 | 最後一位 Admin 保護（ACCOUNT_LAST_ADMIN）；Admin 不可停用自己（ACCOUNT_SELF_DISABLE）；Email 大小寫不敏感唯一性；停用時失效所有 Session；指派角色前驗證 role_code 為有效的預設角色之一 | F004-F010 |
 | Role Service | 提供角色清單查詢（`GET /api/roles`）；角色 Seed Data 初始化（migration 自動執行）；角色 role_code 有效性驗證（供 Account Service 使用） | 不提供角色新增 / 刪除 API（AC-2，US-017）；角色資料為 Seed Data，不可由 API 修改 | F004, F008（US-017, US-014） |
 
 **樂觀鎖定**（OQ-6 決議）：帳號編輯與資料來源編輯均採用 Optimistic Locking，以版本號或 `updated_at` 時間戳記偵測並發衝突，回傳 HTTP 409。
 
 **架構決策 AD-E02-1：雙層角色架構**
 
-CDMP 採用「系統角色（System Role）」與「業務角色（Business Role）」的雙層角色模型：
+CDMP 採用簡單扁平化的角色模型，系統僅需 Admin / User 兩種角色：
 
-| 層次 | 角色 role_code | 用途 |
-|------|--------------|------|
-| 系統角色 | `admin` | 完整平台管理權限（帳號、資料來源、擷取任務、ETL Pipeline） |
-| 系統角色 | `user` | 一般使用者基礎角色；MVP 中作為業務角色的基底；Customer 360 相關功能由業務角色細化 |
-| 業務角色 | `business` | 業務（一線業務人員）；控制 Customer 360 欄位可見性與遮罩規則 |
-| 業務角色 | `marketing` | 行銷（企劃）；同上 |
-| 業務角色 | `customer_service` | 客服（客戶服務人員）；同上 |
-| 業務角色 | `analyst` | 分析師（資料分析師）；同上 |
-| 業務角色 | `supervisor` | 主管（各部門主管）；同上 |
-| 業務角色 | `backend_ops` | 後端作業（作服）；同上 |
-
-**選擇雙層架構而非扁平化 8 種角色的理由**：系統角色控制平台管理功能的存取（是否能進入帳號管理、資料來源、ETL Pipeline 等後台功能）；業務角色控制 Customer 360 模組（E06）的欄位可見性與遮罩規則。兩個維度的語意不同，維持邏輯分層有助於 Phase 2 RBAC 規則擴充時的可維護性。
+| 角色 role_code | 用途 |
+|--------------|------|
+| `admin` | 完整平台管理權限（帳號、資料來源、擷取任務、ETL Pipeline） |
+| `user` | 一般使用者；可存取 Customer 360 相關功能 |
 
 **架構決策 AD-E02-2：角色為 Seed Data，不提供動態 CRUD**
 
-**決策（2026-04-02 業務確認）**：8 種角色為系統預設，在 migration 時自動建立（Seed Data），不開放 Admin 自行新增或刪除。
+**決策（2026-04-02 業務確認）**：2 種角色為系統預設，在 migration 時自動建立（Seed Data），不開放 Admin 自行新增或刪除。
 
-**理由**：業務角色與 Customer 360（E06）的 `c360_role_permissions` 資料表的 `role_code` 欄位緊密耦合。若允許動態新增或刪除角色，`c360_role_permissions` 中的 FK 約束將失效，且存取控制規則需同步調整，大幅增加系統複雜度與資料一致性風險。角色名稱為業務域的固定概念（來自組織設計），不需動態管理。
+**理由**：系統僅需 Admin / User 兩種固定角色。角色名稱為業務域的固定概念（來自組織設計），不需動態管理。
 
 **實作約束**：
 - 後端不提供 `POST /api/roles` 與 `DELETE /api/roles/:code` 端點；若透過 API 嘗試，回傳 `403 Forbidden`
@@ -417,12 +409,12 @@ CDMP 採用「系統角色（System Role）」與「業務角色（Business Role
 
 | 方案 | 說明 | 取捨 |
 |------|------|------|
-| **方案 A（採用）**：User.role 使用 Enum（8 種值） | 將 `role` 欄位的 Enum 值從 2 種擴充為 8 種 | 實作簡單；無需 JOIN；角色驗證在應用層完成。缺點：新增角色需 DB migration 修改 Enum 型別。 |
+| **方案 A（採用）**：User.role 使用 Enum（2 種值） | `role` 欄位使用 Enum，值為 `admin` 與 `user` | 實作簡單；無需 JOIN；角色驗證在應用層完成。缺點：新增角色需 DB migration 修改 Enum 型別。 |
 | 方案 B：User.role 改為外鍵 FK 指向 roles 表 | 建立 `roles` 參考表，`user.role_code` 為外鍵 | 資料正規化更完整；新增角色只需 INSERT。缺點：每次查詢 User 需 JOIN roles；角色 Seed Data 需在 FK 約束前建立，migration 順序複雜。 |
 
-**選擇方案 A（Enum 擴充）的理由**：角色為固定 Seed Data（AD-E02-2），不支援動態新增；Enum 型別已充分表達「值集合固定」的語意。避免引入額外 JOIN 及 migration 順序複雜度。應用層的 `RoleService.validateRoleCode()` 負責業務層驗證，與 DB Enum 約束形成雙重防護。
+**選擇方案 A（Enum）的理由**：角色為固定 Seed Data（AD-E02-2），不支援動態新增；Enum 型別已充分表達「值集合固定」的語意。避免引入額外 JOIN 及 migration 順序複雜度。應用層的 `RoleService.validateRoleCode()` 負責業務層驗證，與 DB Enum 約束形成雙重防護。
 
-**JWT Payload 中的 role 欄位**（影響 Auth 模組）：JWT payload 的 `role` 欄位需能承載 8 種角色值。現有 JWT 結構（`role: "admin" | "user"`）擴充為 `role: "admin" | "user" | "business" | "marketing" | "customer_service" | "analyst" | "supervisor" | "backend_ops"`。RBAC 中介層依此欄位判斷存取權限。
+**JWT Payload 中的 role 欄位**（影響 Auth 模組）：JWT payload 的 `role` 欄位承載角色值，結構為 `role: "admin" | "user"`。RBAC 中介層依此欄位判斷存取權限。
 
 #### Datasource 模組
 
@@ -676,7 +668,7 @@ erDiagram
         string name
         string email "唯一，小寫儲存"
         string password_hash "bcrypt, cost>=10"
-        enum role "admin|user|business|marketing|customer_service|analyst|supervisor|backend_ops"
+        enum role "admin|user"
         enum status "active|disabled"
         timestamp created_at
         timestamp updated_at
@@ -829,8 +821,8 @@ erDiagram
 
 | 實體 | 擁有模組 | 其他模組存取方式 |
 |------|---------|----------------|
-| User（含 role 欄位，8 種值） | Account 模組 | Auth 模組讀取（驗證登入，JWT payload 攜帶 role）；透過服務介面呼叫，不直接存取 Repository |
-| 角色 Seed Data（Enum 定義） | Account 模組（RoleService） | Auth 模組使用（JWT payload 中 role 的有效值集合）；RBAC Middleware 使用（判斷業務角色）；Phase 2 E06 Customer 360 模組使用（c360_role_permissions FK） |
+| User（含 role 欄位，2 種值：admin/user） | Account 模組 | Auth 模組讀取（驗證登入，JWT payload 攜帶 role）；透過服務介面呼叫，不直接存取 Repository |
+| 角色 Seed Data（Enum 定義） | Account 模組（RoleService） | Auth 模組使用（JWT payload 中 role 的有效值集合）；RBAC Middleware 使用（判斷角色） |
 | TokenBlocklist | Auth 模組 | Middleware 查詢（驗證請求）；Account 模組透過 Auth Service 寫入（停用帳號） |
 | PasswordResetToken | Auth 模組 | 不對其他模組開放 |
 | Datasource | Datasource 模組 | Dashboard Service 讀取（彙整統計）；Extraction 模組透過 Datasource Service 介面查詢（驗證參照完整性） |
@@ -868,7 +860,7 @@ erDiagram
 | 表格 | 欄位 | 索引類型 | 理由 |
 |------|------|---------|------|
 | User | email | UNIQUE INDEX | 登入查詢；Email 唯一性檢查 |
-| User | role, status | 複合 INDEX | 帳號清單篩選（F005）；8 種角色值的清單過濾 |
+| User | role, status | 複合 INDEX | 帳號清單篩選（F005）；角色值的清單過濾 |
 | TokenBlocklist | token | UNIQUE INDEX | Middleware 頻繁查詢 |
 | TokenBlocklist | expires_at | INDEX | 定期清理查詢 |
 | TokenBlocklist | user_id | INDEX | 帳號停用批次撤銷 |
@@ -1307,7 +1299,7 @@ graph LR
 | NFR | 架構決策 | 實作位置 |
 |-----|---------|---------|
 | NFR-001.1 Token 管理 | JWT 短效 Access Token（8h/30d）+ Refresh Token；Token Blocklist 支援強制失效 | JWT Util、Auth 模組、Middleware |
-| NFR-001.2 RBAC | 路由層級的角色守衛中介層；支援 8 種角色（系統角色：admin/user；業務角色：business/marketing/customer_service/analyst/supervisor/backend_ops）；未授權回傳 403 並記錄至日誌 | RBAC Middleware |
+| NFR-001.2 RBAC | 路由層級的角色守衛中介層；支援 2 種角色（admin / user）；未授權回傳 403 並記錄至日誌 | RBAC Middleware |
 | NFR-001.3 密碼安全 | bcrypt（cost >= 10）；Logger 自動遮罩密碼欄位；明文密碼絕不持久化 | Hash Util、Logger |
 | NFR-001.4 憑證保護 | AES-256-GCM 加密儲存；金鑰從環境變數讀取；API 序列化層排除 `encrypted_password` 欄位；回傳遮罩字串 `****` | Crypto Util、Datasource Service、DTO 序列化層 |
 | NFR-001.5 傳輸安全 | 強制 TLS 1.2+；HTTP 請求重導至 HTTPS；設定 HSTS 標頭；CORS 白名單（OQ-12） | 反向代理（Nginx/等）配置、後端中介層 |
@@ -1684,7 +1676,7 @@ Seed 流程：
 | 目標資料庫（連線測試目標）從 CDMP 伺服器網路可達 | 若有防火牆隔離，連線測試將全數失敗 | 確認網路拓樸與防火牆規則 |
 | 應用資料庫的選擇（RDBMS 類型：PostgreSQL / MySQL / SQL Server） | 影響 ORM 選擇與 SQL 語法 | 技術選型階段確認 |
 | 初始 Admin 帳號的建立機制（Seed Script 或手動） | 若無初始 Admin，系統無法使用 | 定義 Seed 機制與 Admin 密碼設定方式 |
-| ~~系統僅有 Admin 與 User 兩種角色~~（**已作廢，由 AD-E02-1 取代**） | — | — |
+| 系統角色採用 Admin / User 兩種（**已確認，AQ-20 決議**） | — | — |
 
 ### 9.7 已決議事項（E02 角色管理）
 
@@ -1692,10 +1684,9 @@ Seed 流程：
 
 | # | 問題 | 決議 | 決議日期 |
 |---|------|------|---------|
-| AQ-20 | 系統角色數量是否從 2 種擴充為 8 種？ | **是**。擴充為 2 系統角色（admin、user）+ 6 業務角色（business、marketing、customer_service、analyst、supervisor、backend_ops），詳見 AD-E02-1 | 2026-04-02 |
+| AQ-20 | 系統角色數量是否從 2 種擴充為 8 種？ | **否**。回歸為 Admin / User 兩種角色。原先擴充至 8 種的計畫已取消，E06 Customer 360 僅保留 US-060 與 US-061，不需業務角色細化。詳見 AD-E02-1 | 2026-04-13 |
 | AQ-21 | 角色是否開放 Admin 自行新增/刪除？ | **否**。角色為系統預設 Seed Data，不提供 POST/DELETE 端點（AC-2，US-017），詳見 AD-E02-2 | 2026-04-02 |
-| AQ-22 | User.role 欄位採用 Enum 擴充或新增 roles 外鍵表？ | **Enum 擴充**（方案 A）。擴充至 8 種值；角色固定不支援動態增刪，Enum 足以表達此語意。詳見 AD-E02-3 | 2026-04-02 |
-| AQ-23 | 業務角色是否影響 MVP 的 RBAC 守衛？ | **是（部分）**。MVP 中業務角色已存在於 JWT payload 與資料庫，但業務角色的細粒度存取控制（Customer 360 欄位可見性）由 Phase 2 E06 實作；MVP 中業務角色持有者與 user 角色享有相同存取範圍（Target: Customer 360 Phase 2） | 2026-04-02 |
+| AQ-22 | User.role 欄位採用 Enum 或新增 roles 外鍵表？ | **Enum**（方案 A）。2 種值（admin / user）；角色固定不支援動態增刪，Enum 足以表達此語意。詳見 AD-E02-3 | 2026-04-02 |
 
 ---
 

@@ -24,7 +24,7 @@ status: Draft
 | name | 使用者姓名 | 必填，最大長度 100 字元 | |
 | email | 電子郵件 | 必填，唯一，最大長度 255 字元 | 儲存前強制轉為小寫（`toLowerCase()`），確保大小寫不敏感的唯一性 |
 | password_hash | 密碼雜湊值 | 必填 | bcrypt 雜湊，cost factor >= 10。明文密碼絕不儲存 |
-| role | 角色 | 必填，列舉值：`admin` / `user` / `business` / `marketing` / `customer_service` / `analyst` / `supervisor` / `backend_ops` | 系統角色：admin、user；業務角色：business、marketing、customer_service、analyst、supervisor、backend_ops（詳見 US-017、AD-E02-1） |
+| role | 角色 | 必填，列舉值：`admin` / `user` | 系統角色：admin、user（詳見 US-017） |
 | status | 帳號狀態 | 必填，列舉值：`active` / `disabled` | 預設值：`active` |
 | created_at | 建立時間 | 必填，系統自動設定 | UTC 時間戳記 |
 | updated_at | 最後更新時間 | 必填，系統自動更新 | UTC 時間戳記 |
@@ -36,8 +36,8 @@ status: Draft
 - 密碼最短 8 個字元（驗證發生在雜湊之前）
 - 系統必須至少保留一個 `role = admin` 且 `status = active` 的帳號
 - 停用帳號（`status = disabled`）無法登入，嘗試登入時顯示停用訊息
-- `role` 欄位僅可使用 8 種預設值（admin、user、business、marketing、customer_service、analyst、supervisor、backend_ops）；不支援自訂角色（US-017 AC-2）
-- 8 種角色為系統預設，不提供 API 新增或刪除（Seed Data 策略，詳見 AD-E02-2）
+- `role` 欄位僅可使用 2 種預設值（admin、user）；不支援自訂角色（US-017 AC-2）
+- 2 種角色為系統預設，不提供 API 新增或刪除（Seed Data 策略）
 
 **相關功能**：[F004](features/F004-create-account.md), [F005](features/F005-view-account-list.md), [F006](features/F006-edit-account.md), [F007](features/F007-disable-enable-account.md), [F008](features/F008-assign-change-role.md), [F045](features/F045-business-role-definitions.md)
 
@@ -49,31 +49,24 @@ status: Draft
 
 | 屬性 | 說明 | 約束 | 備註 |
 |------|------|------|------|
-| role_code | 角色代碼 | 主鍵，最大長度 50 字元 | 如 `admin`、`analyst`、`backend_ops` |
-| display_name | 中文顯示名稱 | 必填，最大長度 50 字元 | 如「管理者」、「分析師」、「後端作業」 |
-| alias | 別名 | 可為空，最大長度 50 字元 | 如「Admin」、「企劃」、「作服」 |
-| type | 角色類型 | 必填，列舉值：`system` / `business` | system=系統角色，business=業務角色 |
+| role_code | 角色代碼 | 主鍵，最大長度 50 字元 | 如 `admin`、`user` |
+| display_name | 中文顯示名稱 | 必填，最大長度 50 字元 | 如「管理者」、「使用者」 |
+| alias | 別名 | 可為空，最大長度 50 字元 | 如「Admin」、「User」 |
+| type | 角色類型 | 必填，列舉值：`system` | system=系統角色 |
 | created_at | 建立時間 | 必填，系統自動設定 | Seed Data 建立時設定，UTC 時間戳記 |
 
-### 預設 Seed Data（8 筆）
+### 預設 Seed Data（2 筆）
 
 | role_code | display_name | alias | type |
 |-----------|-------------|-------|------|
 | admin | 管理者 | Admin | system |
 | user | 使用者 | User | system |
-| business | 業務 | — | business |
-| marketing | 行銷 | 企劃 | business |
-| customer_service | 客服 | — | business |
-| analyst | 分析師 | — | business |
-| supervisor | 主管 | — | business |
-| backend_ops | 後端作業 | 作服 | business |
 
 **業務規則**：
 
 - 角色為系統預設 Seed Data，透過 migration script 於系統初始化時建立
 - migration 須為冪等（idempotent）：使用 `INSERT ... ON CONFLICT DO NOTHING` 或等效語法
 - 不提供 `POST /api/roles`（新增）與 `DELETE /api/roles/:code`（刪除）API 端點
-- `role_code` 為跨模組整合鍵，`c360_role_permissions`（US-068）以此欄位作為外鍵
 - User 實體的 `role` 欄位值必須為 Role 實體中存在的 `role_code`
 - 角色顯示名稱格式：無 alias 時顯示 `display_name`；有 alias 時顯示 `display_name（alias）`
 - 日期欄位使用 `timestamp` 類型（PostgreSQL 不支援 `datetime`）
@@ -91,7 +84,7 @@ JWT Token 用於 Session 管理。系統需維護一個 Token blocklist（封鎖
 | 欄位 | 說明 | 備註 |
 |------|------|------|
 | user_id | 使用者 ID | 對應 User.id |
-| role | 使用者角色 | `admin` / `user` / `business` / `marketing` / `customer_service` / `analyst` / `supervisor` / `backend_ops`（8 種，詳見 AD-E02-1） |
+| role | 使用者角色 | `admin` / `user`（2 種） |
 | iat（issued_at） | 發行時間 | Unix timestamp |
 | exp（expiration） | 到期時間 | 預設：iat + 8h（閒置逾時）；記住我：iat + 30d |
 

@@ -211,7 +211,7 @@ status: Draft
 | VALIDATION_PASSWORD_LENGTH | 422 | 密碼長度不得少於 8 個字元 | 密碼短於 8 字元 | F004, F009, F010 |
 | VALIDATION_PORT_RANGE | 422 | 連接埠必須介於 1 到 65535 之間 | 連接埠超出有效範圍 | F011, F013 |
 | VALIDATION_PORT_NUMBER | 422 | 連接埠必須為數字 | 連接埠為非數值 | F011, F013 |
-| VALIDATION_INVALID_ROLE | 422 | 角色值無效，必須為系統定義的 8 種角色之一 | 角色值不在允許的 8 種 role_code 中（admin、user、business、marketing、customer_service、analyst、supervisor、backend_ops） | F004, F008, F045 |
+| VALIDATION_INVALID_ROLE | 422 | 角色值無效，必須為系統定義的 2 種角色之一 | 角色值不在允許的 2 種 role_code 中（admin、user） | F004, F008, F045 |
 | VALIDATION_INVALID_TYPE | 422 | 資料來源類型必須為 mysql、postgresql 或 sqlserver | 類型值不在允許的列舉範圍內 | F011, F013 |
 | VALIDATION_INVALID_STATUS | 422 | 狀態必須為 active 或 disabled | 帳號狀態值不在允許的列舉範圍內 | F007 |
 | VALIDATION_INVALID_MODE | 422 | 擷取模式必須為 full 或 incremental | 模式值不在允許的列舉範圍內 | F017, F019 |

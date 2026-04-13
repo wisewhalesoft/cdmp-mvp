@@ -5,18 +5,18 @@ feature-id: F004
 source-story: US-010
 epic: E02
 priority: P0-MVP
-version: "2.0"
-date: 2026-04-02
+version: "3.0"
+date: 2026-04-13
 status: Draft
 ---
 
 # F004: 建立帳號
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-02
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-13
 
 ## 功能摘要
 
-Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、密碼與角色（支援全部 8 種角色：2 系統角色 + 6 業務角色）。此功能為帳號生命週期管理的起點，所有後續帳號管理操作皆依賴帳號的存在。
+Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、密碼與角色（Admin / User）。此功能為帳號生命週期管理的起點，所有後續帳號管理操作皆依賴帳號的存在。
 
 ## User Story
 
@@ -44,22 +44,16 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 - When Admin 提交表單時有必填欄位未填或資料格式不正確
 - Then 系統針對每個不合規欄位顯示具體的驗證錯誤訊息，且不建立帳號
 
-### AC-4：角色選單顯示全部 8 種角色
+### AC-4：角色選單顯示全部 2 種角色
 
 - Given Admin 在建立帳號表單的角色下拉選單
 - When Admin 展開角色選單
-- Then 系統顯示全部 8 種角色供選擇：管理者（Admin）、使用者（User）、業務、行銷（企劃）、客服、分析師、主管、後端作業（作服）
+- Then 系統顯示全部 2 種角色供選擇：管理者（Admin）、使用者（User）
 
-### AC-5：指派業務角色建立帳號
-
-- Given Admin 在建立帳號表單
-- When Admin 選擇業務角色（如「分析師」）並填寫其他必填欄位後提交
-- Then 系統建立帳號並正確記錄角色為 `analyst`，帳號清單中顯示「分析師」
-
-### AC-6：無效角色代碼驗證
+### AC-5：無效角色代碼驗證
 
 - Given Admin 透過 API 建立帳號
-- When 傳入的 role 值不在 8 種有效 role_code 中（如 `manager`）
+- When 傳入的 role 值不在 2 種有效 role_code 中（如 `analyst`）
 - Then 系統回傳 `400 Bad Request`，錯誤碼 `VALIDATION_INVALID_ROLE`
 
 ## API 規格
@@ -79,7 +73,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
   "name": "string (必填，1-100 字元)",
   "email": "string (必填，有效 Email 格式，RFC 5322 基礎規範)",
   "password": "string (必填，最少 8 字元)",
-  "role": "string (必填，enum: 'admin' | 'user' | 'business' | 'marketing' | 'customer_service' | 'analyst' | 'supervisor' | 'backend_ops')"
+  "role": "string (必填，enum: 'admin' | 'user')"
 }
 ```
 
@@ -143,7 +137,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 |------|------|
 | BR-1 | 密碼必須在儲存前以 bcrypt 雜湊處理（成本因子 >= 10），明文密碼絕不儲存或記錄於日誌 |
 | BR-2 | Email 在儲存前一律以 `toLowerCase()` 轉為小寫，確保大小寫不敏感的唯一性 |
-| BR-3 | 可用角色共 8 種：`admin`、`user`、`business`、`marketing`、`customer_service`、`analyst`、`supervisor`、`backend_ops`（由 F045 Seed Data 定義） |
+| BR-3 | 可用角色共 2 種：`admin`、`user`（由 F045 Seed Data 定義） |
 | BR-4 | 僅 Admin 角色可建立帳號 |
 | BR-5 | 新建帳號預設狀態為 `active` |
 | BR-6 | Email 格式驗證須符合 RFC 5322 基礎規範 |
@@ -155,7 +149,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 | 項目 | 說明 |
 |------|------|
 | 入口 | 帳號管理頁面中的「建立帳號」按鈕 |
-| 表單欄位 | 姓名（文字輸入）、Email（Email 輸入）、密碼（密碼輸入）、角色（下拉選單：全部 8 種角色，由 `GET /api/roles` 動態載入） |
+| 表單欄位 | 姓名（文字輸入）、Email（Email 輸入）、密碼（密碼輸入）、角色（下拉選單：Admin / User，由 `GET /api/roles` 動態載入） |
 | 欄位驗證 | 每個欄位在失焦或提交時顯示即時驗證訊息 |
 | 成功回饋 | 顯示成功訊息，並自動返回帳號清單或將新帳號加入清單 |
 | 錯誤回饋 | 每個欄位下方顯示對應的驗證錯誤訊息；重複 Email 錯誤顯示於 Email 欄位下方 |
@@ -171,7 +165,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 | Email 已存在（大小寫不敏感） | 顯示「此 Email 已有帳號存在」 | 409 |
 | 非 Admin 嘗試存取 | 顯示「您沒有權限執行此操作」 | 403 |
 | 未驗證 Token | 重導至登入頁面 | 401 |
-| 角色值不在 8 種有效 role_code 中 | 顯示「角色值無效」 | 400 |
+| 角色值不在 2 種有效 role_code 中 | 顯示「角色值無效」 | 400 |
 
 參考：[error-handling.md](../error-handling.md) 取得完整錯誤處理策略。
 
@@ -193,7 +187,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 | name | string (1-100) | 是 | 使用者姓名 |
 | email | string | 是 | 使用者 Email（小寫儲存，唯一） |
 | password_hash | string | 是 | bcrypt 雜湊後的密碼 |
-| role | string (FK -> roles.role_code) | 是 | 使用者角色，8 種有效值：admin / user / business / marketing / customer_service / analyst / supervisor / backend_ops |
+| role | string (FK -> roles.role_code) | 是 | 使用者角色：admin / user |
 | status | enum (active, disabled) | 是 | 帳號狀態，預設 active |
 | created_at | timestamp | 是 | 建立時間 |
 | updated_at | timestamp | 是 | 最後更新時間 |
@@ -215,9 +209,9 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 
 ## 交叉參考
 
-- User Story：[US-010-create-account.md](../stories/epics/E02-account-role-management/US-010-create-account.md)
-- Epic Brief：[E02 Epic Brief](../stories/epics/E02-account-role-management/epic-brief.md)
-- NFR：[NFR-001 安全性需求](../stories/non-functional/NFR-001-security.md)
+- User Story：[US-010-create-account.md](../../stories/epics/E02-account-role-management/US-010-create-account.md)
+- Epic Brief：[E02 Epic Brief](../../stories/epics/E02-account-role-management/epic-brief.md)
+- NFR：[NFR-001 安全性需求](../../stories/non-functional/NFR-001-security.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
 - 相關功能：F005、F006、F007、F008、F009、F010、F045
