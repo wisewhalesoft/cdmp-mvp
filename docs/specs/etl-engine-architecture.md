@@ -1,9 +1,9 @@
 ---
 type: etl-engine-architecture
-version: 1.1
+version: 1.2
 status: draft
-last_updated: 2026-03-31
-covers: [US-055, US-056, US-057]
+last_updated: 2026-04-14
+covers: [US-055, US-056, US-057, BUG-1, BUG-2, BUG-3]
 ---
 
 # ETL 執行引擎架構規格書
@@ -94,13 +94,17 @@ graph TD
 
 | 決策點 | 選擇 | 理由 |
 |--------|------|------|
-| Merge/Dedup 執行位置 | **In-Memory（JS）** | 見 4.1 節詳述 |
+| 所有節點執行位置 | **In-DB（PostgreSQL temp table）** | 見 4.1 節詳述；所有節點均採 `CREATE TEMP TABLE AS SELECT ...` 策略，零 JS 記憶體佔用 |
 | DAG 執行策略 | **Kahn's algorithm 拓撲排序 + 循序執行** | 見 2.1 節詳述 |
-| 中間結果儲存 | **記憶體 Map（NodeOutputStore）** | 見 5.1 節詳述 |
+| 中間結果儲存 | **temp table 名稱引用（NodeOutputStore）** | DataSet 儲存 temp table 名稱而非記憶體資料陣列；見 4.2 節詳述 |
 | Extract 讀取方式 | **批次分頁讀取，累積至單一 DataSet** | 見 5.2 節詳述 |
 | Target Load 策略 | **批次 UPSERT（INSERT ... ON CONFLICT）** | 見 3.5 節詳述 |
 | Lookup 雙輸入路由 | **泛化 Handle key 機制（`lookup-input`）** | 與 Merge 的 `left-input`/`right-input` 相同模式；`collectInputs()` 已泛化支援任意 targetHandle key |
 | Lookup JOIN 執行位置 | **In-DB（ALTER TABLE + UPDATE 原地修改）** | 對照資料已為 temp table，ALTER+UPDATE 零記憶體佔用且不需複製整張表；TRIM() 處理 MSSQL CHAR 欄位尾隨空白 |
+| **BUG-1 修正** — Merge same-name JOIN key 輸出策略 | **額外輸出 `{key}_left`、`{key}_right` 欄位** | 原僅輸出 `COALESCE(l.key, r.key)` 導致下游無法區分左右來源；修正後同時輸出三欄：COALESCE 主 key、`_left`（左側原始值）、`_right`（右側原始值）。下游 `field_mapping`（dropUnmapped=true）自然過濾多餘欄位，無影響 |
+| **BUG-2 修正** — cd1 衝突解決欄位覆蓋策略 | **pipeline definition 層擴充 rules，Handler 程式碼不變** | `conditional-handler.ts` 的 `buildCaseSql` NULL-guard 邏輯已可正確處理 MLMC-only/ZZIP-only 記錄；只需在 seed-pipeline-definition.json 的 cd1 節點擴充 rules 從 5 個到 14 個 |
+| **BUG-2 修正** — TargetLoadHandler ghost record 過濾策略 | **顯式 `source_customer_no` 長度閘門（< 5 字元）** | 原採 `information_schema.columns WHERE is_nullable='NO'` 動態查詢過濾，導致 MLMC-only 記錄因 name/customer_type_code 為 null 被隱性排除；修正後移除動態 NOT NULL 過濾，改為只過濾 ghost records |
+| **BUG-3 修正** — ZZIP CUSTOM_MK 格式標準化策略 | **pipeline definition 層新增 `derived_field` 節點，Handler 程式碼不變** | 在 ZZIP 路線 `lk_ctype1` 之前插入 `padStart(CUSTOM_MK, 2, '0')`，將 `"1"` 補零為 `"01"`，統一與 Lookup 對照表格式一致 |
 
 ---
 
@@ -286,26 +290,37 @@ return { rows, rowCount: rows.length };
 
 #### MergeHandler（merge）
 
-- 在記憶體內執行 FULL OUTER JOIN
-- 以 join key 建立兩個 lookup Map（`Map<string, Record[]>`）
+- 採 In-DB SQL 策略：`CREATE TEMP TABLE AS SELECT ... FROM left FULL OUTER JOIN right ON ...`
 - 欄位命名規則：左側欄位保留原名；右側欄位若與左側衝突加 `_right` 後綴
-- Join key 欄位取非 null 者（left 優先）
+- Join key 欄位採 `COALESCE(l.key, r.key)`（left 優先）
+
+**BUG-1 修正 — same-name JOIN key 輸出規則（v1.2 新增）：**
+
+當 `conditions[0].leftColumn === conditions[0].rightColumn`（如 m4 的 `source_customer_no = source_customer_no`）時，合併後輸出三個欄位：
+
+| 欄位名稱 | SQL | 用途 |
+|---------|-----|------|
+| `{key}` | `COALESCE(l."{key}", r."{key}")` | 主 key，取非 null 者（left 優先） |
+| `{key}_left` | `l."{key}"` | 左側原始值（可為 NULL） |
+| `{key}_right` | `r."{key}"` | 右側原始值（可為 NULL） |
+
+下游節點可用 `{key}_left IS NOT NULL` / `{key}_right IS NOT NULL` 正確判斷記錄來源歸屬（如 df3 的 `data_source` CASE WHEN）。`field_mapping`（`dropUnmapped=true`）會自然過濾這兩個額外欄位，不影響 fm1/fm2 輸出。
 
 ```mermaid
 sequenceDiagram
     participant Runner
     participant MergeHandler
-    participant OutputStore
+    participant PG as PostgreSQL
 
-    Runner->>OutputStore: get(leftNodeId) → leftDataSet
-    Runner->>OutputStore: get(rightNodeId) → rightDataSet
-    Runner->>MergeHandler: execute({ inputs: { left, right }, node })
-    MergeHandler->>MergeHandler: 建立 leftMap (key→rows[])
-    MergeHandler->>MergeHandler: 建立 rightMap (key→rows[])
-    MergeHandler->>MergeHandler: 遍歷 leftMap，合併 right 對應列
-    MergeHandler->>MergeHandler: 加入只在 right 有的列
-    MergeHandler-->>Runner: DataSet（FULL OUTER JOIN 結果）
-    Runner->>OutputStore: set(mergeNodeId, result)
+    Runner->>MergeHandler: execute({ inputs: { left-input, right-input }, node })
+    MergeHandler->>PG: 查詢 left/right temp table 欄位清單
+    PG-->>MergeHandler: leftCols, rightCols
+    MergeHandler->>MergeHandler: 建構 SELECT clause<br/>（sameKeyName → 額外輸出 _left/_right）
+    MergeHandler->>PG: CREATE TEMP TABLE result AS SELECT ...<br/>FROM leftTable FULL OUTER JOIN rightTable ON key
+    PG-->>MergeHandler: 完成
+    MergeHandler->>PG: SELECT COUNT(*) FROM result
+    PG-->>MergeHandler: rowCount
+    MergeHandler-->>Runner: DataSet { tempTable, rowCount }
 ```
 
 #### DedupHandler（dedup）
@@ -458,27 +473,33 @@ DO UPDATE SET
 
 ## 4. 資料流策略
 
-### 4.1 In-Memory（JS）vs In-DB（SQL）決策
+### 4.1 In-DB（SQL）temp table 策略
 
-**結論：採用 In-Memory（JS）策略。**
+> **v1.2 更新**：原文件記載「採用 In-Memory（JS）策略」，但實際實作已全面採用 **In-DB（PostgreSQL temp table）** 策略。本節修正以反映實際程式碼行為。
 
-| 評估維度 | In-Memory（JS） | In-DB（SQL） |
-|---------|-----------------|-------------|
-| 210 萬筆 FULL OUTER JOIN 記憶體需求 | ~2-4 GB（視欄位寬度） | 幾乎為零 |
-| 實作複雜度 | 低（純 JS Map 操作） | 高（需要動態建立臨時表、管理 session） |
-| 除錯難度 | 低（可加入 console log） | 高（需查 DB 臨時表） |
-| 單元測試能力 | 高（純函數，無 DB 依賴） | 低（需要 DB 環境） |
-| 調整欄位命名規則的靈活性 | 高（JS 字串操作） | 低（SQL 動態 alias） |
-| Pipeline 定義是任意的（非固定 schema） | 好配合 | 不好配合 |
+**結論：所有節點均採用 In-DB temp table 策略。**
 
-**選擇 In-Memory 的關鍵理由：**
+每個 Node Handler 執行 `CREATE TEMP TABLE AS SELECT ...`，輸出 `DataSet { tempTable: string, rowCount: number }`。節點間透過 temp table 名稱傳遞資料，不在 JS 記憶體中持有資料列。
 
-1. **Pipeline 定義是動態的**：節點連結、join key、欄位映射皆為執行時讀取的設定，In-DB SQL 需要動態 SQL 字串拼接，既難維護又有 SQL injection 風險。
-2. **單元測試隔離性**：In-Memory 處理函數可以不依賴 DB 環境進行單元測試（US-055~057 DoD 要求高覆蓋率）。
-3. **記憶體可管控**：210 萬筆 × ~200 bytes/列 ≈ 420 MB（只有 ZZIP 路線）；兩條路線不同時在記憶體中（dedup 完成後立即釋放上游）。詳見第 5 節。
-4. **MVP 規模**：1,000 用戶、單一 pipeline，不存在多 pipeline 並行執行的記憶體競爭問題。
+| 評估維度 | In-Memory（JS）— 原設計 | In-DB（temp table）— 實際實作 |
+|---------|------------------------|------------------------------|
+| 210 萬筆 FULL OUTER JOIN 記憶體需求 | ~2-4 GB | 幾乎為零（由 PostgreSQL 管理） |
+| 實作複雜度 | 低 | 中（需動態建構 SQL SELECT clause） |
+| 除錯難度 | 低 | 中（需查 DB temp table） |
+| 欄位命名規則靈活性 | 高 | 高（動態 SQL alias，DB 層處理） |
+| SQL injection 風險 | 無 | 存在（節點 id、欄位名來自設定檔）；風險緩解：temp table 名稱採 hash 生成，欄位名以雙引號包裹 |
 
-**風險標記：** 若未來 raw table 規模超過 1,000 萬筆，In-Memory 策略需重新評估，屆時可引入 PostgreSQL 臨時表或 streaming 方案。
+**採用 In-DB 的關鍵優勢：**
+
+1. **零 JS 記憶體佔用**：210 萬筆資料在 PostgreSQL 中處理，Node.js heap 不持有大型陣列。
+2. **天然利用 DB 最佳化**：FULL OUTER JOIN、GROUP BY、LIMIT/OFFSET 均由 PostgreSQL 的查詢最佳化器處理。
+3. **temp table 自動清理**：session 結束（或 `DROP TABLE`）後自動釋放，無需手動 GC。
+
+**NodeOutputStore 角色調整：**
+
+`NodeOutputStore` 儲存的是 `DataSet`（`{ tempTable: string, rowCount: number }`），而非 JS 記憶體中的資料陣列。`release()` 呼叫 `DROP TABLE IF EXISTS` 顯式清理 temp table。
+
+**風險標記：** 若未來多個 ETL pipeline 並行執行，temp table 命名衝突風險需評估。目前 temp table 名稱採 `etl_tmp_{nodeId}_{logId.substr(0,8)}` 格式，logId 為 UUID，衝突概率極低。
 
 ### 4.2 DataSet 介面定義
 
@@ -495,24 +516,29 @@ interface DataSet {
 
 每個 Node Handler 的輸入與輸出皆為 `DataSet`。`DataSet` 為 temp table 引用而非記憶體中的資料陣列，所有節點透過 SQL 在資料庫端完成轉換，避免大量資料載入 JS 記憶體。`rowCount` 在節點執行完成後寫入 `node_logs[N].outputRowCount`。
 
+**Temp table 命名規範：** `etl_tmp_{nodeId}_{logId.substr(0,8)}`（如 `etl_tmp_m4_abc12345`）。`makeTempTableName(nodeId, logId)` 函數統一生成，確保同一 pipeline log 執行中的唯一性。
+
 ---
 
 ## 5. 記憶體管理
 
 ### 5.1 記憶體估算（seed-pipeline）
 
-| 階段 | 駐留的 DataSet | 估算記憶體 |
-|------|---------------|-----------|
-| e1 執行後 | e1 輸出（raw_101f6b3e，210萬筆） | ~420 MB |
-| m1 執行後 | m1 輸出（e1+e2 FULL JOIN，~210萬筆） | ~420 MB，e1/e2 釋放 |
-| d1 執行後 | d1 輸出（去重後，≤210萬筆） | ~420 MB，m1 釋放 |
-| fm1 執行後 | fm1 輸出（48欄位，~210萬筆） | ~300 MB，d1/df1 釋放 |
-| MLMC 路線最大點 | m3 輸出（三來源合併） | ~200 MB |
-| m4 執行前 | fm1 + fm2 同時駐留 | ~500 MB |
-| m4 執行後 | m4 輸出（最終合併） | ~500 MB，fm1/fm2 釋放 |
-| tl1 執行中 | cd1→df3 輸出 + 批次緩衝 | ~500 MB |
+> **v1.2 更新**：採用 In-DB temp table 策略後，Node.js heap 不再持有大型資料陣列。所有 210 萬筆資料在 PostgreSQL 的 temp table 中處理，JS 記憶體中只有 `DataSet`（temp table 名稱字串 + rowCount 整數）。
 
-**峰值記憶體估算：約 600-800 MB**（含 Node.js 運行時開銷）。Node.js heap 預設上限為 ~1.5 GB，建議部署時設定 `--max-old-space-size=2048`。
+| 階段 | JS Heap 中的物件 | PostgreSQL 端（temp table） |
+|------|----------------|---------------------------|
+| e1 執行後 | DataSet（~100 bytes） | e1 temp table（~210萬列） |
+| m1 執行後 | DataSet（~100 bytes） | m1 temp table；e1/e2 temp table 釋放 |
+| d1 執行後 | DataSet（~100 bytes） | d1 temp table；m1 釋放 |
+| fm1 執行後 | DataSet（~100 bytes） | fm1 temp table（48欄位映射後） |
+| m4 執行後 | DataSet（~100 bytes） | m4 temp table（BUG-1 修正後含 `_left`/`_right` 欄位） |
+| tl1 執行中 | DataSet + 批次計數器 | df3 temp table |
+
+**JS Heap 峰值估算：< 50 MB**（主要為 Node.js 運行時、框架、連線池開銷）。
+**PostgreSQL temp table 峰值：** 兩條路線不同時存在最大 temp table，峰值為 m4 temp table（含 `_left`/`_right` 額外兩欄，對 `source_customer_no VARCHAR(20)` 而言約多 80 MB）。
+
+建議部署時仍設定 `--max-old-space-size=512` 作為保守上限（無需 2048 MB）。
 
 ### 5.2 批次讀取策略（Extract）
 
@@ -637,9 +663,9 @@ pipeline.status = 'failed';
 ### 7.3 啟動參數建議
 
 ```
-NODE_OPTIONS="--max-old-space-size=2048"   # 2 GB heap
+NODE_OPTIONS="--max-old-space-size=512"    # 512 MB heap（In-DB 策略後 JS 記憶體需求大幅降低）
 ETL_EXTRACT_BATCH_SIZE=10000               # Extract 批次大小
-ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小
+ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小（受 PostgreSQL 65535 參數上限自動約束）
 ```
 
 ### 7.4 可觀測性
@@ -657,24 +683,30 @@ ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小
 
 | 決策 | 結論 |
 |------|------|
-| In-DB vs In-Memory | In-Memory（JS）；Lookup JOIN 例外採 In-DB |
+| 所有節點執行位置 | In-DB（PostgreSQL temp table），全部採 `CREATE TEMP TABLE AS SELECT ...` |
 | DAG 執行方式 | Kahn's algorithm 循序執行 |
-| 中間結果儲存 | 記憶體 Map，完成後釋放 |
+| 中間結果儲存 | temp table 名稱引用（NodeOutputStore），節點完成後 DROP TABLE 釋放 |
 | Extract 讀取方式 | 批次累積，全量 DataSet |
 | UPSERT 策略 | INSERT ON CONFLICT（PostgreSQL 原生支援） |
 | TargetLoad 事務策略 | 批次提交，接受部分寫入，依賴 UPSERT 冪等性 |
 | 測試執行行為 | TargetLoad 節點跳過寫入，其餘節點正常執行 |
 | Lookup 多輸入路由 | 泛化 Handle key（`collectInputs()` 使用 `targetHandle ?? 'default'`） |
 | Lookup 向下相容 | 無 `lookup-input` 連線時退回 `lookupSource` 文字欄位查 raw table |
+| **BUG-1 修正**（2026-04-14）— Merge same-name key 輸出 | 額外輸出 `{key}_left`、`{key}_right`；下游 `dropUnmapped=true` 自然過濾 |
+| **BUG-2 修正**（2026-04-14）— cd1 衝突解決擴充 | pipeline definition 層修改（14 rules），Handler 程式碼不變 |
+| **BUG-2 修正**（2026-04-14）— TargetLoad ghost record 過濾 | 顯式 `source_customer_no` 長度 < 5 閘門取代動態 NOT NULL 過濾 |
+| **BUG-3 修正**（2026-04-14）— CUSTOM_MK 補零 | pipeline definition 層新增 `derived_field` 節點，Handler 程式碼不變 |
+| **Bug Fix 重新 ETL 策略**（2026-04-14） | `TRUNCATE customer_core` 後全量重跑；UPSERT 冪等性確保安全；見第 9 節 |
 
 ### 8.2 風險
 
 | 風險 | 嚴重度 | 緩解 |
 |------|--------|------|
-| 210 萬筆同時駐留記憶體超過 2 GB | 高 | 確認 raw_101f6b3e 欄位數量與列寬；部署時設定 heap 上限 |
-| UPSERT 500 筆批次造成 TargetLoad 過慢（>10 分鐘） | 中 | 可調整 `ETL_UPSERT_BATCH_SIZE` 至 1,000-5,000 |
+| PostgreSQL temp table 空間不足（大量並行 pipeline） | 中 | MVP 為單一 pipeline，無並行競爭；未來需評估 temp tablespace 容量 |
+| UPSERT 批次造成 TargetLoad 過慢（>10 分鐘） | 中 | 可調整 `ETL_UPSERT_BATCH_SIZE`；目前 batch size 自動受 65535 參數上限約束（最大 1456 列/批） |
 | raw table 缺少索引導致批次 SELECT 逾時 | 中 | 確認 raw table 是否有 `_cdmp_id` 主鍵（已有 SERIAL） |
-| 多個欄位的 CASE WHEN 表達式解析錯誤 | 中 | 測試 df3 的 `data_source` 表達式；明確定義 `left.` / `right.` 解析規則 |
+| BUG-1 修正後 m4 temp table 額外 2 欄的 Lookup 影響 | 低 | `source_customer_no_left`/`_right` 欄位不在 field_mapping targets 中，`dropUnmapped=true` 確保不進入後續節點 |
+| 多個 pipeline 並行執行時 temp table 命名衝突 | 低 | temp table 名稱含 logId UUID 前 8 碼，衝突概率 < 1/2^32 |
 
 ### 8.3 US-058 批次策略依賴
 
@@ -686,4 +718,85 @@ ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小
 
 ---
 
-*本文件版本 1.1，涵蓋 US-055、US-056、US-057 的架構設計，並補充 Lookup 節點雙輸入模式的架構說明。US-058 批次策略待定，介面已預留擴充點。*
+## 9. Bug Fix 重新 ETL 策略（v1.2 新增）
+
+### 9.1 背景
+
+BUG-1、BUG-2、BUG-3 的修正導致以下資料品質問題無法透過增量更新修復：
+
+| Bug | 對現有資料的影響 | 可增量修復？ |
+|-----|--------------|------------|
+| BUG-1（data_source 標記錯誤） | 現有所有記錄的 `data_source` 均為 `"ZZIP_BAMCUST_M+MLMCUSTOMER"`（不正確） | 否（需重新計算 CASE WHEN） |
+| BUG-2（MLMC-only 記錄遺漏） | MLMC-only 記錄被 NOT NULL 過濾，根本不在 `customer_core` 中 | 否（缺漏記錄無法增量補充） |
+| BUG-3（35,445 筆 customer_type_desc 為 null） | 受影響記錄可識別，但批量 UPDATE 複雜度高 | 理論可行但不推薦 |
+
+### 9.2 決策：TRUNCATE + 全量重跑
+
+**結論：執行 `TRUNCATE customer_core` 後重跑完整 ETL pipeline。**
+
+```sql
+-- 執行前確認 ETL pipeline 修正版本已部署
+TRUNCATE TABLE customer_core;
+
+-- 重新執行 ETL pipeline（透過 API 或管理介面觸發）
+```
+
+**理由：**
+
+1. **UPSERT 冪等性**：`INSERT ... ON CONFLICT (source_customer_no) DO UPDATE` 確保重跑安全，不會產生重複資料
+2. **完整性**：TRUNCATE 確保不保留任何 BUG-1 產生的錯誤 `data_source` 標記
+3. **MLMC-only 記錄補全**：全量重跑是唯一能補回遺漏記錄的方式
+4. **簡單可靠**：相比複雜的增量修正 SQL，全量重跑邏輯更清晰，驗證更容易
+
+### 9.3 重跑前檢查清單
+
+```mermaid
+graph TD
+    A["開始重新 ETL"] --> B{"Bug Fix 程式碼已部署？<br/>（merge-handler, target-load-handler）"}
+    B -->|否| C["停止：先部署修正版本"]
+    B -->|是| D{"seed-pipeline-definition.json<br/>已更新？<br/>（cd1 14 rules, BUG-3 padStart 節點）"}
+    D -->|否| E["停止：先更新 pipeline definition"]
+    D -->|是| F["備份現有 customer_core（可選）"]
+    F --> G["TRUNCATE TABLE customer_core"]
+    G --> H["觸發 ETL pipeline 執行"]
+    H --> I{"執行成功？"}
+    I -->|是| J["驗證：<br/>1. data_source 分布是否正確<br/>2. MLMC-only 記錄是否存在<br/>3. customer_type_desc 覆蓋率"]
+    I -->|否| K["查看 node_logs<br/>確認失敗節點與 errorMessage"]
+    J --> L["完成"]
+
+    classDef check fill:#fff9c4,stroke:#f57f17
+    classDef stop fill:#ffebee,stroke:#c62828
+    classDef action fill:#e8f5e9,stroke:#2e7d32
+    class B,D,I check
+    class C,E stop
+    class F,G,H,J,K,L action
+```
+
+### 9.4 驗證查詢
+
+重跑完成後，執行以下驗證查詢確認修正效果：
+
+```sql
+-- BUG-1 驗證：data_source 分布
+SELECT data_source, COUNT(*) AS cnt
+FROM customer_core
+GROUP BY data_source
+ORDER BY cnt DESC;
+-- 預期：三種值（'ZZIP_BAMCUST_M', 'MLMCUSTOMER', 'ZZIP_BAMCUST_M+MLMCUSTOMER'）皆有記錄
+
+-- BUG-2 驗證：MLMC-only 記錄存在
+SELECT COUNT(*) FROM customer_core WHERE data_source = 'MLMCUSTOMER';
+-- 預期：> 0
+
+-- BUG-3 驗證：customer_type_desc 覆蓋率
+SELECT
+  COUNT(*) AS total,
+  COUNT(customer_type_desc) AS with_desc,
+  ROUND(COUNT(customer_type_desc)::numeric / COUNT(*) * 100, 2) AS coverage_pct
+FROM customer_core;
+-- 預期：coverage_pct 顯著提升（原 35,445 筆 ZZIP 記錄的 null 被修復）
+```
+
+---
+
+*本文件版本 1.2，涵蓋 US-055、US-056、US-057 的架構設計，以及 BUG-1/2/3 修正的架構影響分析與重新 ETL 策略。US-058 批次策略待定，介面已預留擴充點。*
