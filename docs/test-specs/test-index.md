@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.5"
+version: "2.6"
 status: draft
 last_updated: 2026-04-13
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045]
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：51 份（4 策略文件 + 43 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：743 個（E01～E04 共 289 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17；另 F039-strategy 4 個策略場景另計）
+> **測試文件總數**：53 份（4 策略文件 + 45 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：812 個（E01～E04 共 289 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + **E06 F046 共 31 + F047 共 38**；另 F039-strategy 4 個策略場景另計）
+> **E06 Customer 360 新增（2026-04-13）**：新增 F046（客戶搜尋與清單，31 場景）與 F047（單一客戶詳情，38 場景），涵蓋 Full-Text Search、精確比對、遮罩規則（Admin/User）、風控旗標高亮、ETL 資料新鮮度、客戶類型適應顯示、404 錯誤處理
 > **E06 角色精簡更新（2026-04-13）**：US-017 角色從 8 種（2 系統角色 + 6 業務角色）精簡為 2 種（admin / user）。F045 更新（15→13 場景）；F004 精簡（14→9 場景）；F005 精簡（14→10 場景）；F008 精簡（20→12 場景）；移除業務角色相關測試案例
 > **F029/F043 更新（2026-03-31）**：新增 Lookup 節點雙輸入重設計測試：F029 補充 6 個前端 Lookup UI 場景（TS-F029-032~037，31→37 場景），F043 補充 14 個 LookupExecutor 場景（TS-F043-045~058，44→58 場景），涵蓋 US-042 AC-7a~7d 與 US-058 AC-1~6
 > **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
@@ -24,15 +25,16 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 ### 涵蓋範圍
 
-- 39 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038、F045），分屬 5 個 Epic（F038 跨 E04/E05）：
+- 41 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038、F045、F046、F047），分屬 6 個 Epic（F038 跨 E04/E05）：
   - **E01 驗證與登入**：F001、F002、F003
   - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010、F045
   - **E03 資料來源管理**：F011、F012、F013、F014、F015、F016
   - **E04 資料擷取**：F017、F018、F019、F020、F021、F022、F023、F024、F025、F026
   - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037
   - **E04+E05 系統啟動修復**：F038（孤兒任務回收，跨 E04/E05）
+  - **E06 Customer 360**：F046（客戶搜尋與清單）、F047（單一客戶詳情）
 - 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程；新增 F026 raw data 預覽效能）
-- 63 個錯誤碼的驗證覆蓋（新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
+- 65 個錯誤碼的驗證覆蓋（新增 C360_CUSTOMER_NOT_FOUND、C360_SEARCH_MIN_LENGTH for E06；新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
 
 ### 排除項目
 
@@ -107,7 +109,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | F042 | ETL 執行引擎核心框架 | P0-MVP | [F042-test.md](features/F042-test.md) | 21 | Draft |
 | F043 | ETL 節點執行器（8 種節點含 Lookup） | P0-MVP | [F043-test.md](features/F043-test.md) | 58 | Draft |
 | F044 | ETL Target Load + UPSERT | P0-MVP | [F044-test.md](features/F044-test.md) | 17 | Draft |
-| **總合計** | | | **43 files** | **743** | |
+| **E06 Customer 360** | | | | | |
+| F046 | Customer 360 — 客戶搜尋與清單 | P0-MVP | [F046-test.md](features/F046-test.md) | 31 | Draft |
+| F047 | Customer 360 — 單一客戶詳情 | P0-MVP | [F047-test.md](features/F047-test.md) | 38 | Draft |
+| **E06 小計** | | | **2 files** | **69** | |
+| **總合計** | | | **45 files** | **812** | |
 
 ---
 
@@ -164,7 +170,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → F003 → **F045** → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044
+**建議載入順序：** F001 → F002 → F003 → **F045** → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047**
 
 **E02 角色定義特殊注意（F045 / F004 / F005 / F008）：**
 - F045 必須先於 F004/F005/F008 載入：F045 的 Seed Data 初始化（TS-F045-001）是後三者所有角色相關測試的前置條件
@@ -265,6 +271,18 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 - 冪等性測試（TS-F038-027, TS-F038-044）：第二次執行時 DB 中無 `status='running'` 記錄，回收靜默通過，驗證無副作用
 - Module 順序驗證（TS-F038-040）：`AppModule.imports` 中 `OrphanRecoveryModule` 必須在 `SchedulerModule` 之前（架構靜態驗證）
 - 回收後操作驗證（TS-F038-041 ~ 043）：觸發 `triggerRun`、`deleteTask`、`triggerExecute` 時不應再拋出 `EXTRACTION_RUNNING` / `PIPELINE_RUNNING`，需依賴 E04 和 E05 的業務 Service
+
+**E06 Customer 360 特殊注意（F046 / F047）：**
+- F046 前置條件：GIN 全文搜尋索引（AddCustomerCoreFullTextIndex Migration）必須在測試環境執行完畢，否則 Full-Text Search 場景（TS-F046-004、TS-F046-005、TS-F046-010）將失敗
+- F046 / F047 遮罩測試：需分別建立 Admin Token 與 User Token 兩組種子帳號（與 E01 相同模式）；遮罩邏輯在 API 層（Service/Serializer）處理，前端直接渲染 API 回傳值
+- F046 搜尋優先邏輯（BR-3）：同時傳入 keyword 與 idNumber 時，idNumber 優先；TS-F046-007 需種子資料同時含符合 keyword 但不符合 idNumber 的客戶，才能驗證 keyword 確實被忽略
+- F046 type 篩選：後端 API 查詢（非前端本地過濾）；前端測試需以 spy 驗證 API 呼叫含正確 type 參數
+- F047 欄位映射：85 欄位分 8 個分類（A=5、B=13、C=10、D=10、E=12、F=14、G=15、H=5）；欄位名稱使用 camelCase；時間欄位回傳 ISO 8601 UTC 格式
+- F047 風控旗標：只以 CHAR(1) 值 `'Y'`（大寫）觸發警告色 Badge；`'N'`、`'1'`、null 均不觸發；address_anomaly_flag 與 mainland_flag（SMALLINT 型別）不列入風控高亮
+- F047 資料新鮮度：計算公式 `Math.ceil((now - _etl_loaded_at) / (24 * 60 * 60 * 1000))`；前端測試使用 clock mock 控制當前時間；閾值為 7 天（超過則顯示警告）
+- F047 客戶類型適應：customer_type_code='01'（個人）與 '04'（外籍）均在 G 分類顯示「本分類不適用」；'02'（企業）才顯示企業欄位
+- F046 / F047 共用遮罩函式：maskIdNumber（前 3 + 後 2）、maskPhone（前 4 + 後 2）、maskEmail（@ 前保留前 2 字元）；NULL 值回傳 null，不套用遮罩
+- F047 UUID 路徑參數驗證：非 UUID 格式的 customerId（如 'invalid-id'）應回傳 400 或 422，不得回傳 500
 
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
