@@ -5,14 +5,14 @@ feature-id: F044
 source-story: US-057
 epic: E05
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-27
+version: "1.1"
+date: 2026-04-14
 status: Draft
 ---
 
 # F044: ETL Target Load + UPSERT
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-03-27
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-14
 
 ## 1. 功能摘要
 
@@ -80,8 +80,14 @@ interface UpsertOptions {
    - 附加 `_etl_loaded_at` 與 `_etl_pipeline_id`
    - `data_source` 欄位取自輸入資料列（由 df3 derived_field 節點產生），不需額外填充
    - `customer_id` 欄位取自輸入資料列（由 df3 gen_random_uuid 產生），INSERT 時寫入，UPDATE 時不修改
-6. 將資料分批（batch size 預設 5000 筆）
-7. 逐批執行 UPSERT SQL：
+6. **資料品質閘門**（BUG-2 修正）：
+   - 跳過 `source_customer_no` 長度 < 5 的記錄（排除 ghost records，如 `"01"`、`"."`、`"0"` 等無效識別碼）
+   - 跳過的記錄筆數記錄於節點日誌中
+   - **禁止**使用 `information_schema.columns` 的 `is_nullable='NO'` 欄位清單動態推導過濾條件（此為 BUG-2 的根因：MLMC-only 記錄的 `name=null` 或 `customer_type_code=null` 被隱性過濾排除）
+   - NOT NULL 欄位為 null 的記錄（如 `name=null`）應正常寫入，由資料庫 constraint 決定是否拒絕
+7. **VARCHAR 空字串正規化**：對所有 VARCHAR 型別欄位執行 `NULLIF(TRIM(col), '')`，將空字串與純空白字串統一轉為 null，避免空字串與 NULL 語意不一致
+8. 將資料分批（batch size 預設 5000 筆）
+9. 逐批執行 UPSERT SQL：
 
 ```sql
 INSERT INTO customer_core (
@@ -102,8 +108,8 @@ DO UPDATE SET
   _etl_pipeline_id = EXCLUDED._etl_pipeline_id;
 ```
 
-8. 統計成功 UPSERT 的總筆數
-9. 回傳 `DataSet { rows: [], rowCount: totalUpsertedCount }`
+10. 統計成功 UPSERT 的總筆數
+11. 回傳 `DataSet { rows: [], rowCount: totalUpsertedCount }`
 
 **關鍵 SQL 規則：**
 
@@ -145,6 +151,9 @@ DO UPDATE SET
 | 目標表已有相同 `source_customer_no` 的資料 | 執行 UPDATE（覆蓋除 customer_id 外的所有欄位） |
 | 單批次超過 PostgreSQL 參數上限（65535） | 自動縮減 batch size 使參數數 < 65535 |
 | 並行 Pipeline 同時 UPSERT 同一 `source_customer_no` | PostgreSQL ON CONFLICT 機制保證原子性，後寫入者覆蓋 |
+| `source_customer_no` 長度 < 5（ghost record）（BUG-2 修正） | 跳過不寫入，跳過筆數記錄於節點日誌 |
+| 輸入資料 NOT NULL schema 欄位為 null（如 `name=null`）（BUG-2 修正） | 正常寫入，不因 schema `is_nullable='NO'` 過濾排除 |
+| VARCHAR 欄位值為空字串或純空白 | `NULLIF(TRIM(col), '')` 正規化為 null 後寫入 |
 
 ## 8. ETL 追蹤欄位規格
 
@@ -225,6 +234,27 @@ actualBatchSize = min(configuredBatchSize, maxBatchSize)
 - When 引擎捕獲錯誤
 - Then tl1 status = `'failed'`，outputRowCount 記錄已成功寫入的筆數（前 2 批）
 - And errorMessage 包含失敗批次 offset 與錯誤訊息
+
+### AC-10: MLMC-only 記錄不因 name=null 被排除（BUG-2 修正）
+
+- Given tl1 輸入含一列 `source_customer_no = "MLMC-999"`、`name = null`、`customer_type_code = "02"`
+- When tl1 執行 UPSERT
+- Then `customer_core` 中 `source_customer_no = "MLMC-999"` 記錄存在，`name = null`
+- And `node_logs[tl1].outputRowCount` 包含此列（不遺失）
+
+### AC-11: ghost record 閘門過濾短識別碼（BUG-2 修正）
+
+- Given tl1 輸入含三列：`source_customer_no = "01"`（長度 2）、`source_customer_no = "."`（長度 1）、`source_customer_no = "VALID001"`（長度 8）
+- When tl1 執行 UPSERT
+- Then `customer_core` 中只寫入 `source_customer_no = "VALID001"` 的列
+- And 前兩列因 `source_customer_no` 長度 < 5 被跳過
+- And `node_logs[tl1].outputRowCount = 1`，跳過筆數記錄於節點日誌中
+
+### AC-12: VARCHAR 空字串正規化為 null
+
+- Given tl1 輸入含一列 `source_customer_no = "TEST001"`、`name = "  "`（純空白）、`email = ""`（空字串）
+- When tl1 執行 UPSERT
+- Then `customer_core` 中 `source_customer_no = "TEST001"` 記錄的 `name = null`、`email = null`（經 `NULLIF(TRIM(col), '')` 正規化）
 
 ## 11. 錯誤場景
 

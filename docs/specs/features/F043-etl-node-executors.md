@@ -5,14 +5,14 @@ feature-id: F043
 source-story: US-056, US-057, US-058
 epic: E05
 priority: P0-MVP
-version: "1.1"
-date: 2026-03-31
+version: "1.2"
+date: 2026-04-14
 status: Draft
 ---
 
 # F043: ETL 節點執行器
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-03-27
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-14
 
 ## 1. 功能摘要
 
@@ -139,8 +139,12 @@ interface MergeCondition {
 
 **特殊規則 — JOIN key 處理：**
 
-- `conditions` 中的 `leftColumn` 與 `rightColumn` 若同名（如 m1 的 `CUSTO_NO = CUSTO_NO`），合併後僅保留一個欄位，值為 `left[key] ?? right[key]`
-- 不產生 `{key}_right` 欄位
+- `conditions` 中的 `leftColumn` 與 `rightColumn` 若同名（如 m1 的 `CUSTO_NO = CUSTO_NO`），合併後產生三個欄位：
+  - `{key}`：`COALESCE(left[key], right[key])`（取非 null 者，若皆非 null 以左側為主）
+  - `{key}_left`：左側原始值（可為 NULL）
+  - `{key}_right`：右側原始值（可為 NULL）
+
+> **BUG-1 修正**：原規格僅輸出 COALESCE 後的主 key 欄位，且 same-name 時不產生 `{key}_right`。導致下游 df3 的 `data_source` CASE WHEN 表達式中 `left.source_customer_no` 與 `right.source_customer_no` 都解析到同一個 COALESCE 後的非 NULL 欄位，所有記錄均被標記為 `"ZZIP_BAMCUST_M+MLMCUSTOMER"`。修正後額外輸出 `{key}_left` 和 `{key}_right`，使下游節點可用 `{key}_left IS NOT NULL` / `{key}_right IS NOT NULL` 正確判斷記錄來源歸屬。
 
 **輸入：** `{ 'left-input': DataSet, 'right-input': DataSet }`
 
@@ -341,7 +345,21 @@ interface DerivedExpression {
 |---------|-----------------|------|
 | df1 | mergePhone × 3（home_phone, contact_phone, office_phone，含分機） | ZZIP 電話合併（含分機） |
 | df2 | padStart(CUTYPE, 2, '0') + mergePhone × 4（BUSINESSTTELCODE/BUSINESSTTEL→office_phone, CUSTTELCODE/CUSTTEL→registered_phone, CUSTFAXCODE/CUSTFAX→registered_fax, BUSINESSFAXCODE/BUSINESSFAX→business_fax） | MLMC 類型轉換 + 4 組電話/傳真合併（5 個表達式） |
-| df3 | CASE WHEN（data_source） + gen_random_uuid（customer_id） | 資料來源標記 + UUID 生成 |
+| df3 | CASE WHEN（data_source） + gen_random_uuid（customer_id） | 資料來源標記 + UUID 生成（BUG-1 修正：見下方） |
+
+> **BUG-1 修正 — df3 data_source CASE WHEN 表達式配置變更**：df3 的 `data_source` 表達式原使用 `left.source_customer_no` / `right.source_customer_no` 語法，但因 merge m4 的 COALESCE 行為，兩者解析到同一個非 NULL 欄位。修正後改為直接引用 merge 額外輸出的實體欄位名稱：
+>
+> ```
+> CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NOT NULL
+>      THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER'
+>      WHEN source_customer_no_left IS NOT NULL
+>      THEN 'ZZIP_BAMCUST_M'
+>      ELSE 'MLMCUSTOMER' END
+> ```
+>
+> 此表達式不再使用 `left.` / `right.` 前綴語法，而是直接以 `source_customer_no_left` 和 `source_customer_no_right` 作為欄位名稱存取 merge m4 額外保留的左右原始 key 值。
+
+> **BUG-3 修正 — ZZIP 分支 CUSTOM_MK 補零配置變更**：ZZIP 路線的 `CUSTOM_MK` 欄位存在 `"1"` 和 `"01"` 兩種格式，Lookup 對照表使用 `"01"` 格式。未補零的 `"1"` 無法匹配對照表，導致 `customer_type_desc` 為 null。修正方式為在 ZZIP 分支的 Lookup `lk_ctype1` 之前新增一個 `derived_field` 節點，對 `CUSTOM_MK` 執行 `padStart(CUSTOM_MK, 2, '0')`，確保所有值統一為兩位數格式。
 
 ---
 
@@ -471,7 +489,35 @@ interface ConditionalCondition {
 
 | 節點 ID | rules 數量 | 說明 |
 |---------|-----------|------|
-| cd1 | 5（name, mobile_phone, mailing_address, capital, office_phone） | 以 source_updated_at 較新者為準解決衝突 |
+| cd1 | 14（見下方完整清單） | 衝突解決：13 欄位取 newer（source_updated_at 較新者）、source_created_at 取 MIN（較早者）（BUG-2 修正：擴充覆蓋範圍） |
+
+> **BUG-2 修正 — cd1 rules 擴充至所有 m4 `_right` 後綴共有欄位**：原 cd1 僅設定 5 個欄位（name, mobile_phone, mailing_address, capital, office_phone）的衝突解決規則。其中 `mailing_address` 僅存在於 fm1（ZZIP），fm2（MLMC）無此欄位，m4 合併後不會產生 `mailing_address_right`，故此 rule 無效。其餘共有欄位（如 `customer_type_code`、`company_address` 等）對 MLMC-only 記錄保持左側（ZZIP）值 null，導致後續 target_load 的 NOT NULL 過濾排除整列。
+>
+> 修正後 cd1 rules 涵蓋 m4 輸出中所有有 `_right` 後綴版本的共有欄位（排除 JOIN key `source_customer_no` 與比較用欄位 `source_updated_at`），共 14 個欄位：
+>
+> | # | targetColumn | 說明 |
+> |---|---|---|
+> | 1 | `customer_type_code` | 客戶類型代碼 |
+> | 2 | `name` | 客戶名稱 |
+> | 3 | `mobile_phone` | 行動電話 |
+> | 4 | `office_phone` | 公司電話 |
+> | 5 | `company_zip` | 公司郵遞區號 |
+> | 6 | `company_address` | 公司地址 |
+> | 7 | `industry_code` | 行業代碼 |
+> | 8 | `capital` | 資本額 |
+> | 9 | `id_issue_type` | 證件發證類型 |
+> | 10 | `id_issue_date` | 證件發證日期 |
+> | 11 | `id_issue_address` | 證件發證地點 |
+> | 12 | `source_created_at` | 來源建立時間（**MIN 策略，見下方說明**） |
+> | 13 | `customer_type_desc` | 客戶類型描述 |
+> | 14 | `industry_desc` | 行業描述 |
+>
+> **衝突解決策略**：
+>
+> - **#1~#11, #13~#14（13 個欄位）— Newer 策略**：`WHEN left.source_updated_at >= right.source_updated_at THEN left.{col} ELSE right.{col}`。以 `source_updated_at` 較新者為準。
+> - **#12 `source_created_at` — MIN 策略**：`WHEN left.source_created_at <= right.source_created_at THEN left.source_created_at ELSE right.source_created_at`。取較早者，因為 `source_created_at` 代表客戶最早的建檔日期，業務上取最早更有意義。
+>
+> 對 MLMC-only 記錄（左側全 null），所有 rule 的左側比較欄位為 null，條件不成立，fallback 到 `elseValue: "right.{col}"`，正確取得 MLMC 路線的值。對 ZZIP-only 記錄同理，取 left 值。
 
 ### 4.8 LookupExecutor (`lookup`)
 
@@ -564,7 +610,7 @@ Seed Pipeline 中 Lookup 節點尚未使用（代碼描述查找為後續階段�
 e1(raw_101f6b3e) ──┐
                     ├─→ m1(FULL JOIN CUSTO_NO) → d1(dedup CUSTO_NO) → df1(mergePhone×3,含分機) → fm1(48 mappings)
 e2(raw_35d85504) ──┘                                                                          │
-                                                                                               ├─→ m4(FULL JOIN source_customer_no) → cd1(衝突解決×5) → df3(data_source + UUID) → tl1
+                                                                                               ├─→ m4(FULL JOIN source_customer_no) → cd1(衝突解決×14) → df3(data_source + UUID) → tl1
 e3(raw_1138803c) ──┐                                                                           │
                     ├─→ m2(FULL JOIN CUSTID) ──┐                                               │
 e4(raw_aec93e7c) ──┘                           ├─→ m3(FULL JOIN CUSTID) → d2(dedup CUSTID) → tc1(VARCHAR→DECIMAL) → df2(padStart + mergePhone×4) → fm2(37 mappings)
@@ -743,6 +789,38 @@ e5(raw_50172f04) ─────────────────────
 - Given 對照資料集為空（rowCount = 0），主資料集有 50 列
 - When LookupExecutor 執行
 - Then 輸出 50 列，所有 `outputColumns` 欄位均為 null
+
+### AC-25: merge same-name join key 額外輸出 `_left` / `_right`（BUG-1 修正）
+
+- Given m4 輸入左側（fm1 ZZIP 路線）含 `source_customer_no = "ZZIP-001"`，右側（fm2 MLMC 路線）含 `source_customer_no = "MLMC-001"`，兩者不同（無 match）
+- When m4 FULL JOIN on `source_customer_no` 執行
+- Then 輸出含兩列：
+  - ZZIP-only 列：`source_customer_no = "ZZIP-001"`（COALESCE）、`source_customer_no_left = "ZZIP-001"`、`source_customer_no_right = null`
+  - MLMC-only 列：`source_customer_no = "MLMC-001"`（COALESCE）、`source_customer_no_left = null`、`source_customer_no_right = "MLMC-001"`
+
+### AC-26: merge same-name join key 雙來源列保留左右原值（BUG-1 修正）
+
+- Given m4 輸入左側含 `source_customer_no = "BOTH-001"`，右側亦含 `source_customer_no = "BOTH-001"`（match）
+- When m4 FULL JOIN 執行
+- Then 輸出該列：`source_customer_no = "BOTH-001"`、`source_customer_no_left = "BOTH-001"`、`source_customer_no_right = "BOTH-001"`
+
+### AC-27: df3 data_source 使用 `_left` / `_right` 實體欄位正確標記三種情境（BUG-1 修正）
+
+- Given m4 輸出含三種記錄：(A) 雙來源、(B) ZZIP-only、(C) MLMC-only
+- When df3 執行 CASE WHEN 表達式（使用 `source_customer_no_left` / `source_customer_no_right`）
+- Then (A) `data_source = "ZZIP_BAMCUST_M+MLMCUSTOMER"`、(B) `data_source = "ZZIP_BAMCUST_M"`、(C) `data_source = "MLMCUSTOMER"`
+
+### AC-28: conditional cd1 覆蓋所有 m4 `_right` 後綴欄位（BUG-2 修正）
+
+- Given cd1 輸入含 MLMC-only 記錄（左側 ZZIP 欄位全 null，右側 MLMC 欄位存在於 `_right` 後綴欄位）
+- When cd1 執行 14 條 rules
+- Then 輸出列中 `customer_type_code`、`name`、`mobile_phone`、`office_phone`、`company_zip`、`company_address`、`industry_code`、`capital`、`id_issue_type`、`id_issue_date`、`id_issue_address`、`source_created_at`、`customer_type_desc`、`industry_desc` 均取自 MLMC 路線的 `_right` 欄位值，不為 null（前提：MLMC 原始資料中對應欄位有值）
+
+### AC-29: ZZIP CUSTOM_MK 補零後 Lookup 正確匹配（BUG-3 修正）
+
+- Given ZZIP 資料中 `CUSTOM_MK = "1"`（未補零），Lookup 對照表中 `TBL_CD = "01"`
+- When ZZIP 分支的 `derived_field` 節點執行 `padStart(CUSTOM_MK, 2, '0')` 後，再經 Lookup `lk_ctype1` 查找
+- Then `customer_type_desc` 正確取得對照表中 `TBL_CD = "01"` 對應的描述值，不為 null
 
 ## 8. 相關文件
 
