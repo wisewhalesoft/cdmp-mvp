@@ -1,16 +1,16 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "2.1"
-date: 2026-04-02
+version: "2.2"
+date: 2026-04-13
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：75 份（7 支援文件 + 45 Feature 文件 + 23 圖表文件）
-> **最後更新**：2026-04-02
+> **文件總數**：79 份（7 支援文件 + 47 Feature 文件 + 25 圖表文件）
+> **最後更新**：2026-04-13
 
 ---
 
@@ -24,9 +24,10 @@ status: Draft
 | Feature 文件（E03） | 6 |
 | Feature 文件（E04） | 10 |
 | Feature 文件（E05） | 17 |
+| Feature 文件（E06） | 2 |
 | Feature 文件（E04/E05 跨模組） | 1 |
-| Mermaid 圖表 | 23 |
-| **總計** | **75** |
+| Mermaid 圖表 | 25 |
+| **總計** | **79** |
 
 ---
 
@@ -115,6 +116,13 @@ status: Draft
 | F043 | [F043-etl-node-executors.md](features/F043-etl-node-executors.md) | ETL 節點執行器（8 種節點處理邏輯與 TypeScript interfaces，含 Lookup 雙輸入模式） | US-056, US-057, US-058 | P0-MVP |
 | F044 | [F044-etl-target-load.md](features/F044-etl-target-load.md) | Target Load + UPSERT（批次寫入、ETL 追蹤欄位） | US-057 | P0-MVP |
 
+### E06 — Customer 360
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+|------------|------|------|-----------|--------|
+| F046 | [F046-customer-search-list.md](features/F046-customer-search-list.md) | Customer 360 — 客戶搜尋與清單 | US-060 | P0-MVP |
+| F047 | [F047-customer-360-detail.md](features/F047-customer-360-detail.md) | Customer 360 — 單一客戶詳情 | US-061 | P0-MVP |
+
 ### E04/E05 — 跨模組系統維運
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
@@ -151,6 +159,8 @@ status: Draft
 | [diagrams/F039-node-field-badge.mmd](diagrams/F039-node-field-badge.mmd) | 節點欄位 Badge 資料流與元件結構 | Flowchart | F039 |
 | [diagrams/F041-badge-hover-tooltip.mmd](diagrams/F041-badge-hover-tooltip.mmd) | Badge Hover Tooltip 互動時序 | Sequence | F041 |
 | [diagrams/F042-etl-execution-engine.mmd](diagrams/F042-etl-execution-engine.mmd) | ETL 執行引擎流程與 Node Dispatcher 架構 | Flowchart | F042 |
+| [diagrams/F046-customer-search-list.mmd](diagrams/F046-customer-search-list.mmd) | 客戶搜尋與清單流程 | Sequence | F046 |
+| [diagrams/F047-customer-360-detail.mmd](diagrams/F047-customer-360-detail.mmd) | 單一客戶 360 詳情載入流程 | Sequence | F047 |
 
 ### 狀態圖
 
@@ -176,7 +186,7 @@ status: Draft
 ### TDD Agent
 1. 必讀：`data-model.md`, `error-handling.md`, `nfr.md`
 2. 依實作順序載入對應 Feature 文件
-3. 建議順序：F001->F002->F003->F045->F004->F005->F006->F008->F009->F010->F007->F011->F012->F013->F015->F014->F016->F017->F018->F019->F020->F021->F022->F023->F024->F025->F026->F027->F028->F029->F036->F030->F037->F031->F032->F033->F034->F035->F038->F042->F043->F044
+3. 建議順序：F001->F002->F003->F045->F004->F005->F006->F008->F009->F010->F007->F011->F012->F013->F015->F014->F016->F017->F018->F019->F020->F021->F022->F023->F024->F025->F026->F027->F028->F029->F036->F030->F037->F031->F032->F033->F034->F035->F038->F042->F043->F044->F046->F047
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -192,9 +202,9 @@ status: Draft
 
 ## 優先級分類
 
-### P0-MVP（Must Have）— 35 個 Feature
+### P0-MVP（Must Have）— 37 個 Feature
 
-F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044, F045
+F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044, F045, F046, F047
 
 ### P1（Should Have）— 9 個 Feature
 
@@ -237,6 +247,10 @@ F042 ──> F043（節點執行器依賴引擎框架）
 F042 ──> F044（Target Load 依賴引擎框架）
 F043 ──> F044（Target Load 依賴上游節點輸出）
 F036 ──> F044（目標表 schema 定義）
+F036 ──> F046（customer_core 85 欄位 Schema）
+E01 ──> F046（使用者驗證）
+F044 ──> F046（ETL TargetLoad 資料已載入）
+F046 ──> F047（客戶清單為 360 詳情主要入口）
 ```
 
 ---
@@ -258,3 +272,4 @@ F036 ──> F044（目標表 schema 定義）
 | 2026-03-27 | 新增 F042（ETL 執行引擎核心框架）、F043（ETL 節點執行器 7 種）、F044（Target Load + UPSERT）；新增 1 個圖表（F042 引擎流程）；對應 US-055/056/057；P0-MVP 增至 34 個 Feature；文件總數 74 份 | Spec Writer Agent |
 | 2026-03-31 | Lookup 節點雙輸入重設計：F029 新增 AC-7a~7d（Lookup 雙輸入 UI）與更新 JSON schema；F043 新增第 8 種節點執行器 LookupExecutor（雙輸入模式 + 向下相容），新增 AC-18~AC-24；對應 US-058 | Spec Writer Agent |
 | 2026-04-02 | E02 角色擴充：新增 F045（業務角色定義，US-017）；更新 F004/F005/F006/F008 支援 8 種角色（2 系統 + 6 業務）；新增 Role 實體至 data-model；新增 ROLE_MODIFICATION_FORBIDDEN/ROLE_NOT_FOUND 錯誤碼；更新 VALIDATION_INVALID_ROLE 訊息；P0-MVP 增至 35 個 Feature；文件總數 75 份 | Spec Writer Agent |
+| 2026-04-13 | 新增 E06 Customer 360：F046（客戶搜尋與清單，US-060）、F047（單一客戶 360 詳情，US-061）；新增 2 個圖表（F046 搜尋流程、F047 詳情載入流程）；新增 C360_CUSTOMER_NOT_FOUND / C360_SEARCH_MIN_LENGTH 錯誤碼；更新 NFR-002.5 受影響功能；解決 G-01~G-08 所有缺口；P0-MVP 增至 37 個 Feature；文件總數 79 份 | Spec Writer Agent |

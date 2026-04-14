@@ -1,0 +1,50 @@
+%% F046: Customer 360 客戶搜尋與清單 — 搜尋與篩選流程
+
+sequenceDiagram
+    actor User as 使用者（Admin/User）
+    participant FE as 前端
+    participant API as API Server
+    participant DB as PostgreSQL（customer_core）
+
+    User->>FE: 點擊 Sidebar「Customer 360」
+    FE->>API: GET /api/v1/c360/customers/stats
+    FE->>API: GET /api/v1/c360/customers?page=1&pageSize=20
+    API->>DB: SELECT COUNT(*) GROUP BY customer_type_code
+    DB-->>API: 統計數值
+    API-->>FE: {total, individual, corporate, foreign}
+    API->>DB: SELECT * FROM customer_core LIMIT 20 OFFSET 0
+    DB-->>API: 客戶清單
+    API->>API: 依 role 套用遮罩
+    API-->>FE: {data: [...], pagination: {...}}
+    FE-->>User: 顯示統計卡片 + 客戶清單
+
+    alt 關鍵字搜尋（姓名）
+        User->>FE: 輸入關鍵字 + Enter
+        FE->>FE: 檢查 keyword >= 2 字元
+        FE->>API: GET /api/v1/c360/customers?keyword=王小明
+        API->>DB: Full-Text Search (tsvector + tsquery + GIN)
+        DB-->>API: 搜尋結果
+        API->>API: 依 role 套用遮罩
+        API-->>FE: {data: [...], pagination: {...}}
+    end
+
+    alt 精確搜尋（身分證/統編）
+        User->>FE: 輸入 idNumber + Enter
+        FE->>API: GET /api/v1/c360/customers?idNumber=A123456789
+        API->>DB: WHERE source_customer_no = 'A123456789'
+        DB-->>API: 0 或 1 筆
+        API->>API: 依 role 套用遮罩
+        API-->>FE: {data: [...], pagination: {...}}
+    end
+
+    alt 類型篩選
+        User->>FE: 選擇客戶類型下拉選單
+        FE->>API: GET /api/v1/c360/customers?type=02
+        API->>DB: WHERE customer_type_code = '02'
+        DB-->>API: 篩選結果
+        API->>API: 依 role 套用遮罩
+        API-->>FE: {data: [...], pagination: {...}}
+    end
+
+    User->>FE: 點擊客戶列
+    FE->>FE: 導覽至 /c360/customers/:customerId

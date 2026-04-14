@@ -1,8 +1,8 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.3"
-date: 2026-04-02
+version: "1.4"
+date: 2026-04-13
 status: Draft
 ---
 
@@ -201,6 +201,15 @@ status: Draft
 
 ---
 
+### C360 領域 — Customer 360 {#c360-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| C360_CUSTOMER_NOT_FOUND | 404 | 找不到此客戶資料 | customer_id 不存在於 customer_core 表 | F046, F047 |
+| C360_SEARCH_MIN_LENGTH | 422 | 搜尋關鍵字至少需要 2 個字元 | keyword 參數長度不足 2 個字元 | F046 |
+
+---
+
 ### VALIDATION 領域 — 通用驗證 {#validation-errors}
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
@@ -297,5 +306,7 @@ status: Draft
 | 目標表不存在 | 404 | PIPELINE_TARGET_TABLE_NOT_FOUND | 找不到指定的目標表 | 拒絕請求 |
 | 嘗試新增/刪除系統預設角色 | 403 | ROLE_MODIFICATION_FORBIDDEN | 角色為系統預設，不支援自訂新增或刪除 | 拒絕請求 |
 | 角色不存在 | 404 | ROLE_NOT_FOUND | 找不到指定的角色 | 拒絕請求 |
+| 客戶 ID 不存在 | 404 | C360_CUSTOMER_NOT_FOUND | 找不到此客戶資料 | 顯示 404 錯誤提示與返回按鈕 |
+| 搜尋關鍵字不足 2 字元 | 422 | C360_SEARCH_MIN_LENGTH | 搜尋關鍵字至少需要 2 個字元 | 拒絕搜尋請求 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

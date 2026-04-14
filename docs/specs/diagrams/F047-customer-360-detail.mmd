@@ -1,0 +1,51 @@
+%% F047: Customer 360 單一客戶詳情 — 載入與顯示流程
+
+sequenceDiagram
+    actor User as 使用者（Admin/User）
+    participant FE as 前端
+    participant API as API Server
+    participant DB as PostgreSQL（customer_core）
+
+    User->>FE: 從客戶清單點擊客戶列
+    FE->>API: GET /api/v1/c360/customers/:customerId
+    API->>DB: SELECT * FROM customer_core WHERE customer_id = :id
+
+    alt 客戶存在
+        DB-->>API: 客戶完整資料（85 欄位）
+        API->>API: 依 role 套用遮罩（sourceCustomerNo, phones, email）
+        API->>API: 組織為 8 個分類（identity~etlTracking）
+        API-->>FE: 200 OK — 完整客戶 360 Response
+
+        FE->>FE: 檢查 _etl_loaded_at 新鮮度
+
+        alt etlLoadedAt 超過 7 天
+            FE->>FE: 顯示資料新鮮度警告 Banner
+        end
+
+        FE->>FE: 渲染 Header（姓名、類型 Badge、編號）
+        FE->>FE: 渲染 8 個分類卡片
+
+        alt customer_type_code = '01' 或 '04'
+            FE->>FE: G 分類顯示「本分類不適用」
+        end
+
+        alt customer_type_code = '02'
+            FE->>FE: G 分類顯示完整企業資料
+        end
+
+        FE->>FE: code/desc 格式化（描述（代碼））
+        FE->>FE: NULL 值替換為「—」
+        FE->>FE: 風控旗標高亮（debt_flag/fine_flag = 'Y'）
+
+        FE-->>User: 顯示客戶 360 完整詳情
+
+    else 客戶不存在
+        DB-->>API: 無資料
+        API-->>FE: 404 C360_CUSTOMER_NOT_FOUND
+        FE-->>User: 顯示「找不到此客戶資料」+ 返回清單按鈕
+    end
+
+    opt 返回清單
+        User->>FE: 點擊「返回清單」按鈕
+        FE->>FE: 導覽至 /c360/customers
+    end
