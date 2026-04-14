@@ -83,7 +83,7 @@ describe('topologicalSort', () => {
   });
 
   // TS-F042-002: Seed Pipeline 19 節點拓撲排序正確性
-  it('TS-F042-002: should correctly sort seed-pipeline 19 nodes', async () => {
+  it('TS-F042-002: should correctly sort seed-pipeline nodes', async () => {
     const fs = await import('fs');
     const path = await import('path');
     const seedPath = path.resolve(__dirname, '../../../../../../scripts/seed-pipeline-definition.json');
@@ -92,15 +92,21 @@ describe('topologicalSort', () => {
 
     const result = topologicalSort(nodes, edges);
     expect(result.hasCycle).toBe(false);
-    expect(result.sorted.length).toBe(19);
+    expect(result.sorted.length).toBe(nodes.length);
 
     const idx = (id: string) => result.sorted.indexOf(id);
 
+    // ZZIP branch: e1 → df_zzip_ctype_pad1 → lk_edu1 → ... → m1 → d1 → df1 → fm1
+    expect(idx('e1')).toBeLessThan(idx('df_zzip_ctype_pad1'));
+    expect(idx('df_zzip_ctype_pad1')).toBeLessThan(idx('lk_edu1'));
     expect(idx('e1')).toBeLessThan(idx('m1'));
+    expect(idx('e2')).toBeLessThan(idx('df_zzip_ctype_pad2'));
+    expect(idx('df_zzip_ctype_pad2')).toBeLessThan(idx('lk_edu2'));
     expect(idx('e2')).toBeLessThan(idx('m1'));
     expect(idx('m1')).toBeLessThan(idx('d1'));
     expect(idx('d1')).toBeLessThan(idx('df1'));
     expect(idx('df1')).toBeLessThan(idx('fm1'));
+    // Final merge → conditional → derived → target load
     expect(idx('fm1')).toBeLessThan(idx('m4'));
     expect(idx('fm2')).toBeLessThan(idx('m4'));
     expect(idx('m4')).toBeLessThan(idx('cd1'));

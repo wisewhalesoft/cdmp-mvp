@@ -32,9 +32,13 @@ function createMockQueryRunner(opts: {
       return tableExists ? [{ table_name: 'customer_core' }] : [];
     }
 
-    if (sql.includes('information_schema.columns') && sql.includes('is_nullable')) {
-      // NOT NULL columns query — return source_customer_no as NOT NULL
-      return [{ column_name: 'source_customer_no' }];
+    // BUG-2 fix: data_type query for VARCHAR detection
+    if (sql.includes('information_schema.columns') && sql.includes('data_type')) {
+      return columns.map((c, i) => ({
+        column_name: c,
+        data_type: c === 'customer_id' ? 'uuid' : 'character varying',
+        ordinal_position: i + 1,
+      }));
     }
 
     if (sql.includes('information_schema.columns')) {
@@ -204,6 +208,52 @@ describe('TargetLoadHandler - UPSERT', () => {
     const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 10), { queryRunner: qr });
     await expect(handler.execute(ctx)).rejects.toThrow('UPSERT 批次失敗');
     await expect(handler.execute(ctx)).rejects.toThrow('offset: 0');
+  });
+});
+
+// ===== BUG-2 Fix Verification =====
+
+describe('TargetLoadHandler - BUG-2 fixes', () => {
+  const handler = new TargetLoadHandler();
+
+  // TS-F044-018: [BUG-2] name=null 記錄正常寫入，不被隱性過濾排除
+  it('TS-F044-018: name=null row is NOT filtered out by implicit NOT NULL check', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 1));
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    // After BUG-2 fix: no information_schema.columns query for is_nullable
+    const isNullableCall = qr.calls.find((c: any) => c.sql.includes('is_nullable'));
+    expect(isNullableCall).toBeUndefined();
+    // UPSERT SQL should NOT contain any IS NOT NULL WHERE filter
+    const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).not.toContain('IS NOT NULL');
+  });
+
+  // TS-F044-019: [BUG-2] ghost record 閘門 — source_customer_no 長度 < 5 被跳過
+  it('TS-F044-019: ghost record gate filters source_customer_no with LENGTH >= 5', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 4));
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    // After BUG-2 fix: UPSERT SQL should contain ghost record gate
+    const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).toContain('LENGTH(TRIM("source_customer_no")) >= 5');
+  });
+
+  // TS-F044-020: [BUG-2] VARCHAR 空字串正規化為 null (NULLIF(TRIM))
+  it('TS-F044-020: VARCHAR columns use NULLIF(TRIM(col), \'\') normalization', async () => {
+    const columns = ['customer_id', 'source_customer_no', 'name', 'email'];
+    const qr = createMockQueryRunner({ columns, rowCount: 3 });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 3), { queryRunner: qr, columns });
+    await handler.execute(ctx);
+
+    // After BUG-2 fix: CREATE TEMP TABLE (enriched) should apply NULLIF(TRIM) to VARCHAR columns
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall).toBeDefined();
+    expect(createCall.sql).toContain('NULLIF(TRIM(');
   });
 });
 

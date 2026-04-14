@@ -24,6 +24,32 @@
         }
       },
       {
+        "id": "df_zzip_ctype_pad1",
+        "type": "pipelineNode",
+        "position": { "x": 150, "y": 50 },
+        "data": {
+          "nodeType": "derived_field",
+          "label": "[和潤]CUSTOM_MK補零",
+          "subtitle": "padStart(CUSTOM_MK, 2, '0')",
+          "expressions": [
+            { "outputColumn": "CUSTOM_MK", "expression": "padStart(CUSTOM_MK, 2, '0')", "outputType": "VARCHAR" }
+          ]
+        }
+      },
+      {
+        "id": "df_zzip_ctype_pad2",
+        "type": "pipelineNode",
+        "position": { "x": 150, "y": 250 },
+        "data": {
+          "nodeType": "derived_field",
+          "label": "[和勁]CUSTOM_MK補零",
+          "subtitle": "padStart(CUSTOM_MK, 2, '0')",
+          "expressions": [
+            { "outputColumn": "CUSTOM_MK", "expression": "padStart(CUSTOM_MK, 2, '0')", "outputType": "VARCHAR" }
+          ]
+        }
+      },
+      {
         "id": "lk_edu1",
         "type": "pipelineNode",
         "position": { "x": 200, "y": 50 },
@@ -804,6 +830,11 @@
           "subtitle": "以較新者為準",
           "rules": [
             {
+              "targetColumn": "customer_type_code",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.customer_type_code" }],
+              "elseValue": "right.customer_type_code"
+            },
+            {
               "targetColumn": "name",
               "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.name" }],
               "elseValue": "right.name"
@@ -814,9 +845,24 @@
               "elseValue": "right.mobile_phone"
             },
             {
-              "targetColumn": "mailing_address",
-              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.mailing_address" }],
-              "elseValue": "right.mailing_address"
+              "targetColumn": "office_phone",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.office_phone" }],
+              "elseValue": "right.office_phone"
+            },
+            {
+              "targetColumn": "company_zip",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.company_zip" }],
+              "elseValue": "right.company_zip"
+            },
+            {
+              "targetColumn": "company_address",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.company_address" }],
+              "elseValue": "right.company_address"
+            },
+            {
+              "targetColumn": "industry_code",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.industry_code" }],
+              "elseValue": "right.industry_code"
             },
             {
               "targetColumn": "capital",
@@ -824,9 +870,34 @@
               "elseValue": "right.capital"
             },
             {
-              "targetColumn": "office_phone",
-              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.office_phone" }],
-              "elseValue": "right.office_phone"
+              "targetColumn": "id_issue_type",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.id_issue_type" }],
+              "elseValue": "right.id_issue_type"
+            },
+            {
+              "targetColumn": "id_issue_date",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.id_issue_date" }],
+              "elseValue": "right.id_issue_date"
+            },
+            {
+              "targetColumn": "id_issue_address",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.id_issue_address" }],
+              "elseValue": "right.id_issue_address"
+            },
+            {
+              "targetColumn": "source_created_at",
+              "conditions": [{ "when": "left.source_created_at <= right.source_created_at", "then": "left.source_created_at" }],
+              "elseValue": "right.source_created_at"
+            },
+            {
+              "targetColumn": "customer_type_desc",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.customer_type_desc" }],
+              "elseValue": "right.customer_type_desc"
+            },
+            {
+              "targetColumn": "industry_desc",
+              "conditions": [{ "when": "left.source_updated_at >= right.source_updated_at", "then": "left.industry_desc" }],
+              "elseValue": "right.industry_desc"
             }
           ]
         }
@@ -840,15 +911,28 @@
           "label": "data_source標記",
           "subtitle": "data_source + UUID",
           "expressions": [
-            { "outputColumn": "data_source", "expression": "CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER' WHEN left.source_customer_no IS NOT NULL THEN 'ZZIP_BAMCUST_M' ELSE 'MLMCUSTOMER' END", "outputType": "VARCHAR" },
+            { "outputColumn": "data_source", "expression": "CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NOT NULL THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER' WHEN source_customer_no_left IS NOT NULL THEN 'ZZIP_BAMCUST_M' ELSE 'MLMCUSTOMER' END", "outputType": "VARCHAR" },
             { "outputColumn": "customer_id", "expression": "gen_random_uuid()", "outputType": "VARCHAR" }
           ]
         }
       },
       {
+        "id": "d3",
+        "type": "pipelineNode",
+        "position": { "x": 3000, "y": 450 },
+        "data": {
+          "nodeType": "dedup",
+          "label": "最終去重",
+          "subtitle": "source_customer_no",
+          "keyColumns": ["source_customer_no"],
+          "keepStrategy": "latest_timestamp",
+          "timestampColumn": "source_updated_at"
+        }
+      },
+      {
         "id": "tl1",
         "type": "pipelineNode",
-        "position": { "x": 3050, "y": 450 },
+        "position": { "x": 3150, "y": 450 },
         "data": {
           "nodeType": "target_load",
           "label": "載入 customer_core",
@@ -943,7 +1027,8 @@
       }
     ],
     "edges": [
-      { "id": "edge-e1-lk_edu1", "source": "e1", "target": "lk_edu1" },
+      { "id": "edge-e1-df_zzip_ctype_pad1", "source": "e1", "target": "df_zzip_ctype_pad1" },
+      { "id": "edge-df_zzip_ctype_pad1-lk_edu1", "source": "df_zzip_ctype_pad1", "target": "lk_edu1" },
       { "id": "edge-lk_edu1-lk_occ1", "source": "lk_edu1", "target": "lk_occ1" },
       { "id": "edge-lk_occ1-lk_job1", "source": "lk_occ1", "target": "lk_job1" },
       { "id": "edge-lk_job1-lk_marry1", "source": "lk_job1", "target": "lk_marry1" },
@@ -953,7 +1038,8 @@
       { "id": "edge-lk_indus1-lk_joblv1", "source": "lk_indus1", "target": "lk_joblv1" },
       { "id": "edge-lk_joblv1-lk_income1", "source": "lk_joblv1", "target": "lk_income1" },
       { "id": "edge-lk_income1-m1", "source": "lk_income1", "target": "m1", "targetHandle": "left-input" },
-      { "id": "edge-e2-lk_edu2", "source": "e2", "target": "lk_edu2" },
+      { "id": "edge-e2-df_zzip_ctype_pad2", "source": "e2", "target": "df_zzip_ctype_pad2" },
+      { "id": "edge-df_zzip_ctype_pad2-lk_edu2", "source": "df_zzip_ctype_pad2", "target": "lk_edu2" },
       { "id": "edge-lk_edu2-lk_occ2", "source": "lk_edu2", "target": "lk_occ2" },
       { "id": "edge-lk_occ2-lk_job2", "source": "lk_occ2", "target": "lk_job2" },
       { "id": "edge-lk_job2-lk_marry2", "source": "lk_job2", "target": "lk_marry2" },
@@ -989,7 +1075,8 @@
       { "id": "edge-fm2-m4", "source": "fm2", "target": "m4", "targetHandle": "right-input" },
       { "id": "edge-m4-cd1", "source": "m4", "target": "cd1" },
       { "id": "edge-cd1-df3", "source": "cd1", "target": "df3" },
-      { "id": "edge-df3-tl1", "source": "df3", "target": "tl1" }
+      { "id": "edge-df3-d3", "source": "df3", "target": "d3" },
+      { "id": "edge-d3-tl1", "source": "d3", "target": "tl1" }
     ]
   },
   "changeSummary": "v5：擴充 MLMC 分支新增 5 組代碼對照 Lookup x 3（和潤/和勁/興業），新增 employee_count_desc/is_listed_desc/company_attr_desc/business_item 欄位"

@@ -50,14 +50,26 @@ export class MergeHandler implements NodeExecutor {
     if (sameKeyName) {
       selectParts.push(`COALESCE(l."${leftKey}", r."${rightKey}") AS "${leftKey}"`);
       usedNames.add(leftKey);
+
+      // BUG-1 fix: output _left and _right for same-name join key
+      // Use unique alias if _left/_right already exists (e.g., chained merges like m2→m3)
+      const leftAlias = this.findUniqueAlias(`${leftKey}_left`, usedNames);
+      selectParts.push(`l."${leftKey}" AS "${leftAlias}"`);
+      usedNames.add(leftAlias);
+
+      const rightAlias = this.findUniqueAlias(`${rightKey}_right`, usedNames);
+      selectParts.push(`r."${rightKey}" AS "${rightAlias}"`);
+      usedNames.add(rightAlias);
     } else {
       selectParts.push(`l."${leftKey}"`);
       usedNames.add(leftKey);
     }
 
-    // Left columns (excluding join key)
+    // Left columns (excluding join key and its _left/_right variants from upstream merges)
     for (const col of leftCols) {
       if (col === leftKey) continue;
+      // Skip upstream _left/_right key columns — they are already handled above or will conflict
+      if (sameKeyName && (col === `${leftKey}_left` || col === `${leftKey}_right`)) continue;
       selectParts.push(`l."${col}"`);
       usedNames.add(col);
     }
@@ -65,17 +77,14 @@ export class MergeHandler implements NodeExecutor {
     // Right columns (excluding join key if same name, deduplicate with suffix)
     for (const col of rightCols) {
       if (sameKeyName && col === rightKey) continue;
+      // Skip upstream _left/_right key columns from right side too
+      if (sameKeyName && (col === `${rightKey}_left` || col === `${rightKey}_right`)) continue;
       if (!usedNames.has(col)) {
         selectParts.push(`r."${col}"`);
         usedNames.add(col);
       } else {
         // Find a unique alias: col_right, col_right_2, col_right_3, ...
-        let alias = `${col}_right`;
-        let counter = 2;
-        while (usedNames.has(alias)) {
-          alias = `${col}_right_${counter}`;
-          counter++;
-        }
+        const alias = this.findUniqueAlias(`${col}_right`, usedNames);
         selectParts.push(`r."${col}" AS "${alias}"`);
         usedNames.add(alias);
       }
@@ -91,6 +100,13 @@ export class MergeHandler implements NodeExecutor {
     const rowCount = countResult[0]?.cnt ?? 0;
 
     return { tempTable, rowCount };
+  }
+
+  private findUniqueAlias(preferred: string, usedNames: Set<string>): string {
+    if (!usedNames.has(preferred)) return preferred;
+    let counter = 2;
+    while (usedNames.has(`${preferred}_${counter}`)) counter++;
+    return `${preferred}_${counter}`;
   }
 
   private async getColumns(context: NodeExecutionContext, tableName: string): Promise<string[]> {

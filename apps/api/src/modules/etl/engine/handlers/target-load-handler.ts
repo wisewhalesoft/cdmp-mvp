@@ -54,7 +54,26 @@ export class TargetLoadHandler implements NodeExecutor {
     // Only include columns that exist in BOTH input and target (plus ETL tracking)
     const matchedInputColumns = inputColumns.filter((c) => targetColumns.has(c));
     const allColumns = [...matchedInputColumns, '_etl_loaded_at', '_etl_pipeline_id'];
-    const selectParts = matchedInputColumns.map((c) => `"${c}"`);
+
+    // BUG-2 fix: Get column types from INPUT temp table for NULLIF(TRIM) normalization
+    // Use input table types (not target table) because temp table types reflect actual data
+    const inputColumnTypes = await context.queryRunner.query(
+      `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+      [inputTable],
+    );
+    const varcharColumns = new Set(
+      inputColumnTypes
+        .filter((r: any) => ['character varying', 'text', 'character'].includes(r.data_type))
+        .map((r: any) => r.column_name),
+    );
+
+    // BUG-2 fix: Apply NULLIF(TRIM(col), '') for VARCHAR columns in enriched temp table
+    const selectParts = matchedInputColumns.map((c) => {
+      if (varcharColumns.has(c)) {
+        return `NULLIF(TRIM("${c}"), '') AS "${c}"`;
+      }
+      return `"${c}"`;
+    });
     selectParts.push(`'${etlLoadedAt}'::TIMESTAMP AS "_etl_loaded_at"`);
     selectParts.push(`'${etlPipelineId}'::UUID AS "_etl_pipeline_id"`);
 
@@ -73,32 +92,44 @@ export class TargetLoadHandler implements NodeExecutor {
 
     const columnList = allColumns.map((c) => `"${c}"`).join(', ');
 
-    // Get NOT NULL columns from target table to filter invalid rows
-    const notNullCols = await context.queryRunner.query(
+    // BUG-2 fix: Data quality gate
+    // 1. Ghost record filter: source_customer_no length >= 5
+    // 2. NOT NULL business key filter: skip rows where DB NOT NULL columns are null
+    //    (these would fail on INSERT anyway; filtering here avoids batch-level failures)
+    const notNullTargetCols = await context.queryRunner.query(
       `SELECT column_name FROM information_schema.columns
        WHERE table_name = $1 AND is_nullable = 'NO'
-       AND column_name NOT IN ('customer_id', '_etl_loaded_at', '_etl_pipeline_id')`,
+       AND column_name NOT IN ('customer_id', '_etl_loaded_at', '_etl_pipeline_id', 'data_source')`,
       [targetTable],
     );
-    const notNullFilter = notNullCols
-      .map((r: any) => `"${r.column_name}" IS NOT NULL`)
-      .join(' AND ');
+    const notNullChecks = notNullTargetCols
+      .filter((r: any) => allColumns.includes(r.column_name))
+      .map((r: any) => `"${r.column_name}" IS NOT NULL`);
 
-    // Count valid rows
-    const validCountSql = notNullFilter
-      ? `SELECT COUNT(*)::int AS cnt FROM "${tempTable}" WHERE ${notNullFilter}`
-      : `SELECT COUNT(*)::int AS cnt FROM "${tempTable}"`;
+    const ghostGate = [
+      `LENGTH(TRIM("source_customer_no")) >= 5`,
+      ...notNullChecks,
+    ].join(' AND ');
+
+    // Count valid rows (after data quality gate filtering + post-normalization dedup)
+    // DISTINCT ON handles collisions caused by NULLIF(TRIM()) normalization
+    // (e.g., "A12345 " and "A12345" become the same after TRIM)
+    const validCountSql = `SELECT COUNT(*)::int AS cnt FROM (SELECT DISTINCT ON ("source_customer_no") * FROM "${tempTable}" WHERE ${ghostGate} ORDER BY "source_customer_no") _dq`;
     const validCountResult = await context.queryRunner.query(validCountSql);
     const validCount = validCountResult[0]?.cnt ?? 0;
+
+    // Create a deduped temp table for batched UPSERT (avoids "cannot affect row a second time")
+    const dedupTable = `${tempTable}_dq`;
+    await context.queryRunner.query(
+      `CREATE TEMP TABLE "${dedupTable}" AS SELECT DISTINCT ON ("source_customer_no") ${columnList} FROM "${tempTable}" WHERE ${ghostGate} ORDER BY "source_customer_no"`,
+    );
 
     // Batch UPSERT with OFFSET/LIMIT
     const batchSize = 5000;
     let totalUpserted = 0;
 
     for (let offset = 0; offset < validCount; offset += batchSize) {
-      const selectSql = notNullFilter
-        ? `SELECT ${columnList} FROM "${tempTable}" WHERE ${notNullFilter} LIMIT ${batchSize} OFFSET ${offset}`
-        : `SELECT ${columnList} FROM "${tempTable}" LIMIT ${batchSize} OFFSET ${offset}`;
+      const selectSql = `SELECT ${columnList} FROM "${dedupTable}" LIMIT ${batchSize} OFFSET ${offset}`;
 
       const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
 
@@ -112,7 +143,8 @@ export class TargetLoadHandler implements NodeExecutor {
       }
     }
 
-    // Drop the enriched temp table
+    // Drop temp tables
+    await context.queryRunner.query(`DROP TABLE IF EXISTS "${dedupTable}"`);
     await context.queryRunner.query(`DROP TABLE IF EXISTS "${tempTable}"`);
 
     return { tempTable: '', rowCount: totalUpserted };

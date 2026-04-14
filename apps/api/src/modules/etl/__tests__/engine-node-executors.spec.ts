@@ -264,6 +264,70 @@ describe('MergeHandler', () => {
     const result = await handler.execute(ctx);
     expect(result).toEqual({ tempTable: '', rowCount: 0 });
   });
+
+  // TS-F043-010A: [BUG-1] same-name join key — 額外輸出 _left / _right 欄位
+  it('TS-F043-010A: same-name join key outputs _left and _right columns', async () => {
+    const leftCols = ['source_customer_no', 'name'];
+    const rightCols = ['source_customer_no', 'mobile_phone'];
+
+    const qr = createMockQueryRunner({
+      rowCount: 2,
+      customHandler: (sql, params) => {
+        if (sql.includes('information_schema.columns')) {
+          const tableName = params?.[0];
+          if (tableName === 'etl_tmp_fm1') return leftCols.map((c, i) => ({ column_name: c, ordinal_position: i + 1 }));
+          if (tableName === 'etl_tmp_fm2') return rightCols.map((c, i) => ({ column_name: c, ordinal_position: i + 1 }));
+        }
+        return undefined;
+      },
+    });
+
+    const ctx = makeContext(
+      { conditions: [{ leftColumn: 'source_customer_no', rightColumn: 'source_customer_no' }] },
+      { 'left-input': makeDs('etl_tmp_fm1', 1), 'right-input': makeDs('etl_tmp_fm2', 1) },
+      { nodeType: 'merge', nodeId: 'm4', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    await handler.execute(ctx);
+
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall).toBeDefined();
+    // COALESCE for the main key
+    expect(createCall.sql).toContain('COALESCE(l."source_customer_no", r."source_customer_no") AS "source_customer_no"');
+    // BUG-1 fix: additional _left and _right columns
+    expect(createCall.sql).toContain('l."source_customer_no" AS "source_customer_no_left"');
+    expect(createCall.sql).toContain('r."source_customer_no" AS "source_customer_no_right"');
+  });
+
+  // TS-F043-010B: [BUG-1] same-name join key 雙方均 match — _left / _right 均有值
+  it('TS-F043-010B: same-name join key with both sides matching outputs _left and _right', async () => {
+    const cols = ['source_customer_no', 'data'];
+
+    const qr = createMockQueryRunner({
+      rowCount: 1,
+      customHandler: (sql, params) => {
+        if (sql.includes('information_schema.columns')) {
+          return cols.map((c, i) => ({ column_name: c, ordinal_position: i + 1 }));
+        }
+        return undefined;
+      },
+    });
+
+    const ctx = makeContext(
+      { conditions: [{ leftColumn: 'source_customer_no', rightColumn: 'source_customer_no' }] },
+      { 'left-input': makeDs('etl_tmp_left', 1), 'right-input': makeDs('etl_tmp_right', 1) },
+      { nodeType: 'merge', nodeId: 'm4', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    await handler.execute(ctx);
+
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall).toBeDefined();
+    // Same structure: COALESCE + _left + _right
+    expect(createCall.sql).toContain('COALESCE(l."source_customer_no", r."source_customer_no") AS "source_customer_no"');
+    expect(createCall.sql).toContain('l."source_customer_no" AS "source_customer_no_left"');
+    expect(createCall.sql).toContain('r."source_customer_no" AS "source_customer_no_right"');
+  });
 });
 
 // ===== DedupHandler Tests =====
