@@ -68,6 +68,17 @@
 
 > 說明：`left.` / `right.` 前綴來自 merge 節點後的欄位命名約定。在 cd1 節點的輸入資料中，`left.source_updated_at` 與 `right.source_updated_at` 分別代表 ZZIP 路線與 MLMC 路線的更新時間。
 
+### AC-2a：conditional — MLMC-only 記錄完整欄位衝突解決（BUG-2 修正）
+
+- **Given** cd1 輸入含 MLMC-only 記錄（ZZIP 路線欄位全為 null，MLMC 路線欄位存在於 `_right` 後綴欄位中，如 `name_right`、`customer_type_code_right`）
+- **When** cd1 執行 rules
+- **Then** 對每條 rule，當 `left.{col} IS NOT NULL` 條件不成立（因 ZZIP 路線值為 null），繼續評估下一個 condition 或 `elseValue`
+- **And** `elseValue: "right.{col}"` 正確解析為列中的 `{col}_right` 欄位，取得 MLMC 路線的非 null 值
+- **And** 輸出列中 `name`、`customer_type_code`、`mobile_phone`、`mailing_address`、`capital`、`office_phone` 等關鍵欄位，對 MLMC-only 記錄均有值（來自 MLMC 路線），不得因 `_right` 欄位未涵蓋而全為 null
+- **And** cd1 的 `rules` 必須涵蓋 m4 輸出中所有有 `_right` 後綴版本的欄位，不限於原始 5 個欄位
+
+> **根因**：原實作 cd1 只設定 name、mobile_phone、mailing_address、capital、office_phone 共 5 個欄位的衝突解決規則，其餘欄位（如 customer_type_code、各地址欄位等）對 MLMC-only 記錄保持左側（ZZIP）值，即 null。後續 `target-load-handler.ts` 的 NOT NULL 過濾（name=null、customer_type_code=null）導致整列被排除。
+
 ### AC-3：target_load — UPSERT 寫入目標表
 
 - **Given** 節點設定含有 `targetTable`（如 `customer_core`）
@@ -83,6 +94,16 @@
 - **And** `customer_id` 欄位不由引擎填充，以資料庫 DEFAULT `gen_random_uuid()` 自動生成（INSERT 時），UPDATE 時不修改 `customer_id`
 - **And** 所有 UPSERT 操作使用單一資料庫 transaction：若批次中任何一批失敗，整個 target_load 節點標記為 `'failed'`，已寫入的批次**不回滾**（接受部分寫入，但記錄失敗節點的錯誤訊息與失敗批次起始 offset）
 - **And** 節點完成後，`node_logs[tl1].outputRowCount` 記錄成功 UPSERT 的總筆數
+
+### AC-3a：target_load — 將隱性 NOT NULL 過濾改為顯式資料品質閘門（BUG-2 修正）
+
+- **Given** tl1 輸入含 MLMC-only 記錄，其中 `name = null`（上游 cd1 已透過 COALESCE 從 `_right` 欄位補值，但仍可能為 null）
+- **When** tl1 執行 UPSERT
+- **Then** 該記錄正常寫入 `customer_core`，`name` 欄位為 null，不被排除
+- **And** tl1 的資料品質閘門（過濾邏輯）僅保留以下一條顯式規則：`source_customer_no` 長度 < 5 的記錄跳過（排除 ghost records，如 `"01"`、`` "`" ``、`"0"`、`"."` 等無效識別碼）
+- **And** tl1 不得使用 DB schema 的 `is_nullable='NO'` 欄位清單動態推導過濾條件（此為隱性過濾的根因，造成 MLMC-only 記錄的 null 欄位被誤判為無效資料）
+
+> **根因（BUG-2）**：`target-load-handler.ts:77-85` 依據 `is_nullable='NO'` 的欄位清單過濾輸入資料列，將 `name=null` 或 `customer_type_code=null` 的記錄排除。MLMC-only 記錄在 cd1 衝突解決後，若其 `_right` 欄位已補值則不為 null；但過濾邏輯早於 conditional COALESCE 完成前執行，或 cd1 rules 未完整涵蓋所有欄位，造成記錄被靜默丟棄。修正後改為顯式 `source_customer_no` 長度閘門，不再依賴 schema 動態過濾。
 
 ### AC-4：target_load — 目標表不存在時的處理
 
@@ -196,6 +217,30 @@ cd1 的輸入來自 m4（FULL OUTER JOIN fm1 與 fm2）。m4 執行後，資料�
 - **When**：tl1 執行
 - **Then**：tl1 status = `'failed'`，errorMessage 包含「目標表 non_existent_table 不存在」
 
+### TC-057-10：conditional MLMC-only 記錄透過 elseValue 正確取得欄位值（BUG-2 修正驗證）
+
+- **Given**：cd1 輸入列含 `name = null`、`name_right = "企業甲"`、`source_updated_at = null`、`source_updated_at_right = "2024-01-01"`
+- **When**：cd1 執行 rule `{targetColumn: "name", conditions: [{when: "left.source_updated_at >= right.source_updated_at", then: "left.name"}], elseValue: "right.name"}`
+- **Then**：輸出列 `name = "企業甲"`（`left.source_updated_at IS NOT NULL` 不成立，fallback 到 `elseValue`，`right.name` 解析為 `name_right` 欄位）
+
+### TC-057-11：conditional ZZIP-only 記錄保持 left 欄位值（BUG-2 修正驗證）
+
+- **Given**：cd1 輸入列含 `name = "個人丙"`、`name_right = null`、`source_updated_at = "2024-02-01"`、`source_updated_at_right = null`
+- **When**：cd1 執行同上 rule
+- **Then**：輸出列 `name = "個人丙"`（`left.source_updated_at >= right.source_updated_at` 條件中 right 為 null 不成立，但 `left.source_updated_at IS NOT NULL` 成立，取 `left.name`）
+
+### TC-057-12：target_load 不因 name=null 排除 MLMC-only 記錄（BUG-2 修正驗證）
+
+- **Given**：tl1 輸入含一列 `source_customer_no = "MLMC-999"`、`name = null`、`customer_type_code = "02"`
+- **When**：tl1 執行 UPSERT
+- **Then**：`customer_core` 中 `source_customer_no = "MLMC-999"` 記錄存在，`name = null`，`node_logs[tl1].outputRowCount` 包含此列（不遺失）
+
+### TC-057-13：target_load ghost record 閘門過濾短識別碼（BUG-2 修正驗證）
+
+- **Given**：tl1 輸入含三列：`source_customer_no = "01"`（長度 2）、`source_customer_no = "."`（長度 1）、`source_customer_no = "VALID001"`（長度 8）
+- **When**：tl1 執行 UPSERT
+- **Then**：`customer_core` 中只寫入 `source_customer_no = "VALID001"` 的列；前兩列因 `source_customer_no` 長度 < 5 被跳過，`node_logs[tl1].outputRowCount = 1`，跳過筆數記錄於節點日誌中
+
 ---
 
 ## 依賴關係
@@ -209,11 +254,14 @@ cd1 的輸入來自 m4（FULL OUTER JOIN fm1 與 fm2）。m4 執行後，資料�
 
 - [ ] field_mapping 節點實作完成（dropUnmapped 邏輯正確）
 - [ ] conditional 節點實作完成，支援 `>=`、`IS NOT NULL` 比較與 `left.` / `right.` 欄位解析
+- [ ] conditional 節點 rules 涵蓋 m4 輸出所有有 `_right` 後綴的欄位，MLMC-only 記錄關鍵欄位均有值（BUG-2 修正驗證）
 - [ ] target_load 節點實作完成，UPSERT 邏輯正確（INSERT + ON CONFLICT DO UPDATE）
+- [ ] target_load 資料品質閘門改為顯式 `source_customer_no` 長度 >= 5 過濾，移除基於 `is_nullable='NO'` 的隱性 schema 過濾（BUG-2 修正驗證）
 - [ ] ETL 追蹤欄位自動填充（`_etl_loaded_at`、`_etl_pipeline_id`、`data_source`）
 - [ ] 測試執行跳過 UPSERT 且節點 status 為 completed
 - [ ] 各節點單元測試完成，覆蓋正常路徑與邊界情況
 - [ ] 整合測試：以 seed-pipeline-definition.json 完整執行後，customer_core 確實有資料寫入（非測試執行模式）
+- [ ] 整合測試：pipeline 執行後 customer_core 中 MLMC-only 記錄筆數 > 0（BUG-2 整合驗證）
 
 ---
 

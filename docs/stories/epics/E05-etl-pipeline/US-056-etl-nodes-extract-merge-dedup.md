@@ -55,11 +55,21 @@
 **欄位命名規則（merge 節點後）：**
 
 ```
+JOIN key：COALESCE(left.key, right.key) AS key（取非 null 者）
 左側欄位：原欄位名稱（不加前綴，直接保留）
 右側欄位：若與左側同名，加 `_right` 後綴；否則直接保留
 ```
 
 > 注意：seed-pipeline 中的 merge 節點後緊跟 dedup，dedup 直接使用 `CUSTO_NO` 或 `CUSTID` 作為 keyColumn，代表 merge 後的欄位名稱應保持原始名稱（不加前綴），僅在衝突時加後綴。
+
+### AC-2a：merge — 同名 join key 必須額外保留左右原值（BUG-1 修正）
+
+- **Given** merge 節點的 `leftColumn` 與 `rightColumn` 名稱相同（如 `source_customer_no`）
+- **When** 節點執行 FULL OUTER JOIN
+- **Then** 除了 COALESCE 後的主 key 欄位外，**額外輸出** `{key}_left` 和 `{key}_right` 兩個欄位，分別保留左右原始值（可為 NULL）
+- **And** 下游節點（如 derived_field df3）可用 `{key}_left IS NOT NULL` / `{key}_right IS NOT NULL` 判斷記錄的真正來源歸屬
+
+> **根因**：原實作僅輸出 COALESCE 後的 join key，且 same-name 時跳過右側 key（無 `_right` 欄位）。導致 df3 的 `data_source` CASE WHEN 判斷中 `left.source_customer_no` 和 `right.source_customer_no` 都解析到同一個 COALESCE 後的欄位，所有記錄都被標記為 `"ZZIP_BAMCUST_M+MLMCUSTOMER"`。
 
 ### AC-3：dedup — 依 key 欄位去重
 
@@ -128,18 +138,42 @@ leftColumn: "CUSTO_NO", rightColumn: "CUSTO_NO"
 
 兩邊都有 `CUSTO_NO`，merge 後只保留一個 `CUSTO_NO`（取非 null 者，若皆非 null 以 left 為主）。這符合 dedup 節點後直接使用 `CUSTO_NO` 作為 keyColumn 的需求。
 
-### derived_field — df3 的 CASE 表達式
+### pipeline definition 層 BUG-3 修正（ZZIP CUSTOM_MK 補零）
 
-df3 中的 `data_source` 表達式語法：
+BUG-3 的根因是 ZZIP 來源的 `CUSTOM_MK` 欄位本身有 `"1"` 和 `"01"` 兩種格式，而 Lookup lk_ctype1 的 `TBL_CD` 統一使用 `"01"`，導致 `CUSTOM_MK="1"` 的記錄查不到對應描述。
+
+修正方式為在 `seed-pipeline-definition.json` 的 ZZIP 分支中，於 Lookup 節點前新增一個 derived_field 節點，對 `CUSTOM_MK` 執行 `padStart(2, '0')` 正規化：
+
+```json
+{
+  "id": "df_zzip_ctype_pad",
+  "type": "derived_field",
+  "expressions": [
+    {
+      "outputColumn": "CUSTOM_MK",
+      "expression": "padStart(CUSTOM_MK, 2, '0')",
+      "outputType": "VARCHAR"
+    }
+  ]
+}
 ```
-CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NOT NULL
+
+此修正屬於 **pipeline definition 設定層**的調整，不需要改動引擎節點邏輯（`padStart` 函數已在 AC-5 支援）。
+
+### derived_field — df3 的 CASE 表達式（BUG-1 修正後）
+
+df3 中的 `data_source` 表達式語法需改用 merge 額外保留的 `_left` / `_right` 欄位：
+```
+CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NOT NULL
      THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER'
-     WHEN left.source_customer_no IS NOT NULL
+     WHEN source_customer_no_left IS NOT NULL
      THEN 'ZZIP_BAMCUST_M'
      ELSE 'MLMCUSTOMER' END
 ```
 
-此表達式在 merge m4 之後的資料列中執行。`left.source_customer_no` 與 `right.source_customer_no` 分別對應 ZZIP 路線（fm1 輸出）與 MLMC 路線（fm2 輸出）的欄位，需依照 merge 後的欄位命名規則正確解析。
+此表達式在 merge m4 之後的資料列中執行。`source_customer_no_left` 與 `source_customer_no_right` 分別保留 ZZIP 路線（fm1 輸出）與 MLMC 路線（fm2 輸出）的原始 join key 值，可為 NULL，用以正確判斷記錄來源。
+
+> **注意**：原始設計使用 `left.source_customer_no` / `right.source_customer_no` 語法，但因 merge 的 COALESCE 行為，兩者解析到同一個非 NULL 欄位。修正後改為直接引用 `_left` / `_right` 實體欄位名稱。
 
 ---
 
@@ -211,6 +245,32 @@ CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NO
 - **When**：對 1000 列資料執行
 - **Then**：1000 列的 customer_id 均為合法 UUID v4，且互不重複
 
+### TC-056-09b：padStart ZZIP CUSTOM_MK 補零正規化（BUG-3 修正驗證）
+
+- **Given**：列中 `CUSTOM_MK = "1"`
+- **When**：`df_zzip_ctype_pad` 執行 `padStart(CUSTOM_MK, 2, '0')`
+- **Then**：輸出列 `CUSTOM_MK = "01"`（可正確命中 Lookup lk_ctype1 的 `TBL_CD="01"` 條目）
+
+### TC-056-10：merge 同名 join key 額外保留 `_left` / `_right` 欄位（BUG-1 修正驗證）
+
+- **Given**：m4 輸入左側（ZZIP 路線）含 `source_customer_no = "ZZIP-001"`，右側（MLMC 路線）含 `source_customer_no = "MLMC-001"`，兩者不同（無 match）
+- **When**：m4 FULL JOIN on `source_customer_no` 執行
+- **Then**：輸出含兩列：
+  - ZZIP-only 列：`source_customer_no = "ZZIP-001"`（COALESCE 結果）、`source_customer_no_left = "ZZIP-001"`、`source_customer_no_right = null`
+  - MLMC-only 列：`source_customer_no = "MLMC-001"`、`source_customer_no_left = null`、`source_customer_no_right = "MLMC-001"`
+
+### TC-056-11：df3 data_source 三種情境標記正確性（BUG-1 修正驗證）
+
+- **Given**：m4 輸出含三種記錄：
+  - (A) 雙來源：`source_customer_no_left = "ZZIP-001"`、`source_customer_no_right = "MLMC-001"`
+  - (B) ZZIP-only：`source_customer_no_left = "ZZIP-001"`、`source_customer_no_right = null`
+  - (C) MLMC-only：`source_customer_no_left = null`、`source_customer_no_right = "MLMC-001"`
+- **When**：df3 執行 CASE WHEN 表達式
+- **Then**：
+  - (A) `data_source = "ZZIP_BAMCUST_M+MLMCUSTOMER"`
+  - (B) `data_source = "ZZIP_BAMCUST_M"`
+  - (C) `data_source = "MLMCUSTOMER"`
+
 ---
 
 ## 依賴關係
@@ -225,10 +285,13 @@ CASE WHEN left.source_customer_no IS NOT NULL AND right.source_customer_no IS NO
 
 - [ ] raw_data_extract 節點實作完成，支援從 raw table 讀取資料
 - [ ] merge 節點（FULL OUTER JOIN）記憶體內實作完成
+- [ ] merge 節點同名 join key 額外輸出 `{key}_left` / `{key}_right` 欄位，可為 NULL（BUG-1 修正驗證）
 - [ ] dedup 節點（latest_timestamp 策略）實作完成
 - [ ] type_cast 節點（VARCHAR → DECIMAL / INTEGER / DATE）實作完成
 - [ ] derived_field 節點實作完成，支援 mergePhone / padStart / gen_random_uuid / CASE WHEN
 - [ ] mergePhone 佔位值過濾邏輯正確
+- [ ] df3 data_source 欄位在三種情境（雙來源、ZZIP-only、MLMC-only）均標記正確（BUG-1 修正驗證）
+- [ ] seed-pipeline-definition.json 的 ZZIP 分支在 Lookup 前新增 `df_zzip_ctype_pad` 節點，`CUSTOM_MK="1"` 正規化為 `"01"`（BUG-3 pipeline definition 修正驗證）
 - [ ] 各節點單元測試完成，覆蓋正常路徑與邊界情況
 - [ ] 以 seed-pipeline-definition.json 執行時，前 15 個節點（e1~fm2）全部 completed，無 failed
 
