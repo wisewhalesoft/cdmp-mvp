@@ -233,7 +233,14 @@
       "Bash(claude mcp:*)",
       "Bash(claude /doctor)",
       "Bash(npx claude-code:*)",
-      "Bash(npx nx:*)"
+      "Bash(npx nx:*)",
+      "mcp__mem0__health",
+      "Bash(cat C:/Users/cacab/.claude/mcp*.json)",
+      "Bash(pip show:*)",
+      "Bash(npx -y mem0-mcp --help)",
+      "Bash(npm info:*)",
+      "Bash(mem0-mcp-server --help)",
+      "Bash(wc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

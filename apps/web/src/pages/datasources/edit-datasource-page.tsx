@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Users, Database, ArrowDownToLine, LogOut, ChevronRight, Plug, Workflow } from 'lucide-react';
+import { Users, Database, ArrowDownToLine, LogOut, ChevronRight, Plug, Workflow, Contact, } from 'lucide-react';
 import { editDatasourceSchema, type EditDatasourceFormData } from './edit-datasource-schema';
 import { getDatasource, updateDatasource, testDatasourceConnection } from '@/api/datasources';
 import { clearAuth, getUser } from '@/stores/auth-store';
@@ -240,6 +240,7 @@ export function EditDatasourcePage() {
             <Workflow size={20} />
             ETL Pipeline
           </a>
+<a            href="/c360/customers"            className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"          >            <Contact size={20} />            Customer 360          </a>
         </nav>
       </aside>
 

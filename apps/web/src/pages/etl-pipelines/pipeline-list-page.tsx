@@ -26,7 +26,7 @@ import {
   AlertTriangle,
   BarChart3,
   List,
-} from 'lucide-react';
+Contact, } from 'lucide-react';
 import { clearAuth, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import {
@@ -511,6 +511,7 @@ export function PipelineListPage() {
             <Workflow size={20} />
             ETL Pipeline
           </a>
+<a            href="/c360/customers"            className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"          >            <Contact size={20} />            Customer 360          </a>
         </nav>
       </aside>
 

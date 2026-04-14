@@ -17,7 +17,9 @@ import { PipelineLogsPage } from '@/pages/etl-pipelines/pipeline-logs-page';
 import { PipelineEditorPage } from '@/pages/etl-pipelines/editor';
 import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
 import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
-import { AdminRoute, UserRoute } from '@/router/protected-route';
+import { CustomerListPage } from '@/pages/c360/customer-list-page';
+import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
+import { AdminRoute, UserRoute, ProtectedRoute } from '@/router/protected-route';
 
 export function App() {
   return (
@@ -135,6 +137,22 @@ export function App() {
           <AdminRoute>
             <PipelineEditorPage />
           </AdminRoute>
+        }
+      />
+      <Route
+        path="/c360/customers"
+        element={
+          <ProtectedRoute>
+            <CustomerListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/c360/customers/:customerId"
+        element={
+          <ProtectedRoute>
+            <CustomerDetailPage />
+          </ProtectedRoute>
         }
       />
       <Route
