@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer 360 — 客戶清單 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">Customer 360</h1>
+    <div class="flex items-center gap-4">
+      <!-- Role Toggle -->
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showState('normal')" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常資料</button>
+      <button onclick="showState('empty-search')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">搜尋無結果</button>
+      <button onclick="showState('no-data')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">無資料狀態</button>
+    </div>
+
+    <div class="p-6">
+
+      <!-- Stats Cards -->
+      <div id="stats-cards" class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg border border-border p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <i data-lucide="users" class="w-5 h-5 text-primary"></i>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500">總客戶數</div>
+            <div class="text-xl font-bold text-gray-900" id="stat-total">1,247</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg border border-border p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <i data-lucide="user" class="w-5 h-5 text-primary"></i>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500">個人客戶</div>
+            <div class="text-xl font-bold text-gray-900" id="stat-individual">856</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg border border-border p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+            <i data-lucide="building-2" class="w-5 h-5 text-success"></i>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500">企業客戶</div>
+            <div class="text-xl font-bold text-gray-900" id="stat-corporate">312</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg border border-border p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+            <i data-lucide="globe" class="w-5 h-5 text-purple-600"></i>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500">外籍客戶</div>
+            <div class="text-xl font-bold text-gray-900" id="stat-foreign">79</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search & Filter -->
+      <div class="bg-white rounded-lg border border-border p-4 mb-6">
+        <div class="flex items-center gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input id="search-input" type="text" placeholder="搜尋客戶姓名或身分證/統編..."
+              class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
+              onkeyup="handleSearchKeyup(event)" oninput="handleSearchInput()">
+            <div id="search-hint" class="hidden absolute left-0 top-full mt-1 text-xs text-gray-400 pl-1">請輸入至少 2 個字元</div>
+          </div>
+          <select id="type-filter" onchange="handleTypeFilter()" class="px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition min-w-[120px]">
+            <option value="">全部類型</option>
+            <option value="01">個人</option>
+            <option value="02">企業</option>
+            <option value="04">外籍</option>
+          </select>
+          <button onclick="handleSearch()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            搜尋
+          </button>
+        </div>
+      </div>
+
+      <!-- Normal State: Table -->
+      <div id="state-normal">
+        <div class="bg-white rounded-lg border border-border shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border bg-gray-50/60">
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">客戶姓名</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">客戶類型</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">身分證/統編</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">行動電話</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">公司名稱</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">操作</th>
+                </tr>
+              </thead>
+              <tbody id="customer-table-body">
+                <!-- Rows injected by JS -->
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div class="flex items-center justify-between px-5 py-3 border-t border-border">
+            <span class="text-sm text-gray-500">顯示 1-20 / 共 1,247 筆</span>
+            <div class="flex items-center gap-1">
+              <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <button class="px-3 py-1.5 text-sm border border-primary rounded-md text-white bg-primary font-medium">1</button>
+              <button class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-600 bg-white hover:bg-gray-50">2</button>
+              <button class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-600 bg-white hover:bg-gray-50">3</button>
+              <span class="px-2 text-gray-400">...</span>
+              <button class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-600 bg-white hover:bg-gray-50">63</button>
+              <button class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-600 bg-white hover:bg-gray-50">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty Search State -->
+      <div id="state-empty-search" class="hidden">
+        <div class="bg-white rounded-lg border border-border shadow-sm p-16 text-center">
+          <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="search-x" class="w-8 h-8 text-gray-400"></i>
+          </div>
+          <h3 class="text-base font-semibold text-gray-700 mb-2">找不到符合條件的客戶</h3>
+          <p class="text-sm text-gray-500 mb-4">請嘗試調整搜尋條件或篩選類型</p>
+          <button onclick="clearFilters()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-blue-50 transition">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            清除篩選條件
+          </button>
+        </div>
+      </div>
+
+      <!-- No Data State -->
+      <div id="state-no-data" class="hidden">
+        <div class="bg-white rounded-lg border border-border shadow-sm p-16 text-center">
+          <div class="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="database" class="w-8 h-8 text-warning"></i>
+          </div>
+          <h3 class="text-base font-semibold text-gray-700 mb-2">客戶資料尚未載入</h3>
+          <p class="text-sm text-gray-500">請聯絡管理員執行 ETL Pipeline</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Sample data
+    const customers = [
+      { name: '王小明', type: '01', typeDesc: '個人', idNo: 'A123456789', phone: '0912345678', company: '台灣科技股份有限公司' },
+      { name: '李小華', type: '01', typeDesc: '個人', idNo: 'B234567890', phone: '0923456789', company: '新光金融控股公司' },
+      { name: '張大偉', type: '01', typeDesc: '個人', idNo: 'C345678901', phone: '0934567890', company: '中華電信股份有限公司' },
+      { name: '台灣半導體製造股份有限公司', type: '02', typeDesc: '企業', idNo: '12345678', phone: '02-27001000', company: '台灣半導體製造股份有限公司' },
+      { name: '陳美玲', type: '01', typeDesc: '個人', idNo: 'D456789012', phone: '0945678901', company: '國泰人壽保險公司' },
+      { name: '鴻海精密工業股份有限公司', type: '02', typeDesc: '企業', idNo: '23456789', phone: '02-22682000', company: '鴻海精密工業股份有限公司' },
+      { name: 'Michael Johnson', type: '04', typeDesc: '外籍', idNo: 'FA12345678', phone: '0956789012', company: 'Google Taiwan Ltd.' },
+      { name: '林志玲', type: '01', typeDesc: '個人', idNo: 'E567890123', phone: '0967890123', company: '遠傳電信股份有限公司' },
+    ];
+
+    let currentRole = 'admin';
+
+    function maskIdNumber(val) {
+      if (!val) return '\u2014';
+      if (val.length <= 5) return val;
+      return val.substring(0, 3) + '*'.repeat(val.length - 5) + val.substring(val.length - 2);
+    }
+
+    function maskPhone(val) {
+      if (!val) return '\u2014';
+      if (val.length <= 6) return val;
+      return val.substring(0, 4) + '*'.repeat(val.length - 6) + val.substring(val.length - 2);
+    }
+
+    function getTypeBadge(type) {
+      const styles = {
+        '01': 'bg-blue-100 text-blue-700',
+        '02': 'bg-green-100 text-green-700',
+        '04': 'bg-purple-100 text-purple-700'
+      };
+      const labels = { '01': '個人', '02': '企業', '04': '外籍' };
+      return `<span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${styles[type] || 'bg-gray-100 text-gray-700'}">${labels[type] || type}</span>`;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('customer-table-body');
+      const typeFilter = document.getElementById('type-filter').value;
+      let filtered = customers;
+      if (typeFilter) {
+        filtered = customers.filter(c => c.type === typeFilter);
+      }
+
+      tbody.innerHTML = filtered.map(c => {
+        const idDisplay = currentRole === 'admin' ? c.idNo : maskIdNumber(c.idNo);
+        const phoneDisplay = currentRole === 'admin' ? c.phone : maskPhone(c.phone);
+        return `
+          <tr class="border-b border-border hover:bg-gray-50/50 transition cursor-pointer" onclick="window.location.href='26-customer-360-detail.html'">
+            <td class="px-5 py-3 font-medium text-gray-900">${c.name}</td>
+            <td class="px-5 py-3">${getTypeBadge(c.type)}</td>
+            <td class="px-5 py-3 text-gray-600 font-mono text-xs">${idDisplay}</td>
+            <td class="px-5 py-3 text-gray-600">${phoneDisplay}</td>
+            <td class="px-5 py-3 text-gray-600">${c.company || '\u2014'}</td>
+            <td class="px-5 py-3">
+              <a href="26-customer-360-detail.html" class="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded-md hover:bg-blue-50 transition" onclick="event.stopPropagation()">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                查看
+              </a>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function setRole(role) {
+      currentRole = role;
+      document.querySelectorAll('.role-btn').forEach(btn => {
+        btn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md transition ' +
+          (btn.id === 'role-' + role ? 'bg-white text-primary shadow-sm' : 'text-gray-500');
+      });
+      renderTable();
+    }
+
+    function showState(state) {
+      document.querySelectorAll('.demo-btn').forEach(btn => {
+        btn.className = 'demo-btn px-3 py-1 text-xs rounded border ' +
+          (btn.textContent.includes(state === 'normal' ? '正常' : state === 'empty-search' ? '搜尋無' : '無資料')
+            ? 'border-primary bg-blue-50 text-primary'
+            : 'border-gray-300 bg-white hover:bg-gray-50');
+      });
+      document.getElementById('state-normal').classList.toggle('hidden', state !== 'normal');
+      document.getElementById('state-empty-search').classList.toggle('hidden', state !== 'empty-search');
+      document.getElementById('state-no-data').classList.toggle('hidden', state !== 'no-data');
+      // Update stats for no-data
+      if (state === 'no-data') {
+        document.getElementById('stat-total').textContent = '0';
+        document.getElementById('stat-individual').textContent = '0';
+        document.getElementById('stat-corporate').textContent = '0';
+        document.getElementById('stat-foreign').textContent = '0';
+      } else {
+        document.getElementById('stat-total').textContent = '1,247';
+        document.getElementById('stat-individual').textContent = '856';
+        document.getElementById('stat-corporate').textContent = '312';
+        document.getElementById('stat-foreign').textContent = '79';
+      }
+    }
+
+    function handleSearchInput() {
+      const val = document.getElementById('search-input').value;
+      const hint = document.getElementById('search-hint');
+      if (val.length > 0 && val.length < 2) {
+        hint.classList.remove('hidden');
+      } else {
+        hint.classList.add('hidden');
+      }
+    }
+
+    function handleSearchKeyup(e) {
+      if (e.key === 'Enter') handleSearch();
+    }
+
+    function handleSearch() {
+      const val = document.getElementById('search-input').value.trim();
+      if (val.length > 0 && val.length < 2) {
+        document.getElementById('search-hint').classList.remove('hidden');
+        return;
+      }
+      // Demo: if search has value but no match simulation
+      if (val.length >= 2) {
+        const found = customers.some(c => c.name.includes(val) || c.idNo.includes(val));
+        if (!found) {
+          showState('empty-search');
+          return;
+        }
+      }
+      showState('normal');
+    }
+
+    function handleTypeFilter() {
+      renderTable();
+    }
+
+    function clearFilters() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('type-filter').value = '';
+      document.getElementById('search-hint').classList.add('hidden');
+      showState('normal');
+      renderTable();
+    }
+
+    // Init
+    renderTable();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

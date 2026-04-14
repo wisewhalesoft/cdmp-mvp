@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer 360 — 客戶詳情 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+    .accordion-content.open { max-height: 2000px; transition: max-height 0.5s ease-in; }
+    .accordion-arrow { transition: transform 0.3s ease; }
+    .accordion-arrow.open { transform: rotate(180deg); }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-3">
+      <h1 class="text-base font-semibold text-gray-800">Customer 360</h1>
+      <span class="text-gray-300">/</span>
+      <span class="text-sm text-gray-500" id="breadcrumb-name">王小明</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <!-- Role Toggle -->
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <!-- Demo Toggle -->
+      <div class="flex items-center gap-1 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="showCustomer('individual')" id="demo-individual" class="demo-type-btn px-2 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">個人</button>
+        <button onclick="showCustomer('corporate')" id="demo-corporate" class="demo-type-btn px-2 py-1 text-xs font-medium rounded-md text-gray-500 transition">企業</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showView('normal')" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常檢視</button>
+      <button onclick="showView('stale')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">資料過期警告</button>
+      <button onclick="showView('not-found')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">404 找不到</button>
+    </div>
+
+    <!-- Normal View -->
+    <div id="view-normal" class="p-6">
+
+      <!-- Back + Header -->
+      <div class="mb-6">
+        <a href="25-customer-360-list.html" class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-primary transition mb-4">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          返回清單
+        </a>
+
+        <!-- Customer Header Card -->
+        <div class="bg-white rounded-lg border border-border p-5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <i data-lucide="user" class="w-6 h-6 text-primary" id="avatar-icon"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-3">
+                  <h2 class="text-xl font-bold text-gray-900" id="customer-name">王小明</h2>
+                  <span id="customer-type-badge" class="inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">個人</span>
+                </div>
+                <div class="text-sm text-gray-500 mt-1">客戶編號：<span class="font-mono" id="customer-id-display">A123456789</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Freshness Warning Banner -->
+        <div id="freshness-warning" class="hidden mt-3 flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-warning shrink-0"></i>
+          <span class="text-sm text-amber-800">此客戶資料最後更新於 <strong>10</strong> 天前，可能非最新狀態</span>
+        </div>
+      </div>
+
+      <!-- 8 Data Category Accordions -->
+      <div class="space-y-3" id="categories-container">
+        <!-- Categories will be rendered by JS -->
+      </div>
+
+    </div>
+
+    <!-- 404 Not Found View -->
+    <div id="view-not-found" class="hidden p-6">
+      <div class="bg-white rounded-lg border border-border shadow-sm p-16 text-center">
+        <div class="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="user-x" class="w-8 h-8 text-danger"></i>
+        </div>
+        <h3 class="text-base font-semibold text-gray-700 mb-2">找不到此客戶資料</h3>
+        <p class="text-sm text-gray-500 mb-4">請確認客戶 ID 是否正確，或該客戶可能已被移除</p>
+        <a href="25-customer-360-list.html" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          返回清單
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let currentRole = 'admin';
+    let currentCustomerType = 'individual'; // or 'corporate'
+
+    // --- Masking functions ---
+    function maskId(val) {
+      if (!val) return '\u2014';
+      if (val.length <= 5) return val;
+      return val.substring(0, 3) + '*'.repeat(val.length - 5) + val.substring(val.length - 2);
+    }
+    function maskPhone(val) {
+      if (!val) return '\u2014';
+      if (val.length <= 6) return val;
+      return val.substring(0, 4) + '*'.repeat(val.length - 6) + val.substring(val.length - 2);
+    }
+    function maskEmail(val) {
+      if (!val) return '\u2014';
+      const parts = val.split('@');
+      if (parts.length !== 2) return val;
+      const local = parts[0];
+      const masked = local.substring(0, 2) + '*'.repeat(Math.max(local.length - 2, 2));
+      return masked + '@' + parts[1];
+    }
+    function fmt(val) { return val == null || val === '' ? '\u2014' : val; }
+    function fmtCodeDesc(code, desc) {
+      if (desc && code) return `${desc}（${code}）`;
+      if (desc) return desc;
+      if (code) return code;
+      return '\u2014';
+    }
+    function fmtNumber(val) {
+      if (val == null) return '\u2014';
+      return Number(val).toLocaleString('zh-TW');
+    }
+    function fmtDate(val) {
+      if (!val) return '\u2014';
+      const d = new Date(val);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    function fmtDateTime(val) {
+      if (!val) return '\u2014';
+      const d = new Date(val);
+      // Convert to UTC+8
+      const utc8 = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+      const y = utc8.getUTCFullYear();
+      const m = String(utc8.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(utc8.getUTCDate()).padStart(2, '0');
+      const h = String(utc8.getUTCHours()).padStart(2, '0');
+      const min = String(utc8.getUTCMinutes()).padStart(2, '0');
+      return `${y}-${m}-${day} ${h}:${min}`;
+    }
+
+    // Flag badge
+    function fmtFlag(val, label) {
+      if (val === 'Y') {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800"><i data-lucide="alert-triangle" class="w-3 h-3"></i>${label}</span>`;
+      }
+      return fmt(val);
+    }
+
+    // --- Sample Data ---
+    const individualData = {
+      customerId: '550e8400-e29b-41d4-a716-446655440000',
+      identity: { sourceCustomerNo: 'A123456789', customerTypeCode: '01', customerTypeDesc: '個人', name: '王小明', englishName: 'Wang Xiao Ming' },
+      personalAttributes: { gender: 'M', dateOfBirth: '1985-03-15', maritalStatusCode: '1', maritalStatusDesc: '已婚', educationCode: '06', educationDesc: '大學', spouseName: '李小美', fatherName: '王大明', motherName: '陳小花', idIssueType: '01', idIssueDate: '2020-01-15T00:00:00.000Z', idIssueAddress: '台北市中正區', driverLicense: 'D123456789' },
+      contactInfo: { mobilePhone: '0912345678', homePhone: '02-23456789', contactPhone: '02-34567890', officePhone: '02-45678901#123', registeredPhone: '02-56789012', registeredFax: '02-56789013', businessFax: '02-67890123', businessMobile: '0922333444', email: 'wang@example.com', lineAccount: 'wang_line' },
+      addresses: { residentialZip: '100', residentialAddress: '台北市中正區忠孝東路一段1號', mailingZip: '100', mailingAddress: '台北市中正區忠孝東路一段1號', registeredZip: '110', registeredAddress: '台北市信義區信義路五段7號', companyZip: '110', companyAddress: '台北市信義區松仁路100號', maturityMailingZip: '100', maturityMailingAddress: '台北市中正區忠孝東路一段1號' },
+      employment: { companyName: '台灣科技股份有限公司', occupationCode: '0301', occupationDesc: '軟體工程師', jobTitleCode: '0102', jobTitleDesc: '經理', jobLevelCode: '03', jobLevelDesc: '中階主管', industryCode: 'H', industryDesc: '資訊及通訊傳播業', workYears: 10.5, companyScale: '1', role: '一般客戶' },
+      financial: { monthlyIncomeCode: '05', monthlyIncomeDesc: '5萬~10萬', approvedIncome: 80000, incomeSourceCode: '01', incomeSourceDesc: '薪資所得', capital: null, creditLimit: 500000, highestTransactionAmount: 1200000, highestTransactionDate: '2025-06-15T00:00:00.000Z', hasRealEstate: 'Y', debtFlag: 'N', fineFlag: 'Y', addressAnomalyFlag: 0, mainlandFlag: 0 },
+      corporate: null,
+      etlTracking: { sourceCreatedAt: '2020-05-10T08:30:00.000Z', sourceUpdatedAt: '2025-12-01T14:22:00.000Z', dataSource: 'ZZIP+MLMC', etlLoadedAt: '2026-04-10T03:00:00.000Z', etlPipelineId: '660e8400-e29b-41d4-a716-446655440001' }
+    };
+
+    const corporateData = {
+      customerId: '770e8400-e29b-41d4-a716-446655440002',
+      identity: { sourceCustomerNo: '12345678', customerTypeCode: '02', customerTypeDesc: '企業', name: '台灣半導體製造股份有限公司', englishName: 'Taiwan Semiconductor Manufacturing Co., Ltd.' },
+      personalAttributes: { gender: null, dateOfBirth: null, maritalStatusCode: null, maritalStatusDesc: null, educationCode: null, educationDesc: null, spouseName: null, fatherName: null, motherName: null, idIssueType: null, idIssueDate: null, idIssueAddress: null, driverLicense: null },
+      contactInfo: { mobilePhone: null, homePhone: null, contactPhone: '03-5636688', officePhone: '03-5636688#100', registeredPhone: '03-5636688', registeredFax: '03-5636689', businessFax: '03-5636690', businessMobile: null, email: 'info@tsmc.com', lineAccount: null },
+      addresses: { residentialZip: null, residentialAddress: null, mailingZip: '300', mailingAddress: '新竹市新竹科學園區力行六路8號', registeredZip: '300', registeredAddress: '新竹市新竹科學園區力行六路8號', companyZip: '300', companyAddress: '新竹市新竹科學園區力行六路8號', maturityMailingZip: null, maturityMailingAddress: null },
+      employment: { companyName: '台灣半導體製造股份有限公司', occupationCode: null, occupationDesc: null, jobTitleCode: null, jobTitleDesc: null, jobLevelCode: null, jobLevelDesc: null, industryCode: 'C', industryDesc: '製造業', workYears: null, companyScale: '5', role: '法人客戶' },
+      financial: { monthlyIncomeCode: null, monthlyIncomeDesc: null, approvedIncome: null, incomeSourceCode: null, incomeSourceDesc: null, capital: 259303804580, creditLimit: 50000000, highestTransactionAmount: 120000000, highestTransactionDate: '2026-01-20T00:00:00.000Z', hasRealEstate: 'Y', debtFlag: 'N', fineFlag: 'N', addressAnomalyFlag: 0, mainlandFlag: 0 },
+      corporate: { ownerName: '魏哲家', ownerId: 'F123456789', ownerBirth: '1960-10-15', ownerZip: '106', ownerAddress: '台北市大安區仁愛路四段100號', establishedCapital: 259303804580, employeeCountCode: '09', employeeCountDesc: '10000人以上', isListedCode: '01', isListedDesc: '上市', groupOwner: '台積電集團', businessItem: '積體電路之製造、銷售、封裝、測試', organizationType: '股份有限公司', parentCustomerId: null, parentCustomerName: null },
+      etlTracking: { sourceCreatedAt: '2018-03-20T02:00:00.000Z', sourceUpdatedAt: '2026-03-15T10:00:00.000Z', dataSource: 'CORP_SYS', etlLoadedAt: '2026-04-12T03:00:00.000Z', etlPipelineId: '770e8400-e29b-41d4-a716-446655440003' }
+    };
+
+    function getData() {
+      return currentCustomerType === 'corporate' ? corporateData : individualData;
+    }
+
+    // --- Build categories ---
+    function buildCategories() {
+      const d = getData();
+      const isUser = currentRole === 'user';
+      const isCorporate = d.identity.customerTypeCode === '02';
+
+      const categories = [
+        {
+          id: 'A', title: 'A. 識別與分類', icon: 'fingerprint',
+          fields: [
+            ['客戶 ID', d.customerId],
+            ['客戶編號', isUser ? maskId(d.identity.sourceCustomerNo) : d.identity.sourceCustomerNo],
+            ['客戶類型', fmtCodeDesc(d.identity.customerTypeCode, d.identity.customerTypeDesc)],
+            ['姓名/企業名稱', fmt(d.identity.name)],
+            ['英文姓名', fmt(d.identity.englishName)],
+          ]
+        },
+        {
+          id: 'B', title: 'B. 個人屬性', icon: 'user-circle',
+          fields: [
+            ['性別', d.personalAttributes.gender === 'M' ? '男' : d.personalAttributes.gender === 'F' ? '女' : fmt(d.personalAttributes.gender)],
+            ['生日', fmtDate(d.personalAttributes.dateOfBirth)],
+            ['婚姻狀態', fmtCodeDesc(d.personalAttributes.maritalStatusCode, d.personalAttributes.maritalStatusDesc)],
+            ['學歷', fmtCodeDesc(d.personalAttributes.educationCode, d.personalAttributes.educationDesc)],
+            ['配偶姓名', fmt(d.personalAttributes.spouseName)],
+            ['父親姓名', fmt(d.personalAttributes.fatherName)],
+            ['母親姓名', fmt(d.personalAttributes.motherName)],
+            ['發證類別', fmt(d.personalAttributes.idIssueType)],
+            ['發證日期', fmtDate(d.personalAttributes.idIssueDate)],
+            ['發證地址', fmt(d.personalAttributes.idIssueAddress)],
+            ['駕照號碼', fmt(d.personalAttributes.driverLicense)],
+          ]
+        },
+        {
+          id: 'C', title: 'C. 聯絡資訊', icon: 'phone',
+          fields: [
+            ['行動電話', isUser ? maskPhone(d.contactInfo.mobilePhone) : fmt(d.contactInfo.mobilePhone)],
+            ['戶籍電話', isUser ? maskPhone(d.contactInfo.homePhone) : fmt(d.contactInfo.homePhone)],
+            ['通訊電話', isUser ? maskPhone(d.contactInfo.contactPhone) : fmt(d.contactInfo.contactPhone)],
+            ['公司電話', isUser ? maskPhone(d.contactInfo.officePhone) : fmt(d.contactInfo.officePhone)],
+            ['公司登記電話', fmt(d.contactInfo.registeredPhone)],
+            ['公司傳真', fmt(d.contactInfo.registeredFax)],
+            ['營業傳真', fmt(d.contactInfo.businessFax)],
+            ['營業行動電話', fmt(d.contactInfo.businessMobile)],
+            ['Email', isUser ? maskEmail(d.contactInfo.email) : fmt(d.contactInfo.email)],
+            ['Line 帳號', fmt(d.contactInfo.lineAccount)],
+          ]
+        },
+        {
+          id: 'D', title: 'D. 地址', icon: 'map-pin',
+          fields: [
+            ['戶籍地址', d.addresses.residentialAddress ? (d.addresses.residentialZip || '') + ' ' + d.addresses.residentialAddress : '\u2014'],
+            ['通訊地址', d.addresses.mailingAddress ? (d.addresses.mailingZip || '') + ' ' + d.addresses.mailingAddress : '\u2014'],
+            ['公司登記地址', d.addresses.registeredAddress ? (d.addresses.registeredZip || '') + ' ' + d.addresses.registeredAddress : '\u2014'],
+            ['營業地址', d.addresses.companyAddress ? (d.addresses.companyZip || '') + ' ' + d.addresses.companyAddress : '\u2014'],
+            ['滿期寄送地址', d.addresses.maturityMailingAddress ? (d.addresses.maturityMailingZip || '') + ' ' + d.addresses.maturityMailingAddress : '\u2014'],
+          ]
+        },
+        {
+          id: 'E', title: 'E. 職業與就業', icon: 'briefcase',
+          fields: [
+            ['服務公司', fmt(d.employment.companyName)],
+            ['職業', fmtCodeDesc(d.employment.occupationCode, d.employment.occupationDesc)],
+            ['職稱', fmtCodeDesc(d.employment.jobTitleCode, d.employment.jobTitleDesc)],
+            ['職級', fmtCodeDesc(d.employment.jobLevelCode, d.employment.jobLevelDesc)],
+            ['行業', fmtCodeDesc(d.employment.industryCode, d.employment.industryDesc)],
+            ['年資', d.employment.workYears != null ? d.employment.workYears + ' 年' : '\u2014'],
+            ['公司規模', fmt(d.employment.companyScale)],
+            ['客戶角色', fmt(d.employment.role)],
+          ]
+        },
+        {
+          id: 'F', title: 'F. 財務與風控', icon: 'shield-alert',
+          fields: [
+            ['月所得', fmtCodeDesc(d.financial.monthlyIncomeCode, d.financial.monthlyIncomeDesc)],
+            ['認定月收入', fmtNumber(d.financial.approvedIncome)],
+            ['收入來源', fmtCodeDesc(d.financial.incomeSourceCode, d.financial.incomeSourceDesc)],
+            ['實收資本額', fmtNumber(d.financial.capital)],
+            ['額度總額', fmtNumber(d.financial.creditLimit)],
+            ['最高往來金額', fmtNumber(d.financial.highestTransactionAmount)],
+            ['最高往來日期', fmtDate(d.financial.highestTransactionDate)],
+            ['自有不動產', fmt(d.financial.hasRealEstate)],
+            ['消債旗標', '__FLAG__', d.financial.debtFlag, '消債註記'],
+            ['違規欠稅旗標', '__FLAG__', d.financial.fineFlag, '罰鍰註記'],
+            ['地址異常註記', fmt(d.financial.addressAnomalyFlag)],
+            ['大陸籍旗標', fmt(d.financial.mainlandFlag)],
+          ]
+        },
+        {
+          id: 'G', title: 'G. 企業客戶專屬', icon: 'building',
+          isCorporateOnly: true,
+          fields: isCorporate && d.corporate ? [
+            ['負責人姓名', fmt(d.corporate.ownerName)],
+            ['負責人身分證', fmt(d.corporate.ownerId)],
+            ['負責人生日', fmtDate(d.corporate.ownerBirth)],
+            ['負責人郵遞區號', fmt(d.corporate.ownerZip)],
+            ['負責人地址', fmt(d.corporate.ownerAddress)],
+            ['登記資本額', fmtNumber(d.corporate.establishedCapital)],
+            ['員工人數', fmtCodeDesc(d.corporate.employeeCountCode, d.corporate.employeeCountDesc)],
+            ['上市櫃', fmtCodeDesc(d.corporate.isListedCode, d.corporate.isListedDesc)],
+            ['集團實際負責人', fmt(d.corporate.groupOwner)],
+            ['營業項目', fmt(d.corporate.businessItem)],
+            ['組織形態', fmt(d.corporate.organizationType)],
+            ['母公司客戶 ID', fmt(d.corporate.parentCustomerId)],
+            ['母公司名稱', fmt(d.corporate.parentCustomerName)],
+          ] : []
+        },
+        {
+          id: 'H', title: 'H. 稽核與 ETL 追蹤', icon: 'file-clock',
+          fields: [
+            ['來源建檔日期', fmtDateTime(d.etlTracking.sourceCreatedAt)],
+            ['來源最後更新', fmtDateTime(d.etlTracking.sourceUpdatedAt)],
+            ['資料來源', fmt(d.etlTracking.dataSource)],
+            ['ETL 載入時間', fmtDateTime(d.etlTracking.etlLoadedAt)],
+            ['Pipeline ID', fmt(d.etlTracking.etlPipelineId)],
+          ]
+        }
+      ];
+
+      return categories;
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('categories-container');
+      const categories = buildCategories();
+      const d = getData();
+      const isCorporate = d.identity.customerTypeCode === '02';
+
+      container.innerHTML = categories.map((cat, idx) => {
+        // G category: show "not applicable" for non-corporate
+        if (cat.isCorporateOnly && !isCorporate) {
+          return `
+            <div class="bg-white rounded-lg border border-border">
+              <button onclick="toggleAccordion('cat-${cat.id}')" class="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <i data-lucide="${cat.icon}" class="w-4 h-4 text-gray-500"></i>
+                  </div>
+                  <h3 class="text-sm font-semibold text-gray-700">${cat.title}</h3>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 accordion-arrow" id="arrow-cat-${cat.id}"></i>
+              </button>
+              <div class="accordion-content" id="cat-${cat.id}">
+                <div class="px-5 pb-4">
+                  <div class="flex items-center gap-2 py-6 justify-center text-gray-400">
+                    <i data-lucide="info" class="w-4 h-4"></i>
+                    <span class="text-sm">本分類不適用</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        // Render field grid
+        const fieldRows = cat.fields.map(f => {
+          let value;
+          if (f[1] === '__FLAG__') {
+            value = fmtFlag(f[2], f[3]);
+          } else {
+            value = f[1];
+          }
+          return `
+            <div class="grid grid-cols-3 gap-4 py-2.5 border-b border-gray-50 last:border-0">
+              <dt class="text-sm text-gray-500">${f[0]}</dt>
+              <dd class="text-sm text-gray-900 col-span-2 font-mono text-xs break-all">${value}</dd>
+            </div>
+          `;
+        }).join('');
+
+        const fieldCount = cat.fields.length;
+        const defaultOpen = idx < 3; // Open first 3 by default
+
+        return `
+          <div class="bg-white rounded-lg border border-border">
+            <button onclick="toggleAccordion('cat-${cat.id}')" class="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <i data-lucide="${cat.icon}" class="w-4 h-4 text-primary"></i>
+                </div>
+                <h3 class="text-sm font-semibold text-gray-700">${cat.title}</h3>
+                <span class="text-xs text-gray-400">${fieldCount} 個欄位</span>
+              </div>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 accordion-arrow ${defaultOpen ? 'open' : ''}" id="arrow-cat-${cat.id}"></i>
+            </button>
+            <div class="accordion-content ${defaultOpen ? 'open' : ''}" id="cat-${cat.id}">
+              <div class="px-5 pb-4">
+                <dl>${fieldRows}</dl>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function toggleAccordion(id) {
+      const content = document.getElementById(id);
+      const arrow = document.getElementById('arrow-' + id);
+      content.classList.toggle('open');
+      arrow.classList.toggle('open');
+    }
+
+    function updateHeader() {
+      const d = getData();
+      const isUser = currentRole === 'user';
+      document.getElementById('customer-name').textContent = d.identity.name;
+      document.getElementById('breadcrumb-name').textContent = d.identity.name;
+      document.getElementById('customer-id-display').textContent = isUser ? maskId(d.identity.sourceCustomerNo) : d.identity.sourceCustomerNo;
+
+      const typeBadge = document.getElementById('customer-type-badge');
+      const typeStyles = { '01': 'bg-blue-100 text-blue-700', '02': 'bg-green-100 text-green-700', '04': 'bg-purple-100 text-purple-700' };
+      const typeLabels = { '01': '個人', '02': '企業', '04': '外籍' };
+      typeBadge.className = 'inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full ' + (typeStyles[d.identity.customerTypeCode] || 'bg-gray-100 text-gray-700');
+      typeBadge.textContent = typeLabels[d.identity.customerTypeCode] || d.identity.customerTypeCode;
+
+      // Avatar icon
+      const avatarIcon = document.getElementById('avatar-icon');
+      avatarIcon.setAttribute('data-lucide', d.identity.customerTypeCode === '02' ? 'building-2' : 'user');
+      lucide.createIcons();
+    }
+
+    function setRole(role) {
+      currentRole = role;
+      document.querySelectorAll('.role-btn').forEach(btn => {
+        btn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md transition ' +
+          (btn.id === 'role-' + role ? 'bg-white text-primary shadow-sm' : 'text-gray-500');
+      });
+      updateHeader();
+      renderCategories();
+    }
+
+    function showCustomer(type) {
+      currentCustomerType = type;
+      document.querySelectorAll('.demo-type-btn').forEach(btn => {
+        btn.className = 'demo-type-btn px-2 py-1 text-xs font-medium rounded-md transition ' +
+          (btn.id === 'demo-' + type ? 'bg-white text-primary shadow-sm' : 'text-gray-500');
+      });
+      updateHeader();
+      renderCategories();
+    }
+
+    function showView(view) {
+      document.querySelectorAll('.demo-btn').forEach(btn => {
+        const match = (view === 'normal' && btn.textContent.includes('正常')) ||
+                      (view === 'stale' && btn.textContent.includes('過期')) ||
+                      (view === 'not-found' && btn.textContent.includes('404'));
+        btn.className = 'demo-btn px-3 py-1 text-xs rounded border ' +
+          (match ? 'border-primary bg-blue-50 text-primary' : 'border-gray-300 bg-white hover:bg-gray-50');
+      });
+
+      document.getElementById('view-normal').classList.toggle('hidden', view === 'not-found');
+      document.getElementById('view-not-found').classList.toggle('hidden', view !== 'not-found');
+      document.getElementById('freshness-warning').classList.toggle('hidden', view !== 'stale');
+    }
+
+    // Init
+    updateHeader();
+    renderCategories();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

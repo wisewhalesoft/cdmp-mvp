@@ -42,6 +42,15 @@ CDMP（企業客戶資料治理平台）MVP 已完成產品需求與系統架構
 | Pipeline 版本狀態 Badge 色彩 | draft=#6B7280, testing=#F59E0B, published=#22C55E | 依 F033 規格定義 |
 | Pipeline 編輯器節點色彩 | Extract=#3B82F6(藍), Transform=#F59E0B(橘), Load=#22C55E(綠) | 依 F029 規格定義，三種類型以色彩區分 |
 | Sidebar 新增項目 | ETL Pipeline（`workflow` 圖示） | 新增第四個 Sidebar 項目，`workflow` 圖示表達「流程/管線」語意 |
+| Sidebar 新增項目 | Customer 360（`contact` 圖示） | 新增第五個 Sidebar 項目，`contact` 圖示表達「客戶資料」語意 |
+| Customer 360 清單 | 統計卡片 + 搜尋篩選 + 表格分頁 | 沿用 07/08/12/17 的卡片+表格模式；4 張統計卡片（總/個人/企業/外籍），搜尋框+類型下拉+搜尋按鈕 |
+| Customer 360 詳情 | Accordion 分類卡片 | 85 個欄位組織為 8 個分類 Accordion，前 3 個預設展開，適合大量欄位瀏覽 |
+| 敏感資料遮罩展示 | Admin/User 角色切換器（Header 右上） | 原型以 Toggle 按鈕模擬角色切換，展示遮罩前後差異（前端直接渲染 API 已處理的遮罩值） |
+| 風控旗標高亮 | 琥珀色 Badge（#F59E0B） | debt_flag/fine_flag='Y' 時顯示警告 Badge，與系統 Warning 色一致 |
+| 客戶類型 Badge | 個人=藍、企業=綠、外籍=紫 | 三色區分客戶類型，與系統色彩體系一致 |
+| 企業客戶 G 分類 | 「本分類不適用」灰色提示 | 個人/外籍客戶的 G.企業客戶專屬分類顯示不適用提示，而非空白欄位 |
+| ETL 新鮮度警告 | 琥珀色 Banner（>7 天觸發） | 條件式顯示，提醒使用者資料可能非最新 |
+| 個人/企業客戶切換 | Demo 切換器（Header 右上） | 原型提供個人/企業客戶範例資料切換，展示 G 分類適應顯示 |
 | Cron UI 選擇器 | 頻率選擇+時間選擇+Cron 預覽 | F028 要求 Cron UI 選擇器，複用 F017 的 cron 輸入模式（頻率下拉+時間+人類可讀說明） |
 | Pipeline 執行進度 | 行內進度條 + Polling 5s | F030 要求即時進度更新，列表行內顯示進度條，與擷取任務的進度條模式一致 |
 
@@ -86,10 +95,12 @@ prototypes/
 ├── 19-pipeline-logs.html          # Pipeline 日誌列表 + 日誌詳情 Drawer (F032)
 ├── 20-pipeline-versions.html      # Pipeline 版本管理 - Diff/回滾/發布 (F033)
 ├── 21-pipeline-interactions.html  # Pipeline 互動狀態展示（進度條/執行中/各 Transform 節點屬性面板）
-└── 22-target-tables.html          # 目標表 Schema 瀏覽 - customer_core 約45欄位8分類 + Phase 2/3 佔位 (F036/US-049)
+├── 22-target-tables.html          # 目標表 Schema 瀏覽 - customer_core 約45欄位8分類 + Phase 2/3 佔位 (F036/US-049)
+├── 25-customer-360-list.html      # Customer 360 客戶清單 — 統計卡片 + 搜尋篩選 + 表格分頁 + 遮罩切換 (F046/US-060)
+└── 26-customer-360-detail.html    # Customer 360 客戶詳情 — 8 分類 Accordion + 風控旗標 + 新鮮度警告 + 遮罩切換 (F047/US-061)
 ```
 
-共 **23 個 HTML 檔案**，每個檔案獨立可開啟（Tailwind CDN + Lucide CDN）。
+共 **25 個 HTML 檔案**，每個檔案獨立可開啟（Tailwind CDN + Lucide CDN）。
 
 ---
 
@@ -203,13 +214,27 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 |------|-------------|---------|
 | `22-target-tables.html` | F036/US-049 | **獨立頁面**（從編輯器 Load 節點連結進入）。**Breadcrumb**：ETL Pipeline > 目標表定義。**Phase 擴展資訊 Banner**：藍色提示說明 Phase 1 MVP 僅 customer_core，Phase 2/3 擴展規劃。**customer_core 卡片**：domain=core 標籤、約 45 欄位、8 個分類，點擊展開分類列表。**8 個分類折疊區塊**：A.識別與分類(5)/B.個人屬性(5)/C.聯絡資訊(6)/D.地址(6)/E.職業與就業(10)/F.財務與風控(10)/G.企業客戶專屬(7)/H.稽核與ETL追蹤(5)，各分類以色彩圓角標籤（A=藍/B=綠/C=橘/D=紫/E=玫瑰/F=橙/G=青/H=灰）區分。每個分類展開為完整欄位表格（欄位名稱/型別/Nullable/PK/說明/來源對應 6 欄），ETL 追蹤欄位以灰色背景+鎖定圖示+「自動填充」標籤區分，NOT NULL 欄位以紅色星號標示。**來源資料表 Banner**：顯示 ZZIP_BAMCUST_M + MLMCUSTOMER 兩個來源系統。**Phase 2/3 佔位卡片**：customer_financial/customer_interaction/customer_service 以灰色半透明卡片展示，標註 Phase 標籤。**Demo 狀態切換**：全部收合/全部展開/展開 A.識別與分類/展開 F.財務與風控/展開 H.稽核與ETL追蹤 |
 
+### Phase 7：Customer 360 (F046-F047)
+
+#### Phase 7a：客戶清單 (25)
+
+| 檔案 | 涵蓋 Feature | 關鍵元素 |
+|------|-------------|---------|
+| `25-customer-360-list.html` | F046/US-060 | **Sidebar** 新增第五項「Customer 360」（contact 圖示）。**統計摘要卡片**（4 張）：總客戶數/個人客戶數/企業客戶數/外籍客戶數，各帶圖示（users/user/building-2/globe）。**搜尋與篩選區域**：搜尋輸入框（placeholder「搜尋客戶姓名或身分證/統編...」）+ 客戶類型下拉選單（全部/個人/企業/外籍）+ 搜尋按鈕；搜尋框不足 2 字元時顯示灰色提示。**客戶清單表格**：客戶姓名/客戶類型 Badge（個人=藍/企業=綠/外籍=紫）/身分證統編/行動電話/公司名稱/操作「查看」按鈕，8 筆範例資料含中英文姓名。**分頁控制元件**：顯示 1-20 / 共 N 筆 + 頁碼按鈕。**Admin/User 角色切換**：Admin 明碼顯示、User 遮罩 sourceCustomerNo（前 3+後 2）及 mobilePhone（前 4+後 2）。**空狀態**：搜尋無結果（search-x 圖示 + 清除篩選按鈕）、customer_core 無資料（database 圖示 + 聯絡管理員提示，統計卡片歸零）。**Demo 切換**：正常資料/搜尋無結果/無資料狀態 |
+
+#### Phase 7b：客戶 360 詳情 (26)
+
+| 檔案 | 涵蓋 Feature | 關鍵元素 |
+|------|-------------|---------|
+| `26-customer-360-detail.html` | F047/US-061 | **Breadcrumb**：Customer 360 > 客戶姓名。**返回清單按鈕**（連結至 25）。**客戶 Header 卡片**：頭像圖示（個人=user/企業=building-2）、客戶姓名（大字體）、類型 Badge、客戶編號（Admin 明碼/User 遮罩）。**ETL 資料新鮮度警告 Banner**（琥珀色，條件顯示）：「此客戶資料最後更新於 N 天前，可能非最新狀態」。**8 個資料分類 Accordion**：A.識別與分類(5)/B.個人屬性(11)/C.聯絡資訊(10)/D.地址(5 組 zip+address)/E.職業與就業(8)/F.財務與風控(12，含消債/罰鍰旗標 Badge)/G.企業客戶專屬(13，個人客戶顯示「本分類不適用」)/H.稽核與ETL追蹤(5)。前 3 個分類預設展開。**code/desc 格式**：「描述（代碼）」如「個人（01）」。**NULL 值**：顯示「\u2014」。**風控旗標高亮**：debt_flag/fine_flag='Y' 時顯示琥珀色警告 Badge。**數值格式**：千位分隔符。**日期格式**：YYYY-MM-DD 或 YYYY-MM-DD HH:mm（UTC+8）。**Admin/User 角色切換**：遮罩 sourceCustomerNo + 4 個電話欄位 + email。**個人/企業客戶切換**（Demo）：展示企業客戶 G 分類完整資料。**404 錯誤狀態**：「找不到此客戶資料」+ 返回清單按鈕。**Demo 切換**：正常檢視/資料過期警告/404 找不到 |
+
 ---
 
 ## 共用 UI 模式
 
 | 模式 | 規則 |
 |------|------|
-| 導航 Sidebar | 四項目：帳號管理(Users)、資料來源(Database)、資料擷取(arrow-down-to-line)、ETL Pipeline(workflow)，active 狀態顯示藍色左/右邊框。資料來源頁、資料擷取頁、Pipeline 頁各含儀表板頁籤（儀表板均為預設頁籤） |
+| 導航 Sidebar | 五項目：帳號管理(Users)、資料來源(Database)、資料擷取(arrow-down-to-line)、ETL Pipeline(workflow)、Customer 360(contact)，active 狀態顯示藍色左/右邊框。資料來源頁、資料擷取頁、Pipeline 頁各含儀表板頁籤（儀表板均為預設頁籤） |
 | 表單驗證 | blur 觸發、紅邊框+紅色錯誤文字、送出按鈕處理中 disabled |
 | 角色 Badge 色彩 | 2 種角色色彩：管理者=bg-blue-100/text-blue-700、使用者=bg-gray-100/text-gray-700。角色下拉選單為簡單 select（Admin/User） |
 | 角色變更確認 | 二步驟流程：(1) 選擇新角色 (2) 確認對話框顯示「目前角色→新角色」箭頭視覺化 |
@@ -287,6 +312,8 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 | F034 刪除 Pipeline | `17-pipeline-management.html` (dialog) | — |
 | F035 Pipeline 監控儀表板 | `17-pipeline-management.html` (監控儀表板頁籤, 預設) | `21-pipeline-interactions.html` (儀表板空狀態展示) |
 | F036/US-049 目標表 Domain-Oriented 規劃 | `22-target-tables.html` | `18-pipeline-editor.html` (Load 節點屬性面板：目標表選擇+45欄位8分類折疊式對應+對應狀態統計+ETL追蹤欄位自動填充), `21-pipeline-interactions.html` (欄位對應互動展示) |
+| F046 客戶搜尋與清單 | `25-customer-360-list.html` | — |
+| F047 客戶 360 詳情 | `26-customer-360-detail.html` | — |
 
 ---
 
@@ -296,6 +323,8 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 - `specs/features/F005-view-account-list.md` — 清單/表格模式
 - `specs/features/F012-view-datasource-list.md` — 雙視圖切換
 - `specs/features/F016-datasource-status-dashboard.md` — 儀表板佈局與色彩（整合於 08-datasource-list.html 頁籤）
+- `specs/features/F046-customer-search-list.md` — 客戶搜尋清單規格（含遮罩規則、Full-Text Search）
+- `specs/features/F047-customer-360-detail.md` — 客戶 360 詳情規格（含 85 欄位映射、8 分類、風控旗標）
 - `specs/error-handling.md` — 完整錯誤碼與繁中訊息
 - `specs/features/F017-create-extraction-task.md` — 擷取任務表單規格
 - `specs/features/F018-view-extraction-task-list.md` — 擷取任務清單與統計
