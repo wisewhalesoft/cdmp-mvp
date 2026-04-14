@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: 1.6
+version: 1.7
 status: draft
-last_updated: 2026-04-02
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038]
+last_updated: 2026-04-13
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047]
 ---
 
 # 系統架構規格書
@@ -12,11 +12,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（ETL Pipeline 模組）、5. 整合與通訊（5.6 Pipeline 執行流程）、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5）、4. 資料架構（EtlPipeline/Version/Log 實體）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
-| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，Pipeline 視覺化編輯器）、10. 技術棧決策（React Flow） |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程）、10. 技術棧決策 |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
+| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
-| Product Analyst | 8. 風險（風險 6-9 為 E05 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設） |
+| Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設） |
 
 ## 目錄
 
@@ -52,12 +52,13 @@ graph TD
         DatasourceMod["Datasource 模組<br/>連線設定、測試、監控"]
         ExtractionMod["Extraction 模組<br/>擷取任務 CRUD、執行調度、日誌管理"]
         ETLMod["ETL Pipeline 模組<br/>Pipeline CRUD、版本管理<br/>視覺化定義、執行引擎"]
+        C360Mod["Customer 360 模組（E06）<br/>客戶搜尋清單、360 詳情<br/>敏感資料遮罩（唯讀）"]
         Scheduler["Scheduler 模組<br/>健康檢查、擷取排程掃描<br/>Pipeline 排程掃描、清理 Cron Job"]
         OrphanRecoveryMod["Orphan Recovery 模組<br/>啟動時孤兒任務回收"]
     end
 
     subgraph 持久層["持久層"]
-        AppDB["應用資料庫<br/>(RDBMS)"]
+        AppDB["應用資料庫<br/>(RDBMS)<br/>含 customer_core 目標表"]
         TokenStore["Token Blocklist<br/>(快取或 DB)"]
     end
 
@@ -72,6 +73,7 @@ graph TD
     API --> DatasourceMod
     API --> ExtractionMod
     API --> ETLMod
+    API --> C360Mod
     Scheduler --> DatasourceMod
     Scheduler --> ExtractionMod
     Scheduler --> ETLMod
@@ -87,12 +89,15 @@ graph TD
     ExtractionMod --> AppDB
     ExtractionMod --> TargetDB
     ETLMod --> AppDB
+    C360Mod -->|"READ ONLY<br/>customer_core"| AppDB
 
     classDef layer fill:#f0f4ff,stroke:#4f6ef7,stroke-width:2px
     classDef module fill:#e8f5e9,stroke:#388e3c,stroke-width:1px
+    classDef c360module fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
     classDef external fill:#fff3e0,stroke:#e65100,stroke-width:1px
     class Browser layer
     class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,ETLMod,Scheduler,OrphanRecoveryMod module
+    class C360Mod c360module
     class Email,TargetDB,AppDB,TokenStore external
 ```
 
@@ -228,6 +233,7 @@ graph TB
         Router["路由層<br/>角色導向 / 守護"]
         AuthPages["驗證頁面<br/>登入、忘記密碼、重設密碼"]
         AdminPages["Admin 管理頁面<br/>帳號清單、新增帳號、編輯帳號<br/>資料來源清單、新增、編輯<br/>資料來源狀態儀表板<br/>擷取任務儀表板、任務清單<br/>建立/編輯擷取任務、執行日誌<br/>Pipeline 列表、視覺化編輯器<br/>Pipeline 日誌、版本管理"]
+        C360Pages["Customer 360 頁面（E06）<br/>客戶清單（搜尋 / 篩選 / 分頁）<br/>客戶 360 詳情（8 個資料分類）"]
         UserPage["User 說明頁面"]
         APIClient["API Client<br/>JWT 附加、錯誤處理、Retry"]
     end
@@ -275,6 +281,12 @@ graph TB
             OrphanSvc["OrphanRecovery Service<br/>OnApplicationBootstrap<br/>回收孤兒 ExtractionTask（E04）<br/>回收孤兒 EtlPipeline（E05）"]
         end
 
+        subgraph C360Module["Customer 360 模組（E06）"]
+            C360Controller["C360 Controller<br/>GET /api/v1/c360/customers/stats<br/>GET /api/v1/c360/customers<br/>GET /api/v1/c360/customers/:customerId"]
+            C360Svc["C360 Service<br/>統計摘要、搜尋邏輯<br/>360 詳情組裝、敏感資料遮罩"]
+            CustomerCoreRepo["CustomerCoreRepository<br/>Raw SQL / QueryBuilder<br/>FTS 查詢（tsvector/tsquery）<br/>customer_core 唯讀抽象層"]
+        end
+
         subgraph SharedInfra["共用基礎建設"]
             CryptoUtil["Crypto Util<br/>AES-256 加解密"]
             HashUtil["Hash Util<br/>bcrypt 雜湊/比對"]
@@ -296,6 +308,7 @@ graph TB
 
     Router --> AuthPages
     Router --> AdminPages
+    Router --> C360Pages
     Router --> UserPage
     AuthPages --> APIClient
     AdminPages --> APIClient
@@ -305,6 +318,7 @@ graph TB
     Middleware --> DatasourceModule
     Middleware --> ExtractionModule
     Middleware --> ETLModule
+    Middleware --> C360Module
     SchedulerModule --> DatasourceModule
     SchedulerModule --> ExtractionModule
     SchedulerModule --> ETLModule
@@ -322,17 +336,25 @@ graph TB
     DsSvc -->|"TCP 連線測試"| TargetDBs
     ExtExecSvc -->|"TCP 批次資料擷取"| TargetDBs
     PipelineExecSvc -->|"讀取 raw_* 表<br/>寫入 customer_* 表"| AppDB
+    C360Controller --> C360Svc
+    C360Svc --> CustomerCoreRepo
+    CustomerCoreRepo -->|"READ ONLY<br/>customer_core"| AppDB
+    C360Pages --> APIClient
 
     classDef frontend fill:#dbeafe,stroke:#2563eb
+    classDef c360fe fill:#bfdbfe,stroke:#1d4ed8,stroke-width:2px
     classDef module fill:#dcfce7,stroke:#16a34a
     classDef etlmodule fill:#fce7f3,stroke:#db2777
+    classDef c360module fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
     classDef orphan fill:#e8f4fd,stroke:#2196F3,stroke-width:1px
     classDef shared fill:#f3e8ff,stroke:#9333ea
     classDef persist fill:#fef9c3,stroke:#ca8a04
     classDef external fill:#fef2f2,stroke:#ef4444
     class Frontend,Router,AuthPages,AdminPages,UserPage,APIClient frontend
+    class C360Pages c360fe
     class AuthModule,AccountModule,DatasourceModule,ExtractionModule,SchedulerModule module
     class ETLModule,PipelineSvc,PipelineDefSvc,PipelineExecSvc,PipelineVersionSvc etlmodule
+    class C360Module,C360Controller,C360Svc,CustomerCoreRepo c360module
     class OrphanRecoveryModule,OrphanSvc orphan
     class SharedInfra,CryptoUtil,HashUtil,JWTUtil,EmailUtil,Logger shared
     class AppDB,TokenStore persist
@@ -348,6 +370,7 @@ graph TB
 | 路由層 | 依 JWT 中的 `role` 欄位導向對應頁面；未驗證時導回登入頁 | JWT（localStorage / cookie）→ 路由決策 |
 | 驗證頁面（AuthPages） | 登入表單、忘記密碼、重設密碼頁面；前端欄位驗證 | 使用者輸入 → API 請求 |
 | Admin 管理頁面 | 帳號管理（F004-F010）、資料來源管理（F011-F016）、擷取任務管理（F017-F025）、ETL Pipeline 管理（F027-F034, F036）所有 UI | API 回應 → 畫面渲染 |
+| Customer 360 頁面（E06） | 客戶清單頁（`/c360/customers`）：統計摘要卡片、搜尋框、類型篩選下拉、分頁列表；客戶 360 詳情頁（`/c360/customers/:customerId`）：8 個資料分類卡片、風控旗標高亮、ETL 資料新鮮度警告；Admin 與 User 兩種角色均可存取（F046, F047） | API 回應 → 畫面渲染；遮罩值由後端回傳，前端直接顯示 |
 | User 說明頁面 | 靜態說明內容，無可操作功能（MVP 限制） | — |
 | API Client | 統一附加 `Authorization: Bearer {token}` header；處理 401/403 回應；提供 Loading 狀態管理；支援不同 Polling 頻率（儀表板 30 秒、擷取進度 3 秒、Pipeline 執行進度 5 秒） | 業務邏輯請求 → HTTP 請求 |
 
@@ -645,6 +668,80 @@ E04（擷取任務）與 E05（ETL Pipeline）的回收在各自獨立的 Transa
 
 ---
 
+#### Customer 360 模組（E06 新增）
+
+**架構決策 AD-E06-1：C360 模組直接查詢 customer_core 表，不建立 TypeORM Entity**
+
+`customer_core` 目標表由 ETL Pipeline（E05）的 Load 節點以動態 SQL 管理，TypeORM 不持有其 Entity 定義。C360 模組採用 `DataSource.query()`（Raw SQL）或 `QueryBuilder` 存取 `customer_core`，透過 `CustomerCoreRepository` 抽象層封裝所有查詢邏輯。此決策避免在 TypeORM Entity 與 ETL 動態 Schema 之間產生雙重管理責任。
+
+**架構決策 AD-E06-2：敏感資料遮罩硬編碼於 Service 層，依角色判斷**
+
+遮罩邏輯（`maskIdNumber()`、`maskPhone()`）硬編碼於 `C360Service`，在 API 回應序列化前依 JWT payload 的 `role` 欄位決定是否套用遮罩，不使用 Middleware 或 Interceptor 攔截。規則：Admin 回傳完整明碼，User 回傳遮罩值。遮罩規則不支援動態設定（MVP 限制）。
+
+**架構決策 AD-E06-3：全文搜尋使用 PostgreSQL 原生 FTS（tsvector/tsquery）**
+
+C360 的姓名搜尋使用 PostgreSQL 原生全文搜尋（`tsvector` + `tsquery` + GIN 索引），不使用應用層 LIKE 查詢，亦不引入外部搜尋引擎（如 Elasticsearch）。MVP 資料量（≤ 1,000 筆）下，PostgreSQL FTS 加 GIN 索引已足以滿足 NFR-002 的 < 500ms 要求，避免引入額外系統依賴。
+
+**架構決策 AD-E06-4：GIN 索引建立於獨立 Migration**
+
+FTS 所需的 GIN 索引（`idx_customer_core_fulltext`）在獨立的 TypeORM Migration 中建立，不包含在 `customer_core` 建表 Migration 中。此設計使 C360 模組的前置依賴（GIN 索引）可獨立部署，並與 ETL Pipeline 的 Schema Migration 解耦。
+
+```sql
+-- Migration: AddCustomerCoreFullTextIndex
+CREATE INDEX IF NOT EXISTS idx_customer_core_fulltext
+  ON customer_core
+  USING GIN (to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(english_name, '')));
+```
+
+**架構決策 AD-E06-5：C360 模組在執行時期不依賴 Extraction 或 ETL Pipeline 模組**
+
+C360 模組僅在執行時期依賴 Auth 模組（JWT 驗證）與應用資料庫（讀取 `customer_core`）。它不注入 ExtractionTaskService 或 PipelineService，只消費 ETL 產生的資料成果（`customer_core` 資料列）。模組邊界清晰，C360 為純粹的唯讀消費者。
+
+| 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
+|------|------|-----------|-------------|
+| C360 Controller | 提供 3 個 REST 端點；JWT 驗證強制（Admin / User 均可）；QueryString 驗證（keyword 最少 2 字元） | 所有端點需 Bearer Token；keyword < 2 字元回傳 422 | F046, F047 |
+| C360 Service | 客戶統計摘要查詢；搜尋優先邏輯（idNumber 優先於 keyword）；類型篩選（AND 組合）；360 詳情 8 分類組裝；敏感資料遮罩 | BR-2（遮罩硬編碼）；BR-3（idNumber 優先）；BR-4（預設 name 升序）；BR-7（統計即時查詢，不快取） | F046, F047 |
+| CustomerCoreRepository | 封裝所有 `customer_core` 查詢的 Raw SQL / QueryBuilder；分頁（LIMIT/OFFSET）；FTS 查詢（tsvector/tsquery）；精確比對（source_customer_no）；單筆詳情查詢（customer_id） | 不執行任何 INSERT / UPDATE / DELETE；所有查詢加上 `deleted_at IS NULL`（若 customer_core 有此欄位，否則無條件查詢） | F046, F047 |
+
+**API 端點摘要**
+
+| HTTP Method | 路徑 | 說明 | 角色 |
+|-------------|------|------|------|
+| GET | `/api/v1/c360/customers/stats` | 客戶統計摘要（總數、個人、企業、外籍） | Admin / User |
+| GET | `/api/v1/c360/customers` | 客戶清單搜尋（keyword、idNumber、type、page、pageSize） | Admin / User |
+| GET | `/api/v1/c360/customers/:customerId` | 單一客戶 360 詳情（85 欄位 / 8 分類） | Admin / User |
+
+**搜尋優先邏輯**
+
+```
+若 idNumber 存在且非空 → 精確比對 source_customer_no（忽略 keyword）
+若僅有 keyword（>= 2 字元）→ FTS：to_tsvector('simple', name || ' ' || english_name) @@ plainto_tsquery('simple', keyword)
+兩者皆無 → 全部客戶（僅受 type 篩選影響）
+type 篩選 → AND customer_type_code IN (...)
+```
+
+**Monorepo 結構（新增）**
+
+```
+apps/api/src/modules/
+└── c360/                           # Customer 360 模組（E06）
+    ├── c360.module.ts
+    ├── c360.controller.ts          # 3 個端點
+    ├── c360.service.ts             # 搜尋邏輯、遮罩、詳情組裝
+    ├── customer-core.repository.ts # Raw SQL 查詢抽象層
+    └── dto/
+        ├── customer-list.dto.ts    # 回應 DTO（清單項目）
+        ├── customer-detail.dto.ts  # 回應 DTO（360 詳情）
+        └── customer-stats.dto.ts   # 回應 DTO（統計摘要）
+
+apps/web/src/pages/
+└── c360/
+    ├── CustomerListPage.tsx        # 客戶清單（F046）
+    └── CustomerDetailPage.tsx      # 客戶 360 詳情（F047）
+```
+
+---
+
 #### 共用基礎建設（Shared Infrastructure）
 
 | 工具 | 職責 | 安全性注意事項 |
@@ -832,7 +929,7 @@ erDiagram
 | EtlPipeline | ETL Pipeline 模組 | Scheduler 模組透過 Pipeline Execution Service 介面呼叫 |
 | EtlPipelineVersion | ETL Pipeline 模組 | 不對其他模組開放；Pipeline Execution Service 讀取最新 published 版本的 definition |
 | EtlPipelineLog | ETL Pipeline 模組 | 不對其他模組開放 |
-| 目標表（`customer_core` 等） | ETL Pipeline 模組（寫入）| 以動態 SQL 操作，不透過 TypeORM Entity；Phase 1 MVP 僅含 `customer_core`；Phase 2/3 擴展時新增目標表至 Registry；未來可供 BI 工具或下游系統讀取 |
+| 目標表（`customer_core` 等） | ETL Pipeline 模組（寫入）/ C360 模組（唯讀） | ETL Pipeline 以動態 SQL 執行 UPSERT；C360 模組以 Raw SQL / QueryBuilder 唯讀查詢；兩者均不透過 TypeORM Entity 管理此表；Phase 1 MVP 僅含 `customer_core`（85 欄位）；Phase 2/3 擴展時新增目標表至 Registry |
 
 ### 4.3 資料一致性模型
 
@@ -888,9 +985,12 @@ erDiagram
 | etl_pipeline_log | started_at | INDEX | 今日統計計算；清理查詢（30 天保留） |
 | etl_pipeline_log | status, started_at | 複合 INDEX | 今日成功/失敗計數（F035 dashboard） |
 | etl_pipeline_log | is_test_run, pipeline_id | 複合 INDEX | 版本發布前查詢是否有成功測試執行記錄 |
-| customer_core | customer_id | PRIMARY KEY | UPSERT 主鍵衝突判斷（`ON CONFLICT(customer_id) DO UPDATE`） |
-| customer_core | source_customer_no | UNIQUE INDEX | 身分證/統編唯一性保護；同一客戶來自不同來源時的 Merge 查詢 |
+| customer_core | customer_id | PRIMARY KEY | UPSERT 主鍵衝突判斷（`ON CONFLICT(customer_id) DO UPDATE`）；C360 詳情查詢主鍵 |
+| customer_core | source_customer_no | UNIQUE INDEX | 身分證/統編唯一性保護；C360 精確搜尋（`WHERE source_customer_no = :idNumber`） |
 | customer_core | _etl_pipeline_id | INDEX | 追溯特定 Pipeline 執行載入的客戶筆數；Load 後稽核查詢 |
+| customer_core | customer_type_code | INDEX | C360 客戶類型篩選（`WHERE customer_type_code IN (...)`）效能 |
+| customer_core | name | INDEX | C360 預設排序（`ORDER BY name ASC`）效能 |
+| customer_core | idx_customer_core_fulltext（GIN） | GIN INDEX | C360 全文搜尋（`to_tsvector('simple', coalesce(name,'') \|\| ' ' \|\| coalesce(english_name,''))`）；F046 前置依賴 |
 
 ### 4.5 資料生命週期
 
@@ -923,6 +1023,7 @@ erDiagram
 | 後端 → 目標資料庫（資料擷取） | 單向 | 非同步（背景執行，2 小時逾時） | TCP 批次 SQL Query |
 | 後端 → AppDB raw data 表（ETL Extract） | 單向 | 非同步（Pipeline 執行中讀取） | Raw SQL（`SELECT`，Dynamic table name） |
 | 後端 → AppDB target 表（ETL Load） | 單向 | 非同步（Pipeline 執行中寫入） | Raw SQL（`INSERT ON CONFLICT DO UPDATE`） |
+| 後端（C360）← AppDB customer_core 表 | 單向（唯讀） | 同步（API 請求驅動） | Raw SQL / QueryBuilder（`SELECT`，含 FTS） |
 | Scheduler → 後端邏輯 | 內部呼叫 | 同步 | 模組內部方法呼叫 |
 
 ### 5.2 驗證流程（Auth Flow）
@@ -1265,6 +1366,64 @@ sequenceDiagram
     DB-->>ExecSvc: 寫入成功（affected rows）
 ```
 
+### 5.11 Customer 360 查詢流程（F046 / F047）
+
+C360 模組為純唯讀消費者，不產生任何寫入操作。以下時序圖涵蓋客戶清單搜尋與 360 詳情查詢的完整流程。
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器 (SPA)
+    participant API as 後端 API
+    participant DB as 應用資料庫（customer_core）
+
+    Note over Browser,API: 路徑 A：客戶統計摘要（F046 / AC-1）
+    Browser->>API: GET /api/v1/c360/customers/stats<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證（Admin / User 均可）
+    API->>DB: SELECT COUNT(*) AS total,<br/>SUM(CASE WHEN customer_type_code='01' THEN 1 END) AS individual,<br/>SUM(CASE WHEN customer_type_code='02' THEN 1 END) AS corporate,<br/>SUM(CASE WHEN customer_type_code='04' THEN 1 END) AS foreign<br/>FROM customer_core
+    DB-->>API: 統計數值
+    API-->>Browser: 200 {total, individual, corporate, foreign}
+
+    Note over Browser,API: 路徑 B：客戶清單搜尋（F046 / AC-2~6）
+    Browser->>API: GET /api/v1/c360/customers?keyword=王小明&type=01&page=1&pageSize=20<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證；QueryString 驗證（keyword >= 2 字元）
+    API->>API: 決定搜尋策略<br/>（idNumber 存在 → 精確比對；keyword 存在 → FTS；兩者皆無 → 全部）
+
+    alt FTS 搜尋（keyword）
+        API->>DB: SELECT ... FROM customer_core<br/>WHERE to_tsvector('simple', coalesce(name,'') || ' ' || coalesce(english_name,''))<br/>@@ plainto_tsquery('simple', :keyword)<br/>AND customer_type_code IN ('01')<br/>ORDER BY name ASC<br/>LIMIT 20 OFFSET 0
+    else 精確搜尋（idNumber）
+        API->>DB: SELECT ... FROM customer_core<br/>WHERE source_customer_no = :idNumber<br/>AND customer_type_code IN ('01')<br/>ORDER BY name ASC LIMIT 20 OFFSET 0
+    end
+
+    DB-->>API: 查詢結果列表 + COUNT
+    API->>API: 依 role 套用遮罩<br/>（User: maskIdNumber / maskPhone；Admin: 明碼）
+    API-->>Browser: 200 {data: [...], pagination: {...}}
+
+    Note over Browser,API: 路徑 C：客戶 360 詳情（F047）
+    Browser->>API: GET /api/v1/c360/customers/:customerId<br/>Authorization: Bearer {token}
+    API->>API: JWT 驗證（Admin / User 均可）
+    API->>DB: SELECT * FROM customer_core<br/>WHERE customer_id = :customerId
+    alt 客戶存在
+        DB-->>API: 85 欄位完整資料列
+        API->>API: 組裝 8 個資料分類（A~H）<br/>依 role 套用遮罩（聯絡資訊欄位）<br/>計算 ETL 新鮮度（_etl_loaded_at 距今天數）
+        API-->>Browser: 200 {customerId, identity, personalAttributes,<br/>contactInfo, address, employment,<br/>financialRisk, corporate, auditEtl}
+    else 客戶不存在
+        DB-->>API: 查無記錄
+        API-->>Browser: 404 C360_CUSTOMER_NOT_FOUND
+    end
+```
+
+**C360 模組冪等性**
+
+| 端點 | 冪等性 | 說明 |
+|------|-------|------|
+| `GET /api/v1/c360/customers/stats` | 冪等 | 唯讀查詢；結果隨 customer_core 資料而定 |
+| `GET /api/v1/c360/customers` | 冪等 | 唯讀查詢；相同參數回傳相同結果 |
+| `GET /api/v1/c360/customers/:customerId` | 冪等 | 唯讀查詢；不存在時固定回傳 404 |
+
+**C360 與其他模組的執行時期關係**
+
+C360 模組在執行時期**不依賴** Extraction 模組或 ETL Pipeline 模組。它只消費 ETL 執行後留存於 AppDB 的 `customer_core` 資料，屬於資料消費者（Read Consumer），而非資料生產者（Data Producer）。若 ETL Pipeline 尚未執行，`customer_core` 無資料，C360 的統計摘要將顯示全零，清單顯示空狀態——此為預期行為，不構成錯誤。
+
 ---
 
 ## 6. 非功能需求架構對應
@@ -1325,6 +1484,9 @@ graph LR
 | NFR-002.9 Pipeline 執行進度查詢 | p95 < 500ms | EtlPipelineLog 主鍵查詢；`(pipeline_id, started_at)` 複合索引；前端 5 秒 Polling |
 | NFR-002.10 Pipeline 版本 Diff | < 2 秒 | Diff 在應用層計算（比對兩個 JSONB definition）；版本數量有限（典型 < 50 版），應用層計算可接受 |
 | NFR-002.12 孤兒回收耗時（F038） | < 5 秒 | `OrphanRecoveryService` 使用批次 QueryBuilder（`WHERE id IN (...)`）取代逐筆更新；典型場景（0 ~ 數筆孤兒）耗時可忽略不計；若耗時超過 5 秒，Logger 應記錄警告供後續調查 |
+| NFR-002.13 C360 清單查詢（F046） | < 500ms（1,000 筆以內） | GIN 索引加速 FTS；`customer_type_code` INDEX 加速類型篩選；`source_customer_no` UNIQUE INDEX 加速精確搜尋；分頁強制執行（預設 20 筆/頁，最大 100 筆） |
+| NFR-002.14 C360 統計摘要（F046） | < 500ms | `customer_core` 全表 COUNT + 條件 SUM；資料量 MVP 規模（≤ 1,000 筆）可於索引掃描完成 |
+| NFR-002.15 C360 客戶詳情（F047） | < 1 秒 | `customer_id` PRIMARY KEY 點查詢；無 JOIN；85 欄位序列化為 JSON 為主要耗時 |
 
 **效能風險**：
 - `DatasourceHealthLog` 隨時間增長（每 30 分鐘 × 資料來源數），90 天保留期需確保 Cleanup Cron 正常執行，否則查詢效能將逐漸下降。
@@ -1546,6 +1708,21 @@ Seed 流程：
 
 ---
 
+#### 風險 12（E06 新增）：customer_core Schema Drift 影響 C360 查詢
+
+**描述**：`customer_core` 目標表由 ETL Pipeline（E05）的 Migration 與 Load 節點管理。若 ETL 團隊在未通知 C360 模組維護者的情況下，對 `customer_core` 執行欄位改名、型別變更或刪除欄位，`CustomerCoreRepository` 中的 Raw SQL / QueryBuilder 查詢將在執行時期報錯（PostgreSQL column does not exist），導致 C360 API 回傳 500 錯誤。
+
+**影響**：C360 清單與詳情 API 全面失效；使用者無法查詢客戶資料；需緊急修復 `CustomerCoreRepository` 查詢語法。
+
+**建議**：
+- 在開發初期建立 `customer_core` Schema 的文件化 Contract（欄位名稱、型別、nullable 狀態），C360 模組依此 Contract 撰寫查詢
+- ETL Pipeline 的任何 Schema Migration 在合併前，需由 C360 模組維護者 Review（跨模組 PR 審查規則）
+- 考慮在 CI Pipeline 中加入 C360 Integration Test，在測試環境執行真實查詢，當 `customer_core` Schema 變更時即早發現查詢失效
+
+**替代方案**：若 Schema Drift 風險被評估為高，可建立 `customer_core_schema_version` 設定值，C360 啟動時驗證 Schema 版本是否符合預期。
+
+---
+
 #### 風險 11（F036 新增）：來源欄位結構假設與實際不符
 
 **描述**：`customer_core` 的 45 個欄位定義（US-049）基於對 ZZIP_BAMCUST_M 與 MLMCUSTOMER 兩個來源表的欄位假設（如欄位名稱、資料型別、佔位值格式）。若實際來源表的欄位與假設不符（如欄位改名、型別不同、佔位值格式差異），ETL Transform 節點的轉換規則將產生錯誤或無效輸出。
@@ -1595,6 +1772,9 @@ Seed 流程：
 | Pipeline 執行使用 Worker Thread / Worker Process | 對 I/O 密集的 Transform 操作不必要（CPU 密集才需要 Worker Thread）；增加 IPC（Inter-Process Communication）複雜度；MVP 規模不合理 |
 | Pipeline 視覺化編輯器使用後端渲染 | 拖拉畫布需要豐富的前端互動，規格書 F029 明確建議 React Flow（前端庫）；後端無法實現拖拉式 UX |
 | Pipeline 版本 Diff 使用資料庫層計算 | PostgreSQL JSONB Diff 需複雜 SQL 函數；應用層 JSON 比對更直觀且可維護；版本數有限，應用層計算效能可接受 |
+| C360 搜尋使用 Elasticsearch | MVP 資料量（≤ 1,000 筆）遠低於 Elasticsearch 的適用門檻（通常百萬筆以上）；引入額外系統依賴（部署、維運、記憶體）完全不合理；PostgreSQL FTS + GIN 索引已足以滿足 NFR |
+| C360 使用 TypeORM Entity 管理 customer_core | `customer_core` 由 ETL Pipeline 以動態 SQL 管理，若同時建立 TypeORM Entity，將產生雙重管理責任，Schema Migration 與 Entity 定義容易失去同步；選擇 Raw SQL 抽象層（CustomerCoreRepository）更符合單一職責原則 |
+| C360 遮罩邏輯實作為 Middleware / Interceptor | Interceptor 需要攔截所有 API 回應，難以針對特定欄位（sourceCustomerNo、mobilePhone）和特定角色精確套用規則；Service 層硬編碼更直觀，且遮罩邏輯可獨立測試 |
 
 ### 8.3 需要驗證的領域
 
@@ -1677,6 +1857,18 @@ Seed 流程：
 | 應用資料庫的選擇（RDBMS 類型：PostgreSQL / MySQL / SQL Server） | 影響 ORM 選擇與 SQL 語法 | 技術選型階段確認 |
 | 初始 Admin 帳號的建立機制（Seed Script 或手動） | 若無初始 Admin，系統無法使用 | 定義 Seed 機制與 Admin 密碼設定方式 |
 | 系統角色採用 Admin / User 兩種（**已確認，AQ-20 決議**） | — | — |
+
+### 9.8 已決議事項（E06 Customer 360）
+
+> 以下為 E06 架構設計過程中提出並已決議的事項，記錄於此供實作參照。
+
+| # | 問題 | 決議 | 決議日期 |
+|---|------|------|---------|
+| AQ-23 | C360 搜尋引擎選擇：PostgreSQL FTS 或 Elasticsearch？ | **PostgreSQL FTS**。MVP 資料量（≤ 1,000 筆）不需外部搜尋引擎；GIN 索引 + tsvector/tsquery 滿足 < 500ms NFR；詳見 AD-E06-3 | 2026-04-13 |
+| AQ-24 | customer_core 是否建立 TypeORM Entity？ | **否**。以 Raw SQL / QueryBuilder 透過 `CustomerCoreRepository` 存取；避免 ETL Schema 管理與 ORM Entity 雙重責任衝突；詳見 AD-E06-1 | 2026-04-13 |
+| AQ-25 | 敏感資料遮罩實作位置：Middleware / Interceptor / Service？ | **Service 層硬編碼**。遮罩函式（maskIdNumber、maskPhone）於 C360Service 依 JWT role 欄位套用；規則固定不支援動態設定（MVP 限制）；詳見 AD-E06-2 | 2026-04-13 |
+| AQ-26 | FTS 語言設定：`simple` 或 `chinese`？ | **`simple`**。PostgreSQL 預設不含中文詞幹處理器；`simple` 設定對中文姓名逐字元索引，適合短字串前綴搜尋；`english_name` 英文姓名亦不需詞幹處理（人名搜尋） | 2026-04-13 |
+| AQ-27 | C360 API 路徑前綴 | **`/api/v1/c360/`**。與現有模組路徑（`/api/v1/etl/`、`/api/v1/extraction-tasks/`）一致的 v1 前綴；子路由：`/c360/customers/stats`、`/c360/customers`、`/c360/customers/:customerId` | 2026-04-13 |
 
 ### 9.7 已決議事項（E02 角色管理）
 
@@ -1812,9 +2004,10 @@ graph TB
 
 規格書的目標資料庫為 MySQL、PostgreSQL、SQL Server（連線測試對象），應用資料庫需獨立選擇。PostgreSQL 在以下面向優於 MySQL：
 - UUID 型別原生支援（無需 `CHAR(36)`）
-- 更完善的 JSON/JSONB 操作（Phase 2 擴展用）
+- 更完善的 JSON/JSONB 操作（Phase 2 擴展用；Pipeline definition 儲存）
 - 更嚴格的型別檢查與資料完整性
 - 更活躍的開源社群與企業採用率
+- **原生全文搜尋（FTS）支援**：`tsvector`、`tsquery`、GIN 索引，C360 模組（E06）的客戶姓名搜尋直接使用 PostgreSQL FTS，無需引入 Elasticsearch 等外部搜尋引擎（MVP 資料量下充分）
 
 ### 10.5 開發與部署工具
 
@@ -1864,7 +2057,13 @@ cdmp-mvp/
 │   │   │   │   │       ├── merge.transform.ts
 │   │   │   │   │       ├── field-mapping.transform.ts
 │   │   │   │   │       └── ...（其餘 11 種）
-│   │   │   │   └── scheduler/  # Scheduler 模組
+│   │   │   │   ├── scheduler/  # Scheduler 模組
+│   │   │   │   └── c360/       # Customer 360 模組（E06）
+│   │   │   │       ├── c360.module.ts
+│   │   │   │       ├── c360.controller.ts          # 3 個端點（stats / list / detail）
+│   │   │   │       ├── c360.service.ts             # 搜尋邏輯、遮罩、詳情組裝
+│   │   │   │       ├── customer-core.repository.ts # Raw SQL 查詢抽象層
+│   │   │   │       └── dto/                        # 回應 DTO
 │   │   │   ├── common/         # 共用基礎建設
 │   │   │   │   ├── crypto/     # AES-256 Util
 │   │   │   │   ├── hash/       # bcrypt Util
@@ -1932,5 +2131,21 @@ cdmp-mvp/
 - *新增風險 11：來源欄位結構假設與實際不符的風險與緩解措施*
 - *更新 9.5 待確認假設（新增兩項 F036 特有假設：欄位對應確認、Merge 鍵格式一致性）*
 - *更新 Monorepo 結構：新增 `target-tables/` 子目錄與 `customer-core.definition.ts` 定義檔架構*
+
+*本文件版本 1.7，由 System Architect Agent 依據 E06 Customer 360 規格（F046 / F047，2026-04-13）更新。主要變更：*
+- *新增 Customer 360 模組（C360Module）至架構圖（第 1 節總覽圖、第 3 節邏輯架構圖）*
+- *新增 3.x Customer 360 模組詳細說明，含架構決策 AD-E06-1 ~ AD-E06-5*
+- *新增 Customer 360 前端頁面（CustomerListPage、CustomerDetailPage）至前端模組說明*
+- *新增 5.11 節 C360 查詢流程時序圖（stats / list / detail 三路徑）*
+- *新增 C360 相關資料庫索引建議（customer_type_code、name、GIN FTS 索引）*
+- *更新 4.2 資料所有權：customer_core 由 ETL Pipeline（寫入）與 C360（唯讀）共享存取*
+- *新增 5.1 通訊模式：C360 ← AppDB customer_core（唯讀同步）*
+- *新增 NFR-002.13 / 002.14 / 002.15 效能目標對應（清單 < 500ms、統計 < 500ms、詳情 < 1s）*
+- *新增風險 12：customer_core Schema Drift 影響 C360 查詢的風險與緩解措施*
+- *新增已評估替代方案：Elasticsearch、TypeORM Entity 管理 customer_core、Interceptor 遮罩*
+- *新增 9.8 已決議事項（E06）：AQ-23 ~ AQ-27*
+- *更新 Monorepo 結構：新增 `c360/` 模組目錄*
+- *更新 PostgreSQL 選擇理由：強調原生 FTS 支援為 C360 模組的重要基礎*
+- *更新 covers 清單：新增 F046、F047*
 
 *如有規格變更，本文件應同步更新。*

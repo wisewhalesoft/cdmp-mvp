@@ -213,6 +213,35 @@ CDMP 管理的外部資料庫連線設定。
 
 擷取任務首次執行時於 AppDB 動態建立的 raw data 表。表名格式為 `raw_{task_id 前 8 碼}`，結構從來源表 metadata 推斷。詳見 [data-model.md#raw-data-table](../data-model.md#raw-data-table)。
 
+### customer_core（ETL 管理目標表）
+
+> **注意**：`customer_core` 不是 TypeORM 管理的 Entity，不納入上方 ER 圖的實體關聯模型。此表由 ETL Pipeline 模組（E05）以動態 SQL 管理（建表 Migration + UPSERT 寫入），由 Customer 360 模組（E06）以 Raw SQL 唯讀查詢。
+
+**表格特性說明**
+
+| 屬性 | 說明 |
+|------|------|
+| 管理方式 | ETL Pipeline Load 節點以 `INSERT ... ON CONFLICT DO UPDATE` 寫入；TypeORM 不持有 Entity 定義 |
+| 主鍵 | `customer_id`（UUID），由 ETL Merge 節點基於 source_customer_no 生成或延用 |
+| Schema 版本 | F036 v2.4 定義的 85 欄位版本（A~H 八個資料分類）；需執行 Migration 從 54 欄位升級 |
+| 唯讀消費者 | Customer 360 模組（E06）透過 `CustomerCoreRepository` 以 Raw SQL / QueryBuilder 查詢 |
+| GIN 索引 | `idx_customer_core_fulltext`（tsvector on name + english_name），E06 FTS 前置依賴，在獨立 Migration 建立 |
+
+**主要欄位分類（85 欄位，A~H 分類）**
+
+| 分類 | 代表欄位 | C360 用途 |
+|------|---------|---------|
+| A. 識別與分類 | `customer_id`、`source_customer_no`、`customer_type_code`、`name`、`english_name` | 清單顯示、FTS 搜尋、精確搜尋、類型篩選 |
+| B. 個人屬性 | `gender`、`date_of_birth`、`marital_status_code/desc`、`education_code/desc` 等 | 360 詳情 B 分類 |
+| C. 聯絡資訊 | `mobile_phone`（遮罩）、`home_phone`（遮罩）、`email`（遮罩）等 | 清單顯示（mobile_phone）；360 詳情 C 分類 |
+| D. 地址 | `residential_zip/address`、`mailing_zip/address` 等 | 360 詳情 D 分類 |
+| E. 職業與就業 | `company_name`、`occupation_code/desc`、`job_title_code/desc` 等 | 清單顯示（company_name）；360 詳情 E 分類 |
+| F. 財務與風控 | `monthly_income_code/desc`、`debt_flag`（高亮）、`fine_flag`（高亮）等 | 360 詳情 F 分類；風控旗標高亮 |
+| G. 企業客戶專屬 | `owner_name`、`owner_id`、`established_capital` 等 | 360 詳情 G 分類（企業型客戶顯示） |
+| H. 稽核與 ETL 追蹤 | `_etl_loaded_at`（新鮮度計算）、`_etl_pipeline_id`、`data_source` | 360 詳情 H 分類；ETL 資料新鮮度警告 |
+
+詳見 [architecture-spec.md#3.x-customer-360-模組-e06](../architecture-spec.md)、[F036-target-tables.md](../features/F036-target-tables.md)。
+
 ## 關聯關係
 
 | 關聯 | 基數 | 說明 |
@@ -224,3 +253,5 @@ CDMP 管理的外部資料庫連線設定。
 | Datasource → ExtractionTask | 1:N | 一個資料來源可被多個擷取任務參照 |
 | ExtractionTask → ExtractionLog | 1:N | 一個擷取任務可有多筆執行日誌 |
 | ExtractionTask → Raw Data Table | 1:1 | 一個擷取任務對應一張 raw data 動態表 |
+| ETL Pipeline（Load 節點）→ customer_core | N:1（寫入） | 多個 Pipeline 執行可 UPSERT 寫入同一 customer_core 表 |
+| C360 模組 → customer_core | N:1（唯讀） | C360 模組僅讀取 customer_core，不執行任何寫入操作 |
