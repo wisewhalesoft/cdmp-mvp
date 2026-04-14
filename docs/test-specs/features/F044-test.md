@@ -5,7 +5,7 @@ feature_name: ETL Target Load + UPSERT
 priority: P0-MVP
 related_spec: /docs/specs/features/F044-etl-target-load.md
 related_story: US-057（target_load 部分）
-last_updated: 2026-03-27
+last_updated: 2026-04-14
 ---
 
 # F044: ETL Target Load + UPSERT — 測試設計
@@ -316,6 +316,8 @@ const emptyDataSet = { rows: [], rowCount: 0 };
   - 節點拋出例外（NOT NULL 約束違反）
   - 節點標記為 `'failed'`
 
+> **注意（BUG-2 修正後）**：`source_customer_no = null` 仍由 DB NOT NULL constraint 拒絕（此場景仍適用）。BUG-2 新增的 ghost record 閘門僅過濾長度 < 5 的非 null 識別碼（如 `"01"`、`"."`），兩者邏輯不衝突。閘門在 UPSERT SQL 執行前過濾，null 識別碼不進入閘門判斷，直接由 DB constraint 處理。
+
 ---
 
 ### TS-F044-014: 部分批次失敗 — 已寫入批次不回滾
@@ -376,3 +378,98 @@ const emptyDataSet = { rows: [], rowCount: 0 };
   - 後寫入者覆蓋先寫入者（UPSERT 語意）
   - 此場景由 PostgreSQL 引擎保證，不需額外測試
   - 架構決策：每批次獨立 commit，接受「最終一致」語意
+
+---
+
+## 測試場景 — BUG-2 修正驗證
+
+### TS-F044-018: [BUG-2 修正驗證] MLMC-only 記錄 `name=null` 正常寫入，不被隱性過濾排除
+
+- **Related Requirement**: F044 AC-10（BUG-2）/ F044 Section 6 步驟 6 / US-057 AC-3a / US-057 TC-057-12
+- **Test Type**: 正向（BUG-2 修正驗證）
+- **測試層次**: 整合測試（Test Container）
+- **Preconditions**:
+  - customer_core 中無 `source_customer_no = "MLMC-999"` 的記錄
+  - 輸入 DataSet 含一列：
+    ```
+    source_customer_no = "MLMC-999"
+    name = null
+    customer_type_code = "02"
+    customer_id = "uuid-mlmc-test-001"
+    data_source = "MLMCUSTOMER"
+    ```
+  - isTestRun = false
+- **Steps**:
+  1. 執行 TargetLoadExecutor
+  2. 查詢 customer_core WHERE source_customer_no = "MLMC-999"
+  3. 確認 node_logs 的 outputRowCount
+- **Expected Result**:
+  - customer_core 新增一列，`source_customer_no = "MLMC-999"` 存在
+  - 該列 `name = null`（不被排除，資料庫允許 nullable）
+  - `customer_type_code = "02"`（正確寫入）
+  - `node_logs[tl1].outputRowCount = 1`（此列計入成功 UPSERT 筆數，不遺失）
+
+> **根因（BUG-2）**：修正前 `target-load-handler.ts:77-85` 依 `is_nullable='NO'` 欄位清單過濾輸入列，`name=null` 被隱性排除。修正後移除此動態過濾，改為顯式 `source_customer_no` 長度閘門，`name=null` 的記錄正常寫入由 DB constraint 決定是否拒絕。
+
+---
+
+### TS-F044-019: [BUG-2 修正驗證] ghost record 閘門 — `source_customer_no` 長度 < 5 被跳過，長度 >= 5 通過
+
+- **Related Requirement**: F044 AC-11（BUG-2）/ F044 Section 6 步驟 6 / F044 Section 7 / US-057 AC-3a / US-057 TC-057-13
+- **Test Type**: 邊界（BUG-2 修正驗證）
+- **測試層次**: 整合測試（Test Container）
+- **Preconditions**:
+  - customer_core 中無以下任何 source_customer_no 的記錄
+  - 輸入 DataSet 含 **4 列**：
+    | source_customer_no | 長度 | 預期行為 |
+    |--------------------|------|---------|
+    | `"01"` | 2 | 跳過（< 5） |
+    | `"."` | 1 | 跳過（< 5） |
+    | `"ABCDE"` | 5 | 寫入（= 5，邊界通過） |
+    | `"VALID001"` | 8 | 寫入（> 5） |
+  - 每列均含必要欄位（name、customer_type_code、data_source）
+  - isTestRun = false
+- **Steps**:
+  1. 執行 TargetLoadExecutor
+  2. 查詢 customer_core 中哪些 source_customer_no 存在
+  3. 確認 node_logs 的 outputRowCount 與跳過筆數記錄
+- **Expected Result**:
+  - customer_core 中 `source_customer_no = "ABCDE"` 存在（長度 5，恰好通過閘門）
+  - customer_core 中 `source_customer_no = "VALID001"` 存在（長度 8，通過閘門）
+  - customer_core 中 `source_customer_no = "01"` **不存在**（長度 2，被跳過）
+  - customer_core 中 `source_customer_no = "."` **不存在**（長度 1，被跳過）
+  - `node_logs[tl1].outputRowCount = 2`（僅計算成功寫入的 2 列）
+  - 節點日誌中記錄跳過筆數 = 2（`"01"` 與 `"."` 各 1 筆）
+  - 節點 status = `'completed'`（跳過不視為錯誤）
+
+---
+
+### TS-F044-020: [BUG-2 修正驗證] VARCHAR 空字串與純空白正規化為 null（NULLIF(TRIM) 效果）
+
+- **Related Requirement**: F044 AC-12（BUG-2）/ F044 Section 6 步驟 7 / F044 Section 7
+- **Test Type**: 正向（BUG-2 修正驗證）
+- **測試層次**: 整合測試（Test Container）
+- **Preconditions**:
+  - customer_core 中無 `source_customer_no = "TEST001"` 的記錄
+  - 輸入 DataSet 含 **3 列**（驗證不同空字串情境）：
+    | source_customer_no | name | email | 說明 |
+    |--------------------|------|-------|------|
+    | `"TEST001"` | `"  "`（純空白，2 個空格） | `""`（空字串） | 主要驗證列 |
+    | `"TEST002"` | `""\t\n"`（含 tab/換行的空白） | `"  "`（多個空格） | 多類型空白 |
+    | `"TEST003"` | `"正常姓名"` | `"test@example.com"` | 對照列（不應被正規化） |
+  - isTestRun = false
+- **Steps**:
+  1. 執行 TargetLoadExecutor
+  2. 查詢 customer_core，取得三列的 name 與 email 欄位值
+- **Expected Result**:
+  - `TEST001` 列：
+    - `name = null`（純空白字串 `"  "` 經 `NULLIF(TRIM(col), '')` → null）
+    - `email = null`（空字串 `""` 經 `NULLIF(TRIM(col), '')` → null）
+  - `TEST002` 列：
+    - `name = null`（含 tab/換行的空白視為純空白 → null）
+    - `email = null`（多個空格 → null）
+  - `TEST003` 列：
+    - `name = "正常姓名"`（非空白，不被正規化）
+    - `email = "test@example.com"`（非空白，不被正規化）
+
+> **根因（BUG-2）**：源自 MLMC 來源資料中某些欄位以空字串而非 NULL 表示無值，導致 `name = ""` 與 `name = null` 語意不一致，影響下游查詢與合併邏輯。修正後統一以 `NULLIF(TRIM(col), '')` 正規化，空字串與純空白均轉為 null。

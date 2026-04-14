@@ -5,7 +5,7 @@ feature_name: ETL 節點執行器
 priority: P0-MVP
 related_spec: /docs/specs/features/F043-etl-node-executors.md
 related_story: US-056, US-057（FieldMapping / Conditional）, US-058（Lookup 雙輸入）
-last_updated: 2026-03-31
+last_updated: 2026-04-14
 ---
 
 # F043: ETL 節點執行器 — 測試設計
@@ -381,6 +381,57 @@ const fanoutLookupContexts = [
 
 ---
 
+### TS-F043-010A: [BUG-1 修正驗證] 同名 join key FULL JOIN — 額外輸出 `_left` / `_right` 欄位
+
+- **Related Requirement**: F043 Section 4.2 特殊規則 JOIN key 處理 / F043 AC-3a（BUG-1）/ US-056 AC-2a / US-056 TC-056-10
+- **Test Type**: 正向（BUG-1 修正驗證）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - 左側 DataSet（ZZIP 路線 fm1 輸出）：1 列，`source_customer_no = "ZZIP-001"`
+  - 右側 DataSet（MLMC 路線 fm2 輸出）：1 列，`source_customer_no = "MLMC-001"`
+  - 兩者 `source_customer_no` 不同（無 match），模擬 m4 FULL JOIN 情境
+  - JOIN 條件：`leftColumn: "source_customer_no"，rightColumn: "source_customer_no"`（同名 key）
+- **Steps**:
+  1. 執行 MergeExecutor（m4），left-input = ZZIP 列，right-input = MLMC 列
+  2. 取得輸出列陣列（rowCount = 2）
+  3. 依 `source_customer_no` 區分 ZZIP-only 與 MLMC-only 兩列
+- **Expected Result**:
+  - 輸出 `rowCount = 2`（FULL JOIN，無 match 故各自獨立）
+  - **ZZIP-only 列**：
+    - `source_customer_no = "ZZIP-001"`（COALESCE 結果：左側非 null，取左側）
+    - `source_customer_no_left = "ZZIP-001"`（左側原始值）
+    - `source_customer_no_right = null`（右側原始值，因無 match）
+  - **MLMC-only 列**：
+    - `source_customer_no = "MLMC-001"`（COALESCE 結果：左側為 null，取右側）
+    - `source_customer_no_left = null`（左側原始值，因無 match）
+    - `source_customer_no_right = "MLMC-001"`（右側原始值）
+  - 輸出列共含 3 個 join key 相關欄位：`source_customer_no`、`source_customer_no_left`、`source_customer_no_right`
+
+> **背景（BUG-1）**：原實作同名 join key 時僅輸出 COALESCE 後的主 key，不產生 `_left`/`_right` 欄位。導致下游 df3 的 `data_source` CASE WHEN 無法區分記錄來源，所有記錄均被標記為 `"ZZIP_BAMCUST_M+MLMCUSTOMER"`。
+
+---
+
+### TS-F043-010B: [BUG-1 修正驗證] 同名 join key 雙方均 match — `_left` / `_right` 均有值
+
+- **Related Requirement**: F043 Section 4.2 特殊規則 JOIN key 處理 / F043 AC-3a（BUG-1）/ US-056 TC-056-10
+- **Test Type**: 邊界（BUG-1 修正驗證，雙方 match 情境）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - 左側 DataSet：1 列，`source_customer_no = "BOTH-001"`
+  - 右側 DataSet：1 列，`source_customer_no = "BOTH-001"`（相同 key，雙方 match）
+  - JOIN 條件：同名 key `source_customer_no`
+- **Steps**:
+  1. 執行 MergeExecutor FULL JOIN
+  2. 取得輸出列（rowCount = 1）
+- **Expected Result**:
+  - 輸出 `rowCount = 1`（雙方 match，合併為單列）
+  - `source_customer_no = "BOTH-001"`（COALESCE 結果：左側非 null，取左側）
+  - `source_customer_no_left = "BOTH-001"`（左側原始值，非 null）
+  - `source_customer_no_right = "BOTH-001"`（右側原始值，非 null）
+  - 下游 `data_source` CASE WHEN 可正確判斷為雙來源（`_left IS NOT NULL AND _right IS NOT NULL`）
+
+---
+
 ## 測試場景 — DedupExecutor
 
 ### TS-F043-011: 保留最新時間戳的列
@@ -715,6 +766,24 @@ const fanoutLookupContexts = [
 
 ---
 
+### TS-F043-026A: [BUG-3 修正驗證] ZZIP CUSTOM_MK 補零 — `padStart(CUSTOM_MK, 2, '0')` 使 Lookup 命中
+
+- **Related Requirement**: F043 Section 4.5 padStart 函數 / US-056 TC-056-09b（BUG-3）
+- **Test Type**: 正向（BUG-3 修正驗證）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - 列中 `CUSTOM_MK = "1"`（ZZIP 來源單位數格式）
+  - expression = `padStart(CUSTOM_MK, 2, '0')`，outputColumn = `'CUSTOM_MK'`（覆蓋原欄位）
+- **Steps**:
+  1. 執行 DerivedFieldExecutor，節點 = `df_zzip_ctype_pad`
+  2. 取得輸出列的 CUSTOM_MK 值
+- **Expected Result**:
+  - 輸出列 `CUSTOM_MK = "01"`（補零後可命中 Lookup lk_ctype1 的 `TBL_CD = "01"` 條目）
+
+> **背景（BUG-3）**：ZZIP 來源的 `CUSTOM_MK` 欄位同時存在 `"1"` 和 `"01"` 兩種格式，而 lk_ctype1 對照表統一使用 `"01"`，導致 `"1"` 無法命中對照描述。修正方式為在 ZZIP 分支的 Lookup 節點前插入 `df_zzip_ctype_pad`（derived_field）節點執行 padStart 正規化。此為 **pipeline definition 設定層**修改，`padStart` 函數邏輯本身不需更動；現有 TS-F043-025/026 已覆蓋 padStart 函數正確性，本場景驗證 BUG-3 的具體修正情境。
+
+---
+
 ### TS-F043-027: gen_random_uuid 產生唯一 UUID v4
 
 - **Related Requirement**: F043 AC-12 / US-056 TC-056-09
@@ -987,6 +1056,93 @@ const fanoutLookupContexts = [
   1. 對 dedup, type_cast, derived_field, field_mapping, conditional 各節點執行，輸入空 DataSet
 - **Expected Result**:
   - 所有節點輸出 `{ rows: [], rowCount: 0 }`
+
+---
+
+### TS-F043-044A: [BUG-2 修正驗證] MLMC-only 記錄透過 elseValue 正確解析 `_right` 欄位
+
+- **Related Requirement**: F043 AC-16 / US-057 AC-2a（BUG-2）/ US-057 TC-057-10
+- **Test Type**: 正向（BUG-2 修正驗證）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - cd1 輸入列（模擬 m4 FULL JOIN 後 MLMC-only 記錄）：
+    ```
+    name = null
+    name_right = "企業甲"
+    source_updated_at = null
+    source_updated_at_right = "2024-01-01"
+    customer_type_code = null
+    customer_type_code_right = "02"
+    ```
+  - rule：`{ targetColumn: "name", conditions: [{ when: "left.source_updated_at >= right.source_updated_at", then: "left.name" }], elseValue: "right.name" }`
+- **Steps**:
+  1. 執行 ConditionalExecutor，輸入含上述 MLMC-only 列
+  2. 驗證 `name` 欄位輸出值
+- **Expected Result**:
+  - `when "left.source_updated_at >= right.source_updated_at"` 不成立（`source_updated_at = null`，null 安全規則）
+  - fallback 到 `elseValue: "right.name"`，解析為列中 `name_right` 欄位
+  - 輸出列 `name = "企業甲"`（不為 null）
+
+> **背景（BUG-2 cd1 部分）**：cd1 rules 原僅涵蓋 5 個欄位（name、mobile_phone、mailing_address、capital、office_phone），其餘欄位如 `customer_type_code` 對 MLMC-only 記錄保持左側（ZZIP）值即 null。修正後 rules 擴充至 14 個欄位，確保所有有 `_right` 後綴的欄位均被正確解決。
+
+---
+
+### TS-F043-044B: [BUG-2 修正驗證] ZZIP-only 記錄保持 left 欄位值（conditional 不誤取 null）
+
+- **Related Requirement**: F043 AC-16 / US-057 AC-2a（BUG-2）/ US-057 TC-057-11
+- **Test Type**: 正向（BUG-2 修正驗證）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - cd1 輸入列（ZZIP-only 記錄）：
+    ```
+    name = "個人丙"
+    name_right = null
+    source_updated_at = "2024-02-01"
+    source_updated_at_right = null
+    ```
+  - 同上 rule（含 IS NOT NULL 條件）
+- **Steps**:
+  1. 執行 ConditionalExecutor
+  2. 驗證 `name` 欄位輸出值
+- **Expected Result**:
+  - `when "left.source_updated_at >= right.source_updated_at"` 不成立（right 為 null，null 安全）
+  - 檢查後續 condition（若有 `left.source_updated_at IS NOT NULL`）：成立，取 `left.name`
+  - 輸出列 `name = "個人丙"`（ZZIP 路線值正確保留）
+
+> **注意**：本場景確認 BUG-2 修正後 ConditionalExecutor 既不誤丟 ZZIP-only 記錄，也不誤取 null 的 `_right` 欄位。
+
+---
+
+### TS-F043-044C: [BUG-1 修正驗證] df3 CASE WHEN 三種來源標記正確性（整合場景）
+
+- **Related Requirement**: F043 AC-13 / US-056 TC-056-11 / F043 Section 4.5 DerivedFieldExecutor
+- **Test Type**: 正向（BUG-1 修正驗證，整合場景）
+- **測試層次**: 單元測試
+- **Preconditions**:
+  - m4 FULL JOIN 後輸出含三種記錄（BUG-1 修正後包含 `_left`/`_right` 欄位）：
+    - (A) 雙來源：`source_customer_no_left = "ZZIP-001"`，`source_customer_no_right = "MLMC-001"`
+    - (B) ZZIP-only：`source_customer_no_left = "ZZIP-001"`，`source_customer_no_right = null`
+    - (C) MLMC-only：`source_customer_no_left = null`，`source_customer_no_right = "MLMC-001"`
+  - df3 CASE WHEN 表達式（BUG-1 修正後語法）：
+    ```
+    CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NOT NULL
+         THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER'
+         WHEN source_customer_no_left IS NOT NULL
+         THEN 'ZZIP_BAMCUST_M'
+         ELSE 'MLMCUSTOMER' END
+    ```
+- **Steps**:
+  1. 對三種記錄分別執行 DerivedFieldExecutor，outputColumn = 'data_source'
+- **Expected Result**:
+  - (A) 雙來源：`data_source = "ZZIP_BAMCUST_M+MLMCUSTOMER"`
+  - (B) ZZIP-only：`data_source = "ZZIP_BAMCUST_M"`
+  - (C) MLMC-only：`data_source = "MLMCUSTOMER"`
+
+> **背景（BUG-1）**：修正前 df3 表達式引用 `left.source_customer_no` / `right.source_customer_no`，因 merge 的 COALESCE 行為兩者解析到同一個非 null 欄位，導致所有記錄均標記為 `"ZZIP_BAMCUST_M+MLMCUSTOMER"`。修正後改用 `source_customer_no_left` / `source_customer_no_right` 實體欄位（由 BUG-1 新增）。
+
+---
+
+> **ConditionalExecutor buildCaseSql NULL-guard 覆蓋說明**：現有測試資料（conditionalRows，第 142-171 行）已包含 MLMC-only（`source_customer_no_right = 'M001'`、左側 null）與 ZZIP-only（`source_customer_no_right = null`、左側非 null）兩種情境。TS-F043-038~044 的現有場景已透過 `IS NOT NULL` / `>=` / null 安全規則驗證 `buildCaseSql` 對這兩種情境的正確性，BUG-2 修正後 cd1 rules 涵蓋 14 個欄位，僅需確保 ConditionalExecutor 能正確處理任意 `_right` 後綴欄位，不需針對特定欄位數量新增額外測試場景。
 
 ---
 
