@@ -20,6 +20,7 @@ import { EtlPipelineVersion } from './database/entities/etl-pipeline-version.ent
 import { EtlModule } from './modules/etl/etl.module';
 import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.module';
 import { RolesModule } from './modules/roles/roles.module';
+import { C360Module } from './modules/c360/c360.module';
 import { Role } from './database/entities/role.entity';
 
 @Module({
@@ -69,6 +70,7 @@ import { Role } from './database/entities/role.entity';
     EtlModule,
     OrphanRecoveryModule,
     SchedulerModule,
+    C360Module,
   ],
   providers: [],
 })
