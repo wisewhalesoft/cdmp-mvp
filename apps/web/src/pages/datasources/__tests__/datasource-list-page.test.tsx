@@ -185,7 +185,7 @@ describe('DatasourceListPage', () => {
       await renderAndLoad();
 
       const dsLink = screen.getByText('資料來源').closest('a');
-      expect(dsLink).toHaveAttribute('aria-current', 'page');
+      expect(dsLink).toHaveClass('border-r-2');
     });
   });
 

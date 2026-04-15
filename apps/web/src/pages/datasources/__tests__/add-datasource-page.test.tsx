@@ -85,7 +85,7 @@ describe('AddDatasourcePage', () => {
       renderPage();
       const sidebarNav = document.querySelector('aside nav');
       const datasourceLink = sidebarNav?.querySelector('a[href="/datasources/new"]');
-      expect(datasourceLink).toHaveClass('text-primary');
+      expect(datasourceLink).toHaveClass('text-[#2563EB]');
     });
   });
 

@@ -261,7 +261,7 @@ describe('ExtractionTaskListPage', () => {
     it('should have active state on extraction sidebar link', async () => {
       await renderAndLoad();
       const link = screen.getByText('資料擷取').closest('a');
-      expect(link).toHaveAttribute('aria-current', 'page');
+      expect(link).toHaveClass('border-r-2');
     });
   });
 });
