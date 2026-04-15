@@ -22,47 +22,44 @@
   </style>
 </head>
 <body class="bg-bg min-h-screen">
-  <div class="flex min-h-screen">
 
-    <!-- Sidebar -->
-    <aside class="w-56 bg-surface border-r border-border flex flex-col shrink-0">
-      <div class="px-5 py-5 border-b border-border">
-        <h1 class="text-xl font-bold text-primary tracking-wide">CDMP</h1>
-        <p class="text-xs text-gray-500 mt-0.5">資料治理平台</p>
-      </div>
-      <nav class="flex-1 py-3">
-        <a href="#" class="flex items-center gap-3 px-5 py-2.5 text-sm text-primary bg-blue-50 border-l-[3px] border-primary font-medium">
-          <i data-lucide="users" class="w-5 h-5"></i>
-          帳號管理
-        </a>
-        <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-          <i data-lucide="database" class="w-5 h-5"></i>
-          資料來源
-        </a>
-        <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-          <i data-lucide="arrow-down-to-line" class="w-5 h-5"></i>
-          資料擷取
-        </a>
-      </nav>
-    </aside>
+  <!-- Sidebar -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+    </nav>
+  </aside>
 
-    <!-- Main Area -->
-    <div class="flex-1 flex flex-col min-w-0">
+  <!-- Header -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">帳號管理</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
 
-      <!-- Header -->
-      <header class="h-14 bg-surface border-b border-border flex items-center justify-between px-6 shrink-0">
-        <h2 class="text-lg font-semibold text-gray-900">帳號管理</h2>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-gray-700">王小明</span>
-          <button class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
-            <i data-lucide="log-out" class="w-4 h-4"></i>
-            登出
-          </button>
-        </div>
-      </header>
-
-      <!-- Main Content -->
-      <main class="flex-1 p-6">
+  <!-- Main Content -->
+  <main class="ml-56 pt-14">
+    <div class="p-6">
 
         <!-- Toolbar -->
         <div class="flex items-center gap-3 mb-5">
@@ -340,9 +337,8 @@
           </div>
         </div>
 
-      </main>
     </div>
-  </div>
+  </main>
 
   <!-- ===== MODALS ===== -->
 
