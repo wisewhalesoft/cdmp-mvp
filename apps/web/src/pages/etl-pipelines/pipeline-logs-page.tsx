@@ -5,7 +5,6 @@ import {
   Database,
   ArrowDownToLine,
   Workflow,
-  LogOut,
   ArrowLeft,
   ChevronRight,
   ChevronLeft,
@@ -367,42 +366,36 @@ export function PipelineLogsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[#F9FAFB]">
       {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
-        <div className="px-5 py-5 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-blue-600 tracking-wide">CDMP</h1>
-          <p className="text-xs text-gray-500 mt-0.5">資料治理平台</p>
+      <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0">
+        <div className="px-5 py-4 border-b border-[#E5E7EB]">
+          <div className="text-xl font-bold text-[#2563EB]">CDMP</div>
+          <div className="text-xs text-gray-500 mt-0.5">資料治理平台</div>
         </div>
         <nav className="flex-1 py-3">
-          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
-            <Users size={20} />
-            帳號管理
+          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+            <Users size={16} />帳號管理
           </a>
-          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
-            <Database size={20} />
-            資料來源
+          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+            <Database size={16} />資料來源
           </a>
-          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
-            <ArrowDownToLine size={20} />
-            資料擷取
+          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+            <ArrowDownToLine size={16} />資料擷取
           </a>
-          <a
-            href="/etl-pipelines"
-            className="flex items-center gap-3 px-5 py-2.5 text-sm text-blue-600 bg-blue-50 border-l-[3px] border-blue-600 font-medium"
-            aria-current="page"
-          >
-            <Workflow size={20} />
-            ETL Pipeline
+          <a href="/etl-pipelines" className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-[#2563EB] bg-blue-50 border-r-2 border-[#2563EB]">
+            <Workflow size={16} />ETL Pipeline
           </a>
-<a            href="/c360/customers"            className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"          >            <Contact size={20} />            Customer 360          </a>
+          <a href="/c360/customers" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+            <Contact size={16} />Customer 360
+          </a>
         </nav>
       </aside>
 
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header with Breadcrumb */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+        <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-2 text-sm">
             <button
               onClick={() => navigate('/etl-pipelines')}
@@ -419,12 +412,11 @@ export function PipelineLogsPage() {
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-700">{user?.name}</span>
+            <span className="text-sm text-gray-600">{user?.name}</span>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+              className="text-sm text-gray-500 hover:text-[#EF4444] transition"
             >
-              <LogOut size={16} />
               登出
             </button>
           </div>
