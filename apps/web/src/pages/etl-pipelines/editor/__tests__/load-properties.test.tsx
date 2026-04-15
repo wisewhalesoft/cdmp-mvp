@@ -551,4 +551,93 @@ describe('LoadProperties (via PropertiesPanel)', () => {
       expect(autoFillLabels.length).toBe(3);
     });
   });
+
+  describe('fullMode Toggle', () => {
+    it('renders fullMode toggle with label and description', async () => {
+      renderLoadProperties({ targetTable: 'customer_core' });
+
+      await waitFor(() => {
+        expect(screen.getByText('寫入模式')).toBeInTheDocument();
+        expect(screen.getByText('全量重寫模式')).toBeInTheDocument();
+        expect(screen.getByText('(fullMode)')).toBeInTheDocument();
+      });
+
+      // Toggle should exist with switch role
+      const toggle = screen.getByRole('switch', { name: '全量重寫模式' });
+      expect(toggle).toBeInTheDocument();
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('toggle defaults to OFF with UPSERT description', async () => {
+      renderLoadProperties({ targetTable: 'customer_core' });
+
+      await waitFor(() => {
+        expect(screen.getByText(/UPSERT/)).toBeInTheDocument();
+      });
+
+      // Warning should NOT be visible
+      expect(screen.queryByText(/清空目標表/)).not.toBeInTheDocument();
+    });
+
+    it('toggle defaults to ON when fullMode=true in nodeData', async () => {
+      renderLoadProperties({ targetTable: 'customer_core', fullMode: true });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole('switch', { name: '全量重寫模式' });
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+      });
+
+      // Warning SHOULD be visible (multiple text nodes may match)
+      const warnings = screen.getAllByText(/清空目標表/);
+      expect(warnings.length).toBeGreaterThan(0);
+      // Safety note should be visible
+      const safetyNotes = screen.getAllByText(/測試執行/);
+      expect(safetyNotes.length).toBeGreaterThan(0);
+    });
+
+    it('clicking toggle calls onNodeDataChange with fullMode=true', async () => {
+      const user = userEvent.setup();
+      const { onNodeDataChange } = renderLoadProperties({ targetTable: 'customer_core' });
+
+      await waitFor(() => {
+        expect(screen.getByRole('switch', { name: '全量重寫模式' })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('switch', { name: '全量重寫模式' }));
+
+      expect(onNodeDataChange).toHaveBeenCalledWith('node-1', expect.objectContaining({
+        fullMode: true,
+      }));
+    });
+
+    it('clicking toggle ON triggers onChange, clicking OFF triggers onChange with false', async () => {
+      const user = userEvent.setup();
+      const { onNodeDataChange } = renderLoadProperties({ targetTable: 'customer_core' });
+
+      await waitFor(() => {
+        expect(screen.getByRole('switch', { name: '全量重寫模式' })).toBeInTheDocument();
+      });
+
+      // Warning hidden initially
+      expect(screen.queryByText(/清空目標表/)).not.toBeInTheDocument();
+
+      // Click ON
+      await user.click(screen.getByRole('switch', { name: '全量重寫模式' }));
+
+      expect(onNodeDataChange).toHaveBeenCalledWith('node-1', expect.objectContaining({
+        fullMode: true,
+      }));
+    });
+
+    it('fullMode toggle is not rendered when no target table selected', async () => {
+      renderLoadProperties({});
+
+      await waitFor(() => {
+        expect(screen.getByTestId('load-target-table-select')).toBeInTheDocument();
+      });
+
+      // fullMode toggle should not exist without a target table
+      expect(screen.queryByText('寫入模式')).not.toBeInTheDocument();
+    });
+  });
 });

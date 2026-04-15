@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Node, Edge } from '@xyflow/react';
-import { MousePointerClick, Trash2, Plus, Lock, ChevronDown, CheckCircle, MinusCircle, AlertCircle } from 'lucide-react';
+import { MousePointerClick, Trash2, Plus, Lock, ChevronDown, CheckCircle, MinusCircle, AlertCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
 import { FieldFlowTab } from './field-flow-tab';
 import type { RawTableItem, TargetTableSummary, TargetTableColumn } from '@cdmp/shared';
@@ -712,6 +712,57 @@ function LoadProperties({
           <p className="text-xs text-gray-400 mt-1">載入欄位定義中...</p>
         )}
       </div>
+
+      {/* Write Mode (fullMode toggle) — matching prototype 18-pipeline-editor.html:794-824 */}
+      {targetTable && schemaColumns.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">寫入模式</label>
+          <div className="flex items-center justify-between p-3 border border-[#E5E7EB] rounded-lg bg-gray-50">
+            <div className="flex-1 mr-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-800">全量重寫模式</span>
+                <span className="text-xs text-gray-400">(fullMode)</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {(nodeData.fullMode as boolean)
+                  ? '將使用 TRUNCATE + INSERT：清空後全量寫入'
+                  : '目前使用 UPSERT：新增或更新既有資料'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(nodeData.fullMode)}
+              aria-label="全量重寫模式"
+              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 ${
+                (nodeData.fullMode as boolean) ? 'bg-amber-500' : 'bg-gray-300'
+              }`}
+              onClick={() => onChange({ fullMode: !(nodeData.fullMode as boolean) })}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  (nodeData.fullMode as boolean) ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          {(nodeData.fullMode as boolean) && (
+            <div className="mt-2 p-3 border border-amber-300 rounded-lg bg-amber-50">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-800">注意：執行時將清空目標表所有資料</p>
+                  <p className="text-xs text-amber-700 mt-1">開啟後，Pipeline 執行時會先 TRUNCATE 目標表，再全量 INSERT 所有資料。此操作不可復原。</p>
+                  <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-white/60 rounded text-xs text-gray-600">
+                    <ShieldCheck className="w-3 h-3 text-green-600" />
+                    <span>測試執行時不會清空目標表（安全防護）</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Mapping Summary Badges */}
       {targetTable && schemaColumns.length > 0 && (
