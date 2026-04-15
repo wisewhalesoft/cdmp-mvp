@@ -1,8 +1,8 @@
 ---
 type: etl-engine-architecture
-version: 1.2
+version: 1.3
 status: draft
-last_updated: 2026-04-14
+last_updated: 2026-04-15
 covers: [US-055, US-056, US-057, BUG-1, BUG-2, BUG-3]
 ---
 
@@ -98,7 +98,9 @@ graph TD
 | DAG 執行策略 | **Kahn's algorithm 拓撲排序 + 循序執行** | 見 2.1 節詳述 |
 | 中間結果儲存 | **temp table 名稱引用（NodeOutputStore）** | DataSet 儲存 temp table 名稱而非記憶體資料陣列；見 4.2 節詳述 |
 | Extract 讀取方式 | **批次分頁讀取，累積至單一 DataSet** | 見 5.2 節詳述 |
-| Target Load 策略 | **批次 UPSERT（INSERT ... ON CONFLICT）** | 見 3.5 節詳述 |
+| Target Load 策略 | **雙模式：UPSERT（預設）或 fullMode（TRUNCATE + INSERT）** | 見 3.4 節詳述；fullMode 由 pipeline node data `fullMode: true` 靜態設定 |
+| fullMode Transaction 策略 | **TRUNCATE + 全部 INSERT 批次在同一 queryRunner transaction 中** | TRUNCATE 後若 INSERT 失敗目標表已清空，部分寫入語意上為災難性，必須原子化；與 UPSERT 批次提交策略不同（見 6.3 節） |
+| fullMode 觸發機制 | **pipeline definition 靜態屬性（`node.data.fullMode`）** | fullMode 描述「此 pipeline 的行為模式」而非「此次執行的臨時參數」，故設定於 node data 而非執行時 context |
 | Lookup 雙輸入路由 | **泛化 Handle key 機制（`lookup-input`）** | 與 Merge 的 `left-input`/`right-input` 相同模式；`collectInputs()` 已泛化支援任意 targetHandle key |
 | Lookup JOIN 執行位置 | **In-DB（ALTER TABLE + UPDATE 原地修改）** | 對照資料已為 temp table，ALTER+UPDATE 零記憶體佔用且不需複製整張表；TRIM() 處理 MSSQL CHAR 欄位尾隨空白 |
 | **BUG-1 修正** — Merge same-name JOIN key 輸出策略 | **額外輸出 `{key}_left`、`{key}_right` 欄位** | 原僅輸出 `COALESCE(l.key, r.key)` 導致下游無法區分左右來源；修正後同時輸出三欄：COALESCE 主 key、`_left`（左側原始值）、`_right`（右側原始值）。下游 `field_mapping`（dropUnmapped=true）自然過濾多餘欄位，無影響 |
@@ -447,14 +449,19 @@ sequenceDiagram
 
 #### TargetLoadHandler（target_load）
 
-- `isTestRun = true`：跳過寫入，記錄 `outputRowCount = inputDataSet.rowCount`
-- `isTestRun = false`：批次 UPSERT 寫入目標表
+- `isTestRun = true`：跳過所有寫入（**即使 `fullMode: true` 也不執行 TRUNCATE**，安全防護），記錄 `outputRowCount = inputDataSet.rowCount`
+- `isTestRun = false`：依 `node.data.fullMode` 決定寫入策略
 
-**UPSERT 策略：**
+**資料品質閘門（兩種模式皆生效）：**
+- 跳過 `source_customer_no` 長度 < 5 的記錄（ghost record 過濾）
+- 對所有 VARCHAR 欄位執行 `NULLIF(TRIM(col), '')` 空字串正規化
+- 跳過筆數記錄於節點日誌中
+
+**模式 A — UPSERT（`fullMode: false` 或未設定，預設）：**
 
 ```sql
 INSERT INTO customer_core ({columns})
-VALUES ({values})
+SELECT {columns} FROM "{dedupTable}" LIMIT {batchSize} OFFSET {offset}
 ON CONFLICT (source_customer_no)
 DO UPDATE SET
   {非主鍵欄位} = EXCLUDED.{非主鍵欄位},
@@ -463,11 +470,28 @@ DO UPDATE SET
 -- customer_id 不在 DO UPDATE SET 中（保留原值）
 ```
 
-自動附加 ETL 追蹤欄位：`_etl_loaded_at`（執行時間）、`_etl_pipeline_id`（pipeline.id）、`data_source`（來自輸入列）。
+Transaction 策略：批次提交（每批次獨立 commit），接受部分寫入，依賴 UPSERT 冪等性保障 retry 安全性。見第 6.3 節詳述。
 
-執行前驗證目標表存在（`information_schema.tables`）；表不存在則節點立即 failed。
+**模式 B — fullMode 全量重寫（`fullMode: true`）：**
 
-批次大小：`config.upsertBatchSize`（預設 500 筆）。部分寫入失敗時，已完成批次不回滾，記錄失敗批次的起始 offset 與錯誤訊息。
+在同一 queryRunner transaction 中依序執行：
+
+```sql
+-- Step 1: 清空目標表
+TRUNCATE TABLE "customer_core";
+
+-- Step 2: 批次 INSERT（無 ON CONFLICT，目標表已清空）
+INSERT INTO "customer_core" ({columns})
+SELECT {columns} FROM "{dedupTable}" LIMIT {batchSize} OFFSET {offset};
+```
+
+Transaction 策略：TRUNCATE + 全部 INSERT 批次在同一 transaction 中，確保原子性。TRUNCATE 後若任一 INSERT 批次失敗，整個 transaction ROLLBACK，目標表恢復 TRUNCATE 前的狀態。詳見第 6.4 節。
+
+**共同行為：**
+- 執行前驗證目標表存在（`information_schema.tables`）；表不存在則節點立即 failed
+- 自動附加 ETL 追蹤欄位：`_etl_loaded_at`（執行時間）、`_etl_pipeline_id`（pipeline.id）
+- `data_source` 欄位取自輸入資料列（由上游 derived_field 節點產生）
+- 批次大小：預設 5000 筆，受 PostgreSQL 65535 參數上限自動約束（45 欄位時實際 max 為 1456）
 
 ---
 
@@ -615,9 +639,9 @@ pending → skipped（當上游節點 failed 或未執行）
 - `failed`：節點拋出例外後回寫（含 errorMessage）
 - `skipped`：PipelineRunner 檢測到失敗後批量回寫所有剩餘節點
 
-### 6.3 TargetLoad 部分寫入
+### 6.3 TargetLoad 部分寫入（UPSERT 模式）
 
-TargetLoad 節點不使用單一 transaction 包覆所有批次（因為 210 萬筆的 transaction 會造成 DB 鎖定時間過長）。採用「批次提交，失敗記錄」策略：
+UPSERT 模式（`fullMode: false`）不使用單一 transaction 包覆所有批次（因為 210 萬筆的 transaction 會造成 DB 鎖定時間過長）。採用「批次提交，失敗記錄」策略：
 
 - 每批次獨立 commit
 - 某批次失敗時，記錄 `failedAtOffset`、`errorMessage` 並停止後續批次
@@ -626,7 +650,30 @@ TargetLoad 節點不使用單一 transaction 包覆所有批次（因為 210 萬
 
 **此決策的接受理由：** ETL 的目標是「最終一致」，部分寫入後 retry 可補全。強一致性 rollback 在大批量場景代價過高。
 
-### 6.4 Pipeline 層級狀態回寫
+### 6.4 TargetLoad fullMode Transaction 策略
+
+fullMode（`fullMode: true`）採用**單一 transaction 原子化**策略，與 UPSERT 批次提交策略不同：
+
+```
+TRUNCATE → [INSERT batch 1] → [INSERT batch 2] → ... → COMMIT
+                                                      ↑ 全部成功才 commit
+若任一步驟失敗 → ROLLBACK → 目標表恢復 TRUNCATE 前狀態
+```
+
+**策略差異理由：**
+
+| | UPSERT 模式 | fullMode |
+|---|---|---|
+| Transaction 範圍 | 每批次獨立 | 全部批次 + TRUNCATE 在同一 transaction |
+| 部分寫入後果 | 可接受（UPSERT 冪等，retry 可補全） | 不可接受（TRUNCATE 已清空，部分寫入導致資料集不完整） |
+| Retry 策略 | 直接重跑（UPSERT 冪等） | ROLLBACK 後重跑（目標表已還原，重跑安全） |
+| 鎖定風險 | 低（批次短 transaction） | 中（大批量單一長 transaction；MVP 單 pipeline 可接受） |
+
+**ROLLBACK 覆蓋範圍：** PostgreSQL 的 `TRUNCATE` 是 transactional 的，ROLLBACK 可還原被清空的資料。這是選擇此策略的前提條件。
+
+**風險標記：** 若 `customer_core` 未來資料量極大（>500 萬列），單一長 transaction 的鎖定時間需重新評估。MVP 階段資料量在可接受範圍內。
+
+### 6.5 Pipeline 層級狀態回寫
 
 ```typescript
 // 成功路徑
@@ -697,6 +744,8 @@ ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小（受 PostgreSQ
 | **BUG-2 修正**（2026-04-14）— TargetLoad ghost record 過濾 | 顯式 `source_customer_no` 長度 < 5 閘門取代動態 NOT NULL 過濾 |
 | **BUG-3 修正**（2026-04-14）— CUSTOM_MK 補零 | pipeline definition 層新增 `derived_field` 節點，Handler 程式碼不變 |
 | **Bug Fix 重新 ETL 策略**（2026-04-14） | `TRUNCATE customer_core` 後全量重跑；UPSERT 冪等性確保安全；見第 9 節 |
+| **fullMode 全量重寫**（2026-04-15，US-057） | `node.data.fullMode: true` 啟用；TRUNCATE + INSERT 在同一 transaction 原子化執行；test_run 時不執行 TRUNCATE；見 3.4 節、6.4 節 |
+| **fullMode 觸發機制**（2026-04-15，US-057） | 靜態 pipeline node data 屬性，非執行時參數；前端 pipeline editor 可視化此設定（本次不實作 UI，預留擴充點） |
 
 ### 8.2 風險
 

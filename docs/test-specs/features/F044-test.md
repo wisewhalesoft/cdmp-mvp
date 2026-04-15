@@ -1,11 +1,11 @@
 ---
 type: test-design-feature
 feature_id: F044
-feature_name: ETL Target Load + UPSERT
+feature_name: ETL Target Load + UPSERT / fullMode
 priority: P0-MVP
 related_spec: /docs/specs/features/F044-etl-target-load.md
 related_story: US-057（target_load 部分）
-last_updated: 2026-04-14
+last_updated: 2026-04-15
 ---
 
 # F044: ETL Target Load + UPSERT — 測試設計
@@ -17,6 +17,11 @@ last_updated: 2026-04-14
 - **目標表存在性驗證**：Mock queryRunner 驗證判斷邏輯
 - **批次大小計算**：純數學計算，無 DB 依賴
 - **ETL 追蹤欄位填充**：驗證 `_etl_loaded_at` 與 `_etl_pipeline_id` 是否正確附加
+- **fullMode=true 正常路徑**：Mock queryRunner 驗證 TRUNCATE SQL 與 INSERT SQL（無 ON CONFLICT）的呼叫序列
+- **fullMode=true + is_test_run=true**：Mock queryRunner 驗證 TRUNCATE 未被呼叫（安全防護）
+- **fullMode=false（向後相容）**：Mock queryRunner 驗證無 TRUNCATE，UPSERT SQL 含 ON CONFLICT
+- **fullMode=true INSERT 部分失敗**：Mock queryRunner 模擬 INSERT 失敗，驗證 TRUNCATE 已執行且節點拋出錯誤
+- **fullMode=true 資料品質閘門**：驗證 ghost records 閘門（LENGTH >= 5）在 fullMode INSERT SQL 中仍然生效
 
 ### 整合測試範疇
 - **UPSERT 寫入驗證（INSERT）**：需要真實 DB（Test Container）
@@ -25,6 +30,7 @@ last_updated: 2026-04-14
 - **批次分批寫入正確性**：需要真實 DB（含 batch size 邊界）
 - **部分批次失敗**：需要真實 DB（模擬批次失敗）
 - **NOT NULL 約束違反**：需要真實 DB
+- **fullMode=true 舊資料清空驗證**：需要真實 DB（Test Container），驗證 TRUNCATE 後 ghost records 確實消失、新資料正確寫入
 
 ### 測試資料隔離
 - 整合測試每次使用不同的 `source_customer_no` 前綴或清空 `customer_core` 表
@@ -473,3 +479,119 @@ const emptyDataSet = { rows: [], rowCount: 0 };
     - `email = "test@example.com"`（非空白，不被正規化）
 
 > **根因（BUG-2）**：源自 MLMC 來源資料中某些欄位以空字串而非 NULL 表示無值，導致 `name = ""` 與 `name = null` 語意不一致，影響下游查詢與合併邏輯。修正後統一以 `NULLIF(TRIM(col), '')` 正規化，空字串與純空白均轉為 null。
+
+---
+
+## 測試場景 — fullMode 全量重寫
+
+### TS-F044-021: fullMode=true 正常路徑 — TRUNCATE 後 INSERT，無 ON CONFLICT
+
+- **Related Requirement**: F044 AC-13 / F044 Section 5b / US-057 AC-3b / US-057 TC-057-14
+- **Test Type**: 正向
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Mock queryRunner：目標表存在
+  - 節點設定 `fullMode: true`
+  - `isTestRun = false`
+  - 輸入 DataSet：2 列（`source_customer_no = "NEWCUST01"` 與 `"NEWCUST02"`）
+- **Steps**:
+  1. 執行 TargetLoadHandler.execute(context)，context.node.data 含 `fullMode: true`
+  2. 記錄 Mock queryRunner 所有 SQL 呼叫
+- **Expected Result**:
+  - 有 TRUNCATE SQL 呼叫：`qr.calls` 中存在 `sql.includes('TRUNCATE')`，且 SQL 含 `"customer_core"`
+  - 有 INSERT SQL 呼叫：`qr.calls` 中存在 `sql.includes('INSERT INTO "customer_core"')`
+  - INSERT SQL **不含** `ON CONFLICT` 子句（`insertCall.sql` 不含 `'ON CONFLICT'`）
+  - INSERT SQL 含 ETL 追蹤欄位（`_etl_loaded_at`、`_etl_pipeline_id`）
+  - TRUNCATE SQL 呼叫的順序在 INSERT SQL 之前（依 `qr.calls` 陣列 index 驗證）
+  - 回傳 `rowCount = 2`
+
+---
+
+### TS-F044-022: fullMode=true + is_test_run=true — 不執行 TRUNCATE（安全防護）
+
+- **Related Requirement**: F044 AC-14 / F044 Section 6.1 / US-057 AC-3b / US-057 TC-057-15
+- **Test Type**: 正向（安全防護驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Mock queryRunner：目標表存在
+  - 節點設定 `fullMode: true`
+  - `isTestRun = true`
+  - 輸入 DataSet：3 列
+- **Steps**:
+  1. 執行 TargetLoadHandler.execute(context)，context 含 `isTestRun: true`、`fullMode: true`
+  2. 記錄 Mock queryRunner 所有 SQL 呼叫
+- **Expected Result**:
+  - 無 TRUNCATE SQL 呼叫：`qr.calls` 中不存在任何 `sql.includes('TRUNCATE')` 的呼叫
+  - 無 INSERT SQL 呼叫：`qr.calls` 中不存在 `sql.includes('INSERT INTO')`
+  - 回傳 `rowCount = 3`（等於輸入筆數，預計寫入數）
+  - 節點不拋出錯誤
+
+---
+
+### TS-F044-023: fullMode=false（或未設定）— 維持 UPSERT 行為，向後相容
+
+- **Related Requirement**: F044 AC-15 / US-057 AC-3b / US-057 TC-057-16
+- **Test Type**: 正向（回歸驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Mock queryRunner：目標表存在
+  - 節點設定 `fullMode: false`（或節點設定中完全省略 `fullMode` 欄位）
+  - `isTestRun = false`
+  - 輸入 DataSet：1 列（`source_customer_no = "A001"`，`name = "新名稱"`）
+- **Steps**:
+  1. 執行 TargetLoadHandler.execute(context)，context.node.data 含 `fullMode: false`（或不含 `fullMode`）
+  2. 記錄 Mock queryRunner 所有 SQL 呼叫
+- **Expected Result**:
+  - 無 TRUNCATE SQL 呼叫：`qr.calls` 中不存在任何 `sql.includes('TRUNCATE')` 的呼叫
+  - 有 INSERT SQL 呼叫：`qr.calls` 中存在 `sql.includes('INSERT INTO "customer_core"')`
+  - INSERT SQL **含** `ON CONFLICT` 子句（`insertCall.sql.includes('ON CONFLICT ("source_customer_no")')`）
+  - INSERT SQL **含** `DO UPDATE SET` 子句
+  - 回傳 `rowCount = 1`
+
+> **備註（回歸防護）**：此場景確保引入 fullMode 後，原有 UPSERT 路徑行為不受影響。`fullMode` 未設定時應以 `false` 處理（預設值）。
+
+---
+
+### TS-F044-024: fullMode=true INSERT 部分失敗 — TRUNCATE 已執行，節點標記為 failed
+
+- **Related Requirement**: F044 Section 6.6 / F044 Table 7（fullMode INSERT 部分失敗）
+- **Test Type**: 負向
+- **測試層次**: 單元測試（Mock queryRunner，customHandler 模擬 INSERT 失敗）
+- **Preconditions**:
+  - Mock queryRunner：`customHandler` 設定為：
+    - TRUNCATE SQL → 正常回傳（允許執行）
+    - INSERT SQL → 拋出 `Error('DB connection lost during INSERT')`
+  - 節點設定 `fullMode: true`
+  - `isTestRun = false`
+  - 輸入 DataSet：5 列
+- **Steps**:
+  1. 執行 TargetLoadHandler.execute(context)，預期拋出例外
+  2. 記錄 Mock queryRunner 所有 SQL 呼叫
+- **Expected Result**:
+  - TRUNCATE SQL **已執行**（`qr.calls` 中存在 TRUNCATE 呼叫，即 TRUNCATE 在 INSERT 失敗前完成）
+  - 節點拋出例外，錯誤訊息包含 `fullMode` 相關識別字（如 `'fullMode'` 或 `'INSERT 批次失敗'`）
+  - 不拋出 TRUNCATE 相關錯誤（TRUNCATE 本身成功）
+
+> **說明（transaction 語意）**：依 F044 Section 6.6，TRUNCATE 已執行時 INSERT 中途失敗，已寫入批次不回滾（接受部分寫入），節點標記 `'failed'`。此場景在 Mock 層次驗證 TRUNCATE → INSERT 的呼叫序列與失敗傳播行為。實際資料殘留效果需 Test Container 層次驗證。
+
+---
+
+### TS-F044-025: fullMode=true 資料品質閘門仍然生效 — ghost records 在 INSERT 前被過濾
+
+- **Related Requirement**: F044 AC-13（「資料品質閘門在 fullMode 下同樣生效」）/ F044 Section 5b / US-057 AC-3b
+- **Test Type**: 正向（閘門行為驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Mock queryRunner：目標表存在
+  - 節點設定 `fullMode: true`
+  - `isTestRun = false`
+  - 輸入 DataSet：任意筆數（>0）
+- **Steps**:
+  1. 執行 TargetLoadHandler.execute(context)，context.node.data 含 `fullMode: true`
+  2. 取得 INSERT SQL 呼叫內容
+- **Expected Result**:
+  - INSERT SQL 含 ghost records 閘門條件：`insertCall.sql.includes('LENGTH(TRIM("source_customer_no")) >= 5')`
+  - 閘門條件位於 INSERT 的 SELECT 子句（FROM 暫存表的 WHERE 條件或 CASE WHEN 過濾）
+  - 此閘門行為與 UPSERT 模式（TS-F044-019）一致，確保 fullMode 不繞過資料品質保護
+
+> **說明**：fullMode 使用 `INSERT INTO ... SELECT ... FROM dedupTable WHERE LENGTH(TRIM("source_customer_no")) >= 5`，ghost records 在 TRUNCATE 後的 INSERT 來源查詢中被排除，不會因 TRUNCATE 而遺失防護效果。

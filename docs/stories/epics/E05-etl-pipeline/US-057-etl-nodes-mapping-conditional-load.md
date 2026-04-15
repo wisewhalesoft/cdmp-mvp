@@ -12,7 +12,7 @@
 
 **As a** Admin（管理者）
 **I want** FieldMapping / Conditional / TargetLoad 三種節點能執行真正的轉換與寫入邏輯
-**So that** 中間資料能正確地進行欄位對應、衝突解決，並最終 UPSERT 寫入 customer_core
+**So that** 中間資料能正確地進行欄位對應、衝突解決，並最終寫入 customer_core（支援 UPSERT 與 fullMode 全量重寫兩種策略）
 
 ---
 
@@ -105,6 +105,25 @@
 
 > **根因（BUG-2）**：`target-load-handler.ts:77-85` 依據 `is_nullable='NO'` 的欄位清單過濾輸入資料列，將 `name=null` 或 `customer_type_code=null` 的記錄排除。MLMC-only 記錄在 cd1 衝突解決後，若其 `_right` 欄位已補值則不為 null；但過濾邏輯早於 conditional COALESCE 完成前執行，或 cd1 rules 未完整涵蓋所有欄位，造成記錄被靜默丟棄。修正後改為顯式 `source_customer_no` 長度閘門，不再依賴 schema 動態過濾。
 
+### AC-3b：target_load — fullMode 全量重寫（TRUNCATE + INSERT）
+
+- **Given** 節點設定含有 `fullMode: true`，且 `is_test_run = false`
+- **When** tl1 節點執行
+- **Then** 在 INSERT 之前，先執行 `TRUNCATE TABLE {targetTable}`，清除目標表所有現有資料（包含先前 pipeline 執行產生的 ghost records）
+- **And** TRUNCATE 與後續 INSERT 在同一個 database transaction（queryRunner）中執行，確保原子性：TRUNCATE 失敗則不執行 INSERT；INSERT 中途失敗則整批標記失敗
+- **And** INSERT 不含 `ON CONFLICT` 子句（目標表已清空，不會有唯一鍵衝突）
+- **And** 資料品質閘門（`source_customer_no` 長度 >= 5）在 fullMode 下同樣生效，ghost records 在 TRUNCATE 後的 INSERT 前仍被過濾
+- **And** ETL 追蹤欄位（`_etl_loaded_at`、`_etl_pipeline_id`）自動填充，行為與 UPSERT 模式相同
+- **And** 節點完成後，`node_logs[tl1].outputRowCount` 記錄成功 INSERT 的總筆數
+
+- **Given** 節點設定含有 `fullMode: true`，但 `is_test_run = true`
+- **When** tl1 節點執行
+- **Then** **不執行** TRUNCATE（安全防護，避免測試執行清空正式資料）；節點行為與 `fullMode: false` 測試執行相同，回傳 `outputRowCount = inputDataSet.rowCount`，status = `'completed'`
+
+- **Given** 節點設定 `fullMode: false` 或未設定 `fullMode` 欄位
+- **When** tl1 節點執行
+- **Then** 維持現有 UPSERT 行為（INSERT + ON CONFLICT DO UPDATE），不執行 TRUNCATE，確保向後相容
+
 ### AC-4：target_load — 目標表不存在時的處理
 
 - **Given** `targetTable` 設定值在資料庫中不存在（或目標表未完成 migration）
@@ -121,7 +140,20 @@
 
 ## 技術備註
 
-### UPSERT SQL（PostgreSQL）
+### fullMode SQL（PostgreSQL）
+
+```sql
+-- Step 1: 清空目標表（在 transaction 中執行）
+TRUNCATE TABLE "customer_core";
+
+-- Step 2: 批次 INSERT（無 ON CONFLICT，表已清空）
+INSERT INTO "customer_core" ({columns})
+SELECT {columns} FROM "{dedupTable}" LIMIT {batchSize} OFFSET {offset};
+```
+
+fullMode 下 `customer_id` 欄位同樣不由引擎填充，以資料庫 DEFAULT `gen_random_uuid()` 自動生成。
+
+### UPSERT SQL（PostgreSQL，fullMode: false）
 
 ```sql
 INSERT INTO customer_core ({columns})
@@ -155,7 +187,7 @@ cd1 的輸入來自 m4（FULL OUTER JOIN fm1 與 fm2）。m4 執行後，資料�
 ### 測試執行（is_test_run = true）行為
 
 當 `is_test_run = true` 時，target_load 節點：
-1. **不執行** UPSERT
+1. **不執行** UPSERT，**即使 fullMode=true 也不執行 TRUNCATE**（安全防護）
 2. 記錄預計寫入筆數（`outputRowCount = inputDataSet.rowCount`）
 3. 節點 status 標記為 `'completed'`（模擬成功）
 
@@ -241,6 +273,24 @@ cd1 的輸入來自 m4（FULL OUTER JOIN fm1 與 fm2）。m4 執行後，資料�
 - **When**：tl1 執行 UPSERT
 - **Then**：`customer_core` 中只寫入 `source_customer_no = "VALID001"` 的列；前兩列因 `source_customer_no` 長度 < 5 被跳過，`node_logs[tl1].outputRowCount = 1`，跳過筆數記錄於節點日誌中
 
+### TC-057-14：target_load fullMode 先 TRUNCATE 再 INSERT，舊 ghost records 被清除
+
+- **Given**：`customer_core` 中已存在 3 列舊資料（含 `source_customer_no = "ghost-01"` 等 ghost records）；tl1 節點設定 `fullMode: true`，`is_test_run = false`
+- **When**：tl1 執行，輸入含 2 筆新資料（`source_customer_no = "NEWCUST01"`、`"NEWCUST02"`）
+- **Then**：TRUNCATE 後 `customer_core` 清空；INSERT 後 `customer_core` 只有 2 列新資料，舊的 ghost records 不存在；`node_logs[tl1].outputRowCount = 2`
+
+### TC-057-15：target_load fullMode=true 且 is_test_run=true 不執行 TRUNCATE
+
+- **Given**：`customer_core` 中已存在 5 列資料；tl1 節點設定 `fullMode: true`，`is_test_run = true`
+- **When**：tl1 執行
+- **Then**：`customer_core` 資料筆數不變（仍為 5 列），TRUNCATE 未執行；tl1 status = `'completed'`，`outputRowCount` = 輸入筆數
+
+### TC-057-16：target_load fullMode=false（或未設定）維持 UPSERT 行為
+
+- **Given**：`customer_core` 中 `source_customer_no = "A001"` 已存在（`name = "舊名稱"`）；tl1 節點設定 `fullMode: false`（或未設定 fullMode）
+- **When**：tl1 執行，輸入含 `source_customer_no = "A001"`, `name = "新名稱"` 的列
+- **Then**：未執行 TRUNCATE；`customer_core` 中 `source_customer_no = "A001"` 的 `name` 更新為 "新名稱"，原有其他列不受影響
+
 ---
 
 ## 依賴關係
@@ -255,10 +305,12 @@ cd1 的輸入來自 m4（FULL OUTER JOIN fm1 與 fm2）。m4 執行後，資料�
 - [ ] field_mapping 節點實作完成（dropUnmapped 邏輯正確）
 - [ ] conditional 節點實作完成，支援 `>=`、`IS NOT NULL` 比較與 `left.` / `right.` 欄位解析
 - [ ] conditional 節點 rules 涵蓋 m4 輸出所有有 `_right` 後綴的欄位，MLMC-only 記錄關鍵欄位均有值（BUG-2 修正驗證）
-- [ ] target_load 節點實作完成，UPSERT 邏輯正確（INSERT + ON CONFLICT DO UPDATE）
+- [ ] target_load 節點實作完成，UPSERT 邏輯正確（INSERT + ON CONFLICT DO UPDATE，`fullMode: false` 或未設定）
+- [ ] target_load fullMode=true 時先 TRUNCATE 後批次 INSERT，於同一 transaction 中執行（AC-3b）
+- [ ] target_load fullMode=true 且 is_test_run=true 時，TRUNCATE 防護生效，不清除目標表資料（AC-3b）
 - [ ] target_load 資料品質閘門改為顯式 `source_customer_no` 長度 >= 5 過濾，移除基於 `is_nullable='NO'` 的隱性 schema 過濾（BUG-2 修正驗證）
 - [ ] ETL 追蹤欄位自動填充（`_etl_loaded_at`、`_etl_pipeline_id`、`data_source`）
-- [ ] 測試執行跳過 UPSERT 且節點 status 為 completed
+- [ ] 測試執行跳過 UPSERT / TRUNCATE，節點 status 為 completed
 - [ ] 各節點單元測試完成，覆蓋正常路徑與邊界情況
 - [ ] 整合測試：以 seed-pipeline-definition.json 完整執行後，customer_core 確實有資料寫入（非測試執行模式）
 - [ ] 整合測試：pipeline 執行後 customer_core 中 MLMC-only 記錄筆數 > 0（BUG-2 整合驗證）
