@@ -64,6 +64,7 @@ function makeTargetLoadContext(
     pipelineId?: string;
     queryRunner?: any;
     columns?: string[];
+    fullMode?: boolean;
   } = {},
 ): NodeExecutionContext {
   const {
@@ -72,6 +73,7 @@ function makeTargetLoadContext(
     targetTable = 'customer_core',
     pipelineId = 'test-pipeline-uuid-123',
     columns = ['customer_id', 'source_customer_no', 'name'],
+    fullMode,
   } = opts;
 
   const queryRunner = opts.queryRunner ?? createMockQueryRunner({ tableExists, columns, rowCount: input.rowCount });
@@ -81,7 +83,7 @@ function makeTargetLoadContext(
       id: 'tl1',
       type: 'pipelineNode',
       position: { x: 0, y: 0 },
-      data: { nodeType: 'target_load', label: '載入', targetTable },
+      data: { nodeType: 'target_load', label: '載入', targetTable, ...(fullMode !== undefined ? { fullMode } : {}) },
     },
     inputs: { default: input },
     pipelineId,
@@ -276,5 +278,139 @@ describe('calculateBatchSize', () => {
 
   it('maxBatchSize calculation: floor(65535/10) = 6553', () => {
     expect(Math.floor(65535 / 10)).toBe(6553);
+  });
+});
+
+// ===== fullMode 全量重寫 =====
+
+describe('TargetLoadHandler - fullMode', () => {
+  const handler = new TargetLoadHandler();
+
+  // TS-F044-021: fullMode=true 正常路徑 — TRUNCATE 後 INSERT，無 ON CONFLICT
+  it('TS-F044-021: fullMode=true executes TRUNCATE then INSERT without ON CONFLICT', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 2), { fullMode: true });
+    const result = await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+
+    // TRUNCATE SQL 已呼叫
+    const truncateCall = qr.calls.find((c: any) => c.sql.includes('TRUNCATE'));
+    expect(truncateCall).toBeDefined();
+    expect(truncateCall.sql).toContain('"customer_core"');
+
+    // INSERT SQL 已呼叫
+    const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).toContain('INSERT INTO "customer_core"');
+
+    // INSERT SQL 不含 ON CONFLICT
+    expect(insertCall.sql).not.toContain('ON CONFLICT');
+
+    // INSERT SQL 含 ETL 追蹤欄位
+    expect(insertCall.sql).toContain('_etl_loaded_at');
+    expect(insertCall.sql).toContain('_etl_pipeline_id');
+
+    // TRUNCATE 在 INSERT 之前（依 calls 陣列 index）
+    const truncateIdx = qr.calls.indexOf(truncateCall);
+    const insertIdx = qr.calls.indexOf(insertCall);
+    expect(truncateIdx).toBeLessThan(insertIdx);
+
+    // 回傳 rowCount = 2
+    expect(result.rowCount).toBe(2);
+  });
+
+  // TS-F044-022: fullMode=true + isTestRun=true — 不執行 TRUNCATE（安全防護）
+  it('TS-F044-022: fullMode=true + isTestRun=true skips TRUNCATE and INSERT', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 3), { fullMode: true, isTestRun: true });
+    const result = await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+
+    // 無 TRUNCATE
+    const truncateCalls = qr.calls.filter((c: any) => c.sql.includes('TRUNCATE'));
+    expect(truncateCalls).toHaveLength(0);
+
+    // 無 INSERT
+    const insertCalls = qr.calls.filter((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCalls).toHaveLength(0);
+
+    // 回傳 rowCount = 3（輸入筆數）
+    expect(result.rowCount).toBe(3);
+  });
+
+  // TS-F044-023: fullMode=false（或未設定）— 維持 UPSERT，無 TRUNCATE
+  it('TS-F044-023: fullMode=false maintains UPSERT with ON CONFLICT, no TRUNCATE', async () => {
+    // 測試 fullMode=false
+    const ctx1 = makeTargetLoadContext(makeDs('etl_tmp_df3', 1), { fullMode: false });
+    await handler.execute(ctx1);
+
+    const qr1 = ctx1.queryRunner;
+    const truncateCalls1 = qr1.calls.filter((c: any) => c.sql.includes('TRUNCATE'));
+    expect(truncateCalls1).toHaveLength(0);
+
+    const insertCall1 = qr1.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCall1).toBeDefined();
+    expect(insertCall1.sql).toContain('ON CONFLICT ("source_customer_no")');
+    expect(insertCall1.sql).toContain('DO UPDATE SET');
+
+    // 測試 fullMode 未設定（向後相容）
+    const ctx2 = makeTargetLoadContext(makeDs('etl_tmp_df3', 1));
+    await handler.execute(ctx2);
+
+    const qr2 = ctx2.queryRunner;
+    const truncateCalls2 = qr2.calls.filter((c: any) => c.sql.includes('TRUNCATE'));
+    expect(truncateCalls2).toHaveLength(0);
+
+    const insertCall2 = qr2.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCall2).toBeDefined();
+    expect(insertCall2.sql).toContain('ON CONFLICT ("source_customer_no")');
+  });
+
+  // TS-F044-024: fullMode=true INSERT 失敗 — TRUNCATE 已執行，節點拋出錯誤
+  it('TS-F044-024: fullMode=true INSERT failure after TRUNCATE reports error', async () => {
+    const qr = createMockQueryRunner({
+      rowCount: 5,
+      customHandler: (sql) => {
+        // TRUNCATE 正常通過
+        if (sql.includes('TRUNCATE')) {
+          return [];
+        }
+        // INSERT 拋出錯誤
+        if (sql.includes('INSERT INTO') && !sql.includes('CREATE')) {
+          throw new Error('DB connection lost during INSERT');
+        }
+        return undefined;
+      },
+    });
+
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 5), { queryRunner: qr, fullMode: true });
+
+    // 預期拋出錯誤
+    await expect(handler.execute(ctx)).rejects.toThrow();
+
+    // TRUNCATE 已執行
+    const truncateCall = qr.calls.find((c: any) => c.sql.includes('TRUNCATE'));
+    expect(truncateCall).toBeDefined();
+
+    // 錯誤訊息含識別資訊
+    try {
+      await handler.execute(ctx);
+    } catch (e: any) {
+      expect(e.message).toMatch(/fullMode|INSERT 批次失敗/);
+    }
+  });
+
+  // TS-F044-025: fullMode=true 資料品質閘門仍生效 — ghost records 被過濾
+  it('TS-F044-025: fullMode=true ghost gate still filters short source_customer_no', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 3), { fullMode: true });
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+
+    // INSERT SQL 或 dedup table 建立 SQL 含 ghost gate 條件
+    const allSqlWithGhostGate = qr.calls.filter((c: any) =>
+      c.sql.includes('LENGTH(TRIM("source_customer_no")) >= 5'),
+    );
+    expect(allSqlWithGhostGate.length).toBeGreaterThan(0);
   });
 });

@@ -938,6 +938,7 @@
           "label": "載入 customer_core",
           "subtitle": "customer_core",
           "targetTable": "customer_core",
+          "fullMode": false,
           "fieldMappings": {
             "customer_id": "customer_id",
             "source_customer_no": "source_customer_no",
