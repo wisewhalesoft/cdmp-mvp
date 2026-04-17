@@ -16,6 +16,7 @@
  */
 
 import { NodeExecutor, NodeExecutionContext, DataSet, emptyDataSet } from '../types';
+import { resolveRawTable, ExtractionRef } from './resolve-raw-table';
 
 interface LookupOutputColumn {
   lookupColumn: string;
@@ -43,15 +44,26 @@ export class LookupHandler implements NodeExecutor {
 
     // Determine lookup table: dual-input mode vs legacy mode
     const lookupInput = context.inputs['lookup-input'];
-    const lookupSource = data.lookupSource as string;
     const lookupFilter = (data.lookupFilter as string) || '';
 
-    const lookupTable = lookupInput?.tempTable || lookupSource;
+    let lookupTable: string;
 
-    if (!lookupTable) throw new Error('Lookup 節點缺少對照來源');
+    if (lookupInput?.tempTable) {
+      // Dual-input mode: use upstream DataSet directly
+      lookupTable = lookupInput.tempTable;
+    } else {
+      // Legacy mode: resolve via lookupRef or static lookupSource
+      const lookupRef = data.lookupRef as ExtractionRef | undefined;
+      const lookupSource = data.lookupSource as string | undefined;
 
-    // In legacy mode (no lookup-input), validate the raw table exists
-    if (!lookupInput) {
+      lookupTable = await resolveRawTable(
+        context.queryRunner,
+        lookupRef,
+        lookupSource,
+        'lookupRef',
+      );
+
+      // Validate the raw table exists
       const tableCheck = await context.queryRunner.query(
         `SELECT table_name FROM information_schema.tables WHERE table_name = $1`,
         [lookupTable],

@@ -1,10 +1,11 @@
 /**
  * F043: ETL 節點執行器測試（In-DB SQL Strategy）
- * 覆蓋 TS-F043-001 ~ TS-F043-044
+ * 覆蓋 TS-F043-001 ~ TS-F043-066
  * 所有 handler 現在透過 SQL 操作 temp table，測試驗證 SQL 產出
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ExtractHandler } from '../engine/handlers/extract-handler';
+import { LookupHandler } from '../engine/handlers/lookup-handler';
 import { MergeHandler } from '../engine/handlers/merge-handler';
 import { DedupHandler } from '../engine/handlers/dedup-handler';
 import { TypeCastHandler } from '../engine/handlers/type-cast-handler';
@@ -901,5 +902,297 @@ describe('Empty DataSet handling (TS-F043-044)', () => {
       makeContext({ rules: [] }, { default: emptyDs }, { nodeType: 'conditional' }),
     );
     expect(condResult).toEqual({ tempTable: '', rowCount: 0 });
+  });
+});
+
+// ===== extractionRef / lookupRef Tests (TS-F043-059 ~ TS-F043-066) =====
+
+describe('ExtractHandler — extractionRef', () => {
+  const handler = new ExtractHandler();
+
+  /**
+   * Helper: creates a mock queryRunner that intercepts extraction_tasks JOIN query
+   * and returns the specified result, while delegating other queries to standard mock.
+   */
+  function createRefQueryRunner(opts: {
+    refResult: any[];       // result for extraction_tasks JOIN query
+    tableExists?: boolean;
+    rowCount?: number;
+  }) {
+    const { refResult, tableExists = true, rowCount = 3 } = opts;
+    return createMockQueryRunner({
+      tableExists,
+      rowCount,
+      customHandler: (sql, params) => {
+        if (sql.includes('extraction_tasks')) {
+          return refResult;
+        }
+        return undefined; // delegate to default mock
+      },
+    });
+  }
+
+  // TS-F043-059: extractionRef 成功解析 — 使用動態取得的 raw_table_name
+  it('TS-F043-059: extractionRef resolves dynamically via extraction_tasks JOIN', async () => {
+    const qr = createRefQueryRunner({
+      refResult: [{ raw_table_name: 'raw_101f6b3e' }],
+      tableExists: true,
+      rowCount: 3,
+    });
+    const ctx = makeContext(
+      {
+        nodeType: 'raw_data_extract',
+        extractionRef: { datasourceName: 'APYHFC16.ZZIPPROD', sourceTable: 'ZZIP_BAMCUST_M' },
+        // no rawTable — fully depends on ref resolution
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    const result = await handler.execute(ctx);
+
+    // Should have queried extraction_tasks with correct params
+    const refCall = qr.calls.find((c: any) => c.sql.includes('extraction_tasks'));
+    expect(refCall).toBeDefined();
+    expect(refCall.params).toContain('APYHFC16.ZZIPPROD');
+    expect(refCall.params).toContain('ZZIP_BAMCUST_M');
+
+    // CREATE TEMP TABLE should use the dynamically resolved table name
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall).toBeDefined();
+    expect(createCall.sql).toContain('SELECT * FROM "raw_101f6b3e"');
+
+    expect(result.rowCount).toBe(3);
+  });
+
+  // TS-F043-060: extractionRef 查不到，fallback rawTable
+  it('TS-F043-060: extractionRef not found falls back to rawTable with warning', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const qr = createRefQueryRunner({
+        refResult: [],  // extraction_tasks query returns empty
+        tableExists: true,
+        rowCount: 5,
+      });
+      const ctx = makeContext(
+        {
+          nodeType: 'raw_data_extract',
+          extractionRef: { datasourceName: 'UNKNOWN_DS', sourceTable: 'UNKNOWN_TABLE' },
+          rawTable: 'raw_101f6b3e',  // fallback
+        },
+        {},
+        { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+      );
+
+      const result = await handler.execute(ctx);
+
+      // Should use fallback rawTable
+      const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+      expect(createCall).toBeDefined();
+      expect(createCall.sql).toContain('SELECT * FROM "raw_101f6b3e"');
+      expect(createCall.sql).not.toContain('UNKNOWN_TABLE');
+
+      expect(result.rowCount).toBe(5);
+
+      // Should have warning about fallback
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('extractionRef');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  // TS-F043-061: extractionRef 查不到且無 rawTable — 節點 failed
+  it('TS-F043-061: extractionRef not found and no rawTable throws error', async () => {
+    const qr = createRefQueryRunner({
+      refResult: [],  // extraction_tasks query returns empty
+    });
+    const ctx = makeContext(
+      {
+        nodeType: 'raw_data_extract',
+        extractionRef: { datasourceName: 'UNKNOWN_DS', sourceTable: 'UNKNOWN_TABLE' },
+        // no rawTable — no fallback
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    const err = await handler.execute(ctx).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain('UNKNOWN_DS');
+    expect((err as Error).message).toContain('UNKNOWN_TABLE');
+  });
+
+  // TS-F043-062: 向後相容 — 無 extractionRef，直接用 rawTable
+  it('TS-F043-062: no extractionRef uses rawTable directly (backward compatible)', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 3 });
+    const ctx = makeContext(
+      {
+        nodeType: 'raw_data_extract',
+        rawTable: 'raw_101f6b3e',
+        // no extractionRef
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    const result = await handler.execute(ctx);
+
+    // Should NOT query extraction_tasks at all
+    const refCall = qr.calls.find((c: any) => c.sql.includes('extraction_tasks'));
+    expect(refCall).toBeUndefined();
+
+    // Should use rawTable directly
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall).toBeDefined();
+    expect(createCall.sql).toContain('SELECT * FROM "raw_101f6b3e"');
+
+    expect(result.rowCount).toBe(3);
+  });
+});
+
+describe('LookupHandler — lookupRef', () => {
+  const handler = new LookupHandler();
+
+  function createLookupRefQueryRunner(opts: {
+    refResult: any[];
+    tableExists?: boolean;
+    rowCount?: number;
+  }) {
+    const { refResult, tableExists = true, rowCount = 1 } = opts;
+    return createMockQueryRunner({
+      tableExists,
+      rowCount,
+      customHandler: (sql, params) => {
+        if (sql.includes('extraction_tasks')) {
+          return refResult;
+        }
+        return undefined;
+      },
+    });
+  }
+
+  const baseLookupData = {
+    nodeType: 'lookup',
+    matchColumn: 'CUST_TYPE',
+    lookupMatchColumn: 'CODE',
+    outputColumns: [{ lookupColumn: 'CODE_DESC', outputAlias: 'cust_type_desc' }],
+    lookupFilter: "TBL_ID = 'A2'",
+  };
+
+  // TS-F043-063: lookupRef 成功解析 — 使用動態取得的 raw_table_name（單輸入模式）
+  it('TS-F043-063: lookupRef resolves dynamically in legacy mode', async () => {
+    const qr = createLookupRefQueryRunner({
+      refResult: [{ raw_table_name: 'raw_e5a2345c' }],
+      tableExists: true,
+      rowCount: 2,
+    });
+    const ctx = makeContext(
+      {
+        ...baseLookupData,
+        lookupRef: { datasourceName: 'APYHFC16.ZZIPPROD', sourceTable: 'ZZIP_BAMCODE_D' },
+        // no lookupSource — fully depends on ref resolution
+      },
+      { default: makeDs('etl_tmp_main', 3) },
+      { nodeType: 'lookup', nodeId: 'lk1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    const result = await handler.execute(ctx);
+
+    // Should have queried extraction_tasks
+    const refCall = qr.calls.find((c: any) => c.sql.includes('extraction_tasks'));
+    expect(refCall).toBeDefined();
+    expect(refCall.params).toContain('APYHFC16.ZZIPPROD');
+    expect(refCall.params).toContain('ZZIP_BAMCODE_D');
+
+    // Lookup sub-query should use dynamically resolved table
+    const updateCall = qr.calls.find((c: any) => c.sql.includes('UPDATE'));
+    expect(updateCall).toBeDefined();
+    expect(updateCall.sql).toContain('raw_e5a2345c');
+
+    expect(result.rowCount).toBe(2);
+  });
+
+  // TS-F043-064: lookupRef 查不到，fallback lookupSource（單輸入模式）
+  it('TS-F043-064: lookupRef not found falls back to lookupSource with warning', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const qr = createLookupRefQueryRunner({
+        refResult: [],
+        tableExists: true,
+        rowCount: 2,
+      });
+      const ctx = makeContext(
+        {
+          ...baseLookupData,
+          lookupRef: { datasourceName: 'UNKNOWN_DS', sourceTable: 'UNKNOWN_TABLE' },
+          lookupSource: 'raw_e5a2345c',  // fallback
+        },
+        { default: makeDs('etl_tmp_main', 3) },
+        { nodeType: 'lookup', nodeId: 'lk1', logId: 'abcd1234-5678', queryRunner: qr },
+      );
+
+      const result = await handler.execute(ctx);
+
+      // Should use fallback lookupSource
+      const updateCall = qr.calls.find((c: any) => c.sql.includes('UPDATE'));
+      expect(updateCall).toBeDefined();
+      expect(updateCall.sql).toContain('raw_e5a2345c');
+      expect(updateCall.sql).not.toContain('UNKNOWN_TABLE');
+
+      expect(result.rowCount).toBe(2);
+
+      // Should have warning about fallback
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('lookupRef');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  // TS-F043-065: lookupRef 查不到且無 lookupSource — 節點 failed（單輸入模式）
+  it('TS-F043-065: lookupRef not found and no lookupSource throws error', async () => {
+    const qr = createLookupRefQueryRunner({
+      refResult: [],
+    });
+    const ctx = makeContext(
+      {
+        ...baseLookupData,
+        lookupRef: { datasourceName: 'UNKNOWN_DS', sourceTable: 'UNKNOWN_TABLE' },
+        lookupFilter: "TBL_ID = 'A2'",
+        // no lookupSource — no fallback
+      },
+      { default: makeDs('etl_tmp_main', 3) },
+      { nodeType: 'lookup', nodeId: 'lk1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    await expect(handler.execute(ctx)).rejects.toThrow('UNKNOWN_DS');
+  });
+
+  // TS-F043-066: 向後相容 — 無 lookupRef，直接用 lookupSource（單輸入模式）
+  it('TS-F043-066: no lookupRef uses lookupSource directly (backward compatible)', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 2 });
+    const ctx = makeContext(
+      {
+        ...baseLookupData,
+        lookupSource: 'raw_e5a2345c',
+        // no lookupRef
+      },
+      { default: makeDs('etl_tmp_main', 3) },
+      { nodeType: 'lookup', nodeId: 'lk1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    const result = await handler.execute(ctx);
+
+    // Should NOT query extraction_tasks at all
+    const refCall = qr.calls.find((c: any) => c.sql.includes('extraction_tasks'));
+    expect(refCall).toBeUndefined();
+
+    // Should use lookupSource directly
+    const updateCall = qr.calls.find((c: any) => c.sql.includes('UPDATE'));
+    expect(updateCall).toBeDefined();
+    expect(updateCall.sql).toContain('raw_e5a2345c');
+
+    expect(result.rowCount).toBe(2);
   });
 });

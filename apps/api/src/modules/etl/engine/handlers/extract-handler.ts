@@ -5,12 +5,22 @@
  */
 
 import { NodeExecutor, NodeExecutionContext, DataSet, makeTempTableName } from '../types';
+import { resolveRawTable, ExtractionRef } from './resolve-raw-table';
 
 export class ExtractHandler implements NodeExecutor {
   readonly nodeType = 'raw_data_extract';
 
   async execute(context: NodeExecutionContext): Promise<DataSet> {
-    const rawTable = context.node.data.rawTable as string;
+    const extractionRef = context.node.data.extractionRef as ExtractionRef | undefined;
+    const staticRawTable = context.node.data.rawTable as string | undefined;
+
+    // Resolve raw table name (dynamic via ref or static fallback)
+    const rawTable = await resolveRawTable(
+      context.queryRunner,
+      extractionRef,
+      staticRawTable,
+      'extractionRef',
+    );
 
     // Validate table exists
     const tableCheck = await context.queryRunner.query(
