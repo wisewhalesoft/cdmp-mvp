@@ -1,9 +1,9 @@
 ---
 type: etl-engine-architecture
-version: 1.3
+version: 1.4
 status: draft
 last_updated: 2026-04-15
-covers: [US-055, US-056, US-057, BUG-1, BUG-2, BUG-3]
+covers: [US-055, US-056, US-057, US-058, BUG-1, BUG-2, BUG-3]
 ---
 
 # ETL 執行引擎架構規格書
@@ -102,6 +102,9 @@ graph TD
 | fullMode Transaction 策略 | **TRUNCATE + 全部 INSERT 批次在同一 queryRunner transaction 中** | TRUNCATE 後若 INSERT 失敗目標表已清空，部分寫入語意上為災難性，必須原子化；與 UPSERT 批次提交策略不同（見 6.3 節） |
 | fullMode 觸發機制 | **pipeline definition 靜態屬性（`node.data.fullMode`）** | fullMode 描述「此 pipeline 的行為模式」而非「此次執行的臨時參數」，故設定於 node data 而非執行時 context |
 | Lookup 雙輸入路由 | **泛化 Handle key 機制（`lookup-input`）** | 與 Merge 的 `left-input`/`right-input` 相同模式；`collectInputs()` 已泛化支援任意 targetHandle key |
+| **extractionRef 解析策略**（US-058） | **Lazy 解析（執行時各節點自行查詢）** | 與現有 rawTable 驗證保持一致（節點執行時驗證）；查不到時有 rawTable fallback；完全失敗由既有 failed/skipped 流程接管；Eager 驗證在 active transaction 中增加不必要複雜度 |
+| **extractionRef 查詢方式**（US-058） | **直接使用 `context.queryRunner`** | `NodeExecutionContext.queryRunner` 已綁定至 Application DB，可直接執行 `extraction_tasks JOIN datasources` 查詢；無需注入 DataSource，`NodeExecutor` / `NodeExecutionContext` 介面不變 |
+| **extractionRef 跨環境移植**（US-058） | **邏輯識別符（datasourceName + sourceTable），rawTable 為 fallback snapshot** | extractionRef 為環境無關的邏輯參照，移植後只需目標環境 datasources + extraction_tasks 有對應記錄即可解析；rawTable 保留作保底；「重新解析所有 ref」功能留 P2，MVP 不實作 |
 | Lookup JOIN 執行位置 | **In-DB（ALTER TABLE + UPDATE 原地修改）** | 對照資料已為 temp table，ALTER+UPDATE 零記憶體佔用且不需複製整張表；TRIM() 處理 MSSQL CHAR 欄位尾隨空白 |
 | **BUG-1 修正** — Merge same-name JOIN key 輸出策略 | **額外輸出 `{key}_left`、`{key}_right` 欄位** | 原僅輸出 `COALESCE(l.key, r.key)` 導致下游無法區分左右來源；修正後同時輸出三欄：COALESCE 主 key、`_left`（左側原始值）、`_right`（右側原始值）。下游 `field_mapping`（dropUnmapped=true）自然過濾多餘欄位，無影響 |
 | **BUG-2 修正** — cd1 衝突解決欄位覆蓋策略 | **pipeline definition 層擴充 rules，Handler 程式碼不變** | `conditional-handler.ts` 的 `buildCaseSql` NULL-guard 邏輯已可正確處理 MLMC-only/ZZIP-only 記錄；只需在 seed-pipeline-definition.json 的 cd1 節點擴充 rules 從 5 個到 14 個 |
@@ -269,26 +272,62 @@ class NodeOutputStore {
 
 #### ExtractHandler（raw_data_extract）
 
-- 透過 `DataSource.query()` 以分頁批次讀取 raw table
-- 批次大小：`config.batchSize`（預設 10,000 筆）
-- 將所有批次累積成單一 `DataSet` 後輸出
-- 執行前驗證表是否存在（`information_schema.tables`）
+**extractionRef 解析流程（US-058 新增）：**
 
-```typescript
-// 批次讀取偽碼
-const rows: Record<string, unknown>[] = [];
-let offset = 0;
-while (true) {
-  const batch = await dataSource.query(
-    `SELECT * FROM "${rawTable}" LIMIT $1 OFFSET $2`,
-    [batchSize, offset]
-  );
-  if (batch.length === 0) break;
-  rows.push(...batch);
-  offset += batch.length;
-}
-return { rows, rowCount: rows.length };
+節點執行時依以下優先序決定 rawTable：
+
+1. 若節點 data 含 `extractionRef`（`datasourceName` + `sourceTable`），透過 `context.queryRunner` 查詢：
+   ```sql
+   SELECT et.raw_table_name
+   FROM extraction_tasks et
+   JOIN datasources ds ON et.datasource_id = ds.id
+   WHERE ds.name = $1 AND et.source_table = $2
+     AND et.raw_table_name IS NOT NULL
+   ORDER BY et.last_execution_at DESC NULLS LAST
+   LIMIT 1
+   ```
+2. 查到結果 → 使用動態取得的 `raw_table_name`
+3. 查不到且節點設定含 `rawTable` → fallback 使用 `rawTable`（記錄警告日誌）
+4. 查不到且無 `rawTable` → 節點 failed（錯誤訊息含 datasourceName + sourceTable）
+5. 無 `extractionRef` → 直接使用 `data.rawTable`（向後相容，不查詢 DB）
+
+```mermaid
+sequenceDiagram
+    participant Runner
+    participant ExtractHandler
+    participant PG as PostgreSQL
+
+    Runner->>ExtractHandler: execute(context)
+    alt 有 extractionRef
+        ExtractHandler->>PG: SELECT raw_table_name FROM extraction_tasks<br/>JOIN datasources WHERE ds.name=$1 AND et.source_table=$2
+        PG-->>ExtractHandler: raw_table_name（或空結果）
+        alt 查到結果
+            ExtractHandler->>ExtractHandler: rawTable = dynamic raw_table_name
+        else 查不到 + 有 rawTable fallback
+            ExtractHandler->>ExtractHandler: rawTable = node.data.rawTable（記錄警告）
+        else 查不到 + 無 rawTable
+            ExtractHandler-->>Runner: throw Error（節點 failed）
+        end
+    else 無 extractionRef
+        ExtractHandler->>ExtractHandler: rawTable = node.data.rawTable（向後相容）
+    end
+    ExtractHandler->>PG: 驗證 rawTable 存在（information_schema.tables）
+    ExtractHandler->>PG: CREATE TEMP TABLE AS SELECT * FROM rawTable
+    PG-->>ExtractHandler: 完成
+    ExtractHandler->>PG: SELECT COUNT(*) FROM tempTable
+    PG-->>ExtractHandler: rowCount
+    ExtractHandler-->>Runner: DataSet { tempTable, rowCount }
 ```
+
+**架構約束：**
+- 查詢直接使用 `context.queryRunner`，無需 DataSource 注入，`NodeExecutionContext` 介面不變
+- extractionRef 解析採 Lazy 策略（執行時解析），與現有 rawTable 驗證方式一致
+- rawTable 保留作 fallback snapshot，確保 extraction_tasks 表尚無記錄時仍可執行
+
+**主要行為：**
+- 透過 `context.queryRunner` 執行 `CREATE TEMP TABLE AS SELECT * FROM "{rawTable}"`（In-DB SQL 策略）
+- 批次大小：`config.batchSize`（預設 10,000 筆）
+- 執行前驗證 rawTable 是否存在（`information_schema.tables`）
 
 #### MergeHandler（merge）
 
@@ -362,16 +401,26 @@ sequenceDiagram
 
 **職責：** 將主資料流（`inputs['default']`）與對照資料（`inputs['lookup-input']` 或 `lookupSource` 文字欄位）進行 LEFT JOIN，將對照欄位附加至輸出。
 
+**lookupRef 解析（US-058 新增，對稱於 extractionRef）：**
+
+向下相容模式中，`lookupSource` 現支援靜態 raw table 名稱或透過 `lookupRef` 動態查詢。解析優先序與 ExtractHandler 的 extractionRef 完全對稱：
+
+1. 有 `lookupRef`（`datasourceName` + `sourceTable`）→ 透過 `context.queryRunner` 查詢 `extraction_tasks JOIN datasources` 取得動態 raw table 名稱
+2. 查到結果 → 使用動態 raw table 作為 lookup 資料來源
+3. 查不到且有 `lookupSource` → fallback 使用 `lookupSource`（記錄警告）
+4. 查不到且無 `lookupSource` → 節點 failed
+
 **雙輸入模式（有 `lookup-input` 連線時）：**
 
 - `inputs['default']`：主資料流（來自上游節點的 DataSet）
 - `inputs['lookup-input']`：對照資料（另一上游節點的 DataSet，已物化為 PostgreSQL 臨時表）
 - SQL 策略：ALTER TABLE ADD COLUMN + UPDATE ... FROM ... WHERE TRIM()，原地修改主表不複製
 - `lookupFilter` 若有設定仍會套用（作為對照資料的 WHERE 子句）
+- 雙輸入模式下 `lookupRef` 不生效（對照資料已由 `lookup-input` 提供）
 
 **向下相容模式（無 `lookup-input` 連線時）：**
 
-- 直接查詢節點屬性 `lookupSource` 所指定的 raw table
+- 優先嘗試 `lookupRef` 動態解析（見上方說明），fallback 至靜態 `lookupSource`
 - 支援 `lookupFilter` 欄位作為 WHERE 子句對對照資料預先篩選
 
 > **TRIM() 說明：** 比對欄位使用 `TRIM(col::text)` 避免 MSSQL CHAR 型別欄位因尾隨空白導致匹配失敗。
@@ -746,6 +795,7 @@ ETL_UPSERT_BATCH_SIZE=500                  # UPSERT 批次大小（受 PostgreSQ
 | **Bug Fix 重新 ETL 策略**（2026-04-14） | `TRUNCATE customer_core` 後全量重跑；UPSERT 冪等性確保安全；見第 9 節 |
 | **fullMode 全量重寫**（2026-04-15，US-057） | `node.data.fullMode: true` 啟用；TRUNCATE + INSERT 在同一 transaction 原子化執行；test_run 時不執行 TRUNCATE；見 3.4 節、6.4 節 |
 | **fullMode 觸發機制**（2026-04-15，US-057） | 靜態 pipeline node data 屬性，非執行時參數；前端 pipeline editor 可視化此設定（本次不實作 UI，預留擴充點） |
+| **extractionRef / lookupRef 解析策略**（2026-04-15，US-058） | Lazy 解析，`context.queryRunner` 直接查詢，無需 DataSource 注入；NodeExecutionContext 介面不變；rawTable 保留作 fallback snapshot；「重新解析所有 ref」留 P2 |
 
 ### 8.2 風險
 

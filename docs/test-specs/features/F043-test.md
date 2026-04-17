@@ -4,8 +4,8 @@ feature_id: F043
 feature_name: ETL 節點執行器
 priority: P0-MVP
 related_spec: /docs/specs/features/F043-etl-node-executors.md
-related_story: US-056, US-057（FieldMapping / Conditional）, US-058（Lookup 雙輸入）
-last_updated: 2026-04-14
+related_story: US-056（TC-056-12~15）, US-057（FieldMapping / Conditional）, US-058（TC-058-07~10，Lookup 雙輸入）
+last_updated: 2026-04-15
 ---
 
 # F043: ETL 節點執行器 — 測試設計
@@ -216,6 +216,55 @@ const fanoutLookupContexts = [
   { nodeId: 'lookup-node-2', mainRows: lookupMainRows, refRows: lookupRefRows },
   { nodeId: 'lookup-node-3', mainRows: lookupMainRows, refRows: lookupRefRows },
 ];
+
+// extractionRef 成功查詢 — Mock queryRunner 針對 extraction_tasks JOIN datasources 回傳結果
+// SQL 模式：SELECT et.raw_table_name FROM extraction_tasks et JOIN datasources ds ON ...
+//           WHERE ds.name = $1 AND et.source_table = $2 AND et.status = 'completed'
+//           ORDER BY et.created_at DESC LIMIT 1
+const mockExtractionRefQueryRunner = {
+  // 成功情境：回傳 raw_table_name = "raw_101f6b3e"
+  resolves: [{ raw_table_name: 'raw_101f6b3e' }],
+  // 失敗情境（查不到）：回傳空陣列
+  empty: [],
+};
+
+// lookupRef 成功查詢 — 同上模式，但對應 Lookup 節點的 lookupRef 欄位
+const mockLookupRefQueryRunner = {
+  resolves: [{ raw_table_name: 'raw_e5a2345c' }],
+  empty: [],
+};
+
+// extractionRef 節點設定（成功情境）
+const extractionRefConfig = {
+  nodeType: 'raw_data_extract',
+  extractionRef: { datasourceName: 'APYHFC16.ZZIPPROD', sourceTable: 'ZZIP_BAMCUST_M' },
+  // 無 rawTable — 完全依賴 ref 解析
+};
+
+// extractionRef 節點設定（fallback 情境）
+const extractionRefWithFallbackConfig = {
+  nodeType: 'raw_data_extract',
+  extractionRef: { datasourceName: 'UNKNOWN_DS', sourceTable: 'UNKNOWN_TABLE' },
+  rawTable: 'raw_101f6b3e',  // fallback 用
+};
+
+// lookupRef 節點設定（成功情境，單輸入模式）
+const lookupRefConfig = {
+  nodeType: 'lookup',
+  lookupRef: { datasourceName: 'APYHFC16.ZZIPPROD', sourceTable: 'ZZIP_BAMCODE_D' },
+  lookupFilter: "TBL_ID = 'A2'",
+  matchColumn: 'CUST_TYPE',
+  lookupMatchColumn: 'CODE',
+  outputColumns: [{ lookupColumn: 'CODE_DESC', outputAlias: 'cust_type_desc' }],
+  // 無 lookupSource — 完全依賴 ref 解析
+};
+
+// lookupRef 節點設定（fallback 情境）
+const lookupRefWithFallbackConfig = {
+  ...lookupRefConfig,
+  lookupRef: { datasourceName: 'UNKNOWN_DS', sourceTable: 'UNKNOWN_TABLE' },
+  lookupSource: 'raw_e5a2345c',  // fallback 用
+};
 ```
 
 ---
@@ -1389,3 +1438,183 @@ const fanoutLookupContexts = [
   - 三個 Lookup 節點各自完成 LEFT JOIN，輸出互相獨立
   - node_logs 中三個 Lookup 節點均記錄 `status='completed'`
   - 節點 status 標記為 `'completed'`，不拋出錯誤
+
+---
+
+## 測試場景 — extractionRef 邏輯參照（AC-30~AC-33）
+
+> 以下場景對應 F043 v1.3 新增的 extractionRef 機制。ExtractHandler 在節點設定含有 `extractionRef` 時，需查詢 `extraction_tasks JOIN datasources` 取得動態 `raw_table_name`，再 fallback 至靜態 `rawTable`，兩者均無時節點 failed。
+
+### TS-F043-059: extractionRef 成功解析 — 使用動態取得的 raw_table_name
+
+- **Related Requirement**: F043 AC-30 / US-056 TC-056-12
+- **Test Type**: 正向
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - 節點設定含有 `extractionRef: { datasourceName: "APYHFC16.ZZIPPROD", sourceTable: "ZZIP_BAMCUST_M" }`，無 `rawTable` 欄位
+  - Mock queryRunner 針對 `extraction_tasks JOIN datasources` 查詢回傳 `[{ raw_table_name: "raw_101f6b3e" }]`
+  - Mock queryRunner 針對 `raw_101f6b3e` 表存在性查詢回傳存在
+  - Mock queryRunner 針對 COUNT 查詢回傳 `rowCount = 3`
+- **Steps**:
+  1. 建立 ExtractHandler
+  2. 準備 context（node.data = extractionRefConfig）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - queryRunner.query 被呼叫時，包含一次針對 `extraction_tasks` 的 JOIN 查詢，帶入參數 `"APYHFC16.ZZIPPROD"` 與 `"ZZIP_BAMCUST_M"`
+  - 產生的 `CREATE TEMP TABLE ... AS SELECT * FROM "raw_101f6b3e"` SQL 使用動態解析出的表名
+  - 回傳 DataSet `rowCount = 3`
+  - 節點未使用 `rawTable` 欄位（因 `extractionRef` 成功解析）
+
+---
+
+### TS-F043-060: extractionRef 查不到，fallback rawTable
+
+- **Related Requirement**: F043 AC-31 / US-056 TC-056-13
+- **Test Type**: 負向（降級）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - 節點設定含有 `extractionRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }` 且同時含有 `rawTable: "raw_101f6b3e"`
+  - Mock queryRunner 針對 `extraction_tasks JOIN datasources` 查詢回傳空陣列（查不到記錄）
+  - Mock queryRunner 針對 `raw_101f6b3e` 表存在性查詢回傳存在
+  - Mock queryRunner 針對 COUNT 查詢回傳 `rowCount = 5`
+- **Steps**:
+  1. 建立 ExtractHandler
+  2. 準備 context（node.data = extractionRefWithFallbackConfig）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - 節點正常完成，回傳 DataSet `rowCount = 5`
+  - 產生的 SQL 使用 `"raw_101f6b3e"`（fallback 值），不使用 UNKNOWN_TABLE
+  - 執行日誌（warn level）包含描述 fallback 行為的警告訊息，說明 `extractionRef` 解析失敗並改用 `rawTable`
+
+---
+
+### TS-F043-061: extractionRef 查不到且無 rawTable — 節點 failed
+
+- **Related Requirement**: F043 AC-32 / US-056 TC-056-14
+- **Test Type**: 負向（錯誤路徑）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - 節點設定含有 `extractionRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }`，**無** `rawTable` 欄位
+  - Mock queryRunner 針對 `extraction_tasks JOIN datasources` 查詢回傳空陣列
+- **Steps**:
+  1. 建立 ExtractHandler
+  2. 準備 context（node.data 含 extractionRef，無 rawTable）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - handler.execute 拋出例外（或回傳 failed 狀態）
+  - 錯誤訊息包含 `"UNKNOWN_DS"` 與 `"UNKNOWN_TABLE"` 資訊，說明無法解析 extractionRef 且無 fallback
+  - 節點不建立 TEMP TABLE，不執行後續 SQL
+
+---
+
+### TS-F043-062: 向後相容 — 無 extractionRef，直接用 rawTable
+
+- **Related Requirement**: F043 AC-33 / US-056 TC-056-15
+- **Test Type**: 正向（向後相容驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - 舊版 pipeline 節點設定**只有** `rawTable: "raw_101f6b3e"`，**無** `extractionRef` 欄位
+  - Mock queryRunner 針對 `raw_101f6b3e` 表存在性查詢回傳存在
+  - Mock queryRunner 針對 COUNT 查詢回傳 `rowCount = 3`
+- **Steps**:
+  1. 建立 ExtractHandler
+  2. 準備 context（node.data = `{ nodeType: 'raw_data_extract', rawTable: 'raw_101f6b3e' }`，無 extractionRef）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - queryRunner.query 的所有呼叫中，**不包含**任何針對 `extraction_tasks` 的查詢
+  - 產生的 SQL 直接使用 `"raw_101f6b3e"`
+  - 回傳 DataSet `rowCount = 3`
+  - 行為與 extractionRef 功能加入前完全相同
+
+---
+
+## 測試場景 — lookupRef 邏輯參照（AC-34~AC-37）
+
+> 以下場景對應 F043 v1.3 新增的 lookupRef 機制。LookupHandler 在**單輸入模式**（無 `lookup-input`）且節點設定含有 `lookupRef` 時，需查詢 `extraction_tasks JOIN datasources` 取得動態 `raw_table_name`，再 fallback 至靜態 `lookupSource`，兩者均無時節點 failed。**雙輸入模式**（有 `lookup-input`）不受 lookupRef 影響。
+
+### TS-F043-063: lookupRef 成功解析 — 使用動態取得的 raw_table_name（單輸入模式）
+
+- **Related Requirement**: F043 AC-34 / US-058 TC-058-07
+- **Test Type**: 正向
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Lookup 節點為**單輸入模式**（inputs 中**無** `lookup-input` 鍵）
+  - 節點設定含有 `lookupRef: { datasourceName: "APYHFC16.ZZIPPROD", sourceTable: "ZZIP_BAMCODE_D" }` 與 `lookupFilter: "TBL_ID = 'A2'"`，無 `lookupSource`
+  - Mock queryRunner 針對 `extraction_tasks JOIN datasources` 查詢回傳 `[{ raw_table_name: "raw_e5a2345c" }]`
+  - Mock queryRunner 針對 `SELECT * FROM raw_e5a2345c WHERE TBL_ID = 'A2'` 回傳對照資料列
+  - 主資料流（`inputs['default']`）含有 lookupMainRows
+- **Steps**:
+  1. 建立 LookupHandler
+  2. 準備 context（node.data = lookupRefConfig，inputs 只含 `default`，無 `lookup-input`）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - queryRunner.query 包含一次針對 `extraction_tasks` 的 JOIN 查詢，帶入參數 `"APYHFC16.ZZIPPROD"` 與 `"ZZIP_BAMCODE_D"`
+  - 對照資料查詢 SQL 使用動態解析出的 `raw_e5a2345c` 並附加 `lookupFilter`
+  - LEFT JOIN 邏輯正常執行，輸出 DataSet 含 `cust_type_desc` 欄位
+  - 節點 status 為 `'completed'`
+
+---
+
+### TS-F043-064: lookupRef 查不到，fallback lookupSource（單輸入模式）
+
+- **Related Requirement**: F043 AC-35 / US-058 TC-058-08
+- **Test Type**: 負向（降級）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Lookup 節點為**單輸入模式**（inputs 中**無** `lookup-input` 鍵）
+  - 節點設定含有 `lookupRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }` 且同時含有 `lookupSource: "raw_e5a2345c"`
+  - Mock queryRunner 針對 `extraction_tasks JOIN datasources` 查詢回傳空陣列
+  - Mock queryRunner 針對 `SELECT * FROM raw_e5a2345c` 回傳對照資料列
+  - 主資料流（`inputs['default']`）含有 lookupMainRows
+- **Steps**:
+  1. 建立 LookupHandler
+  2. 準備 context（node.data = lookupRefWithFallbackConfig，inputs 只含 `default`，無 `lookup-input`）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - 節點正常完成（`completed`）
+  - 對照資料查詢 SQL 使用 `raw_e5a2345c`（fallback 值），不使用 UNKNOWN_TABLE
+  - 執行日誌（warn level）包含描述 fallback 行為的警告訊息，說明 `lookupRef` 解析失敗並改用 `lookupSource`
+  - LEFT JOIN 輸出結果正確
+
+---
+
+### TS-F043-065: lookupRef 查不到且無 lookupSource — 節點 failed（單輸入模式）
+
+- **Related Requirement**: F043 AC-36 / US-058 TC-058-09
+- **Test Type**: 負向（錯誤路徑）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Lookup 節點為**單輸入模式**（inputs 中**無** `lookup-input` 鍵）
+  - 節點設定含有 `lookupRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }`，**無** `lookupSource` 欄位
+  - Mock queryRunner 針對 `extraction_tasks JOIN datasources` 查詢回傳空陣列
+  - 主資料流（`inputs['default']`）含有 lookupMainRows
+- **Steps**:
+  1. 建立 LookupHandler
+  2. 準備 context（node.data 含 lookupRef，無 lookupSource，inputs 只含 `default`）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - handler.execute 拋出例外（或回傳 failed 狀態）
+  - 錯誤訊息包含 `"UNKNOWN_DS"` 與 `"UNKNOWN_TABLE"` 資訊，說明無法解析 lookupRef 且無 fallback
+  - 節點不執行 LEFT JOIN，不產生輸出 DataSet
+
+---
+
+### TS-F043-066: 向後相容 — 無 lookupRef，直接用 lookupSource（單輸入模式）
+
+- **Related Requirement**: F043 AC-37 / US-058 TC-058-10
+- **Test Type**: 正向（向後相容驗證）
+- **測試層次**: 單元測試（Mock queryRunner）
+- **Preconditions**:
+  - Lookup 節點為**單輸入模式**（inputs 中**無** `lookup-input` 鍵）
+  - 舊版 pipeline 節點設定**只有** `lookupSource: "raw_e5a2345c"`，**無** `lookupRef` 欄位
+  - Mock queryRunner 針對 `SELECT * FROM raw_e5a2345c` 回傳對照資料列
+  - 主資料流（`inputs['default']`）含有 lookupMainRows
+- **Steps**:
+  1. 建立 LookupHandler
+  2. 準備 context（node.data = lookupLegacyConfig，inputs 只含 `default`，無 `lookup-input`）
+  3. 呼叫 handler.execute(context)
+- **Expected Result**:
+  - queryRunner.query 的所有呼叫中，**不包含**任何針對 `extraction_tasks` 的查詢
+  - 對照資料查詢 SQL 直接使用 `raw_e5a2345c`（含 `lookupFilter`）
+  - LEFT JOIN 輸出結果正確，行為與 lookupRef 功能加入前完全相同
+  - 節點 status 為 `'completed'`

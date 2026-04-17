@@ -67,6 +67,31 @@ Pipeline Runner 的 `collectInputs()` 已透過 `edge.targetHandle ?? 'default'`
 - **And** 後續 JOIN 邏輯與雙輸入模式相同（AC-2 相同）
 - **And** 此路徑確保所有使用舊版 Pipeline 定義的 Lookup 節點不受影響
 
+### AC-3a：單輸入模式 — lookupRef 動態解析
+
+- **Given** Lookup 節點為單輸入模式（無 `lookup-input`），且節點設定含有 `lookupRef`（包含 `datasourceName` 與 `sourceTable` 兩個欄位）
+- **When** LookupHandler 執行
+- **Then** 引擎查詢資料庫：
+  ```sql
+  SELECT et.raw_table_name FROM extraction_tasks et
+  JOIN datasources ds ON et.datasource_id = ds.id
+  WHERE ds.name = $1 AND et.source_table = $2
+  AND et.raw_table_name IS NOT NULL
+  ORDER BY et.last_execution_at DESC NULLS LAST
+  LIMIT 1
+  ```
+  （`$1` = `lookupRef.datasourceName`，`$2` = `lookupRef.sourceTable`）
+- **And** 查詢到結果 → 使用動態取得的 `raw_table_name` 搭配 `lookupFilter`（若有）查詢對照資料
+- **And** 查詢無結果且節點設定含有 `lookupSource` → fallback 使用 `lookupSource`（並記錄警告日誌）
+- **And** 查詢無結果且節點設定亦無 `lookupSource` → 節點標記為 `'failed'`，錯誤訊息為「找不到對應的 extraction task（datasourceName: {datasourceName}, sourceTable: {sourceTable}）且無 lookupSource fallback」
+
+### AC-3b：單輸入模式 — 向後相容（無 lookupRef）
+
+- **Given** Lookup 節點為單輸入模式（無 `lookup-input`），且節點設定**不含** `lookupRef`，只有 `lookupSource`（舊版 pipeline 定義）
+- **When** LookupHandler 執行
+- **Then** 引擎直接使用 `lookupSource` 與 `lookupFilter` 查詢對照資料，行為與原 AC-3 完全相同
+- **And** 不查詢 `extraction_tasks` 表，不產生額外 DB 查詢
+
 ### AC-4：向下相容 — 舊版 Pipeline 定義可正常執行
 
 - **Given** 資料庫中存有使用舊版 Lookup 節點定義的 Pipeline（定義中無 `lookup-input` edge，但含有 `lookupSource` 與 `lookupFilter`）
@@ -118,6 +143,19 @@ if (lookupDataSet) {
 }
 ```
 
+### LookupHandler — lookupRef 解析邏輯（單輸入模式擴充）
+
+單輸入模式下，`lookupSource` 的決策順序：
+
+```
+有 lookupRef → 查詢 extraction_tasks JOIN datasources
+  ├─ 查到 raw_table_name → 使用動態結果
+  └─ 查不到
+       ├─ 有 lookupSource → fallback（記錄警告）
+       └─ 無 lookupSource → 節點 failed
+無 lookupRef → 直接使用 lookupSource（向後相容，不查詢 DB）
+```
+
 ### 節點 JSON Schema（雙輸入模式新增欄位）
 
 ```json
@@ -127,13 +165,19 @@ if (lookupDataSet) {
     "matchColumn": "CUST_TYPE",
     "lookupMatchColumn": "CODE",
     "outputColumns": ["CODE_DESC", "CODE_CATEGORY"],
-    "lookupSource": "",
-    "lookupFilter": ""
+    "lookupSource": "raw_e5a2345c",
+    "lookupFilter": "TBL_ID = 'A2'",
+    "lookupRef": {
+      "datasourceName": "APYHFC16.ZZIPPROD",
+      "sourceTable": "ZZIP_BAMCODE_D"
+    }
   }
 }
 ```
 
-雙輸入模式下 `lookupSource` 與 `lookupFilter` 為空字串或省略，不影響向下相容。
+- 雙輸入模式下 `lookupSource`、`lookupFilter`、`lookupRef` 均為可省略，不影響向下相容。
+- 單輸入模式下，`lookupRef` 存在時優先動態解析；不存在時直接使用 `lookupSource`（舊版相容路徑）。
+- `lookupSource` 在有 `lookupRef` 時作為 fallback，建議保留以提升容錯能力。
 
 ### 拓撲排序相容性
 
@@ -179,6 +223,30 @@ if (lookupDataSet) {
 - **When**：LookupHandler 執行
 - **Then**：節點狀態為 `'failed'`，錯誤訊息說明欄位名稱與所屬資料集
 
+### TC-058-07：lookupRef 成功解析 — 使用動態取得的 raw_table_name
+
+- **Given**：Lookup 節點為單輸入模式（無 `lookup-input`）；節點設定含有 `lookupRef: { datasourceName: "APYHFC16.ZZIPPROD", sourceTable: "ZZIP_BAMCODE_D" }` 與 `lookupFilter: "TBL_ID = 'A2'"`；`extraction_tasks` 表中存在對應記錄，`raw_table_name = "raw_e5a2345c"`
+- **When**：LookupHandler 執行
+- **Then**：引擎查詢 DB 取得 `raw_table_name = "raw_e5a2345c"`，以 `SELECT * FROM raw_e5a2345c WHERE TBL_ID = 'A2'` 取得對照資料，JOIN 邏輯正常執行
+
+### TC-058-08：lookupRef 查不到，fallback lookupSource
+
+- **Given**：Lookup 節點為單輸入模式；節點設定含有 `lookupRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }` 且同時含有 `lookupSource: "raw_e5a2345c"`；`extraction_tasks` 表中無對應記錄
+- **When**：LookupHandler 執行
+- **Then**：引擎 fallback 使用 `raw_e5a2345c` 作為對照來源，節點正常完成（`completed`），日誌中有警告訊息說明使用了 fallback
+
+### TC-058-09：lookupRef 查不到且無 lookupSource — 節點 failed
+
+- **Given**：Lookup 節點為單輸入模式；節點設定含有 `lookupRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }`，**且沒有** `lookupSource` 欄位；`extraction_tasks` 表中無對應記錄
+- **When**：LookupHandler 執行
+- **Then**：節點標記為 `'failed'`，錯誤訊息包含 datasourceName 與 sourceTable 資訊
+
+### TC-058-10：向後相容 — 無 lookupRef，直接用 lookupSource
+
+- **Given**：舊版 pipeline 節點設定**只有** `lookupSource: "raw_e5a2345c"`，無 `lookupRef` 欄位
+- **When**：LookupHandler 執行
+- **Then**：引擎直接用 `raw_e5a2345c` 執行，不查詢 `extraction_tasks` 表，行為與修改前完全相同
+
 ---
 
 ## 依賴關係
@@ -196,7 +264,10 @@ if (lookupDataSet) {
 - [ ] LookupHandler 保留向下相容的單輸入模式（從 DB 查詢 `lookupSource + lookupFilter`）
 - [ ] 模式判斷邏輯清晰，依 `inputs["lookup-input"]` 是否存在自動切換
 - [ ] 主資料流缺失、比對欄位不存在的錯誤處理正確
-- [ ] 所有測試案例（TC-058-01 ~ TC-058-06）通過
+- [ ] 單輸入模式支援 `lookupRef` 動態解析，正確 JOIN `extraction_tasks` 與 `datasources` 表取得 `raw_table_name`
+- [ ] lookupRef 解析失敗時 fallback 至 `lookupSource`（有則用），無 fallback 時節點 failed
+- [ ] 無 `lookupRef` 的舊版 pipeline 行為不受影響（向後相容）
+- [ ] 所有測試案例（TC-058-01 ~ TC-058-10）通過
 - [ ] 舊版 Pipeline 定義（含 `lookupSource`、`lookupFilter`）可正常執行，結果不變
 
 ---

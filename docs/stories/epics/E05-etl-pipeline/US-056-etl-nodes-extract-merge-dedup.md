@@ -33,11 +33,36 @@
 
 ### AC-1：raw_data_extract — 從 raw table 讀取資料
 
-- **Given** 節點設定含有 `data.rawTable`（如 `raw_101f6b3e`）
+- **Given** 節點設定含有 `data.rawTable`（如 `raw_101f6b3e`），且**不含** `extractionRef`
 - **When** 節點執行
 - **Then** 引擎透過 TypeORM QueryRunner 以 `SELECT * FROM {rawTable}` 讀取全部資料，以批次方式（batch）載入記憶體
 - **And** 輸出 DataSet 包含該表所有欄位與資料列
 - **And** 若指定的 rawTable 不存在，節點標記為 `'failed'`，錯誤訊息為「原始資料表 {rawTable} 不存在」
+
+### AC-1a：raw_data_extract — extractionRef 動態解析
+
+- **Given** 節點設定含有 `data.extractionRef`（包含 `datasourceName` 與 `sourceTable` 兩個欄位）
+- **When** 節點執行
+- **Then** 引擎查詢資料庫：
+  ```sql
+  SELECT et.raw_table_name FROM extraction_tasks et
+  JOIN datasources ds ON et.datasource_id = ds.id
+  WHERE ds.name = $1 AND et.source_table = $2
+  AND et.raw_table_name IS NOT NULL
+  ORDER BY et.last_execution_at DESC NULLS LAST
+  LIMIT 1
+  ```
+  （`$1` = `extractionRef.datasourceName`，`$2` = `extractionRef.sourceTable`）
+- **And** 查詢到結果 → 使用動態取得的 `raw_table_name` 執行 `SELECT * FROM {raw_table_name}`
+- **And** 查詢無結果且節點設定含有 `rawTable` → fallback 使用 `rawTable` 執行（並記錄警告日誌）
+- **And** 查詢無結果且節點設定亦無 `rawTable` → 節點標記為 `'failed'`，錯誤訊息為「找不到對應的 extraction task（datasourceName: {datasourceName}, sourceTable: {sourceTable}）且無 rawTable fallback」
+
+### AC-1b：raw_data_extract — 向後相容（無 extractionRef）
+
+- **Given** 節點設定**不含** `extractionRef`，只有 `rawTable`（舊版 pipeline 定義）
+- **When** 節點執行
+- **Then** 引擎直接使用 `rawTable` 執行，行為與 AC-1 完全相同
+- **And** 不查詢 `extraction_tasks` 表，不產生額外 DB 查詢
 
 ### AC-2：merge — FULL OUTER JOIN 合併兩路資料集
 
@@ -124,6 +149,28 @@ JOIN key：COALESCE(left.key, right.key) AS key（取非 null 者）
 ---
 
 ## 技術備註
+
+### raw_data_extract — extractionRef 對照表
+
+解析時使用的完整 `datasourceName + sourceTable → rawTable` 對照關係（來自 extraction_tasks 資料庫，此處列出供驗證參考）：
+
+| rawTable | datasourceName | sourceTable |
+|----------|----------------|-------------|
+| raw_101f6b3e | APYHFC16.ZZIPPROD | ZZIP_BAMCUST_M |
+| raw_35d85504 | APYHFC51.ZZIPPROD | ZZIP_BAMCUST_M |
+| raw_e5a2345c | APYHFC16.ZZIPPROD | ZZIP_BAMCODE_D |
+| raw_6fce5258 | APYHFC51.ZZIPPROD | ZZIP_BAMCODE_D |
+| raw_1138803c | APYHFC16.CF | MLMCUSTOMER |
+| raw_aec93e7c | APYHFC51.CF | MLMCUSTOMER |
+| raw_50172f04 | APYHFC71.CF | MLMCUSTOMER |
+| raw_8b80671e | APYHFC16.CF | MLMCODE |
+| raw_9dd0eca5 | APYHFC51.CF | MLMCODE |
+| raw_9dcaf414 | APYHFC71.CF | MLMCODE |
+| raw_b9558d10 | APYHFC16.CF | MLSTDINDUMF |
+| raw_3acd58e7 | APYHFC51.CF | MLSTDINDUMF |
+| raw_afe6a874 | APYHFC71.CF | MLSTDINDUMF |
+
+`datasourceName` 的格式為 `{datasource.name}`，查詢時需 JOIN `datasources` 表取得 `ds.name`。
 
 ### raw_data_extract 與批次讀取
 
@@ -251,6 +298,30 @@ CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NO
 - **When**：`df_zzip_ctype_pad` 執行 `padStart(CUSTOM_MK, 2, '0')`
 - **Then**：輸出列 `CUSTOM_MK = "01"`（可正確命中 Lookup lk_ctype1 的 `TBL_CD="01"` 條目）
 
+### TC-056-12：extractionRef 成功解析 — 使用動態取得的 raw_table_name
+
+- **Given**：節點設定含有 `extractionRef: { datasourceName: "APYHFC16.ZZIPPROD", sourceTable: "ZZIP_BAMCUST_M" }`；`extraction_tasks` 表中存在對應記錄，`raw_table_name = "raw_101f6b3e"`
+- **When**：e1 節點執行
+- **Then**：引擎查詢 DB 取得 `raw_table_name = "raw_101f6b3e"`，以 `SELECT * FROM raw_101f6b3e` 讀取資料，輸出 DataSet rowCount 正確
+
+### TC-056-13：extractionRef 查不到，fallback rawTable
+
+- **Given**：節點設定含有 `extractionRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }` 且同時含有 `rawTable: "raw_101f6b3e"`；`extraction_tasks` 表中無對應記錄
+- **When**：節點執行
+- **Then**：引擎 fallback 使用 `raw_101f6b3e`，節點正常完成（`completed`），日誌中有警告訊息說明使用了 fallback
+
+### TC-056-14：extractionRef 查不到且無 rawTable — 節點 failed
+
+- **Given**：節點設定含有 `extractionRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }`，**且沒有** `rawTable` 欄位；`extraction_tasks` 表中無對應記錄
+- **When**：節點執行
+- **Then**：節點標記為 `'failed'`，錯誤訊息包含 datasourceName 與 sourceTable 資訊
+
+### TC-056-15：向後相容 — 無 extractionRef，直接用 rawTable
+
+- **Given**：舊版 pipeline 節點設定**只有** `rawTable: "raw_101f6b3e"`，無 `extractionRef` 欄位
+- **When**：節點執行
+- **Then**：引擎直接用 `raw_101f6b3e` 執行，不查詢 `extraction_tasks` 表，行為與修改前完全相同
+
 ### TC-056-10：merge 同名 join key 額外保留 `_left` / `_right` 欄位（BUG-1 修正驗證）
 
 - **Given**：m4 輸入左側（ZZIP 路線）含 `source_customer_no = "ZZIP-001"`，右側（MLMC 路線）含 `source_customer_no = "MLMC-001"`，兩者不同（無 match）
@@ -284,6 +355,9 @@ CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NO
 ## Definition of Done
 
 - [ ] raw_data_extract 節點實作完成，支援從 raw table 讀取資料
+- [ ] raw_data_extract 支援 `extractionRef` 動態解析，正確 JOIN `extraction_tasks` 與 `datasources` 表取得 `raw_table_name`
+- [ ] extractionRef 解析失敗時 fallback 至 `rawTable`（有則用），無 fallback 時節點 failed
+- [ ] 無 `extractionRef` 的舊版 pipeline 行為不受影響（向後相容）
 - [ ] merge 節點（FULL OUTER JOIN）記憶體內實作完成
 - [ ] merge 節點同名 join key 額外輸出 `{key}_left` / `{key}_right` 欄位，可為 NULL（BUG-1 修正驗證）
 - [ ] dedup 節點（latest_timestamp 策略）實作完成

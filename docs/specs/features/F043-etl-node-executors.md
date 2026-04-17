@@ -5,14 +5,14 @@ feature-id: F043
 source-story: US-056, US-057, US-058
 epic: E05
 priority: P0-MVP
-version: "1.2"
-date: 2026-04-14
+version: "1.3"
+date: 2026-04-15
 status: Draft
 ---
 
 # F043: ETL 節點執行器
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-14
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-15
 
 ## 1. 功能摘要
 
@@ -60,17 +60,47 @@ interface NodeExecutor {
 interface RawDataExtractConfig {
   nodeType: 'raw_data_extract';
   label: string;
-  rawTable: string;       // 原始資料表名稱（如 'raw_101f6b3e'）
+  rawTable?: string;       // 原始資料表名稱（如 'raw_101f6b3e'），有 extractionRef 時作為 fallback
+  extractionRef?: {        // 邏輯參照，動態查詢 extraction_tasks 取得 raw_table_name
+    datasourceName: string;  // datasources.name（如 'APYHFC16.ZZIPPROD'）
+    sourceTable: string;     // extraction_tasks.source_table（如 'ZZIP_BAMCUST_M'）
+  };
   subtitle?: string;
 }
 ```
 
 **處理邏輯：**
 
-1. 驗證 `data.rawTable` 是否存在於資料庫中
-2. 透過 `queryRunner` 執行 `SELECT * FROM {rawTable}`
-3. 支援分批讀取（batch size 由引擎設定決定，預設 10,000 筆）
-4. 將所有批次合併為單一 DataSet 回傳
+1. **決定 rawTable 來源**（extractionRef 動態解析）：
+   - **有 `extractionRef`**：查詢資料庫取得動態 `raw_table_name`
+     ```sql
+     SELECT et.raw_table_name FROM extraction_tasks et
+     JOIN datasources ds ON et.datasource_id = ds.id
+     WHERE ds.name = $1 AND et.source_table = $2
+     AND et.raw_table_name IS NOT NULL
+     ORDER BY et.last_execution_at DESC NULLS LAST
+     LIMIT 1
+     ```
+     （`$1` = `extractionRef.datasourceName`，`$2` = `extractionRef.sourceTable`）
+     - 查詢到結果 → 使用動態取得的 `raw_table_name` 作為 rawTable
+     - 查詢無結果且節點設定含有 `rawTable` → fallback 使用 `rawTable`（記錄警告日誌）
+     - 查詢無結果且節點設定亦無 `rawTable` → 節點標記為 `'failed'`
+   - **無 `extractionRef`**：直接使用 `data.rawTable`（向後相容，不查詢 `extraction_tasks` 表，不產生額外 DB 查詢）
+2. 驗證最終決定的 rawTable 是否存在於資料庫中
+3. 透過 `queryRunner` 執行 `SELECT * FROM {rawTable}`
+4. 支援分批讀取（batch size 由引擎設定決定，預設 10,000 筆）
+5. 將所有批次合併為單一 DataSet 回傳
+
+> **extractionRef 解析決策流程：**
+>
+> ```
+> 有 extractionRef → 查詢 extraction_tasks JOIN datasources
+>   ├─ 查到 raw_table_name → 使用動態結果
+>   └─ 查不到
+>        ├─ 有 rawTable → fallback（記錄警告）
+>        └─ 無 rawTable → 節點 failed
+> 無 extractionRef → 直接使用 rawTable（向後相容，不查詢 DB）
+> ```
 
 **輸入：** 無（根節點，`inputs` 為空物件）
 
@@ -82,16 +112,19 @@ interface RawDataExtractConfig {
 |---------|-------------|
 | rawTable 不存在 | `原始資料表 {rawTable} 不存在` |
 | 資料庫查詢失敗 | `原始資料表 {rawTable} 讀取失敗：{error}` |
+| extractionRef 查不到且無 rawTable fallback | `找不到對應的 extraction task（datasourceName: {datasourceName}, sourceTable: {sourceTable}）且無 rawTable fallback` |
 
 **Seed Pipeline 中的實例：**
 
-| 節點 ID | rawTable | 說明 |
-|---------|----------|------|
-| e1 | raw_101f6b3e | [和潤]ZZIP 客戶主檔 |
-| e2 | raw_35d85504 | [和勁]ZZIP 客戶主檔 |
-| e3 | raw_1138803c | [和潤]MLMC 企金客戶主檔 |
-| e4 | raw_aec93e7c | [和勁]MLMC 企金客戶主檔 |
-| e5 | raw_50172f04 | [興業]MLMC 客戶主檔 |
+| 節點 ID | rawTable (fallback) | extractionRef.datasourceName | extractionRef.sourceTable | 說明 |
+|---------|----------|-------------------------------|---------------------------|------|
+| e1 | raw_101f6b3e | APYHFC16.ZZIPPROD | ZZIP_BAMCUST_M | [和潤]ZZIP 客戶主檔 |
+| e2 | raw_35d85504 | APYHFC51.ZZIPPROD | ZZIP_BAMCUST_M | [和勁]ZZIP 客戶主檔 |
+| e3 | raw_1138803c | APYHFC16.CF | MLMCUSTOMER | [和潤]MLMC 企金客戶主檔 |
+| e4 | raw_aec93e7c | APYHFC51.CF | MLMCUSTOMER | [和勁]MLMC 企金客戶主檔 |
+| e5 | raw_50172f04 | APYHFC71.CF | MLMCUSTOMER | [興業]MLMC 客戶主檔 |
+
+> **extractionRef 與 rawTable 的關係**：`extractionRef` 為優先解析路徑，`rawTable` 保留作為 fallback。Seed Pipeline 中所有 extract 節點同時設定兩者，確保即使 `extraction_tasks` 表中尚無記錄，仍可透過 fallback 正常執行。
 
 ---
 
@@ -531,8 +564,12 @@ interface LookupConfig {
   lookupMatchColumn: string;     // 對照資料集的比對欄位
   outputColumns: LookupOutputColumn[];
   // 向下相容欄位（僅單輸入模式使用）
-  lookupSource?: string;         // raw table 名稱（如 'raw_e5a2345c'）
+  lookupSource?: string;         // raw table 名稱（如 'raw_e5a2345c'），有 lookupRef 時作為 fallback
   lookupFilter?: string;         // SQL WHERE 條件（如 "TBL_ID = 'A2'"）
+  lookupRef?: {                  // 邏輯參照，動態查詢 extraction_tasks 取得 raw_table_name
+    datasourceName: string;        // datasources.name（如 'APYHFC16.ZZIPPROD'）
+    sourceTable: string;           // extraction_tasks.source_table（如 'ZZIP_BAMCODE_D'）
+  };
   lookupSourceId?: string;       // taskId（UUID）
   noMatchStrategy?: 'null' | 'default_value' | 'skip_row';
   defaultValue?: string | null;
@@ -552,13 +589,38 @@ LookupExecutor 支援兩種執行模式，依 `context.inputs['lookup-input']` �
 | 條件 | 模式 | 對照資料來源 |
 |------|------|-------------|
 | `inputs['lookup-input']` 存在 | 雙輸入模式 | 直接使用 `inputs['lookup-input']` DataSet |
-| `inputs['lookup-input']` 不存在 | 向下相容模式 | 從資料庫查詢 `lookupSource` + `lookupFilter` |
+| `inputs['lookup-input']` 不存在 | 向下相容模式 | 從資料庫查詢對照表（lookupRef 動態解析或 `lookupSource`）+ `lookupFilter` |
 
 **處理邏輯（In-DB SQL 策略，兩種模式共用）：**
 
 1. 決定對照表來源：
-   - 雙輸入模式：`lookupTable = inputs['lookup-input'].tempTable`
-   - 向下相容模式：`lookupTable = lookupSource`（raw table 名稱）
+   - 雙輸入模式：`lookupTable = inputs['lookup-input'].tempTable`（忽略 `lookupRef`、`lookupSource`、`lookupFilter`）
+   - 向下相容模式 — **lookupRef 動態解析**：
+     - **有 `lookupRef`**：查詢資料庫取得動態 `raw_table_name`
+       ```sql
+       SELECT et.raw_table_name FROM extraction_tasks et
+       JOIN datasources ds ON et.datasource_id = ds.id
+       WHERE ds.name = $1 AND et.source_table = $2
+       AND et.raw_table_name IS NOT NULL
+       ORDER BY et.last_execution_at DESC NULLS LAST
+       LIMIT 1
+       ```
+       （`$1` = `lookupRef.datasourceName`，`$2` = `lookupRef.sourceTable`）
+       - 查詢到結果 → 使用動態取得的 `raw_table_name` 搭配 `lookupFilter`（若有）查詢對照資料
+       - 查詢無結果且節點設定含有 `lookupSource` → fallback 使用 `lookupSource`（記錄警告日誌）
+       - 查詢無結果且節點設定亦無 `lookupSource` → 節點標記為 `'failed'`
+     - **無 `lookupRef`**：直接使用 `lookupSource`（向後相容，不查詢 `extraction_tasks` 表，不產生額外 DB 查詢）
+
+> **lookupRef 解析決策流程（僅向下相容模式）：**
+>
+> ```
+> 有 lookupRef → 查詢 extraction_tasks JOIN datasources
+>   ├─ 查到 raw_table_name → 使用動態結果（搭配 lookupFilter）
+>   └─ 查不到
+>        ├─ 有 lookupSource → fallback（記錄警告）
+>        └─ 無 lookupSource → 節點 failed
+> 無 lookupRef → 直接使用 lookupSource（向後相容，不查詢 DB）
+> ```
 2. 建立 lookup 子查詢：`SELECT * FROM "${lookupTable}" [WHERE ${lookupFilter}]`
    - `lookupFilter` 若有設定，在**兩種模式中皆套用**（非僅向下相容模式）
 3. 為每個 `outputColumns` 項目在主表新增欄位：`ALTER TABLE "${inputTable}" ADD COLUMN IF NOT EXISTS "${outputAlias}" TEXT`
@@ -592,6 +654,7 @@ LookupExecutor 支援兩種執行模式，依 `context.inputs['lookup-input']` �
 | `lookupMatchColumn` 不存在於對照資料集 | `Lookup 節點比對欄位 {lookupMatchColumn} 不存在於對照資料集中` |
 | 向下相容模式：`lookupSource` 表不存在 | `對照表 {lookupSource} 不存在` |
 | 向下相容模式：`lookupFilter` 語法錯誤 | `對照表查詢失敗：{error}` |
+| 向下相容模式：lookupRef 查不到且無 lookupSource fallback | `找不到對應的 extraction task（datasourceName: {datasourceName}, sourceTable: {sourceTable}）且無 lookupSource fallback` |
 
 **Seed Pipeline 中的實例：**
 
@@ -821,6 +884,60 @@ e5(raw_50172f04) ─────────────────────
 - Given ZZIP 資料中 `CUSTOM_MK = "1"`（未補零），Lookup 對照表中 `TBL_CD = "01"`
 - When ZZIP 分支的 `derived_field` 節點執行 `padStart(CUSTOM_MK, 2, '0')` 後，再經 Lookup `lk_ctype1` 查找
 - Then `customer_type_desc` 正確取得對照表中 `TBL_CD = "01"` 對應的描述值，不為 null
+
+### AC-30: extractionRef 成功解析 — 使用動態取得的 raw_table_name
+
+- Given 節點設定含有 `extractionRef: { datasourceName: "APYHFC16.ZZIPPROD", sourceTable: "ZZIP_BAMCUST_M" }`；`extraction_tasks` 表中存在對應記錄，`raw_table_name = "raw_101f6b3e"`
+- When 節點執行
+- Then 引擎查詢 DB 取得 `raw_table_name = "raw_101f6b3e"`，以 `SELECT * FROM raw_101f6b3e` 讀取資料
+- And 輸出 DataSet rowCount 正確
+
+### AC-31: extractionRef 查不到，fallback rawTable
+
+- Given 節點設定含有 `extractionRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }` 且同時含有 `rawTable: "raw_101f6b3e"`；`extraction_tasks` 表中無對應記錄
+- When 節點執行
+- Then 引擎 fallback 使用 `raw_101f6b3e`，節點正常完成（`completed`）
+- And 日誌中有警告訊息說明使用了 fallback
+
+### AC-32: extractionRef 查不到且無 rawTable — 節點 failed
+
+- Given 節點設定含有 `extractionRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }`，且沒有 `rawTable` 欄位；`extraction_tasks` 表中無對應記錄
+- When 節點執行
+- Then 節點標記為 `'failed'`，errorMessage 包含 datasourceName 與 sourceTable 資訊
+
+### AC-33: 向後相容 — 無 extractionRef，直接用 rawTable
+
+- Given 舊版 pipeline 節點設定只有 `rawTable: "raw_101f6b3e"`，無 `extractionRef` 欄位
+- When 節點執行
+- Then 引擎直接用 `raw_101f6b3e` 執行，不查詢 `extraction_tasks` 表
+- And 行為與修改前完全相同
+
+### AC-34: lookupRef 成功解析 — 使用動態取得的 raw_table_name（單輸入模式）
+
+- Given Lookup 節點為單輸入模式（無 `lookup-input`）；節點設定含有 `lookupRef: { datasourceName: "APYHFC16.ZZIPPROD", sourceTable: "ZZIP_BAMCODE_D" }` 與 `lookupFilter: "TBL_ID = 'A2'"`；`extraction_tasks` 表中存在對應記錄，`raw_table_name = "raw_e5a2345c"`
+- When LookupExecutor 執行
+- Then 引擎查詢 DB 取得 `raw_table_name = "raw_e5a2345c"`，以 `SELECT * FROM raw_e5a2345c WHERE TBL_ID = 'A2'` 取得對照資料
+- And JOIN 邏輯正常執行
+
+### AC-35: lookupRef 查不到，fallback lookupSource（單輸入模式）
+
+- Given Lookup 節點為單輸入模式；節點設定含有 `lookupRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }` 且同時含有 `lookupSource: "raw_e5a2345c"`；`extraction_tasks` 表中無對應記錄
+- When LookupExecutor 執行
+- Then 引擎 fallback 使用 `raw_e5a2345c` 作為對照來源，節點正常完成（`completed`）
+- And 日誌中有警告訊息說明使用了 fallback
+
+### AC-36: lookupRef 查不到且無 lookupSource — 節點 failed（單輸入模式）
+
+- Given Lookup 節點為單輸入模式；節點設定含有 `lookupRef: { datasourceName: "UNKNOWN_DS", sourceTable: "UNKNOWN_TABLE" }`，且沒有 `lookupSource` 欄位；`extraction_tasks` 表中無對應記錄
+- When LookupExecutor 執行
+- Then 節點標記為 `'failed'`，errorMessage 包含 datasourceName 與 sourceTable 資訊
+
+### AC-37: 向後相容 — 無 lookupRef，直接用 lookupSource（單輸入模式）
+
+- Given 舊版 pipeline 節點設定只有 `lookupSource: "raw_e5a2345c"`，無 `lookupRef` 欄位
+- When LookupExecutor 執行
+- Then 引擎直接用 `raw_e5a2345c` 執行，不查詢 `extraction_tasks` 表
+- And 行為與修改前完全相同
 
 ## 8. 相關文件
 
