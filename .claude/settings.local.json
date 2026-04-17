@@ -240,8 +240,17 @@
       "Bash(npx -y mem0-mcp --help)",
       "Bash(npm info:*)",
       "Bash(mem0-mcp-server --help)",
-      "Bash(wc:*)"
-    ]
+      "Bash(wc:*)",
+      "mcp__mem0__get_memories",
+      "mcp__mem0__search_memories",
+      "mcp__mem0__add_memory",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(npx ts-node -e ':*)",
+      "Bash(PGPASSWORD=cdmp_secret psql:*)",
+      "Bash(grep -E \"\\\\.\\(config|json|ts\\)$\")"
+    ],
+    "defaultMode": "default"
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
