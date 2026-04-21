@@ -1,0 +1,110 @@
+# US-079：編輯人員比例設定
+
+> **Story ID**：US-079
+> **Epic**：[E07 — 客戶名單分派](epic-brief.md)
+> **模組**：M03 分派比例
+> **優先級**：Must Have
+> **階段**：Phase 1（MVP）
+> **預估點數**：5
+
+---
+
+## User Story
+
+**As a** 業務主管
+**I want** 調整部門內各業務人員的名單分配比例
+**So that** 根據人員異動（新進、離職、休假）或業務需求，靈活分配每月客戶名單
+
+---
+
+## 驗收標準
+
+### AC-1：修改人員分配比例
+
+- **Given** 業務主管進入人員比例編輯模式
+- **When** 業務主管修改某員工的比例值
+- **Then** 頁面即時顯示該部門內所有人員比例的動態加總
+- **And** 若加總 = 100%，儲存按鈕啟用；若加總 ≠ 100%，儲存按鈕停用並提示
+
+### AC-2：新增人員至分配清單
+
+- **Given** 新員工已加入 OBEMPLSETMF 但尚未設定比例
+- **When** 業務主管點擊「新增人員」，選擇員工並填入比例
+- **Then** 新員工加入該部門的人員比例清單，頁面動態更新加總
+
+### AC-3：移除人員（設為 0%）
+
+- **Given** 某員工本月不分配名單（如長期請假）
+- **When** 業務主管將該員工比例設為 0%
+- **Then** 系統允許儲存（0% 視為有效值），該員工本月不分到任何名單
+- **And** 0% 人員仍顯示於清單，以便日後恢復
+
+### AC-4：月跑執行中禁止修改
+
+- **Given** 目前有月跑正在執行
+- **When** 業務主管嘗試進入編輯模式
+- **Then** 編輯按鈕停用，提示「分派執行中，無法修改比例設定」
+
+---
+
+## 技術備註
+
+- 人員比例資料（業務員 RATION）：`reference/TableSchema/OB/OBEMPLSETMF.sql`
+- Stage 4 人員分配邏輯：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`（含 T5/T5M/Motor 等變體）
+- 修改僅針對本月（當前 YM），不影響歷史資料
+
+---
+
+## 測試案例
+
+### TC-079-01：動態加總更新
+
+- **Given**：部門 A 3 名人員比例分別為 40%、35%、25%，加總 100%
+- **When**：業務主管將第一名人員改為 50%
+- **Then**：加總即時顯示 110%，儲存按鈕停用
+
+### TC-079-02：儲存成功
+
+- **Given**：業務主管調整後加總恰好 100%
+- **When**：點擊儲存
+- **Then**：OBEMPLSETMF 人員比例欄位更新，顯示成功提示
+
+### TC-079-03：0% 人員儲存
+
+- **Given**：員工 EMP002 設為 0%，其餘人員加總 100%
+- **When**：儲存
+- **Then**：儲存成功，EMP002 仍顯示於清單且比例為 0%
+
+### TC-079-04：月跑執行中鎖定
+
+- **Given**：AssignmentRun status = 'running'
+- **When**：業務主管嘗試編輯
+- **Then**：編輯按鈕停用，顯示鎖定提示
+
+---
+
+## 依賴關係
+
+- **Blocked By**：US-078（查看人員比例設定）
+- **Blocks**：US-081（月跑需要人員比例已設定正確）
+
+---
+
+## Definition of Done
+
+- [ ] 驗收標準全部通過
+- [ ] 動態加總驗證邏輯測試
+- [ ] 0% 人員儲存測試
+- [ ] 月跑執行中鎖定測試
+- [ ] 單元測試覆蓋率 ≥ 80%
+- [ ] Code review 通過
+- [ ] 文件已更新
+
+---
+
+## 相關文件
+
+- **Epic Brief**：[E07 Epic Brief](epic-brief.md)
+- **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
+- **相關 Stories**：US-078（查看人員比例）、US-081（觸發月跑）
+- **Reference**：`reference/TableSchema/OB/OBEMPLSETMF.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`
