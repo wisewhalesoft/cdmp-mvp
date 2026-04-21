@@ -1,0 +1,478 @@
+USE [OB]
+GO
+
+/****** Object:  Table [dbo].[OBPOOLDATA]    Script Date: 2026/4/20 下午 01:48:51 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[OBPOOLDATA](
+	[A_PRGID] [varchar](20) NULL,
+	[A_USERID] [varchar](20) NULL,
+	[A_SYSDT] [datetime] NULL,
+	[U_PRGID] [varchar](20) NULL,
+	[U_USERID] [varchar](20) NULL,
+	[U_SYSDT] [datetime] NULL,
+	[ORGNO] [nvarchar](2) NOT NULL,
+	[APPL_NO] [nvarchar](10) NOT NULL,
+	[CUSTO_NO] [nvarchar](11) NOT NULL,
+	[CUST_NAME] [nvarchar](90) NULL,
+	[LIC_NO] [varchar](10) NULL,
+	[STA_CODE_NA] [nvarchar](40) NULL,
+	[PROJECT_TP] [nvarchar](40) NULL,
+	[SPEC_NO] [nvarchar](10) NULL,
+	[SPEC_NAME] [nvarchar](45) NULL,
+	[DEPT_NAME] [nvarchar](30) NULL,
+	[PAY_RESOUC_CODE] [nvarchar](2) NULL,
+	[BREAK_PCT] [numeric](5, 0) NULL,
+	[EXTEND_DAY] [numeric](2, 0) NULL,
+	[PAY_RESOUC] [nvarchar](40) NULL,
+	[COMMUTE] [nvarchar](90) NULL,
+	[CYCLE_PAY_NA] [nvarchar](40) NULL,
+	[CYCLE_PAY_VAL] [nvarchar](2) NULL,
+	[DEAL_NUM] [numeric](3, 0) NULL,
+	[PRO_RATE] [numeric](5, 2) NULL,
+	[B_CASE_IRR] [numeric](5, 2) NULL,
+	[FIRST_PAY_DT] [datetime] NULL,
+	[FAPCON_DT] [datetime] NULL,
+	[MATURITY_DT] [datetime] NULL,
+	[DEAL_MARK] [nvarchar](2) NULL,
+	[PAY_WAY] [nvarchar](2) NULL,
+	[LOAN_TOTAMT] [numeric](18, 0) NULL,
+	[LOAN_CAPITAL] [numeric](18, 0) NULL,
+	[LOAN_ODDAMT] [numeric](18, 0) NULL,
+	[COMMISSION] [numeric](15, 0) NULL,
+	[SETTLE_DATE] [datetime] NULL,
+	[LOAN_RATE] [numeric](5, 2) NULL,
+	[STA_CODE] [nvarchar](2) NOT NULL,
+	[OFI_DATE] [datetime] NULL,
+	[DEPT_ID] [nvarchar](6) NOT NULL,
+	[PAY_WAY_NA] [nvarchar](30) NULL,
+	[BRNH_NO] [nvarchar](5) NULL,
+	[DLR_NO] [nvarchar](4) NULL,
+	[BROKER] [nvarchar](60) NULL,
+	[SALES_NO] [nvarchar](14) NULL,
+	[BROKER_AGENT] [nvarchar](60) NULL,
+	[HFS_SALES] [nvarchar](14) NULL,
+	[SALES] [nvarchar](60) NULL,
+	[AGENT_HEAD_ID] [nvarchar](11) NULL,
+	[PROMOTER_DEPT] [nvarchar](60) NULL,
+	[AGENT_ID] [nvarchar](11) NULL,
+	[PROMOTER] [nvarchar](60) NULL,
+	[BRAND_NO] [nvarchar](2) NULL,
+	[BRAND_NAME] [nvarchar](40) NULL,
+	[CAR_NAME] [nvarchar](30) NULL,
+	[INQUIRY] [nvarchar](10) NULL,
+	[APPROVAL] [nvarchar](10) NULL,
+	[MANAGER_LIMIT] [nvarchar](2) NULL,
+	[SPEC_MK_NA] [nvarchar](40) NULL,
+	[SPEC_TYPE_NA] [nvarchar](40) NULL,
+	[ATM_BUSINESS] [nvarchar](4) NULL,
+	[NO_DUTY] [nvarchar](1) NULL,
+	[YEAR_PRODU] [nvarchar](4) NULL,
+	[DLR_NAME] [varchar](30) NULL,
+	[BRNH_NAME] [varchar](30) NULL,
+	[PROJECT_TP_CD] [nvarchar](2) NULL,
+	[APPL_DATE] [datetime] NULL,
+	[APMACC_MEMO] [nvarchar](1000) NULL,
+	[SALES_STS_NA] [nvarchar](30) NULL,
+	[SUB_CODE] [nvarchar](2) NULL,
+	[CC_NBR] [nvarchar](5) NULL,
+	[THROU_MON] [numeric](8, 0) NULL,
+	[FUND_SRC] [varchar](2) NULL,
+	[SECRET_FLG] [varchar](1) NULL,
+	[RATE_CHOICE] [varchar](30) NULL,
+	[PER_INFO] [nvarchar](30) NULL,
+	[TIE_DOWN_NUM] [int] NULL,
+	[REST_AMT] [numeric](8, 0) NULL,
+	[OVER_TIE_NUM] [int] NULL,
+	[OPEN_CODE] [varchar](1) NULL,
+	[EMPLID] [varchar](10) NULL,
+	[EMPLID_DEPTID] [varchar](6) NULL,
+	[CASE_TYPE] [varchar](2) NULL,
+	[HOTAI_AGREE] [varchar](10) NULL,
+	[CALL_DEPT] [varchar](4) NULL,
+	[C_CLASS] [varchar](1) NULL,
+	[PAYT_NUM] [int] NULL,
+	[LIST_TYPE] [varchar](2) NOT NULL,
+	[PROD_TYPE] [varchar](2) NULL,
+	[PROD_TYPE_NAME] [nvarchar](40) NULL,
+	[PROD_CLASS] [varchar](2) NULL,
+	[PROD_CLASS_NAME] [nvarchar](40) NULL,
+	[PROD_KIND] [varchar](2) NOT NULL,
+	[PROD_KIND_NAME] [varchar](8) NOT NULL,
+	[BEST_CASE] [varchar](1) NOT NULL,
+	[ACC_DATE] [datetime] NULL,
+	[ORDER1] [int] NULL,
+	[ORDER2] [int] NULL,
+	[PAYT_TERM] [int] NULL,
+	[TERM_AMT] [money] NULL,
+	[NONPAYT_TERM] [int] NULL,
+	[OVERDUE_AMT] [money] NULL,
+	[OVERDUE_DAY] [int] NULL,
+	[COLL_EMPL] [nvarchar](50) NULL,
+	[CAR_MODEL] [nvarchar](100) NULL,
+	[PAY_USER] [nvarchar](90) NULL,
+	[PAY_ADD] [nvarchar](255) NULL,
+	[FLEET_CAR] [varchar](1) NULL,
+	[PROMOTER_TEL] [nvarchar](20) NULL,
+	[SALES_TEL] [nvarchar](20) NULL,
+	[MEMO1] [nvarchar](255) NULL,
+	[CASEYEAR] [nvarchar](4) NULL,
+	[OB_DEPT] [nvarchar](6) NULL,
+	[OB_EMPLID] [nvarchar](6) NULL,
+	[LAST_PAY_DATE] [datetime] NULL,
+	[MONTH_CNT] [int] NULL,
+	[YEAR_CNT] [int] NULL,
+	[SETTLE_SRC] [nvarchar](max) NOT NULL,
+	[SPEC_TP] [varchar](2) NULL,
+	[CUS_LEVEL] [varchar](1) NULL,
+ CONSTRAINT [PK__OBPOOLDA__472AB2B2BA4DF689] PRIMARY KEY CLUSTERED 
+(
+	[APPL_NO] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[OBPOOLDATA] ADD  CONSTRAINT [DF_OBPOOLDATA_SETTLE_SRC]  DEFAULT ('N') FOR [SETTLE_SRC]
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'新增程式代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'A_PRGID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'新增者' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'A_USERID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'新增時間' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'A_SYSDT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'修改程式代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'U_PRGID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'修改者' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'U_USERID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'修改時間' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'U_SYSDT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'公司別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'ORGNO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'申請書案號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'APPL_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'客戶編號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CUSTO_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'客戶姓名' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CUST_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'牌照號碼' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'LIC_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'申請書狀態' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'STA_CODE_NA'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'主約專案類別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROJECT_TP'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'主約專案代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SPEC_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'主約專案名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SPEC_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'單位名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'DEPT_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'撥款來源' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAY_RESOUC_CODE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'違約金比例' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BREAK_PCT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'展延日(?) 與撥款來源有關 (財務使用)' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'EXTEND_DAY'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'撥款來源(財務使用)' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAY_RESOUC'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'(財務使用)' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'COMMUTE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'繳款週期' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CYCLE_PAY_NA'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'繳款週期期數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CYCLE_PAY_VAL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'期數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'DEAL_NUM'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'案件承作利率' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PRO_RATE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'案件扣佣irr' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'B_CASE_IRR'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'第一次繳款日' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'FIRST_PAY_DT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'財支撥款確認日' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'FAPCON_DT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'最大繳款日' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'MATURITY_DT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'期初/期末註記' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'DEAL_MARK'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'付款方式' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAY_WAY'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'總期付款' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'LOAN_TOTAMT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'總本金' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'LOAN_CAPITAL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'總分差' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'LOAN_ODDAMT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'佣金' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'COMMISSION'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'代償/結清日期' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SETTLE_DATE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'貸款成數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'LOAN_RATE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'狀態碼' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'STA_CODE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'中結傳送財務日' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'OFI_DATE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'分處代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'DEPT_ID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'付款別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAY_WAY_NA'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'營業所代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BRNH_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'經銷商代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'DLR_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'經銷商營業所名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BROKER'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'業務員代號' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SALES_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'業務員名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BROKER_AGENT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'和潤業代(對保人)' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'HFS_SALES'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'和潤業代(對保人)名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SALES'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'agent公司' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'AGENT_HEAD_ID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'agent公司名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROMOTER_DEPT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'agent(承辦人)' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'AGENT_ID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'agent(承辦人)名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROMOTER'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'廠牌' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BRAND_NO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'廠牌名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BRAND_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'車名' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CAR_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'徵信人員' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'INQUIRY'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'簽核人員' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'APPROVAL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'經理權限' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'MANAGER_LIMIT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'產品分類名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SPEC_MK_NA'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'專案屬性名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SPEC_TYPE_NA'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'ATM業務碼' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'ATM_BUSINESS'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'免責' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'NO_DUTY'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'年份' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'YEAR_PRODU'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'經銷商名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'DLR_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'營業所名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BRNH_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'主約專案類別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROJECT_TP_CD'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'申請日期' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'APPL_DATE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'徵信結果說明' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'APMACC_MEMO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'業務員註記' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SALES_STS_NA'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'徵信中心承作建議' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SUB_CODE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'CC數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CC_NBR'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'成交價' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'THROU_MON'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'資料袋' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'FUND_SRC'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'保密件' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SECRET_FLG'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'利率計算方式' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'RATE_CHOICE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'客服同意書' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PER_INFO'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'綁約期數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'TIE_DOWN_NUM'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'小資專案尾款' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'REST_AMT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'違約金利率' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'OVER_TIE_NUM'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'是否開放試算' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'OPEN_CODE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'電銷經辦' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'EMPLID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'電銷經辦單位' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'EMPLID_DEPTID'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'分期類型' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CASE_TYPE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'驅動城市APP同意' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'HOTAI_AGREE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'電銷部門' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CALL_DEPT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'案件主分類-TBLID=04比對TBL_VAL5' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'C_CLASS'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'已繳期數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAYT_NUM'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'名單類別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'LIST_TYPE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'產品分類' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROD_TYPE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'產品分類名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROD_TYPE_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'商品類別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROD_CLASS'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'商品類別名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROD_CLASS_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'產品類別' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROD_KIND'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'產品類別名稱' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROD_KIND_NAME'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'優勢案件' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'BEST_CASE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'結清日' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'ACC_DATE'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'排序1' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'ORDER1'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'排序2' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'ORDER2'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'已繳期數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAYT_TERM'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'期付款' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'TERM_AMT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'未繳期數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'NONPAYT_TERM'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'逾期金額' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'OVERDUE_AMT'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'逾期天數' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'OVERDUE_DAY'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'催收經辦' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'COLL_EMPL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'車型' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'CAR_MODEL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'匯款人姓名' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAY_USER'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'匯款人地址' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PAY_ADD'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'靠行註記' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'FLEET_CAR'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'承辦人電話' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'PROMOTER_TEL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'分期業代電話' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'SALES_TEL'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'備註一' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA', @level2type=N'COLUMN',@level2name=N'MEMO1'
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'每月分派名單POOL' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OBPOOLDATA'
+GO
+
+
