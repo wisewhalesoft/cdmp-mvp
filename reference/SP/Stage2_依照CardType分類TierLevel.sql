@@ -1,0 +1,144 @@
+USE[OB]
+/*********************************************************
+--  程式名稱：電銷每月分派名單產生
+--  功能說明：Stage2_依照CardType分類TierLevel
+--  撰寫人員：
+--  開發日期：
+--  修改日期：
+
+-- 
+-- 檢查:
+SELECT LIST_NO,CARD_LEVEL,TIER_LEVEL,COUNT(1) 
+FROM OBPOOLDATA_LIST WITH(NOLOCK) 
+WHERE LIST_NO LIKE '%202603%'
+GROUP BY LIST_NO,CARD_LEVEL,TIER_LEVEL
+ORDER BY LIST_NO
+
+
+*********************************************************/
+	DECLARE @MSG NVARCHAR(MAX)='',
+			@WORKDT VARCHAR(10)='20260401' -- 下月一號日期 yyyyMM01
+
+
+	IF (DATEPART(D,GETDATE())<'21' and not getdate() between '20240101'and '20240110') OR  @WORKDT < convert(varchar(10),GETDATE(),112)	--正式用21
+	--IF DATEPART(D,GETDATE())<'01' OR  @WORKDT < convert(varchar(10),GETDATE(),112)	--測試用01
+	BEGIN
+		RETURN    -- 執行時間日期<21號 、 @WORKDT<現在時間 => 不給執行，因為已派案
+	END 
+	ELSE BEGIN
+		BEGIN TRY
+
+			DECLARE @BREAK VARCHAR(200)=''
+			DECLARE @LIST_NO VARCHAR(15)=''
+			DECLARE @LIST_NM VARCHAR(50)=''
+			DECLARE @CASENUMBER VARCHAR(50)=''
+			DECLARE @CARD_TYPE VARCHAR(5)=''	--客戶分級卡 ADD BY JOAN 20191127
+			--DECLARE @TIER_LEVEL VARCHAR(5)=''	--20210120 MinYann 依據TIER分配給部門和人員
+			--DECLARE @MSG VARCHAR(200)
+			--SELECT LIST_NO,LIST_NM,CASENUMBER,CARD_TYPE FROM OBMLISTDF WHERE PROJECT_WORKYM='202305'
+
+			DECLARE cur_list CURSOR FOR -- SEC
+			SELECT LIST_NO, LIST_NM, CASENUMBER, CARD_TYPE  FROM OBMLISTDF WITH (NOLOCK)
+			WHERE PROJECT_WORKYM = LEFT(@WORKDT,6) -- 取下月的名單
+
+			OPEN cur_list
+				FETCH NEXT FROM cur_list INTO @LIST_NO,@LIST_NM,@CASENUMBER,@CARD_TYPE
+					WHILE(@@FETCH_STATUS = 0)
+					BEGIN
+
+						SET @BREAK='@LIST_NO='+@LIST_NO+', @LIST_NM='+@LIST_NM
+						PRINT @BREAK
+
+						DECLARE @IS_ASSIGNED VARCHAR(1)
+
+						SELECT TOP 1 @IS_ASSIGNED=IS_ASSIGNED
+						  FROM OBMLISTDF
+						 WHERE LIST_NO=@LIST_NO
+
+						--ADD BY JOAN 20191224 加客戶分級卡(CARD_TYPE)，取自名單名稱後三碼
+						UPDATE OBMLISTDF 
+						SET CARD_TYPE =RIGHT(LIST_NM,3-CHARINDEX('-',RIGHT(LIST_NM,3)) )
+						WHERE LIST_NO=@LIST_NO
+
+						SELECT @CARD_TYPE=CARD_TYPE FROM OBMLISTDF WHERE LIST_NO=@LIST_NO
+
+						IF ISNULL( @IS_ASSIGNED,'N')<>'Y' 
+						BEGIN 
+
+							--20210120 MinYann 先給予CARD_LEVEL和TIER_LEVEL，後續才能以TIER_LEVEL進行分配
+							SET @BREAK='SET CARD_LEVEL:'+'@LIST_NO='+@LIST_NO+', @CARD_TYPE='+@CARD_TYPE
+							PRINT @BREAK
+							IF @CARD_TYPE='H' EXEC [dbo].[SP_OBLEVELCARD_H] @LIST_NO	--汽車期中
+							IF @CARD_TYPE='S' EXEC [dbo].[SP_OBLEVELCARD_S] @LIST_NO	--汽車中結
+							IF @CARD_TYPE='E' EXEC [dbo].[SP_OBLEVELCARD_E] @LIST_NO	--汽車滿期
+							IF @CARD_TYPE='S5' EXEC [dbo].[SP_OBLEVELCARD_S5] @LIST_NO	--汽車中結5年
+							IF @CARD_TYPE='E5' EXEC [dbo].[SP_OBLEVELCARD_E5] @LIST_NO	--汽車滿期3年
+							IF @CARD_TYPE='M' EXEC [dbo].[SP_OBLEVELCARD_M] @LIST_NO	--機車滿期
+							IF @CARD_TYPE='HM' EXEC [dbo].[SP_OBLEVELCARD_HM] @LIST_NO	--機車期中（後來新增）
+
+							--20210114 MinYann 更新TIER_LEVEL
+							SET @BREAK='SET TIER_LEVEL:'+'@LIST_NO='+@LIST_NO+', @CARD_TYPE='+@CARD_TYPE
+							PRINT @BREAK
+
+							-- 依照CARD_LEVEL結果設定TIER_LEVEL
+							UPDATE A
+							   SET TIER_LEVEL=ISNULL(C.TIER_LEVEL,'')
+							  FROM OBPOOLDATA_LIST A
+							  JOIN OBMLISTDF B ON A.LIST_NO=B.LIST_NO
+							  LEFT JOIN OBTIER C ON A.CARD_LEVEL=C.CARD_LEVEL AND B.CARD_TYPE=C.CARD_TYPE
+							 WHERE A.LIST_NO=@LIST_NO
+
+							
+							--20210929 MinYann 機車中結滿期3年以上
+							IF @CARD_TYPE='M3' 
+							BEGIN
+								UPDATE A
+								   SET TIER_LEVEL='T5M'
+								  FROM OBPOOLDATA_LIST A
+								  JOIN OBMLISTDF B ON A.LIST_NO=B.LIST_NO
+								 WHERE B.CARD_TYPE='M3'
+								   AND B.LIST_NO = @LIST_NO
+							END
+
+							--20220803 Rumin 商品期中
+							IF @CARD_TYPE='HC' 
+							BEGIN
+								UPDATE A
+								   SET TIER_LEVEL='THC'
+								  FROM OBPOOLDATA_LIST A
+								  JOIN OBMLISTDF B ON A.LIST_NO=B.LIST_NO
+								 WHERE B.CARD_TYPE='HC'
+								   AND B.LIST_NO = @LIST_NO
+							END
+
+							--20220803 Rumin 商品中結滿期三年以下
+							IF @CARD_TYPE='C3'
+							BEGIN
+								UPDATE A
+								   SET TIER_LEVEL='T3C'
+								  FROM OBPOOLDATA_LIST A
+								  JOIN OBMLISTDF B ON A.LIST_NO=B.LIST_NO
+								 WHERE B.CARD_TYPE='C3'
+								   AND B.LIST_NO = @LIST_NO
+							END
+
+							
+						END
+						
+						FETCH NEXT FROM cur_list INTO @LIST_NO,@LIST_NM,@CASENUMBER,@CARD_TYPE
+					END 
+			CLOSE cur_list
+			DEALLOCATE cur_list
+
+			PRINT('執行成功!!')
+
+		END TRY
+		BEGIN CATCH
+			CLOSE cur_list
+			DEALLOCATE cur_list
+
+			SET @MSG= @BREAK + ', ERROR:' + ISNULL(ERROR_MESSAGE(),'') 
+			PRINT  @MSG
+			RETURN
+		END CATCH
+	END
