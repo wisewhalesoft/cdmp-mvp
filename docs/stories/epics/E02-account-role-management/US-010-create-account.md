@@ -6,6 +6,7 @@
 > **階段**：Phase 1（MVP）
 > **預估點數**：3
 > **變更說明（2026-04-13）**：角色選項從 8 種簡化為 2 種（Admin / User），移除六種業務角色
+> **變更說明（2026-04-24）**：新增 AC-5 — 建立 User 帳號時可選填業務主管旗標（is_sales_manager）
 
 ---
 
@@ -39,12 +40,20 @@
 - **When** Admin 展開角色選單
 - **Then** 系統顯示全部 2 種角色供選擇：管理者（Admin）、使用者（User）
 
+### AC-5：建立 User 帳號時可選填業務主管旗標
+- **Given** Admin 在建立帳號表單，且已選擇角色為「使用者（User）」
+- **When** 表單顯示
+- **Then** 表單額外顯示「業務主管權限」checkbox（預設未勾選，對應 is_sales_manager = false）
+- **And** 若 Admin 勾選 checkbox，帳號建立後 is_sales_manager = true，該 User 可存取 E07 與 E06
+- **And** 若 Admin 選擇角色為「管理者（Admin）」，「業務主管權限」checkbox 不顯示（Admin 本身已涵蓋所有功能）
+
 ---
 
 ## Technical Notes
 
 - 端點：`POST /api/accounts`
-- Request body：`{ name, email, password, role }`
+- Request body：`{ name, email, password, role, isSalesManager? }`
+- `isSalesManager` 為可選參數（boolean），預設 false；僅在 role = `user` 時有效，若 role = `admin` 則忽略此參數
 - 密碼必須在儲存前以 bcrypt 雜湊處理
 - 角色值（role_code）：`admin`、`user`
 - 角色清單由 US-017 定義的系統預設 Seed Data 提供，後端須驗證傳入的 role_code 為有效值
@@ -69,6 +78,9 @@
 | 7 | 角色設為「admin」 | 帳號以 Admin 角色建立 |
 | 8 | 角色設為無效值（如「analyst」） | 回傳 400 Bad Request，角色不合法 |
 | 9 | 非 Admin 嘗試建立帳號 | 回傳 403 Forbidden |
+| 10 | 建立 User 帳號且勾選業務主管權限 | is_sales_manager = true，帳號建立成功 |
+| 11 | 建立 User 帳號且不勾選業務主管權限 | is_sales_manager = false（預設值） |
+| 12 | 建立 Admin 帳號時傳入 isSalesManager = true | 參數被忽略，帳號建立成功，is_sales_manager 不適用 |
 
 ---
 
@@ -84,7 +96,9 @@
 
 - [ ] 建立帳號表單 UI 含所有必填欄位
 - [ ] 角色下拉選單顯示全部 2 種角色（Admin / User）
-- [ ] 後端 API 端點含驗證邏輯（包含角色代碼有效性驗證）
+- [ ] 選擇 User 角色時顯示「業務主管權限」checkbox（預設未勾選）
+- [ ] 選擇 Admin 角色時隱藏「業務主管權限」checkbox
+- [ ] 後端 API 端點含驗證邏輯（包含角色代碼有效性驗證、isSalesManager 僅在 role=user 時有效）
 - [ ] 密碼在儲存前完成雜湊處理
 - [ ] 重複 Email 檢查實作完成
 - [ ] 成功／錯誤回饋訊息正確顯示

@@ -6,6 +6,7 @@
 > **階段**：Phase 1（MVP）
 > **預估點數**：3
 > **變更說明（2026-04-13）**：角色選項從 8 種簡化為 2 種（Admin / User），移除六種業務角色與 US-068 依賴
+> **變更說明（2026-04-24）**：新增 AC-7 業務主管旗標切換、AC-8 Admin 帳號不適用旗標說明
 
 ---
 
@@ -49,6 +50,17 @@
 - **When** 該使用者的 Token 下次刷新或重新登入後
 - **Then** 新角色的存取設定即時生效
 
+### AC-7：切換業務主管旗標
+- **Given** Admin 正在查看角色為「使用者（User）」的帳號
+- **When** Admin 切換「業務主管權限」開關（toggle）為啟用或停用
+- **Then** 系統更新該帳號的 is_sales_manager 旗標（true 或 false），顯示成功訊息
+- **And** 旗標變更於下次 API 請求時即時生效（不需重新登入）
+
+### AC-8：Admin 帳號不顯示業務主管旗標設定
+- **Given** Admin 正在查看角色為「管理者（Admin）」的帳號
+- **When** 帳號詳細頁顯示
+- **Then** 介面不顯示「業務主管權限」開關（Admin 角色本身已涵蓋所有功能，旗標無意義）
+
 ---
 
 ## Technical Notes
@@ -59,6 +71,9 @@
 - 後端必須強制執行「至少一位 Admin」的限制
 - 角色變更於 Token 下次刷新或重新登入後生效
 - 角色變更不影響帳號的密碼、姓名、Email 等資料
+- 業務主管旗標切換端點：`PATCH /api/accounts/:id/sales-manager-flag`（端點名稱與 body 欄位名由 system-architect 決定）
+- 旗標切換僅限 role = `user` 的帳號；若目標帳號為 Admin，後端回傳 `400 Bad Request`
+- 旗標變更立即生效（不依賴 Token 刷新），下次請求即套用新權限
 
 ---
 
@@ -72,6 +87,9 @@
 | 4 | 傳入無效 role_code（如「analyst」） | 回傳 400 Bad Request |
 | 5 | 未確認即變更角色 | 操作未執行 |
 | 6 | 非 Admin 嘗試變更角色 | 回傳 403 Forbidden |
+| 7 | 對 User 帳號啟用業務主管旗標 | is_sales_manager = true，顯示成功訊息 |
+| 8 | 對 User 帳號停用業務主管旗標 | is_sales_manager = false，顯示成功訊息 |
+| 9 | 對 Admin 帳號嘗試設定業務主管旗標 | 後端回傳 400 Bad Request，介面不顯示旗標開關 |
 
 ---
 
@@ -92,6 +110,10 @@
 - [ ] 後端強制執行「至少一位 Admin」規則
 - [ ] 後端驗證 role_code 有效性
 - [ ] UI 中正確反映角色變更
+- [ ] User 帳號詳細頁顯示「業務主管權限」開關（toggle）
+- [ ] Admin 帳號詳細頁不顯示「業務主管權限」開關
+- [ ] 業務主管旗標切換 API 實作完成（僅限 role = user）
+- [ ] 旗標變更即時生效驗證
 - [ ] 所有驗收標準的單元測試通過
 
 ---

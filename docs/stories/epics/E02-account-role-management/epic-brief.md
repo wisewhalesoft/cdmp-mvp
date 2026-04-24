@@ -21,6 +21,17 @@ CDMP 採用兩種系統角色，均為系統預設（Seed Data），不支援 Ad
 | `admin` | 管理者（Admin） | 具備完整平台管理權限 |
 | `user` | 使用者（User） | 一般使用者，可存取 Customer 360 查詢功能（敏感欄位套用固定遮罩） |
 
+### 業務主管旗標（is_sales_manager）
+
+業務主管（Sales Manager）並非獨立系統角色，而是 User 帳號上的功能旗標（`is_sales_manager`）。系統角色維持 admin / user 兩種，不新增第三種角色。
+
+- **旗標預設值**：false（所有新建帳號預設不具備業務主管身分）
+- **指派方式**：由 Admin 透過帳號管理介面切換，僅適用於 role = `user` 的帳號
+- **功能範圍**：具備此旗標的 User 可額外存取以下模組：
+  - E07 客戶名單分派全功能（M01 名單定義 / M02 計分設定 / M03 分派比例 / M04 分派執行 / M05 快照歷史 / M06 代碼維護）
+  - E06 Customer 360（敏感欄位套用 User 同等遮罩規則）
+- **Admin 與 E07**：Admin 角色本身具備超集權限，可存取 E07 全功能，is_sales_manager 旗標對 Admin 帳號無意義，不顯示旗標設定入口
+
 ## User Stories
 
 | Story ID | 標題 | 優先級 | 檔案 |
@@ -36,7 +47,7 @@ CDMP 採用兩種系統角色，均為系統預設（Seed Data），不支援 Ad
 
 ## 依賴關係
 
-- **封鎖下游**：E06（Customer 360 依賴帳號驗證與角色判斷）
+- **封鎖下游**：E06（Customer 360 依賴帳號驗證與角色判斷）、E07（客戶名單分派依賴業務主管旗標定義與 Admin 帳號管理能力）
 - **依賴**：E01（Admin 必須完成驗證才能存取帳號管理功能）
 - **NFR 關聯**：NFR-001（帳號建立時的密碼雜湊需求、RBAC 強制執行）
 
@@ -47,7 +58,8 @@ CDMP 採用兩種系統角色，均為系統預設（Seed Data），不支援 Ad
 - Admin 能夠編輯帳號詳細資料（姓名、Email）
 - Admin 能夠停用或啟用帳號
 - Admin 能夠為任何帳號指派或變更角色（Admin / User）
-- 系統具備完整的 2 種角色 Seed Data，並於初始化後自動存在
+- Admin 能夠為 User 帳號切換業務主管旗標（is_sales_manager）
+- 系統具備完整的 2 種角色 Seed Data，並於初始化後自動存在；所有帳號的 is_sales_manager 預設為 false
 - 所有管理操作僅限 Admin 角色執行
 
 ## 待解決問題

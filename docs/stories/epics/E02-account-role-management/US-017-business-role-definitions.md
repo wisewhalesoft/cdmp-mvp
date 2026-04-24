@@ -6,6 +6,7 @@
 > **階段**：Phase 1（MVP）
 > **預估點數**：1
 > **變更說明（2026-04-13）**：移除六種業務角色，簡化為 Admin / User 兩種系統角色
+> **變更說明（2026-04-24）**：新增 is_sales_manager 旗標語意說明（業務主管為 User 子類旗標，非第三種系統角色）；新增 AC-5 旗標 Seed Data 初始值
 
 ---
 
@@ -21,10 +22,19 @@
 
 CDMP 系統採用兩種系統角色：
 
-- `admin`：管理者，具備完整平台管理權限
+- `admin`：管理者，具備完整平台管理權限（含 E07 客戶名單分派全功能）
 - `user`：一般使用者，可存取 Customer 360 查詢功能（敏感欄位套用固定遮罩）
 
 角色為系統預設 Seed Data，不開放 Admin 自行新增或刪除。
+
+### 業務主管旗標（is_sales_manager）
+
+除系統角色外，User 帳號具備 `is_sales_manager` 布林旗標，用以標記該使用者是否具備業務主管身分：
+
+- **旗標預設值**：false（所有帳號於建立時預設不啟用）
+- **適用角色**：僅適用於 role = `user` 的帳號；Admin 帳號不適用，不顯示此設定入口
+- **功能影響**：is_sales_manager = true 的 User 可額外存取 E07 客戶名單分派（M01~M06 全功能）及 E06 Customer 360
+- **指派方式**：由 Admin 透過帳號管理介面設定（US-010 建立時選填 / US-014 事後切換）
 
 ---
 
@@ -52,6 +62,12 @@ CDMP 系統採用兩種系統角色：
 - **When** Admin 嘗試將最後一位 Admin 帳號的角色改為 User
 - **Then** 系統阻止此操作，顯示「系統必須至少保留一個 Admin 帳號」
 
+### AC-5：業務主管旗標 Seed Data 初始值
+- **Given** 系統完成初始化或資料庫遷移
+- **When** 查詢所有現有帳號的 is_sales_manager 欄位值
+- **Then** 所有帳號的 is_sales_manager 均為 false（旗標預設不啟用）
+- **And** 新建帳號若未明確指定，is_sales_manager 預設為 false
+
 ---
 
 ## Technical Notes
@@ -63,11 +79,14 @@ CDMP 系統採用兩種系統角色：
 | admin | 管理者 | system |
 | user | 使用者 | system |
 
+**備註**：`is_sales_manager` 旗標為 users 資料表欄位（非 roles 表欄位），schema 設計由 system-architect 負責。
+
 ### Seed Data 初始化
 
 - 系統部署時透過 migration 或 seed script 自動建立上述 2 筆角色資料
 - 角色資料不可由 API 刪除（後端強制保護）
 - migration 須為冪等（idempotent）：使用 `INSERT ... ON CONFLICT DO NOTHING`
+- users 表的 `is_sales_manager` 欄位預設值為 false，由 migration 加入欄位定義
 
 ### API 端點
 
@@ -87,6 +106,8 @@ CDMP 系統採用兩種系統角色：
 | 4 | 嘗試透過 API DELETE /api/roles/admin 刪除角色 | 回傳 403 Forbidden |
 | 5 | 非 Admin 存取 GET /api/roles | 回傳 403 Forbidden |
 | 6 | Seed Data 遷移後驗證 role_code 正確性 | 全部 2 筆 role_code 與 display_name 正確 |
+| 7 | 系統初始化後所有帳號的 is_sales_manager | 所有帳號均為 false |
+| 8 | 建立新 User 帳號未指定 is_sales_manager | is_sales_manager 預設為 false |
 
 ---
 
@@ -106,6 +127,7 @@ CDMP 系統採用兩種系統角色：
 - [ ] 後端防護：不提供角色新增 / 刪除 API
 - [ ] 建立帳號與指派角色表單的角色下拉選單正確顯示全部 2 種角色
 - [ ] 角色顯示名稱正確呈現
+- [ ] users 表 is_sales_manager 欄位 migration 完成（預設值 false）
 - [ ] 所有驗收標準的單元測試通過
 
 ---
