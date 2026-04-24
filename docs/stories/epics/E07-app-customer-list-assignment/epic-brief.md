@@ -148,12 +148,21 @@
 
 以下問題待 system-architect 評估並提供答案後，方可進入對應 Story 的實作設計：
 
-1. **OBMLISTDF STATUS 欄位 schema 變更**：在 OBMLISTDF 加入 STATUS ENUM('active','inactive') 欄位，預設值 'active'。需確認是否影響既有 SP 查詢邏輯（US-070、US-088、US-089、US-090）
+1. **🔴 OB 資料庫的資料來源架構定位（最優先，其他問題依此決策）**：E07 對 OB 表有 CRUD 需求（OBMLISTDF / OBMCODEDF / OBPOOLDATA_LIST / per-LIST_NO 比例表），與既有 E03-E05「唯讀擷取式外部資料源 + 複製至 AppDB」架構衝突。需由 system-architect 決定 OB 資料庫的定位方案：
+   - 選項 A：**直連 OB 資料庫**（E07 讀寫直接指向原 OB DB，繞過 E03-E05）
+   - 選項 B：**E03 擴充為可寫資料來源**（需新增寫入能力至現有擷取架構）
+   - 選項 C：**OB 表遷移至 AppDB**（舊 OB 資料庫汰換，含資料遷移）
+   - 選項 D：**雙邊同步**（CRUD 對 AppDB 鏡像表，定期同步回 OB）
+   - 選項 E：**OB 視為 E07 專屬系統 DB**（與 E03 外部源區分定位）
 
-2. **AssignmentAuditLog 表設計**：新建稽核日誌表，記錄 E07 所有 CRUD 操作。需 system-architect 設計表結構（欄位：action、entity_type、entity_id、operator_id、operated_at、payload 等）
+   此決策影響以下所有問題的實作方向（schema 變更落在哪個 DB、遷移策略、SP 是否保留等）。
 
-3. **LIST_NO 自動產生的 999 筆上限處理**：格式 `OB{YYYYMM}{NNN}`，流水號 001~999，若同月超過 999 筆時的處理方案（擴位？拒絕新增？）需 system-architect 評估
+2. **OBMLISTDF STATUS 欄位 schema 變更**：在 OBMLISTDF 加入 STATUS ENUM('active','inactive') 欄位，預設值 'active'。需確認是否影響既有 SP 查詢邏輯（US-070、US-088、US-089、US-090）。**變更落點依問題 1 而定**。
 
-4. **per-LIST_NO 部門比例表確認**：US-091 使用的 per-LIST_NO 部門比例表，需確認是否為既有 OBPCTLIST 或需新建同等表，以及與 OBMDEPTPCT（全域比例）的月跑讀取優先序邏輯
+3. **AssignmentAuditLog 表設計**：新建稽核日誌表，記錄 E07 所有 CRUD 操作。需 system-architect 設計表結構（欄位：action、entity_type、entity_id、operator_id、operated_at、payload 等）。**表存於 AppDB 或 OB DB 依問題 1 而定**。
 
-5. **CARD_TYPE 舊資料遷移策略**：舊系統 CARD_TYPE 值從 LIST_NM 中擷取（字串 parse），新系統改為獨立輸入欄位（US-088/089）。既有 OBMLISTDF 資料若 CARD_TYPE 欄位為空，需確認遷移方案（手動補填 vs. 自動遷移 vs. 不遷移）
+4. **LIST_NO 自動產生的 999 筆上限處理**：格式 `OB{YYYYMM}{NNN}`，流水號 001~999，若同月超過 999 筆時的處理方案（擴位？拒絕新增？）需 system-architect 評估。
+
+5. **per-LIST_NO 部門比例表確認**：US-091 使用的 per-LIST_NO 部門比例表，需確認是否為既有 OBPCTLIST 或需新建同等表，以及與 OBMDEPTPCT（全域比例）的月跑讀取優先序邏輯。
+
+6. **CARD_TYPE 舊資料遷移策略**：舊系統 CARD_TYPE 值從 LIST_NM 中擷取（字串 parse），新系統改為獨立輸入欄位（US-088/089）。既有 OBMLISTDF 資料若 CARD_TYPE 欄位為空，需確認遷移方案（手動補填 vs. 自動遷移 vs. 不遷移）。**遷移目標 DB 依問題 1 而定**。
