@@ -5,14 +5,14 @@ feature-id: F005
 source-story: US-011
 epic: E02
 priority: P0-MVP
-version: "3.0"
-date: 2026-04-13
+version: "3.1"
+date: 2026-04-24
 status: Draft
 ---
 
 # F005: 查看帳號清單
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-13
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 功能摘要
 
@@ -82,6 +82,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
         "roleCode": "string",
         "displayName": "string"
       },
+      "is_sales_manager": "boolean (業務主管旗標；Admin 帳號亦回傳該欄位原值，前端可選擇不顯示)",
       "status": "string",
       "created_at": "string (ISO 8601)"
     }
@@ -121,12 +122,13 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 | BR-5 | 篩選條件可組合使用（search + role + status） |
 | BR-6 | 僅 Admin 角色可存取帳號清單 |
 | BR-7 | 回傳的帳號資料不包含 password_hash 欄位 |
+| BR-8 | API response 中 `is_sales_manager` 欄位為資料庫原值（Admin 帳號亦回傳此欄位，但 UI 僅在 User 角色下呈現為業務主管標記或切換入口） |
 
 ## UI/UX 需求
 
 | 項目 | 說明 |
 |------|------|
-| 清單欄位 | 姓名、Email、角色（中文顯示名稱）、狀態、建立日期、操作（編輯/停用/角色變更/重設密碼） |
+| 清單欄位 | 姓名、Email、角色（中文顯示名稱）、業務主管標記（User 角色且 `is_sales_manager = true` 時以 badge 標示「業務主管」；Admin 與其他 User 不顯示）、狀態、建立日期、操作（編輯/停用/角色變更/重設密碼） |
 | 搜尋 | 搜尋框位於清單上方，支援即時搜尋或按鍵搜尋 |
 | 篩選 | 角色篩選（全部/管理者/使用者）與狀態篩選（全部/啟用/停用），角色篩選選項由 `GET /api/roles` 動態載入 |
 | 分頁 | 清單下方顯示分頁控制項，包含當前頁碼、總頁數、每頁筆數選擇 |
@@ -156,7 +158,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 ## 資料需求
 
 此功能讀取 Account Entity 的以下欄位：
-- id, name, email, role, status, created_at
+- id, name, email, role, is_sales_manager, status, created_at
 
 不回傳 password_hash 或其他敏感欄位。
 

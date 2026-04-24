@@ -5,14 +5,14 @@ feature-id: F002
 source-story: US-002
 epic: E01 — 驗證與登入
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-04-24
 status: Draft
 ---
 
 # F002: User 登入
 
-**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-03-06
+**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-04-24
 
 ---
 
@@ -72,7 +72,8 @@ status: Draft
 
 - Request / Response 結構與 F001 完全相同
 - 成功 Response 中 `user.role` 值為 `"user"`（而非 `"admin"`）
-- 前端根據 `role` 欄位決定導向目標：`user` 導向 User 說明頁面
+- JWT Payload 中 `is_sales_manager` 欄位反映該 User 的業務主管旗標狀態（`true` / `false`）；前端可據此決定是否顯示 E07 分派相關導覽入口（詳見 F001 JWT Payload 結構）
+- 前端根據 `role` 欄位決定導向目標：`user` 導向 User 說明頁面（若 `is_sales_manager=true`，導向目標依 E07 相關 Feature 規格處理）
 
 ### RBAC 路由保護
 
@@ -186,7 +187,8 @@ status: Draft
 
 關鍵差異：
 - `user.role` 值為 `"user"`，決定前端導向 User 說明頁面
-- RBAC 中介層根據此角色值判斷 API 端點存取權限
+- `user.is_sales_manager` 布林旗標反映該帳號是否為業務主管；RBAC 中介層以 `role` + `is_sales_manager` 組合判斷 API 端點存取權限（參考 AD-E02-1）
+- RBAC 中介層根據角色值判斷 API 端點存取權限
 
 詳細資料模型請參閱 [data-model.md#user-entity](../data-model.md#user-entity)。
 

@@ -5,14 +5,14 @@ feature-id: F001
 source-story: US-001
 epic: E01 — 驗證與登入
 priority: P0-MVP
-version: "1.0"
-date: 2026-03-06
+version: "1.1"
+date: 2026-04-24
 status: Draft
 ---
 
 # F001: Admin 登入
 
-**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-03-06
+**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-04-24
 
 ---
 
@@ -104,9 +104,12 @@ status: Draft
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | userId | string (UUID) | 使用者唯一識別碼 |
-| role | string | 角色（8 種 role_code 之一，如 `admin`、`user`、`analyst` 等，詳見 F045） |
+| role | string | 角色代碼：`admin` 或 `user`（系統預設 Seed Data，詳見 F045） |
+| is_sales_manager | boolean | 業務主管旗標；Admin 角色下此欄位仍會寫入但 RBAC 不依賴它判斷權限（Admin 為超集）；User 角色下 `true` 表示可存取 E07 分派全流程與 E06 Customer 360 |
 | iat | number (Unix timestamp) | Token 發行時間 |
 | exp | number (Unix timestamp) | Token 到期時間 |
+
+**旗標時效性**：`is_sales_manager` 於登入時由後端從 `users.is_sales_manager` 欄位寫入 Payload；帳號旗標變更後，舊 JWT 仍有效直至過期（參考 AD-E02-1）。
 
 ### Token 有效期策略
 

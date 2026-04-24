@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "2.2"
-date: 2026-04-13
+version: "2.3"
+date: 2026-04-24
 status: Draft
 ---
 
@@ -10,7 +10,7 @@ status: Draft
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **文件總數**：79 份（7 支援文件 + 47 Feature 文件 + 25 圖表文件）
-> **最後更新**：2026-04-13
+> **最後更新**：2026-04-24
 
 ---
 
@@ -63,7 +63,7 @@ status: Draft
 | F005 | [F005-view-account-list.md](features/F005-view-account-list.md) | 查看帳號清單 | US-011 | P0-MVP |
 | F006 | [F006-edit-account.md](features/F006-edit-account.md) | 編輯帳號 | US-012 | P0-MVP |
 | F007 | [F007-disable-enable-account.md](features/F007-disable-enable-account.md) | 停用／啟用帳號 | US-013 | P1 |
-| F008 | [F008-assign-change-role.md](features/F008-assign-change-role.md) | 指派／變更角色（8 種角色） | US-014 | P0-MVP |
+| F008 | [F008-assign-change-role.md](features/F008-assign-change-role.md) | 指派／變更角色（Admin / User）＋ 業務主管旗標切換 | US-014 | P0-MVP |
 | F009 | [F009-self-service-password-reset.md](features/F009-self-service-password-reset.md) | 自助式密碼重設 | US-015 | P0-MVP |
 | F010 | [F010-admin-reset-password.md](features/F010-admin-reset-password.md) | Admin 重設使用者密碼 | US-016 | P0-MVP |
 | F045 | [F045-business-role-definitions.md](features/F045-business-role-definitions.md) | 業務角色定義（系統預設角色） | US-017 | P0-MVP |
@@ -273,3 +273,4 @@ F046 ──> F047（客戶清單為 360 詳情主要入口）
 | 2026-03-31 | Lookup 節點雙輸入重設計：F029 新增 AC-7a~7d（Lookup 雙輸入 UI）與更新 JSON schema；F043 新增第 8 種節點執行器 LookupExecutor（雙輸入模式 + 向下相容），新增 AC-18~AC-24；對應 US-058 | Spec Writer Agent |
 | 2026-04-02 | E02 角色擴充：新增 F045（業務角色定義，US-017）；更新 F004/F005/F006/F008 支援 8 種角色（2 系統 + 6 業務）；新增 Role 實體至 data-model；新增 ROLE_MODIFICATION_FORBIDDEN/ROLE_NOT_FOUND 錯誤碼；更新 VALIDATION_INVALID_ROLE 訊息；P0-MVP 增至 35 個 Feature；文件總數 75 份 | Spec Writer Agent |
 | 2026-04-13 | 新增 E06 Customer 360：F046（客戶搜尋與清單，US-060）、F047（單一客戶 360 詳情，US-061）；新增 2 個圖表（F046 搜尋流程、F047 詳情載入流程）；新增 C360_CUSTOMER_NOT_FOUND / C360_SEARCH_MIN_LENGTH 錯誤碼；更新 NFR-002.5 受影響功能；解決 G-01~G-08 所有缺口；P0-MVP 增至 37 個 Feature；文件總數 79 份 | Spec Writer Agent |
+| 2026-04-24 | E02 `is_sales_manager` 旗標同步：F001 v1.1（JWT Payload 補 `is_sales_manager` 欄位）、F002 v1.1（JWT Payload 差異說明補旗標）、F004 v3.1（新增 AC-6/AC-7、`isSalesManager` request 欄位、checkbox UI、BR-9/BR-10、Account Entity 補欄位）、F005 v3.1（API response 補 `is_sales_manager`、清單欄位加業務主管 badge、BR-8）、F006 v2.1（修正 BR-5 過時描述、加入旗標唯讀顯示、BR-6 排除旗標於編輯範圍外）、F008 v3.1（新增 AC-8/AC-9/AC-10、新增 `PATCH /api/accounts/:id/sales-manager-flag` 端點、`ACCOUNT_FLAG_NOT_APPLICABLE` 錯誤碼、BR-9~BR-11 旗標規則、UI toggle switch、安全性註記 Token Blocklist）；F003/F007/F009/F010/F045 經檢視不需改動 | Spec Writer Agent |
