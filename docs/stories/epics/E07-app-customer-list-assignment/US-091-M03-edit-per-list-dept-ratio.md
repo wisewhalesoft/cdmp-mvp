@@ -13,7 +13,7 @@
 
 **As a** 業務主管
 **I want** 為特定名單（LIST_NO）設定各部門的分配比例（RATION）
-**So that** 不同名單可依業務策略分配不同的部門比例，而不受全域部門比例限制
+**So that** 不同名單可依業務策略分配不同的部門比例
 
 ---
 
@@ -54,7 +54,7 @@
 - **When** 確認對話框確認後執行
 - **Then** 系統清空該 LIST_NO 所有部門的 RATION 設定（刪除或設為 NULL/0）
 - **And** 頁面顯示提示「已清除 {LIST_NM}（{LIST_NO}）的所有部門比例設定」
-- **And** 清除後，月跑時該 LIST_NO 將依全域部門比例（OBMDEPTPCT）分配（或由業務主管重新設定 per-LIST_NO 比例後再執行）
+- **And** 清除後，該 LIST_NO 在月跑時不套用任何部門比例設定，需由業務主管重新設定後再執行月跑
 
 ### AC-6：月跑執行中禁止修改
 
@@ -66,21 +66,13 @@
 
 ## 技術備註
 
-### per-LIST_NO 比例 vs 全域部門比例（關鍵區分）
+### 資料表說明
 
-本 Story（US-091）管理的是 **per-LIST_NO 層級**的部門比例，與 US-076/077 管理的**全域部門比例（OBMDEPTPCT）**為兩個獨立層級，不可混淆：
+本 Story（US-091）管理的是各 LIST_NO 的部門比例設定，對應 OBMDEPTPCT（AppDB 遷移後為 `ob_dept_pct`，待 system-architect 確認映射）。每個 LIST_NO 各自擁有一組部門比例設定，各自須加總為 100%。
 
-| 項目 | 全域部門比例（US-076/077） | per-LIST_NO 部門比例（US-091） |
-|------|--------------------------|-------------------------------|
-| 資料表 | OBMDEPTPCT | OBPCTLIST 或同等表（待 system-architect 確認） |
-| 適用範圍 | 整個月跑的預設部門分配比例 | 特定 LIST_NO 的部門分配比例覆寫值 |
-| 對應舊系統 | OBZ020 以外的全域設定 | OBZ020 M 區（per-LIST_NO 設定） |
-| 優先權 | 低（預設值） | 高（覆寫全域設定） |
-| Story | US-076（查看）、US-077（編輯） | 本 Story（US-091） |
-
-- per-LIST_NO 比例表對應舊系統 OBZ020 M 區，schema 需 system-architect 確認是否為既有 OBPCTLIST 或需新建
-- 月跑邏輯：Stage 2 部門分配時，若某 LIST_NO 有 per-LIST_NO 比例設定，優先使用；若無，退回全域 OBMDEPTPCT
-- 「清除比例設定」後的降級行為需在月跑邏輯（US-081）中處理
+- 部門比例表對應舊系統 OBZ020 M 區（per-LIST_NO 設定），schema 由 system-architect 確認
+- 月跑邏輯：Stage 2 部門分配時，讀取對應 LIST_NO 的部門比例設定；若該 LIST_NO 無設定，月跑前置條件驗證（US-081 AC-1）將阻擋執行
+- 「清除比例設定」後的行為需在月跑邏輯（US-081）中處理
 - AssignmentAuditLog 寫入（待 system-architect 設計表結構）
 - 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 
@@ -110,8 +102,8 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-070（需先有名單定義才有 LIST_NO 可設定）、US-088（新增名單後才能為其設定比例）、US-076（查看全域部門比例，理解差異）
-- **Blocks**：US-081（月跑 Stage 2 需讀取 per-LIST_NO 比例）
+- **Blocked By**：US-070（需先有名單定義才有 LIST_NO 可設定）、US-088（新增名單後才能為其設定比例）
+- **Blocks**：US-081（月跑 Stage 2 需讀取各 LIST_NO 的部門比例；月跑前置條件驗證每個 active LIST_NO 均有部門比例設定）
 
 ---
 
@@ -123,7 +115,7 @@
 - [ ] 清除比例設定測試（全部清空）
 - [ ] 月跑中資料鎖測試
 - [ ] AssignmentAuditLog 寫入測試
-- [ ] per-LIST_NO 比例與全域 OBMDEPTPCT 互不干擾測試
+- [ ] 各 LIST_NO 比例設定互不干擾測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -134,5 +126,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
-- **相關 Stories**：US-070（名單定義清單，入口）、US-076（查看全域部門比例）、US-077（編輯全域部門比例）、US-081（月跑 Stage 2 使用 per-LIST_NO 比例）
+- **相關 Stories**：US-070（名單定義清單，入口）、US-081（月跑 Stage 2 使用 per-LIST_NO 比例）
 - **Reference**：`reference/TableSchema/OB/OBMLISTDF.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（Stage 2 部門分配邏輯）

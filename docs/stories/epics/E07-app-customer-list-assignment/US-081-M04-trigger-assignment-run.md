@@ -25,7 +25,7 @@
 - **When** 系統進行前置條件驗證
 - **Then** 依序檢查以下條件：
   1. 本月名單定義已就緒（OBMLISTDF 有本作業年月的 STATUS = 'active' 記錄至少一筆）
-  2. 部門比例加總 = 100%（OBMDEPTPCT）
+  2. 每個 STATUS='active' 的名單（LIST_NO）在 OBMDEPTPCT 中均有部門比例設定，且各自加總 = 100%（per-LIST_NO）
   3. 所有啟用部門的人員比例加總各自 = 100%（OBEMPLSETMF）
   4. 計分版本有生效版本（OBLEVELCARD_VERSION status = 'active'）
   5. 目前無 running 狀態的月跑（防止併發執行）
@@ -86,9 +86,9 @@
 
 ### TC-081-01：前置條件驗證失敗
 
-- **Given**：部門比例加總為 95%
+- **Given**：某個 active 名單（例 LIST_NO 'OB202605001'）在 OBMDEPTPCT 中的部門比例加總為 95%
 - **When**：業務主管點擊「執行月跑」
-- **Then**：顯示錯誤清單「部門比例加總為 95%，需調整至 100%」，月跑不啟動
+- **Then**：顯示錯誤清單「LIST_NO 'OB202605001' 的部門比例加總為 95%，需調整至 100%」，月跑不啟動
 
 ### TC-081-02：月跑成功啟動
 
@@ -119,7 +119,7 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-070（名單定義就緒）、US-077（部門比例設定完成）、US-079（人員比例設定完成）
+- **Blocked By**：US-070（名單定義就緒）、US-091（per-LIST_NO 部門比例設定完成）、US-079（人員比例設定完成）
 - **Blocks**：US-082（查看執行進度）、US-083（查看結果摘要）、US-084（匯出結果）、US-085（歷史清單）、US-086（快照詳情）、US-087（差異比對）
 
 ---
@@ -142,5 +142,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-003](../../non-functional/NFR-003-assignment-execution-perf.md)、[NFR-004](../../non-functional/NFR-004-snapshot-integrity.md)、[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
-- **相關 Stories**：US-070（名單定義）、US-073（計分維度）、US-077（部門比例）、US-079（人員比例）、US-080（CR 設定）、US-082（執行進度）
+- **相關 Stories**：US-070（名單定義）、US-073（計分維度）、US-091（per-LIST_NO 部門比例）、US-079（人員比例）、US-080（CR 設定）、US-082（執行進度）
 - **Reference**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（Stage 3 部門分配）、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`（Stage 4 人員分配）、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`（Stage 4 st4_exchange）

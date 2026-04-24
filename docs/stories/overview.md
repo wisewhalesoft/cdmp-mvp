@@ -9,12 +9,12 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 7 |
-| User Story 總數 | 71 |
+| User Story 總數 | 69 |
 | 非功能需求（NFR）總數 | 5 |
 | 目標階段 | Phase 1（MVP）+ Phase 2（Customer 360） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
 | 主要角色 | Admin（管理者）、User（使用者）、業務主管（Sales Manager） |
-| 最後更新 | 2026-04-24（E07 新增 US-088~092 共 5 個 Story；修改 US-070/071/081/086；E07 總計 23 個 Story；總 User Story 數 71） |
+| 最後更新 | 2026-04-24（E07 M01 CRUD 擴充並刪除誤解需求 US-076/077；E02 新增 is_sales_manager 旗標；OB 資料庫遷移至 AppDB；E07 總計 21 個 Story；總 User Story 數 69） |
 
 ## Epic 索引
 
@@ -26,7 +26,7 @@
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 平台能力 | 1（MVP） | 11 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 | E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 平台能力 | 1（MVP） | 18 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
 | E06 | [Customer 360](epics/E06-customer-360/epic-brief.md) | 下游應用 | 2 | 2 | [epic-brief.md](epics/E06-customer-360/epic-brief.md) |
-| E07 | [客戶名單分派](epics/E07-app-customer-list-assignment/epic-brief.md) | 下游應用 | 1（MVP） | 23 | [epic-brief.md](epics/E07-app-customer-list-assignment/epic-brief.md) |
+| E07 | [客戶名單分派](epics/E07-app-customer-list-assignment/epic-brief.md) | 下游應用 | 1（MVP） | 21 | [epic-brief.md](epics/E07-app-customer-list-assignment/epic-brief.md) |
 
 ## Story 地圖
 
@@ -86,8 +86,6 @@
 | E07 | [US-073](epics/E07-app-customer-list-assignment/US-073-M02-edit-scoring-dimension.md) | 編輯計分維度與分數 | Must Have |
 | E07 | [US-074](epics/E07-app-customer-list-assignment/US-074-M02-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻 | Must Have |
 | E07 | [US-075](epics/E07-app-customer-list-assignment/US-075-M02-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表 | Must Have |
-| E07 | [US-076](epics/E07-app-customer-list-assignment/US-076-M03-view-dept-ratio.md) | 查看部門比例設定 | Must Have |
-| E07 | [US-077](epics/E07-app-customer-list-assignment/US-077-M03-edit-dept-ratio.md) | 編輯部門比例設定 | Must Have |
 | E07 | [US-078](epics/E07-app-customer-list-assignment/US-078-M03-view-personnel-ratio.md) | 查看人員比例設定 | Must Have |
 | E07 | [US-079](epics/E07-app-customer-list-assignment/US-079-M03-edit-personnel-ratio.md) | 編輯人員比例設定 | Must Have |
 | E07 | [US-080](epics/E07-app-customer-list-assignment/US-080-M03-toggle-cr-reassignment.md) | 開關 CR 回分規則 | Must Have |

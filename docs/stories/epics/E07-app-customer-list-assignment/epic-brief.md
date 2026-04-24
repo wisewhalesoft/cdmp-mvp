@@ -4,7 +4,7 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：23
+> **Stories 數量**：21
 
 ## Epic 目標
 
@@ -37,8 +37,6 @@
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
-| US-076 | 查看部門比例設定（全域） | Must Have | [US-076-M03-view-dept-ratio.md](US-076-M03-view-dept-ratio.md) |
-| US-077 | 編輯部門比例設定（全域） | Must Have | [US-077-M03-edit-dept-ratio.md](US-077-M03-edit-dept-ratio.md) |
 | US-078 | 查看人員比例設定 | Must Have | [US-078-M03-view-personnel-ratio.md](US-078-M03-view-personnel-ratio.md) |
 | US-079 | 編輯人員比例設定 | Must Have | [US-079-M03-edit-personnel-ratio.md](US-079-M03-edit-personnel-ratio.md) |
 | US-080 | 開關 CR 回分規則 | Must Have | [US-080-M03-toggle-cr-reassignment.md](US-080-M03-toggle-cr-reassignment.md) |
@@ -144,25 +142,15 @@
 4. 五個配置面板（M01 ~ M05）全部可操作，無任何功能需跳出至資料庫工具
 5. 歷史快照支援任意兩次執行的差異比對，業務主管可清楚看出人員配置或參數變動的影響
 
-## 待解決問題
+## 已解決問題（2026-04-24 system-architect 決策）
 
-以下問題待 system-architect 評估並提供答案後，方可進入對應 Story 的實作設計：
+原 6 條待解決問題已全數決策完成：
 
-1. **🔴 OB 資料庫的資料來源架構定位（最優先，其他問題依此決策）**：E07 對 OB 表有 CRUD 需求（OBMLISTDF / OBMCODEDF / OBPOOLDATA_LIST / per-LIST_NO 比例表），與既有 E03-E05「唯讀擷取式外部資料源 + 複製至 AppDB」架構衝突。需由 system-architect 決定 OB 資料庫的定位方案：
-   - 選項 A：**直連 OB 資料庫**（E07 讀寫直接指向原 OB DB，繞過 E03-E05）
-   - 選項 B：**E03 擴充為可寫資料來源**（需新增寫入能力至現有擷取架構）
-   - 選項 C：**OB 表遷移至 AppDB**（舊 OB 資料庫汰換，含資料遷移）
-   - 選項 D：**雙邊同步**（CRUD 對 AppDB 鏡像表，定期同步回 OB）
-   - 選項 E：**OB 視為 E07 專屬系統 DB**（與 E03 外部源區分定位）
+1. ✅ **OB 資料庫架構定位** → 方案 C：OB 表全數遷移至 AppDB（PostgreSQL），採 `ob_` 前綴 snake_case 命名，不直連 OB DB。詳見 [architecture-spec.md §3.10](../../specs/architecture-spec.md) 與 [data-model.md](../../specs/data-model.md) OB 表映射表
+2. ✅ **OBMLISTDF STATUS 欄位** → AppDB 新建表 `ob_list_definition` 直接加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`
+3. ✅ **AssignmentAuditLog 表設計** → 採納建議設計（id / action / entity_type / entity_id / operator_id / operated_at / before_payload JSONB / after_payload JSONB / ip_address），存於 AppDB，保留 3 年
+4. ✅ **LIST_NO 999 上限處理** → MVP 達上限回傳 422（error_code: `LIST_NO_LIMIT_EXCEEDED`）；Phase 2 backlog 評估擴位
+5. ✅ **per-LIST_NO 部門比例表** → 使用 `ob_dept_pct`（OBMDEPTPCT 映射），無「全域比例」概念；**US-076/077 已確認為需求誤解產物，本版刪除**
+6. ✅ **CARD_TYPE 舊資料遷移策略** → 遷移時直接沿用現有值（舊 SP 由 LIST_NM 解析之結果），缺漏筆數由遷移腳本識別處理
 
-   此決策影響以下所有問題的實作方向（schema 變更落在哪個 DB、遷移策略、SP 是否保留等）。
-
-2. **OBMLISTDF STATUS 欄位 schema 變更**：在 OBMLISTDF 加入 STATUS ENUM('active','inactive') 欄位，預設值 'active'。需確認是否影響既有 SP 查詢邏輯（US-070、US-088、US-089、US-090）。**變更落點依問題 1 而定**。
-
-3. **AssignmentAuditLog 表設計**：新建稽核日誌表，記錄 E07 所有 CRUD 操作。需 system-architect 設計表結構（欄位：action、entity_type、entity_id、operator_id、operated_at、payload 等）。**表存於 AppDB 或 OB DB 依問題 1 而定**。
-
-4. **LIST_NO 自動產生的 999 筆上限處理**：格式 `OB{YYYYMM}{NNN}`，流水號 001~999，若同月超過 999 筆時的處理方案（擴位？拒絕新增？）需 system-architect 評估。
-
-5. **per-LIST_NO 部門比例表確認**：US-091 使用的 per-LIST_NO 部門比例表，需確認是否為既有 OBPCTLIST 或需新建同等表，以及與 OBMDEPTPCT（全域比例）的月跑讀取優先序邏輯。
-
-6. **CARD_TYPE 舊資料遷移策略**：舊系統 CARD_TYPE 值從 LIST_NM 中擷取（字串 parse），新系統改為獨立輸入欄位（US-088/089）。既有 OBMLISTDF 資料若 CARD_TYPE 欄位為空，需確認遷移方案（手動補填 vs. 自動遷移 vs. 不遷移）。**遷移目標 DB 依問題 1 而定**。
+相關架構決策：AD-E07-1（OB 資料遷移）、AD-E07-2（月跑非同步 + 快照原子性）、AD-E07-3（複雜計分保留為 PostgreSQL function）。
