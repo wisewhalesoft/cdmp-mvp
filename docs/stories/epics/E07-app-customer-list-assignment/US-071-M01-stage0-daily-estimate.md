@@ -38,6 +38,14 @@
 - **When** 估算計算完成
 - **Then** 在估算表上方顯示橘色警示：「Pool 資料筆數偏低（現有 N 筆），請確認資料擷取任務已正常執行」
 
+### AC-4：針對單一 LIST_NO 即時試算案件數量
+
+- **Given** 業務主管在名單定義清單（US-070）中查看某 STATUS = 'active' 的名單
+- **When** 業務主管點擊該名單列的「計算案件數量」按鈕（對應舊系統 OBZ020 DoCount 功能）
+- **Then** 系統依該 LIST_NO 的篩選條件（PROD_KIND、CASEYEAR、SPEC_TP、LIST_PERIOD_START/END、SETTLE_SRC 等）即時試算符合條件的案件數量
+- **And** 顯示試算結果：「符合條件案件數：N 筆」
+- **And** 此試算不執行實際月跑，不寫入任何分派結果，僅供估算參考
+
 ---
 
 ## 技術備註

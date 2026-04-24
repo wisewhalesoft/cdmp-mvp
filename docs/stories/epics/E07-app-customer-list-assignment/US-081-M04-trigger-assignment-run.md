@@ -24,7 +24,7 @@
 - **Given** 業務主管在分派執行頁面點擊「執行月跑」按鈕
 - **When** 系統進行前置條件驗證
 - **Then** 依序檢查以下條件：
-  1. 本月名單定義已就緒（OBMLISTDF 有本月資料）
+  1. 本月名單定義已就緒（OBMLISTDF 有本作業年月的 STATUS = 'active' 記錄至少一筆）
   2. 部門比例加總 = 100%（OBMDEPTPCT）
   3. 所有啟用部門的人員比例加總各自 = 100%（OBEMPLSETMF）
   4. 計分版本有生效版本（OBLEVELCARD_VERSION status = 'active'）
