@@ -4,7 +4,7 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：18
+> **Stories 數量**：23
 
 ## Epic 目標
 
@@ -19,7 +19,10 @@
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
 | US-070 | 查看本月名單定義清單 | Must Have | [US-070-M01-view-list-definition.md](US-070-M01-view-list-definition.md) |
-| US-071 | Stage 0 每日分派數量估算 | Must Have | [US-071-M01-stage0-daily-estimate.md](US-071-M01-stage0-daily-estimate.md) |
+| US-071 | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | Must Have | [US-071-M01-stage0-daily-estimate.md](US-071-M01-stage0-daily-estimate.md) |
+| US-088 | 新增名單定義 | Must Have | [US-088-M01-create-list-definition.md](US-088-M01-create-list-definition.md) |
+| US-089 | 編輯名單定義 | Must Have | [US-089-M01-edit-list-definition.md](US-089-M01-edit-list-definition.md) |
+| US-090 | 停用名單定義 | Must Have | [US-090-M01-disable-list-definition.md](US-090-M01-disable-list-definition.md) |
 
 ### M02 — 計分設定
 
@@ -34,11 +37,12 @@
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
-| US-076 | 查看部門比例設定 | Must Have | [US-076-M03-view-dept-ratio.md](US-076-M03-view-dept-ratio.md) |
-| US-077 | 編輯部門比例設定 | Must Have | [US-077-M03-edit-dept-ratio.md](US-077-M03-edit-dept-ratio.md) |
+| US-076 | 查看部門比例設定（全域） | Must Have | [US-076-M03-view-dept-ratio.md](US-076-M03-view-dept-ratio.md) |
+| US-077 | 編輯部門比例設定（全域） | Must Have | [US-077-M03-edit-dept-ratio.md](US-077-M03-edit-dept-ratio.md) |
 | US-078 | 查看人員比例設定 | Must Have | [US-078-M03-view-personnel-ratio.md](US-078-M03-view-personnel-ratio.md) |
 | US-079 | 編輯人員比例設定 | Must Have | [US-079-M03-edit-personnel-ratio.md](US-079-M03-edit-personnel-ratio.md) |
 | US-080 | 開關 CR 回分規則 | Must Have | [US-080-M03-toggle-cr-reassignment.md](US-080-M03-toggle-cr-reassignment.md) |
+| US-091 | 設定 per-LIST_NO 部門比例 | Must Have | [US-091-M03-edit-per-list-dept-ratio.md](US-091-M03-edit-per-list-dept-ratio.md) |
 
 ### M04 — 分派執行
 
@@ -56,6 +60,12 @@
 | US-085 | 查看歷史執行紀錄清單 | Must Have | [US-085-M05-view-run-history-list.md](US-085-M05-view-run-history-list.md) |
 | US-086 | 查看執行快照詳情 | Must Have | [US-086-M05-view-run-snapshot-detail.md](US-086-M05-view-run-snapshot-detail.md) |
 | US-087 | 比對兩次執行結果差異 | Should Have | [US-087-M05-compare-run-results.md](US-087-M05-compare-run-results.md) |
+
+### M06 — 基礎代碼維護
+
+| Story ID | 標題 | 優先級 | 檔案 |
+|----------|------|--------|------|
+| US-092 | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | Must Have | [US-092-M06-edit-base-code.md](US-092-M06-edit-base-code.md) |
 
 ## 依賴關係
 
@@ -87,12 +97,37 @@
 | payload | JSONB | 快照內容 |
 | created_at | TIMESTAMP | 快照時間 |
 
-### 既有 OB 相關表（唯讀參照）
+### AssignmentAuditLog（E07 CRUD 操作稽核日誌）
+
+記錄 E07 所有 CRUD 操作完整歷程，含 action（新增/編輯/停用/比例設定）、操作者、操作時間、LIST_NO 等。
+
+**待解決**：表結構由 system-architect 設計（見「待解決問題」第 2 點）。
+
+### OBMCODEDF（既有，代碼維護）
+
+| 欄位（參考） | 說明 |
+|------------|------|
+| CODE_TYPE | 代碼類別（PROD_KIND / SPEC_TP / CASEYEAR） |
+| CODE_VAL | 代碼值 |
+| CODE_NM | 顯示名稱 |
+| STATUS | 啟用/停用 |
+
+參照 Story：US-092（代碼維護）、US-088/089（表單選項來源）
+
+### per-LIST_NO 部門比例表（待確認）
+
+為特定 LIST_NO 設定各部門 RATION，覆寫全域 OBMDEPTPCT。
+
+**待解決**：需確認是否為既有 OBPCTLIST 或需新建（見「待解決問題」第 4 點）。
+
+參照 Story：US-091（設定 per-LIST_NO 部門比例）、US-081（月跑 Stage 2 讀取）
+
+### 既有 OB 相關表
 
 | 表名 | 說明 | 參照 Story |
 |------|------|-----------|
-| OBMDEPTPCT | 部門比例設定 | US-076、US-077 |
-| OBMLISTDF | 名單定義（Stage 條件） | US-070、US-071 |
+| OBMDEPTPCT | 全域部門比例設定 | US-076、US-077 |
+| OBMLISTDF | 名單定義（Stage 篩選條件）**[需 schema 變更：新增 STATUS ENUM('active','inactive') 欄位]** | US-070、US-071、US-088、US-089、US-090 |
 | OBLEVELCARD_VERSION | 計分版本管理 | US-072、US-073 |
 | OBLEVELCARD_COLUNM | 計分維度欄位定義 | US-073 |
 | OBLEVELCARD_SCORE | 計分維度分數設定 | US-073 |
@@ -111,4 +146,14 @@
 
 ## 待解決問題
 
-（需求訪談階段已全部釐清，無待解問題）
+以下問題待 system-architect 評估並提供答案後，方可進入對應 Story 的實作設計：
+
+1. **OBMLISTDF STATUS 欄位 schema 變更**：在 OBMLISTDF 加入 STATUS ENUM('active','inactive') 欄位，預設值 'active'。需確認是否影響既有 SP 查詢邏輯（US-070、US-088、US-089、US-090）
+
+2. **AssignmentAuditLog 表設計**：新建稽核日誌表，記錄 E07 所有 CRUD 操作。需 system-architect 設計表結構（欄位：action、entity_type、entity_id、operator_id、operated_at、payload 等）
+
+3. **LIST_NO 自動產生的 999 筆上限處理**：格式 `OB{YYYYMM}{NNN}`，流水號 001~999，若同月超過 999 筆時的處理方案（擴位？拒絕新增？）需 system-architect 評估
+
+4. **per-LIST_NO 部門比例表確認**：US-091 使用的 per-LIST_NO 部門比例表，需確認是否為既有 OBPCTLIST 或需新建同等表，以及與 OBMDEPTPCT（全域比例）的月跑讀取優先序邏輯
+
+5. **CARD_TYPE 舊資料遷移策略**：舊系統 CARD_TYPE 值從 LIST_NM 中擷取（字串 parse），新系統改為獨立輸入欄位（US-088/089）。既有 OBMLISTDF 資料若 CARD_TYPE 欄位為空，需確認遷移方案（手動補填 vs. 自動遷移 vs. 不遷移）

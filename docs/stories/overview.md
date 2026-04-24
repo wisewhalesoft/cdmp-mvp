@@ -9,12 +9,12 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 7 |
-| User Story 總數 | 66 |
+| User Story 總數 | 71 |
 | 非功能需求（NFR）總數 | 5 |
 | 目標階段 | Phase 1（MVP）+ Phase 2（Customer 360） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
 | 主要角色 | Admin（管理者）、User（使用者）、業務主管（Sales Manager） |
-| 最後更新 | 2026-04-21（新增 E07 客戶名單分派 18 個 Story；新增 NFR-003/004/005；Epic 索引加入「類型」欄） |
+| 最後更新 | 2026-04-24（E07 新增 US-088~092 共 5 個 Story；修改 US-070/071/081/086；E07 總計 23 個 Story；總 User Story 數 71） |
 
 ## Epic 索引
 
@@ -26,7 +26,7 @@
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 平台能力 | 1（MVP） | 11 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 | E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 平台能力 | 1（MVP） | 18 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
 | E06 | [Customer 360](epics/E06-customer-360/epic-brief.md) | 下游應用 | 2 | 2 | [epic-brief.md](epics/E06-customer-360/epic-brief.md) |
-| E07 | [客戶名單分派](epics/E07-app-customer-list-assignment/epic-brief.md) | 下游應用 | 1（MVP） | 18 | [epic-brief.md](epics/E07-app-customer-list-assignment/epic-brief.md) |
+| E07 | [客戶名單分派](epics/E07-app-customer-list-assignment/epic-brief.md) | 下游應用 | 1（MVP） | 23 | [epic-brief.md](epics/E07-app-customer-list-assignment/epic-brief.md) |
 
 ## Story 地圖
 
@@ -81,7 +81,7 @@
 | E06 | [US-060](epics/E06-customer-360/US-060-customer-search-list.md) | 客戶搜尋與清單 | Must Have |
 | E06 | [US-061](epics/E06-customer-360/US-061-customer-360-view.md) | 單一客戶 360 檢視 | Must Have |
 | E07 | [US-070](epics/E07-app-customer-list-assignment/US-070-M01-view-list-definition.md) | 查看本月名單定義清單 | Must Have |
-| E07 | [US-071](epics/E07-app-customer-list-assignment/US-071-M01-stage0-daily-estimate.md) | Stage 0 每日分派數量估算 | Must Have |
+| E07 | [US-071](epics/E07-app-customer-list-assignment/US-071-M01-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | Must Have |
 | E07 | [US-072](epics/E07-app-customer-list-assignment/US-072-M02-view-scoring-dimensions.md) | 查看計分維度設定 | Must Have |
 | E07 | [US-073](epics/E07-app-customer-list-assignment/US-073-M02-edit-scoring-dimension.md) | 編輯計分維度與分數 | Must Have |
 | E07 | [US-074](epics/E07-app-customer-list-assignment/US-074-M02-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻 | Must Have |
@@ -98,6 +98,11 @@
 | E07 | [US-085](epics/E07-app-customer-list-assignment/US-085-M05-view-run-history-list.md) | 查看歷史執行紀錄清單 | Must Have |
 | E07 | [US-086](epics/E07-app-customer-list-assignment/US-086-M05-view-run-snapshot-detail.md) | 查看執行快照詳情 | Must Have |
 | E07 | [US-087](epics/E07-app-customer-list-assignment/US-087-M05-compare-run-results.md) | 比對兩次執行結果差異 | Should Have |
+| E07 | [US-088](epics/E07-app-customer-list-assignment/US-088-M01-create-list-definition.md) | 新增名單定義 | Must Have |
+| E07 | [US-089](epics/E07-app-customer-list-assignment/US-089-M01-edit-list-definition.md) | 編輯名單定義 | Must Have |
+| E07 | [US-090](epics/E07-app-customer-list-assignment/US-090-M01-disable-list-definition.md) | 停用名單定義 | Must Have |
+| E07 | [US-091](epics/E07-app-customer-list-assignment/US-091-M03-edit-per-list-dept-ratio.md) | 設定 per-LIST_NO 部門比例 | Must Have |
+| E07 | [US-092](epics/E07-app-customer-list-assignment/US-092-M06-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | Must Have |
 
 ## 非功能需求（NFR）
 
@@ -124,7 +129,7 @@
 ### Phase 1（新增）— 客戶名單分派（E07）
 重點：業務主管可獨立操作名單定義、計分設定、分派比例、觸發月跑、匯出結果與查看歷史快照，IT 零介入
 
-- E07 全部 Stories（US-070 ~ US-087）
+- E07 全部 Stories（US-070 ~ US-092）
 - NFR-003（分派執行效能）、NFR-004（快照原子性）、NFR-005（結果準確性）
 
 ### Phase 2 — Customer 360
