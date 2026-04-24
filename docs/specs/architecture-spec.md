@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: 1.7
+version: 1.8
 status: draft
-last_updated: 2026-04-13
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047]
+last_updated: 2026-04-24
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, E07-M01, E07-M02, E07-M03, E07-M04, E07-M05, E07-M06]
 ---
 
 # 系統架構規格書
@@ -12,23 +12,24 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程）、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
-| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面）、10. 技術棧決策（React Flow） |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程）、10. 技術棧決策 |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~3）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
+| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
-| Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設） |
+| Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~3）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程 |
 
 ## 目錄
 
 1. [架構總覽](#1-架構總覽)
 2. [系統上下文](#2-系統上下文)
-3. [邏輯架構](#3-邏輯架構)
-4. [資料架構](#4-資料架構)
-5. [整合與通訊](#5-整合與通訊)
+3. [邏輯架構](#3-邏輯架構)（含 3.10 E07 Assignment Module）
+4. [資料架構](#4-資料架構)（含 ob_* 表、assignment_* 表）
+5. [整合與通訊](#5-整合與通訊)（含 5.12 E07 月跑執行流程）
 6. [非功能需求架構對應](#6-非功能需求架構對應)
 7. [部署與執行時期視圖](#7-部署與執行時期視圖)
 8. [風險、取捨與替代方案](#8-風險取捨與替代方案)
-9. [待決事項](#9-待決事項)
+9. [待決事項](#9-待決事項)（含 9.6 E07 已決議）
 10. [技術棧決策](#10-技術棧決策)
 
 ---
@@ -53,12 +54,13 @@ graph TD
         ExtractionMod["Extraction 模組<br/>擷取任務 CRUD、執行調度、日誌管理"]
         ETLMod["ETL Pipeline 模組<br/>Pipeline CRUD、版本管理<br/>視覺化定義、執行引擎"]
         C360Mod["Customer 360 模組（E06）<br/>客戶搜尋清單、360 詳情<br/>敏感資料遮罩（唯讀）"]
+        AssignmentMod["Assignment 模組（E07）<br/>名單定義 CRUD、計分設定管理<br/>比例設定管理、分派執行引擎<br/>快照歷史、代碼維護"]
         Scheduler["Scheduler 模組<br/>健康檢查、擷取排程掃描<br/>Pipeline 排程掃描、清理 Cron Job"]
         OrphanRecoveryMod["Orphan Recovery 模組<br/>啟動時孤兒任務回收"]
     end
 
     subgraph 持久層["持久層"]
-        AppDB["應用資料庫<br/>(RDBMS)<br/>含 customer_core 目標表"]
+        AppDB["應用資料庫<br/>(RDBMS)<br/>含 customer_core 目標表<br/>ob_* 業務表、assignment_* 執行紀錄表"]
         TokenStore["Token Blocklist<br/>(快取或 DB)"]
     end
 
@@ -74,6 +76,8 @@ graph TD
     API --> ExtractionMod
     API --> ETLMod
     API --> C360Mod
+    API --> AssignmentMod
+    AssignmentMod --> AppDB
     Scheduler --> DatasourceMod
     Scheduler --> ExtractionMod
     Scheduler --> ETLMod
@@ -96,8 +100,10 @@ graph TD
     classDef c360module fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
     classDef external fill:#fff3e0,stroke:#e65100,stroke-width:1px
     class Browser layer
+    classDef assignmentmodule fill:#fef3c7,stroke:#d97706,stroke-width:2px
     class API,AuthMod,AccountMod,DatasourceMod,ExtractionMod,ETLMod,Scheduler,OrphanRecoveryMod module
     class C360Mod c360module
+    class AssignmentMod assignmentmodule
     class Email,TargetDB,AppDB,TokenStore external
 ```
 
@@ -137,6 +143,7 @@ graph TB
     subgraph 內部使用者["內部使用者"]
         Admin["Admin（管理者）<br/>IT 管理員、資料團隊主管"]
         User["User（一般使用者）<br/>存取 Customer 360 相關功能"]
+        SalesManager["業務主管（Sales Manager）<br/>User + is_sales_manager=true<br/>存取 E07 分派全流程 + E06"]
     end
 
     subgraph CDMP["CDMP 平台"]
@@ -150,17 +157,20 @@ graph TB
         SQLServer["SQL Server 實例<br/>連線測試 / 資料擷取目標"]
     end
 
-    Admin -->|"HTTPS — 管理後台<br/>帳號、資料來源、擷取任務、ETL Pipeline"| System
-    User -->|"HTTPS — 登入<br/>查看說明頁面"| System
+    Admin -->|"HTTPS — 管理後台<br/>帳號、資料來源、擷取任務、ETL Pipeline<br/>+ E07 全部（Admin 為超集）"| System
+    User -->|"HTTPS — 登入<br/>查看說明頁面 + E06 Customer 360"| System
+    SalesManager -->|"HTTPS — E01 + E06 + E07<br/>（名單定義、計分設定、比例設定<br/>分派執行、快照歷史、代碼維護）"| System
     System -->|"SMTP/API<br/>密碼重設連結"| EmailSvc
     System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| MySQL
     System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| PostgreSQL
     System -->|"TCP<br/>連線測試（SELECT 1）<br/>資料擷取（SELECT * / WHERE）"| SQLServer
 
     classDef actor fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    classDef salesactor fill:#fef3c7,stroke:#d97706,stroke-width:2px
     classDef system fill:#dcfce7,stroke:#16a34a,stroke-width:2px
     classDef external fill:#fef9c3,stroke:#ca8a04,stroke-width:1px
     class Admin,User actor
+    class SalesManager salesactor
     class System system
     class EmailSvc,MySQL,PostgreSQL,SQLServer external
 ```
@@ -177,11 +187,15 @@ graph TB
 
     subgraph TZ_Auth["信任區域：已驗證使用者（JWT 必要）"]
         Logout["POST /api/v1/auth/logout"]
-        UserEndpoints["User 可存取端點<br/>（Customer 360 相關端點）"]
+        UserEndpoints["User 可存取端點<br/>（Customer 360 相關端點）<br/>GET /api/v1/c360/**"]
+    end
+
+    subgraph TZ_SalesManager["信任區域：業務主管（JWT + role=user + is_sales_manager=true）"]
+        SalesEndpoints["業務主管端點<br/>分派模組 /api/v1/assignment/**<br/>（含 M01~M06 全部面板）<br/>Admin 亦可存取此區域（超集）"]
     end
 
     subgraph TZ_Admin["信任區域：Admin 角色（JWT + role=admin）"]
-        AdminEndpoints["Admin 專屬端點<br/>帳號管理 /api/v1/accounts/**<br/>角色查詢 GET /api/roles<br/>資料來源管理 /api/v1/datasources/**<br/>擷取任務管理 /api/v1/extraction-tasks/**<br/>ETL Pipeline 管理 /api/v1/etl/**"]
+        AdminEndpoints["Admin 專屬端點<br/>帳號管理 /api/v1/accounts/**<br/>角色查詢 GET /api/roles<br/>資料來源管理 /api/v1/datasources/**<br/>擷取任務管理 /api/v1/extraction-tasks/**<br/>ETL Pipeline 管理 /api/v1/etl/**<br/>+ /api/v1/assignment/**（超集）"]
     end
 
     subgraph TZ_Internal["信任區域：系統內部（不對外暴露）"]
@@ -192,17 +206,21 @@ graph TB
 
     Internet -->|"HTTPS (TLS 1.2+)"| TZ_Public
     Internet -->|"HTTPS + Bearer Token"| TZ_Auth
+    Internet -->|"HTTPS + Bearer Token<br/>(role=user + is_sales_manager=true)"| TZ_SalesManager
     Internet -->|"HTTPS + Bearer Token (role=admin)"| TZ_Admin
     TZ_Admin --> TZ_Internal
+    TZ_SalesManager --> TZ_Internal
     TZ_Auth --> TZ_Internal
     TZ_Public --> TZ_Internal
 
     classDef public fill:#fef2f2,stroke:#ef4444
     classDef auth fill:#fef9c3,stroke:#ca8a04
+    classDef sales fill:#fef3c7,stroke:#d97706
     classDef admin fill:#dcfce7,stroke:#16a34a
     classDef internal fill:#f0f4ff,stroke:#4f6ef7
     class TZ_Public public
     class TZ_Auth auth
+    class TZ_SalesManager sales
     class TZ_Admin admin
     class TZ_Internal internal
 ```
@@ -218,6 +236,8 @@ graph TB
 | 瀏覽器 | HTTPS | 使用者介面 | 全部 |
 
 > **E05 新增說明**：ETL Pipeline 的 Extract 節點讀取 AppDB 內的 raw data 表（不直接連外部資料庫），Load 節點寫入 AppDB 內的目標表（Phase 1 MVP 為 `customer_core`，約 45 欄位，整合 ZZIP_BAMCUST_M 與 MLMCUSTOMER 兩個來源），因此 ETL Pipeline 執行不新增外部依賴，資料流閉合於 AppDB 內部。Target Table Registry 為 in-process 靜態定義，無額外依賴。
+
+> **E07 新增說明**：E07 Assignment Module 不直連 OB 資料庫。OB 系統業務表（OBMLISTDF、OBPOOLDATA_LIST 等）已全數遷移至 AppDB（以 `ob_` 前綴 snake_case 命名），E07 所有讀寫操作均對 AppDB 執行。`ob_pool_data`（案件池）由 E04 擷取任務定期從 OB 原始系統匯入（建議月初執行一次）；E07 月跑 Stage 1 讀取的 `ob_pool_data` 資料新鮮度由 E04 任務頻率控制。E07 不引入新的外部系統依賴。
 
 > **注意**：資料擷取（F021/F023）對目標資料庫的流量性質與連線測試（`SELECT 1`）顯著不同——擷取為批次資料讀取（`SELECT * FROM table` 或增量 `WHERE col > value`），可能涉及大量資料傳輸，對目標資料庫的負載影響需評估。
 
@@ -287,6 +307,16 @@ graph TB
             CustomerCoreRepo["CustomerCoreRepository<br/>Raw SQL / QueryBuilder<br/>FTS 查詢（tsvector/tsquery）<br/>customer_core 唯讀抽象層"]
         end
 
+        subgraph AssignmentModule["Assignment 模組（E07）"]
+            AssignmentListSvc["AssignmentList Service<br/>名單定義 CRUD（ob_list_definition）<br/>LIST_NO 自動產生（OB{YYYYMM}{NNN}）<br/>同月 999 筆上限 → 422"]
+            AssignmentScoringSvc["AssignmentScoring Service<br/>計分卡版本管理（ob_levelcard_*）<br/>CARD_LEVEL 門檻 / TIER_LEVEL 對應<br/>複雜計分邏輯呼叫 PostgreSQL function"]
+            AssignmentRatioSvc["AssignmentRatio Service<br/>per-LIST_NO 部門比例（ob_dept_pct）<br/>人員比例（ob_empl_set）<br/>CR 回分規則開關"]
+            AssignmentCodeSvc["AssignmentCode Service<br/>代碼維護（ob_code_df）<br/>PROD_KIND / SPEC_TP / CASEYEAR"]
+            AssignmentRunSvc["AssignmentRun Service<br/>觸發月跑（202 非同步）<br/>Stage 0~4 執行引擎<br/>快照原子性寫入（Transaction）"]
+            AssignmentSnapshotSvc["AssignmentSnapshot Service<br/>歷史清單、快照詳情<br/>兩次執行差異比對"]
+            AssignmentAuditSvc["AssignmentAudit Service<br/>E07 所有 CRUD 操作稽核<br/>寫入 assignment_audit_log"]
+        end
+
         subgraph SharedInfra["共用基礎建設"]
             CryptoUtil["Crypto Util<br/>AES-256 加解密"]
             HashUtil["Hash Util<br/>bcrypt 雜湊/比對"]
@@ -297,7 +327,7 @@ graph TB
     end
 
     subgraph Persistence["持久層"]
-        AppDB["應用資料庫<br/>User / Datasource<br/>PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog<br/>raw_{task_id_short} 動態表<br/>EtlPipeline / EtlPipelineVersion / EtlPipelineLog<br/>customer_core（Phase 1 MVP 目標表）<br/>Phase 2: customer_financial / customer_interaction<br/>Phase 3: customer_service"]
+        AppDB["應用資料庫<br/>User / Datasource / PasswordResetToken / DatasourceHealthLog<br/>ExtractionTask / ExtractionLog / raw_{task_id_short}<br/>EtlPipeline / EtlPipelineVersion / EtlPipelineLog<br/>customer_core（E05 目標表）<br/>ob_list_definition / ob_pool_data / ob_pool_data_list<br/>ob_dept_pct / ob_empl_set / ob_code_df<br/>ob_levelcard_version / ob_levelcard_column / ob_levelcard_score / ob_levelcard_level<br/>assignment_run / assignment_run_snapshot / assignment_audit_log"]
         TokenStore["Token Blocklist Store"]
     end
 
@@ -340,12 +370,21 @@ graph TB
     C360Svc --> CustomerCoreRepo
     CustomerCoreRepo -->|"READ ONLY<br/>customer_core"| AppDB
     C360Pages --> APIClient
+    Middleware --> AssignmentModule
+    AssignmentModule --> SharedInfra
+    AssignmentListSvc -->|"CRUD ob_list_definition"| AppDB
+    AssignmentScoringSvc -->|"讀寫 ob_levelcard_*<br/>呼叫 PostgreSQL function"| AppDB
+    AssignmentRatioSvc -->|"讀寫 ob_dept_pct / ob_empl_set"| AppDB
+    AssignmentCodeSvc -->|"CRUD ob_code_df"| AppDB
+    AssignmentRunSvc -->|"讀 ob_pool_data\n寫 ob_pool_data_list\n寫 assignment_run / snapshot"| AppDB
+    AssignmentAuditSvc -->|"寫入 assignment_audit_log"| AppDB
 
     classDef frontend fill:#dbeafe,stroke:#2563eb
     classDef c360fe fill:#bfdbfe,stroke:#1d4ed8,stroke-width:2px
     classDef module fill:#dcfce7,stroke:#16a34a
     classDef etlmodule fill:#fce7f3,stroke:#db2777
     classDef c360module fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
+    classDef assignmentmodule fill:#fef3c7,stroke:#d97706,stroke-width:2px
     classDef orphan fill:#e8f4fd,stroke:#2196F3,stroke-width:1px
     classDef shared fill:#f3e8ff,stroke:#9333ea
     classDef persist fill:#fef9c3,stroke:#ca8a04
@@ -355,6 +394,7 @@ graph TB
     class AuthModule,AccountModule,DatasourceModule,ExtractionModule,SchedulerModule module
     class ETLModule,PipelineSvc,PipelineDefSvc,PipelineExecSvc,PipelineVersionSvc etlmodule
     class C360Module,C360Controller,C360Svc,CustomerCoreRepo c360module
+    class AssignmentModule,AssignmentListSvc,AssignmentScoringSvc,AssignmentRatioSvc,AssignmentCodeSvc,AssignmentRunSvc,AssignmentSnapshotSvc,AssignmentAuditSvc assignmentmodule
     class OrphanRecoveryModule,OrphanSvc orphan
     class SharedInfra,CryptoUtil,HashUtil,JWTUtil,EmailUtil,Logger shared
     class AppDB,TokenStore persist
@@ -403,19 +443,34 @@ graph TB
 
 | 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
 |------|------|-----------|-------------|
-| Account Service | 帳號 CRUD；角色指派（admin / user）；停用/啟用；Admin 代為重設密碼 | 最後一位 Admin 保護（ACCOUNT_LAST_ADMIN）；Admin 不可停用自己（ACCOUNT_SELF_DISABLE）；Email 大小寫不敏感唯一性；停用時失效所有 Session；指派角色前驗證 role_code 為有效的預設角色之一 | F004-F010 |
+| Account Service | 帳號 CRUD；角色指派（admin / user）；is_sales_manager 旗標設定；停用/啟用；Admin 代為重設密碼 | 最後一位 Admin 保護（ACCOUNT_LAST_ADMIN）；Admin 不可停用自己（ACCOUNT_SELF_DISABLE）；Email 大小寫不敏感唯一性；停用時失效所有 Session；指派角色前驗證 role_code 為有效的預設角色之一；`is_sales_manager` 旗標僅可由 Admin 設定，User 無法自行變更 | F004-F010, E07（業務主管設定） |
 | Role Service | 提供角色清單查詢（`GET /api/roles`）；角色 Seed Data 初始化（migration 自動執行）；角色 role_code 有效性驗證（供 Account Service 使用） | 不提供角色新增 / 刪除 API（AC-2，US-017）；角色資料為 Seed Data，不可由 API 修改 | F004, F008（US-017, US-014） |
 
 **樂觀鎖定**（OQ-6 決議）：帳號編輯與資料來源編輯均採用 Optimistic Locking，以版本號或 `updated_at` 時間戳記偵測並發衝突，回傳 HTTP 409。
 
-**架構決策 AD-E02-1：雙層角色架構**
+**架構決策 AD-E02-1（更新 2026-04-24）：角色 + is_sales_manager 旗標 RBAC 模型**
 
-CDMP 採用簡單扁平化的角色模型，系統僅需 Admin / User 兩種角色：
+CDMP 系統角色維持 2 種（admin / user），但新增 `is_sales_manager` 布林欄位擴充業務主管能力，實現角色與功能旗標的正交組合：
+
+| 身份 | role | is_sales_manager | 可存取模組 |
+|------|------|-----------------|-----------|
+| 管理者 | `admin` | 任意（忽略） | 全部（E01~E07） |
+| 業務主管 | `user` | `true` | E01 + E06 + E07 全部（M01~M06） |
+| 一般使用者 | `user` | `false` | E01 + E06 |
+
+**RBAC 中介層檢查順序**：
+1. JWT 驗證（token 有效、未過期、未在 blocklist）
+2. `role` 欄位檢查（admin 端點要求 `role=admin`）
+3. 需要業務主管權限的端點（`/api/v1/assignment/**`）額外檢查 `is_sales_manager=true`（Admin 無需此檢查，已在步驟 2 通過）
+
+**JWT Payload 更新**：新增 `is_sales_manager: boolean` 欄位，與 `role` 一同在登入時寫入 payload；帳號的 `is_sales_manager` 變更後，舊 JWT 仍有效直至過期（短效 8h/30d Access Token 機制提供自然過期），若需即時失效需將 Token 加入 Blocklist。
+
+原有 role_code 說明：
 
 | 角色 role_code | 用途 |
 |--------------|------|
-| `admin` | 完整平台管理權限（帳號、資料來源、擷取任務、ETL Pipeline） |
-| `user` | 一般使用者；可存取 Customer 360 相關功能 |
+| `admin` | 完整平台管理權限（帳號、資料來源、擷取任務、ETL Pipeline、E07 分派） |
+| `user` | 一般使用者；可存取 E06 Customer 360；若 `is_sales_manager=true` 額外存取 E07 分派全流程 |
 
 **架構決策 AD-E02-2：角色為 Seed Data，不提供動態 CRUD**
 
@@ -742,6 +797,82 @@ apps/web/src/pages/
 
 ---
 
+#### E07 Assignment Module（客戶名單分派模組）
+
+**架構決策 AD-E07-1：OB 業務資料完全遷移至 AppDB，Assignment Module 直接操作 ob_* 表**
+
+OB 系統的業務表（OBMLISTDF 等 10 張表）已遷移至 AppDB，以 `ob_` 前綴 snake_case 命名。E07 不直連 OB 原始資料庫，所有讀寫操作均針對 AppDB，資料流閉合。`ob_pool_data`（案件池）由 E04 擷取任務定期從 OB 原始系統匯入（建議月初執行一次），E07 月跑 Stage 1 讀取此表。
+
+**架構決策 AD-E07-2：月跑採非同步執行模型，三份快照原子性寫入**
+
+`POST /api/v1/assignment/runs` 回傳 `202 Accepted`，月跑在背景 Promise chain 非同步執行 Stage 0~4。前端以 3 秒 Polling 讀取進度。同月僅允許一個 `pending` 或 `running` 狀態的月跑（重複觸發回傳 409）。月跑完成後，三份快照（config / input_list / result）在同一 DB Transaction 中原子性寫入 `assignment_run_snapshot`；任一失敗則整體 Rollback，`assignment_run.status` 改為 `failed`。
+
+**架構決策 AD-E07-3：複雜計分邏輯保留為 PostgreSQL function**
+
+TIER_LEVEL 對應計算、多維度加權計分等複雜邏輯由 PostgreSQL function 實作，`AssignmentScoringService` 作為呼叫層（Service 層發出 `SELECT fn_calc_tier_level(...)` 等 Raw SQL 呼叫）。此決策確保效能（在 DB 層減少資料傳輸），並與既有 Stored Procedure 邏輯對應，降低移植風險。PostgreSQL function 的命名規範與版本管理策略見 open-questions.md（A44）。
+
+| 服務 | 職責 | 關鍵業務規則 | 相關 Stories |
+|------|------|------------|------------|
+| AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
+| AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應 | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3） | US-072, US-073, US-074, US-075 |
+| AssignmentRatio Service | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關 | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表） | US-078, US-079, US-080, US-091 |
+| AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASEYEAR 代碼維護） | Admin 與業務主管均可存取；代碼用於名單定義表單選項 | US-092 |
+| AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；匯出 CSV | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid | US-081, US-082, US-083, US-084 |
+| AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
+| AssignmentAudit Service | E07 所有 CRUD 操作後寫入 `assignment_audit_log` | 不對外暴露 API；由各 Service 呼叫；保留 3 年，Cleanup Cron 每日清理 | 所有 E07 Stories |
+
+**E07 API Endpoints 摘要**
+
+| HTTP Method | 路徑 | 說明 | 最低角色要求 |
+|-------------|------|------|------------|
+| GET | `/api/v1/assignment/list-definitions` | 本月名單定義清單 | user + is_sales_manager |
+| POST | `/api/v1/assignment/list-definitions` | 新增名單定義 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/list-definitions/:listNo` | 編輯名單定義 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/list-definitions/:listNo/disable` | 停用名單定義 | user + is_sales_manager |
+| GET | `/api/v1/assignment/list-definitions/:listNo/estimate` | Stage 0 案件估算 | user + is_sales_manager |
+| GET | `/api/v1/assignment/scoring` | 查看計分維度設定 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/dimensions` | 編輯計分維度與分數 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/card-levels` | 編輯 CARD_LEVEL 門檻 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/tier-mapping` | 編輯 TIER_LEVEL 對應表 | user + is_sales_manager |
+| GET | `/api/v1/assignment/ratios/dept/:listNo` | 查看部門比例設定 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/ratios/dept/:listNo` | 設定 per-LIST_NO 部門比例 | user + is_sales_manager |
+| GET | `/api/v1/assignment/ratios/personnel/:listNo` | 查看人員比例設定 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/ratios/personnel/:listNo` | 編輯人員比例設定 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/ratios/cr-rule` | 開關 CR 回分規則 | user + is_sales_manager |
+| GET | `/api/v1/assignment/codes` | 查看代碼清單 | user + is_sales_manager |
+| PUT | `/api/v1/assignment/codes` | 維護代碼 | user + is_sales_manager |
+| POST | `/api/v1/assignment/runs` | 觸發分派月跑 | user + is_sales_manager |
+| GET | `/api/v1/assignment/runs/:runId` | 查看月跑執行進度 | user + is_sales_manager |
+| GET | `/api/v1/assignment/runs/:runId/summary` | 查看分派結果摘要 | user + is_sales_manager |
+| GET | `/api/v1/assignment/runs/:runId/export` | 匯出分派結果 CSV | user + is_sales_manager |
+| GET | `/api/v1/assignment/history` | 查看歷史執行清單 | user + is_sales_manager |
+| GET | `/api/v1/assignment/history/:runId/snapshot` | 查看執行快照詳情 | user + is_sales_manager |
+| GET | `/api/v1/assignment/history/compare` | 比對兩次執行差異（?runA=&runB=） | user + is_sales_manager |
+
+**E07 與 E04 的依賴關係**
+
+```mermaid
+graph LR
+    OB_Sys["OB 原始系統\n（SQL Server）"]
+    E04["E04 擷取任務\n（月初執行一次）"]
+    ob_pool["ob_pool_data\n（AppDB）"]
+    E07["E07 月跑 Stage 1\n讀取案件池"]
+
+    OB_Sys -->|"E04 擷取"| ob_pool
+    ob_pool -->|"Stage 1 讀取"| E07
+
+    classDef ob fill:#fff3e0,stroke:#e65100
+    classDef extraction fill:#dcfce7,stroke:#16a34a
+    classDef appdb fill:#e3f2fd,stroke:#1565c0
+    classDef e07 fill:#fef3c7,stroke:#d97706
+    class OB_Sys ob
+    class E04 extraction
+    class ob_pool appdb
+    class E07 e07
+```
+
+---
+
 #### 共用基礎建設（Shared Infrastructure）
 
 | 工具 | 職責 | 安全性注意事項 |
@@ -907,18 +1038,56 @@ erDiagram
     User ||--o{ Datasource : "creates (created_by)"
     User ||--o{ ExtractionTask : "creates (created_by)"
     User ||--o{ EtlPipeline : "creates (created_by)"
+    User ||--o{ AssignmentRun : "triggers (triggered_by)"
+    User ||--o{ AssignmentAuditLog : "operates (operator_id)"
     Datasource ||--o{ DatasourceHealthLog : "has health logs"
     Datasource ||--o{ ExtractionTask : "referenced by"
     ExtractionTask ||--o{ ExtractionLog : "has execution logs"
     EtlPipeline ||--o{ EtlPipelineVersion : "has versions"
     EtlPipeline ||--o{ EtlPipelineLog : "has execution logs"
+    AssignmentRun ||--o{ AssignmentRunSnapshot : "has snapshots"
+    ObListDefinition {
+        varchar list_no PK "OB{YYYYMM}{NNN}"
+        text list_nm
+        varchar status "active|inactive"
+        varchar card_type "新欄位（獨立輸入）"
+        timestamp created_at
+        timestamp updated_at
+    }
+    AssignmentRun {
+        uuid run_id PK
+        varchar ym "YYYYMM"
+        enum status "pending|running|completed|failed"
+        uuid triggered_by FK
+        timestamp triggered_at
+        timestamp completed_at
+        integer total_count
+        text error_message
+    }
+    AssignmentRunSnapshot {
+        uuid run_id FK
+        enum snapshot_type "config|input_list|result"
+        jsonb payload
+        timestamp created_at
+    }
+    AssignmentAuditLog {
+        bigint id PK
+        varchar action "CREATE|UPDATE|DISABLE|SET_RATIO|TRIGGER_RUN"
+        varchar entity_type
+        varchar entity_id
+        uuid operator_id FK
+        timestamp operated_at
+        jsonb before_payload
+        jsonb after_payload
+        varchar ip_address
+    }
 ```
 
 ### 4.2 資料所有權
 
 | 實體 | 擁有模組 | 其他模組存取方式 |
 |------|---------|----------------|
-| User（含 role 欄位，2 種值：admin/user） | Account 模組 | Auth 模組讀取（驗證登入，JWT payload 攜帶 role）；透過服務介面呼叫，不直接存取 Repository |
+| User（含 role / is_sales_manager 欄位） | Account 模組 | Auth 模組讀取（驗證登入，JWT payload 攜帶 role 與 is_sales_manager）；RBAC Middleware 使用 is_sales_manager 判斷 E07 存取權；透過服務介面呼叫，不直接存取 Repository |
 | 角色 Seed Data（Enum 定義） | Account 模組（RoleService） | Auth 模組使用（JWT payload 中 role 的有效值集合）；RBAC Middleware 使用（判斷角色） |
 | TokenBlocklist | Auth 模組 | Middleware 查詢（驗證請求）；Account 模組透過 Auth Service 寫入（停用帳號） |
 | PasswordResetToken | Auth 模組 | 不對其他模組開放 |
@@ -930,6 +1099,9 @@ erDiagram
 | EtlPipelineVersion | ETL Pipeline 模組 | 不對其他模組開放；Pipeline Execution Service 讀取最新 published 版本的 definition |
 | EtlPipelineLog | ETL Pipeline 模組 | 不對其他模組開放 |
 | 目標表（`customer_core` 等） | ETL Pipeline 模組（寫入）/ C360 模組（唯讀） | ETL Pipeline 以動態 SQL 執行 UPSERT；C360 模組以 Raw SQL / QueryBuilder 唯讀查詢；兩者均不透過 TypeORM Entity 管理此表；Phase 1 MVP 僅含 `customer_core`（85 欄位）；Phase 2/3 擴展時新增目標表至 Registry |
+| ob_* 表（ob_list_definition 等 10 張） | Assignment 模組（讀寫）/ E04 Extraction 模組（ob_pool_data 寫入） | Assignment Module 負責 CRUD；ob_pool_data 例外：由 E04 ExtractionExecution Service 從 OB 原始系統匯入寫入，E07 僅讀取 |
+| assignment_run / assignment_run_snapshot | Assignment 模組（讀寫） | 不對其他模組開放；月跑紀錄與快照完整由 AssignmentRun Service 管理 |
+| assignment_audit_log | Assignment 模組（只寫）/ DBA（唯讀） | 由 AssignmentAudit Service 寫入；不提供 API 查詢（稽核用途，由 DBA 直接查詢）；Cleanup Cron 負責 3 年清理 |
 
 ### 4.3 資料一致性模型
 
@@ -951,6 +1123,11 @@ erDiagram
 | Pipeline 執行完成（更新 Log + Pipeline） | 強一致性 | 同一 DB 交易：UPDATE EtlPipelineLog（finished_at, duration_ms）+ UPDATE EtlPipeline（status, last_execution_at, processed_count, avg_duration_ms, execution_count）；測試執行同時更新 EtlPipelineVersion.status = 'testing' |
 | Pipeline 版本發布 | 強一致性 | 同一 DB 交易：UPDATE EtlPipelineVersion.status = 'published' + UPDATE EtlPipeline.version |
 | EtlPipelineLog 清理 | 最終一致性 | 背景 Cron Job，不影響前台操作 |
+| 觸發月跑（建立 AssignmentRun + 更新狀態） | 強一致性 | 同一 DB 交易：INSERT AssignmentRun（status=pending）+ 驗證同月無 pending/running 紀錄（並發控制） |
+| 月跑三份快照寫入 | 強一致性 | 同一 DB Transaction 原子性寫入三份 AssignmentRunSnapshot；任一失敗整體 Rollback，AssignmentRun.status 改為 failed（AD-E07-2） |
+| 月跑回寫 ob_pool_data_list（OB_DEPT / OB_EMPLID） | 強一致性 | Stage 3/4 完成後同步更新；失敗時 AssignmentRun.status 改為 failed |
+| E07 CRUD 稽核日誌寫入 | 最終一致性 | AssignmentAudit Service 在業務操作成功後寫入；若稽核寫入失敗僅記錄 Logger.error，不 Rollback 業務操作 |
+| AssignmentAuditLog 清理 | 最終一致性 | Cleanup Cron Job 每日清理超過 3 年記錄 |
 
 ### 4.4 資料庫索引建議
 
@@ -991,6 +1168,21 @@ erDiagram
 | customer_core | customer_type_code | INDEX | C360 客戶類型篩選（`WHERE customer_type_code IN (...)`）效能 |
 | customer_core | name | INDEX | C360 預設排序（`ORDER BY name ASC`）效能 |
 | customer_core | idx_customer_core_fulltext（GIN） | GIN INDEX | C360 全文搜尋（`to_tsvector('simple', coalesce(name,'') \|\| ' ' \|\| coalesce(english_name,''))`）；F046 前置依賴 |
+| ob_list_definition | list_no | PRIMARY KEY | 名單定義查詢主鍵 |
+| ob_list_definition | status, project_workym | 複合 INDEX | 查詢本月 active 名單清單（US-070）；月跑 Stage 1 篩選條件 |
+| ob_pool_data_list | list_no, orgno, appl_no | PRIMARY KEY（複合） | 月跑 Stage 3/4 更新 ob_dept / ob_emplid |
+| ob_dept_pct | project_workym, list_no, obdeptid | PRIMARY KEY（複合） | 部門比例讀取（Stage 2）；per-LIST_NO 查詢 |
+| ob_empl_set | list_no, deptid_m, emplid | PRIMARY KEY（複合） | 人員比例讀取（Stage 4） |
+| ob_levelcard_version | card_type, card_version | 複合 INDEX | 最新計分版本查詢；版本管理 |
+| ob_levelcard_score | card_type, card_version | 複合 INDEX | 計分分數批次讀取 |
+| ob_levelcard_level | card_type, card_version | 複合 INDEX | CARD_LEVEL 門檻讀取 |
+| assignment_run | ym | INDEX | 同月唯一性檢查（防止重複月跑）；歷史清單年月篩選 |
+| assignment_run | status | INDEX | 排程或查詢 running/pending 月跑 |
+| assignment_run | triggered_at DESC | INDEX | 歷史清單倒序排列（US-085） |
+| assignment_run_snapshot | run_id, snapshot_type | 複合 INDEX | 快速載入指定執行的特定快照類型 |
+| assignment_audit_log | entity_type, entity_id | 複合 INDEX | 查詢特定實體操作歷史 |
+| assignment_audit_log | operator_id | INDEX | 查詢特定使用者操作歷史 |
+| assignment_audit_log | operated_at DESC | INDEX | 時間範圍查詢；Cleanup Cron 清理（3 年） |
 
 ### 4.5 資料生命週期
 

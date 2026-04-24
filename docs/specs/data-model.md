@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.4"
-date: 2026-04-02
+version: "1.5"
+date: 2026-04-24
 status: Draft
 ---
 
@@ -788,3 +788,374 @@ Phase 2/3 的 `customer_interaction`、`customer_financial`、`customer_service`
 - Phase 1 MVP 僅建立 `customer_core`，Phase 2/3 目標表待來源系統接入後再建立
 
 **相關功能**：[F029](features/F029-pipeline-editor.md), [F036](features/F036-target-tables.md)
+
+---
+
+## E07 資料模型 {#e07-data-model}
+
+本段落定義 E07「客戶名單分派」所需的 AppDB（PostgreSQL）資料表。分為兩類：
+
+1. **OB 系統遷移表**（10 張）：從 SQL Server OB 資料庫遷移至 AppDB，採 `ob_` 前綴命名。
+2. **E07 新建表**（3 張）：月跑執行紀錄、快照、稽核，不用 `ob_` 前綴。
+
+### 命名規範
+
+| 規範 | 說明 |
+|------|------|
+| 欄位命名 | 全部 snake_case 小寫 |
+| 稽核欄位 | `A_PRGID` → `created_by_prog`、`A_USERID` → `created_by`、`A_SYSDT` → `created_at`、`U_PRGID` → `updated_by_prog`、`U_USERID` → `updated_by`、`U_SYSDT` → `updated_at` |
+| 型別映射 | `datetime` → `TIMESTAMP`、`nvarchar(n)` → `VARCHAR(n)`（n > 255 改 `TEXT`）、`numeric(p,s)` → `NUMERIC(p,s)`、`int` → `INTEGER`、`money` → `NUMERIC(19,4)` |
+| OB 表前綴 | `ob_` + snake_case（如 `ob_list_definition`） |
+
+---
+
+### OB 遷移表
+
+#### ob_list_definition（OBMLISTDF — 名單定義）
+
+PK：`list_no`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(20) | NOT NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(20) | NOT NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NOT NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(20) | NOT NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(20) | NOT NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NOT NULL | U_SYSDT | 更新時間 |
+| list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號（1–999） |
+| list_nm | VARCHAR(45) | NOT NULL | LIST_NM | 名單名稱 |
+| prod_kind | VARCHAR(255) | NOT NULL | PROD_KIND | 商品種類（多值 01=汽車/02=機車） |
+| prod_best | VARCHAR(5) | NOT NULL | PROD_BEST | 優良案件旗標 |
+| spec_tp | VARCHAR(255) | NULL | SPEC_TP | 專案特性 |
+| list_type | VARCHAR(255) | NOT NULL | LIST_TYPE | 名單類型 |
+| list_period_start | VARCHAR(3) | NOT NULL | LIST_PERIOD_START | 名單開始期間 |
+| list_period_end | VARCHAR(3) | NOT NULL | LIST_PERIOD_END | 名單結束期間 |
+| list_interval | VARCHAR(3) | NOT NULL | LIST_INTERVAL | 名單間隔 |
+| assigned_date | TIMESTAMP | NULL | ASSIGNED_DATE | 名單分派日期 |
+| total_amount | INTEGER | NULL | TOTAL_AMOUNT | 總案件數 |
+| reserved_amount | INTEGER | NULL | RESERVED_AMOUNT | 保留案件數 |
+| is_assigned | VARCHAR(1) | NULL | IS_ASSIGNED | 分派狀態（Y=已分派） |
+| project_workym | VARCHAR(6) | NULL | PROJECT_WORKYM | 名單作業年月（YYYYMM） |
+| casenumber | VARCHAR(50) | NULL | CASENUMBER | 案件編號 |
+| name | VARCHAR(50) | NULL | NAME | 名稱 |
+| caseyear | VARCHAR(255) | NULL | CASEYEAR | 案件年份 |
+| caseyearnm | VARCHAR(10) | NULL | CASEYEARNM | 案件年份名稱 |
+| settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源 |
+| card_type | VARCHAR(2) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議） |
+
+**索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）
+
+---
+
+#### ob_pool_data（OBPOOLDATA — 案件池）
+
+> ob_pool_data 欄位達 90+ 個，由 E04 擷取任務定期匯入（Q-B 決策）。以下列出 E07 月跑邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
+
+PK：`(list_no, orgno, appl_no)`
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| list_no | VARCHAR(100) | NOT NULL | 名單編號（FK → ob_list_definition.list_no） |
+| orgno | VARCHAR(2) | NOT NULL | 機構別 |
+| appl_no | VARCHAR(10) | NOT NULL | 申請案號（PK 組成） |
+| custo_no | VARCHAR(11) | NULL | 客戶編號 |
+| cust_name | VARCHAR(90) | NULL | 客戶姓名 |
+| dept_id | VARCHAR(6) | NULL | 部門代碼 |
+| emplid | VARCHAR(10) | NULL | 業務員工號（月跑後填入） |
+| emplid_deptid | VARCHAR(6) | NULL | 業務員所屬部門 |
+| card_level | VARCHAR(1) | NULL | 計分卡等級 |
+| tier_level | VARCHAR(5) | NULL | 名單層級 |
+| card_type | VARCHAR(2) | NULL | 計分卡類型 |
+| case_type | VARCHAR(2) | NULL | 案件類型 |
+| prod_kind | VARCHAR(2) | NULL | 商品種類 |
+| settle_src | TEXT | NOT NULL | 結案來源（DEFAULT 'N'） |
+| _cdmp_extracted_at | TIMESTAMP | NOT NULL | ETL 擷取時間（E04 系統附加） |
+
+**索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, dept_id)`、`(list_no, emplid)`
+
+---
+
+#### ob_pool_data_list（OBPOOLDATA_LIST — per-LIST_NO 案件分派結果）
+
+PK：`(list_no, orgno, appl_no)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(20) | NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| list_no | VARCHAR(100) | NOT NULL | LIST_NO | **PK**，名單編號 |
+| orgno | VARCHAR(2) | NOT NULL | ORGNO | **PK**，機構別 |
+| appl_no | VARCHAR(10) | NOT NULL | APPL_NO | **PK**，申請案號 |
+| custo_no | VARCHAR(11) | NULL | CUSTO_NO | 客戶編號 |
+| cust_name | VARCHAR(90) | NULL | CUST_NAME | 客戶姓名 |
+| dept_id | VARCHAR(6) | NULL | DEPT_ID | 部門代碼 |
+| dept_name | VARCHAR(30) | NULL | DEPT_NAME | 部門名稱 |
+| emplid | VARCHAR(10) | NULL | EMPLID | 業務員工號（分派結果） |
+| emplid_deptid | VARCHAR(6) | NULL | EMPLID_DEPTID | 業務員所屬部門 |
+| card_level | VARCHAR(1) | NULL | CARD_LEVEL | 計分卡等級 |
+| tier_level | VARCHAR(5) | NULL | TIER_LEVEL | 名單層級 |
+| settle_src | TEXT | NOT NULL | SETTLE_SRC | 結案來源（DEFAULT 'N'） |
+| case_type | VARCHAR(2) | NULL | CASE_TYPE | 案件類型 |
+| prod_kind | VARCHAR(2) | NULL | PROD_KIND | 商品種類 |
+| prod_kind_name | VARCHAR(8) | NULL | PROD_KIND_NAME | 商品種類名稱 |
+| loan_totamt | NUMERIC(18,0) | NULL | LOAN_TOTAMT | 總貸款金額 |
+| loan_capital | NUMERIC(18,0) | NULL | LOAN_CAPITAL | 貸款本金 |
+| overdue_amt | NUMERIC(19,4) | NULL | OVERDUE_AMT | 逾期金額（money） |
+| overdue_day | INTEGER | NULL | OVERDUE_DAY | 逾期天數 |
+| assignday | VARCHAR(100) | NULL | ASSIGNDAY | 分派日期字串 |
+| order1 | INTEGER | NULL | ORDER1 | 排序順序1 |
+| order2 | INTEGER | NULL | ORDER2 | 排序順序2 |
+| is_cr | VARCHAR(1) | NULL | IS_CR | 是否為前業務員管理案件 |
+| cr_id | VARCHAR(20) | NULL | CR_ID | 前業務員工號 |
+| cr_nm | VARCHAR(50) | NULL | CR_NM | 前業務員姓名 |
+
+> 其餘業務欄位（貸款明細、車輛資訊、業務員資訊等）完整映射 OBPOOLDATA_LIST，命名規範同上（snake_case，nvarchar → VARCHAR/TEXT，datetime → TIMESTAMP，numeric → NUMERIC，money → NUMERIC(19,4)）。
+
+**索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, emplid)`、`(list_no, dept_id)`
+
+---
+
+#### ob_dept_pct（OBMDEPTPCT — per-LIST_NO 部門比例）
+
+PK：`(project_workym, list_no, obdeptid, ration)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(10) | NOT NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(10) | NOT NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NOT NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(10) | NOT NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(10) | NOT NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NOT NULL | U_SYSDT | 更新時間 |
+| project_workym | VARCHAR(6) | NOT NULL | PROJECT_WORKYM | **PK**，作業年月 |
+| list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號 |
+| obdeptid | VARCHAR(6) | NOT NULL | OBDEPTID | **PK**，催收部門代碼 |
+| obdeptnm | VARCHAR(10) | NOT NULL | OBDEPTNM | 催收部門名稱 |
+| ration | NUMERIC(9,1) | NOT NULL | RATION | **PK**，分配比例 |
+
+**索引**：複合 PK 即為主索引。`(project_workym, list_no)` 為月跑查詢索引。
+
+---
+
+#### ob_empl_set（OBEMPLSETMF — 人員比例設定）
+
+PK：`(list_no, deptid_m, emplid, ration)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(10) | NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(10) | NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(10) | NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(10) | NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號 |
+| deptid_m | VARCHAR(50) | NOT NULL | DEPTID_M | **PK**，催收人員所屬部門（組合鍵） |
+| emplid | VARCHAR(6) | NOT NULL | EMPLID | **PK**，催收人員工號 |
+| ration | NUMERIC(10,1) | NOT NULL | RATION | **PK**，分配比例 |
+| prod_type | VARCHAR(255) | NULL | PROD_TYPE | 商品類型（多值） |
+
+**索引**：複合 PK 即為主索引。`(list_no, deptid_m)` 為查詢索引。
+
+---
+
+#### ob_code_df（OBMCODEDF — 系統代碼表）
+
+無 PK 約束（來源無 PK）；查詢鍵：`(system_id, tbl_id, tbl_cd)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| system_id | VARCHAR(4) | NOT NULL | SYSTEM_ID | 系統別 |
+| tbl_id | VARCHAR(2) | NOT NULL | TBL_ID | 代碼類別 |
+| tbl_cd | VARCHAR(4) | NOT NULL | TBL_CD | 代碼編號 |
+| tbl_desc1 | VARCHAR(40) | NULL | TBL_DESC1 | 代碼描述1 |
+| tbl_desc2 | VARCHAR(40) | NULL | TBL_DESC2 | 代碼描述2 |
+| tbl_val1 | NUMERIC(12,0) | NULL | TBL_VAL1 | 擴充值1（數值） |
+| tbl_val2 | TIMESTAMP | NULL | TBL_VAL2 | 擴充值2（日期） |
+| tbl_val3 | VARCHAR(40) | NULL | TBL_VAL3 | 擴充值3 |
+| tbl_val4 | VARCHAR(40) | NULL | TBL_VAL4 | 擴充值4 |
+| tbl_val5 | VARCHAR(40) | NULL | TBL_VAL5 | 擴充值5 |
+| tbl_val6 | VARCHAR(80) | NULL | TBL_VAL6 | 擴充值6 |
+| tbl_val7 | VARCHAR(80) | NULL | TBL_VAL7 | 擴充值7 |
+| tbl_val8 | VARCHAR(80) | NULL | TBL_VAL8 | 擴充值8 |
+| stadt | VARCHAR(8) | NULL | STADT | 代碼生效日 |
+| enddt | VARCHAR(8) | NULL | ENDDT | 代碼失效日 |
+
+**索引**：`(system_id, tbl_id, tbl_cd)`（複合唯一索引）
+
+---
+
+#### ob_levelcard_version（OBLEVELCARD_VERSION — 計分卡版本）
+
+無嚴格 PK（來源無 PK constraint），邏輯主鍵：`(card_type, card_version)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(20) | NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| card_type | TEXT | NULL | CARD_TYPE | 計分卡類型（原 varchar(max)） |
+| card_name | VARCHAR(20) | NULL | CARD_NAME | 計分卡名稱 |
+| card_version | INTEGER | NULL | CARD_VERSION | 版本號 |
+| sdate | VARCHAR(8) | NULL | SDATE | 生效日（YYYYMMDD） |
+| edate | VARCHAR(8) | NULL | EDATE | 失效日（YYYYMMDD） |
+
+**索引**：`(card_type, card_version)`（複合索引）
+
+---
+
+#### ob_levelcard_column（OBLEVELCARD_COLUNM — 計分維度欄位定義）
+
+無嚴格 PK；邏輯主鍵：`(card_type, card_version, column_name)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(20) | NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| card_type | VARCHAR(10) | NULL | CARD_TYPE | 計分卡類型 |
+| card_version | INTEGER | NULL | CARD_VERSION | 版本號 |
+| column_name | VARCHAR(30) | NULL | COLUNM | 維度欄位名稱（原拼字 COLUNM） |
+| column_label | VARCHAR(30) | NULL | COLUNM_NAME | 維度欄位顯示名稱 |
+
+> 注意：原表欄位名 `COLUNM` 為舊系統拼字錯誤（應為 COLUMN），遷移時修正為 `column_name`。
+
+**索引**：`(card_type, card_version, column_name)`（複合索引）
+
+---
+
+#### ob_levelcard_score（OBLEVELCARD_SCORE — 計分維度分數設定）
+
+無嚴格 PK；邏輯主鍵：`(card_type, card_version, column_name, level1, level2_s, level2_e)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(20) | NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| card_type | VARCHAR(10) | NOT NULL | CARD_TYPE | 計分卡類型 |
+| card_version | INTEGER | NOT NULL | CARD_VERSION | 版本號 |
+| column_name | VARCHAR(30) | NOT NULL | COLUNM | 維度欄位名稱 |
+| level1 | VARCHAR(10) | NULL | LEVEL1 | 類別型條件（精確值） |
+| level2_s | VARCHAR(10) | NULL | LEVEL2_S | 數值型條件起始值 |
+| level2_e | VARCHAR(10) | NULL | LEVEL2_E | 數值型條件結束值 |
+| score | INTEGER | NOT NULL | SCORE | 分數 |
+
+**索引**：`(card_type, card_version, column_name)`（複合索引）
+
+---
+
+#### ob_levelcard_level（OBLEVELCARD_LEVEL — CARD_LEVEL 分級設定）
+
+無嚴格 PK；邏輯主鍵：`(card_type, card_version, score_s, score_e)`
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼 |
+| created_by | VARCHAR(20) | NULL | A_USERID | 建立者 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼 |
+| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| card_type | VARCHAR(10) | NOT NULL | CARD_TYPE | 計分卡類型 |
+| card_version | INTEGER | NOT NULL | CARD_VERSION | 版本號 |
+| score_s | INTEGER | NOT NULL | SCORE_S | 分級分數起始值 |
+| score_e | INTEGER | NOT NULL | SCORE_E | 分級分數結束值 |
+| card_level | VARCHAR(1) | NOT NULL | CARD_LEVEL | 等級代號（A/B/C/D/E） |
+
+**索引**：`(card_type, card_version)`（複合索引）
+
+---
+
+### E07 新建表（非 ob_ 前綴）
+
+#### assignment_run（月跑執行紀錄）
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| run_id | UUID | NOT NULL | **PK**，月跑唯一識別碼（系統自動產生） |
+| project_workym | VARCHAR(6) | NOT NULL | 作業年月（YYYYMM） |
+| status | VARCHAR(20) | NOT NULL | 執行狀態：`pending` / `running` / `completed` / `failed` |
+| triggered_by | UUID | NOT NULL | 觸發者 user_id（FK → users.id） |
+| started_at | TIMESTAMP | NULL | 執行開始時間（UTC） |
+| finished_at | TIMESTAMP | NULL | 執行結束時間（UTC） |
+| duration_ms | INTEGER | NULL | 執行耗時（毫秒） |
+| total_cases | INTEGER | NULL | 本次分派總案件數 |
+| total_lists | INTEGER | NULL | 本次處理名單數 |
+| error_message | TEXT | NULL | 失敗錯誤訊息 |
+| created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
+
+**索引**：`run_id`（PK）、`(project_workym, status)`（查詢索引）
+
+---
+
+#### assignment_run_snapshot（月跑快照）
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| snapshot_id | UUID | NOT NULL | **PK**，快照識別碼 |
+| run_id | UUID | NOT NULL | FK → assignment_run.run_id |
+| snapshot_type | VARCHAR(20) | NOT NULL | 快照類型：`config` / `input_list` / `result` |
+| payload | JSONB | NOT NULL | 快照內容（JSON） |
+| created_at | TIMESTAMP | NOT NULL | 快照建立時間（UTC） |
+
+**業務規則**：
+- 每次月跑產生 3 筆快照（config、input_list、result）
+- 快照保留期限與 `assignment_run` 相同（3 年）
+
+**索引**：`snapshot_id`（PK）、`(run_id, snapshot_type)`（查詢索引）
+
+---
+
+#### assignment_audit_log（E07 CRUD 稽核日誌）
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| log_id | UUID | NOT NULL | **PK**，日誌識別碼 |
+| entity_type | VARCHAR(50) | NOT NULL | 被操作實體（如 `ob_list_definition`、`ob_dept_pct`） |
+| entity_id | VARCHAR(100) | NOT NULL | 被操作實體的識別碼（字串化） |
+| action | VARCHAR(10) | NOT NULL | 操作類型：`CREATE` / `UPDATE` / `DELETE` / `RUN` |
+| actor_id | UUID | NOT NULL | 操作者 user_id（FK → users.id） |
+| actor_name | VARCHAR(100) | NOT NULL | 操作者姓名（快照，不受後續改名影響） |
+| before_value | JSONB | NULL | 操作前資料快照（UPDATE/DELETE 填入） |
+| after_value | JSONB | NULL | 操作後資料快照（CREATE/UPDATE 填入） |
+| ip_address | VARCHAR(45) | NULL | 操作者 IP（IPv4/IPv6） |
+| created_at | TIMESTAMP | NOT NULL | 稽核紀錄建立時間（UTC） |
+
+**業務規則**：
+- 保留 3 年（架構決策 AD-E07-3）
+- 不可修改或刪除（INSERT-only）
+- 超過 3 年的紀錄由排程任務定期清除
+
+**索引**：`log_id`（PK）、`(entity_type, entity_id)`、`(actor_id, created_at)`、`created_at`（保留期排程清理）
+
+---
+
+### User 實體補充（E07 新增欄位）
+
+`users` 表新增以下欄位，支援業務主管角色識別：
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| is_sales_manager | BOOLEAN | NOT NULL DEFAULT FALSE | 業務主管旗標（true = 可管理所屬業務員名單分派） |
+
+**業務規則**：
+- `is_sales_manager = true` 的使用者可於 E07 UI 查看並管理其所屬部門的分派結果
+- 該旗標由 Admin 設定，不可自行設定
+- 與 `role` 欄位無衝突（`role = user` 且 `is_sales_manager = true` 為合法組合）
+
+**相關功能**：[E07 epic-brief](stories/E07-epic-brief.md)

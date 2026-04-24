@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "1.5"
-date: 2026-03-27
+version: "1.6"
+date: 2026-04-24
 status: Draft
 ---
 
@@ -218,6 +218,32 @@ status: Draft
 | A40 | Tooltip 全域狀態管理使用 React Context（非 Zustand） | F041 設計假設 | 架構師確認 |
 | A41 | Badge 計算失敗時靜默降級（不顯示 Badge），不阻斷使用者操作 | F039 設計假設 | 架構師確認 |
 
+## E07 已解決問題（來自 E07 Stories）
+
+以下問題已於 E07 architecture-spec 設計階段，由架構師確認決策：
+
+| # | 問題 | 決議 | 來源 |
+|---|------|------|------|
+| R18 | OB 資料庫遷移至 AppDB 還是維持讀 SQL Server？ | **遷移至 AppDB（PostgreSQL）**，E04 擷取任務定期匯入，避免跨庫事務與效能風險 | AD-E07-1（architecture-spec） |
+| R19 | OB 表的命名規範如何決定？ | **`ob_` 前綴 + snake_case 全小寫**，稽核欄位統一重命名（A_*/U_* → created_*/updated_*） | AD-E07-1 |
+| R20 | 月跑（名單分派）執行紀錄需要哪些表？ | **3 張新建表**：`assignment_run`（紀錄）、`assignment_run_snapshot`（config/input_list/result 快照）、`assignment_audit_log`（CRUD 稽核） | AD-E07-2 |
+| R21 | assignment_audit_log 保留期限？ | **3 年**，超過由排程任務定期清除（INSERT-only，不可修改） | AD-E07-3 |
+| R22 | 業務主管（Sales Manager）如何識別？ | **`users` 表新增 `is_sales_manager BOOLEAN NOT NULL DEFAULT FALSE`**，由 Admin 設定 | AD-E07-1 |
+| R23 | 複雜計分邏輯（CARD_LEVEL 計算）如何實作？ | **保留為 PostgreSQL function**，遷移時轉換 SQL Server stored procedure（Q-C 決策） | architecture-spec Section 9.6 |
+| R24 | ob_pool_data 來源更新方式？ | **E04 擷取任務定期匯入**（月跑前確保資料新鮮度），非即時同步（Q-B 決策） | architecture-spec Section 9.6 |
+
+## E07 假設清單補充
+
+以下假設為 E07 架構設計階段確認：
+
+| # | 假設 | 來源 | 驗證方式 |
+|---|------|------|---------|
+| A42 | ob_pool_data 在月跑前由 E04 擷取任務確保資料新鮮度（非即時同步） | architecture-spec AD-E07-1 | 排程設計確認 |
+| A43 | CARD_TYPE 欄位遷移沿用舊值（不重新編碼），缺漏值由遷移腳本填入 NULL | architecture-spec AD-E07-1 | 遷移腳本驗證 |
+| A44 | OBLEVELCARD 系列表的計分計算邏輯以 PostgreSQL function 實作（移植自 SQL Server SP） | architecture-spec AD-E07-2 Q-C | function 實作驗證 |
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
@@ -234,3 +260,4 @@ status: Draft
 | 2026-03-25 | 新增 F038 已解決的開放問題 OQ-39 ~ OQ-41、假設 A31 ~ A33 | Spec Writer Agent |
 | 2026-03-25 | US-049 v2 修訂：更新 R17 決議（4 表→1 表）、新增 OQ-42 ~ OQ-47（目標表縮減/來源定義/衝突解決/佔位值/代碼轉換/型別轉換）、新增假設 A34 ~ A37 | Spec Writer Agent |
 | 2026-03-27 | 新增 F039/F040/F041 相關開放問題 OQ-48 ~ OQ-50、假設 A38 ~ A41（Badge 計算 debounce/快取/Tooltip 狀態管理/降級策略） | Spec Writer Agent |
+| 2026-04-24 | 新增 E07 已解決問題 R18 ~ R24（OB 遷移策略/月跑表設計/稽核保留期/業務主管旗標/計分 function 實作）、假設 A42 ~ A44 | System Architect Agent |
