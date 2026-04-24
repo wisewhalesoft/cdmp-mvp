@@ -1,0 +1,99 @@
+﻿@* 引入框架元件 *@
+@using ILS.Mvc.UI
+
+
+
+<div class="row">
+    @(Html.ILS().FormGroupHtml().Begin("<span style=\"color:red\">*</span>名單代號(年月)"))
+    @(
+            Html.ILS()
+            .TextBox("Q_txtYEARMONTH")
+            .Field("I_CHR_YEARMONTH")
+            .Validator("Search")
+            .Require()
+            .End()
+            .HtmlAttributes(new {
+                // scripts\TsLibs\COMMON.ts
+                onkeyup = "return ValidateChar(this, event)",
+                onkeypress = "return ValidateNumber(this,event,'Q')",
+                //onblur= "return MyOnBlur_YYYYMM(this, 1)"
+            })
+            .MaxLength(6)
+            .FormGroup(false)
+            .Width(250)
+        )
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+
+<div class="row">
+    @(
+       Html.ILS()
+       .DropDownList("E_ddlPROD_TYPE")
+       .Field("I_CHR_PROD_TYPE")
+       .Label("名單產品類別")
+       .Validator("Search")
+       .Require()
+       .End()
+       .DataSource("DsPROD_TYPE")
+       .Width(250)
+       )
+
+</div>
+
+<div class="row">
+    @(
+       Html.ILS()
+       .DropDownList("E_ddlDEPTID")
+       .Field("I_CHR_DEPTID")
+       .Label("電銷處別")
+       .Validator("Search")
+       .Require()
+       .End()
+       .DataSource("DsOB_DEPTID")
+       .Width(250)
+       )
+
+</div>
+
+@*<div class="row">
+    @(Html.ILS().FormGroupHtml().Begin("退款申請日"))
+    @(
+            Html.ILS()
+            .TextBoxDate("Q_txtCSDATE")
+            .Field("I_DTE_CSDATE")
+            .Validator("Search")
+            .End()
+            .HtmlAttributes(new
+             {
+                 // scripts\TsLibs\COMMON.ts
+                 onkeyup = "return ValidateChar(this, event)",
+                 onkeypress = "return ValidateNumber(this,event,'Q')",
+             })
+            .MaxLength(10)
+            .FormGroup(false)
+            .Width(150)
+        )
+    <span class="tilde">~</span>
+    @(
+            Html.ILS()
+            .TextBoxDate("Q_txtCEDATE")
+            .Field("I_DTE_CEDATE")
+            .Validator("Search")
+            .End()
+            .HtmlAttributes(new
+             {
+                 // scripts\TsLibs\COMMON.ts
+                 onkeyup = "return ValidateChar(this, event)",
+                 onkeypress = "return ValidateNumber(this,event,'Q')",
+             })
+            .MaxLength(10)
+            .FormGroup(false)
+            .Width(150)
+        )
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+<div class="row">
+    @(Html.ILS().FormGroupHtml().Begin("<span style=\"color:red\">*</span>備註"))
+    <span class="control-label">搜尋條件請至少擇一輸入。</span>
+    @(Html.ILS().FormGroupHtml().End())
+</div>*@

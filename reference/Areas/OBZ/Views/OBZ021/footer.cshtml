@@ -1,0 +1,57 @@
+﻿@using ILS.Mvc.UI
+@*
+    此頁面請自由發揮撰寫，框架預設行為不會觸動到此畫面區塊，
+    需要開發者自行撰寫對應程式來觸發行為、資料處理。
+    Controller 必須將 HasFooter 屬性調成 true，此畫面才會被顯示，
+    若不使用 footer 區塊，可將此檔案移除。
+*@
+
+<div class="ils-panelBar" style="padding-bottom: 10px; margin: 10px 0px 10px 0px; ">
+    <div class="ils-panelBar-header">
+        <i class="fa fa-th"></i> 執行匯入人員比例設定
+    </div>
+    <div style="padding:10px 1px 10px 1px">
+        <div class="row">
+            @(
+            Html.ILS()
+            .DropDownList("F_ddlPROD_TYPE")
+            //.Field("I_CHR_PROD_TYPE")
+            .Label("名單產品類別")
+            .DataSource("DsPROD_TYPE")
+            .Width(250)
+            )
+
+            <button id="btnDoImport" type="button" class="btn btn-success form-group" style="width:150px; margin: 5px 10px" title="excel匯入">
+                excel匯入
+            </button>
+
+
+        </div>
+        <div class="row">
+            @(
+            Html.ILS()
+            .TextBox("F_txtYEARMONTH")
+            //.Field("I_CHR_YEARMONTH")
+            .Label("名單年月")
+            .HtmlAttributes(new
+            {
+                // scripts\TsLibs\COMMON.ts
+                onkeyup = "return ValidateChar(this, event)",
+                onkeypress = "return ValidateNumber(this,event,'Q')",
+                //onblur= "return MyOnBlur_YYYYMM(this, 1)"
+            })
+            .MaxLength(6)
+            .Width(250)
+            )
+
+            <button id="btnInsertAll" type="button" class="btn btn-danger form-group" style="width: 150px; margin: 5px 10px" disabled="disabled" title="匯入">
+                執行匯入資料庫
+            </button>
+
+
+
+        </div>
+
+
+    </div>
+</div>

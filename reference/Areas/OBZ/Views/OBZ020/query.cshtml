@@ -1,0 +1,48 @@
+﻿@* 引入框架元件 *@
+@using ILS.Mvc.UI
+
+@*<div class="row">
+    <div class="col-xs-8">
+        <div class="form-group">
+            <label class="control-label col-sm-2">員編：</label>
+            <div class="col-sm-10 col-md-10">
+                @(
+                     Html.ILS_DDLFilterUI()
+                     .DropDownFilter("Q_tbddlfEMPLID")
+                     //.Field("I_CHR_EMPLID")
+                     .DataSource("DsEMPID")
+                     .Label("員編")
+                     .FormGroup(false)
+                     .Width(240)
+                     .TextBox()
+                     .IsUpperCase(true)
+                     .MaxLength(10)
+                     .Width(86)
+                     )
+
+            </div>
+        </div>
+    </div>
+
+</div>*@
+<div class="row">
+    @(Html.ILS().FormGroupHtml().Begin("<span style=\"color:red\">*</span>名單代號(年月)"))
+    @(
+            Html.ILS()
+            .TextBox("Q_txtYEARMONTH")
+            .Field("I_CHR_YEARMONTH") 
+            .Validator("Search")
+            .End()
+            .HtmlAttributes(new {
+                // scripts\TsLibs\COMMON.ts
+                onkeyup = "return ValidateChar(this, event)",
+                onkeypress = "return ValidateNumber(this,event,'Q')",
+                //onblur= "return MyOnBlur_YYYYMM(this, 1)"
+            })
+            .MaxLength(6)
+            .FormGroup(false)
+            .Width(115)
+        )
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+

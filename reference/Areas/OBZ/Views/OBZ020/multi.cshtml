@@ -1,0 +1,40 @@
+﻿@using ILS.Mvc.UI
+@*<div class="ils-panelBar" style="padding-bottom:20px; margin-bottom:20px;">
+        <div class="ils-panelBar-header">
+            <i class="fa fa-th"></i>
+        </div>
+        <div class="row">
+            @(
+            Html.ILS()
+            .TextBox("E_test")
+            .Field("E_test")
+            .Label("文字輸入框範例")
+            .Width(150)
+        )
+        </div>
+    </div>*@
+
+<!-- **************【 M1 】：Grid 不可新增資料 ************** -->
+<div id="Gridpanelbar" class="ils-panelBar">
+    <div class="ils-panelBar-header" @*onclick='$("#ILS_UI_PanMulti").slideToggle("fast");*@'>
+        <i class="fa fa-th"></i>
+        <label>部門比例設定</label>
+    </div>
+    <div id="ILS_UI_PanMulti" style="padding: 0;">
+        <div id="gridMulti" class="ils-grid-theme"></div>
+    </div>
+</div>
+
+<!-- **************【 M1 】：Grid 可新增資料 ************** -->
+@*<div id="Gridpanelbar" class="ils-panelBar">
+        <div class="ils-panelBar-header" onclick='$("#ILS_UI_PanQuery").slideToggle("fast");'>
+            <i class="fa fa-th"></i>
+            &ensp;
+            <button id="M_btnInsert" type="button" class="btn btn-success" title="新增一筆">
+                新增一筆
+            </button>
+        </div>
+        <div style="padding: 0;">
+            <div id="gridMulti" class="ils-grid-theme"></div>
+        </div>
+    </div>*@

@@ -1,0 +1,46 @@
+﻿<script src="~/scripts/TsLib/COMMON.js"></script>
+<script src="~/Areas/ChooseLib/Controllers/OBZ021_POP_1/OBZ021_POP_1.js?ver=@ProjectConfig.Version()"></script>
+
+@using ILS.Mvc.UI
+<div class="row" style="margin-top: 50px;">
+        <div class="col-xs-12">
+            <div class="form-group">
+                <label class="control-label col-xs-3 ilsVal-Required">檔案挑選：</label>
+                <div class="col-xs-9">
+                    <input type="file" id="Q_txtFile" name="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"/>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-xs-12">
+            <div class="form-group">
+                <label class="control-label col-xs-6">
+                    <button class="btn btn-primary" id="btn_import">上傳</button>
+                </label>
+                <div class="col-xs-6" style="line-height: 26px;">
+                    <button class="btn btn-primary" id="btn_close">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        body {
+            background: #FFF;
+            overflow-x: hidden;
+        }
+
+        .w-100 {
+            width: 100%;
+        }
+    </style>
+@*<div class="input-group" style="margin-top:10%;padding:0 10% 0 10%">
+    <input type="file" name="file" id="Q_txtFile" style="font-size:1.15rem" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+           class="form-control btn-outline-secondary" aria-describedby="Q_txtFile" aria-label="Upload">
+    <button class="btn btn-outline-secondary" type="button" id="btn_import">上傳</button>
+    <button class="btn btn-outline-secondary" type="button" id="btn_close">關閉</button>
+</div>
+
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">*@

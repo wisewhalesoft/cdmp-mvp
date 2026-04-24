@@ -1,0 +1,342 @@
+﻿@* 引入框架元件 *@
+@using ILS.Mvc.UI
+
+<style type="text/css">
+    .default-textbox {
+        border: 1px white solid;
+        border-radius: 5px;
+        color: red;
+        background-color: white;
+        font-weight: bold;
+        font-size: initial;
+        text-align: left;
+        padding: 0px 15px;
+        width: 250px;
+    }
+
+    input[type='checkbox'] {
+        width: 3px;
+        height: 3px;
+        position: absolute;
+    }
+
+    .form-selectgroup-item {
+        /*display: block;*/
+        position: relative;
+        margin: 8px;
+    }
+
+    .form-selectgroup-label {
+        position: relative;
+        display: block;
+        min-width: 50px;
+        margin: -5px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        color: #1F618D;
+        background: #ffffff;
+        text-align: center;
+        cursor: pointer;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        border: 1px solid #2471A3;
+        border-radius: 5px;
+        transition: border-color 0.3s, background 0.3s, color 0.3s;
+    }
+
+
+        .form-selectgroup-label:hover {
+            color: #fff;
+            background-color: #1F618D;
+        }
+
+
+    .form-selectgroup-input[type="checkbox"] + .form-selectgroup-label .form-selectgroup-check {
+        border-radius: 4px;
+    }
+
+    .form-selectgroup-input[type="radio"] + .form-selectgroup-label .form-selectgroup-check {
+        border-radius: 50%;
+    }
+
+    .form-selectgroup-input:checked + .form-selectgroup-label .form-selectgroup-check {
+        background-color: #EAF2F8;
+        background-repeat: repeat;
+        background-position: center;
+        background-size: 1rem;
+        border-color: rgba(98, 105, 118, 0.24);
+    }
+
+    .form-selectgroup-input:checked + .form-selectgroup-label {
+        z-index: 1;
+        color: #fff;
+        font-weight: normal;
+        background: #2471A3;
+        border-color: #2471A3;
+    }
+</style>
+
+<div class="row">
+    @Html.ILS().FormGroupHtml().Begin("名單編號")
+    <input class="default-textbox" data-bind="value:LIST_NO" type="text" disabled="disabled" />
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+
+@*<div class="row">
+    @(
+        Html.ILS()
+        .TextBox("E_txtLISTNO")
+        .Field("LIST_NO")
+        .Label("名單編號")
+        .Validator("Save")
+        //.Require()
+        .End()
+        .MaxLength(11)
+        .IsUpperCase()
+        .Width(250)
+    )
+</div>*@
+<div class="row">
+
+    @(
+        Html.ILS()
+        .TextBox("E_txtLISTNM")
+        .Field("LIST_NM")
+        .Label("名單名稱")
+        .Validator("Save")
+        .Require()
+        .End()
+        .MaxLength(45)
+        //一定要寫這css，否則會破版
+        //.HtmlAttributes(new { style = "display: inline-block;" ,Readonly = "readonly"})
+        .Width(250)
+    )
+</div>
+
+<div class="row">
+    @(
+       Html.ILS()
+       .DropDownList("E_ddlPROD_TYPE")
+       .Field("PROD_KIND")
+       .Label("產品類別")
+       .Validator("Save")
+       .Require()
+       .End()
+       .DataSource("DsPROD_TYPE")
+       .Width(250)
+       )
+
+</div>
+
+<div class="row" hidden>
+    @Html.ILS().FormGroupHtml().Begin("<span style='color:red'>*</span>名單類型")
+    <textarea class="k-textbox form-control col-lg-12"
+              rows="3" @*顯示行數*@
+              style="resize: none; width:250px" @*樣式*@
+              id="E_txtLIST_TYPE" @*元件id名稱*@
+              data-bind="value:LIST_TYPE" @*繫節資料庫欄位名稱*@
+              maxlength="255" @*字數限制*@></textarea>
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+<div class="row">
+    <div class="col-xs-12">
+        <div class="form-group">
+            <label class="control-label col-sm-2 ilsVal-Required">名單類型：</label>
+            <div id="divLISTTYPE_CHK" class="col-sm-8 col-md-8">
+
+                <!--選項動態生成-->
+                @*<label class="form-selectgroup-item">
+                    <input type="checkbox" name="ListTypes" value="value" class="form-selectgroup-input chkLISTTYPE">
+                    <span class="form-selectgroup-label">test</span>
+                    </label>*@
+
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="row" hidden>
+    @Html.ILS().FormGroupHtml().Begin("<span style='color:red'>*</span>進件/滿期/中結年數")
+    <textarea class="k-textbox form-control col-lg-12"
+              rows="3" @*顯示行數*@
+              style="resize: none; width:250px" @*樣式*@
+              id="E_txtCASEYEAR" @*元件id名稱*@
+              data-bind="value:CASEYEAR" @*繫節資料庫欄位名稱*@
+              maxlength="255" @*字數限制*@></textarea>
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+<div class="row">
+    <div class="col-xs-12">
+        <div class="form-group">
+            <label class="control-label col-sm-2 ilsVal-Required">進件/滿期/中結年數：</label>
+            <div id="divCASEYEAR_CHK" class="col-sm-8 col-md-8">
+
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="0" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">0</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="1" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">1</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="2" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">2</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="3" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">3</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="4" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">4</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="5" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">5</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="6" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">6</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="7" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">7</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="8" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">8</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="9" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">9</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="10" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">10</span>
+                </label>
+                @*<label class="form-selectgroup-item">
+                    <input type="checkbox" name="CaseYears" value="99" class="form-selectgroup-input chkCASEYEAR">
+                    <span class="form-selectgroup-label">10年以上</span>
+                </label>*@
+                <label class="form-selectgroup-item">
+                    <input id="selYear_All" type="checkbox" class="form-selectgroup-input">
+                    <span class="form-selectgroup-label">全選</span>
+                </label>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="row" hidden>
+    @Html.ILS().FormGroupHtml().Begin("<span style='color:red'>*</span>專案類別")
+    <textarea class="k-textbox form-control col-lg-12"
+              rows="3" @*顯示行數*@
+              style="resize: none; width:250px" @*樣式*@
+              id="E_txtSPEC_TP" @*元件id名稱*@
+              data-bind="value:SPEC_TP" @*繫節資料庫欄位名稱*@
+              maxlength="255" @*字數限制*@></textarea>
+    @(Html.ILS().FormGroupHtml().End())
+</div>
+<div class="row">
+    <div class="col-xs-12">
+        <div class="form-group">
+            <label class="control-label col-sm-2 ilsVal-Required">專案類別：</label>
+            <div id="divSPEC_CHK" class="col-sm-8 col-md-8">
+
+                <!--選項動態生成-->
+                @*<label class="form-selectgroup-item">
+                    <input type="checkbox" name="SpecTypes" value="value" class="form-selectgroup-input chkSPEC">
+                    <span class="form-selectgroup-label">test</span>
+                    </label>*@
+
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="row">
+    @(
+        Html.ILS()
+        .TextBox("E_txtPERIOD_S")
+        .Field("LIST_PERIOD_START")
+        .Label("開始撈取期數")
+        .Validator("Save")
+        .Require()
+        .End()
+        .MaxLength(3)
+        .IsUpperCase()
+        .Width(250)
+    )
+
+
+</div>
+<div class="row">
+    @(
+        Html.ILS()
+        .TextBox("E_txtPERIOD_E")
+        .Field("LIST_PERIOD_END")
+        .Label("結束撈取期數")
+        .Validator("Save")
+        .Require()
+        .End()
+        .MaxLength(3)
+        .Width(250)
+    )
+</div>
+
+<div class="row">
+    @(
+        Html.ILS()
+        .TextBox("E_txtPERIOD_INTERVAL")
+        .Field("LIST_INTERVAL")
+        .Label("間隔期數")
+        .Validator("Save")
+        .Require()
+        .End()
+        .MaxLength(3)
+        .Width(250)
+    )
+</div>
+
+<div class="row" hidden>
+    @(
+        Html.ILS()
+        .TextBox("E_txtSETTLE_SRC")
+        .Field("SETTLE_SRC")
+        .Label("被他行代償案件")
+        .Validator("Save")
+        .Require()
+        .End()
+        .MaxLength(20)
+        .Width(250)
+    )
+</div>
+<div class="row">
+    <div class="col-xs-12">
+        <div class="form-group">
+            <label class="control-label col-sm-2 ilsVal-Required">被他行代償案件：</label>
+            <div id="divSETTLE_CHK" class="col-sm-8 col-md-8">
+
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="SettleSrc" value="Y" class="form-selectgroup-input chkSETTLE">
+                    <span class="form-selectgroup-label">含</span>
+                </label>
+                <label class="form-selectgroup-item">
+                    <input type="checkbox" name="SettleSrc" value="N" class="form-selectgroup-input chkSETTLE">
+                    <span class="form-selectgroup-label">不含</span>
+                </label>
+
+            </div>
+        </div>
+    </div>
+</div>
