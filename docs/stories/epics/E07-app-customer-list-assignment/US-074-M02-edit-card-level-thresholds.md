@@ -47,6 +47,8 @@
 - 門檻設定與 US-073 的計分維度共享版本草稿機制；若有草稿版本存在，門檻修改亦套用至草稿版本
 - 預覽影響計算需載入 OBPOOLDATA 現有客戶的評分分佈（可非即時，允許最多 1 分鐘的快取）
 
+> **[ASSUMPTION]** OBLEVELCARD_VERSION 原表無 STATUS 欄位（原表以 SDATE/EDATE 兩個 VARCHAR(8) 欄位表達計分版本生效期間，dump 中 6 筆全部 EDATE='20991231'）。遷移至 AppDB 時補加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 SDATE/EDATE 計算。本 Story 中「目前生效版本」的判斷依據為遷移後 status='active' 欄位。
+
 ---
 
 ## 測試案例

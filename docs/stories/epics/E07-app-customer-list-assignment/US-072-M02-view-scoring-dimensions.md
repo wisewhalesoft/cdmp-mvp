@@ -47,6 +47,8 @@
 - 計分分數設定：`reference/TableSchema/OB/OBLEVELCARD_SCORE.sql`
 - 此頁面為唯讀查看；修改操作由 US-073 處理
 
+> **[ASSUMPTION]** OBLEVELCARD_VERSION 原表無 STATUS 欄位（原表以 SDATE/EDATE 兩個 VARCHAR(8) 欄位表達計分版本生效期間，dump 中 6 筆全部 EDATE='20991231'）。遷移至 AppDB 時補加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 SDATE/EDATE 計算（SDATE ≤ 今日 < EDATE 者設為 'active'，否則設為 'inactive'）。Story 層所有 status='active' 之描述均基於此遷移後欄位，非原表欄位。
+
 ---
 
 ## 測試案例

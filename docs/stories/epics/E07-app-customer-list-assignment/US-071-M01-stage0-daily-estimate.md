@@ -52,7 +52,7 @@
 
 - Stage 0 每日估算邏輯參照：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` 中 Stage 0 相關邏輯
 - Pool 資料來源：`reference/TableSchema/OB/OBPOOLDATA.sql`
-- 工作日曆（排除假日）：`reference/TableSchema/OB/OBCALENDAR.sql`
+- 工作日曆（排除假日）：`reference/TableSchema/OB/OBCALENDAR.sql`；AppDB 對應表為 `ob_calendar`（CALENDAR_DATE / REST_FLG，REST_FLG=0 為工作日）。**資料來源：透過 E04 通用擷取任務定期從 OB DB 同步至 AppDB，E07 直接查詢 `ob_calendar`，不需額外維護。**
 - 估算僅為預覽，不寫入資料庫；實際件數以月跑執行結果為準
 
 ---

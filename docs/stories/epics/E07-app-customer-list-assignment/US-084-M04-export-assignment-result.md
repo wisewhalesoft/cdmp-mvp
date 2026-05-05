@@ -46,6 +46,7 @@
 
 - 匯出資料來源：AssignmentRunSnapshot result 快照（JSONB payload 轉換為表格行）
 - 匯出邏輯參照舊系統：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql` 的輸出欄位
+- **分配人員姓名（EMP_NM）**：快照 payload 中若已含 EMP_NM 欄位則直接取用；若快照僅存 EMP_ID，匯出時 join AppDB `ob_emphire.EMP_NM`（`ob_emphire` 透過 E04 通用擷取任務每日同步自 OB DB，E07 不另建員工維護功能）。
 - 大量資料匯出建議採用串流寫入（streaming）方式，避免記憶體溢出
 - 匯出操作記錄至 AssignmentRunExportLog（操作者、匯出時間、格式、檔案大小）
 

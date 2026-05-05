@@ -69,13 +69,13 @@
 | 欄位 | schema 欄位名 | UI 元件 | 說明 |
 |------|--------------|---------|------|
 | 名單名稱 | LIST_NM | 文字框，max 45 | 必填 |
-| 產品類別 | PROD_KIND | 單選下拉，來源 OBMCODEDF（US-092 管理） | 必填 |
-| 進件/滿期/中結年數 | CASEYEAR | 多選 CHKBOX + 全選按鈕，來源 OBMCODEDF（US-092 管理），多值以 `$$` 分隔儲存 | 必填，至少選一 |
-| 專案類別 | SPEC_TP | 多選 CHKBOX，來源 OBMCODEDF（US-092 管理），多值以 `$$` 分隔儲存 | 必填，至少選一 |
+| 產品類別 | PROD_KIND | **多選** CHKBOX，來源 OBMCODEDF（US-092 管理），多值以 `$$` 分隔儲存 | 必填，至少選一 |
+| 進件/滿期/中結年數 | CASEYEAR | **多選** CHKBOX + 全選按鈕，來源 OBMCODEDF（US-092 管理），多值以 `$$` 分隔儲存 | 必填，至少選一 |
+| 專案類別 | SPEC_TP | **多選** CHKBOX，來源 OBMCODEDF（US-092 管理），多值以 `$$` 分隔儲存 | 必填，至少選一 |
 | 開始撈取期數（月） | LIST_PERIOD_START | 數字框，max 3 碼 | 必填 |
 | 結束撈取期數（月） | LIST_PERIOD_END | 數字框，max 3 碼，需 ≥ LIST_PERIOD_START | 必填 |
 | 間隔期數（月） | LIST_INTERVAL | 數字框，max 3 碼 | 必填 |
-| 被他行代償案件 | SETTLE_SRC | 多選 CHKBOX，固定選項：「含」(Y) / 「不含」(N) | 必填，至少選一 |
+| 被他行代償案件 | SETTLE_SRC | **多選** CHKBOX，固定選項：「含」(Y) / 「不含」(N)，多值以 `$$` 分隔儲存 | 必填，至少選一 |
 
 ### 選填欄位
 
@@ -102,12 +102,16 @@
 - 資料來源：`reference/TableSchema/OB/OBMLISTDF.sql`（OBMLISTDF 表）
 - 舊系統表單參照：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml`、`reference/Areas/OBZ/Controllers/OBZ020/OBZ020Controller.cs`
 - 代碼選項來源（PROD_KIND、CASEYEAR、SPEC_TP）：OBMCODEDF，由 US-092 進行維護
-- CASEYEAR 多值儲存格式：以 `$$` 為分隔符，例如 `0$$1$$2$$3`
-- SPEC_TP 多值儲存格式：同上
-- SETTLE_SRC 多值儲存格式：同上，例如 `Y$$N`（含且不含）或 `Y`（僅含）
+- **多值欄位與 `$$` 分隔格式（dump 驗證，2026-05-05）**：以下四個欄位均為多選，提交時以 `$$` 為分隔符儲存至 OBMLISTDF，與舊系統格式一致：
+  - `PROD_KIND`：多選，例如 `02$$04$$05`（dump 實際觀察值）
+  - `CASEYEAR`：多選，例如 `0$$1$$2$$3$$4$$5`
+  - `SPEC_TP`：多選，例如 `02$$04$$05$$06$$11$$12`
+  - `SETTLE_SRC`：多選，例如 `Y$$N`（含且不含）或 `Y`（僅含）
 - 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 - 操作寫入 AssignmentAuditLog（待 system-architect 設計表結構）
 - 覆寫式更新對齊 A12 決策：無草稿、無版本分岔；需追溯歷史請查詢 AssignmentAuditLog
+
+> **[ASSUMPTION]** OBMLISTDF 多值欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC）均以 `$$` 分隔字串儲存，與舊系統格式一致（2026-05-05 dump 驗證）。表單元件對應為多選 CHKBOX，非單選下拉。
 
 ---
 

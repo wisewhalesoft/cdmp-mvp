@@ -74,7 +74,7 @@
 - Stage 1 邏輯：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`
 - Stage 2（計分）：套用 OBLEVELCARD 計分邏輯（參照 `reference/SP/SP_OBLEVELCARD_S.sql`）
 - Stage 3（部門分配 + CR 回分）：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（含 motor/motor_c/T5M 變體）；CR 回分為部門分配中的優先指定機制
-- Stage 4（人員分配 + st4_exchange）：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`（含 T5/T5M/Motor 等變體）+ `reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`（T1/T2/T3 新件轉資深業務員 10% 交換）
+- Stage 4（人員分配 + st4_exchange）：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`（含 T5/T5M/Motor 等變體）+ `reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`（T1/T2/T3 新件轉資深業務員 10% 交換）。**Stage 4 員工資訊（姓名、部門等）join AppDB `ob_emphire`（透過 E04 通用擷取任務每日從 OB DB 同步），過濾條件 RESIGN_DATE IS NULL 確保僅分配予在職人員。**
 - 月跑為非同步執行，前端透過輪詢或 WebSocket 取得進度（由 US-082 負責進度顯示）
 - **執行觸發不受日期限制**：舊系統 SP 要求每月 21 日後才能執行的硬編碼限制已移除，業務主管可隨時觸發（A13）
 - **允許整批覆蓋重跑**：同月可多次觸發月跑，每次產生新 run_id，前次結果保留於快照歷史（不刪除）；只阻擋併發執行（running 狀態中禁止再次觸發），不阻擋重跑（A5）

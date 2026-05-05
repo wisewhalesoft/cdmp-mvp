@@ -87,13 +87,13 @@
 | 欄位 | schema 欄位名 | UI 元件 |
 |------|--------------|---------|
 | 名單名稱 | LIST_NM | 文字框，max 45 |
-| 產品類別 | PROD_KIND | 單選下拉，來源 OBMCODEDF |
-| 進件/滿期/中結年數 | CASEYEAR | 多選 CHKBOX + 全選，來源 OBMCODEDF，多值 `$$` 分隔 |
-| 專案類別 | SPEC_TP | 多選 CHKBOX，來源 OBMCODEDF，多值 `$$` 分隔 |
+| 產品類別 | PROD_KIND | **多選** CHKBOX，來源 OBMCODEDF，多值 `$$` 分隔 |
+| 進件/滿期/中結年數 | CASEYEAR | **多選** CHKBOX + 全選，來源 OBMCODEDF，多值 `$$` 分隔 |
+| 專案類別 | SPEC_TP | **多選** CHKBOX，來源 OBMCODEDF，多值 `$$` 分隔 |
 | 開始撈取期數（月） | LIST_PERIOD_START | 數字框，max 3 |
 | 結束撈取期數（月） | LIST_PERIOD_END | 數字框，max 3，需 ≥ START |
 | 間隔期數（月） | LIST_INTERVAL | 數字框，max 3 |
-| 被他行代償案件 | SETTLE_SRC | 多選 CHKBOX：「含」(Y) / 「不含」(N) |
+| 被他行代償案件 | SETTLE_SRC | **多選** CHKBOX：「含」(Y) / 「不含」(N)，多值 `$$` 分隔 |
 
 ### 選填欄位摘要
 
@@ -110,8 +110,14 @@
 - 舊系統表單參照：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml`（新增模式）、`reference/Areas/OBZ/Controllers/OBZ020/OBZ020Controller.cs`
 - LIST_NO 產生機制：後端依當月 YYYYMM 查詢最大既有流水號後 +1；若無既有，從 001 開始。999 為上限（超過需 system-architect 評估擴位方案，為待解決問題）
 - 代碼選項來源（PROD_KIND、CASEYEAR、SPEC_TP）：OBMCODEDF，由 US-092 進行維護
-- CASEYEAR / SPEC_TP / SETTLE_SRC 多值儲存格式：以 `$$` 為分隔符（例如 `0$$1$$2$$3`）
+- **多值欄位與 `$$` 分隔格式（dump 驗證，2026-05-05）**：以下四個欄位均為多選，提交時以 `$$` 為分隔符儲存至 OBMLISTDF，與舊系統格式一致：
+  - `PROD_KIND`：多選，例如 `02$$04$$05`（dump 實際觀察值）
+  - `CASEYEAR`：多選，例如 `0$$1$$2$$3$$4$$5`
+  - `SPEC_TP`：多選，例如 `02$$04$$05$$06$$11$$12`
+  - `SETTLE_SRC`：多選，例如 `Y$$N`（含且不含）或 `Y`（僅含）
 - STATUS 初始值：後端寫入 'active'，不由前端傳送
+
+> **[ASSUMPTION]** OBMLISTDF 多值欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC）均以 `$$` 分隔字串儲存，與舊系統格式一致（2026-05-05 dump 驗證）。表單元件對應為多選 CHKBOX，非單選下拉。
 - 操作寫入 AssignmentAuditLog（待 system-architect 設計表結構）
 - 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 

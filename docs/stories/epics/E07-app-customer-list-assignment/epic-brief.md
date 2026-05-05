@@ -67,7 +67,7 @@
 
 ## 依賴關係
 
-- **依賴**：E01（驗證登入，業務主管須通過身分驗證）、E02（帳號角色管理，需定義業務主管角色及其存取權限）
+- **依賴**：E01（驗證登入，業務主管須通過身分驗證）、E02（帳號角色管理，需定義業務主管角色及其存取權限）、E04（資料擷取）：OBEMPHIRE / OBCALENDAR 透過 E04 通用擷取任務同步至 AppDB，E07 業務邏輯直接查詢 `ob_emphire` / `ob_calendar`，無需 E07 額外維護
 - **封鎖下游**：無
 - **NFR 關聯**：NFR-003（分派執行效能）、NFR-004（快照原子性）、NFR-005（結果準確性）
 
@@ -122,17 +122,20 @@
 
 ### 既有 OB 相關表
 
-| 表名 | 說明 | 參照 Story |
-|------|------|-----------|
-| OBMDEPTPCT | 全域部門比例設定 | US-076、US-077 |
-| OBMLISTDF | 名單定義（Stage 篩選條件）**[需 schema 變更：新增 STATUS ENUM('active','inactive') 欄位]** | US-070、US-071、US-088、US-089、US-090 |
-| OBLEVELCARD_VERSION | 計分版本管理 | US-072、US-073 |
-| OBLEVELCARD_COLUNM | 計分維度欄位定義 | US-073 |
-| OBLEVELCARD_SCORE | 計分維度分數設定 | US-073 |
-| OBLEVELCARD_LEVEL | CARD_LEVEL 分級設定 | US-074 |
-| OBPOOLDATA | 案件池（OB 月跑輸入案件清單） | US-081（Stage 1 讀取） |
-| OBPOOLDATA_LIST | per-LIST_NO 案件池 / 分派結果寫回表（OB_DEPT、OB_EMPLID） | US-081（Stage 3/4 寫入）、US-083、US-086 |
-| OBEMPLSETMF | 人員比例設定（業務員 RATION） | US-078、US-079、US-081 |
+| 表名 | 說明 | 資料同步機制 | 參照 Story |
+|------|------|------------|-----------|
+| OBEMPHIRE | 員工主檔（EMP_ID / EMP_NM / DEPT_CODE / DEPT_NAME / JFUN_ID / RESIGN_DATE），提供姓名/部門 join 與在職狀態過濾（RESIGN_DATE IS NULL） | E04 ETL 每日擷取 → AppDB `ob_emphire` | US-079（員工清單）、US-081（Stage 4 人員 join）、US-084（匯出員工姓名） |
+| OBCALENDAR | 工作日/假日表（CALENDAR_DATE / REST_FLG），REST_FLG=0 為工作日，排除週末與國定假日 | E04 ETL 定期擷取 → AppDB `ob_calendar` | US-071（Stage 0 工作日試算） |
+| OBMDEPTPCT | 全域部門比例設定 | 業務主管於 E07 M03 維護 | US-076、US-077 |
+| OBMLISTDF | 名單定義（Stage 篩選條件）**[需 schema 變更：新增 STATUS ENUM('active','inactive') 欄位]** | 業務主管於 E07 M01 維護 | US-070、US-071、US-088、US-089、US-090 |
+| OBLEVELCARD_VERSION | 計分版本管理 | 業務主管於 E07 M02 維護 | US-072、US-073 |
+| OBLEVELCARD_COLUNM | 計分維度欄位定義 | 業務主管於 E07 M02 維護 | US-073 |
+| OBLEVELCARD_SCORE | 計分維度分數設定 | 業務主管於 E07 M02 維護 | US-073 |
+| OBLEVELCARD_LEVEL | CARD_LEVEL 分級設定（總分區間 → CARD_LEVEL=A/B/C/D…） | 業務主管於 E07 M02 維護 | US-074 |
+| OBTIER | TIER_LEVEL 對應表（CARD_TYPE × CARD_LEVEL → TIER_LEVEL=T1/T2/T3…）；AppDB 對應名 `ob_tier`；原表 4 欄（LIST_NM / CARD_TYPE / CARD_LEVEL / TIER_LEVEL，皆 nullable，無 PK constraint，無稽核欄位）；schema 已確認（2026-05-05）；dump 顯示 8 種 CARD_TYPE（H/S/E/S5/E5/M/HM/M5），HM/M5 為計分卡外 fallback，其 CARD_LEVEL 可為空；複合 PK `(card_type, card_level)` **[ASSUMPTION：遷移時補建，非原表既有；CARD_LEVEL 為空時以 CARD_TYPE 唯一]** | 業務主管於 E07 M02 維護 | US-075 |
+| OBPOOLDATA | 案件池（OB 月跑輸入案件清單） | E04 ETL 擷取 | US-081（Stage 1 讀取） |
+| OBPOOLDATA_LIST | per-LIST_NO 案件池 / 分派結果寫回表（OB_DEPT、OB_EMPLID） | 月跑寫入 | US-081（Stage 3/4 寫入）、US-083、US-086 |
+| OBEMPLSETMF | 人員比例設定（業務員 RATION） | 業務主管於 E07 M03 維護 | US-078、US-079、US-081 |
 
 ## 成功標準
 
@@ -152,5 +155,21 @@
 4. ✅ **LIST_NO 999 上限處理** → MVP 達上限回傳 422（error_code: `LIST_NO_LIMIT_EXCEEDED`）；Phase 2 backlog 評估擴位
 5. ✅ **per-LIST_NO 部門比例表** → 使用 `ob_dept_pct`（OBMDEPTPCT 映射），無「全域比例」概念；**US-076/077 已確認為需求誤解產物，本版刪除**
 6. ✅ **CARD_TYPE 舊資料遷移策略** → 遷移時直接沿用現有值（舊 SP 由 LIST_NM 解析之結果），缺漏筆數由遷移腳本識別處理
+7. ✅ **OBEMPHIRE / OBCALENDAR 同步機制（2026-05-04 決議）** → 採 E04 通用擷取任務：Admin 於系統初始化時建立兩個擷取任務（`ob_emphire` 每日擷取、`ob_calendar` 定期擷取），E07 業務邏輯直接 query AppDB。不在 E07 額外新增 CRUD Story，業務主管不維護這兩張表。
+8. ✅ **OBTIER schema 已取得（2026-05-05）** → 確認為 4 欄結構（LIST_NM nvarchar(30) / CARD_TYPE varchar(5) / CARD_LEVEL varchar(5) / TIER_LEVEL varchar(5)，皆 nullable，原表無 PK constraint，無稽核欄位）。LIST_NM 為描述性輔助欄位，不參與 SP join 邏輯。複合 PK `(card_type, card_level)` 從 SP join 條件推論業務上唯一，遷移至 AppDB 時補建。操作稽核由 `assignment_audit_log` 統一記錄，`ob_tier` 本表不含稽核欄位。
 
 相關架構決策：AD-E07-1（OB 資料遷移）、AD-E07-2（月跑非同步 + 快照原子性）、AD-E07-3（複雜計分保留為 PostgreSQL function）。
+
+9. ✅ **2026-05-05 dump 驗證後 6 項 Story 層決議**：
+
+   a. **OBLEVELCARD_VERSION 補加 STATUS 欄位**（差異 1）：原表無 STATUS 欄位，以 SDATE/EDATE（VARCHAR(8) YYYYMMDD）表達計分版本生效期間（dump 6 筆全部 EDATE='20991231'）。採選項 B：遷移至 AppDB 時補加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 SDATE/EDATE 計算（SDATE ≤ 今日 < EDATE 則設 'active'）。與 ob_list_definition 採相同設計。影響：US-072、US-073、US-074。
+
+   b. **OBTIER 接受 HM/M5 等計分卡外 fallback，CARD_LEVEL 可空**（差異 2）：OBTIER dump 顯示 8 種 CARD_TYPE（H/S/E/S5/E5/M/HM/M5），HM（機車期中名單）、M5（機車中結滿期名單）為計分卡體系外 fallback；M5 的 CARD_LEVEL 為空字串，月跑 Stage 2 僅比對 CARD_TYPE 即輸出 TIER_LEVEL。複合 PK 假設附加但書：CARD_LEVEL 為空時以 CARD_TYPE 唯一。TIER_LEVEL 有效值約 13 種（T1/T2/T3/T1M/T3M/T32/T4/T51/T52/T1HM/T2HM/T3HM/T5M）。影響：US-075；OQ 待解決項（TIER_LEVEL 有效值範圍 / CARD_TYPE 有效值來源）標記 Resolved。
+
+   c. **OBEMPLSETMF.DEPTID_M 遷移時 RTRIM**（差異 4）：原表 DEPTID_M 宣告 VARCHAR(50)，業務值為 4 字元部門代碼，dump 顯示 46 個空白填充。遷移腳本需 `RTRIM`，新系統 `ob_empl_set.deptid_m` 存入 trim 後值。影響：US-079。
+
+   d. **OBMLISTDF 多值欄位採 `$$` 分隔，UI 為多選**（差異 5）：dump 驗證 SPEC_TP / SETTLE_SRC / CASEYEAR / PROD_KIND 均為多值欄位，以 `$$` 分隔儲存（例：SPEC_TP = `02$$04$$05$$06$$11$$12`、SETTLE_SRC = `Y$$N`）。表單元件改為多選 CHKBOX，PROD_KIND 由「單選下拉」更正為「多選 CHKBOX」。影響：US-088、US-089。
+
+   e. **OBMCODEDF.SYSTEM_ID 固定為 `OB`**（差異 6，OQ-E07-11 Resolved）：dump 全表驗證 SYSTEM_ID 全部為 `OB`，後端查詢加 `WHERE SYSTEM_ID = 'OB'` 即可，不需 UI 呈現。影響：US-092。
+
+   f. **差異 3（稽核欄位 NULL）屬 spec 範圍**：OBLEVELCARD_VERSION 稽核欄位允許 NULL（dump 6 筆中至少 4 筆為 NULL），此差異僅影響 data-model.md，不在 Story 層處理，由 spec-writer 負責。

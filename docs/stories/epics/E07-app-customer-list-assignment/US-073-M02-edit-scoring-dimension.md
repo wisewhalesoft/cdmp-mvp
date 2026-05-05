@@ -66,6 +66,8 @@
 - 月跑執行中禁止修改屬於**資料鎖保護**（防止運算中途參數異動），與版本管理概念無關
 - 此 Story 的計分結果直接影響 US-081 的 Stage 2 計分流程
 
+> **[ASSUMPTION]** OBLEVELCARD_VERSION 原表無 STATUS 欄位（原表以 SDATE/EDATE 兩個 VARCHAR(8) 欄位表達計分版本生效期間，dump 中 6 筆全部 EDATE='20991231'）。遷移至 AppDB 時補加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 SDATE/EDATE 計算（SDATE ≤ 今日 < EDATE 者設為 'active'，否則設為 'inactive'）。本 Story 中「現行設定」視圖即讀取 status='active' 版本，邏輯不變，基於此遷移後欄位。
+
 ---
 
 ## 測試案例

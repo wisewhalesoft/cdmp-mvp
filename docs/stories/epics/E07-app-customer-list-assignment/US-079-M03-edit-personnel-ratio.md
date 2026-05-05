@@ -31,6 +31,7 @@
 - **Given** 新員工已加入 OBEMPLSETMF 但尚未設定比例
 - **When** 業務主管點擊「新增人員」，選擇員工並填入比例
 - **Then** 新員工加入該部門的人員比例清單，頁面動態更新加總
+- **And** 可選員工清單來源為 AppDB `ob_emphire`，僅顯示 RESIGN_DATE IS NULL 的在職員工（`ob_emphire` 透過 E04 通用擷取任務每日從 OB DB 同步，E07 直接查詢，不另行維護）
 
 ### AC-3：移除人員（設為 0%）
 
@@ -52,6 +53,8 @@
 - 人員比例資料（業務員 RATION）：`reference/TableSchema/OB/OBEMPLSETMF.sql`
 - Stage 4 人員分配邏輯：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`（含 T5/T5M/Motor 等變體）
 - 修改僅針對本月（當前 YM），不影響歷史資料
+- **員工主檔資料來源**：AppDB `ob_emphire`（對應 OB DB OBEMPHIRE），透過 E04 通用擷取任務每日同步。在職員工過濾條件：`RESIGN_DATE IS NULL`。EMP_NM / DEPT_CODE / DEPT_NAME 等欄位直接從 `ob_emphire` join 取得，E07 不另建員工維護功能。
+- **`OBEMPLSETMF.DEPTID_M` 尾隨空白**：原表 DEPTID_M 宣告為 VARCHAR(50)，但業務值為 4 字元部門代碼（dump 範例：`"XTC0                                              "`，46 個空白填充）。遷移腳本需對此欄位執行 `RTRIM` 處理；新系統寫入 `ob_empl_set.deptid_m` 應已為 trim 後的值（4 字元），查詢比對時不應有空白差異。
 
 ---
 

@@ -69,7 +69,11 @@
 
 ### 技術細節
 
-- 資料來源：OBMCODEDF 表（既有 OB 系統表，需確認 schema，含 CODE_TYPE、CODE_VAL、CODE_NM、STATUS 等欄位）
+- 資料來源：OBMCODEDF 表（既有 OB 系統表，含 CODE_TYPE、CODE_VAL、CODE_NM、STATUS 等欄位）
+- **SYSTEM_ID 固定值**（Resolved 2026-05-05，dump 全表驗證）：OBMCODEDF.SYSTEM_ID 全部為 `OB`，為固定常數，不需 UI 呈現或維護，後端查詢時加 `WHERE SYSTEM_ID = 'OB'` 條件即可。
+
+> **[ASSUMPTION - Resolved]** OQ-E07-11：OBMCODEDF.SYSTEM_ID 固定為 `OB`（2026-05-05 dump 全表驗證確認，無其他值）。
+
 - 本 Story 管理的三個 CODE_TYPE：
   - `PROD_KIND`：產品類別（名單定義必填，單選）
   - `SPEC_TP`：專案類別（名單定義必填，多選）
