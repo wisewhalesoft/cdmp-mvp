@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: 1.8
+version: 2.0
 status: draft
-last_updated: 2026-04-24
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, E07-M01, E07-M02, E07-M03, E07-M04, E07-M05, E07-M06]
+last_updated: 2026-05-05
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
 ---
 
 # 系統架構規格書
@@ -13,11 +13,11 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
 | Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程）、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~3）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~3）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程 |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核） |
 
 ## 目錄
 
@@ -2341,3 +2341,685 @@ cdmp-mvp/
 - *更新 covers 清單：新增 F046、F047*
 
 *如有規格變更，本文件應同步更新。*
+
+---
+
+## 附錄 E07：客戶名單分派模組完整架構決策
+
+> 本附錄為 2026-05-05 System Architect Agent 針對 E07 Epic 進入開發前所補入的架構決策章節，採追加方式擴充，**不修改**現有第 3.10 節之已決議內容（AD-E07-1~3）。
+
+### 附錄目錄
+
+- [E07-A　資料來源分層架構](#e07-a-資料來源分層架構)
+- [E07-B　Migration 設計（L1 一次性遷移）](#e07-b-migration-設計l1-一次性遷移)
+- [E07-C　ETL 設計（L2 定期同步）](#e07-c-etl-設計l2-定期同步)
+- [E07-D　月跑執行架構（L3 系統產出）](#e07-d-月跑執行架構l3-系統產出)
+- [E07-E　PostgreSQL Function 設計（fn_calc_tier_level）](#e07-e-postgresql-function-設計fn_calc_tier_level)
+- [E07-F　開發前準備檢核清單](#e07-f-開發前準備檢核清單)
+
+---
+
+### E07-A　資料來源分層架構
+
+#### AD-E07-4　ob_levelcard_column 停用維度機制
+
+**決策**：新增 `status VARCHAR(10) NOT NULL DEFAULT 'active'` 欄位至 `ob_levelcard_column`，以支援計分維度的停用操作。停用後欄位值改為 `'disabled'`，月跑 Stage 2 執行時過濾 `status = 'active'` 的維度，不刪除資料列。
+
+**理由**：
+- 與 `ob_list_definition.status`、`ob_levelcard_version.status` 的命名語意一致，降低認知負擔
+- `card_version` 遞增方案代價過高：每次停用一個維度就需要產生新版本號，導致版本號膨脹且無直覺語意
+- Soft disable 保留歷史資料，月跑 config 快照仍可回溯停用前的設定
+
+**放棄替代方案**：`card_version` 遞增區分新舊維度 — 版本號膨脹且與現有版本管理語意（`ob_levelcard_version` 代表計分體系版本）混淆。
+
+**對應假設**：A45（F054） → 已解決，採 `status` 欄位方案。
+
+**影響範圍**：F054、data-model.md `#ob-levelcard-column-entity`、Migration 腳本 L1。
+
+---
+
+#### AD-E07-5　CR 回分全域開關儲存位置
+
+**決策**：在 AppDB 新建獨立設定表 `ob_assign_config`，以 key-value 方式儲存全域設定，包含 CR 回分開關。初始紀錄由 Migration 腳本從 OBASSIGNSET 對應值填入（若原系統有對應欄位）或以 `FALSE` 作為 MVP 初始值。
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `config_key` | `VARCHAR(50) PK` | 設定鍵（如 `cr_reassignment_enabled`） |
+| `config_value` | `TEXT NOT NULL` | 設定值（序列化字串，布林用 `'true'/'false'`） |
+| `updated_at` | `TIMESTAMP NOT NULL` | 最後更新時間 |
+| `updated_by` | `UUID FK → users.id` | 最後修改者 |
+| `description` | `TEXT` | 說明（選填） |
+
+初始 Seed 紀錄：
+```sql
+INSERT INTO ob_assign_config (config_key, config_value, updated_at, description)
+VALUES ('cr_reassignment_enabled', 'false', NOW(), 'CR 回分全域開關（F059）');
+```
+
+**理由**：
+- `ob_assign_set` 表（映射自 OBASSIGNSET）屬於 Stage 0 **每日比例係數**的輸出表（L3 系統產出），寫入欄位為 `list_no`, `workdt`, `casedt`, `ratio_rate`，**並非**全域設定的適合儲存位置
+- 將 CR 開關混入 `ob_assign_set` 會造成設定語意污染：`ob_assign_set` 每月每 LIST_NO 均有多列，無法對應「全域唯一」的開關語意
+- 獨立 `ob_assign_config` Key-value 表擴展性佳，未來如需新增其他全域設定（如月跑觸發閾值等），無需 ALTER TABLE
+
+**放棄替代方案**：將 CR 開關存入 `ob_assign_set` — 語意不清，且該表為 Stage 0 寫出的每日比例記錄，行語意與全域開關不符。
+
+**對應假設**：A48（F059） → 已解決，採獨立 `ob_assign_config` 表。
+
+**影響範圍**：F059、data-model.md（新增 `ob_assign_config` 表定義）、Migration 腳本（初始 Seed）。
+
+---
+
+#### AD-E07-6　ob_empl_set 員工停用機制
+
+**決策**：以 `ob_emphire.resign_date IS NULL` 作為在職員工的判斷條件，**不在** `ob_empl_set` 新增 `status` 欄位。`ob_empl_set` 為比例設定表，其 `ration` 欄位代表分配比例，不承載員工在職狀態語意。
+
+月跑 Stage 4 在讀取 `ob_empl_set` 人員比例時，JOIN `ob_emphire` 並過濾 `resign_date IS NULL`，自動排除已離職員工。F057 查詢人員比例清單時，API 提供 `includeInactive=false`（預設）/`true` 參數，以 `ob_emphire.resign_date IS NULL` 為過濾條件。
+
+**理由**：
+- `ob_emphire` 由 E04 每日 ETL 從 OBEMPHIRE 同步，`resign_date` 為 OBEMPHIRE 原生欄位，已能準確反映在職狀態（OQ-E07-15 已決議）
+- 在 `ob_empl_set` 增加 `status` 欄位須額外維護同步邏輯（誰負責更新？何時更新？），產生不必要的雙重真實來源（Single Source of Truth 原則違反）
+- `ration = 0` 慣例不適用：ratio 為零可能是業務上的真實設定（暫時不分配），不等同於員工離職
+
+**對應假設**：A49（F057） → 已解決，採 `ob_emphire.resign_date IS NULL` 方案。
+
+**影響範圍**：F057、F058、F061 Stage 4。
+
+---
+
+#### AD-E07-7　月跑 Stage 進度儲存方式
+
+**決策**：新建獨立表 `assignment_run_stage_log`，每個 Stage 啟動與完成時各寫入一列，支援結構化查詢，並能在月跑執行中提供 F062 進度輪詢所需的每 Stage 狀態。
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `id` | `BIGSERIAL PK` | 自增主鍵 |
+| `run_id` | `UUID NOT NULL FK → assignment_run.run_id` | 所屬月跑 |
+| `stage_no` | `SMALLINT NOT NULL` | Stage 編號（0~4） |
+| `status` | `VARCHAR(10) NOT NULL` | `running` / `completed` / `failed` |
+| `started_at` | `TIMESTAMP NOT NULL` | Stage 開始時間 |
+| `finished_at` | `TIMESTAMP` | Stage 完成時間（nullable） |
+| `processed_count` | `INTEGER` | 本 Stage 處理筆數（nullable） |
+| `error_message` | `TEXT` | 失敗原因（nullable） |
+
+F062 Polling 查詢：`SELECT * FROM assignment_run_stage_log WHERE run_id = :runId ORDER BY stage_no ASC`。
+
+**理由**：
+- JSONB 欄位方案（在 `assignment_run` 新增 `stage_log JSONB`）無法在月跑執行中途原子性更新單一 Stage：PostgreSQL JSONB 更新需整欄覆寫，並發風險高
+- 獨立表支援精確的每 Stage `started_at` / `finished_at` 時間戳記，`processed_count` 等結構化欄位，可直接在 DB 層過濾/聚合，無需應用層解析 JSONB
+- F062 進度 API 需要「每 Stage 最新狀態」，獨立表 `ORDER BY stage_no` 直接滿足，不需解析嵌套 JSON
+
+**放棄替代方案**：JSONB 存入 `assignment_run.stage_log` — 月跑執行中即時更新 JSONB 需讀取→修改→回寫整個欄位，並發競爭條件下有寫入遺漏風險；結構化查詢（如「哪個 Stage 耗時最長」）需在應用層解析，無法利用 DB 索引。
+
+**對應假設**：OQ-E07-13（F062） → 已解決，採獨立 `assignment_run_stage_log` 表。
+
+**影響範圍**：F062、data-model.md（新增 `assignment_run_stage_log` 表定義）。
+
+---
+
+#### AD-E07-8　Stage 0 日分派比例演算法
+
+**決策**：確認 Stage 0 日分派比例演算法為「整除基礎 + 餘數補到最近日期」：
+
+```
+base_ratio  = FLOOR(1000 / working_days)
+remainder   = 1000 % working_days
+per_date    = base_ratio
+最後 remainder 個工作日（以 calendar_date DESC 排序最前的 N 日）: per_date = base_ratio + 1
+```
+
+實作參考：
+1. 從 `ob_calendar` 讀取本月工作日清單（`rest_flg = '0'`）
+2. 以 `calendar_date DESC` 排列，前 `remainder` 個日期 `ratio_rate = base_ratio + 1`，其餘 `ratio_rate = base_ratio`
+3. 批次 INSERT `ob_assign_set`（`list_no, workdt, casedt, ratio_rate`），每個 LIST_NO × 每個工作日一列
+
+此演算法移植自 `reference/SP/Stage0_估算每日分派案件數量.sql`（T-SQL ROW_NUMBER OVER ORDER BY CALENDAR_DATE DESC）。
+
+**注意**：Stage 0 在 F049「每日估算」功能中僅為**試算預覽**（不寫入 `ob_assign_set`），正式月跑（F061）前置條件 Stage 0 才執行正式寫入。
+
+**對應假設**：F049 A-2 → 已解決，確認演算法為 FLOOR + 餘數補最近日期。
+
+---
+
+#### AD-E07-9　ob_assign_set 資料分層歸屬
+
+**決策**：`ob_assign_set` 歸屬於 **L3（系統產出）**，而非 L1 Migration 範疇。
+
+| 層級 | 資料來源 | 代表表 |
+|------|---------|------|
+| L1（一次性遷移） | OB 舊系統歷史資料 | ob_list_definition / ob_dept_pct / ob_empl_set / ob_levelcard_* / ob_tier / ob_code_df |
+| L2（E04 定期 ETL） | OBPOOLDATA / OBEMPHIRE / OBCALENDAR 每日/每月 ETL | ob_pool_data / ob_emphire / ob_calendar |
+| L3（月跑系統產出） | E07 月跑計算結果 | ob_assign_set / ob_pool_data_list（欄位回寫）/ assignment_run / assignment_run_snapshot / assignment_run_stage_log / assignment_audit_log |
+
+**理由**：`ob_assign_set` 存放的是月跑 Stage 0 計算得出的「當月各工作日分派量係數」，每月月跑前重新計算，不是歷史遷移資料。舊系統的 OBASSIGNSET 歷史資料無需遷移，直接由新系統月跑重新產出。
+
+---
+
+#### E07 資料來源分層架構圖
+
+```mermaid
+graph TD
+    subgraph 舊OB系統["舊 OB 系統（SQL Server）"]
+        OBMLISTDF["OBMLISTDF\n名單定義"]
+        OBMDEPTPCT["OBMDEPTPCT\n部門比例"]
+        OBEMPLSETMF["OBEMPLSETMF\n人員比例"]
+        OBLEVELCARD_V["OBLEVELCARD_VERSION\n計分版本"]
+        OBLEVELCARD_COL["OBLEVELCARD_COLUMN\n計分維度"]
+        OBLEVELCARD_SCO["OBLEVELCARD_SCORE\n計分分數"]
+        OBLEVELCARD_LEV["OBLEVELCARD_LEVEL\n CARD_LEVEL 門檻"]
+        OBTIER["OBTIER\nTIER_LEVEL 對應"]
+        OBMCODEDF["OBMCODEDF\n代碼定義"]
+        OBPOOLDATA["OBPOOLDATA\n案件池主檔"]
+        OBEMPHIRE["OBEMPHIRE\n員工主檔"]
+        OBCALENDAR["OBCALENDAR\n工作日表"]
+    end
+
+    subgraph L1["L1：一次性 Migration（部署前）"]
+        MIG_SCRIPT["Migration 腳本\n（Node.js + psql COPY）"]
+    end
+
+    subgraph L2["L2：E04 ETL 定期同步"]
+        ETL_POOL["E04 擷取任務\nOBPOOLDATA → ob_pool_data\n月跑前手動/排程執行"]
+        ETL_EMP["E04 擷取任務\nOBEMPHIRE → ob_emphire\n每日 ETL"]
+        ETL_CAL["E04 擷取任務\nOBCALENDAR → ob_calendar\n每年 ETL（年初一次）"]
+    end
+
+    subgraph AppDB["AppDB（PostgreSQL 16）"]
+        subgraph ob_migrated["ob_* 遷移表（L1 產出）"]
+            ob_list["ob_list_definition"]
+            ob_dept["ob_dept_pct"]
+            ob_empl["ob_empl_set"]
+            ob_lv["ob_levelcard_version / column / score / level"]
+            ob_tier_pg["ob_tier"]
+            ob_code["ob_code_df"]
+        end
+        subgraph ob_etl["ob_* ETL 表（L2 產出）"]
+            ob_pool["ob_pool_data"]
+            ob_emphire_pg["ob_emphire"]
+            ob_cal_pg["ob_calendar"]
+        end
+        subgraph ob_l3["L3 月跑產出"]
+            ob_assign_set["ob_assign_set\n日比例係數"]
+            ob_pool_list["ob_pool_data_list\n分派結果"]
+            assign_run["assignment_run\nassignment_run_snapshot\nassignment_run_stage_log\nassignment_audit_log"]
+            ob_assign_cfg["ob_assign_config\n全域設定"]
+        end
+    end
+
+    subgraph E07月跑["E07 月跑引擎（F061）"]
+        Stage0["Stage 0\n前置條件 + 日比例計算"]
+        Stage1["Stage 1\n名單建立（ob_pool_data 篩選）"]
+        Stage2["Stage 2\n計分（fn_calc_tier_level）"]
+        Stage3["Stage 3\n部門分配（ob_dept_pct）"]
+        Stage4["Stage 4\n人員分配（ob_empl_set）"]
+        Snapshot["快照原子性寫入\n（DB Transaction）"]
+    end
+
+    OBMLISTDF -->|一次性| MIG_SCRIPT
+    OBMDEPTPCT -->|一次性| MIG_SCRIPT
+    OBEMPLSETMF -->|一次性| MIG_SCRIPT
+    OBLEVELCARD_V -->|一次性| MIG_SCRIPT
+    OBLEVELCARD_COL -->|一次性| MIG_SCRIPT
+    OBLEVELCARD_SCO -->|一次性| MIG_SCRIPT
+    OBLEVELCARD_LEV -->|一次性| MIG_SCRIPT
+    OBTIER -->|一次性| MIG_SCRIPT
+    OBMCODEDF -->|一次性| MIG_SCRIPT
+
+    MIG_SCRIPT -->|"psql COPY\n+ 轉換 + 補建 PK"| ob_migrated
+
+    OBPOOLDATA -->|"E04 ETL（月跑前）"| ETL_POOL
+    OBEMPHIRE -->|"E04 ETL（每日）"| ETL_EMP
+    OBCALENDAR -->|"E04 ETL（每年）"| ETL_CAL
+
+    ETL_POOL --> ob_pool
+    ETL_EMP --> ob_emphire_pg
+    ETL_CAL --> ob_cal_pg
+
+    ob_list -->|Stage 1 篩選條件| Stage1
+    ob_pool -->|Stage 1 讀取| Stage1
+    ob_lv -->|Stage 2 計分設定| Stage2
+    ob_tier_pg -->|Stage 2 TIER 對應| Stage2
+    ob_dept -->|Stage 3 部門比例| Stage3
+    ob_empl -->|Stage 4 人員比例| Stage4
+    ob_emphire_pg -->|Stage 4 在職判斷 + 員工資料| Stage4
+    ob_cal_pg -->|Stage 0 工作日計算| Stage0
+    ob_assign_cfg -->|Stage 3 CR 開關| Stage3
+
+    Stage0 -->|"寫 ob_assign_set"| ob_assign_set
+    Stage1 --> Stage2
+    Stage2 --> Stage3
+    Stage3 -->|"回寫 ob_pool_data_list.dept_id"| ob_pool_list
+    Stage4 -->|"回寫 ob_pool_data_list.emplid"| ob_pool_list
+    Stage3 --> Stage4
+    Stage4 --> Snapshot
+    Snapshot -->|"原子性寫入"| assign_run
+
+    classDef l1 fill:#dbeafe,stroke:#2563eb
+    classDef l2 fill:#dcfce7,stroke:#16a34a
+    classDef l3 fill:#fef9c3,stroke:#ca8a04
+    classDef src fill:#fef2f2,stroke:#ef4444
+    classDef engine fill:#f3e8ff,stroke:#9333ea
+    class MIG_SCRIPT l1
+    class ETL_POOL,ETL_EMP,ETL_CAL l2
+    class ob_l3,ob_assign_set,ob_pool_list,assign_run,ob_assign_cfg l3
+    class 舊OB系統,OBMLISTDF,OBMDEPTPCT,OBEMPLSETMF,OBLEVELCARD_V,OBLEVELCARD_COL,OBLEVELCARD_SCO,OBLEVELCARD_LEV,OBTIER,OBMCODEDF,OBPOOLDATA,OBEMPHIRE,OBCALENDAR src
+    class E07月跑,Stage0,Stage1,Stage2,Stage3,Stage4,Snapshot engine
+```
+
+---
+
+### E07-B　Migration 設計（L1 一次性遷移）
+
+#### 遷移範圍與匯入順序
+
+L1 Migration 包含 9 張 OB 歷史設定表，需依 FK 相依順序匯入：
+
+| 順序 | 來源表（SQL Server） | AppDB 目標表 | 關鍵轉換規則 |
+|------|---------------------|-------------|-------------|
+| 1 | `OBMCODEDF` | `ob_code_df` | — |
+| 2 | `OBTIER` | `ob_tier` | 補建複合 PK `(card_type, COALESCE(card_level, ''))`；`card_type` / `tier_level` 補 NOT NULL |
+| 3 | `OBLEVELCARD_VERSION` | `ob_levelcard_version` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 `(SDATE <= NOW() < EDATE)` 計算；稽核欄位統一重命名 `A_*/U_* → created_*/updated_*` |
+| 4 | `OBLEVELCARD_COLUMN` | `ob_levelcard_column` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`（AD-E07-4）；稽核欄位重命名 |
+| 5 | `OBLEVELCARD_SCORE` | `ob_levelcard_score` | 稽核欄位重命名 |
+| 6 | `OBLEVELCARD_LEVEL` | `ob_levelcard_level` | 稽核欄位重命名 |
+| 7 | `OBMLISTDF` | `ob_list_definition` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`；多值欄位（`prod_kind` / `spec_tp` / `settle_src` / `caseyear`）維持 `$$` 分隔字串原樣 |
+| 8 | `OBMDEPTPCT` | `ob_dept_pct` | `DEPTID_M` RTRIM（padded to 50 chars，實際 4 chars） |
+| 9 | `OBEMPLSETMF` | `ob_empl_set` | `DEPTID_M` RTRIM；`ration` 欄位名稱對應（`RATION` → `ration`） |
+
+並行初始化（無 FK 相依）：
+- `ob_assign_config` 初始 Seed（AD-E07-5）
+
+#### 轉換規則彙整
+
+| 規則 | 說明 |
+|------|------|
+| 欄位重命名（稽核欄位） | `A_PRGID → created_by_prgid`, `A_USERID → created_by_userid`, `A_SYSDT → created_at`, `U_PRGID → updated_by_prgid`, `U_USERID → updated_by_userid`, `U_SYSDT → updated_at`（部分表不存在稽核欄位則略過） |
+| NVARCHAR → TEXT/VARCHAR | SQL Server `nvarchar(MAX)` → PostgreSQL `TEXT`；`nvarchar(N)` → `VARCHAR(N)` |
+| DATETIME → TIMESTAMP | `DATETIME` → `TIMESTAMP WITHOUT TIME ZONE`（資料假設為 UTC+8，遷移時保留原值，不做時區轉換） |
+| RTRIM DEPTID_M | `ob_dept_pct` 與 `ob_empl_set` 的 `deptid_m` 欄位在 CSV 中為 50 字元 padded，寫入前執行 RTRIM |
+| ob_tier PK 補建 | `card_level` 可為 NULL（M5 fallback），PK 使用 UNIQUE INDEX ON `ob_tier (card_type, COALESCE(card_level, ''))`（PostgreSQL 不支援 COALESCE in Primary Key，改以 UNIQUE INDEX 等效表達） |
+| ob_levelcard_version status 初值 | `CASE WHEN SDATE <= NOW() AND (EDATE IS NULL OR NOW() < EDATE) THEN 'active' ELSE 'inactive' END` |
+| $$ 多值欄位 | `prod_kind`, `spec_tp`, `settle_src`, `caseyear` 維持原始 `$$` 分隔字串，不拆解；遷移腳本直接原樣複製 |
+
+#### 工具選型
+
+| 工具 | 用途 |
+|------|------|
+| `pg_dump` / `bcp` | 從 SQL Server 匯出 CSV（DBA 執行，已有 dump 樣本於 `reference/DumpData/`） |
+| Node.js Migration Script | 讀取 CSV，執行轉換規則（RTRIM、欄位重命名、status 初值計算），批次 `COPY ... FROM STDIN`（`pg` driver） |
+| PostgreSQL `COPY` | 高效大量匯入（優於逐列 INSERT） |
+| TypeORM Migration | Schema 建立（`CREATE TABLE ob_*`）；Migration 腳本在 Schema 建立後執行 |
+
+#### 遷移驗證
+
+部署後執行以下驗證查詢（對應 OQ-E07-17 決議）：
+
+```sql
+-- 1. ob_tier：驗證 PK 唯一性（含 NULL card_level fallback）
+SELECT card_type, COALESCE(card_level, '') AS ck, COUNT(*)
+  FROM ob_tier
+ GROUP BY 1, 2
+HAVING COUNT(*) > 1;
+-- 預期：0 列
+
+-- 2. ob_levelcard_version：驗證 status 初值計算正確
+SELECT status, COUNT(*) FROM ob_levelcard_version GROUP BY status;
+-- 預期：active 筆數 >= 1（至少有一個當前生效版本）
+
+-- 3. ob_dept_pct：驗證 DEPTID_M 無尾隨空白
+SELECT COUNT(*) FROM ob_dept_pct WHERE deptid_m != RTRIM(deptid_m);
+-- 預期：0
+
+-- 4. ob_list_definition：驗證多值欄位格式
+SELECT COUNT(*) FROM ob_list_definition WHERE prod_kind LIKE '%$$%';
+-- 預期：>= 0（符合多值欄位儲存規範）
+
+-- 5. 各表筆數與舊系統匯出 CSV 一致（由 DBA 對照 reference/DumpData/ 驗證）
+```
+
+---
+
+### E07-C　ETL 設計（L2 定期同步）
+
+#### L2 ETL 任務配置
+
+依 OQ-E07-15 決議，以下三張表透過 E04 通用擷取任務從舊 OB SQL Server 同步至 AppDB：
+
+| E04 任務 | 來源（SQL Server） | AppDB 目標 | 同步策略 | 同步頻率 |
+|---------|-----------------|-----------|---------|---------|
+| OBPOOLDATA 擷取 | `dbo.OBPOOLDATA`（USP_OB_OBPOOLDATA 上游物化表） | `ob_pool_data` | **全量替換**（TRUNCATE + COPY）| 月跑前手動或排程（建議每月 1 日） |
+| OBEMPHIRE 擷取 | `dbo.OBEMPHIRE` | `ob_emphire` | **增量**（依 `update_date` 欄位） | 每日 03:00（建議低峰）|
+| OBCALENDAR 擷取 | `dbo.OBCALENDAR` | `ob_calendar` | **全量替換** | 每年初一次（由 DBA 手動觸發） |
+
+#### 同步策略說明
+
+**OBPOOLDATA（全量替換）**
+- 案件池每月由舊系統 Stored Procedure 重建，增量欄位不可靠
+- 全量 TRUNCATE + COPY 確保 ob_pool_data 與舊系統當月快照一致
+- 月跑前由業務主管或排程確保最新 ob_pool_data 已就緒（F061 前置條件 AC-1 第 6 點）
+
+**OBEMPHIRE（增量）**
+- 員工異動（入職/離職/轉調）每日發生，增量同步可降低 ETL 資料量
+- 以 `update_date`（OBEMPHIRE 的 `U_SYSDT` 欄位，映射為 `ob_emphire.updated_at`）作為增量鍵
+- `ob_emphire` 補建 `emp_id` 為 PK（原 OBEMPHIRE 無 PK），UPSERT 策略
+
+**OBCALENDAR（全量替換）**
+- 工作日行事曆由舊 OB Admin 每年初手動維護下年度資料
+- 資料量小（~365 列/年），全量替換無效能問題
+
+#### AppDB ETL 目標表補充設計
+
+**ob_emphire**（來源：OBEMPHIRE，每日增量）：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `emp_id` | `VARCHAR(10) PK` | 員工工號（補建 PK，原表無） |
+| `emp_nm` | `VARCHAR(50)` | 員工姓名（F064 分派結果匯出用） |
+| `deptid_m` | `VARCHAR(4)` | 部門代碼（RTRIM）|
+| `resign_date` | `DATE` | 離職日期，`NULL` = 在職（AD-E07-6） |
+| `...` | | 其他 OBEMPHIRE 欄位（完整映射由 E04 擷取任務設定） |
+| `created_at` | `TIMESTAMP` | 首次同步時間 |
+| `updated_at` | `TIMESTAMP` | 最後同步時間 |
+
+**ob_calendar**（來源：OBCALENDAR，每年全量）：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `calendar_date` | `DATE PK` | 日期 |
+| `rest_flg` | `VARCHAR(1) NOT NULL` | `'0'` = 工作日；`'1'` = 假日 |
+| `list_no` | `VARCHAR(10)` | 適用名單（若 OBCALENDAR 有 LIST_NO 欄位）|
+
+#### ETL 同步流程圖
+
+```mermaid
+sequenceDiagram
+    participant OB_DB as 舊 OB DB（SQL Server）
+    participant E04 as E04 擷取任務（Scheduler）
+    participant AppDB as AppDB（PostgreSQL）
+    participant E07 as E07 月跑引擎
+
+    Note over OB_DB,AppDB: 每日 ETL（OBEMPHIRE → ob_emphire）
+    E04->>OB_DB: SELECT * FROM OBEMPHIRE WHERE U_SYSDT > :last_incremental_value
+    OB_DB-->>E04: 異動員工資料（增量）
+    E04->>AppDB: INSERT INTO ob_emphire ... ON CONFLICT (emp_id) DO UPDATE
+
+    Note over OB_DB,AppDB: 月跑前 ETL（OBPOOLDATA → ob_pool_data）
+    E04->>OB_DB: SELECT * FROM OBPOOLDATA WHERE WORKYM = :currentYm
+    OB_DB-->>E04: 當月案件池資料（全量）
+    E04->>AppDB: TRUNCATE ob_pool_data; COPY ob_pool_data FROM ...
+
+    Note over OB_DB,AppDB: 每年初 ETL（OBCALENDAR → ob_calendar）
+    E04->>OB_DB: SELECT * FROM OBCALENDAR WHERE CALENDAR_DATE >= :nextYearStart
+    OB_DB-->>E04: 下年度工作日資料
+    E04->>AppDB: TRUNCATE ob_calendar; COPY ob_calendar FROM ...
+
+    Note over AppDB,E07: 月跑觸發
+    E07->>AppDB: 讀 ob_calendar（工作日計算）
+    E07->>AppDB: 讀 ob_pool_data（當月案件）
+    E07->>AppDB: 讀 ob_emphire（在職員工，resign_date IS NULL）
+```
+
+---
+
+### E07-D　月跑執行架構（L3 系統產出）
+
+#### 月跑整體流程
+
+```mermaid
+graph TD
+    A["業務主管\n點擊「執行月跑」"] --> B["POST /api/v1/assignment/runs"]
+    B --> C{前置條件檢查\n AC-1}
+    C -->|失敗| D["422 ASSIGNMENT_RUN_PRECHECK_FAILED\n回傳失敗清單"]
+    C -->|通過| E["確認對話框\n顯示 YM / 名單數 / 計分版本"]
+    E --> F["INSERT assignment_run\nstatus=pending\n202 Accepted 回傳 runId"]
+    F --> G["前端跳轉 F062 進度頁\n3 秒 Polling 開始"]
+    F --> H["背景 Promise Chain 啟動"]
+
+    H --> I["Stage 0\n工作日計算 + ob_assign_set 寫入"]
+    I --> J["INSERT assignment_run_stage_log\nstage_no=0, status=completed"]
+    J --> K["Stage 1\n篩選 ob_pool_data\n→ ob_pool_data_list 建立"]
+    K --> L["INSERT assignment_run_stage_log\nstage_no=1, status=completed"]
+    L --> M["Stage 2\nfn_calc_tier_level() 計分\n→ 回寫 tier_level"]
+    M --> N["INSERT assignment_run_stage_log\nstage_no=2, status=completed"]
+    N --> O["Stage 3\n部門分配（ob_dept_pct）\n＋ CR 回分（F059 開關）\n→ 回寫 ob_pool_data_list.dept_id"]
+    O --> P["INSERT assignment_run_stage_log\nstage_no=3, status=completed"]
+    P --> Q["Stage 4\n人員分配（ob_empl_set）\n＋ st4_exchange（T1/T2/T3 新件 10%）\n→ 回寫 ob_pool_data_list.emplid"]
+    Q --> R["INSERT assignment_run_stage_log\nstage_no=4, status=completed"]
+
+    R --> S{"DB Transaction\n快照原子性寫入"}
+    S -->|成功| T["INSERT assignment_run_snapshot\nconfig / input_list / result\n（3 列，同一 Transaction）"]
+    T --> U["UPDATE assignment_run\nstatus=completed\nfinished_at=NOW()\ntotal_cases=N"]
+    S -->|失敗| V["Transaction Rollback\nUPDATE assignment_run\nstatus=failed\nerror_message=Snapshot_failed"]
+
+    style D fill:#fef2f2,stroke:#ef4444
+    style V fill:#fef2f2,stroke:#ef4444
+    style T fill:#dcfce7,stroke:#16a34a
+    style U fill:#dcfce7,stroke:#16a34a
+```
+
+#### Stage 進度狀態機
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: POST /runs（INSERT assignment_run）
+    pending --> running: Stage 0 開始
+    running --> completed: 快照 Transaction commit
+    running --> failed: 任一 Stage 失敗 或 快照 Rollback
+    completed --> [*]
+    failed --> [*]
+
+    state running {
+        [*] --> Stage0_running
+        Stage0_running --> Stage0_done
+        Stage0_done --> Stage1_running
+        Stage1_running --> Stage1_done
+        Stage1_done --> Stage2_running
+        Stage2_running --> Stage2_done
+        Stage2_done --> Stage3_running
+        Stage3_running --> Stage3_done
+        Stage3_done --> Stage4_running
+        Stage4_running --> Stage4_done
+        Stage4_done --> Snapshot_writing
+        Snapshot_writing --> Snapshot_done
+    }
+```
+
+#### 並發控制
+
+| 情境 | 控制方式 |
+|------|---------|
+| 同月重複觸發（pending/running 存在） | 前置條件 AC-1 第 5 點：查詢 `assignment_run WHERE ym = :currentYm AND status IN ('pending','running')`，存在則回傳 409 `ASSIGNMENT_RUN_ALREADY_RUNNING` |
+| 月跑執行中 CRUD 操作 | F048/F050~F052/F054~F060/F068 API 在寫入前檢查 `assignment_run.status IN ('pending','running')`，存在則回傳 409 `*_LOCKED`（月跑鎖） |
+| 重跑（completed 狀態） | 允許；前次快照保留（BR-4，F061） |
+
+#### 月跑環境變數清單
+
+| 變數名稱 | 預設值 | 說明 |
+|---------|-------|------|
+| `ASSIGNMENT_PROGRESS_POLL_INTERVAL_MS` | `3000` | F062 前端 Polling 間隔（毫秒） |
+| `STAGE0_ESTIMATE_TIMEOUT_MS` | `10000` | F049 估算 API 逾時（毫秒） |
+| `STAGE0_POOL_WARN_THRESHOLD` | `1000` | F049 案件池數量警告門檻 |
+| `EXPORT_FILE_EXPIRE_MS` | `300000` | F064 匯出逾時（毫秒，預設 5 分鐘） |
+| `ASSIGNMENT_RUN_TIMEOUT_MS` | `1800000` | 月跑最大執行時間（毫秒，預設 30 分鐘，對應 NFR-003） |
+
+---
+
+### E07-E　PostgreSQL Function 設計（fn_calc_tier_level）
+
+#### AD-E07-10　計分函式介面定義
+
+**決策**：將 Stage 2 計分邏輯以 PostgreSQL function `fn_calc_tier_level` 實作，移植自 SQL Server `SP_OBLEVELCARD_*` 系列 Stored Procedure 群組（AD-E07-3）。
+
+**Function 簽章**：
+
+```sql
+CREATE OR REPLACE FUNCTION fn_calc_tier_level(
+    p_card_type     VARCHAR(5),   -- 計分卡類型（對應 ob_levelcard_version.card_type）
+    p_card_version  INTEGER,      -- 計分卡版本（對應 ob_levelcard_version.card_version）
+    p_pool_data_row ob_pool_data  -- 單筆案件資料（複合型別，讀取計分維度所需欄位）
+)
+RETURNS TABLE (
+    score       INTEGER,          -- 總分
+    card_level  VARCHAR(5),       -- CARD_LEVEL（對應 ob_levelcard_level 門檻）
+    tier_level  VARCHAR(5)        -- TIER_LEVEL（對應 ob_tier）
+)
+LANGUAGE plpgsql
+AS $$
+-- 實作：
+-- 1. 讀 ob_levelcard_column（status='active', card_type=p_card_type, card_version=p_card_version）
+-- 2. 依各維度 column_name 從 p_pool_data_row 取值，JOIN ob_levelcard_score 計算分數
+-- 3. 累加 score → 總分
+-- 4. JOIN ob_levelcard_level 取得對應 card_level（依門檻區間）
+-- 5. JOIN ob_tier（card_type=p_card_type, card_level=card_level）取得 tier_level
+--    若無精確匹配（card_level IS NOT NULL），fallback 查 ob_tier WHERE card_type=p_card_type AND card_level IS NULL
+-- 6. RETURN NEXT (score, card_level, tier_level)
+$$;
+```
+
+**呼叫方式**（Stage 2 批次執行）：
+
+```sql
+-- 批次更新 ob_pool_data_list 的 score / card_level / tier_level
+UPDATE ob_pool_data_list pdl
+   SET score      = calc.score,
+       card_level = calc.card_level,
+       tier_level = calc.tier_level
+  FROM ob_pool_data pd
+  CROSS JOIN LATERAL fn_calc_tier_level(
+      :p_card_type,       -- 由月跑 Stage 1 依 list_no → ob_list_definition.card_type 決定
+      :p_card_version,    -- 取 ob_levelcard_version WHERE card_type = :p_card_type AND status = 'active'
+      pd.*
+  ) AS calc
+ WHERE pdl.list_no  = :list_no
+   AND pd.appl_no   = pdl.appl_no
+   AND pd.orgno     = pdl.orgno;
+```
+
+**ob_tier Fallback 邏輯**（Stage 2）：
+
+```sql
+-- 精確匹配：card_level 有值
+SELECT tier_level FROM ob_tier
+ WHERE card_type = :card_type AND card_level = :card_level;
+
+-- Fallback：card_level IS NULL（如 M5 → T5M）
+SELECT tier_level FROM ob_tier
+ WHERE card_type = :card_type AND card_level IS NULL;
+```
+
+**效能考量**：
+- 批次呼叫（LATERAL JOIN）優於逐列 Python/Node.js 應用層計算，充分利用 PostgreSQL 執行計畫與緩衝
+- ob_levelcard_column / ob_levelcard_score / ob_levelcard_level 在 Stage 2 執行前已快取於 PostgreSQL shared_buffers
+- 若 10 萬筆案件 Stage 2 耗時超過 10 分鐘（NFR-003 Stage 2 門檻），考慮分批（每 1 萬筆一 batch）以避免長事務鎖定
+
+**注意事項**：
+- Function 為純計算函式，不直接寫入任何表（副作用由呼叫方 UPDATE 負責）
+- function 參數 `p_pool_data_row ob_pool_data` 使用 PostgreSQL row type，需確保 `ob_pool_data` 表結構穩定；若 ETL 重建 `ob_pool_data`（TRUNCATE + COPY），row type 不受影響（schema 定義不變）
+
+---
+
+### E07-F　開發前準備檢核清單
+
+以下清單為 E07 TDD 實作開始前的必要準備項目，任一 **[BLOCKER]** 項目未完成則不得進入實作階段。
+
+#### F-1　資料庫 Schema 準備（L1 Migration）
+
+| # | 項目 | 狀態 | 備注 |
+|---|------|------|------|
+| M1 | TypeORM Migration 檔案：建立所有 `ob_*` 表（含補建欄位） | ⬜ 待建立 | **[BLOCKER]** |
+| M2 | TypeORM Migration 檔案：建立 `assignment_run` / `assignment_run_snapshot` / `assignment_run_stage_log` / `assignment_audit_log` | ⬜ 待建立 | **[BLOCKER]** |
+| M3 | TypeORM Migration 檔案：建立 `ob_assign_config`（AD-E07-5，含初始 Seed） | ⬜ 待建立 | **[BLOCKER]** |
+| M4 | TypeORM Migration 檔案：`ob_assign_set` 表建立 | ⬜ 待建立 | **[BLOCKER]** |
+| M5 | 確認 `ob_tier` UNIQUE INDEX `(card_type, COALESCE(card_level, ''))` 在 PostgreSQL 16 語法正確 | ⬜ 待驗證 | 參考：PostgreSQL 不支援 COALESCE in PK，改用 UNIQUE INDEX + WHERE — 驗證可行性 |
+| M6 | `users` 表 `is_sales_manager BOOLEAN NOT NULL DEFAULT FALSE` 欄位 Migration | ⬜ 待確認 | 檢查是否已在 E02 Migration 中建立 |
+
+#### F-2　Migration 腳本執行（L1 資料匯入）
+
+| # | 項目 | 狀態 | 備注 |
+|---|------|------|------|
+| D1 | 從 SQL Server dump 9 表 CSV（已有樣本：`reference/DumpData/*_20260505.csv`） | ✅ 樣本已取得 | 正式 dump 前確認與樣本一致 |
+| D2 | Migration 腳本：OBMCODEDF → `ob_code_df` | ⬜ 待撰寫 | |
+| D3 | Migration 腳本：OBTIER → `ob_tier`（含 NULL card_level 處理） | ⬜ 待撰寫 | **[BLOCKER]** |
+| D4 | Migration 腳本：OBLEVELCARD_VERSION → `ob_levelcard_version`（含 status 初值） | ⬜ 待撰寫 | **[BLOCKER]** |
+| D5 | Migration 腳本：OBLEVELCARD_COLUMN → `ob_levelcard_column`（補建 status='active'） | ⬜ 待撰寫 | **[BLOCKER]** |
+| D6 | Migration 腳本：OBLEVELCARD_SCORE → `ob_levelcard_score` | ⬜ 待撰寫 | |
+| D7 | Migration 腳本：OBLEVELCARD_LEVEL → `ob_levelcard_level` | ⬜ 待撰寫 | |
+| D8 | Migration 腳本：OBMLISTDF → `ob_list_definition`（含 $$ 多值欄位保留） | ⬜ 待撰寫 | **[BLOCKER]** |
+| D9 | Migration 腳本：OBMDEPTPCT → `ob_dept_pct`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
+| D10 | Migration 腳本：OBEMPLSETMF → `ob_empl_set`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
+| D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列 | ⬜ 待執行 | **[BLOCKER]** |
+
+#### F-3　E04 ETL 任務設定（L2 同步）
+
+| # | 項目 | 狀態 | 備注 |
+|---|------|------|------|
+| E1 | 建立 E04 擷取任務：OBPOOLDATA → `ob_pool_data`（全量替換，月跑前執行） | ⬜ 待設定 | **[BLOCKER]** |
+| E2 | 建立 E04 擷取任務：OBEMPHIRE → `ob_emphire`（增量，每日 03:00） | ⬜ 待設定 | **[BLOCKER]** |
+| E3 | 建立 E04 擷取任務：OBCALENDAR → `ob_calendar`（全量，每年初一次） | ⬜ 待設定 | |
+| E4 | 確認 `ob_emphire.emp_id` 為 PK，UPSERT 策略正確（`ON CONFLICT (emp_id) DO UPDATE`） | ⬜ 待確認 | |
+| E5 | 首次執行 OBEMPHIRE ETL，確認 `ob_emphire` 有資料（月跑 Stage 4 依賴） | ⬜ 待執行 | **[BLOCKER]** |
+| E6 | 首次執行 OBCALENDAR ETL，確認 `ob_calendar` 當年度工作日資料完整 | ⬜ 待執行 | **[BLOCKER]** |
+
+#### F-4　PostgreSQL Function 建立（計分引擎）
+
+| # | 項目 | 狀態 | 備注 |
+|---|------|------|------|
+| P1 | 撰寫 `fn_calc_tier_level` PostgreSQL function（plpgsql） | ⬜ 待撰寫 | **[BLOCKER]**（月跑 Stage 2 依賴） |
+| P2 | Function 單元測試：以 `reference/DumpData/` 已知資料驗證計分結果 | ⬜ 待撰寫 | **[BLOCKER]** |
+| P3 | ob_tier fallback 邏輯測試（M5 → T5M，card_level IS NULL 案例） | ⬜ 待撰寫 | |
+| P4 | 效能測試：10 萬筆 LATERAL JOIN 耗時 < 10 分鐘（NFR-003 Stage 2 門檻）| ⬜ 待執行 | 建議在 Staging 環境以真實資料量測試 |
+
+#### F-5　開放問題最終確認
+
+| # | 項目 | 狀態 | 備注 |
+|---|------|------|------|
+| Q1 | ob_tier UNIQUE INDEX 語法驗證（`COALESCE(card_level, '')` in index key） | ⬜ 待驗證 | 詳見 A54 |
+| Q2 | ob_levelcard_column.status 欄位：確認是否需要 `index(status)` 加速 Stage 2 篩選 | ⬜ 待確認 | 建議加 `INDEX (card_type, card_version, status)` |
+| Q3 | F062 `assignment_run_stage_log` 表：確認 `stage_no` 是否需要 `UNIQUE (run_id, stage_no, status)` 約束，防止重複插入同一 Stage 狀態 | ⬜ 待確認 | 建議 `UNIQUE (run_id, stage_no)` + 以 UPDATE 取代 INSERT（若同一 Stage 重跑） |
+| Q4 | OBPOOLDATA 全量替換期間（TRUNCATE 中）月跑若被觸發，需確認鎖定順序（建議 E04 ETL 執行中加 advisory lock 或直接在前置條件禁止月跑觸發） | ⬜ 待確認 | 架構風險：ETL 與月跑並發 |
+
+#### F-6　規格最終對齊
+
+| # | 項目 | 狀態 | 備注 |
+|---|------|------|------|
+| S1 | F049 試算 API 與正式月跑 Stage 0 確認共用同一日比例演算法（AD-E07-8） | ✅ 確認 | F049 試算不寫入 ob_assign_set；月跑 Stage 0 正式寫入 |
+| S2 | F059 CR 回分開關：確認 `ob_assign_config.config_key = 'cr_reassignment_enabled'` 為唯一真實來源 | ✅ 確認（AD-E07-5） | |
+| S3 | F054/F057 月跑鎖：確認所有 E07 CRUD API 在寫入前查詢 `assignment_run WHERE status IN ('pending','running')` | ⬜ 待 TDD 實作驗證 | |
+| S4 | F064 匯出：確認使用 exceljs streaming mode（非全量 buffer），避免大資料集 OOM | ⬜ 待 TDD 實作驗證 | AD-E07-11（參考技術選型） |
+| S5 | 確認 `ob_emphire.resign_date IS NULL` 為在職判斷唯一條件（AD-E07-6），無其他停用欄位 | ✅ 確認 | |
+
+---
+
+#### AD-E07-11　F064 匯出技術選型
+
+**決策**：F064 分派結果匯出使用 **exceljs** 套件的 Streaming Writer 模式，不使用一次性全量 buffer 模式。
+
+```
+exceljs WorkbookWriter（streaming）
+  → 逐列 addRow()
+  → 直接 pipe 至 HTTP Response stream
+  → 避免 N 萬列資料全部載入 Node.js Heap
+```
+
+**理由**：分派結果可能達 10 萬筆，全量 buffer（`const wb = new ExcelJS.Workbook()`）模式將所有列保存於 Heap，有 OOM 風險（參考風險 6）。Streaming Writer 逐列輸出，Heap 使用量固定（與資料量無關）。
+
+**影響範圍**：F064。
+
+---
+
+*本文件版本 2.0，由 System Architect Agent 依據 E07 Epic 進入開發前架構決策需求（2026-05-05）更新。主要變更：*
+
+- *新增架構決策 AD-E07-4（ob_levelcard_column 停用機制：status 欄位）*
+- *新增架構決策 AD-E07-5（CR 回分開關：ob_assign_config 獨立表）*
+- *新增架構決策 AD-E07-6（員工停用：ob_emphire.resign_date IS NULL）*
+- *新增架構決策 AD-E07-7（Stage 進度：assignment_run_stage_log 獨立表）*
+- *新增架構決策 AD-E07-8（Stage 0 日比例演算法：FLOOR + 餘數補最近日期）*
+- *新增架構決策 AD-E07-9（ob_assign_set 歸屬 L3 系統產出）*
+- *新增架構決策 AD-E07-10（fn_calc_tier_level function 簽章與呼叫方式）*
+- *新增架構決策 AD-E07-11（F064 exceljs streaming mode）*
+- *新增 E07-A 資料來源分層架構（含 L1/L2/L3 分層圖）*
+- *新增 E07-B Migration 設計（匯入順序、轉換規則、驗證 SQL）*
+- *新增 E07-C ETL 設計（OBPOOLDATA/OBEMPHIRE/OBCALENDAR 三任務配置）*
+- *新增 E07-D 月跑執行架構（流程圖、狀態機、並發控制、環境變數）*
+- *新增 E07-E PostgreSQL Function 設計（fn_calc_tier_level 簽章、LATERAL JOIN 呼叫、ob_tier fallback）*
+- *新增 E07-F 開發前準備檢核清單（M/D/E/P/Q/S 六類共 28 項，其中 9 項為 BLOCKER）*
+- *解決 OQ-E07-6/8/9/13 開放問題；更新 covers 清單至 F048~F068 全覆蓋*
