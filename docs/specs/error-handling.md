@@ -1,8 +1,8 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.4"
-date: 2026-04-13
+version: "1.5"
+date: 2026-04-24
 status: Draft
 ---
 
@@ -210,6 +210,64 @@ status: Draft
 
 ---
 
+### ASSIGNMENT 領域 — E07 客戶名單分派 {#assignment-errors}
+
+E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、快照歷史、代碼維護等六個模組。所有 `is_sales_manager` 權限不足時回傳 `AUTH_FORBIDDEN`（見 AUTH 領域）。
+
+#### 名單定義 / 資料鎖 {#assignment-list-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| LIST_NO_LIMIT_EXCEEDED | 422 | 本月（{ym}）名單定義已達 999 筆上限，無法新增 | 同月 `ob_list_definition` 紀錄超過 999 筆（OB{YYYYMM}{NNN} 格式限制，Phase 2 擴位） | F050 |
+| LIST_NO_DUPLICATE | 422 | 相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {conflictListNo}） | `prod_kind + card_type` 在當月 active 名單中已存在 | F050, F051 |
+| ASSIGNMENT_LIST_NOT_FOUND | 404 | 找不到指定的名單定義 | `list_no` 不存在於 `ob_list_definition` | F049, F051, F052, F060 |
+| ASSIGNMENT_LIST_INACTIVE | 422 | 已停用名單不可編輯 | 嘗試編輯 `status = 'inactive'` 的名單 | F051 |
+| ASSIGNMENT_LIST_ALREADY_INACTIVE | 422 | 名單已處於停用狀態，無需重複操作 | 嘗試停用已 inactive 的名單 | F052 |
+
+#### 計分設定 {#assignment-scoring-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| SCORING_VERSION_NOT_FOUND | 404 | 目前無生效的計分版本，請聯繫 IT 確認設定 | `ob_levelcard_version` 無 `status = 'active'` 紀錄 | F053 |
+| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定 | F054, F055, F056 |
+| SCORING_RANGE_OVERLAP | 422 | 分數區間重疊，請調整條件值 | 分數區間或 CARD_LEVEL 門檻區間重疊 | F054, F055 |
+| TIER_LEVEL_DUPLICATE | 422 | TIER_LEVEL 代碼 {code} 已存在 | 新增 TIER_LEVEL 對應時代碼重複 | F056 |
+| CARD_LEVEL_NOT_FOUND | 422 | 指定的 CARD_LEVEL 不存在於當前版本 | TIER_LEVEL 對應至不存在的 CARD_LEVEL | F056 |
+
+#### 分派比例 {#assignment-ratio-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| RATIO_SUM_INVALID | 422 | LIST_NO {listNo} 部門比例加總為 {sum}%，需調整至 100% | `ob_dept_pct` 同 `list_no` 下 `ration` 加總 ≠ 100% | F060 |
+| PERSONNEL_RATIO_SUM_INVALID | 422 | 部門 {deptId} 人員比例加總為 {sum}%，需調整至 100% | `ob_empl_set` 同 `list_no + deptid_m` 下 `ration` 加總 ≠ 100% | F058 |
+
+#### 分派執行 {#assignment-run-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| ASSIGNMENT_RUN_ALREADY_RUNNING | 409 | 分派執行中（run_id: {currentRunId}），請等待完成後再觸發 | 同月已有 `status IN ('pending', 'running')` 紀錄時嘗試觸發新月跑，或於月跑執行中嘗試修改任何 E07 設定 | F048-F052, F054-F060, F061, F068 |
+| ASSIGNMENT_RUN_PRECHECK_FAILED | 422 | 前置條件未滿足：{details} | 月跑 Stage 0 前置條件檢查失敗（5 項任一未通過） | F061 |
+| ASSIGNMENT_RUN_NOT_FOUND | 404 | 找不到該月跑紀錄或快照不完整 | `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 三份快照不完整 | F062, F063, F064, F066, F067 |
+| ASSIGNMENT_RUN_NOT_COMPLETED | 422 | 月跑尚未完成，該操作不可用 | 對 `status != 'completed'` 的月跑執行結果查詢、匯出等操作 | F063, F064 |
+| ASSIGNMENT_RUN_NOT_COMPARABLE | 422 | 僅 completed 狀態的月跑可比對 | 比對操作的任一 `run_id` 非 `completed` 狀態 | F067 |
+
+#### Stage 0 試算 / 匯出 {#assignment-misc-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| STAGE0_ESTIMATE_TIMEOUT | 500 | 試算查詢超過 10 秒 timeout，請稍後再試或聯繫 IT 檢查索引 | Stage 0 單一 LIST_NO 試算超時 | F049 |
+| EXPORT_FILE_EXPIRED | 500 | 檔案產生逾時（超過 5 分鐘），請稍後再試或聯繫 IT | 分派結果匯出超時 | F064 |
+
+#### 代碼維護 {#assignment-code-errors}
+
+| 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
+|--------|------------|------|------|----------|
+| CODE_IN_USE | 422 | 代碼值 {tblCd} 在類別 {tblId} 中已存在 | 新增代碼時 `(tbl_id, tbl_cd)` 組合重複（啟用期間內） | F068 |
+| CODE_TYPE_INVALID | 422 | 本功能僅支援 PROD_KIND / SPEC_TP / CASEYEAR 三類代碼維護 | API 傳送的 `tbl_id` 不在允許清單中 | F068 |
+| CODE_NOT_FOUND | 404 | 找不到指定的代碼 | `(tbl_id, tbl_cd)` 組合不存在於 `ob_code_df` | F068 |
+
+---
+
 ### VALIDATION 領域 — 通用驗證 {#validation-errors}
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
@@ -308,5 +366,19 @@ status: Draft
 | 角色不存在 | 404 | ROLE_NOT_FOUND | 找不到指定的角色 | 拒絕請求 |
 | 客戶 ID 不存在 | 404 | C360_CUSTOMER_NOT_FOUND | 找不到此客戶資料 | 顯示 404 錯誤提示與返回按鈕 |
 | 搜尋關鍵字不足 2 字元 | 422 | C360_SEARCH_MIN_LENGTH | 搜尋關鍵字至少需要 2 個字元 | 拒絕搜尋請求 |
+| 同月名單定義達 999 筆 | 422 | LIST_NO_LIMIT_EXCEEDED | 本月名單定義已達 999 筆上限 | 不新增紀錄 |
+| PROD_KIND + CARD_TYPE 組合重複 | 422 | LIST_NO_DUPLICATE | 相同產品類別與卡別的有效名單已存在 | 不新增/更新 |
+| 月跑執行中觸發新月跑或修改 E07 設定 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 分派執行中 | 拒絕請求 |
+| 月跑前置條件失敗 | 422 | ASSIGNMENT_RUN_PRECHECK_FAILED | 前置條件未滿足 | 顯示失敗項目清單 |
+| 部門比例加總 ≠ 100% | 422 | RATIO_SUM_INVALID | 部門比例加總需調整至 100% | 儲存按鈕停用 |
+| 人員比例加總 ≠ 100% | 422 | PERSONNEL_RATIO_SUM_INVALID | 人員比例加總需調整至 100% | 儲存按鈕停用 |
+| 月跑 run_id 不存在 | 404 | ASSIGNMENT_RUN_NOT_FOUND | 找不到該月跑紀錄 | 拒絕請求 |
+| 月跑非 completed 狀態匯出/比對 | 422 | ASSIGNMENT_RUN_NOT_COMPLETED / ASSIGNMENT_RUN_NOT_COMPARABLE | 僅 completed 狀態可操作 | 按鈕停用 |
+| 計分設定月跑鎖定 | 409 | SCORING_VERSION_LOCKED | 分派執行中，無法修改計分設定 | 拒絕請求 |
+| 分數區間重疊 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊 | 不儲存 |
+| Stage 0 試算超時 | 500 | STAGE0_ESTIMATE_TIMEOUT | 試算查詢超過 10 秒 | 中斷查詢 |
+| 匯出逾時 | 500 | EXPORT_FILE_EXPIRED | 檔案產生逾時 | 中斷匯出 |
+| 代碼值重複 | 422 | CODE_IN_USE | 代碼值在該類別中已存在 | 不寫入 |
+| 代碼類別非 PROD_KIND/SPEC_TP/CASEYEAR | 422 | CODE_TYPE_INVALID | 僅支援三類代碼維護 | 拒絕請求 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

@@ -1,8 +1,8 @@
 ---
 spec-id: scope
 title: 範圍定義
-version: "1.4"
-date: 2026-04-02
+version: "1.6"
+date: 2026-05-04
 status: Draft
 ---
 
@@ -19,6 +19,8 @@ status: Draft
 | E03 | 資料來源管理 | 6 | Phase 1（MVP） |
 | E04 | 資料擷取管理 | 10 | Phase 1（MVP） |
 | E05 | ETL Pipeline 管理 | 10 | Phase 1（MVP） |
+| E06 | Customer 360 | 2 | Phase 1（MVP） |
+| E07 | 客戶名單分派 | 21 | Phase 1（MVP） |
 
 ### 功能對照表
 
@@ -69,6 +71,29 @@ status: Draft
 | F042 | US-055 | E05 | ETL 執行引擎核心框架 | P0-MVP | DAG 拓撲排序、Node Dispatcher、nodeOutputMap、temp table 管理 |
 | F043 | US-056, US-057, US-058 | E05 | ETL 節點執行器 | P0-MVP | 8 種 NodeExecutor（extract, merge, dedup, type_cast, derived_field, field_mapping, conditional, lookup），含 Lookup 雙輸入模式 |
 | F044 | US-057 | E05 | Target Load + UPSERT | P0-MVP | 批次寫入目標表、ETL 追蹤欄位填充、UPSERT 衝突處理 |
+| F046 | US-060 | E06 | Customer 360 — 客戶搜尋與清單 | P0-MVP | 統計摘要 + Full-Text Search + 類型篩選 + 分頁；依角色遮罩 |
+| F047 | US-061 | E06 | Customer 360 — 單一客戶 360 詳情 | P0-MVP | 85 欄位 8 個分類展示，ETL 新鮮度顯示 |
+| F048 | US-070 | E07 | 查看本月名單定義清單 | P0-MVP | M01 入口頁；使用中/已停用雙頁籤；月跑鎖 |
+| F049 | US-071 | E07 | Stage 0 每日分派數量估算 | P0-MVP | 每日估算 + 單一 LIST_NO 即時案件試算 |
+| F050 | US-088 | E07 | 新增名單定義 | P0-MVP | LIST_NO 自動產生（OB{YYYYMM}{NNN}）；同月 999 筆上限；PROD_KIND+CARD_TYPE 重複檢查；複製名單 |
+| F051 | US-089 | E07 | 編輯名單定義 | P0-MVP | 覆寫式編輯；與 F050 共用表單欄位規範 |
+| F052 | US-090 | E07 | 停用名單定義 | P0-MVP | 軟刪除（status → inactive）；不提供重新啟用 |
+| F053 | US-072 | E07 | 查看計分維度設定 | P0-MVP | 顯示生效版本計分維度與分數區間（唯讀） |
+| F054 | US-073 | E07 | 編輯計分維度與分數 | P0-MVP | 新增/修改/停用維度；覆寫式；月跑鎖 |
+| F055 | US-074 | E07 | 編輯 CARD_LEVEL 分級門檻 | P0-MVP | 各等級分數下限；門檻不重疊驗證；預覽影響 |
+| F056 | US-075 | E07 | 編輯 TIER_LEVEL 對應表 | P0-MVP | 維護 TIER_LEVEL ↔ CARD_LEVEL 對應 |
+| F057 | US-078 | E07 | 查看人員比例設定 | P0-MVP | 顯示各部門人員 ration（唯讀） |
+| F058 | US-079 | E07 | 編輯人員比例設定 | P0-MVP | 同 LIST_NO + 部門加總 = 100% |
+| F059 | US-080 | E07 | 開關 CR 回分規則 | P0-MVP | 全域開關；月跑鎖 |
+| F060 | US-091 | E07 | 設定 per-LIST_NO 部門比例 | P0-MVP | ob_dept_pct 即 per-LIST_NO；同 LIST_NO 加總 = 100% |
+| F061 | US-081 | E07 | 觸發分派月跑 | P0-MVP | 前置條件檢查 + 非同步 Stage 1~4 + 三份快照原子性寫入 |
+| F062 | US-082 | E07 | 查看分派執行進度 | P0-MVP | 3 秒 Polling；Stage 狀態列表 |
+| F063 | US-083 | E07 | 查看分派結果摘要 | P0-MVP | 總量 / 部門偏差 / 等級分佈；偏差 > 3% 橘色警示 |
+| F064 | US-084 | E07 | 匯出分派結果 | P0-MVP | Excel/CSV streaming；5 分鐘 timeout |
+| F065 | US-085 | E07 | 查看歷史執行紀錄清單 | P0-MVP | 分頁 + 年月/狀態篩選；比對入口 |
+| F066 | US-086 | E07 | 查看執行快照詳情 | P0-MVP | 三份快照分頁（config/input_list/result）+ 搜尋 |
+| F067 | US-087 | E07 | 比對兩次執行結果差異 | P0-MVP（使用者升級） | 摘要差異 + 人員配對 diff（NFR-005 主驗收工具）+ 設定差異 + 客戶層級差異 |
+| F068 | US-092 | E07 | E07 相關代碼維護 | P0-MVP | PROD_KIND / SPEC_TP / CASEYEAR 三類代碼維護（限定 scope） |
 
 ### 非功能需求
 
@@ -76,6 +101,9 @@ status: Draft
 |--------|------|--------|----------|
 | NFR-001 | 安全性 | P0 | [nfr.md](nfr.md) |
 | NFR-002 | 效能 | P0 | [nfr.md](nfr.md) |
+| NFR-003 | E07 月跑執行效能 | P0 | [nfr.md](nfr.md) |
+| NFR-004 | E07 快照原子性 | P0 | [nfr.md](nfr.md) |
+| NFR-005 | E07 分派結果準確性 | P0 | [nfr.md](nfr.md) |
 
 ## MVP 範圍外（Out of Scope）
 
@@ -115,11 +143,16 @@ E01（驗證與登入）
  ├── 封鎖 → E02（帳號管理需要 Admin 已完成驗證）
  ├── 封鎖 → E03（資料來源管理需要 Admin 已完成驗證）
  ├── 封鎖 → E04（資料擷取管理需要 Admin 已完成驗證）
- └── 封鎖 → E05（ETL Pipeline 管理需要 Admin 已完成驗證）
+ ├── 封鎖 → E05（ETL Pipeline 管理需要 Admin 已完成驗證）
+ ├── 封鎖 → E06（Customer 360 需要已驗證使用者）
+ └── 封鎖 → E07（分派模組需要業務主管已驗證）
+E02（帳號與角色管理）
+ └── 封鎖 → E07（業務主管旗標 is_sales_manager 由 E02 設定）
 E03（資料來源管理）
  └── 封鎖 → E04（擷取任務需要資料來源存在）
 E04（資料擷取管理）
- └── 封鎖 → E05（ETL Pipeline 需讀取 raw data 表）
+ ├── 封鎖 → E05（ETL Pipeline 需讀取 raw data 表）
+ └── 封鎖 → E07（ob_pool_data 由 E04 擷取任務匯入）
 ```
 
 - E01 為基礎 Epic，無外部依賴
@@ -127,6 +160,9 @@ E04（資料擷取管理）
 - E03 依賴 E01：Admin 必須完成驗證才能執行資料來源管理操作
 - E04 依賴 E01 與 E03：Admin 已驗證且需有資料來源才能建立擷取任務
 - E05 依賴 E01 與 E04：Admin 已驗證且需有擷取任務產生 raw data 表
+- E06 依賴 E01 與 E05：已驗證使用者且 `customer_core` 已由 ETL 載入
+- E07 依賴 E01、E02、E04：業務主管需驗證並具備 `is_sales_manager = true`；`ob_pool_data` 由 E04 擷取任務匯入
+- **E04 擷取任務範圍涵蓋舊 OB DB 業務表**：包含 `OBPOOLDATA`（→ `ob_pool_data`）、`OBEMPHIRE`（→ `ob_emphire`，員工主檔）、`OBCALENDAR`（→ `ob_calendar`，工作日/假日表）等舊 OB DB 業務表，由 Admin 於系統初始化時建立對應擷取任務並設定排程，採通用擷取機制不需新增 Feature；E07 不提供 `ob_emphire` / `ob_calendar` 維護介面（資料維護於舊 OB 端）
 - E02 與 E03 之間無直接依賴，可平行開發（前提是 E01 已完成）
 - E04 需 E03 完成後才能開始（前提是 E01 也已完成）
 - E05 需 E04 完成後才能開始（Extract 節點讀取 raw data 表）

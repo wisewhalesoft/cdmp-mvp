@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.5"
-date: 2026-04-24
+version: "1.7"
+date: 2026-05-05
 status: Draft
 ---
 
@@ -839,10 +839,21 @@ PK：`list_no`
 | project_workym | VARCHAR(6) | NULL | PROJECT_WORKYM | 名單作業年月（YYYYMM） |
 | casenumber | VARCHAR(50) | NULL | CASENUMBER | 案件編號 |
 | name | VARCHAR(50) | NULL | NAME | 名稱 |
-| caseyear | VARCHAR(255) | NULL | CASEYEAR | 案件年份 |
+| caseyear | VARCHAR(255) | NULL | CASEYEAR | 案件年份（多值欄位，`$$` 分隔） |
 | caseyearnm | VARCHAR(10) | NULL | CASEYEARNM | 案件年份名稱 |
-| settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源 |
+| settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
 | card_type | VARCHAR(2) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議） |
+
+**多值欄位儲存規範**：
+
+`prod_kind` / `spec_tp` / `settle_src` / `caseyear` 為 `$$` 分隔字串（與舊系統格式相容；dump 觀察範例見下表）。UI 提交時以多選清單序列化為 `$$` 分隔字串、查詢時以 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對；遷移時保留原始字串不拆分為陣列或正規化表。
+
+| 欄位 | dump 範例 | 含義 |
+|------|----------|------|
+| `spec_tp` | `02$$04$$05$$06$$11$$12$$13$$14$$15$$16$$20$$21$$22$$23` | 多個專案類別代碼 |
+| `settle_src` | `Y$$N` 或 `Y` 或 `N` | 含 / 不含被他行代償案件 |
+| `caseyear` | `0$$1$$2$$3$$4$$5$$6$$7$$8$$9$$10$$99` | 多個進件 / 中結年數 |
+| `prod_kind` | `02$$03$$04` 或 `01` 或 `02` | 多個產品種類代碼（dump 觀察單值居多，但結構允許多值） |
 
 **索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）
 
@@ -955,10 +966,12 @@ PK：`(list_no, deptid_m, emplid, ration)`
 | updated_by | VARCHAR(10) | NULL | U_USERID | 更新者 |
 | updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
 | list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號 |
-| deptid_m | VARCHAR(50) | NOT NULL | DEPTID_M | **PK**，催收人員所屬部門（組合鍵） |
+| deptid_m | VARCHAR(50) | NOT NULL | DEPTID_M | **PK**，催收人員所屬部門（組合鍵；遷移時 `RTRIM(deptid_m)`，見下方註腳） |
 | emplid | VARCHAR(6) | NOT NULL | EMPLID | **PK**，催收人員工號 |
 | ration | NUMERIC(10,1) | NOT NULL | RATION | **PK**，分配比例 |
 | prod_type | VARCHAR(255) | NULL | PROD_TYPE | 商品類型（多值） |
+
+> ⚠️ **`deptid_m` 尾隨空白填充處理**：舊 `OBEMPLSETMF.DEPTID_M` 雖宣告 `VARCHAR(50)`，dump 觀察實際業務值為 4 字元部門代碼（如 `XTC0`）但被 padded 至 50 字元（範例：`"XTC0                                              "`）。遷移時統一執行 `RTRIM(deptid_m)`，AppDB 存入 trim 後的值（即實際 4 字元代碼），避免 join `ob_emphire.dept_code`（不含 padding）失敗。AppDB 寫入路徑（F058 / 月跑 Stage 4）亦不可保留尾隨空白。
 
 **索引**：複合 PK 即為主索引。`(list_no, deptid_m)` 為查詢索引。
 
@@ -992,23 +1005,32 @@ PK：`(list_no, deptid_m, emplid, ration)`
 
 #### ob_levelcard_version（OBLEVELCARD_VERSION — 計分卡版本）
 
+> **STATUS 為 AppDB 遷移補建欄位**（原表無），與 `ob_list_definition` 設計對齊。原 OBLEVELCARD_VERSION 透過 `SDATE` / `EDATE`（VARCHAR(8) YYYYMMDD）表達生效期間（dump 中 6 筆全部 `EDATE = '20991231'`）；遷移時依 `(SDATE <= 今日 < EDATE)` 計算 `status` 初值。
+> **稽核欄位允許 NULL**：dump 觀察 6 筆中至少 4 筆稽核欄位（`A_PRGID` / `A_USERID` / `A_SYSDT` / `U_*`）全為 NULL，遷移後維持 NULL 設定。
+
 無嚴格 PK（來源無 PK constraint），邏輯主鍵：`(card_type, card_version)`
 
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
-| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼 |
-| created_by | VARCHAR(20) | NULL | A_USERID | 建立者 |
-| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
-| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼 |
-| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者 |
-| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| created_by_prog | VARCHAR(20) | NULL | A_PRGID | 建立程式代碼（dump 觀察多筆為 NULL） |
+| created_by | VARCHAR(20) | NULL | A_USERID | 建立者（dump 觀察多筆為 NULL） |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間（dump 觀察多筆為 NULL） |
+| updated_by_prog | VARCHAR(20) | NULL | U_PRGID | 更新程式代碼（dump 觀察多筆為 NULL） |
+| updated_by | VARCHAR(20) | NULL | U_USERID | 更新者（dump 觀察多筆為 NULL） |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間（dump 觀察多筆為 NULL） |
 | card_type | TEXT | NULL | CARD_TYPE | 計分卡類型（原 varchar(max)） |
 | card_name | VARCHAR(20) | NULL | CARD_NAME | 計分卡名稱 |
 | card_version | INTEGER | NULL | CARD_VERSION | 版本號 |
-| sdate | VARCHAR(8) | NULL | SDATE | 生效日（YYYYMMDD） |
-| edate | VARCHAR(8) | NULL | EDATE | 失效日（YYYYMMDD） |
+| sdate | VARCHAR(8) | NOT NULL | SDATE | 生效日（YYYYMMDD 字串；dump 觀察 6 筆均有值） |
+| edate | VARCHAR(8) | NOT NULL | EDATE | 失效日（YYYYMMDD 字串；dump 觀察 6 筆均為 `'20991231'`） |
+| status | VARCHAR(10) | NOT NULL DEFAULT 'active' | — | **[遷移補建]** 啟用旗標（`active` / `inactive`）；遷移時依 `(SDATE <= 今日 < EDATE)` 計算初值；原表無此欄位 |
 
 **索引**：`(card_type, card_version)`（複合索引）
+
+**dump 觀察**（`reference/DumpData/OBLEVELCARD_VERSION_20260505.csv`）：
+- 6 筆 CARD_TYPE：`H` / `S` / `E` / `S5` / `E5` / `M`（**未含** `HM` / `M5`，OBTIER 中存在的兩種 fallback CARD_TYPE 在本表無對應計分版本，詳見 `ob_tier` 章節）
+- 全部 `EDATE = '20991231'`（無時限）
+- 多筆稽核欄位為 NULL
 
 ---
 
@@ -1078,6 +1100,110 @@ PK：`(list_no, deptid_m, emplid, ration)`
 | card_level | VARCHAR(1) | NOT NULL | CARD_LEVEL | 等級代號（A/B/C/D/E） |
 
 **索引**：`(card_type, card_version)`（複合索引）
+
+---
+
+#### ob_tier（OBTIER — TIER_LEVEL 對應表） {#ob-tier-entity}
+
+> schema 已於 2026-05-05 取得（路徑：`reference/TableSchema/OB/OBTIER.sql`）。原表共 4 欄全部 NULLABLE、無 PK 約束、無稽核欄位。**遷移時建議補建 PK `(card_type, card_level)`**（依 SP join 邏輯 `LEFT JOIN OBTIER C ON A.CARD_LEVEL=C.CARD_LEVEL AND B.CARD_TYPE=C.CARD_TYPE`），並將 `card_type` / `tier_level` 補上 NOT NULL 約束以保證 join 與輸出語意。`card_level` 因 dump 觀察存在 NULL 值（M5 fallback），維持 NULL。詳見 [open-questions.md OQ-E07-14](open-questions.md#e07-已解決-spec-層級問題2026-04-24-本版規格撰寫) 與假設 A53 / A54。
+
+PK：`(card_type, COALESCE(card_level, ''))`（[ASSUMPTION] — 原 OBTIER 無 PK constraint，本表於遷移至 AppDB 時依 SP join 邏輯補建；當 `card_level IS NULL`（fallback CARD_TYPE 如 M5）時以空字串納入 PK 唯一性比對，亦可採 PostgreSQL 15+ 的 `NULLS NOT DISTINCT` 索引語法等價表達）
+
+用途：將「計分卡類型 CARD_TYPE × 計分卡等級 CARD_LEVEL」對應到外部系統使用的分群代碼 TIER_LEVEL。月跑 Stage 2 計算出 `ob_pool_data_list.card_level` 後，依本表 join 取得 `tier_level` 寫回。
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| list_nm | VARCHAR(30) | NULL | LIST_NM | 名單名稱（描述性欄位，不參與 join；對應原表 `nvarchar(30)`） |
+| card_type | VARCHAR(5) | NOT NULL | CARD_TYPE | **PK** 組成，計分卡類型（如 H/S/E/S5/E5/M/HM/M5 等；對應原表 `varchar(5) NULL`，遷移時補上 NOT NULL） |
+| card_level | VARCHAR(5) | NULL | CARD_LEVEL | **PK** 組成，計分卡等級（A/B/C/D；對應原表 `varchar(5) NULL`）。**dump 觀察存在 NULL 值**（如 `M5` → `T5M`，CARD_LEVEL 為空字串），用於 fallback CARD_TYPE 直接對應 TIER_LEVEL 不分等級的情境，遷移時維持 NULL 允許並以 `COALESCE(card_level, '')` 納入 PK |
+| tier_level | VARCHAR(5) | NOT NULL | TIER_LEVEL | 名單分群結果代碼（如 T1/T2/T3/T5M/THC/T3C 等；對應原表 `varchar(5) NULL`，遷移時補上 NOT NULL） |
+
+**Fallback CARD_TYPE 觀察**（dump 範圍：`reference/DumpData/OBTIER_20260505.csv`）：
+
+| 維度 | 觀察值 | 備註 |
+|------|--------|------|
+| 全部 CARD_TYPE | `H` / `S` / `E` / `S5` / `E5` / `M` / **`HM`** / **`M5`**（共 8 種） | OBLEVELCARD_VERSION 僅含 6 種計分版本（無 HM / M5），HM / M5 為「計分卡體系外的 fallback」 |
+| 全部 TIER_LEVEL | `T1` / `T2` / `T3` / `T32` / `T4` / `T51` / `T52` / `T1M` / `T3M` / `T5M` / `T1HM` / `T2HM` / `T3HM` / `T3` 等（共 13 種變體） | 由業務定義，不限制列舉 |
+| CARD_LEVEL NULL 紀錄 | `機車中結滿期名單,M5,,T5M`（dump 第 28 列）| `M5` 為 fallback CARD_TYPE，CARD_LEVEL 為空字串，直接對應 `T5M`，不分等級 |
+| CARD_LEVEL 非 NULL 紀錄 | 其餘 24 筆，CARD_LEVEL 取值 `A` / `B` / `C` / `D` | 標準計分流程：CARD_TYPE × CARD_LEVEL → TIER_LEVEL |
+
+**Stage 2 fallback join 語意**：當 `ob_pool_data_list.card_level` 在 `ob_tier` 找不到對應紀錄時，回退以 `CARD_TYPE` 比對 `card_level IS NULL` 的 fallback 紀錄（如 M5 → T5M）。F056 編輯時允許新增 `card_level IS NULL` 紀錄但需 UI 提示為 fallback 規則。
+
+**SP join 證據對照**（已實證 vs 仍假設）：
+
+| 欄位 | SP 證據 | 狀態 |
+|------|---------|------|
+| `card_type` | `B.CARD_TYPE = C.CARD_TYPE` | ✅ 已實證（OBTIER.sql 確認 CARD_TYPE varchar(5) NULL） |
+| `card_level` | `A.CARD_LEVEL = C.CARD_LEVEL` | ✅ 已實證（OBTIER.sql 確認 CARD_LEVEL varchar(5) NULL） |
+| `tier_level` | `SET TIER_LEVEL = ISNULL(C.TIER_LEVEL, '')` | ✅ 已實證（OBTIER.sql 確認 TIER_LEVEL varchar(5) NULL） |
+| `list_nm` | 未參與 SP join，原表為描述性欄位 | ✅ 已實證（OBTIER.sql 確認 LIST_NM nvarchar(30) NULL） |
+| PK `(card_type, card_level)` | SP join 鍵組合 | [ASSUMPTION] — 原表無 PK constraint，遷移時補建 |
+| 稽核欄位 | 原表無稽核欄位 | ✅ 已實證（OBTIER.sql 4 欄均無稽核欄位）；E07 內容變更稽核透過 `assignment_audit_log` 統一處理 |
+
+**索引**：複合 PK `(card_type, card_level)` 即為主索引；無額外索引需求。
+
+**注意**：與 `ob_levelcard_level`（CARD_LEVEL 分級門檻：總分區間 → CARD_LEVEL，由 F055 維護）為**不同表**，不可混用。`ob_tier` 為 TIER_LEVEL 對應，由 F056 維護。
+
+---
+
+#### ob_emphire（OBEMPHIRE — 員工主檔） {#ob-emphire-entity}
+
+> **資料同步機制**：本表**由 E04 通用擷取任務從舊 OB DB（SQL Server `OBEMPHIRE`）每日同步至 AppDB**。E07 不提供 CRUD 維護介面，所有員工資料維護於舊 OB 端進行。同步策略（CDC 增量 vs 全量替換）由 system-architect 於 E04 擷取任務設定時決定。
+
+PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 `PRIMARY KEY (emp_id)` 以利 join。
+
+用途：提供 E07 月跑（Stage 4 人員指派）、F058 編輯人員比例設定、F064 匯出分派結果（員工姓名 join 來源）等 Feature 取得員工基本資料。
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| emp_id | VARCHAR(10) | NOT NULL | EMP_ID | **PK**，人員編號（員工工號） |
+| emp_nm | VARCHAR(50) | NULL | EMP_NM | 人員姓名 |
+| id_no | VARCHAR(10) | NULL | ID | 身份證字號（避免 SQL keyword `id`，重命名為 `id_no`） |
+| dept_code | VARCHAR(10) | NULL | DEPT_CODE | 部門代碼 |
+| dept_name | VARCHAR(30) | NULL | DEPT_NAME | 部門名稱 |
+| title_code | VARCHAR(5) | NULL | TITLE_CODE | 職稱代碼 |
+| title_name | VARCHAR(30) | NULL | TITLE_NAME | 職稱名稱 |
+| jfun_id | VARCHAR(10) | NULL | JFUN_ID | 職務代碼 |
+| jfun_nm | VARCHAR(15) | NULL | JFUN_NM | 職務名稱 |
+| hire_date | DATE | NULL | HIRE_DATE | 在職日期（到職日） |
+| resign_date | DATE | NULL | RESIGN_DATE | 離職日期（NULL 表示在職中） |
+| email | VARCHAR(100) | NULL | EMAIL | 信箱 |
+| is_auth | VARCHAR(1) | NULL | IS_AUTH | 是否最高權限（沿用舊系統旗標） |
+
+**索引**：
+- `emp_id`（PK）
+- `(dept_code)` — 依部門查詢員工（F058 編輯部門人員比例下拉清單）
+- `(resign_date)` — 在職員工查詢（`WHERE resign_date IS NULL`）
+
+**業務規則**：
+- 在職員工判定條件：`resign_date IS NULL`
+- 不納入 ORM Entity CRUD（僅讀取）；E07 內所有員工資料修改皆於舊 OB 端進行後 ETL 同步
+
+**相關功能**：[F058](features/F058-edit-personnel-ratio.md)、[F061](features/F061-trigger-assignment-run.md)、[F063](features/F063-view-run-result-summary.md)、[F064](features/F064-export-assignment-result.md)
+
+---
+
+#### ob_calendar（OBCALENDAR — 工作日/假日表） {#ob-calendar-entity}
+
+> **資料同步機制**：本表**由 E04 通用擷取任務從舊 OB DB（SQL Server `OBCALENDAR`）同步至 AppDB**。每年底由 Admin 於舊 OB 端維護下年度資料後，透過 ETL 帶入 AppDB；E07 不提供 CRUD 維護介面。同步頻率（每日 vs 每月）與策略由 system-architect 於 E04 擷取任務設定時決定。
+
+PK：`calendar_date`
+
+用途：提供 F049 Stage 0 每日分派數量估算所需之工作日篩選（排除週末與假日）。
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| calendar_date | DATE | NOT NULL | CALENDAR_DATE | **PK**，日期 |
+| rest_flg | VARCHAR(1) | NOT NULL | REST_FLG | 工作日旗標（`'0'` = 工作日 / `'1'` = 假日；原表型別為 `int`，遷移統一字串以避免 boolean 隱式轉換） |
+
+**索引**：`calendar_date`（PK 即查詢索引）
+
+**業務規則**：
+- 工作日判定：`rest_flg = '0'`
+- 月跑期間之工作日數計算：`SELECT COUNT(*) FROM ob_calendar WHERE rest_flg = '0' AND calendar_date BETWEEN :startDate AND :endDate`
+- 假日定義由舊 OB 端 Admin 維護，包含週末與國定假日
+
+**相關功能**：[F049](features/F049-stage0-daily-estimate.md)
 
 ---
 
