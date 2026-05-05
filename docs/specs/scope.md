@@ -152,7 +152,9 @@ E03（資料來源管理）
  └── 封鎖 → E04（擷取任務需要資料來源存在）
 E04（資料擷取管理）
  ├── 封鎖 → E05（ETL Pipeline 需讀取 raw data 表）
- └── 封鎖 → E07（ob_pool_data 由 E04 擷取任務匯入）
+ └── 封鎖 → E07（ob_pool_data / ob_emphire / ob_calendar 由 E04 抓 raw → E05 Pipeline TargetLoad 載入）
+E05（ETL Pipeline 管理）
+ └── 封鎖 → E07（雙層 ETL 第二段，AD-E07-12）
 ```
 
 - E01 為基礎 Epic，無外部依賴
@@ -161,8 +163,12 @@ E04（資料擷取管理）
 - E04 依賴 E01 與 E03：Admin 已驗證且需有資料來源才能建立擷取任務
 - E05 依賴 E01 與 E04：Admin 已驗證且需有擷取任務產生 raw data 表
 - E06 依賴 E01 與 E05：已驗證使用者且 `customer_core` 已由 ETL 載入
-- E07 依賴 E01、E02、E04：業務主管需驗證並具備 `is_sales_manager = true`；`ob_pool_data` 由 E04 擷取任務匯入
-- **E04 擷取任務範圍涵蓋舊 OB DB 業務表**：包含 `OBPOOLDATA`（→ `ob_pool_data`）、`OBEMPHIRE`（→ `ob_emphire`，員工主檔）、`OBCALENDAR`（→ `ob_calendar`，工作日/假日表）等舊 OB DB 業務表，由 Admin 於系統初始化時建立對應擷取任務並設定排程，採通用擷取機制不需新增 Feature；E07 不提供 `ob_emphire` / `ob_calendar` 維護介面（資料維護於舊 OB 端）
+- E07 依賴 E01、E02、E04、E05：業務主管需驗證並具備 `is_sales_manager = true`；`ob_pool_data` / `ob_emphire` / `ob_calendar` 由 E04 + E05 雙層 ETL 載入
+- **E07 涉及的 OB 系統表（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）透過 E04 通用擷取機制抓取至 raw_xxx 中介表後，再由 E05 Pipeline TargetLoad 載入 `ob_pool_data` / `ob_emphire` / `ob_calendar`（雙層架構，AD-E07-12）**：
+  - E04 端建立通用擷取任務（既有機制 → raw_{task_id_short}）；OBEMPHIRE 採 full 全量重抓策略（每日重抓）、OBCALENDAR 年初執行、OBPOOLDATA 每月跑前執行
+  - E05 端建立 Pipeline（既有 F044 customer_core TargetLoad 機制延伸）將 raw 資料以 full replace 模式載入目標表
+  - 由 Admin 於系統初始化時建立對應 E04 擷取任務 + E05 Pipeline 並設定排程，採既有通用機制不需新增 Feature；E07 不提供 `ob_emphire` / `ob_calendar` / `ob_pool_data` 維護介面（資料維護於舊 OB 端）
+  - 詳見 [architecture-spec.md §E07-C ETL 設計](architecture-spec.md#e07-c-etl-設計)
 - E02 與 E03 之間無直接依賴，可平行開發（前提是 E01 已完成）
 - E04 需 E03 完成後才能開始（前提是 E01 也已完成）
 - E05 需 E04 完成後才能開始（Extract 節點讀取 raw data 表）

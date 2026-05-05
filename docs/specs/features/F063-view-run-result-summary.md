@@ -119,7 +119,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-2 | 部門偏差警示門檻：絕對值 > 3% 以橘色標示，對應 NFR-005 |
 | BR-3 | 本頁為唯讀查看，無編輯功能 |
 | BR-4 | `coverageRate = stage4Count / stage1Count`，以小數儲存（0.95 = 95%） |
-| BR-5 | 部門名稱（`deptName`）優先使用 `ob_pool_data_list.dept_name` 冗餘欄位；若需於後續擴充員工層級分布，員工資料以 `ob_emphire` join（`emplid = emp_id`）取得，`ob_emphire` 由 E04 通用擷取任務從舊 OB DB 同步 |
+| BR-5 | 部門名稱（`deptName`）優先使用 `ob_pool_data_list.dept_name` 冗餘欄位；若需於後續擴充員工層級分布，員工資料以 `ob_emphire` join（`emplid = emp_id`）取得，`ob_emphire` 採 E04 + E05 雙層 ETL 從舊 OB DB 同步（OBEMPHIRE 採 full 全量重抓策略，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)） |
 
 ## 7. UI/UX 需求
 
@@ -135,7 +135,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 9. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`assignment_run`、`assignment_run_snapshot`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（員工資料 join 來源，由 E04 同步）
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`assignment_run`、`assignment_run_snapshot`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（員工資料 join 來源，採 E04 + E05 雙層 ETL 同步）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 非功能需求：[nfr.md](../nfr.md)（NFR-005）
 - 架構決策：AD-E07-2

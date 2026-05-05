@@ -43,7 +43,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - 每個 active `list_no` 的部門比例加總 = 100%（F060）
 - 所有啟用部門 × LIST_NO 的人員比例加總 = 100%（F058）
 - 計分版本有 `status = 'active'` 紀錄（F054 / F055 / F056）
-- `ob_pool_data` 已由 E04 擷取任務匯入當月資料
+- `ob_pool_data` 已由 **E04 + E05 雙層 ETL** 流程載入當月資料（詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)）
 
 ## 4. 驗收標準
 
@@ -75,7 +75,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
   - Stage 1：讀 `ob_pool_data` + 套用 `ob_list_definition` 篩選 → 產出候選名單
   - Stage 2：呼叫 `fn_calc_tier_level(...)` PostgreSQL function（AD-E07-3），套用 `ob_levelcard_*` 計分；TIER_LEVEL 對應採 `ob_tier` join，若 `ob_pool_data_list.card_level` 在 `ob_tier` 找不到對應紀錄，回退以 `card_type` 比對 fallback 規則（`card_level IS NULL` 那筆，如 `M5` → `T5M`）
   - Stage 3：讀 `ob_dept_pct` 部門比例 + CR 回分優先指定（依 F059 開關狀態）→ 寫 `ob_pool_data_list.dept_id`
-  - Stage 4：讀 `ob_empl_set` 人員比例 + st4_exchange（T1/T2/T3 新件 10% 轉資深）→ 寫 `ob_pool_data_list.emplid`；員工基本資料（在職判定、部門對應、員工姓名）由 `ob_emphire` join 取得（由 E04 通用擷取任務從舊 OB DB 同步）
+  - Stage 4：讀 `ob_empl_set` 人員比例 + st4_exchange（T1/T2/T3 新件 10% 轉資深）→ 寫 `ob_pool_data_list.emplid`；員工基本資料（在職判定、部門對應、員工姓名）由 `ob_emphire` join 取得（採 E04 + E05 雙層 ETL 從舊 OB DB 同步，OBEMPHIRE 採 full 全量重抓策略，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)）
 - **And** 每個 Stage 成功後更新 `assignment_run`（`status = 'running'` + stage log）
 
 ### AC-4：三份快照原子性寫入
@@ -174,12 +174,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 10. 相依性
 
-- **Blocked By**：F048, F050, F054, F055, F058, F060（前置條件來源）、E04（`ob_pool_data` 資料來源）
+- **Blocked By**：F048, F050, F054, F055, F058, F060（前置條件來源）、E04 + E05 雙層 ETL（`ob_pool_data` / `ob_emphire` / `ob_calendar` 資料來源，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)）
 - **Blocks**：F062（進度）、F063（結果摘要）、F064（匯出）、F065（歷史清單）、F066（快照詳情）、F067（差異比對）
 
 ## 11. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`assignment_run`、`assignment_run_snapshot`、`ob_pool_data_list`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（Stage 4 員工資料 join 來源，由 E04 同步）；[data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity)（工作日表，Stage 0/1 期間計算）
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`assignment_run`、`assignment_run_snapshot`、`ob_pool_data_list`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（Stage 4 員工資料 join 來源，採 E04 + E05 雙層 ETL 同步）；[data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity)（工作日表，Stage 0/1 期間計算）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 非功能需求：[nfr.md](../nfr.md)（NFR-003 / NFR-004 / NFR-005）
 - 流程圖：[diagrams/F061-assignment-run-flow.mmd](../diagrams/F061-assignment-run-flow.mmd)

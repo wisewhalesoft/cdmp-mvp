@@ -126,7 +126,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 9. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`assignment_run_snapshot`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（員工姓名 join 來源 `ob_emphire`，由 E04 同步）
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`assignment_run_snapshot`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（員工姓名 join 來源 `ob_emphire`，採 E04 + E05 雙層 ETL 同步）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 架構決策：AD-E07-2
 - 相關功能：[F061](F061-trigger-assignment-run.md)、[F063](F063-view-run-result-summary.md)
@@ -135,5 +135,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 | # | 假設 | 標記 |
 |---|---|---|
-| A-1 | ~~員工姓名由員工主檔 join 取得（`[ASSUMPTION]` 表名由 system-architect 確認）~~ **已解決（2026-05-04）**：員工姓名由 `ob_emphire.emp_nm` join 取得（`ob_pool_data_list.emplid = ob_emphire.emp_id`）；`ob_emphire` 由 E04 通用擷取任務從舊 OB DB `OBEMPHIRE` 同步至 AppDB。詳見 [data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)。對應 OQ-E07-12 / OQ-E07-15 已 Resolved。 | Resolved |
+| A-1 | ~~員工姓名由員工主檔 join 取得（`[ASSUMPTION]` 表名由 system-architect 確認）~~ **已解決（2026-05-04，2026-05-05 同步機制更新）**：員工姓名由 `ob_emphire.emp_nm` join 取得（`ob_pool_data_list.emplid = ob_emphire.emp_id`）；`ob_emphire` 採 **E04 + E05 雙層 ETL** 從舊 OB DB `OBEMPHIRE` 同步至 AppDB（E04 抓 raw → E05 Pipeline TargetLoad full replace，OBEMPHIRE 採 full 全量重抓策略）。詳見 [data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity) 與 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)。對應 OQ-E07-12 / OQ-E07-15 已 Resolved。 | Resolved |
 | A-2 | 匯出格式預設支援 xlsx 與 csv；Excel 使用 streaming 庫（如 `exceljs` stream mode） | [ASSUMPTION] |

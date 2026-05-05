@@ -40,7 +40,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 - 業務主管已登入並持有有效 JWT Token
 - 至少一筆 `ob_list_definition` 的 `status = 'active'` 且 `project_workym = :currentYm`
-- `ob_pool_data` 已由 E04 擷取任務匯入當月資料（若無資料，估算結果為 0）
+- `ob_pool_data` 已由 **E04 + E05 雙層 ETL** 流程載入當月資料（詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)；若無資料，估算結果為 0）
 
 ## 4. 驗收標準
 
@@ -126,7 +126,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | 試算僅為預覽，不寫入任何分派結果；實際件數以月跑結果為準 |
-| BR-2 | 工作日計算排除週末與假日；資料來源為 AppDB `ob_calendar`（由 E04 通用擷取任務從舊 OB DB 同步），篩選條件 `WHERE rest_flg = '0' AND calendar_date BETWEEN :startDate AND :endDate` |
+| BR-2 | 工作日計算排除週末與假日；資料來源為 AppDB `ob_calendar`（採 E04 + E05 雙層 ETL 從舊 OB DB 同步，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)），篩選條件 `WHERE rest_flg = '0' AND calendar_date BETWEEN :startDate AND :endDate` |
 | BR-3 | 試算查詢逾時上限 10 秒，超過則回傳 `STAGE0_ESTIMATE_TIMEOUT` |
 | BR-4 | Pool 筆數警示門檻可於環境變數 `STAGE0_POOL_WARN_THRESHOLD` 配置（預設 1000） |
 
@@ -147,12 +147,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 9. 相依性
 
-- **Blocked By**：F048（名單定義清單）、E04 擷取任務（`ob_pool_data` 資料來源）
+- **Blocked By**：F048（名單定義清單）、E04 + E05 雙層 ETL（`ob_pool_data` / `ob_calendar` 資料來源，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)）
 - **Blocks**：F061（觸發月跑前業務主管依此決定是否執行）
 
 ## 10. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_pool_data`、`ob_list_definition`）；[data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity)（工作日表，由 E04 同步）
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_pool_data`、`ob_list_definition`）；[data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity)（工作日表，採 E04 + E05 雙層 ETL 同步）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 流程圖：[diagrams/F049-stage0-estimate-flow.mmd](../diagrams/F049-stage0-estimate-flow.mmd)
 - 架構決策：AD-E07-1（OB 資料遷移）、E07 與 E04 依賴關係
@@ -162,5 +162,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 | # | 假設 | 標記 |
 |---|---|---|
-| A-1 | ~~工作日/假日表由現有系統基礎資料或 `ob_calendar` 提供~~ **已解決（2026-05-04）**：採 `ob_calendar`（AppDB），由 E04 通用擷取任務從舊 OB DB `OBCALENDAR` 同步至 AppDB；詳見 [data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity)。對應 OQ-E07-10 / OQ-E07-15 已 Resolved。 | Resolved |
+| A-1 | ~~工作日/假日表由現有系統基礎資料或 `ob_calendar` 提供~~ **已解決（2026-05-04，2026-05-05 同步機制更新）**：採 `ob_calendar`（AppDB），透過 **E04 + E05 雙層 ETL** 從舊 OB DB `OBCALENDAR` 同步至 AppDB（E04 抓 raw → E05 Pipeline TargetLoad full replace）；詳見 [data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity) 與 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)。對應 OQ-E07-10 / OQ-E07-15 已 Resolved。 | Resolved |
 | A-2 | 每日分派比例係數為「`ob_pool_data` 總筆數 / 工作天數」等分 | [ASSUMPTION] |

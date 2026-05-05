@@ -861,7 +861,9 @@ PK：`list_no`
 
 #### ob_pool_data（OBPOOLDATA — 案件池）
 
-> ob_pool_data 欄位達 90+ 個，由 E04 擷取任務定期匯入（Q-B 決策）。以下列出 E07 月跑邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBPOOLDATA`）抓取至 raw_{task_id_short} 中介表（既有機制，每月跑前執行），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**。
+>
+> ob_pool_data 欄位達 90+ 個（Q-B 決策）。以下列出 E07 月跑邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
 
 PK：`(list_no, orgno, appl_no)`
 
@@ -1148,7 +1150,7 @@ PK：`(card_type, COALESCE(card_level, ''))`（[ASSUMPTION] — 原 OBTIER 無 P
 
 #### ob_emphire（OBEMPHIRE — 員工主檔） {#ob-emphire-entity}
 
-> **資料同步機制**：本表**由 E04 通用擷取任務從舊 OB DB（SQL Server `OBEMPHIRE`）每日同步至 AppDB**。E07 不提供 CRUD 維護介面，所有員工資料維護於舊 OB 端進行。同步策略（CDC 增量 vs 全量替換）由 system-architect 於 E04 擷取任務設定時決定。
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBEMPHIRE`）抓取至 raw_{task_id_short} 中介表（既有機制），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。OBEMPHIRE 採 **full 全量重抓**策略，每日重抓 raw → Pipeline 整批 replace `ob_emphire`（員工數 < 1 萬筆無效能壓力）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**，所有員工資料維護於舊 OB 端進行。
 
 PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 `PRIMARY KEY (emp_id)` 以利 join。
 
@@ -1185,7 +1187,7 @@ PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 
 
 #### ob_calendar（OBCALENDAR — 工作日/假日表） {#ob-calendar-entity}
 
-> **資料同步機制**：本表**由 E04 通用擷取任務從舊 OB DB（SQL Server `OBCALENDAR`）同步至 AppDB**。每年底由 Admin 於舊 OB 端維護下年度資料後，透過 ETL 帶入 AppDB；E07 不提供 CRUD 維護介面。同步頻率（每日 vs 每月）與策略由 system-architect 於 E04 擷取任務設定時決定。
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBCALENDAR`）抓取至 raw_{task_id_short} 中介表（既有機制，年初執行），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。每年底由 Admin 於舊 OB 端維護下年度資料後，透過此雙層 ETL 流程帶入 AppDB。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**。
 
 PK：`calendar_date`
 

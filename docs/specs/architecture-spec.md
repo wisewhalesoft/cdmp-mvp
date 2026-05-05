@@ -2680,47 +2680,110 @@ SELECT COUNT(*) FROM ob_list_definition WHERE prod_kind LIKE '%$$%';
 
 ### E07-C　ETL 設計（L2 定期同步）
 
-#### L2 ETL 任務配置
+> **架構修正（2026-05-05，AD-E07-12）**：本節依據使用者決議（方案 B）改為 **E04 raw 擷取 + E05 Pipeline TargetLoad 雙層架構**。E04 既有規格（F021）自動產生 `raw_{task_id_short}` 中介表，不支援 `targetTable` 自訂；E05 F044 TargetLoad 以 `fullMode: true` 完成最終寫入。所有「INSERT ON CONFLICT DO UPDATE」與「TRUNCATE + COPY」描述已移除，改以正確的雙層機制取代。
 
-依 OQ-E07-15 決議，以下三張表透過 E04 通用擷取任務從舊 OB SQL Server 同步至 AppDB：
+#### L2 ETL 雙層流程配置
 
-| E04 任務 | 來源（SQL Server） | AppDB 目標 | 同步策略 | 同步頻率 |
-|---------|-----------------|-----------|---------|---------|
-| OBPOOLDATA 擷取 | `dbo.OBPOOLDATA`（USP_OB_OBPOOLDATA 上游物化表） | `ob_pool_data` | **全量替換**（TRUNCATE + COPY）| 月跑前手動或排程（建議每月 1 日） |
-| OBEMPHIRE 擷取 | `dbo.OBEMPHIRE` | `ob_emphire` | **增量**（依 `update_date` 欄位） | 每日 03:00（建議低峰）|
-| OBCALENDAR 擷取 | `dbo.OBCALENDAR` | `ob_calendar` | **全量替換** | 每年初一次（由 DBA 手動觸發） |
+依 OQ-E07-15 決議並補充 AD-E07-12 雙層設計，以下三張表採「E04 通用擷取 → raw 中介表 → E05 Pipeline TargetLoad → AppDB 目標表」雙層流程同步：
+
+| 流程 | 來源（SQL Server） | E04 任務名稱 | E04 中介表 | E05 Pipeline 名稱 | AppDB 目標表 | 同步策略 | 頻率 |
+|------|-----------------|------------|----------|-----------------|------------|---------|------|
+| OBPOOLDATA 同步 | `dbo.OBPOOLDATA` | E07-OBPOOLDATA-Extract | `raw_{obpooldata_id}`（短）| E07-OBPOOLDATA-Load | `ob_pool_data` | E04 full + E05 replace | 月跑前手動 |
+| OBEMPHIRE 同步 | `dbo.OBEMPHIRE` | E07-OBEMPHIRE-Extract | `raw_{obemphire_id}`（短）| E07-OBEMPHIRE-Load | `ob_emphire` | E04 full + E05 replace | 每日 03:00 |
+| OBCALENDAR 同步 | `dbo.OBCALENDAR` | E07-OBCALENDAR-Extract | `raw_{obcalendar_id}`（短）| E07-OBCALENDAR-Load | `ob_calendar` | E04 full + E05 replace | 每年初一次 |
+
+> **說明**：E04 中介表名稱由引擎自動產生（F021 §5.6c：`raw_{task_id_short}`），不可由使用者自訂。每次 ETL 全量重抓即覆寫，中介表為**短期持有**，不需長期保留。
+
+#### E04→E05 銜接方式：排程時間錯開（方案 B）
+
+E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron 排程**（每分鐘掃描 cron 表達式），**不具備事件驅動鏈式觸發能力**（即 E04 完成後無法直接回呼 E05）。因此採方案 B：
+
+| ETL 層 | 排程時間 | 說明 |
+|--------|---------|------|
+| E04 OBEMPHIRE-Extract | 每日 **03:00** | 從 OB DB 擷取全量至 `raw_{id}` |
+| E05 OBEMPHIRE-Load | 每日 **03:30** | Pipeline 讀取 `raw_{id}` → TargetLoad `ob_emphire` |
+| E04 E05 OBPOOLDATA | 月跑前**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
+| E04 E05 OBCALENDAR | 每年初**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
+
+> **風險 E07-C-1（已接受）**：若 E04 在 03:00~03:30 之間未完成（資料量超預期），E05 Pipeline 於 03:30 執行時讀取的 `raw_{id}` 為上一批資料（或空表）。員工數 < 1 萬筆，實際 E04 執行時間預估 < 10 分鐘，30 分鐘緩衝足夠。若未來資料量增加，需重新評估時間間隔或引入 E04 完成回呼機制。
 
 #### 同步策略說明
 
-**OBPOOLDATA（全量替換）**
-- 案件池每月由舊系統 Stored Procedure 重建，增量欄位不可靠
-- 全量 TRUNCATE + COPY 確保 ob_pool_data 與舊系統當月快照一致
-- 月跑前由業務主管或排程確保最新 ob_pool_data 已就緒（F061 前置條件 AC-1 第 6 點）
+**OBPOOLDATA（E04 full + E05 replace）**
+- 案件池每月由舊系統 Stored Procedure 重建，增量欄位不可靠，採全量重抓
+- E04 任務 `mode: full`（F021）：`TRUNCATE raw_{id}` 後批次 INSERT 1000 筆/批
+- E05 Pipeline TargetLoad `fullMode: true`（F044）：`TRUNCATE ob_pool_data` + 批次 INSERT，確保目標表完全反映本次 ETL 結果
+- 月跑前由業務主管手動依序執行 E04→E05，確保 `ob_pool_data` 就緒（F061 前置條件 AC-1 第 6 點）
 
-**OBEMPHIRE（增量）**
-- 員工異動（入職/離職/轉調）每日發生，增量同步可降低 ETL 資料量
-- 以 `update_date`（OBEMPHIRE 的 `U_SYSDT` 欄位，映射為 `ob_emphire.updated_at`）作為增量鍵
-- `ob_emphire` 補建 `emp_id` 為 PK（原 OBEMPHIRE 無 PK），UPSERT 策略
+**OBEMPHIRE（E04 full + E05 replace，每日全量重抓）**
+- 員工數 < 1 萬筆，全量重抓無效能壓力；避免增量同步所需的 UPSERT 複雜性
+- E04 任務 `mode: full`：每日全量 SELECT OBEMPHIRE → TRUNCATE raw_{id} → 批次 INSERT
+- E05 Pipeline TargetLoad `fullMode: true`：TRUNCATE `ob_emphire` → 批次 INSERT
+- **不採增量同步**：OBEMPHIRE 原表無 PK constraint，增量鍵（`U_SYSDT`）可靠性未驗證；全量 replace 語意清晰，無歷史髒資料殘留風險
 
-**OBCALENDAR（全量替換）**
+**OBCALENDAR（E04 full + E05 replace，每年初一次）**
 - 工作日行事曆由舊 OB Admin 每年初手動維護下年度資料
-- 資料量小（~365 列/年），全量替換無效能問題
+- 資料量小（~365 列/年），全量 E04 + E05 replace 無效能問題
+- 由 DBA 每年初手動依序觸發 E04→E05
+
+#### E05 Pipeline 節點結構概要
+
+以下三條 Pipeline 均採最簡節點結構（參考 F044 TargetLoad 機制）：
+
+**E07-OBPOOLDATA-Load Pipeline**
+
+```
+[Extract] 讀取來源節點 → 輸入：raw_{obpooldata_id}
+   ↓
+[Field Mapping] 欄位 snake_case 轉換
+   （OBPOOLDATA 欄位映射至 ob_pool_data 欄位名稱）
+   ↓
+[TargetLoad] ob_pool_data（fullMode: true）
+   TRUNCATE ob_pool_data → 批次 INSERT（5000 筆/批）
+```
+
+**E07-OBEMPHIRE-Load Pipeline**
+
+```
+[Extract] 讀取來源節點 → 輸入：raw_{obemphire_id}
+   ↓
+[Field Mapping] 欄位 snake_case 轉換 + RTRIM(deptid_m)
+   （DEPTID_M 在 OBEMPLSETMF 中有尾隨空白問題，OQ-E07-17 驗證；
+     OBEMPHIRE 同理，遷移腳本 RTRIM 後 ob_emphire.deptid_m 無尾隨空白）
+   ↓
+[TargetLoad] ob_emphire（fullMode: true）
+   TRUNCATE ob_emphire → 批次 INSERT（5000 筆/批）
+```
+
+**E07-OBCALENDAR-Load Pipeline**
+
+```
+[Extract] 讀取來源節點 → 輸入：raw_{obcalendar_id}
+   ↓
+[Field Mapping] 欄位 snake_case 轉換
+   （CALENDAR_DATE → calendar_date、REST_FLG → rest_flg）
+   ↓
+[TargetLoad] ob_calendar（fullMode: true）
+   TRUNCATE ob_calendar → 批次 INSERT（5000 筆/批）
+```
+
+> **共同設定**：三條 Pipeline 均需先通過 F030 測試執行（`is_test_run: true`）與 F037 版本發布後，才可啟用排程執行。
 
 #### AppDB ETL 目標表補充設計
 
-**ob_emphire**（來源：OBEMPHIRE，每日增量）：
+**ob_emphire**（來源：OBEMPHIRE，每日全量 replace）：
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | `emp_id` | `VARCHAR(10) PK` | 員工工號（補建 PK，原表無） |
 | `emp_nm` | `VARCHAR(50)` | 員工姓名（F064 分派結果匯出用） |
-| `deptid_m` | `VARCHAR(4)` | 部門代碼（RTRIM）|
+| `deptid_m` | `VARCHAR(4)` | 部門代碼（RTRIM，E05 Field Mapping 處理）|
 | `resign_date` | `DATE` | 離職日期，`NULL` = 在職（AD-E07-6） |
-| `...` | | 其他 OBEMPHIRE 欄位（完整映射由 E04 擷取任務設定） |
-| `created_at` | `TIMESTAMP` | 首次同步時間 |
-| `updated_at` | `TIMESTAMP` | 最後同步時間 |
+| `...` | | 其他 OBEMPHIRE 欄位（完整映射由 E05 Pipeline Field Mapping 設定） |
+| `created_at` | `TIMESTAMP` | 首次同步時間（E05 TargetLoad 追蹤欄位）|
+| `updated_at` | `TIMESTAMP` | 最後同步時間（E05 TargetLoad 追蹤欄位）|
 
-**ob_calendar**（來源：OBCALENDAR，每年全量）：
+**ob_calendar**（來源：OBCALENDAR，每年全量 replace）：
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
@@ -2733,29 +2796,51 @@ SELECT COUNT(*) FROM ob_list_definition WHERE prod_kind LIKE '%$$%';
 ```mermaid
 sequenceDiagram
     participant OB_DB as 舊 OB DB（SQL Server）
-    participant E04 as E04 擷取任務（Scheduler）
-    participant AppDB as AppDB（PostgreSQL）
+    participant E04 as E04 擷取引擎（Scheduler）
+    participant RAW as AppDB raw_{id}（中介表）
+    participant E05 as E05 Pipeline（Scheduler）
+    participant TARGET as AppDB ob_* 目標表
     participant E07 as E07 月跑引擎
 
-    Note over OB_DB,AppDB: 每日 ETL（OBEMPHIRE → ob_emphire）
-    E04->>OB_DB: SELECT * FROM OBEMPHIRE WHERE U_SYSDT > :last_incremental_value
-    OB_DB-->>E04: 異動員工資料（增量）
-    E04->>AppDB: INSERT INTO ob_emphire ... ON CONFLICT (emp_id) DO UPDATE
+    Note over OB_DB,TARGET: 每日 ETL（OBEMPHIRE → ob_emphire）排程時間錯開
+    Note over E04: 每日 03:00 觸發
+    E04->>OB_DB: SELECT * FROM OBEMPHIRE（全量，mode: full）
+    OB_DB-->>E04: 全量員工資料
+    E04->>RAW: TRUNCATE raw_{obemphire_id}
+    E04->>RAW: 批次 INSERT（1000 筆/批）
 
-    Note over OB_DB,AppDB: 月跑前 ETL（OBPOOLDATA → ob_pool_data）
-    E04->>OB_DB: SELECT * FROM OBPOOLDATA WHERE WORKYM = :currentYm
-    OB_DB-->>E04: 當月案件池資料（全量）
-    E04->>AppDB: TRUNCATE ob_pool_data; COPY ob_pool_data FROM ...
+    Note over E05: 每日 03:30 觸發（E04 完成預留 30 分鐘緩衝）
+    E05->>RAW: 讀取 raw_{obemphire_id}
+    E05->>E05: Field Mapping（snake_case + RTRIM deptid_m）
+    E05->>TARGET: TRUNCATE ob_emphire
+    E05->>TARGET: 批次 INSERT ob_emphire（5000 筆/批，fullMode）
 
-    Note over OB_DB,AppDB: 每年初 ETL（OBCALENDAR → ob_calendar）
-    E04->>OB_DB: SELECT * FROM OBCALENDAR WHERE CALENDAR_DATE >= :nextYearStart
+    Note over OB_DB,TARGET: 月跑前 ETL（OBPOOLDATA → ob_pool_data）手動觸發
+    E04->>OB_DB: SELECT * FROM OBPOOLDATA（全量，mode: full）
+    OB_DB-->>E04: 當月案件池資料
+    E04->>RAW: TRUNCATE raw_{obpooldata_id}
+    E04->>RAW: 批次 INSERT（1000 筆/批）
+    Note over E05: E04 完成後手動觸發 E05
+    E05->>RAW: 讀取 raw_{obpooldata_id}
+    E05->>E05: Field Mapping（snake_case 轉換）
+    E05->>TARGET: TRUNCATE ob_pool_data
+    E05->>TARGET: 批次 INSERT ob_pool_data（5000 筆/批，fullMode）
+
+    Note over OB_DB,TARGET: 每年初 ETL（OBCALENDAR → ob_calendar）手動觸發
+    E04->>OB_DB: SELECT * FROM OBCALENDAR（全量，mode: full）
     OB_DB-->>E04: 下年度工作日資料
-    E04->>AppDB: TRUNCATE ob_calendar; COPY ob_calendar FROM ...
+    E04->>RAW: TRUNCATE raw_{obcalendar_id}
+    E04->>RAW: 批次 INSERT（1000 筆/批）
+    Note over E05: E04 完成後手動觸發 E05
+    E05->>RAW: 讀取 raw_{obcalendar_id}
+    E05->>E05: Field Mapping（snake_case 轉換）
+    E05->>TARGET: TRUNCATE ob_calendar
+    E05->>TARGET: 批次 INSERT ob_calendar（5000 筆/批，fullMode）
 
-    Note over AppDB,E07: 月跑觸發
-    E07->>AppDB: 讀 ob_calendar（工作日計算）
-    E07->>AppDB: 讀 ob_pool_data（當月案件）
-    E07->>AppDB: 讀 ob_emphire（在職員工，resign_date IS NULL）
+    Note over TARGET,E07: 月跑觸發（ob_* 資料已就緒）
+    E07->>TARGET: 讀 ob_calendar（工作日計算）
+    E07->>TARGET: 讀 ob_pool_data（當月案件）
+    E07->>TARGET: 讀 ob_emphire（在職員工，resign_date IS NULL）
 ```
 
 ---
@@ -2948,16 +3033,19 @@ SELECT tier_level FROM ob_tier
 | D10 | Migration 腳本：OBEMPLSETMF → `ob_empl_set`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
 | D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列 | ⬜ 待執行 | **[BLOCKER]** |
 
-#### F-3　E04 ETL 任務設定（L2 同步）
+#### F-3　E04 + E05 雙層 ETL 任務設定（L2 同步，AD-E07-12）
 
 | # | 項目 | 狀態 | 備注 |
 |---|------|------|------|
-| E1 | 建立 E04 擷取任務：OBPOOLDATA → `ob_pool_data`（全量替換，月跑前執行） | ⬜ 待設定 | **[BLOCKER]** |
-| E2 | 建立 E04 擷取任務：OBEMPHIRE → `ob_emphire`（增量，每日 03:00） | ⬜ 待設定 | **[BLOCKER]** |
-| E3 | 建立 E04 擷取任務：OBCALENDAR → `ob_calendar`（全量，每年初一次） | ⬜ 待設定 | |
-| E4 | 確認 `ob_emphire.emp_id` 為 PK，UPSERT 策略正確（`ON CONFLICT (emp_id) DO UPDATE`） | ⬜ 待確認 | |
-| E5 | 首次執行 OBEMPHIRE ETL，確認 `ob_emphire` 有資料（月跑 Stage 4 依賴） | ⬜ 待執行 | **[BLOCKER]** |
-| E6 | 首次執行 OBCALENDAR ETL，確認 `ob_calendar` 當年度工作日資料完整 | ⬜ 待執行 | **[BLOCKER]** |
+| E1 | 建立 E04 擷取任務：E07-OBPOOLDATA-Extract（來源 `dbo.OBPOOLDATA`，`mode: full`） | ⬜ 待設定 | **[BLOCKER]** |
+| E2 | 建立 E04 擷取任務：E07-OBEMPHIRE-Extract（來源 `dbo.OBEMPHIRE`，`mode: full`，每日全量重抓） | ⬜ 待設定 | **[BLOCKER]** |
+| E3 | 建立 E04 擷取任務：E07-OBCALENDAR-Extract（來源 `dbo.OBCALENDAR`，`mode: full`） | ⬜ 待設定 | |
+| E4 | 建立 E05 Pipeline：E07-OBPOOLDATA-Load（`raw_{obpooldata_id}` → Field Mapping → TargetLoad `ob_pool_data`，`fullMode: true`） | ⬜ 待建立 | **[BLOCKER]** |
+| E5 | 建立 E05 Pipeline：E07-OBEMPHIRE-Load（`raw_{obemphire_id}` → Field Mapping + RTRIM(deptid_m) → TargetLoad `ob_emphire`，`fullMode: true`） | ⬜ 待建立 | **[BLOCKER]** |
+| E6 | 建立 E05 Pipeline：E07-OBCALENDAR-Load（`raw_{obcalendar_id}` → Field Mapping → TargetLoad `ob_calendar`，`fullMode: true`） | ⬜ 待建立 | |
+| E7 | 確認排程錯開設定：E04 OBEMPHIRE-Extract 03:00、E05 OBEMPHIRE-Load 03:30；E04 E05 其餘管道手動依序觸發 | ⬜ 待確認 | **[BLOCKER]** |
+| E8 | 首次執行 OBEMPHIRE 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_emphire` 有資料（月跑 Stage 4 依賴） | ⬜ 待執行 | **[BLOCKER]** |
+| E9 | 首次執行 OBCALENDAR 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_calendar` 當年度工作日資料完整 | ⬜ 待執行 | **[BLOCKER]** |
 
 #### F-4　PostgreSQL Function 建立（計分引擎）
 
@@ -3006,7 +3094,48 @@ exceljs WorkbookWriter（streaming）
 
 ---
 
-*本文件版本 2.0，由 System Architect Agent 依據 E07 Epic 進入開發前架構決策需求（2026-05-05）更新。主要變更：*
+#### AD-E07-12　E07 ETL 採 E04 + E05 雙層架構
+
+**決策**：E07 涉及的 OB 系統表（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）採「E04 通用擷取至 `raw_{id}` 中介表 + E05 Pipeline TargetLoad 至 `ob_*` 目標表」雙層流程，不修改 E04 / E05 既有規格。
+
+**雙層流程**：
+
+```
+OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
+  → E04 擷取任務（mode: full，F021 既有機制）
+  → raw_{task_id_short}（AppDB 中介表，短期持有，每次 full 覆寫）
+  → E05 Pipeline TargetLoad（fullMode: true，F044 既有機制）
+  → ob_pool_data / ob_emphire / ob_calendar（AppDB 最終目標表）
+  → E07 月跑引擎讀取
+```
+
+**理由**：
+1. E04 既有規格（F021 §5.6c）自動建立 `raw_{task_id_short}` 表，**不支援 `targetTable` 自訂**，且 `mode` 僅有 `full | incremental`，**無 UPSERT 模式**；直接寫入 `ob_*` 目標表須修改 E04 規格，成本 +3~5 天
+2. E05 F044 TargetLoad 已支援 `fullMode: true`（TRUNCATE + 批次 INSERT），功能完整，可直接複用
+3. OBEMPHIRE 員工數 < 1 萬筆，全量 E04 full + E05 replace 無效能壓力，避免增量同步所需 UPSERT 複雜性（原 `U_SYSDT` 增量鍵可靠性未驗證）
+4. 方案 B 不改 E04 / E05 spec，符合 MVP 速度優先原則
+
+**影響範圍**：E07-C ETL 設計、E07-F 開發前檢核清單 E 類項目重組（E1~E9）。
+
+**替代方案考量**：
+- **方案 A（擴充 E04 支援 UPSERT + targetTable）**：需修改 F017 / F021 spec + 實作 + 測試，額外 +3~5 天，MVP 不採
+- **方案 C（直連 OB DB cron job，繞過 E04 / E05）**：違反 AD-E07-1（統一架構，所有 OB 資料透過 E04 擷取任務進入 AppDB），引入維護孤島，不採
+
+---
+
+*本文件版本 2.1，由 System Architect Agent 依據架構修正需求（2026-05-05）更新。主要變更：*
+
+- *修正 E07-C ETL 設計：改為 E04 raw 擷取 + E05 Pipeline TargetLoad 雙層架構（AD-E07-12）*
+- *OBEMPHIRE 同步策略改為 full 全量（移除增量同步描述）*
+- *移除 INSERT ON CONFLICT DO UPDATE 描述，改為 E05 TargetLoad fullMode*
+- *移除 TRUNCATE + COPY 描述，改為 E04 full TRUNCATE + 批次 INSERT + E05 Pipeline replace target*
+- *重畫 ETL 同步流程圖（sequenceDiagram），加入 raw_{id} 中介層與 E05 Pipeline 節點*
+- *新增三條 E05 Pipeline 節點結構概要（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）*
+- *新增 E04→E05 銜接機制說明（排程時間錯開，方案 B）*
+- *E07-F 開發前檢核清單 E 類項目重組為 9 項（E1~E9，其中 E1/E2/E4/E5/E7/E8 為 BLOCKER）*
+- *新增架構決策 AD-E07-12（E07 ETL 採 E04 + E05 雙層架構）*
+
+*v2.0 原有變更（2026-05-05）：*
 
 - *新增架構決策 AD-E07-4（ob_levelcard_column 停用機制：status 欄位）*
 - *新增架構決策 AD-E07-5（CR 回分開關：ob_assign_config 獨立表）*

@@ -132,7 +132,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-3 | 月跑鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
 | BR-4 | `ration` 範圍：0.0 ~ 100.0（`NUMERIC(10,1)`） |
 | BR-5 | 修改僅針對指定 `list_no + deptid_m`，不影響其他 LIST_NO 或部門 |
-| BR-6 | 「新增人員」員工下拉清單來源為 AppDB `ob_emphire`（由 E04 通用擷取任務從舊 OB DB 同步），過濾條件 `WHERE resign_date IS NULL`（在職員工）；可進一步依目標 `deptid_m` 過濾 `dept_code = :deptIdM` |
+| BR-6 | 「新增人員」員工下拉清單來源為 AppDB `ob_emphire`（採 E04 + E05 雙層 ETL 從舊 OB DB 同步，OBEMPHIRE 採 full 全量重抓策略，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)），過濾條件 `WHERE resign_date IS NULL`（在職員工）；可進一步依目標 `deptid_m` 過濾 `dept_code = :deptIdM` |
 
 ## 7. UI/UX 需求
 
@@ -148,7 +148,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 9. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_empl_set`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（員工主檔，由 E04 同步）
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_empl_set`）；[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（員工主檔，採 E04 + E05 雙層 ETL 同步）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 架構決策：AD-E07-1
 - 相關功能：[F057](F057-view-personnel-ratio.md)、[F061](F061-trigger-assignment-run.md)
