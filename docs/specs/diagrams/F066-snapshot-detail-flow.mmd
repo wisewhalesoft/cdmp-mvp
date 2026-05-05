@@ -1,0 +1,41 @@
+%% F066 — 查看執行快照詳情
+%% 說明：業務主管從歷史清單進入某 run_id，系統讀取三份 snapshot_type（config / input_list / result），前端依分頁呈現 JSONB payload
+sequenceDiagram
+    participant SM as 業務主管（Sales Manager）
+    participant UI as 前端 SPA（快照詳情頁）
+    participant API as AssignmentSnapshot Service
+    participant DB as AppDB（PostgreSQL）
+
+    SM->>UI: 從歷史清單點擊某 run_id
+    UI->>API: GET /api/v1/assignment/history/:runId/snapshot
+
+    API->>DB: SELECT * FROM assignment_run WHERE run_id = :runId
+    alt run_id 不存在
+        DB-->>API: 0 row
+        API-->>UI: 404 ASSIGNMENT_RUN_NOT_FOUND
+        UI-->>SM: 顯示錯誤提示
+    else run_id 存在
+        DB-->>API: AssignmentRun 基本資訊
+        API->>DB: SELECT snapshot_type, payload, created_at<br/>FROM assignment_run_snapshot<br/>WHERE run_id = :runId
+        DB-->>API: 三筆 snapshot（config / input_list / result）
+
+        API-->>UI: 200 OK<br/>{ runMeta, snapshots: { config, inputList, result } }
+        UI-->>SM: 顯示基本資訊 + 三個分頁索引
+
+        Note over SM,UI: 分頁 1：設定快照（config）
+        SM->>UI: 點擊「設定快照」分頁
+        UI->>UI: 前端解析 config.payload JSONB<br/>（計分版本 / 部門比例 / 人員比例 / CR 開關）
+        UI-->>SM: 表格呈現設定參數
+
+        Note over SM,UI: 分頁 2：輸入名單快照（input_list）
+        SM->>UI: 點擊「輸入名單快照」分頁
+        UI->>UI: 前端解析 input_list.payload JSONB<br/>（Stage 1 原始名單）
+        UI-->>SM: 表格 + 搜尋框（依客戶編號查詢）
+
+        Note over SM,UI: 分頁 3：結果快照（result）
+        SM->>UI: 點擊「結果快照」分頁
+        UI->>UI: 前端解析 result.payload JSONB<br/>（Stage 4 最終分派）
+        UI-->>SM: 表格 + 搜尋框（依客戶編號 / 人員工號查詢）
+    end
+
+    Note over API,DB: 快照為不可修改的唯讀紀錄（INSERT-only），<br/>資料量 > 100,000 筆時考慮提供後端分頁 API

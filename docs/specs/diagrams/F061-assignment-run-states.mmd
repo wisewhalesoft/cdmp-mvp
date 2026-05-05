@@ -1,0 +1,32 @@
+%% F061 — AssignmentRun 狀態轉換
+%% 說明：月跑紀錄（assignment_run.status）的生命週期：pending → running → completed/failed
+stateDiagram-v2
+    [*] --> pending : INSERT assignment_run<br/>（前置條件通過 + 202 Accepted）
+
+    pending --> running : 非同步引擎啟動<br/>started_at = NOW
+    pending --> failed : 前置條件事後檢查失敗<br/>或啟動異常
+
+    running --> completed : Stage 1~4 全部成功<br/>+ 三份快照 Transaction commit<br/>finished_at = NOW<br/>total_cases = N
+    running --> failed : 任一 Stage 失敗<br/>或快照寫入 ROLLBACK<br/>error_message = Stage_X failed
+
+    completed --> [*] : 可被 US-085 歷史清單查詢<br/>可被 US-086 快照詳情查閱<br/>可被 US-087 比對差異
+    failed --> [*] : 可被 US-085 歷史清單查詢<br/>業務主管修正後可重新觸發新月跑
+
+    note right of pending
+        同月僅允許一個
+        pending/running 紀錄
+        重複觸發 → 409
+        ASSIGNMENT_RUN_ALREADY_RUNNING
+    end note
+
+    note right of running
+        running 期間：
+        所有 E07 CRUD 操作鎖定
+        （名單/計分/比例/代碼全部禁止修改）
+    end note
+
+    note right of completed
+        completed 的月跑不阻擋重跑；
+        同月可再次觸發新月跑，
+        前次快照完整保留（不覆蓋）
+    end note

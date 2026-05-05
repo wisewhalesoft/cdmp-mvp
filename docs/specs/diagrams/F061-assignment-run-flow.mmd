@@ -1,0 +1,55 @@
+%% F061 — 觸發分派月跑（Stage 0~4 執行引擎）
+%% 說明：月跑採非同步執行（202 Accepted），依序執行 Stage 0 前置、Stage 1 名單建立、Stage 2 計分與部門分配、Stage 3 部門分配、Stage 4 人員分配與 st4_exchange
+flowchart TD
+    Start([業務主管點擊「執行月跑」]) --> Precheck{Stage 0：前置條件檢查}
+
+    Precheck -->|名單未就緒| Fail0[阻擋執行<br/>回傳 422 + 失敗原因清單]
+    Precheck -->|部門比例 ≠ 100%| Fail0
+    Precheck -->|人員比例 ≠ 100%| Fail0
+    Precheck -->|無生效計分版本| Fail0
+    Precheck -->|同月 running/pending| Reject[409 ASSIGNMENT_RUN_ALREADY_RUNNING]
+    Precheck -->|全部通過| CreateRun[INSERT assignment_run<br/>status = 'pending'<br/>回傳 202 Accepted + run_id]
+
+    CreateRun --> Async[[背景 Promise chain 非同步執行]]
+    Async --> SetRunning[UPDATE assignment_run<br/>status = 'running'<br/>started_at = NOW]
+
+    SetRunning --> Stage1[Stage 1：建立原始名單<br/>讀 ob_pool_data<br/>套用 ob_list_definition 篩選<br/>產出候選名單]
+    Stage1 --> Stage1Check{Stage 1 成功?}
+    Stage1Check -->|否| Rollback
+    Stage1Check -->|是| Stage2
+
+    Stage2[Stage 2：計分與 CARD_LEVEL 劃分<br/>呼叫 fn_calc_tier_level PostgreSQL function<br/>套用 ob_levelcard_* 計分邏輯]
+    Stage2 --> Stage2Check{Stage 2 成功?}
+    Stage2Check -->|否| Rollback
+    Stage2Check -->|是| Stage3
+
+    Stage3[Stage 3：部門分配<br/>讀 ob_dept_pct per-LIST_NO 部門比例<br/>CR 回分優先指定<br/>寫 ob_pool_data_list.ob_dept]
+    Stage3 --> Stage3Check{Stage 3 成功?}
+    Stage3Check -->|否| Rollback
+    Stage3Check -->|是| Stage4
+
+    Stage4[Stage 4：人員分配 + st4_exchange<br/>讀 ob_empl_set 人員比例<br/>T1/T2/T3 新件 10% 交換至資深<br/>寫 ob_pool_data_list.emplid]
+    Stage4 --> Stage4Check{Stage 4 成功?}
+    Stage4Check -->|否| Rollback
+    Stage4Check -->|是| Snapshot
+
+    Snapshot[[快照寫入 Transaction]]
+    Snapshot --> SnapConfig[INSERT snapshot_type='config'<br/>payload = 本次設定完整快照]
+    SnapConfig --> SnapInput[INSERT snapshot_type='input_list'<br/>payload = Stage 1 輸出]
+    SnapInput --> SnapResult[INSERT snapshot_type='result'<br/>payload = Stage 4 輸出]
+    SnapResult --> SnapCheck{三份快照 commit 成功?}
+    SnapCheck -->|否| Rollback
+    SnapCheck -->|是| Complete[UPDATE assignment_run<br/>status = 'completed'<br/>finished_at = NOW<br/>total_cases = N]
+
+    Rollback[ROLLBACK 快照 Transaction<br/>UPDATE assignment_run<br/>status = 'failed'<br/>error_message = Stage_X failed]
+    Rollback --> EndFail([月跑失敗<br/>前端輪詢顯示失敗提示])
+    Complete --> EndOk([月跑完成<br/>前端輪詢顯示完成提示])
+
+    classDef stage fill:#dbeafe,stroke:#2563eb
+    classDef decision fill:#fef9c3,stroke:#ca8a04
+    classDef fail fill:#fef2f2,stroke:#ef4444
+    classDef ok fill:#dcfce7,stroke:#16a34a
+    class Stage1,Stage2,Stage3,Stage4,Snapshot,SetRunning,CreateRun,SnapConfig,SnapInput,SnapResult stage
+    class Precheck,Stage1Check,Stage2Check,Stage3Check,Stage4Check,SnapCheck decision
+    class Fail0,Reject,Rollback,EndFail fail
+    class Complete,EndOk ok

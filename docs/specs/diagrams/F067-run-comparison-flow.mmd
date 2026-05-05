@@ -1,0 +1,48 @@
+%% F067 — 比對兩次執行結果差異（含人員配對一致性 diff，NFR-005 主驗收工具）
+%% 說明：業務主管選定 Base run_id 與 Compare run_id，後端比對兩份 result 快照產出摘要差異 + 人員配對不一致報告
+sequenceDiagram
+    participant SM as 業務主管（Sales Manager）
+    participant UI as 前端 SPA（比對頁）
+    participant API as AssignmentSnapshot Service
+    participant DB as AppDB（PostgreSQL）
+
+    SM->>UI: 選定 Base run_id 與 Compare run_id，點擊「比對」
+    UI->>API: GET /api/v1/assignment/history/compare?runA=:baseId&runB=:compareId
+
+    API->>DB: SELECT * FROM assignment_run<br/>WHERE run_id IN (:baseId, :compareId)
+    alt 任一 run_id 不存在
+        API-->>UI: 404 ASSIGNMENT_RUN_NOT_FOUND
+        UI-->>SM: 顯示錯誤提示
+    else 任一 run_id 非 completed
+        API-->>UI: 422 ASSIGNMENT_RUN_NOT_COMPARABLE
+        UI-->>SM: 顯示「僅 completed 狀態可比對」
+    else 兩筆均為 completed
+        DB-->>API: 兩筆 AssignmentRun 基本資訊
+
+        API->>DB: 讀取兩份 result 快照<br/>SELECT payload FROM assignment_run_snapshot<br/>WHERE run_id IN (:baseId, :compareId)<br/>AND snapshot_type = 'result'
+        DB-->>API: Base.payload + Compare.payload
+
+        API->>DB: 讀取兩份 config 快照<br/>WHERE snapshot_type = 'config'
+        DB-->>API: Base.config + Compare.config
+
+        API->>API: 應用層計算 diff：<br/>1. 摘要差異（總筆數 / 部門 / 等級）<br/>2. 人員配對不一致（JOIN APPL_NO 比 ob_emplid）<br/>3. 設定差異（計分版本 / 比例 / CR 開關）<br/>4. 客戶層級集合差異（新增 / 移除）
+
+        API->>API: 計算人員配對不一致率<br/>rate = 不一致案件數 / 同批次總案件數
+
+        alt rate > 3%
+            API-->>UI: 200 OK<br/>{ summary, personnelMismatch: { list, rate, alert: true } }
+            UI-->>SM: 顯示比對結果<br/>人員配對不一致率紅色警示（連結 NFR-005）
+        else rate ≤ 3%
+            API-->>UI: 200 OK<br/>{ summary, personnelMismatch: { list, rate, alert: false } }
+            UI-->>SM: 顯示比對結果<br/>人員配對不一致率正常顯示
+        end
+
+        Note over SM,UI: 下載不一致案件清單
+        SM->>UI: 點擊「下載不一致案件清單」
+        UI->>API: GET /api/v1/assignment/history/compare/mismatch/export<br/>?runA=:baseId&runB=:compareId
+        API->>API: 以 streaming 產出 Excel<br/>欄位：APPL_NO / Base OB_EMPLID / Compare OB_EMPLID
+        API-->>UI: Excel 檔案（Content-Disposition: attachment）
+        UI-->>SM: 瀏覽器下載檔案
+    end
+
+    Note over API,DB: 人員配對 diff 為 NFR-005 主驗收工具；<br/>差異比對完全由應用層計算（不額外寫入）

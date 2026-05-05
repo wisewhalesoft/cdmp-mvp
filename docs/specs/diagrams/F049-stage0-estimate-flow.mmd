@@ -1,0 +1,34 @@
+%% F049 — Stage 0 每日分派數量估算流程
+%% 說明：業務主管在名單定義清單中點擊「計算案件數量」按鈕，系統即時試算符合條件的案件數量（不寫入任何分派結果）
+sequenceDiagram
+    participant SM as 業務主管（Sales Manager）
+    participant UI as 前端 SPA
+    participant API as AssignmentList Service
+    participant DB as AppDB（PostgreSQL）
+
+    SM->>UI: 進入 M01 名單定義清單頁
+    UI->>API: GET /api/v1/assignment/list-definitions?ym=YYYYMM
+    API->>DB: SELECT from ob_list_definition<br/>WHERE project_workym = :ym AND status = 'active'
+    DB-->>API: active 名單列表
+    API-->>UI: 200 OK [list]
+    UI-->>SM: 顯示本月 active 名單清單（含預估件數欄）
+
+    Note over SM,UI: 試算單一 LIST_NO 案件數量（對應 US-071 AC-4）
+    SM->>UI: 點擊某 LIST_NO 的「計算案件數量」按鈕
+    UI->>API: GET /api/v1/assignment/list-definitions/:listNo/estimate
+
+    API->>DB: 讀取 LIST_NO 篩選條件<br/>（PROD_KIND / CASEYEAR / SPEC_TP /<br/>LIST_PERIOD_START|END / SETTLE_SRC）
+    DB-->>API: 條件組合
+
+    API->>DB: 套用條件即時試算 ob_pool_data<br/>SELECT COUNT(*) FROM ob_pool_data<br/>WHERE （LIST_NO 篩選條件）
+    DB-->>API: 符合條件筆數 N
+
+    alt ob_pool_data 筆數 < 1000（警示門檻）
+        API-->>UI: 200 OK { count: N, warning: "POOL_COUNT_LOW" }
+        UI-->>SM: 顯示橘色警示<br/>「Pool 資料筆數偏低（N 筆），請確認擷取任務執行」
+    else 正常
+        API-->>UI: 200 OK { count: N }
+        UI-->>SM: 顯示「符合條件案件數：N 筆」
+    end
+
+    Note over API,DB: 本試算不寫入任何分派結果；<br/>僅為估算參考，實際件數以月跑結果為準
