@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "2.7"
-date: 2026-05-05
+version: "2.8"
+date: 2026-05-06
 status: Draft
 ---
 
@@ -10,7 +10,7 @@ status: Draft
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **文件總數**：104 份（7 支援文件含 spec-index 本檔 + 68 Feature 文件 + 29 圖表文件）
-> **最後更新**：2026-05-05
+> **最後更新**：2026-05-06
 
 ---
 
@@ -387,3 +387,6 @@ F066 ──> F067（比對需讀取個別快照）
 | 2026-05-05 | dump 資料驗證 9 表（`reference/DumpData/*_20260505.csv`），發現 5 項與 spec 假設差異並修正：(1) `OBLEVELCARD_VERSION` STATUS 欄位遷移補建（原表無，依 SDATE/EDATE 計算初值；data-model 補入欄位 + blockquote，F054/F055 補 BR）；(2) `OBTIER` 接受計分卡體系外的 CARD_TYPE（H/S/E/S5/E5/M/HM/M5 共 8 種，M5 → T5M 為 fallback 規則 CARD_LEVEL 可 NULL；data-model `ob_tier` `card_level` 改回 NULL + PK 補建邏輯更新 `(card_type, COALESCE(card_level, ''))` + Fallback CARD_TYPE 觀察表；F056 新增 AC-4a + BR-8；F061 Stage 2 補 fallback join 語意）；(3) `ob_levelcard_*` 系列稽核欄位 NULL 化驗證（既有設定無誤）；(4) `OBEMPLSETMF.DEPTID_M` 遷移時 RTRIM（dump 觀察 4 字元代碼被 padded 至 50 字元；data-model `ob_empl_set` 補註腳）；(5) `OBMLISTDF` 多值欄位 `$$` 分隔（`prod_kind` / `spec_tp` / `settle_src` / `caseyear`；data-model 補多值欄位儲存規範段落，F050/F051 UI/UX 補多選序列化規範）；OQ-E07-11（OBMCODEDF.SYSTEM_ID）✅ Resolved（dump 全表 = `'OB'`，F068 同步更新）；新增 OQ-E07-17（dump 驗證決議彙整 ✅ Resolved）；假設 A51 / A54 同步更新 | Spec Writer Agent |
 | 2026-05-05 | 修正 E04 ETL 描述：`ob_pool_data` / `ob_emphire` / `ob_calendar` 改為 **E04 + E05 雙層 ETL** 流程（AD-E07-12）— E04 通用擷取任務從舊 OB DB 抓取至 raw_{task_id_short} 中介表（既有機制），再由 E05 Pipeline TargetLoad 載入目標表（full replace 模式，沿用 F044 customer_core 機制）；OBEMPHIRE 同步策略改為 **full 全量重抓**（每日重抓全表，員工數 < 1 萬筆無效能壓力）；data-model.md 三表 blockquote 「資料同步機制」更新（`ob_emphire` / `ob_calendar` / `ob_pool_data`）；F049（Stage 0 前置條件 + BR-2 + 假設 A-1）/ F058（BR-6 員工下拉清單來源）/ F061（Stage 0 前置條件 + Stage 4 員工 join + Blocked By）/ F063（BR-5 部門名稱 + ob_emphire 引用）/ F064（員工姓名 join 來源 + 假設 A-1）引用文字對齊；scope.md Epic 依賴圖補入 E05 → E07 封鎖關係 + E04 擷取任務範圍說明改寫為雙層 ETL 描述；E07 整體不新增 ETL Feature（pipeline 設定屬部署文件，由 Admin 於系統初始化建立 E04 + E05 並設定排程） | Spec Writer Agent |
 | 2026-05-05 | 修正 E07-C ETL 設計：改為 E04 raw 擷取 + E05 Pipeline TargetLoad 雙層架構（AD-E07-12）；OBEMPHIRE 同步策略改為 full 全量（移除增量同步描述）；E07-F 檢核清單 E 類項目重組為 9 項（E1/E2/E4/E5/E7/E8 為 BLOCKER）；新增 AD-E07-12 架構決策；architecture-spec.md 升至 v2.1；open-questions OQ-E07-15 解決方案補入 E04 + E05 雙層流程說明及引用 AD-E07-12 | System Architect Agent |
+| 2026-05-06 | 修正 `ob_pool_data` 結構：移除誤含的 `list_no` 欄位、PK 重設為 `(orgno, appl_no)`（system-architect 並行處理 AD-E07-13），blockquote 補「共享案件池」說明（120 欄無 LIST_NO，per-LIST_NO 候選由 Stage 1 join `ob_list_definition` 篩選條件動態取得），索引重構為 `(orgno, appl_no)` / `(custo_no)` / `(prod_kind)` / `(settle_src)` / `(card_type, card_level)`；F049 AC-4 文字明確化（讀 `ob_list_definition` 取篩選條件後對 `ob_pool_data` 套用 WHERE 子句，非按 list_no 過濾）；F061 / F063 檢視後語意正確不需改。新增 OQ-E07-18（`ob_pool_data` 結構落差，與 system-architect 並行處理）與 OQ-E07-19（`is_sales_manager` 實作完全缺漏 — migration / Entity / Auth Service / JWT payload 全無；spec 描述本身正確無需修改；Open，待 Phase 1 Track A M3 補建） | Spec Writer Agent |
+| 2026-05-08 | 修正 ob_pool_data 結構落差（AD-E07-13）：移除 list_no（OBPOOLDATA 來源無此欄）、PK 重設為 `(orgno, appl_no)`；確立 ob_pool_data（L2 共享案件池）與 ob_pool_data_list（L3 分派結果）的「池/結果」分離架構；E07-D 補充 Stage 1 演算法說明（ob_pool_data 無 list_no，per-list 透過 JOIN ob_list_definition 篩選條件取候選）；新增 OQ-E07-18（schema 落差盤點，直接 ✅ Resolved，含 4 項落差處置）；architecture-spec.md 升至 v2.2 | System Architect Agent |
+| 2026-05-06 | 清理 data-model `ob_pool_data` 章節殘留：移除 4 個 `ob_pool_data_list` 才有的欄位（`card_level` / `tier_level` / `card_type` / `case_type`）與對應 `(card_type, card_level)` 索引；對齊 AD-E07-13 完整映射 OBPOOLDATA（120 欄 + `_cdmp_extracted_at` = 121 欄，**無 LIST_NO 欄位**）。`ob_pool_data_list` 章節正確列示這些欄位不受影響 | Spec Writer Agent |

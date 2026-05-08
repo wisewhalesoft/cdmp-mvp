@@ -67,7 +67,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 - **Given** 業務主管在名單定義清單（F048）中查看某 `status = 'active'` 的名單
 - **When** 業務主管點擊該列的「計算案件數量」按鈕
-- **Then** 系統依該 `list_no` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start` ~ `list_period_end` / `settle_src`）即時 COUNT `ob_pool_data`，回傳「符合條件案件數：N 筆」
+- **Then** 系統讀取 `ob_list_definition` 中該 `list_no` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start` ~ `list_period_end` / `settle_src`），對共享案件池 `ob_pool_data` 套用對應 WHERE 子句即時 COUNT，回傳「符合條件案件數：N 筆」（`ob_pool_data` 為共享池，無 `list_no` 欄位，篩選邏輯與月跑 Stage 1 一致）
 - **And** 此試算不執行實際月跑，不寫入 `ob_pool_data_list`，不建立 `assignment_run` 紀錄
 
 ### AC-5：試算逾時保護

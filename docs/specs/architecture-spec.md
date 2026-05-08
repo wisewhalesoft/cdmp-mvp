@@ -1,8 +1,8 @@
 ---
 type: architecture-spec
-version: 2.0
+version: 2.2
 status: draft
-last_updated: 2026-05-05
+last_updated: 2026-05-06
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
 ---
 
@@ -17,7 +17,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核） |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）** |
 
 ## 目錄
 
@@ -2361,6 +2361,93 @@ cdmp-mvp/
 
 ### E07-A　資料來源分層架構
 
+#### AD-E07-13　ob_pool_data 表結構修正（PK 重設 + list_no 移除）
+
+**決策**：
+
+1. **Primary Key**：`ob_pool_data` 的 PK 採用 **`(orgno, appl_no)` 複合主鍵**（對應 OBPOOLDATA 中唯一的 NOT NULL 業務鍵）。
+2. **移除 list_no**：`ob_pool_data` 不含 `list_no` 欄位。`list_no` 屬於分派結果層（`ob_pool_data_list`），不屬於案件池本身。
+
+**背景**：
+
+OBPOOLDATA 為舊 OB 系統的共享案件池主檔（120 欄，原表無 PK 約束）。驗證 `reference/TableSchema/OB/OBPOOLDATA.sql` 後確認：
+
+- OBPOOLDATA **完全沒有 LIST_NO 欄位**
+- NOT NULL 欄位僅 `ORGNO` / `APPL_NO` / `CUSTO_NO`
+- Stage 1 SP（`SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`）為：
+
+```sql
+FROM OBPOOLDATA o
+JOIN (SELECT * FROM OBMLISTDF WHERE LIST_NO=@LIST_NO) AS A2
+  ON <PROD_KIND / SPEC_TP 等篩選條件>
+```
+
+即：**OBPOOLDATA 是純粹的案件池**，Stage 1 透過 JOIN OBMLISTDF（AppDB 端：`ob_list_definition`）的篩選條件決定哪些案件進入特定 LIST_NO，分派結果（含 list_no）寫入 **`ob_pool_data_list`**，而非回寫至 `ob_pool_data`。
+
+**PK 選擇理由**：
+
+| 方案 | 評估 |
+|------|------|
+| `(orgno, appl_no)` ✅ 採用 | ORGNO + APPL_NO 為 SP join 鍵，語意上構成案件唯一識別。CUSTO_NO 雖 NOT NULL，但客戶號不是案件鍵（一客戶可對應多案件） |
+| `(orgno, appl_no, custo_no)` | 過度包含：引入 CUSTO_NO 至 PK 後，若資料中同一案件的 CUSTO_NO 不一致會導致重複行，語意比 (orgno, appl_no) 更寬鬆而非更嚴謹 |
+| 無 PK，僅唯一索引 | 與 OBPOOLDATA 原表一致，但放棄 PK 語意保證；Stage 1 LATERAL JOIN 在 `(orgno, appl_no)` 無 B-tree PK 索引時效能下降；ETL full replace（TRUNCATE + COPY）期間無法保護資料完整性 |
+
+**Stage 1 演算法正確描述**（修正既有 spec 中的誤解）：
+
+```
+Stage 1 — ob_pool_data 候選篩選 → ob_pool_data_list 建立
+
+FOR EACH active list_no IN ob_list_definition（本月有效名單）:
+  1. 讀取 ob_list_definition 的篩選條件欄位：
+     prod_kind（$$分隔多值）、spec_tp（$$分隔多值）、settle_src、caseyear 等
+  2. 以上述條件 JOIN ob_pool_data，取出符合條件的案件：
+     SELECT pd.orgno, pd.appl_no, ...
+     FROM ob_pool_data pd
+     WHERE <篩選條件子句（LIKE '%$$VALUE$$%' 三段比對）>
+  3. 將符合條件的案件 INSERT INTO ob_pool_data_list（含 list_no 欄位）
+     ob_pool_data_list.list_no = :list_no
+     ob_pool_data_list.orgno   = pd.orgno
+     ob_pool_data_list.appl_no = pd.appl_no
+     ... （其他分派欄位初始為 NULL）
+END FOR
+
+注意：ob_pool_data 本身不含 list_no；
+      list_no 首次出現於 ob_pool_data_list（分派結果表）。
+```
+
+**ob_pool_data 在 E07-A 分層架構中的定位**：
+
+- 層級：**L2（E04 定期 ETL 同步）**
+- 語意：案件池（共享，不分名單）；案件本身無 list_no
+- 與 `ob_pool_data_list` 的關係：**「池 / 結果」分離**——`ob_pool_data` 為原始案件資料，`ob_pool_data_list` 為月跑 Stage 1 篩選後的 per-list 分派結果（含 list_no、tier_level、dept_id、emplid 等計算欄位）
+
+**影響範圍**：
+
+| 項目 | 影響說明 | 處理方 |
+|------|---------|--------|
+| `data-model.md` ob_pool_data 定義 | 移除 `list_no` 欄位；PK 修正為 `(orgno, appl_no)` | spec-writer 並行處理 |
+| `scripts/e07-etl-config.json` | `OBPOOLDATA-Load` pipeline fieldMappings 含「LIST_NO → list_no」映射必須移除（來源無此欄位，ETL 會報錯） | 實作端部署前修正 |
+| F049 Stage 0 估算 API | 若查詢 `WHERE list_no = ?` 直打 `ob_pool_data`，需修正為 JOIN `ob_list_definition` 篩選邏輯 | spec-writer 確認 F049 SQL 描述 |
+| F061 Stage 1 描述 | 強調 Stage 1 讀取 `ob_pool_data`（無 list_no），以 JOIN `ob_list_definition` 篩選條件建立 `ob_pool_data_list` | spec-writer 確認 F061 AC 文字 |
+| ETL Pipeline Field Mapping | E07-OBPOOLDATA-Load Pipeline 的 Field Mapping 節點不包含 LIST_NO 欄位（來源 OBPOOLDATA 無此欄） | E05 Pipeline 設定確認 |
+
+**開發前影響（已加入 E07-F 檢核清單）**：
+
+- **D11**（已有）：執行遷移驗證查詢，確認 0 異常列 — **補充**：驗證 `ob_pool_data` 中 `(orgno, appl_no)` 唯一性（dump 後執行唯一性查詢，預期 0 重複）
+
+```sql
+-- 驗證 ob_pool_data (orgno, appl_no) 唯一性
+SELECT orgno, appl_no, COUNT(*)
+  FROM ob_pool_data
+ GROUP BY orgno, appl_no
+HAVING COUNT(*) > 1;
+-- 預期：0 列（若有重複列，需回查 OBPOOLDATA 原始資料判斷去重策略）
+```
+
+**關聯 OQ**：OQ-E07-18（本次新增，schema 落差盤點）→ 此決策為其第 1 項處置。
+
+---
+
 #### AD-E07-4　ob_levelcard_column 停用維度機制
 
 **決策**：新增 `status VARCHAR(10) NOT NULL DEFAULT 'active'` 欄位至 `ob_levelcard_column`，以支援計分維度的停用操作。停用後欄位值改為 `'disabled'`，月跑 Stage 2 執行時過濾 `status = 'active'` 的維度，不刪除資料列。
@@ -2604,6 +2691,18 @@ graph TD
     class 舊OB系統,OBMLISTDF,OBMDEPTPCT,OBEMPLSETMF,OBLEVELCARD_V,OBLEVELCARD_COL,OBLEVELCARD_SCO,OBLEVELCARD_LEV,OBTIER,OBMCODEDF,OBPOOLDATA,OBEMPHIRE,OBCALENDAR src
     class E07月跑,Stage0,Stage1,Stage2,Stage3,Stage4,Snapshot engine
 ```
+
+#### 資料來源分層表（含 ob_pool_data 定位說明）
+
+| 層級 | 資料表 | 來源 | 語意說明 |
+|------|--------|------|---------|
+| L1（一次性遷移） | ob_list_definition, ob_dept_pct, ob_empl_set, ob_levelcard_*, ob_tier, ob_code_df | OB 歷史設定表 | 靜態設定，月跑前置條件 |
+| L2（E04 定期 ETL） | **ob_pool_data**（PK: orgno+appl_no，**不含 list_no**）, ob_emphire, ob_calendar | OBPOOLDATA / OBEMPHIRE / OBCALENDAR | **ob_pool_data 為共享案件池，案件本身無 list_no 概念**；list_no 由 Stage 1 JOIN ob_list_definition 篩選後首次出現於 ob_pool_data_list（AD-E07-13） |
+| L3（月跑系統產出） | ob_assign_set, **ob_pool_data_list**（含 list_no）, assignment_run, assignment_run_snapshot, assignment_run_stage_log, assignment_audit_log | E07 月跑計算結果 | ob_pool_data_list 為 Stage 1 篩選後的 per-list 分派結果表；ob_pool_data（L2）與 ob_pool_data_list（L3）構成「池 / 結果」分離關係 |
+
+> **ob_pool_data vs ob_pool_data_list 區別（AD-E07-13 決議）**：
+> - `ob_pool_data`（L2）：案件池，全量 ETL 同步，不含 list_no，PK = `(orgno, appl_no)`
+> - `ob_pool_data_list`（L3）：月跑 Stage 1 產出，per-list 分派結果，含 list_no，PK = `(list_no, orgno, appl_no)`
 
 ---
 
@@ -2908,6 +3007,29 @@ stateDiagram-v2
     }
 ```
 
+#### Stage 1 演算法說明（ob_pool_data 為共享池，per-list 篩選邏輯）
+
+> **重要架構澄清（AD-E07-13）**：`ob_pool_data` 是**共享案件池**，案件本身不含 `list_no`。Stage 1 透過 JOIN `ob_list_definition` 的篩選條件欄位（`prod_kind` / `spec_tp` / `caseyear` 等 `$$` 分隔多值欄位）決定每個 LIST_NO 收納哪些案件，分派結果（含 `list_no`）寫入 `ob_pool_data_list`。
+
+Stage 1 核心流程（偽 SQL）：
+
+```sql
+-- 對每個本月 active 的 list_no 執行：
+FOR EACH list_no IN (SELECT list_no FROM ob_list_definition WHERE status = 'active' AND project_workym = :ym):
+
+  INSERT INTO ob_pool_data_list (list_no, orgno, appl_no, ...)
+  SELECT :list_no, pd.orgno, pd.appl_no, ...
+  FROM ob_pool_data pd
+  WHERE
+    -- $$ 分隔多值比對（ob_list_definition 的篩選條件）
+    ('$$' || ld.prod_kind || '$$') LIKE ('%$$' || pd.prod_kind || '$$%')
+    AND ('$$' || ld.spec_tp || '$$') LIKE ('%$$' || pd.spec_tp || '$$%')
+    -- ... 其他篩選條件
+  -- ob_pool_data 無 list_no 欄位；list_no 在此為外部輸入，首次寫入 ob_pool_data_list
+```
+
+此邏輯忠實移植自 SP `reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` 的 `FROM OBPOOLDATA o JOIN (SELECT * FROM OBMLISTDF WHERE LIST_NO=@LIST_NO) AS A2 ON ...` 結構。
+
 #### 並發控制
 
 | 情境 | 控制方式 |
@@ -3031,7 +3153,7 @@ SELECT tier_level FROM ob_tier
 | D8 | Migration 腳本：OBMLISTDF → `ob_list_definition`（含 $$ 多值欄位保留） | ⬜ 待撰寫 | **[BLOCKER]** |
 | D9 | Migration 腳本：OBMDEPTPCT → `ob_dept_pct`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
 | D10 | Migration 腳本：OBEMPLSETMF → `ob_empl_set`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
-| D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列 | ⬜ 待執行 | **[BLOCKER]** |
+| D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列；**補充**：驗證 `ob_pool_data (orgno, appl_no)` 唯一性（AD-E07-13，預期 0 重複列；SQL：`SELECT orgno, appl_no, COUNT(*) FROM ob_pool_data GROUP BY orgno, appl_no HAVING COUNT(*) > 1`） | ⬜ 待執行 | **[BLOCKER]** |
 
 #### F-3　E04 + E05 雙層 ETL 任務設定（L2 同步，AD-E07-12）
 
@@ -3117,11 +3239,22 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 **影響範圍**：E07-C ETL 設計、E07-F 開發前檢核清單 E 類項目重組（E1~E9）。
 
+> **下游 ETL 配置修正提示**：`scripts/e07-etl-config.json` 中 OBPOOLDATA-Load pipeline 的 `fieldMappings` 含 `"LIST_NO" → "list_no"` 映射。**此映射必須在部署前移除**——OBPOOLDATA 原表無 LIST_NO 欄位，ETL 執行時該映射會導致欄位不存在錯誤（`column "LIST_NO" does not exist`）。此為 AD-E07-13 的直接下游影響，實作端部署前確認。
+
 **替代方案考量**：
 - **方案 A（擴充 E04 支援 UPSERT + targetTable）**：需修改 F017 / F021 spec + 實作 + 測試，額外 +3~5 天，MVP 不採
 - **方案 C（直連 OB DB cron job，繞過 E04 / E05）**：違反 AD-E07-1（統一架構，所有 OB 資料透過 E04 擷取任務進入 AppDB），引入維護孤島，不採
 
 ---
+
+*本文件版本 2.2，由 System Architect Agent 依據 ob_pool_data schema 落差分析（2026-05-06）更新。主要變更：*
+
+- *新增架構決策 AD-E07-13（ob_pool_data 結構修正：PK 設為 (orgno, appl_no)、移除 list_no）*
+- *E07-A 補充資料來源分層表，明確標註 ob_pool_data 不含 list_no、與 ob_pool_data_list 的池/結果分離關係*
+- *E07-D 月跑執行架構補充「Stage 1 演算法說明」節——強調 ob_pool_data 為共享池，per-list 透過 JOIN ob_list_definition 篩選條件取得候選，list_no 首次出現於 ob_pool_data_list*
+- *E07-F 開發前檢核清單 D11 補充：驗證 ob_pool_data (orgno, appl_no) 唯一性*
+- *AD-E07-12 補充下游 ETL 配置修正提示（scripts/e07-etl-config.json LIST_NO fieldMapping 須移除）*
+- *新增 OQ-E07-18（open-questions.md）：schema 落差盤點，4 項處置*
 
 *本文件版本 2.1，由 System Architect Agent 依據架構修正需求（2026-05-05）更新。主要變更：*
 

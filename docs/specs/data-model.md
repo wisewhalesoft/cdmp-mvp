@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.7"
-date: 2026-05-05
+version: "1.8"
+date: 2026-05-06
 status: Draft
 ---
 
@@ -863,29 +863,28 @@ PK：`list_no`
 
 > **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBPOOLDATA`）抓取至 raw_{task_id_short} 中介表（既有機制，每月跑前執行），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**。
 >
-> ob_pool_data 欄位達 90+ 個（Q-B 決策）。以下列出 E07 月跑邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
+> ⚠️ **本表為共享案件池**（對應 OBPOOLDATA 原表結構，120 欄位中**無 LIST_NO 欄位**），不直接綁定特定名單。per-LIST_NO 候選由月跑 Stage 1 透過 join `ob_list_definition` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start ~ list_period_end` / `settle_src` 等）動態取得；分派結果（含 LIST_NO）寫入 `ob_pool_data_list`。
+>
+> ob_pool_data 欄位達 120 個（Q-B 決策）。以下列出 E07 月跑邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
 
-PK：`(list_no, orgno, appl_no)`
+PK：`(orgno, appl_no)`
 
 | 欄位名 | 型別 | NULL | 說明 |
 |--------|------|------|------|
-| list_no | VARCHAR(100) | NOT NULL | 名單編號（FK → ob_list_definition.list_no） |
-| orgno | VARCHAR(2) | NOT NULL | 機構別 |
+| orgno | VARCHAR(2) | NOT NULL | 機構別（PK 組成） |
 | appl_no | VARCHAR(10) | NOT NULL | 申請案號（PK 組成） |
-| custo_no | VARCHAR(11) | NULL | 客戶編號 |
+| custo_no | VARCHAR(11) | NULL | 客戶編號（C360 join 鍵） |
 | cust_name | VARCHAR(90) | NULL | 客戶姓名 |
 | dept_id | VARCHAR(6) | NULL | 部門代碼 |
-| emplid | VARCHAR(10) | NULL | 業務員工號（月跑後填入） |
+| emplid | VARCHAR(10) | NULL | 業務員工號（前次分派填入，CR 回分用） |
 | emplid_deptid | VARCHAR(6) | NULL | 業務員所屬部門 |
-| card_level | VARCHAR(1) | NULL | 計分卡等級 |
-| tier_level | VARCHAR(5) | NULL | 名單層級 |
-| card_type | VARCHAR(2) | NULL | 計分卡類型 |
-| case_type | VARCHAR(2) | NULL | 案件類型 |
-| prod_kind | VARCHAR(2) | NULL | 商品種類 |
-| settle_src | TEXT | NOT NULL | 結案來源（DEFAULT 'N'） |
+| prod_kind | VARCHAR(2) | NULL | 商品種類（Stage 1 篩選用） |
+| caseyear | VARCHAR(255) | NULL | 案件年份（Stage 1 篩選用） |
+| spec_tp | VARCHAR(255) | NULL | 專案特性（Stage 1 篩選用） |
+| settle_src | TEXT | NOT NULL | 結案來源（DEFAULT 'N'，Stage 1 篩選用） |
 | _cdmp_extracted_at | TIMESTAMP | NOT NULL | ETL 擷取時間（E04 系統附加） |
 
-**索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, dept_id)`、`(list_no, emplid)`
+**索引**：`(orgno, appl_no)`（PK）、`(custo_no)`（C360 join 用）、`(prod_kind)`、`(settle_src)`
 
 ---
 

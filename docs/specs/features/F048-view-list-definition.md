@@ -118,7 +118,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 |---|---|---|
 | data[].listNo | `ob_list_definition.list_no` | 名單編號 |
 | data[].listNm | `ob_list_definition.list_nm` | 名單名稱 |
-| data[].estimatedCount | 實時計算 | 套用 LIST_NO 篩選條件 COUNT `ob_pool_data` |
+| data[].estimatedCount | 實時計算 | 讀 `ob_list_definition` 取該 LIST_NO 篩選條件後對共享案件池 `ob_pool_data` 套用 WHERE 子句 COUNT（`ob_pool_data` 無 list_no 欄位） |
 | lockState.locked | `assignment_run.status IN ('pending','running')` | 月跑鎖狀態 |
 
 **錯誤回應**
