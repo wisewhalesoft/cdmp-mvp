@@ -1,0 +1,100 @@
+{
+  "_comment": "E07 客戶名單分派 ETL 設定（AD-E07-12 雙層架構）。datasource APYHFC16.OB 已手動建立，此 config 僅建立 3 個 E04 擷取任務 + 3 個 E05 Pipeline。執行：cd scripts && node seed-e07-etl.mjs",
+  "_lastUpdated": "2026-05-05",
+
+  "datasourceRef": {
+    "name": "APYHFC16.OB",
+    "expectedId": "af5f69a7-c3e4-41fe-b1e5-16b23f9509f8",
+    "_comment": "expectedId 僅供驗證，script 會 GET /datasources?name=... 動態取得實際 id"
+  },
+
+  "extractionTasks": [
+    {
+      "name": "E07-OBPOOLDATA-Extract",
+      "datasourceName": "APYHFC16.OB",
+      "sourceSchema": "dbo",
+      "sourceTable": "OBPOOLDATA",
+      "mode": "full",
+      "schedule": "0 2 1 * *",
+      "_comment": "案件池每月 1 號 02:00 全量抓取（月跑前）"
+    },
+    {
+      "name": "E07-OBEMPHIRE-Extract",
+      "datasourceName": "APYHFC16.OB",
+      "sourceSchema": "dbo",
+      "sourceTable": "OBEMPHIRE",
+      "mode": "full",
+      "schedule": "0 3 * * *",
+      "_comment": "員工主檔每日 03:00 全量重抓（員工數 < 1 萬筆，AD-E07-12）"
+    },
+    {
+      "name": "E07-OBCALENDAR-Extract",
+      "datasourceName": "APYHFC16.OB",
+      "sourceSchema": "dbo",
+      "sourceTable": "OBCALENDAR",
+      "mode": "full",
+      "schedule": "0 4 1 1 *",
+      "_comment": "工作日表每年 1/1 04:00 全量抓取"
+    }
+  ],
+
+  "pipelines": [
+    {
+      "name": "E07-OBCALENDAR-Load",
+      "description": "raw OBCALENDAR → ob_calendar（fullMode 全量替換，AD-E07-12）",
+      "schedule": "30 4 1 1 *",
+      "extractionTaskName": "E07-OBCALENDAR-Extract",
+      "targetTable": "ob_calendar",
+      "fieldMappings": [
+        { "sourceColumn": "CALENDAR_DATE", "targetColumn": "calendar_date" },
+        { "sourceColumn": "REST_FLG", "targetColumn": "rest_flg" }
+      ]
+    },
+    {
+      "name": "E07-OBEMPHIRE-Load",
+      "description": "raw OBEMPHIRE → ob_emphire（fullMode 全量替換，AD-E07-12）",
+      "schedule": "30 3 * * *",
+      "extractionTaskName": "E07-OBEMPHIRE-Extract",
+      "targetTable": "ob_emphire",
+      "fieldMappings": [
+        { "sourceColumn": "EMP_ID", "targetColumn": "emp_id" },
+        { "sourceColumn": "EMP_NM", "targetColumn": "emp_nm" },
+        { "sourceColumn": "ID", "targetColumn": "id_no" },
+        { "sourceColumn": "DEPT_CODE", "targetColumn": "dept_code" },
+        { "sourceColumn": "DEPT_NAME", "targetColumn": "dept_name" },
+        { "sourceColumn": "TITLE_CODE", "targetColumn": "title_code" },
+        { "sourceColumn": "TITLE_NAME", "targetColumn": "title_name" },
+        { "sourceColumn": "JFUN_ID", "targetColumn": "jfun_id" },
+        { "sourceColumn": "JFUN_NM", "targetColumn": "jfun_nm" },
+        { "sourceColumn": "HIRE_DATE", "targetColumn": "hire_date" },
+        { "sourceColumn": "RESIGN_DATE", "targetColumn": "resign_date" },
+        { "sourceColumn": "EMAIL", "targetColumn": "email" },
+        { "sourceColumn": "IS_AUTH", "targetColumn": "is_auth" }
+      ]
+    },
+    {
+      "name": "E07-OBPOOLDATA-Load",
+      "description": "raw OBPOOLDATA → ob_pool_data（fullMode 全量替換，AD-E07-12）",
+      "schedule": null,
+      "extractionTaskName": "E07-OBPOOLDATA-Extract",
+      "targetTable": "ob_pool_data",
+      "_TODO": "ob_pool_data 含 90+ 欄位，以下僅列 E07 月跑使用的關鍵欄位；其餘欄位待 M1 migration 完成後從 reference/TableSchema/OB/OBPOOLDATA.sql 補完整 mapping",
+      "fieldMappings": [
+        { "sourceColumn": "LIST_NO", "targetColumn": "list_no" },
+        { "sourceColumn": "ORGNO", "targetColumn": "orgno" },
+        { "sourceColumn": "APPL_NO", "targetColumn": "appl_no" },
+        { "sourceColumn": "CUSTO_NO", "targetColumn": "custo_no" },
+        { "sourceColumn": "CUST_NAME", "targetColumn": "cust_name" },
+        { "sourceColumn": "DEPT_ID", "targetColumn": "dept_id" },
+        { "sourceColumn": "EMPLID", "targetColumn": "emplid" },
+        { "sourceColumn": "EMPLID_DEPTID", "targetColumn": "emplid_deptid" },
+        { "sourceColumn": "CARD_LEVEL", "targetColumn": "card_level" },
+        { "sourceColumn": "TIER_LEVEL", "targetColumn": "tier_level" },
+        { "sourceColumn": "CARD_TYPE", "targetColumn": "card_type" },
+        { "sourceColumn": "CASE_TYPE", "targetColumn": "case_type" },
+        { "sourceColumn": "PROD_KIND", "targetColumn": "prod_kind" },
+        { "sourceColumn": "SETTLE_SRC", "targetColumn": "settle_src" }
+      ]
+    }
+  ]
+}
