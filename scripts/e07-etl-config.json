@@ -1,13 +1,11 @@
 {
   "_comment": "E07 客戶名單分派 ETL 設定（AD-E07-12 雙層架構）。datasource APYHFC16.OB 已手動建立，此 config 僅建立 3 個 E04 擷取任務 + 3 個 E05 Pipeline。執行：cd scripts && node seed-e07-etl.mjs",
   "_lastUpdated": "2026-05-05",
-
   "datasourceRef": {
     "name": "APYHFC16.OB",
     "expectedId": "af5f69a7-c3e4-41fe-b1e5-16b23f9509f8",
     "_comment": "expectedId 僅供驗證，script 會 GET /datasources?name=... 動態取得實際 id"
   },
-
   "extractionTasks": [
     {
       "name": "E07-OBPOOLDATA-Extract",
@@ -37,7 +35,6 @@
       "_comment": "工作日表每年 1/1 04:00 全量抓取"
     }
   ],
-
   "pipelines": [
     {
       "name": "E07-OBCALENDAR-Load",
@@ -46,8 +43,14 @@
       "extractionTaskName": "E07-OBCALENDAR-Extract",
       "targetTable": "ob_calendar",
       "fieldMappings": [
-        { "sourceColumn": "CALENDAR_DATE", "targetColumn": "calendar_date" },
-        { "sourceColumn": "REST_FLG", "targetColumn": "rest_flg" }
+        {
+          "sourceColumn": "CALENDAR_DATE",
+          "targetColumn": "calendar_date"
+        },
+        {
+          "sourceColumn": "REST_FLG",
+          "targetColumn": "rest_flg"
+        }
       ]
     },
     {
@@ -57,19 +60,58 @@
       "extractionTaskName": "E07-OBEMPHIRE-Extract",
       "targetTable": "ob_emphire",
       "fieldMappings": [
-        { "sourceColumn": "EMP_ID", "targetColumn": "emp_id" },
-        { "sourceColumn": "EMP_NM", "targetColumn": "emp_nm" },
-        { "sourceColumn": "ID", "targetColumn": "id_no" },
-        { "sourceColumn": "DEPT_CODE", "targetColumn": "dept_code" },
-        { "sourceColumn": "DEPT_NAME", "targetColumn": "dept_name" },
-        { "sourceColumn": "TITLE_CODE", "targetColumn": "title_code" },
-        { "sourceColumn": "TITLE_NAME", "targetColumn": "title_name" },
-        { "sourceColumn": "JFUN_ID", "targetColumn": "jfun_id" },
-        { "sourceColumn": "JFUN_NM", "targetColumn": "jfun_nm" },
-        { "sourceColumn": "HIRE_DATE", "targetColumn": "hire_date" },
-        { "sourceColumn": "RESIGN_DATE", "targetColumn": "resign_date" },
-        { "sourceColumn": "EMAIL", "targetColumn": "email" },
-        { "sourceColumn": "IS_AUTH", "targetColumn": "is_auth" }
+        {
+          "sourceColumn": "EMP_ID",
+          "targetColumn": "emp_id"
+        },
+        {
+          "sourceColumn": "EMP_NM",
+          "targetColumn": "emp_nm"
+        },
+        {
+          "sourceColumn": "ID",
+          "targetColumn": "id_no"
+        },
+        {
+          "sourceColumn": "DEPT_CODE",
+          "targetColumn": "dept_code"
+        },
+        {
+          "sourceColumn": "DEPT_NAME",
+          "targetColumn": "dept_name"
+        },
+        {
+          "sourceColumn": "TITLE_CODE",
+          "targetColumn": "title_code"
+        },
+        {
+          "sourceColumn": "TITLE_NAME",
+          "targetColumn": "title_name"
+        },
+        {
+          "sourceColumn": "JFUN_ID",
+          "targetColumn": "jfun_id"
+        },
+        {
+          "sourceColumn": "JFUN_NM",
+          "targetColumn": "jfun_nm"
+        },
+        {
+          "sourceColumn": "HIRE_DATE",
+          "targetColumn": "hire_date"
+        },
+        {
+          "sourceColumn": "RESIGN_DATE",
+          "targetColumn": "resign_date"
+        },
+        {
+          "sourceColumn": "EMAIL",
+          "targetColumn": "email"
+        },
+        {
+          "sourceColumn": "IS_AUTH",
+          "targetColumn": "is_auth"
+        }
       ]
     },
     {
@@ -78,22 +120,464 @@
       "schedule": null,
       "extractionTaskName": "E07-OBPOOLDATA-Extract",
       "targetTable": "ob_pool_data",
-      "_TODO": "ob_pool_data 含 90+ 欄位，以下僅列 E07 月跑使用的關鍵欄位；其餘欄位待 M1 migration 完成後從 reference/TableSchema/OB/OBPOOLDATA.sql 補完整 mapping",
+      "_TODO": "ob_pool_data 完整映射 OBPOOLDATA 120 欄（排除 6 稽核欄位 + _cdmp_extracted_at 系統欄位）= 114 mappings；自動產出 by parse-ob-schema.mjs --mappings",
       "fieldMappings": [
-        { "sourceColumn": "LIST_NO", "targetColumn": "list_no" },
-        { "sourceColumn": "ORGNO", "targetColumn": "orgno" },
-        { "sourceColumn": "APPL_NO", "targetColumn": "appl_no" },
-        { "sourceColumn": "CUSTO_NO", "targetColumn": "custo_no" },
-        { "sourceColumn": "CUST_NAME", "targetColumn": "cust_name" },
-        { "sourceColumn": "DEPT_ID", "targetColumn": "dept_id" },
-        { "sourceColumn": "EMPLID", "targetColumn": "emplid" },
-        { "sourceColumn": "EMPLID_DEPTID", "targetColumn": "emplid_deptid" },
-        { "sourceColumn": "CARD_LEVEL", "targetColumn": "card_level" },
-        { "sourceColumn": "TIER_LEVEL", "targetColumn": "tier_level" },
-        { "sourceColumn": "CARD_TYPE", "targetColumn": "card_type" },
-        { "sourceColumn": "CASE_TYPE", "targetColumn": "case_type" },
-        { "sourceColumn": "PROD_KIND", "targetColumn": "prod_kind" },
-        { "sourceColumn": "SETTLE_SRC", "targetColumn": "settle_src" }
+        {
+          "sourceColumn": "ORGNO",
+          "targetColumn": "orgno"
+        },
+        {
+          "sourceColumn": "APPL_NO",
+          "targetColumn": "appl_no"
+        },
+        {
+          "sourceColumn": "CUSTO_NO",
+          "targetColumn": "custo_no"
+        },
+        {
+          "sourceColumn": "CUST_NAME",
+          "targetColumn": "cust_name"
+        },
+        {
+          "sourceColumn": "LIC_NO",
+          "targetColumn": "lic_no"
+        },
+        {
+          "sourceColumn": "STA_CODE_NA",
+          "targetColumn": "sta_code_na"
+        },
+        {
+          "sourceColumn": "PROJECT_TP",
+          "targetColumn": "project_tp"
+        },
+        {
+          "sourceColumn": "SPEC_NO",
+          "targetColumn": "spec_no"
+        },
+        {
+          "sourceColumn": "SPEC_NAME",
+          "targetColumn": "spec_name"
+        },
+        {
+          "sourceColumn": "DEPT_NAME",
+          "targetColumn": "dept_name"
+        },
+        {
+          "sourceColumn": "PAY_RESOUC_CODE",
+          "targetColumn": "pay_resouc_code"
+        },
+        {
+          "sourceColumn": "BREAK_PCT",
+          "targetColumn": "break_pct"
+        },
+        {
+          "sourceColumn": "EXTEND_DAY",
+          "targetColumn": "extend_day"
+        },
+        {
+          "sourceColumn": "PAY_RESOUC",
+          "targetColumn": "pay_resouc"
+        },
+        {
+          "sourceColumn": "COMMUTE",
+          "targetColumn": "commute"
+        },
+        {
+          "sourceColumn": "CYCLE_PAY_NA",
+          "targetColumn": "cycle_pay_na"
+        },
+        {
+          "sourceColumn": "CYCLE_PAY_VAL",
+          "targetColumn": "cycle_pay_val"
+        },
+        {
+          "sourceColumn": "DEAL_NUM",
+          "targetColumn": "deal_num"
+        },
+        {
+          "sourceColumn": "PRO_RATE",
+          "targetColumn": "pro_rate"
+        },
+        {
+          "sourceColumn": "B_CASE_IRR",
+          "targetColumn": "b_case_irr"
+        },
+        {
+          "sourceColumn": "FIRST_PAY_DT",
+          "targetColumn": "first_pay_dt"
+        },
+        {
+          "sourceColumn": "FAPCON_DT",
+          "targetColumn": "fapcon_dt"
+        },
+        {
+          "sourceColumn": "MATURITY_DT",
+          "targetColumn": "maturity_dt"
+        },
+        {
+          "sourceColumn": "DEAL_MARK",
+          "targetColumn": "deal_mark"
+        },
+        {
+          "sourceColumn": "PAY_WAY",
+          "targetColumn": "pay_way"
+        },
+        {
+          "sourceColumn": "LOAN_TOTAMT",
+          "targetColumn": "loan_totamt"
+        },
+        {
+          "sourceColumn": "LOAN_CAPITAL",
+          "targetColumn": "loan_capital"
+        },
+        {
+          "sourceColumn": "LOAN_ODDAMT",
+          "targetColumn": "loan_oddamt"
+        },
+        {
+          "sourceColumn": "COMMISSION",
+          "targetColumn": "commission"
+        },
+        {
+          "sourceColumn": "SETTLE_DATE",
+          "targetColumn": "settle_date"
+        },
+        {
+          "sourceColumn": "LOAN_RATE",
+          "targetColumn": "loan_rate"
+        },
+        {
+          "sourceColumn": "STA_CODE",
+          "targetColumn": "sta_code"
+        },
+        {
+          "sourceColumn": "OFI_DATE",
+          "targetColumn": "ofi_date"
+        },
+        {
+          "sourceColumn": "DEPT_ID",
+          "targetColumn": "dept_id"
+        },
+        {
+          "sourceColumn": "PAY_WAY_NA",
+          "targetColumn": "pay_way_na"
+        },
+        {
+          "sourceColumn": "BRNH_NO",
+          "targetColumn": "brnh_no"
+        },
+        {
+          "sourceColumn": "DLR_NO",
+          "targetColumn": "dlr_no"
+        },
+        {
+          "sourceColumn": "BROKER",
+          "targetColumn": "broker"
+        },
+        {
+          "sourceColumn": "SALES_NO",
+          "targetColumn": "sales_no"
+        },
+        {
+          "sourceColumn": "BROKER_AGENT",
+          "targetColumn": "broker_agent"
+        },
+        {
+          "sourceColumn": "HFS_SALES",
+          "targetColumn": "hfs_sales"
+        },
+        {
+          "sourceColumn": "SALES",
+          "targetColumn": "sales"
+        },
+        {
+          "sourceColumn": "AGENT_HEAD_ID",
+          "targetColumn": "agent_head_id"
+        },
+        {
+          "sourceColumn": "PROMOTER_DEPT",
+          "targetColumn": "promoter_dept"
+        },
+        {
+          "sourceColumn": "AGENT_ID",
+          "targetColumn": "agent_id"
+        },
+        {
+          "sourceColumn": "PROMOTER",
+          "targetColumn": "promoter"
+        },
+        {
+          "sourceColumn": "BRAND_NO",
+          "targetColumn": "brand_no"
+        },
+        {
+          "sourceColumn": "BRAND_NAME",
+          "targetColumn": "brand_name"
+        },
+        {
+          "sourceColumn": "CAR_NAME",
+          "targetColumn": "car_name"
+        },
+        {
+          "sourceColumn": "INQUIRY",
+          "targetColumn": "inquiry"
+        },
+        {
+          "sourceColumn": "APPROVAL",
+          "targetColumn": "approval"
+        },
+        {
+          "sourceColumn": "MANAGER_LIMIT",
+          "targetColumn": "manager_limit"
+        },
+        {
+          "sourceColumn": "SPEC_MK_NA",
+          "targetColumn": "spec_mk_na"
+        },
+        {
+          "sourceColumn": "SPEC_TYPE_NA",
+          "targetColumn": "spec_type_na"
+        },
+        {
+          "sourceColumn": "ATM_BUSINESS",
+          "targetColumn": "atm_business"
+        },
+        {
+          "sourceColumn": "NO_DUTY",
+          "targetColumn": "no_duty"
+        },
+        {
+          "sourceColumn": "YEAR_PRODU",
+          "targetColumn": "year_produ"
+        },
+        {
+          "sourceColumn": "DLR_NAME",
+          "targetColumn": "dlr_name"
+        },
+        {
+          "sourceColumn": "BRNH_NAME",
+          "targetColumn": "brnh_name"
+        },
+        {
+          "sourceColumn": "PROJECT_TP_CD",
+          "targetColumn": "project_tp_cd"
+        },
+        {
+          "sourceColumn": "APPL_DATE",
+          "targetColumn": "appl_date"
+        },
+        {
+          "sourceColumn": "APMACC_MEMO",
+          "targetColumn": "apmacc_memo"
+        },
+        {
+          "sourceColumn": "SALES_STS_NA",
+          "targetColumn": "sales_sts_na"
+        },
+        {
+          "sourceColumn": "SUB_CODE",
+          "targetColumn": "sub_code"
+        },
+        {
+          "sourceColumn": "CC_NBR",
+          "targetColumn": "cc_nbr"
+        },
+        {
+          "sourceColumn": "THROU_MON",
+          "targetColumn": "throu_mon"
+        },
+        {
+          "sourceColumn": "FUND_SRC",
+          "targetColumn": "fund_src"
+        },
+        {
+          "sourceColumn": "SECRET_FLG",
+          "targetColumn": "secret_flg"
+        },
+        {
+          "sourceColumn": "RATE_CHOICE",
+          "targetColumn": "rate_choice"
+        },
+        {
+          "sourceColumn": "PER_INFO",
+          "targetColumn": "per_info"
+        },
+        {
+          "sourceColumn": "TIE_DOWN_NUM",
+          "targetColumn": "tie_down_num"
+        },
+        {
+          "sourceColumn": "REST_AMT",
+          "targetColumn": "rest_amt"
+        },
+        {
+          "sourceColumn": "OVER_TIE_NUM",
+          "targetColumn": "over_tie_num"
+        },
+        {
+          "sourceColumn": "OPEN_CODE",
+          "targetColumn": "open_code"
+        },
+        {
+          "sourceColumn": "EMPLID",
+          "targetColumn": "emplid"
+        },
+        {
+          "sourceColumn": "EMPLID_DEPTID",
+          "targetColumn": "emplid_deptid"
+        },
+        {
+          "sourceColumn": "CASE_TYPE",
+          "targetColumn": "case_type"
+        },
+        {
+          "sourceColumn": "HOTAI_AGREE",
+          "targetColumn": "hotai_agree"
+        },
+        {
+          "sourceColumn": "CALL_DEPT",
+          "targetColumn": "call_dept"
+        },
+        {
+          "sourceColumn": "C_CLASS",
+          "targetColumn": "c_class"
+        },
+        {
+          "sourceColumn": "PAYT_NUM",
+          "targetColumn": "payt_num"
+        },
+        {
+          "sourceColumn": "LIST_TYPE",
+          "targetColumn": "list_type"
+        },
+        {
+          "sourceColumn": "PROD_TYPE",
+          "targetColumn": "prod_type"
+        },
+        {
+          "sourceColumn": "PROD_TYPE_NAME",
+          "targetColumn": "prod_type_name"
+        },
+        {
+          "sourceColumn": "PROD_CLASS",
+          "targetColumn": "prod_class"
+        },
+        {
+          "sourceColumn": "PROD_CLASS_NAME",
+          "targetColumn": "prod_class_name"
+        },
+        {
+          "sourceColumn": "PROD_KIND",
+          "targetColumn": "prod_kind"
+        },
+        {
+          "sourceColumn": "PROD_KIND_NAME",
+          "targetColumn": "prod_kind_name"
+        },
+        {
+          "sourceColumn": "BEST_CASE",
+          "targetColumn": "best_case"
+        },
+        {
+          "sourceColumn": "ACC_DATE",
+          "targetColumn": "acc_date"
+        },
+        {
+          "sourceColumn": "ORDER1",
+          "targetColumn": "order1"
+        },
+        {
+          "sourceColumn": "ORDER2",
+          "targetColumn": "order2"
+        },
+        {
+          "sourceColumn": "PAYT_TERM",
+          "targetColumn": "payt_term"
+        },
+        {
+          "sourceColumn": "TERM_AMT",
+          "targetColumn": "term_amt"
+        },
+        {
+          "sourceColumn": "NONPAYT_TERM",
+          "targetColumn": "nonpayt_term"
+        },
+        {
+          "sourceColumn": "OVERDUE_AMT",
+          "targetColumn": "overdue_amt"
+        },
+        {
+          "sourceColumn": "OVERDUE_DAY",
+          "targetColumn": "overdue_day"
+        },
+        {
+          "sourceColumn": "COLL_EMPL",
+          "targetColumn": "coll_empl"
+        },
+        {
+          "sourceColumn": "CAR_MODEL",
+          "targetColumn": "car_model"
+        },
+        {
+          "sourceColumn": "PAY_USER",
+          "targetColumn": "pay_user"
+        },
+        {
+          "sourceColumn": "PAY_ADD",
+          "targetColumn": "pay_add"
+        },
+        {
+          "sourceColumn": "FLEET_CAR",
+          "targetColumn": "fleet_car"
+        },
+        {
+          "sourceColumn": "PROMOTER_TEL",
+          "targetColumn": "promoter_tel"
+        },
+        {
+          "sourceColumn": "SALES_TEL",
+          "targetColumn": "sales_tel"
+        },
+        {
+          "sourceColumn": "MEMO1",
+          "targetColumn": "memo1"
+        },
+        {
+          "sourceColumn": "CASEYEAR",
+          "targetColumn": "caseyear"
+        },
+        {
+          "sourceColumn": "OB_DEPT",
+          "targetColumn": "ob_dept"
+        },
+        {
+          "sourceColumn": "OB_EMPLID",
+          "targetColumn": "ob_emplid"
+        },
+        {
+          "sourceColumn": "LAST_PAY_DATE",
+          "targetColumn": "last_pay_date"
+        },
+        {
+          "sourceColumn": "MONTH_CNT",
+          "targetColumn": "month_cnt"
+        },
+        {
+          "sourceColumn": "YEAR_CNT",
+          "targetColumn": "year_cnt"
+        },
+        {
+          "sourceColumn": "SETTLE_SRC",
+          "targetColumn": "settle_src"
+        },
+        {
+          "sourceColumn": "SPEC_TP",
+          "targetColumn": "spec_tp"
+        },
+        {
+          "sourceColumn": "CUS_LEVEL",
+          "targetColumn": "cus_level"
+        }
       ]
     }
   ]

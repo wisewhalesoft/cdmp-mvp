@@ -32,6 +32,12 @@ const addCdmpExtractedAt = argv.includes('--add-cdmp-extracted-at');
 // Entity 輸出模式
 // 用法：node parse-ob-schema.mjs <sql> --entity --name=ob_emphire --class=ObEmphire --pk=emp_id [--rename=ID:id_no,FOO:bar]
 const entityMode = argv.includes('--entity');
+// fieldMappings 輸出模式（給 e07-etl-config.json 用）
+// 用法：node parse-ob-schema.mjs <sql> --mappings [--rename=A:b]
+//   - 排除稽核欄位（A_PRGID 等 6 個）— ETL pipeline 不映射稽核欄位（target 表自帶 created_at/updated_at）
+//   - 保留 sourceColumn 為 SQL Server CAPS 原名（raw 表保留原大小寫）
+//   - targetColumn 為 snake_case（target ob_* 表欄位）
+const mappingsMode = argv.includes('--mappings');
 const flagValue = (k) => {
   const arg = argv.find((a) => a.startsWith(`--${k}=`));
   return arg ? arg.slice(k.length + 3) : null;
@@ -162,7 +168,19 @@ if (addCdmpExtractedAt) {
   });
 }
 
-if (entityMode) {
+if (mappingsMode) {
+  // === fieldMappings 輸出（給 ETL pipeline）===
+  const auditNames = new Set(Object.keys(AUDIT_RENAMES));
+  const mappings = [];
+  for (const c of cols) {
+    if (!c.rawName) continue; // 跳過 _cdmp_extracted_at（無 rawName）
+    if (auditNames.has(c.rawName)) continue; // 跳過稽核欄位
+    const target = renameMap[c.rawName] || c.name;
+    mappings.push({ sourceColumn: c.rawName, targetColumn: target });
+  }
+  console.log(JSON.stringify(mappings, null, 2));
+  console.error(`\n✓ Mappings 解析完成：${mappings.length} 個（已排除稽核欄位與系統欄位）`);
+} else if (entityMode) {
   // === Entity 輸出模式 ===
   // TypeORM @Column 對應 TypeScript 型別
   const tsTypeOf = (c) => {

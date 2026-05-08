@@ -122,11 +122,13 @@ async function ensureDatasource(config) {
 async function ensureExtractionTask(taskCfg, datasourceId) {
   console.log(`▸ 確認擷取任務 ${taskCfg.name}`);
   const list = await api('GET', `/api/v1/extraction-tasks?search=${encodeURIComponent(taskCfg.name)}`);
-  const existing = (list.data || []).find((t) => t.name === taskCfg.name);
+  const existingStub = (list.data || []).find((t) => t.name === taskCfg.name);
 
-  if (existing) {
-    console.log(`  ✓ 已存在 id=${existing.id}, rawTable=${existing.rawTableName}`);
-    return existing;
+  if (existingStub) {
+    // List response 不含 rawTableName，需要 GET by id 取得完整 detail
+    const detail = await api('GET', `/api/v1/extraction-tasks/${existingStub.id}`);
+    console.log(`  ✓ 已存在 id=${detail.id}, rawTable=${detail.rawTableName}`);
+    return detail;
   }
 
   const created = await api('POST', '/api/v1/extraction-tasks', {
@@ -199,7 +201,8 @@ function buildPipelineDefinition(pipelineCfg, rawTableName, datasourceName) {
 
 async function ensurePipeline(pipelineCfg, extractionTask, datasourceName) {
   console.log(`▸ 確認 Pipeline ${pipelineCfg.name}`);
-  const list = await api('GET', `/api/v1/etl/pipelines?search=${encodeURIComponent(pipelineCfg.name)}`);
+  // 注意：pipeline list API 用 keyword（非 search，與 extraction-task 不同）
+  const list = await api('GET', `/api/v1/etl/pipelines?keyword=${encodeURIComponent(pipelineCfg.name)}`);
   let pipeline = (list.data || []).find((p) => p.name === pipelineCfg.name);
 
   if (!pipeline) {
