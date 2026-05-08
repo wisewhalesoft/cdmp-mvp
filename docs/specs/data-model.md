@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.8"
-date: 2026-05-06
+version: "1.9"
+date: 2026-05-08
 status: Draft
 ---
 
@@ -1144,6 +1144,31 @@ PK：`(card_type, COALESCE(card_level, ''))`（[ASSUMPTION] — 原 OBTIER 無 P
 **索引**：複合 PK `(card_type, card_level)` 即為主索引；無額外索引需求。
 
 **注意**：與 `ob_levelcard_level`（CARD_LEVEL 分級門檻：總分區間 → CARD_LEVEL，由 F055 維護）為**不同表**，不可混用。`ob_tier` 為 TIER_LEVEL 對應，由 F056 維護。
+
+---
+
+#### ob_arreturndf_min_cap（OB_ARRETURNDF_MIN_CAP — ARRETURNDF 累積未償本金彙總） {#ob-arreturndf-min-cap-entity}
+
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OB_ARRETURNDF_MIN_CAP`）抓取至 `raw_{task_id_short}` 中介表，再由 E05 Pipeline TargetLoad 將資料載入本表（`fullMode: true` 全量替換）。OB 端 `OB_ARRETURNDF_MIN_CAP` 為 `ARRETURNDF` 還款明細表的預先彙總結果（`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`）；每月月跑前由業務主管手動依序觸發 E04→E05（同 OBPOOLDATA 同步策略）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**，所有資料維護於舊 OB 端進行。
+
+PK：`appl_no` [ASSUMPTION] 原表（`OB_ARRETURNDF_MIN_CAP`）無 PK constraint 亦無索引；遷移時補建 `PRIMARY KEY (appl_no)` 以利 `fn_calc_tier_level` 內部 LEFT JOIN 查詢。DBA 需確認 OB 端 SP 重建後 `APPL_NO` 唯一性（若存在重複 key，需在 ETL 層以 `MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO` 或 `DISTINCT ON (appl_no)` 去重後再寫入）。
+
+用途：E07 月跑 Stage 2 計分時，`fn_calc_tier_level` 以 LEFT JOIN 取得個別案件的累積未償本金（`ADD_UN_CAPITAL` 維度），適用 H / HM 等需要此計分維度的計分卡類型。缺值時 default 為 0。
+
+| 欄位名 | 型別 | NULL | 原欄位 | 說明 |
+|--------|------|------|--------|------|
+| appl_no | VARCHAR(20) | NOT NULL | APPL_NO | **PK**，案件編號（與 `ob_pool_data.appl_no` join key） |
+| add_un_capital | NUMERIC(15,0) | NULL | ADD_UN_CAPITAL | 累積未償本金（OB 端預先彙總，OB SP：`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`） |
+| _cdmp_extracted_at | TIMESTAMP | NOT NULL | （系統欄位）| ETL 擷取時間戳記（由 E04/E05 寫入，UTC） |
+
+**索引**：
+- `appl_no`（PK，補建於遷移時）
+
+**業務規則**：
+- 不納入 ORM Entity CRUD（僅讀取）；所有資料修改皆於舊 OB 端進行後 ETL 同步
+- `fn_calc_tier_level` 以 `LEFT JOIN ob_arreturndf_min_cap ON appl_no = (p_pool_data).appl_no` 取值；查無資料時以 `COALESCE(add_un_capital, 0)` 處理，行為等價 SP `ISNULL(ADD_UN_CAPITAL, 0)`
+
+**相關功能**：[F061](features/F061-trigger-assignment-run.md)（月跑 Stage 2 計分）
 
 ---
 

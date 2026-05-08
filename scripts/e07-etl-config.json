@@ -33,6 +33,15 @@
       "mode": "full",
       "schedule": "0 4 1 1 *",
       "_comment": "工作日表每年 1/1 04:00 全量抓取"
+    },
+    {
+      "name": "E07-OBARRETURNDF_MIN_CAP-Extract",
+      "datasourceName": "APYHFC16.OB",
+      "sourceSchema": "dbo",
+      "sourceTable": "OB_ARRETURNDF_MIN_CAP",
+      "mode": "full",
+      "schedule": "0 2 1 * *",
+      "_comment": "ARRETURNDF 累積未償本金彙總每月 1 號 02:00 全量抓取（月跑前，同 OBPOOLDATA 排程；fn_calc_tier_level 計分依賴）"
     }
   ],
   "pipelines": [
@@ -577,6 +586,23 @@
         {
           "sourceColumn": "CUS_LEVEL",
           "targetColumn": "cus_level"
+        }
+      ]
+    },
+    {
+      "name": "E07-OBARRETURNDF_MIN_CAP-Load",
+      "description": "raw OB_ARRETURNDF_MIN_CAP → ob_arreturndf_min_cap（fullMode 全量替換，AD-E07-12 / AD-E07-10 lookup 約定）",
+      "schedule": "30 2 1 * *",
+      "extractionTaskName": "E07-OBARRETURNDF_MIN_CAP-Extract",
+      "targetTable": "ob_arreturndf_min_cap",
+      "fieldMappings": [
+        {
+          "sourceColumn": "APPL_NO",
+          "targetColumn": "appl_no"
+        },
+        {
+          "sourceColumn": "ADD_UN_CAPITAL",
+          "targetColumn": "add_un_capital"
         }
       ]
     }

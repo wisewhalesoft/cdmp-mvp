@@ -42,6 +42,7 @@ import { AssignmentRunStageLog } from './database/entities/assignment-run-stage-
 import { AssignmentAuditLog } from './database/entities/assignment-audit-log.entity';
 import { ObAssignConfig } from './database/entities/ob-assign-config.entity';
 import { ObAssignSet } from './database/entities/ob-assign-set.entity';
+import { ObArreturndfMinCap } from './database/entities/ob-arreturndf-min-cap.entity';
 
 const E07_ENTITIES = [
   ObCodeDf, ObListDefinition, ObDeptPct, ObEmplSet,
@@ -49,6 +50,7 @@ const E07_ENTITIES = [
   ObTier, ObEmphire, ObCalendar, ObPoolData, ObPoolDataList,
   AssignmentRun, AssignmentRunSnapshot, AssignmentRunStageLog, AssignmentAuditLog,
   ObAssignConfig, ObAssignSet,
+  ObArreturndfMinCap,
 ];
 
 @Module({

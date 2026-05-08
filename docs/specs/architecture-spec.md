@@ -1,8 +1,8 @@
 ---
 type: architecture-spec
-version: 2.2
+version: 2.3
 status: draft
-last_updated: 2026-05-06
+last_updated: 2026-05-08
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
 ---
 
@@ -17,7 +17,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）** |
 
 ## 目錄
 
@@ -2574,7 +2574,7 @@ per_date    = base_ratio
 | 層級 | 資料來源 | 代表表 |
 |------|---------|------|
 | L1（一次性遷移） | OB 舊系統歷史資料 | ob_list_definition / ob_dept_pct / ob_empl_set / ob_levelcard_* / ob_tier / ob_code_df |
-| L2（E04 定期 ETL） | OBPOOLDATA / OBEMPHIRE / OBCALENDAR 每日/每月 ETL | ob_pool_data / ob_emphire / ob_calendar |
+| L2（E04 定期 ETL） | OBPOOLDATA / OBEMPHIRE / OBCALENDAR / OB_ARRETURNDF_MIN_CAP 每日/每月 ETL | ob_pool_data / ob_emphire / ob_calendar / ob_arreturndf_min_cap |
 | L3（月跑系統產出） | E07 月跑計算結果 | ob_assign_set / ob_pool_data_list（欄位回寫）/ assignment_run / assignment_run_snapshot / assignment_run_stage_log / assignment_audit_log |
 
 **理由**：`ob_assign_set` 存放的是月跑 Stage 0 計算得出的「當月各工作日分派量係數」，每月月跑前重新計算，不是歷史遷移資料。舊系統的 OBASSIGNSET 歷史資料無需遷移，直接由新系統月跑重新產出。
@@ -2697,7 +2697,7 @@ graph TD
 | 層級 | 資料表 | 來源 | 語意說明 |
 |------|--------|------|---------|
 | L1（一次性遷移） | ob_list_definition, ob_dept_pct, ob_empl_set, ob_levelcard_*, ob_tier, ob_code_df | OB 歷史設定表 | 靜態設定，月跑前置條件 |
-| L2（E04 定期 ETL） | **ob_pool_data**（PK: orgno+appl_no，**不含 list_no**）, ob_emphire, ob_calendar | OBPOOLDATA / OBEMPHIRE / OBCALENDAR | **ob_pool_data 為共享案件池，案件本身無 list_no 概念**；list_no 由 Stage 1 JOIN ob_list_definition 篩選後首次出現於 ob_pool_data_list（AD-E07-13） |
+| L2（E04 定期 ETL） | **ob_pool_data**（PK: orgno+appl_no，**不含 list_no**）, ob_emphire, ob_calendar, **ob_arreturndf_min_cap** | OBPOOLDATA / OBEMPHIRE / OBCALENDAR / OB_ARRETURNDF_MIN_CAP | **ob_pool_data 為共享案件池，案件本身無 list_no 概念**；list_no 由 Stage 1 JOIN ob_list_definition 篩選後首次出現於 ob_pool_data_list（AD-E07-13）；**ob_arreturndf_min_cap**：ARRETURNDF 累積未償本金彙總（per APPL_NO），月跑 Stage 2 計分使用 |
 | L3（月跑系統產出） | ob_assign_set, **ob_pool_data_list**（含 list_no）, assignment_run, assignment_run_snapshot, assignment_run_stage_log, assignment_audit_log | E07 月跑計算結果 | ob_pool_data_list 為 Stage 1 篩選後的 per-list 分派結果表；ob_pool_data（L2）與 ob_pool_data_list（L3）構成「池 / 結果」分離關係 |
 
 > **ob_pool_data vs ob_pool_data_list 區別（AD-E07-13 決議）**：
@@ -2783,13 +2783,14 @@ SELECT COUNT(*) FROM ob_list_definition WHERE prod_kind LIKE '%$$%';
 
 #### L2 ETL 雙層流程配置
 
-依 OQ-E07-15 決議並補充 AD-E07-12 雙層設計，以下三張表採「E04 通用擷取 → raw 中介表 → E05 Pipeline TargetLoad → AppDB 目標表」雙層流程同步：
+依 OQ-E07-15 決議並補充 AD-E07-12 雙層設計，以下**四張表**採「E04 通用擷取 → raw 中介表 → E05 Pipeline TargetLoad → AppDB 目標表」雙層流程同步：
 
 | 流程 | 來源（SQL Server） | E04 任務名稱 | E04 中介表 | E05 Pipeline 名稱 | AppDB 目標表 | 同步策略 | 頻率 |
 |------|-----------------|------------|----------|-----------------|------------|---------|------|
 | OBPOOLDATA 同步 | `dbo.OBPOOLDATA` | E07-OBPOOLDATA-Extract | `raw_{obpooldata_id}`（短）| E07-OBPOOLDATA-Load | `ob_pool_data` | E04 full + E05 replace | 月跑前手動 |
 | OBEMPHIRE 同步 | `dbo.OBEMPHIRE` | E07-OBEMPHIRE-Extract | `raw_{obemphire_id}`（短）| E07-OBEMPHIRE-Load | `ob_emphire` | E04 full + E05 replace | 每日 03:00 |
 | OBCALENDAR 同步 | `dbo.OBCALENDAR` | E07-OBCALENDAR-Extract | `raw_{obcalendar_id}`（短）| E07-OBCALENDAR-Load | `ob_calendar` | E04 full + E05 replace | 每年初一次 |
+| OB_ARRETURNDF_MIN_CAP 同步 | `dbo.OB_ARRETURNDF_MIN_CAP` | E07-OBARRETURNDF_MIN_CAP-Extract | `raw_{obarreturndf_min_cap_id}`（短）| E07-OBARRETURNDF_MIN_CAP-Load | `ob_arreturndf_min_cap` | E04 full + E05 replace | 月跑前手動 |
 
 > **說明**：E04 中介表名稱由引擎自動產生（F021 §5.6c：`raw_{task_id_short}`），不可由使用者自訂。每次 ETL 全量重抓即覆寫，中介表為**短期持有**，不需長期保留。
 
@@ -2803,6 +2804,7 @@ E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron
 | E05 OBEMPHIRE-Load | 每日 **03:30** | Pipeline 讀取 `raw_{id}` → TargetLoad `ob_emphire` |
 | E04 E05 OBPOOLDATA | 月跑前**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
 | E04 E05 OBCALENDAR | 每年初**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
+| E04 E05 OB_ARRETURNDF_MIN_CAP | 月跑前**手動**依序觸發（同 OBPOOLDATA）| E04 Execute → 等待完成 → E05 Execute；Stage 2 計分依賴此表 |
 
 > **風險 E07-C-1（已接受）**：若 E04 在 03:00~03:30 之間未完成（資料量超預期），E05 Pipeline 於 03:30 執行時讀取的 `raw_{id}` 為上一批資料（或空表）。員工數 < 1 萬筆，實際 E04 執行時間預估 < 10 分鐘，30 分鐘緩衝足夠。若未來資料量增加，需重新評估時間間隔或引入 E04 完成回呼機制。
 
@@ -2825,9 +2827,15 @@ E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron
 - 資料量小（~365 列/年），全量 E04 + E05 replace 無效能問題
 - 由 DBA 每年初手動依序觸發 E04→E05
 
+**OB_ARRETURNDF_MIN_CAP（E04 full + E05 replace，月跑前手動）**
+- OB 端 `OB_ARRETURNDF_MIN_CAP` 為 `ARRETURNDF` 還款明細的預先彙總表（`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`），OB 端每月月跑前由其 SP 重建
+- 資料量與案件池規模相當（預計與 OBPOOLDATA 筆數接近），全量 E04 + E05 replace，每月月跑前手動依序觸發
+- E04 任務 `mode: full`：全量 SELECT → TRUNCATE raw_{id} → 批次 INSERT；E05 TargetLoad `fullMode: true`：TRUNCATE ob_arreturndf_min_cap → 批次 INSERT
+- [ASSUMPTION] 原表 `APPL_NO` 無 PK constraint；ETL 同步後需驗證 `appl_no` 唯一性（見 E07-F F-2 D 列）
+
 #### E05 Pipeline 節點結構概要
 
-以下三條 Pipeline 均採最簡節點結構（參考 F044 TargetLoad 機制）：
+以下**四條** Pipeline 均採最簡節點結構（參考 F044 TargetLoad 機制）：
 
 **E07-OBPOOLDATA-Load Pipeline**
 
@@ -2866,7 +2874,19 @@ E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron
    TRUNCATE ob_calendar → 批次 INSERT（5000 筆/批）
 ```
 
-> **共同設定**：三條 Pipeline 均需先通過 F030 測試執行（`is_test_run: true`）與 F037 版本發布後，才可啟用排程執行。
+**E07-OBARRETURNDF_MIN_CAP-Load Pipeline**
+
+```
+[Extract] 讀取來源節點 → 輸入：raw_{obarreturndf_min_cap_id}
+   ↓
+[Field Mapping] 欄位 snake_case 轉換
+   （APPL_NO → appl_no、ADD_UN_CAPITAL → add_un_capital）
+   ↓
+[TargetLoad] ob_arreturndf_min_cap（fullMode: true）
+   TRUNCATE ob_arreturndf_min_cap → 批次 INSERT（5000 筆/批）
+```
+
+> **共同設定**：四條 Pipeline 均需先通過 F030 測試執行（`is_test_run: true`）與 F037 版本發布後，才可啟用排程執行。
 
 #### AppDB ETL 目標表補充設計
 
@@ -3122,6 +3142,44 @@ SELECT tier_level FROM ob_tier
 - Function 為純計算函式，不直接寫入任何表（副作用由呼叫方 UPDATE 負責）
 - function 參數 `p_pool_data_row ob_pool_data` 使用 PostgreSQL row type，需確保 `ob_pool_data` 表結構穩定；若 ETL 重建 `ob_pool_data`（TRUNCATE + COPY），row type 不受影響（schema 定義不變）
 
+#### AD-E07-10-L　客戶屬性與 loan 屬性 lookup 約定
+
+**決策**：`fn_calc_tier_level` 函式簽章**保持不變**（僅接受 `p_pool_data_row ob_pool_data`），但函式內部以 LEFT JOIN 方式從 `customer_core` 取客戶屬性、從 `ob_arreturndf_min_cap` 取 `ADD_UN_CAPITAL`，以等價移植 SP 中各 join 邏輯，確保計分結果與 SQL Server 行為一致。
+
+**設計原則**：
+- 外部 lookup 為 function **內部行為**，對呼叫方（`AssignmentScoringService`）完全透明
+- join key：`customer_core.source_customer_no = (p_pool_data).custo_no`；`ob_arreturndf_min_cap.appl_no = (p_pool_data).appl_no`
+- 所有欄位缺值行為以 `COALESCE` 處理，等價 SP 的 `ISNULL(...)` 語意
+
+**column_name 對應規則表**（供 fn_calc_tier_level 實作參考）：
+
+| column_name（ob_levelcard_column） | 取值來源 | 缺值 default |
+|-----------------------------------|---------|-------------|
+| `CUS_SEX` | `customer_core.gender` | `'3'` |
+| `CAREA_NO1` | `(customer_core.home_phone IS NOT NULL)::int` | `0` |
+| `CAREA_NO2` | `(customer_core.contact_phone IS NOT NULL)::int` | `0` |
+| `CELLULAR` | `(customer_core.mobile_phone IS NOT NULL)::int` | `0` |
+| `AGE` | `EXTRACT(YEAR FROM age(customer_core.date_of_birth))` | `0` |
+| `EDUCAT_BACK` | `customer_core.education_code` | `''` |
+| `HPOST_NUM_NM` | `customer_core.residential_zip` | `''` |
+| `CPOST_NUM_NM` | `customer_core.mailing_zip` | `''` |
+| `CO_NUM_NM` | `customer_core.company_zip` | `''` |
+| `ADD_UN_CAPITAL` | `ob_arreturndf_min_cap.add_un_capital` | `0` |
+| `CAR_YEAR` | `EXTRACT(YEAR FROM CURRENT_DATE) - (p_pool_data).year_produ::int` | `0` |
+| `LIST_MONTH` | `(p_pool_data).month_cnt` | `25` |
+| `PROJECT_TP` | `(p_pool_data).spec_tp`；若 `spec_name LIKE '%專案%'` 則衍生 `LEVEL1='A'` | `spec_tp '01'`、`spec_name ''` |
+| `SALES_STS` | `CASE (p_pool_data).sales_sts_na WHEN 'AGENT' THEN 'AGENT' WHEN '經銷商' THEN 'UCD' ELSE 'HFC' END`，比對 `LEVEL1` | `'HFC'` |
+| `LOAN_RATE` | `(p_pool_data).loan_rate` | `0` |
+| （其餘維度） | 通用引擎：`to_jsonb(p_pool_data)->>lower(column_name)` cast to numeric，BETWEEN `level2_s` / `level2_e` | `0` |
+
+> **注意**：`ADD_UN_CAPITAL` 維度僅在 `ob_arreturndf_min_cap` ETL 同步資料就緒的情況下才有意義。若月跑前未完成 OB_ARRETURNDF_MIN_CAP ETL 同步，該表為空，所有案件 `ADD_UN_CAPITAL` 將 fallback 為 0，導致計分結果偏差。月跑前置條件應將此 ETL 同步納入必要檢核。
+
+**效能補述**：
+- `customer_core` 已建 unique index on `source_customer_no`（dev 環境 2,167,620 筆已驗證查詢效能）
+- `ob_arreturndf_min_cap` 遷移時補建 PK on `appl_no`（index scan 查詢）
+- LATERAL JOIN 100K 案件 → 100K 次 `customer_core` lookup + 100K 次 `ob_arreturndf_min_cap` lookup（均走 index scan），預期 Stage 2 整體執行時間 < 30 秒（dev 環境基準）
+- 如 Stage 2 超出 10 分鐘 NFR 門檻，考慮以 `WITH cte AS (SELECT ... FROM customer_core WHERE source_customer_no IN (...))` 批次預取後 join，減少逐列 lookup 次數
+
 ---
 
 ### E07-F　開發前準備檢核清單
@@ -3154,6 +3212,7 @@ SELECT tier_level FROM ob_tier
 | D9 | Migration 腳本：OBMDEPTPCT → `ob_dept_pct`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
 | D10 | Migration 腳本：OBEMPLSETMF → `ob_empl_set`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
 | D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列；**補充**：驗證 `ob_pool_data (orgno, appl_no)` 唯一性（AD-E07-13，預期 0 重複列；SQL：`SELECT orgno, appl_no, COUNT(*) FROM ob_pool_data GROUP BY orgno, appl_no HAVING COUNT(*) > 1`） | ⬜ 待執行 | **[BLOCKER]** |
+| D12 | [ASSUMPTION] 首次執行 OB_ARRETURNDF_MIN_CAP ETL 同步後，驗證 `ob_arreturndf_min_cap.appl_no` 唯一性（OB 端 SP 以 `GROUP BY APPL_NO` 預彙總，預期 0 重複；若有重複，E05 Pipeline 需在 Field Mapping 加 DISTINCT ON appl_no 去重邏輯）：SQL：`SELECT appl_no, COUNT(*) FROM ob_arreturndf_min_cap GROUP BY appl_no HAVING COUNT(*) > 1` | ⬜ 待執行（ETL 同步後） | [ASSUMPTION] |
 
 #### F-3　E04 + E05 雙層 ETL 任務設定（L2 同步，AD-E07-12）
 
@@ -3168,12 +3227,14 @@ SELECT tier_level FROM ob_tier
 | E7 | 確認排程錯開設定：E04 OBEMPHIRE-Extract 03:00、E05 OBEMPHIRE-Load 03:30；E04 E05 其餘管道手動依序觸發 | ⬜ 待確認 | **[BLOCKER]** |
 | E8 | 首次執行 OBEMPHIRE 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_emphire` 有資料（月跑 Stage 4 依賴） | ⬜ 待執行 | **[BLOCKER]** |
 | E9 | 首次執行 OBCALENDAR 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_calendar` 當年度工作日資料完整 | ⬜ 待執行 | **[BLOCKER]** |
+| E10 | 建立 E04 擷取任務：E07-OBARRETURNDF_MIN_CAP-Extract（來源 `dbo.OB_ARRETURNDF_MIN_CAP`，`mode: full`） | ⬜ 待設定 | **[BLOCKER]**（Stage 2 ADD_UN_CAPITAL 維度依賴） |
+| E11 | 建立 E05 Pipeline：E07-OBARRETURNDF_MIN_CAP-Load（`raw_{obarreturndf_min_cap_id}` → Field Mapping：`APPL_NO → appl_no`、`ADD_UN_CAPITAL → add_un_capital` → TargetLoad `ob_arreturndf_min_cap`，`fullMode: true`）；首次執行後驗證資料（見 F-2 D12） | ⬜ 待建立 | **[BLOCKER]**（Stage 2 ADD_UN_CAPITAL 維度依賴） |
 
 #### F-4　PostgreSQL Function 建立（計分引擎）
 
 | # | 項目 | 狀態 | 備注 |
 |---|------|------|------|
-| P1 | 撰寫 `fn_calc_tier_level` PostgreSQL function（plpgsql） | ⬜ 待撰寫 | **[BLOCKER]**（月跑 Stage 2 依賴） |
+| P1 | 撰寫 `fn_calc_tier_level` PostgreSQL function（plpgsql）；實作含 LEFT JOIN `customer_core`（取客戶屬性）與 LEFT JOIN `ob_arreturndf_min_cap`（取 ADD_UN_CAPITAL），依 AD-E07-10-L 規則表對應各 column_name 取值；缺值以 COALESCE 補預設值 | ⬜ 待撰寫 | **[BLOCKER]**（月跑 Stage 2 依賴） |
 | P2 | Function 單元測試：以 `reference/DumpData/` 已知資料驗證計分結果 | ⬜ 待撰寫 | **[BLOCKER]** |
 | P3 | ob_tier fallback 邏輯測試（M5 → T5M，card_level IS NULL 案例） | ⬜ 待撰寫 | |
 | P4 | 效能測試：10 萬筆 LATERAL JOIN 耗時 < 10 分鐘（NFR-003 Stage 2 門檻）| ⬜ 待執行 | 建議在 Staging 環境以真實資料量測試 |
