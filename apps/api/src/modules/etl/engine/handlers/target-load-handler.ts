@@ -82,15 +82,52 @@ export class TargetLoadHandler implements NodeExecutor {
       `CREATE TEMP TABLE "${tempTable}" AS SELECT ${selectParts.join(', ')} FROM "${inputTable}"`,
     );
 
-    // Columns to exclude from UPDATE
+    const columnList = allColumns.map((c) => `"${c}"`).join(', ');
+
+    // Determine write mode
+    const fullMode = context.node.data.fullMode === true;
+
+    const batchSize = 5000;
+    let totalUpserted = 0;
+
+    if (fullMode) {
+      // fullMode: 通用全量替換路徑（TRUNCATE + batch INSERT）
+      // 跳過 customer_core 專屬的 ghost record gate 與 source_customer_no dedup，
+      // 適用於 ob_pool_data / ob_emphire / ob_calendar 等通用目標表（AD-E07-12）
+      try {
+        await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
+      } catch (err: any) {
+        throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
+      }
+
+      const totalRows = input.rowCount;
+      for (let offset = 0; offset < totalRows; offset += batchSize) {
+        const selectSql = `SELECT ${columnList} FROM "${tempTable}" LIMIT ${batchSize} OFFSET ${offset}`;
+        const insertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql}`;
+
+        try {
+          await context.queryRunner.query(insertSql);
+          totalUpserted += Math.min(batchSize, totalRows - offset);
+        } catch (err: any) {
+          throw new Error(
+            `fullMode INSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
+          );
+        }
+      }
+
+      await context.queryRunner.query(`DROP TABLE IF EXISTS "${tempTable}"`);
+      return { tempTable: '', rowCount: totalUpserted };
+    }
+
+    // === 以下為 customer_core 專屬 UPSERT 路徑 (!fullMode) ===
+
+    // Columns to exclude from UPDATE (customer_core 主鍵)
     const excludeFromUpdate = new Set(['customer_id', 'source_customer_no']);
 
     const updateCols = allColumns
       .filter((col) => !excludeFromUpdate.has(col))
       .map((col) => `"${col}" = EXCLUDED."${col}"`)
       .join(', ');
-
-    const columnList = allColumns.map((c) => `"${c}"`).join(', ');
 
     // BUG-2 fix: Data quality gate
     // 1. Ghost record filter: source_customer_no length >= 5
@@ -124,47 +161,18 @@ export class TargetLoadHandler implements NodeExecutor {
       `CREATE TEMP TABLE "${dedupTable}" AS SELECT DISTINCT ON ("source_customer_no") ${columnList} FROM "${tempTable}" WHERE ${ghostGate} ORDER BY "source_customer_no"`,
     );
 
-    // Determine write mode
-    const fullMode = context.node.data.fullMode === true;
+    // UPSERT mode: batch INSERT ON CONFLICT
+    for (let offset = 0; offset < validCount; offset += batchSize) {
+      const selectSql = `SELECT ${columnList} FROM "${dedupTable}" LIMIT ${batchSize} OFFSET ${offset}`;
+      const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
 
-    const batchSize = 5000;
-    let totalUpserted = 0;
-
-    if (fullMode) {
-      // fullMode: TRUNCATE + batch INSERT (no ON CONFLICT)
       try {
-        await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
+        await context.queryRunner.query(upsertSql);
+        totalUpserted += Math.min(batchSize, validCount - offset);
       } catch (err: any) {
-        throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
-      }
-
-      for (let offset = 0; offset < validCount; offset += batchSize) {
-        const selectSql = `SELECT ${columnList} FROM "${dedupTable}" LIMIT ${batchSize} OFFSET ${offset}`;
-        const insertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql}`;
-
-        try {
-          await context.queryRunner.query(insertSql);
-          totalUpserted += Math.min(batchSize, validCount - offset);
-        } catch (err: any) {
-          throw new Error(
-            `fullMode INSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
-          );
-        }
-      }
-    } else {
-      // UPSERT mode (default): batch INSERT ON CONFLICT
-      for (let offset = 0; offset < validCount; offset += batchSize) {
-        const selectSql = `SELECT ${columnList} FROM "${dedupTable}" LIMIT ${batchSize} OFFSET ${offset}`;
-        const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
-
-        try {
-          await context.queryRunner.query(upsertSql);
-          totalUpserted += Math.min(batchSize, validCount - offset);
-        } catch (err: any) {
-          throw new Error(
-            `UPSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
-          );
-        }
+        throw new Error(
+          `UPSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
+        );
       }
     }
 

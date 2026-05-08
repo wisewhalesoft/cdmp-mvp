@@ -259,6 +259,101 @@ describe('TargetLoadHandler - BUG-2 fixes', () => {
   });
 });
 
+// ===== AD-E07-12 fullMode generic target table support =====
+
+describe('TargetLoadHandler - fullMode 通用全量替換路徑（AD-E07-12）', () => {
+  const handler = new TargetLoadHandler();
+
+  // fullMode 對 ob_emphire 等通用目標表跳過 customer_core 專屬邏輯
+  it('fullMode + 非 customer_core 目標表：SQL 不含 source_customer_no 相關邏輯', async () => {
+    const obEmphireColumns = ['emp_id', 'emp_nm', 'dept_code', 'resign_date'];
+    const qr = createMockQueryRunner({ columns: obEmphireColumns, rowCount: 100 });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 100), {
+      queryRunner: qr,
+      targetTable: 'ob_emphire',
+      columns: obEmphireColumns,
+      fullMode: true,
+    });
+
+    const result = await handler.execute(ctx);
+    expect(result.rowCount).toBe(100);
+
+    // 不應出現 customer_core 專屬的 ghost gate / dedup / UPSERT 字串
+    const allSql = qr.calls.map((c: any) => c.sql).join('\n');
+    expect(allSql).not.toContain('source_customer_no');
+    expect(allSql).not.toContain('LENGTH(TRIM');
+    expect(allSql).not.toContain('DISTINCT ON');
+    expect(allSql).not.toContain('ON CONFLICT');
+    expect(allSql).not.toContain('DO UPDATE');
+    expect(allSql).not.toContain('is_nullable');
+  });
+
+  it('fullMode：執行 TRUNCATE TABLE 後批次 INSERT', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 50), {
+      targetTable: 'ob_calendar',
+      columns: ['calendar_date', 'rest_flg'],
+      fullMode: true,
+    });
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    const truncateCall = qr.calls.find((c: any) => c.sql.includes('TRUNCATE TABLE'));
+    expect(truncateCall).toBeDefined();
+    expect(truncateCall.sql).toContain('"ob_calendar"');
+
+    const insertCalls = qr.calls.filter((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCalls.length).toBeGreaterThanOrEqual(1);
+    expect(insertCalls[0].sql).toContain('INSERT INTO "ob_calendar"');
+  });
+
+  it('fullMode：TRUNCATE 失敗時拋出明確錯誤訊息', async () => {
+    const qr = createMockQueryRunner({
+      columns: ['emp_id', 'emp_nm'],
+      rowCount: 5,
+      customHandler: (sql) => {
+        if (sql.includes('TRUNCATE TABLE')) {
+          throw new Error('permission denied');
+        }
+        return undefined;
+      },
+    });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 5), {
+      queryRunner: qr,
+      targetTable: 'ob_emphire',
+      columns: ['emp_id', 'emp_nm'],
+      fullMode: true,
+    });
+
+    await expect(handler.execute(ctx)).rejects.toThrow('fullMode TRUNCATE 失敗：permission denied');
+  });
+
+  it('fullMode：INSERT 批次失敗時錯誤訊息含 offset 與已寫入數', async () => {
+    let insertCount = 0;
+    const qr = createMockQueryRunner({
+      columns: ['emp_id'],
+      rowCount: 6000,
+      customHandler: (sql) => {
+        if (sql.includes('INSERT INTO') && !sql.includes('CREATE')) {
+          insertCount++;
+          if (insertCount === 2) throw new Error('disk full');
+        }
+        return undefined;
+      },
+    });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 6000), {
+      queryRunner: qr,
+      targetTable: 'ob_emphire',
+      columns: ['emp_id'],
+      fullMode: true,
+    });
+
+    // 單次執行同時驗證兩個 substring（避免跨呼叫狀態累積）
+    await expect(handler.execute(ctx)).rejects.toThrow(
+      /fullMode INSERT 批次失敗.*offset: 5000.*已成功寫入: 5000/s,
+    );
+  });
+});
+
 // ===== Batch Size Calculation =====
 
 describe('calculateBatchSize', () => {
@@ -400,17 +495,25 @@ describe('TargetLoadHandler - fullMode', () => {
     }
   });
 
-  // TS-F044-025: fullMode=true 資料品質閘門仍生效 — ghost records 被過濾
-  it('TS-F044-025: fullMode=true ghost gate still filters short source_customer_no', async () => {
+  // TS-F044-025: fullMode=true 跳過 customer_core 專屬 ghost gate（AD-E07-12）
+  // 行為已於 2026-05-05 反轉：fullMode 為通用全量替換，不再套用 customer_core 的
+  // source_customer_no 長度檢查；通用目標表（如 ob_pool_data）可能無此欄位。
+  it('TS-F044-025: fullMode=true 跳過 ghost gate（AD-E07-12 純粹全量替換語意）', async () => {
     const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 3), { fullMode: true });
     await handler.execute(ctx);
 
     const qr = ctx.queryRunner;
 
-    // INSERT SQL 或 dedup table 建立 SQL 含 ghost gate 條件
+    // 任何 SQL 均不應出現 ghost gate 條件（純粹全量替換）
     const allSqlWithGhostGate = qr.calls.filter((c: any) =>
       c.sql.includes('LENGTH(TRIM("source_customer_no")) >= 5'),
     );
-    expect(allSqlWithGhostGate.length).toBeGreaterThan(0);
+    expect(allSqlWithGhostGate.length).toBe(0);
+
+    // 也不應出現 source_customer_no DISTINCT ON dedup
+    const allSqlWithDedup = qr.calls.filter((c: any) =>
+      c.sql.includes('DISTINCT ON ("source_customer_no")'),
+    );
+    expect(allSqlWithDedup.length).toBe(0);
   });
 });
