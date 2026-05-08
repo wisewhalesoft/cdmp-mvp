@@ -84,7 +84,8 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
           { name: 'caseyear', type: 'varchar', length: '255', isNullable: true }, // $$ 多值
           { name: 'caseyearnm', type: 'varchar', length: '10', isNullable: true },
           { name: 'settle_src', type: 'varchar', length: '6', isNullable: true }, // $$ 多值
-          { name: 'card_type', type: 'varchar', length: '2', isNullable: true },
+          // dump 觀察含 3 字元值（SEC / SEB），spec L845 原寫 VARCHAR(2) 錯誤；改 VARCHAR(5) 對齊 ob_levelcard_*
+          { name: 'card_type', type: 'varchar', length: '5', isNullable: true },
           // E07 新增：status（OQ-E07-14 / AD-E02-? — 名單啟用旗標）
           { name: 'status', type: 'varchar', length: '10', isNullable: false, default: "'active'" },
         ],

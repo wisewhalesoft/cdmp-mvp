@@ -82,7 +82,8 @@ export class ObListDefinition {
   @Column({ name: 'settle_src', type: 'varchar', length: 6, nullable: true })
   settle_src: string | null;
 
-  @Column({ name: 'card_type', type: 'varchar', length: 2, nullable: true })
+  // dump 觀察含 3 字元值（SEC / SEB），spec L845 原寫 VARCHAR(2) 錯誤；改 VARCHAR(5) 對齊 ob_levelcard_*
+  @Column({ name: 'card_type', type: 'varchar', length: 5, nullable: true })
   card_type: string | null;
 
   // E07 名單啟用旗標（migration M1 補建）
