@@ -36,4 +36,9 @@ export class User {
 
   @Column({ type: dateColumnType, nullable: true, default: null })
   password_changed_at: Date | null;
+
+  // E07 業務主管旗標（AD-E02-1，OQ-E07-19）
+  // Migration: 1711360000130-CreateObAssignConfigSetAndUserFlag.ts
+  @Column({ type: 'boolean', default: false })
+  is_sales_manager: boolean;
 }
