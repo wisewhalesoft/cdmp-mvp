@@ -281,6 +281,11 @@ export class RawDataService {
   /**
    * Insert a batch of rows into the raw data table.
    * Returns the number of rows inserted.
+   *
+   * 自動切片：PostgreSQL extended query protocol 對單次 bind 訊息的參數數量有
+   * uint16 上限（65535）；行數 × 欄位數超過此值會拋
+   * `bind message has N parameter formats but 0 parameters`。寬欄位來源（如
+   * OBPOOLDATA 122 欄 × batch 1000 = 122000）必須切成多個 INSERT 才能跑通。
    */
   async insertBatch(
     rawTableName: string,
@@ -292,41 +297,55 @@ export class RawDataService {
     if (rows.length === 0) return 0;
 
     const safeCols = columns.map((c) => this.sanitizeColumnName(c));
+    const colCount = columns.length || 1;
 
-    if (this.isPostgres) {
-      // PostgreSQL uses $1, $2, ... numbered parameters
-      let paramIndex = 1;
-      const placeholders = rows
-        .map(() => `(${safeCols.map(() => `$${paramIndex++}`).join(', ')})`)
-        .join(', ');
+    // 留 535 buffer 防 driver 邊界條件；最少 1 row 一批
+    const PG_PARAM_LIMIT = 65000;
+    const maxRowsPerInsert = this.isPostgres
+      ? Math.max(1, Math.floor(PG_PARAM_LIMIT / colCount))
+      : rows.length;
 
-      const values: any[] = [];
-      for (const row of rows) {
-        for (const col of columns) {
-          values.push(row[col] ?? null);
+    let inserted = 0;
+    for (let offset = 0; offset < rows.length; offset += maxRowsPerInsert) {
+      const chunk = rows.slice(offset, offset + maxRowsPerInsert);
+
+      if (this.isPostgres) {
+        // PostgreSQL uses $1, $2, ... numbered parameters
+        let paramIndex = 1;
+        const placeholders = chunk
+          .map(() => `(${safeCols.map(() => `$${paramIndex++}`).join(', ')})`)
+          .join(', ');
+
+        const values: any[] = [];
+        for (const row of chunk) {
+          for (const col of columns) {
+            values.push(row[col] ?? null);
+          }
         }
+
+        const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
+        await this.dataSource.query(sql, values);
+      } else {
+        // SQLite uses ? positional parameters
+        const placeholders = chunk
+          .map(() => `(${safeCols.map(() => '?').join(', ')})`)
+          .join(', ');
+
+        const values: any[] = [];
+        for (const row of chunk) {
+          for (const col of columns) {
+            values.push(row[col] ?? null);
+          }
+        }
+
+        const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
+        await this.dataSource.query(sql, values);
       }
 
-      const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
-      await this.dataSource.query(sql, values);
-    } else {
-      // SQLite uses ? positional parameters
-      const placeholders = rows
-        .map(() => `(${safeCols.map(() => '?').join(', ')})`)
-        .join(', ');
-
-      const values: any[] = [];
-      for (const row of rows) {
-        for (const col of columns) {
-          values.push(row[col] ?? null);
-        }
-      }
-
-      const sql = `INSERT INTO "${rawTableName}" (${safeCols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`;
-      await this.dataSource.query(sql, values);
+      inserted += chunk.length;
     }
 
-    return rows.length;
+    return inserted;
   }
 
   /**

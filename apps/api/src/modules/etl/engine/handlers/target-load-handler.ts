@@ -53,7 +53,12 @@ export class TargetLoadHandler implements NodeExecutor {
 
     // Only include columns that exist in BOTH input and target (plus ETL tracking)
     const matchedInputColumns = inputColumns.filter((c) => targetColumns.has(c));
-    const allColumns = [...matchedInputColumns, '_etl_loaded_at', '_etl_pipeline_id'];
+    // ETL tracking cols 只在 target 端真的有時才追加
+    // （customer_core 有 _etl_loaded_at/_etl_pipeline_id，OB 通用表沒有）
+    const etlTrackingCols: string[] = [];
+    if (targetColumns.has('_etl_loaded_at')) etlTrackingCols.push('_etl_loaded_at');
+    if (targetColumns.has('_etl_pipeline_id')) etlTrackingCols.push('_etl_pipeline_id');
+    const allColumns = [...matchedInputColumns, ...etlTrackingCols];
 
     // BUG-2 fix: Get column types from INPUT temp table for NULLIF(TRIM) normalization
     // Use input table types (not target table) because temp table types reflect actual data
@@ -74,8 +79,12 @@ export class TargetLoadHandler implements NodeExecutor {
       }
       return `"${c}"`;
     });
-    selectParts.push(`'${etlLoadedAt}'::TIMESTAMP AS "_etl_loaded_at"`);
-    selectParts.push(`'${etlPipelineId}'::UUID AS "_etl_pipeline_id"`);
+    if (targetColumns.has('_etl_loaded_at')) {
+      selectParts.push(`'${etlLoadedAt}'::TIMESTAMP AS "_etl_loaded_at"`);
+    }
+    if (targetColumns.has('_etl_pipeline_id')) {
+      selectParts.push(`'${etlPipelineId}'::UUID AS "_etl_pipeline_id"`);
+    }
 
     // Create enriched temp table
     await context.queryRunner.query(
