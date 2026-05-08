@@ -842,7 +842,7 @@ PK：`list_no`
 | caseyear | VARCHAR(255) | NULL | CASEYEAR | 案件年份（多值欄位，`$$` 分隔） |
 | caseyearnm | VARCHAR(10) | NULL | CASEYEARNM | 案件年份名稱 |
 | settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
-| card_type | VARCHAR(2) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議） |
+| card_type | VARCHAR(5) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議；dump 含 3 字元值如 SEC/SEB，與 ob_levelcard_* 系列一致改為 VARCHAR(5)） |
 
 **多值欄位儲存規範**：
 
