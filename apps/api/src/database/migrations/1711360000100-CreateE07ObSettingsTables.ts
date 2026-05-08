@@ -28,14 +28,15 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
   name = 'CreateE07ObSettingsTables1711360000100';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // === 1. ob_code_df （OBMCODEDF — 無 PK，UNIQUE INDEX (system_id, tbl_id, tbl_cd)）===
+    // === 1. ob_code_df （OBMCODEDF — composite PK (system_id, tbl_id, tbl_cd)）===
+    // TypeORM entity 強制要求 PK；3 欄都 NOT NULL，可直接作 composite PK
     await queryRunner.createTable(
       new Table({
         name: 'ob_code_df',
         columns: [
-          { name: 'system_id', type: 'varchar', length: '4', isNullable: false },
-          { name: 'tbl_id', type: 'varchar', length: '2', isNullable: false },
-          { name: 'tbl_cd', type: 'varchar', length: '4', isNullable: false },
+          { name: 'system_id', type: 'varchar', length: '4', isNullable: false, isPrimary: true },
+          { name: 'tbl_id', type: 'varchar', length: '2', isNullable: false, isPrimary: true },
+          { name: 'tbl_cd', type: 'varchar', length: '4', isNullable: false, isPrimary: true },
           { name: 'tbl_desc1', type: 'varchar', length: '40', isNullable: true },
           { name: 'tbl_desc2', type: 'varchar', length: '40', isNullable: true },
           { name: 'tbl_val1', type: 'numeric', precision: 12, scale: 0, isNullable: true },
@@ -51,14 +52,6 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
         ],
       }),
       true,
-    );
-    await queryRunner.createIndex(
-      'ob_code_df',
-      new TableIndex({
-        name: 'uq_ob_code_df_key',
-        columnNames: ['system_id', 'tbl_id', 'tbl_cd'],
-        isUnique: true,
-      }),
     );
 
     // === 2. ob_list_definition （OBMLISTDF — PK list_no）===
@@ -170,11 +163,13 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
       }),
     );
 
-    // === 5. ob_levelcard_version （OBLEVELCARD_VERSION — 無嚴格 PK，含遷移補建 status）===
+    // === 5. ob_levelcard_version （OBLEVELCARD_VERSION — surrogate id PK，含遷移補建 status）===
+    // 原表無嚴格 PK；邏輯主鍵 (card_type, card_version) 含 nullable 欄位無法作 PK，補 surrogate id
     await queryRunner.createTable(
       new Table({
         name: 'ob_levelcard_version',
         columns: [
+          { name: 'id', type: 'bigserial', isPrimary: true },
           { name: 'created_by_prog', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_by', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_at', type: 'timestamp', isNullable: true },
@@ -201,11 +196,12 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
       }),
     );
 
-    // === 6. ob_levelcard_column （OBLEVELCARD_COLUNM — COLUNM → column_name 拼字修正）===
+    // === 6. ob_levelcard_column （OBLEVELCARD_COLUNM — COLUNM → column_name 拼字修正；surrogate id PK）===
     await queryRunner.createTable(
       new Table({
         name: 'ob_levelcard_column',
         columns: [
+          { name: 'id', type: 'bigserial', isPrimary: true },
           { name: 'created_by_prog', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_by', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_at', type: 'timestamp', isNullable: true },
@@ -228,11 +224,12 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
       }),
     );
 
-    // === 7. ob_levelcard_score （OBLEVELCARD_SCORE — COLUNM → column_name）===
+    // === 7. ob_levelcard_score （OBLEVELCARD_SCORE — COLUNM → column_name；surrogate id PK）===
     await queryRunner.createTable(
       new Table({
         name: 'ob_levelcard_score',
         columns: [
+          { name: 'id', type: 'bigserial', isPrimary: true },
           { name: 'created_by_prog', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_by', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_at', type: 'timestamp', isNullable: true },
@@ -258,11 +255,12 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
       }),
     );
 
-    // === 8. ob_levelcard_level （OBLEVELCARD_LEVEL — CARD_LEVEL 門檻）===
+    // === 8. ob_levelcard_level （OBLEVELCARD_LEVEL — CARD_LEVEL 門檻；surrogate id PK）===
     await queryRunner.createTable(
       new Table({
         name: 'ob_levelcard_level',
         columns: [
+          { name: 'id', type: 'bigserial', isPrimary: true },
           { name: 'created_by_prog', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_by', type: 'varchar', length: '20', isNullable: true },
           { name: 'created_at', type: 'timestamp', isNullable: true },
@@ -286,11 +284,12 @@ export class CreateE07ObSettingsTables1711360000100 implements MigrationInterfac
       }),
     );
 
-    // === 9. ob_tier （OBTIER — UNIQUE INDEX with COALESCE 處理 NULL CARD_LEVEL fallback）===
+    // === 9. ob_tier （OBTIER — surrogate id PK；UNIQUE INDEX with COALESCE 處理 NULL CARD_LEVEL fallback）===
     await queryRunner.createTable(
       new Table({
         name: 'ob_tier',
         columns: [
+          { name: 'id', type: 'bigserial', isPrimary: true },
           { name: 'list_nm', type: 'varchar', length: '30', isNullable: true }, // 描述性
           // 遷移時補 NOT NULL（依 SP join 邏輯，AD-E07-13）
           { name: 'card_type', type: 'varchar', length: '5', isNullable: false },

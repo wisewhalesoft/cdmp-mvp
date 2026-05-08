@@ -22,6 +22,34 @@ import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.
 import { RolesModule } from './modules/roles/roles.module';
 import { C360Module } from './modules/c360/c360.module';
 import { Role } from './database/entities/role.entity';
+// === E07 Entities (Track A — 19 表)===
+import { ObCodeDf } from './database/entities/ob-code-df.entity';
+import { ObListDefinition } from './database/entities/ob-list-definition.entity';
+import { ObDeptPct } from './database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from './database/entities/ob-empl-set.entity';
+import { ObLevelcardVersion } from './database/entities/ob-levelcard-version.entity';
+import { ObLevelcardColumn } from './database/entities/ob-levelcard-column.entity';
+import { ObLevelcardScore } from './database/entities/ob-levelcard-score.entity';
+import { ObLevelcardLevel } from './database/entities/ob-levelcard-level.entity';
+import { ObTier } from './database/entities/ob-tier.entity';
+import { ObEmphire } from './database/entities/ob-emphire.entity';
+import { ObCalendar } from './database/entities/ob-calendar.entity';
+import { ObPoolData } from './database/entities/ob-pool-data.entity';
+import { ObPoolDataList } from './database/entities/ob-pool-data-list.entity';
+import { AssignmentRun } from './database/entities/assignment-run.entity';
+import { AssignmentRunSnapshot } from './database/entities/assignment-run-snapshot.entity';
+import { AssignmentRunStageLog } from './database/entities/assignment-run-stage-log.entity';
+import { AssignmentAuditLog } from './database/entities/assignment-audit-log.entity';
+import { ObAssignConfig } from './database/entities/ob-assign-config.entity';
+import { ObAssignSet } from './database/entities/ob-assign-set.entity';
+
+const E07_ENTITIES = [
+  ObCodeDf, ObListDefinition, ObDeptPct, ObEmplSet,
+  ObLevelcardVersion, ObLevelcardColumn, ObLevelcardScore, ObLevelcardLevel,
+  ObTier, ObEmphire, ObCalendar, ObPoolData, ObPoolDataList,
+  AssignmentRun, AssignmentRunSnapshot, AssignmentRunStageLog, AssignmentAuditLog,
+  ObAssignConfig, ObAssignSet,
+];
 
 @Module({
   imports: [
@@ -38,7 +66,7 @@ import { Role } from './database/entities/role.entity';
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role],
+            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role, ...E07_ENTITIES],
             synchronize: true,
           };
         }
@@ -50,7 +78,7 @@ import { Role } from './database/entities/role.entity';
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role],
+          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role, ...E07_ENTITIES],
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },
