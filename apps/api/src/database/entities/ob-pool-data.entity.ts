@@ -283,14 +283,16 @@ export class ObPoolData {
   @Column({ name: 'prod_class_name', type: 'varchar', length: 40, nullable: true })
   prod_class_name: string | null;
 
-  @Column({ name: 'prod_kind', type: 'varchar', length: 2 })
-  prod_kind: string;
+  // PROD_KIND/PROD_KIND_NAME/BEST_CASE 在 OBPOOLDATA 源頭實際有空字串
+  // （ETL NULLIF(TRIM) 後 → NULL）；遷移時放寬為 nullable 對齊真實資料分布
+  @Column({ name: 'prod_kind', type: 'varchar', length: 2, nullable: true })
+  prod_kind: string | null;
 
-  @Column({ name: 'prod_kind_name', type: 'varchar', length: 8 })
-  prod_kind_name: string;
+  @Column({ name: 'prod_kind_name', type: 'varchar', length: 8, nullable: true })
+  prod_kind_name: string | null;
 
-  @Column({ name: 'best_case', type: 'varchar', length: 1 })
-  best_case: string;
+  @Column({ name: 'best_case', type: 'varchar', length: 1, nullable: true })
+  best_case: string | null;
 
   @Column({ name: 'acc_date', type: 'timestamp', nullable: true })
   acc_date: Date | null;
