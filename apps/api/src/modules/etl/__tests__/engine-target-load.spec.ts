@@ -17,7 +17,7 @@ function createMockQueryRunner(opts: {
   rowCount?: number;
   customHandler?: (sql: string, params?: any[]) => any;
 } = {}) {
-  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name'], rowCount = 0, customHandler } = opts;
+  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name', '_etl_loaded_at', '_etl_pipeline_id'], rowCount = 0, customHandler } = opts;
   const calls: { sql: string; params?: any[] }[] = [];
 
   const query = vi.fn(async (sql: string, params?: any[]) => {
@@ -72,7 +72,7 @@ function makeTargetLoadContext(
     tableExists = true,
     targetTable = 'customer_core',
     pipelineId = 'test-pipeline-uuid-123',
-    columns = ['customer_id', 'source_customer_no', 'name'],
+    columns = ['customer_id', 'source_customer_no', 'name', '_etl_loaded_at', '_etl_pipeline_id'],
     fullMode,
   } = opts;
 

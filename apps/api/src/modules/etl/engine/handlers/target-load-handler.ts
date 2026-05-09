@@ -52,7 +52,12 @@ export class TargetLoadHandler implements NodeExecutor {
     const targetColumns = new Set(await this.getColumns(context, targetTable));
 
     // Only include columns that exist in BOTH input and target (plus ETL tracking)
-    const matchedInputColumns = inputColumns.filter((c) => targetColumns.has(c));
+    // _etl_loaded_at / _etl_pipeline_id 永遠由 handler 重新填值（即使 input 也有這欄
+    // 也要 overwrite），故從 matchedInputColumns 排除避免後續組 SQL 出現 duplicate col
+    const HANDLER_OWNED_COLS = new Set(['_etl_loaded_at', '_etl_pipeline_id']);
+    const matchedInputColumns = inputColumns.filter(
+      (c) => targetColumns.has(c) && !HANDLER_OWNED_COLS.has(c),
+    );
     // ETL tracking cols 只在 target 端真的有時才追加
     // - customer_core: _etl_loaded_at / _etl_pipeline_id
     // - OB 通用表（ob_pool_data / ob_arreturndf_min_cap）: _cdmp_extracted_at（NOT NULL）

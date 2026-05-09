@@ -221,6 +221,7 @@ describe('MSSQLExecutor', () => {
         encrypt: false,
         trustServerCertificate: true,
         connectTimeout: 10000,
+        requestTimeout: 300000,
       },
     });
   });
