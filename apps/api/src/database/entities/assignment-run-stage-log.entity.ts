@@ -4,7 +4,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { AssignmentRun } from './assignment-run.entity';
 
-@Index('idx_assignment_run_stage_log_run_stage', ['run_id', 'stage_no'])
+// Q3：UNIQUE (run_id, stage_no) 防同 stage 重複 INSERT；Stage 重跑改用 UPDATE
+@Index('uq_assignment_run_stage_log_run_stage', ['run_id', 'stage_no'], { unique: true })
 @Entity('assignment_run_stage_log')
 export class AssignmentRunStageLog {
   @PrimaryGeneratedColumn({ type: 'bigint' })
