@@ -4,6 +4,9 @@ import { JwtService } from '@nestjs/jwt';
 export interface JwtPayloadInput {
   userId: string;
   role: string;
+  // E07 業務主管旗標（AD-E02-1）：JWT 攜帶以利 SalesManagerGuard 直接讀取
+  // 不需每 request 再 hit DB；undefined → 視為 false
+  isSalesManager?: boolean;
   rememberMe?: boolean;
 }
 
@@ -23,6 +26,7 @@ export class JwtUtil {
       {
         userId: input.userId,
         role: input.role,
+        isSalesManager: input.isSalesManager ?? false,
       },
       {
         expiresIn,

@@ -106,6 +106,7 @@ describe('AuthService', () => {
     expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
       userId: ADMIN_ACTIVE.id,
       role: 'admin',
+      isSalesManager: false,
       rememberMe: false,
     });
   });
@@ -126,6 +127,7 @@ describe('AuthService', () => {
     expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
       userId: ADMIN_ACTIVE.id,
       role: 'admin',
+      isSalesManager: false,
       rememberMe: true,
     });
   });
@@ -145,6 +147,7 @@ describe('AuthService', () => {
     expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
       userId: ADMIN_ACTIVE.id,
       role: 'admin',
+      isSalesManager: false,
       rememberMe: false,
     });
   });
@@ -243,6 +246,7 @@ describe('AuthService', () => {
     expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
       userId: USER_ACTIVE.id,
       role: 'user',
+      isSalesManager: false,
       rememberMe: false,
     });
   });
@@ -263,6 +267,7 @@ describe('AuthService', () => {
     expect(mockJwtUtil.generateToken).toHaveBeenCalledWith({
       userId: USER_ACTIVE.id,
       role: 'user',
+      isSalesManager: false,
       rememberMe: true,
     });
   });

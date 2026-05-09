@@ -80,6 +80,8 @@ export class AuthGuard implements CanActivate {
       (request as any).user = {
         userId: payload.userId,
         role: payload.role,
+        // E07 業務主管旗標（AD-E02-1）：給 SalesManagerGuard / 業務邏輯讀取
+        isSalesManager: payload.isSalesManager ?? false,
       };
       return true;
     } catch (error: any) {

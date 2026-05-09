@@ -48,7 +48,7 @@ describe('AuthGuard', () => {
 
     expect(result).toBe(true);
     const request = context.switchToHttp().getRequest() as any;
-    expect(request.user).toEqual({ userId: 'user-123', role: 'admin' });
+    expect(request.user).toEqual({ userId: 'user-123', role: 'admin', isSalesManager: false });
     expect(mockJwtService.verify).toHaveBeenCalledWith('valid-token');
   });
 

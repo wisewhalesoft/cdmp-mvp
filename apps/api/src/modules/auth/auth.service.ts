@@ -84,10 +84,11 @@ export class AuthService {
       });
     }
 
-    // Generate JWT
+    // Generate JWT（含 is_sales_manager 旗標供 SalesManagerGuard 使用，AD-E02-1）
     const token = this.jwtUtil.generateToken({
       userId: user.id,
       role: user.role,
+      isSalesManager: user.is_sales_manager ?? false,
       rememberMe: dto.rememberMe ?? false,
     });
 
