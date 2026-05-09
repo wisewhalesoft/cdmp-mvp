@@ -39,4 +39,9 @@ export class ObLevelcardColumn {
 
   @Column({ name: 'column_label', type: 'varchar', length: 30, nullable: true })
   column_label: string | null; // COLUNM_NAME
+
+  // [遷移補建] 啟用旗標（AD-E07-4）：fn_calc_tier_level WHERE status='active'
+  // 過濾無效計分維度（如停用、待測試）；遷移時所有列預設 'active'
+  @Column({ name: 'status', type: 'varchar', length: 10, default: 'active' })
+  status: string;
 }

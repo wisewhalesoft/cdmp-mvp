@@ -99,9 +99,16 @@ BEGIN
      LIMIT 1;
 
     -- ===== Step 4: 迭代 ob_levelcard_score 規則 =====
+    -- AD-E07-10 第 1 步：JOIN ob_levelcard_column 過濾 status='active'
+    -- 跳過已停用維度的所有 score 規則（停用維度可能尚未定型或已過期）
     FOR v_score_rule IN
         SELECT s.column_name, s.level1, s.level2_s, s.level2_e, s.score
           FROM ob_levelcard_score s
+          JOIN ob_levelcard_column c
+            ON c.card_type    = s.card_type
+           AND c.card_version = s.card_version
+           AND c.column_name  = s.column_name
+           AND c.status = 'active'
          WHERE s.card_type    = p_card_type
            AND s.card_version = p_card_version
     LOOP
