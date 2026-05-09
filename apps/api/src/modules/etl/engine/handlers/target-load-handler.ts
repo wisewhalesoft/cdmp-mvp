@@ -54,10 +54,16 @@ export class TargetLoadHandler implements NodeExecutor {
     // Only include columns that exist in BOTH input and target (plus ETL tracking)
     const matchedInputColumns = inputColumns.filter((c) => targetColumns.has(c));
     // ETL tracking cols 只在 target 端真的有時才追加
-    // （customer_core 有 _etl_loaded_at/_etl_pipeline_id，OB 通用表沒有）
+    // - customer_core: _etl_loaded_at / _etl_pipeline_id
+    // - OB 通用表（ob_pool_data / ob_arreturndf_min_cap）: _cdmp_extracted_at（NOT NULL）
+    //   field_mapping dropUnmapped:true 會把 raw 端 _cdmp_extracted_at 丟掉，
+    //   handler 在 target 有此欄但 input 不帶時補 NOW() 載入時刻
     const etlTrackingCols: string[] = [];
     if (targetColumns.has('_etl_loaded_at')) etlTrackingCols.push('_etl_loaded_at');
     if (targetColumns.has('_etl_pipeline_id')) etlTrackingCols.push('_etl_pipeline_id');
+    const fillCdmpExtractedAt =
+      targetColumns.has('_cdmp_extracted_at') && !matchedInputColumns.includes('_cdmp_extracted_at');
+    if (fillCdmpExtractedAt) etlTrackingCols.push('_cdmp_extracted_at');
     const allColumns = [...matchedInputColumns, ...etlTrackingCols];
 
     // BUG-2 fix: Get column types from INPUT temp table for NULLIF(TRIM) normalization
@@ -84,6 +90,9 @@ export class TargetLoadHandler implements NodeExecutor {
     }
     if (targetColumns.has('_etl_pipeline_id')) {
       selectParts.push(`'${etlPipelineId}'::UUID AS "_etl_pipeline_id"`);
+    }
+    if (fillCdmpExtractedAt) {
+      selectParts.push(`'${etlLoadedAt}'::TIMESTAMP AS "_cdmp_extracted_at"`);
     }
 
     // Create enriched temp table
