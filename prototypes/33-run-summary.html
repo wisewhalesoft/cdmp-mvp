@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>結果摘要 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .bar-track { background: #F3F4F6; height: 14px; border-radius: 6px; position: relative; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+    .bar-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(31,41,55,0.55); z-index: 2; }
+    @keyframes bar-anim { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .pulse-soft { animation: bar-anim 1.6s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="percent" class="w-4 h-4"></i>比例設定</a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">結果摘要</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">健康偏差</button>
+      <button onclick="showDemoState('imbalanced')" id="demo-imbalanced" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">部門失衡</button>
+      <button onclick="showDemoState('tier-skew')" id="demo-tier-skew" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">等級分佈異常</button>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <!-- ===== Run Info Bar ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-3 border-b border-border flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-success">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+              已完成
+            </span>
+            <span class="text-xs text-gray-500">Run ID</span>
+            <span class="font-mono text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">550e8400-e29b</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="35-snapshot-detail.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
+              <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+              查看快照詳情
+            </a>
+            <a href="34-run-history.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i>
+              執行歷史
+            </a>
+          </div>
+        </div>
+        <div class="px-5 py-4 grid grid-cols-5 gap-4">
+          <div>
+            <div class="text-xs text-gray-500 mb-1">作業年月</div>
+            <div class="text-sm font-semibold text-gray-800 font-mono">202605</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">完成時間</div>
+            <div class="text-sm text-gray-700 font-mono">2026-05-09 12:30:17</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">執行耗時</div>
+            <div class="text-sm font-semibold text-primary tabular-nums">30 分 12 秒</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">Stage 1 原始名單</div>
+            <div class="text-sm font-semibold text-gray-800 tabular-nums">50,000 筆</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">名單覆蓋率</div>
+            <div class="text-sm font-semibold text-success tabular-nums">95.0%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Stat Cards (3 個) ===== -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg border border-border shadow-sm p-5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-xs font-medium text-gray-500">總分派客戶數</div>
+            <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <i data-lucide="users" class="w-4 h-4 text-primary"></i>
+            </div>
+          </div>
+          <div id="statTotal" class="text-3xl font-bold text-gray-900 tabular-nums">9,500</div>
+          <div class="text-xs text-gray-500 mt-1">Stage 4 最終分派數</div>
+        </div>
+        <div class="bg-white rounded-lg border border-border shadow-sm p-5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-xs font-medium text-gray-500">分派部門數</div>
+            <div class="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+              <i data-lucide="building-2" class="w-4 h-4 text-purple-600"></i>
+            </div>
+          </div>
+          <div id="statDepts" class="text-3xl font-bold text-gray-900 tabular-nums">5</div>
+          <div class="text-xs text-gray-500 mt-1">D01 / D02 / D03 / D04 / D05</div>
+        </div>
+        <div class="bg-white rounded-lg border border-border shadow-sm p-5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-xs font-medium text-gray-500">分派業務員數</div>
+            <div class="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+              <i data-lucide="user-check" class="w-4 h-4 text-warning"></i>
+            </div>
+          </div>
+          <div id="statEmpls" class="text-3xl font-bold text-gray-900 tabular-nums">142</div>
+          <div class="text-xs text-gray-500 mt-1">平均每人 67 案</div>
+        </div>
+      </div>
+
+      <!-- ===== 部門偏差 chart ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-sm font-semibold text-gray-800">部門分配偏差</h3>
+            <span class="text-xs text-gray-400">設定比例 vs 實際比例</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-success"></span>正常 ≤ 1%</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-warning"></span>偏差 1~3%</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-danger"></span>警示 &gt; 3% (NFR-005)</span>
+          </div>
+        </div>
+        <div id="deptChart" class="px-5 py-5 space-y-4"></div>
+      </div>
+
+      <!-- ===== 等級分佈 chart ===== -->
+      <div class="grid grid-cols-2 gap-4">
+        <!-- TIER_LEVEL 分佈 -->
+        <div class="bg-white rounded-lg border border-border shadow-sm">
+          <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-sm font-semibold text-gray-800">TIER_LEVEL 分佈</h3>
+            </div>
+            <span class="text-xs text-gray-400">fn_calc_tier_level 計算結果</span>
+          </div>
+          <div id="tierChart" class="px-5 py-5 space-y-3"></div>
+        </div>
+
+        <!-- CARD_LEVEL 圓餅模擬 -->
+        <div class="bg-white rounded-lg border border-border shadow-sm">
+          <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-sm font-semibold text-gray-800">CARD_LEVEL 等級佔比</h3>
+            </div>
+          </div>
+          <div class="px-5 py-5">
+            <div id="cardLevelDonut" class="flex items-center justify-center mb-4" style="height: 180px;">
+              <!-- conic-gradient 圓餅 -->
+            </div>
+            <div id="cardLevelLegend" class="space-y-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 匯出區塊 ===== -->
+      <div id="export" class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="download" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">匯出分派結果（F064）</h3>
+        </div>
+        <div class="px-5 py-5">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div class="flex-1 min-w-[280px]">
+              <p class="text-sm text-gray-700 font-medium mb-1">將分派結果匯出為檔案</p>
+              <p class="text-xs text-gray-500 leading-relaxed">
+                包含 9,500 筆分派紀錄，欄位涵蓋客戶編號 / 客戶姓名 / CARD_LEVEL / TIER_LEVEL / 部門 / 人員工號 / 人員姓名 / 分配日期。檔案名稱：<span class="font-mono text-gray-600">assignment_result_202605_550e8400.{xlsx|csv}</span>
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="startExport('xlsx')" class="inline-flex items-center gap-2 px-4 py-2 bg-success text-white text-sm font-medium rounded-lg hover:bg-green-600 transition shadow-sm">
+                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                匯出 Excel (streaming)
+              </button>
+              <button onclick="startExport('csv')" class="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 text-sm font-medium border border-border rounded-lg hover:bg-gray-50 transition">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+                匯出 CSV
+              </button>
+            </div>
+          </div>
+
+          <!-- Streaming 進度（隱藏） -->
+          <div id="exportProgress" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex items-center gap-3 mb-2">
+              <i data-lucide="loader" class="w-4 h-4 text-primary spin-icon"></i>
+              <span class="text-sm font-medium text-primary">正在產生檔案，請稍候…</span>
+              <span class="ml-auto text-xs text-gray-500">採 exceljs streaming 寫入，5 分鐘 timeout</span>
+            </div>
+            <div class="w-full h-2 bg-white rounded-full overflow-hidden border border-blue-100">
+              <div id="exportBar" class="h-full bg-primary pulse-soft" style="width:0%"></div>
+            </div>
+            <div class="text-xs text-gray-600 mt-2">
+              已寫入 <span id="exportRows" class="font-mono">0</span> / 9,500 筆
+            </div>
+          </div>
+
+          <!-- 匯出說明 -->
+          <div class="mt-4 flex items-start gap-2 p-3 bg-amber-50/50 border border-amber-100 rounded-lg text-xs text-gray-600">
+            <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-medium text-gray-700 mb-0.5">匯出注意事項（AD-E07-11）</p>
+              <p>大檔案採 exceljs streaming mode 直接寫入瀏覽器，記憶體不會 OOM。資料來源為 assignment_run_snapshot.payload (snapshot_type='result')，每次匯出將寫入 assignment_audit_log 稽核紀錄。匯出超過 5 分鐘將回傳 EXPORT_FILE_EXPIRED 錯誤。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div id="alertNote" class="hidden flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-gray-700">
+        <i data-lucide="alert-circle" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-danger mb-0.5">NFR-005 警示：偏差超過閾值</p>
+          <p>本次月跑存在偏差超過 3% 的部門。建議檢查 ob_dept_pct 設定，或前往 F067 比對近月結果確認分派演算法表現。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+    <i data-lucide="check-circle" class="w-4 h-4 text-success"></i>
+    <span id="toastMsg">下載完成</span>
+  </div>
+
+  <script>
+    // ===== Mock Data =====
+    const datasets = {
+      normal: {
+        total: 9500, depts: 5, empls: 142,
+        deptData: [
+          { id: 'D01', name: '業務一部', cfg: 30.0, actual: 30.5, count: 2898 },
+          { id: 'D02', name: '業務二部', cfg: 25.0, actual: 24.6, count: 2337 },
+          { id: 'D03', name: '業務三部', cfg: 20.0, actual: 20.2, count: 1919 },
+          { id: 'D04', name: '車貸專案部', cfg: 15.0, actual: 15.4, count: 1463 },
+          { id: 'D05', name: '機車專案部', cfg: 10.0, actual: 9.3, count: 883 },
+        ],
+        tierData: [
+          { tier: 'T1', count: 1850, color: 'bg-blue-500' },
+          { tier: 'T2', count: 2100, color: 'bg-cyan-500' },
+          { tier: 'T3', count: 1620, color: 'bg-teal-500' },
+          { tier: 'T32', count: 980, color: 'bg-emerald-500' },
+          { tier: 'T4', count: 1400, color: 'bg-lime-500' },
+          { tier: 'T51', count: 720, color: 'bg-amber-500' },
+          { tier: 'T52', count: 540, color: 'bg-orange-500' },
+          { tier: 'T1M', count: 180, color: 'bg-purple-500' },
+          { tier: 'T3M', count: 80, color: 'bg-pink-500' },
+          { tier: 'T5M', count: 30, color: 'bg-rose-500' },
+        ],
+        cardLevels: [
+          { lvl: 'A', count: 2000, color: '#2563EB' },
+          { lvl: 'B', count: 4000, color: '#06B6D4' },
+          { lvl: 'C', count: 3000, color: '#22C55E' },
+          { lvl: 'D', count: 500,  color: '#F59E0B' },
+        ],
+        alert: false,
+      },
+      imbalanced: {
+        total: 9420, depts: 5, empls: 142,
+        deptData: [
+          { id: 'D01', name: '業務一部', cfg: 30.0, actual: 35.2, count: 3316 },
+          { id: 'D02', name: '業務二部', cfg: 25.0, actual: 19.4, count: 1828 },
+          { id: 'D03', name: '業務三部', cfg: 20.0, actual: 24.5, count: 2308 },
+          { id: 'D04', name: '車貸專案部', cfg: 15.0, actual: 16.2, count: 1526 },
+          { id: 'D05', name: '機車專案部', cfg: 10.0, actual: 4.7, count: 442 },
+        ],
+        tierData: [
+          { tier: 'T1', count: 1820, color: 'bg-blue-500' },
+          { tier: 'T2', count: 2050, color: 'bg-cyan-500' },
+          { tier: 'T3', count: 1580, color: 'bg-teal-500' },
+          { tier: 'T32', count: 950, color: 'bg-emerald-500' },
+          { tier: 'T4', count: 1380, color: 'bg-lime-500' },
+          { tier: 'T51', count: 720, color: 'bg-amber-500' },
+          { tier: 'T52', count: 540, color: 'bg-orange-500' },
+          { tier: 'T1M', count: 230, color: 'bg-purple-500' },
+          { tier: 'T3M', count: 110, color: 'bg-pink-500' },
+          { tier: 'T5M', count: 40, color: 'bg-rose-500' },
+        ],
+        cardLevels: [
+          { lvl: 'A', count: 1980, color: '#2563EB' },
+          { lvl: 'B', count: 3950, color: '#06B6D4' },
+          { lvl: 'C', count: 2980, color: '#22C55E' },
+          { lvl: 'D', count: 510,  color: '#F59E0B' },
+        ],
+        alert: true,
+      },
+      'tier-skew': {
+        total: 9510, depts: 5, empls: 142,
+        deptData: [
+          { id: 'D01', name: '業務一部', cfg: 30.0, actual: 30.1, count: 2862 },
+          { id: 'D02', name: '業務二部', cfg: 25.0, actual: 25.3, count: 2406 },
+          { id: 'D03', name: '業務三部', cfg: 20.0, actual: 19.8, count: 1883 },
+          { id: 'D04', name: '車貸專案部', cfg: 15.0, actual: 15.1, count: 1436 },
+          { id: 'D05', name: '機車專案部', cfg: 10.0, actual: 9.7, count: 923 },
+        ],
+        tierData: [
+          { tier: 'T1', count: 540, color: 'bg-blue-500' },
+          { tier: 'T2', count: 720, color: 'bg-cyan-500' },
+          { tier: 'T3', count: 880, color: 'bg-teal-500' },
+          { tier: 'T32', count: 980, color: 'bg-emerald-500' },
+          { tier: 'T4', count: 1100, color: 'bg-lime-500' },
+          { tier: 'T51', count: 2400, color: 'bg-amber-500' },
+          { tier: 'T52', count: 2150, color: 'bg-orange-500' },
+          { tier: 'T1M', count: 420, color: 'bg-purple-500' },
+          { tier: 'T3M', count: 240, color: 'bg-pink-500' },
+          { tier: 'T5M', count: 80, color: 'bg-rose-500' },
+        ],
+        cardLevels: [
+          { lvl: 'A', count: 480, color: '#2563EB' },
+          { lvl: 'B', count: 2200, color: '#06B6D4' },
+          { lvl: 'C', count: 4150, color: '#22C55E' },
+          { lvl: 'D', count: 2680, color: '#F59E0B' },
+        ],
+        alert: true,
+      },
+    };
+
+    function deviationStyle(dev) {
+      const a = Math.abs(dev);
+      if (a > 3) return { fill: 'bg-danger', text: 'text-danger', tag: '警示' };
+      if (a > 1) return { fill: 'bg-warning', text: 'text-warning', tag: '輕微' };
+      return { fill: 'bg-success', text: 'text-success', tag: '正常' };
+    }
+
+    function renderDeptChart(data) {
+      const max = Math.max(...data.map(d => Math.max(d.cfg, d.actual))) * 1.15;
+      const html = data.map(d => {
+        const dev = +(d.actual - d.cfg).toFixed(2);
+        const s = deviationStyle(dev);
+        const cfgW = (d.cfg / max) * 100;
+        const actW = (d.actual / max) * 100;
+        return `
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-semibold text-gray-600">${d.id}</span>
+                <span class="text-sm font-medium text-gray-800">${d.name}</span>
+                <span class="inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full ${s.fill} text-white">${s.tag}</span>
+              </div>
+              <div class="flex items-center gap-3 text-xs">
+                <span class="text-gray-500">設定 <span class="font-mono text-gray-700">${d.cfg.toFixed(1)}%</span></span>
+                <span class="text-gray-400">/</span>
+                <span class="text-gray-500">實際 <span class="font-mono text-gray-700">${d.actual.toFixed(1)}%</span></span>
+                <span class="text-gray-400">/</span>
+                <span class="font-mono ${s.text} font-semibold">${dev > 0 ? '+' : ''}${dev}%</span>
+                <span class="text-gray-500 tabular-nums">(${d.count.toLocaleString()} 筆)</span>
+              </div>
+            </div>
+            <div class="space-y-1.5">
+              <!-- 設定比例（淺色） -->
+              <div class="flex items-center gap-2">
+                <span class="w-12 text-[10px] text-gray-400">設定</span>
+                <div class="bar-track flex-1">
+                  <div class="bar-fill bg-gray-300" style="width:${cfgW}%"></div>
+                </div>
+              </div>
+              <!-- 實際比例（依偏差變色） -->
+              <div class="flex items-center gap-2">
+                <span class="w-12 text-[10px] text-gray-400">實際</span>
+                <div class="bar-track flex-1 relative">
+                  <div class="bar-fill ${s.fill}" style="width:${actW}%"></div>
+                  <div class="bar-marker" style="left:${cfgW}%" title="設定比例 marker"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('deptChart').innerHTML = html;
+    }
+
+    function renderTierChart(data) {
+      const max = Math.max(...data.map(d => d.count));
+      const total = data.reduce((s, d) => s + d.count, 0);
+      const html = data.map(d => {
+        const pct = ((d.count / total) * 100).toFixed(1);
+        const w = (d.count / max) * 100;
+        return `
+          <div class="flex items-center gap-3">
+            <span class="w-12 text-xs font-mono font-semibold text-gray-700">${d.tier}</span>
+            <div class="flex-1 bar-track">
+              <div class="bar-fill ${d.color}" style="width:${w}%"></div>
+            </div>
+            <span class="text-xs font-mono text-gray-600 w-16 text-right tabular-nums">${d.count.toLocaleString()}</span>
+            <span class="text-xs text-gray-500 w-12 text-right tabular-nums">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('tierChart').innerHTML = html;
+    }
+
+    function renderCardLevelDonut(data) {
+      const total = data.reduce((s, d) => s + d.count, 0);
+      let cumulative = 0;
+      const stops = data.map(d => {
+        const start = (cumulative / total) * 360;
+        cumulative += d.count;
+        const end = (cumulative / total) * 360;
+        return `${d.color} ${start}deg ${end}deg`;
+      }).join(', ');
+      const donut = `
+        <div class="relative" style="width: 160px; height: 160px;">
+          <div class="absolute inset-0 rounded-full" style="background: conic-gradient(${stops});"></div>
+          <div class="absolute inset-0 m-auto bg-white rounded-full flex flex-col items-center justify-center" style="width: 90px; height: 90px;">
+            <div class="text-[10px] text-gray-500">總數</div>
+            <div class="text-base font-bold text-gray-900 tabular-nums">${total.toLocaleString()}</div>
+          </div>
+        </div>
+      `;
+      document.getElementById('cardLevelDonut').innerHTML = donut;
+
+      const legend = data.map(d => {
+        const pct = ((d.count / total) * 100).toFixed(1);
+        return `
+          <div class="flex items-center gap-2 text-sm">
+            <span class="w-3 h-3 rounded-sm" style="background:${d.color}"></span>
+            <span class="font-mono font-semibold text-gray-700 w-6">${d.lvl}</span>
+            <span class="text-gray-500 flex-1">CARD_LEVEL ${d.lvl}</span>
+            <span class="font-mono text-gray-700 tabular-nums">${d.count.toLocaleString()}</span>
+            <span class="text-xs text-gray-500 w-12 text-right tabular-nums">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('cardLevelLegend').innerHTML = legend;
+    }
+
+    // ===== Demo state =====
+    function showDemoState(state) {
+      ['normal','imbalanced','tier-skew'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      const ds = datasets[state];
+      document.getElementById('statTotal').textContent = ds.total.toLocaleString();
+      document.getElementById('statDepts').textContent = ds.depts;
+      document.getElementById('statEmpls').textContent = ds.empls;
+      renderDeptChart(ds.deptData);
+      renderTierChart(ds.tierData);
+      renderCardLevelDonut(ds.cardLevels);
+
+      document.getElementById('alertNote').classList.toggle('hidden', !ds.alert);
+
+      lucide.createIcons();
+    }
+
+    // ===== Export demo =====
+    function startExport(fmt) {
+      document.getElementById('exportProgress').classList.remove('hidden');
+      let p = 0;
+      const bar = document.getElementById('exportBar');
+      const rows = document.getElementById('exportRows');
+      const it = setInterval(() => {
+        p += Math.random() * 12 + 5;
+        if (p >= 100) {
+          p = 100; clearInterval(it);
+          bar.style.width = '100%';
+          rows.textContent = '9,500';
+          setTimeout(() => {
+            document.getElementById('exportProgress').classList.add('hidden');
+            showToast(`已下載 assignment_result_202605_550e8400.${fmt}`);
+            bar.style.width = '0%'; rows.textContent = '0';
+          }, 800);
+          return;
+        }
+        bar.style.width = p + '%';
+        rows.textContent = Math.floor((p/100) * 9500).toLocaleString();
+      }, 220);
+    }
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toastMsg').textContent = msg;
+      t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 2400);
+    }
+
+    function setRole(role) {
+      const a = document.getElementById('role-admin'), u = document.getElementById('role-user');
+      if (role === 'admin') {
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // init
+    showDemoState('normal');
+    lucide.createIcons();
+  </script>
+</body>
+</html>

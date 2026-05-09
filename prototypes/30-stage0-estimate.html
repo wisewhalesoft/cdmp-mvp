@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stage 0 試算 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .bar-cell { display: inline-block; height: 8px; border-radius: 4px; min-width: 4px; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+
+      <!-- E07 區塊 -->
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
+      </a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
+      </a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
+      </a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+      </a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
+      </a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
+      </a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
+      </a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
+      </a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
+      </a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
+      </a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">Stage 0 試算</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常試算</button>
+      <button onclick="showDemoState('weekend-skip')" id="demo-weekend-skip" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">週末跳過</button>
+      <button onclick="showDemoState('holiday-skip')" id="demo-holiday-skip" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">國定假日跳過</button>
+    </div>
+
+    <div class="p-6">
+
+      <!-- 試算說明 banner -->
+      <div class="mb-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-primary">Daily estimate 不寫入 ob_assign_set</p>
+          <p class="text-xs text-gray-600 mt-0.5">本頁為 F049 試算預覽，演算法 = FLOOR(1000/工作日) + 餘數補最近日期（AD-E07-8）。實際寫入由月跑 Stage 0 正式執行（F061）。</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-5">
+
+        <!-- ===== 左：輸入區 ===== -->
+        <div class="col-span-4">
+          <div class="bg-white rounded-lg border border-border shadow-sm sticky top-20">
+            <div class="px-5 py-4 border-b border-border bg-gradient-to-br from-blue-50/40 to-white">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i data-lucide="settings-2" class="w-4 h-4 text-primary"></i>
+                試算輸入
+              </h3>
+              <p class="text-xs text-gray-500 mt-0.5">調整參數即時預覽結果</p>
+            </div>
+            <div class="p-5 space-y-4">
+
+              <!-- LIST_NO -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">名單 LIST_NO</label>
+                <div class="relative">
+                  <select id="inListNo" onchange="recompute()" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+                    <option value="OB202605001">OB202605001 — 汽車期中名單</option>
+                    <option value="OB202605002">OB202605002 — 汽車中分名單</option>
+                    <option value="OB202605004">OB202605004 — 機車滿期名單</option>
+                    <option value="OB202605005">OB202605005 — 信貸中度逾期名單</option>
+                  </select>
+                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">僅顯示 status='active' 的名單</p>
+              </div>
+
+              <!-- 預估總筆數 -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">預估總筆數</label>
+                <input id="inTotalCount" type="number" value="9500" oninput="recompute()" min="0"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <p class="text-xs text-gray-400 mt-1">來自 ob_pool_data 篩選結果（LIST_NO 篩選條件 COUNT）</p>
+              </div>
+
+              <!-- 起訖日期 -->
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1.5">起始日</label>
+                  <input id="inStart" type="date" value="2026-05-01" onchange="recompute()"
+                    class="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1.5">結束日</label>
+                  <input id="inEnd" type="date" value="2026-05-31" onchange="recompute()"
+                    class="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+              </div>
+
+              <!-- 工作日來源 -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">工作日來源</label>
+                <div class="relative">
+                  <select id="inCalendarSrc" onchange="recompute()" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+                    <option value="weekday">工作日（rest_flg='0'）— 排除週末與國定假日</option>
+                    <option value="weekday-only">僅排除週末</option>
+                    <option value="all">不排除（含週末與國定假日）</option>
+                  </select>
+                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">資料表 <code>ob_calendar</code>（E04+E05 ETL 同步）</p>
+              </div>
+
+              <!-- 演算法說明 -->
+              <div class="p-3 bg-gray-50 rounded-lg text-xs text-gray-600 font-mono leading-relaxed">
+                <div class="flex items-center gap-1.5 text-gray-500 font-sans font-medium mb-1.5">
+                  <i data-lucide="function-square" class="w-3.5 h-3.5"></i>
+                  AD-E07-8 演算法
+                </div>
+                base = FLOOR(1000 / working_days)<br>
+                rem  = 1000 mod working_days<br>
+                per_date = base<br>
+                <span class="text-primary">最後 rem 個工作日: per_date = base + 1</span>
+              </div>
+
+              <!-- API ref -->
+              <div class="text-xs text-gray-400 pt-2 border-t border-border">
+                <code>GET /api/v1/assignment/stage0/daily-estimate?ym=202605</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 右：試算結果 ===== -->
+        <div class="col-span-8 space-y-4">
+
+          <!-- Pool 偏低警示 -->
+          <div id="poolWarn" class="hidden flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-semibold text-warning">Pool 資料筆數偏低（現有 800 筆）</p>
+              <p class="text-xs text-gray-600 mt-0.5">低於閾值 STAGE0_POOL_WARN_THRESHOLD = 1000，請確認資料擷取任務（OBPOOLDATA）已正常執行。</p>
+            </div>
+          </div>
+
+          <!-- KPI -->
+          <div class="grid grid-cols-4 gap-3">
+            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-gray-500">working_days 工作日</span>
+                <i data-lucide="calendar-check" class="w-4 h-4 text-blue-500"></i>
+              </div>
+              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiWorkdays">21</div>
+              <p class="text-xs text-gray-400 mt-1">本月可分派天數</p>
+            </div>
+            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-gray-500">total_estimate 總筆數</span>
+                <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+              </div>
+              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiTotal">9,500</div>
+              <p class="text-xs text-gray-400 mt-1">符合 LIST_NO 篩選條件</p>
+            </div>
+            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-gray-500">base ratio</span>
+                <i data-lucide="divide" class="w-4 h-4 text-purple-500"></i>
+              </div>
+              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiBase">47</div>
+              <p class="text-xs text-gray-400 mt-1">FLOOR(1000/工作日) ‰</p>
+            </div>
+            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-gray-500">remainder 餘數</span>
+                <i data-lucide="plus-circle" class="w-4 h-4 text-amber-500"></i>
+              </div>
+              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiRem">13</div>
+              <p class="text-xs text-gray-400 mt-1">補至最近 N 個工作日</p>
+            </div>
+          </div>
+
+          <!-- 圖表（純 div bar） -->
+          <div class="bg-white rounded-lg border border-border shadow-sm">
+            <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="w-4 h-4 text-primary"></i>
+                每日預估筆數
+              </h3>
+              <div class="flex items-center gap-3 text-xs text-gray-500">
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-blue-500"></span>工作日 (base)</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-blue-700"></span>工作日 (base+1)</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-gray-300"></span>跳過</span>
+              </div>
+            </div>
+            <div id="chartContainer" class="p-5 grid grid-cols-7 gap-2"></div>
+          </div>
+
+          <!-- 表格 -->
+          <div class="bg-white rounded-lg border border-border shadow-sm">
+            <div class="px-5 py-4 border-b border-border">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i data-lucide="table" class="w-4 h-4 text-primary"></i>
+                每日試算明細
+              </h3>
+            </div>
+            <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-gray-50/95 backdrop-blur z-10">
+                  <tr class="border-b border-border">
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">calendar_date</th>
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">星期</th>
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">工作日</th>
+                    <th class="text-right px-5 py-3 font-semibold text-gray-600">預估件數</th>
+                    <th class="text-right px-5 py-3 font-semibold text-gray-600">累積</th>
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">餘數補</th>
+                  </tr>
+                </thead>
+                <tbody id="dailyTbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">Stage 0 試算說明</p>
+          <p>F049 純為唯讀計算（BR-1），不寫入 <code>ob_assign_set</code>、不建立 <code>assignment_run</code>；單一 LIST_NO 試算逾時上限 10 秒（BR-3，500 STAGE0_ESTIMATE_TIMEOUT）；Pool 警示閾值由環境變數 <code>STAGE0_POOL_WARN_THRESHOLD</code> 控制（預設 1000，BR-4）。實際寫入由 F061 月跑 Stage 0 在背景執行。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // ===== Mock: 2026-05 行事曆 =====
+    // 每日：date, weekday, isWorkday (依 mode 不同)
+    function buildCalendar(start, end, mode) {
+      const days = [];
+      let d = new Date(start);
+      const ed = new Date(end);
+      // 國定假日（mock）
+      const holidays = ['2026-05-01']; // 勞動節
+      while (d <= ed) {
+        const ymd = d.toISOString().slice(0, 10);
+        const dow = d.getDay(); // 0=Sun, 6=Sat
+        const wkLabels = ['日','一','二','三','四','五','六'];
+        const isHoliday = holidays.includes(ymd);
+        const isWeekend = (dow === 0 || dow === 6);
+        let isWorkday = false;
+        let skipReason = null;
+        if (mode === 'all') {
+          isWorkday = true;
+        } else if (mode === 'weekday-only') {
+          isWorkday = !isWeekend;
+          if (isWeekend) skipReason = '週末';
+        } else {
+          // weekday: skip both
+          isWorkday = !isWeekend && !isHoliday;
+          if (isWeekend) skipReason = '週末';
+          else if (isHoliday) skipReason = '國定假日';
+        }
+        days.push({ date: ymd, dow, weekday: wkLabels[dow], isWorkday, skipReason, isWeekend, isHoliday });
+        d.setDate(d.getDate() + 1);
+      }
+      return days;
+    }
+
+    function recompute() {
+      const total = parseInt(document.getElementById('inTotalCount').value || '0', 10);
+      const start = document.getElementById('inStart').value;
+      const end = document.getElementById('inEnd').value;
+      const mode = document.getElementById('inCalendarSrc').value;
+
+      const cal = buildCalendar(start, end, mode);
+      const workdays = cal.filter(d => d.isWorkday);
+      const wd = workdays.length;
+      const base = wd > 0 ? Math.floor(1000 / wd) : 0;
+      const rem = wd > 0 ? (1000 % wd) : 0;
+
+      // 餘數補最近 rem 個工作日（DESC，前 rem 個）
+      // 排序工作日 by date DESC，前 rem 個 ratio = base+1
+      const sortedDesc = [...workdays].sort((a, b) => b.date.localeCompare(a.date));
+      const bonusSet = new Set(sortedDesc.slice(0, rem).map(d => d.date));
+
+      // 對每天分配
+      const ratios = cal.map(d => {
+        if (!d.isWorkday) return { ...d, ratio: 0, count: 0, isBonus: false };
+        const ratio = bonusSet.has(d.date) ? base + 1 : base;
+        return { ...d, ratio, count: 0, isBonus: bonusSet.has(d.date) };
+      });
+
+      // 每日件數 = ratio / 1000 * total
+      let cum = 0;
+      ratios.forEach(d => {
+        d.count = Math.round((d.ratio / 1000) * total);
+        cum += d.count;
+        d.cumulative = cum;
+      });
+
+      // KPI 更新
+      document.getElementById('kpiWorkdays').textContent = wd;
+      document.getElementById('kpiTotal').textContent = total.toLocaleString();
+      document.getElementById('kpiBase').textContent = base;
+      document.getElementById('kpiRem').textContent = rem;
+
+      // 圖表
+      const chart = document.getElementById('chartContainer');
+      const maxCount = Math.max(...ratios.map(r => r.count), 1);
+      chart.innerHTML = ratios.map(d => {
+        const heightPct = d.isWorkday ? Math.max((d.count / maxCount) * 100, 8) : 12;
+        const color = d.isWorkday ? (d.isBonus ? 'bg-blue-700' : 'bg-blue-500') : 'bg-gray-300';
+        return `
+          <div class="flex flex-col items-center gap-1.5">
+            <div class="text-[10px] font-mono ${d.isWorkday ? 'text-gray-700 font-semibold' : 'text-gray-300'}">${d.isWorkday ? d.count : '—'}</div>
+            <div class="w-full h-20 flex items-end">
+              <div class="w-full ${color} rounded-t" style="height: ${heightPct}%" title="${d.date} ${d.weekday} ${d.isWorkday ? d.count + '件' : (d.skipReason || '')}"></div>
+            </div>
+            <div class="text-[10px] font-mono text-gray-500">${d.date.slice(8)}</div>
+            <div class="text-[10px] ${d.dow === 0 ? 'text-rose-500' : d.dow === 6 ? 'text-blue-500' : 'text-gray-400'}">${d.weekday}</div>
+          </div>
+        `;
+      }).join('');
+
+      // 表格
+      const tbody = document.getElementById('dailyTbody');
+      tbody.innerHTML = ratios.map(d => `
+        <tr class="border-b border-border ${d.isWorkday ? '' : 'bg-gray-50/50'}">
+          <td class="px-5 py-2.5 font-mono text-xs ${d.isWorkday ? 'text-gray-700' : 'text-gray-400'}">${d.date}</td>
+          <td class="px-5 py-2.5">
+            <span class="${d.dow === 0 ? 'text-rose-500' : d.dow === 6 ? 'text-blue-500' : 'text-gray-700'}">${d.weekday}</span>
+          </td>
+          <td class="px-5 py-2.5">
+            ${d.isWorkday
+              ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700"><i data-lucide="check" class="w-3 h-3"></i>Y (rest_flg=0)</span>'
+              : `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"><i data-lucide="x" class="w-3 h-3"></i>N (${d.skipReason})</span>`
+            }
+          </td>
+          <td class="px-5 py-2.5 text-right tabular-nums ${d.isWorkday ? 'text-gray-900 font-semibold' : 'text-gray-300'}">${d.isWorkday ? d.count : '—'}</td>
+          <td class="px-5 py-2.5 text-right tabular-nums ${d.isWorkday ? 'text-gray-700' : 'text-gray-300'}">${d.isWorkday ? d.cumulative.toLocaleString() : '—'}</td>
+          <td class="px-5 py-2.5">
+            ${d.isBonus ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700"><i data-lucide="plus" class="w-3 h-3"></i>base+1（餘數補）</span>' : '<span class="text-gray-300">—</span>'}
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // ===== Role toggle =====
+    function setRole(role) {
+      const adminBtn = document.getElementById('role-admin');
+      const userBtn = document.getElementById('role-user');
+      if (role === 'admin') {
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // ===== Demo state =====
+    function showDemoState(state) {
+      ['normal','weekend-skip','holiday-skip'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      const poolWarn = document.getElementById('poolWarn');
+      poolWarn.classList.add('hidden');
+
+      if (state === 'normal') {
+        document.getElementById('inTotalCount').value = 9500;
+        document.getElementById('inStart').value = '2026-05-01';
+        document.getElementById('inEnd').value = '2026-05-31';
+        document.getElementById('inCalendarSrc').value = 'weekday';
+      } else if (state === 'weekend-skip') {
+        // 強調週末跳過效果，使用較短日期區間
+        document.getElementById('inTotalCount').value = 5000;
+        document.getElementById('inStart').value = '2026-05-04';
+        document.getElementById('inEnd').value = '2026-05-17';
+        document.getElementById('inCalendarSrc').value = 'weekday-only';
+      } else if (state === 'holiday-skip') {
+        // 強調 5/1 勞動節跳過
+        document.getElementById('inTotalCount').value = 800; // 同時觸發 pool 偏低警示
+        document.getElementById('inStart').value = '2026-04-27';
+        document.getElementById('inEnd').value = '2026-05-08';
+        document.getElementById('inCalendarSrc').value = 'weekday';
+        poolWarn.classList.remove('hidden');
+      }
+      recompute();
+    }
+
+    // ===== Init =====
+    recompute();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

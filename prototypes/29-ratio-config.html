@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>比例設定 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .tab-btn { position: relative; }
+    .tab-btn.active { color: #2563EB; }
+    .tab-btn.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #2563EB;
+    }
+    /* Toggle switch */
+    .toggle { width: 44px; height: 24px; background: #D1D5DB; border-radius: 9999px; position: relative; cursor: pointer; transition: background 0.2s; }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: #fff; border-radius: 50%; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .toggle.on { background: #22C55E; }
+    .toggle.on::after { left: 22px; }
+    .toggle.disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+
+      <!-- E07 區塊 -->
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
+      </a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
+      </a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
+      </a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+      </a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
+      </a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
+      </a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
+      </a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
+      </a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
+      </a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
+      </a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">比例設定</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常（加總 100%）</button>
+      <button onclick="showDemoState('imbalanced')" id="demo-imbalanced" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">部門加總 &lt; 100%</button>
+      <button onclick="showDemoState('cr-disabled')" id="demo-cr-disabled" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">CR 開關關閉</button>
+    </div>
+
+    <div class="p-6">
+
+      <!-- LIST_NO Selector -->
+      <div class="bg-white rounded-lg border border-border shadow-sm p-5 mb-4 flex items-end gap-4 flex-wrap">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">作業 LIST_NO</label>
+          <div class="relative">
+            <select id="listNoSelect" onchange="onListNoChange()" class="pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none min-w-[360px]">
+              <option value="OB202605001">OB202605001 — 2026-05 汽車期中名單</option>
+              <option value="OB202605002">OB202605002 — 2026-05 汽車中分名單</option>
+              <option value="OB202605003">OB202605003 — 2026-05 汽車低分名單</option>
+              <option value="OB202605004">OB202605004 — 2026-05 機車滿期名單</option>
+              <option value="OB202605005">OB202605005 — 2026-05 信貸中度逾期名單</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+        </div>
+        <div class="flex-1 min-w-[200px] p-3 bg-gray-50/60 border border-border rounded-lg flex items-center gap-4">
+          <div class="text-xs">
+            <div class="text-gray-500">作業年月</div>
+            <div class="font-mono font-semibold text-gray-700">202605</div>
+          </div>
+          <div class="text-xs">
+            <div class="text-gray-500">名單名稱</div>
+            <div class="font-medium text-gray-800" id="listNmDisp">2026-05 汽車期中名單</div>
+          </div>
+          <div class="text-xs">
+            <div class="text-gray-500">PROD_KIND / CARD_TYPE</div>
+            <div class="font-mono text-gray-700">01 (汽車) / H</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-t-lg border border-border border-b-0">
+        <div class="flex items-center px-4 border-b border-border">
+          <button id="tab-dept" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('dept')">
+            <i data-lucide="building-2" class="w-3.5 h-3.5 inline mr-1"></i>
+            部門比例
+            <span class="ml-1 text-xs text-gray-400">(F060)</span>
+          </button>
+          <button id="tab-empl" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('empl')">
+            <i data-lucide="users" class="w-3.5 h-3.5 inline mr-1"></i>
+            人員比例
+            <span class="ml-1 text-xs text-gray-400">(F057/F058)</span>
+          </button>
+          <button id="tab-cr" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('cr')">
+            <i data-lucide="recycle" class="w-3.5 h-3.5 inline mr-1"></i>
+            CR 回分開關
+            <span class="ml-1 text-xs text-gray-400">(F059)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== Tab 1: 部門比例 (F060) ===== -->
+      <div id="panel-dept" class="bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
+          <h4 class="text-sm font-semibold text-gray-700">名單 <span id="dispListNo" class="font-mono text-primary">OB202605001</span> 的部門分配比例</h4>
+          <span class="text-xs text-gray-400">資料表 <code>ob_dept_pct</code> · PK (project_workym, list_no, obdeptid, ration)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">obdeptid</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">obdeptnm（部門名稱）</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">ration（%）</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">調整</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="dept-tbody"></tbody>
+            <tfoot>
+              <tr id="deptTotalRow" class="bg-emerald-50/50 border-t-2 border-emerald-200">
+                <td class="px-5 py-3 font-semibold text-gray-700" colspan="2">部門比例加總</td>
+                <td class="px-5 py-3 text-right">
+                  <span id="deptTotalDisp" class="text-lg font-bold tabular-nums text-emerald-600">100.0%</span>
+                </td>
+                <td class="px-5 py-3" colspan="2">
+                  <span id="deptTotalBadge" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                    達 100%
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <!-- imbalanced banner -->
+        <div id="deptImbalanceBanner" class="hidden mx-4 my-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-warning">部門比例加總非 100%（目前 <span id="deptImbVal">90.0</span>%）— 月跑前必須調整為 100%</p>
+            <p class="text-xs text-gray-600 mt-0.5">儲存時將回傳 422 <code>RATIO_SUM_INVALID</code>。月跑觸發前 (F061 AC-1) 也會驗證此規則。</p>
+          </div>
+        </div>
+        <div class="px-4 py-3 border-t border-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-danger border border-red-200 rounded-md hover:bg-red-50 transition">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              清除比例設定
+            </button>
+            <span class="text-xs text-gray-400">DELETE /assignment/ratios/dept/:listNo</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">取消</button>
+            <button id="btnSaveDept" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              <i data-lucide="save" class="w-3.5 h-3.5"></i>
+              儲存（加總須 = 100%）
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Tab 2: 人員比例 (F057/F058) ===== -->
+      <div id="panel-empl" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3 flex-wrap">
+          <label class="text-xs text-gray-500">部門篩選</label>
+          <div class="relative">
+            <select id="deptFilter" onchange="renderEmpl()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none">
+              <option value="ALL">全部部門</option>
+              <option value="XTC0">XTC0 業務一部</option>
+              <option value="XTC1">XTC1 業務二部</option>
+              <option value="XTC2">XTC2 業務三部</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <label class="inline-flex items-center gap-2 text-xs text-gray-600 ml-2">
+            <input type="checkbox" class="rounded">
+            顯示停用人員
+          </label>
+          <span class="text-xs text-gray-400 ml-auto">資料表 <code>ob_empl_set</code> · PK (list_no, deptid_m, emplid, ration)</span>
+        </div>
+
+        <div id="emplGroupContainer" class="divide-y divide-border"></div>
+
+        <div class="px-4 py-3 border-t border-border bg-gray-50/40 flex items-center justify-between">
+          <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>同一 (list_no, deptid_m) 下人員比例加總須 = 100%（BR-1）；0% 為合法值（視為「本月不分配」，BR-2）；新增人員下拉來源 ob_emphire WHERE resign_date IS NULL</p>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+            新增人員
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== Tab 3: CR 回分開關 (F059) ===== -->
+      <div id="panel-cr" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="p-6 max-w-3xl">
+          <!-- 主開關卡片 -->
+          <div class="rounded-xl border border-border bg-gradient-to-br from-emerald-50/30 to-white p-5">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1">
+                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <i data-lucide="recycle" class="w-5 h-5 text-emerald-600"></i>
+                  CR 回分規則（Customer Recycling）
+                </h3>
+                <p class="text-sm text-gray-600 mt-1.5">啟用時，月跑 Stage 3 部門分配將「曾被分派但未成交」的客戶優先指定回前業務員所屬部門，避免客戶關係斷層。</p>
+                <div class="mt-3 flex items-center gap-4 text-xs text-gray-500">
+                  <span><i data-lucide="user" class="w-3 h-3 inline mr-0.5"></i>最後更新者 <span id="crUpdater" class="font-medium text-gray-700">sales_manager_01</span></span>
+                  <span><i data-lucide="clock" class="w-3 h-3 inline mr-0.5"></i><span id="crUpdatedAt" class="font-mono">2026-04-20 08:00</span></span>
+                </div>
+              </div>
+              <div class="flex flex-col items-end gap-2">
+                <span id="crStatusText" class="text-sm font-semibold text-success">已啟用</span>
+                <div id="crToggle" class="toggle on" onclick="toggleCr()"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 設定資訊 -->
+          <div class="mt-4 p-4 bg-blue-50/30 border border-blue-100 rounded-lg">
+            <h4 class="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">儲存位置</h4>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-xs text-gray-500">資料表（AD-E07-5）</div>
+                <code class="text-xs font-mono text-gray-800">ob_assign_config</code>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">config_key</div>
+                <code class="text-xs font-mono text-gray-800">cr_reassignment_enabled</code>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">config_value</div>
+                <code id="crValue" class="text-xs font-mono text-emerald-700 font-semibold">true</code>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">影響範圍</div>
+                <span class="text-xs text-gray-700">下一次月跑（F061 Stage 3）</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 規則說明 -->
+          <div class="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-gray-700">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-semibold text-warning">商業規則</p>
+              <ul class="list-disc list-inside space-y-0.5 mt-1 text-gray-600">
+                <li>BR-1：CR 回分為全域開關，影響所有部門</li>
+                <li>BR-2：月跑執行中（status IN pending/running）禁止切換 — 409 ASSIGNMENT_RUN_ALREADY_RUNNING</li>
+                <li>BR-3：每次切換必須透過確認對話框，避免誤操作</li>
+                <li>BR-4：當下狀態於月跑觸發時由 config 快照記錄，歷史可透過 F066 追溯</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">比例設定操作說明</p>
+          <p>per-LIST_NO 部門比例（F060）與部門內人員比例（F058）兩者均須加總 = 100%；月跑執行中所有編輯被鎖定。CR 回分開關為全域設定（AD-E07-5），切換需確認對話框。所有變更寫入 <code>assignment_audit_log</code>。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal: CR 切換確認 ===== -->
+  <div id="crConfirmModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeCrModal()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">確認切換 CR 回分規則</h3>
+          <p id="crConfirmText" class="text-sm text-gray-600 leading-relaxed">確定將 CR 回分規則切換至「<span class="font-semibold text-gray-800">啟用</span>」？此變更將影響下一次月跑的 Stage 3 部門分配邏輯。</p>
+        </div>
+        <div class="px-6 pb-2">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-gray-700 leading-relaxed">
+            <div class="flex items-start gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+              <div>
+                寫入 <code>ob_assign_config.config_value</code> 並記錄至 <code>assignment_audit_log</code>（action=UPDATE, entity_type=cr_reassignment_flag）。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="closeCrModal()" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+          <button onclick="confirmCrToggle()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">確認</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Mock: per-LIST_NO 部門比例 =====
+    let deptRatios = [
+      { obdeptid: 'XTC0', obdeptnm: '業務一部', ration: 30.0 },
+      { obdeptid: 'XTC1', obdeptnm: '業務二部', ration: 40.0 },
+      { obdeptid: 'XTC2', obdeptnm: '業務三部', ration: 30.0 },
+    ];
+
+    // ===== Mock: 人員比例（依部門 group）=====
+    const emplGroups = [
+      {
+        deptid_m: 'XTC0', deptName: '業務一部',
+        members: [
+          { emplid: 'E0001', emplName: '王大明', ration: 40.0, prod_type: '01$$02' },
+          { emplid: 'E0002', emplName: '林小華', ration: 35.0, prod_type: '01$$02' },
+          { emplid: 'E0003', emplName: '陳志宏', ration: 25.0, prod_type: '01$$02' },
+        ]
+      },
+      {
+        deptid_m: 'XTC1', deptName: '業務二部',
+        members: [
+          { emplid: 'E0010', emplName: '張美玲', ration: 50.0, prod_type: '01' },
+          { emplid: 'E0011', emplName: '黃建國', ration: 30.0, prod_type: '01' },
+          { emplid: 'E0012', emplName: '李秀蘭', ration: 20.0, prod_type: '01' },
+          { emplid: 'E0013', emplName: '吳雅婷', ration: 0.0,  prod_type: '01' },
+        ]
+      },
+      {
+        deptid_m: 'XTC2', deptName: '業務三部',
+        members: [
+          { emplid: 'E0020', emplName: '劉建宏', ration: 60.0, prod_type: '01$$03' },
+          { emplid: 'E0021', emplName: '蔡秀珍', ration: 40.0, prod_type: '01$$03' },
+        ]
+      }
+    ];
+
+    let crEnabled = true;
+    let pendingCrState = null;
+
+    // ===== Renderers =====
+    function renderDept(imbalanced = false) {
+      const tbody = document.getElementById('dept-tbody');
+      // imbalanced 用 90% 試算
+      const display = imbalanced
+        ? [{ obdeptid: 'XTC0', obdeptnm: '業務一部', ration: 30.0 }, { obdeptid: 'XTC1', obdeptnm: '業務二部', ration: 30.0 }, { obdeptid: 'XTC2', obdeptnm: '業務三部', ration: 30.0 }]
+        : deptRatios;
+
+      tbody.innerHTML = display.map(d => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition">
+          <td class="px-5 py-3 font-mono text-xs font-semibold text-gray-700">${d.obdeptid}</td>
+          <td class="px-5 py-3 text-gray-900">${d.obdeptnm}</td>
+          <td class="px-5 py-3 text-right">
+            <input type="number" step="0.1" min="0" max="100" value="${d.ration.toFixed(1)}" class="w-24 px-2 py-1 text-sm border border-border rounded-md text-right font-mono">
+          </td>
+          <td class="px-5 py-3 w-[200px]">
+            <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div class="h-2 ${d.ration >= 30 ? 'bg-blue-500' : 'bg-amber-500'}" style="width: ${d.ration}%"></div>
+            </div>
+          </td>
+          <td class="px-5 py-3 text-right">
+            <button class="p-1.5 text-gray-500 hover:text-danger hover:bg-red-50 rounded transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+
+      const total = display.reduce((s, d) => s + d.ration, 0);
+      const totalDisp = document.getElementById('deptTotalDisp');
+      const totalBadge = document.getElementById('deptTotalBadge');
+      const banner = document.getElementById('deptImbalanceBanner');
+      const totalRow = document.getElementById('deptTotalRow');
+      const btnSave = document.getElementById('btnSaveDept');
+
+      totalDisp.textContent = total.toFixed(1) + '%';
+      if (Math.abs(total - 100) < 0.01) {
+        totalDisp.className = 'text-lg font-bold tabular-nums text-emerald-600';
+        totalBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success';
+        totalBadge.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i> 達 100%';
+        totalRow.className = 'bg-emerald-50/50 border-t-2 border-emerald-200';
+        banner.classList.add('hidden');
+        btnSave.disabled = false;
+      } else {
+        totalDisp.className = 'text-lg font-bold tabular-nums text-warning';
+        totalBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-warning';
+        totalBadge.innerHTML = '<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> 需調整';
+        totalRow.className = 'bg-amber-50/50 border-t-2 border-amber-200';
+        document.getElementById('deptImbVal').textContent = total.toFixed(1);
+        banner.classList.remove('hidden');
+        btnSave.disabled = true;
+      }
+      lucide.createIcons();
+    }
+
+    function renderEmpl() {
+      const filter = document.getElementById('deptFilter').value;
+      const list = filter === 'ALL' ? emplGroups : emplGroups.filter(g => g.deptid_m === filter);
+      const container = document.getElementById('emplGroupContainer');
+      container.innerHTML = list.map(g => {
+        const total = g.members.reduce((s, m) => s + m.ration, 0);
+        const isOk = Math.abs(total - 100) < 0.01;
+        return `
+          <div class="px-4 py-4">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i data-lucide="building-2" class="w-4 h-4 text-gray-500"></i>
+                <span class="font-mono text-primary">${g.deptid_m}</span>
+                <span>${g.deptName}</span>
+                <span class="text-xs font-normal text-gray-400">${g.members.length} 人</span>
+              </h4>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500">部門加總</span>
+                <span class="text-sm font-bold tabular-nums ${isOk ? 'text-emerald-600' : 'text-warning'}">${total.toFixed(1)}%</span>
+                ${isOk ? '<i data-lucide="check-circle" class="w-4 h-4 text-success"></i>' : '<i data-lucide="alert-circle" class="w-4 h-4 text-warning"></i>'}
+              </div>
+            </div>
+            <div class="overflow-x-auto rounded-lg border border-border">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50/60 border-b border-border">
+                    <th class="text-left px-4 py-2 font-semibold text-gray-600">emplid</th>
+                    <th class="text-left px-4 py-2 font-semibold text-gray-600">姓名</th>
+                    <th class="text-left px-4 py-2 font-semibold text-gray-600">prod_type</th>
+                    <th class="text-right px-4 py-2 font-semibold text-gray-600">ration（%）</th>
+                    <th class="text-right px-4 py-2 font-semibold text-gray-600">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${g.members.map(m => `
+                    <tr class="border-b border-border last:border-b-0 ${m.ration === 0 ? 'bg-gray-50/40' : ''}">
+                      <td class="px-4 py-2 font-mono text-xs text-gray-700">${m.emplid}</td>
+                      <td class="px-4 py-2 text-gray-900">${m.emplName}${m.ration === 0 ? '<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] rounded bg-gray-200 text-gray-600">本月不分配</span>' : ''}</td>
+                      <td class="px-4 py-2 font-mono text-xs text-gray-500">${m.prod_type}</td>
+                      <td class="px-4 py-2 text-right">
+                        <input type="number" step="0.1" min="0" max="100" value="${m.ration.toFixed(1)}" class="w-20 px-2 py-1 text-sm border border-border rounded-md text-right font-mono">
+                      </td>
+                      <td class="px-4 py-2 text-right">
+                        <button class="p-1 text-gray-500 hover:text-danger hover:bg-red-50 rounded">
+                          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function onListNoChange() {
+      const sel = document.getElementById('listNoSelect');
+      const opt = sel.options[sel.selectedIndex].text;
+      document.getElementById('dispListNo').textContent = sel.value;
+      document.getElementById('listNmDisp').textContent = opt.split('—')[1].trim();
+    }
+
+    // ===== CR 開關 =====
+    function toggleCr() {
+      pendingCrState = !crEnabled;
+      const text = pendingCrState ? '啟用' : '停用';
+      document.getElementById('crConfirmText').innerHTML = `確定將 CR 回分規則切換至「<span class="font-semibold text-gray-800">${text}</span>」？此變更將影響下一次月跑的 Stage 3 部門分配邏輯。`;
+      document.getElementById('crConfirmModal').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCrModal() {
+      document.getElementById('crConfirmModal').classList.add('hidden');
+      document.body.style.overflow = '';
+      pendingCrState = null;
+    }
+
+    function confirmCrToggle() {
+      crEnabled = pendingCrState;
+      updateCrUI();
+      closeCrModal();
+    }
+
+    function updateCrUI() {
+      const tg = document.getElementById('crToggle');
+      const txt = document.getElementById('crStatusText');
+      const val = document.getElementById('crValue');
+      const updatedAt = document.getElementById('crUpdatedAt');
+      const updater = document.getElementById('crUpdater');
+      if (crEnabled) {
+        tg.classList.add('on');
+        txt.textContent = '已啟用';
+        txt.className = 'text-sm font-semibold text-success';
+        val.textContent = 'true';
+        val.className = 'text-xs font-mono text-emerald-700 font-semibold';
+      } else {
+        tg.classList.remove('on');
+        txt.textContent = '已停用';
+        txt.className = 'text-sm font-semibold text-gray-500';
+        val.textContent = 'false';
+        val.className = 'text-xs font-mono text-gray-500 font-semibold';
+      }
+      updatedAt.textContent = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      updater.textContent = '王小明';
+    }
+
+    // ===== Tab switch =====
+    function switchTab(name) {
+      ['dept','empl','cr'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('active', t === name);
+        document.getElementById('tab-' + t).classList.toggle('text-gray-500', t !== name);
+        document.getElementById('panel-' + t).classList.toggle('hidden', t !== name);
+      });
+    }
+
+    // ===== Role toggle =====
+    function setRole(role) {
+      const adminBtn = document.getElementById('role-admin');
+      const userBtn = document.getElementById('role-user');
+      if (role === 'admin') {
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // ===== Demo state =====
+    function showDemoState(state) {
+      ['normal','imbalanced','cr-disabled'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      if (state === 'normal') {
+        crEnabled = true;
+        updateCrUI();
+        switchTab('dept');
+        renderDept(false);
+      } else if (state === 'imbalanced') {
+        switchTab('dept');
+        renderDept(true);
+      } else if (state === 'cr-disabled') {
+        crEnabled = false;
+        updateCrUI();
+        switchTab('cr');
+      }
+    }
+
+    // ===== Init =====
+    renderDept(false);
+    renderEmpl();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>執行進度 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    @keyframes spin-soft { to { transform: rotate(360deg); } }
+    .spin-icon { animation: spin-soft 1.6s linear infinite; transform-origin: center; }
+    @keyframes pulse-bar { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+    .pulse-bar { animation: pulse-bar 1.4s ease-in-out infinite; }
+    .stage-step { transition: all 0.2s; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="percent" class="w-4 h-4"></i>比例設定</a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">執行進度</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('running')" id="demo-running" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">執行中</button>
+      <button onclick="showDemoState('completed')" id="demo-completed" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">已完成</button>
+      <button onclick="showDemoState('failed')" id="demo-failed" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">失敗</button>
+      <button onclick="showDemoState('pending')" id="demo-pending" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">待執行</button>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <!-- ===== Run Summary Card ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span id="runStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-100 text-primary">
+              <span class="w-1.5 h-1.5 rounded-full bg-primary pulse-bar"></span>
+              <span id="runStatusText">執行中</span>
+            </span>
+            <span class="text-xs text-gray-500">Run ID</span>
+            <span id="runId" class="font-mono text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">550e8400-e29b</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500 inline-flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+              Polling 3 秒自動更新
+            </span>
+            <button id="cancelBtn" onclick="openCancelModal()" class="hidden inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-danger border border-danger/30 rounded-md hover:bg-red-50 transition">
+              <i data-lucide="x-octagon" class="w-3.5 h-3.5"></i>
+              取消月跑
+            </button>
+          </div>
+        </div>
+        <div class="px-5 py-4 grid grid-cols-5 gap-4">
+          <div>
+            <div class="text-xs text-gray-500 mb-1">作業年月</div>
+            <div class="text-sm font-semibold text-gray-800 font-mono">202605</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">觸發者</div>
+            <div class="text-sm font-medium text-gray-800">王小明 <span class="text-xs text-gray-400">(sales_manager_01)</span></div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">觸發時間</div>
+            <div class="text-sm text-gray-700 font-mono">2026-05-09 12:00:05</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">已執行</div>
+            <div id="elapsedTime" class="text-sm font-semibold text-primary tabular-nums">04:32</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">總筆數</div>
+            <div id="totalCases" class="text-sm font-semibold text-gray-800 tabular-nums">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Top Banner（依狀態切換） ===== -->
+      <div id="completedBanner" class="hidden flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <i data-lucide="check-circle" class="w-5 h-5 text-success mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-success">執行完成（總耗時 30 分 12 秒，分派 9,500 筆）</p>
+          <p class="text-xs text-gray-600 mt-0.5">三份快照（config / input_list / result）已寫入。建議下一步：</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <a href="33-run-summary.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-white border border-primary/30 rounded-md hover:bg-blue-50 transition">
+              <i data-lucide="file-bar-chart" class="w-3.5 h-3.5"></i>
+              查看結果摘要
+            </a>
+            <a href="33-run-summary.html#export" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-white border border-primary/30 rounded-md hover:bg-blue-50 transition">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              匯出結果
+            </a>
+            <a href="35-snapshot-detail.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-white border border-primary/30 rounded-md hover:bg-blue-50 transition">
+              <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+              查看快照詳情
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div id="failedBanner" class="hidden flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <i data-lucide="x-circle" class="w-5 h-5 text-danger mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-danger">執行失敗於 Stage 3 部門分配</p>
+          <p class="text-xs text-gray-600 mt-1 font-mono bg-white border border-red-100 rounded p-2 leading-relaxed">
+            ASSIGNMENT_DEPT_RATIO_MISMATCH: 部門 D03 設定比例 25% 但實際可分配人員工作量已飽和（available_capacity = 0）。請先至「比例設定」調整 D03 部門比例或增加人員容量上限後重新觸發月跑。
+          </p>
+          <div class="mt-2 flex items-center gap-2">
+            <a href="31-trigger-run.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-danger rounded-md hover:bg-red-700 transition">
+              <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+              修正後重新觸發
+            </a>
+            <a href="29-ratio-config.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-border rounded-md hover:bg-gray-50 transition">
+              <i data-lucide="percent" class="w-3.5 h-3.5"></i>
+              前往比例設定
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div id="pendingBanner" class="hidden flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <i data-lucide="clock" class="w-5 h-5 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-primary">月跑已排入佇列，等待 Worker 開始執行</p>
+          <p class="text-xs text-gray-600 mt-0.5">通常於 30 秒內會進入 running 狀態。本頁將每 3 秒自動重新整理。</p>
+        </div>
+      </div>
+
+      <!-- ===== Stage 進度條 ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="git-fork" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-sm font-semibold text-gray-800">執行階段進度</h3>
+            <span class="text-xs text-gray-400">Stage 0 → Stage 4</span>
+          </div>
+          <div class="text-xs text-gray-500">
+            完成 <span id="stageProgress" class="font-semibold text-gray-700">2 / 5</span>
+          </div>
+        </div>
+
+        <!-- 橫向 stage 進度視覺 -->
+        <div class="px-5 py-5 border-b border-border bg-gray-50/40">
+          <div class="flex items-center">
+            <!-- Stage 0 -->
+            <div class="flex flex-col items-center" style="flex:0 0 auto;">
+              <div id="stepDot-0" class="step-dot w-9 h-9 rounded-full bg-success text-white flex items-center justify-center shadow-sm">
+                <i data-lucide="check" class="w-5 h-5"></i>
+              </div>
+              <div class="mt-2 text-xs font-medium text-gray-700">Stage 0</div>
+              <div class="text-[11px] text-gray-500">日比例試算</div>
+            </div>
+            <!-- 連線 -->
+            <div id="stepLine-0" class="step-line h-1 flex-1 mx-1 bg-success rounded"></div>
+            <!-- Stage 1 -->
+            <div class="flex flex-col items-center" style="flex:0 0 auto;">
+              <div id="stepDot-1" class="step-dot w-9 h-9 rounded-full bg-success text-white flex items-center justify-center shadow-sm">
+                <i data-lucide="check" class="w-5 h-5"></i>
+              </div>
+              <div class="mt-2 text-xs font-medium text-gray-700">Stage 1</div>
+              <div class="text-[11px] text-gray-500">案件池篩選</div>
+            </div>
+            <div id="stepLine-1" class="step-line h-1 flex-1 mx-1 bg-success rounded"></div>
+            <!-- Stage 2 -->
+            <div class="flex flex-col items-center" style="flex:0 0 auto;">
+              <div id="stepDot-2" class="step-dot w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center shadow-sm pulse-bar">
+                <i data-lucide="loader" class="w-5 h-5 spin-icon"></i>
+              </div>
+              <div class="mt-2 text-xs font-semibold text-primary">Stage 2</div>
+              <div class="text-[11px] text-gray-500">計分</div>
+            </div>
+            <div id="stepLine-2" class="step-line h-1 flex-1 mx-1 bg-gray-200 rounded"></div>
+            <!-- Stage 3 -->
+            <div class="flex flex-col items-center" style="flex:0 0 auto;">
+              <div id="stepDot-3" class="step-dot w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center">
+                <span class="text-xs font-bold">3</span>
+              </div>
+              <div class="mt-2 text-xs text-gray-500">Stage 3</div>
+              <div class="text-[11px] text-gray-400">部門分配</div>
+            </div>
+            <div id="stepLine-3" class="step-line h-1 flex-1 mx-1 bg-gray-200 rounded"></div>
+            <!-- Stage 4 -->
+            <div class="flex flex-col items-center" style="flex:0 0 auto;">
+              <div id="stepDot-4" class="step-dot w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center">
+                <span class="text-xs font-bold">4</span>
+              </div>
+              <div class="mt-2 text-xs text-gray-500">Stage 4</div>
+              <div class="text-[11px] text-gray-400">人員分配</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage 詳情 cards -->
+        <div id="stageList" class="divide-y divide-border"></div>
+      </div>
+
+      <!-- footer note -->
+      <div class="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">執行進度說明</p>
+          <p>F062 採前端 Polling（預設 3 秒，可由 ASSIGNMENT_PROGRESS_POLL_INTERVAL_MS 配置）。月跑進入 completed / failed 後自動停止輪詢。Stage 階段紀錄儲存於 assignment_run_stage_log（AD-E07-7）。Admin 可中止 running 狀態的月跑。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Cancel 確認 Modal ===== -->
+  <div id="cancelModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('cancelModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative transform transition-all">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="alert-triangle" class="w-6 h-6 text-danger"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">取消月跑執行？</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            Run <span class="font-mono text-gray-800">550e8400-e29b</span> 將被中止並標記為 cancelled。
+          </p>
+        </div>
+        <div class="px-6 pb-2">
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
+            <div class="flex items-start gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+              <div>
+                <p class="font-semibold text-warning mb-1">注意事項</p>
+                <ul class="list-disc list-inside space-y-0.5 text-gray-600">
+                  <li>已完成的 Stage 0 / Stage 1 將保留 stage_log 紀錄</li>
+                  <li>未完成的 Stage 不會寫入快照</li>
+                  <li>需重新觸發新的月跑（產生新 run_id）</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="closeModal('cancelModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">繼續執行</button>
+          <button onclick="closeModal('cancelModal')" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-lg hover:bg-red-700 transition shadow-sm">確認取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Mock Data: 5 Stages =====
+    const stagesByState = {
+      running: [
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
+        { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'completed', startedAt: '2026-05-09 12:00:08', finishedAt: '2026-05-09 12:01:42', processed: 50000, unit: '筆', err: null },
+        { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'running', startedAt: '2026-05-09 12:01:42', finishedAt: null, processed: 28400, unit: '/ 50,000 筆', err: null, percent: 57 },
+        { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+        { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+      ],
+      completed: [
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
+        { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'completed', startedAt: '2026-05-09 12:00:08', finishedAt: '2026-05-09 12:01:42', processed: 50000, unit: '筆', err: null },
+        { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'completed', startedAt: '2026-05-09 12:01:42', finishedAt: '2026-05-09 12:08:15', processed: 50000, unit: '筆', err: null },
+        { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'completed', startedAt: '2026-05-09 12:08:15', finishedAt: '2026-05-09 12:18:40', processed: 9500, unit: '筆', err: null },
+        { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'completed', startedAt: '2026-05-09 12:18:40', finishedAt: '2026-05-09 12:30:17', processed: 9500, unit: '筆', err: null },
+      ],
+      failed: [
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
+        { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'completed', startedAt: '2026-05-09 12:00:08', finishedAt: '2026-05-09 12:01:42', processed: 50000, unit: '筆', err: null },
+        { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'completed', startedAt: '2026-05-09 12:01:42', finishedAt: '2026-05-09 12:08:15', processed: 50000, unit: '筆', err: null },
+        { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'failed', startedAt: '2026-05-09 12:08:15', finishedAt: '2026-05-09 12:08:42', processed: 1820, unit: '/ 9,500 筆', err: 'ASSIGNMENT_DEPT_RATIO_MISMATCH: 部門 D03 設定比例 25% 但實際可分配人員工作量已飽和（available_capacity = 0）' },
+        { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'skipped', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+      ],
+      pending: [
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+        { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+        { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+        { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+        { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+      ],
+    };
+
+    function statusIcon(s) {
+      if (s === 'completed') return `<div class="w-7 h-7 rounded-full bg-green-100 text-success flex items-center justify-center shrink-0"><i data-lucide="check" class="w-4 h-4"></i></div>`;
+      if (s === 'running')   return `<div class="w-7 h-7 rounded-full bg-blue-100 text-primary flex items-center justify-center shrink-0"><i data-lucide="loader" class="w-4 h-4 spin-icon"></i></div>`;
+      if (s === 'failed')    return `<div class="w-7 h-7 rounded-full bg-red-100 text-danger flex items-center justify-center shrink-0"><i data-lucide="x" class="w-4 h-4"></i></div>`;
+      if (s === 'skipped')   return `<div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center shrink-0"><i data-lucide="minus" class="w-4 h-4"></i></div>`;
+      return `<div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center shrink-0"><i data-lucide="circle" class="w-4 h-4"></i></div>`;
+    }
+
+    function statusBadge(s) {
+      const map = {
+        completed: 'bg-green-100 text-success',
+        running: 'bg-blue-100 text-primary',
+        failed: 'bg-red-100 text-danger',
+        skipped: 'bg-gray-100 text-gray-500',
+        pending: 'bg-gray-100 text-gray-500',
+      };
+      const label = { completed: '完成', running: '執行中', failed: '失敗', skipped: '略過', pending: '待執行' }[s] || s;
+      return `<span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${map[s]}">${label}</span>`;
+    }
+
+    function renderStageList(stages) {
+      const html = stages.map(st => {
+        const elapsed = (st.startedAt && st.finishedAt) ? calcElapsed(st.startedAt, st.finishedAt) : (st.startedAt ? '進行中' : '—');
+        const processed = st.processed === null ? '—' : `${st.processed.toLocaleString()} ${st.unit}`;
+        const progressBar = st.status === 'running' && st.percent
+          ? `<div class="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+               <div class="h-full bg-primary pulse-bar" style="width:${st.percent}%"></div>
+             </div>
+             <div class="text-[11px] text-gray-500 mt-1">${st.percent}% 完成（預估剩餘 4 分 30 秒）</div>`
+          : '';
+        const errorBox = st.err
+          ? `<div class="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-md text-xs text-gray-700 leading-relaxed">
+               <i data-lucide="alert-circle" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+               <div>
+                 <p class="font-semibold text-danger mb-1">錯誤訊息</p>
+                 <p class="font-mono break-all">${st.err}</p>
+               </div>
+             </div>`
+          : '';
+        return `
+          <div class="px-5 py-4 hover:bg-gray-50/40 transition">
+            <div class="flex items-start gap-3">
+              ${statusIcon(st.status)}
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-semibold text-gray-800">${st.name}</span>
+                  ${statusBadge(st.status)}
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">${st.desc}</p>
+                <div class="mt-2 grid grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <div class="text-gray-400 mb-0.5">started_at</div>
+                    <div class="font-mono text-gray-700">${st.startedAt || '—'}</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 mb-0.5">finished_at</div>
+                    <div class="font-mono text-gray-700">${st.finishedAt || '—'}</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 mb-0.5">耗時</div>
+                    <div class="font-mono text-gray-700">${elapsed}</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 mb-0.5">processed_count</div>
+                    <div class="font-mono text-gray-700 tabular-nums">${processed}</div>
+                  </div>
+                </div>
+                ${progressBar}
+                ${errorBox}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('stageList').innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function calcElapsed(s, e) {
+      const ms = new Date(e.replace(' ', 'T')) - new Date(s.replace(' ', 'T'));
+      const sec = Math.floor(ms / 1000);
+      const m = Math.floor(sec / 60), ss = sec % 60;
+      return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    }
+
+    // ===== Stage step dots & lines update =====
+    function updateStepVisual(stages) {
+      stages.forEach(st => {
+        const dot = document.getElementById('stepDot-' + st.id);
+        const line = document.getElementById('stepLine-' + st.id); // 0..3
+        if (!dot) return;
+        if (st.status === 'completed') {
+          dot.className = 'step-dot w-9 h-9 rounded-full bg-success text-white flex items-center justify-center shadow-sm';
+          dot.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i>';
+        } else if (st.status === 'running') {
+          dot.className = 'step-dot w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center shadow-sm pulse-bar';
+          dot.innerHTML = '<i data-lucide="loader" class="w-5 h-5 spin-icon"></i>';
+        } else if (st.status === 'failed') {
+          dot.className = 'step-dot w-9 h-9 rounded-full bg-danger text-white flex items-center justify-center shadow-sm';
+          dot.innerHTML = '<i data-lucide="x" class="w-5 h-5"></i>';
+        } else if (st.status === 'skipped') {
+          dot.className = 'step-dot w-9 h-9 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center';
+          dot.innerHTML = '<i data-lucide="minus" class="w-5 h-5"></i>';
+        } else {
+          dot.className = 'step-dot w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center';
+          dot.innerHTML = `<span class="text-xs font-bold">${st.id}</span>`;
+        }
+        if (line) {
+          if (st.status === 'completed') line.className = 'step-line h-1 flex-1 mx-1 bg-success rounded';
+          else if (st.status === 'running') line.className = 'step-line h-1 flex-1 mx-1 bg-primary rounded pulse-bar';
+          else if (st.status === 'failed') line.className = 'step-line h-1 flex-1 mx-1 bg-danger rounded';
+          else line.className = 'step-line h-1 flex-1 mx-1 bg-gray-200 rounded';
+        }
+      });
+      lucide.createIcons();
+    }
+
+    // ===== Demo state =====
+    function showDemoState(state) {
+      ['running','completed','failed','pending'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      const stages = stagesByState[state];
+      renderStageList(stages);
+      updateStepVisual(stages);
+
+      // banner
+      ['completedBanner','failedBanner','pendingBanner'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      if (state === 'completed') document.getElementById('completedBanner').classList.remove('hidden');
+      if (state === 'failed') document.getElementById('failedBanner').classList.remove('hidden');
+      if (state === 'pending') document.getElementById('pendingBanner').classList.remove('hidden');
+
+      // status badge
+      const badge = document.getElementById('runStatusBadge');
+      const text = document.getElementById('runStatusText');
+      if (state === 'running') {
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-100 text-primary';
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-primary pulse-bar"></span><span id="runStatusText">執行中</span>`;
+      } else if (state === 'completed') {
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-success';
+        badge.innerHTML = `<i data-lucide="check-circle" class="w-3.5 h-3.5"></i><span>已完成</span>`;
+      } else if (state === 'failed') {
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-danger';
+        badge.innerHTML = `<i data-lucide="x-circle" class="w-3.5 h-3.5"></i><span>失敗</span>`;
+      } else if (state === 'pending') {
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-500';
+        badge.innerHTML = `<i data-lucide="clock" class="w-3.5 h-3.5"></i><span>待執行</span>`;
+      }
+      lucide.createIcons();
+
+      // elapsed / total / progress
+      const elapsedMap = { running: '04:32', completed: '30:12', failed: '08:42', pending: '00:00' };
+      const totalMap   = { running: '— (進行中)', completed: '9,500', failed: '— (失敗中止)', pending: '—' };
+      const progMap    = { running: '2 / 5', completed: '5 / 5', failed: '3 / 5 (1 失敗)', pending: '0 / 5' };
+      document.getElementById('elapsedTime').textContent = elapsedMap[state];
+      document.getElementById('totalCases').textContent = totalMap[state];
+      document.getElementById('stageProgress').textContent = progMap[state];
+
+      // Cancel btn 僅 running 顯示
+      const cb = document.getElementById('cancelBtn');
+      if (state === 'running') cb.classList.remove('hidden');
+      else cb.classList.add('hidden');
+    }
+
+    function setRole(role) {
+      const a = document.getElementById('role-admin'), u = document.getElementById('role-user');
+      if (role === 'admin') {
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    function openCancelModal() { document.getElementById('cancelModal').classList.remove('hidden'); document.body.style.overflow='hidden'; }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.body.style.overflow=''; }
+
+    // init
+    showDemoState('running');
+    lucide.createIcons();
+  </script>
+</body>
+</html>

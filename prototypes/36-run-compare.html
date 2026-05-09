@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>結果比對 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .bar-track { background: #F3F4F6; height: 12px; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; }
+    /* diff color rules */
+    .diff-a-only { background: #FEE2E2; color: #B91C1C; }
+    .diff-b-only { background: #EDE9FE; color: #6D28D9; }
+    .diff-a-more { background: #DBEAFE; color: #1D4ED8; }
+    .diff-b-more { background: #DCFCE7; color: #166534; }
+    .pulse-soft { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.7;} }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="percent" class="w-4 h-4"></i>比例設定</a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">結果比對</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('identical')" id="demo-identical" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">100% 相同</button>
+      <button onclick="showDemoState('partial-diff')" id="demo-partial-diff" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">少量差異</button>
+      <button onclick="showDemoState('algorithm-changed')" id="demo-algorithm-changed" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">演算法變更</button>
+      <span class="ml-3 text-xs text-gray-400">|</span>
+      <span class="text-xs text-warning inline-flex items-center gap-1 font-medium">
+        <i data-lucide="shield-alert" class="w-3 h-3"></i>
+        F067 為 NFR-005 主驗收工具
+      </span>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <!-- ===== Run Selector ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="git-compare" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">選擇要比對的兩次月跑</h3>
+        </div>
+        <div class="grid grid-cols-2 gap-0 divide-x divide-border">
+          <!-- Run A (Base) -->
+          <div class="px-5 py-4 bg-blue-50/30">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-primary text-white">A</span>
+              <span class="text-sm font-semibold text-primary">Base Run</span>
+            </div>
+            <select id="selA" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option value="7a1b2c3d-4e5f">7a1b2c3d-4e5f — 2026-04 月跑（9,120 筆）</option>
+              <option value="ad4e5f6a-7b8c">ad4e5f6a-7b8c — 2026-03 月跑（8,780 筆）</option>
+              <option value="cf6a7b8c-9d0e">cf6a7b8c-9d0e — 2026-02 月跑（8,420 筆）</option>
+            </select>
+            <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div><span class="text-gray-500">作業年月</span><div class="font-mono font-semibold text-gray-700">202604</div></div>
+              <div><span class="text-gray-500">總筆數</span><div class="font-mono font-semibold text-gray-700 tabular-nums">9,120</div></div>
+              <div><span class="text-gray-500">完成時間</span><div class="font-mono text-gray-700">04-24 11:02</div></div>
+            </div>
+          </div>
+          <!-- Run B (Compare) -->
+          <div class="px-5 py-4 bg-green-50/30">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-success text-white">B</span>
+              <span class="text-sm font-semibold text-success">Compare Run</span>
+            </div>
+            <select id="selB" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option value="550e8400-e29b">550e8400-e29b — 2026-05 月跑（9,500 筆）</option>
+              <option value="7a1b2c3d-4e5f">7a1b2c3d-4e5f — 2026-04 月跑（9,120 筆）</option>
+              <option value="ad4e5f6a-7b8c">ad4e5f6a-7b8c — 2026-03 月跑（8,780 筆）</option>
+            </select>
+            <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div><span class="text-gray-500">作業年月</span><div class="font-mono font-semibold text-gray-700">202605</div></div>
+              <div><span class="text-gray-500">總筆數</span><div class="font-mono font-semibold text-gray-700 tabular-nums">9,500</div></div>
+              <div><span class="text-gray-500">完成時間</span><div class="font-mono text-gray-700">05-09 12:30</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="px-5 py-3 border-t border-border bg-gray-50/40 flex items-center justify-between">
+          <div class="text-xs text-gray-500 inline-flex items-center gap-1">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+            僅 status = completed 的月跑可比對；同月比對通常用於重跑調參情境
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-white transition">
+              <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
+              交換 A / B
+            </button>
+            <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition shadow-sm">
+              <i data-lucide="search" class="w-3.5 h-3.5"></i>
+              重新比對
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 演算法警示橫幅 (algorithm-changed only) ===== -->
+      <div id="algoBanner" class="hidden flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <i data-lucide="alert-octagon" class="w-5 h-5 text-danger mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-danger">演算法版本變更：人員配對不一致率 12.4% （&gt; NFR-005 警示閾值 3%）</p>
+          <p class="text-xs text-gray-600 mt-1">card_version: 2 → 3，此次變更影響大量案件分派結果。建議檢視設定差異區塊與下載不一致案件清單。</p>
+        </div>
+      </div>
+
+      <!-- ===== Identical 提示 ===== -->
+      <div id="identicalBanner" class="hidden flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <i data-lucide="check-circle" class="w-5 h-5 text-success mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-success">兩次月跑配對 100% 相同 — 分派演算法 deterministic 驗證通過</p>
+          <p class="text-xs text-gray-600 mt-1">人員配對不一致率 0.00%（NFR-005 通過）。此結果代表演算法在相同輸入與設定下能產生穩定可重現的結果。</p>
+        </div>
+      </div>
+
+      <!-- ===== Section 1: Summary 比對 ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="bar-chart-2" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">Summary 比對</h3>
+          <span class="text-xs text-gray-400">總筆數 / 部門數 / 失敗 case</span>
+        </div>
+        <div id="summarySection" class="grid grid-cols-3 gap-0 divide-x divide-border">
+          <!-- Stat cards 由 JS 渲染 -->
+        </div>
+      </div>
+
+      <!-- ===== Section 2: 人員配對一致性 (NFR-005 主驗收區) ===== -->
+      <div class="bg-white rounded-lg border-2 shadow-sm" id="mismatchSection" style="border-color: #FCD34D;">
+        <div class="px-5 py-4 border-b border-border flex items-center justify-between bg-amber-50/50">
+          <div class="flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-warning"></i>
+            <h3 class="text-sm font-semibold text-gray-800">人員配對一致性 diff</h3>
+            <span class="text-xs px-1.5 py-0.5 bg-warning text-white rounded-full font-bold">NFR-005</span>
+          </div>
+          <button id="downloadMismatch" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            下載不一致案件清單
+          </button>
+        </div>
+        <div class="px-5 py-5">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div>
+              <div class="text-xs text-gray-500 mb-1">同批次總案件數</div>
+              <div id="mismatchTotal" class="text-2xl font-bold text-gray-800 tabular-nums">9,000</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-500 mb-1">不一致案件數</div>
+              <div id="mismatchCount" class="text-2xl font-bold text-gray-800 tabular-nums">200</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-500 mb-1">人員配對不一致率</div>
+              <div id="mismatchRate" class="text-2xl font-bold tabular-nums text-success">2.22%</div>
+              <div id="mismatchRateBar" class="mt-1.5 bar-track">
+                <div id="mismatchRateFill" class="bar-fill bg-success" style="width: 22%"></div>
+              </div>
+              <div class="text-[10px] text-gray-400 mt-0.5">NFR-005 警示門檻 3.00%</div>
+            </div>
+          </div>
+
+          <!-- 配對差異 table -->
+          <div class="border border-border rounded-lg overflow-hidden">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-gray-50/60">
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600">appl_no</th>
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600">orgno</th>
+                  <th class="text-left px-3 py-2 font-semibold text-primary">A: 業務員</th>
+                  <th class="text-center px-3 py-2 text-gray-300">→</th>
+                  <th class="text-left px-3 py-2 font-semibold text-success">B: 業務員</th>
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600">差異原因</th>
+                </tr>
+              </thead>
+              <tbody id="mismatchTbody" class="divide-y divide-border font-mono"></tbody>
+            </table>
+            <div class="px-3 py-2 border-t border-border text-xs text-gray-500 bg-gray-50/40">
+              顯示前 10 筆 — 完整 <span id="mismatchTotal2">200</span> 筆請下載 Excel 清單
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Section 3: 部門偏差比對 ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="building-2" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">部門分配比對</h3>
+          <span class="text-xs text-gray-400">A vs B 各部門實際比例</span>
+        </div>
+        <div class="px-5 py-5">
+          <div id="deptCompare" class="space-y-4"></div>
+        </div>
+      </div>
+
+      <!-- ===== Section 4: 等級分佈比對（並排）===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">TIER_LEVEL 分佈比對</h3>
+        </div>
+        <div class="px-5 py-5 grid grid-cols-2 gap-6">
+          <div>
+            <div class="text-xs font-semibold text-primary mb-3 inline-flex items-center gap-1">
+              <span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-primary text-white">A</span>
+              Base Run — 2026-04（9,120 筆）
+            </div>
+            <div id="tierA" class="space-y-2"></div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-success mb-3 inline-flex items-center gap-1">
+              <span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-success text-white">B</span>
+              Compare Run — 2026-05（9,500 筆）
+            </div>
+            <div id="tierB" class="space-y-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Section 5: 設定差異 ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">設定差異（config 快照 diff）</h3>
+        </div>
+        <div id="configDiff" class="divide-y divide-border"></div>
+      </div>
+
+      <!-- ===== Section 6: 客戶層級 diff ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-4 h-4 text-primary"></i>
+          <h3 class="text-sm font-semibold text-gray-800">客戶層級差異（集合運算）</h3>
+        </div>
+        <div class="px-5 py-5 grid grid-cols-2 gap-4">
+          <div class="border border-red-200 rounded-lg overflow-hidden">
+            <div class="px-3 py-2 bg-red-50 border-b border-red-200 flex items-center justify-between">
+              <span class="text-sm font-semibold text-danger inline-flex items-center gap-1">
+                <i data-lucide="user-minus" class="w-4 h-4"></i>
+                僅在 A — 已移除
+              </span>
+              <span id="removedCount" class="text-xs font-mono font-semibold text-danger">230 筆</span>
+            </div>
+            <div id="removedList" class="divide-y divide-border max-h-48 overflow-y-auto"></div>
+          </div>
+          <div class="border border-purple-200 rounded-lg overflow-hidden">
+            <div class="px-3 py-2 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
+              <span class="text-sm font-semibold text-purple-700 inline-flex items-center gap-1">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                僅在 B — 新增
+              </span>
+              <span id="addedCount" class="text-xs font-mono font-semibold text-purple-700">610 筆</span>
+            </div>
+            <div id="addedList" class="divide-y divide-border max-h-48 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="flex items-start gap-2 p-3 bg-amber-50/50 border border-amber-100 rounded-lg text-xs text-gray-700">
+        <i data-lucide="shield-alert" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-warning mb-0.5">F067 為 NFR-005 主驗收工具</p>
+          <p>「兩次配對相同」表示分派演算法 deterministic — 在相同輸入與設定下產生穩定可重現的結果。配對不一致率 &gt; 3% 觸發紅色警示，提示演算法可能存在隨機性或設定變動。比對為唯讀計算（讀兩份 result 快照 + 兩份 config 快照），不寫入資料庫。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+    <i data-lucide="check-circle" class="w-4 h-4 text-success"></i>
+    <span id="toastMsg">已下載清單</span>
+  </div>
+
+  <script>
+    // ===== Mock Data =====
+    const datasets = {
+      identical: {
+        summary: [
+          { label: '總分派筆數', a: 9120, b: 9120, diff: 0, sub: '無變動' },
+          { label: '部門數', a: 5, b: 5, diff: 0, sub: '相同' },
+          { label: '失敗 case 數', a: 0, b: 0, diff: 0, sub: '無失敗' },
+        ],
+        mismatchTotal: 9120, mismatchCount: 0, mismatchRate: 0.0,
+        mismatchList: [],
+        deptData: [
+          { id: 'D01', name: '業務一部', a: 30.5, b: 30.5 },
+          { id: 'D02', name: '業務二部', a: 25.0, b: 25.0 },
+          { id: 'D03', name: '業務三部', a: 19.8, b: 19.8 },
+          { id: 'D04', name: '車貸專案部', a: 15.0, b: 15.0 },
+          { id: 'D05', name: '機車專案部', a: 9.7, b: 9.7 },
+        ],
+        tierA: [
+          { tier: 'T1', count: 1820 }, { tier: 'T2', count: 2050 }, { tier: 'T3', count: 1580 },
+          { tier: 'T32', count: 950 }, { tier: 'T4', count: 1380 }, { tier: 'T51', count: 720 },
+          { tier: 'T52', count: 540 }, { tier: 'T1M', count: 80 },
+        ],
+        tierB: [
+          { tier: 'T1', count: 1820 }, { tier: 'T2', count: 2050 }, { tier: 'T3', count: 1580 },
+          { tier: 'T32', count: 950 }, { tier: 'T4', count: 1380 }, { tier: 'T51', count: 720 },
+          { tier: 'T52', count: 540 }, { tier: 'T1M', count: 80 },
+        ],
+        configDiff: [
+          { label: 'card_version', a: 3, b: 3, same: true },
+          { label: 'cr_rule_enabled', a: true, b: true, same: true },
+          { label: 'daily_quota_max', a: 350, b: 350, same: true },
+          { label: 'OB202604001 D01 比例', a: '30.0%', b: '30.0%', same: true },
+        ],
+        added: [], removed: [],
+        algoBanner: false, identicalBanner: true,
+      },
+      'partial-diff': {
+        summary: [
+          { label: '總分派筆數', a: 9120, b: 9500, diff: 380, sub: 'B 較多 380 筆' },
+          { label: '部門數', a: 5, b: 5, diff: 0, sub: '相同' },
+          { label: '失敗 case 數', a: 0, b: 0, diff: 0, sub: '無失敗' },
+        ],
+        mismatchTotal: 9000, mismatchCount: 200, mismatchRate: 2.22,
+        mismatchList: [
+          { applNo: 'APPL000031', orgno: '9001234601', a: 'EMP001 王大明', b: 'EMP002 林志強', reason: 'cr_rule 觸發回分' },
+          { applNo: 'APPL000058', orgno: '9001234628', a: 'EMP015 陳美華', b: 'EMP018 張志豪', reason: '部門容量飽和' },
+          { applNo: 'APPL000142', orgno: '9001234712', a: 'EMP034 黃雅婷', b: 'EMP041 吳建宏', reason: '計分變動 → 換等級' },
+          { applNo: 'APPL000256', orgno: '9001234826', a: 'EMP058 林佳玲', b: 'EMP063 王美芳', reason: '人員 quota 已滿' },
+          { applNo: 'APPL000389', orgno: '9001234959', a: 'EMP102 蔡明宇', b: 'EMP108 周淑芬', reason: '機車部專案調整' },
+          { applNo: 'APPL000412', orgno: '9001234982', a: 'EMP024 李文豪', b: 'EMP028 鄭怡君', reason: 'cr_rule 觸發回分' },
+          { applNo: 'APPL000528', orgno: '9001235098', a: 'EMP037 黃文成', b: 'EMP045 林雅惠', reason: '計分變動 → 換等級' },
+          { applNo: 'APPL000641', orgno: '9001235211', a: 'EMP019 陳雅芳', b: 'EMP021 楊志明', reason: '部門容量飽和' },
+          { applNo: 'APPL000758', orgno: '9001235328', a: 'EMP063 王美芳', b: 'EMP058 林佳玲', reason: '人員交叉分配' },
+          { applNo: 'APPL000882', orgno: '9001235452', a: 'EMP005 林大偉', b: 'EMP008 張小玲', reason: '計分變動 → 換等級' },
+        ],
+        deptData: [
+          { id: 'D01', name: '業務一部', a: 30.5, b: 30.5 },
+          { id: 'D02', name: '業務二部', a: 25.0, b: 25.0 },
+          { id: 'D03', name: '業務三部', a: 19.8, b: 20.2 },
+          { id: 'D04', name: '車貸專案部', a: 15.0, b: 15.4 },
+          { id: 'D05', name: '機車專案部', a: 9.7, b: 8.9 },
+        ],
+        tierA: [
+          { tier: 'T1', count: 1820 }, { tier: 'T2', count: 2050 }, { tier: 'T3', count: 1580 },
+          { tier: 'T32', count: 950 }, { tier: 'T4', count: 1380 }, { tier: 'T51', count: 720 },
+          { tier: 'T52', count: 540 }, { tier: 'T1M', count: 80 },
+        ],
+        tierB: [
+          { tier: 'T1', count: 1850 }, { tier: 'T2', count: 2100 }, { tier: 'T3', count: 1620 },
+          { tier: 'T32', count: 980 }, { tier: 'T4', count: 1400 }, { tier: 'T51', count: 720 },
+          { tier: 'T52', count: 540 }, { tier: 'T1M', count: 290 },
+        ],
+        configDiff: [
+          { label: 'card_version', a: 3, b: 3, same: true },
+          { label: 'cr_rule_enabled', a: false, b: true, same: false },
+          { label: 'daily_quota_max', a: 350, b: 380, same: false },
+          { label: 'OB202604001 D01 比例', a: '30.0%', b: '32.0%', same: false, deptDiff: true },
+        ],
+        added: [
+          { custoNo: 'C00231', custName: '陳俊宏' }, { custoNo: 'C00352', custName: '林秀玲' },
+          { custoNo: 'C00478', custName: '王大華' }, { custoNo: 'C00591', custName: '黃文成' },
+          { custoNo: 'C00614', custName: '李怡君' }, { custoNo: 'C00723', custName: '張志強' },
+          { custoNo: 'C00845', custName: '蔡淑芬' },
+        ],
+        removed: [
+          { custoNo: 'C00102', custName: '吳明達' }, { custoNo: 'C00198', custName: '楊雅惠' },
+          { custoNo: 'C00276', custName: '周建宏' }, { custoNo: 'C00318', custName: '鄭文豪' },
+        ],
+        algoBanner: false, identicalBanner: false,
+      },
+      'algorithm-changed': {
+        summary: [
+          { label: '總分派筆數', a: 9120, b: 9420, diff: 300, sub: 'B 較多 300 筆' },
+          { label: '部門數', a: 5, b: 5, diff: 0, sub: '相同' },
+          { label: '失敗 case 數', a: 0, b: 0, diff: 0, sub: '無失敗' },
+        ],
+        mismatchTotal: 9000, mismatchCount: 1116, mismatchRate: 12.4,
+        mismatchList: [
+          { applNo: 'APPL000005', orgno: '9001234567', a: 'EMP001 王大明', b: 'EMP015 陳美華', reason: 'card_version 變更' },
+          { applNo: 'APPL000017', orgno: '9001234579', a: 'EMP002 林志強', b: 'EMP034 黃雅婷', reason: 'card_version 變更' },
+          { applNo: 'APPL000032', orgno: '9001234594', a: 'EMP008 張小玲', b: 'EMP058 林佳玲', reason: 'D03 比例調升' },
+          { applNo: 'APPL000048', orgno: '9001234610', a: 'EMP015 陳美華', b: 'EMP063 王美芳', reason: 'card_version 變更' },
+          { applNo: 'APPL000073', orgno: '9001234635', a: 'EMP024 李文豪', b: 'EMP102 蔡明宇', reason: 'D05 比例調降' },
+          { applNo: 'APPL000091', orgno: '9001234653', a: 'EMP037 黃文成', b: 'EMP019 陳雅芳', reason: 'card_version 變更' },
+          { applNo: 'APPL000115', orgno: '9001234677', a: 'EMP041 吳建宏', b: 'EMP028 鄭怡君', reason: 'tier_level 重算' },
+          { applNo: 'APPL000142', orgno: '9001234704', a: 'EMP058 林佳玲', b: 'EMP005 林大偉', reason: 'card_version 變更' },
+          { applNo: 'APPL000168', orgno: '9001234730', a: 'EMP063 王美芳', b: 'EMP021 楊志明', reason: 'tier_level 重算' },
+          { applNo: 'APPL000201', orgno: '9001234763', a: 'EMP102 蔡明宇', b: 'EMP108 周淑芬', reason: 'card_version 變更' },
+        ],
+        deptData: [
+          { id: 'D01', name: '業務一部', a: 30.5, b: 35.2 },
+          { id: 'D02', name: '業務二部', a: 25.0, b: 19.4 },
+          { id: 'D03', name: '業務三部', a: 19.8, b: 24.5 },
+          { id: 'D04', name: '車貸專案部', a: 15.0, b: 16.2 },
+          { id: 'D05', name: '機車專案部', a: 9.7, b: 4.7 },
+        ],
+        tierA: [
+          { tier: 'T1', count: 1820 }, { tier: 'T2', count: 2050 }, { tier: 'T3', count: 1580 },
+          { tier: 'T32', count: 950 }, { tier: 'T4', count: 1380 }, { tier: 'T51', count: 720 },
+          { tier: 'T52', count: 540 }, { tier: 'T1M', count: 80 },
+        ],
+        tierB: [
+          { tier: 'T1', count: 540 }, { tier: 'T2', count: 720 }, { tier: 'T3', count: 880 },
+          { tier: 'T32', count: 980 }, { tier: 'T4', count: 1100 }, { tier: 'T51', count: 2400 },
+          { tier: 'T52', count: 2150 }, { tier: 'T1M', count: 650 },
+        ],
+        configDiff: [
+          { label: 'card_version', a: 2, b: 3, same: false, critical: true },
+          { label: 'cr_rule_enabled', a: false, b: true, same: false },
+          { label: 'daily_quota_max', a: 350, b: 380, same: false },
+          { label: 'OB202604001 D01 比例', a: '30.0%', b: '35.0%', same: false, deptDiff: true },
+          { label: 'OB202604001 D03 比例', a: '20.0%', b: '25.0%', same: false, deptDiff: true },
+          { label: 'OB202604001 D05 比例', a: '10.0%', b: '5.0%', same: false, deptDiff: true },
+        ],
+        added: [
+          { custoNo: 'C01024', custName: '陳建華' }, { custoNo: 'C01156', custName: '林雅惠' },
+          { custoNo: 'C01278', custName: '黃文豪' }, { custoNo: 'C01392', custName: '王美玲' },
+          { custoNo: 'C01445', custName: '李志強' }, { custoNo: 'C01568', custName: '張俊宏' },
+          { custoNo: 'C01672', custName: '吳秀芬' }, { custoNo: 'C01789', custName: '楊大偉' },
+        ],
+        removed: [
+          { custoNo: 'C00012', custName: '蔡明達' }, { custoNo: 'C00078', custName: '周建宏' },
+          { custoNo: 'C00125', custName: '鄭怡君' }, { custoNo: 'C00198', custName: '林秀玲' },
+          { custoNo: 'C00256', custName: '王大華' }, { custoNo: 'C00318', custName: '黃文成' },
+        ],
+        algoBanner: true, identicalBanner: false,
+      },
+    };
+
+    function renderSummary(data) {
+      const html = data.summary.map(s => {
+        const diffClass = s.diff > 0 ? 'text-success' : s.diff < 0 ? 'text-danger' : 'text-gray-400';
+        const diffSign = s.diff > 0 ? '+' : '';
+        return `
+          <div class="px-5 py-4">
+            <div class="text-xs text-gray-500 mb-2">${s.label}</div>
+            <div class="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <div class="text-[10px] font-bold text-primary mb-0.5">A (Base)</div>
+                <div class="text-2xl font-bold text-gray-800 tabular-nums">${typeof s.a==='number'?s.a.toLocaleString():s.a}</div>
+              </div>
+              <div>
+                <div class="text-[10px] font-bold text-success mb-0.5">B (Compare)</div>
+                <div class="text-2xl font-bold text-gray-800 tabular-nums">${typeof s.b==='number'?s.b.toLocaleString():s.b}</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-500">差異</span>
+              <span class="font-mono font-semibold ${diffClass}">${diffSign}${s.diff} <span class="text-gray-400">(${s.sub})</span></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('summarySection').innerHTML = html;
+    }
+
+    function renderMismatch(data) {
+      document.getElementById('mismatchTotal').textContent = data.mismatchTotal.toLocaleString();
+      document.getElementById('mismatchCount').textContent = data.mismatchCount.toLocaleString();
+      document.getElementById('mismatchTotal2').textContent = data.mismatchCount.toLocaleString();
+      const rate = data.mismatchRate;
+      const rateEl = document.getElementById('mismatchRate');
+      rateEl.textContent = rate.toFixed(2) + '%';
+      const rateFill = document.getElementById('mismatchRateFill');
+      const ms = document.getElementById('mismatchSection');
+
+      if (rate > 3) {
+        rateEl.className = 'text-2xl font-bold tabular-nums text-danger pulse-soft';
+        rateFill.className = 'bar-fill bg-danger pulse-soft';
+        ms.style.borderColor = '#FCA5A5';
+      } else if (rate > 1) {
+        rateEl.className = 'text-2xl font-bold tabular-nums text-warning';
+        rateFill.className = 'bar-fill bg-warning';
+        ms.style.borderColor = '#FCD34D';
+      } else {
+        rateEl.className = 'text-2xl font-bold tabular-nums text-success';
+        rateFill.className = 'bar-fill bg-success';
+        ms.style.borderColor = '#86EFAC';
+      }
+      const w = Math.min(100, (rate / 5) * 100);
+      rateFill.style.width = Math.max(2, w) + '%';
+
+      const tbody = document.getElementById('mismatchTbody');
+      if (data.mismatchList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-3 py-6 text-center text-success text-sm">
+          <i data-lucide="check-circle" class="inline-block w-4 h-4 mr-1"></i>
+          兩次月跑配對 100% 相同 — 演算法 deterministic 驗證通過
+        </td></tr>`;
+      } else {
+        tbody.innerHTML = data.mismatchList.map(m => `
+          <tr class="hover:bg-amber-50/30 transition">
+            <td class="px-3 py-2 font-semibold text-gray-700">${m.applNo}</td>
+            <td class="px-3 py-2 text-gray-600">${m.orgno}</td>
+            <td class="px-3 py-2"><span class="diff-a-only px-2 py-0.5 rounded">${m.a}</span></td>
+            <td class="px-3 py-2 text-center text-gray-300">→</td>
+            <td class="px-3 py-2"><span class="diff-b-only px-2 py-0.5 rounded">${m.b}</span></td>
+            <td class="px-3 py-2 text-xs text-gray-500">${m.reason}</td>
+          </tr>
+        `).join('');
+      }
+      lucide.createIcons();
+    }
+
+    function renderDeptCompare(data) {
+      const html = data.deptData.map(d => {
+        const diff = +(d.b - d.a).toFixed(2);
+        const aMore = d.a > d.b;
+        const bMore = d.b > d.a;
+        return `
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-semibold text-gray-600">${d.id}</span>
+                <span class="text-sm font-medium text-gray-800">${d.name}</span>
+              </div>
+              <div class="flex items-center gap-3 text-xs">
+                <span class="diff-a-more px-2 py-0.5 rounded font-mono">A: ${d.a.toFixed(1)}%</span>
+                <span class="text-gray-300">vs</span>
+                <span class="diff-b-more px-2 py-0.5 rounded font-mono">B: ${d.b.toFixed(1)}%</span>
+                <span class="font-mono font-semibold ${diff > 0 ? 'text-success' : diff < 0 ? 'text-danger' : 'text-gray-400'}">${diff > 0 ? '+' : ''}${diff}%</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bar-track"><div class="bar-fill ${aMore ? 'bg-primary' : 'bg-blue-200'}" style="width:${d.a*2.5}%"></div></div>
+              <div class="bar-track"><div class="bar-fill ${bMore ? 'bg-success' : 'bg-green-200'}" style="width:${d.b*2.5}%"></div></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('deptCompare').innerHTML = html;
+    }
+
+    function renderTier(elId, data, color) {
+      const max = Math.max(...data.map(d => d.count));
+      const total = data.reduce((s, d) => s + d.count, 0);
+      const html = data.map(d => {
+        const pct = ((d.count / total) * 100).toFixed(1);
+        const w = (d.count / max) * 100;
+        return `
+          <div class="flex items-center gap-2">
+            <span class="w-12 text-xs font-mono font-semibold text-gray-700">${d.tier}</span>
+            <div class="flex-1 bar-track">
+              <div class="bar-fill ${color}" style="width:${w}%"></div>
+            </div>
+            <span class="text-xs font-mono text-gray-600 w-14 text-right tabular-nums">${d.count.toLocaleString()}</span>
+            <span class="text-xs text-gray-500 w-10 text-right tabular-nums">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+      document.getElementById(elId).innerHTML = html;
+    }
+
+    function renderConfigDiff(data) {
+      const html = data.configDiff.map(c => {
+        if (c.same) {
+          return `
+            <div class="px-5 py-3 flex items-center gap-4 hover:bg-gray-50/40">
+              <i data-lucide="check" class="w-3.5 h-3.5 text-success shrink-0"></i>
+              <span class="text-sm font-mono font-semibold text-gray-700 w-64">${c.label}</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">A: ${c.a}</span>
+              <span class="text-gray-300">=</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">B: ${c.b}</span>
+              <span class="ml-auto text-xs text-gray-400">無變動</span>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="px-5 py-3 flex items-center gap-4 ${c.critical ? 'bg-red-50/40' : 'bg-amber-50/30'}">
+              <i data-lucide="${c.critical ? 'alert-octagon' : 'arrow-right'}" class="w-3.5 h-3.5 ${c.critical ? 'text-danger' : 'text-warning'} shrink-0"></i>
+              <span class="text-sm font-mono font-semibold text-gray-800 w-64">${c.label}${c.critical ? ' <span class="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-danger text-white">關鍵變更</span>' : ''}</span>
+              <span class="diff-a-more px-2 py-0.5 rounded font-mono text-xs">A: ${c.a}</span>
+              <span class="text-gray-400">→</span>
+              <span class="diff-b-more px-2 py-0.5 rounded font-mono text-xs">B: ${c.b}</span>
+              ${c.deptDiff ? '<span class="ml-auto text-xs text-warning font-medium">部門比例差異 ≥ 1%</span>' : '<span class="ml-auto text-xs text-warning">已調整</span>'}
+            </div>
+          `;
+        }
+      }).join('');
+      document.getElementById('configDiff').innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function renderCustomerDiff(data) {
+      document.getElementById('removedCount').textContent = (data.removed.length === 0 ? '0' : data.removed.length + '+') + ' 筆';
+      document.getElementById('addedCount').textContent = (data.added.length === 0 ? '0' : data.added.length + '+') + ' 筆';
+
+      const removedHtml = data.removed.length === 0
+        ? '<div class="px-3 py-6 text-center text-xs text-gray-400">無移除客戶</div>'
+        : data.removed.map(c => `
+            <div class="px-3 py-2 flex items-center gap-3 hover:bg-red-50/40 text-xs">
+              <i data-lucide="user" class="w-3.5 h-3.5 text-danger"></i>
+              <span class="font-mono font-semibold text-gray-700">${c.custoNo}</span>
+              <span class="text-gray-600">${c.custName}</span>
+              <span class="ml-auto px-2 py-0.5 text-[10px] font-medium rounded diff-a-only">僅在 A</span>
+            </div>
+          `).join('');
+      document.getElementById('removedList').innerHTML = removedHtml;
+
+      const addedHtml = data.added.length === 0
+        ? '<div class="px-3 py-6 text-center text-xs text-gray-400">無新增客戶</div>'
+        : data.added.map(c => `
+            <div class="px-3 py-2 flex items-center gap-3 hover:bg-purple-50/40 text-xs">
+              <i data-lucide="user-plus" class="w-3.5 h-3.5 text-purple-600"></i>
+              <span class="font-mono font-semibold text-gray-700">${c.custoNo}</span>
+              <span class="text-gray-600">${c.custName}</span>
+              <span class="ml-auto px-2 py-0.5 text-[10px] font-medium rounded diff-b-only">僅在 B</span>
+            </div>
+          `).join('');
+      document.getElementById('addedList').innerHTML = addedHtml;
+      lucide.createIcons();
+    }
+
+    function showDemoState(state) {
+      ['identical','partial-diff','algorithm-changed'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      const ds = datasets[state];
+      renderSummary(ds);
+      renderMismatch(ds);
+      renderDeptCompare(ds);
+      renderTier('tierA', ds.tierA, 'bg-primary');
+      renderTier('tierB', ds.tierB, 'bg-success');
+      renderConfigDiff(ds);
+      renderCustomerDiff(ds);
+
+      document.getElementById('algoBanner').classList.toggle('hidden', !ds.algoBanner);
+      document.getElementById('identicalBanner').classList.toggle('hidden', !ds.identicalBanner);
+
+      lucide.createIcons();
+    }
+
+    document.getElementById('downloadMismatch').addEventListener('click', () => {
+      const t = document.getElementById('toast');
+      document.getElementById('toastMsg').textContent = '已下載 mismatch_compare_550e8400_vs_7a1b2c3d.xlsx';
+      t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 2400);
+    });
+
+    function setRole(role) {
+      const a = document.getElementById('role-admin'), u = document.getElementById('role-user');
+      if (role === 'admin') {
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // init
+    showDemoState('identical');
+    lucide.createIcons();
+  </script>
+</body>
+</html>

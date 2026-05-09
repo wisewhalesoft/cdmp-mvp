@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>計分卡設定 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .tab-btn { position: relative; }
+    .tab-btn.active { color: #2563EB; }
+    .tab-btn.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #2563EB;
+    }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+
+      <!-- E07 區塊 -->
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
+      </a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
+      </a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
+      </a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+      </a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
+      </a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
+      </a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
+      </a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
+      </a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
+      </a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
+      </a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">計分卡設定</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常</button>
+      <button onclick="showDemoState('loading-version')" id="demo-loading-version" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">切換版本載入中</button>
+      <button onclick="showDemoState('inactive-version')" id="demo-inactive-version" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">已停用版本</button>
+    </div>
+
+    <div class="p-6">
+
+      <!-- 已停用版本 banner -->
+      <div id="inactiveBanner" class="hidden mb-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-warning">此計分版本已停用（status = inactive），僅供查看</p>
+          <p class="text-xs text-gray-600 mt-0.5">此版本不會被月跑使用。如需編輯，請切換至 active 版本。</p>
+        </div>
+      </div>
+
+      <!-- 版本選擇器 + 版本卡片 -->
+      <div class="bg-white rounded-lg border border-border shadow-sm p-5 mb-4">
+        <div class="flex items-end gap-4 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">CARD_TYPE 計分卡類型</label>
+            <div class="relative">
+              <select id="cardTypeSelect" onchange="onSelectorChange()" class="pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none min-w-[200px]">
+                <option value="H">H — 一般高分</option>
+                <option value="S">S — 一般中分</option>
+                <option value="E">E — 一般低分</option>
+                <option value="S5">S5 — 中度逾期</option>
+                <option value="E5">E5 — 嚴重逾期</option>
+                <option value="M">M — 機車卡</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">CARD_VERSION 版本</label>
+            <div class="relative">
+              <select id="cardVersionSelect" onchange="onSelectorChange()" class="pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none min-w-[140px]">
+                <option value="1">v1（active）</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            </div>
+          </div>
+
+          <!-- 版本資訊卡片 -->
+          <div id="versionCard" class="flex-1 min-w-[420px] p-3 bg-gray-50/60 border border-border rounded-lg flex items-center gap-4">
+            <div class="text-xs">
+              <div class="text-gray-500">card_name</div>
+              <div class="font-semibold text-gray-800" id="vCardName">高資產計分卡</div>
+            </div>
+            <div class="text-xs">
+              <div class="text-gray-500">sdate ~ edate</div>
+              <div class="font-mono text-gray-700"><span id="vSdate">20260101</span> ~ <span id="vEdate">20991231</span></div>
+            </div>
+            <div class="text-xs">
+              <div class="text-gray-500">建立者</div>
+              <div class="text-gray-700"><span id="vCreatedBy">admin</span> · <span id="vCreatedAt">2026-01-01 09:00</span></div>
+            </div>
+            <div class="ml-auto">
+              <span id="vStatusBadge" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">
+                <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+                active
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-t-lg border border-border border-b-0">
+        <div class="flex items-center justify-between px-4 border-b border-border">
+          <div class="flex items-center gap-1">
+            <button id="tab-dim" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('dim')">
+              <i data-lucide="layers" class="w-3.5 h-3.5 inline mr-1"></i>
+              計分維度
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full">8</span>
+            </button>
+            <button id="tab-score" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('score')">
+              <i data-lucide="hash" class="w-3.5 h-3.5 inline mr-1"></i>
+              分數設定
+            </button>
+            <button id="tab-level" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('level')">
+              <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 inline mr-1"></i>
+              CARD_LEVEL 門檻
+            </button>
+            <button id="tab-tier" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('tier')">
+              <i data-lucide="layers-3" class="w-3.5 h-3.5 inline mr-1"></i>
+              TIER_LEVEL 對應
+            </button>
+          </div>
+          <div class="flex items-center gap-2 pr-3">
+            <span class="text-xs text-gray-400">資料來源 <code class="text-xs text-gray-500">ob_levelcard_*</code></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 容器 -->
+      <div id="loadingState" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm py-12 text-center">
+        <i data-lucide="loader-2" class="w-8 h-8 text-primary mx-auto animate-spin"></i>
+        <p class="text-sm text-gray-500 mt-3">載入版本資料中...</p>
+      </div>
+
+      <!-- ===== Tab 1: 計分維度 ===== -->
+      <div id="panel-dim" class="bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">column_label</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">分數區間摘要</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="dim-tbody"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between px-5 py-3 border-t border-border">
+          <span class="text-sm text-gray-500">共 8 個維度</span>
+          <button id="btnAddDim" onclick="openDimModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            新增維度
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== Tab 2: 分數設定 ===== -->
+      <div id="panel-score" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3 flex-wrap">
+          <label class="text-xs text-gray-500">維度欄位</label>
+          <div class="relative">
+            <select id="dimFilter" onchange="renderScoreTable()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+              <option value="ALL">全部維度</option>
+              <option value="CUS_SEX">CUS_SEX 客戶性別</option>
+              <option value="CAR_YEAR">CAR_YEAR 車齡</option>
+              <option value="CAREA_NO1">CAREA_NO1 居住區域 1</option>
+              <option value="CAREA_NO2">CAREA_NO2 居住區域 2</option>
+              <option value="LIST_MONTH">LIST_MONTH 名單月份</option>
+              <option value="PROJECT_TP">PROJECT_TP 專案類型</option>
+              <option value="SALES_STS">SALES_STS 業務狀態</option>
+              <option value="ADD_UN_CAPITAL">ADD_UN_CAPITAL 累積未償本金</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <span class="text-xs text-gray-400 ml-auto">資料表 <code>ob_levelcard_score</code> · 邏輯主鍵 (card_type, card_version, column_name, level1, level2_s, level2_e)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">level1（類別型）</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">level2_s</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">level2_e</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">score</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="score-tbody"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t border-border flex items-center justify-between">
+          <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>類別型 (level1) 與數值型 (level2_s ~ level2_e) 為二擇一；數值區間不可重疊（BR-3）</p>
+          <button id="btnAddScore" onclick="openScoreModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            新增分數區間
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== Tab 3: CARD_LEVEL 門檻 ===== -->
+      <div id="panel-level" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="grid grid-cols-3 gap-0">
+          <!-- 左: 編輯表 -->
+          <div class="col-span-2 border-r border-border">
+            <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
+              <h4 class="text-sm font-semibold text-gray-700">總分區間 → CARD_LEVEL 對應</h4>
+              <span class="text-xs text-gray-400 ml-auto">資料表 <code>ob_levelcard_level</code></span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-border bg-gray-50/60">
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">card_level</th>
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">等級名稱</th>
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">score_s（下限）</th>
+                    <th class="text-left px-5 py-3 font-semibold text-gray-600">score_e（上限）</th>
+                    <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="level-tbody"></tbody>
+              </table>
+            </div>
+            <div class="px-4 py-3 border-t border-border flex items-center justify-between">
+              <p id="levelOverlapWarn" class="hidden text-xs text-danger flex items-center gap-1.5">
+                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                <span>等級 B 下限 (65) 與等級 A 上限 (80) 重疊，請調整</span>
+              </p>
+              <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>相鄰等級 score_e + 1 = 下一級 score_s（BR-1）</p>
+              <button id="btnSaveLevel" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                儲存門檻
+              </button>
+            </div>
+          </div>
+          <!-- 右: 預覽 -->
+          <div>
+            <div class="px-4 py-3 border-b border-border bg-blue-50/30">
+              <h4 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <i data-lucide="eye" class="w-4 h-4 text-primary"></i>
+                預估各等級分佈
+              </h4>
+              <p class="text-xs text-gray-500 mt-0.5">基於目前 ob_pool_data（最多 60 秒快取）</p>
+            </div>
+            <div class="p-5 space-y-3" id="levelPreview">
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-2 text-sm font-medium text-gray-700"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> A 級</span>
+                <span class="font-semibold text-gray-900 tabular-nums">2,000 人</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-2 bg-emerald-500" style="width: 21%"></div></div>
+
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-2 text-sm font-medium text-gray-700"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> B 級</span>
+                <span class="font-semibold text-gray-900 tabular-nums">4,000 人</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-2 bg-blue-500" style="width: 42%"></div></div>
+
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-2 text-sm font-medium text-gray-700"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> C 級</span>
+                <span class="font-semibold text-gray-900 tabular-nums">3,000 人</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-2 bg-amber-500" style="width: 31%"></div></div>
+
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-2 text-sm font-medium text-gray-700"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> D 級</span>
+                <span class="font-semibold text-gray-900 tabular-nums">500 人</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-2 bg-rose-500" style="width: 6%"></div></div>
+
+              <div class="pt-3 border-t border-border flex items-center justify-between text-xs text-gray-500">
+                <span>樣本來源</span>
+                <span class="font-mono">ob_pool_data n = 9,500</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Tab 4: TIER_LEVEL 對應 ===== -->
+      <div id="panel-tier" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
+          <h4 class="text-sm font-semibold text-gray-700">CARD_TYPE × CARD_LEVEL → TIER_LEVEL</h4>
+          <span class="text-xs text-gray-400">資料表 <code>ob_tier</code> · PK (card_type, card_level)</span>
+          <button onclick="openTierModal()" class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            新增對應
+          </button>
+        </div>
+        <!-- Fallback note -->
+        <div class="mx-4 mt-3 mb-1 flex items-start gap-2 p-3 bg-purple-50/60 border border-purple-200 rounded-lg text-xs text-gray-700">
+          <i data-lucide="git-fork" class="w-4 h-4 text-purple-600 mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-purple-700">Fallback 規則說明</p>
+            <p class="text-gray-600 mt-0.5">當 CARD_TYPE 為計分卡體系外（如 <code>HM</code> / <code>M5</code>，於 ob_levelcard_version 中無對應版本），CARD_LEVEL 留空（NULL）即為 fallback 規則 — 不分等級直接對應 TIER_LEVEL（如 M5 → T5M）。表中以紫色底色與「Fallback」標籤區分。</p>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">card_type</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">card_level</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">tier_level</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">list_nm（描述性，optional）</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tier-tbody"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t border-border flex items-center justify-between">
+          <span class="text-sm text-gray-500" id="tierCount">共 25 筆對應</span>
+          <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>月跑 Stage 2 完成 CARD_LEVEL 計算後，依此表 join 寫入 ob_pool_data_list.tier_level</p>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">計分卡設定操作說明</p>
+          <p>覆寫式編輯（無草稿、無 rollback），歷史追溯依賴月跑 config 快照（F066）。月跑執行中（assignment_run.status IN pending/running）所有編輯功能將被鎖定（409 SCORING_VERSION_LOCKED）。複雜計分邏輯由 PostgreSQL function <code>fn_calc_tier_level</code> 實作（AD-E07-3）。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal: 編輯/新增 維度 ===== -->
+  <div id="dimModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('dimModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 class="text-lg font-semibold text-gray-900">新增計分維度</h3>
+          <button onclick="closeModal('dimModal')" class="p-1 hover:bg-gray-100 rounded-md">
+            <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+          </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_name <span class="text-danger">*</span></label>
+            <input type="text" maxlength="30" placeholder="例：CONTRACT_YEARS"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-xs text-gray-400 mt-1">最多 30 字元（VARCHAR(30)）</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_label <span class="text-danger">*</span></label>
+            <input type="text" maxlength="30" placeholder="例：契約年資"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button onclick="closeModal('dimModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+          <button onclick="closeModal('dimModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">確認新增</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: 編輯/新增 分數區間 ===== -->
+  <div id="scoreModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('scoreModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 class="text-lg font-semibold text-gray-900">新增分數區間</h3>
+          <button onclick="closeModal('scoreModal')" class="p-1 hover:bg-gray-100 rounded-md">
+            <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+          </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_name</label>
+            <select class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white">
+              <option>CUS_SEX</option>
+              <option>CAR_YEAR</option>
+              <option>CAREA_NO1</option>
+              <option>ADD_UN_CAPITAL</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">類型</label>
+              <select class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white">
+                <option>數值型 (level2_s ~ level2_e)</option>
+                <option>類別型 (level1)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">score 分數</label>
+              <input type="number" placeholder="例：20" class="w-full px-3 py-2 text-sm border border-border rounded-lg">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">level2_s（起始）</label>
+              <input type="text" placeholder="0" class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">level2_e（結束）</label>
+              <input type="text" placeholder="3" class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
+            </div>
+          </div>
+          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-gray-700 flex items-start gap-2">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <span>數值區間不可與既有區間重疊；違反時 422 <code>SCORING_RANGE_OVERLAP</code></span>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button onclick="closeModal('scoreModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button onclick="closeModal('scoreModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: 編輯/新增 TIER 對應 ===== -->
+  <div id="tierModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('tierModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 class="text-lg font-semibold text-gray-900">新增 TIER_LEVEL 對應</h3>
+          <button onclick="closeModal('tierModal')" class="p-1 hover:bg-gray-100 rounded-md">
+            <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+          </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">card_type <span class="text-danger">*</span></label>
+              <input type="text" maxlength="5" placeholder="H / S / E / S5 / E5 / M / HM / M5"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
+              <p class="text-xs text-gray-400 mt-1">VARCHAR(5)</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">card_level（NULL = fallback）</label>
+              <input type="text" maxlength="5" placeholder="A / B / C / D（fallback 留空）"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
+              <p class="text-xs text-purple-600 mt-1"><i data-lucide="git-fork" class="w-3 h-3 inline"></i> 留空 = fallback 規則</p>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">tier_level <span class="text-danger">*</span></label>
+            <input type="text" maxlength="5" placeholder="例：T1 / T2 / T5M / THC（業務自定）"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
+            <p class="text-xs text-gray-400 mt-1">VARCHAR(5)，業務方自由定義（BR-2）</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">list_nm（optional）</label>
+            <input type="text" maxlength="30" placeholder="例：高資產卡 A 級"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg">
+            <p class="text-xs text-gray-400 mt-1">最多 30 字元；不參與 PK 與 join</p>
+          </div>
+          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-gray-700 flex items-start gap-2">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div>
+              <p>(card_type, card_level) 重複時：422 <code>TIER_LEVEL_DUPLICATE</code></p>
+              <p class="mt-1">非 fallback 場景下，CARD_LEVEL 必須存在於 active 版本：422 <code>CARD_LEVEL_NOT_FOUND</code></p>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button onclick="closeModal('tierModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button onclick="closeModal('tierModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Mock: 6 種 CARD_TYPE 版本 =====
+    const versions = {
+      'H':  { cardName: '高資產計分卡', sdate: '20260101', edate: '20991231', createdBy: 'admin', createdAt: '2026-01-01 09:00', status: 'active' },
+      'S':  { cardName: '一般中分計分卡', sdate: '20260101', edate: '20991231', createdBy: 'admin', createdAt: '2026-01-01 09:00', status: 'active' },
+      'E':  { cardName: '一般低分計分卡', sdate: '20260101', edate: '20991231', createdBy: 'admin', createdAt: '2026-01-01 09:00', status: 'active' },
+      'S5': { cardName: '中度逾期計分卡', sdate: '20260101', edate: '20991231', createdBy: 'admin', createdAt: '2026-01-01 09:00', status: 'active' },
+      'E5': { cardName: '嚴重逾期計分卡', sdate: '20260101', edate: '20991231', createdBy: 'admin', createdAt: '2026-01-01 09:00', status: 'active' },
+      'M':  { cardName: '機車計分卡', sdate: '20260101', edate: '20991231', createdBy: 'admin', createdAt: '2026-01-01 09:00', status: 'active' },
+    };
+
+    // ===== Mock: 維度（active version 通用範例，符合 dump：column_name 為遷移修正自 COLUNM）=====
+    const dimensions = [
+      { columnName: 'CUS_SEX',         columnLabel: '客戶性別',         type: '類別型', summary: 'M=10 / F=15 / U=5' },
+      { columnName: 'CAR_YEAR',        columnLabel: '車齡（年）',       type: '數值型', summary: '0~3=20 / 4~7=15 / 8~99=5' },
+      { columnName: 'CAREA_NO1',       columnLabel: '居住區域 1',       type: '類別型', summary: '北=15 / 中=12 / 南=10 / 東=8' },
+      { columnName: 'CAREA_NO2',       columnLabel: '居住區域 2',       type: '類別型', summary: 'A=10 / B=5 / 其他=0' },
+      { columnName: 'LIST_MONTH',      columnLabel: '名單月份',         type: '數值型', summary: '1~3=15 / 4~6=10 / 7~12=5' },
+      { columnName: 'PROJECT_TP',      columnLabel: '專案類型',         type: '類別型', summary: '02=10 / 04=15 / 11=20 / 22=5' },
+      { columnName: 'SALES_STS',       columnLabel: '業務狀態',         type: '類別型', summary: 'A=20 / B=10 / C=0' },
+      { columnName: 'ADD_UN_CAPITAL',  columnLabel: '累積未償本金',     type: '數值型', summary: '0~10K=20 / 10K~50K=10 / 50K+=0' },
+    ];
+
+    // ===== Mock: 分數設定（依 column 顯示）=====
+    const scores = [
+      { columnName: 'CUS_SEX',        level1: 'M',    level2_s: null, level2_e: null, score: 10 },
+      { columnName: 'CUS_SEX',        level1: 'F',    level2_s: null, level2_e: null, score: 15 },
+      { columnName: 'CUS_SEX',        level1: 'U',    level2_s: null, level2_e: null, score: 5  },
+      { columnName: 'CAR_YEAR',       level1: null,   level2_s: '0',  level2_e: '3',  score: 20 },
+      { columnName: 'CAR_YEAR',       level1: null,   level2_s: '4',  level2_e: '7',  score: 15 },
+      { columnName: 'CAR_YEAR',       level1: null,   level2_s: '8',  level2_e: '99', score: 5  },
+      { columnName: 'CAREA_NO1',      level1: '北',   level2_s: null, level2_e: null, score: 15 },
+      { columnName: 'CAREA_NO1',      level1: '中',   level2_s: null, level2_e: null, score: 12 },
+      { columnName: 'CAREA_NO1',      level1: '南',   level2_s: null, level2_e: null, score: 10 },
+      { columnName: 'CAREA_NO1',      level1: '東',   level2_s: null, level2_e: null, score: 8  },
+      { columnName: 'LIST_MONTH',     level1: null,   level2_s: '1',  level2_e: '3',  score: 15 },
+      { columnName: 'LIST_MONTH',     level1: null,   level2_s: '4',  level2_e: '6',  score: 10 },
+      { columnName: 'LIST_MONTH',     level1: null,   level2_s: '7',  level2_e: '12', score: 5  },
+      { columnName: 'PROJECT_TP',     level1: '02',   level2_s: null, level2_e: null, score: 10 },
+      { columnName: 'PROJECT_TP',     level1: '04',   level2_s: null, level2_e: null, score: 15 },
+      { columnName: 'PROJECT_TP',     level1: '11',   level2_s: null, level2_e: null, score: 20 },
+      { columnName: 'SALES_STS',      level1: 'A',    level2_s: null, level2_e: null, score: 20 },
+      { columnName: 'SALES_STS',      level1: 'B',    level2_s: null, level2_e: null, score: 10 },
+      { columnName: 'ADD_UN_CAPITAL', level1: null,   level2_s: '0',  level2_e: '10000',  score: 20 },
+      { columnName: 'ADD_UN_CAPITAL', level1: null,   level2_s: '10001', level2_e: '50000', score: 10 },
+      { columnName: 'ADD_UN_CAPITAL', level1: null,   level2_s: '50001', level2_e: '999999999', score: 0 },
+    ];
+
+    // ===== Mock: CARD_LEVEL 門檻 =====
+    const levels = [
+      { cardLevel: 'A', levelName: '優質客戶', scoreS: 81,  scoreE: 100 },
+      { cardLevel: 'B', levelName: '一般客戶', scoreS: 61,  scoreE: 80  },
+      { cardLevel: 'C', levelName: '需注意',   scoreS: 41,  scoreE: 60  },
+      { cardLevel: 'D', levelName: '高風險',   scoreS: 0,   scoreE: 40  },
+    ];
+
+    // ===== Mock: TIER 對應（依 dump 觀察 8 種 CARD_TYPE，含 fallback HM/M5）=====
+    const tiers = [
+      // 標準對應 CARD_LEVEL 非 NULL
+      { cardType: 'H',  cardLevel: 'A', tierLevel: 'T1',  listNm: '高資產卡 A 級', isFallback: false },
+      { cardType: 'H',  cardLevel: 'B', tierLevel: 'T2',  listNm: null, isFallback: false },
+      { cardType: 'H',  cardLevel: 'C', tierLevel: 'T3',  listNm: null, isFallback: false },
+      { cardType: 'H',  cardLevel: 'D', tierLevel: 'T4',  listNm: null, isFallback: false },
+      { cardType: 'S',  cardLevel: 'A', tierLevel: 'T1',  listNm: null, isFallback: false },
+      { cardType: 'S',  cardLevel: 'B', tierLevel: 'T2',  listNm: null, isFallback: false },
+      { cardType: 'S',  cardLevel: 'C', tierLevel: 'T3',  listNm: null, isFallback: false },
+      { cardType: 'S',  cardLevel: 'D', tierLevel: 'T4',  listNm: null, isFallback: false },
+      { cardType: 'E',  cardLevel: 'A', tierLevel: 'T1',  listNm: null, isFallback: false },
+      { cardType: 'E',  cardLevel: 'B', tierLevel: 'T2',  listNm: null, isFallback: false },
+      { cardType: 'E',  cardLevel: 'C', tierLevel: 'T3',  listNm: null, isFallback: false },
+      { cardType: 'E',  cardLevel: 'D', tierLevel: 'T4',  listNm: null, isFallback: false },
+      { cardType: 'S5', cardLevel: 'A', tierLevel: 'T51', listNm: null, isFallback: false },
+      { cardType: 'S5', cardLevel: 'B', tierLevel: 'T52', listNm: null, isFallback: false },
+      { cardType: 'E5', cardLevel: 'A', tierLevel: 'T51', listNm: null, isFallback: false },
+      { cardType: 'E5', cardLevel: 'B', tierLevel: 'T52', listNm: null, isFallback: false },
+      { cardType: 'E5', cardLevel: 'C', tierLevel: 'T32', listNm: null, isFallback: false },
+      { cardType: 'M',  cardLevel: 'A', tierLevel: 'T1M', listNm: null, isFallback: false },
+      { cardType: 'M',  cardLevel: 'B', tierLevel: 'T3M', listNm: null, isFallback: false },
+      { cardType: 'M',  cardLevel: 'C', tierLevel: 'T3M', listNm: null, isFallback: false },
+      // Fallback CARD_TYPE (CARD_LEVEL NULL)
+      { cardType: 'M5', cardLevel: null, tierLevel: 'T5M',  listNm: '機車中結滿期名單', isFallback: true },
+      { cardType: 'HM', cardLevel: 'A',  tierLevel: 'T1HM', listNm: null, isFallback: true },
+      { cardType: 'HM', cardLevel: 'B',  tierLevel: 'T2HM', listNm: null, isFallback: true },
+      { cardType: 'HM', cardLevel: 'C',  tierLevel: 'T3HM', listNm: null, isFallback: true },
+      { cardType: 'HM', cardLevel: 'D',  tierLevel: 'T3HM', listNm: null, isFallback: true },
+    ];
+
+    // ===== Renderers =====
+    function renderVersionCard(cardType) {
+      const v = versions[cardType];
+      document.getElementById('vCardName').textContent = v.cardName;
+      document.getElementById('vSdate').textContent = v.sdate;
+      document.getElementById('vEdate').textContent = v.edate;
+      document.getElementById('vCreatedBy').textContent = v.createdBy;
+      document.getElementById('vCreatedAt').textContent = v.createdAt;
+    }
+
+    function renderDim() {
+      const tbody = document.getElementById('dim-tbody');
+      tbody.innerHTML = dimensions.map(d => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition">
+          <td class="px-5 py-3 font-mono text-xs font-semibold text-gray-700">${d.columnName}</td>
+          <td class="px-5 py-3 text-gray-900">${d.columnLabel}</td>
+          <td class="px-5 py-3">
+            <span class="inline-flex px-2 py-0.5 text-xs rounded-full ${d.type === '類別型' ? 'bg-cyan-100 text-cyan-700' : 'bg-violet-100 text-violet-700'}">${d.type}</span>
+          </td>
+          <td class="px-5 py-3 text-xs text-gray-500 font-mono">${d.summary}</td>
+          <td class="px-5 py-3">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">
+              <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+              active
+            </span>
+          </td>
+          <td class="px-5 py-3 text-right">
+            <div class="inline-flex items-center gap-1">
+              <button onclick="openDimModal()" title="編輯" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition action-btn">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button title="停用" class="p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition action-btn">
+                <i data-lucide="ban" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function renderScoreTable() {
+      const filter = document.getElementById('dimFilter').value;
+      const list = filter === 'ALL' ? scores : scores.filter(s => s.columnName === filter);
+      const tbody = document.getElementById('score-tbody');
+      tbody.innerHTML = list.map(s => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition">
+          <td class="px-5 py-3 font-mono text-xs text-gray-700">${s.columnName}</td>
+          <td class="px-5 py-3 font-mono text-sm">${s.level1 ?? '<span class="text-gray-300">—</span>'}</td>
+          <td class="px-5 py-3 font-mono text-sm">${s.level2_s ?? '<span class="text-gray-300">—</span>'}</td>
+          <td class="px-5 py-3 font-mono text-sm">${s.level2_e ?? '<span class="text-gray-300">—</span>'}</td>
+          <td class="px-5 py-3 text-right font-semibold tabular-nums">${s.score}</td>
+          <td class="px-5 py-3 text-right">
+            <button onclick="openScoreModal()" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition action-btn">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function renderLevel() {
+      const tbody = document.getElementById('level-tbody');
+      tbody.innerHTML = levels.map(l => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition">
+          <td class="px-5 py-3"><span class="inline-flex items-center justify-center w-8 h-8 text-sm font-semibold rounded-md ${l.cardLevel === 'A' ? 'bg-emerald-100 text-emerald-700' : l.cardLevel === 'B' ? 'bg-blue-100 text-blue-700' : l.cardLevel === 'C' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${l.cardLevel}</span></td>
+          <td class="px-5 py-3 text-gray-900">${l.levelName}</td>
+          <td class="px-5 py-3"><input type="number" value="${l.scoreS}" class="w-24 px-2 py-1 text-sm border border-border rounded-md font-mono"></td>
+          <td class="px-5 py-3"><input type="number" value="${l.scoreE}" class="w-24 px-2 py-1 text-sm border border-border rounded-md font-mono"></td>
+          <td class="px-5 py-3 text-right">
+            <button class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition action-btn">
+              <i data-lucide="check" class="w-4 h-4"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function renderTier() {
+      const tbody = document.getElementById('tier-tbody');
+      tbody.innerHTML = tiers.map(t => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition ${t.isFallback ? 'bg-purple-50/30' : ''}">
+          <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-mono font-semibold rounded ${t.cardType === 'M5' || t.cardType === 'HM' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}">${t.cardType}</span></td>
+          <td class="px-5 py-3 font-mono text-sm">${t.cardLevel ?? '<span class="text-purple-500 italic">NULL</span>'}</td>
+          <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-mono font-semibold rounded bg-blue-100 text-blue-700">${t.tierLevel}</span></td>
+          <td class="px-5 py-3 text-xs text-gray-500">${t.listNm ?? '<span class="text-gray-300">—</span>'}</td>
+          <td class="px-5 py-3">
+            ${t.isFallback ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700"><i data-lucide="git-fork" class="w-3 h-3"></i>Fallback</span>' : '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">標準</span>'}
+          </td>
+          <td class="px-5 py-3 text-right">
+            <div class="inline-flex items-center gap-1">
+              <button onclick="openTierModal()" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded action-btn"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+              <button class="p-1.5 text-gray-500 hover:text-danger hover:bg-red-50 rounded action-btn"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      document.getElementById('tierCount').textContent = `共 ${tiers.length} 筆對應`;
+      lucide.createIcons();
+    }
+
+    // ===== Tab switch =====
+    function switchTab(name) {
+      ['dim','score','level','tier'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('active', t === name);
+        document.getElementById('tab-' + t).classList.toggle('text-gray-500', t !== name);
+        document.getElementById('panel-' + t).classList.toggle('hidden', t !== name);
+      });
+    }
+
+    // ===== Modal helpers =====
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); document.body.style.overflow='hidden'; }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.body.style.overflow=''; }
+    function openDimModal() { openModal('dimModal'); }
+    function openScoreModal() { openModal('scoreModal'); }
+    function openTierModal() { openModal('tierModal'); }
+
+    // ===== Selector change =====
+    function onSelectorChange() {
+      const ct = document.getElementById('cardTypeSelect').value;
+      renderVersionCard(ct);
+      // 切換動畫提示
+      const panels = ['panel-dim','panel-score','panel-level','panel-tier'];
+      panels.forEach(p => document.getElementById(p).style.opacity = '0.5');
+      setTimeout(() => panels.forEach(p => document.getElementById(p).style.opacity = '1'), 250);
+    }
+
+    // ===== Role toggle =====
+    function setRole(role) {
+      const adminBtn = document.getElementById('role-admin');
+      const userBtn = document.getElementById('role-user');
+      if (role === 'admin') {
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // ===== Demo state switch =====
+    function showDemoState(state) {
+      ['normal','loading-version','inactive-version'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      const loading = document.getElementById('loadingState');
+      const inactiveBanner = document.getElementById('inactiveBanner');
+      const panels = ['panel-dim','panel-score','panel-level','panel-tier'];
+      const statusBadge = document.getElementById('vStatusBadge');
+      const actionBtns = document.querySelectorAll('.action-btn, #btnAddDim, #btnAddScore, #btnSaveLevel');
+
+      // reset
+      loading.classList.add('hidden');
+      inactiveBanner.classList.add('hidden');
+      panels.forEach(p => document.getElementById(p).classList.remove('hidden'));
+      statusBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success';
+      statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-success"></span> active';
+      actionBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-40','cursor-not-allowed'); });
+
+      // Re-apply current tab
+      const activeTab = document.querySelector('.tab-btn.active').id.replace('tab-','');
+
+      if (state === 'normal') {
+        switchTab(activeTab);
+      } else if (state === 'loading-version') {
+        // 隱藏所有 panel + show loading
+        panels.forEach(p => document.getElementById(p).classList.add('hidden'));
+        loading.classList.remove('hidden');
+      } else if (state === 'inactive-version') {
+        inactiveBanner.classList.remove('hidden');
+        statusBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500';
+        statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> inactive';
+        actionBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-40','cursor-not-allowed'); });
+        switchTab(activeTab);
+      }
+    }
+
+    // ===== Init =====
+    renderVersionCard('H');
+    renderDim();
+    renderScoreTable();
+    renderLevel();
+    renderTier();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

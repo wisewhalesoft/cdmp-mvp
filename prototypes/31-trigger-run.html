@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>觸發月跑 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .stage-arrow { position: relative; }
+    .stage-arrow::after {
+      content: ''; position: absolute; top: 50%; right: -8px; transform: translateY(-50%);
+      width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+      border-left: 8px solid #E5E7EB;
+    }
+    .stage-arrow:last-child::after { display: none; }
+    @keyframes pulse-running {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); }
+      50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+    }
+    .pulse-running { animation: pulse-running 2s infinite; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+
+      <!-- E07 區塊 -->
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
+      </a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
+      </a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
+      </a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+      </a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
+      </a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
+      </a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
+      </a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
+      </a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
+      </a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
+      </a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">觸發月跑</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('ready')" id="demo-ready" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">前置全綠（可啟動）</button>
+      <button onclick="showDemoState('blocked')" id="demo-blocked" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">前置失敗（disabled）</button>
+      <button onclick="showDemoState('running')" id="demo-running" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">409 執行中</button>
+    </div>
+
+    <div class="p-6 max-w-6xl">
+
+      <!-- 已執行中 banner -->
+      <div id="runningBanner" class="hidden mb-4 flex items-start gap-2 p-4 bg-amber-50 border-2 border-amber-200 rounded-lg">
+        <i data-lucide="alert-octagon" class="w-5 h-5 text-warning mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-warning">月跑執行中（無法重複觸發）</p>
+          <p class="text-sm text-gray-700 mt-0.5">202605 月跑 <code class="font-mono text-xs">run_id: 550e8400-e29b-41d4-a716-446655440000</code> 處於 <span class="font-semibold">running</span> 狀態。</p>
+          <p class="text-xs text-gray-600 mt-1">API 回應：<code>409 ASSIGNMENT_RUN_ALREADY_RUNNING</code> — 請等待完成後再觸發。同月僅允許一個 pending/running 月跑（BR-2）。</p>
+          <a href="32-run-progress.html" class="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
+            <i data-lucide="activity" class="w-4 h-4"></i>
+            前往執行進度頁查看
+          </a>
+        </div>
+      </div>
+
+      <!-- 標題列 + CTA -->
+      <div class="bg-white rounded-lg border border-border shadow-sm p-6 mb-4">
+        <div class="flex items-start justify-between gap-6 flex-wrap">
+          <div class="flex-1 min-w-[300px]">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+                <i data-lucide="calendar" class="w-3 h-3"></i>
+                作業年月 202605
+              </span>
+              <span class="text-xs text-gray-400">project_workym</span>
+            </div>
+            <h2 class="text-xl font-bold text-gray-900">觸發 2026-05 月跑</h2>
+            <p class="text-sm text-gray-600 mt-1">啟動全流程 Stage 0~4 + 三份快照原子性寫入。本次將處理 <span class="font-semibold text-gray-900" id="ctaActiveListCount">8</span> 個 active 名單，預估 <span class="font-semibold text-gray-900" id="ctaTotalCount">9,500</span> 筆案件。</p>
+
+            <div class="mt-3 flex items-center gap-4 text-xs text-gray-500">
+              <span><i data-lucide="user" class="w-3 h-3 inline mr-0.5"></i>觸發者 王小明 (Sales Manager)</span>
+              <span><i data-lucide="clock" class="w-3 h-3 inline mr-0.5"></i>預估執行時間 < 30 分鐘 (NFR-003，10 萬筆)</span>
+              <span><i data-lucide="git-branch" class="w-3 h-3 inline mr-0.5"></i>計分版本 active</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end gap-2">
+            <button id="btnStartRun" onclick="openConfirmModal()" class="inline-flex items-center gap-2 px-6 py-3 bg-danger text-white text-base font-semibold rounded-lg hover:bg-red-600 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+              <i data-lucide="play-circle" class="w-5 h-5"></i>
+              啟動月跑
+            </button>
+            <p class="text-xs text-gray-400">POST /api/v1/assignment/runs</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 三份快照原子性提示 -->
+      <div class="mb-4 flex items-start gap-2 p-3 bg-blue-50/60 border border-blue-100 rounded-lg text-sm text-gray-700">
+        <i data-lucide="layers" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-primary">啟動後將原子性寫入三份快照（AD-E07-2）</p>
+          <p class="text-xs text-gray-600 mt-0.5">於同一 DB Transaction 中：<code>config</code>（本次設定）+ <code>input_list</code>（候選名單）+ <code>result</code>（最終分派）。任一失敗整體 Rollback，<code>assignment_run.status = 'failed'</code>。歷史快照不可變，不被覆蓋（BR-3）。</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-5">
+
+        <!-- ===== 前置檢查面板 ===== -->
+        <div class="col-span-7 bg-white rounded-lg border border-border shadow-sm">
+          <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-4 h-4 text-primary"></i>
+              前置條件檢查（F061 AC-1）
+            </h3>
+            <span id="preCheckSummary" class="text-xs text-emerald-600 font-medium flex items-center gap-1">
+              <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+              5/5 通過
+            </span>
+          </div>
+
+          <div id="preCheckList" class="divide-y divide-border">
+            <!-- Check 1 -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="1" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">名單定義已建立</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">本月（202605）至少 1 筆 <code>ob_list_definition</code> 處於 status='active'</p>
+                <p class="check-detail text-xs mt-1.5"></p>
+              </div>
+            </div>
+            <!-- Check 2 -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="2" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">部門比例加總 = 100%</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">每個 active LIST_NO 的 <code>ob_dept_pct</code> 比例加總須 = 100%（F060）</p>
+                <p class="check-detail text-xs mt-1.5"></p>
+              </div>
+            </div>
+            <!-- Check 3 -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="3" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">人員比例加總 = 100%</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">每個 (LIST_NO × 部門) 的 <code>ob_empl_set</code> 比例加總須 = 100%（F058）</p>
+                <p class="check-detail text-xs mt-1.5"></p>
+              </div>
+            </div>
+            <!-- Check 4 -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="4" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">計分版本 active</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5"><code>ob_levelcard_version</code> 至少 1 筆 status='active'</p>
+                <p class="check-detail text-xs mt-1.5"></p>
+              </div>
+            </div>
+            <!-- Check 5 -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="5" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">無 pending/running 月跑</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">同月僅允許一個 <code>assignment_run.status IN (pending, running)</code>（BR-2）</p>
+                <p class="check-detail text-xs mt-1.5"></p>
+              </div>
+            </div>
+            <!-- Check 6: ETL -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="6" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">ETL 同步狀態</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">E04+E05 雙層 ETL 已完成本月資料載入</p>
+                <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>OBPOOLDATA <span class="font-mono text-gray-500 ml-auto">9,500 筆</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>OBEMPHIRE <span class="font-mono text-gray-500 ml-auto">238 人</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>OBCALENDAR <span class="font-mono text-gray-500 ml-auto">2026 全年</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>OB_ARRETURNDF_MIN_CAP <span class="font-mono text-gray-500 ml-auto">9,420 筆</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 右側：摘要 + 失敗時跳轉入口 ===== -->
+        <div class="col-span-5 space-y-4">
+          <div class="bg-white rounded-lg border border-border shadow-sm">
+            <div class="px-5 py-4 border-b border-border">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+                本次執行摘要
+              </h3>
+            </div>
+            <div class="p-5 space-y-3">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500">作業年月</span>
+                <span class="font-mono font-semibold text-gray-900">202605</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500">active 名單數</span>
+                <span class="font-semibold text-gray-900">8 個</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500">預估總筆數</span>
+                <span class="font-semibold text-gray-900 tabular-nums">9,500</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500">計分版本</span>
+                <span class="text-xs text-gray-700">6 個 CARD_TYPE / v1</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500">CR 回分（F059）</span>
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-success">
+                  <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+                  啟用
+                </span>
+              </div>
+              <div class="flex items-center justify-between text-sm pt-3 border-t border-border">
+                <span class="text-gray-500">觸發者</span>
+                <span class="text-gray-900">王小明</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500">觸發時間</span>
+                <span class="font-mono text-gray-700 text-xs">2026-05-09 14:30</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 失敗時的跳轉入口（blocked 才顯示） -->
+          <div id="fixLinkPanel" class="hidden bg-white rounded-lg border border-amber-200 shadow-sm">
+            <div class="px-5 py-3 border-b border-amber-200 bg-amber-50/40">
+              <h3 class="text-sm font-semibold text-warning flex items-center gap-2">
+                <i data-lucide="wrench" class="w-4 h-4"></i>
+                修正入口
+              </h3>
+            </div>
+            <div class="p-3 space-y-1">
+              <a href="29-ratio-config.html" class="flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-amber-50 transition">
+                <span class="flex items-center gap-2 text-gray-700"><i data-lucide="percent" class="w-4 h-4 text-warning"></i>調整 per-LIST_NO 部門比例 (F060)</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400"></i>
+              </a>
+              <a href="29-ratio-config.html" class="flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-amber-50 transition">
+                <span class="flex items-center gap-2 text-gray-700"><i data-lucide="users" class="w-4 h-4 text-warning"></i>調整人員比例 (F058)</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400"></i>
+              </a>
+              <a href="27-list-definition.html" class="flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-amber-50 transition">
+                <span class="flex items-center gap-2 text-gray-700"><i data-lucide="clipboard-list" class="w-4 h-4 text-warning"></i>檢查名單定義 (F048)</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Stage 0~4 Timeline ===== -->
+      <div class="mt-5 bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-4 border-b border-border">
+          <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="git-branch" class="w-4 h-4 text-primary"></i>
+            執行流程概覽（Stage 0 ~ Stage 4）
+          </h3>
+        </div>
+        <div class="p-5">
+          <div class="grid grid-cols-5 gap-3">
+            <div class="stage-arrow rounded-lg border border-border p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">0</span>
+                <h4 class="text-xs font-semibold text-gray-700">Stage 0</h4>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">每日分派數計算（FLOOR + 餘數補最近日期）</p>
+              <code class="block mt-1.5 text-[10px] text-gray-400">→ ob_assign_set</code>
+            </div>
+            <div class="stage-arrow rounded-lg border border-border p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                <h4 class="text-xs font-semibold text-gray-700">Stage 1</h4>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">名單建立（讀 ob_pool_data + LIST_NO 篩選）</p>
+              <code class="block mt-1.5 text-[10px] text-gray-400">→ 候選名單</code>
+            </div>
+            <div class="stage-arrow rounded-lg border border-border p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">2</span>
+                <h4 class="text-xs font-semibold text-gray-700">Stage 2</h4>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">計分（fn_calc_tier_level）+ TIER 對應</p>
+              <code class="block mt-1.5 text-[10px] text-gray-400">→ card_level / tier_level</code>
+            </div>
+            <div class="stage-arrow rounded-lg border border-border p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">3</span>
+                <h4 class="text-xs font-semibold text-gray-700">Stage 3</h4>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">部門分配（含 CR 回分優先指定）</p>
+              <code class="block mt-1.5 text-[10px] text-gray-400">→ ob_pool_data_list.dept_id</code>
+            </div>
+            <div class="rounded-lg border border-border p-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">4</span>
+                <h4 class="text-xs font-semibold text-gray-700">Stage 4</h4>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">人員分配 + st4_exchange (T1/T2/T3 10% 轉資深)</p>
+              <code class="block mt-1.5 text-[10px] text-gray-400">→ ob_pool_data_list.emplid</code>
+            </div>
+          </div>
+
+          <!-- 快照 atomic 提示 -->
+          <div class="mt-4 grid grid-cols-3 gap-2 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-100">
+            <div class="flex items-center gap-2 text-xs text-gray-700">
+              <i data-lucide="camera" class="w-3.5 h-3.5 text-primary"></i>
+              <code class="font-mono">snapshot_type = config</code>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-gray-700">
+              <i data-lucide="camera" class="w-3.5 h-3.5 text-primary"></i>
+              <code class="font-mono">snapshot_type = input_list</code>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-gray-700">
+              <i data-lucide="camera" class="w-3.5 h-3.5 text-primary"></i>
+              <code class="font-mono">snapshot_type = result</code>
+            </div>
+            <div class="col-span-3 text-xs text-gray-600 mt-1">
+              <i data-lucide="lock" class="w-3 h-3 inline mr-0.5"></i>
+              三份快照於同一 DB Transaction 原子性寫入；commit 後 <code>assignment_run.status = 'completed'</code>，failure 整體 Rollback 並 status = 'failed'。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">月跑觸發說明</p>
+          <p>採非同步執行模型（AD-E07-2）：API 立即回 <code>202 Accepted</code> + run_id，Stage 0~4 於背景 Promise chain 執行；前端跳轉 F062 進度頁以 3 秒 polling 讀取進度。允許 completed 狀態重跑（BR-4），前次快照保留。執行不受日期限制（BR-5，已移除舊系統「每月 21 日後」限制）。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal: 確認啟動 ===== -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeConfirmModal()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div class="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="play-circle" class="w-7 h-7 text-danger"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">確認啟動 2026-05 月跑？</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">系統將立即建立 <code class="font-mono text-xs">assignment_run</code>（status=pending）並開始非同步執行。</p>
+        </div>
+        <div class="px-6 pb-2">
+          <div class="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 leading-relaxed space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-gray-500">project_workym</span>
+              <span class="font-mono font-semibold">202605</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-gray-500">active 名單數</span>
+              <span class="font-semibold">8</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-gray-500">預估筆數</span>
+              <span class="font-semibold tabular-nums">9,500</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-gray-500">CR 回分</span>
+              <span class="text-emerald-600 font-medium">啟用</span>
+            </div>
+          </div>
+          <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
+            <div class="flex items-start gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+              <div>
+                啟動後 E07 所有 CRUD 操作（名單定義 / 計分 / 比例 / 代碼）將被鎖定，直到月跑 status 變更為 completed 或 failed（BR-8）。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="closeConfirmModal()" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+          <button onclick="closeConfirmModal()" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-danger rounded-lg hover:bg-red-600 transition shadow-sm">
+            <i data-lucide="play-circle" class="w-4 h-4"></i>
+            確認啟動
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Check item state helpers =====
+    function setCheckItemStatus(num, status, detail) {
+      const item = document.querySelector(`.check-item[data-check="${num}"]`);
+      if (!item) return;
+      item.dataset.status = status;
+      const icon = item.querySelector('.check-icon');
+      const badge = item.querySelector('.check-badge');
+      const detailEl = item.querySelector('.check-detail');
+
+      const map = {
+        pass: {
+          iconHtml: '<i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>',
+          badge: '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">通過</span>',
+          rowBg: ''
+        },
+        fail: {
+          iconHtml: '<i data-lucide="x-circle" class="w-5 h-5 text-danger"></i>',
+          badge: '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-danger">失敗</span>',
+          rowBg: 'bg-red-50/30'
+        },
+        warn: {
+          iconHtml: '<i data-lucide="alert-triangle" class="w-5 h-5 text-warning"></i>',
+          badge: '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-warning">警示</span>',
+          rowBg: 'bg-amber-50/30'
+        }
+      };
+      const m = map[status];
+      icon.innerHTML = m.iconHtml;
+      badge.outerHTML = m.badge.replace('text-xs', 'check-badge text-xs');
+      item.className = 'check-item p-4 flex items-start gap-3 ' + m.rowBg;
+      if (detail) {
+        detailEl.innerHTML = detail;
+        detailEl.style.display = 'block';
+      } else {
+        detailEl.innerHTML = '';
+        detailEl.style.display = 'none';
+      }
+      lucide.createIcons();
+    }
+
+    // 預設細節
+    const defaultDetails = {
+      1: '<span class="text-emerald-600">8 個 active 名單已就緒（OB202605001 ~ OB202605008）</span>',
+      2: '<span class="text-emerald-600">所有 8 個 LIST_NO 部門比例加總均 = 100.0%</span>',
+      3: '<span class="text-emerald-600">所有部門 × LIST_NO 組合人員比例加總 = 100.0%</span>',
+      4: '<span class="text-emerald-600">6 個 CARD_TYPE 計分版本 (H/S/E/S5/E5/M) 全部 active</span>',
+      5: '<span class="text-emerald-600">無 pending/running 月跑（最近一次 completed: 202604, 已完成）</span>',
+      6: ''
+    };
+    [1,2,3,4,5,6].forEach(n => setCheckItemStatus(n, 'pass', defaultDetails[n]));
+
+    function updatePreCheckSummary(passCount, totalCount) {
+      const summary = document.getElementById('preCheckSummary');
+      if (passCount === totalCount) {
+        summary.className = 'text-xs text-emerald-600 font-medium flex items-center gap-1';
+        summary.innerHTML = `<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> ${passCount}/${totalCount} 通過`;
+      } else {
+        summary.className = 'text-xs text-danger font-medium flex items-center gap-1';
+        summary.innerHTML = `<i data-lucide="x-circle" class="w-3.5 h-3.5"></i> ${passCount}/${totalCount} 通過 — 無法啟動`;
+      }
+      lucide.createIcons();
+    }
+    updatePreCheckSummary(6, 6);
+
+    // ===== Modal =====
+    function openConfirmModal() {
+      const btn = document.getElementById('btnStartRun');
+      if (btn.disabled) return;
+      document.getElementById('confirmModal').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    // ===== Role toggle =====
+    function setRole(role) {
+      const adminBtn = document.getElementById('role-admin');
+      const userBtn = document.getElementById('role-user');
+      if (role === 'admin') {
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // ===== Demo state =====
+    function showDemoState(state) {
+      ['ready','blocked','running'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      const banner = document.getElementById('runningBanner');
+      const fixPanel = document.getElementById('fixLinkPanel');
+      const btn = document.getElementById('btnStartRun');
+
+      if (state === 'ready') {
+        banner.classList.add('hidden');
+        fixPanel.classList.add('hidden');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50','cursor-not-allowed');
+        btn.classList.remove('pulse-running');
+        // 全綠
+        [1,2,3,4,5,6].forEach(n => setCheckItemStatus(n, 'pass', defaultDetails[n]));
+        updatePreCheckSummary(6, 6);
+        btn.innerHTML = '<i data-lucide="play-circle" class="w-5 h-5"></i> 啟動月跑';
+      } else if (state === 'blocked') {
+        banner.classList.add('hidden');
+        fixPanel.classList.remove('hidden');
+        btn.disabled = true;
+        btn.classList.add('opacity-50','cursor-not-allowed');
+        // 部分失敗
+        setCheckItemStatus(1, 'pass', defaultDetails[1]);
+        setCheckItemStatus(2, 'fail', '<span class="text-danger">LIST_NO <code>OB202605003</code> 部門比例加總 = 90.0%（缺 10%）；LIST_NO <code>OB202605007</code> 部門比例加總 = 110.0%（多 10%）</span>');
+        setCheckItemStatus(3, 'fail', '<span class="text-danger">LIST_NO <code>OB202605004</code> × 部門 <code>XTC1</code> 人員比例加總 = 95.0%（缺 5%）</span>');
+        setCheckItemStatus(4, 'pass', defaultDetails[4]);
+        setCheckItemStatus(5, 'pass', defaultDetails[5]);
+        setCheckItemStatus(6, 'warn', '<span class="text-warning">OB_ARRETURNDF_MIN_CAP 上次同步時間為 2026-05-08 02:00，超過 24 小時建議重跑 ETL</span>');
+        updatePreCheckSummary(3, 6);
+        btn.innerHTML = '<i data-lucide="ban" class="w-5 h-5"></i> 無法啟動（前置失敗）';
+      } else if (state === 'running') {
+        banner.classList.remove('hidden');
+        fixPanel.classList.add('hidden');
+        btn.disabled = true;
+        btn.classList.add('opacity-50','cursor-not-allowed');
+        setCheckItemStatus(1, 'pass', defaultDetails[1]);
+        setCheckItemStatus(2, 'pass', defaultDetails[2]);
+        setCheckItemStatus(3, 'pass', defaultDetails[3]);
+        setCheckItemStatus(4, 'pass', defaultDetails[4]);
+        setCheckItemStatus(5, 'fail', '<span class="text-danger">已存在 status = <code class="font-mono">running</code> 的月跑（run_id: 550e8400-...）— 409 ASSIGNMENT_RUN_ALREADY_RUNNING</span>');
+        setCheckItemStatus(6, 'pass', defaultDetails[6]);
+        updatePreCheckSummary(5, 6);
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> 月跑執行中...';
+      }
+    }
+
+    // ===== Init =====
+    lucide.createIcons();
+  </script>
+</body>
+</html>

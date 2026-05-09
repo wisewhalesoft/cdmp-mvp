@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>名單定義 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    /* 自訂 sidebar：E07 子項展開 */
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    /* checkbox group 的多值 chip pill */
+    .chip-checkbox { user-select: none; }
+    .chip-checkbox input { display: none; }
+    .chip-checkbox span {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; font-size: 0.75rem; border-radius: 9999px;
+      border: 1px solid #E5E7EB; color: #4B5563; background: #fff; cursor: pointer; transition: all 0.15s;
+    }
+    .chip-checkbox input:checked + span {
+      border-color: #2563EB; background: #EFF6FF; color: #2563EB;
+    }
+    /* tab 樣式 */
+    .tab-btn { position: relative; }
+    .tab-btn.active { color: #2563EB; }
+    .tab-btn.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #2563EB;
+    }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
+      </a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="database" class="w-4 h-4"></i>資料來源
+      </a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
+      </a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
+      </a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
+      </a>
+
+      <!-- E07 區塊 -->
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
+      </a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
+      </a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
+      </a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+      </a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
+      </a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
+      </a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
+      </a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
+      </a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
+      </a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
+      </a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">名單定義</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <!-- Role Toggle -->
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常清單</button>
+      <button onclick="showDemoState('empty')" id="demo-empty" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">空清單</button>
+      <button onclick="showDemoState('locked')" id="demo-locked" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">月跑鎖定</button>
+    </div>
+
+    <div class="p-6">
+
+      <!-- 月跑鎖定通知列（僅 locked state 顯示） -->
+      <div id="lockedBanner" class="hidden mb-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700">
+        <i data-lucide="lock" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-warning">本月跑執行中（202605），所有名單編輯功能暫時鎖定</p>
+          <p class="text-xs text-gray-600 mt-0.5">月跑完成後將自動解除鎖定。可繼續查看現有名單定義。</p>
+        </div>
+      </div>
+
+      <!-- Tabs：使用中 / 已停用 -->
+      <div class="bg-white rounded-t-lg border border-border border-b-0">
+        <div class="flex items-center justify-between px-4 border-b border-border">
+          <div class="flex items-center gap-1">
+            <button id="tab-active" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('active')">
+              使用中 <span id="tab-active-count" class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full">8</span>
+            </button>
+            <button id="tab-inactive" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('inactive')">
+              已停用 <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">2</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">作業年月 <span class="font-medium text-gray-600">202605</span></span>
+            <button id="btn-refresh" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 border border-border rounded-md hover:bg-gray-50 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              重新整理
+            </button>
+            <button id="btn-create" onclick="openCreateModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              新增名單
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter 列 -->
+        <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3 flex-wrap">
+          <div class="relative">
+            <select class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+              <option>作業年月：202605（本月）</option>
+              <option>202604</option>
+              <option>202603</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <div class="relative">
+            <select class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+              <option>計分卡類型：全部</option>
+              <option>H — 一般高分</option>
+              <option>S — 一般中分</option>
+              <option>E — 一般低分</option>
+              <option>S5 — 中度逾期</option>
+              <option>E5 — 嚴重逾期</option>
+              <option>M — 機車</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <div class="relative">
+            <select class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+              <option>產品類別：全部</option>
+              <option>01 — 汽車</option>
+              <option>02 — 機車</option>
+              <option>03 — 信貸</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <div class="relative flex-1 min-w-[180px]">
+            <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input type="text" placeholder="搜尋 LIST_NO 或名單名稱..."
+              class="w-full pl-9 pr-3 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+          </div>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-border rounded-md hover:bg-white transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            清除
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== 使用中分頁內容 ===== -->
+      <div id="panel-active" class="bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">LIST_NO</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">名單名稱</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">作業年月</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">計分卡 / 產品</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">條件摘要</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">預估筆數</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="active-tbody"></tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="flex items-center justify-between px-5 py-3 border-t border-border">
+          <span class="text-sm text-gray-500">顯示 1-8 / 共 8 筆</span>
+          <div class="flex items-center gap-1">
+            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button class="px-3 py-1.5 text-sm border border-primary rounded-md text-white bg-primary font-medium">1</button>
+            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 空清單狀態（demo: empty 時顯示） ===== -->
+      <div id="panel-empty" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="flex flex-col items-center justify-center py-16 px-6 text-center">
+          <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <i data-lucide="clipboard-list" class="w-8 h-8 text-gray-400"></i>
+          </div>
+          <h3 class="text-base font-semibold text-gray-700 mb-1">尚無名單定義</h3>
+          <p class="text-sm text-gray-500 mb-5 max-w-sm">本作業年月（202605）尚未建立任何名單定義。點擊下方按鈕開始建立第一筆名單，或從既有月份複製。</p>
+          <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            建立第一筆名單
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== 已停用分頁內容 (隱藏) ===== -->
+      <div id="panel-inactive" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">LIST_NO</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">名單名稱</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">作業年月</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">計分卡 / 產品</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">停用時間</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+              </tr>
+            </thead>
+            <tbody id="inactive-tbody"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between px-5 py-3 border-t border-border">
+          <span class="text-sm text-gray-500">顯示 1-2 / 共 2 筆</span>
+          <div class="flex items-center gap-1">
+            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button class="px-3 py-1.5 text-sm border border-primary rounded-md text-white bg-primary font-medium">1</button>
+            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">名單定義操作說明</p>
+          <p>新增 / 編輯 / 停用為業務主管權限。月跑執行中（assignment_run.status IN pending/running）所有操作將被鎖定。停用為軟刪除，歷史月跑快照不受影響。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal 1: 新增 / 編輯 名單定義 ===== -->
+  <div id="formModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('formModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-3xl relative transform transition-all max-h-[90vh] flex flex-col">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+          <div>
+            <h3 id="formModalTitle" class="text-lg font-semibold text-gray-900">新增名單定義</h3>
+            <p id="formModalSubtitle" class="text-xs text-gray-500 mt-0.5">作業年月 202605 — LIST_NO 將於儲存後自動產生</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="copyFromBtn" onclick="toggleCopySelector()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-md hover:bg-blue-50 transition">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              從既有名單複製
+            </button>
+            <button onclick="closeModal('formModal')" class="p-1 hover:bg-gray-100 rounded-md transition-colors">
+              <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 複製來源選擇器 (隱藏) -->
+        <div id="copySelector" class="hidden border-b border-border bg-blue-50/50 px-6 py-3">
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">選擇複製來源</label>
+          <div class="flex items-center gap-2">
+            <select class="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option>請選擇來源名單...</option>
+              <option>OB202604001 — 2026-04 汽車期中名單</option>
+              <option>OB202604002 — 2026-04 機車期中名單</option>
+              <option>OB202604005 — 2026-04 信貸中結名單</option>
+            </select>
+            <button class="px-3 py-2 text-xs font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition">套用</button>
+            <button onclick="toggleCopySelector()" class="px-3 py-2 text-xs font-medium text-gray-600 border border-border rounded-lg hover:bg-white transition">取消</button>
+          </div>
+        </div>
+
+        <!-- Modal Body (scrollable) -->
+        <div class="px-6 py-5 overflow-y-auto flex-1">
+
+          <!-- LIST_NO 顯示（編輯時 readonly，新增時 placeholder） -->
+          <div id="listNoSection" class="mb-5 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+            <div>
+              <div class="text-xs text-gray-500 mb-0.5">LIST_NO（系統自動產生）</div>
+              <div id="listNoDisplay" class="text-sm font-mono font-semibold text-gray-700">儲存後自動產生（範例：OB202605009）</div>
+            </div>
+            <span class="text-xs text-gray-400">格式 OB{YYYYMM}{NNN}</span>
+          </div>
+
+          <!-- 區塊 1：基本資訊 -->
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-3">
+              <i data-lucide="info" class="w-4 h-4 text-primary"></i>
+              <h4 class="text-sm font-semibold text-gray-800">基本資訊</h4>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">名單名稱 <span class="text-danger">*</span></label>
+                <input id="formListNm" type="text" maxlength="45" placeholder="例：2026-05 汽車期中名單"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <p class="text-xs text-gray-400 mt-1">最多 45 字元</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">產品類別 PROD_KIND <span class="text-danger">*</span></label>
+                <select id="formProdKind" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                  <option value="">請選擇</option>
+                  <option value="01">01 — 汽車</option>
+                  <option value="02">02 — 機車</option>
+                  <option value="03">03 — 信貸</option>
+                  <option value="04">04 — 房貸</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">卡別 CARD_TYPE</label>
+                <select id="formCardType" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                  <option value="">請選擇</option>
+                  <option value="H">H — 一般高分</option>
+                  <option value="S">S — 一般中分</option>
+                  <option value="E">E — 一般低分</option>
+                  <option value="S5">S5 — 中度逾期</option>
+                  <option value="E5">E5 — 嚴重逾期</option>
+                  <option value="M">M — 機車卡</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">獨立輸入，不由名單名稱解析</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">最佳產品 PROD_BEST</label>
+                <input id="formProdBest" type="text" maxlength="5" placeholder="選填，最多 5 字元"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">作業年月 PROJECT_WORKYM</label>
+                <input type="text" value="202605" disabled
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed">
+                <p class="text-xs text-gray-400 mt-1">系統自動填入當期年月</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 區塊 2：名單條件（多值欄位） -->
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-3">
+              <i data-lucide="filter" class="w-4 h-4 text-primary"></i>
+              <h4 class="text-sm font-semibold text-gray-800">名單條件</h4>
+              <span class="text-xs text-gray-400">多值欄位以 $$ 分隔儲存</span>
+            </div>
+            <div class="space-y-4">
+              <!-- CASEYEAR -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-sm font-medium text-gray-700">進件 / 滿期 / 中結年數 CASEYEAR <span class="text-danger">*</span></label>
+                  <button class="text-xs text-primary hover:underline" onclick="toggleAll('caseyear')">全選 / 清除</button>
+                </div>
+                <div id="caseyear-group" class="flex flex-wrap gap-1.5 p-3 border border-border rounded-lg bg-gray-50/50">
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="0"><span>0 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="1" checked><span>1 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="2" checked><span>2 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="3"><span>3 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="4"><span>4 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="5"><span>5 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="6"><span>6 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="7"><span>7 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="8"><span>8 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="9"><span>9 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="10"><span>10 年</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="99"><span>99 (其他)</span></label>
+                </div>
+              </div>
+
+              <!-- SPEC_TP -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-sm font-medium text-gray-700">專案類別 SPEC_TP <span class="text-danger">*</span></label>
+                  <button class="text-xs text-primary hover:underline" onclick="toggleAll('spec_tp')">全選 / 清除</button>
+                </div>
+                <div id="spec_tp-group" class="flex flex-wrap gap-1.5 p-3 border border-border rounded-lg bg-gray-50/50">
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="02" checked><span>02 一般</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="04" checked><span>04 專案 A</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="05" checked><span>05 專案 B</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="06"><span>06 專案 C</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="11"><span>11 高端</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="12"><span>12 VIP</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="13"><span>13 大眾</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="14"><span>14 公教</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="20"><span>20 經銷</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="spec_tp" value="22"><span>22 其他</span></label>
+                </div>
+              </div>
+
+              <!-- SETTLE_SRC -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">被他行代償案件 SETTLE_SRC <span class="text-danger">*</span></label>
+                <div id="settle_src-group" class="flex gap-1.5 p-3 border border-border rounded-lg bg-gray-50/50">
+                  <label class="chip-checkbox"><input type="checkbox" name="settle_src" value="Y" checked><span>Y — 含他行代償</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="settle_src" value="N" checked><span>N — 不含他行代償</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 區塊 3：期間設定 -->
+          <div class="mb-2">
+            <div class="flex items-center gap-2 mb-3">
+              <i data-lucide="calendar-range" class="w-4 h-4 text-primary"></i>
+              <h4 class="text-sm font-semibold text-gray-800">期間設定</h4>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">開始撈取期數 <span class="text-danger">*</span></label>
+                <input id="formPeriodStart" type="number" min="1" max="999" value="1"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <p class="text-xs text-gray-400 mt-1">月份（最多 3 位）</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">結束撈取期數 <span class="text-danger">*</span></label>
+                <input id="formPeriodEnd" type="number" min="1" max="999" value="6"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <p class="text-xs text-gray-400 mt-1">需 ≥ 開始撈取期數</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">間隔期數 <span class="text-danger">*</span></label>
+                <input id="formInterval" type="number" min="1" max="999" value="1"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <p class="text-xs text-gray-400 mt-1">月份（最多 3 位）</p>
+              </div>
+            </div>
+            <div id="periodError" class="hidden mt-2 flex items-center gap-1.5 text-xs text-danger">
+              <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+              <span>結束期數需大於等於開始期數</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-border shrink-0">
+          <p class="text-xs text-gray-400 flex items-center gap-1.5">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+            <span>標示 <span class="text-danger">*</span> 為必填欄位</span>
+          </p>
+          <div class="flex items-center gap-3">
+            <button onclick="closeModal('formModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+            <button onclick="closeModal('formModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">儲存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal 2: 停用確認 ===== -->
+  <div id="disableModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('disableModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative transform transition-all">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">停用名單定義</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            確定停用名單<br>
+            「<span id="disableListNm" class="font-semibold text-gray-800">2026-05 汽車期中名單</span>」（<span id="disableListNo" class="font-mono text-gray-700">OB202605001</span>）？
+          </p>
+        </div>
+        <div class="px-6 pb-2">
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700 leading-relaxed">
+            <div class="flex items-start gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+              <div>
+                <p class="font-semibold text-warning mb-1">此操作為軟刪除（無法復原）</p>
+                <ul class="list-disc list-inside space-y-0.5 text-gray-600">
+                  <li>停用後此名單將不再用於未來月跑</li>
+                  <li>無法在本系統重新啟用，需透過「複製」建立新名單</li>
+                  <li>歷史月跑快照資料完整保留，不受影響</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="closeModal('disableModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+          <button onclick="closeModal('disableModal')" class="px-4 py-2 text-sm font-medium text-white bg-warning rounded-lg hover:bg-amber-600 transition shadow-sm">確認停用</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Toast (隱藏) ===== -->
+  <div id="toast" class="hidden fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+    <i data-lucide="check-circle" class="w-4 h-4 text-success"></i>
+    <span id="toastMsg">已儲存</span>
+  </div>
+
+  <script>
+    // ===== Mock Data =====
+    const activeLists = [
+      { listNo: 'OB202605001', listNm: '2026-05 汽車期中名單', ym: '202605', cardType: 'H', prodKind: '01', summary: 'CASEYEAR=1$$2 / SPEC_TP=02$$04$$05 / 期 1-6', count: 8520 },
+      { listNo: 'OB202605002', listNm: '2026-05 汽車中分名單', ym: '202605', cardType: 'S', prodKind: '01', summary: 'CASEYEAR=1$$2$$3 / SPEC_TP=02$$04 / 期 1-6', count: 4830 },
+      { listNo: 'OB202605003', listNm: '2026-05 汽車低分名單', ym: '202605', cardType: 'E', prodKind: '01', summary: 'CASEYEAR=1$$2$$3 / SPEC_TP=02 / 期 7-12', count: 2150 },
+      { listNo: 'OB202605004', listNm: '2026-05 機車滿期名單', ym: '202605', cardType: 'M', prodKind: '02', summary: 'CASEYEAR=1$$2 / SPEC_TP=02$$04 / 期 1-3', count: 3420 },
+      { listNo: 'OB202605005', listNm: '2026-05 信貸中度逾期名單', ym: '202605', cardType: 'S5', prodKind: '03', summary: 'CASEYEAR=1$$2$$3$$4 / SPEC_TP=11$$12 / 期 1-6', count: 1280 },
+      { listNo: 'OB202605006', listNm: '2026-05 信貸嚴重逾期名單', ym: '202605', cardType: 'E5', prodKind: '03', summary: 'CASEYEAR=2$$3$$4$$5 / SPEC_TP=11 / 期 7-24', count: 670 },
+      { listNo: 'OB202605007', listNm: '2026-05 房貸中結名單', ym: '202605', cardType: 'H', prodKind: '04', summary: 'CASEYEAR=1$$2 / SPEC_TP=20 / 期 1-12', count: 920 },
+      { listNo: 'OB202605008', listNm: '2026-05 信貸高分名單', ym: '202605', cardType: 'H', prodKind: '03', summary: 'CASEYEAR=0$$1 / SPEC_TP=02$$04 / 期 1-3', count: 5410 },
+    ];
+
+    const inactiveLists = [
+      { listNo: 'OB202604003', listNm: '2026-04 汽車測試名單（已停用）', ym: '202604', cardType: 'S', prodKind: '01', updatedAt: '2026-04-22 14:30' },
+      { listNo: 'OB202603009', listNm: '2026-03 機車舊版名單', ym: '202603', cardType: 'M', prodKind: '02', updatedAt: '2026-03-28 10:15' },
+    ];
+
+    function getCardTypeBadge(t) {
+      const map = {
+        'H': 'bg-blue-100 text-blue-700',
+        'S': 'bg-cyan-100 text-cyan-700',
+        'E': 'bg-amber-100 text-amber-700',
+        'S5': 'bg-orange-100 text-orange-700',
+        'E5': 'bg-red-100 text-red-700',
+        'M': 'bg-purple-100 text-purple-700',
+      };
+      return `<span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${map[t] || 'bg-gray-100 text-gray-700'}">${t}</span>`;
+    }
+
+    function getProdKindLabel(k) {
+      const map = { '01': '汽車', '02': '機車', '03': '信貸', '04': '房貸' };
+      return map[k] || k;
+    }
+
+    // ===== Render =====
+    function renderActive() {
+      const tbody = document.getElementById('active-tbody');
+      tbody.innerHTML = activeLists.map(l => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition">
+          <td class="px-5 py-3 font-mono text-xs font-semibold text-gray-700">${l.listNo}</td>
+          <td class="px-5 py-3 font-medium text-gray-900">${l.listNm}</td>
+          <td class="px-5 py-3 text-gray-600 font-mono text-xs">${l.ym}</td>
+          <td class="px-5 py-3">
+            <div class="flex items-center gap-2">
+              ${getCardTypeBadge(l.cardType)}
+              <span class="text-xs text-gray-500">${l.prodKind} ${getProdKindLabel(l.prodKind)}</span>
+            </div>
+          </td>
+          <td class="px-5 py-3 text-xs text-gray-500 font-mono max-w-[260px] truncate" title="${l.summary}">${l.summary}</td>
+          <td class="px-5 py-3 text-right font-medium text-gray-900 tabular-nums">${l.count.toLocaleString()}</td>
+          <td class="px-5 py-3">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">
+              <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+              使用中
+            </span>
+          </td>
+          <td class="px-5 py-3">
+            <div class="flex items-center justify-end gap-1">
+              <button title="檢視" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+              <button title="編輯" onclick="openEditModal('${l.listNo}', '${l.listNm}')" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button title="停用" onclick="openDisableModal('${l.listNo}', '${l.listNm}')" class="p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition">
+                <i data-lucide="ban" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function renderInactive() {
+      const tbody = document.getElementById('inactive-tbody');
+      tbody.innerHTML = inactiveLists.map(l => `
+        <tr class="border-b border-border hover:bg-gray-50/50 transition">
+          <td class="px-5 py-3 font-mono text-xs font-semibold text-gray-500">${l.listNo}</td>
+          <td class="px-5 py-3 font-medium text-gray-600">${l.listNm}</td>
+          <td class="px-5 py-3 text-gray-500 font-mono text-xs">${l.ym}</td>
+          <td class="px-5 py-3">
+            <div class="flex items-center gap-2 opacity-60">
+              ${getCardTypeBadge(l.cardType)}
+              <span class="text-xs text-gray-500">${l.prodKind} ${getProdKindLabel(l.prodKind)}</span>
+            </div>
+          </td>
+          <td class="px-5 py-3 text-xs text-gray-500 font-mono">${l.updatedAt}</td>
+          <td class="px-5 py-3">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500">
+              <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+              已停用
+            </span>
+          </td>
+          <td class="px-5 py-3 text-right">
+            <button title="檢視" class="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-gray-600 border border-border rounded-md hover:bg-gray-50 transition">
+              <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+              查看詳情
+            </button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // ===== Tab switch =====
+    function switchTab(name) {
+      document.getElementById('tab-active').classList.toggle('active', name === 'active');
+      document.getElementById('tab-active').classList.toggle('text-gray-500', name !== 'active');
+      document.getElementById('tab-inactive').classList.toggle('active', name === 'inactive');
+      document.getElementById('tab-inactive').classList.toggle('text-gray-500', name !== 'inactive');
+      document.getElementById('panel-active').classList.toggle('hidden', name !== 'active');
+      document.getElementById('panel-inactive').classList.toggle('hidden', name !== 'inactive');
+    }
+
+    // ===== Modal helpers =====
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+      document.body.style.overflow = '';
+      if (id === 'formModal') {
+        document.getElementById('copySelector').classList.add('hidden');
+      }
+    }
+
+    function openCreateModal() {
+      document.getElementById('formModalTitle').textContent = '新增名單定義';
+      document.getElementById('formModalSubtitle').textContent = '作業年月 202605 — LIST_NO 將於儲存後自動產生';
+      document.getElementById('listNoDisplay').textContent = '儲存後自動產生（範例：OB202605009）';
+      document.getElementById('copyFromBtn').classList.remove('hidden');
+      // 清空 form
+      document.getElementById('formListNm').value = '';
+      document.getElementById('formProdKind').value = '';
+      document.getElementById('formCardType').value = '';
+      document.getElementById('formProdBest').value = '';
+      openModal('formModal');
+    }
+
+    function openEditModal(listNo, listNm) {
+      document.getElementById('formModalTitle').textContent = '編輯名單定義';
+      document.getElementById('formModalSubtitle').textContent = `LIST_NO ${listNo}（不可修改）`;
+      document.getElementById('listNoDisplay').textContent = listNo;
+      document.getElementById('copyFromBtn').classList.add('hidden');
+      // pre-fill 範例
+      document.getElementById('formListNm').value = listNm;
+      const item = activeLists.find(x => x.listNo === listNo);
+      if (item) {
+        document.getElementById('formProdKind').value = item.prodKind;
+        document.getElementById('formCardType').value = item.cardType;
+      }
+      openModal('formModal');
+    }
+
+    function openDisableModal(listNo, listNm) {
+      document.getElementById('disableListNo').textContent = listNo;
+      document.getElementById('disableListNm').textContent = listNm;
+      openModal('disableModal');
+    }
+
+    function toggleCopySelector() {
+      document.getElementById('copySelector').classList.toggle('hidden');
+    }
+
+    function toggleAll(name) {
+      const boxes = document.querySelectorAll(`input[name="${name}"]`);
+      const allChecked = Array.from(boxes).every(b => b.checked);
+      boxes.forEach(b => b.checked = !allChecked);
+    }
+
+    // ===== Period validation =====
+    function validatePeriod() {
+      const start = parseInt(document.getElementById('formPeriodStart').value || '0', 10);
+      const end = parseInt(document.getElementById('formPeriodEnd').value || '0', 10);
+      const errEl = document.getElementById('periodError');
+      if (end < start) {
+        errEl.classList.remove('hidden');
+      } else {
+        errEl.classList.add('hidden');
+      }
+    }
+    document.getElementById('formPeriodStart').addEventListener('input', validatePeriod);
+    document.getElementById('formPeriodEnd').addEventListener('input', validatePeriod);
+
+    // ===== Role toggle (demo only — Sales Manager 為主要使用者，Admin/User 切換僅展示) =====
+    function setRole(role) {
+      const adminBtn = document.getElementById('role-admin');
+      const userBtn = document.getElementById('role-user');
+      if (role === 'admin') {
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // ===== Demo state switch =====
+    function showDemoState(state) {
+      // demo button active 樣式
+      ['normal', 'empty', 'locked'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) {
+          btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        } else {
+          btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+        }
+      });
+
+      const tabsWrap = document.querySelector('.bg-white.rounded-t-lg.border.border-border.border-b-0');
+      const panelActive = document.getElementById('panel-active');
+      const panelInactive = document.getElementById('panel-inactive');
+      const panelEmpty = document.getElementById('panel-empty');
+      const lockedBanner = document.getElementById('lockedBanner');
+      const btnCreate = document.getElementById('btn-create');
+      const btnRefresh = document.getElementById('btn-refresh');
+      const tabActiveCount = document.getElementById('tab-active-count');
+
+      // 重設
+      lockedBanner.classList.add('hidden');
+      panelEmpty.classList.add('hidden');
+      tabsWrap.classList.remove('hidden');
+      btnCreate.disabled = false;
+      btnCreate.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      // 操作欄按鈕（編輯 / 停用）— 表格內按鈕的 disabled 樣式（locked 狀態）
+      const rowEditBtns = document.querySelectorAll('#active-tbody button[title="編輯"], #active-tbody button[title="停用"]');
+
+      if (state === 'normal') {
+        // 預設：使用中分頁顯示
+        switchTab('active');
+        tabActiveCount.textContent = '8';
+        rowEditBtns.forEach(b => {
+          b.disabled = false;
+          b.classList.remove('opacity-40', 'cursor-not-allowed');
+        });
+      } else if (state === 'empty') {
+        // 隱藏 active/inactive panel，顯示 empty
+        panelActive.classList.add('hidden');
+        panelInactive.classList.add('hidden');
+        panelEmpty.classList.remove('hidden');
+        tabActiveCount.textContent = '0';
+      } else if (state === 'locked') {
+        // 顯示鎖定 banner，禁用編輯/新增/停用 按鈕
+        lockedBanner.classList.remove('hidden');
+        switchTab('active');
+        tabActiveCount.textContent = '8';
+        btnCreate.disabled = true;
+        btnCreate.classList.add('opacity-50', 'cursor-not-allowed');
+        rowEditBtns.forEach(b => {
+          b.disabled = true;
+          b.classList.add('opacity-40', 'cursor-not-allowed');
+        });
+      }
+    }
+
+    // ===== Init =====
+    renderActive();
+    renderInactive();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

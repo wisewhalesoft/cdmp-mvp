@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快照詳情 — E07 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
+    .tab-btn { position: relative; }
+    .tab-btn.active { color: #2563EB; }
+    .tab-btn.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #2563EB; }
+    .json-viewer { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.55; }
+    details > summary { cursor: pointer; user-select: none; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .arrow { display: inline-block; transition: transform 0.15s; }
+    details[open] > summary > .arrow { transform: rotate(90deg); }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+
+      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+        E07 客戶名單分派
+      </div>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="percent" class="w-4 h-4"></i>比例設定</a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <h1 class="text-base font-semibold text-gray-800">快照詳情</h1>
+    <div class="flex items-center gap-4">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        Sales Manager
+      </span>
+      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
+        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
+        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      </div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar (本頁以 sub-tab 為主，demo 切 tab) -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="switchSnapTab('config')" id="demo-config" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">Config 快照</button>
+      <button onclick="switchSnapTab('input')" id="demo-input" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Input List 快照</button>
+      <button onclick="switchSnapTab('result')" id="demo-result" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Result 快照</button>
+      <span class="ml-3 text-xs text-gray-400">|</span>
+      <a href="34-run-history.html" class="text-xs text-primary hover:underline inline-flex items-center gap-1">
+        <i data-lucide="arrow-left" class="w-3 h-3"></i>
+        返回執行歷史
+      </a>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <!-- ===== Run Info Bar ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 py-3 border-b border-border flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-success">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+              已完成
+            </span>
+            <span class="text-xs text-gray-500">Run ID</span>
+            <span class="font-mono text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">7a1b2c3d-4e5f-41d4-a716-446655440002</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+              <i data-lucide="lock" class="w-3 h-3"></i>
+              READ-ONLY 不可變
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="downloadJson()" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-md hover:bg-blue-50 transition">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              下載快照 JSON
+            </button>
+            <a href="36-run-compare.html?runA=7a1b2c3d-4e5f" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
+              <i data-lucide="git-compare" class="w-3.5 h-3.5"></i>
+              以此比對
+            </a>
+          </div>
+        </div>
+        <div class="px-5 py-4 grid grid-cols-6 gap-4">
+          <div>
+            <div class="text-xs text-gray-500 mb-1">作業年月</div>
+            <div class="text-sm font-semibold text-gray-800 font-mono">202604</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">觸發者</div>
+            <div class="text-sm font-medium text-gray-800">王小明</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">觸發時間</div>
+            <div class="text-sm text-gray-700 font-mono">2026-04-24 10:30:12</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">完成時間</div>
+            <div class="text-sm text-gray-700 font-mono">2026-04-24 11:02:08</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">總分派</div>
+            <div class="text-sm font-semibold text-gray-800 tabular-nums">9,120 筆</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">快照保留</div>
+            <div class="text-sm text-gray-700">至 2029-04-24 <span class="text-xs text-gray-400">(3 年, AD-E07-3)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 三個 Sub-Tab ===== -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+        <div class="px-5 border-b border-border flex items-center justify-between">
+          <div class="flex items-center gap-1">
+            <button id="tab-config" onclick="switchSnapTab('config')" class="tab-btn active px-4 py-3 text-sm font-medium inline-flex items-center gap-1.5">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              設定快照
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-blue-50 text-primary rounded-full">config</span>
+            </button>
+            <button id="tab-input" onclick="switchSnapTab('input')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
+              <i data-lucide="list-tree" class="w-4 h-4"></i>
+              輸入名單快照
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full">input_list</span>
+            </button>
+            <button id="tab-result" onclick="switchSnapTab('result')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
+              <i data-lucide="table" class="w-4 h-4"></i>
+              結果快照
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full">result</span>
+            </button>
+          </div>
+          <span class="text-xs text-gray-400">snapshot_type 三份均已寫入</span>
+        </div>
+
+        <!-- ============ Config Panel ============ -->
+        <div id="panel-config" class="p-5 space-y-4">
+          <!-- 計分版本 -->
+          <details open class="border border-border rounded-lg bg-gray-50/40">
+            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="arrow text-gray-400">▶</span>
+                <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
+                <span class="text-sm font-semibold text-gray-800">計分卡版本（card_version）</span>
+              </div>
+              <span class="text-xs font-mono text-gray-500">v3 / 6 個 CARD_TYPE</span>
+            </summary>
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50/60 text-xs">
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">CARD_TYPE</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">名稱</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">card_version</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">備註</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  <tr><td class="px-3 py-2 font-mono">H</td><td class="px-3 py-2">一般高分</td><td class="px-3 py-2 text-right font-mono">3</td><td class="px-3 py-2 text-gray-500">2026-04 調整 score_threshold 5 分</td></tr>
+                  <tr><td class="px-3 py-2 font-mono">S</td><td class="px-3 py-2">一般中分</td><td class="px-3 py-2 text-right font-mono">3</td><td class="px-3 py-2 text-gray-500">2026-04 同步調整</td></tr>
+                  <tr><td class="px-3 py-2 font-mono">E</td><td class="px-3 py-2">一般低分</td><td class="px-3 py-2 text-right font-mono">2</td><td class="px-3 py-2 text-gray-500">未變動</td></tr>
+                  <tr><td class="px-3 py-2 font-mono">S5</td><td class="px-3 py-2">中度逾期</td><td class="px-3 py-2 text-right font-mono">2</td><td class="px-3 py-2 text-gray-500">未變動</td></tr>
+                  <tr><td class="px-3 py-2 font-mono">E5</td><td class="px-3 py-2">嚴重逾期</td><td class="px-3 py-2 text-right font-mono">1</td><td class="px-3 py-2 text-gray-500">初始版本</td></tr>
+                  <tr><td class="px-3 py-2 font-mono">M</td><td class="px-3 py-2">機車</td><td class="px-3 py-2 text-right font-mono">2</td><td class="px-3 py-2 text-gray-500">未變動</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <!-- LIST_NO 部門比例 -->
+          <details open class="border border-border rounded-lg bg-gray-50/40">
+            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="arrow text-gray-400">▶</span>
+                <i data-lucide="building-2" class="w-4 h-4 text-primary"></i>
+                <span class="text-sm font-semibold text-gray-800">部門比例 ob_dept_pct</span>
+              </div>
+              <span class="text-xs font-mono text-gray-500">8 個 LIST_NO × 5 部門</span>
+            </summary>
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="bg-gray-50/60">
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">LIST_NO</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D01</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D02</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D03</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D04</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D05</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">合計</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border font-mono">
+                  <tr><td class="px-3 py-2 font-semibold">OB202604001</td><td class="px-3 py-2 text-right">30.0%</td><td class="px-3 py-2 text-right">25.0%</td><td class="px-3 py-2 text-right">20.0%</td><td class="px-3 py-2 text-right">15.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right text-success">100%</td></tr>
+                  <tr><td class="px-3 py-2 font-semibold">OB202604002</td><td class="px-3 py-2 text-right">35.0%</td><td class="px-3 py-2 text-right">30.0%</td><td class="px-3 py-2 text-right">15.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right text-success">100%</td></tr>
+                  <tr><td class="px-3 py-2 font-semibold">OB202604005</td><td class="px-3 py-2 text-right">25.0%</td><td class="px-3 py-2 text-right">25.0%</td><td class="px-3 py-2 text-right">20.0%</td><td class="px-3 py-2 text-right">20.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right text-success">100%</td></tr>
+                  <tr class="text-gray-500"><td class="px-3 py-2">⋯ 其他 5 筆 LIST_NO</td><td colspan="6" class="px-3 py-2 text-center">展開查看完整 8 筆</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <!-- 部門 → 人員 巢狀 -->
+          <details class="border border-border rounded-lg bg-gray-50/40">
+            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="arrow text-gray-400">▶</span>
+                <i data-lucide="users" class="w-4 h-4 text-primary"></i>
+                <span class="text-sm font-semibold text-gray-800">部門人員比例 ob_empl_set</span>
+              </div>
+              <span class="text-xs font-mono text-gray-500">5 部門 × 142 人員</span>
+            </summary>
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg space-y-2">
+              <details class="border border-border rounded">
+                <summary class="px-3 py-2 hover:bg-gray-50 transition flex items-center justify-between">
+                  <span class="text-sm"><span class="arrow text-gray-400 inline-block w-3">▶</span> <span class="font-mono font-semibold">D01</span> 業務一部 (32 人)</span>
+                  <span class="text-xs text-gray-500">合計 100.0%</span>
+                </summary>
+                <div class="px-3 py-2 text-xs text-gray-600 grid grid-cols-2 gap-x-6 gap-y-1 font-mono">
+                  <div>EMP001 王大明 — 5.0%</div><div>EMP002 林志強 — 4.5%</div>
+                  <div>EMP003 陳美華 — 4.0%</div><div>EMP004 黃文豪 — 3.5%</div>
+                  <div class="text-gray-400 col-span-2">⋯ 其他 28 人</div>
+                </div>
+              </details>
+              <details class="border border-border rounded">
+                <summary class="px-3 py-2 hover:bg-gray-50 transition flex items-center justify-between">
+                  <span class="text-sm"><span class="arrow text-gray-400 inline-block w-3">▶</span> <span class="font-mono font-semibold">D02</span> 業務二部 (28 人)</span>
+                  <span class="text-xs text-gray-500">合計 100.0%</span>
+                </summary>
+                <div class="px-3 py-2 text-xs text-gray-500 font-mono">展開查看 28 筆</div>
+              </details>
+              <div class="text-xs text-gray-400 px-3 py-1">⋯ D03 / D04 / D05 共 82 位人員</div>
+            </div>
+          </details>
+
+          <!-- 其他設定 JSON -->
+          <details class="border border-border rounded-lg bg-gray-50/40">
+            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="arrow text-gray-400">▶</span>
+                <i data-lucide="braces" class="w-4 h-4 text-primary"></i>
+                <span class="text-sm font-semibold text-gray-800">ob_assign_config（CR 回分規則 / 其他全域設定）</span>
+              </div>
+              <span class="text-xs font-mono text-gray-500">JSONB</span>
+            </summary>
+            <div class="px-4 py-3 border-t border-border bg-gray-900 rounded-b-lg">
+              <pre class="json-viewer text-gray-100 overflow-x-auto"><span class="text-gray-400">{</span>
+  <span class="text-pink-300">"cr_rule_enabled"</span>: <span class="text-green-300">true</span>,
+  <span class="text-pink-300">"cr_rule_threshold"</span>: <span class="text-amber-300">90</span>,
+  <span class="text-gray-500">// 90 天無回應自動回分</span>
+  <span class="text-pink-300">"daily_quota_enabled"</span>: <span class="text-green-300">true</span>,
+  <span class="text-pink-300">"daily_quota_max"</span>: <span class="text-amber-300">350</span>,
+  <span class="text-pink-300">"score_threshold_card_h"</span>: <span class="text-amber-300">85</span>,
+  <span class="text-pink-300">"score_threshold_card_s"</span>: <span class="text-amber-300">70</span>,
+  <span class="text-pink-300">"deduplication_strategy"</span>: <span class="text-green-300">"latest_run_wins"</span>
+<span class="text-gray-400">}</span></pre>
+            </div>
+          </details>
+        </div>
+
+        <!-- ============ Input List Panel ============ -->
+        <div id="panel-input" class="p-5 hidden">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">總筆數（Stage 1）</div>
+              <div class="text-2xl font-bold text-primary tabular-nums">48,200</div>
+              <div class="text-xs text-gray-500 mt-1">原始未篩選名單</div>
+            </div>
+            <div class="bg-gray-50 border border-border rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">active LIST_NO 數</div>
+              <div class="text-2xl font-bold text-gray-700 tabular-nums">8</div>
+              <div class="text-xs text-gray-500 mt-1">本月使用中名單</div>
+            </div>
+            <div class="bg-amber-50 border border-amber-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">payload 大小</div>
+              <div class="text-2xl font-bold text-warning tabular-nums">2.3 MB</div>
+              <div class="text-xs text-gray-500 mt-1">JSONB 壓縮後</div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-border rounded-lg">
+            <div class="px-4 py-3 border-b border-border flex items-center justify-between">
+              <span class="text-sm font-semibold text-gray-700">LIST_NO 與筆數明細</span>
+              <div class="flex items-center gap-2">
+                <input type="text" placeholder="依 custo_no 搜尋是否在輸入名單中..."
+                  class="px-3 py-1.5 text-xs border border-border rounded-md w-72 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                  查詢
+                </button>
+              </div>
+            </div>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gray-50/60 text-xs">
+                  <th class="text-left px-4 py-2 font-semibold text-gray-600">LIST_NO</th>
+                  <th class="text-left px-4 py-2 font-semibold text-gray-600">名單名稱</th>
+                  <th class="text-left px-4 py-2 font-semibold text-gray-600">CARD_TYPE</th>
+                  <th class="text-right px-4 py-2 font-semibold text-gray-600">原始筆數</th>
+                  <th class="text-right px-4 py-2 font-semibold text-gray-600">佔比</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604001</td><td class="px-4 py-2">2026-04 汽車期中名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">8,420</td><td class="px-4 py-2 text-right font-mono text-gray-500">17.5%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604002</td><td class="px-4 py-2">2026-04 汽車中分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-700">S</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">4,750</td><td class="px-4 py-2 text-right font-mono text-gray-500">9.9%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604003</td><td class="px-4 py-2">2026-04 汽車低分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">E</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">2,140</td><td class="px-4 py-2 text-right font-mono text-gray-500">4.4%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604004</td><td class="px-4 py-2">2026-04 機車滿期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">M</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">3,360</td><td class="px-4 py-2 text-right font-mono text-gray-500">7.0%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604005</td><td class="px-4 py-2">2026-04 信貸中度逾期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">S5</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">1,260</td><td class="px-4 py-2 text-right font-mono text-gray-500">2.6%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604006</td><td class="px-4 py-2">2026-04 信貸嚴重逾期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">E5</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">650</td><td class="px-4 py-2 text-right font-mono text-gray-500">1.3%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604007</td><td class="px-4 py-2">2026-04 房貸中結名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">920</td><td class="px-4 py-2 text-right font-mono text-gray-500">1.9%</td></tr>
+                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604008</td><td class="px-4 py-2">2026-04 信貸高分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">26,700</td><td class="px-4 py-2 text-right font-mono text-gray-500">55.4%</td></tr>
+              </tbody>
+              <tfoot>
+                <tr class="bg-gray-50/60 font-semibold">
+                  <td colspan="3" class="px-4 py-2 text-right">合計</td>
+                  <td class="px-4 py-2 text-right font-mono tabular-nums">48,200</td>
+                  <td class="px-4 py-2 text-right font-mono text-gray-500">100.0%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- ============ Result Panel ============ -->
+        <div id="panel-result" class="p-5 hidden">
+          <div class="grid grid-cols-4 gap-4 mb-4">
+            <div class="bg-green-50 border border-green-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">Stage 4 最終分派</div>
+              <div class="text-2xl font-bold text-success tabular-nums">9,120</div>
+            </div>
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">覆蓋率</div>
+              <div class="text-2xl font-bold text-primary tabular-nums">93.5%</div>
+            </div>
+            <div class="bg-purple-50 border border-purple-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">分派部門</div>
+              <div class="text-2xl font-bold text-purple-700 tabular-nums">5</div>
+            </div>
+            <div class="bg-amber-50 border border-amber-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">分派人員</div>
+              <div class="text-2xl font-bold text-warning tabular-nums">138</div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-border rounded-lg">
+            <div class="px-4 py-3 border-b border-border flex items-center justify-between">
+              <span class="text-sm font-semibold text-gray-700">前 50 筆 ob_pool_data_list 預覽</span>
+              <div class="flex items-center gap-2">
+                <input type="text" placeholder="依 custo_no 或 emplid 搜尋..."
+                  class="px-3 py-1.5 text-xs border border-border rounded-md w-72 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                  查詢
+                </button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="bg-gray-50/60">
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">LIST_NO</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">orgno</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">appl_no</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">score</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">card_level</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">tier_level</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">dept_id</th>
+                    <th class="text-left px-3 py-2 font-semibold text-gray-600">emplid</th>
+                  </tr>
+                </thead>
+                <tbody id="resultTbody" class="divide-y divide-border font-mono text-gray-700"></tbody>
+              </table>
+            </div>
+            <div class="px-4 py-2 border-t border-border text-xs text-gray-500">
+              顯示前 50 / 共 9,120 筆 — 完整資料請使用搜尋或下載 JSON 快照
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- footer note -->
+      <div class="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">快照詳情說明</p>
+          <p>F066 三份快照（config / input_list / result）均為 INSERT-only 不可變紀錄，由月跑完成時寫入 assignment_run_snapshot。保留期 3 年（AD-E07-3）。資料量 &gt; 100,000 筆時前端搜尋自動切換至後端搜尋 API（5.2 endpoint）。</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // ===== Mock Result Data =====
+    const sampleResult = [
+      ['OB202604001','9001234567','APPL000001',92,'A','T1','D01','EMP001'],
+      ['OB202604001','9001234568','APPL000002',88,'A','T1','D01','EMP002'],
+      ['OB202604001','9001234569','APPL000003',75,'B','T2','D02','EMP015'],
+      ['OB202604002','9001234570','APPL000004',68,'B','T2','D02','EMP021'],
+      ['OB202604002','9001234571','APPL000005',60,'C','T3','D03','EMP034'],
+      ['OB202604003','9001234572','APPL000006',45,'D','T4','D04','EMP058'],
+      ['OB202604004','9001234573','APPL000007',82,'A','T1M','D05','EMP102'],
+      ['OB202604005','9001234574','APPL000008',38,'D','T51','D03','EMP041'],
+      ['OB202604005','9001234575','APPL000009',32,'D','T51','D04','EMP063'],
+      ['OB202604006','9001234576','APPL000010',22,'D','T52','D02','EMP019'],
+      ['OB202604008','9001234577','APPL000011',95,'A','T1','D01','EMP005'],
+      ['OB202604008','9001234578','APPL000012',91,'A','T1','D01','EMP008'],
+      ['OB202604008','9001234579','APPL000013',78,'B','T2','D02','EMP024'],
+      ['OB202604001','9001234580','APPL000014',71,'B','T2','D02','EMP028'],
+      ['OB202604001','9001234581','APPL000015',64,'C','T3','D03','EMP037'],
+    ];
+
+    function renderResult() {
+      const tb = document.getElementById('resultTbody');
+      tb.innerHTML = sampleResult.map(r => `
+        <tr class="hover:bg-gray-50/50 transition">
+          <td class="px-3 py-2 font-semibold text-gray-700">${r[0]}</td>
+          <td class="px-3 py-2">${r[1]}</td>
+          <td class="px-3 py-2">${r[2]}</td>
+          <td class="px-3 py-2 text-right tabular-nums">${r[3]}</td>
+          <td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded ${r[4]==='A'?'bg-blue-100 text-blue-700':r[4]==='B'?'bg-cyan-100 text-cyan-700':r[4]==='C'?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'}">${r[4]}</span></td>
+          <td class="px-3 py-2 text-gray-600">${r[5]}</td>
+          <td class="px-3 py-2">${r[6]}</td>
+          <td class="px-3 py-2">${r[7]}</td>
+        </tr>
+      `).join('');
+    }
+
+    // ===== Tab switch =====
+    function switchSnapTab(name) {
+      ['config','input','result'].forEach(n => {
+        document.getElementById('tab-' + n).classList.toggle('active', n === name);
+        document.getElementById('tab-' + n).classList.toggle('text-gray-500', n !== name);
+        document.getElementById('panel-' + n).classList.toggle('hidden', n !== name);
+        const dbtn = document.getElementById('demo-' + n);
+        if (dbtn) {
+          if (n === name) dbtn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+          else dbtn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+        }
+      });
+      lucide.createIcons();
+    }
+
+    function downloadJson() {
+      const t = document.createElement('div');
+      t.className = 'fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg flex items-center gap-2';
+      t.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-success"></i><span>已下載 snapshot_7a1b2c3d.json (3.2 MB)</span>`;
+      document.body.appendChild(t);
+      lucide.createIcons();
+      setTimeout(() => t.remove(), 2400);
+    }
+
+    function setRole(role) {
+      const a = document.getElementById('role-admin'), u = document.getElementById('role-user');
+      if (role === 'admin') {
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      } else {
+        u.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
+        a.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
+      }
+    }
+
+    // init
+    renderResult();
+    switchSnapTab('config');
+    lucide.createIcons();
+  </script>
+</body>
+</html>
