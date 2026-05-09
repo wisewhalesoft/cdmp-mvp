@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from '../entities/user.entity';
+import { ObAssignConfig } from '../entities/ob-assign-config.entity';
 
 const SEED_ACCOUNTS = [
   {
@@ -43,6 +44,16 @@ const SEED_ACCOUNTS = [
   },
 ];
 
+// E07 ob_assign_config 全域設定（AD-E07-5）— 對應 migration 130 的 INSERT，
+// dev synchronize 不跑 migration 故此處 seed 補
+const SEED_ASSIGN_CONFIGS = [
+  {
+    config_key: 'cr_reassignment_enabled',
+    config_value: 'false',
+    description: 'CR 回分全域開關（F059）',
+  },
+];
+
 async function seed() {
   const dbType = process.env.DB_TYPE || 'postgres';
   const dataSource = new DataSource({
@@ -52,7 +63,7 @@ async function seed() {
     username: process.env.DB_USERNAME || 'cdmp',
     password: process.env.DB_PASSWORD || 'cdmp_secret',
     database: process.env.DB_NAME || 'cdmp_dev',
-    entities: [User],
+    entities: [User, ObAssignConfig],
     synchronize: true,
   });
 
@@ -60,6 +71,7 @@ async function seed() {
   console.log('Database connected.');
 
   const userRepo = dataSource.getRepository(User);
+  const configRepo = dataSource.getRepository(ObAssignConfig);
 
   for (const account of SEED_ACCOUNTS) {
     const existing = await userRepo.findOne({ where: { email: account.email } });
@@ -97,6 +109,24 @@ async function seed() {
     console.log(
       `  Created: ${account.email} (${account.role}, ${account.status}, is_sales_manager=${account.is_sales_manager})`,
     );
+  }
+
+  // === ob_assign_config seed ===
+  console.log('Seeding ob_assign_config...');
+  for (const cfg of SEED_ASSIGN_CONFIGS) {
+    const existing = await configRepo.findOne({ where: { config_key: cfg.config_key } });
+    if (existing) {
+      console.log(`  Skip: ${cfg.config_key} = ${existing.config_value}`);
+      continue;
+    }
+    await configRepo.save(
+      configRepo.create({
+        config_key: cfg.config_key,
+        config_value: cfg.config_value,
+        description: cfg.description,
+      }),
+    );
+    console.log(`  Created: ${cfg.config_key} = ${cfg.config_value}`);
   }
 
   console.log('Seed complete.');
