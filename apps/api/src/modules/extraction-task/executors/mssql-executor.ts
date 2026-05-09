@@ -4,6 +4,10 @@ import { ColumnMetadata } from '../extraction-executor.provider';
 import { BaseExecutor } from './base-executor';
 
 const CONNECT_TIMEOUT = 10000;
+// 全量擷取走 OFFSET pagination，OFFSET 大時單批 query 可能 > 15s 預設 timeout（OBPOOLDATA
+// 1.48M 列 × 122 寬欄到 offset ~660K 觀察值 > 15s 拋 'Timeout: Request failed to complete in 15000ms'）
+// 設為 5 min 給寬表 + 高 offset 場景充足容忍度
+const REQUEST_TIMEOUT = 300000;
 
 export interface MSSQLDriver {
   ConnectionPool: new (config: any) => any;
@@ -40,6 +44,7 @@ export class MSSQLExecutor extends BaseExecutor {
         encrypt: false,
         trustServerCertificate: true,
         connectTimeout: CONNECT_TIMEOUT,
+        requestTimeout: REQUEST_TIMEOUT,
       },
     });
     try {
