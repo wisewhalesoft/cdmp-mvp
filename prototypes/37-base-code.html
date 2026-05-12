@@ -150,13 +150,13 @@
               <i data-lucide="package" class="w-3.5 h-3.5 inline mr-1"></i>
               PROD_KIND
               <span class="ml-1 text-xs text-gray-400">產品類別</span>
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full" id="cnt-PROD_KIND">8</span>
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full" id="cnt-PROD_KIND">3</span>
             </button>
             <button id="tab-SPEC_TP" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('SPEC_TP')">
               <i data-lucide="layers" class="w-3.5 h-3.5 inline mr-1"></i>
               SPEC_TP
               <span class="ml-1 text-xs text-gray-400">專案類別</span>
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-SPEC_TP">10</span>
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-SPEC_TP">32</span>
             </button>
             <button id="tab-CASEYEAR" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('CASEYEAR')">
               <i data-lucide="calendar-days" class="w-3.5 h-3.5 inline mr-1"></i>
@@ -358,29 +358,63 @@
   <script>
     // ===== Mock Data: 三類代碼 =====
     const TODAY = '20260509';
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sample data 來源：reference/DumpData/OBMCODEDF_20260505.csv
+    //
+    // 落差說明：
+    //   - dump 真實 tbl_id 為 '01'/'02' 數字編碼，spec F068 要求 logical
+    //     字串 'PROD_KIND'/'SPEC_TP'/'CASEYEAR'。本 prototype 沿用 spec
+    //     的 logical tab 名稱，內容取 dump 對應數字 tbl_id 的真實列。
+    //   - dump 無 CASEYEAR 對應類別（年數 0~10/99 在 OB 端可能由其他機制
+    //     處理）。CASEYEAR tab 暫保留合理範例值，待 F068 正式上線後由業
+    //     務主管首次新建。
+    //   - dump 全部 stadt='20001101' / enddt='20991231'，故 PROD_KIND /
+    //     SPEC_TP 全為 active 狀態；demo state 中的 expired-included
+    //     僅 CASEYEAR 有變異。
+    // ─────────────────────────────────────────────────────────────────────────
     const codes = {
+      // dump tbl_id='01'（產品類別，3 筆）
       PROD_KIND: [
-        { tblCd: '01', tblDesc1: '汽車貸款', tblDesc2: '個人汽車購車貸款', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '02', tblDesc1: '機車貸款', tblDesc2: '個人機車購車貸款', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '03', tblDesc1: '信用貸款', tblDesc2: '個人信用貸款', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '04', tblDesc1: '房屋貸款', tblDesc2: '住宅型房屋貸款', stadt: '20240601', enddt: '99991231' },
-        { tblCd: '05', tblDesc1: '商用車貸款', tblDesc2: '商業用途車貸（新增）', stadt: '20260301', enddt: '99991231' },
-        { tblCd: '06', tblDesc1: '中古車貸款', tblDesc2: '二手車購車貸款', stadt: '20260601', enddt: '99991231' }, // future
-        { tblCd: '07', tblDesc1: '舊版房貸', tblDesc2: '已下架產品', stadt: '20210101', enddt: '20251231' }, // expired
-        { tblCd: '08', tblDesc1: '促銷專案 A', tblDesc2: '2024 春季促銷', stadt: '20240301', enddt: '20240630' }, // expired
+        { tblCd: '01', tblDesc1: '汽車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '02', tblDesc1: '機車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '03', tblDesc1: '一般商品', tblDesc2: '', stadt: '20001101', enddt: '20991231' },
       ],
+      // dump tbl_id='02'（專案類別，32 筆）
       SPEC_TP: [
-        { tblCd: '02', tblDesc1: '一般', tblDesc2: '一般專案', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '04', tblDesc1: '專案 A', tblDesc2: '行銷活動 A', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '05', tblDesc1: '專案 B', tblDesc2: '行銷活動 B', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '06', tblDesc1: '專案 C', tblDesc2: '行銷活動 C', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '11', tblDesc1: '高端', tblDesc2: '高資產客戶專屬', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '12', tblDesc1: 'VIP', tblDesc2: 'VIP 客戶', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '13', tblDesc1: '大眾', tblDesc2: '一般大眾客戶', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '14', tblDesc1: '公教', tblDesc2: '公教族群專案', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '20', tblDesc1: '經銷', tblDesc2: '經銷商通路', stadt: '20240101', enddt: '99991231' },
-        { tblCd: '22', tblDesc1: '其他', tblDesc2: '未分類', stadt: '20240101', enddt: '99991231' },
+        { tblCd: '01', tblDesc1: '新車',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '02', tblDesc1: '中古車',       tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '03', tblDesc1: '原融',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '04', tblDesc1: '原融代償',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '05', tblDesc1: '在庫融資',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '11', tblDesc1: '保單',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '12', tblDesc1: '信貸',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '31', tblDesc1: '遠信機車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '32', tblDesc1: '遠信圖書',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '33', tblDesc1: '遠信綜合',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '41', tblDesc1: '機器設備',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '42', tblDesc1: '重型機車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '51', tblDesc1: '一般分期',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '52', tblDesc1: '諾蒂亞',       tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '61', tblDesc1: '亞太策盟A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '62', tblDesc1: '亞太策盟B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '63', tblDesc1: '第一專案A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '64', tblDesc1: '第一專案B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '65', tblDesc1: '廿一專案A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '66', tblDesc1: '廿一專案B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '67', tblDesc1: '台灣才將專案A', tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '68', tblDesc1: '台灣才將專案B', tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '69', tblDesc1: '遠信AR專案A',  tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '70', tblDesc1: '遠信AR專案B',  tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '71', tblDesc1: '遠信AR專案C',  tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '72', tblDesc1: '和灣專案A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '73', tblDesc1: '和灣專案B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '74', tblDesc1: '機車原融',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '75', tblDesc1: '機車自承',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '76', tblDesc1: '商品分期',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '77', tblDesc1: '機車買賣',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
+        { tblCd: '99', tblDesc1: '其他',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
       ],
+      // dump 中無對應類別；以下為 spec F068 預期格式範例，待業務主管首次新建
       CASEYEAR: [
         { tblCd: '0',  tblDesc1: '0 年',   tblDesc2: '當年新進件',     stadt: '20240101', enddt: '99991231' },
         { tblCd: '1',  tblDesc1: '1 年',   tblDesc2: '前 1 年案件',    stadt: '20240101', enddt: '99991231' },
