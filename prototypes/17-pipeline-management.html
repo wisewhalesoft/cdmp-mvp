@@ -22,12 +22,15 @@
 <body class="bg-bg min-h-screen">
 
   <!-- Sidebar -->
-  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30">
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
     <div class="px-5 py-4 border-b border-border">
       <div class="text-xl font-bold text-primary">CDMP</div>
       <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
     </div>
     <nav class="flex-1 py-3">
+
+      <!-- Group: 資料治理 -->
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
       <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="users" class="w-4 h-4"></i>帳號管理
       </a>
@@ -40,48 +43,59 @@
       <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
         <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
       </a>
+
+      <!-- Divider -->
+      <div class="mx-5 my-3 border-t border-border"></div>
+
+      <!-- Group: 應用模組 -->
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
       <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
       </a>
 
-      <!-- E07 區塊 -->
-      <div class="mt-4 px-5 py-1 nav-section-title font-semibold text-gray-400 uppercase flex items-center gap-2">
-        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
-        E07 客戶名單分派
-      </div>
-      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
-      </a>
-      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
-      </a>
-      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
-      </a>
-      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
-      </a>
-      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
-      </a>
-      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
-      </a>
-      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
-      </a>
-      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
-      </a>
-      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
-      </a>
-      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
-      </a>
-      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+      <!-- Collapsible：客戶名單分派 -->
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="false"
+        class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <span class="flex items-center gap-3">
+          <i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派
+        </span>
+        <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200"></i>
+      </button>
+      <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 0px;">
+      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
       </a>
+      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
+      </a>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
+      </a>
+      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
+      </a>
+      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+      </a>
+      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
+      </a>
+      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
+      </a>
+      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
+      </a>
+      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
+      </a>
+      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
+      </a>
+      </div>
     </nav>
   </aside>
 
@@ -1024,6 +1038,50 @@
       lucide.createIcons();
       renderTrendChart('7d');
     });
+  </script>
+  <script>
+    // ===== Sidebar collapsible：客戶名單分派 =====
+    (function() {
+      const assignmentPages = [
+        '27-list-definition.html', '28-scoring-config.html', '29-ratio-config.html',
+        '30-stage0-estimate.html', '31-trigger-run.html', '32-run-progress.html',
+        '33-run-summary.html', '34-run-history.html', '35-snapshot-detail.html',
+        '36-run-compare.html', '37-base-code.html'
+      ];
+      const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
+      const isAssignmentPage = assignmentPages.includes(currentPage);
+
+      window.toggleAssignmentSection = function() {
+        const header = document.getElementById('assignment-section-header');
+        const expanded = header.getAttribute('aria-expanded') === 'true';
+        setAssignmentExpanded(!expanded, true);
+      };
+
+      function setAssignmentExpanded(expanded, persist) {
+        const section = document.getElementById('assignment-section');
+        const chevron = document.getElementById('assignment-chevron');
+        const header = document.getElementById('assignment-section-header');
+        if (!section || !chevron || !header) return;
+        if (expanded) {
+          section.style.maxHeight = section.scrollHeight + 'px';
+          chevron.style.transform = 'rotate(90deg)';
+          header.setAttribute('aria-expanded', 'true');
+        } else {
+          section.style.maxHeight = '0px';
+          chevron.style.transform = 'rotate(0deg)';
+          header.setAttribute('aria-expanded', 'false');
+        }
+        if (persist) {
+          localStorage.setItem('cdmp.sidebar.assignment.expanded', expanded ? '1' : '0');
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const stored = localStorage.getItem('cdmp.sidebar.assignment.expanded');
+        const shouldExpand = isAssignmentPage || stored === '1';
+        setAssignmentExpanded(shouldExpand, false);
+      });
+    })();
   </script>
 </body>
 </html>
