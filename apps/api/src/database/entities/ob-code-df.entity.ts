@@ -4,6 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('ob_code_df')
 export class ObCodeDf {
@@ -29,7 +30,8 @@ export class ObCodeDf {
   @Column({ name: 'tbl_val1', type: 'numeric', precision: 12, scale: 0, nullable: true })
   tbl_val1: string | null;
 
-  @Column({ name: 'tbl_val2', type: 'timestamp', nullable: true })
+  // F068 / E2E sqlite 相容：採 dateColumnType（postgres=timestamp / sqlite=datetime）
+  @Column({ name: 'tbl_val2', type: dateColumnType, nullable: true })
   tbl_val2: Date | null;
 
   @Column({ name: 'tbl_val3', type: 'varchar', length: 40, nullable: true })
