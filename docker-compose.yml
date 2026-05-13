@@ -36,6 +36,7 @@ services:
       PORT: 3000
     volumes:
       - ./apps/api/src:/app/src
+      - ./apps/api/test:/app/test
     depends_on:
       postgres:
         condition: service_healthy
