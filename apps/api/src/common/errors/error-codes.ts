@@ -72,6 +72,10 @@ export const ERROR_CODES = {
   // F046/F047: Customer 360
   C360_CUSTOMER_NOT_FOUND: 'C360_CUSTOMER_NOT_FOUND',
   C360_SEARCH_MIN_LENGTH: 'C360_SEARCH_MIN_LENGTH',
+  // F068: E07 代碼維護
+  CODE_IN_USE: 'CODE_IN_USE',
+  CODE_TYPE_INVALID: 'CODE_TYPE_INVALID',
+  CODE_NOT_FOUND: 'CODE_NOT_FOUND',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -150,4 +154,9 @@ export const ERROR_MESSAGES = {
   // F046/F047: Customer 360
   C360_CUSTOMER_NOT_FOUND: '找不到此客戶資料',
   C360_SEARCH_MIN_LENGTH: '搜尋關鍵字至少需要 2 個字元',
+  // F068: E07 代碼維護
+  // CODE_IN_USE 訊息含 {tblCd} / {tblId} placeholder，由 Service 層替換
+  CODE_IN_USE: '代碼值 {tblCd} 在類別 {tblId} 中已存在',
+  CODE_TYPE_INVALID: '本功能僅支援 PROD_KIND / SPEC_TP / CASE_STATUS 三類代碼維護',
+  CODE_NOT_FOUND: '找不到指定的代碼',
 } as const;

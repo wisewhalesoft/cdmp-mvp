@@ -21,6 +21,7 @@ import { EtlModule } from './modules/etl/etl.module';
 import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { C360Module } from './modules/c360/c360.module';
+import { AssignmentCodeModule } from './modules/assignment-code/assignment-code.module';
 import { Role } from './database/entities/role.entity';
 // === E07 Entities (Track A — 19 表)===
 import { ObCodeDf } from './database/entities/ob-code-df.entity';
@@ -101,6 +102,7 @@ const E07_ENTITIES = [
     OrphanRecoveryModule,
     SchedulerModule,
     C360Module,
+    AssignmentCodeModule,
   ],
   providers: [],
 })
