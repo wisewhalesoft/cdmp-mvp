@@ -19,7 +19,7 @@ import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
 import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
 import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
-import { AssignmentStubPage } from '@/pages/assignment';
+import { AssignmentStubPage, BaseCodesPage } from '@/pages/assignment';
 import { AdminRoute, ProtectedRoute, SalesManagerRoute } from '@/router/protected-route';
 
 export function App() {
@@ -157,11 +157,12 @@ export function App() {
         }
       />
       {/* E07 客戶名單分派 stub 路由（SalesManagerRoute Guard） */}
+      {/* F068：代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） */}
       <Route
         path="/assignment/base-codes"
         element={
           <SalesManagerRoute>
-            <AssignmentStubPage title="代碼維護" />
+            <BaseCodesPage />
           </SalesManagerRoute>
         }
       />
