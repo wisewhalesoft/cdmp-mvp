@@ -11,7 +11,10 @@ export class ObCodeDf {
   @PrimaryColumn({ name: 'system_id', type: 'varchar', length: 4 })
   system_id: string;
 
-  @PrimaryColumn({ name: 'tbl_id', type: 'varchar', length: 2 })
+  // F068 / AD-E07-14：tbl_id 由 VARCHAR(2) 擴充為 VARCHAR(11) 以容納英文常數
+  // （PROD_KIND / SPEC_TP / CASE_STATUS，最長 11 字元）。
+  // 對應 migration 1711360000150-ExtendObCodeDfTblIdToVarchar11.ts
+  @PrimaryColumn({ name: 'tbl_id', type: 'varchar', length: 11 })
   tbl_id: string;
 
   @PrimaryColumn({ name: 'tbl_cd', type: 'varchar', length: 4 })
