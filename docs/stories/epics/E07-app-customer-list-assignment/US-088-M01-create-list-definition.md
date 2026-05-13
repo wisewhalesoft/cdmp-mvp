@@ -57,19 +57,33 @@
 - **When** 業務主管嘗試點擊「新增名單定義」按鈕
 - **Then** 按鈕為停用狀態，hover 顯示提示「分派執行中，無法新增名單定義」
 
-### AC-6：必填欄位驗證
+### AC-6：案件結清期別（case_status）必填多選
+
+- **Given** 業務主管在新增表單操作案件結清期別欄位
+- **When** 業務主管未選取任何選項即點擊「儲存」
+- **Then** 前端顯示錯誤「案件結清期別為必填，請至少選取一項」，儲存不執行
+- **And** 可選選項由 OBMCODEDF（TBL_ID = '22'，SYSTEM_ID = 'OB'）動態載入，固定 4 個啟用選項：
+  - `01` = 期中（不含當月滿期）
+  - `02` = 中結
+  - `03` = 滿期（含當月滿期）
+  - `04` = 滿期
+- **And** 業務主管可勾選一個或多個選項，多選值以 `$$` 分隔儲存（例如 `01$$02$$03`），與 CASEYEAR / SPEC_TP 同模式
+
+> **[BUSINESS RULE]** case_status 為獨立欄位，用於限定此名單篩選時的案件結清期別範圍，與 list_type 欄位語意不重疊（見下方「list_type vs case_status 語意分離說明」）。
+
+### AC-7：必填欄位驗證（原 AC-6）
 
 - **Given** 業務主管未填寫任一必填欄位即點擊「儲存」
 - **When** 前端進行表單驗證
 - **Then** 對應欄位顯示紅色邊框與錯誤訊息「此欄位為必填」，儲存不執行
 
-### AC-7：LIST_PERIOD_END 需大於等於 LIST_PERIOD_START
+### AC-8：LIST_PERIOD_END 需大於等於 LIST_PERIOD_START
 
 - **Given** 業務主管在新增表單輸入 LIST_PERIOD_START 與 LIST_PERIOD_END
 - **When** 任一欄位值變更後
 - **Then** 若 LIST_PERIOD_END < LIST_PERIOD_START，顯示錯誤「結束期數需大於等於開始期數」，儲存按鈕停用
 
-### AC-8：儲存後操作
+### AC-9：儲存後操作
 
 - **Given** 新增表單所有驗證均通過
 - **When** 業務主管點擊「儲存」並後端成功寫入
@@ -90,6 +104,7 @@
 | 產品類別 | PROD_KIND | **多選** CHKBOX，來源 OBMCODEDF，多值 `$$` 分隔 |
 | 進件/滿期/中結年數 | CASEYEAR | **多選** CHKBOX + 全選，來源 OBMCODEDF，多值 `$$` 分隔 |
 | 專案類別 | SPEC_TP | **多選** CHKBOX，來源 OBMCODEDF，多值 `$$` 分隔 |
+| **案件結清期別** | **case_status** | **多選** CHKBOX，來源 OBMCODEDF（TBL_ID='22'），多值 `$$` 分隔；選項：期中/中結/滿期(含當月)/滿期 |
 | 開始撈取期數（月） | LIST_PERIOD_START | 數字框，max 3 |
 | 結束撈取期數（月） | LIST_PERIOD_END | 數字框，max 3，需 ≥ START |
 | 間隔期數（月） | LIST_INTERVAL | 數字框，max 3 |
@@ -109,28 +124,57 @@
 - 資料來源：`reference/TableSchema/OB/OBMLISTDF.sql`（OBMLISTDF 表）
 - 舊系統表單參照：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml`（新增模式）、`reference/Areas/OBZ/Controllers/OBZ020/OBZ020Controller.cs`
 - LIST_NO 產生機制：後端依當月 YYYYMM 查詢最大既有流水號後 +1；若無既有，從 001 開始。999 為上限（超過需 system-architect 評估擴位方案，為待解決問題）
-- 代碼選項來源（PROD_KIND、CASEYEAR、SPEC_TP）：OBMCODEDF，由 US-092 進行維護
-- **多值欄位與 `$$` 分隔格式（dump 驗證，2026-05-05）**：以下四個欄位均為多選，提交時以 `$$` 為分隔符儲存至 OBMLISTDF，與舊系統格式一致：
+- 代碼選項來源（PROD_KIND、CASEYEAR、SPEC_TP、case_status）：OBMCODEDF，由 US-092 進行維護
+- **多值欄位與 `$$` 分隔格式（dump 驗證，2026-05-05）**：以下五個欄位均為多選，提交時以 `$$` 為分隔符儲存至 OBMLISTDF，與舊系統格式一致：
   - `PROD_KIND`：多選，例如 `02$$04$$05`（dump 實際觀察值）
   - `CASEYEAR`：多選，例如 `0$$1$$2$$3$$4$$5`
   - `SPEC_TP`：多選，例如 `02$$04$$05$$06$$11$$12`
   - `SETTLE_SRC`：多選，例如 `Y$$N`（含且不含）或 `Y`（僅含）
+  - `case_status`：多選，例如 `01$$02$$03`，來源 OBMCODEDF TBL_ID='22'
 - STATUS 初始值：後端寫入 'active'，不由前端傳送
 
-> **[ASSUMPTION]** OBMLISTDF 多值欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC）均以 `$$` 分隔字串儲存，與舊系統格式一致（2026-05-05 dump 驗證）。表單元件對應為多選 CHKBOX，非單選下拉。
+### list_type vs case_status 語意分離說明
+
+原系統 DB 欄位 `LIST_TYPE` 在業務上承擔了兩種不同的語意，新系統決議拆分為兩個欄位以消除混淆：
+
+| 欄位 | 語意 | 值來源 | 表單顯示 |
+|------|------|--------|---------|
+| `list_type` | 名單的系統分類（分派名單 vs 外部名單） | 固定 `'01'`（分派名單），後端寫入 | **不顯示**，業務主管無需操作 |
+| `case_status` | 名單篩選時的案件結清期別範圍 | OBMCODEDF TBL_ID='22'，業務主管選擇 | **必填多選**，對應原系統「名單類型」欄位 |
+
+> **[BUSINESS RULE]** `list_type = '01'` 為固定系統常數，表示本系統建立的名單均屬「分派名單」類型，不需業務主管設定。`case_status` 才是業務主管在原系統「名單類型」欄位實際操作的篩選條件。
+
+> **[ASSUMPTION]** OBMLISTDF 多值欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC / case_status）均以 `$$` 分隔字串儲存，與舊系統格式一致（2026-05-05 dump 驗證）。表單元件對應為多選 CHKBOX，非單選下拉。
 - 操作寫入 AssignmentAuditLog（待 system-architect 設計表結構）
 - 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 
 ---
 
+## Open Questions
+
+| ID | 問題 | 負責方 | 狀態 |
+|----|------|--------|------|
+| OQ-088-01 | case_status 4 個選項（期中/中結/滿期含當月/滿期）的業務含義為何？例如「期中」指的是案件還在還款中未到期，或有其他業務定義？需業務主管確認後補入說明。 | 業務主管 | 待確認 |
+| OQ-088-02 | case_status 多選的業務意義：選「期中 + 中結」是否表示此名單只篩選「案件結清期別為期中或中結」的案件？是 OR 邏輯（符合任一即納入）？ | 業務主管 | 待確認 |
+| OQ-088-03 | 現有名單若無 case_status 值（資料遷移議題）：既有 OBMLISTDF 中的舊資料是否需要補填 case_status？如何決定預設值？ | system-architect + 業務主管 | 待評估 |
+| OQ-088-04 | case_status 欄位在 OBMLISTDF schema 中的型態與長度：建議 VARCHAR 儲存 `$$` 分隔值，最大長度待 system-architect 確認（4 個選項最大字串為 `01$$02$$03$$04` = 14 碼）。 | system-architect | 待確認 |
+
+---
+
 ## 測試案例
 
-### TC-088-01：正常新增（空白表單）
+### TC-088-01：正常新增（空白表單，含 case_status）
 
-- **Given**：業務主管填入 LIST_NM = 「新車月跑名單」、PROD_KIND = 'A'、CASEYEAR = '1$$2'、SPEC_TP = 'S1'、LIST_PERIOD_START = 1、LIST_PERIOD_END = 6、LIST_INTERVAL = 1、SETTLE_SRC = 'Y'
+- **Given**：業務主管填入 LIST_NM = 「新車月跑名單」、PROD_KIND = 'A'、CASEYEAR = '1$$2'、SPEC_TP = 'S1'、case_status = '01$$02'（期中 + 中結）、LIST_PERIOD_START = 1、LIST_PERIOD_END = 6、LIST_INTERVAL = 1、SETTLE_SRC = 'Y'
 - **When**：點擊「儲存」
-- **Then**：OBMLISTDF 新增一列，LIST_NO = 'OB202605001'（假設本月首筆），STATUS = 'active'，LIST_TYPE = '01'
+- **Then**：OBMLISTDF 新增一列，LIST_NO = 'OB202605001'（假設本月首筆），STATUS = 'active'，LIST_TYPE = '01'（後端寫入），case_status = '01$$02'
 - **And**：成功提示顯示 LIST_NO，返回清單頁
+
+### TC-088-01b：case_status 未選取時阻擋儲存
+
+- **Given**：業務主管填妥其他所有必填欄位，但未勾選任何 case_status 選項
+- **When**：點擊「儲存」
+- **Then**：前端顯示「案件結清期別為必填，請至少選取一項」，儲存不執行
 
 ### TC-088-02：PROD_KIND + CARD_TYPE 重複硬阻擋
 
@@ -154,7 +198,7 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-070（新增按鈕在清單頁）、US-092（PROD_KIND / CASEYEAR / SPEC_TP 代碼維護）
+- **Blocked By**：US-070（新增按鈕在清單頁）、US-092（PROD_KIND / CASEYEAR / SPEC_TP / case_status 代碼維護）
 - **Blocks**：US-081（月跑需有 active 名單定義）
 
 ---
@@ -164,8 +208,9 @@
 - [ ] 驗收標準全部通過
 - [ ] LIST_NO 自動產生邏輯測試（流水號遞增、不重複）
 - [ ] PROD_KIND + CARD_TYPE 重複檢查測試
-- [ ] 複製名單功能測試（欄位填入、LIST_NO 重新產生）
-- [ ] 必填欄位驗證測試
+- [ ] 複製名單功能測試（欄位填入、LIST_NO 重新產生，含 case_status 值複製）
+- [ ] 必填欄位驗證測試（含 case_status 未選阻擋）
+- [ ] case_status 多選值以 `$$` 分隔正確儲存測試
 - [ ] LIST_PERIOD_END >= START 驗證測試
 - [ ] 月跑中資料鎖測試
 - [ ] AssignmentAuditLog 寫入測試

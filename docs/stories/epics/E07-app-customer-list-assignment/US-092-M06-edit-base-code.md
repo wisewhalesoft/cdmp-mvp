@@ -12,7 +12,7 @@
 ## User Story
 
 **As a** 業務主管
-**I want** 維護客戶名單分派所需的代碼選項（PROD_KIND、SPEC_TP、CASEYEAR）
+**I want** 維護客戶名單分派所需的代碼選項（PROD_KIND、SPEC_TP、CASEYEAR、CASE_STATUS）
 **So that** 可在不需 IT 介入的情況下，自行調整名單定義表單中的下拉與多選選項，確保代碼符合業務現況
 
 ---
@@ -23,7 +23,7 @@
 
 - **Given** 業務主管進入 M06 基礎代碼維護頁面
 - **When** 頁面載入
-- **Then** 顯示三個代碼類別頁籤（或區塊）：「PROD_KIND（產品類別）」、「SPEC_TP（專案類別）」、「CASEYEAR（進件/滿期/中結年數）」
+- **Then** 顯示**四個**代碼類別頁籤（或區塊）：「PROD_KIND（產品類別）」、「SPEC_TP（專案類別）」、「CASEYEAR（進件/滿期/中結年數）」、**「CASE_STATUS（案件結清期別）」**
 - **And** 每個類別列出目前所有代碼選項，含代碼值、顯示名稱、狀態（啟用/停用）
 
 ### AC-2：新增代碼選項
@@ -31,7 +31,7 @@
 - **Given** 業務主管在某代碼類別頁籤點擊「新增」
 - **When** 業務主管填入代碼值與顯示名稱後點擊「儲存」
 - **Then** 新代碼選項寫入 OBMCODEDF 對應類別，狀態預設為啟用
-- **And** 新選項立即出現於 US-088/089 表單對應欄位的可選清單中
+- **And** 新選項立即出現於 US-088/089 表單對應欄位的可選清單中（包含 CASE_STATUS 類別的新選項出現於 case_status 多選欄位）
 
 ### AC-3：修改代碼選項
 
@@ -60,11 +60,11 @@
 
 ### Scope 控制說明（為何不做通用代碼管理平台）
 
-本 Story 的 scope 嚴格限定為 E07 客戶名單分派需要的三個 OBMCODEDF 代碼類別：**PROD_KIND、SPEC_TP、CASEYEAR**。
+本 Story 的 scope 嚴格限定為 E07 客戶名單分派需要的**四個** OBMCODEDF 代碼類別：**PROD_KIND、SPEC_TP、CASEYEAR、CASE_STATUS**。
 
 刻意不做通用代碼管理平台的原因：
 1. **避免功能蔓延（scope creep）**：通用平台需處理所有 Epic 的代碼，牽涉範圍過廣，MVP 不宜納入
-2. **業務邊界清晰**：這三類代碼由業務主管（M06）自行維護，技術邊界對應 E07；其他 Epic 的代碼由對應模組負責
+2. **業務邊界清晰**：這四類代碼由業務主管（M06）自行維護，技術邊界對應 E07；其他 Epic 的代碼由對應模組負責
 3. **可擴充性**：若業務需求增加，Phase 2 可將 M06 升級為獨立通用 Epic，提供跨 Epic 代碼管理能力
 
 ### 技術細節
@@ -74,13 +74,36 @@
 
 > **[ASSUMPTION - Resolved]** OQ-E07-11：OBMCODEDF.SYSTEM_ID 固定為 `OB`（2026-05-05 dump 全表驗證確認，無其他值）。
 
-- 本 Story 管理的三個 CODE_TYPE：
-  - `PROD_KIND`：產品類別（名單定義必填，單選）
+- 本 Story 管理的**四個** CODE_TYPE：
+  - `PROD_KIND`：產品類別（名單定義必填，多選）
   - `SPEC_TP`：專案類別（名單定義必填，多選）
   - `CASEYEAR`：進件/滿期/中結年數（名單定義必填，多選 + 全選）
+  - `CASE_STATUS`（**新增**）：案件結清期別（名單定義必填，多選）；對應 OBMCODEDF 中 TBL_ID = `'22'`，初始 4 個啟用選項（`01` 期中、`02` 中結、`03` 滿期含當月、`04` 滿期）；業務說明：此代碼用於限定名單篩選時的案件結清期別範圍，例如業務主管選「期中 + 中結」表示該名單只篩選結清期別為這兩種的案件。
 - 代碼選項的 UI 動態載入：US-088/089 表單在渲染時查詢 OBMCODEDF 啟用中的選項
 - CASEYEAR 的「全選」邏輯：前端在 US-088/089 處理，OBMCODEDF 只存個別選項值
 - 停用代碼的既有名單影響：代碼值儲存在 OBMLISTDF 欄位中（字串），停用代碼不會觸發名單的連鎖更新（MVP 不做），但月跑執行前的前置條件可選擇性警示（system-architect 評估）
+
+### CASE_STATUS 代碼說明
+
+| 代碼值 | 顯示名稱 | DESC2 | 業務含義 |
+|--------|---------|-------|---------|
+| `01` | 期中（不含當月滿期） | 期中 | **[OQ-092-01]** 待業務主管確認業務定義 |
+| `02` | 中結 | 中結 | **[OQ-092-01]** 待業務主管確認業務定義 |
+| `03` | 滿期（含當月滿期） | 當月滿期 | **[OQ-092-01]** 待業務主管確認業務定義 |
+| `04` | 滿期 | 滿期 | **[OQ-092-01]** 待業務主管確認業務定義 |
+
+> **[BUSINESS RULE]** CASE_STATUS 與 PROD_KIND / SPEC_TP / CASEYEAR 同屬 OBMCODEDF 管理的代碼類別，維護流程一致（CRUD + 停用不回溯）。差異在於 CASE_STATUS 對應 TBL_ID = '22'，查詢時需以此 TBL_ID 過濾，不使用 CODE_TYPE 欄位（system-architect 確認欄位映射後請更新此備註）。
+
+> **[OPEN QUESTION - OQ-092-02]** OBMCODEDF 同時有 TBL_ID 與 CODE_TYPE 兩個欄位，CASE_STATUS 在 DB 中使用哪個欄位作為類別識別碼（TBL_ID = '22' 或 CODE_TYPE = 'CASE_STATUS'）？需 system-architect 查閱 OBMCODEDF schema 確認，以確保 API 查詢條件正確。
+
+---
+
+## Open Questions
+
+| ID | 問題 | 負責方 | 狀態 |
+|----|------|--------|------|
+| OQ-092-01 | CASE_STATUS 四個選項（01 期中/02 中結/03 滿期含當月/04 滿期）的業務含義各為何？目前 OBMCODEDF dump 只有顯示名稱，業務定義需業務主管說明，以利前端 tooltip 或說明文字的撰寫。 | 業務主管 | 待確認 |
+| OQ-092-02 | OBMCODEDF 中 CASE_STATUS 使用 TBL_ID = '22' 作為識別，而其他三類（PROD_KIND / SPEC_TP / CASEYEAR）使用 CODE_TYPE 欄位。新系統 US-092 的維護介面與 API 應如何統一查詢這四個類別？是否需要建立映射表或在 API 統一轉換？ | system-architect | 待確認 |
 
 ---
 
@@ -105,22 +128,36 @@
 - **When**：業務主管嘗試在 CASEYEAR 類別再次新增代碼值 '5'
 - **Then**：顯示「此代碼值在該類別中已存在」，不寫入
 
+### TC-092-04：CASE_STATUS 頁籤顯示與初始代碼
+
+- **Given**：OBMCODEDF 中 TBL_ID = '22' 有 4 個啟用選項（01/02/03/04）
+- **When**：業務主管進入 M06 基礎代碼維護頁面，切換至「CASE_STATUS（案件結清期別）」頁籤
+- **Then**：顯示 4 個代碼選項（期中/中結/滿期含當月/滿期），狀態均為啟用
+
+### TC-092-05：停用 CASE_STATUS 代碼後不影響既有名單
+
+- **Given**：CASE_STATUS 代碼值 '03'（滿期含當月）已被 LIST_NO = 'OB202605005' 使用（case_status 欄位含 '03'）
+- **When**：業務主管停用 CASE_STATUS '03'
+- **Then**：OBMCODEDF '03' 狀態改為停用，US-088/089 case_status 多選不再顯示 '03'
+- **And**：OBMLISTDF LIST_NO = 'OB202605005' 的 case_status 欄位值不變（'03' 保留）
+
 ---
 
 ## 依賴關係
 
 - **Blocked By**：US-001（登入驗證）
-- **Blocks**：US-088（新增名單需 PROD_KIND / CASEYEAR / SPEC_TP 代碼就緒）、US-089（編輯名單同上）
+- **Blocks**：US-088（新增名單需 PROD_KIND / CASEYEAR / SPEC_TP / CASE_STATUS 代碼就緒）、US-089（編輯名單同上）
 
 ---
 
 ## Definition of Done
 
 - [ ] 驗收標準全部通過
-- [ ] 三個代碼類別的 CRUD 操作測試
+- [ ] 四個代碼類別（含 CASE_STATUS）的 CRUD 操作測試
+- [ ] CASE_STATUS 頁籤正確顯示初始 4 個選項測試
 - [ ] 代碼值唯一性驗證測試
-- [ ] 停用代碼後表單不顯示測試
-- [ ] 停用代碼不回溯修改既有名單測試
+- [ ] 停用代碼後表單不顯示測試（含 case_status 欄位）
+- [ ] 停用代碼不回溯修改既有名單測試（含 case_status 欄位）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -131,5 +168,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：無直接 NFR 約束
-- **相關 Stories**：US-088（新增名單定義，使用 PROD_KIND / CASEYEAR / SPEC_TP 代碼）、US-089（編輯名單定義，同上）
-- **Reference**：`reference/TableSchema/OB/OBMLISTDF.sql`（OBMLISTDF 欄位參照代碼值）、`reference/Areas/OBZ/Views/OBZ020/edit.cshtml`（代碼選項在舊系統的呈現方式）
+- **相關 Stories**：US-088（新增名單定義，使用 PROD_KIND / CASEYEAR / SPEC_TP / CASE_STATUS 代碼）、US-089（編輯名單定義，同上）
+- **Reference**：`reference/TableSchema/OB/OBMLISTDF.sql`（OBMLISTDF 欄位參照代碼值）、`reference/Areas/OBZ/Views/OBZ020/edit.cshtml`（代碼選項在舊系統的呈現方式）、`reference/Dumpdata/OBMCODEDF_20260505.csv`（TBL_ID='22' CASE_STATUS 初始 4 筆資料）、`reference/Areas/OBZ/Controllers/OBZ020/OBZ020Controller.cs:96-107`（GetCASE_STATUS API，ID=116 對應 TBL_ID='22'）
