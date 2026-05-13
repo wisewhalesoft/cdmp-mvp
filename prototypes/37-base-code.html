@@ -138,7 +138,18 @@
         <i data-lucide="lock" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
         <div>
           <p class="font-semibold text-primary">本功能限定 E07 三類代碼維護（BR-1）</p>
-          <p class="text-xs text-gray-600 mt-0.5">PROD_KIND（產品類別）/ SPEC_TP（專案類別）/ CASEYEAR（進件/滿期/中結年數）。其他 <code>tbl_id</code> 一律回傳 422 <code>CODE_TYPE_INVALID</code>。資料表 <code>ob_code_df</code> · <code>system_id = 'OB'</code>（OQ-E07-11 ✅ 2026-05-05 確認）</p>
+          <p class="text-xs text-gray-600 mt-0.5">
+            <code>PROD_KIND</code>（產品類別）/ <code>SPEC_TP</code>（專案類別）/ <code>CASE_STATUS</code>（案件結清期別）。
+            其他 <code>tbl_id</code> 一律回傳 422 <code>CODE_TYPE_INVALID</code>。資料表 <code>ob_code_df</code> · <code>system_id = 'OB'</code>（OQ-E07-11 ✅ 2026-05-05 確認）
+          </p>
+          <p class="text-xs text-gray-500 mt-1">
+            <i data-lucide="info" class="w-3 h-3 inline-block align-text-bottom"></i>
+            <span class="font-medium">AD-E07-14 tbl_id 英文常數映射</span>：原系統 <code>'01'</code>→<code>PROD_KIND</code>、<code>'02'</code>→<code>SPEC_TP</code>、<code>'22'</code>→<code>CASE_STATUS</code>（CDMP 兩階段 migration 後改用英文常數，畫面與 API 一律使用英文常數）。
+          </p>
+          <p class="text-xs text-amber-700 mt-1 flex items-start gap-1">
+            <i data-lucide="alert-triangle" class="w-3 h-3 mt-0.5 shrink-0"></i>
+            <span><span class="font-medium">CASEYEAR 不在本功能維護範圍</span>：探查 <code>reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235</code> 發現舊系統 CASEYEAR 為前端 hard-coded 0~10 共 11 個 CheckBox，不從 <code>ob_code_df</code> 動態載入；CDMP 沿用此設計，由 F050/F051 表單前端固定提供。</span>
+          </p>
         </div>
       </div>
 
@@ -158,11 +169,11 @@
               <span class="ml-1 text-xs text-gray-400">專案類別</span>
               <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-SPEC_TP">32</span>
             </button>
-            <button id="tab-CASEYEAR" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('CASEYEAR')">
-              <i data-lucide="calendar-days" class="w-3.5 h-3.5 inline mr-1"></i>
-              CASEYEAR
-              <span class="ml-1 text-xs text-gray-400">進件 / 滿期 / 中結年數</span>
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-CASEYEAR">12</span>
+            <button id="tab-CASE_STATUS" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('CASE_STATUS')">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5 inline mr-1"></i>
+              CASE_STATUS
+              <span class="ml-1 text-xs text-gray-400">案件結清期別</span>
+              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-CASE_STATUS">4</span>
             </button>
           </div>
           <div class="pr-3">
@@ -196,6 +207,70 @@
             新增代碼
           </button>
         </div>
+      </div>
+
+      <!-- CASE_STATUS 專屬：4 個代碼業務語意對照 banner（僅在 CASE_STATUS tab 顯示，視覺接合 Tabs 與表格） -->
+      <div id="caseStatusSemanticBanner" class="hidden bg-blue-50/40 border-l border-r border-border">
+        <details class="group" open>
+          <summary class="cursor-pointer list-none flex items-start gap-2 px-4 py-2.5 hover:bg-blue-50/70 transition border-b border-blue-100/60">
+            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+            <div class="flex-1 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-gray-700">
+                  4 個代碼業務語意對照
+                  <span class="text-gray-500 font-normal">— 同為「滿期」字面，但 <code class="text-primary font-semibold">03</code> 與 <code class="text-primary font-semibold">04</code> 案件實況截然不同</span>
+                </span>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform shrink-0"></i>
+              </div>
+            </div>
+          </summary>
+          <div class="overflow-x-auto bg-white border-b border-border">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-blue-50/30 border-b border-blue-100">
+                  <th class="text-left px-4 py-2 font-semibold text-gray-600 w-16">代碼</th>
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600 w-40">名稱（tbl_desc1）</th>
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600 w-32">對應 STA_CODE</th>
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600">案件實況</th>
+                  <th class="text-left px-3 py-2 font-semibold text-gray-600 w-40">業務目標</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-blue-50">
+                  <td class="px-4 py-2 font-mono font-semibold text-primary">01</td>
+                  <td class="px-3 py-2 text-gray-700">期中(不含當月滿期)</td>
+                  <td class="px-3 py-2 font-mono text-gray-600">05~89（active）</td>
+                  <td class="px-3 py-2 text-gray-600">處理中，距滿期 &gt; 1 個月 或 剩餘期數 &gt; 2</td>
+                  <td class="px-3 py-2 text-gray-700">一般期中案件管理</td>
+                </tr>
+                <tr class="border-b border-blue-50">
+                  <td class="px-4 py-2 font-mono font-semibold text-primary">02</td>
+                  <td class="px-3 py-2 text-gray-700">中結</td>
+                  <td class="px-3 py-2 font-mono text-gray-600">98</td>
+                  <td class="px-3 py-2 text-gray-600">已中途結清</td>
+                  <td class="px-3 py-2 text-gray-700">中結客戶聯繫</td>
+                </tr>
+                <tr class="border-b border-blue-50 bg-amber-50/30">
+                  <td class="px-4 py-2 font-mono font-semibold text-amber-700">03</td>
+                  <td class="px-3 py-2 text-gray-700">滿期(含當月滿期)</td>
+                  <td class="px-3 py-2 font-mono text-gray-700"><span class="inline-flex items-center px-1.5 py-0.5 mr-1 text-[10px] font-semibold rounded bg-green-100 text-green-700">active</span>05~89</td>
+                  <td class="px-3 py-2 text-gray-700">本月即將到期但<span class="font-semibold">尚未結清</span></td>
+                  <td class="px-3 py-2 text-amber-800 font-medium">主動續貸 / 防流失</td>
+                </tr>
+                <tr class="bg-gray-50/40">
+                  <td class="px-4 py-2 font-mono font-semibold text-gray-700">04</td>
+                  <td class="px-3 py-2 text-gray-700">滿期</td>
+                  <td class="px-3 py-2 font-mono text-gray-700"><span class="inline-flex items-center px-1.5 py-0.5 mr-1 text-[10px] font-semibold rounded bg-gray-200 text-gray-600">已完成</span>90</td>
+                  <td class="px-3 py-2 text-gray-700"><span class="font-semibold">已完整結清完成</span></td>
+                  <td class="px-3 py-2 text-gray-700 font-medium">回找維繫 / 再行銷</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="px-4 py-2 text-[11px] text-gray-500 bg-gray-50/30 border-t border-blue-50">
+              <span class="font-medium text-gray-600">語意來源：</span>舊系統 SP <code>USP_OB_OBPOOLDATA.sql:189-216</code> 依 <code>obccfdate.STA_CODE</code> 判斷案件狀態並寫入 dump 表的 <code>list_type</code> 欄。新系統 Stage 1 沿用相同 4 個值匹配 <code>ob_pool_data.list_type</code>，業務語意由匯入端維持。
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- 表格 panel -->
@@ -359,18 +434,29 @@
     // ===== Mock Data: 三類代碼 =====
     const TODAY = '20260509';
     // ─────────────────────────────────────────────────────────────────────────
-    // Sample data 來源：reference/DumpData/OBMCODEDF_20260505.csv
+    // Sample data 來源：reference/Dumpdata/OBMCODEDF_20260505.csv
+    //
+    // AD-E07-14 決議：CDMP 兩階段 migration 後，ob_code_df.tbl_id 由原系統
+    //   數字編碼改用英文常數。畫面與 API 一律以英文常數呈現。
+    //     dump '01' → 新系統 'PROD_KIND'   （產品類別，3 筆）
+    //     dump '02' → 新系統 'SPEC_TP'     （專案類別，32 筆）
+    //     dump '22' → 新系統 'CASE_STATUS' （案件結清期別，4 筆）
     //
     // 落差說明：
-    //   - dump 真實 tbl_id 為 '01'/'02' 數字編碼，spec F068 要求 logical
-    //     字串 'PROD_KIND'/'SPEC_TP'/'CASEYEAR'。本 prototype 沿用 spec
-    //     的 logical tab 名稱，內容取 dump 對應數字 tbl_id 的真實列。
-    //   - dump 無 CASEYEAR 對應類別（年數 0~10/99 在 OB 端可能由其他機制
-    //     處理）。CASEYEAR tab 暫保留合理範例值，待 F068 正式上線後由業
-    //     務主管首次新建。
-    //   - dump 全部 stadt='20001101' / enddt='20991231'，故 PROD_KIND /
-    //     SPEC_TP 全為 active 狀態；demo state 中的 expired-included
-    //     僅 CASEYEAR 有變異。
+    //   - PROD_KIND：dump 對應 tbl_id='01' 真實 3 筆，已採用。
+    //   - SPEC_TP：dump 對應 tbl_id='02' 真實 32 筆，已採用。
+    //   - CASE_STATUS：dump 對應 tbl_id='22' 真實 4 筆，已採用：
+    //     '01' 期中(不含當月滿期)、'02' 中結、'03' 滿期(含當月滿期)、'04' 滿期。
+    //
+    //   - dump 全部 stadt='20220913'~'20001101' / enddt='20991231'，故所有
+    //     dump 來源資料皆為 active。
+    //
+    // 為何移除 CASEYEAR：
+    //   探查舊系統前端 reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235 發現
+    //   CASEYEAR 為前端 hard-coded 0~10 共 11 個 CheckBox（第 12 個 99=10年以上
+    //   被 Razor @*...*@ 註解掉，未啟用），不從 ob_code_df 動態載入。
+    //   CDMP 沿用此設計：F068 不維護 CASEYEAR；該 enum 由 F050/F051 表單前端
+    //   固定提供。
     // ─────────────────────────────────────────────────────────────────────────
     const codes = {
       // dump tbl_id='01'（產品類別，3 筆）
@@ -414,21 +500,13 @@
         { tblCd: '77', tblDesc1: '機車買賣',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
         { tblCd: '99', tblDesc1: '其他',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
       ],
-      // dump 中無對應類別；以下為 spec F068 預期格式範例，待業務主管首次新建
-      CASEYEAR: [
-        { tblCd: '0',  tblDesc1: '0 年',   tblDesc2: '當年新進件',     stadt: '20240101', enddt: '99991231' },
-        { tblCd: '1',  tblDesc1: '1 年',   tblDesc2: '前 1 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '2',  tblDesc1: '2 年',   tblDesc2: '前 2 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '3',  tblDesc1: '3 年',   tblDesc2: '前 3 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '4',  tblDesc1: '4 年',   tblDesc2: '前 4 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '5',  tblDesc1: '5 年',   tblDesc2: '前 5 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '6',  tblDesc1: '6 年',   tblDesc2: '前 6 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '7',  tblDesc1: '7 年',   tblDesc2: '前 7 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '8',  tblDesc1: '8 年',   tblDesc2: '前 8 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '9',  tblDesc1: '9 年',   tblDesc2: '前 9 年案件',    stadt: '20240101', enddt: '99991231' },
-        { tblCd: '10', tblDesc1: '10 年',  tblDesc2: '前 10 年案件',   stadt: '20240101', enddt: '99991231' },
-        { tblCd: '99', tblDesc1: '其他',   tblDesc2: '其他年數案件',   stadt: '20240101', enddt: '99991231' },
-      ]
+      // dump tbl_id='22'（案件結清期別，4 筆生效中）
+      CASE_STATUS: [
+        { tblCd: '01', tblDesc1: '期中(不含當月滿期)', tblDesc2: '期中',     stadt: '20220913', enddt: '20991231' },
+        { tblCd: '02', tblDesc1: '中結',               tblDesc2: '中結',     stadt: '20220913', enddt: '20991231' },
+        { tblCd: '03', tblDesc1: '滿期(含當月滿期)',   tblDesc2: '當月滿期', stadt: '20220913', enddt: '20991231' },
+        { tblCd: '04', tblDesc1: '滿期',               tblDesc2: '滿期',     stadt: '20220913', enddt: '20991231' },
+      ],
     };
 
     let currentTbl = 'PROD_KIND';
@@ -490,7 +568,7 @@
 
       document.getElementById('paginationInfo').textContent = `顯示 1-${filtered.length} / 共 ${filtered.length} 筆`;
       // Update tab counts (active only)
-      ['PROD_KIND','SPEC_TP','CASEYEAR'].forEach(t => {
+      ['PROD_KIND','SPEC_TP','CASE_STATUS'].forEach(t => {
         const cnt = codes[t].filter(c => statusOf(c) === 'active').length;
         document.getElementById('cnt-' + t).textContent = cnt;
       });
@@ -500,7 +578,7 @@
     // ===== Tab switch =====
     function switchTab(name) {
       currentTbl = name;
-      ['PROD_KIND','SPEC_TP','CASEYEAR'].forEach(t => {
+      ['PROD_KIND','SPEC_TP','CASE_STATUS'].forEach(t => {
         document.getElementById('tab-' + t).classList.toggle('active', t === name);
         document.getElementById('tab-' + t).classList.toggle('text-gray-500', t !== name);
         document.getElementById('cnt-' + t).className = (t === name)
@@ -508,6 +586,8 @@
           : 'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full';
       });
       document.getElementById('curTblId').textContent = name;
+      // CASE_STATUS 專屬業務語意 banner：只在該 tab 顯示
+      document.getElementById('caseStatusSemanticBanner').classList.toggle('hidden', name !== 'CASE_STATUS');
       renderTable();
     }
 
