@@ -353,7 +353,9 @@ describe('F032: Pipeline Logs Page', () => {
     await act(async () => { fireEvent.click(logRow); });
 
     await waitFor(() => {
-      expect(screen.getByText('執行進度')).toBeInTheDocument();
+      // "執行進度" 也存在於 sidebar E07 stub 群組（admin/sales_manager 可見），
+      // 因此使用 getAllByText 並確認 drawer 中存在文案，搭配「執行中」精確匹配
+      expect(screen.getAllByText('執行進度').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('執行中')).toBeInTheDocument();
     });
   });

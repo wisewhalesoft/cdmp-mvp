@@ -1,10 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Users,
-  Database,
-  ArrowDownToLine,
-  Workflow,
   ArrowLeft,
   ChevronRight,
   ChevronLeft,
@@ -12,9 +8,8 @@ import {
   X,
   AlertCircle,
   RotateCcw,
-Contact, } from 'lucide-react';
-import { clearAuth, getUser } from '@/stores/auth-store';
-import { logout } from '@/api/auth';
+} from 'lucide-react';
+import { AppLayout } from '@/components/layout/app-layout';
 import { getPipelineLogs, getLogDetail, executePipeline } from '@/api/etl-pipelines';
 import { formatDateTW, formatDuration } from '@/utils/date-utils';
 import type {
@@ -67,7 +62,6 @@ export function PipelineLogsPage() {
   const { id: pipelineId } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const user = getUser();
 
   // Pipeline info from navigation state
   const navState = location.state as {
@@ -105,15 +99,6 @@ export function PipelineLogsPage() {
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      clearAuth();
-      navigate('/login');
-    }
-  };
 
   const handleLogClick = async (logId: string) => {
     setDrawerLoading(true);
@@ -365,64 +350,26 @@ export function PipelineLogsPage() {
     );
   };
 
+  const headerLeft = (
+    <div className="flex items-center gap-2 text-sm">
+      <button
+        onClick={() => navigate('/etl-pipelines')}
+        className="text-gray-400 hover:text-blue-600"
+      >
+        <ArrowLeft className="w-4 h-4" />
+      </button>
+      <nav className="flex items-center text-gray-500">
+        <a href="/etl-pipelines/list" className="hover:text-blue-600">Pipeline 清單</a>
+        <ChevronRight className="w-4 h-4 mx-1" />
+        <span className="text-gray-800 font-medium">{pipelineName}</span>
+        <ChevronRight className="w-4 h-4 mx-1" />
+        <span className="text-blue-600 font-medium">執行日誌</span>
+      </nav>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-screen bg-[#F9FAFB]">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0">
-        <div className="px-5 py-4 border-b border-[#E5E7EB]">
-          <div className="text-xl font-bold text-[#2563EB]">CDMP</div>
-          <div className="text-xs text-gray-500 mt-0.5">資料治理平台</div>
-        </div>
-        <nav className="flex-1 py-3">
-          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Users size={16} />帳號管理
-          </a>
-          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Database size={16} />資料來源
-          </a>
-          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <ArrowDownToLine size={16} />資料擷取
-          </a>
-          <a href="/etl-pipelines" className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-[#2563EB] bg-blue-50 border-r-2 border-[#2563EB]">
-            <Workflow size={16} />ETL Pipeline
-          </a>
-          <a href="/c360/customers" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Contact size={16} />Customer 360
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header with Breadcrumb */}
-        <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              onClick={() => navigate('/etl-pipelines')}
-              className="text-gray-400 hover:text-blue-600"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <nav className="flex items-center text-gray-500">
-              <a href="/etl-pipelines/list" className="hover:text-blue-600">Pipeline 清單</a>
-              <ChevronRight className="w-4 h-4 mx-1" />
-              <span className="text-gray-800 font-medium">{pipelineName}</span>
-              <ChevronRight className="w-4 h-4 mx-1" />
-              <span className="text-blue-600 font-medium">執行日誌</span>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name}</span>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-[#EF4444] transition"
-            >
-              登出
-            </button>
-          </div>
-        </header>
-
-        {/* Main Content */}
+    <AppLayout headerLeft={headerLeft}>
         <main className="flex-1 p-6 overflow-auto">
           {/* Pipeline Summary Card */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-6">
@@ -493,10 +440,9 @@ export function PipelineLogsPage() {
             </div>
           )}
         </main>
-      </div>
 
       {/* Drawer */}
       {renderDrawer()}
-    </div>
+    </AppLayout>
   );
 }

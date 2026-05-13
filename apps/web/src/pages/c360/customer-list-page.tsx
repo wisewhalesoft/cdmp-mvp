@@ -6,9 +6,6 @@ import {
   Building2,
   Globe,
   Database,
-  ArrowDownToLine,
-  Workflow,
-  Contact,
   Search,
   SearchX,
   ChevronLeft,
@@ -16,8 +13,7 @@ import {
   Eye,
   RotateCcw,
 } from 'lucide-react';
-import { clearAuth, getUser } from '@/stores/auth-store';
-import { logout } from '@/api/auth';
+import { AppLayout } from '@/components/layout/app-layout';
 import {
   getCustomerStats,
   getCustomers,
@@ -39,7 +35,6 @@ function formatNumber(n: number): string {
 
 export function CustomerListPage() {
   const navigate = useNavigate();
-  const user = getUser();
 
   const [stats, setStats] = useState<CustomerStats>({
     total: 0,
@@ -142,16 +137,6 @@ export function CustomerListPage() {
     fetchCustomers();
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // ignore
-    }
-    clearAuth();
-    navigate('/login');
-  };
-
   const { data: customers, pagination } = listResponse;
   const isNoData = stats.total === 0 && customers.length === 0 && !loading;
   const isEmptySearch = hasSearched && customers.length === 0 && !isNoData && !loading;
@@ -175,50 +160,8 @@ export function CustomerListPage() {
   const endItem = Math.min(pagination.page * pagination.pageSize, pagination.total);
 
   return (
-    <div className="flex min-h-screen bg-[#F9FAFB]">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0">
-        <div className="px-5 py-4 border-b border-[#E5E7EB]">
-          <div className="text-xl font-bold text-[#2563EB]">CDMP</div>
-          <div className="text-xs text-gray-500 mt-0.5">資料治理平台</div>
-        </div>
-        <nav className="flex-1 py-3">
-          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Users size={16} />帳號管理
-          </a>
-          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Database size={16} />資料來源
-          </a>
-          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <ArrowDownToLine size={16} />資料擷取
-          </a>
-          <a href="/etl-pipelines" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Workflow size={16} />ETL Pipeline
-          </a>
-          <a href="/c360/customers" className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-[#2563EB] bg-blue-50 border-r-2 border-[#2563EB]">
-            <Contact size={16} />Customer 360
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-base font-semibold text-gray-800">Customer 360</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name}</span>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-[#EF4444] transition"
-            >
-              登出
-            </button>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
+    <AppLayout title="Customer 360">
+      <main className="flex-1 p-6">
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             <StatCard
@@ -400,9 +343,8 @@ export function CustomerListPage() {
               </div>
             </div>
           )}
-        </main>
-      </div>
-    </div>
+      </main>
+    </AppLayout>
   );
 }
 

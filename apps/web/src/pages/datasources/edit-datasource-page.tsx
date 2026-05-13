@@ -2,11 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Users, Database, ArrowDownToLine, ChevronRight, Plug, Workflow, Contact, } from 'lucide-react';
+import { ChevronRight, Plug } from 'lucide-react';
 import { editDatasourceSchema, type EditDatasourceFormData } from './edit-datasource-schema';
 import { getDatasource, updateDatasource, testDatasourceConnection } from '@/api/datasources';
-import { clearAuth, getUser } from '@/stores/auth-store';
-import { logout } from '@/api/auth';
+import { AppLayout } from '@/components/layout/app-layout';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Select } from '@/components/ui/select';
@@ -30,7 +29,6 @@ const DEFAULT_PORTS: Record<string, number> = {
 export function EditDatasourcePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const user = getUser();
   const { showToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -114,17 +112,6 @@ export function EditDatasourcePage() {
     }
   }, [selectedType, setValue]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // Graceful degradation
-    } finally {
-      clearAuth();
-      navigate('/login');
-    }
-  };
-
   const handleTestConnection = async () => {
     if (!id || isTesting) return;
     setIsTesting(true);
@@ -204,50 +191,8 @@ export function EditDatasourcePage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#F9FAFB]">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0">
-        <div className="px-5 py-4 border-b border-[#E5E7EB]">
-          <div className="text-xl font-bold text-[#2563EB]">CDMP</div>
-          <div className="text-xs text-gray-500 mt-0.5">資料治理平台</div>
-        </div>
-        <nav className="flex-1 py-3">
-          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Users size={16} />帳號管理
-          </a>
-          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-[#2563EB] bg-blue-50 border-r-2 border-[#2563EB]">
-            <Database size={16} />資料來源
-          </a>
-          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <ArrowDownToLine size={16} />資料擷取
-          </a>
-          <a href="/etl-pipelines" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Workflow size={16} />ETL Pipeline
-          </a>
-          <a href="/c360/customers" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Contact size={16} />Customer 360
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-base font-semibold text-gray-800">資料來源</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name}</span>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-[#EF4444] transition"
-            >
-              登出
-            </button>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
+    <AppLayout title="資料來源">
+      <main className="flex-1 p-6">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 text-sm mb-6" aria-label="breadcrumb">
             <span className="text-gray-500">資料來源</span>
@@ -399,8 +344,7 @@ export function EditDatasourcePage() {
               </div>
             </form>
           </div>
-        </main>
-      </div>
-    </div>
+      </main>
+    </AppLayout>
   );
 }

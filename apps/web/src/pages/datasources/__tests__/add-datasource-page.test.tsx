@@ -81,12 +81,7 @@ describe('AddDatasourcePage', () => {
       expect(screen.getByPlaceholderText('選填，最多 500 字')).toBeInTheDocument();
     });
 
-    it('Sidebar 資料來源為 active 狀態', () => {
-      renderPage();
-      const sidebarNav = document.querySelector('aside nav');
-      const datasourceLink = sidebarNav?.querySelector('a[href="/datasources/new"]');
-      expect(datasourceLink).toHaveClass('text-[#2563EB]');
-    });
+    // Sidebar active state 由共用 AppSidebar 元件負責，於其自身 unit test 覆蓋。
   });
 
   describe('類型選擇自動帶入 port', () => {

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Database, ArrowDownToLine, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid, AlertTriangle, BarChart3, Workflow, Contact, } from 'lucide-react';
-import { clearAuth, getUser } from '@/stores/auth-store';
-import { logout } from '@/api/auth';
+import { Database, Plus, Search, ChevronLeft, ChevronRight, List, LayoutGrid, AlertTriangle, BarChart3 } from 'lucide-react';
 import { getDatasources, deleteDatasource, testDatasourceConnection } from '@/api/datasources';
 import { Button } from '@/components/ui/button';
+import { AppLayout } from '@/components/layout/app-layout';
 import { useToast } from '@/components/ui/toast';
 import { DashboardTab } from './dashboard-tab';
 import { formatDateTW } from '@/utils/date-utils';
@@ -51,7 +50,6 @@ function getInitialViewMode(): 'list' | 'card' {
 
 export function DatasourceListPage() {
   const navigate = useNavigate();
-  const user = getUser();
   const { showToast } = useToast();
 
   // Tab state: 'overview' (dashboard) or 'list'
@@ -122,17 +120,6 @@ export function DatasourceListPage() {
     }
   }, [fetchDatasources, activeTab]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // Graceful degradation
-    } finally {
-      clearAuth();
-      navigate('/login');
-    }
-  };
-
   const handleTypeChange = (value: string) => {
     setTypeFilter(value);
     setPage(1);
@@ -195,48 +182,7 @@ export function DatasourceListPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F9FAFB]">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0">
-        <div className="px-5 py-4 border-b border-[#E5E7EB]">
-          <div className="text-xl font-bold text-[#2563EB]">CDMP</div>
-          <div className="text-xs text-gray-500 mt-0.5">資料治理平台</div>
-        </div>
-        <nav className="flex-1 py-3">
-          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Users size={16} />帳號管理
-          </a>
-          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-[#2563EB] bg-blue-50 border-r-2 border-[#2563EB]">
-            <Database size={16} />資料來源
-          </a>
-          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <ArrowDownToLine size={16} />資料擷取
-          </a>
-          <a href="/etl-pipelines" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Workflow size={16} />ETL Pipeline
-          </a>
-          <a href="/c360/customers" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Contact size={16} />Customer 360
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-base font-semibold text-gray-800">資料來源管理</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name}</span>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-[#EF4444] transition"
-            >
-              登出
-            </button>
-          </div>
-        </header>
-
+    <AppLayout title="資料來源管理">
         {/* Tab Navigation */}
         <div className="bg-white border-b border-gray-200 px-6">
           <nav className="flex space-x-1" role="tablist">
@@ -525,7 +471,6 @@ export function DatasourceListPage() {
             )}
           </main>
         )}
-      </div>
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
@@ -565,6 +510,6 @@ export function DatasourceListPage() {
           </div>
         </div>
       )}
-    </div>
+    </AppLayout>
   );
 }

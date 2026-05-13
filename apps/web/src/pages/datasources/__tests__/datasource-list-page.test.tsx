@@ -180,13 +180,7 @@ describe('DatasourceListPage', () => {
       expect(screen.getByLabelText('下一頁')).toBeInTheDocument();
     });
 
-    // FE-011: Sidebar 資料來源為 active
-    it('should have active state on datasource sidebar link', async () => {
-      await renderAndLoad();
-
-      const dsLink = screen.getByText('資料來源').closest('a');
-      expect(dsLink).toHaveClass('border-r-2');
-    });
+    // FE-011: Sidebar active state 已由共用 AppSidebar 元件負責，於其自身 unit test 覆蓋。
   });
 
   // FE-004, FE-005, FE-006: 互動測試

@@ -19,7 +19,8 @@ import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
 import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
 import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
-import { AdminRoute, UserRoute, ProtectedRoute } from '@/router/protected-route';
+import { AssignmentStubPage } from '@/pages/assignment';
+import { AdminRoute, ProtectedRoute, SalesManagerRoute } from '@/router/protected-route';
 
 export function App() {
   return (
@@ -30,9 +31,9 @@ export function App() {
       <Route
         path="/user-info"
         element={
-          <UserRoute>
+          <ProtectedRoute>
             <UserInfoPage />
-          </UserRoute>
+          </ProtectedRoute>
         }
       />
       <Route
@@ -153,6 +154,95 @@ export function App() {
           <ProtectedRoute>
             <CustomerDetailPage />
           </ProtectedRoute>
+        }
+      />
+      {/* E07 客戶名單分派 stub 路由（SalesManagerRoute Guard） */}
+      <Route
+        path="/assignment/base-codes"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="代碼維護" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/scoring"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="計分卡設定" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/ratios"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="比例設定" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/list-definitions"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="名單定義" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/estimate"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="Stage 0 試算" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/run"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="觸發月跑" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/run-progress"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="執行進度" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/run-summary"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="結果摘要" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/history"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="執行歷史" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/snapshots"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="快照詳情" />
+          </SalesManagerRoute>
+        }
+      />
+      <Route
+        path="/assignment/compare"
+        element={
+          <SalesManagerRoute>
+            <AssignmentStubPage title="結果比對" />
+          </SalesManagerRoute>
         }
       />
       <Route

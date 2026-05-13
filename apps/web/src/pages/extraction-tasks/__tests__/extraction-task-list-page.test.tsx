@@ -257,11 +257,5 @@ describe('ExtractionTaskListPage', () => {
     });
   });
 
-  describe('Sidebar', () => {
-    it('should have active state on extraction sidebar link', async () => {
-      await renderAndLoad();
-      const link = screen.getByText('資料擷取').closest('a');
-      expect(link).toHaveClass('border-r-2');
-    });
-  });
+  // Sidebar active state 已由共用 AppSidebar 元件負責，於其自身 unit test 覆蓋。
 });
