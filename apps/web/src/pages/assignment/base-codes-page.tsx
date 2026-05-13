@@ -8,7 +8,6 @@ import {
   Plus,
   Pencil,
   Ban,
-  Lock,
   AlertTriangle,
   Info,
   X,
@@ -33,10 +32,8 @@ import {
  *
  * 對應 prototype: /prototypes/37-base-code.html
  *
- * 三 Tabs（PROD_KIND / SPEC_TP / CASE_STATUS）、Demo Bar、搜尋 + 狀態篩選、
+ * 三 Tabs（PROD_KIND / SPEC_TP / CASE_STATUS）、搜尋 + 狀態篩選、
  * CASE_STATUS 業務語意對照 banner、新增 / 編輯 / 停用 Modal。
- *
- * Demo Bar 為純前端顯示開關（控制 statusFilter），對齊 prototype 行為。
  */
 
 type StatusFilter = 'all' | 'active' | 'future' | 'expired';
@@ -261,73 +258,10 @@ export function BaseCodesPage() {
     setStatusFilter('all');
   }
 
-  function applyDemo(state: 'normal' | 'effective-only' | 'expired-included') {
-    setKeyword('');
-    if (state === 'normal') setStatusFilter('all');
-    else if (state === 'effective-only') setStatusFilter('active');
-    else setStatusFilter('expired');
-  }
-
   return (
     <AppLayout title="代碼維護">
       <main className="flex-1">
-        {/* ===== Demo Bar ===== */}
-        <div className="bg-white border-b border-[#E5E7EB] px-6 py-2 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-400 mr-1">Demo:</span>
-          {[
-            { key: 'normal', label: '正常清單' },
-            { key: 'effective-only', label: '僅顯示生效中' },
-            { key: 'expired-included', label: '含已過期代碼' },
-          ].map((d) => {
-            const active =
-              (d.key === 'normal' && statusFilter === 'all' && !keyword) ||
-              (d.key === 'effective-only' && statusFilter === 'active') ||
-              (d.key === 'expired-included' && statusFilter === 'expired');
-            return (
-              <button
-                key={d.key}
-                type="button"
-                onClick={() => applyDemo(d.key as any)}
-                className={
-                  active
-                    ? 'px-3 py-1 text-xs rounded border border-[#2563EB] bg-blue-50 text-[#2563EB]'
-                    : 'px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50'
-                }
-              >
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="p-6">
-          {/* ===== Scope 提示 ===== */}
-          <div className="mb-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
-            <Lock className="w-4 h-4 text-[#2563EB] mt-0.5 shrink-0" />
-            <div>
-              <p className="font-semibold text-[#2563EB]">本功能限定 E07 三類代碼維護（BR-1）</p>
-              <p className="text-xs text-gray-600 mt-0.5">
-                <code>PROD_KIND</code>（產品類別）/ <code>SPEC_TP</code>（專案類別）/{' '}
-                <code>CASE_STATUS</code>（案件結清期別）。其他 <code>tbl_id</code> 一律回傳 422{' '}
-                <code>CODE_TYPE_INVALID</code>。資料表 <code>ob_code_df</code> ·{' '}
-                <code>system_id = 'OB'</code>（OQ-E07-11 ✅ 2026-05-05 確認）
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                <Info className="w-3 h-3 inline-block align-text-bottom mr-0.5" />
-                <span className="font-medium">AD-E07-14 tbl_id 英文常數映射</span>：原系統{' '}
-                <code>'01'</code>→<code>PROD_KIND</code>、<code>'02'</code>→<code>SPEC_TP</code>、
-                <code>'22'</code>→<code>CASE_STATUS</code>（CDMP 兩階段 migration 後改用英文常數）。
-              </p>
-              <p className="text-xs text-amber-700 mt-1 flex items-start gap-1">
-                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                <span>
-                  <span className="font-medium">CASEYEAR 不在本功能維護範圍</span>：舊系統 CASEYEAR
-                  為前端 hard-coded 0~10 共 11 個 CheckBox，CDMP 沿用此設計，由 F050/F051 表單前端固定提供。
-                </span>
-              </p>
-            </div>
-          </div>
-
           {/* ===== Tabs + Filter ===== */}
           <div className="bg-white rounded-t-lg border border-[#E5E7EB] border-b-0">
             <div className="flex items-center justify-between px-4 border-b border-[#E5E7EB]">
@@ -542,20 +476,6 @@ export function BaseCodesPage() {
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-          </div>
-
-          {/* footer note */}
-          <div className="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
-            <Info className="w-4 h-4 text-[#2563EB] mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium text-gray-700 mb-0.5">代碼維護操作說明</p>
-              <p>
-                停用為軟刪除（更新 <code>enddt</code>，BR-2 不刪除紀錄）。停用代碼不再出現於
-                F050/F051 名單定義表單下拉，但既有名單定義中已選用的代碼值不被回溯修改（BR-4）。
-                代碼值唯一性檢查範圍為同 tbl_id 下啟用期間紀錄（BR-3，違反時 422{' '}
-                <code>CODE_IN_USE</code>）。Admin 與業務主管均可存取（BR-5）。
-              </p>
             </div>
           </div>
 

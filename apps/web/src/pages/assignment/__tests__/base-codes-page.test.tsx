@@ -5,7 +5,6 @@
  *   - 3 個 Tabs 正確顯示與切換
  *   - CASE_STATUS Tab 顯示業務語意對照 banner，其他 Tab 不顯示
  *   - listAssignmentCodes 在初始化時被各 tab 呼叫一次
- *   - Demo Bar 按鈕切換 statusFilter
  */
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -87,15 +86,6 @@ describe('F068: BaseCodesPage 渲染煙霧測試', () => {
     await waitFor(() => {
       expect(screen.getByText(/4 個代碼業務語意對照/)).toBeInTheDocument();
     });
-  });
-
-  it('預設 Scope 提示 banner 顯示 BR-1 / AD-E07-14 / CASEYEAR 警示', async () => {
-    render(wrap(<BaseCodesPage />));
-    await waitFor(() => {
-      expect(screen.getByText(/本功能限定 E07 三類代碼維護/)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/AD-E07-14 tbl_id 英文常數映射/)).toBeInTheDocument();
-    expect(screen.getByText(/CASEYEAR 不在本功能維護範圍/)).toBeInTheDocument();
   });
 
   it('點擊「新增代碼」開啟 Modal', async () => {
