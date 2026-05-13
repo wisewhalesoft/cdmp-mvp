@@ -18,6 +18,7 @@ import {
   ADMIN_DISABLED,
   USER_ACTIVE,
   USER_DISABLED,
+  SALES_MANAGER_ACTIVE,
 } from './seeds/test-data';
 
 async function createTestApp(throttleLimit: number): Promise<INestApplication> {
@@ -98,6 +99,15 @@ async function createTestApp(throttleLimit: number): Promise<INestApplication> {
       password_hash: hashedPassword,
       role: USER_DISABLED.role,
       status: USER_DISABLED.status,
+    }),
+    userRepo.create({
+      id: SALES_MANAGER_ACTIVE.id,
+      name: SALES_MANAGER_ACTIVE.name,
+      email: SALES_MANAGER_ACTIVE.email,
+      password_hash: hashedPassword,
+      role: SALES_MANAGER_ACTIVE.role,
+      status: SALES_MANAGER_ACTIVE.status,
+      is_sales_manager: SALES_MANAGER_ACTIVE.is_sales_manager,
     }),
   ]);
 
@@ -328,6 +338,111 @@ describe('Auth E2E - F002 User Login (POST /api/v1/auth/login)', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('Auth E2E - F002SM Sales Manager Flag (POST /api/v1/auth/login)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    app = await createTestApp(100);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // TS-F002SM-001: Sales Manager 登入 → user.isSalesManager === true
+  it('should return user.isSalesManager=true for sales manager account', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: SALES_MANAGER_ACTIVE.email,
+        password: SALES_MANAGER_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toHaveProperty('isSalesManager');
+    expect(response.body.user.isSalesManager).toBe(true);
+    expect(typeof response.body.user.isSalesManager).toBe('boolean');
+    expect(response.body.user.role).toBe('user');
+  });
+
+  // TS-F002SM-002: 一般 User 登入 → user.isSalesManager === false
+  it('should return user.isSalesManager=false for regular user', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toHaveProperty('isSalesManager');
+    expect(response.body.user.isSalesManager).toBe(false);
+  });
+
+  // TS-F002SM-003: Admin 登入 → user.isSalesManager === false
+  it('should return user.isSalesManager=false for admin account', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: ADMIN_ACTIVE.email,
+        password: ADMIN_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toHaveProperty('isSalesManager');
+    expect(response.body.user.isSalesManager).toBe(false);
+  });
+
+  // TS-F002SM-004: JWT payload 含 isSalesManager: true（解碼驗證）
+  it('should embed isSalesManager=true in JWT payload for sales manager', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: SALES_MANAGER_ACTIVE.email,
+        password: SALES_MANAGER_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    const token: string = response.body.token;
+    const payloadBase64 = token.split('.')[1];
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+    expect(payload.isSalesManager).toBe(true);
+    expect(typeof payload.isSalesManager).toBe('boolean');
+  });
+
+  // TS-F002SM-005: JWT payload 含 isSalesManager: false（一般 user）
+  it('should embed isSalesManager=false in JWT payload for regular user', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    const token: string = response.body.token;
+    const payloadBase64 = token.split('.')[1];
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+    expect(payload.isSalesManager).toBe(false);
+  });
+
+  // TS-F002SM-006: isSalesManager 必須為 boolean，不能為字串
+  it('should serialize isSalesManager as boolean, never as string', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({
+        email: SALES_MANAGER_ACTIVE.email,
+        password: SALES_MANAGER_ACTIVE.password,
+      });
+
+    expect(response.status).toBe(200);
+    const value = response.body.user.isSalesManager;
+    expect(typeof value).toBe('boolean');
+    expect(value).not.toBe('true');
+    expect(value).not.toBe('false');
   });
 });
 

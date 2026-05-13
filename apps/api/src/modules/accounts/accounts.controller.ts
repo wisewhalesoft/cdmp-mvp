@@ -7,6 +7,7 @@ import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { UpdateSalesManagerFlagDto } from './dto/update-sales-manager-flag.dto';
 import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
@@ -48,6 +49,16 @@ export class AccountsController {
     @Body() dto: UpdateRoleDto,
   ) {
     return this.accountsService.changeRole(id, dto.role);
+  }
+
+  // F008 v3.2: PATCH /api/accounts/:id/sales-manager-flag
+  // 切換 User 帳號的業務主管旗標
+  @Patch(':id/sales-manager-flag')
+  async updateSalesManagerFlag(
+    @Param('id') id: string,
+    @Body() dto: UpdateSalesManagerFlagDto,
+  ) {
+    return this.accountsService.updateSalesManagerFlag(id, dto.isSalesManager);
   }
 
   @Post(':id/reset-password')

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@/database/entities/user.entity';
@@ -14,6 +14,7 @@ export interface CreateAccountResult {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -23,6 +24,7 @@ export interface UpdateAccountResult {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   created_at: Date;
   updated_at: Date;
@@ -33,6 +35,7 @@ export interface AccountListItem {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -49,6 +52,17 @@ export interface ChangeRoleResult {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
+  status: 'active' | 'disabled';
+  updated_at: Date;
+}
+
+export interface UpdateSalesManagerFlagResult {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
@@ -62,6 +76,7 @@ export interface ToggleStatusResult {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
@@ -86,6 +101,8 @@ export class AccountsService {
         'user.role',
         'user.status',
         'user.created_at',
+        // F004/F006/F008 v3.2: 列表頁需顯示 is_sales_manager chip 徽章
+        'user.is_sales_manager',
       ]);
 
     if (query.search) {
@@ -116,6 +133,7 @@ export class AccountsService {
         name: user.name,
         email: user.email,
         role: user.role,
+        is_sales_manager: user.is_sales_manager ?? false,
         status: user.status,
         created_at: user.created_at,
       })),
@@ -140,6 +158,10 @@ export class AccountsService {
     // Hash password
     const passwordHash = await HashUtil.hash(dto.password);
 
+    // F004 AC-7 / BR-9: Admin 角色強制忽略 isSalesManager (寫入 false)；
+    // 僅在 role='user' 時採用傳入值（預設 false）
+    const isSalesManager = dto.role === 'user' ? (dto.isSalesManager ?? false) : false;
+
     // Create and save user
     const user = this.userRepository.create({
       name: dto.name,
@@ -147,6 +169,7 @@ export class AccountsService {
       password_hash: passwordHash,
       role: dto.role,
       status: 'active',
+      is_sales_manager: isSalesManager,
     });
 
     const saved = await this.userRepository.save(user);
@@ -156,6 +179,7 @@ export class AccountsService {
       name: saved.name,
       email: saved.email,
       role: saved.role,
+      is_sales_manager: saved.is_sales_manager ?? false,
       status: saved.status,
       created_at: saved.created_at,
     };
@@ -182,7 +206,9 @@ export class AccountsService {
       });
     }
 
-    // Update fields
+    // Update fields (F006 BR-1: 只能編輯姓名與 Email)
+    // F006 BR-6: is_sales_manager 不在此功能範圍，DTO 已透過 whitelist 阻擋；
+    // service 也僅更新 name/email，is_sales_manager 不動。
     user.name = dto.name;
     user.email = email;
 
@@ -193,6 +219,7 @@ export class AccountsService {
       name: saved.name,
       email: saved.email,
       role: saved.role,
+      is_sales_manager: saved.is_sales_manager ?? false,
       status: saved.status,
       created_at: saved.created_at,
       updated_at: saved.updated_at,
@@ -230,6 +257,7 @@ export class AccountsService {
       name: saved.name,
       email: saved.email,
       role: saved.role,
+      is_sales_manager: saved.is_sales_manager ?? false,
       status: saved.status,
       updated_at: saved.updated_at,
     };
@@ -255,6 +283,8 @@ export class AccountsService {
         name: user.name,
         email: user.email,
         role: user.role,
+        // F008 v3.2 BR-8 / TS-F008-SM-009: 角色變更不影響 is_sales_manager
+        is_sales_manager: user.is_sales_manager ?? false,
         status: user.status,
         updated_at: user.updated_at,
       };
@@ -272,6 +302,8 @@ export class AccountsService {
     }
 
     // Update role
+    // F008 v3.2 AC-10 / BR-8: is_sales_manager 不因角色變更而被清除
+    // （升 admin 時 DB 保留原值，再降回 user 時旗標仍維持原值）
     user.role = role;
     const saved = await this.userRepository.save(user);
 
@@ -280,6 +312,46 @@ export class AccountsService {
       name: saved.name,
       email: saved.email,
       role: saved.role,
+      is_sales_manager: saved.is_sales_manager ?? false,
+      status: saved.status,
+      updated_at: saved.updated_at,
+    };
+  }
+
+  // F008 v3.2 AC-8 / AC-9 / BR-9 / BR-10:
+  // PATCH /api/accounts/:id/sales-manager-flag
+  // - 僅可對 role=user 帳號操作；admin 拒絕 ACCOUNT_FLAG_NOT_APPLICABLE
+  // - 冪等：同值亦回傳 200
+  async updateSalesManagerFlag(
+    id: string,
+    isSalesManager: boolean,
+  ): Promise<UpdateSalesManagerFlagResult> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ACCOUNT_NOT_FOUND,
+        message: ERROR_MESSAGES.ACCOUNT_NOT_FOUND,
+      });
+    }
+
+    // AC-9 / BR-9: Admin 帳號不適用業務主管旗標，回 400
+    if (user.role !== 'user') {
+      throw new BadRequestException({
+        error: ERROR_CODES.ACCOUNT_FLAG_NOT_APPLICABLE,
+        message: ERROR_MESSAGES.ACCOUNT_FLAG_NOT_APPLICABLE,
+      });
+    }
+
+    // 更新旗標（冪等：相同值亦寫入並回 200）
+    user.is_sales_manager = isSalesManager;
+    const saved = await this.userRepository.save(user);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      email: saved.email,
+      role: saved.role,
+      is_sales_manager: saved.is_sales_manager ?? false,
       status: saved.status,
       updated_at: saved.updated_at,
     };

@@ -16,6 +16,7 @@ import {
   ADMIN_DISABLED,
   USER_ACTIVE,
   USER_DISABLED,
+  SALES_MANAGER_ACTIVE,
 } from '../../../../test/seeds/test-data';
 
 describe('AuthService', () => {
@@ -338,6 +339,117 @@ describe('AuthService', () => {
     // Verify TypeORM findOne was called with the raw string (parameterized)
     expect(mockUserRepository.findOne).toHaveBeenCalledWith({
       where: { email: sqlInjectionEmail.toLowerCase() },
+    });
+  });
+
+  // F002SM: Sales Manager 旗標補充於 LoginResult.user
+  describe('F002SM - isSalesManager in LoginResult', () => {
+    // TS-F002SM-001: Sales Manager 登入 → user.isSalesManager === true
+    it('should return user.isSalesManager=true for sales manager account', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...SALES_MANAGER_ACTIVE,
+        password_hash: hashedPassword,
+      });
+
+      const result = await authService.login({
+        email: SALES_MANAGER_ACTIVE.email,
+        password: SALES_MANAGER_ACTIVE.password,
+      });
+
+      expect(result.user).toHaveProperty('isSalesManager');
+      expect(result.user.isSalesManager).toBe(true);
+      expect(typeof result.user.isSalesManager).toBe('boolean');
+      expect(result.user.role).toBe('user');
+    });
+
+    // TS-F002SM-002: 一般 User 登入 → user.isSalesManager === false
+    it('should return user.isSalesManager=false for regular user (no flag)', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...USER_ACTIVE,
+        is_sales_manager: false,
+        password_hash: hashedPassword,
+      });
+
+      const result = await authService.login({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+      expect(result.user).toHaveProperty('isSalesManager');
+      expect(result.user.isSalesManager).toBe(false);
+      expect(typeof result.user.isSalesManager).toBe('boolean');
+    });
+
+    // TS-F002SM-003: Admin 登入 → user.isSalesManager === false（boundary safety）
+    it('should return user.isSalesManager=false for admin account', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...ADMIN_ACTIVE,
+        is_sales_manager: false,
+        password_hash: hashedPassword,
+      });
+
+      const result = await authService.login({
+        email: ADMIN_ACTIVE.email,
+        password: ADMIN_ACTIVE.password,
+      });
+
+      expect(result.user).toHaveProperty('isSalesManager');
+      expect(result.user.isSalesManager).toBe(false);
+      expect(result.user.role).toBe('admin');
+    });
+
+    // TS-F002SM-006: 型別必須為 boolean（非字串）
+    it('should return isSalesManager as boolean type, not string', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...SALES_MANAGER_ACTIVE,
+        password_hash: hashedPassword,
+      });
+
+      const result = await authService.login({
+        email: SALES_MANAGER_ACTIVE.email,
+        password: SALES_MANAGER_ACTIVE.password,
+      });
+
+      expect(typeof result.user.isSalesManager).toBe('boolean');
+      expect(result.user.isSalesManager).not.toBe('true');
+      expect(result.user.isSalesManager).not.toBe('false');
+    });
+
+    // TS-F002SM-004: JWT payload 含 isSalesManager: true
+    it('should pass isSalesManager=true to JWT generation for sales manager', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...SALES_MANAGER_ACTIVE,
+        password_hash: hashedPassword,
+      });
+
+      await authService.login({
+        email: SALES_MANAGER_ACTIVE.email,
+        password: SALES_MANAGER_ACTIVE.password,
+      });
+
+      expect(mockJwtUtil.generateToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: SALES_MANAGER_ACTIVE.id,
+          role: 'user',
+          isSalesManager: true,
+        }),
+      );
+    });
+
+    // Defense in depth: 若 DB 欄位為 undefined（極端情況），仍應回傳 false
+    it('should default isSalesManager to false when DB value is nullish', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...USER_ACTIVE,
+        is_sales_manager: undefined,
+        password_hash: hashedPassword,
+      });
+
+      const result = await authService.login({
+        email: USER_ACTIVE.email,
+        password: USER_ACTIVE.password,
+      });
+
+      expect(result.user.isSalesManager).toBe(false);
     });
   });
 

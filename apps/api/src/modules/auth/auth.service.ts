@@ -24,6 +24,7 @@ export interface LoginResult {
     name: string;
     email: string;
     role: string;
+    isSalesManager: boolean;
   };
 }
 
@@ -84,11 +85,15 @@ export class AuthService {
       });
     }
 
+    // F002SM / F008 AD-E02-1：旗標統一以 boolean 形式回傳，
+    // Admin 帳號亦回傳 false（非 undefined）以避免前端 undefined 邊界
+    const isSalesManager = user.is_sales_manager ?? false;
+
     // Generate JWT（含 is_sales_manager 旗標供 SalesManagerGuard 使用，AD-E02-1）
     const token = this.jwtUtil.generateToken({
       userId: user.id,
       role: user.role,
-      isSalesManager: user.is_sales_manager ?? false,
+      isSalesManager,
       rememberMe: dto.rememberMe ?? false,
     });
 
@@ -99,6 +104,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        isSalesManager,
       },
     };
   }

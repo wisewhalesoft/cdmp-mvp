@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AccountsService } from '../accounts.service';
 import { User } from '@/database/entities/user.entity';
 import { HashUtil } from '@/common/hash/hash.util';
@@ -403,5 +403,219 @@ describe('AccountsService', () => {
       expect(result.role).toBe('user');
     });
 
+    // F008 v3.2 BR-8 / TS-F008-SM-009: 角色變更不影響 is_sales_manager
+    it('should preserve is_sales_manager when changing role (TS-F008-SM-009)', async () => {
+      const userWithSalesManager = {
+        ...userAccount,
+        is_sales_manager: true,
+      };
+      userRepository.findOne.mockResolvedValueOnce({ ...userWithSalesManager });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      // 冪等：user → user，回應仍保留 is_sales_manager: true
+      const result = await service.changeRole('user-uuid-1', 'user');
+      expect(result.role).toBe('user');
+      expect(result.is_sales_manager).toBe(true);
+    });
+
+    it('should include is_sales_manager in changeRole response when upgrading', async () => {
+      const userWithSalesManager = {
+        ...userAccount,
+        is_sales_manager: true,
+      };
+      userRepository.findOne.mockResolvedValueOnce({ ...userWithSalesManager });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.changeRole('user-uuid-1', 'admin');
+      expect(result.role).toBe('admin');
+      // F008 v3.2 AC-10: 升級為 admin 時 DB 中 is_sales_manager 仍保留原值（不被清除）
+      expect(result.is_sales_manager).toBe(true);
+    });
+  });
+
+  // ===== F004 AC-6 / AC-7 / BR-9: createAccount with isSalesManager =====
+  describe('createAccount with isSalesManager (F004 SM)', () => {
+    // TS-F004-SM-001
+    it('should create User account with isSalesManager=true and write DB true', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.createAccount({
+        name: 'New User',
+        email: 'user+sm@example.com',
+        password: 'password123',
+        role: 'user',
+        isSalesManager: true,
+      });
+
+      const savedEntity = userRepository.create.mock.calls[0][0];
+      expect(savedEntity.is_sales_manager).toBe(true);
+      expect(result.is_sales_manager).toBe(true);
+    });
+
+    // TS-F004-SM-002
+    it('should create User account with isSalesManager=false', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.createAccount({
+        name: 'New User',
+        email: 'user2@example.com',
+        password: 'password123',
+        role: 'user',
+        isSalesManager: false,
+      });
+
+      const savedEntity = userRepository.create.mock.calls[0][0];
+      expect(savedEntity.is_sales_manager).toBe(false);
+      expect(result.is_sales_manager).toBe(false);
+    });
+
+    // TS-F004-SM-003
+    it('should default isSalesManager to false when omitted', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.createAccount({
+        name: 'New User',
+        email: 'user3@example.com',
+        password: 'password123',
+        role: 'user',
+        // 無 isSalesManager 欄位
+      });
+
+      const savedEntity = userRepository.create.mock.calls[0][0];
+      expect(savedEntity.is_sales_manager).toBe(false);
+      expect(result.is_sales_manager).toBe(false);
+    });
+
+    // TS-F004-SM-004: AC-7 BR-9
+    it('should force is_sales_manager=false when role=admin even if isSalesManager=true is sent', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.createAccount({
+        name: 'New Admin',
+        email: 'admin-sm@example.com',
+        password: 'password123',
+        role: 'admin',
+        isSalesManager: true,
+      });
+
+      const savedEntity = userRepository.create.mock.calls[0][0];
+      // BR-9: role=admin 時後端強制覆寫為 false（不論傳入值）
+      expect(savedEntity.is_sales_manager).toBe(false);
+      expect(result.is_sales_manager).toBe(false);
+    });
+  });
+
+  // ===== F006 BR-6: updateAccount must ignore isSalesManager =====
+  describe('updateAccount ignores isSalesManager (F006 BR-6)', () => {
+    it('should not modify is_sales_manager via updateAccount', async () => {
+      const existingUser = {
+        id: 'user-uuid-1',
+        name: 'Original',
+        email: 'original@example.com',
+        password_hash: '$2b$10$hashedpassword',
+        role: 'user' as const,
+        status: 'active' as const,
+        is_sales_manager: false,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+      };
+      userRepository.findOne
+        .mockResolvedValueOnce({ ...existingUser })
+        .mockResolvedValueOnce(null);
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      // DTO 即使被攻擊者繞過送入 isSalesManager: true，service 也不應改動 DB
+      await service.updateAccount('user-uuid-1', {
+        name: 'Updated',
+        email: 'updated@example.com',
+      } as any);
+
+      const savedEntity = userRepository.save.mock.calls[0][0];
+      expect(savedEntity.is_sales_manager).toBe(false);
+    });
+  });
+
+  // ===== F008 v3.2 AC-8 / AC-9 / BR-9 / BR-10: updateSalesManagerFlag =====
+  describe('updateSalesManagerFlag', () => {
+    const userAccount = {
+      id: 'user-uuid-1',
+      name: 'Test User',
+      email: 'test@example.com',
+      password_hash: '$2b$10$hashedpassword',
+      role: 'user' as const,
+      status: 'active' as const,
+      is_sales_manager: false,
+      created_at: new Date('2025-01-01'),
+      updated_at: new Date('2025-01-01'),
+    };
+
+    // TS-F008-SM-001
+    it('should toggle flag false → true and return 200', async () => {
+      userRepository.findOne.mockResolvedValueOnce({ ...userAccount });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateSalesManagerFlag('user-uuid-1', true);
+
+      expect(result.is_sales_manager).toBe(true);
+      expect(result.id).toBe('user-uuid-1');
+      expect(result.role).toBe('user');
+      expect(result).not.toHaveProperty('password_hash');
+    });
+
+    // TS-F008-SM-002
+    it('should toggle flag true → false and return 200', async () => {
+      const userWithSm = { ...userAccount, is_sales_manager: true };
+      userRepository.findOne.mockResolvedValueOnce({ ...userWithSm });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateSalesManagerFlag('user-uuid-1', false);
+      expect(result.is_sales_manager).toBe(false);
+    });
+
+    // TS-F008-SM-003 / BR-10
+    it('should be idempotent when setting same value (true → true)', async () => {
+      const userWithSm = { ...userAccount, is_sales_manager: true };
+      userRepository.findOne.mockResolvedValueOnce({ ...userWithSm });
+      userRepository.save.mockImplementation((entity: any) =>
+        Promise.resolve({ ...entity, updated_at: new Date('2025-06-01') }),
+      );
+
+      const result = await service.updateSalesManagerFlag('user-uuid-1', true);
+      expect(result.is_sales_manager).toBe(true);
+    });
+
+    // TS-F008-SM-005 / AC-9 / BR-9
+    it('should throw BadRequestException ACCOUNT_FLAG_NOT_APPLICABLE for admin account', async () => {
+      const adminAccount = {
+        ...userAccount,
+        role: 'admin' as const,
+      };
+      userRepository.findOne.mockResolvedValueOnce({ ...adminAccount });
+
+      await expect(
+        service.updateSalesManagerFlag('user-uuid-1', true),
+      ).rejects.toThrow(BadRequestException);
+      // 確認 DB 未被更新
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    // TS-F008-SM-006
+    it('should throw NotFoundException when account does not exist', async () => {
+      userRepository.findOne.mockResolvedValueOnce(null);
+
+      await expect(
+        service.updateSalesManagerFlag('nonexistent-uuid', true),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 });

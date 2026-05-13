@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { VALID_ROLES, type UserRole } from '@/common/constants/roles';
 
 export class CreateAccountDto {
@@ -18,4 +18,10 @@ export class CreateAccountDto {
 
   @IsIn([...VALID_ROLES], { message: '角色值無效，必須為系統定義的 8 種角色之一' })
   role: UserRole;
+
+  // F004 AC-6 / BR-9: 業務主管旗標
+  // 選填、預設 false；僅在 role='user' 時有效，role='admin' 時 Service 層強制覆寫為 false
+  @IsOptional()
+  @IsBoolean({ message: 'isSalesManager 必須為布林值' })
+  isSalesManager?: boolean;
 }

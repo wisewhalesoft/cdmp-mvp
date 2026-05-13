@@ -39,3 +39,14 @@ export const USER_DISABLED = {
   role: 'user' as const,
   status: 'disabled' as const,
 };
+
+// F002SM / F008 AD-E02-1: Sales Manager fixture（role=user + is_sales_manager=true）
+export const SALES_MANAGER_ACTIVE = {
+  id: 'e5f6a7b8-c9d0-1234-efab-345678901234',
+  name: 'Sales Manager User',
+  email: 'manager@cdmp.test',
+  password: 'P@ssw0rd123',
+  role: 'user' as const,
+  status: 'active' as const,
+  is_sales_manager: true,
+};
