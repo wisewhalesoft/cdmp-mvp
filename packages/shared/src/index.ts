@@ -46,6 +46,8 @@ export interface UserInfo {
   name: string;
   email: string;
   role: UserRole;
+  // F002SM / F008 AD-E02-1：業務主管旗標。Admin 回傳 false；舊 token 可能為 undefined。
+  isSalesManager?: boolean;
 }
 
 export interface ApiError {
@@ -62,6 +64,8 @@ export interface CreateAccountRequest {
   email: string;
   password: string;
   role: UserRole;
+  // F004 AC-6 / BR-9: 選填，僅在 role='user' 時有效，role='admin' 時後端忽略
+  isSalesManager?: boolean;
 }
 
 export interface CreateAccountResponse {
@@ -69,6 +73,7 @@ export interface CreateAccountResponse {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active';
   created_at: string;
 }
@@ -84,6 +89,7 @@ export interface UpdateAccountResponse {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   created_at: string;
   updated_at: string;
@@ -99,6 +105,7 @@ export interface UpdateStatusResponse {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   updated_at: string;
 }
@@ -113,6 +120,22 @@ export interface UpdateRoleResponse {
   name: string;
   email: string;
   role: UserRole;
+  is_sales_manager: boolean;
+  status: 'active' | 'disabled';
+  updated_at: string;
+}
+
+// F008 v3.2: PATCH /api/accounts/:id/sales-manager-flag
+export interface UpdateSalesManagerFlagRequest {
+  isSalesManager: boolean;
+}
+
+export interface UpdateSalesManagerFlagResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   updated_at: string;
 }
@@ -131,6 +154,8 @@ export interface AccountListItem {
   name: string;
   email: string;
   role: UserRole;
+  // F004/F006/F008 v3.2: 列表頁 chip 徽章與 dialog 預設值需要此欄位
+  is_sales_manager: boolean;
   status: 'active' | 'disabled';
   created_at: string;
 }
@@ -917,6 +942,7 @@ export const ERROR_CODES = {
   ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
   ACCOUNT_SELF_DISABLE: 'ACCOUNT_SELF_DISABLE',
   ACCOUNT_LAST_ADMIN: 'ACCOUNT_LAST_ADMIN',
+  ACCOUNT_FLAG_NOT_APPLICABLE: 'ACCOUNT_FLAG_NOT_APPLICABLE',
   VALIDATION_INVALID_ROLE: 'VALIDATION_INVALID_ROLE',
   RESET_TOKEN_EXPIRED: 'AUTH_RESET_TOKEN_EXPIRED',
   RESET_TOKEN_USED: 'AUTH_RESET_TOKEN_USED',
