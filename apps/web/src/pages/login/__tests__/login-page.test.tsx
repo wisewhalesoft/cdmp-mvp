@@ -147,27 +147,62 @@ describe('LoginPage', () => {
     });
   });
 
-  describe('登入後角色導向', () => {
-    it('User 登入成功 → 導向 /user-info', async () => {
+  describe('登入後角色導向（F002 v1.2 §4.5 矩陣）', () => {
+    // T-001（修訂）：一般使用者導向 /c360/customers
+    it('一般使用者（role=user, isSalesManager=false）登入 → 導向 /c360/customers', async () => {
       const user = userEvent.setup();
       mockedLogin.mockResolvedValue({
         token: 'user-token',
-        user: { id: 'u1', name: 'User', email: 'user@test.com', role: 'user' },
+        user: {
+          id: 'u1',
+          name: 'User',
+          email: 'user@test.com',
+          role: 'user',
+          isSalesManager: false,
+        },
       });
       renderLoginPage();
       await user.type(screen.getByLabelText('Email'), 'user@test.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/user-info');
+        expect(mockNavigate).toHaveBeenCalledWith('/c360/customers');
       });
     });
 
-    it('Admin 登入成功 → 導向 /', async () => {
+    // T-008（新增）：業務主管登入 → 導向 /c360/customers
+    it('業務主管（role=user, isSalesManager=true）登入 → 導向 /c360/customers', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'manager-token',
+        user: {
+          id: 'm1',
+          name: 'Manager',
+          email: 'manager@cdmp.test',
+          role: 'user',
+          isSalesManager: true,
+        },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email'), 'manager@cdmp.test');
+      await user.type(screen.getByLabelText('密碼'), 'P@ssw0rd123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/c360/customers');
+      });
+    });
+
+    // T-004（修訂）：admin 導向 /
+    it('Admin 登入 → 導向 /', async () => {
       const user = userEvent.setup();
       mockedLogin.mockResolvedValue({
         token: 'admin-token',
-        user: { id: 'a1', name: 'Admin', email: 'admin@test.com', role: 'admin' },
+        user: {
+          id: 'a1',
+          name: 'Admin',
+          email: 'admin@test.com',
+          role: 'admin',
+        },
       });
       renderLoginPage();
       await user.type(screen.getByLabelText('Email'), 'admin@test.com');
@@ -175,6 +210,22 @@ describe('LoginPage', () => {
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
+    });
+
+    // 既有 user 但無 isSalesManager 欄位（舊 token）
+    it('一般使用者（role=user，無 isSalesManager 欄位）登入 → 導向 /c360/customers', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'user-token-legacy',
+        user: { id: 'u9', name: 'Legacy', email: 'legacy@test.com', role: 'user' },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email'), 'legacy@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/c360/customers');
       });
     });
   });

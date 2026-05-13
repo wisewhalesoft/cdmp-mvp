@@ -40,7 +40,12 @@ export function LoginPage() {
         rememberMe: data.rememberMe,
       });
       setAuth(result.token, result.user);
-      navigate(result.user.role === 'user' ? '/user-info' : '/');
+      // AD-E02-4-D 登入後導向策略：
+      //   admin → /（帳號管理）
+      //   user（包含業務主管）→ /c360/customers
+      // 業務主管與一般使用者均導向 /c360/customers；功能差異由 sidebar 與
+      // SalesManagerRoute 在執行時控制（F002 v1.2 §4.5 矩陣）。
+      navigate(result.user.role === 'admin' ? '/' : '/c360/customers');
     } catch (err: unknown) {
       const error = err as { response?: { status?: number } };
       const status = error.response?.status;
