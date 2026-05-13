@@ -1,8 +1,8 @@
 ---
 type: architecture-spec
-version: 2.7
+version: 2.8
 status: draft
-last_updated: 2026-05-12
+last_updated: 2026-05-13
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
 ---
 
@@ -13,8 +13,8 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
 | Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程）、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
-| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板）、10. 技術棧決策（React Flow） |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
+| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
 | E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）** |
@@ -493,6 +493,188 @@ CDMP 系統角色維持 2 種（admin / user），但新增 `is_sales_manager` �
 **選擇方案 A（Enum）的理由**：角色為固定 Seed Data（AD-E02-2），不支援動態新增；Enum 型別已充分表達「值集合固定」的語意。避免引入額外 JOIN 及 migration 順序複雜度。應用層的 `RoleService.validateRoleCode()` 負責業務層驗證，與 DB Enum 約束形成雙重防護。
 
 **JWT Payload 中的 role 欄位**（影響 Auth 模組）：JWT payload 的 `role` 欄位承載角色值，結構為 `role: "admin" | "user"`。RBAC 中介層依此欄位判斷存取權限。
+
+---
+
+**架構決策 AD-E02-4（新增 2026-05-13）：前端路由 Guard 模型與共用 Sidebar 架構**
+
+> **問題根因**：`manager@cdmp.test`（`role=user, is_sales_manager=true`）登入後被 redirect 至 `/user-info`，該頁無 sidebar，使用者完全無法導覽。現有三個 Guard（`ProtectedRoute` / `AdminRoute` / `UserRoute`）均不讀取 `is_sales_manager`，且 `AdminRoute` 在 `role !== 'admin'` 時一律 redirect 至 `/user-info`。此外，各 Page 各自渲染 sidebar 造成散落，E07 功能上線後維護困難。
+
+##### AD-E02-4-A：Route Guard 模型
+
+系統前端維護 **4 個** Route Guard，職責如下：
+
+| Guard 名稱 | 放行條件 | 未通過時 redirect | 適用路由 |
+|---|---|---|---|
+| `ProtectedRoute` | `isAuthenticated() === true` | `/login` | 所有受保護路由的最外層（可單獨使用） |
+| `AdminRoute` | `isAuthenticated() && role === 'admin'` | `/c360/customers` | `/`、`/datasources/**`、`/extraction-tasks/**`、`/etl-pipelines/**` |
+| `SalesManagerRoute` | `isAuthenticated() && (role === 'admin' \|\| isSalesManager === true)` | `/c360/customers` | `/assignment/**`（E07 全部路由） |
+| `UserRoute` | **廢棄**。原職責（保護 `/user-info`）由 `ProtectedRoute` 取代 | — | — |
+
+**關鍵變更說明：**
+
+1. `AdminRoute` redirect 目標由 `/user-info` 改為 `/c360/customers`。Customer 360 對所有已認證身份開放，是最合適的 fallback 著陸頁。
+2. `SalesManagerRoute` 新增：採用 **嚴格布林比對** `isSalesManager === true`（非 truthy），防止舊 token 的 `undefined` 值誤放行。Admin 視為超集，無需持有 `is_sales_manager` 旗標即可通過。
+3. `UserRoute` 廢棄：原設計限定 `role === 'user'` 才放行，會將 admin 擋在 `/user-info` 之外；且 `/user-info` 在 MVP 階段已無存在必要（見下方 AD-E02-4-C）。
+4. `ProtectedRoute` 維持不變，僅檢查 `isAuthenticated()`。
+
+```mermaid
+graph TD
+    Request["路由請求"] --> IsAuth{"isAuthenticated()?"}
+    IsAuth -->|否| Login["/login"]
+    IsAuth -->|是| RouteType{"路由類型"}
+    RouteType -->|AdminRoute| IsAdmin{"role === 'admin'?"}
+    RouteType -->|SalesManagerRoute| IsSM{"role==='admin' OR<br/>isSalesManager===true?"}
+    RouteType -->|ProtectedRoute| Allow["放行渲染"]
+    IsAdmin -->|是| Allow
+    IsAdmin -->|否| C360["/c360/customers"]
+    IsSM -->|是| Allow
+    IsSM -->|否| C360
+
+    classDef guard fill:#dbeafe,stroke:#2563eb
+    classDef redirect fill:#fee2e2,stroke:#ef4444
+    classDef allow fill:#dcfce7,stroke:#16a34a
+    class IsAuth,IsAdmin,IsSM guard
+    class Login,C360 redirect
+    class Allow allow
+```
+
+##### AD-E02-4-B：路由 Guard 對應表（完整）
+
+| Route | 目前 Guard | 建議 Guard | 備註 |
+|---|---|---|---|
+| `/` | `AdminRoute` | `AdminRoute` | redirect 目標改為 `/c360/customers` |
+| `/datasources/**` | `AdminRoute` | `AdminRoute` | 同上 |
+| `/extraction-tasks/**` | `AdminRoute` | `AdminRoute` | 同上 |
+| `/etl-pipelines/**` | `AdminRoute` | `AdminRoute` | 同上 |
+| `/c360/customers` | `ProtectedRoute` | `ProtectedRoute` | 不變，全身份可用 |
+| `/c360/customers/:id` | `ProtectedRoute` | `ProtectedRoute` | 不變 |
+| `/user-info` | `UserRoute` | **移除或改 `ProtectedRoute`**（見 AD-E02-4-C） | `UserRoute` 廢棄 |
+| `/assignment/**`（E07，待實作） | — | `SalesManagerRoute` | Admin + 業務主管可用 |
+
+##### AD-E02-4-C：`/user-info` 存廢決策
+
+**決策：保留路由，改為通用 Settings/Profile 頁面，套用 `ProtectedRoute`（全身份可用）。**
+
+理由：
+- MVP 階段 Customer 360 已對所有身份開放，「目前尚無可用功能」的說明訊息已無語意。
+- 廢棄路由會造成已存在書籤失效。
+- 改為簡易 Profile 頁（顯示姓名、Email、角色、`is_sales_manager` 狀態）仍具使用價值，且可作為未來帳號設定的進入點。
+- `ProtectedRoute` 保護即可，無需角色限制。
+- **Sidebar 處理**：`/user-info` 改版後應套用共用 `<AppLayout>`（見 AD-E02-4-D），讓使用者能在 Profile 頁看到 sidebar 並自由導覽。
+
+**ASSUMPTION-AD-E02-4-C-1**：`/user-info` 頁面的「目前尚無可用功能」訊息更新為 Profile 顯示內容，由 TDD Developer 於實作時定案（不需 spec-writer 額外建立新 Feature spec，屬 UI 層調整）。
+
+##### AD-E02-4-D：登入後導向策略
+
+**決策：在 LoginPage 的 `onSuccess` callback 依 `user.role` + `user.isSalesManager` 決定 redirect 目標。**
+
+| 實質身份 | 條件 | 登入後導向 |
+|---|---|---|
+| 管理者 | `role === 'admin'` | `/`（帳號管理頁） |
+| 業務主管 | `role === 'user' && isSalesManager === true` | `/c360/customers` |
+| 一般使用者 | `role === 'user' && isSalesManager !== true` | `/c360/customers` |
+
+**選擇在 LoginPage 處理而非根 router 的理由**：根 router 的 redirect 邏輯難以讀取 `isSalesManager`（`AdminRoute` 只做 admin/非admin 二分），且在根 router 實作「依 isSalesManager 三向分岔」會導致 guard 邏輯與 redirect 邏輯分散在兩處，不易維護。LoginPage 已有 `onSuccess` 時機，集中處理最清晰。
+
+```mermaid
+sequenceDiagram
+    participant U as 使用者
+    participant LP as LoginPage
+    participant AS as auth-store
+    participant R as React Router
+
+    U->>LP: 輸入 Email + 密碼
+    LP->>AS: POST /api/auth/login
+    AS-->>LP: { token, user: { role, isSalesManager } }
+    LP->>AS: setAuth(token, user)
+    LP->>LP: 計算 redirectPath
+    Note over LP: role==='admin' → '/'<br/>role==='user' → '/c360/customers'<br/>（無論 isSalesManager）
+    LP->>R: navigate(redirectPath, { replace: true })
+```
+
+**注意**：業務主管與一般使用者均導向 `/c360/customers`，導向邏輯因此簡化為二分而非三分。兩者的功能差異由 sidebar 可見項目與 `SalesManagerRoute` 在執行時期控制，無需登入時分派至不同路徑。
+
+##### AD-E02-4-E：共用 Sidebar 元件架構
+
+**決策：抽出共用 `<AppLayout>` 元件，包含 `<AppSidebar>` 子元件，依 `role` + `isSalesManager` 動態 render menu items。取代各 Page 各自渲染 sidebar 的散落模式。**
+
+**Menu 設定資料結構（宣告式）：**
+
+```typescript
+type MenuRequires = 'authenticated' | 'admin' | 'sales_manager';
+
+interface MenuItem {
+  to: string;
+  label: string;
+  icon: string;           // lucide-react icon name
+  requires: MenuRequires;
+}
+
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
+
+interface MenuSection {
+  label: string;           // 分組標頭（如「資料治理」、「應用模組」）
+  groups: MenuGroup[];     // 含可折疊子項的群組（如「客戶名單分派」）
+  items?: MenuItem[];      // 直屬 item（無子群組）
+}
+```
+
+**過濾邏輯規則：**
+
+| `requires` 值 | 顯示條件 |
+|---|---|
+| `'authenticated'` | 永遠顯示（已通過 `ProtectedRoute`） |
+| `'admin'` | `role === 'admin'` |
+| `'sales_manager'` | `role === 'admin' \|\| isSalesManager === true` |
+
+**`is_sales_manager` 讀取來源**：`auth-store.getUser().isSalesManager`，嚴格比對 `=== true`。舊 token 的 `undefined` 值視同 `false`。`isSalesManager` 為 `optional` 欄位（`UserInfo` 型別），實作時需以 `user?.isSalesManager === true` 模式防禦 `undefined`。
+
+**Sidebar Menu 設定（依 prototype/27-list-definition.html 對齊）：**
+
+```
+── 資料治理（requires: admin）
+│   ├── 帳號管理      /             admin
+│   ├── 資料來源      /datasources   admin
+│   ├── 資料擷取      /extraction-tasks  admin
+│   └── ETL Pipeline  /etl-pipelines     admin
+──（分隔線）
+── 應用模組
+│   ├── Customer 360  /c360/customers    authenticated
+│   └── 客戶名單分派（可折疊群組，requires: sales_manager）
+│       ├── 代碼維護   /assignment/base-codes    sales_manager
+│       ├── 計分卡設定  /assignment/scoring        sales_manager
+│       ├── 比例設定   /assignment/ratios         sales_manager
+│       ├── 名單定義   /assignment/list-definitions  sales_manager
+│       ├── Stage 0 試算  /assignment/estimate     sales_manager
+│       ├── 觸發月跑   /assignment/run            sales_manager
+│       ├── 執行進度   /assignment/run-progress   sales_manager
+│       ├── 結果摘要   /assignment/run-summary    sales_manager
+│       ├── 執行歷史   /assignment/history        sales_manager
+│       ├── 快照詳情   /assignment/snapshots      sales_manager
+│       └── 結果比對   /assignment/compare        sales_manager
+```
+
+**E07 子項顯示策略：**
+- 「客戶名單分派」群組整體以 `requires: 'sales_manager'` 控制，一般使用者看不到此群組。
+- E07 子項在 MVP 期間以 **路由 stub 方式實作**（回傳「施工中」畫面），**不使用 `[尚未實作]` 標籤或 disabled 樣式**。理由：業務主管登入後應能看到完整導覽結構，disabled 項目會造成困惑；stub 頁面保留可點擊性且不暴露技術細節。
+- 「客戶名單分派」折疊群組預設展開（`defaultOpen: true`），以對齊 prototype 中的活躍狀態表示。
+
+**實作順序建議：**
+1. 建立 `apps/web/src/components/layout/app-sidebar.tsx`（宣告式 menu config + 過濾邏輯）
+2. 建立 `apps/web/src/components/layout/app-layout.tsx`（包含 sidebar + header + 主內容 slot）
+3. 在 `auth-store.ts` 新增 `getIsSalesManager(): boolean` helper（`user?.isSalesManager === true`）
+4. 在 `protected-route.tsx` 新增 `SalesManagerRoute`；廢棄 `UserRoute`（保留空 export 避免編譯錯誤，標記 `@deprecated`）
+5. 更新 `App.tsx`：調整 `AdminRoute` redirect 目標；所有 `/assignment/**` 路由套用 `SalesManagerRoute`；`/user-info` 改用 `ProtectedRoute`
+6. 更新 LoginPage：在 `onSuccess` 依 `role` 決定 redirect 目標（admin → `/`，其他 → `/c360/customers`）
+7. 逐一將各 page 的 sidebar 渲染移除，改為套用 `<AppLayout>`
+
+**風險：RISK-AD-E02-4-1**（中等）：`UserInfo.isSalesManager` 為 `optional` 欄位（`isSalesManager?: boolean`），舊 token 可能為 `undefined`。所有判斷必須以 `=== true` 嚴格比對，不可使用 truthy 判斷式。影響：`SalesManagerRoute`、sidebar 過濾邏輯、`getIsSalesManager()` helper 均需遵循此規則。
+
+---
 
 #### Datasource 模組
 
