@@ -263,7 +263,16 @@
       "mcp__mem0__update_memory",
       "Bash(powershell.exe *)",
       "Bash(awk -F, '{print $2}')",
-      "Bash(awk -F, '{print $2 \"  →  \" $4}')"
+      "Bash(awk -F, '{print $2 \"  →  \" $4}')",
+      "Bash(tasklist /FI \"PID eq 21432\")",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Get-Item *)",
+      "Bash(awk -F'|' '{print $2}')",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api\\\\src\\\\modules\\\\accounts\\\\__tests__\\\\accounts.service.spec.ts\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\web\\\\src\\\\pages\\\\accounts\\\\__tests__\\\\account-list-page.test.tsx\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(npx vitest run apps/web/src/pages/c360/__tests__/customer-list-page.test.tsx 2>&1 | Select-Object -Last 60)"
     ],
     "defaultMode": "default"
   },
