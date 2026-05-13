@@ -93,7 +93,7 @@ status: Draft
 | F065 | US-085 | E07 | 查看歷史執行紀錄清單 | P0-MVP | 分頁 + 年月/狀態篩選；比對入口 |
 | F066 | US-086 | E07 | 查看執行快照詳情 | P0-MVP | 三份快照分頁（config/input_list/result）+ 搜尋 |
 | F067 | US-087 | E07 | 比對兩次執行結果差異 | P0-MVP（使用者升級） | 摘要差異 + 人員配對 diff（NFR-005 主驗收工具）+ 設定差異 + 客戶層級差異 |
-| F068 | US-092 | E07 | E07 相關代碼維護 | P0-MVP | PROD_KIND / SPEC_TP / CASEYEAR 三類代碼維護（限定 scope） |
+| F068 | US-092 | E07 | E07 相關代碼維護 | P0-MVP | PROD_KIND / SPEC_TP / CASE_STATUS 三類代碼維護（限定 scope；CASEYEAR 為前端 hard-coded 11 個固定選項 0~10，不在此維護，OQ-E07-24 ✅ Resolved 2026-05-12） |
 
 ### 非功能需求
 

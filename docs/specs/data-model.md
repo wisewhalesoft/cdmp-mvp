@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.9"
-date: 2026-05-08
+version: "1.10"
+date: 2026-05-12
 status: Draft
 ---
 
@@ -839,21 +839,39 @@ PK：`list_no`
 | project_workym | VARCHAR(6) | NULL | PROJECT_WORKYM | 名單作業年月（YYYYMM） |
 | casenumber | VARCHAR(50) | NULL | CASENUMBER | 案件編號 |
 | name | VARCHAR(50) | NULL | NAME | 名稱 |
-| caseyear | VARCHAR(255) | NULL | CASEYEAR | 案件年份（多值欄位，`$$` 分隔） |
+| caseyear | VARCHAR(255) | NULL | CASEYEAR | 進件/滿期/中結年數（多值欄位，`$$` 分隔；F050/F051 前端固定 11 個選項 value `0`~`10`，不從 `ob_code_df` 載入；OQ-E07-24 ✅ Resolved 2026-05-12，證據 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`；Stage 1 與 `ob_pool_data.year_cnt` 整數比對） |
 | caseyearnm | VARCHAR(10) | NULL | CASEYEARNM | 案件年份名稱 |
+| case_status | VARCHAR(14) | NOT NULL | （新增，原 OBMLISTDF.LIST_TYPE 業務語意拆出） | 案件結清期別（多值欄位，`$$` 分隔；F050/F051 必填多選），可選代碼來源 `ob_code_df` `tbl_id = 'CASE_STATUS'`（對應原 OBMCODEDF TBL_ID='22'）；最大長度依 4 個代碼全選計算 `01$$02$$03$$04` = 14 字元。**4 個值業務語意對照詳見 [F050 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)**（OQ-E07-23 ✅ Resolved 2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆）。月跑 Stage 1 以本欄位（業務主管選擇）與 `ob_pool_data.list_type`（SP 計算寫入）作 OR 比對（BR-7） |
 | settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
 | card_type | VARCHAR(5) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議；dump 含 3 字元值如 SEC/SEB，與 ob_levelcard_* 系列一致改為 VARCHAR(5)） |
 
 **多值欄位儲存規範**：
 
-`prod_kind` / `spec_tp` / `settle_src` / `caseyear` 為 `$$` 分隔字串（與舊系統格式相容；dump 觀察範例見下表）。UI 提交時以多選清單序列化為 `$$` 分隔字串、查詢時以 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對；遷移時保留原始字串不拆分為陣列或正規化表。
+`prod_kind` / `spec_tp` / `settle_src` / `caseyear` / `case_status` 為 `$$` 分隔字串（與舊系統格式相容；dump 觀察範例見下表）。UI 提交時以多選清單序列化為 `$$` 分隔字串、查詢時以 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對；遷移時保留原始字串不拆分為陣列或正規化表。
 
 | 欄位 | dump 範例 | 含義 |
 |------|----------|------|
 | `spec_tp` | `02$$04$$05$$06$$11$$12$$13$$14$$15$$16$$20$$21$$22$$23` | 多個專案類別代碼 |
 | `settle_src` | `Y$$N` 或 `Y` 或 `N` | 含 / 不含被他行代償案件 |
-| `caseyear` | `0$$1$$2$$3$$4$$5$$6$$7$$8$$9$$10$$99` | 多個進件 / 中結年數 |
+| `caseyear` | `0$$1$$2$$3$$4$$5$$6$$7$$8$$9$$10` | 多個進件 / 中結年數（前端 11 個固定選項 0~10；舊系統 dump 偶見 `99` 值為舊資料殘留，未啟用） |
 | `prod_kind` | `02$$03$$04` 或 `01` 或 `02` | 多個產品種類代碼（dump 觀察單值居多，但結構允許多值） |
+| `case_status` | `01$$02$$03` 或 `01` 或 `04` | 多個案件結清期別（最多 4 選；對應 `ob_code_df` `tbl_id = 'CASE_STATUS'`） |
+
+**list_type vs case_status 語意分離**：原系統 `LIST_TYPE` 欄位混用兩種語意，新系統拆分如下：
+
+| 欄位 | 角色 | 表單顯示 | 寫入方式 |
+|---|---|---|---|
+| `list_type` | 系統內部分類常數，固定 `'01'`（分派名單） | 否 | 後端固定寫入 |
+| `case_status`（新欄位） | 業務主管選擇的案件結清期別篩選範圍 | 是（必填多選） | F050/F051 表單提交，多值以 `$$` 分隔 |
+
+**`case_status` Migration 策略（AD-E07-14 兩階段）**：
+
+原 OBMLISTDF 無 `case_status` 欄位；但 `LIST_TYPE` 欄位的實際儲存值即為案件結清期別代碼（dump 驗證：`'01'`、`'02'`、`'02$$03$$04'` 等）。採兩階段 migration 以安全補值：
+
+- **Phase 1**：`ALTER TABLE ADD COLUMN case_status VARCHAR(14) NULL`；執行 `UPDATE SET case_status = list_type`（將 LIST_TYPE 原值複製至 case_status）
+- **Phase 2**：執行驗證查詢確認無 NULL 餘留後，`ALTER COLUMN case_status SET NOT NULL`；同步將 `list_type` 全數更新為常數 `'01'`
+
+完整 migration SQL 見 architecture-spec.md AD-E07-14。
 
 **索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）
 
@@ -882,9 +900,18 @@ PK：`(orgno, appl_no)`
 | caseyear | VARCHAR(255) | NULL | 案件年份（Stage 1 篩選用） |
 | spec_tp | VARCHAR(255) | NULL | 專案特性（Stage 1 篩選用） |
 | settle_src | TEXT | NOT NULL | 結案來源（DEFAULT 'N'，Stage 1 篩選用） |
+| list_type | VARCHAR(2) | NULL | 案件結清期別代碼（**單值**，由舊系統 SP `USP_OB_OBPOOLDATA.sql:189-216` CASE WHEN 計算後寫入；ETL 直接同步舊欄位 `OBPOOLDATA.LIST_TYPE`）。值域 `'01'` / `'02'` / `'03'` / `'04'`，業務語意詳見 [F050 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)。Stage 1 篩選用：與 `ob_list_definition.case_status`（業務主管選擇之多值 `$$` 分隔字串）作 OR 比對（OQ-E07-20 / OQ-E07-23 ✅ Resolved 2026-05-12） |
 | _cdmp_extracted_at | TIMESTAMP | NOT NULL | ETL 擷取時間（E04 系統附加） |
 
-**索引**：`(orgno, appl_no)`（PK）、`(custo_no)`（C360 join 用）、`(prod_kind)`、`(settle_src)`
+> **同名異義警示**：`ob_list_definition.list_type`（系統內部分類常數，固定 `'01'` 代表分派名單）與 `ob_pool_data.list_type`（案件結清期別代碼 `'01'`~`'04'`）**同名但語意不同**，源自舊系統設計（OBMLISTDF.LIST_TYPE 與 OBPOOLDATA.LIST_TYPE 在原系統即同名異義）。AD-E07-14 已將 `ob_list_definition` 的業務語意拆出為 `case_status` 欄位；`ob_pool_data.list_type` 保留原 SP 計算結果不改名（避免影響 ETL 對齊）。Stage 1 SQL 引用時須使用全限定名 `pd.list_type` / `ld.list_type` / `ld.case_status` 區分。
+>
+> **`ob_pool_data.list_type` SP 計算邏輯**（USP_OB_OBPOOLDATA.sql:189-216）：
+> - `'01'` 期中(不含當月滿期)：`STA_CODE BETWEEN '05' AND '89'` **AND** (`DATEDIFF(M, WORKDT, MATURITY_DT) > 1` **OR** `DEAL_NUM - PAYT_NUM > 2`)
+> - `'02'` 中結：`STA_CODE = '98'`
+> - `'03'` 滿期(含當月滿期)：`STA_CODE BETWEEN '05' AND '89'` **AND** `DATEDIFF(M, WORKDT, MATURITY_DT) <= 1` **AND** `DEAL_NUM - PAYT_NUM <= 2`（**仍 active**）
+> - `'04'` 滿期：`STA_CODE = '90'`（**已結清完成**）
+
+**索引**：`(orgno, appl_no)`（PK）、`(custo_no)`（C360 join 用）、`(prod_kind)`、`(settle_src)`、`(list_type)`（Stage 1 篩選用）
 
 ---
 
@@ -982,10 +1009,21 @@ PK：`(list_no, deptid_m, emplid, ration)`
 
 無 PK 約束（來源無 PK）；查詢鍵：`(system_id, tbl_id, tbl_cd)`
 
+**E07 使用的 `tbl_id` 範圍**（F068 維護，**3 類**）：
+- `PROD_KIND` — 產品類別
+- `SPEC_TP` — 專案類別
+- `CASE_STATUS` — 案件結清期別（對應原 OBMCODEDF TBL_ID='22'，dump 2026-05-05 驗證已生效 4 筆：`01` 期中（不含當月滿期）/ `02` 中結 / `03` 滿期（含當月滿期）/ `04` 滿期）
+
+> **CASEYEAR 不在 ob_code_df 範圍**（OQ-E07-24 ✅ Resolved 2026-05-12）：F050/F051 之「進件/滿期/中結年數」欄位為前端固定 11 個 CheckBox（value `0`~`10`，每個直接代表合約年數整數），不從 `ob_code_df` 動態載入。證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235` — 舊系統 cshtml hard-coded，無 AJAX 載入動作。OBMCODEDF dump 中 `TBL_ID='04'` 該 1 筆紀錄屬其他模組殘留，與 E07 名單定義 CASEYEAR 無關。
+
+> **[AD-E07-14 已決議]** 新系統 `tbl_id` 採英文常數命名（原 OQ-092-02 已決）。遷移白名單（**3 類**）：`TBL_ID='01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`。白名單外 TBL_ID 值（含 `'04'`，前端 hard-coded 不入庫）不匯入 ob_code_df（E07 不使用）。`tbl_id` 欄位型別由 VARCHAR(2) 擴充為 VARCHAR(11)。
+
+
+
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
 | system_id | VARCHAR(4) | NOT NULL | SYSTEM_ID | 系統別 |
-| tbl_id | VARCHAR(2) | NOT NULL | TBL_ID | 代碼類別 |
+| tbl_id | VARCHAR(11) | NOT NULL | TBL_ID | 代碼類別；新系統採英文常數命名（AD-E07-14，**3 類**）：`'PROD_KIND'`/`'SPEC_TP'`/`'CASE_STATUS'`；欄位長度由原 VARCHAR(2) 擴充為 VARCHAR(11) 以容納最長值 `'CASE_STATUS'`（11 字元）；遷移時依白名單映射，原 TBL_ID='01'→'PROD_KIND', '02'→'SPEC_TP', '22'→'CASE_STATUS'（**`'04'` CASEYEAR 不入庫**，OQ-E07-24 Resolved 2026-05-12，前端 hard-coded） |
 | tbl_cd | VARCHAR(4) | NOT NULL | TBL_CD | 代碼編號 |
 | tbl_desc1 | VARCHAR(40) | NULL | TBL_DESC1 | 代碼描述1 |
 | tbl_desc2 | VARCHAR(40) | NULL | TBL_DESC2 | 代碼描述2 |

@@ -1,8 +1,8 @@
 ---
 type: architecture-spec
-version: 2.3
+version: 2.7
 status: draft
-last_updated: 2026-05-08
+last_updated: 2026-05-12
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
 ---
 
@@ -311,7 +311,7 @@ graph TB
             AssignmentListSvc["AssignmentList Service<br/>名單定義 CRUD（ob_list_definition）<br/>LIST_NO 自動產生（OB{YYYYMM}{NNN}）<br/>同月 999 筆上限 → 422"]
             AssignmentScoringSvc["AssignmentScoring Service<br/>計分卡版本管理（ob_levelcard_*）<br/>CARD_LEVEL 門檻 / TIER_LEVEL 對應<br/>複雜計分邏輯呼叫 PostgreSQL function"]
             AssignmentRatioSvc["AssignmentRatio Service<br/>per-LIST_NO 部門比例（ob_dept_pct）<br/>人員比例（ob_empl_set）<br/>CR 回分規則開關"]
-            AssignmentCodeSvc["AssignmentCode Service<br/>代碼維護（ob_code_df）<br/>PROD_KIND / SPEC_TP / CASEYEAR"]
+            AssignmentCodeSvc["AssignmentCode Service<br/>代碼維護（ob_code_df）<br/>PROD_KIND / SPEC_TP / CASE_STATUS"]
             AssignmentRunSvc["AssignmentRun Service<br/>觸發月跑（202 非同步）<br/>Stage 0~4 執行引擎<br/>快照原子性寫入（Transaction）"]
             AssignmentSnapshotSvc["AssignmentSnapshot Service<br/>歷史清單、快照詳情<br/>兩次執行差異比對"]
             AssignmentAuditSvc["AssignmentAudit Service<br/>E07 所有 CRUD 操作稽核<br/>寫入 assignment_audit_log"]
@@ -816,7 +816,7 @@ TIER_LEVEL 對應計算、多維度加權計分等複雜邏輯由 PostgreSQL fun
 | AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
 | AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應 | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3） | US-072, US-073, US-074, US-075 |
 | AssignmentRatio Service | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關 | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表） | US-078, US-079, US-080, US-091 |
-| AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASEYEAR 代碼維護） | Admin 與業務主管均可存取；代碼用於名單定義表單選項 | US-092 |
+| AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASE_STATUS **三類**代碼維護；**CASEYEAR 不納入**，因 CASEYEAR 為前端 hard-coded 的 11 個固定 enum 選項 0~10，不從 `ob_code_df` 動態載入，證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；`tbl_id` 使用英文常數（非原系統數字代碼），映射規則：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（AD-E07-14；初版含 `'04'→'CASEYEAR'`，於 2026-05-12 OQ-E07-24 Resolved 後移除） | Admin 與業務主管均可存取；代碼用於名單定義表單選項；F050/F051 `case_status` 欄位多選選項來源為 `tbl_id='CASE_STATUS'`；F050/F051 `caseyear` 欄位為前端固定 11 個選項（0~10），非 ob_code_df 動態載入 | US-092 |
 | AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；匯出 CSV | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid | US-081, US-082, US-083, US-084 |
 | AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
 | AssignmentAudit Service | E07 所有 CRUD 操作後寫入 `assignment_audit_log` | 不對外暴露 API；由各 Service 呼叫；保留 3 年，Cleanup Cron 每日清理 | 所有 E07 Stories |
@@ -2448,6 +2448,99 @@ HAVING COUNT(*) > 1;
 
 ---
 
+#### AD-E07-14　LIST_TYPE 欄位語意拆分：list_type + case_status
+
+**背景**：
+
+原系統 `OBMLISTDF.LIST_TYPE` 欄位在語意上存在混淆：在 dump 資料中，`LIST_TYPE` 的實際值為案件結清期別代碼（`'01'`、`'02'`、`'02$$03$$04'` 等，對應 OBMCODEDF TBL_ID='22'），並非名單分類的系統常數。此混淆源自舊系統設計，新系統於 E07 正名並拆分。
+
+**決策**：
+
+將原 `OBMLISTDF.LIST_TYPE` 的語意拆分為兩個欄位：
+
+| 欄位 | 型別 | 語意 | 填值方式 | 表單顯示 |
+|------|------|------|---------|---------|
+| `list_type` | `VARCHAR(255) NOT NULL` | 系統內部名單分類常數，固定值 `'01'`（分派名單）| 後端 API 寫入時固定填入 `'01'`，不接受前端傳值 | 否 |
+| `case_status` | `VARCHAR(14) NOT NULL` | 業務語意：案件結清期別篩選範圍（多值 `$$` 分隔，對應 OBMCODEDF `TBL_ID='22'` 的 4 個有效代碼）| F050/F051 表單必填多選，由業務主管選擇 | 是（F050/F051 必填） |
+
+**ob_code_df tbl_id 英文常數映射決策**：
+
+新系統 `ob_code_df.tbl_id` 採英文常數命名（取代原系統數字代碼），理由：
+- 程式碼可讀性：應用層查詢 `WHERE tbl_id = 'CASE_STATUS'` 比 `WHERE tbl_id = '22'` 語意清晰
+- 避免混淆：原系統 TBL_ID 使用純數字（`'01'`、`'02'`⋯`'A2'`），與 `tbl_cd` 值相似，容易誤讀
+- 擴展性：英文常數允許未來新增代碼類別時使用更具描述性的識別符
+
+**TBL_ID 映射表**（Migration script 白名單，僅 E07 使用的 3 類）：
+
+| 原 OBMCODEDF TBL_ID | AppDB ob_code_df tbl_id | 說明 |
+|---------------------|------------------------|------|
+| `'01'` | `'PROD_KIND'` | 產品類別（汽車 / 機車 / 一般商品） |
+| `'02'` | `'SPEC_TP'` | 專案類別（新車 / 中古車 / 原融⋯等） |
+| `'22'` | `'CASE_STATUS'` | 案件結清期別（dump 驗證 4 筆生效：01/02/03/04） |
+
+> **CASEYEAR 不納入 ob_code_df 範圍（2026-05-12 修訂）**：本 AD 初版（2026-05-12 早版）含 `'04'→'CASEYEAR'` 映射列，後於同日舊系統前端探查（`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）確認 CASEYEAR 為前端 hard-coded 的 11 個 CheckBox（value `0`~`10`，第 12 個 `99 = 10年以上` 被 Razor 註解掉未啟用），**不從 OBMCODEDF / ob_code_df 動態載入**。OBMCODEDF dump 中 `TBL_ID='04'` 僅 1 筆 `TBL_CD='01', TBL_DESC1='0'` 屬其他模組殘留，與 E07 名單定義 CASEYEAR 無關。因此本 AD 自映射表移除 `'04'→'CASEYEAR'` 該列（OQ-E07-24 ✅ Resolved 2026-05-12）。`ob_code_df.tbl_id` 仍維持 `VARCHAR(11)`（容納 `CASE_STATUS` 11 字元上限）。
+
+**ob_code_df.tbl_id 欄位型別修正**：
+
+原 data-model.md 定義 `tbl_id VARCHAR(2)`，但英文常數最長為 `'CASE_STATUS'`（11 字元）。**必須擴充為 `VARCHAR(11)`**。此修改影響：
+1. TypeORM Migration DDL：`CREATE TABLE ob_code_df` 中 `tbl_id VARCHAR(11) NOT NULL`
+2. Migration script：寫入英文常數前確認欄寬足夠
+3. `ob_code_df` 複合唯一索引 `(system_id, tbl_id, tbl_cd)` 不受影響（索引可包含任意長度字串欄位）
+
+> **註**：CASEYEAR（8 字元）雖已移出映射表，但 `'CASE_STATUS'` 仍為當前最長常數（11 字元），VARCHAR(11) 容量無需調整。
+
+**ob_list_definition.case_status Migration 兩階段策略**：
+
+`ob_list_definition` 從 OBMLISTDF 遷移時，原表無 `case_status` 欄位，但 `LIST_TYPE` 欄位的實際資料即為期別代碼（dump 驗證值：`'01'`、`'02'`、`'02$$03$$04'` 等）。採兩階段 migration 以安全補值：
+
+```
+Phase 1（Schema Migration）：
+  ALTER TABLE ob_list_definition ADD COLUMN case_status VARCHAR(14) NULL;
+
+Phase 1b（資料補值，Migration Script）：
+  UPDATE ob_list_definition
+     SET case_status = list_type  -- 原 LIST_TYPE 存的是期別值
+   WHERE case_status IS NULL;
+  -- 注意：此時 list_type 已在 Schema 中定義，但尚未強制為 '01'
+
+Phase 2（補 NOT NULL，驗證後執行）：
+  -- 前置驗證：確認無 NULL 餘留
+  SELECT COUNT(*) FROM ob_list_definition WHERE case_status IS NULL;
+  -- 預期：0
+  ALTER TABLE ob_list_definition ALTER COLUMN case_status SET NOT NULL;
+  -- 同步：將 list_type 全數更新為常數 '01'
+  UPDATE ob_list_definition SET list_type = '01';
+```
+
+> **Phase 2 前置條件**：dump 資料中 `LIST_TYPE` 值是否 100% 為 `ob_code_df` TBL_ID='22' 的有效代碼需驗證（目前 dump 僅見 `'01'`/`'02'`/`'03'`/`'04'` 及其組合，符合預期，但應執行正式驗證查詢再加 NOT NULL）。
+
+**遷移驗證 SQL**（補入 E07-B 驗證清單）：
+
+```sql
+-- 驗證 ob_list_definition.case_status 無 NULL
+SELECT COUNT(*) FROM ob_list_definition WHERE case_status IS NULL;
+-- 預期：0（Phase 2 前執行，應為 0 方可 SET NOT NULL）
+
+-- 驗證 case_status 值均為有效代碼（對應 ob_code_df tbl_id='CASE_STATUS'）
+SELECT DISTINCT unnest(string_to_array(case_status, '$$')) AS code
+  FROM ob_list_definition
+ WHERE case_status IS NOT NULL
+   AND unnest(string_to_array(case_status, '$$'))
+       NOT IN (SELECT tbl_cd FROM ob_code_df WHERE tbl_id = 'CASE_STATUS');
+-- 預期：0 列（所有 case_status 代碼均為 ob_code_df 已知代碼）
+```
+
+**Consequences**：
+- E07 F050/F051（新增/編輯名單定義）表單必須加入 `case_status` 多選欄位，`list_type` 欄位不顯示於表單
+- Stage 1 需加入 `case_status` 篩選條件（OR 邏輯，BR-7，見 E07-D）
+- `ob_code_df` tbl_id VARCHAR 欄位型別需在 Schema Migration 中確認為 VARCHAR(11)
+- Migration script D2（OBMCODEDF → ob_code_df）需實作 tbl_id 白名單映射（**3 類**：`'01'`/`'02'`/`'22'`）
+- F068 代碼維護 scope 限定為 **3 類**（PROD_KIND / SPEC_TP / CASE_STATUS）；CASEYEAR 不納入動態維護（前端 hard-coded 11 個固定選項 0~10）
+- F050/F051 `caseyear` 欄位之 11 個選項由前端直接渲染，不調用 `GET /api/v1/assignment/codes?tblId=CASEYEAR`（該 endpoint 對 CASEYEAR 直接回 `CODE_TYPE_INVALID`）
+- **case_status 4 個選項的業務語意已於 OQ-E07-23 結案時確認**（2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` 計算邏輯 + DB 1.49M 筆驗證），詳見 [F050 §5.1.1 case_status 4 個值業務語意對照表](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)。`03`（仍 active 即將到期）與 `04`（STA_CODE 90 已結清完成）為兩種不同案件實況，前端 tooltip 採該對照表文字
+
+---
+
 #### AD-E07-4　ob_levelcard_column 停用維度機制
 
 **決策**：新增 `status VARCHAR(10) NOT NULL DEFAULT 'active'` 欄位至 `ob_levelcard_column`，以支援計分維度的停用操作。停用後欄位值改為 `'disabled'`，月跑 Stage 2 執行時過濾 `status = 'active'` 的維度，不刪除資料列。
@@ -2714,13 +2807,13 @@ L1 Migration 包含 9 張 OB 歷史設定表，需依 FK 相依順序匯入：
 
 | 順序 | 來源表（SQL Server） | AppDB 目標表 | 關鍵轉換規則 |
 |------|---------------------|-------------|-------------|
-| 1 | `OBMCODEDF` | `ob_code_df` | — |
+| 1 | `OBMCODEDF` | `ob_code_df` | `tbl_id` 欄位由數字代碼映射為英文常數（AD-E07-14）：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`；**`'04'`（原推測對應 CASEYEAR）已自映射表移除**（OQ-E07-24 Resolved 2026-05-12：CASEYEAR 為前端 hard-coded 11 個固定選項 0~10，不從 ob_code_df 動態載入，證據 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；其餘 `tbl_id` 值不在 E07 代碼維護範圍者保留原值或略過（由 Migration script 白名單控制）；`ob_code_df.tbl_id` 型別須擴充為 `VARCHAR(11)` 以容納最長英文常數（`CASE_STATUS` = 11 字元） |
 | 2 | `OBTIER` | `ob_tier` | 補建複合 PK `(card_type, COALESCE(card_level, ''))`；`card_type` / `tier_level` 補 NOT NULL |
 | 3 | `OBLEVELCARD_VERSION` | `ob_levelcard_version` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 `(SDATE <= NOW() < EDATE)` 計算；稽核欄位統一重命名 `A_*/U_* → created_*/updated_*` |
 | 4 | `OBLEVELCARD_COLUMN` | `ob_levelcard_column` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`（AD-E07-4）；稽核欄位重命名 |
 | 5 | `OBLEVELCARD_SCORE` | `ob_levelcard_score` | 稽核欄位重命名 |
 | 6 | `OBLEVELCARD_LEVEL` | `ob_levelcard_level` | 稽核欄位重命名 |
-| 7 | `OBMLISTDF` | `ob_list_definition` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`；多值欄位（`prod_kind` / `spec_tp` / `settle_src` / `caseyear`）維持 `$$` 分隔字串原樣 |
+| 7 | `OBMLISTDF` | `ob_list_definition` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`；多值欄位（`prod_kind` / `spec_tp` / `settle_src` / `caseyear`）維持 `$$` 分隔字串原樣；**補建 `case_status VARCHAR(14)`**（AD-E07-14 兩階段 migration：Phase 1 `NULL` 允許並從 `LIST_TYPE` 複製原值，Phase 2 補 NOT NULL 約束）；`list_type` 固定寫入常數 `'01'`（分派名單），不再對應舊 `LIST_TYPE` 的期別語意 |
 | 8 | `OBMDEPTPCT` | `ob_dept_pct` | `DEPTID_M` RTRIM（padded to 50 chars，實際 4 chars） |
 | 9 | `OBEMPLSETMF` | `ob_empl_set` | `DEPTID_M` RTRIM；`ration` 欄位名稱對應（`RATION` → `ration`） |
 
@@ -2737,7 +2830,9 @@ L1 Migration 包含 9 張 OB 歷史設定表，需依 FK 相依順序匯入：
 | RTRIM DEPTID_M | `ob_dept_pct` 與 `ob_empl_set` 的 `deptid_m` 欄位在 CSV 中為 50 字元 padded，寫入前執行 RTRIM |
 | ob_tier PK 補建 | `card_level` 可為 NULL（M5 fallback），PK 使用 UNIQUE INDEX ON `ob_tier (card_type, COALESCE(card_level, ''))`（PostgreSQL 不支援 COALESCE in Primary Key，改以 UNIQUE INDEX 等效表達） |
 | ob_levelcard_version status 初值 | `CASE WHEN SDATE <= NOW() AND (EDATE IS NULL OR NOW() < EDATE) THEN 'active' ELSE 'inactive' END` |
-| $$ 多值欄位 | `prod_kind`, `spec_tp`, `settle_src`, `caseyear` 維持原始 `$$` 分隔字串，不拆解；遷移腳本直接原樣複製 |
+| $$ 多值欄位 | `prod_kind`, `spec_tp`, `settle_src`, `caseyear` 維持原始 `$$` 分隔字串，不拆解；遷移腳本直接原樣複製。**註**：`caseyear` 欄位於 `ob_list_definition` 之多選值由 F050/F051 前端 11 個固定 CheckBox（value 0~10）序列化寫入（OQ-E07-24 Resolved），與 `ob_code_df` 無關 |
+| ob_code_df tbl_id 映射 | Migration script 執行時，將 OBMCODEDF.TBL_ID 以白名單映射為英文常數後寫入 `ob_code_df.tbl_id`：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（共 3 類）；白名單外的 TBL_ID 值（含 `'04'`（CASEYEAR 屬前端 hard-coded，不入庫，OQ-E07-24 Resolved）、`'03'`、`'06'`⋯`'A4'` 等）不匯入（E07 不使用）。`ob_code_df.tbl_id` 欄位型別由遷移前 DDL 設定為 `VARCHAR(11)`（AD-E07-14） |
+| ob_list_definition case_status 補值 | Migration 時 OBMLISTDF 無 `case_status` 欄位；需從 `LIST_TYPE` 欄位原值作為初始填入值（原系統 LIST_TYPE 即為期別代碼），並以兩階段 migration 處理（AD-E07-14）：Phase 1 新增 `case_status VARCHAR(14) NULL`，複製 LIST_TYPE 值；Phase 2 驗證無 NULL 後加 NOT NULL 約束 |
 
 #### 工具選型
 
@@ -3044,11 +3139,32 @@ FOR EACH list_no IN (SELECT list_no FROM ob_list_definition WHERE status = 'acti
     -- $$ 分隔多值比對（ob_list_definition 的篩選條件）
     ('$$' || ld.prod_kind || '$$') LIKE ('%$$' || pd.prod_kind || '$$%')
     AND ('$$' || ld.spec_tp || '$$') LIKE ('%$$' || pd.spec_tp || '$$%')
+    -- case_status 篩選（見下方 BR-7 說明）
     -- ... 其他篩選條件
   -- ob_pool_data 無 list_no 欄位；list_no 在此為外部輸入，首次寫入 ob_pool_data_list
 ```
 
 此邏輯忠實移植自 SP `reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` 的 `FROM OBPOOLDATA o JOIN (SELECT * FROM OBMLISTDF WHERE LIST_NO=@LIST_NO) AS A2 ON ...` 結構。
+
+**BR-7：`case_status` 篩選邏輯（Stage 1）**
+
+`ob_list_definition.case_status` 儲存業務主管選擇的案件結清期別（多值 `$$` 分隔），Stage 1 需將此值與 `ob_pool_data.list_type` 比對，以篩選符合期別的案件。
+
+> **✅ OQ-E07-20 Resolved（2026-05-12）**：`ob_pool_data` 中對應「案件結清期別」的欄位確認為 **`list_type`**（AppDB snake_case，對應 OBPOOLDATA.LIST_TYPE）。證據：(1) `USP_OB_OBPOOLDATA.sql` 第 189-216 行 CASE WHEN 以 STA_CODE / MATURITY_DT 計算後賦值 `'01'`/`'02'`/`'03'`/`'04'` 至 `LIST_TYPE`；(2) `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` 第 54 行篩選語法 `AND o.LIST_TYPE IN (SELECT field FROM [fn_SplitString_cte] (OBMLISTDF.LIST_TYPE, '$$'))`；(3) DB 驗證 `ob_pool_data.list_type` 僅含 `'01'`/`'02'`/`'03'`/`'04'` 四個值（共 1,487,695 筆）。
+
+> **✅ OQ-E07-21 Resolved（2026-05-12）**：Stage 1 `case_status` 多選篩選邏輯為 **OR**（符合任一期別即納入）。SP 直接證據：`fn_SplitString_cte` 拆分 `$$` 分隔值後以 `IN` 比對（`IN` 語義即 OR），非 `AND` 鏈接；SP 未有任何「同時滿足多個期別」的邏輯。
+
+Stage 1 `case_status` 篩選 SQL：
+
+```sql
+  -- OQ-E07-20 Resolved：ob_pool_data 對應欄位確認為 list_type
+  -- OQ-E07-21 Resolved：OR 語意（IN 即 OR），由 SP fn_SplitString_cte + IN 確認
+  AND pd.list_type IN (
+    SELECT unnest(string_to_array(ld.case_status, '$$'))
+  )
+```
+
+> **架構備註**：`ob_list_definition.list_type`（固定常數 `'01'`，表系統分類）與 `ob_pool_data.list_type`（案件結清期別代碼 `'01'`/`'02'`/`'03'`/`'04'`）同名但語意不同。AppDB 設計中 `ob_list_definition.list_type` 已由 AD-E07-14 確定為常數 `'01'`（分派名單），業務期別篩選條件改由 `ob_list_definition.case_status` 承載；`ob_pool_data.list_type` 保留原始 OBPOOLDATA.LIST_TYPE 語意（案件結清期別）。Stage 1 篩選須以 `ob_list_definition.case_status` 對比 `ob_pool_data.list_type`，而非兩個 `list_type` 互比。
 
 #### 並發控制
 
@@ -3202,16 +3318,16 @@ SELECT tier_level FROM ob_tier
 | # | 項目 | 狀態 | 備注 |
 |---|------|------|------|
 | D1 | 從 SQL Server dump 9 表 CSV（已有樣本：`reference/DumpData/*_20260505.csv`） | ✅ 樣本已取得 | 正式 dump 前確認與樣本一致 |
-| D2 | Migration 腳本：OBMCODEDF → `ob_code_df` | ⬜ 待撰寫 | |
+| D2 | Migration 腳本：OBMCODEDF → `ob_code_df`；**需實作 tbl_id 白名單映射**（AD-E07-14，**3 類**）：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`；白名單外 TBL_ID（含 `'04'`，CASEYEAR 屬前端 hard-coded 不入庫，OQ-E07-24 Resolved）略過不匯入；`tbl_id` DDL 確認為 VARCHAR(11) | ⬜ 待撰寫 | **[BLOCKER]**（AD-E07-14） |
 | D3 | Migration 腳本：OBTIER → `ob_tier`（含 NULL card_level 處理） | ⬜ 待撰寫 | **[BLOCKER]** |
 | D4 | Migration 腳本：OBLEVELCARD_VERSION → `ob_levelcard_version`（含 status 初值） | ⬜ 待撰寫 | **[BLOCKER]** |
 | D5 | Migration 腳本：OBLEVELCARD_COLUMN → `ob_levelcard_column`（補建 status='active'） | ⬜ 待撰寫 | **[BLOCKER]** |
 | D6 | Migration 腳本：OBLEVELCARD_SCORE → `ob_levelcard_score` | ⬜ 待撰寫 | |
 | D7 | Migration 腳本：OBLEVELCARD_LEVEL → `ob_levelcard_level` | ⬜ 待撰寫 | |
-| D8 | Migration 腳本：OBMLISTDF → `ob_list_definition`（含 $$ 多值欄位保留） | ⬜ 待撰寫 | **[BLOCKER]** |
+| D8 | Migration 腳本：OBMLISTDF → `ob_list_definition`（含 $$ 多值欄位保留）；**需實作 case_status 兩階段 migration**（AD-E07-14）：Phase 1 新增 case_status NULL 欄位並從 LIST_TYPE 複製初值；Phase 2 驗證無 NULL 後加 NOT NULL 約束 + 更新 list_type 全數為 `'01'` | ⬜ 待撰寫 | **[BLOCKER]** |
 | D9 | Migration 腳本：OBMDEPTPCT → `ob_dept_pct`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
 | D10 | Migration 腳本：OBEMPLSETMF → `ob_empl_set`（含 RTRIM DEPTID_M） | ⬜ 待撰寫 | |
-| D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列；**補充**：驗證 `ob_pool_data (orgno, appl_no)` 唯一性（AD-E07-13，預期 0 重複列；SQL：`SELECT orgno, appl_no, COUNT(*) FROM ob_pool_data GROUP BY orgno, appl_no HAVING COUNT(*) > 1`） | ⬜ 待執行 | **[BLOCKER]** |
+| D11 | 執行遷移驗證查詢（E07-B 節驗證 SQL）並確認 0 異常列；**補充**：驗證 `ob_pool_data (orgno, appl_no)` 唯一性（AD-E07-13）；**補充**：驗證 `ob_list_definition.case_status` 無 NULL（AD-E07-14 Phase 2 前執行）；**補充**：驗證 `ob_code_df` tbl_id 僅含白名單英文常數（AD-E07-14） | ⬜ 待執行 | **[BLOCKER]** |
 | D12 | [ASSUMPTION] 首次執行 OB_ARRETURNDF_MIN_CAP ETL 同步後，驗證 `ob_arreturndf_min_cap.appl_no` 唯一性（OB 端 SP 以 `GROUP BY APPL_NO` 預彙總，預期 0 重複；若有重複，E05 Pipeline 需在 Field Mapping 加 DISTINCT ON appl_no 去重邏輯）：SQL：`SELECT appl_no, COUNT(*) FROM ob_arreturndf_min_cap GROUP BY appl_no HAVING COUNT(*) > 1` | ⬜ 待執行（ETL 同步後） | [ASSUMPTION] |
 
 #### F-3　E04 + E05 雙層 ETL 任務設定（L2 同步，AD-E07-12）
@@ -3346,3 +3462,50 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 - *新增 E07-E PostgreSQL Function 設計（fn_calc_tier_level 簽章、LATERAL JOIN 呼叫、ob_tier fallback）*
 - *新增 E07-F 開發前準備檢核清單（M/D/E/P/Q/S 六類共 28 項，其中 9 項為 BLOCKER）*
 - *解決 OQ-E07-6/8/9/13 開放問題；更新 covers 清單至 F048~F068 全覆蓋*
+
+*本文件版本 2.4，由 System Architect Agent 依據 LIST_TYPE 語意拆分決議（2026-05-12）更新。主要變更：*
+
+- *新增架構決策 AD-E07-14（LIST_TYPE 語意拆分：list_type 固定常數 '01' + case_status 業務主管必填期別欄位）*
+- *§3.10 AssignmentCode Service 補入 CASE_STATUS 代碼類別；表格描述補述 tbl_id 英文常數映射規則（AD-E07-14）*
+- *E07-B Migration 設計：OBMCODEDF 遷移列補入 tbl_id 映射規則；OBMLISTDF 遷移列補入 case_status 兩階段 migration 說明；轉換規則彙整表新增 ob_code_df tbl_id 映射規則與 ob_list_definition case_status 補值規則*
+- *E07-D Stage 1 演算法補述 BR-7 case_status 篩選邏輯（OR 語意 [ASSUMPTION]）；於 architecture-spec 內部追蹤 case_status 相關開放問題 OQ-E07-20（ob_pool_data 對應欄位名稱待確認）與 OQ-E07-21（case_status 篩選 OR/AND 邏輯待業務確認）*
+- *前端 Diagram（§3.10 component box）更新 AssignmentCode Service 節點文字加入 CASE_STATUS*
+
+---
+
+*本文件版本 2.4.1，由 Spec Writer Agent 依據 OQ 編號衝突修正（2026-05-12）更新。主要變更：*
+
+- *修正 OQ 編號衝突：原 v2.4 誤編之 OQ-E07-19（ob_pool_data 案件結清期別欄位）改為 OQ-E07-20，避免與既有 OQ-E07-19（is_sales_manager 旗標實作缺漏，記錄於 open-questions.md）衝突*
+- *新增 case_status 多選篩選邏輯 OR/AND 之追蹤項目 OQ-E07-21（原僅於 [ASSUMPTION] 文字標記，未登錄中央 open-questions.md）*
+- *case_status 相關開放問題已全數於 open-questions.md 登錄，本文件內 OQ-E07-20 / OQ-E07-21 引用文字補上指向中央清單之提示*
+
+---
+
+*本文件版本 2.5，由 System Architect Agent 依據 SP 原始碼分析 + DB 驗證（2026-05-12）更新。主要變更：*
+
+- *✅ OQ-E07-20 Resolved：`ob_pool_data` 中「案件結清期別」對應欄位確認為 `list_type`（原 OBPOOLDATA.LIST_TYPE）。證據：USP_OB_OBPOOLDATA.sql CASE WHEN 賦值邏輯（行 189-216）+ SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql 篩選語法（行 54）+ DB 驗證 ob_pool_data.list_type 僅含 '01'/'02'/'03'/'04'（共 1,487,695 筆）*
+- *✅ OQ-E07-21 Resolved：case_status 多選篩選邏輯確認為 OR（fn_SplitString_cte + IN 語義）。SP 直接證據，無需業務確認*
+- *E07-D BR-7 section 更新：移除 [ASSUMPTION] 與 [待確認] 標記，placeholder `<ob_pool_data_case_status_field>` 替換為實際欄位 `list_type`；SQL 片段改用 PostgreSQL `string_to_array` + `unnest` 等效表達；補入架構備註說明 ob_list_definition.list_type（常數 '01'）與 ob_pool_data.list_type（期別代碼）同名異義*
+- *OQ-E07-22 分析：DB 驗證 ob_list_definition.list_type 既有值全在合法代碼集（'01'/'02'/'03'/'04' 及其 $$ 組合），Phase 1b 可直接複製 list_type → case_status，無雜質風險；結論詳見 open-questions.md*
+- *OQ-E07-23 SQL 反推：USP_OB_OBPOOLDATA.sql STA_CODE 邏輯對應 4 個期別，完整反推假設登入 open-questions.md，業務細微語意仍需業務確認*
+- *OQ-E07-24 DB 確認：ob_code_df tbl_id='04'（CASEYEAR）確認仍只有 1 筆；CASEYEAR 在 SP 中以 year_cnt 數值直接比對，不從 ob_code_df 查表；ob_pool_data.caseyear 實為 4 位年份字串；詳見 open-questions.md*
+
+---
+
+*本文件版本 2.6，由 Spec Writer Agent 依據舊系統前端 CASEYEAR 設計探查（2026-05-12）更新。主要變更：*
+
+- *✅ OQ-E07-24 Resolved：舊系統前端探查確認 CASEYEAR 為 cshtml hard-coded 11 個 CheckBox（value `0`~`10`，第 12 個 `99=10年以上` 被 Razor 註解掉未啟用），證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`。無 AJAX 載入動作，與 PROD_KIND/SPEC_TP/CASE_STATUS 不同模式。OBMCODEDF dump TBL_ID='04' 該 1 筆紀錄為其他模組殘留，與 E07 名單定義 CASEYEAR 無關*
+- *AD-E07-14 TBL_ID 映射表縮減為 3 類：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（移除 `'04'→'CASEYEAR'`），AD 仍有效但範圍縮小；補入「CASEYEAR 不納入 ob_code_df 範圍」之決議說明*
+- *AD-E07-14 Consequences 補入：F068 scope 限定 3 類（CASEYEAR 移除）；F050/F051 `caseyear` 欄位 11 個選項由前端直接渲染，不調用代碼查詢 API*
+- *§3.10 AssignmentCode Service 服務職責由「4 類」改為「3 類」；補入 CASEYEAR 證據引用*
+- *E07-B Migration（OBMCODEDF → ob_code_df）白名單與 §3290 轉換規則更新為 3 類；D2 BLOCKER 項目同步*
+- *E07-B 轉換規則「$$ 多值欄位」補註：`ob_list_definition.caseyear` 來源為 F050/F051 前端 hard-coded 11 個固定 CheckBox，與 `ob_code_df` 無關*
+- *`ob_code_df.tbl_id` VARCHAR(11) 維持不變（CASE_STATUS 仍為 11 字元最長值）*
+
+---
+
+*本文件版本 2.7，由 Spec Writer Agent 依據 OQ-E07-23 結案（2026-05-12）更新。主要變更：*
+
+- *✅ OQ-E07-23 Resolved：`case_status` 4 個選項的業務語意已由 System Architect Agent SP 分析（`reference/SP/USP_OB_OBPOOLDATA.sql:189-216` CASE WHEN 邏輯）+ DB 實證（`ob_pool_data` 1,487,695 筆 sta_code 分布查詢）合力確認，**無需業務主管確認即可結案**。`03` 滿期(含當月) vs `04` 滿期之根本差異釐清：`03` 為 STA_CODE 05~89（**仍 active 處理中**，即將到期未結清），`04` 為 STA_CODE 90（**已完成結清**）*
+- *AD-E07-14 Consequences 補一行：case_status 4 個選項業務語意已於 OQ-E07-23 結案時確認，指向 F050 §5.1.1 之業務語意對照表（含 STA_CODE 對應、案件實況、業務目標建議）*
+- *無新增 AD：本次變更為既有 AD-E07-14 之補充說明，且為 spec/feature 層業務語意確認，非架構決策變更*

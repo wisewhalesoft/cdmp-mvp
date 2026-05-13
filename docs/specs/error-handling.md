@@ -220,6 +220,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 |--------|------------|------|------|----------|
 | LIST_NO_LIMIT_EXCEEDED | 422 | 本月（{ym}）名單定義已達 999 筆上限，無法新增 | 同月 `ob_list_definition` 紀錄超過 999 筆（OB{YYYYMM}{NNN} 格式限制，Phase 2 擴位） | F050 |
 | LIST_NO_DUPLICATE | 422 | 相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {conflictListNo}） | `prod_kind + card_type` 在當月 active 名單中已存在 | F050, F051 |
+| CASE_STATUS_REQUIRED | 422 | 案件結清期別為必填，請至少選取一項 | 新增或編輯名單定義時 `case_status` 為 NULL / 空字串 / 未提供（前端阻擋後的後端保護） | F050, F051 |
 | ASSIGNMENT_LIST_NOT_FOUND | 404 | 找不到指定的名單定義 | `list_no` 不存在於 `ob_list_definition` | F049, F051, F052, F060 |
 | ASSIGNMENT_LIST_INACTIVE | 422 | 已停用名單不可編輯 | 嘗試編輯 `status = 'inactive'` 的名單 | F051 |
 | ASSIGNMENT_LIST_ALREADY_INACTIVE | 422 | 名單已處於停用狀態，無需重複操作 | 嘗試停用已 inactive 的名單 | F052 |
@@ -263,7 +264,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
 | CODE_IN_USE | 422 | 代碼值 {tblCd} 在類別 {tblId} 中已存在 | 新增代碼時 `(tbl_id, tbl_cd)` 組合重複（啟用期間內） | F068 |
-| CODE_TYPE_INVALID | 422 | 本功能僅支援 PROD_KIND / SPEC_TP / CASEYEAR 三類代碼維護 | API 傳送的 `tbl_id` 不在允許清單中 | F068 |
+| CODE_TYPE_INVALID | 422 | 本功能僅支援 PROD_KIND / SPEC_TP / CASE_STATUS 三類代碼維護 | API 傳送的 `tbl_id` 不在允許清單（PROD_KIND / SPEC_TP / CASE_STATUS）中；含 `CASEYEAR` 亦回此錯誤（CASEYEAR 為 F050/F051 前端 hard-coded 11 個固定選項，不入 ob_code_df，OQ-E07-24 Resolved 2026-05-12） | F068 |
 | CODE_NOT_FOUND | 404 | 找不到指定的代碼 | `(tbl_id, tbl_cd)` 組合不存在於 `ob_code_df` | F068 |
 
 ---
@@ -379,6 +380,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | Stage 0 試算超時 | 500 | STAGE0_ESTIMATE_TIMEOUT | 試算查詢超過 10 秒 | 中斷查詢 |
 | 匯出逾時 | 500 | EXPORT_FILE_EXPIRED | 檔案產生逾時 | 中斷匯出 |
 | 代碼值重複 | 422 | CODE_IN_USE | 代碼值在該類別中已存在 | 不寫入 |
-| 代碼類別非 PROD_KIND/SPEC_TP/CASEYEAR | 422 | CODE_TYPE_INVALID | 僅支援三類代碼維護 | 拒絕請求 |
+| 代碼類別非 PROD_KIND/SPEC_TP/CASE_STATUS | 422 | CODE_TYPE_INVALID | 僅支援三類代碼維護（CASEYEAR 為前端 hard-coded，亦回此錯誤） | 拒絕請求 |
+| 名單新增/編輯時案件結清期別未填 | 422 | CASE_STATUS_REQUIRED | 案件結清期別為必填，請至少選取一項 | 拒絕請求 |
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

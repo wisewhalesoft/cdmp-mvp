@@ -181,7 +181,7 @@ status: Draft
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
-| F068 | [F068-edit-base-code.md](features/F068-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | US-092 | P0-MVP |
+| F068 | [F068-edit-base-code.md](features/F068-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） | US-092 | P0-MVP |
 
 ---
 
@@ -345,7 +345,7 @@ F044 ──> F046（ETL TargetLoad 資料已載入）
 F046 ──> F047（客戶清單為 360 詳情主要入口）
 
 # E07 依賴鏈
-F068 ──> F050, F051（PROD_KIND / SPEC_TP / CASEYEAR 代碼就緒）
+F068 ──> F050, F051（PROD_KIND / SPEC_TP / CASE_STATUS 代碼就緒；CASEYEAR 為前端 hard-coded 不阻擋）
 F048 ──> F049（Stage 0 估算於清單頁觸發）
 F048 ──> F050, F051, F052, F060（清單頁為入口）
 F050 ──> F051, F052, F060（需先有名單才能編輯/停用/設定比例）
