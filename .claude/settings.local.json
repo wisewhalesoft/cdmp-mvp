@@ -248,7 +248,22 @@
       "Read(//tmp/**)",
       "Bash(npx ts-node -e ':*)",
       "Bash(PGPASSWORD=cdmp_secret psql:*)",
-      "Bash(grep -E \"\\\\.\\(config|json|ts\\)$\")"
+      "Bash(grep -E \"\\\\.\\(config|json|ts\\)$\")",
+      "Bash(netstat -ano)",
+      "Bash(mkdir *)",
+      "PowerShell(Test-NetConnection *)",
+      "Bash(awk -F',' 'NR>1 {n=split\\($26,a,\"\"\\); if \\(length\\($26\\)>2\\) print NR\": card_type=\"$26\" \\(\"length\\($26\\)\"\\)\"}' reference/DumpData/OBMLISTDF_20260505.csv)",
+      "Bash(awk -F',' 'NR>1 {print $26}' reference/DumpData/OBMLISTDF_20260505.csv)",
+      "Bash(node scripts/parse-ob-schema.mjs ../../reference/TableSchema/OB/OBPOOLDATA.sql --mappings)",
+      "Read(//c/Users/cacab/AppData/Local/Temp/**)",
+      "Bash(docker cp *)",
+      "PowerShell(docker exec cdmp-api *)",
+      "PowerShell(cd apps/api; $env:DB_TYPE='postgres'; $env:DB_HOST='localhost'; $env:DB_PORT='5432'; $env:DB_USERNAME='cdmp'; $env:DB_PASSWORD='cdmp_secret'; $env:DB_NAME='cdmp_dev'; npx vitest run src/modules/etl/__tests__/fn-calc-tier-level.spec.ts 2>&1 | Select-Object -Last 60)",
+      "PowerShell(docker exec cdmp-postgres *)",
+      "mcp__mem0__update_memory",
+      "Bash(powershell.exe *)",
+      "Bash(awk -F, '{print $2}')",
+      "Bash(awk -F, '{print $2 \"  →  \" $4}')"
     ],
     "defaultMode": "default"
   },
