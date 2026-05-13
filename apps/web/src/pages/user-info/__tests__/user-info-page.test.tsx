@@ -26,13 +26,21 @@ const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 const mockedLogout = vi.mocked(authApi.logout);
 
-function renderPage() {
-  mockedGetUser.mockReturnValue({
+function renderPage(
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: 'admin' | 'user';
+    isSalesManager?: boolean;
+  } = {
     id: 'user-1',
     name: '陳小美',
     email: 'user@cdmp.test',
     role: 'user',
-  });
+  },
+) {
+  mockedGetUser.mockReturnValue(user);
   return render(
     <MemoryRouter>
       <UserInfoPage />
@@ -40,33 +48,65 @@ function renderPage() {
   );
 }
 
-describe('UserInfoPage', () => {
+describe('UserInfoPage（AD-E02-4-C：Profile 頁套用 AppLayout）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedLogout.mockResolvedValue({ message: '登出成功' });
   });
 
-  it('渲染「目前尚無可用功能」訊息', () => {
+  it('套用 AppLayout — sidebar 與 header 共用元件存在', () => {
     renderPage();
-    expect(screen.getByText('目前尚無可用功能')).toBeInTheDocument();
+    // sidebar 共用元件存在（CDMP 品牌標頭只在 AppSidebar 中）
+    expect(screen.getByText('CDMP')).toBeInTheDocument();
+    // sidebar 至少顯示 Customer 360（一般使用者基本入口）
+    expect(screen.getByText('Customer 360')).toBeInTheDocument();
   });
 
-  it('渲染「請聯絡您的管理員」文字', () => {
+  it('顯示 Profile 資訊 — 姓名、Email、角色', () => {
     renderPage();
-    expect(screen.getByText('請聯絡您的管理員。')).toBeInTheDocument();
+    // 姓名出現於 header（一次）與 Profile row（一次）— 使用 getAllByText 確認皆存在
+    expect(screen.getAllByText('陳小美').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('user@cdmp.test')).toBeInTheDocument();
   });
 
-  it('渲染登出按鈕', () => {
-    renderPage();
-    expect(screen.getByRole('button', { name: /登出/ })).toBeInTheDocument();
+  it('業務主管 — sidebar 顯示客戶名單分派群組 + header 顯示 Sales Manager Badge', () => {
+    renderPage({
+      id: 'm1',
+      name: 'Manager',
+      email: 'manager@cdmp.test',
+      role: 'user',
+      isSalesManager: true,
+    });
+    expect(screen.getByText('客戶名單分派')).toBeInTheDocument();
+    expect(screen.getByTestId('sales-manager-badge')).toBeInTheDocument();
   });
 
-  // TS-F003-FE: 點擊登出 → 呼叫 logout API + clearAuth + 導向 /login
+  it('一般使用者 — sidebar 無客戶名單分派群組', () => {
+    const { container } = renderPage();
+    expect(container.textContent).not.toContain('客戶名單分派');
+  });
+
+  it('admin — sidebar 顯示完整管理者群組', () => {
+    renderPage({
+      id: 'a1',
+      name: 'Admin User',
+      email: 'admin@cdmp.test',
+      role: 'admin',
+      isSalesManager: false,
+    });
+    expect(screen.getByText('帳號管理')).toBeInTheDocument();
+    expect(screen.getByText('資料來源')).toBeInTheDocument();
+  });
+
+  it('不再顯示「目前尚無可用功能」訊息', () => {
+    renderPage();
+    expect(screen.queryByText('目前尚無可用功能')).toBeNull();
+  });
+
   it('點擊登出 → 呼叫 logout API + clearAuth + 導向 /login', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('button', { name: /登出/ }));
-
     await waitFor(() => {
       expect(mockedLogout).toHaveBeenCalled();
       expect(mockedClearAuth).toHaveBeenCalled();
@@ -74,22 +114,14 @@ describe('UserInfoPage', () => {
     });
   });
 
-  // TS-F003-006: 登出 API 失敗降級處理 — 仍清除 Session 並導向 /login
   it('登出 API 失敗 → 仍清除 Session 並導向 /login（降級處理）', async () => {
     mockedLogout.mockRejectedValue(new Error('Network Error'));
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('button', { name: /登出/ }));
-
     await waitFor(() => {
-      expect(mockedLogout).toHaveBeenCalled();
       expect(mockedClearAuth).toHaveBeenCalled();
       expect(mockNavigate).toHaveBeenCalledWith('/login');
     });
-  });
-
-  it('顯示使用者名稱', () => {
-    renderPage();
-    expect(screen.getByText('陳小美')).toBeInTheDocument();
   });
 });

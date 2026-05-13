@@ -35,3 +35,16 @@ export function getUserRole(): 'admin' | 'user' | null {
   const user = getUser();
   return user?.role ?? null;
 }
+
+/**
+ * F002 v1.2 / AD-E02-4：取得當前登入身份的業務主管旗標。
+ *
+ * 嚴格 === true 比對（RISK-AD-E02-4-1）：
+ * - 舊 token 可能無 isSalesManager 欄位（undefined） → 視為 false
+ * - 字串 "true"、數字 1 等 truthy 值 → 視為 false
+ * - 僅 boolean true 才回傳 true
+ */
+export function getIsSalesManager(): boolean {
+  const user = getUser();
+  return user?.isSalesManager === true;
+}

@@ -1,61 +1,76 @@
-import { useNavigate } from 'react-router-dom';
-import { Inbox, LogOut, ShieldCheck } from 'lucide-react';
-import { clearAuth, getUser } from '@/stores/auth-store';
-import { logout } from '@/api/auth';
+import { Mail, User as UserIcon, ShieldCheck, BadgeCheck } from 'lucide-react';
+import { getUser } from '@/stores/auth-store';
+import { AppLayout } from '@/components/layout/app-layout';
+import { getRoleDisplayName } from '@cdmp/shared';
+
+/**
+ * F002 v1.2 / AD-E02-4-C：/user-info 改版為 Profile 頁
+ *
+ * 取代原本「目前尚無可用功能」的訊息頁。
+ * 套用共用 AppLayout，sidebar 與 header 自動依身份渲染（含登出按鈕）。
+ * 顯示 Profile 資訊：姓名、Email、角色、is_sales_manager 旗標。
+ *
+ * 路由 Guard：ProtectedRoute（不再限定 role=user），任何已登入身份皆可存取。
+ */
 
 export function UserInfoPage() {
-  const navigate = useNavigate();
   const user = getUser();
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // Graceful degradation: clear local session even if API fails
-    }
-    clearAuth();
-    navigate('/login');
-  };
-
-  const initials = user?.name?.charAt(0) ?? '';
+  const isSalesManager = user?.isSalesManager === true;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="bg-surface border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center justify-center w-8 h-8 bg-primary rounded-lg">
-            <ShieldCheck className="w-5 h-5 text-white" />
+    <AppLayout title="個人資訊">
+      <div className="p-6">
+        <div className="max-w-2xl bg-white rounded-lg border border-[#E5E7EB] shadow-sm">
+          <div className="px-6 py-5 border-b border-[#E5E7EB]">
+            <h2 className="text-base font-semibold text-gray-800">帳號資料</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              此處顯示您目前登入帳號的基本資訊。
+            </p>
           </div>
-          <span className="text-lg font-bold text-gray-900">CDMP</span>
+          <dl className="divide-y divide-[#E5E7EB]">
+            <ProfileRow
+              icon={<UserIcon className="w-4 h-4 text-gray-400" />}
+              label="姓名"
+              value={user?.name ?? '—'}
+            />
+            <ProfileRow
+              icon={<Mail className="w-4 h-4 text-gray-400" />}
+              label="Email"
+              value={user?.email ?? '—'}
+            />
+            <ProfileRow
+              icon={<BadgeCheck className="w-4 h-4 text-gray-400" />}
+              label="角色"
+              value={user?.role ? getRoleDisplayName(user.role) : '—'}
+            />
+            <ProfileRow
+              icon={<ShieldCheck className="w-4 h-4 text-gray-400" />}
+              label="業務主管旗標"
+              value={isSalesManager ? '是' : '否'}
+            />
+          </dl>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-primary">{initials}</span>
-            </div>
-            <span className="text-sm text-gray-700 font-medium">{user?.name}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-500 hover:text-danger rounded-lg hover:bg-red-50 transition"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>登出</span>
-          </button>
-        </div>
-      </header>
+      </div>
+    </AppLayout>
+  );
+}
 
-      {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-            <Inbox className="w-8 h-8 text-gray-400" />
-          </div>
-          <h2 className="text-lg font-medium text-gray-700 mb-2">目前尚無可用功能</h2>
-          <p className="text-sm text-gray-400">請聯絡您的管理員。</p>
-        </div>
-      </main>
+function ProfileRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center px-6 py-4">
+      <dt className="flex items-center gap-2 w-40 text-sm text-gray-500">
+        {icon}
+        {label}
+      </dt>
+      <dd className="flex-1 text-sm text-gray-800">{value}</dd>
     </div>
   );
 }
