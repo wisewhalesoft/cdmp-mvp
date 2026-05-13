@@ -289,24 +289,32 @@
                     </div>
                   </td>
                 </tr>
-                <!-- Row 9: 使用者 (User) -->
+                <!-- Row 9: 使用者 (User) - is_sales_manager = true -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">吳佳蓉</td>
                   <td class="px-5 py-3 text-gray-600">user6@example.com</td>
-                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">使用者</span></td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">使用者</span>
+                      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200" title="此 User 已啟用業務主管權限，可存取 E07 客戶名單分派與 E06 Customer 360">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                        Sales Manager
+                      </span>
+                    </div>
+                  </td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-08-05</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('吳佳蓉','user6@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('吳佳蓉','user6@example.com', true)" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('吳佳蓉')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
-                      <button onclick="openChangeRoleModal('吳佳蓉','使用者')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openChangeRoleModal('吳佳蓉','使用者', true)" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('吳佳蓉')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
                 <!-- Row 10: Admin -->
-                <tr class="hover:bg-gray-50/50 transition-colors">
+                <tr class="border-b border-border hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3 font-medium text-gray-900">蔡明翰</td>
                   <td class="px-5 py-3 text-gray-600">admin3@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">管理者</span></td>
@@ -314,10 +322,28 @@
                   <td class="px-5 py-3 text-gray-500">2025-09-10</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('蔡明翰','admin3@example.com')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('蔡明翰','admin3@example.com', false, 'admin')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('蔡明翰')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('蔡明翰','管理者')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('蔡明翰')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
+                    </div>
+                  </td>
+                </tr>
+                <!-- Row 11: 使用者 (User) - is_sales_manager = false -->
+                <tr class="hover:bg-gray-50/50 transition-colors">
+                  <td class="px-5 py-3 font-medium text-gray-900">林宥嘉</td>
+                  <td class="px-5 py-3 text-gray-600">user7@example.com</td>
+                  <td class="px-5 py-3">
+                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">使用者</span>
+                  </td>
+                  <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
+                  <td class="px-5 py-3 text-gray-500">2025-10-22</td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-2">
+                      <button onclick="openEditModal('林宥嘉','user7@example.com', false)" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openDisableModal('林宥嘉')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
+                      <button onclick="openChangeRoleModal('林宥嘉','使用者', false)" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
+                      <button onclick="openResetPasswordModal('林宥嘉')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
                     </div>
                   </td>
                 </tr>
@@ -386,6 +412,7 @@
             <button onclick="openDisableModal('李小華')" class="px-3 py-1.5 text-xs font-medium border border-amber-200 rounded-md hover:bg-amber-50 transition-colors text-amber-600">停用帳號 Modal</button>
             <button onclick="openEnableModal('張大偉')" class="px-3 py-1.5 text-xs font-medium border border-green-200 rounded-md hover:bg-green-50 transition-colors text-green-600">啟用帳號 Modal</button>
             <button onclick="openChangeRoleModal('李小華','分析師')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">變更角色 Modal</button>
+            <button onclick="openChangeRoleModal('吳佳蓉','使用者', true)" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">變更角色 Modal（User+SM）</button>
             <button onclick="openResetPasswordModal('李小華')" class="px-3 py-1.5 text-xs font-medium border border-red-200 rounded-md hover:bg-red-50 transition-colors text-red-600">重設密碼 Modal</button>
           </div>
         </div>
@@ -434,7 +461,7 @@
           <!-- 角色 -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">角色 <span class="text-danger">*</span></label>
-            <select id="createRole" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+            <select id="createRole" onchange="onCreateRoleChange()" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
               <optgroup label="系統角色">
                 <option value="admin">管理者（Admin）</option>
                 <option value="user" selected>使用者（User）</option>
@@ -449,6 +476,20 @@
               </optgroup>
             </select>
           </div>
+          <!-- 業務主管權限 (僅當角色 = user 時顯示) -->
+          <div id="createSalesManagerWrap" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+            <label class="flex items-start gap-2.5 cursor-pointer">
+              <input id="createSalesManagerFlag" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20">
+              <span class="flex-1">
+                <span class="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5 text-warning"></i>
+                  業務主管權限
+                </span>
+                <span class="block text-xs text-gray-500 mt-0.5 leading-relaxed">啟用後此帳號可存取 E07 客戶名單分派與 E06 Customer 360</span>
+              </span>
+            </label>
+          </div>
+          <p class="text-xs text-gray-400 leading-relaxed">業務主管權限可於建立後從帳號詳細頁切換</p>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button onclick="closeModal('createModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition-colors">取消</button>
@@ -477,6 +518,25 @@
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Email <span class="text-danger">*</span></label>
             <input id="editEmail" type="email" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+          </div>
+          <!-- 角色（唯讀顯示，依 F006 BR-5：角色變更不在此功能範圍） -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">角色</label>
+            <div class="flex items-center gap-2">
+              <span id="editRoleDisplay" class="inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">-</span>
+              <span class="text-xs text-gray-400">如需變更請使用「變更角色」功能</span>
+            </div>
+          </div>
+          <!-- 業務主管權限 (僅當角色 = user 時顯示，依 F006 UI/UX：嚴格唯讀，變更入口導向 F008 列表 Toggle) -->
+          <div id="editSalesManagerWrap">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">業務主管權限</label>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="editSalesManagerChip" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                <i data-lucide="shield-off" class="w-3.5 h-3.5"></i>
+                <span id="editSalesManagerChipText">未啟用</span>
+              </span>
+              <span class="text-xs text-gray-400">需變更請至帳號列表使用 Toggle Switch（即時生效）</span>
+            </div>
           </div>
           <div class="flex items-start gap-2 p-3 bg-blue-50 rounded-lg">
             <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
@@ -567,6 +627,19 @@
               </optgroup>
             </select>
           </div>
+          <!-- 業務主管權限 (僅當新角色 = 使用者 時顯示，樣式與建立帳號 modal 一致) -->
+          <div id="roleDialogSalesManagerWrap" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 hidden">
+            <label class="flex items-start gap-2.5 cursor-pointer">
+              <input id="roleDialogSalesManagerFlag" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20">
+              <span class="flex-1">
+                <span class="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5 text-warning"></i>
+                  業務主管權限
+                </span>
+                <span class="block text-xs text-gray-500 mt-0.5 leading-relaxed">啟用後此帳號可存取 E07 客戶名單分派與 E06 Customer 360</span>
+              </span>
+            </label>
+          </div>
           <!-- 系統角色提示 -->
           <div id="changeRoleSystemWarning" class="flex items-start gap-2 p-3 bg-amber-50 rounded-lg">
             <i data-lucide="alert-circle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
@@ -590,7 +663,7 @@
   <div id="changeRoleConfirmModal" class="fixed inset-0 z-[60] hidden">
     <div class="modal-backdrop absolute inset-0" onclick="closeModal('changeRoleConfirmModal')"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-sm relative transform transition-all">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative transform transition-all">
         <div class="px-6 pt-6 pb-2 text-center">
           <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
             <i data-lucide="shield-check" class="w-6 h-6 text-primary"></i>
@@ -609,6 +682,10 @@
           </div>
           <p id="confirmUserName" class="text-sm text-gray-500 mb-1">確定要變更 <strong>-</strong> 的角色嗎？</p>
           <p id="confirmBusinessNote" class="text-xs text-amber-600 hidden">此變更將影響使用者在 Customer 360 模組中的存取權限</p>
+          <!-- 業務主管權限摘要（僅當新角色 = 使用者 時顯示，純摘要，不可編輯） -->
+          <p id="confirmSalesManagerSummary" class="text-xs mt-1 hidden">
+            <span class="text-gray-500">業務主管權限：</span><span id="confirmSalesManagerSummaryValue"></span>
+          </p>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4">
           <button onclick="closeModal('changeRoleConfirmModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition-colors">取消</button>
@@ -701,9 +778,45 @@
     });
 
     // ===== Edit Modal =====
-    function openEditModal(name, email) {
+    function openEditModal(name, email, isSalesManager, role) {
+      // role: 'admin' or 'user' (預設 'user'，符合大多數 row 場景)
+      const accountRole = role || 'user';
       document.getElementById('editName').value = name;
       document.getElementById('editEmail').value = email;
+
+      // 角色唯讀顯示
+      const roleDisplay = document.getElementById('editRoleDisplay');
+      if (accountRole === 'admin') {
+        roleDisplay.textContent = '管理者（Admin）';
+        roleDisplay.className = 'inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700';
+      } else {
+        roleDisplay.textContent = '使用者（User）';
+        roleDisplay.className = 'inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700';
+      }
+
+      // 業務主管權限：嚴格唯讀 chip，僅 user 角色顯示；變更入口導向 F008 列表 Toggle Switch
+      const wrap = document.getElementById('editSalesManagerWrap');
+      const chip = document.getElementById('editSalesManagerChip');
+      const chipText = document.getElementById('editSalesManagerChipText');
+      if (accountRole === 'user') {
+        wrap.classList.remove('hidden');
+        if (isSalesManager) {
+          chip.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200';
+          chip.innerHTML = '<i data-lucide="shield-check" class="w-3.5 h-3.5"></i><span id="editSalesManagerChipText">業務主管權限：已啟用</span>';
+        } else {
+          chip.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600';
+          chip.innerHTML = '<i data-lucide="shield-off" class="w-3.5 h-3.5"></i><span id="editSalesManagerChipText">業務主管權限：未啟用</span>';
+        }
+      } else {
+        // Admin: 不顯示，但 DB 值仍保留（spec F008 AC-10）
+        wrap.classList.add('hidden');
+      }
+
+      // 重新渲染 chip 內的 lucide icon
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+
       openModal('editModal');
     }
 
@@ -750,9 +863,13 @@
       return businessRoles.includes(role);
     }
 
-    function openChangeRoleModal(name, currentRole) {
+    // 暫存目標帳號目前的 is_sales_manager 值（mock，用於 dialog 內 checkbox 預設值）
+    let currentTargetIsSalesManager = false;
+
+    function openChangeRoleModal(name, currentRole, isSalesManager) {
       document.getElementById('changeRoleName').textContent = name;
       document.getElementById('changeRoleCurrent').textContent = currentRole;
+      currentTargetIsSalesManager = !!isSalesManager;
       const select = document.getElementById('changeRoleSelect');
       // Set default to a different role than current
       if (currentRole === '管理者') {
@@ -762,6 +879,9 @@
       } else {
         select.value = '管理者';
       }
+      // 預填主 dialog 的業務主管權限 checkbox 為目標帳號目前值
+      // （updateRoleChangeWarning 會依新角色決定是否顯示此 wrap）
+      document.getElementById('roleDialogSalesManagerFlag').checked = currentTargetIsSalesManager;
       updateRoleChangeWarning();
       openModal('changeRoleModal');
     }
@@ -776,6 +896,16 @@
       } else {
         systemWarning.classList.remove('hidden');
         businessWarning.classList.add('hidden');
+      }
+      // 業務主管權限 wrap：僅當新角色 = 使用者 (User) 時顯示
+      // 切到非 User 角色（Admin 或業務角色）自動隱藏並重置為未勾選（與區塊 A 同邏輯）
+      const smWrap = document.getElementById('roleDialogSalesManagerWrap');
+      const smCb = document.getElementById('roleDialogSalesManagerFlag');
+      if (newRole === '使用者') {
+        smWrap.classList.remove('hidden');
+      } else {
+        smWrap.classList.add('hidden');
+        smCb.checked = false;
       }
       lucide.createIcons();
     }
@@ -801,15 +931,38 @@
         businessNote.classList.add('hidden');
       }
 
+      // 業務主管權限摘要：讀取主 dialog checkbox 狀態，僅當新角色 = 使用者 時顯示
+      const smSummary = document.getElementById('confirmSalesManagerSummary');
+      const smSummaryValue = document.getElementById('confirmSalesManagerSummaryValue');
+      const smCb = document.getElementById('roleDialogSalesManagerFlag');
+      if (newRole === '使用者') {
+        smSummary.classList.remove('hidden');
+        if (smCb.checked) {
+          smSummaryValue.innerHTML = '<span class="text-success font-medium">✓ 啟用</span>';
+        } else {
+          smSummaryValue.innerHTML = '<span class="text-gray-400">未啟用</span>';
+        }
+      } else {
+        smSummary.classList.add('hidden');
+        smSummaryValue.textContent = '';
+      }
+
       openModal('changeRoleConfirmModal');
     }
 
     function handleChangeRole() {
       const name = document.getElementById('changeRoleName').textContent;
       const newRole = document.getElementById('changeRoleSelect').value;
+      const smCb = document.getElementById('roleDialogSalesManagerFlag');
+      const newIsSalesManager = (newRole === '使用者') && smCb.checked;
       closeModal('changeRoleConfirmModal');
       closeModal('changeRoleModal');
-      showToast('success', '角色已變更', `${name} 的角色已變更為${newRole}。`);
+      // mock：同時變更 role 與 is_sales_manager；旗標僅當新角色 = User 時有意義
+      let msg = `${name} 的角色已變更為${newRole}。`;
+      if (newRole === '使用者') {
+        msg += newIsSalesManager ? ' 業務主管權限已啟用。' : ' 業務主管權限為未啟用。';
+      }
+      showToast('success', '角色已變更', msg);
     }
 
     // ===== Reset Password Modal =====
@@ -860,6 +1013,27 @@
       ['createNameError', 'createEmailError', 'createPasswordError'].forEach(id => {
         document.getElementById(id)?.classList.add('hidden');
       });
+      // Reset sales manager checkbox
+      const smCb = document.getElementById('createSalesManagerFlag');
+      if (smCb) smCb.checked = false;
+      // Sync sales manager wrap visibility with current role
+      onCreateRoleChange();
+    }
+
+    // 角色連動：選 User 才顯示業務主管權限 checkbox；
+    // 切到 Admin 自動隱藏並重置為未勾選（F004 AC-6, BR-9）
+    function onCreateRoleChange() {
+      const role = document.getElementById('createRole').value;
+      const wrap = document.getElementById('createSalesManagerWrap');
+      const cb = document.getElementById('createSalesManagerFlag');
+      if (!wrap || !cb) return;
+      if (role === 'user') {
+        wrap.classList.remove('hidden');
+      } else {
+        // Admin 或 業務角色：隱藏並重置為未勾選
+        wrap.classList.add('hidden');
+        cb.checked = false;
+      }
     }
 
     function handleCreate() {
@@ -896,9 +1070,16 @@
       if (!valid) return;
 
       const roleSelect = document.getElementById('createRole');
+      const roleValue = roleSelect.value;
       const roleDisplayName = roleSelect.options[roleSelect.selectedIndex].text;
+      const isSalesManager = document.getElementById('createSalesManagerFlag').checked;
       closeModal('createModal');
-      showToast('success', '帳號已建立', `帳號 ${name}（${roleDisplayName}）已成功建立。`);
+      // 僅當角色 = user 時 sales manager flag 有意義（F004 BR-9）
+      let msg = `帳號 ${name}（${roleDisplayName}）已成功建立。`;
+      if (roleValue === 'user' && isSalesManager) {
+        msg += ' 已啟用業務主管權限。';
+      }
+      showToast('success', '帳號已建立', msg);
     }
 
     // ===== Password Toggle =====
