@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Users, Database, ArrowDownToLine, Plus, Search, ChevronLeft, ChevronRight, Workflow, Contact } from 'lucide-react';
-import { clearAuth, getUser } from '@/stores/auth-store';
-import { logout } from '@/api/auth';
-import { getAccounts, updateAccountStatus, updateAccountRole, adminResetPassword } from '@/api/accounts';
+import { Plus, Search, ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
+import { getUser } from '@/stores/auth-store';
+import {
+  getAccounts,
+  updateAccountStatus,
+  updateAccountRole,
+  updateAccountSalesManagerFlag,
+  adminResetPassword,
+} from '@/api/accounts';
 import { Button } from '@/components/ui/button';
+import { AppLayout } from '@/components/layout/app-layout';
+import { useToast } from '@/components/ui/toast';
 import { CreateAccountModal } from './create-account-modal';
 import { EditAccountModal } from './edit-account-modal';
 import { ToggleStatusDialog } from './toggle-status-dialog';
@@ -30,6 +36,22 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+// F008 v3.2 / TS-F008-SM-FE-013~017:
+// 列表頁 Sales Manager chip — 僅當 role=user 且 is_sales_manager=true 時顯示
+// className 嚴格對齊 prototype 07 line 299-302
+function SalesManagerChip({ accountId }: { accountId: string }) {
+  return (
+    <span
+      data-testid={`sales-manager-chip-${accountId}`}
+      title="此 User 已啟用業務主管權限，可存取 E07 客戶名單分派與 E06 Customer 360"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200"
+    >
+      <ShieldCheck className="w-3.5 h-3.5" />
+      Sales Manager
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
     return (
@@ -46,8 +68,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function AccountListPage() {
-  const navigate = useNavigate();
   const user = getUser();
+  const { showToast } = useToast();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountListItem | null>(null);
@@ -117,17 +139,6 @@ export function AccountListPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // Graceful degradation
-    } finally {
-      clearAuth();
-      navigate('/login');
-    }
-  };
-
   const handleCreateSuccess = () => {
     setShowCreateModal(false);
     fetchAccounts();
@@ -172,19 +183,89 @@ export function AccountListPage() {
     setShowRoleDialog(true);
   };
 
-  const handleRoleConfirm = async (newRole: UserRole) => {
+  // F008 v3.2 BR-12 / AC-11 / TS-F008-SM-INT-001~007:
+  // 合併 UX：依差異依序呼叫 PATCH /role 與 PATCH /sales-manager-flag
+  const handleRoleConfirm = async (newRole: UserRole, newIsSalesManager: boolean) => {
     if (!roleTarget) return;
+
+    const currentRole = roleTarget.role;
+    const currentIsSm = roleTarget.is_sales_manager === true;
+    const roleChanged = newRole !== currentRole;
+    const newRoleIsUser = newRole === 'user';
+    // 旗標變動：僅當新 role=user 時才比對；其他情境視為無 flag 變動
+    const flagChanged = newRoleIsUser && newIsSalesManager !== currentIsSm;
+
     setRoleLoading(true);
-    try {
-      await updateAccountRole(roleTarget.id, { role: newRole });
-      setShowRoleDialog(false);
-      setRoleTarget(null);
-      fetchAccounts();
-    } catch {
-      // Error handling — graceful degradation
-    } finally {
-      setRoleLoading(false);
+
+    let roleSuccess = false;
+    let roleErrorMessage: string | null = null;
+    let flagAttempted = false;
+    let flagSuccess = false;
+    let flagErrorMessage: string | null = null;
+
+    // 第一步：PATCH /role（若 role 有變動）
+    if (roleChanged) {
+      try {
+        await updateAccountRole(roleTarget.id, { role: newRole });
+        roleSuccess = true;
+      } catch (err: unknown) {
+        // role 端點失敗 → 中止，不呼叫 flag
+        const error = err as { response?: { data?: { error?: string; message?: string } } };
+        roleErrorMessage =
+          error?.response?.data?.message || '角色變更失敗，請稍後再試';
+        // ACCOUNT_LAST_ADMIN 走特殊訊息（spec 已定義訊息文字）
+        showToast(roleErrorMessage, 'error');
+        setRoleLoading(false);
+        return;
+      }
     }
+
+    // 第二步：PATCH /sales-manager-flag（僅當 newRole=user 且 flag 有變更）
+    // 情境 B 變形：升 admin 時跳過 flag 呼叫（避免 ACCOUNT_FLAG_NOT_APPLICABLE）
+    if (newRoleIsUser && flagChanged) {
+      flagAttempted = true;
+      try {
+        await updateAccountSalesManagerFlag(roleTarget.id, {
+          isSalesManager: newIsSalesManager,
+        });
+        flagSuccess = true;
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string; message?: string } } };
+        flagErrorMessage =
+          error?.response?.data?.message || '業務主管權限調整失敗';
+      }
+    }
+
+    // 訊息組合 — 部分成功時警示
+    if (roleSuccess && flagAttempted && !flagSuccess) {
+      // 情境 E：role 成功但 flag 失敗 → 不 rollback role
+      showToast(
+        `角色已變更為 ${getRoleDisplayName(newRole)}，但業務主管權限調整失敗，請稍後重試`,
+        'warning',
+      );
+    } else if (roleSuccess || flagSuccess) {
+      // 全成功的情況
+      let msg = '';
+      if (roleSuccess) {
+        msg = `角色已變更為 ${getRoleDisplayName(newRole)}`;
+        if (newRoleIsUser && flagAttempted && flagSuccess) {
+          msg += `，業務主管權限${newIsSalesManager ? '已啟用' : '已停用'}`;
+        }
+      } else if (flagSuccess) {
+        // 情境 C / D：僅 flag 變更
+        msg = `業務主管權限${newIsSalesManager ? '已啟用' : '已停用'}`;
+      }
+      showToast(msg, 'success');
+    } else if (flagAttempted && !flagSuccess && !roleChanged) {
+      // 僅 flag 操作但失敗
+      showToast(flagErrorMessage || '業務主管權限調整失敗', 'error');
+    }
+
+    // 不論成功或部分成功，皆關閉 dialog 並重新載入列表
+    setShowRoleDialog(false);
+    setRoleTarget(null);
+    setRoleLoading(false);
+    fetchAccounts();
   };
 
   const handleRoleChange = (value: string) => {
@@ -218,50 +299,8 @@ export function AccountListPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F9FAFB]">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0">
-        <div className="px-5 py-4 border-b border-[#E5E7EB]">
-          <div className="text-xl font-bold text-[#2563EB]">CDMP</div>
-          <div className="text-xs text-gray-500 mt-0.5">資料治理平台</div>
-        </div>
-        <nav className="flex-1 py-3">
-          <a href="/" className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-[#2563EB] bg-blue-50 border-r-2 border-[#2563EB]">
-            <Users size={16} />帳號管理
-          </a>
-          <a href="/datasources" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Database size={16} />資料來源
-          </a>
-          <a href="/extraction-tasks" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <ArrowDownToLine size={16} />資料擷取
-          </a>
-          <a href="/etl-pipelines" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Workflow size={16} />ETL Pipeline
-          </a>
-          <a href="/c360/customers" className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-            <Contact size={16} />Customer 360
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-base font-semibold text-gray-800">帳號管理</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name}</span>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-[#EF4444] transition"
-            >
-              登出
-            </button>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
+    <AppLayout title="帳號管理">
+      <main className="flex-1 p-6">
           {/* Toolbar */}
           <div className="flex items-center gap-3 mb-5">
             <Button onClick={() => setShowCreateModal(true)}>
@@ -334,7 +373,12 @@ export function AccountListPage() {
                         <td className="px-5 py-3 font-medium text-gray-900">{account.name}</td>
                         <td className="px-5 py-3 text-gray-600">{account.email}</td>
                         <td className="px-5 py-3">
-                          <RoleBadge role={account.role} />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <RoleBadge role={account.role} />
+                            {account.role === 'user' && account.is_sales_manager === true && (
+                              <SalesManagerChip accountId={account.id} />
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-3">
                           <StatusBadge status={account.status} />
@@ -433,8 +477,7 @@ export function AccountListPage() {
               </div>
             )}
           </div>
-        </main>
-      </div>
+      </main>
 
       {/* Create Account Modal */}
       <CreateAccountModal
@@ -461,11 +504,12 @@ export function AccountListPage() {
         onCancel={() => { setShowToggleDialog(false); setToggleTarget(null); }}
       />
 
-      {/* Change Role Dialog */}
+      {/* Change Role Dialog (F008 v3.2 合併 UX) */}
       <ChangeRoleDialog
         open={showRoleDialog}
         accountName={roleTarget?.name ?? ''}
         currentRole={roleTarget?.role ?? 'user'}
+        currentIsSalesManager={roleTarget?.is_sales_manager === true}
         loading={roleLoading}
         onConfirm={handleRoleConfirm}
         onCancel={() => { setShowRoleDialog(false); setRoleTarget(null); }}
@@ -479,6 +523,6 @@ export function AccountListPage() {
         onConfirm={handleResetConfirm}
         onCancel={() => { setShowResetDialog(false); setResetTarget(null); }}
       />
-    </div>
+    </AppLayout>
   );
 }

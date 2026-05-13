@@ -7,6 +7,8 @@ import type {
   UpdateStatusResponse,
   UpdateRoleRequest,
   UpdateRoleResponse,
+  UpdateSalesManagerFlagRequest,
+  UpdateSalesManagerFlagResponse,
   AccountListQuery,
   AccountListResponse,
   AdminResetPasswordRequest,
@@ -43,6 +45,18 @@ export async function updateAccountStatus(id: string, data: UpdateStatusRequest)
 
 export async function updateAccountRole(id: string, data: UpdateRoleRequest): Promise<UpdateRoleResponse> {
   const response = await apiClient.patch<UpdateRoleResponse>(`/accounts/${id}/role`, data);
+  return response.data;
+}
+
+// F008 v3.2: 切換業務主管旗標
+export async function updateAccountSalesManagerFlag(
+  id: string,
+  data: UpdateSalesManagerFlagRequest,
+): Promise<UpdateSalesManagerFlagResponse> {
+  const response = await apiClient.patch<UpdateSalesManagerFlagResponse>(
+    `/accounts/${id}/sales-manager-flag`,
+    data,
+  );
   return response.data;
 }
 

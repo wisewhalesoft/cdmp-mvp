@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ShieldCheck, ShieldOff, X } from 'lucide-react';
 import { editAccountSchema, type EditAccountFormData } from './edit-account-schema';
 import { updateAccount } from '@/api/accounts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
-import { X } from 'lucide-react';
 import type { AccountListItem } from '@cdmp/shared';
 
 interface EditAccountModalProps {
@@ -56,6 +56,7 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
     setApiError(null);
     setIsSubmitting(true);
     try {
+      // F006 BR-6: 僅送出 name 與 email，不含 isSalesManager
       await updateAccount(account.id, data);
       onSuccess();
     } catch (err: unknown) {
@@ -76,6 +77,11 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
   };
 
   if (!open) return null;
+
+  // F006 SM: chip 雙狀態判定，嚴格比對 true（null/undefined 視同 false）
+  const isSalesManager = account?.is_sales_manager === true;
+  // F006 AC-5: Admin 帳號不顯示 chip
+  const showSalesManagerChip = account?.role === 'user';
 
   return (
     <div className="fixed inset-0 z-50">
@@ -120,6 +126,37 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
                 error={errors.email?.message}
                 {...register('email')}
               />
+
+              {/* F006 SM: 業務主管權限 read-only chip（僅 user 角色顯示） */}
+              {showSalesManagerChip && (
+                <div data-testid="edit-sales-manager-wrap">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    業務主管權限
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isSalesManager ? (
+                      <span
+                        data-testid="edit-sales-manager-chip"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        業務主管權限：已啟用
+                      </span>
+                    ) : (
+                      <span
+                        data-testid="edit-sales-manager-chip"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600"
+                      >
+                        <ShieldOff className="w-3.5 h-3.5" />
+                        業務主管權限：未啟用
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400">
+                      需變更請至變更角色 dialog
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">

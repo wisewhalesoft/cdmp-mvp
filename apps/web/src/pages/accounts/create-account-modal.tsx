@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ShieldCheck } from 'lucide-react';
 import { createAccountSchema, type CreateAccountFormData } from './create-account-schema';
 import { createAccount } from '@/api/accounts';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,8 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
     handleSubmit,
     reset,
     setError,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateAccountFormData>({
     resolver: zodResolver(createAccountSchema),
@@ -38,8 +41,12 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
       email: '',
       password: '',
       role: 'user',
+      isSalesManager: false,
     },
   });
+
+  const role = watch('role');
+  const showSalesManagerCheckbox = role === 'user';
 
   const handleClose = () => {
     reset();
@@ -47,11 +54,19 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
     onClose();
   };
 
+  // 角色 select 的 register（保留 RHF 控制）
+  const roleRegister = register('role');
+
   const onSubmit = async (data: CreateAccountFormData) => {
     setApiError(null);
     setIsSubmitting(true);
     try {
-      await createAccount(data);
+      // F004 BR-9: admin 角色時 isSalesManager 強制為 false（前後端雙重保險）
+      const payload: CreateAccountFormData = {
+        ...data,
+        isSalesManager: data.role === 'user' ? data.isSalesManager : false,
+      };
+      await createAccount(payload);
       reset();
       onSuccess();
     } catch (err: unknown) {
@@ -126,8 +141,41 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
                 label="角色"
                 options={ROLE_OPTIONS}
                 error={errors.role?.message}
-                {...register('role')}
+                {...roleRegister}
+                onChange={(e) => {
+                  // F004 AC-6 / BR-9: 角色切換為非 user 時重置 SM checkbox
+                  roleRegister.onChange(e);
+                  if (e.target.value !== 'user') {
+                    setValue('isSalesManager', false);
+                  }
+                }}
               />
+
+              {/* F004 AC-6: 業務主管權限 checkbox（僅當 role=user 時顯示） */}
+              {showSalesManagerCheckbox && (
+                <div
+                  data-testid="create-sales-manager-wrap"
+                  className="rounded-lg border border-amber-200 bg-amber-50/50 p-3"
+                >
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      data-testid="create-sales-manager-flag"
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
+                      {...register('isSalesManager')}
+                    />
+                    <span className="flex-1">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                        <ShieldCheck className="w-3.5 h-3.5 text-warning" />
+                        業務主管權限
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        啟用後此帳號可存取 E07 客戶名單分派與 E06 Customer 360
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">

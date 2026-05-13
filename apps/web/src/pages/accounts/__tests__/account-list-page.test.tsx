@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { AccountListPage } from '../account-list-page';
+import { ToastProvider } from '@/components/ui/toast';
 import * as accountsApi from '@/api/accounts';
 import * as authStore from '@/stores/auth-store';
 import type { AccountListResponse } from '@cdmp/shared';
@@ -18,6 +19,9 @@ const mockedCreateAccount = vi.mocked(accountsApi.createAccount);
 const mockedUpdateAccount = vi.mocked(accountsApi.updateAccount);
 const mockedUpdateAccountStatus = vi.mocked(accountsApi.updateAccountStatus);
 const mockedUpdateAccountRole = vi.mocked(accountsApi.updateAccountRole);
+const mockedUpdateAccountSalesManagerFlag = vi.mocked(
+  accountsApi.updateAccountSalesManagerFlag,
+);
 const mockedAdminResetPassword = vi.mocked(accountsApi.adminResetPassword);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
@@ -29,6 +33,7 @@ const mockAccountsResponse: AccountListResponse = {
       name: 'Test Admin',
       email: 'admin@cdmp.test',
       role: 'admin',
+      is_sales_manager: false,
       status: 'active',
       created_at: '2025-03-01T00:00:00.000Z',
     },
@@ -37,6 +42,7 @@ const mockAccountsResponse: AccountListResponse = {
       name: 'Normal User',
       email: 'user@cdmp.test',
       role: 'user',
+      is_sales_manager: false,
       status: 'active',
       created_at: '2025-02-15T00:00:00.000Z',
     },
@@ -45,8 +51,45 @@ const mockAccountsResponse: AccountListResponse = {
       name: 'Disabled User',
       email: 'disabled@cdmp.test',
       role: 'user',
+      is_sales_manager: false,
       status: 'disabled',
       created_at: '2025-01-10T00:00:00.000Z',
+    },
+  ],
+  total: 3,
+  page: 1,
+  limit: 20,
+};
+
+// F008 v3.2: 包含 SM 帳號的 mock 用於 chip 顯示測試
+const mockAccountsWithSMResponse: AccountListResponse = {
+  data: [
+    {
+      id: '1',
+      name: 'Test Admin',
+      email: 'admin@cdmp.test',
+      role: 'admin',
+      is_sales_manager: false,
+      status: 'active',
+      created_at: '2025-03-01T00:00:00.000Z',
+    },
+    {
+      id: '4',
+      name: 'Sales Manager User',
+      email: 'manager@cdmp.test',
+      role: 'user',
+      is_sales_manager: true,
+      status: 'active',
+      created_at: '2025-02-20T00:00:00.000Z',
+    },
+    {
+      id: '2',
+      name: 'Normal User',
+      email: 'user@cdmp.test',
+      role: 'user',
+      is_sales_manager: false,
+      status: 'active',
+      created_at: '2025-02-15T00:00:00.000Z',
     },
   ],
   total: 3,
@@ -92,7 +135,9 @@ describe('AccountListPage', () => {
 
     render(
       <BrowserRouter>
-        <AccountListPage />
+        <ToastProvider>
+          <AccountListPage />
+        </ToastProvider>
       </BrowserRouter>,
     );
 
@@ -266,7 +311,9 @@ describe('AccountListPage', () => {
 
       render(
         <BrowserRouter>
-          <AccountListPage />
+          <ToastProvider>
+            <AccountListPage />
+          </ToastProvider>
         </BrowserRouter>,
       );
 
@@ -291,6 +338,7 @@ describe('AccountListPage', () => {
         name: 'New Account',
         email: 'new@cdmp.test',
         role: 'user',
+        is_sales_manager: false,
         status: 'active',
         created_at: '2025-04-01T00:00:00.000Z',
       });
@@ -299,7 +347,9 @@ describe('AccountListPage', () => {
 
       render(
         <BrowserRouter>
-          <AccountListPage />
+          <ToastProvider>
+            <AccountListPage />
+          </ToastProvider>
         </BrowserRouter>,
       );
 
@@ -385,6 +435,7 @@ describe('AccountListPage', () => {
         name: 'Normal User',
         email: 'user@cdmp.test',
         role: 'user',
+        is_sales_manager: false,
         status: 'disabled',
         updated_at: '2025-06-01T00:00:00.000Z',
       });
@@ -430,6 +481,7 @@ describe('AccountListPage', () => {
         name: 'Disabled User',
         email: 'disabled@cdmp.test',
         role: 'user',
+        is_sales_manager: false,
         status: 'active',
         updated_at: '2025-06-01T00:00:00.000Z',
       });
@@ -496,6 +548,7 @@ describe('AccountListPage', () => {
         name: 'Normal User',
         email: 'user@cdmp.test',
         role: 'admin',
+        is_sales_manager: false,
         status: 'active',
         updated_at: '2025-06-01T00:00:00.000Z',
       });
@@ -511,6 +564,13 @@ describe('AccountListPage', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(100);
       });
+
+      // F008 v3.2: dialog 預設新角色 = 目前角色 (user)，必須先切到 admin
+      // 頁面有多個 combobox（filter + dialog），使用「新角色」label 旁的 select
+      const dialogSelects = screen.getAllByRole('combobox');
+      // dialog 的 select 是頁面最後一個
+      const select = dialogSelects[dialogSelects.length - 1];
+      fireEvent.change(select, { target: { value: 'admin' } });
 
       // Two-step flow: first click "下一步", then "確認變更"
       fireEvent.click(screen.getByRole('button', { name: '下一步' }));
@@ -551,6 +611,213 @@ describe('AccountListPage', () => {
     });
   });
 
+  // F008 v3.2: Sales Manager chip + 合併呼叫
+  describe('F008 SM: Sales Manager chip', () => {
+    // TS-F008-SM-FE-013
+    it('User + is_sales_manager=true → 列表顯示 Sales Manager chip', async () => {
+      await renderAndLoad(mockAccountsWithSMResponse);
+      expect(screen.getByTestId('sales-manager-chip-4')).toBeInTheDocument();
+      expect(screen.getByText('Sales Manager')).toBeInTheDocument();
+    });
+
+    // TS-F008-SM-FE-014
+    it('User + is_sales_manager=false → 該 row 不顯示 chip', async () => {
+      await renderAndLoad(mockAccountsWithSMResponse);
+      // id='2' Normal User 為 user + false → 不應顯示
+      expect(screen.queryByTestId('sales-manager-chip-2')).not.toBeInTheDocument();
+    });
+
+    // TS-F008-SM-FE-015
+    it('Admin 帳號 → 該 row 不顯示 chip', async () => {
+      await renderAndLoad(mockAccountsWithSMResponse);
+      // id='1' Admin → 不應顯示
+      expect(screen.queryByTestId('sales-manager-chip-1')).not.toBeInTheDocument();
+    });
+
+    // TS-F008-SM-FE-017
+    it('chip className 嚴格對齊 prototype 07 line 299-302', async () => {
+      await renderAndLoad(mockAccountsWithSMResponse);
+      const chip = screen.getByTestId('sales-manager-chip-4');
+      expect(chip.className).toContain('inline-flex');
+      expect(chip.className).toContain('items-center');
+      expect(chip.className).toContain('bg-amber-50');
+      expect(chip.className).toContain('text-warning');
+      expect(chip.className).toContain('border');
+      expect(chip.className).toContain('border-amber-200');
+      expect(chip.className).toContain('rounded-md');
+    });
+  });
+
+  // F008 v3.2: 合併呼叫策略
+  describe('F008 SM: 合併呼叫策略 (BR-12 / AC-11)', () => {
+    // 情境 A：role + flag 同時變動
+    it('情境 A：role 變 user→admin + flag 變 → 僅呼叫 PATCH /role（admin 不呼叫 flag）', async () => {
+      mockedUpdateAccountRole.mockResolvedValue({
+        id: '4',
+        name: 'Sales Manager User',
+        email: 'manager@cdmp.test',
+        role: 'admin',
+        is_sales_manager: true,
+        status: 'active',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad(mockAccountsWithSMResponse);
+
+      // 點 SM User 的「變更角色」(第 2 列，index 1)
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // 切角色為 admin
+      const dialogSelects = screen.getAllByRole('combobox');
+      const select = dialogSelects[dialogSelects.length - 1];
+      fireEvent.change(select, { target: { value: 'admin' } });
+
+      fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: '確認變更' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountRole).toHaveBeenCalledWith('4', { role: 'admin' });
+      // 升 admin 時不應呼叫 flag 端點（避免 ACCOUNT_FLAG_NOT_APPLICABLE）
+      expect(mockedUpdateAccountSalesManagerFlag).not.toHaveBeenCalled();
+    });
+
+    // 情境 C / TS-F008-SM-INT-003：僅 flag 變更 → 跳過 PATCH /role
+    it('情境 C：僅 flag 變更（角色未改）→ 跳過 PATCH /role，僅呼叫 PATCH /flag', async () => {
+      mockedUpdateAccountSalesManagerFlag.mockResolvedValue({
+        id: '4',
+        name: 'Sales Manager User',
+        email: 'manager@cdmp.test',
+        role: 'user',
+        is_sales_manager: false,
+        status: 'active',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad(mockAccountsWithSMResponse);
+
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[1]); // SM User (id='4')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // 取消勾選 checkbox（從 true → false）
+      const cb = screen.getByTestId('role-dialog-sales-manager-flag');
+      fireEvent.click(cb);
+
+      fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: '確認變更' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountRole).not.toHaveBeenCalled();
+      expect(mockedUpdateAccountSalesManagerFlag).toHaveBeenCalledWith('4', {
+        isSalesManager: false,
+      });
+    });
+
+    // 情境 B / TS-F008-SM-INT-001：user 角色不變 + flag 變 (false→true)
+    it('情境：user 角色不變 + flag 變 false→true → 僅呼叫 PATCH /flag', async () => {
+      mockedUpdateAccountSalesManagerFlag.mockResolvedValue({
+        id: '2',
+        name: 'Normal User',
+        email: 'user@cdmp.test',
+        role: 'user',
+        is_sales_manager: true,
+        status: 'active',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+
+      await renderAndLoad();
+
+      // Normal User (id='2') role=user, is_sales_manager=false
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[1]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // 勾選 checkbox（false → true）
+      fireEvent.click(screen.getByTestId('role-dialog-sales-manager-flag'));
+
+      fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: '確認變更' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountRole).not.toHaveBeenCalled();
+      expect(mockedUpdateAccountSalesManagerFlag).toHaveBeenCalledWith('2', {
+        isSalesManager: true,
+      });
+    });
+
+    // 情境 D / TS-F008-SM-INT-004：role 失敗 → 不呼叫 flag
+    it('情境 D：PATCH /role 失敗 (ACCOUNT_LAST_ADMIN) → 不呼叫 flag 端點', async () => {
+      mockedUpdateAccountRole.mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            error: 'ACCOUNT_LAST_ADMIN',
+            message: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
+          },
+        },
+      });
+
+      await renderAndLoad(mockAccountsWithSMResponse);
+
+      const roleButtons = screen.getAllByText('變更角色');
+      fireEvent.click(roleButtons[0]); // Test Admin (id='1')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      // 切角色 admin → user
+      const dialogSelects = screen.getAllByRole('combobox');
+      const select = dialogSelects[dialogSelects.length - 1];
+      fireEvent.change(select, { target: { value: 'user' } });
+      // 勾選 checkbox（flag 有變動）
+      fireEvent.click(screen.getByTestId('role-dialog-sales-manager-flag'));
+
+      fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: '確認變更' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+
+      expect(mockedUpdateAccountRole).toHaveBeenCalled();
+      // role 失敗 → 必須中止，不呼叫 flag
+      expect(mockedUpdateAccountSalesManagerFlag).not.toHaveBeenCalled();
+    });
+  });
+
   describe('編輯帳號整合', () => {
     it('點擊編輯按鈕後顯示編輯 Modal', async () => {
       await renderAndLoad();
@@ -572,6 +839,7 @@ describe('AccountListPage', () => {
         name: 'Updated Admin',
         email: 'admin@cdmp.test',
         role: 'admin',
+        is_sales_manager: false,
         status: 'active',
         created_at: '2025-03-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',

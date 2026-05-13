@@ -114,6 +114,7 @@ describe('CreateAccountModal', () => {
         name: 'New User',
         email: 'new@test.com',
         role: 'user',
+        is_sales_manager: false,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -136,6 +137,7 @@ describe('CreateAccountModal', () => {
         name: 'Test',
         email: 'test@test.com',
         role: 'admin',
+        is_sales_manager: false,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -154,7 +156,139 @@ describe('CreateAccountModal', () => {
           email: 'test@test.com',
           password: 'password123',
           role: 'admin',
+          // admin 角色 checkbox 隱藏並重置為 false
+          isSalesManager: false,
         });
+      });
+    });
+  });
+
+  // ===== F004 SM: 業務主管旗標 checkbox =====
+  describe('F004 SM: 業務主管旗標 checkbox', () => {
+    // TS-F004-SM-FE-001
+    it('role=user 時 checkbox 區塊顯示且預設未勾選', () => {
+      renderModal();
+      const wrap = screen.getByTestId('create-sales-manager-wrap');
+      expect(wrap).toBeInTheDocument();
+      const cb = screen.getByTestId('create-sales-manager-flag') as HTMLInputElement;
+      expect(cb).toBeInTheDocument();
+      expect(cb.checked).toBe(false);
+    });
+
+    // TS-F004-SM-FE-002
+    it('role=admin 時 checkbox 區塊不顯示', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.selectOptions(screen.getByLabelText('角色'), 'admin');
+      expect(screen.queryByTestId('create-sales-manager-wrap')).not.toBeInTheDocument();
+    });
+
+    // TS-F004-SM-FE-003
+    it('切換 user→admin → checkbox 隱藏並重置', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      const cb = screen.getByTestId('create-sales-manager-flag') as HTMLInputElement;
+      await user.click(cb);
+      expect(cb.checked).toBe(true);
+
+      await user.selectOptions(screen.getByLabelText('角色'), 'admin');
+      expect(screen.queryByTestId('create-sales-manager-wrap')).not.toBeInTheDocument();
+    });
+
+    // TS-F004-SM-FE-004
+    it('切換 user→admin→user → checkbox 再顯示但重置為未勾選', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      let cb = screen.getByTestId('create-sales-manager-flag') as HTMLInputElement;
+      await user.click(cb);
+      expect(cb.checked).toBe(true);
+
+      await user.selectOptions(screen.getByLabelText('角色'), 'admin');
+      expect(screen.queryByTestId('create-sales-manager-wrap')).not.toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText('角色'), 'user');
+      cb = screen.getByTestId('create-sales-manager-flag') as HTMLInputElement;
+      expect(cb).toBeInTheDocument();
+      expect(cb.checked).toBe(false);
+    });
+
+    // TS-F004-SM-FE-005
+    it('checkbox wrap className 嚴格對齊 prototype 07 line 480', () => {
+      renderModal();
+      const wrap = screen.getByTestId('create-sales-manager-wrap');
+      expect(wrap.className).toContain('rounded-lg');
+      expect(wrap.className).toContain('border');
+      expect(wrap.className).toContain('border-amber-200');
+      expect(wrap.className).toContain('bg-amber-50/50');
+      expect(wrap.className).toContain('p-3');
+    });
+
+    // TS-F004-SM-FE-006
+    it('checkbox 顯示說明文字', () => {
+      renderModal();
+      expect(
+        screen.getByText(/啟用後此帳號可存取 E07 客戶名單分派與 E06 Customer 360/),
+      ).toBeInTheDocument();
+    });
+
+    // TS-F004-SM-FE-007
+    it('勾選 checkbox 後提交 → API request body 含 isSalesManager: true', async () => {
+      const user = userEvent.setup();
+      mockedCreateAccount.mockResolvedValue({
+        id: 'new-id',
+        name: 'SM User',
+        email: 'sm@test.com',
+        role: 'user',
+        is_sales_manager: true,
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+      });
+      renderModal();
+
+      await user.type(screen.getByLabelText('姓名'), 'SM User');
+      await user.type(screen.getByLabelText('Email'), 'sm@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByTestId('create-sales-manager-flag'));
+      await user.click(screen.getByRole('button', { name: '建立' }));
+
+      await waitFor(() => {
+        expect(mockedCreateAccount).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'SM User',
+            email: 'sm@test.com',
+            password: 'password123',
+            role: 'user',
+            isSalesManager: true,
+          }),
+        );
+      });
+    });
+
+    // TS-F004-SM-FE-008
+    it('未勾選 checkbox 提交 → API request body 含 isSalesManager: false', async () => {
+      const user = userEvent.setup();
+      mockedCreateAccount.mockResolvedValue({
+        id: 'new-id',
+        name: 'No SM User',
+        email: 'nosm@test.com',
+        role: 'user',
+        is_sales_manager: false,
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+      });
+      renderModal();
+
+      await user.type(screen.getByLabelText('姓名'), 'No SM User');
+      await user.type(screen.getByLabelText('Email'), 'nosm@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '建立' }));
+
+      await waitFor(() => {
+        expect(mockedCreateAccount).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isSalesManager: false,
+          }),
+        );
       });
     });
   });

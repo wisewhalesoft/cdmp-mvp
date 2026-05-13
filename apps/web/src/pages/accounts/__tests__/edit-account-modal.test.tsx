@@ -14,6 +14,7 @@ const mockAccount: AccountListItem = {
   name: 'Test User',
   email: 'test@cdmp.test',
   role: 'user',
+  is_sales_manager: false,
   status: 'active',
   created_at: '2025-01-01T00:00:00.000Z',
 };
@@ -117,6 +118,7 @@ describe('EditAccountModal', () => {
         name: 'Updated Name',
         email: 'test@cdmp.test',
         role: 'user',
+        is_sales_manager: false,
         status: 'active',
         created_at: '2025-01-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',
@@ -140,6 +142,7 @@ describe('EditAccountModal', () => {
         name: 'New Name',
         email: 'new@cdmp.test',
         role: 'user',
+        is_sales_manager: false,
         status: 'active',
         created_at: '2025-01-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',
@@ -233,6 +236,110 @@ describe('EditAccountModal', () => {
       const { onClose } = renderModal();
       await user.click(screen.getByTestId('modal-backdrop'));
       expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  // ===== F006 SM: 業務主管旗標 read-only chip =====
+  describe('F006 SM: 業務主管旗標 read-only chip', () => {
+    // TS-F006-SM-FE-001
+    it('User + is_sales_manager=true → 顯示 amber chip + 「已啟用」', () => {
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: true },
+      });
+      const wrap = screen.getByTestId('edit-sales-manager-wrap');
+      expect(wrap).toBeInTheDocument();
+      const chip = screen.getByTestId('edit-sales-manager-chip');
+      expect(chip).toBeInTheDocument();
+      expect(chip.textContent).toContain('已啟用');
+      expect(chip.className).toContain('bg-amber-50');
+    });
+
+    // TS-F006-SM-FE-002
+    it('User + is_sales_manager=false → 顯示 gray chip + 「未啟用」', () => {
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: false },
+      });
+      const chip = screen.getByTestId('edit-sales-manager-chip');
+      expect(chip).toBeInTheDocument();
+      expect(chip.textContent).toContain('未啟用');
+      expect(chip.className).toContain('bg-gray-100');
+    });
+
+    // TS-F006-SM-FE-003
+    it('Admin 帳號 → chip wrap 不顯示', () => {
+      renderModal({
+        account: { ...mockAccount, role: 'admin', is_sales_manager: false },
+      });
+      expect(screen.queryByTestId('edit-sales-manager-wrap')).not.toBeInTheDocument();
+    });
+
+    // TS-F006-SM-FE-004: chip 不可點擊
+    it('chip 不含 onClick / cursor-pointer 屬性', () => {
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: true },
+      });
+      const chip = screen.getByTestId('edit-sales-manager-chip');
+      expect(chip.className).not.toContain('cursor-pointer');
+      // chip 元素應為 span，本身無 onclick
+      expect(chip.tagName.toLowerCase()).toBe('span');
+    });
+
+    // TS-F006-SM-FE-005: icon 尺寸
+    it('chip icon 含 w-3.5 h-3.5 class', () => {
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: true },
+      });
+      const chip = screen.getByTestId('edit-sales-manager-chip');
+      const svg = chip.querySelector('svg');
+      expect(svg).not.toBeNull();
+      // lucide icons 透過 className 設定尺寸
+      expect(svg!.getAttribute('class')).toMatch(/w-3\.5/);
+      expect(svg!.getAttribute('class')).toMatch(/h-3\.5/);
+    });
+
+    // TS-F006-SM-FE-006: 引導文字
+    it('chip 旁顯示引導文字「需變更請至變更角色 dialog」', () => {
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: true },
+      });
+      expect(screen.getByText(/需變更請至變更角色 dialog/)).toBeInTheDocument();
+    });
+
+    // TS-F006-SM-FE-007: PUT request body 不含 isSalesManager
+    it('提交時 PUT request body 不含 isSalesManager 欄位', async () => {
+      const user = userEvent.setup();
+      mockedUpdateAccount.mockResolvedValue({
+        id: 'user-uuid-1',
+        name: 'Updated',
+        email: 'test@cdmp.test',
+        role: 'user',
+        is_sales_manager: true,
+        status: 'active',
+        created_at: '2025-01-01T00:00:00.000Z',
+        updated_at: '2025-06-01T00:00:00.000Z',
+      });
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: true },
+      });
+
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      await waitFor(() => {
+        const sentBody = mockedUpdateAccount.mock.calls[0][1];
+        expect(sentBody).not.toHaveProperty('isSalesManager');
+        expect(sentBody).toHaveProperty('name');
+        expect(sentBody).toHaveProperty('email');
+      });
+    });
+
+    // TS-F006-SM-EDGE-001: null/undefined 視同 false
+    it('is_sales_manager 為 null/undefined → 顯示 gray chip', () => {
+      renderModal({
+        account: { ...mockAccount, is_sales_manager: null as unknown as boolean },
+      });
+      const chip = screen.getByTestId('edit-sales-manager-chip');
+      expect(chip.textContent).toContain('未啟用');
+      expect(chip.className).toContain('bg-gray-100');
     });
   });
 });
