@@ -423,26 +423,104 @@
               <span class="text-xs text-gray-400">多值欄位以 $$ 分隔儲存</span>
             </div>
             <div class="space-y-4">
-              <!-- CASEYEAR -->
+              <!-- CASE_STATUS（案件結清期別，必填多選） -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-sm font-medium text-gray-700">
+                    案件結清期別 CASE_STATUS <span class="text-danger">*</span>
+                    <span class="ml-1 text-xs font-normal text-gray-400">（ob_code_df.tbl_id = <code>CASE_STATUS</code>）</span>
+                  </label>
+                  <button type="button" class="text-xs text-primary hover:underline" onclick="toggleAll('case_status')">全選 / 清除</button>
+                </div>
+                <!-- 業務語意對照表（可折疊，預設展開） -->
+                <details class="mb-2 group" open>
+                  <summary class="cursor-pointer list-none flex items-start gap-2 p-2.5 bg-blue-50/60 border border-blue-100 rounded-lg hover:bg-blue-50 transition">
+                    <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+                    <div class="flex-1 text-xs">
+                      <div class="flex items-center justify-between">
+                        <span class="font-medium text-gray-700">4 個代碼業務語意對照（同為「滿期」字面，但 <code class="text-primary font-semibold">03</code> 與 <code class="text-primary font-semibold">04</code> 案件實況截然不同）</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform shrink-0"></i>
+                      </div>
+                    </div>
+                  </summary>
+                  <div class="mt-2 overflow-x-auto rounded-lg border border-blue-100">
+                    <table class="w-full text-xs">
+                      <thead>
+                        <tr class="bg-blue-50/40 border-b border-blue-100">
+                          <th class="text-left px-3 py-2 font-semibold text-gray-600 w-20">代碼</th>
+                          <th class="text-left px-3 py-2 font-semibold text-gray-600 w-32">名稱</th>
+                          <th class="text-left px-3 py-2 font-semibold text-gray-600">案件實況</th>
+                          <th class="text-left px-3 py-2 font-semibold text-gray-600">業務目標</th>
+                        </tr>
+                      </thead>
+                      <tbody class="bg-white">
+                        <tr class="border-b border-blue-50">
+                          <td class="px-3 py-2 font-mono font-semibold text-primary">01</td>
+                          <td class="px-3 py-2 text-gray-700">期中<br><span class="text-gray-400">(不含當月滿期)</span></td>
+                          <td class="px-3 py-2 text-gray-600">處理中（active），距滿期 &gt; 1 個月 或 剩餘期數 &gt; 2</td>
+                          <td class="px-3 py-2 text-gray-700">一般期中案件管理</td>
+                        </tr>
+                        <tr class="border-b border-blue-50">
+                          <td class="px-3 py-2 font-mono font-semibold text-primary">02</td>
+                          <td class="px-3 py-2 text-gray-700">中結</td>
+                          <td class="px-3 py-2 text-gray-600">已中途結清（STA_CODE = 98）</td>
+                          <td class="px-3 py-2 text-gray-700">中結客戶聯繫</td>
+                        </tr>
+                        <tr class="border-b border-blue-50 bg-amber-50/30">
+                          <td class="px-3 py-2 font-mono font-semibold text-amber-700">03</td>
+                          <td class="px-3 py-2 text-gray-700">滿期<br><span class="text-gray-400">(含當月滿期)</span></td>
+                          <td class="px-3 py-2 text-gray-700"><span class="inline-flex items-center px-1.5 py-0.5 mr-1 text-[10px] font-semibold rounded bg-green-100 text-green-700">active</span>本月即將到期但尚未結清</td>
+                          <td class="px-3 py-2 text-amber-800 font-medium">主動續貸 / 防流失</td>
+                        </tr>
+                        <tr class="bg-gray-50/40">
+                          <td class="px-3 py-2 font-mono font-semibold text-gray-700">04</td>
+                          <td class="px-3 py-2 text-gray-700">滿期</td>
+                          <td class="px-3 py-2 text-gray-700"><span class="inline-flex items-center px-1.5 py-0.5 mr-1 text-[10px] font-semibold rounded bg-gray-200 text-gray-600">已完成</span>已完整結清完成（STA_CODE = 90）</td>
+                          <td class="px-3 py-2 text-gray-700 font-medium">回找維繫 / 再行銷</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div class="px-3 py-2 text-[11px] text-gray-500 bg-gray-50/30 border-t border-blue-50">
+                      語意對照來源：舊系統 SP <code>USP_OB_OBPOOLDATA.sql:189-216</code>。新系統 Stage 1 直接以此選擇匹配 <code>ob_pool_data.list_type</code>，業務語意由匯入端維持。
+                    </div>
+                  </div>
+                </details>
+
+                <div id="case_status-group" class="flex flex-wrap gap-1.5 p-3 border border-border rounded-lg bg-gray-50/50">
+                  <label class="chip-checkbox" title="處理中（active），距滿期 > 1 月｜一般期中案件"><input type="checkbox" name="case_status" value="01" checked onchange="validateCaseStatus()"><span>01 期中(不含當月滿期)</span></label>
+                  <label class="chip-checkbox" title="已中途結清（STA_CODE = 98）｜中結客戶聯繫"><input type="checkbox" name="case_status" value="02" onchange="validateCaseStatus()"><span>02 中結</span></label>
+                  <label class="chip-checkbox" title="active 但本月即將到期｜主動續貸 / 防流失目標"><input type="checkbox" name="case_status" value="03" onchange="validateCaseStatus()"><span>03 滿期(含當月滿期)<span class="ml-1 inline-flex items-center px-1 py-0 text-[9px] font-semibold rounded bg-amber-100 text-amber-700 align-middle">續貸</span></span></label>
+                  <label class="chip-checkbox" title="已完整結清完成（STA_CODE = 90）｜回找維繫 / 再行銷目標"><input type="checkbox" name="case_status" value="04" onchange="validateCaseStatus()"><span>04 滿期<span class="ml-1 inline-flex items-center px-1 py-0 text-[9px] font-semibold rounded bg-gray-200 text-gray-600 align-middle">回找</span></span></label>
+                </div>
+                <div id="caseStatusError" class="hidden mt-2 flex items-center gap-1.5 text-xs text-danger">
+                  <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                  <span>請選擇至少一個案件結清期別</span>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">多值以 <code>$$</code> 分隔儲存（如 <code>01$$02</code>）。資料來源 <code>ob_code_df</code> 對應 dump <code>OBMCODEDF</code> 真實 4 筆生效中代碼。</p>
+              </div>
+
+              <!-- CASEYEAR（舊系統前端 hard-coded，不從 ob_code_df 載入） -->
               <div>
                 <div class="flex items-center justify-between mb-2">
                   <label class="block text-sm font-medium text-gray-700">進件 / 滿期 / 中結年數 CASEYEAR <span class="text-danger">*</span></label>
-                  <button class="text-xs text-primary hover:underline" onclick="toggleAll('caseyear')">全選 / 清除</button>
+                  <button type="button" class="text-xs text-primary hover:underline" onclick="toggleAll('caseyear')">全選 / 清除</button>
                 </div>
                 <div id="caseyear-group" class="flex flex-wrap gap-1.5 p-3 border border-border rounded-lg bg-gray-50/50">
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="0"><span>0 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="1" checked><span>1 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="2" checked><span>2 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="3"><span>3 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="4"><span>4 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="5"><span>5 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="6"><span>6 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="7"><span>7 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="8"><span>8 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="9"><span>9 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="10"><span>10 年</span></label>
-                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="99"><span>99 (其他)</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="0"><span>0</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="1" checked><span>1</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="2" checked><span>2</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="3"><span>3</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="4"><span>4</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="5"><span>5</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="6"><span>6</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="7"><span>7</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="8"><span>8</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="9"><span>9</span></label>
+                  <label class="chip-checkbox"><input type="checkbox" name="caseyear" value="10"><span>10</span></label>
                 </div>
+                <p class="text-xs text-gray-400 mt-1">
+                  合約年數 0~10 共 11 個固定值，前端 hard-coded（沿用舊系統 <code>edit.cshtml:174-235</code> 慣例，<span class="text-amber-700">不從 <code>ob_code_df</code> 載入</span>，故 F068 代碼維護不含 CASEYEAR）。多值以 <code>$$</code> 分隔儲存（如 <code>1$$2</code>）。
+                </p>
               </div>
 
               <!-- SPEC_TP -->
@@ -514,11 +592,11 @@
         <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-border shrink-0">
           <p class="text-xs text-gray-400 flex items-center gap-1.5">
             <i data-lucide="info" class="w-3.5 h-3.5"></i>
-            <span>標示 <span class="text-danger">*</span> 為必填欄位</span>
+            <span>標示 <span class="text-danger">*</span> 為必填欄位 · <code>list_type</code> 由系統固定為 <code>'01'</code>（分派名單），不於表單顯示</span>
           </p>
           <div class="flex items-center gap-3">
             <button onclick="closeModal('formModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
-            <button onclick="closeModal('formModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">儲存</button>
+            <button type="button" onclick="handleFormSubmit()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">儲存</button>
           </div>
         </div>
       </div>
@@ -571,15 +649,17 @@
 
   <script>
     // ===== Mock Data =====
+    // summary 採新格式：CASE_STATUS / CASEYEAR / SPEC_TP / 期數
+    // case_status 多值以 $$ 分隔，對應 dump 真實 4 個值 (01/02/03/04)
     const activeLists = [
-      { listNo: 'OB202605001', listNm: '2026-05 汽車期中名單', ym: '202605', cardType: 'H', prodKind: '01', summary: 'CASEYEAR=1$$2 / SPEC_TP=02$$04$$05 / 期 1-6', count: 8520 },
-      { listNo: 'OB202605002', listNm: '2026-05 汽車中分名單', ym: '202605', cardType: 'S', prodKind: '01', summary: 'CASEYEAR=1$$2$$3 / SPEC_TP=02$$04 / 期 1-6', count: 4830 },
-      { listNo: 'OB202605003', listNm: '2026-05 汽車低分名單', ym: '202605', cardType: 'E', prodKind: '01', summary: 'CASEYEAR=1$$2$$3 / SPEC_TP=02 / 期 7-12', count: 2150 },
-      { listNo: 'OB202605004', listNm: '2026-05 機車滿期名單', ym: '202605', cardType: 'M', prodKind: '02', summary: 'CASEYEAR=1$$2 / SPEC_TP=02$$04 / 期 1-3', count: 3420 },
-      { listNo: 'OB202605005', listNm: '2026-05 信貸中度逾期名單', ym: '202605', cardType: 'S5', prodKind: '03', summary: 'CASEYEAR=1$$2$$3$$4 / SPEC_TP=11$$12 / 期 1-6', count: 1280 },
-      { listNo: 'OB202605006', listNm: '2026-05 信貸嚴重逾期名單', ym: '202605', cardType: 'E5', prodKind: '03', summary: 'CASEYEAR=2$$3$$4$$5 / SPEC_TP=11 / 期 7-24', count: 670 },
-      { listNo: 'OB202605007', listNm: '2026-05 房貸中結名單', ym: '202605', cardType: 'H', prodKind: '04', summary: 'CASEYEAR=1$$2 / SPEC_TP=20 / 期 1-12', count: 920 },
-      { listNo: 'OB202605008', listNm: '2026-05 信貸高分名單', ym: '202605', cardType: 'H', prodKind: '03', summary: 'CASEYEAR=0$$1 / SPEC_TP=02$$04 / 期 1-3', count: 5410 },
+      { listNo: 'OB202605001', listNm: '2026-05 汽車期中名單', ym: '202605', cardType: 'H', prodKind: '01', summary: 'CASE_STATUS=01 / CASEYEAR=1$$2 / SPEC_TP=02$$04$$05 / 期 1-6', count: 8520 },
+      { listNo: 'OB202605002', listNm: '2026-05 汽車中分名單', ym: '202605', cardType: 'S', prodKind: '01', summary: 'CASE_STATUS=01 / CASEYEAR=1$$2$$3 / SPEC_TP=02$$04 / 期 1-6', count: 4830 },
+      { listNo: 'OB202605003', listNm: '2026-05 汽車低分名單', ym: '202605', cardType: 'E', prodKind: '01', summary: 'CASE_STATUS=01 / CASEYEAR=1$$2$$3 / SPEC_TP=02 / 期 7-12', count: 2150 },
+      { listNo: 'OB202605004', listNm: '2026-05 機車滿期名單', ym: '202605', cardType: 'M', prodKind: '02', summary: 'CASE_STATUS=03$$04 / CASEYEAR=1$$2 / SPEC_TP=02$$04 / 期 1-3', count: 3420 },
+      { listNo: 'OB202605005', listNm: '2026-05 信貸中度逾期名單', ym: '202605', cardType: 'S5', prodKind: '03', summary: 'CASE_STATUS=01$$02 / CASEYEAR=1$$2$$3$$4 / SPEC_TP=11$$12 / 期 1-6', count: 1280 },
+      { listNo: 'OB202605006', listNm: '2026-05 信貸嚴重逾期名單', ym: '202605', cardType: 'E5', prodKind: '03', summary: 'CASE_STATUS=01$$02 / CASEYEAR=2$$3$$4$$5 / SPEC_TP=11 / 期 7-24', count: 670 },
+      { listNo: 'OB202605007', listNm: '2026-05 房貸中結名單', ym: '202605', cardType: 'H', prodKind: '04', summary: 'CASE_STATUS=02 / CASEYEAR=1$$2 / SPEC_TP=20 / 期 1-12', count: 920 },
+      { listNo: 'OB202605008', listNm: '2026-05 信貸高分名單', ym: '202605', cardType: 'H', prodKind: '03', summary: 'CASE_STATUS=01 / CASEYEAR=0$$1 / SPEC_TP=02$$04 / 期 1-3', count: 5410 },
     ];
 
     const inactiveLists = [
@@ -709,6 +789,8 @@
       document.getElementById('formProdKind').value = '';
       document.getElementById('formCardType').value = '';
       document.getElementById('formProdBest').value = '';
+      // case_status：預設勾 '01'（期中），其他清空，確保驗證提示重置
+      prefillCaseStatus('01');
       openModal('formModal');
     }
 
@@ -723,6 +805,21 @@
       if (item) {
         document.getElementById('formProdKind').value = item.prodKind;
         document.getElementById('formCardType').value = item.cardType;
+        // case_status：解析 summary（範例僅作 demo，實際應由 API 回傳獨立欄位）
+        // 不同名單給不同預設組合，避免畫面看起來都一樣
+        const caseStatusByList = {
+          'OB202605001': '01',        // 期中名單
+          'OB202605002': '01',
+          'OB202605003': '01',
+          'OB202605004': '03$$04',    // 滿期名單
+          'OB202605005': '01$$02',
+          'OB202605006': '01$$02',
+          'OB202605007': '02',        // 中結名單
+          'OB202605008': '01',
+        };
+        prefillCaseStatus(caseStatusByList[listNo] || '01');
+      } else {
+        prefillCaseStatus('01');
       }
       openModal('formModal');
     }
@@ -741,6 +838,47 @@
       const boxes = document.querySelectorAll(`input[name="${name}"]`);
       const allChecked = Array.from(boxes).every(b => b.checked);
       boxes.forEach(b => b.checked = !allChecked);
+      // 全選 / 清除後重新驗證 case_status
+      if (name === 'case_status') validateCaseStatus();
+    }
+
+    // ===== case_status 驗證（至少選 1 項） =====
+    function validateCaseStatus() {
+      const boxes = document.querySelectorAll('input[name="case_status"]');
+      const anyChecked = Array.from(boxes).some(b => b.checked);
+      const errEl = document.getElementById('caseStatusError');
+      if (anyChecked) {
+        errEl.classList.add('hidden');
+        return true;
+      } else {
+        errEl.classList.remove('hidden');
+        return false;
+      }
+    }
+
+    // ===== 表單送出（前端阻擋必填） =====
+    function handleFormSubmit() {
+      // case_status：必填多選，未選阻擋
+      const caseStatusOk = validateCaseStatus();
+      // 期間檢查
+      validatePeriod();
+      const periodErrVisible = !document.getElementById('periodError').classList.contains('hidden');
+      if (!caseStatusOk || periodErrVisible) {
+        // 滾到第一個錯誤
+        const firstErr = document.querySelector('#caseStatusError:not(.hidden), #periodError:not(.hidden)');
+        if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      closeModal('formModal');
+    }
+
+    // ===== 編輯模式：解析既存 case_status 多值（$$ 分隔）並勾選 =====
+    function prefillCaseStatus(rawValue) {
+      const selected = (rawValue || '').split('$$').filter(Boolean);
+      document.querySelectorAll('input[name="case_status"]').forEach(b => {
+        b.checked = selected.includes(b.value);
+      });
+      validateCaseStatus();
     }
 
     // ===== Period validation =====
