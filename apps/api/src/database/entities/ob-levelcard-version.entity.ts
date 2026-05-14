@@ -12,19 +12,21 @@ export class ObLevelcardVersion {
   @PrimaryGeneratedColumn({ type: surrogatePkType })
   id: string;
 
-  @Column({ name: 'created_by_prog', type: 'varchar', length: 20, nullable: true })
+  // Iter 6 OPEN-H 修補：created_by/updated_by 擴至 VARCHAR(50) 容納 user.id UUID（36 char）。
+  // 對應 migration: 1711360000164-ExtendObLevelcardVersionCreatedByVarchar50.ts
+  @Column({ name: 'created_by_prog', type: 'varchar', length: 50, nullable: true })
   created_by_prog: string | null; // A_PRGID
 
-  @Column({ name: 'created_by', type: 'varchar', length: 20, nullable: true })
+  @Column({ name: 'created_by', type: 'varchar', length: 50, nullable: true })
   created_by: string | null; // A_USERID
 
   @Column({ name: 'created_at', type: dateColumnType, nullable: true })
   created_at: Date | null; // A_SYSDT
 
-  @Column({ name: 'updated_by_prog', type: 'varchar', length: 20, nullable: true })
+  @Column({ name: 'updated_by_prog', type: 'varchar', length: 50, nullable: true })
   updated_by_prog: string | null; // U_PRGID
 
-  @Column({ name: 'updated_by', type: 'varchar', length: 20, nullable: true })
+  @Column({ name: 'updated_by', type: 'varchar', length: 50, nullable: true })
   updated_by: string | null; // U_USERID
 
   @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
