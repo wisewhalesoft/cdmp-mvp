@@ -297,6 +297,29 @@
             <span class="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">SQL Server</span>
           </div>
         </div>
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">PROD_KIND 彩色 Badge（E07 計分卡 + 代碼維護用）</p>
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">尺寸 md（清單列用）</p>
+              <div class="flex flex-wrap gap-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700"><i data-lucide="car" class="w-3 h-3"></i>01 汽車</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700"><i data-lucide="bike" class="w-3 h-3"></i>02 機車</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-violet-100 text-violet-700"><i data-lucide="package" class="w-3 h-3"></i>03 一般商品</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-400 italic"><i data-lucide="alert-circle" class="w-3 h-3"></i>— PROD_KIND 已停用</span>
+              </div>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">尺寸 sm（info banner / version strip 用）</p>
+              <div class="flex flex-wrap gap-3">
+                <span class="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded bg-blue-100 text-blue-700"><i data-lucide="car" class="w-2.5 h-2.5"></i>01 汽車</span>
+                <span class="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700"><i data-lucide="bike" class="w-2.5 h-2.5"></i>02 機車</span>
+                <span class="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded bg-violet-100 text-violet-700"><i data-lucide="package" class="w-2.5 h-2.5"></i>03 一般商品</span>
+              </div>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">配色對照：01 汽車 = blue / 02 機車 = emerald / 03 一般商品 = violet / 已停用 fallback = gray。資料來源：<code>ob_code_df WHERE tbl_id='PROD_KIND'</code></p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -305,9 +328,78 @@
       <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Modal / Dialog</h2>
       <div class="bg-white p-6 rounded-lg shadow-sm border border-border">
         <button onclick="document.getElementById('demo-modal').classList.remove('hidden')" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">開啟 Modal</button>
-        <button onclick="document.getElementById('demo-confirm').classList.remove('hidden')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600 ml-2">開啟確認對話框</button>
+        <button onclick="document.getElementById('demo-confirm').classList.remove('hidden')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600 ml-2">開啟確認對話框（軟刪除）</button>
+        <button onclick="document.getElementById('demo-cascade-delete').classList.remove('hidden')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600 ml-2 inline-flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i>開啟 Cascade Delete Dialog</button>
+        <p class="text-xs text-gray-500 mt-3">
+          <span class="font-medium">使用時機：</span>
+          一般 Modal — 普通表單；確認對話框 — 軟刪除 / 一般確認；
+          <span class="text-danger font-medium">Cascade Delete Dialog — 級聯 hard delete（不可復原），需要影響範圍表 + 二次確認 checkbox</span>
+        </p>
       </div>
     </section>
+
+    <!-- Demo Cascade Delete Dialog -->
+    <div id="demo-cascade-delete" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('demo-cascade-delete').classList.add('hidden')"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 class="text-lg font-semibold text-danger flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            停用 / 永久刪除（範本）
+          </h3>
+          <button onclick="document.getElementById('demo-cascade-delete').classList.add('hidden')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div>
+            <p class="text-sm text-gray-800">確定停用 <code class="font-mono font-semibold text-gray-900">{ENTITY_KEY}</code> <span class="font-semibold">{ENTITY_NAME}</span>？</p>
+            <p class="text-xs text-danger mt-1">此操作將級聯 hard delete 以下資料且不可復原</p>
+          </div>
+          <!-- 影響範圍 -->
+          <div class="bg-red-50/30 border border-red-200 rounded-lg p-4">
+            <h4 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+              <i data-lucide="alert-octagon" class="w-4 h-4 text-danger"></i>
+              影響範圍：將被永久刪除的紀錄筆數
+            </h4>
+            <table class="w-full text-sm">
+              <tbody>
+                <tr class="border-b border-red-100/50"><td class="py-1.5 text-gray-700"><code>downstream_table_1</code></td><td class="py-1.5 text-right font-mono font-semibold text-danger tabular-nums">N1 筆</td></tr>
+                <tr class="border-b border-red-100/50"><td class="py-1.5 text-gray-700"><code>downstream_table_2</code></td><td class="py-1.5 text-right font-mono font-semibold text-danger tabular-nums">N2 筆</td></tr>
+                <tr><td class="py-1.5 text-gray-700"><code>main_entity</code> <span class="text-xs text-gray-400">（本身）</span></td><td class="py-1.5 text-right font-mono font-semibold text-danger tabular-nums">1 筆</td></tr>
+              </tbody>
+            </table>
+            <div class="mt-3 pt-3 border-t border-gray-200 bg-gray-50/60 -mx-4 -mb-4 p-3 rounded-b-lg">
+              <p class="text-xs font-medium text-gray-600 flex items-center gap-1.5 mb-1.5"><i data-lucide="info" class="w-3.5 h-3.5 text-gray-500"></i>不受影響（保留）</p>
+              <ul class="text-xs text-gray-600 space-y-0.5 ml-5 list-disc">
+                <li><code>history_snapshot</code> — 歷史快照完整保留</li>
+                <li><code>downstream_result</code> — 歷史結果不變</li>
+              </ul>
+            </div>
+          </div>
+          <!-- 外部引用警告（可選顯示） -->
+          <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs">
+            <div class="flex items-start gap-2">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+              <div class="flex-1">
+                <p class="font-semibold text-amber-900">外部引用警告（可選顯示）</p>
+                <p class="text-gray-700 mt-1">該實體仍有 <span class="font-bold text-amber-900">N</span> 筆外部紀錄引用（如 <code>external_table</code>）。停用後這些紀錄可能無法正常運作，請確認後再進行。</p>
+              </div>
+            </div>
+          </div>
+          <!-- 二次確認 -->
+          <label class="flex items-start gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
+            <input id="demo-cascade-checkbox" type="checkbox" onchange="document.getElementById('demo-cascade-btn').disabled = !this.checked" class="mt-0.5 w-4 h-4 text-danger border-border rounded focus:ring-danger">
+            <span class="text-sm text-gray-700">我已確認上述影響範圍與外部引用，知悉此操作不可復原（級聯 hard delete）</span>
+          </label>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button onclick="document.getElementById('demo-cascade-delete').classList.add('hidden')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button id="demo-cascade-btn" disabled onclick="document.getElementById('demo-cascade-delete').classList.add('hidden')" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-lg hover:bg-red-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            確認永久刪除
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Demo Modal -->
     <div id="demo-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
@@ -401,15 +493,84 @@
 
     <!-- ==================== Empty State ==================== -->
     <section>
-      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Empty State</h2>
-      <div class="bg-white rounded-lg shadow-sm border border-border p-12 text-center">
-        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <i data-lucide="inbox" class="w-8 h-8 text-gray-400"></i>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Empty State（4 變體）</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Variant 1: List Empty -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-8 text-center">
+          <i data-lucide="inbox" class="w-12 h-12 text-gray-300 mx-auto"></i>
+          <h3 class="text-sm font-semibold text-gray-700 mt-3">尚未設定任何項目</h3>
+          <p class="text-xs text-gray-500 mt-1">請點擊下方按鈕開始建立第一筆資料</p>
+          <button class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-blue-700">
+            <i data-lucide="plus" class="w-4 h-4"></i>新增第一筆
+          </button>
+          <p class="mt-3 text-[10px] text-gray-400 font-mono">variant: list-empty</p>
         </div>
-        <h3 class="text-lg font-semibold text-gray-700 mb-2">找不到帳號</h3>
-        <p class="text-sm text-gray-500 mb-4">目前沒有符合條件的帳號資料</p>
-        <button class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">建立帳號</button>
+        <!-- Variant 2: No Selection -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-8 text-center">
+          <i data-lucide="mouse-pointer-click" class="w-10 h-10 text-gray-300 mx-auto"></i>
+          <h3 class="text-sm font-semibold text-gray-700 mt-3">請先選擇項目</h3>
+          <p class="text-xs text-gray-500 mt-1">本頁面內容依選中項目顯示<br/>請於左側 / 上方清單先選取一筆</p>
+          <button class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-border text-sm text-gray-700 rounded-md hover:bg-gray-50">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>前往清單
+          </button>
+          <p class="mt-3 text-[10px] text-gray-400 font-mono">variant: no-selection</p>
+        </div>
+        <!-- Variant 3: Loading -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-8 text-center">
+          <i data-lucide="loader-2" class="w-10 h-10 text-primary mx-auto animate-spin"></i>
+          <h3 class="text-sm font-semibold text-gray-700 mt-3">載入中...</h3>
+          <p class="text-xs text-gray-500 mt-1">資料載入中，請稍候</p>
+          <p class="mt-3 text-[10px] text-gray-400 font-mono">variant: loading</p>
+        </div>
+        <!-- Variant 4: Error -->
+        <div class="bg-white rounded-lg shadow-sm border border-border p-8 text-center">
+          <i data-lucide="alert-triangle" class="w-10 h-10 text-danger mx-auto"></i>
+          <h3 class="text-sm font-semibold text-gray-700 mt-3">載入失敗</h3>
+          <p class="text-xs text-gray-500 mt-1">無法取得資料，請檢查網路連線或稍後再試</p>
+          <button class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-border text-sm text-gray-700 rounded-md hover:bg-gray-50">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>重試
+          </button>
+          <p class="mt-3 text-[10px] text-gray-400 font-mono">variant: error</p>
+        </div>
       </div>
+      <p class="text-xs text-gray-500 mt-3"><span class="font-medium">使用準則：</span>list-empty 用於資料零筆；no-selection 用於主從介面尚未選中主項目；loading 用於 API 載入中；error 用於 API 失敗。所有變體統一採中央對齊 + icon + 標題 + 描述 + CTA（loading 無 CTA）。</p>
+    </section>
+
+    <!-- ==================== Banner: Month Run Lock Warning ==================== -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Banner（月跑鎖定 / 警告條）</h2>
+      <div class="space-y-3">
+        <!-- Info Banner -->
+        <div class="rounded-lg p-3 bg-blue-50/60 border border-blue-100 flex items-start gap-2 text-sm text-gray-700">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-medium text-gray-800">資訊提示</p>
+            <p class="text-xs text-gray-600 mt-0.5">用於跨頁面的長期提示，例如：「PROD_KIND 由代碼維護管理，前往代碼維護」</p>
+          </div>
+        </div>
+        <!-- Month Run Lock Warning -->
+        <div class="rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm text-amber-800">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold">分派執行中（assignment_run.status = running）</p>
+            <p class="text-xs mt-0.5">所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月跑完成後自動解除（對應 409 <code>ASSIGNMENT_RUN_ALREADY_RUNNING</code> / <code>SCORING_VERSION_LOCKED</code>）</p>
+          </div>
+        </div>
+        <!-- Error Banner -->
+        <div class="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-sm text-red-800">
+          <i data-lucide="x-circle" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold">操作失敗</p>
+            <p class="text-xs mt-0.5">用於頁面層級的錯誤提示（非 toast），例如載入失敗、批次儲存失敗</p>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">
+        <span class="font-medium">使用準則：</span>
+        Info banner = 藍底，長期說明 / 跳轉提示；
+        <span class="text-warning font-medium">Month Run Lock 警告 = 琥珀底</span>，搭配所有寫入按鈕 disabled；
+        Error banner = 紅底，頁面層級錯誤（一過性錯誤用 Toast）
+      </p>
     </section>
 
     <!-- ==================== Loading Skeleton ==================== -->
