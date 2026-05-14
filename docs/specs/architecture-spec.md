@@ -1,6 +1,6 @@
 ---
 type: architecture-spec
-version: 2.8
+version: "2.8"
 status: draft
 last_updated: 2026-05-13
 covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
@@ -17,7 +17,7 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）** |
 
 ## 目錄
 
@@ -3431,6 +3431,8 @@ SELECT tier_level FROM ob_tier
  WHERE card_type = :card_type AND card_level IS NULL;
 ```
 
+> **與舊 SP 的行為差異（AD-E07-10 行為改善說明）**：舊系統 `Stage2_依照CardType分類TierLevel.sql` L88 採 `LEFT JOIN OBTIER C ON A.CARD_LEVEL=C.CARD_LEVEL`，SQL Server 三值邏輯下 `NULL = NULL` 不 match，因此 M5（CARD_LEVEL 為空字串）的 fallback 在舊系統**從未實際生效**（結果為空字串）。`fn_calc_tier_level` migration 141 以兩階段 `IS NULL` 顯式分支修正此行為：先精確比對，若 `v_tier_level IS NULL` 再查 `card_level IS NULL` 的 fallback 紀錄。此為有意識的行為改善，確保 M5 名單在新系統能正確取得 `T5M`。
+
 **效能考量**：
 - 批次呼叫（LATERAL JOIN）優於逐列 Python/Node.js 應用層計算，充分利用 PostgreSQL 執行計畫與緩衝
 - ob_levelcard_column / ob_levelcard_score / ob_levelcard_level 在 Stage 2 執行前已快取於 PostgreSQL shared_buffers
@@ -3477,6 +3479,40 @@ SELECT tier_level FROM ob_tier
 - `ob_arreturndf_min_cap` 遷移時補建 PK on `appl_no`（index scan 查詢）
 - LATERAL JOIN 100K 案件 → 100K 次 `customer_core` lookup + 100K 次 `ob_arreturndf_min_cap` lookup（均走 index scan），預期 Stage 2 整體執行時間 < 30 秒（dev 環境基準）
 - 如 Stage 2 超出 10 分鐘 NFR 門檻，考慮以 `WITH cte AS (SELECT ... FROM customer_core WHERE source_customer_no IN (...))` 批次預取後 join，減少逐列 lookup 次數
+
+---
+
+#### AD-E07-15　HM 計分卡獨立化決策
+
+**決策**：`HM`（機車期中）計分卡**不延續**舊系統 `SP_OBLEVELCARD_HM` 借用 `CARD_TYPE='M'` 計分設定的隱性耦合設計。HM 應在 `ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` 補建為**獨立計分卡**，並維持 `ob_tier` 中現有的 HM 完整 4 級對應（A→T1HM、B→T2HM、C→T3HM、D→T3HM）。
+
+**背景（舊 SP 行為）**：
+`SP_OBLEVELCARD_HM` L80–82 雖以 `CARD_TYPE='HM'` 調用，但在查詢 `OBLEVELCARD_VERSION` / `OBLEVELCARD_COLUNM` / `OBLEVELCARD_SCORE` 時強制使用 `A.CARD_TYPE = 'M'`，即借用 M 的計分維度與分數設定進行計分。TIER_LEVEL 查詢則使用 HM 自身在 OBTIER 的對應紀錄。結果：`OBLEVELCARD_VERSION` dump 中無 HM 版本，但 OBTIER dump 有完整 HM 四級對應。
+
+**OBMLISTDF 現況證據**（`reference/DumpData/OBMLISTDF_*.csv`）：
+HM 名單共 63 筆，仍在業務使用。
+
+**決策理由**：
+1. 消除跨 `CARD_TYPE` 借用造成的隱性耦合——業務調整 M 計分設定時不應波及 HM
+2. `fn_calc_tier_level` 函式簽章與邏輯**保持不變**（無需修改 migration 141）
+3. `AssignmentRunService` Stage 2 呼叫端**無需加入 card_type 映射層**，計分流程統一
+4. F053–F056 計分卡設定 UI 可對 HM 進行標準 CRUD 維護，不需特殊處理路徑
+
+**過渡安排與風險**：
+- `ob_tier` 中 HM 的 A/B/C/D 四筆對應（dump 遷移後保留）可正常服務 TIER_LEVEL lookup
+- **遷移阻斷點**：`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` 目前**缺 HM 計分設定**。在業務主管透過 F053/F054 建立 HM 計分設定或由遷移腳本補入前，月跑 HM 名單的計分結果將為 `score=0`、`card_level=NULL`，tier_level 走 fallback（`card_level IS NULL`）——但 `ob_tier` 中 HM 並無 `card_level IS NULL` 的 fallback 紀錄，最終 `tier_level` 為 NULL
+- **建議處置**：遷移腳本執行後，業務方需透過 F054（計分維度編輯）補建 HM 計分設定；在設定完成前，月跑驗收應排除 HM 名單，或由月跑引擎對「score=0 且 tier_level=NULL」案件輸出警告標記
+
+**影響範圍**：
+- `fn_calc_tier_level`（migration 141）：**不修改**
+- `AssignmentRunService` Stage 2 呼叫端：**不修改**
+- `ob_tier` 遷移腳本：HM 四筆對應**正常遷移**（dump 28 筆全部遷移）
+- `ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` 遷移腳本：**無 HM 資料可遷移**，需業務補建
+- E07-F 開發前檢核清單：新增 P5 項（HM 計分設定補建確認）
+
+**替代方案考量**：
+- **方案 A（Stage 2 呼叫端加 HM→M 映射）**：Stage 2 若 `card_type='HM'` 改傳 `p_card_type='M'`，但 `ob_tier` lookup 保留 `'HM'`。可立即消除月跑 HM 名單為空的風險，但在 Service 層引入 CARD_TYPE 映射表，造成計分邏輯不透明；業務若調整 M 設定，HM 計分隨之改變，缺乏控制——**不採**
+- **方案 B（在 ob_levelcard_* 複製 M 的資料為 HM 版本）**：等同本決策（補建獨立設定），但以資料複製而非業務輸入實作初值——資料來源不透明且雙向維護問題存在——可作為**臨時救急手段**，由 DBA 執行，但長期應以業務主管透過 F054 維護為準
 
 ---
 
@@ -3536,6 +3572,7 @@ SELECT tier_level FROM ob_tier
 | P2 | Function 單元測試：以 `reference/DumpData/` 已知資料驗證計分結果 | ⬜ 待撰寫 | **[BLOCKER]** |
 | P3 | ob_tier fallback 邏輯測試（M5 → T5M，card_level IS NULL 案例） | ⬜ 待撰寫 | |
 | P4 | 效能測試：10 萬筆 LATERAL JOIN 耗時 < 10 分鐘（NFR-003 Stage 2 門檻）| ⬜ 待執行 | 建議在 Staging 環境以真實資料量測試 |
+| P5 | **HM 計分設定補建確認**（AD-E07-15）：遷移腳本執行後確認 `ob_levelcard_version` 中是否已有 HM 版本；若無，由業務主管透過 F054 補建 HM 計分維度與分數設定後方可進行 HM 名單的月跑驗收 | ⬜ 待確認 | **[BLOCKER for HM 名單月跑]**（未補建前月跑 HM 名單 score=0 / tier_level=NULL） |
 
 #### F-5　開放問題最終確認
 
@@ -3691,3 +3728,13 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 - *✅ OQ-E07-23 Resolved：`case_status` 4 個選項的業務語意已由 System Architect Agent SP 分析（`reference/SP/USP_OB_OBPOOLDATA.sql:189-216` CASE WHEN 邏輯）+ DB 實證（`ob_pool_data` 1,487,695 筆 sta_code 分布查詢）合力確認，**無需業務主管確認即可結案**。`03` 滿期(含當月) vs `04` 滿期之根本差異釐清：`03` 為 STA_CODE 05~89（**仍 active 處理中**，即將到期未結清），`04` 為 STA_CODE 90（**已完成結清**）*
 - *AD-E07-14 Consequences 補一行：case_status 4 個選項業務語意已於 OQ-E07-23 結案時確認，指向 F050 §5.1.1 之業務語意對照表（含 STA_CODE 對應、案件實況、業務目標建議）*
 - *無新增 AD：本次變更為既有 AD-E07-14 之補充說明，且為 spec/feature 層業務語意確認，非架構決策變更*
+
+---
+
+*本文件版本 2.8，由 System Architect Agent 依據 test-designer 比對 dump / SP 後識別之架構問題（2026-05-13）更新。主要變更：*
+
+- *新增架構決策 AD-E07-15（HM 計分卡獨立化：不延續舊 SP_OBLEVELCARD_HM 借用 M 計分設定的設計；HM 應補建為獨立計分卡；fn_calc_tier_level / Stage 2 呼叫端均不修改；過渡期月跑 HM 名單 score=0 / tier_level=NULL 屬已知風險）*
+- *AD-E07-10 ob_tier Fallback 邏輯段落新增備註：說明新系統 IS NULL 顯式分支修正舊 SP NULL=NULL 不 match 的行為（M5 fallback 在舊系統從未實際生效）*
+- *E07-F F-4 PostgreSQL Function 清單新增 P5 項（HM 計分設定補建確認，[BLOCKER for HM 名單月跑]）*
+- *OQ-E07-27（HM 借用行為）標為 ✅ Resolved（AD-E07-15）；OQ-E07-28（M3/HC/C3）標為 ✅ Resolved（OBMLISTDF dump 實證，data-model.md 補 seed 規範）；新增 OQ-E07-29（HB/SEB/SEC 邊緣 CARD_TYPE，Open，待業務確認）*
+- *covers 清單維持 F068 不變（本次無新增 Feature 涵蓋）*

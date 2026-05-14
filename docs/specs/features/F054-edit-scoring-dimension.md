@@ -6,14 +6,14 @@ source-story: US-073
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-13
 status: Draft
 ---
 
 # F054: 編輯計分維度與分數
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 ## Agent Loading Guide
 
@@ -71,8 +71,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 - **Given** 業務主管點擊某維度的「停用」按鈕並確認
 - **When** 後端處理停用請求
-- **Then** 該維度於 `ob_levelcard_column` 中標記為停用（`[ASSUMPTION]` 新增 `status` 欄位，或以 `ob_levelcard_version.card_version` 遞增劃分新舊資料；詳見 open-questions.md）
-- **And** 不刪除既有資料；後續月跑不讀取該維度
+- **Then** 該維度於 `ob_levelcard_column.status` 欄位標記為 `'inactive'`（soft delete 機制；欄位定義由 migration `1711360000143-AddObLevelcardColumnStatus.ts` 補建，VARCHAR(10) NOT NULL DEFAULT 'active'）
+- **And** 不刪除既有資料；後續月跑 Stage 2 透過 `fn_calc_tier_level` 依 `status = 'active'` 過濾，停用維度不再參與計分
 - **And** 寫入 `assignment_audit_log`（`action = 'DISABLE'`）
 
 ### AC-5：月跑執行中禁止修改（資料鎖）
@@ -148,15 +148,55 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
+| 422 | SCORING_COLUMN_DUPLICATE | `column_name` 已存在於 active 版本 |
 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊 |
 | 422 | VALIDATION_ERROR | 欄位驗證失敗 |
+
+### 5.3 PUT /api/v1/assignment/scoring/dimensions/:columnName/disable（停用維度）
+
+對應 AC-4 soft delete：將 `ob_levelcard_column.status` 由 `'active'` 標記為 `'inactive'`，不刪除既有 `ob_levelcard_score` 資料。動詞採用 `PUT` 並以 `/disable` 子路徑表示動作，沿用 E07 模組既有慣例（參見 F068 §5.4）。
+
+**Path Parameters**
+
+| 參數 | 型別 | 必填 | 說明 |
+|---|---|---|---|
+| columnName | string | 是 | 計分維度欄位名稱（如 `ACCOUNT_AGE`） |
+
+**Query Parameters**
+
+| 參數 | 型別 | 必填 | 說明 |
+|---|---|---|---|
+| cardType | string | 是 | 卡別代碼（如 `H` / `S` / `E` / `S5` / `E5` / `M`） |
+
+**Request Body**：無
+
+**Response — 200 OK**
+
+```json
+{
+  "cardType": "H",
+  "cardVersion": 1,
+  "columnName": "ACCOUNT_AGE",
+  "status": "inactive",
+  "disabledAt": "2026-05-13T08:30:00.000Z"
+}
+```
+
+**錯誤回應**
+
+| HTTP | 錯誤碼 | 說明 |
+|---|---|---|
+| 401 | AUTH_TOKEN_MISSING | 未登入 |
+| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 404 | SCORING_COLUMN_NOT_FOUND | 指定的 `cardType + columnName` 不存在或已停用 |
+| 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
 
 ## 6. 商業規則
 
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | 覆寫式編輯：無草稿版本、無 rollback；歷史追溯透過月跑自動產生的 `config` 快照（F066） |
-| BR-2 | `card_version` 寫入規則：`[ASSUMPTION]` 同一 `card_version` 內可直接覆寫；若需新版本則由系統另行建立 `ob_levelcard_version` 紀錄（詳見 open-questions.md） |
+| BR-2 | `card_version` 寫入規則：覆寫式修改不遞增 `card_version`（OBLEVELCARD_VERSION dump 中 6 種 CARD_TYPE — H/S/E/S5/E5/M — 全部為 v1 為證）；新版本另行建立 `ob_levelcard_version` 紀錄屬未來範疇，本次不支援 |
 | BR-3 | 分數區間不可重疊；類別型（`level1`）與數值型（`level2_s` ~ `level2_e`）為二擇一 |
 | BR-4 | 月跑鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回傳 409 |
 | BR-5 | 複雜計分邏輯（TIER_LEVEL 對應計算）由 PostgreSQL function 實作（AD-E07-3） |
@@ -183,7 +223,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 10. 假設
 
-| # | 假設 | 標記 |
-|---|---|---|
-| A-1 | `ob_levelcard_column` 新增 `status` 欄位以支援停用維度（或由 `card_version` 遞增區分） | [ASSUMPTION]（記入 open-questions.md） |
-| A-2 | 覆寫式修改不產生新 `card_version`；歷史追溯依賴月跑 config 快照 | [ASSUMPTION] |
+本版本無未解決假設：
+
+- 原 A-1（`ob_levelcard_column.status` 欄位）已由 migration `1711360000143-AddObLevelcardColumnStatus.ts` 落實，見 AC-4
+- 原 A-2（覆寫式修改不遞增 `card_version`）已由 OBLEVELCARD_VERSION dump（6 種 CARD_TYPE 均為 v1）證實，見 BR-2

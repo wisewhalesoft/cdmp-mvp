@@ -1,8 +1,8 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.10"
-date: 2026-05-12
+version: "1.11"
+date: 2026-05-13
 status: Draft
 ---
 
@@ -936,6 +936,7 @@ PK：`(list_no, orgno, appl_no)`
 | dept_name | VARCHAR(30) | NULL | DEPT_NAME | 部門名稱 |
 | emplid | VARCHAR(10) | NULL | EMPLID | 業務員工號（分派結果） |
 | emplid_deptid | VARCHAR(6) | NULL | EMPLID_DEPTID | 業務員所屬部門 |
+| score | INTEGER | NULL | SCORE | 月跑 Stage 2 計分結果（由 `fn_calc_tier_level` 計算後寫入；初始為 NULL）。對應舊系統 OBPOOLDATA_LIST.SCORE。F055 preview API 讀取此欄位套用新門檻計算 CARD_LEVEL 分佈（AD-E07-10） |
 | card_level | VARCHAR(1) | NULL | CARD_LEVEL | 計分卡等級 |
 | tier_level | VARCHAR(5) | NULL | TIER_LEVEL | 名單層級 |
 | settle_src | TEXT | NOT NULL | SETTLE_SRC | 結案來源（DEFAULT 'N'） |
@@ -1136,7 +1137,7 @@ PK：`(list_no, deptid_m, emplid, ration)`
 | card_version | INTEGER | NOT NULL | CARD_VERSION | 版本號 |
 | score_s | INTEGER | NOT NULL | SCORE_S | 分級分數起始值 |
 | score_e | INTEGER | NOT NULL | SCORE_E | 分級分數結束值 |
-| card_level | VARCHAR(1) | NOT NULL | CARD_LEVEL | 等級代號（A/B/C/D/E） |
+| card_level | VARCHAR(1) | NOT NULL | CARD_LEVEL | 等級代號（A/B/C/D/E）。**型別設計備註**：刻意設定為 VARCHAR(1)，反映 dump 觀察所有等級代號均為單字元（A/B/C/D）之業務約束；與 `ob_tier.card_level VARCHAR(5)` 長度不對稱，係因 `ob_tier.card_level` 對應原表 `varchar(5) NULL`（保留原始型別），兩欄在 PostgreSQL 類型相容（VARCHAR(1) 指派給 VARCHAR(5) 變數不截斷），執行期無問題 |
 
 **索引**：`(card_type, card_version)`（複合索引）
 
@@ -1165,6 +1166,53 @@ PK：`(card_type, COALESCE(card_level, ''))`（[ASSUMPTION] — 原 OBTIER 無 P
 | 全部 TIER_LEVEL | `T1` / `T2` / `T3` / `T32` / `T4` / `T51` / `T52` / `T1M` / `T3M` / `T5M` / `T1HM` / `T2HM` / `T3HM` / `T3` 等（共 13 種變體） | 由業務定義，不限制列舉 |
 | CARD_LEVEL NULL 紀錄 | `機車中結滿期名單,M5,,T5M`（dump 第 28 列）| `M5` 為 fallback CARD_TYPE，CARD_LEVEL 為空字串，直接對應 `T5M`，不分等級 |
 | CARD_LEVEL 非 NULL 紀錄 | 其餘 24 筆，CARD_LEVEL 取值 `A` / `B` / `C` / `D` | 標準計分流程：CARD_TYPE × CARD_LEVEL → TIER_LEVEL |
+
+**CARD_TYPE 完整覆蓋率分析**（依據 OBMLISTDF / OBTIER / OBLEVELCARD_VERSION 三表對照，2026-05-13）：
+
+> 資料來源：`reference/DumpData/OBMLISTDF_*.csv`（OBMLISTDF 名單統計）+ `reference/DumpData/OBTIER_20260505.csv` + `reference/DumpData/OBLEVELCARD_VERSION_20260505.csv`
+
+| CARD_TYPE | OBMLISTDF 名單筆數 | ob_levelcard_version | ob_tier | 遷移狀態 |
+|-----------|-----------------|---------------------|---------|---------|
+| H | 124 | ✅ 有計分版本 | ✅ A/B/C/D 四筆 | 完整支援 |
+| S | 124 | ✅ 有計分版本 | ✅ A/B/C/D 四筆 | 完整支援 |
+| E | 62 | ✅ 有計分版本 | ✅ A/B/C/D 四筆 | 完整支援 |
+| M | 58 | ✅ 有計分版本 | ✅ A/B/C/D 四筆 | 完整支援 |
+| E5 | 53 | ✅ 有計分版本 | ✅ A/B/C/D 四筆 | 完整支援 |
+| S5 | 53 | ✅ 有計分版本 | ✅ A/B 兩筆（S5 業務僅分兩級） | 完整支援 |
+| HM | 63 | ❌ **缺計分版本**（舊 SP 借用 M 設定） | ✅ A/B/C/D 四筆 | **需補建計分設定（AD-E07-15）** |
+| M5 | — （無名單，為 TIER fallback） | ❌ 不適用（非計分卡）| ✅ 1 筆（card_level=NULL → T5M）| fallback 規則，不需計分版本 |
+| M3 | 31 | ❌ **缺計分版本** | ❌ **缺 ob_tier 對應** | **需補 ob_tier seed（見下方）** |
+| HC | 25 | ❌ **缺計分版本** | ❌ **缺 ob_tier 對應** | **需補 ob_tier seed（見下方）** |
+| C3 | 23 | ❌ **缺計分版本** | ❌ **缺 ob_tier 對應** | **需補 ob_tier seed（見下方）** |
+| HB | 1 | ❌ 缺 | ❌ 缺 | 邊緣 CARD_TYPE，待業務確認（OQ-E07-29） |
+| SEB | 1 | ❌ 缺 | ❌ 缺 | 邊緣 CARD_TYPE，待業務確認（OQ-E07-29） |
+| SEC | 1 | ❌ 缺 | ❌ 缺 | 邊緣 CARD_TYPE，待業務確認（OQ-E07-29） |
+
+**M3 / HC / C3 ob_tier Seed 規範**（OQ-E07-28 決議，2026-05-13）：
+
+OBMLISTDF dump 確認 M3（31 筆）/ HC（25 筆）/ C3（23 筆）仍為業務現役 CARD_TYPE，但 OBTIER dump 中三者均無對應紀錄——舊系統以 `Stage2_依照CardType分類TierLevel.sql` L93–123 硬編碼覆寫 TIER_LEVEL，未入 OBTIER 表。
+
+遷移腳本（D3：OBTIER → ob_tier）執行後，需**額外執行以下 seed INSERT**，移植舊 SP 硬編碼邏輯：
+
+```sql
+-- M3：機車中途結清 3 年以上，一律對應 T5M（Stage2 SP L93-100）
+INSERT INTO ob_tier (card_type, card_level, tier_level, list_nm)
+VALUES ('M3', NULL, 'T5M', '機車中結滿期名單（3年以上）');
+
+-- HC：汽車（HC 類），一律對應 THC（Stage2 SP L103-111）
+INSERT INTO ob_tier (card_type, card_level, tier_level, list_nm)
+VALUES ('HC', NULL, 'THC', '汽車HC名單');
+
+-- C3：汽車 3 年以下，一律對應 T3C（Stage2 SP L114-122）
+INSERT INTO ob_tier (card_type, card_level, tier_level, list_nm)
+VALUES ('C3', NULL, 'T3C', '汽車C3名單');
+```
+
+> **說明**：M3 / HC / C3 三者在舊系統皆為「不分等級直接對應 TIER_LEVEL」模式（等同 M5 的 fallback 語意），故 `card_level = NULL`（fallback 規則）。`fn_calc_tier_level` 計分後若無 CARD_LEVEL 對應，自動走 `card_level IS NULL` 分支，能正確取得 TIER_LEVEL。
+>
+> **遷移腳本責任**：以上 seed 由 TDD 開發者在 D3 migration 腳本末段執行，本 agent 不直接寫 migration 程式碼。D11 驗證 SQL 需補入確認 M3 / HC / C3 各有 1 筆 `card_level IS NULL` 的對應紀錄。
+>
+> **計分設定缺漏**：M3 / HC / C3 同樣缺少 `ob_levelcard_version` 計分設定（與 HM 相同）；遷移後月跑這些 CARD_TYPE 名單時 score=0，tier_level 由 fallback 取得（T5M / THC / T3C）。業務語意上這與舊 SP 的硬編碼行為等效（舊 SP 對這三種 CARD_TYPE 完全略過計分步驟，直接覆寫 TIER_LEVEL）——因此**月跑結果語意一致**，但計分數值不可信。詳見 [architecture-spec.md AD-E07-15](architecture-spec.md#ad-e07-15hm-計分卡獨立化決策)。
 
 **Stage 2 fallback join 語意**：當 `ob_pool_data_list.card_level` 在 `ob_tier` 找不到對應紀錄時，回退以 `CARD_TYPE` 比對 `card_level IS NULL` 的 fallback 紀錄（如 M5 → T5M）。F056 編輯時允許新增 `card_level IS NULL` 紀錄但需 UI 提示為 fallback 規則。
 

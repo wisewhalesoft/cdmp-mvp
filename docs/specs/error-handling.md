@@ -230,7 +230,9 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
 | SCORING_VERSION_NOT_FOUND | 404 | 目前無生效的計分版本，請聯繫 IT 確認設定 | `ob_levelcard_version` 無 `status = 'active'` 紀錄 | F053 |
+| SCORING_COLUMN_NOT_FOUND | 404 | 指定的計分維度不存在或已停用 | `(card_type, card_version, column_name)` 組合不存在於 `ob_levelcard_column`，或 `status = 'inactive'` | F054 |
 | SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定 | F054, F055, F056 |
+| SCORING_COLUMN_DUPLICATE | 422 | 計分維度 column_name `{columnName}` 已存在於 active 版本 | 新增維度時 `column_name` 已存在於同 `card_type + card_version` 的 `status = 'active'` 紀錄 | F054 |
 | SCORING_RANGE_OVERLAP | 422 | 分數區間重疊，請調整條件值 | 分數區間或 CARD_LEVEL 門檻區間重疊 | F054, F055 |
 | TIER_LEVEL_DUPLICATE | 422 | TIER_LEVEL 代碼 {code} 已存在 | 新增 TIER_LEVEL 對應時代碼重複 | F056 |
 | CARD_LEVEL_NOT_FOUND | 422 | 指定的 CARD_LEVEL 不存在於當前版本 | TIER_LEVEL 對應至不存在的 CARD_LEVEL | F056 |

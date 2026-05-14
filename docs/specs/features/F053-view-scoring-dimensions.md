@@ -6,14 +6,14 @@ source-story: US-072
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-13
 status: Draft
 ---
 
 # F053: 查看計分維度設定
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 ## Agent Loading Guide
 
@@ -56,6 +56,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **Given** 計分維度清單已顯示
 - **When** 業務主管查看頁面頂部
 - **Then** 顯示目前生效版本的 `card_type`、`card_name`、`card_version`、`sdate` / `edate`、建立者與建立時間
+- **And** `createdBy` / `createdAt` 於 dump 中常為 NULL（OBLEVELCARD_VERSION 6 筆中 4 筆 `A_PRGID` / `A_USERID` / `A_SYSDT` 為 NULL），null 時 UI 顯示為「—」
 
 ### AC-3：查看維度詳細分數表
 
@@ -84,13 +85,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ```json
 {
   "version": {
-    "cardType": "01",
-    "cardName": "車貸計分卡",
-    "cardVersion": 3,
-    "sdate": "20260401",
-    "edate": "99991231",
-    "createdBy": "admin",
-    "createdAt": "2026-04-01T00:00:00Z"
+    "cardType": "H",
+    "cardName": "期中",
+    "cardVersion": 1,
+    "sdate": "20190823",
+    "edate": "20991231",
+    "createdBy": "21251",
+    "createdAt": "2019-08-23T00:00:00Z"
   },
   "dimensions": [
     {
@@ -106,6 +107,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 }
 ```
 
+**Response 欄位說明**
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| version.cardType | string | 計分卡類型；OBLEVELCARD_VERSION dump 觀察值為 `H` / `S` / `E` / `S5` / `E5` / `M`（共 6 筆）。注意 OBMLISTDF 另含 `HM` / `M3` / `HC` / `C3` / `HB` / `SEB` / `SEC` 等 CARD_TYPE 但於 OBLEVELCARD_VERSION 缺對應紀錄（屬遷移待補項，由 F056 與 architecture 處理） |
+| version.cardName | string | 計分卡名稱（如「期中」/「中結」/「滿期」/「中結5年」/「滿期5年」/「機車」） |
+| version.cardVersion | number | 版本號；dump 中所有 CARD_TYPE 均為 `1`（F054 BR-2 規定覆寫式編輯不遞增版本） |
+| version.sdate / edate | string | 生效日期區間，格式 `YYYYMMDD` |
+| version.createdBy | string \| null | 建立者；對應 `A_USERID`。dump 中 4/6 筆為 NULL；null 時 UI 顯示為「—」 |
+| version.createdAt | string \| null | 建立時間，ISO-8601 格式（如 `2019-08-23T00:00:00Z`）。對應 `A_SYSDT`。dump 中 4/6 筆為 NULL；null 時 UI 顯示為「—」 |
+
 **錯誤回應**
 
 | HTTP | 錯誤碼 | 說明 |
@@ -119,7 +131,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | 僅查詢 `ob_levelcard_version.status = 'active'` 的版本 |
-| BR-2 | `column_name` 為遷移時修正自原欄位 `COLUNM`（原系統拼字錯誤） |
+| BR-2 | `column_name` 為遷移時修正自原欄位 `COLUNM`（原系統拼字錯誤）；遷移時表名 `OBLEVELCARD_COLUNM` 亦修正為 `ob_levelcard_column` |
 | BR-3 | 本頁面為純唯讀，無編輯按鈕；編輯操作由 F054 處理 |
 
 ## 7. UI/UX 需求
