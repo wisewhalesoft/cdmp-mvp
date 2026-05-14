@@ -4,11 +4,12 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { dateColumnType, surrogatePkType } from '@/common/database/column-types';
 
 @Entity('ob_levelcard_version')
 export class ObLevelcardVersion {
   // surrogate PK（原表無嚴格 PK，邏輯主鍵 (card_type, card_version) 可能含 NULL）
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  @PrimaryGeneratedColumn({ type: surrogatePkType })
   id: string;
 
   @Column({ name: 'created_by_prog', type: 'varchar', length: 20, nullable: true })
@@ -17,7 +18,7 @@ export class ObLevelcardVersion {
   @Column({ name: 'created_by', type: 'varchar', length: 20, nullable: true })
   created_by: string | null; // A_USERID
 
-  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'created_at', type: dateColumnType, nullable: true })
   created_at: Date | null; // A_SYSDT
 
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 20, nullable: true })
@@ -26,7 +27,7 @@ export class ObLevelcardVersion {
   @Column({ name: 'updated_by', type: 'varchar', length: 20, nullable: true })
   updated_by: string | null; // U_USERID
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
 
   @Column({ name: 'card_type', type: 'text', nullable: true })

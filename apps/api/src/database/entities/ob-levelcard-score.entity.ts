@@ -4,10 +4,11 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { dateColumnType, surrogatePkType } from '@/common/database/column-types';
 
 @Entity('ob_levelcard_score')
 export class ObLevelcardScore {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  @PrimaryGeneratedColumn({ type: surrogatePkType })
   id: string;
 
   @Column({ name: 'created_by_prog', type: 'varchar', length: 20, nullable: true })
@@ -16,7 +17,7 @@ export class ObLevelcardScore {
   @Column({ name: 'created_by', type: 'varchar', length: 20, nullable: true })
   created_by: string | null; // A_USERID
 
-  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'created_at', type: dateColumnType, nullable: true })
   created_at: Date | null; // A_SYSDT
 
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 20, nullable: true })
@@ -25,7 +26,7 @@ export class ObLevelcardScore {
   @Column({ name: 'updated_by', type: 'varchar', length: 20, nullable: true })
   updated_by: string | null; // U_USERID
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
 
   @Column({ name: 'card_type', type: 'varchar', length: 10 })
@@ -37,7 +38,9 @@ export class ObLevelcardScore {
   @Column({ name: 'column_name', type: 'varchar', length: 30 })
   column_name: string; // COLUNM
 
-  @Column({ name: 'level1', type: 'char', length: 10, nullable: true })
+  // sqlite e2e 相容：char 改 varchar（語意相同，PostgreSQL nchar(10) → varchar(10) 行為一致；
+  // 業務上 level1 為列舉值，padding 由舊系統累積，新系統皆 TRIM 後寫入）
+  @Column({ name: 'level1', type: 'varchar', length: 10, nullable: true })
   level1: string | null;
 
   @Column({ name: 'level2_s', type: 'varchar', length: 10, nullable: true })

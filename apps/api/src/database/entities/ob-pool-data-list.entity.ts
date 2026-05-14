@@ -4,6 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('ob_pool_data_list')
 export class ObPoolDataList {
@@ -13,7 +14,7 @@ export class ObPoolDataList {
   @Column({ name: 'created_by', type: 'varchar', length: 20, nullable: true })
   created_by: string | null; // A_USERID
 
-  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'created_at', type: dateColumnType, nullable: true })
   created_at: Date | null; // A_SYSDT
 
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 20, nullable: true })
@@ -22,7 +23,7 @@ export class ObPoolDataList {
   @Column({ name: 'updated_by', type: 'varchar', length: 20, nullable: true })
   updated_by: string | null; // U_USERID
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
 
   @PrimaryColumn({ name: 'list_no', type: 'varchar', length: 100 })
@@ -88,13 +89,13 @@ export class ObPoolDataList {
   @Column({ name: 'b_case_irr', type: 'numeric', precision: 5, scale: 2, nullable: true })
   b_case_irr: string | null;
 
-  @Column({ name: 'first_pay_dt', type: 'timestamp', nullable: true })
+  @Column({ name: 'first_pay_dt', type: dateColumnType, nullable: true })
   first_pay_dt: Date | null;
 
-  @Column({ name: 'fapcon_dt', type: 'timestamp', nullable: true })
+  @Column({ name: 'fapcon_dt', type: dateColumnType, nullable: true })
   fapcon_dt: Date | null;
 
-  @Column({ name: 'maturity_dt', type: 'timestamp', nullable: true })
+  @Column({ name: 'maturity_dt', type: dateColumnType, nullable: true })
   maturity_dt: Date | null;
 
   @Column({ name: 'deal_mark', type: 'varchar', length: 2, nullable: true })
@@ -115,7 +116,7 @@ export class ObPoolDataList {
   @Column({ name: 'commission', type: 'numeric', precision: 15, scale: 0, nullable: true })
   commission: string | null;
 
-  @Column({ name: 'settle_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'settle_date', type: dateColumnType, nullable: true })
   settle_date: Date | null;
 
   @Column({ name: 'loan_rate', type: 'numeric', precision: 5, scale: 2, nullable: true })
@@ -124,7 +125,7 @@ export class ObPoolDataList {
   @Column({ name: 'sta_code', type: 'varchar', length: 2, nullable: true })
   sta_code: string | null;
 
-  @Column({ name: 'ofi_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'ofi_date', type: dateColumnType, nullable: true })
   ofi_date: Date | null;
 
   @Column({ name: 'dept_id', type: 'varchar', length: 6, nullable: true })
@@ -208,7 +209,7 @@ export class ObPoolDataList {
   @Column({ name: 'project_tp_cd', type: 'varchar', length: 2, nullable: true })
   project_tp_cd: string | null;
 
-  @Column({ name: 'appl_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'appl_date', type: dateColumnType, nullable: true })
   appl_date: Date | null;
 
   @Column({ name: 'apmacc_memo', type: 'text', nullable: true })
@@ -295,7 +296,7 @@ export class ObPoolDataList {
   @Column({ name: 'best_case', type: 'varchar', length: 1, nullable: true })
   best_case: string | null;
 
-  @Column({ name: 'acc_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'acc_date', type: dateColumnType, nullable: true })
   acc_date: Date | null;
 
   @Column({ name: 'order1', type: 'integer', nullable: true })
@@ -352,7 +353,7 @@ export class ObPoolDataList {
   @Column({ name: 'ob_emplid', type: 'varchar', length: 6, nullable: true })
   ob_emplid: string | null;
 
-  @Column({ name: 'last_pay_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'last_pay_date', type: dateColumnType, nullable: true })
   last_pay_date: Date | null;
 
   @Column({ name: 'month_cnt', type: 'integer', nullable: true })
@@ -390,4 +391,9 @@ export class ObPoolDataList {
 
   @Column({ name: 'is_cr', type: 'varchar', length: 1, nullable: true })
   is_cr: string | null;
+
+  // F055 preview / 月跑 Stage 2（AD-E07-10）：fn_calc_tier_level 寫入計分結果。
+  // 對齊架構文件 L3408 `UPDATE ob_pool_data_list pdl SET score = calc.score`。
+  @Column({ name: 'score', type: 'integer', nullable: true })
+  score: number | null;
 }

@@ -2,6 +2,7 @@
 // data-model.md §E07 新建表 — assignment_run
 
 import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Index('idx_assignment_run_workym_status', ['project_workym', 'status'])
 @Entity('assignment_run')
@@ -18,10 +19,10 @@ export class AssignmentRun {
   @Column({ name: 'triggered_by', type: 'uuid' })
   triggered_by: string;
 
-  @Column({ name: 'started_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'started_at', type: dateColumnType, nullable: true })
   started_at: Date | null;
 
-  @Column({ name: 'finished_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'finished_at', type: dateColumnType, nullable: true })
   finished_at: Date | null;
 
   @Column({ name: 'duration_ms', type: 'integer', nullable: true })
@@ -36,6 +37,6 @@ export class AssignmentRun {
   @Column({ name: 'error_message', type: 'text', nullable: true })
   error_message: string | null;
 
-  @Column({ name: 'created_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'created_at', type: dateColumnType, default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 }

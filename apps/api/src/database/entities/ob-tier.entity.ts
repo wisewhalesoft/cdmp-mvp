@@ -4,13 +4,15 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { surrogatePkType } from '@/common/database/column-types';
 
 // AD-E07-13：UNIQUE (card_type, COALESCE(card_level, '')) 由 migration 用 raw SQL 建立
 // （TypeORM @Index 不支援 COALESCE 表達式，dev synchronize 不會建此索引；prod 用 migration）
 @Entity('ob_tier')
 export class ObTier {
   // surrogate PK（原表無 PK；UNIQUE INDEX 在 migration 補 raw SQL）
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  // F053~F056 e2e 相容：surrogatePkType（postgres=bigint / sqlite=integer，AUTOINCREMENT 限制）
+  @PrimaryGeneratedColumn({ type: surrogatePkType })
   id: string;
 
   @Column({ name: 'list_nm', type: 'varchar', length: 30, nullable: true })
