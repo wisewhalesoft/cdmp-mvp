@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -22,8 +23,10 @@ import { DisableDimensionQueryDto } from './dto/disable-dimension-query.dto';
 import { UpdateCardLevelsDto } from './dto/update-card-levels.dto';
 import { GetCardLevelsQueryDto } from './dto/get-card-levels-query.dto';
 import { PreviewCardLevelsQueryDto } from './dto/preview-card-levels-query.dto';
+import { DeleteCardLevelQueryDto } from './dto/delete-card-level-query.dto';
 import { UpdateTierMappingDto } from './dto/update-tier-mapping.dto';
 import { CreateTierMappingDto } from './dto/create-tier-mapping.dto';
+import { DeleteTierMappingQueryDto } from './dto/delete-tier-mapping-query.dto';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Controller
@@ -110,6 +113,31 @@ export class AssignmentScoringController {
     return this.service.updateCardLevels(dto, actor);
   }
 
+  /**
+   * F055 §5.3 DELETE /api/v1/assignment/scoring/card-levels
+   * Query: cardType, cardVersion, cardLevel（皆必填）
+   *
+   * Hard delete + cascade reference check（BR-5/BR-6）。
+   */
+  @Delete('card-levels')
+  async deleteCardLevel(
+    @Query() query: DeleteCardLevelQueryDto,
+    @Req() req: any,
+  ) {
+    const actor = {
+      userId: req.user.userId,
+      ipAddress: req.ip ?? null,
+    };
+    return this.service.deleteCardLevel(
+      {
+        cardType: query.cardType,
+        cardVersion: query.cardVersion,
+        cardLevel: query.cardLevel,
+      },
+      actor,
+    );
+  }
+
   // ===== F056 =====
 
   @Get('tier-mapping')
@@ -134,5 +162,30 @@ export class AssignmentScoringController {
       ipAddress: req.ip ?? null,
     };
     return this.service.createTierMapping(dto, actor);
+  }
+
+  /**
+   * F056 §5.4 DELETE /api/v1/assignment/scoring/tier-mapping
+   * Query: cardType（必填）、cardLevel（選填，省略代表 fallback NULL）
+   *
+   * Hard delete（BR-11）。
+   */
+  @Delete('tier-mapping')
+  async deleteTierMapping(
+    @Query() query: DeleteTierMappingQueryDto,
+    @Req() req: any,
+  ) {
+    const actor = {
+      userId: req.user.userId,
+      ipAddress: req.ip ?? null,
+    };
+    return this.service.deleteTierMapping(
+      {
+        cardType: query.cardType,
+        // 省略 cardLevel → null（fallback 規則紀錄）
+        cardLevel: query.cardLevel === undefined ? null : query.cardLevel,
+      },
+      actor,
+    );
   }
 }

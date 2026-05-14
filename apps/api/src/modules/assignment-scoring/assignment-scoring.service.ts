@@ -39,7 +39,15 @@ export const SCORING_ERROR_CODES = {
   SCORING_COLUMN_DUPLICATE: 'SCORING_COLUMN_DUPLICATE',
   SCORING_RANGE_OVERLAP: 'SCORING_RANGE_OVERLAP',
   TIER_LEVEL_DUPLICATE: 'TIER_LEVEL_DUPLICATE',
-  CARD_LEVEL_NOT_FOUND: 'CARD_LEVEL_NOT_FOUND',
+  // v1.3 / v1.4 錯誤碼拆分（PO 2026-05-14）：
+  //   舊 CARD_LEVEL_NOT_FOUND 一碼多用，於本版拆分為三：
+  //   - CARD_LEVEL_NOT_FOUND_IN_VERSION（422）：F056 PUT/POST 驗證，cardLevel 不存在於 active 版本
+  //   - CARD_LEVEL_RECORD_NOT_FOUND   （404）：F055 PUT/DELETE 操作時複合 PK 紀錄不存在
+  //   - CARD_LEVEL_REFERENCED         （409）：F055 DELETE cascade reference check（ob_tier 仍引用）
+  CARD_LEVEL_NOT_FOUND_IN_VERSION: 'CARD_LEVEL_NOT_FOUND_IN_VERSION',
+  CARD_LEVEL_RECORD_NOT_FOUND: 'CARD_LEVEL_RECORD_NOT_FOUND',
+  CARD_LEVEL_REFERENCED: 'CARD_LEVEL_REFERENCED',
+  TIER_MAPPING_NOT_FOUND: 'TIER_MAPPING_NOT_FOUND',
 } as const;
 
 export const SCORING_ERROR_MESSAGES = {
@@ -49,7 +57,11 @@ export const SCORING_ERROR_MESSAGES = {
   SCORING_COLUMN_DUPLICATE: '計分維度 column_name 已存在於 active 版本',
   SCORING_RANGE_OVERLAP: '分數區間重疊，請調整條件值',
   TIER_LEVEL_DUPLICATE: 'TIER 對應已存在',
-  CARD_LEVEL_NOT_FOUND: '指定的 CARD_LEVEL 不存在於當前版本',
+  CARD_LEVEL_NOT_FOUND_IN_VERSION: '指定的 CARD_LEVEL 不存在於 active 計分版本',
+  CARD_LEVEL_RECORD_NOT_FOUND: '指定的 CARD_LEVEL 紀錄不存在',
+  CARD_LEVEL_REFERENCED:
+    '此 CARD_LEVEL 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除',
+  TIER_MAPPING_NOT_FOUND: '指定的 TIER 對應不存在',
 } as const;
 
 // =========================
@@ -188,6 +200,20 @@ export interface PreviewCardLevelsResult {
   distribution: Record<string, number>;
 }
 
+// F055 §5.3 DELETE
+export interface DeleteCardLevelInput {
+  cardType: string;
+  cardVersion: number;
+  cardLevel: string;
+}
+
+export interface DeleteCardLevelResult {
+  cardType: string;
+  cardVersion: number;
+  cardLevel: string;
+  deletedAt: string;
+}
+
 // =========================
 // F056 types
 // =========================
@@ -228,6 +254,18 @@ export interface CreateTierMappingResult {
   cardLevel: string | null;
   tierLevel: string;
   listNm: string | null;
+}
+
+// F056 §5.4 DELETE
+export interface DeleteTierMappingInput {
+  cardType: string;
+  cardLevel: string | null; // null = fallback 規則紀錄
+}
+
+export interface DeleteTierMappingResult {
+  cardType: string;
+  cardLevel: string | null;
+  deletedAt: string;
 }
 
 @Injectable()
@@ -731,9 +769,11 @@ export class AssignmentScoringService {
         },
       });
       if (!existing) {
+        // F055 PUT 複合 PK 紀錄不存在 → 404 CARD_LEVEL_RECORD_NOT_FOUND
+        // （與 F056 PUT/POST 422 CARD_LEVEL_NOT_FOUND_IN_VERSION 區分）
         throw new NotFoundException({
-          error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND,
-          message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND,
+          error: SCORING_ERROR_CODES.CARD_LEVEL_RECORD_NOT_FOUND,
+          message: SCORING_ERROR_MESSAGES.CARD_LEVEL_RECORD_NOT_FOUND,
         });
       }
       beforeAll.push({
@@ -762,6 +802,85 @@ export class AssignmentScoringService {
       cardType: input.cardType,
       cardVersion: input.cardVersion,
       updatedLevels: input.levels.length,
+    };
+  }
+
+  // =========================
+  // F055 — DELETE /scoring/card-levels（§5.3，hard delete + cascade reference check）
+  // =========================
+  //
+  // 對應 spec：F055 v1.3 §5.3 / AC-6 / AC-7 / BR-5 / BR-6
+  //   1. 月跑鎖（BR-3）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
+  //   2. 複合 PK 紀錄存在性檢查：不存在 → 404 CARD_LEVEL_RECORD_NOT_FOUND
+  //   3. cascade reference check（BR-6）：ob_tier 仍引用 (cardType, cardLevel) → 409 CARD_LEVEL_REFERENCED
+  //      - fallback 對應（card_level IS NULL）不算引用，因 NULL 與本表的具體 cardLevel 字串不同
+  //   4. hard delete（BR-5）：直接從 ob_levelcard_level 移除紀錄
+  //   5. audit log：action='DELETE', entity_id='{cardType}|{cardVersion}|{cardLevel}',
+  //                  before_value 含 scoreS/scoreE，after_value=null
+
+  async deleteCardLevel(
+    input: DeleteCardLevelInput,
+    actor: ActorContext,
+  ): Promise<DeleteCardLevelResult> {
+    await this.assertNotLocked();
+
+    const existing = await this.levelRepo.findOne({
+      where: {
+        card_type: input.cardType as any,
+        card_version: input.cardVersion as any,
+        card_level: input.cardLevel as any,
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        error: SCORING_ERROR_CODES.CARD_LEVEL_RECORD_NOT_FOUND,
+        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_RECORD_NOT_FOUND,
+      });
+    }
+
+    // BR-6 cascade reference check：ob_tier 仍有 (cardType, cardLevel) 對應 → 拒絕刪除
+    // 注意：fallback 紀錄 card_level IS NULL 不會與本表的非 NULL cardLevel 比對相等，
+    // 因此這裡用 find()+filter 而非 SQL `=` 比對，與 service 內 findTierByPk 同樣處理方式。
+    const referencingTiers = await this.tierRepo.find({
+      where: { card_type: input.cardType as any },
+    });
+    const referenced = referencingTiers.some(
+      (t) => t.card_level === input.cardLevel,
+    );
+    if (referenced) {
+      throw new ConflictException({
+        error: SCORING_ERROR_CODES.CARD_LEVEL_REFERENCED,
+        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_REFERENCED,
+      });
+    }
+
+    const before = {
+      cardLevel: existing.card_level,
+      scoreS: existing.score_s,
+      scoreE: existing.score_e,
+    };
+
+    // BR-5 hard delete
+    await this.levelRepo.delete({
+      card_type: input.cardType as any,
+      card_version: input.cardVersion as any,
+      card_level: input.cardLevel as any,
+    });
+
+    await this.writeAudit(
+      actor,
+      'DELETE',
+      'ob_levelcard_level',
+      `${input.cardType}|${input.cardVersion}|${input.cardLevel}`,
+      before,
+      null,
+    );
+
+    return {
+      cardType: input.cardType,
+      cardVersion: input.cardVersion,
+      cardLevel: input.cardLevel,
+      deletedAt: new Date().toISOString(),
     };
   }
 
@@ -930,13 +1049,70 @@ export class AssignmentScoringService {
     };
   }
 
+  // =========================
+  // F056 — DELETE /scoring/tier-mapping（§5.4，hard delete）
+  // =========================
+  //
+  // 對應 spec：F056 v1.4 §5.4 / AC-6 / AC-7 / BR-11
+  //   1. 月跑鎖（BR-5）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
+  //   2. 對應紀錄存在性檢查：不存在（含 fallback NULL）→ 404 TIER_MAPPING_NOT_FOUND
+  //   3. hard delete（BR-11）：直接從 ob_tier 移除紀錄
+  //   4. audit log：action='DELETE', entity_type='ob_tier',
+  //                  entity_id='{cardType}|{cardLevel ?? ""}'（fallback cardLevel 留空）,
+  //                  before_value 含 tierLevel，after_value=null
+
+  async deleteTierMapping(
+    input: DeleteTierMappingInput,
+    actor: ActorContext,
+  ): Promise<DeleteTierMappingResult> {
+    await this.assertNotLocked();
+
+    const existing = await this.findTierByPk(input.cardType, input.cardLevel);
+    if (!existing) {
+      throw new NotFoundException({
+        error: SCORING_ERROR_CODES.TIER_MAPPING_NOT_FOUND,
+        message: SCORING_ERROR_MESSAGES.TIER_MAPPING_NOT_FOUND,
+      });
+    }
+
+    const before = {
+      cardType: existing.card_type,
+      cardLevel: existing.card_level,
+      tierLevel: existing.tier_level,
+      listNm: existing.list_nm,
+    };
+
+    // BR-11 hard delete
+    // 用 remove(entity) 而非 delete({...PK...})：避免在 SQLite 上對 card_level=null 的條件
+    // 退化為 SQL `card_level = NULL` 而無法 match（與既有 findTierByPk 處理方式對稱）。
+    await this.tierRepo.remove(existing);
+
+    await this.writeAudit(
+      actor,
+      'DELETE',
+      'ob_tier',
+      `${input.cardType}|${input.cardLevel ?? ''}`,
+      before,
+      null,
+    );
+
+    return {
+      cardType: input.cardType,
+      cardLevel: input.cardLevel,
+      deletedAt: new Date().toISOString(),
+    };
+  }
+
   // ----- F056 helpers -----
 
   /**
    * fallback 場景（card_level === null）跳過驗證；
    * 其他需確認該 cardLevel 存在於 active 版本對應 ob_levelcard_level。
-   * BR-9：card_level 超過 1 字元視同不存在 → CARD_LEVEL_NOT_FOUND
+   * BR-9：card_level 超過 1 字元視同不存在 → CARD_LEVEL_NOT_FOUND_IN_VERSION
    *   （VARCHAR(1) vs VARCHAR(5) 長度不對稱保護）。
+   *
+   * v1.4：原 CARD_LEVEL_NOT_FOUND 重新命名為 CARD_LEVEL_NOT_FOUND_IN_VERSION，
+   * 與 F055 DELETE 404 CARD_LEVEL_RECORD_NOT_FOUND 區分。
    */
   private async assertCardLevelExistsOrFallback(
     cardType: string,
@@ -946,8 +1122,8 @@ export class AssignmentScoringService {
 
     if (cardLevel.length > 1) {
       throw new UnprocessableEntityException({
-        error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND,
-        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND,
+        error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND_IN_VERSION,
+        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND_IN_VERSION,
       });
     }
 
@@ -957,8 +1133,8 @@ export class AssignmentScoringService {
     const cardVersion = version?.card_version ?? null;
     if (cardVersion == null) {
       throw new UnprocessableEntityException({
-        error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND,
-        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND,
+        error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND_IN_VERSION,
+        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND_IN_VERSION,
       });
     }
     const level = await this.levelRepo.findOne({
@@ -970,8 +1146,8 @@ export class AssignmentScoringService {
     });
     if (!level) {
       throw new UnprocessableEntityException({
-        error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND,
-        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND,
+        error: SCORING_ERROR_CODES.CARD_LEVEL_NOT_FOUND_IN_VERSION,
+        message: SCORING_ERROR_MESSAGES.CARD_LEVEL_NOT_FOUND_IN_VERSION,
       });
     }
   }
