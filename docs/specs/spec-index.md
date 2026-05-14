@@ -142,14 +142,20 @@ status: Draft
 | F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | 編輯名單定義（覆寫式） | US-089 | P0-MVP |
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | 停用名單定義（軟刪除） | US-090 | P0-MVP |
 
-#### M02 計分設定
+#### M02 計分設定（5 Tab 結構，2026-05-14 擴充）
 
-| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
-|------------|------|------|-----------|--------|
-| F053 | [F053-view-scoring-dimensions.md](features/F053-view-scoring-dimensions.md) | 查看計分維度設定 | US-072 | P0-MVP |
-| F054 | [F054-edit-scoring-dimension.md](features/F054-edit-scoring-dimension.md) | 編輯計分維度與分數 | US-073 | P0-MVP |
-| F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻 | US-074 | P0-MVP |
-| F056 | [F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表 | US-075 | P0-MVP |
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 版本 |
+|------------|------|------|-----------|--------|------|
+| F069 | [F069-view-card-type-list.md](features/F069-view-card-type-list.md) | 查看 CARD_TYPE 計分卡類型清單（M02 Tab 1） | US-093 | P0-MVP | v1.0 |
+| F070 | [F070-create-card-type.md](features/F070-create-card-type.md) | 新增 CARD_TYPE 計分卡類型 | US-094 | P0-MVP | v1.0 |
+| F071 | [F071-edit-card-type.md](features/F071-edit-card-type.md) | 編輯 CARD_TYPE 計分卡類型 | US-095 | P0-MVP | v1.0 |
+| F072 | [F072-disable-card-type.md](features/F072-disable-card-type.md) | 停用 CARD_TYPE 計分卡類型（級聯刪除） | US-096 | P0-MVP | v1.0 |
+| F053 | [F053-view-scoring-dimensions.md](features/F053-view-scoring-dimensions.md) | 查看計分維度設定（M02 Tab 2） | US-072 | P0-MVP | v1.2 |
+| F054 | [F054-edit-scoring-dimension.md](features/F054-edit-scoring-dimension.md) | 編輯計分維度與分數（M02 Tab 2 寫入） | US-073 | P0-MVP | v1.2 |
+| F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074 | P0-MVP | v1.4 |
+| F056 | [F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表（M02 Tab 5） | US-075 | P0-MVP | v1.5 |
+
+> M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入、Tab 3 = F054 分數設定子視圖、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。
 
 #### M03 分派比例
 
@@ -258,7 +264,7 @@ status: Draft
    - 跨模組：F038
    - E05 執行引擎：F042->F043->F044
    - E06：F046->F047
-   - **E07 建議順序**：F068（代碼維護，前置依賴）->F048->F050->F051->F052->F049->F053->F054->F055->F056->F057->F058->F059->F060->F061->F062->F063->F064->F065->F066->F067
+   - **E07 建議順序**：F068（代碼維護，前置依賴）->F048->F050->F051->F052->F049->**F069->F070->F071->F072**（CARD_TYPE CRUD，M02 入口）->F053->F054->F055->F056（M02 Tab 2~5）->F057->F058->F059->F060->F061->F062->F063->F064->F065->F066->F067
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -288,10 +294,10 @@ status: Draft
 **E01~E06 既有**（37 個）：
 F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044, F045, F046, F047
 
-**E07 新增**（21 個）：
-F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068
+**E07 新增**（25 個，2026-05-14 M02 計分設定擴充 +4）：
+F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072
 
-**P0-MVP 總計：58 個 Feature**（37 既有 + 21 E07 新增）
+**P0-MVP 總計：62 個 Feature**（37 既有 + 25 E07 新增）
 
 ### P1（Should Have）— 9 個 Feature
 
@@ -349,6 +355,10 @@ F068 ──> F050, F051（PROD_KIND / SPEC_TP / CASE_STATUS 代碼就緒；CASEY
 F048 ──> F049（Stage 0 估算於清單頁觸發）
 F048 ──> F050, F051, F052, F060（清單頁為入口）
 F050 ──> F051, F052, F060（需先有名單才能編輯/停用/設定比例）
+F068 ──> F069（PROD_KIND 代碼為 CARD_TYPE 綁定來源）
+F069 ──> F070, F071, F072（CARD_TYPE CRUD 鏈）
+F069 ──> F053, F054, F055, F056（Tab 1 selectedCardType 驅動 Tab 2~5 篩選）
+F070 ──> F054, F055, F056（新建 CARD_TYPE 後才能設定維度 / CARD_LEVEL / TIER 對應）
 F053 ──> F054, F055, F056（需先查看現有設定）
 F055 ──> F056（TIER 對應依賴 CARD_LEVEL）
 F057 ──> F058（編輯需先查看）

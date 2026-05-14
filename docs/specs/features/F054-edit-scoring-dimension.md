@@ -1,26 +1,26 @@
 ---
 spec-id: F054
-title: 編輯計分維度與分數
+title: 編輯計分維度與分數（M02 Tab 2 寫入）
 feature-id: F054
 source-story: US-073
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.1"
-date: 2026-05-13
+version: "1.2"
+date: 2026-05-14
 status: Draft
 ---
 
-# F054: 編輯計分維度與分數
+# F054: 編輯計分維度與分數（M02 Tab 2 寫入）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## Agent Loading Guide
 
 | Agent 角色 | 需載入的檔案 |
 |-----------|-------------|
-| TDD Developer | 本文件 + `data-model.md#e07-data-model` + `error-handling.md#assignment-errors` |
-| QA / Tester | 本文件 + `error-handling.md#assignment-errors` |
+| TDD Developer | 本文件 + `data-model.md#e07-data-model` + `data-model.md#ob-card-type-entity` + `error-handling.md#assignment-scoring-errors` |
+| QA / Tester | 本文件 + `error-handling.md#assignment-scoring-errors` |
 | UI/UX Designer | 本文件（第 7 節 UI/UX 需求） |
 | Architect | 本文件 + `architecture-spec.md` §3.10 |
 
@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 ## 1. 功能摘要
 
-提供業務主管新增、修改、停用計分維度，以及調整各維度的分數區間設定（`ob_levelcard_column` / `ob_levelcard_score`）。採覆寫式儲存（無草稿版本分岔）；月跑執行中禁止修改。歷史追溯透過每次月跑自動產生的 config 快照（F066）查詢。
+提供業務主管針對「Tab 1 選中之 CARD_TYPE」新增、修改、停用計分維度，以及調整各維度的分數區間設定（`ob_levelcard_column` / `ob_levelcard_score`）。採覆寫式儲存（無草稿版本分岔）；月跑執行中禁止修改。歷史追溯透過每次月跑自動產生的 config 快照（F066）查詢。所有寫入操作之範圍均嚴格限定於 Tab 1 選中之 CARD_TYPE，跨 CARD_TYPE 寫入請求一律拒絕。
 
 ## 2. 使用者故事
 
@@ -39,17 +39,20 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 ## 3. 前置條件
 
 - 業務主管已登入並持有有效 JWT Token
-- `ob_levelcard_version` 至少有一筆 `status = 'active'` 的版本紀錄
+- `is_sales_manager = TRUE`
+- F069 Tab 1 已有選中之 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status = 'active'`
+- 該 CARD_TYPE 於 `ob_levelcard_version` 至少有一筆 `status = 'active'` 的版本紀錄（由 F070 新增 CARD_TYPE 時自動建立）
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 的紀錄
 
 ## 4. 驗收標準
 
-### AC-1：查看並直接編輯現行計分維度清單
+### AC-1：依選中 CARD_TYPE 查看並直接編輯現行計分維度清單
 
-- **Given** 業務主管進入 M02 計分設定頁面
+- **Given** 業務主管已在 Tab 1 選中某 CARD_TYPE，進入 M02 Tab 2 編輯模式
 - **When** 頁面載入完成
-- **Then** 顯示目前生效的所有計分維度清單，可直接點擊進入編輯模式
+- **Then** 顯示該 CARD_TYPE 目前生效版本的所有計分維度清單（`ob_levelcard_column WHERE card_type = :selectedCardType AND status = 'active'`），可直接點擊進入編輯模式
 - **And** 頁面顯示「現行設定」單一視圖，不存在草稿版本或版本切換選單
+- **And** 所有寫入操作（新增 / 修改 / 停用）之範圍嚴格限定於 Tab 1 選中之 CARD_TYPE
 
 ### AC-2：修改維度分數區間並即時儲存
 
@@ -59,13 +62,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 - **And** 頁面顯示儲存成功 toast
 - **And** 寫入 `assignment_audit_log`（`action = 'UPDATE'`, `before_value` + `after_value` JSONB）
 
-### AC-3：新增維度直接生效
+### AC-3：新增維度直接生效（範圍限定選中 CARD_TYPE）
 
 - **Given** 業務主管點擊「新增維度」，填入 `column_name` / `column_label` / 分數區間
 - **When** 業務主管點擊「確認新增」
-- **Then** 新維度寫入 `ob_levelcard_column` 並對應區間寫入 `ob_levelcard_score`
+- **Then** 新維度寫入 `ob_levelcard_column`，`card_type` 自動帶入 Tab 1 選中之 CARD_TYPE，`card_version` 帶入該 CARD_TYPE 之 active version；對應區間寫入 `ob_levelcard_score`
 - **And** 新維度立即出現於現行設定清單中
 - **And** 寫入 `assignment_audit_log`（`action = 'CREATE'`）
+- **And** Request body 中之 `cardType` 必須與 URL / context 提供之 selectedCardType 一致，否則 422 `VALIDATION_ERROR`
 
 ### AC-4：停用維度（Soft Delete）
 
@@ -88,7 +92,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 - **When** 前端/後端驗證
 - **Then** 若新區間與既有區間重疊（交集不為空），回傳 422 `SCORING_RANGE_OVERLAP`，訊息：「分數區間重疊，請調整條件值」
 
+### AC-7：CARD_TYPE 不存在或非 active
+
+- **Given** Request body / query 之 `cardType` 不存在於 `ob_card_type.status = 'active'`
+- **When** 後端驗證
+- **Then** 所有寫入端點（PUT 5.1 / POST 5.2 / PUT 5.3）回 404 `CARD_TYPE_NOT_FOUND`
+- **And** 與 AC-3 對應的 cross-CARD_TYPE 寫入禁止規則一同保護資料一致性
+
 ## 5. API 規格
+
+**Controller 規範**（適用於本節所有端點）：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
 
 ### 5.1 PUT /api/v1/assignment/scoring/dimensions
 
@@ -150,7 +163,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
 | 422 | SCORING_COLUMN_DUPLICATE | `column_name` 已存在於 active 版本 |
 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊 |
-| 422 | VALIDATION_ERROR | 欄位驗證失敗 |
+| 404 | CARD_TYPE_NOT_FOUND | request 之 `cardType` 不存在於 `ob_card_type.status = 'active'`（v1.2 新增） |
+| 422 | VALIDATION_ERROR | 欄位驗證失敗（含 request body `cardType` 與 selectedCardType 不一致） |
 
 ### 5.3 PUT /api/v1/assignment/scoring/dimensions/:columnName/disable（停用維度）
 
@@ -189,6 +203,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
 | 404 | SCORING_COLUMN_NOT_FOUND | 指定的 `cardType + columnName` 不存在或已停用 |
+| 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.2 新增） |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
 
 ## 6. 商業規則
@@ -201,6 +216,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 | BR-4 | 月跑鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回傳 409 |
 | BR-5 | 複雜計分邏輯（TIER_LEVEL 對應計算）由 PostgreSQL function 實作（AD-E07-3） |
 | BR-6 | `ob_levelcard_version.status` 欄位於遷移時補建（原 OBLEVELCARD_VERSION 無此欄位），初值由 `(SDATE <= 今日 < EDATE)` 計算；本功能仍以 `status = 'active'` 判斷 active 計分版本 |
+| BR-7 | **CARD_TYPE 範圍鎖**（v1.2 新增）：所有寫入操作之 `cardType` 必須對應 `ob_card_type.status = 'active'`；request body 中之 `cardType` 必須與 Tab 1 selectedCardType 一致；跨 CARD_TYPE 寫入請求一律拒絕（422 `CARD_TYPE_NOT_FOUND` 或 `VALIDATION_ERROR`） |
 
 ## 7. UI/UX 需求
 
@@ -211,17 +227,24 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 ## 8. 相依性
 
-- **Blocked By**：F053（需先查看現有設定）
+- **Blocked By**：F053（需先查看現有設定）、F069（Tab 1 CARD_TYPE 選中狀態來源）、F070（新建 CARD_TYPE 後才能編輯其維度）
 - **Blocks**：F061（月跑 Stage 2 計分邏輯使用此設定）
 
 ## 9. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_levelcard_version`、`ob_levelcard_column`、`ob_levelcard_score`）
-- 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_levelcard_version`、`ob_levelcard_column`、`ob_levelcard_score`）、[data-model.md#ob-card-type-entity](../data-model.md#ob-card-type-entity)
+- 錯誤處理：[error-handling.md#assignment-scoring-errors](../error-handling.md#assignment-scoring-errors)（含 v1.2 引用之 `CARD_TYPE_NOT_FOUND`）
 - 架構決策：AD-E07-3（PostgreSQL function）
-- 相關功能：[F053](F053-view-scoring-dimensions.md)、[F055](F055-edit-card-level-thresholds.md)、[F056](F056-edit-tier-mapping.md)、[F061](F061-trigger-assignment-run.md)、[F066](F066-view-run-snapshot-detail.md)
+- 相關功能：[F053](F053-view-scoring-dimensions.md)、[F055](F055-edit-card-level-thresholds.md)、[F056](F056-edit-tier-mapping.md)、[F061](F061-trigger-assignment-run.md)、[F066](F066-view-run-snapshot-detail.md)、[F069](F069-view-card-type-list.md)、[F070](F070-create-card-type.md)
 
-## 10. 假設
+## 10. 變更紀錄
+
+| 版本 | 日期 | 變更內容 |
+|---|---|---|
+| v1.1 | 2026-05-13 | 初版（覆寫式編輯、軟刪除 `ob_levelcard_column.status`、OBLEVELCARD_VERSION dump 驗證） |
+| v1.2 | 2026-05-14 | 補入 CARD_TYPE 範圍鎖（BR-7）、AC-1 / AC-3 改為 selectedCardType 為範圍、新增 AC-7、各端點補 422/404 `CARD_TYPE_NOT_FOUND`、Controller 規範註記、相依性補 F069 / F070 |
+
+## 11. 假設
 
 本版本無未解決假設：
 

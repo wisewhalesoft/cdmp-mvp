@@ -1,17 +1,17 @@
 ---
 spec-id: F055
-title: 編輯 CARD_LEVEL 分級門檻
+title: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4）
 feature-id: F055
 source-story: US-074
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.3"
+version: "1.4"
 date: 2026-05-14
 status: Draft
 ---
 
-# F055: 編輯 CARD_LEVEL 分級門檻
+# F055: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4）
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
@@ -19,8 +19,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 | Agent 角色 | 需載入的檔案 |
 |-----------|-------------|
-| TDD Developer | 本文件 + `data-model.md#e07-data-model` + `error-handling.md#assignment-errors` |
-| QA / Tester | 本文件 + `error-handling.md#assignment-errors` |
+| TDD Developer | 本文件 + `data-model.md#e07-data-model` + `data-model.md#ob-card-type-entity` + `error-handling.md#assignment-scoring-errors` |
+| QA / Tester | 本文件 + `error-handling.md#assignment-scoring-errors` |
 | UI/UX Designer | 本文件（第 7 節 UI/UX 需求） |
 | Architect | 本文件 + `architecture-spec.md` §3.10 |
 
@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管調整 CARD_LEVEL 各等級（A/B/C/D 等）的分數下限門檻（`ob_levelcard_level`）。修改時提供「預估各等級客戶分佈」預覽，並驗證門檻不得重疊。亦支援刪除特定等級（DELETE）以反映業務調整等級結構。月跑執行中禁止修改。
+提供業務主管針對 Tab 1 選中之 CARD_TYPE，調整 CARD_LEVEL 各等級（A/B/C/D 等）的分數下限門檻（`ob_levelcard_level`）。修改時提供「預估各等級客戶分佈」預覽，並驗證門檻不得重疊。亦支援刪除特定等級（DELETE）以反映業務調整等級結構。所有寫入操作之範圍均限定於 Tab 1 選中之 CARD_TYPE。月跑執行中禁止修改。本功能屬 M02 計分設定 5 Tab 結構中的 Tab 4。
 
 ## 2. 使用者故事
 
@@ -39,18 +39,21 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ## 3. 前置條件
 
 - 業務主管已登入並持有有效 JWT Token
-- `ob_levelcard_level` 已有對應 `card_type + card_version` 的分級資料
+- `is_sales_manager = TRUE`
+- F069 Tab 1 已有選中之 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status = 'active'`
+- `ob_levelcard_level` 已有對應 `card_type + card_version` 的分級資料（若為剛建立之 CARD_TYPE 可為空，依 AC-1 之空狀態處理）
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 的紀錄
 
 ## 4. 驗收標準
 
-### AC-1：顯示目前 CARD_LEVEL 門檻設定
+### AC-1：依選中 CARD_TYPE 顯示 CARD_LEVEL 門檻設定
 
-- **Given** 業務主管進入 CARD_LEVEL 設定頁面
+- **Given** 業務主管已在 Tab 1 選中某 CARD_TYPE，並切換至 Tab 4
 - **When** 頁面載入完成
-- **Then** 顯示目前各等級的分數區間（`score_s` ~ `score_e`）與等級代碼（`card_level`），表格欄位：等級代碼、等級名稱、分數下限、分數上限
+- **Then** 顯示該 CARD_TYPE 之 active 版本各等級的分數區間（`score_s` ~ `score_e`）與等級代碼（`card_level`），表格欄位：等級代碼、等級名稱、分數下限、分數上限
 - **And** 不同 CARD_TYPE 的等級數可能不同（OBLEVELCARD_LEVEL dump 中 `S5` 僅 A/B 兩級，其餘 H/S/E/E5/M 為 A/B/C/D 四級），UI 與 API 不可硬編碼 4 級邏輯
-- **And** 資料來源：`GET /api/v1/assignment/scoring/card-levels`（詳見 §5.1.1）
+- **And** 資料來源：`GET /api/v1/assignment/scoring/card-levels?cardType=:selectedCardType`（詳見 §5.1.1）
+- **And** 若 selectedCardType 為空（Tab 1 無選中）則 UI 顯示提示「請先在 Tab 1 選擇計分卡類型以查看設定」，不呼叫 API
 
 ### AC-2：修改門檻值並儲存
 
@@ -99,6 +102,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 5. API 規格
 
+**Controller 規範**（適用於本節所有端點）：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+
+**CARD_TYPE 範圍鎖**：本節所有端點之 `cardType` 必須對應 `ob_card_type.status = 'active'`，否則回 404 `CARD_TYPE_NOT_FOUND`（v1.4 新增）。
+
 ### 5.1.1 GET /api/v1/assignment/scoring/card-levels
 
 對應 AC-1：頁面載入時取得目前 `cardType + cardVersion` 之 `ob_levelcard_level` 清單供表格顯示。
@@ -133,6 +140,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增） |
 | 404 | SCORING_VERSION_NOT_FOUND | 該 `cardType` 無 active 計分版本，或指定 `cardVersion` 不存在 |
 
 ### 5.1 PUT /api/v1/assignment/scoring/card-levels
@@ -187,6 +195,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增；亦適用於 §5.1 PUT 端點 — request body 之 cardType） |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 422 | SCORING_RANGE_OVERLAP | 門檻區間重疊 |
 
@@ -221,6 +230,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增） |
 | 404 | CARD_LEVEL_RECORD_NOT_FOUND | 指定的 `(cardType, cardVersion, cardLevel)` 紀錄不存在於 `ob_levelcard_level` |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 409 | CARD_LEVEL_REFERENCED | 仍被 `ob_tier` 引用，禁止刪除（cascade reference check 失敗，見 BR-6） |
@@ -235,6 +245,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | BR-4 | `ob_levelcard_version.status` 欄位於遷移時補建（原 OBLEVELCARD_VERSION 無此欄位），初值由 `(SDATE <= 今日 < EDATE)` 計算；本功能仍以 `status = 'active'` 判斷 active 計分版本 |
 | BR-5 | **hard delete 決策**：DELETE 採 hard delete（`ob_levelcard_level` 表無 status 欄位；與 F054 軟刪除 `ob_levelcard_column` 的設計刻意不同，理由：等級結構為「業務分級設計」而非「啟用狀態」，被刪除的等級應從歷史結構中移除，歷史追溯依賴月跑 snapshot F066） |
 | BR-6 | **cascade reference check**：刪除前必須先檢查 `ob_tier WHERE card_type = :cardType AND card_level = :cardLevel`，若存在紀錄則回 409 `CARD_LEVEL_REFERENCED`，業務需先於 F056 移除對應後才能刪除 |
+| BR-7 | **CARD_TYPE 範圍鎖**（v1.4 新增）：所有寫入操作之 `cardType` 必須對應 `ob_card_type.status = 'active'`；違反回 404 `CARD_TYPE_NOT_FOUND`；前端 Tab 4 操作以 Tab 1 selectedCardType 為唯一資料範圍，跨 CARD_TYPE 寫入不開放 |
 
 ## 7. UI/UX 需求
 
@@ -248,17 +259,26 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 8. 相依性
 
-- **Blocked By**：F053（需先了解計分版本結構）
+- **Blocked By**：F053（需先了解計分版本結構）、F069（Tab 1 CARD_TYPE 選中狀態來源）
 - **Blocks**：F056（TIER_LEVEL 對應依賴 CARD_LEVEL 定義；刪除 cardLevel 前須確認 F056 `ob_tier` 對應已清空 — BR-6 cascade check）、F061（月跑 Stage 2 等級劃分）
 
 ## 9. 交叉參考
 
-- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_levelcard_level`）
-- 錯誤處理：[error-handling.md#assignment-scoring-errors](../error-handling.md#assignment-scoring-errors)（含 v1.3 新增的 `CARD_LEVEL_RECORD_NOT_FOUND`（404）、`CARD_LEVEL_REFERENCED`（409）錯誤碼）
+- 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_levelcard_level`）、[data-model.md#ob-card-type-entity](../data-model.md#ob-card-type-entity)
+- 錯誤處理：[error-handling.md#assignment-scoring-errors](../error-handling.md#assignment-scoring-errors)（含 v1.3 新增的 `CARD_LEVEL_RECORD_NOT_FOUND`（404）、`CARD_LEVEL_REFERENCED`（409）；v1.4 引用 `CARD_TYPE_NOT_FOUND`（404））
 - 架構決策：AD-E07-3
-- 相關功能：[F053](F053-view-scoring-dimensions.md)、[F054](F054-edit-scoring-dimension.md)（軟刪除維度，作為刪除設計對照）、[F056](F056-edit-tier-mapping.md)、[F061](F061-trigger-assignment-run.md)
+- 相關功能：[F053](F053-view-scoring-dimensions.md)、[F054](F054-edit-scoring-dimension.md)（軟刪除維度，作為刪除設計對照）、[F056](F056-edit-tier-mapping.md)、[F061](F061-trigger-assignment-run.md)、[F069](F069-view-card-type-list.md)、[F070](F070-create-card-type.md)
 
-## 10. 假設
+## 10. 變更紀錄
+
+| 版本 | 日期 | 變更內容 |
+|---|---|---|
+| v1.1 | 2026-05-13 | 初版（依 dump 觀察 5/6 CARD_TYPE 4 級 / S5 2 級，禁止前端硬編碼） |
+| v1.2 | 2026-05-13 | 補 GET 5.1.1 端點供頁面載入 |
+| v1.3 | 2026-05-14 | 新增 DELETE 端點 + cascade reference check + AC-6/7 |
+| v1.4 | 2026-05-14 | CARD_TYPE 範圍鎖（BR-7）；AC-1 改為依 selectedCardType 顯示；所有端點補 404 CARD_TYPE_NOT_FOUND；Controller 規範註記；相依性補 F069 |
+
+## 11. 假設
 
 | # | 假設 | 標記 |
 |---|---|---|
