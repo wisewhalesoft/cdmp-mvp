@@ -1,8 +1,8 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.5"
-date: 2026-04-24
+version: "1.7"
+date: 2026-05-14
 status: Draft
 ---
 
@@ -235,7 +235,10 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | SCORING_COLUMN_DUPLICATE | 422 | 計分維度 column_name `{columnName}` 已存在於 active 版本 | 新增維度時 `column_name` 已存在於同 `card_type + card_version` 的 `status = 'active'` 紀錄 | F054 |
 | SCORING_RANGE_OVERLAP | 422 | 分數區間重疊，請調整條件值 | 分數區間或 CARD_LEVEL 門檻區間重疊 | F054, F055 |
 | TIER_LEVEL_DUPLICATE | 422 | TIER_LEVEL 代碼 {code} 已存在 | 新增 TIER_LEVEL 對應時代碼重複 | F056 |
-| CARD_LEVEL_NOT_FOUND | 422 | 指定的 CARD_LEVEL 不存在於當前版本 | TIER_LEVEL 對應至不存在的 CARD_LEVEL | F056 |
+| CARD_LEVEL_NOT_FOUND_IN_VERSION | 422 | 指定的 CARD_LEVEL 不存在於 active 計分版本 | TIER_LEVEL 對應（新增 / 編輯）指向之 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`，或 `card_level` 輸入超過 1 字元（VARCHAR(1) vs VARCHAR(5) 不對稱保護，見 F056 BR-9）。fallback 場景 `card_level IS NULL` 不觸發此驗證（F056 AC-4a） | F056 §5.2 / §5.3 |
+| CARD_LEVEL_RECORD_NOT_FOUND | 404 | 指定的 CARD_LEVEL 紀錄不存在 | DELETE CARD_LEVEL 時 `ob_levelcard_level` 中無對應 `(cardType, cardVersion, cardLevel)` 複合 PK 紀錄 | F055 §5.3 |
+| CARD_LEVEL_REFERENCED | 409 | 等級 {cardLevel} 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除 | DELETE CARD_LEVEL 前的 cascade reference check：`ob_tier WHERE card_type = :cardType AND card_level = :cardLevel` 仍有紀錄存在（F055 BR-6 / AC-7） | F055 |
+| TIER_MAPPING_NOT_FOUND | 404 | 指定的 (cardType, cardLevel) TIER 對應不存在 | DELETE TIER 對應時 `ob_tier` 無對應 `(card_type, card_level)` 紀錄（含 fallback NULL 紀錄）；F056 §5.4 | F056 |
 
 #### 分派比例 {#assignment-ratio-errors}
 
@@ -379,6 +382,10 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 月跑非 completed 狀態匯出/比對 | 422 | ASSIGNMENT_RUN_NOT_COMPLETED / ASSIGNMENT_RUN_NOT_COMPARABLE | 僅 completed 狀態可操作 | 按鈕停用 |
 | 計分設定月跑鎖定 | 409 | SCORING_VERSION_LOCKED | 分派執行中，無法修改計分設定 | 拒絕請求 |
 | 分數區間重疊 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊 | 不儲存 |
+| TIER 對應指向不存在的 CARD_LEVEL | 422 | CARD_LEVEL_NOT_FOUND_IN_VERSION | 指定的 CARD_LEVEL 不存在於 active 計分版本 | 不儲存（fallback `card_level IS NULL` 場景例外） |
+| 刪除 CARD_LEVEL 但紀錄不存在 | 404 | CARD_LEVEL_RECORD_NOT_FOUND | 指定的 CARD_LEVEL 紀錄不存在 | 拒絕請求 |
+| 刪除 CARD_LEVEL 仍被 TIER 對應引用 | 409 | CARD_LEVEL_REFERENCED | 等級仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除 | 拒絕刪除（cascade reference check 失敗） |
+| 刪除 TIER 對應但對應不存在 | 404 | TIER_MAPPING_NOT_FOUND | 指定的 (cardType, cardLevel) TIER 對應不存在 | 拒絕請求 |
 | Stage 0 試算超時 | 500 | STAGE0_ESTIMATE_TIMEOUT | 試算查詢超過 10 秒 | 中斷查詢 |
 | 匯出逾時 | 500 | EXPORT_FILE_EXPIRED | 檔案產生逾時 | 中斷匯出 |
 | 代碼值重複 | 422 | CODE_IN_USE | 代碼值在該類別中已存在 | 不寫入 |

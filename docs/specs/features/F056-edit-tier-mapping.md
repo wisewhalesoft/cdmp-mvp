@@ -6,14 +6,14 @@ source-story: US-075
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.3"
-date: 2026-05-13
+version: "1.4"
+date: 2026-05-14
 status: Draft
 ---
 
 # F056: 編輯 TIER_LEVEL 對應表
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## Agent Loading Guide
 
@@ -78,7 +78,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 - **Given** 業務主管選擇或輸入非空值的 CARD_LEVEL（即非 fallback 場景）
 - **When** 前端/後端驗證
-- **Then** 該 CARD_LEVEL 必須存在於目前 active 版本的 `ob_levelcard_level` 中（依 CARD_TYPE 對應），否則回傳 422 `CARD_LEVEL_NOT_FOUND`
+- **Then** 該 CARD_LEVEL 必須存在於目前 active 版本的 `ob_levelcard_level` 中（依 CARD_TYPE 對應），否則回傳 422 `CARD_LEVEL_NOT_FOUND_IN_VERSION`
 - **And** 若 CARD_LEVEL 留空（fallback 規則路徑），改走 AC-4a，不觸發本驗證
 
 ### AC-4a：允許新增 CARD_LEVEL 為 NULL 的 fallback 對應
@@ -87,7 +87,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 - **When** 業務主管於新增 / 修改表單將 CARD_LEVEL 留空
 - **Then** 系統允許寫入 `card_level IS NULL` 紀錄（如 `M5` → `T5M`），表示 fallback 對應規則（不分等級直接對應 TIER_LEVEL）
 - **And** UI 須以視覺提示（如標籤 `Fallback` 或不同列底色）區分 fallback 規則與標準規則
-- **And** 此情境不觸發 AC-4 的 `CARD_LEVEL_NOT_FOUND` 驗證
+- **And** 此情境不觸發 AC-4 的 `CARD_LEVEL_NOT_FOUND_IN_VERSION` 驗證
 - **And** 對於 M3 / HC / C3 等過渡期 CARD_TYPE（OBLEVELCARD_VERSION 暫缺、但 OBMLISTDF 仍有名單筆數），允許先於 OBTIER 建立 fallback 對應；待業務補完整計分卡設定後改走標準路徑（CARD_LEVEL 非 NULL，AC-4）
 
 ### AC-5：月跑執行中禁止修改
@@ -95,6 +95,20 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務主管嘗試修改對應表
 - **Then** 編輯按鈕 disabled，API 回傳 409 `SCORING_VERSION_LOCKED`
+
+### AC-6：刪除單筆 TIER 對應
+
+- **Given** 業務主管於 TIER_LEVEL 對應頁面看到某 `(cardType, cardLevel)` 列；無月跑鎖
+- **When** 業務主管點擊該列的刪除按鈕並於確認對話框點擊「確認刪除」
+- **Then** 呼叫 `DELETE /api/v1/assignment/scoring/tier-mapping`（query: `cardType` + `cardLevel`），HTTP 200，DB 中該複合 PK 紀錄被實體刪除（hard delete）
+- **And** 寫入 `assignment_audit_log`（`action = 'DELETE'`、`entity_type = 'ob_tier'`、`entity_id = '{cardType}|{cardLevel ?? ""}'`、`before_value` 含 `tierLevel`、`after_value = null`）
+
+### AC-7：刪除 fallback 對應（cardLevel = NULL）
+
+- **Given** fallback 對應紀錄存在（`card_level IS NULL`，如 `M5` → `T5M`）
+- **When** 業務主管點擊刪除按鈕並確認
+- **Then** API 接受 `cardLevel` query 省略（不可用空字串，需與 BR-9 一致），執行 NULL 紀錄刪除
+- **And** 寫入 `assignment_audit_log`，`entity_id = '{cardType}|'`（cardLevel 部份留空）
 
 ## 5. API 規格
 
@@ -148,7 +162,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 - 同一 request body 內 `(card_type, card_level)` 重複出現視為輸入錯誤，回傳 422 `TIER_LEVEL_DUPLICATE`（body 內 PK 重複，不執行任何寫入）
 - 對於 body 中通過驗證的 mapping，若 DB 中已存在對應 PK 紀錄則 UPDATE，否則 INSERT
-- request 中未列出的既有對應不會被刪除（後續視需求新增獨立刪除 API）
+- request 中未列出的既有對應不會被刪除；如需刪除單筆對應，使用 §5.4 DELETE 端點
 
 **Response — 200 OK**：更新筆數。
 
@@ -167,7 +181,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 422 | TIER_LEVEL_DUPLICATE | request body 內 `(card_type, card_level)` 組合重複 |
-| 422 | CARD_LEVEL_NOT_FOUND | 指定的 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`（非 fallback 場景） |
+| 422 | CARD_LEVEL_NOT_FOUND_IN_VERSION | 指定的 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`（非 fallback 場景） |
 
 ### 5.3 POST /api/v1/assignment/scoring/tier-mapping
 
@@ -207,7 +221,49 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 422 | TIER_LEVEL_DUPLICATE | DB 中 `(card_type, card_level)` 組合已存在 |
-| 422 | CARD_LEVEL_NOT_FOUND | 指定的 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`（非 fallback 場景） |
+| 422 | CARD_LEVEL_NOT_FOUND_IN_VERSION | 指定的 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`（非 fallback 場景） |
+
+### 5.4 DELETE /api/v1/assignment/scoring/tier-mapping
+
+對應 AC-6 / AC-7：刪除指定 `(cardType, cardLevel)` 的單筆對應紀錄（包含 fallback 紀錄 `card_level IS NULL`）。
+
+**Query Parameters**
+
+| 參數 | 型別 | 必填 | 說明 |
+|---|---|---|---|
+| cardType | string | 是 | VARCHAR(5) |
+| cardLevel | string | 否 | 省略時代表刪除 `card_level IS NULL` 的 fallback 紀錄；不可使用空字串（與 BR-9 一致，空字串非合法 PK 值） |
+
+**Request Body**：無
+
+**Response — 200 OK**
+
+```json
+{
+  "cardType": "H",
+  "cardLevel": "D",
+  "deletedAt": "2026-05-14T08:30:00.000Z"
+}
+```
+
+fallback 刪除回應範例（cardLevel 為 null）：
+
+```json
+{
+  "cardType": "M5",
+  "cardLevel": null,
+  "deletedAt": "2026-05-14T08:30:00.000Z"
+}
+```
+
+**錯誤回應**
+
+| HTTP | 錯誤碼 | 說明 |
+|---|---|---|
+| 401 | AUTH_TOKEN_MISSING | 未登入 |
+| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 404 | TIER_MAPPING_NOT_FOUND | 指定的 `(cardType, cardLevel)` 對應不存在 |
+| 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 
 ## 6. 商業規則
 
@@ -221,8 +277,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 | BR-6 | 特殊 CARD_TYPE（`M3` → `T5M`、`HC` → `THC`、`C3` → `T3C`）於舊 SP Stage2 L93-123 以 IF 分支硬編碼覆寫；本功能於 `ob_tier` 中以正常對應紀錄表達，不再使用硬編碼。OBMLISTDF dump 證實 M3 (31 筆)、HC (25 筆)、C3 (23 筆) 仍在使用（OQ-E07-28 決策），遷移腳本需：(a) 為 M3 / HC / C3 補 `ob_tier` seed（M3→T5M、HC→THC、C3→T3C），語意參考舊 SP Stage2 L93-123；(b) 為 M3 / HC / C3 補 `ob_levelcard_version` 計分卡（業務需提供計分設定，新系統不再保留 SP 硬編碼分支）。具體 seed 內容由 system-architect 於 data-model 或 open-questions 記載 |
 | BR-7 | `ob_tier` 原表無稽核欄位；本功能對 `ob_tier` 的 INSERT / UPDATE 透過 `assignment_audit_log`（`entity_type = 'ob_tier'`）統一記錄稽核軌跡，與 E07 其他設定一致 |
 | BR-8 | OBTIER 接受計分卡體系外的 CARD_TYPE（如 `M5`，dump 觀察存在於 OBTIER 但不存在於 OBLEVELCARD_VERSION），對應月跑 Stage 2 fallback 邏輯：當 CARD_TYPE 為 fallback 類型時，CARD_LEVEL 可為 NULL（如 `M5` → `T5M` 直接對應，不分等級）；UI 須以視覺提示區分 fallback 規則。注意：`HM` 雖過去亦缺 OBLEVELCARD_VERSION 紀錄，但依 OQ-E07-27 決策應補建為獨立計分卡（見 A-5），未來不再屬於 fallback 場景 |
-| BR-9 | `ob_tier.card_level` 為 VARCHAR(5)、`ob_levelcard_level.card_level` 為 VARCHAR(1)；兩表 join 與驗證以字串精確比對；TIER 對應輸入超過 1 字元視為對應失敗，回 422 `CARD_LEVEL_NOT_FOUND`（fallback 場景 NULL 例外，見 AC-4a） |
+| BR-9 | `ob_tier.card_level` 為 VARCHAR(5)、`ob_levelcard_level.card_level` 為 VARCHAR(1)；兩表 join 與驗證以字串精確比對；TIER 對應輸入超過 1 字元視為對應失敗，回 422 `CARD_LEVEL_NOT_FOUND_IN_VERSION`（fallback 場景 NULL 例外，見 AC-4a） |
 | BR-10 | fallback 規則（`card_level IS NULL`）於 PostgreSQL `fn_calc_tier_level` 中必須以顯式 `IS NULL` 分支處理。舊 SP Stage2 L84-88 採 `LEFT JOIN OBTIER C ON A.CARD_LEVEL=C.CARD_LEVEL`，但 SQL 三值邏輯下 `A.CARD_LEVEL = C.CARD_LEVEL` 對 NULL 不會 match（OBTIER 中 `M5,,T5M` fallback 紀錄於舊 SP 實際未生效，M5 / M3 / HC / C3 依賴 SP L93-123 硬編碼 IF 分支補上）。新系統 function 需在 join 條件中顯式判斷 `IS NULL` 以正確啟用 fallback；具體 SQL 實作由 system-architect 於 architecture-spec 描述 |
+| BR-11 | **DELETE 採 hard delete**：`ob_tier` 表無 status 欄位，刪除直接從 DB 移除紀錄；歷史追溯依 F066 月跑 snapshot；audit log 記錄 `action = 'DELETE'`、`entity_type = 'ob_tier'`、`entity_id = '{cardType}|{cardLevel ?? ""}'`、`before_value` 含 `tierLevel`、`after_value = null` |
 
 ## 7. UI/UX 需求
 
@@ -232,6 +289,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 - TIER_LEVEL 採文字輸入（業務方自定義代碼）
 - LIST_NM 採 optional 文字輸入（最多 30 字元），允許空白；不影響 PK 唯一性與寫入結果
 - 新增按鈕開啟 Modal 表單
+- 對應列右側操作區提供「刪除」icon 按鈕（trash icon，紅色 hover），點擊觸發確認對話框；月跑鎖定時 disabled
+- **prototype 28 註記**：prototype L1165-1172 即為此功能 trash icon UI，現有設計可直接沿用，本次（v1.4）無需重繪
 
 ## 8. 相依性
 
@@ -242,7 +301,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
 
 - 資料模型：[data-model.md#ob-tier-entity](../data-model.md#ob-tier-entity)（`ob_tier` 表定義，含 SP 證據與假設說明）
 - 相關資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_levelcard_level` CARD_LEVEL 分級門檻 — 由 F055 維護）
-- 錯誤處理：[error-handling.md#assignment-scoring-errors](../error-handling.md#assignment-scoring-errors)
+- 錯誤處理：[error-handling.md#assignment-scoring-errors](../error-handling.md#assignment-scoring-errors)（v1.4 新增 `TIER_MAPPING_NOT_FOUND`（404）；原 `CARD_LEVEL_NOT_FOUND` 已拆分重新命名為 `CARD_LEVEL_NOT_FOUND_IN_VERSION`（422，TIER 對應驗證用））
 - 架構決策：AD-E07-3
 - SP 來源：`reference/SP/Stage2_依照CardType分類TierLevel.sql`
 - 相關功能：[F055](F055-edit-card-level-thresholds.md)、[F061](F061-trigger-assignment-run.md)
