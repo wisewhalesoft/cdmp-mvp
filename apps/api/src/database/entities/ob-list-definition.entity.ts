@@ -4,6 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('ob_list_definition')
 export class ObListDefinition {
@@ -13,7 +14,10 @@ export class ObListDefinition {
   @Column({ name: 'created_by', type: 'varchar', length: 20 })
   created_by: string; // A_USERID
 
-  @Column({ name: 'created_at', type: 'timestamp' })
+  // E2E sqlite 相容：採 dateColumnType（postgres=timestamp / sqlite=datetime）
+  // 依 memory feedback_typeorm_timestamp 規則；遷移到 ob_card_type 模組（F069~F072 Iter 2）
+  // 需要在 SQLite e2e 註冊本 entity，故統一改用 helper。
+  @Column({ name: 'created_at', type: dateColumnType })
   created_at: Date; // A_SYSDT
 
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 20 })
@@ -22,7 +26,7 @@ export class ObListDefinition {
   @Column({ name: 'updated_by', type: 'varchar', length: 20 })
   updated_by: string; // U_USERID
 
-  @Column({ name: 'updated_at', type: 'timestamp' })
+  @Column({ name: 'updated_at', type: dateColumnType })
   updated_at: Date; // U_SYSDT
 
   @PrimaryColumn({ name: 'list_no', type: 'varchar', length: 11 })
@@ -52,7 +56,7 @@ export class ObListDefinition {
   @Column({ name: 'list_interval', type: 'varchar', length: 3 })
   list_interval: string;
 
-  @Column({ name: 'assigned_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'assigned_date', type: dateColumnType, nullable: true })
   assigned_date: Date | null;
 
   @Column({ name: 'total_amount', type: 'integer', nullable: true })

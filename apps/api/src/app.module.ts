@@ -45,6 +45,8 @@ import { AssignmentAuditLog } from './database/entities/assignment-audit-log.ent
 import { ObAssignConfig } from './database/entities/ob-assign-config.entity';
 import { ObAssignSet } from './database/entities/ob-assign-set.entity';
 import { ObArreturndfMinCap } from './database/entities/ob-arreturndf-min-cap.entity';
+// Iter 1：F069~F072 CARD_TYPE 主檔 entity
+import { ObCardType } from './database/entities/ob-card-type.entity';
 
 const E07_ENTITIES = [
   ObCodeDf, ObListDefinition, ObDeptPct, ObEmplSet,
@@ -53,6 +55,7 @@ const E07_ENTITIES = [
   AssignmentRun, AssignmentRunSnapshot, AssignmentRunStageLog, AssignmentAuditLog,
   ObAssignConfig, ObAssignSet,
   ObArreturndfMinCap,
+  ObCardType,
 ];
 
 @Module({
