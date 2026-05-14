@@ -11,10 +11,17 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { User } from '@/database/entities/user.entity';
+import { TIER_LEVEL_ENUM_SET } from './constants/card-type.constants';
+import { assertCardTypeActive } from './helpers/card-type-scope.helper';
+import {
+  detectFallbackStandardMutexViolation,
+  TierRow,
+} from './helpers/tier-mapping-mutex.helper';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Service
@@ -48,6 +55,11 @@ export const SCORING_ERROR_CODES = {
   CARD_LEVEL_RECORD_NOT_FOUND: 'CARD_LEVEL_RECORD_NOT_FOUND',
   CARD_LEVEL_REFERENCED: 'CARD_LEVEL_REFERENCED',
   TIER_MAPPING_NOT_FOUND: 'TIER_MAPPING_NOT_FOUND',
+  // v1.5（Iter 3）新增（F056 spec §AC-8 / AC-9 / AC-3 / AC-4a）
+  TIER_LEVEL_INVALID_ENUM: 'TIER_LEVEL_INVALID_ENUM',
+  CARD_TYPE_FALLBACK_STANDARD_MUTEX: 'CARD_TYPE_FALLBACK_STANDARD_MUTEX',
+  CARD_TYPE_NOT_FOUND: 'CARD_TYPE_NOT_FOUND',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
 } as const;
 
 export const SCORING_ERROR_MESSAGES = {
@@ -62,6 +74,12 @@ export const SCORING_ERROR_MESSAGES = {
   CARD_LEVEL_REFERENCED:
     '此 CARD_LEVEL 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除',
   TIER_MAPPING_NOT_FOUND: '指定的 TIER 對應不存在',
+  // v1.5（Iter 3）新增
+  TIER_LEVEL_INVALID_ENUM: 'TIER_LEVEL 必須為 T1~T10 之一',
+  CARD_TYPE_FALLBACK_STANDARD_MUTEX:
+    '同一計分卡類型不可同時存在 Fallback 與 Standard 規則',
+  CARD_TYPE_NOT_FOUND: '計分卡類型不存在或已停用',
+  VALIDATION_ERROR: '請求參數不符規範',
 } as const;
 
 // =========================
@@ -224,7 +242,12 @@ export interface TierMappingItem {
   listNm?: string | null;
 }
 
+export interface GetTierMappingInput {
+  cardType: string;
+}
+
 export interface GetTierMappingResult {
+  cardType: string;
   mappings: Array<{
     cardType: string;
     cardLevel: string | null;
@@ -234,6 +257,8 @@ export interface GetTierMappingResult {
 }
 
 export interface UpdateTierMappingInput {
+  /** v1.5：query 帶入 cardType，body 內所有 mapping 必須一致 */
+  cardType: string;
   mappings: TierMappingItem[];
 }
 
@@ -281,6 +306,8 @@ export class AssignmentScoringService {
     private readonly levelRepo: Repository<ObLevelcardLevel>,
     @InjectRepository(ObTier)
     private readonly tierRepo: Repository<ObTier>,
+    @InjectRepository(ObCardType)
+    private readonly cardTypeRepo: Repository<ObCardType>,
     @InjectRepository(ObPoolDataList)
     private readonly poolDataListRepo: Repository<ObPoolDataList>,
     @InjectRepository(AssignmentRun)
@@ -297,6 +324,11 @@ export class AssignmentScoringService {
 
   async getScoring(query: { cardType?: string }): Promise<GetScoringResult> {
     const cardType = query.cardType;
+    // F053 v1.2 AC-7 / BR-4：cardType 範圍鎖（cardType 提供時優先檢查；
+    //   path rename + cardType 改必填屬 v1.2 完整重構，超出 Iter 4 增量範圍）
+    if (cardType) {
+      await assertCardTypeActive(this.cardTypeRepo, cardType);
+    }
     const version = await this.versionRepo.findOne({
       where: { card_type: cardType as any, status: 'active' as any },
     });
@@ -367,6 +399,9 @@ export class AssignmentScoringService {
   ): Promise<UpdateDimensionsResult> {
     // BR-4：月跑鎖
     await this.assertNotLocked();
+
+    // F054 v1.2 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
 
     // AC-6 / BR-3：先驗證每個維度的數值區間（在 body 內）不重疊
     for (const dim of input.dimensions) {
@@ -494,6 +529,9 @@ export class AssignmentScoringService {
   ): Promise<CreateDimensionResult> {
     await this.assertNotLocked();
 
+    // F054 v1.2 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
     // AC-6：body 內 scores 區間重疊驗證（先做，避免在 duplicate 之後又驗證）
     const numericScores = input.scores.filter(
       (s) => s.level2S != null && s.level2E != null,
@@ -594,6 +632,9 @@ export class AssignmentScoringService {
   ): Promise<DisableDimensionResult> {
     await this.assertNotLocked();
 
+    // F054 v1.2 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, cardType);
+
     // findOne 限定 status='active'，已停用的不再允許重複停用 → 404
     const existing = await this.columnRepo.findOne({
       where: {
@@ -641,6 +682,9 @@ export class AssignmentScoringService {
   // =========================
 
   async getCardLevels(input: GetCardLevelsInput): Promise<GetCardLevelsResult> {
+    // F055 v1.4 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
     // cardVersion 未傳 → 取 active 版本；顯式傳入 → 用該版本（不限 status）
     const whereClause: any = {
       card_type: input.cardType as any,
@@ -688,6 +732,9 @@ export class AssignmentScoringService {
   async previewCardLevels(
     input: PreviewCardLevelsInput,
   ): Promise<PreviewCardLevelsResult> {
+    // F055 v1.4 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
     // 解析 levels JSON
     let parsedLevels: CardLevelItem[];
     try {
@@ -736,6 +783,9 @@ export class AssignmentScoringService {
     actor: ActorContext,
   ): Promise<UpdateCardLevelsResult> {
     await this.assertNotLocked();
+
+    // F055 v1.4 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
 
     // 區間驗證
     for (const l of input.levels) {
@@ -824,6 +874,9 @@ export class AssignmentScoringService {
   ): Promise<DeleteCardLevelResult> {
     await this.assertNotLocked();
 
+    // F055 v1.4 AC-7 / BR-7：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
     const existing = await this.levelRepo.findOne({
       where: {
         card_type: input.cardType as any,
@@ -885,17 +938,22 @@ export class AssignmentScoringService {
   }
 
   // =========================
-  // F056 — GET /scoring/tier-mapping（§5.1）
+  // F056 v1.5 — GET /scoring/tier-mapping（§5.1）
   // =========================
 
-  async getTierMapping(): Promise<GetTierMappingResult> {
-    const rows = await this.tierRepo.find();
+  async getTierMapping(
+    input: GetTierMappingInput,
+  ): Promise<GetTierMappingResult> {
+    // v1.5 AC-9：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
 
-    // 依 (card_type, card_level NULLS LAST) 升冪
+    // v1.5 AC-1：僅回傳該 cardType 的紀錄
+    const rows = await this.tierRepo.find({
+      where: { card_type: input.cardType as any },
+    });
+
+    // 依 card_level（NULLS LAST）升冪
     const sorted = [...rows].sort((a, b) => {
-      if (a.card_type !== b.card_type) {
-        return a.card_type.localeCompare(b.card_type);
-      }
       const aNull = a.card_level == null;
       const bNull = b.card_level == null;
       if (aNull && !bNull) return 1;
@@ -905,6 +963,7 @@ export class AssignmentScoringService {
     });
 
     return {
+      cardType: input.cardType,
       mappings: sorted.map((r) => ({
         cardType: r.card_type,
         cardLevel: r.card_level,
@@ -915,14 +974,34 @@ export class AssignmentScoringService {
   }
 
   // =========================
-  // F056 — PUT /scoring/tier-mapping（§5.2，批次 UPSERT）
+  // F056 v1.5 — PUT /scoring/tier-mapping（§5.2，批次 UPSERT）
   // =========================
 
   async updateTierMapping(
     input: UpdateTierMappingInput,
     actor: ActorContext,
   ): Promise<UpdateTierMappingResult> {
+    // BR-5：月跑鎖（保留既有錯誤碼 SCORING_VERSION_LOCKED）
     await this.assertNotLocked();
+
+    // v1.5 AC-9：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
+    // v1.5：body 內所有 mapping 之 cardType 必須與 query cardType 一致
+    for (const m of input.mappings) {
+      if (m.cardType !== input.cardType) {
+        throw new UnprocessableEntityException({
+          error: SCORING_ERROR_CODES.VALIDATION_ERROR,
+          message: `mapping cardType '${m.cardType}' 與 query cardType '${input.cardType}' 不一致`,
+          details: { field: 'mappings.cardType', expected: input.cardType, actual: m.cardType },
+        });
+      }
+    }
+
+    // v1.5 AC-8：tierLevel 列舉檢查（service 端額外把關，防 client 跳過 pipe）
+    for (const m of input.mappings) {
+      this.assertTierLevelValid(m.tierLevel);
+    }
 
     // BR-1 / spec 5.2：body 內 (cardType, cardLevel) 重複 → 422 TIER_LEVEL_DUPLICATE
     const pkSet = new Set<string>();
@@ -941,6 +1020,10 @@ export class AssignmentScoringService {
     for (const m of input.mappings) {
       await this.assertCardLevelExistsOrFallback(m.cardType, m.cardLevel);
     }
+
+    // v1.5 AC-3 / AC-4a / BR-13：Fallback/Standard 互斥檢查
+    //   依「DB 既有 + body 預定寫入」最終態組合判斷
+    await this.assertFallbackStandardMutex(input.cardType, input.mappings);
 
     let updatedCount = 0;
     let insertedCount = 0;
@@ -1008,8 +1091,25 @@ export class AssignmentScoringService {
   ): Promise<CreateTierMappingResult> {
     await this.assertNotLocked();
 
+    // v1.5 AC-9：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
+    // v1.5 AC-8：tierLevel 列舉檢查
+    this.assertTierLevelValid(input.tierLevel);
+
     // BR-3 / BR-9：CARD_LEVEL 非 NULL 時必須存在於 active 版本；>1 字元視同不存在
     await this.assertCardLevelExistsOrFallback(input.cardType, input.cardLevel);
+
+    // v1.5 AC-3 / AC-4a / BR-13：Fallback/Standard 互斥檢查
+    //   單筆 POST 場景：以「DB 既有 + 本筆 INSERT」最終態判斷
+    await this.assertFallbackStandardMutex(input.cardType, [
+      {
+        cardType: input.cardType,
+        cardLevel: input.cardLevel,
+        tierLevel: input.tierLevel,
+        listNm: input.listNm ?? null,
+      },
+    ]);
 
     const existing = await this.findTierByPk(input.cardType, input.cardLevel);
     if (existing) {
@@ -1067,6 +1167,9 @@ export class AssignmentScoringService {
   ): Promise<DeleteTierMappingResult> {
     await this.assertNotLocked();
 
+    // v1.5 AC-9：cardType 範圍鎖
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
     const existing = await this.findTierByPk(input.cardType, input.cardLevel);
     if (!existing) {
       throw new NotFoundException({
@@ -1104,6 +1207,74 @@ export class AssignmentScoringService {
   }
 
   // ----- F056 helpers -----
+
+  /**
+   * v1.5 AC-8：tierLevel 必須屬於 T1~T10 列舉，否則 422 TIER_LEVEL_INVALID_ENUM。
+   *   service 端 assert（DTO @IsIn 為主、service 為輔，雙重把關）。
+   */
+  private assertTierLevelValid(tierLevel: string): void {
+    if (!TIER_LEVEL_ENUM_SET.has(tierLevel)) {
+      throw new UnprocessableEntityException({
+        error: SCORING_ERROR_CODES.TIER_LEVEL_INVALID_ENUM,
+        message: `${SCORING_ERROR_MESSAGES.TIER_LEVEL_INVALID_ENUM}，目前值：${tierLevel}`,
+        details: { field: 'tierLevel', value: tierLevel },
+      });
+    }
+  }
+
+  /**
+   * v1.5 AC-3 / AC-4a / BR-13：Fallback/Standard 互斥檢查（應用層 Mutex）。
+   *
+   * 判斷邏輯：合併「DB 既有 + 本批次預定寫入」之最終態，呼叫 pure helper
+   *   detectFallbackStandardMutexViolation 判斷是否存在 null + 非 null cardLevel
+   *   並存於同一 cardType。
+   *
+   * @param cardType  目標 cardType
+   * @param incoming  本次預定寫入的 mapping items（POST 為 1 筆，PUT 為 N 筆）
+   */
+  private async assertFallbackStandardMutex(
+    cardType: string,
+    incoming: ReadonlyArray<TierMappingItem>,
+  ): Promise<void> {
+    const dbRows = await this.tierRepo.find({
+      where: { card_type: cardType as any },
+    });
+
+    // 將 DB 既有與 incoming 合併為最終態：incoming 中的 (cardType, cardLevel) 覆寫 DB 既有，
+    // 未涵蓋之既有保留。
+    const incomingKey = (m: { cardType: string; cardLevel: string | null }) =>
+      `${m.cardType}|${m.cardLevel ?? '__NULL__'}`;
+    const incomingKeys = new Set(incoming.map(incomingKey));
+
+    const merged: TierRow[] = [];
+    for (const r of dbRows) {
+      const key = incomingKey({ cardType: r.card_type, cardLevel: r.card_level });
+      if (!incomingKeys.has(key)) {
+        merged.push({ cardType: r.card_type, cardLevel: r.card_level });
+      }
+    }
+    for (const m of incoming) {
+      merged.push({ cardType: m.cardType, cardLevel: m.cardLevel });
+    }
+
+    if (detectFallbackStandardMutexViolation(merged, cardType)) {
+      // 為前端錯誤訊息提供有用上下文：計算最終態 standard / fallback 筆數
+      const sameCardType = merged.filter((r) => r.cardType === cardType);
+      const standardCount = sameCardType.filter((r) => r.cardLevel != null).length;
+      const fallbackCount = sameCardType.filter((r) => r.cardLevel == null).length;
+      throw new UnprocessableEntityException({
+        error: SCORING_ERROR_CODES.CARD_TYPE_FALLBACK_STANDARD_MUTEX,
+        message:
+          `${SCORING_ERROR_MESSAGES.CARD_TYPE_FALLBACK_STANDARD_MUTEX}：` +
+          `CARD_TYPE ${cardType} 同時存在 ${standardCount} 筆 Standard + ${fallbackCount} 筆 Fallback`,
+        details: {
+          cardType,
+          standardCount,
+          fallbackCount,
+        },
+      });
+    }
+  }
 
   /**
    * fallback 場景（card_level === null）跳過驗證；

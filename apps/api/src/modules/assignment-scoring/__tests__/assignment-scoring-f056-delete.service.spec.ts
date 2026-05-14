@@ -24,6 +24,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
@@ -40,6 +41,7 @@ describe('AssignmentScoringService — F056 deleteTierMapping', () => {
   let runRepo: any;
   let auditRepo: any;
   let userRepo: any;
+  let cardTypeRepo: any;
 
   const actor = { userId: 'sm-uuid', ipAddress: '127.0.0.1' };
 
@@ -65,6 +67,17 @@ describe('AssignmentScoringService — F056 deleteTierMapping', () => {
     userRepo = {
       findOne: vi.fn().mockResolvedValue({ id: 'sm-uuid', name: 'SM' }),
     };
+    // v1.5 cardType 範圍鎖：預設目標 cardType 為 active，使既有 TC 不受影響
+    cardTypeRepo = {
+      findOne: vi.fn().mockImplementation(({ where }: any) =>
+        Promise.resolve({
+          card_type: where.card_type,
+          card_name: 'mock',
+          prod_kind: '01',
+          status: 'active',
+        }),
+      ),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -74,6 +87,7 @@ describe('AssignmentScoringService — F056 deleteTierMapping', () => {
         { provide: getRepositoryToken(ObLevelcardScore), useValue: scoreRepo },
         { provide: getRepositoryToken(ObLevelcardLevel), useValue: levelRepo },
         { provide: getRepositoryToken(ObTier), useValue: tierRepo },
+        { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
         { provide: getRepositoryToken(ObPoolDataList), useValue: poolDataListRepo },
         { provide: getRepositoryToken(AssignmentRun), useValue: runRepo },
         { provide: getRepositoryToken(AssignmentAuditLog), useValue: auditRepo },

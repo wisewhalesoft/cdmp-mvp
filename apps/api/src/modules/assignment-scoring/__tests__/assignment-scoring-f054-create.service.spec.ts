@@ -18,6 +18,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
@@ -71,6 +72,17 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         { provide: getRepositoryToken(ObLevelcardScore), useValue: scoreRepo },
         { provide: getRepositoryToken(ObLevelcardLevel), useValue: levelRepo },
         { provide: getRepositoryToken(ObTier), useValue: tierRepo },
+        // Iter 4 v1.2：F054 cardType 範圍鎖；happy-path TC 預設 cardType active
+        { provide: getRepositoryToken(ObCardType), useValue: {
+          findOne: vi.fn().mockImplementation(({ where }: any) =>
+            Promise.resolve({
+              card_type: where.card_type,
+              card_name: 'mock',
+              prod_kind: '01',
+              status: 'active',
+            }),
+          ),
+        } },
         { provide: getRepositoryToken(ObPoolDataList), useValue: poolDataListRepo },
         { provide: getRepositoryToken(AssignmentRun), useValue: runRepo },
         { provide: getRepositoryToken(AssignmentAuditLog), useValue: auditRepo },

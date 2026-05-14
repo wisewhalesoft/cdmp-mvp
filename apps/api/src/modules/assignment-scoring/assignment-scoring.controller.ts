@@ -24,9 +24,13 @@ import { UpdateCardLevelsDto } from './dto/update-card-levels.dto';
 import { GetCardLevelsQueryDto } from './dto/get-card-levels-query.dto';
 import { PreviewCardLevelsQueryDto } from './dto/preview-card-levels-query.dto';
 import { DeleteCardLevelQueryDto } from './dto/delete-card-level-query.dto';
-import { UpdateTierMappingDto } from './dto/update-tier-mapping.dto';
+import {
+  UpdateTierMappingDto,
+  UpdateTierMappingQueryDto,
+} from './dto/update-tier-mapping.dto';
 import { CreateTierMappingDto } from './dto/create-tier-mapping.dto';
 import { DeleteTierMappingQueryDto } from './dto/delete-tier-mapping-query.dto';
+import { GetTierMappingQueryDto } from './dto/get-tier-mapping-query.dto';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Controller
@@ -138,20 +142,30 @@ export class AssignmentScoringController {
     );
   }
 
-  // ===== F056 =====
+  // ===== F056 v1.5 =====
 
   @Get('tier-mapping')
-  async getTierMapping() {
-    return this.service.getTierMapping();
+  async getTierMapping(@Query() query: GetTierMappingQueryDto) {
+    return this.service.getTierMapping({ cardType: query.cardType });
   }
 
   @Put('tier-mapping')
-  async updateTierMapping(@Body() dto: UpdateTierMappingDto, @Req() req: any) {
+  async updateTierMapping(
+    @Query() query: UpdateTierMappingQueryDto,
+    @Body() dto: UpdateTierMappingDto,
+    @Req() req: any,
+  ) {
     const actor = {
       userId: req.user.userId,
       ipAddress: req.ip ?? null,
     };
-    return this.service.updateTierMapping(dto, actor);
+    return this.service.updateTierMapping(
+      {
+        cardType: query.cardType,
+        mappings: dto.mappings,
+      },
+      actor,
+    );
   }
 
   @Post('tier-mapping')

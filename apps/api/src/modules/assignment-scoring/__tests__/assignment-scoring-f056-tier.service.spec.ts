@@ -42,6 +42,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
@@ -82,6 +83,18 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
       findOne: vi.fn().mockResolvedValue({ id: 'sm-uuid', name: 'SM' }),
     };
 
+    // v1.5 cardType 範圍鎖：預設目標 cardType 為 active（既有 TC 不受 v1.5 範圍鎖影響）
+    const cardTypeRepo = {
+      findOne: vi.fn().mockImplementation(({ where }: any) =>
+        Promise.resolve({
+          card_type: where.card_type,
+          card_name: 'mock',
+          prod_kind: '01',
+          status: 'active',
+        }),
+      ),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssignmentScoringService,
@@ -90,6 +103,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
         { provide: getRepositoryToken(ObLevelcardScore), useValue: scoreRepo },
         { provide: getRepositoryToken(ObLevelcardLevel), useValue: levelRepo },
         { provide: getRepositoryToken(ObTier), useValue: tierRepo },
+        { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
         { provide: getRepositoryToken(ObPoolDataList), useValue: poolDataListRepo },
         { provide: getRepositoryToken(AssignmentRun), useValue: runRepo },
         { provide: getRepositoryToken(AssignmentAuditLog), useValue: auditRepo },
@@ -102,23 +116,25 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
 
   // ===== GET /tier-mapping =====
 
-  it('TS-F056-001：GET 回傳含標準 + fallback 對應，依 (card_type, card_level) 升冪', async () => {
+  it('TS-F056-001：GET 回傳含標準 + fallback 對應，依 card_level 升冪（v1.5：限該 cardType）', async () => {
+    // v1.5 GET 只回傳 query cardType 的紀錄；mock 模擬 tierRepo.find 已篩選後結果
     tierRepo.find.mockResolvedValue([
-      { card_type: 'H', card_level: 'A', tier_level: 'T1', list_nm: '期中名單' },
-      { card_type: 'M5', card_level: null, tier_level: 'T5M', list_nm: '機車' },
-      { card_type: 'M3', card_level: null, tier_level: 'T5M', list_nm: null },
       { card_type: 'H', card_level: 'B', tier_level: 'T2', list_nm: '期中' },
+      { card_type: 'H', card_level: 'A', tier_level: 'T1', list_nm: '期中名單' },
+      { card_type: 'H', card_level: null, tier_level: 'T1', list_nm: 'fallback' },
     ]);
 
-    const result = await service.getTierMapping();
-    expect(result.mappings).toHaveLength(4);
-    // 依 (card_type, card_level NULLS FIRST) 升冪
-    // H/A < H/B < M3/null < M5/null
+    const result = await service.getTierMapping({ cardType: 'H' } as any);
+    expect(result.cardType).toBe('H');
+    expect(result.mappings).toHaveLength(3);
+    // 依 cardLevel 升冪、NULL 末尾
     expect(result.mappings.map((m) => `${m.cardType}|${m.cardLevel ?? '_null'}`)).toEqual([
-      'H|A', 'H|B', 'M3|_null', 'M5|_null',
+      'H|A',
+      'H|B',
+      'H|_null',
     ]);
-    // fallback 那筆 cardLevel=null
-    expect(result.mappings.find((m) => m.cardType === 'M5')?.cardLevel).toBeNull();
+    // tierRepo.find 被以 cardType=H 篩選呼叫
+    expect(tierRepo.find).toHaveBeenCalledWith({ where: { card_type: 'H' } });
   });
 
   it('TS-F056-002：GET list_nm 有值與 null 均正確回傳（鍵存在）', async () => {
@@ -127,7 +143,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
       { card_type: 'H', card_level: 'B', tier_level: 'T2', list_nm: null },
     ]);
 
-    const result = await service.getTierMapping();
+    const result = await service.getTierMapping({ cardType: 'H' } as any);
     expect(result.mappings[0].listNm).toBe('期中名單');
     expect(result.mappings[1]).toHaveProperty('listNm', null);
   });
@@ -149,6 +165,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
 
     const result = await service.updateTierMapping(
       {
+        cardType: 'H',
         mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2', listNm: undefined }],
       },
       actor,
@@ -170,7 +187,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     tierRepo.findOne.mockResolvedValue(null); // DB 無 H/B
 
     const result = await service.updateTierMapping(
-      { mappings: [{ cardType: 'H', cardLevel: 'B', tierLevel: 'T2' }] },
+      { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'B', tierLevel: 'T2' }] },
       actor,
     );
 
@@ -189,7 +206,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     });
 
     await service.updateTierMapping(
-      { mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T1' }] },
+      { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T1' }] },
       actor,
     );
 
@@ -202,6 +219,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     await expect(
       service.updateTierMapping(
         {
+          cardType: 'H',
           mappings: [
             { cardType: 'H', cardLevel: 'A', tierLevel: 'T1' },
             { cardType: 'H', cardLevel: 'A', tierLevel: 'T2' },
@@ -214,6 +232,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     try {
       await service.updateTierMapping(
         {
+          cardType: 'H',
           mappings: [
             { cardType: 'H', cardLevel: 'A', tierLevel: 'T1' },
             { cardType: 'H', cardLevel: 'A', tierLevel: 'T2' },
@@ -232,9 +251,11 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     await expect(
       service.updateTierMapping(
         {
+          cardType: 'M5',
           mappings: [
-            { cardType: 'M5', cardLevel: null, tierLevel: 'T5M' },
-            { cardType: 'M5', cardLevel: null, tierLevel: 'T5N' },
+            // v1.5：TIER_LEVEL_DUPLICATE 由 PK 重複觸發；用兩個合法列舉值
+            { cardType: 'M5', cardLevel: null, tierLevel: 'T5' },
+            { cardType: 'M5', cardLevel: null, tierLevel: 'T6' },
           ],
         },
         actor,
@@ -254,7 +275,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     });
 
     await service.updateTierMapping(
-      { mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2' }] },
+      { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2' }] },
       actor,
     );
 
@@ -272,7 +293,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     tierRepo.findOne.mockResolvedValue(null); // INSERT 路徑
 
     const result = await service.updateTierMapping(
-      { mappings: [{ cardType: 'M5', cardLevel: null, tierLevel: 'T5M' }] },
+      { cardType: 'M5', mappings: [{ cardType: 'M5', cardLevel: null, tierLevel: 'T5' }] },
       actor,
     );
 
@@ -285,7 +306,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     runRepo.findOne.mockResolvedValue({ status: 'pending' });
     await expect(
       service.updateTierMapping(
-        { mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T1' }] },
+        { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T1' }] },
         actor,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -295,7 +316,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
     await expect(
       service.updateTierMapping(
-        { mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T1' }] },
+        { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T1' }] },
         actor,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -342,14 +363,16 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
 
     await expect(
       service.createTierMapping(
-        { cardType: 'H', cardLevel: 'A', tierLevel: 'T99' },
+        // v1.5：T99 已不合法（被列舉檢查擋），改用合法列舉值仍應觸發 PK 重複
+        { cardType: 'H', cardLevel: 'A', tierLevel: 'T9' },
         actor,
       ),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     try {
       await service.createTierMapping(
-        { cardType: 'H', cardLevel: 'A', tierLevel: 'T99' },
+        // v1.5：T99 已不合法（被列舉檢查擋），改用合法列舉值仍應觸發 PK 重複
+        { cardType: 'H', cardLevel: 'A', tierLevel: 'T9' },
         actor,
       );
     } catch (e: any) {
@@ -406,25 +429,25 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     }
   });
 
-  it('TS-F056-016：POST fallback (M5, null) → 201 不觸發 CARD_LEVEL_NOT_FOUND_IN_VERSION', async () => {
+  it('TS-F056-016：POST fallback (M5, null) → 201 不觸發 CARD_LEVEL_NOT_FOUND_IN_VERSION（v1.5 tierLevel 改用列舉 T5）', async () => {
     tierRepo.findOne.mockResolvedValue(null);
 
     const result = await service.createTierMapping(
-      { cardType: 'M5', cardLevel: null, tierLevel: 'T5M', listNm: '機車' },
+      { cardType: 'M5', cardLevel: null, tierLevel: 'T5', listNm: '機車' },
       actor,
     );
 
     expect(result.cardLevel).toBeNull();
-    expect(result.tierLevel).toBe('T5M');
+    expect(result.tierLevel).toBe('T5');
     // levelRepo.findOne 不該被呼叫
     expect(levelRepo.findOne).not.toHaveBeenCalled();
   });
 
-  it('TS-F056-017：POST fallback (M3, null) 過渡期 → 201', async () => {
+  it('TS-F056-017：POST fallback (M3, null) 過渡期 → 201（v1.5 tierLevel 改用列舉 T5）', async () => {
     tierRepo.findOne.mockResolvedValue(null);
 
     const result = await service.createTierMapping(
-      { cardType: 'M3', cardLevel: null, tierLevel: 'T5M' },
+      { cardType: 'M3', cardLevel: null, tierLevel: 'T5' },
       actor,
     );
     expect(result.cardType).toBe('M3');
@@ -455,7 +478,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     });
 
     await service.updateTierMapping(
-      { mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2' }] },
+      { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2' }] },
       actor,
     );
 
@@ -476,7 +499,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     });
 
     await service.updateTierMapping(
-      { mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2', listNm: null }] },
+      { cardType: 'H', mappings: [{ cardType: 'H', cardLevel: 'A', tierLevel: 'T2', listNm: null }] },
       actor,
     );
 
