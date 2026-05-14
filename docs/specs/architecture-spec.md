@@ -1,9 +1,9 @@
 ---
 type: architecture-spec
-version: "2.8"
+version: "2.9"
 status: draft
-last_updated: 2026-05-13
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068]
+last_updated: 2026-05-14
+covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072]
 ---
 
 # 系統架構規格書
@@ -13,10 +13,10 @@ covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012,
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
 | Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程）、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、10. 技術棧決策 |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
-| Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、風險 13 為 E07 新增）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
+| Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
 | E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）** |
 
 ## 目錄
@@ -996,7 +996,8 @@ TIER_LEVEL 對應計算、多維度加權計分等複雜邏輯由 PostgreSQL fun
 | 服務 | 職責 | 關鍵業務規則 | 相關 Stories |
 |------|------|------------|------------|
 | AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
-| AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應 | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3） | US-072, US-073, US-074, US-075 |
+| AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應；**F056 v1.5 起：所有寫入端點加入 CARD_TYPE 範圍鎖（assertCardTypeActive）** | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3）；**F056 TIER_LEVEL 列舉驗證（T1~T10）；Fallback/Standard 互斥檢查**（應用層 Mutex）；**ob_tier fallback 紀錄刪除必須用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）** | US-072, US-073, US-074, US-075 |
+| CardType Service（**F069~F072 新增**） | `ob_card_type` CRUD；查詢清單（JOIN `ob_code_df` 取 prodKindName）；新增（同 transaction 自動建立 v1 `ob_levelcard_version`）；編輯（card_name / prod_kind 僅此兩欄）；刪除預覽（5 張下游表筆數統計 + ob_list_definition active 引用數）；級聯 hard delete（6 步驟 transaction）；審計日誌同 transaction 寫入 | **依賴 Repository**：`ObCardType`（新建 Entity）/ `ObLevelcardVersion` / `ObLevelcardColumn` / `ObLevelcardScore` / `ObLevelcardLevel` / `ObTier` / `ObCodeDf`（需新增 module import）/ `AssignmentRun` / `AssignmentAuditLog`；F070 同 transaction：INSERT ob_card_type + INSERT ob_levelcard_version（v1，sdate=今日 / edate=20991231 / status=active）；F072 採應用層 transaction（AD-E07-16，不使用 `ON DELETE CASCADE`） | US-093, US-094, US-095, US-096 |
 | AssignmentRatio Service | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關 | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表） | US-078, US-079, US-080, US-091 |
 | AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASE_STATUS **三類**代碼維護；**CASEYEAR 不納入**，因 CASEYEAR 為前端 hard-coded 的 11 個固定 enum 選項 0~10，不從 `ob_code_df` 動態載入，證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；`tbl_id` 使用英文常數（非原系統數字代碼），映射規則：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（AD-E07-14；初版含 `'04'→'CASEYEAR'`，於 2026-05-12 OQ-E07-24 Resolved 後移除） | Admin 與業務主管均可存取；代碼用於名單定義表單選項；F050/F051 `case_status` 欄位多選選項來源為 `tbl_id='CASE_STATUS'`；F050/F051 `caseyear` 欄位為前端固定 11 個選項（0~10），非 ob_code_df 動態載入 | US-092 |
 | AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；匯出 CSV | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid | US-081, US-082, US-083, US-084 |
@@ -1012,10 +1013,15 @@ TIER_LEVEL 對應計算、多維度加權計分等複雜邏輯由 PostgreSQL fun
 | PUT | `/api/v1/assignment/list-definitions/:listNo` | 編輯名單定義 | user + is_sales_manager |
 | PUT | `/api/v1/assignment/list-definitions/:listNo/disable` | 停用名單定義 | user + is_sales_manager |
 | GET | `/api/v1/assignment/list-definitions/:listNo/estimate` | Stage 0 案件估算 | user + is_sales_manager |
-| GET | `/api/v1/assignment/scoring` | 查看計分維度設定 | user + is_sales_manager |
-| PUT | `/api/v1/assignment/scoring/dimensions` | 編輯計分維度與分數 | user + is_sales_manager |
-| PUT | `/api/v1/assignment/scoring/card-levels` | 編輯 CARD_LEVEL 門檻 | user + is_sales_manager |
-| PUT | `/api/v1/assignment/scoring/tier-mapping` | 編輯 TIER_LEVEL 對應表 | user + is_sales_manager |
+| GET | `/api/v1/assignment/scoring/card-types` | **[F069 新增]** 查看 CARD_TYPE 計分卡類型清單（含 prodKindName JOIN） | user + is_sales_manager |
+| POST | `/api/v1/assignment/scoring/card-types` | **[F070 新增]** 新增 CARD_TYPE（同 transaction 自動建立 v1 版本） | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/card-types/:cardType` | **[F071 新增]** 編輯 CARD_TYPE（card_name / prod_kind；代碼不可修改） | user + is_sales_manager |
+| GET | `/api/v1/assignment/scoring/card-types/:cardType/delete-preview` | **[F072 新增]** 刪除預覽（5 張下游表筆數 + ob_list_definition 引用數） | user + is_sales_manager |
+| DELETE | `/api/v1/assignment/scoring/card-types/:cardType` | **[F072 新增]** 級聯 hard delete（需 confirmCascade=true query） | user + is_sales_manager |
+| GET | `/api/v1/assignment/scoring` | 查看計分維度設定（**F053 v1.2：需 cardType query param；加 CARD_TYPE 存在性驗證**） | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/dimensions` | 編輯計分維度與分數（**F054 v1.2：加 CARD_TYPE 範圍鎖**） | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/card-levels` | 編輯 CARD_LEVEL 門檻（**F055 v1.4：加 CARD_TYPE 範圍鎖**） | user + is_sales_manager |
+| PUT | `/api/v1/assignment/scoring/tier-mapping` | 編輯 TIER_LEVEL 對應表（**F056 v1.5 breaking：CARD_TYPE 範圍鎖 + TIER_LEVEL 列舉 + Fallback/Standard 互斥**） | user + is_sales_manager |
 | GET | `/api/v1/assignment/ratios/dept/:listNo` | 查看部門比例設定 | user + is_sales_manager |
 | PUT | `/api/v1/assignment/ratios/dept/:listNo` | 設定 per-LIST_NO 部門比例 | user + is_sales_manager |
 | GET | `/api/v1/assignment/ratios/personnel/:listNo` | 查看人員比例設定 | user + is_sales_manager |
@@ -2094,6 +2100,46 @@ Seed 流程：
 - 考慮在 CI Pipeline 中加入 C360 Integration Test，在測試環境執行真實查詢，當 `customer_core` Schema 變更時即早發現查詢失效
 
 **替代方案**：若 Schema Drift 風險被評估為高，可建立 `customer_core_schema_version` 設定值，C360 啟動時驗證 Schema 版本是否符合預期。
+
+---
+
+#### 風險 13（E07 M02 計分設定擴充新增）：ob_tier UNIQUE INDEX 未建立導致 Fallback/Standard 互斥失效
+
+**描述**：`ob_tier` 複合唯一鍵 `UNIQUE INDEX ON ob_tier (card_type, COALESCE(card_level, ''))` 由 migration 以 raw SQL 建立（entity 檔案 line 9 說明：TypeORM `@Index` 不支援 `COALESCE` 表達式）。若此索引未在實際執行的 migration 中建立，則同一 `(card_type, card_level)` 組合可重複寫入，導致 F056 `TIER_LEVEL_DUPLICATE` 保護失效，且 Stage 2 `ob_tier` join 查詢可能取得多筆結果（非確定性）。
+
+**影響**：`ob_tier` 寫入重複紀錄；月跑 Stage 2 TIER_LEVEL 對應結果非確定性；資料一致性受損。
+
+**建議**：TDD Developer 在實作前必須確認現有 `ob_tier` migration 是否已包含 raw SQL `UNIQUE INDEX` 語句（非透過 `@Index` 裝飾器）；若未建立，需在 D-CT-01 附近的 migration 中補建。
+
+---
+
+#### 風險 14（E07 M02 計分設定擴充新增）：D-CT-03 CHECK constraint 早於 TIER_LEVEL 轉換 UPDATE 執行
+
+**描述**：Migration D-CT-03（為 `ob_tier.tier_level` 加 CHECK constraint）依賴 D3 migration（OBTIER → ob_tier 遷移）與 TIER_LEVEL 後綴值轉換 UPDATE 全部完成後才能執行。若 TypeORM migration 執行順序因時間戳記設定錯誤導致 D-CT-03 早於 D3 執行，則 D3 INSERT 時舊後綴值（如 `T1M`、`T1HM`）將違反 CHECK constraint，整批 migration 失敗。
+
+**影響**：Production 環境 migration 失敗；需手動 rollback 並修正 migration 順序後重新執行。
+
+**建議**：D-CT-03 migration 的時間戳記必須晚於 D3（OBTIER 遷移）+ TIER_LEVEL UPDATE + M3/HC/C3 seed 三個 migration 的時間戳記；建議在 D-CT-03 migration 開頭加入 pre-condition guard（執行 D11 驗證 SQL，若有違規行直接 throw Error 中止 migration）。
+
+---
+
+#### 風險 15（E07 M02 計分設定擴充新增）：CHECK constraint 語法在 SQLite E2E 環境不相容
+
+**描述**：`ob_card_type.card_type` 的 regex CHECK（`card_type ~ '^[A-Z0-9]{1,5}$'`）使用 PostgreSQL 專有 `~` 運算子，SQLite 不支援。若 TypeORM migration 未以 `process.env.DB_TYPE` 條件分支，E2E 測試（SQLite）執行 migration 時將拋出語法錯誤。
+
+**影響**：所有 F069~F072 相關的 E2E 測試無法建表，導致整個 E2E 測試套件失敗。
+
+**建議**：TypeORM migration 中所有 PostgreSQL 專有語法（regex CHECK、`NULLS NOT DISTINCT` 等）必須以 `process.env.DB_TYPE === 'sqlite'` 判斷條件分支；SQLite 版本省略該 constraint，由應用層保證格式正確性。
+
+---
+
+#### 風險 16（E07 M02 計分設定擴充新增）：ob_list_definition 無 card_type 索引導致 F072 preview 查詢效能問題
+
+**描述**：F072 刪除預覽端點需執行 `SELECT COUNT(*) FROM ob_list_definition WHERE card_type = :ct AND status = 'active'`。若 `ob_list_definition.card_type` 無索引，此查詢需 full table scan。
+
+**影響**：MVP 資料量（`ob_list_definition` 數百筆）下影響可忽略（< 5ms）；若未來資料量增長至數萬筆，preview 端點回應時間可能超過 500ms。
+
+**建議**：MVP 可接受；若 `ob_list_definition` entity 目前無 `card_type` 索引，P2 階段補建。
 
 ---
 
@@ -3513,6 +3559,174 @@ HM 名單共 63 筆，仍在業務使用。
 **替代方案考量**：
 - **方案 A（Stage 2 呼叫端加 HM→M 映射）**：Stage 2 若 `card_type='HM'` 改傳 `p_card_type='M'`，但 `ob_tier` lookup 保留 `'HM'`。可立即消除月跑 HM 名單為空的風險，但在 Service 層引入 CARD_TYPE 映射表，造成計分邏輯不透明；業務若調整 M 設定，HM 計分隨之改變，缺乏控制——**不採**
 - **方案 B（在 ob_levelcard_* 複製 M 的資料為 HM 版本）**：等同本決策（補建獨立設定），但以資料複製而非業務輸入實作初值——資料來源不透明且雙向維護問題存在——可作為**臨時救急手段**，由 DBA 執行，但長期應以業務主管透過 F054 維護為準
+
+---
+
+#### AD-E07-16　F072 CARD_TYPE 級聯刪除採應用層 Transaction，不使用 ON DELETE CASCADE
+
+**決策**：F072 停用 CARD_TYPE 的 6 步驟級聯 hard delete 採**應用層 Transaction 控制**，不在 `ob_card_type` 與下游 5 張表之間建立 DB-level `ON DELETE CASCADE` FK constraint。
+
+**刪除執行順序**（由子表至父表，同一 `READ COMMITTED` transaction）：
+
+```
+step 1: DELETE ob_tier                WHERE card_type = :cardType
+step 2: DELETE ob_levelcard_score     WHERE card_type = :cardType
+step 3: DELETE ob_levelcard_level     WHERE card_type = :cardType
+step 4: DELETE ob_levelcard_column    WHERE card_type = :cardType
+step 5: DELETE ob_levelcard_version   WHERE card_type = :cardType
+step 6: DELETE ob_card_type           WHERE card_type = :cardType
+step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆數摘要, ...)
+```
+
+**決策理由**：
+
+| 考量 | 說明 |
+|------|------|
+| SQLite E2E 相容性 | 補 FK 後需調整 E2E 測試 `PRAGMA foreign_keys = ON`，影響測試套件穩定性 |
+| audit log 同 transaction | `ON DELETE CASCADE` 無法在 cascade 過程中插入 `assignment_audit_log`，違反 F072 BR-8 |
+| 遷移時序風險 | D3 migration 期間存在過渡型 CARD_TYPE 值（HM/M5），補 FK 後 INSERT 違反 constraint |
+| MVP 效能 | 每次刪除量 < 300 筆，應用層 transaction 無效能疑慮 |
+
+**否決方案**：`ON DELETE CASCADE`（DB 層）——audit log 無法插入 cascade 過程中。
+
+**影響範圍**：
+- `CardTypeService.deleteCardTypeCascade()` 需使用 `QueryRunner.startTransaction()` 執行 7 步驟
+- `ob_tier` fallback 紀錄的單筆刪除（F056 AC-7）需使用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）
+- `ob_card_type` Migration（D-CT-01）不加 FK constraint 至 `ob_code_df`；下游 5 張表不加 FK constraint 至 `ob_card_type`
+
+**相關**：[data-model.md #ob-card-type-entity](data-model.md#ob-card-type-entity)，風險 13~16（E07 M02 計分設定擴充）
+
+---
+
+### E07-G　M02 計分設定擴充 Migration 設計（F069~F072，2026-05-14）
+
+> **範圍**：本節定義 F069~F072（CARD_TYPE CRUD）新增的 3 個 migration 設計草案。實際 TypeORM migration 程式碼由 TDD Developer 實作。
+
+#### D-CT-01：建立 ob_card_type 表
+
+**依賴**：無（可與 M1~M6 平行執行，但建議在 D-CT-02 / D3 之前完成）
+
+**DDL 設計草案**：
+
+```sql
+-- ob_card_type 表建立
+-- 注意：以下為設計草案，TypeORM migration 實作時需依 DB_TYPE 條件分支
+CREATE TABLE ob_card_type (
+  card_type    VARCHAR(5)   NOT NULL,
+  card_name    VARCHAR(20)  NOT NULL,
+  prod_kind    VARCHAR(4)   NOT NULL,
+  status       VARCHAR(10)  NOT NULL DEFAULT 'active',
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by   VARCHAR(50)  NOT NULL,
+  updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by   VARCHAR(50)  NOT NULL,
+
+  CONSTRAINT pk_ob_card_type     PRIMARY KEY (card_type),
+  CONSTRAINT chk_ob_card_type_status
+    CHECK (status IN ('active','inactive')),
+  -- 以下 CHECK 僅 PostgreSQL 版本（SQLite 不支援 ~ 運算子，由應用層保證格式）
+  CONSTRAINT chk_ob_card_type_code_format
+    CHECK (card_type ~ '^[A-Z0-9]{1,5}$')
+);
+
+-- status 查詢索引
+CREATE INDEX idx_ob_card_type_status ON ob_card_type (status);
+```
+
+**TypeORM 實作注意**：
+- `created_at` / `updated_at` 欄位使用 `dateColumnType` helper（`'timestamp'` for PostgreSQL，`'datetime'` for SQLite）
+- regex CHECK constraint 以 `process.env.DB_TYPE !== 'sqlite'` 條件分支加入
+- `created_by` / `updated_by` 為 `VARCHAR(50) NOT NULL`（儲存 users.id 字串，無 FK constraint）
+
+#### D-CT-02：Seed 6 個正規 CARD_TYPE
+
+**依賴**：D-CT-01（ob_card_type 表存在）
+
+**執行前驗證**（TDD Developer 須先確認）：
+```sql
+SELECT tbl_cd, tbl_desc1 FROM ob_code_df WHERE tbl_id = 'PROD_KIND';
+-- 預期：至少含 tbl_cd='01' 與 tbl_cd='02' 兩筆
+```
+
+**Seed 對照表（✅ OQ-E07-33 Resolved，依 OBMLISTDF dump 實證）**：
+
+| card_type | card_name | prod_kind | 驗證來源 |
+|-----------|-----------|-----------|---------|
+| H | 期中 | 01 | OBMLISTDF dump 第 2、7、8 行 |
+| S | 中結 | 01 | OBMLISTDF dump 第 4、5 行 |
+| E | 滿期 | 01 | OBMLISTDF dump 第 6 行 |
+| S5 | 中結5年 | 01 | OBMLISTDF dump 第 53 行 |
+| E5 | 滿期5年 | 01 | OBMLISTDF dump 第 54 行 |
+| M | 機車 | 02 | OBMLISTDF dump 第 3 行 |
+
+**Seed SQL 設計原則（冪等，安全重複執行）**：
+
+```sql
+-- 設計草案（TypeORM migration queryRunner.query() 呼叫）
+INSERT INTO ob_card_type (card_type, card_name, prod_kind, status,
+                          created_at, created_by, updated_at, updated_by)
+VALUES
+  ('H',  '期中',   '01', 'active', CURRENT_TIMESTAMP, 'SYSTEM', CURRENT_TIMESTAMP, 'SYSTEM'),
+  ('S',  '中結',   '01', 'active', CURRENT_TIMESTAMP, 'SYSTEM', CURRENT_TIMESTAMP, 'SYSTEM'),
+  ('E',  '滿期',   '01', 'active', CURRENT_TIMESTAMP, 'SYSTEM', CURRENT_TIMESTAMP, 'SYSTEM'),
+  ('S5', '中結5年', '01', 'active', CURRENT_TIMESTAMP, 'SYSTEM', CURRENT_TIMESTAMP, 'SYSTEM'),
+  ('E5', '滿期5年', '01', 'active', CURRENT_TIMESTAMP, 'SYSTEM', CURRENT_TIMESTAMP, 'SYSTEM'),
+  ('M',  '機車',   '02', 'active', CURRENT_TIMESTAMP, 'SYSTEM', CURRENT_TIMESTAMP, 'SYSTEM')
+ON CONFLICT (card_type) DO NOTHING;
+```
+
+#### D-CT-03：ob_tier chk_ob_tier_tier_level CHECK constraint
+
+**依賴**（執行時序嚴格依序）：
+
+```
+D3 migration（OBTIER → ob_tier）
+  ↓
+TIER_LEVEL 後綴值轉換 UPDATE（^T(\d+) 取前綴 + THC → T1）
+  ↓
+M3 / HC / C3 ob_tier seed INSERT（card_level IS NULL fallback）
+  ↓
+D11 驗證 SQL 確認 0 筆違規
+  ↓
+D-CT-03：加 CHECK constraint（PostgreSQL 環境）
+```
+
+**D11 驗證 SQL（必須全部通過後才執行 D-CT-03）**：
+
+```sql
+-- 1. 驗證 ob_tier.tier_level 全部在 T1~T10
+SELECT tier_level, COUNT(*)
+  FROM ob_tier
+ WHERE tier_level NOT IN ('T1','T2','T3','T4','T5','T6','T7','T8','T9','T10')
+ GROUP BY tier_level;
+-- 預期：0 列
+
+-- 2. 驗證 6 個正規 CARD_TYPE 均存在於 ob_card_type
+SELECT card_type FROM ob_card_type ORDER BY card_type;
+-- 預期：E / E5 / H / M / S / S5（至少這 6 筆）
+
+-- 3. 驗證 M3 / HC / C3 各有 1 筆 card_level IS NULL 的 fallback 紀錄
+SELECT card_type, COUNT(*) FROM ob_tier
+ WHERE card_type IN ('M3','HC','C3') AND card_level IS NULL
+ GROUP BY card_type;
+-- 預期：M3=1 / HC=1 / C3=1
+
+-- 4. 驗證過渡型 CARD_TYPE 未混入 ob_card_type（遷移範圍之外不應自動 seed）
+SELECT card_type FROM ob_card_type
+ WHERE card_type NOT IN ('H','S','E','S5','E5','M');
+-- 預期：0 列（或只有業務主管透過 F070 手動新增的合法紀錄）
+```
+
+**CHECK constraint DDL 設計草案（PostgreSQL 環境，D-CT-03）**：
+
+```sql
+-- 執行前確認 D11 驗證 SQL 全部通過（0 違規列）
+ALTER TABLE ob_tier
+  ADD CONSTRAINT chk_ob_tier_tier_level
+    CHECK (tier_level IN ('T1','T2','T3','T4','T5','T6','T7','T8','T9','T10'));
+```
+
+> **SQLite E2E 環境**：SQLite 版本省略此 CHECK constraint（由應用層 F056 `TIER_LEVEL_ENUM` 常數陣列保護）。TypeORM migration 以 `process.env.DB_TYPE !== 'sqlite'` 條件分支控制是否執行 DDL。
 
 ---
 

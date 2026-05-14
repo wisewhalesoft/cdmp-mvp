@@ -1,7 +1,7 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.7"
+version: "1.8"
 date: 2026-05-14
 status: Draft
 ---
@@ -231,14 +231,19 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 |--------|------------|------|------|----------|
 | SCORING_VERSION_NOT_FOUND | 404 | 目前無生效的計分版本，請聯繫 IT 確認設定 | `ob_levelcard_version` 無 `status = 'active'` 紀錄 | F053 |
 | SCORING_COLUMN_NOT_FOUND | 404 | 指定的計分維度不存在或已停用 | `(card_type, card_version, column_name)` 組合不存在於 `ob_levelcard_column`，或 `status = 'inactive'` | F054 |
-| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定 | F054, F055, F056 |
+| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定 | F054, F055, F056, F070, F071, F072 |
 | SCORING_COLUMN_DUPLICATE | 422 | 計分維度 column_name `{columnName}` 已存在於 active 版本 | 新增維度時 `column_name` 已存在於同 `card_type + card_version` 的 `status = 'active'` 紀錄 | F054 |
 | SCORING_RANGE_OVERLAP | 422 | 分數區間重疊，請調整條件值 | 分數區間或 CARD_LEVEL 門檻區間重疊 | F054, F055 |
-| TIER_LEVEL_DUPLICATE | 422 | TIER_LEVEL 代碼 {code} 已存在 | 新增 TIER_LEVEL 對應時代碼重複 | F056 |
-| CARD_LEVEL_NOT_FOUND_IN_VERSION | 422 | 指定的 CARD_LEVEL 不存在於 active 計分版本 | TIER_LEVEL 對應（新增 / 編輯）指向之 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`，或 `card_level` 輸入超過 1 字元（VARCHAR(1) vs VARCHAR(5) 不對稱保護，見 F056 BR-9）。fallback 場景 `card_level IS NULL` 不觸發此驗證（F056 AC-4a） | F056 §5.2 / §5.3 |
+| TIER_LEVEL_DUPLICATE | 422 | TIER_LEVEL 代碼 {code} 已存在 | 新增 TIER_LEVEL 對應時 `(card_type, card_level)` 複合 PK 重複；含 fallback 重複情境（同 CARD_TYPE 已存在 `card_level IS NULL` 的 fallback 列再新增另一筆 fallback） | F056 |
+| CARD_LEVEL_NOT_FOUND_IN_VERSION | 422 | 指定的 CARD_LEVEL 不存在於 active 計分版本 | TIER_LEVEL 對應（新增 / 編輯）指向之 `(card_type, card_level)` 組合不存在於 active 版本的 `ob_levelcard_level`，或 `card_level` 輸入超過 1 字元（VARCHAR(1) vs VARCHAR(5) 不對稱保護，見 F056 BR-9）。Fallback 場景 `card_level IS NULL` 不觸發此驗證（F056 AC-4a）。v1.5 新關聯：適用於選定 CARD_TYPE 之 active `ob_levelcard_level` 範圍內查找；CARD_TYPE 範圍鎖由 `CARD_TYPE_NOT_FOUND` 另行檢查 | F056 §5.2 / §5.3 |
 | CARD_LEVEL_RECORD_NOT_FOUND | 404 | 指定的 CARD_LEVEL 紀錄不存在 | DELETE CARD_LEVEL 時 `ob_levelcard_level` 中無對應 `(cardType, cardVersion, cardLevel)` 複合 PK 紀錄 | F055 §5.3 |
 | CARD_LEVEL_REFERENCED | 409 | 等級 {cardLevel} 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除 | DELETE CARD_LEVEL 前的 cascade reference check：`ob_tier WHERE card_type = :cardType AND card_level = :cardLevel` 仍有紀錄存在（F055 BR-6 / AC-7） | F055 |
 | TIER_MAPPING_NOT_FOUND | 404 | 指定的 (cardType, cardLevel) TIER 對應不存在 | DELETE TIER 對應時 `ob_tier` 無對應 `(card_type, card_level)` 紀錄（含 fallback NULL 紀錄）；F056 §5.4 | F056 |
+| CARD_TYPE_DUPLICATE | 422 | 計分卡代碼 {cardType} 已存在，請使用其他代碼 | F070 新增 CARD_TYPE 時 `card_type` 與 `ob_card_type.status = 'active'` 既有紀錄重複；唯一性檢查範圍僅 active scope | F070 |
+| CARD_TYPE_NOT_FOUND | 404 | 找不到指定的計分卡類型 | F069 / F071 / F072 操作目標 cardType 不存在於 `ob_card_type` active 紀錄；F053 / F054 / F055 / F056 之 cardType query / body 不存在於 `ob_card_type.status = 'active'`（v1.5 新增的 CARD_TYPE 範圍鎖檢查） | F069, F071, F072, F053, F054, F055, F056 |
+| CARD_TYPE_CASCADE_NOT_CONFIRMED | 422 | 級聯刪除需要二次確認，請於請求帶上 `confirmCascade=true` | F072 DELETE 請求缺少 `confirmCascade=true` query；用於阻擋誤觸刪除 | F072 |
+| TIER_LEVEL_INVALID_ENUM | 422 | TIER_LEVEL 必須為 T1~T10 之一，目前值：{value} | F056 v1.5+ TIER_LEVEL 寫入端點（POST / PUT）之 `tierLevel` 不在固定列舉 T1~T10 範圍內；讀取端點不阻擋舊資料顯示 | F056 |
+| CARD_TYPE_FALLBACK_STANDARD_MUTEX | 422 | 同一 CARD_TYPE 不可同時存在 Fallback（CARD_LEVEL 為空）與 Standard 對應，請先移除既有列再新增 | F056 v1.5+ 違反 Fallback / Standard 互斥規則：同 CARD_TYPE 已有 `card_level IS NULL` fallback 列時禁止新增 standard 列；反之亦然。檢查時機：5.2 PUT 批次（含 body 內互斥 + body 與 DB 互斥）、5.3 POST 單筆（新增前 query DB） | F056 |
 
 #### 分派比例 {#assignment-ratio-errors}
 
@@ -386,6 +391,11 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 刪除 CARD_LEVEL 但紀錄不存在 | 404 | CARD_LEVEL_RECORD_NOT_FOUND | 指定的 CARD_LEVEL 紀錄不存在 | 拒絕請求 |
 | 刪除 CARD_LEVEL 仍被 TIER 對應引用 | 409 | CARD_LEVEL_REFERENCED | 等級仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除 | 拒絕刪除（cascade reference check 失敗） |
 | 刪除 TIER 對應但對應不存在 | 404 | TIER_MAPPING_NOT_FOUND | 指定的 (cardType, cardLevel) TIER 對應不存在 | 拒絕請求 |
+| 新增 CARD_TYPE 代碼重複 | 422 | CARD_TYPE_DUPLICATE | 計分卡代碼已存在 | 不新增 |
+| 操作不存在的 CARD_TYPE | 404 | CARD_TYPE_NOT_FOUND | 找不到指定的計分卡類型 | 拒絕請求 |
+| 停用 CARD_TYPE 未確認級聯 | 422 | CARD_TYPE_CASCADE_NOT_CONFIRMED | 級聯刪除需要二次確認 | 不刪除 |
+| TIER_LEVEL 不在 T1~T10 列舉 | 422 | TIER_LEVEL_INVALID_ENUM | TIER_LEVEL 必須為 T1~T10 之一 | 不寫入 |
+| 同 CARD_TYPE 違反 Fallback / Standard 互斥 | 422 | CARD_TYPE_FALLBACK_STANDARD_MUTEX | 不可同時存在 Fallback 與 Standard | 不寫入 |
 | Stage 0 試算超時 | 500 | STAGE0_ESTIMATE_TIMEOUT | 試算查詢超過 10 秒 | 中斷查詢 |
 | 匯出逾時 | 500 | EXPORT_FILE_EXPIRED | 檔案產生逾時 | 中斷匯出 |
 | 代碼值重複 | 422 | CODE_IN_USE | 代碼值在該類別中已存在 | 不寫入 |

@@ -1043,6 +1043,116 @@ PK：`(list_no, deptid_m, emplid, ration)`
 
 ---
 
+#### ob_card_type（CARD_TYPE 計分卡類型主表） {#ob-card-type-entity}
+
+> 本表為 **AppDB 新建表，無對應舊系統 OB 表**（2026-05-14 由 M02 計分設定擴充新增）。作為 `ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier` 共同的「計分卡類型」上層字典表，並與 `ob_code_df` 中 PROD_KIND 建立 1:1 業務綁定。M02 計分設定頁面之 5 Tab 結構以本表為 Tab 1 入口，Tab 2~5 之資料範圍由本表選中之 `card_type` 驅動。
+
+業務邏輯主鍵：`card_type`（Natural PK，建立後不可修改）
+
+**欄位語意定義**（業務層欄位清單）
+
+| 欄位名 | 業務語意 | NULL | 說明 |
+|--------|----------|------|------|
+| card_type | CARD_TYPE 代碼 | NOT NULL | VARCHAR(5)，計分卡類型代碼（如 `H` / `S` / `E` / `S5` / `E5` / `M`）；與 `ob_levelcard_*` / `ob_tier.card_type` 對應；建立後不可修改（F071 BR-1） |
+| card_name | 計分卡顯示名稱 | NOT NULL | VARCHAR(20)，業務顯示名稱（如「期中」「中結」「滿期」） |
+| prod_kind | 綁定之 PROD_KIND 代碼 | NOT NULL | VARCHAR(4)，對應 `ob_code_df.tbl_cd WHERE tbl_id = 'PROD_KIND'`；1:1 業務綁定（每張 CARD_TYPE 綁定一個 PROD_KIND）；**無 DB-level FK constraint**（見「FK 設計決策」段） |
+| status | 啟用狀態 | NOT NULL | VARCHAR(10)，`'active'` / `'inactive'`；F069 GET 預設僅顯示 `'active'`；F072 採級聯 hard delete（無 inactive 紀錄殘留） |
+| created_at | 建立時間 | NOT NULL | `dateColumnType` helper（PostgreSQL = `timestamp`，SQLite E2E = `datetime`）；**不可用 `datetime` 固定字串** |
+| created_by | 建立者 user_id | NOT NULL | VARCHAR(50)，儲存 users.id 字串（與 assignment_audit_log 模式一致，無 FK constraint） |
+| updated_at | 更新時間 | NOT NULL | `dateColumnType` helper；F070 新增時同 created_at 填入，F071 編輯時更新 |
+| updated_by | 更新者 user_id | NOT NULL | VARCHAR(50)，儲存 users.id 字串 |
+
+**DB-level 約束設計（✅ system-architect 決議，2026-05-14）**
+
+```
+PRIMARY KEY (card_type)
+CHECK (card_type ~ '^[A-Z0-9]{1,5}$')   -- 僅大寫英數字，長度 1~5
+CHECK (status IN ('active','inactive'))
+```
+
+> **SQLite E2E 注意**：`card_type ~ '^[A-Z0-9]{1,5}$'` 使用 PostgreSQL regex 語法，SQLite 不支援 `~` 運算子。TypeORM migration 需以 `process.env.DB_TYPE` 判斷：PostgreSQL 版本加 regex CHECK，SQLite 版本省略（由應用層保證格式）。
+
+**FK 設計決策（✅ system-architect 決議，OQ-E07-32 Resolved）**
+
+`prod_kind` **不建立 DB-level FK constraint**，原因：
+
+1. `ob_code_df` 為三欄複合 PK（`system_id`, `tbl_id`, `tbl_cd`）；若補 FK，`ob_card_type` 須冗餘儲存 `system_id='OB'` 與 `tbl_id='PROD_KIND'` 兩欄
+2. 業務語意：`prod_kind` 為代碼代入值，允許 `ob_code_df` 對應紀錄過期後仍顯示歷史 PROD_KIND 代碼
+3. 應用層保證：F070 / F071 POST / PUT 寫入時後端驗證 `prodKind` 存在於 `ob_code_df WHERE tbl_id = 'PROD_KIND'` 之啟用期間內紀錄（`stadt <= TODAY <= enddt` 或為 NULL）
+
+**下游表 FK 補建決策（✅ system-architect 決議，OQ-E07-32 Resolved）**
+
+下游 5 張表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）之 `card_type` 欄位**不補建 DB-level FK constraint（含 `ON DELETE CASCADE`）**，改以**應用層 Transaction 控制級聯刪除**。
+
+理由：
+
+| 考量 | 說明 |
+|------|------|
+| SQLite E2E 相容性 | 補 FK 後需同步調整所有 E2E 測試的 `PRAGMA foreign_keys = ON`，影響面廣 |
+| 遷移時序風險 | D3 migration 期間可能存在不在 ob_card_type 範圍內的過渡型 CARD_TYPE 值（HM/M5 等），補 FK 後 INSERT 會違反 constraint |
+| audit log 同 transaction | DB-level `ON DELETE CASCADE` 無法在 cascade 過程中插入 `assignment_audit_log`，違反 F072 BR-8 |
+| MVP 效能 | 刪除量 < 300 筆，應用層 transaction 效能完全足夠 |
+
+**索引設計**
+
+```
+-- 主鍵索引（PostgreSQL 自動建立）
+PRIMARY KEY (card_type)
+
+-- status 查詢索引（F069 GET 預設 WHERE status = 'active'）
+CREATE INDEX idx_ob_card_type_status ON ob_card_type (status);
+```
+
+**業務語意關係**：
+
+| 關係 | 對端表 | 連結欄位 | 業務語意 |
+|------|--------|----------|----------|
+| 1 對多 | `ob_levelcard_version` | `card_type` | 一個 CARD_TYPE 可有多個計分卡版本（依 `card_version`，本次 MVP 規範僅 v1） |
+| 1 對多 | `ob_levelcard_column` | `card_type` | 一個 CARD_TYPE 可有多個計分維度紀錄 |
+| 1 對多 | `ob_levelcard_score` | `card_type` | 一個 CARD_TYPE 可有多個維度分數設定 |
+| 1 對多 | `ob_levelcard_level` | `card_type` | 一個 CARD_TYPE 可有多個 CARD_LEVEL 分級門檻 |
+| 1 對多 | `ob_tier` | `card_type` | 一個 CARD_TYPE 可有多個 TIER_LEVEL 對應（含 fallback NULL 紀錄） |
+| 1 對 1 | `ob_code_df`（`tbl_id='PROD_KIND'`） | `prod_kind` ↔ `tbl_cd` | 每張 CARD_TYPE 綁定一個 PROD_KIND（業務層 1:1 綁定；同一 PROD_KIND 可被多個 CARD_TYPE 引用，反向多對一） |
+
+**Seed 範圍**（遷移時執行）：
+
+遷移腳本從既有 `ob_levelcard_version` 之 dump（`reference/DumpData/OBLEVELCARD_VERSION_20260505.csv`）萃取唯一 `card_type` 值，seed **6 筆正規 CARD_TYPE** 至 `ob_card_type`：
+
+| card_type | card_name | prod_kind | 資料驗證來源 | status |
+|-----------|-----------|-----------|------------|--------|
+| H | 期中 | `01`（汽車） | OBMLISTDF dump 第 2、7、8 行 `PROD_KIND=01, CARD_TYPE=H` | active |
+| S | 中結 | `01`（汽車） | OBMLISTDF dump 第 4、5 行 `PROD_KIND=01, CARD_TYPE=S` | active |
+| E | 滿期 | `01`（汽車） | OBMLISTDF dump 第 6 行 `PROD_KIND=01, CARD_TYPE=E` | active |
+| S5 | 中結5年 | `01`（汽車） | OBMLISTDF dump 第 53 行 `PROD_KIND=01, CARD_TYPE=S5` | active |
+| E5 | 滿期5年 | `01`（汽車） | OBMLISTDF dump 第 54 行 `PROD_KIND=01, CARD_TYPE=E5` | active |
+| M | 機車 | `02`（機車） | OBMLISTDF dump 第 3 行 `PROD_KIND=02, CARD_TYPE=M` | active |
+
+> **PROD_KIND 對照已確認（✅ OQ-E07-33 Resolved，system-architect，2026-05-14）**：PROD_KIND 對照已依 `reference/DumpData/OBMLISTDF_20260505.csv` 第 9 欄（PROD_KIND）與最後欄（CARD_TYPE）實證確認，H/S/E/S5/E5 → `01` 汽車，M → `02` 機車。Migration 執行前 TDD Developer 需先執行 `SELECT tbl_cd, tbl_desc1 FROM ob_code_df WHERE tbl_id='PROD_KIND'` 確認 `01`/`02` 存在，seed 採冪等設計（`INSERT ... ON CONFLICT (card_type) DO NOTHING`）。
+
+**不 seed 範圍**：
+
+- HM / M5 / M3 / HC / C3 等過渡 / fallback CARD_TYPE **不入 `ob_card_type`**；對應之 `ob_tier` 紀錄於 F056 v1.5 BR-6 中亦排除遷移（避免違反業務層 1:1 綁定）。
+- HB / SEB / SEC 邊緣 CARD_TYPE 同樣不 seed（OQ-E07-29 仍 Open）。
+- 上述 CARD_TYPE 若業務後續需保留，由業務主管透過 F070 新增。
+
+**F072 級聯刪除執行順序（✅ system-architect 決議，AD-E07-16）**
+
+採應用層 Transaction（`READ COMMITTED` 隔離等級），6 步驟由子表至父表執行：
+
+```
+step 1: DELETE FROM ob_tier                WHERE card_type = :cardType
+step 2: DELETE FROM ob_levelcard_score     WHERE card_type = :cardType
+step 3: DELETE FROM ob_levelcard_level     WHERE card_type = :cardType
+step 4: DELETE FROM ob_levelcard_column    WHERE card_type = :cardType
+step 5: DELETE FROM ob_levelcard_version   WHERE card_type = :cardType
+step 6: DELETE FROM ob_card_type           WHERE card_type = :cardType
+step 7: INSERT INTO assignment_audit_log   (action='DELETE', ...)  -- 同 transaction
+```
+
+詳見 `architecture-spec.md` AD-E07-16。
+
+---
+
 #### ob_levelcard_version（OBLEVELCARD_VERSION — 計分卡版本）
 
 > **STATUS 為 AppDB 遷移補建欄位**（原表無），與 `ob_list_definition` 設計對齊。原 OBLEVELCARD_VERSION 透過 `SDATE` / `EDATE`（VARCHAR(8) YYYYMMDD）表達生效期間（dump 中 6 筆全部 `EDATE = '20991231'`）；遷移時依 `(SDATE <= 今日 < EDATE)` 計算 `status` 初值。
@@ -1216,6 +1326,98 @@ VALUES ('C3', NULL, 'T3C', '汽車C3名單');
 
 **Stage 2 fallback join 語意**：當 `ob_pool_data_list.card_level` 在 `ob_tier` 找不到對應紀錄時，回退以 `CARD_TYPE` 比對 `card_level IS NULL` 的 fallback 紀錄（如 M5 → T5M）。F056 編輯時允許新增 `card_level IS NULL` 紀錄但需 UI 提示為 fallback 規則。
 
+---
+
+**TIER_LEVEL 列舉約束與遷移規則（F056 v1.5+，2026-05-14 新增）**
+
+> 對應 F056 v1.5 BR-2 / BR-12 / AC-8 / `TIER_LEVEL_INVALID_ENUM` 錯誤碼。
+
+**列舉約束**：自 F056 v1.5 起，`ob_tier.tier_level` 之**寫入端點**（POST / PUT）僅接受固定列舉值：
+
+```
+T1, T2, T3, T4, T5, T6, T7, T8, T9, T10
+```
+
+讀取端點（GET）不阻擋舊資料顯示（過渡期），但遷移完成後資料層應無例外。違反列舉之寫入回 422 `TIER_LEVEL_INVALID_ENUM`。
+
+**遷移規則（OQ-E07-31 ✅ Resolved 2026-05-14）**：
+
+遷移腳本（D3：OBTIER → ob_tier）執行後，對 `ob_tier.tier_level` 既有後綴值依「取前綴數字」規則統一轉換。規則：正則 `^T(\d+)` 取得 T 後第一個連續數字，取**首位數字**組合為 `T{N}`。
+
+完整映射表（涵蓋 OBTIER dump 觀察之 13 種變體）：
+
+| 舊值 | 新值 | 規則來源 |
+|------|------|----------|
+| T1 / T2 / T3 / T4 / T5 | 不變 | 已在列舉內 |
+| T1M | T1 | 取前綴數字 1 |
+| T1HM | T1 | 取前綴數字 1 |
+| T2HM | T2 | 取前綴數字 2 |
+| T3M | T3 | 取前綴數字 3 |
+| T3HM | T3 | 取前綴數字 3 |
+| T3C | T3 | 取前綴數字 3 |
+| T32 | T3 | 取首位數字 3 |
+| T4M | T4 | 取前綴數字 4 |
+| T51 | T5 | 取首位數字 5 |
+| T52 | T5 | 取首位數字 5 |
+| T5M | T5 | 取前綴數字 5 |
+| **THC** | **T1** | OQ新-2 ✅ Resolved 2026-05-14：HC 為汽車 high-credit 最高層級，遷移至 T1 |
+
+> **遷移範圍限定 6 個正規 CARD_TYPE**（F056 v1.5 BR-6）：本遷移規則僅適用於遷移範圍內之 6 個正規 CARD_TYPE（H / S / E / S5 / E5 / M）所對應的 OBTIER 紀錄。HM / M3 / HC / C3 / M5 等過渡 / fallback CARD_TYPE 之 OBTIER 紀錄**整列不匯入** `ob_tier`（避免違反 `ob_card_type` 1:1 綁定約束）。因此 dump 中之 `T1HM` / `T2HM` / `T3HM` / `T5M`（屬 HM / M5 紀錄）與 `THC`（屬 HC 紀錄）等實際上多數於遷移時隨對應 CARD_TYPE 紀錄一起略過；本映射表仍保留以涵蓋邊界情境（如業務未來補建 HM 計分卡並沿用舊 TIER 值時）。
+
+**遷移腳本責任**：由 TDD 開發者於 D3 migration 後執行 UPDATE 腳本。D11 驗證 SQL 需確認：
+
+```sql
+-- 驗證 ob_tier.tier_level 全部值符合 T1~T10 列舉
+SELECT tier_level, COUNT(*)
+  FROM ob_tier
+ WHERE tier_level NOT IN ('T1','T2','T3','T4','T5','T6','T7','T8','T9','T10')
+ GROUP BY tier_level;
+-- 預期：0 列
+```
+
+**DB 層列舉約束實作（✅ OQ-E07-36 Resolved，system-architect，2026-05-14）**
+
+採 `CHECK constraint`（非 PostgreSQL `ENUM type`，非純應用層驗證）：
+
+```sql
+ALTER TABLE ob_tier
+  ADD CONSTRAINT chk_ob_tier_tier_level
+    CHECK (tier_level IN ('T1','T2','T3','T4','T5','T6','T7','T8','T9','T10'));
+```
+
+執行時序（**D-CT-03 migration，必須依序**）：D3 migration（OBTIER → ob_tier）→ TIER_LEVEL 轉換 UPDATE → M3/HC/C3 seed INSERT → D11 驗證確認 0 筆違規 → **加 CHECK constraint**。
+
+選用 CHECK constraint 而非 ENUM type 的理由：若未來業務需擴展至 T11+，只需 `ALTER TABLE DROP CONSTRAINT + ADD CONSTRAINT`，不需 `ALTER TYPE`（PostgreSQL ENUM DDL 在部分版本無法 rollback）。SQLite 支援 CHECK constraint，E2E 測試相容（PostgreSQL 版本加入；SQLite 版本可省略，由應用層保證）。
+
+**ob_tier Fallback 紀錄刪除操作規範（⚠️ TypeORM NULL PK silent bug 防範）**
+
+`ob_tier.card_level` 為 nullable 欄位，Fallback 紀錄之 `card_level IS NULL`。**刪除 Fallback 單筆紀錄**（F056 AC-7）**必須**：
+
+```typescript
+// ✅ 正確：先取得 entity，再 remove
+const entity = await repo.findOne({
+  where: { card_type: ct, card_level: IsNull() }
+});
+await repo.remove(entity);
+
+// ❌ 禁止：TypeORM 產生 WHERE card_level = NULL（永不 match，silent bug）
+await repo.delete({ card_type: ct, card_level: null });
+```
+
+> F072 步驟 1 刪除 `ob_tier WHERE card_type = :cardType`（整批，WHERE 條件為非 NULL 的 `card_type`）**不受此問題影響**，可正常使用 `repo.delete({ card_type: cardType })`。
+
+---
+
+**M02 計分設定擴充（2026-05-14）相關規則彙整**
+
+| 來源 | 規則 | 適用範圍 |
+|------|------|----------|
+| F056 BR-6 | 遷移範圍限 6 個正規 CARD_TYPE | OBTIER → ob_tier 遷移腳本 |
+| F056 BR-13 | Fallback / Standard 互斥 | ob_tier 寫入 |
+| F056 BR-12 | TIER 遷移規則（^T(\d+) 取前綴）| 本章節「TIER_LEVEL 列舉約束與遷移規則」段落 |
+| F072 BR-1~9 | CARD_TYPE 級聯 hard delete | ob_card_type + 下游 5 表 |
+| F072 BR-3 | 排除 ob_pool_data_list / assignment_run_snapshot / ob_list_definition | F072 級聯範圍 |
+
 **SP join 證據對照**（已實證 vs 仍假設）：
 
 | 欄位 | SP 證據 | 狀態 |
@@ -1227,7 +1429,28 @@ VALUES ('C3', NULL, 'T3C', '汽車C3名單');
 | PK `(card_type, card_level)` | SP join 鍵組合 | [ASSUMPTION] — 原表無 PK constraint，遷移時補建 |
 | 稽核欄位 | 原表無稽核欄位 | ✅ 已實證（OBTIER.sql 4 欄均無稽核欄位）；E07 內容變更稽核透過 `assignment_audit_log` 統一處理 |
 
-**索引**：複合 PK `(card_type, card_level)` 即為主索引；無額外索引需求。
+**索引**：`UNIQUE INDEX ON ob_tier (card_type, COALESCE(card_level, ''))` 即為主索引（entity 檔案 line 9 說明：PostgreSQL 不支援 `COALESCE` in Primary Key，以 raw SQL UNIQUE INDEX 等效表達）；無額外索引需求。
+
+**Fallback / Standard 互斥約束實作（✅ OQ-E07-35 Resolved，system-architect，2026-05-14）**
+
+採**應用層 Mutex 檢查**，不建立 DB-level partial unique index 或 trigger。
+
+理由：Fallback/Standard 互斥語意（「同一 card_type 下不可同時存在 card_level IS NULL 與 card_level IS NOT NULL」）無法用單一 DB constraint 精確表達；應用層已是唯一寫入路徑；SQLite E2E trigger 語法差異問題；MVP 並發量極低。
+
+**Service 層實作規範（TDD Developer）**：F056 `createTierMapping()` / `updateTierMapping()` 在同一 transaction 中：
+
+```typescript
+// 1. 計算 Standard 筆數（card_level IS NOT NULL）
+const standardCount = await repo.count({
+  where: { card_type: ct, card_level: Not(IsNull()) }
+});
+// 2. 確認 Fallback 是否存在（card_level IS NULL）
+const fallbackExists = await repo.exists({
+  where: { card_type: ct, card_level: IsNull() }
+});
+// 3. 新增 Fallback 時，若已有 Standard 紀錄 → 422 CARD_TYPE_FALLBACK_STANDARD_MUTEX
+// 4. 新增 Standard 時，若已有 Fallback 紀錄 → 422 CARD_TYPE_FALLBACK_STANDARD_MUTEX
+```
 
 **注意**：與 `ob_levelcard_level`（CARD_LEVEL 分級門檻：總分區間 → CARD_LEVEL，由 F055 維護）為**不同表**，不可混用。`ob_tier` 為 TIER_LEVEL 對應，由 F056 維護。
 
