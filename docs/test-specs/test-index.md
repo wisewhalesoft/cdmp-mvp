@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.7"
+version: "2.8"
 status: draft
 last_updated: 2026-05-13
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047]
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F053, F054, F055, F056]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：54 份（4 策略文件 + 46 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：837 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + **E06 F046 共 31 + F047 共 38**；另 F039-strategy 4 個策略場景另計）
+> **測試文件總數**：58 份（4 策略文件 + 50 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：921 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + **E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28**；另 F039-strategy 4 個策略場景另計）
+> **E07 M02 計分設定新增（2026-05-13）**：新增 F053（查看計分維度，13 場景）、F054（編輯計分維度與分數，24 場景）、F055（編輯 CARD_LEVEL 門檻，21 場景）、F056（編輯 TIER_LEVEL 對應表，28 場景），涵蓋覆寫式編輯語意、月跑鎖（pending/running）、稽核 log before/after、Fallback CARD_TYPE（M5/M3/HC/C3）、fn_calc_tier_level NULL fallback 跨層整合、S5 兩級 vs H 四級等級數差異、BR-9 card_level 長度驗證、PUT/POST 端點語意分離
 > **F002SM 新增（2026-05-13）**：新增 Sales Manager 旗標顯示於 Top Bar 測試設計（25 場景），涵蓋後端 Login API `isSalesManager` 欄位補充、Frontend TopBar Badge 元件、JWT payload 驗證、edge case（舊 token / 旗標升降級）
 > **E06 Customer 360 新增（2026-04-13）**：新增 F046（客戶搜尋與清單，31 場景）與 F047（單一客戶詳情，38 場景），涵蓋 Full-Text Search、精確比對、遮罩規則（Admin/User）、風控旗標高亮、ETL 資料新鮮度、客戶類型適應顯示、404 錯誤處理
 > **E06 角色精簡更新（2026-04-13）**：US-017 角色從 8 種（2 系統角色 + 6 業務角色）精簡為 2 種（admin / user）。F045 更新（15→13 場景）；F004 精簡（14→9 場景）；F005 精簡（14→10 場景）；F008 精簡（20→12 場景）；移除業務角色相關測試案例
@@ -26,7 +27,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 
 ### 涵蓋範圍
 
-- 41 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038、F045、F046、F047），分屬 6 個 Epic（F038 跨 E04/E05）：
+- 45 個 Feature（F001–F026、F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037、F038、F045、F046、F047、F053–F056），分屬 7 個 Epic（F038 跨 E04/E05）：
   - **E01 驗證與登入**：F001、F002、F003
   - **E02 帳號與角色管理**：F004、F005、F006、F007、F008、F009、F010、F045
   - **E03 資料來源管理**：F011、F012、F013、F014、F015、F016
@@ -34,6 +35,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
   - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037
   - **E04+E05 系統啟動修復**：F038（孤兒任務回收，跨 E04/E05）
   - **E06 Customer 360**：F046（客戶搜尋與清單）、F047（單一客戶詳情）
+  - **E07 客戶名單分派（M02 計分設定）**：F053（查看計分維度）、F054（編輯計分維度與分數）、F055（編輯 CARD_LEVEL 門檻）、F056（編輯 TIER_LEVEL 對應表）
 - 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程；新增 F026 raw data 預覽效能）
 - 65 個錯誤碼的驗證覆蓋（新增 C360_CUSTOMER_NOT_FOUND、C360_SEARCH_MIN_LENGTH for E06；新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
 
@@ -115,7 +117,13 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F046 | Customer 360 — 客戶搜尋與清單 | P0-MVP | [F046-test.md](features/F046-test.md) | 31 | Draft |
 | F047 | Customer 360 — 單一客戶詳情 | P0-MVP | [F047-test.md](features/F047-test.md) | 38 | Draft |
 | **E06 小計** | | | **2 files** | **69** | |
-| **總合計** | | | **45 files** | **812** | |
+| **E07 M02 計分設定** | | | | | |
+| F053 | 查看計分維度設定 | P0-MVP | [F053-test.md](features/F053-test.md) | 13 | Draft |
+| F054 | 編輯計分維度與分數 | P0-MVP | [F054-test.md](features/F054-test.md) | 24 | Draft |
+| F055 | 編輯 CARD_LEVEL 分級門檻 | P0-MVP | [F055-test.md](features/F055-test.md) | 21 | Draft |
+| F056 | 編輯 TIER_LEVEL 對應表 | P0-MVP | [F056-test.md](features/F056-test.md) | 28 | Draft |
+| **E07 M02 小計** | | | **4 files** | **86** | |
+| **總合計** | | | **49 files** | **898** | |
 
 ---
 
@@ -172,7 +180,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047**
+**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056**
 
 **F002SM Sales Manager Badge 特殊注意：**
 - 後端 `LoginResult.user` DTO 須補充 `isSalesManager: boolean`；TS-F002SM-001 / TS-F002SM-006 驗證欄位存在性與 boolean 型別（不可為字串）
@@ -293,6 +301,24 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - F047 客戶類型適應：customer_type_code='01'（個人）與 '04'（外籍）均在 G 分類顯示「本分類不適用」；'02'（企業）才顯示企業欄位
 - F046 / F047 共用遮罩函式：maskIdNumber（前 3 + 後 2）、maskPhone（前 4 + 後 2）、maskEmail（@ 前保留前 2 字元）；NULL 值回傳 null，不套用遮罩
 - F047 UUID 路徑參數驗證：非 UUID 格式的 customerId（如 'invalid-id'）應回傳 400 或 422，不得回傳 500
+
+**E07 M02 計分設定特殊注意（F053 / F054 / F055 / F056）：**
+- 所有 E07 計分設定 API 均需 `is_sales_manager = true`（SalesManagerGuard + @RequireSalesManager()）；非 Sales Manager Token 回傳 403 AUTH_FORBIDDEN
+- 月跑鎖適用 F054 / F055 / F056 的全部寫入端點：`assignment_run.status IN ('pending', 'running')` 時回 409 SCORING_VERSION_LOCKED；兩種狀態均需各自測試（TS-F054-010/011、TS-F055-007/008、TS-F056-010/011）
+- ob_levelcard_column.status 欄位由 Migration 1711360000143 補建（VARCHAR(10) NOT NULL DEFAULT 'active'）；測試 seed 不依賴 dev DB 狀態，直接植入已知 status 值
+- ob_levelcard_version 的 active 判斷以 `status='active'` 為準（非 sdate/edate 計算），seed 直接寫 status='active'，避免時鐘依賴
+- F054 PUT 覆寫語意：card_version 不遞增（BR-2，dump 觀察 6 種 CARD_TYPE 均為 v1）；TS-F054-001 需顯式驗證 DB card_version 仍為 1
+- F055 等級數差異：S5 型 2 級（A/B）vs H/S/E/E5/M 型 4 級（A/B/C/D）；TS-F055-002/004 使用 S5 seed，驗證 API/UI 不硬編碼 4 級邏輯
+- F055 PUT 依 `(card_type, card_version, card_level)` 三欄定位 UPDATE，不傳 surrogate id；TS-F055-005 顯式驗證此行為
+- F055 preview 快取（BR-2，60 秒）：CI 只驗計算正確性（TS-F055-013/014）；快取行為移至 Manual QA（除非實作提供 injectable TTL）
+- F055 preview URL encoded levels 參數：直接使用 spec 5.2 範例字串（`levels=%5B%7B%22cardLevel%22%3A%22A%22...%7D%5D`）
+- F056 PUT（批次 UPSERT） vs POST（單筆 INSERT）語意分離：TIER_LEVEL_DUPLICATE 在 PUT 是「body 內 PK 重複」（TS-F056-007），在 POST 是「DB 已存在」（TS-F056-013）
+- F056 Fallback CARD_TYPE：M5（標準 fallback，OBTIER dump 第 28 列）、M3/HC/C3（過渡期 fallback，OQ-E07-28 決策，OBMLISTDF 仍有名單）；HM 不再為 fallback（OQ-E07-27 決策，需補獨立計分卡）
+- F056 BR-9 card_level 長度檢查：ob_tier.card_level VARCHAR(5) vs ob_levelcard_level.card_level VARCHAR(1)；輸入 'AB'（2 字元）應回 422 CARD_LEVEL_NOT_FOUND（TS-F056-015）
+- F056 BR-10 fn_calc_tier_level NULL fallback：跨層整合測試（TS-F056-019/020）需直接以 SQL 呼叫 PostgreSQL function；Migration 1711360000141 必須先執行於 Test Container
+- Audit Log 通用驗證：所有 F054/F055/F056 寫入操作後，查詢 assignment_audit_log 最新一筆確認 action / entity_type / entity_id / before_value / after_value；before_value 不可為 null（需記錄舊值）
+- F053 BE-F053-001（停用維度連鎖）應在 F054 的整合 test suite 中串聯：F054 停用維度 → 呼叫 F053 GET /scoring 確認該維度不出現（TS-F054-009）
+- F054 停用維度端點路徑：spec 未明確定義（PATCH vs DELETE），測試設計標記為待確認；實作後對齊測試
 
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
