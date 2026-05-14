@@ -272,7 +272,17 @@
       "Bash(awk -F'|' '{print $2}')",
       "PowerShell(\\(Get-Content \"C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api\\\\src\\\\modules\\\\accounts\\\\__tests__\\\\accounts.service.spec.ts\" | Measure-Object -Line\\).Lines)",
       "PowerShell(\\(Get-Content \"C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\web\\\\src\\\\pages\\\\accounts\\\\__tests__\\\\account-list-page.test.tsx\" | Measure-Object -Line\\).Lines)",
-      "PowerShell(npx vitest run apps/web/src/pages/c360/__tests__/customer-list-page.test.tsx 2>&1 | Select-Object -Last 60)"
+      "PowerShell(npx vitest run apps/web/src/pages/c360/__tests__/customer-list-page.test.tsx 2>&1 | Select-Object -Last 60)",
+      "Bash(dir *)",
+      "Bash(143)",
+      "Bash(141)",
+      "Bash(142)",
+      "Bash(fn_calc\")",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api\\\\src\\\\modules\\\\assignment-scoring\" -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5 | ForEach-Object { \"$\\($_.LastWriteTime\\) - $\\($_.Name\\)\" })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api\\\\src\\\\modules\\\\assignment-scoring\" -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 8 | ForEach-Object { \"$\\($_.LastWriteTime.ToString\\('HH:mm:ss'\\)\\) - $\\($_.Name\\)\" })",
+      "PowerShell(docker restart cdmp-api *)",
+      "PowerShell(docker exec cdmp-web *)",
+      "PowerShell(docker restart cdmp-web *)"
     ],
     "defaultMode": "default"
   },
