@@ -1,10 +1,11 @@
 ---
 type: test-design-feature
 feature_id: F054
-feature_name: 編輯計分維度與分數
+feature_name: 編輯計分維度與分數（M02 Tab 3）
 priority: P0-MVP
 related_spec: /docs/specs/features/F054-edit-scoring-dimension.md
-last_updated: 2026-05-13
+last_updated: 2026-05-14
+spec_version: "1.2"
 ---
 
 # F054: 編輯計分維度與分數 — 測試設計
@@ -201,5 +202,16 @@ INSERT INTO assignment_run (run_ym, status, created_at) VALUES ('202604', 'runni
 
 | 項目 | 內容 |
 |------|------|
-| 相依功能 | F001（JWT 驗證）、F053（BE-F054-009 跨 Feature 串聯）、Migration 1711360000143（ob_levelcard_column.status 欄位） |
-| 環境依賴 | Test Container PostgreSQL（AppDB）；assignment_run 表需存在 |
+| 相依功能 | F001（JWT 驗證）、F053（BE-F054-009 跨 Feature 串聯）、F069（ob_card_type 必須存在，v1.2 新增 CARD_TYPE_NOT_FOUND 場景） |
+| 環境依賴 | SQLite in-memory（E2E）；ob_card_type entity 需已加入 E2E app 的 entities 清單 |
+
+---
+
+## v1.2 新增 Test Scenarios
+
+### E. API Integration Tests — cardType 不存在回 404（v1.2 新增）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F054-025 | PUT /dimensions 傳不存在的 cardType 回 404 | AC-7（v1.2） | Integration | ob_card_type 無 'NOTEXIST'（或 status='inactive'）；SM Token | PUT /api/v1/assignment/scoring/dimensions?cardType=NOTEXIST，body 含任意 dimensions | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
+| TS-F054-026 | POST /dimensions 傳不存在的 cardType 回 404 | AC-7（v1.2） | Integration | ob_card_type 無 'NOTEXIST'；SM Token | POST /api/v1/assignment/scoring/dimensions?cardType=NOTEXIST，body 含任意 dimension | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |

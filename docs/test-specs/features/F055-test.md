@@ -1,13 +1,14 @@
 ---
 type: test-design-feature
 feature_id: F055
-feature_name: 編輯 CARD_LEVEL 分級門檻
+feature_name: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4）
 priority: P0-MVP
 related_spec: /docs/specs/features/F055-edit-card-level-thresholds.md
-last_updated: 2026-05-13
+last_updated: 2026-05-14
+spec_version: "1.4"
 ---
 
-# F055: 編輯 CARD_LEVEL 分級門檻 — 測試設計
+# F055: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） — 測試設計
 
 ---
 
@@ -184,8 +185,33 @@ INSERT INTO assignment_run (run_ym, status, created_at) VALUES ('202604', 'runni
 
 | 項目 | 內容 |
 |------|------|
-| 相依功能 | F001（JWT 驗證）、F053（需有 active 版本）、Migration 1711360000100（ob_levelcard_level 表）、ob_pool_data 表（preview 計算） |
-| 環境依賴 | Test Container PostgreSQL（AppDB）；ob_pool_data 需植入合理種子資料 |
+| 相依功能 | F001（JWT 驗證）、F053（需有 active 版本）、F069（ob_card_type 必須存在，v1.4 新增 CARD_TYPE_NOT_FOUND）、ob_pool_data 表（preview 計算） |
+| 環境依賴 | SQLite in-memory（E2E）；ob_pool_data 需植入合理種子資料；ob_card_type entity 需已加入 entities 清單 |
 | 風險-1 | TS-F055-013 preview 加總驗證依賴 ob_pool_data 的計分計算邏輯（fn_calc_tier_level）；若 preview 只套用 CARD_LEVEL 門檻而不重新計算分數（更可能的實作方案），需確認 ob_pool_data 中已有 computed score，測試種子資料要預先寫入 score 值 |
 | 風險-2 | 若 preview 計算改以 ob_pool_data 的既有 score 欄位套用新門檻（非重新呼叫 fn_calc_tier_level），需釐清 API 讀取的是哪個 score 欄位 |
 | 風險-3 | S5 型 2 級門檻（TS-F055-002、TS-F055-004）需確認 ob_levelcard_level 中實際 S5 的等級是 A/B 兩筆；若 dump 實際值與預設不同，需依 dump 真實資料調整 seed |
+
+---
+
+## v1.4 新增 Test Scenarios
+
+### F. API Integration Tests — DELETE 等級端點與 cardType 404（v1.4 新增）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F055-022 | DELETE /card-levels/:cardLevel 正常刪除等級 | AC-6（v1.4） | Integration | ob_card_type(H active)；ob_levelcard_level(H, v1, D 等級存在)；無月跑鎖；SM Token | DELETE /api/v1/assignment/scoring/card-levels/D?cardType=H | HTTP 200；DB ob_levelcard_level WHERE card_type='H' AND card_level='D' 無紀錄（實體刪除）；ob_levelcard_level 其他等級（A/B/C）不受影響 |
+| TS-F055-023 | DELETE 等級時月跑執行中回 409 | AC-6（v1.4） | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | DELETE /api/v1/assignment/scoring/card-levels/D?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
+| TS-F055-024 | DELETE 不存在的等級回 404 | AC-6（v1.4） | Integration | ob_card_type(H active)；ob_levelcard_level 無 H/Z；SM Token | DELETE /api/v1/assignment/scoring/card-levels/Z?cardType=H | HTTP 404；errorCode='CARD_LEVEL_NOT_FOUND' |
+| TS-F055-025 | GET / PUT 傳不存在的 cardType 回 404 | AC-7（v1.4） | Integration | ob_card_type 無 'NOTEXIST'；SM Token | GET /api/v1/assignment/scoring/card-levels?cardType=NOTEXIST | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
+
+### G. Frontend Unit Tests — DELETE 等級 UI（v1.4 新增）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F055-026 | DELETE 等級成功後清單移除該列並顯示 toast | AC-6（v1.4） | Frontend Unit | stub DELETE 回傳 HTTP 200；isLocked=false | 點擊 D 級列的「刪除」按鈕 → 確認對話框確認 | ob_levelcard_level 清單不再顯示 D 級列；顯示刪除成功 toast 通知 |
+
+### H. audit_log 驗證（DELETE 等級，v1.4 新增）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F055-027 | DELETE 等級成功後 audit_log 記錄 action='DELETE' | AC-6（v1.4） | Integration | TC-F055-022 成功後 | 查詢 assignment_audit_log 最新一筆 | action='DELETE'；entity_type='ob_levelcard_level'；entity_id 含 'H\|D'（或等效格式）；before_value 含 score_s / score_e；after_value=null |
