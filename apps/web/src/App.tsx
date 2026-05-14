@@ -19,7 +19,7 @@ import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
 import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
 import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
-import { AssignmentStubPage, BaseCodesPage } from '@/pages/assignment';
+import { AssignmentStubPage, BaseCodesPage, ScoringConfigPage } from '@/pages/assignment';
 import { AdminRoute, ProtectedRoute, SalesManagerRoute } from '@/router/protected-route';
 
 export function App() {
@@ -170,7 +170,7 @@ export function App() {
         path="/assignment/scoring"
         element={
           <SalesManagerRoute>
-            <AssignmentStubPage title="計分卡設定" />
+            <ScoringConfigPage />
           </SalesManagerRoute>
         }
       />
