@@ -17,9 +17,9 @@
  * POST /tier-mapping (§5.3，單筆 INSERT)
  *   - TS-F056-012：正常新增 → 201
  *   - TS-F056-013：DB 已存在 → 422 TIER_LEVEL_DUPLICATE（不執行 UPDATE）
- *   - TS-F056-014：CARD_LEVEL 不存在於 active 版本（標準路徑）→ 422 CARD_LEVEL_NOT_FOUND
- *   - TS-F056-015：card_level 'AB'（>1 字元）→ 422 CARD_LEVEL_NOT_FOUND（BR-9）
- *   - TS-F056-016：fallback (M5, null) 新增 → 201（不觸發 CARD_LEVEL_NOT_FOUND）
+ *   - TS-F056-014：CARD_LEVEL 不存在於 active 版本（標準路徑）→ 422 CARD_LEVEL_NOT_FOUND_IN_VERSION
+ *   - TS-F056-015：card_level 'AB'（>1 字元）→ 422 CARD_LEVEL_NOT_FOUND_IN_VERSION（BR-9）
+ *   - TS-F056-016：fallback (M5, null) 新增 → 201（不觸發 CARD_LEVEL_NOT_FOUND_IN_VERSION）
  *   - TS-F056-017：fallback (M3, null) 過渡期 → 201
  *   - TS-F056-018：月跑鎖 → 409
  *
@@ -359,7 +359,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     expect(tierRepo.save).not.toHaveBeenCalled();
   });
 
-  it('TS-F056-014：POST CARD_LEVEL 不存在於 active 版本 → 422 CARD_LEVEL_NOT_FOUND', async () => {
+  it('TS-F056-014：POST CARD_LEVEL 不存在於 active 版本 → 422 CARD_LEVEL_NOT_FOUND_IN_VERSION', async () => {
     versionRepo.findOne.mockResolvedValue({
       card_type: 'H', card_version: 1, status: 'active',
     });
@@ -378,11 +378,11 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
         actor,
       );
     } catch (e: any) {
-      expect(e.getResponse().error).toBe('CARD_LEVEL_NOT_FOUND');
+      expect(e.getResponse().error).toBe('CARD_LEVEL_NOT_FOUND_IN_VERSION');
     }
   });
 
-  it("TS-F056-015：POST card_level 'AB' (>1 字元) → 422 CARD_LEVEL_NOT_FOUND（BR-9）", async () => {
+  it("TS-F056-015：POST card_level 'AB' (>1 字元) → 422 CARD_LEVEL_NOT_FOUND_IN_VERSION（BR-9）", async () => {
     versionRepo.findOne.mockResolvedValue({
       card_type: 'H', card_version: 1, status: 'active',
     });
@@ -402,11 +402,11 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
         actor,
       );
     } catch (e: any) {
-      expect(e.getResponse().error).toBe('CARD_LEVEL_NOT_FOUND');
+      expect(e.getResponse().error).toBe('CARD_LEVEL_NOT_FOUND_IN_VERSION');
     }
   });
 
-  it('TS-F056-016：POST fallback (M5, null) → 201 不觸發 CARD_LEVEL_NOT_FOUND', async () => {
+  it('TS-F056-016：POST fallback (M5, null) → 201 不觸發 CARD_LEVEL_NOT_FOUND_IN_VERSION', async () => {
     tierRepo.findOne.mockResolvedValue(null);
 
     const result = await service.createTierMapping(

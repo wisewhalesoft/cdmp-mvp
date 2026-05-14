@@ -297,7 +297,10 @@ describe('AssignmentScoringService — F055 updateCardLevels', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('找不到三欄複合鍵對應的紀錄 → 404 CARD_LEVEL_NOT_FOUND', async () => {
+  it('找不到三欄複合鍵對應的紀錄 → 404 CARD_LEVEL_RECORD_NOT_FOUND', async () => {
+    // v1.3 錯誤碼拆分（PO 2026-05-14）：F055 PUT 找不到複合 PK 紀錄改用
+    // CARD_LEVEL_RECORD_NOT_FOUND（404），與 F056 PUT/POST 驗證用的
+    // CARD_LEVEL_NOT_FOUND_IN_VERSION（422）分開。
     levelRepo.findOne.mockResolvedValue(null);
     try {
       await service.updateCardLevels(
@@ -309,7 +312,7 @@ describe('AssignmentScoringService — F055 updateCardLevels', () => {
       );
       throw new Error('should have thrown');
     } catch (e: any) {
-      expect(e.getResponse().error).toBe('CARD_LEVEL_NOT_FOUND');
+      expect(e.getResponse().error).toBe('CARD_LEVEL_RECORD_NOT_FOUND');
     }
   });
 });

@@ -948,6 +948,144 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.status).toBe(200);
       expect(res.body.distribution).toEqual({ A: 0, B: 0 });
     });
+
+    // ============================================================
+    // F055 §5.3 DELETE /card-levels（v1.3 hard delete + cascade ref check）
+    // ============================================================
+
+    it('TS-F055-D08：DELETE happy path → 200 + DB 紀錄移除 + audit DELETE', async () => {
+      await seedHWithLevels();
+
+      const res = await request(app.getHttpServer())
+        .delete(
+          '/api/v1/assignment/scoring/card-levels' +
+            '?cardType=H&cardVersion=1&cardLevel=D',
+        )
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        cardType: 'H',
+        cardVersion: 1,
+        cardLevel: 'D',
+      });
+      expect(typeof res.body.deletedAt).toBe('string');
+      expect(res.body.deletedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+      // DB 中 D 等級確實被移除
+      const remaining = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(remaining).toHaveLength(3);
+      expect(remaining.map((r) => r.card_level).sort()).toEqual(['A', 'B', 'C']);
+
+      // audit log
+      const logs = await ds.getRepository(AssignmentAuditLog).find();
+      const deleteLog = logs.find((l) => l.action === 'DELETE');
+      expect(deleteLog).toBeDefined();
+      expect(deleteLog?.entity_type).toBe('ob_levelcard_level');
+      expect(deleteLog?.entity_id).toBe('H|1|D');
+      expect(deleteLog?.before_value).toEqual(
+        expect.objectContaining({ cardLevel: 'D', scoreS: 0, scoreE: 184 }),
+      );
+      expect(deleteLog?.after_value).toBeNull();
+    });
+
+    it('TS-F055-D09：DELETE 找不到複合 PK 紀錄 → 404 CARD_LEVEL_RECORD_NOT_FOUND', async () => {
+      await seedHWithLevels();
+
+      const res = await request(app.getHttpServer())
+        .delete(
+          '/api/v1/assignment/scoring/card-levels' +
+            '?cardType=H&cardVersion=1&cardLevel=Z',
+        )
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('CARD_LEVEL_RECORD_NOT_FOUND');
+
+      // 既有 A/B/C/D 完整保留
+      const remaining = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(remaining).toHaveLength(4);
+    });
+
+    it('TS-F055-D10：DELETE 仍被 ob_tier 引用 → 409 CARD_LEVEL_REFERENCED（cascade BR-6）', async () => {
+      await seedHWithLevels();
+      // 植入 (H, A) 引用紀錄；fallback (H, null) 也植入但不應被視為對 'A' 的引用
+      await ds.getRepository(ObTier).save([
+        { card_type: 'H', card_level: 'A', tier_level: 'T1', list_nm: '期中名單' },
+        { card_type: 'H', card_level: null, tier_level: 'T_FB', list_nm: null },
+      ] as any);
+
+      const res = await request(app.getHttpServer())
+        .delete(
+          '/api/v1/assignment/scoring/card-levels' +
+            '?cardType=H&cardVersion=1&cardLevel=A',
+        )
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('CARD_LEVEL_REFERENCED');
+
+      // 確認 A 紀錄仍存在（未刪除）
+      const aLevel = await ds.getRepository(ObLevelcardLevel).findOne({
+        where: { card_type: 'H', card_version: 1, card_level: 'A' },
+      });
+      expect(aLevel).not.toBeNull();
+
+      // 確認未寫 DELETE audit log
+      const logs = await ds.getRepository(AssignmentAuditLog).find();
+      expect(logs.filter((l) => l.action === 'DELETE')).toHaveLength(0);
+    });
+
+    it('TS-F055-D11：月跑 pending 時 DELETE → 409 SCORING_VERSION_LOCKED', async () => {
+      await seedHWithLevels();
+      await ds.getRepository(AssignmentRun).save({
+        run_id: '11111111-1111-1111-1111-1111110055d11',
+        project_workym: '202605',
+        status: 'pending',
+        triggered_by: SM_USER.id,
+        created_at: new Date(),
+      } as any);
+
+      const res = await request(app.getHttpServer())
+        .delete(
+          '/api/v1/assignment/scoring/card-levels' +
+            '?cardType=H&cardVersion=1&cardLevel=D',
+        )
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('SCORING_VERSION_LOCKED');
+
+      // 鎖時不應執行任何刪除
+      const remaining = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(remaining).toHaveLength(4);
+    });
+
+    it('TS-F055-D12：DELETE 未登入 → 401 AUTH_TOKEN_MISSING', async () => {
+      const res = await request(app.getHttpServer()).delete(
+        '/api/v1/assignment/scoring/card-levels' +
+          '?cardType=H&cardVersion=1&cardLevel=D',
+      );
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+    });
+
+    it('TS-F055-D13：DELETE 非業務主管 → 403 AUTH_FORBIDDEN', async () => {
+      const res = await request(app.getHttpServer())
+        .delete(
+          '/api/v1/assignment/scoring/card-levels' +
+            '?cardType=H&cardVersion=1&cardLevel=D',
+        )
+        .set('Authorization', `Bearer ${plainToken}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+    });
   });
 
   // ============================================================
@@ -1214,7 +1352,9 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(row?.tier_level).toBe('T1');
     });
 
-    it('TS-F056-014：POST CARD_LEVEL 不存在 → 422 CARD_LEVEL_NOT_FOUND', async () => {
+    it('TS-F056-014：POST CARD_LEVEL 不存在 → 422 CARD_LEVEL_NOT_FOUND_IN_VERSION', async () => {
+      // v1.4 錯誤碼拆分（PO 2026-05-14）：F056 PUT/POST 驗證錯誤碼從
+      // CARD_LEVEL_NOT_FOUND 改為 CARD_LEVEL_NOT_FOUND_IN_VERSION。
       await seedHActiveLevels();
 
       const res = await request(app.getHttpServer())
@@ -1222,10 +1362,10 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${smToken}`)
         .send({ cardType: 'H', cardLevel: 'Z', tierLevel: 'T9' });
       expect(res.status).toBe(422);
-      expect(res.body.error).toBe('CARD_LEVEL_NOT_FOUND');
+      expect(res.body.error).toBe('CARD_LEVEL_NOT_FOUND_IN_VERSION');
     });
 
-    it("TS-F056-015：POST card_level 'AB' (>1 字元) → 422 CARD_LEVEL_NOT_FOUND（BR-9）", async () => {
+    it("TS-F056-015：POST card_level 'AB' (>1 字元) → 422 CARD_LEVEL_NOT_FOUND_IN_VERSION（BR-9）", async () => {
       await seedHActiveLevels();
 
       const res = await request(app.getHttpServer())
@@ -1233,7 +1373,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${smToken}`)
         .send({ cardType: 'H', cardLevel: 'AB', tierLevel: 'T1' });
       expect(res.status).toBe(422);
-      expect(res.body.error).toBe('CARD_LEVEL_NOT_FOUND');
+      expect(res.body.error).toBe('CARD_LEVEL_NOT_FOUND_IN_VERSION');
     });
 
     it('TS-F056-016：POST fallback (M5, null) → 201', async () => {
@@ -1356,6 +1496,117 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${plainToken}`)
         .send({ mappings: [] });
       expect(res.status).toBe(403);
+    });
+
+    // ============================================================
+    // F056 §5.4 DELETE /tier-mapping（v1.4 hard delete + fallback NULL）
+    // ============================================================
+
+    it('TS-F056-D07：DELETE 標準對應 (H, A) → 200 + DB 移除 + audit DELETE', async () => {
+      await seedHActiveLevels();
+      await ds.getRepository(ObTier).save([
+        { card_type: 'H', card_level: 'A', tier_level: 'T1', list_nm: '期中名單' },
+        { card_type: 'H', card_level: 'B', tier_level: 'T2', list_nm: null },
+      ] as any);
+
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/assignment/scoring/tier-mapping?cardType=H&cardLevel=A')
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ cardType: 'H', cardLevel: 'A' });
+      expect(typeof res.body.deletedAt).toBe('string');
+
+      const remaining = await ds.getRepository(ObTier).find();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].card_level).toBe('B');
+
+      const logs = await ds.getRepository(AssignmentAuditLog).find();
+      const deleteLog = logs.find((l) => l.action === 'DELETE');
+      expect(deleteLog).toBeDefined();
+      expect(deleteLog?.entity_type).toBe('ob_tier');
+      expect(deleteLog?.entity_id).toBe('H|A');
+      expect(deleteLog?.before_value).toEqual(
+        expect.objectContaining({
+          cardType: 'H',
+          cardLevel: 'A',
+          tierLevel: 'T1',
+        }),
+      );
+      expect(deleteLog?.after_value).toBeNull();
+    });
+
+    it('TS-F056-D08：DELETE fallback (M5, NULL) → 200，省略 cardLevel query → fallback', async () => {
+      // 植入兩筆對應：fallback M5/null + 標準 M5/A（如果未來補等級）
+      await ds.getRepository(ObTier).save([
+        { card_type: 'M5', card_level: null, tier_level: 'T5M', list_nm: '機車' },
+      ] as any);
+
+      // 注意：cardLevel query 省略 → service 接收 null（fallback）
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/assignment/scoring/tier-mapping?cardType=M5')
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ cardType: 'M5', cardLevel: null });
+
+      const remaining = await ds.getRepository(ObTier).find();
+      expect(remaining).toHaveLength(0);
+
+      const logs = await ds.getRepository(AssignmentAuditLog).find();
+      const deleteLog = logs.find((l) => l.action === 'DELETE');
+      expect(deleteLog?.entity_type).toBe('ob_tier');
+      expect(deleteLog?.entity_id).toBe('M5|'); // fallback entity_id 結尾留空
+    });
+
+    it('TS-F056-D09：DELETE 找不到對應 → 404 TIER_MAPPING_NOT_FOUND', async () => {
+      // 空 ob_tier
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/assignment/scoring/tier-mapping?cardType=H&cardLevel=A')
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('TIER_MAPPING_NOT_FOUND');
+    });
+
+    it('TS-F056-D10：月跑 running 時 DELETE → 409 SCORING_VERSION_LOCKED', async () => {
+      await ds.getRepository(ObTier).save({
+        card_type: 'H', card_level: 'A', tier_level: 'T1', list_nm: null,
+      } as any);
+      await ds.getRepository(AssignmentRun).save({
+        run_id: '22222222-2222-2222-2222-2222220056d10',
+        project_workym: '202605',
+        status: 'running',
+        triggered_by: SM_USER.id,
+        created_at: new Date(),
+      } as any);
+
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/assignment/scoring/tier-mapping?cardType=H&cardLevel=A')
+        .set('Authorization', `Bearer ${smToken}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('SCORING_VERSION_LOCKED');
+
+      // 鎖時不應執行刪除
+      const remaining = await ds.getRepository(ObTier).find();
+      expect(remaining).toHaveLength(1);
+    });
+
+    it('TS-F056-D11：DELETE 未登入 → 401 AUTH_TOKEN_MISSING', async () => {
+      const res = await request(app.getHttpServer()).delete(
+        '/api/v1/assignment/scoring/tier-mapping?cardType=H&cardLevel=A',
+      );
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+    });
+
+    it('TS-F056-D12：DELETE 非業務主管 → 403 AUTH_FORBIDDEN', async () => {
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/assignment/scoring/tier-mapping?cardType=H&cardLevel=A')
+        .set('Authorization', `Bearer ${plainToken}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('AUTH_FORBIDDEN');
     });
   });
 
