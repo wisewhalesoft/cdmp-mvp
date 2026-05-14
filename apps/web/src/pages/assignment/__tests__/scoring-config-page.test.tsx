@@ -45,9 +45,11 @@ vi.mock('@/api/assignment-scoring', async () => {
     getCardLevels: vi.fn(),
     updateCardLevels: vi.fn(),
     previewCardLevels: vi.fn(),
+    deleteCardLevel: vi.fn(), // v1.3 新增
     getTierMapping: vi.fn(),
     updateTierMapping: vi.fn(),
     createTierMapping: vi.fn(),
+    deleteTierMapping: vi.fn(), // v1.4 新增
   };
 });
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
@@ -58,9 +60,13 @@ const mockedGetCardLevels = vi.mocked(api.getCardLevels);
 const mockedGetTierMapping = vi.mocked(api.getTierMapping);
 const mockedCreateDimension = vi.mocked(api.createDimension);
 const mockedDisableDimension = vi.mocked(api.disableDimension);
+const mockedUpdateDimensions = vi.mocked(api.updateDimensions);
 const mockedUpdateCardLevels = vi.mocked(api.updateCardLevels);
 const mockedPreviewCardLevels = vi.mocked(api.previewCardLevels);
+const mockedDeleteCardLevel = vi.mocked(api.deleteCardLevel);
 const mockedCreateTierMapping = vi.mocked(api.createTierMapping);
+const mockedUpdateTierMapping = vi.mocked(api.updateTierMapping);
+const mockedDeleteTierMapping = vi.mocked(api.deleteTierMapping);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
@@ -525,5 +531,408 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
       expect(screen.queryByTestId('tier-modal')).not.toBeInTheDocument();
     });
     expect(screen.getByTestId('btn-add-tier')).toBeDisabled();
+  });
+});
+
+// ============================================================
+// v1.3 / v1.4 新增：4 個 Tab 的編輯 / 刪除 互動測試（+ prototype 28 樣式對齊 + 錯誤碼 rename）
+// ============================================================
+
+// ---- 共用：開 dim tab 等 row 出現 ----
+async function openDimTabAndWaitRow() {
+  render(wrap(<ScoringConfigPage />));
+  await waitFor(() => {
+    expect(screen.getByTestId('dim-row-ACCOUNT_AGE')).toBeInTheDocument();
+  });
+}
+
+describe('ScoringConfigPage — DimensionsTab 編輯 / icon-only 停用', () => {
+  it('TS-F054-E01：每列顯示 pencil 編輯按鈕（icon-only，藍色 hover）', async () => {
+    await openDimTabAndWaitRow();
+    const editBtn = screen.getByTestId('edit-dim-ACCOUNT_AGE');
+    expect(editBtn).toBeInTheDocument();
+    // prototype 28 L1087: hover:text-primary + hover:bg-blue-50 + rounded + action-btn p-1.5
+    expect(editBtn.className).toContain('action-btn');
+    expect(editBtn.className).toContain('p-1.5');
+    expect(editBtn.className).toContain('hover:text-[#2563EB]');
+    expect(editBtn.className).toContain('hover:bg-blue-50');
+    // icon-only：按鈕內無文字（僅 lucide svg）
+    expect(editBtn.textContent?.trim()).toBe('');
+  });
+
+  it('TS-F054-E02：點擊 pencil → 開啟編輯 Modal，預填 columnLabel', async () => {
+    await openDimTabAndWaitRow();
+    fireEvent.click(screen.getByTestId('edit-dim-ACCOUNT_AGE'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-edit-modal')).toBeInTheDocument();
+    });
+    const modal = screen.getByTestId('dim-edit-modal');
+    expect(modal.textContent).toContain('編輯計分維度');
+    // columnLabel 預填
+    const labelInput = within(modal).getByTestId('dim-edit-label') as HTMLInputElement;
+    expect(labelInput.value).toBe('帳齡');
+  });
+
+  it('TS-F054-E03：編輯 Modal 儲存 → 呼叫 updateDimensions，toast 成功', async () => {
+    mockedUpdateDimensions.mockResolvedValue({
+      cardType: 'H', cardVersion: 1, updatedDimensions: 1, updatedScores: 2,
+    } as any);
+    await openDimTabAndWaitRow();
+    fireEvent.click(screen.getByTestId('edit-dim-ACCOUNT_AGE'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-edit-modal')).toBeInTheDocument();
+    });
+    const modal = screen.getByTestId('dim-edit-modal');
+    const labelInput = within(modal).getByTestId('dim-edit-label') as HTMLInputElement;
+    fireEvent.change(labelInput, { target: { value: '帳齡（修訂）' } });
+    fireEvent.click(within(modal).getByTestId('dim-edit-submit'));
+
+    await waitFor(() => {
+      expect(mockedUpdateDimensions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cardType: 'H',
+          cardVersion: 1,
+          dimensions: expect.arrayContaining([
+            expect.objectContaining({
+              columnName: 'ACCOUNT_AGE',
+              columnLabel: '帳齡（修訂）',
+            }),
+          ]),
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('toast')).toBeInTheDocument();
+    });
+  });
+
+  it('TS-F054-E04：停用按鈕為 icon-only ban（無「停用」文字），hover 橘色', async () => {
+    await openDimTabAndWaitRow();
+    const disableBtn = screen.getByTestId('disable-ACCOUNT_AGE');
+    expect(disableBtn).toBeInTheDocument();
+    // 不再是 text-only 按鈕：button 內僅 svg，無「停用」字串
+    expect(disableBtn.textContent?.trim()).toBe('');
+    // prototype 28 L1090：hover:text-warning + hover:bg-amber-50 + p-1.5 + action-btn
+    expect(disableBtn.className).toContain('action-btn');
+    expect(disableBtn.className).toContain('p-1.5');
+    expect(disableBtn.className).toContain('hover:text-[#F59E0B]');
+    expect(disableBtn.className).toContain('hover:bg-amber-50');
+  });
+});
+
+describe('ScoringConfigPage — ScoresTab 編輯 / 刪除', () => {
+  it('TS-F054-E05：每列 pencil 編輯按鈕（icon-only） + click 開啟單筆編輯 Modal', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-score')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-score'));
+    // 第一筆 score row 預期有 testid score-row-0
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-score-0')).toBeInTheDocument();
+    });
+    const btn = screen.getByTestId('edit-score-0');
+    expect(btn.className).toContain('action-btn');
+    expect(btn.textContent?.trim()).toBe('');
+
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(screen.getByTestId('score-edit-modal')).toBeInTheDocument();
+    });
+  });
+
+  it('TS-F054-E06：score 編輯 Modal 儲存 → 呼叫 updateDimensions（覆寫式整批 scores）', async () => {
+    mockedUpdateDimensions.mockResolvedValue({} as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-score')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-score-0')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('edit-score-0'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-edit-modal')).toBeInTheDocument();
+    });
+    const modal = screen.getByTestId('score-edit-modal');
+    // 修改分數值
+    const scoreInput = within(modal).getByTestId('score-edit-score') as HTMLInputElement;
+    fireEvent.change(scoreInput, { target: { value: '99' } });
+    fireEvent.click(within(modal).getByTestId('score-edit-submit'));
+
+    await waitFor(() => {
+      expect(mockedUpdateDimensions).toHaveBeenCalled();
+    });
+    // 確認傳出的 payload 至少包含修改後的 score=99
+    const callArg = mockedUpdateDimensions.mock.calls[0][0];
+    const allScores = callArg.dimensions[0].scores;
+    expect(allScores.some((s: any) => s.score === 99)).toBe(true);
+  });
+
+  it('TS-F054-E07：score 列 trash 按鈕 + 確認對話框 → 刪除該筆走 updateDimensions（覆寫式去除）', async () => {
+    mockedUpdateDimensions.mockResolvedValue({} as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-score')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-score-0')).toBeInTheDocument();
+    });
+    const trashBtn = screen.getByTestId('delete-score-0');
+    // hover 紅色（prototype 28 L1171）
+    expect(trashBtn.className).toContain('hover:text-[#EF4444]');
+    expect(trashBtn.className).toContain('hover:bg-red-50');
+
+    fireEvent.click(trashBtn);
+    await waitFor(() => {
+      expect(screen.getByTestId('score-delete-confirm-modal')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('score-delete-confirm'));
+
+    await waitFor(() => {
+      expect(mockedUpdateDimensions).toHaveBeenCalled();
+    });
+    // 確認該筆被剔除（剩 1 筆 scores）
+    const callArg = mockedUpdateDimensions.mock.calls[0][0];
+    expect(callArg.dimensions[0].scores).toHaveLength(1);
+  });
+});
+
+describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELETE）', () => {
+  it('TS-F055-E01：每列 check 單列儲存按鈕 click → 呼叫 updateCardLevels', async () => {
+    mockedUpdateCardLevels.mockResolvedValue({} as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-level')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('save-level-A')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('save-level-A'));
+    await waitFor(() => {
+      expect(mockedUpdateCardLevels).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cardType: 'H',
+          cardVersion: 1,
+          levels: expect.arrayContaining([
+            expect.objectContaining({ cardLevel: 'A' }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('TS-F055-E02：每列 trash 刪除按鈕 + 確認對話框（含 AC-7 警告）→ 呼叫 deleteCardLevel API', async () => {
+    mockedDeleteCardLevel.mockResolvedValue({
+      cardType: 'H', cardVersion: 1, cardLevel: 'D', deletedAt: '2026-05-14T00:00:00.000Z',
+    } as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-level')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-level-D')).toBeInTheDocument();
+    });
+    const trash = screen.getByTestId('delete-level-D');
+    expect(trash.className).toContain('hover:text-[#EF4444]');
+    expect(trash.className).toContain('hover:bg-red-50');
+
+    fireEvent.click(trash);
+    await waitFor(() => {
+      expect(screen.getByTestId('level-delete-confirm-modal')).toBeInTheDocument();
+    });
+    // AC-7 警告文字（spec：F056 引用 / Stage 2 分級 / 先移除對應 等關鍵字至少出現）
+    const modal = screen.getByTestId('level-delete-confirm-modal');
+    expect(modal.textContent).toMatch(/月跑 Stage 2|TIER_LEVEL 對應|F056/);
+
+    fireEvent.click(screen.getByTestId('level-delete-confirm'));
+    await waitFor(() => {
+      expect(mockedDeleteCardLevel).toHaveBeenCalledWith('H', 1, 'D');
+    });
+  });
+
+  it('TS-F055-E03：DELETE 409 CARD_LEVEL_REFERENCED 顯示錯誤訊息（不關閉對話框）', async () => {
+    mockedDeleteCardLevel.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          error: 'CARD_LEVEL_REFERENCED',
+          message: '此 CARD_LEVEL 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除',
+        },
+      },
+    });
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-level')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-level'));
+    fireEvent.click(await screen.findByTestId('delete-level-D'));
+    await screen.findByTestId('level-delete-confirm-modal');
+    fireEvent.click(screen.getByTestId('level-delete-confirm'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('level-delete-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('level-delete-error').textContent).toContain(
+      'TIER_LEVEL 對應',
+    );
+  });
+});
+
+describe('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE）', () => {
+  it('TS-F056-E01：每列 pencil 編輯 → 開啟 TIER 編輯 Modal，預填 tierLevel/listNm', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-tier'));
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-tier-H-A')).toBeInTheDocument();
+    });
+    const editBtn = screen.getByTestId('edit-tier-H-A');
+    expect(editBtn.className).toContain('action-btn');
+    expect(editBtn.className).toContain('hover:text-[#2563EB]');
+
+    fireEvent.click(editBtn);
+    await waitFor(() => {
+      expect(screen.getByTestId('tier-edit-modal')).toBeInTheDocument();
+    });
+    const modal = screen.getByTestId('tier-edit-modal');
+    const tierInput = within(modal).getByTestId('tier-edit-tierLevel') as HTMLInputElement;
+    expect(tierInput.value).toBe('T1');
+  });
+
+  it('TS-F056-E02：TIER 編輯 Modal 儲存 → 呼叫 updateTierMapping PUT', async () => {
+    mockedUpdateTierMapping.mockResolvedValue({
+      updatedCount: 1, insertedCount: 0,
+    } as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-tier'));
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-tier-H-A')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('edit-tier-H-A'));
+    await screen.findByTestId('tier-edit-modal');
+    const modal = screen.getByTestId('tier-edit-modal');
+    const tierInput = within(modal).getByTestId('tier-edit-tierLevel') as HTMLInputElement;
+    fireEvent.change(tierInput, { target: { value: 'T99' } });
+    fireEvent.click(within(modal).getByTestId('tier-edit-submit'));
+
+    await waitFor(() => {
+      expect(mockedUpdateTierMapping).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mappings: expect.arrayContaining([
+            expect.objectContaining({
+              cardType: 'H',
+              cardLevel: 'A',
+              tierLevel: 'T99',
+            }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('TS-F056-E03：每列 trash → 確認對話框 → 呼叫 deleteTierMapping（標準對應 H/A）', async () => {
+    mockedDeleteTierMapping.mockResolvedValue({
+      cardType: 'H', cardLevel: 'A', deletedAt: '2026-05-14T00:00:00Z',
+    } as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-tier'));
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-tier-H-A')).toBeInTheDocument();
+    });
+    const trash = screen.getByTestId('delete-tier-H-A');
+    expect(trash.className).toContain('hover:text-[#EF4444]');
+    expect(trash.className).toContain('hover:bg-red-50');
+
+    fireEvent.click(trash);
+    await waitFor(() => {
+      expect(screen.getByTestId('tier-delete-confirm-modal')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tier-delete-confirm'));
+
+    await waitFor(() => {
+      expect(mockedDeleteTierMapping).toHaveBeenCalledWith('H', 'A');
+    });
+  });
+
+  it('TS-F056-E04：刪除 fallback 對應（M5/null）→ 呼叫 deleteTierMapping(M5, null)', async () => {
+    mockedDeleteTierMapping.mockResolvedValue({
+      cardType: 'M5', cardLevel: null, deletedAt: '2026-05-14T00:00:00Z',
+    } as any);
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-tier'));
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-tier-M5-null')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('delete-tier-M5-null'));
+    await screen.findByTestId('tier-delete-confirm-modal');
+    fireEvent.click(screen.getByTestId('tier-delete-confirm'));
+
+    await waitFor(() => {
+      expect(mockedDeleteTierMapping).toHaveBeenCalledWith('M5', null);
+    });
+  });
+
+  it('TS-F056-E05：月跑鎖時所有 TIER 編輯 / 刪除 / 新增按鈕 disabled', async () => {
+    // 模擬已經是鎖定狀態：先觸發 createTierMapping 拋 409 設 isLocked
+    mockedCreateTierMapping.mockRejectedValue({
+      response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
+    });
+    render(wrap(<ScoringConfigPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(await screen.findByTestId('btn-add-tier'));
+    const tierModal = await screen.findByTestId('tier-modal');
+    const inputs = tierModal.querySelectorAll('input[type="text"]');
+    fireEvent.change(inputs[1], { target: { value: 'T9' } });
+    fireEvent.click(screen.getByTestId('tier-modal-submit'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lock-banner')).toBeInTheDocument();
+    });
+    const cancelBtn = within(screen.getByTestId('tier-modal')).getByText('取消');
+    fireEvent.click(cancelBtn);
+    await waitFor(() => {
+      expect(screen.queryByTestId('tier-modal')).not.toBeInTheDocument();
+    });
+
+    // 鎖定後：新增 / 每列 編輯 / 刪除 都應 disabled
+    expect(screen.getByTestId('btn-add-tier')).toBeDisabled();
+    expect(screen.getByTestId('edit-tier-H-A')).toBeDisabled();
+    expect(screen.getByTestId('delete-tier-H-A')).toBeDisabled();
+  });
+});
+
+// ---- 錯誤碼拆分：v1.3 / v1.4 rename（前端字面字串）----
+
+describe('ScoringConfigPage — v1.3 / v1.4 錯誤碼 rename 對齊', () => {
+  it('TS-F056-E06：page tsx 與測試環境不應殘留舊錯誤碼 CARD_LEVEL_NOT_FOUND（無 _IN_VERSION / _RECORD_NOT_FOUND 後綴）', async () => {
+    // 此 test 直接讀 page source 字串檢查（前端錯誤訊息 mapping 不可殘留舊名）
+    const fs = await import('fs');
+    const path = await import('path');
+    const pageSrc = fs.readFileSync(
+      path.resolve(__dirname, '../scoring-config-page.tsx'),
+      'utf-8',
+    );
+    // 舊名單獨出現視為殘留（允許 CARD_LEVEL_NOT_FOUND_IN_VERSION / _RECORD_NOT_FOUND）
+    const stale = pageSrc.match(/CARD_LEVEL_NOT_FOUND(?!_IN_VERSION|_RECORD_NOT_FOUND)/g);
+    expect(stale).toBeNull();
   });
 });

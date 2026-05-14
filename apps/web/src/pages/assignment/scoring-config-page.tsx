@@ -11,9 +11,12 @@ import {
   Layers,
   Layers3,
   Pencil,
+  Ban,
+  Check,
   Plus,
   Save,
   ShieldCheck,
+  Trash2,
   X,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -25,6 +28,8 @@ import {
   TierMappingItem,
   createDimension,
   createTierMapping,
+  deleteCardLevel,
+  deleteTierMapping,
   disableDimension,
   getCardLevels,
   getScoring,
@@ -32,6 +37,7 @@ import {
   previewCardLevels,
   updateCardLevels,
   updateDimensions,
+  updateTierMapping,
 } from '@/api/assignment-scoring';
 
 /**
@@ -101,6 +107,20 @@ export function ScoringConfigPage() {
   const [tierModalOpen, setTierModalOpen] = useState(false);
   const [disableModalOpen, setDisableModalOpen] = useState(false);
   const [disableTarget, setDisableTarget] = useState<ScoringDimUI | null>(null);
+
+  // v1.3 / v1.4 新增：編輯 / 刪除 Modal 狀態（每列觸發）
+  const [dimEditTarget, setDimEditTarget] = useState<ScoringDimUI | null>(null);
+  const [scoreEditTarget, setScoreEditTarget] = useState<{
+    dim: ScoringDimUI;
+    scoreIdx: number;
+  } | null>(null);
+  const [scoreDeleteTarget, setScoreDeleteTarget] = useState<{
+    dim: ScoringDimUI;
+    scoreIdx: number;
+  } | null>(null);
+  const [levelDeleteTarget, setLevelDeleteTarget] = useState<CardLevelItem | null>(null);
+  const [tierEditTarget, setTierEditTarget] = useState<TierMappingItem | null>(null);
+  const [tierDeleteTarget, setTierDeleteTarget] = useState<TierMappingItem | null>(null);
 
   // === Toast helper ===
   function showToast(t: Toast) {
@@ -308,6 +328,7 @@ export function ScoringConfigPage() {
                 dimensions={dimensions}
                 isLocked={isLocked}
                 onAdd={() => setDimModalOpen(true)}
+                onEdit={(d) => setDimEditTarget(d)}
                 onDisable={(d) => {
                   setDisableTarget(d);
                   setDisableModalOpen(true);
@@ -319,6 +340,12 @@ export function ScoringConfigPage() {
                 dimensions={dimensions}
                 isLocked={isLocked}
                 onAddScore={() => setScoreModalOpen(true)}
+                onEditScore={(dim, scoreIdx) =>
+                  setScoreEditTarget({ dim, scoreIdx })
+                }
+                onDeleteScore={(dim, scoreIdx) =>
+                  setScoreDeleteTarget({ dim, scoreIdx })
+                }
               />
             )}
             {tab === 'level' && (
@@ -329,6 +356,7 @@ export function ScoringConfigPage() {
                 setLevels={setLevels}
                 isLocked={isLocked}
                 onSaved={() => fetchAll(cardType)}
+                onDelete={(lvl) => setLevelDeleteTarget(lvl)}
                 runWriteOp={runWriteOp}
               />
             )}
@@ -336,6 +364,8 @@ export function ScoringConfigPage() {
               <TierMappingTab
                 mappings={tierMappings}
                 onAdd={() => setTierModalOpen(true)}
+                onEdit={(m) => setTierEditTarget(m)}
+                onDelete={(m) => setTierDeleteTarget(m)}
                 isLocked={isLocked}
               />
             )}
@@ -411,6 +441,100 @@ export function ScoringConfigPage() {
             setDisableTarget(null);
             await fetchAll(cardType);
             showToast({ type: 'success', message: '維度已停用' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.3：DimensionsTab 編輯 Modal（沿用 updateDimensions 覆寫式編輯）*/}
+      {dimEditTarget && (
+        <DimensionEditModal
+          target={dimEditTarget}
+          cardType={cardType}
+          cardVersion={version?.cardVersion ?? 1}
+          onClose={() => setDimEditTarget(null)}
+          onSaved={async () => {
+            setDimEditTarget(null);
+            await fetchAll(cardType);
+            showToast({ type: 'success', message: '維度編輯成功' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.3：ScoresTab 單筆 score 編輯 Modal */}
+      {scoreEditTarget && (
+        <ScoreSingleEditModal
+          dim={scoreEditTarget.dim}
+          scoreIdx={scoreEditTarget.scoreIdx}
+          cardType={cardType}
+          cardVersion={version?.cardVersion ?? 1}
+          onClose={() => setScoreEditTarget(null)}
+          onSaved={async () => {
+            setScoreEditTarget(null);
+            await fetchAll(cardType);
+            showToast({ type: 'success', message: '分數區間更新成功' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.3：ScoresTab 單筆 score 刪除確認 Modal */}
+      {scoreDeleteTarget && (
+        <ScoreDeleteConfirmModal
+          dim={scoreDeleteTarget.dim}
+          scoreIdx={scoreDeleteTarget.scoreIdx}
+          cardType={cardType}
+          cardVersion={version?.cardVersion ?? 1}
+          onClose={() => setScoreDeleteTarget(null)}
+          onConfirmed={async () => {
+            setScoreDeleteTarget(null);
+            await fetchAll(cardType);
+            showToast({ type: 'success', message: '分數區間已刪除' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.3：CardLevelsTab 刪除確認 Modal（含 AC-7 警告 + cascade 409 顯示）*/}
+      {levelDeleteTarget && (
+        <LevelDeleteConfirmModal
+          target={levelDeleteTarget}
+          cardType={cardType}
+          cardVersion={version?.cardVersion ?? 1}
+          onClose={() => setLevelDeleteTarget(null)}
+          onConfirmed={async () => {
+            setLevelDeleteTarget(null);
+            await fetchAll(cardType);
+            showToast({ type: 'success', message: 'CARD_LEVEL 已刪除' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.4：TierMappingTab 編輯 Modal */}
+      {tierEditTarget && (
+        <TierEditModal
+          target={tierEditTarget}
+          onClose={() => setTierEditTarget(null)}
+          onSaved={async () => {
+            setTierEditTarget(null);
+            await fetchTier();
+            showToast({ type: 'success', message: 'TIER 對應更新成功' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.4：TierMappingTab 刪除確認 Modal（含 fallback NULL 路徑）*/}
+      {tierDeleteTarget && (
+        <TierDeleteConfirmModal
+          target={tierDeleteTarget}
+          onClose={() => setTierDeleteTarget(null)}
+          onConfirmed={async () => {
+            setTierDeleteTarget(null);
+            await fetchTier();
+            showToast({ type: 'success', message: 'TIER 對應已刪除' });
           }}
           runWriteOp={runWriteOp}
         />
@@ -544,11 +668,13 @@ function DimensionsTab({
   dimensions,
   isLocked,
   onAdd,
+  onEdit,
   onDisable,
 }: {
   dimensions: ScoringDimUI[];
   isLocked: boolean;
   onAdd: () => void;
+  onEdit: (d: ScoringDimUI) => void;
   onDisable: (d: ScoringDimUI) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -606,21 +732,41 @@ function DimensionsTab({
                     </td>
                     <td className="px-5 py-3 text-sm text-gray-600">{d.scoreSummary}</td>
                     <td className="px-5 py-3 text-right">
-                      <button
-                        type="button"
-                        data-testid={`disable-${d.columnName}`}
-                        disabled={isLocked}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDisable(d);
-                        }}
-                        className={
-                          'inline-flex items-center gap-1 px-2 py-1 text-xs text-[#F59E0B] hover:bg-amber-50 rounded transition ' +
-                          (isLocked ? 'opacity-30 cursor-not-allowed' : '')
-                        }
-                      >
-                        停用
-                      </button>
+                      {/* prototype 28 L1085-1093：icon-only pencil + ban，gap-1 兩顆按鈕 */}
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          data-testid={`edit-dim-${d.columnName}`}
+                          title="編輯"
+                          disabled={isLocked}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(d);
+                          }}
+                          className={
+                            'action-btn p-1.5 text-gray-500 hover:text-[#2563EB] hover:bg-blue-50 rounded transition ' +
+                            (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                          }
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`disable-${d.columnName}`}
+                          title="停用"
+                          disabled={isLocked}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDisable(d);
+                          }}
+                          className={
+                            'action-btn p-1.5 text-gray-500 hover:text-[#F59E0B] hover:bg-amber-50 rounded transition ' +
+                            (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                          }
+                        >
+                          <Ban className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {isExpanded && (
@@ -692,15 +838,22 @@ function ScoresTab({
   dimensions,
   isLocked,
   onAddScore,
+  onEditScore,
+  onDeleteScore,
 }: {
   dimensions: ScoringDimUI[];
   isLocked: boolean;
   onAddScore: () => void;
+  onEditScore: (dim: ScoringDimUI, scoreIdx: number) => void;
+  onDeleteScore: (dim: ScoringDimUI, scoreIdx: number) => void;
 }) {
   const [filterColumn, setFilterColumn] = useState<string>('ALL');
 
+  // 攜帶 source dim + scoreIdx 以便編輯 / 刪除走整批覆寫式 PUT
   const flatRows = useMemo(() => {
     const rows: Array<{
+      dim: ScoringDimUI;
+      scoreIdx: number;
       columnName: string;
       level1: string | null;
       level2S: string | null;
@@ -709,8 +862,10 @@ function ScoresTab({
     }> = [];
     dimensions.forEach((d) => {
       if (filterColumn !== 'ALL' && d.columnName !== filterColumn) return;
-      d.scores.forEach((s) => {
+      d.scores.forEach((s, scoreIdx) => {
         rows.push({
+          dim: d,
+          scoreIdx,
           columnName: d.columnName,
           level1: s.level1,
           level2S: s.level2S,
@@ -754,12 +909,13 @@ function ScoresTab({
               <th className="text-left px-5 py-3 font-semibold text-gray-600">level2_s</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">level2_e</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">score</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
             </tr>
           </thead>
           <tbody>
             {flatRows.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center py-12 text-gray-400 text-sm">
+                <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
                   無分數區間資料
                 </td>
               </tr>
@@ -777,6 +933,37 @@ function ScoresTab({
                   {r.level2E ?? <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-5 py-2 text-right font-semibold">{r.score}</td>
+                <td className="px-5 py-2 text-right">
+                  {/* prototype 28 L1127-1131：pencil + trash icon-only */}
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      data-testid={`edit-score-${idx}`}
+                      title="編輯分數區間"
+                      disabled={isLocked}
+                      onClick={() => onEditScore(r.dim, r.scoreIdx)}
+                      className={
+                        'action-btn p-1.5 text-gray-500 hover:text-[#2563EB] hover:bg-blue-50 rounded transition ' +
+                        (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                      }
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`delete-score-${idx}`}
+                      title="刪除分數區間"
+                      disabled={isLocked}
+                      onClick={() => onDeleteScore(r.dim, r.scoreIdx)}
+                      className={
+                        'action-btn p-1.5 text-gray-500 hover:text-[#EF4444] hover:bg-red-50 rounded transition ' +
+                        (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                      }
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -824,6 +1011,7 @@ function CardLevelsTab({
   setLevels,
   isLocked,
   onSaved,
+  onDelete,
   runWriteOp,
 }: {
   cardType: CardType;
@@ -832,6 +1020,7 @@ function CardLevelsTab({
   setLevels: (l: CardLevelItem[]) => void;
   isLocked: boolean;
   onSaved: () => void;
+  onDelete: (lvl: CardLevelItem) => void;
   runWriteOp: <T>(
     op: () => Promise<T>,
     onSuccess: string,
@@ -947,12 +1136,13 @@ function CardLevelsTab({
                   <th className="text-left px-5 py-3 font-semibold text-gray-600">card_level</th>
                   <th className="text-left px-5 py-3 font-semibold text-gray-600">score_s（下限）</th>
                   <th className="text-left px-5 py-3 font-semibold text-gray-600">score_e（上限）</th>
+                  <th className="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {drafts.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-center py-10 text-gray-400 text-sm">
+                    <td colSpan={4} className="text-center py-10 text-gray-400 text-sm">
                       無 CARD_LEVEL 資料
                     </td>
                   </tr>
@@ -1012,6 +1202,43 @@ function CardLevelsTab({
                             (isLocked ? ' bg-gray-50 cursor-not-allowed' : '')
                           }
                         />
+                      </td>
+                      <td className="px-5 py-2 text-right">
+                        {/* prototype 28 L1147-1151：每列 check 單列儲存（觸發整批 PUT，與 spec 5.1 三欄複合鍵 UPDATE 語意一致）；v1.3 新增 trash */}
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            data-testid={`save-level-${d.cardLevel}`}
+                            title="儲存此列"
+                            disabled={isLocked}
+                            onClick={() => handleSave()}
+                            className={
+                              'action-btn p-1.5 text-gray-500 hover:text-[#2563EB] hover:bg-blue-50 rounded transition ' +
+                              (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                            }
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`delete-level-${d.cardLevel}`}
+                            title="刪除此等級"
+                            disabled={isLocked}
+                            onClick={() =>
+                              onDelete({
+                                cardLevel: d.cardLevel,
+                                scoreS: Number(d.scoreS),
+                                scoreE: Number(d.scoreE),
+                              })
+                            }
+                            className={
+                              'action-btn p-1.5 text-gray-500 hover:text-[#EF4444] hover:bg-red-50 rounded transition ' +
+                              (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                            }
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1127,10 +1354,14 @@ function CardLevelsTab({
 function TierMappingTab({
   mappings,
   onAdd,
+  onEdit,
+  onDelete,
   isLocked,
 }: {
   mappings: TierMappingItem[];
   onAdd: () => void;
+  onEdit: (m: TierMappingItem) => void;
+  onDelete: (m: TierMappingItem) => void;
   isLocked: boolean;
 }) {
   return (
@@ -1182,12 +1413,13 @@ function TierMappingTab({
                 list_nm（描述性）
               </th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
             </tr>
           </thead>
           <tbody>
             {mappings.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center py-12 text-gray-400 text-sm">
+                <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
                   無對應資料
                 </td>
               </tr>
@@ -1240,6 +1472,37 @@ function TierMappingTab({
                         標準
                       </span>
                     )}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    {/* prototype 28 L1168-1173：pencil + trash 操作按鈕 */}
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        data-testid={`edit-tier-${m.cardType}-${m.cardLevel ?? 'null'}`}
+                        title="編輯對應"
+                        disabled={isLocked}
+                        onClick={() => onEdit(m)}
+                        className={
+                          'action-btn p-1.5 text-gray-500 hover:text-[#2563EB] hover:bg-blue-50 rounded transition ' +
+                          (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                        }
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        data-testid={`delete-tier-${m.cardType}-${m.cardLevel ?? 'null'}`}
+                        title="刪除對應"
+                        disabled={isLocked}
+                        onClick={() => onDelete(m)}
+                        className={
+                          'action-btn p-1.5 text-gray-500 hover:text-[#EF4444] hover:bg-red-50 rounded transition ' +
+                          (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                        }
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -1811,7 +2074,7 @@ function TierAddModal({
                 </p>
                 <p className="mt-1">
                   非 fallback 場景下，CARD_LEVEL 必須存在於 active 版本：422{' '}
-                  <code>CARD_LEVEL_NOT_FOUND</code>
+                  <code>CARD_LEVEL_NOT_FOUND_IN_VERSION</code>
                 </p>
               </div>
             </div>
@@ -1943,6 +2206,782 @@ function DisableConfirmModal({
               className="px-4 py-2 text-sm font-medium text-white bg-[#F59E0B] rounded-lg hover:bg-amber-600 shadow-sm disabled:opacity-50"
             >
               {submitting ? '處理中...' : '確認停用'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =========================
+// v1.3 / v1.4 新增 Modals：編輯 / 刪除流程
+// =========================
+
+/** F054：每列 pencil → 編輯既有維度（修改 columnLabel + 整批 scores） */
+function DimensionEditModal({
+  target,
+  cardType,
+  cardVersion,
+  onClose,
+  onSaved,
+  runWriteOp,
+}: {
+  target: ScoringDimUI;
+  cardType: CardType;
+  cardVersion: number;
+  onClose: () => void;
+  onSaved: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [columnLabel, setColumnLabel] = useState(target.columnLabel);
+  const [scores, setScores] = useState<ScoringScoreItem[]>(target.scores);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  function updateScore(idx: number, patch: Partial<ScoringScoreItem>) {
+    setScores((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    );
+  }
+
+  async function handleSubmit() {
+    setFormError(null);
+    if (!columnLabel) {
+      setFormError('columnLabel 為必填');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await runWriteOp(
+        () =>
+          updateDimensions({
+            cardType,
+            cardVersion,
+            dimensions: [
+              {
+                columnName: target.columnName,
+                columnLabel,
+                scores,
+              },
+            ],
+          }),
+        '維度編輯成功',
+      );
+      onSaved();
+    } catch (err: any) {
+      setFormError(err?.response?.data?.message ?? '編輯失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="dim-edit-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-lg relative"
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+            <h3 className="text-lg font-semibold text-gray-900">編輯計分維度</h3>
+            <button
+              type="button"
+              onClick={() => !submitting && onClose()}
+              className="p-1 hover:bg-gray-100 rounded-md"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                column_name（不可修改）
+              </label>
+              <input
+                type="text"
+                value={target.columnName}
+                readOnly
+                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono bg-gray-50 text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                column_label <span className="text-[#EF4444]">*</span>
+              </label>
+              <input
+                type="text"
+                data-testid="dim-edit-label"
+                value={columnLabel}
+                onChange={(e) => setColumnLabel(e.target.value)}
+                maxLength={30}
+                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">分數區間</p>
+              <div className="space-y-2">
+                {scores.map((s, idx) => (
+                  <ScoreRowEditor
+                    key={idx}
+                    score={s}
+                    onChange={(patch) => updateScore(idx, patch)}
+                  />
+                ))}
+              </div>
+            </div>
+            {formError && (
+              <div
+                data-testid="dim-edit-error"
+                className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-start gap-2"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="dim-edit-submit"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#2563EB] rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '儲存'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** F054：單筆 score 編輯 Modal（前端組整批 scores 走 updateDimensions） */
+function ScoreSingleEditModal({
+  dim,
+  scoreIdx,
+  cardType,
+  cardVersion,
+  onClose,
+  onSaved,
+  runWriteOp,
+}: {
+  dim: ScoringDimUI;
+  scoreIdx: number;
+  cardType: CardType;
+  cardVersion: number;
+  onClose: () => void;
+  onSaved: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [draft, setDraft] = useState<ScoringScoreItem>({ ...dim.scores[scoreIdx] });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const newScores = dim.scores.map((s, i) => (i === scoreIdx ? draft : s));
+      await runWriteOp(
+        () =>
+          updateDimensions({
+            cardType,
+            cardVersion,
+            dimensions: [
+              {
+                columnName: dim.columnName,
+                columnLabel: dim.columnLabel,
+                scores: newScores,
+              },
+            ],
+          }),
+        '分數區間更新成功',
+      );
+      onSaved();
+    } catch (err: any) {
+      setFormError(err?.response?.data?.message ?? '儲存失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="score-edit-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md relative"
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+            <h3 className="text-lg font-semibold text-gray-900">編輯分數區間</h3>
+            <button
+              type="button"
+              onClick={() => !submitting && onClose()}
+              className="p-1 hover:bg-gray-100 rounded-md"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+          <div className="px-6 py-5 space-y-3">
+            <p className="text-xs text-gray-500">
+              維度 <code className="font-mono text-gray-700">{dim.columnName}</code>
+              （{dim.columnLabel}）的第 {scoreIdx + 1} 個區間
+            </p>
+            <ScoreRowEditor
+              score={draft}
+              onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+            />
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                score 分數
+              </label>
+              <input
+                type="number"
+                data-testid="score-edit-score"
+                value={draft.score}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, score: Number(e.target.value) }))
+                }
+                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono"
+              />
+            </div>
+            {formError && (
+              <div
+                data-testid="score-edit-error"
+                className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-start gap-2"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="score-edit-submit"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#2563EB] rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '儲存'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** F054：單筆 score 刪除確認 Modal（重組剩餘 scores 走 updateDimensions） */
+function ScoreDeleteConfirmModal({
+  dim,
+  scoreIdx,
+  cardType,
+  cardVersion,
+  onClose,
+  onConfirmed,
+  runWriteOp,
+}: {
+  dim: ScoringDimUI;
+  scoreIdx: number;
+  cardType: CardType;
+  cardVersion: number;
+  onClose: () => void;
+  onConfirmed: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const target = dim.scores[scoreIdx];
+
+  async function handleConfirm() {
+    setSubmitting(true);
+    try {
+      const newScores = dim.scores.filter((_, i) => i !== scoreIdx);
+      await runWriteOp(
+        () =>
+          updateDimensions({
+            cardType,
+            cardVersion,
+            dimensions: [
+              {
+                columnName: dim.columnName,
+                columnLabel: dim.columnLabel,
+                scores: newScores,
+              },
+            ],
+          }),
+        '分數區間已刪除',
+      );
+      onConfirmed();
+    } catch {
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="score-delete-confirm-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md relative"
+        >
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-[#EF4444]" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              刪除分數區間
+            </h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              確定刪除維度{' '}
+              <code className="font-mono font-semibold text-gray-800">
+                {dim.columnName}
+              </code>{' '}
+              的此區間？
+            </p>
+            <p className="text-xs text-gray-500 mt-2 font-mono">
+              {target.level1 ?? '—'} / {target.level2S ?? '—'} ~{' '}
+              {target.level2E ?? '—'} = {target.score}
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="score-delete-confirm"
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#EF4444] rounded-lg hover:bg-red-700 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '確認刪除'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** F055 v1.3：CARD_LEVEL 刪除確認 Modal（含 AC-7 警告 + 409 CARD_LEVEL_REFERENCED 顯示） */
+function LevelDeleteConfirmModal({
+  target,
+  cardType,
+  cardVersion,
+  onClose,
+  onConfirmed,
+  runWriteOp,
+}: {
+  target: CardLevelItem;
+  cardType: CardType;
+  cardVersion: number;
+  onClose: () => void;
+  onConfirmed: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    setErrorMsg(null);
+    setSubmitting(true);
+    try {
+      await runWriteOp(
+        () => deleteCardLevel(cardType, cardVersion, target.cardLevel),
+        'CARD_LEVEL 已刪除',
+      );
+      onConfirmed();
+    } catch (err: any) {
+      // AC-7：409 CARD_LEVEL_REFERENCED 在對話框 inline 顯示，不關閉
+      const code = err?.response?.data?.error;
+      const msg = err?.response?.data?.message;
+      if (code === 'CARD_LEVEL_REFERENCED') {
+        setErrorMsg(
+          msg ??
+            '此 CARD_LEVEL 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除',
+        );
+      } else if (code === 'CARD_LEVEL_RECORD_NOT_FOUND') {
+        setErrorMsg(msg ?? '此 CARD_LEVEL 紀錄不存在（可能已被其他人刪除）');
+      } else {
+        // 月跑鎖 / auth 等其他錯誤由 runWriteOp 的 toast 處理；對話框關閉
+        onClose();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="level-delete-confirm-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md relative"
+        >
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-[#EF4444]" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              刪除 CARD_LEVEL 等級
+            </h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              確定刪除等級{' '}
+              <code className="font-mono font-semibold text-gray-800">
+                {target.cardLevel}
+              </code>
+              （{target.scoreS} ~ {target.scoreE} 分）？
+            </p>
+          </div>
+          <div className="px-6 pb-2">
+            {/* AC-7 警告（規格指定文字：月跑 Stage 2 / TIER_LEVEL 對應 / F056） */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-[#F59E0B] mb-1">注意</p>
+                  <p>
+                    刪除後此等級不再參與月跑 Stage 2 分級。若 TIER_LEVEL 對應（F056）中仍有此{' '}
+                    <code>(cardType, cardLevel)</code> 紀錄，將無法刪除（409{' '}
+                    <code>CARD_LEVEL_REFERENCED</code>）。
+                  </p>
+                </div>
+              </div>
+            </div>
+            {errorMsg && (
+              <div
+                data-testid="level-delete-error"
+                className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-start gap-2"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="level-delete-confirm"
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#EF4444] rounded-lg hover:bg-red-700 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '確認刪除'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** F056 v1.4：TIER 對應編輯 Modal（透過 PUT batch UPSERT 走單筆更新） */
+function TierEditModal({
+  target,
+  onClose,
+  onSaved,
+  runWriteOp,
+}: {
+  target: TierMappingItem;
+  onClose: () => void;
+  onSaved: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [tierLevel, setTierLevel] = useState(target.tierLevel);
+  const [listNm, setListNm] = useState(target.listNm ?? '');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setFormError(null);
+    if (!tierLevel) {
+      setFormError('tier_level 為必填');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await runWriteOp(
+        () =>
+          updateTierMapping({
+            mappings: [
+              {
+                cardType: target.cardType,
+                cardLevel: target.cardLevel,
+                tierLevel,
+                listNm: listNm === '' ? null : listNm,
+              },
+            ],
+          }),
+        'TIER 對應更新成功',
+      );
+      onSaved();
+    } catch (err: any) {
+      setFormError(err?.response?.data?.message ?? '更新失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="tier-edit-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-lg relative"
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+            <h3 className="text-lg font-semibold text-gray-900">編輯 TIER 對應</h3>
+            <button
+              type="button"
+              onClick={() => !submitting && onClose()}
+              className="p-1 hover:bg-gray-100 rounded-md"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  card_type（PK，不可修改）
+                </label>
+                <input
+                  type="text"
+                  value={target.cardType}
+                  readOnly
+                  className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono bg-gray-50 text-gray-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  card_level（PK，不可修改）
+                </label>
+                <input
+                  type="text"
+                  value={target.cardLevel ?? 'NULL (fallback)'}
+                  readOnly
+                  className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono bg-gray-50 text-gray-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                tier_level <span className="text-[#EF4444]">*</span>
+              </label>
+              <input
+                type="text"
+                data-testid="tier-edit-tierLevel"
+                value={tierLevel}
+                onChange={(e) => setTierLevel(e.target.value)}
+                maxLength={5}
+                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                list_nm（optional）
+              </label>
+              <input
+                type="text"
+                data-testid="tier-edit-listNm"
+                value={listNm}
+                onChange={(e) => setListNm(e.target.value)}
+                maxLength={30}
+                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg"
+              />
+            </div>
+            {formError && (
+              <div
+                data-testid="tier-edit-error"
+                className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-start gap-2"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="tier-edit-submit"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#2563EB] rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '儲存'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** F056 v1.4：TIER 對應刪除確認 Modal（含 fallback NULL 路徑） */
+function TierDeleteConfirmModal({
+  target,
+  onClose,
+  onConfirmed,
+  runWriteOp,
+}: {
+  target: TierMappingItem;
+  onClose: () => void;
+  onConfirmed: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const isFallback = target.cardLevel === null;
+
+  async function handleConfirm() {
+    setSubmitting(true);
+    try {
+      await runWriteOp(
+        () => deleteTierMapping(target.cardType, target.cardLevel),
+        'TIER 對應已刪除',
+      );
+      onConfirmed();
+    } catch {
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="tier-delete-confirm-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md relative"
+        >
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-[#EF4444]" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              刪除 TIER 對應
+            </h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              確定刪除對應{' '}
+              <code className="font-mono font-semibold text-gray-800">
+                {target.cardType} × {target.cardLevel ?? 'NULL'}
+              </code>{' '}
+              → <code className="font-mono">{target.tierLevel}</code>？
+            </p>
+            {isFallback && (
+              <p className="text-xs text-purple-600 mt-2 inline-flex items-center gap-1 justify-center">
+                <GitFork className="w-3 h-3" />
+                fallback 規則（card_level IS NULL）
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="tier-delete-confirm"
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#EF4444] rounded-lg hover:bg-red-700 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '確認刪除'}
             </button>
           </div>
         </div>

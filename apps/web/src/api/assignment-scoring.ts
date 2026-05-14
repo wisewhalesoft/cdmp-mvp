@@ -208,3 +208,51 @@ export async function createTierMapping(payload: {
   const res = await apiClient.post('/assignment/scoring/tier-mapping', payload);
   return res.data;
 }
+
+// ---- F055 §5.3 DELETE ----
+
+export interface DeleteCardLevelResponse {
+  cardType: string;
+  cardVersion: number;
+  cardLevel: string;
+  deletedAt: string;
+}
+
+export async function deleteCardLevel(
+  cardType: CardType,
+  cardVersion: number,
+  cardLevel: string,
+): Promise<DeleteCardLevelResponse> {
+  const res = await apiClient.delete<DeleteCardLevelResponse>(
+    '/assignment/scoring/card-levels',
+    { params: { cardType, cardVersion, cardLevel } },
+  );
+  return res.data;
+}
+
+// ---- F056 §5.4 DELETE ----
+
+export interface DeleteTierMappingResponse {
+  cardType: string;
+  cardLevel: string | null;
+  deletedAt: string;
+}
+
+/**
+ * cardLevel === null 時，省略 query 參數（service 解讀為 fallback NULL）。
+ * 不可傳空字串（F056 BR-9）。
+ */
+export async function deleteTierMapping(
+  cardType: string,
+  cardLevel: string | null,
+): Promise<DeleteTierMappingResponse> {
+  const params: Record<string, string> = { cardType };
+  if (cardLevel !== null) {
+    params.cardLevel = cardLevel;
+  }
+  const res = await apiClient.delete<DeleteTierMappingResponse>(
+    '/assignment/scoring/tier-mapping',
+    { params },
+  );
+  return res.data;
+}
