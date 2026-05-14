@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
   AlertTriangle,
   BarChart3,
   ChevronDown,
+  CreditCard,
   Eye,
   GitFork,
   Hash,
@@ -15,13 +17,12 @@ import {
   Check,
   Plus,
   Save,
-  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
+import { listCardTypes, type CardTypeListItem } from '@/api/card-type';
 import {
-  CARD_TYPE_OPTIONS,
   CardType,
   CardLevelItem,
   ScoringScoreItem,
@@ -39,6 +40,22 @@ import {
   updateDimensions,
   updateTierMapping,
 } from '@/api/assignment-scoring';
+// Iter 5a 新增（F069~F072 5-Tab Shell + Tab 1）
+import {
+  SelectedCardTypeProvider,
+  useSelectedCardType,
+} from './_hooks/use-selected-card-type';
+import {
+  CardTypeListTab,
+  ProdKindInfoBanner,
+  NoCardTypeSelectedEmpty,
+} from './_components/card-type-list-tab';
+import { RunLockBanner } from './_components/run-lock-banner';
+// Iter 5b 新增（F056 v1.5 Tab 5 改造）
+import { TierMappingTabV15 } from './_components/tier-mapping-tab';
+// Iter 7（review fix）：footer note + version strip 樣式對齊
+import { ScoringConfigFooterNote } from './_components/footer-note';
+import { VersionStrip } from './_components/version-strip';
 
 /**
  * F053 / F054 / F055 / F056：計分卡設定頁
@@ -59,12 +76,14 @@ import {
 
 type TabKey = 'dim' | 'score' | 'level' | 'tier';
 
-const TAB_LABELS: Record<TabKey, string> = {
+// TAB_LABELS 為 v1.4 legacy 預留；Iter 5a 已改用 5-Tab Shell，本物件僅供 console debug。
+// 標 `void` 防止 TS6133 unused-variable 警告。
+void ({
   dim: '計分維度',
   score: '分數設定',
   level: 'CARD_LEVEL 門檻',
   tier: 'TIER_LEVEL 對應',
-};
+} satisfies Record<TabKey, string>);
 
 interface ScoringDimUI {
   columnName: string;
@@ -86,17 +105,202 @@ interface VersionUI {
 type Toast = { type: 'success' | 'error'; message: string } | null;
 
 // =========================
-// 主頁面
+// 主頁面（Iter 5a：拆分為 5-Tab Shell + Legacy Tab 2~5 內容）
+//
+// Shell 元件 ScoringConfigPage 提供：
+//   - SelectedCardTypeProvider（context 串接 Tab 1 ↔ Tab 2~5）
+//   - PROD_KIND info banner（跨 Tab 持續可見）
+//   - 5-Tab 結構（Tab 1 CARD_TYPE / Tab 2~5 既有實作）
+//   - Tab 2~5 依 selectedCardType 篩選資料；未選中時顯示「請先於 Tab 1 選擇計分卡類型」
+//
+// 既有 v1.4 4-Tab 主體保留於 ScoringConfigLegacyTabs（內含 cardType selector / dim / score / level / tier
+// 等元件），Tab 2~5 直接渲染此元件；Iter 5b 會逐步移除既有 selector，改由 context 完全取代。
 // =========================
 
 export function ScoringConfigPage() {
-  const [cardType, setCardType] = useState<CardType>('H');
-  const [tab, setTab] = useState<TabKey>('dim');
+  return (
+    <SelectedCardTypeProvider>
+      <ScoringConfigShell />
+    </SelectedCardTypeProvider>
+  );
+}
+
+type TopTabKey = 'cardtype' | 'dim' | 'score' | 'level' | 'tier';
+
+const TOP_TAB_LABELS: Record<TopTabKey, { label: string; icon: any }> = {
+  cardtype: { label: 'CARD_TYPE', icon: CreditCard },
+  dim: { label: '計分維度', icon: Layers },
+  score: { label: '分數設定', icon: Hash },
+  level: { label: 'CARD_LEVEL 門檻', icon: BarChart3 },
+  tier: { label: 'TIER_LEVEL 對應', icon: Layers3 },
+};
+
+function ScoringConfigShell() {
+  const [topTab, setTopTab] = useState<TopTabKey>('cardtype');
+  const { selectedCardItem } = useSelectedCardType();
+  // Iter 5b：月跑鎖暫由 Legacy 內 fetchAll 取得；Shell 預設 false。
+  // OPEN-J / OPEN-E：Iter 6+ 待整合 /assignment-run 端點查詢真實狀態，
+  // 將實際 lock 狀態下傳給所有 Tab（包含 Tab 1 / Tab 5）以統一 UX。
+  // Iter 7 已將 Tab 1 / Tab 5 接通 isLocked prop 通道；目前 Shell 層仍為 false，
+  // Legacy 內部仍依靠 SCORING_VERSION_LOCKED 422 偵測切換 banner。
+  const isLocked = false;
+
+  // 計分維度數量（用於 Tab 計數 badge；只在已選 CARD_TYPE 時才查詢）
+  const dimensionsQuery = useQuery({
+    queryKey: ['scoring', selectedCardItem?.cardType, 'dimensions'],
+    queryFn: () =>
+      getScoring(selectedCardItem!.cardType as CardType).then(
+        (s) => s.dimensions,
+      ),
+    enabled: !!selectedCardItem?.cardType,
+    retry: false,
+  });
+
+  // CARD_TYPE 數量（用於 Tab 計數 badge）
+  const cardTypesQuery = useQuery({
+    queryKey: ['card-types'],
+    queryFn: () => listCardTypes('active'),
+    retry: false,
+  });
+
+  // Tab 2~5 需要選中 CARD_TYPE 才能顯示內容
+  const needsSelection = topTab !== 'cardtype';
+  const hasSelection = !!selectedCardItem;
+
+  const cardTypeCount = cardTypesQuery.data?.cardTypes.length;
+  const dimCount = dimensionsQuery.data?.length;
+
+  return (
+    <AppLayout title="計分卡設定">
+      <main className="flex-1 p-6">
+        {/* F069 AC-4 / AC-5：頂部 PROD_KIND info banner */}
+        <ProdKindInfoBanner selectedCard={selectedCardItem} />
+
+        {/* F069 AC-6：月跑鎖警告 banner */}
+        <RunLockBanner isLocked={isLocked} />
+
+        {/* 5-Tab 切換列（依 prototype 28 line 179~210 平鋪） */}
+        <div className="bg-white rounded-t-lg border border-gray-200 border-b-0">
+          <div className="flex items-center px-4 border-b border-gray-200">
+            {(['cardtype', 'dim', 'score', 'level', 'tier'] as TopTabKey[]).map(
+              (key) => {
+                const { label, icon: Icon } = TOP_TAB_LABELS[key];
+                const active = topTab === key;
+                // review 差異 #3：CARD_TYPE / 計分維度 加 count badge
+                let badge: number | undefined;
+                if (key === 'cardtype') badge = cardTypeCount;
+                else if (key === 'dim') badge = dimCount;
+                return (
+                  <button
+                    key={key}
+                    data-testid={`tab-${key}`}
+                    onClick={() => setTopTab(key)}
+                    className={
+                      'px-4 py-3 text-sm font-medium border-b-2 transition ' +
+                      (active
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-800')
+                    }
+                  >
+                    <Icon className="w-3.5 h-3.5 inline mr-1" />
+                    {label}
+                    {badge !== undefined && (
+                      <span
+                        className={
+                          'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium rounded-full ' +
+                          (active
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'bg-gray-100 text-gray-500')
+                        }
+                      >
+                        {badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              },
+            )}
+            <span className="ml-auto pr-3 text-xs text-gray-400">
+              資料來源{' '}
+              <code className="text-gray-500">
+                ob_card_type / ob_levelcard_* / ob_tier
+              </code>
+            </span>
+          </div>
+        </div>
+
+        {topTab === 'cardtype' && <CardTypeListTab isLocked={isLocked} />}
+        {needsSelection && !hasSelection && (
+          <div className="bg-white rounded-b-lg border border-gray-200 border-t-0 shadow-sm">
+            <NoCardTypeSelectedEmpty
+              onSwitchToTab1={() => setTopTab('cardtype')}
+            />
+          </div>
+        )}
+        {needsSelection && hasSelection && topTab !== 'tier' && (
+          // Tab 2~4 沿用 v1.4 ScoringConfigLegacyTabs 內部的 panel 邏輯
+          // Iter 7 已拆解：不再渲染 AppLayout / 月跑鎖 banner / 版本選擇器 / 4-Tab 列 / footer。
+          // 改由 Shell 控制這些外殼，Legacy 只渲染對應 panel + modal + toast。
+          <ScoringConfigLegacyTabs
+            forceCardType={selectedCardItem!.cardType}
+            forceTab={topTab as TabKey}
+            selectedCardItem={selectedCardItem!}
+          />
+        )}
+        {needsSelection && hasSelection && topTab === 'tier' && (
+          // Iter 5b：Tab 5 採全新 v1.5 元件（互斥 / TIER 列舉 / 待遷移 badge）
+          <TierMappingTabV15
+            isLocked={isLocked}
+            selectedCardItem={selectedCardItem!}
+          />
+        )}
+
+        {/* Iter 7（review 差異 #29）：footer note 提升到 Shell，所有 Tab 都看得到 */}
+        <ScoringConfigFooterNote />
+      </main>
+    </AppLayout>
+  );
+}
+
+/**
+ * v1.4 既有 4-Tab 內容（計分維度 / 分數 / CARD_LEVEL / TIER）
+ * 接收 prop：
+ *   - `forceCardType`：Shell 傳入 selectedCardType 時優先使用此值
+ *   - `forceTab`：Iter 5b 5-Tab 平鋪後 Shell 控制當前 Tab；本元件直接渲染對應內容
+ * Iter 5b：Tab 5（TIER）已由 TierMappingTabV15 取代，Shell 不再以 forceTab='tier' 呼叫此元件。
+ */
+export function ScoringConfigLegacyTabs({
+  forceCardType,
+  forceTab,
+  selectedCardItem,
+}: {
+  forceCardType?: string;
+  forceTab?: TabKey;
+  selectedCardItem?: CardTypeListItem;
+} = {}) {
+  const [cardType, setCardTypeInternal] = useState<CardType>(
+    (forceCardType as CardType) ?? 'H',
+  );
+
+  // 同步 forceCardType 變化（context 觸發 setSelected 後 Shell rerender 傳新 prop）
+  useEffect(() => {
+    if (forceCardType && forceCardType !== cardType) {
+      setCardTypeInternal(forceCardType as CardType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceCardType]);
+
+  // Iter 7 重構：原內部 4-Tab 列移除後，本元件不再自切 Tab；setCardType / setTab
+  // 不再使用。tab 直接從 forceTab（或預設 'dim'）取值。
+  const [tabInternal] = useState<TabKey>(forceTab ?? 'dim');
+  const tab = forceTab ?? tabInternal;
   const [version, setVersion] = useState<VersionUI | null>(null);
   const [dimensions, setDimensions] = useState<ScoringDimUI[]>([]);
   const [levels, setLevels] = useState<CardLevelItem[]>([]);
   const [tierMappings, setTierMappings] = useState<TierMappingItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // loading state 保留用於 VersionCard placeholder 路徑（Iter 7 已改由 VersionStrip 提供）；
+  // 內部 setLoading 仍保留以維持 fetchAll 既有流程，不對外暴露
+  const [, setLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
@@ -162,15 +366,16 @@ export function ScoringConfigPage() {
 
   const fetchTier = useCallback(async () => {
     try {
-      const tm = await getTierMapping();
+      // F056 v1.5：cardType 改為必填，傳入當前選中 cardType
+      const tm = await getTierMapping(cardType);
       setTierMappings(tm.mappings);
     } catch (err: any) {
-      // tier-mapping 不依賴 cardType，獨立載入
+      // tier-mapping 依 cardType 篩選；錯誤靜默讓 Tab 自行顯示空狀態
       if (err?.response?.status !== 401) {
-        // 靜默
+        setTierMappings([]);
       }
     }
-  }, []);
+  }, [cardType]);
 
   useEffect(() => {
     fetchAll(cardType);
@@ -217,172 +422,110 @@ export function ScoringConfigPage() {
   }
 
   // ===== Render =====
+  //
+  // Iter 7 重構（review 差異 #1 / #2 / #29）：
+  //   - 移除 <AppLayout>、月跑鎖 banner、版本選擇器卡片、4-Tab 列、footer note；
+  //     這些外殼由 Shell（ScoringConfigShell）統一管理，避免巢狀。
+  //   - 月跑鎖 banner 改由 Shell 的 <RunLockBanner> 顯示；本元件仍保留
+  //     `data-testid="lock-banner"`（既有測試 F054-017 / F056-025 依此判斷），
+  //     位置移到 Fragment 頂部、僅在 isLocked=true 時 render。
+  //   - <VersionStrip> 改顯示在 panel 頂部（替代既有 VersionCard）；保留
+  //     `version-card` / `version-sdate` / `version-edate` / `version-created-by`
+  //     / `version-created-at` testid 以維持向後相容。
+  //   - 404 路徑改用 VersionStrip 內建 `no-active-version` 顯示。
 
   return (
-    <AppLayout title="計分卡設定">
-      <main className="flex-1 p-6">
-        {/* 月跑鎖 banner */}
-        {isLocked && (
-          <div
-            data-testid="lock-banner"
-            className="mb-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700"
-          >
-            <AlertTriangle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
-            <div>
-              <p className="font-semibold text-[#F59E0B]">分派執行中，無法修改計分設定</p>
-              <p className="text-xs text-gray-600 mt-0.5">
-                月跑期間（assignment_run.status IN pending/running）所有寫入功能將被鎖定
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* 版本選擇器 + 版本卡片 */}
-        <div className="bg-white rounded-lg border border-[#E5E7EB] shadow-sm p-5 mb-4">
-          <div className="flex items-end gap-4 flex-wrap">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                CARD_TYPE 計分卡類型
-              </label>
-              <div className="relative">
-                <select
-                  value={cardType}
-                  onChange={(e) => setCardType(e.target.value as CardType)}
-                  className="pl-3 pr-9 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] appearance-none min-w-[200px]"
-                >
-                  {CARD_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                CARD_VERSION 版本
-              </label>
-              <div
-                className="px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-gray-50 text-gray-700 min-w-[140px]"
-                data-testid="card-version-display"
-              >
-                v{version?.cardVersion ?? 1}（active）
-              </div>
-            </div>
-
-            <VersionCard version={version} loading={loading} />
+    <>
+      {/* 月跑鎖 banner（保留 testid 給既有測試；Shell RunLockBanner 是另一個獨立 banner） */}
+      {isLocked && (
+        <div
+          data-testid="lock-banner"
+          className="mb-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700"
+        >
+          <AlertTriangle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold text-[#F59E0B]">分派執行中，無法修改計分設定</p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              月跑期間（assignment_run.status IN pending/running）所有寫入功能將被鎖定
+            </p>
           </div>
         </div>
+      )}
 
-        {versionError ? (
-          <div
-            data-testid="no-active-version"
-            className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-gray-700 flex items-start gap-2"
-          >
-            <AlertTriangle className="w-5 h-5 text-[#F59E0B] mt-0.5 shrink-0" />
-            <span>{versionError}</span>
-          </div>
-        ) : (
-          <>
-            {/* Tabs */}
-            <div className="bg-white rounded-t-lg border border-[#E5E7EB] border-b-0">
-              <div className="flex items-center px-4 border-b border-[#E5E7EB]">
-                <TabBtn
-                  active={tab === 'dim'}
-                  onClick={() => setTab('dim')}
-                  icon={Layers}
-                  label="計分維度"
-                  badge={dimensions.length}
-                  testId="tab-dim"
-                />
-                <TabBtn
-                  active={tab === 'score'}
-                  onClick={() => setTab('score')}
-                  icon={Hash}
-                  label="分數設定"
-                  testId="tab-score"
-                />
-                <TabBtn
-                  active={tab === 'level'}
-                  onClick={() => setTab('level')}
-                  icon={BarChart3}
-                  label="CARD_LEVEL 門檻"
-                  testId="tab-level"
-                />
-                <TabBtn
-                  active={tab === 'tier'}
-                  onClick={() => setTab('tier')}
-                  icon={Layers3}
-                  label="TIER_LEVEL 對應"
-                  testId="tab-tier"
-                />
-                <span className="ml-auto pr-3 text-xs text-gray-400">
-                  資料來源 <code className="text-gray-500">ob_levelcard_*</code>
-                </span>
-              </div>
-            </div>
+      {/* review 差異 #2：版本資訊條 — 取代既有 VersionCard，
+          樣式為 panel 內的 sub-header（border-x + border-b + 共用 bg-white card） */}
+      {!versionError && selectedCardItem && (
+        <div className="bg-white border border-[#E5E7EB] border-t-0">
+          <VersionStrip
+            cardType={selectedCardItem.cardType}
+            cardName={selectedCardItem.cardName}
+            prodKind={selectedCardItem.prodKind}
+            prodKindName={selectedCardItem.prodKindName}
+          />
+        </div>
+      )}
 
-            {tab === 'dim' && (
-              <DimensionsTab
-                dimensions={dimensions}
-                isLocked={isLocked}
-                onAdd={() => setDimModalOpen(true)}
-                onEdit={(d) => setDimEditTarget(d)}
-                onDisable={(d) => {
-                  setDisableTarget(d);
-                  setDisableModalOpen(true);
-                }}
-              />
-            )}
-            {tab === 'score' && (
-              <ScoresTab
-                dimensions={dimensions}
-                isLocked={isLocked}
-                onAddScore={() => setScoreModalOpen(true)}
-                onEditScore={(dim, scoreIdx) =>
-                  setScoreEditTarget({ dim, scoreIdx })
-                }
-                onDeleteScore={(dim, scoreIdx) =>
-                  setScoreDeleteTarget({ dim, scoreIdx })
-                }
-              />
-            )}
-            {tab === 'level' && (
-              <CardLevelsTab
-                cardType={cardType}
-                cardVersion={version?.cardVersion ?? 1}
-                levels={levels}
-                setLevels={setLevels}
-                isLocked={isLocked}
-                onSaved={() => fetchAll(cardType)}
-                onDelete={(lvl) => setLevelDeleteTarget(lvl)}
-                runWriteOp={runWriteOp}
-              />
-            )}
-            {tab === 'tier' && (
-              <TierMappingTab
-                mappings={tierMappings}
-                onAdd={() => setTierModalOpen(true)}
-                onEdit={(m) => setTierEditTarget(m)}
-                onDelete={(m) => setTierDeleteTarget(m)}
-                isLocked={isLocked}
-              />
-            )}
-            <div className="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
-              <Info className="w-4 h-4 text-[#2563EB] mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium text-gray-700 mb-0.5">計分卡設定操作說明</p>
-                <p>
-                  覆寫式編輯（無草稿、無 rollback），歷史追溯依賴月跑 config 快照（F066）。月跑執行中（assignment_run.status IN pending/running）所有編輯功能將被鎖定（409{' '}
-                  <code>SCORING_VERSION_LOCKED</code>）。複雜計分邏輯由 PostgreSQL function{' '}
-                  <code>fn_calc_tier_level</code> 實作（AD-E07-3）。
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-      </main>
+      {/* 版本載入錯誤（404 / 其他）— VersionStrip 於 404 會返回 null，由本層顯示警示 */}
+      {versionError && (
+        <div
+          data-testid="no-active-version"
+          className="bg-white border border-[#E5E7EB] border-t-0 rounded-b-lg shadow-sm p-4 text-sm text-gray-700 flex items-start gap-2"
+        >
+          <AlertTriangle className="w-5 h-5 text-[#F59E0B] mt-0.5 shrink-0" />
+          <span>{versionError}</span>
+        </div>
+      )}
+
+      {!versionError && (
+        <>
+          {tab === 'dim' && (
+            <DimensionsTab
+              dimensions={dimensions}
+              isLocked={isLocked}
+              onAdd={() => setDimModalOpen(true)}
+              onEdit={(d) => setDimEditTarget(d)}
+              onDisable={(d) => {
+                setDisableTarget(d);
+                setDisableModalOpen(true);
+              }}
+            />
+          )}
+          {tab === 'score' && (
+            <ScoresTab
+              dimensions={dimensions}
+              isLocked={isLocked}
+              onAddScore={() => setScoreModalOpen(true)}
+              onEditScore={(dim, scoreIdx) =>
+                setScoreEditTarget({ dim, scoreIdx })
+              }
+              onDeleteScore={(dim, scoreIdx) =>
+                setScoreDeleteTarget({ dim, scoreIdx })
+              }
+            />
+          )}
+          {tab === 'level' && (
+            <CardLevelsTab
+              cardType={cardType}
+              cardVersion={version?.cardVersion ?? 1}
+              levels={levels}
+              setLevels={setLevels}
+              isLocked={isLocked}
+              onSaved={() => fetchAll(cardType)}
+              onDelete={(lvl) => setLevelDeleteTarget(lvl)}
+              runWriteOp={runWriteOp}
+            />
+          )}
+          {tab === 'tier' && (
+            <TierMappingTab
+              mappings={tierMappings}
+              onAdd={() => setTierModalOpen(true)}
+              onEdit={(m) => setTierEditTarget(m)}
+              onDelete={(m) => setTierDeleteTarget(m)}
+              isLocked={isLocked}
+            />
+          )}
+        </>
+      )}
 
       {/* Modals */}
       {dimModalOpen && (
@@ -553,112 +696,17 @@ export function ScoringConfigPage() {
           {toast.message}
         </div>
       )}
-    </AppLayout>
+    </>
   );
 }
 
 // =========================
 // 子元件
 // =========================
-
-function VersionCard({
-  version,
-  loading,
-}: {
-  version: VersionUI | null;
-  loading: boolean;
-}) {
-  if (loading || !version) {
-    return (
-      <div
-        data-testid="version-card-loading"
-        className="flex-1 min-w-[420px] p-3 bg-gray-50/60 border border-[#E5E7EB] rounded-lg text-xs text-gray-400"
-      >
-        {loading ? '載入版本資料中...' : '無版本資料'}
-      </div>
-    );
-  }
-  const createdByDisplay = version.createdBy ?? '—';
-  const createdAtDisplay = version.createdAt
-    ? version.createdAt.replace('T', ' ').replace(/\.\d+Z$/, '').slice(0, 16)
-    : '—';
-  return (
-    <div
-      data-testid="version-card"
-      className="flex-1 min-w-[420px] p-3 bg-gray-50/60 border border-[#E5E7EB] rounded-lg flex items-center gap-4"
-    >
-      <div className="text-xs">
-        <div className="text-gray-500">card_name</div>
-        <div className="font-semibold text-gray-800">{version.cardName ?? '—'}</div>
-      </div>
-      <div className="text-xs">
-        <div className="text-gray-500">sdate ~ edate</div>
-        <div className="font-mono text-gray-700">
-          <span data-testid="version-sdate">{version.sdate}</span> ~{' '}
-          <span data-testid="version-edate">{version.edate}</span>
-        </div>
-      </div>
-      <div className="text-xs">
-        <div className="text-gray-500">建立者</div>
-        <div className="text-gray-700">
-          <span data-testid="version-created-by">{createdByDisplay}</span>
-          {' · '}
-          <span data-testid="version-created-at">{createdAtDisplay}</span>
-        </div>
-      </div>
-      <div className="ml-auto">
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-[#22C55E]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
-          active
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function TabBtn({
-  active,
-  onClick,
-  icon: Icon,
-  label,
-  badge,
-  testId,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Layers;
-  label: string;
-  badge?: number;
-  testId: string;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      className={
-        'relative px-4 py-3 text-sm font-medium transition ' +
-        (active ? 'text-[#2563EB]' : 'text-gray-500 hover:text-gray-800')
-      }
-    >
-      <Icon className="w-3.5 h-3.5 inline mr-1" />
-      {label}
-      {badge !== undefined && (
-        <span
-          className={
-            'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium rounded-full ' +
-            (active ? 'bg-blue-50 text-[#2563EB]' : 'bg-gray-100 text-gray-500')
-          }
-        >
-          {badge}
-        </span>
-      )}
-      {active && (
-        <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-[#2563EB]" />
-      )}
-    </button>
-  );
-}
+//
+// Iter 7 重構：原 `VersionCard` / `TabBtn` 已不再使用 — VersionCard 由
+// `_components/version-strip.tsx` 取代；TabBtn 由 Shell 內聯 button 取代。
+// 兩者已刪除以保持檔案精簡。
 
 // =========================
 // Tab 1: 計分維度
@@ -2771,8 +2819,9 @@ function TierEditModal({
     setSubmitting(true);
     try {
       await runWriteOp(
+        // F056 v1.5：updateTierMapping 加 cardType query
         () =>
-          updateTierMapping({
+          updateTierMapping(target.cardType, {
             mappings: [
               {
                 cardType: target.cardType,

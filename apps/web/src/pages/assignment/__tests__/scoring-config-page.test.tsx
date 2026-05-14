@@ -30,8 +30,11 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from '@/components/ui/toast';
 import { ScoringConfigPage } from '../scoring-config-page';
 import * as api from '@/api/assignment-scoring';
+import * as cardTypeApi from '@/api/card-type';
 import * as authStore from '@/stores/auth-store';
 
 vi.mock('@/api/assignment-scoring', async () => {
@@ -50,6 +53,17 @@ vi.mock('@/api/assignment-scoring', async () => {
     updateTierMapping: vi.fn(),
     createTierMapping: vi.fn(),
     deleteTierMapping: vi.fn(), // v1.4 新增
+  };
+});
+vi.mock('@/api/card-type', async () => {
+  const actual = await vi.importActual<typeof cardTypeApi>('@/api/card-type');
+  return {
+    ...actual,
+    listCardTypes: vi.fn(),
+    createCardType: vi.fn(),
+    updateCardType: vi.fn(),
+    getDeletePreview: vi.fn(),
+    deleteCardType: vi.fn(),
   };
 });
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
@@ -71,7 +85,17 @@ const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
 
 function wrap(node: React.ReactElement) {
-  return <BrowserRouter>{node}</BrowserRouter>;
+  // Iter 5a：新 Shell 含 useQuery / useMutation（Tab 1 + 3 Modal），須提供 QueryClient + Toast
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <BrowserRouter>{node}</BrowserRouter>
+      </ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
 const DEFAULT_VERSION_WITH_VALUES = {
@@ -112,8 +136,46 @@ const DEFAULT_H_LEVELS = [
   { cardLevel: 'D', scoreS: 0, scoreE: 184 },
 ];
 
+// Iter 5b/7 helper：v1.4 既有測試針對 legacy 4-Tab；
+//   - Iter 5b 改為 5-Tab 平鋪
+//   - Iter 7（review fix）拆解內部 4-Tab 列；Shell 為唯一 tab nav
+// 步驟：
+//   1. 等待 Tab 1 清單載入完成（selectedCardType 被 useEffect 設定為第一筆）
+//   2. 點擊外層 Shell 的 tab-dim 切換到「計分維度」Tab → 觸發 ScoringConfigLegacyTabs forceTab='dim'
+//   3. 等待版本資訊（version-card 或 no-active-version）渲染
+async function switchToLegacyTabs() {
+  // 等 Tab 1 表格載入完成（出現 H row 即代表 selectedCardType 已 sync）
+  await screen.findByTestId('card-type-row-H');
+  // Iter 7：拆解 legacy 4-Tab 後，只剩 Shell 一個 tab-dim button；
+  // 仍用 getAllByTestId 以維持向後相容（陣列長度＝1）
+  const shellTabDim = screen.getAllByTestId('tab-dim')[0];
+  fireEvent.click(shellTabDim);
+  // 等 panel 內容渲染（version-card 由 VersionStrip 提供；no-active-version 由 Legacy panel 提供）
+  await waitFor(
+    () => {
+      expect(
+        screen.queryByTestId('version-card') ||
+          screen.queryByTestId('no-active-version'),
+      ).toBeTruthy();
+    },
+    { timeout: 3000 },
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // Iter 5a：Tab 1 載入 card-types 清單；預設回 [H] 一筆，讓 selectedCardType 自動設為 'H'
+  vi.mocked(cardTypeApi.listCardTypes).mockResolvedValue({
+    cardTypes: [
+      {
+        cardType: 'H',
+        cardName: '期中',
+        prodKind: '01',
+        prodKindName: '汽車',
+        status: 'active',
+      },
+    ],
+  });
   mockedGetUser.mockReturnValue({
     id: 'sm-id',
     name: 'Sales Manager',
@@ -149,6 +211,7 @@ beforeEach(() => {
 describe('ScoringConfigPage — F053 顯示', () => {
   it('TS-F053-009：版本卡片顯示 cardType / sdate~edate / 建立者', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('version-card')).toBeInTheDocument();
     });
@@ -158,7 +221,10 @@ describe('ScoringConfigPage — F053 顯示', () => {
   });
 
   it('TS-F053-010：createdBy/createdAt 為 null 時 UI 顯示「—」', async () => {
-    mockedGetScoring.mockResolvedValueOnce({
+    // Iter 7 後 Shell 對 getScoring 有 3 個 caller（Shell dim badge / VersionStrip /
+    // Legacy fetchAll），需用 mockResolvedValue（不是 Once）讓所有 caller 都拿到
+    // null 版本資料。
+    mockedGetScoring.mockResolvedValue({
       version: {
         ...DEFAULT_VERSION_WITH_VALUES,
         createdBy: null,
@@ -167,6 +233,7 @@ describe('ScoringConfigPage — F053 顯示', () => {
       dimensions: DEFAULT_DIMENSIONS,
     } as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('version-created-by').textContent).toBe('—');
     });
@@ -175,18 +242,24 @@ describe('ScoringConfigPage — F053 顯示', () => {
 
   it('TS-F053-011：維度 Badge 顯示維度數量', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    // Iter 7 重構（review 差異 #1 / #3）：移除內部 4-Tab 列；count badge
+    // 改由 Shell 5-Tab 的 tab-dim 提供（值來自 useQuery('scoring' → dimensions）。
     await waitFor(() => {
-      expect(screen.getByTestId('tab-dim')).toBeInTheDocument();
+      const tabDim = screen.getByTestId('tab-dim');
+      expect(tabDim.textContent).toContain('2'); // 2 個維度
     });
-    const tabDim = screen.getByTestId('tab-dim');
-    expect(tabDim.textContent).toContain('2'); // 2 個維度
   });
 
   it('TS-F053-012：無 active 版本顯示警示訊息', async () => {
-    mockedGetScoring.mockRejectedValueOnce({
+    // Iter 7 後 Shell 對 getScoring 有 3 個 caller；用 mockRejectedValue（不是 Once）
+    // 讓所有 caller 都拿到 404，確保 Legacy 的 versionError 必定被設定，
+    // 進而 render no-active-version banner。
+    mockedGetScoring.mockRejectedValue({
       response: { status: 404, data: { error: 'SCORING_VERSION_NOT_FOUND' } },
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('no-active-version')).toBeInTheDocument();
     });
@@ -197,6 +270,7 @@ describe('ScoringConfigPage — F053 顯示', () => {
 
   it('TS-F053-013：維度列展開後顯示分數詳細表', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('dim-row-ACCOUNT_AGE')).toBeInTheDocument();
     });
@@ -211,6 +285,7 @@ describe('ScoringConfigPage — F053 顯示', () => {
 describe('ScoringConfigPage — F054 寫入互動', () => {
   it('TS-F054-019：點擊「新增維度」開啟 Modal，必填驗證', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('btn-add-dim')).toBeInTheDocument();
     });
@@ -229,6 +304,7 @@ describe('ScoringConfigPage — F054 寫入互動', () => {
 
   it('TS-F054-020：點擊「停用」開啟確認對話框，取消後不發 API', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('disable-ACCOUNT_AGE')).toBeInTheDocument();
     });
@@ -261,6 +337,7 @@ describe('ScoringConfigPage — F054 寫入互動', () => {
     } as any);
 
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('btn-add-dim')).toBeInTheDocument();
     });
@@ -290,6 +367,7 @@ describe('ScoringConfigPage — F054 月跑鎖 UI', () => {
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('btn-add-dim')).toBeInTheDocument();
     });
@@ -323,9 +401,12 @@ describe('ScoringConfigPage — F055 CARD_LEVEL', () => {
       ],
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-level')).toBeInTheDocument();
     });
+    // Iter 5b 5-Tab 平鋪：點 Shell 外層 tab-level（切換到 Shell 的 CARD_LEVEL 分頁，
+    // 觸發 ScoringConfigLegacyTabs forceTab='level'）
     fireEvent.click(screen.getByTestId('tab-level'));
     await waitFor(() => {
       expect(screen.getByTestId('level-A-scoreS')).toBeInTheDocument();
@@ -337,9 +418,12 @@ describe('ScoringConfigPage — F055 CARD_LEVEL', () => {
 
   it('TS-F055-016：H 4 級表格渲染 A/B/C/D', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-level')).toBeInTheDocument();
     });
+    // Iter 5b 5-Tab 平鋪：點 Shell 外層 tab-level（切換到 Shell 的 CARD_LEVEL 分頁，
+    // 觸發 ScoringConfigLegacyTabs forceTab='level'）
     fireEvent.click(screen.getByTestId('tab-level'));
     await waitFor(() => {
       expect(screen.getByTestId('level-A-scoreS')).toBeInTheDocument();
@@ -354,9 +438,12 @@ describe('ScoringConfigPage — F055 CARD_LEVEL', () => {
       response: { status: 422, data: { error: 'SCORING_RANGE_OVERLAP' } },
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-level')).toBeInTheDocument();
     });
+    // Iter 5b 5-Tab 平鋪：點 Shell 外層 tab-level（切換到 Shell 的 CARD_LEVEL 分頁，
+    // 觸發 ScoringConfigLegacyTabs forceTab='level'）
     fireEvent.click(screen.getByTestId('tab-level'));
     await waitFor(() => {
       expect(screen.getByTestId('btn-save-levels')).toBeInTheDocument();
@@ -368,13 +455,19 @@ describe('ScoringConfigPage — F055 CARD_LEVEL', () => {
   });
 });
 
-describe('ScoringConfigPage — F056 TIER 對應', () => {
+// Iter 5b：F056 v1.4 TIER Tab 已由 TierMappingTabV15 元件取代。
+// 此 describe 內的 v1.4 行為（legacy-tab-tier）已不適用 — 改由：
+//   - apps/web/src/pages/assignment/__tests__/tier-mapping-tab.test.tsx（v1.5 Tab 5 行為）
+//   - apps/web/src/pages/assignment/__tests__/create-tier-mapping-modal.test.tsx（v1.5 互斥/列舉）
+// 全面覆蓋。本 describe skip 保留以記錄歷史對照。
+describe.skip('ScoringConfigPage — F056 TIER 對應（v1.4，已由 Tab 5 v1.5 元件取代）', () => {
   it('TS-F056-021 + TS-F056-028：Fallback (M5/M3/HC/C3) 列顯示紫色 + 標籤', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('fallback-banner')).toBeInTheDocument();
     });
@@ -388,10 +481,11 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
 
   it('TS-F056-022：標準對應列無 Fallback 標籤', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('tier-row-H-A')).toBeInTheDocument();
     });
@@ -402,10 +496,11 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
 
   it('TS-F056-023：CARD_LEVEL 下拉依當前 cardType 動態顯示 levels', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('btn-add-tier')).toBeInTheDocument();
     });
@@ -420,10 +515,11 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
 
   it('TS-F056-024：list_nm null 顯示「—」', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('tier-row-H-B')).toBeInTheDocument();
     });
@@ -448,10 +544,11 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
       });
 
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('btn-add-tier')).toBeInTheDocument();
     });
@@ -485,10 +582,11 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
     });
 
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     fireEvent.click(await screen.findByTestId('btn-add-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('tier-modal')).toBeInTheDocument();
@@ -510,10 +608,11 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     fireEvent.click(await screen.findByTestId('btn-add-tier'));
     const modal = await screen.findByTestId('tier-modal');
     const inputs = modal.querySelectorAll('input[type="text"]');
@@ -541,6 +640,7 @@ describe('ScoringConfigPage — F056 TIER 對應', () => {
 // ---- 共用：開 dim tab 等 row 出現 ----
 async function openDimTabAndWaitRow() {
   render(wrap(<ScoringConfigPage />));
+  await switchToLegacyTabs();
   await waitFor(() => {
     expect(screen.getByTestId('dim-row-ACCOUNT_AGE')).toBeInTheDocument();
   });
@@ -623,6 +723,7 @@ describe('ScoringConfigPage — DimensionsTab 編輯 / icon-only 停用', () => 
 describe('ScoringConfigPage — ScoresTab 編輯 / 刪除', () => {
   it('TS-F054-E05：每列 pencil 編輯按鈕（icon-only） + click 開啟單筆編輯 Modal', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-score')).toBeInTheDocument();
     });
@@ -644,6 +745,7 @@ describe('ScoringConfigPage — ScoresTab 編輯 / 刪除', () => {
   it('TS-F054-E06：score 編輯 Modal 儲存 → 呼叫 updateDimensions（覆寫式整批 scores）', async () => {
     mockedUpdateDimensions.mockResolvedValue({} as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-score')).toBeInTheDocument();
     });
@@ -673,6 +775,7 @@ describe('ScoringConfigPage — ScoresTab 編輯 / 刪除', () => {
   it('TS-F054-E07：score 列 trash 按鈕 + 確認對話框 → 刪除該筆走 updateDimensions（覆寫式去除）', async () => {
     mockedUpdateDimensions.mockResolvedValue({} as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-score')).toBeInTheDocument();
     });
@@ -704,9 +807,12 @@ describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELET
   it('TS-F055-E01：每列 check 單列儲存按鈕 click → 呼叫 updateCardLevels', async () => {
     mockedUpdateCardLevels.mockResolvedValue({} as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-level')).toBeInTheDocument();
     });
+    // Iter 5b 5-Tab 平鋪：點 Shell 外層 tab-level（切換到 Shell 的 CARD_LEVEL 分頁，
+    // 觸發 ScoringConfigLegacyTabs forceTab='level'）
     fireEvent.click(screen.getByTestId('tab-level'));
     await waitFor(() => {
       expect(screen.getByTestId('save-level-A')).toBeInTheDocument();
@@ -730,9 +836,12 @@ describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELET
       cardType: 'H', cardVersion: 1, cardLevel: 'D', deletedAt: '2026-05-14T00:00:00.000Z',
     } as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-level')).toBeInTheDocument();
     });
+    // Iter 5b 5-Tab 平鋪：點 Shell 外層 tab-level（切換到 Shell 的 CARD_LEVEL 分頁，
+    // 觸發 ScoringConfigLegacyTabs forceTab='level'）
     fireEvent.click(screen.getByTestId('tab-level'));
     await waitFor(() => {
       expect(screen.getByTestId('delete-level-D')).toBeInTheDocument();
@@ -766,9 +875,12 @@ describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELET
       },
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
       expect(screen.getByTestId('tab-level')).toBeInTheDocument();
     });
+    // Iter 5b 5-Tab 平鋪：點 Shell 外層 tab-level（切換到 Shell 的 CARD_LEVEL 分頁，
+    // 觸發 ScoringConfigLegacyTabs forceTab='level'）
     fireEvent.click(screen.getByTestId('tab-level'));
     fireEvent.click(await screen.findByTestId('delete-level-D'));
     await screen.findByTestId('level-delete-confirm-modal');
@@ -783,13 +895,16 @@ describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELET
   });
 });
 
-describe('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE）', () => {
+// Iter 5b：v1.4 TIER 編輯 / 刪除互動已由 TierMappingTabV15 取代（含 v1.5 互斥規則）。
+// 新測試覆蓋於 tier-mapping-tab.test.tsx + create-tier-mapping-modal.test.tsx。
+describe.skip('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE，已由 Tab 5 v1.5 元件取代）', () => {
   it('TS-F056-E01：每列 pencil 編輯 → 開啟 TIER 編輯 Modal，預填 tierLevel/listNm', async () => {
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('edit-tier-H-A')).toBeInTheDocument();
     });
@@ -811,10 +926,11 @@ describe('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE）'
       updatedCount: 1, insertedCount: 0,
     } as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('edit-tier-H-A')).toBeInTheDocument();
     });
@@ -845,10 +961,11 @@ describe('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE）'
       cardType: 'H', cardLevel: 'A', deletedAt: '2026-05-14T00:00:00Z',
     } as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('delete-tier-H-A')).toBeInTheDocument();
     });
@@ -872,10 +989,11 @@ describe('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE）'
       cardType: 'M5', cardLevel: null, deletedAt: '2026-05-14T00:00:00Z',
     } as any);
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     await waitFor(() => {
       expect(screen.getByTestId('delete-tier-M5-null')).toBeInTheDocument();
     });
@@ -894,10 +1012,11 @@ describe('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELETE）'
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
     });
     render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-tier')).toBeInTheDocument();
+      expect(screen.getByTestId('legacy-tab-tier')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-tier'));
+    fireEvent.click(screen.getByTestId('legacy-tab-tier'));
     fireEvent.click(await screen.findByTestId('btn-add-tier'));
     const tierModal = await screen.findByTestId('tier-modal');
     const inputs = tierModal.querySelectorAll('input[type="text"]');

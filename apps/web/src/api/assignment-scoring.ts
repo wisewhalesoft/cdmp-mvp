@@ -167,7 +167,34 @@ export async function previewCardLevels(
   return res.data;
 }
 
-// ---- F056 ----
+// ---- F056 v1.5 ----
+
+/**
+ * TIER_LEVEL 列舉（F056 v1.5 AC-8 / architecture-spec §E07-G D-CT-03）。
+ * 寫入端點之 tierLevel 必須屬於此列舉，違反回 422 TIER_LEVEL_INVALID_ENUM。
+ */
+export const TIER_LEVEL_ENUM = [
+  'T1',
+  'T2',
+  'T3',
+  'T4',
+  'T5',
+  'T6',
+  'T7',
+  'T8',
+  'T9',
+  'T10',
+] as const;
+export type TierLevelEnum = (typeof TIER_LEVEL_ENUM)[number];
+
+/**
+ * F056 v1.5 已知舊後綴值（待遷移 badge 用）。
+ * 殘留於 ob_tier 的舊值在前端以「待遷移」琥珀 badge 標示。
+ */
+export const LEGACY_TIER_VALUES = new Set([
+  'T1M', 'T1HM', 'T2HM', 'T3M', 'T3HM', 'T32', 'T3C',
+  'T4M', 'T51', 'T52', 'T5M', 'THC',
+]);
 
 export interface TierMappingItem {
   cardType: string;
@@ -180,22 +207,40 @@ export interface GetTierMappingResponse {
   mappings: TierMappingItem[];
 }
 
-export async function getTierMapping(): Promise<GetTierMappingResponse> {
+/**
+ * F056 v1.5：cardType 參數現為必填（後端 query 必填 + 範圍鎖）。
+ *
+ * Iter 5b 補強：
+ *   - GET / PUT 加 cardType query
+ *   - tierLevel 型別宣告為 TierLevelEnum（T1~T10）
+ *   - 新錯誤碼處理由呼叫端負責（service 已 422 / 404 / 409；client 透傳）
+ */
+export async function getTierMapping(
+  cardType: string,
+): Promise<GetTierMappingResponse> {
   const res = await apiClient.get<GetTierMappingResponse>(
     '/assignment/scoring/tier-mapping',
+    { params: { cardType } },
   );
   return res.data;
 }
 
-export async function updateTierMapping(payload: {
-  mappings: Array<{
-    cardType: string;
-    cardLevel: string | null;
-    tierLevel: string;
-    listNm?: string | null;
-  }>;
-}): Promise<{ updatedCount: number; insertedCount: number }> {
-  const res = await apiClient.put('/assignment/scoring/tier-mapping', payload);
+export async function updateTierMapping(
+  cardType: string,
+  payload: {
+    mappings: Array<{
+      cardType: string;
+      cardLevel: string | null;
+      tierLevel: string;
+      listNm?: string | null;
+    }>;
+  },
+): Promise<{ updatedCount: number; insertedCount: number }> {
+  const res = await apiClient.put(
+    '/assignment/scoring/tier-mapping',
+    payload,
+    { params: { cardType } },
+  );
   return res.data;
 }
 
