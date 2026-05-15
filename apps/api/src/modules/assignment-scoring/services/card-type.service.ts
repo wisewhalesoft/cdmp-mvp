@@ -75,10 +75,29 @@ export interface CardTypeListItem {
   prodKind: string;
   prodKindName: string | null;
   status: 'active' | 'inactive';
+  // Iter 9：banner metadata（active version JOIN + users.name JOIN）
+  cardVersion: number | null;
+  sdate: string | null;
+  edate: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
 }
 
 export interface ListCardTypesResult {
   cardTypes: CardTypeListItem[];
+}
+
+/**
+ * Iter 9：GET /:cardType/stats response。
+ * banner KPI 5 欄一次回（dim/score/level/tier/listDefsAffected）。
+ */
+export interface CardTypeStatsResult {
+  cardType: string;
+  dimCount: number;
+  scoreCount: number;
+  levelCount: number;
+  tierCount: number;
+  listDefsAffected: number;
 }
 
 export interface CreateCardTypeInput {
@@ -206,18 +225,95 @@ export class CardTypeService {
       }
     }
 
+    // Iter 9：JOIN active version（每張卡最多一筆）取 cardVersion / sdate / edate
+    const cardTypeCodes = cards.map((c) => c.card_type);
+    const activeVersions =
+      cardTypeCodes.length === 0
+        ? []
+        : await this.versionRepo.find({
+            where: cardTypeCodes.map((ct) => ({
+              card_type: ct as any,
+              status: 'active',
+            })),
+          });
+    const versionByCardType = new Map<string, ObLevelcardVersion>();
+    for (const v of activeVersions) {
+      if (v.card_type) versionByCardType.set(v.card_type, v);
+    }
+
+    // Iter 9：JOIN users 取 createdBy name
+    const createdByIds = Array.from(
+      new Set(cards.map((c) => c.created_by).filter((id): id is string => !!id)),
+    );
+    const users =
+      createdByIds.length === 0
+        ? []
+        : await this.userRepo.find({
+            where: createdByIds.map((id) => ({ id })),
+            select: ['id', 'name'],
+          });
+    const userNameById = new Map<string, string | null>();
+    for (const u of users) {
+      userNameById.set(u.id, u.name ?? null);
+    }
+
     const sorted = [...cards].sort((a, b) =>
       a.card_type.localeCompare(b.card_type),
     );
 
     return {
-      cardTypes: sorted.map((c) => ({
-        cardType: c.card_type,
-        cardName: c.card_name,
-        prodKind: c.prod_kind,
-        prodKindName: prodKindNameByCode.get(c.prod_kind) ?? null,
-        status: c.status as 'active' | 'inactive',
-      })),
+      cardTypes: sorted.map((c) => {
+        const v = versionByCardType.get(c.card_type) ?? null;
+        const createdAt = c.created_at
+          ? c.created_at instanceof Date
+            ? c.created_at.toISOString()
+            : String(c.created_at)
+          : null;
+        return {
+          cardType: c.card_type,
+          cardName: c.card_name,
+          prodKind: c.prod_kind,
+          prodKindName: prodKindNameByCode.get(c.prod_kind) ?? null,
+          status: c.status as 'active' | 'inactive',
+          cardVersion: v?.card_version ?? null,
+          sdate: v?.sdate ?? null,
+          edate: v?.edate ?? null,
+          createdBy: c.created_by ? userNameById.get(c.created_by) ?? null : null,
+          createdAt,
+        };
+      }),
+    };
+  }
+
+  // =========================
+  // Iter 9 — GET /card-types/:cardType/stats
+  // =========================
+
+  async getCardTypeStats(cardType: string): Promise<CardTypeStatsResult> {
+    // 1. 確認 cardType 存在（不限 status — banner 可能仍要看到 inactive 卡）
+    const card = await this.cardTypeRepo.findOne({
+      where: { card_type: cardType },
+    });
+    if (!card) {
+      throw new NotFoundException({
+        error: CARD_TYPE_ERROR_CODES.CARD_TYPE_NOT_FOUND,
+        message: `計分卡類型 ${cardType} 不存在`,
+      });
+    }
+
+    // 2. 5 個 count 並行查詢（_countCascade 已 cover dim/score/level/tier 4 個，
+    //    listDefsAffected 用 _countActiveListDefinitions）
+    const cascade = await this._countCascade(cardType);
+    const listDefsAffected = await this._countActiveListDefinitions(cardType);
+
+    return {
+      cardType,
+      // dim = columns 數量（cascade.columns 即計分維度）
+      dimCount: cascade.columns,
+      scoreCount: cascade.scores,
+      levelCount: cascade.levels,
+      tierCount: cascade.tierMappings,
+      listDefsAffected,
     };
   }
 

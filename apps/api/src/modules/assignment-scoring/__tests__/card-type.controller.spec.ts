@@ -52,6 +52,7 @@ describe('CardTypeController — Guard Matrix', () => {
     updateCardType: ReturnType<typeof vi.fn>;
     getDeletePreview: ReturnType<typeof vi.fn>;
     deleteCardTypeCascade: ReturnType<typeof vi.fn>;
+    getCardTypeStats: ReturnType<typeof vi.fn>;
   };
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
@@ -87,6 +88,14 @@ describe('CardTypeController — Guard Matrix', () => {
         deletedCascade: { versions: 0, columns: 0, scores: 0, levels: 0, tierMappings: 0 },
         listDefinitionsAffected: 0,
         deletedAt: new Date().toISOString(),
+      }),
+      getCardTypeStats: vi.fn().mockResolvedValue({
+        cardType: 'H',
+        dimCount: 8,
+        scoreCount: 24,
+        levelCount: 4,
+        tierCount: 4,
+        listDefsAffected: 2,
       }),
     };
 
@@ -181,6 +190,11 @@ describe('CardTypeController — Guard Matrix', () => {
       name: 'DELETE /card-types/:cardType',
       method: 'delete',
       path: '/api/v1/assignment/scoring/card-types/X?confirmCascade=true',
+    },
+    {
+      name: 'GET /card-types/:cardType/stats',
+      method: 'get',
+      path: '/api/v1/assignment/scoring/card-types/H/stats',
     },
   ];
 
@@ -278,6 +292,43 @@ describe('CardTypeController — Guard Matrix', () => {
         '/api/v1/assignment/scoring/card-types?status=invalid',
       );
       expect(res.status).toBe(422);
+    });
+  });
+
+  // ===== Iter 9 / GET /:cardType/stats =====
+  describe('GET /:cardType/stats — Iter 9', () => {
+    it('200 with stats body（業務主管）', async () => {
+      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/scoring/card-types/H/stats',
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        cardType: 'H',
+        dimCount: 8,
+        scoreCount: 24,
+        levelCount: 4,
+        tierCount: 4,
+        listDefsAffected: 2,
+      });
+      expect(serviceMock.getCardTypeStats).toHaveBeenCalledWith('H');
+    });
+
+    it('404 當 cardType 不存在（透傳 service NotFoundException）', async () => {
+      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      const { NotFoundException } = await import('@nestjs/common');
+      serviceMock.getCardTypeStats.mockRejectedValueOnce(
+        new NotFoundException({
+          error: 'CARD_TYPE_NOT_FOUND',
+          message: '計分卡類型 NONE 不存在',
+        }),
+      );
+
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/scoring/card-types/NONE/stats',
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('CARD_TYPE_NOT_FOUND');
     });
   });
 });

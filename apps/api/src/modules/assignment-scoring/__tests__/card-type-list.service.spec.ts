@@ -34,12 +34,22 @@ describe('CardTypeService — F069 listCardTypes', () => {
   let service: CardTypeService;
   let cardTypeRepo: any;
   let codeDfRepo: any;
+  let versionRepo: any;
+  let userRepo: any;
 
   beforeEach(async () => {
     cardTypeRepo = {
       find: vi.fn().mockResolvedValue([]),
     };
     codeDfRepo = {
+      find: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockResolvedValue(null),
+    };
+    // Iter 9：listCardTypes 補 metadata — JOIN active version + users.name
+    versionRepo = {
+      find: vi.fn().mockResolvedValue([]),
+    };
+    userRepo = {
       find: vi.fn().mockResolvedValue([]),
       findOne: vi.fn().mockResolvedValue(null),
     };
@@ -51,7 +61,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         CardTypeService,
         { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
         { provide: getRepositoryToken(ObCodeDf), useValue: codeDfRepo },
-        { provide: getRepositoryToken(ObLevelcardVersion), useValue: noop },
+        { provide: getRepositoryToken(ObLevelcardVersion), useValue: versionRepo },
         { provide: getRepositoryToken(ObLevelcardColumn), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardScore), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardLevel), useValue: noop },
@@ -59,7 +69,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         { provide: getRepositoryToken(ObListDefinition), useValue: noop },
         { provide: getRepositoryToken(AssignmentRun), useValue: noop },
         { provide: getRepositoryToken(AssignmentAuditLog), useValue: noop },
-        { provide: getRepositoryToken(User), useValue: noop },
+        { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: DataSource, useValue: { transaction: vi.fn() } },
       ],
     }).compile();
@@ -191,5 +201,160 @@ describe('CardTypeService — F069 listCardTypes', () => {
 
     const result = await service.listCardTypes({ status: 'active' });
     expect(result.cardTypes[0].prodKindName).toBeNull();
+  });
+
+  // ============================================================
+  // Iter 9 / listCardTypes 補 Metadata（cardVersion / sdate / edate / createdBy / createdAt）
+  // ============================================================
+
+  it('Metadata：response 包含 5 個新欄位（cardVersion / sdate / edate / createdBy / createdAt）', async () => {
+    const fixedDate = new Date('2019-08-23T00:00:00.000Z');
+    cardTypeRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_name: '期中',
+        prod_kind: '01',
+        status: 'active',
+        created_at: fixedDate,
+        created_by: 'sm-uuid',
+      },
+    ]);
+    versionRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_version: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        status: 'active',
+      },
+    ]);
+    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: 'Sales Manager' }]);
+
+    const result = await service.listCardTypes({ status: 'active' });
+
+    expect(result.cardTypes).toHaveLength(1);
+    const h = result.cardTypes[0];
+    expect(h).toHaveProperty('cardVersion');
+    expect(h).toHaveProperty('sdate');
+    expect(h).toHaveProperty('edate');
+    expect(h).toHaveProperty('createdBy');
+    expect(h).toHaveProperty('createdAt');
+  });
+
+  it('Metadata：cardVersion/sdate/edate 來自 active version 列', async () => {
+    cardTypeRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_name: '期中',
+        prod_kind: '01',
+        status: 'active',
+        created_at: new Date('2019-08-23T00:00:00.000Z'),
+        created_by: 'sm-uuid',
+      },
+    ]);
+    versionRepo.find.mockResolvedValue([
+      // 有兩個版本：v0=inactive、v1=active；service 只應取 active
+      {
+        card_type: 'H',
+        card_version: 0,
+        sdate: '20180101',
+        edate: '20190101',
+        status: 'inactive',
+      },
+      {
+        card_type: 'H',
+        card_version: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        status: 'active',
+      },
+    ]);
+    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: 'Sales Manager' }]);
+
+    const result = await service.listCardTypes({ status: 'active' });
+    const h = result.cardTypes[0];
+
+    expect(h.cardVersion).toBe(1);
+    expect(h.sdate).toBe('20190823');
+    expect(h.edate).toBe('20991231');
+  });
+
+  it('Metadata：createdBy 透過 users.name 解析（JOIN）', async () => {
+    cardTypeRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_name: '期中',
+        prod_kind: '01',
+        status: 'active',
+        created_at: new Date('2019-08-23T00:00:00.000Z'),
+        created_by: 'sm-uuid',
+      },
+    ]);
+    versionRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_version: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        status: 'active',
+      },
+    ]);
+    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: '王小明' }]);
+
+    const result = await service.listCardTypes({ status: 'active' });
+
+    expect(result.cardTypes[0].createdBy).toBe('王小明');
+  });
+
+  it('Metadata：無 active version 時 cardVersion/sdate/edate 為 null（graceful）', async () => {
+    cardTypeRepo.find.mockResolvedValue([
+      {
+        card_type: 'X',
+        card_name: '無版本',
+        prod_kind: '01',
+        status: 'active',
+        created_at: new Date('2019-08-23T00:00:00.000Z'),
+        created_by: 'sm-uuid',
+      },
+    ]);
+    versionRepo.find.mockResolvedValue([]); // 沒有任何版本
+    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: 'Sales Manager' }]);
+
+    const result = await service.listCardTypes({ status: 'active' });
+    const x = result.cardTypes[0];
+
+    expect(x.cardVersion).toBeNull();
+    expect(x.sdate).toBeNull();
+    expect(x.edate).toBeNull();
+    // createdBy / createdAt 仍應有值（從 ob_card_type 取）
+    expect(x.createdBy).toBe('Sales Manager');
+    expect(x.createdAt).not.toBeNull();
+  });
+
+  it('Metadata：createdBy 對應 user 不存在 → null（graceful）', async () => {
+    cardTypeRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_name: '期中',
+        prod_kind: '01',
+        status: 'active',
+        created_at: new Date('2019-08-23T00:00:00.000Z'),
+        created_by: 'unknown-user',
+      },
+    ]);
+    versionRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_version: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        status: 'active',
+      },
+    ]);
+    userRepo.find.mockResolvedValue([]); // user 不存在
+
+    const result = await service.listCardTypes({ status: 'active' });
+
+    expect(result.cardTypes[0].createdBy).toBeNull();
   });
 });

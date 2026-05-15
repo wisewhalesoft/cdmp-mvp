@@ -90,6 +90,13 @@ export class CardTypeController {
     );
   }
 
+  // ===== Iter 9 — GET /:cardType/stats =====
+
+  @Get(':cardType/stats')
+  async getCardTypeStats(@Param('cardType') cardType: string) {
+    return this.service.getCardTypeStats(cardType);
+  }
+
   // ===== F072 =====
 
   @Get(':cardType/delete-preview')
