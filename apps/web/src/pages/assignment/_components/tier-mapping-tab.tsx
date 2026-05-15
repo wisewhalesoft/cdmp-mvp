@@ -19,9 +19,8 @@ import {
 import { useSelectedCardType } from '../_hooks/use-selected-card-type';
 import { NoCardTypeSelectedEmpty } from './card-type-list-tab';
 import { CreateTierMappingModal } from './create-tier-mapping-modal';
-// Iter 7：review 差異 #2 — 加 version-strip
-import { VersionStrip } from './version-strip';
-import type { CardTypeListItem } from '@/api/card-type';
+// Iter 8：拔除 VersionStrip（prototype 28 v3+ 已移除 .version-strip）；
+// 版本資訊改顯示於 SelectedCardTypeBanner（Shell 層）。
 
 /**
  * F056 v1.5：TIER_LEVEL 對應表 Tab 5
@@ -47,14 +46,11 @@ import type { CardTypeListItem } from '@/api/card-type';
 interface Props {
   isLocked?: boolean;
   availableCardLevels?: string[];
-  /** Shell 帶入完整 CARD_TYPE 資料（供 VersionStrip 顯示 PROD_KIND） */
-  selectedCardItem?: CardTypeListItem;
 }
 
 export function TierMappingTabV15({
   isLocked = false,
   availableCardLevels = ['A', 'B', 'C', 'D'],
-  selectedCardItem,
 }: Props) {
   const { selectedCardType, selectedCardName } = useSelectedCardType();
   const [createOpen, setCreateOpen] = useState(false);
@@ -140,15 +136,8 @@ export function TierMappingTabV15({
       className="bg-white rounded-b-lg border border-gray-200 border-t-0 shadow-sm"
       data-testid="tier-mapping-tab-v15"
     >
-      {/* Iter 7 review 差異 #2：頂部 version strip */}
-      {selectedCardItem && (
-        <VersionStrip
-          cardType={selectedCardItem.cardType}
-          cardName={selectedCardItem.cardName}
-          prodKind={selectedCardItem.prodKind}
-          prodKindName={selectedCardItem.prodKindName}
-        />
-      )}
+      {/* Iter 8（prototype B 排列）：拔除頂部 version-strip；版本/PROD_KIND 改由
+          SelectedCardTypeBanner 在 Shell 層統一顯示。 */}
 
       {/* Mode Banner */}
       <ModeBanner standardCount={standardCount} fallbackCount={fallbackCount} />

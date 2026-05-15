@@ -24,10 +24,29 @@ export interface CardTypeListItem {
   prodKind: string;
   prodKindName: string | null;
   status: 'active' | 'inactive';
+  // Iter 9：banner metadata（後端從 active version + users JOIN 帶回）
+  cardVersion: number | null;
+  sdate: string | null;
+  edate: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
 }
 
 export interface ListCardTypesResponse {
   cardTypes: CardTypeListItem[];
+}
+
+/**
+ * Iter 9：GET /:cardType/stats response
+ * 對應 banner KPI 5 欄（dim/score/level/tier/listDefsAffected）。
+ */
+export interface CardTypeStatsResponse {
+  cardType: string;
+  dimCount: number;
+  scoreCount: number;
+  levelCount: number;
+  tierCount: number;
+  listDefsAffected: number;
 }
 
 export interface CreateCardTypePayload {
@@ -137,6 +156,16 @@ export async function deleteCardType(
   const res = await apiClient.delete<DeleteCardTypeResponse>(
     `/assignment/scoring/card-types/${encodeURIComponent(cardType)}`,
     { params: { confirmCascade: 'true' } },
+  );
+  return res.data;
+}
+
+/** Iter 9：取得 CARD_TYPE 的 5 個 KPI 統計 */
+export async function getCardTypeStats(
+  cardType: string,
+): Promise<CardTypeStatsResponse> {
+  const res = await apiClient.get<CardTypeStatsResponse>(
+    `/assignment/scoring/card-types/${encodeURIComponent(cardType)}/stats`,
   );
   return res.data;
 }

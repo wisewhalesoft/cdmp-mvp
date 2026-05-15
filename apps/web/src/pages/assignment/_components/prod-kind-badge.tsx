@@ -59,12 +59,14 @@ export function ProdKindBadge({
     ? style.name
     : prodKindName ?? style.name;
 
+  // Iter 8（prototype B 排列）：sm 改為 px-2 py-0.5 text-xs font-semibold rounded，
+  // 對齊 SelectedCardTypeBanner 身分區 badge 樣式。
   const containerClasses =
     size === 'sm'
-      ? `inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded ${style.bg} ${style.text}`
+      ? `inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded ${style.bg} ${style.text}`
       : `inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${style.bg} ${style.text}`;
 
-  const iconSize = size === 'sm' ? 10 : 12;
+  const iconSize = size === 'sm' ? 12 : 12;
 
   return (
     <span

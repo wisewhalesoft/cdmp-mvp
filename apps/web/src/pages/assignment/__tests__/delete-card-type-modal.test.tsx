@@ -42,6 +42,12 @@ const TARGET = {
   prodKind: '01',
   prodKindName: '汽車',
   status: 'active' as const,
+  // Iter 9：CardTypeListItem 新增 metadata 欄位（modal 不讀此值，僅 satisfy 型別）
+  cardVersion: 1,
+  sdate: '20190823',
+  edate: '20991231',
+  createdBy: null,
+  createdAt: null,
 };
 
 beforeEach(() => {

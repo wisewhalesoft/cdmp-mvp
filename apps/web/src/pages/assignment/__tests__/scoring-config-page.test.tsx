@@ -2,11 +2,11 @@
  * F053 / F054 / F055 / F056：ScoringConfigPage 前端煙霧測試
  *
  * 涵蓋 prototype 28 主要互動：
- *   - TS-F053-009：版本卡片顯示版本資訊
- *   - TS-F053-010：createdBy/createdAt 為 null 時 UI 顯示「—」
  *   - TS-F053-011：維度數量 Badge 正確
  *   - TS-F053-012：無 active 版本顯示警示
  *   - TS-F053-013：維度展開顯示分數詳細
+ *   - 註：TS-F053-009 / 010（version-card metadata）已搬到 SelectedCardTypeBanner，
+ *     對應測試已遷移至 card-type-list-tab.test.tsx 內 SelectedCardTypeBanner describe。
  *   - TS-F054-017：月跑鎖定時 DOM 按鈕 disabled
  *   - TS-F054-019：新增維度 Modal 渲染與必填驗證
  *   - TS-F054-020：停用維度確認對話框
@@ -64,6 +64,7 @@ vi.mock('@/api/card-type', async () => {
     updateCardType: vi.fn(),
     getDeletePreview: vi.fn(),
     deleteCardType: vi.fn(),
+    getCardTypeStats: vi.fn(),
   };
 });
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
@@ -136,25 +137,23 @@ const DEFAULT_H_LEVELS = [
   { cardLevel: 'D', scoreS: 0, scoreE: 184 },
 ];
 
-// Iter 5b/7 helper：v1.4 既有測試針對 legacy 4-Tab；
+// Iter 5b/7/8 helper：
 //   - Iter 5b 改為 5-Tab 平鋪
 //   - Iter 7（review fix）拆解內部 4-Tab 列；Shell 為唯一 tab nav
+//   - Iter 8（prototype B 排列）拔除 VersionStrip；不再有 version-card testid
 // 步驟：
 //   1. 等待 Tab 1 清單載入完成（selectedCardType 被 useEffect 設定為第一筆）
 //   2. 點擊外層 Shell 的 tab-dim 切換到「計分維度」Tab → 觸發 ScoringConfigLegacyTabs forceTab='dim'
-//   3. 等待版本資訊（version-card 或 no-active-version）渲染
+//   3. 等待 panel 內容渲染（btn-add-dim 為 panel 載入完成的最穩定 anchor；
+//      若 404 則改等 no-active-version）
 async function switchToLegacyTabs() {
-  // 等 Tab 1 表格載入完成（出現 H row 即代表 selectedCardType 已 sync）
   await screen.findByTestId('card-type-row-H');
-  // Iter 7：拆解 legacy 4-Tab 後，只剩 Shell 一個 tab-dim button；
-  // 仍用 getAllByTestId 以維持向後相容（陣列長度＝1）
   const shellTabDim = screen.getAllByTestId('tab-dim')[0];
   fireEvent.click(shellTabDim);
-  // 等 panel 內容渲染（version-card 由 VersionStrip 提供；no-active-version 由 Legacy panel 提供）
   await waitFor(
     () => {
       expect(
-        screen.queryByTestId('version-card') ||
+        screen.queryByTestId('btn-add-dim') ||
           screen.queryByTestId('no-active-version'),
       ).toBeTruthy();
     },
@@ -165,6 +164,7 @@ async function switchToLegacyTabs() {
 beforeEach(() => {
   vi.clearAllMocks();
   // Iter 5a：Tab 1 載入 card-types 清單；預設回 [H] 一筆，讓 selectedCardType 自動設為 'H'
+  // Iter 9：response 含 5 個 metadata 欄位（cardVersion / sdate / edate / createdBy / createdAt）
   vi.mocked(cardTypeApi.listCardTypes).mockResolvedValue({
     cardTypes: [
       {
@@ -173,8 +173,22 @@ beforeEach(() => {
         prodKind: '01',
         prodKindName: '汽車',
         status: 'active',
+        cardVersion: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        createdBy: 'Sales Manager',
+        createdAt: '2019-08-23T00:00:00.000Z',
       },
     ],
+  });
+  // Iter 9：banner KPI 5 欄統計 — 預設 H 卡的 cascade
+  vi.mocked(cardTypeApi.getCardTypeStats).mockResolvedValue({
+    cardType: 'H',
+    dimCount: 2,
+    scoreCount: 4,
+    levelCount: 4,
+    tierCount: 6,
+    listDefsAffected: 0,
   });
   mockedGetUser.mockReturnValue({
     id: 'sm-id',
@@ -209,36 +223,8 @@ beforeEach(() => {
 });
 
 describe('ScoringConfigPage — F053 顯示', () => {
-  it('TS-F053-009：版本卡片顯示 cardType / sdate~edate / 建立者', async () => {
-    render(wrap(<ScoringConfigPage />));
-    await switchToLegacyTabs();
-    await waitFor(() => {
-      expect(screen.getByTestId('version-card')).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('version-sdate').textContent).toBe('20190823');
-    expect(screen.getByTestId('version-edate').textContent).toBe('20991231');
-    expect(screen.getByTestId('version-created-by').textContent).toBe('21251');
-  });
-
-  it('TS-F053-010：createdBy/createdAt 為 null 時 UI 顯示「—」', async () => {
-    // Iter 7 後 Shell 對 getScoring 有 3 個 caller（Shell dim badge / VersionStrip /
-    // Legacy fetchAll），需用 mockResolvedValue（不是 Once）讓所有 caller 都拿到
-    // null 版本資料。
-    mockedGetScoring.mockResolvedValue({
-      version: {
-        ...DEFAULT_VERSION_WITH_VALUES,
-        createdBy: null,
-        createdAt: null,
-      },
-      dimensions: DEFAULT_DIMENSIONS,
-    } as any);
-    render(wrap(<ScoringConfigPage />));
-    await switchToLegacyTabs();
-    await waitFor(() => {
-      expect(screen.getByTestId('version-created-by').textContent).toBe('—');
-    });
-    expect(screen.getByTestId('version-created-at').textContent).toBe('—');
-  });
+  // Iter 8（prototype B 排列）：TS-F053-009 / 010 已搬到 SelectedCardTypeBanner，
+  // 對應測試於 card-type-list-tab.test.tsx 的 SelectedCardTypeBanner describe。
 
   it('TS-F053-011：維度 Badge 顯示維度數量', async () => {
     render(wrap(<ScoringConfigPage />));
@@ -252,8 +238,8 @@ describe('ScoringConfigPage — F053 顯示', () => {
   });
 
   it('TS-F053-012：無 active 版本顯示警示訊息', async () => {
-    // Iter 7 後 Shell 對 getScoring 有 3 個 caller；用 mockRejectedValue（不是 Once）
-    // 讓所有 caller 都拿到 404，確保 Legacy 的 versionError 必定被設定，
+    // Iter 8（拔 VersionStrip）後 getScoring 剩 2 個 caller（Shell dim badge / Legacy fetchAll）；
+    // 用 mockRejectedValue（不是 Once）讓所有 caller 都拿到 404，確保 Legacy 的 versionError 必定被設定，
     // 進而 render no-active-version banner。
     mockedGetScoring.mockRejectedValue({
       response: { status: 404, data: { error: 'SCORING_VERSION_NOT_FOUND' } },
@@ -1036,6 +1022,84 @@ describe.skip('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELET
     expect(screen.getByTestId('btn-add-tier')).toBeDisabled();
     expect(screen.getByTestId('edit-tier-H-A')).toBeDisabled();
     expect(screen.getByTestId('delete-tier-H-A')).toBeDisabled();
+  });
+});
+
+// ---- Iter 9：Banner stats 串接 + KPI listdef 跳轉 ----
+
+describe('ScoringConfigPage — Iter 9 Banner stats integration', () => {
+  it('Banner stats 顯示 backend 回傳的 5 個 KPI 數字（getCardTypeStats）', async () => {
+    vi.mocked(cardTypeApi.getCardTypeStats).mockResolvedValueOnce({
+      cardType: 'H',
+      dimCount: 8,
+      scoreCount: 24,
+      levelCount: 4,
+      tierCount: 4,
+      listDefsAffected: 2,
+    });
+
+    render(wrap(<ScoringConfigPage />));
+
+    await screen.findByTestId('card-type-row-H');
+
+    // 等待 banner 上的 KPI 被資料填上
+    await waitFor(() => {
+      expect(screen.getByTestId('kpi-dim').textContent).toContain('8');
+    });
+    expect(screen.getByTestId('kpi-score').textContent).toContain('24');
+    expect(screen.getByTestId('kpi-level').textContent).toContain('4');
+    expect(screen.getByTestId('kpi-tier').textContent).toContain('4');
+    expect(screen.getByTestId('kpi-listdef').textContent).toContain('2');
+  });
+
+  it('Banner metadata 顯示 backend 回傳的 cardVersion / sdate / edate / createdBy', async () => {
+    render(wrap(<ScoringConfigPage />));
+
+    await screen.findByTestId('card-type-row-H');
+
+    await waitFor(() => {
+      const meta = screen.getByTestId('banner-meta');
+      // cardVersion: 1 → 'v1'
+      expect(meta.textContent).toContain('v1');
+      // sdate=20190823 → 2019-08-23
+      expect(meta.textContent).toContain('2019-08-23');
+      // edate=20991231 → 2099-12-31
+      expect(meta.textContent).toContain('2099-12-31');
+      expect(meta.textContent).toContain('Sales Manager');
+    });
+  });
+
+  it('KPI 第 5 個（kpi-listdef）點擊 → navigate 至 /assignment/list-definitions?cardType=...', async () => {
+    render(wrap(<ScoringConfigPage />));
+
+    await screen.findByTestId('card-type-row-H');
+
+    // 等待 banner KPI ready
+    await waitFor(() => {
+      expect(screen.getByTestId('kpi-listdef')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('kpi-listdef'));
+
+    // 跳轉後 URL 應為 /assignment/list-definitions?cardType=H
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/assignment/list-definitions');
+      expect(window.location.search).toContain('cardType=H');
+    });
+  });
+
+  it('selectedCardType=null（清單為空）時 stats 不查詢（getCardTypeStats 未被呼叫）', async () => {
+    vi.mocked(cardTypeApi.listCardTypes).mockResolvedValueOnce({
+      cardTypes: [],
+    });
+
+    render(wrap(<ScoringConfigPage />));
+
+    // 等待 empty state 出現確認 page 已渲染
+    await screen.findByTestId('card-type-empty');
+
+    // stats 不應該被呼叫（enabled: !!selectedCardType）
+    expect(vi.mocked(cardTypeApi.getCardTypeStats)).not.toHaveBeenCalled();
   });
 });
 

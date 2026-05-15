@@ -46,6 +46,12 @@ function wrap(node: React.ReactElement, selectedCardType = 'H') {
             prodKind: '01',
             prodKindName: '汽車',
             status: 'active',
+            // Iter 9：CardTypeListItem 新增 5 個 metadata 欄位
+            cardVersion: 1,
+            sdate: '20190823',
+            edate: '20991231',
+            createdBy: null,
+            createdAt: null,
           }}
         >
           {node}

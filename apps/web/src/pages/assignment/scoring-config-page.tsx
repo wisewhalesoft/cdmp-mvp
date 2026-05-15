@@ -20,8 +20,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/app-layout';
-import { listCardTypes, type CardTypeListItem } from '@/api/card-type';
+import { listCardTypes, getCardTypeStats } from '@/api/card-type';
 import {
   CardType,
   CardLevelItem,
@@ -53,9 +54,9 @@ import {
 import { RunLockBanner } from './_components/run-lock-banner';
 // Iter 5b 新增（F056 v1.5 Tab 5 改造）
 import { TierMappingTabV15 } from './_components/tier-mapping-tab';
-// Iter 7（review fix）：footer note + version strip 樣式對齊
+// Iter 7（review fix）：footer note 樣式對齊
+// Iter 8（prototype B 排列）：拔除 VersionStrip（已刪除 _components/version-strip.tsx）。
 import { ScoringConfigFooterNote } from './_components/footer-note';
-import { VersionStrip } from './_components/version-strip';
 
 /**
  * F053 / F054 / F055 / F056：計分卡設定頁
@@ -136,8 +137,9 @@ const TOP_TAB_LABELS: Record<TopTabKey, { label: string; icon: any }> = {
 };
 
 function ScoringConfigShell() {
+  const navigate = useNavigate();
   const [topTab, setTopTab] = useState<TopTabKey>('cardtype');
-  const { selectedCardItem } = useSelectedCardType();
+  const { selectedCardItem, setSelected } = useSelectedCardType();
   // Iter 5b：月跑鎖暫由 Legacy 內 fetchAll 取得；Shell 預設 false。
   // OPEN-J / OPEN-E：Iter 6+ 待整合 /assignment-run 端點查詢真實狀態，
   // 將實際 lock 狀態下傳給所有 Tab（包含 Tab 1 / Tab 5）以統一 UX。
@@ -163,18 +165,65 @@ function ScoringConfigShell() {
     retry: false,
   });
 
+  // Iter 9：banner KPI 5 欄統計（dim/score/level/tier/listDefsAffected）
+  const statsQuery = useQuery({
+    queryKey: ['card-type-stats', selectedCardItem?.cardType],
+    queryFn: () => getCardTypeStats(selectedCardItem!.cardType),
+    enabled: !!selectedCardItem?.cardType,
+    retry: false,
+  });
+
+  // Banner stats props：當 query 未 ready 時用全 0 預設，避免 type 報錯
+  const bannerStats = statsQuery.data ?? {
+    cardType: selectedCardItem?.cardType ?? '',
+    dimCount: 0,
+    scoreCount: 0,
+    levelCount: 0,
+    tierCount: 0,
+    listDefsAffected: 0,
+  };
+
   // Tab 2~5 需要選中 CARD_TYPE 才能顯示內容
   const needsSelection = topTab !== 'cardtype';
   const hasSelection = !!selectedCardItem;
 
   const cardTypeCount = cardTypesQuery.data?.cardTypes.length;
   const dimCount = dimensionsQuery.data?.length;
+  const availableCardTypes = cardTypesQuery.data?.cardTypes ?? [];
+
+  // Iter 8（排列 B）：切換器點他張卡時，從清單找到對應 item 寫入 context
+  function handleSwitchCardType(code: string) {
+    const target = availableCardTypes.find((c) => c.cardType === code);
+    if (target) setSelected(target);
+  }
+
+  // Iter 8（排列 B）：KPI 點擊 → 切到對應 Tab
+  function handleSwitchTab(tab: 'dim' | 'score' | 'level' | 'tier') {
+    setTopTab(tab);
+  }
+
+  // Iter 9：KPI 第 5 個（listdef）點擊 → 跳至名單定義頁，帶 cardType filter query
+  // 註：list-definition 頁目前為 stub（AssignmentStubPage），尚未支援 cardType query 解析；
+  // 先確保 URL 正確以利後續 F074 實作頁面時直接讀 query string 設預設 filter。
+  function handleGoToListDefinitions(code: string) {
+    navigate(`/assignment/list-definitions?cardType=${encodeURIComponent(code)}`);
+  }
 
   return (
     <AppLayout title="計分卡設定">
       <main className="flex-1 p-6">
-        {/* F069 AC-4 / AC-5：頂部 PROD_KIND info banner */}
-        <ProdKindInfoBanner selectedCard={selectedCardItem} />
+        {/* F069 排列 B：頂部「目前編輯中的計分卡」狀態卡（含 metadata + KPI + 切換器）
+            Iter 9：stats 改 required，串接 GET /:cardType/stats；KPI 第 5 個（listdef）
+            點擊 navigate 至 /assignment/list-definitions?cardType=... */}
+        <ProdKindInfoBanner
+          selectedCardType={selectedCardItem}
+          monthRunLocked={isLocked}
+          availableCardTypes={availableCardTypes}
+          onSwitchCardType={handleSwitchCardType}
+          stats={bannerStats}
+          onSwitchTab={handleSwitchTab}
+          onGoToListDefinitions={handleGoToListDefinitions}
+        />
 
         {/* F069 AC-6：月跑鎖警告 banner */}
         <RunLockBanner isLocked={isLocked} />
@@ -241,18 +290,16 @@ function ScoringConfigShell() {
           // Tab 2~4 沿用 v1.4 ScoringConfigLegacyTabs 內部的 panel 邏輯
           // Iter 7 已拆解：不再渲染 AppLayout / 月跑鎖 banner / 版本選擇器 / 4-Tab 列 / footer。
           // 改由 Shell 控制這些外殼，Legacy 只渲染對應 panel + modal + toast。
+          // Iter 8：移除 selectedCardItem prop（VersionStrip 已拔除）
           <ScoringConfigLegacyTabs
             forceCardType={selectedCardItem!.cardType}
             forceTab={topTab as TabKey}
-            selectedCardItem={selectedCardItem!}
           />
         )}
         {needsSelection && hasSelection && topTab === 'tier' && (
           // Iter 5b：Tab 5 採全新 v1.5 元件（互斥 / TIER 列舉 / 待遷移 badge）
-          <TierMappingTabV15
-            isLocked={isLocked}
-            selectedCardItem={selectedCardItem!}
-          />
+          // Iter 8：移除 selectedCardItem prop（VersionStrip 已拔除）
+          <TierMappingTabV15 isLocked={isLocked} />
         )}
 
         {/* Iter 7（review 差異 #29）：footer note 提升到 Shell，所有 Tab 都看得到 */}
@@ -268,15 +315,14 @@ function ScoringConfigShell() {
  *   - `forceCardType`：Shell 傳入 selectedCardType 時優先使用此值
  *   - `forceTab`：Iter 5b 5-Tab 平鋪後 Shell 控制當前 Tab；本元件直接渲染對應內容
  * Iter 5b：Tab 5（TIER）已由 TierMappingTabV15 取代，Shell 不再以 forceTab='tier' 呼叫此元件。
+ * Iter 8：移除 selectedCardItem prop（拔除 VersionStrip）。
  */
 export function ScoringConfigLegacyTabs({
   forceCardType,
   forceTab,
-  selectedCardItem,
 }: {
   forceCardType?: string;
   forceTab?: TabKey;
-  selectedCardItem?: CardTypeListItem;
 } = {}) {
   const [cardType, setCardTypeInternal] = useState<CardType>(
     (forceCardType as CardType) ?? 'H',
@@ -452,20 +498,10 @@ export function ScoringConfigLegacyTabs({
         </div>
       )}
 
-      {/* review 差異 #2：版本資訊條 — 取代既有 VersionCard，
-          樣式為 panel 內的 sub-header（border-x + border-b + 共用 bg-white card） */}
-      {!versionError && selectedCardItem && (
-        <div className="bg-white border border-[#E5E7EB] border-t-0">
-          <VersionStrip
-            cardType={selectedCardItem.cardType}
-            cardName={selectedCardItem.cardName}
-            prodKind={selectedCardItem.prodKind}
-            prodKindName={selectedCardItem.prodKindName}
-          />
-        </div>
-      )}
-
-      {/* 版本載入錯誤（404 / 其他）— VersionStrip 於 404 會返回 null，由本層顯示警示 */}
+      {/* Iter 8（prototype B 排列）：拔除 VersionStrip；版本資訊改顯示於 Shell 層的
+          SelectedCardTypeBanner（含 metadata 三行 version/起訖/createdBy·createdAt）。
+          404 警示保留：fetchAll 拿到 404 時 versionError 仍會被設定，此處渲染
+          `no-active-version` 警示讓 Tab 2~4 的內容區呈現警告而非空表。 */}
       {versionError && (
         <div
           data-testid="no-active-version"
@@ -933,7 +969,7 @@ function ScoresTab({
           <select
             value={filterColumn}
             onChange={(e) => setFilterColumn(e.target.value)}
-            className="pl-3 pr-8 py-1.5 text-sm border border-[#E5E7EB] rounded-md bg-white"
+            className="pl-3 pr-8 py-1.5 text-sm border border-[#E5E7EB] rounded-md bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
           >
             <option value="ALL">全部維度</option>
             {dimensions.map((d) => (
