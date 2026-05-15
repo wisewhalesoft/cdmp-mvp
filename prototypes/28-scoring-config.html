@@ -147,23 +147,52 @@
 
     <div class="p-6">
 
-      <!-- ===== 頂部 PROD_KIND info banner（跨所有 Tab 持續可見） ===== -->
-      <div id="prodKindBanner" class="mb-4 rounded-lg p-3 bg-blue-50/60 border border-blue-100 text-sm text-gray-700">
-        <div class="flex items-start gap-2">
-          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-          <div class="flex-1">
-            <p class="font-medium text-gray-800">
-              產品類別（PROD_KIND）由「代碼維護」管理
-              <a href="37-base-code.html" class="text-primary hover:underline ml-2 inline-flex items-center gap-1">
-                前往代碼維護<i data-lucide="arrow-right" class="w-3 h-3"></i>
-              </a>
-            </p>
-            <p id="bannerSelection" class="text-xs text-gray-600 mt-1">
-              目前選中：CARD_TYPE = <span class="font-mono font-semibold text-gray-800">H</span> 期中
-              <span class="text-gray-300 mx-2">·</span>
-              PROD_KIND = <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-100 text-blue-700"><i data-lucide="car" class="w-2.5 h-2.5"></i>01 汽車</span>
-            </p>
+      <!-- ===== 頂部「目前編輯的計分卡」狀態卡（排列 B：單列三欄） =====
+           ≥1280px (xl): 三欄水平 grid-cols-12（身分 5 / metadata 3 / 統計+操作 4），直立分隔線
+           <1280px:      退化為單欄垂直堆疊（divide-y 取代 divide-x），等同 A 的兩段式視覺
+           注意：placeholder 狀態下 metadata 欄與統計欄會 hidden，#bannerSelection 跨 12 欄；
+                 此邏輯由 updateBanner() 動態切換 class 達成 -->
+      <div id="prodKindBanner" class="mb-4 rounded-xl bg-white border border-border shadow-sm">
+        <div class="grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-border" id="bannerGrid">
+
+          <!-- 欄 1：身分區（tile + cardName + badges） -->
+          <div id="bannerSelection" class="xl:col-span-5 px-5 py-3 flex items-center gap-3 min-w-0">
+            <div class="w-14 h-14 rounded-xl bg-primary flex items-center justify-center shrink-0 shadow-sm" id="bannerTile">
+              <span class="font-mono text-3xl font-bold text-white leading-none">H</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-lg font-semibold text-gray-900 leading-tight truncate">期中</div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-700"><i data-lucide="car" class="w-3 h-3"></i>01 汽車</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">
+                  <span class="w-1.5 h-1.5 rounded-full bg-success"></span>active
+                </span>
+              </div>
+            </div>
           </div>
+
+          <!-- 欄 2：metadata 區（三行垂直堆疊） -->
+          <div id="bannerMeta" class="xl:col-span-3 px-5 py-3 flex flex-col justify-center gap-1 text-xs text-gray-500 min-w-0"></div>
+
+          <!-- 欄 3：統計+操作區（KPI 5 欄 + 切換器右下） -->
+          <div id="bannerStatsCol" class="xl:col-span-4 px-3 py-2 flex flex-col gap-1.5 min-w-0">
+            <div id="bannerStats" class="grid grid-cols-5 gap-0.5"></div>
+            <div id="cardSwitcherSlot" class="flex justify-end px-2">
+              <div id="cardSwitcherWrap" class="relative">
+                <button id="cardSwitcherBtn" type="button" onclick="toggleCardSwitcher(event)"
+                  class="write-btn inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-white border border-border rounded-md hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
+                  <i data-lucide="repeat" class="w-3 h-3"></i>
+                  <span>切換</span>
+                  <i data-lucide="chevron-down" class="w-3 h-3 text-gray-400"></i>
+                </button>
+                <div id="cardSwitcherPanel" class="hidden absolute right-0 mt-2 w-72 bg-white border border-border rounded-lg shadow-lg z-20 overflow-hidden">
+                  <div class="px-3 py-2 border-b border-border bg-gray-50/60 text-xs font-semibold text-gray-500">切換至其他計分卡</div>
+                  <div id="cardSwitcherList" class="max-h-80 overflow-y-auto py-1"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -248,8 +277,6 @@
 
       <!-- ===== Tab 2: 計分維度 ===== -->
       <div id="panel-dim" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
-        <!-- Version Strip -->
-        <div class="dim-version-strip version-strip px-4 py-2.5 border-b border-border bg-gray-50/40 flex items-center gap-3 text-xs flex-wrap"></div>
         <!-- 空狀態（未選中 CARD_TYPE） -->
         <div class="empty-no-selection hidden py-20 text-center">
           <i data-lucide="mouse-pointer-click" class="w-10 h-10 text-gray-300 mx-auto"></i>
@@ -289,7 +316,6 @@
 
       <!-- ===== Tab 3: 分數設定 ===== -->
       <div id="panel-score" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
-        <div class="score-version-strip version-strip px-4 py-2.5 border-b border-border bg-gray-50/40 flex items-center gap-3 text-xs flex-wrap"></div>
         <div class="empty-no-selection hidden py-20 text-center">
           <i data-lucide="mouse-pointer-click" class="w-10 h-10 text-gray-300 mx-auto"></i>
           <p class="text-sm font-medium text-gray-700 mt-3">請先於 Tab 1 選擇計分卡類型</p>
@@ -337,7 +363,6 @@
 
       <!-- ===== Tab 4: CARD_LEVEL 門檻 ===== -->
       <div id="panel-level" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
-        <div class="level-version-strip version-strip px-4 py-2.5 border-b border-border bg-gray-50/40 flex items-center gap-3 text-xs flex-wrap"></div>
         <div class="empty-no-selection hidden py-20 text-center">
           <i data-lucide="mouse-pointer-click" class="w-10 h-10 text-gray-300 mx-auto"></i>
           <p class="text-sm font-medium text-gray-700 mt-3">請先於 Tab 1 選擇計分卡類型</p>
@@ -417,7 +442,6 @@
 
       <!-- ===== Tab 5: TIER_LEVEL 對應 ===== -->
       <div id="panel-tier" class="hidden bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
-        <div class="tier-version-strip version-strip px-4 py-2.5 border-b border-border bg-gray-50/40 flex items-center gap-3 text-xs flex-wrap"></div>
         <div class="empty-no-selection hidden py-20 text-center">
           <i data-lucide="mouse-pointer-click" class="w-10 h-10 text-gray-300 mx-auto"></i>
           <p class="text-sm font-medium text-gray-700 mt-3">請先於 Tab 1 選擇計分卡類型</p>
@@ -1016,11 +1040,11 @@
       const pk = prodKinds[code];
       if (!pk) {
         // fallback：未指定 / 停用
-        if (size === 'sm') return `<span class="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded bg-gray-100 text-gray-400 italic"><i data-lucide="alert-circle" class="w-2.5 h-2.5"></i>— 停用</span>`;
+        if (size === 'sm') return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded bg-gray-100 text-gray-400 italic"><i data-lucide="alert-circle" class="w-3 h-3"></i>— 停用</span>`;
         return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-400 italic"><i data-lucide="alert-circle" class="w-3 h-3"></i>— PROD_KIND 已停用</span>`;
       }
       if (size === 'sm') {
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded ${pk.bg} ${pk.text}"><i data-lucide="${pk.icon}" class="w-2.5 h-2.5"></i>${code} ${pk.name}</span>`;
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded ${pk.bg} ${pk.text}"><i data-lucide="${pk.icon}" class="w-3 h-3"></i>${code} ${pk.name}</span>`;
       }
       return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${pk.bg} ${pk.text}"><i data-lucide="${pk.icon}" class="w-3 h-3"></i>${code} ${pk.name}</span>`;
     }
@@ -1037,46 +1061,210 @@
       return currentTiers().filter(t => t.cardType === ct);
     }
 
-    // ===== Banner update =====
+    // ===== Banner update（排列 B：單列三欄） =====
+    // DOM 結構：
+    //   #prodKindBanner (容器)
+    //   └── #bannerGrid (grid-cols-1 xl:grid-cols-12 divide)
+    //       ├── #bannerSelection (col-span-5)  身分區：tile + cardName + prodKind + status
+    //       ├── #bannerMeta      (col-span-3)  metadata 三行
+    //       └── #bannerStatsCol  (col-span-4)  KPI 5 欄 + 切換器
+    //           ├── #bannerStats     (grid-cols-5)
+    //           └── #cardSwitcherWrap (相對定位 + dropdown panel)
+    //
+    // 主題切換：
+    //   normal           → 容器 white + divide-border + tile primary
+    //   placeholder      → 容器 dashed gray，身分區跨 12 欄、metadata/stats 欄 hide
+    //   month-run-lock   → 容器 amber-50/60 + amber-200 border，divide-amber-200，tile amber-500
     function updateBanner() {
+      const banner = document.getElementById('prodKindBanner');
+      const grid = document.getElementById('bannerGrid');
       const el = document.getElementById('bannerSelection');
-      if (!selectedCardType) {
-        el.innerHTML = `<span class="text-gray-500">尚未選擇 CARD_TYPE，請於下方 Tab 1 選取或新增</span>`;
-        return;
-      }
-      const ct = getCardType(selectedCardType);
+      const meta = document.getElementById('bannerMeta');
+      const statsCol = document.getElementById('bannerStatsCol');
+      const stats = document.getElementById('bannerStats');
+      const switcherWrap = document.getElementById('cardSwitcherWrap');
+      const ct = selectedCardType ? getCardType(selectedCardType) : null;
+
+      const isAmber = banner.classList.contains('bg-amber-50/60');
+      // 月跑鎖時 divide 線顏色換 amber-200，否則 border
+      const dividePalette = isAmber
+        ? 'grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-amber-200'
+        : 'grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-border';
+      grid.className = dividePalette;
+
       if (!ct) {
-        el.innerHTML = `<span class="text-gray-500">尚未選擇 CARD_TYPE，請於下方 Tab 1 選取或新增</span>`;
+        // placeholder：容器換 dashed gray、身分區跨 12 欄、metadata/stats 欄隱藏
+        if (!isAmber) {
+          banner.className = 'mb-4 rounded-xl bg-gray-50 border-2 border-dashed border-gray-300';
+        }
+        meta.classList.add('hidden');
+        statsCol.classList.add('hidden');
+        // 身分區跨全寬：移除 xl:col-span-5，加 xl:col-span-12
+        el.className = 'xl:col-span-12 px-5 py-3 flex items-center gap-3 min-w-0';
+        el.innerHTML = `
+          <div class="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
+            <i data-lucide="mouse-pointer-click" class="w-6 h-6 text-gray-400"></i>
+          </div>
+          <div class="flex-1 min-w-0 py-0.5">
+            <div class="text-sm font-semibold text-gray-700 leading-tight">尚未選擇 CARD_TYPE</div>
+            <div class="text-xs text-gray-500 mt-1">請於下方 Tab 1 選取或新增一筆計分卡類型，或點右側「切換」直接選一張</div>
+          </div>
+        `;
+        // 切換器 reattach 到身分區末尾（小型版本）
+        el.appendChild(switcherWrap);
+        renderCardSwitcherList();
+        applyMonthRunLockButtons();
+        lucide.createIcons();
         return;
       }
+
+      // 已選中：恢復三欄式
+      meta.classList.remove('hidden');
+      statsCol.classList.remove('hidden');
+      el.className = 'xl:col-span-5 px-5 py-3 flex items-center gap-3 min-w-0';
+      // 若先前是 placeholder 狀態（switcher 被 reattach 到 el），需移回 statsCol 的 slot
+      const switcherSlot = document.getElementById('cardSwitcherSlot');
+      if (switcherSlot && switcherWrap.parentElement !== switcherSlot) {
+        switcherSlot.appendChild(switcherWrap);
+      }
+
+      const tileBg = isAmber ? 'bg-amber-500' : 'bg-primary';
+      const stat = cascadePreview[ct.cardType] || { columns: 0, scores: 0, levels: 0, tiers: 0, listDefsAffected: 0 };
+      const dimCount = (dimensionsByType[ct.cardType] || []).length;
+      const scoreCount = (scoresByType[ct.cardType] || []).length;
+      const levelCount = (levelsByType[ct.cardType] || []).length;
+      const tierCount = tiersForCardType(ct.cardType).length;
+      const listDefsAffected = stat.listDefsAffected || 0;
+
+      const fmtDate = (yyyymmdd) => yyyymmdd && yyyymmdd.length === 8
+        ? `${yyyymmdd.slice(0,4)}-${yyyymmdd.slice(4,6)}-${yyyymmdd.slice(6,8)}` : '—';
+      const dashSpan = '<span class="text-gray-300">—</span>';
+      const dash = (v) => (v == null || v === '—' || v === '') ? dashSpan : v;
+      const statusDot = ct.status === 'active'
+        ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>active</span>`
+        : `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>inactive</span>`;
+
+      // === 欄 1：身分區 ===
       el.innerHTML = `
-        目前選中：CARD_TYPE = <span class="font-mono font-semibold text-gray-800">${ct.cardType}</span> ${ct.cardName}
-        <span class="text-gray-300 mx-2">·</span>
-        PROD_KIND = ${prodKindBadge(ct.prodKind, 'sm')}
+        <div class="w-14 h-14 rounded-xl ${tileBg} flex items-center justify-center shrink-0 shadow-sm">
+          <span class="font-mono text-3xl font-bold text-white leading-none">${ct.cardType}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-lg font-semibold text-gray-900 leading-tight truncate">${ct.cardName}</div>
+          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            ${prodKindBadge(ct.prodKind, 'sm')}
+            ${statusDot}
+          </div>
+        </div>
       `;
+
+      // === 欄 2：metadata 三行 ===
+      meta.innerHTML = `
+        <div class="inline-flex items-center gap-1.5" title="cardVersion"><i data-lucide="git-branch" class="w-3 h-3 shrink-0"></i><span class="font-mono text-gray-700">v1</span></div>
+        <div class="inline-flex items-center gap-1.5" title="生效起訖"><i data-lucide="calendar" class="w-3 h-3 shrink-0"></i><span class="truncate">${fmtDate(ct.sdate)} ~ ${fmtDate(ct.edate)}</span></div>
+        <div class="inline-flex items-center gap-1.5 min-w-0" title="建立者 · 建立時間"><i data-lucide="user" class="w-3 h-3 shrink-0"></i><span class="truncate">${dash(ct.createdBy)} · ${dash(ct.createdAt)}</span></div>
+      `;
+
+      // === 欄 3：KPI 5 欄 + 切換器 ===
+      const kpiBtnBase = 'flex flex-col items-center justify-center px-1 py-1.5 rounded-md text-center transition hover:bg-gray-100 focus:outline-none focus:bg-gray-100';
+      const affectedColor = listDefsAffected > 0 ? 'text-amber-600' : 'text-gray-900';
+      const affectedLabelColor = listDefsAffected > 0 ? 'text-amber-700 font-medium' : 'text-gray-500';
+      const affectedIcon = listDefsAffected > 0
+        ? `<i data-lucide="alert-triangle" class="w-3 h-3 text-amber-600 mr-0.5 inline-block align-text-bottom"></i>`
+        : '';
+      // 月跑鎖時 KPI hover 改為 amber-100
+      const kpiBtnTheme = isAmber ? kpiBtnBase.replace('hover:bg-gray-100', 'hover:bg-amber-100').replace('focus:bg-gray-100', 'focus:bg-amber-100') : kpiBtnBase;
+      stats.innerHTML = `
+        <button type="button" onclick="switchTab('dim')" class="${kpiBtnTheme}">
+          <span class="text-base font-bold text-gray-900 leading-none">${dimCount}</span>
+          <span class="text-[10px] text-gray-500 mt-0.5">維度</span>
+        </button>
+        <button type="button" onclick="switchTab('score')" class="${kpiBtnTheme}">
+          <span class="text-base font-bold text-gray-900 leading-none">${scoreCount}</span>
+          <span class="text-[10px] text-gray-500 mt-0.5">分數</span>
+        </button>
+        <button type="button" onclick="switchTab('level')" class="${kpiBtnTheme}">
+          <span class="text-base font-bold text-gray-900 leading-none">${levelCount}</span>
+          <span class="text-[10px] text-gray-500 mt-0.5">LEVEL</span>
+        </button>
+        <button type="button" onclick="switchTab('tier')" class="${kpiBtnTheme}">
+          <span class="text-base font-bold text-gray-900 leading-none">${tierCount}</span>
+          <span class="text-[10px] text-gray-500 mt-0.5">TIER</span>
+        </button>
+        <button type="button" onclick="goToListDefinitions('${ct.cardType}')" class="${kpiBtnTheme}" title="${listDefsAffected > 0 ? '動此 CARD_TYPE 會影響 ' + listDefsAffected + ' 個名單定義' : '目前無名單定義引用此 CARD_TYPE'}">
+          <span class="text-base font-bold ${affectedColor} leading-none">${affectedIcon}${listDefsAffected}</span>
+          <span class="text-[10px] ${affectedLabelColor} mt-0.5">名單</span>
+        </button>
+      `;
+
+      renderCardSwitcherList();
+      applyMonthRunLockButtons();
       lucide.createIcons();
     }
 
-    // ===== Version Strip （Tab 2~5 頂部資訊條） =====
-    function renderVersionStrips() {
-      const strips = document.querySelectorAll('.version-strip');
-      const ct = selectedCardType ? getCardType(selectedCardType) : null;
-      const html = ct ? `
-        <span class="inline-flex items-center gap-1 text-gray-500"><i data-lucide="credit-card" class="w-3.5 h-3.5"></i>CARD_TYPE</span>
-        <span class="font-mono font-semibold text-gray-800">${ct.cardType}</span>
-        <span class="text-gray-700">— ${ct.cardName}</span>
-        <span class="text-gray-300">│</span>
-        ${prodKindBadge(ct.prodKind, 'sm')}
-        <span class="text-gray-300">│</span>
-        <span class="text-gray-500">版本 v1</span>
-        <span class="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] font-medium rounded-full bg-green-100 text-success">
-          <span class="w-1 h-1 rounded-full bg-success"></span>active
-        </span>
-        <span class="text-gray-300">│</span>
-        <span class="font-mono text-gray-500 text-[11px]">${ct.sdate} ~ ${ct.edate}</span>
-      ` : '';
-      strips.forEach(s => s.innerHTML = html);
+    // ===== CARD_TYPE 快速切換器 =====
+    function renderCardSwitcherList() {
+      const list = document.getElementById('cardSwitcherList');
+      if (!list) return;
+      list.innerHTML = cardTypes.map(c => {
+        const isCurrent = c.cardType === selectedCardType;
+        return `
+          <button type="button" onclick="switchCardType('${c.cardType}')"
+            class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition ${isCurrent ? 'bg-blue-50/70 cursor-default' : 'hover:bg-gray-50'}"
+            ${isCurrent ? 'aria-current="true"' : ''}>
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-md ${isCurrent ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700'} font-mono text-xs font-bold shrink-0">${c.cardType}</span>
+            <span class="flex-1 min-w-0">
+              <span class="block font-medium text-gray-900 truncate">${c.cardName}</span>
+              <span class="block text-[11px] text-gray-500 truncate">${prodKinds[c.prodKind] ? prodKinds[c.prodKind].name : '—'} · v1</span>
+            </span>
+            ${isCurrent ? '<span class="text-[10px] font-semibold text-primary uppercase tracking-wide">目前</span>' : ''}
+          </button>
+        `;
+      }).join('');
     }
+
+    function toggleCardSwitcher(ev) {
+      if (ev) ev.stopPropagation();
+      const btn = document.getElementById('cardSwitcherBtn');
+      if (btn.disabled) return;
+      const panel = document.getElementById('cardSwitcherPanel');
+      panel.classList.toggle('hidden');
+    }
+
+    function closeCardSwitcher() {
+      const panel = document.getElementById('cardSwitcherPanel');
+      if (panel) panel.classList.add('hidden');
+    }
+
+    function switchCardType(code) {
+      const panel = document.getElementById('cardSwitcherPanel');
+      panel.classList.add('hidden');
+      if (code === selectedCardType) return;
+      selectedCardType = code;
+      updateBanner();
+      renderCardTypeList();
+      renderDim();
+      renderDimFilter();
+      renderScoreTable();
+      renderLevel();
+      renderTier();
+      showToast('success', `已切換至 CARD_TYPE = ${code}`);
+    }
+
+    // KPI 點擊「引用名單定義」時跳轉（prototype 沒有對應 Tab，先 toast 提示）
+    function goToListDefinitions(code) {
+      showToast('success', `（demo）將導向名單定義頁，篩選 CARD_TYPE = ${code}`);
+    }
+
+    // outside-click / ESC：close switcher
+    document.addEventListener('click', function(ev) {
+      const wrap = document.getElementById('cardSwitcherWrap');
+      if (!wrap) return;
+      if (!wrap.contains(ev.target)) closeCardSwitcher();
+    });
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') closeCardSwitcher();
+    });
 
     // ===== Tab 1: CARD_TYPE 列表 =====
     function renderCardTypeList() {
@@ -1135,7 +1323,6 @@
       selectedCardType = code;
       updateBanner();
       renderCardTypeList();
-      renderVersionStrips();
       renderDim();
       renderDimFilter();
       renderScoreTable();
@@ -1374,21 +1561,17 @@
       ['dim','score','level','tier'].forEach(t => {
         const panel = document.getElementById('panel-' + t);
         const emptyEl = panel.querySelector('.empty-no-selection');
-        const versionEl = panel.querySelector('.version-strip');
         const contentEl = panel.querySelector('.' + t + '-content');
         if (!selectedCardType) {
           if (emptyEl) emptyEl.classList.remove('hidden');
-          if (versionEl) versionEl.classList.add('hidden');
           if (contentEl) contentEl.classList.add('hidden');
         } else {
           if (emptyEl) emptyEl.classList.add('hidden');
-          if (versionEl) versionEl.classList.remove('hidden');
           if (contentEl) contentEl.classList.remove('hidden');
         }
       });
 
       if (selectedCardType) {
-        renderVersionStrips();
         if (name === 'dim') renderDim();
         if (name === 'score') { renderDimFilter(); renderScoreTable(); }
         if (name === 'level') renderLevel();
@@ -1457,7 +1640,6 @@
       closeModal('createCardTypeModal');
       updateBanner();
       renderCardTypeList();
-      renderVersionStrips();
       showToast('success', `已新增 CARD_TYPE = ${code}，並自動建立 v1 版本`);
     }
 
@@ -1494,7 +1676,6 @@
       closeModal('editCardTypeModal');
       updateBanner();
       renderCardTypeList();
-      renderVersionStrips();
       showToast('success', `已更新 CARD_TYPE = ${code}`);
     }
 
@@ -1649,9 +1830,11 @@
       cardTypeListMode = 'normal';
       useLegacyTiers = false;
       document.getElementById('monthLockBanner').classList.add('hidden');
-      // 恢復 PROD_KIND banner 為藍底
+      // 恢復「目前編輯的計分卡」狀態卡為白底（normal 主題）
+      // 註：未選中狀態的 dashed placeholder className 會在 updateBanner() 內覆蓋
+      //     主卡與統計列各自有 padding，外層容器不再帶 px/py
       const banner = document.getElementById('prodKindBanner');
-      banner.className = 'mb-4 rounded-lg p-3 bg-blue-50/60 border border-blue-100 text-sm text-gray-700';
+      banner.className = 'mb-4 rounded-xl bg-white border border-border shadow-sm';
       // 關所有 Modal
       ['createCardTypeModal','editCardTypeModal','deleteCardTypeModal','dimModal','scoreModal','tierModal'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
@@ -1684,12 +1867,12 @@
         monthRunLocked = true;
         selectedCardType = 'H';
         document.getElementById('monthLockBanner').classList.remove('hidden');
-        banner.className = 'mb-4 rounded-lg p-3 bg-amber-50/60 border border-amber-200 text-sm text-gray-700';
+        // 月跑鎖主題：amber-50 底 + amber-200 邊框，updateBanner() 偵測此 className 後會把 tile 切成 amber-500
+        banner.className = 'mb-4 rounded-xl bg-amber-50/60 border border-amber-200 shadow-sm';
       }
 
       updateBanner();
       renderCardTypeList();
-      renderVersionStrips();
       if (selectedCardType) {
         renderDim();
         renderDimFilter();
@@ -1726,7 +1909,6 @@
     function init() {
       updateBanner();
       renderCardTypeList();
-      renderVersionStrips();
       renderDim();
       renderDimFilter();
       renderScoreTable();
