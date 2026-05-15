@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Iter 9：穩定 scrollbar gutter — 避免內容超過 viewport 高度時 scrollbar
+ * 出現/消失引起的主內容區寬度跳動（layout shift ~15px）。
+ *
+ * 套用層級：html（最外層 scroll container；99% 瀏覽器情境）。
+ * 行為：scrollbar 不存在時也保留其槽位空間，內容不再因 scrollbar 出現而擠動。
+ * 支援度：Chrome 94+/Edge 94+/Firefox 97+/Safari 17+；舊瀏覽器 graceful fallback
+ *   為原本行為（仍會 shift，但功能不損）。
+ */
+html {
+  scrollbar-gutter: stable;
+}
