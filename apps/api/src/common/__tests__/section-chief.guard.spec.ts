@@ -18,7 +18,7 @@ function makeContext(user: any): ExecutionContext {
  * SectionChiefGuard：通過條件 = role === 'admin' OR businessRole === 'section_chief'
  * （與 architecture-spec L469 對齊：admin 視為超集；spec 表格僅標 'section_chief' 條件，
  *  但全域規則 admin 一律放行，與其他 Guard 一致；F002 §4.6 規定 admin 自動繼承所有 E07 角色）
- * 失敗錯誤碼：403 AUTH_FORBIDDEN
+ * 失敗錯誤碼：403 E07_REQUIRES_SECTION_CHIEF（F002 v2.0 §4.6.2 / error-handling.md v1.14 / 2026-05-16）
  */
 describe('SectionChiefGuard', () => {
   let guard: SectionChiefGuard;
@@ -46,13 +46,13 @@ describe('SectionChiefGuard', () => {
     expect(guard.canActivate(ctx)).toBe(true);
   });
 
-  it('user + businessRole === director → deny', () => {
+  it('user + businessRole === director → deny 403 E07_REQUIRES_SECTION_CHIEF', () => {
     const ctx = makeContext({ userId: 'u1', role: 'user', businessRole: 'director' });
     expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
     try {
       guard.canActivate(ctx);
     } catch (e: any) {
-      expect(e.response.error).toBe(ERROR_CODES.FORBIDDEN);
+      expect(e.response.error).toBe(ERROR_CODES.E07_REQUIRES_SECTION_CHIEF);
     }
   });
 

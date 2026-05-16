@@ -48,7 +48,13 @@ describe('AuthGuard', () => {
 
     expect(result).toBe(true);
     const request = context.switchToHttp().getRequest() as any;
-    expect(request.user).toEqual({ userId: 'user-123', role: 'admin', isSalesManager: false });
+    expect(request.user).toEqual({
+      userId: 'user-123',
+      role: 'admin',
+      isSalesManager: false,
+      // E07 業務角色（AD-E07 v3.0 / B2 / 2026-05-16）：legacy payload 未含 businessRole → null
+      businessRole: null,
+    });
     expect(mockJwtService.verify).toHaveBeenCalledWith('valid-token');
   });
 

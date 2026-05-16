@@ -39,8 +39,8 @@ export class SectionChiefGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException({
-        error: ERROR_CODES.FORBIDDEN,
-        message: ERROR_MESSAGES.FORBIDDEN,
+        error: ERROR_CODES.E07_REQUIRES_SECTION_CHIEF,
+        message: ERROR_MESSAGES.E07_REQUIRES_SECTION_CHIEF,
       });
     }
 
@@ -54,8 +54,8 @@ export class SectionChiefGuard implements CanActivate {
         `timestamp=${new Date().toISOString()}`,
     );
     throw new ForbiddenException({
-      error: ERROR_CODES.FORBIDDEN,
-      message: ERROR_MESSAGES.FORBIDDEN,
+      error: ERROR_CODES.E07_REQUIRES_SECTION_CHIEF,
+      message: ERROR_MESSAGES.E07_REQUIRES_SECTION_CHIEF,
     });
   }
 }

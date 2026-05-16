@@ -8,7 +8,8 @@
  *   - TC-GUARD-NULL-PK-002：六步驟 cascade 含 Fallback 列完整刪除
  *   - TC-GUARD-RUN-SEED-001：AssignmentRun seed 必須含 4 個 NOT NULL 欄位（run_id /
  *     project_workym / triggered_by / created_at）
- *   - TC-GUARD-GUARD-001：F069~F072 全端點 SalesManagerGuard 403 覆蓋
+ *   - TC-GUARD-GUARD-001：F069~F072 全端點 RBAC 覆蓋（B2 替換後：
+ *     GET 端點 DirectorOrSectionChiefGuard / 寫入端點 DirectorGuard）
  *
  * 非 DB 行為（fs / metadata 層）由 unit spec 覆蓋：
  *   - TC-GUARD-TIMESTAMP-001 / TC-GUARD-ERRORCODE-001：見
@@ -43,14 +44,26 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 
-const SM_USER = {
+// B2 替換：以 business_role 標記角色（取代既有 is_sales_manager）
+const DIRECTOR_USER = {
   id: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
-  name: 'Guard SM',
-  email: 'guard-sm@cdmp.test',
+  name: 'Guard Director',
+  email: 'guard-director@cdmp.test',
   password: 'P@ssw0rd123',
   role: 'user' as const,
   status: 'active' as const,
-  is_sales_manager: true,
+  is_sales_manager: false, // legacy 欄位，保留 default 不影響
+  business_role: 'director' as const,
+};
+const SECTION_CHIEF_USER = {
+  id: 'c1d2e3f4-a5b6-7890-cdef-012345678901',
+  name: 'Guard SectionChief',
+  email: 'guard-sc@cdmp.test',
+  password: 'P@ssw0rd123',
+  role: 'user' as const,
+  status: 'active' as const,
+  is_sales_manager: false,
+  business_role: 'section_chief' as const,
 };
 const PLAIN_USER = {
   id: 'b2c3d4e5-f6a7-8901-bcde-f01234567890',
@@ -60,6 +73,7 @@ const PLAIN_USER = {
   role: 'user' as const,
   status: 'active' as const,
   is_sales_manager: false,
+  business_role: null,
 };
 
 async function createTestApp(): Promise<INestApplication> {
@@ -112,7 +126,7 @@ async function createTestApp(): Promise<INestApplication> {
   const ds = moduleFixture.get(DataSource);
   const userRepo = ds.getRepository(User);
   const passwordHash = await HashUtil.hash('P@ssw0rd123');
-  for (const u of [SM_USER, PLAIN_USER]) {
+  for (const u of [DIRECTOR_USER, SECTION_CHIEF_USER, PLAIN_USER]) {
     await userRepo.save(
       userRepo.create({
         id: u.id,
@@ -122,6 +136,7 @@ async function createTestApp(): Promise<INestApplication> {
         role: u.role,
         status: u.status,
         is_sales_manager: u.is_sales_manager,
+        business_role: u.business_role,
       }),
     );
   }
@@ -137,14 +152,16 @@ async function login(app: INestApplication, email: string): Promise<string> {
 
 describe('M02 Regression Guards (Iter 6)', () => {
   let app: INestApplication;
-  let smToken: string;
+  let directorToken: string;
+  let sectionChiefToken: string;
   let plainToken: string;
   let ds: DataSource;
 
   beforeAll(async () => {
     app = await createTestApp();
     ds = app.get(DataSource);
-    smToken = await login(app, SM_USER.email);
+    directorToken = await login(app, DIRECTOR_USER.email);
+    sectionChiefToken = await login(app, SECTION_CHIEF_USER.email);
     plainToken = await login(app, PLAIN_USER.email);
   });
 
@@ -197,7 +214,7 @@ describe('M02 Regression Guards (Iter 6)', () => {
     // 省略 cardLevel query → service 解讀為 fallback NULL
     const res = await request(app.getHttpServer())
       .delete('/api/v1/assignment/scoring/tier-mapping?cardType=XTEST')
-      .set('Authorization', `Bearer ${smToken}`);
+      .set('Authorization', `Bearer ${directorToken}`);
     expect(res.status).toBe(200);
     expect(res.body.cardLevel).toBeNull();
 
@@ -225,7 +242,7 @@ describe('M02 Regression Guards (Iter 6)', () => {
 
     const res = await request(app.getHttpServer())
       .delete('/api/v1/assignment/scoring/card-types/X?confirmCascade=true')
-      .set('Authorization', `Bearer ${smToken}`);
+      .set('Authorization', `Bearer ${directorToken}`);
     expect(res.status).toBe(200);
 
     const remaining = await ds
@@ -261,7 +278,7 @@ describe('M02 Regression Guards (Iter 6)', () => {
       await ds.getRepository(AssignmentRun).save({
         run_id: 'r-missing-created-at',
         project_workym: '202604',
-        triggered_by: SM_USER.id,
+        triggered_by: DIRECTOR_USER.id,
         status: 'pending',
         // created_at 缺漏
       } as any);
@@ -275,7 +292,7 @@ describe('M02 Regression Guards (Iter 6)', () => {
     await ds.getRepository(AssignmentRun).save({
       run_id: 'r-complete',
       project_workym: '202604',
-      triggered_by: SM_USER.id,
+      triggered_by: DIRECTOR_USER.id,
       status: 'pending',
       created_at: now,
     } as any);
@@ -284,15 +301,24 @@ describe('M02 Regression Guards (Iter 6)', () => {
   });
 
   // =========================================================================
-  // TC-GUARD-GUARD-001：F069~F072 SalesManagerGuard 覆蓋矩陣
+  // TC-GUARD-GUARD-001：F069~F072 RBAC 覆蓋矩陣（B2 替換後）
+  //   GET 端點 → DirectorOrSectionChiefGuard（director / section_chief / admin pass）
+  //   寫入端點 → DirectorGuard（director / admin pass；section_chief 403）
   // =========================================================================
-  describe('TC-GUARD-GUARD-001：F069~F072 SalesManagerGuard 覆蓋', () => {
-    const endpoints = [
-      { name: 'GET /card-types', method: 'get' as const, path: '/api/v1/assignment/scoring/card-types' },
-      { name: 'POST /card-types', method: 'post' as const, path: '/api/v1/assignment/scoring/card-types', body: { cardType: 'X', cardName: 'x', prodKind: '01' } },
-      { name: 'PUT /card-types/:cardType', method: 'put' as const, path: '/api/v1/assignment/scoring/card-types/H', body: { cardName: 'x', prodKind: '01' } },
-      { name: 'GET /card-types/:cardType/delete-preview', method: 'get' as const, path: '/api/v1/assignment/scoring/card-types/H/delete-preview' },
-      { name: 'DELETE /card-types/:cardType', method: 'delete' as const, path: '/api/v1/assignment/scoring/card-types/H?confirmCascade=true' },
+  describe('TC-GUARD-GUARD-001：F069~F072 RBAC 覆蓋（B2 替換後）', () => {
+    type EP = {
+      name: string;
+      method: 'get' | 'post' | 'put' | 'delete';
+      path: string;
+      body?: any;
+      isWrite: boolean;
+    };
+    const endpoints: EP[] = [
+      { name: 'GET /card-types', method: 'get', path: '/api/v1/assignment/scoring/card-types', isWrite: false },
+      { name: 'POST /card-types', method: 'post', path: '/api/v1/assignment/scoring/card-types', body: { cardType: 'X', cardName: 'x', prodKind: '01' }, isWrite: true },
+      { name: 'PUT /card-types/:cardType', method: 'put', path: '/api/v1/assignment/scoring/card-types/H', body: { cardName: 'x', prodKind: '01' }, isWrite: true },
+      { name: 'GET /card-types/:cardType/delete-preview', method: 'get', path: '/api/v1/assignment/scoring/card-types/H/delete-preview', isWrite: false },
+      { name: 'DELETE /card-types/:cardType', method: 'delete', path: '/api/v1/assignment/scoring/card-types/H?confirmCascade=true', isWrite: true },
     ];
 
     for (const ep of endpoints) {
@@ -302,7 +328,7 @@ describe('M02 Regression Guards (Iter 6)', () => {
         const res = await req;
         expect(res.status).toBe(401);
       });
-      it(`${ep.name} → 非 SM 403`, async () => {
+      it(`${ep.name} → plain user 403 E07_ROLE_NOT_ASSIGNED`, async () => {
         let req = request(app.getHttpServer())[ep.method](ep.path).set(
           'Authorization',
           `Bearer ${plainToken}`,
@@ -310,8 +336,30 @@ describe('M02 Regression Guards (Iter 6)', () => {
         if (ep.body) req = req.send(ep.body);
         const res = await req;
         expect(res.status).toBe(403);
-        expect(res.body.error).toBe('AUTH_FORBIDDEN');
+        expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
       });
+      if (ep.isWrite) {
+        it(`${ep.name} → section_chief 403 E07_REQUIRES_DIRECTOR（寫入限部長）`, async () => {
+          let req = request(app.getHttpServer())[ep.method](ep.path).set(
+            'Authorization',
+            `Bearer ${sectionChiefToken}`,
+          );
+          if (ep.body) req = req.send(ep.body);
+          const res = await req;
+          expect(res.status).toBe(403);
+          expect(res.body.error).toBe('E07_REQUIRES_DIRECTOR');
+        });
+      } else {
+        it(`${ep.name} → section_chief 通過（GET 開放至處長）`, async () => {
+          let req = request(app.getHttpServer())[ep.method](ep.path).set(
+            'Authorization',
+            `Bearer ${sectionChiefToken}`,
+          );
+          if (ep.body) req = req.send(ep.body);
+          const res = await req;
+          expect([200, 404]).toContain(res.status);
+        });
+      }
     }
   });
 });

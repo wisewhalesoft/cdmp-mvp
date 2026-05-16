@@ -23,6 +23,8 @@ import { RolesModule } from './modules/roles/roles.module';
 import { C360Module } from './modules/c360/c360.module';
 import { AssignmentCodeModule } from './modules/assignment-code/assignment-code.module';
 import { AssignmentScoringModule } from './modules/assignment-scoring/assignment-scoring.module';
+import { AssignmentListModule } from './modules/assignment-list/assignment-list.module';
+import { SystemModule } from './modules/system/system.module';
 import { Role } from './database/entities/role.entity';
 // === E07 Entities (Track A — 19 表)===
 import { ObCodeDf } from './database/entities/ob-code-df.entity';
@@ -108,6 +110,8 @@ const E07_ENTITIES = [
     C360Module,
     AssignmentCodeModule,
     AssignmentScoringModule,
+    AssignmentListModule,
+    SystemModule,
   ],
   providers: [],
 })

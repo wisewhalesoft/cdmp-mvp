@@ -1,40 +1,20 @@
 /**
  * F068：AssignmentCodeController Integration Tests
  *
- * 策略：採 mocked AssignmentCodeService + mocked AuthGuard / SalesManagerGuard
- * (覆寫 .canActivate 控制不同 user role)，避開 sqlite 對 ObCodeDf 的 timestamp 限制。
+ * 策略：採 mocked AssignmentCodeService + mocked AuthGuard
+ * 並真實掛載 DirectorOrSectionChiefGuard + DirectorGuard（透過 metadata key 控制行為），
+ * 避開 sqlite 對 ObCodeDf 的 timestamp 限制。
  *
  * DB 互動行為由 Service Unit Spec 驗證；本 spec 重點：
  *   - Route binding (4 端點)
  *   - Guard chain 行為（401 / 403 / 200 + 404 / 422 transparent pass-through）
  *   - ValidationPipe DTO 驗證（whitelist / forbidNonWhitelisted / transform）
  *
- * 涵蓋 15 cases：
- *
- * A. Route + Guard chain（5 cases）
- *   1. 未帶 JWT → 401 AUTH_TOKEN_MISSING（AuthGuard 拒）
- *   2. role=user 非業務主管 → 403 AUTH_FORBIDDEN（SalesManagerGuard 拒）
- *   3. admin 通過
- *   4. role=user + is_sales_manager=true 通過
- *   5. SalesManagerGuard 在 AuthGuard 之後執行
- *
- * B. GET /assignment/codes（3 cases）
- *   6. 缺 tblId → 422 VALIDATION_ERROR（CDMP HttpExceptionFilter 統一將 ValidationPipe 錯誤轉 422）
- *   7. Service throw CODE_TYPE_INVALID 透傳 422
- *   8. includeInactive='true' query 轉 boolean
- *
- * C. POST /assignment/codes（3 cases）
- *   9. tblCd 缺失 → 422 VALIDATION_ERROR
- *  10. 完整 body → 201
- *  11. tbl_desc1 > 40 字元 → 422 VALIDATION_ERROR
- *
- * D. PUT /:tblId/:tblCd（2 cases）
- *  12. Service throw CODE_NOT_FOUND 透傳 404
- *  13. tbl_desc1 缺失 → 422 VALIDATION_ERROR
- *
- * E. PUT /:tblId/:tblCd/disable（2 cases）
- *  14. 成功透傳 200
- *  15. Service throw CODE_NOT_FOUND 透傳 404
+ * RBAC 角色矩陣（依 F002 §4.6.2 / AD-E07 v3.0 / B2 替換後）：
+ *   - GET → DirectorOrSectionChiefGuard：director / section_chief / admin 通過
+ *   - POST / PUT / DELETE → DirectorGuard：director / admin 通過；section_chief 拒
+ *   - 一般 user（businessRole=null）：所有端點被 DirectorOrSectionChiefGuard 拒
+ *     回 E07_ROLE_NOT_ASSIGNED
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
@@ -45,18 +25,22 @@ import {
   NotFoundException,
   UnprocessableEntityException,
   UnauthorizedException,
-  ForbiddenException,
   ExecutionContext,
 } from '@nestjs/common';
 import request from 'supertest';
 import { AssignmentCodeController } from '../assignment-code.controller';
 import { AssignmentCodeService } from '../assignment-code.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
-import { SalesManagerGuard } from '@/common/guards/sales-manager.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
-type CurrentUser = { userId: string; role: string; isSalesManager: boolean } | null;
+type CurrentUser =
+  | {
+      userId: string;
+      role: string;
+      businessRole: 'director' | 'section_chief' | null;
+    }
+  | null;
 
 describe('AssignmentCodeController (HTTP integration)', () => {
   let app: INestApplication;
@@ -92,7 +76,8 @@ describe('AssignmentCodeController (HTTP integration)', () => {
       },
     };
 
-    // 真實 SalesManagerGuard 但 reflector 需要的 metadata 已由 @RequireSalesManager() 注入
+    // 真實 Director(OrSectionChief)Guard：依 controller 上的 @RequireDirector /
+    // @RequireDirectorOrSectionChief metadata 與 request.user.businessRole 判定
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [AssignmentCodeController],
       providers: [{ provide: AssignmentCodeService, useValue: serviceMock }],
@@ -124,13 +109,20 @@ describe('AssignmentCodeController (HTTP integration)', () => {
   });
 
   function asAdmin() {
-    currentUser = { userId: 'admin-id', role: 'admin', isSalesManager: false };
+    currentUser = { userId: 'admin-id', role: 'admin', businessRole: null };
   }
-  function asSalesManager() {
-    currentUser = { userId: 'sm-id', role: 'user', isSalesManager: true };
+  function asDirector() {
+    currentUser = { userId: 'dir-id', role: 'user', businessRole: 'director' };
+  }
+  function asSectionChief() {
+    currentUser = {
+      userId: 'sc-id',
+      role: 'user',
+      businessRole: 'section_chief',
+    };
   }
   function asPlainUser() {
-    currentUser = { userId: 'user-id', role: 'user', isSalesManager: false };
+    currentUser = { userId: 'user-id', role: 'user', businessRole: null };
   }
 
   // ===== A. Route + Guard chain =====
@@ -143,15 +135,15 @@ describe('AssignmentCodeController (HTTP integration)', () => {
     expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
   });
 
-  it('2) role=user 非業務主管 → 403 AUTH_FORBIDDEN（SalesManagerGuard 拒）', async () => {
+  it('2) role=user businessRole=null → 403 E07_ROLE_NOT_ASSIGNED（DirectorOrSectionChiefGuard 拒）', async () => {
     asPlainUser();
     const res = await request(app.getHttpServer())
       .get('/api/v1/assignment/codes?tblId=PROD_KIND');
     expect(res.status).toBe(403);
-    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+    expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
   });
 
-  it('3) admin 通過', async () => {
+  it('3) admin GET → 通過', async () => {
     asAdmin();
     serviceMock.listCodes.mockResolvedValue({ tblId: 'PROD_KIND', data: [] });
     const res = await request(app.getHttpServer())
@@ -160,16 +152,34 @@ describe('AssignmentCodeController (HTTP integration)', () => {
     expect(res.body.tblId).toBe('PROD_KIND');
   });
 
-  it('4) role=user + is_sales_manager=true 通過', async () => {
-    asSalesManager();
+  it('4a) director GET → 通過', async () => {
+    asDirector();
     serviceMock.listCodes.mockResolvedValue({ tblId: 'PROD_KIND', data: [] });
     const res = await request(app.getHttpServer())
       .get('/api/v1/assignment/codes?tblId=PROD_KIND');
     expect(res.status).toBe(200);
   });
 
-  it('5) SalesManagerGuard 在 AuthGuard 之後執行', async () => {
-    // 未登入 + 非 SM → AuthGuard 應先拒（401），不會走到 SalesManagerGuard（403）
+  it('4b) section_chief GET → 通過（瀏覽開放）', async () => {
+    asSectionChief();
+    serviceMock.listCodes.mockResolvedValue({ tblId: 'PROD_KIND', data: [] });
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/assignment/codes?tblId=PROD_KIND');
+    expect(res.status).toBe(200);
+  });
+
+  it('4c) section_chief POST → 403 E07_REQUIRES_DIRECTOR（寫入限部長）', async () => {
+    asSectionChief();
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/assignment/codes')
+      .send({ tblId: 'PROD_KIND', tblCd: '05', tblDesc1: 'X' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('E07_REQUIRES_DIRECTOR');
+    expect(serviceMock.createCode).not.toHaveBeenCalled();
+  });
+
+  it('5) AuthGuard 在 RBAC Guard 之前執行', async () => {
+    // 未登入 + 非角色 → AuthGuard 應先拒（401），不會走到 RBAC Guard（403）
     currentUser = null;
     const res = await request(app.getHttpServer())
       .post('/api/v1/assignment/codes')
@@ -218,7 +228,7 @@ describe('AssignmentCodeController (HTTP integration)', () => {
   // ===== C. POST /assignment/codes =====
 
   it('9) tblCd 缺失 → 422 VALIDATION_ERROR', async () => {
-    asAdmin();
+    asDirector();
     const res = await request(app.getHttpServer())
       .post('/api/v1/assignment/codes')
       .send({ tblId: 'PROD_KIND', tblDesc1: '商用車' });
@@ -227,8 +237,8 @@ describe('AssignmentCodeController (HTTP integration)', () => {
     expect(serviceMock.createCode).not.toHaveBeenCalled();
   });
 
-  it('10) 完整 body → 201', async () => {
-    asAdmin();
+  it('10) 完整 body → 201（director 通過）', async () => {
+    asDirector();
     serviceMock.createCode.mockResolvedValue({
       tblCd: '05',
       tblDesc1: '商用車',
@@ -244,12 +254,12 @@ describe('AssignmentCodeController (HTTP integration)', () => {
     expect(res.body.tblCd).toBe('05');
     expect(serviceMock.createCode).toHaveBeenCalledWith(
       { tblId: 'PROD_KIND', tblCd: '05', tblDesc1: '商用車' },
-      expect.objectContaining({ userId: 'admin-id' }),
+      expect.objectContaining({ userId: 'dir-id' }),
     );
   });
 
   it('11) tbl_desc1 > 40 字元 → 422 VALIDATION_ERROR', async () => {
-    asAdmin();
+    asDirector();
     const longDesc = 'A'.repeat(41);
     const res = await request(app.getHttpServer())
       .post('/api/v1/assignment/codes')
@@ -261,7 +271,7 @@ describe('AssignmentCodeController (HTTP integration)', () => {
   // ===== D. PUT /:tblId/:tblCd =====
 
   it('12) Service throw CODE_NOT_FOUND 透傳 404', async () => {
-    asAdmin();
+    asDirector();
     serviceMock.updateCode.mockRejectedValue(
       new NotFoundException({
         error: ERROR_CODES.CODE_NOT_FOUND,
@@ -276,7 +286,7 @@ describe('AssignmentCodeController (HTTP integration)', () => {
   });
 
   it('13) tbl_desc1 缺失 → 422 VALIDATION_ERROR', async () => {
-    asAdmin();
+    asDirector();
     const res = await request(app.getHttpServer())
       .put('/api/v1/assignment/codes/PROD_KIND/01')
       .send({});
@@ -287,8 +297,8 @@ describe('AssignmentCodeController (HTTP integration)', () => {
 
   // ===== E. PUT /:tblId/:tblCd/disable =====
 
-  it('14) 成功透傳 200', async () => {
-    asAdmin();
+  it('14) 成功透傳 200（director 通過）', async () => {
+    asDirector();
     serviceMock.disableCode.mockResolvedValue({
       tblCd: '01',
       tblDesc1: 'X',
@@ -303,12 +313,12 @@ describe('AssignmentCodeController (HTTP integration)', () => {
     expect(serviceMock.disableCode).toHaveBeenCalledWith(
       'PROD_KIND',
       '01',
-      expect.objectContaining({ userId: 'admin-id' }),
+      expect.objectContaining({ userId: 'dir-id' }),
     );
   });
 
   it('15) disable 找不到 → 404 CODE_NOT_FOUND', async () => {
-    asAdmin();
+    asDirector();
     serviceMock.disableCode.mockRejectedValue(
       new NotFoundException({
         error: ERROR_CODES.CODE_NOT_FOUND,

@@ -1,19 +1,20 @@
 /**
- * F069/F070/F071/F072 / CardTypeController — Route + Guard Matrix Tests
+ * F069/F070/F071/F072 / CardTypeController — Route + RBAC Matrix Tests
  *
- * 策略：mocked Service + overridden AuthGuard / SalesManagerGuard
- *   （與既有 assignment-scoring-f053.controller.spec.ts 同 pattern）
+ * 策略：mocked Service + mocked AuthGuard + 真實 RBAC Guard chain
+ *   （依 AD-E07 v3.0 / F002 §4.6.2 / B2 替換後）
  *
- * 涵蓋 Guard 矩陣（依 test-spec regression/M02-regression-guards.md TC-GUARD-GUARD-001）：
- *   4 endpoints × 3 角色 = 12 cases，加上 POST + delete-preview 為 5 個 controller endpoint：
+ * RBAC：
+ *   - GET → DirectorOrSectionChiefGuard：director / section_chief / admin 通過
+ *   - POST / PUT / DELETE → DirectorGuard：director / admin 通過；section_chief 拒
+ *
+ * 涵蓋 6 端點 × 4 角色（unauthenticated / plain user / section_chief / director）矩陣：
  *     - GET    /card-types
  *     - POST   /card-types
  *     - PUT    /card-types/:cardType
  *     - GET    /card-types/:cardType/delete-preview
  *     - DELETE /card-types/:cardType
- *   每個端點驗證：(1) 未登入 → 401 AUTH_TOKEN_MISSING
- *                (2) is_sales_manager=false → 403 AUTH_FORBIDDEN
- *                (3) admin 通過 / SM 通過
+ *     - GET    /card-types/:cardType/stats
  */
 
 import {
@@ -28,7 +29,6 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   ExecutionContext,
-  ForbiddenException,
   INestApplication,
   UnauthorizedException,
   ValidationPipe,
@@ -37,14 +37,17 @@ import request from 'supertest';
 import { CardTypeController } from '../controllers/card-type.controller';
 import { CardTypeService } from '../services/card-type.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
-import { SalesManagerGuard } from '@/common/guards/sales-manager.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 
 type CurrentUser =
-  | { userId: string; role: string; isSalesManager: boolean }
+  | {
+      userId: string;
+      role: string;
+      businessRole: 'director' | 'section_chief' | null;
+    }
   | null;
 
-describe('CardTypeController — Guard Matrix', () => {
+describe('CardTypeController — RBAC Matrix', () => {
   let app: INestApplication;
   let serviceMock: {
     listCardTypes: ReturnType<typeof vi.fn>;
@@ -117,24 +120,6 @@ describe('CardTypeController — Guard Matrix', () => {
           return true;
         },
       })
-      .overrideGuard(SalesManagerGuard)
-      .useValue({
-        canActivate: (ctx: ExecutionContext) => {
-          const req = ctx.switchToHttp().getRequest();
-          const u = req.user;
-          if (!u) {
-            throw new ForbiddenException({
-              error: 'AUTH_FORBIDDEN',
-              message: '您沒有權限執行此操作。',
-            });
-          }
-          if (u.role === 'admin' || u.isSalesManager === true) return true;
-          throw new ForbiddenException({
-            error: 'AUTH_FORBIDDEN',
-            message: '您沒有權限執行此操作。',
-          });
-        },
-      })
       .compile();
 
     app = module.createNestApplication();
@@ -160,41 +145,53 @@ describe('CardTypeController — Guard Matrix', () => {
     vi.clearAllMocks();
   });
 
-  // ===== 認證矩陣（4 端點 × 3 角色） =====
-
-  const endpoints: Array<{
+  type Method = 'get' | 'post' | 'put' | 'delete';
+  type Endpoint = {
     name: string;
-    method: 'get' | 'post' | 'put' | 'delete';
+    method: Method;
     path: string;
+    isWrite: boolean;
     body?: any;
-  }> = [
-    { name: 'GET /card-types', method: 'get', path: '/api/v1/assignment/scoring/card-types' },
+  };
+
+  const endpoints: Endpoint[] = [
+    {
+      name: 'GET /card-types',
+      method: 'get',
+      path: '/api/v1/assignment/scoring/card-types',
+      isWrite: false,
+    },
     {
       name: 'POST /card-types',
       method: 'post',
       path: '/api/v1/assignment/scoring/card-types',
+      isWrite: true,
       body: { cardType: 'X1', cardName: '測試卡', prodKind: '01' },
     },
     {
       name: 'PUT /card-types/:cardType',
       method: 'put',
       path: '/api/v1/assignment/scoring/card-types/H',
+      isWrite: true,
       body: { cardName: '新名稱', prodKind: '01' },
     },
     {
       name: 'GET /card-types/:cardType/delete-preview',
       method: 'get',
       path: '/api/v1/assignment/scoring/card-types/X/delete-preview',
+      isWrite: false,
     },
     {
       name: 'DELETE /card-types/:cardType',
       method: 'delete',
       path: '/api/v1/assignment/scoring/card-types/X?confirmCascade=true',
+      isWrite: true,
     },
     {
       name: 'GET /card-types/:cardType/stats',
       method: 'get',
       path: '/api/v1/assignment/scoring/card-types/H/stats',
+      isWrite: false,
     },
   ];
 
@@ -209,20 +206,47 @@ describe('CardTypeController — Guard Matrix', () => {
         expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
       });
 
-      it('非業務主管 (is_sales_manager=false) → 403 AUTH_FORBIDDEN', async () => {
-        currentUser = { userId: 'u1', role: 'user', isSalesManager: false };
+      it('businessRole=null → 403 E07_ROLE_NOT_ASSIGNED', async () => {
+        currentUser = { userId: 'u1', role: 'user', businessRole: null };
         let req = request(app.getHttpServer())[ep.method](ep.path);
         if (ep.body) req = req.send(ep.body);
         const res = await req;
         expect(res.status).toBe(403);
-        expect(res.body.error).toBe('AUTH_FORBIDDEN');
+        expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
       });
 
-      it('業務主管（is_sales_manager=true）通過', async () => {
+      if (ep.isWrite) {
+        it('section_chief → 403 E07_REQUIRES_DIRECTOR（寫入限部長）', async () => {
+          currentUser = {
+            userId: 'sc-uuid',
+            role: 'user',
+            businessRole: 'section_chief',
+          };
+          let req = request(app.getHttpServer())[ep.method](ep.path);
+          if (ep.body) req = req.send(ep.body);
+          const res = await req;
+          expect(res.status).toBe(403);
+          expect(res.body.error).toBe('E07_REQUIRES_DIRECTOR');
+        });
+      } else {
+        it('section_chief 通過（GET 開放）', async () => {
+          currentUser = {
+            userId: 'sc-uuid',
+            role: 'user',
+            businessRole: 'section_chief',
+          };
+          let req = request(app.getHttpServer())[ep.method](ep.path);
+          if (ep.body) req = req.send(ep.body);
+          const res = await req;
+          expect([200, 201]).toContain(res.status);
+        });
+      }
+
+      it('director 通過', async () => {
         currentUser = {
-          userId: 'sm-uuid',
+          userId: 'dir-uuid',
           role: 'user',
-          isSalesManager: true,
+          businessRole: 'director',
         };
         let req = request(app.getHttpServer())[ep.method](ep.path);
         if (ep.body) req = req.send(ep.body);
@@ -231,7 +255,7 @@ describe('CardTypeController — Guard Matrix', () => {
       });
 
       it('admin 通過（豁免規則）', async () => {
-        currentUser = { userId: 'admin-uuid', role: 'admin', isSalesManager: false };
+        currentUser = { userId: 'admin-uuid', role: 'admin', businessRole: null };
         let req = request(app.getHttpServer())[ep.method](ep.path);
         if (ep.body) req = req.send(ep.body);
         const res = await req;
@@ -243,7 +267,11 @@ describe('CardTypeController — Guard Matrix', () => {
   // ===== AC-2 (F071)：body 含 cardType 後端忽略，URL path 為準 =====
   describe('PUT body 含 cardType 欄位時後端忽略（AC-2）', () => {
     it('TC-F071-02：body { cardType: TAMPERED } → service.updateCardType 仍以 path H 為準', async () => {
-      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      currentUser = {
+        userId: 'dir-uuid',
+        role: 'user',
+        businessRole: 'director',
+      };
 
       const res = await request(app.getHttpServer())
         .put('/api/v1/assignment/scoring/card-types/H')
@@ -259,7 +287,7 @@ describe('CardTypeController — Guard Matrix', () => {
       expect(serviceMock.updateCardType).toHaveBeenCalledWith(
         'H',
         { cardName: '新名稱', prodKind: '01' },
-        expect.objectContaining({ userId: 'sm-uuid' }),
+        expect.objectContaining({ userId: 'dir-uuid' }),
       );
     });
   });
@@ -267,7 +295,11 @@ describe('CardTypeController — Guard Matrix', () => {
   // ===== F069 status query =====
   describe('GET status query', () => {
     it('未帶 status → service 收到 status=undefined（service 自行套用 active 預設）', async () => {
-      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      currentUser = {
+        userId: 'dir-uuid',
+        role: 'user',
+        businessRole: 'director',
+      };
       await request(app.getHttpServer()).get(
         '/api/v1/assignment/scoring/card-types',
       );
@@ -278,7 +310,11 @@ describe('CardTypeController — Guard Matrix', () => {
     });
 
     it('status=all → service 收到 status=all', async () => {
-      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      currentUser = {
+        userId: 'dir-uuid',
+        role: 'user',
+        businessRole: 'director',
+      };
       await request(app.getHttpServer()).get(
         '/api/v1/assignment/scoring/card-types?status=all',
       );
@@ -287,7 +323,11 @@ describe('CardTypeController — Guard Matrix', () => {
     });
 
     it('status=invalid → 422 VALIDATION_ERROR', async () => {
-      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      currentUser = {
+        userId: 'dir-uuid',
+        role: 'user',
+        businessRole: 'director',
+      };
       const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/scoring/card-types?status=invalid',
       );
@@ -297,8 +337,12 @@ describe('CardTypeController — Guard Matrix', () => {
 
   // ===== Iter 9 / GET /:cardType/stats =====
   describe('GET /:cardType/stats — Iter 9', () => {
-    it('200 with stats body（業務主管）', async () => {
-      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+    it('200 with stats body（section_chief 亦可讀）', async () => {
+      currentUser = {
+        userId: 'sc-uuid',
+        role: 'user',
+        businessRole: 'section_chief',
+      };
       const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/scoring/card-types/H/stats',
       );
@@ -315,7 +359,11 @@ describe('CardTypeController — Guard Matrix', () => {
     });
 
     it('404 當 cardType 不存在（透傳 service NotFoundException）', async () => {
-      currentUser = { userId: 'sm-uuid', role: 'user', isSalesManager: true };
+      currentUser = {
+        userId: 'dir-uuid',
+        role: 'user',
+        businessRole: 'director',
+      };
       const { NotFoundException } = await import('@nestjs/common');
       serviceMock.getCardTypeStats.mockRejectedValueOnce(
         new NotFoundException({

@@ -16,7 +16,7 @@ function makeContext(user: any): ExecutionContext {
 
 /**
  * DirectorGuard：通過條件 = role === 'admin' OR businessRole === 'director'
- * 失敗錯誤碼：403 AUTH_FORBIDDEN（部長專屬功能不揭露範圍）
+ * 失敗錯誤碼：403 E07_REQUIRES_DIRECTOR（F002 v2.0 §4.6.2 / error-handling.md v1.14 / 2026-05-16）
  * 對應 spec：architecture-spec.md §E07 Guard 清單；F002 v2.0 §4.6
  */
 describe('DirectorGuard', () => {
@@ -46,13 +46,13 @@ describe('DirectorGuard', () => {
     expect(guard.canActivate(ctx)).toBe(true);
   });
 
-  it('user + businessRole === section_chief → deny 403 AUTH_FORBIDDEN', () => {
+  it('user + businessRole === section_chief → deny 403 E07_REQUIRES_DIRECTOR', () => {
     const ctx = makeContext({ userId: 'u1', role: 'user', businessRole: 'section_chief' });
     expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
     try {
       guard.canActivate(ctx);
     } catch (e: any) {
-      expect(e.response.error).toBe(ERROR_CODES.FORBIDDEN);
+      expect(e.response.error).toBe(ERROR_CODES.E07_REQUIRES_DIRECTOR);
     }
   });
 

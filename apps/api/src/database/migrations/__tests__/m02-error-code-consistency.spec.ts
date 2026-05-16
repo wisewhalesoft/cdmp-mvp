@@ -11,6 +11,7 @@
  *      - 舊 `CARD_LEVEL_NOT_FOUND`（裸名）應不再出現（已拆分為 IN_VERSION / RECORD / REFERENCED）
  *      - F069~F072 新增錯誤碼存在
  *      - F056 v1.5 新增 TIER_LEVEL_INVALID_ENUM / CARD_TYPE_FALLBACK_STANDARD_MUTEX 存在
+ *      - F055 v1.5 新增 CARD_LEVEL_DUPLICATE（POST §5.4 / BR-9）
  *   2. TC-GUARD-TIMESTAMP-001：ob_card_type entity 日期欄位採 dateColumnType helper
  */
 
@@ -43,6 +44,8 @@ describe('TC-GUARD-ERRORCODE-001：M02 錯誤碼一致性 (fs + JS regex)', () =
       'CARD_LEVEL_NOT_FOUND_IN_VERSION',
       'CARD_LEVEL_RECORD_NOT_FOUND',
       'CARD_LEVEL_REFERENCED',
+      // F055 v1.5 §5.4 POST 新增（error-handling.md v1.9 / F055 BR-9）
+      'CARD_LEVEL_DUPLICATE',
     ]);
     const invalidTokens = new Set<string>();
     for (const occ of allOccurrences) {

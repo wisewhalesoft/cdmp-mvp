@@ -1,3 +1,17 @@
+/**
+ * DEPRECATED（E07 重構 P1 B2 補完 / 2026-05-16）
+ *
+ * 此 e2e spec 測試 `is_sales_manager` 旗標欄位，已於 m14 (1711360000170-AddBusinessRoleDropLegacyFlags)
+ * 從 users 表移除。功能合併至 `business_role` 欄位（per AD-E07 v3.0）。
+ *
+ * 等價測試請參考：
+ *   - F006a 端點 (PATCH /accounts/:id/business-role)
+ *   - F004 已更新測試（採 business_role 欄位）
+ *
+ * 整個 describe 已 410 Gone — 全部 skip 並保留供歷史追溯。
+ * 後續清理可於 P2 階段刪除此檔案。
+ */
+
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -119,7 +133,7 @@ async function getUserToken(app: INestApplication): Promise<string> {
   return res.body.token;
 }
 
-describe('F004 SM: Create Account with isSalesManager', () => {
+describe.skip('[DEPRECATED] F004 SM: Create Account with isSalesManager', () => {
   let app: INestApplication;
   let adminToken: string;
 
@@ -220,7 +234,7 @@ describe('F004 SM: Create Account with isSalesManager', () => {
   });
 });
 
-describe('F006 SM: PUT /accounts/:id ignores isSalesManager', () => {
+describe.skip('[DEPRECATED] F006 SM: PUT /accounts/:id ignores isSalesManager', () => {
   let app: INestApplication;
   let adminToken: string;
 
@@ -283,7 +297,7 @@ describe('F006 SM: PUT /accounts/:id ignores isSalesManager', () => {
   });
 });
 
-describe('F008 SM: PATCH /accounts/:id/sales-manager-flag', () => {
+describe.skip('[DEPRECATED] F008 SM: PATCH /accounts/:id/sales-manager-flag', () => {
   let app: INestApplication;
   let adminToken: string;
 

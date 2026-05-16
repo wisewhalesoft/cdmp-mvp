@@ -80,8 +80,13 @@ export class AuthGuard implements CanActivate {
       (request as any).user = {
         userId: payload.userId,
         role: payload.role,
-        // E07 業務主管旗標（AD-E02-1）：給 SalesManagerGuard / 業務邏輯讀取
+        // E07 業務主管旗標（DEPRECATED, AD-E07 v3.0 / 2026-05-16）：
+        // 沿用至 B2 callsite 全替換完成前，避免 silent 行為改變
         isSalesManager: payload.isSalesManager ?? false,
+        // E07 業務角色（AD-E07 v3.0 / F002 §4.6 / 2026-05-16）：
+        // 給 DirectorGuard / SectionChiefGuard / DirectorOrSectionChiefGuard 讀取
+        // legacy JWT 未含此 claim → undefined → 顯式降級為 null
+        businessRole: payload.businessRole ?? null,
       };
       return true;
     } catch (error: any) {

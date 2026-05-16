@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -13,8 +12,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
-import { SalesManagerGuard } from '@/common/guards/sales-manager.guard';
-import { RequireSalesManager } from '@/common/decorators/sales-manager.decorator';
+import { DirectorGuard } from '@/common/guards/director.guard';
+import { DirectorOrSectionChiefGuard } from '@/common/guards/director-or-section-chief.guard';
+import {
+  RequireDirector,
+  RequireDirectorOrSectionChief,
+} from '@/common/decorators/business-role.decorator';
 import { AssignmentCodeService } from './assignment-code.service';
 import { ListCodesQueryDto } from './dto/list-codes-query.dto';
 import { CreateCodeDto } from './dto/create-code.dto';
@@ -26,14 +29,15 @@ import { UpdateCodeDto } from './dto/update-code.dto';
  * 路由前綴 `assignment/codes`（main.ts 設 global prefix `api/v1`，最終為
  * `/api/v1/assignment/codes`）。
  *
- * 權限：所有端點要求 AuthGuard + SalesManagerGuard
- *   - admin 直接通過
- *   - role='user' + is_sales_manager=true 通過
- *   - 其餘 403 AUTH_FORBIDDEN
+ * 權限（依 F002 §4.6.2 / AD-E07 v3.0 / 2026-05-16）：
+ *   - class 級套 AuthGuard + DirectorOrSectionChiefGuard + DirectorGuard
+ *   - class 級 `@RequireDirectorOrSectionChief()`：所有方法至少需 director/section_chief/admin
+ *   - GET 端點未額外標 → 走 DirectorOrSectionChiefGuard（瀏覽開放至處長）
+ *   - 寫入端點額外標 `@RequireDirector()` → 走 DirectorGuard（M06 白名單寫入限部長）
  */
 @Controller('assignment/codes')
-@UseGuards(AuthGuard, SalesManagerGuard)
-@RequireSalesManager()
+@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@RequireDirectorOrSectionChief()
 export class AssignmentCodeController {
   constructor(private readonly service: AssignmentCodeService) {}
 
@@ -44,6 +48,7 @@ export class AssignmentCodeController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequireDirector()
   async create(@Body() dto: CreateCodeDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -53,6 +58,7 @@ export class AssignmentCodeController {
   }
 
   @Put(':tblId/:tblCd')
+  @RequireDirector()
   async update(
     @Param('tblId') tblId: string,
     @Param('tblCd') tblCd: string,
@@ -67,6 +73,7 @@ export class AssignmentCodeController {
   }
 
   @Put(':tblId/:tblCd/disable')
+  @RequireDirector()
   async disable(
     @Param('tblId') tblId: string,
     @Param('tblCd') tblCd: string,

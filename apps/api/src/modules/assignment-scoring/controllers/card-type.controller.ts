@@ -13,8 +13,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
-import { SalesManagerGuard } from '@/common/guards/sales-manager.guard';
-import { RequireSalesManager } from '@/common/decorators/sales-manager.decorator';
+import { DirectorGuard } from '@/common/guards/director.guard';
+import { DirectorOrSectionChiefGuard } from '@/common/guards/director-or-section-chief.guard';
+import {
+  RequireDirector,
+  RequireDirectorOrSectionChief,
+} from '@/common/decorators/business-role.decorator';
 import { CardTypeService } from '../services/card-type.service';
 import { CreateCardTypeDto } from '../dto/create-card-type.dto';
 import { UpdateCardTypeDto } from '../dto/update-card-type.dto';
@@ -26,10 +30,11 @@ import { DeleteCardTypeQueryDto } from '../dto/delete-card-type-query.dto';
  *
  * 路由前綴：`/api/v1/assignment/scoring/card-types`
  *
- * 權限：所有端點 AuthGuard + SalesManagerGuard
- *   - admin 直接通過（豁免）
- *   - role='user' + is_sales_manager=true 通過
- *   - 其餘 403 AUTH_FORBIDDEN
+ * 權限（依 F002 §4.6.2 / AD-E07 v3.0 / 2026-05-16）：
+ *   - class 級 AuthGuard + DirectorOrSectionChiefGuard + DirectorGuard
+ *   - class 級 `@RequireDirectorOrSectionChief()`：所有方法至少需 director/section_chief/admin
+ *   - GET 端點未額外標 → 走 DirectorOrSectionChiefGuard（M02 讀取開放至處長）
+ *   - 寫入端點額外標 `@RequireDirector()` → 走 DirectorGuard（M02 寫入限部長）
  *
  * 端點：
  *   - GET    /                        F069 列表
@@ -39,8 +44,8 @@ import { DeleteCardTypeQueryDto } from '../dto/delete-card-type-query.dto';
  *   - DELETE /:cardType               F072 級聯刪除（需 confirmCascade=true）
  */
 @Controller('assignment/scoring/card-types')
-@UseGuards(AuthGuard, SalesManagerGuard)
-@RequireSalesManager()
+@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@RequireDirectorOrSectionChief()
 export class CardTypeController {
   constructor(private readonly service: CardTypeService) {}
 
@@ -55,6 +60,7 @@ export class CardTypeController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequireDirector()
   async createCardType(@Body() dto: CreateCardTypeDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -73,6 +79,7 @@ export class CardTypeController {
   // ===== F071 =====
 
   @Put(':cardType')
+  @RequireDirector()
   async updateCardType(
     @Param('cardType') cardType: string,
     @Body() dto: UpdateCardTypeDto,
@@ -105,6 +112,7 @@ export class CardTypeController {
   }
 
   @Delete(':cardType')
+  @RequireDirector()
   async deleteCardType(
     @Param('cardType') cardType: string,
     @Query() query: DeleteCardTypeQueryDto,

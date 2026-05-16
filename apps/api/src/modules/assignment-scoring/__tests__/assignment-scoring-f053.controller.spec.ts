@@ -1,14 +1,18 @@
 /**
  * F053：AssignmentScoringController — GET /scoring Route + Guard Tests
  *
- * 策略：mocked Service + mocked AuthGuard / SalesManagerGuard，
+ * 策略：mocked Service + mocked AuthGuard + 真實 RBAC Guard chain，
  * 不真實連接 DB（與 F068 controller spec 同 pattern）。
+ *
+ * RBAC（依 F002 §4.6.2 / AD-E07 v3.0 / B2 替換後）：
+ *   - GET → DirectorOrSectionChiefGuard：director / section_chief / admin 通過
  *
  * 涵蓋：
  *   - TS-F053-007：未帶 JWT → 401 AUTH_TOKEN_MISSING
- *   - TS-F053-008：role=user 非 SM → 403 AUTH_FORBIDDEN
+ *   - TS-F053-008：role=user businessRole=null → 403 E07_ROLE_NOT_ASSIGNED
  *   - admin 通過
- *   - role=user + is_sales_manager=true 通過
+ *   - role=user + businessRole=director 通過
+ *   - role=user + businessRole=section_chief 通過
  *   - Service throw NotFound 透傳 404
  *   - Service throw VALIDATION_ERROR 透傳 422
  *   - cardType query 正確傳入 service
@@ -18,7 +22,6 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   ExecutionContext,
-  ForbiddenException,
   INestApplication,
   NotFoundException,
   UnauthorizedException,
@@ -28,10 +31,15 @@ import request from 'supertest';
 import { AssignmentScoringController } from '../assignment-scoring.controller';
 import { AssignmentScoringService } from '../assignment-scoring.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
-import { SalesManagerGuard } from '@/common/guards/sales-manager.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 
-type CurrentUser = { userId: string; role: string; isSalesManager: boolean } | null;
+type CurrentUser =
+  | {
+      userId: string;
+      role: string;
+      businessRole: 'director' | 'section_chief' | null;
+    }
+  | null;
 
 describe('AssignmentScoringController — F053', () => {
   let app: INestApplication;
@@ -60,24 +68,6 @@ describe('AssignmentScoringController — F053', () => {
           const req = ctx.switchToHttp().getRequest();
           req.user = currentUser;
           return true;
-        },
-      })
-      .overrideGuard(SalesManagerGuard)
-      .useValue({
-        canActivate: (ctx: ExecutionContext) => {
-          const req = ctx.switchToHttp().getRequest();
-          const u = req.user;
-          if (!u) {
-            throw new ForbiddenException({
-              error: 'AUTH_FORBIDDEN',
-              message: '您沒有權限執行此操作。',
-            });
-          }
-          if (u.role === 'admin' || u.isSalesManager === true) return true;
-          throw new ForbiddenException({
-            error: 'AUTH_FORBIDDEN',
-            message: '您沒有權限執行此操作。',
-          });
         },
       })
       .compile();
@@ -114,17 +104,17 @@ describe('AssignmentScoringController — F053', () => {
     expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
   });
 
-  it('TS-F053-008：role=user 非業務主管 → 403 AUTH_FORBIDDEN', async () => {
-    currentUser = { userId: 'u1', role: 'user', isSalesManager: false };
+  it('TS-F053-008：role=user businessRole=null → 403 E07_ROLE_NOT_ASSIGNED', async () => {
+    currentUser = { userId: 'u1', role: 'user', businessRole: null };
     const res = await request(app.getHttpServer()).get(
       '/api/v1/assignment/scoring?cardType=H',
     );
     expect(res.status).toBe(403);
-    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+    expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
   });
 
   it('admin 通過 → service 被呼叫一次', async () => {
-    currentUser = { userId: 'u-admin', role: 'admin', isSalesManager: false };
+    currentUser = { userId: 'u-admin', role: 'admin', businessRole: null };
     serviceMock.getScoring.mockResolvedValue({
       version: {
         cardType: 'H', cardName: '期中', cardVersion: 1,
@@ -141,8 +131,8 @@ describe('AssignmentScoringController — F053', () => {
     expect(serviceMock.getScoring).toHaveBeenCalledWith({ cardType: 'H' });
   });
 
-  it('role=user + isSalesManager=true 通過 → service 被呼叫', async () => {
-    currentUser = { userId: 'u-sm', role: 'user', isSalesManager: true };
+  it('role=user + businessRole=director 通過', async () => {
+    currentUser = { userId: 'u-dir', role: 'user', businessRole: 'director' };
     serviceMock.getScoring.mockResolvedValue({
       version: {
         cardType: 'H', cardName: '期中', cardVersion: 1,
@@ -158,8 +148,28 @@ describe('AssignmentScoringController — F053', () => {
     expect(res.body.version.cardType).toBe('H');
   });
 
+  it('role=user + businessRole=section_chief 通過（GET 開放）', async () => {
+    currentUser = {
+      userId: 'u-sc',
+      role: 'user',
+      businessRole: 'section_chief',
+    };
+    serviceMock.getScoring.mockResolvedValue({
+      version: {
+        cardType: 'H', cardName: '期中', cardVersion: 1,
+        sdate: '20190823', edate: '20991231',
+        createdBy: null, createdAt: null,
+      },
+      dimensions: [],
+    });
+    const res = await request(app.getHttpServer()).get(
+      '/api/v1/assignment/scoring?cardType=H',
+    );
+    expect(res.status).toBe(200);
+  });
+
   it('Service throw NotFoundException 透傳 404', async () => {
-    currentUser = { userId: 'u-sm', role: 'user', isSalesManager: true };
+    currentUser = { userId: 'u-dir', role: 'user', businessRole: 'director' };
     serviceMock.getScoring.mockRejectedValue(
       new NotFoundException({
         error: 'SCORING_VERSION_NOT_FOUND',
@@ -174,7 +184,7 @@ describe('AssignmentScoringController — F053', () => {
   });
 
   it('cardType 省略時 query.cardType 為 undefined', async () => {
-    currentUser = { userId: 'u-sm', role: 'user', isSalesManager: true };
+    currentUser = { userId: 'u-dir', role: 'user', businessRole: 'director' };
     serviceMock.getScoring.mockResolvedValue({
       version: {
         cardType: 'H', cardName: '期中', cardVersion: 1,
@@ -189,7 +199,7 @@ describe('AssignmentScoringController — F053', () => {
   });
 
   it('cardType 超過 5 字元 → 422 VALIDATION_ERROR', async () => {
-    currentUser = { userId: 'u-sm', role: 'user', isSalesManager: true };
+    currentUser = { userId: 'u-dir', role: 'user', businessRole: 'director' };
     const res = await request(app.getHttpServer()).get(
       '/api/v1/assignment/scoring?cardType=TOOLONG',
     );

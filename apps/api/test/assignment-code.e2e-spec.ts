@@ -35,14 +35,16 @@ import { HashUtil } from '@/common/hash/hash.util';
 
 const JWT_SECRET = 'test-jwt-secret-for-assignment-code-e2e';
 
+// B2 替換（AD-E07 v3.0 / 2026-05-16）：SM fixture 升級為 director（M06 寫入限部長）
 const SM_USER = {
   id: 'e5f6a7b8-c9d0-1234-efab-345678901234',
-  name: 'Sales Manager',
+  name: 'Director User',
   email: 'sm-e2e@cdmp.test',
   password: 'P@ssw0rd123',
   role: 'user' as const,
   status: 'active' as const,
-  is_sales_manager: true,
+  is_sales_manager: true, // legacy 欄位，保留以避免遷移破壞
+  business_role: 'director' as const,
 };
 const PLAIN_USER = {
   id: 'c3d4e5f6-a7b8-9012-cdef-aaaaaaaaaaaa',
@@ -52,6 +54,7 @@ const PLAIN_USER = {
   role: 'user' as const,
   status: 'active' as const,
   is_sales_manager: false,
+  business_role: null,
 };
 
 async function createTestApp(): Promise<INestApplication> {
@@ -106,6 +109,7 @@ async function createTestApp(): Promise<INestApplication> {
         role: u.role,
         status: u.status,
         is_sales_manager: u.is_sales_manager,
+        business_role: u.business_role,
       }),
     );
   }
@@ -156,12 +160,12 @@ describe('F068: AssignmentCode E2E (/api/v1/assignment/codes)', () => {
     expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
   });
 
-  it('2) role=user 非業務主管 → 403 AUTH_FORBIDDEN', async () => {
+  it('2) role=user 業務角色未指派 → 403 E07_ROLE_NOT_ASSIGNED', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/assignment/codes?tblId=PROD_KIND')
       .set('Authorization', `Bearer ${plainToken}`);
     expect(res.status).toBe(403);
-    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+    expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
   });
 
   it('3) SM 登入 GET listCodes → 200', async () => {

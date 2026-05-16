@@ -99,4 +99,14 @@ export class ObListDefinition {
   // 對應 migration：(後續 E07 重構批次 m05~m13 中之 stage 欄位 migration)
   @Column({ name: 'stage', type: 'varchar', length: 20, default: 'draft' })
   stage: 'draft' | 'dept_ratio' | 'personnel_ratio' | 'approval' | 'ready';
+
+  // E07 重構 P1 B2 補完（2026-05-16）— F050 / F051 v2.0 DTO 必填，多值 `$$` 分隔
+  // 對應 migration m17：1711360000181-AddObListDefinitionCaseStatus
+  @Column({ name: 'case_status', type: 'varchar', length: 14, nullable: true })
+  case_status: string | null;
+
+  // E07 重構 P1 B2 補完（2026-05-16）— per-LIST CR 回分開關，取代 F059 全域 OBASSIGNSET
+  // 對應 migration m18：1711360000182-AddObListDefinitionCrEnabled
+  @Column({ name: 'cr_enabled', type: 'boolean', default: false })
+  cr_enabled: boolean;
 }

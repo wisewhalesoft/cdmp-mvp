@@ -42,14 +42,16 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 
+// B2 替換（AD-E07 v3.0 / 2026-05-16）：SM fixture 升級為 director
 const SM_USER = {
   id: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
-  name: 'M02 Cross-Spec SM',
+  name: 'M02 Cross-Spec Director',
   email: 'm02-cross-spec@cdmp.test',
   password: 'P@ssw0rd123',
   role: 'user' as const,
   status: 'active' as const,
   is_sales_manager: true,
+  business_role: 'director' as const,
 };
 
 async function createTestApp(): Promise<INestApplication> {
@@ -111,6 +113,7 @@ async function createTestApp(): Promise<INestApplication> {
       role: SM_USER.role,
       status: SM_USER.status,
       is_sales_manager: SM_USER.is_sales_manager,
+      business_role: SM_USER.business_role,
     }),
   );
 
