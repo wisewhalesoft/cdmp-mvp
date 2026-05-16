@@ -116,10 +116,10 @@
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
-          <option value="minister">部長</option>
-          <option value="admin">Admin</option>
-          <option value="director_xtc0">處長（XTC0 北一處）</option>
-          <option value="sales">業務（無權）</option>
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief_xtc0">業務處長（XTC0 北一處）</option>
+          <option value="user">一般使用者（無權）</option>
         </select>
       </div>
       <div id="role-badge-container"></div>
@@ -155,8 +155,8 @@
       <button onclick="loadDemo('rejected')" id="demo-rejected" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">含拒絕記錄</button>
       <button onclick="loadDemo('resigned_only')" id="demo-resigned_only" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">含離職員工</button>
       <span class="mx-2 text-gray-300">|</span>
-      <button onclick="loadDemo('director')" id="demo-director" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">部長視角</button>
-      <button onclick="loadDemo('section_chief_xtc0')" id="demo-section_chief_xtc0" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">處長視角（XTC0）</button>
+      <button onclick="loadDemo('director')" id="demo-director" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">業務部長視角</button>
+      <button onclick="loadDemo('section_chief_xtc0')" id="demo-section_chief_xtc0" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">業務處長視角（XTC0）</button>
       <button onclick="resetRejectBanner()" class="ml-auto text-[10px] px-2 py-1 border border-border rounded text-gray-500 hover:bg-gray-50 inline-flex items-center gap-1">
         <i data-lucide="refresh-cw" class="w-3 h-3"></i>重設拒絕 banner
       </button>
@@ -443,28 +443,29 @@
     // ============================================================
     const LIST_NO = 'OB202605007';
     const REJECT_KEY = `e07-reject-banner-dismiss-${LIST_NO}`;
+    // v3.0 4 角色合併（單一 business_role 維度）。section_chief_xtc0 為含 scope 的處長 demo 變體。
     const ROLE_META = {
-      minister:         { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '張部長',   scope: null },
-      admin:            { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員', scope: null },
-      director_xtc0:    { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長',   scope: 'XTC0' },
-      sales:            { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務',   scope: null }
+      admin:              { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明', scope: null },
+      director:           { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長', scope: null },
+      section_chief_xtc0: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長', scope: 'XTC0' },
+      user:               { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',      name: '陳業務', scope: null }
     };
-    let currentRole = 'minister';
+    let currentRole = 'director';
 
     function setRole(role) {
       currentRole = role;
-      const m = ROLE_META[role] || ROLE_META.minister;
+      const m = ROLE_META[role] || ROLE_META.director;
       document.getElementById('role-badge-container').innerHTML =
         `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
       document.getElementById('user-name').textContent = m.name;
-      const isSales = role === 'sales';
-      const isDirector = role.startsWith('director');
-      document.getElementById('roleBlockedBanner').classList.toggle('hidden', !isSales);
-      document.getElementById('mainContent').classList.toggle('hidden', isSales);
-      // 處長：隱藏推進、隱藏 rollback、隱藏「儲存全部」（僅可「儲存本部門」）
-      document.getElementById('btnRollback').classList.toggle('hidden', isDirector);
-      document.getElementById('btnAdvance').classList.toggle('hidden', isDirector);
-      document.getElementById('btnSaveAll').classList.toggle('hidden', isDirector);
+      const isUser = role === 'user';
+      const isSectionChief = role.startsWith('section_chief');
+      document.getElementById('roleBlockedBanner').classList.toggle('hidden', !isUser);
+      document.getElementById('mainContent').classList.toggle('hidden', isUser);
+      // 業務處長：隱藏推進、隱藏 rollback、隱藏「儲存全部」（僅可「儲存本部門」）
+      document.getElementById('btnRollback').classList.toggle('hidden', isSectionChief);
+      document.getElementById('btnAdvance').classList.toggle('hidden', isSectionChief);
+      document.getElementById('btnSaveAll').classList.toggle('hidden', isSectionChief);
       renderAll();
       lucide.createIcons();
     }
@@ -566,7 +567,7 @@
 
     function isDeptEditable(d) {
       const m = ROLE_META[currentRole];
-      if (currentRole === 'sales') return false;
+      if (currentRole === 'user') return false;
       if (!m.scope) return true; // 部長 / Admin
       return d.code === m.scope; // 處長僅自己轄區
     }
@@ -1066,7 +1067,7 @@
         btn.classList.remove('border-gray-300', 'bg-white');
       }
       LATEST_REJECTION = null;
-      document.getElementById('role-switcher').value = 'minister';
+      document.getElementById('role-switcher').value = 'director';
 
       if (state === 'normal') {
         buildDepts();
@@ -1085,10 +1086,10 @@
         buildDepts({ resignE003: true });
       } else if (state === 'director') {
         buildDepts({ fillSome: true });
-        document.getElementById('role-switcher').value = 'minister'; // 部長視角
+        document.getElementById('role-switcher').value = 'director'; // 業務部長視角
       } else if (state === 'section_chief_xtc0') {
         buildDepts();
-        document.getElementById('role-switcher').value = 'director_xtc0';
+        document.getElementById('role-switcher').value = 'section_chief_xtc0';
       }
       setRole(document.getElementById('role-switcher').value);
       applyRejectBanner();

@@ -105,10 +105,10 @@
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
-          <option value="minister">部長</option>
-          <option value="admin">Admin</option>
-          <option value="director_xtc0">處長（XTC0 北一處）</option>
-          <option value="sales">業務（無權）</option>
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief_xtc0">業務處長（XTC0 北一處）</option>
+          <option value="user">一般使用者（無權）</option>
         </select>
       </div>
       <div id="role-badge-container"></div>
@@ -435,20 +435,21 @@
     // ============================================================
     // 角色 meta（沿用 29b：含處長 scope）
     // ============================================================
+    // v3.0 4 角色合併（含業務處長 scope 變體 section_chief_xtc0）。
     const ROLE_META = {
-      minister:      { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '張部長',     scope: null,   canRunMonth: true,  canRollback: true,  canView: true  },
-      admin:         { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員', scope: null,   canRunMonth: true,  canRollback: true,  canView: true  },
-      director_xtc0: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長',     scope: 'XTC0', canRunMonth: false, canRollback: false, canView: true  },
-      sales:         { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務',     scope: null,   canRunMonth: false, canRollback: false, canView: false }
+      admin:              { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明', scope: null,   canRunMonth: true,  canRollback: true,  canView: true  },
+      director:           { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長', scope: null,   canRunMonth: true,  canRollback: true,  canView: true  },
+      section_chief_xtc0: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長', scope: 'XTC0', canRunMonth: false, canRollback: false, canView: true  },
+      user:               { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',      name: '陳業務', scope: null,   canRunMonth: false, canRollback: false, canView: false }
     };
-    let currentRole = 'minister';
+    let currentRole = 'director';
     let currentMode = 'list';
     let currentListNo = 'OB202605002';
     let currentScenario = 'list';
 
     function setRole(role) {
       currentRole = role;
-      const m = ROLE_META[role] || ROLE_META.minister;
+      const m = ROLE_META[role] || ROLE_META.director;
       document.getElementById('role-badge-container').innerHTML =
         `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
       document.getElementById('user-name').textContent = m.name;
@@ -462,12 +463,12 @@
       if (btnRun) btnRun.classList.toggle('hidden', !m.canRunMonth);
       if (btnRunDetail) btnRunDetail.classList.toggle('hidden', !m.canRunMonth);
       if (btnRollback) btnRollback.classList.toggle('hidden', !m.canRollback);
-      // 處長轄區提示
+      // 業務處長轄區提示
       const dirBanner = document.getElementById('directorScopeBanner');
-      const isDirector = role.startsWith('director');
-      if (dirBanner) dirBanner.classList.toggle('hidden', !(isDirector && currentMode === 'detail'));
+      const isSectionChief = role.startsWith('section_chief');
+      if (dirBanner) dirBanner.classList.toggle('hidden', !(isSectionChief && currentMode === 'detail'));
       const hint = document.getElementById('detailDirectorOnlyHint');
-      if (hint) hint.textContent = isDirector ? '（轄區檢視）' : '';
+      if (hint) hint.textContent = isSectionChief ? '（轄區檢視）' : '';
       renderAll();
       lucide.createIcons();
     }
@@ -559,9 +560,9 @@
         active.classList.remove('border-gray-300', 'bg-white');
         active.classList.add('border-primary', 'bg-blue-50', 'text-primary');
       }
-      // 處長 banner 切換
-      const isDirector = currentRole.startsWith('director');
-      document.getElementById('directorScopeBanner').classList.toggle('hidden', !(isDirector && currentMode === 'detail'));
+      // 業務處長 banner 切換
+      const isSectionChief = currentRole.startsWith('section_chief');
+      document.getElementById('directorScopeBanner').classList.toggle('hidden', !(isSectionChief && currentMode === 'detail'));
       renderAll();
       lucide.createIcons();
     }
@@ -855,7 +856,7 @@
     (function init() {
       const params = new URLSearchParams(window.location.search);
       const listNo = params.get('listNo');
-      setRole('minister');
+      setRole('director');
       if (listNo) {
         currentListNo = listNo;
         loadMode('detail');

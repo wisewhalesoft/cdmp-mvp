@@ -127,10 +127,10 @@
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
-          <option value="minister">部長</option>
-          <option value="director">處長</option>
-          <option value="admin">Admin</option>
-          <option value="sales">業務</option>
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief">業務處長</option>
+          <option value="user">一般使用者</option>
         </select>
       </div>
       <div id="role-badge-container"></div>
@@ -774,12 +774,12 @@
 
     // ===== Role toggle (B7 standard 4-role) =====
     const ROLE_META = {
-      minister: { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '王部長' },
-      director: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長' },
-      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員' },
-      sales:    { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務' }
+      admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
+      director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
+      section_chief: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長' },
+      user:          { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',      name: '陳業務' }
     };
-    let currentRole = 'minister';
+    let currentRole = 'director';
     function renderRoleBadge(role) {
       const m = ROLE_META[role] || ROLE_META.sales;
       return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
@@ -789,12 +789,12 @@
       const sw = document.getElementById('role-switcher'); if (sw) sw.value = role;
       document.getElementById('role-badge-container').innerHTML = renderRoleBadge(role);
       document.getElementById('user-name').textContent = ROLE_META[role].name;
-      const blocked = (role === 'sales');
+      const blocked = (role === 'user');
       document.getElementById('mainContent').classList.toggle('hidden', blocked);
       document.getElementById('salesBlockedBanner').classList.toggle('hidden', !blocked);
       lucide.createIcons();
     }
-    document.addEventListener('DOMContentLoaded', function(){ setRole('minister'); });
+    document.addEventListener('DOMContentLoaded', function(){ setRole('director'); });
 
     // init
     showDemoState('identical');

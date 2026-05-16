@@ -135,13 +135,13 @@
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher-legacy" onchange="legacySetRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
-          <option value="minister">部長</option>
-          <option value="director">處長</option>
-          <option value="admin">Admin</option>
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief">業務處長</option>
         </select>
       </div>
       <span id="legacyRoleBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:#DBEAFE;color:#1D4ED8;">
-        <i data-lucide="crown" class="w-3 h-3"></i>部長
+        <i data-lucide="crown" class="w-3 h-3"></i>系統管理者
       </span>
       <span class="text-sm text-gray-600" id="legacyUserName">王部長</span>
     </div>
@@ -652,13 +652,14 @@
     }
 
     // ===== Role toggle（DEPRECATED 頁面，僅切換 header badge；不影響資料） =====
+    // v3.0 4 角色合併（DEPRECATED 頁面，僅切換 header badge）
     const LEGACY_ROLE_META = {
-      minister: { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '王部長' },
-      director: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長' },
-      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員' }
+      admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
+      director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
+      section_chief: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長' }
     };
     function legacySetRole(role) {
-      const m = LEGACY_ROLE_META[role] || LEGACY_ROLE_META.minister;
+      const m = LEGACY_ROLE_META[role] || LEGACY_ROLE_META.admin;
       const badge = document.getElementById('legacyRoleBadge');
       badge.style.background = m.bg;
       badge.style.color = m.fg;

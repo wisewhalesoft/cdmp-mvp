@@ -83,10 +83,10 @@
         <i data-lucide="user-check" class="w-3.5 h-3.5 text-gray-400"></i>
         <span class="text-[10px] text-gray-500 uppercase tracking-wide">模擬角色</span>
         <select id="ds-role-switcher" onchange="updateRoleBadge(this.value); applyRoleGuard(this.value);" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
-          <option value="minister">部長</option>
-          <option value="director">處長</option>
-          <option value="admin">Admin</option>
-          <option value="sales">業務</option>
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief">業務處長</option>
+          <option value="user">一般使用者</option>
         </select>
       </div>
       <div id="ds-role-badge-container"></div>
@@ -251,10 +251,10 @@
     function dsCloseModal(id) { document.getElementById(id).classList.add('hidden'); document.body.style.overflow = ''; }
 
     const ROLE_META = {
-      minister: { label: '部長', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown' },
-      director: { label: '處長', bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog' },
-      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check' },
-      sales:    { label: '業務', bg: '#F3F4F6', fg: '#374151', icon: 'user' }
+      admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown' },
+      director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase' },
+      section_chief: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog' },
+      user:          { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user' }
     };
     function renderRoleBadge(role) {
       const m = ROLE_META[role] || ROLE_META.sales;
@@ -628,7 +628,7 @@
     // 角色守衛
     // ============================================================
     function applyRoleGuard(role) {
-      const isReadOnly = (role === 'director' || role === 'sales');
+      const isReadOnly = (role === 'section_chief' || role === 'user');
       document.querySelectorAll('[data-write-action]').forEach(el => {
         el.style.display = isReadOnly ? 'none' : '';
       });
@@ -687,7 +687,7 @@
     })();
 
     // Init
-    updateRoleBadge('minister');
+    updateRoleBadge('director');
     renderAccordions();
     lucide.createIcons();
   </script>
