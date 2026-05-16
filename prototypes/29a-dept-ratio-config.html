@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>部門比例設定 — 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .toast { transition: all 0.3s ease; }
+    .toast.toast-enter { opacity: 0; transform: translateY(-8px); }
+    .toast.toast-show { opacity: 1; transform: translateY(0); }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    @keyframes pop-in { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .animate-pop-in { animation: pop-in 0.18s ease-out; }
+    /* 階段路徑 step */
+    .step-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+    .step-dot { width: 18px; height: 18px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; }
+    .step-done { background: #D1FAE5; color: #047857; }
+    .step-current { background: #DBEAFE; color: #1D4ED8; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+    .step-todo { background: #F3F4F6; color: #9CA3AF; }
+    .step-arrow { color: #D1D5DB; font-size: 14px; }
+    /* RATION input */
+    .ration-input { width: 90px; text-align: right; padding: 6px 10px; border: 1px solid #E5E7EB; border-radius: 6px; font-family: 'Inter', monospace; font-weight: 500; font-size: 14px; }
+    .ration-input:focus { outline: none; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+    .ration-input.err { border-color: #EF4444; background: #FEF2F2; }
+    .ration-input:disabled, .ration-input[readonly] { background: #F9FAFB; color: #6B7280; cursor: not-allowed; }
+    /* tabular nums */
+    .tabular { font-variant-numeric: tabular-nums; }
+    /* tooltip */
+    .has-tooltip { position: relative; }
+    .has-tooltip .tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #111827; color: white; font-size: 11px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 10; }
+    .has-tooltip:hover .tip { opacity: 1; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <div class="mx-5 my-3 border-t border-border"></div>
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="true"
+        class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <span class="flex items-center gap-3"><i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派</span>
+        <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200 rotate-90"></i>
+      </button>
+      <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 600px;">
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+        <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+        <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+        <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
+        <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例</a>
+        <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱</a>
+        <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
+        <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+        <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+        <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+        <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+        <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+        <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+        <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+          <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+          <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ===== Header（含麵包屑 + 角色切換器） ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2 text-sm">
+      <a href="27-list-definition.html" class="text-gray-500 hover:text-primary transition">名單定義</a>
+      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
+      <span class="font-semibold text-gray-800">部門比例設定</span>
+      <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background:#DBEAFE;color:#1E40AF;">
+        <i data-lucide="building-2" class="w-3 h-3"></i>dept_ratio 階段
+      </span>
+      <span class="ml-1 font-mono text-xs text-gray-400">OB202605003</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- 月份切換器（disabled，鎖定該名單所屬月份） -->
+      <div class="has-tooltip">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-gray-50 border border-border rounded-md text-gray-500 cursor-not-allowed">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+          <span class="font-mono">2026-05</span>
+          <i data-lucide="lock" class="w-3 h-3 text-gray-400"></i>
+        </div>
+        <span class="tip">編輯階段：月份鎖定於名單所屬月份</span>
+      </div>
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="minister">部長</option>
+          <option value="admin">Admin</option>
+          <option value="director">處長（唯讀）</option>
+          <option value="sales">業務（無權）</option>
+        </select>
+      </div>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">王部長</span>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- 階段路徑 breadcrumb 條 -->
+    <div class="bg-white border-b border-border px-6 py-3 flex items-center gap-3">
+      <span class="text-xs text-gray-400 mr-1">階段路徑：</span>
+      <span class="step-item">
+        <span class="step-dot step-done"><i data-lucide="check" class="w-3 h-3"></i></span>
+        <span class="text-gray-500">草稿</span>
+      </span>
+      <span class="step-arrow">›</span>
+      <span class="step-item">
+        <span class="step-dot step-current">2</span>
+        <span class="font-semibold text-primary">部門比例</span>
+      </span>
+      <span class="step-arrow">›</span>
+      <span class="step-item">
+        <span class="step-dot step-todo">3</span>
+        <span class="text-gray-400">個別業務比例</span>
+      </span>
+      <span class="step-arrow">›</span>
+      <span class="step-item">
+        <span class="step-dot step-todo">4</span>
+        <span class="text-gray-400">簽核</span>
+      </span>
+      <span class="step-arrow">›</span>
+      <span class="step-item">
+        <span class="step-dot step-todo">5</span>
+        <span class="text-gray-400">準備完成</span>
+      </span>
+      <span class="ml-auto inline-flex items-center gap-1 text-[10px] text-gray-400">
+        <i data-lucide="git-branch" class="w-3 h-3"></i>F079 / F080 / F081
+      </span>
+    </div>
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">Demo 場景：</span>
+      <button onclick="loadDemo('balanced')" id="demo-balanced" class="demo-btn px-2.5 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">sum = 100%（預設）</button>
+      <button onclick="loadDemo('under')" id="demo-under" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">sum = 95%（差 5%）</button>
+      <button onclick="loadDemo('over')" id="demo-over" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">sum = 105%（超 5%）</button>
+      <button onclick="loadDemo('director')" id="demo-director" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">處長視角（唯讀）</button>
+      <button onclick="loadDemo('offline')" id="demo-offline" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">含已下線部門</button>
+      <span class="ml-auto text-[10px] text-gray-400">mock 互動 · 不發 API</span>
+    </div>
+
+    <!-- ===== 角色封鎖 banner（sales）===== -->
+    <div id="roleBlockedBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
+        <p class="text-sm text-gray-500 max-w-md">「部門比例設定」為部長 / Admin 專屬功能（處長僅可唯讀）。業務員不參與此階段。</p>
+        <a href="27-list-definition.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
+        </a>
+      </div>
+    </div>
+
+    <!-- ===== 主要內容區 ===== -->
+    <div id="mainContent" class="p-6 space-y-4">
+
+      <!-- 處長唯讀提示 banner -->
+      <div id="directorReadOnlyBanner" class="hidden rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm">
+        <i data-lucide="eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-purple-900">處長僅可查看部門比例，無編輯權</p>
+          <p class="text-xs text-purple-700 mt-0.5">部門比例由部長 / Admin 設定；您將於下一階段（個別業務比例）為本部門業務員分配比例。</p>
+        </div>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style="background:#EDE9FE;color:#6D28D9;">
+          <i data-lucide="scan-eye" class="w-3 h-3"></i>轄區檢視
+        </span>
+      </div>
+
+      <!-- ===== 區塊：名單摘要（唯讀） ===== -->
+      <section class="bg-white rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-800">
+              部門比例設定
+              <span class="ml-2 text-base text-gray-500 font-normal">— <span class="font-mono">OB202605003</span>「2026-05 主力催收名單 A」</span>
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">為本名單之各在職部門設定 RATION，加總須 = 100%；推進後比例將鎖定（如需修改請 Rollback 至草稿）。</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[10px] text-gray-400 uppercase tracking-wider">建立資訊</p>
+            <p class="text-sm font-medium text-gray-700 mt-0.5"><i data-lucide="user" class="w-3 h-3 inline mr-0.5"></i>張部長</p>
+            <p class="text-xs text-gray-500"><i data-lucide="calendar" class="w-3 h-3 inline mr-0.5"></i>2026-05-15</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mt-4">
+          <!-- 篩選條件 chips -->
+          <div class="col-span-2 p-3 bg-gray-50/60 rounded-lg border border-border/60">
+            <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-2"><i data-lucide="filter" class="w-3 h-3 inline mr-0.5"></i>篩選條件（從草稿階段帶入 · 唯讀）</p>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-border text-gray-700">PROD_KIND in (汽車, 機車)</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-border text-gray-700">LIST_TYPE = 期中</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-border text-gray-700">CASEYEAR in (3, 4, 5)</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-border text-gray-700">MONTH_CNT &gt;= 2</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-border text-gray-700">SETTLE_SRC = N</span>
+            </div>
+          </div>
+          <!-- CR 開關狀態 + 預估命中 -->
+          <div class="p-3 bg-gray-50/60 rounded-lg border border-border/60 flex flex-col justify-between">
+            <div>
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1"><i data-lucide="recycle" class="w-3 h-3 inline mr-0.5"></i>CR 回分開關</p>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-success">
+                <i data-lucide="check-circle-2" class="w-3 h-3"></i>啟用
+              </span>
+            </div>
+            <div class="mt-2">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider"><i data-lucide="target" class="w-3 h-3 inline mr-0.5"></i>預估命中（Stage 0 mock）</p>
+              <p class="text-sm font-semibold text-gray-800 tabular"><span id="totalEstimate">1,200</span> 筆</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 區塊：部門比例輸入表格 ===== -->
+      <section class="bg-white rounded-xl border border-border overflow-hidden">
+        <div class="px-5 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
+          <h2 class="text-sm font-semibold text-gray-800">
+            <i data-lucide="building-2" class="w-4 h-4 inline text-primary"></i>
+            各部門 RATION 設定
+          </h2>
+          <span class="text-xs text-gray-400">資料表 <code class="font-mono">ob_dept_pct</code> · per-LIST_NO</span>
+          <span class="ml-auto text-xs text-gray-500">部門清單來源：<code class="font-mono">ob_emphire WHERE resign_date IS NULL</code></span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/30 text-xs text-gray-500 uppercase tracking-wider">
+                <th class="text-left px-5 py-2.5 font-medium" style="width:15%">部門代碼</th>
+                <th class="text-left px-5 py-2.5 font-medium" style="width:25%">部門名稱</th>
+                <th class="text-left px-5 py-2.5 font-medium" style="width:15%">處長</th>
+                <th class="text-right px-5 py-2.5 font-medium" style="width:20%">RATION (%)</th>
+                <th class="text-right px-5 py-2.5 font-medium" style="width:15%">預估案件數</th>
+                <th class="text-right px-5 py-2.5 font-medium" style="width:10%">操作</th>
+              </tr>
+            </thead>
+            <tbody id="deptTbody" class="divide-y divide-border"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== 區塊：即時加總 Banner（B1 元件） ===== -->
+      <section id="sumBanner" class="rounded-xl border-2 p-4 transition-colors flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div id="sumIcon" class="w-10 h-10 rounded-full flex items-center justify-center shrink-0">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p id="sumTitle" class="text-base font-semibold">目前總和：100.0% ✓</p>
+            <p id="sumHelp" class="text-xs mt-0.5">所有部門 RATION 加總落於容忍範圍 [99.99, 100.01]，可儲存並推進。</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] text-gray-400 uppercase tracking-wider">即時加總</p>
+          <p id="sumValue" class="text-3xl font-bold tabular">100.0<span class="text-base font-normal">%</span></p>
+        </div>
+      </section>
+
+      <!-- ===== 操作按鈕區 ===== -->
+      <div id="actionBar" class="bg-white rounded-xl border border-border px-5 py-4 flex items-center justify-between gap-3">
+        <a href="27-list-definition.html" class="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1">
+          <i data-lucide="x" class="w-4 h-4"></i>取消（返回名單列表）
+        </a>
+        <div class="flex items-center gap-2">
+          <button id="btnRollback" type="button" onclick="openRollbackModal()"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm border border-red-300 text-danger rounded-md hover:bg-red-50">
+            <i data-lucide="undo-2" class="w-4 h-4"></i>退回草稿
+          </button>
+          <button id="btnSave" type="button" onclick="onSave()"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm border border-primary text-primary rounded-md hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent">
+            <i data-lucide="save" class="w-4 h-4"></i>儲存
+          </button>
+          <button id="btnAdvance" type="button" onclick="openAdvanceModal()"
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary">
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>儲存並推進至個別業務比例
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal：推進至個別業務比例（F080 advance 藍） ===== -->
+  <div id="advanceModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-pop-in">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+          <i data-lucide="arrow-right-circle" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1">
+          <h3 class="text-base font-semibold text-gray-800">推進至個別業務比例設定階段？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F080 · stage: dept_ratio → personnel_ratio</p>
+        </div>
+        <button onclick="closeAdvanceModal()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-3">
+        <p class="text-sm text-gray-700">確認將名單「<span class="font-medium">2026-05 主力催收名單 A</span>」（<span class="font-mono">OB202605003</span>）推進至個別業務比例設定階段？</p>
+
+        <div class="rounded-lg bg-blue-50/50 border border-blue-200 p-3">
+          <p class="text-xs font-semibold text-primary mb-2"><i data-lucide="list" class="w-3.5 h-3.5 inline mr-0.5"></i>本階段部門比例摘要（將鎖定）</p>
+          <div id="advanceSummary" class="space-y-1"></div>
+        </div>
+
+        <div class="rounded-lg bg-amber-50/60 border border-amber-200 p-3 flex items-start gap-2">
+          <i data-lucide="bell" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+          <div class="text-xs text-amber-900">
+            <p class="font-semibold">推進後將觸發：</p>
+            <ul class="list-disc pl-4 mt-1 space-y-0.5 text-amber-800">
+              <li>部門比例鎖定（如需修改僅能 Rollback 退回）</li>
+              <li>轄區處長收到通知並開始為本部門業務員設定個別比例</li>
+              <li>篩選條件與 CR 開關仍維持鎖定狀態</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeAdvanceModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
+        <button onclick="confirmAdvance()" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>確認推進
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal：退回草稿（F081 destructive 紅） ===== -->
+  <div id="rollbackModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-pop-in">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-danger"></i>
+        </div>
+        <div class="flex-1">
+          <h3 class="text-base font-semibold text-gray-800">退回草稿階段？資料將清空且無法復原</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F081 · stage: dept_ratio → draft（destructive）</p>
+        </div>
+        <button onclick="closeRollbackModal()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-3">
+        <div class="rounded-lg bg-red-50/60 border border-red-200 p-3 flex items-start gap-2">
+          <i data-lucide="trash-2" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+          <div class="text-xs text-red-900">
+            <p class="font-semibold">以下資料將被清空：</p>
+            <ul class="list-disc pl-4 mt-1 space-y-0.5 text-red-800">
+              <li>所有 <span id="rollbackCount" class="font-semibold">7</span> 個部門的 RATION 設定（<code class="font-mono">ob_dept_pct</code> 對應紀錄 DELETE）</li>
+              <li>稽核日誌將寫入完整快照供日後追溯（<code class="font-mono">before_value.deptRatios</code>）</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="rounded-lg bg-blue-50/50 border border-blue-200 p-3 flex items-start gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <p class="text-xs text-blue-900">Rollback 後可重新編輯<strong>篩選條件</strong>與 <strong>CR 開關</strong>（從鎖定釋放），並可再次推進至部門比例設定階段。</p>
+        </div>
+
+        <label class="flex items-start gap-2 cursor-pointer select-none mt-2 p-2 hover:bg-gray-50 rounded">
+          <input type="checkbox" id="rollbackConfirm" onchange="document.getElementById('btnRollbackConfirm').disabled = !this.checked"
+            class="mt-0.5 w-4 h-4 rounded border-gray-300 text-danger focus:ring-danger">
+          <span class="text-sm text-gray-700">我確認 Rollback 並清空部門比例資料</span>
+        </label>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeRollbackModal()" class="px-4 py-2 text-sm text-gray-700 hover:bg-white rounded-md border border-border">取消</button>
+        <button id="btnRollbackConfirm" onclick="confirmRollback()" disabled
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-danger rounded-md hover:bg-red-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-danger">
+          <i data-lucide="undo-2" class="w-4 h-4"></i>確認退回
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toastContainer" class="fixed top-20 right-6 z-[60] space-y-2"></div>
+
+  <!-- ===== JS ===== -->
+  <script>
+    // ============================================================
+    // Sidebar：可摺疊區塊
+    // ============================================================
+    function toggleAssignmentSection() {
+      const sec = document.getElementById('assignment-section');
+      const chev = document.getElementById('assignment-chevron');
+      const expanded = sec.style.maxHeight !== '0px';
+      if (expanded) { sec.style.maxHeight = '0px'; chev.classList.remove('rotate-90'); }
+      else { sec.style.maxHeight = '600px'; chev.classList.add('rotate-90'); }
+    }
+
+    // ============================================================
+    // 角色（沿用 B1 元件）
+    // ============================================================
+    const ROLE_META = {
+      minister: { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '王部長' },
+      director: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長' },
+      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員' },
+      sales:    { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務' }
+    };
+    function setRole(role) {
+      const m = ROLE_META[role] || ROLE_META.minister;
+      document.getElementById('role-badge-container').innerHTML =
+        `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+      document.getElementById('user-name').textContent = m.name;
+
+      const isSales = role === 'sales';
+      const isDirector = role === 'director';
+      document.getElementById('roleBlockedBanner').classList.toggle('hidden', !isSales);
+      document.getElementById('mainContent').classList.toggle('hidden', isSales);
+      document.getElementById('directorReadOnlyBanner').classList.toggle('hidden', !isDirector);
+      // 處長：表格輸入唯讀 + 隱藏儲存/推進/退回按鈕
+      const readOnly = isDirector;
+      document.getElementById('btnSave').classList.toggle('hidden', readOnly);
+      document.getElementById('btnAdvance').classList.toggle('hidden', readOnly);
+      document.getElementById('btnRollback').classList.toggle('hidden', readOnly);
+      renderTable();
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // Mock 部門資料（核心狀態）
+    // ============================================================
+    const TOTAL_ESTIMATE = 1200; // 預估命中總案件數（Stage 0 mock）
+    let depts = [
+      { code: 'XTC0', name: '北一處', director: '李處長',  active: true,  noDeputy: false },
+      { code: 'XTC1', name: '北二處', director: '王處長',  active: true,  noDeputy: false },
+      { code: 'XTC2', name: '中區處', director: '陳處長',  active: true,  noDeputy: false },
+      { code: 'XTC3', name: '南一處', director: '黃處長',  active: true,  noDeputy: false },
+      { code: 'XTC4', name: '南二處', director: '(未設代理)', active: true, noDeputy: true }
+    ];
+    // 預設場景的 RATION 值（5 部門）
+    const DEMO_RATIONS = {
+      balanced: [30, 25, 20, 15, 10],
+      under:    [28, 24, 19, 14, 10], // 95
+      over:     [33, 27, 22, 16, 7]   // 105
+    };
+    let rations = [...DEMO_RATIONS.balanced];
+
+    // ============================================================
+    // 表格渲染
+    // ============================================================
+    function renderTable() {
+      const tbody = document.getElementById('deptTbody');
+      const isDirector = document.getElementById('role-switcher').value === 'director';
+      tbody.innerHTML = depts.map((d, i) => {
+        const r = rations[i] ?? 0;
+        const caseCount = Math.round(TOTAL_ESTIMATE * r / 100);
+        const rowBg = !d.active ? 'bg-gray-50' : '';
+        const inactiveBadge = !d.active
+          ? '<span class="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-600"><i data-lucide="archive" class="w-2.5 h-2.5"></i>已下線</span>'
+          : '';
+        const noDeputyDot = d.noDeputy
+          ? '<span class="inline-flex items-center gap-1 text-danger"><span class="w-1.5 h-1.5 rounded-full bg-danger"></span><span class="text-xs">未設代理</span></span>'
+          : `<span class="text-xs text-gray-600"><i data-lucide="user-cog" class="w-3 h-3 inline mr-0.5 text-purple-600"></i>${d.director}</span>`;
+        // RATION 欄
+        let rationCell;
+        if (isDirector) {
+          rationCell = `<span class="font-mono font-semibold text-gray-700 tabular">${r.toFixed(1)}%</span>`;
+        } else {
+          rationCell = `<input type="number" min="0" max="100" step="0.1" value="${r}"
+            oninput="onRationInput(${i}, this.value, this)"
+            class="ration-input tabular">`;
+        }
+        // 操作欄
+        const opCell = isDirector
+          ? `<span class="text-xs text-gray-300">—</span>`
+          : `<button onclick="clearRation(${i})" class="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-danger hover:bg-red-50 rounded" title="清空"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>`;
+        return `
+          <tr class="${rowBg} hover:bg-blue-50/30">
+            <td class="px-5 py-3 font-mono text-sm text-gray-700">${d.code}</td>
+            <td class="px-5 py-3">
+              <div class="flex items-center gap-1">
+                <span class="text-sm font-medium text-gray-800">${d.name}</span>
+                ${inactiveBadge}
+              </div>
+            </td>
+            <td class="px-5 py-3">${noDeputyDot}</td>
+            <td class="px-5 py-3 text-right">${rationCell}</td>
+            <td class="px-5 py-3 text-right text-sm text-gray-600 tabular">${caseCount.toLocaleString()}</td>
+            <td class="px-5 py-3 text-right">${opCell}</td>
+          </tr>`;
+      }).join('');
+      lucide.createIcons();
+      updateSum();
+    }
+
+    function onRationInput(idx, val, el) {
+      const num = parseFloat(val);
+      if (isNaN(num) || num < 0 || num > 100) {
+        el.classList.add('err');
+        rations[idx] = 0;
+      } else {
+        el.classList.remove('err');
+        rations[idx] = num;
+      }
+      // 即時更新該列預估案件數
+      const tr = el.closest('tr');
+      const caseCount = Math.round(TOTAL_ESTIMATE * rations[idx] / 100);
+      tr.querySelectorAll('td')[4].textContent = caseCount.toLocaleString();
+      updateSum();
+    }
+
+    function clearRation(idx) {
+      rations[idx] = 0;
+      renderTable();
+    }
+
+    // ============================================================
+    // 即時加總 banner（B1 元件三狀態）
+    // ============================================================
+    function updateSum() {
+      const sum = rations.reduce((a, b) => a + b, 0);
+      const banner = document.getElementById('sumBanner');
+      const icon = document.getElementById('sumIcon');
+      const title = document.getElementById('sumTitle');
+      const help = document.getElementById('sumHelp');
+      const valueEl = document.getElementById('sumValue');
+      const btnSave = document.getElementById('btnSave');
+      const btnAdvance = document.getElementById('btnAdvance');
+      const diff = sum - 100;
+      const ok = Math.abs(diff) <= 0.01;
+
+      valueEl.innerHTML = `${sum.toFixed(1)}<span class="text-base font-normal">%</span>`;
+
+      if (ok) {
+        banner.style.background = '#F0FDF4';
+        banner.style.borderColor = '#86EFAC';
+        icon.style.background = '#22C55E';
+        icon.style.color = '#FFFFFF';
+        icon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i>';
+        title.textContent = `目前總和：${sum.toFixed(1)}% ✓`;
+        title.style.color = '#15803D';
+        help.textContent = '所有部門 RATION 加總落於容忍範圍 [99.99, 100.01]，可儲存並推進。';
+        help.style.color = '#15803D';
+        valueEl.style.color = '#15803D';
+        btnSave.disabled = false;
+        btnAdvance.disabled = false;
+      } else {
+        // 超出容忍 → 紅
+        banner.style.background = '#FEF2F2';
+        banner.style.borderColor = '#FCA5A5';
+        icon.style.background = '#EF4444';
+        icon.style.color = '#FFFFFF';
+        icon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+        const word = diff > 0 ? `超 ${diff.toFixed(1)}%` : `差 ${(-diff).toFixed(1)}%`;
+        title.textContent = `目前總和：${sum.toFixed(1)}%（${word} 需調整至 100%）`;
+        title.style.color = '#B91C1C';
+        help.textContent = diff > 0
+          ? '加總超過 100%，請調降部分部門 RATION（或將某些部門設為 0%）。'
+          : '加總未達 100%，請補足剩餘比例（0% 為合法值表示該部門本月不分派）。';
+        help.style.color = '#B91C1C';
+        valueEl.style.color = '#B91C1C';
+        btnSave.disabled = true;
+        btnAdvance.disabled = true;
+      }
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // Demo 場景切換
+    // ============================================================
+    function loadDemo(state) {
+      // 切 demo 按鈕樣式
+      document.querySelectorAll('.demo-btn').forEach(b => {
+        b.classList.remove('border-primary', 'bg-blue-50', 'text-primary');
+        b.classList.add('border-gray-300', 'bg-white');
+      });
+      const btn = document.getElementById('demo-' + state);
+      btn.classList.add('border-primary', 'bg-blue-50', 'text-primary');
+      btn.classList.remove('border-gray-300', 'bg-white');
+
+      // 重置：5 部門，全在職
+      depts = [
+        { code: 'XTC0', name: '北一處', director: '李處長',  active: true,  noDeputy: false },
+        { code: 'XTC1', name: '北二處', director: '王處長',  active: true,  noDeputy: false },
+        { code: 'XTC2', name: '中區處', director: '陳處長',  active: true,  noDeputy: false },
+        { code: 'XTC3', name: '南一處', director: '黃處長',  active: true,  noDeputy: false },
+        { code: 'XTC4', name: '南二處', director: '(未設代理)', active: true, noDeputy: true }
+      ];
+      document.getElementById('role-switcher').value = 'minister';
+
+      if (state === 'balanced')  rations = [...DEMO_RATIONS.balanced];
+      else if (state === 'under') rations = [...DEMO_RATIONS.under];
+      else if (state === 'over')  rations = [...DEMO_RATIONS.over];
+      else if (state === 'director') {
+        rations = [...DEMO_RATIONS.balanced];
+        document.getElementById('role-switcher').value = 'director';
+      }
+      else if (state === 'offline') {
+        // 加 1 個已下線部門（已被 ob_emphire 全員離職但 ob_dept_pct 殘留紀錄）
+        depts.push({ code: 'XTC9', name: '舊東區處', director: '—',  active: false, noDeputy: false });
+        rations = [28, 23, 18, 13, 10, 8]; // sum = 100
+        rations[5] = 8;
+      }
+
+      setRole(document.getElementById('role-switcher').value);
+    }
+
+    // ============================================================
+    // 推進 / Rollback / 儲存
+    // ============================================================
+    function openAdvanceModal() {
+      // 渲染 summary
+      const summary = document.getElementById('advanceSummary');
+      summary.innerHTML = depts.map((d, i) =>
+        `<div class="flex items-center justify-between text-xs py-0.5">
+          <span class="text-gray-700"><span class="font-mono text-gray-500">${d.code}</span> · ${d.name}</span>
+          <span class="font-semibold text-primary tabular">${(rations[i] ?? 0).toFixed(1)}%</span>
+        </div>`
+      ).join('');
+      document.getElementById('advanceModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeAdvanceModal() { document.getElementById('advanceModal').classList.add('hidden'); }
+    function confirmAdvance() {
+      closeAdvanceModal();
+      toast('名單「2026-05 主力催收名單 A」已推進至個別業務比例設定階段', 'success');
+      setTimeout(() => { window.location.href = '27-list-definition.html'; }, 1500);
+    }
+
+    function openRollbackModal() {
+      document.getElementById('rollbackCount').textContent = depts.length;
+      document.getElementById('rollbackConfirm').checked = false;
+      document.getElementById('btnRollbackConfirm').disabled = true;
+      document.getElementById('rollbackModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeRollbackModal() { document.getElementById('rollbackModal').classList.add('hidden'); }
+    function confirmRollback() {
+      closeRollbackModal();
+      toast('OB202605003 已退回草稿，部門比例資料已清空', 'warning');
+      setTimeout(() => { window.location.href = '27-list-definition.html'; }, 1500);
+    }
+
+    function onSave() {
+      toast('部門比例已儲存（mock 不實際 PUT /api/v1/assignment/ratios/dept/OB202605003）', 'success');
+    }
+
+    // ============================================================
+    // Toast
+    // ============================================================
+    function toast(msg, type) {
+      const palette = {
+        success: { bg: '#ECFDF5', border: '#86EFAC', fg: '#065F46', icon: 'check-circle-2' },
+        warning: { bg: '#FFFBEB', border: '#FDE68A', fg: '#92400E', icon: 'alert-triangle' },
+        info:    { bg: '#EFF6FF', border: '#BFDBFE', fg: '#1E40AF', icon: 'info' }
+      };
+      const p = palette[type] || palette.info;
+      const div = document.createElement('div');
+      div.className = 'toast toast-enter rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 text-sm border';
+      div.style.cssText = `background:${p.bg};border-color:${p.border};color:${p.fg};min-width:300px;`;
+      div.innerHTML = `<i data-lucide="${p.icon}" class="w-4 h-4 shrink-0"></i><span>${msg}</span>`;
+      document.getElementById('toastContainer').appendChild(div);
+      lucide.createIcons();
+      requestAnimationFrame(() => {
+        div.classList.remove('toast-enter'); div.classList.add('toast-show');
+      });
+      setTimeout(() => {
+        div.classList.add('toast-enter'); div.classList.remove('toast-show');
+        setTimeout(() => div.remove(), 300);
+      }, 3500);
+    }
+
+    // ============================================================
+    // Init
+    // ============================================================
+    setRole('minister');
+    lucide.createIcons();
+  </script>
+</body>
+</html>

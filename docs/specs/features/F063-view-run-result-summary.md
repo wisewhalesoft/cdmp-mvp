@@ -28,17 +28,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務主管在月跑完成後快速查看分派結果摘要：整體統計、各部門分配量、各 CARD_LEVEL 等級分佈，以及部門實際比例與設定比例的偏差值。偏差超過 ±3% 以橘色標示（NFR-005 警示門檻）。資料來源為 `assignment_run` 基本資訊 + `assignment_run_snapshot` 的 `result` 快照聚合。
+提供業務部長 / 業務處長在月跑完成後快速查看分派結果摘要：整體統計、各部門分配量、各 CARD_LEVEL 等級分佈，以及部門實際比例與設定比例的偏差值。偏差超過 ±3% 以橘色標示（NFR-005 警示門檻）。資料來源為 `assignment_run` 基本資訊 + `assignment_run_snapshot` 的 `result` 快照聚合。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 在月跑完成後查看分派結果的摘要統計
 **So that** 快速確認本月名單總量、各部門分配量、各等級分佈是否符合預期，決定是否需要調整後重跑
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長 / 業務處長已登入並持有有效 JWT Token
 - 目標 `run_id` 存在於 `assignment_run` 且 `status = 'completed'`
 - `assignment_run_snapshot` 已寫入三份快照（`config` / `input_list` / `result`）
 
@@ -47,7 +47,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-1：顯示整體摘要數據
 
 - **Given** 月跑已完成（`status = 'completed'`）
-- **When** 業務主管進入結果摘要頁
+- **When** 業務部長 / 業務處長進入結果摘要頁
 - **Then** 顯示本次月跑的整體統計：
   - `run_id`、`project_workym`、`finished_at`、`duration_ms`
   - 總分派客戶數（`total_cases`）
@@ -57,20 +57,20 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-2：各部門分配量統計
 
 - **Given** 結果摘要頁已顯示
-- **When** 業務主管查看部門分配區塊
+- **When** 業務部長 / 業務處長查看部門分配區塊
 - **Then** 顯示各部門的實際分配量與設定比例的對比，欄位：部門代碼、部門名稱、設定比例（%）、實際分配量、實際比例（%）、偏差值
 - **And** 偏差值 = 實際比例 - 設定比例；若絕對值 > 3%，以橘色標示（NFR-005 警示）
 
 ### AC-3：各等級分佈統計
 
 - **Given** 結果摘要頁已顯示
-- **When** 業務主管查看等級分佈區塊
+- **When** 業務部長 / 業務處長查看等級分佈區塊
 - **Then** 顯示各 CARD_LEVEL（A/B/C/D 等）的客戶數與佔比
 
 ### AC-4：月跑未完成時阻擋
 
 - **Given** 目標 `run_id` 的 `status` 為 `pending` / `running` / `failed`
-- **When** 業務主管嘗試查看結果摘要
+- **When** 業務部長 / 業務處長嘗試查看結果摘要
 - **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPLETED`，訊息：「月跑尚未完成，結果摘要不可用」
 
 ## 5. API 規格
@@ -107,7 +107,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | `run_id` 不存在 |
 | 422 | ASSIGNMENT_RUN_NOT_COMPLETED | 月跑尚未完成 |
 

@@ -9,12 +9,12 @@
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 7 |
-| User Story 總數 | 69 |
+| User Story 總數 | 93（含 A~H 組全批重構；廢棄 4 Story；US-078 保留為流程外查詢入口）|
 | 非功能需求（NFR）總數 | 5 |
 | 目標階段 | Phase 1（MVP）+ Phase 2（Customer 360） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
-| 主要角色 | Admin（管理者）、User（使用者）、業務主管（Sales Manager） |
-| 最後更新 | 2026-04-24（E07 M01 CRUD 擴充並刪除誤解需求 US-076/077；E02 新增 is_sales_manager 旗標；OB 資料庫遷移至 AppDB；E07 總計 21 個 Story；總 User Story 數 69） |
+| 主要角色 | Admin（管理者）、User（使用者）、部長（Director）、處長（Section Chief） |
+| 最後更新 | 2026-05-15（E07 重構 E~H 組：新增 US-109~119；廢棄 US-079/091；補修 US-081/090/101/104/105/106/108；M03 拆分為 M03a/M03b/M03c/M03d） |
 
 ## Epic 索引
 
@@ -26,7 +26,7 @@
 | E04 | [資料擷取管理](epics/E04-data-extraction/epic-brief.md) | 平台能力 | 1（MVP） | 11 | [epic-brief.md](epics/E04-data-extraction/epic-brief.md) |
 | E05 | [ETL Pipeline 管理](epics/E05-etl-pipeline/epic-brief.md) | 平台能力 | 1（MVP） | 18 | [epic-brief.md](epics/E05-etl-pipeline/epic-brief.md) |
 | E06 | [Customer 360](epics/E06-customer-360/epic-brief.md) | 下游應用 | 2 | 2 | [epic-brief.md](epics/E06-customer-360/epic-brief.md) |
-| E07 | [客戶名單分派](epics/E07-app-customer-list-assignment/epic-brief.md) | 下游應用 | 1（MVP） | 21 | [epic-brief.md](epics/E07-app-customer-list-assignment/epic-brief.md) |
+| E07 | [客戶名單分派](epics/E07-app-customer-list-assignment/epic-brief.md) | 下游應用 | 1（MVP） | 46 | [epic-brief.md](epics/E07-app-customer-list-assignment/epic-brief.md) |
 
 ## Story 地圖
 
@@ -85,6 +85,7 @@
 | E07 | [US-072](epics/E07-app-customer-list-assignment/US-072-M02-view-scoring-dimensions.md) | 查看計分維度設定 | Must Have |
 | E07 | [US-073](epics/E07-app-customer-list-assignment/US-073-M02-edit-scoring-dimension.md) | 編輯計分維度與分數 | Must Have |
 | E07 | [US-074](epics/E07-app-customer-list-assignment/US-074-M02-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻 | Must Have |
+| E07 | [US-097](epics/E07-app-customer-list-assignment/US-097-M02-create-card-level.md) | 新增 CARD_LEVEL 等級 | Must Have |
 | E07 | [US-075](epics/E07-app-customer-list-assignment/US-075-M02-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表 | Must Have |
 | E07 | [US-078](epics/E07-app-customer-list-assignment/US-078-M03-view-personnel-ratio.md) | 查看人員比例設定 | Must Have |
 | E07 | [US-079](epics/E07-app-customer-list-assignment/US-079-M03-edit-personnel-ratio.md) | 編輯人員比例設定 | Must Have |
@@ -101,6 +102,27 @@
 | E07 | [US-090](epics/E07-app-customer-list-assignment/US-090-M01-disable-list-definition.md) | 停用名單定義 | Must Have |
 | E07 | [US-091](epics/E07-app-customer-list-assignment/US-091-M03-edit-per-list-dept-ratio.md) | 設定 per-LIST_NO 部門比例 | Must Have |
 | E07 | [US-092](epics/E07-app-customer-list-assignment/US-092-M06-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | Must Have |
+| E07 | [US-100](epics/E07-app-customer-list-assignment/US-100-M07-define-director-role.md) | 部長角色定義與 E07 全模組操作權限 | Must Have |
+| E07 | [US-101](epics/E07-app-customer-list-assignment/US-101-M07-define-section-chief-role.md) | 處長角色定義與可見範圍（收斂版） | Must Have |
+| E07 | [US-102](epics/E07-app-customer-list-assignment/US-102-M06-manage-pooldata-field-whitelist.md) | 管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata） | Must Have |
+| E07 | [US-103](epics/E07-app-customer-list-assignment/US-103-M06-manage-categorical-field-values.md) | 管理類別型欄位的可選值 | Must Have |
+| E07 | [US-104](epics/E07-app-customer-list-assignment/US-104-M01-month-switch-history-readonly.md) | 月份切換與歷史月份唯讀 | Must Have |
+| E07 | [US-105](epics/E07-app-customer-list-assignment/US-105-M01-list-stage-overview.md) | 名單五階段狀態總覽 | Must Have |
+| E07 | [US-106](epics/E07-app-customer-list-assignment/US-106-M01-draft-create-list-with-filter.md) | 草稿階段建立名單與篩選條件 | Must Have |
+| E07 | [US-107](epics/E07-app-customer-list-assignment/US-107-M01-draft-per-list-cr-toggle.md) | 草稿階段 per-LIST_NO CR 回分開關設定 | Must Have |
+| E07 | [US-108](epics/E07-app-customer-list-assignment/US-108-M01-draft-advance-to-dept-ratio.md) | 草稿階段推進至部門比例設定 | Must Have |
+| E07 | [US-120](epics/E07-app-customer-list-assignment/US-120-M01-cr-storage-spec-correction.md) | CR 回分儲存位置 spec 落差修正 | Must Have |
+| E07 | [US-109](epics/E07-app-customer-list-assignment/US-109-M03a-set-dept-ratio.md) | 部門比例設定（各部門分配比例）| Must Have |
+| E07 | [US-110](epics/E07-app-customer-list-assignment/US-110-M03a-advance-to-personnel-ratio.md) | 部門比例設定階段推進至個別業務比例設定 | Must Have |
+| E07 | [US-111](epics/E07-app-customer-list-assignment/US-111-M03a-rollback-to-draft.md) | 部門比例設定階段 Rollback 至草稿 | Must Have |
+| E07 | [US-112](epics/E07-app-customer-list-assignment/US-112-M03b-set-personnel-ratio.md) | 個別業務比例設定（處長設定本部門業務員比例）| Must Have |
+| E07 | [US-113](epics/E07-app-customer-list-assignment/US-113-M03b-quick-ratio-template.md) | 獎懲快速比例設定（相對調整模板）| Must Have |
+| E07 | [US-114](epics/E07-app-customer-list-assignment/US-114-M03b-advance-to-approval.md) | 個別業務比例設定階段推進至簽核 | Must Have |
+| E07 | [US-115](epics/E07-app-customer-list-assignment/US-115-M03b-rollback-to-dept-ratio.md) | 個別業務比例設定階段 Rollback 至部門比例設定 | Must Have |
+| E07 | [US-116](epics/E07-app-customer-list-assignment/US-116-M03c-approve-to-ready.md) | 部長核准名單（簽核通過 → 準備完成）| Must Have |
+| E07 | [US-117](epics/E07-app-customer-list-assignment/US-117-M03c-reject-to-personnel-ratio.md) | 部長拒絕名單並退回個別業務比例設定 | Must Have |
+| E07 | [US-118](epics/E07-app-customer-list-assignment/US-118-M03d-ready-stage-summary.md) | 準備完成階段查詢摘要（唯讀）| Must Have |
+| E07 | [US-119](epics/E07-app-customer-list-assignment/US-119-M03d-rollback-to-approval.md) | 準備完成階段 Rollback 至簽核 | Must Have |
 
 ## 非功能需求（NFR）
 
@@ -125,9 +147,12 @@
 - NFR-001、NFR-002
 
 ### Phase 1（新增）— 客戶名單分派（E07）
-重點：業務主管可獨立操作名單定義、計分設定、分派比例、觸發月跑、匯出結果與查看歷史快照，IT 零介入
+重點：部長 / Admin 可獨立操作名單定義五階段流程、計分設定、分派比例、觸發月跑、匯出結果與查看歷史快照；處長僅可操作個別業務比例設定與準備完成查詢，IT 零介入
 
-- E07 全部 Stories（US-070 ~ US-092）
+- E07 全部 Stories（US-070 ~ US-092、US-097、US-100 ~ US-120，含 M03a/b/c/d 各子模組）
+- US-088 / US-089 已廢棄（由 US-106 取代），保留歷史記錄
+- US-079 已廢棄（由 US-112 取代），US-091 已廢棄（由 US-109 取代），保留歷史記錄
+- US-078 保留為「流程外人員比例查詢入口」（與 US-118 準備完成摘要並行存在）
 - NFR-003（分派執行效能）、NFR-004（快照原子性）、NFR-005（結果準確性）
 
 ### Phase 2 — Customer 360

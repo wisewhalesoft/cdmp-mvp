@@ -28,17 +28,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供 Stage 0「每日電訪名單」預估分派數量與單一 `list_no` 即時案件試算能力，供業務主管在觸發月跑前評估本月工作量配置是否合理、Pool 資料新鮮度是否足夠。本功能為唯讀計算，不寫入 `ob_pool_data_list` 或 `assignment_run`。
+提供 Stage 0「每日電訪名單」預估分派數量與單一 `list_no` 即時案件試算能力，供業務部長在觸發月跑前評估本月工作量配置是否合理、Pool 資料新鮮度是否足夠。本功能為唯讀計算，不寫入 `ob_pool_data_list` 或 `assignment_run`。授權層採 `DirectorGuard`（部長為月跑前置評估角色，處長不執行月跑前置試算；依 F002 §4.6.2）。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 查看 Stage 0（每日電訪名單）的每日預估分派數量，並能針對單一 `list_no` 即時試算符合條件的案件數
 **So that** 可在觸發月跑前評估每日工作量配置、調整比例設定，並確認名單條件涵蓋正確的案件範圍
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長已登入並持有有效 JWT Token
 - 至少一筆 `ob_list_definition` 的 `status = 'active'` 且 `project_workym = :currentYm`
 - `ob_pool_data` 已由 **E04 + E05 雙層 ETL** 流程載入當月資料（詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)；若無資料，估算結果為 0）
 
@@ -46,7 +46,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ### AC-1：顯示 Stage 0 每日估算表
 
-- **Given** 業務主管已進入名單定義頁面並選擇「Stage 0 估算」
+- **Given** 業務部長已進入名單定義頁面並選擇「Stage 0 估算」
 - **When** 頁面載入估算資料
 - **Then** 顯示本月每個工作日的預估分派件數，表格欄位含：日期、星期、預估件數
 - **And** 表格底部顯示本月預估總件數與實際工作天數
@@ -54,7 +54,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-2：估算基準說明
 
 - **Given** Stage 0 估算表已顯示
-- **When** 業務主管查看估算說明區
+- **When** 業務部長查看估算說明區
 - **Then** 顯示估算所使用的基準參數：`ob_pool_data` 總筆數、每日分派比例係數、排除週末/國定假日邏輯
 
 ### AC-3：Pool 筆數偏低警示
@@ -65,8 +65,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ### AC-4：單一 LIST_NO 即時案件試算
 
-- **Given** 業務主管在名單定義清單（F048）中查看某 `status = 'active'` 的名單
-- **When** 業務主管點擊該列的「計算案件數量」按鈕
+- **Given** 業務部長在名單定義清單（F048）中查看某 `status = 'active'` 的名單
+- **When** 業務部長點擊該列的「計算案件數量」按鈕
 - **Then** 系統讀取 `ob_list_definition` 中該 `list_no` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start` ~ `list_period_end` / `settle_src`），對共享案件池 `ob_pool_data` 套用對應 WHERE 子句即時 COUNT，回傳「符合條件案件數：N 筆」（`ob_pool_data` 為共享池，無 `list_no` 欄位，篩選邏輯與月跑 Stage 1 一致）
 - **And** 此試算不執行實際月跑，不寫入 `ob_pool_data_list`，不建立 `assignment_run` 紀錄
 
@@ -74,7 +74,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 - **Given** 單一 LIST_NO 試算查詢超過 10 秒仍未返回
 - **When** 後端偵測逾時
-- **Then** 中斷查詢並回傳 `STAGE0_ESTIMATE_TIMEOUT` 錯誤，提示業務主管稍後再試或聯繫 IT 檢查 `ob_pool_data` 索引
+- **Then** 中斷查詢並回傳 `STAGE0_ESTIMATE_TIMEOUT` 錯誤，提示業務部長稍後再試或聯繫 IT 檢查 `ob_pool_data` 索引
 
 ## 5. API 規格
 
@@ -117,7 +117,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2；月跑前置試算為部長專屬） |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在或 `status = 'inactive'` |
 | 500 | STAGE0_ESTIMATE_TIMEOUT | 試算查詢超過 10 秒 |
 
@@ -148,7 +148,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ## 9. 相依性
 
 - **Blocked By**：F048（名單定義清單）、E04 + E05 雙層 ETL（`ob_pool_data` / `ob_calendar` 資料來源，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)）
-- **Blocks**：F061（觸發月跑前業務主管依此決定是否執行）
+- **Blocks**：F061（觸發月跑前業務部長依此決定是否執行）
 
 ## 10. 交叉參考
 

@@ -78,11 +78,20 @@
       <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
         <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
       </a>
-      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
-      </a>
       <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定
+      </a>
+      <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例
+      </a>
+      <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱
+      </a>
+      <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要
       </a>
       <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
@@ -105,6 +114,11 @@
       <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
       </a>
+      <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+        <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+        <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+      </a>
       </div>
     </nav>
   </aside>
@@ -113,22 +127,39 @@
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
     <h1 class="text-base font-semibold text-gray-800">計分卡設定</h1>
     <div class="flex items-center gap-4">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
-        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-        Sales Manager
-      </span>
-      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
-        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
-        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      <!-- 角色切換器（B1 沿用） -->
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="minister">部長</option>
+          <option value="director">處長</option>
+          <option value="admin">Admin</option>
+          <option value="sales">業務</option>
+        </select>
       </div>
-      <span class="text-sm text-gray-600">王小明</span>
-      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">王部長</span>
     </div>
   </header>
 
   <!-- ===== Main ===== -->
   <main class="ml-56 pt-14">
 
+    <!-- M02 角色封鎖卡片（處長 / 業務員顯示） -->
+    <div id="m02BlockedBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
+        <p class="text-sm text-gray-500 max-w-md">「計分卡設定」（M02）為部長 / Admin 專屬功能。請切換至部長或 Admin 角色查看。處長與業務員無此模組存取權。</p>
+        <a href="27-list-definition.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+          <i data-lucide="list" class="w-4 h-4"></i>返回名單定義
+        </a>
+      </div>
+    </div>
+
+    <div id="mainContent">
     <!-- Demo Bar -->
     <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
       <span class="text-xs text-gray-400 mr-1">Demo:</span>
@@ -377,7 +408,12 @@
             <div class="col-span-2 border-r border-border">
               <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
                 <h4 class="text-sm font-semibold text-gray-700">總分區間 → CARD_LEVEL 對應</h4>
-                <span class="text-xs text-gray-400 ml-auto">資料表 <code>ob_levelcard_level</code></span>
+                <span class="text-xs text-gray-400 ml-2">資料表 <code>ob_levelcard_level</code></span>
+                <button id="btnAddLevel" data-testid="btn-add-level" onclick="openLevelModal()"
+                  class="ml-auto write-btn inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  新增等級
+                </button>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -503,6 +539,7 @@
       </div>
 
     </div>
+    </div><!-- /#mainContent -->
   </main>
 
   <!-- ===== Toast 容器 ===== -->
@@ -902,6 +939,75 @@
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button onclick="closeModal('tierModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
           <button id="tierModalConfirmBtn" onclick="closeModal('tierModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: 新增 CARD_LEVEL 等級（v1.5 — AC-8 ~ AC-8f / §5.4 POST） ===== -->
+  <div id="levelModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('levelModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 class="text-lg font-semibold text-gray-900">新增 CARD_LEVEL 等級</h3>
+          <button onclick="closeModal('levelModal')" class="p-1 hover:bg-gray-100 rounded-md">
+            <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+          </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <!-- CARD_TYPE：由 Tab 1 selectedCardType 帶入，disabled（BR-7 範圍鎖） -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">CARD_TYPE</label>
+            <input id="levelModalCardType" data-testid="level-modal-card-type" type="text" disabled
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono bg-gray-50 text-gray-500 cursor-not-allowed">
+            <p class="text-xs text-gray-400 mt-1">由 Tab 1 選中狀態帶入，不可修改（BR-7 CARD_TYPE 範圍鎖）</p>
+          </div>
+
+          <!-- CARD_LEVEL：單一大寫英文字元，pattern ^[A-Z]$（BR-8） -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">CARD_LEVEL 等級代碼 <span class="text-danger">*</span></label>
+            <input id="levelModalCardLevel" data-testid="level-modal-card-level" type="text" maxlength="1" autocomplete="off"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              oninput="this.value = this.value.toUpperCase()">
+            <p id="levelModalCardLevelError" class="hidden text-xs text-danger mt-1"></p>
+            <p class="text-xs text-gray-400 mt-1">單一大寫英文字元（A~Z），對應 <code>ob_levelcard_level.card_level VARCHAR(1)</code>（BR-8）</p>
+          </div>
+
+          <!-- score_s / score_e -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">score_s（下限）<span class="text-danger">*</span></label>
+              <input id="levelModalScoreS" data-testid="level-modal-score-s" type="number" min="0"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">score_e（上限）<span class="text-danger">*</span></label>
+              <input id="levelModalScoreE" data-testid="level-modal-score-e" type="number" min="0"
+                class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+          </div>
+          <p id="levelModalScoreError" class="hidden text-xs text-danger -mt-2"></p>
+
+          <!-- BR-1 v1.5 提示：允許 gap，僅檢查不重疊 -->
+          <div id="levelModalHint" class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+            <div id="levelModalHintBody" class="text-gray-700"></div>
+          </div>
+
+          <!-- 通用錯誤（422 / 409） -->
+          <div id="levelModalApiError" class="hidden bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 flex items-start gap-2">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 mt-0.5 shrink-0"></i>
+            <span id="levelModalApiErrorText"></span>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button onclick="closeModal('levelModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button id="levelModalConfirmBtn" data-testid="level-modal-submit" onclick="submitAddLevel()"
+            class="write-btn px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            新增等級
+          </button>
         </div>
       </div>
     </div>
@@ -1455,6 +1561,10 @@
           <i data-lucide="inbox" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
           <p>目前無 CARD_LEVEL 等級門檻設定</p>
           <p class="text-xs text-gray-400 mt-1">請點擊「+ 新增等級」開始</p>
+          <button data-testid="btn-add-level-empty" onclick="openLevelModal()" class="write-btn mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            新增等級
+          </button>
         </td></tr>`;
       } else {
         tbody.innerHTML = list.map(l => `
@@ -1589,6 +1699,132 @@
       // 預設規則類型 Standard，依當前 CARD_TYPE ob_tier 紀錄判斷互斥
       onTierModeChange('standard');
       openModal('tierModal');
+    }
+
+    // ===== Tab 4 新增等級 Modal（F055 v1.5 — AC-8 ~ AC-8f / §5.4 POST） =====
+    function nextAvailableLevel(existing) {
+      for (const c of 'ABCDEFGHIJ') if (!existing.includes(c)) return c;
+      return '';
+    }
+
+    function openLevelModal() {
+      const ct = selectedCardType;
+      if (!ct) return;
+      const meta = getCardType(ct);
+      document.getElementById('levelModalCardType').value = `${ct} — ${meta?.cardName || ''}`;
+      const existing = (levelsByType[ct] || []).slice();
+      const existingCodes = existing.map(l => l.cardLevel);
+      const nextLevel = nextAvailableLevel(existingCodes);
+      document.getElementById('levelModalCardLevel').value = nextLevel;
+      // 預填 scoreS/scoreE：無資料→0~999；有資料→建議落在最低級之下（不自動 re-balance）
+      if (existing.length === 0) {
+        document.getElementById('levelModalScoreS').value = 0;
+        document.getElementById('levelModalScoreE').value = 999;
+      } else {
+        const lowest = existing.slice().sort((a,b) => a.scoreS - b.scoreS)[0];
+        document.getElementById('levelModalScoreS').value = '';
+        document.getElementById('levelModalScoreE').value = Math.max(0, lowest.scoreS - 1);
+      }
+      renderLevelModalHint();
+      resetLevelModalErrors();
+      openModal('levelModal');
+    }
+
+    function renderLevelModalHint() {
+      const ct = selectedCardType;
+      const list = (levelsByType[ct] || []).slice().sort((a,b) => b.scoreS - a.scoreS);
+      const body = document.getElementById('levelModalHintBody');
+      if (list.length === 0) {
+        body.innerHTML = `<p class="font-medium text-gray-800">將建立第一個等級</p><p class="text-gray-600 mt-0.5">建議從 A 級開始（最高分），score_e 通常設為 999</p>`;
+      } else {
+        const ranges = list.map(l => `<strong>${l.cardLevel}</strong>（${l.scoreS}~${l.scoreE}）`).join('、');
+        body.innerHTML = `<p class="font-medium text-gray-800">BR-1（v1.5 修訂）：新區間不可與既有等級重疊；允許 gap，相鄰等級不強制連續</p><p class="text-gray-600 mt-0.5">目前已有：${ranges}</p>`;
+      }
+    }
+
+    function resetLevelModalErrors() {
+      ['levelModalCardLevelError','levelModalScoreError','levelModalApiError'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.classList.add('hidden'); if (el.tagName === 'P') el.textContent = ''; }
+      });
+      // 重置紅框
+      ['levelModalCardLevel','levelModalScoreS','levelModalScoreE'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('border-danger','border-2');
+      });
+    }
+
+    function showLevelFieldError(fieldId, errorElId, msg) {
+      const el = document.getElementById(fieldId);
+      const err = document.getElementById(errorElId);
+      if (el) el.classList.add('border-danger','border-2');
+      if (err) { err.classList.remove('hidden'); err.textContent = msg; }
+    }
+
+    function showLevelApiError(msg) {
+      const wrap = document.getElementById('levelModalApiError');
+      const text = document.getElementById('levelModalApiErrorText');
+      wrap.classList.remove('hidden');
+      text.textContent = msg;
+    }
+
+    function submitAddLevel() {
+      const ct = selectedCardType;
+      if (!ct) return;
+      // 月跑鎖（AC-8e / BR-3）
+      if (monthRunLocked) {
+        showLevelApiError('分派執行中，無法新增 CARD_LEVEL 等級（409 SCORING_VERSION_LOCKED）');
+        return;
+      }
+      resetLevelModalErrors();
+      const lvl = document.getElementById('levelModalCardLevel').value.trim().toUpperCase();
+      const ssRaw = document.getElementById('levelModalScoreS').value;
+      const seRaw = document.getElementById('levelModalScoreE').value;
+      const ss = parseInt(ssRaw, 10);
+      const se = parseInt(seRaw, 10);
+
+      // AC-8d / BR-8：cardLevel 格式 ^[A-Z]$
+      if (!/^[A-Z]$/.test(lvl)) {
+        showLevelFieldError('levelModalCardLevel','levelModalCardLevelError','等級代碼必須為單一大寫英文字元（A~Z）');
+        return;
+      }
+      // 必填數值
+      if (ssRaw === '' || seRaw === '' || Number.isNaN(ss) || Number.isNaN(se)) {
+        showLevelFieldError('levelModalScoreS','levelModalScoreError','score_s / score_e 為必填數值（VALIDATION_ERROR）');
+        document.getElementById('levelModalScoreE').classList.add('border-danger','border-2');
+        return;
+      }
+      // §5.4 寫入語意 step 3：scoreE >= scoreS
+      if (ss < 0 || se < ss) {
+        showLevelFieldError('levelModalScoreS','levelModalScoreError','score_s 必須 ≥ 0，且 score_e ≥ score_s（VALIDATION_ERROR）');
+        document.getElementById('levelModalScoreE').classList.add('border-danger','border-2');
+        return;
+      }
+
+      const existing = levelsByType[ct] || [];
+      // AC-8c / 422 CARD_LEVEL_DUPLICATE：應用層唯一性檢查
+      if (existing.find(l => l.cardLevel === lvl)) {
+        showLevelFieldError('levelModalCardLevel','levelModalCardLevelError',`等級 ${lvl} 已存在於 CARD_TYPE = ${ct}（422 CARD_LEVEL_DUPLICATE）`);
+        return;
+      }
+      // AC-8b / 422 SCORING_RANGE_OVERLAP：BR-1 v1.5 — 僅檢查不重疊，允許 gap
+      for (const l of existing) {
+        if (!(se < l.scoreS || ss > l.scoreE)) {
+          document.getElementById('levelModalScoreS').classList.add('border-danger','border-2');
+          document.getElementById('levelModalScoreE').classList.add('border-danger','border-2');
+          const err = document.getElementById('levelModalScoreError');
+          err.classList.remove('hidden');
+          err.textContent = `新增等級 ${lvl} 區間 ${ss}~${se} 與既有等級 ${l.cardLevel} 區間 ${l.scoreS}~${l.scoreE} 重疊，請調整`;
+          return;
+        }
+      }
+
+      // 成功：寫入 mock + 依 scoreS 降冪重排（A 在上）
+      levelsByType[ct] = [...existing, { cardLevel: lvl, scoreS: ss, scoreE: se }]
+        .sort((a,b) => b.scoreS - a.scoreS);
+      closeModal('levelModal');
+      renderLevel();
+      showToast('success', `等級 ${lvl} 已新增（區間 ${ss}~${se}）`);
     }
 
     // ===== 新增 CARD_TYPE Modal =====
@@ -1770,22 +2006,34 @@
       lucide.createIcons();
     }
 
-    // ===== Role toggle =====
+    // ===== Role toggle (B7 standard 4-role) =====
+    const ROLE_META = {
+      minister: { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '王部長' },
+      director: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長' },
+      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員' },
+      sales:    { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務' }
+    };
+    let currentRole = 'minister';
+    function renderRoleBadge(role) {
+      const m = ROLE_META[role] || ROLE_META.sales;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+    }
     function setRole(role) {
-      const adminBtn = document.getElementById('role-admin');
-      const userBtn = document.getElementById('role-user');
-      if (role === 'admin') {
-        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
-        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
-      } else {
-        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
-        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
-      }
+      currentRole = role;
+      const sw = document.getElementById('role-switcher');
+      if (sw) sw.value = role;
+      document.getElementById('role-badge-container').innerHTML = renderRoleBadge(role);
+      document.getElementById('user-name').textContent = ROLE_META[role].name;
+      // M02 守衛：處長 + 業務員 整頁封鎖
+      const blocked = (role === 'director' || role === 'sales');
+      document.getElementById('mainContent').classList.toggle('hidden', blocked);
+      document.getElementById('m02BlockedBanner').classList.toggle('hidden', !blocked);
+      lucide.createIcons();
     }
 
     // ===== Month run lock：apply 至所有 .write-btn =====
     function applyMonthRunLockButtons() {
-      const writeBtns = document.querySelectorAll('.write-btn, #btnAddCardType, #btnAddDim, #btnAddScore, #btnSaveLevel, #btnAddTier');
+      const writeBtns = document.querySelectorAll('.write-btn, #btnAddCardType, #btnAddDim, #btnAddScore, #btnAddLevel, #btnSaveLevel, #btnAddTier');
       writeBtns.forEach(b => {
         b.disabled = monthRunLocked;
         if (monthRunLocked) {
@@ -1836,7 +2084,7 @@
       const banner = document.getElementById('prodKindBanner');
       banner.className = 'mb-4 rounded-xl bg-white border border-border shadow-sm';
       // 關所有 Modal
-      ['createCardTypeModal','editCardTypeModal','deleteCardTypeModal','dimModal','scoreModal','tierModal'].forEach(id => {
+      ['createCardTypeModal','editCardTypeModal','deleteCardTypeModal','dimModal','scoreModal','tierModal','levelModal'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
       });
       document.body.style.overflow = '';
@@ -1963,6 +2211,11 @@
         setAssignmentExpanded(shouldExpand, false);
       });
     })();
+
+    // 初始化角色（B7 標準）
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof setRole === 'function') setRole('minister');
+    });
   </script>
 </body>
 </html>

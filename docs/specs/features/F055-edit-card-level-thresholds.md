@@ -28,18 +28,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管針對 Tab 1 選中之 CARD_TYPE，調整 CARD_LEVEL 各等級（A/B/C/D 等）的分數下限門檻（`ob_levelcard_level`）。修改時提供「預估各等級客戶分佈」預覽，並驗證門檻不得重疊。亦支援刪除特定等級（DELETE）以反映業務調整等級結構。所有寫入操作之範圍均限定於 Tab 1 選中之 CARD_TYPE。月跑執行中禁止修改。本功能屬 M02 計分設定 5 Tab 結構中的 Tab 4。
+提供業務部長針對 Tab 1 選中之 CARD_TYPE，調整 CARD_LEVEL 各等級（A/B/C/D 等）的分數下限門檻（`ob_levelcard_level`）。修改時提供「預估各等級客戶分佈」預覽，並驗證門檻不得重疊。亦支援刪除特定等級（DELETE）以反映業務調整等級結構。所有寫入操作之範圍均限定於 Tab 1 選中之 CARD_TYPE。月跑執行中禁止修改。本功能屬 M02 計分設定 5 Tab 結構中的 Tab 4。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 調整 CARD_LEVEL 的分級門檻（各等級的分數下限）
 **So that** 可根據本月客戶評分分佈，重新劃定等級分界線，確保名單分配比例合理
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長已登入並持有有效 JWT Token
+- `businessRole='director'`（M02 計分卡寫入限部長，後端套用 `DirectorGuard`，依 F002 §4.6.2）
 - F069 Tab 1 已有選中之 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status = 'active'`
 - `ob_levelcard_level` 已有對應 `card_type + card_version` 的分級資料（若為剛建立之 CARD_TYPE 可為空，依 AC-1 之空狀態處理）
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 的紀錄
@@ -48,7 +48,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-1：依選中 CARD_TYPE 顯示 CARD_LEVEL 門檻設定
 
-- **Given** 業務主管已在 Tab 1 選中某 CARD_TYPE，並切換至 Tab 4
+- **Given** 業務部長已在 Tab 1 選中某 CARD_TYPE，並切換至 Tab 4
 - **When** 頁面載入完成
 - **Then** 顯示該 CARD_TYPE 之 active 版本各等級的分數區間（`score_s` ~ `score_e`）與等級代碼（`card_level`），表格欄位：等級代碼、等級名稱、分數下限、分數上限
 - **And** 不同 CARD_TYPE 的等級數可能不同（OBLEVELCARD_LEVEL dump 中 `S5` 僅 A/B 兩級，其餘 H/S/E/E5/M 為 A/B/C/D 四級），UI 與 API 不可硬編碼 4 級邏輯
@@ -57,15 +57,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-2：修改門檻值並儲存
 
-- **Given** 業務主管進入編輯模式
-- **When** 業務主管修改某等級的 `score_s` 或 `score_e`，點擊「儲存」
+- **Given** 業務部長進入編輯模式
+- **When** 業務部長修改某等級的 `score_s` 或 `score_e`，點擊「儲存」
 - **Then** `ob_levelcard_level` 對應列 UPDATE，頁面顯示儲存成功提示
 - **And** 若修改後導致等級之間的區間重疊（例如 B 的 `score_s` ≤ A 的 `score_e`），顯示驗證錯誤，不允許儲存
 - **And** 寫入 `assignment_audit_log`（`action = 'UPDATE'`）
 
 ### AC-3：門檻變更預覽影響
 
-- **Given** 業務主管修改門檻值（尚未儲存）
+- **Given** 業務部長修改門檻值（尚未儲存）
 - **When** 修改完成
 - **Then** 頁面顯示預估影響：「預估各等級客戶分佈：A 級 N 人 / B 級 N 人 / C 級 N 人 / D 級 N 人」
 - **And** 預覽計算以目前 `ob_pool_data` 套用新門檻（允許最多 1 分鐘的應用層快取）
@@ -73,27 +73,27 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ### AC-4：月跑執行中禁止修改
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
-- **When** 業務主管嘗試進入編輯模式
+- **When** 業務部長嘗試進入編輯模式
 - **Then** 編輯按鈕 disabled，提示「分派執行中，無法修改 CARD_LEVEL 門檻」
 - **And** API 回傳 409 `SCORING_VERSION_LOCKED`
 
 ### AC-5：門檻區間不重疊驗證
 
-- **Given** 業務主管修改 B 級 `score_s` 為 65，A 級 `score_e` 為 80
-- **When** 業務主管點擊「儲存」
+- **Given** 業務部長修改 B 級 `score_s` 為 65，A 級 `score_e` 為 80
+- **When** 業務部長點擊「儲存」
 - **Then** 回傳 422 `SCORING_RANGE_OVERLAP`，訊息：「等級 B 下限 65 與等級 A 上限 80 重疊，請調整」
 
 ### AC-6：刪除單一 CARD_LEVEL 列
 
-- **Given** 業務主管於 CARD_LEVEL 設定頁面看到某等級列；該等級於 `ob_levelcard_level` 中存在；無月跑鎖
-- **When** 業務主管點擊該列的刪除按鈕並於確認對話框點擊「確認刪除」
+- **Given** 業務部長於 CARD_LEVEL 設定頁面看到某等級列；該等級於 `ob_levelcard_level` 中存在；無月跑鎖
+- **When** 業務部長點擊該列的刪除按鈕並於確認對話框點擊「確認刪除」
 - **Then** 呼叫 `DELETE /api/v1/assignment/scoring/card-levels`（query: `cardType` + `cardVersion` + `cardLevel`），HTTP 200，DB 中該複合 PK 紀錄被實體刪除（hard delete）
 - **And** 寫入 `assignment_audit_log`（`action = 'DELETE'`、`entity_type = 'ob_levelcard_level'`、`entity_id = '{cardType}|{cardVersion}|{cardLevel}'`、`before_value` 含舊 `scoreS` / `scoreE`、`after_value = null`）
 - **And** 刪除完成後該等級不再出現於 `GET /scoring/card-levels` 回應
 
 ### AC-7：刪除前 cascade 檢查（採方案 A）
 
-- **Given** 業務主管點擊刪除按鈕
+- **Given** 業務部長點擊刪除按鈕
 - **When** 確認對話框開啟
 - **Then** 對話框顯示警告文字：「刪除後此等級不再參與月跑 Stage 2 分級。若 TIER_LEVEL 對應（F056）中仍有此 `(cardType, cardLevel)` 紀錄，將無法刪除。」
 - **And** 執行 DELETE 時，後端先檢查 `ob_tier WHERE card_type = :cardType AND card_level = :cardLevel`：
@@ -102,7 +102,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 5. API 規格
 
-**Controller 規範**（適用於本節所有端點）：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**（適用於本節所有端點）：GET 端點（5.1.1 / 5.2 preview）使用 `DirectorOrSectionChiefGuard`；寫入端點（5.1 PUT / 5.3 DELETE）使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2）。
 
 **CARD_TYPE 範圍鎖**：本節所有端點之 `cardType` 必須對應 `ob_card_type.status = 'active'`，否則回 404 `CARD_TYPE_NOT_FOUND`（v1.4 新增）。
 
@@ -139,7 +139,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard` 攔截）；GET 端點：`businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，回 `E07_ROLE_NOT_ASSIGNED`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增） |
 | 404 | SCORING_VERSION_NOT_FOUND | 該 `cardType` 無 active 計分版本，或指定 `cardVersion` 不存在 |
 
@@ -194,7 +194,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard` 攔截）；GET 端點：`businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，回 `E07_ROLE_NOT_ASSIGNED`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增；亦適用於 §5.1 PUT 端點 — request body 之 cardType） |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 422 | SCORING_RANGE_OVERLAP | 門檻區間重疊 |
@@ -229,7 +229,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard` 攔截）；GET 端點：`businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，回 `E07_ROLE_NOT_ASSIGNED`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增） |
 | 404 | CARD_LEVEL_RECORD_NOT_FOUND | 指定的 `(cardType, cardVersion, cardLevel)` 紀錄不存在於 `ob_levelcard_level` |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |

@@ -1,0 +1,60 @@
+%% F078 v1.0 草稿階段推進至部門比例設定流程（含 feature flag gating + 6 項前置條件嚴格驗證）
+%% 引用：features/F078-draft-advance-to-dept-ratio.md §4 / §5 / §6
+flowchart TD
+    Start([部長 / Admin 在 F077 草稿視圖看到名單]) --> RoleCheck{角色為 Director / Admin？}
+    RoleCheck -- 否 --> Hide[「推進」按鈕完全不渲染]
+    Hide --> EndForbidden([結束：處長無權推進])
+
+    RoleCheck -- 是 --> ClickAdvance[點擊「推進至部門比例設定」]
+    ClickAdvance --> ClientValid{前端驗證：condition_payload.conditions ≥ 1？}
+    ClientValid -- 否 --> ShowError[顯示「請先設定至少一個篩選條件」]
+    ShowError --> EndClient([結束：前端阻擋])
+
+    ClientValid -- 是 --> Modal[Modal 確認對話框<br/>顯示警告：推進後篩選條件與 CR 開關鎖定<br/>如需修改請先 Rollback 至草稿]
+    Modal --> UserConfirm{使用者選擇}
+    UserConfirm -- 取消 --> EndCancel([結束：使用者取消])
+
+    UserConfirm -- 確認推進 --> SubmitAPI[POST /api/v1/assignment/list-definitions/listNo/advance-to-dept-ratio]
+
+    SubmitAPI --> FlagCheck{ENABLE_E07_REFACTOR_PHASE3 = true？}
+    FlagCheck -- 否 --> Return503[503 SERVICE_UNAVAILABLE]
+    Return503 --> EndFlag([結束：feature flag 未啟用])
+
+    FlagCheck -- 是 --> F059Check{F059 殘留程式碼偵測}
+    F059Check -- 殘留 --> Return500[500 LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059]
+    Return500 --> EndF059([結束：F059 未移除])
+
+    F059Check -- 已移除 --> Guard1{DirectorGuard 通過？}
+    Guard1 -- 否 --> R403_1[403 E07_FORBIDDEN_DIRECTOR_ONLY]
+    R403_1 --> EndAuth([結束：處長被攔截])
+
+    Guard1 -- 是 --> Pre1{1. list_no 存在？}
+    Pre1 -- 否 --> R404[404 ASSIGNMENT_LIST_NOT_FOUND]
+    R404 --> EndPre1([結束：名單不存在])
+
+    Pre1 -- 是 --> Pre2{2. status = active？}
+    Pre2 -- 否 --> R422_inactive[422 ASSIGNMENT_LIST_INACTIVE]
+    R422_inactive --> EndPre2([結束：已停用])
+
+    Pre2 -- 是 --> Pre3{3. stage = draft？}
+    Pre3 -- 否 --> R422_stage[422 LIST_STAGE_NOT_DRAFT]
+    R422_stage --> EndPre3([結束：非草稿])
+
+    Pre3 -- 是 --> Pre4{4. condition_payload.conditions ≥ 1？}
+    Pre4 -- 否 --> R422_cond[422 LIST_DRAFT_NO_CONDITIONS]
+    R422_cond --> EndPre4([結束：條件為空])
+
+    Pre4 -- 是 --> Pre5{5. project_workym ≥ current_work_ym？}
+    Pre5 -- 否 --> R403_hist[403 LIST_HISTORICAL_READONLY]
+    R403_hist --> EndPre5([結束：歷史月份])
+
+    Pre5 -- 是 --> Pre6{6. assignment_run 非 pending / running？}
+    Pre6 -- 否 --> R409[409 ASSIGNMENT_RUN_ALREADY_RUNNING]
+    R409 --> EndPre6([結束：月跑執行中])
+
+    Pre6 -- 是 --> Tx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = dept_ratio<br/>       updated_by = current user<br/>       updated_at = NOW<br/>   WHERE list_no = listNo<br/>2. INSERT assignment_audit_log<br/>   action = ADVANCE_STAGE<br/>   before.stage = draft<br/>   after.stage = dept_ratio]
+
+    Tx --> Success[200 OK<br/>回傳 stage = dept_ratio + previousStage = draft]
+    Success --> ToastShow[toast：名單 listNm 已推進至部門比例設定階段]
+    ToastShow --> RefreshList[F077 清單頁刷新<br/>該名單從「草稿」視圖移至「部門比例設定」視圖<br/>操作按鈕欄重新渲染：設定部門比例 / Rollback / 推進]
+    RefreshList --> EndSuccess([結束：推進成功])

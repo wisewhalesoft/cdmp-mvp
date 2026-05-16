@@ -5,14 +5,32 @@ feature-id: F008
 source-story: US-014
 epic: E02
 priority: P0-MVP
-version: "3.2"
-date: 2026-05-13
-status: Draft
+version: "3.0-DEPRECATED"
+date: 2026-05-16
+status: Deprecated
 ---
 
-# F008: 指派／變更角色
+# F008: 指派／變更角色（DEPRECATED）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-13
+Priority: P0-MVP | Status: **DEPRECATED v3.0** | Last Updated: 2026-05-16
+
+> **⚠️ DEPRECATED（v3.0-DEPRECATED / 2026-05-16 / E07 合併重構 AD-E07 v3.0）**：本 spec 因 E07 重構廢除 `users.is_sales_manager` 欄位而**整體廢棄**。
+>
+> **廢棄範圍**：
+> - PATCH `/api/v1/accounts/:id/sales-manager-flag` 端點廢除
+> - v1.4 短期過渡 PATCH `/api/v1/accounts/:id/e07-role` 端點廢除
+> - 「變更角色 dialog」內「業務主管權限」checkbox 廢除
+> - 「業務主管」label 廢除（改用「業務部長」/「業務處長」/「一般使用者」三 label）
+>
+> **取代路徑**：
+> - **變更業務角色** → 改走 [F006a：PATCH `/api/v1/accounts/:id/business-role`](F006a-update-business-role.md)（單一端點，body `{ business_role: 'director' | 'section_chief' | null }`）
+> - **變更系統角色（admin / user）** → 仍由本 spec 之 PATCH `/role` 端點承擔，但本 spec 已停止維護；如需重新啟用 PATCH `/role` 之語意，請另起 spec（建議 F008a 或 F006b）
+>
+> **資料模型變更**：`users.is_sales_manager` 欄位於 m14 migration DROP；新增 `users.business_role VARCHAR(20) NULL`（CHECK constraint enum）。詳見 [data-model.md#user-entity](../data-model.md#user-entity)。
+>
+> **保留原因**：本檔保留以便歷史追溯（v3.2 之前的設計脈絡 + audit log 中 `ASSIGN_SALES_MANAGER` / `REVOKE_SALES_MANAGER` 行為解讀）；新功能 spec **不**應引用本檔。
+>
+> **以下原 v3.2 內容保留供歷史追溯，不再具備有效性**。
 
 ## 功能摘要
 

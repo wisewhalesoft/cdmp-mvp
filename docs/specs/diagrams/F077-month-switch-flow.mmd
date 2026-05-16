@@ -1,0 +1,48 @@
+%% F077 — 月份切換 + 唯讀判斷流程
+%% 描述前端進入 M01 名單定義頁時，月份切換器初始化、URL ?ym= 同步、歷史 / 當月 / 未來分支的處理
+%% 配合 F077 §4 AC-1 ~ AC-4 / AC-10 與 §6 BR-1 ~ BR-4 閱讀
+flowchart TD
+    Start([使用者進入 M01 名單定義頁]) --> FetchCwy[GET /api/v1/assignment/current-work-ym<br/>取得 currentWorkYm / rangeMin / rangeMax]
+    FetchCwy --> CheckUrlYm{URL 含 ?ym= ?}
+
+    CheckUrlYm -->|否| UseDefault[selectedYm = currentWorkYm]
+    CheckUrlYm -->|是| ValidateYm{ym 在 range 內?<br/>rangeMin ≤ ym ≤ rangeMax}
+
+    ValidateYm -->|否| FallbackToCurrent[Fallback 至 currentWorkYm<br/>+ Toast「月份超出範圍」<br/>更新 URL ?ym = currentWorkYm]
+    ValidateYm -->|是| UseUrlYm[selectedYm = URL ym]
+
+    UseDefault --> FetchList
+    UseUrlYm --> FetchList
+    FallbackToCurrent --> FetchList
+
+    FetchList[GET /api/v1/assignment/list-definitions<br/>?ym=selectedYm&stage=...] --> CheckType{selectedYm vs currentWorkYm}
+
+    CheckType -->|selectedYm < currentWorkYm| Historical[**歷史月份**<br/>readonly = true]
+    CheckType -->|selectedYm = currentWorkYm| Current[**當月**<br/>readonly = false<br/>完整操作能力]
+    CheckType -->|selectedYm > currentWorkYm| Future[**未來月份**<br/>readonly = false<br/>部長 / Admin 可預先建立草稿]
+
+    Historical --> RenderReadonly[渲染清單<br/>**所有寫入按鈕完全不渲染**<br/>顯示「歷史月份唯讀」提示條<br/>API 寫入路徑被下游 Guard 攔截<br/>→ 403 LIST_HISTORICAL_READONLY]
+
+    Current --> CheckLock{lockState.locked ?}
+    Future --> CheckLock
+
+    CheckLock -->|true| RenderLocked[渲染清單<br/>所有寫入按鈕 disabled<br/>橘色「分派執行中」通知條]
+    CheckLock -->|false| RenderActive[渲染清單<br/>依「角色 × 階段」矩陣<br/>渲染對應操作按鈕<br/>F077 AC-7 BR-9]
+
+    RenderReadonly --> End([頁面就緒])
+    RenderLocked --> End
+    RenderActive --> End
+
+    classDef apiNode fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef decisionNode fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef historicalNode fill:#f3f4f6,stroke:#6b7280,color:#374151
+    classDef currentNode fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef futureNode fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef errorNode fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class FetchCwy,FetchList apiNode
+    class CheckUrlYm,ValidateYm,CheckType,CheckLock decisionNode
+    class Historical,RenderReadonly historicalNode
+    class Current,RenderActive currentNode
+    class Future futureNode
+    class FallbackToCurrent,RenderLocked errorNode

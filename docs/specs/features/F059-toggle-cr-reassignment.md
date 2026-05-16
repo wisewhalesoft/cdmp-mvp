@@ -1,19 +1,32 @@
 ---
 spec-id: F059
-title: 開關 CR 回分規則
+title: 開關 CR 回分規則（DEPRECATED v2.0）
 feature-id: F059
 source-story: US-080
 epic: E07
 module: M03 分派比例
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
-status: Draft
+version: "2.0-DEPRECATED"
+date: 2026-05-16
+status: Deprecated
+supersededBy: F050, F051, ob_list_definition.cr_enabled
 ---
 
-# F059: 開關 CR 回分規則
+# F059: 開關 CR 回分規則 — DEPRECATED (v2.0)
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+> **DEPRECATED — 2026-05-16 / v2.0**
+>
+> 本 spec 已於 AD-E07 v3.0 / F002 v2.0 重構期間廢止，**不再進入 MVP 實作**。
+>
+> - **取代路徑**：
+>   - 名單建立階段 → [F050 v2.0 建立名單定義](F050-create-list-definition.md)（建立時直接設定 `ob_list_definition.cr_enabled`）
+>   - 名單編輯階段 → [F051 v2.0 編輯名單定義](F051-edit-list-definition.md)（限草稿狀態調整 `cr_enabled`）
+> - **廢止原因**：CR 回分由「全域開關」改為 **per-list flag**（`ob_list_definition.cr_enabled BOOLEAN NOT NULL DEFAULT false`），授權整合至名單 CRUD（`DirectorGuard`）；不再需要獨立切換端點
+> - **下游影響**：US-080 已 reroute 至 F050/F051；data-model 不再保留全域 `cr_reassignment_enabled` 設定
+>
+> 以下 v1.0 內容僅供歷史比對，**禁止用於實作**。
+
+Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 ## Agent Loading Guide
 

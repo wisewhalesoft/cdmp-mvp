@@ -1,16 +1,32 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "2.8"
-date: 2026-05-06
+version: "3.0"
+date: 2026-05-16
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **文件總數**：104 份（7 支援文件含 spec-index 本檔 + 68 Feature 文件 + 29 圖表文件）
-> **最後更新**：2026-05-06
+> **文件總數**：132 份（7 支援文件含 spec-index 本檔 + 86 Feature 文件含新建 F006a + 39 圖表文件）
+> **最後更新**：2026-05-16（**v3.0 / E07 合併重構 AD-E07 v3.0 — 破壞性大改**）
+
+> **v3.0 / 2026-05-16 破壞性變更摘要**：依 system-architect AD-E07 v3.0 合併重構決議，廢除 v1.x 「`users.is_sales_manager` BOOLEAN + `users.e07_role` VARCHAR」正交雙欄位設計，整合為**單一欄位** `users.business_role VARCHAR(20) NULL`（enum：`'director'` / `'section_chief'` / `NULL`，DB CHECK constraint 強制）。系統實質身份共 **4 種 label**：「系統管理者」/「業務部長」/「業務處長」/「一般使用者」（廢除 v1.x「業務主管」中間語意層）。`SalesManagerGuard` 全數廢除，改用 `DirectorGuard` / `SectionChiefGuard` / `DirectorOrSectionChiefGuard` 三 Guard 體系。新增錯誤碼 `E07_ROLE_NOT_ASSIGNED`（403）取代未指派時的模糊 `AUTH_FORBIDDEN`。
+>
+> **本輪受影響檔案清單**：
+> - **新建**：[F006a-update-business-role.md](features/F006a-update-business-role.md) v1.0（PATCH `/business-role` 唯一寫入入口）
+> - **重寫 v2.0**：[F073-define-director-role.md](features/F073-define-director-role.md)、[F074-define-section-chief-role.md](features/F074-define-section-chief-role.md)
+> - **DEPRECATED**：[F008-assign-change-role.md](features/F008-assign-change-role.md) v3.0-DEPRECATED（PATCH `/sales-manager-flag` 與 v1.4 短期過渡 PATCH `/e07-role` 端點均廢除）
+> - **補修 banner**：F002 v2.0 / F005 v3.2 / F006 v2.3（核心欄位變更聲明 + 變更指向 F006a；§4.5 / §4.6 之完整重寫請以 F006a + F073 v2.0 + F074 v2.0 三 spec 為主要權威來源）
+> - **支援文件**：data-model.md（User 實體 + m14 migration 規範）、error-handling.md v1.14（新增 `E07_ROLE_NOT_ASSIGNED` / `ACCOUNT_BUSINESS_ROLE_INVALID`；標 DEPRECATED：`ACCOUNT_E07_ROLE_INVALID` / `ACCOUNT_E07_ROLE_FORBIDDEN` / `E07_FORBIDDEN_DIRECTOR_ONLY`）、architecture-spec.md v2.11（§3.10 補 `AccountsService.updateBusinessRole()` + Guard 三元件清單）
+> - **F050~F072 批次**：23 個 spec 中之 ASCII 識別字（`SalesManagerGuard` → `DirectorOrSectionChiefGuard` / `is_sales_manager` → `business_role` / `e07_role` → `business_role`）需於下一輪批次補修；本輪因 PowerShell 編碼事故（見下方 Known Issues）已 git checkout 還原；改採「依 demand 逐 spec 補修」策略，下游 TDD developer / QA 應以 [F002 v2.0 §4.6](features/F002-user-login.md#e07-角色矩陣) + [F006a](features/F006a-update-business-role.md) + [F073 v2.0](features/F073-define-director-role.md) + [F074 v2.0](features/F074-define-section-chief-role.md) 四檔為**唯一權威來源**，凡這四檔與其他 E07 spec 衝突時以這四檔為準
+>
+> **⚠️ Known Issues（本輪事故記錄）**：spec-writer agent 於 2026-05-16 嘗試以 PowerShell 5.1 批次替換 23 個 spec 之識別字時，因 `Get-Content -Raw` 預設 cp950 解碼導致 15 個 untracked 新檔（F075~F089）之中文段落損壞（識別字、結構、code 區塊、英文 ASCII 內容**仍正確**，僅中文文字段落變為亂碼或 `?` 替代字元）。F083 受兩次 PowerShell 操作疊加破壞，亂碼最重。**這 15 個 spec 之 ASCII 識別字、API 端點、欄位名、Guard 名、錯誤碼名等技術內容仍可信賴**；中文敘述、AC 描述、BR 文字部分需用戶提供原始備份或重新生成。已 commit 至 HEAD 之 31 個 spec（F048 / F049 / F050~F072 / F002 / F005 / F006 / F008 等）已透過 `git checkout -- ...` 完整還原至 HEAD 版（v1.x），未受編碼事故影響；其中 F002 / F005 / F006 / F008 已重新加上 v3.0 補修 banner（核心變更聲明）。
+>
+> **下一輪建議（給 spec-writer）**：(1) 用戶確認 F075~F089 救援策略（從本機備份恢復 / 從 `.claude/projects/.../*.jsonl` 對話記錄抓回 / 重新生成）；(2) F048~F072 之 23 個 spec 之識別字批次補修，**禁用 PowerShell**，改用 Edit 工具或 Git Bash sed（具備 LANG=zh_TW.UTF-8 環境）；(3) 補 F002 §4.5 / §4.6 完整重寫（目前僅 banner，矩陣詳細表格須以 [F002 v2.0 ${EDITOR_RESCUE}] 之既有編輯為基礎重作 — 由於 git checkout 還原，這些細節已遺失，需重做）。
+>
+> **上一輪更新**：2026-05-16（**E07 重構衍生 spec 補修第二輪（system-architect Phase 1 / 6 項風險決議落地）**：F082 升至 v1.3（決議 #1 全員離職邊界選項 D + 決議 #2 503 + `FEATURE_NOT_ENABLED` + 決議 #4 `SectionChiefScopeGuard` method 分支 + 決議 #5 fixture factory 策略 + 決議 #6 `AssignmentRunGuardService.assertNoRunningRun()` 集中實作）；F079 / F081 升至 v1.1、F080 升至 v1.1、F083 升至 v1.2、F084 升至 v1.2、F085 升至 v1.2、F086 升至 v1.1、F087 升至 v1.1、F089 升至 v1.1（統一補入 BR-`AssignmentRunGuardService` cross-ref + Feature Flag fallback 503，相關 [ASSUMPTION] 升 ✅ Resolved）；F050 v2.0 §13.2 升 v2.0.1（Feature Flag Gating [ASSUMPTION] → [RESOLVED]，明確 flag = false 回 503 + `FEATURE_NOT_ENABLED`）；error-handling 升至 v1.12（新增 #feature-flag-errors 段落 + `FEATURE_NOT_ENABLED` 503 + `PERSONNEL_RATIO_OUT_OF_SCOPE` 補「僅適用 PUT/POST」備註 + `ASSIGNMENT_RUN_ALREADY_RUNNING` 補「`AssignmentRunGuardService` 集中拋出」備註）；data-model 補修（`ob_list_definition.stage` m12 migration 範圍說明 + `ob_emphire` 補 CI fixture 策略指引）；architecture-spec §3.10 補登 `AssignmentRunGuardService` / `StageTransitionService` / `PersonnelRatioValidationService` / `RatioValidationService` / `FeatureFlagGuard` / `SectionChiefScopeGuard` 6 個共用元件說明）
 
 ---
 
@@ -26,9 +42,9 @@ status: Draft
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 21 |
-| Mermaid 圖表 | 29 |
-| **總計** | **104** |
+| Feature 文件（E07） | 38 |
+| Mermaid 圖表 | 39 |
+| **總計** | **131** |
 
 ---
 
@@ -61,13 +77,14 @@ status: Draft
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
 | F004 | [F004-create-account.md](features/F004-create-account.md) | 建立帳號 | US-010 | P0-MVP |
-| F005 | [F005-view-account-list.md](features/F005-view-account-list.md) | 查看帳號清單 | US-011 | P0-MVP |
-| F006 | [F006-edit-account.md](features/F006-edit-account.md) | 編輯帳號 | US-012 | P0-MVP |
+| F005 | [F005-view-account-list.md](features/F005-view-account-list.md) | 查看帳號清單（**v3.2 / 2026-05-16 補 banner — `business_role` 欄位**）| US-011 | P0-MVP |
+| F006 | [F006-edit-account.md](features/F006-edit-account.md) | 編輯帳號（**v2.3 / 2026-05-16 — 不含 `business_role` 寫入；變更入口走 F006a**）| US-012 | P0-MVP |
+| **F006a** | [**F006a-update-business-role.md**](features/F006a-update-business-role.md) | **變更帳號業務角色（business_role）— PATCH `/api/v1/accounts/:id/business-role` 唯一寫入入口** | **US-014（接續，取代 F008 v3.x 之 sales-manager-flag / e07-role 端點）** | **P0-MVP（v1.0 新建 / 2026-05-16）** |
 | F007 | [F007-disable-enable-account.md](features/F007-disable-enable-account.md) | 停用／啟用帳號 | US-013 | P1 |
-| F008 | [F008-assign-change-role.md](features/F008-assign-change-role.md) | 指派／變更角色（Admin / User）＋ 業務主管旗標切換 | US-014 | P0-MVP |
+| ~~F008~~ | ~~[F008-assign-change-role.md](features/F008-assign-change-role.md)~~ | ~~指派／變更角色（Admin / User）＋ 業務主管旗標切換~~ | ~~US-014~~ | **DEPRECATED v3.0-DEPRECATED / 2026-05-16**（PATCH `/sales-manager-flag` 與 v1.4 短期過渡 PATCH `/e07-role` 端點均廢除；業務角色變更改走 F006a；系統角色變更如需重啟動請另起 spec） |
 | F009 | [F009-self-service-password-reset.md](features/F009-self-service-password-reset.md) | 自助式密碼重設 | US-015 | P0-MVP |
 | F010 | [F010-admin-reset-password.md](features/F010-admin-reset-password.md) | Admin 重設使用者密碼 | US-016 | P0-MVP |
-| F045 | [F045-business-role-definitions.md](features/F045-business-role-definitions.md) | 業務角色定義（系統預設角色） | US-017 | P0-MVP |
+| F045 | [F045-business-role-definitions.md](features/F045-business-role-definitions.md) | 系統角色定義（系統預設角色 admin / user） | US-017 | P0-MVP |
 
 ### E03 — 資料來源管理
 
@@ -136,11 +153,13 @@ status: Draft
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
-| F048 | [F048-view-list-definition.md](features/F048-view-list-definition.md) | 查看本月名單定義清單（M01 入口） | US-070 | P0-MVP |
+| F048 | [F048-view-list-definition.md](features/F048-view-list-definition.md) | M01 名單定義入口（月份 + 階段總覽，v2.0 升版合併 US-104/105 入口骨架） | US-070, US-104, US-105 | P0-MVP |
 | F049 | [F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | US-071 | P0-MVP |
-| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | 新增名單定義（LIST_NO 自動產生） | US-088 | P0-MVP |
-| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | 編輯名單定義（覆寫式） | US-089 | P0-MVP |
-| F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | 停用名單定義（軟刪除） | US-090 | P0-MVP |
+| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（動態篩選條件 + per-LIST_NO `cr_enabled` + 從上月複製，v2.0 重寫合併 US-106 / US-107 / US-120）** | US-106, US-107, US-120 | P0-MVP（**v2.0**）|
+| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（限 `stage = 'draft'`，v2.0 重寫合併 US-106 AC-7 + US-107 AC-2/AC-5）** | US-106, US-107 | P0-MVP（**v2.0**）|
+| F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
+| F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105） | US-104, US-105 | P0-MVP |
+| F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|
 
 #### M02 計分設定（5 Tab 結構，2026-05-14 擴充）
 
@@ -152,25 +171,58 @@ status: Draft
 | F072 | [F072-disable-card-type.md](features/F072-disable-card-type.md) | 停用 CARD_TYPE 計分卡類型（級聯刪除） | US-096 | P0-MVP | v1.0 |
 | F053 | [F053-view-scoring-dimensions.md](features/F053-view-scoring-dimensions.md) | 查看計分維度設定（M02 Tab 2） | US-072 | P0-MVP | v1.2 |
 | F054 | [F054-edit-scoring-dimension.md](features/F054-edit-scoring-dimension.md) | 編輯計分維度與分數（M02 Tab 2 寫入） | US-073 | P0-MVP | v1.2 |
-| F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074 | P0-MVP | v1.4 |
+| F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074、US-097 | P0-MVP | v1.5 |
 | F056 | [F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表（M02 Tab 5） | US-075 | P0-MVP | v1.5 |
 
 > M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入、Tab 3 = F054 分數設定子視圖、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。
 
-#### M03 分派比例
+#### M03 分派比例（重構後拆分，2026-05-15）
+
+> **[通知 spec-writer]**：M03 分派比例模組已依五階段流程拆分為 M03a/M03b/M03c/M03d，需新增對應 Feature spec。F058（US-079）與 F060（US-091）標記 DEPRECATED。
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 狀態 |
+|------------|------|------|-----------|--------|------|
+| F057 | [F057-view-personnel-ratio.md](features/F057-view-personnel-ratio.md) | **查看人員比例設定（流程外快速查詢入口，v1.1 修訂；明確與 F088 分工 + 角色限縮為部長 / 處長 / Admin + 處長轄區過濾）** | US-078 | P0-MVP | **v1.1** |
+| ~~F058~~ | ~~[F058-edit-personnel-ratio.md](features/F058-edit-personnel-ratio.md)~~ | ~~編輯人員比例設定~~ | ~~US-079~~ | P0-MVP | **DEPRECATED v2.0（2026-05-15 / E07 重構批次 5，由 F082 / F083 / F084 / F085 取代；限 `stage = 'personnel_ratio'` + 處長轄區 Guard + per-DEPT 加總驗證 + 獎懲模板獨立 spec）** |
+| ~~F059~~ | ~~[F059-toggle-cr-reassignment.md](features/F059-toggle-cr-reassignment.md)~~ | ~~開關 CR 回分規則（全域開關）~~ | ~~US-080~~ + US-120 | P0-MVP | **DEPRECATED v2.0（2026-05-15 / E07 重構批次 3，由 F050 v2.0 per-LIST_NO `cr_enabled` 取代；US-120 spec 落差修正）** |
+| ~~F060~~ | ~~[F060-edit-per-list-dept-ratio.md](features/F060-edit-per-list-dept-ratio.md)~~ | ~~設定 per-LIST_NO 部門比例~~ | ~~US-091~~ | P0-MVP | **DEPRECATED v2.0（2026-05-15 / E07 重構批次 4，由 F079 / F080 / F081 取代；限 `stage = 'dept_ratio'` 寫入 + 部長 + Admin 限制 + I-8 容忍誤差語意）** |
+
+**M03a — 部門比例設定階段（E07 重構批次 4，2026-05-15 新增）**
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
-| F057 | [F057-view-personnel-ratio.md](features/F057-view-personnel-ratio.md) | 查看人員比例設定 | US-078 | P0-MVP |
-| F058 | [F058-edit-personnel-ratio.md](features/F058-edit-personnel-ratio.md) | 編輯人員比例設定（加總 = 100%） | US-079 | P0-MVP |
-| F059 | [F059-toggle-cr-reassignment.md](features/F059-toggle-cr-reassignment.md) | 開關 CR 回分規則 | US-080 | P0-MVP |
-| F060 | [F060-edit-per-list-dept-ratio.md](features/F060-edit-per-list-dept-ratio.md) | 設定 per-LIST_NO 部門比例 | US-091 | P0-MVP |
+| F079 | [F079-set-dept-ratio.md](features/F079-set-dept-ratio.md) | 部門比例設定（per-LIST_NO 各部門分配比例，限 `stage = 'dept_ratio'`） | US-109 | P0-MVP |
+| F080 | [F080-advance-to-personnel-ratio.md](features/F080-advance-to-personnel-ratio.md) | 部門比例設定階段推進至個別業務比例設定 | US-110 | P0-MVP |
+| F081 | [F081-rollback-to-draft.md](features/F081-rollback-to-draft.md) | 部門比例設定階段 Rollback 至草稿（清空 `ob_dept_pct`） | US-111 | P0-MVP |
+
+**M03b — 個別業務比例設定階段（E07 重構批次 5，2026-05-15 新增）**
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+|------------|------|------|-----------|--------|
+| F082 | [F082-set-personnel-ratio.md](features/F082-set-personnel-ratio.md) | **個別業務比例設定（per-LIST_NO 各部門業務員 RATION，處長轄區 + 部長代操作；v1.2 PO 決議 F082-A：離職員工保留顯示 + isResigned flag + 比例驗算排除 + ETL E07-OBEMPHIRE-Load pipeline 來源明確化）** | US-112 | P0-MVP（**v1.2**）|
+| F083 | [F083-quick-ratio-template.md](features/F083-quick-ratio-template.md) | 獎懲快速比例模板（相對均等預設值之 ±10/20% 調整，OQ-E07-20 落地；v1.1 PO 決議 F083-A 覆蓋式模板落地） | US-113 | P0-MVP（**v1.1**）|
+| F084 | [F084-advance-to-approval.md](features/F084-advance-to-approval.md) | 個別業務比例設定階段推進至簽核（多角色 Actor + per-DEPT 加總驗證；v1.1 PO 決議 F084-A 無代理推進 + 不增加 is_proxy_set 欄位 + F088 cross-ref） | US-114 | P0-MVP（**v1.1**）|
+| F085 | [F085-rollback-to-dept-ratio.md](features/F085-rollback-to-dept-ratio.md) | 個別業務比例設定階段 Rollback 至部門比例（限部長 + Admin，跨轄區清空 `ob_empl_set`；v1.1 PO 決議 F085-B 跨轄區清空不需處長同意 + audit log 完整紀錄） | US-115 | P0-MVP（**v1.1**）|
+
+**M03c — 簽核階段（E07 重構批次 6，2026-05-15 新增）**
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+|------------|------|------|-----------|--------|
+| F086 | [F086-approve-to-ready.md](features/F086-approve-to-ready.md) | **部長核准名單（簽核 → 準備完成；限部長 + Admin；新建 `assignment_approval` 表）** | US-116 | P0-MVP |
+| F087 | [F087-reject-to-personnel-ratio.md](features/F087-reject-to-personnel-ratio.md) | **部長拒絕並退回個別業務比例設定（簽核拒絕；限部長 + Admin；拒絕原因必填 1~500 字；觸發 F082 banner OQ-E07-21 落地）** | US-117 | P0-MVP |
+
+**M03d — 準備完成階段（E07 重構批次 6，2026-05-15 新增）**
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+|------------|------|------|-----------|--------|
+| F088 | [F088-ready-stage-summary.md](features/F088-ready-stage-summary.md) | **準備完成階段查詢摘要（部長 + 處長 + Admin 唯讀；含篩選 / 部門比例 / 個別業務比例 / CR 開關四區塊；處長轄區過濾；月跑前置條件即時計算；v1.1 補 `proxyStatus` 欄位 schema 對應 F084-A 落地）** | US-118 | P0-MVP（**v1.1**）|
+| F089 | [F089-rollback-to-approval.md](features/F089-rollback-to-approval.md) | **準備完成階段 Rollback 至簽核（限部長 + Admin；保留設定資料；清空 `assignment_approval`）** | US-119 | P0-MVP |
 
 #### M04 分派執行
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
-| F061 | [F061-trigger-assignment-run.md](features/F061-trigger-assignment-run.md) | 觸發分派月跑（Stage 0~4 + 三份快照原子性寫入） | US-081 | P0-MVP |
+| F061 | [F061-trigger-assignment-run.md](features/F061-trigger-assignment-run.md) | **觸發分派月跑（Stage 0~4 + 三份快照原子性寫入；v1.2 PO 決議 OQ-E07-29-A 邊緣 CARD_TYPE HB/SEB/SEC 跳過 + report_payload.skippedCases JSONB + 月跑仍 completed；v1.1 補「所有 active 名單 stage = 'ready'」前置條件 + Stage 3 CR 路徑改 per-LIST_NO `cr_enabled` + `MONTHLY_RUN_BLOCKED_LIST_NOT_READY` 錯誤碼）** | US-081 | P0-MVP（**v1.2**）|
 | F062 | [F062-view-run-progress.md](features/F062-view-run-progress.md) | 查看分派執行進度（3 秒 Polling） | US-082 | P0-MVP |
 | F063 | [F063-view-run-result-summary.md](features/F063-view-run-result-summary.md) | 查看分派結果摘要（部門偏差 / 等級分佈） | US-083 | P0-MVP |
 | F064 | [F064-export-assignment-result.md](features/F064-export-assignment-result.md) | 匯出分派結果（Excel / CSV streaming） | US-084 | P0-MVP |
@@ -185,9 +237,20 @@ status: Draft
 
 #### M06 基礎代碼維護
 
-| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
-|------------|------|------|-----------|--------|
-| F068 | [F068-edit-base-code.md](features/F068-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） | US-092 | P0-MVP |
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 版本 |
+|------------|------|------|-----------|--------|------|
+| F068 | [F068-edit-base-code.md](features/F068-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） | US-092 | P0-MVP | v1.2 |
+| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata） | US-102 | P0-MVP | v1.0 |
+| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（v1.1 PO 決議 F076-C 類別切換批次軟停用 + `deactivation_reason` ENUM + 歷史保留 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103 | P0-MVP | **v1.1** |
+
+#### M07 角色與可見範圍（E07 重構批次 1，2026-05-15）
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 版本 |
+|------------|------|------|-----------|--------|------|
+| F073 | [F073-define-director-role.md](features/F073-define-director-role.md) | **部長角色定義與 E07 全模組權限（v1.1：§E02 整合 — PATCH `/accounts/:id/e07-role` 唯一寫入端點 + Token revoke 沿用 `password_changed_at` + 並存正交 BR）** | US-100 | P0-MVP | **v1.1** |
+| F074 | [F074-define-section-chief-role.md](features/F074-define-section-chief-role.md) | **處長角色定義與轄區（`created_by`）限縮（v1.1：§E02 整合沿用 F073 §5.4 + 並存正交 BR）** | US-101 | P0-MVP | **v1.1** |
+
+> **E07 角色矩陣權威來源**：[F002 §4.6](features/F002-user-login.md#e07-角色矩陣)（v1.4 補入「`is_sales_manager` 與 `e07_role` 正交維度說明」+ JWT Payload `e07_role` claim 規範 + Guard `req.user.e07_role` 暴露機制；v1.3 由 F073 / F074 導入定義部長 / 處長 / Admin × M01~M06 之 CRUD 矩陣與三層 Guard 行為）。F068（v1.2）/ F055（v1.6）/ F069~F072 / F075 / F076 / 後續 M03a~d spec 一律引用本節。
 
 ---
 
@@ -230,6 +293,15 @@ status: Draft
 | [diagrams/F061-assignment-run-flow.mmd](diagrams/F061-assignment-run-flow.mmd) | 月跑 Stage 0~4 執行引擎流程 | Flowchart | F061 |
 | [diagrams/F066-snapshot-detail-flow.mmd](diagrams/F066-snapshot-detail-flow.mmd) | 執行快照詳情載入流程 | Sequence | F066 |
 | [diagrams/F067-run-comparison-flow.mmd](diagrams/F067-run-comparison-flow.mmd) | 兩次執行結果差異比對流程 | Sequence | F067 |
+| [diagrams/F073-role-matrix.mmd](diagrams/F073-role-matrix.mmd) | E07 角色 × 模組權限矩陣決策流程（Guard 檢查順序） | Flowchart | F073, F074, F002 §4.6 |
+| [diagrams/F075-whitelist-flow.mmd](diagrams/F075-whitelist-flow.mmd) | POOLDATA 篩選欄位白名單管理流程（seed / 列表 / CRUD） | Flowchart | F075, F076 |
+| [diagrams/F077-month-switch-flow.mmd](diagrams/F077-month-switch-flow.mmd) | M01 月份切換 + 唯讀判斷 + lockState 渲染流程 | Flowchart | F077, F048 |
+| [diagrams/F050-draft-create-flow.mmd](diagrams/F050-draft-create-flow.mmd) | F050 v2.0 草稿建立名單流程（含「從上月複製」分支與 feature flag gating） | Flowchart | F050 v2.0, F077 |
+| [diagrams/F078-draft-advance-flow.mmd](diagrams/F078-draft-advance-flow.mmd) | F078 v1.0 草稿推進至部門比例設定流程（含 6 項前置條件嚴格驗證 + feature flag gating） | Flowchart | F078, F050 v2.0, F077 |
+| [diagrams/F079-dept-ratio-flow.mmd](diagrams/F079-dept-ratio-flow.mmd) | F079 / F080 / F081 v1.0 部門比例設定整合流程（含 advance / rollback 分支 + service 層共用 helper 註記） | Flowchart | F079, F080, F081, F077 |
+| [diagrams/F082-personnel-ratio-flow.mmd](diagrams/F082-personnel-ratio-flow.mmd) | F082 / F083 / F084 / F085 v1.0 個別業務比例設定整合流程（含轄區 Guard / 模板套用 / advance / rollback + service 層共用 helper 註記） | Flowchart | F082, F083, F084, F085, F077 |
+| [diagrams/F086-approval-flow.mmd](diagrams/F086-approval-flow.mmd) | **F086 / F087 v1.0 簽核階段流程（核准 → ready / 拒絕 → personnel_ratio 兩條分支 + banner 觸發機制）** | Flowchart | F086, F087, F082 v1.1 |
+| [diagrams/F088-ready-summary.mmd](diagrams/F088-ready-summary.mmd) | **F088 / F089 v1.0 準備完成階段查詢摘要與 Rollback 資訊架構（三角色 × 四區塊 + 月跑前置條件耦合 + monthlyRunReady 即時更新）** | Flowchart | F088, F089, F061 v1.1, F082 v1.1 |
 
 ### 狀態圖
 
@@ -241,6 +313,7 @@ status: Draft
 | [diagrams/pipeline-states.md](diagrams/pipeline-states.md) | Pipeline 狀態轉換 | State | F028, F030, F031, F034 |
 | [diagrams/pipeline-version-states.md](diagrams/pipeline-version-states.md) | Pipeline 版本狀態轉換 | State | F029, F030, F033, F037 |
 | [diagrams/F061-assignment-run-states.mmd](diagrams/F061-assignment-run-states.mmd) | AssignmentRun 狀態轉換（pending/running/completed/failed） | State | F061, F062 |
+| [diagrams/F077-stage-overview.mmd](diagrams/F077-stage-overview.mmd) | 名單定義五階段狀態轉換（draft → dept_ratio → personnel_ratio → approval → ready，含 advance / rollback / 拒絕 / 停用 / 遷移分支） | State | F077, F048, F050, F052, F061 |
 
 ---
 
@@ -264,7 +337,7 @@ status: Draft
    - 跨模組：F038
    - E05 執行引擎：F042->F043->F044
    - E06：F046->F047
-   - **E07 建議順序**：F068（代碼維護，前置依賴）->F048->F050->F051->F052->F049->**F069->F070->F071->F072**（CARD_TYPE CRUD，M02 入口）->F053->F054->F055->F056（M02 Tab 2~5）->F057->F058->F059->F060->F061->F062->F063->F064->F065->F066->F067
+   - **E07 建議順序**：**F073->F074**（M07 角色定義，E07 重構批次 1 前置依賴）->F068->**F075->F076**（M06 進階白名單）->**F048 v2.0->F077**（M01 入口 + 月份 / 階段總覽，E07 重構批次 2）->**F050 v2.0->F051 v2.0->F052 v2.0->F078**（M01 草稿階段建立 / 編輯 / 停用 / 推進，E07 重構批次 3；含 F059 同批次標 DEPRECATED + 移除舊路徑程式碼 + feature flag `ENABLE_E07_REFACTOR_PHASE3` 上線；原子性 I-1）->**F079->F080->F081**（M03a 部門比例設定 + 推進 + Rollback，E07 重構批次 4；含 F060 同批次標 DEPRECATED + service 層共用 `StageTransitionService` + `RatioValidationService` helper；建議與 F050 v2.0 §13 同套 flag gating，OQ-E07-37）->**F082 v1.1->F083->F084->F085**（M03b 個別業務比例 + 獎懲模板 + 推進至簽核 + Rollback 至部門比例，E07 重構批次 5；含 F058 同批次標 DEPRECATED + 新 `SectionChiefScopeGuard` + `PersonnelRatioValidationService` helper + `BONUS_PENALTY_TEMPLATE_INVALID` 等 4 個新錯誤碼；F082 v1.1 補 banner 渲染 OQ-E07-21）->**F086->F087->F088->F089**（M03c 簽核 + M03d 準備完成 + Rollback，E07 重構批次 6 最後一批；含新建 `assignment_approval` 表 + `MonthlyRunReadinessService` helper + `StageTransitionService.rejectTo` 新 helper + 4 個新錯誤碼 `MONTHLY_RUN_BLOCKED_LIST_NOT_READY` / `APPROVAL_INVALID_STAGE` / `APPROVAL_REJECT_REASON_REQUIRED` / `APPROVAL_REJECT_REASON_TOO_LONG`）->F049->**F069->F070->F071->F072**（CARD_TYPE CRUD，M02 入口）->F053->F054->F055->F056（M02 Tab 2~5）->F057 v1.1->~~F058~~（DEPRECATED 不實作）->~~F059~~（DEPRECATED 不實作）->~~F060~~（DEPRECATED 不實作）->**F061 v1.1**（補 ready 名單前置條件 + Stage 3 CR per-LIST_NO 路徑 + `MONTHLY_RUN_BLOCKED_LIST_NOT_READY` 錯誤碼）->F062->F063->F064->F065->F066->F067
 
 ### QA / Test Design Agent
 1. 必讀：`scope.md`, `error-handling.md`, `nfr.md`
@@ -294,10 +367,10 @@ status: Draft
 **E01~E06 既有**（37 個）：
 F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044, F045, F046, F047
 
-**E07 新增**（25 個，2026-05-14 M02 計分設定擴充 +4）：
-F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072
+**E07 新增**（42 個，2026-05-14 M02 計分設定擴充 +4，2026-05-15 M07 角色 + M06 進階 +4，2026-05-15 重構批次 2 +1，2026-05-15 重構批次 3 +1 含 F059 標 DEPRECATED，2026-05-15 重構批次 4 +3 含 F060 標 DEPRECATED，2026-05-15 重構批次 5 +4 含 F058 標 DEPRECATED，2026-05-15 重構批次 6 +4 M03c/d）：
+F048, F049, F050（v2.0.1）, F051（v2.0）, F052（v2.0）, F053, F054, F055, F056, F057（v1.1）, ~~F058（v2.0 DEPRECATED）~~, ~~F059（v2.0 DEPRECATED）~~, ~~F060（v2.0 DEPRECATED）~~, F061（v1.2）, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076（v1.1）, F077, **F078**, **F079（v1.1）**, **F080（v1.1）**, **F081（v1.1）**, **F082（v1.3）**, **F083（v1.2）**, **F084（v1.2）**, **F085（v1.2）**, **F086（v1.1）**, **F087（v1.1）**, **F088（v1.1）**, **F089（v1.1）**
 
-**P0-MVP 總計：62 個 Feature**（37 既有 + 25 E07 新增）
+**P0-MVP 總計：78 個 Feature**（37 既有 + 42 E07 新增 - 1 既有 F058 計入但已標 DEPRECATED 不再實作；實際新建構數 37 既有 + 41 E07 = 78。F058 / F059 / F060 標 DEPRECATED 之既有計算保留於索引以供脈絡追溯，但不重複實作）
 
 ### P1（Should Have）— 9 個 Feature
 
@@ -351,10 +424,62 @@ F044 ──> F046（ETL TargetLoad 資料已載入）
 F046 ──> F047（客戶清單為 360 詳情主要入口）
 
 # E07 依賴鏈
+F002 v1.3 §4.6 ──權威定義──> F073, F074, F068, F055, F069~F072, F075, F076（E07 角色矩陣）
+F073 ──> F074（處長以部長為對比基準）、F075、F076、F068 v1.2、F055 v1.6（部長 / 處長 Guard 行為導入）
+F074 ──> F068 v1.2（處長對 M06 唯讀 cross-ref）、F055 v1.6（M02 處長 Nav 完全不可見 cross-ref）
+F075 ──> F076（categorical 欄位可選值掛父表）、後續 US-106 spec（新名單動態篩選欄位來源）
+F076 ──> 後續 US-106 spec（新名單多選元件選項來源）
 F068 ──> F050, F051（PROD_KIND / SPEC_TP / CASE_STATUS 代碼就緒；CASEYEAR 為前端 hard-coded 不阻擋）
-F048 ──> F049（Stage 0 估算於清單頁觸發）
-F048 ──> F050, F051, F052, F060（清單頁為入口）
-F050 ──> F051, F052, F060（需先有名單才能編輯/停用/設定比例）
+F048 v2.0 ──> F077（互動補強：月份切換 + 階段總覽）
+F048 v2.0 + F077 ──> F049（Stage 0 估算於清單頁觸發）
+F048 v2.0 + F077 ──> F050, F051, F052, F060（清單頁為入口；操作按鈕渲染依 F077 角色 × 階段矩陣）
+F077 ──> F050 v2.0（新建名單預設 stage = 'draft'）、F052 v2.0（停用僅在草稿階段）、F061（月跑前置條件 stage = 'ready'）、F078（草稿推進）、後續批次 4+ Rollback / 簽核 spec
+F050 v2.0 ──> F051 v2.0, F052 v2.0, F078, F060（需先有草稿名單才能編輯/停用/推進/設定比例）
+F050 v2.0 + F078 + F059 程式碼移除 ──原子性上線（I-1）──> 受 feature flag ENABLE_E07_REFACTOR_PHASE3 統一控制；違反順序回 500 LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059
+F050 v2.0 ──取代──> ~~F059~~（per-LIST_NO `cr_enabled` 取代全域 OBASSIGNSET CR 開關；US-120 spec 落差修正）
+F075, F076 ──> F050 v2.0（動態篩選條件欄位來源 + categorical 可選值來源）
+
+# E07 重構批次 4 — M03a 部門比例設定（2026-05-15）
+F078 ──> F079（推進至 dept_ratio 後才能設定部門比例）
+F079 ──> F080（部門比例加總 = 100% 才可推進至個別業務比例設定）
+F079 ──> F081（Rollback 至草稿時清空 ob_dept_pct）
+F080 ──> F082（推進至 personnel_ratio 後才能設定個別業務比例）
+F081 ──> F050 v2.0 / F051 v2.0 / F052 v2.0 / F078（Rollback 後重新可用）
+F079 / F080 / F081 ──取代──> ~~F060~~（限 stage = 'dept_ratio' + 部長 + Admin + I-8 容忍誤差語意；DEPRECATED v2.0）
+F079 / F080 / F081 ──共用 service helper──> StageTransitionService.assertStageEquals / advanceTo / rollbackTo + RatioValidationService.assertSumEquals100 + assertEachInRange（system-architect 抽出，與後續 M03b/c/d 共用）
+F079 / F080 / F081 ──[ASSUMPTION] 與 F050 v2.0 §13 同套 ENABLE_E07_REFACTOR_PHASE3 flag gating──> 詳見 OQ-E07-37
+
+# E07 重構批次 5 — M03b 個別業務比例（2026-05-15）
+F080 ──> F082（推進至 personnel_ratio 後處長 / 部長 / Admin 設定業務員比例）
+F079 / F080 ──> F082（前置 ob_dept_pct 加總 = 100% 為 F082 寫入前置條件）
+F082 ──> F083（獎懲快速模板為 F082 之 UI 子模組；計算結果透過 F082 PUT 儲存）
+F082 ──> F084（per-DEPT 加總 = 100% 為推進至 approval 之前置條件）
+F082 ──> F085（Rollback 清空 ob_empl_set 跨轄區所有紀錄）
+F084 ──> F086 / F087（推進至 approval 後可核准或拒絕）
+F085 ──> F079 / F080（Rollback 後重新可寫入 / 重新推進）
+F082 / F083 / F084 / F085 ──取代──> ~~F058~~（限 stage = 'personnel_ratio' + 處長轄區 Guard + per-DEPT 加總 + 獎懲模板獨立；DEPRECATED v2.0）
+F082 / F084 ──共用 service helper──> SectionChiefScopeGuard（新）+ PersonnelRatioValidationService.assertDeptSumEquals100 / assertAllDeptsSumEquals100（system-architect 抽出，與後續 M03d 共用）
+F085 ──共用 service helper──> StageTransitionService.rollbackTo cleanupFn = DELETE ob_empl_set WHERE list_no（與 F081 共用 helper）
+F082 / F083 / F084 / F085 ──[ASSUMPTION] 與 F050 v2.0 §13 同套 ENABLE_E07_REFACTOR_PHASE3 flag gating──> 詳見 OQ-E07-37
+
+# E07 重構批次 6 — M03c 簽核 + M03d 準備完成（2026-05-15，最後一批）
+F084 ──> F086（推進至 approval 後部長 / Admin 核准 → ready）
+F084 ──> F087（推進至 approval 後部長 / Admin 拒絕 → personnel_ratio + 清空 ob_empl_set）
+F086 ──> F088（核准後名單出現於 ready 清單供查詢）
+F086 ──> F061 v1.1（核准後 stage = 'ready'，月跑前置條件 BR-6 達成）
+F086 ──> F089（核准後可 Rollback 至 approval）
+F087 ──> F082 v1.1（拒絕觸發 banner 顯示於 F082 頁面，OQ-E07-21 落地；資料來源 GET response latestRejection 欄位）
+F088 ──> F061 v1.1（monthlyRunReady.allReady 為月跑前置條件 1 之核心入口）
+F088 ──> F089（提供「退回簽核」按鈕入口）
+F089 ──> F086 / F087（Rollback 後重新可核准 / 拒絕）
+F089 ──連動──> F088 monthlyRunReady 即時更新（從 ready 清單移出）+ F082 latestRejection = null（清空 assignment_approval）
+F086 / F087 ──共用 DB 表──> assignment_approval（新建表，data-model #assignment_approval）
+F086 / F087 ──共用 service helper──> StageTransitionService 擴充 advanceTo + 新增 rejectTo（含 postActionFn = INSERT assignment_approval；建議由 system-architect 抽出）
+F089 ──共用 service helper──> StageTransitionService.rollbackTo cleanupFn = DELETE assignment_approval WHERE list_no（與 F081 / F085 共用 helper）
+F088 ──新建 helper──> MonthlyRunReadinessService.calculateReadiness(workYm)（建議由 system-architect 抽出）
+F086 / F087 / F088 / F089 ──[ASSUMPTION] 與 F050 v2.0 §13 同套 ENABLE_E07_REFACTOR_PHASE3 flag gating──> 詳見 OQ-E07-37
+F057 v1.1 ──分工──> F088（F057 流程外快速查詢；F088 流程內最終確認）
+F061 v1.1 ──取代──> ~~OBASSIGNSET 全域 CR 路徑~~（Stage 3 改讀 per-LIST_NO ob_list_definition.cr_enabled，對齊 F050 v2.0 / F059 廢棄）
 F068 ──> F069（PROD_KIND 代碼為 CARD_TYPE 綁定來源）
 F069 ──> F070, F071, F072（CARD_TYPE CRUD 鏈）
 F069 ──> F053, F054, F055, F056（Tab 1 selectedCardType 驅動 Tab 2~5 篩選）
@@ -401,3 +526,12 @@ F066 ──> F067（比對需讀取個別快照）
 | 2026-05-08 | 修正 ob_pool_data 結構落差（AD-E07-13）：移除 list_no（OBPOOLDATA 來源無此欄）、PK 重設為 `(orgno, appl_no)`；確立 ob_pool_data（L2 共享案件池）與 ob_pool_data_list（L3 分派結果）的「池/結果」分離架構；E07-D 補充 Stage 1 演算法說明（ob_pool_data 無 list_no，per-list 透過 JOIN ob_list_definition 篩選條件取候選）；新增 OQ-E07-18（schema 落差盤點，直接 ✅ Resolved，含 4 項落差處置）；architecture-spec.md 升至 v2.2 | System Architect Agent |
 | 2026-05-06 | 清理 data-model `ob_pool_data` 章節殘留：移除 4 個 `ob_pool_data_list` 才有的欄位（`card_level` / `tier_level` / `card_type` / `case_type`）與對應 `(card_type, card_level)` 索引；對齊 AD-E07-13 完整映射 OBPOOLDATA（120 欄 + `_cdmp_extracted_at` = 121 欄，**無 LIST_NO 欄位**）。`ob_pool_data_list` 章節正確列示這些欄位不受影響 | Spec Writer Agent |
 | 2026-05-06 | 修正 ob_list_definition.card_type VARCHAR(2) → VARCHAR(5)（dump 含 3 字元值如 SEC/SEB）；對齊 ob_levelcard_* 系列 | Spec Writer Agent |
+| 2026-05-15 | **E07 重構批次 1**（4 個新 spec + 3 個既有 spec 升版 + 連帶更新）：新增 F073（部長角色定義，US-100）、F074（處長角色定義 + `created_by` 轄區限縮，US-101）、F075（POOLDATA 篩選欄位白名單，US-102）、F076（類別型欄位可選值，US-103）；新增 2 個圖表（F073 角色矩陣決策、F075 白名單流程）；F002 升至 v1.3（新增 §4.6 E07 角色矩陣作為權威來源 + Director / SectionChief 應用層角色定義 + 三層 Guard 規格）；F068 升至 v1.2（補 BR-6 處長禁用寫入 + 處長視圖規則）；F055 升至 v1.6（補 BR-10 處長對 M02 完全不可見，OQ-C-03 決議）；data-model.md 新增 `field_whitelist`（#field-whitelist-entity）+ `categorical_field_value`（#categorical-field-value-entity）兩表 schema；error-handling.md 新增 `E07_FORBIDDEN_DIRECTOR_ONLY`（403）/ `E07_FORBIDDEN_SECTION_CHIEF_SCOPE`（403）/ `WHITELIST_FIELD_DUPLICATE`（422）/ `WHITELIST_FIELD_NOT_FOUND`（404）/ `OPTION_VALUE_DUPLICATE`（422）/ `OPTION_VALUE_NOT_FOUND`（404）/ `OPTION_FIELD_TYPE_MISMATCH`（422）共 7 個錯誤碼；P0-MVP 增至 66 個 Feature；新增 M07 角色與可見範圍模組（F073/F074）與 M06 進階段落（F075/F076）；TDD 順序前置 F073->F074->F068->F075->F076 | Spec Writer Agent |
+| 2026-05-15 | **E07 重構批次 2 — M01 流程基礎**（1 個新 spec + 1 個既有 spec 升版 + 連帶更新）：新增 F077（月份切換與名單五階段總覽，合併 US-104 + US-105 為單一 M01 入口互動補強 spec）；F048 升至 v2.0（從「查看本月名單定義清單」升版為「M01 名單定義入口（月份 + 階段總覽）」，雙頁籤改由 `stage` 篩選器涵蓋，新增 `stage` / `readonly` / `currentWorkYm` / `selectedYm` 欄位，操作按鈕渲染改依 F077 角色 × 階段矩陣）；新增 2 個圖表（F077-stage-overview 五階段狀態轉換 stateDiagram-v2、F077-month-switch-flow 月份切換 + 唯讀判斷流程）；data-model.md `ob_list_definition` 新增 `stage VARCHAR(20)`（5 值 CHECK constraint）+ `status VARCHAR(10)` 明確定義、新增「舊名單遷移規則（I-5）」段落（既有 OBMLISTDF 全數初始 `stage = 'ready'`）、新增 §`current_work_ym` 規則（每月 1 號 0:00 UTC+8 切換 / ±12 個月範圍 / 後端唯一計算來源）、新增 `(project_workym, stage, status)` 與 `(created_by)` 兩個索引；error-handling.md 新增 `WORK_YM_OUT_OF_RANGE`（422）/ `WORK_YM_INVALID_FORMAT`（422）/ `LIST_HISTORICAL_READONLY`（403）共 3 個錯誤碼；P0-MVP 增至 67 個 Feature；TDD 順序補入 F048 v2.0->F077；下游 F050/F051/F052/F061 將於批次 3 統一補入「歷史月份寫入 → 403」cross-ref 與 `stage` 流轉行為 | Spec Writer Agent |
+| 2026-05-15 | **E07 重構批次 5 — M03b 個別業務比例設定 + F058 廢棄**（4 個新 spec + 1 個既有 spec 標 DEPRECATED + 連帶更新）：新增 F082（個別業務比例設定 / US-112，per-LIST_NO + per-DEPT 業務員 RATION，處長轄區 Guard + 部長 / Admin 跨轄區）、F083（獎懲快速比例模板 / US-113，OQ-E07-20 落地：均等分配 + 相對 ±10/20% 調整 + 邊界阻擋 + 前端計算 + 後端防呆）、F084（推進至簽核 / US-114，多角色 Actor + per-DEPT 加總 = 100% 驗證 + 處長 / 部長 / Admin 三角色推進邏輯 + 無代理處長時部長代推進）、F085（Rollback 至部門比例 / US-115，限部長 + Admin + 跨轄區清空 `ob_empl_set` + 保留 `ob_dept_pct`）；F058 標 DEPRECATED v2.0（保留 v1.0 內容 + 頂部 banner + cross-ref F082 / F083 / F084 / F085）；新增 1 個圖表 F082 個別業務比例整合流程（含轄區 Guard + 模板套用 + advance / rollback）；data-model.md `ob_empl_set` 補入「比例驗證規則（per-DEPT 加總）」「轄區規則（I-3）」「stage 鎖定規則」「FK 級聯規則」「`project_workym` 補建決策」5 個段落；error-handling.md 新增 `PERSONNEL_RATIO_SUM_NOT_100`（422，per-DEPT，取代 `PERSONNEL_RATIO_SUM_INVALID`）/ `PERSONNEL_RATIO_DEPT_NOT_FOUND`（422）/ `PERSONNEL_RATIO_OUT_OF_SCOPE`（403）/ `BONUS_PENALTY_TEMPLATE_INVALID`（422）共 4 個錯誤碼；標 `PERSONNEL_RATIO_SUM_INVALID` 為 DEPRECATED；`STAGE_ROLLBACK_BLOCKED` 補入 F085 為相關功能；`E07_FORBIDDEN_SECTION_CHIEF_SCOPE` 註明 F082 採更具體之 `PERSONNEL_RATIO_OUT_OF_SCOPE`；P0-MVP 增至 74 個 Feature；新增 OQ-E07-40（F083 「相對預設值 vs 相對部門佔比 ÷ 人數」之語意確認，待 PO）；TDD 順序補入 F082 → F083 → F084 → F085；F058 加入「DEPRECATED 不實作」清單；提示批次 6 進入 M03c/d 簽核 + 準備完成 + F061/F057 修訂 | Spec Writer Agent |
+| 2026-05-15 | **E07 重構批次 3 — M01 草稿階段（最高風險批次，含 F059 廢棄與原子性上線約束）**（1 個新 spec + 3 個既有 spec 升版 + 1 個既有 spec 標 DEPRECATED + 連帶更新）：新增 F078（草稿推進至部門比例設定，US-108）；F050 升至 v2.0（重大改寫：取代來源 US-088 → US-106 / US-107 / US-120；Actor 收斂為部長 + Admin；篩選條件改為 F075 白名單動態驅動 + `condition_payload` JSONB 欄位；新增 per-LIST_NO `cr_enabled` 欄位取代 F059 OBASSIGNSET 全域路徑；新增「從上月名單複製」AC-10 OQ-D-01 決議；建立後 `stage = 'draft'`；§13 完整描述原子性上線約束 + feature flag `ENABLE_E07_REFACTOR_PHASE3` gating + 部署順序 T0-T3 + 失敗回滾路徑）；F051 升至 v2.0（僅 `stage = 'draft'` 可編輯篩選條件 + CR 開關；非草稿階段回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`；表單欄位規範指向 F050 v2.0 共用）；F052 升至 v2.0（僅 `stage = 'draft'` 可停用；非草稿階段回 422 `LIST_STAGE_NOT_DRAFT`，提示先 Rollback）；F059 標 DEPRECATED v2.0（保留歷史脈絡與 v1.0 內容、頂部加廢棄 banner、cross-ref F050 v2.0 / F051 v2.0 / F061 / data-model `cr_enabled` / US-120）；新增 2 個圖表（F050-draft-create-flow 含「從上月複製」分支 + feature flag gating；F078-draft-advance-flow 含 6 項前置條件嚴格驗證 + feature flag gating）；data-model.md `ob_list_definition` 新增 `cr_enabled BOOLEAN NOT NULL DEFAULT TRUE` + `condition_payload JSONB NULL` 兩個欄位；新增「草稿階段欄位編輯規則」表格段落（哪些欄位草稿可改 / 推進後鎖定）；新增「從上月名單複製」API 行為規則段落（OQ-D-01）；error-handling.md 新增 `LIST_FILTER_FIELD_NOT_IN_WHITELIST`（422，置於 assignment-list-errors）+ 新增 `assignment-stage-transition-errors` 子段落（4 個錯誤碼：`LIST_STAGE_NOT_DRAFT`、`LIST_STAGE_TRANSITION_FORBIDDEN`、`LIST_DRAFT_NO_CONDITIONS`、`LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059`）共 5 個新錯誤碼；P0-MVP 增至 68 個 Feature；依賴鏈補入「F050 v2.0 + F078 + F059 程式碼移除原子性上線（I-1）」、「F050 v2.0 取代 F059」、「F075/F076 ──> F050 v2.0 動態篩選來源」；提示批次 4 進入 M03a 部門比例 + F060 廢棄 | Spec Writer Agent |
+| 2026-05-15 | **E07 重構批次 6 — M03c 簽核 + M03d 準備完成 + F061/F057 修訂（最後一批）**（4 個新 spec + 3 個既有 spec 升版 + 連帶更新）：新增 F086（部長核准名單 / US-116，簽核 → ready，限部長 + Admin，新建 `assignment_approval` 表）、F087（部長拒絕並退回個別業務比例設定 / US-117，簽核 → personnel_ratio + 跨轄區清空 `ob_empl_set`，拒絕原因必填 1~500 字，OQ-E07-21 用戶決議落地：F082 GET response 補 `latestRejection` 欄位作為 banner 觸發資料來源）、F088（準備完成階段查詢摘要 / US-118，部長 / 處長 / Admin 三角色唯讀，含篩選 / 部門比例 / 個別業務比例 / CR 開關四區塊摘要，處長轄區過濾，月跑前置條件 `monthlyRunReady` 即時計算，與 F086 共用 GET `summary/{listNo}` 端點，與 F057 並存分工）、F089（準備完成 Rollback 至簽核 / US-119，限部長 + Admin，保留設定資料 + DELETE `assignment_approval`）；F082 升至 v1.1（OQ-E07-21 落地：補 §7.x「拒絕 banner 渲染與互動」UI 規範 + GET response 補 `latestRejection` 欄位 + BR-2a「相對 %」UI 顯示語意 OQ-E07-40 落地）；F083 補 BR-2a「相對 %」UI 顯示語意（OQ-E07-40 用戶決議落地）；F061 升至 v1.1（OQ Q6.1=A 用戶決議落地：AC-1 第 2 項新增「所有 active 名單需 `stage = 'ready'`」前置條件 + Stage 3 CR 回分讀取路徑改為 per-LIST_NO `ob_list_definition.cr_enabled` 欄位 + 快照 `config` 內容含 per-LIST_NO `cr_enabled` 取代全域開關 + 新增錯誤碼 `MONTHLY_RUN_BLOCKED_LIST_NOT_READY`）；F057 升至 v1.1（明確「流程外快速查詢入口」定位 + 與 F088 分工說明 + 角色限縮為部長 / 處長 / Admin + 處長轄區過濾 + Response 補 `stage` / `viewerRole` / `isInScope` 欄位 + 「stage 篩選器」+ 「LIST_NO 連結依 stage 跳轉至 F082 / F088 / F048」）；新增 2 個圖表（F086-approval-flow 簽核流程含核准 → ready / 拒絕 → personnel_ratio 兩條分支 + banner 觸發機制；F088-ready-summary 準備完成階段查詢摘要與 Rollback 資訊架構含三角色 × 四區塊 × 月跑前置條件耦合）；data-model.md 新增 `assignment_approval` 表完整 schema（含 PK / FK / 索引建議 / 多次拒絕 / 重複核准場景處理表 / [ASSUMPTION] 4 項待 system-architect 決議）；error-handling.md 新增 `MONTHLY_RUN_BLOCKED_LIST_NOT_READY`（422，含 `details.notReadyLists` 陣列）+ 新增 `assignment-approval-errors` 子段落（3 個錯誤碼 `APPROVAL_INVALID_STAGE` / `APPROVAL_REJECT_REASON_REQUIRED` / `APPROVAL_REJECT_REASON_TOO_LONG`）共 4 個新錯誤碼 + 補 `STAGE_ROLLBACK_BLOCKED` 沿用至 F089 描述 + 補 `E07_FORBIDDEN_DIRECTOR_ONLY` 適用範圍含 F086 / F087 / F089；P0-MVP 增至 78 個 Feature；依賴鏈補入「批次 6 — M03c/d」完整鏈、「F057 v1.1 vs F088 分工」、「F061 v1.1 取代 OBASSIGNSET 全域 CR 路徑」；TDD 順序補入 F082 v1.1->F083->F084->F085->**F086->F087->F088->F089**->F057 v1.1->F061 v1.1；**E07 重構 spec-writer 階段 100% 完成**（剩餘事項移交 system-architect 處理 [ASSUMPTION] 與 helper 抽出 / OQ-E07-37 flag gating 決議 / OQ-E07-40 DB 儲存值語意） | Spec Writer Agent |
+| 2026-05-15 | **E07 重構批次 4 — M03a 部門比例設定階段（含 F060 廢棄）**（3 個新 spec + 1 個既有 spec 標 DEPRECATED + 連帶更新）：新增 F079（部門比例設定 per-LIST_NO，US-109）/ F080（部門比例設定階段推進至個別業務比例設定，US-110）/ F081（部門比例設定階段 Rollback 至草稿，US-111）；3 個 spec 統一沿用 `DirectorGuard`（部長 + Admin，處長一律 403 `E07_FORBIDDEN_DIRECTOR_ONLY`）；F079 限 `stage = 'dept_ratio'` 寫入（非此階段 422 `LIST_STAGE_TRANSITION_FORBIDDEN`）；F079 比例驗證採容忍 ±0.01% 浮點誤差（沿用 Invariant I-8）；F080 採 7 項前置條件嚴格驗證（沿用 F078 模式）；F081 採嚴格單階 Rollback（不允許跨階捷徑，OQ-E07-26）；F060 標 DEPRECATED v2.0（保留 v1.x 歷史內容、頂部加廢棄 banner + 取代路徑摘要 + 語意變更對照表 + 原子性上線 [ASSUMPTION] 沿用 F050 v2.0 §13 flag gating，OQ-E07-37）；新增 1 個圖表（F079-dept-ratio-flow 整合 F079 / F080 / F081 三 spec 含 advance / rollback / cleanup 子流程 + service 層共用 helper 註記）；data-model.md `ob_dept_pct` 新增「比例驗證規則（I-8）」+「stage 鎖定規則」+「FK 級聯規則 [ASSUMPTION]」3 個段落；error-handling.md 新增 `assignment-ratio-errors` 之 `RATIO_SUM_NOT_100`（取代舊 `RATIO_SUM_INVALID`，後者標 deprecated）+ `RATIO_OUT_OF_RANGE` 共 2 個；新增 `assignment-stage-transition-errors` 之 `STAGE_ADVANCE_PRECONDITION_FAILED`（含 `details.reason` / `details.actualSum`）+ `STAGE_ROLLBACK_BLOCKED`（含 `details.reason` = `already_at_first_stage` / `wrong_source_stage`）共 2 個；總計 4 個新錯誤碼；P0-MVP 增至 71 個 Feature；依賴鏈補入「F079 / F080 / F081 取代 F060」、「F079 / F080 / F081 共用 service helper」、「F079 / F080 / F081 與 F050 v2.0 §13 同套 flag gating [ASSUMPTION]」；spec 中明確要求 system-architect 抽出 `StageTransitionService`（`assertStageEquals` / `advanceTo` / `rollbackTo`）+ `RatioValidationService`（`assertSumEquals100` / `assertEachInRange`）兩個 service helper 供後續 M03b/c/d 共用；提示批次 5 進入 M03b 個別業務比例 + F058 廢棄 | Spec Writer Agent |
+| 2026-05-16 | **E07 重構衍生 spec 補修（system-architect Phase 1 / 6 個 PO 決策落地）**（7 份 spec 升版 + 2 個支援文件連帶更新）：F082 v1.1 → v1.2（PO 決議 F082-A：業務員清單從 `resign_date IS NULL` 改為「全取，含已離職員工帶 `isResigned = true` flag」+ UI 顯示「離職」badge + per-DEPT 比例驗算排除離職員工 + 既有 ration 紀錄保留供歷史 + 明確 `appdb.ob_emphire` 由 ETL E07-OBEMPHIRE-Load pipeline 載入；BLOCKING 議題解除）；F083 v1.0 → v1.1（PO 決議 F083-A：模板覆蓋式 — 每次以均等值 100/N 為基準重新計算，非疊加 + UI 顯示目前套用模板名稱 + §12 A-2 [RESOLVED]）；F084 v1.0 → v1.1（PO 決議 F084-A：無代理處長允許推進 + 不增加 `is_proxy_set` 欄位 + 推進條件以 `ob_empl_set` 加總合法為唯一判斷 + AC-9 補 F088 cross-ref + §12 A-6 [RESOLVED]）；F085 v1.0 → v1.1（PO 決議 F085-B：跨轄區清空不需處長同意 + 直接執行 + audit log 完整紀錄 + §12 A-5 [RESOLVED]）；F088 v1.0 → v1.1（補 `personnelRatios[].proxyStatus` schema：`{ isProxySet, setBy, setByRole }` + service 層即時計算 `ob_empl_set.created_by` 對應角色，無需新增 DB 欄位 + UI 顯示「此部門由 {setByRole} 代為設定」標示）；F061 v1.1 → v1.2（PO 決議 OQ-E07-29-A：Stage 2 邊緣 CARD_TYPE HB/SEB/SEC 跳過該案件不拋錯 + `report_payload.skippedCases[]` JSONB 結構 BR-12/BR-13 + 月跑仍 `status = 'completed'` + §8 補警告紀錄行為）；F076 v1.0 → v1.1（PO 決議 F076-C：F075 切換 `field_type` 離開 categorical 時批次 SET `is_active = false` 軟停用，**不 CASCADE 刪除** + 補 `deactivation_reason ENUM('manual', 'field_type_changed') DEFAULT 'manual'` 欄位於 m10 一次到位 + 歷史保留供追溯 + 既有名單月跑沿用 BR-3 不阻擋 + §12 A-5 [RESOLVED]）；error-handling v1.10 → v1.11（新增 `#assignment-run-warnings` 段落 + `RUN_REPORT_SKIPPED_CASES` 警告紀錄（F061 v1.2 引入）+ `WHITELIST_OPTION_INACTIVE` 警告紀錄（F076 v1.1 引入）+ 前端展示建議）；data-model 連帶更新（`assignment_run.report_payload` JSONB 欄位 + 結構範例與欄位說明 + `categorical_field_value.deactivation_reason` ENUM 欄位 + F076 v1.1 BR-7/BR-10 業務規則更新 + `ob_emphire` blockquote 補 ETL pipeline 識別碼 `E07-OBEMPHIRE-Load` 與 F082 v1.2 使用模式說明）；spec-index 升至 v2.15；Feature 版本標註對應更新；**spec-writer 階段補修完成，等用戶確認後可交棒 test-designer 規劃測試策略** | Spec Writer Agent |
+| 2026-05-16 | **E07 重構衍生 spec 補修第二輪（system-architect Phase 1 / 6 項風險決議落地）**（11 份 spec 升版 + 3 個支援文件連帶更新 + architecture-spec 元件補登）：F082 v1.2 → v1.3（**決議 #1 全員離職邊界選項 D**：per-DEPT sum=0% 允許 + `PersonnelRatioValidationService.assertDeptSumEquals100()` 短路 return + GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位 + 新增 AC-14；**決議 #2 503 + `FEATURE_NOT_ENABLED`** 新增 BR-16 + AC-15；**決議 #4 `SectionChiefScopeGuard` method 分支**：GET 不攔截、PUT/POST 攔截 + 新增 §5.x 對照表 + BR-14 改寫 + §12 A-1 [RESOLVED]；**決議 #5 fixture factory 策略**：§11 補測試 Fixture 策略章節（`apps/api/test/fixtures/ob-emphire.fixture.ts` + ob_emphire 必要欄位清單）；**決議 #6 `AssignmentRunGuardService.assertNoRunningRun()` 集中實作**：新增 BR-15 + AC-11 補充 + §11 實作 Checklist 補 5 項；§12 A-6 [RESOLVED]）；F079 v1.0 → v1.1、F080 v1.0 → v1.1、F081 v1.0 → v1.1、F083 v1.1 → v1.2、F084 v1.1 → v1.2、F085 v1.1 → v1.2、F086 v1.0 → v1.1、F087 v1.0 → v1.1、F089 v1.0 → v1.1（統一補入 BR-`AssignmentRunGuardService` cross-ref + Feature Flag fallback 503 BR + 相關 [ASSUMPTION] 升 ✅ Resolved）；F050 v2.0 → v2.0.1（§13.2 Feature Flag Gating [ASSUMPTION] → [RESOLVED]，明確 flag = false 回 503 + `FEATURE_NOT_ENABLED`，統一套用至 F078 / F079~F089）；error-handling v1.11 → v1.12（新增 `#feature-flag-errors` 段落 + `FEATURE_NOT_ENABLED`（503）+ `PERSONNEL_RATIO_OUT_OF_SCOPE` 補「僅適用 PUT/POST；GET 對越權回 200 空陣列」備註 + `ASSIGNMENT_RUN_ALREADY_RUNNING` 補「由 `AssignmentRunGuardService.assertNoRunningRun()` 集中拋出」備註 + 套用範圍清單）；data-model 補修（`ob_list_definition.stage` m12 migration `status != 'inactive'` AND `stage = 'draft'` 範圍規則表 + `ob_emphire` 補 CI fixture 策略指引 / fixture factory 對應 / 必要欄位清單）；architecture-spec §3.10 E07 Assignment Module 補登 6 個共用元件說明：`AssignmentRunGuardService`（新增 / 決議 #6）/ `StageTransitionService` / `PersonnelRatioValidationService`（補全員離職邊界）/ `RatioValidationService` / `FeatureFlagGuard`（補登 / 決議 #2）/ `SectionChiefScopeGuard`（補 method 分支 / 決議 #4）；spec-index 升至 v2.16；Feature 版本標註對應更新；**spec-writer 階段補修第二輪完成，等用戶確認後可正式進入 TDD developer 實作** | Spec Writer Agent |
+| 2026-05-16 | **E07 重構衍生 spec 補修第三輪（§E02 整合 PO 三項決議落地）**（5 份 spec 升版 + 3 個支援文件連帶更新）：tdd-implementation 提出 E02 整合範圍，PO 確認 3 個關鍵決議：**(A) 新增專用 PATCH `/accounts/:id/e07-role`** — 沿用 F008 sales-manager-flag 端點對稱模式，不擴充既有 PUT `/accounts/:id`；**(C) Token revoke 沿用 F009 / F010 既有 `password_changed_at` 機制** — 不新建 token blocklist 表、不新增 `AuthService.revokeAllUserTokens(userId)` method，最低跨模組耦合；**(D) `is_sales_manager` 與 `e07_role` 完全並存不遷移** — 兩欄位語意正交，`is_sales_manager` 管「業務主管讀寫權」、`e07_role` 管「E07 月度流程審批層級」，獨立 Guard 檢查可同時存在於同一 user 帳號。本批次：**F073 v1.0 → v1.1**（新增 §5.4「§E02 整合」+ §5.4.2 Token revoke 機制詳述 + 2 個錯誤碼 `ACCOUNT_E07_ROLE_INVALID`（422）/ `ACCOUNT_E07_ROLE_FORBIDDEN`（403）+ BR-9（角色變更入口唯一性）/ BR-10（Token revoke 同步觸發）/ BR-11（正交維度並存）+ AC-7 升級為 [RESOLVED]（明確 `password_changed_at` 比對流程與 audit log 結構）+ §12 假設 A-1 / A-2 升 ✅ Resolved）；**F074 v1.0 → v1.1**（新增 §5.4 沿用 F073 §5.4 規格 + BR-10（正交並存）/ BR-11（Token revoke 同步觸發）+ AC-7 升 [RESOLVED] + §12 假設 A-1 升 ✅ Resolved）；**F002 v1.3 → v1.4**（§4.6 補入「`is_sales_manager` 與 `e07_role` 正交維度說明」+ JWT Payload 補充「`e07_role` claim 型別 + `req.user.e07_role` 暴露」+ E07 模組 × 角色 CRUD 權限矩陣前補「欄位對應 `e07_role` 維度」說明 + E07 應用層角色定義表三欄調整指派入口為 PATCH `/accounts/:id/e07-role` + Guard 規格補 `req.user` 比對寫法）；**F006 v2.1 → v2.2**（功能摘要明確列示「`e07_role` 不在 PUT 範圍」+ BR-9 變更入口為 PATCH `/accounts/:id/e07-role` 專用端點 + 交叉參考補 F073 / F074 + §更新紀錄補建）；**architecture-spec v2.9 → v2.10**（§3.10 Account Service 元件補登 `AccountsService.updateE07Role()` method 完整規格表 + [RESOLVED] `AuthService.revokeAllUserTokens()` 不新增決策說明 + covers list 補入 F073 / F074）；**data-model.md** `users` 表 E07 新增欄位區塊補 `e07_role` 欄位定義（VARCHAR(20) NULL，CHECK 限三值）+ 5 條業務規則（`e07_role` 由 Admin 設定 / 並存正交 / 變更觸發 `password_changed_at` / 不在 PUT 範圍 / 對應 PATCH `/accounts/:id/e07-role` 端點）+ 索引建議 `(e07_role) WHERE NOT NULL` + Migration `[ASSUMPTION]` m06 待 system-architect 確認；**error-handling v1.12 → v1.13**（ACCOUNT 領域新增 `ACCOUNT_E07_ROLE_INVALID`（422）/ `ACCOUNT_E07_ROLE_FORBIDDEN`（403）共 2 個錯誤碼）；spec-index 升至 v2.17；F073 / F074 / F002 / F006 版本標註更新；**spec-writer §E02 整合補修完成，等用戶確認後可進入 ui-ux-designer 補 07-account-list.html prototype 對應端點 UI** | Spec Writer Agent |

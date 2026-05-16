@@ -6,14 +6,16 @@ source-story: US-088
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "1.1"
-date: 2026-05-12
+version: "2.0"
+date: 2026-05-16
 status: Draft
 ---
 
 # F050: 新增名單定義
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+
+> **v2.0（2026-05-16）**：依 F002 v2.0 / AD-E07 v3.0 重構：Guard 改為 `DirectorGuard`（M01 名單 CRUD 寫入限部長）；新增 `cr_enabled` per-list flag 取代 F059 全域開關（F059 已 DEPRECATED）。
 
 ## Agent Loading Guide
 
@@ -28,17 +30,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
 
 ## 1. 功能摘要
 
-提供業務主管新增名單定義功能，支援空白表單與「從既有名單複製」兩種建立模式。系統依格式 `OB{YYYYMM}{NNN}` 自動產生 `list_no`，同月流水號上限 999 筆；`prod_kind + card_type` 組合在當月 active 名單中必須唯一。表單必填多選欄位 `case_status`（案件結清期別）。月跑執行中禁止新增。本 Feature 與 F051 共用表單欄位規範。
+提供業務部長新增名單定義功能，支援空白表單與「從既有名單複製」兩種建立模式。系統依格式 `OB{YYYYMM}{NNN}` 自動產生 `list_no`，同月流水號上限 999 筆；`prod_kind + card_type` 組合在當月 active 名單中必須唯一。表單必填多選欄位 `case_status`（案件結清期別）。月跑執行中禁止新增。本 Feature 與 F051 共用表單欄位規範。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 新增或從既有名單複製建立一筆新的名單定義
 **So that** 彈性設定本月各 Stage 的客戶篩選條件，不需仰賴 IT 手動操作資料庫
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長已登入並持有有效 JWT Token；`businessRole='director'`（M01 名單 CRUD 寫入限部長，後端套用 `DirectorGuard`，依 F002 §4.6.2）
 - `ob_code_df` 中 `PROD_KIND` / `SPEC_TP` / `CASE_STATUS` 代碼已維護（由 F068 處理）；**`CASEYEAR` 不從 `ob_code_df` 載入**，由前端固定 11 個 CheckBox（value 0~10）渲染，無前置代碼維護需求（OQ-E07-24 ✅ Resolved 2026-05-12）
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 的紀錄
 
@@ -46,14 +48,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
 
 ### AC-1：從空白表單新增
 
-- **Given** 業務主管在 F048 名單定義清單頁點擊「新增名單定義」
+- **Given** 業務部長在 F048 名單定義清單頁點擊「新增名單定義」
 - **When** 系統開啟新增表單
 - **Then** 顯示空白表單含全部可編輯欄位（詳見第 5 節表單欄位規範，與 F051 一致）
 - **And** `list_no` 欄位不顯示（儲存後系統自動產生）
 
 ### AC-2：LIST_NO 自動產生規則
 
-- **Given** 業務主管填妥表單並點擊「儲存」
+- **Given** 業務部長填妥表單並點擊「儲存」
 - **When** 後端處理新增請求
 - **Then** 系統依格式 `OB{YYYYMM}{NNN}` 自動產生 `list_no`，共 11 碼（OB 固定 + YYYYMM 當月 + NNN 該月流水號 001~999）
 - **And** 新產生的 `list_no` 不與任何現有 `list_no` 重複
@@ -62,55 +64,55 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
 ### AC-3：同月 999 筆上限硬阻擋
 
 - **Given** 本月 `ob_list_definition` 已有 999 筆紀錄（含 active + inactive）
-- **When** 業務主管嘗試新增第 1000 筆
+- **When** 業務部長嘗試新增第 1000 筆
 - **Then** 系統回傳 422 `LIST_NO_LIMIT_EXCEEDED`，訊息：「本月（YYYYMM）名單定義已達 999 筆上限，無法新增」
 - **And** 不產生新紀錄
 
 ### AC-4：PROD_KIND + CARD_TYPE 組合重複檢查
 
-- **Given** 業務主管填入的 `prod_kind + card_type` 組合，在當前作業年月下已存在 `status = 'active'` 的名單
-- **When** 業務主管點擊「儲存」
+- **Given** 業務部長填入的 `prod_kind + card_type` 組合，在當前作業年月下已存在 `status = 'active'` 的名單
+- **When** 業務部長點擊「儲存」
 - **Then** 系統硬阻擋，回傳 422 `LIST_NO_DUPLICATE`，訊息：「相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {衝突 list_no}），請停用既有名單或修改條件」
 - **And** 不產生新紀錄
 
 ### AC-5：複製名單功能
 
-- **Given** 業務主管在新增表單點擊「複製名單」按鈕
+- **Given** 業務部長在新增表單點擊「複製名單」按鈕
 - **When** 系統開啟複製來源選擇器（下拉或搜尋彈窗，顯示所有 `status = 'active'` 的既有名單）
-- **Then** 業務主管選擇某一來源名單後，表單各欄位自動填入來源名單的對應值
+- **Then** 業務部長選擇某一來源名單後，表單各欄位自動填入來源名單的對應值
 - **And** `list_no` 仍為空（儲存後重新產生），`list_nm` 可自由修改
 
 ### AC-6：月跑執行中禁止新增
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
-- **When** 業務主管嘗試點擊「新增名單定義」按鈕
+- **When** 業務部長嘗試點擊「新增名單定義」按鈕
 - **Then** 按鈕為 disabled，hover 顯示提示「分派執行中，無法新增名單定義」
 
 ### AC-7：必填欄位驗證
 
-- **Given** 業務主管未填寫任一必填欄位即點擊「儲存」
+- **Given** 業務部長未填寫任一必填欄位即點擊「儲存」
 - **When** 前端進行表單驗證
 - **Then** 對應欄位顯示紅色邊框與錯誤訊息「此欄位為必填」，儲存請求不發送
 - **And** 必填欄位範圍包含：`list_nm` / `prod_kind` / `caseyear` / `spec_tp` / `case_status` / `list_period_start` / `list_period_end` / `list_interval` / `settle_src`
 
 ### AC-7b：case_status 必填多選驗證
 
-- **Given** 業務主管在新增表單操作案件結清期別欄位
-- **When** 業務主管未勾選任何 `case_status` 選項即點擊「儲存」
+- **Given** 業務部長在新增表單操作案件結清期別欄位
+- **When** 業務部長未勾選任何 `case_status` 選項即點擊「儲存」
 - **Then** 前端阻擋送出並顯示錯誤「案件結清期別為必填，請至少選取一項」
 - **And** 若前端被繞過，後端回傳 422 `CASE_STATUS_REQUIRED`，訊息：「案件結清期別為必填，請至少選取一項」
-- **And** `case_status` 可選選項由 `ob_code_df`（`tbl_id = 'CASE_STATUS'`）動態載入，業務主管可勾選一個或多個選項，多選值以 `$$` 分隔儲存（例如 `01$$02$$03`），與 `caseyear` / `spec_tp` 同模式
+- **And** `case_status` 可選選項由 `ob_code_df`（`tbl_id = 'CASE_STATUS'`）動態載入，業務部長可勾選一個或多個選項，多選值以 `$$` 分隔儲存（例如 `01$$02$$03`），與 `caseyear` / `spec_tp` 同模式
 
 ### AC-8：LIST_PERIOD_END ≥ LIST_PERIOD_START 驗證
 
-- **Given** 業務主管輸入 `list_period_start` 與 `list_period_end`
+- **Given** 業務部長輸入 `list_period_start` 與 `list_period_end`
 - **When** 任一欄位值變更後
 - **Then** 若 `list_period_end < list_period_start`，顯示錯誤「結束期數需大於等於開始期數」，儲存按鈕停用
 
 ### AC-9：儲存成功後的操作
 
 - **Given** 新增表單所有驗證通過
-- **When** 業務主管點擊「儲存」並後端成功寫入
+- **When** 業務部長點擊「儲存」並後端成功寫入
 - **Then** 頁面顯示成功提示含新產生的 `list_no`
 - **And** 返回 F048 名單定義清單頁，新建名單出現在「使用中」頁籤清單中
 - **And** 寫入 `assignment_audit_log`（`action = 'CREATE'`, `entity_type = 'ob_list_definition'`, `entity_id = list_no`）
@@ -153,9 +155,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
 | `03` 滿期(含當月) | 4,711 |
 | `04` 滿期 | 747,903 |
 
-**計算與比對機制**：以上分類規則由舊系統 SP `USP_OB_OBPOOLDATA.sql:189-216` 以 `STA_CODE` / `MATURITY_DT` / `DEAL_NUM-PAYT_NUM` 計算後寫入 `ob_pool_data.list_type`。新系統 Stage 1 直接讀取 `ob_pool_data.list_type` 與業務主管於本表單選擇之 `ob_list_definition.case_status` 比對（OR 邏輯，BR-7，AD-E07-14）。
+**計算與比對機制**：以上分類規則由舊系統 SP `USP_OB_OBPOOLDATA.sql:189-216` 以 `STA_CODE` / `MATURITY_DT` / `DEAL_NUM-PAYT_NUM` 計算後寫入 `ob_pool_data.list_type`。新系統 Stage 1 直接讀取 `ob_pool_data.list_type` 與業務部長於本表單選擇之 `ob_list_definition.case_status` 比對（OR 邏輯，BR-7，AD-E07-14）。
 
-> 業務目標欄位標註「（建議）」表示為依 SP 邏輯與舊系統業務反推之合理推論，作為前端 tooltip 提示用途；非絕對化定義，實際業務操作以業務主管之名單條件設定為準。
+> 業務目標欄位標註「（建議）」表示為依 SP 邏輯與舊系統業務反推之合理推論，作為前端 tooltip 提示用途；非絕對化定義，實際業務操作以業務部長之名單條件設定為準。
 
 ### 5.2 選填欄位
 
@@ -163,11 +165,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
 |---|---|---|---|
 | 卡別 | `card_type` | 文字框，max 2 | 獨立輸入，不由 `list_nm` 解析（A43 決議） |
 | 最佳產品 | `prod_best` | 文字框，max 5 | — |
+| 啟用 CR 回分 | `cr_enabled` | Toggle / Checkbox，預設 false | **v2.0 新增**：per-list flag，取代原 F059 全域開關（F059 已 DEPRECATED）。`BOOLEAN NOT NULL DEFAULT false`；月跑 Stage 3 依此 flag 決定是否將該名單套用 CR（Customer Recycling）回分規則。詳見 [data-model.md `ob_list_definition.cr_enabled`](../data-model.md#ob-list-definition-obmlistdf--名單定義) |
 
 ### 5.3 系統管理欄位（表單不顯示）
 
 - `list_no`（系統自動產生）
-- `list_type = '01'`（後端固定）— **僅系統內部分類用，表示「分派名單」類型，業務主管不設定此欄位；與案件結清期別 `case_status` 為兩個不同欄位**：`list_type` 為系統分類常數、`case_status` 為業務主管於表單必填多選的篩選條件，原系統 `LIST_TYPE` 欄位的業務語意已由 `case_status` 取代
+- `list_type = '01'`（後端固定）— **僅系統內部分類用，表示「分派名單」類型，業務部長不設定此欄位；與案件結清期別 `case_status` 為兩個不同欄位**：`list_type` 為系統分類常數、`case_status` 為業務部長於表單必填多選的篩選條件，原系統 `LIST_TYPE` 欄位的業務語意已由 `case_status` 取代
 - `project_workym = :currentYm`（後端自動填入）
 - `status = 'active'`（新增時固定）
 - `created_by`, `created_at`, `updated_by`, `updated_at`（後端自動填入）
@@ -191,9 +194,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
   "settleSrc": "Y",
   "cardType": "01",
   "prodBest": null,
+  "crEnabled": false,
   "copyFromListNo": null
 }
 ```
+
+`crEnabled` 為選填 boolean（預設 false），v2.0 新增 per-list flag，取代 F059 全域開關。
 
 `caseStatus` 為必填多選欄位，至少需傳入一個有效代碼值，多值以 `$$` 分隔（如 `01$$02$$03`）；可選代碼來源 `ob_code_df` `tbl_id = 'CASE_STATUS'`。
 
@@ -215,7 +221,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-12
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
 | 422 | LIST_NO_LIMIT_EXCEEDED | 本月已達 999 筆 |
 | 422 | LIST_NO_DUPLICATE | `prod_kind + card_type` 組合已存在 active 名單 |

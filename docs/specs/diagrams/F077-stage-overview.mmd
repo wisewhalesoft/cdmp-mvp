@@ -1,0 +1,42 @@
+%% F077 — 名單定義五階段狀態轉換
+%% 描述 ob_list_definition.stage 欄位的生命週期：draft → dept_ratio → personnel_ratio → approval → ready
+%% 含 advance（推進）、rollback（退回）、reject（簽核拒絕）、disable（草稿階段停用）、migrate（既有 OBMLISTDF 遷移初值）分支
+%% 配合 F077 §6 BR-5 / BR-6 / BR-9 與 epic-brief「五階段流程」段落閱讀
+stateDiagram-v2
+    [*] --> draft : F050 新增名單<br/>stage = 'draft'<br/>（預設 BR-7）
+
+    [*] --> ready : 既有 OBMLISTDF 遷移<br/>BR-5 全數初始 stage = 'ready'<br/>（migrate-only 路徑）
+
+    draft --> dept_ratio : 推進（US-108 / 後續 spec）<br/>篩選條件鎖定<br/>CR 開關鎖定
+    draft --> [*] : 停用（F052）<br/>status = 'inactive'<br/>**草稿階段唯一停用入口**
+
+    dept_ratio --> personnel_ratio : 推進至個別業務比例<br/>（US-110）
+    dept_ratio --> draft : Rollback 至草稿<br/>（US-111）<br/>**清空本階段資料**
+
+    personnel_ratio --> approval : 推進至簽核<br/>（US-114）
+    personnel_ratio --> dept_ratio : Rollback 至部門比例<br/>（US-115）<br/>**清空本階段資料**
+
+    approval --> ready : 部長核准<br/>（US-116）
+    approval --> personnel_ratio : 部長拒絕<br/>（US-117，**以拒絕代替 rollback**）
+
+    ready --> approval : Rollback 至簽核<br/>（US-119）<br/>**清空本階段資料**
+    ready --> [*] : F061 月跑觸發<br/>（stage = 'ready' 為前置條件，BR-8）<br/>名單參與當月分派
+
+    note left of draft
+        草稿不可 Rollback
+        （無上一階段）
+        停用為唯一退出入口
+    end note
+
+    note right of approval
+        簽核以「拒絕」代替 Rollback：
+        拒絕 = 退回個別業務比例設定
+        核准 = 推進至準備完成
+    end note
+
+    note right of ready
+        Rollback 與月跑互斥：
+        執行中（assignment_run.status
+        IN ('pending','running')）
+        禁止 Rollback
+    end note

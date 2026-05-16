@@ -28,17 +28,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務主管將已完成月跑的分派結果匯出為 Excel 或 CSV 檔案。大量資料採 streaming 寫入，避免記憶體溢出。匯出欄位對應舊系統 SP_INFOT_ASSIGNEXPORTNAMELIST 輸出格式，讓業務主管可直接交付予業務員或上傳至 CRM。
+提供業務部長 / 業務處長將已完成月跑的分派結果匯出為 Excel 或 CSV 檔案。大量資料採 streaming 寫入，避免記憶體溢出。匯出欄位對應舊系統 SP_INFOT_ASSIGNEXPORTNAMELIST 輸出格式，讓業務部長 / 業務處長可直接交付予業務員或上傳至 CRM。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 將本月分派結果匯出為 Excel 或 CSV 檔案
 **So that** 可將名單交付給業務人員使用，或上傳至 CRM / 電話系統，完成最後一哩路
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長 / 業務處長已登入並持有有效 JWT Token
 - 目標 `run_id` 存在於 `assignment_run` 且 `status = 'completed'`
 
 ## 4. 驗收標準
@@ -46,7 +46,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-1：觸發匯出並下載檔案
 
 - **Given** 月跑已完成（`status = 'completed'`）
-- **When** 業務主管點擊「匯出結果」並選擇格式（Excel / CSV）
+- **When** 業務部長 / 業務處長點擊「匯出結果」並選擇格式（Excel / CSV）
 - **Then** 系統產生對應格式檔案，瀏覽器觸發下載
 - **And** 檔案名稱格式：`assignment_result_{YYYYMM}_{run_id 前 8 碼}.xlsx`（或 `.csv`）
 
@@ -60,13 +60,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-3：月跑未完成時阻擋匯出
 
 - **Given** 目標 `run_id` 的 `status` 為 `pending` / `running` / `failed`
-- **When** 業務主管嘗試匯出
+- **When** 業務部長 / 業務處長嘗試匯出
 - **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPLETED`，前端匯出按鈕 disabled 並顯示提示「分派執行中，完成後才能匯出」
 
 ### AC-4：大量資料串流匯出
 
 - **Given** 分派結果超過 50,000 筆
-- **When** 業務主管觸發匯出
+- **When** 業務部長 / 業務處長觸發匯出
 - **Then** 系統採 streaming 寫入（不完整讀入記憶體），顯示「正在產生檔案，請稍候…」提示
 - **And** 檔案產生完成後自動下載
 - **And** 若超過 5 分鐘仍未完成，中斷匯出並回傳 500 `EXPORT_FILE_EXPIRED`，訊息：「檔案產生逾時，請稍後再試或聯繫 IT」
@@ -98,7 +98,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | `run_id` 不存在 |
 | 422 | ASSIGNMENT_RUN_NOT_COMPLETED | 月跑尚未完成 |
 | 500 | EXPORT_FILE_EXPIRED | 匯出超過 5 分鐘 timeout |
@@ -110,7 +110,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-1 | 資料來源：`assignment_run_snapshot.payload`（`snapshot_type = 'result'`） |
 | BR-2 | 大量資料採 streaming 寫入，不完整讀入記憶體 |
 | BR-3 | 匯出逾時上限 5 分鐘；超過回傳 `EXPORT_FILE_EXPIRED` |
-| BR-4 | 檔案名稱包含 `YYYYMM` + `run_id 前 8 碼`，便於業務主管識別 |
+| BR-4 | 檔案名稱包含 `YYYYMM` + `run_id 前 8 碼`，便於業務部長 / 業務處長識別 |
 | BR-5 | 每次匯出寫入 `assignment_audit_log`（稽核用途） |
 
 ## 7. UI/UX 需求

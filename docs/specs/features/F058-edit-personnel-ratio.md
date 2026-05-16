@@ -1,19 +1,30 @@
 ---
 spec-id: F058
-title: 編輯人員比例設定
+title: 編輯人員比例設定（DEPRECATED v2.0）
 feature-id: F058
 source-story: US-079
 epic: E07
 module: M03 分派比例
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
-status: Draft
+version: "2.0-DEPRECATED"
+date: 2026-05-16
+status: Deprecated
+supersededBy: F082
 ---
 
-# F058: 編輯人員比例設定
+# F058: 編輯人員比例設定 — DEPRECATED (v2.0)
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+> **DEPRECATED — 2026-05-16 / v2.0**
+>
+> 本 spec 已於 AD-E07 v3.0 / F002 v2.0 重構期間廢止，**不再進入 MVP 實作**。
+>
+> - **取代路徑**：[F082 v1.3 個別業務比例（Per-Sales Ratio）](F082-set-per-sales-ratio.md)
+> - **廢止原因**：原 `ob_empl_set.ration` 「人員比例」概念已併入 M03b 個別業務比例（per-sales ratio），授權層採處長轄區限縮（`DirectorOrSectionChiefGuard` + service 層 `scopeByCreator()`），詳見 [F002 §4.6.1 / §4.6.2](F002-user-login.md)
+> - **下游影響**：相關使用者故事（US-079）已 reroute 至 F082；data model 中 `ob_empl_set` 改用 F082 描述的 schema
+>
+> 以下 v1.0 內容僅供歷史比對，**禁止用於實作**。
+
+Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 ## Agent Loading Guide
 

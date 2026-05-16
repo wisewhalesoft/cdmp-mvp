@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>準備完成階段摘要 — 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .toast { transition: all 0.3s ease; }
+    .toast.toast-enter { opacity: 0; transform: translateY(-8px); }
+    .toast.toast-show { opacity: 1; transform: translateY(0); }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    @keyframes pop-in { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .animate-pop-in { animation: pop-in 0.18s ease-out; }
+    .step-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+    .step-dot { width: 18px; height: 18px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; }
+    .step-done { background: #D1FAE5; color: #047857; }
+    .step-current { background: #DBEAFE; color: #1D4ED8; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+    .step-arrow { color: #D1D5DB; font-size: 14px; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .has-tooltip { position: relative; }
+    .has-tooltip .tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #111827; color: white; font-size: 11px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 10; }
+    .has-tooltip:hover .tip { opacity: 1; }
+    .dept-body { overflow: hidden; transition: max-height 0.25s ease-out; }
+    .dept-body.collapsed { max-height: 0 !important; }
+    .row-resigned { opacity: 0.55; background: #F9FAFB; }
+    .list-card { transition: all 0.15s ease; }
+    .list-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); transform: translateY(-1px); border-color: #BFDBFE; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <div class="mx-5 my-3 border-t border-border"></div>
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="true"
+        class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <span class="flex items-center gap-3"><i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派</span>
+        <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200 rotate-90"></i>
+      </button>
+      <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 600px;">
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+        <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+        <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+        <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
+        <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例</a>
+        <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱</a>
+        <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
+        <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+        <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+        <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+        <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+        <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+        <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+        <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+          <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+          <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2 text-sm">
+      <a href="27-list-definition.html" class="text-gray-500 hover:text-primary transition">名單定義</a>
+      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
+      <span class="font-semibold text-gray-800" id="hdrTitle">準備完成階段</span>
+      <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background:#D1FAE5;color:#047857;">
+        <i data-lucide="check-circle-2" class="w-3 h-3"></i>ready 階段
+      </span>
+      <span class="ml-1 font-mono text-xs text-gray-400" id="hdrListNo"></span>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="has-tooltip">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-gray-50 border border-border rounded-md text-gray-500 cursor-not-allowed">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+          <span class="font-mono">2026-05</span>
+          <i data-lucide="lock" class="w-3 h-3 text-gray-400"></i>
+        </div>
+        <span class="tip">摘要階段：月份鎖定於名單所屬月份</span>
+      </div>
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="minister">部長</option>
+          <option value="admin">Admin</option>
+          <option value="director_xtc0">處長（XTC0 北一處）</option>
+          <option value="sales">業務（無權）</option>
+        </select>
+      </div>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">張部長</span>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- 階段路徑 breadcrumb -->
+    <div class="bg-white border-b border-border px-6 py-3 flex items-center gap-3">
+      <span class="text-xs text-gray-400 mr-1">階段路徑：</span>
+      <span class="step-item"><span class="step-dot step-done"><i data-lucide="check" class="w-3 h-3"></i></span><span class="text-gray-500">草稿</span></span>
+      <span class="step-arrow">›</span>
+      <span class="step-item"><span class="step-dot step-done"><i data-lucide="check" class="w-3 h-3"></i></span><span class="text-gray-500">部門比例</span></span>
+      <span class="step-arrow">›</span>
+      <span class="step-item"><span class="step-dot step-done"><i data-lucide="check" class="w-3 h-3"></i></span><span class="text-gray-500">個別業務比例</span></span>
+      <span class="step-arrow">›</span>
+      <span class="step-item"><span class="step-dot step-done"><i data-lucide="check" class="w-3 h-3"></i></span><span class="text-gray-500">簽核</span></span>
+      <span class="step-arrow">›</span>
+      <span class="step-item"><span class="step-dot step-current">5</span><span class="font-semibold text-primary">準備完成</span></span>
+      <span class="ml-auto inline-flex items-center gap-1 text-[10px] text-gray-400">
+        <i data-lucide="git-branch" class="w-3 h-3"></i>F088 v1.1 / F089
+      </span>
+    </div>
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 mr-1">View 模式：</span>
+      <button onclick="loadMode('list')" id="mode-list" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">A · 清單頁（所有 ready 名單）</button>
+      <button onclick="loadMode('detail')" id="mode-detail" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">B · 詳情頁（OB202605002）</button>
+      <button onclick="loadMode('detail_proxy')" id="mode-detail_proxy" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">B · 詳情頁（含「部長代設定」）</button>
+      <span class="mx-2 text-gray-300">|</span>
+      <button onclick="loadMode('list_partial')" id="mode-list_partial" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">A · 部分名單尚未 ready</button>
+      <span class="ml-auto text-[10px] text-gray-400">mock · 不發 API</span>
+    </div>
+
+    <!-- 角色封鎖 banner（sales） -->
+    <div id="roleBlockedBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
+        <p class="text-sm text-gray-500 max-w-md">「準備完成」階段摘要由部長 / 處長 / Admin 操作；業務員不參與此階段。</p>
+        <a href="27-list-definition.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
+        </a>
+      </div>
+    </div>
+
+    <!-- ===== 主要內容 ===== -->
+    <div id="mainContent" class="p-6 space-y-4">
+
+      <!-- 處長轄區提示（detail 模式 + 處長角色） -->
+      <div id="directorScopeBanner" class="hidden rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm">
+        <i data-lucide="scan-eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-purple-900">處長僅可查看自己轄區之個別業務比例</p>
+          <p class="text-xs text-purple-700 mt-0.5">下方部門 accordion 已過濾為您轄區內的部門；其他部門的設定僅部長 / Admin 可見。</p>
+        </div>
+      </div>
+
+      <!-- ===== 模式 A：清單頁 ===== -->
+      <div id="modeListWrap" class="hidden space-y-4">
+        <!-- 月跑就緒狀態 banner -->
+        <section id="monthlyRunBanner" class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div id="mrIcon" class="w-12 h-12 rounded-full flex items-center justify-center">
+                <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+              </div>
+              <div>
+                <h2 class="text-lg font-semibold text-gray-800" id="mrTitle">本月所有名單均已 ready · 可執行月跑</h2>
+                <p class="text-xs text-gray-500 mt-0.5" id="mrSubtitle">2026-05 共 <strong id="mrReadyCount">3</strong> 筆名單已準備完成，預計月跑時間 2026-05-20 02:00</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnRunMonth" onclick="onRunMonth()"
+                class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary">
+                <i data-lucide="play-circle" class="w-4 h-4"></i>執行月跑
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 月跑前提示（部分名單未 ready） -->
+        <section id="partialReadyBanner" class="hidden bg-amber-50/60 border border-amber-200 rounded-xl p-4">
+          <div class="flex items-start gap-3">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-warning mt-0.5 shrink-0"></i>
+            <div class="flex-1 text-sm text-amber-900">
+              <p class="font-semibold">本月仍有 <span id="notReadyCount">2</span> 筆名單未進入 ready 階段，無法執行月跑</p>
+              <p class="text-xs text-amber-800 mt-1">未 ready 名單：<span id="notReadyList" class="font-mono"></span></p>
+              <p class="text-xs text-amber-700 mt-1">請先完成上述名單的「個別業務比例」與「簽核」階段。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 名單卡片列表 -->
+        <section class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold text-gray-800 inline-flex items-center gap-2">
+              <i data-lucide="list-checks" class="w-4 h-4 text-success"></i>已 ready 名單清單
+              <span class="text-xs text-gray-400 font-normal">（依 created_at 倒序）</span>
+            </h3>
+            <span id="readyListCount" class="text-xs text-gray-500"></span>
+          </div>
+          <div id="readyListContainer" class="grid grid-cols-1 gap-3"></div>
+        </section>
+      </div>
+
+      <!-- ===== 模式 B：詳情頁 ===== -->
+      <div id="modeDetailWrap" class="hidden space-y-4">
+        <!-- 返回連結 -->
+        <div class="flex items-center justify-between">
+          <button onclick="loadMode('list')" class="text-sm text-gray-500 hover:text-primary inline-flex items-center gap-1">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>返回 ready 名單清單
+          </button>
+          <div id="detailActions" class="flex items-center gap-2">
+            <button id="btnRollback" type="button" onclick="openRollbackModal()"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm border border-red-300 text-danger rounded-md hover:bg-red-50">
+              <i data-lucide="undo-2" class="w-4 h-4"></i>退回簽核
+            </button>
+            <button id="btnRunMonthDetail" onclick="onRunMonth()"
+              class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
+              <i data-lucide="play-circle" class="w-4 h-4"></i>執行月跑
+            </button>
+          </div>
+        </div>
+
+        <!-- 名單標題卡片 -->
+        <section class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-start justify-between gap-4 mb-3">
+            <div>
+              <h1 class="text-xl font-semibold text-gray-800">
+                <span id="detailListNm">2026-05 業務二部 主力催收</span>
+                <span class="ml-2 text-base text-gray-500 font-normal">— <span class="font-mono" id="detailListNo">OB202605002</span></span>
+              </h1>
+              <p class="text-xs text-gray-500 mt-1">本名單已通過部長核准，等待月跑啟動 Stage 1~3 計算（亦可由部長 / Admin Rollback 重新審核）。</p>
+            </div>
+            <div class="text-right">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider">最終核准資訊</p>
+              <p class="text-sm font-medium text-gray-700 mt-0.5"><i data-lucide="crown" class="w-3 h-3 inline mr-0.5 text-primary"></i>張部長</p>
+              <p class="text-xs text-gray-500"><i data-lucide="calendar" class="w-3 h-3 inline mr-0.5"></i>2026-05-14 18:05 核准</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-4 gap-3 mt-4 pt-4 border-t border-border">
+            <div class="text-center">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider">部門數</p>
+              <p class="text-xl font-semibold text-gray-800 tabular mt-0.5" id="detailDeptCount">5</p>
+            </div>
+            <div class="text-center">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider">在職業務員</p>
+              <p class="text-xl font-semibold text-gray-800 tabular mt-0.5" id="detailEmpCount">17</p>
+              <p class="text-[10px] text-gray-500"><span id="detailResignedCount">1</span> 位離職不計</p>
+            </div>
+            <div class="text-center">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider">預估案件數</p>
+              <p class="text-xl font-semibold text-primary tabular mt-0.5">~12,400</p>
+              <p class="text-[10px] text-gray-500">由 Stage 0 試算</p>
+            </div>
+            <div class="text-center">
+              <p class="text-[10px] text-gray-400 uppercase tracking-wider">簽核紀錄</p>
+              <p class="text-xl font-semibold text-success tabular mt-0.5">1</p>
+              <p class="text-[10px] text-gray-500">approve · 0 reject</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 區塊 1 + 2：篩選條件 + 部門比例（同 29c） -->
+        <section class="bg-white rounded-xl border border-border p-5">
+          <h2 class="text-base font-semibold text-gray-800 mb-3 inline-flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-blue-100 text-primary inline-flex items-center justify-center text-xs font-semibold">1</span>
+            篩選條件
+          </h2>
+          <div class="flex flex-wrap gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="package" class="w-3 h-3 text-gray-400"></i>PROD_KIND <span class="text-gray-400 mx-0.5">in</span> <span class="font-mono">(信貸)</span></span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="layers" class="w-3 h-3 text-gray-400"></i>LIST_TYPE <span class="text-gray-400 mx-0.5">=</span> <span class="font-mono">主力</span></span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="hash" class="w-3 h-3 text-gray-400"></i>MONTH_CNT <span class="text-gray-400 mx-0.5">in</span> <span class="font-mono">(M2~M4)</span></span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-green-50 border border-green-200 text-green-700 font-medium"><i data-lucide="recycle" class="w-3 h-3"></i>CR 啟用</span>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-semibold text-gray-800 inline-flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-blue-100 text-primary inline-flex items-center justify-center text-xs font-semibold">2</span>
+              部門比例
+              <span class="text-xs text-gray-400 font-normal" id="detailDirectorOnlyHint"></span>
+            </h2>
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-green-100 text-success">
+              <i data-lucide="check-circle-2" class="w-3 h-3"></i>加總 = 100% 合法
+            </span>
+          </div>
+          <div class="overflow-hidden rounded-lg border border-border">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-xs text-gray-500">
+                <tr>
+                  <th class="text-left px-4 py-2 font-medium">部門代碼</th>
+                  <th class="text-left px-4 py-2 font-medium">部門名稱</th>
+                  <th class="text-left px-4 py-2 font-medium">處長</th>
+                  <th class="text-left px-4 py-2 font-medium">設定者</th>
+                  <th class="text-right px-4 py-2 font-medium">RATION</th>
+                </tr>
+              </thead>
+              <tbody id="detailDeptBody" class="divide-y divide-border bg-white"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 區塊 3：個別業務比例 -->
+        <section class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-semibold text-gray-800 inline-flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-blue-100 text-primary inline-flex items-center justify-center text-xs font-semibold">3</span>
+              個別業務比例
+              <span class="text-xs text-gray-400 font-normal">（依部門展開 / 唯讀）</span>
+            </h2>
+            <div class="flex items-center gap-2">
+              <button onclick="expandAllDepts(true)" class="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1">
+                <i data-lucide="chevrons-down" class="w-3 h-3"></i>全部展開
+              </button>
+              <span class="text-gray-300">/</span>
+              <button onclick="expandAllDepts(false)" class="text-xs text-gray-500 hover:text-primary inline-flex items-center gap-1">
+                <i data-lucide="chevrons-up" class="w-3 h-3"></i>全部摺疊
+              </button>
+            </div>
+          </div>
+          <div id="detailAccordionContainer" class="space-y-3"></div>
+        </section>
+
+        <!-- 區塊 4：簽核歷史 -->
+        <section class="bg-white rounded-xl border border-border p-5">
+          <h2 class="text-base font-semibold text-gray-800 mb-3 inline-flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-blue-100 text-primary inline-flex items-center justify-center text-xs font-semibold">4</span>
+            簽核歷史
+            <span class="text-xs text-gray-400 font-normal">（最終核准前的完整紀錄）</span>
+          </h2>
+          <div class="rounded-lg bg-green-50/60 border border-green-200 p-3 flex items-start gap-3">
+            <div class="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+              <i data-lucide="check" class="w-4 h-4 text-success"></i>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-semibold text-green-900">張部長 <span class="text-xs font-normal text-success">核准</span></p>
+              <p class="text-xs text-green-700 mt-0.5"><i data-lucide="clock" class="w-3 h-3 inline mr-0.5"></i>2026-05-14 18:05</p>
+              <p class="text-xs text-green-800 mt-1">名單已通過審閱，進入準備完成階段。</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal：Rollback ready → approval（F089） ===== -->
+  <div id="rollbackModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-pop-in">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-danger"></i>
+        </div>
+        <div class="flex-1">
+          <h3 class="text-base font-semibold text-gray-800">退回簽核階段？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F089 · stage: ready → approval（destructive）</p>
+        </div>
+        <button onclick="closeRollbackModal()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-3">
+        <p class="text-sm text-gray-700">確認將名單「<span class="font-medium" id="rollbackListNm">2026-05 業務二部 主力催收</span>」（<span class="font-mono" id="rollbackListNo">OB202605002</span>）退回至簽核階段？</p>
+
+        <div class="rounded-lg bg-red-50/60 border border-red-200 p-3 flex items-start gap-2">
+          <i data-lucide="alert-octagon" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+          <div class="text-xs text-red-900">
+            <p class="font-semibold">Rollback 後將觸發：</p>
+            <ul class="list-disc pl-4 mt-1 space-y-0.5 text-red-800">
+              <li>名單從「月跑可觸發清單」中 <strong>移除</strong></li>
+              <li>Hard delete <code class="font-mono">assignment_approval</code>（共 <span id="rollbackApprovalCount">1</span> 筆核准紀錄）</li>
+              <li>名單退回 approval 階段，部長 / Admin 需重新審閱</li>
+              <li>稽核日誌將寫入完整快照供日後追溯</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="rounded-lg bg-blue-50/50 border border-blue-200 p-3 flex items-start gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div class="text-xs text-blue-900">
+            <p><strong>與 F081 / F085 Rollback 差異</strong>：本 Rollback <strong>不清空</strong> <code class="font-mono">ob_dept_pct</code> 或 <code class="font-mono">ob_empl_set</code> 設定資料；僅刪除核准紀錄使名單退回審閱中。重新審閱時資料保留供部長判斷。</p>
+          </div>
+        </div>
+
+        <label class="flex items-start gap-2 cursor-pointer select-none mt-2 p-2 hover:bg-gray-50 rounded">
+          <input type="checkbox" id="rollbackConfirm" onchange="document.getElementById('btnRollbackConfirm').disabled = !this.checked"
+            class="mt-0.5 w-4 h-4 rounded border-gray-300 text-danger focus:ring-danger">
+          <span class="text-sm text-gray-700">我確認 Rollback 並刪除核准紀錄（部長 / Admin 需重新審閱）</span>
+        </label>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeRollbackModal()" class="px-4 py-2 text-sm text-gray-700 hover:bg-white rounded-md border border-border">取消</button>
+        <button id="btnRollbackConfirm" onclick="confirmRollback()" disabled
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-danger rounded-md hover:bg-red-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-danger">
+          <i data-lucide="undo-2" class="w-4 h-4"></i>確認退回
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toastContainer" class="fixed top-20 right-6 z-[60] space-y-2"></div>
+
+  <!-- ===== JS ===== -->
+  <script>
+    // ============================================================
+    // Sidebar
+    // ============================================================
+    function toggleAssignmentSection() {
+      const sec = document.getElementById('assignment-section');
+      const chev = document.getElementById('assignment-chevron');
+      const expanded = sec.style.maxHeight !== '0px';
+      if (expanded) { sec.style.maxHeight = '0px'; chev.classList.remove('rotate-90'); }
+      else { sec.style.maxHeight = '600px'; chev.classList.add('rotate-90'); }
+    }
+
+    // ============================================================
+    // 角色 meta（沿用 29b：含處長 scope）
+    // ============================================================
+    const ROLE_META = {
+      minister:      { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '張部長',     scope: null,   canRunMonth: true,  canRollback: true,  canView: true  },
+      admin:         { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員', scope: null,   canRunMonth: true,  canRollback: true,  canView: true  },
+      director_xtc0: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長',     scope: 'XTC0', canRunMonth: false, canRollback: false, canView: true  },
+      sales:         { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務',     scope: null,   canRunMonth: false, canRollback: false, canView: false }
+    };
+    let currentRole = 'minister';
+    let currentMode = 'list';
+    let currentListNo = 'OB202605002';
+    let currentScenario = 'list';
+
+    function setRole(role) {
+      currentRole = role;
+      const m = ROLE_META[role] || ROLE_META.minister;
+      document.getElementById('role-badge-container').innerHTML =
+        `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+      document.getElementById('user-name').textContent = m.name;
+      const blocked = !m.canView;
+      document.getElementById('roleBlockedBanner').classList.toggle('hidden', !blocked);
+      document.getElementById('mainContent').classList.toggle('hidden', blocked);
+      // 月跑按鈕 / Rollback 按鈕依角色顯示
+      const btnRun = document.getElementById('btnRunMonth');
+      const btnRunDetail = document.getElementById('btnRunMonthDetail');
+      const btnRollback = document.getElementById('btnRollback');
+      if (btnRun) btnRun.classList.toggle('hidden', !m.canRunMonth);
+      if (btnRunDetail) btnRunDetail.classList.toggle('hidden', !m.canRunMonth);
+      if (btnRollback) btnRollback.classList.toggle('hidden', !m.canRollback);
+      // 處長轄區提示
+      const dirBanner = document.getElementById('directorScopeBanner');
+      const isDirector = role.startsWith('director');
+      if (dirBanner) dirBanner.classList.toggle('hidden', !(isDirector && currentMode === 'detail'));
+      const hint = document.getElementById('detailDirectorOnlyHint');
+      if (hint) hint.textContent = isDirector ? '（轄區檢視）' : '';
+      renderAll();
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // Mock 名單列表（ready 階段）
+    // ============================================================
+    const READY_LISTS_BASE = [
+      { listNo: 'OB202605001', listNm: '2026-05 業務一部 主力催收',  deptCount: 4, empCount: 14, estimateCases: 9800,  createdBy: '王部長',  approvedAt: '2026-05-13 16:20', scope: ['XTC1','XTC2','XTC3','XTC4'] },
+      { listNo: 'OB202605002', listNm: '2026-05 業務二部 主力催收',  deptCount: 5, empCount: 17, estimateCases: 12400, createdBy: '王部長',  approvedAt: '2026-05-14 18:05', scope: ['XTC0','XTC1','XTC2','XTC3','XTC4'] },
+      { listNo: 'OB202605006', listNm: '2026-05 業務一部 重點戶',    deptCount: 3, empCount: 9,  estimateCases: 5600,  createdBy: '李處長',  approvedAt: '2026-05-15 10:42', scope: ['XTC0','XTC1','XTC2'] }
+    ];
+    const NOT_READY_LISTS = [
+      { listNo: 'OB202605007', listNm: '2026-05 業務三部 退回重做', stage: 'personnel_ratio' },
+      { listNo: 'OB202605008', listNm: '2026-05 業務二部 即將到期', stage: 'approval' }
+    ];
+
+    let ALL_READY = true;
+
+    // ============================================================
+    // Mock 詳情資料（部門 + 員工 + proxy 標示）
+    // ============================================================
+    function buildDetailData(withProxy) {
+      return [
+        { code:'XTC0', name:'北一處', director:'李處長', proxyByMinister:false, quota:30,
+          emps: [
+            { empId:'EMP001', name:'王小明', isResigned:false, ration:25 },
+            { empId:'EMP002', name:'林小美', isResigned:false, ration:22 },
+            { empId:'EMP003', name:'張大華', isResigned:false, ration:20 },
+            { empId:'EMP004', name:'陳經理', isResigned:false, ration:18 },
+            { empId:'EMP005', name:'黃專員', isResigned:false, ration:15 }
+          ]},
+        { code:'XTC1', name:'北二處', director:'王處長', proxyByMinister:false, quota:25,
+          emps: [
+            { empId:'EMP006', name:'劉志強', isResigned:false, ration:30 },
+            { empId:'EMP007', name:'蔡美玲', isResigned:false, ration:25 },
+            { empId:'EMP008', name:'周建華', isResigned:false, ration:25 },
+            { empId:'EMP009', name:'許淑芬', isResigned:false, ration:20 }
+          ]},
+        { code:'XTC2', name:'中區處', director:'陳處長', proxyByMinister:false, quota:20,
+          emps: [
+            { empId:'EMP010', name:'郭文彬', isResigned:false, ration:40 },
+            { empId:'EMP011', name:'吳新人', isResigned:false, ration:25 },
+            { empId:'EMP012', name:'蘇雅婷', isResigned:false, ration:35 }
+          ]},
+        { code:'XTC3', name:'南一處', director:'黃處長', proxyByMinister:false, quota:15,
+          emps: [
+            { empId:'EMP013', name:'楊志明', isResigned:false, ration:33 },
+            { empId:'EMP014', name:'葉佩珊', isResigned:false, ration:33 },
+            { empId:'EMP015', name:'鄭世豪', isResigned:false, ration:34 },
+            { empId:'EMP016', name:'潘秀英', isResigned:true,  ration:0 }
+          ]},
+        { code:'XTC4', name:'南二處', director: withProxy ? '(未設代理)' : '蔡處長', proxyByMinister: withProxy, quota:10,
+          emps: [
+            { empId:'EMP018', name:'簡志偉', isResigned:false, ration:55 },
+            { empId:'EMP019', name:'紀美華', isResigned:false, ration:45 }
+          ]}
+      ];
+    }
+    let DETAIL_DEPTS = buildDetailData(false);
+
+    // ============================================================
+    // Mode 切換
+    // ============================================================
+    function loadMode(mode) {
+      currentScenario = mode;
+      if (mode === 'list' || mode === 'list_partial') {
+        currentMode = 'list';
+        ALL_READY = (mode === 'list');
+        document.getElementById('hdrTitle').textContent = '準備完成階段';
+        document.getElementById('hdrListNo').textContent = '';
+      } else {
+        currentMode = 'detail';
+        currentListNo = 'OB202605002';
+        DETAIL_DEPTS = buildDetailData(mode === 'detail_proxy');
+        document.getElementById('hdrTitle').textContent = '準備完成階段 — 詳情';
+        document.getElementById('hdrListNo').textContent = currentListNo;
+      }
+      document.getElementById('modeListWrap').classList.toggle('hidden', currentMode !== 'list');
+      document.getElementById('modeDetailWrap').classList.toggle('hidden', currentMode !== 'detail');
+
+      // demo button 高亮
+      document.querySelectorAll('.demo-btn').forEach(b => {
+        b.classList.remove('border-primary', 'bg-blue-50', 'text-primary');
+        b.classList.add('border-gray-300', 'bg-white');
+      });
+      const active = document.getElementById('mode-' + mode);
+      if (active) {
+        active.classList.remove('border-gray-300', 'bg-white');
+        active.classList.add('border-primary', 'bg-blue-50', 'text-primary');
+      }
+      // 處長 banner 切換
+      const isDirector = currentRole.startsWith('director');
+      document.getElementById('directorScopeBanner').classList.toggle('hidden', !(isDirector && currentMode === 'detail'));
+      renderAll();
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // 模式 A：清單頁渲染
+    // ============================================================
+    function renderListMode() {
+      const m = ROLE_META[currentRole];
+      // 處長過濾：僅顯示 scope 內名單
+      let lists = READY_LISTS_BASE;
+      if (m.scope) {
+        lists = lists.filter(l => l.scope.includes(m.scope));
+      }
+      // 月跑就緒 banner
+      const mrBanner = document.getElementById('monthlyRunBanner');
+      const mrIcon = document.getElementById('mrIcon');
+      const mrTitle = document.getElementById('mrTitle');
+      const mrSubtitle = document.getElementById('mrSubtitle');
+      const partial = document.getElementById('partialReadyBanner');
+      const btnRun = document.getElementById('btnRunMonth');
+
+      if (ALL_READY) {
+        mrIcon.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-green-100 text-success';
+        mrIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-6 h-6"></i>';
+        mrTitle.textContent = '本月所有名單均已 ready · 可執行月跑';
+        document.getElementById('mrReadyCount').textContent = lists.length;
+        mrSubtitle.innerHTML = `2026-05 共 <strong>${lists.length}</strong> 筆名單已準備完成，預計月跑時間 2026-05-20 02:00`;
+        partial.classList.add('hidden');
+        if (btnRun) btnRun.disabled = !m.canRunMonth;
+      } else {
+        mrIcon.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-amber-100 text-warning';
+        mrIcon.innerHTML = '<i data-lucide="alert-triangle" class="w-6 h-6"></i>';
+        mrTitle.textContent = '本月仍有名單未進入 ready · 月跑暫不可執行';
+        mrSubtitle.innerHTML = `已 ready：<strong>${lists.length}</strong> 筆 · 未 ready：<strong>${NOT_READY_LISTS.length}</strong> 筆，待全部完成方可月跑`;
+        partial.classList.remove('hidden');
+        document.getElementById('notReadyCount').textContent = NOT_READY_LISTS.length;
+        document.getElementById('notReadyList').innerHTML = NOT_READY_LISTS.map(l => `${l.listNo}（${l.stage}）`).join('、');
+        if (btnRun) btnRun.disabled = true;
+      }
+
+      // 名單卡片
+      const container = document.getElementById('readyListContainer');
+      document.getElementById('readyListCount').textContent = lists.length > 0 ? `共 ${lists.length} 筆` : '無符合條件之名單';
+
+      if (lists.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+            <div class="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+              <i data-lucide="scan-eye" class="w-8 h-8 text-purple-600"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 mb-1">您的轄區暫無 ready 名單</h3>
+            <p class="text-sm text-gray-500 max-w-md">處長僅可查看自己轄區之 ready 名單。可能尚未有名單核准完成，或本月名單均不在您轄區內。</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = lists.map(l => `
+        <div class="list-card bg-white rounded-xl border border-border p-4 cursor-pointer" onclick="openDetailById('${l.listNo}')">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-mono text-xs text-gray-500">${l.listNo}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-success">
+                  <i data-lucide="check-circle-2" class="w-2.5 h-2.5"></i>ready
+                </span>
+              </div>
+              <h4 class="text-base font-semibold text-gray-800">${l.listNm}</h4>
+              <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                <span class="inline-flex items-center gap-1"><i data-lucide="building-2" class="w-3 h-3"></i>${l.deptCount} 部門</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>${l.empCount} 業務員</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="file-text" class="w-3 h-3"></i>~${l.estimateCases.toLocaleString()} 案件</span>
+                <span class="text-gray-300">·</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>${l.createdBy} 建立</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="check" class="w-3 h-3 text-success"></i>${l.approvedAt} 核准</span>
+              </div>
+            </div>
+            <button class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-md text-gray-700 hover:bg-gray-50 hover:border-primary hover:text-primary" onclick="event.stopPropagation(); openDetailById('${l.listNo}')">
+              <i data-lucide="eye" class="w-3 h-3"></i>查看摘要
+            </button>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function openDetailById(listNo) {
+      currentListNo = listNo;
+      loadMode('detail');
+    }
+
+    // ============================================================
+    // 模式 B：詳情頁渲染
+    // ============================================================
+    function renderDetailMode() {
+      const m = ROLE_META[currentRole];
+      let depts = DETAIL_DEPTS;
+      // 處長：過濾為自己轄區
+      if (m.scope) depts = depts.filter(d => d.code === m.scope);
+
+      // 標題卡片
+      document.getElementById('detailListNo').textContent = currentListNo;
+      document.getElementById('detailDeptCount').textContent = depts.length;
+      const allEmps = depts.reduce((a, d) => a + d.emps.filter(e => !e.isResigned).length, 0);
+      const resignedEmps = depts.reduce((a, d) => a + d.emps.filter(e => e.isResigned).length, 0);
+      document.getElementById('detailEmpCount').textContent = allEmps;
+      document.getElementById('detailResignedCount').textContent = resignedEmps;
+
+      // 部門比例表
+      const tbody = document.getElementById('detailDeptBody');
+      tbody.innerHTML = depts.map(d => {
+        const setterChip = d.proxyByMinister
+          ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-warning border border-amber-200"><i data-lucide="crown" class="w-2.5 h-2.5"></i>該部門由部長代設定</span>`
+          : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200"><i data-lucide="user-cog" class="w-2.5 h-2.5"></i>由 ${d.director} 設定</span>`;
+        return `<tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-2 font-mono text-xs text-gray-600">${d.code}</td>
+          <td class="px-4 py-2 text-gray-800">${d.name}</td>
+          <td class="px-4 py-2 text-xs text-gray-600"><span class="inline-flex items-center gap-1"><i data-lucide="user-cog" class="w-3 h-3 text-purple-600"></i>${d.director}</span></td>
+          <td class="px-4 py-2">${setterChip}</td>
+          <td class="px-4 py-2 text-right font-semibold tabular text-gray-800">${d.quota.toFixed(2)}%</td>
+        </tr>`;
+      }).join('');
+
+      // 部門 accordion
+      const container = document.getElementById('detailAccordionContainer');
+      container.innerHTML = depts.map((d, i) => renderDeptCard(d, i)).join('');
+
+      // Rollback modal 內容
+      const totalApprovals = 1; // mock
+      document.getElementById('rollbackApprovalCount').textContent = totalApprovals;
+      document.getElementById('rollbackListNo').textContent = currentListNo;
+      const meta = READY_LISTS_BASE.find(l => l.listNo === currentListNo);
+      if (meta) {
+        document.getElementById('detailListNm').textContent = meta.listNm;
+        document.getElementById('rollbackListNm').textContent = meta.listNm;
+      }
+      lucide.createIcons();
+    }
+
+    function renderDeptCard(d, idx) {
+      const activeCount = d.emps.filter(e => !e.isResigned).length;
+      const resignedCount = d.emps.filter(e => e.isResigned).length;
+      const sum = d.emps.filter(e => !e.isResigned).reduce((a, e) => a + e.ration, 0);
+      const ok = Math.abs(sum - 100) <= 0.01;
+
+      const proxyChip = d.proxyByMinister
+        ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-warning border border-amber-200"><i data-lucide="crown" class="w-2.5 h-2.5"></i>該部門由部長代設定</span>`
+        : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200"><i data-lucide="user-cog" class="w-2.5 h-2.5"></i>設定者：${d.director}</span>`;
+
+      const empsRows = d.emps.map(e => {
+        const ration = e.isResigned ? '—' : `${e.ration.toFixed(2)}%`;
+        const alloc = e.isResigned ? '—' : `${((d.quota * e.ration / 100)).toFixed(2)}%`;
+        const resignBadge = e.isResigned
+          ? `<span class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-500"><i data-lucide="user-minus" class="w-2.5 h-2.5"></i>離職</span>`
+          : '';
+        return `<tr class="${e.isResigned ? 'row-resigned' : ''}">
+          <td class="px-3 py-2 font-mono text-xs text-gray-500">${e.empId}</td>
+          <td class="px-3 py-2 text-gray-800">${e.name}${resignBadge}</td>
+          <td class="px-3 py-2 text-right tabular text-gray-700">${ration}</td>
+          <td class="px-3 py-2 text-right tabular text-gray-500 text-xs">${alloc}</td>
+        </tr>`;
+      }).join('');
+
+      return `
+        <section data-detail-dept-idx="${idx}" class="rounded-xl border border-border bg-white overflow-hidden">
+          <button type="button" onclick="toggleDept(${idx})"
+            class="w-full px-4 py-3 flex items-center gap-2 hover:bg-gray-50 transition text-left">
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 transition-transform dept-chevron"></i>
+            <span class="font-mono text-sm text-gray-500">${d.code}</span>
+            <span class="font-semibold text-gray-800">${d.name}</span>
+            ${proxyChip}
+            <span class="ml-auto inline-flex items-center gap-2 text-xs text-gray-500">
+              <span>部門配額 <span class="font-semibold text-gray-800 tabular">${d.quota}%</span></span>
+              <span class="text-gray-300">·</span>
+              <span>在職 <span class="font-semibold text-gray-800 tabular">${activeCount}</span> 人</span>
+              ${resignedCount > 0 ? `<span class="text-gray-300">·</span><span class="text-gray-400">離職 ${resignedCount} 人不計</span>` : ''}
+              <span class="text-gray-300">·</span>
+              <span>加總 <span class="font-semibold tabular ${ok ? 'text-success' : 'text-danger'}">${sum.toFixed(1)}%</span></span>
+              ${ok ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-success"><i data-lucide="check-circle-2" class="w-2.5 h-2.5"></i>已完成</span>` : ''}
+            </span>
+          </button>
+          <div class="dept-body" style="max-height: 1200px;">
+            <div class="px-4 pb-4 pt-1">
+              <div class="overflow-hidden rounded-lg border border-border">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 text-xs text-gray-500">
+                    <tr>
+                      <th class="text-left px-3 py-2 font-medium">員工編號</th>
+                      <th class="text-left px-3 py-2 font-medium">姓名</th>
+                      <th class="text-right px-3 py-2 font-medium">RATION（部門內）</th>
+                      <th class="text-right px-3 py-2 font-medium">名單分配占比</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border bg-white">${empsRows}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function toggleDept(idx) {
+      const sec = document.querySelector(`section[data-detail-dept-idx="${idx}"]`);
+      const body = sec.querySelector('.dept-body');
+      const chev = sec.querySelector('.dept-chevron');
+      const isCollapsed = body.classList.contains('collapsed');
+      if (isCollapsed) {
+        body.classList.remove('collapsed');
+        body.style.maxHeight = '1200px';
+        chev.classList.remove('-rotate-90');
+      } else {
+        body.classList.add('collapsed');
+        body.style.maxHeight = '0px';
+        chev.classList.add('-rotate-90');
+      }
+    }
+
+    function expandAllDepts(open) {
+      document.querySelectorAll('section[data-detail-dept-idx]').forEach(sec => {
+        const body = sec.querySelector('.dept-body');
+        const chev = sec.querySelector('.dept-chevron');
+        if (open) {
+          body.classList.remove('collapsed');
+          body.style.maxHeight = '1200px';
+          chev.classList.remove('-rotate-90');
+        } else {
+          body.classList.add('collapsed');
+          body.style.maxHeight = '0px';
+          chev.classList.add('-rotate-90');
+        }
+      });
+    }
+
+    function renderAll() {
+      if (currentMode === 'list') renderListMode();
+      else renderDetailMode();
+    }
+
+    // ============================================================
+    // 操作：執行月跑
+    // ============================================================
+    function onRunMonth() {
+      toast('mock：將跳轉至「觸發月跑」頁面 31-trigger-run.html', 'info');
+      setTimeout(() => { window.location.href = '31-trigger-run.html'; }, 800);
+    }
+
+    // ============================================================
+    // Modal：Rollback（F089）
+    // ============================================================
+    function openRollbackModal() {
+      document.getElementById('rollbackModal').classList.remove('hidden');
+      document.getElementById('rollbackConfirm').checked = false;
+      document.getElementById('btnRollbackConfirm').disabled = true;
+      lucide.createIcons();
+    }
+    function closeRollbackModal() { document.getElementById('rollbackModal').classList.add('hidden'); }
+    function confirmRollback() {
+      closeRollbackModal();
+      toast(`已 Rollback ${currentListNo}：核准紀錄已 hard delete，名單退回 approval 階段`, 'warning');
+      setTimeout(() => toast('（保留 ob_dept_pct 與 ob_empl_set 設定資料）', 'info'), 600);
+      setTimeout(() => loadMode('list'), 1800);
+    }
+
+    // ============================================================
+    // Toast
+    // ============================================================
+    function toast(msg, type) {
+      const palette = {
+        success: { bg: '#ECFDF5', border: '#86EFAC', fg: '#065F46', icon: 'check-circle-2' },
+        warning: { bg: '#FFFBEB', border: '#FDE68A', fg: '#92400E', icon: 'alert-triangle' },
+        info:    { bg: '#EFF6FF', border: '#BFDBFE', fg: '#1E40AF', icon: 'info' }
+      };
+      const p = palette[type] || palette.info;
+      const div = document.createElement('div');
+      div.className = 'toast toast-enter rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 text-sm border';
+      div.style.cssText = `background:${p.bg};border-color:${p.border};color:${p.fg};min-width:300px;max-width:480px;`;
+      div.innerHTML = `<i data-lucide="${p.icon}" class="w-4 h-4 shrink-0"></i><span>${msg}</span>`;
+      document.getElementById('toastContainer').appendChild(div);
+      lucide.createIcons();
+      requestAnimationFrame(() => { div.classList.remove('toast-enter'); div.classList.add('toast-show'); });
+      setTimeout(() => {
+        div.classList.add('toast-enter'); div.classList.remove('toast-show');
+        setTimeout(() => div.remove(), 300);
+      }, 3800);
+    }
+
+    // ============================================================
+    // Init：依 URL 參數 listNo 進入 detail，否則 list
+    // ============================================================
+    (function init() {
+      const params = new URLSearchParams(window.location.search);
+      const listNo = params.get('listNo');
+      setRole('minister');
+      if (listNo) {
+        currentListNo = listNo;
+        loadMode('detail');
+      } else {
+        loadMode('list');
+      }
+      lucide.createIcons();
+    })();
+  </script>
+</body>
+</html>

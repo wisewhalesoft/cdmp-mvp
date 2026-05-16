@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.8"
+version: "2.9"
 status: draft
-last_updated: 2026-05-13
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F053, F054, F055, F056]
+last_updated: 2026-05-16
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F053, F054, F055, F056, F073, F074]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：58 份（4 策略文件 + 50 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：921 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + **E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28**；另 F039-strategy 4 個策略場景另計）
+> **測試文件總數**：59 份（4 策略文件 + 51 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：964 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 43**；另 F039-strategy 4 個策略場景另計）
+> **E07 M07 角色整合補修（2026-05-16）**：新增 F073-F074 E02 整合測試設計（43 場景），涵蓋 PATCH `/accounts/:id/e07-role` 端點（TC-E02-100~112，13 場景）、JWT payload e07_role claim（TC-AUTH-200~205，6 場景）、DirectorGuard / SectionChiefGuard / 組合 Guard 單元測試（TC-GUARD-300~315，16 場景）、is_sales_manager 與 e07_role 正交維度 regression（TC-ORTHO-400~407，8 場景）；新增 7 種 Fixture builder 建議（buildUserOrthogonalSectionChief 為關鍵正交驗證 fixture）；新增 4 個開放問題（OQ-E02-001~004）
 > **E07 M02 計分設定新增（2026-05-13）**：新增 F053（查看計分維度，13 場景）、F054（編輯計分維度與分數，24 場景）、F055（編輯 CARD_LEVEL 門檻，21 場景）、F056（編輯 TIER_LEVEL 對應表，28 場景），涵蓋覆寫式編輯語意、月跑鎖（pending/running）、稽核 log before/after、Fallback CARD_TYPE（M5/M3/HC/C3）、fn_calc_tier_level NULL fallback 跨層整合、S5 兩級 vs H 四級等級數差異、BR-9 card_level 長度驗證、PUT/POST 端點語意分離
 > **F002SM 新增（2026-05-13）**：新增 Sales Manager 旗標顯示於 Top Bar 測試設計（25 場景），涵蓋後端 Login API `isSalesManager` 欄位補充、Frontend TopBar Badge 元件、JWT payload 驗證、edge case（舊 token / 旗標升降級）
 > **E06 Customer 360 新增（2026-04-13）**：新增 F046（客戶搜尋與清單，31 場景）與 F047（單一客戶詳情，38 場景），涵蓋 Full-Text Search、精確比對、遮罩規則（Admin/User）、風控旗標高亮、ETL 資料新鮮度、客戶類型適應顯示、404 錯誤處理
@@ -123,7 +124,10 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F055 | 編輯 CARD_LEVEL 分級門檻 | P0-MVP | [F055-test.md](features/F055-test.md) | 21 | Draft |
 | F056 | 編輯 TIER_LEVEL 對應表 | P0-MVP | [F056-test.md](features/F056-test.md) | 28 | Draft |
 | **E07 M02 小計** | | | **4 files** | **86** | |
-| **總合計** | | | **49 files** | **898** | |
+| **E07 M07 角色整合（E02 整合）** | | | | | |
+| F073-F074-E02 | E07 角色指派 E02 整合（PATCH e07-role / Guard / JWT / 正交維度） | P0-MVP | [F073-F074-e02-integration-test.md](features/F073-F074-e02-integration-test.md) | 43 | Draft |
+| **E07 M07 小計** | | | **1 file** | **43** | |
+| **總合計** | | | **50 files** | **941** | |
 
 ---
 
@@ -180,7 +184,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056**
+**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → **F073-F074-E02**（E07 角色整合先行，Guard 設計影響後續 E07 實作） → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056**
 
 **F002SM Sales Manager Badge 特殊注意：**
 - 後端 `LoginResult.user` DTO 須補充 `isSalesManager: boolean`；TS-F002SM-001 / TS-F002SM-006 驗證欄位存在性與 boolean 型別（不可為字串）
@@ -189,6 +193,14 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - DOM 不渲染原則：TS-F002SM-010 ~ 013 驗證 `false` / `undefined` / `null` / admin 角色時 badge 元素在 DOM 中完全不存在，非 `display:none`
 - 建議 Badge 元素掛 `data-testid="sales-manager-badge"` 供自動化定位
 - 種子帳號：manager@cdmp.test / P@ssw0rd123（role=user, is_sales_manager=true）已存在於 dev seed
+
+**E07 M07 角色整合特殊注意（F073-F074-E02）：**
+- Guard 正交性：DirectorGuard 與 SalesManagerGuard 各自獨立讀取不同欄位（DirectorGuard 讀 `e07_role`；SalesManagerGuard 讀 `is_sales_manager` 或 `e07_role`），TC-GUARD-304 / TC-GUARD-309 驗證不互相干擾
+- 關鍵 Fixture：`buildUserOrthogonalSectionChief()`（is_sales_manager=false + e07_role='section_chief'）為正交驗證必要 fixture，不可以 buildUserAsSectionChief 替代
+- Token revoke 驗證：TC-E02-109 以「PATCH 後立即（毫秒級）用舊 JWT 呼叫 /auth/me」驗證，不需 mock 時鐘（password_changed_at +1000ms 機制的時間窗口是 1 秒，測試請求通常在此之內即可觸發 revoke）
+- 冪等性行為（TC-E02-103）待 OQ-E02-001 確認，TDD Developer 需在 F073 v1.2 更新後才能最終實作此場景
+- `assignment_audit_log` 三欄位原子性（TC-E02-100~102）：須在同一斷言中驗證 `e07_role` + `password_changed_at` + audit_log 同時更新（transaction 原子性保證）
+- SalesManagerGuard 向後相容（TC-ORTHO-403）：確認 F050+ 既有 controller 仍使用 SalesManagerGuard，與新 DirectorGuard 並存不衝突（參照 memory: feedback_e07_controllers_use_sales_manager_guard.md）
 
 **E02 角色定義特殊注意（F045 / F004 / F005 / F008）：**
 - F045 必須先於 F004/F005/F008 載入：F045 的 Seed Data 初始化（TS-F045-001）是後三者所有角色相關測試的前置條件

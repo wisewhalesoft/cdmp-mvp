@@ -72,11 +72,20 @@
       <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
       </a>
-      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="percent" class="w-4 h-4"></i>比例設定
-      </a>
       <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
+      </a>
+      <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定
+      </a>
+      <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例
+      </a>
+      <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱
+      </a>
+      <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要
       </a>
       <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
@@ -99,6 +108,11 @@
       <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
       </a>
+      <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+        <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+        <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+      </a>
       </div>
     </nav>
   </aside>
@@ -107,22 +121,38 @@
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
     <h1 class="text-base font-semibold text-gray-800">代碼維護</h1>
     <div class="flex items-center gap-4">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200">
-        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-        Sales Manager
-      </span>
-      <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-1 py-0.5">
-        <button onclick="setRole('admin')" id="role-admin" class="role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition">Admin</button>
-        <button onclick="setRole('user')" id="role-user" class="role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition">User</button>
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="minister">部長</option>
+          <option value="director">處長</option>
+          <option value="admin">Admin</option>
+          <option value="sales">業務</option>
+        </select>
       </div>
-      <span class="text-sm text-gray-600">王小明</span>
-      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">王部長</span>
     </div>
   </header>
 
   <!-- ===== Main ===== -->
   <main class="ml-56 pt-14">
 
+    <!-- 業務員封鎖卡片 -->
+    <div id="salesBlockedBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
+        <p class="text-sm text-gray-500 max-w-md">「代碼維護」為部長 / Admin / 處長專屬功能。業務員角色請至 Customer 360 查看您被分派的客戶名單。</p>
+        <a href="25-customer-360-list.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+          <i data-lucide="contact" class="w-4 h-4"></i>前往 Customer 360
+        </a>
+      </div>
+    </div>
+
+    <div id="mainContent">
     <!-- Demo Bar -->
     <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
       <span class="text-xs text-gray-400 mr-1">Demo:</span>
@@ -151,6 +181,72 @@
             <span><span class="font-medium">CASEYEAR 不在本功能維護範圍</span>：探查 <code>reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235</code> 發現舊系統 CASEYEAR 為前端 hard-coded 0~10 共 11 個 CheckBox，不從 <code>ob_code_df</code> 動態載入；CDMP 沿用此設計，由 F050/F051 表單前端固定提供。</span>
           </p>
         </div>
+      </div>
+
+      <!-- E07 重構：M06 進階維護入口（F075 / F076） -->
+      <div class="mb-5">
+        <div class="flex items-center gap-2 mb-2.5">
+          <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
+          <h2 class="text-sm font-semibold text-gray-800">進階維護</h2>
+          <span class="text-[10px] text-gray-400 px-1.5 py-0.5 bg-blue-50 text-primary rounded border border-blue-200">E07 重構新增</span>
+          <span class="text-xs text-gray-500">— F075 / F076 v1.1：白名單驅動的新名單定義條件選單</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          <!-- 入口 1：F075 POOLDATA 篩選欄位白名單 -->
+          <a href="37a-pooldata-whitelist.html"
+            class="group bg-white border border-border rounded-lg p-4 hover:border-primary hover:shadow-md transition flex items-start gap-3">
+            <div class="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition">
+              <i data-lucide="filter" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">POOLDATA 篩選欄位白名單</h3>
+                <span class="text-[10px] text-gray-400 font-mono">F075</span>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">管理可作為名單定義條件的 <code>OBPOOLDATA</code> 欄位，並為每個欄位標記 <code>field_type</code>（numeric / categorical / date）驅動 US-106 新表單條件元件型態。</p>
+              <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+                <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>field_whitelist</span>
+                <span>·</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>部長 + Admin</span>
+                <span>·</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="package" class="w-3 h-3"></i>Seed 8 筆</span>
+              </div>
+            </div>
+            <i data-lucide="arrow-up-right" class="w-4 h-4 text-gray-300 group-hover:text-primary transition shrink-0"></i>
+          </a>
+
+          <!-- 入口 2：F076 類別型欄位可選值 -->
+          <a href="37b-categorical-field-values.html"
+            class="group bg-white border border-border rounded-lg p-4 hover:border-primary hover:shadow-md transition flex items-start gap-3">
+            <div class="w-10 h-10 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition">
+              <i data-lucide="list-checks" class="w-5 h-5 text-purple-600"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">類別型欄位可選值</h3>
+                <span class="text-[10px] text-gray-400 font-mono">F076 v1.1</span>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">管理白名單中 <code>field_type = 'categorical'</code> 欄位的選項清單（<code>option_value</code> / <code>option_label</code>），供新名單定義表單之多選元件動態載入；含 PO 決議 F076-C 軟停用機制。</p>
+              <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+                <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>categorical_field_value</span>
+                <span>·</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>部長 + Admin</span>
+                <span>·</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="layers" class="w-3 h-3"></i>6 欄位 × N 值</span>
+              </div>
+            </div>
+            <i data-lucide="arrow-up-right" class="w-4 h-4 text-gray-300 group-hover:text-primary transition shrink-0"></i>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- 基礎代碼分區標題（既有 F068） -->
+      <div class="flex items-center gap-2 mb-2.5">
+        <i data-lucide="tags" class="w-4 h-4 text-gray-600"></i>
+        <h2 class="text-sm font-semibold text-gray-800">基礎代碼維護</h2>
+        <span class="text-xs text-gray-500">— F068：PROD_KIND / SPEC_TP / CASE_STATUS（沿用 ob_code_df）</span>
       </div>
 
       <!-- Tabs -->
@@ -317,6 +413,7 @@
       </div>
 
     </div>
+    </div><!-- /#mainContent -->
   </main>
 
   <!-- ===== Modal: 新增 / 編輯代碼 ===== -->
@@ -626,18 +723,29 @@
       openModal('disableModal');
     }
 
-    // ===== Role toggle =====
-    function setRole(role) {
-      const adminBtn = document.getElementById('role-admin');
-      const userBtn = document.getElementById('role-user');
-      if (role === 'admin') {
-        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
-        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
-      } else {
-        userBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md bg-white text-primary shadow-sm transition';
-        adminBtn.className = 'role-btn px-3 py-1 text-xs font-medium rounded-md text-gray-500 transition';
-      }
+    // ===== Role toggle (B7 standard 4-role) =====
+    const ROLE_META = {
+      minister: { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '王部長' },
+      director: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長' },
+      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員' },
+      sales:    { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務' }
+    };
+    let currentRole = 'minister';
+    function renderRoleBadge(role) {
+      const m = ROLE_META[role] || ROLE_META.sales;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
     }
+    function setRole(role) {
+      currentRole = role;
+      const sw = document.getElementById('role-switcher'); if (sw) sw.value = role;
+      document.getElementById('role-badge-container').innerHTML = renderRoleBadge(role);
+      document.getElementById('user-name').textContent = ROLE_META[role].name;
+      const blocked = (role === 'sales');
+      document.getElementById('mainContent').classList.toggle('hidden', blocked);
+      document.getElementById('salesBlockedBanner').classList.toggle('hidden', !blocked);
+      lucide.createIcons();
+    }
+    document.addEventListener('DOMContentLoaded', function(){ setRole('minister'); });
 
     // ===== Demo state =====
     function showDemoState(state) {
@@ -671,7 +779,8 @@
         '27-list-definition.html', '28-scoring-config.html', '29-ratio-config.html',
         '30-stage0-estimate.html', '31-trigger-run.html', '32-run-progress.html',
         '33-run-summary.html', '34-run-history.html', '35-snapshot-detail.html',
-        '36-run-compare.html', '37-base-code.html'
+        '36-run-compare.html', '37-base-code.html',
+        '37a-pooldata-whitelist.html', '37b-categorical-field-values.html'
       ];
       const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
       const isAssignmentPage = assignmentPages.includes(currentPage);

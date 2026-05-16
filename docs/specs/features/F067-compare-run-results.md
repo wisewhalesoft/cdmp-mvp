@@ -28,17 +28,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務主管選擇任意兩次月跑的結果進行差異比對，包含摘要層級差異、設定差異、客戶層級集合差異，以及**人員配對一致性 diff**（NFR-005 主驗收工具：比較同 APPL_NO 的 `ob_emplid` 是否一致，計算人員配對不一致率，超過 3% 觸發紅色警示）。比對完全由應用層計算，不額外寫入資料。使用者確認升級為 **P0-MVP**（原 epic-brief Should Have）。
+提供業務部長 / 業務處長選擇任意兩次月跑的結果進行差異比對，包含摘要層級差異、設定差異、客戶層級集合差異，以及**人員配對一致性 diff**（NFR-005 主驗收工具：比較同 APPL_NO 的 `ob_emplid` 是否一致，計算人員配對不一致率，超過 3% 觸發紅色警示）。比對完全由應用層計算，不額外寫入資料。使用者確認升級為 **P0-MVP**（原 epic-brief Should Have）。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 選擇任意兩次月跑的結果進行差異比對
 **So that** 清楚了解調整計分設定或比例設定後對最終分派結果的具體影響（新增了哪些客戶、移除了哪些客戶、等級有何變化、人員配對是否一致）
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長 / 業務處長已登入並持有有效 JWT Token
 - 兩個目標 `run_id` 均存在且 `status = 'completed'`
 - 兩個 `run_id` 的三份快照均已寫入
 
@@ -46,8 +46,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ### AC-1：選擇兩次月跑進行比對
 
-- **Given** 業務主管在 F065 歷史清單或 F066 快照詳情頁
-- **When** 業務主管選擇「比對差異」功能並選定 Base run_id 與 Compare run_id
+- **Given** 業務部長 / 業務處長在 F065 歷史清單或 F066 快照詳情頁
+- **When** 業務部長 / 業務處長選擇「比對差異」功能並選定 Base run_id 與 Compare run_id
 - **Then** 頁面顯示兩次月跑的基本資訊並排（`project_workym`、`triggered_at`、`total_cases`）
 - **And** 若兩次月跑的 `project_workym` 相同，顯示提示「同月比對通常用於重跑調參情境」（不阻擋比對）
 
@@ -73,7 +73,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-4：設定差異報告
 
 - **Given** 兩次月跑已選定
-- **When** 業務主管查看「設定差異」區塊
+- **When** 業務部長 / 業務處長查看「設定差異」區塊
 - **Then** 列出兩份 `config` 快照的差異項目：
   - 計分版本是否變更（`card_version`）
   - 各 LIST_NO 部門比例是否有調整（差異 ≥ 1% 標示）
@@ -82,14 +82,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-5：客戶層級差異查詢
 
 - **Given** 比對摘要已顯示
-- **When** 業務主管點擊「查看新增客戶」或「查看移除客戶」
+- **When** 業務部長 / 業務處長點擊「查看新增客戶」或「查看移除客戶」
 - **Then** 顯示僅出現在 Compare 結果而不在 Base 結果中的客戶清單（新增），以及僅在 Base 而不在 Compare 中的客戶清單（移除）
 - **And** 每列顯示 `custo_no`、`cust_name`
 
 ### AC-6：非 completed 狀態阻擋比對
 
 - **Given** 任一 `run_id` 的 `status` 不為 `completed`
-- **When** 業務主管嘗試比對
+- **When** 業務部長 / 業務處長嘗試比對
 - **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPARABLE`，訊息：「僅 completed 狀態的月跑可比對」
 
 ## 5. API 規格
@@ -144,7 +144,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | 任一 `run_id` 不存在 |
 | 422 | ASSIGNMENT_RUN_NOT_COMPARABLE | 任一 `run_id` 非 `completed` 狀態 |
 

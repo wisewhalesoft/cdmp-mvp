@@ -1,10 +1,12 @@
 ---
 type: architecture-spec
-version: "2.9"
+version: "2.11"
 status: draft
-last_updated: 2026-05-14
-covers: [F001, F002, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072]
+last_updated: 2026-05-16
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089]
 ---
+
+> **v2.11 / 2026-05-16 變更摘要（E07 合併重構 AD-E07 v3.0）**：(1) §3.10 Account Service 補登 `AccountsService.updateBusinessRole()` method（取代 v2.10 之 `updateE07Role()`），對應 [F006a](features/F006a-update-business-role.md) 新 PATCH `/business-role` 端點；(2) §3.10 新增 E07 後端 Guard 元件清單（`DirectorOrSectionChiefGuard` / `DirectorGuard` / `SectionChiefGuard` 三 Guard 體系，取代舊 `SalesManagerGuard`）；(3) AD-E02-1 / AD-E02-4 改採 `business_role` 單欄位設計（廢除 v1.x `is_sales_manager` + `e07_role` 雙欄位）；(4) covers 補登 F006a / F075~F089。
 
 # 系統架構規格書
 
@@ -443,8 +445,42 @@ graph TB
 
 | 服務 | 職責 | 關鍵業務規則 | 相關 Feature |
 |------|------|-----------|-------------|
-| Account Service | 帳號 CRUD；角色指派（admin / user）；is_sales_manager 旗標設定；停用/啟用；Admin 代為重設密碼 | 最後一位 Admin 保護（ACCOUNT_LAST_ADMIN）；Admin 不可停用自己（ACCOUNT_SELF_DISABLE）；Email 大小寫不敏感唯一性；停用時失效所有 Session；指派角色前驗證 role_code 為有效的預設角色之一；`is_sales_manager` 旗標僅可由 Admin 設定，User 無法自行變更 | F004-F010, E07（業務主管設定） |
-| Role Service | 提供角色清單查詢（`GET /api/roles`）；角色 Seed Data 初始化（migration 自動執行）；角色 role_code 有效性驗證（供 Account Service 使用） | 不提供角色新增 / 刪除 API（AC-2，US-017）；角色資料為 Seed Data，不可由 API 修改 | F004, F008（US-017, US-014） |
+| Account Service | 帳號 CRUD；系統角色指派（admin / user）；**業務角色（`business_role`）變更**（v2.11 / 2026-05-16 / E07 合併重構 AD-E07 v3.0：`AccountsService.updateBusinessRole()`，見下方說明）；停用/啟用；Admin 代為重設密碼 | 最後一位 Admin 保護（ACCOUNT_LAST_ADMIN）；Admin 不可停用自己（ACCOUNT_SELF_DISABLE）；Email 大小寫不敏感唯一性；停用時失效所有 Session；指派系統角色前驗證 role_code 為有效的預設角色之一；**`business_role` 僅可由 Admin 透過 PATCH `/api/v1/accounts/:id/business-role` 變更（[F006a](features/F006a-update-business-role.md) 定義；v2.11 取代 v2.10 之 PATCH `/e07-role` 端點）** | F004-F010, F006a, F073, F074 |
+| Role Service | 提供角色清單查詢（`GET /api/roles`）；角色 Seed Data 初始化（migration 自動執行）；角色 role_code 有效性驗證（供 Account Service 使用） | 不提供角色新增 / 刪除 API（AC-2，US-017）；角色資料為 Seed Data，不可由 API 修改 | F004, ~~F008（DEPRECATED v3.x）~~（US-017, US-014） |
+
+**`AccountsService.updateBusinessRole()` 元件說明（v2.11 / 2026-05-16 / E07 合併重構）**：
+
+| 項目 | 規格 |
+|------|------|
+| Method 簽名 | `updateBusinessRole(targetUserId: string, newRole: 'director' \| 'section_chief' \| null, actorId: string): Promise<UserResponseDto>` |
+| 觸發來源 | PATCH `/api/v1/accounts/:id/business-role`（Admin only，見 [F006a](features/F006a-update-business-role.md)） |
+| 同 transaction 寫入 | (a) UPDATE `users.business_role`；(b) UPDATE `users.password_changed_at = new Date(Date.now() + 1000)`；(c) INSERT `assignment_audit_log`（`action = 'ASSIGN_ROLE'` / `'REVOKE_ROLE'`、`entity_type = 'business_role'`、`entity_id = '{userId}\|{role}'`） |
+| Token revoke 機制 | **沿用 F009 / F010 既有 `password_changed_at` 機制**（已上線並驗證）；不新建 token blocklist 表、**不新增 `AuthService.revokeAllUserTokens(userId)` method**（與下方 [RESOLVED] 註記對應） |
+| 錯誤碼 | 404 `ACCOUNT_NOT_FOUND`（目標帳號不存在）；422 `ACCOUNT_BUSINESS_ROLE_INVALID`（值非允許列表）；403 `AUTH_FORBIDDEN`（呼叫者非 admin，由既有 RolesGuard 拋出） |
+| ~~`AccountsService.updateE07Role()`~~ | **v2.10 / DEPRECATED v2.11**：舊 PATCH `/e07-role` 端點之 method 由 `updateBusinessRole()` 取代；行為與簽名相同（僅 method 名與 column 名變更） |
+| ~~`AccountsService.updateSalesManagerFlag()`~~ | **F008 舊 method / DEPRECATED v2.11**：`users.is_sales_manager` 欄位於 m14 migration DROP；本 method 已無對應欄位可寫入 |
+
+**E07 後端 Guard 元件清單（v2.11 / 2026-05-16 新增 / E07 合併重構）**：
+
+| Guard 名稱 | 通過條件 | 失敗錯誤碼 | 適用範圍 |
+|---|---|---|---|
+| `DirectorOrSectionChiefGuard`（取代舊 `SalesManagerGuard`） | `req.user.role === 'admin'` OR `req.user.businessRole IN ('director', 'section_chief')` | 403 `E07_ROLE_NOT_ASSIGNED` | E07 全部 controller 入口（M02 除外） |
+| `DirectorGuard` | `req.user.role === 'admin'` OR `req.user.businessRole === 'director'` | 403 `AUTH_FORBIDDEN` | 部長專屬功能（M02 全部端點含 GET、M06 寫入、月跑觸發、名單 CRUD、M03a / M03c / M03d Rollback） |
+| `SectionChiefGuard` | `req.user.businessRole === 'section_chief'` | 403 `AUTH_FORBIDDEN` | 處長專用端點（少數明確標記） |
+
+> **檢查順序**：JWT 驗證 → `DirectorOrSectionChiefGuard` → `DirectorGuard`（若功能為部長專屬）→ service 層 `scopeByCreator()`（處長轄區過濾）。詳見 [F002 v2.0 §4.6](features/F002-user-login.md#e07-角色矩陣)。
+
+~~**SalesManagerGuard**~~ **（v2.11 廢除）**：v1.x 之 `SalesManagerGuard` 已由 `DirectorOrSectionChiefGuard`（一般入口）+ `DirectorGuard`（部長專屬）兩 Guard 取代；既有 `@RequireSalesManager()` decorator 一律改為 `@RequireDirector()` 或 `@RequireDirectorOrSectionChief()`。
+
+**[RESOLVED] `AuthService.revokeAllUserTokens(userId)` 設計決策（v2.10 / v2.11 沿用）**：
+
+E07 重構批次 1 階段（2026-05-15）system-architect 草案曾提及可新增顯式 method `AuthService.revokeAllUserTokens(userId)` 作為 token revoke 的統一入口。經 PO 決議（2026-05-16），採方案：
+
+- **不新增此方法**。由 `AccountsService.updateBusinessRole()` 直接寫入 `users.password_changed_at`（最低跨模組耦合原則），AuthGuard 既有比對邏輯（`JWT.iat * 1000 < password_changed_at`）即可達成「批次 revoke 該 user 所有舊 token」效果
+- **若未來確實需要顯式 method 名**（例如統一稽核 log 識別 token revoke 來源、或多處 service 需共用），可再加 thin wrapper 集中於 `AuthService`，本決策不阻擋未來擴充
+- 此決策同步適用於：F006a / F007 / F009 / F010 / 任何未來需「批次 revoke 單一 user 所有 token」之場景
+
+
 
 **樂觀鎖定**（OQ-6 決議）：帳號編輯與資料來源編輯均採用 Optimistic Locking，以版本號或 `updated_at` 時間戳記偵測並發衝突，回傳 HTTP 409。
 
@@ -1003,6 +1039,12 @@ TIER_LEVEL 對應計算、多維度加權計分等複雜邏輯由 PostgreSQL fun
 | AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；匯出 CSV | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid | US-081, US-082, US-083, US-084 |
 | AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
 | AssignmentAudit Service | E07 所有 CRUD 操作後寫入 `assignment_audit_log` | 不對外暴露 API；由各 Service 呼叫；保留 3 年，Cleanup Cron 每日清理 | 所有 E07 Stories |
+| **AssignmentRunGuardService**（2026-05-16 新增 / 決議 #6） | 月跑並發守衛集中實作；提供 `assertNoRunningRun(workYm?)` method | 查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`；所有 E07 寫入 service method 最頂層呼叫；月跑結束（`status = 'completed'` / `'failed'`）後自動解除阻擋；位置：assignment 模組底下，與 `StageTransitionService` 同層 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082 v1.3, F083（透過 F082 PUT）, F084, F085, F086, F087, F089 |
+| **StageTransitionService**（2026-05-15 新增 / E07 重構批次 4 引入；2026-05-16 補登元件說明） | 五階段流程引擎共用 helper；提供 `advanceTo` / `rollbackTo` / `rejectTo` / `assertStageEquals` 4 個 method | `advanceTo(listNo, fromStage, toStage, preconditionFn, postActionFn?)` 用於 F078 / F080 / F084 / F086；`rollbackTo(listNo, fromStage, toStage, cleanupFn)` 用於 F081 / F085 / F089；`rejectTo(listNo, fromStage, toStage, rejectReason, cleanupFn?, postActionFn?)` 用於 F087；`assertStageEquals(listNo, expectedStage)` 由各 service 共用；所有寫入操作於同一 DB transaction 內完成（含稽核 INSERT，稽核失敗例外） | F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
+| **PersonnelRatioValidationService**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補全員離職邊界） | per-DEPT 個別業務比例驗算 helper；提供 `assertDeptSumEquals100` / `assertAllDeptsSumEquals100` 2 個 method | `assertDeptSumEquals100(deptCode, ratios)` 用於 F082 PUT 寫入校驗（**v1.3 / 決議 #1**：若 `activeEmployeeCount === 0` **短路 return**，允許部門 sum = 0%、不阻擋儲存）；`assertAllDeptsSumEquals100(listNo)` 用於 F084 推進前置條件驗證（內部查詢 `ob_empl_set` GROUP BY deptid_m）；錯誤碼 `PERSONNEL_RATIO_SUM_NOT_100`（per-DEPT 語意，與 `RatioValidationService` 之 per-LIST_NO 語意區隔） | F082, F084 |
+| **RatioValidationService**（2026-05-15 新增 / E07 重構批次 4 引入） | per-LIST_NO 部門比例驗算 helper；提供 `assertSumEquals100` / `assertEachInRange` 2 個 method | `assertSumEquals100(ratios)` 用於 F079 PUT + F080 推進前置條件驗證；`assertEachInRange(ratios, [0, 100])` 用於單欄位邊界校驗；錯誤碼 `RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE` | F079, F080 |
+| **FeatureFlagGuard**（2026-05-16 補登 / 決議 #2） | Feature flag 控制 Guard；於 E07 重構批次 3~6 端點啟動 `ENABLE_E07_REFACTOR_PHASE3` 檢查 | flag = `false` 時統一回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = `true` 時放行；實作機制（環境變數 vs config 表 vs LaunchDarkly）由 system-architect 於 batch 3 architecture 階段決議 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
+| **SectionChiefScopeGuard**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補 method 分支） | 處長轄區隔離 Guard；於 F082 端點套用 | (1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：**GET 不攔截**（由 service 層 `scopeByCreator(currentUserId)` 統一過濾，越權回 200 + `departments = []`）；**PUT / POST 攔截**（從 request body / params 抽 `deptCode` + `empIds`，比對 `ob_empl_set.created_by`，不符回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`）；後續 M03d / 簽核流程可重用 | F082 v1.3 |
 
 **E07 API Endpoints 摘要**
 

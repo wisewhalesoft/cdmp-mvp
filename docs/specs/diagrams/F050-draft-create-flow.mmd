@@ -1,0 +1,64 @@
+%% F050 v2.0 草稿階段建立名單流程（含「從上月複製」分支與 feature flag gating）
+%% 引用：features/F050-create-list-definition.md §4 / §6 / §13
+flowchart TD
+    Start([部長 / Admin 進入 M01 清單頁]) --> RoleCheck{角色為 Director / Admin？}
+    RoleCheck -- 否 --> Hide[「新增名單」按鈕完全不渲染]
+    Hide --> EndForbidden([結束：處長無權建立])
+
+    RoleCheck -- 是 --> MonthCheck{F077 月份切換器選定月份}
+    MonthCheck -- 歷史月份 --> HideHistorical[「新增名單」按鈕完全不渲染]
+    HideHistorical --> EndHistorical([結束：歷史月份唯讀])
+
+    MonthCheck -- 當月或未來月份 --> RunLockCheck{月跑執行中？}
+    RunLockCheck -- 是 --> DisableBtn[按鈕 disabled + hover 提示]
+    DisableBtn --> EndRunLock([結束：月跑執行中])
+
+    RunLockCheck -- 否 --> ClickCreate[點擊「新增名單」]
+    ClickCreate --> OpenForm[開啟建立表單<br/>basic + filter + crEnabled + 從上月複製按鈕]
+
+    OpenForm --> CopyBranch{選擇起點？}
+
+    CopyBranch -- 從零開始 --> ManualFill[手動填寫 listNm + 篩選條件 + crEnabled]
+    CopyBranch -- 從上月複製 --> CheckCopySource{上月有 stage = ready<br/>且 status = active 名單？}
+
+    CheckCopySource -- 否 --> CopyDisabled[「從上月複製」按鈕 disabled]
+    CopyDisabled --> ManualFill
+
+    CheckCopySource -- 是 --> ListCopySource[GET /list-definitions/copy-source-options<br/>列出上月 ready + active 名單]
+    ListCopySource --> SelectSource[使用者選定來源 listNo]
+    SelectSource --> FetchPayload[GET /list-definitions/sourceListNo/condition-payload]
+    FetchPayload --> AutoFill[自動填入 conditionPayload<br/>crEnabled 恢復預設 true<br/>listNm 留空待填]
+    AutoFill --> ManualFill
+
+    ManualFill --> ClientValid{前端驗證通過？<br/>listNm + ≥1 條件 + min ≤ max + categorical ≥1 值}
+    ClientValid -- 否 --> ShowError[顯示對應錯誤訊息]
+    ShowError --> ManualFill
+
+    ClientValid -- 是 --> SubmitAPI[POST /api/v1/assignment/list-definitions]
+
+    SubmitAPI --> FlagCheck{ENABLE_E07_REFACTOR_PHASE3 = true？}
+    FlagCheck -- 否 --> Return503[503 SERVICE_UNAVAILABLE]
+    Return503 --> EndFlag([結束：feature flag 未啟用])
+
+    FlagCheck -- 是 --> F059Check{F059 殘留程式碼偵測}
+    F059Check -- 殘留 --> Return500[500 LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059]
+    Return500 --> EndF059([結束：F059 未移除])
+
+    F059Check -- 已移除 --> AuthGuard{DirectorGuard 通過？}
+    AuthGuard -- 否 --> Return403[403 E07_FORBIDDEN_DIRECTOR_ONLY]
+    Return403 --> EndAuth([結束：處長被攔截])
+
+    AuthGuard -- 是 --> WhitelistCheck{conditions 全部欄位<br/>在 F075 白名單 + isActive=true？}
+    WhitelistCheck -- 否 --> Return422White[422 LIST_FILTER_FIELD_NOT_IN_WHITELIST]
+    Return422White --> EndWhitelist([結束：欄位不在白名單])
+
+    WhitelistCheck -- 是 --> WriteDB[Service 層 transaction:<br/>1. 產生 list_no = OBYYYYMMNNN<br/>2. 寫入 ob_list_definition<br/>   stage = draft, status = active<br/>   created_by = current user<br/>   cr_enabled, condition_payload<br/>3. 寫入 assignment_audit_log]
+
+    WriteDB --> CheckLimit{當月已 999 筆？}
+    CheckLimit -- 是 --> Return422Limit[422 LIST_NO_LIMIT_EXCEEDED]
+    Return422Limit --> EndLimit([結束：上限])
+
+    CheckLimit -- 否 --> Success[201 Created<br/>回傳 listNo + stage=draft]
+    Success --> ToastShow[toast：已建立名單 listNm listNo]
+    ToastShow --> RefreshList[F077 清單頁刷新<br/>新名單顯示於「草稿」階段]
+    RefreshList --> EndSuccess([結束：建立成功])

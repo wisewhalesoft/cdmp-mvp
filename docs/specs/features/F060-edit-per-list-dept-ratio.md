@@ -1,19 +1,30 @@
 ---
 spec-id: F060
-title: 設定 per-LIST_NO 部門比例
+title: 設定 per-LIST_NO 部門比例（DEPRECATED v2.0）
 feature-id: F060
 source-story: US-091
 epic: E07
 module: M03 分派比例
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
-status: Draft
+version: "2.0-DEPRECATED"
+date: 2026-05-16
+status: Deprecated
+supersededBy: F079
 ---
 
-# F060: 設定 per-LIST_NO 部門比例
+# F060: 設定 per-LIST_NO 部門比例 — DEPRECATED (v2.0)
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+> **DEPRECATED — 2026-05-16 / v2.0**
+>
+> 本 spec 已於 AD-E07 v3.0 / F002 v2.0 重構期間廢止，**不再進入 MVP 實作**。
+>
+> - **取代路徑**：[F079 設定部門比例（Set Dept Ratio）](F079-set-dept-ratio.md)
+> - **廢止原因**：M03a 部門比例已從 per-list 改為「依分派月份」的階段性設定，授權層採 `DirectorGuard`（處長僅讀），由部長於 M03a 階段統一維護；原 OQ-E07-5 per-LIST_NO 模型已被 M03a/M03b 雙層架構取代
+> - **下游影響**：US-091 已 reroute 至 F079；`ob_dept_pct` schema 由 F079 重新定義
+>
+> 以下 v1.0 內容僅供歷史比對，**禁止用於實作**。
+
+Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 ## Agent Loading Guide
 

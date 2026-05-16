@@ -28,18 +28,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管新增一筆 CARD_TYPE 計分卡類型，包含代碼、名稱、PROD_KIND 綁定。新增操作在**同一 DB transaction** 內完成兩件事：① 寫入 `ob_card_type` 新紀錄；② 自動建立對應的 v1 空白 `ob_levelcard_version`，讓後續維度 / 分數 / 等級 / TIER 對應可即時於 Tab 2~5 設定。任一步驟失敗整體 rollback。月跑執行中禁止新增。
+提供業務部長新增一筆 CARD_TYPE 計分卡類型，包含代碼、名稱、PROD_KIND 綁定。新增操作在**同一 DB transaction** 內完成兩件事：① 寫入 `ob_card_type` 新紀錄；② 自動建立對應的 v1 空白 `ob_levelcard_version`，讓後續維度 / 分數 / 等級 / TIER 對應可即時於 Tab 2~5 設定。任一步驟失敗整體 rollback。月跑執行中禁止新增。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 新增一種新的計分卡類型，並指定其代碼、名稱及對應的產品類別
 **So that** 業務擴展新卡種時，可立即在系統中建立對應的計分設定結構，不需依賴 IT 直接操作資料庫
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長已登入並持有有效 JWT Token
+- `businessRole='director'`（M02 寫入端點限部長，依 F002 §4.6.2）
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 紀錄
 - `ob_code_df` 中至少有一筆 `tbl_id = 'PROD_KIND'` 啟用期間內的紀錄（由 F068 維護）
 
@@ -47,7 +47,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-1：填入基本資料新增，同 transaction 自動建立 v1 版本
 
-- **Given** 業務主管在 Tab 1 點擊「新增計分卡類型」，開啟新增 Modal
+- **Given** 業務部長在 Tab 1 點擊「新增計分卡類型」，開啟新增 Modal
 - **When** 填入 `cardType`（必填，VARCHAR(5) 以內，英數字）、`cardName`（必填）、`prodKind`（必填，下拉來源：`ob_code_df WHERE tbl_id = 'PROD_KIND'` 啟用期間內紀錄），點擊「確認新增」
 - **Then** 系統在同一 transaction 中執行：
   1. INSERT `ob_card_type`（`card_type` / `card_name` / `prod_kind` / `status = 'active'`）
@@ -58,34 +58,34 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-2：代碼唯一性驗證
 
-- **Given** 業務主管於新增 Modal 輸入的 `cardType` 與 `ob_card_type` 中既有 `status = 'active'` 紀錄重複
-- **When** 業務主管點擊「確認新增」
+- **Given** 業務部長於新增 Modal 輸入的 `cardType` 與 `ob_card_type` 中既有 `status = 'active'` 紀錄重複
+- **When** 業務部長點擊「確認新增」
 - **Then** API 回傳 422 `CARD_TYPE_DUPLICATE`，訊息：「計分卡代碼 `{cardType}` 已存在，請使用其他代碼」
 - **And** 資料庫無寫入，Modal 不關閉，UI 於 cardType 欄位下方顯示錯誤訊息
 
 ### AC-3：新增後 Tab 2~5 顯示空狀態提示
 
-- **Given** 業務主管成功新增 CARD_TYPE，系統自動建立 v1 空白計分版本
-- **When** 業務主管切換至 Tab 2 / 3 / 4 / 5
+- **Given** 業務部長成功新增 CARD_TYPE，系統自動建立 v1 空白計分版本
+- **When** 業務部長切換至 Tab 2 / 3 / 4 / 5
 - **Then** Tab 2（計分維度）顯示「目前無計分維度，請點擊『新增維度』開始設定」
 - **And** Tab 3 / 4 / 5 顯示對應之空狀態提示（無錯誤訊息）
 
 ### AC-4：必填欄位驗證
 
-- **Given** 業務主管未填入必填欄位（`cardType` / `cardName` / `prodKind` 任一為空）
-- **When** 業務主管點擊「確認新增」
+- **Given** 業務部長未填入必填欄位（`cardType` / `cardName` / `prodKind` 任一為空）
+- **When** 業務部長點擊「確認新增」
 - **Then** 前端阻擋送出；若 client 跳過前端驗證直接呼叫 API，後端回 422 `VALIDATION_ERROR`，`details` 標明缺失欄位
 
 ### AC-5：PROD_KIND 必須屬於啟用期間內紀錄
 
-- **Given** 業務主管送出之 `prodKind` 不存在於 `ob_code_df WHERE tbl_id = 'PROD_KIND'` 之啟用期間內紀錄
+- **Given** 業務部長送出之 `prodKind` 不存在於 `ob_code_df WHERE tbl_id = 'PROD_KIND'` 之啟用期間內紀錄
 - **When** 後端驗證
 - **Then** 回 422 `VALIDATION_ERROR`，`details` 註明 `prodKind` 欄位不合法
 
 ### AC-6：月跑執行中禁止新增
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 紀錄
-- **When** 業務主管嘗試送出新增請求
+- **When** 業務部長嘗試送出新增請求
 - **Then** API 回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
 - **And** UI 端「新增計分卡類型」按鈕 disabled，hover 顯示「分派執行中，無法修改計分設定」
 
@@ -93,7 +93,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### 5.1 POST /api/v1/assignment/scoring/card-types
 
-**Controller 規範**：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**：使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2，M02 計分卡寫入為部長專屬）。
 
 **Request Body**
 
@@ -130,7 +130,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中禁止新增 |
 | 422 | CARD_TYPE_DUPLICATE | `cardType` 與 active 紀錄重複 |
 | 422 | VALIDATION_ERROR | 必填欄位缺失 / 欄位格式不合 / `prodKind` 不在啟用期間內 |
@@ -145,7 +145,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | BR-4 | `prod_kind` 必填，業務層保持 1:1 綁定（同一 CARD_TYPE 僅一個 PROD_KIND）；DB 層 FK 約束由 system-architect 決定 |
 | BR-5 | 月跑執行中禁止新增（資料鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回 409） |
 | BR-6 | 新增成功後 audit log `action = 'CREATE'`，含完整新增紀錄；同 transaction 寫入 |
-| BR-7 | 自動建立之 v1 `ob_levelcard_version` 不附帶任何 `ob_levelcard_column` / `score` / `level` 紀錄；業務主管須於 Tab 2~5 自行新增 |
+| BR-7 | 自動建立之 v1 `ob_levelcard_version` 不附帶任何 `ob_levelcard_column` / `score` / `level` 紀錄；業務部長須於 Tab 2~5 自行新增 |
 
 ## 7. UI/UX 需求
 

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>編輯草稿名單 — 客戶名單分派 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .toast { transition: all 0.3s ease; }
+    .toast.toast-enter { opacity: 0; transform: translateY(-8px); }
+    .toast.toast-show { opacity: 1; transform: translateY(0); }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    @keyframes pop-in { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .animate-pop-in { animation: pop-in 0.18s ease-out; }
+    .cond-row { transition: background 0.15s; }
+    .cond-row:hover .cond-remove { opacity: 1; }
+    .cond-remove { opacity: 0.4; }
+    .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d1d5db; transition: 0.2s; border-radius: 22px; }
+    .switch-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: 0.2s; border-radius: 50%; }
+    input:checked + .switch-slider { background-color: #22C55E; }
+    input:checked + .switch-slider:before { transform: translateX(18px); }
+    .val-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: #DBEAFE; color: #1E40AF; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+    .val-chip button { line-height: 1; padding: 0; background: transparent; border: none; cursor: pointer; color: #1E40AF; }
+    .val-chip button:hover { color: #1D4ED8; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- Sidebar（沿用） -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <div class="mx-5 my-3 border-t border-border"></div>
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="false"
+        class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <span class="flex items-center gap-3"><i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派</span>
+        <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200"></i>
+      </button>
+      <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 0px;">
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+        <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+        <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+        <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
+        <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例</a>
+        <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱</a>
+        <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
+        <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+        <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+        <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+        <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+        <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+        <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+        <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+          <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+          <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2 text-sm">
+      <a href="27-list-definition.html" class="text-gray-500 hover:text-primary transition">名單定義</a>
+      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
+      <span class="font-semibold text-gray-800">編輯草稿名單</span>
+      <code id="headerListNo" class="ml-1 font-mono text-primary text-xs">OB202605001</code>
+      <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background:#F3F4F6;color:#6B7280;">
+        <i data-lucide="pencil" class="w-3 h-3"></i>草稿階段
+      </span>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="minister">部長</option>
+          <option value="admin">Admin</option>
+          <option value="director">處長（無權）</option>
+          <option value="sales">業務（無權）</option>
+        </select>
+      </div>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">王部長</span>
+    </div>
+  </header>
+
+  <main class="ml-56 pt-14">
+
+    <!-- 角色封鎖 banner（director / sales） -->
+    <div id="roleBlockedBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
+        <p class="text-sm text-gray-500 max-w-md">「編輯草稿名單」為部長 / Admin 專屬功能。</p>
+        <a href="27-list-definition.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
+        </a>
+      </div>
+    </div>
+
+    <!-- 非 draft 階段 banner（rollback 提示） -->
+    <div id="notDraftBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-amber-200 p-8 flex items-start gap-4">
+        <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i>
+        </div>
+        <div class="flex-1">
+          <h3 class="text-base font-semibold text-amber-900">無法編輯篩選條件</h3>
+          <p class="text-sm text-gray-700 mt-1">名單 <code id="notDraftListNo" class="font-mono text-primary">OB202605008</code> 已進入「<span id="notDraftStage" class="font-semibold">待簽核</span>」階段，根據 F051 規格僅 <code>draft</code> 階段可編輯篩選條件與 CR 開關。</p>
+          <p class="text-sm text-gray-700 mt-2">如需修改，請先執行 <span class="font-semibold text-danger">Rollback</span> 回到草稿階段（部門 / 個別比例設定將清空），再回此頁編輯。</p>
+          <div class="mt-4 flex items-center gap-2">
+            <a href="27-list-definition.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
+            </a>
+            <button onclick="openRollbackHint()" class="inline-flex items-center gap-1.5 px-4 py-2 border border-danger text-danger text-sm rounded-md hover:bg-red-50">
+              <i data-lucide="undo-2" class="w-4 h-4"></i>了解 Rollback 流程
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主要表單 -->
+    <div id="mainForm" class="p-6">
+
+      <!-- 頁面標題 -->
+      <div class="flex items-start justify-between mb-4 gap-4">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-800">編輯草稿名單 <code id="titleListNo" class="font-mono text-primary text-base ml-1">OB202605001</code></h1>
+          <p class="text-sm text-gray-500 mt-1">月份 <code class="font-mono text-primary">2026-05</code> · 建立者 <span id="metaCreatedBy">王部長</span> · 建立時間 <span id="metaCreatedAt">2026-05-02</span></p>
+        </div>
+        <!-- 停用按鈕（destructive，僅 draft 階段可見） -->
+        <button type="button" onclick="openDeactivateModal()"
+          class="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-danger text-danger rounded-md hover:bg-red-50">
+          <i data-lucide="archive" class="w-4 h-4"></i>停用此名單
+        </button>
+      </div>
+
+      <!-- Demo 切換器（本頁額外提供：可預覽不同 listNo / 不同 stage 場景） -->
+      <div class="mb-4 bg-white border border-border rounded-lg px-4 py-2 flex items-center gap-2 flex-wrap text-xs">
+        <span class="text-gray-400 mr-1">Demo 場景：</span>
+        <button onclick="loadList('OB202605001')" class="demo-btn px-2.5 py-1 border rounded">OB202605001 草稿（雙條件 + CR）</button>
+        <button onclick="loadList('OB202605002')" class="demo-btn px-2.5 py-1 border rounded">OB202605002 草稿（單條件）</button>
+        <button onclick="loadList('OB202605008')" class="demo-btn px-2.5 py-1 border rounded">OB202605008 待簽核（rollback 提示）</button>
+        <button onclick="loadList('OB202605003')" class="demo-btn px-2.5 py-1 border rounded">OB202605003 部門比例（rollback 提示）</button>
+        <span class="text-[10px] text-gray-400 ml-auto">或於 URL 加 ?listNo=OB202605001</span>
+      </div>
+
+      <form id="editForm" onsubmit="submitEdit(event)" class="space-y-4">
+
+        <!-- 區塊 1：基本資訊 -->
+        <section class="bg-white rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">1</span>
+            <h2 class="text-base font-semibold text-gray-800">基本資訊</h2>
+          </div>
+
+          <!-- LIST_NO 唯讀 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">LIST_NO（唯讀，無法修改）</label>
+              <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-md font-mono text-sm text-gray-700 w-full">
+                <i data-lucide="hash" class="w-4 h-4 text-gray-400"></i>
+                <span id="roListNo">OB202605001</span>
+                <i data-lucide="lock" class="w-3 h-3 text-gray-400 ml-auto" title="F051：建立後不允許變更"></i>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">建立者（唯讀）</label>
+              <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-md text-sm text-gray-700 w-full">
+                <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                <span id="roCreatedBy">王部長</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 名單名稱 -->
+          <div>
+            <label for="listNm" class="block text-sm font-medium text-gray-700 mb-1.5">
+              名單名稱 <span class="text-danger">*</span>
+              <span class="text-[10px] text-gray-400 font-normal ml-1">1~50 字</span>
+            </label>
+            <input id="listNm" type="text" required maxlength="50"
+              oninput="validateName()"
+              class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+            <div class="flex items-center justify-between mt-1">
+              <p id="nameError" class="hidden text-xs text-danger">請輸入名單名稱</p>
+              <p class="text-[10px] text-gray-400 ml-auto"><span id="nameCount">0</span>/50</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 區塊 2：CR 回分開關 -->
+        <section class="bg-white rounded-xl border border-border p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">2</span>
+            <h2 class="text-base font-semibold text-gray-800">CR 回分規則</h2>
+          </div>
+          <div class="flex items-start justify-between gap-4 p-3 bg-gray-50/50 rounded-lg border border-border/60">
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-700">本名單啟用 CR 回分</span>
+                <button type="button" onclick="document.getElementById('crTooltipBox').classList.toggle('hidden')" class="text-gray-400 hover:text-primary"><i data-lucide="help-circle" class="w-3.5 h-3.5"></i></button>
+              </div>
+              <p id="crStatusLabel" class="text-xs text-success mt-0.5">啟用中</p>
+            </div>
+            <label class="switch shrink-0 mt-1">
+              <input type="checkbox" id="crToggle" checked onchange="onCrToggle(this.checked)">
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+          <div id="crTooltipBox" class="hidden text-xs text-gray-600 bg-blue-50/50 border border-blue-100 rounded-md p-3">
+            <p class="font-semibold text-primary mb-1">CR = Customer Recycling（客戶回分）</p>
+            <p>啟用時，過去月份曾被分派但未成交的客戶將被重新納入本次分派候選名單。</p>
+          </div>
+        </section>
+
+        <!-- 區塊 3：篩選條件 -->
+        <section class="bg-white rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">3</span>
+              <h2 class="text-base font-semibold text-gray-800">篩選條件</h2>
+              <span class="text-[10px] text-gray-400 ml-1">條件間以「且」（AND）連接</span>
+            </div>
+            <button type="button" onclick="addCondition()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-primary text-primary rounded-md hover:bg-blue-50">
+              <i data-lucide="plus" class="w-4 h-4"></i>新增條件
+            </button>
+          </div>
+          <div id="condEmpty" class="hidden rounded-lg border border-dashed border-border p-8 flex flex-col items-center text-center">
+            <i data-lucide="filter" class="w-6 h-6 text-gray-400 mb-2"></i>
+            <p class="text-sm text-gray-500">尚未新增任何篩選條件</p>
+            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存</p>
+          </div>
+          <div id="condList" class="space-y-2"></div>
+          <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div class="flex-1">
+              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用</p>
+              <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
+            </div>
+          </div>
+          <div id="previewBanner" class="hidden rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm">
+            <i data-lucide="calculator" class="w-5 h-5 text-primary shrink-0"></i>
+            <div class="flex-1">
+              <p class="font-semibold text-primary">依此條件預估命中 <span id="previewCount" class="text-lg">0</span> 筆案件</p>
+              <p class="text-xs text-blue-700/80 mt-0.5">基於上月 POOLDATA 樣本估算（mock）</p>
+            </div>
+            <a href="30-stage0-estimate.html" class="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100">開啟 Stage 0 試算</a>
+          </div>
+        </section>
+
+        <!-- 底部 sticky 操作列 -->
+        <div class="sticky bottom-0 bg-white/95 backdrop-blur border-t border-border -mx-6 px-6 py-3 flex items-center justify-between">
+          <a href="27-list-definition.html" class="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1">
+            <i data-lucide="x" class="w-4 h-4"></i>取消
+          </a>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="submitEdit(null, 'advance')" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-border text-gray-700 rounded-md hover:bg-gray-50">
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>儲存並推進至部門比例
+            </button>
+            <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
+              <i data-lucide="save" class="w-4 h-4"></i>儲存編輯
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </main>
+
+  <!-- ===== Modal：停用名單 ===== -->
+  <div id="deactivateModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate-pop-in">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+          <i data-lucide="archive" class="w-5 h-5 text-danger"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-gray-800">確認停用名單 <code id="deactListNo" class="font-mono text-primary">OB202605001</code>？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F052 v2.0 · 軟刪除操作</p>
+        </div>
+      </div>
+      <div class="p-5 space-y-3">
+        <div class="rounded-md bg-red-50/50 border border-red-100 p-3 text-sm text-red-800">
+          <p class="font-semibold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-4 h-4"></i>此操作將軟刪除名單</p>
+          <p class="text-xs mt-1 text-red-700">已停用名單可在「已停用」分區查詢；無法直接還原，如需復原請聯絡 Admin。</p>
+        </div>
+        <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
+          <div class="flex justify-between"><span class="text-gray-500">名單名稱</span><span class="text-gray-800 font-medium" id="deactName">—</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">階段</span><span class="text-gray-800 font-medium">草稿</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">條件數</span><span class="text-gray-800 font-medium" id="deactCond">0</span></div>
+        </div>
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="deactConfirm" onchange="document.getElementById('btnDeactConfirm').disabled = !this.checked" class="mt-0.5 rounded text-danger focus:ring-danger">
+          <span class="text-sm text-gray-700">我確認停用此名單，理解此操作將軟刪除並無法於本頁直接還原。</span>
+        </label>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeDeactivateModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
+        <button id="btnDeactConfirm" disabled onclick="confirmDeactivate()"
+          class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-md hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed">
+          <i data-lucide="archive" class="w-4 h-4 inline -mt-0.5"></i> 確認停用
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal：儲存並推進 ===== -->
+  <div id="advanceModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate-pop-in">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+          <i data-lucide="arrow-right-circle" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-gray-800">儲存並推進至部門比例階段？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F078 原子性上線約束流程</p>
+        </div>
+      </div>
+      <div class="p-5 space-y-3">
+        <p class="text-sm text-gray-700">推進後將同時：</p>
+        <ul class="text-sm text-gray-600 space-y-1.5 pl-5 list-disc">
+          <li>儲存當前編輯內容</li>
+          <li>鎖定篩選條件與 CR 開關（僅能 Rollback 退回後再修改）</li>
+          <li>進入部門比例設定階段，處長將收到通知</li>
+        </ul>
+        <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
+          <div class="flex justify-between"><span class="text-gray-500">LIST_NO</span><span class="text-primary font-mono" id="advListNo">OB202605001</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">名稱</span><span class="text-gray-800 font-medium" id="advName">—</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">條件數</span><span class="text-gray-800 font-medium" id="advCondCount">0</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">CR 狀態</span><span class="text-gray-800 font-medium" id="advCr">啟用</span></div>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeAdvanceModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
+        <button onclick="confirmAdvance()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700">
+          <i data-lucide="arrow-right" class="w-4 h-4 inline -mt-0.5"></i> 確認推進
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal：Rollback 提示（資訊用，停留在說明） ===== -->
+  <div id="rollbackHintModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate-pop-in">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <i data-lucide="undo-2" class="w-5 h-5 text-warning"></i>
+        <h3 class="text-base font-semibold text-gray-800">Rollback 至草稿流程</h3>
+      </div>
+      <div class="p-5 space-y-2 text-sm text-gray-700">
+        <p>Rollback 是 destructive 動作：</p>
+        <ol class="list-decimal pl-5 space-y-1 text-gray-600 text-xs">
+          <li>部門比例 → 草稿：將清空所有部門比例設定</li>
+          <li>個別比例 → 部門比例：將清空所有個別比例設定（但保留部門比例）</li>
+          <li>待簽核 → 個別比例：取消當前簽核流程</li>
+          <li>準備完成 → 待簽核：取消準備完成狀態</li>
+        </ol>
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2">Rollback 入口位於名單列表的「退回」按鈕（B5 將於 29a 部門比例頁實作）。</p>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <a href="27-list-definition.html" class="px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-blue-700">前往名單定義列表</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="fixed top-20 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    lucide.createIcons();
+
+    // Sidebar collapsible
+    (function() {
+      const assignmentPages = ['27-list-definition.html','28-scoring-config.html','29-ratio-config.html','30-stage0-estimate.html','31-trigger-run.html','32-run-progress.html','33-run-summary.html','34-run-history.html','35-snapshot-detail.html','36-run-compare.html','37-base-code.html','37a-pooldata-whitelist.html','37b-categorical-field-values.html','27a-list-create-draft.html','27b-list-edit-draft.html'];
+      const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
+      const isAssignmentPage = assignmentPages.includes(currentPage);
+      window.toggleAssignmentSection = function() {
+        const header = document.getElementById('assignment-section-header');
+        const expanded = header.getAttribute('aria-expanded') === 'true';
+        setExp(!expanded, true);
+      };
+      function setExp(exp, persist) {
+        const section = document.getElementById('assignment-section');
+        const chevron = document.getElementById('assignment-chevron');
+        const header = document.getElementById('assignment-section-header');
+        if (!section) return;
+        if (exp) { section.style.maxHeight = section.scrollHeight + 'px'; chevron.style.transform = 'rotate(90deg)'; header.setAttribute('aria-expanded', 'true'); }
+        else { section.style.maxHeight = '0px'; chevron.style.transform = 'rotate(0deg)'; header.setAttribute('aria-expanded', 'false'); }
+        if (persist) localStorage.setItem('cdmp.sidebar.assignment.expanded', exp ? '1' : '0');
+      }
+      document.addEventListener('DOMContentLoaded', function() {
+        const stored = localStorage.getItem('cdmp.sidebar.assignment.expanded');
+        setExp(isAssignmentPage || stored === '1', false);
+      });
+    })();
+
+    function showToast(type, msg, sub) {
+      const c = document.getElementById('toastContainer');
+      const cls = type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' : type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-green-50 border-green-200 text-green-800';
+      const icon = type === 'error' ? 'x-circle' : type === 'warning' ? 'alert-triangle' : type === 'info' ? 'info' : 'check-circle';
+      const el = document.createElement('div');
+      el.className = `toast toast-enter rounded-lg shadow-lg px-4 py-2.5 text-sm border max-w-sm flex items-start gap-2 ${cls}`;
+      el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 mt-0.5 shrink-0"></i><div><div class="font-semibold">${msg}</div>${sub ? `<div class="text-xs opacity-80 mt-0.5">${sub}</div>` : ''}</div>`;
+      c.appendChild(el);
+      lucide.createIcons();
+      requestAnimationFrame(() => { el.classList.remove('toast-enter'); el.classList.add('toast-show'); });
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
+    }
+
+    // 角色
+    const ROLE_META = {
+      minister: { label: '部長',  bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',        name: '王部長' },
+      director: { label: '處長',  bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog',     name: '李處長' },
+      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check', name: '系統管理員' },
+      sales:    { label: '業務',  bg: '#F3F4F6', fg: '#374151', icon: 'user',         name: '陳業務' }
+    };
+    function setRole(role) {
+      const m = ROLE_META[role] || ROLE_META.minister;
+      document.getElementById('role-badge-container').innerHTML =
+        `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+      document.getElementById('user-name').textContent = m.name;
+      const canAccess = role === 'minister' || role === 'admin';
+      if (!canAccess) {
+        document.getElementById('mainForm').classList.add('hidden');
+        document.getElementById('notDraftBanner').classList.add('hidden');
+        document.getElementById('roleBlockedBanner').classList.remove('hidden');
+      } else {
+        document.getElementById('roleBlockedBanner').classList.add('hidden');
+        // 重新依當前 listNo 決定 mainForm vs notDraftBanner
+        applyStageGuard();
+      }
+      lucide.createIcons();
+    }
+
+    // F075 / F076 mock（同 27a）
+    const FIELDS = [
+      { code: 'PROD_KIND',  label: '產品類別',        type: 'categorical', active: true },
+      { code: 'LIST_TYPE',  label: '名單類別',        type: 'categorical', active: true },
+      { code: 'BEST_CASE',  label: '最佳產品',        type: 'categorical', active: true },
+      { code: 'SPEC_TP',    label: '專案類別',        type: 'categorical', active: true },
+      { code: 'CASEYEAR',   label: '進件 / 滿期年數', type: 'categorical', active: true },
+      { code: 'SETTLE_SRC', label: '他行代償',        type: 'categorical', active: true },
+      { code: 'MONTH_CNT',  label: '撈取月份計數',    type: 'numeric',     active: true },
+      { code: 'PAYT_TERM',  label: '還款期別',        type: 'numeric',     active: false }
+    ];
+    const FIELD_VALUES = {
+      PROD_KIND:  [ { v: '01', l: '汽車新車', active: false, deactReason: 'manual' }, { v: '02', l: '機車', active: true }, { v: '03', l: '其他商品', active: true } ],
+      LIST_TYPE:  [ { v: '01', l: '期中', active: true }, { v: '02', l: '中結', active: true }, { v: '03', l: '滿期', active: true } ],
+      BEST_CASE:  [ { v: '01', l: '汽車', active: true }, { v: '02', l: '機車', active: true }, { v: '03', l: '一般', active: true }, { v: '04', l: '保單', active: false, deactReason: 'manual' }, { v: '05', l: '信貸', active: true } ],
+      SPEC_TP:    [ { v: '02', l: '中古車', active: true }, { v: '04', l: '原融代償', active: true }, { v: '05', l: '在庫融資', active: true }, { v: '06', l: '專案融資', active: true }, { v: '11', l: '保單', active: true }, { v: '12', l: '信貸', active: true } ],
+      CASEYEAR:   [ { v: '0', l: '0 年', active: true }, { v: '1', l: '1 年', active: true }, { v: '2', l: '2 年', active: true }, { v: '3', l: '3 年', active: true }, { v: '4', l: '4 年', active: true }, { v: '5', l: '5 年', active: true }, { v: '6', l: '6 年以上', active: true }, { v: '99', l: '不限', active: true } ],
+      SETTLE_SRC: [ { v: 'Y', l: '含他行代償', active: true }, { v: 'N', l: '不含他行代償', active: true } ]
+    };
+    const NUM_OPS = ['>', '<', '=', '>=', '<='];
+
+    // Mock 名單（每筆預填資料）
+    const MOCK = {
+      OB202605001: { stage: 'draft',       listNm: '2026-05 業務一部 主力催收',   createdBy: '王部長', createdAt: '2026-05-02', cr: true,  conds: [{ field: 'PROD_KIND', vals: ['01','02','03'] }, { field: 'MONTH_CNT', op: '>=', val: 2 }] },
+      OB202605002: { stage: 'draft',       listNm: '2026-05 業務二部 主力催收',   createdBy: '王部長', createdAt: '2026-05-03', cr: true,  conds: [{ field: 'LIST_TYPE', vals: ['01','02'] }] },
+      OB202605003: { stage: 'dept_ratio',  listNm: '2026-05 業務三部 信貸催收',   createdBy: '王部長', createdAt: '2026-05-04', cr: true,  conds: [{ field: 'BEST_CASE', vals: ['05'] }] },
+      OB202605008: { stage: 'approval',    listNm: '2026-05 業務二部 即將到期',   createdBy: '王部長', createdAt: '2026-05-08', cr: true,  conds: [{ field: 'MONTH_CNT', op: '>=', val: 2 }] }
+    };
+    const STAGE_LABEL = { draft: '草稿', dept_ratio: '部門比例', indiv_ratio: '個別比例', approval: '待簽核', ready: '準備完成' };
+
+    let currentListNo = 'OB202605001';
+    let conditions = [];
+    let condIdSeq = 1;
+
+    function loadList(listNo) {
+      currentListNo = listNo;
+      const m = MOCK[listNo];
+      if (!m) { showToast('error', '查無此名單', listNo); return; }
+      document.getElementById('headerListNo').textContent = listNo;
+      document.getElementById('titleListNo').textContent = listNo;
+      document.getElementById('roListNo').textContent = listNo;
+      document.getElementById('roCreatedBy').textContent = m.createdBy;
+      document.getElementById('metaCreatedBy').textContent = m.createdBy;
+      document.getElementById('metaCreatedAt').textContent = m.createdAt;
+      document.getElementById('listNm').value = m.listNm;
+      document.getElementById('nameCount').textContent = m.listNm.length;
+      document.getElementById('crToggle').checked = m.cr;
+      onCrToggle(m.cr);
+      // 條件
+      conditions = [];
+      condIdSeq = 1;
+      m.conds.forEach(src => {
+        const f = FIELDS.find(x => x.code === src.field);
+        if (!f) return;
+        const c = { id: condIdSeq++, field: src.field };
+        if (f.type === 'numeric') { c.op = src.op || '>='; c.val = src.val; c.vals = []; }
+        else { c.op = 'in'; c.val = ''; c.vals = src.vals ? [...src.vals] : []; }
+        conditions.push(c);
+      });
+      renderConditions();
+      applyStageGuard();
+    }
+
+    function applyStageGuard() {
+      const m = MOCK[currentListNo];
+      const stage = m ? m.stage : 'draft';
+      const isDraft = stage === 'draft';
+      document.getElementById('mainForm').classList.toggle('hidden', !isDraft);
+      document.getElementById('notDraftBanner').classList.toggle('hidden', isDraft);
+      if (!isDraft) {
+        document.getElementById('notDraftListNo').textContent = currentListNo;
+        document.getElementById('notDraftStage').textContent = STAGE_LABEL[stage] || stage;
+      }
+    }
+
+    // 條件 builder（與 27a 一致）
+    function availableFields(excludeId) {
+      const used = new Set(conditions.filter(c => c.id !== excludeId && c.field).map(c => c.field));
+      return FIELDS.filter(f => f.active && !used.has(f.code));
+    }
+    function addCondition() {
+      conditions.push({ id: condIdSeq++, field: '', op: '', val: '', vals: [] });
+      renderConditions();
+    }
+    function removeCondition(id) { conditions = conditions.filter(c => c.id !== id); renderConditions(); }
+    function setField(id, code) {
+      const c = conditions.find(x => x.id === id);
+      if (!c) return;
+      c.field = code;
+      const f = FIELDS.find(x => x.code === code);
+      if (f) {
+        if (f.type === 'numeric') { c.op = '>='; c.val = ''; c.vals = []; }
+        else { c.op = 'in'; c.val = ''; c.vals = []; }
+      }
+      renderConditions();
+    }
+    function setOp(id, op) { const c = conditions.find(x => x.id === id); if (c) { c.op = op; renderConditions(); } }
+    function setNumValue(id, val) { const c = conditions.find(x => x.id === id); if (c) { c.val = val; updatePreview(); } }
+    function toggleCatValue(id, val) {
+      const c = conditions.find(x => x.id === id);
+      if (!c) return;
+      if (!c.vals) c.vals = [];
+      if (c.vals.includes(val)) c.vals = c.vals.filter(v => v !== val);
+      else c.vals.push(val);
+      renderConditions();
+    }
+    function toggleValueDropdown(id) {
+      document.querySelectorAll('[id^="valDrop-"]').forEach(d => { if (d.id !== `valDrop-${id}`) d.classList.add('hidden'); });
+      document.getElementById(`valDrop-${id}`).classList.toggle('hidden');
+    }
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('[id^="valDrop-"]') && !e.target.closest('button[onclick^="toggleValueDropdown"]')) {
+        document.querySelectorAll('[id^="valDrop-"]').forEach(d => d.classList.add('hidden'));
+      }
+    });
+
+    function renderConditions() {
+      const list = document.getElementById('condList');
+      const empty = document.getElementById('condEmpty');
+      if (conditions.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        document.getElementById('previewBanner').classList.add('hidden');
+        document.getElementById('inactiveValueWarn').classList.add('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      list.innerHTML = conditions.map((c, idx) => {
+        const f = FIELDS.find(x => x.code === c.field);
+        const fieldOpts = availableFields(c.id).map(o => `<option value="${o.code}" ${o.code === c.field ? 'selected' : ''}>${o.code} — ${o.label}</option>`).join('');
+        const fieldSelect = `
+          <select onchange="setField(${c.id}, this.value)" class="px-2.5 py-1.5 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary min-w-[200px]">
+            <option value="">-- 選擇欄位 --</option>
+            ${fieldOpts}
+            ${c.field && !availableFields(c.id).some(o => o.code === c.field) ? `<option value="${c.field}" selected>${c.field} — ${(FIELDS.find(x=>x.code===c.field)||{}).label||''}</option>` : ''}
+          </select>`;
+        let valueUI = '';
+        if (!f) {
+          valueUI = `<span class="text-xs text-gray-400 italic">請先選擇欄位</span>`;
+        } else if (f.type === 'numeric') {
+          const opOpts = NUM_OPS.map(o => `<option value="${o}" ${o === c.op ? 'selected' : ''}>${o}</option>`).join('');
+          valueUI = `
+            <select onchange="setOp(${c.id}, this.value)" class="px-2 py-1.5 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary font-mono w-16">${opOpts}</select>
+            <input type="number" value="${c.val}" oninput="setNumValue(${c.id}, this.value)" placeholder="數值"
+              class="w-28 px-2.5 py-1.5 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+            <span class="text-xs text-gray-400">${f.code === 'MONTH_CNT' ? '個月' : ''}</span>`;
+        } else if (f.type === 'categorical') {
+          const opts = FIELD_VALUES[f.code] || [];
+          const selected = c.vals || [];
+          const chips = selected.map(v => {
+            const opt = opts.find(o => o.v === v);
+            const label = opt ? opt.l : v;
+            const isInactive = opt && !opt.active;
+            const chipCls = isInactive
+              ? 'inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200 rounded-full text-[11px]'
+              : 'val-chip';
+            const icon = isInactive ? '<i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i>' : '';
+            return `<span class="${chipCls}">${icon}${v} · ${label}<button type="button" onclick="toggleCatValue(${c.id}, '${v}')"><i data-lucide="x" class="w-3 h-3"></i></button></span>`;
+          }).join(' ');
+          const dropdownOpts = opts.map(o => {
+            const sel = selected.includes(o.v);
+            const tag = !o.active ? ' <span class="text-amber-600">(已停用)</span>' : '';
+            return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}">
+              <input type="checkbox" ${sel ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
+              <span class="font-mono text-xs text-gray-500 w-8">${o.v}</span>
+              <span class="text-gray-700">${o.l}${tag}</span>
+            </label>`;
+          }).join('');
+          valueUI = `
+            <span class="text-xs text-gray-500 font-mono mr-1">in</span>
+            <div class="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-border rounded-md bg-white">
+              ${chips || '<span class="text-xs text-gray-400">未選擇任何值</span>'}
+              <div class="relative ml-auto">
+                <button type="button" onclick="toggleValueDropdown(${c.id})" class="text-xs px-2 py-1 border border-border rounded-md text-primary hover:bg-blue-50 inline-flex items-center gap-1">
+                  <i data-lucide="plus" class="w-3 h-3"></i>選擇值
+                  <span class="text-gray-400">(${opts.filter(o => o.active).length})</span>
+                </button>
+                <div id="valDrop-${c.id}" class="hidden absolute right-0 top-full mt-1 w-64 bg-white border border-border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">${dropdownOpts}</div>
+              </div>
+            </div>`;
+        }
+        const andLabel = idx > 0 ? `<div class="flex items-center gap-2 py-1 -mb-1"><div class="flex-1 h-px bg-border"></div><span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">且 AND</span><div class="flex-1 h-px bg-border"></div></div>` : '';
+        return `
+          ${andLabel}
+          <div class="cond-row flex items-center gap-2 p-3 bg-gray-50/50 border border-border rounded-lg">
+            <span class="text-[10px] font-mono text-gray-400 w-6">#${idx + 1}</span>
+            ${fieldSelect}
+            <div class="flex items-center gap-2 flex-1">${valueUI}</div>
+            <button type="button" onclick="removeCondition(${c.id})" title="移除條件" class="cond-remove p-1.5 text-gray-400 hover:text-danger hover:bg-red-50 rounded transition shrink-0">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>`;
+      }).join('');
+      lucide.createIcons();
+      updatePreview();
+      updateInactiveWarn();
+    }
+
+    function updateInactiveWarn() {
+      const warned = [];
+      conditions.forEach(c => {
+        const f = FIELDS.find(x => x.code === c.field);
+        if (!f || f.type !== 'categorical') return;
+        const opts = FIELD_VALUES[f.code] || [];
+        (c.vals || []).forEach(v => {
+          const opt = opts.find(o => o.v === v);
+          if (opt && !opt.active) warned.push(`${f.code}.${v}（${opt.l}）`);
+        });
+      });
+      const box = document.getElementById('inactiveValueWarn');
+      if (warned.length === 0) { box.classList.add('hidden'); return; }
+      box.classList.remove('hidden');
+      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將於儲存時被忽略`;
+      document.getElementById('inactiveWarnDetail').textContent = warned.join('、') + '。';
+    }
+
+    function updatePreview() {
+      const valid = conditions.filter(c => {
+        const f = FIELDS.find(x => x.code === c.field);
+        if (!f) return false;
+        if (f.type === 'numeric') return c.val !== '' && c.val !== null;
+        if (f.type === 'categorical') return (c.vals || []).length > 0;
+        return false;
+      });
+      const banner = document.getElementById('previewBanner');
+      if (valid.length === 0) { banner.classList.add('hidden'); return; }
+      banner.classList.remove('hidden');
+      let n = 12500;
+      valid.forEach((c, i) => { n = Math.floor(n * (0.85 - i * 0.08)); });
+      document.getElementById('previewCount').textContent = n.toLocaleString();
+    }
+
+    function onCrToggle(checked) {
+      const lbl = document.getElementById('crStatusLabel');
+      if (checked) { lbl.className = 'text-xs text-success mt-0.5'; lbl.textContent = '啟用中：曾被分派但未成交的客戶將重新納入分派'; }
+      else { lbl.className = 'text-xs text-gray-500 mt-0.5'; lbl.textContent = '已停用：僅納入新增及尚未被分派的客戶'; }
+    }
+
+    function validateName() {
+      const v = document.getElementById('listNm').value.trim();
+      document.getElementById('nameCount').textContent = v.length;
+    }
+
+    function validate() {
+      const name = document.getElementById('listNm').value.trim();
+      if (!name) { document.getElementById('nameError').classList.remove('hidden'); document.getElementById('listNm').focus(); showToast('error', '請輸入名單名稱'); return false; }
+      if (conditions.length === 0) { showToast('error', '請至少新增 1 個篩選條件'); return false; }
+      const incomplete = conditions.find(c => {
+        const f = FIELDS.find(x => x.code === c.field);
+        if (!f) return true;
+        if (f.type === 'numeric') return c.val === '' || c.val === null;
+        if (f.type === 'categorical') return (c.vals || []).filter(v => { const opt = (FIELD_VALUES[f.code]||[]).find(o => o.v === v); return opt && opt.active; }).length === 0;
+        return false;
+      });
+      if (incomplete) { showToast('error', '部分條件尚未填寫完整', '請補齊欄位、運算子、或至少選擇 1 個 active 可選值'); return false; }
+      return true;
+    }
+
+    function submitEdit(ev, action) {
+      if (ev) ev.preventDefault();
+      if (!validate()) return;
+      if (action === 'advance') {
+        document.getElementById('advListNo').textContent = currentListNo;
+        document.getElementById('advName').textContent = document.getElementById('listNm').value.trim();
+        document.getElementById('advCondCount').textContent = conditions.length;
+        document.getElementById('advCr').textContent = document.getElementById('crToggle').checked ? '啟用' : '停用';
+        document.getElementById('advanceModal').classList.remove('hidden');
+        lucide.createIcons();
+      } else {
+        showToast('success', `${currentListNo} 編輯已儲存`, '即將返回名單定義頁...');
+        setTimeout(() => { location.href = '27-list-definition.html'; }, 1200);
+      }
+    }
+    function closeAdvanceModal() { document.getElementById('advanceModal').classList.add('hidden'); }
+    function confirmAdvance() {
+      closeAdvanceModal();
+      showToast('success', `${currentListNo} 已推進至部門比例`, '處長將收到通知');
+      setTimeout(() => { location.href = '27-list-definition.html'; }, 1500);
+    }
+
+    // 停用名單
+    function openDeactivateModal() {
+      document.getElementById('deactListNo').textContent = currentListNo;
+      document.getElementById('deactName').textContent = document.getElementById('listNm').value.trim();
+      document.getElementById('deactCond').textContent = conditions.length;
+      document.getElementById('deactConfirm').checked = false;
+      document.getElementById('btnDeactConfirm').disabled = true;
+      document.getElementById('deactivateModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeDeactivateModal() { document.getElementById('deactivateModal').classList.add('hidden'); }
+    function confirmDeactivate() {
+      closeDeactivateModal();
+      showToast('warning', `${currentListNo} 已停用`, '可於名單列表「已停用」分區查詢');
+      setTimeout(() => { location.href = '27-list-definition.html'; }, 1500);
+    }
+    function openRollbackHint() { document.getElementById('rollbackHintModal').classList.remove('hidden'); lucide.createIcons(); }
+
+    // Init：解析 ?listNo=
+    (function init() {
+      setRole('minister');
+      const urlParams = new URLSearchParams(location.search);
+      const listNo = urlParams.get('listNo') || 'OB202605001';
+      loadList(listNo);
+    })();
+  </script>
+</body>
+</html>

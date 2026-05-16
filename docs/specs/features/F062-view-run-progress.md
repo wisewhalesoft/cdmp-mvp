@@ -28,17 +28,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務主管在月跑執行期間即時查看各 Stage 的執行進度。採前端 Polling（預設每 3 秒輪詢一次，與 AD-E07-2 一致）。月跑完成顯示結果入口（連至 F063 / F064）；月跑失敗顯示錯誤訊息與重新觸發按鈕。
+提供業務部長 / 業務處長在月跑執行期間即時查看各 Stage 的執行進度。採前端 Polling（預設每 3 秒輪詢一次，與 AD-E07-2 一致）。月跑完成顯示結果入口（連至 F063 / F064）；月跑失敗顯示錯誤訊息與重新觸發按鈕（重新觸發限部長，見 F061 §4.6）。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 在月跑執行期間即時查看各 Stage 的執行進度
 **So that** 了解月跑目前跑到哪個步驟、預估完成時間，不需要不斷詢問 IT
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長 / 業務處長已登入並持有有效 JWT Token
 - 目標 `run_id` 存在於 `assignment_run`
 
 ## 4. 驗收標準
@@ -46,7 +46,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-1：顯示目前月跑執行狀態
 
 - **Given** 月跑已觸發（F061），進度頁 URL 含 `run_id`
-- **When** 業務主管進入執行進度頁
+- **When** 業務部長 / 業務處長進入執行進度頁
 - **Then** 顯示月跑資訊：`run_id`、`project_workym`、`triggered_by`（觸發者名稱）、`triggered_at`（觸發時間）、目前 `status`、已執行時間
 - **And** 顯示各 Stage 的執行進度列表（Stage 1 ~ Stage 4），每個 Stage 顯示：名稱、狀態（pending / running / completed / failed / skipped）、開始時間、結束時間、處理筆數
 
@@ -68,12 +68,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **Given** 月跑失敗（`status = 'failed'`）
 - **When** 進度頁偵測到失敗狀態
 - **Then** 顯示失敗提示，標示失敗的 Stage，並顯示 `error_message` 內容
-- **And** 提供「重新觸發」按鈕（連回 F061，業務主管修正問題後可重試）
+- **And** 提供「重新觸發」按鈕（連回 F061，業務部長 / 業務處長修正問題後可重試）
 
 ### AC-5：月跑 run_id 不存在
 
 - **Given** URL 中的 `run_id` 不存在於 `assignment_run`
-- **When** 業務主管進入進度頁
+- **When** 業務部長 / 業務處長進入進度頁
 - **Then** 回傳 404 `ASSIGNMENT_RUN_NOT_FOUND`，前端顯示「找不到該月跑紀錄」
 
 ## 5. API 規格
@@ -108,7 +108,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | `run_id` 不存在 |
 
 ## 6. 商業規則

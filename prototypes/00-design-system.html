@@ -37,6 +37,29 @@
       <p class="text-gray-500 mt-2">企業客戶資料治理平台 — UI 元件庫與設計規範</p>
     </div>
 
+    <!-- ==================== E07 章節快速導覽 ==================== -->
+    <section class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
+      <div class="flex items-start gap-3">
+        <i data-lucide="bookmark" class="w-5 h-5 text-primary mt-0.5"></i>
+        <div class="flex-1">
+          <h2 class="text-base font-semibold text-gray-900">E07 業務專屬元件導覽</h2>
+          <p class="text-xs text-gray-600 mt-1">下列章節為 E07（客戶清單分派）擴充，搭配 27 / 28 / 30~37 系列 prototype 使用。所有元件均可實際互動，可作為實作 reference。</p>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3 text-xs">
+            <a href="#e07-stage-badge" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">① 五階段 Badge</a>
+            <a href="#e07-role-badge" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">② 角色 Badge</a>
+            <a href="#e07-month-picker" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">③ 月份切換器</a>
+            <a href="#e07-ratio-input" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">④ 比例輸入</a>
+            <a href="#e07-resigned" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">⑤ 離職 / 代理</a>
+            <a href="#e07-reject-banner" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">⑥ 拒絕 Banner</a>
+            <a href="#e07-modals" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">⑦ Modal 模板</a>
+            <a href="#e07-template-btn" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">⑧ 獎懲模板</a>
+            <a href="#e07-toast" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">⑨ Toast 系統</a>
+            <a href="#e07-js-patterns" class="px-2 py-1.5 bg-white border border-blue-200 rounded text-primary hover:bg-blue-50">⑩ JS Pattern</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ==================== 色彩系統 ==================== -->
     <section>
       <h2 class="text-2xl font-semibold mb-4 border-b pb-2">色彩系統</h2>
@@ -573,6 +596,657 @@
       </p>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- ============== E07 業務專屬元件（新增章節）================== -->
+    <!-- ============================================================ -->
+
+    <div class="border-t-4 border-double border-primary/30 pt-8 mt-12">
+      <div class="text-center mb-2">
+        <span class="inline-block px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold tracking-wider">E07 — CUSTOMER LIST ASSIGNMENT</span>
+      </div>
+      <h1 class="text-2xl font-bold text-center text-gray-900">E07 業務專屬元件</h1>
+      <p class="text-center text-sm text-gray-500 mt-1">客戶清單分派 — 五階段流程、月份維度、雙層比例設定相關元件</p>
+    </div>
+
+    <!-- ==================== ① 五階段 Badge 系統 ==================== -->
+    <section id="e07-stage-badge">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">① 五階段 Badge 系統</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <!-- 視覺呈現 -->
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">視覺呈現（依清單流程順序）</p>
+          <div class="flex flex-wrap gap-3 items-center">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style="background:#F3F4F6;color:#6B7280;">
+              <i data-lucide="pencil" class="w-3 h-3"></i>草稿
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style="background:#DBEAFE;color:#1E40AF;">
+              <i data-lucide="building-2" class="w-3 h-3"></i>部門比例
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style="background:#CFFAFE;color:#0E7490;">
+              <i data-lucide="users" class="w-3 h-3"></i>個別比例
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style="background:#FEF3C7;color:#92400E;">
+              <i data-lucide="stamp" class="w-3 h-3"></i>待簽核
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style="background:#DCFCE7;color:#15803D;">
+              <i data-lucide="check-circle-2" class="w-3 h-3"></i>備援可用
+            </span>
+          </div>
+        </div>
+
+        <!-- 色票對照 -->
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">色票與資料對應</p>
+          <table class="w-full text-xs border border-border rounded">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left px-3 py-2 font-medium text-gray-600">stage</th>
+                <th class="text-left px-3 py-2 font-medium text-gray-600">標籤</th>
+                <th class="text-left px-3 py-2 font-medium text-gray-600">背景 / 文字色</th>
+                <th class="text-left px-3 py-2 font-medium text-gray-600">Lucide icon</th>
+                <th class="text-left px-3 py-2 font-medium text-gray-600">使用情境</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              <tr><td class="px-3 py-2 font-mono">draft</td><td class="px-3 py-2">草稿</td><td class="px-3 py-2"><code>#F3F4F6 / #6B7280</code></td><td class="px-3 py-2"><code>pencil</code></td><td class="px-3 py-2 text-gray-500">清單建立後尚未送出</td></tr>
+              <tr><td class="px-3 py-2 font-mono">dept_ratio</td><td class="px-3 py-2">部門比例</td><td class="px-3 py-2"><code>#DBEAFE / #1E40AF</code></td><td class="px-3 py-2"><code>building-2</code></td><td class="px-3 py-2 text-gray-500">部長設定中</td></tr>
+              <tr><td class="px-3 py-2 font-mono">indiv_ratio</td><td class="px-3 py-2">個別比例</td><td class="px-3 py-2"><code>#CFFAFE / #0E7490</code></td><td class="px-3 py-2"><code>users</code></td><td class="px-3 py-2 text-gray-500">處長設定中</td></tr>
+              <tr><td class="px-3 py-2 font-mono">approval</td><td class="px-3 py-2">待簽核</td><td class="px-3 py-2"><code>#FEF3C7 / #92400E</code></td><td class="px-3 py-2"><code>stamp</code></td><td class="px-3 py-2 text-gray-500">已送出，等待上層確認</td></tr>
+              <tr><td class="px-3 py-2 font-mono">ready</td><td class="px-3 py-2">備援可用</td><td class="px-3 py-2"><code>#DCFCE7 / #15803D</code></td><td class="px-3 py-2"><code>check-circle-2</code></td><td class="px-3 py-2 text-gray-500">月跑可使用此版本</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- HTML 範例 -->
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">HTML 範例（draft 階段）</p>
+          <pre class="bg-gray-900 text-gray-100 text-xs p-3 rounded overflow-x-auto"><code>&lt;span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+      style="background:#F3F4F6;color:#6B7280;"&gt;
+  &lt;i data-lucide="pencil" class="w-3 h-3"&gt;&lt;/i&gt;草稿
+&lt;/span&gt;</code></pre>
+        </div>
+
+        <!-- 使用情境 -->
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p><span class="font-semibold text-primary">使用情境：</span>27 名單頁清單列、30/31/32/33/34 各階段詳細頁 header、Pipeline 段交付儀表板。可用 <code>initStageBadge(stage)</code> 一鍵生成。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ② 角色 Badge 系統 ==================== -->
+    <section id="e07-role-badge">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">② 角色 Badge 系統</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">角色 Badge</p>
+          <div class="flex flex-wrap gap-3 items-center">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:#DBEAFE;color:#1D4ED8;">
+              <i data-lucide="crown" class="w-3 h-3"></i>部長
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:#EDE9FE;color:#6D28D9;">
+              <i data-lucide="user-cog" class="w-3 h-3"></i>處長
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:#FEF3C7;color:#B45309;">
+              <i data-lucide="shield-check" class="w-3 h-3"></i>Admin
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:#F3F4F6;color:#374151;">
+              <i data-lucide="user" class="w-3 h-3"></i>業務（一般）
+            </span>
+          </div>
+        </div>
+
+        <!-- Header 範例 -->
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">Header 右上角顯示 + 角色切換器（demo 用）</p>
+          <div class="border border-border rounded-lg overflow-hidden">
+            <header class="h-14 bg-white border-b border-border flex items-center justify-between px-6">
+              <h1 class="text-lg font-semibold">客戶清單分派</h1>
+              <div class="flex items-center gap-3">
+                <!-- Role Switcher -->
+                <div class="flex items-center gap-2 bg-gray-50 border border-border rounded-lg px-2 py-1">
+                  <i data-lucide="user-check" class="w-3.5 h-3.5 text-gray-400"></i>
+                  <span class="text-[10px] text-gray-500 uppercase tracking-wide">模擬角色</span>
+                  <select id="ds-role-switcher" onchange="updateRoleBadge(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+                    <option value="minister">部長</option>
+                    <option value="director">處長</option>
+                    <option value="admin">Admin</option>
+                    <option value="sales">業務</option>
+                  </select>
+                </div>
+                <div id="ds-role-badge-container">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:#DBEAFE;color:#1D4ED8;">
+                    <i data-lucide="crown" class="w-3 h-3"></i>部長
+                  </span>
+                </div>
+                <span class="text-sm text-gray-600">王小明</span>
+              </div>
+            </header>
+            <div class="p-4 bg-bg text-xs text-gray-500">
+              切換上方下拉選單會即時更新右側角色 Badge。<span class="text-primary">此切換器僅在 10 個重要 E07 頁面提供（不入帳號權限）。</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 使用情境 -->
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p><span class="font-semibold text-primary">使用情境：</span>10 個重要 E07 頁面（27 名單、28/29 計分卡、30~36 月跑系列、37 代碼維護）顯示。可用 <code>initRoleSwitcher()</code> + <code>renderRoleBadge(role)</code> 一鍵掛載。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ③ 月份切換器 ==================== -->
+    <section id="e07-month-picker">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">③ 月份切換器</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">標準月份切換器（select + ← →）</p>
+          <div class="flex items-center gap-2 p-4 bg-gray-50 rounded">
+            <button id="ds-mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <select id="ds-mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
+            <button id="ds-mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+            <span id="ds-mp-current-label" class="ml-3 text-xs text-gray-500"></span>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">歷史月份觸發唯讀提示條（自動顯示）</p>
+          <div id="ds-mp-readonly-banner" class="hidden rounded-lg p-3 bg-gray-100 border border-gray-200 flex items-start gap-2 text-sm text-gray-700">
+            <i data-lucide="calendar-clock" class="w-4 h-4 text-gray-500 mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-semibold text-gray-800">歷史月份（唯讀）</p>
+              <p class="text-xs mt-0.5">您正在檢視過去月份的歷史快照，所有寫入功能已停用。如需編輯請切換至當月（<span id="ds-mp-current-month-hint">2026-05</span>）。</p>
+            </div>
+          </div>
+          <p id="ds-mp-readonly-empty" class="text-xs text-gray-400 italic">當切換至過去月份時，唯讀提示條會自動顯示於此區域上方。</p>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p class="font-semibold text-primary mb-1">規則：</p>
+          <ul class="list-disc ml-5 space-y-0.5">
+            <li>預設顯示當月（today.YYYY-MM）</li>
+            <li>可選範圍：當月 ±12 個月</li>
+            <li>切換至歷史月份 → 自動顯示「唯讀」提示條 + 所有寫入按鈕變 disabled（由 <code>initMonthPicker</code> 觸發 callback）</li>
+            <li>歷史月份的 option 文字會加 <code>📅</code> icon prefix + 灰色顯示</li>
+            <li>後續批次：27、29x、30~36 全部使用此 pattern</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ④ 比例輸入欄位 ==================== -->
+    <section id="e07-ratio-input">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">④ 比例輸入欄位</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">部門加總 banner（隨輸入即時變色）</p>
+          <div id="ds-ratio-sum-banner" class="rounded-lg p-3 border flex items-center justify-between text-sm" style="background:#F3F4F6;border-color:#E5E7EB;">
+            <div class="flex items-center gap-2">
+              <i id="ds-ratio-sum-icon" data-lucide="circle" class="w-4 h-4 text-gray-400"></i>
+              <span id="ds-ratio-sum-text" class="font-medium text-gray-700">部門加總：100%</span>
+            </div>
+            <span class="text-xs text-gray-500">須等於 100% 才可送出</span>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">比例輸入（即時驗算 + 範圍檢查）</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">業務一部</label>
+              <div class="relative">
+                <input type="number" class="ds-ratio-input w-full px-3 py-2 pr-8 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary" value="40" min="0" max="100" oninput="dsRatioRecalc()">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">業務二部</label>
+              <div class="relative">
+                <input type="number" class="ds-ratio-input w-full px-3 py-2 pr-8 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary" value="35" min="0" max="100" oninput="dsRatioRecalc()">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">業務三部</label>
+              <div class="relative">
+                <input type="number" class="ds-ratio-input w-full px-3 py-2 pr-8 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary" value="25" min="0" max="100" oninput="dsRatioRecalc()">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">變更上方數值（試試輸入 50、120 或 -5）觀察 banner 與欄位的即時反應。</p>
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">Out-of-range 錯誤狀態（自動套用）</p>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">範例：>100</label>
+              <div class="relative">
+                <input type="number" value="120" disabled class="w-full px-3 py-2 pr-8 border-2 border-danger rounded-md text-sm bg-red-50/30">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-danger">%</span>
+              </div>
+              <p class="text-xs text-danger mt-1 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i>不可超過 100</p>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">範例：&lt;0</label>
+              <div class="relative">
+                <input type="number" value="-5" disabled class="w-full px-3 py-2 pr-8 border-2 border-danger rounded-md text-sm bg-red-50/30">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-danger">%</span>
+              </div>
+              <p class="text-xs text-danger mt-1 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i>不可為負值</p>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">範例：非整數警告</label>
+              <div class="relative">
+                <input type="number" value="33" disabled class="w-full px-3 py-2 pr-8 border border-amber-300 rounded-md text-sm bg-amber-50/30">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-amber-600">%</span>
+              </div>
+              <p class="text-xs text-amber-700 mt-1 flex items-center gap-1"><i data-lucide="info" class="w-3 h-3"></i>建議用整數</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p class="font-semibold text-primary mb-1">Banner 三狀態：</p>
+          <ul class="list-disc ml-5 space-y-0.5">
+            <li><span class="font-medium">綠（=100%）</span> — 加總正確，可送出</li>
+            <li><span class="font-medium text-danger">紅（&ne;100%）</span> — 未達或超過，banner 顯示差額提示「目前 X%，差 Y%」</li>
+            <li><span class="font-medium text-gray-500">灰（編輯中 / 全空）</span> — 預設狀態</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ⑤ 離職 Badge + 代理狀態 ==================== -->
+    <section id="e07-resigned">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">⑤ 離職 Badge + proxyStatus 標示</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">離職員工 row（整列 opacity-60 + 灰色 badge）</p>
+          <div class="border border-border rounded overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b border-border">
+                <tr>
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-600">員工編號</th>
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-600">姓名</th>
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-600">部門</th>
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-600">狀態</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-600">比例</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                <tr><td class="px-4 py-2.5 font-mono text-xs">E0123</td><td class="px-4 py-2.5">王小明</td><td class="px-4 py-2.5"><span class="text-xs text-gray-500">業務一部</span></td><td class="px-4 py-2.5"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">在職</span></td><td class="px-4 py-2.5 text-right font-mono">25%</td></tr>
+                <tr class="opacity-60 bg-gray-50/40">
+                  <td class="px-4 py-2.5 font-mono text-xs">E0245</td>
+                  <td class="px-4 py-2.5"><span class="line-through">李離職</span></td>
+                  <td class="px-4 py-2.5"><span class="text-xs text-gray-500">業務一部</span></td>
+                  <td class="px-4 py-2.5">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600 font-medium">
+                      <i data-lucide="user-x" class="w-3 h-3"></i>離職
+                    </span>
+                  </td>
+                  <td class="px-4 py-2.5 text-right font-mono text-gray-400">—</td>
+                </tr>
+                <tr><td class="px-4 py-2.5 font-mono text-xs">E0367</td><td class="px-4 py-2.5">張在職</td><td class="px-4 py-2.5"><span class="text-xs text-gray-500">業務一部</span></td><td class="px-4 py-2.5"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">在職</span></td><td class="px-4 py-2.5 text-right font-mono">30%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">proxyStatus 兩種狀態</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="border border-border rounded p-3 flex items-start gap-3">
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="w-2 h-2 bg-amber-500 rounded-full"></span>
+                <span class="text-xs font-medium text-amber-700">部長代設定</span>
+              </div>
+              <div class="text-xs text-gray-600 flex-1">
+                <p>部長已替處長預設好個別比例，處長可直接「接受」或進行調整。</p>
+                <p class="mt-1 text-gray-400">tooltip: 部長於 YYYY-MM-DD 替您預設了 N 筆比例</p>
+              </div>
+            </div>
+            <div class="border border-border rounded p-3 flex items-start gap-3">
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                <span class="text-xs font-medium text-red-700">未設代理</span>
+              </div>
+              <div class="text-xs text-gray-600 flex-1">
+                <p>處長休假 / 缺位且未指派代理，部長將收到警示需介入處理。</p>
+                <p class="mt-1 text-gray-400">tooltip: 此處長尚未指派代理，請聯絡 IT 或 HR</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p><span class="font-semibold text-primary">使用情境：</span>30 部門比例、31 個別比例、33 簽核頁面用於標示員工 / 處長狀態。離職員工 row 仍顯示但不可編輯比例，已分派的歷史資料保留。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ⑥ 拒絕 Banner ==================== -->
+    <section id="e07-reject-banner">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">⑥ 拒絕 Banner（含 LocalStorage 折疊記憶）</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">展開狀態（首次顯示 / 未折疊）</p>
+          <div id="ds-reject-banner-full" class="rounded-lg p-4 bg-red-50 border border-red-200">
+            <div class="flex items-start gap-3">
+              <i data-lucide="alert-octagon" class="w-5 h-5 text-danger mt-0.5 shrink-0"></i>
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-red-900">本份清單（LIST-2026-05-001）曾被拒絕 2 次</p>
+                <div class="mt-2 space-y-2">
+                  <div class="text-xs bg-white border border-red-100 rounded p-2">
+                    <p class="text-gray-500">2026-05-12 14:32 — 由 <span class="font-medium text-gray-700">張部長</span> 拒絕</p>
+                    <p class="text-gray-800 mt-1">業務二部比例偏高，請參考上月慣例（25%）調整為 25-30% 區間。</p>
+                  </div>
+                  <div class="text-xs bg-white border border-red-100 rounded p-2">
+                    <p class="text-gray-500">2026-05-10 09:15 — 由 <span class="font-medium text-gray-700">張部長</span> 拒絕</p>
+                    <p class="text-gray-800 mt-1">缺少業務三部的個別比例設定。</p>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button onclick="dsRejectCollapse()" class="p-1.5 text-xs text-red-700 hover:bg-red-100 rounded inline-flex items-center gap-1" title="折疊">
+                  <i data-lucide="chevrons-up" class="w-3.5 h-3.5"></i>折疊
+                </button>
+                <button onclick="dsRejectDismiss()" class="p-1.5 text-red-700 hover:bg-red-100 rounded" title="關閉">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="ds-reject-banner-slim" class="hidden mt-2 rounded-lg p-2.5 bg-red-50/60 border border-red-200 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 text-red-800">
+              <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-danger"></i>
+              <span>有 2 筆拒絕記錄</span>
+            </div>
+            <button onclick="dsRejectExpand()" class="text-red-700 hover:underline inline-flex items-center gap-1">
+              <i data-lucide="chevrons-down" class="w-3 h-3"></i>展開
+            </button>
+          </div>
+
+          <div class="mt-3 flex gap-2">
+            <button onclick="dsRejectReset()" class="text-xs px-2 py-1 border border-border rounded hover:bg-gray-50 inline-flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i>重設範例狀態
+            </button>
+            <span class="text-xs text-gray-400 self-center">（LocalStorage key: <code>e07-reject-banner-dismiss-LIST-2026-05-001</code>）</span>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p class="font-semibold text-primary mb-1">行為規則：</p>
+          <ul class="list-disc ml-5 space-y-0.5">
+            <li>同一份清單在 LocalStorage 記憶折疊狀態（key 以 listNo 區隔）</li>
+            <li>「折疊」 → 切換到 slim banner（仍顯示，提醒用戶有拒絕記錄）</li>
+            <li>「關閉」 → 完全隱藏（但下次有新拒絕時自動重現）</li>
+            <li>LocalStorage 操作包 try/catch，incognito mode 也不會壞掉</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ⑦ Modal 模板系列 ==================== -->
+    <section id="e07-modals">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">⑦ Modal 模板系列（E07 專用 4 變體）</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-3">
+        <div class="flex flex-wrap gap-3">
+          <button onclick="dsOpenModal('ds-modal-rollback')" class="px-4 py-2 bg-white border border-danger text-danger rounded-md text-sm font-medium hover:bg-red-50 inline-flex items-center gap-1.5">
+            <i data-lucide="undo-2" class="w-4 h-4"></i>Rollback Modal（destructive）
+          </button>
+          <button onclick="dsOpenModal('ds-modal-advance')" class="px-4 py-2 bg-white border border-primary text-primary rounded-md text-sm font-medium hover:bg-blue-50 inline-flex items-center gap-1.5">
+            <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>推進 Modal（中性藍）
+          </button>
+          <button onclick="dsOpenModal('ds-modal-reject')" class="px-4 py-2 bg-white border border-warning text-warning rounded-md text-sm font-medium hover:bg-amber-50 inline-flex items-center gap-1.5">
+            <i data-lucide="message-square-warning" class="w-4 h-4"></i>拒絕原因 Modal（琥珀）
+          </button>
+          <button onclick="dsOpenModal('ds-modal-f089')" class="px-4 py-2 bg-white border border-gray-400 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50 inline-flex items-center gap-1.5">
+            <i data-lucide="arrow-left-circle" class="w-4 h-4"></i>F089 變體（ready→approval）
+          </button>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700 mt-4">
+          <p class="font-semibold text-primary mb-1">4 變體差異：</p>
+          <ul class="list-disc ml-5 space-y-0.5">
+            <li><span class="font-medium text-danger">Rollback</span>（紅色頂條 + 警示）：例如 indiv_ratio → dept_ratio，會清空已輸入資料，需顯示影響範圍預覽</li>
+            <li><span class="font-medium text-primary">推進</span>（藍色頂條）：例如 dept_ratio → indiv_ratio，提醒下一階段會鎖定本階段</li>
+            <li><span class="font-medium text-warning">拒絕原因</span>（琥珀頂條）：textarea 1~500 字，必填 + 字數計</li>
+            <li><span class="font-medium text-gray-700">F089 變體</span>（中性灰）：ready → approval rollback 不會清空資料，因此文案避免「清空」字眼</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ⑧ 獎懲快速模板按鈕 ==================== -->
+    <section id="e07-template-btn">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">⑧ 獎懲快速模板按鈕</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-5">
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">對「王小明」套用模板（其他 N-1 人均分剩餘）</p>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2 p-4 bg-gray-50 rounded">
+            <div class="border border-primary bg-white rounded p-2 text-center">
+              <p class="text-xs text-primary font-medium">王小明 ★</p>
+              <p id="ds-tpl-target" class="text-xl font-bold text-primary mt-1">25%</p>
+            </div>
+            <div class="border border-border bg-white rounded p-2 text-center">
+              <p class="text-xs text-gray-500">李大同</p>
+              <p class="ds-tpl-other text-xl font-bold text-gray-700 mt-1">25%</p>
+            </div>
+            <div class="border border-border bg-white rounded p-2 text-center">
+              <p class="text-xs text-gray-500">張三</p>
+              <p class="ds-tpl-other text-xl font-bold text-gray-700 mt-1">25%</p>
+            </div>
+            <div class="border border-border bg-white rounded p-2 text-center">
+              <p class="text-xs text-gray-500">陳四</p>
+              <p class="ds-tpl-other text-xl font-bold text-gray-700 mt-1">25%</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-gray-600 mb-2">快速模板（點擊覆蓋以 100/N 為基準計算）</p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="dsApplyTemplate(0.1)" class="px-4 py-2 bg-green-50 border border-green-300 text-green-800 rounded-md text-sm font-semibold hover:bg-green-100 inline-flex items-center gap-1.5">
+              <i data-lucide="trending-up" class="w-4 h-4"></i>+10% 獎勵
+            </button>
+            <button onclick="dsApplyTemplate(0.2)" class="px-4 py-2 bg-green-50 border border-green-300 text-green-800 rounded-md text-sm font-semibold hover:bg-green-100 inline-flex items-center gap-1.5">
+              <i data-lucide="trending-up" class="w-4 h-4"></i>+20% 獎勵
+            </button>
+            <button onclick="dsApplyTemplate(-0.1)" class="px-4 py-2 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm font-semibold hover:bg-red-100 inline-flex items-center gap-1.5">
+              <i data-lucide="trending-down" class="w-4 h-4"></i>-10% 懲罰
+            </button>
+            <button onclick="dsApplyTemplate(-0.2)" class="px-4 py-2 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm font-semibold hover:bg-red-100 inline-flex items-center gap-1.5">
+              <i data-lucide="trending-down" class="w-4 h-4"></i>-20% 懲罰
+            </button>
+            <button onclick="dsApplyTemplate(0)" class="px-4 py-2 bg-white border border-border text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50 inline-flex items-center gap-1.5">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>重設均分
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">每次模板套用都以 100/N 為基準重新計算（覆蓋式，非累加），避免多次點擊產生失控比例。</p>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
+          <p><span class="font-semibold text-primary">範例計算：</span>4 人均分 = 25% 一人。套用 +20% → 該員工 30%（25 × 1.2），其他 3 人均分 70% = 23.33% 一人。超過 100 / 低於 0 會被夾斷並 toast 提示。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ⑨ Toast 系統（E07 補充） ==================== -->
+    <section id="e07-toast">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">⑨ Toast 訊息系統（E07 補充情境）</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border space-y-3">
+        <p class="text-sm text-gray-600">沿用上方 Toast 系統，補充 E07 常見業務情境：</p>
+        <div class="flex flex-wrap gap-3">
+          <button onclick="showToast('success','已送出簽核','將通知部長 / 處長進行下一步')" class="px-3 py-1.5 bg-success text-white rounded text-xs font-medium hover:opacity-90">送出簽核</button>
+          <button onclick="showToast('error','加總不等於 100%','請調整部門比例至加總 = 100% 才可送出')" class="px-3 py-1.5 bg-danger text-white rounded text-xs font-medium hover:opacity-90">加總錯誤</button>
+          <button onclick="showToast('warning','「員工 E0245」已離職','其原 25% 比例將被忽略，請重新分配')" class="px-3 py-1.5 bg-warning text-white rounded text-xs font-medium hover:opacity-90">離職警告</button>
+          <button onclick="showToast('warning','「業務四部」已停用','從上月複製載入時將被忽略')" class="px-3 py-1.5 bg-warning text-white rounded text-xs font-medium hover:opacity-90">部門停用</button>
+          <button onclick="showToast('info','已套用「+20% 獎勵」模板','其他員工平均分配剩餘 70% 比例')" class="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:opacity-90">模板套用</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ⑩ JS Pattern 文件化 ==================== -->
+    <section id="e07-js-patterns">
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">⑩ 通用 JS Pattern（後續批次可重用）</h2>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-border">
+        <p class="text-sm text-gray-600 mb-4">以下函式皆已在本頁底部 <code>&lt;script&gt;</code> 內定義並可實際操作。後續 B2~B8 批次 prototype 可直接 copy-paste 同名實作。</p>
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 border-y border-border">
+            <tr>
+              <th class="text-left px-3 py-2 font-medium text-gray-600">函式</th>
+              <th class="text-left px-3 py-2 font-medium text-gray-600">用途</th>
+              <th class="text-left px-3 py-2 font-medium text-gray-600">使用頁面</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            <tr><td class="px-3 py-2 font-mono text-primary">initStageBadge(stage)</td><td class="px-3 py-2">輸入 stage（draft/dept_ratio/...）回傳 HTML string</td><td class="px-3 py-2 text-gray-500">27、30~34</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">renderRoleBadge(role)</td><td class="px-3 py-2">輸入 role 回傳 HTML string</td><td class="px-3 py-2 text-gray-500">10 個重要頁面 header</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">initRoleSwitcher(onChange)</td><td class="px-3 py-2">掛載 header 右上角色切換器（demo 用）</td><td class="px-3 py-2 text-gray-500">10 個重要頁面</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">initMonthPicker(currentYm, minYm, maxYm, onChange)</td><td class="px-3 py-2">月份切換器，自動處理範圍 + 歷史月份唯讀</td><td class="px-3 py-2 text-gray-500">27、29x、30~36</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">isHistoricalMonth(ym)</td><td class="px-3 py-2">判斷是否為歷史月份（&lt; today.YYYY-MM）</td><td class="px-3 py-2 text-gray-500">月份切換器內部用</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">initRatioInput(input, group)</td><td class="px-3 py-2">綁定即時驗算 + 範圍檢查 + group 加總</td><td class="px-3 py-2 text-gray-500">30、31、32</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">recalcRatioSum(group)</td><td class="px-3 py-2">重算 group 加總並更新 banner 顏色</td><td class="px-3 py-2 text-gray-500">30、31、32</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">initRejectBanner(listNo, rejections)</td><td class="px-3 py-2">含 LocalStorage 折疊記憶</td><td class="px-3 py-2 text-gray-500">27、30~34</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">openModal(id) / closeModal(id)</td><td class="px-3 py-2">統一 modal 開關 + body scroll lock</td><td class="px-3 py-2 text-gray-500">所有 E07 頁面</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">applyTemplate(targetIdx, delta, total)</td><td class="px-3 py-2">覆蓋式套用獎懲模板</td><td class="px-3 py-2 text-gray-500">31、32</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">showToast(type, title, msg)</td><td class="px-3 py-2">已存在於原 design system，可全頁面共用</td><td class="px-3 py-2 text-gray-500">所有頁面</td></tr>
+            <tr><td class="px-3 py-2 font-mono text-primary">safeLocalStorage.get(k) / set(k,v)</td><td class="px-3 py-2">try/catch 包覆，incognito 安全</td><td class="px-3 py-2 text-gray-500">所有頁面</td></tr>
+          </tbody>
+        </table>
+        <div class="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-gray-700 mt-4 flex items-start gap-2">
+          <i data-lucide="lightbulb" class="w-4 h-4 text-amber-600 mt-0.5"></i>
+          <div>
+            <p class="font-semibold text-amber-900">實作建議：</p>
+            <p>B2 起的每個 prototype 開頭 <code>&lt;script&gt;</code> 區段直接複製本頁 script 區段的 <code>dsXxx</code> / <code>safeLocalStorage</code> / <code>openModal</code> 等通用函式（拿掉 <code>ds</code> 前綴），保持 prototype 互不依賴但行為一致。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- E07 Modal Templates -->
+    <div id="ds-modal-rollback" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="dsCloseModal('ds-modal-rollback')"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+        <div class="h-1.5 bg-danger rounded-t-lg"></div>
+        <div class="p-6">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+              <i data-lucide="alert-triangle" class="w-5 h-5 text-danger"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">資料將被清空，無法復原</h3>
+              <p class="text-sm text-gray-600 mt-1">從「個別比例」回退至「部門比例」階段</p>
+            </div>
+          </div>
+          <div class="bg-red-50 border border-red-200 rounded p-3 text-sm">
+            <p class="font-semibold text-red-900 mb-1.5">影響範圍：</p>
+            <ul class="text-xs text-gray-700 space-y-0.5 ml-5 list-disc">
+              <li>3 個部門共 <span class="font-bold text-danger">23 筆</span>個別比例設定將被清除</li>
+              <li>歷史簽核紀錄保留</li>
+              <li>需重新進入「個別比例」階段重新設定</li>
+            </ul>
+          </div>
+          <label class="flex items-start gap-2 mt-4 p-2 bg-gray-50 rounded cursor-pointer">
+            <input type="checkbox" id="ds-rollback-check" onchange="document.getElementById('ds-rollback-btn').disabled=!this.checked" class="mt-0.5">
+            <span class="text-xs text-gray-700">我已了解此操作會清空資料且無法復原</span>
+          </label>
+          <div class="flex justify-end gap-3 mt-5">
+            <button onclick="dsCloseModal('ds-modal-rollback')" class="px-4 py-2 border border-border rounded-md text-sm hover:bg-gray-50">取消</button>
+            <button id="ds-rollback-btn" disabled onclick="dsCloseModal('ds-modal-rollback');showToast('success','已回退至部門比例','請通知處長重新設定個別比例')" class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed">確認回退</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ds-modal-advance" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="dsCloseModal('ds-modal-advance')"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+        <div class="h-1.5 bg-primary rounded-t-lg"></div>
+        <div class="p-6">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+              <i data-lucide="arrow-right-circle" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">推進至下一階段</h3>
+              <p class="text-sm text-gray-600 mt-1">部門比例 → 個別比例</p>
+            </div>
+          </div>
+          <div class="bg-blue-50 border border-blue-100 rounded p-3 text-sm text-gray-700">
+            <i data-lucide="info" class="w-4 h-4 text-primary inline mr-1"></i>
+            <span class="text-xs">推進後將鎖定本階段資料，需 rollback 才可重新編輯部門比例。</span>
+          </div>
+          <div class="flex justify-end gap-3 mt-5">
+            <button onclick="dsCloseModal('ds-modal-advance')" class="px-4 py-2 border border-border rounded-md text-sm hover:bg-gray-50">取消</button>
+            <button onclick="dsCloseModal('ds-modal-advance');showToast('success','已推進至個別比例階段','處長將收到通知')" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">確認推進</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ds-modal-reject" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="dsCloseModal('ds-modal-reject')"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+        <div class="h-1.5 bg-warning rounded-t-lg"></div>
+        <div class="p-6">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+              <i data-lucide="message-square-warning" class="w-5 h-5 text-warning"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">拒絕並退回</h3>
+              <p class="text-sm text-gray-600 mt-1">請說明拒絕原因（必填，1~500 字）</p>
+            </div>
+          </div>
+          <textarea id="ds-reject-textarea" rows="5" maxlength="500" oninput="dsRejectCount(this)" placeholder="請具體說明，例如：業務二部比例偏高，請參考上月慣例調整為 25-30% 區間" class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-warning"></textarea>
+          <div class="flex justify-between items-center mt-2 text-xs">
+            <span id="ds-reject-error" class="text-danger hidden">請填寫拒絕原因（至少 1 字）</span>
+            <span class="text-gray-400 ml-auto"><span id="ds-reject-count">0</span> / 500</span>
+          </div>
+          <div class="flex justify-end gap-3 mt-5">
+            <button onclick="dsCloseModal('ds-modal-reject')" class="px-4 py-2 border border-border rounded-md text-sm hover:bg-gray-50">取消</button>
+            <button onclick="dsRejectSubmit()" class="px-4 py-2 bg-warning text-white rounded-md text-sm font-medium hover:bg-amber-600">確認拒絕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ds-modal-f089" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" onclick="dsCloseModal('ds-modal-f089')"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+        <div class="h-1.5 bg-gray-400 rounded-t-lg"></div>
+        <div class="p-6">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
+              <i data-lucide="arrow-left-circle" class="w-5 h-5 text-gray-600"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">回退至「待簽核」階段</h3>
+              <p class="text-sm text-gray-600 mt-1">F089 — 從備援可用退回</p>
+            </div>
+          </div>
+          <div class="bg-gray-50 border border-gray-200 rounded p-3 text-sm text-gray-700">
+            <p class="text-xs">本次回退<span class="font-semibold text-gray-900">不會清除任何已輸入資料</span>，僅將狀態退回至「待簽核」階段，便於重新進行確認流程。</p>
+          </div>
+          <div class="flex justify-end gap-3 mt-5">
+            <button onclick="dsCloseModal('ds-modal-f089')" class="px-4 py-2 border border-border rounded-md text-sm hover:bg-gray-50">取消</button>
+            <button onclick="dsCloseModal('ds-modal-f089');showToast('info','已回退至待簽核','簽核者將收到通知重新處理')" class="px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-medium hover:bg-gray-700">確認回退</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ==================== Loading Skeleton ==================== -->
     <section>
       <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Loading Skeleton</h2>
@@ -636,6 +1310,255 @@
       lucide.createIcons();
       setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 5000);
     }
+
+    // ============================================================
+    // E07 通用 JS Pattern（後續批次可直接 copy-paste 拿掉 ds 前綴）
+    // ============================================================
+
+    // ---- safeLocalStorage：try/catch 包覆，incognito 安全 ----
+    const safeLocalStorage = {
+      get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+      set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* swallow */ } },
+      remove(key) { try { localStorage.removeItem(key); } catch (e) { /* swallow */ } }
+    };
+
+    // ---- 五階段 Badge ----
+    const STAGE_META = {
+      draft:       { label: '草稿',     bg: '#F3F4F6', fg: '#6B7280', icon: 'pencil' },
+      dept_ratio:  { label: '部門比例', bg: '#DBEAFE', fg: '#1E40AF', icon: 'building-2' },
+      indiv_ratio: { label: '個別比例', bg: '#CFFAFE', fg: '#0E7490', icon: 'users' },
+      approval:    { label: '待簽核',   bg: '#FEF3C7', fg: '#92400E', icon: 'stamp' },
+      ready:       { label: '備援可用', bg: '#DCFCE7', fg: '#15803D', icon: 'check-circle-2' }
+    };
+    function initStageBadge(stage) {
+      const m = STAGE_META[stage] || STAGE_META.draft;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+    }
+
+    // ---- 角色 Badge ----
+    const ROLE_META = {
+      minister: { label: '部長',   bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown' },
+      director: { label: '處長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog' },
+      admin:    { label: 'Admin',  bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check' },
+      sales:    { label: '業務',   bg: '#F3F4F6', fg: '#374151', icon: 'user' }
+    };
+    function renderRoleBadge(role) {
+      const m = ROLE_META[role] || ROLE_META.sales;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+    }
+    function updateRoleBadge(role) {
+      const container = document.getElementById('ds-role-badge-container');
+      if (container) { container.innerHTML = renderRoleBadge(role); lucide.createIcons(); }
+    }
+
+    // ---- 月份切換器 ----
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function ymToParts(ym) { const [y, m] = ym.split('-').map(Number); return { y, m }; }
+    function shiftYm(ym, delta) {
+      const { y, m } = ymToParts(ym);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+    function todayYm() {
+      const d = new Date();
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+    function isHistoricalMonth(ym) { return ym < todayYm(); }
+
+    const dsMpState = { current: todayYm(), min: shiftYm(todayYm(), -12), max: shiftYm(todayYm(), 12) };
+    function dsBuildMonthOptions() {
+      const select = document.getElementById('ds-mp-select');
+      if (!select) return;
+      select.innerHTML = '';
+      let cur = dsMpState.min;
+      const today = todayYm();
+      while (cur <= dsMpState.max) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        const isHist = cur < today;
+        opt.textContent = isHist ? `📅 ${cur}（歷史）` : (cur === today ? `${cur}（當月）` : cur);
+        if (isHist) opt.style.color = '#9CA3AF';
+        if (cur === dsMpState.current) opt.selected = true;
+        select.appendChild(opt);
+        cur = shiftYm(cur, 1);
+      }
+    }
+    function dsMonthShift(delta) {
+      const next = shiftYm(dsMpState.current, delta);
+      if (next < dsMpState.min || next > dsMpState.max) return;
+      dsMpState.current = next;
+      dsBuildMonthOptions();
+      dsUpdateMonthUi();
+    }
+    function dsMonthChange(ym) {
+      dsMpState.current = ym;
+      dsUpdateMonthUi();
+    }
+    function dsUpdateMonthUi() {
+      const prev = document.getElementById('ds-mp-prev');
+      const next = document.getElementById('ds-mp-next');
+      const label = document.getElementById('ds-mp-current-label');
+      const banner = document.getElementById('ds-mp-readonly-banner');
+      const empty = document.getElementById('ds-mp-readonly-empty');
+      const hint = document.getElementById('ds-mp-current-month-hint');
+      if (prev) prev.disabled = dsMpState.current <= dsMpState.min;
+      if (next) next.disabled = dsMpState.current >= dsMpState.max;
+      if (label) label.textContent = `（當前選擇：${dsMpState.current}${dsMpState.current === todayYm() ? ' 當月' : ''}）`;
+      if (hint) hint.textContent = todayYm();
+      if (banner && empty) {
+        if (isHistoricalMonth(dsMpState.current)) {
+          banner.classList.remove('hidden');
+          empty.classList.add('hidden');
+        } else {
+          banner.classList.add('hidden');
+          empty.classList.remove('hidden');
+        }
+      }
+    }
+
+    // ---- 比例輸入欄位 ----
+    function dsRatioRecalc() {
+      const inputs = document.querySelectorAll('.ds-ratio-input');
+      let sum = 0;
+      let hasError = false;
+      inputs.forEach(input => {
+        const v = parseFloat(input.value);
+        // out-of-range 標示
+        if (!isNaN(v) && (v < 0 || v > 100)) {
+          input.classList.add('border-2', 'border-danger');
+          input.classList.remove('border', 'border-border');
+          hasError = true;
+        } else {
+          input.classList.remove('border-2', 'border-danger');
+          input.classList.add('border', 'border-border');
+        }
+        if (!isNaN(v)) sum += v;
+      });
+
+      const banner = document.getElementById('ds-ratio-sum-banner');
+      const text = document.getElementById('ds-ratio-sum-text');
+      const icon = document.getElementById('ds-ratio-sum-icon');
+      if (!banner || !text || !icon) return;
+
+      if (hasError) {
+        banner.style.background = '#FEF2F2';
+        banner.style.borderColor = '#FECACA';
+        text.className = 'font-medium text-danger';
+        text.textContent = `欄位有錯誤值，請修正後再送出`;
+        icon.setAttribute('data-lucide', 'alert-circle');
+        icon.className = 'w-4 h-4 text-danger';
+      } else if (sum === 100) {
+        banner.style.background = '#F0FDF4';
+        banner.style.borderColor = '#BBF7D0';
+        text.className = 'font-medium text-green-700';
+        text.textContent = `部門加總：100% ✓`;
+        icon.setAttribute('data-lucide', 'check-circle');
+        icon.className = 'w-4 h-4 text-success';
+      } else {
+        banner.style.background = '#FEF2F2';
+        banner.style.borderColor = '#FECACA';
+        text.className = 'font-medium text-danger';
+        const diff = 100 - sum;
+        text.textContent = `部門加總：${sum}%（差 ${diff > 0 ? '+' : ''}${diff}%）`;
+        icon.setAttribute('data-lucide', 'alert-circle');
+        icon.className = 'w-4 h-4 text-danger';
+      }
+      lucide.createIcons();
+    }
+
+    // ---- 拒絕 Banner ----
+    const DS_REJECT_KEY = 'e07-reject-banner-dismiss-LIST-2026-05-001';
+    function dsRejectCollapse() {
+      document.getElementById('ds-reject-banner-full').classList.add('hidden');
+      document.getElementById('ds-reject-banner-slim').classList.remove('hidden');
+      safeLocalStorage.set(DS_REJECT_KEY, 'collapsed');
+    }
+    function dsRejectExpand() {
+      document.getElementById('ds-reject-banner-full').classList.remove('hidden');
+      document.getElementById('ds-reject-banner-slim').classList.add('hidden');
+      safeLocalStorage.set(DS_REJECT_KEY, 'expanded');
+    }
+    function dsRejectDismiss() {
+      document.getElementById('ds-reject-banner-full').classList.add('hidden');
+      document.getElementById('ds-reject-banner-slim').classList.add('hidden');
+      safeLocalStorage.set(DS_REJECT_KEY, 'dismissed');
+    }
+    function dsRejectReset() {
+      safeLocalStorage.remove(DS_REJECT_KEY);
+      document.getElementById('ds-reject-banner-full').classList.remove('hidden');
+      document.getElementById('ds-reject-banner-slim').classList.add('hidden');
+      showToast('info', '已重設範例狀態', '拒絕 banner 回到預設展開狀態');
+    }
+    function dsApplyRejectMemory() {
+      const state = safeLocalStorage.get(DS_REJECT_KEY);
+      if (state === 'collapsed') { dsRejectCollapse(); }
+      else if (state === 'dismissed') { dsRejectDismiss(); }
+    }
+
+    // ---- Modal ----
+    function dsOpenModal(id) {
+      const m = document.getElementById(id);
+      if (m) { m.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+    }
+    function dsCloseModal(id) {
+      const m = document.getElementById(id);
+      if (m) { m.classList.add('hidden'); document.body.style.overflow = ''; }
+      // 重置 rollback checkbox
+      const cb = document.getElementById('ds-rollback-check');
+      if (cb) { cb.checked = false; document.getElementById('ds-rollback-btn').disabled = true; }
+      // 重置 reject textarea
+      const ta = document.getElementById('ds-reject-textarea');
+      if (ta) { ta.value = ''; document.getElementById('ds-reject-count').textContent = '0'; document.getElementById('ds-reject-error').classList.add('hidden'); }
+    }
+    function dsRejectCount(ta) {
+      document.getElementById('ds-reject-count').textContent = ta.value.length;
+      if (ta.value.length > 0) document.getElementById('ds-reject-error').classList.add('hidden');
+    }
+    function dsRejectSubmit() {
+      const ta = document.getElementById('ds-reject-textarea');
+      if (!ta.value.trim()) {
+        document.getElementById('ds-reject-error').classList.remove('hidden');
+        ta.focus();
+        return;
+      }
+      dsCloseModal('ds-modal-reject');
+      showToast('warning', '已退回', '拒絕原因已通知申請人，等待重新送件');
+    }
+
+    // ---- 獎懲快速模板 ----
+    let dsTplState = { total: 4, base: 25 }; // 預設 4 人均分 25%
+    function dsApplyTemplate(delta) {
+      const target = dsTplState.base * (1 + delta); // 王小明的新比例
+      const targetClamped = Math.max(0, Math.min(100, target));
+      const remaining = 100 - targetClamped;
+      const othersCount = dsTplState.total - 1;
+      const otherShare = othersCount > 0 ? (remaining / othersCount) : 0;
+      const otherShareClamped = Math.max(0, Math.min(100, otherShare));
+
+      // 範圍警告
+      if (target !== targetClamped) {
+        showToast('warning', '比例超出範圍', `已自動調整為 ${targetClamped}%（原值 ${target.toFixed(1)}% 超出 0-100）`);
+      }
+
+      document.getElementById('ds-tpl-target').textContent = `${targetClamped.toFixed(targetClamped % 1 === 0 ? 0 : 1)}%`;
+      document.querySelectorAll('.ds-tpl-other').forEach(el => {
+        el.textContent = `${otherShareClamped.toFixed(otherShareClamped % 1 === 0 ? 0 : 2)}%`;
+      });
+
+      if (delta === 0) {
+        showToast('info', '已重設均分', `${dsTplState.total} 人均分 = 25% 一人`);
+      } else if (delta !== 0 && target === targetClamped) {
+        const label = delta > 0 ? `+${(delta * 100).toFixed(0)}% 獎勵` : `${(delta * 100).toFixed(0)}% 懲罰`;
+        showToast('info', `已套用「${label}」`, `其他 ${othersCount} 人平均分配剩餘 ${remaining.toFixed(0)}% 比例`);
+      }
+    }
+
+    // ---- 初始化 ----
+    dsBuildMonthOptions();
+    dsUpdateMonthUi();
+    dsApplyRejectMemory();
+    // 確保比例初始狀態正確顯示
+    dsRatioRecalc();
   </script>
 </body>
 </html>

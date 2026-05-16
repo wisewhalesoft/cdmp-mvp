@@ -1,0 +1,81 @@
+%% F082 / F083 / F084 / F085 v1.0 個別業務比例設定整合流程（含轄區 Guard / 模板套用 / advance / rollback）
+%% 引用：features/F082-set-personnel-ratio.md / F083-quick-ratio-template.md / F084-advance-to-approval.md / F085-rollback-to-dept-ratio.md
+flowchart TD
+    Start([使用者在 F077 個別業務比例設定階段視圖看到名單<br/>stage = personnel_ratio]) --> RoleCheck{角色為何？}
+
+    RoleCheck -- 其他角色 --> Hide[操作按鈕完全不渲染]
+    Hide --> EndForbidden([結束：無權限])
+
+    RoleCheck -- Director / Admin --> ButtonGroup{選擇操作}
+    RoleCheck -- SectionChief --> ButtonGroupSC{選擇操作<br/>Rollback 不可見}
+
+    %% ============ F082 設定個別業務比例 ============
+    ButtonGroup -- 設定個別比例 --> F082Page[進入 F082 設定頁<br/>GET /assignment/ratios/personnel/listNo]
+    ButtonGroupSC -- 設定個別比例 --> F082Page
+
+    F082Page --> ScopeFilter{Service 層 scopeByCreator<br/>處長僅回轄區內<br/>Director / Admin 不過濾}
+    ScopeFilter --> RenderDept[渲染部門子表<br/>每位業務員載入 RATION 或預設 100/N]
+    RenderDept --> EditMode[進入編輯模式]
+
+    %% ---- 模板套用子流程 F083 ----
+    EditMode --> TemplateChoice{使用者操作}
+    TemplateChoice -- 點擊模板按鈕 +-10/20% --> TemplateCalc[F083 前端計算<br/>defaultRation = 100 / N<br/>EMP_X = defaultRation + delta<br/>其餘均分 = 100 - EMP_X / N - 1]
+    TemplateCalc --> RangeCheckTpl{所有 RATION 落於 0~100？}
+    RangeCheckTpl -- 否 --> ToastTplErr[Toast：套用後 EMP_X 比例為 N%<br/>超出 0~100% 範圍<br/>不執行調整]
+    ToastTplErr --> EditMode
+    RangeCheckTpl -- 是 --> UpdateInputs[即時更新部門子表所有 RATION 輸入框]
+    UpdateInputs --> EditMode
+
+    TemplateChoice -- 手動輸入 RATION --> ManualEdit[修改輸入框值]
+    ManualEdit --> SumCheck{部門加總落於 99.99~100.01？}
+    SumCheck -- 否 --> DisableSave[該部門儲存按鈕 disabled<br/>提示：deptName 加總 N% 需調整至 100%]
+    DisableSave --> EditMode
+    SumCheck -- 是 --> RangeCheck{單欄位 RATION 落於 0~100？}
+    RangeCheck -- 否 --> ShowRangeErr[顯示比例需介於 0 到 100 之間]
+    ShowRangeErr --> EditMode
+    RangeCheck -- 是 --> ClickSave[點擊該部門儲存]
+
+    ClickSave --> SaveAPI[PUT /assignment/ratios/personnel/listNo<br/>body: deptCode + employees + appliedTemplate?]
+    SaveAPI --> SaveGuards{Guards：<br/>SectionChiefOrAboveGuard +<br/>SectionChiefScopeGuard +<br/>stage = personnel_ratio +<br/>非月跑 + 非歷史月份 +<br/>ob_dept_pct 含此 deptCode}
+    SaveGuards -- 失敗 --> ReturnSaveErr[回對應錯誤碼<br/>PERSONNEL_RATIO_OUT_OF_SCOPE 403 /<br/>PERSONNEL_RATIO_DEPT_NOT_FOUND 422 /<br/>LIST_STAGE_TRANSITION_FORBIDDEN 422 /<br/>ASSIGNMENT_RUN_ALREADY_RUNNING 409 /<br/>LIST_HISTORICAL_READONLY 403]
+    SaveGuards -- 通過 --> ValidateSum{PersonnelRatioValidationService<br/>per-DEPT 加總 = 100% +<br/>各 RATION 0~100}
+    ValidateSum -- 失敗 --> Return422[422 PERSONNEL_RATIO_SUM_NOT_100 或<br/>RATIO_OUT_OF_RANGE 或<br/>BONUS_PENALTY_TEMPLATE_INVALID]
+    ValidateSum -- 通過 --> SaveTx[DB transaction:<br/>1. DELETE FROM ob_empl_set<br/>   WHERE list_no, deptid_m<br/>2. INSERT new RATION rows<br/>   created_by = currentUserId<br/>3. INSERT assignment_audit_log<br/>   action = SET_PERSONNEL_RATIO<br/>   metadata.deptid_m = deptCode]
+    SaveTx --> SaveSuccess[200 OK<br/>toast：deptName 個別業務比例已儲存]
+    SaveSuccess --> EndSave([結束：儲存完成<br/>該部門子表切換唯讀])
+
+    %% ============ F084 推進至簽核 ============
+    ButtonGroup -- 推進至簽核 --> F084Click[點擊推進按鈕]
+    ButtonGroupSC -- 推進至簽核 --> F084Click
+    F084Click --> AdvanceAPI[POST /list-definitions/listNo/advance-to-approval]
+    AdvanceAPI --> AdvanceGuards{Guards：SectionChiefOrAboveGuard +<br/>stage = personnel_ratio +<br/>非月跑 + 非歷史月份}
+    AdvanceGuards -- 失敗 --> ReturnAdvanceAuthErr[回對應錯誤碼]
+
+    AdvanceGuards -- 通過 --> Pre1{ob_dept_pct 至少 1 筆？}
+    Pre1 -- 否 --> R422_empty[422 STAGE_ADVANCE_PRECONDITION_FAILED<br/>reason: dept_ratio_empty]
+    Pre1 -- 是 --> Pre2{對每個部門：ob_empl_set<br/>per-DEPT 加總 = 100% 容忍 0.01？}
+    Pre2 -- 否 --> R422_incomplete[422 STAGE_ADVANCE_PRECONDITION_FAILED<br/>reason: personnel_ratio_incomplete_depts<br/>details.incompleteDepts]
+    Pre2 -- 是 --> AdvanceModal[Modal：確認推進對話框<br/>警告：推進後個別業務比例將鎖定]
+    AdvanceModal --> AdvanceConfirm{使用者選擇}
+    AdvanceConfirm -- 取消 --> EndCancel([結束：取消])
+    AdvanceConfirm -- 確認推進 --> AdvanceTx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = approval<br/>2. INSERT assignment_audit_log<br/>   action = ADVANCE_STAGE<br/>   metadata.advancedByRole]
+    AdvanceTx --> AdvanceSuccess[200 OK<br/>toast：已推進至簽核階段<br/>等待部長核准]
+    AdvanceSuccess --> EndAdvance([結束：推進成功<br/>F082 PUT 從此鎖定<br/>下一步交由 M03c 簽核 spec])
+
+    %% ============ F085 Rollback 至部門比例（限 Director/Admin） ============
+    ButtonGroup -- 退回部門比例 --> F085Click[點擊退回部門比例按鈕]
+    F085Click --> RollbackModal[Modal：紅色警示對話框<br/>所有部門個別業務比例將全部清空<br/>含其他處長設定<br/>無法復原<br/>影響範圍預覽：N 位業務員 / M 個部門]
+    RollbackModal --> RollbackConfirm{使用者選擇}
+    RollbackConfirm -- 取消 --> EndCancelRb([結束：取消])
+
+    RollbackConfirm -- 確認退回 --> RollbackAPI[POST /list-definitions/listNo/rollback-to-dept-ratio]
+    RollbackAPI --> RollbackGuards{Guards：DirectorGuard +<br/>stage = personnel_ratio +<br/>非月跑 + 非歷史月份}
+    RollbackGuards -- 失敗 --> ReturnRollbackErr[回對應錯誤碼<br/>E07_FORBIDDEN_DIRECTOR_ONLY 403<br/>STAGE_ROLLBACK_BLOCKED 422<br/>reason: wrong_source_stage]
+    RollbackGuards -- 通過 --> RollbackTx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = dept_ratio<br/>2. DELETE FROM ob_empl_set<br/>   WHERE list_no = listNo<br/>   跨轄區全部清空<br/>3. INSERT assignment_audit_log<br/>   action = ROLLBACK_STAGE<br/>   before.personnelRatios = 完整快照<br/>   metadata.deletedRowCount]
+    RollbackTx --> RollbackSuccess[200 OK<br/>toast：已退回部門比例設定階段<br/>個別業務比例已清空 N 筆<br/>ob_dept_pct 保留]
+    RollbackSuccess --> EndRollback([結束：Rollback 成功<br/>F079 PUT 重新可寫入<br/>F080 可重新推進])
+
+    %% ============ Service 層共用 helper 註記 ============
+    SaveTx -.沿用.-> Helper1[StageTransitionService.assertStageEquals<br/>+ PersonnelRatioValidationService.assertDeptSumEquals100]
+    AdvanceTx -.沿用.-> Helper2[StageTransitionService.advanceTo<br/>+ PersonnelRatioValidationService.assertAllDeptsSumEquals100]
+    RollbackTx -.沿用.-> Helper3[StageTransitionService.rollbackTo<br/>cleanupFn: DELETE ob_empl_set 跨轄區]

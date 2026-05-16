@@ -1,0 +1,342 @@
+---
+spec-id: F088
+title: 準備完成階段查詢摘要（部長 + 處長 + Admin 唯讀，含轄區過濾）
+feature-id: F088
+source-story: US-118
+epic: E07
+module: M03d 準備完成階段
+priority: P0-MVP
+version: "1.2"
+date: 2026-05-16
+status: Draft
+---
+
+# F088: 準備完成階段查詢摘要（部長 + 處長 + Admin 唯讀，含轄區過濾）
+
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+
+> **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔，本版本依 US-118 + AD-E07 v3.0 一致性決議完整重建；Guard 統一為 `DirectorOrSectionChiefGuard`（admin / director / section_chief 三角色 + service 層 `scopeByCreator()` 過濾處長轄區）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊；保留 v1.1 之月跑前置條件聚合提示。
+
+## Agent Loading Guide
+
+| Agent 角色 | 需載入的檔案 |
+|-----------|-------------|
+| TDD Developer | 本文件 + `data-model.md#ob-list-definition-stage` + `data-model.md#ob-dept-pct-obmdeptpct--per-list-no-部門比例` + `data-model.md#ob-empl-set-obemplsetmf--人員比例設定` + `error-handling.md#assignment-stage-transition-errors` |
+| QA / Tester | 本文件 + `error-handling.md#assignment-stage-transition-errors` |
+| UI/UX Designer | 本文件 §7 + `F082-set-personnel-ratio.md` §7（業務員比例顯示樣式參考） |
+| Architect | 本文件 + `architecture-spec.md` §3.10（含 `scopeByCreator()` helper） |
+
+---
+
+## 對應 User Story
+
+- 來源 Story：[US-118-M03d-ready-stage-summary.md](../../stories/epics/E07-app-customer-list-assignment/US-118-M03d-ready-stage-summary.md)
+- Epic：[E07 — 客戶名單分派](../../stories/epics/E07-app-customer-list-assignment/epic-brief.md)
+- 模組：M03d 準備完成階段
+
+---
+
+## 1. 功能摘要
+
+提供部長 / 處長 / Admin 查詢 `stage = 'ready'` 名單之完整設定摘要：篩選條件、部門比例、個別業務比例、CR 開關狀態。本頁面為**完全唯讀**（無任何編輯按鈕），主要用途：
+
+1. 月跑前最終確認所有名單設定正確
+2. 部長透過本頁面確認「所有 active 名單均已就緒」後觸發月跑（F061 前置條件）
+
+**範圍**：
+- 處長僅可查看本轄區之 ready 名單與本轄區業務員比例（依 `created_by` 過濾，沿用 F074 BR-1）
+- 部長 / Admin 可查看所有 ready 名單與所有部門業務員比例
+- 任何修改請求一律 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（需先 F089 Rollback 至 `approval`）
+
+## 2. 使用者故事
+
+**As a** 部長（Director）/ 處長（Section Chief）/ Admin
+**I want** 在名單進入「準備完成」階段後，查看該名單完整設定摘要
+**So that** 月跑前可做最終確認，避免帶著錯誤設定進入月跑
+
+## 3. 前置條件
+
+- 使用者已通過 E01 驗證並持有 JWT Token
+- 使用者具「部長」或「處長」或「Admin」權限
+- 至少一份名單 `stage = 'ready'`
+
+## 4. 驗收標準
+
+### AC-1：準備完成名單清單頁
+
+- **Given** 部長 / Admin 進入 F077 五階段總覽頁
+- **When** 篩選顯示 `stage = 'ready'` 之名單，或點擊「準備完成」頁籤
+- **Then** 顯示所有 ready 狀態之名單清單（`list_no` / `list_nm` / 最後更新時間 / 核准者帳號 / 核准時間）
+- **And** 處長進入相同頁面時，**僅顯示本轄區**（service 層依 `scopeByCreator()` 過濾）之 ready 名單
+
+### AC-2：查看單一名單完整設定摘要
+
+- **Given** 部長 / 處長 / Admin 在 ready 名單清單點擊某名單
+- **When** 進入名單詳情頁（GET `/api/v1/assignment/lists/{listNo}/ready-summary`）
+- **Then** 顯示以下 4 個區塊（均為唯讀）：
+  1. **篩選條件**：展開顯示所有篩選欄位與條件值（JSONB 轉換為可讀格式）
+  2. **部門比例**：各部門 `dept_name` + `ration`（%）表格，底部顯示加總（應 = 100%）
+  3. **個別業務比例**：按部門分組，各業務員 `emp_nm` + `ration`（%），各部門底部顯示加總
+  4. **CR 回分開關**：顯示「啟用 / 停用」狀態
+- **And** 頁面無任何「編輯」「修改」「儲存」等可操作按鈕或控件
+
+### AC-3：處長僅可查看本轄區業務員比例
+
+- **Given** 帳號 `business_role = 'section_chief'`
+- **When** 查看 ready 名單清單或詳情頁
+- **Then** 個別業務比例區塊**僅顯示本處長轄區的部門業務員**（其他部門業務員不顯示）
+- **And** 篩選條件、部門比例、CR 開關可完整查看（全名單共用，非按轄區過濾）
+
+### AC-4：月跑前置條件聚合提示（部長 / Admin）
+
+- **Given** 部長或 Admin 在 ready 名單清單頁
+- **When** 頁面載入
+- **Then** 系統呼叫 GET `/api/v1/assignment/ready-summary?ym={currentWorkYm}` 取得當月 active 名單聚合狀態
+- **And** 若本月所有 active 名單（`status = 'active'` 且非 `'draft'`）均已進入 `'ready'` 狀態，頁面頂部顯示綠色提示「所有名單已就緒，可觸發月跑」
+- **And** 若仍有名單未達 ready，頁面頂部顯示警告提示「以下名單尚未就緒：{listNm}（{stage 中文}）...」，含跳轉連結至對應名單
+
+### AC-5：唯讀保護（後端守衛）
+
+- **Given** 名單 `stage = 'ready'`
+- **When** 任何使用者透過 API 嘗試修改篩選條件 / 部門比例 / 個別業務比例 / CR 開關
+- **Then** 後端回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`，提示「準備完成階段的名單設定為唯讀，如需修改請先 Rollback 至簽核」
+
+### AC-6：歷史月份查詢
+
+- **Given** 名單 `project_workym < current_work_ym`
+- **When** 使用者查詢 ready 名單
+- **Then** GET 端點允許查詢（歷史唯讀 OK）
+- **And** UI 標示「歷史月份（{projectWorkym}）」
+
+### AC-7：處長跨轄區查詢防護
+
+- **Given** 處長 A 嘗試查詢處長 B 之轄區業務員比例
+- **When** GET `/api/v1/assignment/lists/{listNo}/ready-summary?deptCode={處長 B 轄區之部門}`
+- **Then** service 層 `scopeByCreator()` 過濾後，回 200 OK 但 `individualRatios.departments` 為空陣列（不洩漏他人轄區存在性）
+- **And** 篩選條件、部門比例、CR 開關仍正常顯示（這些為全名單共用資料）
+
+## 5. API 規格
+
+### 5.1 GET /api/v1/assignment/lists/{listNo}/ready-summary
+
+| 屬性 | 值 |
+|---|---|
+| 用途 | 取得單一 ready 名單之完整設定摘要 |
+| 認證 | JWT 必填 |
+| 授權 | `DirectorOrSectionChiefGuard`（admin OR business_role IN ('director', 'section_chief')） |
+
+**Response — 200 OK**
+
+```json
+{
+  "listNo": "OB202605001",
+  "listNm": "車貸催收名單",
+  "projectWorkym": "202605",
+  "stage": "ready",
+  "approverName": "張部長",
+  "approvedAt": "2026-05-15T13:00:00Z",
+  "filterConditions": {
+    "prodKind": ["01", "02"],
+    "overdueDays": { "min": 30, "max": 90 }
+  },
+  "deptRatios": [
+    { "deptCode": "XTC0", "deptName": "業務一處", "ration": 30.0 },
+    { "deptCode": "XTD0", "deptName": "業務二處", "ration": 70.0 }
+  ],
+  "deptRatioSum": 100.0,
+  "individualRatios": {
+    "departments": [
+      {
+        "deptCode": "XTC0",
+        "deptName": "業務一處",
+        "deptRatio": 30.0,
+        "isInScope": true,
+        "employees": [
+          { "empId": "EMP001", "empName": "張三", "ration": 60.0 },
+          { "empId": "EMP002", "empName": "李四", "ration": 40.0 }
+        ],
+        "deptSum": 100.0
+      }
+    ]
+  },
+  "crEnabled": true
+}
+```
+
+> 處長視角下，`individualRatios.departments` 僅含本轄區部門；部長 / Admin 視角下含所有部門。
+
+### 5.2 GET /api/v1/assignment/ready-summary
+
+| 屬性 | 值 |
+|---|---|
+| 用途 | 取得當月 ready 名單聚合狀態，供月跑前置條件提示 |
+| 認證 | JWT 必填 |
+| 授權 | `DirectorGuard`（admin OR business_role = 'director'） |
+
+**Query 參數**
+
+| 名稱 | 必填 | 說明 |
+|------|------|------|
+| `ym` | 是 | 工作月份（格式 YYYYMM）；通常為 current_work_ym |
+
+**Response — 200 OK**
+
+```json
+{
+  "workYm": "202605",
+  "totalActiveLists": 5,
+  "readyCount": 4,
+  "notReadyLists": [
+    { "listNo": "OB202605005", "listNm": "個貸名單", "stage": "personnel_ratio" }
+  ],
+  "allReady": false,
+  "monthlyRunStatus": "pending"
+}
+```
+
+> `allReady = true` 表示所有 active 名單均為 ready，前端顯示綠色提示「所有名單已就緒，可觸發月跑」；`false` 時顯示警告與 `notReadyLists`。
+
+**錯誤回應（兩端點共用）**
+
+| HTTP | 錯誤碼 | 說明 |
+|---|---|---|
+| 401 | AUTH_TOKEN_MISSING / AUTH_TOKEN_EXPIRED | 未登入或 Token 過期 |
+| 403 | AUTH_FORBIDDEN | 非 admin / director / section_chief 任一身份 |
+| 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在（5.1 端點） |
+| 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
+| 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'ready'`（5.1 端點） |
+| 503 | FEATURE_NOT_ENABLED | feature flag `ENABLE_E07_REFACTOR_PHASE3 = false` |
+
+## 6. 商業規則
+
+| 規則編號 | 說明 |
+|---|---|
+| BR-1 | **完全唯讀**：本 spec 不提供任何寫入端點；任何修改請求由其他 spec（F079 / F082 / F086 / F089）負責，且要求對應的 stage 條件 |
+| BR-2 | **處長轄區過濾**：service 層使用 `scopeByCreator()` helper 過濾 `individualRatios.departments`；部門比例、篩選條件、CR 開關**不過濾**（全名單共用） |
+| BR-3 | **角色矩陣**：admin / director / section_chief 三角色可查詢；其他回 403 `AUTH_FORBIDDEN` |
+| BR-4 | **聚合查詢僅部長 / Admin**：5.2 端點僅供部長 / Admin 使用（處長無此聚合需求），由 `DirectorGuard` 保護 |
+| BR-5 | **聚合查詢範圍**：`totalActiveLists` 計算 `status = 'active'` 且 `stage != 'draft'` 之名單；`readyCount` 計算其中 `stage = 'ready'` 者；`allReady = (readyCount === totalActiveLists)` |
+| BR-6 | **月跑狀態欄位**：`monthlyRunStatus` 反映當月 `assignment_run` 最新狀態，可能值：`'none'`（尚未觸發）/ `'pending'` / `'running'` / `'completed'` / `'failed'`；若 `status = 'running'` 則前端隱藏「觸發月跑」按鈕並顯示「分派執行中」 |
+| BR-7 | **歷史月份允許查詢**：與 F082 / F079 寫入端點不同，本 spec 查詢端點允許歷史月份；UI 標示「歷史月份」即可 |
+| BR-8 | **CR 開關來源**：`cr_enabled` 欄位儲存位置依 F048 / US-120 規範；本 spec 僅讀取 |
+| BR-9 | **Feature Flag fallback**：本 spec 兩端點均掛 `FeatureFlagGuard`；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
+
+## 7. UI/UX 需求
+
+- **準備完成名單清單頁**：
+  - F077 五階段總覽頁中「準備完成」頁籤
+  - 表格欄位：`list_no` / `list_nm` / 最後更新時間 / 核准者 / 核准時間 / 「查看摘要」連結
+  - 部長 / Admin 視角：頁首顯示**月跑前置條件聚合提示 banner**：
+    - `allReady = true` → 綠色 banner「所有名單已就緒，可觸發月跑」+ 「觸發月跑」按鈕（連至 F061）
+    - `allReady = false` → 警告色 banner「以下名單尚未就緒：{listNm}（{stage 中文}）...」+ 各名單之跳轉連結
+  - 處長視角：僅顯示本轄區之 ready 名單（無聚合提示 banner）
+- **名單詳情頁布局**：
+  - 標題：「準備完成階段摘要：{listNm}（{listNo}）」
+  - 唯讀提示 banner：「此名單已進入準備完成階段，所有設定為唯讀。如需修改請先 Rollback 至簽核階段（部長 / Admin）」
+  - 區塊 1 — **篩選條件**：可摺疊區塊，展開顯示 JSONB 之各欄位與條件值（建議以 key-value table 或巢狀清單呈現）
+  - 區塊 2 — **部門比例**：表格，欄位：部門代號 / 部門名稱 / 比例（%）；底部「加總：100%」
+  - 區塊 3 — **個別業務比例**：按部門分組之子區塊，每部門一表格，欄位：員工工號 / 員工姓名 / 比例（%）；各部門底部「加總：100%」
+    - 處長視角：僅本轄區部門
+    - 部長 / Admin 視角：所有部門
+  - 區塊 4 — **CR 回分開關**：簡單標示「啟用」/「停用」（可加 icon）
+- **核准資訊區塊**：頁面右上角顯示「核准者：{approverName} / 核准時間：{approvedAt 格式化}」
+- **跳轉動作（部長 / Admin）**：
+  - 頁面底部「Rollback 至簽核」按鈕（連至 F089，僅部長 / Admin 可見）
+  - 「觸發月跑」按鈕（如 `allReady = true`，連至 F061）
+- **無觸發月跑權限提示**：處長視角不顯示「觸發月跑」按鈕
+
+## 8. 相依性
+
+- **Blocked By**：
+  - F086（核准至 ready，提供 `stage = 'ready'` 名單）
+  - F082（個別業務比例設定，提供 `ob_empl_set` 資料）
+  - F079（部門比例設定，提供 `ob_dept_pct` 資料）
+  - F073（部長角色）/ F074（處長角色與轄區）
+  - F077（五階段總覽，本 spec 入口）
+- **Blocks**：
+  - F061（月跑觸發，本 spec 提供月跑前置條件聚合確認入口）
+  - F089（準備完成 Rollback，本 spec 之逆操作入口）
+
+## 9. 交叉參考
+
+- **權威矩陣**：[F002 §4.6 E07 角色矩陣](F002-user-login.md#e07-角色矩陣)
+- **資料模型**：
+  - [data-model.md#ob-list-definition-stage](../data-model.md#ob-list-definition-stage)（含 `stage` / `cr_enabled` / `filter_conditions`）
+  - [data-model.md#ob-dept-pct-obmdeptpct--per-list-no-部門比例](../data-model.md#ob_dept_pctobmdeptpct--per-list-no-部門比例)
+  - [data-model.md#ob-empl-set-obemplsetmf--人員比例設定](../data-model.md#ob_empl_setobemplsetmf--人員比例設定)
+  - [data-model.md#assignment-approval-entity](../data-model.md#assignment-approval-entity)（核准者資訊）
+- **錯誤處理**：[error-handling.md#assignment-stage-transition-errors](../error-handling.md#assignment-stage-transition-errors)
+- **架構決策**：
+  - [F074](F074-define-section-chief-role.md)（處長轄區 + `scopeByCreator()` helper）
+  - AD-E07 v3.0（Guard 體系）
+- **相關功能**：
+  - [F077](F077-month-switch-and-stage-overview.md)（本 spec 入口）
+  - [F086](F086-approve-to-ready.md)（核准至 ready）
+  - [F087](F087-reject-to-personnel-ratio.md)（簽核拒絕，本 spec 之逆方向之一）
+  - [F089](F089-rollback-to-approval.md)（M03d Rollback，本 spec 之逆操作）
+  - [F061](F061-trigger-assignment-run.md)（月跑觸發，本 spec 為前置條件確認入口）
+  - [F082](F082-set-personnel-ratio.md)（個別業務比例設定，本 spec 之資料來源 + UI 樣式參考）
+  - [F079](F079-set-dept-ratio.md)（部門比例設定，本 spec 之資料來源）
+- **圖表**：[diagrams/F088-ready-summary-flow.mmd](../diagrams/F088-ready-summary-flow.mmd)（含聚合查詢 + 月跑前置條件判斷流程）
+
+## 10. 測試覆蓋率要求
+
+- 單元測試覆蓋率 ≥ 80%
+- 後端關鍵測試案例：
+  - 部長 GET 5.1 → 回傳完整 4 區塊資料（含所有部門業務員比例）
+  - 處長 GET 5.1 → 回傳完整 4 區塊資料，但 `individualRatios.departments` 僅本轄區
+  - Admin GET 5.1 → 同部長視角
+  - GET 5.1 `stage != 'ready'` → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
+  - GET 5.1 `list_no` 不存在 → 404 `ASSIGNMENT_LIST_NOT_FOUND`
+  - GET 5.1 已停用名單 → 422 `ASSIGNMENT_LIST_INACTIVE`
+  - GET 5.1 歷史月份 → 200 OK（允許查詢）
+  - 一般 user GET 5.1 → 403 `AUTH_FORBIDDEN`
+  - 部長 GET 5.2 `allReady = true` 場景 → 回傳 `allReady: true` + 空 `notReadyLists`
+  - 部長 GET 5.2 `allReady = false` 場景 → 回傳 `allReady: false` + 含未就緒名單清單
+  - 處長 GET 5.2 → 403 `AUTH_FORBIDDEN`（聚合僅部長 / Admin）
+  - 任何修改請求對 ready 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（由 F079 / F082 / F086 各自 spec 驗證）
+  - Feature flag = false → 503 `FEATURE_NOT_ENABLED`
+  - 處長 GET 5.1 帶 `deptCode` 屬於他人轄區 → 200 + `individualRatios.departments = []`
+  - 處長 GET 5.1 → 篩選條件 / 部門比例 / CR 開關仍完整顯示（不過濾）
+- 前端關鍵測試案例：
+  - 部長 / Admin 視角顯示月跑前置條件聚合 banner
+  - `allReady = true` → 綠色 banner + 「觸發月跑」按鈕
+  - `allReady = false` → 警告 banner + 未就緒名單跳轉連結
+  - 處長視角不顯示聚合 banner
+  - 詳情頁完全無編輯按鈕
+  - 處長視角詳情頁業務員比例僅顯示本轄區
+  - 部長 / Admin 視角顯示「Rollback 至簽核」按鈕，處長視角不顯示
+- E2E：F086 核准至 ready → 部長 GET 5.2 確認 allReady → F061 月跑觸發 → 月跑完成
+
+## 11. 實作 Checklist
+
+- [ ] 後端實作 `GET /api/v1/assignment/lists/{listNo}/ready-summary` 端點 + Service
+- [ ] 後端實作 `GET /api/v1/assignment/ready-summary?ym={ym}` 聚合端點 + Service
+- [ ] 後端套 `DirectorOrSectionChiefGuard`（5.1 端點）/ `DirectorGuard`（5.2 端點）
+- [ ] 後端套 service 層 `scopeByCreator()` helper 過濾 `individualRatios.departments`
+- [ ] 後端套 `StageTransitionService.assertStageEquals(listNo, 'ready')`（5.1 端點）
+- [ ] 後端套 `FeatureFlagGuard`
+- [ ] 前端「準備完成」頁籤渲染（F077 整合）
+- [ ] 前端月跑前置條件聚合 banner（部長 / Admin 視角）
+- [ ] 前端名單詳情頁 4 區塊布局（篩選條件 / 部門比例 / 個別業務比例 / CR 開關）
+- [ ] 前端處長 vs 部長視角差異（業務員比例過濾、聚合 banner 隱藏、Rollback 按鈕渲染）
+- [ ] 前端完全無編輯按鈕之保護（DOM 層 + 路由 Guard）
+- [ ] 圖表：[diagrams/F088-ready-summary-flow.mmd](../diagrams/F088-ready-summary-flow.mmd)
+- [ ] E2E：F086 → F088 → F061 完整路徑
+
+## 12. 假設
+
+| # | 假設 | 標記 |
+|---|---|---|
+| A-1 | **CR 開關儲存位置**：本 spec 假設 `cr_enabled` 欄位存於 `ob_list_definition`；具體位置由 US-120 / F048 spec 規範 | [ASSUMPTION] 待 F048 / US-120 確認 |
+| A-2 | **`monthlyRunStatus` 計算邏輯**：本 spec 預設取「當月最新一筆 `assignment_run` 之 status」；若同月有多筆 run（如重試），以最新一筆為準；具體邏輯由 F061 spec 規範 | [ASSUMPTION] 待 F061 spec 確認 |
+| A-3 | **聚合 API 效能**：當月 active 名單預估 10~50 份，單次查詢可接受；若未來規模擴大需考慮 cache 或物化視圖 | [ASSUMPTION] 待 system-architect 評估 |
+| A-4 | **歷史月份是否顯示月跑前置條件 banner**：本 spec 預設僅當月顯示；歷史月份頁面不顯示聚合 banner（避免誤觸發月跑） | [ASSUMPTION] 待 UI/UX 確認 |
+
+## 13. 變更紀錄
+
+| 版本 | 日期 | 變更內容 |
+|---|---|---|
+| v1.0 | 2026-05-15 | 初版（對應 US-118，E07 補修批次 5）：依五階段流程提供 ready 名單摘要查詢；新增 5.2 聚合端點供月跑前置條件確認；完全唯讀（不提供寫入端點）；處長轄區過濾以 `scopeByCreator()` helper 統一實作 |
+| v1.1 | 2026-05-16 | **E07 補修批次 6 修訂**：補充月跑前置條件聚合 banner UI 規格（綠色 / 警告色雙態）；新增 `monthlyRunStatus` 欄位於 5.2 response；BR-6 描述月跑狀態欄位語意 |
+| **v1.2** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-118 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 統一為 `DirectorOrSectionChiefGuard`（5.1 端點）+ `DirectorGuard`（5.2 聚合端點）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊 F074 v2.0；保留 v1.1 之月跑前置條件聚合提示 |

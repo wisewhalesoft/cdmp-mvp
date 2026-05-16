@@ -28,18 +28,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管停用 CARD_TYPE 計分卡類型。停用操作為**不可復原的破壞性級聯 hard delete**：於同一 DB transaction 內清除 `ob_card_type` 本身與 5 張下游計分設定表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）所有匹配紀錄；歷史月跑快照（`assignment_run_snapshot`）與歷史分派結果（`ob_pool_data_list`）**不被影響**，供 F066 歷史追溯使用。執行前需業務主管二次確認；若該 CARD_TYPE 仍被 `ob_list_definition` active 紀錄引用，顯示警告但允許繼續（OQ-E07-30 ✅ Resolved）。月跑執行中禁止停用。
+提供業務部長停用 CARD_TYPE 計分卡類型。停用操作為**不可復原的破壞性級聯 hard delete**：於同一 DB transaction 內清除 `ob_card_type` 本身與 5 張下游計分設定表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）所有匹配紀錄；歷史月跑快照（`assignment_run_snapshot`）與歷史分派結果（`ob_pool_data_list`）**不被影響**，供 F066 歷史追溯使用。執行前需業務部長二次確認；若該 CARD_TYPE 仍被 `ob_list_definition` active 紀錄引用，顯示警告但允許繼續（OQ-E07-30 ✅ Resolved）。月跑執行中禁止停用。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 停用已不再使用的計分卡類型，並自動清除其所有下游計分設定紀錄
 **So that** 系統不再將該 CARD_TYPE 納入月跑計算，且資料保持一致，不留孤兒紀錄
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長已登入並持有有效 JWT Token
+- `businessRole='director'`（M02 寫入端點限部長，依 F002 §4.6.2）
 - 待停用之 `cardType` 存在於 `ob_card_type` 且 `status = 'active'`
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 紀錄
 
@@ -47,7 +47,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-1：刪除預覽端點顯示級聯範圍
 
-- **Given** 業務主管於 Tab 1 點擊某 CARD_TYPE 的「停用」按鈕
+- **Given** 業務部長於 Tab 1 點擊某 CARD_TYPE 的「停用」按鈕
 - **When** 前端呼叫刪除預覽端點（`GET /api/v1/assignment/scoring/card-types/:cardType/delete-preview`）
 - **Then** 回應內容包含五張下游表的即將刪除筆數：
   - `ob_levelcard_version`：N1 筆
@@ -67,7 +67,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-3：確認後執行級聯 hard delete（同 transaction）
 
-- **Given** 業務主管閱讀警示後點擊「確認停用」
+- **Given** 業務部長閱讀警示後點擊「確認停用」
 - **When** 前端呼叫 DELETE 端點並帶上 `confirmCascade=true` query
 - **Then** 後端於同一 transaction 內依以下順序執行 hard delete：
   1. `DELETE FROM ob_tier WHERE card_type = :cardType`
@@ -86,11 +86,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - **Then** 以下資料**不被刪除，保持原狀**：
   - `assignment_run_snapshot`：歷史月跑快照中包含該 CARD_TYPE 的 payload 完整保留，供 F066 歷史追溯
   - `ob_pool_data_list`：歷史分派結果保留（歷史結果不可變更）。**本表不含 `card_type` 欄位**（`card_type` 隸屬 CARD_TYPE / 計分版本層而非分派結果列），實作上無需 join 篩選；級聯刪除概念上不影響此表所有紀錄
-  - `ob_list_definition`：名單定義紀錄保留（包含引用該 CARD_TYPE 的 active 紀錄），由業務主管自行處理
+  - `ob_list_definition`：名單定義紀錄保留（包含引用該 CARD_TYPE 的 active 紀錄），由業務部長自行處理
 
 ### AC-5：缺少 `confirmCascade=true` 時拒絕執行
 
-- **Given** 業務主管或 client 未帶 `confirmCascade=true` query 即呼叫 DELETE
+- **Given** 業務部長或 client 未帶 `confirmCascade=true` query 即呼叫 DELETE
 - **When** 後端驗證
 - **Then** 回 422 `CARD_TYPE_CASCADE_NOT_CONFIRMED`，訊息：「級聯刪除需要二次確認，請於請求帶上 `confirmCascade=true`」
 - **And** 資料庫無任何刪除動作
@@ -101,7 +101,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - **When** Modal 關閉後
 - **Then** Tab 1 清單刷新，已刪除之 CARD_TYPE 不再顯示
 - **And** 若該 CARD_TYPE 為當前 Tab 1 之選中狀態，刪除後選中狀態被清除，Tab 2~5 顯示「請選擇計分卡類型以查看設定」空狀態
-- **And** 不自動選中其他 CARD_TYPE（由業務主管主動選擇）
+- **And** 不自動選中其他 CARD_TYPE（由業務部長主動選擇）
 
 ### AC-7：cardType 不存在
 
@@ -112,7 +112,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ### AC-8：月跑執行中禁止停用
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 紀錄
-- **When** 業務主管嘗試送出 DELETE 請求
+- **When** 業務部長嘗試送出 DELETE 請求
 - **Then** API 回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
 - **And** UI 端「停用」按鈕 disabled
 
@@ -122,7 +122,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 對應 AC-1：取得刪除預覽資訊供 UI 確認對話框顯示。
 
-**Controller 規範**：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**：使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2，M02 計分卡寫入為部長專屬）。
 
 **Path Parameters**
 
@@ -152,12 +152,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | CARD_TYPE_NOT_FOUND | 指定的 cardType 不存在 |
 
 ### 5.2 DELETE /api/v1/assignment/scoring/card-types/:cardType
 
-**Controller 規範**：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**：使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2，M02 計分卡寫入為部長專屬）。
 
 **Path Parameters**
 
@@ -195,7 +195,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | CARD_TYPE_NOT_FOUND | 指定的 cardType 不存在 |
 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中禁止停用 |
 | 422 | CARD_TYPE_CASCADE_NOT_CONFIRMED | 缺少 `confirmCascade=true` query |
@@ -220,7 +220,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - 點擊停用觸發兩階段確認：
   1. 前端先呼叫 5.1 預覽端點取得級聯筆數
   2. 開啟確認對話框，顯示影響範圍 + 警告（若有 `listDefinitionsAffected > 0`）
-  3. 業務主管點擊「確認停用」（紅色危險按鈕）後呼叫 5.2 DELETE 端點帶 `confirmCascade=true`
+  3. 業務部長點擊「確認停用」（紅色危險按鈕）後呼叫 5.2 DELETE 端點帶 `confirmCascade=true`
 - 停用成功後 Tab 1 清單刷新；若被停用之 CARD_TYPE 為當前選中，清除選中狀態，Tab 2~5 切換為空狀態提示
 - 月跑鎖定時「停用」按鈕 disabled，hover tooltip 顯示「分派執行中，無法修改計分設定」
 - 失敗（404 / 409 / 422）以 toast 或 inline error 顯示

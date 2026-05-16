@@ -28,18 +28,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管針對「Tab 1 選中之 CARD_TYPE」新增、修改、停用計分維度，以及調整各維度的分數區間設定（`ob_levelcard_column` / `ob_levelcard_score`）。採覆寫式儲存（無草稿版本分岔）；月跑執行中禁止修改。歷史追溯透過每次月跑自動產生的 config 快照（F066）查詢。所有寫入操作之範圍均嚴格限定於 Tab 1 選中之 CARD_TYPE，跨 CARD_TYPE 寫入請求一律拒絕。
+提供業務部長針對「Tab 1 選中之 CARD_TYPE」新增、修改、停用計分維度，以及調整各維度的分數區間設定（`ob_levelcard_column` / `ob_levelcard_score`）。採覆寫式儲存（無草稿版本分岔）；月跑執行中禁止修改。歷史追溯透過每次月跑自動產生的 config 快照（F066）查詢。所有寫入操作之範圍均嚴格限定於 Tab 1 選中之 CARD_TYPE，跨 CARD_TYPE 寫入請求一律拒絕。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 新增、修改或停用計分維度，以及調整各維度的分數區間設定
 **So that** 可在不依賴 IT 的情況下，根據當月業務策略靈活調整客戶評分邏輯
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長已登入並持有有效 JWT Token
+- `businessRole='director'`（M02 計分卡寫入限部長，後端套用 `DirectorGuard`，依 F002 §4.6.2）
 - F069 Tab 1 已有選中之 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status = 'active'`
 - 該 CARD_TYPE 於 `ob_levelcard_version` 至少有一筆 `status = 'active'` 的版本紀錄（由 F070 新增 CARD_TYPE 時自動建立）
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 的紀錄
@@ -48,7 +48,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-1：依選中 CARD_TYPE 查看並直接編輯現行計分維度清單
 
-- **Given** 業務主管已在 Tab 1 選中某 CARD_TYPE，進入 M02 Tab 2 編輯模式
+- **Given** 業務部長已在 Tab 1 選中某 CARD_TYPE，進入 M02 Tab 2 編輯模式
 - **When** 頁面載入完成
 - **Then** 顯示該 CARD_TYPE 目前生效版本的所有計分維度清單（`ob_levelcard_column WHERE card_type = :selectedCardType AND status = 'active'`），可直接點擊進入編輯模式
 - **And** 頁面顯示「現行設定」單一視圖，不存在草稿版本或版本切換選單
@@ -56,16 +56,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-2：修改維度分數區間並即時儲存
 
-- **Given** 業務主管修改某維度的分數區間（新增區間、調整條件值或分數）
-- **When** 業務主管點擊「儲存」
+- **Given** 業務部長修改某維度的分數區間（新增區間、調整條件值或分數）
+- **When** 業務部長點擊「儲存」
 - **Then** 修改直接寫入生效設定（`ob_levelcard_score` 對應列 UPDATE；新增區間則 INSERT），無草稿暫存流程
 - **And** 頁面顯示儲存成功 toast
 - **And** 寫入 `assignment_audit_log`（`action = 'UPDATE'`, `before_value` + `after_value` JSONB）
 
 ### AC-3：新增維度直接生效（範圍限定選中 CARD_TYPE）
 
-- **Given** 業務主管點擊「新增維度」，填入 `column_name` / `column_label` / 分數區間
-- **When** 業務主管點擊「確認新增」
+- **Given** 業務部長點擊「新增維度」，填入 `column_name` / `column_label` / 分數區間
+- **When** 業務部長點擊「確認新增」
 - **Then** 新維度寫入 `ob_levelcard_column`，`card_type` 自動帶入 Tab 1 選中之 CARD_TYPE，`card_version` 帶入該 CARD_TYPE 之 active version；對應區間寫入 `ob_levelcard_score`
 - **And** 新維度立即出現於現行設定清單中
 - **And** 寫入 `assignment_audit_log`（`action = 'CREATE'`）
@@ -73,7 +73,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-4：停用維度（Soft Delete）
 
-- **Given** 業務主管點擊某維度的「停用」按鈕並確認
+- **Given** 業務部長點擊某維度的「停用」按鈕並確認
 - **When** 後端處理停用請求
 - **Then** 該維度於 `ob_levelcard_column.status` 欄位標記為 `'inactive'`（soft delete 機制；欄位定義由 migration `1711360000143-AddObLevelcardColumnStatus.ts` 補建，VARCHAR(10) NOT NULL DEFAULT 'active'）
 - **And** 不刪除既有資料；後續月跑 Stage 2 透過 `fn_calc_tier_level` 依 `status = 'active'` 過濾，停用維度不再參與計分
@@ -82,13 +82,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ### AC-5：月跑執行中禁止修改（資料鎖）
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
-- **When** 業務主管嘗試進入計分設定編輯模式
+- **When** 業務部長嘗試進入計分設定編輯模式
 - **Then** 編輯功能全部停用，頁面顯示「分派執行中，無法修改計分設定」提示
 - **And** API 呼叫回傳 409 `SCORING_VERSION_LOCKED`
 
 ### AC-6：分數區間重疊驗證
 
-- **Given** 業務主管新增或修改某數值型區間（`level2_s` ~ `level2_e`）
+- **Given** 業務部長新增或修改某數值型區間（`level2_s` ~ `level2_e`）
 - **When** 前端/後端驗證
 - **Then** 若新區間與既有區間重疊（交集不為空），回傳 422 `SCORING_RANGE_OVERLAP`，訊息：「分數區間重疊，請調整條件值」
 
@@ -101,7 +101,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 5. API 規格
 
-**Controller 規範**（適用於本節所有端點）：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**（適用於本節所有寫入端點）：使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2，M02 計分卡寫入為部長專屬）。
 
 ### 5.1 PUT /api/v1/assignment/scoring/dimensions
 
@@ -159,7 +159,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
 | 422 | SCORING_COLUMN_DUPLICATE | `column_name` 已存在於 active 版本 |
 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊 |
@@ -201,7 +201,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | SCORING_COLUMN_NOT_FOUND | 指定的 `cardType + columnName` 不存在或已停用 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.2 新增） |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |

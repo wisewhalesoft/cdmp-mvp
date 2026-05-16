@@ -4,7 +4,8 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：21
+> **Stories 數量**：46（含 A~H 組重構全批；廢棄 US-088/089/079/091；US-078 保留為流程外查詢入口）
+> **最後更新**：2026-05-15（重構 E~H 組：新增 US-109~119；廢棄 US-079/091；補修 US-081/090/101/104/105/106/108；M03 拆分為 M03a/M03b/M03c/M03d）
 
 ## Epic 目標
 
@@ -20,9 +21,15 @@
 |----------|------|--------|------|
 | US-070 | 查看本月名單定義清單 | Must Have | [US-070-M01-view-list-definition.md](US-070-M01-view-list-definition.md) |
 | US-071 | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | Must Have | [US-071-M01-stage0-daily-estimate.md](US-071-M01-stage0-daily-estimate.md) |
-| US-088 | 新增名單定義 | Must Have | [US-088-M01-create-list-definition.md](US-088-M01-create-list-definition.md) |
-| US-089 | 編輯名單定義 | Must Have | [US-089-M01-edit-list-definition.md](US-089-M01-edit-list-definition.md) |
-| US-090 | 停用名單定義 | Must Have | [US-090-M01-disable-list-definition.md](US-090-M01-disable-list-definition.md) |
+| US-104 | 月份切換與歷史月份唯讀 | Must Have | [US-104-M01-month-switch-history-readonly.md](US-104-M01-month-switch-history-readonly.md) |
+| US-105 | 名單五階段狀態總覽 | Must Have | [US-105-M01-list-stage-overview.md](US-105-M01-list-stage-overview.md) |
+| US-106 | 草稿階段建立名單與篩選條件 | Must Have | [US-106-M01-draft-create-list-with-filter.md](US-106-M01-draft-create-list-with-filter.md) |
+| US-107 | 草稿階段 per-LIST_NO CR 回分開關設定 | Must Have | [US-107-M01-draft-per-list-cr-toggle.md](US-107-M01-draft-per-list-cr-toggle.md) |
+| US-108 | 草稿階段推進至部門比例設定 | Must Have | [US-108-M01-draft-advance-to-dept-ratio.md](US-108-M01-draft-advance-to-dept-ratio.md) |
+| US-120 | CR 回分儲存位置 spec 落差修正 | Must Have | [US-120-M01-cr-storage-spec-correction.md](US-120-M01-cr-storage-spec-correction.md) |
+| US-090 | 名單定義停用（草稿階段退出）| Must Have | [US-090-M01-disable-list-definition.md](US-090-M01-disable-list-definition.md) |
+| ~~US-088~~ | ~~新增名單定義~~（**已廢棄，由 US-106 取代**）| 廢棄 | [US-088-M01-create-list-definition.md](US-088-M01-create-list-definition.md) |
+| ~~US-089~~ | ~~編輯名單定義~~（**已廢棄，由 US-106 取代**）| 廢棄 | [US-089-M01-edit-list-definition.md](US-089-M01-edit-list-definition.md) |
 
 ### M02 — 計分設定
 
@@ -31,16 +38,56 @@
 | US-072 | 查看計分維度設定 | Must Have | [US-072-M02-view-scoring-dimensions.md](US-072-M02-view-scoring-dimensions.md) |
 | US-073 | 編輯計分維度與分數 | Must Have | [US-073-M02-edit-scoring-dimension.md](US-073-M02-edit-scoring-dimension.md) |
 | US-074 | 編輯 CARD_LEVEL 分級門檻 | Must Have | [US-074-M02-edit-card-level-thresholds.md](US-074-M02-edit-card-level-thresholds.md) |
+| US-097 | 新增 CARD_LEVEL 等級 | Must Have | [US-097-M02-create-card-level.md](US-097-M02-create-card-level.md) |
 | US-075 | 編輯 TIER_LEVEL 對應表 | Must Have | [US-075-M02-edit-tier-mapping.md](US-075-M02-edit-tier-mapping.md) |
 
-### M03 — 分派比例
+### M03 — 分派比例（重構後拆分為 M03a/M03b/M03c/M03d）
+
+> **[重構決策，2026-05-15]**：M03 原為單一模組，重構後依五階段流程拆分如下：
+> - **M03a（部門比例設定階段）**：US-109/110/111
+> - **M03b（個別業務比例設定階段）**：US-112/113/114/115
+> - **M03c（簽核階段）**：US-116/117
+> - **M03d（準備完成階段）**：US-118/119
+
+#### M03a — 部門比例設定階段
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
-| US-078 | 查看人員比例設定 | Must Have | [US-078-M03-view-personnel-ratio.md](US-078-M03-view-personnel-ratio.md) |
-| US-079 | 編輯人員比例設定 | Must Have | [US-079-M03-edit-personnel-ratio.md](US-079-M03-edit-personnel-ratio.md) |
+| US-109 | 部門比例設定（各部門分配比例）| Must Have | [US-109-M03a-set-dept-ratio.md](US-109-M03a-set-dept-ratio.md) |
+| US-110 | 部門比例設定階段推進至個別業務比例設定 | Must Have | [US-110-M03a-advance-to-personnel-ratio.md](US-110-M03a-advance-to-personnel-ratio.md) |
+| US-111 | 部門比例設定階段 Rollback 至草稿 | Must Have | [US-111-M03a-rollback-to-draft.md](US-111-M03a-rollback-to-draft.md) |
+
+#### M03b — 個別業務比例設定階段
+
+| Story ID | 標題 | 優先級 | 檔案 |
+|----------|------|--------|------|
+| US-112 | 個別業務比例設定（處長設定本部門業務員比例）| Must Have | [US-112-M03b-set-personnel-ratio.md](US-112-M03b-set-personnel-ratio.md) |
+| US-113 | 獎懲快速比例設定（相對調整模板）| Must Have | [US-113-M03b-quick-ratio-template.md](US-113-M03b-quick-ratio-template.md) |
+| US-114 | 個別業務比例設定階段推進至簽核 | Must Have | [US-114-M03b-advance-to-approval.md](US-114-M03b-advance-to-approval.md) |
+| US-115 | 個別業務比例設定階段 Rollback 至部門比例設定 | Must Have | [US-115-M03b-rollback-to-dept-ratio.md](US-115-M03b-rollback-to-dept-ratio.md) |
+
+#### M03c — 簽核階段
+
+| Story ID | 標題 | 優先級 | 檔案 |
+|----------|------|--------|------|
+| US-116 | 部長核准名單（簽核通過 → 準備完成）| Must Have | [US-116-M03c-approve-to-ready.md](US-116-M03c-approve-to-ready.md) |
+| US-117 | 部長拒絕名單並退回個別業務比例設定 | Must Have | [US-117-M03c-reject-to-personnel-ratio.md](US-117-M03c-reject-to-personnel-ratio.md) |
+
+#### M03d — 準備完成階段
+
+| Story ID | 標題 | 優先級 | 檔案 |
+|----------|------|--------|------|
+| US-118 | 準備完成階段查詢摘要（唯讀）| Must Have | [US-118-M03d-ready-stage-summary.md](US-118-M03d-ready-stage-summary.md) |
+| US-119 | 準備完成階段 Rollback 至簽核 | Must Have | [US-119-M03d-rollback-to-approval.md](US-119-M03d-rollback-to-approval.md) |
+
+#### M03（舊版，部分廢棄 / 保留）
+
+| Story ID | 標題 | 優先級 | 檔案 |
+|----------|------|--------|------|
+| US-078 | 查看人員比例設定（**流程外查詢入口，保留**）| Must Have | [US-078-M03-view-personnel-ratio.md](US-078-M03-view-personnel-ratio.md) |
+| ~~US-079~~ | ~~編輯人員比例設定~~（**已廢棄，由 US-112 取代**）| 廢棄 | [US-079-M03-edit-personnel-ratio.md](US-079-M03-edit-personnel-ratio.md) |
 | US-080 | 開關 CR 回分規則 | Must Have | [US-080-M03-toggle-cr-reassignment.md](US-080-M03-toggle-cr-reassignment.md) |
-| US-091 | 設定 per-LIST_NO 部門比例 | Must Have | [US-091-M03-edit-per-list-dept-ratio.md](US-091-M03-edit-per-list-dept-ratio.md) |
+| ~~US-091~~ | ~~設定 per-LIST_NO 部門比例~~（**已廢棄，由 US-109 取代**）| 廢棄 | [US-091-M03-edit-per-list-dept-ratio.md](US-091-M03-edit-per-list-dept-ratio.md) |
 
 ### M04 — 分派執行
 
@@ -59,11 +106,26 @@
 | US-086 | 查看執行快照詳情 | Must Have | [US-086-M05-view-run-snapshot-detail.md](US-086-M05-view-run-snapshot-detail.md) |
 | US-087 | 比對兩次執行結果差異 | Should Have | [US-087-M05-compare-run-results.md](US-087-M05-compare-run-results.md) |
 
-### M06 — 基礎代碼維護
+### M06 — 代碼維護
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
 | US-092 | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | Must Have | [US-092-M06-edit-base-code.md](US-092-M06-edit-base-code.md) |
+| US-102 | 管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata） | Must Have | [US-102-M06-manage-pooldata-field-whitelist.md](US-102-M06-manage-pooldata-field-whitelist.md) |
+| US-103 | 管理類別型欄位的可選值 | Must Have | [US-103-M06-manage-categorical-field-values.md](US-103-M06-manage-categorical-field-values.md) |
+
+### M07 — 角色與可見範圍
+
+> **重要（2026-05-15 決策）**：E07 角色矩陣最終定案如下：
+> - **部長 + Admin**：對 E07 全模組（白名單維護、計分設定、部門比例、簽核、月跑觸發、名單 CRUD）擁有完整操作權限
+> - **處長**：**僅限**「個別業務比例設定」（可操作）+ 「準備完成階段查詢」（可查詢唯讀）；其他所有 E07 功能無操作權限（M02 計分設定可唯讀查看）
+> - **角色指派入口**：E02 帳號管理頁（US-014），E07 不另設指派 UI
+> - 此矩陣為 **F002（auth/permission feature spec）** 的更新依據，需通知 spec-writer 同步
+
+| Story ID | 標題 | 優先級 | 檔案 |
+|----------|------|--------|------|
+| US-100 | 部長角色定義與 E07 全模組操作權限 | Must Have | [US-100-M07-define-director-role.md](US-100-M07-define-director-role.md) |
+| US-101 | 處長角色定義與可見範圍（收斂版） | Must Have | [US-101-M07-define-section-chief-role.md](US-101-M07-define-section-chief-role.md) |
 
 ## 依賴關係
 

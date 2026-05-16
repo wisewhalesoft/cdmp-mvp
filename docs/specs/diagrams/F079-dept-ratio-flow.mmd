@@ -1,0 +1,61 @@
+%% F079 / F080 / F081 v1.0 部門比例設定整合流程（含 advance / rollback 分支）
+%% 引用：features/F079-set-dept-ratio.md / F080-advance-to-personnel-ratio.md / F081-rollback-to-draft.md
+flowchart TD
+    Start([部長 / Admin 在 F077 部門比例設定階段視圖看到名單]) --> RoleCheck{角色為 Director / Admin？}
+    RoleCheck -- 否 --> Hide[操作按鈕完全不渲染]
+    Hide --> EndForbidden([結束：處長無權])
+
+    RoleCheck -- 是 --> ButtonGroup{選擇操作}
+
+    %% ============ F079 設定部門比例 ============
+    ButtonGroup -- 設定部門比例 --> F079Page[進入 F079 比例設定頁<br/>GET /api/v1/assignment/ratios/dept/listNo]
+    F079Page --> EditRatios[編輯各部門 RATION<br/>即時加總顯示]
+    EditRatios --> SumCheck{加總落於 99.99 ~ 100.01？}
+    SumCheck -- 否 --> DisableSave[儲存按鈕 disabled<br/>提示：目前加總 N% 需調整至 100%]
+    DisableSave --> EditRatios
+    SumCheck -- 是 --> RangeCheck{單欄位 RATION 落於 0 ~ 100？}
+    RangeCheck -- 否 --> ShowRangeErr[顯示「比例需介於 0 到 100 之間」]
+    ShowRangeErr --> EditRatios
+    RangeCheck -- 是 --> ClickSave[點擊儲存]
+
+    ClickSave --> SaveAPI[PUT /api/v1/assignment/ratios/dept/listNo]
+    SaveAPI --> SaveGuards{Guards：<br/>DirectorGuard +<br/>stage = dept_ratio +<br/>非月跑 + 非歷史月份}
+    SaveGuards -- 失敗 --> ReturnSaveErr[回對應錯誤碼<br/>E07_FORBIDDEN_DIRECTOR_ONLY /<br/>LIST_STAGE_TRANSITION_FORBIDDEN /<br/>ASSIGNMENT_RUN_ALREADY_RUNNING /<br/>LIST_HISTORICAL_READONLY]
+    SaveGuards -- 通過 --> SaveTx[DB transaction:<br/>1. DELETE FROM ob_dept_pct<br/>   WHERE project_workym, list_no<br/>2. INSERT new RATION rows<br/>3. INSERT assignment_audit_log<br/>   action = SET_DEPT_RATIO]
+    SaveTx --> SaveSuccess[200 OK<br/>toast：部門比例設定已儲存]
+    SaveSuccess --> EndSave([結束：儲存完成])
+
+    %% ============ F080 推進至個別業務比例 ============
+    ButtonGroup -- 推進至個別業務比例 --> F080Click[點擊推進按鈕]
+    F080Click --> AdvanceAPI[POST /list-definitions/listNo/advance-to-personnel-ratio]
+    AdvanceAPI --> AdvanceGuards{Guards：DirectorGuard +<br/>stage = dept_ratio +<br/>非月跑 + 非歷史月份}
+    AdvanceGuards -- 失敗 --> ReturnAdvanceAuthErr[回對應錯誤碼]
+
+    AdvanceGuards -- 通過 --> Pre1{ob_dept_pct 至少 1 筆？}
+    Pre1 -- 否 --> R422_empty[422 STAGE_ADVANCE_PRECONDITION_FAILED<br/>reason: dept_ratio_empty]
+    Pre1 -- 是 --> Pre2{加總 = 100% 容忍 0.01？}
+    Pre2 -- 否 --> R422_sum[422 STAGE_ADVANCE_PRECONDITION_FAILED<br/>reason: dept_ratio_sum_not_100<br/>details.actualSum]
+    Pre2 -- 是 --> AdvanceModal[Modal：確認推進對話框<br/>警告：推進後部門比例將鎖定]
+    AdvanceModal --> AdvanceConfirm{使用者選擇}
+    AdvanceConfirm -- 取消 --> EndCancel([結束：取消])
+    AdvanceConfirm -- 確認推進 --> AdvanceTx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = personnel_ratio<br/>2. INSERT assignment_audit_log<br/>   action = ADVANCE_STAGE<br/>   before.stage = dept_ratio<br/>   after.stage = personnel_ratio]
+    AdvanceTx --> AdvanceSuccess[200 OK<br/>toast：已推進至個別業務比例設定階段]
+    AdvanceSuccess --> EndAdvance([結束：推進成功 → F079 PUT 從此鎖定<br/>下一步交由 M03b spec 接手])
+
+    %% ============ F081 Rollback 至草稿 ============
+    ButtonGroup -- 退回草稿 --> F081Click[點擊退回草稿按鈕]
+    F081Click --> RollbackModal[Modal：紅色警示對話框<br/>已設定的部門比例資料將全部清空<br/>無法復原]
+    RollbackModal --> RollbackConfirm{使用者選擇}
+    RollbackConfirm -- 取消 --> EndCancelRb([結束：取消])
+
+    RollbackConfirm -- 確認退回 --> RollbackAPI[POST /list-definitions/listNo/rollback-to-draft]
+    RollbackAPI --> RollbackGuards{Guards：DirectorGuard +<br/>stage = dept_ratio +<br/>非月跑 + 非歷史月份}
+    RollbackGuards -- 失敗 --> ReturnRollbackErr[回對應錯誤碼<br/>含 STAGE_ROLLBACK_BLOCKED<br/>reason: already_at_first_stage /<br/>wrong_source_stage]
+    RollbackGuards -- 通過 --> RollbackTx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = draft<br/>2. DELETE FROM ob_dept_pct<br/>   WHERE project_workym, list_no<br/>3. INSERT assignment_audit_log<br/>   action = ROLLBACK_STAGE<br/>   before.deptRatios = 完整快照]
+    RollbackTx --> RollbackSuccess[200 OK<br/>toast：已退回草稿階段<br/>部門比例已清空]
+    RollbackSuccess --> EndRollback([結束：Rollback 成功 → F051 v2.0 / F052 v2.0 / F078 重新可用])
+
+    %% ============ Service 層共用 helper 註記 ============
+    SaveTx -.沿用.-> Helper1[StageTransitionService.assertStageEquals]
+    AdvanceTx -.沿用.-> Helper2[StageTransitionService.advanceTo<br/>+ RatioValidationService.assertSumEquals100]
+    RollbackTx -.沿用.-> Helper3[StageTransitionService.rollbackTo<br/>cleanupFn: DELETE ob_dept_pct]

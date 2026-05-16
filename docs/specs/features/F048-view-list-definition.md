@@ -28,25 +28,25 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務主管（`user + is_sales_manager = true`）查看本作業年月（YYYYMM）所有 active 名單定義的入口頁。頁面以「使用中 / 已停用」雙頁籤呈現，並作為 M01 所有操作的入口（新增 → F050、編輯 → F051、停用 → F052、per-LIST_NO 部門比例 → F060、單一 LIST_NO 案件試算 → F049）。月跑執行中全部操作按鈕鎖定。
+提供業務部長 / 業務處長（`role=user` 且 `businessRole IN ('director','section_chief')`）查看本作業年月（YYYYMM）所有 active 名單定義的入口頁。頁面以「使用中 / 已停用」雙頁籤呈現，並作為 M01 所有操作的入口（新增 → F050、編輯 → F051、停用 → F052、per-LIST_NO 部門比例 → 已併入 F079、單一 LIST_NO 案件試算 → F049）。月跑執行中全部操作按鈕鎖定。寫入類操作（新增 / 編輯 / 停用 / 試算）僅部長可執行，處長僅可瀏覽（依 F002 §4.6.2）。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 查看本月各 Stage 的名單定義條件清單
 **So that** 在觸發月跑之前確認每個 Stage 的篩選條件與預期涵蓋範圍符合本月業務策略
 
 ## 3. 前置條件
 
 - 使用者已通過驗證（E01），持有有效 JWT Token
-- JWT payload `role = user` 且 `is_sales_manager = true`（或 `role = admin`，管理者為超集）
+- JWT payload `role = user` 且 `businessRole IN ('director','section_chief')`（或 `role = admin`，管理者為超集）；後端套用 `DirectorOrSectionChiefGuard`（依 F002 §4.6.2）
 - AppDB 已完成 E07 schema migration（`ob_list_definition`、`assignment_run` 等表已建立）
 
 ## 4. 驗收標準
 
 ### AC-1：顯示本月名單定義清單
 
-- **Given** 業務主管已登入並進入名單定義頁面
+- **Given** 業務部長 / 業務處長已登入並進入名單定義頁面
 - **When** 頁面載入完成
 - **Then** 顯示本作業年月（YYYYMM）下所有 `status = 'active'` 的名單定義列表，每列包含：`list_no`、`list_nm`、`prod_kind`、篩選條件摘要（`caseyear` / `spec_tp` / `list_period_start`~`list_period_end`）、預估客戶數量，並提供「編輯」、「停用」、「設定部門比例」、「計算案件數量」操作欄
 - **And** 清單依 `list_no` 升序排列
@@ -55,7 +55,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-2：展開單一名單條件詳情
 
 - **Given** 名單定義清單已顯示
-- **When** 業務主管點擊某一名單列
+- **When** 業務部長 / 業務處長點擊某一名單列
 - **Then** 展開或跳至詳情頁，顯示該名單的完整篩選條件（每個條件欄位名稱、運算子、條件值）
 
 ### AC-3：無資料時的引導提示
@@ -67,13 +67,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-4：月跑執行中所有操作按鈕鎖定
 
 - **Given** `assignment_run` 存在 `status IN ('pending', 'running')` 的紀錄
-- **When** 業務主管在本頁面
+- **When** 業務部長 / 業務處長在本頁面
 - **Then** 「新增名單定義」按鈕、每列的「編輯」、「停用」、「設定部門比例」按鈕均為 disabled 狀態
 - **And** 頁面頂部顯示橘色通知列：「分派執行中，名單定義暫時鎖定，無法進行新增、編輯或停用操作」
 
 ### AC-5：使用中／已停用頁籤切換
 
-- **Given** 業務主管已進入名單定義頁面
+- **Given** 業務部長 / 業務處長已進入名單定義頁面
 - **When** 頁面載入完成
 - **Then** 顯示兩個獨立頁籤：「使用中」（`status = 'active'`）與「已停用」（`status = 'inactive'`）
 - **And** 預設顯示「使用中」頁籤；「已停用」頁籤僅供唯讀查閱，不顯示「編輯」與「停用」按鈕
@@ -126,14 +126,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING / AUTH_TOKEN_EXPIRED | 未登入或 Token 無效 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 500 | SYSTEM_INTERNAL_ERROR | 伺服器內部錯誤 |
 
 ## 6. 商業規則
 
 | 規則編號 | 說明 |
 |---|---|
-| BR-1 | 僅 `role = user + is_sales_manager = true` 或 `role = admin` 可存取 |
+| BR-1 | GET 端點僅 `role = user` 且 `businessRole IN ('director','section_chief')` 或 `role = admin` 可存取（`DirectorOrSectionChiefGuard`）；寫入類按鈕（新增 / 編輯 / 停用）僅 `businessRole='director'` 渲染可用，處長操作為唯讀（依 F002 §4.6.1 矩陣） |
 | BR-2 | `ym` 預設值為當前伺服器作業年月（以後端系統時間計算） |
 | BR-3 | 月跑鎖由 `assignment_run.status` 即時判斷，無需額外旗標 |
 | BR-4 | 「已停用」頁籤記錄為唯讀，不提供重新啟用（MVP 範圍外） |
@@ -144,7 +144,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | 場景 | 系統回應 | 參考 |
 |---|---|---|
 | 未登入存取 | HTTP 401 | error-handling.md#auth-errors |
-| `is_sales_manager = false` 的 user | HTTP 403 | error-handling.md#auth-errors |
+| `businessRole IS NULL` 的 user | HTTP 403 `E07_ROLE_NOT_ASSIGNED` | error-handling.md#auth-errors |
 | 伺服器錯誤 | HTTP 500 | error-handling.md#system-errors |
 
 ## 8. UI/UX 需求
@@ -157,7 +157,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 9. 相依性
 
-- **Blocked By**：F001（登入驗證）、F045（`is_sales_manager` 旗標設計）
+- **Blocked By**：F001（登入驗證）、F002 §4.6（角色矩陣 + Guard）、F045（`business_role` 欄位設計）
 - **Blocks**：F049, F050, F051, F052, F060, F061
 
 ## 10. 交叉參考
@@ -166,4 +166,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 非功能需求：[nfr.md](../nfr.md)（NFR-003 執行效能）
 - 架構決策：AD-E07-1（OB 遷移至 AppDB）
-- 相關功能：[F049](F049-stage0-daily-estimate.md)（Stage 0 估算）、[F050](F050-create-list-definition.md)、[F051](F051-edit-list-definition.md)、[F052](F052-disable-list-definition.md)、[F060](F060-edit-per-list-dept-ratio.md)、[F068](F068-edit-base-code.md)
+- 相關功能：[F049](F049-stage0-daily-estimate.md)（Stage 0 估算）、[F050](F050-create-list-definition.md)、[F051](F051-edit-list-definition.md)、[F052](F052-disable-list-definition.md)、~~F060（已 DEPRECATED → [F079](F079-set-dept-ratio.md)）~~、[F068](F068-edit-base-code.md)、[F002 §4.6 角色矩陣](F002-user-login.md)

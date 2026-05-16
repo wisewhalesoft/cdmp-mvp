@@ -28,17 +28,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務主管查看特定月跑的三份執行快照詳細內容（`config` / `input_list` / `result`）。快照為不可修改的唯讀紀錄（INSERT-only）；JSONB payload 由前端解析並以表格方式呈現。`input_list` 與 `result` 快照提供搜尋功能（依客戶編號 / 人員工號）。
+提供業務部長 / 業務處長查看特定月跑的三份執行快照詳細內容（`config` / `input_list` / `result`）。快照為不可修改的唯讀紀錄（INSERT-only）；JSONB payload 由前端解析並以表格方式呈現。`input_list` 與 `result` 快照提供搜尋功能（依客戶編號 / 人員工號）。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 查看特定月跑的三份執行快照詳細內容
 **So that** 可完整追溯當時的執行設定、輸入名單與分派結果，作為稽核依據或問題排查參考
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
+- 業務部長 / 業務處長已登入並持有有效 JWT Token
 - 目標 `run_id` 存在於 `assignment_run`
 - `assignment_run_snapshot` 已寫入三份快照（`config` / `input_list` / `result`）
 
@@ -46,14 +46,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ### AC-1：顯示快照總覽
 
-- **Given** 業務主管從 F065 歷史清單進入某月跑的詳情頁
+- **Given** 業務部長 / 業務處長從 F065 歷史清單進入某月跑的詳情頁
 - **When** 頁面載入完成
 - **Then** 顯示月跑基本資訊（`run_id`、`project_workym`、`triggered_by`、`triggered_at`、`finished_at`、`status`、`total_cases`）
 - **And** 顯示三個快照分頁索引：「設定快照」、「輸入名單快照」、「結果快照」
 
 ### AC-2：查看設定快照（config）
 
-- **Given** 業務主管點擊「設定快照」分頁
+- **Given** 業務部長 / 業務處長點擊「設定快照」分頁
 - **When** 分頁內容載入
 - **Then** 顯示本次執行時使用的完整設定參數：
   - 計分版本號與備註（`card_type` / `card_version`）
@@ -63,14 +63,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ### AC-3：查看輸入名單快照（input_list）
 
-- **Given** 業務主管點擊「輸入名單快照」分頁
+- **Given** 業務部長 / 業務處長點擊「輸入名單快照」分頁
 - **When** 分頁內容載入
 - **Then** 顯示 Stage 1 的原始名單摘要：總筆數、各 LIST_NO 筆數
 - **And** 提供搜尋功能：可依客戶編號（`custo_no`）查詢是否在輸入名單中
 
 ### AC-4：查看結果快照（result）
 
-- **Given** 業務主管點擊「結果快照」分頁
+- **Given** 業務部長 / 業務處長點擊「結果快照」分頁
 - **When** 分頁內容載入
 - **Then** 顯示最終分派結果：總筆數、各部門分配量、各等級分佈
 - **And** 提供搜尋功能：可依客戶編號（`custo_no`）或人員工號（`emplid`）查詢分派紀錄
@@ -78,7 +78,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 ### AC-5：run_id 不存在或快照缺失
 
 - **Given** URL 中的 `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 缺少某份快照
-- **When** 業務主管進入詳情頁
+- **When** 業務部長 / 業務處長進入詳情頁
 - **Then** 回傳 404 `ASSIGNMENT_RUN_NOT_FOUND`，前端顯示「找不到該月跑紀錄或快照不完整」
 
 ## 5. API 規格
@@ -123,7 +123,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | `run_id` 不存在或快照缺失 |
 
 ## 6. 商業規則

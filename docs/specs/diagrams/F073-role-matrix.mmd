@@ -1,0 +1,45 @@
+%% F073 / F074 — E07 角色 × 模組權限矩陣決策流程
+%% 顯示請求進入 E07 後，後端 Guard 如何依「Admin / Director / SectionChief」決定通過或拒絕
+%% 配合 F002 §E07 角色矩陣（權威定義）與 error-handling.md#assignment-errors 閱讀
+
+flowchart TD
+    Start([HTTP 請求進入 E07 endpoint]) --> JwtCheck{JWT 有效?}
+    JwtCheck -->|否| E401[/401 AUTH_TOKEN_MISSING/]
+    JwtCheck -->|是| RoleResolve[解析 role + e07_role]
+
+    RoleResolve --> AdminCheck{role = admin?}
+    AdminCheck -->|是| Pass([通過 — 全 E07 範圍可存取])
+
+    AdminCheck -->|否| DirectorCheck{e07_role = director?}
+    DirectorCheck -->|是| Pass
+
+    DirectorCheck -->|否| SectionChiefCheck{e07_role = section_chief?}
+    SectionChiefCheck -->|否| E403Generic[/403 AUTH_FORBIDDEN/]
+
+    SectionChiefCheck -->|是| EndpointType{請求 endpoint 類別}
+
+    EndpointType -->|"M02 全部端點 (含 GET)"| E403DirectorOnly1[/403 E07_FORBIDDEN_DIRECTOR_ONLY/]
+    EndpointType -->|"部長專屬功能 (M06 白名單 / 月跑 / 名單 CRUD …)"| E403DirectorOnly2[/403 E07_FORBIDDEN_DIRECTOR_ONLY/]
+    EndpointType -->|"M03b 個別業務比例設定 (寫入)"| ScopeCheck{資料 created_by = 當前 userId?}
+    EndpointType -->|"M03d 準備完成階段 (唯讀)"| ScopeCheck
+    EndpointType -->|"GET 一般 E07 列表 (非 M02)"| ScopedRead[Scoped 讀取<br/>service 層套 created_by 過濾]
+
+    ScopeCheck -->|是| Pass
+    ScopeCheck -->|否| E403Scope[/403 E07_FORBIDDEN_SECTION_CHIEF_SCOPE/]
+
+    ScopedRead --> Pass
+
+    classDef passNode fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef errNode fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef decisionNode fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    class Pass passNode
+    class E401,E403Generic,E403DirectorOnly1,E403DirectorOnly2,E403Scope errNode
+    class JwtCheck,AdminCheck,DirectorCheck,SectionChiefCheck,EndpointType,ScopeCheck decisionNode
+
+    subgraph Legend [說明]
+        L1[Admin = role 'admin']
+        L2[Director = e07_role 'director' 或 Admin 自動繼承]
+        L3[SectionChief = e07_role 'section_chief']
+        L4[並任 Director + SectionChief: Director 權限優先]
+    end

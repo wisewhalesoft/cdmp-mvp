@@ -5,18 +5,26 @@ feature-id: F006
 source-story: US-012
 epic: E02
 priority: P0-MVP
-version: "2.1"
-date: 2026-04-24
+version: "2.3"
+date: 2026-05-16
 status: Draft
 ---
 
 # F006: 編輯帳號
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+
+> **v2.3 / 2026-05-16 變更（E07 合併重構 AD-E07 v3.0）**：v1.x `is_sales_manager` 欄位與 v1.4 短期過渡 `e07_role` 欄位均已於 m14 migration DROP，整合為單一欄位 `users.business_role VARCHAR(20) NULL`，唯一寫入入口為 [F006a](F006a-update-business-role.md) PATCH `/api/v1/accounts/:id/business-role`。本端點 PUT body **不**包含 `business_role` 欄位（若帶入應忽略，沿用敏感欄位獨立端點設計慣例）；GET response 可包含 `business_role` 唯讀欄位供前端顯示。
 
 ## 功能摘要
 
-Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限基本資料的修改，不包含密碼變更（由 F010 處理）、角色變更（由 F008 處理，支援 Admin / User 兩種角色）與業務主管旗標切換（由 F008 處理 `is_sales_manager`）。編輯帳號頁面顯示該帳號目前的角色中文名稱（唯讀），若為 User 角色亦顯示 `is_sales_manager` 狀態（唯讀，變更入口位於 F008）。
+Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限基本資料的修改，**不**包含：
+
+- 密碼變更（由 F010 處理）
+- 系統角色變更（`role`：admin / user，由 F008 v3.x DEPRECATED 之 PATCH `/role` 處理；如需重啟動請另起 spec）
+- **業務角色變更（`business_role`：director / section_chief / NULL，由 [F006a](F006a-update-business-role.md) 之 PATCH `/api/v1/accounts/:id/business-role` 專用端點處理；v2.3 補修聲明）**
+
+編輯帳號頁面顯示該帳號目前的系統角色中文名稱（唯讀），若帳號持有 `business_role`，亦以唯讀方式顯示對應 label（「業務部長」/「業務處長」/「未指派」），變更入口導向 F006a。
 
 ## User Story
 
@@ -132,17 +140,18 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 | BR-2 | Email 在儲存前一律以 `toLowerCase()` 轉為小寫，與 F004 一致 |
 | BR-3 | Email 唯一性檢查須排除自身帳號（同一帳號的 Email 未變更時不應觸發重複錯誤） |
 | BR-4 | 密碼變更不在此功能範圍（由 F010 處理） |
-| BR-5 | 角色變更不在此功能範圍（由 F008 處理，支援 Admin / User 兩種角色） |
-| BR-6 | 業務主管旗標（`is_sales_manager`）切換不在此功能範圍（由 F008 對應端點處理） |
+| BR-5 | 系統角色變更（`role`：admin / user）不在此功能範圍（v2.3 / E07 合併重構 AD-E07 v3.0：原由 [F008](F008-assign-change-role.md) 之 PATCH `/role` 端點處理，但 F008 已整體標 DEPRECATED；如需重啟動 PATCH `/role` 之語意，請另起 spec — 建議 F008a 或 F006b） |
+| BR-6 | ~~業務主管旗標切換不在此範圍~~（v2.3 廢除：`is_sales_manager` 欄位已 DROP；參見 BR-9） |
 | BR-7 | 僅 Admin 角色可編輯帳號 |
 | BR-8 | 建議使用 Optimistic Locking 防止並發編輯衝突 |
+| BR-9 | **業務角色（`business_role`）變更不在此功能範圍（v2.3 / E07 合併重構 AD-E07 v3.0）**：`users.business_role` 欄位之**唯一**寫入入口為 PATCH `/api/v1/accounts/:id/business-role`（[F006a](F006a-update-business-role.md) Admin only；同 transaction 觸發 token revoke）；本端點 PUT body 即使含 `business_role` 欄位亦應**忽略**（不寫入、不報錯）。GET response 可包含 `business_role` 唯讀欄位供前端顯示。 |
 
 ## UI/UX 需求
 
 | 項目 | 說明 |
 |------|------|
 | 入口 | 帳號清單中每筆帳號的「編輯」操作按鈕 |
-| 表單 | 編輯表單或對話框，預填現有姓名與 Email；角色以中文名稱唯讀顯示（「管理者」或「使用者」）；若為 User 角色，額外以唯讀方式顯示「業務主管權限」狀態（已啟用／未啟用），變更入口導向 F008 |
+| 表單 | 編輯表單或對話框，預填現有姓名與 Email；系統角色以中文名稱唯讀顯示（「管理者」或「使用者」）；若帳號持有 `business_role`，額外以唯讀方式顯示對應 label（「業務部長」/「業務處長」/「未指派」），變更入口導向 [F006a](F006a-update-business-role.md) |
 | 欄位驗證 | 每個欄位在失焦或提交時顯示即時驗證訊息 |
 | 成功回饋 | 顯示成功訊息，變更立即反映於帳號清單或詳細頁面 |
 | 錯誤回饋 | 每個欄位下方顯示對應的驗證錯誤訊息；重複 Email 錯誤顯示於 Email 欄位下方 |
@@ -191,4 +200,11 @@ Email 唯一性由資料庫層級的 unique constraint 保障。
 - Epic Brief：[E02 Epic Brief](../stories/epics/E02-account-role-management/epic-brief.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
-- 相關功能：F004、F005、F008（角色變更）、F010（密碼重設）、F045（角色定義）
+- 相關功能：F004、F005、[F006a](F006a-update-business-role.md)（業務角色變更**唯一寫入入口**）、~~F008（DEPRECATED v3.x）~~、F010（密碼重設）、F045（角色定義）、[F073 v2.0](F073-define-director-role.md)、[F074 v2.0](F074-define-section-chief-role.md)
+
+## 更新紀錄
+
+| 版本 | 日期 | 變更摘要 |
+|---|---|---|
+| v2.1 | 2026-04-24 | E02 `is_sales_manager` 旗標同步：唯讀顯示 + 變更入口導向 F008 |
+| **v2.3** | **2026-05-16** | **【E07 合併重構 AD-E07 v3.0】**：廢除 v2.1/v2.2 之 `is_sales_manager` / `e07_role` 欄位設計，整合為單一欄位 `users.business_role`；功能摘要、BR-5/BR-6/BR-9、UI/UX 表單欄位、交叉參考全面改寫為引用 [F006a](F006a-update-business-role.md) 之 PATCH `/business-role` 端點；F008 標 DEPRECATED |

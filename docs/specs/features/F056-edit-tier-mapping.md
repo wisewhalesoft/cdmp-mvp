@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管針對 Tab 1 選中之 CARD_TYPE，維護 TIER_LEVEL 對應表(`ob_tier`，舊系統 `OBTIER`)。對應表用途為將「計分卡類型 CARD_TYPE × 計分卡等級 CARD_LEVEL」映射至外部系統使用的分群代碼 TIER_LEVEL。月跑 Stage 2 完成 CARD_LEVEL 計算後，依本表 join 取得 `tier_level` 寫回 `ob_pool_data_list.tier_level`。
+提供業務部長針對 Tab 1 選中之 CARD_TYPE，維護 TIER_LEVEL 對應表(`ob_tier`，舊系統 `OBTIER`)。對應表用途為將「計分卡類型 CARD_TYPE × 計分卡等級 CARD_LEVEL」映射至外部系統使用的分群代碼 TIER_LEVEL。月跑 Stage 2 完成 CARD_LEVEL 計算後，依本表 join 取得 `tier_level` 寫回 `ob_pool_data_list.tier_level`。
 
 **v1.5 重大變更**(breaking)：
 
@@ -44,14 +44,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 維護選定計分卡類型(CARD_TYPE)的 TIER_LEVEL 對應設定，包含「標準規則(CARD_LEVEL 非空)」與「Fallback 規則(CARD_LEVEL 為空，不分等級)」兩種對應模式
 **So that** 確保月跑 Stage 2 計分結果能正確分群至外部系統使用的 TIER_LEVEL，避免後續分派與通報資料錯誤
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長已登入並持有有效 JWT Token
+- `businessRole='director'`（M02 計分卡寫入限部長，GET 端點開放處長；後端寫入套用 `DirectorGuard`，GET 套用 `DirectorOrSectionChiefGuard`，依 F002 §4.6.2）
 - F069 Tab 1 已有選中之 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status = 'active'`
 - `ob_levelcard_level` 已有對應的 `card_level` 等級資料(由 F055 維護)；Standard 規則新增之 `card_level` 必須存在於該 CARD_TYPE 之 active 計分版本
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 的紀錄
@@ -60,7 +60,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-1：依選中 CARD_TYPE 顯示 TIER_LEVEL 對應表
 
-- **Given** 業務主管已在 Tab 1 選中某 CARD_TYPE，並切換至 Tab 5
+- **Given** 業務部長已在 Tab 1 選中某 CARD_TYPE，並切換至 Tab 5
 - **When** Tab 5 載入完成
 - **Then** 顯示 `ob_tier WHERE card_type = :selectedCardType` 的所有對應列，欄位：CARD_LEVEL(standard 列顯示等級代碼如 A/B/C/D;fallback 列顯示「(無 — Fallback)」)、TIER_LEVEL(T1~T10 值)、LIST_NM(描述性欄位，可空)
 - **And** 預設依 CARD_LEVEL 升冪排序，fallback 列(`card_level IS NULL`)排在末尾
@@ -70,15 +70,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ### AC-2：修改對應關係(TIER_LEVEL 採 T1~T10 下拉)
 
 - **Given** 對應表已顯示
-- **When** 業務主管修改某 `(card_type, card_level)` 之 `tier_level` 並點擊儲存
+- **When** 業務部長修改某 `(card_type, card_level)` 之 `tier_level` 並點擊儲存
 - **Then** 對應關係更新(針對 `ob_tier` 該複合 PK 紀錄 UPDATE)
 - **And** TIER_LEVEL 之輸入方式為下拉選單，僅 T1 / T2 / T3 / T4 / T5 / T6 / T7 / T8 / T9 / T10 共 10 個選項(**不允許自由文字輸入**);後端對 request 之 `tierLevel` 進行列舉驗證，不在 T1~T10 範圍內回 422 `TIER_LEVEL_INVALID_ENUM`
 - **And** 寫入 `assignment_audit_log`(`action = 'UPDATE'`、`entity_type = 'ob_tier'`、`entity_id = '{card_type}|{card_level ?? ""}'`)
 
 ### AC-3：新增 Standard 對應列(CARD_LEVEL 非空)
 
-- **Given** 對應表已顯示，業務主管點擊「新增對應」，選擇規則類型為「Standard(依等級)」
-- **When** 業務主管填入 CARD_LEVEL(必填，下拉來源：目前選中 CARD_TYPE 的 `ob_levelcard_level` 有效等級)、TIER_LEVEL(必填，T1~T10 下拉)、LIST_NM(選填)，點擊確認
+- **Given** 對應表已顯示，業務部長點擊「新增對應」，選擇規則類型為「Standard(依等級)」
+- **When** 業務部長填入 CARD_LEVEL(必填，下拉來源：目前選中 CARD_TYPE 的 `ob_levelcard_level` 有效等級)、TIER_LEVEL(必填，T1~T10 下拉)、LIST_NM(選填)，點擊確認
 - **Then** `ob_tier` 新增一列(`card_type` = 選中之 selectedCardType，`card_level` = 填入值)，顯示新增成功提示
 - **And** 若 DB 中 `(card_type, card_level)` 組合已存在，回 422 `TIER_LEVEL_DUPLICATE`，訊息：「CARD_TYPE {cardType} × CARD_LEVEL {cardLevel} 的對應已存在」
 - **And** 若該 CARD_TYPE 已存在 fallback 列(`card_level IS NULL`)，回 422 `CARD_TYPE_FALLBACK_STANDARD_MUTEX`，訊息：「CARD_TYPE {cardType} 已有 Fallback 規則，請先移除後再新增 Standard 對應」
@@ -86,15 +86,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-4：CARD_LEVEL 必須存在於選中 CARD_TYPE 之 active 計分版本(Standard 規則路徑)
 
-- **Given** 業務主管選擇 Standard 規則，輸入非空之 CARD_LEVEL
+- **Given** 業務部長選擇 Standard 規則，輸入非空之 CARD_LEVEL
 - **When** 前端 / 後端驗證
 - **Then** 該 CARD_LEVEL 必須存在於該 CARD_TYPE 之 active `ob_levelcard_level`，否則回 422 `CARD_LEVEL_NOT_FOUND_IN_VERSION`
 - **And** 若 CARD_LEVEL 留空(Fallback 規則路徑)，改走 AC-4a，不觸發本驗證
 
 ### AC-4a：允許新增 CARD_LEVEL 為 NULL 的 Fallback 對應
 
-- **Given** 業務主管選擇規則類型為「Fallback(不分等級)」
-- **When** 業務主管填入 TIER_LEVEL(必填，T1~T10 下拉)、LIST_NM(選填)，CARD_LEVEL 欄位自動帶入「不分等級(NULL)」，點擊確認
+- **Given** 業務部長選擇規則類型為「Fallback(不分等級)」
+- **When** 業務部長填入 TIER_LEVEL(必填，T1~T10 下拉)、LIST_NM(選填)，CARD_LEVEL 欄位自動帶入「不分等級(NULL)」，點擊確認
 - **Then** `ob_tier` 新增一列(`card_type` = 選中之 selectedCardType，`card_level IS NULL`)，表示不分等級直接對應 TIER_LEVEL
 - **And** 若該 CARD_TYPE 之 fallback 列已存在，回 422 `TIER_LEVEL_DUPLICATE`，訊息：「CARD_TYPE {cardType} 的 Fallback 對應已存在，請修改現有列」
 - **And** 若該 CARD_TYPE 已存在任一 Standard 列(`card_level` 非空)，回 422 `CARD_TYPE_FALLBACK_STANDARD_MUTEX`，訊息：「CARD_TYPE {cardType} 已有 {N} 筆 Standard 規則，請先移除後再新增 Fallback 對應」
@@ -104,26 +104,26 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ### AC-5：月跑執行中禁止修改
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
-- **When** 業務主管嘗試修改對應表
+- **When** 業務部長嘗試修改對應表
 - **Then** 編輯按鈕 disabled，API 回 409 `SCORING_VERSION_LOCKED`
 
 ### AC-6：刪除單筆 TIER 對應
 
-- **Given** 業務主管於 Tab 5 看到某 `(cardType, cardLevel)` 列;無月跑鎖
-- **When** 業務主管點擊該列的刪除按鈕並於確認對話框點擊「確認刪除」
+- **Given** 業務部長於 Tab 5 看到某 `(cardType, cardLevel)` 列;無月跑鎖
+- **When** 業務部長點擊該列的刪除按鈕並於確認對話框點擊「確認刪除」
 - **Then** 呼叫 `DELETE /api/v1/assignment/scoring/tier-mapping`(query：`cardType` + `cardLevel`)，HTTP 200，DB 中該複合 PK 紀錄被實體刪除(hard delete)
 - **And** 寫入 `assignment_audit_log`(`action = 'DELETE'`、`entity_type = 'ob_tier'`、`entity_id = '{cardType}|{cardLevel ?? ""}'`、`before_value` 含 `tierLevel`、`after_value = null`)
 
 ### AC-7：刪除 fallback 對應(cardLevel = NULL)
 
 - **Given** fallback 對應紀錄存在(`card_level IS NULL`)
-- **When** 業務主管點擊刪除按鈕並確認
+- **When** 業務部長點擊刪除按鈕並確認
 - **Then** API 接受 `cardLevel` query 省略(不可用空字串，需與 BR-9 一致)，執行 NULL 紀錄刪除
 - **And** 寫入 `assignment_audit_log`，`entity_id = '{cardType}|'`(cardLevel 部份留空)
 
 ### AC-8：TIER_LEVEL 列舉約束(HARDCODE T1~T10)
 
-- **Given** 業務主管於 5.2 / 5.3 端點送出 `tierLevel` 值
+- **Given** 業務部長於 5.2 / 5.3 端點送出 `tierLevel` 值
 - **When** 後端驗證
 - **Then** `tierLevel` 必須屬於列舉 `["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"]`;違反回 422 `TIER_LEVEL_INVALID_ENUM`，訊息：「TIER_LEVEL 必須為 T1~T10 之一，目前值：`{value}`」
 - **And** 前端 UI 之 TIER_LEVEL 欄位採下拉選單呈現此 10 個選項，不允許自由輸入
@@ -138,7 +138,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 5. API 規格
 
-**Controller 規範**(適用於本節所有端點)：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**：GET 端點（5.1）使用 `DirectorOrSectionChiefGuard` + `@RequireDirectorOrSectionChief()`；寫入端點（5.2 PUT / 5.3 POST / 5.4 DELETE）使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2 M02 計分卡讀取 / 寫入二分）。
 
 **CARD_TYPE 範圍鎖**：所有端點之 `cardType` 必須對應 `ob_card_type.status = 'active'`，否則回 404 `CARD_TYPE_NOT_FOUND`(AC-9)。
 
@@ -180,7 +180,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard`）；GET 端點回 `E07_ROLE_NOT_ASSIGNED`（`DirectorOrSectionChiefGuard`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`(v1.5 新增) |
 
 ### 5.2 PUT /api/v1/assignment/scoring/tier-mapping
@@ -234,7 +234,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard`）；GET 端點回 `E07_ROLE_NOT_ASSIGNED`（`DirectorOrSectionChiefGuard`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`(v1.5 新增) |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 422 | TIER_LEVEL_DUPLICATE | request body 內 `(card_type, card_level)` 組合重複 |
@@ -278,7 +278,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard`）；GET 端點回 `E07_ROLE_NOT_ASSIGNED`（`DirectorOrSectionChiefGuard`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | request 之 `cardType` 不存在於 `ob_card_type.status = 'active'`(v1.5 新增) |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 422 | TIER_LEVEL_DUPLICATE | DB 中 `(card_type, card_level)` 組合已存在 |
@@ -324,7 +324,7 @@ fallback 刪除回應範例(cardLevel 為 null)：
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard`）；GET 端點回 `E07_ROLE_NOT_ASSIGNED`（`DirectorOrSectionChiefGuard`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`(v1.5 新增) |
 | 404 | TIER_MAPPING_NOT_FOUND | 指定的 `(cardType, cardLevel)` 對應不存在 |
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
@@ -338,7 +338,7 @@ fallback 刪除回應範例(cardLevel 為 null)：
 | BR-3 | Standard 規則之 CARD_LEVEL 必須存在於該 CARD_TYPE 之 active `ob_levelcard_level`;Fallback 規則(`card_level IS NULL`)例外(見 AC-4a) |
 | BR-4 | 此對應表為靜態設定，直接修改生效版本(與 F054 的覆寫式設計一致);歷史追溯依賴月跑 `assignment_run_snapshot.config_payload` |
 | BR-5 | 月跑鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
-| BR-6 | **遷移範圍限定 6 個正規 CARD_TYPE**(v1.5 改寫)：遷移腳本(D3：OBTIER → ob_tier)僅匯入 `ob_card_type` seed 之 6 個正規 CARD_TYPE(H / S / E / S5 / E5 / M)所對應的 OBTIER 紀錄;HM / M3 / HC / C3 / M5 等過渡 / fallback CARD_TYPE 之 OBTIER 紀錄**不匯入**(避免違反 `ob_card_type` 業務層 1:1 綁定)。若業務後續需保留 HM / M3 / HC / C3，由業務主管於 F070 新增 CARD_TYPE 後再於 F056 補設對應;舊 SP 中 M3→T5M、HC→THC、C3→T3C 之硬編碼語意不於新系統保留 |
+| BR-6 | **遷移範圍限定 6 個正規 CARD_TYPE**(v1.5 改寫)：遷移腳本(D3：OBTIER → ob_tier)僅匯入 `ob_card_type` seed 之 6 個正規 CARD_TYPE(H / S / E / S5 / E5 / M)所對應的 OBTIER 紀錄;HM / M3 / HC / C3 / M5 等過渡 / fallback CARD_TYPE 之 OBTIER 紀錄**不匯入**(避免違反 `ob_card_type` 業務層 1:1 綁定)。若業務後續需保留 HM / M3 / HC / C3，由業務部長於 F070 新增 CARD_TYPE 後再於 F056 補設對應;舊 SP 中 M3→T5M、HC→THC、C3→T3C 之硬編碼語意不於新系統保留 |
 | BR-7 | `ob_tier` 原表無稽核欄位;本功能對 `ob_tier` 的 INSERT / UPDATE / DELETE 透過 `assignment_audit_log`(`entity_type = 'ob_tier'`)統一記錄稽核軌跡，與 E07 其他設定一致 |
 | BR-8 | Fallback 語意：`card_level IS NULL` 表示該 CARD_TYPE 不分等級全部對應至設定之 TIER;UI 須以視覺提示區分。**同一 CARD_TYPE 之 Fallback 列與 Standard 列互斥**(BR-13) |
 | BR-9 | `ob_tier.card_level` 為 VARCHAR(5)、`ob_levelcard_level.card_level` 為 VARCHAR(1);兩表 join 與驗證以字串精確比對;TIER 對應輸入超過 1 字元視為對應失敗，回 422 `CARD_LEVEL_NOT_FOUND_IN_VERSION`(fallback 場景 NULL 例外，見 AC-4a) |

@@ -1,0 +1,93 @@
+%% F088 / F089 準備完成階段查詢摘要 + Rollback 之資訊架構
+%% 對應 E07 重構批次 6（2026-05-15）
+flowchart TB
+    subgraph Roles[角色權限]
+        Director[部長 Director]
+        SectionChief[處長 Section Chief]
+        Admin[Admin]
+    end
+
+    subgraph Endpoints[F088 GET 端點]
+        ListEndpoint[GET /list-definitions/<br/>ready-summary?ym=YYYYMM]
+        SummaryEndpoint[GET /list-definitions/<br/>listNo/summary<br/>支援 approval + ready 階段<br/>F086 預覽共用]
+    end
+
+    Director --> ListEndpoint
+    SectionChief --> ListEndpoint
+    Admin --> ListEndpoint
+
+    Director --> SummaryEndpoint
+    SectionChief --> SummaryEndpoint
+    Admin --> SummaryEndpoint
+
+    subgraph ListResponse[ready-summary 回應結構]
+        MonthlyReady[monthlyRunReady<br/>allReady boolean<br/>totalActiveLists<br/>readyLists 計數<br/>incompleteLists 陣列]
+        ReadyLists[readyLists 陣列<br/>listNo / listNm /<br/>approverName / approvedAt]
+    end
+
+    ListEndpoint --> MonthlyReady
+    ListEndpoint --> ReadyLists
+
+    subgraph SummaryResponse[summary/listNo 回應四區塊]
+        Block1[區塊 1：篩選條件<br/>condition_payload JSONB +<br/>cr_enabled 開關]
+        Block2[區塊 2：部門比例<br/>ob_dept_pct +<br/>加總顯示]
+        Block3[區塊 3：個別業務比例<br/>ob_empl_set 按部門分組<br/>處長轄區過濾<br/>F082 BR-3 / scopeByCreator]
+        Block4[區塊 4：CR 開關<br/>ob_list_definition.cr_enabled]
+        ApprovalHistory[approvalHistory 陣列<br/>assignment_approval 倒序<br/>action / reject_reason /<br/>approverName / approvedAt]
+    end
+
+    SummaryEndpoint --> Block1
+    SummaryEndpoint --> Block2
+    SummaryEndpoint --> Block3
+    SummaryEndpoint --> Block4
+    SummaryEndpoint --> ApprovalHistory
+
+    subgraph ScopeFiltering[處長轄區過濾邏輯]
+        DirectorView[部長 / Admin 視角<br/>所有部門業務員]
+        SectionChiefView[處長視角<br/>僅 ob_empl_set.created_by =<br/>currentUserId 之部門業務員]
+    end
+
+    Block3 -.-> DirectorView
+    Block3 -.-> SectionChiefView
+
+    subgraph ActionsBar[F088 操作入口]
+        TriggerRun[執行月跑按鈕<br/>限部長 + Admin<br/>連結至 F061]
+        RollbackBtn[退回簽核按鈕<br/>限部長 + Admin<br/>連結至 F089]
+        ReadOnlyMark[完全唯讀<br/>無編輯按鈕<br/>後端 F051/F079/F082 PUT<br/>422 LIST_STAGE_TRANSITION_FORBIDDEN]
+    end
+
+    MonthlyReady -->|allReady = true| TriggerRun
+    ReadyLists --> RollbackBtn
+    Block1 -.-> ReadOnlyMark
+    Block2 -.-> ReadOnlyMark
+    Block3 -.-> ReadOnlyMark
+    Block4 -.-> ReadOnlyMark
+
+    subgraph F089Rollback[F089 Rollback 流程]
+        RollbackTxn[F089 DB Transaction<br/>1. UPDATE stage = 'approval'<br/>2. DELETE FROM<br/>   assignment_approval<br/>   WHERE list_no<br/>   清空簽核紀錄<br/>3. INSERT assignment_audit_log<br/>   含 before_value 完整快照<br/>** 設定資料保留 **]
+        RollbackResult[名單退回<br/>stage = 'approval'<br/>從 ready 清單移出<br/>monthlyRunReady 即時更新]
+    end
+
+    RollbackBtn --> RollbackTxn
+    RollbackTxn --> RollbackResult
+    RollbackResult -.重新核准 F086.-> ListEndpoint
+
+    subgraph CrossSpec[跨 spec 連動]
+        F061Run[F061 月跑觸發<br/>monthlyRunReady.allReady<br/>= 月跑前置條件 1]
+        F082Banner[F082 v1.1 banner<br/>F089 Rollback 後<br/>latestRejection = null<br/>banner 不顯示]
+    end
+
+    TriggerRun -.allReady = true.-> F061Run
+    RollbackResult -.assignment_approval 清空.-> F082Banner
+
+    classDef roleStyle fill:#e7f3ff,stroke:#0066cc,color:#000
+    classDef endpointStyle fill:#fff8dc,stroke:#daa520,color:#000
+    classDef readonlyStyle fill:#f0f0f0,stroke:#666,color:#000
+    classDef rollbackStyle fill:#ffe6e6,stroke:#dc3545,color:#000
+    classDef crossStyle fill:#e6ffe6,stroke:#28a745,color:#000
+
+    class Director,SectionChief,Admin roleStyle
+    class ListEndpoint,SummaryEndpoint endpointStyle
+    class ReadOnlyMark readonlyStyle
+    class RollbackTxn,RollbackResult,RollbackBtn rollbackStyle
+    class F061Run,F082Banner crossStyle

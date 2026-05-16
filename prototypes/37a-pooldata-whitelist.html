@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POOLDATA 篩選欄位白名單 — 代碼維護 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    @keyframes slide-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .animate-slide-in { animation: slide-in 0.25s ease-out; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <div class="mx-5 my-3 border-t border-border"></div>
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="false"
+        class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <span class="flex items-center gap-3"><i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派</span>
+        <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200"></i>
+      </button>
+      <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 0px;">
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+          <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
+        </a>
+        <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+        <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+        <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
+        <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例</a>
+        <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱</a>
+        <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
+        <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+        <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+        <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+        <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+        <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+        <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+        <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+          <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+          <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ===== Header（含 B1 角色切換器） ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2 text-sm">
+      <a href="37-base-code.html" class="text-gray-500 hover:text-primary transition">代碼維護</a>
+      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
+      <span class="font-semibold text-gray-800">POOLDATA 篩選欄位白名單</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 bg-gray-50 border border-border rounded-lg px-2 py-1">
+        <i data-lucide="user-check" class="w-3.5 h-3.5 text-gray-400"></i>
+        <span class="text-[10px] text-gray-500 uppercase tracking-wide">模擬角色</span>
+        <select id="ds-role-switcher" onchange="updateRoleBadge(this.value); applyRoleGuard(this.value);" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="minister">部長</option>
+          <option value="director">處長</option>
+          <option value="admin">Admin</option>
+          <option value="sales">業務</option>
+        </select>
+      </div>
+      <div id="ds-role-badge-container"></div>
+      <span class="text-sm text-gray-600">王小明</span>
+      <button class="text-sm text-gray-500 hover:text-danger transition">登出</button>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+    <div class="p-6">
+
+      <!-- Scope 提示 -->
+      <div class="mb-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
+        <i data-lucide="filter" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-semibold text-primary">F075 — POOLDATA 篩選欄位白名單（M06 代碼維護擴充）</p>
+          <p class="text-xs text-gray-600 mt-0.5">
+            管理可作為名單條件的 <code>OBPOOLDATA</code> 欄位；每欄位標記 <code>field_type</code>（numeric / categorical / date），驅動 US-106 新名單定義表單的條件元件型態。
+            停用為軟刪除（<code>is_active = false</code>），不回溯既有名單條件（BR-3）。
+            資料表 <code>field_whitelist</code> · 初始 Seed 8 筆（來源 <code>SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql</code>）。
+          </p>
+          <p class="text-xs text-amber-700 mt-1 flex items-start gap-1">
+            <i data-lucide="shield" class="w-3 h-3 mt-0.5 shrink-0"></i>
+            <span><span class="font-medium">權限</span>：部長 + Admin 可新增 / 編輯 / 停用；處長 + 業務僅可查看（不渲染寫入按鈕；後端寫入端點亦回 403 <code>E07_FORBIDDEN_DIRECTOR_ONLY</code>）。請使用上方角色切換器測試。</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- 卡片 panel -->
+      <div class="bg-white rounded-lg border border-border shadow-sm">
+
+        <!-- 工具列 -->
+        <div class="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
+          <div class="relative flex-1 min-w-[240px] max-w-[400px]">
+            <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input id="searchKw" oninput="renderTable()" type="text" placeholder="搜尋 column_name / display_name..."
+              class="w-full pl-9 pr-3 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+          </div>
+          <div class="relative">
+            <select id="typeFilter" onchange="renderTable()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+              <option value="all">類別：全部</option>
+              <option value="categorical">categorical（類別型）</option>
+              <option value="numeric">numeric（數值型）</option>
+              <option value="date">date（日期型）</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <div class="relative">
+            <select id="statusFilter" onchange="renderTable()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+              <option value="all">狀態：全部</option>
+              <option value="active">僅顯示啟用</option>
+              <option value="inactive">僅顯示停用</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+          <button onclick="document.getElementById('searchKw').value=''; document.getElementById('typeFilter').value='all'; document.getElementById('statusFilter').value='all'; renderTable();" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-border rounded-md hover:bg-white transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            清除
+          </button>
+          <span class="ml-auto text-xs text-gray-400">總計 <span id="totalCnt" class="font-mono font-medium text-gray-600">8</span> 筆（啟用 <span id="activeCnt" class="text-success font-medium">7</span> / 停用 <span id="inactiveCnt" class="text-gray-500 font-medium">1</span>）</span>
+          <button data-write-action onclick="openFieldModal('create')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            新增欄位
+          </button>
+        </div>
+
+        <!-- 表格 -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-gray-50/60">
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[16%]">column_name</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[18%]">display_name</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[14%]">field_type</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[18%]">seed 來源 / 備註</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[10%]">狀態</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[10%]">建立時間</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600 w-[14%]">操作</th>
+              </tr>
+            </thead>
+            <tbody id="fieldTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between px-5 py-3 border-t border-border">
+          <span class="text-sm text-gray-500" id="paginationInfo">顯示 1-8 / 共 8 筆</span>
+          <div class="flex items-center gap-1">
+            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <button class="px-3 py-1.5 text-sm border border-primary rounded-md text-white bg-primary font-medium">1</button>
+            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- footer note -->
+      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div>
+          <p class="font-medium text-gray-700 mb-0.5">F075 商業規則摘要</p>
+          <ul class="list-disc list-inside space-y-0.5">
+            <li><strong>BR-1</strong>：<code>column_name</code> 為唯一鍵，新增時不分啟用 / 停用一律檢查重複（違反回 422 <code>WHITELIST_FIELD_DUPLICATE</code>）。</li>
+            <li><strong>BR-3</strong>：停用「不回溯」既有名單條件，月跑 Stage 1 直接讀 <code>ob_list_definition</code> JSONB，不 join <code>field_whitelist</code> 驗證。</li>
+            <li><strong>BR-4</strong>：<code>field_type</code> 由 categorical 改為其他類別時，<strong>不自動刪除</strong> F076 既有可選值（軟停用，<code>deactivation_reason = 'field_type_changed'</code>，PO 決議 F076-C）。</li>
+            <li><strong>BR-7</strong>：舊名單（F050/F051）沿用固定欄位邏輯，本白名單僅影響 US-106 後續新名單定義。</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== Modal: 新增 / 編輯欄位 ===== -->
+  <div id="fieldModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="dsCloseModal('fieldModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 id="fieldModalTitle" class="text-lg font-semibold text-gray-900">新增白名單欄位</h3>
+            <p class="text-xs text-gray-500 mt-0.5">POST /api/v1/assignment/pooldata-fields</p>
+          </div>
+          <button onclick="dsCloseModal('fieldModal')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_name <span class="text-danger">*</span></label>
+            <input id="formColumnName" type="text" maxlength="50" placeholder="例：RISK_LEVEL"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-xs text-gray-400 mt-1">需與 <code>ob_pool_data</code> 實際欄位名稱一致；唯一鍵（不分啟用 / 停用）</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">display_name <span class="text-danger">*</span></label>
+            <input id="formDisplayName" type="text" maxlength="100" placeholder="例：風險等級"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-xs text-gray-400 mt-1">業務可讀中文標籤，最多 100 字元</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">field_type <span class="text-danger">*</span></label>
+            <div class="grid grid-cols-3 gap-2" id="fieldTypeRadios">
+              <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition" data-type-card="categorical">
+                <input type="radio" name="fieldType" value="categorical" class="mt-0.5" onchange="onFieldTypeChange(this.value)">
+                <div>
+                  <div class="text-sm font-medium text-gray-800">categorical</div>
+                  <div class="text-[11px] text-gray-500 mt-0.5">類別型（多選列表）</div>
+                </div>
+              </label>
+              <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition" data-type-card="numeric">
+                <input type="radio" name="fieldType" value="numeric" class="mt-0.5" onchange="onFieldTypeChange(this.value)">
+                <div>
+                  <div class="text-sm font-medium text-gray-800">numeric</div>
+                  <div class="text-[11px] text-gray-500 mt-0.5">數值型（min/max）</div>
+                </div>
+              </label>
+              <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition" data-type-card="date">
+                <input type="radio" name="fieldType" value="date" class="mt-0.5" onchange="onFieldTypeChange(this.value)">
+                <div>
+                  <div class="text-sm font-medium text-gray-800">date</div>
+                  <div class="text-[11px] text-gray-500 mt-0.5">日期型（日期範圍）</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- categorical 提示 -->
+          <div id="categoricalHint" class="hidden bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-700">
+            <div class="flex items-start gap-2">
+              <i data-lucide="lightbulb" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+              <div>
+                <p class="font-semibold text-primary mb-0.5">已選擇「類別型」</p>
+                <p>儲存後系統會 hint <code>PLEASE_MAINTAIN_OPTIONS</code>，請至「類別型欄位可選值」頁設定可選值（F076）。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-700 flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+            <div>
+              新增 / 修改寫入 <code>assignment_audit_log</code>（<code>entity_type = pooldata_field_whitelist</code>、<code>entity_id = column_name</code>）。違反唯一性 → 422 <code>WHITELIST_FIELD_DUPLICATE</code>。
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button onclick="dsCloseModal('fieldModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button onclick="submitFieldForm()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: field_type 變更警告（categorical -> 其他） ===== -->
+  <div id="typeChangeModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="dsCloseModal('typeChangeModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">變更欄位類別</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            欄位 <code class="font-mono font-semibold text-gray-800" id="typeChangeColName">PROD_KIND</code> 從<br>
+            <code class="text-primary font-semibold">categorical</code> → <code class="text-warning font-semibold" id="typeChangeNewType">numeric</code>
+          </p>
+        </div>
+        <div class="px-6 pb-2">
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
+            <div class="flex items-start gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+              <div>
+                <p class="font-semibold text-warning mb-1">此操作將自動停用 <span id="typeChangeOptionCnt" class="font-mono">3</span> 個可選值（BR-4 / F076-C）</p>
+                <ul class="list-disc list-inside space-y-0.5 text-gray-600">
+                  <li>F076 既有可選值將 SET <code>is_active = false</code>，<code>deactivation_reason = 'field_type_changed'</code></li>
+                  <li>不執行 hard delete，可於 F076 列表 <code>?includeInactive=true</code> 查詢歷史</li>
+                  <li>既有名單條件不受影響（BR-3 不回溯）</li>
+                  <li>寫入 <code>assignment_audit_log</code>（action=UPDATE + 批次 DISABLE）</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="dsCloseModal('typeChangeModal'); cancelTypeChange();" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button onclick="confirmTypeChange()" class="px-4 py-2 text-sm font-medium text-white bg-warning rounded-lg hover:bg-amber-600 shadow-sm">確認變更</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: 停用 / 啟用 ===== -->
+  <div id="toggleModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="dsCloseModal('toggleModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative">
+        <div class="px-6 pt-6 pb-2 text-center">
+          <div id="toggleIconWrap" class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <i id="toggleIcon" data-lucide="ban" class="w-6 h-6 text-warning"></i>
+          </div>
+          <h3 id="toggleTitle" class="text-lg font-semibold text-gray-900 mb-2">停用白名單欄位</h3>
+          <p class="text-sm text-gray-600 leading-relaxed" id="toggleBody">
+            確定停用 <code class="font-mono font-semibold text-gray-800" id="toggleColName">SETTLE_SRC</code>「<span class="font-semibold text-gray-800" id="toggleDisplayName">他行代償</span>」？
+          </p>
+        </div>
+        <div class="px-6 pb-2">
+          <div id="toggleNote" class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
+            <div class="flex items-start gap-2">
+              <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+              <div>
+                <p class="font-semibold text-warning mb-1">軟刪除（is_active = false）</p>
+                <ul class="list-disc list-inside space-y-0.5 text-gray-600">
+                  <li>新名單定義（US-106）將不再顯示此欄位選項</li>
+                  <li>既有名單條件不被回溯修改（BR-3）</li>
+                  <li>寫入 <code>assignment_audit_log</code>（action=DISABLE）</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4">
+          <button onclick="dsCloseModal('toggleModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
+          <button id="toggleConfirmBtn" onclick="confirmToggle()" class="px-4 py-2 text-sm font-medium text-white bg-warning rounded-lg hover:bg-amber-600 shadow-sm">確認停用</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Toast container ===== -->
+  <div id="toast-container" class="fixed top-20 right-4 z-[60] space-y-2"></div>
+
+  <script>
+    // ============================================================
+    // 共用 pattern（取自 00-design-system.html）
+    // ============================================================
+    const safeLocalStorage = {
+      get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+      set(key, value) { try { localStorage.setItem(key, value); } catch (e) {} },
+      remove(key) { try { localStorage.removeItem(key); } catch (e) {} }
+    };
+
+    function dsOpenModal(id) { document.getElementById(id).classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+    function dsCloseModal(id) { document.getElementById(id).classList.add('hidden'); document.body.style.overflow = ''; }
+
+    const ROLE_META = {
+      minister: { label: '部長', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown' },
+      director: { label: '處長', bg: '#EDE9FE', fg: '#6D28D9', icon: 'user-cog' },
+      admin:    { label: 'Admin', bg: '#FEF3C7', fg: '#B45309', icon: 'shield-check' },
+      sales:    { label: '業務', bg: '#F3F4F6', fg: '#374151', icon: 'user' }
+    };
+    function renderRoleBadge(role) {
+      const m = ROLE_META[role] || ROLE_META.sales;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+    }
+    function updateRoleBadge(role) {
+      const c = document.getElementById('ds-role-badge-container');
+      if (c) { c.innerHTML = renderRoleBadge(role); lucide.createIcons(); }
+    }
+
+    function showToast(type, title, message) {
+      const container = document.getElementById('toast-container');
+      const colors = { success: 'border-success', error: 'border-danger', warning: 'border-warning', info: 'border-primary' };
+      const icons = { success: 'check-circle', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
+      const iconColors = { success: 'text-success', error: 'text-danger', warning: 'text-warning', info: 'text-primary' };
+      const toast = document.createElement('div');
+      toast.className = `bg-white border-l-4 ${colors[type]} rounded-lg shadow-lg p-4 min-w-[320px] max-w-md flex items-start gap-3 animate-slide-in`;
+      toast.innerHTML = `
+        <i data-lucide="${icons[type]}" class="w-5 h-5 ${iconColors[type]} flex-shrink-0 mt-0.5"></i>
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-gray-900">${title}</p>
+          <p class="text-sm text-gray-600 mt-0.5">${message}</p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600 flex-shrink-0"><i data-lucide="x" class="w-4 h-4"></i></button>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons();
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 5000);
+    }
+
+    // ============================================================
+    // F075 Mock Data — 8 筆 seed（依 spec §4.4）
+    // ============================================================
+    const fields = [
+      { columnName: 'PROD_KIND',  displayName: '產品類別',         fieldType: 'categorical', seedNote: 'SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list', isActive: true,  createdAt: '2026-05-15', optionCount: 3 },
+      { columnName: 'LIST_TYPE',  displayName: '名單類別',         fieldType: 'categorical', seedNote: 'SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list', isActive: true,  createdAt: '2026-05-15', optionCount: 3 },
+      { columnName: 'BEST_CASE',  displayName: '最佳產品',         fieldType: 'categorical', seedNote: 'OBMCODEDF (PROD_BEST)',                  isActive: true,  createdAt: '2026-05-15', optionCount: 5 },
+      { columnName: 'SPEC_TP',    displayName: '專案類別',         fieldType: 'categorical', seedNote: 'OBMCODEDF (SPEC_TP)',                    isActive: true,  createdAt: '2026-05-15', optionCount: 32 },
+      { columnName: 'CASEYEAR',   displayName: '進件 / 滿期年數',  fieldType: 'categorical', seedNote: 'SP fn_SplitString_cte（含 99 = 不限）',  isActive: true,  createdAt: '2026-05-15', optionCount: 8 },
+      { columnName: 'SETTLE_SRC', displayName: '他行代償',         fieldType: 'categorical', seedNote: 'SP IN (Y / N)',                          isActive: true,  createdAt: '2026-05-15', optionCount: 2 },
+      { columnName: 'MONTH_CNT',  displayName: '撈取月份計數',     fieldType: 'numeric',     seedNote: 'SP LIST_PERIOD_START/END/INTERVAL',      isActive: true,  createdAt: '2026-05-15', optionCount: 0 },
+      { columnName: 'PAYT_TERM',  displayName: '還款期別',         fieldType: 'numeric',     seedNote: 'SP 已 comment out（被 MONTH_CNT 取代）',  isActive: false, createdAt: '2026-05-15', optionCount: 0, deactivationReason: '現行 SP 已被 MONTH_CNT 取代' }
+    ];
+
+    let editingColumnName = null;   // edit modal 暫存
+    let pendingTypeChange = null;   // type 變更 pending
+
+    // ============================================================
+    // 表格渲染
+    // ============================================================
+    function typeBadge(t) {
+      if (t === 'categorical') return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-primary border border-blue-200"><i data-lucide="list" class="w-3 h-3"></i>categorical</span>';
+      if (t === 'numeric')     return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"><i data-lucide="hash" class="w-3 h-3"></i>numeric</span>';
+      if (t === 'date')        return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-purple-50 text-purple-700 border border-purple-200"><i data-lucide="calendar" class="w-3 h-3"></i>date</span>';
+      return '';
+    }
+    function statusBadge(active) {
+      return active
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>啟用</span>'
+        : '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>停用</span>';
+    }
+
+    function renderTable() {
+      const kw = (document.getElementById('searchKw').value || '').toLowerCase();
+      const typeF = document.getElementById('typeFilter').value;
+      const statusF = document.getElementById('statusFilter').value;
+
+      const filtered = fields.filter(f => {
+        const matchKw = !kw || f.columnName.toLowerCase().includes(kw) || f.displayName.toLowerCase().includes(kw);
+        if (!matchKw) return false;
+        if (typeF !== 'all' && f.fieldType !== typeF) return false;
+        if (statusF === 'active' && !f.isActive) return false;
+        if (statusF === 'inactive' && f.isActive) return false;
+        return true;
+      });
+
+      const tbody = document.getElementById('fieldTbody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-12 text-gray-400 text-sm">無符合條件的欄位</td></tr>';
+      } else {
+        tbody.innerHTML = filtered.map(f => {
+          const inactiveBadge = !f.isActive && f.deactivationReason
+            ? `<div class="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"><i data-lucide="info" class="w-2.5 h-2.5"></i>${f.deactivationReason}</div>`
+            : '';
+          const manageOptionsBtn = (f.fieldType === 'categorical')
+            ? `<a href="37b-categorical-field-values.html?col=${f.columnName}" title="管理可選值" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition inline-block"><i data-lucide="list-checks" class="w-4 h-4"></i></a>`
+            : '';
+          const editBtn = `<button data-write-action onclick="openFieldModal('edit','${f.columnName}')" title="編輯" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition"><i data-lucide="pencil" class="w-4 h-4"></i></button>`;
+          const toggleBtn = f.isActive
+            ? `<button data-write-action onclick="openToggleModal('disable','${f.columnName}')" title="停用" class="p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition"><i data-lucide="ban" class="w-4 h-4"></i></button>`
+            : `<button data-write-action onclick="openToggleModal('enable','${f.columnName}')" title="啟用" class="p-1.5 text-gray-500 hover:text-success hover:bg-green-50 rounded transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>`;
+
+          return `
+            <tr class="border-b border-border hover:bg-gray-50/50 transition ${!f.isActive ? 'opacity-70 bg-gray-50/30' : ''}">
+              <td class="px-5 py-3 font-mono text-sm font-semibold text-gray-900">${f.columnName}</td>
+              <td class="px-5 py-3 text-gray-800">${f.displayName}</td>
+              <td class="px-5 py-3">${typeBadge(f.fieldType)}</td>
+              <td class="px-5 py-3 text-xs text-gray-500">${f.seedNote}${f.fieldType === 'categorical' ? `<div class="text-[11px] text-gray-400 mt-0.5">可選值 ${f.optionCount} 筆</div>` : ''}</td>
+              <td class="px-5 py-3">${statusBadge(f.isActive)}${inactiveBadge}</td>
+              <td class="px-5 py-3 font-mono text-xs text-gray-600">${f.createdAt}</td>
+              <td class="px-5 py-3 text-right">
+                <div class="inline-flex items-center gap-1">
+                  ${manageOptionsBtn}
+                  ${editBtn}
+                  ${toggleBtn}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // 統計
+      document.getElementById('totalCnt').textContent = fields.length;
+      document.getElementById('activeCnt').textContent = fields.filter(f => f.isActive).length;
+      document.getElementById('inactiveCnt').textContent = fields.filter(f => !f.isActive).length;
+      document.getElementById('paginationInfo').textContent = `顯示 1-${filtered.length} / 共 ${filtered.length} 筆`;
+
+      // 套用目前角色守衛（重渲染後按鈕重新生成）
+      applyRoleGuard(document.getElementById('ds-role-switcher').value);
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // 新增 / 編輯 modal
+    // ============================================================
+    function openFieldModal(mode, columnName) {
+      editingColumnName = null;
+      document.getElementById('categoricalHint').classList.add('hidden');
+      document.querySelectorAll('[data-type-card]').forEach(c => {
+        c.classList.remove('border-primary', 'bg-blue-50/40');
+      });
+      document.querySelectorAll('input[name="fieldType"]').forEach(r => r.checked = false);
+
+      if (mode === 'create') {
+        document.getElementById('fieldModalTitle').textContent = '新增白名單欄位';
+        document.getElementById('formColumnName').value = '';
+        document.getElementById('formColumnName').disabled = false;
+        document.getElementById('formDisplayName').value = '';
+      } else {
+        const f = fields.find(x => x.columnName === columnName);
+        if (!f) return;
+        editingColumnName = columnName;
+        document.getElementById('fieldModalTitle').textContent = '編輯白名單欄位';
+        document.getElementById('formColumnName').value = f.columnName;
+        document.getElementById('formColumnName').disabled = true; // PK 不可改
+        document.getElementById('formDisplayName').value = f.displayName;
+        const radio = document.querySelector(`input[name="fieldType"][value="${f.fieldType}"]`);
+        if (radio) { radio.checked = true; onFieldTypeChange(f.fieldType); }
+      }
+      dsOpenModal('fieldModal');
+    }
+
+    function onFieldTypeChange(value) {
+      document.querySelectorAll('[data-type-card]').forEach(c => {
+        if (c.getAttribute('data-type-card') === value) {
+          c.classList.add('border-primary', 'bg-blue-50/40');
+        } else {
+          c.classList.remove('border-primary', 'bg-blue-50/40');
+        }
+      });
+      document.getElementById('categoricalHint').classList.toggle('hidden', value !== 'categorical');
+    }
+
+    function submitFieldForm() {
+      const colName = document.getElementById('formColumnName').value.trim();
+      const dispName = document.getElementById('formDisplayName').value.trim();
+      const typeRadio = document.querySelector('input[name="fieldType"]:checked');
+
+      if (!colName || !dispName || !typeRadio) {
+        showToast('error', '欄位驗證失敗', '請填寫 column_name、display_name 並選擇 field_type');
+        return;
+      }
+
+      // CREATE 模式 — 唯一性檢查（BR-1）
+      if (editingColumnName === null) {
+        if (fields.some(f => f.columnName === colName)) {
+          showToast('error', '422 WHITELIST_FIELD_DUPLICATE', `欄位名稱 ${colName} 已存在於白名單，請改為「啟用」操作`);
+          return;
+        }
+        fields.push({
+          columnName: colName, displayName: dispName, fieldType: typeRadio.value,
+          seedNote: '使用者新增', isActive: true, createdAt: '2026-05-16', optionCount: 0
+        });
+        dsCloseModal('fieldModal');
+        renderTable();
+        if (typeRadio.value === 'categorical') {
+          showToast('info', `${dispName} 已新增`, '此為類別型欄位，請至「類別型欄位可選值」頁設定可選值（hint=PLEASE_MAINTAIN_OPTIONS）');
+        } else {
+          showToast('success', '欄位已新增', `${colName}（${dispName}）已加入白名單`);
+        }
+        return;
+      }
+
+      // EDIT 模式 — 偵測 field_type 變更（categorical -> 其他 → 跳警告）
+      const target = fields.find(f => f.columnName === editingColumnName);
+      if (!target) { dsCloseModal('fieldModal'); return; }
+      const wasCategorical = target.fieldType === 'categorical';
+      const becomesOther   = typeRadio.value !== 'categorical';
+
+      if (wasCategorical && becomesOther && target.optionCount > 0) {
+        pendingTypeChange = { columnName: target.columnName, newType: typeRadio.value, newDisplayName: dispName, optionCount: target.optionCount };
+        document.getElementById('typeChangeColName').textContent = target.columnName;
+        document.getElementById('typeChangeNewType').textContent = typeRadio.value;
+        document.getElementById('typeChangeOptionCnt').textContent = target.optionCount;
+        dsCloseModal('fieldModal');
+        dsOpenModal('typeChangeModal');
+        lucide.createIcons();
+        return;
+      }
+
+      // 一般更新
+      target.displayName = dispName;
+      target.fieldType = typeRadio.value;
+      dsCloseModal('fieldModal');
+      renderTable();
+      showToast('success', '欄位已更新', `${target.columnName} 設定已儲存`);
+    }
+
+    function confirmTypeChange() {
+      if (!pendingTypeChange) { dsCloseModal('typeChangeModal'); return; }
+      const target = fields.find(f => f.columnName === pendingTypeChange.columnName);
+      if (target) {
+        target.fieldType = pendingTypeChange.newType;
+        target.displayName = pendingTypeChange.newDisplayName;
+        target.optionCount = 0; // F076 軟停用（不刪除實際資料，但 active 計數歸零）
+      }
+      const cnt = pendingTypeChange.optionCount;
+      dsCloseModal('typeChangeModal');
+      renderTable();
+      showToast('warning', `${cnt} 個可選值已軟停用`, `${target.columnName} 之 F076 可選值已 SET is_active=false（deactivation_reason='field_type_changed'）`);
+      pendingTypeChange = null;
+    }
+    function cancelTypeChange() { pendingTypeChange = null; }
+
+    // ============================================================
+    // 停用 / 啟用 modal
+    // ============================================================
+    let toggleContext = null;
+    function openToggleModal(action, columnName) {
+      const f = fields.find(x => x.columnName === columnName);
+      if (!f) return;
+      toggleContext = { action, columnName };
+      document.getElementById('toggleColName').textContent = f.columnName;
+      document.getElementById('toggleDisplayName').textContent = f.displayName;
+
+      const confirmBtn = document.getElementById('toggleConfirmBtn');
+      const iconWrap = document.getElementById('toggleIconWrap');
+      const icon = document.getElementById('toggleIcon');
+      const title = document.getElementById('toggleTitle');
+      const note = document.getElementById('toggleNote');
+
+      if (action === 'disable') {
+        title.textContent = '停用白名單欄位';
+        confirmBtn.className = 'px-4 py-2 text-sm font-medium text-white bg-warning rounded-lg hover:bg-amber-600 shadow-sm';
+        confirmBtn.textContent = '確認停用';
+        iconWrap.className = 'w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4';
+        icon.setAttribute('data-lucide', 'ban');
+        icon.className = 'w-6 h-6 text-warning';
+        note.className = 'bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700';
+        note.innerHTML = `
+          <div class="flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-semibold text-warning mb-1">軟刪除（is_active = false）</p>
+              <ul class="list-disc list-inside space-y-0.5 text-gray-600">
+                <li>新名單定義（US-106）將不再顯示此欄位選項</li>
+                <li>既有名單條件不被回溯修改（BR-3）</li>
+                <li>寫入 <code>assignment_audit_log</code>（action=DISABLE）</li>
+              </ul>
+            </div>
+          </div>`;
+      } else {
+        title.textContent = '重新啟用欄位';
+        confirmBtn.className = 'px-4 py-2 text-sm font-medium text-white bg-success rounded-lg hover:bg-green-600 shadow-sm';
+        confirmBtn.textContent = '確認啟用';
+        iconWrap.className = 'w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4';
+        icon.setAttribute('data-lucide', 'rotate-ccw');
+        icon.className = 'w-6 h-6 text-success';
+        note.className = 'bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-gray-700';
+        note.innerHTML = `
+          <div class="flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-success mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-semibold text-success mb-1">重新啟用（is_active = true）</p>
+              <ul class="list-disc list-inside space-y-0.5 text-gray-600">
+                <li>新名單定義將重新顯示此欄位選項</li>
+                <li>F076 可選值（若為 categorical）需另行檢查啟用狀態</li>
+                <li>寫入 <code>assignment_audit_log</code>（action=ENABLE）</li>
+              </ul>
+            </div>
+          </div>`;
+      }
+      dsOpenModal('toggleModal');
+      lucide.createIcons();
+    }
+
+    function confirmToggle() {
+      if (!toggleContext) { dsCloseModal('toggleModal'); return; }
+      const f = fields.find(x => x.columnName === toggleContext.columnName);
+      if (f) {
+        if (toggleContext.action === 'disable') {
+          f.isActive = false;
+          f.deactivationReason = '部長手動停用';
+        } else {
+          f.isActive = true;
+          delete f.deactivationReason;
+        }
+      }
+      const actionLabel = toggleContext.action === 'disable' ? '已停用' : '已啟用';
+      dsCloseModal('toggleModal');
+      renderTable();
+      showToast(toggleContext.action === 'disable' ? 'warning' : 'success', actionLabel, `${f.columnName}（${f.displayName}）狀態已更新`);
+      toggleContext = null;
+    }
+
+    // ============================================================
+    // 角色守衛：處長 / 業務 → 移除所有寫入按鈕
+    // ============================================================
+    function applyRoleGuard(role) {
+      const isReadOnly = (role === 'director' || role === 'sales');
+      document.querySelectorAll('[data-write-action]').forEach(el => {
+        el.style.display = isReadOnly ? 'none' : '';
+      });
+    }
+
+    // ============================================================
+    // Sidebar collapsible
+    // ============================================================
+    (function() {
+      const assignmentPages = [
+        '27-list-definition.html', '28-scoring-config.html', '29-ratio-config.html',
+        '30-stage0-estimate.html', '31-trigger-run.html', '32-run-progress.html',
+        '33-run-summary.html', '34-run-history.html', '35-snapshot-detail.html',
+        '36-run-compare.html', '37-base-code.html',
+        '37a-pooldata-whitelist.html', '37b-categorical-field-values.html'
+      ];
+      const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
+      const isAssignmentPage = assignmentPages.includes(currentPage);
+
+      window.toggleAssignmentSection = function() {
+        const header = document.getElementById('assignment-section-header');
+        const expanded = header.getAttribute('aria-expanded') === 'true';
+        setAssignmentExpanded(!expanded, true);
+      };
+
+      function setAssignmentExpanded(expanded, persist) {
+        const section = document.getElementById('assignment-section');
+        const chevron = document.getElementById('assignment-chevron');
+        const header = document.getElementById('assignment-section-header');
+        if (!section || !chevron || !header) return;
+        if (expanded) {
+          section.style.maxHeight = section.scrollHeight + 'px';
+          chevron.style.transform = 'rotate(90deg)';
+          header.setAttribute('aria-expanded', 'true');
+        } else {
+          section.style.maxHeight = '0px';
+          chevron.style.transform = 'rotate(0deg)';
+          header.setAttribute('aria-expanded', 'false');
+        }
+        if (persist) safeLocalStorage.set('cdmp.sidebar.assignment.expanded', expanded ? '1' : '0');
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const stored = safeLocalStorage.get('cdmp.sidebar.assignment.expanded');
+        const shouldExpand = isAssignmentPage || stored === '1';
+        setAssignmentExpanded(shouldExpand, false);
+      });
+    })();
+
+    // Init
+    updateRoleBadge('minister');
+    renderTable();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

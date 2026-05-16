@@ -28,25 +28,25 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管查看所有已設定的 CARD_TYPE 計分卡類型清單，作為 M02 計分設定的入口（5 Tab 結構中之 Tab 1）。選中之 CARD_TYPE 為頁面層級脈絡，驅動 Tab 2~5（F053 計分維度 / F054 維度編輯 / F055 CARD_LEVEL 門檻 / F056 TIER_LEVEL 對應）依此 CARD_TYPE 篩選資料。本功能為純唯讀查看；新增 / 編輯 / 停用操作分別由 F070 / F071 / F072 處理。
+提供業務部長 / 業務處長查看所有已設定的 CARD_TYPE 計分卡類型清單，作為 M02 計分設定的入口（5 Tab 結構中之 Tab 1）。選中之 CARD_TYPE 為頁面層級脈絡，驅動 Tab 2~5（F053 計分維度 / F054 維度編輯 / F055 CARD_LEVEL 門檻 / F056 TIER_LEVEL 對應）依此 CARD_TYPE 篩選資料。本功能為純唯讀查看；新增 / 編輯 / 停用操作分別由 F070 / F071 / F072 處理。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長 / 業務處長
 **I want** 查看所有已設定的計分卡類型（CARD_TYPE）清單，以及每種卡別對應的產品類別（PROD_KIND）
 **So that** 我能一眼掌握系統目前支援哪些計分卡種類、各計分卡與哪類產品相關聯，再決定是否需要新增或調整
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長 / 業務處長已登入並持有有效 JWT Token
+- `businessRole IN ('director','section_chief')`（後端套用 `DirectorOrSectionChiefGuard`，依 F002 §4.6.2）
 - `ob_code_df` 中至少有一筆 `tbl_id = 'PROD_KIND'` 啟用期間內的紀錄（由 F068 維護）
 
 ## 4. 驗收標準
 
 ### AC-1：顯示 CARD_TYPE 清單
 
-- **Given** 業務主管已進入 M02 計分設定頁面，停留在 Tab 1
+- **Given** 業務部長 / 業務處長已進入 M02 計分設定頁面，停留在 Tab 1
 - **When** 頁面載入完成
 - **Then** 顯示 `ob_card_type` 中 `status = 'active'` 的所有紀錄，每列包含：`card_type`（代碼）、`card_name`（名稱）、`prod_kind`（代碼）、`prod_kind_name`（產品類別名稱，後端 join `ob_code_df` 取 `tbl_desc1`）、`status`
 - **And** 清單依 `card_type` 升序排列
@@ -60,29 +60,29 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-3：手動切換選中 CARD_TYPE 後 Tab 2~5 自動刷新
 
-- **Given** 業務主管已在 Tab 1 查看清單
-- **When** 業務主管點擊另一列 CARD_TYPE
+- **Given** 業務部長 / 業務處長已在 Tab 1 查看清單
+- **When** 業務部長 / 業務處長點擊另一列 CARD_TYPE
 - **Then** 頁面更新選中狀態至該列
 - **And** Tab 2~5 自動依新選中 CARD_TYPE 重新載入資料；目前停留之 Tab 不變
 
 ### AC-4：PROD_KIND 提示（頁面頂部 banner + 列旁 badge）
 
 - **Given** CARD_TYPE 清單已顯示
-- **When** 業務主管查看頁面
+- **When** 業務部長 / 業務處長查看頁面
 - **Then** 頁面頂部顯示 info banner：「產品類別（PROD_KIND）由 M06 基礎代碼維護管理；如需新增或修改 PROD_KIND，請前往 M06」，banner 包含可點擊的「前往 M06」連結
 - **And** CARD_TYPE 清單中每列的 `prod_kind` 以 badge 形式顯示（顯示 PROD_KIND 代碼與名稱）
 
 ### AC-5：清單為空狀態
 
 - **Given** `ob_card_type` 無任何 `status = 'active'` 紀錄
-- **When** 業務主管進入 M02 計分設定頁面
+- **When** 業務部長 / 業務處長進入 M02 計分設定頁面
 - **Then** Tab 1 顯示空狀態提示：「目前尚未設定任何計分卡類型，請點擊『新增計分卡類型』開始設定」
 - **And** Tab 2~5 同樣顯示空狀態提示：「請先在 Tab 1 新增並選擇計分卡類型」
 
 ### AC-6：月跑執行中清單仍可查看（寫入按鈕 disabled）
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
-- **When** 業務主管進入 M02 Tab 1
+- **When** 業務部長 / 業務處長進入 M02 Tab 1
 - **Then** 清單正常顯示（GET 不受月跑鎖影響）
 - **And** 頁面顯示「分派執行中，無法修改計分設定」提示，新增 / 編輯 / 停用按鈕 disabled
 
@@ -92,7 +92,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 對應 AC-1：取得 CARD_TYPE 清單。
 
-**Controller 規範**：使用 `SalesManagerGuard` + `@RequireSalesManager()`（與 E07 其他 controller 一致）。
+**Controller 規範**：使用 `DirectorOrSectionChiefGuard` + `@RequireDirectorOrSectionChief()`（依 F002 §4.6.2 M02 計分卡讀取為 GET endpoint）。
 
 **Query Parameters**
 
@@ -138,7 +138,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 
 ## 6. 商業規則
 

@@ -28,18 +28,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務主管修改既有 CARD_TYPE 紀錄的 `cardName` 與 `prodKind`。`cardType`（代碼）為系統 join key，所有下游表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）均依此 join，**不允許修改**。月跑執行中禁止編輯。
+提供業務部長修改既有 CARD_TYPE 紀錄的 `cardName` 與 `prodKind`。`cardType`（代碼）為系統 join key，所有下游表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）均依此 join，**不允許修改**。月跑執行中禁止編輯。
 
 ## 2. 使用者故事
 
-**As a** 業務主管
+**As a** 業務部長
 **I want** 修改計分卡類型的名稱或產品類別綁定
 **So that** 當業務定義調整（如卡種更名或產品重分類）時，計分設定能即時反映，無需 IT 介入
 
 ## 3. 前置條件
 
-- 業務主管已登入並持有有效 JWT Token
-- `is_sales_manager = TRUE`
+- 業務部長已登入並持有有效 JWT Token
+- `businessRole='director'`（M02 寫入端點限部長，依 F002 §4.6.2）
 - 待編輯之 `cardType` 存在於 `ob_card_type` 且 `status = 'active'`
 - `assignment_run` 當下無 `status IN ('pending', 'running')` 紀錄
 
@@ -47,29 +47,29 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### AC-1：開啟編輯 Modal 並預填現值
 
-- **Given** 業務主管在 Tab 1 查看 CARD_TYPE 清單
-- **When** 業務主管點擊某列的「編輯」按鈕
+- **Given** 業務部長在 Tab 1 查看 CARD_TYPE 清單
+- **When** 業務部長點擊某列的「編輯」按鈕
 - **Then** 開啟編輯 Modal，預填現有 `cardName` 與 `prodKind` 值
 - **And** `cardType` 欄位以唯讀方式顯示（disabled），附說明文字：「計分卡代碼為系統 join 鍵，建立後不可修改」
 
 ### AC-2：cardType 代碼欄位不可修改
 
-- **Given** 業務主管已開啟編輯 Modal
-- **When** 業務主管嘗試在 `cardType` 欄位輸入
+- **Given** 業務部長已開啟編輯 Modal
+- **When** 業務部長嘗試在 `cardType` 欄位輸入
 - **Then** 欄位 disabled 不接受輸入；若 client 跳過前端阻擋送出含修改之 `cardType` request，後端忽略 `cardType` 欄位（僅 URL path param 為準）
 
 ### AC-3：修改 cardName 或 prodKind 並儲存
 
-- **Given** 業務主管修改了 `cardName` 或 `prodKind`
-- **When** 業務主管點擊「儲存」
+- **Given** 業務部長修改了 `cardName` 或 `prodKind`
+- **When** 業務部長點擊「儲存」
 - **Then** `ob_card_type` 對應列 UPDATE（僅 `card_name` / `prod_kind` 欄位）
 - **And** 寫入 `assignment_audit_log`（`action = 'UPDATE'`、`entity_type = 'ob_card_type'`、`entity_id = cardType`、`before_value` 含舊值、`after_value` 含新值）
 - **And** Modal 關閉，Tab 1 清單刷新顯示更新後資料
 
 ### AC-4：cardName 必填驗證
 
-- **Given** 業務主管清空 `cardName` 或 `prodKind`
-- **When** 業務主管點擊「儲存」
+- **Given** 業務部長清空 `cardName` 或 `prodKind`
+- **When** 業務部長點擊「儲存」
 - **Then** 前端阻擋送出；若繞過前端，後端回 422 `VALIDATION_ERROR`
 
 ### AC-5：cardType 不存在
@@ -87,7 +87,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 ### AC-7：月跑執行中禁止編輯
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 紀錄
-- **When** 業務主管嘗試送出 PUT 請求
+- **When** 業務部長嘗試送出 PUT 請求
 - **Then** API 回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
 - **And** UI 端編輯按鈕 disabled
 
@@ -95,7 +95,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ### 5.1 PUT /api/v1/assignment/scoring/card-types/:cardType
 
-**Controller 規範**：使用 `SalesManagerGuard` + `@RequireSalesManager()`。
+**Controller 規範**：使用 `DirectorGuard` + `@RequireDirector()`（依 F002 §4.6.2，M02 計分卡寫入為部長專屬）。
 
 **Path Parameters**
 
@@ -137,7 +137,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | HTTP | 錯誤碼 | 說明 |
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
-| 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | CARD_TYPE_NOT_FOUND | 指定的 cardType 不存在於 active 紀錄 |
 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中禁止編輯 |
 | 422 | VALIDATION_ERROR | 必填欄位缺失 / `prodKind` 不在啟用期間內 |

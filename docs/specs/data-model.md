@@ -844,6 +844,10 @@ PK：`list_no`
 | case_status | VARCHAR(14) | NOT NULL | （新增，原 OBMLISTDF.LIST_TYPE 業務語意拆出） | 案件結清期別（多值欄位，`$$` 分隔；F050/F051 必填多選），可選代碼來源 `ob_code_df` `tbl_id = 'CASE_STATUS'`（對應原 OBMCODEDF TBL_ID='22'）；最大長度依 4 個代碼全選計算 `01$$02$$03$$04` = 14 字元。**4 個值業務語意對照詳見 [F050 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)**（OQ-E07-23 ✅ Resolved 2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆）。月跑 Stage 1 以本欄位（業務主管選擇）與 `ob_pool_data.list_type`（SP 計算寫入）作 OR 比對（BR-7） |
 | settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
 | card_type | VARCHAR(5) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議；dump 含 3 字元值如 SEC/SEB，與 ob_levelcard_* 系列一致改為 VARCHAR(5)） |
+| status | VARCHAR(10) | NOT NULL DEFAULT 'active' | （AppDB 新建欄位） | 啟用狀態：`'active'` / `'inactive'`（草稿階段停用後設 `'inactive'`，沿用 epic-brief「已解決問題」第 2 點與 F052） |
+| stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月跑 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
+| cr_enabled | BOOLEAN | NOT NULL DEFAULT TRUE | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代 F059 OBASSIGNSET 全域路徑**） | per-LIST_NO CR 回分開關；草稿階段（`stage = 'draft'`）由 F050 v2.0 / F051 v2.0 透過 `crEnabled` 欄位設定；推進至非草稿階段後鎖定（透過 F051 v2.0 BR-3 統一拒絕，無需獨立鎖定欄位）；月跑 Stage 3 讀取本欄位決定是否執行 CR 回分（false = 跳過）；既有 OBMLISTDF 遷移之名單初始 `true`（保持現行行為）；US-120 spec 落差修正之唯一儲存位置；F059 v2.0 標記 DEPRECATED 不再讀寫 |
+| condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代固定欄位 PROD_KIND / CASEYEAR / SPEC_TP / CASE_STATUS / SETTLE_SRC 等之必填語意**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；F050 v2.0 新建必填（至少 1 個 conditions）；F051 v2.0 草稿階段可整段覆寫；F050 v2.0 BR-6 強制 `conditions[].columnName` 必須存在於 F075 白名單且 `is_active = true`；月跑 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（F050 v2.0 BR-10）；既有 OBMLISTDF 遷移之名單初始 `NULL`（其月跑語意沿用既有固定欄位 + 後端做 JSONB / 舊欄位讀取相容處理，由 system-architect 設計）|
 
 **多值欄位儲存規範**：
 
@@ -873,7 +877,99 @@ PK：`list_no`
 
 完整 migration SQL 見 architecture-spec.md AD-E07-14。
 
-**索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）
+**索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）、`(project_workym, stage, status)`（M01 入口 F048 列表 + 階段篩選）、`(created_by)`（處長轄區過濾，F074 / F077 BR-10）
+
+**舊名單遷移規則（I-5，2026-05-15 / F077 BR-5）**：
+
+既有 OBMLISTDF 資料遷移至 `ob_list_definition` 時：
+
+| 欄位 | 遷移處置 |
+|------|---------|
+| `stage` | **全數初始為 `'ready'`**（視為已完成五階段流程）；確保歷史月份名單可正常被 F061 月跑引用、F048 列表正確顯示「準備完成」階段標籤 |
+| `status` | 沿用既有資料中的有效值；缺值預設 `'active'` |
+| 其他業務欄位 | 沿用既有 OBMLISTDF 欄位邏輯（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等），不受 F075 白名單影響（沿用 F075 BR-3 / US-102 §舊名單相容規則） |
+
+> **說明**：舊系統無「五階段流程」概念，所有舊名單已歷經 IT 手動執行 SP 完成分派，等同於新流程的「準備完成」階段。新建名單（F050）始於 `stage = 'draft'`，依 F077 §10 圖表 [F077-stage-overview.mmd](diagrams/F077-stage-overview.mmd) 流轉。
+
+**m12 migration `stage` active 名單範圍規則（2026-05-16 / system-architect 決議 #3）**：
+
+m12 migration 腳本對「歷史遷移紀錄」之 `stage` 欄位執行下列 UPDATE，**不限月份範圍**：
+
+```sql
+UPDATE ob_list_definition
+   SET stage = 'ready'
+ WHERE status != 'inactive'
+   AND stage = 'draft';
+```
+
+| 規則 | 說明 |
+|---|---|
+| **active 名單範圍** | 條件 `status != 'inactive'`（即 `status = 'active'`；亦涵蓋未來可能新增之其他 active 子狀態），不限月份 |
+| **防呆條件** | `AND stage = 'draft'` 確保不覆蓋手動推進至 `dept_ratio` / `personnel_ratio` / `approval` 之新流程紀錄；亦不重複處理已 `ready` 之歷史遷移紀錄 |
+| **inactive 名單** | 一律保持原 `stage` 值；停用後不重新進入流程 |
+| **覆蓋邊界** | 本腳本僅執行一次性 backfill；後續新建名單由 F050 v2.0 寫入 `stage = 'draft'`，由 F078 / F080 / F084 / F086 推進 |
+
+**草稿階段欄位編輯規則（2026-05-15 / F050 v2.0 / F051 v2.0 / F052 v2.0 / F078 / E07 重構批次 3）**：
+
+| 欄位 | 草稿（`stage = 'draft'`）可改？ | 推進後（`stage IN ('dept_ratio', 'personnel_ratio', 'approval', 'ready')`）可改？ | 由哪個 spec 維護 |
+|------|---|---|---|
+| `list_nm` | ✅ | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.0 / F051 v2.0 |
+| `condition_payload` | ✅（覆寫式） | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.0 / F051 v2.0 |
+| `cr_enabled` | ✅ | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.0 / F051 v2.0 |
+| `status`（停用） | ✅（軟刪除為 `'inactive'`） | ❌（回 422 `LIST_STAGE_NOT_DRAFT`，需先 Rollback 至草稿） | F052 v2.0 |
+| `stage` | ❌（不可手動覆寫） | ❌（不可手動覆寫） | F078 / 後續 M03a~d 推進 / Rollback spec |
+| `list_no` / `project_workym` / `created_by` / `created_at` | ❌（建立後永久不可改） | ❌（永久不可改） | F050 v2.0 寫入後鎖定 |
+
+> **規則來源**：F050 v2.0 BR-2 / F051 v2.0 BR-3 / F052 v2.0 BR-3 / F077 BR-9 角色 × 階段操作矩陣。
+> **退出鎖定途徑**：透過後續批次 spec 之 Rollback 機制（M03a/b/c/d Rollback；如 US-111 / US-115 / US-117）退回 `'draft'` 階段後，本表「草稿可改」欄位重新可編輯。
+
+**「從上月名單複製」API 行為規則（2026-05-15 / F050 v2.0 / OQ-D-01 決議）**：
+
+F050 v2.0 提供「從上月名單複製」起點，行為規則如下：
+
+| 規則 | 說明 |
+|---|---|
+| **僅複製 `condition_payload`** | 整段 JSONB 複製至新名單；新名單需重新填寫 `list_nm` |
+| **不複製比例資料** | 部門比例（`ob_dept_pct`）/ 人員比例（`ob_empl_set`）為各自階段資料表，建立新草稿時恢復為空，需於後續 M03a / M03b 階段重新設定 |
+| **`cr_enabled` 恢復預設 `true`** | 不沿用上月設定（即使來源名單之 `cr_enabled = false`，新名單仍以預設 `true` 起算） |
+| **來源名單條件** | `project_workym = targetWorkym - 1 month` AND `stage = 'ready'` AND `status = 'active'`（避免複製到未完成的草稿、推進中、已停用名單） |
+| **跨年計算** | 「上月」按 calendar month 計算（例：202501 - 1 = 202412） |
+| **稽核追溯** | 來源 `list_no` 寫入 `assignment_audit_log.before_value.copyFromListNo` 欄位 |
+
+> **API 端點**：`GET /api/v1/assignment/list-definitions/copy-source-options?projectWorkym=YYYYMM`（取得可複製來源清單）+ `GET /api/v1/assignment/list-definitions/{listNo}/condition-payload`（取得來源 JSONB）+ `POST /api/v1/assignment/list-definitions`（建立時帶 `copyFromListNo` 欄位）。詳見 [F050 v2.0 §6.1 / §6.2 / §6.3](features/F050-create-list-definition.md#6-api-規格)。
+
+---
+
+#### `current_work_ym` 規則 {#current-work-ym-rule}
+
+> **2026-05-15 / F077 BR-1, BR-2, BR-12 引入**
+
+E07 月跑與 M01 名單定義之「目前作業月份（current_work_ym）」由後端統一計算，前端不自行計算。本規則為唯一權威來源。
+
+| 項目 | 規則 |
+|------|------|
+| 計算公式 | `current_work_ym = format(NOW(), 'YYYYMM')`（取系統時鐘之年月） |
+| 切換時刻 | 每月 **1 號 0:00:00**（含）切換為該月；至下月 1 號 0:00:00 為止維持當月（例：`2026-06-01 00:00:00 +08:00` → `current_work_ym = '202606'`） |
+| 時區 | **UTC+8（台北時區）**；後端實作須明確固定，不取系統 default 時區（避免跨時區月底切換不一致） |
+| 可選月份範圍 | `[current_work_ym - 12, current_work_ym + 12]`（共 25 個月） |
+| 提供端點 | `GET /api/v1/assignment/current-work-ym`（回傳 `currentWorkYm` / `rangeMin` / `rangeMax`），詳見 [F077 §5.1](features/F077-month-switch-and-stage-overview.md) |
+| 配置覆蓋 | [ASSUMPTION] 是否提供 `WORK_YM_SWITCH_DAY` 配置項（覆蓋預設「每月 1 號切換」）由 system-architect 決策；spec 預設行為為硬編碼 1 號 |
+
+**寫入端 Guard 規則**：
+
+所有 M01 / M03 / M04 寫入端點（F050 / F051 / F052 / F060 / F061 / 後續推進與 Rollback / 簽核）需檢查 `request.project_workym >= current_work_ym`：
+
+- 若 `request.project_workym < current_work_ym` → HTTP 403 `LIST_HISTORICAL_READONLY`（歷史月份禁止寫入）
+- 若 `request.project_workym > current_work_ym + 12` → HTTP 422 `WORK_YM_OUT_OF_RANGE`（超出可選範圍）
+- GET 端點不受此規則約束（保留歷史可查）
+
+**範例**：
+
+| 系統時鐘 | current_work_ym | rangeMin | rangeMax |
+|---------|-----------------|----------|----------|
+| 2026-05-15 14:30 +08:00 | `'202605'` | `'202505'` | `'202705'` |
+| 2026-06-01 00:00:00 +08:00 | `'202606'`（**切換**） | `'202506'` | `'202706'` |
+| 2026-12-31 23:59:59 +08:00 | `'202612'` | `'202512'` | `'202712'` |
 
 ---
 
@@ -980,6 +1076,33 @@ PK：`(project_workym, list_no, obdeptid, ration)`
 
 **索引**：複合 PK 即為主索引。`(project_workym, list_no)` 為月跑查詢索引。
 
+**比例驗證規則（I-8，2026-05-15 / F079 v1.0 / E07 重構批次 4 文件化）**：
+
+| 規則 | 說明 |
+|------|------|
+| **加總約束** | 同 `(project_workym, list_no)` 下所有 `ration` 加總須落於 `[99.99, 100.01]`（容忍 ±0.01% 浮點誤差，沿用 Invariant I-8）；違反回 422 `RATIO_SUM_NOT_100` |
+| **單欄位區間** | 任一 `ration` 須落於 `[0, 100]`（整數或最多兩位小數）；`ration = 0` 視為有效值（表示該部門本月不分派）；違反回 422 `RATIO_OUT_OF_RANGE` |
+| **驗證執行時機** | service 層於 PUT 寫入前執行；DB 端是否額外加 CHECK constraint 由 system-architect 決議（[ASSUMPTION]） |
+| **驗證 helper** | 建議封裝為 `RatioValidationService.assertSumEquals100(ratios)` + `assertEachInRange(ratios, 0, 100)`，由 F079 PUT 與 F080 推進前置條件共用，後續 M03b 個別業務比例 spec 沿用 |
+
+**stage 鎖定規則（2026-05-15 / F079 / F080 / F081 / E07 重構批次 4）**：
+
+| 操作 | 允許 stage | 拒絕 stage 之回應 | 維護 spec |
+|------|----------|------------------|----------|
+| GET（讀） | 任意 stage（推進後 `isReadOnly = true`）| 不拒絕 | F079 §5.1 |
+| PUT（寫） | `'dept_ratio'` | 422 `LIST_STAGE_TRANSITION_FORBIDDEN` | F079 §5.2 / F079 BR-3 |
+| 推進至 `personnel_ratio` | `'dept_ratio'` + 加總 = 100% | 422 `LIST_STAGE_TRANSITION_FORBIDDEN` 或 422 `STAGE_ADVANCE_PRECONDITION_FAILED` | F080 §5.1 |
+| Rollback 至 `draft` | `'dept_ratio'` | 422 `STAGE_ROLLBACK_BLOCKED`（reason: `wrong_source_stage` / `already_at_first_stage`） | F081 §5.1 |
+| Rollback 之資料清空 | `'dept_ratio'` → `'draft'` | DELETE FROM `ob_dept_pct` WHERE `(project_workym, list_no)` 對應之所有紀錄；於同 transaction 內執行 | F081 BR-4 / Invariant I-9 |
+
+**FK 級聯規則（[ASSUMPTION]，2026-05-15）**：
+
+| 關聯 | 建議級聯規則 | [ASSUMPTION] 說明 |
+|------|------------|------------------|
+| `ob_dept_pct.list_no → ob_list_definition.list_no` | `ON DELETE RESTRICT`（避免名單意外刪除帶走比例資料）；`ON UPDATE` 不適用（PK 不可改） | F050 v2.0 BR：`list_no` 建立後永久不可改；名單僅軟刪除（`status = 'inactive'`），不執行 hard delete；FK 級聯規則由 system-architect 於 migration 設計確認 |
+| `ob_dept_pct.project_workym` | 無 FK（`project_workym` 為從 `ob_list_definition.project_workym` 複製寫入之冗餘欄位） | system-architect 評估是否補 trigger 或 service 層 invariant 確保兩表 `project_workym` 一致 |
+| `ob_dept_pct.obdeptid → ob_emphire.dept_code` | **不建議**設 FK（`ob_emphire` 為 ETL 同步表，部門可下線；F079 BR-12 + AC-2 已定義「部門已下線」UX 處理） | service 層由 F079 GET 邏輯處理；FK 不設可避免 ETL 異動阻塞名單寫入 |
+
 ---
 
 #### ob_empl_set（OBEMPLSETMF — 人員比例設定）
@@ -1000,9 +1123,52 @@ PK：`(list_no, deptid_m, emplid, ration)`
 | ration | NUMERIC(10,1) | NOT NULL | RATION | **PK**，分配比例 |
 | prod_type | VARCHAR(255) | NULL | PROD_TYPE | 商品類型（多值） |
 
-> ⚠️ **`deptid_m` 尾隨空白填充處理**：舊 `OBEMPLSETMF.DEPTID_M` 雖宣告 `VARCHAR(50)`，dump 觀察實際業務值為 4 字元部門代碼（如 `XTC0`）但被 padded 至 50 字元（範例：`"XTC0                                              "`）。遷移時統一執行 `RTRIM(deptid_m)`，AppDB 存入 trim 後的值（即實際 4 字元代碼），避免 join `ob_emphire.dept_code`（不含 padding）失敗。AppDB 寫入路徑（F058 / 月跑 Stage 4）亦不可保留尾隨空白。
+> ⚠️ **`deptid_m` 尾隨空白填充處理**：舊 `OBEMPLSETMF.DEPTID_M` 雖宣告 `VARCHAR(50)`，dump 觀察實際業務值為 4 字元部門代碼（如 `XTC0`）但被 padded 至 50 字元（範例：`"XTC0                                              "`）。遷移時統一執行 `RTRIM(deptid_m)`，AppDB 存入 trim 後的值（即實際 4 字元代碼），避免 join `ob_emphire.dept_code`（不含 padding）失敗。AppDB 寫入路徑（F082 / 月跑 Stage 4）亦不可保留尾隨空白。
 
-**索引**：複合 PK 即為主索引。`(list_no, deptid_m)` 為查詢索引。
+**索引**：複合 PK 即為主索引。`(list_no, deptid_m)` 為查詢索引（per-DEPT 加總 / Rollback 清空 / F082 GET 之 SQL filter 共用）。
+
+**比例驗證規則（I-8，2026-05-15 / F082 v1.0 / E07 重構批次 5 文件化）**：
+
+| 規則 | 說明 |
+|------|------|
+| **per-DEPT 加總約束** | 同 `(list_no, deptid_m)` 下所有 `ration` 加總須落於 `[99.99, 100.01]`（容忍 ±0.01% 浮點誤差，沿用 Invariant I-8）；違反回 422 `PERSONNEL_RATIO_SUM_NOT_100`。**注意**：與 `ob_dept_pct` 之 per-LIST_NO 加總語意不同 |
+| **單欄位區間** | 任一 `ration` 須落於 `[0, 100]`（整數或最多兩位小數）；`ration = 0` 視為有效值（表示該業務員本月不分派）；違反回 422 `RATIO_OUT_OF_RANGE` |
+| **驗證執行時機** | service 層於 PUT 寫入前執行；DB 端是否額外加 CHECK constraint 由 system-architect 決議（[ASSUMPTION]） |
+| **驗證 helper** | 建議封裝為 `PersonnelRatioValidationService.assertDeptSumEquals100(deptCode, ratios)`（per-DEPT 寫入時使用，F082）+ `PersonnelRatioValidationService.assertAllDeptsSumEquals100(listNo)`（推進前置條件使用，F084），與 F079 之 `RatioValidationService.assertSumEquals100` 並列 |
+
+**轄區規則（I-3，2026-05-15 / F082 v1.0 / E07 重構批次 5 文件化）**：
+
+| 規則 | 說明 |
+|------|------|
+| **轄區判定** | 處長僅能讀寫 `ob_empl_set.created_by = currentUserId` 之紀錄；部長 / Admin 不受此限 |
+| **新建紀錄 `created_by` 自動填入** | F082 PUT 寫入時 `created_by` 由後端自動填入 `currentUserId`（覆寫式寫入：DELETE + INSERT 後新紀錄之 `created_by` 為當前使用者，故部長代操作後紀錄歸屬於部長 userId）|
+| **GET 過濾邏輯** | 處長 GET 端點：service 層 `scopeByCreator()` helper 於 SQL WHERE 加 `AND (currentUserRole IN ('director','admin') OR created_by = :currentUserId)` |
+| **PUT 攔截邏輯** | 處長 PUT 端點：新 `SectionChiefScopeGuard` 攔截 request body 之 `deptCode` + `empIds`，比對 DB 中 `created_by`，不符回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE` |
+| **跨轄區 Rollback** | F085 Rollback 為部長 / Admin 操作，DELETE `ob_empl_set WHERE list_no = :listNo` **跨轄區全部清空**（不過濾 `created_by`）|
+
+**stage 鎖定規則（2026-05-15 / F082 / F084 / F085 / E07 重構批次 5）**：
+
+| 操作 | 允許 stage | 拒絕 stage 之回應 | 維護 spec |
+|------|----------|------------------|----------|
+| GET（讀） | 任意 stage（推進後 `isReadOnly = true`）| 不拒絕 | F082 §5.1 |
+| PUT（寫） | `'personnel_ratio'` | 422 `LIST_STAGE_TRANSITION_FORBIDDEN` | F082 §5.2 / F082 BR-5 |
+| 推進至 `approval` | `'personnel_ratio'` + 所有部門加總 = 100% | 422 `LIST_STAGE_TRANSITION_FORBIDDEN` 或 422 `STAGE_ADVANCE_PRECONDITION_FAILED` | F084 §5.1 |
+| Rollback 至 `dept_ratio` | `'personnel_ratio'`（限部長 + Admin）| 422 `STAGE_ROLLBACK_BLOCKED`（reason: `wrong_source_stage`）/ 403 `E07_FORBIDDEN_DIRECTOR_ONLY` | F085 §5.1 |
+| Rollback 之資料清空 | `'personnel_ratio'` → `'dept_ratio'` | DELETE FROM `ob_empl_set` WHERE `list_no = :listNo` 之**所有部門所有業務員**紀錄（跨轄區）；於同 transaction 內執行 | F085 BR-3 / Invariant I-9 |
+
+**FK 級聯規則（[ASSUMPTION]，2026-05-15）**：
+
+| 關聯 | 建議級聯規則 | [ASSUMPTION] 說明 |
+|------|------------|------------------|
+| `ob_empl_set.list_no → ob_list_definition.list_no` | `ON DELETE RESTRICT`（避免名單意外刪除帶走比例資料）| F050 v2.0 BR：名單僅軟刪除（`status = 'inactive'`），不執行 hard delete；FK 級聯規則由 system-architect 於 migration 設計確認 |
+| `ob_empl_set.deptid_m → ob_emphire.dept_code` | **不建議**設 FK（`ob_emphire` 為 ETL 同步表，部門可下線；參考 F079 / `ob_dept_pct.obdeptid` 同等決策）| service 層由 F082 GET 邏輯處理；FK 不設可避免 ETL 異動阻塞名單寫入 |
+| `ob_empl_set.emplid → ob_emphire.emp_id` | **不建議**設 FK（同上理由）| service 層 F082 BR-13 校驗 `empId` 存在於在職員工；FK 不設保留歷史紀錄 |
+
+**`project_workym` 欄位補建決策（[ASSUMPTION]，2026-05-15）**：
+
+> 既有 OBEMPLSETMF schema **無 `project_workym` 欄位**（PK 僅 `(list_no, deptid_m, emplid, ration)`）；F085 Rollback 以 `list_no` 為條件 DELETE 已可達月份隔離（`list_no` 含 `OB{YYYYMM}{NNN}` 格式內含月份）。
+>
+> **本 spec 不要求補建 `project_workym`**，但 system-architect 應評估是否補建以對齊 `ob_dept_pct` 之設計一致性（如補建可簡化跨月份查詢與索引設計）。詳見 [F082 §12 A-3](features/F082-set-personnel-ratio.md#12-假設)。
 
 ---
 
@@ -1483,7 +1649,9 @@ PK：`appl_no` [ASSUMPTION] 原表（`OB_ARRETURNDF_MIN_CAP`）無 PK constraint
 
 #### ob_emphire（OBEMPHIRE — 員工主檔） {#ob-emphire-entity}
 
-> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBEMPHIRE`）抓取至 raw_{task_id_short} 中介表（既有機制），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。OBEMPHIRE 採 **full 全量重抓**策略，每日重抓 raw → Pipeline 整批 replace `ob_emphire`（員工數 < 1 萬筆無效能壓力）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**，所有員工資料維護於舊 OB 端進行。
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步，pipeline 識別碼 **E07-OBEMPHIRE-Load**：E04 通用擷取任務從舊 OB DB（SQL Server `OBEMPHIRE`）抓取至 raw_{task_id_short} 中介表（既有機制），再由 E05 Pipeline TargetLoad 將資料載入本表 `appdb.ob_emphire`（full replace 模式）。OBEMPHIRE 採 **full 全量重抓**策略，每日重抓 raw → Pipeline 整批 replace `ob_emphire`（員工數 < 1 萬筆無效能壓力）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**，所有員工資料維護於舊 OB 端進行。
+>
+> **F082 v1.2 使用模式（PO 決議 F082-A 落地，2026-05-16）**：F082 業務員清單來源為 `appdb.ob_emphire` **全取**（不過濾 `resign_date`）；每筆員工 service 層即時計算 `isResigned = (resign_date IS NOT NULL)`；F082 GET response `employees[].isResigned` 由此衍生；UI 顯示「離職」badge；per-DEPT 比例驗算排除 `isResigned = true` 員工；既有 `ob_empl_set` ration 紀錄保留供歷史追溯，不自動清除。
 
 PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 `PRIMARY KEY (emp_id)` 以利 join。
 
@@ -1514,7 +1682,19 @@ PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 
 - 在職員工判定條件：`resign_date IS NULL`
 - 不納入 ORM Entity CRUD（僅讀取）；E07 內所有員工資料修改皆於舊 OB 端進行後 ETL 同步
 
-**相關功能**：[F058](features/F058-edit-personnel-ratio.md)、[F061](features/F061-trigger-assignment-run.md)、[F063](features/F063-view-run-result-summary.md)、[F064](features/F064-export-assignment-result.md)
+**CI / test fixture 策略（2026-05-16 / system-architect 決議 #5）**：
+
+Integration test 共用 fixture factory 模組 `apps/api/test/fixtures/ob-emphire.fixture.ts`：
+
+| Helper | 用途 |
+|---|---|
+| `buildObEmphire(overrides)` | 建立單筆 `ob_emphire` 紀錄，預設在職、可覆寫欄位 |
+| `allResignedDeptSeed(deptCode)` | 建立指定部門「全員離職」場景 seed |
+| `mixedActiveResignedDeptSeed(deptCode, activeCnt, resignedCnt)` | 建立「部分在職 + 部分離職」場景 seed |
+
+**測試使用最低必要欄位**：`emp_id` / `emp_nm` / `dept_code` / `resign_date`（其他欄位可 NULL；fixture factory 預設帶入合理值）。詳見 [F082 v1.3 §11 測試 Fixture 策略](features/F082-set-personnel-ratio.md#11-實作-checklist)。
+
+**相關功能**：[F058](features/F058-edit-personnel-ratio.md)、[F061](features/F061-trigger-assignment-run.md)、[F063](features/F063-view-run-result-summary.md)、[F064](features/F064-export-assignment-result.md)、[F082 v1.3](features/F082-set-personnel-ratio.md)（per-DEPT 比例驗算 + 離職員工 isResigned flag + 全員離職邊界）
 
 ---
 
@@ -1558,9 +1738,43 @@ PK：`calendar_date`
 | total_cases | INTEGER | NULL | 本次分派總案件數 |
 | total_lists | INTEGER | NULL | 本次處理名單數 |
 | error_message | TEXT | NULL | 失敗錯誤訊息 |
+| report_payload | JSONB | NULL | **v1.1 / 2026-05-16 新增（F061 v1.2 / PO 決議 OQ-E07-29-A 落地）**：月跑警告紀錄與輔助資訊容器；目前已定義子鍵：`skippedCases[]`（邊緣 CARD_TYPE 跳過案件清單）+ `skippedCaseCount`（跳過總數）+ `warnings[]`（其他警告，如 `WHITELIST_OPTION_INACTIVE`）；非錯誤訊息，月跑仍可 `status = 'completed'`；schema 詳見下方「report_payload 結構」段落 |
 | created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
 
 **索引**：`run_id`（PK）、`(project_workym, status)`（查詢索引）
+
+**`report_payload` 結構（v1.1 / 2026-05-16 新增）**：
+
+```json
+{
+  "skippedCases": [
+    {
+      "caseId": "CASE_ID_001",
+      "reason": "UNSUPPORTED_CARD_TYPE",
+      "cardType": "HB",
+      "listNo": "OB202605001",
+      "stage": 2
+    }
+  ],
+  "skippedCaseCount": 1,
+  "warnings": [
+    {
+      "code": "WHITELIST_OPTION_INACTIVE",
+      "listNo": "OB202605002",
+      "columnName": "PROD_KIND",
+      "optionValue": "02",
+      "message": "名單條件引用之可選值已被停用"
+    }
+  ]
+}
+```
+
+**欄位說明**：
+- `skippedCases[].reason`：ENUM；目前定義 `UNSUPPORTED_CARD_TYPE`（邊緣 CARD_TYPE，如 HB / SEB / SEC，無對應計分卡且無 `ob_tier` fallback）；未來可擴充
+- `skippedCases[].caseId`：跳過案件之 `appl_no`（或 `(orgno, appl_no)` 字串化）
+- `skippedCases[].stage`：跳過時所處 Stage（目前固定為 2，計分階段）
+- `warnings[].code`：對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings) 警告碼
+- 前端 F062 / F063 依此欄位顯示黃色警示 banner（沿用 `RUN_REPORT_SKIPPED_CASES` / `WHITELIST_OPTION_INACTIVE` 警告紀錄）
 
 ---
 
@@ -1606,17 +1820,176 @@ PK：`calendar_date`
 
 ---
 
-### User 實體補充（E07 新增欄位）
+#### assignment_approval（簽核紀錄） {#assignment_approval--簽核紀錄}
 
-`users` 表新增以下欄位，支援業務主管角色識別：
+> **新建表（2026-05-15 / E07 重構批次 6）**：對應 [F086](features/F086-approve-to-ready.md)（核准）、[F087](features/F087-reject-to-personnel-ratio.md)（拒絕）、[F089](features/F089-rollback-to-approval.md)（Rollback 時清空）。記錄 `ob_list_definition` 簽核階段（M03c）之核准 / 拒絕操作歷史，獨立於 `assignment_audit_log` 以提供 F082 banner 顯示與 F088 摘要顯示之查詢來源。
 
 | 欄位名 | 型別 | NULL | 說明 |
 |--------|------|------|------|
-| is_sales_manager | BOOLEAN | NOT NULL DEFAULT FALSE | 業務主管旗標（true = 可管理所屬業務員名單分派） |
+| approval_id | UUID | NOT NULL | **PK [ASSUMPTION]** 由 system-architect 確認 PK 設計（單 PK UUID vs 複合 PK `(list_no, approved_at)`）|
+| list_no | VARCHAR(11) | NOT NULL | FK → `ob_list_definition.list_no`；對應簽核之名單 |
+| action | VARCHAR(10) | NOT NULL | 簽核動作：`'approve'`（核准 → ready，由 F086 寫入）/ `'reject'`（拒絕 → personnel_ratio，由 F087 寫入）；CHECK constraint 限二值 |
+| reject_reason | TEXT | NULL | 拒絕原因（1~500 字）；`action = 'reject'` 時 NOT NULL；`action = 'approve'` 時 NULL；DB CHECK constraint 表達互斥規則（`(action = 'reject' AND reject_reason IS NOT NULL) OR (action = 'approve' AND reject_reason IS NULL)`）|
+| approver_id | VARCHAR(50) | NOT NULL | 操作者 user_id（與 `assignment_audit_log.actor_id` 模式一致）|
+| approver_name | VARCHAR(100) | NOT NULL | 操作者姓名快照（不受後續改名影響）|
+| approver_role | VARCHAR(20) | NOT NULL | 操作者角色：`'director'` / `'admin'` |
+| approved_at | TIMESTAMP | NOT NULL | 簽核操作時間（UTC）|
+| ip_address | VARCHAR(45) | NULL | 操作者 IP（IPv4/IPv6）|
+| created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC，通常 = `approved_at`）|
 
 **業務規則**：
-- `is_sales_manager = true` 的使用者可於 E07 UI 查看並管理其所屬部門的分派結果
-- 該旗標由 Admin 設定，不可自行設定
-- 與 `role` 欄位無衝突（`role = user` 且 `is_sales_manager = true` 為合法組合）
 
-**相關功能**：[E07 epic-brief](stories/E07-epic-brief.md)
+| 規則 | 說明 | 來源 |
+|------|------|------|
+| **每次簽核產生獨立紀錄**（不 UPSERT）| F086 / F087 每次操作皆 INSERT 一筆紀錄；多次拒絕 / Rollback 後再核准之歷史紀錄完整保留 | F086 BR-5 / F087 BR-12 |
+| **F082 banner 來源**：最近一筆 `action = 'reject'` 紀錄 | F082 GET 端點 LEFT JOIN 取最近一筆紀錄；若最近一筆為 `action = 'approve'` 或無紀錄，回傳 `latestRejection = null` | F087 BR-11 / F082 v1.1 §7.x |
+| **F088 `approvalHistory` 來源**：所有紀錄按 `approved_at` 倒序 | F088 GET `summary/{listNo}` 端點回傳完整 `approvalHistory` 陣列 | F088 BR-6 |
+| **F089 Rollback 時 hard delete**：DELETE WHERE `list_no = :listNo` 清空全部紀錄 | F089 Rollback 至 simulation 時需清空 `assignment_approval`（避免 F082 banner / F088 `approvalHistory` 顯示已過時資料）；歷史完整資訊由 `assignment_audit_log.before_value.approvalHistory` 保留 | F089 BR-4 / BR-9 |
+| **拒絕原因長度上限 500 字** | F087 後端校驗；超出回 422 `APPROVAL_REJECT_REASON_TOO_LONG` | F087 BR-5 / AC-9 |
+| **不可修改**（INSERT-only / DELETE-only）| 簽核紀錄不可 UPDATE；唯一可改變狀態之操作為 F089 Rollback 之 hard delete | 設計原則 |
+
+**多次拒絕 / 重複核准場景處理**：
+
+| 場景 | `assignment_approval` 紀錄 | F082 banner | F088 approvalHistory |
+|------|---------------------------|-------------|---------------------|
+| 名單第一次推進至 approval → 部長拒絕 | 1 筆 reject | 顯示拒絕原因 | 1 筆 reject |
+| 處長修正後重新推進 → 部長再次拒絕（不同原因）| 2 筆 reject | 顯示**最近一筆**拒絕原因 | 2 筆 reject（倒序）|
+| 處長修正後 → 部長核准 → 名單進入 ready | 2 筆 reject + 1 筆 approve | `latestRejection = null`（最近為 approve）| 3 筆紀錄（倒序）|
+| 部長 F089 Rollback → 名單重回 approval | **0 筆**（已 hard delete）| `latestRejection = null` | 0 筆（`assignment_audit_log.before_value.approvalHistory` 含 3 筆完整快照供追溯） |
+
+**索引（建議）**：
+
+| 索引 | 說明 |
+|------|------|
+| `approval_id`（PK，UUID）| 主鍵 |
+| `(list_no, approved_at DESC)` | F082 / F088 查詢「該名單最近一筆紀錄」優化（covering index 候選）|
+| `(approver_id, approved_at)` | 稽核 / 報表查詢「某使用者所有簽核操作」|
+
+**FK 級聯規則（建議由 system-architect 確認）**：
+
+| FK | 級聯規則 |
+|----|---------|
+| `assignment_approval.list_no → ob_list_definition.list_no` | `ON DELETE RESTRICT`（避免名單意外刪除帶走簽核紀錄）；F050 v2.0 BR：名單僅軟刪除（`status = 'inactive'`），不執行 hard delete |
+
+**[ASSUMPTION] 待 system-architect 決議事項**：
+
+| # | 事項 | 來源 spec |
+|---|------|----------|
+| 1 | PK 設計：單 PK `approval_id` UUID（建議）vs 複合 PK `(list_no, approved_at)` | F086 §12 A-2、F087 §12 A-2 |
+| 2 | `action` / `reject_reason` 互斥之 DB CHECK constraint 是否強制 | F087 BR-5 |
+| 3 | F089 Rollback 採 hard delete vs soft delete | F089 §12 A-2 |
+| 4 | `approver_role` 是否需要 ENUM type 限制（建議採 CHECK constraint，與 F056 TIER_LEVEL 一致策略）| F086 / F087 |
+
+**相關功能**：[F086](features/F086-approve-to-ready.md)、[F087](features/F087-reject-to-personnel-ratio.md)、[F088](features/F088-ready-stage-summary.md)、[F089](features/F089-rollback-to-approval.md)、[F082 v1.1](features/F082-set-personnel-ratio.md)（GET response `latestRejection` 欄位來源）
+
+---
+
+### User 實體補充（E07 業務角色欄位） {#user-entity}
+
+> **v2.0 / 2026-05-16 破壞性變更（E07 合併重構 AD-E07 v3.0）**：本節廢除 v1.x 「`is_sales_manager` BOOLEAN + `e07_role` VARCHAR」正交雙欄位設計，改採**單一欄位** `business_role VARCHAR(20) NULL`。舊兩欄位於 m14 migration 統一 DROP；不進行資料遷移（per PO 決議「不向下相容、不保留歷史值」）。
+
+`users` 表新增以下欄位，支援業務角色識別與 E07 應用層角色：
+
+| 欄位名 | 型別 | NULL | 約束 | 說明 |
+|--------|------|------|------|------|
+| business_role | VARCHAR(20) | NULL（預設） | DB CHECK：`business_role IS NULL OR business_role IN ('director', 'section_chief')` | **v2.0 / E07 合併重構新增**：E07 業務角色 ENUM；NULL 表示未指派 E07 角色（user 帳號於 E07 全模組無權回 `E07_ROLE_NOT_ASSIGNED`；admin 帳號自動繼承 director 全範圍，本欄位無實質效用） |
+
+**業務規則**：
+- `business_role = 'director'` → 業務部長身份（E07 全模組 RW）
+- `business_role = 'section_chief'` → 業務處長身份（限轄區 RW；M02 完全不可見）
+- `business_role = NULL` → user 帳號 = 無 E07 角色；admin 帳號 = 自動繼承部長全範圍
+- 部長與處長**互斥**（單一欄位設計，不可同時持有）
+- `business_role` 由 Admin 設定（PATCH `/api/v1/accounts/:id/business-role`，[F006a](features/F006a-update-business-role.md) 新增），不可自行設定
+- 與 `role` 欄位無衝突（`role = 'user'` 且 `business_role = 'director'` 為合法組合）
+- `business_role` **不**在 PUT `/api/accounts/:id`（F006 編輯帳號）變更範圍；若 PUT body 含 `business_role` 欄位應**忽略**（沿用敏感欄位獨立端點設計慣例）
+- **`business_role` 變更觸發 password_changed_at 寫入**：`AccountsService.updateBusinessRole()` 寫入 `business_role` 變更時，必須在同一 DB transaction 內同步寫入 `users.password_changed_at = new Date(Date.now() + 1000)`，使該帳號所有舊 JWT 因 AuthGuard 比對 `JWT.iat * 1000 < password_changed_at` 立即失效（沿用 F009 / F010 既有 `password_changed_at` 機制）。+1 秒之偏移避免同秒 JWT iat 比較邊界 bug
+
+**索引建議**：`(business_role)` WHERE `business_role IS NOT NULL`（部分索引；用於 E02 帳號管理頁「依 business_role 篩選」與 E07 統計查詢）
+
+**相關功能**：[F006](features/F006-edit-account.md)、[F006a](features/F006a-update-business-role.md)（**唯一寫入入口**）、~~F008（DEPRECATED v3.x）~~、[F009](features/F009-self-service-password-reset.md)、[F010](features/F010-admin-reset-password.md)、[F073 v2.0](features/F073-define-director-role.md)、[F074 v2.0](features/F074-define-section-chief-role.md)、[F002 v2.0 §4.6](features/F002-user-login.md#e07-角色矩陣)（E07 角色矩陣權威來源）
+
+#### m14 Migration 規範（v2.0 / E07 合併重構）
+
+| 步驟 | SQL | 備註 |
+|---|---|---|
+| 1 | `ALTER TABLE users ADD COLUMN business_role VARCHAR(20) NULL;` | 新欄位預設 NULL，向下相容 |
+| 2 | `ALTER TABLE users ADD CONSTRAINT chk_users_business_role CHECK (business_role IS NULL OR business_role IN ('director', 'section_chief'));` | DB 層強制 enum 值 |
+| 3 | `CREATE INDEX idx_users_business_role ON users (business_role) WHERE business_role IS NOT NULL;` | 部分索引 |
+| 4 | `ALTER TABLE users DROP COLUMN IF EXISTS is_sales_manager;` | v1.x 欄位 DROP |
+| 5 | `ALTER TABLE users DROP COLUMN IF EXISTS e07_role;` | v1.x 短期過渡欄位 DROP（若曾建立） |
+
+> **不執行 UPDATE / 不進行 backfill**：所有既有帳號之 `business_role` 預設為 NULL；Admin 需透過 [F006a](features/F006a-update-business-role.md) 重新逐筆指派。此為 PO 決議「不向下相容、不保留 v1.x 業務主管旗標值」之落地（2026-05-16）。
+
+> **Migration 順序**：m14 須在所有依賴 `is_sales_manager` 之既有功能（F005 / F008 / 既有 SalesManagerGuard 等）下線後執行；建議與後端 Guard / Controller 變更同一個 release window 上線。
+
+~~**`is_sales_manager` 與 `e07_role` 為正交維度**~~（**v2.0 廢除**：兩欄位均 DROP；不存在「正交維度」概念）
+
+---
+
+### M06 進階代碼維護新建表（E07 重構批次 1）
+
+#### field_whitelist（POOLDATA 篩選欄位白名單） {#field-whitelist-entity}
+
+> **新建表（2026-05-15 / E07 重構批次 1）**：對應 [F075](features/F075-manage-pooldata-field-whitelist.md)。提供新名單定義（後續 US-106 spec）動態載入可用篩選欄位之 metadata，取代原 SP 中硬編碼的 PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等固定欄位。本表為 AppDB 新建表，無對應舊系統 OB 表。
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| column_name | VARCHAR(50) | NOT NULL | **PK**，對應 OBPOOLDATA 之欄位名稱（字串映射，不維護 FK） |
+| display_name | VARCHAR(100) | NOT NULL | 業務可讀之中文標籤（如「產品類別」） |
+| field_type | VARCHAR(20) | NOT NULL | 欄位類別列舉：`numeric` / `categorical` / `date`（CHECK constraint 限三值） |
+| is_active | BOOLEAN | NOT NULL DEFAULT TRUE | 啟用狀態；停用後新名單表單不再顯示，但既有名單條件不受影響（F075 BR-3） |
+| created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
+| updated_at | TIMESTAMP | NOT NULL | 最後更新時間（UTC） |
+| created_by | UUID | NULL | 建立者 user_id（[ASSUMPTION] 由 system-architect 確認是否必填） |
+| updated_by | UUID | NULL | 最後更新者 user_id |
+
+**業務規則**：
+- `column_name` 為唯一鍵；新增時不分啟用 / 停用一律檢查重複（F075 BR-1）
+- `field_type` 僅允許三種列舉值；其他值由業務層 + DB CHECK 雙層驗證
+- 停用為軟刪除（`is_active = false`），MVP 不支援硬刪除（F075 BR-9，OQ-102-02 暫定）
+- 與 OBPOOLDATA 之欄位名稱為字串映射關係，不維護外鍵約束（F075 BR-8）
+- 月跑 Stage 1 不 join 本表做欄位有效性驗證，直接讀取 `ob_list_definition.condition_payload`（避免停用後月跑失敗）
+
+**索引**：`column_name`（PK）、`(field_type, is_active)`（多選元件查詢）
+
+**初始 Seed**（8 筆，依 F075 §4.4，冪等以 `column_name` 為鍵）：
+- 7 筆 `is_active = true`：PROD_KIND（categorical）/ LIST_TYPE（categorical）/ BEST_CASE（categorical）/ SPEC_TP（categorical）/ CASEYEAR（categorical）/ SETTLE_SRC（categorical）/ MONTH_CNT（numeric）
+- 1 筆 `is_active = false`：PAYT_TERM（numeric，現行 SP 已被 MONTH_CNT 取代）
+
+**相關功能**：[F075](features/F075-manage-pooldata-field-whitelist.md)、[F076](features/F076-manage-categorical-field-values.md)（FK 父表）
+
+---
+
+#### categorical_field_value（類別型欄位可選值） {#categorical-field-value-entity}
+
+> **新建表（2026-05-15 / E07 重構批次 1）**：對應 [F076](features/F076-manage-categorical-field-values.md)。為 `field_whitelist` 中 `field_type = 'categorical'` 的欄位維護可選值清單，供新名單定義表單之多選元件動態載入。
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| column_name | VARCHAR(50) | NOT NULL | **複合 PK**，FK → `field_whitelist.column_name` |
+| option_value | VARCHAR(20) | NOT NULL | **複合 PK**，對應 `ob_pool_data` 中該欄位之實際儲存值 |
+| option_label | VARCHAR(100) | NOT NULL | 顯示標籤（中文） |
+| is_active | BOOLEAN | NOT NULL DEFAULT TRUE | 啟用狀態；停用後新名單表單多選元件不再顯示，但既有名單條件不受影響（F076 BR-3） |
+| deactivation_reason | VARCHAR(30) | NULL | **v1.1 / 2026-05-16 新增（F076 v1.1 / PO 決議 F076-C 落地）**：軟停用原因 ENUM：`'manual'`（手動於 F076 停用，預設）/ `'field_type_changed'`（因 F075 將 `field_type` 從 `categorical` 切換為其他類別自動軟停用）；`is_active = true` 時為 NULL；建議於 m10 migration 一次到位避免後續變更 |
+| created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
+| updated_at | TIMESTAMP | NOT NULL | 最後更新時間（UTC） |
+| created_by | UUID | NULL | 建立者 user_id |
+| updated_by | UUID | NULL | 最後更新者 user_id |
+
+**業務規則**：
+- 複合 PK：`(column_name, option_value)`；新增時不分啟用 / 停用一律檢查重複（F076 BR-1）
+- FK 約束：`column_name` 必須存在於 `field_whitelist` 且 `field_type = 'categorical'`（業務層強制檢查；DB 層 FK 級聯行為由 system-architect 決定，[ASSUMPTION]）
+- 停用為軟刪除，MVP 不支援硬刪除（F076 BR-8）；不支援排序（F076 BR-9）
+- 月跑 Stage 1 不 join 本表做有效性驗證（與 `field_whitelist` 同語意）
+- **父表 `field_whitelist.field_type` 由 `categorical` 改為其他值時（v1.1 / 2026-05-16 修訂 / PO 決議 F076-C）**：本表既有資料**批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`**（軟停用，不 CASCADE 刪除；F076 v1.1 BR-7 + BR-10）；F075 編輯欄位 service 層觸發批次 UPDATE，建議同 transaction 完成；既有名單若引用 inactive 值月跑不阻擋（沿用 F076 BR-3 不回溯規則）
+
+**索引**：`(column_name, option_value)`（PK）、`(column_name, is_active)`（多選元件查詢）
+
+**初始 Seed**（依 F076 §4.4，冪等以 `(column_name, option_value)` 為鍵）：
+- PROD_KIND：01 / 02 / 03（共 3 筆，固定）
+- LIST_TYPE：01 / 02 / 03（共 3 筆，固定）
+- CASEYEAR：0~6 + 99（共 8 筆，固定）
+- SETTLE_SRC：Y / N（共 2 筆，固定）
+- SPEC_TP / BEST_CASE：依執行期 OBMCODEDF 動態 seed（數量不固定）
+
+**相關功能**：[F076](features/F076-manage-categorical-field-values.md)、[F075](features/F075-manage-pooldata-field-whitelist.md)（父表）
