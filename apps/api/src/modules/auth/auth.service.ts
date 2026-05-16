@@ -25,6 +25,8 @@ export interface LoginResult {
     email: string;
     role: string;
     isSalesManager: boolean;
+    // F002 v2.0 §4.6：登入回應含 businessRole（director / section_chief / null）
+    businessRole: 'director' | 'section_chief' | null;
   };
 }
 
@@ -88,12 +90,15 @@ export class AuthService {
     // F002SM / F008 AD-E02-1：旗標統一以 boolean 形式回傳，
     // Admin 帳號亦回傳 false（非 undefined）以避免前端 undefined 邊界
     const isSalesManager = user.is_sales_manager ?? false;
+    // F002 v2.0 §4.6 / AD-E07 v3.0：JWT 帶 businessRole（director / section_chief / null）
+    const businessRole = (user.business_role ?? null) as 'director' | 'section_chief' | null;
 
     // Generate JWT（含 is_sales_manager 旗標供 SalesManagerGuard 使用，AD-E02-1）
     const token = this.jwtUtil.generateToken({
       userId: user.id,
       role: user.role,
       isSalesManager,
+      businessRole,
       rememberMe: dto.rememberMe ?? false,
     });
 
@@ -105,6 +110,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         isSalesManager,
+        businessRole,
       },
     };
   }

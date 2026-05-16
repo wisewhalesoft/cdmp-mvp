@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
 import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AccountsService } from '../accounts.service';
 import { User } from '@/database/entities/user.entity';
@@ -44,6 +44,11 @@ describe('AccountsService — adminResetPassword (F010)', () => {
       providers: [
         AccountsService,
         { provide: getRepositoryToken(User), useValue: userRepository },
+        // P1 B1 / F006a：AccountsService 注入 DataSource，本 spec 不觸發 transaction
+        {
+          provide: getDataSourceToken(),
+          useValue: { transaction: vi.fn() },
+        },
       ],
     }).compile();
 

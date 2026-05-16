@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable, BadRequestException, ConflictException, GoneException, HttpException, HttpStatus, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from '@/database/entities/user.entity';
+import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { HashUtil } from '@/common/hash/hash.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { UserRole } from '@/common/constants/roles';
@@ -81,11 +82,30 @@ export interface ToggleStatusResult {
   updated_at: Date;
 }
 
+export type BusinessRole = 'director' | 'section_chief' | null;
+
+export interface UpdateBusinessRoleResult {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  business_role: BusinessRole;
+  status: 'active' | 'disabled';
+  password_changed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 @Injectable()
 export class AccountsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    // F006a v1.0 / 2026-05-16：updateBusinessRole 同 transaction 寫 audit log
+    // P0 P1 過渡期 dataSource 為 optional：未注入時表 legacy module 尚未升級，
+    // 仍可由舊功能 Repository<User> 走原路徑
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(query: ListAccountsQueryDto): Promise<AccountListResult> {
@@ -398,5 +418,85 @@ export class AccountsService {
     await this.userRepository.save(user);
 
     return { message: '密碼已重設，使用者需以新密碼重新登入' };
+  }
+
+  /**
+   * F006a v1.0 / AD-E07 v3.0 / 2026-05-16
+   * PATCH /api/v1/accounts/:id/business-role
+   *
+   * 同一 DB transaction 內：
+   *   1) findOne(target) → 不存在拋 404 ACCOUNT_NOT_FOUND
+   *   2) UPDATE users.business_role = newRole + password_changed_at = now + 1000ms
+   *   3) INSERT assignment_audit_log（action = ASSIGN_ROLE / REVOKE_ROLE）
+   *
+   * BR-1：唯一 business_role 寫入入口
+   * BR-3：caller 由 RolesGuard @Roles('admin') 強制 admin（service 層不重複檢查）
+   * BR-4：token revoke via password_changed_at（沿用 F009 / F010 機制）
+   * BR-5：稽核寫入 entity_id = `{userId}|{role}`
+   * BR-6：覆寫 / 撤銷皆走本端點
+   * BR-7：Admin 自身亦允許寫入（不阻擋）
+   */
+  async updateBusinessRole(
+    targetId: string,
+    newRole: BusinessRole,
+    actorId: string,
+  ): Promise<UpdateBusinessRoleResult> {
+    return this.dataSource.transaction(async (mgr) => {
+      const user = await mgr.findOne(User, { where: { id: targetId } });
+      if (!user) {
+        throw new NotFoundException({
+          error: ERROR_CODES.ACCOUNT_NOT_FOUND,
+          message: ERROR_MESSAGES.ACCOUNT_NOT_FOUND,
+        });
+      }
+
+      const oldRole = (user.business_role ?? null) as BusinessRole;
+      const passwordChangedAt = new Date(Date.now() + 1000);
+
+      // UPDATE users (single statement: business_role + password_changed_at + updated_at)
+      await mgr.update(
+        User,
+        { id: targetId },
+        {
+          business_role: newRole,
+          password_changed_at: passwordChangedAt,
+        },
+      );
+
+      // INSERT assignment_audit_log
+      // F006a §9：entity_id 撤銷時 {newRole} 為原舊 role；指派時為新 role
+      const action: 'ASSIGN_ROLE' | 'REVOKE_ROLE' =
+        newRole === null ? 'REVOKE_ROLE' : 'ASSIGN_ROLE';
+      const entityIdSuffix = newRole === null ? oldRole : newRole;
+
+      await mgr.insert(AssignmentAuditLog, {
+        action,
+        entity_type: 'business_role',
+        entity_id: `${targetId}|${entityIdSuffix ?? ''}`,
+        actor_id: actorId,
+        actor_name: actorId,
+        before_value: { business_role: oldRole },
+        after_value: { business_role: newRole },
+      });
+
+      // 回傳更新後物件（合併本地變更，避免再讀一次 DB）
+      const updated = {
+        ...user,
+        business_role: newRole,
+        password_changed_at: passwordChangedAt,
+      };
+
+      return {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        role: updated.role,
+        business_role: updated.business_role,
+        status: updated.status,
+        password_changed_at: updated.password_changed_at,
+        created_at: updated.created_at,
+        updated_at: updated.updated_at,
+      };
+    });
   }
 }

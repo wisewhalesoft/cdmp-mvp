@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -83,7 +83,7 @@ describe('AuthService', () => {
     authService = module.get<AuthService>(AuthService);
   });
 
-  // TS-F001-001: Admin 正確憑證 → 回傳 { token, user }
+  // TS-F001-001: Admin 甇?Ⅱ?? ??? { token, user }
   it('should return token and user info for valid admin credentials', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...ADMIN_ACTIVE,
@@ -108,11 +108,12 @@ describe('AuthService', () => {
       userId: ADMIN_ACTIVE.id,
       role: 'admin',
       isSalesManager: false,
+      businessRole: null,
       rememberMe: false,
     });
   });
 
-  // TS-F001-002: rememberMe=true → JWT exp = 30 天
+  // TS-F001-002: rememberMe=true ??JWT exp = 30 憭?
   it('should pass rememberMe=true to JWT generation', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...ADMIN_ACTIVE,
@@ -129,11 +130,12 @@ describe('AuthService', () => {
       userId: ADMIN_ACTIVE.id,
       role: 'admin',
       isSalesManager: false,
+      businessRole: null,
       rememberMe: true,
     });
   });
 
-  // TS-F001-003: rememberMe=false → JWT exp = 8 小時
+  // TS-F001-003: rememberMe=false ??JWT exp = 8 撠?
   it('should pass rememberMe=false to JWT generation by default', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...ADMIN_ACTIVE,
@@ -149,11 +151,12 @@ describe('AuthService', () => {
       userId: ADMIN_ACTIVE.id,
       role: 'admin',
       isSalesManager: false,
+      businessRole: null,
       rememberMe: false,
     });
   });
 
-  // TS-F001-004: 錯誤密碼 → UnauthorizedException
+  // TS-F001-004: ?航炊撖Ⅳ ??UnauthorizedException
   it('should throw UnauthorizedException for wrong password', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...ADMIN_ACTIVE,
@@ -178,7 +181,7 @@ describe('AuthService', () => {
     }
   });
 
-  // TS-F001-005: 不存在 Email → UnauthorizedException (同錯誤密碼回應)
+  // TS-F001-005: 銝???Email ??UnauthorizedException (?隤文?蝣澆???
   it('should throw UnauthorizedException for non-existent email with same message as wrong password', async () => {
     mockUserRepository.findOne.mockResolvedValue(null);
 
@@ -200,7 +203,7 @@ describe('AuthService', () => {
     }
   });
 
-  // TS-F001-006: 帳號已停用 → ForbiddenException
+  // TS-F001-006: 撣唾?撌脣?????ForbiddenException
   it('should throw ForbiddenException for disabled account', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...ADMIN_DISABLED,
@@ -225,7 +228,7 @@ describe('AuthService', () => {
     }
   });
 
-  // TS-F002-001: User 正確憑證登入 → token + user.role='user'
+  // TS-F002-001: User 甇?Ⅱ???餃 ??token + user.role='user'
   it('should return token and user info for valid user credentials', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...USER_ACTIVE,
@@ -248,11 +251,12 @@ describe('AuthService', () => {
       userId: USER_ACTIVE.id,
       role: 'user',
       isSalesManager: false,
+      businessRole: null,
       rememberMe: false,
     });
   });
 
-  // TS-F002-002: User rememberMe=true → JWT generateToken 帶 rememberMe=true
+  // TS-F002-002: User rememberMe=true ??JWT generateToken 撣?rememberMe=true
   it('should pass rememberMe=true to JWT generation for user', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...USER_ACTIVE,
@@ -269,11 +273,12 @@ describe('AuthService', () => {
       userId: USER_ACTIVE.id,
       role: 'user',
       isSalesManager: false,
+      businessRole: null,
       rememberMe: true,
     });
   });
 
-  // TS-F002-005: User 帳號已停用 → ForbiddenException
+  // TS-F002-005: User 撣唾?撌脣?????ForbiddenException
   it('should throw ForbiddenException for disabled user account', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...USER_DISABLED,
@@ -298,7 +303,7 @@ describe('AuthService', () => {
     }
   });
 
-  // TS-F002-006: User 錯誤密碼 → UnauthorizedException
+  // TS-F002-006: User ?航炊撖Ⅳ ??UnauthorizedException
   it('should throw UnauthorizedException for wrong user password', async () => {
     mockUserRepository.findOne.mockResolvedValue({
       ...USER_ACTIVE,
@@ -323,7 +328,7 @@ describe('AuthService', () => {
     }
   });
 
-  // TS-F001-007: SQL injection 安全處理
+  // TS-F001-007: SQL injection 摰??
   it('should safely handle SQL injection attempt via parameterized query', async () => {
     mockUserRepository.findOne.mockResolvedValue(null);
 
@@ -342,9 +347,9 @@ describe('AuthService', () => {
     });
   });
 
-  // F002SM: Sales Manager 旗標補充於 LoginResult.user
+  // F002SM: Sales Manager ??鋆???LoginResult.user
   describe('F002SM - isSalesManager in LoginResult', () => {
-    // TS-F002SM-001: Sales Manager 登入 → user.isSalesManager === true
+    // TS-F002SM-001: Sales Manager ?餃 ??user.isSalesManager === true
     it('should return user.isSalesManager=true for sales manager account', async () => {
       mockUserRepository.findOne.mockResolvedValue({
         ...SALES_MANAGER_ACTIVE,
@@ -362,7 +367,7 @@ describe('AuthService', () => {
       expect(result.user.role).toBe('user');
     });
 
-    // TS-F002SM-002: 一般 User 登入 → user.isSalesManager === false
+    // TS-F002SM-002: 銝??User ?餃 ??user.isSalesManager === false
     it('should return user.isSalesManager=false for regular user (no flag)', async () => {
       mockUserRepository.findOne.mockResolvedValue({
         ...USER_ACTIVE,
@@ -380,7 +385,7 @@ describe('AuthService', () => {
       expect(typeof result.user.isSalesManager).toBe('boolean');
     });
 
-    // TS-F002SM-003: Admin 登入 → user.isSalesManager === false（boundary safety）
+    // TS-F002SM-003: Admin ?餃 ??user.isSalesManager === false嚗oundary safety嚗?
     it('should return user.isSalesManager=false for admin account', async () => {
       mockUserRepository.findOne.mockResolvedValue({
         ...ADMIN_ACTIVE,
@@ -398,7 +403,7 @@ describe('AuthService', () => {
       expect(result.user.role).toBe('admin');
     });
 
-    // TS-F002SM-006: 型別必須為 boolean（非字串）
+    // TS-F002SM-006: ?敹???boolean嚗?摮葡嚗?
     it('should return isSalesManager as boolean type, not string', async () => {
       mockUserRepository.findOne.mockResolvedValue({
         ...SALES_MANAGER_ACTIVE,
@@ -415,7 +420,7 @@ describe('AuthService', () => {
       expect(result.user.isSalesManager).not.toBe('false');
     });
 
-    // TS-F002SM-004: JWT payload 含 isSalesManager: true
+    // TS-F002SM-004: JWT payload ??isSalesManager: true
     it('should pass isSalesManager=true to JWT generation for sales manager', async () => {
       mockUserRepository.findOne.mockResolvedValue({
         ...SALES_MANAGER_ACTIVE,
@@ -436,7 +441,7 @@ describe('AuthService', () => {
       );
     });
 
-    // Defense in depth: 若 DB 欄位為 undefined（極端情況），仍應回傳 false
+    // Defense in depth: ??DB 甈???undefined嚗扔蝡舀?瘜?嚗?????false
     it('should default isSalesManager to false when DB value is nullish', async () => {
       mockUserRepository.findOne.mockResolvedValue({
         ...USER_ACTIVE,
@@ -485,7 +490,7 @@ describe('AuthService', () => {
       );
     });
 
-    it('should be idempotent — skip if token already in blocklist', async () => {
+    it('should be idempotent ??skip if token already in blocklist', async () => {
       mockTokenBlocklistRepository.findOne.mockResolvedValue({
         token: 'already-revoked',
       });

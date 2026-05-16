@@ -4,6 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('ob_empl_set')
 export class ObEmplSet {
@@ -13,7 +14,9 @@ export class ObEmplSet {
   @Column({ name: 'created_by', type: 'varchar', length: 10, nullable: true })
   created_by: string | null; // A_USERID
 
-  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  // P1 B1 / AD-E07-17 議題 3 / 2026-05-16：改用 dateColumnType helper（postgres=timestamp / sqlite=datetime）
+  // 對應 memory feedback_typeorm_timestamp 規則
+  @Column({ name: 'created_at', type: dateColumnType, nullable: true })
   created_at: Date | null; // A_SYSDT
 
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 10, nullable: true })
@@ -22,7 +25,7 @@ export class ObEmplSet {
   @Column({ name: 'updated_by', type: 'varchar', length: 10, nullable: true })
   updated_by: string | null; // U_USERID
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
 
   @PrimaryColumn({ name: 'list_no', type: 'varchar', length: 11 })

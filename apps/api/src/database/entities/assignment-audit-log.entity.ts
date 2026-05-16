@@ -18,8 +18,19 @@ export class AssignmentAuditLog {
   @Column({ name: 'entity_id', type: 'varchar', length: 100 })
   entity_id: string;
 
-  @Column({ name: 'action', type: 'varchar', length: 10 })
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RUN';
+  // m16 / AD-E07-17 議題 2 / 2026-05-16：length 由 10 擴為 30，
+  // union 補充 STAGE_ADVANCE / STAGE_ROLLBACK / STAGE_REJECT / ASSIGN_ROLE / REVOKE_ROLE
+  @Column({ name: 'action', type: 'varchar', length: 30 })
+  action:
+    | 'CREATE'
+    | 'UPDATE'
+    | 'DELETE'
+    | 'RUN'
+    | 'STAGE_ADVANCE'
+    | 'STAGE_ROLLBACK'
+    | 'STAGE_REJECT'
+    | 'ASSIGN_ROLE'
+    | 'REVOKE_ROLE';
 
   @Column({ name: 'actor_id', type: 'uuid' })
   actor_id: string;

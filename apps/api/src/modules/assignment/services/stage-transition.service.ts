@@ -143,16 +143,13 @@ export class StageTransitionService {
     actorId: string,
     payload: Record<string, unknown>,
   ): Partial<AssignmentAuditLog> {
-    // action 為 STAGE_ADVANCE / STAGE_ROLLBACK / STAGE_REJECT；entity column 設計上為
-    // varchar(10)（既有 schema），spec 後續批次將擴 varchar 容納。先以 truncated 名稱寫入。
-    const truncatedAction = action.length > 10 ? action.slice(0, 10) : action;
+    // m16 / 2026-05-16：column 已擴為 varchar(30) + entity union 已含 STAGE_*，可寫完整名稱
     return {
-      action: truncatedAction as AssignmentAuditLog['action'],
+      action: action as AssignmentAuditLog['action'],
       entity_type: 'list_definition',
       entity_id: listNo,
       actor_id: actorId,
       actor_name: actorId, // placeholder：上層 service 可覆寫
-      // 沿用既有 assignment_audit_log schema：before_value / after_value JSON
       after_value: payload as Record<string, unknown>,
     };
   }
