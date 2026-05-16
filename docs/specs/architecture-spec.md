@@ -3640,6 +3640,39 @@ step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆�
 
 ---
 
+#### AD-E07-17　Schema 修補三議題決議（2026-05-16，TDD P0 完成後）
+
+> **背景**：TDD P0 階段（70/70 tests PASS）發現 3 個 spec/schema 不一致，由 system-architect 統一決議後交 TDD P1 B1 啟動前修補。
+
+**議題 1 決議：`assignment_audit_log.action` VARCHAR(10) → VARCHAR(30)**
+
+| 項目 | 決議 |
+|------|------|
+| **選定方案** | 選項 A：直接擴欄至 `VARCHAR(30)`，同時擴充合法 action 值 union |
+| **理由** | Stage 系列 action（`STAGE_ADVANCE`、`STAGE_ROLLBACK`、`STAGE_REJECT`，最長 14 字元）超出 VARCHAR(10)；VARCHAR(30) 留有未來擴充空間（最長業務 action 預估 ≤ 20 字元）；PostgreSQL ALTER COLUMN 不涉及資料遷移，執行安全 |
+| **否決選項 B** | PostgreSQL native ENUM 強型別但 SQLite E2E 不支援；TypeScript union 已在 service 層提供等效型別安全，無需 DB ENUM |
+| **否決選項 C** | 另設 `stage_transition_audit_log` 為過度設計；`assignment_audit_log` 已定義為統一稽核日誌（AD-E07-3），拆分違反設計原則 |
+| **實作指引** | 新建 migration `AddAuditLogActionVarchar30`（timestamp 接在 m170 之後）；migration 內 `ALTER TABLE assignment_audit_log ALTER COLUMN action TYPE VARCHAR(30)`；Entity 同步修正 `length: 30`；`AssignmentAuditLog.action` TypeScript union 擴充加入 `'STAGE_ADVANCE' \| 'STAGE_ROLLBACK' \| 'STAGE_REJECT'` |
+
+**議題 2 決議：`ob_empl_set.created_at/updated_at` 改用 `dateColumnType()` helper**
+
+| 項目 | 決議 |
+|------|------|
+| **根本原因** | `ob-empl-set.entity.ts` 使用 `type: 'timestamp'`（固定字串），TypeORM 在 SQLite E2E 模式下不識別此型別（SQLite 對應型別為 `datetime`）；migration 層 `type: 'timestamp'` 在 PostgreSQL 正確，無需修改 |
+| **決議** | 僅修改 entity 檔案（`ob-empl-set.entity.ts`）：`created_at` / `updated_at` 的 `@Column` 改用 `dateColumnType()` helper（`import { dateColumnType } from '../helpers/column-types'`）；**不需新增 migration**（migration 中 `'timestamp'` 在 PostgreSQL 下與 `dateColumnType()` 產出結果相同，無 DDL 差異） |
+| **影響確認** | 既有 PostgreSQL production 資料不受影響；SQLite E2E schema sync 可恢復正常；pattern 與 `ob_card_type` entity 一致 |
+
+**議題 3 決議：`ObListDefinition.stage` column migration 歸屬明示**
+
+| 項目 | 決議 |
+|------|------|
+| **歸屬 migration** | `1711360000100-CreateE07ObSettingsTables`（系統稱「m100」）—— `stage VARCHAR(20) NOT NULL DEFAULT 'draft'` 已作為 `ob_list_definition` CREATE TABLE 的組成欄位存在 |
+| **m12 data backfill 仍有效** | m12 migration 腳本（`UPDATE ob_list_definition SET stage = 'ready' WHERE ...`）為 **data backfill**，不建欄、僅寫資料；現行規則（2026-05-16 system-architect 決議 #3）完全有效 |
+| **TDD entity 新增 stage 欄位** | TDD P0 於 entity 新增 `stage` 欄位供 service 引用，此為正確的 code-first 補齊；migration 已存在欄位定義，**無衝突** |
+| **不需新增 migration** | stage column DDL 已在 m100；m12 backfill UPDATE 保持原位；TDD P1 無需額外 migration 處理此議題 |
+
+---
+
 ### E07-G　M02 計分設定擴充 Migration 設計（F069~F072，2026-05-14）
 
 > **範圍**：本節定義 F069~F072（CARD_TYPE CRUD）新增的 3 個 migration 設計草案。實際 TypeORM migration 程式碼由 TDD Developer 實作。
@@ -3994,3 +4027,10 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 - *E07-F F-4 PostgreSQL Function 清單新增 P5 項（HM 計分設定補建確認，[BLOCKER for HM 名單月跑]）*
 - *OQ-E07-27（HM 借用行為）標為 ✅ Resolved（AD-E07-15）；OQ-E07-28（M3/HC/C3）標為 ✅ Resolved（OBMLISTDF dump 實證，data-model.md 補 seed 規範）；新增 OQ-E07-29（HB/SEB/SEC 邊緣 CARD_TYPE，Open，待業務確認）*
 - *covers 清單維持 F068 不變（本次無新增 Feature 涵蓋）*
+
+---
+
+*本文件版本 2.12，由 System Architect Agent 依據 TDD P0 完成後識別之 3 個 schema/spec 議題（2026-05-16）更新。主要變更：*
+
+- *新增架構決策 AD-E07-17（Schema 修補三議題決議：議題 1 `assignment_audit_log.action` VARCHAR(10)→VARCHAR(30)；議題 2 `ob_empl_set` 時間欄位 entity 改用 `dateColumnType()` helper；議題 3 `ObListDefinition.stage` 確認歸屬 m100 migration，m12 data backfill 仍有效）*
+- *data-model.md 同步更新：`assignment_audit_log.action` 欄位說明更新 VARCHAR(30) + stage 系列 action 值；`ob_empl_set.created_at/updated_at` 補入 dateColumnType helper 強制說明；`ob_list_definition.stage` 欄位補入 migration 歸屬明示*

@@ -845,7 +845,7 @@ PK：`list_no`
 | settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
 | card_type | VARCHAR(5) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議；dump 含 3 字元值如 SEC/SEB，與 ob_levelcard_* 系列一致改為 VARCHAR(5)） |
 | status | VARCHAR(10) | NOT NULL DEFAULT 'active' | （AppDB 新建欄位） | 啟用狀態：`'active'` / `'inactive'`（草稿階段停用後設 `'inactive'`，沿用 epic-brief「已解決問題」第 2 點與 F052） |
-| stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月跑 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
+| stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入；**migration 歸屬：`1711360000100-CreateE07ObSettingsTables`（m100）中 `ob_list_definition` CREATE TABLE 時同步加入此欄位；m12 data backfill UPDATE 僅寫資料不建欄，見 AD-E07-17 議題 3**） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月跑 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
 | cr_enabled | BOOLEAN | NOT NULL DEFAULT TRUE | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代 F059 OBASSIGNSET 全域路徑**） | per-LIST_NO CR 回分開關；草稿階段（`stage = 'draft'`）由 F050 v2.0 / F051 v2.0 透過 `crEnabled` 欄位設定；推進至非草稿階段後鎖定（透過 F051 v2.0 BR-3 統一拒絕，無需獨立鎖定欄位）；月跑 Stage 3 讀取本欄位決定是否執行 CR 回分（false = 跳過）；既有 OBMLISTDF 遷移之名單初始 `true`（保持現行行為）；US-120 spec 落差修正之唯一儲存位置；F059 v2.0 標記 DEPRECATED 不再讀寫 |
 | condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代固定欄位 PROD_KIND / CASEYEAR / SPEC_TP / CASE_STATUS / SETTLE_SRC 等之必填語意**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；F050 v2.0 新建必填（至少 1 個 conditions）；F051 v2.0 草稿階段可整段覆寫；F050 v2.0 BR-6 強制 `conditions[].columnName` 必須存在於 F075 白名單且 `is_active = true`；月跑 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（F050 v2.0 BR-10）；既有 OBMLISTDF 遷移之名單初始 `NULL`（其月跑語意沿用既有固定欄位 + 後端做 JSONB / 舊欄位讀取相容處理，由 system-architect 設計）|
 
@@ -1113,10 +1113,10 @@ PK：`(list_no, deptid_m, emplid, ration)`
 |--------|------|------|--------|------|
 | created_by_prog | VARCHAR(10) | NULL | A_PRGID | 建立程式代碼 |
 | created_by | VARCHAR(10) | NULL | A_USERID | 建立者 |
-| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間 |
+| created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間（**entity 必須使用 `dateColumnType()` helper，禁用 `type: 'timestamp'` 固定字串**，見 AD-E07-17 議題 2） |
 | updated_by_prog | VARCHAR(10) | NULL | U_PRGID | 更新程式代碼 |
 | updated_by | VARCHAR(10) | NULL | U_USERID | 更新者 |
-| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間 |
+| updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間（**同 created_at，使用 `dateColumnType()` helper**） |
 | list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號 |
 | deptid_m | VARCHAR(50) | NOT NULL | DEPTID_M | **PK**，催收人員所屬部門（組合鍵；遷移時 `RTRIM(deptid_m)`，見下方註腳） |
 | emplid | VARCHAR(6) | NOT NULL | EMPLID | **PK**，催收人員工號 |
@@ -1803,7 +1803,7 @@ PK：`calendar_date`
 | log_id | UUID | NOT NULL | **PK**，日誌識別碼 |
 | entity_type | VARCHAR(50) | NOT NULL | 被操作實體（如 `ob_list_definition`、`ob_dept_pct`） |
 | entity_id | VARCHAR(100) | NOT NULL | 被操作實體的識別碼（字串化） |
-| action | VARCHAR(10) | NOT NULL | 操作類型：`CREATE` / `UPDATE` / `DELETE` / `RUN` |
+| action | VARCHAR(30) | NOT NULL | 操作類型：`CREATE` / `UPDATE` / `DELETE` / `RUN` / `STAGE_ADVANCE` / `STAGE_ROLLBACK` / `STAGE_REJECT`（**v1.12 / 2026-05-16 擴充 VARCHAR(10)→VARCHAR(30)**，見 AD-E07-17） |
 | actor_id | UUID | NOT NULL | 操作者 user_id（FK → users.id） |
 | actor_name | VARCHAR(100) | NOT NULL | 操作者姓名（快照，不受後續改名影響） |
 | before_value | JSONB | NULL | 操作前資料快照（UPDATE/DELETE 填入） |

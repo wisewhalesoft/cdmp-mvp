@@ -93,4 +93,10 @@ export class ObListDefinition {
   // E07 名單啟用旗標（migration M1 補建）
   @Column({ name: 'status', type: 'varchar', length: 10, default: 'active' })
   status: string;
+
+  // E07 五階段流程欄位（data-model.md L848 / F077 v1.0 / E07 重構批次 2 / 2026-05-15 引入）
+  // 值列舉：'draft' / 'dept_ratio' / 'personnel_ratio' / 'approval' / 'ready'
+  // 對應 migration：(後續 E07 重構批次 m05~m13 中之 stage 欄位 migration)
+  @Column({ name: 'stage', type: 'varchar', length: 20, default: 'draft' })
+  stage: 'draft' | 'dept_ratio' | 'personnel_ratio' | 'approval' | 'ready';
 }
