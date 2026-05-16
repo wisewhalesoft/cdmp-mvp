@@ -54,6 +54,9 @@ export const SCORING_ERROR_CODES = {
   CARD_LEVEL_NOT_FOUND_IN_VERSION: 'CARD_LEVEL_NOT_FOUND_IN_VERSION',
   CARD_LEVEL_RECORD_NOT_FOUND: 'CARD_LEVEL_RECORD_NOT_FOUND',
   CARD_LEVEL_REFERENCED: 'CARD_LEVEL_REFERENCED',
+  // F055 v1.5 §5.4 POST：(cardType, cardVersion, cardLevel) 已存在於當前存活紀錄
+  //   BR-9：hard delete 後 PK 釋放，可重新新增；本檢查僅針對 active 紀錄
+  CARD_LEVEL_DUPLICATE: 'CARD_LEVEL_DUPLICATE',
   TIER_MAPPING_NOT_FOUND: 'TIER_MAPPING_NOT_FOUND',
   // v1.5（Iter 3）新增（F056 spec §AC-8 / AC-9 / AC-3 / AC-4a）
   TIER_LEVEL_INVALID_ENUM: 'TIER_LEVEL_INVALID_ENUM',
@@ -73,6 +76,7 @@ export const SCORING_ERROR_MESSAGES = {
   CARD_LEVEL_RECORD_NOT_FOUND: '指定的 CARD_LEVEL 紀錄不存在',
   CARD_LEVEL_REFERENCED:
     '此 CARD_LEVEL 仍被 TIER_LEVEL 對應引用，請先於 F056 移除對應後再刪除',
+  CARD_LEVEL_DUPLICATE: '等級代碼已存在於選中計分版本',
   TIER_MAPPING_NOT_FOUND: '指定的 TIER 對應不存在',
   // v1.5（Iter 3）新增
   TIER_LEVEL_INVALID_ENUM: 'TIER_LEVEL 必須為 T1~T10 之一',
@@ -230,6 +234,23 @@ export interface DeleteCardLevelResult {
   cardVersion: number;
   cardLevel: string;
   deletedAt: string;
+}
+
+// F055 v1.5 §5.4 POST
+export interface CreateCardLevelInput {
+  cardType: string;
+  cardLevel: string;
+  scoreS: number;
+  scoreE: number;
+}
+
+export interface CreateCardLevelResult {
+  cardType: string;
+  cardVersion: number;
+  cardLevel: string;
+  scoreS: number;
+  scoreE: number;
+  createdAt: string;
 }
 
 // =========================
@@ -934,6 +955,142 @@ export class AssignmentScoringService {
       cardVersion: input.cardVersion,
       cardLevel: input.cardLevel,
       deletedAt: new Date().toISOString(),
+    };
+  }
+
+  // =========================
+  // F055 v1.5 — POST /scoring/card-levels（§5.4，單筆 INSERT）
+  // =========================
+  //
+  // 對應 spec：F055 v1.5 §5.4 / AC-8 ~ AC-8f / BR-1 / BR-7 / BR-8 / BR-9
+  //
+  //   驗證順序（依 spec §5.4 寫入語意；月跑鎖前置以對齊既有 deleteCardLevel/updateCardLevels 慣例）：
+  //     0. 月跑鎖（BR-3）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
+  //     1. cardType 範圍鎖（BR-7）：ob_card_type.status=active → 404 CARD_TYPE_NOT_FOUND
+  //     2. scoreE >= scoreS 業務驗證 → 422 VALIDATION_ERROR
+  //        （cardLevel 格式 ^[A-Z]$ 已由 DTO @Matches 處理，HTTP 422 由 NestJS ValidationPipe 拋出）
+  //     3. 取 active 計分版本（BR-4）：ob_levelcard_version.status=active → 404 SCORING_VERSION_NOT_FOUND
+  //     4. dedup（BR-9）：當前存活 (cardType, cardVersion, cardLevel) 已存在 → 422 CARD_LEVEL_DUPLICATE
+  //     5. 與既有等級區間不重疊（BR-1 v1.5 — 允許 gap）→ 422 SCORING_RANGE_OVERLAP
+  //     6. INSERT + audit (action=CREATE, entity_id={cardType}|{cardVersion}|{cardLevel},
+  //                       before_value=null, after_value={cardLevel, scoreS, scoreE})
+
+  async createCardLevel(
+    input: CreateCardLevelInput,
+    actor: ActorContext,
+  ): Promise<CreateCardLevelResult> {
+    // 0. 月跑鎖（BR-3）
+    await this.assertNotLocked();
+
+    // 1. cardType 範圍鎖（BR-7）
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
+    // 2. scoreE >= scoreS 業務驗證
+    if (input.scoreE < input.scoreS) {
+      throw new UnprocessableEntityException({
+        error: SCORING_ERROR_CODES.VALIDATION_ERROR,
+        message: `scoreE (${input.scoreE}) 必須 >= scoreS (${input.scoreS})`,
+        details: { field: 'scoreE', scoreS: input.scoreS, scoreE: input.scoreE },
+      });
+    }
+
+    // 3. 取 active 計分版本
+    const version = await this.versionRepo.findOne({
+      where: { card_type: input.cardType as any, status: 'active' as any },
+    });
+    if (!version) {
+      throw new NotFoundException({
+        error: SCORING_ERROR_CODES.SCORING_VERSION_NOT_FOUND,
+        message: SCORING_ERROR_MESSAGES.SCORING_VERSION_NOT_FOUND,
+      });
+    }
+    const cardVersion = version.card_version ?? 1;
+
+    // 4. dedup（BR-9：僅針對當前存活紀錄）
+    const existing = await this.levelRepo.findOne({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+        card_level: input.cardLevel as any,
+      },
+    });
+    if (existing) {
+      throw new UnprocessableEntityException({
+        error: SCORING_ERROR_CODES.CARD_LEVEL_DUPLICATE,
+        message: `等級代碼 ${input.cardLevel} 已存在於選中計分版本`,
+        details: {
+          cardType: input.cardType,
+          cardVersion,
+          cardLevel: input.cardLevel,
+        },
+      });
+    }
+
+    // 5. 與既有等級區間不重疊（BR-1 v1.5 — 允許 gap）
+    const existingLevels = await this.levelRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+      },
+    });
+    const merged = [
+      ...existingLevels.map((l) => ({ scoreS: l.score_s, scoreE: l.score_e })),
+      { scoreS: input.scoreS, scoreE: input.scoreE },
+    ];
+    if (AssignmentScoringService.hasNumericOverlap(merged)) {
+      // 找出哪個既有等級與新筆重疊（供前端顯示 conflictLevel）
+      const conflict = existingLevels.find(
+        (l) => !(input.scoreE < l.score_s || input.scoreS > l.score_e),
+      );
+      throw new UnprocessableEntityException({
+        error: SCORING_ERROR_CODES.SCORING_RANGE_OVERLAP,
+        message: conflict
+          ? `新增等級 ${input.cardLevel} 區間 ${input.scoreS}~${input.scoreE} 與既有等級 ${conflict.card_level} 區間 ${conflict.score_s}~${conflict.score_e} 重疊，請調整`
+          : SCORING_ERROR_MESSAGES.SCORING_RANGE_OVERLAP,
+        details: conflict
+          ? {
+              cardLevel: input.cardLevel,
+              scoreS: input.scoreS,
+              scoreE: input.scoreE,
+              conflictLevel: conflict.card_level,
+              conflictScoreS: conflict.score_s,
+              conflictScoreE: conflict.score_e,
+            }
+          : undefined,
+      });
+    }
+
+    // 6. INSERT
+    const newRow = this.levelRepo.create({
+      card_type: input.cardType,
+      card_version: cardVersion,
+      card_level: input.cardLevel,
+      score_s: input.scoreS,
+      score_e: input.scoreE,
+    } as any);
+    await this.levelRepo.save(newRow);
+
+    // audit log
+    await this.writeAudit(
+      actor,
+      'CREATE',
+      'ob_levelcard_level',
+      `${input.cardType}|${cardVersion}|${input.cardLevel}`,
+      null,
+      {
+        cardLevel: input.cardLevel,
+        scoreS: input.scoreS,
+        scoreE: input.scoreE,
+      },
+    );
+
+    return {
+      cardType: input.cardType,
+      cardVersion,
+      cardLevel: input.cardLevel,
+      scoreS: input.scoreS,
+      scoreE: input.scoreE,
+      createdAt: new Date().toISOString(),
     };
   }
 

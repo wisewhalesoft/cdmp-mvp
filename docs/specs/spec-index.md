@@ -173,7 +173,7 @@ status: Draft
 | F072 | [F072-disable-card-type.md](features/F072-disable-card-type.md) | 停用 CARD_TYPE 計分卡類型（級聯刪除） | US-096 | P0-MVP | v1.0 |
 | F053 | [F053-view-scoring-dimensions.md](features/F053-view-scoring-dimensions.md) | 查看計分維度設定（M02 Tab 2） | US-072 | P0-MVP | v1.2 |
 | F054 | [F054-edit-scoring-dimension.md](features/F054-edit-scoring-dimension.md) | 編輯計分維度與分數（M02 Tab 2 寫入） | US-073 | P0-MVP | v1.2 |
-| F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074、US-097 | P0-MVP | v1.5 |
+| F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074、US-097 | P0-MVP | v1.6 |
 | F056 | [F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表（M02 Tab 5） | US-075 | P0-MVP | v1.5 |
 
 > M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入、Tab 3 = F054 分數設定子視圖、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。

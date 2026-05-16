@@ -13,8 +13,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@/common/guards/auth.guard';
-import { SalesManagerGuard } from '@/common/guards/sales-manager.guard';
-import { RequireSalesManager } from '@/common/decorators/sales-manager.decorator';
+import { DirectorGuard } from '@/common/guards/director.guard';
+import { DirectorOrSectionChiefGuard } from '@/common/guards/director-or-section-chief.guard';
+import {
+  RequireDirector,
+  RequireDirectorOrSectionChief,
+} from '@/common/decorators/business-role.decorator';
 import { AssignmentScoringService } from './assignment-scoring.service';
 import { GetScoringQueryDto } from './dto/get-scoring-query.dto';
 import { UpdateDimensionsDto } from './dto/update-dimensions.dto';
@@ -24,6 +28,7 @@ import { UpdateCardLevelsDto } from './dto/update-card-levels.dto';
 import { GetCardLevelsQueryDto } from './dto/get-card-levels-query.dto';
 import { PreviewCardLevelsQueryDto } from './dto/preview-card-levels-query.dto';
 import { DeleteCardLevelQueryDto } from './dto/delete-card-level-query.dto';
+import { CreateCardLevelDto } from './dto/create-card-level.dto';
 import {
   UpdateTierMappingDto,
   UpdateTierMappingQueryDto,
@@ -38,14 +43,15 @@ import { GetTierMappingQueryDto } from './dto/get-tier-mapping-query.dto';
  * 路由前綴 `assignment/scoring`（global prefix `api/v1`，最終
  * `/api/v1/assignment/scoring/...`）。
  *
- * 權限：所有端點 AuthGuard + SalesManagerGuard
- *   - admin 直接通過
- *   - role='user' + is_sales_manager=true 通過
- *   - 其餘 403 AUTH_FORBIDDEN
+ * 權限（依 F002 §4.6.2 / AD-E07 v3.0 / 2026-05-16）：
+ *   - class 級 AuthGuard + DirectorOrSectionChiefGuard + DirectorGuard
+ *   - class 級 `@RequireDirectorOrSectionChief()`：所有方法至少需 director/section_chief/admin
+ *   - GET 端點未額外標 → 走 DirectorOrSectionChiefGuard（M02 讀取開放至處長）
+ *   - 寫入端點額外標 `@RequireDirector()` → 走 DirectorGuard（M02 寫入限部長）
  */
 @Controller('assignment/scoring')
-@UseGuards(AuthGuard, SalesManagerGuard)
-@RequireSalesManager()
+@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@RequireDirectorOrSectionChief()
 export class AssignmentScoringController {
   constructor(private readonly service: AssignmentScoringService) {}
 
@@ -59,6 +65,7 @@ export class AssignmentScoringController {
   // ===== F054 =====
 
   @Put('dimensions')
+  @RequireDirector()
   async updateDimensions(@Body() dto: UpdateDimensionsDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -69,6 +76,7 @@ export class AssignmentScoringController {
 
   @Post('dimensions')
   @HttpCode(HttpStatus.CREATED)
+  @RequireDirector()
   async createDimension(@Body() dto: CreateDimensionDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -78,6 +86,7 @@ export class AssignmentScoringController {
   }
 
   @Put('dimensions/:columnName/disable')
+  @RequireDirector()
   async disableDimension(
     @Param('columnName') columnName: string,
     @Query() query: DisableDimensionQueryDto,
@@ -109,6 +118,7 @@ export class AssignmentScoringController {
   }
 
   @Put('card-levels')
+  @RequireDirector()
   async updateCardLevels(@Body() dto: UpdateCardLevelsDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -118,12 +128,31 @@ export class AssignmentScoringController {
   }
 
   /**
+   * F055 v1.5 §5.4 POST /api/v1/assignment/scoring/card-levels
+   * Body: cardType / cardLevel / scoreS / scoreE（不含 cardVersion，後端依 active 版本帶入）
+   *
+   * 新增單筆 CARD_LEVEL 等級至選中 CARD_TYPE 之 active 計分版本。
+   * 對應 AC-8 ~ AC-8f / BR-1 / BR-7 / BR-8 / BR-9。
+   */
+  @Post('card-levels')
+  @HttpCode(HttpStatus.CREATED)
+  @RequireDirector()
+  async createCardLevel(@Body() dto: CreateCardLevelDto, @Req() req: any) {
+    const actor = {
+      userId: req.user.userId,
+      ipAddress: req.ip ?? null,
+    };
+    return this.service.createCardLevel(dto, actor);
+  }
+
+  /**
    * F055 §5.3 DELETE /api/v1/assignment/scoring/card-levels
    * Query: cardType, cardVersion, cardLevel（皆必填）
    *
    * Hard delete + cascade reference check（BR-5/BR-6）。
    */
   @Delete('card-levels')
+  @RequireDirector()
   async deleteCardLevel(
     @Query() query: DeleteCardLevelQueryDto,
     @Req() req: any,
@@ -150,6 +179,7 @@ export class AssignmentScoringController {
   }
 
   @Put('tier-mapping')
+  @RequireDirector()
   async updateTierMapping(
     @Query() query: UpdateTierMappingQueryDto,
     @Body() dto: UpdateTierMappingDto,
@@ -170,6 +200,7 @@ export class AssignmentScoringController {
 
   @Post('tier-mapping')
   @HttpCode(HttpStatus.CREATED)
+  @RequireDirector()
   async createTierMapping(@Body() dto: CreateTierMappingDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -185,6 +216,7 @@ export class AssignmentScoringController {
    * Hard delete（BR-11）。
    */
   @Delete('tier-mapping')
+  @RequireDirector()
   async deleteTierMapping(
     @Query() query: DeleteTierMappingQueryDto,
     @Req() req: any,

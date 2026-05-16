@@ -6,14 +6,14 @@ source-story: US-074
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.4"
-date: 2026-05-14
+version: "1.6"
+date: 2026-05-17
 status: Draft
 ---
 
 # F055: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## Agent Loading Guide
 
@@ -235,6 +235,32 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
 | 409 | CARD_LEVEL_REFERENCED | 仍被 `ob_tier` 引用，禁止刪除（cascade reference check 失敗，見 BR-6） |
 
+## 5.4 RBAC 與權限（v1.6 部長 / 處長 Guard 行為導入）
+
+> **權威來源**：本節對齊 [F002 §4.6.2 Controller Guard 對應表](F002-user-login.md#462-controller-guard-對應表) 與 architecture-spec.md AD-E07 v3.0；本節僅描述 F055 端點適用範圍與行為，定義變更以 F002 §4.6.2 為準。
+
+### 5.4.1 端點 Guard 對應表
+
+| 端點 | HTTP Method | Guard | 允許角色 | 行為說明 |
+|---|---|---|---|---|
+| `/api/v1/assignment/scoring/card-levels`（§5.1.1） | GET | `DirectorOrSectionChiefGuard` | 部長（`businessRole='director'`）、處長（`businessRole='section_chief'`）、Admin | M02 計分卡為全系統共用，處長可讀取以協助業務檢視 |
+| `/api/v1/assignment/scoring/card-levels`（§5.1） | PUT | `DirectorGuard` + `@RequireDirector()` | 部長、Admin | M02 計分卡寫入限部長；處長禁止寫入 |
+| `/api/v1/assignment/scoring/card-levels`（§5.3） | DELETE | `DirectorGuard` + `@RequireDirector()` | 部長、Admin | 同上 |
+| `/api/v1/assignment/scoring/card-levels/preview`（§5.2） | GET | `DirectorOrSectionChiefGuard` | 部長、處長、Admin | 預覽屬唯讀試算，處長可瀏覽 |
+
+### 5.4.2 適用錯誤碼
+
+| HTTP | 錯誤碼 | 觸發情境 | Guard 來源 |
+|---|---|---|---|
+| 403 | `E07_REQUIRES_DIRECTOR` | 處長（`businessRole='section_chief'`）嘗試呼叫寫入端點（PUT / DELETE） | `DirectorGuard` |
+| 403 | `E07_ROLE_NOT_ASSIGNED` | 一般使用者（`businessRole=null`）呼叫本節任一端點 | `DirectorGuard` / `DirectorOrSectionChiefGuard` |
+
+### 5.4.3 設計原則
+
+- **M02 計分卡為「全系統共用」資料**（不分轄區、不分業務），故處長對 GET 端點具讀取權限以利業務檢視，但寫入仍限部長以保持單一決策來源。
+- **不採用 `is_sales_manager` 舊旗標**：自 AD-E07 v3.0 起，E07 RBAC 一律以 `users.business_role`（`'director'` / `'section_chief'` / `NULL`）枚舉與對應 Guard 判定；F055 v1.6 完全移除 `is_sales_manager` / `SalesManagerGuard` 引用。
+- **權限矩陣同步**：本節任一行為變更，須同步檢視 F002 §4.6.2、error-handling.md `E07_*` 錯誤碼章節、AD-E07 v3.0。
+
 ## 6. 商業規則
 
 | 規則編號 | 說明 |
@@ -277,6 +303,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | v1.2 | 2026-05-13 | 補 GET 5.1.1 端點供頁面載入 |
 | v1.3 | 2026-05-14 | 新增 DELETE 端點 + cascade reference check + AC-6/7 |
 | v1.4 | 2026-05-14 | CARD_TYPE 範圍鎖（BR-7）；AC-1 改為依 selectedCardType 顯示；所有端點補 404 CARD_TYPE_NOT_FOUND；Controller 規範註記；相依性補 F069 |
+| v1.5 | 2026-05-15 | 對齊 spec-index 與 US-097：補 M02 新建 CARD_LEVEL 流程相關 cross-ref（與 F070 / US-097 串接） |
+| v1.6 | 2026-05-17 | **RBAC 明文化（§5.4 新增）**：依 AD-E07 v3.0 + F002 §4.6.2 導入部長 / 處長 Guard 行為矩陣；GET 端點採 `DirectorOrSectionChiefGuard`、寫入端點採 `DirectorGuard`；對應錯誤碼 `E07_REQUIRES_DIRECTOR` / `E07_ROLE_NOT_ASSIGNED` 明列；正式廢棄 `is_sales_manager` / `SalesManagerGuard` 引用，全文改採 `businessRole`（`'director'` / `'section_chief'`）+ 新 Guard 名 |
 
 ## 11. 假設
 

@@ -254,6 +254,40 @@ export async function createTierMapping(payload: {
   return res.data;
 }
 
+// ---- F055 v1.5 §5.4 POST ----
+
+export interface CreateCardLevelPayload {
+  cardType: CardType;
+  cardLevel: string;
+  scoreS: number;
+  scoreE: number;
+}
+
+export interface CreateCardLevelResponse {
+  cardType: string;
+  cardVersion: number;
+  cardLevel: string;
+  scoreS: number;
+  scoreE: number;
+  createdAt: string;
+}
+
+/**
+ * F055 v1.5 §5.4：新增單筆 CARD_LEVEL 等級至選中 CARD_TYPE 之 active 計分版本。
+ *
+ * Request body 不含 `cardVersion`（後端依 active 版本自動帶入）。
+ * 對應 AC-8 ~ AC-8f / BR-1 / BR-7 / BR-8 / BR-9。
+ */
+export async function createCardLevel(
+  payload: CreateCardLevelPayload,
+): Promise<CreateCardLevelResponse> {
+  const res = await apiClient.post<CreateCardLevelResponse>(
+    '/assignment/scoring/card-levels',
+    payload,
+  );
+  return res.data;
+}
+
 // ---- F055 §5.3 DELETE ----
 
 export interface DeleteCardLevelResponse {

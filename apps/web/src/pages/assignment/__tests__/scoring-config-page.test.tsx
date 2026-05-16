@@ -49,6 +49,7 @@ vi.mock('@/api/assignment-scoring', async () => {
     updateCardLevels: vi.fn(),
     previewCardLevels: vi.fn(),
     deleteCardLevel: vi.fn(), // v1.3 新增
+    createCardLevel: vi.fn(), // v1.5 (US-097) 新增
     getTierMapping: vi.fn(),
     updateTierMapping: vi.fn(),
     createTierMapping: vi.fn(),
@@ -878,6 +879,78 @@ describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELET
     expect(screen.getByTestId('level-delete-error').textContent).toContain(
       'TIER_LEVEL 對應',
     );
+  });
+});
+
+// =========================
+// F055 v1.5 (US-097)：CardLevelsTab 新增等級 — 表頭按鈕 + 空狀態 CTA + Modal 串接
+// =========================
+describe('ScoringConfigPage — CardLevelsTab 新增等級（v1.5 POST）', () => {
+  it('TS-F055-N01：CardLevelsTab 表頭顯示「+ 新增等級」按鈕', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-add-level')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('btn-add-level').textContent).toContain(
+      '新增等級',
+    );
+  });
+
+  it('TS-F055-N02：空 levels 顯示空狀態提示 + CTA 按鈕 (btn-add-level-empty)', async () => {
+    // 空 levels
+    vi.mocked(api.getCardLevels).mockResolvedValue({
+      cardType: 'H',
+      cardVersion: 1,
+      levels: [],
+    });
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-add-level-empty')).toBeInTheDocument();
+    });
+    // 空狀態文字
+    expect(
+      screen.getByText('請點擊「+ 新增等級」開始'),
+    ).toBeInTheDocument();
+  });
+
+  it('TS-F055-N03：月跑鎖時 btn-add-level disabled', async () => {
+    // 透過 updateCardLevels 422 SCORING_VERSION_LOCKED 觸發鎖 banner
+    mockedUpdateCardLevels.mockRejectedValue({
+      response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
+    });
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-save-levels')).toBeInTheDocument();
+    });
+    // 觸發鎖
+    fireEvent.click(screen.getByTestId('btn-save-levels'));
+    await waitFor(() => {
+      expect(screen.getByTestId('lock-banner')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('btn-add-level')).toBeDisabled();
+  });
+
+  it('TS-F055-N04：點擊 btn-add-level 開啟新增 Modal', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-add-level')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('btn-add-level'));
+    await waitFor(() => {
+      expect(screen.getByTestId('create-card-level-modal')).toBeInTheDocument();
+    });
+    // Modal 內含 cardType disabled 顯示
+    const ctInput = screen.getByTestId('level-modal-card-type') as HTMLInputElement;
+    expect(ctInput).toBeDisabled();
+    expect(ctInput.value).toContain('H');
   });
 });
 

@@ -42,14 +42,16 @@ import { HashUtil } from '@/common/hash/hash.util';
 
 const JWT_SECRET = 'test-jwt-secret-for-assignment-scoring-e2e';
 
+// B2 替換（AD-E07 v3.0 / 2026-05-16）：SM fixture 升級為 director（M02 寫入限部長）
 const SM_USER = {
   id: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
-  name: 'Sales Manager Scoring',
+  name: 'Director Scoring',
   email: 'sm-scoring-e2e@cdmp.test',
   password: 'P@ssw0rd123',
   role: 'user' as const,
   status: 'active' as const,
   is_sales_manager: true,
+  business_role: 'director' as const,
 };
 const PLAIN_USER = {
   id: 'b2c3d4e5-f6a7-8901-bcde-f01234567890',
@@ -59,6 +61,7 @@ const PLAIN_USER = {
   role: 'user' as const,
   status: 'active' as const,
   is_sales_manager: false,
+  business_role: null,
 };
 
 async function createTestApp(): Promise<INestApplication> {
@@ -122,6 +125,7 @@ async function createTestApp(): Promise<INestApplication> {
         role: u.role,
         status: u.status,
         is_sales_manager: u.is_sales_manager,
+        business_role: u.business_role,
       }),
     );
   }
@@ -204,7 +208,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .get('/api/v1/assignment/scoring?cardType=H')
         .set('Authorization', `Bearer ${plainToken}`);
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     it('TS-F053-002：無 active 版本 → 404 SCORING_VERSION_NOT_FOUND', async () => {
@@ -710,7 +714,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${plainToken}`)
         .send({ cardType: 'H', cardVersion: 1, dimensions: [] });
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     // Iter 4 v1.2 新增 e2e：cardType 範圍鎖（AC-7 / BR-7）
@@ -988,7 +992,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${plainToken}`)
         .send({ cardType: 'H', cardVersion: 1, levels: [] });
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     // ---- GET /card-levels/preview ----
@@ -1198,7 +1202,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         )
         .set('Authorization', `Bearer ${plainToken}`);
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     // Iter 4 v1.4 新增 e2e：cardType 範圍鎖（AC-7 / BR-7）
@@ -1244,6 +1248,278 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${smToken}`);
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('CARD_TYPE_NOT_FOUND');
+    });
+
+    // ============================================================
+    // F055 v1.5 §5.4 POST /card-levels（US-097 新增等級）
+    // ============================================================
+    //
+    // 對應 spec：F055-edit-card-level-thresholds.md v1.5 §5.4 / AC-8 ~ AC-8f
+    //   BR-1 / BR-3 / BR-7 / BR-8 / BR-9
+
+    /** seed H active version（無 levels）— 供 POST 第一筆等級測試使用 */
+    async function seedHActiveVersionOnly() {
+      await ds.getRepository(ObLevelcardVersion).save({
+        card_type: 'H',
+        card_name: '期中',
+        card_version: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        status: 'active',
+      } as any);
+    }
+
+    it('TS-F055-P01：POST happy path → 201 + GET 看到新等級 + audit CREATE', async () => {
+      await seedHWithLevels();
+
+      // 既有 A=243~999；A 之下 D=0~184；新增 E=185~213 ← 與 C 重疊；改用 gap：新增 X 區間
+      // 用既有 A/B/C/D 已塞滿 0~999，須先刪 D 才能新增 E。改測策略：seed 只放 A=243~999，新增 B=0~50
+      await ds.getRepository(ObLevelcardLevel).delete({
+        card_type: 'H',
+        card_version: 1,
+      });
+      await ds.getRepository(ObLevelcardLevel).save([
+        { card_type: 'H', card_version: 1, card_level: 'A', score_s: 243, score_e: 999 },
+      ] as any);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'E', scoreS: 0, scoreE: 49 });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        cardType: 'H',
+        cardVersion: 1,
+        cardLevel: 'E',
+        scoreS: 0,
+        scoreE: 49,
+      });
+      expect(typeof res.body.createdAt).toBe('string');
+
+      // GET 看到新等級
+      const getRes = await request(app.getHttpServer())
+        .get('/api/v1/assignment/scoring/card-levels?cardType=H')
+        .set('Authorization', `Bearer ${smToken}`);
+      expect(getRes.status).toBe(200);
+      const codes = getRes.body.levels.map((l: any) => l.cardLevel);
+      expect(codes).toContain('E');
+
+      // audit CREATE
+      const logs = await ds.getRepository(AssignmentAuditLog).find();
+      const createLog = logs.find(
+        (l) => l.action === 'CREATE' && l.entity_id === 'H|1|E',
+      );
+      expect(createLog).toBeDefined();
+      expect(createLog?.entity_type).toBe('ob_levelcard_level');
+      expect(createLog?.before_value).toBeNull();
+      expect(createLog?.after_value).toEqual(
+        expect.objectContaining({ cardLevel: 'E', scoreS: 0, scoreE: 49 }),
+      );
+    });
+
+    it('TS-F055-P02：空 levels 新增第一筆 → 201（AC-8a）', async () => {
+      await seedHActiveVersionOnly();
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'A', scoreS: 0, scoreE: 999 });
+
+      expect(res.status).toBe(201);
+      expect(res.body.cardLevel).toBe('A');
+
+      const dbLevels = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(dbLevels).toHaveLength(1);
+      expect(dbLevels[0].score_s).toBe(0);
+      expect(dbLevels[0].score_e).toBe(999);
+    });
+
+    it('TS-F055-P03a：cardLevel 格式錯誤 "a"（小寫）→ 422 VALIDATION_ERROR', async () => {
+      await seedHActiveVersionOnly();
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'a', scoreS: 0, scoreE: 99 });
+
+      // HttpExceptionFilter 將 class-validator BadRequest 轉為 422 + VALIDATION_ERROR
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      // 訊息含 cardLevel 提示
+      const text = JSON.stringify(res.body);
+      expect(text).toMatch(/cardLevel|單一大寫|A~Z/);
+    });
+
+    it('TS-F055-P03b：cardLevel 多字元 "AB" → 422 VALIDATION_ERROR', async () => {
+      await seedHActiveVersionOnly();
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'AB', scoreS: 0, scoreE: 99 });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('TS-F055-P03c：cardLevel 數字 "1" → 422 VALIDATION_ERROR', async () => {
+      await seedHActiveVersionOnly();
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: '1', scoreS: 0, scoreE: 99 });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('TS-F055-P03d：cardLevel 空字串 → 422 VALIDATION_ERROR', async () => {
+      await seedHActiveVersionOnly();
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: '', scoreS: 0, scoreE: 99 });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('TS-F055-P04：區間重疊 → 422 SCORING_RANGE_OVERLAP（AC-8b）', async () => {
+      await seedHActiveVersionOnly();
+      await ds.getRepository(ObLevelcardLevel).save([
+        { card_type: 'H', card_version: 1, card_level: 'A', score_s: 80, score_e: 999 },
+      ] as any);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'B', scoreS: 85, scoreE: 120 });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('SCORING_RANGE_OVERLAP');
+
+      // DB 不變
+      const dbLevels = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(dbLevels).toHaveLength(1);
+    });
+
+    it('TS-F055-P05：允許 gap → 201（AC-8b BR-1 v1.5）', async () => {
+      await seedHActiveVersionOnly();
+      await ds.getRepository(ObLevelcardLevel).save([
+        { card_type: 'H', card_version: 1, card_level: 'A', score_s: 80, score_e: 999 },
+      ] as any);
+
+      // gap 51~79；新 C=0~50 應通過
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'C', scoreS: 0, scoreE: 50 });
+
+      expect(res.status).toBe(201);
+      const dbLevels = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(dbLevels).toHaveLength(2);
+    });
+
+    it('TS-F055-P06：cardLevel 重複 → 422 CARD_LEVEL_DUPLICATE（AC-8c）', async () => {
+      await seedHActiveVersionOnly();
+      await ds.getRepository(ObLevelcardLevel).save([
+        { card_type: 'H', card_version: 1, card_level: 'A', score_s: 80, score_e: 999 },
+      ] as any);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'A', scoreS: 0, scoreE: 50 });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('CARD_LEVEL_DUPLICATE');
+
+      // DB 維持 1 筆
+      const dbLevels = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(dbLevels).toHaveLength(1);
+    });
+
+    it('TS-F055-P07：月跑 pending → 409 SCORING_VERSION_LOCKED（AC-8e）', async () => {
+      await seedHActiveVersionOnly();
+      await ds.getRepository(AssignmentRun).save({
+        run_id: 'bbbb1111-1111-1111-1111-1111110097aaa',
+        project_workym: '202605',
+        status: 'pending',
+        triggered_by: SM_USER.id,
+        created_at: new Date(),
+      } as any);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'A', scoreS: 0, scoreE: 999 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('SCORING_VERSION_LOCKED');
+
+      // 無新增
+      const dbLevels = await ds.getRepository(ObLevelcardLevel).find({
+        where: { card_type: 'H', card_version: 1 },
+      });
+      expect(dbLevels).toHaveLength(0);
+    });
+
+    it('TS-F055-P08：cardType 不存在 → 404 CARD_TYPE_NOT_FOUND（AC-8f）', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'NOTEX', cardLevel: 'A', scoreS: 0, scoreE: 99 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('CARD_TYPE_NOT_FOUND');
+    });
+
+    it('TS-F055-P09：BR-9 regression — DELETE A 後 POST A 應成功', async () => {
+      await seedHWithLevels();
+      // 先 DELETE D（A 仍被 cascade 阻擋；用 D 避開 cascade）
+      const delRes = await request(app.getHttpServer())
+        .delete(
+          '/api/v1/assignment/scoring/card-levels?cardType=H&cardVersion=1&cardLevel=D',
+        )
+        .set('Authorization', `Bearer ${smToken}`);
+      expect(delRes.status).toBe(200);
+
+      // 重新 POST D — 應 201（dedup 僅針對當前存活紀錄）
+      const postRes = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${smToken}`)
+        .send({ cardType: 'H', cardLevel: 'D', scoreS: 0, scoreE: 184 });
+      expect(postRes.status).toBe(201);
+
+      // DB 中 D 紀錄重新存在
+      const dLevel = await ds.getRepository(ObLevelcardLevel).findOne({
+        where: { card_type: 'H', card_version: 1, card_level: 'D' },
+      });
+      expect(dLevel).not.toBeNull();
+      expect(dLevel?.score_s).toBe(0);
+      expect(dLevel?.score_e).toBe(184);
+    });
+
+    it('TS-F055-P10a：POST 未登入 → 401 AUTH_TOKEN_MISSING', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .send({ cardType: 'H', cardLevel: 'A', scoreS: 0, scoreE: 99 });
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+    });
+
+    it('TS-F055-P10b：POST 非業務主管 → 403 AUTH_FORBIDDEN', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/scoring/card-levels')
+        .set('Authorization', `Bearer ${plainToken}`)
+        .send({ cardType: 'H', cardLevel: 'A', scoreS: 0, scoreE: 99 });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
   });
 
@@ -1783,7 +2059,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .delete('/api/v1/assignment/scoring/tier-mapping?cardType=H&cardLevel=A')
         .set('Authorization', `Bearer ${plainToken}`);
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
     // ============================================================
     // F056 v1.5 新增 E2E（Iter 3）：cardType 範圍鎖 / TIER 列舉 / Fallback-Standard 互斥
@@ -2016,7 +2292,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .get('/api/v1/assignment/scoring/card-types')
         .set('Authorization', `Bearer ${plainToken}`);
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     it('TC-F069-01 + TC-F069-02：GET 列表升冪排序含 prodKindName', async () => {
@@ -2131,7 +2407,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${plainToken}`)
         .send({ cardType: 'X1', cardName: '測試', prodKind: '01' });
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('AUTH_FORBIDDEN');
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     it('TC-F070-01 + TC-F070-02 + TC-F070-03：成功新增同 tx 寫入 + audit', async () => {

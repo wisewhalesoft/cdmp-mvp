@@ -57,6 +57,8 @@ import { TierMappingTabV15 } from './_components/tier-mapping-tab';
 // Iter 7（review fix）：footer note 樣式對齊
 // Iter 8（prototype B 排列）：拔除 VersionStrip（已刪除 _components/version-strip.tsx）。
 import { ScoringConfigFooterNote } from './_components/footer-note';
+// v1.5 (US-097) 新增 CARD_LEVEL 等級 Modal
+import { CreateCardLevelModal } from './_components/create-card-level-modal';
 
 /**
  * F053 / F054 / F055 / F056：計分卡設定頁
@@ -369,6 +371,8 @@ export function ScoringConfigLegacyTabs({
     scoreIdx: number;
   } | null>(null);
   const [levelDeleteTarget, setLevelDeleteTarget] = useState<CardLevelItem | null>(null);
+  // v1.5 (US-097)：新增 CARD_LEVEL 等級 Modal 開關
+  const [levelAddModalOpen, setLevelAddModalOpen] = useState(false);
   const [tierEditTarget, setTierEditTarget] = useState<TierMappingItem | null>(null);
   const [tierDeleteTarget, setTierDeleteTarget] = useState<TierMappingItem | null>(null);
 
@@ -548,6 +552,7 @@ export function ScoringConfigLegacyTabs({
               isLocked={isLocked}
               onSaved={() => fetchAll(cardType)}
               onDelete={(lvl) => setLevelDeleteTarget(lvl)}
+              onAdd={() => setLevelAddModalOpen(true)}
               runWriteOp={runWriteOp}
             />
           )}
@@ -672,6 +677,21 @@ export function ScoringConfigLegacyTabs({
             showToast({ type: 'success', message: '分數區間已刪除' });
           }}
           runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* v1.5 (US-097)：CardLevelsTab 新增等級 Modal */}
+      {levelAddModalOpen && (
+        <CreateCardLevelModal
+          open={levelAddModalOpen}
+          cardType={cardType}
+          cardName={version?.cardName ?? undefined}
+          existingLevels={levels}
+          onClose={() => setLevelAddModalOpen(false)}
+          onCreated={async () => {
+            // 後端成功後重 fetch 取得最新 levels（避免 optimistic-update 與 audit_log 不同步）
+            await fetchAll(cardType);
+          }}
         />
       )}
 
@@ -1096,6 +1116,7 @@ function CardLevelsTab({
   isLocked,
   onSaved,
   onDelete,
+  onAdd,
   runWriteOp,
 }: {
   cardType: CardType;
@@ -1105,6 +1126,7 @@ function CardLevelsTab({
   isLocked: boolean;
   onSaved: () => void;
   onDelete: (lvl: CardLevelItem) => void;
+  onAdd: () => void;
   runWriteOp: <T>(
     op: () => Promise<T>,
     onSuccess: string,
@@ -1209,9 +1231,24 @@ function CardLevelsTab({
             <h4 className="text-sm font-semibold text-gray-700">
               總分區間 → CARD_LEVEL 對應
             </h4>
-            <span className="text-xs text-gray-400 ml-auto">
+            <span className="text-xs text-gray-400 ml-2">
               資料表 <code>ob_levelcard_level</code>
             </span>
+            {/* v1.5 (US-097)：表頭右側「+ 新增等級」按鈕，無論列表是否為空均存在 */}
+            <button
+              type="button"
+              data-testid="btn-add-level"
+              onClick={onAdd}
+              disabled={isLocked}
+              title={isLocked ? '分派執行中，無法新增 CARD_LEVEL 等級' : '新增等級'}
+              className={
+                'ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm ' +
+                (isLocked ? 'opacity-50 cursor-not-allowed' : '')
+              }
+            >
+              <Plus className="w-3.5 h-3.5" />
+              新增等級
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1227,7 +1264,23 @@ function CardLevelsTab({
                 {drafts.length === 0 && (
                   <tr>
                     <td colSpan={4} className="text-center py-10 text-gray-400 text-sm">
-                      無 CARD_LEVEL 資料
+                      {/* AC-8a：空狀態進入點 — 顯示提示文字 + CTA 按鈕 */}
+                      <div className="flex flex-col items-center gap-3">
+                        <span>請點擊「+ 新增等級」開始</span>
+                        <button
+                          type="button"
+                          data-testid="btn-add-level-empty"
+                          onClick={onAdd}
+                          disabled={isLocked}
+                          className={
+                            'inline-flex items-center gap-1.5 px-4 py-2 bg-[#2563EB] text-white text-sm font-medium rounded-md hover:bg-blue-700 transition shadow-sm ' +
+                            (isLocked ? 'opacity-50 cursor-not-allowed' : '')
+                          }
+                        >
+                          <Plus className="w-4 h-4" />
+                          新增等級
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )}

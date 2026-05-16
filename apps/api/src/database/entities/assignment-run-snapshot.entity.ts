@@ -2,6 +2,7 @@
 
 import { Entity, PrimaryGeneratedColumn, Column, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { AssignmentRun } from './assignment-run.entity';
+import { dateColumnType, jsonColumnType } from '@/common/database/column-types';
 
 @Index('idx_assignment_run_snapshot_run_type', ['run_id', 'snapshot_type'])
 @Entity('assignment_run_snapshot')
@@ -19,9 +20,11 @@ export class AssignmentRunSnapshot {
   @Column({ name: 'snapshot_type', type: 'varchar', length: 20 })
   snapshot_type: 'config' | 'input_list' | 'result';
 
-  @Column({ name: 'payload', type: 'jsonb' })
+  // E07 P1 B4 補完 (2026-05-17)：jsonb → jsonColumnType helper（sqlite 相容）
+  @Column({ name: 'payload', type: jsonColumnType })
   payload: Record<string, unknown>;
 
-  @Column({ name: 'created_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  // E07 P1 B4 補完 (2026-05-17)：timestamp → dateColumnType helper（sqlite 相容）
+  @Column({ name: 'created_at', type: dateColumnType, default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 }

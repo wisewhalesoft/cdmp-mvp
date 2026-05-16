@@ -4,6 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
 
 @Entity('ob_pool_data')
 export class ObPoolData {
@@ -13,7 +14,9 @@ export class ObPoolData {
   @Column({ name: 'created_by', type: 'varchar', length: 20, nullable: true })
   created_by: string | null; // A_USERID
 
-  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  // E07 P1 B4 / F049：原 'timestamp' 改 dateColumnType 以相容 sqlite e2e
+  // 對應 memory feedback_typeorm_timestamp 規範（postgres=timestamp / sqlite=datetime）
+  @Column({ name: 'created_at', type: dateColumnType, nullable: true })
   created_at: Date | null; // A_SYSDT
 
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 20, nullable: true })
@@ -22,7 +25,7 @@ export class ObPoolData {
   @Column({ name: 'updated_by', type: 'varchar', length: 20, nullable: true })
   updated_by: string | null; // U_USERID
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
 
   @PrimaryColumn({ name: 'orgno', type: 'varchar', length: 2 })
@@ -85,13 +88,13 @@ export class ObPoolData {
   @Column({ name: 'b_case_irr', type: 'numeric', precision: 5, scale: 2, nullable: true })
   b_case_irr: string | null;
 
-  @Column({ name: 'first_pay_dt', type: 'timestamp', nullable: true })
+  @Column({ name: 'first_pay_dt', type: dateColumnType, nullable: true })
   first_pay_dt: Date | null;
 
-  @Column({ name: 'fapcon_dt', type: 'timestamp', nullable: true })
+  @Column({ name: 'fapcon_dt', type: dateColumnType, nullable: true })
   fapcon_dt: Date | null;
 
-  @Column({ name: 'maturity_dt', type: 'timestamp', nullable: true })
+  @Column({ name: 'maturity_dt', type: dateColumnType, nullable: true })
   maturity_dt: Date | null;
 
   @Column({ name: 'deal_mark', type: 'varchar', length: 2, nullable: true })
@@ -112,7 +115,7 @@ export class ObPoolData {
   @Column({ name: 'commission', type: 'numeric', precision: 15, scale: 0, nullable: true })
   commission: string | null;
 
-  @Column({ name: 'settle_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'settle_date', type: dateColumnType, nullable: true })
   settle_date: Date | null;
 
   @Column({ name: 'loan_rate', type: 'numeric', precision: 5, scale: 2, nullable: true })
@@ -121,7 +124,7 @@ export class ObPoolData {
   @Column({ name: 'sta_code', type: 'varchar', length: 2 })
   sta_code: string;
 
-  @Column({ name: 'ofi_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'ofi_date', type: dateColumnType, nullable: true })
   ofi_date: Date | null;
 
   @Column({ name: 'dept_id', type: 'varchar', length: 6 })
@@ -205,7 +208,7 @@ export class ObPoolData {
   @Column({ name: 'project_tp_cd', type: 'varchar', length: 2, nullable: true })
   project_tp_cd: string | null;
 
-  @Column({ name: 'appl_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'appl_date', type: dateColumnType, nullable: true })
   appl_date: Date | null;
 
   @Column({ name: 'apmacc_memo', type: 'text', nullable: true })
@@ -294,7 +297,7 @@ export class ObPoolData {
   @Column({ name: 'best_case', type: 'varchar', length: 1, nullable: true })
   best_case: string | null;
 
-  @Column({ name: 'acc_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'acc_date', type: dateColumnType, nullable: true })
   acc_date: Date | null;
 
   @Column({ name: 'order1', type: 'integer', nullable: true })
@@ -351,7 +354,7 @@ export class ObPoolData {
   @Column({ name: 'ob_emplid', type: 'varchar', length: 6, nullable: true })
   ob_emplid: string | null;
 
-  @Column({ name: 'last_pay_date', type: 'timestamp', nullable: true })
+  @Column({ name: 'last_pay_date', type: dateColumnType, nullable: true })
   last_pay_date: Date | null;
 
   @Column({ name: 'month_cnt', type: 'integer', nullable: true })
@@ -369,6 +372,6 @@ export class ObPoolData {
   @Column({ name: 'cus_level', type: 'varchar', length: 1, nullable: true })
   cus_level: string | null;
 
-  @Column({ name: '_cdmp_extracted_at', type: 'timestamp' })
+  @Column({ name: '_cdmp_extracted_at', type: dateColumnType })
   _cdmp_extracted_at: Date;
 }

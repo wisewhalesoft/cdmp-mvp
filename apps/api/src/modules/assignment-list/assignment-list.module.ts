@@ -5,11 +5,15 @@ import { ConfigService } from '@nestjs/config';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
+import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { AssignmentListController } from './assignment-list.controller';
 import { AssignmentListService } from './assignment-list.service';
+import { Stage0EstimateController } from './stage0-estimate.controller';
+import { Stage0EstimateService } from './stage0-estimate.service';
 
 /**
  * F048 / F050 / F051 / F052 / F077：M01 名單 CRUD 模組
@@ -26,6 +30,8 @@ import { AssignmentListService } from './assignment-list.service';
       ObListDefinition,
       AssignmentAuditLog,
       AssignmentRun,
+      ObPoolData,
+      ObCalendar,
       User,
       TokenBlocklist,
     ]),
@@ -36,8 +42,12 @@ import { AssignmentListService } from './assignment-list.service';
       }),
     }),
   ],
-  controllers: [AssignmentListController],
-  providers: [AssignmentListService, AssignmentRunGuardService],
-  exports: [AssignmentListService],
+  controllers: [AssignmentListController, Stage0EstimateController],
+  providers: [
+    AssignmentListService,
+    AssignmentRunGuardService,
+    Stage0EstimateService,
+  ],
+  exports: [AssignmentListService, Stage0EstimateService],
 })
 export class AssignmentListModule {}

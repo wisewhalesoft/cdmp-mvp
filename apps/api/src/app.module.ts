@@ -24,6 +24,7 @@ import { C360Module } from './modules/c360/c360.module';
 import { AssignmentCodeModule } from './modules/assignment-code/assignment-code.module';
 import { AssignmentScoringModule } from './modules/assignment-scoring/assignment-scoring.module';
 import { AssignmentListModule } from './modules/assignment-list/assignment-list.module';
+import { AssignmentModule } from './modules/assignment/assignment.module';
 import { SystemModule } from './modules/system/system.module';
 import { Role } from './database/entities/role.entity';
 // === E07 Entities (Track A — 19 表)===
@@ -111,6 +112,7 @@ const E07_ENTITIES = [
     AssignmentCodeModule,
     AssignmentScoringModule,
     AssignmentListModule,
+    AssignmentModule,
     SystemModule,
   ],
   providers: [],
