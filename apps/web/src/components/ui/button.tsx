@@ -3,6 +3,7 @@ import { type ButtonHTMLAttributes, forwardRef } from 'react';
 const variantClasses = {
   primary: 'bg-primary text-white hover:bg-primary-700',
   secondary: 'bg-white border border-border text-gray-700 hover:bg-gray-50',
+  warning: 'bg-warning text-white hover:bg-amber-600',
   danger: 'bg-danger text-white hover:bg-danger-700',
 } as const;
 
