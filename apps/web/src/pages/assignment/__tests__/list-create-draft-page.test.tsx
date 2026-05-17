@@ -20,6 +20,7 @@ vi.mock('@/stores/auth-store', async () => {
 });
 
 const mockedCreateList = vi.mocked(assignmentListApi.createList);
+const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
@@ -137,5 +138,98 @@ describe('ListCreateDraftPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('form-error')).toHaveTextContent(/此商品 \+ 卡別組合/),
     );
+  });
+
+  describe('Phase 3 P2-6 從上月複製', () => {
+    it('顯示「從上月複製」CTA', () => {
+      renderPage();
+      expect(screen.getByTestId('btn-open-copy-modal')).toBeInTheDocument();
+    });
+
+    it('點 CTA → 開啟 modal 並呼叫 listLists(prevYm)', async () => {
+      mockedListLists.mockResolvedValue({
+        selectedYm: '202604',
+        currentWorkYm: '202605',
+        isHistorical: false,
+        isFuture: false,
+        lockState: { locked: false, reason: null },
+        lists: [],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      });
+      renderPage();
+      fireEvent.click(screen.getByTestId('btn-open-copy-modal'));
+      await waitFor(() => {
+        expect(screen.getByTestId('copy-prev-month-modal')).toBeInTheDocument();
+      });
+      // listLists 被呼叫且 ym 是上月（FE-7：current 2026-05 → prev 2026-04）
+      expect(mockedListLists).toHaveBeenCalled();
+      const arg = mockedListLists.mock.calls[0]?.[0];
+      expect(typeof arg?.ym).toBe('string');
+    });
+
+    it('點某 row「使用此名單」→ 帶入欄位 + 顯示 banner + 關 modal', async () => {
+      mockedListLists.mockResolvedValue({
+        selectedYm: '202604',
+        currentWorkYm: '202605',
+        isHistorical: false,
+        isFuture: false,
+        lockState: { locked: false, reason: null },
+        lists: [
+          {
+            listNo: 'OB202604001',
+            listNm: '汽車期中',
+            prodKind: 'AUTO',
+            caseYear: '3$$4',
+            specTp: '01',
+            caseStatus: '01',
+            crEnabled: true,
+            listPeriodStart: 0,
+            listPeriodEnd: 999,
+            listInterval: 30,
+            settleSrc: 'N',
+            cardType: 'M3',
+            prodBest: null,
+            status: 'active',
+            stage: 'ready',
+            createdBy: '張部長',
+            createdAt: '2026-04-10T00:00:00Z',
+            updatedAt: '2026-04-10T00:00:00Z',
+          },
+        ],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 1,
+          disabled: 0,
+        },
+      });
+      renderPage();
+      fireEvent.click(screen.getByTestId('btn-open-copy-modal'));
+      await waitFor(() =>
+        expect(screen.getByTestId('copy-row-OB202604001')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('btn-use-OB202604001'));
+
+      // 1. modal 關閉
+      await waitFor(() => {
+        expect(screen.queryByTestId('copy-prev-month-modal')).not.toBeInTheDocument();
+      });
+
+      // 2. banner 顯示
+      expect(screen.getByTestId('copy-applied-banner')).toBeInTheDocument();
+
+      // 3. prodKind 欄位被填入
+      const prodKindInput = screen.getByTestId('input-prodKind') as HTMLInputElement;
+      expect(prodKindInput.value).toBe('AUTO');
+    });
   });
 });

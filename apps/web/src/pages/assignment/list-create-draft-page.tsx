@@ -1,10 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Hash, FileText, Save, ArrowLeft, Plus, X } from 'lucide-react';
+import {
+  Hash,
+  FileText,
+  Save,
+  ArrowLeft,
+  Plus,
+  X,
+  Copy,
+  CheckCircle2,
+} from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { createList } from '@/api/assignment-list';
+import {
+  createList,
+  listLists,
+  type AssignmentListItem,
+} from '@/api/assignment-list';
+import {
+  CopyFromPrevMonthModal,
+  computePrevYm,
+} from './_components/copy-from-prev-month-modal';
 
 /**
  * F050 v2.0 — 建立草稿名單頁
@@ -60,12 +77,59 @@ export function ListCreateDraftPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Phase 3 P2-6：從上月複製 modal state
+  const currentYm = fromYm
+    ? fromYm.replace('-', '')
+    : (() => {
+        const now = new Date();
+        return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+      })();
+  const prevYm = computePrevYm(currentYm);
+
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [prevLists, setPrevLists] = useState<AssignmentListItem[]>([]);
+  const [prevLoading, setPrevLoading] = useState(false);
+  const [copyFromListNo, setCopyFromListNo] = useState<string | null>(null);
+
   useEffect(() => {
     if (fromYm) {
       // 預填名稱前綴
       setListNm(`${fromYm} `);
     }
   }, [fromYm]);
+
+  const handleOpenCopyModal = async () => {
+    setCopyModalOpen(true);
+    if (prevLists.length > 0 || !prevYm) return;
+    setPrevLoading(true);
+    try {
+      const data = await listLists({ ym: prevYm });
+      setPrevLists(
+        (data.lists ?? []).filter((l) => l.status === 'active'),
+      );
+    } catch {
+      setPrevLists([]);
+    } finally {
+      setPrevLoading(false);
+    }
+  };
+
+  // P2-6 BR：複製後僅帶入欄位（CR 開關 / 篩選條件 / 商品 / 期別）；名稱重新建立
+  const handleCopyApply = (src: AssignmentListItem) => {
+    setProdKind(src.prodKind ?? '');
+    setCaseYear((src.caseYear ?? '').split('$$').filter(Boolean).join(','));
+    setSpecTp((src.specTp ?? '').split('$$').filter(Boolean).join(','));
+    setCaseStatus((src.caseStatus ?? '').split('$$').filter(Boolean).join(','));
+    setListPeriodStart(String(src.listPeriodStart ?? 0));
+    setListPeriodEnd(String(src.listPeriodEnd ?? 999));
+    setListInterval(String(src.listInterval ?? 30));
+    setSettleSrc(src.settleSrc ?? '');
+    setCardType(src.cardType ?? '');
+    setCrEnabled(src.crEnabled ?? true);
+    setCopyFromListNo(src.listNo);
+    setCopyModalOpen(false);
+    showToast(`已從 ${src.listNo} 帶入欄位`, 'success');
+  };
 
   const addCondition = () => {
     setConditions((prev) => [...prev, { id: genId(), columnName: '', values: '' }]);
@@ -108,6 +172,7 @@ export function ListCreateDraftPage() {
     };
     if (cardType) dto.cardType = cardType;
     if (prodBest) dto.prodBest = prodBest;
+    if (copyFromListNo) dto.copyFromListNo = copyFromListNo;
 
     const validConds = conditions
       .map((c) => ({
@@ -151,9 +216,48 @@ export function ListCreateDraftPage() {
           <h1 className="text-base font-semibold text-gray-800">建立草稿名單</h1>
         </div>
       }
+      actions={
+        <button
+          type="button"
+          data-testid="btn-open-copy-modal"
+          onClick={handleOpenCopyModal}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-primary border border-blue-200 rounded-md hover:bg-blue-50"
+        >
+          <Copy className="w-4 h-4" />
+          從上月複製
+        </button>
+      }
     >
       <main className="flex-1 p-6">
         <div className="max-w-3xl mx-auto space-y-4">
+          {/* Phase 3 P2-6：複製成功 banner */}
+          {copyFromListNo && (
+            <div
+              data-testid="copy-applied-banner"
+              className="rounded-lg p-3 bg-green-50 border border-green-200 flex items-start gap-2 text-sm"
+            >
+              <CheckCircle2 className="w-4 h-4 text-green-700 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-green-900">
+                  已從{' '}
+                  <code className="font-mono">{copyFromListNo}</code>{' '}
+                  帶入欄位
+                </p>
+                <p className="text-xs text-green-800 mt-0.5">
+                  名稱與 LIST_NO 將重新建立；CR 開關、商品、期別、篩選條件均已套用，您仍可手動調整。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCopyFromListNo(null)}
+                aria-label="關閉"
+                className="text-green-700 hover:bg-green-100 p-1 rounded"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {error && (
             <div
               data-testid="form-error"
@@ -464,6 +568,16 @@ export function ListCreateDraftPage() {
           </form>
         </div>
       </main>
+
+      {/* Phase 3 P2-6：從上月複製 modal */}
+      <CopyFromPrevMonthModal
+        open={copyModalOpen}
+        prevYm={prevYm}
+        lists={prevLists}
+        loading={prevLoading}
+        onCopy={handleCopyApply}
+        onClose={() => setCopyModalOpen(false)}
+      />
     </AppLayout>
   );
 }
