@@ -1,0 +1,262 @@
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
+import { ListDefinitionPage } from '../list-definition-page';
+import { ToastProvider } from '@/components/ui/toast';
+import * as assignmentListApi from '@/api/assignment-list';
+import * as authStore from '@/stores/auth-store';
+import type { ListListsResponse } from '@/api/assignment-list';
+
+vi.mock('@/api/assignment-list');
+vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
+vi.mock('@/stores/auth-store', async () => {
+  const actual = await vi.importActual('@/stores/auth-store');
+  return {
+    ...actual,
+    getUser: vi.fn(),
+    clearAuth: vi.fn(),
+    getBusinessRole: vi.fn(),
+    getEffectiveIdentity: vi.fn(),
+  };
+});
+
+const mockedListLists = vi.mocked(assignmentListApi.listLists);
+const mockedDisableList = vi.mocked(assignmentListApi.disableList);
+const mockedGetUser = vi.mocked(authStore.getUser);
+const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
+const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
+
+const baseResponse: ListListsResponse = {
+  selectedYm: '202605',
+  currentWorkYm: '202605',
+  isHistorical: false,
+  isFuture: false,
+  lockState: { locked: false, reason: null },
+  lists: [
+    {
+      listNo: 'OB202605001',
+      listNm: '2026-05 業務一部 主力催收',
+      prodKind: '汽車貸款',
+      caseYear: '2026',
+      specTp: null,
+      listPeriodStart: null,
+      listPeriodEnd: null,
+      listInterval: null,
+      settleSrc: null,
+      cardType: 'M3',
+      prodBest: null,
+      status: 'active',
+      stage: 'draft',
+      createdBy: '王部長',
+      createdAt: '2026-05-02T00:00:00.000Z',
+      updatedAt: '2026-05-02T00:00:00.000Z',
+    },
+    {
+      listNo: 'OB202605002',
+      listNm: '2026-05 業務二部 信貸',
+      prodKind: '信用貸款',
+      caseYear: '2026',
+      specTp: null,
+      listPeriodStart: null,
+      listPeriodEnd: null,
+      listInterval: null,
+      settleSrc: null,
+      cardType: 'M5',
+      prodBest: null,
+      status: 'active',
+      stage: 'dept_ratio',
+      createdBy: '王部長',
+      createdAt: '2026-05-03T00:00:00.000Z',
+      updatedAt: '2026-05-03T00:00:00.000Z',
+    },
+    {
+      listNo: 'OB202605003',
+      listNm: '2026-05 業務三部 房貸',
+      prodKind: '房貸',
+      caseYear: '2026',
+      specTp: null,
+      listPeriodStart: null,
+      listPeriodEnd: null,
+      listInterval: null,
+      settleSrc: null,
+      cardType: 'HC',
+      prodBest: null,
+      status: 'active',
+      stage: 'approval',
+      createdBy: '王部長',
+      createdAt: '2026-05-04T00:00:00.000Z',
+      updatedAt: '2026-05-04T00:00:00.000Z',
+    },
+  ],
+  stageCounts: {
+    draft: 1,
+    dept_ratio: 1,
+    personnel_ratio: 0,
+    approval: 1,
+    ready: 0,
+    disabled: 0,
+  },
+};
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <ListDefinitionPage />
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe('ListDefinitionPage (FE-2 M01 名單定義)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'a1',
+      name: 'Admin',
+      email: 'admin@cdmp.test',
+      role: 'admin',
+      isSalesManager: false,
+      businessRole: null,
+    });
+    mockedGetBusinessRole.mockReturnValue(null);
+    mockedGetEffectiveIdentity.mockReturnValue('admin');
+    mockedListLists.mockResolvedValue(baseResponse);
+  });
+
+  afterEach(() => cleanup());
+
+  // Demo 觀察點 #1: KPI 5 卡顯示
+  it('顯示 KPI 5 卡（名單總數 / 草稿 / 進行中 / 待簽核 / 準備完成）', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kpi-section')).toBeInTheDocument());
+    expect(screen.getByText('名單總數')).toBeInTheDocument();
+    expect(screen.getByText('草稿階段')).toBeInTheDocument();
+    expect(screen.getByText('進行中')).toBeInTheDocument();
+    // '待簽核' and '準備完成' 在 KPI 卡與 stage filter chip 中皆有，故用 getAllByText
+    expect(screen.getAllByText('待簽核').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('準備完成').length).toBeGreaterThan(0);
+  });
+
+  // Demo 觀察點 #2: 階段 filter chips 5 個
+  it('5 個 stage filter chip 預設全部啟用', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('stage-filter-draft')).toBeInTheDocument());
+    expect(screen.getByTestId('stage-filter-dept_ratio')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-filter-personnel_ratio')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-filter-approval')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-filter-ready')).toBeInTheDocument();
+  });
+
+  // Demo 觀察點 #3: 表格渲染 3 筆名單
+  it('渲染 lists 中 3 筆名單', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('OB202605001')).toBeInTheDocument());
+    expect(screen.getByText('OB202605002')).toBeInTheDocument();
+    expect(screen.getByText('OB202605003')).toBeInTheDocument();
+  });
+
+  // Demo 觀察點 #4: 階段 chip 切換可過濾表格
+  it('關閉 draft chip 後 OB202605001 (draft) 不再顯示', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('OB202605001')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('stage-filter-draft'));
+    await waitFor(() =>
+      expect(screen.queryByText('OB202605001')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('OB202605002')).toBeInTheDocument();
+  });
+
+  // Demo 觀察點 #5: 搜尋過濾
+  it('搜尋 LIST_NO 子字串可過濾', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('OB202605001')).toBeInTheDocument());
+    const search = screen.getByPlaceholderText(/搜尋名單名稱/);
+    fireEvent.change(search, { target: { value: '002' } });
+    expect(screen.queryByText('OB202605001')).not.toBeInTheDocument();
+    expect(screen.getByText('OB202605002')).toBeInTheDocument();
+  });
+
+  // Demo 觀察點 #6: historical banner
+  it('isHistorical=true 顯示歷史月份唯讀通知條 + 新增按鈕停用', async () => {
+    mockedListLists.mockResolvedValue({
+      ...baseResponse,
+      selectedYm: '202604',
+      isHistorical: true,
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('historical-banner')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('btn-create-list')).toBeDisabled();
+  });
+
+  // Demo 觀察點 #7: locked banner
+  it('lockState.locked=true 顯示月跑鎖通知條 + 新增按鈕停用', async () => {
+    mockedListLists.mockResolvedValue({
+      ...baseResponse,
+      lockState: { locked: true, reason: '分派執行中' },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('locked-banner')).toBeInTheDocument());
+    expect(screen.getByTestId('btn-create-list')).toBeDisabled();
+  });
+
+  // Demo 觀察點 #8: 業務處長（section_chief） 寫入按鈕停用
+  it('section_chief 身份 → 新增名單按鈕停用（只讀）', async () => {
+    mockedGetEffectiveIdentity.mockReturnValue('section_chief');
+    mockedGetBusinessRole.mockReturnValue('section_chief');
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-create-list')).toBeInTheDocument());
+    expect(screen.getByTestId('btn-create-list')).toBeDisabled();
+  });
+
+  // Demo 觀察點 #9: 業務部長（director） 寫入按鈕可用
+  it('director 身份 → 新增名單按鈕可用', async () => {
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    mockedGetBusinessRole.mockReturnValue('director');
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-create-list')).toBeInTheDocument());
+    expect(screen.getByTestId('btn-create-list')).not.toBeDisabled();
+  });
+
+  // Demo 觀察點 #10: 空狀態
+  it('lists 為空時顯示「本月尚無名單」', async () => {
+    mockedListLists.mockResolvedValue({
+      ...baseResponse,
+      lists: [],
+      stageCounts: { draft: 0, dept_ratio: 0, personnel_ratio: 0, approval: 0, ready: 0, disabled: 0 },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('empty-state')).toBeInTheDocument());
+    expect(screen.getByText('本月尚無名單')).toBeInTheDocument();
+  });
+
+  // Demo 觀察點 #11: 停用 modal 開啟 + 呼叫 API
+  it('點停用圖示 → 開啟 danger ConfirmModal → 確認 → 呼叫 disableList API', async () => {
+    mockedDisableList.mockResolvedValue({});
+    renderPage();
+    await waitFor(() => expect(screen.getByText('OB202605001')).toBeInTheDocument());
+
+    // 點 draft 列上的 archive 按鈕
+    const archiveBtn = screen.getByTitle('停用名單');
+    fireEvent.click(archiveBtn);
+
+    expect(screen.getByTestId('confirm-modal-danger')).toBeInTheDocument();
+    expect(screen.getByText('確認停用名單 OB202605001？')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /確認停用/ }));
+
+    await waitFor(() =>
+      expect(mockedDisableList).toHaveBeenCalledWith('OB202605001'),
+    );
+  });
+
+  // Demo 觀察點 #12: footer 顯示 visible / total 與 API hint
+  it('footer 顯示 visible / total count + API URL hint', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('total-count')).toHaveTextContent('3'));
+    expect(screen.getByTestId('visible-count')).toHaveTextContent('3');
+    expect(screen.getByText(/GET \/api\/v1\/assignment\/lists\?ym=202605/)).toBeInTheDocument();
+  });
+});
