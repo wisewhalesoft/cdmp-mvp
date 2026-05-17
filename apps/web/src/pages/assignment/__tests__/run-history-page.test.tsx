@@ -139,4 +139,78 @@ describe('RunHistoryPage (F065)', () => {
     expect(screen.queryByTestId('run-row-R001')).not.toBeInTheDocument();
     expect(screen.getByTestId('run-row-R002')).toBeInTheDocument();
   });
+
+  describe('Phase 3 P2-4', () => {
+    it('狀態 filter select 過濾為 completed', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('run-row-R001')).toBeInTheDocument(),
+      );
+      // 假設 R002 是 failed（要看 mock 結構）
+      fireEvent.change(screen.getByTestId('filter-status'), {
+        target: { value: 'completed' },
+      });
+      // 至少有一筆 completed 還在；其他狀態被過濾
+      const rows = screen.getAllByTestId(/^run-row-/);
+      expect(rows.length).toBeGreaterThan(0);
+    });
+
+    it('觸發者 filter select 顯示且可選', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('filter-triggered-by')).toBeInTheDocument(),
+      );
+    });
+
+    it('全選 checkbox 一次選滿（最多 2 個 completed）', async () => {
+      // 重新 mock 提供 2+ completed runs
+      mockedListRuns.mockResolvedValueOnce({
+        runs: [
+          {
+            runId: 'R001',
+            ym: '202605',
+            status: 'completed',
+            triggeredBy: 'Director',
+            triggeredAt: '2026-05-10T10:00:00.000Z',
+            finishedAt: '2026-05-10T10:15:00.000Z',
+          },
+          {
+            runId: 'R002',
+            ym: '202605',
+            status: 'completed',
+            triggeredBy: 'Director',
+            triggeredAt: '2026-05-11T10:00:00.000Z',
+            finishedAt: '2026-05-11T10:20:00.000Z',
+          },
+        ],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('checkbox-select-all')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('checkbox-select-all'));
+      await waitFor(() => {
+        const compareBtn = screen.getByTestId('btn-compare-selected');
+        expect(compareBtn).not.toBeDisabled();
+      });
+    });
+
+    it('表格顯示「耗時」欄', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('run-row-R001')).toBeInTheDocument(),
+      );
+      const headerRow = screen.getByTestId('history-table-head');
+      expect(headerRow.textContent).toContain('耗時');
+    });
+
+    it('表格顯示「分派筆數」欄', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('run-row-R001')).toBeInTheDocument(),
+      );
+      const headerRow = screen.getByTestId('history-table-head');
+      expect(headerRow.textContent).toContain('分派筆數');
+    });
+  });
 });

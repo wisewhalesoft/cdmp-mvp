@@ -74,6 +74,27 @@ function formatDateTime(iso: string | null | undefined): string {
   }
 }
 
+// Phase 3 P2-4：耗時 helper
+function formatDuration(
+  triggeredAt: string,
+  finishedAt: string | null | undefined,
+): string {
+  if (!finishedAt) return '—';
+  try {
+    const ms = new Date(finishedAt).getTime() - new Date(triggeredAt).getTime();
+    if (Number.isNaN(ms) || ms <= 0) return '—';
+    const s = Math.floor(ms / 1000);
+    const hh = Math.floor(s / 3600);
+    const mm = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    if (hh > 0) return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+    return `${pad(mm)}:${pad(ss)}`;
+  } catch {
+    return '—';
+  }
+}
+
 export function RunHistoryPage() {
   const navigate = useNavigate();
   const [ym, setYm] = useState(currentYmDisplay());
@@ -82,6 +103,9 @@ export function RunHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Phase 3 P2-4：新增 filter
+  const [statusFilter, setStatusFilter] = useState<'all' | RunStatus>('all');
+  const [triggeredByFilter, setTriggeredByFilter] = useState<string>('all');
 
   const fetchRuns = useCallback(async (selectedYm: string) => {
     setLoading(true);
@@ -103,14 +127,32 @@ export function RunHistoryPage() {
   }, [ym, fetchRuns]);
 
   const filteredRuns = useMemo(() => {
+    let list = runs;
+    if (statusFilter !== 'all') {
+      list = list.filter((r) => r.status === statusFilter);
+    }
+    if (triggeredByFilter !== 'all') {
+      list = list.filter((r) => r.triggeredBy === triggeredByFilter);
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return runs;
-    return runs.filter(
-      (r) =>
-        r.runId.toLowerCase().includes(q) ||
-        (r.triggeredBy ?? '').toLowerCase().includes(q),
-    );
-  }, [runs, search]);
+    if (q) {
+      list = list.filter(
+        (r) =>
+          r.runId.toLowerCase().includes(q) ||
+          (r.triggeredBy ?? '').toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [runs, search, statusFilter, triggeredByFilter]);
+
+  // 觸發者下拉的 options（從現有 runs 萃取 unique）
+  const triggeredByOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of runs) {
+      if (r.triggeredBy) set.add(r.triggeredBy);
+    }
+    return Array.from(set).sort();
+  }, [runs]);
 
   const toggleSelect = (runId: string) => {
     setSelected((prev) => {
@@ -118,6 +160,20 @@ export function RunHistoryPage() {
       if (next.has(runId)) next.delete(runId);
       else if (next.size < 2) next.add(runId);
       return next;
+    });
+  };
+
+  // Phase 3 P2-4：全選（取 filtered 前 2 個 completed runs）
+  const handleSelectAll = () => {
+    setSelected((prev) => {
+      if (prev.size > 0) {
+        // 已有選擇 → 全清
+        return new Set();
+      }
+      const completedRuns = filteredRuns
+        .filter((r) => r.status === 'completed')
+        .slice(0, 2);
+      return new Set(completedRuns.map((r) => r.runId));
     });
   };
 
@@ -176,15 +232,59 @@ export function RunHistoryPage() {
         )}
 
         <section className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜尋 runId / 觸發人"
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="搜尋 runId / 觸發人"
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <select
+              data-testid="filter-status"
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as 'all' | RunStatus)
+              }
+              className="px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">狀態：全部</option>
+              <option value="completed">completed — 已完成</option>
+              <option value="failed">failed — 失敗</option>
+              <option value="running">running — 執行中</option>
+              <option value="pending">pending — 待執行</option>
+            </select>
+            <select
+              data-testid="filter-triggered-by"
+              value={triggeredByFilter}
+              onChange={(e) => setTriggeredByFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">觸發者：全部</option>
+              {triggeredByOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+            {(statusFilter !== 'all' ||
+              triggeredByFilter !== 'all' ||
+              search) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setTriggeredByFilter('all');
+                  setSearch('');
+                }}
+                className="text-xs text-gray-500 hover:text-primary underline"
+              >
+                清除篩選
+              </button>
+            )}
           </div>
         </section>
 
@@ -204,16 +304,30 @@ export function RunHistoryPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase">
+                <thead
+                  data-testid="history-table-head"
+                  className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase"
+                >
                   <tr>
-                    <th className="text-left px-3 py-3 font-semibold w-[4%]"></th>
-                    <th className="text-left px-3 py-3 font-semibold w-[24%]">runId</th>
-                    <th className="text-left px-3 py-3 font-semibold w-[10%]">月份</th>
-                    <th className="text-left px-3 py-3 font-semibold w-[10%]">狀態</th>
-                    <th className="text-left px-3 py-3 font-semibold w-[12%]">觸發人</th>
-                    <th className="text-left px-3 py-3 font-semibold w-[15%]">觸發時間</th>
-                    <th className="text-left px-3 py-3 font-semibold w-[15%]">完成時間</th>
-                    <th className="text-right px-3 py-3 font-semibold w-[10%]">操作</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[4%]">
+                      <input
+                        type="checkbox"
+                        data-testid="checkbox-select-all"
+                        checked={selected.size > 0}
+                        onChange={handleSelectAll}
+                        title="全選 / 全清（最多 2 個 completed run）"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
+                      />
+                    </th>
+                    <th className="text-left px-3 py-3 font-semibold w-[18%]">runId</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[8%]">月份</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[9%]">狀態</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[10%]">觸發人</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[13%]">觸發時間</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[13%]">完成時間</th>
+                    <th className="text-right px-3 py-3 font-semibold w-[8%]">耗時</th>
+                    <th className="text-right px-3 py-3 font-semibold w-[9%]">分派筆數</th>
+                    <th className="text-right px-3 py-3 font-semibold w-[8%]">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -252,6 +366,12 @@ export function RunHistoryPage() {
                         </td>
                         <td className="px-3 py-3 text-gray-500 text-xs font-mono">
                           {formatDateTime(r.finishedAt)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-gray-700 text-xs font-mono tabular-nums">
+                          {formatDuration(r.triggeredAt, r.finishedAt)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-gray-700 text-xs font-mono tabular-nums">
+                          {r.totalCount?.toLocaleString() ?? '—'}
                         </td>
                         <td className="px-3 py-3 text-right">
                           <div className="inline-flex items-center gap-1">
