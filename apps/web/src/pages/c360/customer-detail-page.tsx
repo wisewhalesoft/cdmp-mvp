@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { getCustomerDetail, type CustomerDetailResponse } from '@/api/c360';
+import { PiiMaskBanner } from './_components/pii-mask-banner';
+import { getUserRole, getBusinessRole } from '@/stores/auth-store';
 
 /** Format code/desc combo: "desc（code）" */
 function formatCodeDesc(code: string | null, desc: string | null): string {
@@ -322,6 +324,14 @@ export function CustomerDetailPage() {
           {/* Customer Content */}
           {customer && !error && (
             <>
+              {/* P2-1 Phase 3：plain user 顯示 PII masked 提示 banner */}
+              <div className="mb-4">
+                <PiiMaskBanner
+                  userRole={getUserRole()}
+                  businessRole={getBusinessRole()}
+                />
+              </div>
+
               {/* Back Link */}
               <div className="mb-6">
                 <Link

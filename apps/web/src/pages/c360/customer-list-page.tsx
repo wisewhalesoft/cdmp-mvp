@@ -21,6 +21,8 @@ import {
   type CustomerListResponse,
   type CustomerListParams,
 } from '@/api/c360';
+import { PiiMaskBanner } from './_components/pii-mask-banner';
+import { getUserRole, getBusinessRole } from '@/stores/auth-store';
 
 const TYPE_OPTIONS = [
   { value: '', label: '全部類型' },
@@ -162,6 +164,14 @@ export function CustomerListPage() {
   return (
     <AppLayout title="Customer 360">
       <main className="flex-1 p-6">
+          {/* P2-1 Phase 3：plain user 顯示 PII masked 提示 banner */}
+          <div className="mb-4">
+            <PiiMaskBanner
+              userRole={getUserRole()}
+              businessRole={getBusinessRole()}
+            />
+          </div>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             <StatCard
