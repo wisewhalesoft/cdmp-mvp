@@ -86,7 +86,7 @@ export class StageTransitionService {
       await this.assertStageEquals(listNo, fromStage, mgr);
       await preconditionFn(mgr);
       await mgr.update(ObListDefinition, { list_no: listNo }, { stage: toStage } as any);
-      await mgr.insert(AssignmentAuditLog, this.buildAudit('STAGE_ADVANCE', listNo, actorId, { fromStage, toStage }));
+      await mgr.insert(AssignmentAuditLog, this.buildAudit('STAGE_ADVANCE', listNo, actorId, { fromStage, toStage }) as any);
       if (postActionFn) await postActionFn(mgr);
     });
     this.logger.log(`STAGE_ADVANCE list=${listNo} ${fromStage} → ${toStage} by ${actorId}`);
@@ -107,7 +107,7 @@ export class StageTransitionService {
       await this.assertStageEquals(listNo, fromStage, mgr);
       await cleanupFn(mgr);
       await mgr.update(ObListDefinition, { list_no: listNo }, ({ stage: toStage } as any));
-      await mgr.insert(AssignmentAuditLog, this.buildAudit('STAGE_ROLLBACK', listNo, actorId, { fromStage, toStage }));
+      await mgr.insert(AssignmentAuditLog, this.buildAudit('STAGE_ROLLBACK', listNo, actorId, { fromStage, toStage }) as any);
     });
     this.logger.log(`STAGE_ROLLBACK list=${listNo} ${fromStage} → ${toStage} by ${actorId}`);
   }
@@ -130,7 +130,7 @@ export class StageTransitionService {
       await mgr.update(ObListDefinition, { list_no: listNo }, ({ stage: toStage } as any));
       await mgr.insert(
         AssignmentAuditLog,
-        this.buildAudit('STAGE_REJECT', listNo, actorId, { fromStage, toStage, rejectReason }),
+        this.buildAudit('STAGE_REJECT', listNo, actorId, { fromStage, toStage, rejectReason }) as any,
       );
       if (postActionFn) await postActionFn(mgr);
     });

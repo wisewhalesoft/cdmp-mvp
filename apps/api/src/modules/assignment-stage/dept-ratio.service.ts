@@ -179,7 +179,7 @@ export class DeptRatioService {
           before_value: { deptRatios: beforeRows.map((r) => ({ obdeptId: r.obdeptid, ration: Number(r.ration) })) },
           after_value: { deptRatios: dto.deptRatios, projectWorkym },
           ip_address: actor.ipAddress,
-        } as unknown as AssignmentAuditLog);
+        } as any);
       } catch (err) {
         this.logger.error(`SET_DEPT_RATIO audit log 寫入失敗 (listNo=${listNo}): ${(err as Error).message}`);
       }

@@ -364,7 +364,7 @@ export class PersonnelRatioService {
           before_value: { deptCode: dto.deptCode, employees: beforeRows.map((r) => ({ empId: r.emplid, ration: Number(r.ration) })) },
           after_value: { deptCode: dto.deptCode, employees: dto.employees, appliedTemplate: dto.appliedTemplate ?? null },
           ip_address: actor.ipAddress,
-        } as unknown as AssignmentAuditLog);
+        } as any);
       } catch (err) {
         this.logger.error(`SET_PERSONNEL_RATIO audit log 寫入失敗 (listNo=${listNo}, dept=${dto.deptCode}): ${(err as Error).message}`);
       }

@@ -311,7 +311,7 @@ export class AssignmentRunPipelineService {
         : [];
 
       const scoredPool = pool.map((p) => {
-        const score = activeVer
+        const score = activeVer && activeVer.card_version !== null
           ? this.computeScore(p, list.card_type ?? '', activeVer.card_version, activeColumns, allScores)
           : null;
         const lvl = activeVer && score !== null
