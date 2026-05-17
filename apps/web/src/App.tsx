@@ -35,6 +35,11 @@ import {
   RunSummaryPage,
   SnapshotDetailPage,
   RunComparePage,
+  DeptRatioConfigPage,
+  PersonnelRatioConfigPage,
+  ApprovalReviewPage,
+  ReadySummaryListPage,
+  ReadySummaryDetailPage,
 } from '@/pages/assignment';
 import {
   AdminRoute,
@@ -238,6 +243,50 @@ export function App() {
           <DirectorRoute>
             <ListEditDraftPage />
           </DirectorRoute>
+        }
+      />
+      {/* M03a 部門比例設定：director（寫入），section_chief 可進但唯讀 */}
+      <Route
+        path="/assignment/lists/:listNo/dept-ratio"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <DeptRatioConfigPage />
+          </DirectorOrSectionChiefRoute>
+        }
+      />
+      {/* M03b 個別業務比例設定：director + section_chief */}
+      <Route
+        path="/assignment/lists/:listNo/personnel-ratio"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <PersonnelRatioConfigPage />
+          </DirectorOrSectionChiefRoute>
+        }
+      />
+      {/* M03c 簽核審閱：director（寫入），section_chief 可進但唯讀 */}
+      <Route
+        path="/assignment/lists/:listNo/approval"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <ApprovalReviewPage />
+          </DirectorOrSectionChiefRoute>
+        }
+      />
+      {/* M03d 準備完成名單清單 + 詳情：director + section_chief */}
+      <Route
+        path="/assignment/ready-summary"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <ReadySummaryListPage />
+          </DirectorOrSectionChiefRoute>
+        }
+      />
+      <Route
+        path="/assignment/ready-summary/:listNo"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <ReadySummaryDetailPage />
+          </DirectorOrSectionChiefRoute>
         }
       />
       {/* M03 Stage 0 試算：director only */}

@@ -19,6 +19,7 @@ import {
   History,
   Camera,
   GitCompare,
+  CheckCircle2,
   type LucideIcon,
 } from 'lucide-react';
 import type { BusinessRole, UserRole } from '@cdmp/shared';
@@ -142,6 +143,13 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             to: '/assignment/list-definitions',
             label: '名單定義',
             icon: ClipboardList,
+            requires: 'director_or_section_chief',
+          },
+          // M03d 準備完成名單：director + section_chief（觀察可月跑前置）
+          {
+            to: '/assignment/ready-summary',
+            label: '準備完成名單',
+            icon: CheckCircle2,
             requires: 'director_or_section_chief',
           },
           // M03 Stage 0 試算：director only
