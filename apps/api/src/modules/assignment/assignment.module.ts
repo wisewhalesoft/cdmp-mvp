@@ -11,6 +11,9 @@ import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
+import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
+import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
+import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
 import { User } from '@/database/entities/user.entity';
@@ -45,6 +48,9 @@ import { AssignmentRunController } from './assignment-run.controller';
       ObDeptPct,
       ObEmplSet,
       ObCardType,
+      ObLevelcardVersion,
+      ObLevelcardColumn,
+      ObLevelcardScore,
       ObLevelcardLevel,
       ObTier,
       User,
