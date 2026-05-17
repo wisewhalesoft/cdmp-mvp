@@ -10,6 +10,10 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import {
+  SectionChiefScopeService,
+  ActorUser,
+} from './section-chief-scope.service';
 
 export interface SummaryDeptRow {
   deptId: string;
@@ -132,26 +136,33 @@ export class AssignmentRunReportService {
     private readonly snapshotRepo: Repository<AssignmentRunSnapshot>,
     @InjectRepository(AssignmentAuditLog)
     private readonly auditRepo: Repository<AssignmentAuditLog>,
+    private readonly scope: SectionChiefScopeService,
   ) {}
 
   // -------------------------------------------------------------------------
   // F063 結果摘要
   // -------------------------------------------------------------------------
 
-  async getSummary(runId: string): Promise<SummaryResponse> {
+  async getSummary(runId: string, actor?: ActorUser | null): Promise<SummaryResponse> {
     const run = await this.requireCompletedRun(runId);
     const { configPayload, resultPayload, inputListPayload } =
       await this.loadAllPayloads(runId);
 
-    const assignments: ResultAssignment[] = Array.isArray(
+    const allAssignments: ResultAssignment[] = Array.isArray(
       (resultPayload as any)?.assignments,
     )
       ? ((resultPayload as any).assignments as ResultAssignment[])
       : [];
+    // F063 v1.1 BR-6 / BR-7：section_chief scopeByCreator filter；director / admin bypass
+    const assignments = await this.scope.filterByEmplId<ResultAssignment>(
+      allAssignments,
+      actor,
+    );
     const stage4Count = assignments.length;
-    const stage1Cases = Array.isArray((inputListPayload as any)?.cases)
-      ? ((inputListPayload as any).cases as unknown[])
+    const allStage1Cases = Array.isArray((inputListPayload as any)?.cases)
+      ? ((inputListPayload as any).cases as Array<{ emplid?: string | null }>)
       : [];
+    const stage1Cases = await this.scope.filterByEmplId(allStage1Cases, actor);
     const stage1Count = stage1Cases.length;
     const coverageRate = stage1Count === 0 ? 0 : stage4Count / stage1Count;
 
@@ -183,10 +194,11 @@ export class AssignmentRunReportService {
       deptConfigRatio.set(k, cnt === 0 ? 0 : sum / cnt);
     }
 
-    const allDeptIds = new Set<string>([
-      ...deptActual.keys(),
-      ...deptConfigRatio.keys(),
-    ]);
+    // F063 AC-5：section_chief 視角下，deptSummary 只列出 assignments 中出現的 dept
+    //            （不洩漏轄區外 deptId 的存在性）。director / admin bypass 顯示 union。
+    const allDeptIds = this.scope.shouldFilter(actor)
+      ? new Set<string>(deptActual.keys())
+      : new Set<string>([...deptActual.keys(), ...deptConfigRatio.keys()]);
     const deptSummary: SummaryDeptRow[] = [];
     for (const deptId of allDeptIds) {
       const actualCount = deptActual.get(deptId) ?? 0;
@@ -232,12 +244,18 @@ export class AssignmentRunReportService {
       }))
       .sort((a, b) => a.cardLevel.localeCompare(b.cardLevel));
 
+    // F063 AC-5：section_chief 視角下 totalCases 為轄區內子集（= stage4Count）；
+    //            director / admin bypass，回原值（run.total_cases）。
+    const totalCases = this.scope.shouldFilter(actor)
+      ? stage4Count
+      : run.total_cases;
+
     return {
       runId: run.run_id,
       projectWorkym: run.project_workym,
       finishedAt: run.finished_at,
       durationMs: run.duration_ms,
-      totalCases: run.total_cases,
+      totalCases,
       stage1Count,
       stage4Count,
       coverageRate: Math.round(coverageRate * 10000) / 10000,
@@ -258,6 +276,7 @@ export class AssignmentRunReportService {
     runId: string,
     format: 'csv' | 'xlsx' = 'csv',
     actorId?: string,
+    actor?: ActorUser | null,
   ): Promise<ExportResult> {
     const run = await this.requireCompletedRun(runId);
 
@@ -270,11 +289,16 @@ export class AssignmentRunReportService {
     }
 
     const { resultPayload } = await this.loadAllPayloads(runId);
-    const assignments: ResultAssignment[] = Array.isArray(
+    const allAssignments: ResultAssignment[] = Array.isArray(
       (resultPayload as any)?.assignments,
     )
       ? ((resultPayload as any).assignments as ResultAssignment[])
       : [];
+    // F064 v1.1 scope filter
+    const assignments = await this.scope.filterByEmplId<ResultAssignment>(
+      allAssignments,
+      actor,
+    );
 
     const header = [
       'list_no',
@@ -323,7 +347,11 @@ export class AssignmentRunReportService {
   // F067 比對
   // -------------------------------------------------------------------------
 
-  async compareRuns(runA: string, runB: string): Promise<CompareResponse> {
+  async compareRuns(
+    runA: string,
+    runB: string,
+    actor?: ActorUser | null,
+  ): Promise<CompareResponse> {
     const base = await this.requireRun(runA);
     const compare = await this.requireRun(runB);
 
@@ -339,16 +367,25 @@ export class AssignmentRunReportService {
     const baseSnap = await this.loadAllPayloads(runA);
     const cmpSnap = await this.loadAllPayloads(runB);
 
-    const baseList: ResultAssignment[] = Array.isArray(
+    const baseListRaw: ResultAssignment[] = Array.isArray(
       (baseSnap.resultPayload as any)?.assignments,
     )
       ? (baseSnap.resultPayload as any).assignments
       : [];
-    const cmpList: ResultAssignment[] = Array.isArray(
+    const cmpListRaw: ResultAssignment[] = Array.isArray(
       (cmpSnap.resultPayload as any)?.assignments,
     )
       ? (cmpSnap.resultPayload as any).assignments
       : [];
+    // F067 v1.1 scope filter — 兩邊都套
+    const baseList = await this.scope.filterByEmplId<ResultAssignment>(
+      baseListRaw,
+      actor,
+    );
+    const cmpList = await this.scope.filterByEmplId<ResultAssignment>(
+      cmpListRaw,
+      actor,
+    );
 
     // 摘要 dept / level diff
     const sumDept = this.aggregateBy(baseList, cmpList, (x) => x.deptId);
@@ -369,16 +406,18 @@ export class AssignmentRunReportService {
     const added = [...cmpSet].filter((a) => !baseSet.has(a));
     const removed = [...baseSet].filter((a) => !cmpSet.has(a));
 
+    // F067 v1.1：section_chief 視角 totalCases 為轄區內子集
+    const filtered = this.scope.shouldFilter(actor);
     return {
       base: {
         runId: base.run_id,
         projectWorkym: base.project_workym,
-        totalCases: base.total_cases ?? baseList.length,
+        totalCases: filtered ? baseList.length : (base.total_cases ?? baseList.length),
       },
       compare: {
         runId: compare.run_id,
         projectWorkym: compare.project_workym,
-        totalCases: compare.total_cases ?? cmpList.length,
+        totalCases: filtered ? cmpList.length : (compare.total_cases ?? cmpList.length),
       },
       summary: {
         totalDiff: cmpList.length - baseList.length,

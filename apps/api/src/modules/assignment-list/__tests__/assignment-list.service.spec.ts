@@ -23,6 +23,7 @@ import { AssignmentRunGuardService } from '@/modules/assignment/services/assignm
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -44,13 +45,14 @@ async function buildModule(): Promise<{
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [ObListDefinition, AssignmentAuditLog, AssignmentRun],
+        entities: [ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
         ObListDefinition,
         AssignmentAuditLog,
         AssignmentRun,
+        PooldataFieldOption,
       ]),
     ],
     providers: [AssignmentListService, AssignmentRunGuardService],

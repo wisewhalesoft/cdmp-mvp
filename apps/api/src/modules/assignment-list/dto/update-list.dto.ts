@@ -69,4 +69,20 @@ export class UpdateListDto {
   @IsOptional()
   @IsBoolean()
   crEnabled?: boolean;
+
+  /**
+   * F051 v2.0 / F050 v2.0 一致：動態篩選條件（data-model.md L850）。
+   * 接受 DTO 並用於 WHITELIST_OPTION_INACTIVE warning 計算（不持久化於本批次）。
+   */
+  @IsOptional()
+  conditionPayload?: {
+    conditions?: Array<{
+      columnName: string;
+      fieldType?: string;
+      values?: string[];
+      [k: string]: unknown;
+    }>;
+    logic?: 'AND' | 'OR';
+    [k: string]: unknown;
+  };
 }

@@ -296,7 +296,10 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.runId).toBe('run-uuid-1');
-      expect(reportMock.getSummary).toHaveBeenCalledWith('run-uuid-1');
+      expect(reportMock.getSummary).toHaveBeenCalledWith(
+        'run-uuid-1',
+        expect.objectContaining({ userId: 'u-director' }),
+      );
     });
 
     it('plain user → 403', async () => {
@@ -332,6 +335,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         'run-uuid-1',
         'csv',
         'u-director',
+        expect.objectContaining({ userId: 'u-director' }),
       );
     });
 
@@ -350,6 +354,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         'run-uuid-1',
         'xlsx',
         'u-director',
+        expect.objectContaining({ userId: 'u-director' }),
       );
     });
 
@@ -385,7 +390,10 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         '/api/v1/assignment/runs/run-uuid-1/snapshot',
       );
       expect(res.status).toBe(200);
-      expect(snapshotMock.getFullSnapshot).toHaveBeenCalledWith('run-uuid-1');
+      expect(snapshotMock.getFullSnapshot).toHaveBeenCalledWith(
+        'run-uuid-1',
+        expect.objectContaining({ userId: 'u-director' }),
+      );
       expect(res.body.snapshots).toBeDefined();
     });
 
@@ -398,6 +406,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       expect(snapshotMock.getSnapshotByType).toHaveBeenCalledWith(
         'run-uuid-1',
         'config',
+        expect.objectContaining({ userId: 'u-director' }),
       );
     });
 
@@ -410,6 +419,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       expect(snapshotMock.getSnapshotByType).toHaveBeenCalledWith(
         'run-uuid-1',
         'result',
+        expect.objectContaining({ userId: 'u-director' }),
       );
     });
 
@@ -432,7 +442,11 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         `/api/v1/assignment/runs/compare?runA=${A}&runB=${B}`,
       );
       expect(res.status).toBe(200);
-      expect(reportMock.compareRuns).toHaveBeenCalledWith(A, B);
+      expect(reportMock.compareRuns).toHaveBeenCalledWith(
+        A,
+        B,
+        expect.objectContaining({ userId: 'u-director' }),
+      );
       expect(res.body.personnelMismatch).toBeDefined();
     });
 

@@ -97,8 +97,12 @@ export class AssignmentRunController {
   // -------------------------------------------------------------------------
 
   @Get('compare')
-  async compareRuns(@Query() query: CompareRunsQueryDto) {
-    return this.reportService.compareRuns(query.runA, query.runB);
+  async compareRuns(@Query() query: CompareRunsQueryDto, @Req() req: any) {
+    return this.reportService.compareRuns(
+      query.runA,
+      query.runB,
+      this.toActor(req.user),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -115,8 +119,8 @@ export class AssignmentRunController {
   // -------------------------------------------------------------------------
 
   @Get(':runId/summary')
-  async getRunSummary(@Param('runId') runId: string) {
-    return this.reportService.getSummary(runId);
+  async getRunSummary(@Param('runId') runId: string, @Req() req: any) {
+    return this.reportService.getSummary(runId, this.toActor(req.user));
   }
 
   // -------------------------------------------------------------------------
@@ -135,6 +139,7 @@ export class AssignmentRunController {
       runId,
       format,
       req.user?.userId,
+      this.toActor(req.user),
     );
     res.setHeader('Content-Type', out.contentType);
     res.setHeader(
@@ -152,25 +157,46 @@ export class AssignmentRunController {
   async getRunSnapshot(
     @Param('runId') runId: string,
     @Query() query: SnapshotQueryDto,
+    @Req() req: any,
   ) {
+    const actor = this.toActor(req.user);
     if (query.type) {
-      return this.snapshotService.getSnapshotByType(runId, query.type);
+      return this.snapshotService.getSnapshotByType(runId, query.type, actor);
     }
-    return this.snapshotService.getFullSnapshot(runId);
+    return this.snapshotService.getFullSnapshot(runId, actor);
   }
 
   @Get(':runId/snapshot/:type')
   async getRunSnapshotByType(
     @Param('runId') runId: string,
     @Param('type') type: string,
+    @Req() req: any,
   ) {
+    const actor = this.toActor(req.user);
     if (type !== 'config' && type !== 'input_list' && type !== 'result') {
       // 對齊 spec：未知 type 視為快照缺失 → 404 路徑由 service NotFoundException 處理
       return this.snapshotService.getSnapshotByType(
         runId,
         type as 'config' | 'input_list' | 'result',
+        actor,
       );
     }
-    return this.snapshotService.getSnapshotByType(runId, type);
+    return this.snapshotService.getSnapshotByType(runId, type, actor);
+  }
+
+  /**
+   * 從 req.user 抽取 SectionChiefScopeService 所需的 ActorUser shape。
+   */
+  private toActor(user: any): {
+    userId: string;
+    role: string;
+    businessRole?: string | null;
+  } | null {
+    if (!user || !user.userId) return null;
+    return {
+      userId: user.userId,
+      role: user.role ?? 'user',
+      businessRole: user.businessRole ?? null,
+    };
   }
 }

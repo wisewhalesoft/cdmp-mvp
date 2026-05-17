@@ -9,10 +9,21 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Like, Repository } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { CreateListDto } from './dto/create-list.dto';
 import type { UpdateListDto } from './dto/update-list.dto';
+
+/**
+ * WHITELIST_OPTION_INACTIVE warning 結構（error-handling.md v1.14）
+ * 非 HTTP 錯誤碼；隨 200 OK response 攜帶於 `warnings[]`，不阻擋寫入。
+ */
+export interface ListResponseWarning {
+  code: string;
+  message: string;
+  details: Array<{ columnName: string; optionValue: string }>;
+}
 
 /**
  * AssignmentListService — F048 / F050 / F051 / F052 / F077 共用 service
@@ -35,6 +46,8 @@ export class AssignmentListService {
     private readonly listRepo: Repository<ObListDefinition>,
     @InjectRepository(AssignmentAuditLog)
     private readonly auditRepo: Repository<AssignmentAuditLog>,
+    @InjectRepository(PooldataFieldOption)
+    private readonly optionRepo: Repository<PooldataFieldOption>,
     private readonly assignmentRunGuard: AssignmentRunGuardService,
   ) {}
 
@@ -140,6 +153,7 @@ export class AssignmentListService {
     listNm: string;
     status: string;
     projectWorkym: string;
+    warnings?: ListResponseWarning[];
   }> {
     // BR / spec AC-6：月跑鎖（最頂層）
     await this.assignmentRunGuard.assertNoRunningRun();
@@ -226,11 +240,14 @@ export class AssignmentListService {
       },
     });
 
+    const warnings = await this.calculateInactiveOptionWarnings(dto.conditionPayload);
+
     return {
       listNo,
       listNm: dto.listNm,
       status: 'active',
       projectWorkym: currentWorkYm,
+      warnings,
     };
   }
 
@@ -248,6 +265,7 @@ export class AssignmentListService {
     listNm: string;
     status: string;
     updatedAt: Date;
+    warnings?: ListResponseWarning[];
   }> {
     await this.assignmentRunGuard.assertNoRunningRun();
 
@@ -337,12 +355,77 @@ export class AssignmentListService {
       },
     });
 
+    const warnings = await this.calculateInactiveOptionWarnings(dto.conditionPayload);
+
     return {
       listNo,
       listNm: dto.listNm,
       status: existing.status,
       updatedAt: now,
+      warnings,
     };
+  }
+
+  /**
+   * F050 v2.0 / F051 v2.0 + F076 v1.3 BR-7 + error-handling.md v1.14
+   *
+   * 檢查 condition_payload 引用之可選值是否有已停用（is_active=false）。
+   * 不阻擋寫入，僅 response.warnings 增補 WHITELIST_OPTION_INACTIVE 條目。
+   *
+   * @returns warnings 陣列（無 inactive 引用時為 []）
+   */
+  private async calculateInactiveOptionWarnings(
+    conditionPayload?: {
+      conditions?: Array<{
+        columnName: string;
+        values?: string[];
+        [k: string]: unknown;
+      }>;
+      [k: string]: unknown;
+    } | null,
+  ): Promise<ListResponseWarning[]> {
+    if (!conditionPayload || !Array.isArray(conditionPayload.conditions)) {
+      return [];
+    }
+
+    // 收集 (columnName, optionValue) 對
+    const refPairs: Array<{ columnName: string; optionValue: string }> = [];
+    for (const cond of conditionPayload.conditions) {
+      if (!cond?.columnName || !Array.isArray(cond?.values)) continue;
+      for (const v of cond.values) {
+        if (v == null) continue;
+        refPairs.push({ columnName: cond.columnName, optionValue: String(v) });
+      }
+    }
+    if (refPairs.length === 0) return [];
+
+    // 一次查詢相關 options
+    const columnNames = Array.from(new Set(refPairs.map((p) => p.columnName)));
+    const options = await this.optionRepo
+      .createQueryBuilder('o')
+      .where('o.column_name IN (:...names)', { names: columnNames })
+      .getMany();
+    const activeMap = new Map<string, boolean>();
+    for (const o of options) {
+      activeMap.set(`${o.column_name}::${o.option_value}`, o.is_active);
+    }
+
+    // 不存在於 active map 視為「未維護」不報 inactive（避免誤報，留給其他驗證處理）
+    const inactiveRefs = refPairs.filter((p) => {
+      const key = `${p.columnName}::${p.optionValue}`;
+      const isActive = activeMap.get(key);
+      return isActive === false;
+    });
+
+    if (inactiveRefs.length === 0) return [];
+
+    return [
+      {
+        code: ERROR_CODES.WHITELIST_OPTION_INACTIVE,
+        message: ERROR_MESSAGES.WHITELIST_OPTION_INACTIVE,
+        details: inactiveRefs,
+      },
+    ];
   }
 
   // -------------------------------------------------------------------------

@@ -7,6 +7,10 @@ import { Repository } from 'typeorm';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import {
+  SectionChiefScopeService,
+  ActorUser,
+} from './section-chief-scope.service';
 
 export type SnapshotType = 'config' | 'input_list' | 'result';
 
@@ -48,9 +52,13 @@ export class AssignmentRunSnapshotService {
     private readonly runRepo: Repository<AssignmentRun>,
     @InjectRepository(AssignmentRunSnapshot)
     private readonly snapshotRepo: Repository<AssignmentRunSnapshot>,
+    private readonly scope: SectionChiefScopeService,
   ) {}
 
-  async getFullSnapshot(runId: string): Promise<FullSnapshotResponse> {
+  async getFullSnapshot(
+    runId: string,
+    actor?: ActorUser | null,
+  ): Promise<FullSnapshotResponse> {
     const run = await this.requireRun(runId);
     const all = await this.snapshotRepo.find({ where: { run_id: runId } });
 
@@ -63,8 +71,8 @@ export class AssignmentRunSnapshotService {
       runMeta: this.toMeta(run),
       snapshots: {
         config: byType.get('config') ?? null,
-        inputList: byType.get('input_list') ?? null,
-        result: byType.get('result') ?? null,
+        inputList: await this.filterPayload(byType.get('input_list'), 'cases', actor),
+        result: await this.filterPayload(byType.get('result'), 'assignments', actor),
       },
     };
   }
@@ -72,6 +80,7 @@ export class AssignmentRunSnapshotService {
   async getSnapshotByType(
     runId: string,
     type: SnapshotType,
+    actor?: ActorUser | null,
   ): Promise<{ runMeta: RunMeta; type: SnapshotType; payload: Record<string, unknown> }> {
     const run = await this.requireRun(runId);
     const snap = await this.snapshotRepo.findOne({
@@ -84,7 +93,30 @@ export class AssignmentRunSnapshotService {
         message: ERROR_MESSAGES.ASSIGNMENT_RUN_NOT_FOUND,
       });
     }
-    return { runMeta: this.toMeta(run), type, payload: snap.payload };
+    const payload =
+      type === 'config'
+        ? snap.payload
+        : type === 'input_list'
+          ? await this.filterPayload(snap.payload, 'cases', actor)
+          : await this.filterPayload(snap.payload, 'assignments', actor);
+    return { runMeta: this.toMeta(run), type, payload: payload ?? snap.payload };
+  }
+
+  /**
+   * F066 v1.1 scope filter — 對 result.assignments / input_list.cases 進行 emplid 過濾。
+   * config 不過濾（無 emplid 概念）。
+   */
+  private async filterPayload(
+    payload: Record<string, unknown> | undefined | null,
+    arrayKey: 'assignments' | 'cases',
+    actor?: ActorUser | null,
+  ): Promise<Record<string, unknown> | null> {
+    if (!payload) return null;
+    if (!this.scope.shouldFilter(actor)) return payload;
+    const arr = (payload as any)[arrayKey];
+    if (!Array.isArray(arr)) return payload;
+    const filtered = await this.scope.filterByEmplId<{ emplid?: string | null }>(arr, actor);
+    return { ...payload, [arrayKey]: filtered };
   }
 
   private async requireRun(runId: string): Promise<AssignmentRun> {

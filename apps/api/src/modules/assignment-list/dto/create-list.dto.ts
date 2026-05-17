@@ -86,4 +86,26 @@ export class CreateListDto {
   @IsOptional()
   @IsString()
   copyFromListNo?: string | null;
+
+  /**
+   * F050 v2.0 動態篩選條件（data-model.md L850）
+   *
+   * schema: `{ conditions: [{ columnName, fieldType, values?, ... }], logic: 'AND' | 'OR' }`
+   *
+   * 本 MVP 批次（P2 補完）：尚未持久化至 ob_list_definition.condition_payload 欄位
+   * （該欄位 migration 未實作），但接受 DTO 並用於 WHITELIST_OPTION_INACTIVE warning 計算。
+   *
+   * 後續批次將補 entity column + migration + 月跑 Stage 1 動態 SQL 組成。
+   */
+  @IsOptional()
+  conditionPayload?: {
+    conditions?: Array<{
+      columnName: string;
+      fieldType?: string;
+      values?: string[];
+      [k: string]: unknown;
+    }>;
+    logic?: 'AND' | 'OR';
+    [k: string]: unknown;
+  };
 }

@@ -22,6 +22,7 @@ import { AssignmentRunService } from './services/assignment-run.service';
 import { AssignmentRunPipelineService } from './services/assignment-run-pipeline.service';
 import { AssignmentRunSnapshotService } from './services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from './services/assignment-run-report.service';
+import { SectionChiefScopeService } from './services/section-chief-scope.service';
 import { AssignmentRunController } from './assignment-run.controller';
 
 /**
@@ -65,11 +66,13 @@ import { AssignmentRunController } from './assignment-run.controller';
     AssignmentRunGuardService,
     MonthlyRunReadinessService,
     StageTransitionService,
+    SectionChiefScopeService,
   ],
   exports: [
     AssignmentRunGuardService,
     MonthlyRunReadinessService,
     StageTransitionService,
+    SectionChiefScopeService,
   ],
 })
 export class AssignmentModule {}

@@ -25,9 +25,11 @@ import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AssignmentRunReportService } from '../assignment-run-report.service';
+import { SectionChiefScopeService } from '../section-chief-scope.service';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -46,16 +48,17 @@ async function buildModule(): Promise<Env> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog],
+        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog, ObEmplSet],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
         AssignmentRun,
         AssignmentRunSnapshot,
         AssignmentAuditLog,
+        ObEmplSet,
       ]),
     ],
-    providers: [AssignmentRunReportService],
+    providers: [AssignmentRunReportService, SectionChiefScopeService],
   }).compile();
   await app.init();
   return {
