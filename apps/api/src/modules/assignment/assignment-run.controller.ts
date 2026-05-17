@@ -25,6 +25,7 @@ import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorato
 import { AssignmentRunService } from './services/assignment-run.service';
 import { AssignmentRunSnapshotService } from './services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from './services/assignment-run-report.service';
+import { MonthlyRunReadinessService } from './services/monthly-run-readiness.service';
 import { TriggerRunDto } from './dto/trigger-run.dto';
 import { ExportQueryDto } from './dto/export-query.dto';
 import { SnapshotQueryDto } from './dto/snapshot-query.dto';
@@ -59,6 +60,7 @@ export class AssignmentRunController {
     private readonly service: AssignmentRunService,
     private readonly snapshotService: AssignmentRunSnapshotService,
     private readonly reportService: AssignmentRunReportService,
+    private readonly readinessService: MonthlyRunReadinessService,
   ) {}
 
   /**
@@ -93,6 +95,16 @@ export class AssignmentRunController {
   async listRuns(@Query('ym') ym?: string) {
     const rows = await this.service.listRuns({ ym });
     return { runs: rows };
+  }
+
+  // -------------------------------------------------------------------------
+  // F061 Phase 2 — GET 月跑前置條件就緒度（必須在 :runId 之前）
+  // -------------------------------------------------------------------------
+
+  @Get('readiness')
+  async getReadiness(@Query('ym') ym?: string) {
+    const effectiveYm = ym ?? AssignmentRunController.computeCurrentWorkYm();
+    return this.readinessService.calculateReadiness(effectiveYm);
   }
 
   // -------------------------------------------------------------------------
@@ -205,6 +217,18 @@ export class AssignmentRunController {
       );
     }
     return this.snapshotService.getSnapshotByType(runId, type, actor);
+  }
+
+  // -------------------------------------------------------------------------
+  // F062 Phase 2 — POST 取消月跑（director only）
+  // -------------------------------------------------------------------------
+
+  @Post(':runId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+  async cancelRun(@Param('runId') runId: string, @Req() req: any) {
+    return this.service.cancelRun(runId, req.user.userId);
   }
 
   /**

@@ -25,6 +25,10 @@ import { MonthlyRunReadinessService } from '../monthly-run-readiness.service';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
+import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
+import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -43,13 +47,25 @@ async function buildModule(): Promise<{
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [AssignmentRun, ObListDefinition, AssignmentAuditLog],
+        entities: [
+          AssignmentRun,
+          ObListDefinition,
+          AssignmentAuditLog,
+          ObLevelcardVersion,
+          EtlPipelineLog,
+          EtlPipeline,
+          User,
+        ],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
         AssignmentRun,
         ObListDefinition,
         AssignmentAuditLog,
+        ObLevelcardVersion,
+        EtlPipelineLog,
+        EtlPipeline,
+        User,
       ]),
     ],
     providers: [
@@ -267,6 +283,98 @@ describe('AssignmentRunService', () => {
       expect(res.runId).toBe(saved.run_id);
       expect(res.status).toBe('completed');
       expect(res.projectWorkym).toBe(YM);
+    });
+  });
+
+  describe('cancelRun (F062 Phase 2)', () => {
+    it('pending run 可 cancel → status="failed" + errorMessage="使用者取消"', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'pending',
+          triggered_by: ACTOR_ID,
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      const res = await env.service.cancelRun(saved.run_id, ACTOR_ID);
+      expect(res.status).toBe('failed');
+      expect(res.errorMessage).toBe('使用者取消');
+      const reloaded = await env.runRepo.findOne({
+        where: { run_id: saved.run_id },
+      });
+      expect(reloaded?.status).toBe('failed');
+      expect(reloaded?.error_message).toBe('使用者取消');
+    });
+
+    it('running run 可 cancel', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'running',
+          triggered_by: ACTOR_ID,
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      const res = await env.service.cancelRun(saved.run_id, ACTOR_ID);
+      expect(res.status).toBe('failed');
+    });
+
+    it('completed run 不可 cancel → 422 ASSIGNMENT_RUN_NOT_CANCELLABLE', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'completed',
+          triggered_by: ACTOR_ID,
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      await expect(
+        env.service.cancelRun(saved.run_id, ACTOR_ID),
+      ).rejects.toMatchObject({
+        response: { error: ERROR_CODES.ASSIGNMENT_RUN_NOT_CANCELLABLE },
+      });
+    });
+
+    it('failed run 不可重複 cancel → 422 ASSIGNMENT_RUN_NOT_CANCELLABLE', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'failed',
+          triggered_by: ACTOR_ID,
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      await expect(
+        env.service.cancelRun(saved.run_id, ACTOR_ID),
+      ).rejects.toMatchObject({
+        response: { error: ERROR_CODES.ASSIGNMENT_RUN_NOT_CANCELLABLE },
+      });
+    });
+
+    it('runId 不存在 → 404 ASSIGNMENT_RUN_NOT_FOUND', async () => {
+      await expect(
+        env.service.cancelRun(
+          '00000000-0000-0000-0000-000000000000',
+          ACTOR_ID,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('cancel 後寫入 audit log（action="CANCEL"）', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'pending',
+          triggered_by: ACTOR_ID,
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      await env.service.cancelRun(saved.run_id, ACTOR_ID);
+      const auditRows = await env.auditRepo.find({
+        where: { entity_id: saved.run_id, action: 'CANCEL' },
+      });
+      expect(auditRows).toHaveLength(1);
+      expect(auditRows[0].actor_id).toBe(ACTOR_ID);
     });
   });
 });

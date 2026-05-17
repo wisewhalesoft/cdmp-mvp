@@ -3,6 +3,9 @@ import type { Repository } from 'typeorm';
 import { MonthlyRunReadinessService } from '../monthly-run-readiness.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
+import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
+import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
+import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 
 /**
  * MonthlyRunReadinessService（F088 §5.2 / F061 月跑前置條件）
@@ -20,13 +23,31 @@ describe('MonthlyRunReadinessService', () => {
   let service: MonthlyRunReadinessService;
   let listRepo: any;
   let runRepo: any;
+  let versionRepo: any;
+  let etlLogRepo: any;
+  let etlPipelineRepo: any;
 
   beforeEach(() => {
     listRepo = { find: vi.fn() };
     runRepo = { findOne: vi.fn() };
+    versionRepo = { count: vi.fn().mockResolvedValue(1) };
+    etlLogRepo = {
+      createQueryBuilder: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+      }),
+    };
+    etlPipelineRepo = { find: vi.fn().mockResolvedValue([]) };
     service = new MonthlyRunReadinessService(
       listRepo as Repository<ObListDefinition>,
       runRepo as Repository<AssignmentRun>,
+      versionRepo as Repository<ObLevelcardVersion>,
+      etlLogRepo as Repository<EtlPipelineLog>,
+      etlPipelineRepo as Repository<EtlPipeline>,
     );
   });
 
@@ -95,5 +116,99 @@ describe('MonthlyRunReadinessService', () => {
     expect(res.totalActiveLists).toBe(0);
     expect(res.readyCount).toBe(0);
     expect(res.allReady).toBe(true);
+  });
+
+  describe('F061 Phase 2 — scoringActive + etlStatus 擴充', () => {
+    it('有 active levelcard version → scoringActive=true', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(1);
+
+      const res = await service.calculateReadiness('202605');
+      expect(res.scoringActive).toBe(true);
+    });
+
+    it('沒有 active levelcard version → scoringActive=false', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(0);
+
+      const res = await service.calculateReadiness('202605');
+      expect(res.scoringActive).toBe(false);
+    });
+
+    it('etlStatus 回傳 4 個 key（pooldata / emphire / calendar / arreturndf）', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(1);
+
+      const res = await service.calculateReadiness('202605');
+      expect(res.etlStatus).toBeDefined();
+      expect(res.etlStatus).toHaveProperty('pooldata');
+      expect(res.etlStatus).toHaveProperty('emphire');
+      expect(res.etlStatus).toHaveProperty('calendar');
+      expect(res.etlStatus).toHaveProperty('arreturndf');
+    });
+
+    it('每個 etlStatus 項目皆有 status / lastRunAt 欄位', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(1);
+
+      const res = await service.calculateReadiness('202605');
+      const keys = ['pooldata', 'emphire', 'calendar', 'arreturndf'] as const;
+      for (const k of keys) {
+        const it = (res.etlStatus as Record<string, unknown>)[k] as {
+          status: string;
+          lastRunAt: string | null;
+        };
+        expect(it).toHaveProperty('status');
+        expect(it).toHaveProperty('lastRunAt');
+      }
+    });
+
+    it('沒有任何 etl_pipeline_logs → 全部 status="missing", lastRunAt=null', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(1);
+      etlLogRepo.createQueryBuilder.mockReturnValue({
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+      });
+
+      const res = await service.calculateReadiness('202605');
+      expect((res.etlStatus as any).pooldata.status).toBe('missing');
+      expect((res.etlStatus as any).emphire.status).toBe('missing');
+      expect((res.etlStatus as any).pooldata.lastRunAt).toBeNull();
+    });
+
+    it('pooldata 最新 log status=completed → etlStatus.pooldata.status="completed" + lastRunAt', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(1);
+      const finishedAt = new Date('2026-05-15T03:00:00Z');
+      etlLogRepo.createQueryBuilder.mockReturnValue({
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([
+          {
+            status: 'completed',
+            finished_at: finishedAt,
+            pipeline: { name: 'OBPOOLDATA' },
+          },
+        ]),
+      });
+
+      const res = await service.calculateReadiness('202605');
+      expect((res.etlStatus as any).pooldata.status).toBe('completed');
+      expect((res.etlStatus as any).pooldata.lastRunAt).toBe(finishedAt.toISOString());
+    });
   });
 });

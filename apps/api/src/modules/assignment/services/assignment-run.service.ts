@@ -148,6 +148,65 @@ export class AssignmentRunService {
     return this.toSummary(row);
   }
 
+  /**
+   * F062 Phase 2：使用者取消月跑
+   *
+   * 規則：
+   *   - 僅 status='pending' 或 'running' 可取消
+   *   - 其他 status → 422 ASSIGNMENT_RUN_NOT_CANCELLABLE
+   *   - 不存在 → 404
+   *   - 成功：status='failed' + error_message='使用者取消' + audit log (action='CANCEL')
+   *   - 注意：背景 pipeline 不會立即中斷（Stage 1~4 尚未實作 cancellation token），
+   *     但 status 已標記，下一輪 polling 即會收到 failed。
+   *
+   * @throws 404 ASSIGNMENT_RUN_NOT_FOUND
+   * @throws 422 ASSIGNMENT_RUN_NOT_CANCELLABLE
+   */
+  async cancelRun(runId: string, actorId: string): Promise<RunSummary> {
+    const row = await this.runRepo.findOne({ where: { run_id: runId } });
+    if (!row) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND,
+        message: ERROR_MESSAGES.ASSIGNMENT_RUN_NOT_FOUND,
+      });
+    }
+    if (row.status !== 'pending' && row.status !== 'running') {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.ASSIGNMENT_RUN_NOT_CANCELLABLE,
+        message: ERROR_MESSAGES.ASSIGNMENT_RUN_NOT_CANCELLABLE,
+        details: [{ currentStatus: row.status }],
+      });
+    }
+    const now = new Date();
+    row.status = 'failed';
+    row.error_message = '使用者取消';
+    row.finished_at = now;
+    await this.runRepo.save(row);
+
+    // 寫 audit log
+    try {
+      await this.auditRepo.save(
+        this.auditRepo.create({
+          entity_type: 'assignment_run',
+          entity_id: runId,
+          action: 'CANCEL',
+          actor_id: actorId,
+          actor_name: actorId,
+          before_value: null,
+          after_value: { status: 'failed', errorMessage: '使用者取消' },
+          ip_address: null,
+          created_at: now,
+        } as Partial<AssignmentAuditLog>),
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `assignment_audit_log write failed: run=${runId}, action=CANCEL: ${err?.message ?? err}`,
+      );
+    }
+
+    return this.toSummary(row);
+  }
+
   // -------------------------------------------------------------------------
   // 內部
   // -------------------------------------------------------------------------

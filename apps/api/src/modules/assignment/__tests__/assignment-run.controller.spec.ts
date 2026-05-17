@@ -27,6 +27,7 @@ import { AssignmentRunController } from '../assignment-run.controller';
 import { AssignmentRunService } from '../services/assignment-run.service';
 import { AssignmentRunSnapshotService } from '../services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from '../services/assignment-run-report.service';
+import { MonthlyRunReadinessService } from '../services/monthly-run-readiness.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { ERROR_CODES } from '@/common/errors/error-codes';
@@ -45,6 +46,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
     triggerRun: ReturnType<typeof vi.fn>;
     listRuns: ReturnType<typeof vi.fn>;
     getRunById: ReturnType<typeof vi.fn>;
+    cancelRun: ReturnType<typeof vi.fn>;
   };
   let snapshotMock: {
     getFullSnapshot: ReturnType<typeof vi.fn>;
@@ -76,6 +78,12 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         runId: 'run-uuid-1',
         projectWorkym: '202605',
         status: 'completed',
+      }),
+      cancelRun: vi.fn().mockResolvedValue({
+        runId: 'run-uuid-1',
+        projectWorkym: '202605',
+        status: 'failed',
+        errorMessage: '使用者取消',
       }),
     };
     snapshotMock = {
@@ -120,6 +128,26 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         { provide: AssignmentRunService, useValue: serviceMock },
         { provide: AssignmentRunSnapshotService, useValue: snapshotMock },
         { provide: AssignmentRunReportService, useValue: reportMock },
+        {
+          provide: MonthlyRunReadinessService,
+          useValue: {
+            calculateReadiness: vi.fn().mockResolvedValue({
+              workYm: '202605',
+              totalActiveLists: 0,
+              readyCount: 0,
+              notReadyLists: [],
+              allReady: true,
+              monthlyRunStatus: 'none',
+              scoringActive: true,
+              etlStatus: {
+                pooldata: { status: 'completed', lastRunAt: null },
+                emphire: { status: 'completed', lastRunAt: null },
+                calendar: { status: 'completed', lastRunAt: null },
+                arreturndf: { status: 'completed', lastRunAt: null },
+              },
+            }),
+          },
+        },
       ],
     })
       .overrideGuard(AuthGuard)
@@ -161,6 +189,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
     serviceMock.triggerRun.mockClear();
     serviceMock.listRuns.mockClear();
     serviceMock.getRunById.mockClear();
+    serviceMock.cancelRun.mockClear();
     snapshotMock.getFullSnapshot.mockClear();
     snapshotMock.getSnapshotByType.mockClear();
     reportMock.getSummary.mockClear();
@@ -520,6 +549,127 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       );
       expect(res.status).toBe(422);
       expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPARABLE);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // F061 Phase 2 — GET /api/v1/assignment/runs/readiness
+  // -------------------------------------------------------------------------
+
+  describe('GET /runs/readiness (F061 Phase 2)', () => {
+    it('director → 200 + readiness 完整欄位', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/readiness',
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('totalActiveLists');
+      expect(res.body).toHaveProperty('readyCount');
+      expect(res.body).toHaveProperty('allReady');
+      expect(res.body).toHaveProperty('scoringActive');
+      expect(res.body).toHaveProperty('etlStatus');
+    });
+
+    it('section_chief → 200（讀取權限同等）', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/readiness',
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it('plain user → 403 E07_ROLE_NOT_ASSIGNED', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/readiness',
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe(ERROR_CODES.E07_ROLE_NOT_ASSIGNED);
+    });
+
+    it('ym query param 傳入 readinessService', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/readiness?ym=202604',
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // F062 Phase 2 — POST /api/v1/assignment/runs/:runId/cancel
+  // -------------------------------------------------------------------------
+
+  describe('POST /runs/:runId/cancel (F062 Phase 2)', () => {
+    it('director → 200 + status="failed"', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/cancel',
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.errorMessage).toBe('使用者取消');
+      expect(serviceMock.cancelRun).toHaveBeenCalledWith(
+        'run-uuid-1',
+        'u-director',
+      );
+    });
+
+    it('section_chief → 403 E07_REQUIRES_DIRECTOR', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/cancel',
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe(ERROR_CODES.E07_REQUIRES_DIRECTOR);
+    });
+
+    it('plain user → 403 E07_ROLE_NOT_ASSIGNED', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/cancel',
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe(ERROR_CODES.E07_ROLE_NOT_ASSIGNED);
+    });
+
+    it('未登入 → 401 AUTH_TOKEN_MISSING', async () => {
+      authShouldThrow401 = true;
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/cancel',
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it('run 不存在 → 404', async () => {
+      currentUser = director;
+      serviceMock.cancelRun.mockRejectedValueOnce(
+        new NotFoundException({
+          error: ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND,
+          message: '找不到指定的月跑紀錄',
+        }),
+      );
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/missing/cancel',
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND);
+    });
+
+    it('run 狀態 completed → 422 ASSIGNMENT_RUN_NOT_CANCELLABLE', async () => {
+      currentUser = director;
+      const { UnprocessableEntityException } = await import('@nestjs/common');
+      serviceMock.cancelRun.mockRejectedValueOnce(
+        new UnprocessableEntityException({
+          error: ERROR_CODES.ASSIGNMENT_RUN_NOT_CANCELLABLE,
+          message: '月跑當前狀態不允許取消',
+        }),
+      );
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/cancel',
+      );
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_RUN_NOT_CANCELLABLE);
     });
   });
 });

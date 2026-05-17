@@ -16,6 +16,8 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
+import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { AssignmentRunGuardService } from './services/assignment-run-guard.service';
@@ -53,6 +55,8 @@ import { AssignmentRunController } from './assignment-run.controller';
       ObLevelcardScore,
       ObLevelcardLevel,
       ObTier,
+      EtlPipeline,
+      EtlPipelineLog,
       User,
       TokenBlocklist,
     ]),
