@@ -6,14 +6,16 @@ source-story: US-087
 epic: E07
 module: M05 快照歷史
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-17
 status: Draft
 ---
 
 # F067: 比對兩次執行結果差異
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+
+> **v1.1（2026-05-17 / AD-E07 v3.0 處長轄區補修）**：依 F002 §4.6.2 + AD-E07 v3.0，補入處長視角差異比對 `scopeByCreator()` filter 規格（AC-7 + BR-7 + BR-8 + §7 效能需求備註）。處長視角差異比對與人員配對不一致率計算範圍 = 處長轄區內案件；部長 / Admin = 全公司；NFR-005 警示門檻（> 3%）之計算分母同步限縮，避免處長視角下被無關案件稀釋。
 
 ## Agent Loading Guide
 
@@ -85,6 +87,19 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **When** 業務部長 / 業務處長點擊「查看新增客戶」或「查看移除客戶」
 - **Then** 顯示僅出現在 Compare 結果而不在 Base 結果中的客戶清單（新增），以及僅在 Base 而不在 Compare 中的客戶清單（移除）
 - **And** 每列顯示 `custo_no`、`cust_name`
+
+### AC-7：處長視角差異比對僅計算轄區內案件（v1.1 新增）
+
+- **Given** 登入者 `businessRole = 'section_chief'`（業務處長）且通過 `DirectorOrSectionChiefGuard`，且 Base + Compare 兩 `run_id` 均 `status = 'completed'`
+- **When** 業務處長呼叫 `GET /api/v1/assignment/history/compare?runA=...&runB=...` 或 `GET /api/v1/assignment/history/compare/mismatch/export`
+- **Then** 整體比對不被阻擋（回 200 OK；不回 403）
+- **And** service 層執行 `scopeByCreator(actorUser)` helper：兩份 `result` 快照於應用層計算前，先過濾僅保留處長轄區內 `created_by` 對應之員工 / 部門所屬之案件
+- **And** `summary.totalDiff` / `summary.deptDiff` / `summary.levelDiff` 為處長轄區內案件之差異統計
+- **And** `personnelMismatch.list` 僅含處長轄區內案件之 `appl_no`；`personnelMismatch.totalCount` = 處長轄區內 Base + Compare 共同案件數（非全公司總數）；`personnelMismatch.rate = mismatchCount / totalCount`（分母同步限縮，避免被轄區外案件稀釋）
+- **And** `customerDiff.added` / `customerDiff.removed` 僅含處長轄區內之客戶
+- **And** `configDiff` **不過濾**（與 F066 BR-5 一致：`config` 為共用設定快照）
+- **And** 5.2 匯出端點之 Excel 檔案僅含處長轄區內之不一致案件列
+- **And** `businessRole = 'director'` / `role = 'admin'`：bypass filter，計算全公司差異（與 v1.0 原行為一致）
 
 ### AC-6：非 completed 狀態阻擋比對
 
@@ -158,6 +173,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-4 | 客戶層級 diff 採集合運算：`Compare - Base` 為新增；`Base - Compare` 為移除 |
 | BR-5 | 同月比對允許執行，僅顯示提示（不阻擋） |
 | BR-6 | 比對結果不寫入資料庫（唯讀計算） |
+| BR-7 | **處長轄區過濾（v1.1 新增）**：service 層使用 `scopeByCreator(actorUser)` helper 統一過濾（與 F063 BR-6 / F064 BR-6 / F066 BR-5 / F057 v1.1 / F082 BR-3 一致 pattern）；`businessRole = 'section_chief'` 自動於兩份 `result` 快照之應用層計算前先做過濾；`configDiff` 不過濾（與 F066 BR-5 一致）；`businessRole = 'director'` / `role = 'admin'` bypass filter |
+| BR-8 | **NFR-005 計算範圍對應（v1.1 新增）**：處長視角 → 人員配對不一致率分母 = 處長轄區內 Base ∩ Compare 案件數；部長 / Admin 視角 → 分母 = 全公司 Base ∩ Compare 案件數；BR-3 之 3% 警示門檻於兩種視角皆適用，但分子分母同步限縮，避免處長視角下警示語意失真 |
 
 ## 7. 效能需求
 
@@ -165,6 +182,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 |---|---|---|
 | 比對計算時間（10 萬筆 × 2 份快照） | < 30 秒 | `[ASSUMPTION]`（測試驗證） |
 | 不一致案件清單 Excel 匯出 | < 2 分鐘 | 採 streaming 寫入 |
+| 處長視角比對計算時間 | < 30 秒（同部長視角閾值） | v1.1：scopeByCreator 過濾於應用層執行，資料集小於全公司，預期效能更佳 |
 
 ## 8. 錯誤場景
 

@@ -1,7 +1,7 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.1"
+version: "3.2"
 date: 2026-05-17
 status: Draft
 ---
@@ -26,9 +26,11 @@ status: Draft
 >
 > **下一輪建議（給 spec-writer）**：(1) 用戶確認 F075~F089 救援策略（從本機備份恢復 / 從 `.claude/projects/.../*.jsonl` 對話記錄抓回 / 重新生成）；(2) F048~F072 之 23 個 spec 之識別字批次補修，**禁用 PowerShell**，改用 Edit 工具或 Git Bash sed（具備 LANG=zh_TW.UTF-8 環境）；(3) 補 F002 §4.5 / §4.6 完整重寫（目前僅 banner，矩陣詳細表格須以 [F002 v2.0 ${EDITOR_RESCUE}] 之既有編輯為基礎重作 — 由於 git checkout 還原，這些細節已遺失，需重做）。
 >
-> **本輪更新**：2026-05-16（**TDD P0 完成後 schema/spec 修補（AD-E07-17 三議題決議）**：architecture-spec 升至 v2.12（新增 AD-E07-17 三議題決議）；data-model 升至 v1.12（`assignment_audit_log.action` VARCHAR(10)→VARCHAR(30) + stage 系列 action；`ob_empl_set.created_at/updated_at` 補 dateColumnType helper 強制說明；`ob_list_definition.stage` 補 migration 歸屬明示為 m100 / m12 backfill 仍有效））
+> **本輪更新**：2026-05-17（**v3.2 / E07 重構 P1 B6 處長轄區補修**：依 F002 §4.6.2 + AD-E07 v3.0，補入 F063 / F064 / F066 / F067 四份 spec 之處長視角 `scopeByCreator()` filter AC 與 BR；service 層 helper pattern 與 P0 `PersonnelRatioValidationService` / F057 v1.1 / F082 BR-3 一致；F063 升 v1.1（AC-5 + BR-6/7）、F064 升 v1.1（AC-6 + AC-5 audit 補欄位 + BR-6/7）、F066 升 v1.1（AC-6 分型過濾 + BR-5/6）、F067 升 v1.1（AC-7 + BR-7/8 + §7 效能備註）。等用戶確認後 TDD 可進入 P2 補 `scopeByCreator` 實作。）
 >
-> **上一輪更新**：2026-05-16（**E07 重構衍生 spec 補修第二輪（system-architect Phase 1 / 6 項風險決議落地）**：F082 升至 v1.3（決議 #1 全員離職邊界選項 D + 決議 #2 503 + `FEATURE_NOT_ENABLED` + 決議 #4 `SectionChiefScopeGuard` method 分支 + 決議 #5 fixture factory 策略 + 決議 #6 `AssignmentRunGuardService.assertNoRunningRun()` 集中實作）；F079 / F081 升至 v1.1、F080 升至 v1.1、F083 升至 v1.2、F084 升至 v1.2、F085 升至 v1.2、F086 升至 v1.1、F087 升至 v1.1、F089 升至 v1.1（統一補入 BR-`AssignmentRunGuardService` cross-ref + Feature Flag fallback 503，相關 [ASSUMPTION] 升 ✅ Resolved）；F050 v2.0 §13.2 升 v2.0.1（Feature Flag Gating [ASSUMPTION] → [RESOLVED]，明確 flag = false 回 503 + `FEATURE_NOT_ENABLED`）；error-handling 升至 v1.12（新增 #feature-flag-errors 段落 + `FEATURE_NOT_ENABLED` 503 + `PERSONNEL_RATIO_OUT_OF_SCOPE` 補「僅適用 PUT/POST」備註 + `ASSIGNMENT_RUN_ALREADY_RUNNING` 補「`AssignmentRunGuardService` 集中拋出」備註）；data-model 補修（`ob_list_definition.stage` m12 migration 範圍說明 + `ob_emphire` 補 CI fixture 策略指引）；architecture-spec §3.10 補登 `AssignmentRunGuardService` / `StageTransitionService` / `PersonnelRatioValidationService` / `RatioValidationService` / `FeatureFlagGuard` / `SectionChiefScopeGuard` 6 個共用元件說明）
+> **上一輪更新**：2026-05-16（**TDD P0 完成後 schema/spec 修補（AD-E07-17 三議題決議）**：architecture-spec 升至 v2.12（新增 AD-E07-17 三議題決議）；data-model 升至 v1.12（`assignment_audit_log.action` VARCHAR(10)→VARCHAR(30) + stage 系列 action；`ob_empl_set.created_at/updated_at` 補 dateColumnType helper 強制說明；`ob_list_definition.stage` 補 migration 歸屬明示為 m100 / m12 backfill 仍有效））
+>
+> **上上輪更新**：2026-05-16（**E07 重構衍生 spec 補修第二輪（system-architect Phase 1 / 6 項風險決議落地）**：F082 升至 v1.3（決議 #1 全員離職邊界選項 D + 決議 #2 503 + `FEATURE_NOT_ENABLED` + 決議 #4 `SectionChiefScopeGuard` method 分支 + 決議 #5 fixture factory 策略 + 決議 #6 `AssignmentRunGuardService.assertNoRunningRun()` 集中實作）；F079 / F081 升至 v1.1、F080 升至 v1.1、F083 升至 v1.2、F084 升至 v1.2、F085 升至 v1.2、F086 升至 v1.1、F087 升至 v1.1、F089 升至 v1.1（統一補入 BR-`AssignmentRunGuardService` cross-ref + Feature Flag fallback 503，相關 [ASSUMPTION] 升 ✅ Resolved）；F050 v2.0 §13.2 升 v2.0.1（Feature Flag Gating [ASSUMPTION] → [RESOLVED]，明確 flag = false 回 503 + `FEATURE_NOT_ENABLED`）；error-handling 升至 v1.12（新增 #feature-flag-errors 段落 + `FEATURE_NOT_ENABLED` 503 + `PERSONNEL_RATIO_OUT_OF_SCOPE` 補「僅適用 PUT/POST」備註 + `ASSIGNMENT_RUN_ALREADY_RUNNING` 補「`AssignmentRunGuardService` 集中拋出」備註）；data-model 補修（`ob_list_definition.stage` m12 migration 範圍說明 + `ob_emphire` 補 CI fixture 策略指引）；architecture-spec §3.10 補登 `AssignmentRunGuardService` / `StageTransitionService` / `PersonnelRatioValidationService` / `RatioValidationService` / `FeatureFlagGuard` / `SectionChiefScopeGuard` 6 個共用元件說明）
 
 ---
 

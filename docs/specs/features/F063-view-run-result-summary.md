@@ -6,14 +6,16 @@ source-story: US-083
 epic: E07
 module: M04 分派執行
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-17
 status: Draft
 ---
 
 # F063: 查看分派結果摘要
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+
+> **v1.1（2026-05-17 / AD-E07 v3.0 處長轄區補修）**：依 F002 §4.6.2 + AD-E07 v3.0，補入處長視角 `scopeByCreator()` filter 規格（AC-5 + BR-6 + BR-7）；service 層統一使用 `scopeByCreator(actorUser)` helper（與 P0 `PersonnelRatioValidationService` / F057 v1.1 pattern 一致）；部長 / Admin bypass filter，處長自動 filter；非過濾型錯誤碼（200 OK + 空 / 縮小集合）。
 
 ## Agent Loading Guide
 
@@ -66,6 +68,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **Given** 結果摘要頁已顯示
 - **When** 業務部長 / 業務處長查看等級分佈區塊
 - **Then** 顯示各 CARD_LEVEL（A/B/C/D 等）的客戶數與佔比
+
+### AC-5：處長視角自動以 scopeByCreator 過濾顯示範圍（v1.1 新增）
+
+- **Given** 登入者 `businessRole = 'section_chief'`（業務處長）且通過 `DirectorOrSectionChiefGuard`
+- **When** 業務處長呼叫 `GET /api/v1/assignment/runs/:runId/summary`
+- **Then** 整體查詢不被阻擋（回 200 OK；不回 403）
+- **And** service 層執行 `scopeByCreator(actorUser)` helper：response `deptSummary[]` 與 `levelDistribution[]` 之聚合範圍限縮至「處長轄區內 `created_by` 對應之員工 / 部門所屬之分派紀錄」
+- **And** `totalCases` / `stage1Count` / `stage4Count` / `coverageRate` 為處長轄區內之子集統計（非全公司原值）
+- **And** 不洩漏轄區外部門 / 員工之存在性（轄區外 `deptId` 不出現在 `deptSummary[]`）
+- **And** `businessRole = 'director'`（業務部長）或 `role = 'admin'`：bypass filter，回全公司聚合（與 v1.0 原行為一致）
 
 ### AC-4：月跑未完成時阻擋
 
@@ -120,6 +132,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-3 | 本頁為唯讀查看，無編輯功能 |
 | BR-4 | `coverageRate = stage4Count / stage1Count`，以小數儲存（0.95 = 95%） |
 | BR-5 | 部門名稱（`deptName`）優先使用 `ob_pool_data_list.dept_name` 冗餘欄位；若需於後續擴充員工層級分布，員工資料以 `ob_emphire` join（`emplid = emp_id`）取得，`ob_emphire` 採 E04 + E05 雙層 ETL 從舊 OB DB 同步（OBEMPHIRE 採 full 全量重抓策略，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)） |
+| BR-6 | **處長轄區過濾（v1.1 新增）**：service 層使用 `scopeByCreator(actorUser)` helper 統一過濾（與 P0 `PersonnelRatioValidationService` / F057 v1.1 / F082 BR-3 一致 pattern）；`businessRole = 'section_chief'` 自動套用 `WHERE assigned_emplid IN (SELECT emp_id FROM ob_emphire WHERE created_by = :currentUserId)` 等價條件（具體 SQL 投影策略由 system-architect 於實作時細化）；`businessRole = 'director'` / `role = 'admin'` bypass filter |
+| BR-7 | **過濾語意（v1.1 新增）**：過濾為「縮小回傳集合」而非「拒絕請求」；不會回 403 / 422，僅回 200 OK + 縮小後之聚合；一般使用者（無 `businessRole`）已於 `DirectorOrSectionChiefGuard` 階段被擋下，不會進入 service 層 |
 
 ## 7. UI/UX 需求
 

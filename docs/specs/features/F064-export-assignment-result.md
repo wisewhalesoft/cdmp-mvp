@@ -6,14 +6,16 @@ source-story: US-084
 epic: E07
 module: M04 分派執行
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-17
 status: Draft
 ---
 
 # F064: 匯出分派結果
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+
+> **v1.1（2026-05-17 / AD-E07 v3.0 處長轄區補修）**：依 F002 §4.6.2 + AD-E07 v3.0，補入處長視角匯出 `scopeByCreator()` filter 規格（AC-6 + BR-6 + BR-7 + AC-5 audit log 補欄位）；CSV / Excel 匯出僅含處長轄區內資料列；audit log `after_value` 加記 actor 角色與過濾後筆數，便於稽核追溯處長視角匯出範圍。
 
 ## Agent Loading Guide
 
@@ -76,6 +78,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **Given** 匯出成功完成
 - **When** 後端處理完成
 - **Then** 寫入 `assignment_audit_log`（`action = 'EXPORT'`, `entity_type = 'assignment_run'`, `entity_id = run_id`, `after_value` 記錄檔案格式與筆數）
+- **And** `after_value` 額外記錄 `{ actorBusinessRole, scopedByCreator: <boolean>, exportedRowCount }` 三欄位（v1.1 新增），便於稽核追溯處長視角縮小後之匯出範圍
+
+### AC-6：處長視角匯出僅含轄區內資料列（v1.1 新增）
+
+- **Given** 登入者 `businessRole = 'section_chief'`（業務處長）且通過 `DirectorOrSectionChiefGuard`
+- **When** 業務處長呼叫 `GET /api/v1/assignment/runs/:runId/export?format=xlsx`（或 csv）
+- **Then** 整體匯出不被阻擋（回 200 OK + streaming 檔案；不回 403）
+- **And** service 層執行 `scopeByCreator(actorUser)` helper：streaming pipeline 之 query WHERE 條件限縮至「處長轄區內 `created_by` 對應之員工 / 部門所屬之分派紀錄」
+- **And** 產出 CSV / Excel 檔僅含轄區內資料列，欄位與 AC-2 一致
+- **And** 檔案名稱仍採 AC-1 規則（不額外附加處長識別碼，避免檔名洩漏 ID）
+- **And** `assignment_audit_log.after_value` 同時記錄 `scopedByCreator: true` 與過濾後實際匯出之 `exportedRowCount`
+- **And** `businessRole = 'director'`（業務部長）或 `role = 'admin'`：bypass filter，匯出全公司資料，`scopedByCreator: false`
 
 ## 5. API 規格
 
@@ -111,7 +125,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-2 | 大量資料採 streaming 寫入，不完整讀入記憶體 |
 | BR-3 | 匯出逾時上限 5 分鐘；超過回傳 `EXPORT_FILE_EXPIRED` |
 | BR-4 | 檔案名稱包含 `YYYYMM` + `run_id 前 8 碼`，便於業務部長 / 業務處長識別 |
-| BR-5 | 每次匯出寫入 `assignment_audit_log`（稽核用途） |
+| BR-5 | 每次匯出寫入 `assignment_audit_log`（稽核用途）；`after_value` 含 `{ format, actorBusinessRole, scopedByCreator, exportedRowCount }`（v1.1 補欄位） |
+| BR-6 | **處長轄區過濾（v1.1 新增）**：service 層使用 `scopeByCreator(actorUser)` helper 統一過濾（與 F063 BR-6 / F057 v1.1 / F082 BR-3 一致 pattern）；`businessRole = 'section_chief'` 自動套用 WHERE 條件限縮匯出 SQL 之 streaming pipeline；`businessRole = 'director'` / `role = 'admin'` bypass filter |
+| BR-7 | **過濾語意（v1.1 新增）**：過濾為「縮小資料列」而非「拒絕請求」；不會回 403 / 422；若處長轄區內無任何分派紀錄，仍回 200 OK + 僅含表頭之檔案（不回 404）；一般使用者已於 Guard 階段被擋下 |
 
 ## 7. UI/UX 需求
 

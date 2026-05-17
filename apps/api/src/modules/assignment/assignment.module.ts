@@ -20,6 +20,8 @@ import { MonthlyRunReadinessService } from './services/monthly-run-readiness.ser
 import { StageTransitionService } from './services/stage-transition.service';
 import { AssignmentRunService } from './services/assignment-run.service';
 import { AssignmentRunPipelineService } from './services/assignment-run-pipeline.service';
+import { AssignmentRunSnapshotService } from './services/assignment-run-snapshot.service';
+import { AssignmentRunReportService } from './services/assignment-run-report.service';
 import { AssignmentRunController } from './assignment-run.controller';
 
 /**
@@ -58,6 +60,8 @@ import { AssignmentRunController } from './assignment-run.controller';
   providers: [
     AssignmentRunService,
     AssignmentRunPipelineService,
+    AssignmentRunSnapshotService,
+    AssignmentRunReportService,
     AssignmentRunGuardService,
     MonthlyRunReadinessService,
     StageTransitionService,

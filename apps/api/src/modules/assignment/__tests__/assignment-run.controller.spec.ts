@@ -25,6 +25,8 @@ import {
 import request from 'supertest';
 import { AssignmentRunController } from '../assignment-run.controller';
 import { AssignmentRunService } from '../services/assignment-run.service';
+import { AssignmentRunSnapshotService } from '../services/assignment-run-snapshot.service';
+import { AssignmentRunReportService } from '../services/assignment-run-report.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { ERROR_CODES } from '@/common/errors/error-codes';
@@ -44,6 +46,15 @@ describe('AssignmentRunController — RBAC + Routes', () => {
     listRuns: ReturnType<typeof vi.fn>;
     getRunById: ReturnType<typeof vi.fn>;
   };
+  let snapshotMock: {
+    getFullSnapshot: ReturnType<typeof vi.fn>;
+    getSnapshotByType: ReturnType<typeof vi.fn>;
+  };
+  let reportMock: {
+    getSummary: ReturnType<typeof vi.fn>;
+    exportResult: ReturnType<typeof vi.fn>;
+    compareRuns: ReturnType<typeof vi.fn>;
+  };
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
 
@@ -62,12 +73,49 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         status: 'completed',
       }),
     };
+    snapshotMock = {
+      getFullSnapshot: vi.fn().mockResolvedValue({
+        runMeta: { runId: 'run-uuid-1' },
+        snapshots: { config: {}, inputList: {}, result: {} },
+      }),
+      getSnapshotByType: vi.fn().mockResolvedValue({
+        runMeta: { runId: 'run-uuid-1' },
+        type: 'config',
+        payload: { foo: 'bar' },
+      }),
+    };
+    reportMock = {
+      getSummary: vi.fn().mockResolvedValue({
+        runId: 'run-uuid-1',
+        stage1Count: 10,
+        stage4Count: 8,
+        coverageRate: 0.8,
+      }),
+      exportResult: vi.fn().mockResolvedValue({
+        filename: 'assignment_result_202605_aaaaaaaa.csv',
+        contentType: 'text/csv; charset=utf-8',
+        body: 'list_no,appl_no\nL1,A1',
+        rowCount: 1,
+      }),
+      compareRuns: vi.fn().mockResolvedValue({
+        base: { runId: 'A', projectWorkym: '202604', totalCases: 9 },
+        compare: { runId: 'B', projectWorkym: '202605', totalCases: 10 },
+        summary: { totalDiff: 1, deptDiff: [], levelDiff: [] },
+        configDiff: { cardVersionChanged: null, deptRatioChanges: [], crRuleChanged: null },
+        personnelMismatch: { list: [], mismatchCount: 0, totalCount: 0, rate: 0, alert: false },
+        customerDiff: { added: [], removed: [] },
+      }),
+    };
 
     process.env.OVERRIDE_CURRENT_WORK_YM = '202605';
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AssignmentRunController],
-      providers: [{ provide: AssignmentRunService, useValue: serviceMock }],
+      providers: [
+        { provide: AssignmentRunService, useValue: serviceMock },
+        { provide: AssignmentRunSnapshotService, useValue: snapshotMock },
+        { provide: AssignmentRunReportService, useValue: reportMock },
+      ],
     })
       .overrideGuard(AuthGuard)
       .useValue({
@@ -102,7 +150,15 @@ describe('AssignmentRunController — RBAC + Routes', () => {
   beforeEach(() => {
     authShouldThrow401 = false;
     currentUser = null;
-    vi.clearAllMocks();
+    // 重置 call 記錄但保留 mock 預設實作
+    serviceMock.triggerRun.mockClear();
+    serviceMock.listRuns.mockClear();
+    serviceMock.getRunById.mockClear();
+    snapshotMock.getFullSnapshot.mockClear();
+    snapshotMock.getSnapshotByType.mockClear();
+    reportMock.getSummary.mockClear();
+    reportMock.exportResult.mockClear();
+    reportMock.compareRuns.mockClear();
   });
 
   const director: CurrentUser = {
@@ -225,6 +281,217 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       );
       expect(res.status).toBe(404);
       expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // M05 — F063 / F064 / F066 / F067
+  // -------------------------------------------------------------------------
+
+  describe('GET /runs/:runId/summary (F063)', () => {
+    it('director → 200 + summary fields', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/summary',
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.runId).toBe('run-uuid-1');
+      expect(reportMock.getSummary).toHaveBeenCalledWith('run-uuid-1');
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/summary',
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe(ERROR_CODES.E07_ROLE_NOT_ASSIGNED);
+    });
+
+    it('section_chief → 200', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/summary',
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe('GET /runs/:runId/export (F064)', () => {
+    it('director default csv → 200 + Content-Disposition + body', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/export',
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/csv');
+      expect(res.headers['content-disposition']).toContain('attachment');
+      expect(res.headers['content-disposition']).toContain('.csv');
+      expect(res.text).toContain('list_no');
+      expect(reportMock.exportResult).toHaveBeenCalledWith(
+        'run-uuid-1',
+        'csv',
+        'u-director',
+      );
+    });
+
+    it('format=xlsx 透傳至 service（service 端拒絕）', async () => {
+      currentUser = director;
+      reportMock.exportResult.mockRejectedValueOnce(
+        Object.assign(new Error('xlsx not supported'), {
+          status: 422,
+          response: { error: ERROR_CODES.EXPORT_FORMAT_NOT_SUPPORTED },
+        }),
+      );
+      await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/export?format=xlsx',
+      );
+      expect(reportMock.exportResult).toHaveBeenCalledWith(
+        'run-uuid-1',
+        'xlsx',
+        'u-director',
+      );
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/export',
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it('未完成 run → 422 透傳', async () => {
+      currentUser = director;
+      const { UnprocessableEntityException } = await import('@nestjs/common');
+      reportMock.exportResult.mockRejectedValueOnce(
+        new UnprocessableEntityException({
+          error: ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPLETED,
+          message: '月跑尚未完成，結果摘要不可用',
+        }),
+      );
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/export',
+      );
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPLETED);
+    });
+  });
+
+  describe('GET /runs/:runId/snapshot (F066)', () => {
+    it('director no type → getFullSnapshot 三份', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/snapshot',
+      );
+      expect(res.status).toBe(200);
+      expect(snapshotMock.getFullSnapshot).toHaveBeenCalledWith('run-uuid-1');
+      expect(res.body.snapshots).toBeDefined();
+    });
+
+    it('director type=config → getSnapshotByType', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/snapshot?type=config',
+      );
+      expect(res.status).toBe(200);
+      expect(snapshotMock.getSnapshotByType).toHaveBeenCalledWith(
+        'run-uuid-1',
+        'config',
+      );
+    });
+
+    it('director path /snapshot/:type → getSnapshotByType', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/snapshot/result',
+      );
+      expect(res.status).toBe(200);
+      expect(snapshotMock.getSnapshotByType).toHaveBeenCalledWith(
+        'run-uuid-1',
+        'result',
+      );
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/snapshot',
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /runs/compare (F067)', () => {
+    const A = '550e8400-e29b-41d4-a716-446655440000';
+    const B = '550e8400-e29b-41d4-a716-446655440001';
+
+    it('director → 200 + compare response', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runA=${A}&runB=${B}`,
+      );
+      expect(res.status).toBe(200);
+      expect(reportMock.compareRuns).toHaveBeenCalledWith(A, B);
+      expect(res.body.personnelMismatch).toBeDefined();
+    });
+
+    it('section_chief → 200', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runA=${A}&runB=${B}`,
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runA=${A}&runB=${B}`,
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it('缺 runA → 422 VALIDATION_ERROR', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runB=${B}`,
+      );
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe(ERROR_CODES.VALIDATION_ERROR);
+    });
+
+    it('runA 非 UUID → 422', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runA=not-uuid&runB=${B}`,
+      );
+      expect(res.status).toBe(422);
+    });
+
+    it('compare 路由不被 :runId 攔截（執行 reportService.compareRuns 而非 service.getRunById）', async () => {
+      currentUser = director;
+      await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runA=${A}&runB=${B}`,
+      );
+      expect(reportMock.compareRuns).toHaveBeenCalled();
+      expect(serviceMock.getRunById).not.toHaveBeenCalled();
+    });
+
+    it('任一 run 非 completed → 422 透傳', async () => {
+      currentUser = director;
+      const { UnprocessableEntityException } = await import('@nestjs/common');
+      reportMock.compareRuns.mockRejectedValueOnce(
+        new UnprocessableEntityException({
+          error: ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPARABLE,
+          message: '僅 completed 狀態的月跑可比對',
+        }),
+      );
+      const res = await request(app.getHttpServer()).get(
+        `/api/v1/assignment/runs/compare?runA=${A}&runB=${B}`,
+      );
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPARABLE);
     });
   });
 });

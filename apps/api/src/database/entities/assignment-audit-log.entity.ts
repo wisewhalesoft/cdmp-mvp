@@ -20,12 +20,14 @@ export class AssignmentAuditLog {
 
   // m16 / AD-E07-17 議題 2 / 2026-05-16：length 由 10 擴為 30，
   // union 補充 STAGE_ADVANCE / STAGE_ROLLBACK / STAGE_REJECT / ASSIGN_ROLE / REVOKE_ROLE
+  // P1 B6 / F064 AC-5 / 2026-05-17：補 EXPORT（分派結果匯出稽核）
   @Column({ name: 'action', type: 'varchar', length: 30 })
   action:
     | 'CREATE'
     | 'UPDATE'
     | 'DELETE'
     | 'RUN'
+    | 'EXPORT'
     | 'STAGE_ADVANCE'
     | 'STAGE_ROLLBACK'
     | 'STAGE_REJECT'

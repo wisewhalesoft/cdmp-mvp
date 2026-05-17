@@ -6,14 +6,16 @@ source-story: US-086
 epic: E07
 module: M05 快照歷史
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-17
 status: Draft
 ---
 
 # F066: 查看執行快照詳情
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+
+> **v1.1（2026-05-17 / AD-E07 v3.0 處長轄區補修）**：依 F002 §4.6.2 + AD-E07 v3.0，補入處長視角分型 snapshot 過濾規格（AC-6 + BR-5 + BR-6）。`type = 'config'` 共用設定不過濾；`type = 'input_list'` / `'result'` 走 `scopeByCreator()` filter 僅顯示處長轄區案件；service 層 helper pattern 與 F063 / F064 / F057 v1.1 / F082 BR-3 一致。
 
 ## Agent Loading Guide
 
@@ -75,6 +77,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **Then** 顯示最終分派結果：總筆數、各部門分配量、各等級分佈
 - **And** 提供搜尋功能：可依客戶編號（`custo_no`）或人員工號（`emplid`）查詢分派紀錄
 
+### AC-6：處長視角依 snapshotType 分型過濾（v1.1 新增）
+
+- **Given** 登入者 `businessRole = 'section_chief'`（業務處長）且通過 `DirectorOrSectionChiefGuard`
+- **When** 業務處長呼叫 `GET /api/v1/assignment/history/:runId/snapshot`（總覽）或 `GET /api/v1/assignment/history/:runId/snapshot/search?snapshotType={type}`（5.2 搜尋端點）
+- **Then** 整體查詢不被阻擋（回 200 OK；不回 403）
+- **And** 依 `snapshotType` 分型套用 `scopeByCreator(actorUser)` helper：
+  - `type = 'config'`：**不過濾**（config 為共用設定快照，部門比例 / 計分版本等屬全公司設定，處長有完整檢視權限）
+  - `type = 'input_list'`：**過濾**，僅顯示處長轄區內 `created_by` 對應之員工 / 部門所屬之案件（`custo_no` 集合縮小）
+  - `type = 'result'`：**過濾**，僅顯示處長轄區內 `created_by` 對應之員工 / 部門所屬之分派結果列
+- **And** 總覽端點（5.1）回 response 時：`snapshots.config` 不變、`snapshots.inputList.totalCount` / `byListNo` 與 `snapshots.result.totalCount` / `byDept` / `byLevel` 為處長轄區縮小後之聚合
+- **And** `businessRole = 'director'` / `role = 'admin'`：bypass filter，全部 snapshot 回原值
+
 ### AC-5：run_id 不存在或快照缺失
 
 - **Given** URL 中的 `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 缺少某份快照
@@ -134,6 +148,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 | BR-2 | JSONB payload 預設由前端解析；資料量 > 100,000 筆時啟用後端搜尋 API（5.2） |
 | BR-3 | `input_list` 快照間接保存月跑當時的名單定義篩選結果，可追溯名單條件變更的影響 |
 | BR-4 | 快照保留期與 `assignment_run` 相同（3 年，AD-E07-3） |
+| BR-5 | **處長轄區分型過濾（v1.1 新增）**：service 層使用 `scopeByCreator(actorUser)` helper，依 `snapshotType` 分流：`config` 不過濾（共用設定）；`input_list` / `result` 過濾僅含處長轄區內案件 / 分派結果；helper pattern 與 F063 BR-6 / F064 BR-6 / F057 v1.1 / F082 BR-3 一致；`businessRole = 'director'` / `role = 'admin'` bypass filter |
+| BR-6 | **過濾語意（v1.1 新增）**：過濾為「縮小回傳集合」而非「拒絕請求」；不會回 403 / 422，僅回 200 OK + 縮小後之 payload；若處長轄區內 `input_list` / `result` 子集為空，回 200 OK + `totalCount = 0`（不回 404，404 仍僅針對 AC-5 之 `run_id` 不存在或快照本身缺失）；一般使用者已於 Guard 階段被擋下 |
 
 ## 7. UI/UX 需求
 
