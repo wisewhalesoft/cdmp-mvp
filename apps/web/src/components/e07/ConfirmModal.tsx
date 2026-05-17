@@ -63,6 +63,10 @@ export interface ConfirmModalProps {
   disabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** 自訂 modal 容器 testId（預設 `confirm-modal-${variant}`） */
+  testId?: string;
+  /** 自訂確認按鈕 testId（預設 undefined） */
+  confirmTestId?: string;
 }
 
 export function ConfirmModal({
@@ -77,13 +81,15 @@ export function ConfirmModal({
   disabled = false,
   onConfirm,
   onCancel,
+  testId,
+  confirmTestId,
 }: ConfirmModalProps) {
   if (!open) return null;
   const cfg = VARIANT_CONFIG[variant];
   const Icon = cfg.icon;
 
   return (
-    <div className="fixed inset-0 z-50" data-testid={`confirm-modal-${variant}`}>
+    <div className="fixed inset-0 z-50" data-testid={testId ?? `confirm-modal-${variant}`}>
       <div
         className="modal-backdrop absolute inset-0 bg-black/50"
         onClick={onCancel}
@@ -127,6 +133,7 @@ export function ConfirmModal({
               loadingText={loadingText}
               disabled={disabled}
               onClick={onConfirm}
+              data-testid={confirmTestId}
             >
               {confirmLabel}
             </Button>

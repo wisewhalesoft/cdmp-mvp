@@ -13,3 +13,9 @@ export { RunHistoryPage } from './run-history-page';
 export { RunSummaryPage } from './run-summary-page';
 export { SnapshotDetailPage } from './snapshot-detail-page';
 export { RunComparePage } from './run-compare-page';
+// E07 P1 — M03 5 個獨立頁
+export { DeptRatioConfigPage } from './dept-ratio-config-page';
+export { PersonnelRatioConfigPage } from './personnel-ratio-config-page';
+export { ApprovalReviewPage } from './approval-review-page';
+export { ReadySummaryListPage } from './ready-summary-list-page';
+export { ReadySummaryDetailPage } from './ready-summary-detail-page';

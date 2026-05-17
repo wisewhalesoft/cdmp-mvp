@@ -197,3 +197,31 @@ export async function rejectList(
   );
   return response.data;
 }
+
+// =====================================================================
+// F087 v1.2 P1 — 簽核歷史完整時間軸（GET）
+// =====================================================================
+
+export interface ApprovalHistoryItem {
+  approvalId: string;
+  action: 'approve' | 'reject';
+  rejectReason: string | null;
+  approverId: string;
+  approverName: string | null;
+  approverRole: string | null;
+  approvedAt: string;
+}
+
+export interface ApprovalHistoryResponse {
+  listNo: string;
+  history: ApprovalHistoryItem[];
+}
+
+export async function getApprovalHistory(
+  listNo: string,
+): Promise<ApprovalHistoryResponse> {
+  const response = await apiClient.get<ApprovalHistoryResponse>(
+    `/assignment/lists/${listNo}/approval-history`,
+  );
+  return response.data;
+}
