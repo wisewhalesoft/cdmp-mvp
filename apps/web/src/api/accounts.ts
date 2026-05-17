@@ -7,8 +7,8 @@ import type {
   UpdateStatusResponse,
   UpdateRoleRequest,
   UpdateRoleResponse,
-  UpdateSalesManagerFlagRequest,
-  UpdateSalesManagerFlagResponse,
+  UpdateBusinessRoleRequest,
+  UpdateBusinessRoleResponse,
   AccountListQuery,
   AccountListResponse,
   AdminResetPasswordRequest,
@@ -48,13 +48,15 @@ export async function updateAccountRole(id: string, data: UpdateRoleRequest): Pr
   return response.data;
 }
 
-// F008 v3.2: 切換業務主管旗標
-export async function updateAccountSalesManagerFlag(
+// F006a v1.0 / AD-E07 v3.0 (2026-05-16)：唯一 business_role 寫入入口
+// PATCH /api/v1/accounts/:id/business-role（Admin only）
+// 同 transaction 觸發 password_changed_at，使該 user 既有 JWT 全數失效。
+export async function updateBusinessRole(
   id: string,
-  data: UpdateSalesManagerFlagRequest,
-): Promise<UpdateSalesManagerFlagResponse> {
-  const response = await apiClient.patch<UpdateSalesManagerFlagResponse>(
-    `/accounts/${id}/sales-manager-flag`,
+  data: UpdateBusinessRoleRequest,
+): Promise<UpdateBusinessRoleResponse> {
+  const response = await apiClient.patch<UpdateBusinessRoleResponse>(
+    `/accounts/${id}/business-role`,
     data,
   );
   return response.data;

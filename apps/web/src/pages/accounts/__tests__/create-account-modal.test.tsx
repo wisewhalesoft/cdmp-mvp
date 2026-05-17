@@ -115,6 +115,8 @@ describe('CreateAccountModal', () => {
         email: 'new@test.com',
         role: 'user',
         is_sales_manager: false,
+
+        business_role: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -138,6 +140,8 @@ describe('CreateAccountModal', () => {
         email: 'test@test.com',
         role: 'admin',
         is_sales_manager: false,
+
+        business_role: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -240,6 +244,8 @@ describe('CreateAccountModal', () => {
         email: 'sm@test.com',
         role: 'user',
         is_sales_manager: true,
+
+        business_role: 'director',
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -273,6 +279,8 @@ describe('CreateAccountModal', () => {
         email: 'nosm@test.com',
         role: 'user',
         is_sales_manager: false,
+
+        business_role: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });

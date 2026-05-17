@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ShieldCheck, ShieldOff, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { editAccountSchema, type EditAccountFormData } from './edit-account-schema';
 import { updateAccount } from '@/api/accounts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
-import type { AccountListItem } from '@cdmp/shared';
+import { RoleBadge } from '@/components/e07/RoleBadge';
+import { type AccountListItem, deriveEffectiveIdentity } from '@cdmp/shared';
 
 interface EditAccountModalProps {
   open: boolean;
@@ -78,10 +79,10 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
 
   if (!open) return null;
 
-  // F006 SM: chip 雙狀態判定，嚴格比對 true（null/undefined 視同 false）
-  const isSalesManager = account?.is_sales_manager === true;
-  // F006 AC-5: Admin 帳號不顯示 chip
-  const showSalesManagerChip = account?.role === 'user';
+  // F006a / AD-E07 v3.0：read-only role badge — 顯示 4 角色實質身份
+  const identity = account
+    ? deriveEffectiveIdentity(account.role, account.business_role)
+    : null;
 
   return (
     <div className="fixed inset-0 z-50">
@@ -127,30 +128,14 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
                 {...register('email')}
               />
 
-              {/* F006 SM: 業務主管權限 read-only chip（僅 user 角色顯示） */}
-              {showSalesManagerChip && (
-                <div data-testid="edit-sales-manager-wrap">
+              {/* F006a v1.0 / AD-E07 v3.0：read-only role badge — 顯示 4 角色實質身份 */}
+              {identity && (
+                <div data-testid="edit-role-wrap">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    業務主管權限
+                    角色
                   </label>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {isSalesManager ? (
-                      <span
-                        data-testid="edit-sales-manager-chip"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        業務主管權限：已啟用
-                      </span>
-                    ) : (
-                      <span
-                        data-testid="edit-sales-manager-chip"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600"
-                      >
-                        <ShieldOff className="w-3.5 h-3.5" />
-                        業務主管權限：未啟用
-                      </span>
-                    )}
+                    <RoleBadge identity={identity} />
                     <span className="text-xs text-gray-400">
                       需變更請至變更角色 dialog
                     </span>

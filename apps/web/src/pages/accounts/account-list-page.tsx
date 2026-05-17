@@ -1,55 +1,47 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Plus, Search, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 import { getUser } from '@/stores/auth-store';
 import {
   getAccounts,
   updateAccountStatus,
   updateAccountRole,
-  updateAccountSalesManagerFlag,
+  updateBusinessRole,
   adminResetPassword,
 } from '@/api/accounts';
 import { Button } from '@/components/ui/button';
 import { AppLayout } from '@/components/layout/app-layout';
 import { useToast } from '@/components/ui/toast';
+import { RoleBadge } from '@/components/e07/RoleBadge';
 import { CreateAccountModal } from './create-account-modal';
 import { EditAccountModal } from './edit-account-modal';
 import { ToggleStatusDialog } from './toggle-status-dialog';
 import { ChangeRoleDialog } from './change-role-dialog';
 import { ResetPasswordDialog } from './reset-password-dialog';
-import { type AccountListItem, type UserRole, getRoleDisplayName } from '@cdmp/shared';
+import {
+  type AccountListItem,
+  type BusinessRole,
+  type EffectiveIdentity,
+  type UserRole,
+  deriveEffectiveIdentity,
+  getEffectiveIdentityDisplayName,
+} from '@cdmp/shared';
 
 function formatDate(isoString: string): string {
   return isoString.slice(0, 10);
 }
 
-const ROLE_BADGE_STYLES: Record<string, string> = {
-  admin: 'bg-blue-100 text-blue-700',
-  user: 'bg-gray-100 text-gray-700',
-};
-
-function RoleBadge({ role }: { role: string }) {
-  const styles = ROLE_BADGE_STYLES[role] ?? 'bg-gray-100 text-gray-700';
-  return (
-    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${styles}`}>
-      {getRoleDisplayName(role as UserRole)}
-    </span>
-  );
-}
-
-// F008 v3.2 / TS-F008-SM-FE-013~017:
-// 列表頁 Sales Manager chip — 僅當 role=user 且 is_sales_manager=true 時顯示
-// className 嚴格對齊 prototype 07 line 299-302
-function SalesManagerChip({ accountId }: { accountId: string }) {
-  return (
-    <span
-      data-testid={`sales-manager-chip-${accountId}`}
-      title="此 User 已啟用業務主管權限，可存取 E07 客戶名單分派與 E06 Customer 360"
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-50 text-warning rounded-md border border-amber-200"
-    >
-      <ShieldCheck className="w-3.5 h-3.5" />
-      Sales Manager
-    </span>
-  );
+// F006a / AD-E07 v3.0：4 角色實質身份 → (systemRole, businessRole) 對應
+function identityToRoles(identity: EffectiveIdentity): { role: UserRole; businessRole: BusinessRole } {
+  switch (identity) {
+    case 'admin':
+      return { role: 'admin', businessRole: null };
+    case 'director':
+      return { role: 'user', businessRole: 'director' };
+    case 'section_chief':
+      return { role: 'user', businessRole: 'section_chief' };
+    case 'user':
+      return { role: 'user', businessRole: null };
+  }
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -90,7 +82,8 @@ export function AccountListPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  // F006a / AD-E07 v3.0：roleFilter = '' | 'admin' | 'director' | 'section_chief' | 'user'
+  const [roleFilter, setRoleFilter] = useState<'' | EffectiveIdentity>('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -117,14 +110,29 @@ export function AccountListPage() {
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
+      // 後端 GET /accounts?role= 只支援 admin/user 兩值（系統角色維度）；
+      // director/section_chief/user 之業務角色過濾在前端 client-side 套用。
+      const backendRole: 'admin' | 'user' | undefined =
+        roleFilter === 'admin' ? 'admin'
+        : roleFilter === '' ? undefined
+        : 'user';
       const result = await getAccounts({
         page,
         limit,
         search: debouncedSearch || undefined,
-        role: (roleFilter as UserRole) || undefined,
+        role: backendRole,
         status: (statusFilter as 'active' | 'disabled') || undefined,
       });
-      setAccounts(result.data);
+      // 客戶端依 business_role 進一步過濾 director/section_chief/user
+      let rows = result.data;
+      if (roleFilter === 'director') {
+        rows = rows.filter((a) => a.business_role === 'director');
+      } else if (roleFilter === 'section_chief') {
+        rows = rows.filter((a) => a.business_role === 'section_chief');
+      } else if (roleFilter === 'user') {
+        rows = rows.filter((a) => a.role === 'user' && a.business_role === null);
+      }
+      setAccounts(rows);
       setTotal(result.total);
     } catch {
       // Error handling — graceful degradation
@@ -183,85 +191,66 @@ export function AccountListPage() {
     setShowRoleDialog(true);
   };
 
-  // F008 v3.2 BR-12 / AC-11 / TS-F008-SM-INT-001~007:
-  // 合併 UX：依差異依序呼叫 PATCH /role 與 PATCH /sales-manager-flag
-  const handleRoleConfirm = async (newRole: UserRole, newIsSalesManager: boolean) => {
+  // F006a v1.0 / AD-E07 v3.0：依新身份 → 系統角色 + 業務角色，依差異呼叫對應端點
+  const handleRoleConfirm = async (newIdentity: EffectiveIdentity) => {
     if (!roleTarget) return;
 
-    const currentRole = roleTarget.role;
-    const currentIsSm = roleTarget.is_sales_manager === true;
-    const roleChanged = newRole !== currentRole;
-    const newRoleIsUser = newRole === 'user';
-    // 旗標變動：僅當新 role=user 時才比對；其他情境視為無 flag 變動
-    const flagChanged = newRoleIsUser && newIsSalesManager !== currentIsSm;
+    const current = deriveEffectiveIdentity(roleTarget.role, roleTarget.business_role);
+    if (current === newIdentity) {
+      setShowRoleDialog(false);
+      setRoleTarget(null);
+      return;
+    }
+
+    const target = identityToRoles(newIdentity);
+    const roleChanged = target.role !== roleTarget.role;
+    const businessRoleChanged = target.businessRole !== roleTarget.business_role;
 
     setRoleLoading(true);
 
-    let roleSuccess = false;
-    let roleErrorMessage: string | null = null;
-    let flagAttempted = false;
-    let flagSuccess = false;
-    let flagErrorMessage: string | null = null;
-
-    // 第一步：PATCH /role（若 role 有變動）
+    // 步驟 1: PATCH /role（系統角色變動時）
     if (roleChanged) {
       try {
-        await updateAccountRole(roleTarget.id, { role: newRole });
-        roleSuccess = true;
+        await updateAccountRole(roleTarget.id, { role: target.role });
       } catch (err: unknown) {
-        // role 端點失敗 → 中止，不呼叫 flag
-        const error = err as { response?: { data?: { error?: string; message?: string } } };
-        roleErrorMessage =
-          error?.response?.data?.message || '角色變更失敗，請稍後再試';
-        // ACCOUNT_LAST_ADMIN 走特殊訊息（spec 已定義訊息文字）
-        showToast(roleErrorMessage, 'error');
+        const error = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
+        const status = error?.response?.status;
+        const code = error?.response?.data?.error;
+        let msg = error?.response?.data?.message || '角色變更失敗，請稍後再試';
+        if (status === 403) msg = error?.response?.data?.message || '您沒有權限執行此操作。';
+        if (status === 422 && code === 'ACCOUNT_LAST_ADMIN') {
+          msg = '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。';
+        }
+        showToast(msg, 'error');
         setRoleLoading(false);
         return;
       }
     }
 
-    // 第二步：PATCH /sales-manager-flag（僅當 newRole=user 且 flag 有變更）
-    // 情境 B 變形：升 admin 時跳過 flag 呼叫（避免 ACCOUNT_FLAG_NOT_APPLICABLE）
-    if (newRoleIsUser && flagChanged) {
-      flagAttempted = true;
+    // 步驟 2: PATCH /business-role（業務角色變動時，僅 user 適用；admin 帳號 business_role 邏輯上為 null，不需呼叫）
+    if (businessRoleChanged && target.role === 'user') {
       try {
-        await updateAccountSalesManagerFlag(roleTarget.id, {
-          isSalesManager: newIsSalesManager,
-        });
-        flagSuccess = true;
+        await updateBusinessRole(roleTarget.id, { business_role: target.businessRole });
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string; message?: string } } };
-        flagErrorMessage =
-          error?.response?.data?.message || '業務主管權限調整失敗';
+        const error = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
+        const status = error?.response?.status;
+        let msg = error?.response?.data?.message || '業務角色變更失敗，請稍後再試';
+        if (status === 403) msg = error?.response?.data?.message || '您沒有權限執行此操作。';
+        if (status === 422) msg = error?.response?.data?.message || '業務角色值無效';
+        if (status === 409) msg = error?.response?.data?.message || '此帳號狀態無法變更角色';
+        showToast(
+          `系統角色已更新但業務角色變更失敗：${msg}`,
+          'warning',
+        );
+        setShowRoleDialog(false);
+        setRoleTarget(null);
+        setRoleLoading(false);
+        fetchAccounts();
+        return;
       }
     }
 
-    // 訊息組合 — 部分成功時警示
-    if (roleSuccess && flagAttempted && !flagSuccess) {
-      // 情境 E：role 成功但 flag 失敗 → 不 rollback role
-      showToast(
-        `角色已變更為 ${getRoleDisplayName(newRole)}，但業務主管權限調整失敗，請稍後重試`,
-        'warning',
-      );
-    } else if (roleSuccess || flagSuccess) {
-      // 全成功的情況
-      let msg = '';
-      if (roleSuccess) {
-        msg = `角色已變更為 ${getRoleDisplayName(newRole)}`;
-        if (newRoleIsUser && flagAttempted && flagSuccess) {
-          msg += `，業務主管權限${newIsSalesManager ? '已啟用' : '已停用'}`;
-        }
-      } else if (flagSuccess) {
-        // 情境 C / D：僅 flag 變更
-        msg = `業務主管權限${newIsSalesManager ? '已啟用' : '已停用'}`;
-      }
-      showToast(msg, 'success');
-    } else if (flagAttempted && !flagSuccess && !roleChanged) {
-      // 僅 flag 操作但失敗
-      showToast(flagErrorMessage || '業務主管權限調整失敗', 'error');
-    }
-
-    // 不論成功或部分成功，皆關閉 dialog 並重新載入列表
+    showToast(`角色已變更為 ${getEffectiveIdentityDisplayName(newIdentity)}`, 'success');
     setShowRoleDialog(false);
     setRoleTarget(null);
     setRoleLoading(false);
@@ -269,7 +258,7 @@ export function AccountListPage() {
   };
 
   const handleRoleChange = (value: string) => {
-    setRoleFilter(value);
+    setRoleFilter(value as '' | EffectiveIdentity);
     setPage(1);
   };
 
@@ -325,11 +314,14 @@ export function AccountListPage() {
             <select
               value={roleFilter}
               onChange={(e) => handleRoleChange(e.target.value)}
+              aria-label="角色"
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">全部角色</option>
-              <option value="admin">管理者（Admin）</option>
-              <option value="user">使用者（User）</option>
+              <option value="admin">系統管理者</option>
+              <option value="director">業務部長</option>
+              <option value="section_chief">業務處長</option>
+              <option value="user">一般使用者</option>
             </select>
             <select
               value={statusFilter}
@@ -358,7 +350,17 @@ export function AccountListPage() {
                     <tr className="border-b border-gray-200 bg-gray-50/60">
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">姓名</th>
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">Email</th>
-                      <th className="text-left px-5 py-3 font-semibold text-gray-600">角色</th>
+                      <th className="text-left px-5 py-3 font-semibold text-gray-600">
+                        <span className="inline-flex items-center gap-1">
+                          角色
+                          <span
+                            title="單一角色維度（系統管理者 / 業務部長 / 業務處長 / 一般使用者）。系統管理者自動具備所有業務權限。"
+                            className="cursor-help text-gray-400"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5" />
+                          </span>
+                        </span>
+                      </th>
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">建立日期</th>
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">操作</th>
@@ -373,12 +375,10 @@ export function AccountListPage() {
                         <td className="px-5 py-3 font-medium text-gray-900">{account.name}</td>
                         <td className="px-5 py-3 text-gray-600">{account.email}</td>
                         <td className="px-5 py-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <RoleBadge role={account.role} />
-                            {account.role === 'user' && account.is_sales_manager === true && (
-                              <SalesManagerChip accountId={account.id} />
-                            )}
-                          </div>
+                          <RoleBadge
+                            role={account.role}
+                            businessRole={account.business_role}
+                          />
                         </td>
                         <td className="px-5 py-3">
                           <StatusBadge status={account.status} />
@@ -504,12 +504,15 @@ export function AccountListPage() {
         onCancel={() => { setShowToggleDialog(false); setToggleTarget(null); }}
       />
 
-      {/* Change Role Dialog (F008 v3.2 合併 UX) */}
+      {/* Change Role Dialog (F006a / AD-E07 v3.0 4-radio 單維度) */}
       <ChangeRoleDialog
         open={showRoleDialog}
         accountName={roleTarget?.name ?? ''}
-        currentRole={roleTarget?.role ?? 'user'}
-        currentIsSalesManager={roleTarget?.is_sales_manager === true}
+        currentIdentity={
+          roleTarget
+            ? deriveEffectiveIdentity(roleTarget.role, roleTarget.business_role)
+            : 'user'
+        }
         loading={roleLoading}
         onConfirm={handleRoleConfirm}
         onCancel={() => { setShowRoleDialog(false); setRoleTarget(null); }}
