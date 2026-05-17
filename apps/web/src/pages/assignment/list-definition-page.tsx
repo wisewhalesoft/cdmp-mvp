@@ -77,6 +77,77 @@ function formatDateTime(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * E07 P1：依名單 stage 決定「編輯」按鈕的跳轉目的地。
+ *
+ * - draft → list-edit-draft 編輯欄位
+ * - dept_ratio → 部門比例設定頁
+ * - personnel_ratio → 個別業務比例設定頁
+ * - approval → 簽核審閱頁
+ * - ready → ready-summary 詳情頁
+ */
+function stageNavTarget(listNo: string, stage: string): string {
+  switch (stage) {
+    case 'draft':
+      return `/assignment/list-definitions/${listNo}/edit`;
+    case 'dept_ratio':
+      return `/assignment/lists/${listNo}/dept-ratio`;
+    case 'personnel_ratio':
+      return `/assignment/lists/${listNo}/personnel-ratio`;
+    case 'approval':
+      return `/assignment/lists/${listNo}/approval`;
+    case 'ready':
+      return `/assignment/ready-summary/${listNo}`;
+    default:
+      return `/assignment/list-definitions/${listNo}/edit`;
+  }
+}
+
+/**
+ * Phase 3 P2-5：將 list 主要欄位組成簡短的篩選條件預覽。
+ *
+ * 從 prodKind / specTp / caseYear / caseStatus / settleSrc / cardType 萃取，
+ * 取前 3 個非空條件用「、」分隔顯示，超過則加「…」。
+ */
+function buildConditionPreview(list: AssignmentListItem): string {
+  const items: string[] = [];
+  if (list.prodKind) items.push(`PROD_KIND=${list.prodKind}`);
+  if (list.specTp) {
+    const vs = list.specTp.split('$$').filter(Boolean).join(',');
+    items.push(`SPEC_TP in (${vs})`);
+  }
+  if (list.caseYear) {
+    const vs = list.caseYear.split('$$').filter(Boolean).join(',');
+    items.push(`CASEYEAR in (${vs})`);
+  }
+  if (list.caseStatus) {
+    const vs = list.caseStatus.split('$$').filter(Boolean).join(',');
+    items.push(`CASE_STATUS in (${vs})`);
+  }
+  if (list.settleSrc) items.push(`SETTLE_SRC=${list.settleSrc}`);
+  if (list.cardType) items.push(`CARD_TYPE=${list.cardType}`);
+  if (items.length === 0) return '—';
+  const head = items.slice(0, 3).join('、');
+  return items.length > 3 ? `${head} …(+${items.length - 3})` : head;
+}
+
+function stageNavLabel(stage: string): string {
+  switch (stage) {
+    case 'draft':
+      return '編輯草稿';
+    case 'dept_ratio':
+      return '設定部門比例';
+    case 'personnel_ratio':
+      return '設定個別業務比例';
+    case 'approval':
+      return '進入簽核審閱';
+    case 'ready':
+      return '查看 ready 詳情';
+    default:
+      return '查看名單';
+  }
+}
+
 interface StageFilterChipProps {
   stage: Stage;
   count: number;
@@ -427,16 +498,18 @@ export function ListDefinitionPage() {
             <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
-                disabled={writeDisabled}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid="btn-stage0-estimate"
+                onClick={() => navigate('/assignment/estimate')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
               >
                 <Calculator className="w-4 h-4" />
                 Stage 0 試算
               </button>
               <button
                 type="button"
-                disabled={writeDisabled}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid="btn-ready-summary"
+                onClick={() => navigate('/assignment/ready-summary')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
               >
                 <PlayCircle className="w-4 h-4" />
                 執行月跑
@@ -513,15 +586,19 @@ export function ListDefinitionPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase">
+                <thead
+                  data-testid="list-definition-table-head"
+                  className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase"
+                >
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium w-[12%]">LIST_NO</th>
-                    <th className="text-left px-4 py-3 font-medium w-[24%]">名單名稱</th>
-                    <th className="text-left px-4 py-3 font-medium w-[12%]">階段</th>
-                    <th className="text-left px-4 py-3 font-medium w-[14%]">商品 / 卡別</th>
-                    <th className="text-left px-4 py-3 font-medium w-[12%]">建立者</th>
-                    <th className="text-left px-4 py-3 font-medium w-[12%]">建立時間</th>
-                    <th className="text-right px-4 py-3 font-medium w-[14%]">操作</th>
+                    <th className="text-left px-4 py-3 font-medium w-[11%]">LIST_NO</th>
+                    <th className="text-left px-4 py-3 font-medium w-[18%]">名單名稱</th>
+                    <th className="text-left px-4 py-3 font-medium w-[10%]">階段</th>
+                    <th className="text-left px-4 py-3 font-medium w-[20%]">篩選條件</th>
+                    <th className="text-left px-4 py-3 font-medium w-[7%]">CR 開關</th>
+                    <th className="text-left px-4 py-3 font-medium w-[10%]">建立者</th>
+                    <th className="text-left px-4 py-3 font-medium w-[11%]">建立時間</th>
+                    <th className="text-right px-4 py-3 font-medium w-[13%]">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -534,9 +611,31 @@ export function ListDefinitionPage() {
                       <td className="px-4 py-3">
                         <StageBadge stage={(list.status === 'inactive' ? 'disabled' : list.stage) as Stage} />
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs">
-                        {list.prodKind ?? '—'}
-                        {list.cardType ? ` / ${list.cardType}` : ''}
+                      <td
+                        className="px-4 py-3 text-gray-600 text-xs"
+                        data-testid={`list-conditions-${list.listNo}`}
+                        title={buildConditionPreview(list)}
+                      >
+                        <span className="block truncate max-w-[260px]">
+                          {buildConditionPreview(list)}
+                        </span>
+                      </td>
+                      <td
+                        className="px-4 py-3 text-xs"
+                        data-testid={`list-cr-${list.listNo}`}
+                      >
+                        {list.crEnabled === true ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                            <CheckCircle2 className="w-3 h-3" />
+                            啟用
+                          </span>
+                        ) : list.crEnabled === false ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">
+                            停用
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{list.createdBy}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs font-mono">
@@ -546,9 +645,10 @@ export function ListDefinitionPage() {
                         <div className="inline-flex items-center gap-1">
                           <button
                             type="button"
-                            title="編輯名單"
+                            title={stageNavLabel(list.stage)}
+                            data-testid={`btn-open-${list.listNo}`}
                             onClick={() =>
-                              navigate(`/assignment/list-definitions/${list.listNo}/edit`)
+                              navigate(stageNavTarget(list.listNo, list.stage))
                             }
                             className="p-1.5 text-xs text-primary hover:bg-blue-50 rounded transition-colors"
                           >
@@ -624,7 +724,7 @@ export function ListDefinitionPage() {
         </div>
       </main>
 
-      {/* 階段推進 / Rollback Modal（F078~F089） */}
+      {/* 階段推進 / Rollback Modal（F078~F089） + Phase 3 P2-5：含條件數 / CR 狀態詳情 */}
       <ConfirmModal
         open={stageActionTarget !== null}
         variant={stageActionTarget?.kind === 'rollback' ? 'warning' : 'info'}
@@ -639,6 +739,43 @@ export function ListDefinitionPage() {
               <p>
                 名單 <code className="font-mono text-primary">{stageActionTarget.list.listNo}</code> 將{stageActionLabel(stageActionTarget.list, stageActionTarget.kind)}。
               </p>
+              {/* Phase 3 P2-5：推進前顯示條件數 + CR 狀態 */}
+              <div
+                data-testid="stage-action-detail"
+                className="rounded-md bg-gray-50 border border-gray-200 p-3 text-xs space-y-1 text-left"
+              >
+                <div className="flex justify-between">
+                  <span className="text-gray-500">名單名稱</span>
+                  <span className="text-gray-800 font-medium">
+                    {stageActionTarget.list.listNm}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">商品 / 卡別</span>
+                  <span className="text-gray-800 font-medium">
+                    {stageActionTarget.list.prodKind ?? '—'}
+                    {stageActionTarget.list.cardType
+                      ? ` / ${stageActionTarget.list.cardType}`
+                      : ''}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">CR 狀態</span>
+                  <span className="text-gray-800 font-medium">
+                    {stageActionTarget.list.crEnabled === true
+                      ? '啟用'
+                      : stageActionTarget.list.crEnabled === false
+                        ? '停用'
+                        : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">篩選條件</span>
+                  <span className="text-gray-800 font-medium text-right max-w-[60%]">
+                    {buildConditionPreview(stageActionTarget.list)}
+                  </span>
+                </div>
+              </div>
               {stageActionTarget.kind === 'rollback' && (
                 <p className="text-amber-700">
                   Rollback 將清空當前階段設定，請確認此操作。

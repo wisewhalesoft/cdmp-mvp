@@ -259,4 +259,24 @@ describe('ListDefinitionPage (FE-2 M01 名單定義)', () => {
     expect(screen.getByTestId('visible-count')).toHaveTextContent('3');
     expect(screen.getByText(/GET \/api\/v1\/assignment\/lists\?ym=202605/)).toBeInTheDocument();
   });
+
+  describe('Phase 3 P2-5', () => {
+    it('表頭含「篩選條件」與「CR 開關」欄', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('list-definition-table-head')).toBeInTheDocument(),
+      );
+      const head = screen.getByTestId('list-definition-table-head');
+      expect(head.textContent).toContain('篩選條件');
+      expect(head.textContent).toContain('CR 開關');
+    });
+
+    it('每筆名單渲染條件預覽 cell + CR 狀態 badge', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('list-conditions-OB202605001')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('list-cr-OB202605001')).toBeInTheDocument();
+    });
+  });
 });

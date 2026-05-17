@@ -27,6 +27,10 @@ export interface AssignmentListItem {
   prodKind: string | null;
   caseYear: string | null;
   specTp: string | null;
+  /** Phase 3 P2-5：case_status（'$$' 分隔多值，例 '01$$02'） */
+  caseStatus?: string | null;
+  /** Phase 3 P2-5：CR 回分啟用 */
+  crEnabled?: boolean;
   listPeriodStart: number | null;
   listPeriodEnd: number | null;
   listInterval: number | null;
