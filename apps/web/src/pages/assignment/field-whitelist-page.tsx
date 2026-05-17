@@ -8,6 +8,7 @@ import {
   Hash,
   Calendar,
   Tags,
+  Info,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -87,6 +88,8 @@ export function FieldWhitelistPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('active');
+  // Phase 4 P3-3：type filter
+  const [typeFilter, setTypeFilter] = useState<'all' | FieldType>('all');
 
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
@@ -125,14 +128,30 @@ export function FieldWhitelistPage() {
   }, [fetchFields]);
 
   const filteredFields = useMemo(() => {
+    let list = fields;
+    if (typeFilter !== 'all') {
+      list = list.filter((f) => f.fieldType === typeFilter);
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return fields;
-    return fields.filter(
-      (f) =>
-        f.columnName.toLowerCase().includes(q) ||
-        f.displayName.toLowerCase().includes(q),
-    );
-  }, [fields, search]);
+    if (q) {
+      list = list.filter(
+        (f) =>
+          f.columnName.toLowerCase().includes(q) ||
+          f.displayName.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [fields, search, typeFilter]);
+
+  // Phase 4 P3-3：總計 / 啟用 / 停用 統計
+  const fieldStats = useMemo(() => {
+    const active = fields.filter((f) => f.isActive).length;
+    return {
+      total: fields.length,
+      active,
+      inactive: fields.length - active,
+    };
+  }, [fields]);
 
   const resetCreateForm = () => {
     setNewColumn('');
@@ -242,8 +261,8 @@ export function FieldWhitelistPage() {
         )}
 
         <section className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-md min-w-[200px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
@@ -253,6 +272,19 @@ export function FieldWhitelistPage() {
                 className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
+            <select
+              data-testid="filter-type"
+              value={typeFilter}
+              onChange={(e) =>
+                setTypeFilter(e.target.value as 'all' | FieldType)
+              }
+              className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">類型：全部</option>
+              <option value="categorical">categorical</option>
+              <option value="numeric">numeric</option>
+              <option value="date">date</option>
+            </select>
             <select
               data-testid="filter-active"
               value={activeFilter}
@@ -265,6 +297,17 @@ export function FieldWhitelistPage() {
               <option value="inactive">已停用</option>
               <option value="all">全部</option>
             </select>
+            {/* Phase 4 P3-3：統計列 */}
+            <div
+              data-testid="field-stats"
+              className="ml-auto text-xs text-gray-500"
+            >
+              總計 <span className="font-mono font-medium text-gray-700">{fieldStats.total}</span> 筆
+              <span className="mx-1 text-gray-300">·</span>
+              啟用 <span className="font-mono font-medium text-green-600">{fieldStats.active}</span>
+              <span className="mx-1 text-gray-300">/</span>
+              停用 <span className="font-mono font-medium text-gray-500">{fieldStats.inactive}</span>
+            </div>
           </div>
         </section>
 
@@ -351,6 +394,39 @@ export function FieldWhitelistPage() {
             </div>
           )}
         </section>
+
+        {/* Phase 4 P3-3：F075 商業規則摘要 footer */}
+        <div
+          data-testid="field-whitelist-rules-footer"
+          className="rounded-lg p-3 bg-blue-50/50 border border-blue-100 text-xs text-gray-600 flex items-start gap-2"
+        >
+          <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-gray-700 mb-0.5">F075 商業規則摘要</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>
+                <strong>BR-1</strong>：<code className="font-mono">column_name</code> 為唯一鍵，
+                新增時不分啟用 / 停用一律檢查重複
+                （違反回 422 <code className="font-mono">WHITELIST_FIELD_DUPLICATE</code>）。
+              </li>
+              <li>
+                <strong>BR-3</strong>：停用「不回溯」既有名單條件；
+                月跑 Stage 1 直接讀 <code className="font-mono">ob_list_definition</code> JSONB，
+                不 join <code className="font-mono">field_whitelist</code> 驗證。
+              </li>
+              <li>
+                <strong>BR-4</strong>：<code className="font-mono">field_type</code> 由 categorical 改為其他類別時，
+                <strong>不自動刪除</strong> F076 既有可選值
+                （軟停用，<code className="font-mono">deactivation_reason = 'field_type_changed'</code>，
+                PO 決議 F076-C）。
+              </li>
+              <li>
+                <strong>BR-7</strong>：舊名單（F050 / F051）沿用固定欄位邏輯；
+                本白名單僅影響 US-106 後續新名單定義。
+              </li>
+            </ul>
+          </div>
+        </div>
       </main>
 
       {/* Create field modal */}

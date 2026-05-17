@@ -160,4 +160,52 @@ describe('FieldWhitelistPage (F075)', () => {
     );
     expect(mockedGetCount).not.toHaveBeenCalled();
   });
+
+  describe('Phase 4 P3-3', () => {
+    it('顯示總計 / 啟用 / 停用 統計列', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('field-stats')).toBeInTheDocument(),
+      );
+      const stats = screen.getByTestId('field-stats');
+      // 至少含「總計」與某數字
+      expect(stats.textContent).toMatch(/總計|筆/);
+    });
+
+    it('顯示 type filter dropdown（categorical/numeric/date/all）', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('filter-type')).toBeInTheDocument(),
+      );
+      const sel = screen.getByTestId('filter-type') as HTMLSelectElement;
+      // 4 options
+      expect(sel.options.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('type filter=numeric 過濾為 numeric 欄位', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByText('AMOUNT')).toBeInTheDocument(),
+      );
+      fireEvent.change(screen.getByTestId('filter-type'), {
+        target: { value: 'numeric' },
+      });
+      // PROD_KIND (categorical) 應被過濾掉
+      expect(screen.queryByText('PROD_KIND')).not.toBeInTheDocument();
+      // AMOUNT (numeric) 仍在
+      expect(screen.getByText('AMOUNT')).toBeInTheDocument();
+    });
+
+    it('footer 顯示 F075 商業規則摘要（BR-1/3/4/7）', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('field-whitelist-rules-footer')).toBeInTheDocument(),
+      );
+      const footer = screen.getByTestId('field-whitelist-rules-footer');
+      expect(footer.textContent).toContain('BR-1');
+      expect(footer.textContent).toContain('BR-3');
+      expect(footer.textContent).toContain('BR-4');
+      expect(footer.textContent).toContain('BR-7');
+    });
+  });
 });

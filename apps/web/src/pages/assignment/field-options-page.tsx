@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Tags,
   AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -104,6 +105,16 @@ export function FieldOptionsPage() {
         o.optionLabel.toLowerCase().includes(q),
     );
   }, [options, search]);
+
+  // Phase 4 P3-4：統計列
+  const optionStats = useMemo(() => {
+    const active = options.filter((o) => o.isActive).length;
+    return {
+      total: options.length,
+      active,
+      inactive: options.length - active,
+    };
+  }, [options]);
 
   const handleCreate = async () => {
     setCreateError(null);
@@ -244,6 +255,17 @@ export function FieldOptionsPage() {
               />
               <span className="text-sm text-gray-700">顯示已停用</span>
             </label>
+            {/* Phase 4 P3-4：統計列 */}
+            <div
+              data-testid="option-stats"
+              className="ml-auto text-xs text-gray-500"
+            >
+              總計 <span className="font-mono font-medium text-gray-700">{optionStats.total}</span> 筆
+              <span className="mx-1 text-gray-300">·</span>
+              啟用 <span className="font-mono font-medium text-green-600">{optionStats.active}</span>
+              <span className="mx-1 text-gray-300">/</span>
+              停用 <span className="font-mono font-medium text-gray-500">{optionStats.inactive}</span>
+            </div>
           </div>
         </section>
 
@@ -328,6 +350,43 @@ export function FieldOptionsPage() {
             </div>
           )}
         </section>
+
+        {/* Phase 4 P3-4：F076 商業規則摘要 footer */}
+        <div
+          data-testid="field-options-rules-footer"
+          className="rounded-lg p-3 bg-blue-50/50 border border-blue-100 text-xs text-gray-600 flex items-start gap-2"
+        >
+          <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-gray-700 mb-0.5">
+              F076 v1.1 商業規則摘要（含 PO 決議 F076-C）
+            </p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>
+                <strong>BR-1</strong>：
+                <code className="font-mono">(column_name, option_value)</code> 複合唯一鍵，
+                新增時不分啟用 / 停用一律檢查重複
+                （違反回 422 <code className="font-mono">OPTION_VALUE_DUPLICATE</code>）。
+              </li>
+              <li>
+                <strong>BR-3 / BR-10</strong>：停用「不回溯」既有名單；
+                inactive 值保留供歷史追溯，月跑 Stage 1 不阻擋。
+              </li>
+              <li>
+                <strong>BR-7（v1.1）</strong>：F075 將欄位{' '}
+                <code className="font-mono">field_type</code> 從 categorical 改為其他類別時，
+                本表既有可選值<strong>批次軟停用</strong>（
+                <code className="font-mono">is_active = false</code>，
+                <code className="font-mono">deactivation_reason = 'field_type_changed'</code>），
+                不 CASCADE 刪除。
+              </li>
+              <li>
+                <strong>BR-9</strong>：MVP 不支援可選值排序；
+                列表依 <code className="font-mono">option_value</code> 升冪排列。
+              </li>
+            </ul>
+          </div>
+        </div>
       </main>
 
       {/* Create option modal */}

@@ -174,4 +174,25 @@ describe('FieldOptionsPage (F076)', () => {
       expect(mockedReactivateOption).toHaveBeenCalledWith('PROD_KIND', 'M5'),
     );
   });
+
+  describe('Phase 4 P3-4', () => {
+    it('顯示總計 / 啟用 / 停用 統計列', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('option-stats')).toBeInTheDocument(),
+      );
+      const stats = screen.getByTestId('option-stats');
+      expect(stats.textContent).toMatch(/總計|筆/);
+    });
+
+    it('footer 顯示 F076 商業規則摘要', async () => {
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('field-options-rules-footer')).toBeInTheDocument(),
+      );
+      const footer = screen.getByTestId('field-options-rules-footer');
+      expect(footer.textContent).toContain('BR-1');
+      expect(footer.textContent).toContain('F076');
+    });
+  });
 });
