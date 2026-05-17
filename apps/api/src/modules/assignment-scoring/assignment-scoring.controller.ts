@@ -19,6 +19,8 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { AssignmentScoringService } from './assignment-scoring.service';
 import { GetScoringQueryDto } from './dto/get-scoring-query.dto';
 import { UpdateDimensionsDto } from './dto/update-dimensions.dto';
@@ -50,7 +52,7 @@ import { GetTierMappingQueryDto } from './dto/get-tier-mapping-query.dto';
  *   - 寫入端點額外標 `@RequireDirector()` → 走 DirectorGuard（M02 寫入限部長）
  */
 @Controller('assignment/scoring')
-@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class AssignmentScoringController {
   constructor(private readonly service: AssignmentScoringService) {}
@@ -66,6 +68,7 @@ export class AssignmentScoringController {
 
   @Put('dimensions')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async updateDimensions(@Body() dto: UpdateDimensionsDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -77,6 +80,7 @@ export class AssignmentScoringController {
   @Post('dimensions')
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async createDimension(@Body() dto: CreateDimensionDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -87,6 +91,7 @@ export class AssignmentScoringController {
 
   @Put('dimensions/:columnName/disable')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async disableDimension(
     @Param('columnName') columnName: string,
     @Query() query: DisableDimensionQueryDto,
@@ -119,6 +124,7 @@ export class AssignmentScoringController {
 
   @Put('card-levels')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async updateCardLevels(@Body() dto: UpdateCardLevelsDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -137,6 +143,7 @@ export class AssignmentScoringController {
   @Post('card-levels')
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async createCardLevel(@Body() dto: CreateCardLevelDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -153,6 +160,7 @@ export class AssignmentScoringController {
    */
   @Delete('card-levels')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async deleteCardLevel(
     @Query() query: DeleteCardLevelQueryDto,
     @Req() req: any,
@@ -180,6 +188,7 @@ export class AssignmentScoringController {
 
   @Put('tier-mapping')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async updateTierMapping(
     @Query() query: UpdateTierMappingQueryDto,
     @Body() dto: UpdateTierMappingDto,
@@ -201,6 +210,7 @@ export class AssignmentScoringController {
   @Post('tier-mapping')
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async createTierMapping(@Body() dto: CreateTierMappingDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -217,6 +227,7 @@ export class AssignmentScoringController {
    */
   @Delete('tier-mapping')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async deleteTierMapping(
     @Query() query: DeleteTierMappingQueryDto,
     @Req() req: any,

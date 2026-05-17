@@ -18,6 +18,8 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { AssignmentCodeService } from './assignment-code.service';
 import { ListCodesQueryDto } from './dto/list-codes-query.dto';
 import { CreateCodeDto } from './dto/create-code.dto';
@@ -36,7 +38,7 @@ import { UpdateCodeDto } from './dto/update-code.dto';
  *   - 寫入端點額外標 `@RequireDirector()` → 走 DirectorGuard（M06 白名單寫入限部長）
  */
 @Controller('assignment/codes')
-@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class AssignmentCodeController {
   constructor(private readonly service: AssignmentCodeService) {}
@@ -49,6 +51,7 @@ export class AssignmentCodeController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async create(@Body() dto: CreateCodeDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -59,6 +62,7 @@ export class AssignmentCodeController {
 
   @Put(':tblId/:tblCd')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async update(
     @Param('tblId') tblId: string,
     @Param('tblCd') tblCd: string,
@@ -74,6 +78,7 @@ export class AssignmentCodeController {
 
   @Put(':tblId/:tblCd/disable')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async disable(
     @Param('tblId') tblId: string,
     @Param('tblCd') tblCd: string,

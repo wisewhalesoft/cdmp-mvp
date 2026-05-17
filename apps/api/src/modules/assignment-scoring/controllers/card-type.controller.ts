@@ -19,6 +19,8 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { CardTypeService } from '../services/card-type.service';
 import { CreateCardTypeDto } from '../dto/create-card-type.dto';
 import { UpdateCardTypeDto } from '../dto/update-card-type.dto';
@@ -44,7 +46,7 @@ import { DeleteCardTypeQueryDto } from '../dto/delete-card-type-query.dto';
  *   - DELETE /:cardType               F072 級聯刪除（需 confirmCascade=true）
  */
 @Controller('assignment/scoring/card-types')
-@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class CardTypeController {
   constructor(private readonly service: CardTypeService) {}
@@ -61,6 +63,7 @@ export class CardTypeController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async createCardType(@Body() dto: CreateCardTypeDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -80,6 +83,7 @@ export class CardTypeController {
 
   @Put(':cardType')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async updateCardType(
     @Param('cardType') cardType: string,
     @Body() dto: UpdateCardTypeDto,
@@ -113,6 +117,7 @@ export class CardTypeController {
 
   @Delete(':cardType')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async deleteCardType(
     @Param('cardType') cardType: string,
     @Query() query: DeleteCardTypeQueryDto,

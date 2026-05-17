@@ -53,7 +53,12 @@ describe('AssignmentCodeController (HTTP integration)', () => {
   // 可動態切換 current user 以驗證不同 role 場景
   let currentUser: CurrentUser = null;
 
+  // v2.0 FeatureFlagGuard：寫入端點需 ENABLE_E07_REFACTOR_PHASE3=true
+  const FLAG = 'ENABLE_E07_REFACTOR_PHASE3';
+  const originalFlag = process.env[FLAG];
+
   beforeAll(async () => {
+    process.env[FLAG] = 'true';
     serviceMock = {
       listCodes: vi.fn(),
       createCode: vi.fn(),
@@ -101,6 +106,8 @@ describe('AssignmentCodeController (HTTP integration)', () => {
 
   afterAll(async () => {
     await app?.close();
+    if (originalFlag === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = originalFlag;
   });
 
   beforeEach(() => {

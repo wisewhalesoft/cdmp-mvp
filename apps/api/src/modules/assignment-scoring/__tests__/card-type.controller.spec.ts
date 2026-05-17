@@ -60,7 +60,12 @@ describe('CardTypeController — RBAC Matrix', () => {
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
 
+  // v2.0 FeatureFlagGuard：寫入端點需 ENABLE_E07_REFACTOR_PHASE3=true
+  const FLAG = 'ENABLE_E07_REFACTOR_PHASE3';
+  const originalFlag = process.env[FLAG];
+
   beforeAll(async () => {
+    process.env[FLAG] = 'true';
     serviceMock = {
       listCardTypes: vi.fn().mockResolvedValue({ cardTypes: [] }),
       createCardType: vi.fn().mockResolvedValue({
@@ -137,6 +142,8 @@ describe('CardTypeController — RBAC Matrix', () => {
 
   afterAll(async () => {
     await app?.close();
+    if (originalFlag === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = originalFlag;
   });
 
   beforeEach(() => {

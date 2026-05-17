@@ -18,6 +18,8 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { PooldataFieldOptionService } from '../services/pooldata-field-option.service';
 import { CreatePooldataOptionDto } from '../dto/create-pooldata-option.dto';
 import { UpdatePooldataOptionDto } from '../dto/update-pooldata-option.dto';
@@ -40,7 +42,7 @@ import { ListPooldataOptionsQueryDto } from '../dto/list-pooldata-options-query.
  *   - PATCH /:optionValue/deactivate   F076 §5.4 停用專屬（reason 必填 ≤200 字）
  */
 @Controller('api/v1/pooldata-fields/:columnName/options')
-@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class PooldataFieldOptionController {
   constructor(private readonly service: PooldataFieldOptionService) {}
@@ -63,6 +65,7 @@ export class PooldataFieldOptionController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async createOption(
     @Param('columnName') columnName: string,
     @Body() dto: CreatePooldataOptionDto,
@@ -83,6 +86,7 @@ export class PooldataFieldOptionController {
 
   @Patch(':optionValue/deactivate')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async deactivateOption(
     @Param('columnName') columnName: string,
     @Param('optionValue') optionValue: string,
@@ -105,6 +109,7 @@ export class PooldataFieldOptionController {
 
   @Patch(':optionValue')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async reactivateOption(
     @Param('columnName') columnName: string,
     @Param('optionValue') optionValue: string,

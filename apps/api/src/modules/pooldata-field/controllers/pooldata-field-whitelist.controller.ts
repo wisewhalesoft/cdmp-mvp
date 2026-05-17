@@ -19,6 +19,8 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { PooldataFieldWhitelistService } from '../services/pooldata-field-whitelist.service';
 import { CreatePooldataFieldDto } from '../dto/create-pooldata-field.dto';
 import { UpdatePooldataFieldDto } from '../dto/update-pooldata-field.dto';
@@ -43,7 +45,7 @@ import { ListPooldataFieldsQueryDto } from '../dto/list-pooldata-fields-query.dt
  *   - DELETE /:columnName           F075 §5.4 軟刪除（is_active=false）
  */
 @Controller('api/v1/pooldata-fields')
-@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class PooldataFieldWhitelistController {
   constructor(private readonly service: PooldataFieldWhitelistService) {}
@@ -70,6 +72,7 @@ export class PooldataFieldWhitelistController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async createField(@Body() dto: CreatePooldataFieldDto, @Req() req: any) {
     const actor = {
       userId: req.user.userId,
@@ -89,6 +92,7 @@ export class PooldataFieldWhitelistController {
 
   @Patch(':columnName')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async updateField(
     @Param('columnName') columnName: string,
     @Body() dto: UpdatePooldataFieldDto,
@@ -113,6 +117,7 @@ export class PooldataFieldWhitelistController {
 
   @Delete(':columnName')
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async disableField(
     @Param('columnName') columnName: string,
     @Req() req: any,
