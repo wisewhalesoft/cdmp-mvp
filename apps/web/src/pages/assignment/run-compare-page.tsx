@@ -8,6 +8,9 @@ import {
   TrendingUp,
   TrendingDown,
   Users,
+  AlertOctagon,
+  CheckCircle2,
+  ShieldAlert,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,8 +18,18 @@ import { useToast } from '@/components/ui/toast';
 import {
   compareRuns,
   downloadCompareExport,
+  listRuns,
   type CompareRunsResponse,
+  type RunListItem,
 } from '@/api/assignment-run';
+import { RunSelector } from './_components/run-selector';
+
+/**
+ * F067 NFR-005 不一致率警示閾值
+ *
+ * 不一致率 = customersChangedAssigneeCount / totalB；超過則顯示 algorithm-changed banner。
+ */
+const NFR005_THRESHOLD = 0.03;
 
 /**
  * F067 — 兩個月跑比對頁
@@ -36,7 +49,7 @@ import {
 export function RunComparePage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const runA = searchParams.get('runA') ?? '';
   const runB = searchParams.get('runB') ?? '';
 
@@ -44,6 +57,27 @@ export function RunComparePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [availableRuns, setAvailableRuns] = useState<RunListItem[]>([]);
+
+  // 載入可比對的 runs（status=completed）
+  useEffect(() => {
+    let aborted = false;
+    void (async () => {
+      try {
+        const data = await listRuns();
+        if (!aborted) {
+          setAvailableRuns(
+            (data.runs ?? []).filter((r) => r.status === 'completed'),
+          );
+        }
+      } catch {
+        // 無 runs 不致命
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!runA || !runB) {
@@ -71,6 +105,13 @@ export function RunComparePage() {
     };
   }, [runA, runB]);
 
+  const handleCompare = (a: string, b: string) => {
+    setSearchParams({ runA: a, runB: b }, { replace: true });
+  };
+
+  const handleChangeA = (a: string) => setSearchParams({ runA: a, runB });
+  const handleChangeB = (b: string) => setSearchParams({ runA, runB: b });
+
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -86,6 +127,22 @@ export function RunComparePage() {
 
   const deltaTotal = data?.summary.deltaTotal ?? 0;
   const deltaPositive = deltaTotal > 0;
+
+  // F067 不一致率（algorithm-changed 警示）
+  const mismatchRate = (() => {
+    if (!data) return 0;
+    const totalB = data.summary.totalB ?? 0;
+    if (totalB <= 0) return 0;
+    return (data.summary.customersChangedAssigneeCount ?? 0) / totalB;
+  })();
+  // F067 identical 判定：personnelMismatch + customerDiff + changedAssignee 全為 0
+  //（addedCount/removedCount 可能反映兩 run 的客戶集合差異，不屬演算法不一致）
+  const isIdentical =
+    !!data &&
+    (data.summary.customersChangedAssigneeCount ?? 0) === 0 &&
+    (data.personnelMismatch?.length ?? 0) === 0 &&
+    (data.customerDiff?.length ?? 0) === 0;
+  const algorithmChanged = !!data && !isIdentical && mismatchRate > NFR005_THRESHOLD;
 
   return (
     <AppLayout
@@ -103,20 +160,22 @@ export function RunComparePage() {
       }
     >
       <main className="flex-1 p-6 space-y-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-gray-600">比對：</span>
-          <code className="font-mono text-xs text-primary px-2 py-0.5 bg-blue-50 rounded">
-            {runA || '—'}
-          </code>
-          <GitCompare className="w-4 h-4 text-gray-400" />
-          <code className="font-mono text-xs text-primary px-2 py-0.5 bg-blue-50 rounded">
-            {runB || '—'}
-          </code>
+        {/* Run Selector */}
+        <RunSelector
+          runs={availableRuns}
+          runA={runA}
+          runB={runB}
+          onCompare={handleCompare}
+          onChangeA={handleChangeA}
+          onChangeB={handleChangeB}
+          loading={loading}
+        />
+
+        <div className="flex items-center justify-end">
           {data && (
             <Button
               type="button"
               variant="secondary"
-              className="ml-auto"
               data-testid="btn-export-compare"
               loading={exporting}
               loadingText="匯出中..."
@@ -129,6 +188,53 @@ export function RunComparePage() {
             </Button>
           )}
         </div>
+
+        {/* Algorithm-changed warning（不一致率 > 3%） */}
+        {algorithmChanged && (
+          <div
+            data-testid="algorithm-changed-banner"
+            role="alert"
+            className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg"
+          >
+            <AlertOctagon className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-red-700">
+                人員配對不一致率{' '}
+                <span className="font-mono">
+                  {(mismatchRate * 100).toFixed(2)}%
+                </span>
+                （&gt; NFR-005 警示閾值 {(NFR005_THRESHOLD * 100).toFixed(0)}%）
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                此次變更影響大量案件分派結果。可能因演算法版本變更或設定差異所致，
+                建議檢視設定差異區塊與下載不一致案件清單。
+              </p>
+              <div className="mt-2 inline-flex items-center gap-1 text-xs text-red-700">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                F067 為 NFR-005 主驗收工具
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Identical banner（100% 相同） */}
+        {isIdentical && (
+          <div
+            data-testid="identical-banner"
+            className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg"
+          >
+            <CheckCircle2 className="w-5 h-5 text-green-700 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-green-700">
+                兩次月跑配對 100% 相同 — 分派演算法 deterministic 驗證通過
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                人員配對不一致率 0.00%（NFR-005 通過）。
+                此結果代表演算法在相同輸入與設定下能產生穩定可重現的結果。
+              </p>
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="p-12 text-center text-gray-400" data-testid="compare-loading">

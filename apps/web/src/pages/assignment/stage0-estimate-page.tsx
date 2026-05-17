@@ -1,19 +1,46 @@
-import { useEffect, useState } from 'react';
-import { Calculator, RefreshCw, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Calculator,
+  RefreshCw,
+  AlertTriangle,
+  CalendarCheck,
+  Users,
+  Divide,
+  PlusCircle,
+  Table,
+  Eye,
+  Database,
+} from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/e07/MonthPicker';
-import { getDailyEstimate, type DailyEstimateResponse } from '@/api/assignment-run';
+import {
+  getDailyEstimate,
+  getListEstimate,
+  type DailyEstimateResponse,
+} from '@/api/assignment-run';
+import { listLists } from '@/api/assignment-list';
+import {
+  Stage0InputPanel,
+  type Stage0Input,
+} from './_components/stage0-input-panel';
+import {
+  Stage0BarChart,
+  computeAdE07Distribution,
+  type Stage0Row,
+} from './_components/stage0-bar-chart';
+import { getBusinessRole } from '@/stores/auth-store';
 
 /**
- * F049 — Stage 0 每日試算頁
+ * F049 Stage 0 試算頁（Phase 2 全面改造）
  *
- * 對應 prototype: /prototypes/30-stage0-estimate.html
+ * 對應 prototype 30-stage0-estimate.html
  *
- * RBAC: DirectorRoute（M03 director-only per F002 §4.6.2）
- *
- * MVP：MonthPicker + 試算結果摘要卡 + 重新試算按鈕。
- * 詳細 details 區塊（依 backend 回傳 details 結構動態渲染）為 P2 補完。
+ * 區塊：
+ *   - 處長唯讀提示 banner（businessRole='section_chief'）
+ *   - 試算說明 banner
+ *   - 左 4 欄：Stage0InputPanel（LIST_NO/總筆數/起訖日/工作日來源）
+ *   - 右 8 欄：4 KPI + Pool 警示 + bar chart + 明細表（calendar_date/星期/工作日/預估件數/累積/餘數補）
  */
 
 function toYYYYMM(yyyymm: string): string {
@@ -29,30 +56,122 @@ function currentYmDisplay(): string {
   return `${y}-${m}`;
 }
 
+function inferIsWorkday(weekday: string): boolean {
+  // 後端 dailyEstimates 已過濾為工作日（estimate > 0）；
+  // 此處保留容錯：若 weekday='六'/'日' 視為非工作日。
+  return weekday !== '六' && weekday !== '日';
+}
+
 export function Stage0EstimatePage() {
+  const businessRole = getBusinessRole();
+  const isSectionChief = businessRole === 'section_chief';
+
   const [ym, setYm] = useState(currentYmDisplay());
-  const [data, setData] = useState<DailyEstimateResponse | null>(null);
+  const [dailyData, setDailyData] = useState<DailyEstimateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lists, setLists] = useState<Array<{ listNo: string; listNm: string }>>(
+    [],
+  );
 
-  const fetchEstimate = async (selectedYm: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await getDailyEstimate(toYYYYMMRaw(selectedYm));
-      setData(result);
-    } catch (err: unknown) {
-      const e = err as { response?: { status?: number; data?: { message?: string } } };
-      setError(e?.response?.data?.message ?? '試算失敗，請稍後再試');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [input, setInput] = useState<Stage0Input>({
+    listNo: '',
+    totalCount: 9500,
+    startDate: '',
+    endDate: '',
+    calendarSource: 'weekday',
+  });
+  const [listEstimating, setListEstimating] = useState(false);
 
+  // 載入 daily-estimate + lists
   useEffect(() => {
-    void fetchEstimate(ym);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let aborted = false;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await getDailyEstimate(toYYYYMMRaw(ym));
+        if (!aborted) {
+          setDailyData(result);
+          setInput((prev) => ({
+            ...prev,
+            totalCount:
+              prev.totalCount && prev.totalCount > 0
+                ? prev.totalCount
+                : result.totalEstimate ?? 0,
+            startDate:
+              prev.startDate || result.dailyEstimates?.[0]?.date || '',
+            endDate:
+              prev.endDate ||
+              result.dailyEstimates?.[result.dailyEstimates.length - 1]?.date ||
+              '',
+          }));
+        }
+      } catch (err: unknown) {
+        const e = err as { response?: { data?: { message?: string } } };
+        if (!aborted)
+          setError(e?.response?.data?.message ?? '試算失敗，請稍後再試');
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const data = await listLists({ ym: toYYYYMMRaw(ym) });
+        if (!aborted) {
+          setLists(
+            (data.lists ?? [])
+              .filter((l) => l.status === 'active')
+              .map((l) => ({ listNo: l.listNo, listNm: l.listNm })),
+          );
+        }
+      } catch {
+        // 無 lists 不影響 stage0 試算
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
   }, [ym]);
+
+  // input.listNo 變化 → 呼叫 list-estimate 取得該 LIST_NO COUNT，套用到 totalCount
+  useEffect(() => {
+    if (!input.listNo) return;
+    let aborted = false;
+    setListEstimating(true);
+    void (async () => {
+      try {
+        const r = await getListEstimate(input.listNo);
+        if (!aborted) {
+          const count = r.count ?? r.estimatedCount ?? 0;
+          setInput((prev) => ({ ...prev, totalCount: count }));
+        }
+      } catch {
+        // 忽略；使用既有 totalCount
+      } finally {
+        if (!aborted) setListEstimating(false);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [input.listNo]);
+
+  // 計算 AD-E07-8 分配（FE 端）
+  const distribution = useMemo<Stage0Row[]>(() => {
+    if (!dailyData?.dailyEstimates) return [];
+    const days = dailyData.dailyEstimates.map((d) => ({
+      date: d.date,
+      weekday: d.weekday,
+      isWorkday: inferIsWorkday(d.weekday),
+    }));
+    return computeAdE07Distribution(input.totalCount, days);
+  }, [dailyData, input.totalCount]);
+
+  const workingDays = dailyData?.workingDays ?? 0;
+  const base = workingDays > 0 ? Math.floor(input.totalCount / workingDays) : 0;
+  const remainder =
+    workingDays > 0 ? input.totalCount - base * workingDays : 0;
 
   return (
     <AppLayout
@@ -60,21 +179,34 @@ export function Stage0EstimatePage() {
       actions={<MonthPicker value={ym} onChange={setYm} />}
     >
       <main className="flex-1 p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            月跑前置試算：依當月各 LIST_NO 條件試算可分派客戶總數，協助於正式月跑前估算工作量。
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void fetchEstimate(ym)}
-            disabled={loading}
+        {isSectionChief && (
+          <div
+            data-testid="director-readonly-banner"
+            className="rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm"
           >
-            <span className="inline-flex items-center gap-1.5">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              重新試算
-            </span>
-          </Button>
+            <Eye className="w-4 h-4 text-purple-700 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-purple-900">
+                處長角色為唯讀檢視（Stage 0 為部長 / Admin 月跑前置試算）
+              </p>
+              <p className="text-xs text-purple-800 mt-0.5">
+                您可查看試算結果，但部長 / Admin 才能依此調整月跑參數。
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
+          <Calculator className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold text-primary">
+              Daily estimate 不寫入 ob_assign_set
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              本頁為 F049 試算預覽，演算法 = FLOOR(total/工作日) + 餘數補最近 N 天工作日（AD-E07-8）。
+              實際寫入由月跑 Stage 0 正式執行（F061）。
+            </p>
+          </div>
         </div>
 
         {error && (
@@ -82,77 +214,196 @@ export function Stage0EstimatePage() {
             data-testid="stage0-error"
             className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-sm"
           >
-            <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
             <span className="text-red-800">{error}</span>
           </div>
         )}
 
-        {loading && !data && (
-          <div className="p-12 text-center text-gray-400" data-testid="stage0-loading">
-            試算中...
+        <div className="grid grid-cols-12 gap-5">
+          {/* 左：輸入面板 */}
+          <div className="col-span-4">
+            <Stage0InputPanel
+              lists={lists}
+              value={input}
+              onChange={setInput}
+            />
           </div>
-        )}
 
-        {data && (
-          <section
-            className="bg-white rounded-xl border border-gray-200 p-6 space-y-4"
-            data-testid="stage0-result"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Calculator className="w-6 h-6 text-blue-800" />
+          {/* 右：KPI + Pool warn + bar chart + table */}
+          <div className="col-span-8 space-y-4">
+            {/* Pool 偏低警示 */}
+            {dailyData?.warning === 'POOL_COUNT_LOW' && (
+              <div
+                data-testid="pool-low-warning"
+                className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700"
+              >
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-amber-800">
+                    Pool 資料筆數偏低（現有 {dailyData.poolCount} 筆）
+                  </p>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    低於閾值 STAGE0_POOL_WARN_THRESHOLD = 1000，
+                    請確認資料擷取任務（OBPOOLDATA）已正常執行。
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">月份</p>
-                <p className="text-2xl font-semibold text-gray-900 font-mono">
-                  {data.ym ? toYYYYMM(data.ym) : '—'}
-                </p>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  工作天數：{data.workingDays ?? 0} 天
+            )}
+
+            {/* 4 KPI 卡 */}
+            <div className="grid grid-cols-4 gap-3">
+              <div
+                data-testid="kpi-working-days"
+                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">working_days 工作日</span>
+                  <CalendarCheck className="w-4 h-4 text-blue-500" />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tabular-nums">
+                  {workingDays}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">本月可分派天數</p>
+              </div>
+              <div
+                data-testid="kpi-total-estimate"
+                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">total 總筆數</span>
+                  <Users className="w-4 h-4 text-emerald-500" />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tabular-nums">
+                  {input.totalCount.toLocaleString()}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {listEstimating ? '即時試算中...' : '符合 LIST_NO 篩選條件'}
                 </p>
               </div>
-              <div className="ml-auto text-right">
-                <p className="text-xs text-gray-500">預估月總分派量</p>
-                <p
-                  data-testid="stage0-total-count"
-                  className="text-3xl font-bold text-primary"
-                >
-                  {(data.totalEstimate ?? 0).toLocaleString()}
-                </p>
-                <p className="text-[11px] text-gray-400">筆</p>
+              <div
+                data-testid="kpi-base"
+                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">base 基數</span>
+                  <Divide className="w-4 h-4 text-purple-500" />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tabular-nums">
+                  {base}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">FLOOR(total/工作日)</p>
+              </div>
+              <div
+                data-testid="kpi-remainder"
+                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">remainder 餘數</span>
+                  <PlusCircle className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tabular-nums">
+                  {remainder}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">補至最近 N 個工作日</p>
               </div>
             </div>
 
-            {data.dailyEstimates && data.dailyEstimates.length > 0 && (
-              <div
-                className="rounded-md bg-gray-50 border border-gray-200 p-3 max-h-72 overflow-y-auto"
-                data-testid="stage0-daily-table"
-              >
-                <p className="text-xs text-gray-500 mb-2">每日試算明細</p>
-                <table className="w-full text-xs font-mono">
-                  <thead className="text-gray-500">
+            {/* Bar chart */}
+            <Stage0BarChart rows={distribution} />
+
+            {/* Daily detail table */}
+            <div
+              data-testid="stage0-daily-table"
+              className="bg-white rounded-lg border border-gray-200 shadow-sm"
+            >
+              <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-2">
+                <Table className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-semibold text-gray-800">
+                  每日試算明細
+                </h3>
+                <span className="text-xs text-gray-400 ml-2">
+                  GET /api/v1/assignment/stage0/daily-estimate?ym=
+                  {toYYYYMMRaw(ym)}
+                </span>
+              </div>
+              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50/95 backdrop-blur z-10">
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-1.5 font-medium">日期</th>
-                      <th className="text-left py-1.5 font-medium">星期</th>
-                      <th className="text-right py-1.5 font-medium">預估量</th>
+                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
+                        calendar_date
+                      </th>
+                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
+                        星期
+                      </th>
+                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
+                        工作日
+                      </th>
+                      <th className="text-right px-5 py-2 font-semibold text-gray-600">
+                        預估件數
+                      </th>
+                      <th className="text-right px-5 py-2 font-semibold text-gray-600">
+                        累積
+                      </th>
+                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
+                        餘數補
+                      </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {data.dailyEstimates.map((r) => (
-                      <tr key={r.date} className="border-b border-gray-100">
-                        <td className="py-1 text-gray-700">{r.date}</td>
-                        <td className="py-1 text-gray-600">{r.weekday}</td>
-                        <td className="py-1 text-right text-gray-900">
-                          {(r.estimate ?? 0).toLocaleString()}
+                  <tbody className="divide-y divide-gray-100">
+                    {loading && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
+                          試算中...
+                        </td>
+                      </tr>
+                    )}
+                    {!loading && distribution.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
+                          無試算資料
+                        </td>
+                      </tr>
+                    )}
+                    {distribution.map((r) => (
+                      <tr key={r.date}>
+                        <td className="px-5 py-2 font-mono text-xs text-gray-700">
+                          {r.date}
+                        </td>
+                        <td className="px-5 py-2 text-xs text-gray-600">
+                          {r.weekday}
+                        </td>
+                        <td className="px-5 py-2 text-xs">
+                          {r.isWorkday ? (
+                            <span className="text-emerald-700 font-medium">✓</span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-gray-900">
+                          {r.estimate}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-gray-600">
+                          {r.cumulative}
+                        </td>
+                        <td className="px-5 py-2 text-xs">
+                          {r.isBonus ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                              <PlusCircle className="w-3 h-3" />
+                              +1
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
-          </section>
-        )}
+            </div>
+          </div>
+        </div>
       </main>
     </AppLayout>
   );

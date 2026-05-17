@@ -28,6 +28,10 @@ export interface DailyEstimateResponse {
   workingDays: number;
   totalEstimate: number;
   dailyEstimates: DailyEstimateRow[];
+  /** F049 Phase 2：ob_pool_data 共享池實際筆數 */
+  poolCount?: number;
+  /** F049 Phase 2：poolCount < threshold 時為 'POOL_COUNT_LOW' */
+  warning?: 'POOL_COUNT_LOW' | null;
 }
 
 export async function getDailyEstimate(ym?: string): Promise<DailyEstimateResponse> {
@@ -42,7 +46,10 @@ export async function getDailyEstimate(ym?: string): Promise<DailyEstimateRespon
 
 export interface ListEstimateResponse {
   listNo: string;
-  estimatedCount: number;
+  /** 後端 stage0-estimate service 實際回傳欄位 */
+  count?: number;
+  /** legacy alias — 兼容既有頁面使用 */
+  estimatedCount?: number;
   details?: Record<string, unknown>;
 }
 
@@ -67,6 +74,63 @@ export interface TriggerRunResponse {
 export async function triggerRun(): Promise<TriggerRunResponse> {
   // body 為空 — backend 用 currentWorkYm + req.user.userId
   const response = await apiClient.post<TriggerRunResponse>('/assignment/runs', {});
+  return response.data;
+}
+
+// =====================================================================
+// F061 Phase 2 — GET 月跑前置條件就緒度
+// =====================================================================
+
+export type EtlStatusValue = 'completed' | 'failed' | 'running' | 'missing';
+
+export interface EtlSourceStatus {
+  status: EtlStatusValue;
+  lastRunAt: string | null;
+}
+
+export interface EtlStatusMap {
+  pooldata: EtlSourceStatus;
+  emphire: EtlSourceStatus;
+  calendar: EtlSourceStatus;
+  arreturndf: EtlSourceStatus;
+}
+
+export interface ReadinessResponse {
+  workYm: string;
+  totalActiveLists: number;
+  readyCount: number;
+  notReadyLists: Array<{ listNo: string; listNm: string; stage: string }>;
+  allReady: boolean;
+  monthlyRunStatus: 'none' | 'pending' | 'running' | 'completed' | 'failed';
+  scoringActive: boolean;
+  etlStatus: EtlStatusMap;
+}
+
+export async function getReadiness(ym?: string): Promise<ReadinessResponse> {
+  const params: Record<string, string> = {};
+  if (ym) params.ym = ym;
+  const response = await apiClient.get<ReadinessResponse>(
+    '/assignment/runs/readiness',
+    { params },
+  );
+  return response.data;
+}
+
+// =====================================================================
+// F062 Phase 2 — POST 取消月跑（director only）
+// =====================================================================
+
+export interface CancelRunResponse {
+  runId: string;
+  projectWorkym: string;
+  status: 'failed';
+  errorMessage: string;
+}
+
+export async function cancelRun(runId: string): Promise<CancelRunResponse> {
+  const response = await apiClient.post<CancelRunResponse>(
+    `/assignment/runs/${runId}/cancel`,
+  );
   return response.data;
 }
 
@@ -137,16 +201,55 @@ export async function listRuns(ym?: string): Promise<ListRunsResponse> {
 // F063 — GET 結果摘要
 // =====================================================================
 
+/**
+ * F063 Phase 3：對齊後端 SummaryResponse（assignment-run-report.service.ts）
+ */
+export interface SummaryDeptRow {
+  deptId: string;
+  configRatio: number;
+  actualCount: number;
+  actualRatio: number;
+  /** 與 configRatio 的差異 (actual - config) */
+  deviation: number;
+  /** abs(deviation) > NFR-005 閾值（3%）→ true */
+  alert: boolean;
+}
+
+export interface SummaryLevelRow {
+  cardLevel: string;
+  count: number;
+  ratio: number;
+}
+
 export interface RunSummaryResponse {
   runId: string;
-  ym: string;
-  totalAssigned: number;
+  /** 後端欄位：projectWorkym（保留 ym 為 legacy alias） */
+  projectWorkym?: string;
+  ym?: string;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  totalCases?: number | null;
+  stage1Count?: number;
+  stage4Count?: number;
+  coverageRate?: number;
+  deptSummary?: SummaryDeptRow[];
+  levelDistribution?: SummaryLevelRow[];
+  warnings?: {
+    summaryCode: string | null;
+    skippedCases: Record<string, unknown> | null;
+  };
+
+  // ----- legacy 欄位（既有 run-summary-page 沿用，Phase 3 改造後將清掉） -----
+  /** @deprecated 改用 totalCases / stage4Count */
+  totalAssigned?: number;
+  /** @deprecated 改用 deptSummary */
   deptBreakdown?: Array<{
     deptCode: string;
     deptName?: string;
     assignedCount: number;
     ratio: number;
   }>;
+  /** @deprecated 後端未回此欄位 */
   personnelBreakdown?: Array<{
     empId: string;
     empName?: string;

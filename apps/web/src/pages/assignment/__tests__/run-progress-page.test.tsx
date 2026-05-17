@@ -104,7 +104,7 @@ describe('RunProgressPage (F062 polling)', () => {
     });
     renderPage();
     await waitFor(() =>
-      expect(screen.getByTestId('run-status-completed')).toBeInTheDocument(),
+      expect(screen.getAllByTestId('run-status-completed').length).toBeGreaterThan(0),
     );
     expect(screen.getByRole('button', { name: /查看結果摘要/ })).toBeInTheDocument();
   });
@@ -120,8 +120,193 @@ describe('RunProgressPage (F062 polling)', () => {
     });
     renderPage();
     await waitFor(() =>
-      expect(screen.getByTestId('run-status-failed')).toBeInTheDocument(),
+      expect(screen.getAllByTestId('run-status-failed').length).toBeGreaterThan(0),
     );
     expect(screen.getByText(/Stage 2 評分失敗/)).toBeInTheDocument();
+  });
+
+  describe('Phase 2 改造', () => {
+    it('running 狀態顯示 5-step stage stepper', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+        stages: [
+          { name: 'Stage 0', status: 'completed', progressPercent: 100 },
+          { name: 'Stage 1', status: 'completed', progressPercent: 100 },
+          { name: 'Stage 2', status: 'running', progressPercent: 40 },
+          { name: 'Stage 3', status: 'pending' },
+          { name: 'Stage 4', status: 'pending' },
+        ],
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('stage-stepper-progress')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('stage-dot-0')).toBeInTheDocument();
+      expect(screen.getByTestId('stage-dot-4')).toBeInTheDocument();
+    });
+
+    it('running 狀態顯示 elapsed timer', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('elapsed-timer')).toBeInTheDocument();
+      });
+    });
+
+    it('running 狀態 director 顯示「取消月跑」按鈕', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-cancel-run')).toBeInTheDocument();
+      });
+    });
+
+    it('section_chief 顯示「處長唯讀」banner（P3-2）', async () => {
+      mockedGetBusinessRole.mockReturnValue('section_chief');
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('director-readonly-banner')).toBeInTheDocument();
+      });
+    });
+
+    it('director 不顯示「處長唯讀」banner', async () => {
+      mockedGetBusinessRole.mockReturnValue('director');
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('elapsed-timer')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('director-readonly-banner')).not.toBeInTheDocument();
+    });
+
+    it('section_chief 不顯示「取消月跑」按鈕', async () => {
+      mockedGetBusinessRole.mockReturnValue('section_chief');
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('elapsed-timer')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('btn-cancel-run')).not.toBeInTheDocument();
+    });
+
+    it('completed 狀態不顯示「取消月跑」按鈕', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'completed',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+        finishedAt: '2026-05-10T10:30:00.000Z',
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getAllByTestId('run-status-completed').length).toBeGreaterThan(0),
+      );
+      expect(screen.queryByTestId('btn-cancel-run')).not.toBeInTheDocument();
+    });
+
+    it('completed 狀態顯示 3 個跳轉連結（結果摘要/匯出/快照）', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'completed',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+        finishedAt: '2026-05-10T10:30:00.000Z',
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('completed-banner')).toBeInTheDocument(),
+      );
+      const banner = screen.getByTestId('completed-banner');
+      expect(banner.textContent).toContain('結果摘要');
+      expect(banner.textContent).toContain('快照詳情');
+    });
+
+    it('failed 狀態顯示失敗 banner + 2 跳轉連結', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'failed',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+        errorMessage: 'Stage 3 部門分配失敗：D03 容量飽和',
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('failed-banner')).toBeInTheDocument(),
+      );
+      const banner = screen.getByTestId('failed-banner');
+      expect(banner.textContent).toContain('Stage 3');
+      expect(banner.textContent).toContain('重新觸發');
+    });
+
+    it('pending 狀態顯示「排入佇列」banner', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'pending',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('pending-banner')).toBeInTheDocument(),
+      );
+    });
+
+    it('「取消月跑」按鈕 click → 開 confirm modal', async () => {
+      mockedGetRun.mockResolvedValue({
+        runId: 'R001',
+        ym: '202605',
+        status: 'running',
+        triggeredBy: 'Director',
+        triggeredAt: '2026-05-10T10:00:00.000Z',
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-cancel-run')).toBeInTheDocument();
+      });
+      const { fireEvent } = await import('@testing-library/react');
+      fireEvent.click(screen.getByTestId('btn-cancel-run'));
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-cancel-modal')).toBeInTheDocument();
+      });
+    });
   });
 });
