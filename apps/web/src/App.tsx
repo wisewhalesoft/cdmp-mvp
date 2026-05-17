@@ -19,8 +19,30 @@ import { PipelineVersionsPage } from '@/pages/etl-pipelines/versions';
 import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
 import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
-import { AssignmentStubPage, BaseCodesPage, ScoringConfigPage } from '@/pages/assignment';
-import { AdminRoute, ProtectedRoute, SalesManagerRoute } from '@/router/protected-route';
+import {
+  AssignmentStubPage,
+  BaseCodesPage,
+  ScoringConfigPage,
+  ListDefinitionPage,
+  ListCreateDraftPage,
+  ListEditDraftPage,
+  Stage0EstimatePage,
+  TriggerRunPage,
+  RunProgressPage,
+  FieldWhitelistPage,
+  FieldOptionsPage,
+  RunHistoryPage,
+  RunSummaryPage,
+  SnapshotDetailPage,
+  RunComparePage,
+} from '@/pages/assignment';
+import {
+  AdminRoute,
+  DirectorOrSectionChiefRoute,
+  DirectorRoute,
+  ProtectedRoute,
+  SalesManagerRoute,
+} from '@/router/protected-route';
 
 export function App() {
   return (
@@ -161,89 +183,121 @@ export function App() {
       <Route
         path="/assignment/base-codes"
         element={
-          <SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
             <BaseCodesPage />
-          </SalesManagerRoute>
+          </DirectorOrSectionChiefRoute>
         }
       />
+      {/* F075 / F076：POOLDATA 白名單 + 可選值管理 */}
+      <Route
+        path="/assignment/whitelist"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <FieldWhitelistPage />
+          </DirectorOrSectionChiefRoute>
+        }
+      />
+      <Route
+        path="/assignment/whitelist/options"
+        element={
+          <DirectorOrSectionChiefRoute>
+            <FieldOptionsPage />
+          </DirectorOrSectionChiefRoute>
+        }
+      />
+      {/* M02 計分卡：F002 §4.6 director only — section_chief / user 整頁封鎖 */}
       <Route
         path="/assignment/scoring"
         element={
-          <SalesManagerRoute>
+          <DirectorRoute>
             <ScoringConfigPage />
-          </SalesManagerRoute>
+          </DirectorRoute>
         }
       />
-      <Route
-        path="/assignment/ratios"
-        element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="比例設定" />
-          </SalesManagerRoute>
-        }
-      />
+      {/* /assignment/ratios stub 已移除 — M03 比例設定併入名單定義頁 row actions (FE-4 inline 元件) */}
+      {/* M01 名單定義：director + section_chief（讀），director only（寫入） */}
       <Route
         path="/assignment/list-definitions"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="名單定義" />
-          </SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
+            <ListDefinitionPage />
+          </DirectorOrSectionChiefRoute>
         }
       />
+      <Route
+        path="/assignment/list-definitions/new"
+        element={
+          <DirectorRoute>
+            <ListCreateDraftPage />
+          </DirectorRoute>
+        }
+      />
+      <Route
+        path="/assignment/list-definitions/:listNo/edit"
+        element={
+          <DirectorRoute>
+            <ListEditDraftPage />
+          </DirectorRoute>
+        }
+      />
+      {/* M03 Stage 0 試算：director only */}
       <Route
         path="/assignment/estimate"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="Stage 0 試算" />
-          </SalesManagerRoute>
+          <DirectorRoute>
+            <Stage0EstimatePage />
+          </DirectorRoute>
         }
       />
+      {/* M04 觸發月跑：director only */}
       <Route
         path="/assignment/run"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="觸發月跑" />
-          </SalesManagerRoute>
+          <DirectorRoute>
+            <TriggerRunPage />
+          </DirectorRoute>
         }
       />
+      {/* M04 執行進度：director + section_chief */}
       <Route
         path="/assignment/run-progress"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="執行進度" />
-          </SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
+            <RunProgressPage />
+          </DirectorOrSectionChiefRoute>
         }
       />
+      {/* M05 結果摘要 (F063) / 執行歷史 (F065) / 快照詳情 (F066) / 結果比對 (F067) */}
       <Route
         path="/assignment/run-summary"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="結果摘要" />
-          </SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
+            <RunSummaryPage />
+          </DirectorOrSectionChiefRoute>
         }
       />
       <Route
         path="/assignment/history"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="執行歷史" />
-          </SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
+            <RunHistoryPage />
+          </DirectorOrSectionChiefRoute>
         }
       />
       <Route
         path="/assignment/snapshots"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="快照詳情" />
-          </SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
+            <SnapshotDetailPage />
+          </DirectorOrSectionChiefRoute>
         }
       />
       <Route
         path="/assignment/compare"
         element={
-          <SalesManagerRoute>
-            <AssignmentStubPage title="結果比對" />
-          </SalesManagerRoute>
+          <DirectorOrSectionChiefRoute>
+            <RunComparePage />
+          </DirectorOrSectionChiefRoute>
         }
       />
       <Route
