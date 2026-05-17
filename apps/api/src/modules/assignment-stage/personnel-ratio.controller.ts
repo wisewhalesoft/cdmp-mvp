@@ -1,0 +1,78 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { AuthGuard } from '@/common/guards/auth.guard';
+import { DirectorOrSectionChiefGuard } from '@/common/guards/director-or-section-chief.guard';
+import { RequireDirectorOrSectionChief } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
+import { AssignmentListController } from '@/modules/assignment-list/assignment-list.controller';
+import { PersonnelRatioService } from './personnel-ratio.service';
+import { SetPersonnelRatioDto } from './dto/set-personnel-ratio.dto';
+
+/**
+ * F082 v1.4 + F083 v1.3 — 個別業務比例設定 Controller
+ *
+ * 路由：
+ *   - GET  /api/v1/assignment/ratios/personnel/{listNo}
+ *   - PUT  /api/v1/assignment/ratios/personnel/{listNo}
+ *
+ * 權限：DirectorOrSectionChiefGuard（admin / director / section_chief）
+ *   - GET：service 層 scopeByCreator filter（處長 only）
+ *   - PUT：service 層轄區檢查（PERSONNEL_RATIO_OUT_OF_SCOPE）
+ *
+ * FeatureFlag：ENABLE_E07_REFACTOR_PHASE3。
+ */
+@Controller('assignment/ratios/personnel')
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard)
+@RequireDirectorOrSectionChief()
+@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+export class PersonnelRatioController {
+  constructor(private readonly service: PersonnelRatioService) {}
+
+  @Get(':listNo')
+  async get(
+    @Param('listNo') listNo: string,
+    @Query('deptCode') deptCode: string | undefined,
+    @Req() req: Request,
+  ) {
+    const user = (req as any).user;
+    return this.service.getPersonnelRatios(listNo, deptCode ?? null, {
+      userId: user.userId,
+      role: user.role,
+      businessRole: user.businessRole,
+      ipAddress: req.ip ?? null,
+    });
+  }
+
+  @Put(':listNo')
+  @HttpCode(HttpStatus.OK)
+  async set(
+    @Param('listNo') listNo: string,
+    @Body() dto: SetPersonnelRatioDto,
+    @Req() req: Request,
+  ) {
+    const user = (req as any).user;
+    return this.service.setPersonnelRatios(
+      listNo,
+      dto,
+      {
+        userId: user.userId,
+        role: user.role,
+        businessRole: user.businessRole,
+        ipAddress: req.ip ?? null,
+      },
+      AssignmentListController.computeCurrentWorkYm(),
+    );
+  }
+}

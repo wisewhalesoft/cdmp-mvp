@@ -25,6 +25,7 @@ import { AssignmentCodeModule } from './modules/assignment-code/assignment-code.
 import { AssignmentScoringModule } from './modules/assignment-scoring/assignment-scoring.module';
 import { AssignmentListModule } from './modules/assignment-list/assignment-list.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
+import { AssignmentStageModule } from './modules/assignment-stage/assignment-stage.module';
 import { PooldataFieldModule } from './modules/pooldata-field/pooldata-field.module';
 import { SystemModule } from './modules/system/system.module';
 import { Role } from './database/entities/role.entity';
@@ -118,6 +119,7 @@ const E07_ENTITIES = [
     AssignmentScoringModule,
     AssignmentListModule,
     AssignmentModule,
+    AssignmentStageModule,
     PooldataFieldModule,
     SystemModule,
   ],
