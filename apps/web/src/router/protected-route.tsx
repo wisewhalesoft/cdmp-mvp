@@ -3,6 +3,7 @@ import {
   isAuthenticated,
   getUserRole,
   getIsSalesManager,
+  getBusinessRole,
 } from '@/stores/auth-store';
 import type { ReactNode } from 'react';
 
@@ -47,6 +48,43 @@ export function SalesManagerRoute({ children }: ProtectedRouteProps) {
   const role = getUserRole();
   // 嚴格 === true 比對（RISK-AD-E02-4-1）：admin 為超集，無需持有旗標
   if (role !== 'admin' && getIsSalesManager() !== true) {
+    return <Navigate to="/c360/customers" replace />;
+  }
+  return <>{children}</>;
+}
+
+/**
+ * F002 v2.0 / AD-E07 v3.0：4-角色 Route Guards
+ *
+ * - DirectorRoute：role === 'admin' OR businessRole === 'director'（M02 / M03a/c / M04 trigger / M03d Rollback）
+ * - DirectorOrSectionChiefRoute：role === 'admin' OR businessRole IN ('director', 'section_chief')
+ *
+ * 失敗時 redirect 至 /c360/customers（沿用既有 fallback 行為）。
+ */
+
+export function DirectorRoute({ children }: ProtectedRouteProps) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  const role = getUserRole();
+  const businessRole = getBusinessRole();
+  if (role !== 'admin' && businessRole !== 'director') {
+    return <Navigate to="/c360/customers" replace />;
+  }
+  return <>{children}</>;
+}
+
+export function DirectorOrSectionChiefRoute({ children }: ProtectedRouteProps) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  const role = getUserRole();
+  const businessRole = getBusinessRole();
+  if (
+    role !== 'admin' &&
+    businessRole !== 'director' &&
+    businessRole !== 'section_chief'
+  ) {
     return <Navigate to="/c360/customers" replace />;
   }
   return <>{children}</>;

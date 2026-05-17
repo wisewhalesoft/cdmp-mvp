@@ -9,8 +9,8 @@ import {
   ListChecks,
   ChevronRight,
   Tags,
+  ShieldCheck,
   SlidersHorizontal,
-  Percent,
   ClipboardList,
   Calculator,
   PlayCircle,
@@ -21,22 +21,29 @@ import {
   GitCompare,
   type LucideIcon,
 } from 'lucide-react';
-import type { UserRole } from '@cdmp/shared';
+import type { BusinessRole, UserRole } from '@cdmp/shared';
 
 /**
- * F002 v1.2 / AD-E02-4-E：共用 Sidebar 元件
+ * F002 v2.0 / AD-E07 v3.0：共用 Sidebar 元件（4-角色 RBAC）
  *
  * 對應 prototype: /prototypes/27-list-definition.html 第 41-117 行
  *
  * 宣告式 menu 設定 + 純函式過濾邏輯：
- * - `requires: 'authenticated'` → 任何登入身份顯示
- * - `requires: 'admin'`         → role === 'admin'
- * - `requires: 'sales_manager'` → role === 'admin' OR isSalesManager === true（嚴格比對）
+ * - `requires: 'authenticated'`              → 任何登入身份顯示
+ * - `requires: 'admin'`                      → role === 'admin'
+ * - `requires: 'director_only'`              → admin OR director（M02 / M03a/c / M04 觸發 / M03d Rollback）
+ * - `requires: 'director_or_section_chief'`  → admin OR director OR section_chief（E07 大部分）
+ * - `requires: 'sales_manager'`              → ⚠️ DEPRECATED — 視為 director_or_section_chief（過渡期向下相容）
  *
  * 不可見項目完全不渲染 DOM（非 CSS hidden / disabled）— AC-6 安全考量。
  */
 
-export type MenuRequires = 'authenticated' | 'admin' | 'sales_manager';
+export type MenuRequires =
+  | 'authenticated'
+  | 'admin'
+  | 'director_only'
+  | 'director_or_section_chief'
+  | 'sales_manager'; // DEPRECATED
 
 export interface MenuItem {
   to: string;
@@ -105,74 +112,86 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
       {
         label: '客戶名單分派',
         icon: ListChecks,
-        requires: 'sales_manager',
+        requires: 'director_or_section_chief',
         defaultOpen: true,
         items: [
+          // M06 代碼維護：director + section_chief
           {
             to: '/assignment/base-codes',
             label: '代碼維護',
             icon: Tags,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
+          // F075/F076 POOLDATA 白名單：director + section_chief（讀），director only（寫入）
+          {
+            to: '/assignment/whitelist',
+            label: '白名單管理',
+            icon: ShieldCheck,
+            requires: 'director_or_section_chief',
+          },
+          // M02 計分卡：director only（F002 §4.6 M02 對 section_chief 整頁封鎖）
           {
             to: '/assignment/scoring',
             label: '計分卡設定',
             icon: SlidersHorizontal,
-            requires: 'sales_manager',
+            requires: 'director_only',
           },
-          {
-            to: '/assignment/ratios',
-            label: '比例設定',
-            icon: Percent,
-            requires: 'sales_manager',
-          },
+          // M01 名單定義：director + section_chief
+          // M03 比例設定（部門/個別/簽核/準備完成）已併入名單定義頁的 row actions（FE-4 inline 元件），不再有獨立 sidebar 入口
           {
             to: '/assignment/list-definitions',
             label: '名單定義',
             icon: ClipboardList,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
+          // M03 Stage 0 試算：director only
           {
             to: '/assignment/estimate',
             label: 'Stage 0 試算',
             icon: Calculator,
-            requires: 'sales_manager',
+            requires: 'director_only',
           },
+          // M04 觸發月跑：director only
           {
             to: '/assignment/run',
             label: '觸發月跑',
             icon: PlayCircle,
-            requires: 'sales_manager',
+            requires: 'director_only',
           },
+          // M04 執行進度：director + section_chief
           {
             to: '/assignment/run-progress',
             label: '執行進度',
             icon: Activity,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
+          // M05 結果摘要：director + section_chief
           {
             to: '/assignment/run-summary',
             label: '結果摘要',
             icon: FileBarChart,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
+          // M05 執行歷史：director + section_chief
           {
             to: '/assignment/history',
             label: '執行歷史',
             icon: History,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
+          // M05 快照詳情：director + section_chief
           {
             to: '/assignment/snapshots',
             label: '快照詳情',
             icon: Camera,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
+          // M05 結果比對：director + section_chief
           {
             to: '/assignment/compare',
             label: '結果比對',
             icon: GitCompare,
-            requires: 'sales_manager',
+            requires: 'director_or_section_chief',
           },
         ],
       },
@@ -182,17 +201,24 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
 
 /**
  * Pure function：判斷 requires 條件是否符合當前身份。
- * 嚴格 === true 比對 isSalesManager。
+ * F002 v2.0 / AD-E07 v3.0：admin 自動為所有 director / section_chief 之超集。
  */
 function matchesRequires(
   requires: MenuRequires,
   role: UserRole,
-  isSalesManager: boolean,
+  businessRole: BusinessRole,
 ): boolean {
   if (requires === 'authenticated') return true;
   if (requires === 'admin') return role === 'admin';
-  if (requires === 'sales_manager') {
-    return role === 'admin' || isSalesManager === true;
+  if (requires === 'director_only') {
+    return role === 'admin' || businessRole === 'director';
+  }
+  if (requires === 'director_or_section_chief' || requires === 'sales_manager') {
+    return (
+      role === 'admin' ||
+      businessRole === 'director' ||
+      businessRole === 'section_chief'
+    );
   }
   return false;
 }
@@ -203,23 +229,23 @@ function matchesRequires(
  */
 export function getVisibleMenuItems(
   role: UserRole,
-  isSalesManager: boolean,
+  businessRole: BusinessRole,
 ): MenuSection[] {
   const result: MenuSection[] = [];
   for (const section of MENU_SECTIONS) {
     const items =
       section.items?.filter((item) =>
-        matchesRequires(item.requires, role, isSalesManager),
+        matchesRequires(item.requires, role, businessRole),
       ) ?? [];
     const groups: MenuGroup[] = section.groups
-      .filter((group) => matchesRequires(group.requires, role, isSalesManager))
+      .filter((group) => matchesRequires(group.requires, role, businessRole))
       .map((group) => ({
         label: group.label,
         icon: group.icon,
         requires: group.requires,
         defaultOpen: group.defaultOpen,
         items: group.items.filter((item) =>
-          matchesRequires(item.requires, role, isSalesManager),
+          matchesRequires(item.requires, role, businessRole),
         ),
       }))
       .filter((group) => group.items.length > 0);
@@ -237,11 +263,11 @@ export function getVisibleMenuItems(
 
 export interface AppSidebarProps {
   role: UserRole;
-  isSalesManager: boolean;
+  businessRole: BusinessRole;
 }
 
-export function AppSidebar({ role, isSalesManager }: AppSidebarProps) {
-  const sections = getVisibleMenuItems(role, isSalesManager);
+export function AppSidebar({ role, businessRole }: AppSidebarProps) {
+  const sections = getVisibleMenuItems(role, businessRole);
 
   return (
     <aside className="w-56 bg-white border-r border-[#E5E7EB] flex flex-col shrink-0 overflow-y-auto">

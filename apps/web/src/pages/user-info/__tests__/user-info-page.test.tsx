@@ -14,7 +14,12 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
-  return { ...actual, getUser: vi.fn(), clearAuth: vi.fn() };
+  return {
+    ...actual,
+    getUser: vi.fn(),
+    clearAuth: vi.fn(),
+    getBusinessRole: vi.fn(),
+  };
 });
 
 vi.mock('@/api/auth', async () => {
@@ -24,6 +29,7 @@ vi.mock('@/api/auth', async () => {
 
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
+const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedLogout = vi.mocked(authApi.logout);
 
 function renderPage(
@@ -33,6 +39,7 @@ function renderPage(
     email: string;
     role: 'admin' | 'user';
     isSalesManager?: boolean;
+    businessRole?: 'director' | 'section_chief' | null;
   } = {
     id: 'user-1',
     name: '陳小美',
@@ -41,6 +48,11 @@ function renderPage(
   },
 ) {
   mockedGetUser.mockReturnValue(user);
+  // 4 角色：admin/director/section_chief 視為「有業務權限」；否則為 null
+  let br: 'director' | 'section_chief' | null = null;
+  if (user.businessRole) br = user.businessRole;
+  else if (user.isSalesManager === true) br = 'director';
+  mockedGetBusinessRole.mockReturnValue(br);
   return render(
     <MemoryRouter>
       <UserInfoPage />

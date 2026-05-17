@@ -1,4 +1,9 @@
-import type { UserInfo } from '@cdmp/shared';
+import {
+  type BusinessRole,
+  type EffectiveIdentity,
+  type UserInfo,
+  deriveEffectiveIdentity,
+} from '@cdmp/shared';
 
 const AUTH_TOKEN_KEY = 'token';
 const AUTH_USER_KEY = 'user';
@@ -39,12 +44,36 @@ export function getUserRole(): 'admin' | 'user' | null {
 /**
  * F002 v1.2 / AD-E02-4：取得當前登入身份的業務主管旗標。
  *
- * 嚴格 === true 比對（RISK-AD-E02-4-1）：
- * - 舊 token 可能無 isSalesManager 欄位（undefined） → 視為 false
- * - 字串 "true"、數字 1 等 truthy 值 → 視為 false
- * - 僅 boolean true 才回傳 true
+ * ⚠️ DEPRECATED (AD-E07 v3.0)：由 getBusinessRole / getEffectiveIdentity 取代。
+ * 過渡期保留：admin 視為 true，business_role 非 null 視為 true。
  */
 export function getIsSalesManager(): boolean {
   const user = getUser();
-  return user?.isSalesManager === true;
+  if (!user) return false;
+  if (user.isSalesManager === true) return true;
+  if (user.role === 'admin') return true;
+  return user.businessRole === 'director' || user.businessRole === 'section_chief';
+}
+
+/**
+ * F002 v2.0 / AD-E07 v3.0：取得當前登入身份的業務角色。
+ * 'director' / 'section_chief' / null（一般使用者或 admin）。
+ */
+export function getBusinessRole(): BusinessRole {
+  const user = getUser();
+  if (!user) return null;
+  if (user.businessRole === 'director' || user.businessRole === 'section_chief') {
+    return user.businessRole;
+  }
+  return null;
+}
+
+/**
+ * F002 v2.0 / AD-E07 v3.0：取得當前登入身份的 4-角色實質身份 label。
+ * admin / director / section_chief / user。未登入時回傳 'user'。
+ */
+export function getEffectiveIdentity(): EffectiveIdentity {
+  const user = getUser();
+  if (!user) return 'user';
+  return deriveEffectiveIdentity(user.role, user.businessRole);
 }

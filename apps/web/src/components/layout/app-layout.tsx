@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
-import { clearAuth, getUser } from '@/stores/auth-store';
+import { clearAuth, getBusinessRole, getUser } from '@/stores/auth-store';
 import { logout } from '@/api/auth';
 import { AppSidebar } from './app-sidebar';
 import { SalesManagerBadge } from './sales-manager-badge';
@@ -39,7 +39,7 @@ export function AppLayout({ title, headerLeft, actions, children }: AppLayoutPro
   const navigate = useNavigate();
   const user = getUser();
   const role = user?.role ?? 'user';
-  const isSalesManager = user?.isSalesManager === true;
+  const businessRole = getBusinessRole();
 
   const handleLogout = async () => {
     try {
@@ -53,7 +53,7 @@ export function AppLayout({ title, headerLeft, actions, children }: AppLayoutPro
 
   return (
     <div className="flex min-h-screen bg-[#F9FAFB]">
-      <AppSidebar role={role} isSalesManager={isSalesManager} />
+      <AppSidebar role={role} businessRole={businessRole} />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-14 bg-white border-b border-[#E5E7EB] flex items-center justify-between px-6 shrink-0">
           {headerLeft !== undefined ? (

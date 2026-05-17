@@ -14,7 +14,12 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
-  return { ...actual, getUser: vi.fn(), clearAuth: vi.fn() };
+  return {
+    ...actual,
+    getUser: vi.fn(),
+    clearAuth: vi.fn(),
+    getBusinessRole: vi.fn(),
+  };
 });
 
 vi.mock('@/api/auth', async () => {
@@ -24,6 +29,7 @@ vi.mock('@/api/auth', async () => {
 
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedClearAuth = vi.mocked(authStore.clearAuth);
+const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedLogout = vi.mocked(authApi.logout);
 
 describe('AppLayout', () => {
@@ -39,7 +45,9 @@ describe('AppLayout', () => {
       email: 'manager@cdmp.test',
       role: 'user',
       isSalesManager: true,
+      businessRole: 'director',
     });
+    mockedGetBusinessRole.mockReturnValue('director');
     render(
       <MemoryRouter>
         <AppLayout title="測試頁">
@@ -64,7 +72,9 @@ describe('AppLayout', () => {
       email: 'user@cdmp.test',
       role: 'user',
       isSalesManager: false,
+      businessRole: null,
     });
+    mockedGetBusinessRole.mockReturnValue(null);
     const { container } = render(
       <MemoryRouter>
         <AppLayout title="測試頁">
@@ -84,7 +94,9 @@ describe('AppLayout', () => {
       email: 'admin@cdmp.test',
       role: 'admin',
       isSalesManager: false,
+      businessRole: null,
     });
+    mockedGetBusinessRole.mockReturnValue(null);
     render(
       <MemoryRouter>
         <AppLayout title="管理頁">
@@ -103,7 +115,9 @@ describe('AppLayout', () => {
       email: 'user@cdmp.test',
       role: 'user',
       isSalesManager: false,
+      businessRole: null,
     });
+    mockedGetBusinessRole.mockReturnValue(null);
     render(
       <MemoryRouter>
         <AppLayout title="個人資訊">
@@ -121,7 +135,9 @@ describe('AppLayout', () => {
       email: 'user@cdmp.test',
       role: 'user',
       isSalesManager: false,
+      businessRole: null,
     });
+    mockedGetBusinessRole.mockReturnValue(null);
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -145,7 +161,9 @@ describe('AppLayout', () => {
       email: 'user@cdmp.test',
       role: 'user',
       isSalesManager: false,
+      businessRole: null,
     });
+    mockedGetBusinessRole.mockReturnValue(null);
     mockedLogout.mockRejectedValue(new Error('Network'));
     const user = userEvent.setup();
     render(
