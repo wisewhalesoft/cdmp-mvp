@@ -1,6 +1,10 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
+# Native module build deps（better-sqlite3 / bcrypt 等需 node-gyp + python + gcc；
+# 缺一即 npm install 失敗。保留至 dev stage；prod stage 從 build artifacts 重組可不帶。）
+RUN apk add --no-cache python3 make g++
+
 # Install dependencies
 COPY package.json ./
 RUN npm install
