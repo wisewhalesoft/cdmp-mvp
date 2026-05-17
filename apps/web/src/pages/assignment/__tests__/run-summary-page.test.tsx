@@ -108,4 +108,95 @@ describe('RunSummaryPage (F063)', () => {
       expect(mockedExport).toHaveBeenCalledWith('R001', 'xlsx'),
     );
   });
+
+  describe('Phase 3 P2-3', () => {
+    it('顯示 READ-ONLY badge + Run Info Bar 5 欄', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        finishedAt: '2026-05-09T12:30:17Z',
+        durationMs: 30 * 60 * 1000,
+        stage1Count: 50000,
+        stage4Count: 9500,
+        coverageRate: 0.95,
+        deptSummary: [],
+        levelDistribution: [],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('readonly-badge')).toBeInTheDocument(),
+      );
+    });
+
+    it('deptSummary 渲染部門偏差 chart（D01 with alert）', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        finishedAt: '2026-05-09T12:30:17Z',
+        durationMs: 30 * 60 * 1000,
+        stage1Count: 1000,
+        stage4Count: 950,
+        coverageRate: 0.95,
+        deptSummary: [
+          {
+            deptId: 'D01',
+            configRatio: 0.3,
+            actualCount: 285,
+            actualRatio: 0.285,
+            deviation: -0.015,
+            alert: false,
+          },
+          {
+            deptId: 'D02',
+            configRatio: 0.25,
+            actualCount: 290,
+            actualRatio: 0.29,
+            deviation: 0.04,
+            alert: true,
+          },
+        ],
+        levelDistribution: [],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('dept-deviation-D01')).toBeInTheDocument(),
+      );
+      expect(
+        screen.getByTestId('dept-deviation-D02').getAttribute('data-alert'),
+      ).toBe('true');
+    });
+
+    it('levelDistribution 渲染 CARD_LEVEL donut legend', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        deptSummary: [],
+        levelDistribution: [
+          { cardLevel: 'A', count: 800, ratio: 0.4 },
+          { cardLevel: 'B', count: 1200, ratio: 0.6 },
+        ],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('card-legend-A')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('card-legend-B')).toBeInTheDocument();
+    });
+
+    it('匯出 button 文案改為「匯出 Excel (streaming)」', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        deptSummary: [],
+        levelDistribution: [],
+        stage4Count: 100,
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('btn-export-xlsx')).toBeInTheDocument(),
+      );
+      const btn = screen.getByTestId('btn-export-xlsx');
+      expect(btn.textContent).toContain('streaming');
+    });
+  });
 });

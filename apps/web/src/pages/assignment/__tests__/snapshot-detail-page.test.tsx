@@ -116,4 +116,81 @@ describe('SnapshotDetailPage (F066)', () => {
       expect(screen.getByTestId('snapshot-error')).toHaveTextContent(/缺少 runId/),
     );
   });
+
+  describe('Phase 3 P2-2', () => {
+    it('顯示 READ-ONLY badge + 保留 3 年提示', async () => {
+      mockedGetSnapshot.mockResolvedValue({
+        runId: 'R001',
+        type: 'config',
+        data: { listDefinitions: [] },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('readonly-badge')).toBeInTheDocument(),
+      );
+    });
+
+    it('顯示「下載 JSON」按鈕', async () => {
+      mockedGetSnapshot.mockResolvedValue({
+        runId: 'R001',
+        type: 'config',
+        data: { listDefinitions: [] },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('btn-download-snapshot')).toBeInTheDocument(),
+      );
+    });
+
+    it('顯示「以此比對」按鈕', async () => {
+      mockedGetSnapshot.mockResolvedValue({
+        runId: 'R001',
+        type: 'config',
+        data: { listDefinitions: [] },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('btn-compare-from-snapshot')).toBeInTheDocument(),
+      );
+    });
+
+    it('config 渲染正規化 view（listDefinitions section）', async () => {
+      mockedGetSnapshot.mockResolvedValue({
+        runId: 'R001',
+        type: 'config',
+        data: {
+          projectWorkym: '202605',
+          listDefinitions: [
+            {
+              listNo: 'OB001',
+              listNm: '汽車',
+              cardType: 'M3',
+              crEnabled: true,
+              caseStatus: '01',
+            },
+          ],
+        },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('snapshot-config-list-defs')).toBeInTheDocument(),
+      );
+    });
+
+    it('result 渲染 array view（assignments）', async () => {
+      mockedGetSnapshot.mockResolvedValue({
+        runId: 'R001',
+        type: 'result',
+        data: {
+          assignments: [
+            { listNo: 'OB001', applNo: 'A1', deptId: 'D01', emplid: 'E001' },
+          ],
+        },
+      });
+      renderPage('R001', 'result');
+      await waitFor(() =>
+        expect(screen.getByTestId('snapshot-array-table')).toBeInTheDocument(),
+      );
+    });
+  });
 });

@@ -1,12 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Camera, FileText, ListChecks, BarChart3, AlertTriangle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Camera,
+  FileText,
+  ListChecks,
+  BarChart3,
+  AlertTriangle,
+  Lock,
+  Download,
+  GitCompare,
+} from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import {
   getSnapshotByType,
   type SingleSnapshotResponse,
   type SnapshotType,
 } from '@/api/assignment-run';
+import {
+  SnapshotConfigView,
+  type SnapshotConfigPayload,
+} from './_components/snapshot-config-view';
+import { SnapshotArrayView } from './_components/snapshot-array-view';
 
 /**
  * F066 — 月跑快照詳情頁
@@ -112,6 +127,65 @@ export function SnapshotDetailPage() {
       }
     >
       <main className="flex-1 p-6 space-y-4">
+        {/* Phase 3 P2-2: Run Info Bar — READ-ONLY + 下載 / 以此比對 */}
+        {runId && (
+          <div className="bg-white rounded-lg border border-gray-200 p-3 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500">Run ID</span>
+              <code className="font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                {runId}
+              </code>
+              <span
+                data-testid="readonly-badge"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200"
+              >
+                <Lock className="w-3 h-3" />
+                READ-ONLY 不可變
+              </span>
+              <span className="text-gray-400">
+                · 快照保留 3 年（AD-E07-3）
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="btn-download-snapshot"
+                onClick={() => {
+                  if (!data) return;
+                  const blob = new Blob(
+                    [JSON.stringify(data.data, null, 2)],
+                    { type: 'application/json' },
+                  );
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `snapshot-${runId}-${activeType}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}
+                disabled={!data}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-primary border border-blue-200 rounded-md hover:bg-blue-50 disabled:opacity-40"
+              >
+                <Download className="w-3.5 h-3.5" />
+                下載 JSON
+              </button>
+              <button
+                type="button"
+                data-testid="btn-compare-from-snapshot"
+                onClick={() =>
+                  navigate(`/assignment/compare?runA=${runId}&runB=`)
+                }
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
+              >
+                <GitCompare className="w-3.5 h-3.5" />
+                以此比對
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tab nav */}
         <div className="flex items-center gap-2" data-testid="snapshot-tabs">
           {(['config', 'input_list', 'result'] as const).map((t) => {
@@ -163,15 +237,44 @@ export function SnapshotDetailPage() {
             <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-2">
               <Camera className="w-4 h-4 text-gray-600" />
               <h3 className="text-sm font-semibold text-gray-800">
-                {TAB_CONFIG[activeType].label}（type = <code className="font-mono text-xs">{activeType}</code>）
+                {TAB_CONFIG[activeType].label}（type ={' '}
+                <code className="font-mono text-xs">{activeType}</code>）
               </h3>
             </div>
-            <pre
-              data-testid="snapshot-json"
-              className="overflow-auto text-xs font-mono text-gray-700 bg-gray-50/50 p-4 max-h-[60vh]"
-            >
-              {JSON.stringify(data.data, null, 2)}
-            </pre>
+            <div className="p-5">
+              {/* Phase 3 P2-2：依 type 渲染正規化 view */}
+              {activeType === 'config' && (
+                <SnapshotConfigView
+                  payload={data.data as SnapshotConfigPayload | null}
+                />
+              )}
+              {activeType === 'input_list' && (
+                <SnapshotArrayView
+                  payload={data.data as Record<string, unknown> | null}
+                  arrayKey="cases"
+                  title="輸入名單（cases）"
+                />
+              )}
+              {activeType === 'result' && (
+                <SnapshotArrayView
+                  payload={data.data as Record<string, unknown> | null}
+                  arrayKey="assignments"
+                  title="分派結果（assignments）"
+                />
+              )}
+            </div>
+            {/* 原始 JSON （摺疊起來；除錯用） */}
+            <details className="border-t border-gray-200 bg-gray-50/40">
+              <summary className="px-5 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
+                展開原始 JSON（除錯用）
+              </summary>
+              <pre
+                data-testid="snapshot-json"
+                className="overflow-auto text-xs font-mono text-gray-700 bg-gray-50/50 p-4 max-h-[40vh]"
+              >
+                {JSON.stringify(data.data, null, 2)}
+              </pre>
+            </details>
           </section>
         )}
       </main>

@@ -8,6 +8,11 @@ import {
   Users,
   Building2,
   AlertTriangle,
+  Lock,
+  Clock,
+  TrendingUp,
+  FileSpreadsheet,
+  FileText,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -17,6 +22,8 @@ import {
   downloadRunExport,
   type RunSummaryResponse,
 } from '@/api/assignment-run';
+import { DeptDeviationChart } from './_components/dept-deviation-chart';
+import { CardLevelDonut } from './_components/card-level-donut';
 
 /**
  * F063 — 月跑結果摘要頁
@@ -36,6 +43,17 @@ import {
 function formatPct(n: number | undefined): string {
   if (n === undefined || Number.isNaN(n)) return '—';
   return `${(n * 100).toFixed(2)}%`;
+}
+
+function formatDuration(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms) || ms <= 0) return '—';
+  const s = Math.floor(ms / 1000);
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (hh > 0) return `${hh} 時 ${mm} 分 ${ss} 秒`;
+  if (mm > 0) return `${mm} 分 ${ss} 秒`;
+  return `${ss} 秒`;
 }
 
 export function RunSummaryPage() {
@@ -126,65 +144,193 @@ export function RunSummaryPage() {
 
         {data && (
           <>
-            {/* Header card */}
-            <section className="bg-white rounded-xl border border-gray-200 p-6 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                <FileBarChart className="w-6 h-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-gray-500">月份</p>
-                <p className="text-2xl font-mono font-semibold text-gray-900">{data.ym}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">總分派數</p>
-                <p
-                  data-testid="total-assigned"
-                  className="text-3xl font-bold text-primary"
-                >
-                  {data.totalAssigned.toLocaleString()}
-                </p>
-                <p className="text-[11px] text-gray-400 text-right">筆</p>
-              </div>
-              <div className="flex flex-col gap-2 ml-4">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  data-testid="btn-export-csv"
-                  loading={exporting === 'csv'}
-                  loadingText="匯出中..."
-                  disabled={exporting !== null}
-                  onClick={() => void handleExport('csv')}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" />
-                    CSV
+            {/* Run Info Bar — READ-ONLY + 月份 / 完成時間 / 耗時 / Stage1 / 覆蓋率 */}
+            <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                    <FileBarChart className="w-3.5 h-3.5" />
+                    已完成
                   </span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  data-testid="btn-export-xlsx"
-                  loading={exporting === 'xlsx'}
-                  loadingText="匯出中..."
-                  disabled={exporting !== null}
-                  onClick={() => void handleExport('xlsx')}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" />
-                    XLSX
+                  <span className="text-xs text-gray-500">Run ID</span>
+                  <code className="font-mono text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                    {data.runId.slice(0, 13)}
+                  </code>
+                  <span
+                    data-testid="readonly-badge"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200"
+                  >
+                    <Lock className="w-3 h-3" />
+                    READ-ONLY 不可變
                   </span>
-                </Button>
-                <button
-                  type="button"
-                  data-testid="btn-snapshot"
-                  onClick={() => navigate(`/assignment/snapshots?runId=${runId}`)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-primary border border-blue-200 rounded-md hover:bg-blue-50"
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  快照詳情
-                </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="btn-snapshot"
+                    onClick={() => navigate(`/assignment/snapshots?runId=${runId}`)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    快照詳情
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/assignment/history')}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
+                  >
+                    <FileBarChart className="w-3.5 h-3.5" />
+                    執行歷史
+                  </button>
+                </div>
+              </div>
+              <div className="px-5 py-4 grid grid-cols-5 gap-4">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">作業年月</div>
+                  <div className="text-sm font-semibold text-gray-800 font-mono">
+                    {data.projectWorkym ?? data.ym ?? '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">完成時間</div>
+                  <div className="text-sm text-gray-700 font-mono">
+                    {data.finishedAt
+                      ? new Date(data.finishedAt).toLocaleString()
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    執行耗時
+                  </div>
+                  <div className="text-sm font-semibold text-primary tabular-nums">
+                    {formatDuration(data.durationMs)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Stage 1 原始名單</div>
+                  <div className="text-sm font-semibold text-gray-800 tabular-nums">
+                    {(data.stage1Count ?? 0).toLocaleString()} 筆
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    名單覆蓋率
+                  </div>
+                  <div className="text-sm font-semibold text-green-700 tabular-nums">
+                    {data.coverageRate != null
+                      ? (data.coverageRate * 100).toFixed(1) + '%'
+                      : '—'}
+                  </div>
+                </div>
               </div>
             </section>
+
+            {/* 3 stat cards */}
+            <section className="grid grid-cols-3 gap-4">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-gray-500">總分派客戶數</div>
+                  <Users className="w-4 h-4 text-primary" />
+                </div>
+                <div
+                  data-testid="total-assigned"
+                  className="text-3xl font-bold text-gray-900 tabular-nums"
+                >
+                  {(data.stage4Count ?? data.totalCases ?? data.totalAssigned ?? 0).toLocaleString()}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Stage 4 最終分派數</div>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-gray-500">分派部門數</div>
+                  <Building2 className="w-4 h-4 text-purple-600" />
+                </div>
+                <div
+                  data-testid="dept-count"
+                  className="text-3xl font-bold text-gray-900 tabular-nums"
+                >
+                  {data.deptSummary?.length ?? data.deptBreakdown?.length ?? 0}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {(data.deptSummary ?? []).slice(0, 5).map((d) => d.deptId).join(' / ') || '—'}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-gray-500">CARD_LEVEL 種類</div>
+                  <FileBarChart className="w-4 h-4 text-amber-600" />
+                </div>
+                <div
+                  data-testid="level-count"
+                  className="text-3xl font-bold text-gray-900 tabular-nums"
+                >
+                  {data.levelDistribution?.length ?? 0}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">分派結果之等級數</div>
+              </div>
+            </section>
+
+            {/* 匯出區（streaming xlsx + csv） */}
+            <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex-1 min-w-[260px]">
+                  <p className="text-sm font-semibold text-gray-800 mb-1 inline-flex items-center gap-1.5">
+                    <Download className="w-4 h-4 text-primary" />
+                    匯出分派結果（F064）
+                  </p>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    包含{' '}
+                    <strong>
+                      {(data.stage4Count ?? data.totalAssigned ?? 0).toLocaleString()}
+                    </strong>{' '}
+                    筆分派紀錄；欄位含 list_no / appl_no / card_level / tier_level / dept_id / emplid 等。
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    data-testid="btn-export-xlsx"
+                    loading={exporting === 'xlsx'}
+                    loadingText="匯出中..."
+                    disabled={exporting !== null}
+                    onClick={() => void handleExport('xlsx')}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      匯出 Excel (streaming)
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    data-testid="btn-export-csv"
+                    loading={exporting === 'csv'}
+                    loadingText="匯出中..."
+                    disabled={exporting !== null}
+                    onClick={() => void handleExport('csv')}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" />
+                      匯出 CSV
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            {/* Phase 3 P2-3 部門偏差 chart（取代 deptBreakdown table） */}
+            {data.deptSummary && data.deptSummary.length > 0 && (
+              <DeptDeviationChart rows={data.deptSummary} />
+            )}
+
+            {/* Phase 3 P2-3 CARD_LEVEL 圓餅 + TIER placeholder */}
+            {data.levelDistribution && data.levelDistribution.length > 0 && (
+              <CardLevelDonut rows={data.levelDistribution} />
+            )}
 
             {/* Dept breakdown */}
             {data.deptBreakdown && data.deptBreakdown.length > 0 && (
