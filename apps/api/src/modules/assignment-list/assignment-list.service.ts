@@ -124,6 +124,9 @@ export class AssignmentListService {
         prodKind: r.prod_kind,
         caseYear: r.caseyear,
         specTp: r.spec_tp,
+        // P2-5 Phase 3：補 caseStatus + crEnabled（已存 DB）
+        caseStatus: r.case_status,
+        crEnabled: r.cr_enabled,
         listPeriodStart: r.list_period_start,
         listPeriodEnd: r.list_period_end,
         listInterval: r.list_interval,

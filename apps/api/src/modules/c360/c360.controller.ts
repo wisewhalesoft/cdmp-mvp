@@ -16,12 +16,14 @@ export class C360Controller {
   @Get()
   async searchCustomers(@Query() query: CustomerListQueryDto, @Req() req: any) {
     const userRole = req.user.role;
-    return this.c360Service.searchCustomers(query, userRole);
+    const businessRole = req.user.businessRole ?? null;
+    return this.c360Service.searchCustomers(query, userRole, businessRole);
   }
 
   @Get(':customerId')
   async getCustomerDetail(@Param('customerId') customerId: string, @Req() req: any) {
     const userRole = req.user.role;
-    return this.c360Service.getCustomerDetail(customerId, userRole);
+    const businessRole = req.user.businessRole ?? null;
+    return this.c360Service.getCustomerDetail(customerId, userRole, businessRole);
   }
 }

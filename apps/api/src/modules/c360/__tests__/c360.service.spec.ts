@@ -289,6 +289,28 @@ describe('C360Service', () => {
       expect(customer.mobilePhone).toBe('0912****78');
     });
 
+    // Phase 3 P2-1：PII 遮罩規則對齊 prototype 26（businessRole 才解鎖完整 PII）
+    it('Phase 3: director (businessRole=director) sees full sourceCustomerNo', async () => {
+      const result = await service.searchCustomers({}, 'user', 'director');
+      const customer = result.data.find((d: any) => d.customerId === TEST_UUID_1);
+      expect(customer.sourceCustomerNo).toBe('A123456789');
+      expect(customer.mobilePhone).toBe('0912345678');
+    });
+
+    it('Phase 3: section_chief sees full PII', async () => {
+      const result = await service.searchCustomers({}, 'user', 'section_chief');
+      const customer = result.data.find((d: any) => d.customerId === TEST_UUID_1);
+      expect(customer.sourceCustomerNo).toBe('A123456789');
+      expect(customer.mobilePhone).toBe('0912345678');
+    });
+
+    it('Phase 3: plain user (businessRole=null) sees masked PII', async () => {
+      const result = await service.searchCustomers({}, 'user', null);
+      const customer = result.data.find((d: any) => d.customerId === TEST_UUID_1);
+      expect(customer.sourceCustomerNo).toBe('A12*****89');
+      expect(customer.mobilePhone).toBe('0912****78');
+    });
+
     it('TS-F046-019: empty customer_core returns empty list and zero total', async () => {
       await dataSource.query('DELETE FROM customer_core');
       const result = await service.searchCustomers({}, 'admin');

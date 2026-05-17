@@ -540,5 +540,28 @@ describe('AssignmentListService', () => {
       const none = await service.listLists({ ym: YM, stages: ['ready'] });
       expect(none.lists.length).toBe(0);
     });
+
+    // P2-5 Phase 3：listLists 補 caseStatus + crEnabled 欄位
+    it('Phase 3 P2-5：listLists 回傳含 caseStatus + crEnabled', async () => {
+      await service.createList(
+        baseCreateDto({ caseStatus: '01$$02', crEnabled: true }),
+        ACTOR,
+        YM,
+      );
+      const res = await service.listLists({ ym: YM });
+      expect(res.lists.length).toBe(1);
+      expect(res.lists[0].caseStatus).toBe('01$$02');
+      expect(res.lists[0].crEnabled).toBe(true);
+    });
+
+    it('Phase 3 P2-5：crEnabled=false 預設值正確回傳', async () => {
+      await service.createList(
+        baseCreateDto({ caseStatus: '03', crEnabled: false }),
+        ACTOR,
+        YM,
+      );
+      const res = await service.listLists({ ym: YM });
+      expect(res.lists[0].crEnabled).toBe(false);
+    });
   });
 });

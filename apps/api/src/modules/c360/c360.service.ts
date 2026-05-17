@@ -4,6 +4,24 @@ import { maskIdNumber, maskPhone, maskEmail } from './masking.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { CustomerListQueryDto } from './dto/customer-list-query.dto';
 
+/**
+ * F046 / F047 Phase 3 PII 遮罩規則：
+ *   - admin / director / section_chief → 完整顯示（管理 / 業務管理 / 轄區業務需要）
+ *   - plain user（businessRole=null） + 其他角色 → mask
+ *
+ * 對齊 prototype 26-customer-360-detail.html L305：`isUser = currentRole === 'user'`，
+ * Phase 3 進一步限縮為 `businessRole=null` 才視為 plain user。
+ */
+export function canSeeFullPii(
+  userRole: string | null | undefined,
+  businessRole: string | null | undefined,
+): boolean {
+  const r = (userRole ?? '').toLowerCase();
+  if (r === 'admin') return true;
+  const br = (businessRole ?? '').toLowerCase();
+  return br === 'director' || br === 'section_chief';
+}
+
 @Injectable()
 export class C360Service {
   constructor(private readonly dataSource: DataSource) {}
@@ -72,6 +90,7 @@ export class C360Service {
   async searchCustomers(
     query: CustomerListQueryDto,
     userRole: string,
+    businessRole?: string | null,
   ): Promise<{
     data: any[];
     pagination: {
@@ -170,16 +189,16 @@ export class C360Service {
 
     const rows = await this.dataSource.query(dataQuery, dataParams);
 
-    const isAdmin = userRole?.toLowerCase() === 'admin';
+    const fullPii = canSeeFullPii(userRole, businessRole);
     const data = rows.map((row: any) => ({
       customerId: row.customer_id,
       name: row.name,
       customerTypeCode: row.customer_type_code,
       customerTypeDesc: row.customer_type_desc ?? null,
-      sourceCustomerNo: isAdmin
+      sourceCustomerNo: fullPii
         ? row.source_customer_no
         : maskIdNumber(row.source_customer_no),
-      mobilePhone: isAdmin
+      mobilePhone: fullPii
         ? row.mobile_phone ?? null
         : maskPhone(row.mobile_phone),
       companyName: row.company_name ?? null,
@@ -191,7 +210,11 @@ export class C360Service {
     };
   }
 
-  async getCustomerDetail(customerId: string, userRole: string): Promise<any> {
+  async getCustomerDetail(
+    customerId: string,
+    userRole: string,
+    businessRole?: string | null,
+  ): Promise<any> {
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(customerId)) {
@@ -216,12 +239,12 @@ export class C360Service {
     }
 
     const row = rows[0];
-    const isAdmin = userRole?.toLowerCase() === 'admin';
+    const fullPii = canSeeFullPii(userRole, businessRole);
 
     return {
       customerId: row.customer_id,
       identity: {
-        sourceCustomerNo: isAdmin
+        sourceCustomerNo: fullPii
           ? row.source_customer_no
           : maskIdNumber(row.source_customer_no),
         customerTypeCode: row.customer_type_code,
@@ -245,15 +268,15 @@ export class C360Service {
         driverLicense: row.driver_license ?? null,
       },
       contactInfo: {
-        mobilePhone: isAdmin ? (row.mobile_phone ?? null) : maskPhone(row.mobile_phone),
-        homePhone: isAdmin ? (row.home_phone ?? null) : maskPhone(row.home_phone),
-        contactPhone: isAdmin ? (row.contact_phone ?? null) : maskPhone(row.contact_phone),
-        officePhone: isAdmin ? (row.office_phone ?? null) : maskPhone(row.office_phone),
+        mobilePhone: fullPii ? (row.mobile_phone ?? null) : maskPhone(row.mobile_phone),
+        homePhone: fullPii ? (row.home_phone ?? null) : maskPhone(row.home_phone),
+        contactPhone: fullPii ? (row.contact_phone ?? null) : maskPhone(row.contact_phone),
+        officePhone: fullPii ? (row.office_phone ?? null) : maskPhone(row.office_phone),
         registeredPhone: row.registered_phone ?? null,
         registeredFax: row.registered_fax ?? null,
         businessFax: row.business_fax ?? null,
         businessMobile: row.business_mobile ?? null,
-        email: isAdmin ? (row.email ?? null) : maskEmail(row.email),
+        email: fullPii ? (row.email ?? null) : maskEmail(row.email),
         lineAccount: row.line_account ?? null,
       },
       addresses: {
