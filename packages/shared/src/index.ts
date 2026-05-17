@@ -8,6 +8,45 @@ export const VALID_ROLES = [
 
 export type UserRole = (typeof VALID_ROLES)[number];
 
+// ===== F006a / AD-E07 v3.0：業務角色 (business_role) =====
+// 'director' / 'section_chief' / null（DB CHECK constraint 強制）
+// 變更入口唯一：PATCH /api/v1/accounts/:id/business-role（Admin only）
+export type BusinessRole = 'director' | 'section_chief' | null;
+
+export const VALID_BUSINESS_ROLES = ['director', 'section_chief'] as const;
+
+// 4 種「實質身份 label」= 系統角色 × 業務角色組合視圖（F002 v2.0 §4.5）
+export type EffectiveIdentity = 'admin' | 'director' | 'section_chief' | 'user';
+
+export function deriveEffectiveIdentity(
+  role: UserRole,
+  businessRole: BusinessRole | undefined,
+): EffectiveIdentity {
+  if (role === 'admin') return 'admin';
+  if (businessRole === 'director') return 'director';
+  if (businessRole === 'section_chief') return 'section_chief';
+  return 'user';
+}
+
+export function getBusinessRoleDisplayName(businessRole: BusinessRole): string {
+  if (businessRole === 'director') return '業務部長';
+  if (businessRole === 'section_chief') return '業務處長';
+  return '—';
+}
+
+export function getEffectiveIdentityDisplayName(identity: EffectiveIdentity): string {
+  switch (identity) {
+    case 'admin':
+      return '系統管理者';
+    case 'director':
+      return '業務部長';
+    case 'section_chief':
+      return '業務處長';
+    case 'user':
+      return '一般使用者';
+  }
+}
+
 export interface RoleDefinition {
   roleCode: UserRole;
   displayName: string;
@@ -47,7 +86,11 @@ export interface UserInfo {
   email: string;
   role: UserRole;
   // F002SM / F008 AD-E02-1：業務主管旗標。Admin 回傳 false；舊 token 可能為 undefined。
+  // ⚠️ DEPRECATED (AD-E07 v3.0 / 2026-05-16) — 由 businessRole 取代；保留欄位供過渡期 callsite 漸進改造。
   isSalesManager?: boolean;
+  // F002 v2.0 / AD-E07 v3.0：業務角色（'director' / 'section_chief' / null）。
+  // legacy JWT 未含此欄位時為 undefined，FE 應降級視為 null。
+  businessRole?: BusinessRole;
 }
 
 export interface ApiError {
@@ -73,7 +116,10 @@ export interface CreateAccountResponse {
   name: string;
   email: string;
   role: UserRole;
+  // ⚠️ DEPRECATED — 由 business_role 取代；現以 business_role !== null 推導維持向下相容。
   is_sales_manager: boolean;
+  // F006a v1.0 / AD-E07 v3.0 (2026-05-16)：業務角色（'director' / 'section_chief' / null）。
+  business_role: BusinessRole;
   status: 'active';
   created_at: string;
 }
@@ -89,7 +135,9 @@ export interface UpdateAccountResponse {
   name: string;
   email: string;
   role: UserRole;
+  // ⚠️ DEPRECATED — 由 business_role 取代。
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   created_at: string;
   updated_at: string;
@@ -105,7 +153,9 @@ export interface UpdateStatusResponse {
   name: string;
   email: string;
   role: UserRole;
+  // ⚠️ DEPRECATED — 由 business_role 取代。
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   updated_at: string;
 }
@@ -120,12 +170,16 @@ export interface UpdateRoleResponse {
   name: string;
   email: string;
   role: UserRole;
+  // ⚠️ DEPRECATED — 由 business_role 取代。
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   updated_at: string;
 }
 
-// F008 v3.2: PATCH /api/accounts/:id/sales-manager-flag
+// F008 v3.2 / DEPRECATED (AD-E07 v3.0): PATCH /api/accounts/:id/sales-manager-flag
+// 端點現回 410 Gone；改用 PATCH /api/v1/accounts/:id/business-role（F006a）。
+// 型別保留供前端遷移期使用，新程式碼不應引用。
 export interface UpdateSalesManagerFlagRequest {
   isSalesManager: boolean;
 }
@@ -136,7 +190,26 @@ export interface UpdateSalesManagerFlagResponse {
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
+  updated_at: string;
+}
+
+// F006a v1.0 / AD-E07 v3.0 (2026-05-16): PATCH /api/v1/accounts/:id/business-role
+// 唯一 business_role 寫入入口；同 transaction 觸發 password_changed_at 使既有 JWT 失效。
+export interface UpdateBusinessRoleRequest {
+  business_role: BusinessRole;
+}
+
+export interface UpdateBusinessRoleResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  business_role: BusinessRole;
+  status: 'active' | 'disabled';
+  password_changed_at: string | null;
+  created_at: string;
   updated_at: string;
 }
 
@@ -154,8 +227,11 @@ export interface AccountListItem {
   name: string;
   email: string;
   role: UserRole;
-  // F004/F006/F008 v3.2: 列表頁 chip 徽章與 dialog 預設值需要此欄位
+  // ⚠️ DEPRECATED (AD-E07 v3.0) — 由 business_role 取代；
+  // 過渡期由 backend 以 `business_role !== null` 推導維持向下相容。
   is_sales_manager: boolean;
+  // F006a v1.0 / AD-E07 v3.0：4 角色 column 顯示依據（admin / director / section_chief / user）。
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   created_at: string;
 }
@@ -944,6 +1020,11 @@ export const ERROR_CODES = {
   ACCOUNT_LAST_ADMIN: 'ACCOUNT_LAST_ADMIN',
   ACCOUNT_FLAG_NOT_APPLICABLE: 'ACCOUNT_FLAG_NOT_APPLICABLE',
   VALIDATION_INVALID_ROLE: 'VALIDATION_INVALID_ROLE',
+  // F006a / AD-E07 v3.0 (2026-05-16)：業務角色相關
+  ACCOUNT_BUSINESS_ROLE_INVALID: 'ACCOUNT_BUSINESS_ROLE_INVALID',
+  E07_ROLE_NOT_ASSIGNED: 'E07_ROLE_NOT_ASSIGNED',
+  E07_REQUIRES_DIRECTOR: 'E07_REQUIRES_DIRECTOR',
+  E07_REQUIRES_SECTION_CHIEF: 'E07_REQUIRES_SECTION_CHIEF',
   RESET_TOKEN_EXPIRED: 'AUTH_RESET_TOKEN_EXPIRED',
   RESET_TOKEN_USED: 'AUTH_RESET_TOKEN_USED',
   RESET_TOKEN_INVALID: 'AUTH_RESET_TOKEN_INVALID',
@@ -996,6 +1077,10 @@ export const ERROR_MESSAGES = {
   ACCOUNT_SELF_DISABLE: '您無法停用自己的帳號',
   ACCOUNT_LAST_ADMIN: '無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。',
   VALIDATION_INVALID_ROLE: '角色值無效，必須為 admin 或 user',
+  ACCOUNT_BUSINESS_ROLE_INVALID: '業務角色值無效，必須為 director、section_chief 或 null',
+  E07_ROLE_NOT_ASSIGNED: '您尚未被指派業務角色，請聯絡管理員。',
+  E07_REQUIRES_DIRECTOR: '此操作需業務部長權限。',
+  E07_REQUIRES_SECTION_CHIEF: '此操作需業務處長權限。',
   RESET_TOKEN_EXPIRED: '此連結已過期，請重新申請密碼重設',
   RESET_TOKEN_USED: '此連結已失效',
   RESET_TOKEN_INVALID: '重設連結無效',
