@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -152,6 +153,14 @@ export class StageActionController {
       this.actor(req),
       AssignmentListController.computeCurrentWorkYm(),
     );
+  }
+
+  // F087 v1.2 P1: 簽核歷史完整時間軸（DirectorOrSectionChief 讀取）
+  @Get(':listNo/approval-history')
+  @UseGuards(DirectorOrSectionChiefGuard)
+  @RequireDirectorOrSectionChief()
+  async getApprovalHistory(@Param('listNo') listNo: string) {
+    return this.service.getApprovalHistory(listNo);
   }
 
   private actor(req: Request) {

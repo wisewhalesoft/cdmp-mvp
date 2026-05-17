@@ -52,6 +52,8 @@ export class StageActionService {
     private readonly deptPctRepo: Repository<ObDeptPct>,
     @InjectRepository(ObEmplSet)
     private readonly emplSetRepo: Repository<ObEmplSet>,
+    @InjectRepository(AssignmentApproval)
+    private readonly approvalRepo: Repository<AssignmentApproval>,
     private readonly stageTransition: StageTransitionService,
     private readonly ratioValidation: RatioValidationService,
     private readonly personnelRatioValidation: PersonnelRatioValidationService,
@@ -390,6 +392,31 @@ export class StageActionService {
     };
   }
 
+  // ===========================================================================
+  // F087 v1.2 P1 — 簽核歷史完整時間軸（GET）
+  // ===========================================================================
+  async getApprovalHistory(listNo: string): Promise<ApprovalHistoryResponse> {
+    await this.findListOrThrow(listNo); // 名單不存在 → NotFoundException
+    const rows = await this.approvalRepo
+      .createQueryBuilder('a')
+      .where('a.list_no = :listNo', { listNo })
+      .orderBy('a.approved_at', 'DESC')
+      .addOrderBy('a.created_at', 'DESC')
+      .getMany();
+
+    const history: ApprovalHistoryItem[] = rows.map((r) => ({
+      approvalId: r.approval_id,
+      action: r.action,
+      rejectReason: r.reject_reason,
+      approverId: r.approver_id,
+      approverName: r.approver_name,
+      approverRole: r.approver_role,
+      approvedAt: r.approved_at,
+    }));
+
+    return { listNo, history };
+  }
+
   // --- 共用 helpers ---
 
   private async findListOrThrow(listNo: string): Promise<ObListDefinition> {
@@ -439,4 +466,24 @@ export interface StageRollbackResponse {
   deletedEmplSetCount?: number;
   rollbackedBy: string;
   rollbackedAt: Date;
+}
+
+/**
+ * F087 v1.2 P1 — getApprovalHistory 回應結構
+ *
+ * 對應 assignment_approval table；依 approved_at DESC 排序回傳全部紀錄。
+ */
+export interface ApprovalHistoryItem {
+  approvalId: string;
+  action: 'approve' | 'reject';
+  rejectReason: string | null;
+  approverId: string;
+  approverName: string | null;
+  approverRole: string | null;
+  approvedAt: Date;
+}
+
+export interface ApprovalHistoryResponse {
+  listNo: string;
+  history: ApprovalHistoryItem[];
 }

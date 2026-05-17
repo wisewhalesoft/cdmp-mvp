@@ -20,6 +20,7 @@ describe('StageActionService', () => {
   let listRepo: any;
   let deptPctRepo: any;
   let emplSetRepo: any;
+  let approvalRepo: any;
   let stageTransition: any;
   let ratioValidation: any;
   let personnelRatioValidation: any;
@@ -29,6 +30,14 @@ describe('StageActionService', () => {
     listRepo = { findOne: vi.fn() };
     deptPctRepo = {};
     emplSetRepo = {};
+    approvalRepo = {
+      createQueryBuilder: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        addOrderBy: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+      }),
+    };
     stageTransition = {
       advanceTo: vi.fn().mockImplementation(async (_l, _f, _t, _u, pre, post) => {
         await pre({ find: vi.fn().mockResolvedValue([]), delete: vi.fn().mockResolvedValue({ affected: 0 }) });
@@ -49,6 +58,7 @@ describe('StageActionService', () => {
       listRepo,
       deptPctRepo,
       emplSetRepo,
+      approvalRepo,
       stageTransition,
       ratioValidation,
       personnelRatioValidation,
