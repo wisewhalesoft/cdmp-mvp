@@ -25,6 +25,7 @@ import { AssignmentCodeModule } from './modules/assignment-code/assignment-code.
 import { AssignmentScoringModule } from './modules/assignment-scoring/assignment-scoring.module';
 import { AssignmentListModule } from './modules/assignment-list/assignment-list.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
+import { PooldataFieldModule } from './modules/pooldata-field/pooldata-field.module';
 import { SystemModule } from './modules/system/system.module';
 import { Role } from './database/entities/role.entity';
 // === E07 Entities (Track A — 19 表)===
@@ -50,6 +51,9 @@ import { ObAssignSet } from './database/entities/ob-assign-set.entity';
 import { ObArreturndfMinCap } from './database/entities/ob-arreturndf-min-cap.entity';
 // Iter 1：F069~F072 CARD_TYPE 主檔 entity
 import { ObCardType } from './database/entities/ob-card-type.entity';
+// P1 B5：F075 / F076 POOLDATA 篩選欄位白名單 + 類別型可選值 entity
+import { PooldataFieldWhitelist } from './database/entities/pooldata-field-whitelist.entity';
+import { PooldataFieldOption } from './database/entities/pooldata-field-option.entity';
 
 const E07_ENTITIES = [
   ObCodeDf, ObListDefinition, ObDeptPct, ObEmplSet,
@@ -59,6 +63,7 @@ const E07_ENTITIES = [
   ObAssignConfig, ObAssignSet,
   ObArreturndfMinCap,
   ObCardType,
+  PooldataFieldWhitelist, PooldataFieldOption,
 ];
 
 @Module({
@@ -113,6 +118,7 @@ const E07_ENTITIES = [
     AssignmentScoringModule,
     AssignmentListModule,
     AssignmentModule,
+    PooldataFieldModule,
     SystemModule,
   ],
   providers: [],

@@ -6,15 +6,16 @@ source-story: US-102
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.3"
+date: 2026-05-17
 status: Draft
 ---
 
 # F075: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
+> **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回 BR-7 「`field_type` 由 categorical 切離時，service 層批次 SET 對應 `pooldata_field_option.is_active = false` + `deactivation_reason = 'field_type_changed'`（軟停用，不 CASCADE 刪除）」+ AC-6 切換 confirm UI 文字補「將自動停用 N 個可選值」+ 跨參照 data-model `deactivation_reason` ENUM。
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-102 + AD-E07 v3.0 一致性決議完整重建；Guard：寫入 `DirectorGuard`、查看 `DirectorOrSectionChiefGuard`（取代 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議與 seed 清單。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -114,8 +115,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Given** 部長 / Admin 點擊欄位「編輯」
 - **When** 修改 `display_name` 或 `field_type`，點擊儲存
 - **Then** 變更立即生效，下次開啟名單定義表單時反映最新顯示名稱
-- **And** 若 `field_type` 從 `categorical` 改為其他類別，系統顯示警告「此欄位現有可選值設定將不再套用（不自動刪除），確定繼續？」，確認後才儲存
-- **And** 操作寫入 `assignment_audit_log`（`action = 'UPDATE'`）
+- **And** 若 `field_type` 從 `categorical` 改為其他類別，系統先以 `GET /api/v1/pooldata-fields/{columnName}/options?active=true` 取得啟用可選值數量 N，顯示警告「此欄位 {N} 個啟用可選值將自動停用（軟停用，歷史保留不刪除），且不再套用於新名單篩選；確定繼續？」，確認後 service 層**同一 transaction 內**：(1) 更新 `pooldata_field_whitelist.field_type`、(2) 批次 `UPDATE pooldata_field_option SET is_active = false, deactivation_reason = 'field_type_changed' WHERE column_name = :columnName AND is_active = true`（沿用 F076 v1.3 BR-6）
+- **And** 操作寫入 `assignment_audit_log`（`action = 'UPDATE'`、details 含 `deactivatedOptionCount = N`）
 
 ### AC-7：部長 / Admin 停用白名單欄位
 
@@ -243,7 +244,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-4 | **停用後不回溯**：月跑 Stage 1 讀取 `ob_list_definition.filter_conditions` 時，**不 join** `pooldata_field_whitelist` 做欄位有效性驗證；既有條件即使欄位停用仍可正確過濾 |
 | BR-5 | **角色矩陣**：寫入端點（POST / PATCH / DELETE）限 `admin` 或 `business_role = 'director'`；GET 開放至 `business_role = 'section_chief'`；對應 `DirectorGuard` 與 `DirectorOrSectionChiefGuard` |
 | BR-6 | **字串映射不維護外鍵**：白名單之 `column_name` 為 OBPOOLDATA 欄位名稱字串，不維護 FK 約束（因 OBPOOLDATA 為 ETL 同步資料，欄位可能動態變化） |
-| BR-7 | **categorical → 非 categorical 之 field_type 變更**：保留既有 `pooldata_field_option` 紀錄（不刪除），但月跑 / 表單不再參照；UI 顯示警告供 Admin 確認 |
+| BR-7 | **categorical → 非 categorical 之 field_type 變更（v1.3 / 2026-05-17 / PO 決議 F076-C 落地）**：F075 PATCH 將某欄位 `field_type` 從 `'categorical'` 改為其他類別時，service 層於同一 transaction 內對 `pooldata_field_option` 執行批次 `SET is_active = false, deactivation_reason = 'field_type_changed' WHERE column_name = :columnName AND is_active = true`（軟停用）；**不 CASCADE 刪除**，歷史保留供追溯（沿用 F076 v1.3 BR-6 + BR-7）；UI 顯示 confirm Modal 提示「將自動停用 N 個可選值」（N 由 GET options API 動態取得）；批次 UPDATE 失敗則整個 PATCH transaction rollback |
 | BR-8 | **稽核失敗不 rollback**：沿用 F050 v2.0 BR-11 |
 | BR-9 | **Seed 冪等性**：seed 腳本以 `INSERT ... ON CONFLICT (column_name) DO NOTHING` 實現；重複執行不產生重複資料 |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F075 寫入端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED`；GET 端點不受限以保證 F050 / F076 仍能讀取 |
@@ -260,7 +261,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
   - 欄位：`column_name`（text，必填，提示「請輸入 OBPOOLDATA 之欄位名稱」）/ `display_name`（text，必填）/ `field_type`（select：數值型 / 類別型 / 日期型，必填）
   - 儲存後 categorical 欄位顯示提示「請至 POOLDATA 可選值維護頁設定可選值」
 - **編輯 Modal**：與新增相同，但 `column_name` 為唯讀
-- **`field_type` 變更警告 Modal**：自 categorical 改為 numeric / date 時彈出，內容「此欄位現有可選值設定將不再套用（不自動刪除），確定繼續？」+「確認」/「取消」按鈕
+- **`field_type` 變更警告 Modal**：自 categorical 改為 numeric / date 時彈出，內容「此欄位 {N} 個啟用可選值將自動停用（軟停用，歷史保留不刪除），且不再套用於新名單篩選；確定繼續？」+「確認」/「取消」按鈕；N 由 service 層 `GET options?active=true` 預查得到並回填至前端 Modal
 - **停用確認 Modal**：「確認停用 {displayName}？此欄位將立即從新名單定義條件選單中消失，但既有名單條件不受影響。」
 - **成功提示 toast**：「欄位『{displayName}』已新增 / 編輯 / 停用 / 啟用」
 
@@ -342,3 +343,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-102，E07 補修批次 4）：新建 `pooldata_field_whitelist` 表；寫入限部長 + Admin（`DirectorGuard`）；查看開放至處長（`DirectorOrSectionChiefGuard`）；初始 8 筆 seed；停用不回溯既有條件；新增 3 個 errCode |
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #2：新增 BR-10 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`），僅作用於寫入端點 |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-102 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
+| v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失）：(1) BR-7 從「保留紀錄不刪除」強化為「service 層批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`（同 transaction）」；(2) AC-6 confirm 文字補「將自動停用 N 個可選值」+ 稽核 details 補 `deactivatedOptionCount`；(3) UI Modal 文字升級；(4) 與 F076 v1.3 BR-6/BR-7 + data-model.md `pooldata_field_option.deactivation_reason` ENUM 對齊 |

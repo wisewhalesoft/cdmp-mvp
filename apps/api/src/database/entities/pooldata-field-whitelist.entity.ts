@@ -1,0 +1,43 @@
+// F075 v1.3 / 2026-05-17 / architecture-spec §E07 M06：POOLDATA 篩選欄位白名單
+// 對應 migration：1711360000200-CreatePooldataFieldWhitelist.ts
+// ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
+
+import { Entity, Column, PrimaryColumn } from 'typeorm';
+import { dateColumnType } from '@/common/database/column-types';
+
+/**
+ * pooldata_field_whitelist — POOLDATA 篩選欄位白名單（含 field_type metadata）
+ *
+ * 為 F050 新名單定義表單條件篩選欄位之動態來源（取代 v1.x 硬編碼欄位）；
+ * 部長 / Admin 可寫入，處長唯讀。
+ *
+ * 關鍵設計（spec §5.x / §6）：
+ *   - Natural PK：column_name VARCHAR(64)（OBPOOLDATA 欄位名稱字串，不維護 FK 至 OBPOOLDATA）
+ *   - field_type：'numeric' / 'categorical' / 'date'（PostgreSQL CHECK；SQLite 由應用層保證）
+ *   - is_active：軟刪除旗標；停用後不回溯既有名單條件（BR-4）
+ *   - 日期欄位採 `dateColumnType` helper（PostgreSQL timestamp / SQLite datetime）
+ *
+ * F076-C 軟停用級聯（F075 v1.3 BR-7）：field_type 從 categorical 切離時，
+ *   service 層同 transaction 批次 SET pooldata_field_option.is_active=false
+ *   + deactivation_reason='field_type_changed'；不採 DB CASCADE，由應用層保證。
+ */
+@Entity('pooldata_field_whitelist')
+export class PooldataFieldWhitelist {
+  @PrimaryColumn({ name: 'column_name', type: 'varchar', length: 64 })
+  column_name: string;
+
+  @Column({ name: 'display_name', type: 'varchar', length: 100 })
+  display_name: string;
+
+  @Column({ name: 'field_type', type: 'varchar', length: 20 })
+  field_type: 'numeric' | 'categorical' | 'date';
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  is_active: boolean;
+
+  @Column({ name: 'created_at', type: dateColumnType })
+  created_at: Date;
+
+  @Column({ name: 'updated_at', type: dateColumnType })
+  updated_at: Date;
+}

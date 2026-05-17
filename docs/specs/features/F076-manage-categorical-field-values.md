@@ -6,15 +6,16 @@ source-story: US-103
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.3"
+date: 2026-05-17
 status: Draft
 ---
 
 # F076: 類別型欄位可選值管理
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
+> **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回：(1) §5.0 概念 schema 區塊補 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-7 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 已 Resolved）；(3) BR-6 改寫為「F075 將欄位 `field_type` 從 categorical 改為其他類別時批次軟停用」+ 新增 BR-7「歷史保留 + `includeInactive=true` 查詢」；(4) 新增專屬 deactivate 端點 `PATCH /:columnName/options/:optionValue/deactivate` body `{ isActive: false, reason: string }` + 200 字驗證；(5) error-handling `WHITELIST_OPTION_INACTIVE` 警告碼 cross-ref。
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard：寫入 `DirectorGuard`、查看 `DirectorOrSectionChiefGuard`（取代 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議與 seed 清單。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -42,7 +43,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 為 F075 白名單中 `field_type = categorical` 之欄位維護可選值列表（`option_value` + `option_label`），並支援停用 / 啟用。新名單定義表單之多選元件只呈現啟用值；停用值「不回溯」既有名單條件，月跑讀取直接讀 `ob_list_definition.filter_conditions` JSONB。
 
 **範圍**：
-- 新建 `pooldata_field_option` 表，欄位包含 `column_name`（FK → `pooldata_field_whitelist`）、`option_value`、`option_label`、`is_active`，複合唯一鍵 `(column_name, option_value)`
+- 新建 `pooldata_field_option` 表，欄位包含 `column_name`（FK → `pooldata_field_whitelist`）、`option_value`、`option_label`、`is_active`、`deactivation_reason`（軟停用原因 ENUM，詳見 §5.0），複合唯一鍵 `(column_name, option_value)`
 - 部長 / Admin 可寫入；處長唯讀（可進入頁面查看，無編輯按鈕）
 - 系統首次部署時自動 seed 各 categorical 欄位之初始可選值
 - 停用值「不回溯」既有名單條件
@@ -103,13 +104,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Then** 系統顯示錯誤「此可選值已存在（狀態：停用），如需重新使用請改為啟用操作」，不新增重複紀錄
 - **And** 後端回 409 `POOLDATA_OPTION_DUPLICATE`
 
-### AC-6：部長 / Admin 停用可選值
+### AC-6：部長 / Admin 停用可選值（v1.3 / 2026-05-17 / OQ-E07-21 落地 — reason 必填）
 
 - **Given** 部長 / Admin 點擊某可選值之「停用」按鈕
-- **When** 確認 Modal 後執行
-- **Then** 該 `option_value` 之 `is_active` 設為 false，**立即**從新名單定義多選元件選項中消失
-- **And** 已在**現有**名單定義條件中選取此值的設定**不受影響**（不回溯）
-- **And** 操作寫入 `assignment_audit_log`（`action = 'DISABLE'`）
+- **When** 確認 Modal（含「停用原因」textarea，**必填**、最大 200 字）後執行
+- **Then** 系統呼叫 `PATCH /api/v1/pooldata-fields/{columnName}/options/{optionValue}/deactivate`，body `{ "isActive": false, "reason": "<200 字內說明>" }`
+- **And** 該 `option_value` 之 `is_active` 設為 false、`deactivation_reason = 'manual'`，**立即**從新名單定義多選元件選項中消失
+- **And** 已在**現有**名單定義條件中選取此值的設定**不受影響**（不回溯）；月跑遇到引用 inactive 值僅產生警告 `WHITELIST_OPTION_INACTIVE`（詳 [error-handling.md#assignment-run-warnings](../error-handling.md#assignment-run-warnings)）
+- **And** reason 為空字串、>200 字、或欄位缺失 → 後端回 422 `VALIDATION_ERROR`（field: `reason`）
+- **And** 操作寫入 `assignment_audit_log`（`action = 'DISABLE'`、details 含 `reason`、`deactivationReason = 'manual'`）
 
 ### AC-7：停用可選值不中斷月跑
 
@@ -138,6 +141,24 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 ## 5. API 規格
 
+### 5.0 概念 Schema（v1.3 / 2026-05-17 補 — DB 細節以 data-model.md 為權威）
+
+| 欄位 | 型別 | NULL | 說明 |
+|---|---|---|---|
+| column_name | VARCHAR(64) | NOT NULL | FK → `pooldata_field_whitelist.column_name`（複合 PK 第 1 欄） |
+| option_value | VARCHAR(64) | NOT NULL | 可選值（複合 PK 第 2 欄） |
+| option_label | VARCHAR(100) | NOT NULL | 顯示文字 |
+| is_active | BOOLEAN | NOT NULL DEFAULT true | 啟用旗標 |
+| **deactivation_reason** | **VARCHAR(30)** | **NULL** | **v1.3 / 2026-05-17 新增 / PO 決議 F076-C 落地**：軟停用原因 ENUM（CHECK constraint 強制），合法值：`'manual'`（手動於 F076 停用，預設）/ `'field_type_changed'`（因 F075 將 `field_type` 從 `categorical` 切換為其他類別自動軟停用，沿用 F075 v1.3 BR-7）；`is_active = true` 時為 NULL；`is_active = false` 時非 NULL |
+| created_at | TIMESTAMP | NOT NULL | 建立時間 |
+| updated_at | TIMESTAMP | NOT NULL | 最後更新時間 |
+
+**ENUM 規範**：
+- `'manual'`：透過 `PATCH /:columnName/options/:optionValue/deactivate` 由部長 / Admin 主動停用；DTO `reason` 額外寫入 `assignment_audit_log.details`
+- `'field_type_changed'`：由 F075 PATCH 觸發批次更新（同 transaction），無 user-supplied reason；details 寫入 `triggeredBy: 'F075_field_type_change'`
+
+詳細 schema 及 migration 規範見 [data-model.md#pooldata_field_option](../data-model.md#pooldata_field_option--可選值)。
+
 ### 5.1 GET /api/v1/pooldata-fields/{columnName}/options
 
 | 用途 | 取得某 categorical 欄位之可選值列表 |
@@ -145,7 +166,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | 認證 | JWT 必填 |
 | 權限 | `DirectorOrSectionChiefGuard` |
 
-**Query Params**：`?active=true|false`（可選）
+**Query Params**：
+- `?active=true|false`（可選；不帶則回啟用值，**等同於 v1.2 既有行為**）
+- `?includeInactive=true`（v1.3 / 2026-05-17 新增）：回傳全部含 inactive 紀錄供歷史追溯（F076 維護頁、稽核查詢、F051 名單編輯頁顯示已停用條件值之 label 用）；與 `active` query 互斥（同時帶以 `includeInactive` 優先）
 
 **Response — 200 OK**
 
@@ -187,9 +210,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 }
 ```
 
-### 5.3 PATCH /api/v1/pooldata-fields/{columnName}/options/{optionValue}
+### 5.3 PATCH /api/v1/pooldata-fields/{columnName}/options/{optionValue}（啟用用途）
 
-| 用途 | 停用 / 啟用可選值（is_active toggle） |
+| 用途 | 重新啟用已停用之可選值（is_active false → true） |
 |---|---|
 | 認證 | JWT 必填 |
 | 權限 | `DirectorGuard` |
@@ -197,7 +220,48 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 **Request Body**
 
 ```json
-{ "isActive": false }
+{ "isActive": true }
+```
+
+啟用時 service 層自動清空 `deactivation_reason` 為 NULL；不接受 `isActive: false`（停用須改用 §5.4 端點）。若 body 傳 `isActive: false` → 422 `VALIDATION_ERROR` 並提示「停用請改用 deactivate 端點」。
+
+### 5.4 PATCH /api/v1/pooldata-fields/{columnName}/options/{optionValue}/deactivate（v1.3 / 2026-05-17 新增 — 停用專屬）
+
+| 用途 | 停用可選值（is_active true → false）並要求填寫停用原因 |
+|---|---|
+| 認證 | JWT 必填 |
+| 權限 | `DirectorGuard` |
+
+**Request Body**
+
+```json
+{
+  "isActive": false,
+  "reason": "本產品 2026 起停售，可選值不再使用"
+}
+```
+
+**DTO 驗證規則**：
+- `isActive` 必填且必須為 `false`（防呆，避免端點誤用）
+- `reason` 必填、字串、`minLength: 1`、`maxLength: 200`（中文以 1 字計）
+- 違反 → 422 `VALIDATION_ERROR`，details `field: 'reason' | 'isActive'`
+
+**Service 層行為**：
+- SET `is_active = false`、`deactivation_reason = 'manual'`、`updated_at = NOW()`
+- 寫入 `assignment_audit_log`：`action = 'DISABLE'`、`entity_type = 'pooldata_field_option'`、`entity_id = {columnName}.{optionValue}`、details `{ reason, deactivationReason: 'manual' }`
+- 已停用紀錄重新呼叫此端點 → 200 OK（idempotent，僅更新 `reason` 與 `updated_at`）
+
+**Response — 200 OK**
+
+```json
+{
+  "columnName": "PROD_KIND",
+  "optionValue": "03",
+  "optionLabel": "其他商品",
+  "isActive": false,
+  "deactivationReason": "manual",
+  "reason": "本產品 2026 起停售，可選值不再使用"
+}
 ```
 
 **錯誤代碼**
@@ -226,6 +290,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-8 | **Seed 冪等性**：seed 腳本以 `INSERT ... ON CONFLICT (column_name, option_value) DO NOTHING` 實現 |
 | BR-9 | **F050 動態多選來源**：F050 新名單定義表單多選元件呼叫 GET `/api/v1/pooldata-fields/{columnName}/options?active=true`，僅取啟用值 |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F076 寫入端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED`；GET 端點不受限 |
+| BR-11 | **F076-C 批次軟停用（v1.3 / 2026-05-17 / PO 決議 task #16 落地，補回 v1.2 救援遺失內容）**：F075 PATCH 將某欄位 `field_type` 從 `'categorical'` 改為其他類別時，本 Feature 既有可選值由 F075 service 層**批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`**（軟停用），執行於 F075 PATCH 同一 transaction；**不 CASCADE 刪除**、亦不阻擋父表 `field_type` 切換；對應之 F076 端點不接受外部 client 寫入 `deactivation_reason = 'field_type_changed'`（僅 F075 service 內部使用） |
+| BR-12 | **歷史保留 + `includeInactive` 查詢（v1.3 / 2026-05-17 / PO 決議 task #16 落地）**：類別切換後 inactive 可選值**永久保留**供歷史追溯；GET `/options?includeInactive=true` 可查詢含 inactive 紀錄（含 `deactivationReason`）；F051 名單編輯頁載入既有條件值 label 時 SHOULD 帶此 query，避免 inactive 值顯示為 raw `option_value`；F050 新名單表單不帶此 query（沿用 BR-9 僅取啟用值） |
+| BR-13 | **Manual 停用 reason 必填（v1.3 / 2026-05-17 / OQ-E07-21 Resolved）**：透過 §5.4 `PATCH /:columnName/options/:optionValue/deactivate` 端點停用時，DTO `reason` 必填、`maxLength: 200`；service 層寫入 `assignment_audit_log.details.reason`；空字串 / 超長 / 欄位缺失 → 422 `VALIDATION_ERROR`；reason 內容不額外驗證格式（業務自由填寫） |
 
 ## 7. UI/UX 需求
 
@@ -325,3 +392,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-103，E07 補修批次 4）：新建 `pooldata_field_option` 表；寫入限部長 + Admin（`DirectorGuard`）；查看開放至處長（`DirectorOrSectionChiefGuard`）；各 categorical 欄位 seed；停用不回溯既有條件；新增 3 個 errCode |
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #2：新增 BR-10 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`），僅作用於寫入端點 |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
+| v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失，task #16 system-architect Phase 1 PO 決議）：(1) §5.0 新增概念 schema 區塊明列 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-6 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 Resolved）+ 對應錯誤碼；(3) §5.1 GET 補 `includeInactive=true` query；(4) §5.3 PATCH 改為「啟用專用」、§5.4 新增 deactivate 專屬端點 `PATCH /:columnName/options/:optionValue/deactivate` + DTO `{ isActive: false, reason: string }` 200 字驗證；(5) 新增 BR-11 / BR-12 / BR-13；(6) 跨參照 data-model `pooldata_field_option.deactivation_reason` + error-handling `WHITELIST_OPTION_INACTIVE`；(7) 與 F075 v1.3 BR-7 對齊（F075 service 層觸發本表批次軟停用） |
