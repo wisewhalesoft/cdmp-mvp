@@ -10,12 +10,17 @@ import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
+// F006a / AD-E07 v3.0：所有 accounts response 同時暴露 business_role 與 is_sales_manager；
+// is_sales_manager 由 business_role !== null 推導，作為過渡期向下相容（待 FE 全面遷移後可移除）。
+export type BusinessRole = 'director' | 'section_chief' | null;
+
 export interface CreateAccountResult {
   id: string;
   name: string;
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -26,6 +31,7 @@ export interface UpdateAccountResult {
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   created_at: Date;
   updated_at: Date;
@@ -37,6 +43,7 @@ export interface AccountListItem {
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -54,6 +61,7 @@ export interface ChangeRoleResult {
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
@@ -64,6 +72,7 @@ export interface UpdateSalesManagerFlagResult {
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
@@ -78,11 +87,10 @@ export interface ToggleStatusResult {
   email: string;
   role: UserRole;
   is_sales_manager: boolean;
+  business_role: BusinessRole;
   status: 'active' | 'disabled';
   updated_at: Date;
 }
-
-export type BusinessRole = 'director' | 'section_chief' | null;
 
 export interface UpdateBusinessRoleResult {
   id: string;
@@ -94,6 +102,11 @@ export interface UpdateBusinessRoleResult {
   password_changed_at: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+function toBusinessRole(value: unknown): BusinessRole {
+  if (value === 'director' || value === 'section_chief') return value;
+  return null;
 }
 
 @Injectable()
@@ -121,8 +134,10 @@ export class AccountsService {
         'user.role',
         'user.status',
         'user.created_at',
-        // F004/F006/F008 v3.2: 列表頁需顯示 is_sales_manager chip 徽章
+        // F004/F006/F008 v3.2: 列表頁需顯示 is_sales_manager chip 徽章（DEPRECATED）
         'user.is_sales_manager',
+        // F006a / AD-E07 v3.0：4 角色 column 顯示依據
+        'user.business_role',
       ]);
 
     if (query.search) {
@@ -154,6 +169,7 @@ export class AccountsService {
         email: user.email,
         role: user.role,
         is_sales_manager: user.is_sales_manager ?? false,
+        business_role: toBusinessRole(user.business_role),
         status: user.status,
         created_at: user.created_at,
       })),
@@ -200,6 +216,7 @@ export class AccountsService {
       email: saved.email,
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
+      business_role: toBusinessRole(saved.business_role),
       status: saved.status,
       created_at: saved.created_at,
     };
@@ -240,6 +257,7 @@ export class AccountsService {
       email: saved.email,
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
+      business_role: toBusinessRole(saved.business_role),
       status: saved.status,
       created_at: saved.created_at,
       updated_at: saved.updated_at,
@@ -278,6 +296,7 @@ export class AccountsService {
       email: saved.email,
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
+      business_role: toBusinessRole(saved.business_role),
       status: saved.status,
       updated_at: saved.updated_at,
     };
@@ -305,6 +324,7 @@ export class AccountsService {
         role: user.role,
         // F008 v3.2 BR-8 / TS-F008-SM-009: 角色變更不影響 is_sales_manager
         is_sales_manager: user.is_sales_manager ?? false,
+        business_role: toBusinessRole(user.business_role),
         status: user.status,
         updated_at: user.updated_at,
       };
@@ -333,6 +353,7 @@ export class AccountsService {
       email: saved.email,
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
+      business_role: toBusinessRole(saved.business_role),
       status: saved.status,
       updated_at: saved.updated_at,
     };
@@ -372,6 +393,7 @@ export class AccountsService {
       email: saved.email,
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
+      business_role: toBusinessRole(saved.business_role),
       status: saved.status,
       updated_at: saved.updated_at,
     };
@@ -477,7 +499,7 @@ export class AccountsService {
         actor_name: actorId,
         before_value: { business_role: oldRole },
         after_value: { business_role: newRole },
-      });
+      } as any);
 
       // 回傳更新後物件（合併本地變更，避免再讀一次 DB）
       const updated = {
