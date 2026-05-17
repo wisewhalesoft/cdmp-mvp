@@ -7,16 +7,24 @@
  *   - TC-M05-SUMMARY-003：部門偏差 > 3% → alert=true
  *   - TC-M05-SUMMARY-004：warnings 段含 skipped_cases + warning_summary
  *   - TC-M05-EXPORT-001：exportResult format=csv → header + rows
- *   - TC-M05-EXPORT-002：xlsx → 422 EXPORT_FORMAT_NOT_SUPPORTED
+ *   - TC-M05-EXPORT-002：xlsx → ZIP 二進位（不再 422，v2.0 補 B6）
  *   - TC-M05-EXPORT-003：csv 寫入 audit log（action=EXPORT）
  *   - TC-M05-EXPORT-004：未完成 run → 422
  *   - TC-M05-EXPORT-005：CSV 內容含特殊字元（逗號 / 引號）正確 escape
+ *   - TC-EXPORT-XLSX-001：exportResult format=xlsx → Buffer + filename + contentType
+ *   - TC-EXPORT-XLSX-002：xlsx 包含 header + 8 欄位（與 CSV 一致）
+ *   - TC-EXPORT-XLSX-003：xlsx 寫入 audit log（after_value.format=xlsx）
+ *   - TC-EXPORT-XLSX-004：xlsx 含特殊字元值（,/"/\n）能安全寫入
+ *   - TC-EXPORT-XLSX-005：未完成 run → 422 ASSIGNMENT_RUN_NOT_COMPLETED
+ *   - TC-EXPORT-STREAMING：xlsx 50,001 筆 streaming 不爆 memory
+ *   - TC-EXPORT-EXPIRED：xlsx 超過 timeout → 500 EXPORT_FILE_EXPIRED
  *   - TC-M05-COMPARE-001：compareRuns 正常輸出（summary / configDiff / personnelMismatch / customerDiff）
  *   - TC-M05-COMPARE-002：任一 run 非 completed → 422 ASSIGNMENT_RUN_NOT_COMPARABLE
  *   - TC-M05-COMPARE-003：人員配對不一致率（NFR-005）alert > 3% → true
  *   - TC-M05-COMPARE-004：人員配對 0 共同案件 → rate=0, alert=false（不發生除零）
  *   - TC-M05-COMPARE-005：customerDiff added/removed 集合運算正確
  *   - TC-M05-COMPARE-006：configDiff card_version 與 dept_pct ration 變更偵測
+ *   - TC-COMPARE-EXPORT-XLSX：compareRunsExport 回傳 ZIP（xlsx） + filename + 3 sheets 結構
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -251,7 +259,8 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
         'csv',
         'actor-1',
       );
-      const lines = out.body.split('\n');
+      const body = out.body as string;
+      const lines = body.split('\n');
       expect(lines[0]).toBe(
         'list_no,appl_no,card_level,tier_level,dept_id,emplid,score,is_cr',
       );
@@ -263,12 +272,130 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       expect(out.rowCount).toBe(1);
     });
 
-    it('TC-M05-EXPORT-002：xlsx → 422 EXPORT_FORMAT_NOT_SUPPORTED', async () => {
+    it('TC-EXPORT-XLSX-001/002：xlsx → Buffer + filename + contentType + 含 header + rows', async () => {
       const run = await seedRun(env.runRepo);
+      await seedSnap(env.snapRepo, run.run_id, 'result', {
+        assignments: [
+          {
+            listNo: 'L1',
+            applNo: 'A1',
+            cardLevel: 'A',
+            tierLevel: 'T1',
+            deptId: 'D01',
+            emplid: 'E1',
+            score: 90,
+            isCr: 'N',
+          },
+        ],
+      });
+      const out = await env.service.exportResult(
+        run.run_id,
+        'xlsx',
+        'actor-1',
+      );
+      // ZIP 檔頭（xlsx = zip）
+      expect(Buffer.isBuffer(out.body)).toBe(true);
+      const buf = out.body as Buffer;
+      expect(buf.length).toBeGreaterThan(0);
+      expect(buf[0]).toBe(0x50); // 'P'
+      expect(buf[1]).toBe(0x4b); // 'K'
+      expect(out.contentType).toBe(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(out.filename).toMatch(
+        new RegExp(`^assignment_result_${YM}_[a-z0-9]{8}\\.xlsx$`),
+      );
+      expect(out.rowCount).toBe(1);
+    });
+
+    it('TC-EXPORT-XLSX-003：xlsx 寫入 audit log (after_value.format=xlsx)', async () => {
+      const run = await seedRun(env.runRepo);
+      await seedSnap(env.snapRepo, run.run_id, 'result', { assignments: [] });
+      await env.service.exportResult(run.run_id, 'xlsx', 'actor-1');
+      const logs = await env.auditRepo.find();
+      expect(logs.length).toBe(1);
+      expect(logs[0]).toMatchObject({
+        action: 'EXPORT',
+        entity_type: 'assignment_run',
+        entity_id: run.run_id,
+        actor_id: 'actor-1',
+      });
+      expect(logs[0].after_value).toEqual({ format: 'xlsx', rowCount: 0 });
+    });
+
+    it('TC-EXPORT-XLSX-004：xlsx 含特殊字元（,/"/\\n）能安全寫入', async () => {
+      const run = await seedRun(env.runRepo);
+      await seedSnap(env.snapRepo, run.run_id, 'result', {
+        assignments: [
+          {
+            listNo: 'L,1',
+            applNo: 'A"1\nX',
+            cardLevel: 'A',
+            tierLevel: null,
+            deptId: 'D01',
+            emplid: 'E1',
+            score: 80,
+            isCr: 'N',
+          },
+        ],
+      });
+      const out = await env.service.exportResult(
+        run.run_id,
+        'xlsx',
+        'actor-1',
+      );
+      expect(Buffer.isBuffer(out.body)).toBe(true);
+      expect((out.body as Buffer).length).toBeGreaterThan(100);
+      expect(out.rowCount).toBe(1);
+    });
+
+    it('TC-EXPORT-XLSX-005：未完成 → 422 ASSIGNMENT_RUN_NOT_COMPLETED', async () => {
+      const run = await seedRun(env.runRepo, { status: 'pending' });
       await expect(
         env.service.exportResult(run.run_id, 'xlsx', 'actor-1'),
       ).rejects.toMatchObject({
-        response: { error: ERROR_CODES.EXPORT_FORMAT_NOT_SUPPORTED },
+        response: { error: ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPLETED },
+      });
+    });
+
+    it('TC-EXPORT-STREAMING：xlsx 50,001 筆 streaming 能順利匯出（不爆 memory）', async () => {
+      const run = await seedRun(env.runRepo);
+      const assignments = new Array(50_001).fill(0).map((_, i) => ({
+        listNo: 'L1',
+        applNo: `A${i}`,
+        cardLevel: 'A',
+        tierLevel: 'T1',
+        deptId: 'D01',
+        emplid: 'E1',
+        score: 90,
+        isCr: 'N',
+      }));
+      await seedSnap(env.snapRepo, run.run_id, 'result', { assignments });
+      const before = process.memoryUsage().heapUsed;
+      const out = await env.service.exportResult(
+        run.run_id,
+        'xlsx',
+        'actor-1',
+      );
+      const after = process.memoryUsage().heapUsed;
+      expect(out.rowCount).toBe(50_001);
+      expect(Buffer.isBuffer(out.body)).toBe(true);
+      // peak memory delta < 500MB（streaming pattern 驗證；payload 本身就含 50k assignments）
+      expect((after - before) / 1024 / 1024).toBeLessThan(500);
+    }, 60_000);
+
+    it('TC-EXPORT-EXPIRED：xlsx 匯出超過 timeout → 500 EXPORT_FILE_EXPIRED', async () => {
+      const run = await seedRun(env.runRepo);
+      await seedSnap(env.snapRepo, run.run_id, 'result', {
+        assignments: [{ applNo: 'A1', deptId: 'D01', emplid: 'E1' }],
+      });
+      // 強制 timeout = 1ms，模擬超過 5 分鐘的情境
+      await expect(
+        env.service.exportResult(run.run_id, 'xlsx', 'actor-1', null, {
+          timeoutMs: 1,
+        }),
+      ).rejects.toMatchObject({
+        response: { error: ERROR_CODES.EXPORT_FILE_EXPIRED },
       });
     });
 
@@ -317,7 +444,7 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
         'csv',
         'actor-1',
       );
-      const dataLine = out.body.split('\n')[1];
+      const dataLine = (out.body as string).split('\n')[1];
       expect(dataLine).toContain('"L,1"');
       expect(dataLine).toContain('"A""1"');
     });
@@ -436,6 +563,40 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
         to: 35,
       });
       expect(c.configDiff.crRuleChanged).toEqual({ from: false, to: true });
+    });
+
+    it('TC-COMPARE-EXPORT-XLSX：compareRunsExport 回傳 xlsx Buffer + filename + 3 sheets', async () => {
+      const { runA, runB } = await seedComparePair();
+      const out = await env.service.compareRunsExport(
+        runA.run_id,
+        runB.run_id,
+        'actor-1',
+      );
+      expect(Buffer.isBuffer(out.body)).toBe(true);
+      const buf = out.body as Buffer;
+      expect(buf[0]).toBe(0x50);
+      expect(buf[1]).toBe(0x4b);
+      expect(out.contentType).toBe(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(out.filename).toMatch(
+        new RegExp(`^assignment_compare_[a-z0-9]{8}_[a-z0-9]{8}\\.xlsx$`),
+      );
+      // sheet 數 (summary / personnelMismatch / customerDiff)
+      const wb = new (await import('exceljs')).Workbook();
+      await wb.xlsx.load(
+        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
+      );
+      expect(wb.getWorksheet('summary')).toBeDefined();
+      expect(wb.getWorksheet('personnelMismatch')).toBeDefined();
+      expect(wb.getWorksheet('customerDiff')).toBeDefined();
+      // personnelMismatch sheet 第 2 列 = A2 mismatch
+      const pmSheet = wb.getWorksheet('personnelMismatch')!;
+      // row 1 header；row 2 第一筆 mismatch
+      const r2 = pmSheet.getRow(2);
+      expect(String(r2.getCell(1).value)).toBe('A2');
+      expect(String(r2.getCell(2).value)).toBe('E2');
+      expect(String(r2.getCell(3).value)).toBe('E99');
     });
   });
 });

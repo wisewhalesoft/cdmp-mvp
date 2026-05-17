@@ -246,12 +246,13 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
         SC_USER,
         ACTOR_SECTION_CHIEF,
       );
-      const lines = out.body.split('\n').filter(Boolean);
+      const body = out.body as string;
+      const lines = body.split('\n').filter(Boolean);
       // header + 2 rows
       expect(lines.length).toBe(3);
       expect(out.rowCount).toBe(2);
-      expect(out.body).toContain('E1');
-      expect(out.body).toContain('E2');
+      expect(body).toContain('E1');
+      expect(body).toContain('E2');
       expect(out.body).not.toContain('E3');
       expect(out.body).not.toContain('E4');
     });

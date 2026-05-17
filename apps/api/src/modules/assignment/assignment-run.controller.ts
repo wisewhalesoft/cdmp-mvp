@@ -20,6 +20,8 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
+import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { AssignmentRunService } from './services/assignment-run.service';
 import { AssignmentRunSnapshotService } from './services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from './services/assignment-run-report.service';
@@ -50,7 +52,7 @@ import { CompareRunsQueryDto } from './dto/compare-runs-query.dto';
  *   - 其他 GET → DirectorOrSectionChiefGuard（部長或處長）
  */
 @Controller('assignment/runs')
-@UseGuards(AuthGuard, DirectorOrSectionChiefGuard, DirectorGuard)
+@UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class AssignmentRunController {
   constructor(
@@ -77,6 +79,7 @@ export class AssignmentRunController {
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async triggerRun(@Body() _dto: TriggerRunDto, @Req() req: any) {
     const ym = AssignmentRunController.computeCurrentWorkYm();
     return this.service.triggerRun(ym, req.user.userId);
@@ -97,7 +100,27 @@ export class AssignmentRunController {
   // -------------------------------------------------------------------------
 
   @Get('compare')
-  async compareRuns(@Query() query: CompareRunsQueryDto, @Req() req: any) {
+  async compareRuns(
+    @Query() query: CompareRunsQueryDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // F067 AC-3：export=xlsx → streaming xlsx 下載；其他 → JSON
+    if (query.export === 'xlsx') {
+      const out = await this.reportService.compareRunsExport(
+        query.runA,
+        query.runB,
+        req.user?.userId,
+        this.toActor(req.user),
+      );
+      res.setHeader('Content-Type', out.contentType);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${out.filename}"`,
+      );
+      res.send(out.body);
+      return;
+    }
     return this.reportService.compareRuns(
       query.runA,
       query.runB,

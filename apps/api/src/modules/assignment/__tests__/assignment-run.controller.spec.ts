@@ -58,7 +58,12 @@ describe('AssignmentRunController — RBAC + Routes', () => {
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
 
+  // v2.0 FeatureFlagGuard：寫入端點（POST /runs）需 ENABLE_E07_REFACTOR_PHASE3=true
+  const FLAG = 'ENABLE_E07_REFACTOR_PHASE3';
+  const originalFlag = process.env[FLAG];
+
   beforeAll(async () => {
+    process.env[FLAG] = 'true';
     serviceMock = {
       triggerRun: vi.fn().mockResolvedValue({
         runId: 'run-uuid-1',
@@ -145,6 +150,8 @@ describe('AssignmentRunController — RBAC + Routes', () => {
   afterAll(async () => {
     await app?.close();
     delete process.env.OVERRIDE_CURRENT_WORK_YM;
+    if (originalFlag === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = originalFlag;
   });
 
   beforeEach(() => {
@@ -339,17 +346,24 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       );
     });
 
-    it('format=xlsx 透傳至 service（service 端拒絕）', async () => {
+    it('format=xlsx 透傳至 service 並回 xlsx contentType（v2.0 B6 補完）', async () => {
       currentUser = director;
-      reportMock.exportResult.mockRejectedValueOnce(
-        Object.assign(new Error('xlsx not supported'), {
-          status: 422,
-          response: { error: ERROR_CODES.EXPORT_FORMAT_NOT_SUPPORTED },
-        }),
-      );
-      await request(app.getHttpServer()).get(
+      const fakeBuf = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00]);
+      reportMock.exportResult.mockResolvedValueOnce({
+        filename: 'assignment_result_202605_aabbccdd.xlsx',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        body: fakeBuf,
+        rowCount: 0,
+      });
+      const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/runs/run-uuid-1/export?format=xlsx',
       );
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(res.headers['content-disposition']).toContain('.xlsx');
       expect(reportMock.exportResult).toHaveBeenCalledWith(
         'run-uuid-1',
         'xlsx',

@@ -1,11 +1,14 @@
 import {
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { PassThrough } from 'stream';
 import { Repository } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
@@ -51,9 +54,30 @@ export interface SummaryResponse {
 export interface ExportResult {
   filename: string;
   contentType: string;
-  body: string; // CSV 文字（streaming friendly）
+  /** CSV 為 string，xlsx 為 Buffer（streaming written 後集合） */
+  body: string | Buffer;
   rowCount: number;
 }
+
+export interface ExportOptions {
+  /** xlsx streaming timeout (ms)，超過回 EXPORT_FILE_EXPIRED；預設 5 分鐘 */
+  timeoutMs?: number;
+}
+
+/** F064 BR-3：xlsx 串流匯出 timeout 上限（5 分鐘） */
+const EXPORT_TIMEOUT_MS_DEFAULT = 5 * 60 * 1000;
+
+/** F064 AC-2 / BR-1：xlsx + csv 共用欄位（8 欄） */
+const EXPORT_HEADER = [
+  'list_no',
+  'appl_no',
+  'card_level',
+  'tier_level',
+  'dept_id',
+  'emplid',
+  'score',
+  'is_cr',
+] as const;
 
 export interface CompareResponse {
   base: { runId: string; projectWorkym: string; totalCases: number };
@@ -277,17 +301,9 @@ export class AssignmentRunReportService {
     format: 'csv' | 'xlsx' = 'csv',
     actorId?: string,
     actor?: ActorUser | null,
+    options?: ExportOptions,
   ): Promise<ExportResult> {
     const run = await this.requireCompletedRun(runId);
-
-    if (format === 'xlsx') {
-      // exceljs 未列入 MVP 依賴；v2.0 補完前先回 422
-      throw new UnprocessableEntityException({
-        error: ERROR_CODES.EXPORT_FORMAT_NOT_SUPPORTED,
-        message: ERROR_MESSAGES.EXPORT_FORMAT_NOT_SUPPORTED,
-      });
-    }
-
     const { resultPayload } = await this.loadAllPayloads(runId);
     const allAssignments: ResultAssignment[] = Array.isArray(
       (resultPayload as any)?.assignments,
@@ -300,17 +316,27 @@ export class AssignmentRunReportService {
       actor,
     );
 
-    const header = [
-      'list_no',
-      'appl_no',
-      'card_level',
-      'tier_level',
-      'dept_id',
-      'emplid',
-      'score',
-      'is_cr',
-    ];
-    const lines: string[] = [header.join(',')];
+    const shortId = run.run_id.replace(/-/g, '').slice(0, 8);
+
+    if (format === 'xlsx') {
+      const body = await this.buildXlsxStreaming(
+        assignments,
+        options?.timeoutMs ?? EXPORT_TIMEOUT_MS_DEFAULT,
+      );
+      const filename = `assignment_result_${run.project_workym}_${shortId}.xlsx`;
+      // F064 AC-5：稽核
+      await this.writeAudit(runId, actorId, 'xlsx', assignments.length);
+      return {
+        filename,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        body,
+        rowCount: assignments.length,
+      };
+    }
+
+    // CSV path
+    const lines: string[] = [EXPORT_HEADER.join(',')];
     for (const a of assignments) {
       lines.push(
         [
@@ -329,7 +355,6 @@ export class AssignmentRunReportService {
     }
     const body = lines.join('\n');
 
-    const shortId = run.run_id.replace(/-/g, '').slice(0, 8);
     const filename = `assignment_result_${run.project_workym}_${shortId}.csv`;
 
     // F064 AC-5：稽核
@@ -341,6 +366,80 @@ export class AssignmentRunReportService {
       body,
       rowCount: assignments.length,
     };
+  }
+
+  /**
+   * F064 AC-4 / BR-2：使用 exceljs WorkbookWriter（streaming mode），
+   * 逐 row commit，並支援 BR-3 timeout 監看（超過回 EXPORT_FILE_EXPIRED）。
+   *
+   * 採 PassThrough 為 sink，收集 chunks 到 Buffer（最終仍需回給 controller 寫 response），
+   * 但寫入過程為 streaming（exceljs sheet.commit() / workbook.commit() 觸發 partial flush），
+   * 避免一次性建立完整 in-memory Workbook 物件。
+   */
+  private async buildXlsxStreaming(
+    rows: ResultAssignment[],
+    timeoutMs: number,
+  ): Promise<Buffer> {
+    const sink = new PassThrough();
+    const chunks: Buffer[] = [];
+    sink.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const sinkEnd = new Promise<void>((resolve, reject) => {
+      sink.once('end', () => resolve());
+      sink.once('error', reject);
+    });
+
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: sink,
+      useStyles: true,
+      useSharedStrings: false,
+    });
+    const sheet = workbook.addWorksheet('assignment_result');
+    sheet.columns = EXPORT_HEADER.map((key) => ({ header: key, key }));
+    // header style（粗體）
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.commit();
+
+    const writeAndFinish = (async () => {
+      for (const a of rows) {
+        sheet
+          .addRow({
+            list_no: a.listNo ?? '',
+            appl_no: a.applNo ?? '',
+            card_level: a.cardLevel ?? '',
+            tier_level: a.tierLevel ?? '',
+            dept_id: a.deptId ?? '',
+            emplid: a.emplid ?? '',
+            score: a.score ?? '',
+            is_cr: a.isCr ?? '',
+          })
+          .commit();
+      }
+      sheet.commit();
+      // workbook.commit() 結束後 ExcelJS 會關閉 stream → sink 收到 end
+      await workbook.commit();
+      await sinkEnd;
+    })();
+
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(
+          new InternalServerErrorException({
+            error: ERROR_CODES.EXPORT_FILE_EXPIRED,
+            message: ERROR_MESSAGES.EXPORT_FILE_EXPIRED,
+          }),
+        );
+      }, timeoutMs);
+      if (typeof timeoutHandle.unref === 'function') timeoutHandle.unref();
+    });
+
+    try {
+      await Promise.race([writeAndFinish, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+    return Buffer.concat(chunks);
   }
 
   // -------------------------------------------------------------------------
@@ -436,6 +535,180 @@ export class AssignmentRunReportService {
         removed: removed.map((applNo) => ({ applNo })),
       },
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // F067 比對匯出（xlsx）
+  // -------------------------------------------------------------------------
+
+  /**
+   * F067 AC-3 + v1.1：比對差異匯出 xlsx（streaming）。
+   * 3 個 sheet：summary / personnelMismatch / customerDiff。
+   *
+   * 重用 compareRuns() 已計算之 CompareResponse，避免重複 query payload。
+   */
+  async compareRunsExport(
+    runA: string,
+    runB: string,
+    actorId?: string,
+    actor?: ActorUser | null,
+    options?: ExportOptions,
+  ): Promise<ExportResult> {
+    const cmp = await this.compareRuns(runA, runB, actor);
+    const body = await this.buildCompareXlsxStreaming(
+      cmp,
+      options?.timeoutMs ?? EXPORT_TIMEOUT_MS_DEFAULT,
+    );
+    const shortA = cmp.base.runId.replace(/-/g, '').slice(0, 8);
+    const shortB = cmp.compare.runId.replace(/-/g, '').slice(0, 8);
+    const filename = `assignment_compare_${shortA}_${shortB}.xlsx`;
+    // F067 audit log：沿用 EXPORT action，entity_id 採 base run，after_value 加入兩端 run_id
+    await this.writeAudit(
+      cmp.base.runId,
+      actorId,
+      'xlsx',
+      cmp.personnelMismatch.list.length + cmp.customerDiff.added.length +
+        cmp.customerDiff.removed.length,
+      { compareRunId: cmp.compare.runId },
+    );
+    return {
+      filename,
+      contentType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      body,
+      rowCount:
+        cmp.personnelMismatch.list.length +
+        cmp.customerDiff.added.length +
+        cmp.customerDiff.removed.length,
+    };
+  }
+
+  private async buildCompareXlsxStreaming(
+    cmp: CompareResponse,
+    timeoutMs: number,
+  ): Promise<Buffer> {
+    const sink = new PassThrough();
+    const chunks: Buffer[] = [];
+    sink.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const sinkEnd = new Promise<void>((resolve, reject) => {
+      sink.once('end', () => resolve());
+      sink.once('error', reject);
+    });
+
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: sink,
+      useStyles: true,
+      useSharedStrings: false,
+    });
+
+    // sheet 1：summary
+    const summarySheet = workbook.addWorksheet('summary');
+    summarySheet.columns = [
+      { header: 'metric', key: 'metric' },
+      { header: 'base', key: 'base' },
+      { header: 'compare', key: 'compare' },
+      { header: 'diff', key: 'diff' },
+    ];
+    summarySheet.getRow(1).font = { bold: true };
+    summarySheet.getRow(1).commit();
+    summarySheet
+      .addRow({
+        metric: 'totalCases',
+        base: cmp.base.totalCases,
+        compare: cmp.compare.totalCases,
+        diff: cmp.summary.totalDiff,
+      })
+      .commit();
+    for (const d of cmp.summary.deptDiff) {
+      summarySheet
+        .addRow({
+          metric: `dept_${d.deptId}`,
+          base: d.baseCount,
+          compare: d.compareCount,
+          diff: d.diff,
+        })
+        .commit();
+    }
+    for (const l of cmp.summary.levelDiff) {
+      summarySheet
+        .addRow({
+          metric: `level_${l.cardLevel}`,
+          base: l.baseCount,
+          compare: l.compareCount,
+          diff: l.diff,
+        })
+        .commit();
+    }
+    summarySheet
+      .addRow({
+        metric: 'personnelMismatchRate',
+        base: '',
+        compare: cmp.personnelMismatch.rate,
+        diff: cmp.personnelMismatch.alert ? 'ALERT' : '',
+      })
+      .commit();
+    summarySheet.commit();
+
+    // sheet 2：personnelMismatch（NFR-005 主驗收清單）
+    const pmSheet = workbook.addWorksheet('personnelMismatch');
+    pmSheet.columns = [
+      { header: 'appl_no', key: 'appl_no' },
+      { header: 'base_emplid', key: 'base_emplid' },
+      { header: 'compare_emplid', key: 'compare_emplid' },
+    ];
+    pmSheet.getRow(1).font = { bold: true };
+    pmSheet.getRow(1).commit();
+    for (const m of cmp.personnelMismatch.list) {
+      pmSheet
+        .addRow({
+          appl_no: m.applNo,
+          base_emplid: m.baseEmplId ?? '',
+          compare_emplid: m.compareEmplId ?? '',
+        })
+        .commit();
+    }
+    pmSheet.commit();
+
+    // sheet 3：customerDiff
+    const cdSheet = workbook.addWorksheet('customerDiff');
+    cdSheet.columns = [
+      { header: 'change', key: 'change' },
+      { header: 'appl_no', key: 'appl_no' },
+    ];
+    cdSheet.getRow(1).font = { bold: true };
+    cdSheet.getRow(1).commit();
+    for (const a of cmp.customerDiff.added) {
+      cdSheet.addRow({ change: 'added', appl_no: a.applNo }).commit();
+    }
+    for (const r of cmp.customerDiff.removed) {
+      cdSheet.addRow({ change: 'removed', appl_no: r.applNo }).commit();
+    }
+    cdSheet.commit();
+
+    const writeAndFinish = (async () => {
+      await workbook.commit();
+      await sinkEnd;
+    })();
+
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(
+          new InternalServerErrorException({
+            error: ERROR_CODES.EXPORT_FILE_EXPIRED,
+            message: ERROR_MESSAGES.EXPORT_FILE_EXPIRED,
+          }),
+        );
+      }, timeoutMs);
+      if (typeof timeoutHandle.unref === 'function') timeoutHandle.unref();
+    });
+
+    try {
+      await Promise.race([writeAndFinish, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+    return Buffer.concat(chunks);
   }
 
   // -------------------------------------------------------------------------
@@ -641,8 +914,11 @@ export class AssignmentRunReportService {
     actorId: string | undefined,
     format: string,
     rowCount: number,
+    extra?: Record<string, unknown>,
   ): Promise<void> {
     if (!actorId) return;
+    const afterValue: Record<string, unknown> = { format, rowCount };
+    if (extra) Object.assign(afterValue, extra);
     try {
       await this.auditRepo.save(
         this.auditRepo.create({
@@ -652,7 +928,7 @@ export class AssignmentRunReportService {
           actor_id: actorId,
           actor_name: actorId,
           before_value: null,
-          after_value: { format, rowCount },
+          after_value: afterValue,
           ip_address: null,
           created_at: new Date(),
         } as Partial<AssignmentAuditLog>),
