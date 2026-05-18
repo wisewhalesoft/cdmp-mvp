@@ -160,6 +160,7 @@
       <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">健康偏差</button>
       <button onclick="showDemoState('imbalanced')" id="demo-imbalanced" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">部門失衡</button>
       <button onclick="showDemoState('tier-skew')" id="demo-tier-skew" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">等級分佈異常</button>
+      <button onclick="showDemoState('scoring-warn')" id="demo-scoring-warn" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">計分完整性警示</button>
     </div>
 
     <div class="p-6 space-y-4">
@@ -242,6 +243,30 @@
           <div id="statEmpls" class="text-3xl font-bold text-gray-900 tabular-nums">142</div>
           <div class="text-xs text-gray-500 mt-1">平均每人 67 案</div>
         </div>
+      </div>
+
+      <!-- ===== F063 警示橫幅（計分完整性 + BR-12 SKIPPED） ===== -->
+      <div id="scoringWarnBanner" class="hidden rounded-lg overflow-hidden border-l-4 border-warning bg-amber-50">
+        <!-- Header: 摘要 + 展開切換 -->
+        <div class="px-5 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-warning"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-sm font-semibold text-amber-900 flex items-center gap-2 flex-wrap">
+              本次月跑偵測到資料完整性警示
+              <span id="scoringWarnTotal" class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-200 text-amber-900 tabular-nums">0 筆</span>
+            </h3>
+            <p id="scoringWarnSummary" class="text-xs text-amber-800 mt-0.5">已執行完成，下列項目未影響分派流程但建議檢查。</p>
+          </div>
+          <button id="scoringWarnToggleBtn" type="button" onclick="toggleScoringWarn()" aria-expanded="false" aria-controls="scoringWarnDetails"
+            class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-900 bg-white border border-amber-300 rounded-md hover:bg-amber-50 transition">
+            <span id="scoringWarnToggleLabel">展開詳情</span>
+            <i data-lucide="chevron-down" id="scoringWarnChevron" class="w-3.5 h-3.5 transition-transform"></i>
+          </button>
+        </div>
+        <!-- 展開區：依分類渲染（map 結構，可擴充） -->
+        <div id="scoringWarnDetails" class="hidden border-t border-amber-200 bg-white/50 px-5 py-4 space-y-4"></div>
       </div>
 
       <!-- ===== 部門偏差 chart ===== -->
@@ -364,6 +389,44 @@
   </div>
 
   <script>
+    // ===== F063 Scoring Integrity Warnings — 警示分類 map（可插拔結構） =====
+    // 結構：{ category_key: { title, icon, severity, description, rows: [...] } }
+    // severity: 'info' | 'warn' | 'danger'
+    // 未來新增分類只需在 SCORING_WARN_CATEGORIES 加入新 key，無需改 render 邏輯
+    const SCORING_WARN_CATEGORIES = {
+      BR12_EDGE_CARD_TYPE_SKIPPED: {
+        title: 'BR-12 EDGE 客戶因 CARD_TYPE 未設定而跳過',
+        icon: 'skip-forward',
+        severity: 'warn',
+        description: 'EDGE 案件無 active CARD_TYPE 對應，依 BR-12 規則略過該客戶（不計入分派）。請至「計分卡設定」確認此 CARD_TYPE 是否需建立。',
+        columns: [
+          { key: 'customer_id', label: '客戶編號', cls: 'font-mono text-xs' },
+          { key: 'card_type', label: 'CARD_TYPE', cls: 'font-mono text-xs font-semibold' },
+          { key: 'reason', label: '略過原因', cls: 'text-xs text-gray-600' },
+          { key: 'list_def', label: '名單定義', cls: 'text-xs text-gray-600' },
+        ],
+      },
+      SCORING_INTEGRITY_WARN: {
+        title: '計分完整性警示',
+        icon: 'shield-alert',
+        severity: 'warn',
+        description: '部分計分維度於月跑時 ob_levelcard_score 無對應分數列。系統使用 0 分代入但仍完成計分，建議補齊分數區間。',
+        columns: [
+          { key: 'card_type', label: 'CARD_TYPE', cls: 'font-mono text-xs font-semibold' },
+          { key: 'column_name', label: '維度', cls: 'font-mono text-xs' },
+          { key: 'warn_code', label: '警示碼', cls: 'font-mono text-xs text-amber-700' },
+          { key: 'affected', label: '影響客戶數', cls: 'text-xs text-right tabular-nums font-semibold' },
+        ],
+      },
+    };
+
+    // 嚴重度樣式 map
+    const SEVERITY_STYLE = {
+      info:   { tagBg: 'bg-blue-100',   tagText: 'text-blue-700',   border: 'border-blue-200',  iconBg: 'bg-blue-50',   iconText: 'text-primary' },
+      warn:   { tagBg: 'bg-amber-100',  tagText: 'text-amber-700',  border: 'border-amber-200', iconBg: 'bg-amber-50',  iconText: 'text-warning' },
+      danger: { tagBg: 'bg-red-100',    tagText: 'text-red-700',    border: 'border-red-200',   iconBg: 'bg-red-50',    iconText: 'text-danger' },
+    };
+
     // ===== Mock Data =====
     const datasets = {
       normal: {
@@ -394,6 +457,14 @@
           { lvl: 'D', count: 500,  color: '#F59E0B' },
         ],
         alert: false,
+        scoringWarnings: {
+          BR12_EDGE_CARD_TYPE_SKIPPED: [
+            { customer_id: 'C-0010234', card_type: 'EDGE_X', reason: 'CARD_TYPE 不存在', list_def: 'L05 高資產月例分派' },
+          ],
+          SCORING_INTEGRITY_WARN: [
+            { card_type: 'M', column_name: 'CAREA_NO1', warn_code: 'ALL_SCORES_EMPTY', affected: 18 },
+          ],
+        },
       },
       imbalanced: {
         total: 9420, depts: 5, empls: 142,
@@ -423,6 +494,15 @@
           { lvl: 'D', count: 510,  color: '#F59E0B' },
         ],
         alert: true,
+        scoringWarnings: {
+          BR12_EDGE_CARD_TYPE_SKIPPED: [
+            { customer_id: 'C-0010234', card_type: 'EDGE_X', reason: 'CARD_TYPE 不存在', list_def: 'L05 高資產月例分派' },
+            { customer_id: 'C-0010891', card_type: 'EDGE_Y', reason: 'CARD_TYPE 為 inactive', list_def: 'L08 機車中結回收' },
+          ],
+          SCORING_INTEGRITY_WARN: [
+            { card_type: 'M', column_name: 'CAREA_NO1', warn_code: 'ALL_SCORES_EMPTY', affected: 18 },
+          ],
+        },
       },
       'tier-skew': {
         total: 9510, depts: 5, empls: 142,
@@ -452,6 +532,47 @@
           { lvl: 'D', count: 2680, color: '#F59E0B' },
         ],
         alert: true,
+        scoringWarnings: {},
+      },
+      'scoring-warn': {
+        total: 9480, depts: 5, empls: 142,
+        deptData: [
+          { id: 'D01', name: '業務一部', cfg: 30.0, actual: 30.2, count: 2863 },
+          { id: 'D02', name: '業務二部', cfg: 25.0, actual: 24.9, count: 2361 },
+          { id: 'D03', name: '業務三部', cfg: 20.0, actual: 20.0, count: 1896 },
+          { id: 'D04', name: '車貸專案部', cfg: 15.0, actual: 15.2, count: 1441 },
+          { id: 'D05', name: '機車專案部', cfg: 10.0, actual: 9.7, count: 919 },
+        ],
+        tierData: [
+          { tier: 'T1', count: 1820, color: 'bg-blue-500' },
+          { tier: 'T2', count: 2060, color: 'bg-cyan-500' },
+          { tier: 'T3', count: 1590, color: 'bg-teal-500' },
+          { tier: 'T32', count: 970, color: 'bg-emerald-500' },
+          { tier: 'T4', count: 1390, color: 'bg-lime-500' },
+          { tier: 'T51', count: 710, color: 'bg-amber-500' },
+          { tier: 'T52', count: 530, color: 'bg-orange-500' },
+          { tier: 'T1M', count: 220, color: 'bg-purple-500' },
+          { tier: 'T3M', count: 110, color: 'bg-pink-500' },
+          { tier: 'T5M', count: 80,  color: 'bg-rose-500' },
+        ],
+        cardLevels: [
+          { lvl: 'A', count: 1970, color: '#2563EB' },
+          { lvl: 'B', count: 3960, color: '#06B6D4' },
+          { lvl: 'C', count: 3010, color: '#22C55E' },
+          { lvl: 'D', count: 540,  color: '#F59E0B' },
+        ],
+        alert: false,
+        scoringWarnings: {
+          BR12_EDGE_CARD_TYPE_SKIPPED: [
+            { customer_id: 'C-0010234', card_type: 'EDGE_X', reason: 'CARD_TYPE 不存在', list_def: 'L05 高資產月例分派' },
+            { customer_id: 'C-0010891', card_type: 'EDGE_Y', reason: 'CARD_TYPE 為 inactive', list_def: 'L08 機車中結回收' },
+            { customer_id: 'C-0011245', card_type: 'EDGE_X', reason: 'CARD_TYPE 不存在', list_def: 'L05 高資產月例分派' },
+          ],
+          SCORING_INTEGRITY_WARN: [
+            { card_type: 'M', column_name: 'CAREA_NO1', warn_code: 'ALL_SCORES_EMPTY', affected: 18 },
+            { card_type: 'E', column_name: 'AGE', warn_code: 'ALL_SCORES_EMPTY', affected: 45 },
+          ],
+        },
       },
     };
 
@@ -564,10 +685,81 @@
       document.getElementById('cardLevelLegend').innerHTML = legend;
     }
 
+    // ===== F063 警示橫幅 render =====
+    let scoringWarnExpanded = false;
+    function toggleScoringWarn() {
+      scoringWarnExpanded = !scoringWarnExpanded;
+      const details = document.getElementById('scoringWarnDetails');
+      const btn = document.getElementById('scoringWarnToggleBtn');
+      const label = document.getElementById('scoringWarnToggleLabel');
+      const chevron = document.getElementById('scoringWarnChevron');
+      details.classList.toggle('hidden', !scoringWarnExpanded);
+      btn.setAttribute('aria-expanded', String(scoringWarnExpanded));
+      label.textContent = scoringWarnExpanded ? '收合詳情' : '展開詳情';
+      chevron.style.transform = scoringWarnExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    function renderScoringWarnBanner(warnings) {
+      const banner = document.getElementById('scoringWarnBanner');
+      const details = document.getElementById('scoringWarnDetails');
+      const totalBadge = document.getElementById('scoringWarnTotal');
+      const summaryEl = document.getElementById('scoringWarnSummary');
+
+      const groups = warnings || {};
+      const present = Object.keys(SCORING_WARN_CATEGORIES).filter(k => Array.isArray(groups[k]) && groups[k].length > 0);
+
+      if (present.length === 0) {
+        banner.classList.add('hidden');
+        details.innerHTML = '';
+        scoringWarnExpanded = false;
+        details.classList.add('hidden');
+        document.getElementById('scoringWarnToggleLabel').textContent = '展開詳情';
+        document.getElementById('scoringWarnChevron').style.transform = 'rotate(0deg)';
+        document.getElementById('scoringWarnToggleBtn').setAttribute('aria-expanded', 'false');
+        return;
+      }
+
+      banner.classList.remove('hidden');
+      const totalRows = present.reduce((sum, k) => sum + groups[k].length, 0);
+      totalBadge.textContent = `${totalRows} 筆 · ${present.length} 類`;
+      const titles = present.map(k => SCORING_WARN_CATEGORIES[k].title).join('、');
+      summaryEl.textContent = `偵測到 ${present.length} 類異常：${titles}。已執行完成，下列項目未影響分派流程但建議檢查。`;
+
+      // 渲染各分類分組表格（map 結構，未來新增分類自動加入）
+      details.innerHTML = present.map(k => {
+        const cfg = SCORING_WARN_CATEGORIES[k];
+        const rows = groups[k] || [];
+        const sev = SEVERITY_STYLE[cfg.severity] || SEVERITY_STYLE.warn;
+        const headerHtml = cfg.columns.map(c => `<th class="text-left px-3 py-2 text-xs font-semibold text-gray-600 ${c.cls && c.cls.includes('text-right') ? 'text-right' : ''}">${c.label}</th>`).join('');
+        const bodyHtml = rows.map(r => `<tr class="border-b border-gray-100 last:border-b-0 hover:bg-amber-50/30">${cfg.columns.map(c => `<td class="px-3 py-2 ${c.cls || ''}">${r[c.key] ?? '<span class=\\"text-gray-300\\">—</span>'}</td>`).join('')}</tr>`).join('');
+        return `
+          <section class="rounded-lg border ${sev.border} bg-white overflow-hidden" data-warn-category="${k}">
+            <header class="flex items-center gap-3 px-4 py-2.5 ${sev.iconBg} border-b ${sev.border}">
+              <div class="w-7 h-7 rounded-md bg-white flex items-center justify-center shrink-0">
+                <i data-lucide="${cfg.icon}" class="w-4 h-4 ${sev.iconText}"></i>
+              </div>
+              <h4 class="text-sm font-semibold text-gray-800 flex-1 min-w-0">${cfg.title}</h4>
+              <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full ${sev.tagBg} ${sev.tagText} tabular-nums">${rows.length} 筆</span>
+            </header>
+            <p class="px-4 py-2 text-xs text-gray-600 bg-gray-50/60 border-b border-gray-100">${cfg.description}</p>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gray-50/40"><tr>${headerHtml}</tr></thead>
+                <tbody>${bodyHtml}</tbody>
+              </table>
+            </div>
+          </section>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
     // ===== Demo state =====
     function showDemoState(state) {
-      ['normal','imbalanced','tier-skew'].forEach(s => {
+      ['normal','imbalanced','tier-skew','scoring-warn'].forEach(s => {
         const btn = document.getElementById('demo-' + s);
+        if (!btn) return;
         if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
         else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
       });
@@ -579,6 +771,7 @@
       renderDeptChart(ds.deptData);
       renderTierChart(ds.tierData);
       renderCardLevelDonut(ds.cardLevels);
+      renderScoringWarnBanner(ds.scoringWarnings || {});
 
       document.getElementById('alertNote').classList.toggle('hidden', !ds.alert);
 

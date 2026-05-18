@@ -327,6 +327,7 @@
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">column_label</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">比對模式</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">分數區間摘要</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
                   <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
@@ -334,6 +335,10 @@
               </thead>
               <tbody id="dim-tbody"></tbody>
             </table>
+          </div>
+          <div class="px-4 py-2 border-t border-border bg-blue-50/30 text-xs text-gray-600 flex items-start gap-2">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-primary mt-0.5 shrink-0"></i>
+            <span>「比對模式（matchType）」由 PostgreSQL function 依分數區間自動推導（CATEGORY=純類別 / RANGE=純區間 / COMPOSITE=混合）；本欄為唯讀展示，無人工切換功能。</span>
           </div>
           <div class="flex items-center justify-between px-5 py-3 border-t border-border">
             <span id="dimTotal" class="text-sm text-gray-500">共 8 個維度</span>
@@ -367,27 +372,33 @@
             </div>
             <span class="text-xs text-gray-400 ml-auto">資料表 <code>ob_levelcard_score</code> · 邏輯主鍵 (card_type, card_version, column_name, level1, level2_s, level2_e)</span>
           </div>
+
+          <!-- v1.3 唯讀總覽提示 -->
+          <div class="mx-4 mt-3 mb-1 flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-gray-700">
+            <i data-lucide="eye" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-medium text-gray-800">唯讀總覽（v1.3 規格）</p>
+              <p class="text-gray-600 mt-0.5">本 Tab 為跨維度的分數區間總覽，僅供查閱。所有新增 / 編輯 / 停用操作請至 <button onclick="switchTab('dim')" class="text-primary hover:underline font-medium">Tab 2 計分維度</button> 點擊各維度的「編輯」按鈕進入整合式設定 Modal。</p>
+            </div>
+          </div>
+
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-gray-50/60">
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">level1（類別型）</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">比對模式</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">level1</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">level2_s</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">level2_e</th>
                   <th class="text-right px-5 py-3 font-semibold text-gray-600">score</th>
-                  <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
                 </tr>
               </thead>
               <tbody id="score-tbody"></tbody>
             </table>
           </div>
           <div class="px-4 py-3 border-t border-border flex items-center justify-between">
-            <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>類別型 (level1) 與數值型 (level2_s ~ level2_e) 為二擇一；數值區間不可重疊（BR-3）</p>
-            <button id="btnAddScore" onclick="openScoreModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-              新增分數區間
-            </button>
+            <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>級距規則由維度自動推導：類別（level1 only）/ 區間（level2_s~level2_e）/ 複合（兩者皆有）；區間不可重疊（BR-3）</p>
           </div>
         </div>
       </div>
@@ -753,90 +764,161 @@
     </div>
   </div>
 
-  <!-- ===== Modal: 編輯/新增 維度 ===== -->
-  <div id="dimModal" class="fixed inset-0 z-50 hidden">
-    <div class="modal-backdrop absolute inset-0" onclick="closeModal('dimModal')"></div>
+  <!-- ===== Modal: 計分維度整合式編輯器（v1.3 — max-w-3xl，3 段式：欄位 + matchType + 分數區間） ===== -->
+  <div id="dimEditorModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('dimEditorModal')"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-3xl relative max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h3 class="text-lg font-semibold text-gray-900">新增計分維度</h3>
-          <button onclick="closeModal('dimModal')" class="p-1 hover:bg-gray-100 rounded-md">
+          <div>
+            <h3 id="dimEditorTitle" class="text-lg font-semibold text-gray-900">編輯計分維度</h3>
+            <p class="text-xs text-gray-500 mt-0.5">於同一 Modal 完成欄位、比對模式與分數區間設定（v1.3 整合）</p>
+          </div>
+          <button onclick="closeModal('dimEditorModal')" class="p-1 hover:bg-gray-100 rounded-md">
             <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
           </button>
         </div>
-        <div class="px-6 py-5 space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_name <span class="text-danger">*</span></label>
-            <input type="text" maxlength="30" placeholder="例：CONTRACT_YEARS"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <p class="text-xs text-gray-400 mt-1">最多 30 字元（VARCHAR(30)）</p>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_label <span class="text-danger">*</span></label>
-            <input type="text" maxlength="30" placeholder="例：契約年資"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-          </div>
+
+        <div class="px-6 py-5 space-y-5 overflow-y-auto">
+          <!-- §1 欄位基本資訊 -->
+          <section>
+            <h4 class="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-primary text-xs font-bold">1</span>
+              欄位基本資訊
+            </h4>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">column_name <span class="text-danger">*</span></label>
+                <input id="dimEditorColName" type="text" maxlength="30" placeholder="例：CONTRACT_YEARS"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <p class="text-[11px] text-gray-400 mt-1">最多 30 字元（VARCHAR(30)）</p>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">column_label <span class="text-danger">*</span></label>
+                <input id="dimEditorColLabel" type="text" maxlength="30" placeholder="例：契約年資"
+                  class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              </div>
+            </div>
+          </section>
+
+          <!-- §2 比對模式（matchType） -->
+          <section>
+            <h4 class="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-primary text-xs font-bold">2</span>
+              比對模式（matchType）<span class="text-danger">*</span>
+            </h4>
+            <div class="grid grid-cols-3 gap-2" id="dimEditorMatchTypeOptions">
+              <label data-mt="CATEGORY" class="dim-mt-card cursor-pointer border-2 border-primary bg-blue-50/40 rounded-lg p-3 flex flex-col gap-1 transition">
+                <div class="flex items-center gap-1.5">
+                  <input type="radio" name="dimMatchType" value="CATEGORY" checked class="text-primary focus:ring-primary">
+                  <span class="text-sm font-semibold text-gray-800">類別</span>
+                  <code class="ml-auto text-[10px] text-gray-500">CATEGORY</code>
+                </div>
+                <p class="text-[11px] text-gray-600 leading-snug">純類別值比對，僅使用 level1（例：性別、業務註記）</p>
+              </label>
+              <label data-mt="RANGE" class="dim-mt-card cursor-pointer border-2 border-border bg-white rounded-lg p-3 flex flex-col gap-1 transition">
+                <div class="flex items-center gap-1.5">
+                  <input type="radio" name="dimMatchType" value="RANGE" class="text-primary focus:ring-primary">
+                  <span class="text-sm font-semibold text-gray-800">區間</span>
+                  <code class="ml-auto text-[10px] text-gray-500">RANGE</code>
+                </div>
+                <p class="text-[11px] text-gray-600 leading-snug">純數值區間比對（level2_s~level2_e；例：車齡、年齡）</p>
+              </label>
+              <label data-mt="COMPOSITE" class="dim-mt-card cursor-pointer border-2 border-border bg-white rounded-lg p-3 flex flex-col gap-1 transition">
+                <div class="flex items-center gap-1.5">
+                  <input type="radio" name="dimMatchType" value="COMPOSITE" class="text-primary focus:ring-primary">
+                  <span class="text-sm font-semibold text-gray-800">複合</span>
+                  <code class="ml-auto text-[10px] text-gray-500">COMPOSITE</code>
+                </div>
+                <p class="text-[11px] text-gray-600 leading-snug">類別 + 區間複合（同時使用 level1 與 level2_s/e；例：專案類別）</p>
+              </label>
+            </div>
+          </section>
+
+          <!-- §3 分數區間清單 -->
+          <section>
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-primary text-xs font-bold">3</span>
+                分數區間
+                <span id="dimEditorRangeCount" class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">0</span>
+              </h4>
+              <button id="dimEditorAddRangeBtn" type="button" onclick="dimEditorAddRange()"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-primary border border-primary rounded-md hover:bg-blue-50 transition">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                新增區間
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm border border-border rounded-lg">
+                <thead>
+                  <tr class="border-b border-border bg-gray-50/60 text-xs">
+                    <th id="dimEditorThLevel1" class="text-left px-3 py-2 font-semibold text-gray-600">level1（類別）</th>
+                    <th id="dimEditorThLevel2s" class="text-left px-3 py-2 font-semibold text-gray-600">level2_s</th>
+                    <th id="dimEditorThLevel2e" class="text-left px-3 py-2 font-semibold text-gray-600">level2_e</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">score</th>
+                    <th class="w-12 px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody id="dimEditorRangesBody"></tbody>
+              </table>
+            </div>
+
+            <!-- 重疊偵測 inline 提示（純前端） -->
+            <div id="dimEditorOverlapWarn" class="hidden mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+              <div>
+                <p class="font-semibold">偵測到區間重疊</p>
+                <p id="dimEditorOverlapDetail" class="mt-0.5 text-red-700"></p>
+                <p class="mt-0.5 text-red-600">送出後將回傳 422 <code>SCORING_RANGE_OVERLAP</code>，請調整後再儲存。</p>
+              </div>
+            </div>
+
+            <p class="text-xs text-gray-500 mt-2 flex items-start gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0"></i>
+              <span>類別 (CATEGORY)：只填 level1；區間 (RANGE)：只填 level2_s ~ level2_e；複合 (COMPOSITE)：兩者皆填且不可單獨重疊。</span>
+            </p>
+          </section>
         </div>
+
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
-          <button onclick="closeModal('dimModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
-          <button onclick="closeModal('dimModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm">確認新增</button>
+          <button onclick="closeModal('dimEditorModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+          <button id="dimEditorSubmitBtn" onclick="dimEditorSubmit()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">儲存</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ===== Modal: 編輯/新增 分數區間 ===== -->
-  <div id="scoreModal" class="fixed inset-0 z-50 hidden">
-    <div class="modal-backdrop absolute inset-0" onclick="closeModal('scoreModal')"></div>
+  <!-- ===== Modal: matchType 切換二次確認（清空既有分數區間） ===== -->
+  <div id="matchTypeSwitchConfirmModal" class="fixed inset-0 z-[60] hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('matchTypeSwitchConfirmModal')"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative">
         <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h3 class="text-lg font-semibold text-gray-900">新增分數區間</h3>
-          <button onclick="closeModal('scoreModal')" class="p-1 hover:bg-gray-100 rounded-md">
+          <h3 class="text-base font-semibold text-warning flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+            切換比對模式
+          </h3>
+          <button onclick="closeModal('matchTypeSwitchConfirmModal')" class="p-1 hover:bg-gray-100 rounded-md">
             <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
           </button>
         </div>
-        <div class="px-6 py-5 space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">column_name</label>
-            <select class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white">
-              <option>CUS_SEX</option>
-              <option>CAR_YEAR</option>
-              <option>CAREA_NO1</option>
-              <option>ADD_UN_CAPITAL</option>
-            </select>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">類型</label>
-              <select class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white">
-                <option>數值型 (level2_s ~ level2_e)</option>
-                <option>類別型 (level1)</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">score 分數</label>
-              <input type="number" placeholder="例：20" class="w-full px-3 py-2 text-sm border border-border rounded-lg">
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">level2_s（起始）</label>
-              <input type="text" placeholder="0" class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">level2_e（結束）</label>
-              <input type="text" placeholder="3" class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono">
-            </div>
-          </div>
-          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-gray-700 flex items-start gap-2">
-            <i data-lucide="alert-circle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
-            <span>數值區間不可與既有區間重疊；違反時 422 <code>SCORING_RANGE_OVERLAP</code></span>
+        <div class="px-6 py-4 space-y-3">
+          <p class="text-sm text-gray-800">
+            從 <strong id="mtsFrom" class="font-mono">類別</strong>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5 inline mx-1 text-gray-400"></i>
+            <strong id="mtsTo" class="font-mono">區間</strong>
+            ，目前已輸入 <strong id="mtsCount" class="text-danger tabular-nums">3</strong> 筆分數區間將被清空（前端暫存，未送出）。
+          </p>
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700 flex items-start gap-2">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-warning mt-0.5 shrink-0"></i>
+            <span>不同 matchType 的欄位結構不同（CATEGORY 僅 level1 / RANGE 僅 level2_s,e / COMPOSITE 全部）。切換後需重新輸入分數區間。</span>
           </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
-          <button onclick="closeModal('scoreModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
-          <button onclick="closeModal('scoreModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm">儲存</button>
+          <button onclick="closeModal('matchTypeSwitchConfirmModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
+          <button id="mtsConfirmBtn" onclick="confirmMatchTypeSwitch()" class="px-4 py-2 text-sm font-medium text-white bg-warning rounded-lg hover:bg-amber-600 transition shadow-sm">確認切換並清空</button>
         </div>
       </div>
     </div>
@@ -1049,6 +1131,14 @@
       HPOST_NUM_NM:'車主戶籍地郵遞區號', CPOST_NUM_NM:'車主通訊地郵遞區號', CELLULAR:'手機號碼',
     };
 
+    // ===== v1.3 Mock: matchType META（與 frontend MATCH_TYPE_LABELS 對齊：短中文標籤） =====
+    // 三正式 enum：CATEGORY（純類別）/ RANGE（純區間）/ COMPOSITE（複合）
+    const MATCH_TYPE_META = {
+      CATEGORY:  { label: '類別',  badge: 'bg-cyan-100 text-cyan-700',     icon: 'tag' },
+      RANGE:     { label: '區間',  badge: 'bg-violet-100 text-violet-700', icon: 'sliders-horizontal' },
+      COMPOSITE: { label: '複合',  badge: 'bg-amber-100 text-amber-700',   icon: 'layers' },
+    };
+
     // ===== Mock: 各 CARD_TYPE 維度清單 =====
     const dimensionsByType = {
       'H':  ['CUS_SEX','ADD_UN_CAPITAL','CAREA_NO1','CAREA_NO2','CAR_YEAR','LIST_MONTH','PROJECT_TP','SALES_STS'],
@@ -1059,27 +1149,35 @@
       'M':  ['AGE','CAREA_NO1','CAREA_NO2','CO_NUM_NM','HPOST_NUM_NM','CPOST_NUM_NM'],
     };
 
-    // ===== Mock: 分數設定（精簡版，每 CARD_TYPE 取部分代表） =====
+    // ===== Mock: 分數設定（v1.3 新增 PROJECT_TP COMPOSITE 範例） =====
+    // schema: [column_name, level1, level2_s, level2_e, score]
+    // CATEGORY：level1 有值，level2_s/e null
+    // RANGE：   level1 null，level2_s/e 有值
+    // COMPOSITE：三者皆有值
     const scoresByType = {
       'H': [
         ['CUS_SEX',null,'1','1',30],['CUS_SEX',null,'2','2',26],['CUS_SEX',null,'3','3',26],
         ['CAR_YEAR',null,'10','99',35],['CAR_YEAR',null,'5','9',34],['CAR_YEAR',null,'0','2',17],
-        ['SALES_STS','AGENT','1','1',36],['SALES_STS','UCD','2','2',36],['SALES_STS','HFC','3','3',25],
+        ['SALES_STS','AGENT',null,null,36],['SALES_STS','UCD',null,null,36],['SALES_STS','HFC',null,null,25],
+        // COMPOSITE 範例：PROJECT_TP 同時依專案類別與年資區間
+        ['PROJECT_TP','VIP','0','2',18],['PROJECT_TP','VIP','3','9',32],['PROJECT_TP','GENERAL','0','5',14],
       ],
       'S': [
-        ['CUS_SEX',null,'1','1',27],['EDUCAT_BACK',null,'02','02',55],['AGE',null,'0','41',26],
+        ['CUS_SEX',null,'1','1',27],['EDUCAT_BACK','02',null,null,55],['AGE',null,'0','41',26],
+        ['PROJECT_TP','VIP','0','3',20],['PROJECT_TP','GENERAL','4','99',12],
       ],
       'E': [
-        ['EDUCAT_BACK',null,'02','02',45],['CAR_YEAR',null,'12','99',34],['AGE',null,'0','34',24],
+        ['EDUCAT_BACK','02',null,null,45],['CAR_YEAR',null,'12','99',34],['AGE',null,'0','34',24],
       ],
       'S5': [
-        ['EDUCAT_BACK',null,'02','02',35],['CAR_YEAR',null,'0','9',25],['HPOST_NUM_NM','臺北市',null,null,13],
+        ['EDUCAT_BACK','02',null,null,35],['CAR_YEAR',null,'0','9',25],['HPOST_NUM_NM','臺北市',null,null,13],
       ],
       'E5': [
-        ['EDUCAT_BACK',null,'01','01',13],['AGE',null,'0','45',20],['CO_NUM_NM','臺北市',null,null,32],
+        ['EDUCAT_BACK','01',null,null,13],['AGE',null,'0','45',20],['CO_NUM_NM','臺北市',null,null,32],
+        ['PROJECT_TP','VIP','0','2',22],['PROJECT_TP','GENERAL','0','9',8],
       ],
       'M': [
-        ['AGE',null,'0','25',26],['AGE',null,'26','47',30],['CAREA_NO1',null,'1','1',29],
+        ['AGE',null,'0','25',26],['AGE',null,'26','47',30],['CAREA_NO1','1',null,null,29],
       ],
     };
 
@@ -1438,25 +1536,40 @@
     }
 
     // ===== Tab 2: 計分維度 =====
-    function isCategoricalDim(rows) { return rows.some(r => r[1] !== null); }
+    // v1.3 matchType 推導：純前端規則
+    //   - rows 全部 level1 有值且 level2_s/e 為 null → CATEGORY
+    //   - rows 全部 level1 null 且 level2_s/e 有值   → RANGE
+    //   - rows 同時混合（或某 row 兩者皆有）           → COMPOSITE
+    function dimMatchType(ct, name) {
+      const rows = (scoresByType[ct] || []).filter(r => r[0] === name);
+      if (rows.length === 0) return null;
+      const anyComposite = rows.some(r => r[1] !== null && r[2] !== null);
+      if (anyComposite) return 'COMPOSITE';
+      const allCategory = rows.every(r => r[1] !== null && r[2] === null);
+      if (allCategory) return 'CATEGORY';
+      const allRange = rows.every(r => r[1] === null && r[2] !== null);
+      if (allRange) return 'RANGE';
+      // 混雜 → COMPOSITE
+      return 'COMPOSITE';
+    }
 
     function summarizeDim(ct, name) {
       const rows = (scoresByType[ct] || []).filter(r => r[0] === name);
       if (rows.length === 0) return '<span class="text-gray-300">尚無分數</span>';
       const preview = rows.slice(0, 3).map(r => {
         const [, l1, l2s, l2e, score] = r;
-        if (l1 !== null && l2s === null) return `${l1}=${score}`;
-        if (l1 !== null) return `${l1}/${l2s}=${score}`;
+        if (l1 !== null && l2s !== null) return `${l1}/${l2s}~${l2e}=${score}`;
+        if (l1 !== null) return `${l1}=${score}`;
         if (l2s === l2e) return `${l2s}=${score}`;
         return `${l2s}~${l2e}=${score}`;
       }).join(' / ');
       return rows.length > 3 ? `${preview} … (+${rows.length - 3})` : preview;
     }
 
-    function dimType(ct, name) {
-      const rows = (scoresByType[ct] || []).filter(r => r[0] === name);
-      if (rows.length === 0) return '—';
-      return isCategoricalDim(rows) ? '類別型' : '數值型';
+    function matchTypeChip(mt) {
+      if (!mt) return '<span class="text-gray-300 text-xs">—</span>';
+      const m = MATCH_TYPE_META[mt];
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${m.badge}"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
     }
 
     function renderDim() {
@@ -1465,23 +1578,28 @@
       const cols = dimensionsByType[ct] || [];
       const tbody = document.getElementById('dim-tbody');
       if (cols.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-sm text-gray-400">
+        tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-sm text-gray-400">
           <i data-lucide="inbox" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
           <p>目前無計分維度</p>
           <p class="text-xs text-gray-400 mt-1">請點擊上方「+ 新增維度」開始設定</p>
         </td></tr>`;
       } else {
         tbody.innerHTML = cols.map(name => {
-          const type = dimType(ct, name);
+          const mt = dimMatchType(ct, name);
           const summary = summarizeDim(ct, name);
           const label = columnLabels[name] || name;
+          // 「類型」欄：依資料是否類別 (level1) 或數值 (level2) — 與 matchType 雖相關但更基礎；保留為輔助欄位
+          // 取 rows[0] 判斷主導向
+          const rows = (scoresByType[ct] || []).filter(r => r[0] === name);
+          const baseType = rows.length === 0
+            ? '—'
+            : (rows[0][2] !== null ? '數值' : '類別');
           return `
           <tr class="border-b border-border hover:bg-gray-50/50 transition">
             <td class="px-5 py-3 font-mono text-xs font-semibold text-gray-700">${name}</td>
             <td class="px-5 py-3 text-gray-900">${label}</td>
-            <td class="px-5 py-3">
-              <span class="inline-flex px-2 py-0.5 text-xs rounded-full ${type === '類別型' ? 'bg-cyan-100 text-cyan-700' : 'bg-violet-100 text-violet-700'}">${type}</span>
-            </td>
+            <td class="px-5 py-3 text-xs text-gray-600">${baseType}</td>
+            <td class="px-5 py-3">${matchTypeChip(mt)}</td>
             <td class="px-5 py-3 text-xs text-gray-500 font-mono">${summary}</td>
             <td class="px-5 py-3">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success">
@@ -1490,8 +1608,8 @@
             </td>
             <td class="px-5 py-3 text-right">
               <div class="inline-flex items-center gap-1">
-                <button onclick="openDimModal()" class="action-btn write-btn p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-40 disabled:cursor-not-allowed"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-                <button class="action-btn write-btn p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition disabled:opacity-40 disabled:cursor-not-allowed"><i data-lucide="ban" class="w-4 h-4"></i></button>
+                <button onclick="openDimEditor('${name}')" class="action-btn write-btn p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-40 disabled:cursor-not-allowed" title="編輯（整合式 Modal）"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                <button class="action-btn write-btn p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition disabled:opacity-40 disabled:cursor-not-allowed" title="停用"><i data-lucide="ban" class="w-4 h-4"></i></button>
               </div>
             </td>
           </tr>`;
@@ -1526,23 +1644,20 @@
         tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-sm text-gray-400">
           <i data-lucide="inbox" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
           <p>目前無分數區間設定</p>
-          <p class="text-xs text-gray-400 mt-1">請於 Tab 2 確認維度後新增分數區間</p>
+          <p class="text-xs text-gray-400 mt-1">請於 <button onclick="switchTab('dim')" class="text-primary hover:underline">Tab 2 計分維度</button> 編輯維度以新增分數區間</p>
         </td></tr>`;
       } else {
         tbody.innerHTML = list.map(r => {
           const [col, l1, l2s, l2e, score] = r;
+          const mt = dimMatchType(ct, col);
           return `
           <tr class="border-b border-border hover:bg-gray-50/50 transition">
             <td class="px-5 py-3 font-mono text-xs text-gray-700">${col}</td>
+            <td class="px-5 py-3">${matchTypeChip(mt)}</td>
             <td class="px-5 py-3 font-mono text-sm">${l1 ?? '<span class="text-gray-300">—</span>'}</td>
             <td class="px-5 py-3 font-mono text-sm">${l2s ?? '<span class="text-gray-300">—</span>'}</td>
             <td class="px-5 py-3 font-mono text-sm">${l2e ?? '<span class="text-gray-300">—</span>'}</td>
             <td class="px-5 py-3 text-right font-semibold tabular-nums ${score < 0 ? 'text-danger' : ''}">${score}</td>
-            <td class="px-5 py-3 text-right">
-              <button onclick="openScoreModal()" class="action-btn write-btn p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-40 disabled:cursor-not-allowed">
-                <i data-lucide="pencil" class="w-4 h-4"></i>
-              </button>
-            </td>
           </tr>`;
         }).join('');
       }
@@ -1693,12 +1808,260 @@
     // ===== Modal helpers =====
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); document.body.style.overflow='hidden'; lucide.createIcons(); }
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.body.style.overflow=''; }
-    function openDimModal() { openModal('dimModal'); }
-    function openScoreModal() { openModal('scoreModal'); }
+    function openDimModal() {
+      // v1.3：新增維度 — 重定向至整合式編輯器（無預填欄位）
+      openDimEditor(null);
+    }
     function openTierModal() {
       // 預設規則類型 Standard，依當前 CARD_TYPE ob_tier 紀錄判斷互斥
       onTierModeChange('standard');
       openModal('tierModal');
+    }
+
+    // ===== v1.3 整合式維度編輯器（dimEditorModal） =====
+    // 暫存當前編輯狀態：{ colName, colLabel, matchType, ranges: [{level1, level2_s, level2_e, score}] }
+    let dimEditorState = null;
+    // matchType 切換待確認暫存
+    let pendingMatchTypeSwitch = null;
+
+    function openDimEditor(colName) {
+      const ct = selectedCardType;
+      if (!ct) return;
+      if (colName) {
+        // 編輯既有維度：載入分數區間
+        const rows = (scoresByType[ct] || []).filter(r => r[0] === colName);
+        const mt = dimMatchType(ct, colName) || 'CATEGORY';
+        dimEditorState = {
+          colName: colName,
+          colLabel: columnLabels[colName] || colName,
+          matchType: mt,
+          ranges: rows.map(r => ({ level1: r[1], level2_s: r[2], level2_e: r[3], score: r[4] })),
+          isEdit: true,
+        };
+        document.getElementById('dimEditorTitle').textContent = `編輯計分維度 — ${colName}`;
+      } else {
+        // 新增
+        dimEditorState = {
+          colName: '',
+          colLabel: '',
+          matchType: 'CATEGORY',
+          ranges: [],
+          isEdit: false,
+        };
+        document.getElementById('dimEditorTitle').textContent = '新增計分維度';
+      }
+      // 寫入欄位
+      document.getElementById('dimEditorColName').value = dimEditorState.colName;
+      document.getElementById('dimEditorColLabel').value = dimEditorState.colLabel;
+      // matchType radio + card 反白
+      document.querySelectorAll('#dimEditorMatchTypeOptions input[name="dimMatchType"]').forEach(inp => {
+        inp.checked = (inp.value === dimEditorState.matchType);
+        // 切換時觸發 confirm（透過 change event）
+        inp.onchange = onDimEditorMatchTypeRadioChange;
+      });
+      applyDimEditorMatchTypeUI(dimEditorState.matchType);
+      renderDimEditorRanges();
+      openModal('dimEditorModal');
+    }
+
+    function onDimEditorMatchTypeRadioChange(ev) {
+      const newMt = ev.target.value;
+      if (newMt === dimEditorState.matchType) return;
+      // 若已有 ranges → 跳 confirm modal
+      if (dimEditorState.ranges.length > 0) {
+        // 暫不更新 state，待 confirm
+        pendingMatchTypeSwitch = { from: dimEditorState.matchType, to: newMt };
+        document.getElementById('mtsFrom').textContent = MATCH_TYPE_META[pendingMatchTypeSwitch.from].label;
+        document.getElementById('mtsTo').textContent = MATCH_TYPE_META[pendingMatchTypeSwitch.to].label;
+        document.getElementById('mtsCount').textContent = dimEditorState.ranges.length;
+        // 還原 radio（先取消勾選新值）— 確認後才真切換
+        const oldInp = document.querySelector(`#dimEditorMatchTypeOptions input[value="${dimEditorState.matchType}"]`);
+        if (oldInp) oldInp.checked = true;
+        openModal('matchTypeSwitchConfirmModal');
+      } else {
+        // 無 ranges 直接切換
+        dimEditorState.matchType = newMt;
+        applyDimEditorMatchTypeUI(newMt);
+      }
+    }
+
+    function confirmMatchTypeSwitch() {
+      if (!pendingMatchTypeSwitch) return;
+      dimEditorState.matchType = pendingMatchTypeSwitch.to;
+      dimEditorState.ranges = [];
+      // 同步 radio
+      document.querySelectorAll('#dimEditorMatchTypeOptions input[name="dimMatchType"]').forEach(inp => {
+        inp.checked = (inp.value === dimEditorState.matchType);
+      });
+      applyDimEditorMatchTypeUI(dimEditorState.matchType);
+      renderDimEditorRanges();
+      pendingMatchTypeSwitch = null;
+      closeModal('matchTypeSwitchConfirmModal');
+      showToast('success', `已切換為「${MATCH_TYPE_META[dimEditorState.matchType].label}」並清空分數區間`);
+    }
+
+    function applyDimEditorMatchTypeUI(mt) {
+      // Radio Card 反白
+      document.querySelectorAll('.dim-mt-card').forEach(card => {
+        const isActive = card.getAttribute('data-mt') === mt;
+        const colorClass = mt === 'CATEGORY' ? 'border-primary bg-blue-50/40'
+                         : mt === 'RANGE'    ? 'border-violet-500 bg-violet-50/40'
+                         :                     'border-amber-500 bg-amber-50/40';
+        card.className = 'dim-mt-card cursor-pointer border-2 rounded-lg p-3 flex flex-col gap-1 transition '
+                       + (isActive ? colorClass : 'border-border bg-white');
+      });
+      // 欄位顯隱（CATEGORY 隱 level2_s/e；RANGE 隱 level1；COMPOSITE 全顯）
+      const thLevel1 = document.getElementById('dimEditorThLevel1');
+      const thLevel2s = document.getElementById('dimEditorThLevel2s');
+      const thLevel2e = document.getElementById('dimEditorThLevel2e');
+      thLevel1.style.display  = (mt === 'RANGE') ? 'none' : '';
+      thLevel2s.style.display = (mt === 'CATEGORY') ? 'none' : '';
+      thLevel2e.style.display = (mt === 'CATEGORY') ? 'none' : '';
+    }
+
+    function dimEditorAddRange() {
+      const mt = dimEditorState.matchType;
+      const newRow = {
+        level1: (mt === 'RANGE') ? null : '',
+        level2_s: (mt === 'CATEGORY') ? null : '',
+        level2_e: (mt === 'CATEGORY') ? null : '',
+        score: 0,
+      };
+      dimEditorState.ranges.push(newRow);
+      renderDimEditorRanges();
+    }
+
+    function dimEditorRemoveRange(idx) {
+      dimEditorState.ranges.splice(idx, 1);
+      renderDimEditorRanges();
+    }
+
+    function dimEditorUpdateField(idx, field, val) {
+      if (!dimEditorState.ranges[idx]) return;
+      if (field === 'score') {
+        dimEditorState.ranges[idx][field] = parseInt(val, 10) || 0;
+      } else {
+        dimEditorState.ranges[idx][field] = val === '' ? null : val;
+      }
+      // 即時重疊偵測（純前端）
+      detectOverlap();
+    }
+
+    function renderDimEditorRanges() {
+      const mt = dimEditorState.matchType;
+      const tbody = document.getElementById('dimEditorRangesBody');
+      const count = document.getElementById('dimEditorRangeCount');
+      count.textContent = dimEditorState.ranges.length;
+      if (dimEditorState.ranges.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs text-gray-400">
+          <i data-lucide="inbox" class="w-6 h-6 text-gray-300 mx-auto mb-1"></i>
+          <p>尚無分數區間，點擊上方「+ 新增區間」開始</p>
+        </td></tr>`;
+      } else {
+        tbody.innerHTML = dimEditorState.ranges.map((r, idx) => {
+          const showL1  = (mt !== 'RANGE');
+          const showL2s = (mt !== 'CATEGORY');
+          const showL2e = (mt !== 'CATEGORY');
+          return `
+          <tr class="border-b border-border last:border-b-0">
+            <td class="px-3 py-2" style="${showL1 ? '' : 'display:none'}">
+              <input type="text" value="${r.level1 ?? ''}" oninput="dimEditorUpdateField(${idx},'level1',this.value)"
+                placeholder="${mt === 'CATEGORY' ? '例：AGENT' : '例：VIP'}"
+                class="w-full px-2 py-1 text-xs border border-border rounded-md font-mono">
+            </td>
+            <td class="px-3 py-2" style="${showL2s ? '' : 'display:none'}">
+              <input type="text" value="${r.level2_s ?? ''}" oninput="dimEditorUpdateField(${idx},'level2_s',this.value)"
+                placeholder="0"
+                class="w-full px-2 py-1 text-xs border border-border rounded-md font-mono">
+            </td>
+            <td class="px-3 py-2" style="${showL2e ? '' : 'display:none'}">
+              <input type="text" value="${r.level2_e ?? ''}" oninput="dimEditorUpdateField(${idx},'level2_e',this.value)"
+                placeholder="99"
+                class="w-full px-2 py-1 text-xs border border-border rounded-md font-mono">
+            </td>
+            <td class="px-3 py-2 text-right">
+              <input type="number" value="${r.score}" oninput="dimEditorUpdateField(${idx},'score',this.value)"
+                class="w-20 px-2 py-1 text-xs text-right border border-border rounded-md font-mono tabular-nums">
+            </td>
+            <td class="px-3 py-2 text-right">
+              <button onclick="dimEditorRemoveRange(${idx})" class="p-1 text-gray-400 hover:text-danger hover:bg-red-50 rounded transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </td>
+          </tr>`;
+        }).join('');
+      }
+      detectOverlap();
+      lucide.createIcons();
+    }
+
+    // 純前端重疊偵測 — 僅對 RANGE / COMPOSITE 模式
+    function detectOverlap() {
+      const warn = document.getElementById('dimEditorOverlapWarn');
+      const detail = document.getElementById('dimEditorOverlapDetail');
+      const submitBtn = document.getElementById('dimEditorSubmitBtn');
+      const mt = dimEditorState.matchType;
+      if (mt === 'CATEGORY') {
+        warn.classList.add('hidden');
+        submitBtn.disabled = false;
+        return;
+      }
+      // 同 level1（含 null）分組，組內檢查 level2_s/e 不可重疊
+      const groups = {};
+      dimEditorState.ranges.forEach((r, idx) => {
+        const key = mt === 'COMPOSITE' ? (r.level1 ?? '') : '__RANGE__';
+        if (!groups[key]) groups[key] = [];
+        const s = parseFloat(r.level2_s);
+        const e = parseFloat(r.level2_e);
+        if (!isNaN(s) && !isNaN(e)) groups[key].push({ idx, s, e, level1: r.level1 });
+      });
+      const overlaps = [];
+      Object.values(groups).forEach(arr => {
+        for (let i = 0; i < arr.length; i++) {
+          for (let j = i + 1; j < arr.length; j++) {
+            if (!(arr[j].e < arr[i].s || arr[j].s > arr[i].e)) {
+              const lvl1Tag = arr[i].level1 ? `[level1=${arr[i].level1}] ` : '';
+              overlaps.push(`${lvl1Tag}列 ${arr[i].idx + 1} (${arr[i].s}~${arr[i].e}) 與列 ${arr[j].idx + 1} (${arr[j].s}~${arr[j].e})`);
+            }
+          }
+        }
+      });
+      if (overlaps.length > 0) {
+        warn.classList.remove('hidden');
+        detail.textContent = overlaps.join('；');
+        submitBtn.disabled = true;
+      } else {
+        warn.classList.add('hidden');
+        submitBtn.disabled = false;
+      }
+    }
+
+    function dimEditorSubmit() {
+      const colName = document.getElementById('dimEditorColName').value.trim();
+      const colLabel = document.getElementById('dimEditorColLabel').value.trim();
+      if (!colName || !colLabel) {
+        showToast('error', 'column_name / column_label 為必填');
+        return;
+      }
+      // 寫回 mock（極簡 — 不做完整 schema 驗證）
+      const ct = selectedCardType;
+      if (!ct) return;
+      // 移除既有
+      scoresByType[ct] = (scoresByType[ct] || []).filter(r => r[0] !== colName);
+      // 寫入新區間
+      dimEditorState.ranges.forEach(r => {
+        scoresByType[ct].push([colName, r.level1, r.level2_s, r.level2_e, r.score]);
+      });
+      // 確保維度清單包含此欄位
+      if (!dimensionsByType[ct]) dimensionsByType[ct] = [];
+      if (!dimensionsByType[ct].includes(colName)) dimensionsByType[ct].push(colName);
+      // 更新 columnLabels
+      columnLabels[colName] = colLabel;
+      closeModal('dimEditorModal');
+      renderDim();
+      renderDimFilter();
+      renderScoreTable();
+      showToast('success', `已儲存維度 ${colName}（matchType=${MATCH_TYPE_META[dimEditorState.matchType].label}）`);
     }
 
     // ===== Tab 4 新增等級 Modal（F055 v1.5 — AC-8 ~ AC-8f / §5.4 POST） =====
@@ -2084,8 +2447,9 @@
       const banner = document.getElementById('prodKindBanner');
       banner.className = 'mb-4 rounded-xl bg-white border border-border shadow-sm';
       // 關所有 Modal
-      ['createCardTypeModal','editCardTypeModal','deleteCardTypeModal','dimModal','scoreModal','tierModal','levelModal'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
+      ['createCardTypeModal','editCardTypeModal','deleteCardTypeModal','dimEditorModal','matchTypeSwitchConfirmModal','tierModal','levelModal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
       });
       document.body.style.overflow = '';
 
