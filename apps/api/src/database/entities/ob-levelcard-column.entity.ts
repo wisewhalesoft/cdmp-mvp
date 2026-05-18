@@ -5,6 +5,7 @@
 
 import { Entity, Column, PrimaryColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { dateColumnType, surrogatePkType } from '@/common/database/column-types';
+import { MatchType } from '@/modules/assignment-scoring/dto/match-type.enum';
 
 @Entity('ob_levelcard_column')
 export class ObLevelcardColumn {
@@ -45,4 +46,11 @@ export class ObLevelcardColumn {
   // 過濾無效計分維度（如停用、待測試）；遷移時所有列預設 'active'
   @Column({ name: 'status', type: 'varchar', length: 10, default: 'active' })
   status: string;
+
+  // F054 v1.3 / AD-E07-2 補充（2026-05-18）：計分比對模式
+  // 三正式列舉值（CATEGORY / RANGE / COMPOSITE）；對應 fn_calc_tier_level 三分支計分
+  // 對應 migration：1711360000250-AddMatchTypeToObLevelcardColumn.ts
+  // CHECK constraint：chk_ob_levelcard_column_match_type（SQLite 環境由 entity 端保證）
+  @Column({ name: 'match_type', type: 'varchar', length: 20 })
+  match_type: MatchType;
 }
