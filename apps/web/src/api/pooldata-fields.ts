@@ -1,14 +1,15 @@
 import { apiClient } from './client';
 
 /**
- * F075 / F076 — POOLDATA 篩選欄位白名單 + 類別型欄位可選值 API client
+ * F075 / F076 — POOLDATA 篩選欄位管理 + 類別型欄位可選值 API client
  *
  * Spec:
- *   - F075 v1.3: pooldata-fields CRUD（含 F076-C 級聯停用）
+ *   - F075 v1.4: pooldata-fields CRUD + available-columns（含 F076-C 級聯停用）
  *   - F076 v1.3: pooldata-fields/:columnName/options CRUD
  *
- * 注意：backend controller path 為 'api/v1/pooldata-fields'（雙重前綴 bug）
+ * 注意：backend controller path 為 'api/v1/pooldata-fields'（雙重前綴歷史 bug）
  *       FE baseURL='/api/v1' + path='/api/v1/...' → 實際 URL '/api/v1/api/v1/...'
+ *       此 bug 不在 F075 v1.4 PR 範圍內（會影響既有所有端點），予以保留。
  */
 
 const BASE = '/api/v1/pooldata-fields';
@@ -94,6 +95,34 @@ export async function updateField(
 export async function disableField(columnName: string): Promise<{ message: string }> {
   const response = await apiClient.delete<{ message: string }>(
     `${BASE}/${columnName}`,
+  );
+  return response.data;
+}
+
+// =====================================================================
+// F075 v1.4 — pooldata-fields/available-columns（新增 Modal dropdown 來源）
+// =====================================================================
+
+export interface AvailableColumn {
+  columnName: string;
+  dataType: string;
+  suggestedFieldType: FieldType;
+}
+
+export interface ListAvailableColumnsResponse {
+  availableColumns: AvailableColumn[];
+}
+
+/**
+ * F075 v1.4 §5.5：取得 OBPOOLDATA 既有但尚未列入篩選欄位清單之欄位（含已停用過濾，BR-13）。
+ *
+ * 供新增 Modal dropdown 使用；空陣列為合法回傳（OBPOOLDATA 所有欄位皆已列入清單）。
+ *
+ * 權限（與寫入端點一致）：admin / director，受 FeatureFlagGuard 保護。
+ */
+export async function listAvailableColumns(): Promise<ListAvailableColumnsResponse> {
+  const response = await apiClient.get<ListAvailableColumnsResponse>(
+    `${BASE}/available-columns`,
   );
   return response.data;
 }
