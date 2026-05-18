@@ -1,6 +1,8 @@
 %% F075 — POOLDATA 篩選欄位白名單管理流程
 %% 涵蓋: 初始 seed / 列表查看 / 新增 (含 categorical 提示跳轉 F076) / 編輯 / 停用 / 啟用
+%%        / available-columns 查詢（v1.4 新增）
 %% 配合 data-model.md#field-whitelist-entity 與 error-handling.md#assignment-code-errors
+%% 版本: v1.4 (2026-05-18) — 修正 Guard 名稱 / 路由 / 錯誤碼；新增 AvailableColumns 子流程
 
 flowchart TD
     subgraph Init [系統初始化 - Admin 一次性執行]
@@ -11,23 +13,33 @@ flowchart TD
     end
 
     subgraph Query [日常查看 - 部長 / Admin / 處長 皆可]
-        QStart([進入 M06 POOLDATA 篩選欄位分頁]) --> QApi["GET /api/v1/assignment/pooldata-fields<br/>?includeInactive=true"]
-        QApi --> QGuard{SalesManagerGuard<br/>通過?}
+        QStart([進入 M06 篩選欄位管理分頁]) --> QApi["GET /api/v1/pooldata-fields<br/>?active=true|false（可選）"]
+        QApi --> QGuard{DirectorOrSectionChiefGuard<br/>通過?}
         QGuard -->|否| Q403[/403 AUTH_FORBIDDEN/]
         QGuard -->|是| QList[渲染表格<br/>含啟用 + 停用欄位]
         QList --> QRoleUI{角色判斷}
-        QRoleUI -->|"處長"| QReadOnly[隱藏所有寫入按鈕<br/>F074 BR-7]
+        QRoleUI -->|"處長"| QReadOnly[隱藏所有寫入按鈕<br/>AC-3]
         QRoleUI -->|"部長 + Admin"| QFullUI[顯示新增 / 編輯 / 停用 / 啟用 / 管理可選值按鈕]
     end
 
+    subgraph AvailableColumns [新增欄位前置查詢 - 僅部長 + Admin（v1.4 新增）]
+        ACStart([部長 / Admin 點擊「新增篩選欄位」]) --> ACApi["GET /api/v1/pooldata-fields/available-columns"]
+        ACApi --> ACGuard{DirectorGuard +<br/>FeatureFlagGuard 通過?}
+        ACGuard -->|"403 / 503"| ACErr[/403 AUTH_FORBIDDEN<br/>503 FEATURE_NOT_ENABLED/]
+        ACGuard -->|是| ACQuery["查詢 information_schema.columns<br/>WHERE table_schema='public'<br/>AND table_name='ob_pool_data'<br/>AND column_name NOT IN<br/>（pooldata_field_whitelist，含 is_active=false）<br/>ORDER BY column_name ASC<br/>（BR-13）"]
+        ACQuery --> ACInfer["_inferSuggestedFieldType(dataType)<br/>numeric 類 → numeric<br/>date / timestamp 類 → date<br/>其餘 / null → categorical（保守原則）"]
+        ACInfer --> ACReturn["200 OK + availableColumns[]<br/>（空陣列為合法回傳 — ob_pool_data 不存在<br/>或所有欄位皆已列入白名單）"]
+        ACReturn --> ACDropdown[前端 Modal 渲染 dropdown<br/>並預選 suggestedFieldType radio]
+    end
+
     subgraph Write [寫入操作 - 僅部長 + Admin]
-        WStart([部長點擊 新增 / 編輯 / 停用 / 啟用]) --> WApi[呼叫對應 POST / PUT 端點]
+        WStart([部長點擊 新增 / 編輯 / 停用 / 啟用]) --> WApi[呼叫對應 POST / PATCH / DELETE 端點]
         WApi --> WGuard{DirectorGuard<br/>通過?}
-        WGuard -->|否| W403[/403 E07_FORBIDDEN_DIRECTOR_ONLY/]
+        WGuard -->|否| W403[/403 AUTH_FORBIDDEN/]
         WGuard -->|是| WAction{操作類型}
 
-        WAction -->|"新增"| WCreate{column_name<br/>已存在?}
-        WCreate -->|是| W422Dup[/422 WHITELIST_FIELD_DUPLICATE/]
+        WAction -->|"新增（dropdown 已限定合法欄位）"| WCreate{column_name<br/>已存在?}
+        WCreate -->|是| W409Dup[/409 POOLDATA_FIELD_DUPLICATE/]
         WCreate -->|否| WInsert[INSERT field_whitelist<br/>+ 寫 audit_log CREATE]
         WInsert --> WCatHint{field_type =<br/>categorical?}
         WCatHint -->|是| WReturnHint[回傳 hint=PLEASE_MAINTAIN_OPTIONS<br/>前端 toast 跳轉 F076]
@@ -35,24 +47,27 @@ flowchart TD
         WReturnHint --> WReturn201
 
         WAction -->|"編輯 displayName / fieldType"| WUpdate{fieldType 由 categorical<br/>改為其他?}
-        WUpdate -->|是| WConfirm[前端 Modal 警告:<br/>F076 既有可選值不再套用<br/>確定繼續?]
+        WUpdate -->|是| WConfirm["前端 Modal 警告:<br/>「將自動停用 N 個可選值」<br/>（AC-6）確定繼續?"]
         WUpdate -->|否| WUpdateExec[UPDATE field_whitelist<br/>+ 寫 audit_log UPDATE]
         WConfirm --> WUpdateExec
 
-        WAction -->|"停用"| WDisable[UPDATE is_active=false<br/>+ 寫 audit_log DISABLE]
-        WDisable --> WNote[註: 不回溯既有名單條件<br/>BR-3 / F061 月跑 Stage 1 仍正常讀取]
+        WAction -->|"停用"| WDisable["UPDATE is_active=false<br/>+ 寫 audit_log UPDATE（before/after 對比）<br/>BR-4：不回溯既有名單條件"]
+        WDisable --> WNote[月跑 Stage 1 仍正常讀取既有條件]
 
-        WAction -->|"啟用"| WEnable[UPDATE is_active=true<br/>+ 寫 audit_log ENABLE]
+        WAction -->|"啟用"| WEnable[UPDATE is_active=true<br/>+ 寫 audit_log UPDATE]
     end
 
     QFullUI -.點擊管理可選值.-> F076Link([跳轉 F076 可選值管理頁])
+    ACDropdown -.使用者填妥後送出 POST.-> WStart
 
     classDef passNode fill:#dcfce7,stroke:#16a34a,color:#14532d
     classDef errNode fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
     classDef decisionNode fill:#fef3c7,stroke:#d97706,color:#78350f
     classDef actionNode fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef v14Node fill:#f3e8ff,stroke:#7c3aed,color:#3b0764
 
-    class Q403,W403,W422Dup errNode
-    class QGuard,WGuard,WAction,WCreate,WUpdate,WCatHint,QRoleUI,InitCheck decisionNode
-    class WInsert,WUpdateExec,WDisable,WEnable,InitInsert actionNode
-    class WReturn201,QFullUI,QReadOnly passNode
+    class Q403,W403,W409Dup,ACErr errNode
+    class QGuard,WGuard,WAction,WCreate,WUpdate,WCatHint,QRoleUI,InitCheck,ACGuard decisionNode
+    class WInsert,WUpdateExec,WDisable,WEnable,InitInsert,ACQuery,ACInfer actionNode
+    class WReturn201,QFullUI,QReadOnly,ACReturn passNode
+    class ACStart,ACApi,ACDropdown v14Node

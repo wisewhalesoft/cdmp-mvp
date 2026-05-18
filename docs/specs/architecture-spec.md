@@ -1,10 +1,12 @@
 ---
 type: architecture-spec
-version: "2.11"
+version: "2.12"
 status: draft
-last_updated: 2026-05-16
+last_updated: 2026-05-18
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089]
 ---
+
+> **v2.12 / 2026-05-18 變更摘要（F075 v1.4 available-columns 端點架構決策）**：(1) 新增 `GET /api/v1/pooldata-fields/available-columns` 端點，掛載於既有 `PooldataFieldWhitelistController`，靜態路由 `available-columns` 置頂於動態路由 `:columnName` 之前（NestJS 靜態路由優先規則）；(2) Guard 鏈：method 級 `@RequireDirector()` + `@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')`（503 fallback，與 POST 寫入端點一致；此端點為新增 Modal dropdown 資料來源，強耦合於寫入流程，不屬下游唯讀 GET）；(3) `DataSource.query()` raw SQL 查詢 `information_schema.columns WHERE table_schema='public' AND table_name='ob_pool_data'`，子查詢排除所有 `pooldata_field_whitelist.column_name`（**含** `is_active=false`，BR-13）；(4) `suggestedFieldType` 推斷邏輯由 service 層 `private _inferSuggestedFieldType(dataType)` pure function 實作（三類：`numeric` / `date` / `categorical`），不使用 SQL CASE；(5) `ob_pool_data` 不存在 / available 為空 → 回 200 + 空陣列（合法狀態）；(6) 不加 cache（information_schema catalog 查詢 < 5ms，呼叫頻率低，加 cache 引入失效複雜度不值得）；(7) §3.10 服務表補入 `PooldataFieldWhitelistService` v1.4 bullet；(8) A-3（OBPOOLDATA 欄位孤兒新增風險）升級為 [RESOLVED]（新增階段）。
 
 > **v2.11 / 2026-05-16 變更摘要（E07 合併重構 AD-E07 v3.0）**：(1) §3.10 Account Service 補登 `AccountsService.updateBusinessRole()` method（取代 v2.10 之 `updateE07Role()`），對應 [F006a](features/F006a-update-business-role.md) 新 PATCH `/business-role` 端點；(2) §3.10 新增 E07 後端 Guard 元件清單（`DirectorOrSectionChiefGuard` / `DirectorGuard` / `SectionChiefGuard` 三 Guard 體系，取代舊 `SalesManagerGuard`）；(3) AD-E02-1 / AD-E02-4 改採 `business_role` 單欄位設計（廢除 v1.x `is_sales_manager` + `e07_role` 雙欄位）；(4) covers 補登 F006a / F075~F089。
 
@@ -1152,6 +1154,7 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | **RatioValidationService**（2026-05-15 新增 / E07 重構批次 4 引入） | per-LIST_NO 部門比例驗算 helper；提供 `assertSumEquals100` / `assertEachInRange` 2 個 method | `assertSumEquals100(ratios)` 用於 F079 PUT + F080 推進前置條件驗證；`assertEachInRange(ratios, [0, 100])` 用於單欄位邊界校驗；錯誤碼 `RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE` | F079, F080 |
 | **FeatureFlagGuard**（2026-05-16 補登 / 決議 #2） | Feature flag 控制 Guard；於 E07 重構批次 3~6 端點啟動 `ENABLE_E07_REFACTOR_PHASE3` 檢查 | flag = `false` 時統一回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = `true` 時放行；實作機制（環境變數 vs config 表 vs LaunchDarkly）由 system-architect 於 batch 3 architecture 階段決議 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
 | **SectionChiefScopeGuard**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補 method 分支） | 處長轄區隔離 Guard；於 F082 端點套用 | (1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：**GET 不攔截**（由 service 層 `scopeByCreator(currentUserId)` 統一過濾，越權回 200 + `departments = []`）；**PUT / POST 攔截**（從 request body / params 抽 `deptCode` + `empIds`，比對 `ob_empl_set.created_by`，不符回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`）；後續 M03d / 簽核流程可重用 | F082 v1.3 |
+| **PooldataFieldWhitelistService**（F075 v1.3 / 2026-05-16；**v1.4 補登 2026-05-18**） | `pooldata_field_whitelist` CRUD（新增 / 編輯 / 軟刪除）；欄位類別管理（field_type：numeric / categorical / date）；F076-C 級聯軟停用（categorical 切離時同 transaction 批次 SET pooldata_field_option.is_active=false）；**[v1.4 新增]** `getAvailableColumns()`：以 `DataSource.query()` raw SQL 查詢 `information_schema.columns WHERE table_schema='public' AND table_name='ob_pool_data'` 並排除所有 `pooldata_field_whitelist.column_name`（含 is_active=false，BR-13）；`private _inferSuggestedFieldType(dataType)` pure function 推斷三類型（numeric / date / categorical） | 寫入限 admin / director（`DirectorGuard`）；讀取開放至 section_chief（`DirectorOrSectionChiefGuard`）；`GET /available-columns` 受 `DirectorGuard` + `FeatureFlagGuard`（`ENABLE_E07_REFACTOR_PHASE3`）保護；column_name 唯一性由 DB UNIQUE index + 應用層雙重保證（衝突 → 409 POOLDATA_FIELD_DUPLICATE，BR-1）；ob_pool_data 不存在時回空陣列（非 500）；稽核失敗不 rollback（BR-8）；不快取 available-columns 查詢結果（information_schema catalog 查詢成本可忽略，呼叫頻率低） | F075, F076, US-092 |
 
 **E07 API Endpoints 摘要**
 
@@ -1185,6 +1188,11 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | GET | `/api/v1/assignment/history` | 查看歷史執行清單 | user + is_sales_manager |
 | GET | `/api/v1/assignment/history/:runId/snapshot` | 查看執行快照詳情 | user + is_sales_manager |
 | GET | `/api/v1/assignment/history/compare` | 比對兩次執行差異（?runA=&runB=） | user + is_sales_manager |
+| GET | `/api/v1/pooldata-fields` | **[F075]** 白名單欄位列表（?active=true\|false 可選過濾） | admin / director / section_chief |
+| POST | `/api/v1/pooldata-fields` | **[F075]** 新增白名單欄位 | admin / director |
+| PATCH | `/api/v1/pooldata-fields/:columnName` | **[F075]** 編輯欄位 displayName / fieldType（含 F076-C 軟停用級聯） | admin / director |
+| DELETE | `/api/v1/pooldata-fields/:columnName` | **[F075]** 軟刪除欄位（is_active=false） | admin / director |
+| GET | `/api/v1/pooldata-fields/available-columns` | **[F075 v1.4 新增]** 查詢 `ob_pool_data` 欄位中尚未列入白名單者（含停用紀錄排除，`information_schema` raw query，schema=`public`）；回傳 `availableColumns`（columnName / dataType / suggestedFieldType）；供新增 Modal dropdown 使用；受 `DirectorGuard` + `FeatureFlagGuard`（`ENABLE_E07_REFACTOR_PHASE3`）保護 | admin / director |
 
 **E07 與 E04 的依賴關係**
 

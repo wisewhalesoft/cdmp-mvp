@@ -6,15 +6,16 @@ source-story: US-102
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.3"
-date: 2026-05-17
+version: "1.4"
+date: 2026-05-18
 status: Draft
 ---
 
 # F075: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
+> **v1.4 修訂（2026-05-18）**：UI 層命名改為「篩選欄位管理」/「新增篩選欄位」（內部 DB 表名 / API path / 類別名稱 100% 保留 `pooldata_field_whitelist`、`/api/v1/pooldata-fields`）；新增 `GET /api/v1/pooldata-fields/available-columns` 端點，新增欄位流程改為下拉選擇 OBPOOLDATA 既有但尚未列入白名單之欄位（含停用欄位過濾，防繞過 AC-5），徹底消除 A-3 孤兒欄位新增風險；新增 `suggestedFieldType` 推斷規則（numeric / categorical / date，預選非強制，使用者可覆寫）；BR-11 / BR-12 / BR-13 落地；A-3 由 [ASSUMPTION] 升級為 [RESOLVED]；附帶清理：prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串修正為 spec 權威定義 `POOLDATA_FIELD_DUPLICATE`。
 > **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回 BR-7 「`field_type` 由 categorical 切離時，service 層批次 SET 對應 `pooldata_field_option.is_active = false` + `deactivation_reason = 'field_type_changed'`（軟停用，不 CASCADE 刪除）」+ AC-6 切換 confirm UI 文字補「將自動停用 N 個可選值」+ 跨參照 data-model `deactivation_reason` ENUM。
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-102 + AD-E07 v3.0 一致性決議完整重建；Guard：寫入 `DirectorGuard`、查看 `DirectorOrSectionChiefGuard`（取代 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議與 seed 清單。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
@@ -47,6 +48,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - 部長 / Admin 可寫入；處長唯讀（可進入頁面查看，無編輯按鈕）
 - 系統首次部署時自動 seed 8 筆（7 啟用 + 1 停用 PAYT_TERM）
 - 停用欄位「不回溯」既有名單條件，月跑讀取直接讀 `ob_list_definition.filter_conditions` JSONB，不 join 白名單做欄位有效性驗證
+
+**v1.4 新增**：新增欄位流程改為下拉選擇（dropdown） — 後端提供 `GET /api/v1/pooldata-fields/available-columns` 回傳 OBPOOLDATA 既有但尚未列入白名單之欄位清單（含其 PostgreSQL `dataType` 與系統推斷之 `suggestedFieldType`），前端 Modal 以下拉取代自由輸入 `columnName`；available-columns 查詢過濾**所有**已在 `pooldata_field_whitelist` 的紀錄（含 `is_active = false`），確保不會繞過 AC-5 唯一性。系統推斷之 `suggestedFieldType` 作為預選值，使用者仍可覆寫；此舉徹底消除 A-3 孤兒欄位於新增階段產生的風險。
 
 **舊名單相容**：舊名單（既有 OBMLISTDF 遷移資料）繼續沿用固定欄位邏輯，不受本白名單影響
 
@@ -139,6 +142,54 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - **Then** 表單元件為多選列表（可選值由 F076 維護取得）
 - **And** 若 `field_type = numeric`，表單元件為數值範圍輸入（min / max）
 - **And** 若 `field_type = date`，表單元件為日期範圍選擇器
+
+### AC-10：available-columns 端點僅回傳尚未列入白名單之欄位
+
+- **Given** OBPOOLDATA 含 120 個欄位，`pooldata_field_whitelist` 已有 8 筆紀錄（7 啟用 + 1 停用 PAYT_TERM）
+- **When** 部長 / Admin 呼叫 `GET /api/v1/pooldata-fields/available-columns`
+- **Then** Response 回傳 OBPOOLDATA 既有欄位中**未出現於** `pooldata_field_whitelist` 的所有欄位（不論 `is_active` 為何，已停用之 PAYT_TERM 亦不列入 available-columns）
+- **And** 每筆含 `columnName`、`dataType`（PostgreSQL information_schema 原始型別字串）、`suggestedFieldType`
+- **And** 結果按 `columnName` 字母順序排序
+
+### AC-11：available-columns 端點權限
+
+- **Given** 部長身份登入
+- **When** 呼叫 `GET /api/v1/pooldata-fields/available-columns`
+- **Then** 回 200 OK + availableColumns
+- **And** Admin 呼叫 → 200 OK
+- **And** 處長 / 課長 / 業務人員呼叫 → 403 `AUTH_FORBIDDEN`（端點受 `DirectorGuard` 保護，僅供寫入流程使用）
+
+### AC-12：suggestedFieldType 推斷規則
+
+- **Given** OBPOOLDATA 某欄位之 PostgreSQL `dataType` 為 `numeric` / `integer` / `decimal` / `double precision` / `real` / `bigint` 之一
+- **When** 呼叫 `GET /api/v1/pooldata-fields/available-columns`
+- **Then** 對應欄位之 `suggestedFieldType = "numeric"`
+- **And** `dataType` 為 `date` / `timestamp` / `timestamp without time zone` / `timestamp with time zone`（含 `timestamptz`）→ `suggestedFieldType = "date"`
+- **And** 其餘任何 `dataType`（含字串型別、`null`、無法識別）→ `suggestedFieldType = "categorical"`（保守原則）
+
+### AC-13：新增欄位 Modal 為下拉選擇且為唯一新增路徑
+
+- **Given** 部長 / Admin 點擊「新增篩選欄位」開啟 Modal
+- **When** Modal 載入
+- **Then** Modal 內 `columnName` 欄位以**下拉清單（dropdown）**呈現，選項來源為 `GET /api/v1/pooldata-fields/available-columns`
+- **And** 系統**不提供**自由文字輸入 `columnName` 的路徑（v1.4 起 dropdown 為唯一新增路徑，無 fallback toggle）
+- **And** 若 available-columns 為空（OBPOOLDATA 所有欄位皆已列入白名單），Modal 顯示對應空態提示且儲存按鈕停用
+
+### AC-14：選中欄位後顯示系統推斷 hint 與使用者覆寫 hint 切換
+
+- **Given** 部長 / Admin 在新增 Modal 之 dropdown 選中某欄位
+- **When** 選取完成
+- **Then** `field_type` radio 群組之**上方**顯示 hint 文字：「系統推斷：{suggestedFieldType}（依 dataType={dataType}）；請確認是否正確」
+- **And** `field_type` radio 預選為 `suggestedFieldType`
+- **And** 若使用者點選不同 radio 覆寫預選值，hint 文字立即切換為「使用者選擇」（系統推斷文字隱藏或以「使用者選擇」取代）
+- **And** 視覺呈現細節（hint 字級、顏色、位置間距）由 ui-ux-designer 決議；spec 僅約束語意與切換行為
+
+### AC-15：新增成功 toast 顯示 displayName
+
+- **Given** 部長 / Admin 透過 Modal 新增欄位成功（POST 201 Created）
+- **When** Modal 關閉
+- **Then** 系統顯示 toast「欄位『{displayName}』已新增」（toast 內容以 `displayName` 為主，不再以 `columnName` 為主）
+- **And** 編輯 / 停用 / 啟用 toast 亦沿用 displayName 為主之文案（與 §7 toast 規範一致）
 
 ## 5. API 規格
 
@@ -234,6 +285,52 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | 422 | POOLDATA_FIELD_TYPE_INVALID | `fieldType` 不在合法值 |
 | 503 | FEATURE_NOT_ENABLED | Feature Flag 關閉 |
 
+### 5.5 GET /api/v1/pooldata-fields/available-columns
+
+| 用途 | 取得 OBPOOLDATA 既有但尚未列入白名單之欄位清單（供新增 Modal dropdown 使用） |
+|---|---|
+| 認證 | JWT 必填 |
+| 權限 | `DirectorGuard`（與寫入流程一致；僅供新增白名單欄位之 UI 流程使用） |
+
+**Query Params**：無
+
+**過濾規則**
+
+- Source：OBPOOLDATA 之欄位中繼資料（資料庫 information_schema，實際查詢方式由 system-architect 決議）
+- 過濾：扣除**所有**已存在於 `pooldata_field_whitelist` 之 `column_name`，**含 `is_active = false`**（防止繞過 AC-5 唯一性而二次新增同名欄位）
+
+**排序規則**
+
+- 結果按 `columnName` 字母升冪排序
+
+**suggestedFieldType 推斷規則**（對應 AC-12）
+
+| 來源 PostgreSQL dataType | suggestedFieldType |
+|---|---|
+| `numeric` / `integer` / `decimal` / `double precision` / `real` / `bigint` | `numeric` |
+| `date` / `timestamp` / `timestamptz`（含 `timestamp without time zone` / `timestamp with time zone`） | `date` |
+| 其他（字串、null、無法識別） | `categorical`（保守原則） |
+
+**Response — 200 OK**
+
+```json
+{
+  "availableColumns": [
+    { "columnName": "BIRTH_DATE", "dataType": "date", "suggestedFieldType": "date" },
+    { "columnName": "CUST_AGE", "dataType": "integer", "suggestedFieldType": "numeric" },
+    { "columnName": "RISK_LEVEL", "dataType": "varchar", "suggestedFieldType": "categorical" }
+  ]
+}
+```
+
+**錯誤代碼**
+
+| HTTP | 錯誤碼 | 說明 |
+|---|---|---|
+| 401 | AUTH_TOKEN_MISSING / AUTH_TOKEN_EXPIRED | 未登入或 Token 過期 |
+| 403 | AUTH_FORBIDDEN | 非 admin / 非 director 嘗試呼叫 |
+| 503 | FEATURE_NOT_ENABLED | Feature Flag 關閉（沿用 BR-10，與其他寫入端點一致） |
+
 ## 6. 業務規則
 
 | 規則編號 | 說明 |
@@ -248,22 +345,32 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | BR-8 | **稽核失敗不 rollback**：沿用 F050 v2.0 BR-11 |
 | BR-9 | **Seed 冪等性**：seed 腳本以 `INSERT ... ON CONFLICT (column_name) DO NOTHING` 實現；重複執行不產生重複資料 |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F075 寫入端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED`；GET 端點不受限以保證 F050 / F076 仍能讀取 |
+| BR-11 | **新增欄位限下拉選擇（v1.4）**：自由文字輸入 `columnName` 之路徑已移除；新增 Modal 之 `columnName` 來源限定為 `GET /api/v1/pooldata-fields/available-columns` 回傳之 `availableColumns`。此規則徹底消除 A-3 孤兒欄位於新增階段產生之風險。不保留 fallback toggle |
+| BR-12 | **`suggestedFieldType` 推斷規則 + 預選非強制（v1.4）**：available-columns 端點針對每筆欄位回傳 `suggestedFieldType`（推斷規則見 §5.5）；前端 Modal 以該值預選 `field_type` radio 並顯示「系統推斷」hint；使用者覆寫後 hint 改為「使用者選擇」。最終寫入之 `field_type` 以使用者送出值為準，**不強制等同系統推斷** |
+| BR-13 | **available-columns 過濾含停用欄位（v1.4）**：available-columns 查詢過濾邏輯需排除**所有**已在 `pooldata_field_whitelist` 的紀錄，**含 `is_active = false`**；此規則確保已停用欄位無法被再次以 dropdown 選中新增，防繞過 AC-5 唯一性 |
 
 ## 7. UI/UX 需求
 
-- **頁面入口**：M06 代碼維護 > POOLDATA 篩選欄位（新增分頁）
+- **頁面入口**：M06 代碼維護 > **篩選欄位管理**（新增分頁；UI 層命名，內部 API path `/api/v1/pooldata-fields` 與 DB 表名 `pooldata_field_whitelist` 保留不變）
+- **UI 層命名規範（v1.4）**：sidebar / breadcrumb / 頁面 H1 / AppLayout title 一律使用「**篩選欄位管理**」；不可使用「白名單管理」「POOLDATA 篩選欄位白名單」「條件欄位管理」「可用欄位管理」等其他變體
 - **列表表格**：
   - 欄位：`column_name` / `display_name` / `field_type` / 狀態 / 建立時間 / 更新時間 / 操作
   - 停用欄位以灰色背景顯示，「停用」徽章標示
   - 操作欄：「編輯」「停用 / 啟用」「管理可選值」（僅 categorical 顯示）
   - 處長身份**完全不渲染**任何操作欄按鈕（含「新增欄位」上方按鈕）
-- **新增欄位 Modal**：
-  - 欄位：`column_name`（text，必填，提示「請輸入 OBPOOLDATA 之欄位名稱」）/ `display_name`（text，必填）/ `field_type`（select：數值型 / 類別型 / 日期型，必填）
-  - 儲存後 categorical 欄位顯示提示「請至 POOLDATA 可選值維護頁設定可選值」
+- **新增篩選欄位 Modal（v1.4 改造）**：
+  - Modal 標題：「**新增篩選欄位**」（不可使用「新增白名單欄位」/「新增 POOLDATA 欄位」）
+  - 欄位 1：`columnName` — **下拉選擇（dropdown）**，選項來源為 `GET /api/v1/pooldata-fields/available-columns` 之 `availableColumns`，選項顯示 `columnName`（可附 `dataType` 作為輔助說明，視覺細節由 ui-ux-designer 決議）；**不提供自由文字輸入路徑**（BR-11）
+  - 欄位 2：`displayName`（text，必填）
+  - 欄位 3：`fieldType` — radio 群組（`numeric` / `categorical` / `date`，必填）
+  - **系統推斷 hint（AC-14）**：選中 dropdown 某欄位後，`fieldType` radio 群組**上方**顯示語意文字「系統推斷：{suggestedFieldType}（依 dataType={dataType}）；請確認是否正確」，且 radio 預選為 `suggestedFieldType`
+  - **使用者覆寫 hint 切換（AC-14）**：使用者覆寫預選 radio 後，hint 文字改顯示「使用者選擇」（系統推斷文字隱藏或被取代）；視覺呈現細節由 ui-ux-designer 決議
+  - **空態**：若 `availableColumns` 為空陣列，dropdown 顯示對應空態提示且儲存按鈕停用
+  - 儲存後若 `fieldType = categorical`，仍顯示提示「請至 POOLDATA 可選值維護頁設定可選值」（沿用既有行為）
 - **編輯 Modal**：與新增相同，但 `column_name` 為唯讀
 - **`field_type` 變更警告 Modal**：自 categorical 改為 numeric / date 時彈出，內容「此欄位 {N} 個啟用可選值將自動停用（軟停用，歷史保留不刪除），且不再套用於新名單篩選；確定繼續？」+「確認」/「取消」按鈕；N 由 service 層 `GET options?active=true` 預查得到並回填至前端 Modal
 - **停用確認 Modal**：「確認停用 {displayName}？此欄位將立即從新名單定義條件選單中消失，但既有名單條件不受影響。」
-- **成功提示 toast**：「欄位『{displayName}』已新增 / 編輯 / 停用 / 啟用」
+- **成功提示 toast（v1.4 一致化）**：以 `displayName` 為主，例如「欄位『風險等級』已新增」/「欄位『風險等級』已編輯」/「欄位『風險等級』已停用」/「欄位『風險等級』已啟用」；不再以 `columnName` 為主之文案
 
 ## 8. 依賴關係
 
@@ -306,12 +413,25 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
   - 部長 DELETE 停用 → 200 OK，`is_active = false`，稽核 `action = 'DISABLE'`
   - 已停用名單 / 月跑進行中不影響 GET（白名單獨立於月跑流程）
   - 停用欄位後月跑仍可讀取既有條件（AC-8 場景）
+  - 部長 GET available-columns → 200 OK，僅含 OBPOOLDATA 既有但不在白名單之欄位（含 is_active=false 過濾，對應 AC-10 / BR-13）
+  - Admin GET available-columns → 200 OK
+  - 處長 / 課長 / 業務人員 GET available-columns → 403 `AUTH_FORBIDDEN`（對應 AC-11）
+  - GET available-columns suggestedFieldType 推斷正確性：numeric / integer / decimal / double precision / real / bigint → `numeric`；date / timestamp / timestamptz → `date`；其餘含 null → `categorical`（對應 AC-12 / BR-12）
+  - GET available-columns 結果按 columnName 字母升冪排序（對應 AC-10）
+  - GET available-columns 當 OBPOOLDATA 所有欄位皆已列入白名單 → 回傳空陣列
 - 前端關鍵測試案例：
   - 處長頁面**無**任何操作按鈕
   - 部長頁面顯示新增 / 編輯 / 停用按鈕
   - `field_type = categorical` 顯示「管理可選值」按鈕
   - `field_type = numeric` / `date` 無「管理可選值」按鈕
   - 新增 categorical 後顯示提示 toast
+  - 新增 Modal 之 columnName 為 dropdown，非自由輸入（AC-13 / BR-11）
+  - dropdown 為空時 Modal 顯示空態且儲存按鈕停用（AC-13）
+  - 選中 dropdown 欄位後 fieldType radio 預選為 suggestedFieldType，且顯示「系統推斷」hint（AC-14）
+  - 使用者覆寫 fieldType 後 hint 文字切換為「使用者選擇」（AC-14）
+  - 新增成功 toast 文案以 displayName 為主，不以 columnName 為主（AC-15）
+  - sidebar / breadcrumb / 頁面 H1 顯示「篩選欄位管理」字串（UI 命名規範）
+  - 新增 Modal 標題顯示「新增篩選欄位」字串（UI 命名規範）
 - E2E：新增 RISK_LEVEL（categorical）→ F076 維護可選值 → F050 新名單表單可選擇 → 停用 → F050 表單消失 → 既有名單月跑不受影響
 
 ## 11. 實作 Checklist
@@ -326,6 +446,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - [ ] 前端處長唯讀渲染邏輯
 - [ ] 圖表：[diagrams/F075-whitelist-flow.mmd](../diagrams/F075-whitelist-flow.mmd)
 - [ ] 整合測試：F075 → F076 → F050 路徑驗證
+- [ ] 後端新增 `GET /api/v1/pooldata-fields/available-columns` 端點 + `DirectorGuard` + `FeatureFlagGuard`（v1.4）
+- [ ] 後端 available-columns 過濾邏輯：扣除所有 `pooldata_field_whitelist` 紀錄（含 `is_active = false`，對應 BR-13）
+- [ ] 後端 suggestedFieldType 推斷邏輯（對應 BR-12 規則表）
+- [ ] 前端新增 Modal 改為 dropdown，移除自由文字輸入路徑（v1.4 / BR-11）
+- [ ] 前端 fieldType radio 預選 + 「系統推斷」/「使用者選擇」hint 切換（AC-14）
+- [ ] 前端 sidebar / breadcrumb / 頁面 H1 / AppLayout title 改名為「篩選欄位管理」
+- [ ] 前端新增 Modal 標題改為「新增篩選欄位」
+- [ ] 前端成功 toast 文案統一為 displayName 為主
+- [ ] **附帶清理**：修正既有 prototype 第 187 行 `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`
+- [ ] **附帶清理**：修正既有 FE footer 第 409 行 `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`
+- [ ] A-3 升級為 [RESOLVED] 之新增階段防護驗證（既有歷史孤兒偵測仍待後續 spec 處理）
 
 ## 12. 假設
 
@@ -333,7 +464,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 |---|---|---|
 | A-1 | **`pooldata_field_whitelist` schema 細節**：本 spec 列出概念欄位，DB schema 由 system-architect 決議（含 PK 設計：是否以 `column_name` 直接為 PK、或加 surrogate id） | [ASSUMPTION] 待 system-architect |
 | A-2 | **硬刪除支援**：MVP 僅支援軟刪除（is_active = false）；硬刪除待 OQ-102-02 決議 | [ASSUMPTION] 待 PO |
-| A-3 | **OBPOOLDATA 欄位變化追蹤**：若 ETL 端 OBPOOLDATA 欄位被廢除，本白名單對應 `column_name` 仍保留（不自動清理）；建議由 system-architect 設計「孤兒欄位」偵測機制（MVP 暫不實作） | [ASSUMPTION] 待 system-architect |
+| A-3 | **OBPOOLDATA 欄位變化追蹤**：v1.4 已透過 `GET /api/v1/pooldata-fields/available-columns` 過濾邏輯（BR-11 + BR-13）確保新增階段不會產生孤兒欄位（dropdown 來源即為 OBPOOLDATA 既有欄位扣除已存在白名單者）。**既有歷史孤兒欄位偵測**（既有白名單紀錄之 `column_name` 因 ETL 端 OBPOOLDATA 廢除而成為孤兒之偵測 / 告警 / 清理機制）仍待後續 spec 處理，非 v1.4 範圍 | [RESOLVED] v1.4（新增階段）/ 歷史偵測待後續 spec |
 | A-4 | **Feature Flag gating 範圍**：F075 寫入端點屬 `ENABLE_E07_REFACTOR_PHASE3` flag gating；GET 不受限以保證下游 spec 可讀 | 沿用 F050 v2.0 §13.2 |
 
 ## 13. 變更紀錄
@@ -344,3 +475,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #2：新增 BR-10 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`），僅作用於寫入端點 |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-102 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
 | v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失）：(1) BR-7 從「保留紀錄不刪除」強化為「service 層批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`（同 transaction）」；(2) AC-6 confirm 文字補「將自動停用 N 個可選值」+ 稽核 details 補 `deactivatedOptionCount`；(3) UI Modal 文字升級；(4) 與 F076 v1.3 BR-6/BR-7 + data-model.md `pooldata_field_option.deactivation_reason` ENUM 對齊 |
+| v1.4 | 2026-05-18 | **UI 命名標準化 + 新增流程改 dropdown + suggestedFieldType 推斷 + A-3 風險清除**：(1) UI 層命名「白名單管理」/「POOLDATA 篩選欄位白名單」→「**篩選欄位管理**」、「新增白名單欄位」/「新增 POOLDATA 欄位」→「**新增篩選欄位**」（內部 DB 表名 / API path / 類別名稱 100% 保留）；(2) 新增 §5.5 `GET /api/v1/pooldata-fields/available-columns` 端點（`DirectorGuard`，過濾含停用欄位，按 columnName 字母排序）；(3) 新增 AC-10 ~ AC-15（AC-16 不納入 — PO 決議不保留 fallback toggle）；(4) 新增 BR-11 / BR-12 / BR-13；(5) 新增 Modal 改為 dropdown 唯一路徑 + 「系統推斷 → 使用者選擇」hint 切換；(6) 成功 toast 文案以 `displayName` 為主；(7) A-3 升級為 [RESOLVED]（新增階段）；(8) **附帶清理**：修正既有 prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串為 spec 權威之 `POOLDATA_FIELD_DUPLICATE`（spec §5.4 已是正確版本，本次同步前端字串） |

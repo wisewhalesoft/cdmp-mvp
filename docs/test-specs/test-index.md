@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.10"
+version: "2.12"
 status: draft
-last_updated: 2026-05-16
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F053, F054, F055, F056, F073, F074]
+last_updated: 2026-05-18
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F053, F054, F055, F056, F073, F074, F075]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：59 份（4 策略文件 + 51 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
-> **總測試場景數**：984 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 63**；另 F039-strategy 4 個策略場景另計）
+> **測試文件總數**：60 份（4 策略文件 + 52 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份）
+> **總測試場景數**：1009 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 63** + **E07 M06 篩選欄位管理 F075 共 48**；另 F039-strategy 4 個策略場景另計）
+> **E07 M06 篩選欄位管理新增（2026-05-18）**：新增 F075（POOLDATA 篩選欄位白名單管理 v1.4）測試設計，共 48 個場景。涵蓋 `GET /api/v1/pooldata-fields/available-columns` 端點（AC-10~AC-15）、`getAvailableColumns()` service 單元測試（4 場景）、`_inferSuggestedFieldType()` pure function 逐型別驗證（14 場景）、SQLite E2E 權限矩陣 / Feature Flag / 路由排序（8 場景）、PostgreSQL Test Container 過濾邏輯（2 場景）、前端 dropdown / hint 狀態機 / toast（16 場景）、跨模組整合（2 場景）、命名漂移 regression guard（2 場景）。環境策略：方案 C 分層（Guard/路由 → SQLite；過濾邏輯 → `pooldata-available-columns.integration-spec.ts`）。新增 M06 regression guard 文件（`regression/M06-regression-guards.md`）。
 > **E07 M07 角色整合補修 v2.0（2026-05-16）**：business_role 合併重構對齊 AD-E07 v3.0。移除 TC-ORTHO-400~407（正交維度 section，is_sales_manager 廢棄）；TC-E02-100~108 endpoint 更名為 `/business-role`；TC-AUTH-200~205 claim 更名為 `businessRole`；Guard 更名為 DirectorOrAdminGuard / SectionChiefOrAboveGuard，移除 SalesManagerGuard 相關場景。新增：TC-MERGED（合併互斥約束，10 場景）、TC-MIG（m14 遷移，8 場景）、TC-LEGACY（legacy JWT，5 場景）、TC-DEPRECATED（廢棄端點，5 場景）。總場景數由 43 增至 63（+20）。Fixture builder 更新：新增 buildLegacyUser()、移除 buildUserOrthogonalSectionChief() / buildUserWithSalesManagerFlag() / buildUserE07Null()，更名 buildDirectorUser / buildSectionChiefUser / buildRegularUser。新增開放問題 OQ-MIG-001 / OQ-DEPR-001。
 > **E07 M07 角色整合 v1.0（2026-05-16）**：初版 43 場景，涵蓋 PATCH `/accounts/:id/e07-role` 端點（TC-E02-100~112）、JWT payload e07_role claim（TC-AUTH-200~205）、Guard 單元測試（TC-GUARD-300~315）、正交維度 regression（TC-ORTHO-400~407）
 > **E07 M02 計分設定新增（2026-05-13）**：新增 F053（查看計分維度，13 場景）、F054（編輯計分維度與分數，24 場景）、F055（編輯 CARD_LEVEL 門檻，21 場景）、F056（編輯 TIER_LEVEL 對應表，28 場景），涵蓋覆寫式編輯語意、月跑鎖（pending/running）、稽核 log before/after、Fallback CARD_TYPE（M5/M3/HC/C3）、fn_calc_tier_level NULL fallback 跨層整合、S5 兩級 vs H 四級等級數差異、BR-9 card_level 長度驗證、PUT/POST 端點語意分離
@@ -128,7 +129,10 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **E07 M07 角色整合（E02 整合）** | | | | | |
 | F073-F074-E02 | E07 角色指派 E02 整合（PATCH /business-role / Guard / JWT / 合併約束 / m14 遷移 / legacy / deprecated） | P0-MVP | [F073-F074-e02-integration-test.md](features/F073-F074-e02-integration-test.md) | 63 | Draft |
 | **E07 M07 小計** | | | **1 file** | **63** | |
-| **總合計** | | | **50 files** | **961** | |
+| **E07 M06 篩選欄位管理** | | | | | |
+| F075 | POOLDATA 篩選欄位白名單管理（含 v1.4 available-columns 端點、suggestedFieldType 推斷、dropdown Modal） | P0-MVP | [F075-test.md](features/F075-test.md) | 48 | Draft |
+| **E07 M06 小計** | | | **1 file** | **48** | |
+| **總合計** | | | **51 files** | **1009** | |
 
 ---
 
@@ -185,7 +189,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → **F073-F074-E02**（E07 角色整合先行，Guard 設計影響後續 E07 實作） → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056**
+**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → **F073-F074-E02**（E07 角色整合先行，Guard 設計影響後續 E07 實作） → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056** → **F075**
 
 **F002SM Sales Manager Badge 特殊注意：**
 - 後端 `LoginResult.user` DTO 須補充 `isSalesManager: boolean`；TS-F002SM-001 / TS-F002SM-006 驗證欄位存在性與 boolean 型別（不可為字串）
@@ -336,6 +340,15 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - F053 BE-F053-001（停用維度連鎖）應在 F054 的整合 test suite 中串聯：F054 停用維度 → 呼叫 F053 GET /scoring 確認該維度不出現（TS-F054-009）
 - F054 停用維度端點路徑：spec 未明確定義（PATCH vs DELETE），測試設計標記為待確認；實作後對齊測試
 
+**E07 M06 篩選欄位管理特殊注意（F075 v1.4）：**
+- `GET /api/v1/pooldata-fields/available-columns` 受 `DirectorGuard`（非 `DirectorOrSectionChiefGuard`）+ `FeatureFlagGuard('ENABLE_E07_REFACTOR_PHASE3')` 雙重保護；處長呼叫回 403，Feature Flag 關閉回 503
+- **路由排序**：Controller 內 `@Get('available-columns')` 必須宣告在 `@Get(':columnName')` 之前（NestJS 靜態路由優先）；TS-F075-E2E-008 為路由排序回歸測試
+- **information_schema 環境限制**：`_inferSuggestedFieldType` 純函數單元測試使用 mock；過濾邏輯（TS-F075-INT-BE-001/002）需在獨立 PostgreSQL Test Container（`pooldata-available-columns.integration-spec.ts`）執行，**不可**在 SQLite E2E 測試
+- **decimal 邊界（TS-F075-BE-024）**：spec §5.5 文件列 `decimal`，但 PostgreSQL information_schema 實際回傳 `numeric`；`'decimal'` 字串輸入期望 `categorical`（保守原則），正確生產路徑由 TS-F075-BE-010（`'numeric'` → `'numeric'`）覆蓋
+- **hint 狀態機**：React state 需維持 `hasUserOverridden: boolean` flag；`dropdown` 重選時 `setHasUserOverridden(false)`（重置 suggested）；radio `onChange` 一律 `setHasUserOverridden(true)`；**點回原 suggestedFieldType 值不重置 state**（TS-F075-FE-010 驗證此行為）
+- **dropdown-column-name-empty testid 缺失**：prototype 原始空態元素（`#columnDropdownEmpty`）無 data-testid；實作時需補充 `data-testid="dropdown-column-name-empty"`（RISK-F075-004）
+- **Regression Guard**：`regression/M06-regression-guards.md` 含 2 個靜態分析 guard（TC-GUARD-M06-NAMING-001/002），每次 F075 相關 PR 後需重新執行
+
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
 - `test-levels.md` — 各層級測試策略
@@ -391,3 +404,4 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | 2026-04-02 | E02 角色擴充（US-017 業務角色定義）：新增 F045 業務角色定義測試設計（15 個場景）；更新 F004（+6 場景，8→14，新增業務角色建立、無效 role_code、前端角色選單）；更新 F005（+7 場景，7→14，新增依業務角色篩選、角色欄位中文顯示名稱驗證）；更新 F008（+14 場景，6→20，新增業務角色間互相變更、Admin 降級為業務角色、最後 Admin 保護擴充、前端確認對話框）；移除「僅 Admin 與 User 兩種角色」的假設；總場景數由 736 增至 778 | Test Designer Agent |
 | 2026-04-13 | E06 角色精簡（US-017 回歸 2 種角色）：業務角色（business/marketing/customer_service/analyst/supervisor/backend_ops）全部移除；F045（15→13 場景）、F004（14→9 場景）、F005（14→10 場景）、F008（20→12 場景）；移除業務角色相關測試案例；總場景數由 778 降至 743 | Test Designer Agent |
 | 2026-05-13 | 新增 F002SM Sales Manager 旗標顯示於 Top Bar（25 場景）：涵蓋後端 Login API `isSalesManager` 欄位補充（6 場景）、前端 TopBar Badge 元件（7 場景）、前端整合（4 場景）、edge case（4 場景）、Manual E2E（4 場景）；補充 4 項風險（RISK-F002SM-001~004）；總場景數由 812 增至 837 | Test Designer Agent |
+| 2026-05-18 | 新增 E07 M06 篩選欄位管理（F075 v1.4）測試設計（48 場景）：BE service 單元（18 場景，含 `getAvailableColumns` happy path / empty / 排序 / camelCase mapping + `_inferSuggestedFieldType` 15 dataType 逐型別驗證）；BE E2E SQLite（8 場景，Guard 矩陣 / Feature Flag / 路由排序回歸）；BE Integration PostgreSQL TC（2 場景，BR-13 含停用過濾 + 空陣列）；前端 Component（16 場景，dropdown / hint data-state / RISK-003 user-overridden 決議 / empty / toast / Edit regression）；跨模組整合（2 場景，F050 contract + F076 categorical）；命名漂移 regression（2 場景）。新增 `regression/M06-regression-guards.md`（TC-GUARD-M06-NAMING-001/002）。版本升至 v2.12；總場景數由 961 增至 1009 | Test Designer Agent |
