@@ -2,10 +2,11 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -22,6 +23,8 @@ import {
   detectFallbackStandardMutexViolation,
   TierRow,
 } from './helpers/tier-mapping-mutex.helper';
+import { MatchType, MATCH_TYPE_VALUES } from './dto/match-type.enum';
+import { normalizeCharField } from '@/common/etl/normalize-char-field.util';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Service
@@ -63,6 +66,10 @@ export const SCORING_ERROR_CODES = {
   CARD_TYPE_FALLBACK_STANDARD_MUTEX: 'CARD_TYPE_FALLBACK_STANDARD_MUTEX',
   CARD_TYPE_NOT_FOUND: 'CARD_TYPE_NOT_FOUND',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
+  // F054 v1.3（2026-05-18）— matchType 與 BR-9 規一化相關
+  SCORING_INVALID_MATCH_TYPE: 'SCORING_INVALID_MATCH_TYPE',
+  SCORING_MATCH_TYPE_FIELD_MISMATCH: 'SCORING_MATCH_TYPE_FIELD_MISMATCH',
+  SCORING_CATEGORY_DUPLICATE: 'SCORING_CATEGORY_DUPLICATE',
 } as const;
 
 export const SCORING_ERROR_MESSAGES = {
@@ -84,6 +91,12 @@ export const SCORING_ERROR_MESSAGES = {
     '同一計分卡類型不可同時存在 Fallback 與 Standard 規則',
   CARD_TYPE_NOT_FOUND: '計分卡類型不存在或已停用',
   VALIDATION_ERROR: '請求參數不符規範',
+  SCORING_INVALID_MATCH_TYPE:
+    'matchType 必須為 CATEGORY / RANGE / COMPOSITE 其中之一',
+  SCORING_MATCH_TYPE_FIELD_MISMATCH:
+    'matchType 與 scores 欄位不一致（CATEGORY 需 level1、RANGE 需 level2_s/2_e、COMPOSITE 需三欄齊備）',
+  SCORING_CATEGORY_DUPLICATE:
+    'CATEGORY / COMPOSITE 同一 level1 出現多筆 score 列，請檢查資料',
 } as const;
 
 // =========================
@@ -104,6 +117,8 @@ export interface ScoringScoreItem {
 export interface ScoringDimensionItem {
   columnName: string;
   columnLabel: string;
+  /** v1.3 AC-7：寫入此欄位以對齊 ob_levelcard_column.match_type */
+  matchType: MatchType | null;
   scoreSummary: string;
   scores: ScoringScoreItem[];
 }
@@ -129,6 +144,8 @@ export interface GetScoringResult {
 export interface DimensionUpdateInput {
   columnName: string;
   columnLabel: string;
+  /** v1.3 BR-8：必填，列舉 CATEGORY / RANGE / COMPOSITE */
+  matchType: MatchType;
   scores: Array<{
     level1?: string | null;
     level2S?: string | null;
@@ -148,6 +165,8 @@ export interface UpdateDimensionsResult {
   cardVersion: number;
   updatedDimensions: number;
   updatedScores: number;
+  /** v1.3 AC-2b：本次因 matchType 切換而被自動清空 scores 之 column_name 清單 */
+  matchTypeChanged: string[];
 }
 
 export interface CreateDimensionInput {
@@ -155,6 +174,8 @@ export interface CreateDimensionInput {
   cardVersion: number;
   columnName: string;
   columnLabel: string;
+  /** v1.3 BR-8：必填，列舉 CATEGORY / RANGE / COMPOSITE */
+  matchType: MatchType;
   scores: Array<{
     level1?: string | null;
     level2S?: string | null;
@@ -337,6 +358,15 @@ export class AssignmentScoringService {
     private readonly auditRepo: Repository<AssignmentAuditLog>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    /**
+     * v1.3 AC-2b：matchType 切換需 atomic transaction（DELETE scores → UPDATE column.match_type
+     * → INSERT 新 scores → audit）。注入 DataSource 以支援 QueryRunner 手動 transaction。
+     *
+     * Optional 標記：unit test 之 mock 不易提供 DataSource，落入非 atomic 路徑（仍寫入正確
+     * 但不保證 rollback）；E2E 真實 DI 永遠注入。
+     */
+    @Optional()
+    private readonly dataSource?: DataSource,
   ) {}
 
   // =========================
@@ -384,6 +414,7 @@ export class AssignmentScoringService {
       return {
         columnName: col.column_name ?? '',
         columnLabel: col.column_label ?? '',
+        matchType: (col.match_type as MatchType) ?? null,
         scoreSummary: `${colScores.length} 個區間`,
         scores: colScores.map((s) => ({
           level1: s.level1,
@@ -424,29 +455,37 @@ export class AssignmentScoringService {
     // F054 v1.2 AC-7 / BR-7：cardType 範圍鎖
     await assertCardTypeActive(this.cardTypeRepo, input.cardType);
 
-    // AC-6 / BR-3：先驗證每個維度的數值區間（在 body 內）不重疊
-    for (const dim of input.dimensions) {
-      const numericScores = dim.scores.filter(
-        (s) => s.level2S != null && s.level2E != null,
+    // v1.3 BR-9：規一化各 dim 的 level1（'' / 空白 → null、保留 trim 後值）
+    const normalized = input.dimensions.map((dim) => ({
+      ...dim,
+      scores: dim.scores.map((s) => ({
+        ...s,
+        level1: normalizeCharField(s.level1 ?? null),
+      })),
+    }));
+
+    // v1.3 BR-8：matchType 必填且合法（DTO 層已驗，service 層雙重把關）
+    for (const dim of normalized) {
+      AssignmentScoringService.assertMatchTypeValid(dim.matchType);
+      AssignmentScoringService.assertMatchTypeFieldConsistency(
+        dim.matchType,
+        dim.scores,
       );
-      const hasOverlap = AssignmentScoringService.hasStringIntervalOverlap(
-        numericScores.map((s) => ({
-          level2S: s.level2S ?? null,
-          level2E: s.level2E ?? null,
-        })),
+    }
+
+    // v1.3 AC-6：依 matchType 分流驗證
+    for (const dim of normalized) {
+      AssignmentScoringService.assertScoresValidPerMatchType(
+        dim.matchType,
+        dim.scores,
       );
-      if (hasOverlap) {
-        throw new UnprocessableEntityException({
-          error: SCORING_ERROR_CODES.SCORING_RANGE_OVERLAP,
-          message: SCORING_ERROR_MESSAGES.SCORING_RANGE_OVERLAP,
-        });
-      }
     }
 
     let updatedDimensions = 0;
     let updatedScores = 0;
+    const matchTypeChanged: string[] = [];
 
-    for (const dim of input.dimensions) {
+    for (const dim of normalized) {
       const column = await this.columnRepo.findOne({
         where: {
           card_type: input.cardType as any,
@@ -461,6 +500,10 @@ export class AssignmentScoringService {
         });
       }
 
+      const oldMatchType = column.match_type ?? null;
+      const matchTypeChanging =
+        oldMatchType !== null && oldMatchType !== dim.matchType;
+
       // 讀舊 scores（供 audit before_value）
       const oldScores = await this.scoreRepo.find({
         where: {
@@ -472,6 +515,7 @@ export class AssignmentScoringService {
 
       const beforeSnapshot = {
         columnLabel: column.column_label,
+        matchType: oldMatchType,
         scores: oldScores.map((s) => ({
           level1: s.level1,
           level2S: s.level2_s,
@@ -480,37 +524,57 @@ export class AssignmentScoringService {
         })),
       };
 
-      // 覆寫式：刪舊 → 寫新
-      await this.scoreRepo.delete({
-        card_type: input.cardType as any,
-        card_version: input.cardVersion as any,
-        column_name: dim.columnName as any,
-      });
+      const newRowsData = dim.scores.map((s) => ({
+        card_type: input.cardType,
+        card_version: input.cardVersion,
+        column_name: dim.columnName,
+        level1: s.level1 ?? null,
+        level2_s: s.level2S ?? null,
+        level2_e: s.level2E ?? null,
+        score: s.score,
+      }));
 
-      const newRows = dim.scores.map((s) =>
-        this.scoreRepo.create({
-          card_type: input.cardType,
-          card_version: input.cardVersion,
-          column_name: dim.columnName,
-          level1: s.level1 ?? null,
-          level2_s: s.level2S ?? null,
-          level2_e: s.level2E ?? null,
-          score: s.score,
-        } as any),
-      );
+      // v1.3 AC-2b：matchType 切換需 atomic（DELETE scores → UPDATE column.match_type
+      // → INSERT 新 scores）。優先以 DataSource transaction；單元測試環境無 DataSource 時
+      // 退化為非 atomic 順序執行，仍寫入正確結果（測試以 mock 觀察行為即可）。
+      if (this.dataSource) {
+        await this.dataSource.transaction(async (manager) => {
+          await manager.getRepository(ObLevelcardScore).delete({
+            card_type: input.cardType as any,
+            card_version: input.cardVersion as any,
+            column_name: dim.columnName as any,
+          });
 
-      if (newRows.length > 0) {
-        await this.scoreRepo.save(newRows as any);
-      }
+          column.column_label = dim.columnLabel;
+          column.match_type = dim.matchType;
+          await manager.getRepository(ObLevelcardColumn).save(column);
 
-      // 更新 columnLabel（如有變更）
-      if (column.column_label !== dim.columnLabel) {
+          if (newRowsData.length > 0) {
+            await manager
+              .getRepository(ObLevelcardScore)
+              .save(newRowsData as any);
+          }
+        });
+      } else {
+        await this.scoreRepo.delete({
+          card_type: input.cardType as any,
+          card_version: input.cardVersion as any,
+          column_name: dim.columnName as any,
+        });
+
         column.column_label = dim.columnLabel;
+        column.match_type = dim.matchType;
         await this.columnRepo.save(column);
+
+        if (newRowsData.length > 0) {
+          const newRows = newRowsData.map((r) => this.scoreRepo.create(r as any));
+          await this.scoreRepo.save(newRows as any);
+        }
       }
 
       const afterSnapshot = {
         columnLabel: dim.columnLabel,
+        matchType: dim.matchType,
         scores: dim.scores.map((s) => ({
           level1: s.level1 ?? null,
           level2S: s.level2S ?? null,
@@ -528,6 +592,10 @@ export class AssignmentScoringService {
         afterSnapshot,
       );
 
+      if (matchTypeChanging) {
+        matchTypeChanged.push(dim.columnName);
+      }
+
       updatedDimensions += 1;
       updatedScores += dim.scores.length;
     }
@@ -537,6 +605,7 @@ export class AssignmentScoringService {
       cardVersion: input.cardVersion,
       updatedDimensions,
       updatedScores,
+      matchTypeChanged,
     };
   }
 
@@ -553,23 +622,26 @@ export class AssignmentScoringService {
     // F054 v1.2 AC-7 / BR-7：cardType 範圍鎖
     await assertCardTypeActive(this.cardTypeRepo, input.cardType);
 
-    // AC-6：body 內 scores 區間重疊驗證（先做，避免在 duplicate 之後又驗證）
-    const numericScores = input.scores.filter(
-      (s) => s.level2S != null && s.level2E != null,
+    // v1.3 BR-8：matchType 必填且合法（DTO 層已驗，service 層雙重把關）
+    AssignmentScoringService.assertMatchTypeValid(input.matchType);
+
+    // v1.3 BR-9：規一化 level1
+    const normalizedScores = input.scores.map((s) => ({
+      ...s,
+      level1: normalizeCharField(s.level1 ?? null),
+    }));
+
+    // v1.3 AC-9：matchType 與 scores 欄位一致性
+    AssignmentScoringService.assertMatchTypeFieldConsistency(
+      input.matchType,
+      normalizedScores,
     );
-    if (
-      AssignmentScoringService.hasStringIntervalOverlap(
-        numericScores.map((s) => ({
-          level2S: s.level2S ?? null,
-          level2E: s.level2E ?? null,
-        })),
-      )
-    ) {
-      throw new UnprocessableEntityException({
-        error: SCORING_ERROR_CODES.SCORING_RANGE_OVERLAP,
-        message: SCORING_ERROR_MESSAGES.SCORING_RANGE_OVERLAP,
-      });
-    }
+
+    // v1.3 AC-6：依 matchType 分流驗證
+    AssignmentScoringService.assertScoresValidPerMatchType(
+      input.matchType,
+      normalizedScores,
+    );
 
     // TS-F054-006：column_name 已存在於 active 版本 → 422 SCORING_COLUMN_DUPLICATE
     const existing = await this.columnRepo.findOne({
@@ -587,19 +659,20 @@ export class AssignmentScoringService {
       });
     }
 
-    // 寫入 column
+    // 寫入 column（含 match_type）
     const newColumn = this.columnRepo.create({
       card_type: input.cardType,
       card_version: input.cardVersion,
       column_name: input.columnName,
       column_label: input.columnLabel,
       status: 'active',
+      match_type: input.matchType,
     } as any);
     await this.columnRepo.save(newColumn);
 
     // 寫入 scores
-    if (input.scores.length > 0) {
-      const rows = input.scores.map((s) =>
+    if (normalizedScores.length > 0) {
+      const rows = normalizedScores.map((s) =>
         this.scoreRepo.create({
           card_type: input.cardType,
           card_version: input.cardVersion,
@@ -613,7 +686,7 @@ export class AssignmentScoringService {
       await this.scoreRepo.save(rows as any);
     }
 
-    // audit_log
+    // audit_log（v1.3：after_value 含 matchType / card_type / column_name 對齊 F061 AC-9）
     await this.writeAudit(
       actor,
       'CREATE',
@@ -621,9 +694,12 @@ export class AssignmentScoringService {
       `${input.cardType}|${input.cardVersion}|${input.columnName}`,
       null,
       {
+        card_type: input.cardType,
+        column_name: input.columnName,
         columnName: input.columnName,
         columnLabel: input.columnLabel,
-        scores: input.scores.map((s) => ({
+        matchType: input.matchType,
+        scores: normalizedScores.map((s) => ({
           level1: s.level1 ?? null,
           level2S: s.level2S ?? null,
           level2E: s.level2E ?? null,
@@ -1557,6 +1633,162 @@ export class AssignmentScoringService {
   // =========================
   // 純函式 helpers（exported for testing）
   // =========================
+
+  /**
+   * v1.3 BR-8：matchType 必為列舉 CATEGORY / RANGE / COMPOSITE 之一。
+   * 缺值 / 非法值 → 422 SCORING_INVALID_MATCH_TYPE。
+   */
+  static assertMatchTypeValid(matchType: unknown): void {
+    if (
+      typeof matchType !== 'string' ||
+      !(MATCH_TYPE_VALUES as readonly string[]).includes(matchType)
+    ) {
+      throw new UnprocessableEntityException({
+        error: SCORING_ERROR_CODES.SCORING_INVALID_MATCH_TYPE,
+        message: SCORING_ERROR_MESSAGES.SCORING_INVALID_MATCH_TYPE,
+        details: { field: 'matchType', value: matchType },
+      });
+    }
+  }
+
+  /**
+   * v1.3 AC-9：matchType 與 scores 欄位一致性。
+   *   - CATEGORY: level1 必填、level2_s/2_e 必須 NULL
+   *   - RANGE:    level1 必須 NULL、level2_s/2_e 必填
+   *   - COMPOSITE: level1 / level2_s / 2_e 三欄皆必填
+   *
+   * 違反 → 422 SCORING_MATCH_TYPE_FIELD_MISMATCH。
+   */
+  static assertMatchTypeFieldConsistency(
+    matchType: MatchType,
+    scores: ReadonlyArray<{
+      level1?: string | null;
+      level2S?: string | null;
+      level2E?: string | null;
+    }>,
+  ): void {
+    for (let i = 0; i < scores.length; i++) {
+      const s = scores[i];
+      const l1 = s.level1 == null ? null : s.level1;
+      const l2s = s.level2S == null ? null : s.level2S;
+      const l2e = s.level2E == null ? null : s.level2E;
+
+      if (matchType === MatchType.CATEGORY) {
+        if (l1 === null || l2s !== null || l2e !== null) {
+          throw new UnprocessableEntityException({
+            error: SCORING_ERROR_CODES.SCORING_MATCH_TYPE_FIELD_MISMATCH,
+            message:
+              `${SCORING_ERROR_MESSAGES.SCORING_MATCH_TYPE_FIELD_MISMATCH} ` +
+              `(index=${i}, matchType=CATEGORY 要 level1 必填且 level2_s/2_e=NULL)`,
+            details: { index: i, matchType, level1: l1, level2S: l2s, level2E: l2e },
+          });
+        }
+      } else if (matchType === MatchType.RANGE) {
+        if (l1 !== null || l2s === null || l2e === null) {
+          throw new UnprocessableEntityException({
+            error: SCORING_ERROR_CODES.SCORING_MATCH_TYPE_FIELD_MISMATCH,
+            message:
+              `${SCORING_ERROR_MESSAGES.SCORING_MATCH_TYPE_FIELD_MISMATCH} ` +
+              `(index=${i}, matchType=RANGE 要 level1=NULL 且 level2_s/2_e 必填)`,
+            details: { index: i, matchType, level1: l1, level2S: l2s, level2E: l2e },
+          });
+        }
+      } else if (matchType === MatchType.COMPOSITE) {
+        if (l1 === null || l2s === null || l2e === null) {
+          throw new UnprocessableEntityException({
+            error: SCORING_ERROR_CODES.SCORING_MATCH_TYPE_FIELD_MISMATCH,
+            message:
+              `${SCORING_ERROR_MESSAGES.SCORING_MATCH_TYPE_FIELD_MISMATCH} ` +
+              `(index=${i}, matchType=COMPOSITE 要 level1 / level2_s / 2_e 三欄齊備)`,
+            details: { index: i, matchType, level1: l1, level2S: l2s, level2E: l2e },
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * v1.3 AC-6：依 matchType 分流驗證。
+   *   - RANGE:     [level2_s, level2_e] 區間交集不為空 → 422 SCORING_RANGE_OVERLAP
+   *   - CATEGORY:  同 level1（規一化後）重複 → 422 SCORING_CATEGORY_DUPLICATE
+   *   - COMPOSITE: 同 level1 內套 RANGE 規則；不同 level1 不算重疊；
+   *                同 (level1, level2_s, level2_e) 三元組重複 → 422 SCORING_CATEGORY_DUPLICATE
+   */
+  static assertScoresValidPerMatchType(
+    matchType: MatchType,
+    scores: ReadonlyArray<{
+      level1?: string | null;
+      level2S?: string | null;
+      level2E?: string | null;
+    }>,
+  ): void {
+    if (matchType === MatchType.RANGE) {
+      const intervals = scores.map((s) => ({
+        level2S: s.level2S ?? null,
+        level2E: s.level2E ?? null,
+      }));
+      if (AssignmentScoringService.hasStringIntervalOverlap(intervals)) {
+        throw new UnprocessableEntityException({
+          error: SCORING_ERROR_CODES.SCORING_RANGE_OVERLAP,
+          message: SCORING_ERROR_MESSAGES.SCORING_RANGE_OVERLAP,
+        });
+      }
+      return;
+    }
+
+    if (matchType === MatchType.CATEGORY) {
+      const seen = new Set<string>();
+      for (const s of scores) {
+        const key = s.level1 ?? '';
+        if (seen.has(key)) {
+          throw new UnprocessableEntityException({
+            error: SCORING_ERROR_CODES.SCORING_CATEGORY_DUPLICATE,
+            message: SCORING_ERROR_MESSAGES.SCORING_CATEGORY_DUPLICATE,
+            details: { matchType, level1: key },
+          });
+        }
+        seen.add(key);
+      }
+      return;
+    }
+
+    if (matchType === MatchType.COMPOSITE) {
+      // 1) 同 (level1, level2_s, level2_e) 三元組唯一
+      const tripleSeen = new Set<string>();
+      for (const s of scores) {
+        const key = `${s.level1 ?? ''}|${s.level2S ?? ''}|${s.level2E ?? ''}`;
+        if (tripleSeen.has(key)) {
+          throw new UnprocessableEntityException({
+            error: SCORING_ERROR_CODES.SCORING_CATEGORY_DUPLICATE,
+            message: SCORING_ERROR_MESSAGES.SCORING_CATEGORY_DUPLICATE,
+            details: { matchType, triple: key },
+          });
+        }
+        tripleSeen.add(key);
+      }
+
+      // 2) 同 level1 內套 RANGE 不可重疊；不同 level1 不算重疊
+      const groupByLevel1 = new Map<
+        string,
+        Array<{ level2S: string | null; level2E: string | null }>
+      >();
+      for (const s of scores) {
+        const k = s.level1 ?? '';
+        const list = groupByLevel1.get(k) ?? [];
+        list.push({ level2S: s.level2S ?? null, level2E: s.level2E ?? null });
+        groupByLevel1.set(k, list);
+      }
+      for (const [, intervals] of groupByLevel1) {
+        if (AssignmentScoringService.hasStringIntervalOverlap(intervals)) {
+          throw new UnprocessableEntityException({
+            error: SCORING_ERROR_CODES.SCORING_RANGE_OVERLAP,
+            message: SCORING_ERROR_MESSAGES.SCORING_RANGE_OVERLAP,
+          });
+        }
+      }
+      return;
+    }
+  }
 
   /**
    * 驗證數值區間不重疊（半開區間 BR-1：相鄰允許，score_e + 1 = 下一級 score_s）。

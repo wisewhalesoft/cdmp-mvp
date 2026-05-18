@@ -19,6 +19,7 @@ import { AssignmentScoringController } from './assignment-scoring.controller';
 import { AssignmentScoringService } from './assignment-scoring.service';
 import { CardTypeController } from './controllers/card-type.controller';
 import { CardTypeService } from './services/card-type.service';
+import { ScoringIntegrityCheckService } from './services/scoring-integrity-check.service';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定模組
@@ -57,6 +58,7 @@ import { CardTypeService } from './services/card-type.service';
     }),
   ],
   controllers: [AssignmentScoringController, CardTypeController],
-  providers: [AssignmentScoringService, CardTypeService],
+  providers: [AssignmentScoringService, CardTypeService, ScoringIntegrityCheckService],
+  exports: [ScoringIntegrityCheckService],
 })
 export class AssignmentScoringModule {}

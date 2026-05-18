@@ -29,6 +29,7 @@ import { AssignmentRunSnapshotService } from './services/assignment-run-snapshot
 import { AssignmentRunReportService } from './services/assignment-run-report.service';
 import { SectionChiefScopeService } from './services/section-chief-scope.service';
 import { AssignmentRunController } from './assignment-run.controller';
+import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment-scoring.module';
 
 /**
  * AssignmentModule — F061 / F062 / F065 / F066（M04 月跑觸發 + 歷史 + 詳情）
@@ -66,6 +67,8 @@ import { AssignmentRunController } from './assignment-run.controller';
         secret: configService.get<string>('JWT_SECRET', 'default-dev-secret'),
       }),
     }),
+    // F061 v1.3：Stage 2 前置 soft check（ScoringIntegrityCheckService）
+    AssignmentScoringModule,
   ],
   controllers: [AssignmentRunController],
   providers: [

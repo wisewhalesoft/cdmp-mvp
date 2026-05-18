@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
@@ -15,6 +15,10 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import {
+  IntegrityIssue,
+  ScoringIntegrityCheckService,
+} from '@/modules/assignment-scoring/services/scoring-integrity-check.service';
 
 /**
  * AssignmentRunPipelineService — F061 Stage 1~4 pipeline + 三份快照原子寫入
@@ -74,6 +78,12 @@ export class AssignmentRunPipelineService {
     @InjectRepository(ObTier)
     private readonly tierRepo: Repository<ObTier>,
     private readonly dataSource: DataSource,
+    /**
+     * F061 v1.3 BR-13：Stage 2 前 soft check（解耦自 fn_calc_tier_level）。
+     * Optional 標記：少數 unit test 之 TestingModule 未提供本 service，落入 skip 路徑。
+     */
+    @Optional()
+    private readonly integrityCheckService?: ScoringIntegrityCheckService,
   ) {}
 
   /**
@@ -134,6 +144,34 @@ export class AssignmentRunPipelineService {
         });
       }
 
+      // F061 v1.3 BR-13 / AC-7c：Stage 2 前 ScoringIntegrityCheckService soft check
+      // 不嵌入 fn_calc_tier_level；不阻擋月跑；逐個 valid CARD_TYPE 掃描
+      const integrityIssues: IntegrityIssue[] = [];
+      const integrityWarningTypes = new Set<string>();
+      if (this.integrityCheckService) {
+        const checkedKey = new Set<string>();
+        for (const l of validLists) {
+          if (!l.card_type) continue;
+          // 取該 CARD_TYPE 的 active 計分版本
+          const ver = await this.versionRepo.findOne({
+            where: { card_type: l.card_type as any, status: 'active' as any },
+          });
+          if (!ver) continue;
+          const key = `${l.card_type}|${ver.card_version}`;
+          if (checkedKey.has(key)) continue;
+          checkedKey.add(key);
+          const result = await this.integrityCheckService.checkIntegrity(
+            l.card_type,
+            ver.card_version ?? 1,
+            { runId, affectedRowCount: 0 },
+          );
+          for (const i of result.issues) {
+            integrityIssues.push(i);
+            integrityWarningTypes.add(i.type);
+          }
+        }
+      }
+
       // Stage 2 / 3 / 4 — 依 v1 / v2 分支執行
       type ResultRow = Partial<ObPoolDataList>;
       const stage4Results: ResultRow[] = useV2
@@ -183,10 +221,30 @@ export class AssignmentRunPipelineService {
         ] as AssignmentRunSnapshot[]);
       });
 
-      const warningSummary =
-        skippedCases.length > 0 ? 'BR-12_EDGE_CARD_TYPE_SKIPPED' : null;
+      // 組合 warning_summary（多警告碼以逗號分隔 — F061 v1.3 BR-13）
+      const warningCodes: string[] = [];
+      if (skippedCases.length > 0) warningCodes.push('BR-12_EDGE_CARD_TYPE_SKIPPED');
+      if (integrityWarningTypes.has('ALL_SCORES_EMPTY')) {
+        warningCodes.push('ALL_SCORES_EMPTY');
+      }
+      const warningSummary = warningCodes.length > 0 ? warningCodes.join(',') : null;
+
+      // skipped_cases 合併 edge CARD_TYPE 與 ALL_SCORES_EMPTY 兩類
+      const integritySkipped = integrityIssues
+        .filter((i) => i.type === 'ALL_SCORES_EMPTY')
+        .map((i) => ({
+          cardType: i.cardType,
+          columnName: i.columnName,
+          affectedApplNoCount: i.violatedRowCount ?? 0,
+          reason: i.type,
+        }));
       const skippedJson =
-        skippedCases.length > 0 ? { cases: skippedCases } : null;
+        skippedCases.length > 0 || integritySkipped.length > 0
+          ? {
+              cases: skippedCases,
+              integrityIssues: integritySkipped,
+            }
+          : null;
 
       await this.completeRun(
         runId,
