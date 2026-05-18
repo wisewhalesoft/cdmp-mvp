@@ -346,4 +346,196 @@ describe('PooldataFieldWhitelistService', () => {
       ).resolves.toBeDefined();
     });
   });
+
+  // ============================================================
+  // F075 v1.4 — getAvailableColumns + _inferSuggestedFieldType
+  // ============================================================
+
+  describe('getAvailableColumns + _inferSuggestedFieldType (v1.4)', () => {
+    // dataSource.query mock helper：用 fieldRepo 既有 dataSource mock 加 query method
+    beforeEach(() => {
+      (dataSource as any).query = vi.fn().mockResolvedValue([]);
+    });
+
+    // A. getAvailableColumns 整合行為
+    describe('A. getAvailableColumns()', () => {
+      it('TS-F075-BE-001：3 筆未排序 mock → 字母升冪 + suggestedFieldType 正確 + camelCase mapping', async () => {
+        (dataSource as any).query = vi.fn().mockResolvedValue([
+          { column_name: 'ZYEAR', data_type: 'integer' },
+          { column_name: 'AGE', data_type: 'date' },
+          { column_name: 'CODE', data_type: 'character varying' },
+        ]);
+
+        const result = await service.getAvailableColumns();
+
+        expect(result.availableColumns).toHaveLength(3);
+        // 字母升冪：AGE → CODE → ZYEAR
+        expect(result.availableColumns[0]).toEqual({
+          columnName: 'AGE',
+          dataType: 'date',
+          suggestedFieldType: 'date',
+        });
+        expect(result.availableColumns[1]).toEqual({
+          columnName: 'CODE',
+          dataType: 'character varying',
+          suggestedFieldType: 'categorical',
+        });
+        expect(result.availableColumns[2]).toEqual({
+          columnName: 'ZYEAR',
+          dataType: 'integer',
+          suggestedFieldType: 'numeric',
+        });
+      });
+
+      it('TS-F075-BE-002：mock query 回 [] → { availableColumns: [] }，不拋例外', async () => {
+        (dataSource as any).query = vi.fn().mockResolvedValue([]);
+        const result = await service.getAvailableColumns();
+        expect(result).toEqual({ availableColumns: [] });
+      });
+
+      it('TS-F075-BE-003：5 筆亂序 → 字母升冪輸出', async () => {
+        (dataSource as any).query = vi.fn().mockResolvedValue([
+          { column_name: 'ZYEAR', data_type: 'integer' },
+          { column_name: 'AGE', data_type: 'date' },
+          { column_name: 'MONTH_CNT', data_type: 'integer' },
+          { column_name: 'BIRTH_DATE', data_type: 'date' },
+          { column_name: 'FUND_TYPE', data_type: 'character varying' },
+        ]);
+
+        const result = await service.getAvailableColumns();
+        const names = result.availableColumns.map((c) => c.columnName);
+        expect(names).toEqual([
+          'AGE',
+          'BIRTH_DATE',
+          'FUND_TYPE',
+          'MONTH_CNT',
+          'ZYEAR',
+        ]);
+      });
+
+      it('TS-F075-BE-004：DB column_name / data_type → response camelCase；不含 snake_case key', async () => {
+        (dataSource as any).query = vi.fn().mockResolvedValue([
+          { column_name: 'RISK_LEVEL', data_type: 'varchar' },
+        ]);
+
+        const result = await service.getAvailableColumns();
+        expect(result.availableColumns[0]).toEqual({
+          columnName: 'RISK_LEVEL',
+          dataType: 'varchar',
+          suggestedFieldType: 'categorical',
+        });
+        // 確保不含 snake_case key
+        expect((result.availableColumns[0] as any).column_name).toBeUndefined();
+        expect((result.availableColumns[0] as any).data_type).toBeUndefined();
+      });
+
+      // B-i 策略（user 決議 Q2）：SQLite 環境 information_schema 查詢失敗 → 合法空陣列
+      it('B-i：dataSource.query throw（SQLite 無 information_schema）→ 回 { availableColumns: [] } 不擴散例外', async () => {
+        (dataSource as any).query = vi
+          .fn()
+          .mockRejectedValue(new Error('no such table: information_schema.columns'));
+        const result = await service.getAvailableColumns();
+        expect(result).toEqual({ availableColumns: [] });
+      });
+
+      // Phase C 降級紀錄：本應在 PostgreSQL Test Container 執行，暫以 mock 驗證 BR-13 邏輯合約
+      it('TS-F075-INT-BE-001（降級 mock）：SQL 已過濾白名單（含 is_active=false）→ service 信任 SQL 結果只回未列入欄位', async () => {
+        // 模擬 SQL 已執行 NOT IN (含停用) 過濾：PAYT_TERM 不會出現在 query 結果
+        (dataSource as any).query = vi
+          .fn()
+          .mockResolvedValue([{ column_name: 'RISK_LEVEL', data_type: 'varchar' }]);
+
+        const result = await service.getAvailableColumns();
+        expect(result.availableColumns).toHaveLength(1);
+        expect(result.availableColumns[0].columnName).toBe('RISK_LEVEL');
+        // 驗證 service 不二次過濾，完全信任 SQL 子查詢結果
+        expect(
+          result.availableColumns.find((c) => c.columnName === 'PAYT_TERM'),
+        ).toBeUndefined();
+      });
+
+      it('TS-F075-INT-BE-002（降級 mock）：所有欄位皆已列入白名單 → 回空陣列', async () => {
+        (dataSource as any).query = vi.fn().mockResolvedValue([]);
+        const result = await service.getAvailableColumns();
+        expect(result).toEqual({ availableColumns: [] });
+      });
+    });
+
+    // B. _inferSuggestedFieldType 推斷規則逐一驗證（15 個 case）
+    describe('B. _inferSuggestedFieldType() 推斷規則', () => {
+      // 為了驗證 pure function，透過 getAvailableColumns 觀察 suggestedFieldType 結果。
+      // 既符合「驗證該 method 的對外可觀察行為」也避免測試私有 method 強耦合。
+      const callInfer = async (dataType: string | null | undefined): Promise<string> => {
+        (dataSource as any).query = vi
+          .fn()
+          .mockResolvedValue([{ column_name: 'X', data_type: dataType }]);
+        const result = await service.getAvailableColumns();
+        return result.availableColumns[0].suggestedFieldType;
+      };
+
+      it("TS-F075-BE-010：'numeric' → 'numeric'", async () => {
+        expect(await callInfer('numeric')).toBe('numeric');
+      });
+
+      it("TS-F075-BE-011：'integer' → 'numeric'", async () => {
+        expect(await callInfer('integer')).toBe('numeric');
+      });
+
+      it("TS-F075-BE-012：'bigint' → 'numeric'", async () => {
+        expect(await callInfer('bigint')).toBe('numeric');
+      });
+
+      it("TS-F075-BE-013：'double precision' → 'numeric'（含空格）", async () => {
+        expect(await callInfer('double precision')).toBe('numeric');
+      });
+
+      it("TS-F075-BE-014：'real' → 'numeric'", async () => {
+        expect(await callInfer('real')).toBe('numeric');
+      });
+
+      it("TS-F075-BE-015：'date' → 'date'", async () => {
+        expect(await callInfer('date')).toBe('date');
+      });
+
+      it("TS-F075-BE-016：'timestamp without time zone' → 'date'", async () => {
+        expect(await callInfer('timestamp without time zone')).toBe('date');
+      });
+
+      it("TS-F075-BE-017：'timestamp with time zone' → 'date'", async () => {
+        expect(await callInfer('timestamp with time zone')).toBe('date');
+      });
+
+      it("TS-F075-BE-018：'character varying' → 'categorical'（保守原則）", async () => {
+        expect(await callInfer('character varying')).toBe('categorical');
+      });
+
+      it("TS-F075-BE-019：'text' → 'categorical'（保守原則）", async () => {
+        expect(await callInfer('text')).toBe('categorical');
+      });
+
+      it("TS-F075-BE-020：'boolean' → 'categorical'（保守原則）", async () => {
+        expect(await callInfer('boolean')).toBe('categorical');
+      });
+
+      it("TS-F075-BE-021：null → 'categorical'（null-safe）", async () => {
+        expect(await callInfer(null)).toBe('categorical');
+      });
+
+      it("TS-F075-BE-022：undefined → 'categorical'（undefined-safe）", async () => {
+        expect(await callInfer(undefined)).toBe('categorical');
+      });
+
+      it("TS-F075-BE-023：'unknown_type_xyz' → 'categorical'（保守原則）", async () => {
+        expect(await callInfer('unknown_type_xyz')).toBe('categorical');
+      });
+
+      // Decimal 邊界備忘（RISK-F075-002 / spec §5.5 文件與生產實際不一致）
+      it("TS-F075-BE-024：'decimal' → 'categorical'（Decimal 邊界備忘）", async () => {
+        // PostgreSQL information_schema.columns.data_type 對 DECIMAL 實際回傳 'numeric'（不會回傳 'decimal'）
+        // 此 case 驗證即使傳入 'decimal' 字串，保守 fallback 行為正確（不誤判為 numeric）
+        // 對應 service inline NOTE comment
+        expect(await callInfer('decimal')).toBe('categorical');
+      });
+    });
+  });
 });

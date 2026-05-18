@@ -67,6 +67,38 @@ export interface UpdatePooldataFieldResult extends PooldataFieldItem {
   deactivatedOptionCount?: number;
 }
 
+// F075 v1.4：available-columns 端點之 response 型別
+export interface AvailableColumnItem {
+  columnName: string;
+  dataType: string;
+  suggestedFieldType: 'numeric' | 'categorical' | 'date';
+}
+
+export interface GetAvailableColumnsResult {
+  availableColumns: AvailableColumnItem[];
+}
+
+// F075 v1.4 / _inferSuggestedFieldType 推斷規則（spec §5.5 / BR-12）
+//
+// NOTE: PostgreSQL DECIMAL 在 information_schema.columns.data_type 實際回傳 'numeric'（已涵蓋於 NUMERIC_SET）；
+//       'decimal' 字串不會出現在生產 information_schema 結果
+const NUMERIC_SET = new Set<string>([
+  'numeric',
+  'integer',
+  'bigint',
+  'double precision',
+  'real',
+]);
+
+// DATE_SET：PostgreSQL information_schema 對應日期 / 時間型別之實際回傳值（含完整名稱）
+const DATE_SET = new Set<string>([
+  'date',
+  'timestamp',
+  'timestamp without time zone',
+  'timestamp with time zone',
+  'timestamptz',
+]);
+
 @Injectable()
 export class PooldataFieldWhitelistService {
   constructor(
@@ -279,6 +311,72 @@ export class PooldataFieldWhitelistService {
       where: { column_name: columnName, is_active: true },
     });
     return { activeCount: count };
+  }
+
+  // ========================
+  // F075 v1.4 §5.5 — GET /pooldata-fields/available-columns
+  // ========================
+
+  /**
+   * 取得 OBPOOLDATA 既有但尚未列入白名單之欄位清單（供新增 Modal dropdown 使用）。
+   *
+   * 設計重點（architecture-spec v2.12 §3.10）：
+   *   - 以 `dataSource.query()` raw SQL 查詢 `information_schema.columns`
+   *   - 子查詢排除**所有** `pooldata_field_whitelist.column_name`（含 `is_active=false`，BR-13）
+   *   - 按 `column_name` 字母升冪排序（AC-10）
+   *   - `_inferSuggestedFieldType` 為 service 層 pure function，不使用 SQL CASE
+   *   - 不快取（information_schema catalog 查詢成本可忽略）
+   *
+   * SQLite test 環境 / `ob_pool_data` 不存在 → 回 `{ availableColumns: [] }`（合法空陣列，
+   * 對齊 architecture-spec v2.12 §3.10 第 5 點與 B-i 策略決議）。
+   */
+  async getAvailableColumns(): Promise<GetAvailableColumnsResult> {
+    try {
+      const rows: Array<{ column_name: string | null; data_type: string | null }> =
+        await this.dataSource.query(
+          `SELECT c.column_name, c.data_type
+             FROM information_schema.columns c
+            WHERE c.table_schema = 'public'
+              AND c.table_name = 'ob_pool_data'
+              AND c.column_name NOT IN (
+                SELECT w.column_name FROM pooldata_field_whitelist w
+              )
+            ORDER BY c.column_name ASC`,
+        );
+
+      const items: AvailableColumnItem[] = rows
+        .filter((r) => r.column_name !== null && r.column_name !== undefined)
+        .map((r) => ({
+          columnName: r.column_name as string,
+          dataType: r.data_type ?? '',
+          suggestedFieldType: this._inferSuggestedFieldType(r.data_type),
+        }));
+
+      // 雙重保險：即使 SQL 已 ORDER BY，service 層仍確保字母升冪輸出（防 DB collation 差異）
+      items.sort((a, b) => a.columnName.localeCompare(b.columnName));
+
+      return { availableColumns: items };
+    } catch {
+      // SQLite test env（無 information_schema）或 ob_pool_data 不存在 → 合法空陣列
+      // 對齊 architecture-spec v2.12 §3.10 第 5 點 + B-i 策略決議
+      return { availableColumns: [] };
+    }
+  }
+
+  /**
+   * 推斷 PostgreSQL information_schema `data_type` 對應之 `suggestedFieldType`（AC-12 / BR-12）。
+   *
+   * NOTE: PostgreSQL DECIMAL 在 information_schema.columns.data_type 實際回傳 'numeric'（已涵蓋於 NUMERIC_SET）；
+   *       'decimal' 字串不會出現在生產 information_schema 結果。若日後需特殊映射 'decimal' → 'numeric'，
+   *       須同步更新 spec §5.5 並調整 NUMERIC_SET。
+   */
+  private _inferSuggestedFieldType(
+    dataType: string | null | undefined,
+  ): 'numeric' | 'categorical' | 'date' {
+    if (dataType === null || dataType === undefined) return 'categorical';
+    if (NUMERIC_SET.has(dataType)) return 'numeric';
+    if (DATE_SET.has(dataType)) return 'date';
+    return 'categorical'; // 保守原則：字串型 / 未識別 / boolean / 其他 → categorical
   }
 
   // ========================
