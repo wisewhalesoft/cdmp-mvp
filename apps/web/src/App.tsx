@@ -193,7 +193,7 @@ export function App() {
           </DirectorOrSectionChiefRoute>
         }
       />
-      {/* F075 / F076：POOLDATA 白名單 + 可選值管理 */}
+      {/* F075 / F076：POOLDATA 篩選欄位管理 + 可選值管理（v1.4 UI 命名標準化） */}
       <Route
         path="/assignment/whitelist"
         element={

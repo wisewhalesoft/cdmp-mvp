@@ -83,16 +83,16 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).not.toContain('計分卡設定');
   });
 
-  it('menu 設定中 12 個 E07 子項（含新增白名單管理、準備完成名單；比例設定已移除）', () => {
+  it('menu 設定中 12 個 E07 子項（含新增篩選欄位管理、準備完成名單；比例設定已移除）', () => {
     const directorView = getVisibleMenuItems('user', 'director');
     const assignmentGroup = directorView
       .flatMap((s) => s.groups)
       .find((g) => g.label === '客戶名單分派');
     expect(assignmentGroup).toBeDefined();
-    // 10 個（v3.3）+ 1 個白名單管理 + 1 個準備完成名單 = 12
+    // 10 個（v3.3）+ 1 個篩選欄位管理 + 1 個準備完成名單 = 12（F075 v1.4 命名改造）
     expect(assignmentGroup!.items.length).toBe(12);
     const labels = assignmentGroup!.items.map((i) => i.label);
-    expect(labels).toContain('白名單管理');
+    expect(labels).toContain('篩選欄位管理');
     expect(labels).toContain('準備完成名單');
   });
 

@@ -123,10 +123,11 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: Tags,
             requires: 'director_or_section_chief',
           },
-          // F075/F076 POOLDATA 白名單：director + section_chief（讀），director only（寫入）
+          // F075/F076 POOLDATA 篩選欄位管理：director + section_chief（讀），director only（寫入）
+          // v1.4 命名改造：「白名單管理」→「篩選欄位管理」（UI 層命名；內部 DB / API path 保留）
           {
             to: '/assignment/whitelist',
-            label: '白名單管理',
+            label: '篩選欄位管理',
             icon: ShieldCheck,
             requires: 'director_or_section_chief',
           },
