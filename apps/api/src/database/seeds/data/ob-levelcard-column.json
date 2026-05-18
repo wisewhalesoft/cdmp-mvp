@@ -1,0 +1,331 @@
+[
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "column_label": "有無戶藉電話",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "column_label": "車齡",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "column_label": "中結/滿期/撥款與分案月數差",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "column_label": "專案類別",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "column_label": "業務註記",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "ADD_UN_CAPITAL",
+    "column_label": "累積未償本金",
+    "status": "active"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "column_label": "客戶性別",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "column_label": "有無戶藉電話",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "column_label": "車齡",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "column_label": "中結/滿期/撥款與分案月數差",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "column_label": "專案類別",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "AGE",
+    "column_label": "年齡",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "column_label": "學歷",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "column_label": "客戶性別",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "AGE",
+    "column_label": "年齡",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "column_label": "有無戶藉電話",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "column_label": "車齡",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "column_label": "學歷",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "column_label": "中結/滿期/撥款與分案月數差",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "column_label": "貸款成數",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "column_label": "專案類別",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "column_label": "業務註記",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "column_label": "有無戶藉電話",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "column_label": "車齡",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "column_label": "車主公司郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "column_label": "貸款成數",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "column_label": "年齡",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "column_label": "學歷",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "column_label": "車主戶籍地郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "column_label": "年齡",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CELLULAR",
+    "column_label": "手機號碼",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "column_label": "車主公司郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "column_label": "學歷",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "column_label": "中結/滿期/撥款與分案月數差",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "column_label": "貸款成數",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "column_label": "專案類別",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "column_label": "有無戶藉電話",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "column_label": "車主公司郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "AGE",
+    "column_label": "年齡",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "column_label": "車主戶籍地郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "column_label": "車主通訊地郵遞區號",
+    "status": "active"
+  }
+]

@@ -1,0 +1,3332 @@
+[
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 30
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "level1": null,
+    "level2_s": "2",
+    "level2_e": "2",
+    "score": 26
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "level1": null,
+    "level2_s": "3",
+    "level2_e": "3",
+    "score": 26
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "ADD_UN_CAPITAL",
+    "level1": null,
+    "level2_s": "383258",
+    "level2_e": "99999999",
+    "score": 36
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "ADD_UN_CAPITAL",
+    "level1": null,
+    "level2_s": "232952",
+    "level2_e": "383257",
+    "score": 31
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "ADD_UN_CAPITAL",
+    "level1": null,
+    "level2_s": "126480",
+    "level2_e": "232951",
+    "score": 26
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "ADD_UN_CAPITAL",
+    "level1": null,
+    "level2_s": "49698",
+    "level2_e": "126479",
+    "score": 19
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "ADD_UN_CAPITAL",
+    "level1": null,
+    "level2_s": "-99999999",
+    "level2_e": "49697",
+    "score": 12
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 28
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 29
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 52
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 14
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "10",
+    "level2_e": "99",
+    "score": 35
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "5",
+    "level2_e": "9",
+    "score": 34
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "4",
+    "level2_e": "4",
+    "score": 28
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "3",
+    "level2_e": "3",
+    "score": 24
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "2",
+    "score": 17
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "33",
+    "level2_e": "999",
+    "score": 22
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "25",
+    "level2_e": "32",
+    "score": 25
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "21",
+    "level2_e": "24",
+    "score": 31
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "17",
+    "level2_e": "20",
+    "score": 33
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "16",
+    "score": 36
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "20",
+    "level2_e": "20",
+    "score": 37
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "21",
+    "level2_e": "21",
+    "score": 37
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 37
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 37
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 37
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 37
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 35
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 35
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 35
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 35
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "14",
+    "level2_e": "14",
+    "score": 34
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "15",
+    "level2_e": "15",
+    "score": 34
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 34
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "05",
+    "score": 34
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "12",
+    "score": 28
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 28
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "11",
+    "level2_e": "11",
+    "score": 24
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 24
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 19
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "13",
+    "level2_e": "13",
+    "score": 19
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "level1": "AGENT",
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 36
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "level1": "UCD",
+    "level2_s": "2",
+    "level2_e": "2",
+    "score": 36
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "level1": "HFC",
+    "level2_s": "3",
+    "level2_e": "3",
+    "score": 25
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 27
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "level1": null,
+    "level2_s": "2",
+    "level2_e": "2",
+    "score": 18
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CUS_SEX",
+    "level1": null,
+    "level2_s": "3",
+    "level2_e": "3",
+    "score": 18
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 55
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "05",
+    "score": 41
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 30
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 30
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 27
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 21
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 42
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 13
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "99",
+    "score": 27
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "6",
+    "level2_e": "11",
+    "score": 26
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "3",
+    "level2_e": "5",
+    "score": 19
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "2",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "20",
+    "level2_e": "999",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "16",
+    "level2_e": "19",
+    "score": 27
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "8",
+    "level2_e": "15",
+    "score": 33
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "7",
+    "score": 24
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "20",
+    "level2_e": "20",
+    "score": 28
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 28
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 28
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 28
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 31
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "05",
+    "score": 31
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 31
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 31
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "14",
+    "level2_e": "14",
+    "score": 26
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 26
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 26
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "12",
+    "score": 22
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "釣魚臺",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "南海諸",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 22
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "11",
+    "level2_e": "11",
+    "score": 21
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 17
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 45
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "13",
+    "level2_e": "13",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "15",
+    "level2_e": "15",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "21",
+    "level2_e": "21",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "41",
+    "score": 26
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "42",
+    "level2_e": "49",
+    "score": 23
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "50",
+    "level2_e": "56",
+    "score": 20
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 12
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 12
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "07",
+    "level2_e": "07",
+    "score": 12
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "57",
+    "level2_e": "200",
+    "score": 13
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "06",
+    "score": 22
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 17
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 15
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 18
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 27
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 54
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 7
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "40",
+    "level2_e": "999",
+    "score": 33
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "21",
+    "level2_e": "39",
+    "score": 12
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "20",
+    "score": 18
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "11",
+    "score": 24
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "20",
+    "level2_e": "20",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 22
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "05",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 22
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "14",
+    "level2_e": "14",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 22
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "12",
+    "score": 22
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 20
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "11",
+    "level2_e": "11",
+    "score": 20
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 17
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "13",
+    "level2_e": "13",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "15",
+    "level2_e": "15",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "21",
+    "level2_e": "21",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 25
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 17
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "34",
+    "score": 24
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "35",
+    "level2_e": "44",
+    "score": 20
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "45",
+    "level2_e": "57",
+    "score": 19
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 15
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "07",
+    "level2_e": "99",
+    "score": 15
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "58",
+    "level2_e": "200",
+    "score": 17
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "55",
+    "score": 17
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "56",
+    "level2_e": "69",
+    "score": 18
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "70",
+    "level2_e": "75",
+    "score": 19
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "76",
+    "level2_e": "85",
+    "score": 21
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "86",
+    "level2_e": "108",
+    "score": 22
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "109",
+    "level2_e": "999",
+    "score": 24
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "level1": "HFC",
+    "level2_s": "3",
+    "level2_e": "3",
+    "score": 20
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "level1": "AGENT",
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 10
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "SALES_STS",
+    "level1": "UCD",
+    "level2_s": "2",
+    "level2_e": "2",
+    "score": 10
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "05",
+    "score": 28
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 18
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "06",
+    "level2_e": "07",
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 14
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 45
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 27
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 15
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "13",
+    "level2_e": "99",
+    "score": 7
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "10",
+    "level2_e": "12",
+    "score": 21
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "9",
+    "score": 25
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 23
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 23
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 23
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 23
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 23
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "釣魚臺",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "77",
+    "level2_e": "113",
+    "score": 20
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "34",
+    "score": 26
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "35",
+    "level2_e": "38",
+    "score": 22
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "39",
+    "level2_e": "56",
+    "score": 20
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 20
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 7
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "08",
+    "level2_e": "99",
+    "score": 7
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "57",
+    "level2_e": "61",
+    "score": 19
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 13
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 13
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 18
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 18
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 18
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 13
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 16
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 16
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 13
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "67",
+    "level2_e": "76",
+    "score": 17
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "66",
+    "score": 13
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 26
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "07",
+    "score": 31
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 22
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 34
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 10
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CELLULAR",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 19
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CELLULAR",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": -17
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "108",
+    "level2_e": "127",
+    "score": 15
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "52",
+    "level2_e": "107",
+    "score": 17
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "44",
+    "level2_e": "51",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "43",
+    "score": 24
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "11",
+    "level2_e": "11",
+    "score": 12
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "62",
+    "level2_e": "67",
+    "score": 15
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "68",
+    "level2_e": "200",
+    "score": 5
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "07",
+    "level2_e": "10",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "15",
+    "level2_e": "15",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "17",
+    "level2_e": "19",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "24",
+    "level2_e": "99",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "14",
+    "level2_e": "14",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "00",
+    "level2_e": "00",
+    "score": 18
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "00",
+    "level2_e": "00",
+    "score": 7
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "114",
+    "level2_e": "999",
+    "score": 29
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "13",
+    "level2_e": "13",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "14",
+    "level2_e": "14",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "02",
+    "level2_e": "02",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "20",
+    "level2_e": "20",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "04",
+    "level2_e": "04",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "06",
+    "level2_e": "06",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "12",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "16",
+    "level2_e": "16",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "21",
+    "level2_e": "21",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "22",
+    "level2_e": "22",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": "A",
+    "level2_s": "23",
+    "level2_e": "23",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "05",
+    "level2_e": "05",
+    "score": 18
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "42",
+    "score": 19
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "43",
+    "level2_e": "54",
+    "score": 19
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "55",
+    "level2_e": "57",
+    "score": 18
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "03",
+    "level2_e": "03",
+    "score": 24
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "01",
+    "level2_e": "01",
+    "score": -16
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "08",
+    "level2_e": "99",
+    "score": 22
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "58",
+    "level2_e": "62",
+    "score": 17
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "58",
+    "score": 9
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "59",
+    "level2_e": "68",
+    "score": 14
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "69",
+    "level2_e": "75",
+    "score": 17
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "76",
+    "level2_e": "88",
+    "score": 23
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LOAN_RATE",
+    "level1": null,
+    "level2_s": "89",
+    "level2_e": "999",
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "63",
+    "level2_e": "64",
+    "score": 14
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "65",
+    "level2_e": "200",
+    "score": 12
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "LIST_MONTH",
+    "level1": null,
+    "level2_s": "128",
+    "level2_e": "999",
+    "score": 14
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "25",
+    "score": 26
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "26",
+    "level2_e": "47",
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "48",
+    "level2_e": "200",
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 27
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 13
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 64
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 20
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 20
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 38
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 34
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 34
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 34
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 34
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 38
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 45
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "PROJECT_TP",
+    "level1": null,
+    "level2_s": "41",
+    "level2_e": "41",
+    "score": 17
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "08",
+    "level2_e": "99",
+    "score": 12
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "column_name": "EDUCAT_BACK",
+    "level1": null,
+    "level2_s": "00",
+    "level2_e": "00",
+    "score": 12
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "12",
+    "level2_e": "99",
+    "score": 34
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "6",
+    "level2_e": "11",
+    "score": 36
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "4",
+    "level2_e": "5",
+    "score": 13
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "column_name": "CAR_YEAR",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "3",
+    "score": 10
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "釣魚臺",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  }
+]

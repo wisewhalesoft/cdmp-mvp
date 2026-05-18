@@ -44,6 +44,9 @@ docker compose up -d
 
 # 首次啟動需執行 Seed 建立測試帳號
 docker compose --profile seed up seed
+
+# E07 計分卡 6 表初始化（從 reference/DumpData 載入；冪等：表為空才 INSERT）
+docker compose --profile data-seed up data-seed
 ```
 
 啟動完成後開啟瀏覽器：
@@ -55,7 +58,8 @@ docker compose --profile seed up seed
 | postgres | cdmp-postgres | 5432 | PostgreSQL 16 (cdmp_dev) |
 | api | cdmp-api | 3000 | NestJS backend (hot reload via volume mount) |
 | web | cdmp-web | 5173 | React frontend (HMR via volume mount) |
-| seed | cdmp-seed | — | 一次性 seed script（需手動觸發） |
+| seed | cdmp-seed | — | 一次性 seed script — 測試帳號（需手動觸發） |
+| data-seed | cdmp-data-seed | — | 一次性 seed script — E07 計分卡 6 表初始化資料（需手動觸發） |
 
 ```bash
 # 停止所有服務
@@ -138,6 +142,33 @@ npm run web:test
 ```
 
 ---
+
+## E07 計分卡初始資料
+
+`data-seed` profile 將 `reference/DumpData/` 中 2026-05-05 dump 匯入 E07 計分卡相關 6 表，作為新環境部署的初始資料：
+
+| Table | 來源 dump | 載入筆數 | 特殊處理 |
+|-------|-----------|---------|---------|
+| `ob_card_type` | OBLEVELCARD_VERSION（推導 prod_kind） | 6 | M 系列 → prod_kind=02，其餘 01 |
+| `ob_levelcard_version` | OBLEVELCARD_VERSION_20260505.csv | 6 | — |
+| `ob_levelcard_column` | OBLEVELCARD_COLUNM_20260505.csv | 47 | 含中文 column_label |
+| `ob_levelcard_score` | OBLEVELCARD_SCORE_20260505.csv | 370 | BR-9 RTRIM、空字串/NULL 規一化 |
+| `ob_levelcard_level` | OBLEVELCARD_LEVEL_20260505.csv | 22 | — |
+| `ob_tier` | OBTIER_20260505.csv | 27 | tier_level 正規化（捨去後綴英文 + T1-T10 範圍）|
+
+**冪等保證：**
+- 每張表執行前 `SELECT COUNT(*)`，若 `> 0` 則 SKIP（不洗業務既有資料）
+- `ob_levelcard_column` 例外：表非空時用 `UPDATE WHERE column_label IS NULL` 補中文標籤（不洗已調整的 label）
+- `match_type` 只在 `ob_levelcard_column` 首次 INSERT 才依 score 推導；非空 SKIP（保留業務手動調整）
+
+**重新生成 JSON 資料**（dump 更新時）：
+
+```bash
+cd apps/api
+npm run data-seed:regen-json
+```
+
+`reference/DumpData/*.csv` → `apps/api/src/database/seeds/data/*.json`，含 OBTIER 正規化映射（T1HM→T1、T32→T3、T5M→T5 等）。
 
 ## Test Accounts
 

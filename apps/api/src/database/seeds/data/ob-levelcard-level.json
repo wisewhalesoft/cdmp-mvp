@@ -1,0 +1,156 @@
+[
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "score_s": 191,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "score_s": 169,
+    "score_e": 190,
+    "card_level": "B"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "score_s": 153,
+    "score_e": 168,
+    "card_level": "C"
+  },
+  {
+    "card_type": "S",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 152,
+    "card_level": "D"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "score_s": 243,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "score_s": 214,
+    "score_e": 242,
+    "card_level": "B"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "score_s": 185,
+    "score_e": 213,
+    "card_level": "C"
+  },
+  {
+    "card_type": "H",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 184,
+    "card_level": "D"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "score_s": 176,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "score_s": 149,
+    "score_e": 175,
+    "card_level": "B"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "score_s": 141,
+    "score_e": 148,
+    "card_level": "C"
+  },
+  {
+    "card_type": "E",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 140,
+    "card_level": "D"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "score_s": 154,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "score_s": 127,
+    "score_e": 153,
+    "card_level": "B"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "score_s": 104,
+    "score_e": 126,
+    "card_level": "C"
+  },
+  {
+    "card_type": "E5",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 103,
+    "card_level": "D"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "score_s": 152,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "S5",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 151,
+    "card_level": "B"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "score_s": 170,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "score_s": 150,
+    "score_e": 169,
+    "card_level": "B"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "score_s": 143,
+    "score_e": 149,
+    "card_level": "C"
+  },
+  {
+    "card_type": "M",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 142,
+    "card_level": "D"
+  }
+]

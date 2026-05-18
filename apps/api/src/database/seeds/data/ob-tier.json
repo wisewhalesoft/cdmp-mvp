@@ -1,0 +1,164 @@
+[
+  {
+    "list_nm": "期中名單",
+    "card_type": "H",
+    "card_level": "A",
+    "tier_level": "T1"
+  },
+  {
+    "list_nm": "期中名單",
+    "card_type": "H",
+    "card_level": "B",
+    "tier_level": "T2"
+  },
+  {
+    "list_nm": "期中名單",
+    "card_type": "H",
+    "card_level": "C",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "期中名單",
+    "card_type": "H",
+    "card_level": "D",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "機車中結滿期名單",
+    "card_type": "M",
+    "card_level": "A",
+    "tier_level": "T1"
+  },
+  {
+    "list_nm": "機車中結滿期名單",
+    "card_type": "M",
+    "card_level": "B",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "機車中結滿期名單",
+    "card_type": "M",
+    "card_level": "C",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "機車中結滿期名單",
+    "card_type": "M",
+    "card_level": "D",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "中結名單",
+    "card_type": "S",
+    "card_level": "A",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "中結名單",
+    "card_type": "S",
+    "card_level": "B",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "中結名單",
+    "card_type": "S",
+    "card_level": "C",
+    "tier_level": "T4"
+  },
+  {
+    "list_nm": "中結名單",
+    "card_type": "S",
+    "card_level": "D",
+    "tier_level": "T4"
+  },
+  {
+    "list_nm": "滿期名單",
+    "card_type": "E",
+    "card_level": "A",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "滿期名單",
+    "card_type": "E",
+    "card_level": "B",
+    "tier_level": "T4"
+  },
+  {
+    "list_nm": "滿期名單",
+    "card_type": "E",
+    "card_level": "C",
+    "tier_level": "T4"
+  },
+  {
+    "list_nm": "滿期名單",
+    "card_type": "E",
+    "card_level": "D",
+    "tier_level": "T4"
+  },
+  {
+    "list_nm": "中結五年名單",
+    "card_type": "S5",
+    "card_level": "A",
+    "tier_level": "T5"
+  },
+  {
+    "list_nm": "中結五年名單",
+    "card_type": "S5",
+    "card_level": "B",
+    "tier_level": "T5"
+  },
+  {
+    "list_nm": "滿期三年名單",
+    "card_type": "E5",
+    "card_level": "A",
+    "tier_level": "T5"
+  },
+  {
+    "list_nm": "滿期三年名單",
+    "card_type": "E5",
+    "card_level": "B",
+    "tier_level": "T5"
+  },
+  {
+    "list_nm": "滿期三年名單",
+    "card_type": "E5",
+    "card_level": "C",
+    "tier_level": "T5"
+  },
+  {
+    "list_nm": "滿期三年名單",
+    "card_type": "E5",
+    "card_level": "D",
+    "tier_level": "T5"
+  },
+  {
+    "list_nm": "機車期中名單",
+    "card_type": "HM",
+    "card_level": "A",
+    "tier_level": "T1"
+  },
+  {
+    "list_nm": "機車期中名單",
+    "card_type": "HM",
+    "card_level": "B",
+    "tier_level": "T2"
+  },
+  {
+    "list_nm": "機車期中名單",
+    "card_type": "HM",
+    "card_level": "C",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "機車期中名單",
+    "card_type": "HM",
+    "card_level": "D",
+    "tier_level": "T3"
+  },
+  {
+    "list_nm": "機車中結滿期名單",
+    "card_type": "M5",
+    "card_level": null,
+    "tier_level": "T5"
+  }
+]

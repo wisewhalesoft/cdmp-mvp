@@ -75,5 +75,26 @@ services:
     profiles:
       - seed
 
+  # E07 計分卡 6 表初始化（冪等：表為空才 INSERT；不洗業務既有資料）
+  # 用法：docker compose --profile data-seed up data-seed
+  data-seed:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-data-seed
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: cdmp
+      DB_PASSWORD: cdmp_secret
+      DB_NAME: cdmp_dev
+    command: npx ts-node -r tsconfig-paths/register src/database/seeds/prod-data-seed.ts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - data-seed
+
 volumes:
   pgdata:

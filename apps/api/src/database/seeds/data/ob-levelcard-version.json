@@ -1,0 +1,50 @@
+[
+  {
+    "card_type": "H",
+    "card_name": "期中",
+    "card_version": 1,
+    "sdate": "20190823",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "S",
+    "card_name": "中結",
+    "card_version": 1,
+    "sdate": "20190903",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "E",
+    "card_name": "滿期",
+    "card_version": 1,
+    "sdate": "20191125",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "S5",
+    "card_name": "中結5年",
+    "card_version": 1,
+    "sdate": "20191125",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "E5",
+    "card_name": "滿期5年",
+    "card_version": 1,
+    "sdate": "20191125",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "M",
+    "card_name": "機車",
+    "card_version": 1,
+    "sdate": "20191125",
+    "edate": "20991231",
+    "status": "active"
+  }
+]
