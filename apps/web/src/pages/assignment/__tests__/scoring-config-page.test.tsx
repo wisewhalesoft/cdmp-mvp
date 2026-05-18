@@ -905,7 +905,7 @@ describe('ScoringConfigPage — DimensionsTab 狀態欄（落差 4）', () => {
     const chip = screen.getByTestId('dim-status-ACCOUNT_AGE');
     expect(chip).toBeInTheDocument();
     expect(chip.getAttribute('data-status')).toBe('active');
-    expect(chip.textContent).toContain('啟用');
+    expect(chip.textContent).toContain('active');
   });
 });
 

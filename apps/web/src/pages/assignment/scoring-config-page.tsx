@@ -18,6 +18,8 @@ import {
   Check,
   Plus,
   Save,
+  SlidersHorizontal,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
@@ -111,10 +113,22 @@ interface ScoringDimUI {
 /**
  * F054 v1.3：matchType chip 樣式（紫 / 藍 / 琥珀，對應 prototype 28）
  */
+/**
+ * F054 v1.3 chip 顏色（對應 prototype 28 MATCH_TYPE_META L1137-1139）
+ *   CATEGORY  → cyan-100 / cyan-700   + tag icon
+ *   RANGE     → violet-100 / violet-700 + sliders-horizontal icon
+ *   COMPOSITE → amber-100 / amber-700 + layers icon
+ */
 const MATCH_TYPE_CHIP_CLASS: Record<MatchType, string> = {
-  CATEGORY: 'bg-violet-100 text-violet-700',
-  RANGE: 'bg-blue-100 text-blue-700',
+  CATEGORY: 'bg-cyan-100 text-cyan-700',
+  RANGE: 'bg-violet-100 text-violet-700',
   COMPOSITE: 'bg-amber-100 text-amber-700',
+};
+
+const MATCH_TYPE_CHIP_ICON: Record<MatchType, typeof Tag> = {
+  CATEGORY: Tag,
+  RANGE: SlidersHorizontal,
+  COMPOSITE: Layers,
 };
 
 /**
@@ -924,19 +938,23 @@ function DimensionsTab({
                       })()}
                     </td>
                     <td className="px-5 py-3">
-                      {/* F054 v1.3：matchType chip（紫/藍/琥珀） */}
-                      {matchType ? (
-                        <span
-                          data-testid={`dim-matchtype-${d.columnName}`}
-                          data-matchtype={matchType}
-                          className={
-                            'inline-flex px-2 py-0.5 text-xs rounded-full ' +
-                            MATCH_TYPE_CHIP_CLASS[matchType]
-                          }
-                        >
-                          {MATCH_TYPE_CHIP_LABEL[matchType]}
-                        </span>
-                      ) : (
+                      {/* F054 v1.3：matchType chip（含 icon，對應 prototype 28 matchTypeChip L1569-1573） */}
+                      {matchType ? (() => {
+                        const Icon = MATCH_TYPE_CHIP_ICON[matchType];
+                        return (
+                          <span
+                            data-testid={`dim-matchtype-${d.columnName}`}
+                            data-matchtype={matchType}
+                            className={
+                              'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ' +
+                              MATCH_TYPE_CHIP_CLASS[matchType]
+                            }
+                          >
+                            <Icon className="w-3 h-3" />
+                            {MATCH_TYPE_CHIP_LABEL[matchType]}
+                          </span>
+                        );
+                      })() : (
                         <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">
                           未設定
                         </span>
@@ -958,25 +976,25 @@ function DimensionsTab({
                         </span>
                       )}
                     </td>
-                    {/* F054 v1.3 落差 4：狀態 chip（active 綠 / inactive 灰） */}
+                    {/* F054 v1.3 落差 4：狀態 chip（對應 prototype 28 L1604-1607：bg-green-100 + 小圓點） */}
                     <td className="px-5 py-3">
                       {d.status === 'active' ? (
                         <span
                           data-testid={`dim-status-${d.columnName}`}
                           data-status="active"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-[#10B981]"
                         >
-                          <Check className="w-3 h-3" />
-                          啟用
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                          active
                         </span>
                       ) : (
                         <span
                           data-testid={`dim-status-${d.columnName}`}
                           data-status="inactive"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500 border border-gray-200"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"
                         >
-                          <Ban className="w-3 h-3" />
-                          停用
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                          inactive
                         </span>
                       )}
                     </td>
@@ -1220,18 +1238,22 @@ function ScoresTab({
               >
                 <td className="px-5 py-3 font-mono text-xs text-gray-700">{r.columnName}</td>
                 <td className="px-5 py-3">
-                  {r.matchType ? (
-                    <span
-                      data-testid={`score-row-${idx}-matchtype`}
-                      data-matchtype={r.matchType}
-                      className={
-                        'inline-flex px-2 py-0.5 text-xs rounded-full ' +
-                        MATCH_TYPE_CHIP_CLASS[r.matchType]
-                      }
-                    >
-                      {MATCH_TYPE_CHIP_LABEL[r.matchType]}
-                    </span>
-                  ) : (
+                  {r.matchType ? (() => {
+                    const Icon = MATCH_TYPE_CHIP_ICON[r.matchType];
+                    return (
+                      <span
+                        data-testid={`score-row-${idx}-matchtype`}
+                        data-matchtype={r.matchType}
+                        className={
+                          'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ' +
+                          MATCH_TYPE_CHIP_CLASS[r.matchType]
+                        }
+                      >
+                        <Icon className="w-3 h-3" />
+                        {MATCH_TYPE_CHIP_LABEL[r.matchType]}
+                      </span>
+                    );
+                  })() : (
                     <span
                       data-testid={`score-row-${idx}-matchtype`}
                       className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500"
