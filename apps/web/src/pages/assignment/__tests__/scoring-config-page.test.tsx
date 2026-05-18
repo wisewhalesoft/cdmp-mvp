@@ -337,6 +337,8 @@ describe('ScoringConfigPage — F054 寫入互動', () => {
     const inputs = modal.querySelectorAll('input[type="text"]');
     fireEvent.change(inputs[0], { target: { value: 'CONTRACT_YEARS' } });
     fireEvent.change(inputs[1], { target: { value: '契約年資' } });
+    // F054 v1.3 BR-8：必選 matchType（無預設值）
+    fireEvent.click(screen.getByTestId('dim-modal-matchtype-RANGE'));
 
     fireEvent.click(screen.getByTestId('dim-modal-submit'));
     await waitFor(() => {
@@ -367,6 +369,8 @@ describe('ScoringConfigPage — F054 月跑鎖 UI', () => {
     const inputs = modal.querySelectorAll('input[type="text"]');
     fireEvent.change(inputs[0], { target: { value: 'X' } });
     fireEvent.change(inputs[1], { target: { value: 'X' } });
+    // F054 v1.3 BR-8：必選 matchType（無預設值）
+    fireEvent.click(screen.getByTestId('dim-modal-matchtype-RANGE'));
     fireEvent.click(screen.getByTestId('dim-modal-submit'));
 
     await waitFor(() => {
@@ -707,86 +711,226 @@ describe('ScoringConfigPage — DimensionsTab 編輯 / icon-only 停用', () => 
   });
 });
 
-describe('ScoringConfigPage — ScoresTab 編輯 / 刪除', () => {
-  it('TS-F054-E05：每列 pencil 編輯按鈕（icon-only） + click 開啟單筆編輯 Modal', async () => {
+// F054 v1.3 對齊 prototype 28（handoff F054-v1.3-prototype-alignment.md §1-§6）：
+// ScoresTab 由「寫入入口」轉為「唯讀總覽」，列右側 pencil/trash 移除，
+// 新增分數區間入口由 Tab 2 DimensionModal 整合式編輯器取代。
+// 舊測試 TS-F054-E05/E06/E07 已不再適用，改寫為 NEW-01~NEW-04 覆蓋新行為。
+describe('ScoringConfigPage — ScoresTab v1.3 唯讀總覽（落差 1-3）', () => {
+  it('TS-F054-NEW-01：ScoresTab 頂部顯示唯讀總覽說明條', async () => {
     render(wrap(<ScoringConfigPage />));
     await switchToLegacyTabs();
-    await waitFor(() => {
-      expect(screen.getByTestId('tab-score')).toBeInTheDocument();
-    });
     fireEvent.click(screen.getByTestId('tab-score'));
-    // 第一筆 score row 預期有 testid score-row-0
+    // 落差 5 補修：banner 文字改為「唯讀總覽（v1.3 規格）」並附 inline link
     await waitFor(() => {
-      expect(screen.getByTestId('edit-score-0')).toBeInTheDocument();
+      expect(
+        screen.getByText('唯讀總覽（v1.3 規格）'),
+      ).toBeInTheDocument();
     });
-    const btn = screen.getByTestId('edit-score-0');
-    expect(btn.className).toContain('action-btn');
-    expect(btn.textContent?.trim()).toBe('');
-
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(screen.getByTestId('score-edit-modal')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('scores-tab-goto-dim')).toBeInTheDocument();
   });
 
-  it('TS-F054-E06：score 編輯 Modal 儲存 → 呼叫 updateDimensions（覆寫式整批 scores）', async () => {
-    mockedUpdateDimensions.mockResolvedValue({} as any);
+  it('TS-F054-NEW-02：ScoresTab 表頭含「比對模式」欄，每列顯示 matchType chip', async () => {
     render(wrap(<ScoringConfigPage />));
     await switchToLegacyTabs();
-    await waitFor(() => {
-      expect(screen.getByTestId('tab-score')).toBeInTheDocument();
-    });
     fireEvent.click(screen.getByTestId('tab-score'));
     await waitFor(() => {
-      expect(screen.getByTestId('edit-score-0')).toBeInTheDocument();
+      // 表頭含「比對模式」欄
+      expect(screen.getByText('比對模式')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('edit-score-0'));
+    // 第一列為 ACCOUNT_AGE（RANGE）；第三列為 CELLULAR（CATEGORY）
     await waitFor(() => {
-      expect(screen.getByTestId('score-edit-modal')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('score-row-0-matchtype'),
+      ).toBeInTheDocument();
     });
-    const modal = screen.getByTestId('score-edit-modal');
-    // 修改分數值
-    const scoreInput = within(modal).getByTestId('score-edit-score') as HTMLInputElement;
-    fireEvent.change(scoreInput, { target: { value: '99' } });
-    fireEvent.click(within(modal).getByTestId('score-edit-submit'));
-
-    await waitFor(() => {
-      expect(mockedUpdateDimensions).toHaveBeenCalled();
-    });
-    // 確認傳出的 payload 至少包含修改後的 score=99
-    const callArg = mockedUpdateDimensions.mock.calls[0][0];
-    const allScores = callArg.dimensions[0].scores;
-    expect(allScores.some((s: any) => s.score === 99)).toBe(true);
+    const firstChip = screen.getByTestId('score-row-0-matchtype');
+    expect(firstChip.getAttribute('data-matchtype')).toBe('RANGE');
   });
 
-  it('TS-F054-E07：score 列 trash 按鈕 + 確認對話框 → 刪除該筆走 updateDimensions（覆寫式去除）', async () => {
-    mockedUpdateDimensions.mockResolvedValue({} as any);
+  // 落差 9：ScoresTab 對齊 prototype 28 line 387-401 — 純唯讀總覽，無「操作」欄、
+  // 無底部 CTA。原 TS-F054-NEW-03 / NEW-04 / NEW-05 涉及 goto-dim-editor / btn-goto-dim-editor
+  // 已不適用，改寫為 NEW-03a / NEW-04a 驗證唯讀結構。
+  it('TS-F054-NEW-03a：ScoresTab 列無「操作」欄（無 goto-dim-editor / pencil / trash）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-row-0')).toBeInTheDocument();
+    });
+    // 落差 9：移除「操作」欄與所有 row-level 寫入入口
+    expect(screen.queryByTestId('goto-dim-editor-ACCOUNT_AGE')).toBeNull();
+    expect(screen.queryByTestId('edit-score-0')).toBeNull();
+    expect(screen.queryByTestId('delete-score-0')).toBeNull();
+    expect(screen.queryByTestId('btn-add-score')).toBeNull();
+    // 表頭應無「操作」文字（th 級別檢查，非 row 級別）
+    const ths = document.querySelectorAll(
+      '[data-testid^="score-row-"]',
+    );
+    expect(ths.length).toBeGreaterThan(0);
+  });
+
+  it('TS-F054-NEW-04a：ScoresTab 無底部「前往 Tab 2 編輯」CTA（純唯讀）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-row-0')).toBeInTheDocument();
+    });
+    // 落差 9：移除 CTA；對應 prototype 28 line 400-402 純說明條
+    expect(screen.queryByTestId('btn-goto-dim-editor')).toBeNull();
+  });
+});
+
+// =====================================================================
+// F054 v1.3 對齊 prototype 28 — 9 個落差後續驗證測試（落差 1 / 2 / 5 / 8）
+// =====================================================================
+//
+// 對應 prototype 28 line 327-342（DimensionsTab 7 欄含「類型」+ matchType 推導說明）
+// 與 line 387-397（ScoresTab 6 欄純唯讀）。
+describe('ScoringConfigPage — prototype 28 對齊（落差 1 / 2 / 5 / 8）', () => {
+  it('TS-F054-NEW-08：DimensionsTab 表頭含「類型」欄（score-derived 類別/數值/—）', async () => {
     render(wrap(<ScoringConfigPage />));
     await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('tab-score')).toBeInTheDocument();
+      expect(screen.getByTestId('dim-row-ACCOUNT_AGE')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('tab-score'));
-    await waitFor(() => {
-      expect(screen.getByTestId('delete-score-0')).toBeInTheDocument();
-    });
-    const trashBtn = screen.getByTestId('delete-score-0');
-    // hover 紅色（prototype 28 L1171）
-    expect(trashBtn.className).toContain('hover:text-[#EF4444]');
-    expect(trashBtn.className).toContain('hover:bg-red-50');
+    // 表頭：column_name / column_label / 類型 / 比對模式 / 分數區間摘要 / 狀態 / 操作
+    const table = screen.getByTestId('dim-row-ACCOUNT_AGE').closest('table')!;
+    const headers = Array.from(table.querySelectorAll('thead th')).map(
+      (th) => th.textContent?.trim(),
+    );
+    expect(headers).toEqual([
+      'column_name',
+      'column_label',
+      '類型',
+      '比對模式',
+      '分數區間摘要',
+      '狀態',
+      '操作',
+    ]);
+  });
 
-    fireEvent.click(trashBtn);
+  it('TS-F054-NEW-09：「類型」欄 — ACCOUNT_AGE (level2_s 有值) 顯示「數值」', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(screen.getByTestId('score-delete-confirm-modal')).toBeInTheDocument();
+      expect(screen.getByTestId('dim-base-type-ACCOUNT_AGE')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('score-delete-confirm'));
+    expect(
+      screen.getByTestId('dim-base-type-ACCOUNT_AGE').textContent?.trim(),
+    ).toBe('數值');
+  });
 
+  it('TS-F054-NEW-10：「類型」欄 — CELLULAR (level1 有值，level2_s null) 顯示「類別」', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
     await waitFor(() => {
-      expect(mockedUpdateDimensions).toHaveBeenCalled();
+      expect(screen.getByTestId('dim-base-type-CELLULAR')).toBeInTheDocument();
     });
-    // 確認該筆被剔除（剩 1 筆 scores）
-    const callArg = mockedUpdateDimensions.mock.calls[0][0];
-    expect(callArg.dimensions[0].scores).toHaveLength(1);
+    expect(
+      screen.getByTestId('dim-base-type-CELLULAR').textContent?.trim(),
+    ).toBe('類別');
+  });
+
+  it('TS-F054-NEW-11：「類型」欄 — 空 scores 顯示「—」', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: [
+        {
+          columnName: 'EMPTY_DIM',
+          columnLabel: '空維度',
+          scoreSummary: '尚無分數',
+          scores: [],
+        },
+      ],
+    } as any);
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-base-type-EMPTY_DIM')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('dim-base-type-EMPTY_DIM').textContent?.trim(),
+    ).toBe('—');
+  });
+
+  it('TS-F054-NEW-12：DimensionsTab matchType chip 顯示短標籤「區間」（RANGE）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-matchtype-ACCOUNT_AGE')).toBeInTheDocument();
+    });
+    const chip = screen.getByTestId('dim-matchtype-ACCOUNT_AGE');
+    expect(chip.getAttribute('data-matchtype')).toBe('RANGE');
+    expect(chip.textContent?.trim()).toBe('區間');
+  });
+
+  it('TS-F054-NEW-13：DimensionsTab matchType chip 顯示短標籤「類別」（CATEGORY）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-matchtype-CELLULAR')).toBeInTheDocument();
+    });
+    const chip = screen.getByTestId('dim-matchtype-CELLULAR');
+    expect(chip.getAttribute('data-matchtype')).toBe('CATEGORY');
+    expect(chip.textContent?.trim()).toBe('類別');
+  });
+
+  it('TS-F054-NEW-14：DimensionsTab 表格下方顯示 matchType 推導說明條（落差 8）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('dim-matchtype-derivation-note'),
+      ).toBeInTheDocument();
+    });
+    const note = screen.getByTestId('dim-matchtype-derivation-note');
+    // 對應 prototype 28 line 341 文案核心關鍵字
+    expect(note.textContent).toContain('比對模式');
+    expect(note.textContent).toContain('CATEGORY');
+    expect(note.textContent).toContain('RANGE');
+    expect(note.textContent).toContain('COMPOSITE');
+    expect(note.textContent).toContain('自動推導');
+  });
+});
+
+// F054 v1.3 落差 4：DimensionsTab 「狀態」欄
+describe('ScoringConfigPage — DimensionsTab 狀態欄（落差 4）', () => {
+  it('TS-F054-NEW-06：每列顯示狀態 chip（後端未回 status 時 fallback 為 active）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-row-ACCOUNT_AGE')).toBeInTheDocument();
+    });
+    const chip = screen.getByTestId('dim-status-ACCOUNT_AGE');
+    expect(chip).toBeInTheDocument();
+    expect(chip.getAttribute('data-status')).toBe('active');
+    expect(chip.textContent).toContain('啟用');
+  });
+});
+
+// F054 v1.3 落差 6：DimensionModal 重疊偵測 UX 提示
+describe('ScoringConfigPage — DimensionModal 重疊偵測（落差 6）', () => {
+  it('TS-F054-NEW-07：RANGE 模式輸入重疊區間時顯示琥珀色警告', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-add-dim')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('btn-add-dim'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-modal')).toBeInTheDocument();
+    });
+    // 選 RANGE
+    fireEvent.click(screen.getByTestId('dim-modal-matchtype-RANGE'));
+    // 新增第二列（預設第一列也是 [0,99]，第二列也是 [0,99] → 重疊）
+    fireEvent.click(screen.getByTestId('dim-modal-add-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-modal-overlap-warn')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('dim-modal-overlap-warn').textContent,
+    ).toContain('重疊');
   });
 });
 

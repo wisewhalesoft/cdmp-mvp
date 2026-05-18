@@ -9,6 +9,7 @@ import {
   Eye,
   GitFork,
   Hash,
+  Inbox,
   Info,
   Layers,
   Layers3,
@@ -26,6 +27,8 @@ import { listCardTypes, getCardTypeStats } from '@/api/card-type';
 import {
   CardType,
   CardLevelItem,
+  MatchType,
+  MATCH_TYPE_VALUES,
   ScoringScoreItem,
   TierMappingItem,
   createDimension,
@@ -59,6 +62,8 @@ import { TierMappingTabV15 } from './_components/tier-mapping-tab';
 import { ScoringConfigFooterNote } from './_components/footer-note';
 // v1.5 (US-097) 新增 CARD_LEVEL 等級 Modal
 import { CreateCardLevelModal } from './_components/create-card-level-modal';
+// F054 v1.3 落差 6：純前端區間重疊偵測（UX 提示，不阻擋儲存）
+import { detectOverlap } from './_utils/detect-overlap';
 
 /**
  * F053 / F054 / F055 / F056：計分卡設定頁
@@ -92,7 +97,66 @@ interface ScoringDimUI {
   columnName: string;
   columnLabel: string;
   scoreSummary: string;
+  /** F054 v1.3：後端必回此欄位（CATEGORY / RANGE / COMPOSITE） */
+  matchType?: MatchType;
   scores: ScoringScoreItem[];
+  /**
+   * F054 v1.3 落差 4：維度狀態（必填）
+   * 後端 ob_levelcard_column.status（m21 migration 落實），API 應必回；
+   * fetchAll mapper 提供 fallback 'active' 為防禦。
+   */
+  status: 'active' | 'inactive';
+}
+
+/**
+ * F054 v1.3：matchType chip 樣式（紫 / 藍 / 琥珀，對應 prototype 28）
+ */
+const MATCH_TYPE_CHIP_CLASS: Record<MatchType, string> = {
+  CATEGORY: 'bg-violet-100 text-violet-700',
+  RANGE: 'bg-blue-100 text-blue-700',
+  COMPOSITE: 'bg-amber-100 text-amber-700',
+};
+
+/**
+ * F054 v1.3 落差 2 / 5：matchType chip 短中文標籤（對應 prototype 28 line 1137-1139 MATCH_TYPE_META）。
+ * 注意：與 api/assignment-scoring.ts 的 MATCH_TYPE_LABELS（長標籤「類別比對 / 數值區間 / 複合比對」，
+ * 提供給其他元件使用）不同。chip 顯示遵循 prototype 28 短標籤規範。
+ *
+ * 禁用詞（嚴格鐵則）：見 spec/CLAUDE memory — 任何非三正式 enum 之變體（包含舊英文縮寫
+ * 與舊長中文詞）皆不可出現於本檔；如需參考請查 prototype 28 line 1137-1139 MATCH_TYPE_META。
+ */
+const MATCH_TYPE_CHIP_LABEL: Record<MatchType, string> = {
+  CATEGORY: '類別',
+  RANGE: '區間',
+  COMPOSITE: '複合',
+};
+
+/**
+ * F054 v1.3 落差 6 補修：matchType radio card 描述（對應 prototype 28 L810-835）
+ */
+const MATCH_TYPE_DESC: Record<MatchType, string> = {
+  CATEGORY: '純類別值比對，僅使用 level1（例：性別、業務註記）',
+  RANGE: '純數值區間比對（level2_s~level2_e；例：車齡、年齡）',
+  COMPOSITE: '類別 + 區間複合（同時使用 level1 與 level2_s/e；例：專案類別）',
+};
+
+/**
+ * 由既有 scores 結構推導 matchType（後端尚未補回此欄位時的 fallback）：
+ *   - level1 != null && level2_s == null → CATEGORY
+ *   - level1 == null && level2_s != null → RANGE
+ *   - level1 != null && level2_s != null → COMPOSITE
+ *   - 全 null（空維度）→ undefined（顯示「未設定」）
+ */
+function deriveMatchType(scores: ScoringScoreItem[]): MatchType | undefined {
+  if (!scores || scores.length === 0) return undefined;
+  const hasLevel1 = scores.some((s) => s.level1 !== null && s.level1 !== '');
+  const hasLevel2 = scores.some(
+    (s) => s.level2S !== null && s.level2S !== '',
+  );
+  if (hasLevel1 && hasLevel2) return 'COMPOSITE';
+  if (hasLevel1) return 'CATEGORY';
+  if (hasLevel2) return 'RANGE';
+  return undefined;
 }
 
 interface VersionUI {
@@ -293,9 +357,11 @@ function ScoringConfigShell() {
           // Iter 7 已拆解：不再渲染 AppLayout / 月跑鎖 banner / 版本選擇器 / 4-Tab 列 / footer。
           // 改由 Shell 控制這些外殼，Legacy 只渲染對應 panel + modal + toast。
           // Iter 8：移除 selectedCardItem prop（VersionStrip 已拔除）
+          // F054 v1.3 落差 1：ScoresTab 「前往 Tab 2 編輯」CTA 需切外層 topTab
           <ScoringConfigLegacyTabs
             forceCardType={selectedCardItem!.cardType}
             forceTab={topTab as TabKey}
+            onSwitchTab={(t) => setTopTab(t)}
           />
         )}
         {needsSelection && hasSelection && topTab === 'tier' && (
@@ -322,9 +388,15 @@ function ScoringConfigShell() {
 export function ScoringConfigLegacyTabs({
   forceCardType,
   forceTab,
+  onSwitchTab,
 }: {
   forceCardType?: string;
   forceTab?: TabKey;
+  /**
+   * F054 v1.3 落差 1：ScoresTab「前往 Tab 2 編輯」CTA 或 row external-link
+   * 需要切換到外層 Shell 的 dim Tab；由 Shell 提供 callback。
+   */
+  onSwitchTab?: (tab: TabKey) => void;
 } = {}) {
   const [cardType, setCardTypeInternal] = useState<CardType>(
     (forceCardType as CardType) ?? 'H',
@@ -384,6 +456,11 @@ export function ScoringConfigLegacyTabs({
     }
   }
 
+  // === F054 v1.3 落差 9：goToDimEditor focus 機制移除 ===
+  // ScoresTab 改為純唯讀（對齊 prototype 28 line 387-401），無 row 操作 / 底部 CTA；
+  // 編輯入口全部回到 Tab 2 維度列的 pencil 按鈕 → 直接 setDimEditTarget 開 DimensionEditModal。
+  // 落差 5 補修：banner inline link「Tab 2 計分維度」透過 onSwitchTab 切回外層 Shell topTab='dim'。
+
   // === 載入 cardType 對應資料 ===
   const fetchAll = useCallback(async (ct: CardType) => {
     setLoading(true);
@@ -391,7 +468,13 @@ export function ScoringConfigLegacyTabs({
     try {
       const scoring = await getScoring(ct);
       setVersion(scoring.version);
-      setDimensions(scoring.dimensions);
+      // F054 v1.3 落差 4：mapper 補 status fallback 'active'（後端應必回；防禦性）
+      setDimensions(
+        scoring.dimensions.map((d) => ({
+          ...d,
+          status: (d as any).status ?? 'active',
+        })),
+      );
 
       try {
         const cl = await getCardLevels(ct);
@@ -531,16 +614,12 @@ export function ScoringConfigLegacyTabs({
             />
           )}
           {tab === 'score' && (
+            // F054 v1.3 落差 1-3 + 9：ScoresTab 為純唯讀總覽，無 row 操作 / 底部 CTA
+            // 編輯入口收回 Tab 2 維度列的編輯按鈕（DimensionModal 整合式編輯器）
+            // 落差 5 補修：傳入 onGoToDimEditor 供 banner inline link 切回 Tab 2
             <ScoresTab
               dimensions={dimensions}
-              isLocked={isLocked}
-              onAddScore={() => setScoreModalOpen(true)}
-              onEditScore={(dim, scoreIdx) =>
-                setScoreEditTarget({ dim, scoreIdx })
-              }
-              onDeleteScore={(dim, scoreIdx) =>
-                setScoreDeleteTarget({ dim, scoreIdx })
-              }
+              onGoToDimEditor={() => onSwitchTab?.('dim')}
             />
           )}
           {tab === 'level' && (
@@ -790,22 +869,33 @@ function DimensionsTab({
             <tr className="border-b border-[#E5E7EB] bg-gray-50/60">
               <th className="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">column_label</th>
+              {/* F054 v1.3 落差 1：score-derived 「類型」欄（類別 / 數值 / —）；
+                  非 match_type chip，由 rows[0] 推導：level2_s 有值即 數值，否則 類別 */}
               <th className="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">
+                比對模式
+              </th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">分數區間摘要</th>
+              {/* F054 v1.3 落差 4：新增「狀態」欄（active 綠 / inactive 灰） */}
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
             </tr>
           </thead>
           <tbody>
             {dimensions.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center py-12 text-gray-400 text-sm">
+                <td colSpan={7} className="text-center py-12 text-gray-400 text-sm">
                   無計分維度資料
                 </td>
               </tr>
             )}
             {dimensions.map((d) => {
               const isExpanded = expanded[d.columnName] === true;
-              const hasLevel1 = d.scores.some((s) => s.level1 !== null);
+              // F054 v1.3：優先用後端回的 matchType，否則由 scores 推導
+              const matchType: MatchType | undefined =
+                d.matchType ?? deriveMatchType(d.scores);
+              // F054 v1.3 AC-1b：ALL_SCORES_EMPTY 防護網
+              const isAllScoresEmpty = !d.scores || d.scores.length === 0;
               return (
                 <Fragment key={d.columnName}>
                   <tr
@@ -822,19 +912,74 @@ function DimensionsTab({
                       {d.columnName}
                     </td>
                     <td className="px-5 py-3 text-gray-700">{d.columnLabel}</td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={
-                          'inline-flex px-2 py-0.5 text-xs rounded-full ' +
-                          (hasLevel1
-                            ? 'bg-cyan-100 text-cyan-700'
-                            : 'bg-violet-100 text-violet-700')
-                        }
-                      >
-                        {hasLevel1 ? '類別型' : '數值型'}
-                      </span>
+                    {/* F054 v1.3 落差 1：score-derived 「類型」欄（類別 / 數值 / —）
+                        由 rows[0].level2_s 是否有值判斷；空 scores 顯示「—」 */}
+                    <td
+                      className="px-5 py-3 text-xs text-gray-600"
+                      data-testid={`dim-base-type-${d.columnName}`}
+                    >
+                      {(() => {
+                        if (!d.scores || d.scores.length === 0) return '—';
+                        return d.scores[0].level2S !== null ? '數值' : '類別';
+                      })()}
                     </td>
-                    <td className="px-5 py-3 text-sm text-gray-600">{d.scoreSummary}</td>
+                    <td className="px-5 py-3">
+                      {/* F054 v1.3：matchType chip（紫/藍/琥珀） */}
+                      {matchType ? (
+                        <span
+                          data-testid={`dim-matchtype-${d.columnName}`}
+                          data-matchtype={matchType}
+                          className={
+                            'inline-flex px-2 py-0.5 text-xs rounded-full ' +
+                            MATCH_TYPE_CHIP_CLASS[matchType]
+                          }
+                        >
+                          {MATCH_TYPE_CHIP_LABEL[matchType]}
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">
+                          未設定
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-sm">
+                      {/* F054 v1.3 AC-1b：ALL_SCORES_EMPTY 紅色提示 */}
+                      {isAllScoresEmpty ? (
+                        <span
+                          data-testid={`dim-empty-scores-${d.columnName}`}
+                          className="inline-flex items-center gap-1 text-red-600 font-medium"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          尚未設定分數
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">
+                          {d.scores.length} 筆 / {d.scoreSummary}
+                        </span>
+                      )}
+                    </td>
+                    {/* F054 v1.3 落差 4：狀態 chip（active 綠 / inactive 灰） */}
+                    <td className="px-5 py-3">
+                      {d.status === 'active' ? (
+                        <span
+                          data-testid={`dim-status-${d.columnName}`}
+                          data-status="active"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        >
+                          <Check className="w-3 h-3" />
+                          啟用
+                        </span>
+                      ) : (
+                        <span
+                          data-testid={`dim-status-${d.columnName}`}
+                          data-status="inactive"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500 border border-gray-200"
+                        >
+                          <Ban className="w-3 h-3" />
+                          停用
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-right">
                       {/* prototype 28 L1085-1093：icon-only pencil + ban，gap-1 兩顆按鈕 */}
                       <div className="inline-flex items-center gap-1">
@@ -878,7 +1023,8 @@ function DimensionsTab({
                       data-testid={`dim-detail-${d.columnName}`}
                       className="bg-gray-50/40"
                     >
-                      <td colSpan={5} className="px-5 py-3">
+                      {/* F054 v1.3 落差 1 / 4：colSpan 6 → 7（新增「類型」+「狀態」欄） */}
+                      <td colSpan={7} className="px-5 py-3">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="text-gray-500">
@@ -914,6 +1060,17 @@ function DimensionsTab({
           </tbody>
         </table>
       </div>
+      {/* F054 v1.3 落差 8：DimensionsTab 表格下方說明條（對應 prototype 28 line 339-342）
+          「比對模式（matchType）」由 service / PostgreSQL function 依分數區間自動推導 */}
+      <div
+        data-testid="dim-matchtype-derivation-note"
+        className="px-4 py-2 border-t border-[#E5E7EB] bg-blue-50/30 text-xs text-gray-600 flex items-start gap-2"
+      >
+        <Info className="w-3.5 h-3.5 text-[#2563EB] mt-0.5 shrink-0" />
+        <span>
+          「比對模式（matchType）」由分數區間自動推導（CATEGORY=純類別 / RANGE=純區間 / COMPOSITE=混合）；本欄為唯讀展示，無人工切換功能。
+        </span>
+      </div>
       <div className="flex items-center justify-between px-5 py-3 border-t border-[#E5E7EB]">
         <span className="text-sm text-gray-500">共 {dimensions.length} 個維度</span>
         <button
@@ -935,30 +1092,31 @@ function DimensionsTab({
 }
 
 // =========================
-// Tab 2: 分數設定（彙整唯讀）
+// Tab 2: 分數設定（v1.3 唯讀總覽 — 對齊 prototype 28 / handoff §1-§3）
+//
+// 落差 1-3 + 9 變更：
+//   1. 移除列右側 pencil / trash 寫入按鈕（編輯入口收回 Tab 2 DimensionModal）
+//   2. 新增頂部「分數設定總覽（唯讀）」說明條
+//   3. 表頭新增「比對模式」欄；每列顯示 matchType chip（紫/藍/琥珀）
+//   4. 落差 9：移除「操作」欄與底部「前往 Tab 2 編輯」CTA（對齊 prototype 28 純唯讀）
+//   5. props 移除 isLocked / onAddScore / onEditScore / onDeleteScore / onGoToDimEditor
 // =========================
 
 function ScoresTab({
   dimensions,
-  isLocked,
-  onAddScore,
-  onEditScore,
-  onDeleteScore,
+  onGoToDimEditor,
 }: {
   dimensions: ScoringDimUI[];
-  isLocked: boolean;
-  onAddScore: () => void;
-  onEditScore: (dim: ScoringDimUI, scoreIdx: number) => void;
-  onDeleteScore: (dim: ScoringDimUI, scoreIdx: number) => void;
+  // 落差 5 補修：banner inline link「Tab 2 計分維度」需切外層 topTab
+  onGoToDimEditor: () => void;
 }) {
   const [filterColumn, setFilterColumn] = useState<string>('ALL');
 
-  // 攜帶 source dim + scoreIdx 以便編輯 / 刪除走整批覆寫式 PUT
+  // 每筆 row 攜帶 matchType（由 dim 推導或後端回傳）以渲染 chip 欄
   const flatRows = useMemo(() => {
     const rows: Array<{
-      dim: ScoringDimUI;
-      scoreIdx: number;
       columnName: string;
+      matchType: MatchType | undefined;
       level1: string | null;
       level2S: string | null;
       level2E: string | null;
@@ -966,11 +1124,11 @@ function ScoresTab({
     }> = [];
     dimensions.forEach((d) => {
       if (filterColumn !== 'ALL' && d.columnName !== filterColumn) return;
-      d.scores.forEach((s, scoreIdx) => {
+      const matchType = d.matchType ?? deriveMatchType(d.scores);
+      d.scores.forEach((s) => {
         rows.push({
-          dim: d,
-          scoreIdx,
           columnName: d.columnName,
+          matchType,
           level1: s.level1,
           level2S: s.level2S,
           level2E: s.level2E,
@@ -983,12 +1141,35 @@ function ScoresTab({
 
   return (
     <div className="bg-white rounded-b-lg border border-[#E5E7EB] border-t-0 shadow-sm">
+      {/* 1. 唯讀總覽說明條（prototype 28 L376-383）— 落差 5 補修：
+              Eye icon + 「唯讀總覽（v1.3 規格）」文字 + inline link 跳 Tab 2 */}
+      <div className="mx-4 mt-3 mb-1 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2">
+        <Eye className="w-4 h-4 text-[#2563EB] mt-0.5 shrink-0" />
+        <div className="flex-1 text-xs text-gray-700">
+          <p className="font-medium text-gray-800">唯讀總覽（v1.3 規格）</p>
+          <p className="text-gray-600 mt-0.5">
+            本 Tab 為跨維度的分數區間總覽，僅供查閱。所有新增 / 編輯 / 停用操作請至{' '}
+            <button
+              type="button"
+              data-testid="scores-tab-goto-dim"
+              onClick={() => onGoToDimEditor()}
+              className="text-[#2563EB] hover:underline font-medium"
+            >
+              Tab 2 計分維度
+            </button>
+            {' '}點擊各維度的「編輯」按鈕進入整合式設定 Modal。
+          </p>
+        </div>
+      </div>
+
+      {/* 2. 維度欄位篩選 */}
       <div className="px-4 py-3 border-b border-[#E5E7EB] bg-gray-50/40 flex items-center gap-3">
         <label className="text-xs text-gray-500">維度欄位</label>
         <div className="relative">
           <select
             value={filterColumn}
             onChange={(e) => setFilterColumn(e.target.value)}
+            aria-label="維度欄位篩選"
             className="pl-3 pr-8 py-1.5 text-sm border border-[#E5E7EB] rounded-md bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
           >
             <option value="ALL">全部維度</option>
@@ -1004,95 +1185,91 @@ function ScoresTab({
           資料表 <code>ob_levelcard_score</code>
         </span>
       </div>
+
+      {/* 3. 表格（落差 9：對齊 prototype 28 line 387-397 — 6 欄唯讀，無「操作」欄）
+              column_name / 比對模式 / level1 / level2_s / level2_e / score */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#E5E7EB] bg-gray-50/60">
               <th className="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">比對模式</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">level1</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">level2_s</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">level2_e</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">score</th>
-              <th className="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
             </tr>
           </thead>
           <tbody>
             {flatRows.length === 0 && (
               <tr>
                 <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
-                  無分數區間資料
+                  <Inbox className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p>目前無分數區間設定</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    請於 Tab 2「計分維度」進入維度後新增分數區間
+                  </p>
                 </td>
               </tr>
             )}
             {flatRows.map((r, idx) => (
-              <tr key={idx} className="border-b border-[#E5E7EB]">
-                <td className="px-5 py-2 font-mono text-xs text-gray-700">{r.columnName}</td>
-                <td className="px-5 py-2 font-mono text-xs">
+              <tr
+                key={idx}
+                data-testid={`score-row-${idx}`}
+                className="border-b border-[#E5E7EB] hover:bg-gray-50/50 transition"
+              >
+                <td className="px-5 py-3 font-mono text-xs text-gray-700">{r.columnName}</td>
+                <td className="px-5 py-3">
+                  {r.matchType ? (
+                    <span
+                      data-testid={`score-row-${idx}-matchtype`}
+                      data-matchtype={r.matchType}
+                      className={
+                        'inline-flex px-2 py-0.5 text-xs rounded-full ' +
+                        MATCH_TYPE_CHIP_CLASS[r.matchType]
+                      }
+                    >
+                      {MATCH_TYPE_CHIP_LABEL[r.matchType]}
+                    </span>
+                  ) : (
+                    <span
+                      data-testid={`score-row-${idx}-matchtype`}
+                      className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500"
+                    >
+                      未設定
+                    </span>
+                  )}
+                </td>
+                <td className="px-5 py-3 font-mono text-sm">
                   {r.level1 ?? <span className="text-gray-300">—</span>}
                 </td>
-                <td className="px-5 py-2 font-mono text-xs">
+                <td className="px-5 py-3 font-mono text-sm">
                   {r.level2S ?? <span className="text-gray-300">—</span>}
                 </td>
-                <td className="px-5 py-2 font-mono text-xs">
+                <td className="px-5 py-3 font-mono text-sm">
                   {r.level2E ?? <span className="text-gray-300">—</span>}
                 </td>
-                <td className="px-5 py-2 text-right font-semibold">{r.score}</td>
-                <td className="px-5 py-2 text-right">
-                  {/* prototype 28 L1127-1131：pencil + trash icon-only */}
-                  <div className="inline-flex items-center gap-1">
-                    <button
-                      type="button"
-                      data-testid={`edit-score-${idx}`}
-                      title="編輯分數區間"
-                      disabled={isLocked}
-                      onClick={() => onEditScore(r.dim, r.scoreIdx)}
-                      className={
-                        'action-btn p-1.5 text-gray-500 hover:text-[#2563EB] hover:bg-blue-50 rounded transition ' +
-                        (isLocked ? 'opacity-30 cursor-not-allowed' : '')
-                      }
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      data-testid={`delete-score-${idx}`}
-                      title="刪除分數區間"
-                      disabled={isLocked}
-                      onClick={() => onDeleteScore(r.dim, r.scoreIdx)}
-                      className={
-                        'action-btn p-1.5 text-gray-500 hover:text-[#EF4444] hover:bg-red-50 rounded transition ' +
-                        (isLocked ? 'opacity-30 cursor-not-allowed' : '')
-                      }
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                <td
+                  className={
+                    'px-5 py-3 text-right font-semibold tabular-nums ' +
+                    (r.score < 0 ? 'text-[#EF4444]' : '')
+                  }
+                >
+                  {r.score}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
+
+      {/* 4. 底部說明（落差 9：對齊 prototype 28 line 400-402 — 移除「前往 Tab 2 編輯」CTA，
+              ScoresTab 為純唯讀，所有編輯入口在 Tab 2 維度列的編輯按鈕） */}
+      <div className="px-4 py-3 border-t border-[#E5E7EB]">
         <p className="text-xs text-gray-500">
           <Info className="w-3.5 h-3.5 inline mr-1 text-gray-400" />
-          類別型 (level1) 與數值型 (level2_s ~ level2_e) 為二擇一；數值區間不可重疊（BR-3）
+          級距規則由維度自動推導：類別（level1 only）/ 區間（level2_s~level2_e）/ 複合（兩者皆有）；區間不可重疊（BR-3）
         </p>
-        <button
-          type="button"
-          data-testid="btn-add-score"
-          onClick={onAddScore}
-          disabled={isLocked || dimensions.length === 0}
-          className={
-            'inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm ' +
-            (isLocked || dimensions.length === 0
-              ? 'opacity-50 cursor-not-allowed'
-              : '')
-          }
-        >
-          <Plus className="w-3.5 h-3.5" />
-          新增分數區間
-        </button>
       </div>
     </div>
   );
@@ -1681,11 +1858,17 @@ function DimensionModal({
 }) {
   const [columnName, setColumnName] = useState('');
   const [columnLabel, setColumnLabel] = useState('');
-  const [scores, setScores] = useState<ScoringScoreItem[]>([
-    { level1: null, level2S: '0', level2E: '99', score: 10 },
-  ]);
+  // F054 v1.3 BR-8：matchType 必填，無預設值（使用者必須主動選擇）
+  const [matchType, setMatchType] = useState<MatchType | ''>('');
+  const [scores, setScores] = useState<ScoringScoreItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // F054 v1.3 落差 6：重疊偵測（UX 提示，不阻擋儲存）
+  const overlapWarning = useMemo(() => {
+    if (!matchType) return null;
+    return detectOverlap(scores, matchType as MatchType);
+  }, [scores, matchType]);
 
   function updateScore(idx: number, patch: Partial<ScoringScoreItem>) {
     setScores((prev) =>
@@ -1693,10 +1876,35 @@ function DimensionModal({
     );
   }
 
+  // F054 v1.3：matchType 切換時自動切換 scores 結構，並保留 score 數值
+  function handleMatchTypeChange(next: MatchType) {
+    setMatchType(next);
+    setScores((prev) => {
+      // 若 prev 空，給一筆預設行
+      const baseScore = prev[0]?.score ?? 10;
+      if (next === 'CATEGORY') {
+        return [{ level1: '', level2S: null, level2E: null, score: baseScore }];
+      }
+      if (next === 'RANGE') {
+        return [
+          { level1: null, level2S: '0', level2E: '99', score: baseScore },
+        ];
+      }
+      // COMPOSITE
+      return [
+        { level1: '', level2S: '0', level2E: '99', score: baseScore },
+      ];
+    });
+  }
+
   async function handleSubmit() {
     setFormError(null);
     if (!columnName || !columnLabel) {
       setFormError('columnName 與 columnLabel 為必填');
+      return;
+    }
+    if (!matchType) {
+      setFormError('請先選擇比對模式（matchType）');
       return;
     }
     setSubmitting(true);
@@ -1708,6 +1916,7 @@ function DimensionModal({
             cardVersion,
             columnName,
             columnLabel,
+            matchType: matchType as MatchType,
             scores,
           }),
         '維度新增成功',
@@ -1730,9 +1939,9 @@ function DimensionModal({
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
           data-testid="dim-modal"
-          className="bg-white rounded-xl shadow-2xl w-full max-w-lg relative"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-3xl relative max-h-[90vh] flex flex-col"
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] shrink-0">
             <h3 className="text-lg font-semibold text-gray-900">新增計分維度</h3>
             <button
               type="button"
@@ -1742,59 +1951,253 @@ function DimensionModal({
               <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                column_name <span className="text-[#EF4444]">*</span>
-              </label>
-              <input
-                type="text"
-                value={columnName}
-                onChange={(e) => setColumnName(e.target.value)}
-                maxLength={30}
-                placeholder="例：CONTRACT_YEARS"
-                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
-              />
-              <p className="text-xs text-gray-400 mt-1">最多 30 字元（VARCHAR(30)）</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                column_label <span className="text-[#EF4444]">*</span>
-              </label>
-              <input
-                type="text"
-                value={columnLabel}
-                onChange={(e) => setColumnLabel(e.target.value)}
-                maxLength={30}
-                placeholder="例：契約年資"
-                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">初始分數區間</p>
-              <div className="space-y-2">
-                {scores.map((s, idx) => (
-                  <ScoreRowEditor
-                    key={idx}
-                    score={s}
-                    onChange={(patch) => updateScore(idx, patch)}
+          <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
+            {/* 落差 7 補修：§1 基本資訊（編號圓圈） */}
+            <section>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-[#2563EB] text-xs font-bold">
+                  1
+                </span>
+                基本資訊
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    column_name <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={columnName}
+                    onChange={(e) => setColumnName(e.target.value)}
+                    maxLength={30}
+                    placeholder="例：CONTRACT_YEARS"
+                    className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
                   />
-                ))}
+                  <p className="text-xs text-gray-400 mt-1">最多 30 字元（VARCHAR(30)）</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    column_label <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={columnLabel}
+                    onChange={(e) => setColumnLabel(e.target.value)}
+                    maxLength={30}
+                    placeholder="例：契約年資"
+                    className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+                  />
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setScores((prev) => [
-                    ...prev,
-                    { level1: null, level2S: '0', level2E: '99', score: 10 },
-                  ])
-                }
-                className="mt-2 text-xs text-[#2563EB] hover:underline"
+            </section>
+
+            {/* 落差 6 + 7 補修：§2 比對模式（radio card grid + 編號圓圈） */}
+            <section>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-[#2563EB] text-xs font-bold">
+                  2
+                </span>
+                比對模式（matchType）<span className="text-[#EF4444]">*</span>
+              </h4>
+              <div
+                data-testid="dim-modal-matchtype-picker"
+                className="grid grid-cols-3 gap-2"
               >
-                + 新增區間
-              </button>
-            </div>
+                {MATCH_TYPE_VALUES.map((mt) => {
+                  const active = matchType === mt;
+                  return (
+                    <label
+                      key={mt}
+                      data-mt={mt}
+                      data-testid={`dim-modal-matchtype-${mt}`}
+                      className={
+                        'cursor-pointer border-2 rounded-lg p-3 flex flex-col gap-1 transition ' +
+                        (active
+                          ? 'border-[#2563EB] bg-blue-50/40'
+                          : 'border-[#E5E7EB] bg-white hover:bg-gray-50')
+                      }
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="radio"
+                          name="dimMatchType"
+                          value={mt}
+                          checked={active}
+                          onChange={() => handleMatchTypeChange(mt)}
+                          className="text-[#2563EB] focus:ring-[#2563EB]"
+                        />
+                        <span className="text-sm font-semibold text-gray-800">
+                          {MATCH_TYPE_CHIP_LABEL[mt]}
+                        </span>
+                        <code className="ml-auto text-[10px] text-gray-500">{mt}</code>
+                      </div>
+                      <p className="text-[11px] text-gray-600 leading-snug">
+                        {MATCH_TYPE_DESC[mt]}
+                      </p>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 落差 7 + 9 補修：§3 分數區間（編號圓圈 + table 結構） */}
+            {matchType && (
+              <section>
+                <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 mb-3">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-[#2563EB] text-xs font-bold">
+                    3
+                  </span>
+                  分數區間
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                    {scores.length}
+                  </span>
+                </h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-[#E5E7EB] rounded-lg">
+                    <thead>
+                      <tr className="border-b border-[#E5E7EB] bg-gray-50/60 text-xs">
+                        {(matchType === 'CATEGORY' || matchType === 'COMPOSITE') && (
+                          <th className="text-left px-3 py-2 font-semibold text-gray-600">
+                            level1（類別）
+                          </th>
+                        )}
+                        {(matchType === 'RANGE' || matchType === 'COMPOSITE') && (
+                          <>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-600">
+                              level2_s
+                            </th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-600">
+                              level2_e
+                            </th>
+                          </>
+                        )}
+                        <th className="text-right px-3 py-2 font-semibold text-gray-600">
+                          score
+                        </th>
+                        <th className="w-12 px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scores.map((s, idx) => (
+                        <tr
+                          key={idx}
+                          data-testid="dim-score-row"
+                          data-matchtype={matchType}
+                          className="border-b border-[#E5E7EB] last:border-b-0"
+                        >
+                          {(matchType === 'CATEGORY' || matchType === 'COMPOSITE') && (
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                value={s.level1 ?? ''}
+                                onChange={(e) =>
+                                  updateScore(idx, { level1: e.target.value })
+                                }
+                                maxLength={10}
+                                className="w-full px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+                              />
+                            </td>
+                          )}
+                          {(matchType === 'RANGE' || matchType === 'COMPOSITE') && (
+                            <>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="text"
+                                  value={s.level2S ?? ''}
+                                  onChange={(e) =>
+                                    updateScore(idx, { level2S: e.target.value })
+                                  }
+                                  maxLength={10}
+                                  className="w-full px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="text"
+                                  value={s.level2E ?? ''}
+                                  onChange={(e) =>
+                                    updateScore(idx, { level2E: e.target.value })
+                                  }
+                                  maxLength={10}
+                                  className="w-full px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+                                />
+                              </td>
+                            </>
+                          )}
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              value={s.score}
+                              onChange={(e) =>
+                                updateScore(idx, { score: Number(e.target.value) })
+                              }
+                              className="w-20 ml-auto px-2 py-1 text-xs border border-[#E5E7EB] rounded text-right"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              type="button"
+                              data-testid={`dim-modal-remove-score-${idx}`}
+                              onClick={() =>
+                                setScores((prev) =>
+                                  prev.filter((_, i) => i !== idx),
+                                )
+                              }
+                              className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                              aria-label={`移除第 ${idx + 1} 列`}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button
+                  type="button"
+                  data-testid="dim-modal-add-score"
+                  onClick={() => {
+                    const baseScore = scores[0]?.score ?? 10;
+                    if (matchType === 'CATEGORY') {
+                      setScores((prev) => [
+                        ...prev,
+                        { level1: '', level2S: null, level2E: null, score: baseScore },
+                      ]);
+                    } else if (matchType === 'RANGE') {
+                      setScores((prev) => [
+                        ...prev,
+                        { level1: null, level2S: '0', level2E: '99', score: baseScore },
+                      ]);
+                    } else {
+                      setScores((prev) => [
+                        ...prev,
+                        { level1: '', level2S: '0', level2E: '99', score: baseScore },
+                      ]);
+                    }
+                  }}
+                  className="mt-2 text-xs text-[#2563EB] hover:underline"
+                >
+                  + 新增區間
+                </button>
+                {/* 落差 8 補修：動態重疊警告 banner（紅色 + 422 錯誤碼） */}
+                {overlapWarning && (
+                  <div
+                    data-testid="dim-modal-overlap-warn"
+                    className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-[#EF4444] mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-semibold">偵測到區間重疊</p>
+                      <p className="mt-0.5 text-red-700">{overlapWarning}</p>
+                      <p className="mt-0.5 text-red-600">
+                        送出後將回傳 422 <code>SCORING_RANGE_OVERLAP</code>，請調整後再儲存。
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
 
             {formError && (
               <div
@@ -1806,7 +2209,7 @@ function DimensionModal({
               </div>
             )}
           </div>
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB]">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -1838,16 +2241,17 @@ function ScoreRowEditor({
   score: ScoringScoreItem;
   onChange: (patch: Partial<ScoringScoreItem>) => void;
 }) {
-  // 類別型 vs 數值型二擇一
-  const mode: 'cat' | 'num' = score.level1 !== null ? 'cat' : 'num';
+  // 落差 3 / 6：CATEGORY (level1) vs RANGE (level2_s/e) 二擇一；
+  // mode 內部值對齊三正式 enum（不再使用 cat/num 縮寫；UI 文案使用短中文「類別 / 區間」）。
+  const mode: 'CATEGORY' | 'RANGE' = score.level1 !== null ? 'CATEGORY' : 'RANGE';
   return (
     <div className="border border-[#E5E7EB] rounded-md p-2 grid grid-cols-5 gap-2 items-end">
       <div>
-        <label className="block text-[10px] text-gray-500 mb-1">類型</label>
+        <label className="block text-[10px] text-gray-500 mb-1">比對模式</label>
         <select
           value={mode}
           onChange={(e) => {
-            if (e.target.value === 'cat') {
+            if (e.target.value === 'CATEGORY') {
               onChange({ level1: '', level2S: null, level2E: null });
             } else {
               onChange({ level1: null, level2S: '0', level2E: '99' });
@@ -1855,11 +2259,11 @@ function ScoreRowEditor({
           }}
           className="w-full px-1 py-1 text-xs border border-[#E5E7EB] rounded"
         >
-          <option value="num">數值型</option>
-          <option value="cat">類別型</option>
+          <option value="RANGE">區間</option>
+          <option value="CATEGORY">類別</option>
         </select>
       </div>
-      {mode === 'cat' ? (
+      {mode === 'CATEGORY' ? (
         <div className="col-span-3">
           <label className="block text-[10px] text-gray-500 mb-1">level1</label>
           <input
@@ -1903,6 +2307,208 @@ function ScoreRowEditor({
           onChange={(e) => onChange({ score: Number(e.target.value) })}
           className="w-full px-1 py-1 text-xs border border-[#E5E7EB] rounded text-right"
         />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * F054 v1.3：matchType-aware 行編輯器
+ *   - CATEGORY：顯示 level1 + score
+ *   - RANGE：顯示 level2_s / level2_e + score
+ *   - COMPOSITE：顯示 level1 + level2_s / level2_e + score（level1 群以 6 色循環著色）
+ */
+const COMPOSITE_GROUP_COLORS = [
+  'bg-blue-50 border-blue-200',
+  'bg-emerald-50 border-emerald-200',
+  'bg-amber-50 border-amber-200',
+  'bg-rose-50 border-rose-200',
+  'bg-violet-50 border-violet-200',
+  'bg-cyan-50 border-cyan-200',
+];
+
+function getCompositeGroupColor(level1: string | null): string {
+  if (!level1) return 'border-[#E5E7EB]';
+  // 簡單 hash → 0..5
+  let h = 0;
+  for (let i = 0; i < level1.length; i++) h = (h * 31 + level1.charCodeAt(i)) & 0xffff;
+  return COMPOSITE_GROUP_COLORS[h % COMPOSITE_GROUP_COLORS.length];
+}
+
+function DimensionScoreRow({
+  matchType,
+  score,
+  onChange,
+}: {
+  matchType: MatchType;
+  score: ScoringScoreItem;
+  onChange: (patch: Partial<ScoringScoreItem>) => void;
+}) {
+  const groupCls =
+    matchType === 'COMPOSITE'
+      ? getCompositeGroupColor(score.level1)
+      : 'border-[#E5E7EB]';
+  return (
+    <div
+      data-testid="dim-score-row"
+      data-matchtype={matchType}
+      className={
+        'border rounded-md p-2 grid gap-2 items-end ' +
+        groupCls +
+        ' ' +
+        (matchType === 'CATEGORY' ? 'grid-cols-4' : 'grid-cols-5')
+      }
+    >
+      {matchType !== 'RANGE' && (
+        <div className={matchType === 'CATEGORY' ? 'col-span-2' : ''}>
+          <label className="block text-[10px] text-gray-500 mb-1">level1</label>
+          <input
+            type="text"
+            value={score.level1 ?? ''}
+            onChange={(e) => onChange({ level1: e.target.value })}
+            maxLength={10}
+            className="w-full px-1 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+          />
+        </div>
+      )}
+      {matchType !== 'CATEGORY' && (
+        <>
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-1">level2_s</label>
+            <input
+              type="text"
+              value={score.level2S ?? ''}
+              onChange={(e) => onChange({ level2S: e.target.value })}
+              maxLength={10}
+              className="w-full px-1 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-1">level2_e</label>
+            <input
+              type="text"
+              value={score.level2E ?? ''}
+              onChange={(e) => onChange({ level2E: e.target.value })}
+              maxLength={10}
+              className="w-full px-1 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+            />
+          </div>
+        </>
+      )}
+      <div>
+        <label className="block text-[10px] text-gray-500 mb-1">score</label>
+        <input
+          type="number"
+          value={score.score}
+          onChange={(e) => onChange({ score: Number(e.target.value) })}
+          className="w-full px-1 py-1 text-xs border border-[#E5E7EB] rounded text-right"
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * F054 v1.3 AC-2b：切換 matchType 時的確認 Modal。
+ * 警告「將清空 N 筆既有 score 列」，確認後才執行。
+ * 採 aria-modal + ESC 關閉 + autoFocus 取消鈕（focus trap 基本實作）。
+ */
+function MatchTypeSwitchConfirmModal({
+  fromMatchType,
+  toMatchType,
+  existingScoreCount,
+  onCancel,
+  onConfirm,
+}: {
+  fromMatchType: MatchType;
+  toMatchType: MatchType;
+  existingScoreCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  // ESC 關閉
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="match-type-switch-title"
+      data-testid="match-type-switch-modal"
+    >
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md relative">
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-[#F59E0B]" />
+            </div>
+            <h3
+              id="match-type-switch-title"
+              className="text-lg font-semibold text-gray-900 mb-2"
+            >
+              切換比對模式
+            </h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              將比對模式從{' '}
+              <code className="font-mono font-semibold text-violet-700">
+                {fromMatchType}
+              </code>{' '}
+              切換為{' '}
+              <code className="font-mono font-semibold text-blue-700">
+                {toMatchType}
+              </code>
+            </p>
+          </div>
+          <div className="px-6 pb-2">
+            <div
+              data-testid="match-type-switch-warning"
+              className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-gray-700"
+            >
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-[#F59E0B] mb-1">
+                    儲存後將清空既有
+                    <span className="font-mono font-bold mx-1">
+                      {existingScoreCount}
+                    </span>
+                    筆分數區間
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    服務層會自動偵測 matchType 差異並 DELETE 既有 scores，再依新模式寫入。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <button
+              type="button"
+              data-testid="match-type-switch-cancel"
+              onClick={onCancel}
+              autoFocus
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="match-type-switch-confirm"
+              onClick={onConfirm}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#F59E0B] rounded-lg hover:bg-amber-600 shadow-sm"
+            >
+              確認切換並清空
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1954,6 +2560,8 @@ function ScoreEditModal({
               {
                 columnName: dim.columnName,
                 columnLabel: dim.columnLabel,
+                // F054 v1.3 BR-8：matchType 必填；維持既有模式
+                matchType: dim.matchType ?? deriveMatchType(dim.scores) ?? 'RANGE',
                 scores,
               },
             ],
@@ -2028,7 +2636,7 @@ function ScoreEditModal({
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-gray-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
               <span>
-                類別型 (level1) 與數值型 (level2_s ~ level2_e) 為二擇一；數值區間不可與既有區間重疊；違反時 422{' '}
+                CATEGORY（level1）與 RANGE（level2_s ~ level2_e）為二擇一；區間不可與既有區間重疊；違反時 422{' '}
                 <code>SCORING_RANGE_OVERLAP</code>
               </span>
             </div>
@@ -2376,14 +2984,50 @@ function DimensionEditModal({
   ) => Promise<T>;
 }) {
   const [columnLabel, setColumnLabel] = useState(target.columnLabel);
+  // F054 v1.3：取既有 matchType（後端回 or 由 scores 推導 fallback）
+  const originalMatchType: MatchType =
+    target.matchType ?? deriveMatchType(target.scores) ?? 'RANGE';
+  const [matchType, setMatchType] = useState<MatchType>(originalMatchType);
   const [scores, setScores] = useState<ScoringScoreItem[]>(target.scores);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // matchType 切換確認 modal
+  const [pendingMatchType, setPendingMatchType] = useState<MatchType | null>(null);
+
+  // F054 v1.3 落差 6：重疊偵測（UX 提示，不阻擋儲存）
+  const overlapWarning = useMemo(
+    () => detectOverlap(scores, matchType),
+    [scores, matchType],
+  );
 
   function updateScore(idx: number, patch: Partial<ScoringScoreItem>) {
     setScores((prev) =>
       prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
     );
+  }
+
+  // F054 v1.3 AC-2b：切換 matchType 時若有既存 scores 則先彈確認
+  function handleMatchTypeChange(next: MatchType) {
+    if (next === matchType) return;
+    if (scores.length > 0) {
+      setPendingMatchType(next);
+      return;
+    }
+    applyMatchTypeChange(next);
+  }
+
+  function applyMatchTypeChange(next: MatchType) {
+    setMatchType(next);
+    // 切換後 scores 結構需重置（service 層會自動清空，前端 UI 也對齊）
+    const baseScore = scores[0]?.score ?? 10;
+    if (next === 'CATEGORY') {
+      setScores([{ level1: '', level2S: null, level2E: null, score: baseScore }]);
+    } else if (next === 'RANGE') {
+      setScores([{ level1: null, level2S: '0', level2E: '99', score: baseScore }]);
+    } else {
+      setScores([{ level1: '', level2S: '0', level2E: '99', score: baseScore }]);
+    }
+    setPendingMatchType(null);
   }
 
   async function handleSubmit() {
@@ -2403,6 +3047,7 @@ function DimensionEditModal({
               {
                 columnName: target.columnName,
                 columnLabel,
+                matchType,
                 scores,
               },
             ],
@@ -2426,9 +3071,9 @@ function DimensionEditModal({
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
           data-testid="dim-edit-modal"
-          className="bg-white rounded-xl shadow-2xl w-full max-w-lg relative"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-3xl relative max-h-[90vh] flex flex-col"
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] shrink-0">
             <h3 className="text-lg font-semibold text-gray-900">編輯計分維度</h3>
             <button
               type="button"
@@ -2438,43 +3083,222 @@ function DimensionEditModal({
               <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                column_name（不可修改）
-              </label>
-              <input
-                type="text"
-                value={target.columnName}
-                readOnly
-                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono bg-gray-50 text-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                column_label <span className="text-[#EF4444]">*</span>
-              </label>
-              <input
-                type="text"
-                data-testid="dim-edit-label"
-                value={columnLabel}
-                onChange={(e) => setColumnLabel(e.target.value)}
-                maxLength={30}
-                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
-              />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">分數區間</p>
-              <div className="space-y-2">
-                {scores.map((s, idx) => (
-                  <ScoreRowEditor
-                    key={idx}
-                    score={s}
-                    onChange={(patch) => updateScore(idx, patch)}
+          <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
+            {/* 落差 7 補修：§1 基本資訊（編號圓圈） */}
+            <section>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-[#2563EB] text-xs font-bold">
+                  1
+                </span>
+                基本資訊
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    column_name（不可修改）
+                  </label>
+                  <input
+                    type="text"
+                    value={target.columnName}
+                    readOnly
+                    className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg font-mono bg-gray-50 text-gray-500"
                   />
-                ))}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    column_label <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    data-testid="dim-edit-label"
+                    value={columnLabel}
+                    onChange={(e) => setColumnLabel(e.target.value)}
+                    maxLength={30}
+                    className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+                  />
+                </div>
               </div>
-            </div>
+            </section>
+
+            {/* 落差 6 + 7 補修：§2 比對模式（radio card grid + 編號圓圈；切換時若有既存 scores 須先確認） */}
+            <section>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-[#2563EB] text-xs font-bold">
+                  2
+                </span>
+                比對模式（matchType）<span className="text-[#EF4444]">*</span>
+              </h4>
+              <div
+                data-testid="dim-edit-matchtype-picker"
+                className="grid grid-cols-3 gap-2"
+              >
+                {MATCH_TYPE_VALUES.map((mt) => {
+                  const active = matchType === mt;
+                  return (
+                    <label
+                      key={mt}
+                      data-mt={mt}
+                      data-testid={`dim-edit-matchtype-${mt}`}
+                      className={
+                        'cursor-pointer border-2 rounded-lg p-3 flex flex-col gap-1 transition ' +
+                        (active
+                          ? 'border-[#2563EB] bg-blue-50/40'
+                          : 'border-[#E5E7EB] bg-white hover:bg-gray-50')
+                      }
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="radio"
+                          name="dimMatchType"
+                          value={mt}
+                          checked={active}
+                          onChange={() => handleMatchTypeChange(mt)}
+                          className="text-[#2563EB] focus:ring-[#2563EB]"
+                        />
+                        <span className="text-sm font-semibold text-gray-800">
+                          {MATCH_TYPE_CHIP_LABEL[mt]}
+                        </span>
+                        <code className="ml-auto text-[10px] text-gray-500">{mt}</code>
+                      </div>
+                      <p className="text-[11px] text-gray-600 leading-snug">
+                        {MATCH_TYPE_DESC[mt]}
+                      </p>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 落差 7 + 9 補修：§3 分數區間（編號圓圈 + table 結構） */}
+            <section>
+              <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 mb-3">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-[#2563EB] text-xs font-bold">
+                  3
+                </span>
+                分數區間
+                <span className="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                  {scores.length}
+                </span>
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border border-[#E5E7EB] rounded-lg">
+                  <thead>
+                    <tr className="border-b border-[#E5E7EB] bg-gray-50/60 text-xs">
+                      {(matchType === 'CATEGORY' || matchType === 'COMPOSITE') && (
+                        <th className="text-left px-3 py-2 font-semibold text-gray-600">
+                          level1（類別）
+                        </th>
+                      )}
+                      {(matchType === 'RANGE' || matchType === 'COMPOSITE') && (
+                        <>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-600">
+                            level2_s
+                          </th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-600">
+                            level2_e
+                          </th>
+                        </>
+                      )}
+                      <th className="text-right px-3 py-2 font-semibold text-gray-600">
+                        score
+                      </th>
+                      <th className="w-12 px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scores.map((s, idx) => (
+                      <tr
+                        key={idx}
+                        data-testid="dim-score-row"
+                        data-matchtype={matchType}
+                        className="border-b border-[#E5E7EB] last:border-b-0"
+                      >
+                        {(matchType === 'CATEGORY' || matchType === 'COMPOSITE') && (
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={s.level1 ?? ''}
+                              onChange={(e) =>
+                                updateScore(idx, { level1: e.target.value })
+                              }
+                              maxLength={10}
+                              className="w-full px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+                            />
+                          </td>
+                        )}
+                        {(matchType === 'RANGE' || matchType === 'COMPOSITE') && (
+                          <>
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                value={s.level2S ?? ''}
+                                onChange={(e) =>
+                                  updateScore(idx, { level2S: e.target.value })
+                                }
+                                maxLength={10}
+                                className="w-full px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                value={s.level2E ?? ''}
+                                onChange={(e) =>
+                                  updateScore(idx, { level2E: e.target.value })
+                                }
+                                maxLength={10}
+                                className="w-full px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono"
+                              />
+                            </td>
+                          </>
+                        )}
+                        <td className="px-3 py-2 text-right">
+                          <input
+                            type="number"
+                            value={s.score}
+                            onChange={(e) =>
+                              updateScore(idx, { score: Number(e.target.value) })
+                            }
+                            className="w-20 ml-auto px-2 py-1 text-xs border border-[#E5E7EB] rounded text-right"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            data-testid={`dim-edit-remove-score-${idx}`}
+                            onClick={() =>
+                              setScores((prev) =>
+                                prev.filter((_, i) => i !== idx),
+                              )
+                            }
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                            aria-label={`移除第 ${idx + 1} 列`}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* 落差 8 補修：動態重疊警告 banner（紅色 + 422 錯誤碼） */}
+              {overlapWarning && (
+                <div
+                  data-testid="dim-edit-overlap-warn"
+                  className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2"
+                >
+                  <AlertTriangle className="w-4 h-4 text-[#EF4444] mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">偵測到區間重疊</p>
+                    <p className="mt-0.5 text-red-700">{overlapWarning}</p>
+                    <p className="mt-0.5 text-red-600">
+                      送出後將回傳 422 <code>SCORING_RANGE_OVERLAP</code>，請調整後再儲存。
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
             {formError && (
               <div
                 data-testid="dim-edit-error"
@@ -2485,7 +3309,7 @@ function DimensionEditModal({
               </div>
             )}
           </div>
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB]">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -2506,6 +3330,16 @@ function DimensionEditModal({
           </div>
         </div>
       </div>
+      {/* F054 v1.3 AC-2b：matchType 切換確認 modal */}
+      {pendingMatchType && (
+        <MatchTypeSwitchConfirmModal
+          fromMatchType={matchType}
+          toMatchType={pendingMatchType}
+          existingScoreCount={scores.length}
+          onCancel={() => setPendingMatchType(null)}
+          onConfirm={() => applyMatchTypeChange(pendingMatchType)}
+        />
+      )}
     </div>
   );
 }
@@ -2550,6 +3384,8 @@ function ScoreSingleEditModal({
               {
                 columnName: dim.columnName,
                 columnLabel: dim.columnLabel,
+                // F054 v1.3 BR-8：matchType 必填；維持既有模式
+                matchType: dim.matchType ?? deriveMatchType(dim.scores) ?? 'RANGE',
                 scores: newScores,
               },
             ],
@@ -2681,6 +3517,8 @@ function ScoreDeleteConfirmModal({
               {
                 columnName: dim.columnName,
                 columnLabel: dim.columnLabel,
+                // F054 v1.3 BR-8：matchType 必填；維持既有模式
+                matchType: dim.matchType ?? deriveMatchType(dim.scores) ?? 'RANGE',
                 scores: newScores,
               },
             ],

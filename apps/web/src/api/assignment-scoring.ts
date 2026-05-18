@@ -22,6 +22,24 @@ export const CARD_TYPE_OPTIONS: ReadonlyArray<{ value: CardType; label: string }
 
 // ---- F053 ----
 
+/**
+ * F054 v1.3 BR-8：match_type 三正式列舉值（CATEGORY / RANGE / COMPOSITE）。
+ * 禁止其他變體（EXACT / NUMERIC / LITERAL 等）。
+ *
+ * 對應後端：apps/api/src/modules/assignment-scoring/dto/match-type.enum.ts
+ */
+export const MATCH_TYPE_VALUES = ['CATEGORY', 'RANGE', 'COMPOSITE'] as const;
+export type MatchType = (typeof MATCH_TYPE_VALUES)[number];
+
+/**
+ * F054 v1.3：matchType chip 中文標籤與配色（與 prototype 28 一致）。
+ */
+export const MATCH_TYPE_LABELS: Record<MatchType, string> = {
+  CATEGORY: '類別比對',
+  RANGE: '數值區間',
+  COMPOSITE: '複合比對',
+};
+
 export interface ScoringScoreItem {
   level1: string | null;
   level2S: string | null;
@@ -33,6 +51,8 @@ export interface ScoringDimensionItem {
   columnName: string;
   columnLabel: string;
   scoreSummary: string;
+  /** F054 v1.3：後端必回此欄位（CATEGORY / RANGE / COMPOSITE） */
+  matchType?: MatchType;
   scores: ScoringScoreItem[];
 }
 
@@ -66,6 +86,8 @@ export interface DimensionUpdatePayload {
   dimensions: Array<{
     columnName: string;
     columnLabel: string;
+    /** F054 v1.3 BR-8：matchType 為必填欄位 */
+    matchType: MatchType;
     scores: ScoringScoreItem[];
   }>;
 }
@@ -75,6 +97,8 @@ export interface UpdateDimensionsResponse {
   cardVersion: number;
   updatedDimensions: number;
   updatedScores: number;
+  /** F054 v1.3 AC-2b：本次因 matchType 切換而被自動清空 scores 的 column_name */
+  matchTypeChanged?: string[];
 }
 
 export async function updateDimensions(
@@ -92,6 +116,8 @@ export interface CreateDimensionPayload {
   cardVersion: number;
   columnName: string;
   columnLabel: string;
+  /** F054 v1.3 BR-8：matchType 為必填欄位 */
+  matchType: MatchType;
   scores: ScoringScoreItem[];
 }
 

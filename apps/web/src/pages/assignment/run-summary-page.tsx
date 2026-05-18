@@ -24,6 +24,10 @@ import {
 } from '@/api/assignment-run';
 import { DeptDeviationChart } from './_components/dept-deviation-chart';
 import { CardLevelDonut } from './_components/card-level-donut';
+import {
+  ScoringWarningBanner,
+  type ScoringWarningSummary,
+} from './_components/scoring-warning-banner';
 
 /**
  * F063 — 月跑結果摘要頁
@@ -43,6 +47,32 @@ import { CardLevelDonut } from './_components/card-level-donut';
 function formatPct(n: number | undefined): string {
   if (n === undefined || Number.isNaN(n)) return '—';
   return `${(n * 100).toFixed(2)}%`;
+}
+
+/**
+ * F063：將後端 RunSummaryResponse.warnings 轉換為 ScoringWarningBanner 所需結構。
+ * 後端目前以 `warning_summary` 為逗號分隔碼字串，未來會擴充為結構化 issue 列表。
+ */
+function extractWarningSummary(
+  data: RunSummaryResponse,
+): ScoringWarningSummary | null {
+  const w = data.warnings;
+  if (!w) return null;
+  const code = w.summaryCode;
+  if (!code) return null;
+  // 後端目前以逗號分隔字串保存（VARCHAR(100)）→ 拆分為多筆 issue
+  const codes = code
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (codes.length === 0) return null;
+  return {
+    issueCount: codes.length,
+    issues: codes.map((c) => ({
+      type: c,
+      // 若 skippedCases 內帶 columnName 等 metadata，可於未來擴充傳入
+    })),
+  };
 }
 
 function formatDuration(ms: number | null | undefined): string {
@@ -144,6 +174,12 @@ export function RunSummaryPage() {
 
         {data && (
           <>
+            {/* F063 警告 Banner — 計分完整性 / BR-12 SKIPPED */}
+            <ScoringWarningBanner
+              warningSummary={extractWarningSummary(data)}
+              runStatus={(data as { status?: 'completed' | 'failed' }).status ?? 'completed'}
+            />
+
             {/* Run Info Bar — READ-ONLY + 月份 / 完成時間 / 耗時 / Stage1 / 覆蓋率 */}
             <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
               <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
