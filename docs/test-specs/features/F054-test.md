@@ -4,8 +4,8 @@ feature_id: F054
 feature_name: 編輯計分維度與分數（M02 Tab 3）
 priority: P0-MVP
 related_spec: /docs/specs/features/F054-edit-scoring-dimension.md
-last_updated: 2026-05-14
-spec_version: "1.2"
+last_updated: 2026-05-18
+spec_version: "1.3"
 ---
 
 # F054: 編輯計分維度與分數 — 測試設計
@@ -215,3 +215,30 @@ INSERT INTO assignment_run (run_ym, status, created_at) VALUES ('202604', 'runni
 |----|------|---------|---------|---------|------|---------|
 | TS-F054-025 | PUT /dimensions 傳不存在的 cardType 回 404 | AC-7（v1.2） | Integration | ob_card_type 無 'NOTEXIST'（或 status='inactive'）；SM Token | PUT /api/v1/assignment/scoring/dimensions?cardType=NOTEXIST，body 含任意 dimensions | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
 | TS-F054-026 | POST /dimensions 傳不存在的 cardType 回 404 | AC-7（v1.2） | Integration | ob_card_type 無 'NOTEXIST'；SM Token | POST /api/v1/assignment/scoring/dimensions?cardType=NOTEXIST，body 含任意 dimension | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
+
+---
+
+## v1.3 新增 Test Scenarios（2026-05-18）
+
+### F. match_type 欄位（F054 v1.3 AC-7 新增）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F054-MT-001 | createDimension 帶 matchType=RANGE → ob_levelcard_column.match_type='RANGE' | F054 v1.3 AC-7 | Unit | DirectorToken；migration add-match-type 已執行 | POST /dimensions body 含 matchType:'RANGE' | HTTP 201；columnRepo.create 參數含 match_type:'RANGE' |
+| TS-F054-MT-002 | createDimension 帶 matchType=CATEGORY → 儲存 'CATEGORY' | F054 v1.3 AC-7 | Unit | 同上 | POST /dimensions body 含 matchType:'CATEGORY' | columnRepo.save 傳入 match_type:'CATEGORY' |
+| TS-F054-MT-003 | createDimension 帶 matchType=COMPOSITE → 儲存 'COMPOSITE' | F054 v1.3 AC-7 | Unit | 同上 | POST /dimensions body 含 matchType:'COMPOSITE' | columnRepo.save 傳入 match_type:'COMPOSITE' |
+| TS-F054-MT-004 | createDimension 不帶 matchType → 套用預設值 | F054 v1.3 AC-7 | Unit | 同上 | POST /dimensions body 無 matchType | column.match_type 為預設值（與 spec 確認） |
+| TS-F054-MT-005 | updateDimensions 修改 matchType → audit_log 記前後值 | F054 v1.3 AC-7 | Unit | column 現有 match_type='RANGE' | PUT /dimensions body 含 matchType:'CATEGORY' | auditRepo before_value.matchType='RANGE'；after_value.matchType='CATEGORY' |
+| TS-F054-MT-006 | matchType='UNKNOWN' → 422 VALIDATION_ERROR | F054 v1.3 AC-7 | E2E | 同上 | POST /dimensions body 含 matchType:'UNKNOWN' | HTTP 422；error='VALIDATION_ERROR' |
+| TS-F054-MT-007 | GET /scoring response 含 matchType 欄位 | F054 v1.3 AC-7 | E2E | dimension 已存在 | GET /api/v1/assignment/scoring?cardType=H&cardVersion=1 | response.dimensions[].matchType 非 undefined |
+
+#### 規格檔：`assignment-scoring-f054-match-type.service.spec.ts`
+
+---
+
+### G. audit_log 欄位擴充（F061 v1.3 AC-9，與 F054 共用 entity）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 說明 |
+|----|------|---------|---------|------|
+| TS-F054-AL-001 | migration add-scoring-audit-fields up() 新增 5 個 nullable 欄位 | F061 v1.3 AC-9 | Migration Unit | 見 m16-audit-log-action-varchar30.spec.ts（F061 v1.3 describe 區段） |
+| TS-F054-AL-002 | migration add-scoring-audit-fields down() 正確刪除欄位 | F061 v1.3 AC-9 | Migration Unit | 同上 |

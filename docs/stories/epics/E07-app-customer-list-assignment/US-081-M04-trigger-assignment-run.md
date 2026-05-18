@@ -6,6 +6,7 @@
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：5
+> **版本**：v2（2026-05-18 — 補入 AC-6：分數完整性 soft check；明確 audit log 寫入規則）
 
 ---
 
@@ -62,6 +63,20 @@
   - result 快照：記錄最終分派結果明細（Stage 4 輸出）
 - **And** 三份快照在同一 transaction 中寫入；任一快照寫入失敗則整體回滾，月跑標記為 'failed'
 
+### AC-6：分數完整性 soft check（警告不阻擋）
+
+- **Given** 月跑在 Stage 2（計分）開始前
+- **When** 系統針對所有 active CARD_TYPE 執行分數完整性查核
+- **Then** 系統檢查以下完整性規則，違規者**不阻擋月跑繼續執行**，但寫入 `assignment_audit_log`：
+  1. **有 match_type 但無任何 score 列**：某維度存在 match_type 設定，但 `ob_levelcard_score` 中該維度無任何有效分數列
+  2. **RANGE/COMPOSITE 模式中 level2_s > level2_e**：區間起始值大於結束值（邏輯反轉）
+  3. **COMPOSITE 模式中相同 level1 partition 內存在 level2 區間重疊**：相同 level1 值下多個 score 列的 level2_s ~ level2_e 區間有交集
+- **And** audit log 記錄格式：`{ event: 'SCORE_INTEGRITY_WARN', card_type, column_name, match_type, rule_violated, run_id }`
+- **And** 月跑完成後的結果摘要頁（US-083）顯示「分數設定警告」區塊，列出所有違規維度，提示業務主管確認設定是否符合預期
+- **And** 若當月無任何 active 維度有 score 設定（全部為空），仍執行月跑但 audit log 記錄 `SCORE_INTEGRITY_WARN` 等級最高警示
+
+> **業務理由**：分數設定異常屬於計分參數問題，不是系統錯誤；阻擋月跑會造成業務流程中斷。soft check + audit log 讓業務主管在事後確認結果，而非事前被阻擋。
+
 ### AC-5：月跑失敗處理
 
 - **Given** 月跑執行過程中某 Stage 發生錯誤
@@ -112,6 +127,18 @@
 - **When**：業務主管嘗試再次點擊「執行月跑」
 - **Then**：前置條件失敗，提示「分派執行中，請等待目前月跑完成後再觸發」，新月跑不啟動
 
+### TC-081-05：分數完整性 soft check — 有違規但月跑繼續執行
+
+- **Given**：CARD_TYPE = 'H' 的某維度 match_type = 'RANGE'，但 `ob_levelcard_score` 中無任何對應 score 列
+- **When**：月跑啟動，Stage 2 開始前執行 soft check
+- **Then**：月跑**繼續執行**（不阻擋）；`assignment_audit_log` 新增一筆 `event='SCORE_INTEGRITY_WARN'` 的記錄，包含 card_type='H'、rule_violated='NO_SCORE_ROWS'；US-083 結果摘要頁顯示「分數設定警告」區塊
+
+### TC-081-06：分數完整性 soft check — COMPOSITE 模式區間重疊
+
+- **Given**：CARD_TYPE = 'H' 某維度 match_type = 'COMPOSITE'，level1 = 'A' 下有兩筆 score：level2_s=0/level2_e=100 與 level2_s=80/level2_e=200（重疊 80-100）
+- **When**：Stage 2 soft check 執行
+- **Then**：月跑繼續；audit log 記錄 rule_violated='COMPOSITE_LEVEL2_OVERLAP'；結果摘要顯示警告
+
 ### TC-081-04：快照原子性（失敗回滾）
 
 - **Given**：月跑執行成功，但寫入 result 快照時發生 DB 錯誤
@@ -136,6 +163,8 @@
 - [ ] 整批覆蓋重跑測試（completed 狀態允許重跑、舊快照保留）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] 整合測試：完整月跑流程（Stage 1 ~ Stage 4）不拋出未捕獲例外
+- [ ] 分數完整性 soft check 測試（TC-081-05、TC-081-06）：違規寫 audit log、月跑不阻擋
+- [ ] US-083 結果摘要頁顯示「分數設定警告」區塊（有違規時）
 - [ ] Code review 通過
 - [ ] 文件已更新
 

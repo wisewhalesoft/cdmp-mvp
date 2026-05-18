@@ -1,5 +1,6 @@
 %% F061 — 觸發分派月跑（Stage 0~4 執行引擎）
-%% 說明：月跑採非同步執行（202 Accepted），依序執行 Stage 0 前置、Stage 1 名單建立、Stage 2 計分與部門分配、Stage 3 部門分配、Stage 4 人員分配與 st4_exchange
+%% 說明：月跑採非同步執行（202 Accepted），依序執行 Stage 0 前置、Stage 1 名單建立、ScoringIntegrityCheck（Stage 2 前）、Stage 2 計分與部門分配、Stage 3 部門分配、Stage 4 人員分配與 st4_exchange
+%% v1.3 / 2026-05-18：Stage 2 前新增 ScoringIntegrityCheck 節點（F061 v1.3 / F054 v1.3）
 flowchart TD
     Start([業務主管點擊「執行月跑」]) --> Precheck{Stage 0：前置條件檢查}
 
@@ -16,9 +17,15 @@ flowchart TD
     SetRunning --> Stage1[Stage 1：建立原始名單<br/>讀 ob_pool_data<br/>套用 ob_list_definition 篩選<br/>產出候選名單]
     Stage1 --> Stage1Check{Stage 1 成功?}
     Stage1Check -->|否| Rollback
-    Stage1Check -->|是| Stage2
+    Stage1Check -->|是| IntegrityCheck
 
-    Stage2[Stage 2：計分與 CARD_LEVEL 劃分<br/>呼叫 fn_calc_tier_level PostgreSQL function<br/>套用 ob_levelcard_* 計分邏輯]
+    IntegrityCheck["ScoringIntegrityCheckService<br/>稽核 ob_levelcard_column.match_type<br/>與 ob_levelcard_score 記錄一致性<br/>（MATCH_TYPE_FIELD_MISMATCH / CATEGORY_DUPLICATE）"]
+    IntegrityCheck --> IntegrityResult{發現不一致?}
+    IntegrityResult -->|否（設定正確）| Stage2
+    IntegrityResult -->|是（有問題）| WriteWarn[寫入警告：<br/>INSERT assignment_audit_log action='SCORING_INTEGRITY_WARN'<br/>UPDATE report_payload.warningSummary]
+    WriteWarn --> Stage2
+
+    Stage2[Stage 2：計分與 CARD_LEVEL 劃分<br/>呼叫 fn_calc_tier_level PostgreSQL function<br/>依 match_type 分 CATEGORY / RANGE / COMPOSITE 三模式<br/>套用 ob_levelcard_* 計分邏輯]
     Stage2 --> Stage2Check{Stage 2 成功?}
     Stage2Check -->|否| Rollback
     Stage2Check -->|是| Stage3
@@ -43,13 +50,15 @@ flowchart TD
 
     Rollback[ROLLBACK 快照 Transaction<br/>UPDATE assignment_run<br/>status = 'failed'<br/>error_message = Stage_X failed]
     Rollback --> EndFail([月跑失敗<br/>前端輪詢顯示失敗提示])
-    Complete --> EndOk([月跑完成<br/>前端輪詢顯示完成提示])
+    Complete --> EndOk([月跑完成<br/>前端輪詢顯示完成提示<br/>若有 SCORING_INTEGRITY_WARN 顯示黃色警示])
 
     classDef stage fill:#dbeafe,stroke:#2563eb
     classDef decision fill:#fef9c3,stroke:#ca8a04
     classDef fail fill:#fef2f2,stroke:#ef4444
     classDef ok fill:#dcfce7,stroke:#16a34a
+    classDef warn fill:#fef9c3,stroke:#d97706
     class Stage1,Stage2,Stage3,Stage4,Snapshot,SetRunning,CreateRun,SnapConfig,SnapInput,SnapResult stage
-    class Precheck,Stage1Check,Stage2Check,Stage3Check,Stage4Check,SnapCheck decision
+    class Precheck,Stage1Check,Stage2Check,Stage3Check,Stage4Check,SnapCheck,IntegrityResult decision
     class Fail0,Reject,Rollback,EndFail fail
     class Complete,EndOk ok
+    class IntegrityCheck,WriteWarn warn

@@ -135,3 +135,26 @@ CDMP 是一套企業級客戶資料治理平台，旨在為組織內部團隊提
 - **優先級**：P0-MVP（Must Have）、P1（Should Have）
 - **驗收標準格式**：Given / When / Then
 - **交叉參照**：使用相對路徑連結其他檔案
+
+---
+
+## 詞彙表（Glossary）— E07 計分維度核心概念
+
+### match_type（比對模式）
+
+`ob_levelcard_score` 表中每個計分維度的分數比對邏輯類型，決定 Stage 2 計分時如何依客戶資料欄位值查找對應分數。共三種取值：
+
+| 值 | UI 顯示（繁體中文） | 說明 | level1 | level2_s / level2_e |
+|----|------|------|--------|---------------------|
+| `CATEGORY` | 類別 | level1 為離散類別值（如字串代碼），依完全比對 level1 值給分 | 必填（類別代碼） | NULL（不使用） |
+| `RANGE` | 區間 | 無分群，level2_s / level2_e 定義數值區間，依落點給分 | NULL | 必填（數值區間） |
+| `COMPOSITE` | 複合 | 雙層：level1 為第一層分群（如 PROJECT_TP），相同 level1 內再依 level2 數值子區間給分 | 必填（第一層分群） | 必填（數值子區間） |
+
+**重要規則：**
+- `match_type` 修改時，系統自動清空該維度所有 `ob_levelcard_score` 分數列（強制重設，不保留舊資料）
+- `COMPOSITE` 模式的重疊查核範圍限定在相同 level1 partition 內（跨 level1 值的 level2 重疊不視為錯誤）
+- level1 值統一存 NULL（非空字串），讀取時 NULL 與 '' 等價
+
+### PROJECT_TP 使用 COMPOSITE 模式之業務理由
+
+PROJECT_TP（專案類別）作為第一層分群時，相同 PROJECT_TP 內的案件特性較為一致，對應的數值區間分數語意明確。拆分為多個獨立 CATEGORY + RANGE 維度將導致維護成本大幅增加，且無法表達「在特定專案類別前提下的數值區間」語意。COMPOSITE 模式保留此業務語意，不拆分、不簡化。

@@ -6,7 +6,7 @@
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：8
-> **版本**：v2（2026-05-14 — 補入 CARD_TYPE 範圍鎖 AC；Tab 1 CARD_TYPE 選中狀態成為計分維度操作的脈絡來源）
+> **版本**：v3（2026-05-18 — 補入 AC-7：修改 match_type 自動清空 scores；補入 match_type 三模式定義）
 
 ---
 
@@ -55,6 +55,22 @@
 - **When** 業務主管嘗試進入計分設定編輯模式（Tab 2）
 - **Then** 編輯功能全部停用，頁面顯示「分派執行中，無法修改計分設定」提示
 - **And** 月跑完成後，編輯功能自動恢復可用
+
+### AC-7：修改 match_type 自動清空 scores（強制重設）
+
+- **Given** 業務主管將某計分維度的 `match_type` 從現有值（`CATEGORY` / `RANGE` / `COMPOSITE`）改為另一值
+- **When** 業務主管儲存修改
+- **Then** 系統**自動刪除**該維度在 `ob_levelcard_score` 中的所有現有分數列，不保留任何舊 scores
+- **And** 頁面顯示警告訊息「比對模式已變更，原有分數設定已清除，請重新填入分數區間」
+- **And** 業務主管須重新輸入該維度所有分數區間後才能完成設定
+- **And** 清空動作與 match_type 更新在同一 DB transaction 中執行（原子性）；若任一失敗則整體 rollback
+
+> **業務理由**：CATEGORY / RANGE / COMPOSITE 三種模式的分數資料結構不相容（欄位語意不同），允許保留舊 scores 會導致後續月跑計分邏輯錯誤。自動清空比手動警告提示更能防止資料污染。
+
+> **三模式定義**：
+> - `CATEGORY`（類別符合）：level1 欄位為離散類別值（如字串代碼），score 依完全比對 level1 值給予。level2_s / level2_e 不使用，存 NULL。
+> - `RANGE`（區間符合）：level1 為 NULL（區間無分群），level2_s / level2_e 定義數值區間（左閉右開或依業務設定），score 依落點給予。
+> - `COMPOSITE`（複合條件）：level1 為第一層分群類別（如 PROJECT_TP），相同 level1 內再以 level2_s / level2_e 定義數值子區間；level1 為 partition key，重疊查核範圍限定在相同 level1 內。
 
 ### AC-6：CARD_TYPE 範圍鎖 — 操作僅套用於選中 CARD_TYPE
 
@@ -105,6 +121,18 @@
 - **When**：業務主管嘗試點擊「編輯」任何維度
 - **Then**：編輯功能停用，顯示「分派執行中，無法修改計分設定」提示，無法進行任何修改
 
+### TC-073-06：修改 match_type 自動清空 scores
+
+- **Given**：Tab 1 選中 CARD_TYPE = 'H'；維度「帳齡」的 match_type = 'RANGE'，且 `ob_levelcard_score` 中該維度已有 5 筆分數列
+- **When**：業務主管將 match_type 改為 'CATEGORY' 並點擊儲存
+- **Then**：`ob_levelcard_score` 中該維度的 5 筆分數列全部刪除；頁面顯示「比對模式已變更，原有分數設定已清除，請重新填入分數區間」；業務主管需重新填入 CATEGORY 模式的分數設定
+
+### TC-073-07：match_type 清空與更新失敗時整體 rollback
+
+- **Given**：維度「帳齡」的 match_type = 'RANGE'，有 5 筆分數列；scores 清空成功但 match_type 更新因 DB 錯誤失敗
+- **When**：transaction rollback
+- **Then**：`ob_levelcard_score` 5 筆分數列仍然存在，`match_type` 仍為 'RANGE'，無部分寫入殘留
+
 ### TC-073-05：CARD_TYPE 範圍鎖 — 後端拒絕錯誤的 card_type
 
 - **Given**：Tab 1 選中 CARD_TYPE = 'H'
@@ -125,6 +153,8 @@
 - [ ] 驗收標準全部通過
 - [ ] 覆寫式修改邏輯測試（無草稿版本產生）
 - [ ] CARD_TYPE 範圍鎖測試通過（TC-073-05）
+- [ ] match_type 變更自動清空 scores 測試（TC-073-06）
+- [ ] match_type 清空 rollback 測試（TC-073-07）
 - [ ] 新增 / 修改 / 停用維度功能測試
 - [ ] 月跑執行中資料鎖保護測試
 - [ ] 單元測試覆蓋率 ≥ 80%

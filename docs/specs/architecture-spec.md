@@ -1025,20 +1025,127 @@ OB 系統的業務表（OBMLISTDF 等 10 張表）已遷移至 AppDB，以 `ob_`
 
 `POST /api/v1/assignment/runs` 回傳 `202 Accepted`，月跑在背景 Promise chain 非同步執行 Stage 0~4。前端以 3 秒 Polling 讀取進度。同月僅允許一個 `pending` 或 `running` 狀態的月跑（重複觸發回傳 409）。月跑完成後，三份快照（config / input_list / result）在同一 DB Transaction 中原子性寫入 `assignment_run_snapshot`；任一失敗則整體 Rollback，`assignment_run.status` 改為 `failed`。
 
+**AD-E07-2 補充（v1.3 / 2026-05-18）：match_type 切換之 atomic delete + update + insert transaction scope**
+
+F054 v1.3 引入 `match_type` 欄位後，`AssignmentScoringService` 在更新計分維度（PUT `/scoring/dimensions`）時，若 `match_type` 發生變更（如 `CATEGORY` → `RANGE`），須於同一 DB Transaction 中依序執行：
+
+```
+Transaction scope（match_type 切換時）：
+  1. DELETE ob_levelcard_score WHERE card_type=:ct AND card_version=:cv AND column_name=:cn
+     -- scoresClear 原子操作：清除所有舊 score 紀錄，避免 match_type 不一致殘留
+  2. UPDATE ob_levelcard_column SET match_type=:newMatchType WHERE ...
+  3. INSERT ob_levelcard_score ... （新 match_type 對應的 score 資料）
+  4. INSERT assignment_audit_log（action='UPDATE', 記錄 match_type 變更快照）
+```
+
+Transaction 失敗則整體 Rollback，回傳 500。若 `match_type` 未變更（僅調整 score 值），則 step 1 仍需執行（先清後寫，保持冪等性）；step 2 中 `match_type` 欄位值不變。
+
 **架構決策 AD-E07-3：複雜計分邏輯保留為 PostgreSQL function**
 
 TIER_LEVEL 對應計算、多維度加權計分等複雜邏輯由 PostgreSQL function 實作，`AssignmentScoringService` 作為呼叫層（Service 層發出 `SELECT fn_calc_tier_level(...)` 等 Raw SQL 呼叫）。此決策確保效能（在 DB 層減少資料傳輸），並與既有 Stored Procedure 邏輯對應，降低移植風險。PostgreSQL function 的命名規範與版本管理策略見 open-questions.md（A44）。
 
+**AD-E07-3 補充（v1.3 / 2026-05-18）：fn_calc_tier_level 三模式分支**
+
+`fn_calc_tier_level` 須依 `ob_levelcard_column.match_type` 分三個計分分支執行，ETL 統一 RTRIM 與 NULL 規一化策略如下：
+
+```
+fn_calc_tier_level 內部分支邏輯（pseudocode）：
+
+FOR each active column IN ob_levelcard_column WHERE card_type=:ct AND card_version=:cv:
+  raw_value = getFieldValue(case, column.column_name)  -- 從 ob_pool_data 取欄位值
+  normalized_value = RTRIM(COALESCE(raw_value, ''))    -- 統一 RTRIM + NULL → ''
+
+  CASE column.match_type
+    WHEN 'CATEGORY' THEN
+      matched_score = SELECT score FROM ob_levelcard_score
+        WHERE column_name=:cn AND level1 = normalized_value
+        -- 精確比對；RTRIM 後無尾隨空白可靠
+    WHEN 'RANGE' THEN
+      -- Try-cast 策略（使用者決策 2026-05-18）：
+      --   若 level2_s 與 level2_e 皆符合 numeric regex → numeric BETWEEN（避免字典序錯誤）
+      --   否則 fallback VARCHAR BETWEEN（字典序，適用 zero-padded 字串如 PROJECT_TP '01'~'23'）
+      --   此行為與舊 SQL Server SP 在 INT 左側時的 implicit cast 等價。
+      --
+      -- Pseudocode：
+      --   IF level2_s ~ '^-?\d+(\.\d+)?$' AND level2_e ~ '^-?\d+(\.\d+)?$' THEN
+      --     BETWEEN = level2_s::numeric <= normalized_value::numeric <= level2_e::numeric
+      --   ELSE
+      --     BETWEEN = level2_s <= normalized_value AND normalized_value <= level2_e  -- VARCHAR 字典序
+      --
+      -- 範例（numeric 路徑）：level2_s='5', level2_e='99', value='9' → '9'::numeric=9，命中
+      -- 範例（VARCHAR 路徑）：level2_s='A', level2_e='Z', value='M' → 'A'<='M'<='Z'，命中
+      matched_score = SELECT score FROM ob_levelcard_score
+        WHERE column_name=:cn
+          AND CASE
+            WHEN level2_s ~ '^-?[0-9]+(\.[0-9]+)?$'
+             AND level2_e ~ '^-?[0-9]+(\.[0-9]+)?$'
+            THEN level2_s::numeric <= normalized_value::numeric
+             AND (level2_e IS NULL OR normalized_value::numeric <= level2_e::numeric)
+            ELSE level2_s <= normalized_value
+             AND (level2_e IS NULL OR normalized_value <= level2_e)
+          END
+        -- level2_e IS NULL 表示無上限開放區間（兩路徑皆適用）
+    WHEN 'COMPOSITE' THEN
+      -- 先嘗試 level1 精確比對，再嘗試 level2 區間比對（同 RANGE try-cast 邏輯），取第一個命中
+      matched_score = SELECT score FROM ob_levelcard_score
+        WHERE column_name=:cn
+          AND (level1 = normalized_value
+            OR CASE
+                 WHEN level2_s ~ '^-?[0-9]+(\.[0-9]+)?$'
+                  AND level2_e ~ '^-?[0-9]+(\.[0-9]+)?$'
+                 THEN level2_s::numeric <= normalized_value::numeric
+                  AND (level2_e IS NULL OR normalized_value::numeric <= level2_e::numeric)
+                 ELSE level2_s <= normalized_value
+                  AND (level2_e IS NULL OR normalized_value <= level2_e)
+               END)
+        LIMIT 1
+  END CASE
+
+  total_score += COALESCE(matched_score, 0)  -- 未命中記為 0 分（不拋錯）
+END FOR
+```
+
+**全 OB\* CHAR 欄位 ETL 統一 RTRIM 策略（使用者決策 2026-05-18 / 保守策略）**：
+
+所有 OB\* 來源表（SQL Server）的 `CHAR` / `VARCHAR` 欄位，於 E05 Pipeline Field Mapping 節點（或 L1 Migration 腳本）執行寫入前統一 RTRIM，不限特定欄位。涵蓋範圍：
+
+| 來源表 | 受影響代表欄位 | 說明 |
+|--------|--------------|------|
+| OBPOOLDATA | 所有 CHAR/VARCHAR 欄位（如 CARD_TYPE, PROD_KIND 等）| 月跑 Stage 2 計分之 JOIN 鍵與比對值 |
+| OBLEVELCARD_COLUNM | CARD_TYPE, COLUNM, COLUNM_NAME | 計分維度定義；`column_name` 比對鍵 |
+| OBLEVELCARD_SCORE | CARD_TYPE, COLUNM, LEVEL1, LEVEL2_S, LEVEL2_E | `level1` 值與 CATEGORY 比對；數值欄位在 CAST 前 RTRIM |
+| OBTIER | CARD_TYPE, CARD_LEVEL, TIER_LEVEL | TIER_LEVEL 對應查詢鍵 |
+| OBMCODEDF | TBL_ID, TBL_CD | 代碼維護查詢鍵 |
+| OBMDEPTPCT | DEPTID_M | 已知 padded 50 chars（OQ-E07-17 Resolved） |
+| OBEMPLSETMF | DEPTID_M | 已知 padded 50 chars |
+| OBEMPHIRE | DEPTID_M | ETL 同步時 RTRIM |
+
+**ETL helper 命名規範（供 ETL 開發者遵循）**：
+
+```typescript
+// E05 Pipeline Field Mapping 節點通用 helper
+function normalizeCharField(value: string | null): string {
+  return value == null ? '' : value.trimEnd();  // RTRIM only（保留前導空白，與 SQL RTRIM 語意一致）
+}
+
+// 所有 OB* CHAR/VARCHAR 欄位寫入前統一呼叫：
+const cardType = normalizeCharField(row['CARD_TYPE']);
+const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原為 NULL
+```
+
+> `level1` / `level2_s` / `level2_e` 在 RTRIM 後若為空字串，應還原為 `NULL`（`normalizeCharField(v) || null`），以維持 `ob_levelcard_score` 之 NULL 語意與 `match_type` 規則一致。
+
 | 服務 | 職責 | 關鍵業務規則 | 相關 Stories |
 |------|------|------------|------------|
 | AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
-| AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應；**F056 v1.5 起：所有寫入端點加入 CARD_TYPE 範圍鎖（assertCardTypeActive）** | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3）；**F056 TIER_LEVEL 列舉驗證（T1~T10）；Fallback/Standard 互斥檢查**（應用層 Mutex）；**ob_tier fallback 紀錄刪除必須用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）** | US-072, US-073, US-074, US-075 |
+| AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應；**F056 v1.5 起：所有寫入端點加入 CARD_TYPE 範圍鎖（assertCardTypeActive）**；**F054 v1.3：match_type 欄位 atomic delete + update + insert（AD-E07-2 補充）** | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3）；**F056 TIER_LEVEL 列舉驗證（T1~T10）；Fallback/Standard 互斥檢查**（應用層 Mutex）；**ob_tier fallback 紀錄刪除必須用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）**；**`scoresClear` 原子操作（F054 v1.3）**：match_type 切換時先 `DELETE ob_levelcard_score WHERE (card_type, card_version, column_name) = (:ct, :cv, :cn)` 再重新 INSERT，確保舊 score 紀錄不殘留；整段在同一 DB Transaction 中執行（DELETE + INSERT + UPDATE ob_levelcard_column.match_type）；Transaction 失敗時 Rollback，回傳 500 | US-072, US-073, US-074, US-075 |
 | CardType Service（**F069~F072 新增**） | `ob_card_type` CRUD；查詢清單（JOIN `ob_code_df` 取 prodKindName）；新增（同 transaction 自動建立 v1 `ob_levelcard_version`）；編輯（card_name / prod_kind 僅此兩欄）；刪除預覽（5 張下游表筆數統計 + ob_list_definition active 引用數）；級聯 hard delete（6 步驟 transaction）；審計日誌同 transaction 寫入 | **依賴 Repository**：`ObCardType`（新建 Entity）/ `ObLevelcardVersion` / `ObLevelcardColumn` / `ObLevelcardScore` / `ObLevelcardLevel` / `ObTier` / `ObCodeDf`（需新增 module import）/ `AssignmentRun` / `AssignmentAuditLog`；F070 同 transaction：INSERT ob_card_type + INSERT ob_levelcard_version（v1，sdate=今日 / edate=20991231 / status=active）；F072 採應用層 transaction（AD-E07-16，不使用 `ON DELETE CASCADE`） | US-093, US-094, US-095, US-096 |
 | AssignmentRatio Service | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關 | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表） | US-078, US-079, US-080, US-091 |
 | AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASE_STATUS **三類**代碼維護；**CASEYEAR 不納入**，因 CASEYEAR 為前端 hard-coded 的 11 個固定 enum 選項 0~10，不從 `ob_code_df` 動態載入，證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；`tbl_id` 使用英文常數（非原系統數字代碼），映射規則：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（AD-E07-14；初版含 `'04'→'CASEYEAR'`，於 2026-05-12 OQ-E07-24 Resolved 後移除） | Admin 與業務主管均可存取；代碼用於名單定義表單選項；F050/F051 `case_status` 欄位多選選項來源為 `tbl_id='CASE_STATUS'`；F050/F051 `caseyear` 欄位為前端固定 11 個選項（0~10），非 ob_code_df 動態載入 | US-092 |
 | AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；匯出 CSV | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid | US-081, US-082, US-083, US-084 |
 | AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
 | AssignmentAudit Service | E07 所有 CRUD 操作後寫入 `assignment_audit_log` | 不對外暴露 API；由各 Service 呼叫；保留 3 年，Cleanup Cron 每日清理 | 所有 E07 Stories |
+| **ScoringIntegrityCheckService**（**v1.3 / 2026-05-18 新增，F054 v1.3 / F061 v1.3**） | Stage 2 前置計分設定完整性稽核；提供 `checkAndWarn(runId, cardType, cardVersion)` method | 稽核內容：(1) `MATCH_TYPE_FIELD_MISMATCH`：`ob_levelcard_column.match_type` 與對應 `ob_levelcard_score` 紀錄之 level1 / level2_s 組合不一致；(2) `CATEGORY_DUPLICATE`：`match_type = 'CATEGORY'` 下同 `column_name + level1` 重複；稽核發現問題時**不拋錯、不中斷月跑**，而是：(a) 寫入 `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`）；(b) 更新 `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`；稽核通過（無問題）時不寫任何紀錄；位置：`AssignmentModule` 底下，與 `AssignmentRunGuardService` 同層 | F054 v1.3, F061 v1.3 |
 | **AssignmentRunGuardService**（2026-05-16 新增 / 決議 #6） | 月跑並發守衛集中實作；提供 `assertNoRunningRun(workYm?)` method | 查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`；所有 E07 寫入 service method 最頂層呼叫；月跑結束（`status = 'completed'` / `'failed'`）後自動解除阻擋；位置：assignment 模組底下，與 `StageTransitionService` 同層 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082 v1.3, F083（透過 F082 PUT）, F084, F085, F086, F087, F089 |
 | **StageTransitionService**（2026-05-15 新增 / E07 重構批次 4 引入；2026-05-16 補登元件說明） | 五階段流程引擎共用 helper；提供 `advanceTo` / `rollbackTo` / `rejectTo` / `assertStageEquals` 4 個 method | `advanceTo(listNo, fromStage, toStage, preconditionFn, postActionFn?)` 用於 F078 / F080 / F084 / F086；`rollbackTo(listNo, fromStage, toStage, cleanupFn)` 用於 F081 / F085 / F089；`rejectTo(listNo, fromStage, toStage, rejectReason, cleanupFn?, postActionFn?)` 用於 F087；`assertStageEquals(listNo, expectedStage)` 由各 service 共用；所有寫入操作於同一 DB transaction 內完成（含稽核 INSERT，稽核失敗例外） | F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
 | **PersonnelRatioValidationService**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補全員離職邊界） | per-DEPT 個別業務比例驗算 helper；提供 `assertDeptSumEquals100` / `assertAllDeptsSumEquals100` 2 個 method | `assertDeptSumEquals100(deptCode, ratios)` 用於 F082 PUT 寫入校驗（**v1.3 / 決議 #1**：若 `activeEmployeeCount === 0` **短路 return**，允許部門 sum = 0%、不阻擋儲存）；`assertAllDeptsSumEquals100(listNo)` 用於 F084 推進前置條件驗證（內部查詢 `ob_empl_set` GROUP BY deptid_m）；錯誤碼 `PERSONNEL_RATIO_SUM_NOT_100`（per-DEPT 語意，與 `RatioValidationService` 之 per-LIST_NO 語意區隔） | F082, F084 |
@@ -3080,7 +3187,7 @@ L1 Migration 包含 9 張 OB 歷史設定表，需依 FK 相依順序匯入：
 | 1 | `OBMCODEDF` | `ob_code_df` | `tbl_id` 欄位由數字代碼映射為英文常數（AD-E07-14）：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`；**`'04'`（原推測對應 CASEYEAR）已自映射表移除**（OQ-E07-24 Resolved 2026-05-12：CASEYEAR 為前端 hard-coded 11 個固定選項 0~10，不從 ob_code_df 動態載入，證據 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；其餘 `tbl_id` 值不在 E07 代碼維護範圍者保留原值或略過（由 Migration script 白名單控制）；`ob_code_df.tbl_id` 型別須擴充為 `VARCHAR(11)` 以容納最長英文常數（`CASE_STATUS` = 11 字元） |
 | 2 | `OBTIER` | `ob_tier` | 補建複合 PK `(card_type, COALESCE(card_level, ''))`；`card_type` / `tier_level` 補 NOT NULL |
 | 3 | `OBLEVELCARD_VERSION` | `ob_levelcard_version` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 `(SDATE <= NOW() < EDATE)` 計算；稽核欄位統一重命名 `A_*/U_* → created_*/updated_*` |
-| 4 | `OBLEVELCARD_COLUMN` | `ob_levelcard_column` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`（AD-E07-4）；稽核欄位重命名 |
+| 4 | `OBLEVELCARD_COLUMN` | `ob_levelcard_column` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`（AD-E07-4）；稽核欄位重命名；**v1.3 新增：補建 `match_type VARCHAR(20) NOT NULL`**（CHECK `IN ('CATEGORY','RANGE','COMPOSITE')`）；**backfill 策略**：依對應 `ob_levelcard_score` 現有 level1 / level2_s 推導（見 data-model.md ob_levelcard_column Migration 設計段落）；遷移 TypeORM 檔名：`{timestamp}-add-match-type-to-ob-levelcard-column.ts` |
 | 5 | `OBLEVELCARD_SCORE` | `ob_levelcard_score` | 稽核欄位重命名 |
 | 6 | `OBLEVELCARD_LEVEL` | `ob_levelcard_level` | 稽核欄位重命名 |
 | 7 | `OBMLISTDF` | `ob_list_definition` | 補建 `status VARCHAR(10) NOT NULL DEFAULT 'active'`；多值欄位（`prod_kind` / `spec_tp` / `settle_src` / `caseyear`）維持 `$$` 分隔字串原樣；**補建 `case_status VARCHAR(14)`**（AD-E07-14 兩階段 migration：Phase 1 `NULL` 允許並從 `LIST_TYPE` 複製原值，Phase 2 補 NOT NULL 約束）；`list_type` 固定寫入常數 `'01'`（分派名單），不再對應舊 `LIST_TYPE` 的期別語意 |
@@ -3098,6 +3205,7 @@ L1 Migration 包含 9 張 OB 歷史設定表，需依 FK 相依順序匯入：
 | NVARCHAR → TEXT/VARCHAR | SQL Server `nvarchar(MAX)` → PostgreSQL `TEXT`；`nvarchar(N)` → `VARCHAR(N)` |
 | DATETIME → TIMESTAMP | `DATETIME` → `TIMESTAMP WITHOUT TIME ZONE`（資料假設為 UTC+8，遷移時保留原值，不做時區轉換） |
 | RTRIM DEPTID_M | `ob_dept_pct` 與 `ob_empl_set` 的 `deptid_m` 欄位在 CSV 中為 50 字元 padded，寫入前執行 RTRIM |
+| **全 OB\* CHAR 欄位統一 RTRIM（v1.3 / 2026-05-18 保守策略）** | **所有** OB\* 來源表的 CHAR / VARCHAR 欄位，於 E05 Field Mapping 節點或 L1 Migration 腳本寫入前統一呼叫 `normalizeCharField()`（`value.trimEnd()`）；RTRIM 後空字串的語意欄位（`level1` / `level2_s` / `level2_e`）還原為 NULL；此策略避免未來新增 JOIN 鍵或比對欄位時遺漏 RTRIM |
 | ob_tier PK 補建 | `card_level` 可為 NULL（M5 fallback），PK 使用 UNIQUE INDEX ON `ob_tier (card_type, COALESCE(card_level, ''))`（PostgreSQL 不支援 COALESCE in Primary Key，改以 UNIQUE INDEX 等效表達） |
 | ob_levelcard_version status 初值 | `CASE WHEN SDATE <= NOW() AND (EDATE IS NULL OR NOW() < EDATE) THEN 'active' ELSE 'inactive' END` |
 | $$ 多值欄位 | `prod_kind`, `spec_tp`, `settle_src`, `caseyear` 維持原始 `$$` 分隔字串，不拆解；遷移腳本直接原樣複製。**註**：`caseyear` 欄位於 `ob_list_definition` 之多選值由 F050/F051 前端 11 個固定 CheckBox（value 0~10）序列化寫入（OQ-E07-24 Resolved），與 `ob_code_df` 無關 |

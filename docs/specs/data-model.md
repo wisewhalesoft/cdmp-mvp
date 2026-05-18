@@ -1366,10 +1366,66 @@ step 7: INSERT INTO assignment_audit_log   (action='DELETE', ...)  -- 同 transa
 | card_version | INTEGER | NULL | CARD_VERSION | 版本號 |
 | column_name | VARCHAR(30) | NULL | COLUNM | 維度欄位名稱（原拼字 COLUNM） |
 | column_label | VARCHAR(30) | NULL | COLUNM_NAME | 維度欄位顯示名稱 |
+| match_type | VARCHAR(20) | NOT NULL | —（新增欄位）| **v1.3 / 2026-05-18 新增（F054 v1.3 / F061 v1.3）**：計分維度比對模式；允許值：`'CATEGORY'`（精確比對，使用 `level1`）/ `'RANGE'`（數值區間比對，使用 `level2_s` / `level2_e`）/ `'COMPOSITE'`（複合比對，`level1` + `level2_s` / `level2_e` 均可有值）；CHECK constraint：`match_type IN ('CATEGORY', 'RANGE', 'COMPOSITE')`；**遷移時 backfill 策略**：依 `ob_levelcard_score` 現有資料推導（`level1 NOT NULL AND level2_s IS NULL → 'CATEGORY'`；`level1 IS NULL AND level2_s NOT NULL → 'RANGE'`；其餘 → `'COMPOSITE'`），詳見下方「Migration 設計」段落 |
 
 > 注意：原表欄位名 `COLUNM` 為舊系統拼字錯誤（應為 COLUMN），遷移時修正為 `column_name`。
 
 **索引**：`(card_type, card_version, column_name)`（複合索引）
+
+**`match_type` Migration 設計（v1.3 / F054 v1.3 新增）**
+
+> 此欄位為 AppDB 新增欄位（原 OBLEVELCARD_COLUNM 無對應欄），需於 TypeORM Migration 中完成新增 + backfill + CHECK constraint。
+
+```sql
+-- up() 執行順序：
+-- Step 1：新增欄位（允許 NULL，等待 backfill）
+ALTER TABLE ob_levelcard_column
+  ADD COLUMN match_type VARCHAR(20) NULL;
+
+-- Step 2：backfill — 依對應 ob_levelcard_score 資料推導
+UPDATE ob_levelcard_column c
+SET match_type = (
+  SELECT
+    CASE
+      WHEN EXISTS (
+        SELECT 1 FROM ob_levelcard_score s
+        WHERE s.card_type = c.card_type
+          AND s.card_version = c.card_version
+          AND s.column_name = c.column_name
+          AND s.level1 IS NOT NULL
+          AND s.level2_s IS NULL
+          AND s.level2_e IS NULL
+      ) THEN 'CATEGORY'
+      WHEN EXISTS (
+        SELECT 1 FROM ob_levelcard_score s
+        WHERE s.card_type = c.card_type
+          AND s.card_version = c.card_version
+          AND s.column_name = c.column_name
+          AND s.level1 IS NULL
+          AND s.level2_s IS NOT NULL
+      ) THEN 'RANGE'
+      ELSE 'RANGE'  -- 無 score 列者預設 RANGE（AC-1b ALL_SCORES_EMPTY 提示機制覆蓋此情境，最保守選擇）
+    END
+);
+
+-- Step 3：補 NOT NULL constraint（backfill 完成後）
+ALTER TABLE ob_levelcard_column
+  ALTER COLUMN match_type SET NOT NULL;
+
+-- Step 4：補 CHECK constraint
+ALTER TABLE ob_levelcard_column
+  ADD CONSTRAINT chk_ob_levelcard_column_match_type
+  CHECK (match_type IN ('CATEGORY', 'RANGE', 'COMPOSITE'));
+
+-- Step 5：驗證 assertion query（預期 0 列）
+SELECT COUNT(*) FROM ob_levelcard_column WHERE match_type IS NULL;
+-- 預期：0
+SELECT COUNT(*) FROM ob_levelcard_column
+  WHERE match_type NOT IN ('CATEGORY', 'RANGE', 'COMPOSITE');
+-- 預期：0
+```
+
+> **建議 TypeORM 檔名**：`{timestamp}-add-match-type-to-ob-levelcard-column.ts`
 
 ---
 
@@ -1388,10 +1444,16 @@ step 7: INSERT INTO assignment_audit_log   (action='DELETE', ...)  -- 同 transa
 | card_type | VARCHAR(10) | NOT NULL | CARD_TYPE | 計分卡類型 |
 | card_version | INTEGER | NOT NULL | CARD_VERSION | 版本號 |
 | column_name | VARCHAR(30) | NOT NULL | COLUNM | 維度欄位名稱 |
-| level1 | VARCHAR(10) | NULL | LEVEL1 | 類別型條件（精確值） |
-| level2_s | VARCHAR(10) | NULL | LEVEL2_S | 數值型條件起始值 |
-| level2_e | VARCHAR(10) | NULL | LEVEL2_E | 數值型條件結束值 |
+| level1 | VARCHAR(10) | NULL | LEVEL1 | 類別型條件（精確值）；**依 match_type 之 NULL 規則**：`match_type = 'CATEGORY'` 時 NOT NULL（業務層強制）；`match_type = 'RANGE'` 時應為 NULL；`match_type = 'COMPOSITE'` 時可有值亦可 NULL（DB 層維持 NULL 允許，應用層依 match_type 驗證）|
+| level2_s | VARCHAR(10) | NULL | LEVEL2_S | 數值型條件起始值；**依 match_type 之 NULL 規則**：`match_type = 'RANGE'` 或 `'COMPOSITE'` 時需有值；`match_type = 'CATEGORY'` 時應為 NULL |
+| level2_e | VARCHAR(10) | NULL | LEVEL2_E | 數值型條件結束值；NULL 語意同 `level2_s`（可為開放區間上限） |
 | score | INTEGER | NOT NULL | SCORE | 分數 |
+
+> **match_type 與 level1 / level2_s / level2_e 對應規則**（應用層驗證，非 DB CHECK constraint）：
+> - `CATEGORY`：`level1` 必填、`level2_s` / `level2_e` 必須為 NULL
+> - `RANGE`：`level1` 必須為 NULL、`level2_s` 必填（`level2_e` 可為 NULL 表示無上限）
+> - `COMPOSITE`：`level1` 與 `level2_s` / `level2_e` 均允許有值，至少一組不為 NULL
+> - CATEGORY 模式下同一 `(card_type, card_version, column_name, level1)` 不可重複（`SCORING_CATEGORY_DUPLICATE` 422）
 
 **索引**：`(card_type, card_version, column_name)`（複合索引）
 
@@ -1738,12 +1800,12 @@ PK：`calendar_date`
 | total_cases | INTEGER | NULL | 本次分派總案件數 |
 | total_lists | INTEGER | NULL | 本次處理名單數 |
 | error_message | TEXT | NULL | 失敗錯誤訊息 |
-| report_payload | JSONB | NULL | **v1.1 / 2026-05-16 新增（F061 v1.2 / PO 決議 OQ-E07-29-A 落地）**：月跑警告紀錄與輔助資訊容器；目前已定義子鍵：`skippedCases[]`（邊緣 CARD_TYPE 跳過案件清單）+ `skippedCaseCount`（跳過總數）+ `warnings[]`（其他警告，如 `WHITELIST_OPTION_INACTIVE`）；非錯誤訊息，月跑仍可 `status = 'completed'`；schema 詳見下方「report_payload 結構」段落 |
+| report_payload | JSONB | NULL | **v1.2 / 2026-05-18 更新（F061 v1.3）**：月跑警告紀錄與輔助資訊容器；目前已定義子鍵：`skippedCases[]`（邊緣 CARD_TYPE 跳過案件清單）+ `skippedCaseCount`（跳過總數）+ `warningSummary`（計分完整性警告摘要，含 `SCORING_INTEGRITY_WARN` 子鍵）+ `warnings[]`（其他警告，如 `WHITELIST_OPTION_INACTIVE`）；非錯誤訊息，月跑仍可 `status = 'completed'`；schema 詳見下方「report_payload 結構」段落 |
 | created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
 
 **索引**：`run_id`（PK）、`(project_workym, status)`（查詢索引）
 
-**`report_payload` 結構（v1.1 / 2026-05-16 新增）**：
+**`report_payload` 結構（v1.2 / 2026-05-18 更新）**：
 
 ```json
 {
@@ -1757,6 +1819,20 @@ PK：`calendar_date`
     }
   ],
   "skippedCaseCount": 1,
+  "warningSummary": {
+    "SCORING_INTEGRITY_WARN": {
+      "affectedCount": 3,
+      "details": [
+        {
+          "cardType": "H",
+          "cardVersion": 1,
+          "columnName": "PROD_KIND",
+          "issue": "MATCH_TYPE_FIELD_MISMATCH",
+          "description": "match_type=CATEGORY 但 level2_s 不為 NULL"
+        }
+      ]
+    }
+  },
   "warnings": [
     {
       "code": "WHITELIST_OPTION_INACTIVE",
@@ -1773,8 +1849,9 @@ PK：`calendar_date`
 - `skippedCases[].reason`：ENUM；目前定義 `UNSUPPORTED_CARD_TYPE`（邊緣 CARD_TYPE，如 HB / SEB / SEC，無對應計分卡且無 `ob_tier` fallback）；未來可擴充
 - `skippedCases[].caseId`：跳過案件之 `appl_no`（或 `(orgno, appl_no)` 字串化）
 - `skippedCases[].stage`：跳過時所處 Stage（目前固定為 2，計分階段）
+- `warningSummary.SCORING_INTEGRITY_WARN`：**v1.3 / 2026-05-18 新增**；Stage 2 前 `ScoringIntegrityCheckService` 執行計分設定完整性稽核時若發現 `match_type` 與 score 記錄不一致，寫入此子鍵；`affectedCount` 為問題 column 數量；`details[]` 每筆含 `cardType` / `cardVersion` / `columnName` / `issue`（`MATCH_TYPE_FIELD_MISMATCH` 或 `CATEGORY_DUPLICATE`）/ `description`；月跑不中斷，以警告繼續執行
 - `warnings[].code`：對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings) 警告碼
-- 前端 F062 / F063 依此欄位顯示黃色警示 banner（沿用 `RUN_REPORT_SKIPPED_CASES` / `WHITELIST_OPTION_INACTIVE` 警告紀錄）
+- 前端 F062 / F063 依此欄位顯示黃色警示 banner（沿用 `RUN_REPORT_SKIPPED_CASES` / `WHITELIST_OPTION_INACTIVE` 警告紀錄；`warningSummary.SCORING_INTEGRITY_WARN.affectedCount > 0` 時另行顯示黃色 integrity 警示）
 
 ---
 
@@ -1803,7 +1880,7 @@ PK：`calendar_date`
 | log_id | UUID | NOT NULL | **PK**，日誌識別碼 |
 | entity_type | VARCHAR(50) | NOT NULL | 被操作實體（如 `ob_list_definition`、`ob_dept_pct`） |
 | entity_id | VARCHAR(100) | NOT NULL | 被操作實體的識別碼（字串化） |
-| action | VARCHAR(30) | NOT NULL | 操作類型：`CREATE` / `UPDATE` / `DELETE` / `RUN` / `STAGE_ADVANCE` / `STAGE_ROLLBACK` / `STAGE_REJECT`（**v1.12 / 2026-05-16 擴充 VARCHAR(10)→VARCHAR(30)**，見 AD-E07-17） |
+| action | VARCHAR(30) | NOT NULL | 操作類型：`CREATE` / `UPDATE` / `DELETE` / `RUN` / `STAGE_ADVANCE` / `STAGE_ROLLBACK` / `STAGE_REJECT` / `SCORING_INTEGRITY_WARN`（**v1.12 / 2026-05-16 擴充 VARCHAR(10)→VARCHAR(30)**，見 AD-E07-17；**v1.3 / 2026-05-18 新增 `SCORING_INTEGRITY_WARN`**）|
 | actor_id | UUID | NOT NULL | 操作者 user_id（FK → users.id） |
 | actor_name | VARCHAR(100) | NOT NULL | 操作者姓名（快照，不受後續改名影響） |
 | before_value | JSONB | NULL | 操作前資料快照（UPDATE/DELETE 填入） |
@@ -1815,6 +1892,43 @@ PK：`calendar_date`
 - 保留 3 年（架構決策 AD-E07-3）
 - 不可修改或刪除（INSERT-only）
 - 超過 3 年的紀錄由排程任務定期清除
+
+**`SCORING_INTEGRITY_WARN` action 子欄位規範（v1.3 / 2026-05-18 新增）**：
+
+`action = 'SCORING_INTEGRITY_WARN'` 時，`after_value` JSONB 結構如下（`before_value` 為 NULL）：
+
+```json
+{
+  "runId": "uuid-of-run",
+  "projectWorkym": "202605",
+  "checkTimestamp": "2026-05-18T10:00:00Z",
+  "affectedCount": 3,
+  "issues": [
+    {
+      "cardType": "H",
+      "cardVersion": 1,
+      "columnName": "PROD_KIND",
+      "issue": "MATCH_TYPE_FIELD_MISMATCH",
+      "matchType": "CATEGORY",
+      "invalidScoreRows": 2,
+      "description": "match_type=CATEGORY 但有 2 筆 score 記錄之 level2_s 不為 NULL"
+    },
+    {
+      "cardType": "S",
+      "cardVersion": 1,
+      "columnName": "SPEC_TP",
+      "issue": "CATEGORY_DUPLICATE",
+      "duplicateLevel1": "01",
+      "duplicateCount": 3,
+      "description": "CATEGORY 模式下 level1='01' 重複出現 3 筆"
+    }
+  ]
+}
+```
+
+- `entity_type`：`'assignment_run'`；`entity_id`：`run_id`
+- `actor_id`：系統自動寫入，填入觸發月跑之 `triggered_by`（無互動式操作者，沿用月跑觸發者 ID）
+- 此 action 為警告記錄，不影響月跑繼續執行；對應 `report_payload.warningSummary.SCORING_INTEGRITY_WARN` 子鍵
 
 **索引**：`log_id`（PK）、`(entity_type, entity_id)`、`(actor_id, created_at)`、`created_at`（保留期排程清理）
 
