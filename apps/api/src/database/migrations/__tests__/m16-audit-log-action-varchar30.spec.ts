@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { QueryRunner } from 'typeorm';
 import { AddAuditLogActionVarchar301711360000181 } from '../1711360000181-AddAuditLogActionVarchar30';
+import { AddScoringAuditFieldsToAssignmentAuditLog1711360000270 } from '../1711360000270-AddScoringAuditFieldsToAssignmentAuditLog';
 
 describe('Migration 1711360000181: AddAuditLogActionVarchar30 (TC-MIG-audit)', () => {
   let migration: AddAuditLogActionVarchar301711360000181;
@@ -72,6 +73,67 @@ describe('Migration 1711360000181: AddAuditLogActionVarchar30 (TC-MIG-audit)', (
         (sql) => /ALTER\s+COLUMN\s+action\s+TYPE/i.test(sql),
       );
       expect(alterSql).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // F061 v1.3 新增：audit_log 欄位擴充（run_id / card_type / column_name / rule_violated / violated_row_count）
+  // 對應 migration：{timestamp}-add-scoring-audit-fields-to-assignment-audit-log.ts
+  // ============================================================
+
+  describe('F061 v1.3 — audit_log 新欄位 migration（add-scoring-audit-fields）', () => {
+    let scoringMig: AddScoringAuditFieldsToAssignmentAuditLog1711360000270;
+    let qr: { query: ReturnType<typeof vi.fn> };
+
+    beforeEach(() => {
+      scoringMig = new AddScoringAuditFieldsToAssignmentAuditLog1711360000270();
+      qr = { query: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    it('up() — 新增 run_id / card_type / column_name / rule_violated / violated_row_count（nullable）', async () => {
+      delete process.env.DB_TYPE;
+      await scoringMig.up(qr as unknown as QueryRunner);
+      const sqls = qr.query.mock.calls.map((c) => c[0] as string).join(' ; ');
+      expect(sqls).toMatch(/ADD COLUMN IF NOT EXISTS "run_id" UUID/i);
+      expect(sqls).toMatch(/ADD COLUMN IF NOT EXISTS "card_type" VARCHAR\(10\)/i);
+      expect(sqls).toMatch(/ADD COLUMN IF NOT EXISTS "column_name" VARCHAR\(30\)/i);
+      expect(sqls).toMatch(/ADD COLUMN IF NOT EXISTS "rule_violated" VARCHAR\(100\)/i);
+      expect(sqls).toMatch(/ADD COLUMN IF NOT EXISTS "violated_row_count" INTEGER/i);
+    });
+
+    it('down() — 刪除 v1.3 新增欄位', async () => {
+      delete process.env.DB_TYPE;
+      await scoringMig.down(qr as unknown as QueryRunner);
+      const sqls = qr.query.mock.calls.map((c) => c[0] as string).join(' ; ');
+      expect(sqls).toMatch(/DROP COLUMN IF EXISTS "run_id"/i);
+      expect(sqls).toMatch(/DROP COLUMN IF EXISTS "card_type"/i);
+      expect(sqls).toMatch(/DROP COLUMN IF EXISTS "column_name"/i);
+      expect(sqls).toMatch(/DROP COLUMN IF EXISTS "rule_violated"/i);
+      expect(sqls).toMatch(/DROP COLUMN IF EXISTS "violated_row_count"/i);
+    });
+
+    it('up() 不執行 UPDATE / backfill（純增欄位，backward compatible）', async () => {
+      delete process.env.DB_TYPE;
+      await scoringMig.up(qr as unknown as QueryRunner);
+      const calls = qr.query.mock.calls.map((c) => c[0] as string);
+      const hasUpdate = calls.some((sql) =>
+        /^\s*UPDATE\s+assignment_audit_log/i.test(sql),
+      );
+      expect(hasUpdate).toBe(false);
+    });
+
+    it('SQLite 環境：完全略過 ADD COLUMN（synchronize 已涵蓋）', async () => {
+      process.env.DB_TYPE = 'sqlite';
+      await scoringMig.up(qr as unknown as QueryRunner);
+      expect(qr.query).not.toHaveBeenCalled();
+    });
+
+    // ============================================================
+    // F054 v1.3 / 2026-05-18：audit_log action union 補 SCORING_INTEGRITY_WARN
+    // ============================================================
+    it('SCORING_INTEGRITY_WARN 仍在 VARCHAR(30) 範圍內（25 chars）', () => {
+      const action = 'SCORING_INTEGRITY_WARN';
+      expect(action.length).toBeLessThanOrEqual(30);
     });
   });
 

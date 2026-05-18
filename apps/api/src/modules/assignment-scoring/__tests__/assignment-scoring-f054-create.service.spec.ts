@@ -100,6 +100,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         cardVersion: 1,
         columnName: 'CONTRACT_YEARS',
         columnLabel: '契約年資',
+        matchType: 'RANGE' as any,
         scores: [
           { level1: null, level2S: '0', level2E: '5', score: 5 },
           { level1: null, level2S: '6', level2E: '99', score: 15 },
@@ -128,6 +129,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         cardVersion: 1,
         columnName: 'CONTRACT_YEARS',
         columnLabel: '契約年資',
+        matchType: 'RANGE' as any,
         scores: [{ level1: null, level2S: '0', level2E: '5', score: 5 }],
       },
       actor,
@@ -156,6 +158,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         {
           cardType: 'H', cardVersion: 1,
           columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+          matchType: 'RANGE' as any,
           scores: [],
         },
         actor,
@@ -167,6 +170,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         {
           cardType: 'H', cardVersion: 1,
           columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+          matchType: 'RANGE' as any,
           scores: [],
         },
         actor,
@@ -187,6 +191,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         {
           cardType: 'H', cardVersion: 1,
           columnName: 'CONTRACT_YEARS', columnLabel: '契約年資',
+          matchType: 'RANGE' as any,
           scores: [],
         },
         actor,
@@ -200,6 +205,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
         {
           cardType: 'H', cardVersion: 1,
           columnName: 'CONTRACT_YEARS', columnLabel: '契約年資',
+          matchType: 'RANGE' as any,
           scores: [
             { level1: null, level2S: '0', level2E: '10', score: 5 },
             { level1: null, level2S: '5', level2E: '15', score: 10 },
@@ -218,6 +224,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
       {
         cardType: 'H', cardVersion: 1,
         columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+        matchType: 'RANGE' as any,
         scores: [],
       },
       actor,
@@ -232,5 +239,38 @@ describe('AssignmentScoringService — F054 createDimension', () => {
       column_name: 'ACCOUNT_AGE',
       status: 'active',
     });
+  });
+
+  // ============================================================
+  // F054 v1.3 新增：match_type 欄位 createDimension 驗證
+  // ============================================================
+
+  describe('v1.3 — match_type 欄位寫入（createDimension）', () => {
+    it.todo(
+      // TODO（tdd-implementation）：
+      // 詳見 assignment-scoring-f054-match-type.service.spec.ts
+      // TS-F054-MT-001：createDimension 帶 matchType=RANGE → column.match_type='RANGE'
+      // TS-F054-MT-002：createDimension 帶 matchType=CATEGORY → column.match_type='CATEGORY'
+      // TS-F054-MT-003：createDimension 帶 matchType=COMPOSITE → column.match_type='COMPOSITE'
+      // TS-F054-MT-004：不帶 matchType → 預設值（與 spec 確認）
+      'match_type 欄位寫入 — 詳見 assignment-scoring-f054-match-type.service.spec.ts',
+    );
+  });
+
+  // ============================================================
+  // F061 v1.3 新增：audit_log 含 run_id / card_type / column_name / rule_violated / violated_row_count
+  // ============================================================
+
+  describe('v1.3 — audit_log 新增欄位（F061 AC-9）', () => {
+    it.todo(
+      // TODO（tdd-implementation）：
+      // 當 createDimension 產生 audit_log 時，after_value 需含：
+      //   - card_type：'H'
+      //   - column_name：'CONTRACT_YEARS'
+      // 注意：run_id / rule_violated / violated_row_count 為月跑計分稽核欄位
+      //   屬於 AssignmentRunPipelineService 寫入，非 createDimension 負責
+      //   此 describe 標記為 F061 v1.3 協調對齊點
+      'audit_log after_value 含 card_type / column_name（F061 v1.3 欄位對齊）',
+    );
   });
 });

@@ -326,6 +326,63 @@ describe('fn_calc_tier_level (integration)', () => {
     });
   }, TEST_TIMEOUT);
 
+  // ============================================================
+  // TS-F061-013：RANGE try-cast 三類案例（F061 v1.3 決策 5.3）
+  //
+  // 驗證 fn_calc_tier_level 內部 try-cast 策略：
+  //   若 level2_s / level2_e 皆可 cast numeric → 用 numeric BETWEEN
+  //   否則 → fallback VARCHAR BETWEEN
+  //
+  // Fixture：scoring-match-type-v13.sql（RANGE_TRYCAST_TEST 等三個 column）
+  // 前置：需先執行 scoring-match-type-v13.sql seed（BEGIN/ROLLBACK 隔離）
+  // ============================================================
+
+  describe('TS-F061-013：RANGE try-cast 三類案例', () => {
+    it.todo(
+      // TODO（tdd-implementation）：
+      // 案例 A — numeric BETWEEN 路徑：
+      //   seed ob_levelcard_score: column='RANGE_TRYCAST_TEST', level2_s='5', level2_e='99', score=20
+      //   seed ob_pool_data: 對應欄位值 = '9'（實際欄位依 fn 實作，需確認 mapping）
+      //   呼叫 fn_calc_tier_level('H', 1, pd)
+      //   Assert：score 中含有 20（HIT）
+      //   重要：字典序下 '9' > '10' > '5'，但 9 < 10，數值策略才正確
+      //         若 assert HIT 失敗，代表 fn 使用字典序比較（TC 設計可抓 bug）
+      'TC-13a：numeric BETWEEN — level2_s=5, level2_e=99, value=9 → HIT（score+20）',
+    );
+
+    it.todo(
+      // TODO（tdd-implementation）：
+      // 案例 B — VARCHAR BETWEEN fallback 路徑：
+      //   seed ob_levelcard_score: column='RANGE_TRYCAST_TEST_VAR', level2_s='A', level2_e='Z', score=15
+      //   seed ob_pool_data: 對應欄位值 = 'M'
+      //   呼叫 fn_calc_tier_level('H', 1, pd)
+      //   Assert：score 中含有 15（HIT）
+      //   此情境 try-cast('A') 失敗 → fn 回退 VARCHAR BETWEEN → 'A' <= 'M' <= 'Z' → HIT
+      'TC-13b：VARCHAR BETWEEN fallback — level2_s=A, level2_e=Z, value=M → HIT（score+15）',
+    );
+
+    it.todo(
+      // TODO（tdd-implementation）：
+      // 案例 C — 零填充混合（zero-padded PROJECT_TP 樣本）：
+      //   seed ob_levelcard_score: column='RANGE_TRYCAST_ZERO_PAD', level2_s='01', level2_e='23', score=12
+      //   seed ob_pool_data: 對應欄位值 = '15'
+      //   呼叫 fn_calc_tier_level('H', 1, pd)
+      //   Assert：score 中含有 12（HIT）
+      //   數值 BETWEEN：1 <= 15 <= 23 → HIT；字典序 BETWEEN：'01' <= '15' <= '23' → HIT
+      //   兩種策略皆過，驗證邊界相容性
+      'TC-13c：零填充混合 — level2_s=01, level2_e=23, value=15 → HIT（兩種策略均過）',
+    );
+
+    it.todo(
+      // TODO（tdd-implementation）：
+      // 案例 D — numeric MISS 驗證（確保邊界外不命中）：
+      //   沿用 RANGE_TRYCAST_TEST（level2_s=5, level2_e=99）
+      //   seed ob_pool_data: 對應欄位值 = '4'（< 5）
+      //   Assert：RANGE_TRYCAST_TEST 的 score=20 不出現在結果中（MISS）
+      'TC-13d：numeric 邊界外 — value=4 < level2_s=5 → MISS（score 不含 20）',
+    );
+  });
+
   it('TC-08 card_level / tier_level 解析：H 卡 score 落在 score_s..score_e 應對映到 ob_levelcard_level + ob_tier', async () => {
     if (connectFailed) return;
     await tx(async () => {

@@ -117,6 +117,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
           {
             columnName: 'ACCOUNT_AGE',
             columnLabel: '帳齡',
+            matchType: 'RANGE' as any,
             scores: [
               { level1: null, level2S: '0', level2E: '5', score: 15 },
               { level1: null, level2S: '6', level2E: '12', score: 25 },
@@ -142,7 +143,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
   it('TS-F054-002：audit_log 記 action=UPDATE，before/after 含 scores', async () => {
     columnRepo.findOne.mockResolvedValue({
       card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE',
-      column_label: '帳齡', status: 'active',
+      column_label: '帳齡', status: 'active', match_type: 'RANGE',
     });
     scoreRepo.find.mockResolvedValue([
       { card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE',
@@ -156,6 +157,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
         dimensions: [{
           columnName: 'ACCOUNT_AGE',
           columnLabel: '帳齡',
+          matchType: 'RANGE' as any,
           scores: [{ level1: null, level2S: '0', level2E: '5', score: 15 }],
         }],
       },
@@ -177,7 +179,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
   it('TS-F054-003：類別型（level1）區間修改正常', async () => {
     columnRepo.findOne.mockResolvedValue({
       card_type: 'H', card_version: 1, column_name: 'CELLULAR',
-      column_label: '有無手機', status: 'active',
+      column_label: '有無手機', status: 'active', match_type: 'CATEGORY',
     });
     scoreRepo.find.mockResolvedValue([
       { card_type: 'H', card_version: 1, column_name: 'CELLULAR',
@@ -193,6 +195,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
         dimensions: [{
           columnName: 'CELLULAR',
           columnLabel: '有無手機',
+          matchType: 'CATEGORY' as any,
           scores: [
             { level1: 'Y', level2S: null, level2E: null, score: 20 },
             { level1: 'N', level2S: null, level2E: null, score: 5 },
@@ -224,6 +227,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
           dimensions: [{
             columnName: 'ACCOUNT_AGE',
             columnLabel: '帳齡',
+            matchType: 'RANGE' as any,
             scores: [
               { level1: null, level2S: '0', level2E: '10', score: 10 },
               { level1: null, level2S: '9', level2E: '20', score: 20 },
@@ -240,6 +244,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
           cardType: 'H', cardVersion: 1,
           dimensions: [{
             columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+            matchType: 'RANGE' as any,
             scores: [
               { level1: null, level2S: '0', level2E: '10', score: 10 },
               { level1: null, level2S: '9', level2E: '20', score: 20 },
@@ -268,6 +273,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
         cardType: 'H', cardVersion: 1,
         dimensions: [{
           columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+          matchType: 'RANGE' as any,
           scores: [
             { level1: null, level2S: '0', level2E: '10', score: 10 },
             { level1: null, level2S: '11', level2E: '20', score: 20 },
@@ -292,7 +298,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
     const result = await service.updateDimensions(
       {
         cardType: 'H', cardVersion: 1,
-        dimensions: [{ columnName: 'ACCOUNT_AGE', columnLabel: '帳齡', scores: [] }],
+        dimensions: [{ columnName: 'ACCOUNT_AGE', columnLabel: '帳齡', matchType: 'RANGE' as any, scores: [] }],
       },
       actor,
     );
@@ -312,6 +318,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
       {
         cardType: 'H', cardVersion: 1,
         dimensions: [{ columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+          matchType: 'RANGE' as any,
           scores: [{ level1: null, level2S: '0', level2E: '5', score: 10 }] }],
       },
       actor,
@@ -325,7 +332,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
   it('BE-F054-004：[0,10] 與 [10,20] 邊界同值衝突 → 422', async () => {
     columnRepo.findOne.mockResolvedValue({
       card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE',
-      column_label: '帳齡', status: 'active',
+      column_label: '帳齡', status: 'active', match_type: 'RANGE',
     });
     scoreRepo.find.mockResolvedValue([]);
 
@@ -335,6 +342,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
           cardType: 'H', cardVersion: 1,
           dimensions: [{
             columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+            matchType: 'RANGE' as any,
             scores: [
               { level1: null, level2S: '0', level2E: '10', score: 10 },
               { level1: null, level2S: '10', level2E: '20', score: 20 },
@@ -355,6 +363,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
           cardType: 'H', cardVersion: 1,
           dimensions: [{
             columnName: 'ACCOUNT_AGE', columnLabel: '帳齡',
+            matchType: 'RANGE' as any,
             scores: [{ level1: null, level2S: '0', level2E: '5', score: 10 }],
           }],
         },
@@ -372,6 +381,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
           cardType: 'H', cardVersion: 1,
           dimensions: [{
             columnName: 'NOT_EXIST', columnLabel: '不存在',
+            matchType: 'RANGE' as any,
             scores: [],
           }],
         },
@@ -381,5 +391,28 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
     } catch (e: any) {
       expect(e.getResponse().error).toBe('SCORING_COLUMN_NOT_FOUND');
     }
+  });
+
+  // ============================================================
+  // F054 v1.3 新增：match_type 欄位 updateDimensions 驗證
+  // ============================================================
+
+  describe('v1.3 — match_type 欄位更新（updateDimensions）', () => {
+    it.todo(
+      // TODO（tdd-implementation）：
+      // TS-F054-MT-005：updateDimensions 修改 match_type
+      //   Precondition：columnRepo.findOne mock 回傳 { match_type: 'RANGE', ... }
+      //   Body：{ matchType: 'CATEGORY', ... }
+      //   Assert：columnRepo.save 傳入 match_type='CATEGORY'
+      //           auditRepo.create before_value.matchType === 'RANGE'
+      //           auditRepo.create after_value.matchType === 'CATEGORY'
+      'updateDimensions match_type RANGE→CATEGORY → 儲存新值，audit_log 記前後值',
+    );
+
+    it.todo(
+      // TODO（tdd-implementation）：
+      // updateDimensions 不帶 matchType → 保留現有 match_type（不覆蓋為 null）
+      'updateDimensions 不帶 matchType → 保留現有 match_type（不覆蓋）',
+    );
   });
 });

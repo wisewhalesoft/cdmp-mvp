@@ -261,7 +261,13 @@ async function seedVersion(
 
 async function seedColumn(
   repo: Repository<ObLevelcardColumn>,
-  opts: { cardType: string; cardVersion: number; columnName: string; status?: string },
+  opts: {
+    cardType: string;
+    cardVersion: number;
+    columnName: string;
+    status?: string;
+    matchType?: 'CATEGORY' | 'RANGE' | 'COMPOSITE';
+  },
 ): Promise<void> {
   await repo.save(
     repo.create({
@@ -270,6 +276,8 @@ async function seedColumn(
       column_name: opts.columnName,
       column_label: opts.columnName,
       status: opts.status ?? 'active',
+      // F054 v1.3：match_type 為 NOT NULL；seed 預設 'RANGE'
+      match_type: opts.matchType ?? 'RANGE',
     } as Partial<ObLevelcardColumn>),
   );
 }
