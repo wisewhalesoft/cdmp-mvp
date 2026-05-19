@@ -1,25 +1,31 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * P1 B5 / m22 / F075 v1.3 AC-1 / F076 v1.3 AC-3：
+ * P1 B5 / m22 / F075 v1.3 AC-1 / F076 v1.3 AC-3 / v1.4.3 case 對齊：
  *   D-PFW-02：Seed 8 個白名單欄位 + 對應類別型可選值
  *
  * 白名單 8 欄位（F075 AC-1）：
- *   - PROD_KIND   (categorical, 啟用)
- *   - LIST_TYPE   (categorical, 啟用)
- *   - BEST_CASE   (categorical, 啟用)
- *   - SPEC_TP     (categorical, 啟用)
- *   - CASEYEAR    (categorical, 啟用)
- *   - SETTLE_SRC  (categorical, 啟用)
- *   - MONTH_CNT   (numeric,     啟用)
- *   - PAYT_TERM   (numeric,     停用)
+ *   - prod_kind   (categorical, 啟用)
+ *   - list_type   (categorical, 啟用)
+ *   - best_case   (categorical, 啟用)
+ *   - spec_tp     (categorical, 啟用)
+ *   - caseyear    (categorical, 啟用)
+ *   - settle_src  (categorical, 啟用)
+ *   - month_cnt   (numeric,     啟用)
+ *   - payt_term   (numeric,     停用)
  *
  * 對應 categorical 可選值（F076 AC-3）：
- *   - PROD_KIND  : 01/02/03
- *   - LIST_TYPE  : 01/02/03
- *   - CASEYEAR   : 0..6 + 99
- *   - SETTLE_SRC : Y/N
- *   - SPEC_TP / BEST_CASE：依 OBMCODEDF 之後另行補；MVP 此 migration 留空
+ *   - prod_kind  : 01/02/03
+ *   - list_type  : 01/02/03
+ *   - caseyear   : 0..6 + 99
+ *   - settle_src : Y/N
+ *   - spec_tp / best_case：依 OBMCODEDF 之後另行補；MVP 此 migration 留空（後續由 m24 補）
+ *
+ * v1.4.3（2026-05-19）case 對齊：column_name 從原 SQL Server `OBPOOLDATA` 大寫慣例
+ *   改為小寫對齊 PostgreSQL `ob_pool_data` ETL 後表之 snake_case 實際欄位命名；
+ *   消除 `getAvailableColumns` SQL NOT IN 子查詢 case-sensitive 比對失敗導致的
+ *   過濾失效問題。F068 之 `ob_code_df.tbl_id`（PROD_KIND / SPEC_TP / CASE_STATUS
+ *   等大寫業務常數）為獨立語境，不受本次對齊影響。
  *
  * Idempotent：採 ON CONFLICT (column_name) DO NOTHING（PostgreSQL）/
  *   INSERT OR IGNORE（SQLite 條件分支）。對應之 pooldata_field_option 同 pattern
@@ -47,37 +53,37 @@ export class SeedPooldataFieldWhitelist1711360000220 implements MigrationInterfa
     };
 
     const fields: ReadonlyArray<FieldRow> = [
-      { column_name: 'PROD_KIND',  display_name: '產品類別',     field_type: 'categorical', is_active: true },
-      { column_name: 'LIST_TYPE',  display_name: '名單類型',     field_type: 'categorical', is_active: true },
-      { column_name: 'BEST_CASE',  display_name: '優質案件',     field_type: 'categorical', is_active: true },
-      { column_name: 'SPEC_TP',    display_name: '特殊類別',     field_type: 'categorical', is_active: true },
-      { column_name: 'CASEYEAR',   display_name: '案件年度',     field_type: 'categorical', is_active: true },
-      { column_name: 'SETTLE_SRC', display_name: '結清來源',     field_type: 'categorical', is_active: true },
-      { column_name: 'MONTH_CNT',  display_name: '撈取月份計數', field_type: 'numeric',     is_active: true },
-      { column_name: 'PAYT_TERM',  display_name: '繳款期數',     field_type: 'numeric',     is_active: false },
+      { column_name: 'prod_kind',  display_name: '產品類別',     field_type: 'categorical', is_active: true },
+      { column_name: 'list_type',  display_name: '名單類型',     field_type: 'categorical', is_active: true },
+      { column_name: 'best_case',  display_name: '優質案件',     field_type: 'categorical', is_active: true },
+      { column_name: 'spec_tp',    display_name: '特殊類別',     field_type: 'categorical', is_active: true },
+      { column_name: 'caseyear',   display_name: '案件年度',     field_type: 'categorical', is_active: true },
+      { column_name: 'settle_src', display_name: '結清來源',     field_type: 'categorical', is_active: true },
+      { column_name: 'month_cnt',  display_name: '撈取月份計數', field_type: 'numeric',     is_active: true },
+      { column_name: 'payt_term',  display_name: '繳款期數',     field_type: 'numeric',     is_active: false },
     ];
 
     const options: ReadonlyArray<OptionRow> = [
-      // PROD_KIND
-      { column_name: 'PROD_KIND', option_value: '01', option_label: '汽車新車' },
-      { column_name: 'PROD_KIND', option_value: '02', option_label: '機車' },
-      { column_name: 'PROD_KIND', option_value: '03', option_label: '其他商品' },
-      // LIST_TYPE
-      { column_name: 'LIST_TYPE', option_value: '01', option_label: '期中' },
-      { column_name: 'LIST_TYPE', option_value: '02', option_label: '中結' },
-      { column_name: 'LIST_TYPE', option_value: '03', option_label: '滿期' },
-      // CASEYEAR
-      { column_name: 'CASEYEAR', option_value: '0', option_label: '0 年' },
-      { column_name: 'CASEYEAR', option_value: '1', option_label: '1 年' },
-      { column_name: 'CASEYEAR', option_value: '2', option_label: '2 年' },
-      { column_name: 'CASEYEAR', option_value: '3', option_label: '3 年' },
-      { column_name: 'CASEYEAR', option_value: '4', option_label: '4 年' },
-      { column_name: 'CASEYEAR', option_value: '5', option_label: '5 年' },
-      { column_name: 'CASEYEAR', option_value: '6', option_label: '6 年' },
-      { column_name: 'CASEYEAR', option_value: '99', option_label: '不限年數' },
-      // SETTLE_SRC
-      { column_name: 'SETTLE_SRC', option_value: 'Y', option_label: '含他行代償' },
-      { column_name: 'SETTLE_SRC', option_value: 'N', option_label: '不含他行代償' },
+      // prod_kind
+      { column_name: 'prod_kind', option_value: '01', option_label: '汽車新車' },
+      { column_name: 'prod_kind', option_value: '02', option_label: '機車' },
+      { column_name: 'prod_kind', option_value: '03', option_label: '其他商品' },
+      // list_type
+      { column_name: 'list_type', option_value: '01', option_label: '期中' },
+      { column_name: 'list_type', option_value: '02', option_label: '中結' },
+      { column_name: 'list_type', option_value: '03', option_label: '滿期' },
+      // caseyear
+      { column_name: 'caseyear', option_value: '0', option_label: '0 年' },
+      { column_name: 'caseyear', option_value: '1', option_label: '1 年' },
+      { column_name: 'caseyear', option_value: '2', option_label: '2 年' },
+      { column_name: 'caseyear', option_value: '3', option_label: '3 年' },
+      { column_name: 'caseyear', option_value: '4', option_label: '4 年' },
+      { column_name: 'caseyear', option_value: '5', option_label: '5 年' },
+      { column_name: 'caseyear', option_value: '6', option_label: '6 年' },
+      { column_name: 'caseyear', option_value: '99', option_label: '不限年數' },
+      // settle_src
+      { column_name: 'settle_src', option_value: 'Y', option_label: '含他行代償' },
+      { column_name: 'settle_src', option_value: 'N', option_label: '不含他行代償' },
     ];
 
     // Step 1：seed pooldata_field_whitelist
@@ -116,8 +122,8 @@ export class SeedPooldataFieldWhitelist1711360000220 implements MigrationInterfa
   public async down(queryRunner: QueryRunner): Promise<void> {
     // 限定 seed 範圍內欄位，避免誤刪部長透過 F075 / F076 手動新增的紀錄
     const fieldNames = [
-      'PROD_KIND', 'LIST_TYPE', 'BEST_CASE', 'SPEC_TP',
-      'CASEYEAR', 'SETTLE_SRC', 'MONTH_CNT', 'PAYT_TERM',
+      'prod_kind', 'list_type', 'best_case', 'spec_tp',
+      'caseyear', 'settle_src', 'month_cnt', 'payt_term',
     ];
     const inClause = fieldNames.map((n) => `'${n}'`).join(', ');
 
