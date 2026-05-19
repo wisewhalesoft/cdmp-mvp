@@ -79,7 +79,9 @@ services:
     profiles:
       - seed
 
-  # E07 計分卡 6 表初始化（冪等：表為空才 INSERT；不洗業務既有資料）
+  # E07 計分卡 6 表初始化 + F075/F076 篩選欄位白名單 seed migration（冪等）
+  # 流程：(1) typeorm migration:run — 套用所有未跑的 schema/seed migration（含 m22 / m24 / m28
+  #        F075 v1.4.6 5 欄對齊）；(2) prod-data-seed — ob_levelcard 6 表初始化
   # 用法：docker compose --profile data-seed up data-seed
   data-seed:
     build:
@@ -93,7 +95,10 @@ services:
       DB_USERNAME: cdmp
       DB_PASSWORD: cdmp_secret
       DB_NAME: cdmp_dev
-    command: npx ts-node -r tsconfig-paths/register src/database/seeds/prod-data-seed.ts
+    command:
+      - sh
+      - -c
+      - "npm run migration:run && npx ts-node -r tsconfig-paths/register src/database/seeds/prod-data-seed.ts"
     depends_on:
       postgres:
         condition: service_healthy
