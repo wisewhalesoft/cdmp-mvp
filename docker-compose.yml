@@ -34,6 +34,10 @@ services:
       JWT_SECRET: cdmp-dev-jwt-secret-key-2026
       AES_ENCRYPTION_KEY: 2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2
       PORT: 3000
+      # F050 v2.0 / F075 v1.4 / F076 v1.3 — E07 refactor phase 3 feature flag
+      # 受保護端點：F075 寫入 + available-columns / F050 v2.0 草稿 / F076 寫入
+      # 預設關閉以支援漸進 rollout（BR-10）；dev 明確啟用以使用 v1.4 dropdown 等功能
+      ENABLE_E07_REFACTOR_PHASE3: "true"
     volumes:
       - ./apps/api/src:/app/src
       - ./apps/api/test:/app/test
