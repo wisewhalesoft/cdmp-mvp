@@ -30,7 +30,7 @@ const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 
 const sampleOptions: PooldataOption[] = [
   {
-    columnName: 'PROD_KIND',
+    columnName: 'prod_kind',
     optionValue: 'M3',
     optionLabel: '第三類',
     isActive: true,
@@ -38,7 +38,7 @@ const sampleOptions: PooldataOption[] = [
     updatedAt: '2026-05-15T00:00:00.000Z',
   },
   {
-    columnName: 'PROD_KIND',
+    columnName: 'prod_kind',
     optionValue: 'M5',
     optionLabel: '第五類',
     isActive: false,
@@ -48,7 +48,7 @@ const sampleOptions: PooldataOption[] = [
   },
 ];
 
-function renderPage(col = 'PROD_KIND') {
+function renderPage(col = 'prod_kind') {
   return render(
     <MemoryRouter initialEntries={[`/assignment/whitelist/options?col=${col}`]}>
       <ToastProvider>
@@ -88,7 +88,7 @@ describe('FieldOptionsPage (F076)', () => {
   it('渲染 active 可選值（預設不顯示已停用）', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('M3')).toBeInTheDocument());
-    expect(mockedListOptions).toHaveBeenCalledWith('PROD_KIND', {
+    expect(mockedListOptions).toHaveBeenCalledWith('prod_kind', {
       includeInactive: 'false',
     });
   });
@@ -99,7 +99,7 @@ describe('FieldOptionsPage (F076)', () => {
     mockedListOptions.mockResolvedValue({ options: sampleOptions });
     fireEvent.click(screen.getByTestId('toggle-include-inactive'));
     await waitFor(() =>
-      expect(mockedListOptions).toHaveBeenCalledWith('PROD_KIND', {
+      expect(mockedListOptions).toHaveBeenCalledWith('prod_kind', {
         includeInactive: 'true',
       }),
     );
@@ -120,7 +120,7 @@ describe('FieldOptionsPage (F076)', () => {
     fireEvent.click(screen.getByRole('button', { name: '建立' }));
 
     await waitFor(() => expect(mockedCreateOption).toHaveBeenCalledTimes(1));
-    expect(mockedCreateOption.mock.calls[0][0]).toBe('PROD_KIND');
+    expect(mockedCreateOption.mock.calls[0][0]).toBe('prod_kind');
     expect(mockedCreateOption.mock.calls[0][1]).toEqual({
       optionValue: 'M7',
       optionLabel: '第七類',
@@ -153,7 +153,7 @@ describe('FieldOptionsPage (F076)', () => {
     fireEvent.click(screen.getByRole('button', { name: /確認停用/ }));
 
     await waitFor(() =>
-      expect(mockedDeactivateOption).toHaveBeenCalledWith('PROD_KIND', 'M3', {
+      expect(mockedDeactivateOption).toHaveBeenCalledWith('prod_kind', 'M3', {
         isActive: false,
         reason: '棄用 — 已合併至 M5',
       }),
@@ -171,7 +171,7 @@ describe('FieldOptionsPage (F076)', () => {
 
     fireEvent.click(screen.getByTestId('btn-reactivate-M5'));
     await waitFor(() =>
-      expect(mockedReactivateOption).toHaveBeenCalledWith('PROD_KIND', 'M5'),
+      expect(mockedReactivateOption).toHaveBeenCalledWith('prod_kind', 'M5'),
     );
   });
 

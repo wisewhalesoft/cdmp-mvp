@@ -31,7 +31,7 @@ const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 
 const sampleFields: PooldataField[] = [
   {
-    columnName: 'PROD_KIND',
+    columnName: 'prod_kind',
     displayName: '產品類別',
     fieldType: 'categorical',
     isActive: true,
@@ -39,7 +39,7 @@ const sampleFields: PooldataField[] = [
     updatedAt: '2026-05-15T00:00:00.000Z',
   },
   {
-    columnName: 'AMOUNT',
+    columnName: 'amount',
     displayName: '金額',
     fieldType: 'numeric',
     isActive: true,
@@ -78,8 +78,8 @@ describe('FieldWhitelistPage (F075)', () => {
 
   it('渲染欄位列表 + field_type badge', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
-    expect(screen.getByText('AMOUNT')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+    expect(screen.getByText('amount')).toBeInTheDocument();
     expect(screen.getByTestId('field-type-categorical')).toBeInTheDocument();
     expect(screen.getByTestId('field-type-numeric')).toBeInTheDocument();
   });
@@ -88,7 +88,7 @@ describe('FieldWhitelistPage (F075)', () => {
     mockedGetEffectiveIdentity.mockReturnValue('section_chief');
     mockedGetBusinessRole.mockReturnValue('section_chief');
     renderPage();
-    await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
     expect(screen.getByTestId('btn-create-field')).toBeDisabled();
   });
 
@@ -97,7 +97,7 @@ describe('FieldWhitelistPage (F075)', () => {
     mockedListAvailableColumns.mockResolvedValue({
       availableColumns: [
         {
-          columnName: 'NEW_COL',
+          columnName: 'new_col',
           dataType: 'character varying',
           suggestedFieldType: 'categorical',
         },
@@ -105,23 +105,23 @@ describe('FieldWhitelistPage (F075)', () => {
     });
     mockedCreateField.mockResolvedValue({
       ...sampleFields[0],
-      columnName: 'NEW_COL',
+      columnName: 'new_col',
       displayName: '新欄位',
     });
     renderPage();
-    await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('btn-create-field'));
     expect(screen.getByTestId('create-field-modal')).toBeInTheDocument();
 
-    // dropdown 開啟 → 選 NEW_COL
+    // dropdown 開啟 → 選 new_col
     await waitFor(() =>
       expect(screen.getByTestId('dropdown-column-name-trigger')).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
     await waitFor(() =>
-      expect(screen.getByTestId('dropdown-option-NEW_COL')).toBeInTheDocument(),
+      expect(screen.getByTestId('dropdown-option-new_col')).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByTestId('dropdown-option-NEW_COL'));
+    fireEvent.click(screen.getByTestId('dropdown-option-new_col'));
 
     fireEvent.change(screen.getByTestId('input-display-name'), {
       target: { value: '新欄位' },
@@ -130,7 +130,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     await waitFor(() => expect(mockedCreateField).toHaveBeenCalledTimes(1));
     expect(mockedCreateField.mock.calls[0][0]).toMatchObject({
-      columnName: 'NEW_COL',
+      columnName: 'new_col',
       displayName: '新欄位',
       fieldType: 'categorical', // suggestedFieldType 預選
     });
@@ -142,13 +142,13 @@ describe('FieldWhitelistPage (F075)', () => {
 
   it('停用 categorical 欄位 → 預查 active count 並顯示級聯 modal', async () => {
     mockedGetCount.mockResolvedValue({
-      columnName: 'PROD_KIND',
+      columnName: 'prod_kind',
       activeCount: 5,
     });
     renderPage();
-    await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByTestId('btn-disable-PROD_KIND'));
+    fireEvent.click(screen.getByTestId('btn-disable-prod_kind'));
     await waitFor(() =>
       expect(screen.getByTestId('category-switch-modal')).toBeInTheDocument(),
     );
@@ -157,8 +157,8 @@ describe('FieldWhitelistPage (F075)', () => {
 
   it('停用 numeric 欄位 → 顯示一般 confirm modal（無級聯）', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('AMOUNT')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('btn-disable-AMOUNT'));
+    await waitFor(() => expect(screen.getByText('amount')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-disable-amount'));
     await waitFor(() =>
       expect(screen.getByTestId('confirm-modal-danger')).toBeInTheDocument(),
     );
@@ -189,15 +189,15 @@ describe('FieldWhitelistPage (F075)', () => {
     it('type filter=numeric 過濾為 numeric 欄位', async () => {
       renderPage();
       await waitFor(() =>
-        expect(screen.getByText('AMOUNT')).toBeInTheDocument(),
+        expect(screen.getByText('amount')).toBeInTheDocument(),
       );
       fireEvent.change(screen.getByTestId('filter-type'), {
         target: { value: 'numeric' },
       });
-      // PROD_KIND (categorical) 應被過濾掉
-      expect(screen.queryByText('PROD_KIND')).not.toBeInTheDocument();
-      // AMOUNT (numeric) 仍在
-      expect(screen.getByText('AMOUNT')).toBeInTheDocument();
+      // prod_kind (categorical) 應被過濾掉
+      expect(screen.queryByText('prod_kind')).not.toBeInTheDocument();
+      // amount (numeric) 仍在
+      expect(screen.getByText('amount')).toBeInTheDocument();
     });
 
     it('footer 顯示 F075 商業規則摘要（BR-1/3/4/7）', async () => {
@@ -219,14 +219,15 @@ describe('FieldWhitelistPage (F075)', () => {
 
   describe('F075 v1.4 — dropdown + hint + 命名', () => {
     // 標準 available-columns mock response（3 筆，供多個 case 共用）
+    //   v1.4.3：column_name 改小寫貼近 PostgreSQL information_schema.columns 真實 case
     const STANDARD_AVAILABLE: AvailableColumn[] = [
-      { columnName: 'AGE', dataType: 'date', suggestedFieldType: 'date' },
+      { columnName: 'age', dataType: 'date', suggestedFieldType: 'date' },
       {
-        columnName: 'CODE',
+        columnName: 'code',
         dataType: 'character varying',
         suggestedFieldType: 'categorical',
       },
-      { columnName: 'ZYEAR', dataType: 'integer', suggestedFieldType: 'numeric' },
+      { columnName: 'zyear', dataType: 'integer', suggestedFieldType: 'numeric' },
     ];
 
     beforeEach(() => {
@@ -239,7 +240,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     it('TS-F075-FE-001：頁面 H1 / AppLayout title 顯示「篩選欄位管理」（不含「白名單管理」）', async () => {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
 
       // AppLayout title 含「篩選欄位管理」
       const heading = screen.getByRole('heading', { level: 1 });
@@ -251,7 +252,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     it('TS-F075-FE-002：點「新增篩選欄位」按鈕 → Modal 標題為「新增篩選欄位」', async () => {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
 
       const btn = screen.getByTestId('btn-create-field');
       expect(btn.textContent).toContain('新增篩選欄位');
@@ -272,7 +273,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     it('TS-F075-FE-003：開啟 Modal 後 dropdown panel 內 3 個 option 元素', async () => {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('btn-create-field'));
 
       await waitFor(() =>
@@ -282,15 +283,15 @@ describe('FieldWhitelistPage (F075)', () => {
 
       // 確認 3 個 option
       await waitFor(() => {
-        expect(screen.getByTestId('dropdown-option-AGE')).toBeInTheDocument();
+        expect(screen.getByTestId('dropdown-option-age')).toBeInTheDocument();
       });
-      expect(screen.getByTestId('dropdown-option-CODE')).toBeInTheDocument();
-      expect(screen.getByTestId('dropdown-option-ZYEAR')).toBeInTheDocument();
+      expect(screen.getByTestId('dropdown-option-code')).toBeInTheDocument();
+      expect(screen.getByTestId('dropdown-option-zyear')).toBeInTheDocument();
     });
 
     it("TS-F075-FE-004：點 dropdown trigger → panel 可見且 data-state='open'", async () => {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('btn-create-field'));
 
       await waitFor(() =>
@@ -306,9 +307,9 @@ describe('FieldWhitelistPage (F075)', () => {
       expect(screen.getByTestId('dropdown-column-name-panel')).toBeInTheDocument();
     });
 
-    it("TS-F075-FE-005：搜尋輸入 'YE' → 只顯示 ZYEAR", async () => {
+    it("TS-F075-FE-005：搜尋輸入 'ye' → 只顯示 zyear", async () => {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('btn-create-field'));
 
       await waitFor(() =>
@@ -317,26 +318,26 @@ describe('FieldWhitelistPage (F075)', () => {
       fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
 
       await waitFor(() =>
-        expect(screen.getByTestId('dropdown-option-AGE')).toBeInTheDocument(),
+        expect(screen.getByTestId('dropdown-option-age')).toBeInTheDocument(),
       );
 
       fireEvent.change(screen.getByTestId('dropdown-column-name-search'), {
-        target: { value: 'YE' },
+        target: { value: 'ye' },
       });
 
-      // 只剩 ZYEAR
+      // 只剩 zyear
       await waitFor(() =>
-        expect(screen.getByTestId('dropdown-option-ZYEAR')).toBeInTheDocument(),
+        expect(screen.getByTestId('dropdown-option-zyear')).toBeInTheDocument(),
       );
-      expect(screen.queryByTestId('dropdown-option-AGE')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('dropdown-option-CODE')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('dropdown-option-age')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('dropdown-option-code')).not.toBeInTheDocument();
     });
 
     // ===== C. 點選 dropdown → hint + radio =====
 
     async function openDropdownAndSelect(columnTestId: string) {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('btn-create-field'));
       await waitFor(() =>
         expect(screen.getByTestId('dropdown-column-name-trigger')).toBeInTheDocument(),
@@ -348,12 +349,12 @@ describe('FieldWhitelistPage (F075)', () => {
       fireEvent.click(screen.getByTestId(columnTestId));
     }
 
-    it("TS-F075-FE-006：選 AGE → trigger label='AGE'、hint visible + suggested + radio-date checked", async () => {
-      await openDropdownAndSelect('dropdown-option-AGE');
+    it("TS-F075-FE-006：選 age → trigger label='age'、hint visible + suggested + radio-date checked", async () => {
+      await openDropdownAndSelect('dropdown-option-age');
 
-      // trigger label 顯示 AGE
+      // trigger label 顯示 age
       const trigger = screen.getByTestId('dropdown-column-name-trigger');
-      expect(trigger.textContent).toContain('AGE');
+      expect(trigger.textContent).toContain('age');
 
       // hint visible 且 data-state='suggested'
       const hint = screen.getByTestId('field-type-hint');
@@ -378,7 +379,7 @@ describe('FieldWhitelistPage (F075)', () => {
     });
 
     it("TS-F075-FE-007：選 ZYEAR (suggestedFieldType='numeric') → radio-numeric checked + hint 含 'numeric' / 'integer'", async () => {
-      await openDropdownAndSelect('dropdown-option-ZYEAR');
+      await openDropdownAndSelect('dropdown-option-zyear');
 
       const radioNumeric = screen.getByTestId(
         'field-type-radio-numeric',
@@ -391,7 +392,7 @@ describe('FieldWhitelistPage (F075)', () => {
     });
 
     it("TS-F075-FE-008：選 CODE (suggestedFieldType='categorical') → radio-categorical checked", async () => {
-      await openDropdownAndSelect('dropdown-option-CODE');
+      await openDropdownAndSelect('dropdown-option-code');
 
       const radioCategorical = screen.getByTestId(
         'field-type-radio-categorical',
@@ -405,7 +406,7 @@ describe('FieldWhitelistPage (F075)', () => {
     // ===== D. 使用者覆寫 radio → hint data-state 切換 =====
 
     it("TS-F075-FE-009：覆寫 → hint data-state 切換為 'user-overridden'", async () => {
-      await openDropdownAndSelect('dropdown-option-AGE');
+      await openDropdownAndSelect('dropdown-option-age');
 
       // 覆寫為 numeric
       fireEvent.click(screen.getByTestId('field-type-radio-numeric'));
@@ -416,7 +417,7 @@ describe('FieldWhitelistPage (F075)', () => {
     });
 
     it("TS-F075-FE-010：覆寫後點回原 suggestedFieldType → 仍維持 'user-overridden'（RISK-003 決議）", async () => {
-      await openDropdownAndSelect('dropdown-option-AGE');
+      await openDropdownAndSelect('dropdown-option-age');
 
       // 覆寫為 numeric
       fireEvent.click(screen.getByTestId('field-type-radio-numeric'));
@@ -434,7 +435,7 @@ describe('FieldWhitelistPage (F075)', () => {
     });
 
     it("TS-F075-FE-011：dropdown 重選另一欄位 → data-state 重置為 'suggested'", async () => {
-      await openDropdownAndSelect('dropdown-option-AGE');
+      await openDropdownAndSelect('dropdown-option-age');
 
       // 先覆寫
       fireEvent.click(screen.getByTestId('field-type-radio-numeric'));
@@ -444,9 +445,9 @@ describe('FieldWhitelistPage (F075)', () => {
       // 重新開 dropdown 選另一欄位 CODE
       fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
       await waitFor(() =>
-        expect(screen.getByTestId('dropdown-option-CODE')).toBeInTheDocument(),
+        expect(screen.getByTestId('dropdown-option-code')).toBeInTheDocument(),
       );
-      fireEvent.click(screen.getByTestId('dropdown-option-CODE'));
+      fireEvent.click(screen.getByTestId('dropdown-option-code'));
 
       hint = screen.getByTestId('field-type-hint');
       expect(hint.getAttribute('data-state')).toBe('suggested');
@@ -462,7 +463,7 @@ describe('FieldWhitelistPage (F075)', () => {
     it('TS-F075-FE-012：API 回 200 空陣列 → dropdown 空態顯示「全部已列入」(無重試按鈕) + submit 停用', async () => {
       mockedListAvailableColumns.mockResolvedValue({ availableColumns: [] });
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('btn-create-field'));
 
       await waitFor(() =>
@@ -494,7 +495,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     async function openCreateModalAndDropdown() {
       renderPage();
-      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('btn-create-field'));
       await waitFor(() =>
         expect(screen.getByTestId('dropdown-column-name-trigger')).toBeInTheDocument(),
@@ -596,7 +597,7 @@ describe('FieldWhitelistPage (F075)', () => {
         }
         return Promise.resolve({
           availableColumns: [
-            { columnName: 'NEW_COL', dataType: 'varchar', suggestedFieldType: 'categorical' },
+            { columnName: 'new_col', dataType: 'varchar', suggestedFieldType: 'categorical' },
           ],
         });
       });
@@ -630,7 +631,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     it("TS-F075-FE-013：新增成功 → toast 以 displayName 為主（AC-15）", async () => {
       mockedCreateField.mockResolvedValue({
-        columnName: 'ZYEAR',
+        columnName: 'zyear',
         displayName: '風險等級',
         fieldType: 'numeric',
         isActive: true,
@@ -638,7 +639,7 @@ describe('FieldWhitelistPage (F075)', () => {
         updatedAt: '2026-05-18T00:00:00.000Z',
       });
 
-      await openDropdownAndSelect('dropdown-option-ZYEAR');
+      await openDropdownAndSelect('dropdown-option-zyear');
 
       // 填 displayName
       fireEvent.change(screen.getByTestId('input-display-name'), {
@@ -669,7 +670,7 @@ describe('FieldWhitelistPage (F075)', () => {
         },
       });
 
-      await openDropdownAndSelect('dropdown-option-ZYEAR');
+      await openDropdownAndSelect('dropdown-option-zyear');
       fireEvent.change(screen.getByTestId('input-display-name'), {
         target: { value: '重複欄位' },
       });
@@ -699,7 +700,7 @@ describe('FieldWhitelistPage (F075)', () => {
         },
       });
 
-      await openDropdownAndSelect('dropdown-option-ZYEAR');
+      await openDropdownAndSelect('dropdown-option-zyear');
       fireEvent.change(screen.getByTestId('input-display-name'), {
         target: { value: 'X' },
       });
