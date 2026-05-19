@@ -24,6 +24,7 @@ const mockedListFields = vi.mocked(poolApi.listFields);
 const mockedCreateField = vi.mocked(poolApi.createField);
 const mockedGetCount = vi.mocked(poolApi.getActiveOptionsCount);
 const mockedDisableField = vi.mocked(poolApi.disableField);
+const mockedUpdateField = vi.mocked(poolApi.updateField);
 const mockedListAvailableColumns = vi.mocked(poolApi.listAvailableColumns);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
@@ -727,10 +728,290 @@ describe('FieldWhitelistPage (F075)', () => {
     });
 
     // ===== G. Edit 模式 Regression =====
-    // TS-F075-FE-016：SKIP（user Q3 決議 D-iii：Edit 流程未於 v1.4 開放）
-    it.skip('TS-F075-FE-016（SKIP / D-iii）：Edit Modal — readonly chip 顯示 + dropdown 不存在', () => {
-      // Edit 流程未於 F075 v1.4 PR 範圍實作；待後續 spec
-      // 對應 implementation log「SKIP 項目摘要」
+    // TS-F075-FE-016：v1.4.5 reverse D-iii — Edit Modal 已實作（見下方 v1.4.5 區段）
+    it.skip('TS-F075-FE-016（v1.4 D-iii skip / v1.4.5 reverse 補實作）', () => {});
+  });
+
+  // ============================================================
+  // F075 v1.4.5 — prototype 對齊翻新（main content）
+  //   - 工具列結構 / 3 icon 操作 column / Edit Modal / reactivate
+  //   - filter 字串 / 清除按鈕
+  // ============================================================
+
+  describe('F075 v1.4.5 — prototype 對齊翻新', () => {
+    const sampleFieldsInactive: PooldataField[] = [
+      {
+        columnName: 'prod_kind',
+        displayName: '產品類別',
+        fieldType: 'categorical',
+        isActive: true,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        updatedAt: '2026-05-15T00:00:00.000Z',
+      },
+      {
+        columnName: 'amount',
+        displayName: '金額',
+        fieldType: 'numeric',
+        isActive: true,
+        createdAt: '2026-05-16T00:00:00.000Z',
+        updatedAt: '2026-05-16T00:00:00.000Z',
+      },
+      {
+        columnName: 'payt_term',
+        displayName: '還款期別',
+        fieldType: 'numeric',
+        isActive: false,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        updatedAt: '2026-05-15T00:00:00.000Z',
+      },
+    ];
+
+    beforeEach(() => {
+      // 預設活躍 + 停用混合
+      mockedListFields.mockResolvedValue({ fields: sampleFieldsInactive });
+    });
+
+    it('TS-F075-FE-V145-001：新增按鈕渲染於工具列（與 filter-type / filter-active 同 parent toolbar）', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      const toolbar = screen.getByTestId('field-whitelist-toolbar');
+      const createBtn = screen.getByTestId('btn-create-field');
+      const typeFilter = screen.getByTestId('filter-type');
+      const statusFilter = screen.getByTestId('filter-active');
+
+      expect(toolbar).toContainElement(createBtn);
+      expect(toolbar).toContainElement(typeFilter);
+      expect(toolbar).toContainElement(statusFilter);
+    });
+
+    it('TS-F075-FE-V145-002：「清除」按鈕重置 search + filter-type + filter-active', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      // 設定狀態
+      fireEvent.change(screen.getByPlaceholderText(/搜尋 columnName/), {
+        target: { value: 'prod' },
+      });
+      fireEvent.change(screen.getByTestId('filter-type'), {
+        target: { value: 'numeric' },
+      });
+      fireEvent.change(screen.getByTestId('filter-active'), {
+        target: { value: 'active' },
+      });
+
+      // 點清除
+      fireEvent.click(screen.getByTestId('btn-clear-filters'));
+
+      // 確認重置
+      expect(
+        (screen.getByPlaceholderText(/搜尋 columnName/) as HTMLInputElement).value,
+      ).toBe('');
+      expect((screen.getByTestId('filter-type') as HTMLSelectElement).value).toBe('all');
+      expect((screen.getByTestId('filter-active') as HTMLSelectElement).value).toBe('all');
+    });
+
+    it('TS-F075-FE-V145-003：filter-type 三個 option 字串對齊 prototype 37a L133-138', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      const sel = screen.getByTestId('filter-type') as HTMLSelectElement;
+      const optionTexts = Array.from(sel.options).map((o) => o.text);
+      expect(optionTexts).toContain('類別：全部');
+      expect(optionTexts).toContain('categorical（類別型）');
+      expect(optionTexts).toContain('numeric（數值型）');
+      expect(optionTexts).toContain('date（日期型）');
+    });
+
+    it('TS-F075-FE-V145-004：filter-active 三個 option 字串對齊 prototype 37a L142-146', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      const sel = screen.getByTestId('filter-active') as HTMLSelectElement;
+      const optionTexts = Array.from(sel.options).map((o) => o.text);
+      expect(optionTexts).toContain('狀態：全部');
+      expect(optionTexts).toContain('僅顯示啟用');
+      expect(optionTexts).toContain('僅顯示停用');
+      // 禁用辭彙
+      expect(optionTexts).not.toContain('啟用中');
+      expect(optionTexts).not.toContain('已停用');
+    });
+
+    it('TS-F075-FE-V145-005：操作 column — categorical 啟用欄位有 3 個 icon', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      expect(screen.getByTestId('btn-options-prod_kind')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-edit-prod_kind')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-disable-prod_kind')).toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V145-006：操作 column — numeric 啟用欄位有 2 個 icon（無 btn-options）', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('amount')).toBeInTheDocument());
+
+      expect(screen.queryByTestId('btn-options-amount')).not.toBeInTheDocument();
+      expect(screen.getByTestId('btn-edit-amount')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-disable-amount')).toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V145-007：操作 column — inactive 欄位顯示 btn-edit + btn-reactivate（無 btn-disable）', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('payt_term')).toBeInTheDocument());
+
+      expect(screen.getByTestId('btn-edit-payt_term')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-reactivate-payt_term')).toBeInTheDocument();
+      expect(screen.queryByTestId('btn-disable-payt_term')).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V145-008：點 btn-edit → 開 Edit Modal 含 readonly columnName + 預填 displayName + 不渲染 dropdown / hint', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('btn-edit-prod_kind'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-field-modal')).toBeInTheDocument(),
+      );
+      // readonly columnName chip
+      const readonly = screen.getByTestId('readonly-column-name');
+      expect(readonly.textContent).toContain('prod_kind');
+      expect(readonly.textContent).toContain('PK 不可變更');
+      // displayName 預填
+      const dispInput = screen.getByTestId(
+        'edit-input-display-name',
+      ) as HTMLInputElement;
+      expect(dispInput.value).toBe('產品類別');
+      // 預選 radio 為原 fieldType
+      const radioCategorical = screen.getByTestId(
+        'edit-field-type-radio-categorical',
+      ) as HTMLInputElement;
+      expect(radioCategorical.checked).toBe(true);
+      // **不渲染** create-only 元素
+      expect(screen.queryByTestId('dropdown-column-name-trigger')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('field-type-hint')).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V145-009：Edit Modal submit（非級聯）→ 呼叫 updateField + refetch', async () => {
+      mockedUpdateField.mockResolvedValue({
+        ...sampleFieldsInactive[1],
+        displayName: '金額（修正）',
+      });
+      renderPage();
+      await waitFor(() => expect(screen.getByText('amount')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('btn-edit-amount'));
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-field-modal')).toBeInTheDocument(),
+      );
+
+      fireEvent.change(screen.getByTestId('edit-input-display-name'), {
+        target: { value: '金額（修正）' },
+      });
+      fireEvent.click(screen.getByTestId('btn-submit-edit-field'));
+
+      await waitFor(() => expect(mockedUpdateField).toHaveBeenCalledTimes(1));
+      expect(mockedUpdateField.mock.calls[0][0]).toBe('amount');
+      expect(mockedUpdateField.mock.calls[0][1]).toMatchObject({
+        displayName: '金額（修正）',
+        fieldType: 'numeric',
+      });
+    });
+
+    it('TS-F075-FE-V145-010：Edit Modal — categorical → numeric 切換 → 觸發 CategorySwitchConfirmModal（重用既有）', async () => {
+      mockedGetCount.mockResolvedValue({
+        columnName: 'prod_kind',
+        activeCount: 7,
+      });
+      mockedUpdateField.mockResolvedValue({
+        ...sampleFieldsInactive[0],
+        fieldType: 'numeric',
+      });
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('btn-edit-prod_kind'));
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-field-modal')).toBeInTheDocument(),
+      );
+
+      // 切換 fieldType radio: categorical → numeric
+      fireEvent.click(screen.getByTestId('edit-field-type-radio-numeric'));
+      // submit
+      fireEvent.click(screen.getByTestId('btn-submit-edit-field'));
+
+      // 預期：先 getActiveOptionsCount，然後出現 CategorySwitchConfirmModal
+      await waitFor(() => expect(mockedGetCount).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(screen.getByTestId('category-switch-modal')).toBeInTheDocument(),
+      );
+      // 此時 updateField 尚未被呼叫
+      expect(mockedUpdateField).not.toHaveBeenCalled();
+      // active count 顯示 7
+      expect(screen.getByTestId('active-count').textContent).toBe('7');
+    });
+
+    it('TS-F075-FE-V145-011：點 btn-reactivate → 呼叫 updateField({ isActive: true }) + toast「已啟用」', async () => {
+      mockedUpdateField.mockResolvedValue({
+        ...sampleFieldsInactive[2],
+        isActive: true,
+      });
+      renderPage();
+      await waitFor(() => expect(screen.getByText('payt_term')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('btn-reactivate-payt_term'));
+
+      await waitFor(() => expect(mockedUpdateField).toHaveBeenCalledTimes(1));
+      expect(mockedUpdateField.mock.calls[0][0]).toBe('payt_term');
+      expect(mockedUpdateField.mock.calls[0][1]).toEqual({ isActive: true });
+
+      // toast 含 displayName + 已啟用
+      await waitFor(() => {
+        expect(screen.queryByText(/欄位『還款期別』已啟用/)).toBeTruthy();
+      });
+    });
+
+    it('TS-F075-FE-V145-012：reactivate 回 403 → 顯示 error toast 不破壞列表', async () => {
+      mockedUpdateField.mockRejectedValue({
+        response: {
+          status: 403,
+          data: { error: 'FORBIDDEN', message: 'Director only' },
+        },
+      });
+      renderPage();
+      await waitFor(() => expect(screen.getByText('payt_term')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('btn-reactivate-payt_term'));
+
+      await waitFor(() => expect(mockedUpdateField).toHaveBeenCalled());
+      // 列表仍存在原資料
+      expect(screen.getByText('payt_term')).toBeInTheDocument();
+      // error toast
+      await waitFor(() => {
+        expect(screen.queryByText(/Director only/)).toBeTruthy();
+      });
+    });
+
+    it('TS-F075-FE-V145-013：section_chief → btn-edit / btn-disable / btn-reactivate 全部 disabled', async () => {
+      mockedGetEffectiveIdentity.mockReturnValue('section_chief');
+      mockedGetBusinessRole.mockReturnValue('section_chief');
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      expect(screen.getByTestId('btn-edit-prod_kind')).toBeDisabled();
+      expect(screen.getByTestId('btn-disable-prod_kind')).toBeDisabled();
+      expect(screen.getByTestId('btn-edit-payt_term')).toBeDisabled();
+      expect(screen.getByTestId('btn-reactivate-payt_term')).toBeDisabled();
+      expect(screen.getByTestId('btn-create-field')).toBeDisabled();
+    });
+
+    it('TS-F075-FE-V145-014：Glossary regression — filter-active 不含 v1.4 舊字串「啟用中」/「已停用」', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+      const sel = screen.getByTestId('filter-active') as HTMLSelectElement;
+      const html = sel.outerHTML;
+      expect(html).not.toContain('啟用中');
+      expect(html).not.toContain('已停用');
     });
   });
 });
