@@ -9,7 +9,6 @@ import {
   ListChecks,
   ChevronRight,
   Tags,
-  ShieldCheck,
   SlidersHorizontal,
   ClipboardList,
   Calculator,
@@ -123,14 +122,10 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: Tags,
             requires: 'director_or_section_chief',
           },
-          // F075/F076 POOLDATA 篩選欄位管理：director + section_chief（讀），director only（寫入）
-          // v1.4 命名改造：「白名單管理」→「篩選欄位管理」（UI 層命名；內部 DB / API path 保留）
-          {
-            to: '/assignment/whitelist',
-            label: '篩選欄位管理',
-            icon: ShieldCheck,
-            requires: 'director_or_section_chief',
-          },
+          // F075 v1.4.1：F075 / F076 入口卡片已整合入代碼維護頁的「進階維護」區塊
+          // （對齊 prototype 37-base-code.html L186-243 設計）；sidebar 不再有獨立子項，
+          // 但路由 /assignment/whitelist + /assignment/whitelist/options 在 App.tsx
+          // 仍保留供卡片導向。
           // M02 計分卡：director only（F002 §4.6 M02 對 section_chief 整頁封鎖）
           {
             to: '/assignment/scoring',

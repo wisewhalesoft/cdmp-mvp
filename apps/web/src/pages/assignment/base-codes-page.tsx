@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Package,
   Layers,
@@ -14,6 +15,12 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
+  Filter,
+  ListChecks,
+  ArrowUpRight,
+  Database,
+  Users,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import {
@@ -262,6 +269,12 @@ export function BaseCodesPage() {
     <AppLayout title="代碼維護">
       <main className="flex-1">
         <div className="p-6">
+          {/* ===== F075 v1.4.1：進階維護區塊（F075 / F076 入口卡片） ===== */}
+          {/* 對齊 prototype 37-base-code.html L186-243：
+                E07 重構新增的 M06 進階維護入口，將「篩選欄位管理」(F075) 與
+                「類別型欄位可選值」(F076) 由 sidebar 移至此處的卡片入口。 */}
+          <AdvancedMaintenanceSection />
+
           {/* ===== Tabs + Filter ===== */}
           <div className="bg-white rounded-t-lg border border-[#E5E7EB] border-b-0">
             <div className="flex items-center justify-between px-4 border-b border-[#E5E7EB]">
@@ -802,6 +815,112 @@ function CaseStatusSemanticBanner() {
           </div>
         </div>
       </details>
+    </div>
+  );
+}
+
+/**
+ * F075 v1.4.1：M06 進階維護區塊。
+ *
+ * 對應 prototype: /prototypes/37-base-code.html L186-243
+ *
+ * 將 F075 「篩選欄位管理」 與 F076 「類別型欄位可選值」 兩張入口卡片
+ * 從 sidebar 移至代碼維護頁的「進階維護」區塊，貼合 prototype 設計。
+ */
+function AdvancedMaintenanceSection() {
+  return (
+    <div className="mb-5" data-testid="advanced-maintenance-section">
+      <div className="flex items-center gap-2 mb-2.5">
+        <Sparkles className="w-4 h-4 text-[#2563EB]" />
+        <h2 className="text-sm font-semibold text-gray-800">進階維護</h2>
+        <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded border border-blue-200">
+          E07 重構新增
+        </span>
+        <span className="text-xs text-gray-500">
+          — F075 / F076 v1.4：篩選欄位管理與類別型欄位可選值
+        </span>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 入口 1：F075 篩選欄位管理 */}
+        <Link
+          to="/assignment/whitelist"
+          data-testid="card-pooldata-whitelist"
+          className="group bg-white border border-[#E5E7EB] rounded-lg p-4 hover:border-[#2563EB] hover:shadow-md transition flex items-start gap-3"
+        >
+          <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition">
+            <Filter className="w-5 h-5 text-[#2563EB]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-semibold text-gray-900 group-hover:text-[#2563EB] transition">
+                篩選欄位管理
+              </h3>
+              <span className="text-[10px] text-gray-400 font-mono">F075</span>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              管理可作為名單定義條件的 <code>OBPOOLDATA</code> 欄位，並為每個欄位標記{' '}
+              <code>field_type</code>（numeric / categorical / date）驅動 US-106 新表單條件元件型態。
+            </p>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+              <span className="inline-flex items-center gap-1">
+                <Database className="w-3 h-3" />
+                pooldata_field_whitelist
+              </span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                部長 + Admin
+              </span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Package className="w-3 h-3" />
+                Seed 8 筆
+              </span>
+            </div>
+          </div>
+          <ArrowUpRight className="w-4 h-4 text-gray-300 group-hover:text-[#2563EB] transition shrink-0" />
+        </Link>
+
+        {/* 入口 2：F076 類別型欄位可選值 */}
+        <Link
+          to="/assignment/whitelist/options"
+          data-testid="card-categorical-field-values"
+          className="group bg-white border border-[#E5E7EB] rounded-lg p-4 hover:border-[#2563EB] hover:shadow-md transition flex items-start gap-3"
+        >
+          <div className="w-10 h-10 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition">
+            <ListChecks className="w-5 h-5 text-purple-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-semibold text-gray-900 group-hover:text-[#2563EB] transition">
+                類別型欄位可選值
+              </h3>
+              <span className="text-[10px] text-gray-400 font-mono">F076</span>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              管理篩選欄位中 <code>field_type = &apos;categorical&apos;</code> 欄位的選項清單（
+              <code>option_value</code> / <code>option_label</code>），供新名單定義表單之多選元件動態載入；含 PO 決議 F076-C 軟停用機制。
+            </p>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+              <span className="inline-flex items-center gap-1">
+                <Database className="w-3 h-3" />
+                categorical_field_value
+              </span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                部長 + Admin
+              </span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                6 欄位 × N 值
+              </span>
+            </div>
+          </div>
+          <ArrowUpRight className="w-4 h-4 text-gray-300 group-hover:text-[#2563EB] transition shrink-0" />
+        </Link>
+      </div>
     </div>
   );
 }
