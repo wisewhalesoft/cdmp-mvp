@@ -107,6 +107,12 @@ export interface AvailableColumn {
   columnName: string;
   dataType: string;
   suggestedFieldType: FieldType;
+  /**
+   * F075 v1.4.7 / AC-16：SQL Server `sys.extended_properties` 之 `MS_Description`。
+   * 若欄位無 MS_Description / SQL Server 連線失敗 / ExtractionTask 查無，則 backend omit 此欄位
+   * （非 null / 非空字串）。前端應以 `meta.columnDescription` truthy 判斷後再使用。
+   */
+  columnDescription?: string;
 }
 
 export interface ListAvailableColumnsResponse {

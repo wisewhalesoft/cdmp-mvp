@@ -134,6 +134,11 @@ export function FieldWhitelistPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
 
+  // v1.4.7（AC-17）：自動填入 displayName 的 hint 顯示狀態
+  // 觸發：dropdown 選有 columnDescription 之欄位 + input 當前為空白
+  // 消失：使用者鍵入改寫 / 重開 modal / 重新選欄位
+  const [showAutofilledHint, setShowAutofilledHint] = useState(false);
+
   // Disable confirm modal state (categorical with active options → F076-C cascade)
   const [disableTarget, setDisableTarget] = useState<PooldataField | null>(null);
   const [disableActiveCount, setDisableActiveCount] = useState<number | null>(null);
@@ -215,6 +220,28 @@ export function FieldWhitelistPage() {
     setDropdownSearch('');
     setAvailableColumns([]);
     setAvailableColumnsError(null);
+    // v1.4.7（AC-17）：重開 modal 必須重置 hint，避免上一次的自動填入殘留
+    setShowAutofilledHint(false);
+  };
+
+  /**
+   * F075 v1.4.7（AC-17）：自動填入 displayName helper
+   *
+   * 5 步邏輯（任一不符即提早 return）：
+   *   1. meta 為 null → return
+   *   2. input.value.trim() 非空 → return（不覆寫使用者輸入）
+   *   3. meta.columnDescription 為 undefined / null / '' → return
+   *   4. setInput(meta.columnDescription)
+   *   5. 顯示 hint
+   *
+   * 僅在新增 Modal 之 dropdown onChange 時呼叫；Edit Modal 自然不觸發（mode 隔離）。
+   */
+  const autoFillDisplayNameFromColumn = (meta: AvailableColumn | null) => {
+    if (!meta) return;
+    if (newDisplay.trim().length > 0) return;
+    if (!meta.columnDescription) return;
+    setNewDisplay(meta.columnDescription);
+    setShowAutofilledHint(true);
   };
 
   const loadAvailableColumns = async () => {
@@ -264,6 +291,8 @@ export function FieldWhitelistPage() {
     setDropdownOpen(false);
     setDropdownSearch('');
     setCreateError(null);
+    // v1.4.7（AC-17）：選欄位後嘗試自動填入 displayName（含空白判斷 / columnDescription 判斷）
+    autoFillDisplayNameFromColumn(col);
   };
 
   const onFieldTypeChange = (t: FieldType) => {
@@ -929,11 +958,25 @@ export function FieldWhitelistPage() {
                     type="text"
                     data-testid="input-display-name"
                     value={newDisplay}
-                    onChange={(e) => setNewDisplay(e.target.value)}
+                    onChange={(e) => {
+                      setNewDisplay(e.target.value);
+                      // v1.4.7（AC-17）：使用者鍵入 → hint 消失
+                      if (showAutofilledHint) setShowAutofilledHint(false);
+                    }}
                     maxLength={100}
                     placeholder="例：風險等級"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
+                  {/* v1.4.7（AC-17）：自動填入視覺 hint，緊接 input 下方 */}
+                  {showAutofilledHint && (
+                    <p
+                      data-testid="displayname-autofilled-hint"
+                      className="text-[11px] text-primary mt-1 inline-flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      已從 OBPOOLDATA <code className="font-mono">columnDescription</code> 自動填入，可直接覆寫
+                    </p>
+                  )}
                   <p className="text-[10px] text-gray-400 mt-1">
                     業務可讀中文標籤，最多 100 字元（toast 與表格顯示以此為主）
                   </p>

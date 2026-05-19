@@ -1014,4 +1014,174 @@ describe('FieldWhitelistPage (F075)', () => {
       expect(html).not.toContain('已停用');
     });
   });
+
+  // ============================================================
+  // F075 v1.4.7 — columnDescription 自動填入 displayName（AC-17）
+  // ============================================================
+
+  describe('F075 v1.4.7 — autoFillDisplayNameFromColumn (AC-17)', () => {
+    const AVAILABLE_WITH_DESC: AvailableColumn[] = [
+      {
+        columnName: 'prod_kind',
+        dataType: 'character varying',
+        suggestedFieldType: 'categorical',
+        // columnDescription 須擴充 AvailableColumn type
+        columnDescription: '產品類別',
+      } as AvailableColumn,
+      {
+        columnName: 'cust_age',
+        dataType: 'integer',
+        suggestedFieldType: 'numeric',
+        // 無 columnDescription（omit）
+      },
+    ];
+
+    beforeEach(() => {
+      mockedListAvailableColumns.mockResolvedValue({
+        availableColumns: AVAILABLE_WITH_DESC,
+      });
+    });
+
+    async function openModalAndDropdown() {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('btn-create-field'));
+      await waitFor(() =>
+        expect(screen.getByTestId('dropdown-column-name-trigger')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+      await waitFor(() =>
+        expect(screen.getByTestId('dropdown-option-prod_kind')).toBeInTheDocument(),
+      );
+    }
+
+    it('TS-F075-FE-V147-FE-01：選有 columnDescription 欄位 → displayName 自動填入 + hint 顯示', async () => {
+      await openModalAndDropdown();
+
+      // displayName 初始為空白
+      const input = screen.getByTestId('input-display-name') as HTMLInputElement;
+      expect(input.value).toBe('');
+      expect(
+        screen.queryByTestId('displayname-autofilled-hint'),
+      ).not.toBeInTheDocument();
+
+      // 選含 columnDescription 的欄位
+      fireEvent.click(screen.getByTestId('dropdown-option-prod_kind'));
+
+      // input 自動填入 columnDescription
+      await waitFor(() => {
+        const updated = screen.getByTestId('input-display-name') as HTMLInputElement;
+        expect(updated.value).toBe('產品類別');
+      });
+      // hint 顯示
+      expect(
+        screen.getByTestId('displayname-autofilled-hint'),
+      ).toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V147-FE-02：選無 columnDescription 欄位 → displayName 維持空白 + hint 不在 DOM', async () => {
+      await openModalAndDropdown();
+
+      fireEvent.click(screen.getByTestId('dropdown-option-cust_age'));
+
+      // displayName 維持空白
+      const input = screen.getByTestId('input-display-name') as HTMLInputElement;
+      expect(input.value).toBe('');
+      // hint 不在 DOM
+      expect(
+        screen.queryByTestId('displayname-autofilled-hint'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V147-FE-03：自動填入後使用者改寫 → hint 消失', async () => {
+      await openModalAndDropdown();
+      fireEvent.click(screen.getByTestId('dropdown-option-prod_kind'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('displayname-autofilled-hint')).toBeInTheDocument(),
+      );
+
+      // 使用者改寫
+      fireEvent.change(screen.getByTestId('input-display-name'), {
+        target: { value: '產品類別（覆寫）' },
+      });
+
+      // hint 消失
+      expect(
+        screen.queryByTestId('displayname-autofilled-hint'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V147-FE-04：input 已有內容 → 選欄位不覆寫 + hint 不出現', async () => {
+      await openModalAndDropdown();
+
+      // 使用者先輸入 displayName
+      fireEvent.change(screen.getByTestId('input-display-name'), {
+        target: { value: '使用者先輸入' },
+      });
+
+      // 再選含 columnDescription 的欄位
+      fireEvent.click(screen.getByTestId('dropdown-option-prod_kind'));
+
+      // input 維持使用者輸入值（不覆寫）
+      const input = screen.getByTestId('input-display-name') as HTMLInputElement;
+      expect(input.value).toBe('使用者先輸入');
+      // hint 不出現
+      expect(
+        screen.queryByTestId('displayname-autofilled-hint'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-V147-FE-05：關閉 modal 再重開 → hint 不在 DOM + input 為空', async () => {
+      await openModalAndDropdown();
+      fireEvent.click(screen.getByTestId('dropdown-option-prod_kind'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('displayname-autofilled-hint')).toBeInTheDocument(),
+      );
+
+      // 關閉 modal（點 modal 背景）
+      const modal = screen.getByTestId('create-field-modal');
+      // 模擬點背景遮罩
+      const backdrop = modal.querySelector('.bg-black\\/50') as HTMLElement;
+      fireEvent.click(backdrop);
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('create-field-modal')).not.toBeInTheDocument(),
+      );
+
+      // 重開
+      fireEvent.click(screen.getByTestId('btn-create-field'));
+      await waitFor(() =>
+        expect(screen.getByTestId('create-field-modal')).toBeInTheDocument(),
+      );
+
+      // hint 不在 DOM
+      expect(
+        screen.queryByTestId('displayname-autofilled-hint'),
+      ).not.toBeInTheDocument();
+      // input 為空
+      const input = screen.getByTestId('input-display-name') as HTMLInputElement;
+      expect(input.value).toBe('');
+    });
+
+    it('TS-F075-FE-V147-FE-06：Edit Modal 開啟 → hint 不在 DOM（sanity check：mode 隔離）', async () => {
+      mockedUpdateField.mockResolvedValue({
+        ...sampleFields[0],
+      });
+      renderPage();
+      await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
+
+      // 開啟 Edit Modal
+      fireEvent.click(screen.getByTestId('btn-edit-prod_kind'));
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-field-modal')).toBeInTheDocument(),
+      );
+
+      // hint 不在 DOM
+      expect(
+        screen.queryByTestId('displayname-autofilled-hint'),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
