@@ -6,3 +6,7 @@ dist
 *.log
 *.tsbuildinfo
 .mcp.json
+
+# 個人工作文件 / 進度報告（不入版控）
+進度報告*.md
+*-Peter-v*.md
