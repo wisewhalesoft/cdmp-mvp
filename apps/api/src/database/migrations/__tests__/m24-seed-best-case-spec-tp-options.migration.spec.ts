@@ -1,17 +1,18 @@
 /**
- * v2.0 補 / m24 / F076 v1.3 AC-3：BEST_CASE / SPEC_TP 可選值 seed
+ * v2.0 補 / m24 / F076 v1.3 AC-3 / v1.4.3 case 對齊：
+ *   best_case / spec_tp 可選值 seed（column_name 小寫對齊 ob_pool_data snake_case）
  *
- * 對應 spec：F076 §4 / AC-3 與 m22 §22 留項（"SPEC_TP / BEST_CASE：依 OBMCODEDF 之後另行補"）。
+ * 對應 spec：F076 §4 / AC-3 與 m22 §22 留項（"spec_tp / best_case：依 OBMCODEDF 之後另行補"）。
  *
  * 涵蓋 cases：
- *   - TC-SEED-BEST-CASE-001：BEST_CASE 至少 seed 2 筆 Y/N 可選值
- *   - TC-SEED-SPEC-TP-001：SPEC_TP 至少 seed 3 筆 placeholder 可選值
+ *   - TC-SEED-BEST-CASE-001：best_case 至少 seed 2 筆 Y/N 可選值
+ *   - TC-SEED-SPEC-TP-001：spec_tp 至少 seed 3 筆 placeholder 可選值
  *   - TC-SEED-IDEMPOTENT-PG：PostgreSQL ON CONFLICT (column_name, option_value) DO NOTHING
  *   - TC-SEED-IDEMPOTENT-SQLITE：SQLite INSERT OR IGNORE
- *   - TC-SEED-DOWN：DELETE 限定 BEST_CASE / SPEC_TP 兩個 column_name
+ *   - TC-SEED-DOWN：DELETE 限定 best_case / spec_tp 兩個 column_name
  *   - TC-SEED-ASSUMPTION-MARK：migration source 含 [ASSUMPTION] 標註待真實 OBMCODEDF dump 確認
  *
- * 不破壞 m22 已 seed 的其他 6 個欄位（PROD_KIND/LIST_TYPE/CASEYEAR/SETTLE_SRC/MONTH_CNT/PAYT_TERM）。
+ * 不破壞 m22 已 seed 的其他 6 個欄位（prod_kind/list_type/caseyear/settle_src/month_cnt/payt_term）。
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -40,19 +41,19 @@ describe('Migration 1711360000240: SeedBestCaseSpecTpOptions (v2.0 補 m22 留�
       delete process.env.DB_TYPE;
     });
 
-    it('TC-SEED-BEST-CASE-001：BEST_CASE seed 至少 Y / N 兩筆可選值', async () => {
+    it('TC-SEED-BEST-CASE-001：best_case seed 至少 Y / N 兩筆可選值', async () => {
       await migration.up(queryRunner as unknown as QueryRunner);
       const allSql = queryRunner.query.mock.calls.map((c) => c[0]).join('\n');
-      expect(allSql).toMatch(/'BEST_CASE'[^;]*'Y'/);
-      expect(allSql).toMatch(/'BEST_CASE'[^;]*'N'/);
+      expect(allSql).toMatch(/'best_case'[^;]*'Y'/);
+      expect(allSql).toMatch(/'best_case'[^;]*'N'/);
     });
 
-    it('TC-SEED-SPEC-TP-001：SPEC_TP seed 至少 3 筆 placeholder（01 / 02 / 03）', async () => {
+    it('TC-SEED-SPEC-TP-001：spec_tp seed 至少 3 筆 placeholder（01 / 02 / 03）', async () => {
       await migration.up(queryRunner as unknown as QueryRunner);
       const allSql = queryRunner.query.mock.calls.map((c) => c[0]).join('\n');
-      expect(allSql).toMatch(/'SPEC_TP'[^;]*'01'/);
-      expect(allSql).toMatch(/'SPEC_TP'[^;]*'02'/);
-      expect(allSql).toMatch(/'SPEC_TP'[^;]*'03'/);
+      expect(allSql).toMatch(/'spec_tp'[^;]*'01'/);
+      expect(allSql).toMatch(/'spec_tp'[^;]*'02'/);
+      expect(allSql).toMatch(/'spec_tp'[^;]*'03'/);
     });
 
     it('TC-SEED-IDEMPOTENT-PG：ON CONFLICT (column_name, option_value) DO NOTHING', async () => {
@@ -84,18 +85,18 @@ describe('Migration 1711360000240: SeedBestCaseSpecTpOptions (v2.0 補 m22 留�
   });
 
   describe('down()', () => {
-    it('TC-SEED-DOWN：DELETE 限定 BEST_CASE / SPEC_TP IN clause', async () => {
+    it('TC-SEED-DOWN：DELETE 限定 best_case / spec_tp IN clause', async () => {
       await migration.down(queryRunner as unknown as QueryRunner);
       const allSql = queryRunner.query.mock.calls.map((c) => c[0]).join('\n');
       expect(allSql).toMatch(/DELETE\s+FROM\s+pooldata_field_option/i);
       // 必須以 IN clause 限定範圍，避免清空整張表
-      expect(allSql).toMatch(/'BEST_CASE'/);
-      expect(allSql).toMatch(/'SPEC_TP'/);
+      expect(allSql).toMatch(/'best_case'/);
+      expect(allSql).toMatch(/'spec_tp'/);
       // 不可動到其他 6 個 m22 欄位
-      expect(allSql).not.toMatch(/'PROD_KIND'/);
-      expect(allSql).not.toMatch(/'LIST_TYPE'/);
-      expect(allSql).not.toMatch(/'CASEYEAR'/);
-      expect(allSql).not.toMatch(/'SETTLE_SRC'/);
+      expect(allSql).not.toMatch(/'prod_kind'/);
+      expect(allSql).not.toMatch(/'list_type'/);
+      expect(allSql).not.toMatch(/'caseyear'/);
+      expect(allSql).not.toMatch(/'settle_src'/);
       // 不可刪 whitelist（m22 owns）
       expect(allSql).not.toMatch(/DELETE\s+FROM\s+pooldata_field_whitelist/i);
     });

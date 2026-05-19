@@ -40,7 +40,7 @@ describe('PooldataFieldOptionService', () => {
   const makeOption = (
     overrides: Partial<PooldataFieldOption> = {},
   ): PooldataFieldOption => ({
-    column_name: 'PROD_KIND',
+    column_name: 'prod_kind',
     option_value: '01',
     option_label: '汽車新車',
     is_active: true,
@@ -66,7 +66,7 @@ describe('PooldataFieldOptionService', () => {
     };
     whitelistService = {
       assertCategorical: vi.fn().mockResolvedValue({
-        column_name: 'PROD_KIND',
+        column_name: 'prod_kind',
         field_type: 'categorical',
       }),
     };
@@ -90,9 +90,9 @@ describe('PooldataFieldOptionService', () => {
 
   describe('listOptions (TC-OPT-LIST-001 / 002 / 003)', () => {
     it('TC-OPT-LIST-001：?active=true 只取啟用', async () => {
-      await service.listOptions('PROD_KIND', { active: 'true' });
+      await service.listOptions('prod_kind', { active: 'true' });
       expect(optionRepo.find).toHaveBeenCalledWith({
-        where: { column_name: 'PROD_KIND', is_active: true },
+        where: { column_name: 'prod_kind', is_active: true },
         order: { option_value: 'ASC' },
       });
     });
@@ -106,11 +106,11 @@ describe('PooldataFieldOptionService', () => {
           deactivation_reason: 'manual',
         }),
       ]);
-      const result = await service.listOptions('PROD_KIND', {
+      const result = await service.listOptions('prod_kind', {
         includeInactive: 'true',
       });
       expect(optionRepo.find).toHaveBeenCalledWith({
-        where: { column_name: 'PROD_KIND' },
+        where: { column_name: 'prod_kind' },
         order: { option_value: 'ASC' },
       });
       expect(result.options).toHaveLength(2);
@@ -120,12 +120,12 @@ describe('PooldataFieldOptionService', () => {
     });
 
     it('TC-OPT-LIST-003：includeInactive=true 同時帶 active=true → includeInactive 優先', async () => {
-      await service.listOptions('PROD_KIND', {
+      await service.listOptions('prod_kind', {
         includeInactive: 'true',
         active: 'true',
       });
       expect(optionRepo.find).toHaveBeenCalledWith({
-        where: { column_name: 'PROD_KIND' },
+        where: { column_name: 'prod_kind' },
         order: { option_value: 'ASC' },
       });
     });
@@ -134,7 +134,7 @@ describe('PooldataFieldOptionService', () => {
       whitelistService.assertCategorical.mockRejectedValue(
         new BadRequestException(),
       );
-      await expect(service.listOptions('MONTH_CNT')).rejects.toBeInstanceOf(
+      await expect(service.listOptions('month_cnt')).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
@@ -152,7 +152,7 @@ describe('PooldataFieldOptionService', () => {
       );
 
       const result = await service.createOption(
-        'PROD_KIND',
+        'prod_kind',
         { optionValue: '09', optionLabel: '農業機具' },
         actor,
       );
@@ -162,7 +162,7 @@ describe('PooldataFieldOptionService', () => {
       expect(auditRepo.save).toHaveBeenCalledTimes(1);
       const auditArg = auditRepo.create.mock.calls[0][0];
       expect(auditArg.entity_type).toBe('pooldata_field_option');
-      expect(auditArg.entity_id).toBe('PROD_KIND.09');
+      expect(auditArg.entity_id).toBe('prod_kind.09');
       expect(auditArg.action).toBe('CREATE');
     });
 
@@ -172,7 +172,7 @@ describe('PooldataFieldOptionService', () => {
       );
       await expect(
         service.createOption(
-          'PROD_KIND',
+          'prod_kind',
           { optionValue: '03', optionLabel: 'X' },
           actor,
         ),
@@ -186,7 +186,7 @@ describe('PooldataFieldOptionService', () => {
       );
       await expect(
         service.createOption(
-          'MONTH_CNT',
+          'month_cnt',
           { optionValue: '1', optionLabel: 'X' },
           actor,
         ),
@@ -205,7 +205,7 @@ describe('PooldataFieldOptionService', () => {
       optionRepo.save.mockImplementation((e: any) => Promise.resolve({ ...e }));
 
       const result = await service.deactivateOption(
-        'PROD_KIND',
+        'prod_kind',
         '03',
         { reason: '2026 起停售' },
         actor,
@@ -224,7 +224,7 @@ describe('PooldataFieldOptionService', () => {
     it('TC-DEACTIVATE-002：optionValue 不存在 → 404 POOLDATA_OPTION_NOT_FOUND', async () => {
       optionRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.deactivateOption('PROD_KIND', '99', { reason: 'x' }, actor),
+        service.deactivateOption('prod_kind', '99', { reason: 'x' }, actor),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
@@ -238,7 +238,7 @@ describe('PooldataFieldOptionService', () => {
       optionRepo.save.mockImplementation((e: any) => Promise.resolve({ ...e }));
 
       const result = await service.deactivateOption(
-        'PROD_KIND',
+        'prod_kind',
         '03',
         { reason: '更新原因' },
         actor,
@@ -263,7 +263,7 @@ describe('PooldataFieldOptionService', () => {
       optionRepo.save.mockImplementation((e: any) => Promise.resolve({ ...e }));
 
       const result = await service.reactivateOption(
-        'PROD_KIND',
+        'prod_kind',
         '03',
         {},
         actor,
@@ -282,7 +282,7 @@ describe('PooldataFieldOptionService', () => {
       optionRepo.save.mockImplementation((e: any) => Promise.resolve({ ...e }));
 
       const result = await service.reactivateOption(
-        'PROD_KIND',
+        'prod_kind',
         '01',
         { optionLabel: '汽車新車（更新）' },
         actor,

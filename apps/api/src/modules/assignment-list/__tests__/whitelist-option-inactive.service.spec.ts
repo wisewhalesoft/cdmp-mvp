@@ -117,11 +117,12 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
   beforeEach(async () => {
     await env.listRepo.createQueryBuilder().delete().execute();
     await env.optionRepo.createQueryBuilder().delete().execute();
-    // seed：PROD_KIND 01 active；02 inactive；SETTLE_SRC Y active；N inactive
+    // seed：prod_kind 01 active；02 inactive；settle_src Y active；N inactive
+    //   v1.4.3 case 對齊：pooldata_field_option.column_name 改小寫對齊 ob_pool_data snake_case
     const now = new Date();
     await env.optionRepo.save([
       env.optionRepo.create({
-        column_name: 'PROD_KIND',
+        column_name: 'prod_kind',
         option_value: '01',
         option_label: '汽車新車',
         is_active: true,
@@ -130,7 +131,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
         updated_at: now,
       }),
       env.optionRepo.create({
-        column_name: 'PROD_KIND',
+        column_name: 'prod_kind',
         option_value: '02',
         option_label: '機車',
         is_active: false,
@@ -139,7 +140,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
         updated_at: now,
       }),
       env.optionRepo.create({
-        column_name: 'SETTLE_SRC',
+        column_name: 'settle_src',
         option_value: 'Y',
         option_label: '含他行代償',
         is_active: true,
@@ -148,7 +149,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
         updated_at: now,
       }),
       env.optionRepo.create({
-        column_name: 'SETTLE_SRC',
+        column_name: 'settle_src',
         option_value: 'N',
         option_label: '不含他行代償',
         is_active: false,
@@ -163,7 +164,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
     const dto = makeCreateDto({
       conditionPayload: {
         conditions: [
-          { columnName: 'PROD_KIND', fieldType: 'categorical', values: ['02'] }, // inactive
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] }, // inactive
         ],
         logic: 'AND',
       },
@@ -173,7 +174,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
     expect(res.warnings).toHaveLength(1);
     expect(res.warnings![0].code).toBe(ERROR_CODES.WHITELIST_OPTION_INACTIVE);
     expect(res.warnings![0].details).toContainEqual({
-      columnName: 'PROD_KIND',
+      columnName: 'prod_kind',
       optionValue: '02',
     });
   });
@@ -182,8 +183,8 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
     const dto = makeCreateDto({
       conditionPayload: {
         conditions: [
-          { columnName: 'PROD_KIND', fieldType: 'categorical', values: ['01'] },
-          { columnName: 'SETTLE_SRC', fieldType: 'categorical', values: ['Y'] },
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'settle_src', fieldType: 'categorical', values: ['Y'] },
         ],
         logic: 'AND',
       },
@@ -202,7 +203,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
     const updateDto = makeUpdateDto({
       conditionPayload: {
         conditions: [
-          { columnName: 'SETTLE_SRC', fieldType: 'categorical', values: ['N'] }, // inactive
+          { columnName: 'settle_src', fieldType: 'categorical', values: ['N'] }, // inactive
         ],
         logic: 'AND',
       },
@@ -223,11 +224,11 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
       conditionPayload: {
         conditions: [
           {
-            columnName: 'PROD_KIND',
+            columnName: 'prod_kind',
             fieldType: 'categorical',
             values: ['01', '02'], // 01 active, 02 inactive
           },
-          { columnName: 'SETTLE_SRC', fieldType: 'categorical', values: ['N'] }, // inactive
+          { columnName: 'settle_src', fieldType: 'categorical', values: ['N'] }, // inactive
         ],
         logic: 'AND',
       },
@@ -236,8 +237,8 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
     expect(res.warnings).toHaveLength(1);
     const details = res.warnings![0].details as Array<{ columnName: string; optionValue: string }>;
     expect(details).toHaveLength(2);
-    expect(details).toContainEqual({ columnName: 'PROD_KIND', optionValue: '02' });
-    expect(details).toContainEqual({ columnName: 'SETTLE_SRC', optionValue: 'N' });
+    expect(details).toContainEqual({ columnName: 'prod_kind', optionValue: '02' });
+    expect(details).toContainEqual({ columnName: 'settle_src', optionValue: 'N' });
   });
 
   it('TC-WHITELIST-WARNING-005：無 conditionPayload → warnings 空陣列', async () => {

@@ -50,7 +50,7 @@ describe('PooldataFieldWhitelistService', () => {
   const makeRow = (
     overrides: Partial<PooldataFieldWhitelist> = {},
   ): PooldataFieldWhitelist => ({
-    column_name: 'PROD_KIND',
+    column_name: 'prod_kind',
     display_name: '產品類別',
     field_type: 'categorical',
     is_active: true,
@@ -117,8 +117,8 @@ describe('PooldataFieldWhitelistService', () => {
   describe('listFields (TC-M04-001 / 002)', () => {
     it('TC-M04-001：無 query 時 where 為空（回傳全部）', async () => {
       fieldRepo.find.mockResolvedValue([
-        makeRow({ column_name: 'PROD_KIND' }),
-        makeRow({ column_name: 'PAYT_TERM', is_active: false, field_type: 'numeric' }),
+        makeRow({ column_name: 'prod_kind' }),
+        makeRow({ column_name: 'payt_term', is_active: false, field_type: 'numeric' }),
       ]);
 
       const result = await service.listFields();
@@ -155,22 +155,22 @@ describe('PooldataFieldWhitelistService', () => {
     it('TC-M04-003：新增成功 + 寫稽核', async () => {
       fieldRepo.findOne.mockResolvedValue(null);
       fieldRepo.save.mockResolvedValue(
-        makeRow({ column_name: 'RISK_LEVEL', display_name: '風險等級' }),
+        makeRow({ column_name: 'risk_level', display_name: '風險等級' }),
       );
 
       const result = await service.createField(
-        { columnName: 'RISK_LEVEL', displayName: '風險等級', fieldType: 'categorical' },
+        { columnName: 'risk_level', displayName: '風險等級', fieldType: 'categorical' },
         actor,
       );
 
-      expect(result.columnName).toBe('RISK_LEVEL');
+      expect(result.columnName).toBe('risk_level');
       expect(result.fieldType).toBe('categorical');
       expect(result.isActive).toBe(true);
       expect(auditRepo.save).toHaveBeenCalledTimes(1);
       const auditArg = auditRepo.create.mock.calls[0][0];
       expect(auditArg.entity_type).toBe('pooldata_field_whitelist');
       expect(auditArg.action).toBe('CREATE');
-      expect(auditArg.entity_id).toBe('RISK_LEVEL');
+      expect(auditArg.entity_id).toBe('risk_level');
     });
 
     it('TC-M04-004：重複 columnName（含已停用）→ 409 POOLDATA_FIELD_DUPLICATE', async () => {
@@ -178,14 +178,14 @@ describe('PooldataFieldWhitelistService', () => {
 
       await expect(
         service.createField(
-          { columnName: 'PROD_KIND', displayName: 'X', fieldType: 'categorical' },
+          { columnName: 'prod_kind', displayName: 'X', fieldType: 'categorical' },
           actor,
         ),
       ).rejects.toBeInstanceOf(ConflictException);
 
       try {
         await service.createField(
-          { columnName: 'PROD_KIND', displayName: 'X', fieldType: 'categorical' },
+          { columnName: 'prod_kind', displayName: 'X', fieldType: 'categorical' },
           actor,
         );
       } catch (err: any) {
@@ -205,7 +205,7 @@ describe('PooldataFieldWhitelistService', () => {
       fieldRepo.findOne.mockResolvedValue(before);
 
       const result = await service.updateField(
-        'PROD_KIND',
+        'prod_kind',
         { displayName: 'new' },
         actor,
       );
@@ -222,7 +222,7 @@ describe('PooldataFieldWhitelistService', () => {
       txQbUpdateAffected = 3;
 
       const result = await service.updateField(
-        'PROD_KIND',
+        'prod_kind',
         { fieldType: 'numeric' },
         actor,
       );
@@ -241,7 +241,7 @@ describe('PooldataFieldWhitelistService', () => {
       txQbUpdateAffected = 99; // 即使 mock 設了 affected，未觸發 QB 就不會用到
 
       const result = await service.updateField(
-        'MONTH_CNT',
+        'month_cnt',
         { fieldType: 'categorical' },
         actor,
       );
@@ -255,7 +255,7 @@ describe('PooldataFieldWhitelistService', () => {
       txQbUpdateAffected = 5;
 
       const result = await service.updateField(
-        'PROD_KIND',
+        'prod_kind',
         { fieldType: 'categorical', displayName: 'updated' },
         actor,
       );
@@ -281,8 +281,8 @@ describe('PooldataFieldWhitelistService', () => {
       fieldRepo.findOne.mockResolvedValue(before);
       fieldRepo.save.mockImplementation((e: any) => Promise.resolve({ ...e }));
 
-      const result = await service.disableField('PROD_KIND', actor);
-      expect(result.columnName).toBe('PROD_KIND');
+      const result = await service.disableField('prod_kind', actor);
+      expect(result.columnName).toBe('prod_kind');
       expect(result.isActive).toBe(false);
       expect(typeof result.disabledAt).toBe('string');
       expect(auditRepo.save).toHaveBeenCalledTimes(1);
@@ -296,12 +296,12 @@ describe('PooldataFieldWhitelistService', () => {
   describe('assertCategorical (TC-CATEGORICAL-GUARD)', () => {
     it('categorical → 通過', async () => {
       fieldRepo.findOne.mockResolvedValue(makeRow({ field_type: 'categorical' }));
-      await expect(service.assertCategorical('PROD_KIND')).resolves.toBeDefined();
+      await expect(service.assertCategorical('prod_kind')).resolves.toBeDefined();
     });
 
     it('numeric → 400 POOLDATA_OPTION_FIELD_TYPE_INVALID', async () => {
       fieldRepo.findOne.mockResolvedValue(makeRow({ field_type: 'numeric' }));
-      await expect(service.assertCategorical('MONTH_CNT')).rejects.toBeInstanceOf(
+      await expect(service.assertCategorical('month_cnt')).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
@@ -321,10 +321,10 @@ describe('PooldataFieldWhitelistService', () => {
   describe('getInactiveCount (TC-GET-INACTIVE-COUNT)', () => {
     it('回傳 activeCount（給 UI confirm Modal「將自動停用 N 個可選值」用）', async () => {
       optionRepo.count.mockResolvedValue(7);
-      const result = await service.getInactiveCount('PROD_KIND');
+      const result = await service.getInactiveCount('prod_kind');
       expect(result.activeCount).toBe(7);
       expect(optionRepo.count).toHaveBeenCalledWith({
-        where: { column_name: 'PROD_KIND', is_active: true },
+        where: { column_name: 'prod_kind', is_active: true },
       });
     });
   });
@@ -337,11 +337,11 @@ describe('PooldataFieldWhitelistService', () => {
     it('稽核失敗不 rollback 主操作', async () => {
       auditRepo.save.mockRejectedValue(new Error('audit DB down'));
       fieldRepo.findOne.mockResolvedValue(null);
-      fieldRepo.save.mockResolvedValue(makeRow({ column_name: 'NEW' }));
+      fieldRepo.save.mockResolvedValue(makeRow({ column_name: 'new_col' }));
 
       await expect(
         service.createField(
-          { columnName: 'NEW', displayName: 'x', fieldType: 'numeric' },
+          { columnName: 'new_col', displayName: 'x', fieldType: 'numeric' },
           actor,
         ),
       ).resolves.toBeDefined();
@@ -388,28 +388,28 @@ describe('PooldataFieldWhitelistService', () => {
         mockTwoStageQuery(
           [{ '?column?': 1 }],
           [
-            { column_name: 'ZYEAR', data_type: 'integer' },
-            { column_name: 'AGE', data_type: 'date' },
-            { column_name: 'CODE', data_type: 'character varying' },
+            { column_name: 'zyear', data_type: 'integer' },
+            { column_name: 'age', data_type: 'date' },
+            { column_name: 'code', data_type: 'character varying' },
           ],
         );
 
         const result = await service.getAvailableColumns();
 
         expect(result.availableColumns).toHaveLength(3);
-        // 字母升冪：AGE → CODE → ZYEAR
+        // 字母升冪：age → code → zyear
         expect(result.availableColumns[0]).toEqual({
-          columnName: 'AGE',
+          columnName: 'age',
           dataType: 'date',
           suggestedFieldType: 'date',
         });
         expect(result.availableColumns[1]).toEqual({
-          columnName: 'CODE',
+          columnName: 'code',
           dataType: 'character varying',
           suggestedFieldType: 'categorical',
         });
         expect(result.availableColumns[2]).toEqual({
-          columnName: 'ZYEAR',
+          columnName: 'zyear',
           dataType: 'integer',
           suggestedFieldType: 'numeric',
         });
@@ -425,34 +425,34 @@ describe('PooldataFieldWhitelistService', () => {
         mockTwoStageQuery(
           [{ '?column?': 1 }],
           [
-            { column_name: 'ZYEAR', data_type: 'integer' },
-            { column_name: 'AGE', data_type: 'date' },
-            { column_name: 'MONTH_CNT', data_type: 'integer' },
-            { column_name: 'BIRTH_DATE', data_type: 'date' },
-            { column_name: 'FUND_TYPE', data_type: 'character varying' },
+            { column_name: 'zyear', data_type: 'integer' },
+            { column_name: 'age', data_type: 'date' },
+            { column_name: 'month_cnt', data_type: 'integer' },
+            { column_name: 'birth_date', data_type: 'date' },
+            { column_name: 'fund_type', data_type: 'character varying' },
           ],
         );
 
         const result = await service.getAvailableColumns();
         const names = result.availableColumns.map((c) => c.columnName);
         expect(names).toEqual([
-          'AGE',
-          'BIRTH_DATE',
-          'FUND_TYPE',
-          'MONTH_CNT',
-          'ZYEAR',
+          'age',
+          'birth_date',
+          'fund_type',
+          'month_cnt',
+          'zyear',
         ]);
       });
 
       it('TS-F075-BE-004：DB column_name / data_type → response camelCase；不含 snake_case key', async () => {
         mockTwoStageQuery(
           [{ '?column?': 1 }],
-          [{ column_name: 'RISK_LEVEL', data_type: 'varchar' }],
+          [{ column_name: 'risk_level', data_type: 'varchar' }],
         );
 
         const result = await service.getAvailableColumns();
         expect(result.availableColumns[0]).toEqual({
-          columnName: 'RISK_LEVEL',
+          columnName: 'risk_level',
           dataType: 'varchar',
           suggestedFieldType: 'categorical',
         });
@@ -476,18 +476,18 @@ describe('PooldataFieldWhitelistService', () => {
 
       // Phase C 降級紀錄：本應在 PostgreSQL Test Container 執行，暫以 mock 驗證 BR-13 邏輯合約
       it('TS-F075-INT-BE-001（降級 mock）：SQL 已過濾白名單（含 is_active=false）→ service 信任 SQL 結果只回未列入欄位', async () => {
-        // 模擬 SQL 已執行 NOT IN (含停用) 過濾：PAYT_TERM 不會出現在 query 結果
+        // 模擬 SQL 已執行 NOT IN (含停用) 過濾：payt_term 不會出現在 query 結果
         mockTwoStageQuery(
           [{ '?column?': 1 }],
-          [{ column_name: 'RISK_LEVEL', data_type: 'varchar' }],
+          [{ column_name: 'risk_level', data_type: 'varchar' }],
         );
 
         const result = await service.getAvailableColumns();
         expect(result.availableColumns).toHaveLength(1);
-        expect(result.availableColumns[0].columnName).toBe('RISK_LEVEL');
+        expect(result.availableColumns[0].columnName).toBe('risk_level');
         // 驗證 service 不二次過濾，完全信任 SQL 子查詢結果
         expect(
-          result.availableColumns.find((c) => c.columnName === 'PAYT_TERM'),
+          result.availableColumns.find((c) => c.columnName === 'payt_term'),
         ).toBeUndefined();
       });
 
