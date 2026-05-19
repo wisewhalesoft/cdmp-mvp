@@ -16,6 +16,8 @@ import {
   Inbox,
   SearchX,
   Loader2,
+  Pencil,
+  RotateCcw,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,7 @@ import {
   listFields,
   listAvailableColumns,
   createField,
+  updateField,
   disableField as apiDisableField,
   getActiveOptionsCount,
   type FieldType,
@@ -31,27 +34,30 @@ import {
   type AvailableColumn,
 } from '@/api/pooldata-fields';
 import { CategorySwitchConfirmModal } from './_components/category-switch-confirm-modal';
+import { EditFieldModal } from './_components/edit-field-modal';
 import { ConfirmModal } from '@/components/e07/ConfirmModal';
 import { getEffectiveIdentity } from '@/stores/auth-store';
 
 /**
- * F075 v1.4 — POOLDATA 篩選欄位管理頁
+ * F075 v1.4.5 — POOLDATA 篩選欄位管理頁
  *
  * 對應 prototype: /prototypes/37a-pooldata-whitelist.html
  *
  * RBAC: DirectorOrSectionChiefRoute（讀），DirectorGuard（寫入 — 由 backend 攔截）
  *
- * v1.4 改造重點：
- *   - UI 命名「白名單管理」→「篩選欄位管理」（DB / API path 保留）
- *   - 新增 Modal 之 columnName 改為下拉選擇（GET /available-columns 為唯一來源）
+ * v1.4.5 prototype 對齊翻新（main content）：
+ *   - 「新增篩選欄位」按鈕移至工具列（與搜尋 / type filter / status filter / 統計同一橫排）
+ *   - 操作 column 改為 3 個 icon：list-checks（categorical only）+ pencil + ban/rotate-ccw
+ *   - 補實作 Edit Modal（reverse v1.4 D-iii）
+ *   - 補實作 reactivate（inactive 欄位 PATCH isActive=true）
+ *   - filter 字串對齊 prototype：「狀態：全部 / 僅顯示啟用 / 僅顯示停用」
+ *   - 工具列補「清除」按鈕重置 search / type / status filter
+ *
+ * v1.4 既有保留：
+ *   - 新增 Modal columnName dropdown（GET /available-columns 為唯一來源）
  *   - 系統推斷 hint：suggested ↔ user-overridden（RISK-003 決議）
  *   - 成功 toast 以 displayName 為主
- *
- * 功能：
- *   - 列表所有 pooldata-fields（含搜尋 + active filter）
- *   - 新增欄位 modal（dropdown columnName / display_name / field_type radio）
- *   - 停用欄位（categorical 觸發 F076-C confirm modal）
- *   - 點 categorical 欄位的 row → 跳轉至 field-options-page 管理可選值
+ *   - 503 OBPOOLDATA_NOT_READY / FEATURE_NOT_ENABLED / 其他 5xx 錯誤分流
  */
 
 const FIELD_TYPE_CONFIG: Record<
@@ -102,21 +108,20 @@ export function FieldWhitelistPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('active');
-  // Phase 4 P3-3：type filter
+  // v1.4.5：status filter 預設 'all'（對齊 prototype 工具列「狀態：全部」）
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | FieldType>('all');
 
-  // ===== Create modal state (v1.4 改造) =====
+  // ===== Create modal state (v1.4 既有) =====
   const [showCreate, setShowCreate] = useState(false);
   const [newDisplay, setNewDisplay] = useState('');
   const [newType, setNewType] = useState<FieldType>('categorical');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  // v1.4 新增：available-columns + dropdown + hint state
+  // v1.4：available-columns + dropdown + hint state
   const [availableColumns, setAvailableColumns] = useState<AvailableColumn[]>([]);
   const [availableLoading, setAvailableLoading] = useState(false);
-  // v1.4.2 D1 新增：available-columns 載入錯誤分流 state（OBPOOLDATA_NOT_READY / FEATURE_NOT_ENABLED / 其他 5xx）
   type AvailableColumnsError =
     | { kind: 'not_ready'; message: string }
     | { kind: 'feature_disabled'; message: string }
@@ -125,7 +130,6 @@ export function FieldWhitelistPage() {
     useState<AvailableColumnsError | null>(null);
   const [selectedColumnMeta, setSelectedColumnMeta] =
     useState<AvailableColumn | null>(null);
-  // RISK-003 決議：使用者一旦覆寫 radio 即鎖定 user-overridden；唯一 reset 路徑為 dropdown 重選新欄位
   const [hasUserOverridden, setHasUserOverridden] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
@@ -137,6 +141,21 @@ export function FieldWhitelistPage() {
 
   // Simple confirm modal state (non-categorical or zero options)
   const [simpleConfirmTarget, setSimpleConfirmTarget] = useState<PooldataField | null>(null);
+
+  // ===== v1.4.5：Edit modal state =====
+  const [editTarget, setEditTarget] = useState<PooldataField | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  // edit 流程：暫存「categorical → 其他 type」之變更，使用者於 CategorySwitchConfirmModal 確認後再 PATCH
+  const [pendingEditPayload, setPendingEditPayload] = useState<{
+    columnName: string;
+    displayName: string;
+    fieldType: FieldType;
+    activeCount: number;
+  } | null>(null);
+
+  // ===== v1.4.5：reactivate state =====
+  const [reactivatingColumn, setReactivatingColumn] = useState<string | null>(null);
 
   const fetchFields = useCallback(async () => {
     setLoading(true);
@@ -174,7 +193,7 @@ export function FieldWhitelistPage() {
     return list;
   }, [fields, search, typeFilter]);
 
-  // Phase 4 P3-3：總計 / 啟用 / 停用 統計
+  // 統計（基於 fields 全量、不被 filter 收縮）
   const fieldStats = useMemo(() => {
     const active = fields.filter((f) => f.isActive).length;
     return {
@@ -198,16 +217,6 @@ export function FieldWhitelistPage() {
     setAvailableColumnsError(null);
   };
 
-  /**
-   * v1.4.2 D1：抽出 fetch 為可重用函式，提供「重試」按鈕復用。
-   *
-   * 錯誤碼分流（讀 err.response.data.error，與既有 createField catch 模式一致）：
-   *   - 503 OBPOOLDATA_NOT_READY → kind='not_ready'（ETL 未就緒提示）
-   *   - 503 FEATURE_NOT_ENABLED  → kind='feature_disabled'（功能旗標關閉）
-   *   - 其他（含 500 / 網路錯誤）→ kind='generic_error'（通用載入失敗）
-   *
-   * 對齊 spec F075 v1.4.2 §4 AC-13b。
-   */
   const loadAvailableColumns = async () => {
     setAvailableLoading(true);
     setAvailableColumnsError(null);
@@ -233,7 +242,7 @@ export function FieldWhitelistPage() {
       } else {
         setAvailableColumnsError({
           kind: 'generic_error',
-          message: '載入欄位清單失敗，請稍後重試',
+          message: '載入欄位清單失敗,請稍後重試',
         });
       }
       setAvailableColumns([]);
@@ -248,12 +257,6 @@ export function FieldWhitelistPage() {
     await loadAvailableColumns();
   };
 
-  /**
-   * dropdown 重選 / 首次選中：
-   *   - setSelectedColumnMeta(col)
-   *   - setNewType(col.suggestedFieldType) 預選 radio
-   *   - setHasUserOverridden(false) reset hint 至 suggested 狀態（RISK-003 決議：唯一 reset 路徑）
-   */
   const onColumnSelected = (col: AvailableColumn) => {
     setSelectedColumnMeta(col);
     setNewType(col.suggestedFieldType);
@@ -263,10 +266,6 @@ export function FieldWhitelistPage() {
     setCreateError(null);
   };
 
-  /**
-   * radio onChange：任何值（含點回原 suggestedFieldType）都將 hasUserOverridden 設為 true
-   *   - RISK-003 決議：使用者一旦介入即視為「使用者決策」語意
-   */
   const onFieldTypeChange = (t: FieldType) => {
     setNewType(t);
     setHasUserOverridden(true);
@@ -296,7 +295,6 @@ export function FieldWhitelistPage() {
         displayName: dispTrim,
         fieldType: newType,
       });
-      // AC-15：成功 toast 以 displayName 為主
       const displayForToast = result?.displayName ?? dispTrim;
       showToast(`欄位『${displayForToast}』已新增`, 'success');
       setShowCreate(false);
@@ -315,8 +313,9 @@ export function FieldWhitelistPage() {
     }
   };
 
+  // ===== Disable handler（與 v1.4 既有相同邏輯） =====
+
   const startDisable = async (field: PooldataField) => {
-    // categorical → 先預查 active options count (F076-C UI 預查)
     if (field.fieldType === 'categorical') {
       try {
         const res = await getActiveOptionsCount(field.columnName);
@@ -326,7 +325,6 @@ export function FieldWhitelistPage() {
       }
       setDisableTarget(field);
     } else {
-      // 非 categorical 直接走 simple confirm
       setSimpleConfirmTarget(field);
     }
   };
@@ -335,7 +333,6 @@ export function FieldWhitelistPage() {
     setDisableLoading(true);
     try {
       await apiDisableField(field.columnName);
-      // AC-15：toast 以 displayName 為主
       showToast(`欄位『${field.displayName}』已停用`, 'success');
       setDisableTarget(null);
       setSimpleConfirmTarget(null);
@@ -349,7 +346,106 @@ export function FieldWhitelistPage() {
     }
   };
 
-  // submit 按鈕停用條件：availableColumns 為空 / 載入中 / 未選欄位 / 顯示名稱為空 / 建立中
+  // ===== v1.4.5：Edit handler =====
+
+  const startEdit = (field: PooldataField) => {
+    setEditError(null);
+    setPendingEditPayload(null);
+    setEditTarget(field);
+  };
+
+  const applyEditPatch = async (
+    columnName: string,
+    body: { displayName?: string; fieldType?: FieldType },
+    originalDisplayName: string,
+  ) => {
+    setEditSubmitting(true);
+    try {
+      const updated = await updateField(columnName, body);
+      const toastDisplay =
+        updated?.displayName ?? body.displayName ?? originalDisplayName;
+      showToast(`欄位『${toastDisplay}』已編輯`, 'success');
+      setEditTarget(null);
+      setPendingEditPayload(null);
+      void fetchFields();
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: string } } };
+      setEditError(e?.response?.data?.message ?? '編輯失敗');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async (payload: {
+    displayName: string;
+    fieldType: FieldType;
+  }) => {
+    if (!editTarget) return;
+    setEditError(null);
+
+    const isCascading =
+      editTarget.fieldType === 'categorical' &&
+      payload.fieldType !== 'categorical';
+
+    if (isCascading) {
+      let activeCount = 0;
+      try {
+        const res = await getActiveOptionsCount(editTarget.columnName);
+        activeCount = res.activeCount;
+      } catch {
+        activeCount = 0;
+      }
+      setPendingEditPayload({
+        columnName: editTarget.columnName,
+        displayName: payload.displayName,
+        fieldType: payload.fieldType,
+        activeCount,
+      });
+      return;
+    }
+
+    await applyEditPatch(
+      editTarget.columnName,
+      { displayName: payload.displayName, fieldType: payload.fieldType },
+      editTarget.displayName,
+    );
+  };
+
+  const confirmCascadingEdit = async () => {
+    if (!pendingEditPayload || !editTarget) return;
+    await applyEditPatch(
+      pendingEditPayload.columnName,
+      {
+        displayName: pendingEditPayload.displayName,
+        fieldType: pendingEditPayload.fieldType,
+      },
+      editTarget.displayName,
+    );
+  };
+
+  // ===== v1.4.5：Reactivate handler（無 Modal,直接 PATCH isActive=true） =====
+
+  const handleReactivate = async (field: PooldataField) => {
+    setReactivatingColumn(field.columnName);
+    try {
+      const updated = await updateField(field.columnName, { isActive: true });
+      const toastDisplay = updated?.displayName ?? field.displayName;
+      showToast(`欄位『${toastDisplay}』已啟用`, 'success');
+      void fetchFields();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      showToast(e?.response?.data?.message ?? '啟用失敗', 'error');
+    } finally {
+      setReactivatingColumn(null);
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setTypeFilter('all');
+    setActiveFilter('all');
+  };
+
   const submitDisabled =
     availableLoading ||
     availableColumns.length === 0 ||
@@ -373,25 +469,9 @@ export function FieldWhitelistPage() {
       }
     >
       <main className="flex-1 p-6 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm text-gray-500">
-            管理 OBPOOLDATA 表可用的篩選欄位清單（F075）。類別型欄位可進一步管理可選值（F076）。
-          </p>
-          <Button
-            type="button"
-            variant="primary"
-            data-testid="btn-create-field"
-            disabled={!canWrite}
-            onClick={() => {
-              void openCreateModal();
-            }}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Plus className="w-4 h-4" />
-              新增篩選欄位
-            </span>
-          </Button>
-        </div>
+        <p className="text-sm text-gray-500">
+          管理 OBPOOLDATA 表可用的篩選欄位清單（F075）。類別型欄位可進一步管理可選值（F076）。
+        </p>
 
         {error && (
           <div
@@ -402,8 +482,12 @@ export function FieldWhitelistPage() {
           </div>
         )}
 
-        <section className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
+        {/* ===== v1.4.5：工具列（搜尋 / type filter / status filter / 清除 / 統計 / 新增按鈕） ===== */}
+        <section className="bg-white rounded-xl border border-gray-200 p-4">
+          <div
+            data-testid="field-whitelist-toolbar"
+            className="flex items-center gap-3 flex-wrap"
+          >
             <div className="relative flex-1 max-w-md min-w-[200px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -422,10 +506,10 @@ export function FieldWhitelistPage() {
               }
               className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="all">類型：全部</option>
-              <option value="categorical">categorical</option>
-              <option value="numeric">numeric</option>
-              <option value="date">date</option>
+              <option value="all">類別：全部</option>
+              <option value="categorical">categorical（類別型）</option>
+              <option value="numeric">numeric（數值型）</option>
+              <option value="date">date（日期型）</option>
             </select>
             <select
               data-testid="filter-active"
@@ -435,11 +519,19 @@ export function FieldWhitelistPage() {
               }
               className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="active">啟用中</option>
-              <option value="inactive">已停用</option>
-              <option value="all">全部</option>
+              <option value="all">狀態：全部</option>
+              <option value="active">僅顯示啟用</option>
+              <option value="inactive">僅顯示停用</option>
             </select>
-            {/* Phase 4 P3-3：統計列 */}
+            <button
+              type="button"
+              data-testid="btn-clear-filters"
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              清除
+            </button>
             <div
               data-testid="field-stats"
               className="ml-auto text-xs text-gray-500"
@@ -450,6 +542,20 @@ export function FieldWhitelistPage() {
               <span className="mx-1 text-gray-300">/</span>
               停用 <span className="font-mono font-medium text-gray-500">{fieldStats.inactive}</span>
             </div>
+            <Button
+              type="button"
+              variant="primary"
+              data-testid="btn-create-field"
+              disabled={!canWrite}
+              onClick={() => {
+                void openCreateModal();
+              }}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Plus className="w-4 h-4" />
+                新增篩選欄位
+              </span>
+            </Button>
           </div>
         </section>
 
@@ -481,7 +587,10 @@ export function FieldWhitelistPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredFields.map((f) => (
-                    <tr key={f.columnName} className="hover:bg-gray-50/50">
+                    <tr
+                      key={f.columnName}
+                      className={`hover:bg-gray-50/50 ${!f.isActive ? 'bg-gray-50/30 opacity-80' : ''}`}
+                    >
                       <td className="px-5 py-3 font-mono text-primary">{f.columnName}</td>
                       <td className="px-5 py-3 text-gray-900">{f.displayName}</td>
                       <td className="px-5 py-3">
@@ -490,43 +599,71 @@ export function FieldWhitelistPage() {
                       <td className="px-5 py-3">
                         {f.isActive ? (
                           <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-                            啟用中
+                            啟用
                           </span>
                         ) : (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
-                            已停用
+                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
+                            停用
                           </span>
                         )}
                       </td>
                       <td className="px-5 py-3 text-gray-500 text-xs font-mono">
                         {(f.createdAt ?? '').slice(0, 10)}
                       </td>
+                      {/* ===== v1.4.5：3 icon 操作 ===== */}
                       <td className="px-5 py-3 text-right">
-                        <div className="inline-flex items-center gap-2">
+                        <div className="inline-flex items-center gap-1">
+                          {/* 管理可選值 — 僅 categorical（保留 v1.4 testid 'btn-options-*'） */}
                           {f.fieldType === 'categorical' && (
                             <button
                               type="button"
                               data-testid={`btn-options-${f.columnName}`}
+                              title="管理可選值"
                               onClick={() =>
                                 navigate(
                                   `/assignment/whitelist/options?col=${encodeURIComponent(f.columnName)}`,
                                 )
                               }
-                              className="text-xs text-primary hover:underline"
+                              className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition"
                             >
-                              管理可選值
+                              <ListChecks className="w-4 h-4" />
                             </button>
                           )}
+                          {/* v1.4.5 新增：編輯 icon */}
                           <button
                             type="button"
-                            disabled={!canWrite || !f.isActive}
-                            onClick={() => void startDisable(f)}
-                            data-testid={`btn-disable-${f.columnName}`}
-                            className="inline-flex items-center gap-1 text-xs text-danger hover:bg-red-50 px-2 py-1 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                            disabled={!canWrite}
+                            onClick={() => startEdit(f)}
+                            data-testid={`btn-edit-${f.columnName}`}
+                            title="編輯"
+                            className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
                           >
-                            <Ban className="w-3.5 h-3.5" />
-                            停用
+                            <Pencil className="w-4 h-4" />
                           </button>
+                          {/* 停用 / 啟用 toggle */}
+                          {f.isActive ? (
+                            <button
+                              type="button"
+                              disabled={!canWrite}
+                              onClick={() => void startDisable(f)}
+                              data-testid={`btn-disable-${f.columnName}`}
+                              title="停用"
+                              className="p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!canWrite || reactivatingColumn === f.columnName}
+                              onClick={() => void handleReactivate(f)}
+                              data-testid={`btn-reactivate-${f.columnName}`}
+                              title="啟用"
+                              className="p-1.5 text-gray-500 hover:text-success hover:bg-green-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -537,7 +674,7 @@ export function FieldWhitelistPage() {
           )}
         </section>
 
-        {/* Phase 4 P3-3：F075 商業規則摘要 footer（v1.4 修正錯誤碼字串） */}
+        {/* F075 商業規則摘要 footer（v1.4 既有） */}
         <div
           data-testid="field-whitelist-rules-footer"
           className="rounded-lg p-3 bg-blue-50/50 border border-blue-100 text-xs text-gray-600 flex items-start gap-2"
@@ -571,7 +708,7 @@ export function FieldWhitelistPage() {
         </div>
       </main>
 
-      {/* ===== Create field modal（v1.4 改造：dropdown + hint） ===== */}
+      {/* ===== Create field modal（v1.4 既有 dropdown + hint） ===== */}
       {showCreate && (
         <div className="fixed inset-0 z-50" data-testid="create-field-modal">
           <div
@@ -594,7 +731,6 @@ export function FieldWhitelistPage() {
                   </div>
                 )}
 
-                {/* ===== 欄位 1：columnName — Searchable Dropdown（v1.4） ===== */}
                 <div data-testid="field-column-name-section">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     columnName <span className="text-danger">*</span>
@@ -648,7 +784,6 @@ export function FieldWhitelistPage() {
                             <span className="ml-1.5">載入欄位清單中…</span>
                           </div>
                         ) : availableColumnsError !== null ? (
-                          /* v1.4.2 D1：錯誤態（503 OBPOOLDATA_NOT_READY / FEATURE_NOT_ENABLED / 其他 5xx）+ 重試按鈕 */
                           <div
                             data-testid="available-columns-error"
                             data-error-kind={availableColumnsError.kind}
@@ -715,7 +850,6 @@ export function FieldWhitelistPage() {
                   </p>
                 </div>
 
-                {/* ===== 系統推斷 hint（AC-14；suggested ↔ user-overridden） ===== */}
                 {selectedColumnMeta && (
                   <div
                     data-testid="field-type-hint"
@@ -758,7 +892,6 @@ export function FieldWhitelistPage() {
                   </div>
                 )}
 
-                {/* ===== 欄位 2：fieldType radio 群組 ===== */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     fieldType <span className="text-danger">*</span>
@@ -788,7 +921,6 @@ export function FieldWhitelistPage() {
                   </div>
                 </div>
 
-                {/* ===== 欄位 3：displayName（置最後，符合 AC-15 toast 為主視覺） ===== */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     displayName <span className="text-danger">*</span>
@@ -830,7 +962,21 @@ export function FieldWhitelistPage() {
         </div>
       )}
 
-      {/* F076-C: Categorical disable confirm modal */}
+      {/* ===== v1.4.5：Edit field modal ===== */}
+      <EditFieldModal
+        open={editTarget !== null && pendingEditPayload === null}
+        field={editTarget}
+        submitting={editSubmitting}
+        errorMessage={editError}
+        onSubmit={(payload) => void handleEditSubmit(payload)}
+        onCancel={() => {
+          if (editSubmitting) return;
+          setEditTarget(null);
+          setEditError(null);
+        }}
+      />
+
+      {/* ===== F076-C: Categorical disable cascade modal ===== */}
       <CategorySwitchConfirmModal
         open={disableTarget !== null && disableTarget.fieldType === 'categorical'}
         columnName={disableTarget?.columnName ?? ''}
@@ -845,7 +991,20 @@ export function FieldWhitelistPage() {
         }}
       />
 
-      {/* Non-categorical disable confirm */}
+      {/* ===== v1.4.5 新：Edit 流程 categorical → 其他 type 切換時的級聯 modal（重用） ===== */}
+      <CategorySwitchConfirmModal
+        open={pendingEditPayload !== null}
+        columnName={pendingEditPayload?.columnName ?? ''}
+        displayName={editTarget?.displayName ?? ''}
+        activeOptionsCount={pendingEditPayload?.activeCount ?? 0}
+        loading={editSubmitting}
+        onConfirm={() => void confirmCascadingEdit()}
+        onCancel={() => {
+          if (editSubmitting) return;
+          setPendingEditPayload(null);
+        }}
+      />
+
       <ConfirmModal
         open={simpleConfirmTarget !== null}
         variant="danger"
