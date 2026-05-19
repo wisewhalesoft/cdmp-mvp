@@ -24,6 +24,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PooldataFieldWhitelistService } from '../services/pooldata-field-whitelist.service';
@@ -351,20 +352,47 @@ describe('PooldataFieldWhitelistService', () => {
   // F075 v1.4 — getAvailableColumns + _inferSuggestedFieldType
   // ============================================================
 
-  describe('getAvailableColumns + _inferSuggestedFieldType (v1.4)', () => {
+  describe('getAvailableColumns + _inferSuggestedFieldType (v1.4 / v1.4.2)', () => {
+    /**
+     * v1.4.2 兩階段查詢 mock helper：
+     *   - 第一查詢（information_schema.tables 確認 ob_pool_data 存在）→ 預設回 [{ '?column?': 1 }]（表存在）
+     *   - 第二查詢（NOT IN 子查詢取欄位清單）→ 由 columnsRows 控制
+     *
+     * 個別測試覆寫第一查詢以模擬「表不存在」/「information_schema 查詢拋錯」情境。
+     */
+    const mockTwoStageQuery = (
+      tableExistsRows: Array<Record<string, unknown>> | Error | null,
+      columnsRows: Array<{ column_name: string | null; data_type: string | null }> | Error,
+    ) => {
+      let callIndex = 0;
+      (dataSource as any).query = vi.fn(() => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          if (tableExistsRows instanceof Error) return Promise.reject(tableExistsRows);
+          return Promise.resolve(tableExistsRows ?? []);
+        }
+        if (columnsRows instanceof Error) return Promise.reject(columnsRows);
+        return Promise.resolve(columnsRows);
+      });
+    };
+
     // dataSource.query mock helper：用 fieldRepo 既有 dataSource mock 加 query method
     beforeEach(() => {
-      (dataSource as any).query = vi.fn().mockResolvedValue([]);
+      // 預設：表存在 + 第二查詢回空陣列
+      mockTwoStageQuery([{ '?column?': 1 }], []);
     });
 
     // A. getAvailableColumns 整合行為
     describe('A. getAvailableColumns()', () => {
       it('TS-F075-BE-001：3 筆未排序 mock → 字母升冪 + suggestedFieldType 正確 + camelCase mapping', async () => {
-        (dataSource as any).query = vi.fn().mockResolvedValue([
-          { column_name: 'ZYEAR', data_type: 'integer' },
-          { column_name: 'AGE', data_type: 'date' },
-          { column_name: 'CODE', data_type: 'character varying' },
-        ]);
+        mockTwoStageQuery(
+          [{ '?column?': 1 }],
+          [
+            { column_name: 'ZYEAR', data_type: 'integer' },
+            { column_name: 'AGE', data_type: 'date' },
+            { column_name: 'CODE', data_type: 'character varying' },
+          ],
+        );
 
         const result = await service.getAvailableColumns();
 
@@ -387,20 +415,23 @@ describe('PooldataFieldWhitelistService', () => {
         });
       });
 
-      it('TS-F075-BE-002：mock query 回 [] → { availableColumns: [] }，不拋例外', async () => {
-        (dataSource as any).query = vi.fn().mockResolvedValue([]);
+      it('TS-F075-BE-002：表存在 + 第二查詢回 [] → { availableColumns: [] }，不拋例外', async () => {
+        mockTwoStageQuery([{ '?column?': 1 }], []);
         const result = await service.getAvailableColumns();
         expect(result).toEqual({ availableColumns: [] });
       });
 
       it('TS-F075-BE-003：5 筆亂序 → 字母升冪輸出', async () => {
-        (dataSource as any).query = vi.fn().mockResolvedValue([
-          { column_name: 'ZYEAR', data_type: 'integer' },
-          { column_name: 'AGE', data_type: 'date' },
-          { column_name: 'MONTH_CNT', data_type: 'integer' },
-          { column_name: 'BIRTH_DATE', data_type: 'date' },
-          { column_name: 'FUND_TYPE', data_type: 'character varying' },
-        ]);
+        mockTwoStageQuery(
+          [{ '?column?': 1 }],
+          [
+            { column_name: 'ZYEAR', data_type: 'integer' },
+            { column_name: 'AGE', data_type: 'date' },
+            { column_name: 'MONTH_CNT', data_type: 'integer' },
+            { column_name: 'BIRTH_DATE', data_type: 'date' },
+            { column_name: 'FUND_TYPE', data_type: 'character varying' },
+          ],
+        );
 
         const result = await service.getAvailableColumns();
         const names = result.availableColumns.map((c) => c.columnName);
@@ -414,9 +445,10 @@ describe('PooldataFieldWhitelistService', () => {
       });
 
       it('TS-F075-BE-004：DB column_name / data_type → response camelCase；不含 snake_case key', async () => {
-        (dataSource as any).query = vi.fn().mockResolvedValue([
-          { column_name: 'RISK_LEVEL', data_type: 'varchar' },
-        ]);
+        mockTwoStageQuery(
+          [{ '?column?': 1 }],
+          [{ column_name: 'RISK_LEVEL', data_type: 'varchar' }],
+        );
 
         const result = await service.getAvailableColumns();
         expect(result.availableColumns[0]).toEqual({
@@ -429,21 +461,26 @@ describe('PooldataFieldWhitelistService', () => {
         expect((result.availableColumns[0] as any).data_type).toBeUndefined();
       });
 
-      // B-i 策略（user 決議 Q2）：SQLite 環境 information_schema 查詢失敗 → 合法空陣列
-      it('B-i：dataSource.query throw（SQLite 無 information_schema）→ 回 { availableColumns: [] } 不擴散例外', async () => {
-        (dataSource as any).query = vi
-          .fn()
-          .mockRejectedValue(new Error('no such table: information_schema.columns'));
-        const result = await service.getAvailableColumns();
-        expect(result).toEqual({ availableColumns: [] });
+      // v1.4.2 D1：第一查詢拋錯（SQLite 環境）→ 視為 OBPOOLDATA_NOT_READY，不再回空陣列
+      it('TS-F075-BE-026：dataSource.query 第一查詢拋錯（SQLite 無 information_schema）→ throws ServiceUnavailableException OBPOOLDATA_NOT_READY', async () => {
+        mockTwoStageQuery(new Error('no such table: information_schema.tables'), []);
+        await expect(service.getAvailableColumns()).rejects.toBeInstanceOf(
+          ServiceUnavailableException,
+        );
+        try {
+          await service.getAvailableColumns();
+        } catch (err: any) {
+          expect(err.response.error).toBe('OBPOOLDATA_NOT_READY');
+        }
       });
 
       // Phase C 降級紀錄：本應在 PostgreSQL Test Container 執行，暫以 mock 驗證 BR-13 邏輯合約
       it('TS-F075-INT-BE-001（降級 mock）：SQL 已過濾白名單（含 is_active=false）→ service 信任 SQL 結果只回未列入欄位', async () => {
         // 模擬 SQL 已執行 NOT IN (含停用) 過濾：PAYT_TERM 不會出現在 query 結果
-        (dataSource as any).query = vi
-          .fn()
-          .mockResolvedValue([{ column_name: 'RISK_LEVEL', data_type: 'varchar' }]);
+        mockTwoStageQuery(
+          [{ '?column?': 1 }],
+          [{ column_name: 'RISK_LEVEL', data_type: 'varchar' }],
+        );
 
         const result = await service.getAvailableColumns();
         expect(result.availableColumns).toHaveLength(1);
@@ -455,9 +492,28 @@ describe('PooldataFieldWhitelistService', () => {
       });
 
       it('TS-F075-INT-BE-002（降級 mock）：所有欄位皆已列入白名單 → 回空陣列', async () => {
-        (dataSource as any).query = vi.fn().mockResolvedValue([]);
+        mockTwoStageQuery([{ '?column?': 1 }], []);
         const result = await service.getAvailableColumns();
         expect(result).toEqual({ availableColumns: [] });
+      });
+
+      // v1.4.2 D1：新增三條錯誤分流測試
+      it('TS-F075-BE-025：第一查詢回 [] (表不存在) → throws ServiceUnavailableException OBPOOLDATA_NOT_READY', async () => {
+        mockTwoStageQuery([], []);
+        await expect(service.getAvailableColumns()).rejects.toBeInstanceOf(
+          ServiceUnavailableException,
+        );
+        try {
+          await service.getAvailableColumns();
+        } catch (err: any) {
+          expect(err.response.error).toBe('OBPOOLDATA_NOT_READY');
+          expect(err.response.message).toContain('OBPOOLDATA');
+        }
+      });
+
+      it('TS-F075-BE-027：表存在 + 第二查詢真實 SQL error → throws（不再吞錯回空陣列）', async () => {
+        mockTwoStageQuery([{ '?column?': 1 }], new Error('column type not found'));
+        await expect(service.getAvailableColumns()).rejects.toThrow();
       });
     });
 
@@ -466,9 +522,10 @@ describe('PooldataFieldWhitelistService', () => {
       // 為了驗證 pure function，透過 getAvailableColumns 觀察 suggestedFieldType 結果。
       // 既符合「驗證該 method 的對外可觀察行為」也避免測試私有 method 強耦合。
       const callInfer = async (dataType: string | null | undefined): Promise<string> => {
-        (dataSource as any).query = vi
-          .fn()
-          .mockResolvedValue([{ column_name: 'X', data_type: dataType }]);
+        mockTwoStageQuery(
+          [{ '?column?': 1 }],
+          [{ column_name: 'X', data_type: dataType }],
+        );
         const result = await service.getAvailableColumns();
         return result.availableColumns[0].suggestedFieldType;
       };

@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -320,47 +321,66 @@ export class PooldataFieldWhitelistService {
   /**
    * 取得 OBPOOLDATA 既有但尚未列入白名單之欄位清單（供新增 Modal dropdown 使用）。
    *
-   * 設計重點（architecture-spec v2.12 §3.10）：
-   *   - 以 `dataSource.query()` raw SQL 查詢 `information_schema.columns`
+   * 設計重點（architecture-spec v2.12 §3.10 / v1.4.2 D1 設計修補）：
+   *   - **兩階段查詢**（v1.4.2）：
+   *     - Step 1：查 `information_schema.tables` 確認 `ob_pool_data` 存在；查詢失敗（SQLite
+   *       無 information_schema）或回空陣列（PostgreSQL 但表不存在/ETL 未 Load）→ 拋
+   *       **503 OBPOOLDATA_NOT_READY**（不再吞錯回空陣列）
+   *     - Step 2：NOT IN 子查詢取欄位清單；真實 SQL 錯誤 → 直接拋（由 NestJS exception
+   *       filter 攔為 500，避免誤導 UI）
    *   - 子查詢排除**所有** `pooldata_field_whitelist.column_name`（含 `is_active=false`，BR-13）
    *   - 按 `column_name` 字母升冪排序（AC-10）
    *   - `_inferSuggestedFieldType` 為 service 層 pure function，不使用 SQL CASE
    *   - 不快取（information_schema catalog 查詢成本可忽略）
    *
-   * SQLite test 環境 / `ob_pool_data` 不存在 → 回 `{ availableColumns: [] }`（合法空陣列，
-   * 對齊 architecture-spec v2.12 §3.10 第 5 點與 B-i 策略決議）。
+   * v1.4.2 改變理由：原 try/catch 吞錯回空陣列 → UI 一律顯示「全部已列入」誤導訊息（即使
+   * 實際是 SQLite 無 information_schema 或表不存在）。D1 設計修補使三種錯誤情境可由
+   * 前端依錯誤碼分流顯示對應訊息（FEATURE_NOT_ENABLED / OBPOOLDATA_NOT_READY / 5xx）。
    */
   async getAvailableColumns(): Promise<GetAvailableColumnsResult> {
-    try {
-      const rows: Array<{ column_name: string | null; data_type: string | null }> =
-        await this.dataSource.query(
-          `SELECT c.column_name, c.data_type
-             FROM information_schema.columns c
-            WHERE c.table_schema = 'public'
-              AND c.table_name = 'ob_pool_data'
-              AND c.column_name NOT IN (
-                SELECT w.column_name FROM pooldata_field_whitelist w
-              )
-            ORDER BY c.column_name ASC`,
-        );
+    // Step 1：確認 ob_pool_data 表存在（SQLite test env 無 information_schema → catch → 視為 not_ready）
+    const tableExists = await this.dataSource
+      .query(
+        `SELECT 1
+           FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = 'ob_pool_data'
+          LIMIT 1`,
+      )
+      .catch(() => null);
 
-      const items: AvailableColumnItem[] = rows
-        .filter((r) => r.column_name !== null && r.column_name !== undefined)
-        .map((r) => ({
-          columnName: r.column_name as string,
-          dataType: r.data_type ?? '',
-          suggestedFieldType: this._inferSuggestedFieldType(r.data_type),
-        }));
-
-      // 雙重保險：即使 SQL 已 ORDER BY，service 層仍確保字母升冪輸出（防 DB collation 差異）
-      items.sort((a, b) => a.columnName.localeCompare(b.columnName));
-
-      return { availableColumns: items };
-    } catch {
-      // SQLite test env（無 information_schema）或 ob_pool_data 不存在 → 合法空陣列
-      // 對齊 architecture-spec v2.12 §3.10 第 5 點 + B-i 策略決議
-      return { availableColumns: [] };
+    if (!tableExists || tableExists.length === 0) {
+      throw new ServiceUnavailableException({
+        error: ERROR_CODES.OBPOOLDATA_NOT_READY,
+        message: ERROR_MESSAGES.OBPOOLDATA_NOT_READY,
+      });
     }
+
+    // Step 2：NOT IN 子查詢取欄位清單；真實 SQL 錯誤不再吞，直接由 NestJS exception filter 攔截
+    const rows: Array<{ column_name: string | null; data_type: string | null }> =
+      await this.dataSource.query(
+        `SELECT c.column_name, c.data_type
+           FROM information_schema.columns c
+          WHERE c.table_schema = 'public'
+            AND c.table_name = 'ob_pool_data'
+            AND c.column_name NOT IN (
+              SELECT w.column_name FROM pooldata_field_whitelist w
+            )
+          ORDER BY c.column_name ASC`,
+      );
+
+    const items: AvailableColumnItem[] = rows
+      .filter((r) => r.column_name !== null && r.column_name !== undefined)
+      .map((r) => ({
+        columnName: r.column_name as string,
+        dataType: r.data_type ?? '',
+        suggestedFieldType: this._inferSuggestedFieldType(r.data_type),
+      }));
+
+    // 雙重保險：即使 SQL 已 ORDER BY，service 層仍確保字母升冪輸出（防 DB collation 差異）
+    items.sort((a, b) => a.columnName.localeCompare(b.columnName));
+
+    return { availableColumns: items };
   }
 
   /**
