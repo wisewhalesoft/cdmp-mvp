@@ -6,7 +6,7 @@ source-story: US-102
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.4.3"
+version: "1.4.5"
 date: 2026-05-19
 status: Draft
 ---
@@ -15,6 +15,7 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 
+> **v1.4.5 補修（2026-05-19 / prototype 對齊翻新）**：對齊 prototype 37a-pooldata-whitelist.html main content：(1) **§7 工具列結構**補：「新增篩選欄位」按鈕移至工具列右側（與搜尋 / type filter / status filter / 統計同一橫排，對應 prototype L126-157）；(2) **§7 操作 column 3 icon 規範**：list-checks（categorical only）+ pencil（編輯）+ ban/rotate-ccw（停用/啟用 toggle）—對應 prototype L613-619；(3) **§7 Edit 流程恢復**：reverse v1.4 D-iii 決議，補回 Edit Modal（columnName 唯讀 + 不顯示推斷 hint，AC-14 限定僅新增流程）；categorical→其他 fieldType 切換時 reuse 既有 CategorySwitchConfirmModal；(4) **§7 reactivate 流程**：inactive 欄位點 rotate-ccw icon 直接 PATCH `{ isActive: true }`（沿用既有 PATCH 端點，無需確認 modal）；(5) **§7 filter 字串對齊**：status filter `「啟用中 / 已停用 / 全部」` → `「狀態：全部 / 僅顯示啟用 / 僅顯示停用」`；type filter 補 zh-tw 後綴；(6) **§7 [DEFERRED] 區段**：明示 F075-M8（scope 提示區塊）+ F075-M9（seed 來源 column）不實作的設計決策；(7) **不動範圍**：spec §5 API 路徑與 schema、backend DTO、sidebar、breadcrumb、reference / prototype / 00-design-system。
 > **v1.4.3 補修（2026-05-19）**：case 對齊 — `pooldata_field_whitelist.column_name` 從原 SQL Server `OBPOOLDATA` 大寫慣例（`PROD_KIND` 等）改為小寫對齊 PostgreSQL `ob_pool_data` ETL 後表之 snake_case 實際欄位命名（`prod_kind` 等）；DTO regex `/^[A-Z][A-Z0-9_]{0,63}$/` 改為 `/^[a-z][a-z0-9_]{0,63}$/`；AC-1 / AC-8 seed 欄位字串 + API 範例 + 新增 BR-14（命名規範）；§13 補 v1.4.3 變更紀錄。**不動** F068 `ob_code_df.tbl_id` 之 `PROD_KIND` / `SPEC_TP` / `CASE_STATUS` 大寫業務常數（獨立語境）。
 > **v1.4 修訂（2026-05-18）**：UI 層命名改為「篩選欄位管理」/「新增篩選欄位」（內部 DB 表名 / API path / 類別名稱 100% 保留 `pooldata_field_whitelist`、`/api/v1/pooldata-fields`）；新增 `GET /api/v1/pooldata-fields/available-columns` 端點，新增欄位流程改為下拉選擇 OBPOOLDATA 既有但尚未列入白名單之欄位（含停用欄位過濾，防繞過 AC-5），徹底消除 A-3 孤兒欄位新增風險；新增 `suggestedFieldType` 推斷規則（numeric / categorical / date，預選非強制，使用者可覆寫）；BR-11 / BR-12 / BR-13 落地；A-3 由 [ASSUMPTION] 升級為 [RESOLVED]；附帶清理：prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串修正為 spec 權威定義 `POOLDATA_FIELD_DUPLICATE`。
 > **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回 BR-7 「`field_type` 由 categorical 切離時，service 層批次 SET 對應 `pooldata_field_option.is_active = false` + `deactivation_reason = 'field_type_changed'`（軟停用，不 CASCADE 刪除）」+ AC-6 切換 confirm UI 文字補「將自動停用 N 個可選值」+ 跨參照 data-model `deactivation_reason` ENUM。
@@ -391,6 +392,49 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 - **停用確認 Modal**：「確認停用 {displayName}？此欄位將立即從新名單定義條件選單中消失，但既有名單條件不受影響。」
 - **成功提示 toast（v1.4 一致化）**：以 `displayName` 為主，例如「欄位『風險等級』已新增」/「欄位『風險等級』已編輯」/「欄位『風險等級』已停用」/「欄位『風險等級』已啟用」；不再以 `columnName` 為主之文案
 
+### v1.4.5 工具列結構規範（對齊 prototype 37a L126-157）
+
+工具列為單一 flex container，由左至右排列：
+
+| 元素 | testid | 描述 |
+|---|---|---|
+| 搜尋框 | （無，由 placeholder 識別） | 搜尋 `columnName` / `displayName`，oninput 即時過濾 |
+| type filter dropdown | `filter-type` | 字串：「類別：全部 / categorical（類別型）/ numeric（數值型）/ date（日期型）」 |
+| status filter dropdown | `filter-active` | 字串：「狀態：全部 / 僅顯示啟用 / 僅顯示停用」（不可使用 v1.4 字串「啟用中 / 已停用 / 全部」） |
+| 「清除」按鈕 | `btn-clear-filters` | rotate-ccw icon + 「清除」文字，點擊重置 search + type filter + status filter |
+| 統計列 | `field-stats` | `ml-auto` 推至右側，顯示「總計 N 筆（啟用 X / 停用 Y）」 |
+| 「新增篩選欄位」按鈕 | `btn-create-field` | primary 樣式，plus icon + 「新增篩選欄位」文字 |
+
+### v1.4.5 操作 column 規範（對齊 prototype 37a L613-619）
+
+每 row 操作 column 含 **icon 按鈕**（不再使用文字 link/button）：
+
+| icon | testid | 顯示條件 | 點擊行為 |
+|---|---|---|---|
+| `list-checks` | `btn-options-{columnName}` | `fieldType === 'categorical'` 才顯示 | 跳轉至 `/assignment/whitelist/options?col={columnName}` |
+| `pencil` | `btn-edit-{columnName}` | 所有 row | 開啟 Edit Modal |
+| `ban` | `btn-disable-{columnName}` | `isActive === true` 才顯示 | 觸發停用流程（categorical 含 active options → CategorySwitchConfirmModal；其他 → 一般 ConfirmModal） |
+| `rotate-ccw` | `btn-reactivate-{columnName}` | `isActive === false` 才顯示 | 直接 PATCH `{ isActive: true }`，無確認 Modal |
+
+### v1.4.5 Edit Modal 規範（reverse v1.4 D-iii）
+
+- testid：`edit-field-modal`
+- 結構與新增 Modal 相同：fieldType radio + displayName input
+- 差異：
+  - `columnName` 為唯讀 chip（testid `readonly-column-name`，PK 不可變更，對應 prototype L287-295）
+  - **不渲染**系統推斷 hint（AC-14 限定僅新增流程，prototype L704-705 註解）
+  - **不渲染** `dropdown-column-name-trigger`（dropdown 為 create-only）
+- 提交：呼叫 `PATCH /api/v1/pooldata-fields/{columnName}` 帶 `{ displayName, fieldType }`
+- 級聯：`categorical → numeric/date` 切換時，由父層偵測 → 觸發既有 CategorySwitchConfirmModal（重用 v1.4 邏輯）
+- 成功 toast：「欄位『{displayName}』已編輯」
+
+### [DEFERRED] Prototype 對齊未實作項目（v1.4.5 範圍外）
+
+| ID | Prototype 來源 | 延後原因 | 解決方案 |
+|---|---|---|---|
+| F075-M8 | 37a L106-120 scope 提示區塊（藍底 box，含「F075 — 篩選欄位管理（M06 代碼維護擴充）」+ scope 描述 + 權限說明） | React 既有「管理 OBPOOLDATA 表可用的篩選欄位清單（F075）」描述行已替代核心 scope 資訊，且 spec §1 / §7 已有對應規範；增加 box 屬視覺重複 | 不修補；如未來需 emphasis，可新增 `scope-banner` testid 區塊 |
+| F075-M9 | 37a L168 表格欄位「seed 來源 / 備註」（顯示 `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 等 seed 來源字串） | 後端 `pooldata_field_whitelist` entity 無 `seed_note` 欄位；spec §5.1 list 回應 schema 也未定義；屬 backend schema change，超出 v1.4.5 範圍 | 待後續若需展示來源則新增 entity field + spec §5.1 schema 補欄位 |
+
 ## 8. 依賴關係
 
 - **Blocked By**：
@@ -498,3 +542,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 | v1.4.1 | 2026-05-19 | **prototype 對齊補修**：(1) 從 sidebar 移除「篩選欄位管理」獨立項（v1.3 起就不該有，對齊 prototype 37-base-code.html L186-243 設計）；(2) `base-codes-page.tsx` 加入「進階維護」區塊兩張卡片入口（F075「篩選欄位管理」+ F076「類別型欄位可選值」），對應 prototype 37-base-code.html L186-243；(3) prototype 37-base-code.html L192/L204/L209 命名同步至 v1.4（`v1.1 → v1.4`、`POOLDATA 篩選欄位白名單 → 篩選欄位管理`、`field_whitelist → pooldata_field_whitelist`）；(4) regression guard `m06-naming-regression.spec.ts` 補 sidebar 不應出現「篩選欄位管理」/「白名單管理」斷言；(5) §7 頁面入口描述修正：由 sidebar 獨立分頁改為「代碼維護頁進階維護區塊卡片」 |
 | v1.4.2 | 2026-05-19 | **D1 設計修補：available-columns 錯誤碼分流**：(1) `getAvailableColumns` 改為兩階段查詢（Step 1 確認 `ob_pool_data` 表存在、Step 2 NOT IN 子查詢取欄位清單），移除原本 try/catch 吞錯回空陣列導致 UI 誤導「全部已列入」訊息的問題；(2) §5.5 錯誤代碼表新增 `503 OBPOOLDATA_NOT_READY`（表不存在 / ETL 尚未 Load / SQLite 環境 information_schema 不可用）；(3) AC-13 拆為 AC-13a（既有：dropdown 為唯一新增路徑）+ AC-13b（新：dropdown 空態依錯誤碼分流顯示對應訊息與「重試」按鈕，四種狀態為 200 空陣列 / 503 OBPOOLDATA_NOT_READY / 503 FEATURE_NOT_ENABLED / 其他 5xx）；(4) 前端 `field-whitelist-page.tsx` `loadAvailableColumns` 可重用函式 + dropdown render 四級優先序（loading → error → empty「全部已列入」→ 選項列表）；(5) E2E TS-F075-E2E-001/002/008 SQLite 環境斷言由 `200 + availableColumns: []` 改為 `503 OBPOOLDATA_NOT_READY`，路由排序回歸仍可區分 503 vs 404；(6) Dev 環境驗證：補 ETL `ob_pool_data` 表存在 → director 開啟 Modal 可見 121 個未列入欄位，符合 OBPOOLDATA 實際資料量 |
 | v1.4.3 | 2026-05-19 | **case 對齊補修（補修 mini-tdd，非常態化 spec 改動）**：(1) **Root cause**：原 SQL Server `OBPOOLDATA` 大寫欄位慣例（PROD_KIND / LIST_TYPE / ...）與 PostgreSQL ETL 後表 `ob_pool_data` 之 snake_case 實際欄位（prod_kind / list_type / ...）不一致；`getAvailableColumns` SQL 子查詢 `WHERE c.column_name NOT IN (SELECT w.column_name)` 為 case-sensitive 字串比對，導致過濾失效（dropdown 多顯示 8 筆已列入欄位）；使用者從 dropdown 選擇小寫欄位後，DTO `@Matches(/^[A-Z][A-Z0-9_]{0,63}$/)` 大寫 regex 422 拒絕；(2) **生產碼變更**：m22 / m24 seed migration 8 筆 fields + 16 筆 options column_name 全部改小寫；DTO regex 改為 `/^[a-z][a-z0-9_]{0,63}$/`；錯誤訊息「OBPOOLDATA 欄位命名慣例（大寫）」改為「`ob_pool_data` PostgreSQL snake_case 命名」；(3) **AC / 範例更新**：AC-1 seed 欄位列表小寫；AC-8 / AC-10 範例字串小寫；§5 API request/response 範例之 columnName 字串小寫；(4) **新增 BR-14**：`column_name` 命名規範（對齊 PostgreSQL `ob_pool_data` snake_case；不影響 F068 `ob_code_df.tbl_id` 大寫業務常數）；(5) **資料庫**：Dev DB 已由使用者 SQL UPDATE 修正 8 筆 whitelist + 16 筆 options column_name 至小寫；(6) **不動範圍**：F068 `ob_code_df.tbl_id`（PROD_KIND / SPEC_TP / CASE_STATUS 大寫業務常數）、F068 / F069 / F070 / F071 之 assignment-code / assignment-scoring 模組、reference SP / 原 SQL Server 表描述、計分卡 `ob_levelcard_column.column_name`（與本欄為不同表，仍為大寫常數） |
+| v1.4.5 | 2026-05-19 | **prototype 對齊翻新（main content）**：對齊 prototype 37a-pooldata-whitelist.html L106-720 之 main content 設計：(1) **§7 工具列結構**補：「新增篩選欄位」按鈕移至工具列（與搜尋 / type filter / status filter / 統計同一橫排，prototype L126-157）；補「清除」按鈕（rotate-ccw icon，重置 3 個 filter 狀態）；(2) **§7 操作 column 3 icon**：list-checks（categorical only）+ pencil（編輯）+ ban/rotate-ccw（停用/啟用 toggle），對應 prototype L613-619；testid 規範：`btn-options-{col}` / `btn-edit-{col}` / `btn-disable-{col}` / `btn-reactivate-{col}`；(3) **§7 Edit 流程**：reverse v1.4 D-iii 決議，補回 Edit Modal — `columnName` 唯讀 chip + 不渲染推斷 hint（AC-14 限定僅新增流程，prototype L704-705）+ 不渲染 dropdown trigger；categorical→其他 fieldType 切換時 reuse 既有 CategorySwitchConfirmModal；testid `edit-field-modal` / `readonly-column-name` / `edit-input-display-name` / `edit-field-type-radio-{type}` / `btn-submit-edit-field`；提交 PATCH `/api/v1/pooldata-fields/{columnName}` 帶 `{ displayName, fieldType }`；成功 toast「欄位『{displayName}』已編輯」；(4) **§7 reactivate 流程**：inactive 欄位 rotate-ccw icon 直接 PATCH `{ isActive: true }`（沿用既有 PATCH 端點）；無確認 Modal；成功 toast「欄位『{displayName}』已啟用」；(5) **§7 filter 字串對齊**：`filter-active` 字串 `「啟用中 / 已停用 / 全部」` → `「狀態：全部 / 僅顯示啟用 / 僅顯示停用」`（對齊 prototype L142-146）；`filter-type` 補 zh-tw 後綴「（類別型）」「（數值型）」「（日期型）」（對齊 prototype L133-138）；status filter 預設值由 `'active'` 改為 `'all'`；(6) **§7 新增 [DEFERRED] 區段**：明示 F075-M8（scope 提示區塊，已被 React 描述行替代）與 F075-M9（seed 來源 column，需 backend entity 加欄位）不實作的設計決策，避免未來 review 又被抓出；(7) **backend 不動**：既有 `UpdatePooldataFieldDto.isActive` 已支援 reactivate；PATCH 端點足夠；(8) **不動範圍**：spec §5 API 路徑與 schema、backend DTO、sidebar（v1.4.1 已對齊）、breadcrumb（v1.4.4 已對齊）、reference / prototype / 00-design-system；CategorySwitchConfirmModal 既有 component reuse；(9) **測試覆蓋**：F075 補 14 個 test cases（TS-F075-FE-V145-001 ~ 014），既有 28 PASS 全保留 |

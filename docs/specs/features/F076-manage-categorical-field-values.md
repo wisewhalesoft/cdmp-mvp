@@ -6,7 +6,7 @@ source-story: US-103
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.3.1"
+version: "1.4.5"
 date: 2026-05-19
 status: Draft
 ---
@@ -15,6 +15,7 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 
+> **v1.4.5 補修（2026-05-19 / prototype 對齊翻新）**：對齊 prototype 37b-categorical-field-values.html main content（架構翻新）：(1) **§7 頁面架構翻新**：從單欄位 detail page 改為**多欄位 accordion master page**（對應 prototype L143）；(2) **§7 資料載入**：頁面載入時呼叫 `listFields({active:'true'})` 過濾 `fieldType==='categorical'` → 對每個欄位 `Promise.all` 呼叫 `listOptions`（不需 backend 變更）；(3) **§7 per-column 新增按鈕**：每個 accordion 內部底部「新增可選值」按鈕（context 由 accordion 提供，不再為頁面頂部單一按鈕），對應 prototype L436-437；testid `btn-add-option-{columnName}`；(4) **§7 全頁統計**：欄位數 / 啟用值總和 / 停用值總和（對應 prototype L131-134）；testid `option-stats` / `stats-fields-count` / `stats-active-count` / `stats-inactive-count`；(5) **§7「全部展開」按鈕**：工具列右側 `btn-expand-all` 點擊將所有 accordion 展開並寫入 localStorage（對應 prototype L136-138, L478-485）；(6) **§7 `?col=XX` query 改為可選 hint**：自動展開指定 accordion；缺值不再報錯（對應 prototype L680-687）；(7) **§7 三種狀態徽章**：啟用 / 自動停用（類別變更）/ 手動停用（依 `deactivationReason` 分流，對應 prototype L363-371）；(8) **§7 自動停用（field_type_changed）啟用攔阻**：點 rotate-ccw icon 顯示 warning toast「請先於 F075 將欄位類別改回 categorical」而非呼叫 API（對應 prototype L417, L536-539）；(9) **§7 新增 [DEFERRED] 區段**：明示 F076-M5（archived 欄位 UI 區塊）暫不實作的設計決策（方案 C）；(10) **不動範圍**：spec §5 API 路徑與 schema、backend service / DTO、sidebar、breadcrumb（v1.4.4 三層保留）、reference / prototype；既有 deactivate modal 結構保留。
 > **v1.3.1 補修（2026-05-19）**：依 F075 v1.4.3 case 對齊：(1) AC-1 / AC-3 / AC-5 seed 欄位字串 + API 範例 columnName 由大寫（`PROD_KIND` 等）改小寫（`prod_kind` 等），對齊 PostgreSQL `ob_pool_data` snake_case；(2) §10 測試覆蓋目標欄位字串同步；(3) `pooldata_field_option.column_name` FK → `pooldata_field_whitelist.column_name` 之 case 由 m22 / m24 seed migration 保證（已於 F075 v1.4.3 變更）；(4) `spec_tp` / `best_case` 之 [ASSUMPTION] 留項不變（仍待 OBMCODEDF dump 確認 OBMVALUE），僅 column_name 對應改小寫。
 > **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回：(1) §5.0 概念 schema 區塊補 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-7 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 已 Resolved）；(3) BR-6 改寫為「F075 將欄位 `field_type` 從 categorical 改為其他類別時批次軟停用」+ 新增 BR-7「歷史保留 + `includeInactive=true` 查詢」；(4) 新增專屬 deactivate 端點 `PATCH /:columnName/options/:optionValue/deactivate` body `{ isActive: false, reason: string }` + 200 字驗證；(5) error-handling `WHITELIST_OPTION_INACTIVE` 警告碼 cross-ref。
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard：寫入 `DirectorGuard`、查看 `DirectorOrSectionChiefGuard`（取代 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議與 seed 清單。
@@ -312,6 +313,66 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 - **成功提示 toast**：「可選值『{optionLabel}』已新增 / 停用 / 啟用」
 - **caseyear 特殊值說明**：UI 對 `optionValue = '99'` 顯示輔助說明文字「99 = 不限年數（全選）」
 
+### v1.4.5 多欄位 accordion master 規範（對齊 prototype 37b）
+
+**頁面架構翻新**：v1.0 ~ v1.3.1 為「單欄位 detail page」（`?col=XX` 必填，缺值報錯），v1.4.5 改為「**多欄位 accordion master page**」。
+
+**資料載入流程**：
+
+1. 頁面載入 → 呼叫 `listFields({active:'true'})`
+2. 前端過濾 `fieldType === 'categorical'` 的欄位
+3. 對每個 categorical 欄位 `Promise.all` 呼叫 `listOptions(columnName, { includeInactive })`
+4. 渲染對應的 accordion 列表
+
+**testid 規範**：
+
+| 元素 | testid | 描述 |
+|---|---|---|
+| 工具列 | `field-options-toolbar` | flex container |
+| 顯示已停用 toggle | `toggle-include-inactive` | checkbox |
+| 全頁統計 | `option-stats` | container |
+| 統計子項 | `stats-fields-count` / `stats-active-count` / `stats-inactive-count` | 3 個數字 |
+| 「全部展開」按鈕 | `btn-expand-all` | chevrons-down icon |
+| 單一 accordion | `accordion-{columnName}` | `data-state="open"|"closed"` |
+| Accordion summary 點擊區 | `accordion-summary-{columnName}` | button |
+| Accordion 內每筆 status badge | `status-badge-{optionValue}` | 3 種文字依 `deactivationReason` 分流 |
+| Accordion 內停用按鈕 | `btn-deactivate-{optionValue}` | ban icon |
+| Accordion 內啟用按鈕 | `btn-reactivate-{optionValue}` | rotate-ccw icon；`data-blocked="true"` 表示 `field_type_changed` |
+| Accordion 內新增可選值按鈕 | `btn-add-option-{columnName}` | per-column context |
+
+**狀態徽章三種變體**（對應 prototype L363-371）：
+
+| 條件 | 字串 | 樣式 |
+|---|---|---|
+| `isActive === true` | 「啟用」 | 綠色 |
+| `isActive === false && deactivationReason === 'field_type_changed'` | 「自動停用（類別變更）」 | 琥珀色 |
+| `isActive === false && deactivationReason !== 'field_type_changed'` | 「手動停用」 | 灰色 |
+
+**禁用辭彙**（v1.0 / v1.3.1 字串）：「啟用中」「已停用」不可使用於徽章；舊有「自動停用」「類別變更停用」變體禁用。
+
+**`field_type_changed` 啟用攔阻**：
+
+- 點 `btn-reactivate-{optionValue}` 之 option：若 `deactivatedReason === 'field_type_changed'`，**不**呼叫 `reactivateOption` API
+- 改顯示 warning toast：「無法直接啟用 {optionValue}：因類別變更而停用。請先於 F075 將欄位類別改回 categorical」
+
+**localStorage persist 規範**：
+
+- Key 格式：`cdmp.f076.acc.{columnName}.expanded`
+- 值：`'1'`（展開）/ 不存在（collapsed）
+- 觸發寫入：(a) 使用者點擊 accordion summary 展開、(b)「全部展開」按鈕、(c) `?col=XX` URL hint 命中
+- 觸發刪除：使用者點擊 accordion summary 收闔
+
+**`?col=XX` query 規範**：
+
+- v1.0 ~ v1.3.1：必填，缺值報錯
+- v1.4.5：**可選 hint**，僅作為「自動展開對應 accordion」之提示；缺值不報錯，僅顯示空態（無 categorical 欄位）或正常 collapsed 列表
+
+### [DEFERRED] Prototype 對齊未實作項目（v1.4.5 範圍外）
+
+| ID | Prototype 來源 | 延後原因 | 解決方案 |
+|---|---|---|---|
+| F076-M5 | 37b L345-354 archived 欄位 UI 區塊（含「歷史保留（已非 categorical）」徽章、不可新增 options 提示） | (1) 需新 backend endpoint 或 N+1 query 全部 listFields + listOptions 才能識別 archived 欄位；(2) MVP 範圍內 F051 既有 `?includeInactive=true` 查詢已能滿足名單編輯端 inactive option label 顯示需求；(3) archived 區塊純為「讀取展示」，非月跑必須 | 待 OQ 開啟後評估；具體方案為「新增 backend endpoint `GET /api/v1/pooldata-fields/archived`」或「Frontend N+1 query loop」二擇一 |
+
 ## 8. 依賴關係
 
 - **Blocked By**：
@@ -395,3 +456,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
 | v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失，task #16 system-architect Phase 1 PO 決議）：(1) §5.0 新增概念 schema 區塊明列 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-6 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 Resolved）+ 對應錯誤碼；(3) §5.1 GET 補 `includeInactive=true` query；(4) §5.3 PATCH 改為「啟用專用」、§5.4 新增 deactivate 專屬端點 `PATCH /:columnName/options/:optionValue/deactivate` + DTO `{ isActive: false, reason: string }` 200 字驗證；(5) 新增 BR-11 / BR-12 / BR-13；(6) 跨參照 data-model `pooldata_field_option.deactivation_reason` + error-handling `WHITELIST_OPTION_INACTIVE`；(7) 與 F075 v1.3 BR-7 對齊（F075 service 層觸發本表批次軟停用） |
 | v1.3.1 | 2026-05-19 | **case 對齊（依 F075 v1.4.3）**：AC-1 / AC-3 / AC-5 seed 欄位字串（`PROD_KIND` / `LIST_TYPE` / `BEST_CASE` / `SPEC_TP` / `CASEYEAR` / `SETTLE_SRC`）+ API 範例 columnName 由大寫改小寫，對齊 PostgreSQL `ob_pool_data` snake_case；§10 測試覆蓋目標欄位字串同步；`pooldata_field_option.column_name` 由 m22 / m24 seed migration 小寫；`spec_tp` / `best_case` 之 [ASSUMPTION] 留項不變（仍待 OBMCODEDF dump 確認 OBMVALUE），僅 column_name 對應改小寫 |
+| v1.4.5 | 2026-05-19 | **prototype 對齊翻新（main content 架構翻新）**：對齊 prototype 37b-categorical-field-values.html L100-465 之 main content 架構：(1) **§7 頁面架構翻新**：從單欄位 detail page 改為多欄位 accordion master page（對應 prototype L143）；頁面載入呼叫 `listFields({active:'true'})` 過濾 `fieldType==='categorical'` → 對每個欄位 `Promise.all` 呼叫 `listOptions`；(2) **§7 per-column 新增按鈕**：每個 accordion 內部底部「新增可選值」按鈕（context 由 accordion 提供）；testid `btn-add-option-{columnName}`；(3) **§7 全頁統計**：欄位數 / 啟用值總和 / 停用值總和；testid `option-stats` / `stats-fields-count` / `stats-active-count` / `stats-inactive-count`；(4) **§7「全部展開」按鈕**：testid `btn-expand-all`，點擊將所有 accordion 展開並寫入 localStorage；(5) **§7 `?col=XX` query 改為可選 hint**：自動展開指定 accordion；缺值不報錯（v1.0 ~ v1.3.1 為必填）；(6) **§7 三種狀態徽章**：啟用 / 自動停用（類別變更）/ 手動停用（依 `deactivationReason` 分流）；禁用辭彙「啟用中」「已停用」於徽章；(7) **§7 `field_type_changed` 啟用攔阻**：點 rotate-ccw icon 顯示 warning toast 而非呼叫 API；(8) **§7 localStorage persist 規範**：key `cdmp.f076.acc.{columnName}.expanded`；(9) **§7 新增 [DEFERRED] 區段**：明示 F076-M5（archived 欄位 UI 區塊，需 backend endpoint 或 N+1 query）暫不實作的設計決策（方案 C），避免未來 review 又被抓出；(10) **backend 不動**：既有 endpoints 足夠（listFields / listOptions / createOption / deactivateOption / reactivateOption）；(11) **不動範圍**：spec §5 API 路徑與 schema、backend service / DTO、sidebar、breadcrumb（v1.4.4 三層保留）、reference / prototype；既有 deactivate modal 結構保留；(12) **測試覆蓋**：F076 補 15 個 test cases（TS-F076-FE-V145-001 ~ 015），既有 single-detail 結構之 test cases 重寫為 multi-field accordion |
