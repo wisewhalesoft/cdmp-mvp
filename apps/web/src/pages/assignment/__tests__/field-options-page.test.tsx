@@ -1,4 +1,4 @@
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FieldOptionsPage } from '../field-options-page';
@@ -83,6 +83,26 @@ describe('FieldOptionsPage (F076)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('options-error')).toHaveTextContent(/缺少 col/),
     );
+  });
+
+  it('TS-F076-FE-BREADCRUMB：三層麵包屑「代碼維護 → 篩選欄位管理 → 類別型欄位可選值」，前兩層可點擊', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('M3')).toBeInTheDocument());
+
+    const breadcrumb = screen.getByRole('navigation', { name: '麵包屑' });
+    expect(breadcrumb).toBeInTheDocument();
+
+    // 第一層「代碼維護」可點擊
+    const codesLink = within(breadcrumb).getByRole('link', { name: '代碼維護' });
+    expect(codesLink).toHaveAttribute('href', '/assignment/base-codes');
+
+    // 第二層「篩選欄位管理」可點擊
+    const whitelistLink = within(breadcrumb).getByRole('link', { name: '篩選欄位管理' });
+    expect(whitelistLink).toHaveAttribute('href', '/assignment/whitelist');
+
+    // 第三層「類別型欄位可選值」為當前頁面 span（非 link）
+    expect(within(breadcrumb).getByText('類別型欄位可選值')).toBeInTheDocument();
+    expect(within(breadcrumb).queryByRole('link', { name: '類別型欄位可選值' })).toBeNull();
   });
 
   it('渲染 active 可選值（預設不顯示已停用）', async () => {

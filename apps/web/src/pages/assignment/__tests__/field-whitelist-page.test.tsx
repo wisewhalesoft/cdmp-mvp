@@ -1,4 +1,4 @@
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { FieldWhitelistPage } from '../field-whitelist-page';
@@ -238,16 +238,25 @@ describe('FieldWhitelistPage (F075)', () => {
 
     // ===== A. 渲染驗證 — UI 命名規範 =====
 
-    it('TS-F075-FE-001：頁面 H1 / AppLayout title 顯示「篩選欄位管理」（不含「白名單管理」）', async () => {
+    it('TS-F075-FE-001：麵包屑顯示「代碼維護 → 篩選欄位管理」，「代碼維護」可點擊返回', async () => {
       renderPage();
       await waitFor(() => expect(screen.getByText('prod_kind')).toBeInTheDocument());
 
-      // AppLayout title 含「篩選欄位管理」
-      const heading = screen.getByRole('heading', { level: 1 });
-      expect(heading.textContent).toContain('篩選欄位管理');
+      // 麵包屑導航存在（v1.4.4 對齊 prototype 37a）
+      const breadcrumb = screen.getByRole('navigation', { name: '麵包屑' });
+      expect(breadcrumb).toBeInTheDocument();
+
+      // 「代碼維護」為可點擊 Link，指向 /assignment/base-codes
+      const parentLink = within(breadcrumb).getByRole('link', { name: '代碼維護' });
+      expect(parentLink).toHaveAttribute('href', '/assignment/base-codes');
+
+      // 當前頁面「篩選欄位管理」為 span（非 link）
+      expect(within(breadcrumb).getByText('篩選欄位管理')).toBeInTheDocument();
+      expect(within(breadcrumb).queryByRole('link', { name: '篩選欄位管理' })).toBeNull();
+
       // 不含舊命名
-      expect(heading.textContent).not.toContain('白名單管理');
-      expect(heading.textContent).not.toContain('POOLDATA 篩選欄位白名單');
+      expect(breadcrumb.textContent).not.toContain('白名單管理');
+      expect(breadcrumb.textContent).not.toContain('POOLDATA 篩選欄位白名單');
     });
 
     it('TS-F075-FE-002：點「新增篩選欄位」按鈕 → Modal 標題為「新增篩選欄位」', async () => {

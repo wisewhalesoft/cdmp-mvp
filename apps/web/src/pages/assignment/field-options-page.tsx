@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
-  ArrowLeft,
   Plus,
   Search,
   Ban,
@@ -9,6 +8,7 @@ import {
   Tags,
   AlertTriangle,
   Info,
+  ChevronRight,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,6 @@ import { getEffectiveIdentity } from '@/stores/auth-store';
  */
 
 export function FieldOptionsPage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
   const columnName = searchParams.get('col') ?? '';
@@ -181,23 +180,28 @@ export function FieldOptionsPage() {
   return (
     <AppLayout
       headerLeft={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/whitelist')}
-            className="text-gray-400 hover:text-gray-700"
+        <nav aria-label="麵包屑" className="flex items-center gap-2 text-sm">
+          <Link
+            to="/assignment/base-codes"
+            className="text-gray-500 hover:text-primary transition"
           >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">
-            可選值管理
-          </h1>
+            代碼維護
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <Link
+            to="/assignment/whitelist"
+            className="text-gray-500 hover:text-primary transition"
+          >
+            篩選欄位管理
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <span className="font-semibold text-gray-800">類別型欄位可選值</span>
           {columnName && (
-            <code className="font-mono text-primary text-sm px-2 py-0.5 bg-blue-50 rounded">
+            <code className="font-mono text-primary text-sm px-2 py-0.5 bg-blue-50 rounded ml-2">
               {columnName}
             </code>
           )}
-        </div>
+        </nav>
       }
     >
       <main className="flex-1 p-6 space-y-4">

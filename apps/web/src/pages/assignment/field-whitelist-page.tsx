@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Plus,
   Search,
@@ -10,6 +10,7 @@ import {
   Tags,
   Info,
   ChevronDown,
+  ChevronRight,
   Sparkles,
   UserCheck,
   Inbox,
@@ -357,7 +358,20 @@ export function FieldWhitelistPage() {
     creating;
 
   return (
-    <AppLayout title="客戶名單分派 — 代碼維護 / 篩選欄位管理">
+    <AppLayout
+      headerLeft={
+        <nav aria-label="麵包屑" className="flex items-center gap-2 text-sm">
+          <Link
+            to="/assignment/base-codes"
+            className="text-gray-500 hover:text-primary transition"
+          >
+            代碼維護
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <span className="font-semibold text-gray-800">篩選欄位管理</span>
+        </nav>
+      }
+    >
       <main className="flex-1 p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-gray-500">
