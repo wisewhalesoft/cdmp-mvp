@@ -6,7 +6,7 @@ source-story: US-102
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.4.6"
+version: "1.4.7"
 date: 2026-05-19
 status: Draft
 ---
@@ -15,6 +15,7 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 
+> **v1.4.7 補修（2026-05-19 / available-columns 端點補 columnDescription + Modal 自動填入 displayName）**：補兩條未交付需求：(1) **AC-16**：`GET /api/v1/pooldata-fields/available-columns` 於每筆欄位回傳 `columnDescription`，來源為 SQL Server `sys.extended_properties` 之 `MS_Description`；datasource 解析查 `extraction_tasks` 表最新一筆 `source_table = 'OBPOOLDATA'`（不限 status）；遇連線失敗 / 查無 task / 該欄位無 `MS_Description` 三種情境靜默降級（該欄位物件**省略** `columnDescription`，不回 null/空字串），端點整體仍 200 OK，不記錄 error-level 日誌；(2) **AC-17**：新增 Modal dropdown 選欄位後，若 `displayName` 為空白（trim 後長度 0）且該欄位 response 含 `columnDescription`，自動將 `columnDescription` 值填入 `displayName` 輸入框；已有內容不覆寫；無 `columnDescription` 則維持空白且不顯示錯誤；自動填入後仍可清空 / 改寫；Edit Modal 不受影響（僅 create 流程）；(3) **不動範圍**：spec §5 端點路徑與權限、§5.5 過濾/排序/`suggestedFieldType` 規則、§6 BR 編號（不新增 BR）、既有 AC-1 ~ AC-15 語意、錯誤代碼表、`pooldata_field_whitelist` schema、prototype 與 reference。
 > **v1.4.6 補修（2026-05-19 / seed 範圍對齊舊系統 OBZ020）**：對齊舊系統 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml` 之名單篩選欄位範圍（9 欄中扣除 3 欄已由 `ob_list_definition` 一級欄位承擔之 `list_period_start` / `list_period_end` / `list_interval`、1 欄非篩選欄位 `list_nm`，剩 **5 個真正的篩選欄位**）。本版改動：(1) **seed 列從 8 筆收斂為 5 筆全部啟用**：保留 `prod_kind` / `list_type` / `spec_tp` / `caseyear` / `settle_src`（皆 categorical）；(2) **從 seed 移除**：`best_case`（runtime 未讀取，`fn_calc_tier_level.sql` 與 `assignment-run-pipeline.service.ts` 皆未引用）、`month_cnt`（scoring 之 LIST_MONTH 計分碼**直接讀 `ob_pool_data.month_cnt` column**，不經 whitelist；且名單期數範圍 filter 由 `ob_list_definition.list_period_start` / `list_period_end` / `list_interval` 三個一級欄位承擔，whitelist 重複維護無意義）、`payt_term`（runtime 未讀取）；(3) **`ob_pool_data.month_cnt` column 仍保留**（scoring 直讀），僅 whitelist 不列；(4) **BR-13 過濾 inactive 紀錄之語意保留**：seed 雖全為啟用，但部長日後可手動停用某欄位，available-columns 仍需排除含 inactive 紀錄以防繞過 AC-5；(5) **不動範圍**：spec §5 API 路徑與 schema、§6 BR 編號規則、§7 UI/UX 規範、backend DTO、Guard、error code、既有 AC 之語意、prototype 與 reference。
 > **v1.4.5 補修（2026-05-19 / prototype 對齊翻新）**：對齊 prototype 37a-pooldata-whitelist.html main content：(1) **§7 工具列結構**補：「新增篩選欄位」按鈕移至工具列右側（與搜尋 / type filter / status filter / 統計同一橫排，對應 prototype L126-157）；(2) **§7 操作 column 3 icon 規範**：list-checks（categorical only）+ pencil（編輯）+ ban/rotate-ccw（停用/啟用 toggle）—對應 prototype L613-619；(3) **§7 Edit 流程恢復**：reverse v1.4 D-iii 決議，補回 Edit Modal（columnName 唯讀 + 不顯示推斷 hint，AC-14 限定僅新增流程）；categorical→其他 fieldType 切換時 reuse 既有 CategorySwitchConfirmModal；(4) **§7 reactivate 流程**：inactive 欄位點 rotate-ccw icon 直接 PATCH `{ isActive: true }`（沿用既有 PATCH 端點，無需確認 modal）；(5) **§7 filter 字串對齊**：status filter `「啟用中 / 已停用 / 全部」` → `「狀態：全部 / 僅顯示啟用 / 僅顯示停用」`；type filter 補 zh-tw 後綴；(6) **§7 [DEFERRED] 區段**：明示 F075-M8（scope 提示區塊）+ F075-M9（seed 來源 column）不實作的設計決策；(7) **不動範圍**：spec §5 API 路徑與 schema、backend DTO、sidebar、breadcrumb、reference / prototype / 00-design-system。
 > **v1.4.3 補修（2026-05-19）**：case 對齊 — `pooldata_field_whitelist.column_name` 從原 SQL Server `OBPOOLDATA` 大寫慣例（`PROD_KIND` 等）改為小寫對齊 PostgreSQL `ob_pool_data` ETL 後表之 snake_case 實際欄位命名（`prod_kind` 等）；DTO regex `/^[A-Z][A-Z0-9_]{0,63}$/` 改為 `/^[a-z][a-z0-9_]{0,63}$/`；AC-1 / AC-8 seed 欄位字串 + API 範例 + 新增 BR-14（命名規範）；§13 補 v1.4.3 變更紀錄。**不動** F068 `ob_code_df.tbl_id` 之 `PROD_KIND` / `SPEC_TP` / `CASE_STATUS` 大寫業務常數（獨立語境）。
@@ -207,6 +208,29 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 - **Then** 系統顯示 toast「欄位『{displayName}』已新增」（toast 內容以 `displayName` 為主，不再以 `columnName` 為主）
 - **And** 編輯 / 停用 / 啟用 toast 亦沿用 displayName 為主之文案（與 §7 toast 規範一致）
 
+### AC-16：available-columns 端點於每筆欄位回傳 columnDescription
+
+- **Given** 部長 / Admin 呼叫 `GET /api/v1/pooldata-fields/available-columns`
+- **When** 後端成功連線 SQL Server `OBPOOLDATA` 所在 datasource（查 `extraction_tasks` 表最新一筆 `source_table = 'OBPOOLDATA'`，不限 status），並查得某欄位在 SQL Server `sys.extended_properties` 中存有 `MS_Description`
+- **Then** 對應欄位物件包含 `columnDescription` 欄位，值為 `MS_Description` 字串（例：`prod_kind` → `"產品類別"`）
+- **And** 若因下列任一原因無法取得 `MS_Description`（靜默降級，不影響整體端點回傳）：
+  - SQL Server datasource 連線失敗
+  - `extraction_tasks` 查無符合 `source_table = 'OBPOOLDATA'` 之紀錄
+  - 特定欄位在 `sys.extended_properties` 無 `MS_Description`
+  則該欄位物件**省略** `columnDescription` 欄位（不回 `null`，亦不回空字串）
+- **And** 降級情境下，端點整體仍回傳 200 OK，其餘有描述的欄位不受影響
+- **And** 後端不記錄 error-level 日誌（建議 debug / warn level）
+
+### AC-17：新增 Modal dropdown 選欄位後自動填入 displayName
+
+- **Given** 部長 / Admin 開啟「新增篩選欄位」Modal，且 dropdown 已成功載入 `availableColumns`
+- **When** 使用者從 dropdown 選取某一欄位（onChange 觸發）
+- **Then** 若 `displayName` 輸入框當前為空白（trim 後長度為 0）且被選欄位 response 含 `columnDescription`，則自動將 `columnDescription` 值填入 `displayName` 輸入框
+- **And** 若 `displayName` 已有內容（trim 後 > 0），**不覆寫**
+- **And** 若被選欄位 response 不含 `columnDescription`，displayName 維持空白；**不顯示**錯誤訊息
+- **And** 自動填入後使用者仍可清空 / 改寫
+- **And** Edit Modal **不受影響**（僅 create 流程）
+
 ## 5. API 規格
 
 ### 5.1 GET /api/v1/pooldata-fields
@@ -327,17 +351,30 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 | `date` / `timestamp` / `timestamptz`（含 `timestamp without time zone` / `timestamp with time zone`） | `date` |
 | 其他（字串、null、無法識別） | `categorical`（保守原則） |
 
+**columnDescription 取得規則**（對應 AC-16，v1.4.7 新增）
+
+- **查詢來源**：SQL Server `sys.extended_properties` 之 `MS_Description`（保留 SQL Server 原始術語，**不可改名**為 `description` / `chineseName` / `label` / `comment` / `remarks`）
+- **datasource 解析**：查 PostgreSQL `extraction_tasks` 表最新一筆 `source_table = 'OBPOOLDATA'`（**不限 status**），取其 `datasource_id` 連線 SQL Server
+- **降級條件**（任一觸發即省略該欄位之 `columnDescription`）：
+  1. SQL Server datasource 連線失敗
+  2. `extraction_tasks` 查無符合 `source_table = 'OBPOOLDATA'` 之紀錄
+  3. 特定欄位在 `sys.extended_properties` 無 `MS_Description`
+- **降級行為**：該欄位物件 **omit** `columnDescription` key（不回 `null`、不回空字串）；端點整體仍 200 OK；其他有描述之欄位不受影響
+- **日誌等級**：降級不記錄 error-level 日誌（建議 debug 或 warn）
+
 **Response — 200 OK**
 
 ```json
 {
   "availableColumns": [
-    { "columnName": "birth_date", "dataType": "date", "suggestedFieldType": "date" },
+    { "columnName": "birth_date", "dataType": "date", "suggestedFieldType": "date", "columnDescription": "出生日期" },
     { "columnName": "cust_age", "dataType": "integer", "suggestedFieldType": "numeric" },
-    { "columnName": "risk_level", "dataType": "varchar", "suggestedFieldType": "categorical" }
+    { "columnName": "risk_level", "dataType": "varchar", "suggestedFieldType": "categorical", "columnDescription": "風險等級" }
   ]
 }
 ```
+
+> 註：`cust_age` 故意省略 `columnDescription` 欄位，示意該欄位在 `sys.extended_properties` 無 `MS_Description` 時之 omit 行為；不回 `null` 亦不回空字串。
 
 **錯誤代碼**
 
@@ -380,6 +417,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
   - Modal 標題：「**新增篩選欄位**」（不可使用「新增白名單欄位」/「新增 POOLDATA 欄位」）
   - 欄位 1：`columnName` — **下拉選擇（dropdown）**，選項來源為 `GET /api/v1/pooldata-fields/available-columns` 之 `availableColumns`，選項顯示 `columnName`（可附 `dataType` 作為輔助說明，視覺細節由 ui-ux-designer 決議）；**不提供自由文字輸入路徑**（BR-11）
   - 欄位 2：`displayName`（text，必填）
+    - **自動填入行為（v1.4.7 / AC-17）**：dropdown 選欄位 onChange 時，若 `displayName` 當前為空白（trim 後長度為 0）且該欄位 response 含 `columnDescription`，自動帶入 `columnDescription` 值；已有內容不覆寫；無 `columnDescription` 維持空白且**不**顯示錯誤；自動填入後使用者仍可清空 / 改寫；**Edit Modal 不適用**（僅 create 流程）
   - 欄位 3：`fieldType` — radio 群組（`numeric` / `categorical` / `date`，必填）
   - **系統推斷 hint（AC-14）**：選中 dropdown 某欄位後，`fieldType` radio 群組**上方**顯示語意文字「系統推斷：{suggestedFieldType}（依 dataType={dataType}）；請確認是否正確」，且 radio 預選為 `suggestedFieldType`
   - **使用者覆寫 hint 切換（AC-14）**：使用者覆寫預選 radio 後，hint 文字改顯示「使用者選擇」（系統推斷文字隱藏或被取代）；視覺呈現細節由 ui-ux-designer 決議
@@ -480,6 +518,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
   - GET available-columns suggestedFieldType 推斷正確性：numeric / integer / decimal / double precision / real / bigint → `numeric`；date / timestamp / timestamptz → `date`；其餘含 null → `categorical`（對應 AC-12 / BR-12）
   - GET available-columns 結果按 columnName 字母升冪排序（對應 AC-10）
   - GET available-columns 當 OBPOOLDATA 所有欄位皆已列入白名單 → 回傳空陣列
+  - GET available-columns 某欄位 SQL Server `sys.extended_properties` 含 `MS_Description` → response 該欄位含 `columnDescription` 字串（AC-16）
+  - GET available-columns 某欄位 SQL Server `sys.extended_properties` 無 `MS_Description` → response 該欄位 **omit** `columnDescription` key（非 null / 非空字串，AC-16）
+  - GET available-columns SQL Server datasource 連線失敗 → response 全部欄位 omit `columnDescription`，整體仍 200 OK，無 error-level 日誌（AC-16）
+  - GET available-columns `extraction_tasks` 查無 `source_table = 'OBPOOLDATA'` 紀錄 → response 全部欄位 omit `columnDescription`，整體仍 200 OK（AC-16）
+  - `extraction_tasks` datasource 解析查詢取最新一筆（不限 status）— 含 success / failed / running 各狀態下仍能取得最新 `datasource_id`（AC-16）
 - 前端關鍵測試案例：
   - 處長頁面**無**任何操作按鈕
   - 部長頁面顯示新增 / 編輯 / 停用按鈕
@@ -493,6 +536,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
   - 新增成功 toast 文案以 displayName 為主，不以 columnName 為主（AC-15）
   - sidebar / breadcrumb / 頁面 H1 顯示「篩選欄位管理」字串（UI 命名規範）
   - 新增 Modal 標題顯示「新增篩選欄位」字串（UI 命名規範）
+  - 新增 Modal dropdown 選含 `columnDescription` 欄位 + `displayName` 為空 → `displayName` 自動填入 `columnDescription` 值（AC-17）
+  - 新增 Modal dropdown 選不含 `columnDescription` 欄位 + `displayName` 為空 → `displayName` 維持空白且無錯誤訊息（AC-17）
+  - 新增 Modal `displayName` 已有內容（含 trim 後 > 0）→ dropdown 換選不覆寫（AC-17）
+  - 新增 Modal 自動填入後使用者可清空 / 改寫 displayName（AC-17）
+  - Edit Modal 切換 fieldType / 任何欄位變更**不**觸發 `displayName` 自動填入（AC-17 negative case）
 - E2E：新增 RISK_LEVEL（categorical）→ F076 維護可選值 → F050 新名單表單可選擇 → 停用 → F050 表單消失 → 既有名單月跑不受影響
 
 ## 11. 實作 Checklist
@@ -518,6 +566,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 - [ ] **附帶清理**：修正既有 prototype 第 187 行 `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`
 - [ ] **附帶清理**：修正既有 FE footer 第 409 行 `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`
 - [ ] A-3 升級為 [RESOLVED] 之新增階段防護驗證（既有歷史孤兒偵測仍待後續 spec 處理）
+- [ ] 後端 available-columns service 補 `columnDescription` 取得邏輯：查 `extraction_tasks` 最新一筆 `source_table = 'OBPOOLDATA'`（不限 status）→ 連線對應 SQL Server datasource → 查 `sys.extended_properties` 之 `MS_Description`（v1.4.7 / AC-16）
+- [ ] 後端 available-columns response DTO 將 `columnDescription` 設為 optional 欄位（omit 而非 null）（v1.4.7 / AC-16）
+- [ ] 後端三種降級情境靜默處理 + 日誌等級降為 debug / warn（v1.4.7 / AC-16）
+- [ ] 前端新增 Modal dropdown onChange handler 補自動填入 `displayName` 邏輯（trim 為 0 + 含 `columnDescription` 才填）（v1.4.7 / AC-17）
+- [ ] 前端 Edit Modal 確認**不**綁定自動填入邏輯（v1.4.7 / AC-17 negative case）
 
 ## 12. 假設
 
@@ -540,5 +593,6 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 | v1.4.1 | 2026-05-19 | **prototype 對齊補修**：(1) 從 sidebar 移除「篩選欄位管理」獨立項（v1.3 起就不該有，對齊 prototype 37-base-code.html L186-243 設計）；(2) `base-codes-page.tsx` 加入「進階維護」區塊兩張卡片入口（F075「篩選欄位管理」+ F076「類別型欄位可選值」），對應 prototype 37-base-code.html L186-243；(3) prototype 37-base-code.html L192/L204/L209 命名同步至 v1.4（`v1.1 → v1.4`、`POOLDATA 篩選欄位白名單 → 篩選欄位管理`、`field_whitelist → pooldata_field_whitelist`）；(4) regression guard `m06-naming-regression.spec.ts` 補 sidebar 不應出現「篩選欄位管理」/「白名單管理」斷言；(5) §7 頁面入口描述修正：由 sidebar 獨立分頁改為「代碼維護頁進階維護區塊卡片」 |
 | v1.4.2 | 2026-05-19 | **D1 設計修補：available-columns 錯誤碼分流**：(1) `getAvailableColumns` 改為兩階段查詢（Step 1 確認 `ob_pool_data` 表存在、Step 2 NOT IN 子查詢取欄位清單），移除原本 try/catch 吞錯回空陣列導致 UI 誤導「全部已列入」訊息的問題；(2) §5.5 錯誤代碼表新增 `503 OBPOOLDATA_NOT_READY`（表不存在 / ETL 尚未 Load / SQLite 環境 information_schema 不可用）；(3) AC-13 拆為 AC-13a（既有：dropdown 為唯一新增路徑）+ AC-13b（新：dropdown 空態依錯誤碼分流顯示對應訊息與「重試」按鈕，四種狀態為 200 空陣列 / 503 OBPOOLDATA_NOT_READY / 503 FEATURE_NOT_ENABLED / 其他 5xx）；(4) 前端 `field-whitelist-page.tsx` `loadAvailableColumns` 可重用函式 + dropdown render 四級優先序（loading → error → empty「全部已列入」→ 選項列表）；(5) E2E TS-F075-E2E-001/002/008 SQLite 環境斷言由 `200 + availableColumns: []` 改為 `503 OBPOOLDATA_NOT_READY`，路由排序回歸仍可區分 503 vs 404；(6) Dev 環境驗證：補 ETL `ob_pool_data` 表存在 → director 開啟 Modal 可見 121 個未列入欄位，符合 OBPOOLDATA 實際資料量 |
 | v1.4.3 | 2026-05-19 | **case 對齊補修（補修 mini-tdd，非常態化 spec 改動）**：(1) **Root cause**：原 SQL Server `OBPOOLDATA` 大寫欄位慣例（PROD_KIND / LIST_TYPE / ...）與 PostgreSQL ETL 後表 `ob_pool_data` 之 snake_case 實際欄位（prod_kind / list_type / ...）不一致；`getAvailableColumns` SQL 子查詢 `WHERE c.column_name NOT IN (SELECT w.column_name)` 為 case-sensitive 字串比對，導致過濾失效（dropdown 多顯示 8 筆已列入欄位）；使用者從 dropdown 選擇小寫欄位後，DTO `@Matches(/^[A-Z][A-Z0-9_]{0,63}$/)` 大寫 regex 422 拒絕；(2) **生產碼變更**：m22 / m24 seed migration 8 筆 fields + 16 筆 options column_name 全部改小寫；DTO regex 改為 `/^[a-z][a-z0-9_]{0,63}$/`；錯誤訊息「OBPOOLDATA 欄位命名慣例（大寫）」改為「`ob_pool_data` PostgreSQL snake_case 命名」；(3) **AC / 範例更新**：AC-1 seed 欄位列表小寫；AC-8 / AC-10 範例字串小寫；§5 API request/response 範例之 columnName 字串小寫；(4) **新增 BR-14**：`column_name` 命名規範（對齊 PostgreSQL `ob_pool_data` snake_case；不影響 F068 `ob_code_df.tbl_id` 大寫業務常數）；(5) **資料庫**：Dev DB 已由使用者 SQL UPDATE 修正 8 筆 whitelist + 16 筆 options column_name 至小寫；(6) **不動範圍**：F068 `ob_code_df.tbl_id`（PROD_KIND / SPEC_TP / CASE_STATUS 大寫業務常數）、F068 / F069 / F070 / F071 之 assignment-code / assignment-scoring 模組、reference SP / 原 SQL Server 表描述、計分卡 `ob_levelcard_column.column_name`（與本欄為不同表，仍為大寫常數） |
-| v1.4.6 | 2026-05-19 | **seed 範圍對齊舊系統 OBZ020**：(1) **Root cause**：原 v1.4.3 起 seed 8 筆（prod_kind / list_type / best_case / spec_tp / caseyear / settle_src / month_cnt / payt_term）與舊系統 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml` 之 9 欄篩選欄位範圍不對齊；OBZ020 9 欄中 3 欄（`list_period_start` / `list_period_end` / `list_interval`）已由 `ob_list_definition` 一級欄位承擔、1 欄（`list_nm`）為名單名稱非篩選欄位，剩 5 欄才是真正的篩選欄位；(2) **決策依據**：`best_case` runtime 未讀取（`fn_calc_tier_level.sql` 與 `assignment-run-pipeline.service.ts` 均未引用）→ 拔除；`month_cnt` scoring 之 LIST_MONTH 計分碼**直接讀 `ob_pool_data.month_cnt` column**（不經 whitelist），且名單期數範圍 filter 由 `ob_list_definition.list_period_start` / `list_period_end` / `list_interval` 三個一級欄位承擔，whitelist 重複維護無意義 → 拔除（**column 在 `ob_pool_data` 仍保留供 scoring 直讀，僅 whitelist 不列**）；`payt_term` runtime 未讀取 → 拔除；(3) **AC / 範例更新**：§1 功能摘要「seed 8 筆」→「seed 5 筆全部啟用」；AC-1 seed 清單由 8 筆收斂為 5 筆（prod_kind / list_type / spec_tp / caseyear / settle_src）並移除「7 啟用 + 1 停用 payt_term」字樣；AC-10 範例「`pooldata_field_whitelist` 已有 8 筆紀錄（7 啟用 + 1 停用 payt_term）」→「5 筆全為啟用」並移除「已停用之 payt_term 亦不列入 available-columns」字樣，但保留 BR-13 過濾邏輯之語意說明（防部長日後手動停用某欄位繞過 AC-5）；§5.1 GET response 範例之 `month_cnt` 範例改為 `spec_tp`（保留 prod_kind 與另一 categorical 為代表）；§6 BR-9 seed 冪等性說明補充 v1.4.6 5 筆；§10 測試覆蓋目標「初始 seed（8 筆）」→「初始 seed（5 筆全部啟用）」；(4) **不動範圍**：spec §5 API 路徑與 schema、§6 BR 編號規則（BR-1 ~ BR-14 全保留）、§7 UI/UX 規範、§12 假設清單、backend DTO、Guard、error code、既有 AC（AC-2 ~ AC-15）語意、prototype 與 reference；`ob_pool_data` 表結構（含 `month_cnt` column）；F076 v1.4.6 同步收斂 seed（best_case 整個欄位從 whitelist 移除後，其 options 不再屬於 F076 維護範圍） |
 | v1.4.5 | 2026-05-19 | **prototype 對齊翻新（main content）**：對齊 prototype 37a-pooldata-whitelist.html L106-720 之 main content 設計：(1) **§7 工具列結構**補：「新增篩選欄位」按鈕移至工具列（與搜尋 / type filter / status filter / 統計同一橫排，prototype L126-157）；補「清除」按鈕（rotate-ccw icon，重置 3 個 filter 狀態）；(2) **§7 操作 column 3 icon**：list-checks（categorical only）+ pencil（編輯）+ ban/rotate-ccw（停用/啟用 toggle），對應 prototype L613-619；testid 規範：`btn-options-{col}` / `btn-edit-{col}` / `btn-disable-{col}` / `btn-reactivate-{col}`；(3) **§7 Edit 流程**：reverse v1.4 D-iii 決議，補回 Edit Modal — `columnName` 唯讀 chip + 不渲染推斷 hint（AC-14 限定僅新增流程，prototype L704-705）+ 不渲染 dropdown trigger；categorical→其他 fieldType 切換時 reuse 既有 CategorySwitchConfirmModal；testid `edit-field-modal` / `readonly-column-name` / `edit-input-display-name` / `edit-field-type-radio-{type}` / `btn-submit-edit-field`；提交 PATCH `/api/v1/pooldata-fields/{columnName}` 帶 `{ displayName, fieldType }`；成功 toast「欄位『{displayName}』已編輯」；(4) **§7 reactivate 流程**：inactive 欄位 rotate-ccw icon 直接 PATCH `{ isActive: true }`（沿用既有 PATCH 端點）；無確認 Modal；成功 toast「欄位『{displayName}』已啟用」；(5) **§7 filter 字串對齊**：`filter-active` 字串 `「啟用中 / 已停用 / 全部」` → `「狀態：全部 / 僅顯示啟用 / 僅顯示停用」`（對齊 prototype L142-146）；`filter-type` 補 zh-tw 後綴「（類別型）」「（數值型）」「（日期型）」（對齊 prototype L133-138）；status filter 預設值由 `'active'` 改為 `'all'`；(6) **§7 新增 [DEFERRED] 區段**：明示 F075-M8（scope 提示區塊，已被 React 描述行替代）與 F075-M9（seed 來源 column，需 backend entity 加欄位）不實作的設計決策，避免未來 review 又被抓出；(7) **backend 不動**：既有 `UpdatePooldataFieldDto.isActive` 已支援 reactivate；PATCH 端點足夠；(8) **不動範圍**：spec §5 API 路徑與 schema、backend DTO、sidebar（v1.4.1 已對齊）、breadcrumb（v1.4.4 已對齊）、reference / prototype / 00-design-system；CategorySwitchConfirmModal 既有 component reuse；(9) **測試覆蓋**：F075 補 14 個 test cases（TS-F075-FE-V145-001 ~ 014），既有 28 PASS 全保留 |
+| v1.4.6 | 2026-05-19 | **seed 範圍對齊舊系統 OBZ020**：(1) **Root cause**：原 v1.4.3 起 seed 8 筆（prod_kind / list_type / best_case / spec_tp / caseyear / settle_src / month_cnt / payt_term）與舊系統 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml` 之 9 欄篩選欄位範圍不對齊；OBZ020 9 欄中 3 欄（`list_period_start` / `list_period_end` / `list_interval`）已由 `ob_list_definition` 一級欄位承擔、1 欄（`list_nm`）為名單名稱非篩選欄位，剩 5 欄才是真正的篩選欄位；(2) **決策依據**：`best_case` runtime 未讀取（`fn_calc_tier_level.sql` 與 `assignment-run-pipeline.service.ts` 均未引用）→ 拔除；`month_cnt` scoring 之 LIST_MONTH 計分碼**直接讀 `ob_pool_data.month_cnt` column**（不經 whitelist），且名單期數範圍 filter 由 `ob_list_definition.list_period_start` / `list_period_end` / `list_interval` 三個一級欄位承擔，whitelist 重複維護無意義 → 拔除（**column 在 `ob_pool_data` 仍保留供 scoring 直讀，僅 whitelist 不列**）；`payt_term` runtime 未讀取 → 拔除；(3) **AC / 範例更新**：§1 功能摘要「seed 8 筆」→「seed 5 筆全部啟用」；AC-1 seed 清單由 8 筆收斂為 5 筆（prod_kind / list_type / spec_tp / caseyear / settle_src）並移除「7 啟用 + 1 停用 payt_term」字樣；AC-10 範例「`pooldata_field_whitelist` 已有 8 筆紀錄（7 啟用 + 1 停用 payt_term）」→「5 筆全為啟用」並移除「已停用之 payt_term 亦不列入 available-columns」字樣，但保留 BR-13 過濾邏輯之語意說明（防部長日後手動停用某欄位繞過 AC-5）；§5.1 GET response 範例之 `month_cnt` 範例改為 `spec_tp`（保留 prod_kind 與另一 categorical 為代表）；§6 BR-9 seed 冪等性說明補充 v1.4.6 5 筆；§10 測試覆蓋目標「初始 seed（8 筆）」→「初始 seed（5 筆全部啟用）」；(4) **不動範圍**：spec §5 API 路徑與 schema、§6 BR 編號規則（BR-1 ~ BR-14 全保留）、§7 UI/UX 規範、§12 假設清單、backend DTO、Guard、error code、既有 AC（AC-2 ~ AC-15）語意、prototype 與 reference；`ob_pool_data` 表結構（含 `month_cnt` column）；F076 v1.4.6 同步收斂 seed（best_case 整個欄位從 whitelist 移除後，其 options 不再屬於 F076 維護範圍） |
+| v1.4.7 | 2026-05-19 | **available-columns 端點補 columnDescription + Modal 自動填入 displayName**：(1) **Root cause**：舊系統 OBZ020 之 dropdown 顯示中文欄位描述（來源為 SQL Server `sys.extended_properties` 之 `MS_Description`），新系統 available-columns 端點未回傳該描述，使用者新增篩選欄位時須自行輸入中文 `displayName`，UX 較差；(2) **決策依據**：description 為錦上添花 metadata，採靜默降級設計（連線失敗 / 無 task / 無描述均省略欄位而非報錯），避免污染主流程；Modal 自動填入僅限 create 流程且只在 `displayName` 為空時觸發，避免覆寫使用者已輸入內容；(3) **變更項目**：新增 AC-16（端點 `columnDescription` 欄位 + 三種降級情境）+ AC-17（Modal create 流程自動填入 + 不覆寫 / 不影響 Edit）；§5.5 Response 範例補 `columnDescription` 欄位（同時示意有 / 無 description 兩種）+ 新增「`columnDescription` 取得規則」子段落（查詢來源 / datasource 解析 / 降級條件 / 降級行為 / 日誌等級）；§7 「新增篩選欄位 Modal」`displayName` 描述補自動填入行為說明；§10 補後端 5 條 + 前端 5 條 test cases；§11 補 5 項實作 checklist；§13 順手修正 v1.4.5 / v1.4.6 順序錯亂；(4) **不動範圍**：spec §5 端點路徑 / 權限 / Guard、§5.5 過濾規則 / 排序規則 / `suggestedFieldType` 推斷規則、§6 BR 編號（**不新增 BR**，兩個 AC 已自足）、§5.5 錯誤代碼表（降級不丟錯，**不新增** errCode）、既有 AC-1 ~ AC-15 語意、§7 工具列 / 操作 column / Edit Modal / reactivate / filter / [DEFERRED] 規範、prototype 與 reference、`pooldata_field_whitelist` schema、`extraction_tasks` / `ExtractionTask` entity 名稱（**不可改名**）、F076 |
