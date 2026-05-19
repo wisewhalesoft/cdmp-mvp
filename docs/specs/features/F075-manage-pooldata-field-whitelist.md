@@ -167,13 +167,29 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 - **And** `dataType` 為 `date` / `timestamp` / `timestamp without time zone` / `timestamp with time zone`（含 `timestamptz`）→ `suggestedFieldType = "date"`
 - **And** 其餘任何 `dataType`（含字串型別、`null`、無法識別）→ `suggestedFieldType = "categorical"`（保守原則）
 
-### AC-13：新增欄位 Modal 為下拉選擇且為唯一新增路徑
+### AC-13a：新增欄位 Modal 為下拉選擇且為唯一新增路徑
 
 - **Given** 部長 / Admin 點擊「新增篩選欄位」開啟 Modal
 - **When** Modal 載入
 - **Then** Modal 內 `columnName` 欄位以**下拉清單（dropdown）**呈現，選項來源為 `GET /api/v1/pooldata-fields/available-columns`
 - **And** 系統**不提供**自由文字輸入 `columnName` 的路徑（v1.4 起 dropdown 為唯一新增路徑，無 fallback toggle）
 - **And** 若 available-columns 為空（OBPOOLDATA 所有欄位皆已列入白名單），Modal 顯示對應空態提示且儲存按鈕停用
+
+### AC-13b：dropdown 空態錯誤碼分流（v1.4.2 D1 設計修補）
+
+依 `GET /api/v1/pooldata-fields/available-columns` response 之 HTTP status + `error` 欄位分流顯示對應訊息與「重試」按鈕：
+
+- **Given** 部長 / Admin 開啟新增 Modal 觸發 dropdown 載入
+- **When** API 回 `200 OK` + `availableColumns: []`（真實「全部已列入」情境）
+- **Then** dropdown 顯示「OBPOOLDATA 所有欄位皆已列入篩選欄位清單」白色淡 hint，**不顯示**重試按鈕
+- **When** API 回 `503` + `error: "OBPOOLDATA_NOT_READY"`（表不存在 / ETL 尚未 Load / SQLite 環境）
+- **Then** dropdown 顯示「OBPOOLDATA 資料尚未由 ETL 同步至本系統，請聯繫系統管理員確認 ETL 狀態」+ 「重試」按鈕
+- **When** API 回 `503` + `error: "FEATURE_NOT_ENABLED"`（功能旗標 `ENABLE_E07_REFACTOR_PHASE3` 關閉）
+- **Then** dropdown 顯示「F075 功能尚未啟用」+ 「重試」按鈕
+- **When** API 回其他 5xx 錯誤（含網路錯誤）
+- **Then** dropdown 顯示「載入欄位清單失敗，請稍後重試」+ 「重試」按鈕
+- **And** 重試按鈕點擊後重新呼叫 `GET /api/v1/pooldata-fields/available-columns`，由後續 response 決定下一個狀態
+- **And** 上述四種錯誤狀態下，submit 按鈕保持停用
 
 ### AC-14：選中欄位後顯示系統推斷 hint 與使用者覆寫 hint 切換
 
@@ -330,6 +346,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 | 401 | AUTH_TOKEN_MISSING / AUTH_TOKEN_EXPIRED | 未登入或 Token 過期 |
 | 403 | AUTH_FORBIDDEN | 非 admin / 非 director 嘗試呼叫 |
 | 503 | FEATURE_NOT_ENABLED | Feature Flag 關閉（沿用 BR-10，與其他寫入端點一致） |
+| 503 | OBPOOLDATA_NOT_READY | `ob_pool_data` 表不存在或 ETL 尚未 Load（v1.4.2 D1：service 兩階段查詢 Step 1 失敗時拋出，避免吞錯回空陣列誤導 UI） |
 
 ## 6. 業務規則
 
@@ -477,3 +494,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 | v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失）：(1) BR-7 從「保留紀錄不刪除」強化為「service 層批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`（同 transaction）」；(2) AC-6 confirm 文字補「將自動停用 N 個可選值」+ 稽核 details 補 `deactivatedOptionCount`；(3) UI Modal 文字升級；(4) 與 F076 v1.3 BR-6/BR-7 + data-model.md `pooldata_field_option.deactivation_reason` ENUM 對齊 |
 | v1.4 | 2026-05-18 | **UI 命名標準化 + 新增流程改 dropdown + suggestedFieldType 推斷 + A-3 風險清除**：(1) UI 層命名「白名單管理」/「POOLDATA 篩選欄位白名單」→「**篩選欄位管理**」、「新增白名單欄位」/「新增 POOLDATA 欄位」→「**新增篩選欄位**」（內部 DB 表名 / API path / 類別名稱 100% 保留）；(2) 新增 §5.5 `GET /api/v1/pooldata-fields/available-columns` 端點（`DirectorGuard`，過濾含停用欄位，按 columnName 字母排序）；(3) 新增 AC-10 ~ AC-15（AC-16 不納入 — PO 決議不保留 fallback toggle）；(4) 新增 BR-11 / BR-12 / BR-13；(5) 新增 Modal 改為 dropdown 唯一路徑 + 「系統推斷 → 使用者選擇」hint 切換；(6) 成功 toast 文案以 `displayName` 為主；(7) A-3 升級為 [RESOLVED]（新增階段）；(8) **附帶清理**：修正既有 prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串為 spec 權威之 `POOLDATA_FIELD_DUPLICATE`（spec §5.4 已是正確版本，本次同步前端字串） |
 | v1.4.1 | 2026-05-19 | **prototype 對齊補修**：(1) 從 sidebar 移除「篩選欄位管理」獨立項（v1.3 起就不該有，對齊 prototype 37-base-code.html L186-243 設計）；(2) `base-codes-page.tsx` 加入「進階維護」區塊兩張卡片入口（F075「篩選欄位管理」+ F076「類別型欄位可選值」），對應 prototype 37-base-code.html L186-243；(3) prototype 37-base-code.html L192/L204/L209 命名同步至 v1.4（`v1.1 → v1.4`、`POOLDATA 篩選欄位白名單 → 篩選欄位管理`、`field_whitelist → pooldata_field_whitelist`）；(4) regression guard `m06-naming-regression.spec.ts` 補 sidebar 不應出現「篩選欄位管理」/「白名單管理」斷言；(5) §7 頁面入口描述修正：由 sidebar 獨立分頁改為「代碼維護頁進階維護區塊卡片」 |
+| v1.4.2 | 2026-05-19 | **D1 設計修補：available-columns 錯誤碼分流**：(1) `getAvailableColumns` 改為兩階段查詢（Step 1 確認 `ob_pool_data` 表存在、Step 2 NOT IN 子查詢取欄位清單），移除原本 try/catch 吞錯回空陣列導致 UI 誤導「全部已列入」訊息的問題；(2) §5.5 錯誤代碼表新增 `503 OBPOOLDATA_NOT_READY`（表不存在 / ETL 尚未 Load / SQLite 環境 information_schema 不可用）；(3) AC-13 拆為 AC-13a（既有：dropdown 為唯一新增路徑）+ AC-13b（新：dropdown 空態依錯誤碼分流顯示對應訊息與「重試」按鈕，四種狀態為 200 空陣列 / 503 OBPOOLDATA_NOT_READY / 503 FEATURE_NOT_ENABLED / 其他 5xx）；(4) 前端 `field-whitelist-page.tsx` `loadAvailableColumns` 可重用函式 + dropdown render 四級優先序（loading → error → empty「全部已列入」→ 選項列表）；(5) E2E TS-F075-E2E-001/002/008 SQLite 環境斷言由 `200 + availableColumns: []` 改為 `503 OBPOOLDATA_NOT_READY`，路由排序回歸仍可區分 503 vs 404；(6) Dev 環境驗證：補 ETL `ob_pool_data` 表存在 → director 開啟 Modal 可見 121 個未列入欄位，符合 OBPOOLDATA 實際資料量 |
