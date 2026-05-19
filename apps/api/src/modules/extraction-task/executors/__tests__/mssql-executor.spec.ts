@@ -250,11 +250,14 @@ describe('MSSQLExecutor', () => {
 
   // --- getColumnDescriptions (F075 v1.4.7) ---
   describe('getColumnDescriptions (F075 v1.4.7 / AC-16)', () => {
-    it('TS-F075-BE-V147-BE-06：SQL 包含 sys.extended_properties / MS_Description / c.column_id / ep.minor_id；recordset → Map', async () => {
+    it('TS-F075-BE-V147-BE-06：SQL 包含 sys.extended_properties / MS_Description / c.column_id / ep.minor_id；recordset → Map（key normalize 為 lowercase）', async () => {
+      // v1.4.7-fix1 regression guard：mock recordset 用 SQL Server 慣例大寫
+      // （OBPOOLDATA 之 sys.columns.name 為 'PROD_KIND' 等）斷言 Map key 為 lowercase
+      // 對齊 PostgreSQL ob_pool_data snake_case caller。若不 normalize 將造成 silent omit。
       mockRequestQuery.mockResolvedValue({
         recordset: [
-          { column_name: 'prod_kind', ms_description: '產品類別' },
-          { column_name: 'risk_level', ms_description: '風險等級' },
+          { column_name: 'PROD_KIND', ms_description: '產品類別' },
+          { column_name: 'RISK_LEVEL', ms_description: '風險等級' },
         ],
       });
 
@@ -271,9 +274,13 @@ describe('MSSQLExecutor', () => {
       expect(sql).toContain('c.column_id');
       expect(sql).toContain('ep.minor_id');
 
-      // recordset → Map<string, string>
+      // recordset → Map<lowercase columnName, description>
       expect(result).toBeInstanceOf(Map);
       expect(result.size).toBe(2);
+      // 大寫 key 不應存在
+      expect(result.has('PROD_KIND')).toBe(false);
+      expect(result.has('RISK_LEVEL')).toBe(false);
+      // 小寫 key 才能查到值
       expect(result.get('prod_kind')).toBe('產品類別');
       expect(result.get('risk_level')).toBe('風險等級');
     });

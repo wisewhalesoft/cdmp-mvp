@@ -147,6 +147,14 @@ export class MSSQLExecutor extends BaseExecutor {
    *   - schema 為 null/undefined 時 fallback 'dbo'（沿用 `getSourceTableMetadata` 同款行為）
    *   - 查詢失敗由 caller（service 層）以 try/catch 降級為「全部欄位 omit columnDescription」
    *   - 回傳 Map<columnName, ms_description>；若該表無任何 extended_properties 則回空 Map
+   *
+   * **Map key contract（v1.4.7-fix1 / 2026-05-19）**：
+   *   - Key 一律 **lowercase**（normalize via `String.prototype.toLowerCase`）
+   *   - 理由：SQL Server `sys.columns.name` 保留宣告時的 case（OBPOOLDATA 慣例全大寫如 `PROD_KIND`），
+   *     但 caller（F075 service）以 PostgreSQL `ob_pool_data` 之 snake_case 小寫欄位查詢
+   *     （v1.4.3 case 對齊後 ETL 至 PostgreSQL 已統一為小寫）；若不 normalize 將永遠 miss → silent omit
+   *   - 此 contract 與 F075 BR-14（column_name 小寫慣例）一致；未來若有 mixed-case SQL Server 表
+   *     仍可透過此 normalize 對齊
    */
   async getColumnDescriptions(params: {
     datasourceId: string;
@@ -179,7 +187,8 @@ export class MSSQLExecutor extends BaseExecutor {
         ms_description: string | null;
       }>) {
         if (row.column_name && row.ms_description) {
-          map.set(row.column_name, String(row.ms_description));
+          // v1.4.7-fix1: normalize key to lowercase 對齊 PostgreSQL snake_case caller
+          map.set(row.column_name.toLowerCase(), String(row.ms_description));
         }
       }
       return map;
