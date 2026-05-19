@@ -7,10 +7,12 @@ import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.e
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { ExtractionTask } from '@/database/entities/extraction-task.entity';
 import { PooldataFieldWhitelistController } from './controllers/pooldata-field-whitelist.controller';
 import { PooldataFieldOptionController } from './controllers/pooldata-field-option.controller';
 import { PooldataFieldWhitelistService } from './services/pooldata-field-whitelist.service';
 import { PooldataFieldOptionService } from './services/pooldata-field-option.service';
+import { ExtractionTaskModule } from '../extraction-task/extraction-task.module';
 
 /**
  * F075 / F076 v1.3：POOLDATA 篩選欄位白名單 + 類別型可選值管理模組
@@ -33,6 +35,7 @@ import { PooldataFieldOptionService } from './services/pooldata-field-option.ser
       AssignmentAuditLog,
       User,
       TokenBlocklist,
+      ExtractionTask,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -40,6 +43,8 @@ import { PooldataFieldOptionService } from './services/pooldata-field-option.ser
         secret: configService.get<string>('JWT_SECRET', 'default-dev-secret'),
       }),
     }),
+    // F075 v1.4.7：取 MSSQLExecutor 供 available-columns 帶上 columnDescription（MS_Description）
+    ExtractionTaskModule,
   ],
   controllers: [
     PooldataFieldWhitelistController,

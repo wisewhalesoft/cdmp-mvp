@@ -32,6 +32,8 @@ import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-white
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { User } from '@/database/entities/user.entity';
+import { ExtractionTask } from '@/database/entities/extraction-task.entity';
+import { MSSQLExecutor } from '../../extraction-task/executors/mssql-executor';
 
 describe('PooldataFieldWhitelistService', () => {
   let service: PooldataFieldWhitelistService;
@@ -40,6 +42,8 @@ describe('PooldataFieldWhitelistService', () => {
   let auditRepo: any;
   let userRepo: any;
   let dataSource: any;
+  let extractionTaskRepo: any;
+  let mssqlExecutor: any;
 
   // 收集 tx 內的 manager.save 與 manager 內 QB UPDATE 行為
   let txQbUpdateAffected: number;
@@ -78,6 +82,12 @@ describe('PooldataFieldWhitelistService', () => {
     userRepo = {
       findOne: vi.fn().mockResolvedValue({ id: 'director-uuid', name: 'Director' }),
     };
+    extractionTaskRepo = {
+      findOne: vi.fn().mockResolvedValue(null),
+    };
+    mssqlExecutor = {
+      getColumnDescriptions: vi.fn(),
+    };
 
     const fakeManager = {
       save: vi.fn((_cls: any, entity: any) => Promise.resolve(entity)),
@@ -103,6 +113,8 @@ describe('PooldataFieldWhitelistService', () => {
         { provide: getRepositoryToken(PooldataFieldOption), useValue: optionRepo },
         { provide: getRepositoryToken(AssignmentAuditLog), useValue: auditRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
+        { provide: getRepositoryToken(ExtractionTask), useValue: extractionTaskRepo },
+        { provide: MSSQLExecutor, useValue: mssqlExecutor },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
@@ -593,6 +605,148 @@ describe('PooldataFieldWhitelistService', () => {
         // 對應 service inline NOTE comment
         expect(await callInfer('decimal')).toBe('categorical');
       });
+    });
+  });
+
+  // ============================================================
+  // F075 v1.4.7 — columnDescription 取得邏輯（AC-16）
+  // ============================================================
+
+  describe('F075 v1.4.7 — columnDescription 取得（AC-16）', () => {
+    /**
+     * v1.4.7 兩階段查詢補強：
+     *   - Step 1：information_schema.tables 確認 ob_pool_data 存在（沿用 v1.4.2 邏輯）
+     *   - Step 2：information_schema.columns 取欄位清單
+     *   - Step 3（v1.4.7 新）：查 extraction_tasks 最新一筆 source_table='OBPOOLDATA'
+     *     若找到 → 呼叫 MSSQLExecutor.getColumnDescriptions 取 MS_Description map
+     *     若查無 / 呼叫失敗 → 全部欄位 omit columnDescription（不拋錯，整體仍 200 OK）
+     *   - merge：descriptionMap.has(columnName) → 帶上 columnDescription；否則 omit
+     */
+    const mockTwoStageQuery = (
+      tableExistsRows: Array<Record<string, unknown>> | null,
+      columnsRows: Array<{ column_name: string | null; data_type: string | null }>,
+    ) => {
+      let callIndex = 0;
+      (dataSource as any).query = vi.fn(() => {
+        callIndex += 1;
+        if (callIndex === 1) return Promise.resolve(tableExistsRows ?? []);
+        return Promise.resolve(columnsRows);
+      });
+    };
+
+    beforeEach(() => {
+      // 預設：表存在 + 一筆欄位
+      mockTwoStageQuery(
+        [{ '?column?': 1 }],
+        [{ column_name: 'prod_kind', data_type: 'character varying' }],
+      );
+    });
+
+    it('TS-F075-BE-V147-BE-01：descriptionMap 有值 → response 對應欄位含 columnDescription', async () => {
+      extractionTaskRepo.findOne.mockResolvedValue({
+        id: 'task-1',
+        datasource_id: 'ds-mssql',
+        source_table: 'OBPOOLDATA',
+        source_schema: 'dbo',
+      });
+      mssqlExecutor.getColumnDescriptions.mockResolvedValue(
+        new Map<string, string>([['prod_kind', '產品類別']]),
+      );
+
+      const result = await service.getAvailableColumns();
+
+      expect(result.availableColumns).toHaveLength(1);
+      const item = result.availableColumns[0] as any;
+      expect(item.columnName).toBe('prod_kind');
+      expect(item.columnDescription).toBe('產品類別');
+      // 驗證 executor 被以正確 params 呼叫
+      expect(mssqlExecutor.getColumnDescriptions).toHaveBeenCalledTimes(1);
+      expect(mssqlExecutor.getColumnDescriptions).toHaveBeenCalledWith({
+        datasourceId: 'ds-mssql',
+        sourceSchema: 'dbo',
+        sourceTable: 'OBPOOLDATA',
+      });
+    });
+
+    it('TS-F075-BE-V147-BE-02：SQL Server 拋錯 → 全部 omit columnDescription + 整體 200 OK（不重拋）', async () => {
+      extractionTaskRepo.findOne.mockResolvedValue({
+        id: 'task-1',
+        datasource_id: 'ds-mssql',
+        source_table: 'OBPOOLDATA',
+        source_schema: null,
+      });
+      mssqlExecutor.getColumnDescriptions.mockRejectedValue(
+        new Error('SQL Server connection refused'),
+      );
+
+      const result = await service.getAvailableColumns();
+
+      expect(result.availableColumns).toHaveLength(1);
+      const item = result.availableColumns[0];
+      expect(item).not.toHaveProperty('columnDescription');
+      expect(mssqlExecutor.getColumnDescriptions).toHaveBeenCalledTimes(1);
+    });
+
+    it('TS-F075-BE-V147-BE-03：ExtractionTask 查無 → 全部 omit + 200 OK + getColumnDescriptions 不被呼叫', async () => {
+      extractionTaskRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.getAvailableColumns();
+
+      expect(result.availableColumns).toHaveLength(1);
+      const item = result.availableColumns[0];
+      expect(item).not.toHaveProperty('columnDescription');
+      expect(mssqlExecutor.getColumnDescriptions).not.toHaveBeenCalled();
+    });
+
+    it('TS-F075-BE-V147-BE-04：descriptionMap 為空 Map → 全部欄位 omit columnDescription', async () => {
+      extractionTaskRepo.findOne.mockResolvedValue({
+        id: 'task-1',
+        datasource_id: 'ds-mssql',
+        source_table: 'OBPOOLDATA',
+        source_schema: 'dbo',
+      });
+      mssqlExecutor.getColumnDescriptions.mockResolvedValue(new Map<string, string>());
+
+      const result = await service.getAvailableColumns();
+
+      expect(result.availableColumns).toHaveLength(1);
+      const item = result.availableColumns[0];
+      expect(item).not.toHaveProperty('columnDescription');
+    });
+
+    it('TS-F075-BE-V147-BE-05：部分欄位有描述 → 有的含 columnDescription / 無的 omit', async () => {
+      mockTwoStageQuery(
+        [{ '?column?': 1 }],
+        [
+          { column_name: 'birth_date', data_type: 'date' },
+          { column_name: 'cust_age', data_type: 'integer' },
+          { column_name: 'risk_level', data_type: 'varchar' },
+        ],
+      );
+      extractionTaskRepo.findOne.mockResolvedValue({
+        id: 'task-1',
+        datasource_id: 'ds-mssql',
+        source_table: 'OBPOOLDATA',
+        source_schema: 'dbo',
+      });
+      mssqlExecutor.getColumnDescriptions.mockResolvedValue(
+        new Map<string, string>([
+          ['birth_date', '出生日期'],
+          ['risk_level', '風險等級'],
+        ]),
+      );
+
+      const result = await service.getAvailableColumns();
+
+      // 排序後：birth_date, cust_age, risk_level
+      expect(result.availableColumns).toHaveLength(3);
+      const [a, b, c] = result.availableColumns as any[];
+      expect(a.columnName).toBe('birth_date');
+      expect(a.columnDescription).toBe('出生日期');
+      expect(b.columnName).toBe('cust_age');
+      expect(b).not.toHaveProperty('columnDescription');
+      expect(c.columnName).toBe('risk_level');
+      expect(c.columnDescription).toBe('風險等級');
     });
   });
 });

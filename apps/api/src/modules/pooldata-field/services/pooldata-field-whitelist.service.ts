@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
   UnprocessableEntityException,
@@ -12,7 +13,9 @@ import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-white
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { User } from '@/database/entities/user.entity';
+import { ExtractionTask } from '@/database/entities/extraction-task.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import { MSSQLExecutor } from '../../extraction-task/executors/mssql-executor';
 
 /**
  * F075 v1.3 / P1 B5：POOLDATA 篩選欄位白名單 CRUD Service
@@ -69,10 +72,12 @@ export interface UpdatePooldataFieldResult extends PooldataFieldItem {
 }
 
 // F075 v1.4：available-columns 端點之 response 型別
+// v1.4.7（AC-16）：補 optional `columnDescription`；無描述 / 取得失敗時整個 key omit（不回 null / 不回空字串）
 export interface AvailableColumnItem {
   columnName: string;
   dataType: string;
   suggestedFieldType: 'numeric' | 'categorical' | 'date';
+  columnDescription?: string;
 }
 
 export interface GetAvailableColumnsResult {
@@ -102,6 +107,8 @@ const DATE_SET = new Set<string>([
 
 @Injectable()
 export class PooldataFieldWhitelistService {
+  private readonly logger = new Logger(PooldataFieldWhitelistService.name);
+
   constructor(
     @InjectRepository(PooldataFieldWhitelist)
     private readonly fieldRepo: Repository<PooldataFieldWhitelist>,
@@ -111,6 +118,9 @@ export class PooldataFieldWhitelistService {
     private readonly auditRepo: Repository<AssignmentAuditLog>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(ExtractionTask)
+    private readonly extractionTaskRepo: Repository<ExtractionTask>,
+    private readonly mssqlExecutor: MSSQLExecutor,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -357,8 +367,9 @@ export class PooldataFieldWhitelistService {
     }
 
     // Step 2：NOT IN 子查詢取欄位清單；真實 SQL 錯誤不再吞，直接由 NestJS exception filter 攔截
-    const rows: Array<{ column_name: string | null; data_type: string | null }> =
-      await this.dataSource.query(
+    // v1.4.7：與 Step 3（ExtractionTask 查詢）以 Promise.all 平行化（無相依），降低總延遲
+    const [rows, extractionTask] = await Promise.all([
+      this.dataSource.query(
         `SELECT c.column_name, c.data_type
            FROM information_schema.columns c
           WHERE c.table_schema = 'public'
@@ -367,15 +378,55 @@ export class PooldataFieldWhitelistService {
               SELECT w.column_name FROM pooldata_field_whitelist w
             )
           ORDER BY c.column_name ASC`,
+      ) as Promise<
+        Array<{ column_name: string | null; data_type: string | null }>
+      >,
+      this.extractionTaskRepo.findOne({
+        where: { source_table: 'OBPOOLDATA' },
+        order: { created_at: 'DESC' },
+      }),
+    ]);
+
+    // v1.4.7（AC-16）：序列呼叫 MSSQLExecutor 取 MS_Description map（依賴 ExtractionTask 結果）
+    // 三種降級情境（皆 omit columnDescription、整體仍 200 OK）：
+    //   1. ExtractionTask 查無 → 不呼叫 executor，descriptionMap = null
+    //   2. SQL Server 連線/查詢失敗 → catch 後 descriptionMap = null + logger.warn
+    //   3. 該欄位在 sys.extended_properties 無 MS_Description → executor 回 map 但不含該 key
+    let descriptionMap: Map<string, string> | null = null;
+    if (extractionTask) {
+      try {
+        descriptionMap = await this.mssqlExecutor.getColumnDescriptions({
+          datasourceId: extractionTask.datasource_id,
+          sourceSchema: extractionTask.source_schema,
+          sourceTable: 'OBPOOLDATA',
+        });
+      } catch (err) {
+        this.logger.warn(
+          `[F075 v1.4.7] getColumnDescriptions failed; omitting columnDescription for all columns. err=${
+            (err as Error)?.message ?? String(err)
+          }`,
+        );
+        descriptionMap = null;
+      }
+    } else {
+      this.logger.warn(
+        `[F075 v1.4.7] no ExtractionTask found for source_table='OBPOOLDATA'; omitting columnDescription for all columns`,
       );
+    }
 
     const items: AvailableColumnItem[] = rows
       .filter((r) => r.column_name !== null && r.column_name !== undefined)
-      .map((r) => ({
-        columnName: r.column_name as string,
-        dataType: r.data_type ?? '',
-        suggestedFieldType: this._inferSuggestedFieldType(r.data_type),
-      }));
+      .map((r) => {
+        const columnName = r.column_name as string;
+        const desc = descriptionMap?.get(columnName);
+        // 用 spread 條件式：desc 為 undefined / null / 空字串時整個 key omit（不回 null、不回空字串）
+        return {
+          columnName,
+          dataType: r.data_type ?? '',
+          suggestedFieldType: this._inferSuggestedFieldType(r.data_type),
+          ...(desc ? { columnDescription: desc } : {}),
+        };
+      });
 
     // 雙重保險：即使 SQL 已 ORDER BY，service 層仍確保字母升冪輸出（防 DB collation 差異）
     items.sort((a, b) => a.columnName.localeCompare(b.columnName));
