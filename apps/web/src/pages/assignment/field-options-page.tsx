@@ -1,121 +1,226 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
-  Plus,
   Search,
-  Ban,
-  RotateCcw,
-  Tags,
   AlertTriangle,
   Info,
   ChevronRight,
+  ChevronsDown,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import {
+  listFields,
   listOptions,
   createOption,
   deactivateOption,
   reactivateOption,
+  type PooldataField,
   type PooldataOption,
 } from '@/api/pooldata-fields';
+import { OptionAccordion } from './_components/option-accordion';
 import { getEffectiveIdentity } from '@/stores/auth-store';
 
 /**
- * F076 — 類別型欄位可選值管理頁
+ * F076 v1.4.5 — 類別型欄位可選值管理頁
  *
  * 對應 prototype: /prototypes/37b-categorical-field-values.html
  *
- * Deep link: /assignment/base-codes/options?col=COLUMN_NAME
+ * v1.4.5 prototype 對齊翻新（main content 架構翻新）：
+ *   - 從單欄位 detail page 改為多欄位 accordion master page
+ *   - 自動載入所有 categorical 欄位（listFields filter categorical）→ Promise.all listOptions
+ *   - 每個 accordion 內部底部「新增可選值」按鈕（per-column context）
+ *   - 全頁統計：欄位數 / 啟用值總和 / 停用值總和
+ *   - 「全部展開」按鈕 + localStorage persist accordion state
+ *   - `?col=XX` query 改為可選 hint（自動展開特定 accordion，不再為必填）
+ *   - 三種狀態徽章：啟用 / 自動停用（類別變更） / 手動停用
+ *   - 自動停用（field_type_changed）啟用攔阻：顯示 warning toast
  *
- * 功能：
- *   - 列表 active + inactive 可選值（toggle 顯示）
- *   - 新增可選值
- *   - 停用（reason 必填 ≤ 200 字）
- *   - 重新啟用（直接 PATCH）
+ * [DEFERRED] archived 欄位（field_type 曾為 categorical 但已切換）暫不實作（方案 C）
+ *   - 理由：完全不動 backend；F051 既有 includeInactive=true 已可滿足歷史查詢
+ *   - 詳見 F076 spec v1.4.5 §7 [DEFERRED] 區段
+ *
+ * Deep link: /assignment/whitelist/options?col=COLUMN_NAME（可選 hint）
  *
  * RBAC: DirectorGuard（寫入）— backend 攔截。
  */
 
+const LS_PREFIX = 'cdmp.f076.acc.';
+
+function getAccordionLsKey(col: string): string {
+  return `${LS_PREFIX}${col}.expanded`;
+}
+
+function safeLsGet(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLsSet(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
+function safeLsRemove(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+interface CategoricalFieldWithOptions {
+  field: PooldataField;
+  options: PooldataOption[];
+}
+
 export function FieldOptionsPage() {
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
-  const columnName = searchParams.get('col') ?? '';
+  const hintCol = searchParams.get('col') ?? '';
   const identity = getEffectiveIdentity();
   const canWrite = identity === 'admin' || identity === 'director';
 
-  const [options, setOptions] = useState<PooldataOption[]>([]);
+  const [items, setItems] = useState<CategoricalFieldWithOptions[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [includeInactive, setIncludeInactive] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Create option modal state
-  const [showCreate, setShowCreate] = useState(false);
+  // accordion 展開狀態（key = columnName, value = expanded?）
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
+
+  // Create option modal state（per-column context）
+  const [addColumnName, setAddColumnName] = useState<string | null>(null);
   const [newValue, setNewValue] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  // Deactivate modal state
-  const [deactivateTarget, setDeactivateTarget] = useState<PooldataOption | null>(null);
+  // Deactivate modal state（含 columnName context）
+  const [deactivateTarget, setDeactivateTarget] = useState<{
+    columnName: string;
+    option: PooldataOption;
+  } | null>(null);
   const [deactivateReason, setDeactivateReason] = useState('');
   const [deactivating, setDeactivating] = useState(false);
 
-  // Reactivate (no modal — direct call)
-  const [reactivatingValue, setReactivatingValue] = useState<string | null>(null);
+  // Reactivate（直接呼叫，無 modal）
+  const [, setReactivatingKey] = useState<string | null>(null);
 
-  const fetchOptions = useCallback(async () => {
-    if (!columnName) {
-      setError('缺少 col query 參數');
-      setLoading(false);
-      return;
-    }
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listOptions(columnName, {
-        includeInactive: includeInactive ? 'true' : 'false',
-      });
-      setOptions(data.options ?? []);
+      // 取所有 active categorical 欄位
+      const data = await listFields({ active: 'true' });
+      const categoricalFields = (data.fields ?? []).filter(
+        (f) => f.fieldType === 'categorical',
+      );
+
+      // 為每個 categorical 欄位平行載入 options
+      const incInactiveQuery = showInactive ? 'true' : 'false';
+      const optionsResults = await Promise.all(
+        categoricalFields.map(async (f) => {
+          try {
+            const r = await listOptions(f.columnName, {
+              includeInactive: incInactiveQuery,
+            });
+            return { field: f, options: r.options ?? [] };
+          } catch {
+            return { field: f, options: [] as PooldataOption[] };
+          }
+        }),
+      );
+      setItems(optionsResults);
     } catch (err: unknown) {
-      const e = err as { response?: { status?: number; data?: { message?: string } } };
-      if (e.response?.status === 404) {
-        setError(`找不到欄位 ${columnName}`);
-      } else {
-        setError(e?.response?.data?.message ?? '載入可選值失敗');
-      }
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e?.response?.data?.message ?? '載入欄位清單失敗');
     } finally {
       setLoading(false);
     }
-  }, [columnName, includeInactive]);
+  }, [showInactive]);
 
   useEffect(() => {
-    void fetchOptions();
-  }, [fetchOptions]);
+    void fetchAll();
+  }, [fetchAll]);
 
-  const filteredOptions = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(
-      (o) =>
-        o.optionValue.toLowerCase().includes(q) ||
-        o.optionLabel.toLowerCase().includes(q),
-    );
-  }, [options, search]);
+  // 載入後依 localStorage + URL hint 初始化展開狀態
+  useEffect(() => {
+    if (items.length === 0) return;
+    setExpandedMap((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      let changed = false;
+      for (const { field } of items) {
+        if (next[field.columnName] === undefined) {
+          // 1. URL hint 命中 → 展開
+          if (hintCol && hintCol === field.columnName) {
+            next[field.columnName] = true;
+            safeLsSet(getAccordionLsKey(field.columnName), '1');
+            changed = true;
+            continue;
+          }
+          // 2. localStorage 有 → 展開
+          if (safeLsGet(getAccordionLsKey(field.columnName)) === '1') {
+            next[field.columnName] = true;
+            changed = true;
+            continue;
+          }
+          // 3. 預設 collapsed
+          next[field.columnName] = false;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [items, hintCol]);
 
-  // Phase 4 P3-4：統計列
-  const optionStats = useMemo(() => {
-    const active = options.filter((o) => o.isActive).length;
-    return {
-      total: options.length,
-      active,
-      inactive: options.length - active,
-    };
-  }, [options]);
+  const setAccordionExpanded = (col: string, next: boolean) => {
+    setExpandedMap((m) => ({ ...m, [col]: next }));
+    if (next) safeLsSet(getAccordionLsKey(col), '1');
+    else safeLsRemove(getAccordionLsKey(col));
+  };
+
+  const expandAll = () => {
+    setExpandedMap((m) => {
+      const next: Record<string, boolean> = { ...m };
+      for (const { field } of items) {
+        next[field.columnName] = true;
+        safeLsSet(getAccordionLsKey(field.columnName), '1');
+      }
+      return next;
+    });
+  };
+
+  // 全頁統計
+  const globalStats = useMemo(() => {
+    let active = 0;
+    let inactive = 0;
+    for (const { options } of items) {
+      for (const o of options) {
+        if (o.isActive) active += 1;
+        else inactive += 1;
+      }
+    }
+    return { fields: items.length, active, inactive };
+  }, [items]);
+
+  const openAddModal = (columnName: string) => {
+    setNewValue('');
+    setNewLabel('');
+    setCreateError(null);
+    setAddColumnName(columnName);
+  };
 
   const handleCreate = async () => {
+    if (!addColumnName) return;
     setCreateError(null);
     const valTrim = newValue.trim();
     const labelTrim = newLabel.trim();
@@ -125,12 +230,15 @@ export function FieldOptionsPage() {
     }
     setCreating(true);
     try {
-      await createOption(columnName, { optionValue: valTrim, optionLabel: labelTrim });
+      await createOption(addColumnName, {
+        optionValue: valTrim,
+        optionLabel: labelTrim,
+      });
       showToast(`可選值 ${valTrim} 已建立`, 'success');
-      setShowCreate(false);
-      setNewValue('');
-      setNewLabel('');
-      void fetchOptions();
+      // 保持該 accordion 展開
+      setAccordionExpanded(addColumnName, true);
+      setAddColumnName(null);
+      void fetchAll();
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
       let msg = e?.response?.data?.message ?? '建立失敗';
@@ -147,14 +255,15 @@ export function FieldOptionsPage() {
     if (!reasonTrim) return;
     setDeactivating(true);
     try {
-      await deactivateOption(columnName, deactivateTarget.optionValue, {
-        isActive: false,
-        reason: reasonTrim,
-      });
-      showToast(`可選值 ${deactivateTarget.optionValue} 已停用`, 'success');
+      await deactivateOption(
+        deactivateTarget.columnName,
+        deactivateTarget.option.optionValue,
+        { isActive: false, reason: reasonTrim },
+      );
+      showToast(`可選值 ${deactivateTarget.option.optionValue} 已停用`, 'success');
       setDeactivateTarget(null);
       setDeactivateReason('');
-      void fetchOptions();
+      void fetchAll();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '停用失敗', 'error');
@@ -163,18 +272,26 @@ export function FieldOptionsPage() {
     }
   };
 
-  const handleReactivate = async (option: PooldataOption) => {
-    setReactivatingValue(option.optionValue);
+  const handleReactivate = async (columnName: string, option: PooldataOption) => {
+    const key = `${columnName}|${option.optionValue}`;
+    setReactivatingKey(key);
     try {
       await reactivateOption(columnName, option.optionValue);
       showToast(`可選值 ${option.optionValue} 已重新啟用`, 'success');
-      void fetchOptions();
+      void fetchAll();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '啟用失敗', 'error');
     } finally {
-      setReactivatingValue(null);
+      setReactivatingKey(null);
     }
+  };
+
+  const handleBlockedReactivate = (option: PooldataOption) => {
+    showToast(
+      `無法直接啟用 ${option.optionValue}：因類別變更而停用。請先於 F075 將欄位類別改回 categorical`,
+      'warning',
+    );
   };
 
   return (
@@ -196,11 +313,6 @@ export function FieldOptionsPage() {
           </Link>
           <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
           <span className="font-semibold text-gray-800">類別型欄位可選值</span>
-          {columnName && (
-            <code className="font-mono text-primary text-sm px-2 py-0.5 bg-blue-50 rounded ml-2">
-              {columnName}
-            </code>
-          )}
         </nav>
       }
     >
@@ -214,148 +326,122 @@ export function FieldOptionsPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm text-gray-500">
-            管理欄位 <code className="font-mono text-primary">{columnName}</code> 之可選值（F076）
-          </p>
-          <Button
-            type="button"
-            variant="primary"
-            data-testid="btn-create-option"
-            disabled={!canWrite}
-            onClick={() => {
-              setNewValue('');
-              setNewLabel('');
-              setCreateError(null);
-              setShowCreate(true);
-            }}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Plus className="w-4 h-4" />
-              新增可選值
-            </span>
-          </Button>
-        </div>
+        <p className="text-sm text-gray-500">
+          管理 F075 篩選欄位中 categorical 型欄位之可選值（F076），供新名單定義表單之多選元件動態載入。
+        </p>
 
-        <section className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 max-w-md">
+        {/* ===== 工具列 ===== */}
+        <section className="bg-white rounded-xl border border-gray-200 p-4">
+          <div
+            data-testid="field-options-toolbar"
+            className="flex items-center gap-3 flex-wrap"
+          >
+            <div className="relative flex-1 max-w-md min-w-[200px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜尋 value / label"
+                placeholder="搜尋 column_name / value / label..."
                 className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none px-3 py-2 border border-gray-200 rounded-md hover:bg-gray-50 text-sm text-gray-700">
               <input
                 type="checkbox"
                 data-testid="toggle-include-inactive"
-                checked={includeInactive}
-                onChange={(e) => setIncludeInactive(e.target.checked)}
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
               />
-              <span className="text-sm text-gray-700">顯示已停用</span>
+              顯示已停用值
             </label>
-            {/* Phase 4 P3-4：統計列 */}
             <div
               data-testid="option-stats"
-              className="ml-auto text-xs text-gray-500"
+              className="ml-auto flex items-center gap-3 text-xs text-gray-500"
             >
-              總計 <span className="font-mono font-medium text-gray-700">{optionStats.total}</span> 筆
-              <span className="mx-1 text-gray-300">·</span>
-              啟用 <span className="font-mono font-medium text-green-600">{optionStats.active}</span>
-              <span className="mx-1 text-gray-300">/</span>
-              停用 <span className="font-mono font-medium text-gray-500">{optionStats.inactive}</span>
+              <span>
+                欄位{' '}
+                <span
+                  data-testid="stats-fields-count"
+                  className="font-mono font-medium text-gray-700"
+                >
+                  {globalStats.fields}
+                </span>
+              </span>
+              <span>
+                啟用值{' '}
+                <span
+                  data-testid="stats-active-count"
+                  className="font-mono font-medium text-green-600"
+                >
+                  {globalStats.active}
+                </span>
+              </span>
+              <span>
+                停用值{' '}
+                <span
+                  data-testid="stats-inactive-count"
+                  className="font-mono font-medium text-gray-500"
+                >
+                  {globalStats.inactive}
+                </span>
+              </span>
             </div>
+            <button
+              type="button"
+              data-testid="btn-expand-all"
+              onClick={expandAll}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50"
+            >
+              <ChevronsDown className="w-3.5 h-3.5" />
+              全部展開
+            </button>
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {/* ===== Accordions container ===== */}
+        <section className="space-y-3">
           {loading ? (
             <div className="p-12 text-center text-gray-400" data-testid="options-loading">
               載入中...
             </div>
-          ) : filteredOptions.length === 0 ? (
+          ) : items.length === 0 ? (
             <div
-              className="p-12 flex flex-col items-center text-center"
               data-testid="options-empty"
+              className="p-12 flex flex-col items-center text-center bg-white rounded-xl border border-gray-200"
             >
-              <Tags className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">尚無可選值</p>
+              <p className="text-sm text-gray-500">
+                目前沒有 categorical 欄位；請先於 F075 新增。
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase">
-                  <tr>
-                    <th className="text-left px-5 py-3 font-semibold w-[25%]">option_value</th>
-                    <th className="text-left px-5 py-3 font-semibold w-[28%]">option_label</th>
-                    <th className="text-left px-5 py-3 font-semibold w-[10%]">狀態</th>
-                    <th className="text-left px-5 py-3 font-semibold w-[20%]">停用原因</th>
-                    <th className="text-right px-5 py-3 font-semibold w-[17%]">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredOptions.map((o) => (
-                    <tr key={o.optionValue} className="hover:bg-gray-50/50">
-                      <td className="px-5 py-3 font-mono text-primary">
-                        {o.optionValue}
-                      </td>
-                      <td className="px-5 py-3 text-gray-900">{o.optionLabel}</td>
-                      <td className="px-5 py-3">
-                        {o.isActive ? (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-                            啟用中
-                          </span>
-                        ) : (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
-                            已停用
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-xs text-gray-500">
-                        {o.deactivatedReason ?? '—'}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        {o.isActive ? (
-                          <button
-                            type="button"
-                            disabled={!canWrite}
-                            onClick={() => {
-                              setDeactivateTarget(o);
-                              setDeactivateReason('');
-                            }}
-                            data-testid={`btn-deactivate-${o.optionValue}`}
-                            className="inline-flex items-center gap-1 text-xs text-danger hover:bg-red-50 px-2 py-1 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Ban className="w-3.5 h-3.5" />
-                            停用
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!canWrite || reactivatingValue === o.optionValue}
-                            onClick={() => void handleReactivate(o)}
-                            data-testid={`btn-reactivate-${o.optionValue}`}
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:bg-blue-50 px-2 py-1 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            重新啟用
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            items.map(({ field, options }) => (
+              <OptionAccordion
+                key={field.columnName}
+                columnName={field.columnName}
+                displayName={field.displayName}
+                options={options}
+                expanded={!!expandedMap[field.columnName]}
+                canWrite={canWrite}
+                searchKeyword={search}
+                showInactive={showInactive}
+                onToggle={(next) => setAccordionExpanded(field.columnName, next)}
+                onAdd={() => openAddModal(field.columnName)}
+                onDeactivate={(opt) => {
+                  setDeactivateTarget({ columnName: field.columnName, option: opt });
+                  setDeactivateReason('');
+                }}
+                onReactivate={(opt) =>
+                  void handleReactivate(field.columnName, opt)
+                }
+                onBlockedReactivate={(opt) => handleBlockedReactivate(opt)}
+              />
+            ))
           )}
         </section>
 
-        {/* Phase 4 P3-4：F076 商業規則摘要 footer */}
+        {/* ===== Footer：F076 商業規則摘要 ===== */}
         <div
           data-testid="field-options-rules-footer"
           className="rounded-lg p-3 bg-blue-50/50 border border-blue-100 text-xs text-gray-600 flex items-start gap-2"
@@ -393,15 +479,20 @@ export function FieldOptionsPage() {
         </div>
       </main>
 
-      {/* Create option modal */}
-      {showCreate && (
+      {/* ===== Create option modal (per-column context) ===== */}
+      {addColumnName !== null && (
         <div className="fixed inset-0 z-50" data-testid="create-option-modal">
-          <div className="absolute inset-0 bg-black/50" onClick={() => !creating && setShowCreate(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !creating && setAddColumnName(null)}
+          />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-base font-semibold text-gray-800">新增可選值</h3>
-                <p className="text-xs text-gray-500 mt-0.5">F076 §5.2 · 欄位 {columnName}</p>
+                <p className="text-xs text-gray-500 mt-0.5 font-mono">
+                  欄位 {addColumnName} · POST /api/v1/pooldata-fields/{addColumnName}/options
+                </p>
               </div>
               <div className="p-6 space-y-3">
                 {createError && (
@@ -422,7 +513,7 @@ export function FieldOptionsPage() {
                     value={newValue}
                     onChange={(e) => setNewValue(e.target.value)}
                     maxLength={64}
-                    placeholder="例：M3"
+                    placeholder="例：04"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -436,7 +527,7 @@ export function FieldOptionsPage() {
                     value={newLabel}
                     onChange={(e) => setNewLabel(e.target.value)}
                     maxLength={100}
-                    placeholder="例：第三類卡別"
+                    placeholder="例：房屋貸款"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -444,7 +535,7 @@ export function FieldOptionsPage() {
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setShowCreate(false)}
+                  onClick={() => setAddColumnName(null)}
                   className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
                 >
                   取消
@@ -464,10 +555,13 @@ export function FieldOptionsPage() {
         </div>
       )}
 
-      {/* Deactivate modal — reason required */}
+      {/* ===== Deactivate modal — reason required ===== */}
       {deactivateTarget && (
         <div className="fixed inset-0 z-50" data-testid="deactivate-modal">
-          <div className="absolute inset-0 bg-black/50" onClick={() => !deactivating && setDeactivateTarget(null)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !deactivating && setDeactivateTarget(null)}
+          />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
               <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
@@ -481,11 +575,15 @@ export function FieldOptionsPage() {
               </div>
               <div className="p-6 space-y-3">
                 <p className="text-sm text-gray-700">
-                  即將停用{' '}
+                  即將停用欄位{' '}
                   <code className="font-mono text-primary px-1.5 py-0.5 bg-blue-50 rounded text-xs">
-                    {deactivateTarget.optionValue}
+                    {deactivateTarget.columnName}
                   </code>{' '}
-                  （<strong>{deactivateTarget.optionLabel}</strong>）
+                  的{' '}
+                  <code className="font-mono text-primary px-1.5 py-0.5 bg-blue-50 rounded text-xs">
+                    {deactivateTarget.option.optionValue}
+                  </code>{' '}
+                  （<strong>{deactivateTarget.option.optionLabel}</strong>）
                 </p>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
