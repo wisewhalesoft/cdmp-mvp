@@ -115,6 +115,13 @@ export function FieldWhitelistPage() {
   // v1.4 新增：available-columns + dropdown + hint state
   const [availableColumns, setAvailableColumns] = useState<AvailableColumn[]>([]);
   const [availableLoading, setAvailableLoading] = useState(false);
+  // v1.4.2 D1 新增：available-columns 載入錯誤分流 state（OBPOOLDATA_NOT_READY / FEATURE_NOT_ENABLED / 其他 5xx）
+  type AvailableColumnsError =
+    | { kind: 'not_ready'; message: string }
+    | { kind: 'feature_disabled'; message: string }
+    | { kind: 'generic_error'; message: string };
+  const [availableColumnsError, setAvailableColumnsError] =
+    useState<AvailableColumnsError | null>(null);
   const [selectedColumnMeta, setSelectedColumnMeta] =
     useState<AvailableColumn | null>(null);
   // RISK-003 決議：使用者一旦覆寫 radio 即鎖定 user-overridden；唯一 reset 路徑為 dropdown 重選新欄位
@@ -187,21 +194,57 @@ export function FieldWhitelistPage() {
     setDropdownOpen(false);
     setDropdownSearch('');
     setAvailableColumns([]);
+    setAvailableColumnsError(null);
+  };
+
+  /**
+   * v1.4.2 D1：抽出 fetch 為可重用函式，提供「重試」按鈕復用。
+   *
+   * 錯誤碼分流（讀 err.response.data.error，與既有 createField catch 模式一致）：
+   *   - 503 OBPOOLDATA_NOT_READY → kind='not_ready'（ETL 未就緒提示）
+   *   - 503 FEATURE_NOT_ENABLED  → kind='feature_disabled'（功能旗標關閉）
+   *   - 其他（含 500 / 網路錯誤）→ kind='generic_error'（通用載入失敗）
+   *
+   * 對齊 spec F075 v1.4.2 §4 AC-13b。
+   */
+  const loadAvailableColumns = async () => {
+    setAvailableLoading(true);
+    setAvailableColumnsError(null);
+    try {
+      const res = await listAvailableColumns();
+      setAvailableColumns(res.availableColumns ?? []);
+    } catch (err: unknown) {
+      const e = err as {
+        response?: { status?: number; data?: { error?: string; message?: string } };
+      };
+      const code = e?.response?.data?.error;
+      if (code === 'OBPOOLDATA_NOT_READY') {
+        setAvailableColumnsError({
+          kind: 'not_ready',
+          message:
+            'OBPOOLDATA 資料尚未由 ETL 同步至本系統，請聯繫系統管理員確認 ETL 狀態',
+        });
+      } else if (code === 'FEATURE_NOT_ENABLED') {
+        setAvailableColumnsError({
+          kind: 'feature_disabled',
+          message: 'F075 功能尚未啟用',
+        });
+      } else {
+        setAvailableColumnsError({
+          kind: 'generic_error',
+          message: '載入欄位清單失敗，請稍後重試',
+        });
+      }
+      setAvailableColumns([]);
+    } finally {
+      setAvailableLoading(false);
+    }
   };
 
   const openCreateModal = async () => {
     resetCreateForm();
     setShowCreate(true);
-    setAvailableLoading(true);
-    try {
-      const res = await listAvailableColumns();
-      setAvailableColumns(res.availableColumns ?? []);
-    } catch {
-      // 載入失敗時保留空陣列，submit 按鈕停用
-      setAvailableColumns([]);
-    } finally {
-      setAvailableLoading(false);
-    }
+    await loadAvailableColumns();
   };
 
   /**
@@ -589,6 +632,25 @@ export function FieldWhitelistPage() {
                           <div className="px-3 py-6 text-center text-xs text-gray-400">
                             <Loader2 className="w-4 h-4 inline-block animate-spin" />
                             <span className="ml-1.5">載入欄位清單中…</span>
+                          </div>
+                        ) : availableColumnsError !== null ? (
+                          /* v1.4.2 D1：錯誤態（503 OBPOOLDATA_NOT_READY / FEATURE_NOT_ENABLED / 其他 5xx）+ 重試按鈕 */
+                          <div
+                            data-testid="available-columns-error"
+                            data-error-kind={availableColumnsError.kind}
+                            className="px-3 py-6 text-center space-y-2"
+                          >
+                            <p className="text-xs text-red-700 leading-relaxed">
+                              {availableColumnsError.message}
+                            </p>
+                            <button
+                              type="button"
+                              data-testid="available-columns-retry"
+                              onClick={() => void loadAvailableColumns()}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              重試
+                            </button>
                           </div>
                         ) : availableColumns.length === 0 ? (
                           <div

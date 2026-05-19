@@ -459,7 +459,7 @@ describe('FieldWhitelistPage (F075)', () => {
 
     // ===== E. Empty 情境 =====
 
-    it('TS-F075-FE-012：API 回空陣列 → dropdown 空態顯示 + submit 停用', async () => {
+    it('TS-F075-FE-012：API 回 200 空陣列 → dropdown 空態顯示「全部已列入」(無重試按鈕) + submit 停用', async () => {
       mockedListAvailableColumns.mockResolvedValue({ availableColumns: [] });
       renderPage();
       await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
@@ -470,18 +470,160 @@ describe('FieldWhitelistPage (F075)', () => {
       );
       fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
 
-      // 空態元素可見
+      // 空態元素可見（真實「全部已列入」情境）
       await waitFor(() =>
         expect(
           screen.getByTestId('dropdown-column-name-empty'),
         ).toBeInTheDocument(),
       );
 
+      // v1.4.2 強化：200 空陣列不應有錯誤訊息或重試按鈕
+      expect(screen.queryByTestId('available-columns-error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('available-columns-retry')).not.toBeInTheDocument();
+
       // submit 停用
       const submitBtn = screen.getByTestId(
         'btn-submit-create-field',
       ) as HTMLButtonElement;
       expect(submitBtn.disabled).toBe(true);
+    });
+
+    // ============================================================
+    // v1.4.2 D1 — dropdown 錯誤碼分流（TS-F075-FE-017 ~ FE-019）
+    // ============================================================
+
+    async function openCreateModalAndDropdown() {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('PROD_KIND')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('btn-create-field'));
+      await waitFor(() =>
+        expect(screen.getByTestId('dropdown-column-name-trigger')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    }
+
+    it('TS-F075-FE-017：API 回 503 OBPOOLDATA_NOT_READY → dropdown 顯示「ETL 同步」訊息 + 重試按鈕', async () => {
+      mockedListAvailableColumns.mockRejectedValue({
+        response: {
+          status: 503,
+          data: {
+            error: 'OBPOOLDATA_NOT_READY',
+            message: 'OBPOOLDATA 資料尚未由 ETL 同步至本系統',
+          },
+        },
+      });
+
+      await openCreateModalAndDropdown();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('available-columns-error')).toBeInTheDocument(),
+      );
+
+      const errorEl = screen.getByTestId('available-columns-error');
+      expect(errorEl.textContent).toContain('OBPOOLDATA');
+      expect(errorEl.textContent).toContain('ETL');
+      // 重試按鈕存在
+      expect(screen.getByTestId('available-columns-retry')).toBeInTheDocument();
+      // 不顯示「全部已列入」誤導訊息
+      expect(
+        screen.queryByTestId('dropdown-column-name-empty'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-018：API 回 503 FEATURE_NOT_ENABLED → dropdown 顯示「功能尚未啟用」+ 重試按鈕', async () => {
+      mockedListAvailableColumns.mockRejectedValue({
+        response: {
+          status: 503,
+          data: {
+            error: 'FEATURE_NOT_ENABLED',
+            message: '此功能尚未啟用',
+          },
+        },
+      });
+
+      await openCreateModalAndDropdown();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('available-columns-error')).toBeInTheDocument(),
+      );
+
+      const errorEl = screen.getByTestId('available-columns-error');
+      expect(errorEl.textContent).toContain('F075 功能尚未啟用');
+      expect(screen.getByTestId('available-columns-retry')).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('dropdown-column-name-empty'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-019：API 回 500 通用錯誤 → dropdown 顯示「載入失敗請重試」+ 重試按鈕', async () => {
+      mockedListAvailableColumns.mockRejectedValue({
+        response: {
+          status: 500,
+          data: {
+            error: 'INTERNAL_ERROR',
+            message: 'Internal server error',
+          },
+        },
+      });
+
+      await openCreateModalAndDropdown();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('available-columns-error')).toBeInTheDocument(),
+      );
+
+      const errorEl = screen.getByTestId('available-columns-error');
+      expect(errorEl.textContent).toContain('載入欄位清單失敗');
+      expect(errorEl.textContent).toContain('稍後重試');
+      expect(screen.getByTestId('available-columns-retry')).toBeInTheDocument();
+    });
+
+    it('TS-F075-FE-020（補）：點重試按鈕 → 重新呼叫 listAvailableColumns', async () => {
+      // 第一次回 503，第二次成功（用 mockImplementation 計數而非 *Once，避免 once-queue 殘留污染後續測試）
+      let callIndex = 0;
+      mockedListAvailableColumns.mockImplementation(() => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return Promise.reject({
+            response: {
+              status: 503,
+              data: {
+                error: 'OBPOOLDATA_NOT_READY',
+                message: 'OBPOOLDATA not ready',
+              },
+            },
+          });
+        }
+        return Promise.resolve({
+          availableColumns: [
+            { columnName: 'NEW_COL', dataType: 'varchar', suggestedFieldType: 'categorical' },
+          ],
+        });
+      });
+
+      await openCreateModalAndDropdown();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('available-columns-retry')).toBeInTheDocument(),
+      );
+
+      // 第一次呼叫已完成
+      expect(mockedListAvailableColumns).toHaveBeenCalledTimes(1);
+
+      // 點重試
+      fireEvent.click(screen.getByTestId('available-columns-retry'));
+
+      // 第二次呼叫
+      await waitFor(() =>
+        expect(mockedListAvailableColumns).toHaveBeenCalledTimes(2),
+      );
+
+      // 錯誤訊息消失、選項出現
+      await waitFor(() =>
+        expect(
+          screen.queryByTestId('available-columns-error'),
+        ).not.toBeInTheDocument(),
+      );
     });
 
     // ===== F. 成功與錯誤 Toast =====
