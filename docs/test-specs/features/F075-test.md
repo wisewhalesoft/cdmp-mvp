@@ -88,16 +88,16 @@ new_in_v1_4: true
 - **關聯需求**：AC-10、AC-12
 - **測試類型**：Positive / Unit
 - **前置條件**：mock `dataSource.query` 回傳以下未排序資料（模擬 information_schema 查詢結果）：
-  - `[{ column_name: 'ZYEAR', data_type: 'integer' }, { column_name: 'AGE', data_type: 'date' }, { column_name: 'CODE', data_type: 'character varying' }]`
+  - `[{ column_name: 'zyear', data_type: 'integer' }, { column_name: 'age', data_type: 'date' }, { column_name: 'code', data_type: 'character varying' }]`
 - **步驟**：
   1. 呼叫 `getAvailableColumns()`
   2. 驗證回傳值
 - **預期結果**：
   - `availableColumns` 長度 = 3
-  - 順序為 `AGE → CODE → ZYEAR`（字母升冪）
-  - `AGE.columnName='AGE'`、`AGE.dataType='date'`、`AGE.suggestedFieldType='date'`
-  - `CODE.columnName='CODE'`、`CODE.dataType='character varying'`、`CODE.suggestedFieldType='categorical'`
-  - `ZYEAR.columnName='ZYEAR'`、`ZYEAR.dataType='integer'`、`ZYEAR.suggestedFieldType='numeric'`
+  - 順序為 `age → code → zyear`（字母升冪）
+  - `age.columnName='age'`、`age.dataType='date'`、`age.suggestedFieldType='date'`
+  - `code.columnName='code'`、`code.dataType='character varying'`、`code.suggestedFieldType='categorical'`
+  - `zyear.columnName='zyear'`、`zyear.dataType='integer'`、`zyear.suggestedFieldType='numeric'`
   - response key 均為 camelCase（`columnName` 非 `column_name`；`dataType` 非 `data_type`）
 
 ---
@@ -116,9 +116,9 @@ new_in_v1_4: true
 
 - **關聯需求**：AC-10
 - **測試類型**：Positive / Unit
-- **前置條件**：mock `dataSource.query` 回傳 `[{column_name:'ZYEAR',...}, {column_name:'AGE',...}, {column_name:'MONTH_CNT',...}, {column_name:'BIRTH_DATE',...}, {column_name:'FUND_TYPE',...}]`（故意亂序）
+- **前置條件**：mock `dataSource.query` 回傳 `[{column_name:'zyear',...}, {column_name:'age',...}, {column_name:'month_cnt',...}, {column_name:'birth_date',...}, {column_name:'fund_type',...}]`（故意亂序）
 - **步驟**：呼叫 `getAvailableColumns()`
-- **預期結果**：`availableColumns` 順序為 `AGE → BIRTH_DATE → FUND_TYPE → MONTH_CNT → ZYEAR`
+- **預期結果**：`availableColumns` 順序為 `age → birth_date → fund_type → month_cnt → zyear`
 - **備註**：架構決策（architecture-spec v2.12）指定 SQL 含 `ORDER BY column_name ASC`，但 service 仍應確保輸出順序正確；此 test 以 mock 未排序輸入驗證 service 層排序行為
 
 ---
@@ -127,9 +127,9 @@ new_in_v1_4: true
 
 - **關聯需求**：AC-10
 - **測試類型**：Positive / Unit
-- **前置條件**：mock query 回傳 `[{ column_name: 'RISK_LEVEL', data_type: 'varchar' }]`
+- **前置條件**：mock query 回傳 `[{ column_name: 'risk_level', data_type: 'varchar' }]`
 - **步驟**：呼叫 `getAvailableColumns()`
-- **預期結果**：回傳物件含 `columnName: 'RISK_LEVEL'`、`dataType: 'varchar'`；不含 `column_name` 或 `data_type` key
+- **預期結果**：回傳物件含 `columnName: 'risk_level'`、`dataType: 'varchar'`；不含 `column_name` 或 `data_type` key
 
 ---
 
@@ -370,19 +370,19 @@ new_in_v1_4: true
 
 ### A. 過濾邏輯 — BR-13 含停用欄位
 
-#### TS-F075-INT-BE-001：8 筆白名單（7 啟用 + 1 停用 PAYT_TERM）+ 1 新欄位 → 只回傳 1 筆
+#### TS-F075-INT-BE-001：8 筆白名單（7 啟用 + 1 停用 payt_term）+ 1 新欄位 → 只回傳 1 筆
 
 - **關聯需求**：AC-10、BR-13
 - **測試類型**：Positive / Integration
 - **前置條件**：
-  - `ob_pool_data` schema 含欄位：`PROD_KIND`、`LIST_TYPE`、`BEST_CASE`、`SPEC_TP`、`CASEYEAR`、`SETTLE_SRC`、`MONTH_CNT`、`PAYT_TERM`、`RISK_LEVEL`（共 9 欄）
-  - `pooldata_field_whitelist` 已有 8 筆：前 7 欄 `is_active=true`，`PAYT_TERM` 的 `is_active=false`（停用）
+  - `ob_pool_data` schema 含欄位：`prod_kind`、`list_type`、`best_case`、`spec_tp`、`caseyear`、`settle_src`、`month_cnt`、`payt_term`、`risk_level`（共 9 欄）
+  - `pooldata_field_whitelist` 已有 8 筆：前 7 欄 `is_active=true`，`payt_term` 的 `is_active=false`（停用）
 - **步驟**：呼叫 `getAvailableColumns()`（使用真實 DataSource 連至 Test Container）
 - **預期結果**：
   - `availableColumns` 長度 = 1
-  - `availableColumns[0].columnName = 'RISK_LEVEL'`
-  - `PAYT_TERM` **不出現**在結果中（雖已停用，但仍被過濾，符合 BR-13）
-- **驗證 BR-13 核心**：停用欄位 `PAYT_TERM` 已在 `pooldata_field_whitelist`（`is_active=false`），available-columns 查詢應排除**所有**白名單紀錄（含停用），防止繞過 AC-5 唯一性
+  - `availableColumns[0].columnName = 'risk_level'`
+  - `payt_term` **不出現**在結果中（雖已停用，但仍被過濾，符合 BR-13）
+- **驗證 BR-13 核心**：停用欄位 `payt_term` 已在 `pooldata_field_whitelist`（`is_active=false`），available-columns 查詢應排除**所有**白名單紀錄（含停用），防止繞過 AC-5 唯一性
 
 ---
 
@@ -391,8 +391,8 @@ new_in_v1_4: true
 - **關聯需求**：AC-10、AC-13
 - **測試類型**：Positive / Integration
 - **前置條件**：
-  - `ob_pool_data` schema 含欄位：`PROD_KIND`、`LIST_TYPE`（共 2 欄，最小化 setup）
-  - `pooldata_field_whitelist` 已有 `PROD_KIND`（`is_active=true`）、`LIST_TYPE`（`is_active=true`）
+  - `ob_pool_data` schema 含欄位：`prod_kind`、`list_type`（共 2 欄，最小化 setup）
+  - `pooldata_field_whitelist` 已有 `prod_kind`（`is_active=true`）、`list_type`（`is_active=true`）
 - **步驟**：呼叫 `getAvailableColumns()`
 - **預期結果**：`{ availableColumns: [] }`；HTTP 200（空陣列為合法狀態，不拋錯）
 - **說明**：OBPOOLDATA 所有欄位皆已列入白名單時，Modal 應顯示空態提示，儲存按鈕停用（見 AC-13）
@@ -476,18 +476,18 @@ new_in_v1_4: true
 
 ---
 
-#### TS-F075-FE-005：搜尋過濾 — 輸入 `'YE'` → 只顯示 ZYEAR
+#### TS-F075-FE-005：搜尋過濾 — 輸入 `'ye'` → 只顯示 zyear
 
 - **關聯需求**：AC-13（dropdown 含搜尋功能）
 - **測試類型**：Positive / Component
 - **前置條件**：同 TS-F075-FE-003；dropdown panel 已開啟
 - **步驟**：
-  1. `userEvent.type` `dropdown-column-name-search`，輸入 `'YE'`
+  1. `userEvent.type` `dropdown-column-name-search`，輸入 `'ye'`
   2. 查詢 option 可見性
 - **預期結果**：
-  - `dropdown-option-ZYEAR` 可見
-  - `dropdown-option-AGE` 不可見
-  - `dropdown-option-CODE` 不可見
+  - `dropdown-option-zyear` 可見
+  - `dropdown-option-age` 不可見
+  - `dropdown-option-code` 不可見
 
 ---
 
@@ -498,9 +498,9 @@ new_in_v1_4: true
 - **關聯需求**：AC-14、BR-12
 - **測試類型**：Positive / Component
 - **前置條件**：standard mock response；Modal 開啟；dropdown panel 開啟
-- **步驟**：`userEvent.click` `dropdown-option-AGE`
+- **步驟**：`userEvent.click` `dropdown-option-age`
 - **預期結果**：
-  - `dropdown-column-name-trigger` label 文字顯示 `'AGE'`
+  - `dropdown-column-name-trigger` label 文字顯示 `'age'`
   - `field-type-hint` 從 hidden 變為可見
   - `field-type-hint` `data-state` = `'suggested'`
   - hint 文字含「系統推斷」與 `'date'`，且含 `dataType=date` 資訊
@@ -509,7 +509,7 @@ new_in_v1_4: true
 
 ---
 
-#### TS-F075-FE-007：選中 ZYEAR（`suggestedFieldType='numeric'`）→ radio 預選 numeric
+#### TS-F075-FE-007：選中 zyear（`suggestedFieldType='numeric'`）→ radio 預選 numeric
 
 - **關聯需求**：AC-14、BR-12
 - **測試類型**：Positive / Component
@@ -600,12 +600,12 @@ new_in_v1_4: true
 - **測試類型**：Positive / Component
 - **前置條件**：
   - standard mock response
-  - mock `POST /api/v1/pooldata-fields` 回傳 201：`{ "columnName": "RISK_LEVEL", "displayName": "風險等級", "fieldType": "categorical", "isActive": true }`
-  - Modal 已填寫：選擇 ZYEAR（或任意欄位）、displayName 輸入「風險等級」、fieldType 選 categorical
+  - mock `POST /api/v1/pooldata-fields` 回傳 201：`{ "columnName": "risk_level", "displayName": "風險等級", "fieldType": "categorical", "isActive": true }`
+  - Modal 已填寫：選擇 zyear（或任意欄位）、displayName 輸入「風險等級」、fieldType 選 categorical
 - **步驟**：`userEvent.click` `btn-submit-create-field`
 - **預期結果**：
   - toast 文字含「欄位『風險等級』已新增」
-  - toast 文字**不以** `'RISK_LEVEL'`（columnName）為主標
+  - toast 文字**不以** `'risk_level'`（columnName）為主標
   - Modal 關閉
 
 ---
@@ -639,11 +639,11 @@ new_in_v1_4: true
 
 - **關聯需求**：AC-6、§7（編輯 Modal 設計）
 - **測試類型**：Regression
-- **前置條件**：render 頁面（部長角色）；某欄位（如 PROD_KIND）的「編輯」按鈕可點擊
+- **前置條件**：render 頁面（部長角色）；某欄位（如 prod_kind）的「編輯」按鈕可點擊
 - **步驟**：`userEvent.click` 對應欄位的「編輯」按鈕
 - **預期結果**：
   - `dropdown-column-name-trigger` 在 DOM 中不存在（非 `display:none`）；或其父容器 `columnDropdownWrap` 不可見
-  - `readonly-column-name` 元素可見，文字顯示正確的 columnName（如 `'PROD_KIND'`）
+  - `readonly-column-name` 元素可見，文字顯示正確的 columnName（如 `'prod_kind'`）
   - `field-type-hint` 在 DOM 中不存在（Edit 模式無需 suggested hint，使用者已知欄位）
 - **說明**：防止 v1.4 新增 dropdown 邏輯影響既有 Edit 流程
 
@@ -669,13 +669,13 @@ new_in_v1_4: true
 
 - **關聯需求**：F075 §8（Blocks F076）
 - **測試類型**：Integration（跨模組）
-- **前置條件**：DB 中不存在 `RISK_LEVEL` 欄位
+- **前置條件**：DB 中不存在 `risk_level` 欄位
 - **步驟**：
-  1. `POST /api/v1/pooldata-fields` 新增 `{ columnName: 'RISK_LEVEL', displayName: '風險等級', fieldType: 'categorical' }`（部長 JWT）
+  1. `POST /api/v1/pooldata-fields` 新增 `{ columnName: 'risk_level', displayName: '風險等級', fieldType: 'categorical' }`（部長 JWT）
   2. `GET /api/v1/pooldata-fields?active=true`（F076 所使用的端點）
 - **預期結果**：
   - 步驟 1 回 HTTP 201
-  - 步驟 2 response 的 `fields` 陣列中含 `RISK_LEVEL`，且 `fieldType = 'categorical'`
+  - 步驟 2 response 的 `fields` 陣列中含 `risk_level`，且 `fieldType = 'categorical'`
 
 ---
 

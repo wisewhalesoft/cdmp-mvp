@@ -246,8 +246,8 @@ status: Draft
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 版本 |
 |------------|------|------|-----------|--------|------|
 | F068 | [F068-edit-base-code.md](features/F068-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） | US-092 | P0-MVP | v1.2 |
-| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；v1.4 UI 命名改「篩選欄位管理」/「新增篩選欄位」內部保留 `pooldata_field_whitelist` + `/api/v1/pooldata-fields`；新增 `GET /available-columns` 端點 + dropdown 唯一新增路徑 + `suggestedFieldType` 推斷 + AC-10~15 + BR-11~13；A-3 升級 [RESOLVED]；附帶清理 prototype/FE `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`） | US-102 | P0-MVP | **v1.4** |
-| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（v1.3 補回 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 新增 deactivate 端點 + AC-6 reason 必填 200 字 + BR-11/12/13 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103 | P0-MVP | **v1.3** |
+| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；v1.4 UI 命名改「篩選欄位管理」/「新增篩選欄位」內部保留 `pooldata_field_whitelist` + `/api/v1/pooldata-fields`；新增 `GET /available-columns` 端點 + dropdown 唯一新增路徑 + `suggestedFieldType` 推斷 + AC-10~15 + BR-11~13；A-3 升級 [RESOLVED]；附帶清理 prototype/FE `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`；**v1.4.3 case 對齊**：column_name 由大寫改小寫對齊 `ob_pool_data` snake_case，DTO regex `/^[a-z][a-z0-9_]{0,63}$/`，新增 BR-14 命名規範） | US-102 | P0-MVP | **v1.4.3** |
+| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（v1.3 補回 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 新增 deactivate 端點 + AC-6 reason 必填 200 字 + BR-11/12/13 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref；**v1.3.1 case 對齊**：依 F075 v1.4.3 將 seed 欄位字串改小寫） | US-103 | P0-MVP | **v1.3.1** |
 
 #### M07 角色與可見範圍（E07 重構批次 1，2026-05-15）
 

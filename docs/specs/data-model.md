@@ -2044,11 +2044,11 @@ PK：`calendar_date`
 
 #### field_whitelist（POOLDATA 篩選欄位白名單） {#field-whitelist-entity}
 
-> **新建表（2026-05-15 / E07 重構批次 1）**：對應 [F075](features/F075-manage-pooldata-field-whitelist.md)。提供新名單定義（後續 US-106 spec）動態載入可用篩選欄位之 metadata，取代原 SP 中硬編碼的 PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等固定欄位。本表為 AppDB 新建表，無對應舊系統 OB 表。
+> **新建表（2026-05-15 / E07 重構批次 1）**：對應 [F075](features/F075-manage-pooldata-field-whitelist.md)。提供新名單定義（後續 US-106 spec）動態載入可用篩選欄位之 metadata，取代原 SP 中硬編碼的固定欄位（原 SQL Server SP 內以大寫 PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等欄位名硬編碼，新系統對應 PostgreSQL `ob_pool_data` 表之小寫 snake_case 欄位 prod_kind / caseyear / spec_tp / settle_src，由本表 metadata 動態驅動）。本表為 AppDB 新建表，無對應舊系統 OB 表。
 
 | 欄位名 | 型別 | NULL | 說明 |
 |--------|------|------|------|
-| column_name | VARCHAR(50) | NOT NULL | **PK**，對應 OBPOOLDATA 之欄位名稱（字串映射，不維護 FK） |
+| column_name | VARCHAR(50) | NOT NULL | **PK**，對應 PostgreSQL `ob_pool_data` 之欄位名稱（字串映射，不維護 FK）；v1.4.3 起 case 對齊小寫 snake_case（與原 SQL Server `OBPOOLDATA` 大寫慣例脫鉤） |
 | display_name | VARCHAR(100) | NOT NULL | 業務可讀之中文標籤（如「產品類別」） |
 | field_type | VARCHAR(20) | NOT NULL | 欄位類別列舉：`numeric` / `categorical` / `date`（CHECK constraint 限三值） |
 | is_active | BOOLEAN | NOT NULL DEFAULT TRUE | 啟用狀態；停用後新名單表單不再顯示，但既有名單條件不受影響（F075 BR-3） |
@@ -2061,14 +2061,14 @@ PK：`calendar_date`
 - `column_name` 為唯一鍵；新增時不分啟用 / 停用一律檢查重複（F075 BR-1）
 - `field_type` 僅允許三種列舉值；其他值由業務層 + DB CHECK 雙層驗證
 - 停用為軟刪除（`is_active = false`），MVP 不支援硬刪除（F075 BR-9，OQ-102-02 暫定）
-- 與 OBPOOLDATA 之欄位名稱為字串映射關係，不維護外鍵約束（F075 BR-8）
+- 與 PostgreSQL `ob_pool_data` 之欄位名稱為字串映射關係，不維護外鍵約束（F075 BR-8）
 - 月跑 Stage 1 不 join 本表做欄位有效性驗證，直接讀取 `ob_list_definition.condition_payload`（避免停用後月跑失敗）
 
 **索引**：`column_name`（PK）、`(field_type, is_active)`（多選元件查詢）
 
-**初始 Seed**（8 筆，依 F075 §4.4，冪等以 `column_name` 為鍵）：
-- 7 筆 `is_active = true`：PROD_KIND（categorical）/ LIST_TYPE（categorical）/ BEST_CASE（categorical）/ SPEC_TP（categorical）/ CASEYEAR（categorical）/ SETTLE_SRC（categorical）/ MONTH_CNT（numeric）
-- 1 筆 `is_active = false`：PAYT_TERM（numeric，現行 SP 已被 MONTH_CNT 取代）
+**初始 Seed**（8 筆，依 F075 §4.4，冪等以 `column_name` 為鍵；v1.4.3 起 column_name 小寫對齊 `ob_pool_data` PostgreSQL snake_case）：
+- 7 筆 `is_active = true`：prod_kind（categorical）/ list_type（categorical）/ best_case（categorical）/ spec_tp（categorical）/ caseyear（categorical）/ settle_src（categorical）/ month_cnt（numeric）
+- 1 筆 `is_active = false`：payt_term（numeric，現行 SP 已被 month_cnt 取代）
 
 **相關功能**：[F075](features/F075-manage-pooldata-field-whitelist.md)、[F076](features/F076-manage-categorical-field-values.md)（FK 父表）
 
@@ -2099,11 +2099,11 @@ PK：`calendar_date`
 
 **索引**：`(column_name, option_value)`（PK）、`(column_name, is_active)`（多選元件查詢）
 
-**初始 Seed**（依 F076 §4.4，冪等以 `(column_name, option_value)` 為鍵）：
-- PROD_KIND：01 / 02 / 03（共 3 筆，固定）
-- LIST_TYPE：01 / 02 / 03（共 3 筆，固定）
-- CASEYEAR：0~6 + 99（共 8 筆，固定）
-- SETTLE_SRC：Y / N（共 2 筆，固定）
-- SPEC_TP / BEST_CASE：依執行期 OBMCODEDF 動態 seed（數量不固定）
+**初始 Seed**（依 F076 §4.4，冪等以 `(column_name, option_value)` 為鍵；v1.4.3 起 column_name 小寫對齊 `ob_pool_data` PostgreSQL snake_case）：
+- prod_kind：01 / 02 / 03（共 3 筆，固定）
+- list_type：01 / 02 / 03（共 3 筆，固定）
+- caseyear：0~6 + 99（共 8 筆，固定）
+- settle_src：Y / N（共 2 筆，固定）
+- spec_tp / best_case：依執行期 OBMCODEDF 動態 seed（數量不固定）
 
 **相關功能**：[F076](features/F076-manage-categorical-field-values.md)、[F075](features/F075-manage-pooldata-field-whitelist.md)（父表）

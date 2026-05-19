@@ -6,15 +6,16 @@ source-story: US-102
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.4"
-date: 2026-05-18
+version: "1.4.3"
+date: 2026-05-19
 status: Draft
 ---
 
 # F075: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 
+> **v1.4.3 補修（2026-05-19）**：case 對齊 — `pooldata_field_whitelist.column_name` 從原 SQL Server `OBPOOLDATA` 大寫慣例（`PROD_KIND` 等）改為小寫對齊 PostgreSQL `ob_pool_data` ETL 後表之 snake_case 實際欄位命名（`prod_kind` 等）；DTO regex `/^[A-Z][A-Z0-9_]{0,63}$/` 改為 `/^[a-z][a-z0-9_]{0,63}$/`；AC-1 / AC-8 seed 欄位字串 + API 範例 + 新增 BR-14（命名規範）；§13 補 v1.4.3 變更紀錄。**不動** F068 `ob_code_df.tbl_id` 之 `PROD_KIND` / `SPEC_TP` / `CASE_STATUS` 大寫業務常數（獨立語境）。
 > **v1.4 修訂（2026-05-18）**：UI 層命名改為「篩選欄位管理」/「新增篩選欄位」（內部 DB 表名 / API path / 類別名稱 100% 保留 `pooldata_field_whitelist`、`/api/v1/pooldata-fields`）；新增 `GET /api/v1/pooldata-fields/available-columns` 端點，新增欄位流程改為下拉選擇 OBPOOLDATA 既有但尚未列入白名單之欄位（含停用欄位過濾，防繞過 AC-5），徹底消除 A-3 孤兒欄位新增風險；新增 `suggestedFieldType` 推斷規則（numeric / categorical / date，預選非強制，使用者可覆寫）；BR-11 / BR-12 / BR-13 落地；A-3 由 [ASSUMPTION] 升級為 [RESOLVED]；附帶清理：prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串修正為 spec 權威定義 `POOLDATA_FIELD_DUPLICATE`。
 > **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回 BR-7 「`field_type` 由 categorical 切離時，service 層批次 SET 對應 `pooldata_field_option.is_active = false` + `deactivation_reason = 'field_type_changed'`（軟停用，不 CASCADE 刪除）」+ AC-6 切換 confirm UI 文字補「將自動停用 N 個可選值」+ 跨參照 data-model `deactivation_reason` ENUM。
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-102 + AD-E07 v3.0 一致性決議完整重建；Guard：寫入 `DirectorGuard`、查看 `DirectorOrSectionChiefGuard`（取代 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議與 seed 清單。
@@ -46,7 +47,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 **範圍**：
 - 新建 `pooldata_field_whitelist` 表，欄位包含 `column_name`（唯一鍵）、`display_name`、`field_type`、`is_active`、`created_at`、`updated_at`
 - 部長 / Admin 可寫入；處長唯讀（可進入頁面查看，無編輯按鈕）
-- 系統首次部署時自動 seed 8 筆（7 啟用 + 1 停用 PAYT_TERM）
+- 系統首次部署時自動 seed 8 筆（7 啟用 + 1 停用 payt_term）
 - 停用欄位「不回溯」既有名單條件，月跑讀取直接讀 `ob_list_definition.filter_conditions` JSONB，不 join 白名單做欄位有效性驗證
 
 **v1.4 新增**：新增欄位流程改為下拉選擇（dropdown） — 後端提供 `GET /api/v1/pooldata-fields/available-columns` 回傳 OBPOOLDATA 既有但尚未列入白名單之欄位清單（含其 PostgreSQL `dataType` 與系統推斷之 `suggestedFieldType`），前端 Modal 以下拉取代自由輸入 `columnName`；available-columns 查詢過濾**所有**已在 `pooldata_field_whitelist` 的紀錄（含 `is_active = false`），確保不會繞過 AC-5 唯一性。系統推斷之 `suggestedFieldType` 作為預選值，使用者仍可覆寫；此舉徹底消除 A-3 孤兒欄位於新增階段產生的風險。
@@ -71,15 +72,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 - **Given** 系統首次部署
 - **When** Admin 執行初始化
-- **Then** 系統自動 seed 8 筆：
-  - PROD_KIND（categorical，啟用）
-  - LIST_TYPE（categorical，啟用）
-  - BEST_CASE（categorical，啟用）
-  - SPEC_TP（categorical，啟用）
-  - CASEYEAR（categorical，啟用）
-  - SETTLE_SRC（categorical，啟用）
-  - MONTH_CNT（numeric，啟用）
-  - PAYT_TERM（numeric，**停用**）
+- **Then** 系統自動 seed 8 筆（v1.4.3 起 column_name 為小寫 snake_case，對齊 `ob_pool_data` PostgreSQL 實際欄位）：
+  - prod_kind（categorical，啟用）
+  - list_type（categorical，啟用）
+  - best_case（categorical，啟用）
+  - spec_tp（categorical，啟用）
+  - caseyear（categorical，啟用）
+  - settle_src（categorical，啟用）
+  - month_cnt（numeric，啟用）
+  - payt_term（numeric，**停用**）
 - **And** 每筆欄位含 `column_name`、`display_name`、`field_type`、`is_active`
 - **And** seed 為冪等操作（重複執行不產生重複資料）
 
@@ -131,9 +132,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ### AC-8：停用欄位不影響既有名單條件（舊名單相容）
 
-- **Given** 名單定義 `OB202604010` 含篩選條件 `SETTLE_SRC = Y`；部長停用白名單中 `SETTLE_SRC`
+- **Given** 名單定義 `OB202604010` 含篩選條件 `settle_src = Y`；部長停用白名單中 `settle_src`
 - **When** 系統執行月跑讀取 `OB202604010` 之篩選條件
-- **Then** 月跑仍正確讀取 `SETTLE_SRC = Y` 並過濾 OBPOOLDATA；不因欄位停用而失敗
+- **Then** 月跑仍正確讀取 `settle_src = Y` 並過濾 OBPOOLDATA；不因欄位停用而失敗
 
 ### AC-9：欄位類別影響名單定義表單元件選擇
 
@@ -145,9 +146,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ### AC-10：available-columns 端點僅回傳尚未列入白名單之欄位
 
-- **Given** OBPOOLDATA 含 120 個欄位，`pooldata_field_whitelist` 已有 8 筆紀錄（7 啟用 + 1 停用 PAYT_TERM）
+- **Given** `ob_pool_data` 含 120 個欄位，`pooldata_field_whitelist` 已有 8 筆紀錄（7 啟用 + 1 停用 payt_term）
 - **When** 部長 / Admin 呼叫 `GET /api/v1/pooldata-fields/available-columns`
-- **Then** Response 回傳 OBPOOLDATA 既有欄位中**未出現於** `pooldata_field_whitelist` 的所有欄位（不論 `is_active` 為何，已停用之 PAYT_TERM 亦不列入 available-columns）
+- **Then** Response 回傳 `ob_pool_data` 既有欄位中**未出現於** `pooldata_field_whitelist` 的所有欄位（不論 `is_active` 為何，已停用之 payt_term 亦不列入 available-columns）
 - **And** 每筆含 `columnName`、`dataType`（PostgreSQL information_schema 原始型別字串）、`suggestedFieldType`
 - **And** 結果按 `columnName` 字母順序排序
 
@@ -223,8 +224,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 ```json
 {
   "fields": [
-    { "columnName": "PROD_KIND", "displayName": "產品類別", "fieldType": "categorical", "isActive": true, "createdAt": "...", "updatedAt": "..." },
-    { "columnName": "MONTH_CNT", "displayName": "撈取月份計數", "fieldType": "numeric", "isActive": true, "createdAt": "...", "updatedAt": "..." }
+    { "columnName": "prod_kind", "displayName": "產品類別", "fieldType": "categorical", "isActive": true, "createdAt": "...", "updatedAt": "..." },
+    { "columnName": "month_cnt", "displayName": "撈取月份計數", "fieldType": "numeric", "isActive": true, "createdAt": "...", "updatedAt": "..." }
   ]
 }
 ```
@@ -240,7 +241,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ```json
 {
-  "columnName": "RISK_LEVEL",
+  "columnName": "risk_level",
   "displayName": "風險等級",
   "fieldType": "categorical"
 }
@@ -250,7 +251,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ```json
 {
-  "columnName": "RISK_LEVEL",
+  "columnName": "risk_level",
   "displayName": "風險等級",
   "fieldType": "categorical",
   "isActive": true
@@ -284,7 +285,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ```json
 {
-  "columnName": "SETTLE_SRC",
+  "columnName": "settle_src",
   "isActive": false,
   "disabledAt": "2026-05-15T13:00:00Z"
 }
@@ -332,9 +333,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 ```json
 {
   "availableColumns": [
-    { "columnName": "BIRTH_DATE", "dataType": "date", "suggestedFieldType": "date" },
-    { "columnName": "CUST_AGE", "dataType": "integer", "suggestedFieldType": "numeric" },
-    { "columnName": "RISK_LEVEL", "dataType": "varchar", "suggestedFieldType": "categorical" }
+    { "columnName": "birth_date", "dataType": "date", "suggestedFieldType": "date" },
+    { "columnName": "cust_age", "dataType": "integer", "suggestedFieldType": "numeric" },
+    { "columnName": "risk_level", "dataType": "varchar", "suggestedFieldType": "categorical" }
   ]
 }
 ```
@@ -365,6 +366,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 | BR-11 | **新增欄位限下拉選擇（v1.4）**：自由文字輸入 `columnName` 之路徑已移除；新增 Modal 之 `columnName` 來源限定為 `GET /api/v1/pooldata-fields/available-columns` 回傳之 `availableColumns`。此規則徹底消除 A-3 孤兒欄位於新增階段產生之風險。不保留 fallback toggle |
 | BR-12 | **`suggestedFieldType` 推斷規則 + 預選非強制（v1.4）**：available-columns 端點針對每筆欄位回傳 `suggestedFieldType`（推斷規則見 §5.5）；前端 Modal 以該值預選 `field_type` radio 並顯示「系統推斷」hint；使用者覆寫後 hint 改為「使用者選擇」。最終寫入之 `field_type` 以使用者送出值為準，**不強制等同系統推斷** |
 | BR-13 | **available-columns 過濾含停用欄位（v1.4）**：available-columns 查詢過濾邏輯需排除**所有**已在 `pooldata_field_whitelist` 的紀錄，**含 `is_active = false`**；此規則確保已停用欄位無法被再次以 dropdown 選中新增，防繞過 AC-5 唯一性 |
+| BR-14 | **`column_name` 命名規範（v1.4.3 case 對齊）**：`pooldata_field_whitelist.column_name` 與 `pooldata_field_option.column_name` 之儲存格式對齊 PostgreSQL `ob_pool_data` 之 snake_case 實際欄位命名（小寫起頭、小寫英數與底線）；DTO regex 為 `/^[a-z][a-z0-9_]{0,63}$/`。理由：(1) PostgreSQL unquoted identifier 大小寫不敏感但儲存為小寫；(2) `getAvailableColumns` SQL `NOT IN` 子查詢為 case-sensitive 字串比對，大寫 whitelist 與小寫 ob_pool_data 不匹配將導致過濾失效；(3) SQL Server `OBPOOLDATA` 之大寫慣例已隨 ETL 至 `ob_pool_data` 而消失，原大寫慣例不再適用。**不影響** F068 之 `ob_code_df.tbl_id`（PROD_KIND / SPEC_TP / CASE_STATUS 等大寫業務常數仍維持大寫，屬獨立語境） |
 
 ## 7. UI/UX 需求
 
@@ -495,3 +497,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 | v1.4 | 2026-05-18 | **UI 命名標準化 + 新增流程改 dropdown + suggestedFieldType 推斷 + A-3 風險清除**：(1) UI 層命名「白名單管理」/「POOLDATA 篩選欄位白名單」→「**篩選欄位管理**」、「新增白名單欄位」/「新增 POOLDATA 欄位」→「**新增篩選欄位**」（內部 DB 表名 / API path / 類別名稱 100% 保留）；(2) 新增 §5.5 `GET /api/v1/pooldata-fields/available-columns` 端點（`DirectorGuard`，過濾含停用欄位，按 columnName 字母排序）；(3) 新增 AC-10 ~ AC-15（AC-16 不納入 — PO 決議不保留 fallback toggle）；(4) 新增 BR-11 / BR-12 / BR-13；(5) 新增 Modal 改為 dropdown 唯一路徑 + 「系統推斷 → 使用者選擇」hint 切換；(6) 成功 toast 文案以 `displayName` 為主；(7) A-3 升級為 [RESOLVED]（新增階段）；(8) **附帶清理**：修正既有 prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串為 spec 權威之 `POOLDATA_FIELD_DUPLICATE`（spec §5.4 已是正確版本，本次同步前端字串） |
 | v1.4.1 | 2026-05-19 | **prototype 對齊補修**：(1) 從 sidebar 移除「篩選欄位管理」獨立項（v1.3 起就不該有，對齊 prototype 37-base-code.html L186-243 設計）；(2) `base-codes-page.tsx` 加入「進階維護」區塊兩張卡片入口（F075「篩選欄位管理」+ F076「類別型欄位可選值」），對應 prototype 37-base-code.html L186-243；(3) prototype 37-base-code.html L192/L204/L209 命名同步至 v1.4（`v1.1 → v1.4`、`POOLDATA 篩選欄位白名單 → 篩選欄位管理`、`field_whitelist → pooldata_field_whitelist`）；(4) regression guard `m06-naming-regression.spec.ts` 補 sidebar 不應出現「篩選欄位管理」/「白名單管理」斷言；(5) §7 頁面入口描述修正：由 sidebar 獨立分頁改為「代碼維護頁進階維護區塊卡片」 |
 | v1.4.2 | 2026-05-19 | **D1 設計修補：available-columns 錯誤碼分流**：(1) `getAvailableColumns` 改為兩階段查詢（Step 1 確認 `ob_pool_data` 表存在、Step 2 NOT IN 子查詢取欄位清單），移除原本 try/catch 吞錯回空陣列導致 UI 誤導「全部已列入」訊息的問題；(2) §5.5 錯誤代碼表新增 `503 OBPOOLDATA_NOT_READY`（表不存在 / ETL 尚未 Load / SQLite 環境 information_schema 不可用）；(3) AC-13 拆為 AC-13a（既有：dropdown 為唯一新增路徑）+ AC-13b（新：dropdown 空態依錯誤碼分流顯示對應訊息與「重試」按鈕，四種狀態為 200 空陣列 / 503 OBPOOLDATA_NOT_READY / 503 FEATURE_NOT_ENABLED / 其他 5xx）；(4) 前端 `field-whitelist-page.tsx` `loadAvailableColumns` 可重用函式 + dropdown render 四級優先序（loading → error → empty「全部已列入」→ 選項列表）；(5) E2E TS-F075-E2E-001/002/008 SQLite 環境斷言由 `200 + availableColumns: []` 改為 `503 OBPOOLDATA_NOT_READY`，路由排序回歸仍可區分 503 vs 404；(6) Dev 環境驗證：補 ETL `ob_pool_data` 表存在 → director 開啟 Modal 可見 121 個未列入欄位，符合 OBPOOLDATA 實際資料量 |
+| v1.4.3 | 2026-05-19 | **case 對齊補修（補修 mini-tdd，非常態化 spec 改動）**：(1) **Root cause**：原 SQL Server `OBPOOLDATA` 大寫欄位慣例（PROD_KIND / LIST_TYPE / ...）與 PostgreSQL ETL 後表 `ob_pool_data` 之 snake_case 實際欄位（prod_kind / list_type / ...）不一致；`getAvailableColumns` SQL 子查詢 `WHERE c.column_name NOT IN (SELECT w.column_name)` 為 case-sensitive 字串比對，導致過濾失效（dropdown 多顯示 8 筆已列入欄位）；使用者從 dropdown 選擇小寫欄位後，DTO `@Matches(/^[A-Z][A-Z0-9_]{0,63}$/)` 大寫 regex 422 拒絕；(2) **生產碼變更**：m22 / m24 seed migration 8 筆 fields + 16 筆 options column_name 全部改小寫；DTO regex 改為 `/^[a-z][a-z0-9_]{0,63}$/`；錯誤訊息「OBPOOLDATA 欄位命名慣例（大寫）」改為「`ob_pool_data` PostgreSQL snake_case 命名」；(3) **AC / 範例更新**：AC-1 seed 欄位列表小寫；AC-8 / AC-10 範例字串小寫；§5 API request/response 範例之 columnName 字串小寫；(4) **新增 BR-14**：`column_name` 命名規範（對齊 PostgreSQL `ob_pool_data` snake_case；不影響 F068 `ob_code_df.tbl_id` 大寫業務常數）；(5) **資料庫**：Dev DB 已由使用者 SQL UPDATE 修正 8 筆 whitelist + 16 筆 options column_name 至小寫；(6) **不動範圍**：F068 `ob_code_df.tbl_id`（PROD_KIND / SPEC_TP / CASE_STATUS 大寫業務常數）、F068 / F069 / F070 / F071 之 assignment-code / assignment-scoring 模組、reference SP / 原 SQL Server 表描述、計分卡 `ob_levelcard_column.column_name`（與本欄為不同表，仍為大寫常數） |

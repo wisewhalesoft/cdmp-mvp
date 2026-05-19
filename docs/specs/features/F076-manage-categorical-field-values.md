@@ -6,15 +6,16 @@ source-story: US-103
 epic: E07
 module: M06 代碼維護（進階）
 priority: P0-MVP
-version: "1.3"
-date: 2026-05-17
+version: "1.3.1"
+date: 2026-05-19
 status: Draft
 ---
 
 # F076: 類別型欄位可選值管理
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-19
 
+> **v1.3.1 補修（2026-05-19）**：依 F075 v1.4.3 case 對齊：(1) AC-1 / AC-3 / AC-5 seed 欄位字串 + API 範例 columnName 由大寫（`PROD_KIND` 等）改小寫（`prod_kind` 等），對齊 PostgreSQL `ob_pool_data` snake_case；(2) §10 測試覆蓋目標欄位字串同步；(3) `pooldata_field_option.column_name` FK → `pooldata_field_whitelist.column_name` 之 case 由 m22 / m24 seed migration 保證（已於 F075 v1.4.3 變更）；(4) `spec_tp` / `best_case` 之 [ASSUMPTION] 留項不變（仍待 OBMCODEDF dump 確認 OBMVALUE），僅 column_name 對應改小寫。
 > **v1.3 補修（2026-05-17）**：v1.2 救援過程遺失 PO 決議 F076-C 軟停用機制（task #16 system-architect Phase 1 6 PO 決議），補回：(1) §5.0 概念 schema 區塊補 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-7 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 已 Resolved）；(3) BR-6 改寫為「F075 將欄位 `field_type` 從 categorical 改為其他類別時批次軟停用」+ 新增 BR-7「歷史保留 + `includeInactive=true` 查詢」；(4) 新增專屬 deactivate 端點 `PATCH /:columnName/options/:optionValue/deactivate` body `{ isActive: false, reason: string }` + 200 字驗證；(5) error-handling `WHITELIST_OPTION_INACTIVE` 警告碼 cross-ref。
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard：寫入 `DirectorGuard`、查看 `DirectorOrSectionChiefGuard`（取代 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議與 seed 清單。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
@@ -83,11 +84,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - **Given** 系統首次部署
 - **When** Admin 執行初始化
 - **Then** 系統自動 seed 各 categorical 欄位之初始可選值：
-  - PROD_KIND：01（汽車新車）/ 02（機車）/ 03（其他商品），至少 3 筆
-  - LIST_TYPE：01（期中）/ 02（中結）/ 03（滿期），3 筆
-  - CASEYEAR：0 / 1 / 2 / 3 / 4 / 5 / 6 + 99（不限年數），共 8 筆
-  - SETTLE_SRC：Y（含他行代償）/ N（不含他行代償），2 筆
-  - SPEC_TP / BEST_CASE：依 OBMCODEDF 當時記錄 seed
+  - prod_kind：01（汽車新車）/ 02（機車）/ 03（其他商品），至少 3 筆
+  - list_type：01（期中）/ 02（中結）/ 03（滿期），3 筆
+  - caseyear：0 / 1 / 2 / 3 / 4 / 5 / 6 + 99（不限年數），共 8 筆
+  - settle_src：Y（含他行代償）/ N（不含他行代償），2 筆
+  - spec_tp / best_case：依 OBMCODEDF 當時記錄 seed
 - **And** seed 為冪等操作（重複執行不產生重複資料）
 
 ### AC-4：部長 / Admin 新增可選值
@@ -116,9 +117,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ### AC-7：停用可選值不中斷月跑
 
-- **Given** 名單 `OB202604010` 之 PROD_KIND 條件含 `02`；部長停用 PROD_KIND 之 `02`
+- **Given** 名單 `OB202604010` 之 prod_kind 條件含 `02`；部長停用 prod_kind 之 `02`
 - **When** 觸發月跑（F061 / F081），月跑 Stage 1 讀取 `OB202604010` 之篩選條件
-- **Then** 月跑仍正確以 `PROD_KIND INCLUDE ['02', ...]` 過濾 OBPOOLDATA，月跑完成不報錯
+- **Then** 月跑仍正確以 `prod_kind INCLUDE ['02', ...]` 過濾 OBPOOLDATA，月跑完成不報錯
 
 ### AC-8：部長 / Admin 重新啟用已停用的可選值
 
@@ -135,8 +136,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ### AC-10：新名單定義表單多選選項只顯示啟用值
 
-- **Given** 白名單欄位 `PROD_KIND`（categorical）有 5 個可選值，2 個已停用
-- **When** 部長 / Admin 開啟新名單定義表單，選擇 PROD_KIND 為篩選欄位
+- **Given** 白名單欄位 `prod_kind`（categorical）有 5 個可選值，2 個已停用
+- **When** 部長 / Admin 開啟新名單定義表單，選擇 prod_kind 為篩選欄位
 - **Then** 多選元件只呈現 3 個啟用值，不顯示已停用的 2 個
 
 ## 5. API 規格
@@ -174,7 +175,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ```json
 {
-  "columnName": "PROD_KIND",
+  "columnName": "prod_kind",
   "options": [
     { "optionValue": "01", "optionLabel": "汽車新車", "isActive": true },
     { "optionValue": "02", "optionLabel": "機車", "isActive": true },
@@ -203,7 +204,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ```json
 {
-  "columnName": "PROD_KIND",
+  "columnName": "prod_kind",
   "optionValue": "09",
   "optionLabel": "農業機具",
   "isActive": true
@@ -255,7 +256,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ```json
 {
-  "columnName": "PROD_KIND",
+  "columnName": "prod_kind",
   "optionValue": "03",
   "optionLabel": "其他商品",
   "isActive": false,
@@ -309,7 +310,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
   - 停用：「確定停用 {optionLabel}？此值將不再出現於新名單定義選項中，但既有名單條件不受影響。」
   - 啟用：「確認啟用 {optionLabel}？此值將立即重新出現於新名單定義選項中。」
 - **成功提示 toast**：「可選值『{optionLabel}』已新增 / 停用 / 啟用」
-- **CASEYEAR 特殊值說明**：UI 對 `optionValue = '99'` 顯示輔助說明文字「99 = 不限年數（全選）」
+- **caseyear 特殊值說明**：UI 對 `optionValue = '99'` 顯示輔助說明文字「99 = 不限年數（全選）」
 
 ## 8. 依賴關係
 
@@ -340,7 +341,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 - 單元測試覆蓋率 ≥ 80%
 - 後端關鍵測試案例：
-  - 初始 seed → PROD_KIND / LIST_TYPE / CASEYEAR / SETTLE_SRC 等寫入；重複 seed → 不增加
+  - 初始 seed → prod_kind / list_type / caseyear / settle_src 等寫入；重複 seed → 不增加
   - 部長 GET `?active=true` → 只回啟用值
   - 部長 GET `?active=false` → 只回停用值
   - 部長 GET 不帶 query → 全部回傳
@@ -357,7 +358,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
   - 處長頁面**無**任何操作按鈕
   - 部長頁面顯示新增 / 停用 / 啟用按鈕
   - numeric / date 欄位無「管理可選值」連結
-  - CASEYEAR `99` 顯示輔助說明文字
+  - caseyear `99` 顯示輔助說明文字
 - E2E：F075 新增 RISK_LEVEL categorical → F076 維護 4 個可選值（3 啟用 + 1 停用）→ F050 新名單表單顯示 3 個值 → 月跑既有名單條件含已停用值仍正常執行
 
 ## 11. 實作 Checklist
@@ -366,12 +367,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - [ ] 後端新增 GET / POST / PATCH 3 個端點 + Service
 - [ ] 後端套 `DirectorGuard`（寫入）/ `DirectorOrSectionChiefGuard`（GET）+ `FeatureFlagGuard`（寫入）
 - [ ] 後端 categorical 欄位類別檢查
-- [ ] Seed 腳本（含 CASEYEAR 99 特殊值）+ 冪等性測試
+- [ ] Seed 腳本（含 caseyear 99 特殊值）+ 冪等性測試
 - [ ] error-handling.md 新增 `POOLDATA_OPTION_DUPLICATE` / `POOLDATA_OPTION_NOT_FOUND` / `POOLDATA_OPTION_FIELD_TYPE_INVALID`
 - [ ] 前端「管理可選值」子頁面（自 F075 列表進入）
 - [ ] 前端列表 / 新增 / 停用 / 啟用 Modal
 - [ ] 前端處長唯讀渲染邏輯
-- [ ] 前端 CASEYEAR 99 輔助說明
+- [ ] 前端 caseyear 99 輔助說明
 - [ ] 圖表：[diagrams/F076-option-flow.mmd](../diagrams/F076-option-flow.mmd)
 - [ ] 整合測試：F075 → F076 → F050 路徑驗證
 
@@ -393,3 +394,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #2：新增 BR-10 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`），僅作用於寫入端點 |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
 | v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失，task #16 system-architect Phase 1 PO 決議）：(1) §5.0 新增概念 schema 區塊明列 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-6 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 Resolved）+ 對應錯誤碼；(3) §5.1 GET 補 `includeInactive=true` query；(4) §5.3 PATCH 改為「啟用專用」、§5.4 新增 deactivate 專屬端點 `PATCH /:columnName/options/:optionValue/deactivate` + DTO `{ isActive: false, reason: string }` 200 字驗證；(5) 新增 BR-11 / BR-12 / BR-13；(6) 跨參照 data-model `pooldata_field_option.deactivation_reason` + error-handling `WHITELIST_OPTION_INACTIVE`；(7) 與 F075 v1.3 BR-7 對齊（F075 service 層觸發本表批次軟停用） |
+| v1.3.1 | 2026-05-19 | **case 對齊（依 F075 v1.4.3）**：AC-1 / AC-3 / AC-5 seed 欄位字串（`PROD_KIND` / `LIST_TYPE` / `BEST_CASE` / `SPEC_TP` / `CASEYEAR` / `SETTLE_SRC`）+ API 範例 columnName 由大寫改小寫，對齊 PostgreSQL `ob_pool_data` snake_case；§10 測試覆蓋目標欄位字串同步；`pooldata_field_option.column_name` 由 m22 / m24 seed migration 小寫；`spec_tp` / `best_case` 之 [ASSUMPTION] 留項不變（仍待 OBMCODEDF dump 確認 OBMVALUE），僅 column_name 對應改小寫 |
