@@ -88,6 +88,69 @@ describe('F068: BaseCodesPage 渲染煙霧測試', () => {
     });
   });
 
+  // ============================================================================
+  // F075 v1.4.1：進階維護區塊（對齊 prototype 37-base-code.html L186-243）
+  // F075 / F076 入口卡片從 sidebar 移出，改放代碼維護頁的「進階維護」區塊
+  // ============================================================================
+  describe('F075 v1.4.1：進階維護區塊（M06 入口卡片）', () => {
+    it('「進階維護」區塊存在（advanced-maintenance-section testid）', async () => {
+      render(wrap(<BaseCodesPage />));
+      await waitFor(() => {
+        expect(mockedList).toHaveBeenCalled();
+      });
+      expect(screen.getByTestId('advanced-maintenance-section')).toBeInTheDocument();
+      expect(screen.getByText('進階維護')).toBeInTheDocument();
+    });
+
+    it('F075 卡片存在（card-pooldata-whitelist），標題為「篩選欄位管理」', async () => {
+      render(wrap(<BaseCodesPage />));
+      await waitFor(() => {
+        expect(mockedList).toHaveBeenCalled();
+      });
+      const card = screen.getByTestId('card-pooldata-whitelist');
+      expect(card).toBeInTheDocument();
+      expect(card.textContent).toContain('篩選欄位管理');
+    });
+
+    it('F076 卡片存在（card-categorical-field-values），標題為「類別型欄位可選值」', async () => {
+      render(wrap(<BaseCodesPage />));
+      await waitFor(() => {
+        expect(mockedList).toHaveBeenCalled();
+      });
+      const card = screen.getByTestId('card-categorical-field-values');
+      expect(card).toBeInTheDocument();
+      expect(card.textContent).toContain('類別型欄位可選值');
+    });
+
+    it('點擊 F075 卡片導向 /assignment/whitelist', async () => {
+      render(wrap(<BaseCodesPage />));
+      await waitFor(() => {
+        expect(mockedList).toHaveBeenCalled();
+      });
+      const card = screen.getByTestId('card-pooldata-whitelist');
+      // 期望卡片為 <a href="/assignment/whitelist"> 或 button onclick navigate
+      // 採彈性 assertion：anchor 走 href、button 走 data-href / 不便測時改檢 closest('a').getAttribute('href')
+      const anchor = card.closest('a') ?? card.querySelector('a') ?? card;
+      const href =
+        (anchor as HTMLElement).getAttribute('href') ??
+        (anchor as HTMLElement).getAttribute('data-href');
+      expect(href).toBe('/assignment/whitelist');
+    });
+
+    it('點擊 F076 卡片導向 /assignment/whitelist/options', async () => {
+      render(wrap(<BaseCodesPage />));
+      await waitFor(() => {
+        expect(mockedList).toHaveBeenCalled();
+      });
+      const card = screen.getByTestId('card-categorical-field-values');
+      const anchor = card.closest('a') ?? card.querySelector('a') ?? card;
+      const href =
+        (anchor as HTMLElement).getAttribute('href') ??
+        (anchor as HTMLElement).getAttribute('data-href');
+      expect(href).toBe('/assignment/whitelist/options');
+    });
+  });
+
   it('點擊「新增代碼」開啟 Modal', async () => {
     render(wrap(<BaseCodesPage />));
     await waitFor(() => {

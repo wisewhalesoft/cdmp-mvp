@@ -149,6 +149,36 @@ describe('TC-GUARD-M06-NAMING-001：F075 spec + prototype 關鍵字漂移防護'
       });
     }
   });
+
+  // F075 v1.4.1：sidebar 不應含「篩選欄位管理」或「白名單管理」獨立項
+  // 對齊 prototype 37-base-code.html L186-243 設計：F075/F076 為代碼維護頁進階維護區塊卡片入口
+  describe('C. sidebar 不應含 F075 獨立項（v1.4.1 prototype 對齊）', () => {
+    const SIDEBAR_PATH = 'apps/web/src/components/layout/app-sidebar.tsx';
+    let sidebarContent = '';
+
+    it('能讀取 sidebar 檔案', () => {
+      sidebarContent = readFile(SIDEBAR_PATH);
+      expect(sidebarContent.length).toBeGreaterThan(0);
+    });
+
+    // 注意：以下檢查的是「label 字串」出現次數，非識別符；
+    // 「白名單」三字若僅出現在註解亦視為禁用（避免日後誤改）。
+    const forbiddenInSidebar: string[] = [
+      '篩選欄位管理',
+      '白名單管理',
+    ];
+
+    for (const literal of forbiddenInSidebar) {
+      it(`sidebar 不應含禁用字串「${literal}」（v1.4.1 起該入口移至代碼維護頁進階維護區塊）`, () => {
+        const content = sidebarContent || readFile(SIDEBAR_PATH);
+        const count = content.split(literal).length - 1;
+        expect(
+          count,
+          `禁用字串「${literal}」在 sidebar 中出現 ${count} 次（應為 0；對齊 prototype 37-base-code.html L186-243）`,
+        ).toBe(0);
+      });
+    }
+  });
 });
 
 describe('TC-GUARD-M06-NAMING-002：source code 禁用識別符掃描', () => {
