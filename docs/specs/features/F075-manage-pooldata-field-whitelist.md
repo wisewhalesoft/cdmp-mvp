@@ -351,7 +351,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ## 7. UI/UX 需求
 
-- **頁面入口**：M06 代碼維護 > **篩選欄位管理**（新增分頁；UI 層命名，內部 API path `/api/v1/pooldata-fields` 與 DB 表名 `pooldata_field_whitelist` 保留不變）
+- **頁面入口**：M06 代碼維護頁面內「進階維護」區塊之「**篩選欄位管理**」卡片（不在 sidebar 獨立項；UI 層命名，內部 API path `/api/v1/pooldata-fields` 與 DB 表名 `pooldata_field_whitelist` 保留不變）
 - **UI 層命名規範（v1.4）**：sidebar / breadcrumb / 頁面 H1 / AppLayout title 一律使用「**篩選欄位管理**」；不可使用「白名單管理」「POOLDATA 篩選欄位白名單」「條件欄位管理」「可用欄位管理」等其他變體
 - **列表表格**：
   - 欄位：`column_name` / `display_name` / `field_type` / 狀態 / 建立時間 / 更新時間 / 操作
@@ -476,3 +476,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-102 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
 | v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失）：(1) BR-7 從「保留紀錄不刪除」強化為「service 層批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`（同 transaction）」；(2) AC-6 confirm 文字補「將自動停用 N 個可選值」+ 稽核 details 補 `deactivatedOptionCount`；(3) UI Modal 文字升級；(4) 與 F076 v1.3 BR-6/BR-7 + data-model.md `pooldata_field_option.deactivation_reason` ENUM 對齊 |
 | v1.4 | 2026-05-18 | **UI 命名標準化 + 新增流程改 dropdown + suggestedFieldType 推斷 + A-3 風險清除**：(1) UI 層命名「白名單管理」/「POOLDATA 篩選欄位白名單」→「**篩選欄位管理**」、「新增白名單欄位」/「新增 POOLDATA 欄位」→「**新增篩選欄位**」（內部 DB 表名 / API path / 類別名稱 100% 保留）；(2) 新增 §5.5 `GET /api/v1/pooldata-fields/available-columns` 端點（`DirectorGuard`，過濾含停用欄位，按 columnName 字母排序）；(3) 新增 AC-10 ~ AC-15（AC-16 不納入 — PO 決議不保留 fallback toggle）；(4) 新增 BR-11 / BR-12 / BR-13；(5) 新增 Modal 改為 dropdown 唯一路徑 + 「系統推斷 → 使用者選擇」hint 切換；(6) 成功 toast 文案以 `displayName` 為主；(7) A-3 升級為 [RESOLVED]（新增階段）；(8) **附帶清理**：修正既有 prototype L187 + FE footer L409 之 `WHITELIST_FIELD_DUPLICATE` 字串為 spec 權威之 `POOLDATA_FIELD_DUPLICATE`（spec §5.4 已是正確版本，本次同步前端字串） |
+| v1.4.1 | 2026-05-19 | **prototype 對齊補修**：(1) 從 sidebar 移除「篩選欄位管理」獨立項（v1.3 起就不該有，對齊 prototype 37-base-code.html L186-243 設計）；(2) `base-codes-page.tsx` 加入「進階維護」區塊兩張卡片入口（F075「篩選欄位管理」+ F076「類別型欄位可選值」），對應 prototype 37-base-code.html L186-243；(3) prototype 37-base-code.html L192/L204/L209 命名同步至 v1.4（`v1.1 → v1.4`、`POOLDATA 篩選欄位白名單 → 篩選欄位管理`、`field_whitelist → pooldata_field_whitelist`）；(4) regression guard `m06-naming-regression.spec.ts` 補 sidebar 不應出現「篩選欄位管理」/「白名單管理」斷言；(5) §7 頁面入口描述修正：由 sidebar 獨立分頁改為「代碼維護頁進階維護區塊卡片」 |

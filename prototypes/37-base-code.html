@@ -189,11 +189,11 @@
           <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
           <h2 class="text-sm font-semibold text-gray-800">進階維護</h2>
           <span class="text-[10px] text-gray-400 px-1.5 py-0.5 bg-blue-50 text-primary rounded border border-blue-200">E07 重構新增</span>
-          <span class="text-xs text-gray-500">— F075 / F076 v1.1：白名單驅動的新名單定義條件選單</span>
+          <span class="text-xs text-gray-500">— F075 / F076 v1.4：篩選欄位管理與類別型欄位可選值</span>
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-          <!-- 入口 1：F075 POOLDATA 篩選欄位白名單 -->
+          <!-- 入口 1：F075 篩選欄位管理 -->
           <a href="37a-pooldata-whitelist.html"
             class="group bg-white border border-border rounded-lg p-4 hover:border-primary hover:shadow-md transition flex items-start gap-3">
             <div class="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition">
@@ -201,12 +201,12 @@
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
-                <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">POOLDATA 篩選欄位白名單</h3>
+                <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">篩選欄位管理</h3>
                 <span class="text-[10px] text-gray-400 font-mono">F075</span>
               </div>
               <p class="text-xs text-gray-500 leading-relaxed">管理可作為名單定義條件的 <code>OBPOOLDATA</code> 欄位，並為每個欄位標記 <code>field_type</code>（numeric / categorical / date）驅動 US-106 新表單條件元件型態。</p>
               <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
-                <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>field_whitelist</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>pooldata_field_whitelist</span>
                 <span>·</span>
                 <span class="inline-flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>部長 + Admin</span>
                 <span>·</span>
@@ -225,9 +225,9 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">類別型欄位可選值</h3>
-                <span class="text-[10px] text-gray-400 font-mono">F076 v1.1</span>
+                <span class="text-[10px] text-gray-400 font-mono">F076</span>
               </div>
-              <p class="text-xs text-gray-500 leading-relaxed">管理白名單中 <code>field_type = 'categorical'</code> 欄位的選項清單（<code>option_value</code> / <code>option_label</code>），供新名單定義表單之多選元件動態載入；含 PO 決議 F076-C 軟停用機制。</p>
+              <p class="text-xs text-gray-500 leading-relaxed">管理篩選欄位清單中 <code>field_type = 'categorical'</code> 欄位的選項清單（<code>option_value</code> / <code>option_label</code>），供新名單定義表單之多選元件動態載入；含 PO 決議 F076-C 軟停用機制。</p>
               <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
                 <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>categorical_field_value</span>
                 <span>·</span>
