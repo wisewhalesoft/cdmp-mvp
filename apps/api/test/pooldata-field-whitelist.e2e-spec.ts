@@ -3,18 +3,19 @@
  *
  * SQLite in-memory + JWT + Supertest，8 cases：
  *
- * TS-F075-E2E-001 部長 → 200 OK + availableColumns key
- * TS-F075-E2E-002 admin → 200
+ * TS-F075-E2E-001 部長 → 503 OBPOOLDATA_NOT_READY（v1.4.2 D1 修補：SQLite 無 information_schema 視為 not_ready）
+ * TS-F075-E2E-002 admin → 503 OBPOOLDATA_NOT_READY（同上）
  * TS-F075-E2E-003 處長（section_chief）→ 403 AUTH_FORBIDDEN
  * TS-F075-E2E-004 課長（section_chief 為 M06 對應「課長」業務角色，本 spec 沿用 section_chief 角色語意）→ 403
  * TS-F075-E2E-005 業務人員（business_role=null / 非主管）→ 403
  * TS-F075-E2E-006 未登入（無 Token）→ 401 AUTH_TOKEN_MISSING
  * TS-F075-E2E-007 Feature Flag 關閉 → 503 FEATURE_NOT_ENABLED
- * TS-F075-E2E-008 路由排序回歸：available-columns 不被 :columnName 動態路由捕捉（200 非 404）
+ * TS-F075-E2E-008 路由排序回歸：available-columns 不被 :columnName 動態路由捕捉（503 OBPOOLDATA_NOT_READY 非 404 POOLDATA_FIELD_NOT_FOUND）
  *
- * 環境註記（B-i 策略 / user Q2 決議）：
- *   SQLite 環境無 information_schema，service 端 try/catch 將 DB error 轉為合法空陣列；
- *   故所有正面 case 皆預期 availableColumns = []（資料正確性由 unit spec 驗證）。
+ * 環境註記（v1.4.2 D1 設計修補）：
+ *   SQLite 環境無 information_schema，service 端 Step 1 查表存在性會 catch → throw
+ *   ServiceUnavailableException OBPOOLDATA_NOT_READY；正面 case（director/admin 通過權限）皆預期
+ *   503 OBPOOLDATA_NOT_READY。資料正確性由 unit spec 驗證（已 mock 兩階段 query）。
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -219,21 +220,20 @@ describe('F075 v1.4: GET /api/v1/pooldata-fields/available-columns E2E', () => {
 
   // ===== A. 權限矩陣 =====
 
-  it("TS-F075-E2E-001：部長（business_role='director'）→ 200 OK + availableColumns key", async () => {
+  it("TS-F075-E2E-001：部長（business_role='director'）→ 503 OBPOOLDATA_NOT_READY（v1.4.2 D1：SQLite 無 information_schema）", async () => {
     const res = await request(app.getHttpServer())
       .get(ENDPOINT)
       .set('Authorization', `Bearer ${directorToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('availableColumns');
-    expect(Array.isArray(res.body.availableColumns)).toBe(true);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('OBPOOLDATA_NOT_READY');
   });
 
-  it('TS-F075-E2E-002：Admin → 200 OK + availableColumns key', async () => {
+  it('TS-F075-E2E-002：Admin → 503 OBPOOLDATA_NOT_READY（v1.4.2 D1）', async () => {
     const res = await request(app.getHttpServer())
       .get(ENDPOINT)
       .set('Authorization', `Bearer ${adminToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('availableColumns');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('OBPOOLDATA_NOT_READY');
   });
 
   // ===== 既有 Guard 錯誤碼說明 =====
@@ -291,15 +291,16 @@ describe('F075 v1.4: GET /api/v1/pooldata-fields/available-columns E2E', () => {
 
   // ===== C. 路由排序回歸測試 =====
 
-  it("TS-F075-E2E-008：路由排序回歸 — available-columns 不被 :columnName 動態路由捕捉（200，非 404 POOLDATA_FIELD_NOT_FOUND）", async () => {
-    // 確保 DB 中不存在 column_name='available-columns' 紀錄（即使被誤路由也會 404 而非 200）
+  it("TS-F075-E2E-008：路由排序回歸 — available-columns 不被 :columnName 動態路由捕捉（503 OBPOOLDATA_NOT_READY，非 404 POOLDATA_FIELD_NOT_FOUND）", async () => {
+    // v1.4.2 D1：SQLite 無 information_schema → 預期 503 OBPOOLDATA_NOT_READY
+    // 失敗判定：若 controller 未將 @Get('available-columns') 宣告於 @Get(':columnName/...') 之前，
+    // request 會被誤導至 active-options-count 之 :columnName 路由 → 404 POOLDATA_FIELD_NOT_FOUND
     const res = await request(app.getHttpServer())
       .get(ENDPOINT)
       .set('Authorization', `Bearer ${directorToken}`);
-    // 失敗判定：若 controller 未將 @Get('available-columns') 宣告於 @Get(':columnName/...') 之前，
-    // request 會被誤導至 active-options-count 之 :columnName 路由 → 404 POOLDATA_FIELD_NOT_FOUND
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('availableColumns');
-    expect(res.body.error).toBeUndefined();
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('OBPOOLDATA_NOT_READY');
+    // 確保不是 404（即路由排序正確）
+    expect(res.body.error).not.toBe('POOLDATA_FIELD_NOT_FOUND');
   });
 });
