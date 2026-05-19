@@ -138,6 +138,54 @@ export class MSSQLExecutor extends BaseExecutor {
     });
   }
 
+  /**
+   * F075 v1.4.7 / AC-16：取得 SQL Server 表內各欄位的 MS_Description（extended property）。
+   *
+   * 用於 `pooldata-fields/available-columns` response 補上 `columnDescription` 欄位。
+   *
+   * 注意：
+   *   - schema 為 null/undefined 時 fallback 'dbo'（沿用 `getSourceTableMetadata` 同款行為）
+   *   - 查詢失敗由 caller（service 層）以 try/catch 降級為「全部欄位 omit columnDescription」
+   *   - 回傳 Map<columnName, ms_description>；若該表無任何 extended_properties 則回空 Map
+   */
+  async getColumnDescriptions(params: {
+    datasourceId: string;
+    sourceSchema?: string | null;
+    sourceTable: string;
+  }): Promise<Map<string, string>> {
+    return this.withConnection(params.datasourceId, async (pool) => {
+      const schema = params.sourceSchema || 'dbo';
+      const schemaTable = `${schema}.${params.sourceTable}`;
+
+      const result = await pool
+        .request()
+        .input('schema_table', schemaTable)
+        .query(
+          `SELECT
+             c.name            AS column_name,
+             ep.value          AS ms_description
+           FROM sys.columns c
+           JOIN sys.extended_properties ep
+             ON  ep.major_id   = c.object_id
+             AND ep.minor_id   = c.column_id
+             AND ep.class      = 1
+             AND ep.name       = 'MS_Description'
+           WHERE c.object_id = OBJECT_ID(@schema_table)`,
+        );
+
+      const map = new Map<string, string>();
+      for (const row of result.recordset as Array<{
+        column_name: string;
+        ms_description: string | null;
+      }>) {
+        if (row.column_name && row.ms_description) {
+          map.set(row.column_name, String(row.ms_description));
+        }
+      }
+      return map;
+    });
+  }
+
   async readBatch(params: {
     datasourceId: string;
     sourceTable: string;

@@ -16,6 +16,7 @@ import { User } from '@/database/entities/user.entity';
 import { EXTRACTION_EXECUTOR } from './extraction-executor.provider';
 import { ExecutorFactory } from './executors/executor-factory';
 import { DelegatingExecutor } from './executors/delegating-executor';
+import { MSSQLExecutor } from './executors/mssql-executor';
 
 @Module({
   imports: [
@@ -40,7 +41,19 @@ import { DelegatingExecutor } from './executors/delegating-executor';
         new DelegatingExecutor(dsRepo, factory),
       inject: [getRepositoryToken(Datasource), ExecutorFactory],
     },
+    // F075 v1.4.7：直接提供 MSSQLExecutor instance 供 PooldataFieldModule 取 MS_Description
+    {
+      provide: MSSQLExecutor,
+      useFactory: (dsRepo: Repository<Datasource>) => new MSSQLExecutor(dsRepo),
+      inject: [getRepositoryToken(Datasource)],
+    },
   ],
-  exports: [ExtractionTaskService, ExtractionExecutionService, RawDataService, EXTRACTION_EXECUTOR],
+  exports: [
+    ExtractionTaskService,
+    ExtractionExecutionService,
+    RawDataService,
+    EXTRACTION_EXECUTOR,
+    MSSQLExecutor,
+  ],
 })
 export class ExtractionTaskModule {}

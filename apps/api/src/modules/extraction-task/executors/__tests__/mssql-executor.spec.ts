@@ -247,4 +247,69 @@ describe('MSSQLExecutor', () => {
       'SELECT COUNT(*) AS cnt FROM [my]]schema].[my]]table]',
     );
   });
+
+  // --- getColumnDescriptions (F075 v1.4.7) ---
+  describe('getColumnDescriptions (F075 v1.4.7 / AC-16)', () => {
+    it('TS-F075-BE-V147-BE-06：SQL 包含 sys.extended_properties / MS_Description / c.column_id / ep.minor_id；recordset → Map', async () => {
+      mockRequestQuery.mockResolvedValue({
+        recordset: [
+          { column_name: 'prod_kind', ms_description: '產品類別' },
+          { column_name: 'risk_level', ms_description: '風險等級' },
+        ],
+      });
+
+      const result = await executor.getColumnDescriptions({
+        datasourceId: 'ds-ms',
+        sourceSchema: 'dbo',
+        sourceTable: 'OBPOOLDATA',
+      });
+
+      // SQL 包含關鍵字
+      const sql = mockRequestQuery.mock.calls[0][0] as string;
+      expect(sql).toContain('sys.extended_properties');
+      expect(sql).toContain('MS_Description');
+      expect(sql).toContain('c.column_id');
+      expect(sql).toContain('ep.minor_id');
+
+      // recordset → Map<string, string>
+      expect(result).toBeInstanceOf(Map);
+      expect(result.size).toBe(2);
+      expect(result.get('prod_kind')).toBe('產品類別');
+      expect(result.get('risk_level')).toBe('風險等級');
+    });
+
+    it("TS-F075-BE-V147-BE-07：sourceSchema=null → fallback 'dbo'（@schema_table 用 'dbo.{table}'）", async () => {
+      mockRequestQuery.mockResolvedValue({ recordset: [] });
+
+      await executor.getColumnDescriptions({
+        datasourceId: 'ds-ms',
+        sourceSchema: null,
+        sourceTable: 'OBPOOLDATA',
+      });
+
+      // 期待 input('schema_table', 'dbo.OBPOOLDATA') 或類似格式
+      const inputCalls = mockRequestInput.mock.calls;
+      const schemaTableCall = inputCalls.find(
+        (c: any[]) => c[0] === 'schema_table',
+      );
+      expect(schemaTableCall).toBeDefined();
+      expect(schemaTableCall?.[1]).toBe('dbo.OBPOOLDATA');
+    });
+
+    it("TS-F075-BE-V147-BE-07b：sourceSchema 提供時保留原值", async () => {
+      mockRequestQuery.mockResolvedValue({ recordset: [] });
+
+      await executor.getColumnDescriptions({
+        datasourceId: 'ds-ms',
+        sourceSchema: 'sales',
+        sourceTable: 'OBPOOLDATA',
+      });
+
+      const inputCalls = mockRequestInput.mock.calls;
+      const schemaTableCall = inputCalls.find(
+        (c: any[]) => c[0] === 'schema_table',
+      );
+      expect(schemaTableCall?.[1]).toBe('sales.OBPOOLDATA');
+    });
+  });
 });
