@@ -268,3 +268,118 @@ describe('Stage1QueryComposer 波 2 — Path A numeric + date', () => {
     expect(result.where).toContain('"eff_date"');
   });
 });
+
+// ===========================================================================
+// 波 3：Path B fallback（5 個 entity column）
+// ===========================================================================
+
+describe('Stage1QueryComposer 波 3 — Path B fallback', () => {
+  it('UCQ-012：condition_payload IS NULL + prod_kind 有值 → IN fragment', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '01$$02',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).toMatch(/IN\s*\(:\.\.\.[a-zA-Z0-9_]+\)/);
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContainEqual(['01', '02']);
+  });
+
+  it('UCQ-013：Path B caseyear → 對應 ob_pool_data.year_cnt 整數 IN（§18.5 路徑 B 表）', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '',
+      caseyear: '1$$3',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    // caseyear → year_cnt 比對
+    expect(result.where).toContain('"year_cnt"');
+    expect(result.where).not.toContain('"caseyear"');
+    // 整數比對
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContainEqual([1, 3]);
+  });
+
+  it('UCQ-014：Path B case_status → 對應 ob_pool_data.list_type（§18.5 路徑 B 表）', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '',
+      case_status: '01$$02',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    // case_status → list_type 比對（注意 ob_pool_data 無 case_status 欄位）
+    expect(result.where).toContain('"list_type"');
+    expect(result.where).not.toContain('"case_status"');
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContainEqual(['01', '02']);
+  });
+
+  it('UCQ-015：Path B spec_tp / settle_src → 直接 IN', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '',
+      spec_tp: '01$$02',
+      settle_src: '03',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"spec_tp"');
+    expect(result.where).toContain('"settle_src"');
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContainEqual(['01', '02']);
+    expect(paramVals).toContainEqual(['03']);
+  });
+
+  it('UCQ-016：Path B 全空（5 個 entity column 皆空 / null）→ skipReason=EMPTY_CONDITIONS', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '',
+      caseyear: null,
+      spec_tp: null,
+      case_status: '',
+      settle_src: null,
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.where).toBeNull();
+  });
+
+  it('UCQ-017：Path B prod_kind 空字串 → skip 該欄位（§18.5 路徑 B 表「空字串 → skip」）', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '',
+      spec_tp: '01',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).not.toContain('"prod_kind"');
+    expect(result.where).toContain('"spec_tp"');
+  });
+
+  it('UCQ-018：Path B 多欄位混合（prod_kind + caseyear + settle_src）→ 三個 fragment AND 連接', () => {
+    const list = makeList({
+      condition_payload: null,
+      prod_kind: '01',
+      caseyear: '5',
+      settle_src: '02',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    const andCount = (result.where ?? '').match(/AND/g)?.length ?? 0;
+    expect(andCount).toBeGreaterThanOrEqual(2);
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).toContain('"year_cnt"'); // caseyear 映射
+    expect(result.where).toContain('"settle_src"');
+  });
+});

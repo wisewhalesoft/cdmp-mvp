@@ -189,16 +189,74 @@ function buildPathA(
 }
 
 // ---------------------------------------------------------------------------
-// Path B 實作（波 3 補完）— 此波先回 EMPTY_CONDITIONS 占位
+// Path B 實作（§18.5 路徑 B + §18.6 衍生規則表）
 // ---------------------------------------------------------------------------
 
-function buildPathB(_list: ObListDefinition): Stage1QueryFragment {
-  // 波 3 將補完；此處先回 EMPTY_CONDITIONS 讓 UCQ-003 通過
+/**
+ * 路徑 B fallback（舊名單，condition_payload IS NULL）：
+ *
+ * 讀 5 個 entity column，依 §18.5 路徑 B mapping 表轉為 ob_pool_data 欄位 IN fragment：
+ *   - prod_kind   → ob_pool_data.prod_kind
+ *   - caseyear    → ob_pool_data.year_cnt（整數）
+ *   - spec_tp     → ob_pool_data.spec_tp
+ *   - case_status → ob_pool_data.list_type（注意：ob_pool_data 無 case_status 欄位）
+ *   - settle_src  → ob_pool_data.settle_src
+ *
+ * 空值處置（§18.5 路徑 B 表）：空字串 / null → skip 該欄位（不加 fragment）。
+ *
+ * §18.5.1 注意：path B caseyear 含 '99' 時，wildcard 規則由波 4 補；本波先實作標準路徑。
+ */
+function buildPathB(list: ObListDefinition): Stage1QueryFragment {
+  const fragments: string[] = [];
+  const params: Record<string, unknown> = {};
+  const warnings: Stage1ComposerWarning[] = [];
+  let paramIdx = 0;
+
+  for (const mapping of PATH_B_MAPPING) {
+    const raw = list[mapping.entityCol];
+    if (raw === null || raw === undefined || raw === '') continue;
+
+    const values = String(raw)
+      .split('$$')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+
+    if (values.length === 0) continue;
+
+    if (mapping.numericInt) {
+      // caseyear → year_cnt 整數比對；波 4 將補 wildcard 短路
+      const intValues = values
+        .map((v) => parseInt(v, 10))
+        .filter((n) => Number.isFinite(n));
+      if (intValues.length === 0) continue;
+
+      const paramName = `pbNum${paramIdx}`;
+      fragments.push(`"${mapping.poolDataCol}" IN (:...${paramName})`);
+      params[paramName] = intValues;
+      paramIdx += 1;
+      continue;
+    }
+
+    const paramName = `pbCat${paramIdx}`;
+    fragments.push(`"${mapping.poolDataCol}" IN (:...${paramName})`);
+    params[paramName] = values;
+    paramIdx += 1;
+  }
+
+  if (fragments.length === 0) {
+    return {
+      where: null,
+      params: {},
+      skipReason: 'EMPTY_CONDITIONS',
+      warnings,
+    };
+  }
+
   return {
-    where: null,
-    params: {},
-    skipReason: 'EMPTY_CONDITIONS',
-    warnings: [],
+    where: fragments.join(' AND '),
+    params,
+    skipReason: null,
+    warnings,
   };
 }
 
