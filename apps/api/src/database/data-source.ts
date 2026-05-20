@@ -37,7 +37,7 @@ function loadDotEnv(envPath: string): void {
 loadDotEnv(path.resolve(__dirname, '../../.env.cli'));
 loadDotEnv(path.resolve(__dirname, '../../.env'));
 
-export const AppDataSource = new DataSource({
+const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432', 10),
