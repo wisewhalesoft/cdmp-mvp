@@ -117,4 +117,7 @@ export class ConditionItemDto {
   @IsDateString({}, { message: 'date 條件 dateEnd 必填且為 ISO8601 日期字串' })
   @DateEndGteStartConstraint('dateStart', { message: 'date 條件 dateEnd 必須 >= dateStart' })
   dateEnd?: string;
+
+  // 兼容 entity ObListDefinitionConditionItem interface 之 index signature
+  [key: string]: unknown;
 }

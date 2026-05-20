@@ -32,4 +32,7 @@ export class ConditionPayloadDto {
   // m282 backfill metadata；不阻擋 DTO 驗證
   @IsOptional()
   _backfill_empty?: boolean;
+
+  // 兼容 entity ObListDefinitionConditionPayload interface 之 index signature
+  [key: string]: unknown;
 }

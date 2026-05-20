@@ -49,7 +49,11 @@ export class BackfillListDefinitionConditionPayload1711360000282
     let emptyCount = 0;
 
     for (const row of rows) {
-      const conditions = [];
+      const conditions: Array<{
+        columnName: string;
+        fieldType: 'categorical';
+        values: string[];
+      }> = [];
       const buildCategorical = (
         colName: string,
         raw: string | null | undefined,
