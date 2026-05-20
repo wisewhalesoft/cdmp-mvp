@@ -7,6 +7,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -123,10 +124,45 @@ export class AssignmentRunPipelineService {
         else edgeLists.push(l);
       }
 
-      // Stage 1：案件挑選（v1.0 簡化 — 採全表案件）
+      // Stage 1：案件挑選（Phase 5b / AD-E07-18 §18.5 — 動態 SQL）
+      //   - 對每個 validList 個別呼叫 buildStage1WhereConditions
+      //   - skipReason='EMPTY_CONDITIONS' → 不撈 pool + Logger.warn（§18.5.2）
+      //   - 否則 createQueryBuilder().where(fragment, params).getMany()
       const stage1Cases: Array<{ list: ObListDefinition; pool: ObPoolData[] }> = [];
+      const stage1SkippedLists: Array<{
+        listNo: string;
+        listName: string;
+        reason: 'EMPTY_CONDITIONS';
+      }> = [];
+
       for (const list of validLists) {
-        const pool = await this.poolRepo.find();
+        const fragment = buildStage1WhereConditions(list);
+
+        // 非阻擋型 warning 紀錄
+        for (const w of fragment.warnings) {
+          this.logger.warn(
+            `[Stage1] composer warning list_no=${list.list_no} code=${w.code} column=${w.columnName ?? '-'} reason=${w.reason}`,
+          );
+        }
+
+        // §18.5.2：空 conditions / wildcard 後零有效 fragment → skip
+        if (fragment.skipReason === 'EMPTY_CONDITIONS') {
+          this.logger.warn(
+            `[Stage1] Skipping list ${list.list_no} (${list.list_nm}): empty conditions (backfilled empty or invalid state)`,
+          );
+          stage1SkippedLists.push({
+            listNo: list.list_no,
+            listName: list.list_nm,
+            reason: 'EMPTY_CONDITIONS',
+          });
+          continue;
+        }
+
+        // fragment.where 已保證非 null（skipReason=null 時必有 where）
+        const pool = await this.poolRepo
+          .createQueryBuilder('ob_pool_data')
+          .where(fragment.where!, fragment.params)
+          .getMany();
         stage1Cases.push({ list, pool });
       }
 
