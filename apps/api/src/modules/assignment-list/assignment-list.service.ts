@@ -119,6 +119,84 @@ export class AssignmentListService {
     }
   }
 
+  /**
+   * F050 v2.1 / AD-E07-18 §18.6：condition_payload → 5 個 backward-compat entity column 衍生
+   *
+   * NOT NULL 邊界（§18.6 表）：
+   *   - prod_kind / case_status 未衍生時 → '' （空字串）
+   *   - caseyear / spec_tp / settle_src 未衍生時 → null
+   *
+   * 衍生規則：
+   *   - categorical → values.join('$$')
+   *   - numeric → `${min}$$${max}`（5 backward-compat 範圍內理論上不會出現，但容錯）
+   *   - date → `${dateStart}$$${dateEnd}`（同上）
+   *
+   * 其他 columnName（如 month_cnt / birth_date）忽略（entity 無對應欄位）。
+   * 同 columnName 重複出現（理論上 validateConditionPayload 已攔截）→ last-wins。
+   */
+  private deriveBackwardCompatColumns(
+    payload: ObListDefinitionConditionPayload | null | undefined,
+  ): {
+    prod_kind: string;
+    caseyear: string | null;
+    spec_tp: string | null;
+    case_status: string;
+    settle_src: string | null;
+  } {
+    const result = {
+      prod_kind: '',
+      caseyear: null as string | null,
+      spec_tp: null as string | null,
+      case_status: '',
+      settle_src: null as string | null,
+    };
+
+    if (!payload || !Array.isArray(payload.conditions)) return result;
+    const BACKWARD_COMPAT_FIELDS = new Set([
+      'prod_kind',
+      'caseyear',
+      'spec_tp',
+      'case_status',
+      'settle_src',
+    ]);
+
+    for (const cond of payload.conditions as ObListDefinitionConditionItem[]) {
+      if (!BACKWARD_COMPAT_FIELDS.has(cond.columnName)) continue;
+
+      let derived: string | null = null;
+      if (cond.fieldType === 'categorical' && Array.isArray(cond.values)) {
+        derived = cond.values.join('$$');
+      } else if (cond.fieldType === 'numeric' && cond.min !== undefined && cond.max !== undefined) {
+        derived = `${cond.min}$$${cond.max}`;
+      } else if (cond.fieldType === 'date' && cond.dateStart && cond.dateEnd) {
+        derived = `${cond.dateStart}$$${cond.dateEnd}`;
+      }
+
+      if (derived === null) continue;
+      // last-wins（防禦）
+      (result as Record<string, string | null>)[cond.columnName] = derived;
+    }
+    return result;
+  }
+
+  /**
+   * F050 v2.1 / AD-E07-18 §18.8：抽取 prod_kind 條件之 values 集合（唯一性交集比對用）
+   *
+   * - 僅取 fieldType=categorical 之 prod_kind condition
+   * - 過濾空字串 values
+   * - 未設定 / 非 categorical → 回空陣列（呼叫端依此跳過唯一性檢查）
+   */
+  private extractProdKindValues(
+    payload: ObListDefinitionConditionPayload | null | undefined,
+  ): string[] {
+    if (!payload || !Array.isArray(payload.conditions)) return [];
+    const cond = payload.conditions.find(
+      (c) => c.columnName === 'prod_kind' && c.fieldType === 'categorical',
+    );
+    if (!cond || !Array.isArray(cond.values)) return [];
+    return cond.values.filter((v): v is string => typeof v === 'string' && v.length > 0);
+  }
+
   // -------------------------------------------------------------------------
   // F077 / F048 — List
   // -------------------------------------------------------------------------
