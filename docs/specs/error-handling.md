@@ -1,10 +1,12 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.14"
-date: 2026-05-16
+version: "1.15"
+date: 2026-05-20
 status: Draft
 ---
+
+> **v1.15 修訂（2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構）**：(1) `#assignment-list-errors` 新增 4 個錯誤碼支援 F050 v2.1 / F051 v2.1：`CONDITION_COLUMN_NOT_IN_WHITELIST`（422，columnName 不在 F075 v1.5 白名單；拍板 1）、`RESERVED_FIELD_IN_CONDITIONS`（400，list_period_* 入 conditions 防呆；拍板 3）、`LEGACY_LIST_CONDITION_READONLY`（422，舊名單 condition_payload 寫入防呆；拍板 Q3 / 拍板 2）、`LEGACY_LIST_NOT_COPYABLE`（422，舊名單作為複製來源防呆；拍板 Q4）。(2) `LIST_FILTER_FIELD_NOT_IN_WHITELIST`（v2.0 引入）標 **DEPRECATED v2.1 + 並存**：新實作一律改用 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 Q1）；既有 service code rename 由 Phase 3a system-architect 安排。(3) `CASE_STATUS_REQUIRED`（v2.0 引入）標 **DEPRECATED v2.1**：v2.1 之 case_status 必填語意由 `CONDITION_COLUMN_NOT_IN_WHITELIST`（白名單驗證） + condition_payload 必填統一覆蓋（A1 / A5）。(4) `#assignment-code-errors` 表中 `CODE_IN_USE` / `CODE_TYPE_INVALID` / `CODE_NOT_FOUND` 相關功能欄補註「F068 DEPRECATED v1.3，本錯誤碼是否保留待 Phase 3a 評估（GAP-LIST §I）」。(5) `#assignment-run-warnings` 表中 `WHITELIST_OPTION_INACTIVE` 相關功能欄版號更新 F050/F051 v2.0 → v2.1。(6) 行為矩陣表補對應 4 個新錯誤碼之列。
 
 > **v1.14 修訂（2026-05-16 / E07 合併重構 AD-E07 v3.0）**：(1) ACCOUNT 領域新增 `ACCOUNT_BUSINESS_ROLE_INVALID`（422，PATCH `/business-role` 端點傳入非允許值）取代 v1.13 之 `ACCOUNT_E07_ROLE_INVALID`；(2) ASSIGNMENT 領域新增 `E07_ROLE_NOT_ASSIGNED`（403，明示需聯絡 admin 補設）取代 `SalesManagerGuard` 攔截一般使用者時拋出之模糊 `AUTH_FORBIDDEN`；(3) `ACCOUNT_E07_ROLE_INVALID` / `ACCOUNT_E07_ROLE_FORBIDDEN`（v1.13 新增）標 **DEPRECATED**；(4) `E07_FORBIDDEN_DIRECTOR_ONLY`（v1.0 新增）標 **DEPRECATED**（v2.0 後處長存取部長專屬功能改回模糊 `AUTH_FORBIDDEN`，避免揭露功能範圍）；(5) 對應 [F006a](features/F006a-update-business-role.md)、[F002 v2.0](features/F002-user-login.md) §4.6、[F073 v2.0](features/F073-define-director-role.md) / [F074 v2.0](features/F074-define-section-chief-role.md) spec 規格。
 
@@ -238,14 +240,18 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 |--------|------------|------|------|----------|
 | LIST_NO_LIMIT_EXCEEDED | 422 | 本月（{ym}）名單定義已達 999 筆上限，無法新增 | 同月 `ob_list_definition` 紀錄超過 999 筆（OB{YYYYMM}{NNN} 格式限制，Phase 2 擴位） | F050 |
 | LIST_NO_DUPLICATE | 422 | 相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {conflictListNo}） | `prod_kind + card_type` 在當月 active 名單中已存在 | F050, F051 |
-| CASE_STATUS_REQUIRED | 422 | 案件結清期別為必填，請至少選取一項 | 新增或編輯名單定義時 `case_status` 為 NULL / 空字串 / 未提供（前端阻擋後的後端保護） | F050, F051 |
+| ~~CASE_STATUS_REQUIRED~~ | ~~422~~ | ~~案件結清期別為必填，請至少選取一項~~ | **DEPRECATED v2.1（2026-05-20 / F050 v2.1 重構）**：v2.1 之 case_status 必填語意由 `CONDITION_COLUMN_NOT_IN_WHITELIST`（白名單驗證）+ condition_payload 必填統一覆蓋（A1 / A5）；v2.0 service code 引用本錯誤碼之 rename 由 Phase 3a system-architect 安排，新實作禁止引用 | ~~F050, F051~~（DEPRECATED） |
+| CONDITION_COLUMN_NOT_IN_WHITELIST | 422 | 篩選條件欄位 `{columnName}` 不在 POOLDATA 篩選欄位白名單或已停用 | **v2.1（2026-05-20 / F050 v2.1 重構，拍板 1）**：F050 v2.1 / F051 v2.1 寫入名單時，`condition_payload.conditions[].columnName` 未存在於 F075 v1.5 `pooldata_field_whitelist` 或對應欄位 `is_active = false`；service 層校驗（即使前端 dropdown 已過濾，後端仍驗，defense-in-depth）；details 含不合法之 `columnName`。**對應 GAP-LIST §A3 解除**。**取代** v2.0 之 `LIST_FILTER_FIELD_NOT_IN_WHITELIST`（已標 DEPRECATED） | F050 v2.1, F051 v2.1 |
+| RESERVED_FIELD_IN_CONDITIONS | 400 | 以下欄位為一級保留欄位，不可納入篩選條件：`{reservedFields}` | **v2.1（2026-05-20 / F050 v2.1 重構，拍板 3 / J8）**：F050 v2.1 / F051 v2.1 寫入名單時，`condition_payload.conditions[].columnName` 含 `list_period_start` / `list_period_end` / `list_interval`（保留為一級欄位）；後端 defense-in-depth 校驗（前端 dropdown 不列出此三個欄位）；details 含 `reservedFields: string[]` | F050 v2.1, F051 v2.1 |
+| LEGACY_LIST_CONDITION_READONLY | 422 | 此名單使用舊格式儲存（condition_payload IS NULL），篩選條件須由系統 backfill migration 後方可編輯 | **v2.1（2026-05-20 / F050 v2.1 重構，拍板 Q3 / 拍板 2 / US-123 AC-2）**：F051 v2.1 對 `condition_payload IS NULL` 之舊遷移名單寫入 `conditionPayload` 時觸發；defense-in-depth（前端編輯頁該區塊已 read-only 呈現）；E2 backfill 由 Phase 3a system-architect 一次性執行，**無 per-user confirm 轉換流程** | F051 v2.1 |
+| LEGACY_LIST_NOT_COPYABLE | 422 | 來源名單使用舊格式儲存，不可作為複製來源；請先等待系統完成資料轉換 | **v2.1（2026-05-20 / F050 v2.1 重構，拍板 Q4 / US-123 衍生）**：F050 v2.1 「從上月複製」流程，來源名單 `condition_payload IS NULL` 時觸發；defense-in-depth（前端來源 dropdown 已過濾 condition_payload 非 NULL 之名單）；details 含 `copyFromListNo` | F050 v2.1 |
 | ASSIGNMENT_LIST_NOT_FOUND | 404 | 找不到指定的名單定義 | `list_no` 不存在於 `ob_list_definition` | F049, F051, F052, F060 |
 | ASSIGNMENT_LIST_INACTIVE | 422 | 已停用名單不可編輯 | 嘗試編輯 `status = 'inactive'` 的名單 | F051 |
 | ASSIGNMENT_LIST_ALREADY_INACTIVE | 422 | 名單已處於停用狀態，無需重複操作 | 嘗試停用已 inactive 的名單 | F052 |
 | WORK_YM_OUT_OF_RANGE | 422 | 作業月份 {ym} 超出可選範圍（{rangeMin} ~ {rangeMax}） | request `ym` query 或 body `project_workym` 超出 `current_work_ym ± 12 個月`；同樣適用於 GET 列表 / current-work-ym 與所有 M01 寫入端點。範圍規則見 [data-model.md#current-work-ym-rule](data-model.md#current-work-ym-rule)（v1.0 / 2026-05-15 / F077 v1.0 引入） | F048, F050, F051, F052, F060, F061, F077, 後續 M03a~d 寫入 spec |
 | WORK_YM_INVALID_FORMAT | 422 | 作業月份格式錯誤，需為 6 位 YYYYMM | request 之 `ym` 非 6 位數字格式；前端阻擋後的後端保護（v1.0 / 2026-05-15 / F077 v1.0 引入） | F048, F077, 所有引用 `ym` 之 M01 / M03 / M04 端點 |
 | LIST_HISTORICAL_READONLY | 403 | 歷史月份資料為唯讀，不可修改 | 任一 M01 / M03 / M04 寫入端點之 `request.project_workym < current_work_ym`；GET 端點不受影響。Guard 於各下游 controller 寫入路徑統一攔截。規則來源見 [F077 §6 BR-3](features/F077-month-switch-and-stage-overview.md) 與 [data-model.md#current-work-ym-rule](data-model.md#current-work-ym-rule)（v1.0 / 2026-05-15 / F077 v1.0 引入） | F050, F051, F052, F060, F061, F077, 後續 M03a~d 寫入 spec |
-| LIST_FILTER_FIELD_NOT_IN_WHITELIST | 422 | 篩選條件欄位 `{columnName}` 不在 POOLDATA 白名單或已停用 | F050 v2.0 / F051 v2.0 寫入名單時，`condition_payload.conditions[].columnName` 未存在於 F075 白名單或 `is_active = false`；service 層校驗（v2.0 / 2026-05-15 / E07 重構批次 3 引入）| F050 v2.0, F051 v2.0 |
+| LIST_FILTER_FIELD_NOT_IN_WHITELIST | 422 | 篩選條件欄位 `{columnName}` 不在 POOLDATA 白名單或已停用 | **DEPRECATED v2.1（2026-05-20 / F050 v2.1 重構，拍板 Q1）**：請改用 `CONDITION_COLUMN_NOT_IN_WHITELIST`（語意完全相同；拍板 1 命名）；本錯誤碼 v2.1 起新實作不再拋出，僅保留供既有 service code 過渡，由 Phase 3a system-architect 安排 rename。原語意：F050 v2.0 / F051 v2.0 寫入名單時，`condition_payload.conditions[].columnName` 未存在於 F075 白名單或 `is_active = false`；service 層校驗（v2.0 / 2026-05-15 / E07 重構批次 3 引入）| ~~F050 v2.0, F051 v2.0~~（DEPRECATED；新版見 `CONDITION_COLUMN_NOT_IN_WHITELIST`）|
 
 #### 名單階段流轉 / 推進與 Rollback（v2.0 / 2026-05-15 / E07 重構批次 3；v2.1 / 2026-05-15 / 批次 4 新增推進前置條件與 Rollback 錯誤碼） {#assignment-stage-transition-errors}
 
@@ -322,7 +328,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 警告碼 | 觸發階段 | 訊息 | 說明 | 相關功能 |
 |--------|---------|------|------|----------|
 | RUN_REPORT_SKIPPED_CASES | F061 月跑 Stage 2 計分 | 月跑完成，但有 {skippedCaseCount} 筆案件因無對應計分卡（邊緣 CARD_TYPE）被跳過 | **v1.0 / 2026-05-16 / OQ-E07-29-A 落地（F061 v1.2 引入）**：Stage 2 遭遇無計分規則之邊緣 CARD_TYPE（如 HB / SEB / SEC），跳過該案件不拋錯；月跑仍 `status = 'completed'`；跳過案件清單儲存於 `assignment_run.report_payload.skippedCases[]` JSONB（結構詳見 [F061 BR-13](features/F061-trigger-assignment-run.md#6-商業規則)）；前端可於 F062 / F063 顯示黃色警示 banner，提供「查看跳過案件清單」展開連結 | F061 v1.2, F062, F063 |
-| WHITELIST_OPTION_INACTIVE | 月跑 Stage 1 預檢 / F050 / F051 名單儲存 | 名單條件引用之可選值「{optionValue}」（{columnName}）已被停用 | **v1.0 / 2026-05-16 / 衍生補修新增**：F076 將某 categorical 欄位之可選值軟停用（`is_active = false`）後，既有名單若引用 inactive 值，**月跑 Stage 1 不阻擋**（沿用 F076 BR-3 不回溯規則）；可於月跑報告 `report_payload.warnings[]` 補 warning 條目，或於 F050 / F051 名單儲存時顯示輕量警示（不阻擋儲存）。**非 HTTP 錯誤碼**；前端應於名單編輯頁列出受影響條件值；後端不主動清理 `condition_payload` 之 inactive 值（由業務手動處理）| F076, F050 v2.0, F051 v2.0, F061 |
+| WHITELIST_OPTION_INACTIVE | 月跑 Stage 1 預檢 / F050 / F051 名單儲存 | 名單條件引用之可選值「{optionValue}」（{columnName}）已被停用 | **v1.0 / 2026-05-16 / 衍生補修新增；v1.15 / 2026-05-20 引用版號更新**：F076 v1.5 將某 categorical 欄位之可選值軟停用（`is_active = false`）後，既有名單若引用 inactive 值，**月跑 Stage 1 不阻擋**（沿用 F076 v1.5 BR-4 不回溯規則）；可於月跑報告 `report_payload.warnings[]` 補 warning 條目，或於 F050 v2.1 / F051 v2.1 名單儲存時於 response body 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（F050 v2.1 BR-9 / F051 v2.1 BR-12；非阻擋儲存）。**非 HTTP 錯誤碼**；前端應於名單編輯頁列出受影響條件值；後端不主動清理 `condition_payload` 之 inactive 值（由業務手動處理）| F076 v1.5, F050 v2.1, F051 v2.1, F061 |
 | SCORING_INTEGRITY_WARN | F061 月跑 Stage 2 前（`ScoringIntegrityCheckService`）| 計分設定完整性警告：{affectedCount} 個維度之 match_type 與 score 記錄不一致，月跑繼續但結果可能有誤 | **v1.3 / 2026-05-18 / F061 v1.3 新增（非 HTTP 錯誤碼）**：Stage 2 執行前，`ScoringIntegrityCheckService.checkAndWarn()` 稽核所有 active 版本之 `ob_levelcard_column` 與對應 `ob_levelcard_score`；若發現 `MATCH_TYPE_FIELD_MISMATCH`（match_type 與 level1 / level2_s 填值規則衝突）或 `CATEGORY_DUPLICATE`（同 column_name 下 level1 重複），**不拋錯、月跑繼續**；警告寫入：(a) `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`，JSONB 含 issues 陣列）；(b) `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`（含 `affectedCount` + `details[]`）；前端 F062 / F063 結果頁於 `warningSummary.SCORING_INTEGRITY_WARN.affectedCount > 0` 時顯示黃色 integrity 警示 banner，提示業務人員至 M02 計分設定頁修正 | F061 v1.3, F062, F063, F054 |
 
 **前端展示建議**：
@@ -342,9 +348,9 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
-| CODE_IN_USE | 422 | 代碼值 {tblCd} 在類別 {tblId} 中已存在 | 新增代碼時 `(tbl_id, tbl_cd)` 組合重複（啟用期間內） | F068 |
-| CODE_TYPE_INVALID | 422 | 本功能僅支援 PROD_KIND / SPEC_TP / CASE_STATUS 三類代碼維護 | API 傳送的 `tbl_id` 不在允許清單（PROD_KIND / SPEC_TP / CASE_STATUS）中；含 `CASEYEAR` 亦回此錯誤（CASEYEAR 為 F050/F051 前端 hard-coded 11 個固定選項，不入 ob_code_df，OQ-E07-24 Resolved 2026-05-12） | F068 |
-| CODE_NOT_FOUND | 404 | 找不到指定的代碼 | `(tbl_id, tbl_cd)` 組合不存在於 `ob_code_df` | F068 |
+| CODE_IN_USE | 422 | 代碼值 {tblCd} 在類別 {tblId} 中已存在 | 新增代碼時 `(tbl_id, tbl_cd)` 組合重複（啟用期間內）。**v1.15 補述（2026-05-20）**：F068 已 DEPRECATED v1.3（F050 v2.1 重構 / J2），本錯誤碼是否保留待 Phase 3a system-architect 評估（GAP-LIST §I） | F068（**DEPRECATED v1.3**）|
+| CODE_TYPE_INVALID | 422 | 本功能僅支援 PROD_KIND / SPEC_TP / CASE_STATUS 三類代碼維護 | API 傳送的 `tbl_id` 不在允許清單（PROD_KIND / SPEC_TP / CASE_STATUS）中；含 `CASEYEAR` 亦回此錯誤（CASEYEAR 為 F050/F051 前端 hard-coded 11 個固定選項，不入 ob_code_df，OQ-E07-24 Resolved 2026-05-12）。**v1.15 補述（2026-05-20）**：F068 已 DEPRECATED v1.3，本錯誤碼是否保留待 Phase 3a 評估（GAP-LIST §I） | F068（**DEPRECATED v1.3**）|
+| CODE_NOT_FOUND | 404 | 找不到指定的代碼 | `(tbl_id, tbl_cd)` 組合不存在於 `ob_code_df`。**v1.15 補述（2026-05-20）**：F068 已 DEPRECATED v1.3，本錯誤碼是否保留待 Phase 3a 評估（GAP-LIST §I） | F068（**DEPRECATED v1.3**）|
 | WHITELIST_FIELD_DUPLICATE | 422 | 欄位名稱 {columnName} 已存在於白名單，請確認是否需重新啟用停用欄位 | F075 新增白名單欄位時 `column_name` 已存在於 `field_whitelist`（無論啟用或停用） | F075 §5.2 |
 | WHITELIST_FIELD_NOT_FOUND | 404 | 找不到指定的白名單欄位 | F075 / F076 操作目標 `columnName` 不存在於 `field_whitelist` | F075 §5.3~5.5、F076 §5.1~5.4 |
 | OPTION_VALUE_DUPLICATE | 422 | 此可選值已存在（狀態：{startus}），如需重新使用請改為啟用操作 | F076 新增可選值時 `(column_name, option_value)` 已存在於 `categorical_field_value`（無論啟用或停用） | F076 §5.2 |
@@ -484,6 +490,10 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 匯出逾時 | 500 | EXPORT_FILE_EXPIRED | 檔案產生逾時 | 中斷匯出 |
 | 代碼值重複 | 422 | CODE_IN_USE | 代碼值在該類別中已存在 | 不寫入 |
 | 代碼類別非 PROD_KIND/SPEC_TP/CASE_STATUS | 422 | CODE_TYPE_INVALID | 僅支援三類代碼維護（CASEYEAR 為前端 hard-coded，亦回此錯誤） | 拒絕請求 |
-| 名單新增/編輯時案件結清期別未填 | 422 | CASE_STATUS_REQUIRED | 案件結清期別為必填，請至少選取一項 | 拒絕請求 |
+| ~~名單新增/編輯時案件結清期別未填~~ | ~~422~~ | ~~CASE_STATUS_REQUIRED~~ | ~~案件結清期別為必填，請至少選取一項~~ | **DEPRECATED v2.1（2026-05-20 / F050 v2.1 重構，A1 / A5）**：由 `CONDITION_COLUMN_NOT_IN_WHITELIST` + condition_payload 必填統一覆蓋 |
+| 名單篩選條件 columnName 不在白名單或已停用（v2.1） | 422 | CONDITION_COLUMN_NOT_IN_WHITELIST | 篩選條件欄位 `{columnName}` 不在 POOLDATA 篩選欄位白名單或已停用 | 拒絕請求 |
+| 名單篩選條件含一級保留欄位 list_period_*（v2.1） | 400 | RESERVED_FIELD_IN_CONDITIONS | 以下欄位為一級保留欄位，不可納入篩選條件：`{reservedFields}` | 拒絕請求（defense-in-depth）|
+| 對舊遷移名單（condition_payload IS NULL）寫入 conditionPayload（v2.1） | 422 | LEGACY_LIST_CONDITION_READONLY | 此名單使用舊格式儲存，篩選條件須由系統 backfill migration 後方可編輯 | 拒絕請求（defense-in-depth）|
+| 從上月複製來源名單為舊遷移名單（v2.1） | 422 | LEGACY_LIST_NOT_COPYABLE | 來源名單使用舊格式儲存，不可作為複製來源 | 拒絕請求（defense-in-depth）|
 | 資源不存在 | 404 | *_NOT_FOUND | 找不到指定的 {資源} | 拒絕請求 |
 | 伺服器錯誤 | 500 | SYSTEM_INTERNAL_ERROR | 系統發生非預期錯誤，請稍後再試 | 記錄完整錯誤至日誌 |

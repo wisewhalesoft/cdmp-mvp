@@ -1,10 +1,21 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.11"
-date: 2026-05-13
+version: "1.13"
+date: 2026-05-20
 status: Draft
 ---
+
+> **v1.13（2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構）**：依 GAP-LIST §A1~A6 對齊文字描述。核心變更（**不動 entity 結構，不增不減 column**）：
+> 1. **L850 condition_payload 描述**：BR 引用版號 v2.0 → v2.1；新增 list_period_* 保留欄位（F050 v2.1 BR-8）+ INACTIVE 選項警示（F050 v2.1 BR-9）；明列 5 個 entity column 為 backward-compat 衍生欄位（J6 / F050 v2.1 BR-10）
+> 2. **L854 多值欄位儲存規範**：移除舊 SP `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對；改為 v2.1 之 SQL `IN (...)` / `BETWEEN`（F050 v2.1 BR-7、US-122 AC-2/AC-3）+ condition_payload IS NULL 之舊名單 fallback 路徑（D4 / US-122 AC-4 / US-123 AC-3）
+> 3. **L860 caseyear dump 範例**：「前端 11 個固定選項 0~10」→「v2.1 動態載入 8 個選項 0~6 + 99」（J5 / US-125 AC-1）
+> 4. **L842 caseyear 描述欄**：移除「前端固定 11 個 CheckBox」；改為「F050 v2.1 / F051 v2.1 動態載入自 `pooldata_field_option` column_name='caseyear'，初始 seed 8 筆 0~6 + 99（F076 v1.5 / US-125 AC-1）」
+> 5. **L844 case_status 描述欄**：移除「可選代碼來源 `ob_code_df` `tbl_id = 'CASE_STATUS'`」；改為「v2.1：可選代碼來源 `pooldata_field_option` column_name='case_status'（4 筆，由 F076 v1.5 維護；US-125 AC-2）；原 `ob_code_df.tbl_id='CASE_STATUS'` 已由 US-124 廢除（F068 DEPRECATED v1.3）」
+> 6. **case_status Migration 策略段落**：補 v2.1 第三階段說明（E4 backfill 至 `pooldata_field_option`，由 Phase 3a 執行）
+> 7. **舊名單遷移規則段落（I-5）**：補 v2.1 condition_payload IS NULL fallback（D4 / US-122 AC-4 / US-123 AC-3）+ E2 backfill 由 Phase 3a 一次性執行（拍板 2 / 無 confirm 流程）
+> 8. **草稿階段欄位編輯規則表**：F050/F051 v2.0 → v2.1；補 list_period_* 不可入 conditions（F050 v2.1 BR-8）
+> 9. **「從上月名單複製」段落**：補「複製來源亦需 condition_payload 非 NULL，舊名單不可作為複製來源」+ 跨檔錯誤碼 `LEGACY_LIST_NOT_COPYABLE`（拍板 Q4）
 
 # 資料模型
 
@@ -839,27 +850,35 @@ PK：`list_no`
 | project_workym | VARCHAR(6) | NULL | PROJECT_WORKYM | 名單作業年月（YYYYMM） |
 | casenumber | VARCHAR(50) | NULL | CASENUMBER | 案件編號 |
 | name | VARCHAR(50) | NULL | NAME | 名稱 |
-| caseyear | VARCHAR(255) | NULL | CASEYEAR | 進件/滿期/中結年數（多值欄位，`$$` 分隔；F050/F051 前端固定 11 個選項 value `0`~`10`，不從 `ob_code_df` 載入；OQ-E07-24 ✅ Resolved 2026-05-12，證據 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`；Stage 1 與 `ob_pool_data.year_cnt` 整數比對） |
+| caseyear | VARCHAR(255) | NULL | CASEYEAR | 進件/滿期/中結年數（多值欄位，`$$` 分隔；**v2.1（2026-05-20）**：F050 v2.1 / F051 v2.1 動態載入自 `pooldata_field_option` `column_name='caseyear'`，初始 seed **8 筆 `0`~`6` + `99`**（由 F076 v1.5 維護；US-125 AC-1 / J5 拍板）；~~F050/F051 前端固定 11 個選項 value `0`~`10`~~（**v2.1 廢除**：A4 / J5 拍板對應 m22 現行 seed 8 筆）；舊系統 hardcoded 證據 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`（OQ-E07-24 ✅ Resolved 2026-05-12）僅供歷史對照；本欄位為 v2.1 condition_payload 之 **backward-compat 衍生欄位**（J6 / F050 v2.1 BR-10），由後端依 `condition_payload.conditions[columnName='caseyear'].values` 衍生填入；Stage 1 與 `ob_pool_data.year_cnt` 整數比對） |
 | caseyearnm | VARCHAR(10) | NULL | CASEYEARNM | 案件年份名稱 |
-| case_status | VARCHAR(14) | NOT NULL | （新增，原 OBMLISTDF.LIST_TYPE 業務語意拆出） | 案件結清期別（多值欄位，`$$` 分隔；F050/F051 必填多選），可選代碼來源 `ob_code_df` `tbl_id = 'CASE_STATUS'`（對應原 OBMCODEDF TBL_ID='22'）；最大長度依 4 個代碼全選計算 `01$$02$$03$$04` = 14 字元。**4 個值業務語意對照詳見 [F050 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)**（OQ-E07-23 ✅ Resolved 2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆）。月跑 Stage 1 以本欄位（業務主管選擇）與 `ob_pool_data.list_type`（SP 計算寫入）作 OR 比對（BR-7） |
+| case_status | VARCHAR(14) | NOT NULL | （新增，原 OBMLISTDF.LIST_TYPE 業務語意拆出） | 案件結清期別（多值欄位，`$$` 分隔；**v2.1（2026-05-20）**：可選代碼來源改為 `pooldata_field_option` `column_name='case_status'`（4 筆，由 F076 v1.5 維護；US-125 AC-2 / A5 / E4 解除），原 `ob_code_df.tbl_id='CASE_STATUS'`（對應 OBMCODEDF TBL_ID='22'）已由 US-124 廢除（F068 DEPRECATED v1.3）；本欄位為 v2.1 condition_payload 之 **backward-compat 衍生欄位**（J6 / F050 v2.1 BR-10），由後端依 `condition_payload.conditions[columnName='case_status'].values` 衍生填入。最大長度依 4 個代碼全選計算 `01$$02$$03$$04` = 14 字元。**4 個值業務語意對照詳見 [F050 v2.1 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)**（OQ-E07-23 ✅ Resolved 2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆）。月跑 Stage 1 以本欄位（業務主管選擇）與 `ob_pool_data.list_type`（SP 計算寫入）作 OR / IN 比對（F050 v2.1 BR-7） |
 | settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
 | card_type | VARCHAR(5) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議；dump 含 3 字元值如 SEC/SEB，與 ob_levelcard_* 系列一致改為 VARCHAR(5)） |
 | status | VARCHAR(10) | NOT NULL DEFAULT 'active' | （AppDB 新建欄位） | 啟用狀態：`'active'` / `'inactive'`（草稿階段停用後設 `'inactive'`，沿用 epic-brief「已解決問題」第 2 點與 F052） |
 | stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入；**migration 歸屬：`1711360000100-CreateE07ObSettingsTables`（m100）中 `ob_list_definition` CREATE TABLE 時同步加入此欄位；m12 data backfill UPDATE 僅寫資料不建欄，見 AD-E07-17 議題 3**） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月跑 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
 | cr_enabled | BOOLEAN | NOT NULL DEFAULT TRUE | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代 F059 OBASSIGNSET 全域路徑**） | per-LIST_NO CR 回分開關；草稿階段（`stage = 'draft'`）由 F050 v2.0 / F051 v2.0 透過 `crEnabled` 欄位設定；推進至非草稿階段後鎖定（透過 F051 v2.0 BR-3 統一拒絕，無需獨立鎖定欄位）；月跑 Stage 3 讀取本欄位決定是否執行 CR 回分（false = 跳過）；既有 OBMLISTDF 遷移之名單初始 `true`（保持現行行為）；US-120 spec 落差修正之唯一儲存位置；F059 v2.0 標記 DEPRECATED 不再讀寫 |
-| condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代固定欄位 PROD_KIND / CASEYEAR / SPEC_TP / CASE_STATUS / SETTLE_SRC 等之必填語意**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；F050 v2.0 新建必填（至少 1 個 conditions）；F051 v2.0 草稿階段可整段覆寫；F050 v2.0 BR-6 強制 `conditions[].columnName` 必須存在於 F075 白名單且 `is_active = true`；月跑 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（F050 v2.0 BR-10）；既有 OBMLISTDF 遷移之名單初始 `NULL`（其月跑語意沿用既有固定欄位 + 後端做 JSONB / 舊欄位讀取相容處理，由 system-architect 設計）|
+| condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入；**v2.1（2026-05-20）取代 v2.0 固定欄位 prod_kind / caseyear / spec_tp / case_status / settle_src 等之必填語意，成為 source of truth**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；完整 schema 規範詳見 [F050 v2.1 §5.4](features/F050-create-list-definition.md#54-condition_payload-json-schemav21-新增--a2-解除)；F050 v2.1 新建必填（至少 1 個 conditions）；F051 v2.1 草稿階段可整段覆寫（限 `stage='draft'`，K1 / F051 v2.1 BR-9）；**F050 v2.1 BR-6** 強制 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`，違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1 / A3 解除）；**F050 v2.1 BR-8** 強制 `columnName` 不得為 `list_period_start` / `list_period_end` / `list_interval`（一級保留欄位，J8 / 拍板 3），違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；**F050 v2.1 BR-9**：若 conditions 含 `pooldata_field_option.is_active=false` 之 categorical option，寫入仍成功但 response 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（非阻擋；對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings)）；月跑 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（**F050 v2.1 BR-7**：categorical `IN (...)`、numeric `BETWEEN`、date `BETWEEN`；US-122 AC-1~AC-3 / A6 / D3 解除）；**5 個 entity column（prod_kind / caseyear / spec_tp / case_status / settle_src）由後端依本欄位衍生填入並寫入 entity column，為 backward-compat 讀取欄位**（J6 / F050 v2.1 BR-10；衍生規則由 Phase 3a system-architect 設計）；既有 OBMLISTDF 遷移之名單初始 `NULL`，月跑 Stage 1 fallback 至 5 個 entity column 讀取（D4 / US-122 AC-4 / US-123 AC-3）；E2 backfill（entity column → condition_payload 一次性轉換）由 Phase 3a system-architect 執行（拍板 2 / 無 confirm 流程）|
 
-**多值欄位儲存規範**：
+**多值欄位儲存規範（v2.1 重寫）**：
 
-`prod_kind` / `spec_tp` / `settle_src` / `caseyear` / `case_status` 為 `$$` 分隔字串（與舊系統格式相容；dump 觀察範例見下表）。UI 提交時以多選清單序列化為 `$$` 分隔字串、查詢時以 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對；遷移時保留原始字串不拆分為陣列或正規化表。
+`prod_kind` / `spec_tp` / `settle_src` / `caseyear` / `case_status` 為 `$$` 分隔字串（與舊系統格式相容；dump 觀察範例見下表）。
+
+**v2.1 寫入規範（J6 / F050 v2.1 BR-10）**：v2.0 之「UI 提交時序列化為 `$$` 分隔字串」**已廢除**；v2.1 起 5 個欄位均為 **backward-compat 衍生欄位**，由後端依 `condition_payload` 衍生填入並寫入 entity column（衍生規則由 Phase 3a system-architect 設計）；前端不直接送出此 `$$` 分隔格式。
+
+**v2.1 查詢規範（A6 / D3 解除）**：
+- **新名單（`condition_payload IS NOT NULL`）**：月跑 Stage 1 從 JSONB 解析 conditions 後組合 SQL `columnName IN (v1, v2, ...)`（categorical）/ `BETWEEN min AND max`（numeric）/ `BETWEEN dateStart AND dateEnd`（date）；多欄位之間 `AND`（F050 v2.1 BR-7 / US-122 AC-1~AC-3）
+- **舊名單（`condition_payload IS NULL`）**：月跑 Stage 1 fallback 讀 5 個 entity column 並以 `IN (...)` 對應比對（D4 / US-122 AC-4 / US-123 AC-3）
+
+> **v2.0 棄用語意**：舊 SP 之 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對**已棄用**；新實作一律改用 SQL `IN (...)` / `BETWEEN`；遷移時保留原始字串不拆分為陣列或正規化表。
 
 | 欄位 | dump 範例 | 含義 |
 |------|----------|------|
 | `spec_tp` | `02$$04$$05$$06$$11$$12$$13$$14$$15$$16$$20$$21$$22$$23` | 多個專案類別代碼 |
 | `settle_src` | `Y$$N` 或 `Y` 或 `N` | 含 / 不含被他行代償案件 |
-| `caseyear` | `0$$1$$2$$3$$4$$5$$6$$7$$8$$9$$10` | 多個進件 / 中結年數（前端 11 個固定選項 0~10；舊系統 dump 偶見 `99` 值為舊資料殘留，未啟用） |
+| `caseyear` | `0$$1$$2$$3$$4$$5$$6$$99` 或 `0$$99` 或 `99` | 多個進件 / 中結年數（**v2.1 動態載入 8 個選項 `0`~`6` + `99`**；F076 v1.5 / US-125 AC-1 / J5 拍板對應 m22 現行 8 筆 seed）；舊系統 dump 可能含 `7`~`10` 之歷史值（舊名單 `condition_payload IS NULL` fallback 場景容錯讀取），新名單寫入不應出現此範圍外值 |
 | `prod_kind` | `02$$03$$04` 或 `01` 或 `02` | 多個產品種類代碼（dump 觀察單值居多，但結構允許多值） |
-| `case_status` | `01$$02$$03` 或 `01` 或 `04` | 多個案件結清期別（最多 4 選；對應 `ob_code_df` `tbl_id = 'CASE_STATUS'`） |
+| `case_status` | `01$$02$$03` 或 `01` 或 `04` | 多個案件結清期別（最多 4 選；**v2.1 對應 `pooldata_field_option` `column_name='case_status'`，由 F076 v1.5 維護 4 筆**；原 `ob_code_df.tbl_id='CASE_STATUS'` 已由 US-124 廢除 / F068 DEPRECATED v1.3） |
 
 **list_type vs case_status 語意分離**：原系統 `LIST_TYPE` 欄位混用兩種語意，新系統拆分如下：
 
@@ -868,14 +887,15 @@ PK：`list_no`
 | `list_type` | 系統內部分類常數，固定 `'01'`（分派名單） | 否 | 後端固定寫入 |
 | `case_status`（新欄位） | 業務主管選擇的案件結清期別篩選範圍 | 是（必填多選） | F050/F051 表單提交，多值以 `$$` 分隔 |
 
-**`case_status` Migration 策略（AD-E07-14 兩階段）**：
+**`case_status` Migration 策略（AD-E07-14 兩階段 + v2.1 第三階段 E4）**：
 
 原 OBMLISTDF 無 `case_status` 欄位；但 `LIST_TYPE` 欄位的實際儲存值即為案件結清期別代碼（dump 驗證：`'01'`、`'02'`、`'02$$03$$04'` 等）。採兩階段 migration 以安全補值：
 
 - **Phase 1**：`ALTER TABLE ADD COLUMN case_status VARCHAR(14) NULL`；執行 `UPDATE SET case_status = list_type`（將 LIST_TYPE 原值複製至 case_status）
 - **Phase 2**：執行驗證查詢確認無 NULL 餘留後，`ALTER COLUMN case_status SET NOT NULL`；同步將 `list_type` 全數更新為常數 `'01'`
+- **Phase 3（v2.1 / 2026-05-20，US-125 AC-2 / E4 解除）**：CASE_STATUS 4 筆代碼（`01` / `02` / `03` / `04`）從 `ob_code_df.tbl_id='CASE_STATUS'` backfill 至 `pooldata_field_option.column_name='case_status'`；同時 F075 v1.5 `pooldata_field_whitelist` 新增 `case_status` 條目（US-125 AC-5）；DELETE FROM `ob_code_df` WHERE `tbl_id = 'CASE_STATUS'`（GAP-LIST §E7）。本階段由 Phase 3a system-architect 執行 migration 腳本，本段不展開細節。
 
-完整 migration SQL 見 architecture-spec.md AD-E07-14。
+完整 migration SQL 見 architecture-spec.md AD-E07-14；v2.1 Phase 3 migration 詳見 **architecture-spec.md AD-E07-18 §18.3**（Phase 3a 落地，2026-05-20）：M1（m281）ADD COLUMN condition_payload + GIN index、M2（m282）backfill、M3（m283）spec_tp 32 筆 UPSERT、M4（m284）case_status whitelist + options seed、M5（m285）刪除 ob_code_df 重疊 tbl_id（deployment gate：與 F069 service 改讀 pooldata_field_option 同 PR）。
 
 **索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）、`(project_workym, stage, status)`（M01 入口 F048 列表 + 階段篩選）、`(created_by)`（處長轄區過濾，F074 / F077 BR-10）
 
@@ -890,6 +910,8 @@ PK：`list_no`
 | 其他業務欄位 | 沿用既有 OBMLISTDF 欄位邏輯（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等），不受 F075 白名單影響（沿用 F075 BR-3 / US-102 §舊名單相容規則） |
 
 > **說明**：舊系統無「五階段流程」概念，所有舊名單已歷經 IT 手動執行 SP 完成分派，等同於新流程的「準備完成」階段。新建名單（F050）始於 `stage = 'draft'`，依 F077 §10 圖表 [F077-stage-overview.mmd](diagrams/F077-stage-overview.mmd) 流轉。
+
+> **v2.1 補述（2026-05-20 / F050 v2.1 重構，D4 / E2 / J6 / US-122 AC-4 / US-123 AC-3）**：舊 OBMLISTDF 遷移名單之 `condition_payload` 初始為 NULL；月跑 Stage 1 對此類名單採 **backward-compat fallback** 讀取 5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）並以 `IN (...)` 對應比對（D4），fallback 路徑不報錯，月跑不中斷；F051 v2.1 編輯頁載入此類名單時篩選條件區塊呈現為唯讀「（舊格式）」摘要（F051 v2.1 AC-11 / US-123 AC-2），非篩選欄位仍可改。E2 backfill（entity column → condition_payload 一次性轉換）由 **Phase 3a system-architect** 執行；**拍板 2 / 拍板 Q3**：不提供「per-user confirm 轉換」流程，避免部分名單轉換、部分未轉換的混亂狀態；繞過直接寫入 condition_payload 之請求由後端回 422 `LEGACY_LIST_CONDITION_READONLY`（defense-in-depth；F051 v2.1 BR-11）。
 
 **m12 migration `stage` active 名單範圍規則（2026-05-16 / system-architect 決議 #3）**：
 
@@ -909,30 +931,32 @@ UPDATE ob_list_definition
 | **inactive 名單** | 一律保持原 `stage` 值；停用後不重新進入流程 |
 | **覆蓋邊界** | 本腳本僅執行一次性 backfill；後續新建名單由 F050 v2.0 寫入 `stage = 'draft'`，由 F078 / F080 / F084 / F086 推進 |
 
-**草稿階段欄位編輯規則（2026-05-15 / F050 v2.0 / F051 v2.0 / F052 v2.0 / F078 / E07 重構批次 3）**：
+**草稿階段欄位編輯規則（2026-05-15 / F050 v2.0 / F051 v2.0 / F052 v2.0 / F078 / E07 重構批次 3；v2.1 更新引用版號 + 補 list_period_*）**：
 
 | 欄位 | 草稿（`stage = 'draft'`）可改？ | 推進後（`stage IN ('dept_ratio', 'personnel_ratio', 'approval', 'ready')`）可改？ | 由哪個 spec 維護 |
 |------|---|---|---|
-| `list_nm` | ✅ | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.0 / F051 v2.0 |
-| `condition_payload` | ✅（覆寫式） | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.0 / F051 v2.0 |
-| `cr_enabled` | ✅ | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.0 / F051 v2.0 |
+| `list_nm` | ✅ | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.1 / F051 v2.1 |
+| `condition_payload` | ✅（覆寫式；新名單必填至少 1 個 conditions；舊名單 NULL 為 read-only，拒絕寫入回 `LEGACY_LIST_CONDITION_READONLY`，F051 v2.1 BR-11） | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.1 / F051 v2.1 |
+| `list_period_start` / `list_period_end` / `list_interval` | ✅（一級欄位，**不可入 `condition_payload.conditions`**，違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；F050 v2.1 BR-8 / J8 / 拍板 3） | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.1 / F051 v2.1 |
+| `cr_enabled` | ✅ | ❌（回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`） | F050 v2.1 / F051 v2.1 |
 | `status`（停用） | ✅（軟刪除為 `'inactive'`） | ❌（回 422 `LIST_STAGE_NOT_DRAFT`，需先 Rollback 至草稿） | F052 v2.0 |
 | `stage` | ❌（不可手動覆寫） | ❌（不可手動覆寫） | F078 / 後續 M03a~d 推進 / Rollback spec |
-| `list_no` / `project_workym` / `created_by` / `created_at` | ❌（建立後永久不可改） | ❌（永久不可改） | F050 v2.0 寫入後鎖定 |
+| `list_no` / `project_workym` / `created_by` / `created_at` | ❌（建立後永久不可改） | ❌（永久不可改） | F050 v2.1 寫入後鎖定 |
+| backward-compat 衍生欄位（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`） | ❌（前端不直接編輯；由後端依 `condition_payload` 衍生填入；J6 / F050 v2.1 BR-10） | ❌ | F050 v2.1 / F051 v2.1 + Phase 3a system-architect 設計衍生規則 |
 
-> **規則來源**：F050 v2.0 BR-2 / F051 v2.0 BR-3 / F052 v2.0 BR-3 / F077 BR-9 角色 × 階段操作矩陣。
+> **規則來源**：F050 v2.1 BR-2 / F051 v2.1 BR-4 / BR-9 / BR-10 / F052 v2.0 BR-3 / F077 BR-9 角色 × 階段操作矩陣。
 > **退出鎖定途徑**：透過後續批次 spec 之 Rollback 機制（M03a/b/c/d Rollback；如 US-111 / US-115 / US-117）退回 `'draft'` 階段後，本表「草稿可改」欄位重新可編輯。
 
-**「從上月名單複製」API 行為規則（2026-05-15 / F050 v2.0 / OQ-D-01 決議）**：
+**「從上月名單複製」API 行為規則（2026-05-15 / F050 v2.0 / OQ-D-01 決議；v2.1 補 `condition_payload IS NOT NULL` 來源條件）**：
 
-F050 v2.0 提供「從上月名單複製」起點，行為規則如下：
+F050 v2.1 提供「從上月名單複製」起點，行為規則如下：
 
 | 規則 | 說明 |
 |---|---|
 | **僅複製 `condition_payload`** | 整段 JSONB 複製至新名單；新名單需重新填寫 `list_nm` |
 | **不複製比例資料** | 部門比例（`ob_dept_pct`）/ 人員比例（`ob_empl_set`）為各自階段資料表，建立新草稿時恢復為空，需於後續 M03a / M03b 階段重新設定 |
 | **`cr_enabled` 恢復預設 `true`** | 不沿用上月設定（即使來源名單之 `cr_enabled = false`，新名單仍以預設 `true` 起算） |
-| **來源名單條件** | `project_workym = targetWorkym - 1 month` AND `stage = 'ready'` AND `status = 'active'`（避免複製到未完成的草稿、推進中、已停用名單） |
+| **來源名單條件（v2.1 補述）** | `project_workym = targetWorkym - 1 month` AND `stage = 'ready'` AND `status = 'active'` AND `condition_payload IS NOT NULL`（避免複製到未完成的草稿、推進中、已停用名單，**或舊遷移名單**）。**舊名單不可作為複製來源**（拍板 Q4 / 拍板 2 一致性：舊名單條件需先由 Phase 3a E2 backfill 一次性轉換）；前端 dropdown 已過濾此情境，後端 defense-in-depth 違反回 422 `LEGACY_LIST_NOT_COPYABLE`（F050 v2.1 §6.1 錯誤回應表） |
 | **跨年計算** | 「上月」按 calendar month 計算（例：202501 - 1 = 202412） |
 | **稽核追溯** | 來源 `list_no` 寫入 `assignment_audit_log.before_value.copyFromListNo` 欄位 |
 

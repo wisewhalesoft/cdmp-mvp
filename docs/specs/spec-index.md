@@ -1,12 +1,20 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.3"
-date: 2026-05-17
+version: "3.4"
+date: 2026-05-20
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.4 / 2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構**：依 GAP-LIST §A1~A6 解除 spec 內部矛盾。本輪變更檔案：
+> - **升 v2.1**：[F050-create-list-definition.md](features/F050-create-list-definition.md)、[F051-edit-list-definition.md](features/F051-edit-list-definition.md)（condition_payload 為 source of truth；新增 4 個 error code 引用：`CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_CONDITION_READONLY` / `LEGACY_LIST_NOT_COPYABLE`）
+> - **升 v1.5**：[F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md)（seed 補 case_status，6 筆）、[F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md)（seed 補 case_status 4 筆 + caseyear 確認 8 筆 + spec_tp 升真實 dump 32 筆）
+> - **整份 DEPRECATED v1.3**：[F068-edit-base-code.md](features/F068-edit-base-code.md)（保留歷史內容 + banner；F075 v1.5 + F076 v1.5 + US-124 + US-125 承接）
+> - **支援文件更新**：data-model.md v1.13、error-handling.md v1.15、[diagrams/F050-draft-create-flow.mmd](diagrams/F050-draft-create-flow.mmd)（whitelist 節點 rename + 補 RESERVED 節點）
+> - **對應 User Story**：US-121（whitelist-condition-payload）、US-122（Stage 1 dynamic filter）、US-123（backward-compat list read）、US-124（deprecate F068 + merge field-base）、US-125（migrate options to whitelist）；既有修改：US-070 / US-102 / US-103 / US-106；DEPRECATED：US-092
+> - **拍板**：Q1 `LIST_FILTER_FIELD_NOT_IN_WHITELIST` DEPRECATED + 並存；Q3 + Q4 兩個 LEGACY error code 都加；Q5 prod_kind 唯一性比對語意延至 Phase 3a；Q7 mermaid diagram 一併更新；Q2 / Q6 採預設處置；Q8 F048 不本輪處理（下一輪追補）
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **文件總數**：132 份（7 支援文件含 spec-index 本檔 + 86 Feature 文件含新建 F006a + 39 圖表文件）
@@ -161,8 +169,8 @@ status: Draft
 |------------|------|------|-----------|--------|
 | F048 | [F048-view-list-definition.md](features/F048-view-list-definition.md) | M01 名單定義入口（月份 + 階段總覽，v2.0 升版合併 US-104/105 入口骨架） | US-070, US-104, US-105 | P0-MVP |
 | F049 | [F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | US-071 | P0-MVP |
-| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（動態篩選條件 + per-LIST_NO `cr_enabled` + 從上月複製，v2.0 重寫合併 US-106 / US-107 / US-120）** | US-106, US-107, US-120 | P0-MVP（**v2.0**）|
-| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（限 `stage = 'draft'`，v2.0 重寫合併 US-106 AC-7 + US-107 AC-2/AC-5）** | US-106, US-107 | P0-MVP（**v2.0**）|
+| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位 + caseyear / case_status 改 `pooldata_field_option` 動態載入 + SQL `IN`/`BETWEEN` 取代舊 `LIKE '%val$$%'`；解除 GAP-LIST §A1~A6；v2.0 重寫合併 US-106 / US-107 / US-120）** | US-106, US-107, US-120, US-121, US-125 | P0-MVP（**v2.1**）|
+| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.1 對齊 F050 v2.1：condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`（拍板 2：無 confirm 轉換流程，E2 backfill 由 Phase 3a 一次性執行）；限 `stage = 'draft'`，v2.0 重寫合併 US-106 AC-7 + US-107 AC-2/AC-5）** | US-106, US-107, US-121, US-123 | P0-MVP（**v2.1**）|
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
 | F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105） | US-104, US-105 | P0-MVP |
 | F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|
@@ -245,9 +253,9 @@ status: Draft
 
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 版本 |
 |------------|------|------|-----------|--------|------|
-| F068 | [F068-edit-base-code.md](features/F068-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） | US-092 | P0-MVP | v1.2 |
-| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；v1.4 UI 命名改「篩選欄位管理」/「新增篩選欄位」內部保留 `pooldata_field_whitelist` + `/api/v1/pooldata-fields`；新增 `GET /available-columns` 端點 + dropdown 唯一新增路徑 + `suggestedFieldType` 推斷 + AC-10~15 + BR-11~13；A-3 升級 [RESOLVED]；附帶清理 prototype/FE `WHITELIST_FIELD_DUPLICATE` → `POOLDATA_FIELD_DUPLICATE`；**v1.4.3 case 對齊**：column_name 由大寫改小寫對齊 `ob_pool_data` snake_case，DTO regex `/^[a-z][a-z0-9_]{0,63}$/`，新增 BR-14 命名規範） | US-102 | P0-MVP | **v1.4.3** |
-| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（v1.3 補回 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 新增 deactivate 端點 + AC-6 reason 必填 200 字 + BR-11/12/13 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref；**v1.3.1 case 對齊**：依 F075 v1.4.3 將 seed 欄位字串改小寫） | US-103 | P0-MVP | **v1.3.1** |
+| ~~F068~~ | ~~[F068-edit-base-code.md](features/F068-edit-base-code.md)~~ | ~~E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS）~~ | ~~US-092~~ | P0-MVP | **DEPRECATED v1.3（2026-05-20 / F050 v2.1 重構 / J2）— 由 F075 v1.5 + F076 v1.5 + US-124 + US-125 承接；保留歷史內容 + banner** |
+| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；**v1.5 / 2026-05-20**：seed 從 5 筆擴充為 **6 筆全部啟用**，新增 `case_status`（categorical），對應 US-125 AC-5；不動 API / BR / UI；v1.4.7：available-columns 端點補 `columnDescription` + Modal 自動填入 displayName；v1.4 UI 命名改「篩選欄位管理」/「新增篩選欄位」內部保留 `pooldata_field_whitelist` + `/api/v1/pooldata-fields`；新增 `GET /available-columns` 端點 + dropdown 唯一新增路徑 + `suggestedFieldType` 推斷；v1.4.3 case 對齊小寫 snake_case） | US-102, US-125 | P0-MVP | **v1.5** |
+| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（**v1.5 / 2026-05-20**：AC-3 seed 補 `case_status` 4 筆（01/02/03/04，業務語意對照引用 F050 v2.1 §5.1.1）+ caseyear 確認 8 筆（0~6 + 99，J5 拍板）+ spec_tp 升真實 OBMCODEDF dump 32 筆（取代 m24 placeholder 3 筆，E5 ✅ Resolved）；v1.4.5 多欄位 accordion master 架構；v1.3 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 deactivate 端點 + reason 必填 200 字 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103, US-125 | P0-MVP | **v1.5** |
 
 #### M07 角色與可見範圍（E07 重構批次 1，2026-05-15）
 
@@ -256,7 +264,7 @@ status: Draft
 | F073 | [F073-define-director-role.md](features/F073-define-director-role.md) | **部長角色定義與 E07 全模組權限（v1.1：§E02 整合 — PATCH `/accounts/:id/e07-role` 唯一寫入端點 + Token revoke 沿用 `password_changed_at` + 並存正交 BR）** | US-100 | P0-MVP | **v1.1** |
 | F074 | [F074-define-section-chief-role.md](features/F074-define-section-chief-role.md) | **處長角色定義與轄區（`created_by`）限縮（v1.1：§E02 整合沿用 F073 §5.4 + 並存正交 BR）** | US-101 | P0-MVP | **v1.1** |
 
-> **E07 角色矩陣權威來源**：[F002 §4.6](features/F002-user-login.md#e07-角色矩陣)（v1.4 補入「`is_sales_manager` 與 `e07_role` 正交維度說明」+ JWT Payload `e07_role` claim 規範 + Guard `req.user.e07_role` 暴露機制；v1.3 由 F073 / F074 導入定義部長 / 處長 / Admin × M01~M06 之 CRUD 矩陣與三層 Guard 行為）。F068（v1.2）/ F055（v1.6）/ F069~F072 / F075 / F076 / 後續 M03a~d spec 一律引用本節。
+> **E07 角色矩陣權威來源**：[F002 §4.6](features/F002-user-login.md#e07-角色矩陣)（v1.4 補入「`is_sales_manager` 與 `e07_role` 正交維度說明」+ JWT Payload `e07_role` claim 規範 + Guard `req.user.e07_role` 暴露機制；v1.3 由 F073 / F074 導入定義部長 / 處長 / Admin × M01~M06 之 CRUD 矩陣與三層 Guard 行為）。~~F068（v1.2）~~（**DEPRECATED v1.3 / 2026-05-20**）/ F055（v1.6）/ F069~F072 / F075 v1.5 / F076 v1.5 / 後續 M03a~d spec 一律引用本節。
 
 ---
 
@@ -430,20 +438,20 @@ F044 ──> F046（ETL TargetLoad 資料已載入）
 F046 ──> F047（客戶清單為 360 詳情主要入口）
 
 # E07 依賴鏈
-F002 v1.3 §4.6 ──權威定義──> F073, F074, F068, F055, F069~F072, F075, F076（E07 角色矩陣）
-F073 ──> F074（處長以部長為對比基準）、F075、F076、F068 v1.2、F055 v1.6（部長 / 處長 Guard 行為導入）
-F074 ──> F068 v1.2（處長對 M06 唯讀 cross-ref）、F055 v1.6（M02 處長 Nav 完全不可見 cross-ref）
-F075 ──> F076（categorical 欄位可選值掛父表）、後續 US-106 spec（新名單動態篩選欄位來源）
-F076 ──> 後續 US-106 spec（新名單多選元件選項來源）
-F068 ──> F050, F051（PROD_KIND / SPEC_TP / CASE_STATUS 代碼就緒；CASEYEAR 為前端 hard-coded 不阻擋）
+F002 v1.3 §4.6 ──權威定義──> F073, F074, ~~F068~~（DEPRECATED v1.3）, F055, F069~F072, F075 v1.5, F076 v1.5（E07 角色矩陣）
+F073 ──> F074（處長以部長為對比基準）、F075 v1.5、F076 v1.5、~~F068 v1.2~~（DEPRECATED v1.3）、F055 v1.6（部長 / 處長 Guard 行為導入）
+F074 ──> ~~F068 v1.2~~（DEPRECATED v1.3 / 改參照 F075 v1.5 + F076 v1.5）、F055 v1.6（M02 處長 Nav 完全不可見 cross-ref）
+F075 v1.5 ──> F076 v1.5（categorical 欄位可選值掛父表；v1.5 新增 case_status 父表條目）、F050 v2.1 / F051 v2.1（新名單動態篩選欄位來源；含 caseyear / case_status / prod_kind / spec_tp / settle_src / list_type 6 欄）
+F076 v1.5 ──> F050 v2.1 / F051 v2.1（新名單多選元件選項來源；caseyear 8 筆 0~6 + 99、case_status 4 筆 01/02/03/04、prod_kind 3 筆、spec_tp 32 筆 OBMCODEDF dump、settle_src 2 筆、list_type 3 筆）
+~~F068~~（DEPRECATED v1.3 / 2026-05-20 / F050 v2.1 重構 / J2） ──> ~~F050, F051~~（v2.1 已移除 F068 引用，改引 F075 v1.5 + F076 v1.5）
 F048 v2.0 ──> F077（互動補強：月份切換 + 階段總覽）
 F048 v2.0 + F077 ──> F049（Stage 0 估算於清單頁觸發）
-F048 v2.0 + F077 ──> F050, F051, F052, F060（清單頁為入口；操作按鈕渲染依 F077 角色 × 階段矩陣）
-F077 ──> F050 v2.0（新建名單預設 stage = 'draft'）、F052 v2.0（停用僅在草稿階段）、F061（月跑前置條件 stage = 'ready'）、F078（草稿推進）、後續批次 4+ Rollback / 簽核 spec
-F050 v2.0 ──> F051 v2.0, F052 v2.0, F078, F060（需先有草稿名單才能編輯/停用/推進/設定比例）
-F050 v2.0 + F078 + F059 程式碼移除 ──原子性上線（I-1）──> 受 feature flag ENABLE_E07_REFACTOR_PHASE3 統一控制；違反順序回 500 LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059
-F050 v2.0 ──取代──> ~~F059~~（per-LIST_NO `cr_enabled` 取代全域 OBASSIGNSET CR 開關；US-120 spec 落差修正）
-F075, F076 ──> F050 v2.0（動態篩選條件欄位來源 + categorical 可選值來源）
+F048 v2.0 + F077 ──> F050 v2.1, F051 v2.1, F052, F060（清單頁為入口；操作按鈕渲染依 F077 角色 × 階段矩陣）
+F077 ──> F050 v2.1（新建名單預設 stage = 'draft'）、F052 v2.0（停用僅在草稿階段）、F061（月跑前置條件 stage = 'ready'）、F078（草稿推進）、後續批次 4+ Rollback / 簽核 spec
+F050 v2.1 ──> F051 v2.1, F052, F078, F060（需先有草稿名單才能編輯/停用/推進/設定比例）
+F050 v2.1 + F078 + F059 程式碼移除 ──原子性上線（I-1）──> 受 feature flag ENABLE_E07_REFACTOR_PHASE3 統一控制；違反順序回 500 LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059
+F050 v2.1 ──取代──> ~~F059~~（per-LIST_NO `cr_enabled` 取代全域 OBASSIGNSET CR 開關；US-120 spec 落差修正）
+F075 v1.5, F076 v1.5 ──> F050 v2.1（動態篩選條件欄位來源 + categorical 可選值來源；含 caseyear / case_status 動態載入；source of truth = condition_payload）
 
 # E07 重構批次 4 — M03a 部門比例設定（2026-05-15）
 F078 ──> F079（推進至 dept_ratio 後才能設定部門比例）
@@ -486,7 +494,7 @@ F088 ──新建 helper──> MonthlyRunReadinessService.calculateReadiness(wo
 F086 / F087 / F088 / F089 ──[ASSUMPTION] 與 F050 v2.0 §13 同套 ENABLE_E07_REFACTOR_PHASE3 flag gating──> 詳見 OQ-E07-37
 F057 v1.1 ──分工──> F088（F057 流程外快速查詢；F088 流程內最終確認）
 F061 v1.1 ──取代──> ~~OBASSIGNSET 全域 CR 路徑~~（Stage 3 改讀 per-LIST_NO ob_list_definition.cr_enabled，對齊 F050 v2.0 / F059 廢棄）
-F068 ──> F069（PROD_KIND 代碼為 CARD_TYPE 綁定來源）
+~~F068~~（DEPRECATED v1.3 / 2026-05-20）──> F069（PROD_KIND 代碼為 CARD_TYPE 綁定來源）— **待 Phase 3a 評估**（拍板 Q2）：F069~F072（CARD_TYPE CRUD 4 個 spec）對 PROD_KIND 來源描述是否改引 F075 v1.5 + F076 v1.5，本輪 spec-writer 不擅自改寫該 4 份 spec 內文
 F069 ──> F070, F071, F072（CARD_TYPE CRUD 鏈）
 F069 ──> F053, F054, F055, F056（Tab 1 selectedCardType 驅動 Tab 2~5 篩選）
 F070 ──> F054, F055, F056（新建 CARD_TYPE 後才能設定維度 / CARD_LEVEL / TIER 對應）

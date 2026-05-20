@@ -1,5 +1,10 @@
-%% F050 v2.0 草稿階段建立名單流程（含「從上月複製」分支與 feature flag gating）
-%% 引用：features/F050-create-list-definition.md §4 / §6 / §13
+%% F050 v2.1 草稿階段建立名單流程（含「從上月複製」分支與 feature flag gating）
+%% v2.1 變更：
+%%   - WhitelistCheck 錯誤碼 LIST_FILTER_FIELD_NOT_IN_WHITELIST → CONDITION_COLUMN_NOT_IN_WHITELIST（拍板 1）
+%%   - 新增 ReservedFieldCheck 節點 + RESERVED_FIELD_IN_CONDITIONS 錯誤碼（拍板 3 / J8）
+%%   - 新增 LegacyCopyCheck 節點 + LEGACY_LIST_NOT_COPYABLE 錯誤碼（拍板 Q4）
+%%   - ClientValid 訊息「9 個必填欄位」→「condition_payload 必填（≥1 條件）+ list_period_* 必填」
+%% 引用：features/F050-create-list-definition.md §4 / §6 / §7 / §13
 flowchart TD
     Start([部長 / Admin 進入 M01 清單頁]) --> RoleCheck{角色為 Director / Admin？}
     RoleCheck -- 否 --> Hide[「新增名單」按鈕完全不渲染]
@@ -14,23 +19,23 @@ flowchart TD
     DisableBtn --> EndRunLock([結束：月跑執行中])
 
     RunLockCheck -- 否 --> ClickCreate[點擊「新增名單」]
-    ClickCreate --> OpenForm[開啟建立表單<br/>basic + filter + crEnabled + 從上月複製按鈕]
+    ClickCreate --> OpenForm[開啟建立表單<br/>basic + condition_payload 動態區塊 + list_period_* + crEnabled + 從上月複製按鈕]
 
     OpenForm --> CopyBranch{選擇起點？}
 
-    CopyBranch -- 從零開始 --> ManualFill[手動填寫 listNm + 篩選條件 + crEnabled]
-    CopyBranch -- 從上月複製 --> CheckCopySource{上月有 stage = ready<br/>且 status = active 名單？}
+    CopyBranch -- 從零開始 --> ManualFill[手動填寫 listNm + condition_payload 條件 + list_period_* + crEnabled]
+    CopyBranch -- 從上月複製 --> CheckCopySource{上月有 stage = ready<br/>且 status = active<br/>且 condition_payload IS NOT NULL 名單？}
 
     CheckCopySource -- 否 --> CopyDisabled[「從上月複製」按鈕 disabled]
     CopyDisabled --> ManualFill
 
-    CheckCopySource -- 是 --> ListCopySource[GET /list-definitions/copy-source-options<br/>列出上月 ready + active 名單]
+    CheckCopySource -- 是 --> ListCopySource[GET /list-definitions/copy-source-options<br/>列出上月 ready + active + condition_payload 非 NULL 名單]
     ListCopySource --> SelectSource[使用者選定來源 listNo]
     SelectSource --> FetchPayload[GET /list-definitions/sourceListNo/condition-payload]
-    FetchPayload --> AutoFill[自動填入 conditionPayload<br/>crEnabled 恢復預設 true<br/>listNm 留空待填]
+    FetchPayload --> AutoFill[自動填入 conditionPayload + list_period_*<br/>crEnabled 恢復預設 true<br/>listNm 留空待填]
     AutoFill --> ManualFill
 
-    ManualFill --> ClientValid{前端驗證通過？<br/>listNm + ≥1 條件 + min ≤ max + categorical ≥1 值}
+    ManualFill --> ClientValid{前端驗證通過？<br/>listNm + list_period_end ≥ start + condition_payload.conditions ≥ 1<br/>+ numeric max ≥ min + categorical ≥ 1 值}
     ClientValid -- 否 --> ShowError[顯示對應錯誤訊息]
     ShowError --> ManualFill
 
@@ -48,17 +53,31 @@ flowchart TD
     AuthGuard -- 否 --> Return403[403 E07_FORBIDDEN_DIRECTOR_ONLY]
     Return403 --> EndAuth([結束：處長被攔截])
 
-    AuthGuard -- 是 --> WhitelistCheck{conditions 全部欄位<br/>在 F075 白名單 + isActive=true？}
-    WhitelistCheck -- 否 --> Return422White[422 LIST_FILTER_FIELD_NOT_IN_WHITELIST]
+    AuthGuard -- 是 --> LegacyCopyCheck{copyFromListNo 存在？}
+    LegacyCopyCheck -- 是 --> CheckLegacySource{來源名單<br/>condition_payload IS NOT NULL？}
+    CheckLegacySource -- 否 --> Return422Legacy[422 LEGACY_LIST_NOT_COPYABLE<br/>v2.1 / 拍板 Q4]
+    Return422Legacy --> EndLegacy([結束：舊名單不可作為複製來源])
+    CheckLegacySource -- 是 --> ReservedFieldCheck
+    LegacyCopyCheck -- 否 --> ReservedFieldCheck
+
+    ReservedFieldCheck{conditions[].columnName<br/>含 list_period_start/end/interval？}
+    ReservedFieldCheck -- 是 --> Return400Reserved[400 RESERVED_FIELD_IN_CONDITIONS<br/>v2.1 / 拍板 3 / J8]
+    Return400Reserved --> EndReserved([結束：保留欄位入 conditions])
+
+    ReservedFieldCheck -- 否 --> WhitelistCheck{conditions 全部欄位<br/>在 F075 v1.5 白名單 + isActive=true？}
+    WhitelistCheck -- 否 --> Return422White[422 CONDITION_COLUMN_NOT_IN_WHITELIST<br/>v2.1 / 拍板 1 / A3 解除]
     Return422White --> EndWhitelist([結束：欄位不在白名單])
 
-    WhitelistCheck -- 是 --> WriteDB[Service 層 transaction:<br/>1. 產生 list_no = OBYYYYMMNNN<br/>2. 寫入 ob_list_definition<br/>   stage = draft, status = active<br/>   created_by = current user<br/>   cr_enabled, condition_payload<br/>3. 寫入 assignment_audit_log]
+    WhitelistCheck -- 是 --> WriteDB[Service 層 transaction:<br/>1. 產生 list_no = OBYYYYMMNNN<br/>2. 寫入 ob_list_definition<br/>   stage = draft, status = active<br/>   created_by = current user<br/>   cr_enabled, condition_payload<br/>   + 5 個 backward-compat 衍生欄位<br/>     prod_kind / caseyear / spec_tp / case_status / settle_src<br/>     依 condition_payload 衍生填入 J6 / BR-10<br/>3. 寫入 assignment_audit_log]
 
     WriteDB --> CheckLimit{當月已 999 筆？}
     CheckLimit -- 是 --> Return422Limit[422 LIST_NO_LIMIT_EXCEEDED]
     Return422Limit --> EndLimit([結束：上限])
 
-    CheckLimit -- 否 --> Success[201 Created<br/>回傳 listNo + stage=draft]
+    CheckLimit -- 否 --> CheckInactiveOpt{conditions values 含<br/>is_active=false 之 option？}
+    CheckInactiveOpt -- 是 --> SuccessWithWarn[201 Created<br/>回傳 listNo + stage=draft<br/>+ warnings: WHITELIST_OPTION_INACTIVE]
+    CheckInactiveOpt -- 否 --> Success[201 Created<br/>回傳 listNo + stage=draft]
+    SuccessWithWarn --> ToastShow
     Success --> ToastShow[toast：已建立名單 listNm listNo]
     ToastShow --> RefreshList[F077 清單頁刷新<br/>新名單顯示於「草稿」階段]
     RefreshList --> EndSuccess([結束：建立成功])
