@@ -780,7 +780,7 @@ new_in_v1_4: true
 
 ---
 
-### TS-F075-052：M-A1 seed 重複執行後 best_case 在 whitelist 僅 1 筆（DO NOTHING 冪等）
+### TS-F075-052：M-A1 seed 重複執行後 best_case 在 whitelist 僅 1 筆（DO UPDATE 冪等 — UPSERT 語意）
 
 - **關聯需求**：F075 AC-1 / US-129 AC-5（冪等） / TS-F050-A05（跨 Feature 引用）
 - **測試類型**：Boundary / Migration Integration（DB 驗證）
@@ -788,7 +788,7 @@ new_in_v1_4: true
 - **步驟**：
   1. 再次執行 M-A1 up()（第二次）
   2. 查詢 `SELECT COUNT(*) FROM pooldata_field_whitelist WHERE column_name = 'best_case'`
-- **預期結果**：count = 1（DO NOTHING 語意，重複執行不新增）
+- **預期結果**：count = 1（DO UPDATE 語意，重複執行 UPDATE 既有列但不新增；UPSERT 冪等）
 
 ---
 
@@ -809,9 +809,11 @@ new_in_v1_4: true
 
 ### M-A1 UPSERT 語意說明（for TDD Developer）
 
-> **重要**：M-A1 best_case whitelist 的 INSERT 使用 **`DO NOTHING`**（與 M-A2 M-A1 best_case options 的 `DO UPDATE SET option_label` 不同）。原因：whitelist 欄位本身無 label 欄位需覆寫；而 `pooldata_field_option` 的 best_case 選項（`Y` / `N`）使用 `DO UPDATE SET option_label = EXCLUDED.option_label`，確保覆寫 m240 可能的舊標籤（例如 `N='一般案件'` → `N='非優質案件'`）。
+> **重要**：M-A1 best_case whitelist 的 INSERT 使用 **`DO UPDATE SET is_active=true, display_name=EXCLUDED.display_name`**（UPSERT，覆寫 v1.4.6 之 active=false 狀態）。`pooldata_field_option` 的 best_case 選項（`Y` / `N`）同樣使用 `DO UPDATE SET option_label = EXCLUDED.option_label`，確保覆寫 m240 可能的舊標籤（例如 `N='一般案件'` → `N='非優質案件'`）。
 >
-> - whitelist seed：`INSERT ... ON CONFLICT (column_name) DO NOTHING`
+> - whitelist seed：`INSERT ... ON CONFLICT (column_name) DO UPDATE SET is_active=true, display_name=EXCLUDED.display_name`
 > - options seed：`INSERT ... ON CONFLICT (column_name, option_value) DO UPDATE SET option_label = EXCLUDED.option_label`
 >
-> **cross-ref**：TS-F050-A03（DO UPDATE 語意驗證）、TS-F050-A04（label 覆寫驗證）
+> **兩者均為 UPSERT，但目標 column 不同**：whitelist UPDATE `is_active + display_name`，options UPDATE `option_label + is_active`。
+>
+> **cross-ref**：TS-F050-A02（whitelist DO UPDATE 語意驗證）、TS-F050-A03（options DO UPDATE 語意驗證）、TS-F050-A04（label 覆寫驗證）
