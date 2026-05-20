@@ -17,7 +17,7 @@ import { NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CardTypeService } from '../services/card-type.service';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -60,7 +60,7 @@ describe('CardTypeService — getCardTypeStats', () => {
       providers: [
         CardTypeService,
         { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
-        { provide: getRepositoryToken(ObCodeDf), useValue: noop },
+        { provide: getRepositoryToken(PooldataFieldOption), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardVersion), useValue: versionRepo },
         { provide: getRepositoryToken(ObLevelcardColumn), useValue: columnRepo },
         { provide: getRepositoryToken(ObLevelcardScore), useValue: scoreRepo },

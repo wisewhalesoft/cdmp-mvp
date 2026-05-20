@@ -24,7 +24,7 @@ import {
 import { DataSource } from 'typeorm';
 import { CardTypeService } from '../services/card-type.service';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -38,7 +38,7 @@ import { User } from '@/database/entities/user.entity';
 describe('CardTypeService — F070 createCardType', () => {
   let service: CardTypeService;
   let cardTypeRepo: any;
-  let codeDfRepo: any;
+  let optionRepo: any;
   let runRepo: any;
   let userRepo: any;
   let dataSource: any;
@@ -52,15 +52,13 @@ describe('CardTypeService — F070 createCardType', () => {
     cardTypeRepo = {
       findOne: vi.fn().mockResolvedValue(null),
     };
-    // 預設：prodKind '01' 為啟用期間內
-    codeDfRepo = {
+    // v2.1 重構：預設 prodKind '01' 為 pooldata_field_option active 紀錄
+    optionRepo = {
       findOne: vi.fn().mockResolvedValue({
-        system_id: 'OB',
-        tbl_id: 'PROD_KIND',
-        tbl_cd: '01',
-        tbl_desc1: '汽車',
-        stadt: '20000101',
-        enddt: '20991231',
+        column_name: 'prod_kind',
+        option_value: '01',
+        option_label: '汽車',
+        is_active: true,
       }),
     };
     runRepo = { findOne: vi.fn().mockResolvedValue(null) };
@@ -89,7 +87,7 @@ describe('CardTypeService — F070 createCardType', () => {
       providers: [
         CardTypeService,
         { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
-        { provide: getRepositoryToken(ObCodeDf), useValue: codeDfRepo },
+        { provide: getRepositoryToken(PooldataFieldOption), useValue: optionRepo },
         { provide: getRepositoryToken(ObLevelcardVersion), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardColumn), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardScore), useValue: noop },
@@ -186,8 +184,8 @@ describe('CardTypeService — F070 createCardType', () => {
     }
   });
 
-  it('TC-F070-09：prodKind 不在 ob_code_df 啟用期間內 → 422 VALIDATION_ERROR', async () => {
-    codeDfRepo.findOne.mockResolvedValue(null); // 不存在
+  it('TC-F070-09 v2.1：prodKind 不在 pooldata_field_option 啟用紀錄 → 422 VALIDATION_ERROR', async () => {
+    optionRepo.findOne.mockResolvedValue(null); // 無對應 active option
 
     await expect(
       service.createCardType(
@@ -200,7 +198,7 @@ describe('CardTypeService — F070 createCardType', () => {
   });
 
   it('TC-F070-09b：VALIDATION_ERROR 錯誤碼且 details 含 prodKind', async () => {
-    codeDfRepo.findOne.mockResolvedValue(null);
+    optionRepo.findOne.mockResolvedValue(null);
 
     try {
       await service.createCardType(

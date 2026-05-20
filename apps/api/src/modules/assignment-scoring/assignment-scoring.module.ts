@@ -9,7 +9,7 @@ import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity'
 import { ObTier } from '@/database/entities/ob-tier.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
@@ -29,9 +29,10 @@ import { ScoringIntegrityCheckService } from './services/scoring-integrity-check
  * password_changed_at（與其他 protected 模組一致 pattern）。
  *
  * Iter 2 新增 entity：
- *   - ObCardType        F069~F072 主檔
- *   - ObCodeDf          F069 prodKindName join / F070 F071 prodKind 驗證
- *   - ObListDefinition  F072 listDefinitionsAffected 統計
+ *   - ObCardType            F069~F072 主檔
+ *   - PooldataFieldOption   F069 prodKindName join / F070 F071 prodKind 驗證
+ *                           （v2.1 重構 / AD-E07-18 §18.2.7：原 ObCodeDf 已遷至此）
+ *   - ObListDefinition      F072 listDefinitionsAffected 統計
  */
 @Module({
   imports: [
@@ -43,7 +44,7 @@ import { ScoringIntegrityCheckService } from './services/scoring-integrity-check
       ObTier,
       ObPoolDataList,
       ObCardType,
-      ObCodeDf,
+      PooldataFieldOption,
       ObListDefinition,
       AssignmentRun,
       AssignmentAuditLog,

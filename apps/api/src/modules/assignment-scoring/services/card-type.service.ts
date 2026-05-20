@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -24,9 +24,7 @@ import {
 } from '../helpers/assignment-lock.helper';
 import {
   assertProdKindActive,
-  isWithinActivePeriod,
   sdateToday,
-  todayYyyymmdd,
 } from '../helpers/prod-kind.helper';
 
 /**
@@ -157,8 +155,10 @@ export class CardTypeService {
   constructor(
     @InjectRepository(ObCardType)
     private readonly cardTypeRepo: Repository<ObCardType>,
-    @InjectRepository(ObCodeDf)
-    private readonly codeDfRepo: Repository<ObCodeDf>,
+    // v2.1 重構（AD-E07-18 §18.2.7 / §18.7）：prodKindName 來源從 ob_code_df
+    // 改讀 pooldata_field_option（M5 deployment gate 同 commit）
+    @InjectRepository(PooldataFieldOption)
+    private readonly optionRepo: Repository<PooldataFieldOption>,
     @InjectRepository(ObLevelcardVersion)
     private readonly versionRepo: Repository<ObLevelcardVersion>,
     @InjectRepository(ObLevelcardColumn)
@@ -203,25 +203,24 @@ export class CardTypeService {
 
     const cards = await this.cardTypeRepo.find({ where });
 
-    // 取得對應 PROD_KIND 名稱（join ob_code_df）
+    // v2.1 重構（AD-E07-18 §18.2.7 / §18.7）：取得對應 PROD_KIND 名稱
+    // 從 pooldata_field_option（column_name='prod_kind'）join
     const prodKinds = Array.from(new Set(cards.map((c) => c.prod_kind)));
     const prodKindRows =
       prodKinds.length === 0
         ? []
-        : await this.codeDfRepo.find({
+        : await this.optionRepo.find({
             where: prodKinds.map((pk) => ({
-              system_id: 'OB' as any,
-              tbl_id: 'PROD_KIND' as any,
-              tbl_cd: pk as any,
+              column_name: 'prod_kind' as any,
+              option_value: pk as any,
             })),
           });
 
-    const today = todayYyyymmdd();
     const prodKindNameByCode = new Map<string, string | null>();
     for (const row of prodKindRows) {
-      // F069 BE-F069-001：PROD_KIND 停用 / 不在啟用期間內 → 顯示 null（鍵存在）
-      if (isWithinActivePeriod(row.stadt, row.enddt, today)) {
-        prodKindNameByCode.set(row.tbl_cd, row.tbl_desc1 ?? null);
+      // F069 BE-F069-001 v2.1：option is_active=false → 顯示 null（鍵不設，後續 ?? null）
+      if (row.is_active) {
+        prodKindNameByCode.set(row.option_value, row.option_label ?? null);
       }
     }
 
@@ -340,8 +339,8 @@ export class CardTypeService {
       });
     }
 
-    // AC-5：prodKind 必須為 ob_code_df 啟用期間內紀錄
-    await assertProdKindActive(this.codeDfRepo, input.prodKind);
+    // AC-5 v2.1：prodKind 必須為 pooldata_field_option active 紀錄
+    await assertProdKindActive(this.optionRepo, input.prodKind);
 
     const actorName = await this._resolveActorName(actor.userId);
     const now = new Date();
@@ -412,12 +411,11 @@ export class CardTypeService {
       });
     }
 
-    // join PROD_KIND 名稱供 response
-    const prodKindRow = await this.codeDfRepo.findOne({
+    // v2.1：join prod_kind option 取 label 供 response
+    const prodKindRow = await this.optionRepo.findOne({
       where: {
-        system_id: 'OB' as any,
-        tbl_id: 'PROD_KIND' as any,
-        tbl_cd: input.prodKind as any,
+        column_name: 'prod_kind' as any,
+        option_value: input.prodKind as any,
       },
     });
 
@@ -425,7 +423,8 @@ export class CardTypeService {
       cardType: savedCardType.card_type,
       cardName: savedCardType.card_name,
       prodKind: savedCardType.prod_kind,
-      prodKindName: prodKindRow?.tbl_desc1 ?? null,
+      prodKindName:
+        prodKindRow && prodKindRow.is_active ? prodKindRow.option_label ?? null : null,
       status: 'active',
       cardVersion: 1,
       createdAt: now.toISOString(),
@@ -455,8 +454,8 @@ export class CardTypeService {
       });
     }
 
-    // AC-6：prodKind 必須在啟用期間內
-    await assertProdKindActive(this.codeDfRepo, input.prodKind);
+    // AC-6 v2.1：prodKind 必須為 pooldata_field_option active 紀錄
+    await assertProdKindActive(this.optionRepo, input.prodKind);
 
     // 保存 before 值（供 audit）
     const before = {
@@ -490,12 +489,11 @@ export class CardTypeService {
       after,
     );
 
-    // join PROD_KIND 名稱
-    const prodKindRow = await this.codeDfRepo.findOne({
+    // v2.1：join prod_kind option 取 label
+    const prodKindRow = await this.optionRepo.findOne({
       where: {
-        system_id: 'OB' as any,
-        tbl_id: 'PROD_KIND' as any,
-        tbl_cd: saved.prod_kind as any,
+        column_name: 'prod_kind' as any,
+        option_value: saved.prod_kind as any,
       },
     });
 
@@ -503,7 +501,8 @@ export class CardTypeService {
       cardType: saved.card_type,
       cardName: saved.card_name,
       prodKind: saved.prod_kind,
-      prodKindName: prodKindRow?.tbl_desc1 ?? null,
+      prodKindName:
+        prodKindRow && prodKindRow.is_active ? prodKindRow.option_label ?? null : null,
       status: saved.status as 'active' | 'inactive',
       updatedAt: saved.updated_at.toISOString(),
     };

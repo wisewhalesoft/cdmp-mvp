@@ -27,7 +27,7 @@ import {
 import { DataSource } from 'typeorm';
 import { CardTypeService } from '../services/card-type.service';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -47,7 +47,7 @@ interface TxRecord {
 describe('CardTypeService — F072 deletePreview + deleteCardTypeCascade', () => {
   let service: CardTypeService;
   let cardTypeRepo: any;
-  let codeDfRepo: any;
+  let optionRepo: any;
   let versionRepo: any;
   let columnRepo: any;
   let scoreRepo: any;
@@ -72,7 +72,8 @@ describe('CardTypeService — F072 deletePreview + deleteCardTypeCascade', () =>
         status: 'active',
       }),
     };
-    codeDfRepo = { findOne: vi.fn() };
+    // v2.1 重構：prodKindName 來源 / assertProdKindActive 已遷至 pooldata_field_option
+    optionRepo = { findOne: vi.fn(), find: vi.fn() };
     versionRepo = { count: vi.fn().mockResolvedValue(1) };
     columnRepo = { count: vi.fn().mockResolvedValue(3) };
     scoreRepo = { count: vi.fn().mockResolvedValue(6) };
@@ -123,7 +124,7 @@ describe('CardTypeService — F072 deletePreview + deleteCardTypeCascade', () =>
       providers: [
         CardTypeService,
         { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
-        { provide: getRepositoryToken(ObCodeDf), useValue: codeDfRepo },
+        { provide: getRepositoryToken(PooldataFieldOption), useValue: optionRepo },
         { provide: getRepositoryToken(ObLevelcardVersion), useValue: versionRepo },
         { provide: getRepositoryToken(ObLevelcardColumn), useValue: columnRepo },
         { provide: getRepositoryToken(ObLevelcardScore), useValue: scoreRepo },

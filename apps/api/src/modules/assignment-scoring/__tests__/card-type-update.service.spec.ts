@@ -25,7 +25,7 @@ import {
 import { DataSource } from 'typeorm';
 import { CardTypeService } from '../services/card-type.service';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -39,7 +39,7 @@ import { User } from '@/database/entities/user.entity';
 describe('CardTypeService — F071 updateCardType', () => {
   let service: CardTypeService;
   let cardTypeRepo: any;
-  let codeDfRepo: any;
+  let optionRepo: any;
   let runRepo: any;
   let userRepo: any;
   let auditRepo: any;
@@ -59,14 +59,13 @@ describe('CardTypeService — F071 updateCardType', () => {
       }),
       save: vi.fn(async (e: any) => ({ ...e, updated_at: new Date() })),
     };
-    codeDfRepo = {
+    // v2.1 重構：prod_kind 來源從 ob_code_df 改 pooldata_field_option
+    optionRepo = {
       findOne: vi.fn().mockResolvedValue({
-        system_id: 'OB',
-        tbl_id: 'PROD_KIND',
-        tbl_cd: '01',
-        tbl_desc1: '汽車',
-        stadt: '20000101',
-        enddt: '20991231',
+        column_name: 'prod_kind',
+        option_value: '01',
+        option_label: '汽車',
+        is_active: true,
       }),
     };
     runRepo = { findOne: vi.fn().mockResolvedValue(null) };
@@ -85,7 +84,7 @@ describe('CardTypeService — F071 updateCardType', () => {
       providers: [
         CardTypeService,
         { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
-        { provide: getRepositoryToken(ObCodeDf), useValue: codeDfRepo },
+        { provide: getRepositoryToken(PooldataFieldOption), useValue: optionRepo },
         { provide: getRepositoryToken(ObLevelcardVersion), useValue: versionRepo },
         { provide: getRepositoryToken(ObLevelcardColumn), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardScore), useValue: noop },
@@ -103,13 +102,11 @@ describe('CardTypeService — F071 updateCardType', () => {
   });
 
   it('TC-F071-03：成功更新 card_name + prod_kind 並回 200', async () => {
-    codeDfRepo.findOne.mockResolvedValue({
-      system_id: 'OB',
-      tbl_id: 'PROD_KIND',
-      tbl_cd: '02',
-      tbl_desc1: '機車',
-      stadt: '20000101',
-      enddt: '20991231',
+    optionRepo.findOne.mockResolvedValue({
+      column_name: 'prod_kind',
+      option_value: '02',
+      option_label: '機車',
+      is_active: true,
     });
 
     const result = await service.updateCardType(
@@ -162,8 +159,8 @@ describe('CardTypeService — F071 updateCardType', () => {
     }
   });
 
-  it('TC-F071-08：prodKind 不在啟用期間內 → 422 VALIDATION_ERROR', async () => {
-    codeDfRepo.findOne.mockResolvedValue(null);
+  it('TC-F071-08 v2.1：prodKind 不在 pooldata_field_option 啟用紀錄 → 422 VALIDATION_ERROR', async () => {
+    optionRepo.findOne.mockResolvedValue(null);
 
     await expect(
       service.updateCardType('H', { cardName: '期中', prodKind: '99' }, actor),
@@ -207,13 +204,11 @@ describe('CardTypeService — F071 updateCardType', () => {
       updated_by: 'system',
     });
 
-    codeDfRepo.findOne.mockResolvedValue({
-      system_id: 'OB',
-      tbl_id: 'PROD_KIND',
-      tbl_cd: '02',
-      tbl_desc1: '機車',
-      stadt: '20000101',
-      enddt: '20991231',
+    optionRepo.findOne.mockResolvedValue({
+      column_name: 'prod_kind',
+      option_value: '02',
+      option_label: '機車',
+      is_active: true,
     });
 
     await service.updateCardType(

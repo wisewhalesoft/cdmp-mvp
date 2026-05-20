@@ -19,7 +19,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { CardTypeService } from '../services/card-type.service';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
-import { ObCodeDf } from '@/database/entities/ob-code-df.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
@@ -33,7 +33,7 @@ import { User } from '@/database/entities/user.entity';
 describe('CardTypeService — F069 listCardTypes', () => {
   let service: CardTypeService;
   let cardTypeRepo: any;
-  let codeDfRepo: any;
+  let optionRepo: any;
   let versionRepo: any;
   let userRepo: any;
 
@@ -41,7 +41,8 @@ describe('CardTypeService — F069 listCardTypes', () => {
     cardTypeRepo = {
       find: vi.fn().mockResolvedValue([]),
     };
-    codeDfRepo = {
+    // v2.1 重構：prodKindName 來源從 ob_code_df 改 pooldata_field_option
+    optionRepo = {
       find: vi.fn().mockResolvedValue([]),
       findOne: vi.fn().mockResolvedValue(null),
     };
@@ -60,7 +61,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
       providers: [
         CardTypeService,
         { provide: getRepositoryToken(ObCardType), useValue: cardTypeRepo },
-        { provide: getRepositoryToken(ObCodeDf), useValue: codeDfRepo },
+        { provide: getRepositoryToken(PooldataFieldOption), useValue: optionRepo },
         { provide: getRepositoryToken(ObLevelcardVersion), useValue: versionRepo },
         { provide: getRepositoryToken(ObLevelcardColumn), useValue: noop },
         { provide: getRepositoryToken(ObLevelcardScore), useValue: noop },
@@ -84,22 +85,18 @@ describe('CardTypeService — F069 listCardTypes', () => {
       { card_type: 'H', card_name: '期中', prod_kind: '01', status: 'active' },
       { card_type: 'S', card_name: '中結', prod_kind: '01', status: 'active' },
     ]);
-    codeDfRepo.find.mockResolvedValue([
+    optionRepo.find.mockResolvedValue([
       {
-        system_id: 'OB',
-        tbl_id: 'PROD_KIND',
-        tbl_cd: '01',
-        tbl_desc1: '汽車',
-        stadt: '20000101',
-        enddt: '20991231',
+        column_name: 'prod_kind',
+        option_value: '01',
+        option_label: '汽車',
+        is_active: true,
       },
       {
-        system_id: 'OB',
-        tbl_id: 'PROD_KIND',
-        tbl_cd: '02',
-        tbl_desc1: '機車',
-        stadt: '20000101',
-        enddt: '20991231',
+        column_name: 'prod_kind',
+        option_value: '02',
+        option_label: '機車',
+        is_active: true,
       },
     ]);
 
@@ -152,7 +149,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
     cardTypeRepo.find.mockResolvedValue([
       { card_type: 'X', card_name: '無對照', prod_kind: '99', status: 'active' },
     ]);
-    codeDfRepo.find.mockResolvedValue([]); // 無對應 PROD_KIND
+    optionRepo.find.mockResolvedValue([]); // 無對應 prod_kind option
 
     const result = await service.listCardTypes({ status: 'active' });
 
@@ -170,7 +167,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
       { card_type: 'E5', card_name: '滿期5年', prod_kind: '01', status: 'active' },
       { card_type: 'S', card_name: '中結', prod_kind: '01', status: 'active' },
     ]);
-    codeDfRepo.find.mockResolvedValue([]);
+    optionRepo.find.mockResolvedValue([]);
 
     const result = await service.listCardTypes({ status: 'active' });
 
@@ -184,18 +181,16 @@ describe('CardTypeService — F069 listCardTypes', () => {
     ]);
   });
 
-  it('PROD_KIND 已過期（enddt < today）→ prodKindName=null', async () => {
+  it('v2.1：prod_kind option is_active=false → prodKindName=null（取代原 stadt/enddt 過期判定）', async () => {
     cardTypeRepo.find.mockResolvedValue([
       { card_type: 'H', card_name: '期中', prod_kind: '01', status: 'active' },
     ]);
-    codeDfRepo.find.mockResolvedValue([
+    optionRepo.find.mockResolvedValue([
       {
-        system_id: 'OB',
-        tbl_id: 'PROD_KIND',
-        tbl_cd: '01',
-        tbl_desc1: '汽車',
-        stadt: '20000101',
-        enddt: '20100101', // 已過期
+        column_name: 'prod_kind',
+        option_value: '01',
+        option_label: '汽車',
+        is_active: false, // 已停用
       },
     ]);
 
