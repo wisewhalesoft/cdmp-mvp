@@ -575,4 +575,70 @@ describe('AssignmentListService', () => {
       expect(res.lists[0].crEnabled).toBe(false);
     });
   });
+
+  /**
+   * v2.1.1 補強（US-128 / architecture-spec §18.11.6）：
+   *   F 群組 — service 對 dto.prodBest 採方案 Y 行為 — DTO 接受但 service 層 ignore，
+   *   不寫入 entity；entity.prod_best 一律寫 null（M-A2 後 nullable）。
+   *
+   * 對應 test spec：F050-test.md §十四 F 群組（TS-F050-F01 ~ F05）
+   */
+  describe('v2.1.1 prodBest ignore 行為（F 群組 / US-128 AC-5 / §18.11.6）', () => {
+    it('TS-F050-F01：createList — DTO 含 prodBest: null，entity 寫入後 prod_best === null（非空字串 \'\'）', async () => {
+      const res = await service.createList(
+        baseCreateDto({ prodBest: null }) as any,
+        ACTOR,
+        YM,
+      );
+      const record = await listRepo.findOne({ where: { list_no: res.listNo } });
+      expect(record).not.toBeNull();
+      expect(record!.prod_best).toBeNull();
+    });
+
+    it('TS-F050-F02：createList — DTO 不含 prodBest 欄位，entity prod_best 仍為 null', async () => {
+      const dto = baseCreateDto();
+      delete (dto as any).prodBest;
+      const res = await service.createList(dto as any, ACTOR, YM);
+      const record = await listRepo.findOne({ where: { list_no: res.listNo } });
+      expect(record).not.toBeNull();
+      expect(record!.prod_best).toBeNull();
+    });
+
+    it('TS-F050-F03：updateList — DTO 含 prodBest: \'Y\'（舊客戶端），entity prod_best 不被更新（維持 null）', async () => {
+      // 先 create 一筆名單（prod_best 由波 6 service 改動後寫 null）
+      const created = await service.createList(baseCreateDto() as any, ACTOR, YM);
+
+      // 編輯 — 舊客戶端送 prodBest: 'Y'，service 應 ignore
+      await service.updateList(
+        created.listNo,
+        baseUpdateDto({ prodBest: 'Y' }) as any,
+        ACTOR,
+        YM,
+      );
+
+      const record = await listRepo.findOne({ where: { list_no: created.listNo } });
+      expect(record).not.toBeNull();
+      expect(record!.prod_best).toBeNull();
+    });
+
+    it('TS-F050-F04：listLists — prod_best=null 不拋例外，回 response 不缺少欄位', async () => {
+      await service.createList(baseCreateDto() as any, ACTOR, YM);
+
+      const res = await service.listLists({ ym: YM });
+      expect(res.lists.length).toBeGreaterThanOrEqual(1);
+      // 不拋例外即視為通過；其餘 response shape 屬其他測試覆蓋範圍
+    });
+
+    it('TS-F050-F05：listLists — 多筆 prod_best=null 時不拋例外', async () => {
+      await service.createList(baseCreateDto() as any, ACTOR, YM);
+      await service.createList(
+        baseCreateDto({ cardType: '02' }) as any,
+        ACTOR,
+        YM,
+      );
+
+      const res = await service.listLists({ ym: YM });
+      expect(res.lists.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

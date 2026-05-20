@@ -375,7 +375,11 @@ export class AssignmentListService {
       // condition_payload source of truth（v2.1 / §18.4）
       condition_payload: dto.conditionPayload,
 
-      prod_best: dto.prodBest ?? '',
+      // v2.1.1 (US-128 / architecture-spec §18.11.6 方案 Y)：
+      //   prod_best 一級欄位 DEPRECATED；業務語意改由 condition_payload.conditions[
+      //   columnName='best_case'] 承接 (BR-12)。service 層 ignore dto.prodBest 不寫入
+      //   entity；entity column 仍保留為 deprecated nullable，新名單寫 null。
+      prod_best: null,
       list_type: '01', // AC-2：後端固定
       list_period_start: String(dto.listPeriodStart),
       list_period_end: String(dto.listPeriodEnd),
@@ -537,7 +541,9 @@ export class AssignmentListService {
     existing.list_period_end = String(dto.listPeriodEnd);
     existing.list_interval = String(dto.listInterval);
     existing.card_type = dto.cardType ?? null;
-    existing.prod_best = dto.prodBest ?? '';
+    // v2.1.1 (US-128 / architecture-spec §18.11.6 方案 Y)：
+    //   service 層 ignore dto.prodBest — 整行刪除；migration M-A2 已一次性清空既有資料，
+    //   後續寫入維持 NULL（不主動覆寫；舊客戶端送 prodBest:'Y' 也不會生效）。
     if (dto.crEnabled !== undefined) {
       existing.cr_enabled = dto.crEnabled;
     }
