@@ -32,6 +32,7 @@ import { ObListDefinition } from '@/database/entities/ob-list-definition.entity'
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
+import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const HISTORICAL_YM = '202504'; // 歷史月份
@@ -46,17 +47,18 @@ const ACTOR = {
 function fullUpdateDto(overrides: Partial<any> = {}) {
   return {
     listNm: '改名後',
-    prodKind: '01',
-    caseYear: '1',
-    specTp: 'S1',
-    caseStatus: '01',
     listPeriodStart: 1,
     listPeriodEnd: 6,
     listInterval: 1,
-    settleSrc: 'Y',
     cardType: '01',
     prodBest: null,
     crEnabled: false,
+    conditionPayload: {
+      conditions: [
+        { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+      ],
+      logic: 'AND',
+    },
     ...overrides,
   };
 }
@@ -74,7 +76,13 @@ describe('AssignmentListService — historical month readonly (TC-M01-HIST)', ()
         TypeOrmModule.forRoot({
           type: 'better-sqlite3',
           database: ':memory:',
-          entities: [ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption],
+          entities: [
+            ObListDefinition,
+            AssignmentAuditLog,
+            AssignmentRun,
+            PooldataFieldOption,
+            PooldataFieldWhitelist,
+          ],
           synchronize: true,
         }),
         TypeOrmModule.forFeature([
@@ -82,6 +90,7 @@ describe('AssignmentListService — historical month readonly (TC-M01-HIST)', ()
           AssignmentAuditLog,
           AssignmentRun,
           PooldataFieldOption,
+          PooldataFieldWhitelist,
         ]),
       ],
       providers: [AssignmentListService, AssignmentRunGuardService],
@@ -93,6 +102,20 @@ describe('AssignmentListService — historical month readonly (TC-M01-HIST)', ()
     auditRepo = ds.getRepository(AssignmentAuditLog);
     runRepo = ds.getRepository(AssignmentRun);
     service = app.get(AssignmentListService);
+
+    // v2.1 migrate（波 8）：seed whitelist 給 validateConditionPayload 用
+    const whitelistRepo = ds.getRepository(PooldataFieldWhitelist);
+    const now = new Date();
+    await whitelistRepo.save(
+      whitelistRepo.create({
+        column_name: 'prod_kind',
+        display_name: 'prod_kind',
+        field_type: 'categorical',
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      } as Partial<PooldataFieldWhitelist>),
+    );
   });
 
   afterAll(async () => {
@@ -125,6 +148,11 @@ describe('AssignmentListService — historical month readonly (TC-M01-HIST)', ()
         status: 'active',
         stage: 'draft',
         project_workym: ym,
+        // v2.1 migrate：seed 含 condition_payload 避免被視為 legacy
+        condition_payload: {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+          logic: 'AND',
+        },
         created_by_prog: 'seed',
         created_by: 'seed',
         created_at: new Date(),

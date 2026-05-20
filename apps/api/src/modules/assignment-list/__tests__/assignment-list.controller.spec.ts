@@ -135,16 +135,19 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
     vi.clearAllMocks();
   });
 
+  // v2.1 migrate（波 8）：移除 prodKind/caseYear/specTp/caseStatus/settleSrc 5 個欄位
+  //   conditionPayload 必填（CreateListDto）；UpdateListDto 為 optional 但若提供需合 schema
   const baseCreateBody = {
     listNm: 'x',
-    prodKind: '01',
-    caseYear: '1',
-    specTp: 'S1',
-    caseStatus: '01',
     listPeriodStart: 1,
     listPeriodEnd: 1,
     listInterval: 1,
-    settleSrc: 'Y',
+    conditionPayload: {
+      conditions: [
+        { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+      ],
+      logic: 'AND',
+    },
   };
   const baseUpdateBody = baseCreateBody;
 
@@ -352,7 +355,7 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
   });
 
   // =========================================================================
-  // TC-PAYLOAD — 422 case_status 必填 / VALIDATION
+  // TC-PAYLOAD — DTO 驗證（v2.1 migrate）
   // =========================================================================
 
   describe('TC-PAYLOAD — DTO 驗證', () => {
@@ -360,10 +363,10 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
       currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
     });
 
-    it('POST 缺 caseStatus → 422 VALIDATION_ERROR', async () => {
+    it('POST 缺 conditionPayload → 422 VALIDATION_ERROR（v2.1 取代 caseStatus）', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/assignment/lists')
-        .send({ ...baseCreateBody, caseStatus: undefined });
+        .send({ ...baseCreateBody, conditionPayload: undefined });
       expect(res.status).toBe(422);
       expect(res.body.error).toBe('VALIDATION_ERROR');
     });

@@ -19,6 +19,7 @@ import { AssignmentListService } from '../assignment-list.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
+import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 import type { CreateListDto } from '../dto/create-list.dto';
@@ -30,6 +31,7 @@ interface Env {
   service: AssignmentListService;
   listRepo: Repository<ObListDefinition>;
   optionRepo: Repository<PooldataFieldOption>;
+  whitelistRepo: Repository<PooldataFieldWhitelist>;
   app: TestingModule;
 }
 
@@ -43,6 +45,7 @@ async function buildModule(): Promise<Env> {
           ObListDefinition,
           AssignmentAuditLog,
           PooldataFieldOption,
+          PooldataFieldWhitelist,
         ],
         synchronize: true,
       }),
@@ -50,6 +53,7 @@ async function buildModule(): Promise<Env> {
         ObListDefinition,
         AssignmentAuditLog,
         PooldataFieldOption,
+        PooldataFieldWhitelist,
       ]),
     ],
     providers: [
@@ -65,44 +69,48 @@ async function buildModule(): Promise<Env> {
     service: app.get(AssignmentListService),
     listRepo: app.get(getRepositoryToken(ObListDefinition)),
     optionRepo: app.get(getRepositoryToken(PooldataFieldOption)),
+    whitelistRepo: app.get(getRepositoryToken(PooldataFieldWhitelist)),
     app,
   };
 }
 
 function makeCreateDto(overrides: Partial<CreateListDto> = {}): CreateListDto {
+  // v2.1 migrate：移除 prodKind/caseYear/specTp/caseStatus/settleSrc；conditionPayload 必填
   return {
     listNm: '測試名單',
-    prodKind: '01',
-    caseYear: '1',
-    specTp: 'A',
-    caseStatus: '01',
     listPeriodStart: 1,
     listPeriodEnd: 12,
     listInterval: 1,
-    settleSrc: 'Y',
     cardType: 'M5',
     prodBest: null,
     crEnabled: false,
+    conditionPayload: {
+      conditions: [
+        { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+      ],
+      logic: 'AND',
+    },
     ...overrides,
-  } as CreateListDto;
+  } as unknown as CreateListDto;
 }
 
 function makeUpdateDto(overrides: Partial<UpdateListDto> = {}): UpdateListDto {
   return {
     listNm: '測試名單（修改）',
-    prodKind: '01',
-    caseYear: '1',
-    specTp: 'A',
-    caseStatus: '01',
     listPeriodStart: 1,
     listPeriodEnd: 12,
     listInterval: 1,
-    settleSrc: 'Y',
     cardType: 'M5',
     prodBest: null,
     crEnabled: false,
+    conditionPayload: {
+      conditions: [
+        { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+      ],
+      logic: 'AND',
+    },
     ...overrides,
-  } as UpdateListDto;
+  } as unknown as UpdateListDto;
 }
 
 describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F051 v2.0 + F076 v1.3)', () => {
@@ -117,9 +125,29 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
   beforeEach(async () => {
     await env.listRepo.createQueryBuilder().delete().execute();
     await env.optionRepo.createQueryBuilder().delete().execute();
+    await env.whitelistRepo.clear();
+    const now = new Date();
+    // v2.1 migrate：seed whitelist 給 validateConditionPayload 用
+    await env.whitelistRepo.save([
+      env.whitelistRepo.create({
+        column_name: 'prod_kind',
+        display_name: 'prod_kind',
+        field_type: 'categorical',
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      }),
+      env.whitelistRepo.create({
+        column_name: 'settle_src',
+        display_name: 'settle_src',
+        field_type: 'categorical',
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      }),
+    ]);
     // seed：prod_kind 01 active；02 inactive；settle_src Y active；N inactive
     //   v1.4.3 case 對齊：pooldata_field_option.column_name 改小寫對齊 ob_pool_data snake_case
-    const now = new Date();
     await env.optionRepo.save([
       env.optionRepo.create({
         column_name: 'prod_kind',
@@ -241,7 +269,8 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
     expect(details).toContainEqual({ columnName: 'settle_src', optionValue: 'N' });
   });
 
-  it('TC-WHITELIST-WARNING-005：無 conditionPayload → warnings 空陣列', async () => {
+  it('TC-WHITELIST-WARNING-005：conditionPayload 條件無 inactive 引用 → warnings 空陣列（v2.1）', async () => {
+    // v2.1 conditionPayload 必填；改測「條件無 inactive 引用」之等效情境
     const res = await env.service.createList(makeCreateDto(), { userId: 'u1', ipAddress: null }, YM);
     expect(res.warnings ?? []).toEqual([]);
   });
