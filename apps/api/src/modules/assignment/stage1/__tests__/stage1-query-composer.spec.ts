@@ -603,3 +603,138 @@ describe('Stage1QueryComposer 波 5 — columnName allowlist 防禦', () => {
     expect(result.where).toContain(`"${longButLegal}"`);
   });
 });
+
+// ===========================================================================
+// 波 6：v2.1.1 best_case categorical（架構 §18.11.7 / BR-12 §(3)）
+// ===========================================================================
+//
+// 確認 best_case 由路徑 A 通用 categorical fragment 邏輯自動處理，無需特殊規則。
+//
+// 大小寫警告（[[feedback_mock_real_system_contract]]）：
+//   ob_pool_data.best_case 為 ETL 落地之 varchar(1) 大寫；mock 與 assertion
+//   一律用 'Y' / 'N'（不可 'y' / 'n'），否則 SQL IN 比對 case-sensitive silent miss。
+
+describe('Stage1QueryComposer 波 6 — best_case categorical (v2.1.1 / §18.11.7)', () => {
+  it('TS-F050-G01：best_case 單值 [\'Y\'] → "best_case" IN (:...cat0)；params 含 [\'Y\']', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"best_case"');
+    expect(result.where).toMatch(/IN\s*\(:\.\.\.[a-zA-Z0-9_]+\)/);
+    const paramValues = Object.values(result.params);
+    expect(paramValues).toHaveLength(1);
+    expect(paramValues[0]).toEqual(['Y']);
+  });
+
+  it('TS-F050-G02：best_case 雙值 [\'Y\', \'N\'] → IN 子句含兩個值', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          {
+            columnName: 'best_case',
+            fieldType: 'categorical',
+            values: ['Y', 'N'],
+          },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"best_case"');
+    expect(result.where).toMatch(/IN\s*\(:\.\.\.[a-zA-Z0-9_]+\)/);
+    const paramValues = Object.values(result.params);
+    expect(paramValues).toHaveLength(1);
+    expect(paramValues[0]).toEqual(['Y', 'N']);
+  });
+
+  it('TS-F050-G03：best_case 與 prod_kind 並存 → 兩個 fragment AND 連接，params 不衝突', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          {
+            columnName: 'prod_kind',
+            fieldType: 'categorical',
+            values: ['01'],
+          },
+          {
+            columnName: 'best_case',
+            fieldType: 'categorical',
+            values: ['Y'],
+          },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).toContain('"best_case"');
+    // AND 連接（連 fragment 中至少含一個 AND keyword）
+    expect(result.where).toMatch(/\bAND\b/i);
+
+    // params key 互不衝突（共有 2 個 param）
+    const paramKeys = Object.keys(result.params);
+    expect(paramKeys).toHaveLength(2);
+    expect(new Set(paramKeys).size).toBe(2);
+
+    // 兩組 array 分別為 ['01'] / ['Y']
+    const paramArrays = Object.values(result.params) as string[][];
+    expect(paramArrays).toContainEqual(['01']);
+    expect(paramArrays).toContainEqual(['Y']);
+  });
+
+  it("TS-F050-G04：best_case 不觸發 caseyear wildcard 特殊邏輯（regression）", () => {
+    // 故意用 caseyear 的 wildcard 值 '99'，驗證 best_case 不走 caseyear skip 路徑
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          {
+            columnName: 'best_case',
+            fieldType: 'categorical',
+            values: ['99'],
+          },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"best_case"');
+    expect(result.where).toMatch(/IN\s*\(:\.\.\.[a-zA-Z0-9_]+\)/);
+    // params 含 '99'（不被 skip）
+    const paramValues = Object.values(result.params);
+    expect(paramValues).toHaveLength(1);
+    expect(paramValues[0]).toEqual(['99']);
+  });
+
+  it("TS-F050-G05：columnName allowlist guard — 'best_case' 通過正則 /^[a-z][a-z0-9_]{0,63}$/", () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          {
+            columnName: 'best_case',
+            fieldType: 'categorical',
+            values: ['Y'],
+          },
+        ],
+      },
+    });
+    // 不應拋例外
+    expect(() => buildStage1WhereConditions(list)).not.toThrow();
+    const result = buildStage1WhereConditions(list);
+    expect(result.skipReason).toBeNull();
+  });
+});
