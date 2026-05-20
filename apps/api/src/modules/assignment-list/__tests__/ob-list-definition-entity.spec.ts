@@ -115,4 +115,40 @@ describe('ObListDefinition entity condition_payload round-trip (Phase 5a 波2)',
     expect(typeof raw[0].condition_payload).toBe('string');
     expect(JSON.parse(raw[0].condition_payload!)).toEqual(payload);
   });
+
+  /**
+   * v2.1.1 補強（US-128 / architecture-spec §18.11.4 Entity 修改指引）：
+   *   prod_best 欄位放寬為 nullable（string | null）；業務語意已遷移至
+   *   condition_payload.conditions[columnName='best_case']。
+   *
+   * 對應 test spec：F050-test.md §十四 C 群組（TS-F050-C01 / C03）
+   */
+  describe('v2.1.1 補強 — prod_best nullable + ob_card_type regression', () => {
+    it('TS-F050-C01：prod_best 欄位允許寫入 null（M-A2 後 nullable schema）', async () => {
+      const entity = baseEntity({ prod_best: null }) as ObListDefinition;
+      await listRepo.save(listRepo.create(entity));
+
+      const found = await listRepo.findOne({ where: { list_no: 'OB202605001' } });
+      expect(found).not.toBeNull();
+      expect(found!.prod_best).toBeNull();
+    });
+
+    it('TS-F050-C03：ob_card_type entity regression — 欄位結構不受 v2.1.1 改動影響（card_type / card_name / prod_kind / status 四欄存在）', async () => {
+      // Static analysis：讀 entity 檔案內容驗證 @Column 宣告
+      // 依[[feedback_grep_negative_lookahead]]：用 fs + regex 確認 4 欄存在，不可僅靠 Grep 工具
+      const fs = await import('fs');
+      const path = await import('path');
+      const entityPath = path.resolve(
+        __dirname,
+        '../../../database/entities/ob-card-type.entity.ts',
+      );
+      const src = fs.readFileSync(entityPath, 'utf-8');
+
+      // 4 欄必存在
+      expect(src).toMatch(/@PrimaryColumn\(\s*\{[^}]*name:\s*'card_type'/);
+      expect(src).toMatch(/@Column\(\s*\{[^}]*name:\s*'card_name'/);
+      expect(src).toMatch(/@Column\(\s*\{[^}]*name:\s*'prod_kind'/);
+      expect(src).toMatch(/@Column\(\s*\{[^}]*name:\s*'status'/);
+    });
+  });
 });

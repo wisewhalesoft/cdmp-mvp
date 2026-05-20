@@ -65,8 +65,12 @@ export class ObListDefinition {
   @Column({ name: 'prod_kind', type: 'varchar', length: 255 })
   prod_kind: string;
 
-  @Column({ name: 'prod_best', type: 'varchar', length: 5 })
-  prod_best: string;
+  // v2.1.1 (2026-05-20 / US-128 / Q-B B3 / architecture-spec §18.11.4)：
+  //   prod_best 一級欄位 DEPRECATED；業務語意改由 condition_payload.conditions[columnName='best_case'] 承接。
+  //   NOT NULL → NULL 由 migration m287 放寬；本 entity 同步改為 nullable。
+  //   完全 DROP COLUMN 屬 v2.2+ 後續決策。
+  @Column({ name: 'prod_best', type: 'varchar', length: 5, nullable: true })
+  prod_best: string | null;
 
   @Column({ name: 'spec_tp', type: 'varchar', length: 255, nullable: true })
   spec_tp: string | null;
