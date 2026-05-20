@@ -35,6 +35,7 @@ import {
   type PooldataOption,
   type FieldType,
 } from '@/api/pooldata-fields';
+import { listCardTypes, type CardTypeListItem } from '@/api/card-type';
 import {
   CopyFromPrevMonthModal,
   computePrevYm,
@@ -119,11 +120,17 @@ export function ListCreateDraftPage() {
   // ─── Form state ───
   const [listNm, setListNm] = useState('');
   const [cardType, setCardType] = useState('');
-  const [prodBest, setProdBest] = useState('');
+  // v2.1.1（US-128 / D2 / Q-B B3）：prodBest 一級欄位移除；業務語意改由
+  //   condition_payload.conditions[columnName='best_case'] 承接（BR-12）。
+  //   state / DTO 寫入 / input element 全部移除。
   const [listPeriodStart, setListPeriodStart] = useState<string>('');
   const [listPeriodEnd, setListPeriodEnd] = useState<string>('');
   const [listInterval, setListInterval] = useState<string>('');
   const [crEnabled, setCrEnabled] = useState(true);
+
+  // v2.1.1（US-126 / AC-16）：cardType 下拉資料 + fallback 狀態
+  const [cardTypes, setCardTypes] = useState<CardTypeListItem[]>([]);
+  const [cardTypesLoadFailed, setCardTypesLoadFailed] = useState(false);
 
   const [conditions, setConditions] = useState<BuilderCondition[]>([]);
   const [condIdSeq, setCondIdSeq] = useState(1);
@@ -167,6 +174,33 @@ export function ListCreateDraftPage() {
         if (!aborted) setFields(data.fields ?? []);
       } catch {
         if (!aborted) setFields([]);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  // v2.1.1（US-126 / AC-16）：載入 cardTypes（建立模式只列 status=active）
+  // API 失敗時設 cardTypesLoadFailed=true → 渲染 fallback 提示，不阻擋儲存
+  useEffect(() => {
+    let aborted = false;
+    void (async () => {
+      try {
+        const data = await listCardTypes('active');
+        if (!aborted) {
+          // 對齊 prototype 27a — 依 cardType 升冪
+          const sorted = [...(data.cardTypes ?? [])].sort((a, b) =>
+            a.cardType.localeCompare(b.cardType),
+          );
+          setCardTypes(sorted);
+          setCardTypesLoadFailed(false);
+        }
+      } catch {
+        if (!aborted) {
+          setCardTypes([]);
+          setCardTypesLoadFailed(true);
+        }
       }
     })();
     return () => {
@@ -337,7 +371,8 @@ export function ListCreateDraftPage() {
         conditionPayload: buildPayload(),
       };
       if (cardType) dto.cardType = cardType;
-      if (prodBest) dto.prodBest = prodBest;
+      // v2.1.1（US-128）：prodBest 不再從 DTO 送出（業務語意改由 condition_payload
+      //   conditions[columnName='best_case'] 承接，BR-12）
       if (copyFromListNo) dto.copyFromListNo = copyFromListNo;
 
       const result = (await createList(dto)) as { listNo: string };
@@ -361,7 +396,7 @@ export function ListCreateDraftPage() {
     listInterval,
     crEnabled,
     cardType,
-    prodBest,
+    // v2.1.1（US-128）：prodBest 已移除
     copyFromListNo,
     buildPayload,
     showToast,
@@ -594,36 +629,49 @@ export function ListCreateDraftPage() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
-                <div className="col-span-3">
+                {/* v2.1.1（US-126 / AC-16）：卡別由 <input> 改為 <select>；options 來自
+                    ob_card_type（GET /api/v1/assignment/scoring/card-types，建立模式僅列
+                    status=active）；首選項「— 未選擇 —」（空值，預設選中）；API 失敗時
+                    顯示 fallback 提示（不阻擋儲存）。v2.0 之 maxLength={2} 限制由下拉
+                    自然消除（後端 @MaxLength(5) 對齊 ob_card_type.card_type VARCHAR(5)）。 */}
+                <div className="col-span-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     卡別{' '}
-                    <span className="text-[10px] text-gray-400 font-normal">選填 · max 2</span>
+                    <span className="text-[10px] text-gray-400 font-normal">選填</span>
                   </label>
-                  <input
-                    data-testid="input-cardType"
-                    type="text"
-                    maxLength={2}
+                  <select
+                    data-testid="select-cardType"
                     value={cardType}
                     onChange={(e) => setCardType(e.target.value)}
-                    placeholder="例：01"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                    disabled={cardTypesLoadFailed}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">— 未選擇 —</option>
+                    {cardTypes.map((c) => (
+                      <option key={c.cardType} value={c.cardType}>
+                        {c.cardType} — {c.cardName}（{c.prodKindName ?? c.prodKind}）
+                      </option>
+                    ))}
+                  </select>
+                  {cardTypesLoadFailed && (
+                    <div
+                      data-testid="card-type-fallback"
+                      className="mt-2 flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-amber-900">
+                          卡別資料載入失敗，請重新整理頁面
+                        </p>
+                        <p className="text-amber-800 mt-0.5">
+                          卡別為選填欄位，您仍可不選卡別完成建立。
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    最佳產品{' '}
-                    <span className="text-[10px] text-gray-400 font-normal">選填 · max 5</span>
-                  </label>
-                  <input
-                    data-testid="input-prodBest"
-                    type="text"
-                    maxLength={5}
-                    value={prodBest}
-                    onChange={(e) => setProdBest(e.target.value)}
-                    placeholder="例：05"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
+                {/* v2.1.1（US-128 / D2 / Q-B B3）：「最佳產品」prodBest input 已移除；
+                    業務語意改由篩選條件區 best_case categorical condition（Y/N）承接（BR-12）。 */}
               </div>
             </section>
 

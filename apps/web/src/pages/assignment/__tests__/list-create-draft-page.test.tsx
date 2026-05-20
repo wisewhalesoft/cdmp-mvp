@@ -5,15 +5,18 @@ import { ListCreateDraftPage } from '../list-create-draft-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as pooldataFieldsApi from '@/api/pooldata-fields';
+import * as cardTypeApi from '@/api/card-type';
 import * as authStore from '@/stores/auth-store';
 import type { ListListsResponse, AssignmentListItem } from '@/api/assignment-list';
 import type {
   ListFieldsResponse,
   ListOptionsResponse,
 } from '@/api/pooldata-fields';
+import type { ListCardTypesResponse } from '@/api/card-type';
 
 vi.mock('@/api/assignment-list');
 vi.mock('@/api/pooldata-fields');
+vi.mock('@/api/card-type');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
@@ -30,19 +33,41 @@ const mockedCreateList = vi.mocked(assignmentListApi.createList);
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedListFields = vi.mocked(pooldataFieldsApi.listFields);
 const mockedListOptions = vi.mocked(pooldataFieldsApi.listOptions);
+const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 
 // 對齊 prototype 27a L510-519 之 FIELDS mock（含拍板 UI-Q5 birth_date date type）
+// v2.1.1（US-128/US-129）：新增 best_case categorical（承接已移除之 prod_best 業務語意）
 const fieldsFixture: ListFieldsResponse = {
   fields: [
     { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'caseyear', displayName: '進件 / 滿期年數', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'case_status', displayName: '案件結清期別', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
+    { columnName: 'best_case', displayName: '優質案件', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'month_cnt', displayName: '撈取月份計數', fieldType: 'numeric', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'birth_date', displayName: '客戶生日', fieldType: 'date', isActive: true, createdAt: '', updatedAt: '' },
     // list_period_* 三欄不出現在 fields 回傳（依 5d 紅線：whitelist 不含 list_period_*）
+  ],
+};
+
+// v2.1.1（US-126）：cardTypesFixture — 5 筆 active，依 card_type 升冪（對齊 prototype 27a L218-226）
+const cardTypesFixture: ListCardTypesResponse = {
+  cardTypes: [
+    { cardType: 'E', cardName: '期中', prodKind: '01', prodKindName: '三信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'M', cardName: '滿期', prodKind: '03', prodKindName: '一般商品', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'OB', cardName: '一般催收', prodKind: '01', prodKindName: '三信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'S5', cardName: '主力催收', prodKind: '02', prodKindName: '中信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'S6', cardName: '重點戶', prodKind: '02', prodKindName: '中信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+  ],
+};
+
+// v2.1.1（US-129）：best_case options Y / N（大寫；[[feedback_mock_real_system_contract]]）
+const bestCaseOptionsFixture: ListOptionsResponse = {
+  options: [
+    { columnName: 'best_case', optionValue: 'Y', optionLabel: '優質案件', isActive: true, createdAt: '', updatedAt: '' },
+    { columnName: 'best_case', optionValue: 'N', optionLabel: '非優質案件', isActive: true, createdAt: '', updatedAt: '' },
   ],
 };
 
@@ -96,8 +121,11 @@ function setupDefaultMocks() {
     if (columnName === 'caseyear') return caseyearOptionsFixture;
     if (columnName === 'case_status') return caseStatusOptionsFixture;
     if (columnName === 'prod_kind') return prodKindOptionsFixture;
+    if (columnName === 'best_case') return bestCaseOptionsFixture;
     return { options: [] };
   });
+  // v2.1.1（US-126）：cardTypes — 預設回 5 筆 active
+  mockedListCardTypes.mockResolvedValue(cardTypesFixture);
   mockedListLists.mockResolvedValue(emptyPrevMonthLists);
 }
 
@@ -442,5 +470,163 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
     // 勾選後 enabled
     fireEvent.click(screen.getByTestId('checkbox-inactive-acknowledge'));
     expect(confirmBtn).not.toBeDisabled();
+  });
+
+  // ==========================================================================
+  // v2.1.1 補強 H 群組（US-126 / US-128 / US-129 / F050 AC-16 / §18.11.5）
+  //   - cardType: <input type="text"> → <select data-testid="select-cardType">
+  //   - prodBest: 移除 input-prodBest 元素 + state + DTO 寫入
+  //   - best_case: 篩選條件 dropdown 含此欄位 + 可加入 Y/N 條件
+  // ==========================================================================
+  describe('v2.1.1 補強 (US-126/US-128/US-129)', () => {
+    it('TS-F050-H01：移除 prodBest input — queryByTestId(\'input-prodBest\') 為 null（DOM 完全不存在）', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+
+      expect(screen.queryByTestId('input-prodBest')).toBeNull();
+    });
+
+    it('TS-F050-H02：卡別 <select> 以 testid select-cardType 渲染，tagName 為 SELECT', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+
+      const el = screen.getByTestId('select-cardType');
+      expect(el.tagName).toBe('SELECT');
+    });
+
+    it('TS-F050-H03：卡別下拉首選項為「— 未選擇 —」且預設選中（空值）', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+
+      const select = screen.getByTestId('select-cardType') as HTMLSelectElement;
+      // 首選項
+      expect(select.options[0].text).toMatch(/未選擇/);
+      expect(select.options[0].value).toBe('');
+      // 預設值為空（首選項 selected）
+      expect(select.value).toBe('');
+    });
+
+    it('TS-F050-H04：卡別下拉 options 來自 mock cardTypes API — 共 6 個（1 首選 + 5 active），依升冪', async () => {
+      renderPage();
+      await waitFor(() => expect(mockedListCardTypes).toHaveBeenCalled());
+
+      const select = screen.getByTestId('select-cardType') as HTMLSelectElement;
+      expect(select.options.length).toBe(6); // 1 首選 + 5 active
+
+      // 依升冪：E, M, OB, S5, S6（首選項在 index 0）
+      const values = Array.from(select.options).map((o) => o.value);
+      expect(values).toEqual(['', 'E', 'M', 'OB', 'S5', 'S6']);
+
+      // option text 格式：含 card_type — card_name（prod_kind 或 prodKindName）
+      const s5 = Array.from(select.options).find((o) => o.value === 'S5');
+      expect(s5).toBeDefined();
+      expect(s5!.text).toContain('S5');
+      expect(s5!.text).toContain('主力催收');
+    });
+
+    it('TS-F050-H05：選取 S5 後送出 DTO — cardType === \'S5\'（純代碼字串）', async () => {
+      mockedCreateList.mockResolvedValue({ listNo: 'OB202605099' } as never);
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: '測試' } });
+      fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+      fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+      fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+      // 選 cardType=S5
+      fireEvent.change(screen.getByTestId('select-cardType'), { target: { value: 'S5' } });
+
+      // 加最小條件以通過必填驗證
+      fireEvent.click(screen.getByTestId('btn-add-condition'));
+      await waitFor(() => expect(screen.getByTestId('add-field-caseyear')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('add-field-caseyear'));
+      await waitFor(() => expect(mockedListOptions).toHaveBeenCalledWith('caseyear', expect.any(Object)));
+      fireEvent.click(screen.getByTestId('btn-open-values-0'));
+      await waitFor(() => expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+
+      fireEvent.click(screen.getByTestId('btn-save-draft'));
+      await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+
+      const dto = mockedCreateList.mock.calls[0][0] as Record<string, unknown>;
+      expect(dto.cardType).toBe('S5');
+    });
+
+    it('TS-F050-H06：API 載入失敗時顯示 fallback 提示「卡別資料載入失敗，請重新整理頁面」；不阻擋儲存', async () => {
+      mockedListCardTypes.mockRejectedValue(new Error('Network Error'));
+      mockedCreateList.mockResolvedValue({ listNo: 'OB202605099' } as never);
+
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+
+      // fallback 文字出現
+      await waitFor(() => {
+        expect(screen.getByText('卡別資料載入失敗，請重新整理頁面')).toBeInTheDocument();
+      });
+
+      // 填其他欄位仍可儲存
+      fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: '測試' } });
+      fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+      fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+      fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+      fireEvent.click(screen.getByTestId('btn-add-condition'));
+      await waitFor(() => expect(screen.getByTestId('add-field-caseyear')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('add-field-caseyear'));
+      await waitFor(() => expect(mockedListOptions).toHaveBeenCalledWith('caseyear', expect.any(Object)));
+      fireEvent.click(screen.getByTestId('btn-open-values-0'));
+      await waitFor(() => expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+
+      fireEvent.click(screen.getByTestId('btn-save-draft'));
+      await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+    });
+
+    it('TS-F050-H07：篩選條件 dropdown 含 best_case「優質案件」選項', async () => {
+      renderPage();
+      await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByTestId('btn-add-condition'));
+      await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+
+      const dropdown = screen.getByTestId('add-field-dropdown');
+      expect(within(dropdown).getByText('優質案件')).toBeInTheDocument();
+    });
+
+    it('TS-F050-H08：新增 best_case categorical condition、選 Y → conditionPayload.conditions 含 best_case Y（大寫）', async () => {
+      mockedCreateList.mockResolvedValue({ listNo: 'OB202605099' } as never);
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: '優質案件名單' } });
+      fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+      fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+      fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+      // 加 best_case condition，選 'Y'（大寫，依[[feedback_mock_real_system_contract]]）
+      fireEvent.click(screen.getByTestId('btn-add-condition'));
+      await waitFor(() => expect(screen.getByTestId('add-field-best_case')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('add-field-best_case'));
+      await waitFor(() => expect(mockedListOptions).toHaveBeenCalledWith('best_case', expect.any(Object)));
+      fireEvent.click(screen.getByTestId('btn-open-values-0'));
+      await waitFor(() => expect(screen.getByTestId('value-checkbox-0-Y')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('value-checkbox-0-Y'));
+
+      fireEvent.click(screen.getByTestId('btn-save-draft'));
+      await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+
+      const dto = mockedCreateList.mock.calls[0][0] as Record<string, unknown>;
+      const payload = dto.conditionPayload as {
+        conditions: Array<{ columnName: string; values: string[] }>;
+      };
+      const bestCaseCondition = payload.conditions.find(
+        (c) => c.columnName === 'best_case',
+      );
+      expect(bestCaseCondition).toBeDefined();
+      // 大寫 'Y'，不可 'y'
+      expect(bestCaseCondition!.values).toEqual(['Y']);
+    });
   });
 });
