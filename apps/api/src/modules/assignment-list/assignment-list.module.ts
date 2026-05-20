@@ -8,6 +8,7 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
+import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
@@ -34,6 +35,7 @@ import { Stage0EstimateService } from './stage0-estimate.service';
       ObPoolData,
       ObCalendar,
       PooldataFieldOption,
+      PooldataFieldWhitelist,
       User,
       TokenBlocklist,
     ]),

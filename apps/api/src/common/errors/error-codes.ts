@@ -124,6 +124,13 @@ export const ERROR_CODES = {
   WHITELIST_OPTION_INACTIVE: 'WHITELIST_OPTION_INACTIVE',
   // F075 v1.4.2: OBPOOLDATA 表不存在或 ETL 尚未 Load
   OBPOOLDATA_NOT_READY: 'OBPOOLDATA_NOT_READY',
+  // F050 v2.1 / F051 v2.1 whitelist-driven 名單定義重構（2026-05-20 / AD-E07-18）
+  CONDITION_COLUMN_NOT_IN_WHITELIST: 'CONDITION_COLUMN_NOT_IN_WHITELIST',
+  RESERVED_FIELD_IN_CONDITIONS: 'RESERVED_FIELD_IN_CONDITIONS',
+  LEGACY_LIST_CONDITION_READONLY: 'LEGACY_LIST_CONDITION_READONLY',
+  LEGACY_LIST_NOT_COPYABLE: 'LEGACY_LIST_NOT_COPYABLE',
+  /** @deprecated v2.1（2026-05-20）— 使用 CONDITION_COLUMN_NOT_IN_WHITELIST 取代；本碼保留供舊 service 過渡 */
+  LIST_FILTER_FIELD_NOT_IN_WHITELIST: 'LIST_FILTER_FIELD_NOT_IN_WHITELIST',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -254,4 +261,11 @@ export const ERROR_MESSAGES = {
   WHITELIST_OPTION_INACTIVE: '所引用的可選值已停用',
   // F075 v1.4.2: OBPOOLDATA 表不存在或 ETL 尚未 Load
   OBPOOLDATA_NOT_READY: 'OBPOOLDATA 資料尚未由 ETL 同步至本系統，請聯繫系統管理員確認 ETL 狀態',
+  // F050 v2.1 / F051 v2.1 whitelist-driven 名單定義重構（2026-05-20 / AD-E07-18 / error-handling.md v1.15）
+  CONDITION_COLUMN_NOT_IN_WHITELIST: '篩選條件欄位不在 POOLDATA 篩選欄位白名單或已停用',
+  RESERVED_FIELD_IN_CONDITIONS: '以下欄位為一級保留欄位，不可納入篩選條件：list_period_start / list_period_end / list_interval',
+  LEGACY_LIST_CONDITION_READONLY: '此名單使用舊格式儲存（condition_payload IS NULL），篩選條件須由系統 backfill migration 後方可編輯',
+  LEGACY_LIST_NOT_COPYABLE: '來源名單使用舊格式儲存，不可作為複製來源；請先等待系統完成資料轉換',
+  /** @deprecated v2.1 — 改用 CONDITION_COLUMN_NOT_IN_WHITELIST */
+  LIST_FILTER_FIELD_NOT_IN_WHITELIST: '篩選條件欄位不在 POOLDATA 白名單或已停用',
 } as const;

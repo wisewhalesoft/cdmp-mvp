@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -7,13 +8,23 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Like, Repository } from 'typeorm';
-import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
+import {
+  ObListDefinition,
+  ObListDefinitionConditionItem,
+  ObListDefinitionConditionPayload,
+} from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
+import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { CreateListDto } from './dto/create-list.dto';
 import type { UpdateListDto } from './dto/update-list.dto';
+
+/**
+ * F050 v2.1 / AD-E07-18 §18.4：list_period_* 為一級保留欄位，不可入 conditions
+ */
+const RESERVED_CONDITION_FIELDS = ['list_period_start', 'list_period_end', 'list_interval'];
 
 /**
  * WHITELIST_OPTION_INACTIVE warning 結構（error-handling.md v1.14）
@@ -48,8 +59,65 @@ export class AssignmentListService {
     private readonly auditRepo: Repository<AssignmentAuditLog>,
     @InjectRepository(PooldataFieldOption)
     private readonly optionRepo: Repository<PooldataFieldOption>,
+    @InjectRepository(PooldataFieldWhitelist)
+    private readonly whitelistRepo: Repository<PooldataFieldWhitelist>,
     private readonly assignmentRunGuard: AssignmentRunGuardService,
   ) {}
+
+  // -------------------------------------------------------------------------
+  // F050 v2.1 / F051 v2.1 — condition_payload 驗證（AD-E07-18 §18.4）
+  // -------------------------------------------------------------------------
+
+  /**
+   * 驗證 condition_payload service 層校驗（DTO class-validator 之後）。
+   *
+   * 校驗順序（優先序由高至低）：
+   *   1. RESERVED_FIELD_IN_CONDITIONS（400 BadRequest）— columnName ∈ {list_period_start/end/interval}
+   *   2. VALIDATION_ERROR（422）— 同 columnName 重複出現
+   *   3. CONDITION_COLUMN_NOT_IN_WHITELIST（422）— columnName 不在 F075 active whitelist
+   *
+   * @param payload — 已通過 DTO 驗證的 ConditionPayload；若 undefined / null 視為呼叫端責任，本 method 不處理
+   */
+  private async validateConditionPayload(
+    payload: ObListDefinitionConditionPayload | null | undefined,
+  ): Promise<void> {
+    if (!payload || !Array.isArray(payload.conditions)) return;
+    const conditions = payload.conditions as ObListDefinitionConditionItem[];
+
+    // 1. reserved 欄位（400 優先）
+    const reservedHit = conditions
+      .map((c) => c.columnName)
+      .filter((n) => RESERVED_CONDITION_FIELDS.includes(n));
+    if (reservedHit.length > 0) {
+      throw new BadRequestException({
+        error: ERROR_CODES.RESERVED_FIELD_IN_CONDITIONS,
+        message: ERROR_MESSAGES.RESERVED_FIELD_IN_CONDITIONS,
+        details: { reservedFields: Array.from(new Set(reservedHit)) },
+      });
+    }
+
+    // 2. 同 columnName 重複（422 VALIDATION_ERROR）
+    const allNames = conditions.map((c) => c.columnName);
+    if (new Set(allNames).size < allNames.length) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_ERROR,
+        message: '篩選條件不可重複出現相同欄位（columnName）',
+      });
+    }
+
+    // 3. whitelist active check（422 CONDITION_COLUMN_NOT_IN_WHITELIST）
+    const activeRows = await this.whitelistRepo.find({ where: { is_active: true } });
+    const activeSet = new Set(activeRows.map((r) => r.column_name));
+    for (const cond of conditions) {
+      if (!activeSet.has(cond.columnName)) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.CONDITION_COLUMN_NOT_IN_WHITELIST,
+          message: ERROR_MESSAGES.CONDITION_COLUMN_NOT_IN_WHITELIST,
+          details: { columnName: cond.columnName },
+        });
+      }
+    }
+  }
 
   // -------------------------------------------------------------------------
   // F077 / F048 — List
