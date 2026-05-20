@@ -4,8 +4,8 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：50（含 A~H 組 + v2.1 重構；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
-> **最後更新**：2026-05-19（v2.1 重構：新增 US-121~125；廢棄 US-092；修改 US-070/102/103/106；M06「代碼維護」rename「篩選欄位」）
+> **Stories 數量**：54（含 A~H 組 + v2.1 重構 + 2026-05-20 業務複核補強；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
+> **最後更新**：2026-05-20（業務複核補強：新增 US-126~129；落地 D1/D2/D4/Q-A/Q-B 決議 — 卡別下拉、prodBest 移除、best_case options seed）
 
 ## Epic 目標
 
@@ -32,6 +32,9 @@
 | **US-123** | **舊名單 backward-compat 讀取（condition_payload IS NULL fallback）**（v2.1 新增）| Must Have | [US-123-M01-backward-compat-list-read.md](US-123-M01-backward-compat-list-read.md) |
 | ~~US-088~~ | ~~新增名單定義~~（**已廢棄，由 US-106 取代**）| 廢棄 | [US-088-M01-create-list-definition.md](US-088-M01-create-list-definition.md) |
 | ~~US-089~~ | ~~編輯名單定義~~（**已廢棄，由 US-106 取代**）| 廢棄 | [US-089-M01-edit-list-definition.md](US-089-M01-edit-list-definition.md) |
+| **US-126** | **建立草稿名單 — 卡別改為下拉選單**（2026-05-20 業務複核 D1+D4）| Must Have | [US-126-M01-cardtype-dropdown-create.md](US-126-M01-cardtype-dropdown-create.md) |
+| **US-127** | **編輯草稿名單 — 卡別改為下拉選單（含停用卡別保留處理）**（2026-05-20 業務複核 D1+D4+Q-A）| Must Have | [US-127-M01-cardtype-dropdown-edit.md](US-127-M01-cardtype-dropdown-edit.md) |
+| **US-128** | **移除「最佳產品」一級欄位，改由篩選條件 best_case 取代**（2026-05-20 業務複核 D2+Q-B）| Must Have | [US-128-M01-remove-prodbest-field.md](US-128-M01-remove-prodbest-field.md) |
 
 ### M02 — 計分設定
 
@@ -120,6 +123,7 @@
 | US-103 | 管理類別型欄位的可選值 **（v2.1 修改）** | Must Have | [US-103-M06-manage-categorical-field-values.md](US-103-M06-manage-categorical-field-values.md) |
 | **US-124** | **F068（代碼維護 module）廢除與篩選欄位合併管理頁**（v2.1 新增）| Must Have | [US-124-M06-deprecate-f068-merge-field-base.md](US-124-M06-deprecate-f068-merge-field-base.md) |
 | **US-125** | **caseyear / case_status 可選值遷移至 pooldata_field_option**（v2.1 新增）| Must Have | [US-125-M06-migrate-options-to-whitelist.md](US-125-M06-migrate-options-to-whitelist.md) |
+| **US-129** | **best_case 篩選欄位補入 Y / N 可選值（Seed Migration）**（2026-05-20 業務複核 D2）| Must Have | [US-129-M06-seed-bestcase-options.md](US-129-M06-seed-bestcase-options.md) |
 
 ### M07 — 角色與可見範圍
 
