@@ -383,3 +383,108 @@ describe('Stage1QueryComposer 波 3 — Path B fallback', () => {
     expect(result.where).toContain('"settle_src"');
   });
 });
+
+// ===========================================================================
+// 波 4：caseyear wildcard（§18.5.1）
+// ===========================================================================
+
+describe('Stage1QueryComposer 波 4 — caseyear wildcard (§18.5.1)', () => {
+  it('UCQ-019：Path A caseyear=[99] → 完全 skip year_cnt fragment（IT-M01-013）', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'caseyear', fieldType: 'categorical', values: ['99'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    // 完全 skip → 唯一 condition 失效 → §18.5.2 衍生 EMPTY_CONDITIONS
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.where).toBeNull();
+    // SQL 中不應有 year_cnt / caseyear 相關欄位
+    expect(JSON.stringify(result)).not.toContain('year_cnt');
+  });
+
+  it('UCQ-020：Path A caseyear=[1,99,3] → 含 99 即 wildcard，完全 skip year_cnt（IT-M01-014）', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'caseyear', fieldType: 'categorical', values: ['1', '99', '3'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    // 不可只過濾 year_cnt=1,3，必須完全省略
+    expect(JSON.stringify(result.params)).not.toContain('1');
+    expect(JSON.stringify(result.params)).not.toContain('3');
+  });
+
+  it('UCQ-021：Path A caseyear=[1,3] → 不含 99，正常生成 year_cnt IN (1,3)（IT-M01-015）', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'caseyear', fieldType: 'categorical', values: ['1', '3'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    // §18.5.1 表第 2 列：「正常走 year_cnt IN (:...vals_N)」
+    expect(result.where).toContain('"year_cnt"');
+    expect(result.where).not.toContain('"caseyear"');
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContainEqual([1, 3]);
+  });
+
+  it('UCQ-022：Path A caseyear=[99] + 其他 condition → 其他 condition 仍生效，caseyear 部分 skip', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'caseyear', fieldType: 'categorical', values: ['99'] },
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).not.toContain('"year_cnt"');
+    expect(result.where).not.toContain('"caseyear"');
+  });
+
+  it('UCQ-023：Path B caseyear="99" → split 後含 99，完全 skip year_cnt（§18.5.1 注意段）', () => {
+    const list = makeList({
+      condition_payload: null,
+      caseyear: '99',
+    });
+    const result = buildStage1WhereConditions(list);
+
+    // 唯一條件 skip → EMPTY_CONDITIONS
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+  });
+
+  it('UCQ-024：Path B caseyear="1$$99$$3" → 含 99 即 wildcard，完全 skip year_cnt', () => {
+    const list = makeList({
+      condition_payload: null,
+      caseyear: '1$$99$$3',
+      prod_kind: '01', // 另一條件保持有效
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).not.toContain('"year_cnt"');
+    // params 不應含 [1,3] 或 [1,99,3]
+    const paramVals = JSON.stringify(Object.values(result.params));
+    expect(paramVals).not.toContain('99');
+  });
+});

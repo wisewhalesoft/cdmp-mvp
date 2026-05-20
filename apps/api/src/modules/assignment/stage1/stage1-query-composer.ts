@@ -224,7 +224,11 @@ function buildPathB(list: ObListDefinition): Stage1QueryFragment {
     if (values.length === 0) continue;
 
     if (mapping.numericInt) {
-      // caseyear → year_cnt 整數比對；波 4 將補 wildcard 短路
+      // §18.5.1 注意段：path B caseyear 含 '99' 同樣 skip year_cnt 比對
+      if (mapping.entityCol === 'caseyear' && values.includes(CASEYEAR_WILDCARD)) {
+        continue;
+      }
+
       const intValues = values
         .map((v) => parseInt(v, 10))
         .filter((n) => Number.isFinite(n));
@@ -293,6 +297,31 @@ function buildCategoricalFragment(
       reason: 'values missing or empty',
     });
     return null;
+  }
+
+  // §18.5.1：caseyear wildcard 規則 — 含 '99' 即完全 skip year_cnt fragment
+  if (cond.columnName === 'caseyear') {
+    if (cond.values.includes(CASEYEAR_WILDCARD)) {
+      // 不加任何 fragment，但也不發 warning（業務有效行為）
+      return null;
+    }
+    // 非 wildcard：caseyear 對應 ob_pool_data.year_cnt 整數比對
+    const intValues = cond.values
+      .map((v) => parseInt(String(v), 10))
+      .filter((n) => Number.isFinite(n));
+    if (intValues.length === 0) {
+      warnings.push({
+        code: 'EMPTY_VALUES',
+        columnName: cond.columnName,
+        reason: 'no valid integer values for caseyear',
+      });
+      return null;
+    }
+    const paramName = `caseyear${paramIdx}`;
+    return {
+      fragment: `"year_cnt" IN (:...${paramName})`,
+      params: { [paramName]: intValues },
+    };
   }
 
   const paramName = `cat${paramIdx}`;
