@@ -16,6 +16,7 @@ import {
   Loader2,
   Pencil,
   RotateCcw,
+  Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -436,9 +437,23 @@ export function FieldsTab() {
 
   return (
     <div className="p-4 space-y-4">
-      <p className="text-sm text-gray-500">
-        管理 OBPOOLDATA 表可用的篩選欄位清單（F075）。類別型欄位可進一步管理可選值（F076）。
-      </p>
+      {/* Scope 提示 banner（prototype 37-base-code.html L173-183） */}
+      <div
+        data-testid="field-whitelist-scope-hint"
+        className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700"
+      >
+        <Filter className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+        <div>
+          <p className="font-semibold text-primary">F075 v1.5 — POOLDATA 篩選欄位白名單</p>
+          <p className="text-gray-600 mt-0.5">
+            管理可作為名單條件的 <code className="font-mono">OBPOOLDATA</code> 欄位；
+            每欄位標記 <code className="font-mono">field_type</code>
+            （categorical / numeric / date），驅動 F050/F051 名單表單之條件元件型態。
+            停用為軟刪除（<code className="font-mono">is_active = false</code>），不回溯既有名單條件（BR-3）。
+            資料表 <code className="font-mono">pooldata_field_whitelist</code>。
+          </p>
+        </div>
+      </div>
 
       {error && (
         <div
@@ -602,9 +617,10 @@ export function FieldsTab() {
                             onClick={() => void startDisable(f)}
                             data-testid={`btn-disable-${f.columnName}`}
                             title="停用"
-                            className="p-1.5 text-gray-500 hover:text-[#F59E0B] hover:bg-amber-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-warning border border-amber-200 rounded-md hover:bg-amber-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
                           >
-                            <Ban className="w-4 h-4" />
+                            <Ban className="w-3 h-3" />
+                            停用
                           </button>
                         ) : (
                           <button
@@ -613,9 +629,10 @@ export function FieldsTab() {
                             onClick={() => void handleReactivate(f)}
                             data-testid={`btn-reactivate-${f.columnName}`}
                             title="啟用"
-                            className="p-1.5 text-gray-500 hover:text-[#22C55E] hover:bg-green-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-success border border-green-200 rounded-md hover:bg-green-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
                           >
-                            <RotateCcw className="w-4 h-4" />
+                            <RotateCcw className="w-3 h-3" />
+                            啟用
                           </button>
                         )}
                       </div>

@@ -97,4 +97,40 @@ describe('FieldsTab — Phase 5d 波 4', () => {
       expect(screen.getByText('產品類別')).toBeInTheDocument();
     });
   });
+
+  it('fields-tab-5：Scope 提示 banner 顯示 F075 v1.5 標題（對齊 prototype L173-183）', async () => {
+    renderTab();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    const banner = screen.getByTestId('field-whitelist-scope-hint');
+    expect(banner).toHaveTextContent('F075 v1.5');
+    expect(banner).toHaveTextContent('POOLDATA 篩選欄位白名單');
+  });
+
+  it('fields-tab-6：active 列「停用」按鈕含 icon + 文字標籤（對齊 prototype L607）', async () => {
+    renderTab();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-disable-prod_kind')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('btn-disable-prod_kind')).toHaveTextContent('停用');
+  });
+
+  it('fields-tab-7：inactive 列「啟用」按鈕含 icon + 文字標籤', async () => {
+    mockedListFields.mockResolvedValueOnce({
+      fields: [
+        {
+          columnName: 'payt_term',
+          displayName: '還款期別',
+          fieldType: 'numeric',
+          isActive: false,
+          createdAt: '2026-05-01T00:00:00Z',
+          updatedAt: '2026-05-01T00:00:00Z',
+        },
+      ],
+    });
+    renderTab();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-reactivate-payt_term')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('btn-reactivate-payt_term')).toHaveTextContent('啟用');
+  });
 });
