@@ -174,6 +174,14 @@ async function seedList(
       cr_enabled: opts.crEnabled ?? false,
       status: 'active',
       stage: 'ready',
+      // Phase 5b：Stage 1 動態 SQL 需要 condition_payload；fixture seed 給最小條件
+      // 對應 seedPool 預設 prod_kind='A' 確保 SQL 過濾後仍撈到既有測試案件。
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['A'] },
+        ],
+      },
       created_by_prog: 'TEST',
       created_by: 'tester',
       created_at: now,
@@ -186,7 +194,7 @@ async function seedList(
 
 async function seedPool(
   repo: Repository<ObPoolData>,
-  opts: { applNo: string; commission?: string; monthCnt?: number },
+  opts: { applNo: string; commission?: string; monthCnt?: number; prodKind?: string },
 ): Promise<void> {
   await repo.save(
     repo.create({
@@ -199,6 +207,9 @@ async function seedPool(
       settle_src: '01',
       commission: opts.commission ?? '1000',
       month_cnt: opts.monthCnt ?? null,
+      // Phase 5b：seedList 預設 condition_payload.prod_kind=['A']，
+      // seedPool 須對應 prod_kind='A' 以通過 Stage 1 SQL 過濾。
+      prod_kind: opts.prodKind ?? 'A',
       _cdmp_extracted_at: new Date(),
     } as Partial<ObPoolData>),
   );

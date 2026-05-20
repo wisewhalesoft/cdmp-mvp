@@ -125,7 +125,7 @@ export class AssignmentRunPipelineService {
       }
 
       // Stage 1：案件挑選（Phase 5b / AD-E07-18 §18.5 — 動態 SQL）
-      //   - 對每個 validList 個別呼叫 buildStage1WhereConditions
+      //   - 對每個 validList 個別呼叫 runStage1ForList
       //   - skipReason='EMPTY_CONDITIONS' → 不撈 pool + Logger.warn（§18.5.2）
       //   - 否則 createQueryBuilder().where(fragment, params).getMany()
       const stage1Cases: Array<{ list: ObListDefinition; pool: ObPoolData[] }> = [];
@@ -136,20 +136,8 @@ export class AssignmentRunPipelineService {
       }> = [];
 
       for (const list of validLists) {
-        const fragment = buildStage1WhereConditions(list);
-
-        // 非阻擋型 warning 紀錄
-        for (const w of fragment.warnings) {
-          this.logger.warn(
-            `[Stage1] composer warning list_no=${list.list_no} code=${w.code} column=${w.columnName ?? '-'} reason=${w.reason}`,
-          );
-        }
-
-        // §18.5.2：空 conditions / wildcard 後零有效 fragment → skip
-        if (fragment.skipReason === 'EMPTY_CONDITIONS') {
-          this.logger.warn(
-            `[Stage1] Skipping list ${list.list_no} (${list.list_nm}): empty conditions (backfilled empty or invalid state)`,
-          );
+        const result = await this.runStage1ForList(list);
+        if (result.skipped) {
           stage1SkippedLists.push({
             listNo: list.list_no,
             listName: list.list_nm,
@@ -157,13 +145,7 @@ export class AssignmentRunPipelineService {
           });
           continue;
         }
-
-        // fragment.where 已保證非 null（skipReason=null 時必有 where）
-        const pool = await this.poolRepo
-          .createQueryBuilder('ob_pool_data')
-          .where(fragment.where!, fragment.params)
-          .getMany();
-        stage1Cases.push({ list, pool });
+        stage1Cases.push({ list, pool: result.pool });
       }
 
       const skippedCases: Array<{
@@ -616,6 +598,42 @@ export class AssignmentRunPipelineService {
   // =========================================================================
   // 內部
   // =========================================================================
+
+  /**
+   * Phase 5b / AD-E07-18 §18.5：對單一 list 執行 Stage 1 動態 SQL 案件挑選。
+   *
+   * @returns
+   *   - `{ skipped: true }`：composer 回 skipReason → 不撈 pool（已 logger.warn）
+   *   - `{ skipped: false, pool }`：SQL 過濾後的 ob_pool_data 案件清單
+   */
+  private async runStage1ForList(
+    list: ObListDefinition,
+  ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
+    const fragment = buildStage1WhereConditions(list);
+
+    // 非阻擋型 warning 紀錄
+    for (const w of fragment.warnings) {
+      this.logger.warn(
+        `[Stage1] composer warning list_no=${list.list_no} code=${w.code} column=${w.columnName ?? '-'} reason=${w.reason}`,
+      );
+    }
+
+    // §18.5.2：空 conditions / wildcard 後零有效 fragment → skip
+    if (fragment.skipReason === 'EMPTY_CONDITIONS') {
+      this.logger.warn(
+        `[Stage1] Skipping list ${list.list_no} (${list.list_nm}): empty conditions (backfilled empty or invalid state)`,
+      );
+      return { skipped: true };
+    }
+
+    // fragment.where 已保證非 null（skipReason=null 時必有 where）
+    const pool = await this.poolRepo
+      .createQueryBuilder('ob_pool_data')
+      .where(fragment.where!, fragment.params)
+      .getMany();
+    return { skipped: false, pool };
+  }
+
   private async completeRun(
     runId: string,
     startedAt: Date,
