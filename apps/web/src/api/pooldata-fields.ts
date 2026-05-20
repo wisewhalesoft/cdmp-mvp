@@ -207,6 +207,11 @@ export interface ReactivateOptionRequest {
   optionLabel?: string;
 }
 
+/**
+ * F076 §5.3：PATCH /api/v1/pooldata-fields/:columnName/options/:optionValue
+ * Backend DTO（update-pooldata-option.dto.ts）強制 body 必含 `isActive: true`；
+ * 預設僅傳 `{}` 會被 422 攔截「此端點僅支援重新啟用（isActive=true）」。
+ */
 export async function reactivateOption(
   columnName: string,
   optionValue: string,
@@ -214,7 +219,7 @@ export async function reactivateOption(
 ): Promise<PooldataOption> {
   const response = await apiClient.patch<PooldataOption>(
     `${BASE}/${columnName}/options/${optionValue}`,
-    data,
+    { isActive: true, ...data },
   );
   return response.data;
 }
