@@ -6,14 +6,43 @@ source-story: US-092
 epic: E07
 module: M06 基礎代碼維護
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
-status: Draft
+version: "1.3-DEPRECATED"
+date: 2026-05-20
+status: Deprecated
+deprecated: true
+deprecated-date: 2026-05-20
+deprecated-by: US-124, US-125
+successor-specs: F075 v1.5, F076 v1.5
 ---
 
 # F068: E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: **DEPRECATED v1.3** | Last Updated: 2026-05-20
+
+> **⚠️ DEPRECATED v1.3（2026-05-20 / F050 v2.1 重構，J1 + J2 拍板）**
+>
+> **本 Feature 已於 2026-05-20（F050 v2.1 名單定義 whitelist-driven 重構）整份廢棄。**
+>
+> **廢棄原因**：
+> - **J1 決議**：F075（POOLDATA 篩選欄位白名單）+ F076（類別型欄位可選值）為唯一篩選欄位來源；`ob_code_df` 中 PROD_KIND / SPEC_TP / CASE_STATUS 三個 `tbl_id` 重疊代碼搬完後刪除。
+> - **J2 決議**：F068 整個 module 廢除（保留 `ob_code_df` entity 供未來其他 `tbl_id` 使用）。
+> - **J4 決議**：sidebar「代碼維護」rename「篩選欄位」；原 37a / 37b 獨立頁合併為新 37 之 2-Tab 結構（US-124 落地）。
+>
+> **承接 spec**：
+> - **F075 v1.5**：POOLDATA 篩選欄位白名單（補 `case_status` 條目，對齊 US-125 AC-5）
+> - **F076 v1.5**：類別型欄位可選值（含 case_status 4 筆 + caseyear 8 筆 + spec_tp 32 筆 OBMCODEDF dump）
+> - **US-124**：F068 入口廢除與「篩選欄位」2-Tab 合併管理頁
+> - **US-125**：caseyear / case_status 可選值遷移至 `pooldata_field_option`
+>
+> **影響範圍**：
+> - 整個 `apps/api/src/modules/assignment-code/` module 刪除（controller / service / DTO / tests）；`app.module.ts` 移除 `AssignmentCodeModule` import — 實際刪除作業由 **Phase 3a system-architect** 執行（GAP-LIST §I）。
+> - 前端 `apps/web/src/pages/assignment/base-codes-page.tsx` 整頁刪除；`apps/web/src/api/assignment-codes.ts` 整檔刪除 — 由 **Phase 3b ui-ux-designer** 與後續實作階段執行（GAP-LIST §G7 / §G9）。
+> - 35 個 prototype HTML 之 sidebar entry「代碼維護」rename「篩選欄位」，連結改指向新 37 頁 — 由 Phase 3b 執行（GAP-LIST §F9 / §H3）。
+> - `ob_code_df` entity **保留**（供未來其他 `tbl_id` 使用）；DB 中 PROD_KIND / SPEC_TP / CASE_STATUS 三個 `tbl_id` 之資料由 Phase 3a migration 刪除（GAP-LIST §E7）。
+> - error-handling.md `CODE_IN_USE` / `CODE_TYPE_INVALID` / `CODE_NOT_FOUND` 三個錯誤碼是否保留，由 Phase 3a 評估（GAP-LIST §I）。
+>
+> **請勿基於本 spec 進行任何實作或下游 spec 撰寫。**
+> 以下章節原文保留作為歷史紀錄。
 
 > **v1.2（2026-05-16）**：依 F002 v2.0 / AD-E07 v3.0 重構：GET 端點開放部長 + 處長（`DirectorOrSectionChiefGuard`），寫入端點（POST / PUT / DISABLE）限部長（`DirectorGuard`），新增 BR-6「處長禁用寫入」。
 
@@ -189,4 +218,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 |---|---|---|
 | A-1 | ~~`ob_code_df.system_id` 值為 `'E07'` 或其他固定值~~ **已解決（2026-05-05）**：dump 全表驗證 OBMCODEDF.SYSTEM_ID 全為 `'OB'`（`reference/DumpData/OBMCODEDF_20260505.csv`），E07 寫入時固定使用 `system_id = 'OB'`（沿用舊值，**不採** `'E07'`） | ✅ Resolved（OQ-E07-11） |
 | A-2 | 停用操作以 `enddt` = 當日或當日 + 1 標示（非刪除紀錄） | [ASSUMPTION] |
-| A-3 | CASE_STATUS 在 `ob_code_df` 中以 `tbl_id = 'CASE_STATUS'` 識別，對應原系統 OBMCODEDF `TBL_ID = '22'`（dump 2026-05-05 驗證已生效 4 筆：`01` 期中（不含當月滿期）/ `02` 中結 / `03` 滿期（含當月滿期）/ `04` 滿期）。新系統 `tbl_id` 採英文名常數（CASE_STATUS），與其他兩類（PROD_KIND / SPEC_TP）一致；遷移依 AD-E07-14 白名單 `'22' → 'CASE_STATUS'`。**CASEYEAR 不在本 Feature 範圍**（OQ-E07-24 ✅ Resolved 2026-05-12，前端 hard-coded） | ✅ Resolved（AD-E07-14） |
+| A-3 | CASE_STATUS 在 `ob_code_df` 中以 `tbl_id = 'CASE_STATUS'` 識別，對應原系統 OBMCODEDF `TBL_ID = '22'`（dump 2026-05-05 驗證已生效 4 筆：`01` 期中（不含當月滿期）/ `02` 中結 / `03` 滿期（含當月滿期）/ `04` 滿期）。新系統 `tbl_id` 採英文名常數（CASE_STATUS），與其他兩類（PROD_KIND / SPEC_TP）一致；遷移依 AD-E07-14 白名單 `'22' → 'CASE_STATUS'`。**CASEYEAR 不在本 Feature 範圍**（OQ-E07-24 ✅ Resolved 2026-05-12，前端 hard-coded）。**v1.3 補述（2026-05-20 / F050 v2.1 重構）**：CASE_STATUS 來源在 v2.1 已遷移至 `pooldata_field_option`（US-125 AC-2），本段 `ob_code_df` 之 CASE_STATUS 描述僅供歷史對照；新實作請參照 [F075 v1.5](F075-manage-pooldata-field-whitelist.md) + [F076 v1.5](F076-manage-categorical-field-values.md)。 | ✅ Resolved（AD-E07-14） / DEPRECATED v1.3 |
