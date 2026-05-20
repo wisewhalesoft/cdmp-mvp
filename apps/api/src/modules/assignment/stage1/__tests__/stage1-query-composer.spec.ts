@@ -488,3 +488,118 @@ describe('Stage1QueryComposer 波 4 — caseyear wildcard (§18.5.1)', () => {
     expect(paramVals).not.toContain('99');
   });
 });
+
+// ===========================================================================
+// 波 5：columnName allowlist SQL Injection 防禦（§18.5）
+// 對應 brief §7：IT-M01-022 / IT-M01-023（新增編號，後續由 test-designer 追補進
+//   M01-whitelist-driven-integration-test.md）
+// ===========================================================================
+
+describe('Stage1QueryComposer 波 5 — columnName allowlist 防禦', () => {
+  it('UCQ-025 (IT-M01-022a)：columnName 含 SQL Injection payload → skip + INVALID_COLUMN_NAME', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          {
+            // 經典 SQL Injection payload
+            columnName: 'prod_kind"; DROP TABLE ob_pool_data; --',
+            fieldType: 'categorical',
+            values: ['01'],
+          } as any,
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    // 唯一條件被 skip → §18.5.2 EMPTY_CONDITIONS
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.warnings.some((w) => w.code === 'INVALID_COLUMN_NAME')).toBe(true);
+    // 關鍵：SQL fragment（where）必須完全 null，注入 payload 不可進入 SQL 執行路徑
+    expect(result.where).toBeNull();
+    // params 不可帶入注入 payload（params 是 queryBuilder 第二參數）
+    expect(JSON.stringify(result.params)).not.toContain('DROP TABLE');
+  });
+
+  it('UCQ-026 (IT-M01-022b)：columnName 含 UPPERCASE → skip + INVALID_COLUMN_NAME（正規式僅允許 lowercase）', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'PROD_KIND', fieldType: 'categorical', values: ['01'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.warnings.some((w) => w.code === 'INVALID_COLUMN_NAME')).toBe(true);
+  });
+
+  it('UCQ-027 (IT-M01-022c)：columnName 含空白 / 特殊字元 → skip + INVALID_COLUMN_NAME', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'prod kind', fieldType: 'categorical', values: ['01'] }, // 含空白
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.warnings.some((w) => w.code === 'INVALID_COLUMN_NAME')).toBe(true);
+  });
+
+  it('UCQ-028 (IT-M01-023a)：非法 columnName 出現於 numeric / date fragment 同樣被 skip', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'evil;col', fieldType: 'numeric', min: 1, max: 5 } as any,
+          { columnName: 'bad col', fieldType: 'date', dateStart: '2024-01-01', dateEnd: '2024-12-31' } as any,
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    const invalidWarnings = result.warnings.filter((w) => w.code === 'INVALID_COLUMN_NAME');
+    expect(invalidWarnings.length).toBe(2);
+  });
+
+  it('UCQ-029 (IT-M01-023b)：合法 columnName 與非法 columnName 並存 → 合法部分通過，非法 skip', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'BAD;COL', fieldType: 'categorical', values: ['02'] } as any,
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).not.toContain('BAD');
+    expect(result.warnings.some((w) => w.code === 'INVALID_COLUMN_NAME')).toBe(true);
+  });
+
+  it('UCQ-030：合法 columnName 邊界（64 字元 / 純字母數字底線）→ 通過', () => {
+    const longButLegal = 'a' + '_a'.repeat(31); // 'a' + 31×'_a' = 63 字元，剛好在邊界內
+    expect(longButLegal.length).toBe(63);
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: longButLegal, fieldType: 'categorical', values: ['01'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain(`"${longButLegal}"`);
+  });
+});
