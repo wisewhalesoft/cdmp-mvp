@@ -16,6 +16,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FieldBasePage } from '../field-base-page';
+import { ToastProvider } from '@/components/ui/toast';
 import * as authStore from '@/stores/auth-store';
 
 vi.mock('@/stores/auth-store', () => ({
@@ -54,9 +55,11 @@ vi.mock('@/api/pooldata-fields', () => ({
 function renderAt(path = '/assignment/field-base') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/assignment/field-base" element={<FieldBasePage />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/assignment/field-base" element={<FieldBasePage />} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
