@@ -21,7 +21,9 @@ import { EtlModule } from './modules/etl/etl.module';
 import { OrphanRecoveryModule } from './modules/orphan-recovery/orphan-recovery.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { C360Module } from './modules/c360/c360.module';
-import { AssignmentCodeModule } from './modules/assignment-code/assignment-code.module';
+// F068 廢除（F050 v2.1 重構 / AD-E07-18 §18.7 Step 1，Phase 5c 波 10）：
+// F068 assignment-code/ 模組已移除。原 ob_code_df CRUD 功能已遷至 F075/F076
+// (pooldata-field whitelist + options)。
 import { AssignmentScoringModule } from './modules/assignment-scoring/assignment-scoring.module';
 import { AssignmentListModule } from './modules/assignment-list/assignment-list.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
@@ -115,7 +117,7 @@ const E07_ENTITIES = [
     OrphanRecoveryModule,
     SchedulerModule,
     C360Module,
-    AssignmentCodeModule,
+    // F068 assignment-code/ 已於 F050 v2.1 Phase 5c 波10 移除（AD-E07-18 §18.7 Step 1）
     AssignmentScoringModule,
     AssignmentListModule,
     AssignmentModule,
