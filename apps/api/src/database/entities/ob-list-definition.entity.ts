@@ -4,7 +4,34 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, jsonColumnType } from '@/common/database/column-types';
+
+/**
+ * condition_payload JSONB schema（F050 v2.1 / AD-E07-18 §18.4）。
+ *
+ * source of truth for 名單篩選條件（取代 v2.0 之 5 個 entity column 必填語意）；
+ * 5 個 entity column（prod_kind / caseyear / spec_tp / case_status / settle_src）降為
+ * 後端依本 payload 衍生填入之 backward-compat 欄位（§18.6 衍生規則）。
+ *
+ * `_backfill_empty: true` 為 m282 backfill 對「5 個欄位全空」名單之 metadata 標記；
+ * Stage 1 路徑 A 解析後若 `conditions.length === 0` 即 skip（§18.5.2 / OQ-TEST-002）。
+ */
+export interface ObListDefinitionConditionItem {
+  columnName: string;
+  fieldType: 'categorical' | 'numeric' | 'date';
+  values?: string[];
+  min?: number;
+  max?: number;
+  dateStart?: string;
+  dateEnd?: string;
+}
+
+export interface ObListDefinitionConditionPayload {
+  conditions: ObListDefinitionConditionItem[];
+  logic: 'AND';
+  _backfill_empty?: boolean;
+  [k: string]: unknown;
+}
 
 @Entity('ob_list_definition')
 export class ObListDefinition {
@@ -109,4 +136,12 @@ export class ObListDefinition {
   // 對應 migration m18：1711360000182-AddObListDefinitionCrEnabled
   @Column({ name: 'cr_enabled', type: 'boolean', default: false })
   cr_enabled: boolean;
+
+  // F050 v2.1（2026-05-20 / AD-E07-18 §18.4）— 名單篩選條件 source of truth
+  //   - PG：JSONB；SQLite：simple-json（TEXT，內建序列化）
+  //   - nullable=true：舊名單（m100~m280 既有資料）保持 NULL，由 m282 backfill 轉換
+  //   - 對應 migration m281：1711360000281-AddObListDefinitionConditionPayload
+  //   - 對應 migration m282：1711360000282-BackfillListDefinitionConditionPayload
+  @Column({ name: 'condition_payload', type: jsonColumnType, nullable: true })
+  condition_payload: ObListDefinitionConditionPayload | null;
 }
