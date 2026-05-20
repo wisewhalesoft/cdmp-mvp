@@ -252,3 +252,76 @@ describe('UpdateListDto v2.1 validation', () => {
     expect(errs).toEqual([]);
   });
 });
+
+/**
+ * v2.1.1 補強（US-126 / US-128 / architecture-spec §18.11.6）：
+ *   E 群組 — DTO prodBest 採方案 Y backward-compat（保留 @IsOptional 接受 null/empty/undefined，
+ *   service 層 ignore 不寫入 entity）+ cardType @MaxLength(5) 對齊 ob_card_type.card_type
+ *
+ * 對應 test spec：F050-test.md §十四 E 群組（TS-F050-E01 ~ E06）
+ */
+describe('v2.1.1 補強 — E 群組 DTO prodBest backward-compat + cardType @MaxLength(5)', () => {
+  describe('TS-F050-E01~E03：CreateListDto prodBest 方案 Y backward-compat', () => {
+    it('TS-F050-E01：prodBest: null 不產生 validation error', async () => {
+      const dto = plainToInstance(CreateListDto, baseCreate({ prodBest: null }));
+      const errs = await validate(dto);
+      const messages = flattenConstraints(errs).join('|');
+      expect(messages).not.toMatch(/prodBest/i);
+    });
+
+    it('TS-F050-E02：prodBest: \'\' (空字串) 不產生 validation error', async () => {
+      const dto = plainToInstance(CreateListDto, baseCreate({ prodBest: '' }));
+      const errs = await validate(dto);
+      const messages = flattenConstraints(errs).join('|');
+      expect(messages).not.toMatch(/prodBest/i);
+    });
+
+    it('TS-F050-E03：prodBest 欄位不傳（undefined）不產生 validation error', async () => {
+      const data = baseCreate();
+      delete (data as any).prodBest;
+      const dto = plainToInstance(CreateListDto, data);
+      const errs = await validate(dto);
+      const messages = flattenConstraints(errs).join('|');
+      expect(messages).not.toMatch(/prodBest/i);
+    });
+  });
+
+  describe('TS-F050-E04：UpdateListDto prodBest 方案 Y backward-compat', () => {
+    it('TS-F050-E04a：UpdateListDto prodBest: null 不產生 validation error', async () => {
+      const dto = plainToInstance(UpdateListDto, baseUpdate({ prodBest: null }));
+      const errs = await validate(dto);
+      const messages = flattenConstraints(errs).join('|');
+      expect(messages).not.toMatch(/prodBest/i);
+    });
+
+    it('TS-F050-E04b：UpdateListDto prodBest: undefined 不產生 validation error', async () => {
+      const data = baseUpdate();
+      delete (data as any).prodBest;
+      const dto = plainToInstance(UpdateListDto, data);
+      const errs = await validate(dto);
+      const messages = flattenConstraints(errs).join('|');
+      expect(messages).not.toMatch(/prodBest/i);
+    });
+  });
+
+  describe('TS-F050-E05/E06：CreateListDto cardType @MaxLength(5)', () => {
+    it('TS-F050-E05：cardType 6 字元（超過上限）→ 422 errors 含 cardType', async () => {
+      const dto = plainToInstance(CreateListDto, baseCreate({ cardType: 'ABCDEF' }));
+      const errs = await validate(dto);
+      expect(errs.length).toBeGreaterThan(0);
+      const cardTypeErr = errs.find((e) => e.property === 'cardType');
+      expect(cardTypeErr).toBeDefined();
+      // class-validator MaxLength 標準 constraint key 為 'maxLength'，訊息含
+      // "must be shorter than or equal to 5 characters"
+      expect(cardTypeErr!.constraints).toBeDefined();
+      expect(Object.keys(cardTypeErr!.constraints!)).toContain('maxLength');
+    });
+
+    it('TS-F050-E06：cardType 5 字元（邊界正向）→ 通過驗證', async () => {
+      const dto = plainToInstance(CreateListDto, baseCreate({ cardType: 'ABCDE' }));
+      const errs = await validate(dto);
+      const messages = flattenConstraints(errs).join('|');
+      expect(messages).not.toMatch(/cardType/);
+    });
+  });
+});
