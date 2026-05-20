@@ -305,11 +305,16 @@ last_updated: 2026-05-20
 
 ---
 
-## M5：刪除 ob_code_df TBL_ID = '02','05','09'（高風險）
+## M5：刪除 ob_code_df TBL_ID = 'PROD_KIND','SPEC_TP','CASE_STATUS'（高風險）
 
 > **警告**：M5 為不可逆操作（刪除生產資料表紀錄），只在 staging/CI 環境執行測試。
 > M5 must 在 F069 切換來源後方可執行（見 TS-F068-DEP-008 閘門驗證）。
 > 對應 §18.10 Risk-9、TEST-RISK-004。
+>
+> **tbl_id 採英文常數**：m150 migration 已將 ob_code_df.tbl_id 從數字碼轉換為英文常數
+> （原 '01'→'PROD_KIND'、'22'→'CASE_STATUS' 等）。本 M5 section 所有 tbl_id 值
+> 均以 m150 轉碼後的英文常數為準：`'PROD_KIND'`、`'SPEC_TP'`、`'CASE_STATUS'`。
+> 舊測試稿中的 `'02'`、`'05'`、`'09'` 為無效值，DB 中不存在。
 
 ### MT-M5-001：M5 執行前提 — F069 不再讀取 ob_code_df（部署閘門前置驗證）
 
@@ -326,31 +331,31 @@ last_updated: 2026-05-20
 
 ---
 
-### MT-M5-002：M5 up() 刪除 TBL_ID='02'（prod_kind）的所有紀錄
+### MT-M5-002：M5 up() 刪除 TBL_ID='PROD_KIND' 的所有紀錄
 
 - **關聯需求**：§18.4.5（M5 DELETE）/ GAP E3
 - **測試類型**：Positive / Migration Integration（DB 驗證，staging only）
 - **前置條件**：
-  - staging DB ob_code_df 含 TBL_ID='02' 的紀錄
+  - staging DB ob_code_df 含 TBL_ID='PROD_KIND' 的紀錄（m150 轉碼後）
   - M5 部署閘門前置驗證通過
 - **步驟**：
-  1. 記錄 M5 執行前 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id='02'`（基線）
+  1. 記錄 M5 執行前 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id='PROD_KIND'`（基線）
   2. 執行 M5 up()
-  3. 查詢 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id='02'`
+  3. 查詢 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id='PROD_KIND'`
 - **預期結果**：
   - 執行後 count = 0
   - 執行前 count > 0（基線確認）
 
 ---
 
-### MT-M5-003：M5 up() 刪除 TBL_ID='05'（caseyear）與 '09'（spec_tp）的所有紀錄
+### MT-M5-003：M5 up() 刪除 TBL_ID='SPEC_TP' 與 'CASE_STATUS' 的所有紀錄
 
 - **關聯需求**：§18.4.5（M5 DELETE 三個 TBL_ID）/ GAP E3
 - **測試類型**：Positive / Migration Integration（DB 驗證，staging only）
 - **前置條件**：同 MT-M5-002
 - **步驟**：
   1. 執行 M5 up()
-  2. 查詢 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id IN ('05','09')`
+  2. 查詢 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id IN ('SPEC_TP','CASE_STATUS')`
 - **預期結果**：count = 0（兩個 TBL_ID 全部刪除）
 
 ---
@@ -364,7 +369,7 @@ last_updated: 2026-05-20
   1. 記錄其他 TBL_ID 的 COUNT 基線
   2. 執行 M5 up()
   3. 查詢其他 TBL_ID COUNT
-- **預期結果**：其他 TBL_ID 的記錄數量不變（精確刪除 '02','05','09' 只）
+- **預期結果**：其他 TBL_ID 的記錄數量不變（精確刪除 'PROD_KIND','SPEC_TP','CASE_STATUS' 只）
 
 ---
 
@@ -378,7 +383,7 @@ last_updated: 2026-05-20
   2. 驗證 down() 行為
 - **預期結果**：
   - M5 down() **不還原**已刪除資料（或拋出明確的「不可回滾」錯誤）
-  - 若 down() 為空函式（no-op）：驗證 down() 執行後 ob_code_df 仍無 TBL_ID='02','05','09' 紀錄
+  - 若 down() 為空函式（no-op）：驗證 down() 執行後 ob_code_df 仍無 TBL_ID='PROD_KIND','SPEC_TP','CASE_STATUS' 紀錄
   - 文件需明確標注：M5 回滾需從備份還原
 
 ---
@@ -388,7 +393,7 @@ last_updated: 2026-05-20
 - **關聯需求**：AD-E07-18 §18.2.7（F069 閘門語意）/ §18.10 Risk-9
 - **測試類型**：Positive / Integration（End-to-End 驗證）
 - **前置條件**：
-  - M5 up() 已執行（ob_code_df TBL_ID='02' 已刪除）
+  - M5 up() 已執行（ob_code_df TBL_ID='PROD_KIND' 已刪除）
   - F069 Service 已切換為讀取 pooldata_field_option
   - pooldata_field_option 含 prod_kind options（M3/M4 seed 後）
 - **步驟**：

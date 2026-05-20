@@ -349,6 +349,51 @@ last_updated: 2026-05-20
 
 ---
 
+## 八、columnName SQL Injection 防禦（Phase 5b 追補）
+
+> 以下 2 個場景對應 Phase 5b 波 5（commit `070a407`）實作的 `SAFE_COLUMN_NAME_RE` allowlist 防禦。
+> 5b implementation log O-5B-001 要求 test-designer 正式追補此編號。
+> 對應 composer unit spec UCQ-025~029 / §18.5 columnName allowlist 防禦規則（`/^[a-z][a-z0-9_]{0,63}$/`）。
+
+### IT-M01-022：columnName 含特殊字元時 Composer skip 並記錄 Logger.warn
+
+- **關聯需求**：§18.5（columnName allowlist 防禦）/ 5b UCQ-025/026/027
+- **測試類型**：Negative / Security / Integration
+- **前置條件**：
+  - 名單 condition_payload 含非法 columnName（如 `"; DROP TABLE ob_pool_data; --"`）
+  - 名單 stage = ready
+- **步驟**：
+  1. 觸發 Stage 1，此名單 condition_payload 含以下任一非法 columnName：
+     - `"; DROP TABLE ob_pool_data; --"`（SQL Injection payload）
+     - `"PROD_KIND"`（大寫，不符合 `^[a-z]` 規則）
+     - `"prod kind"`（含空白）
+  2. 觀察 Composer 行為與 Logger 輸出
+- **預期結果**：
+  - Composer 對該 condition 條目執行 **skip**（不生成對應 SQL fragment）
+  - Logger.warn 含 `INVALID_COLUMN_NAME` 識別碼及非法 columnName 值
+  - Stage 1 整體仍繼續執行（非法條件被 skip，其餘合法條件正常生成 SQL）
+  - **不因非法 columnName 拋出 500 或中斷月跑**
+
+---
+
+### IT-M01-023：columnName 符合 allowlist regex 時正常通過
+
+- **關聯需求**：§18.5（columnName allowlist 防禦邊界）/ 5b UCQ-028/029
+- **測試類型**：Positive / Boundary / Integration
+- **前置條件**：
+  - 名單 condition_payload 含合法 columnName（符合 `^[a-z][a-z0-9_]{0,63}$`）
+- **步驟**：
+  1. 觸發 Stage 1，此名單 condition_payload 含以下邊界合法值：
+     - `"prod_kind"`（最短合法，lowercase 開頭）
+     - `"a" + "b".repeat(63)`（64 字元，最長合法邊界）
+  2. 檢查生成 SQL
+- **預期結果**：
+  - Composer **不 skip** 上述 columnName（視為合法）
+  - 生成對應 SQL fragment（categorical / numeric 依 fieldType 各自對應）
+  - Logger **不**輸出 `INVALID_COLUMN_NAME` warn
+
+---
+
 ## 附錄：GAP 覆蓋對照
 
 | GAP 分類 | 覆蓋場景 |
@@ -368,6 +413,7 @@ last_updated: 2026-05-20
 | G3（LEGACY not copyable） | IT-M01-021 |
 | OQ-TEST-001（caseyear 99 wildcard） | IT-M01-013、IT-M01-014、IT-M01-015 |
 | OQ-TEST-002（_backfill_empty skip） | IT-M01-016、IT-M01-017 |
+| §18.5 columnName allowlist 防禦（5b 追補） | IT-M01-022、IT-M01-023 |
 
 ## 附錄：AD-E07-18 §18.10 高風險案例覆蓋
 

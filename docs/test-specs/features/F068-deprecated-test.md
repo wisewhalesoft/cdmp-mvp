@@ -121,24 +121,24 @@ last_updated: 2026-05-20
 - **關聯需求**：US-124 AC-4 / AD-E07-18 §18.2.7 / GAP I3
 - **測試類型**：Positive / Integration（Supertest）
 - **前置條件**：
-  - M5（DELETE ob_code_df TBL_ID IN ('02','05','09')）已執行
+  - M5（DELETE ob_code_df TBL_ID IN ('PROD_KIND','SPEC_TP','CASE_STATUS')）已執行
   - F069 Service 已改為從 `pooldata_field_option` 讀取 prod_kind label
 - **步驟**：
   1. 呼叫 F069 提供 prod_kind name 的端點（依實際路由）
   2. 驗證回應資料來源
 - **預期結果**：
   - 回傳的 prod_kind label 資料來自 `pooldata_field_option`（而非 `ob_code_df`）
-  - M5 刪除後 ob_code_df 已無 TBL_ID='02' 紀錄，F069 仍能正常回傳（**不因 ob_code_df 刪除而 500**）
+  - M5 刪除後 ob_code_df 已無 TBL_ID='PROD_KIND' 紀錄，F069 仍能正常回傳（**不因 ob_code_df 刪除而 500**）
 
 ---
 
-### TS-F068-DEP-007：M5 執行後 ob_code_df TBL_ID='02'/'05'/'09' 紀錄不存在
+### TS-F068-DEP-007：M5 執行後 ob_code_df TBL_ID='PROD_KIND'/'SPEC_TP'/'CASE_STATUS' 紀錄不存在
 
 - **關聯需求**：AD-E07-18 §18.2.7 / §18.4（M5 高風險）/ GAP I3
 - **測試類型**：Negative / Migration Integration（DB 驗證）
-- **前置條件**：M5（`1711360000285-DeleteObCodeDf3TblIds.ts`）up() 已執行
+- **前置條件**：M5（`1711360000285-DeleteObCodeDf3TblIds.ts`）up() 已執行（tbl_id 採 m150 轉碼後英文常數）
 - **步驟**：
-  1. 查詢 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id IN ('02','05','09')`
+  1. 查詢 `SELECT COUNT(*) FROM ob_code_df WHERE tbl_id IN ('PROD_KIND','SPEC_TP','CASE_STATUS')`
 - **預期結果**：
   - count = 0（3 個 TBL_ID 的所有紀錄已刪除）
   - **注意**：M5 為不可逆操作，此測試在 staging 環境執行；prod 需備份確認後方執行
