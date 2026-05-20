@@ -13,6 +13,7 @@ import {
   TrendingUp,
   FileSpreadsheet,
   FileText,
+  Filter,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -367,6 +368,52 @@ export function RunSummaryPage() {
             {data.levelDistribution && data.levelDistribution.length > 0 && (
               <CardLevelDonut rows={data.levelDistribution} />
             )}
+
+            {/* Phase 5d 波 10：skipped_cases.lists（5b ITP-006 / IT-M01-017） */}
+            {(() => {
+              const skippedLists =
+                (data.warnings?.skippedCases as
+                  | { lists?: Array<{ listNo: string; listNm?: string; reason?: string }> }
+                  | null
+                  | undefined)?.lists;
+              if (!skippedLists || skippedLists.length === 0) return null;
+              return (
+                <section
+                  className="bg-white rounded-xl border border-amber-200 overflow-hidden"
+                  data-testid="skipped-lists-section"
+                >
+                  <div className="px-5 py-3 border-b border-amber-200 bg-amber-50/50 flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-amber-700" />
+                    <h3 className="text-sm font-semibold text-amber-900">
+                      Stage 1 跳過名單
+                    </h3>
+                    <span className="text-xs text-amber-700">
+                      （{skippedLists.length} 份名單因條件為空或舊格式未轉換而跳過）
+                    </span>
+                  </div>
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                      <tr>
+                        <th className="text-left px-5 py-2 font-medium w-[20%]">LIST_NO</th>
+                        <th className="text-left px-5 py-2 font-medium">名單名稱</th>
+                        <th className="text-left px-5 py-2 font-medium w-[28%]">跳過原因</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {skippedLists.map((l) => (
+                        <tr key={l.listNo}>
+                          <td className="px-5 py-2 font-mono text-primary">{l.listNo}</td>
+                          <td className="px-5 py-2 text-gray-900">{l.listNm ?? '—'}</td>
+                          <td className="px-5 py-2 text-xs text-amber-700 font-mono">
+                            {l.reason ?? 'UNKNOWN'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              );
+            })()}
 
             {/* Dept breakdown */}
             {data.deptBreakdown && data.deptBreakdown.length > 0 && (

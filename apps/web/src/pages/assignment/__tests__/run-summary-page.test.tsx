@@ -199,4 +199,52 @@ describe('RunSummaryPage (F063)', () => {
       expect(btn.textContent).toContain('streaming');
     });
   });
+
+  // Phase 5d 波 10：v2.1 skipped_cases.lists 顯示（對齊 5b ITP-006 / IT-M01-017）
+  describe('Phase 5d 波 10 — skipped_cases.lists 顯示', () => {
+    // rs.test#new1：mock result skipped_cases.lists → 渲染跳過名單區塊
+    it('rs.test#new1: warnings.skippedCases.lists 含名單 → 渲染 skipped lists 區塊', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        deptSummary: [],
+        levelDistribution: [],
+        stage4Count: 100,
+        warnings: {
+          summaryCode: 'EMPTY_CONDITIONS_SKIPPED',
+          skippedCases: {
+            lists: [
+              { listNo: 'OB202605002', listNm: '空條件名單', reason: 'EMPTY_CONDITIONS' },
+              { listNo: 'OB202605003', listNm: '另一個 skip', reason: 'EMPTY_CONDITIONS' },
+            ],
+          },
+        },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('skipped-lists-section')).toBeInTheDocument(),
+      );
+      const section = screen.getByTestId('skipped-lists-section');
+      expect(section.textContent).toContain('OB202605002');
+      expect(section.textContent).toContain('OB202605003');
+      expect(section.textContent).toContain('空條件名單');
+    });
+
+    // rs.test#new2：無 skipped → 不顯示區塊
+    it('rs.test#new2: warnings.skippedCases.lists 為空 → 不顯示 skipped lists 區塊', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        deptSummary: [],
+        levelDistribution: [],
+        stage4Count: 100,
+        warnings: { summaryCode: null, skippedCases: null },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('total-assigned')).toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId('skipped-lists-section')).toBeNull();
+    });
+  });
 });

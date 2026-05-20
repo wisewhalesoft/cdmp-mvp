@@ -279,4 +279,62 @@ describe('ListDefinitionPage (FE-2 M01 名單定義)', () => {
       expect(screen.getByTestId('list-cr-OB202605001')).toBeInTheDocument();
     });
   });
+
+  // Phase 5d 波 10：v2.1 condition_payload-driven filter chip
+  describe('Phase 5d 波 10 — v2.1 filter chip 預覽', () => {
+    // ld.test#new1：mock list 含 conditionPayload → 條件預覽顯示 `prod_kind in (01,02)`
+    it('ld.test#new1: mock list 含 conditionPayload → 條件預覽優先顯示 conditionPayload', async () => {
+      mockedListLists.mockResolvedValue({
+        ...baseResponse,
+        lists: [
+          {
+            ...baseResponse.lists[0],
+            listNo: 'OB202605010',
+            // 5 個 v2.0 一級欄位 fallback 應被 conditionPayload 覆蓋
+            prodKind: '舊資料應被忽略',
+            specTp: '11$$12',
+            conditionPayload: {
+              conditions: [
+                { columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '02'] },
+              ],
+              logic: 'AND',
+            },
+          },
+        ],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('list-conditions-OB202605010')).toBeInTheDocument(),
+      );
+      const cell = screen.getByTestId('list-conditions-OB202605010');
+      // 應以 conditionPayload 為來源（不顯示 prodKind 的 "舊資料應被忽略"）
+      expect(cell.textContent).toContain('prod_kind in (01,02)');
+      expect(cell.textContent).not.toContain('舊資料應被忽略');
+    });
+
+    // ld.test#new2：mock list 無 conditionPayload（legacy）→ 沿用 5 欄位 + LEGACY 小徽章
+    it('ld.test#new2: legacy 名單（conditionPayload IS NULL）→ 沿用舊欄位 + LEGACY 徽章', async () => {
+      mockedListLists.mockResolvedValue({
+        ...baseResponse,
+        lists: [
+          {
+            ...baseResponse.lists[0],
+            listNo: 'OB202604099',
+            prodKind: 'AUTO',
+            caseYear: '1$$2$$3',
+            conditionPayload: null,
+          },
+        ],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('list-conditions-OB202604099')).toBeInTheDocument(),
+      );
+      const cell = screen.getByTestId('list-conditions-OB202604099');
+      // 沿用既有 fallback
+      expect(cell.textContent).toContain('PROD_KIND=AUTO');
+      // LEGACY 徽章
+      expect(screen.getByTestId('legacy-badge-OB202604099')).toBeInTheDocument();
+    });
+  });
 });

@@ -104,12 +104,36 @@ function stageNavTarget(listNo: string, stage: string): string {
 }
 
 /**
- * Phase 3 P2-5：將 list 主要欄位組成簡短的篩選條件預覽。
+ * Phase 5d 波 10：v2.1 篩選條件預覽。
  *
- * 從 prodKind / specTp / caseYear / caseStatus / settleSrc / cardType 萃取，
- * 取前 3 個非空條件用「、」分隔顯示，超過則加「…」。
+ * 優先順序：
+ *   1. conditionPayload != null → 從 conditions[] 萃取（新格式）
+ *   2. conditionPayload == null（LEGACY）→ fallback 沿用 5 欄位（v2.0 舊行為），呼叫端應額外渲染 LEGACY 徽章
+ *
+ * 取前 3 個條件，超過則加「…」。
  */
 function buildConditionPreview(list: AssignmentListItem): string {
+  // v2.1 path：以 conditionPayload 為來源
+  if (list.conditionPayload && list.conditionPayload.conditions.length > 0) {
+    const items = list.conditionPayload.conditions.map((c) => {
+      if (c.fieldType === 'categorical') {
+        const vs = (c.values ?? []).join(',');
+        return `${c.columnName} in (${vs})`;
+      }
+      if (c.fieldType === 'numeric') {
+        return `${c.columnName} between ${c.min}~${c.max}`;
+      }
+      if (c.fieldType === 'date') {
+        return `${c.columnName} between ${c.dateStart}~${c.dateEnd}`;
+      }
+      return c.columnName;
+    });
+    if (items.length === 0) return '—';
+    const head = items.slice(0, 3).join('、');
+    return items.length > 3 ? `${head} …(+${items.length - 3})` : head;
+  }
+
+  // LEGACY path（v2.0 fallback）：沿用 5 欄位
   const items: string[] = [];
   if (list.prodKind) items.push(`PROD_KIND=${list.prodKind}`);
   if (list.specTp) {
@@ -619,6 +643,16 @@ export function ListDefinitionPage() {
                         <span className="block truncate max-w-[260px]">
                           {buildConditionPreview(list)}
                         </span>
+                        {/* Phase 5d 波 10：conditionPayload IS NULL 顯示 LEGACY 小徽章 */}
+                        {list.conditionPayload === null && (
+                          <span
+                            data-testid={`legacy-badge-${list.listNo}`}
+                            className="mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300"
+                          >
+                            <Archive className="w-2.5 h-2.5 mr-0.5" />
+                            LEGACY v2.0
+                          </span>
+                        )}
                       </td>
                       <td
                         className="px-4 py-3 text-xs"
