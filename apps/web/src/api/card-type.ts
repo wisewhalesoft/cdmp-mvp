@@ -201,7 +201,7 @@ export const PROD_KIND_FALLBACK_STYLE: ProdKindStyle = {
 
 /**
  * PROD_KIND 下拉選項（依 prototype 28 line 516-520 一致）。
- * Iter 5a 採 hardcoded；後續若 spec 要求動態載入 ob_code_df，再改為 useQuery。
+ * Iter 5a 採 hardcoded；F069 v2.1 後可改讀 pooldata_field_option (column_name='prod_kind')。
  */
 export const PROD_KIND_OPTIONS: ReadonlyArray<{
   value: string;

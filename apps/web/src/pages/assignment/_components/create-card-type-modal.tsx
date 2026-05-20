@@ -241,7 +241,7 @@ export function CreateCardTypeModal({ open, onClose, onCreated }: Props) {
                 </p>
               )}
               <p className="text-xs text-gray-400 mt-1">
-                來源：代碼維護（ob_code_df, tbl_id=&#39;PROD_KIND&#39;）
+                來源：篩選欄位（pooldata_field_option, column_name=&#39;prod_kind&#39;）
               </p>
             </div>
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-700 flex items-start gap-2">
