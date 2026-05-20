@@ -263,9 +263,13 @@ export class AssignmentRunPipelineService {
       if (integrityWarningTypes.has('ALL_SCORES_EMPTY')) {
         warningCodes.push('ALL_SCORES_EMPTY');
       }
+      // Phase 5b / §18.5.2：empty conditions skip
+      if (stage1SkippedLists.length > 0) {
+        warningCodes.push('EMPTY_CONDITIONS_SKIPPED');
+      }
       const warningSummary = warningCodes.length > 0 ? warningCodes.join(',') : null;
 
-      // skipped_cases 合併 edge CARD_TYPE 與 ALL_SCORES_EMPTY 兩類
+      // skipped_cases 合併 edge CARD_TYPE / ALL_SCORES_EMPTY / EMPTY_CONDITIONS 三類
       const integritySkipped = integrityIssues
         .filter((i) => i.type === 'ALL_SCORES_EMPTY')
         .map((i) => ({
@@ -274,14 +278,25 @@ export class AssignmentRunPipelineService {
           affectedApplNoCount: i.violatedRowCount ?? 0,
           reason: i.type,
         }));
+      // Phase 5b：§18.5.2 skip 名單 → lists 陣列（status='skipped'）
+      const skippedListsPayload = stage1SkippedLists.map((l) => ({
+        listNo: l.listNo,
+        listName: l.listName,
+        status: 'skipped' as const,
+        reason: l.reason,
+      }));
       const skippedJson =
-        skippedCases.length > 0 || integritySkipped.length > 0
+        skippedCases.length > 0 ||
+        integritySkipped.length > 0 ||
+        skippedListsPayload.length > 0
           ? {
               cases: skippedCases,
               integrityIssues: integritySkipped,
+              lists: skippedListsPayload,
             }
           : null;
 
+      // R-5B-08：total_lists 維持 validLists.length 不扣 skip（以 skipped_cases.lists 表達）
       await this.completeRun(
         runId,
         startedAt,
