@@ -1,14 +1,20 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Hash,
-  FileText,
   Save,
-  ArrowLeft,
   Plus,
   X,
   Copy,
   CheckCircle2,
+  ChevronRight,
+  ChevronDown,
+  ShieldCheck,
+  AlertTriangle,
+  Filter,
+  ArrowRight,
+  ArrowRightCircle,
+  Trash2,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -17,39 +23,89 @@ import {
   createList,
   listLists,
   type AssignmentListItem,
+  type ConditionItem,
+  type ConditionPayload,
 } from '@/api/assignment-list';
+import {
+  listFields,
+  listOptions,
+  type PooldataField,
+  type PooldataOption,
+  type FieldType,
+} from '@/api/pooldata-fields';
 import {
   CopyFromPrevMonthModal,
   computePrevYm,
 } from './_components/copy-from-prev-month-modal';
 
 /**
- * F050 v2.0 — 建立草稿名單頁
+ * F050 v2.1 — 建立草稿名單頁（Phase 5d 波 8 重寫）
  *
- * 對應 prototype: /prototypes/27a-list-create-draft.html
+ * 對應 prototype: /prototypes/27a-list-create-draft.html L173-348（4 section）
+ *                + L386-433（AdvanceConfirmModal 含 UI-Q1 INACTIVE 確認）
  *
- * 範圍（MVP）：
- *   - 基本資訊（list_nm）
- *   - CR 回分開關（per-LIST）
- *   - 動態篩選條件（簡化版：column + values comma-separated）
- *   - 商品 / 卡別 / 期別 / 結清來源 等基礎欄位
+ * 區塊順序（嚴格對齊 prototype 不換序）：
+ *   1. 基本資訊（list_nm + cardType + prodBest）
+ *   2. 撈案期間（listPeriodStart/End/Interval；一級保留欄位 BR-8 / J8）
+ *   3. 篩選條件（condition_payload-driven，dynamic builder）
+ *   4. CR 回分規則（per-LIST）
  *
- * 進階功能（待 P2 補）：
- *   - 從上月複製（copyFromListNo source picker）
- *   - 完整 condition_payload builder（操作子 / fieldType / 多 value selector）
- *   - PROD_KIND / CASE_STATUS 之 code lookup（從 pooldata-fields/options 動態載入）
+ * Whitelist source of truth：
+ *   - listFields({ active: 'true' }) — 5d 後唯一篩選欄位來源（F068 廢除）
+ *   - listOptions(columnName, { active: 'true' }) — categorical 欄位值
+ *   - list_period_* 為一級保留欄位，不在 condition_payload 中（BR-8）
  *
- * RBAC: DirectorRoute 已包；section_chief 無建立權。
+ * DTO 對應：v2.1 CreateListRequest（5a backend 落地）
+ *   - 必填：listNm + conditionPayload + listPeriodStart/End/Interval
+ *   - 移除：prodKind / caseYear / specTp / caseStatus / settleSrc（5 個 v2.0 一級欄位）
+ *   - 衍生規則 §18.6 由後端執行（前端不傳）
+ *
+ * 拍板 UI-Q1：含 INACTIVE 推進需 checkbox 雙重確認
  */
 
-interface ConditionRow {
-  id: string;
+type ConditionFieldType = FieldType;
+
+interface BuilderCondition {
+  /** 內部 stable id，用於 React key 與 testid */
+  id: number;
   columnName: string;
-  values: string; // comma-separated，提交時 split → string[]
+  fieldType: ConditionFieldType;
+  /** categorical only */
+  values?: string[];
+  /** numeric only */
+  min?: number | '';
+  max?: number | '';
+  /** date only */
+  dateStart?: string;
+  dateEnd?: string;
 }
 
-function genId(): string {
-  return Math.random().toString(36).slice(2, 10);
+/** 對應 ConditionItem（送 API 用） */
+function toConditionItem(c: BuilderCondition): ConditionItem {
+  const base: ConditionItem = { columnName: c.columnName, fieldType: c.fieldType };
+  if (c.fieldType === 'categorical') {
+    base.values = c.values ?? [];
+  } else if (c.fieldType === 'numeric') {
+    base.min = typeof c.min === 'number' ? c.min : Number(c.min);
+    base.max = typeof c.max === 'number' ? c.max : Number(c.max);
+  } else if (c.fieldType === 'date') {
+    base.dateStart = c.dateStart;
+    base.dateEnd = c.dateEnd;
+  }
+  return base;
+}
+
+function isConditionComplete(c: BuilderCondition): boolean {
+  if (c.fieldType === 'categorical') return (c.values?.length ?? 0) >= 1;
+  if (c.fieldType === 'numeric') {
+    if (c.min === '' || c.max === '' || c.min === undefined || c.max === undefined) return false;
+    return Number(c.max) >= Number(c.min);
+  }
+  if (c.fieldType === 'date') {
+    if (!c.dateStart || !c.dateEnd) return false;
+    return c.dateEnd >= c.dateStart;
+  }
+  return false;
 }
 
 export function ListCreateDraftPage() {
@@ -58,26 +114,32 @@ export function ListCreateDraftPage() {
   const [searchParams] = useSearchParams();
   const fromYm = searchParams.get('ym') ?? '';
 
-  // Form fields
+  // ─── Form state ───
   const [listNm, setListNm] = useState('');
-  const [prodKind, setProdKind] = useState('');
-  const [caseYear, setCaseYear] = useState('');
-  const [specTp, setSpecTp] = useState('');
-  const [caseStatus, setCaseStatus] = useState('');
-  const [listPeriodStart, setListPeriodStart] = useState<string>('0');
-  const [listPeriodEnd, setListPeriodEnd] = useState<string>('999');
-  const [listInterval, setListInterval] = useState<string>('30');
-  const [settleSrc, setSettleSrc] = useState('');
   const [cardType, setCardType] = useState('');
-  // prodBest 在 spec 為選填且 MVP 表單暫不暴露 UI（待 P2 補完）
-  const [prodBest] = useState('');
+  const [prodBest, setProdBest] = useState('');
+  const [listPeriodStart, setListPeriodStart] = useState<string>('');
+  const [listPeriodEnd, setListPeriodEnd] = useState<string>('');
+  const [listInterval, setListInterval] = useState<string>('');
   const [crEnabled, setCrEnabled] = useState(true);
-  const [conditions, setConditions] = useState<ConditionRow[]>([]);
 
+  const [conditions, setConditions] = useState<BuilderCondition[]>([]);
+  const [condIdSeq, setCondIdSeq] = useState(1);
+
+  // ─── UI state ───
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addDropdownOpen, setAddDropdownOpen] = useState(false);
+  const [valueDropdownOpen, setValueDropdownOpen] = useState<number | null>(null);
+  const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
+  const [inactiveAcknowledged, setInactiveAcknowledged] = useState(false);
 
-  // Phase 3 P2-6：從上月複製 modal state
+  // ─── Whitelist fields / options ───
+  const [fields, setFields] = useState<PooldataField[]>([]);
+  const [optionsByColumn, setOptionsByColumn] = useState<Record<string, PooldataOption[]>>({});
+  const [copyFromListNo, setCopyFromListNo] = useState<string | null>(null);
+
+  // ─── 從上月複製 modal state ───
   const currentYm = fromYm
     ? fromYm.replace('-', '')
     : (() => {
@@ -85,108 +147,181 @@ export function ListCreateDraftPage() {
         return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
       })();
   const prevYm = computePrevYm(currentYm);
-
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [prevLists, setPrevLists] = useState<AssignmentListItem[]>([]);
   const [prevLoading, setPrevLoading] = useState(false);
-  const [copyFromListNo, setCopyFromListNo] = useState<string | null>(null);
 
+  // 載入 active fields（whitelist source of truth；list_period_* 不在 whitelist）
   useEffect(() => {
-    if (fromYm) {
-      // 預填名稱前綴
-      setListNm(`${fromYm} `);
-    }
-  }, [fromYm]);
-
-  const handleOpenCopyModal = async () => {
-    setCopyModalOpen(true);
-    if (prevLists.length > 0 || !prevYm) return;
-    setPrevLoading(true);
-    try {
-      const data = await listLists({ ym: prevYm });
-      setPrevLists(
-        (data.lists ?? []).filter((l) => l.status === 'active'),
-      );
-    } catch {
-      setPrevLists([]);
-    } finally {
-      setPrevLoading(false);
-    }
-  };
-
-  // P2-6 BR：複製後僅帶入欄位（CR 開關 / 篩選條件 / 商品 / 期別）；名稱重新建立
-  const handleCopyApply = (src: AssignmentListItem) => {
-    setProdKind(src.prodKind ?? '');
-    setCaseYear((src.caseYear ?? '').split('$$').filter(Boolean).join(','));
-    setSpecTp((src.specTp ?? '').split('$$').filter(Boolean).join(','));
-    setCaseStatus((src.caseStatus ?? '').split('$$').filter(Boolean).join(','));
-    setListPeriodStart(String(src.listPeriodStart ?? 0));
-    setListPeriodEnd(String(src.listPeriodEnd ?? 999));
-    setListInterval(String(src.listInterval ?? 30));
-    setSettleSrc(src.settleSrc ?? '');
-    setCardType(src.cardType ?? '');
-    setCrEnabled(src.crEnabled ?? true);
-    setCopyFromListNo(src.listNo);
-    setCopyModalOpen(false);
-    showToast(`已從 ${src.listNo} 帶入欄位`, 'success');
-  };
-
-  const addCondition = () => {
-    setConditions((prev) => [...prev, { id: genId(), columnName: '', values: '' }]);
-  };
-
-  const removeCondition = (id: string) => {
-    setConditions((prev) => prev.filter((c) => c.id !== id));
-  };
-
-  const updateCondition = (id: string, patch: Partial<ConditionRow>) => {
-    setConditions((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!listNm.trim()) {
-      setError('名單名稱為必填');
-      return;
-    }
-    if (!prodKind || !caseYear || !specTp || !caseStatus || !settleSrc) {
-      setError('請填寫所有必填欄位（商品 / 年期 / 商品次類 / 結清期別 / 結清來源）');
-      return;
-    }
-
-    const dto: Record<string, unknown> = {
-      listNm: listNm.trim(),
-      prodKind,
-      caseYear: caseYear.split(',').map((s) => s.trim()).filter(Boolean).join('$$'),
-      specTp: specTp.split(',').map((s) => s.trim()).filter(Boolean).join('$$'),
-      caseStatus: caseStatus.split(',').map((s) => s.trim()).filter(Boolean).join('$$'),
-      listPeriodStart: parseInt(listPeriodStart, 10) || 0,
-      listPeriodEnd: parseInt(listPeriodEnd, 10) || 999,
-      listInterval: parseInt(listInterval, 10) || 30,
-      settleSrc,
-      crEnabled,
+    let aborted = false;
+    void (async () => {
+      try {
+        const data = await listFields({ active: 'true' });
+        if (!aborted) setFields(data.fields ?? []);
+      } catch {
+        if (!aborted) setFields([]);
+      }
+    })();
+    return () => {
+      aborted = true;
     };
-    if (cardType) dto.cardType = cardType;
-    if (prodBest) dto.prodBest = prodBest;
-    if (copyFromListNo) dto.copyFromListNo = copyFromListNo;
+  }, []);
 
-    const validConds = conditions
-      .map((c) => ({
-        columnName: c.columnName.trim(),
-        values: c.values.split(',').map((s) => s.trim()).filter(Boolean),
-      }))
-      .filter((c) => c.columnName && c.values.length > 0);
+  // ─── 載入某欄位的 options（categorical 才需要） ───
+  const ensureOptions = useCallback(
+    async (columnName: string) => {
+      if (optionsByColumn[columnName]) return;
+      try {
+        const data = await listOptions(columnName, { active: 'true' });
+        setOptionsByColumn((prev) => ({ ...prev, [columnName]: data.options ?? [] }));
+      } catch {
+        setOptionsByColumn((prev) => ({ ...prev, [columnName]: [] }));
+      }
+    },
+    [optionsByColumn],
+  );
 
-    if (validConds.length > 0) {
-      dto.conditionPayload = { conditions: validConds, logic: 'AND' };
+  // ─── 條件操作 helper ───
+  const usedCols = useMemo(
+    () => new Set(conditions.map((c) => c.columnName)),
+    [conditions],
+  );
+  const availableFields = useMemo(
+    () => fields.filter((f) => f.isActive && !usedCols.has(f.columnName)),
+    [fields, usedCols],
+  );
+
+  const addConditionByCol = useCallback(
+    (col: string) => {
+      const f = fields.find((x) => x.columnName === col);
+      if (!f) return;
+      const id = condIdSeq;
+      setCondIdSeq((s) => s + 1);
+      const c: BuilderCondition = {
+        id,
+        columnName: col,
+        fieldType: f.fieldType,
+      };
+      if (f.fieldType === 'categorical') {
+        c.values = [];
+        void ensureOptions(col);
+      } else if (f.fieldType === 'numeric') {
+        c.min = '';
+        c.max = '';
+      } else if (f.fieldType === 'date') {
+        c.dateStart = '';
+        c.dateEnd = '';
+      }
+      setConditions((prev) => [...prev, c]);
+      setAddDropdownOpen(false);
+    },
+    [fields, condIdSeq, ensureOptions],
+  );
+
+  const removeCondition = useCallback((id: number) => {
+    setConditions((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const toggleCatValue = useCallback((id: number, val: string) => {
+    setConditions((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const current = c.values ?? [];
+        const next = current.includes(val)
+          ? current.filter((v) => v !== val)
+          : [...current, val];
+        return { ...c, values: next };
+      }),
+    );
+  }, []);
+
+  const updateNumeric = useCallback(
+    (id: number, key: 'min' | 'max', v: string) => {
+      setConditions((prev) =>
+        prev.map((c) =>
+          c.id === id ? { ...c, [key]: v === '' ? '' : Number(v) } : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  const updateDate = useCallback(
+    (id: number, key: 'dateStart' | 'dateEnd', v: string) => {
+      setConditions((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, [key]: v } : c)),
+      );
+    },
+    [],
+  );
+
+  // ─── INACTIVE 偵測（prototype 27a L750-765 / BR-9 / AC-13） ───
+  const inactiveDetails = useMemo(() => {
+    const details: Array<{ columnName: string; value: string; label: string }> = [];
+    conditions.forEach((c) => {
+      if (c.fieldType !== 'categorical') return;
+      const opts = optionsByColumn[c.columnName] ?? [];
+      (c.values ?? []).forEach((v) => {
+        const opt = opts.find((o) => o.optionValue === v);
+        if (opt && !opt.isActive) {
+          details.push({ columnName: c.columnName, value: v, label: opt.optionLabel });
+        }
+      });
+    });
+    return details;
+  }, [conditions, optionsByColumn]);
+
+  const hasInactive = inactiveDetails.length > 0;
+
+  // ─── validation ───
+  const validate = useCallback((): string | null => {
+    if (!listNm.trim()) return '請輸入名單名稱';
+    if (listPeriodStart === '' || listPeriodEnd === '' || listInterval === '') {
+      return '撈案期間三欄皆為必填';
     }
+    if (Number(listPeriodEnd) < Number(listPeriodStart)) {
+      return '結束期數需大於等於開始期數';
+    }
+    if (conditions.length === 0) {
+      return '請至少設定一個篩選條件';
+    }
+    const incomplete = conditions.find((c) => !isConditionComplete(c));
+    if (incomplete) {
+      return '部分條件尚未填寫完整（categorical 需至少 1 個值；numeric 需 min/max；date 需起迄）';
+    }
+    return null;
+  }, [listNm, listPeriodStart, listPeriodEnd, listInterval, conditions]);
 
+  // ─── 送出 ───
+  const buildPayload = useCallback((): ConditionPayload => {
+    return {
+      conditions: conditions.map(toConditionItem),
+      logic: 'AND',
+    };
+  }, [conditions]);
+
+  const submitDraft = useCallback(async () => {
+    setError(null);
+    const err = validate();
+    if (err) {
+      setError(err);
+      showToast(err, 'error');
+      return;
+    }
     setSubmitting(true);
     try {
+      const dto: Record<string, unknown> = {
+        listNm: listNm.trim(),
+        listPeriodStart: Number(listPeriodStart),
+        listPeriodEnd: Number(listPeriodEnd),
+        listInterval: Number(listInterval),
+        crEnabled,
+        conditionPayload: buildPayload(),
+      };
+      if (cardType) dto.cardType = cardType;
+      if (prodBest) dto.prodBest = prodBest;
+      if (copyFromListNo) dto.copyFromListNo = copyFromListNo;
+
       const result = (await createList(dto)) as { listNo: string };
       showToast(`名單 ${result.listNo} 已建立`, 'success');
       navigate('/assignment/list-definitions');
@@ -200,20 +335,144 @@ export function ListCreateDraftPage() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [
+    validate,
+    listNm,
+    listPeriodStart,
+    listPeriodEnd,
+    listInterval,
+    crEnabled,
+    cardType,
+    prodBest,
+    copyFromListNo,
+    buildPayload,
+    showToast,
+    navigate,
+  ]);
+
+  const handleSaveDraft = useCallback(
+    (e?: React.FormEvent) => {
+      e?.preventDefault();
+      void submitDraft();
+    },
+    [submitDraft],
+  );
+
+  const openAdvanceModal = useCallback(() => {
+    setError(null);
+    const err = validate();
+    if (err) {
+      setError(err);
+      showToast(err, 'error');
+      return;
+    }
+    setInactiveAcknowledged(false);
+    setAdvanceModalOpen(true);
+  }, [validate, showToast]);
+
+  const confirmAdvance = useCallback(async () => {
+    // 推進＝先存草稿（後端會處理 stage 升級；MVP 此處沿用 createList）
+    await submitDraft();
+    setAdvanceModalOpen(false);
+  }, [submitDraft]);
+
+  // ─── 從上月複製 ───
+  const handleOpenCopyModal = useCallback(async () => {
+    setCopyModalOpen(true);
+    if (prevLists.length > 0 || !prevYm) return;
+    setPrevLoading(true);
+    try {
+      const data = await listLists({ ym: prevYm });
+      // 拍板 Q4 / AC-5：僅顯示 conditionPayload IS NOT NULL 之名單
+      setPrevLists(
+        (data.lists ?? []).filter(
+          (l) => l.status === 'active' && l.conditionPayload != null,
+        ),
+      );
+    } catch {
+      setPrevLists([]);
+    } finally {
+      setPrevLoading(false);
+    }
+  }, [prevLists.length, prevYm]);
+
+  const handleCopyApply = useCallback(
+    (src: AssignmentListItem) => {
+      const payload = src.conditionPayload;
+      if (!payload) return;
+      // 帶入 CR + 篩選條件；名稱不帶
+      setCrEnabled(src.crEnabled ?? true);
+      if (src.listPeriodStart != null) setListPeriodStart(String(src.listPeriodStart));
+      if (src.listPeriodEnd != null) setListPeriodEnd(String(src.listPeriodEnd));
+      if (src.listInterval != null) setListInterval(String(src.listInterval));
+
+      // 重建 conditions，並 ensureOptions
+      let nextSeq = condIdSeq;
+      const newConds: BuilderCondition[] = payload.conditions.map((src) => {
+        const c: BuilderCondition = {
+          id: nextSeq++,
+          columnName: src.columnName,
+          fieldType: src.fieldType,
+        };
+        if (src.fieldType === 'categorical') c.values = [...(src.values ?? [])];
+        else if (src.fieldType === 'numeric') {
+          c.min = src.min;
+          c.max = src.max;
+        } else if (src.fieldType === 'date') {
+          c.dateStart = src.dateStart;
+          c.dateEnd = src.dateEnd;
+        }
+        return c;
+      });
+      setCondIdSeq(nextSeq);
+      setConditions(newConds);
+      // load options for categorical columns
+      newConds.forEach((c) => {
+        if (c.fieldType === 'categorical') void ensureOptions(c.columnName);
+      });
+
+      setCopyFromListNo(src.listNo);
+      setCopyModalOpen(false);
+      showToast(`已從 ${src.listNo} 帶入欄位`, 'success');
+    },
+    [condIdSeq, ensureOptions, showToast],
+  );
+
+  // ─── Render helpers ───
+  function renderTypeBadge(fieldType: ConditionFieldType) {
+    const colors: Record<ConditionFieldType, { bg: string; text: string }> = {
+      categorical: { bg: 'bg-blue-100', text: 'text-blue-700' },
+      numeric: { bg: 'bg-violet-100', text: 'text-violet-700' },
+      date: { bg: 'bg-cyan-100', text: 'text-cyan-700' },
+    };
+    const c = colors[fieldType];
+    return (
+      <span
+        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text}`}
+      >
+        {fieldType}
+      </span>
+    );
+  }
 
   return (
     <AppLayout
       headerLeft={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/list-definitions')}
-            className="text-gray-400 hover:text-gray-700"
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            to="/assignment/list-definitions"
+            className="text-gray-500 hover:text-primary transition"
           >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">建立草稿名單</h1>
+            名單定義
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <span className="font-semibold text-gray-800">建立草稿名單</span>
+          <span
+            className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+            style={{ background: '#F3F4F6', color: '#6B7280' }}
+          >
+            草稿階段
+          </span>
         </div>
       }
       actions={
@@ -229,8 +488,8 @@ export function ListCreateDraftPage() {
       }
     >
       <main className="flex-1 p-6">
-        <div className="max-w-3xl mx-auto space-y-4">
-          {/* Phase 3 P2-6：複製成功 banner */}
+        <div className="max-w-4xl mx-auto space-y-4">
+          {/* 從上月複製成功 banner */}
           {copyFromListNo && (
             <div
               data-testid="copy-applied-banner"
@@ -239,12 +498,10 @@ export function ListCreateDraftPage() {
               <CheckCircle2 className="w-4 h-4 text-green-700 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-green-900">
-                  已從{' '}
-                  <code className="font-mono">{copyFromListNo}</code>{' '}
-                  帶入欄位
+                  已從 <code className="font-mono">{copyFromListNo}</code> 複製篩選條件
                 </p>
                 <p className="text-xs text-green-800 mt-0.5">
-                  名稱與 LIST_NO 將重新建立；CR 開關、商品、期別、篩選條件均已套用，您仍可手動調整。
+                  名稱欄位需自行命名；CR 開關已恢復為「啟用」預設值；條件可繼續編輯。
                 </p>
               </div>
               <button
@@ -267,8 +524,8 @@ export function ListCreateDraftPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 1: 基本資訊 */}
+          <form onSubmit={handleSaveDraft} className="space-y-4">
+            {/* ─────────── 1: 基本資訊 ─────────── */}
             <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
@@ -277,6 +534,7 @@ export function ListCreateDraftPage() {
                 <h2 className="text-base font-semibold text-gray-800">基本資訊</h2>
               </div>
 
+              {/* LIST_NO 預覽 */}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
                   LIST_NO（系統自動產生）
@@ -287,34 +545,371 @@ export function ListCreateDraftPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  名單名稱 <span className="text-danger">*</span>
-                  <span className="text-[10px] text-gray-400 font-normal ml-1">1~45 字</span>
-                </label>
-                <input
-                  data-testid="input-listNm"
-                  type="text"
-                  required
-                  maxLength={45}
-                  value={listNm}
-                  onChange={(e) => setListNm(e.target.value)}
-                  placeholder="例：2026-05 業務一部 主力催收"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    名單名稱 <span className="text-danger">*</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-1">1~50 字</span>
+                  </label>
+                  <input
+                    data-testid="input-listNm"
+                    type="text"
+                    required
+                    maxLength={50}
+                    value={listNm}
+                    onChange={(e) => setListNm(e.target.value)}
+                    placeholder="例：2026-05 業務一部 主力催收"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    卡別{' '}
+                    <span className="text-[10px] text-gray-400 font-normal">選填 · max 2</span>
+                  </label>
+                  <input
+                    data-testid="input-cardType"
+                    type="text"
+                    maxLength={2}
+                    value={cardType}
+                    onChange={(e) => setCardType(e.target.value)}
+                    placeholder="例：01"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    最佳產品{' '}
+                    <span className="text-[10px] text-gray-400 font-normal">選填 · max 5</span>
+                  </label>
+                  <input
+                    data-testid="input-prodBest"
+                    type="text"
+                    maxLength={5}
+                    value={prodBest}
+                    onChange={(e) => setProdBest(e.target.value)}
+                    placeholder="例：05"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
             </section>
 
-            {/* 2: CR */}
-            <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            {/* ─────────── 2: 撈案期間（一級保留欄位 BR-8 / J8） ─────────── */}
+            <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
                   2
                 </span>
+                <h2 className="text-base font-semibold text-gray-800">撈案期間</h2>
+                <span
+                  className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200"
+                  title="list_period_start / list_period_end / list_interval 為名單一級保留欄位，系統獨立處理，不可作為動態篩選條件（BR-8 / J8）"
+                >
+                  <ShieldCheck className="w-3 h-3 mr-0.5" />
+                  一級保留欄位
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                以下三欄為名單一級保留欄位，與「篩選條件」分開設定。
+              </p>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    開始撈取期數 <span className="text-danger">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="input-listPeriodStart"
+                      type="number"
+                      min={0}
+                      max={999}
+                      step={1}
+                      required
+                      value={listPeriodStart}
+                      onChange={(e) => setListPeriodStart(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">個月</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    結束撈取期數 <span className="text-danger">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="input-listPeriodEnd"
+                      type="number"
+                      min={0}
+                      max={999}
+                      step={1}
+                      required
+                      value={listPeriodEnd}
+                      onChange={(e) => setListPeriodEnd(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">個月</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    間隔期數 <span className="text-danger">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="input-listInterval"
+                      type="number"
+                      min={0}
+                      max={999}
+                      step={1}
+                      required
+                      value={listInterval}
+                      onChange={(e) => setListInterval(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">個月</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ─────────── 3: 篩選條件（condition_payload-driven） ─────────── */}
+            <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
+                    3
+                  </span>
+                  <h2 className="text-base font-semibold text-gray-800">篩選條件</h2>
+                  <span className="text-[10px] text-gray-400 ml-1">
+                    條件間以「且」（AND）連接
+                  </span>
+                </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    data-testid="btn-add-condition"
+                    onClick={() => setAddDropdownOpen((v) => !v)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-primary text-primary rounded-md hover:bg-blue-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                    新增條件
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                  {addDropdownOpen && (
+                    <div
+                      data-testid="add-field-dropdown"
+                      className="absolute right-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto"
+                    >
+                      <ul className="py-1">
+                        {availableFields.length === 0 ? (
+                          <li className="px-3 py-4 text-center text-xs text-gray-400">
+                            所有 active 欄位皆已加入條件中
+                          </li>
+                        ) : (
+                          availableFields.map((f) => (
+                            <li key={f.columnName}>
+                              <button
+                                type="button"
+                                data-testid={`add-field-${f.columnName}`}
+                                onClick={() => addConditionByCol(f.columnName)}
+                                className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-800">
+                                    {f.displayName}
+                                  </div>
+                                  <code className="text-[10px] font-mono text-gray-500">
+                                    {f.columnName}
+                                  </code>
+                                </div>
+                                {renderTypeBadge(f.fieldType)}
+                              </button>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {conditions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-200 p-8 flex flex-col items-center text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                    <Filter className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm text-gray-500">尚未新增任何篩選條件</p>
+                  <p className="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {conditions.map((c, idx) => {
+                    const f = fields.find((x) => x.columnName === c.columnName);
+                    if (!f) return null;
+                    return (
+                      <div key={c.id}>
+                        {idx > 0 && (
+                          <div className="flex items-center gap-2 py-1 -mb-1">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                              且 AND
+                            </span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                          </div>
+                        )}
+                        <div
+                          data-testid={`condition-row-${idx}`}
+                          className="cond-row p-3 bg-gray-50/50 border border-gray-200 rounded-lg space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-gray-400 w-6">
+                                #{idx + 1}
+                              </span>
+                              <span className="font-medium text-sm text-gray-800">
+                                {f.displayName}
+                              </span>
+                              <code className="text-[10px] font-mono text-gray-500">
+                                {f.columnName}
+                              </code>
+                              {renderTypeBadge(f.fieldType)}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeCondition(c.id)}
+                              data-testid={`btn-remove-condition-${idx}`}
+                              title="移除條件"
+                              className="p-1.5 text-gray-400 hover:text-danger hover:bg-red-50 rounded transition shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* 值編輯區（依 fieldType 分支） */}
+                          {f.fieldType === 'categorical' && (
+                            <CategoricalValuesPicker
+                              idx={idx}
+                              cond={c}
+                              options={optionsByColumn[c.columnName] ?? []}
+                              dropdownOpen={valueDropdownOpen === c.id}
+                              onToggleDropdown={() =>
+                                setValueDropdownOpen((v) => (v === c.id ? null : c.id))
+                              }
+                              onToggleValue={(v) => toggleCatValue(c.id, v)}
+                            />
+                          )}
+                          {f.fieldType === 'numeric' && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-gray-500 font-mono">BETWEEN</span>
+                              <input
+                                type="number"
+                                data-testid={`input-numeric-min-${idx}`}
+                                min={0}
+                                step={1}
+                                value={c.min ?? ''}
+                                onChange={(e) => updateNumeric(c.id, 'min', e.target.value)}
+                                placeholder="min"
+                                className="w-24 px-2.5 py-1.5 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              <span className="text-xs text-gray-400">~</span>
+                              <input
+                                type="number"
+                                data-testid={`input-numeric-max-${idx}`}
+                                min={0}
+                                step={1}
+                                value={c.max ?? ''}
+                                onChange={(e) => updateNumeric(c.id, 'max', e.target.value)}
+                                placeholder="max"
+                                className="w-24 px-2.5 py-1.5 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              {c.min !== '' &&
+                                c.max !== '' &&
+                                c.min !== undefined &&
+                                c.max !== undefined &&
+                                Number(c.max) < Number(c.min) && (
+                                  <span className="text-[11px] text-danger ml-1">
+                                    max 需 ≥ min
+                                  </span>
+                                )}
+                            </div>
+                          )}
+                          {f.fieldType === 'date' && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-gray-500 font-mono">BETWEEN</span>
+                              <input
+                                type="date"
+                                data-testid={`input-date-start-${idx}`}
+                                value={c.dateStart ?? ''}
+                                onChange={(e) => updateDate(c.id, 'dateStart', e.target.value)}
+                                className="px-2.5 py-1.5 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              <span className="text-xs text-gray-400">~</span>
+                              <input
+                                type="date"
+                                data-testid={`input-date-end-${idx}`}
+                                value={c.dateEnd ?? ''}
+                                onChange={(e) => updateDate(c.id, 'dateEnd', e.target.value)}
+                                className="px-2.5 py-1.5 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              {c.dateStart &&
+                                c.dateEnd &&
+                                c.dateEnd < c.dateStart && (
+                                  <span className="text-[11px] text-danger ml-1">
+                                    end 需 ≥ start
+                                  </span>
+                                )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* INACTIVE 警示 banner（BR-9 / AC-13 / 對齊 prototype 27a L297-304） */}
+              {hasInactive && (
+                <div
+                  data-testid="inactive-warning-banner"
+                  className="rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm"
+                >
+                  <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-amber-900">
+                      {inactiveDetails.length} 個可選值已停用，將被保留但月跑 Stage 1 不會匹配
+                    </p>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      {inactiveDetails
+                        .map((d) => `${d.columnName}.${d.value}（${d.label}）`)
+                        .join('、')}
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      如需重新啟用請至{' '}
+                      <Link
+                        to="/assignment/field-base?tab=options"
+                        className="underline font-medium"
+                      >
+                        「篩選欄位 &gt; 可選值管理」
+                      </Link>
+                      。
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* ─────────── 4: CR 回分規則 ─────────── */}
+            <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
+                  4
+                </span>
                 <h2 className="text-base font-semibold text-gray-800">CR 回分規則</h2>
                 <span className="text-[10px] text-gray-400 ml-1">per-LIST 設定</span>
               </div>
-              <label className="flex items-center gap-3 cursor-pointer">
+              <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50/50 rounded-lg border border-gray-200">
                 <input
                   type="checkbox"
                   data-testid="input-crEnabled"
@@ -322,230 +917,23 @@ export function ListCreateDraftPage() {
                   onChange={(e) => setCrEnabled(e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
                 />
-                <span className="text-sm text-gray-700">本名單啟用 CR 回分</span>
-                <span className={`text-xs ${crEnabled ? 'text-success' : 'text-gray-400'}`}>
-                  {crEnabled
-                    ? '啟用中：曾被分派但未成交的客戶將重新納入'
-                    : '已停用：僅納入新增及尚未被分派的客戶'}
-                </span>
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    本名單啟用 CR 回分
+                  </span>
+                  <p
+                    className={`text-xs mt-0.5 ${crEnabled ? 'text-success' : 'text-gray-500'}`}
+                  >
+                    {crEnabled
+                      ? '啟用中：曾被分派但未成交的客戶將重新納入分派'
+                      : '已停用：僅納入新增及尚未被分派的客戶'}
+                  </p>
+                </div>
               </label>
             </section>
 
-            {/* 3: 商品/期別/結清 (必填) */}
-            <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
-                  3
-                </span>
-                <h2 className="text-base font-semibold text-gray-800">商品與期別</h2>
-                <span className="text-[10px] text-gray-400 ml-1">多值欄位以逗號分隔</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    商品類別 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-prodKind"
-                    type="text"
-                    required
-                    value={prodKind}
-                    onChange={(e) => setProdKind(e.target.value)}
-                    placeholder="例：A1（汽車貸款）"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    商品次類 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-specTp"
-                    type="text"
-                    required
-                    value={specTp}
-                    onChange={(e) => setSpecTp(e.target.value)}
-                    placeholder="例：01,02"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    年期 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-caseYear"
-                    type="text"
-                    required
-                    value={caseYear}
-                    onChange={(e) => setCaseYear(e.target.value)}
-                    placeholder="例：1,2"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    結清期別 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-caseStatus"
-                    type="text"
-                    required
-                    value={caseStatus}
-                    onChange={(e) => setCaseStatus(e.target.value)}
-                    placeholder="例：01,02"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    結清來源 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-settleSrc"
-                    type="text"
-                    required
-                    value={settleSrc}
-                    onChange={(e) => setSettleSrc(e.target.value)}
-                    placeholder="例：S1"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    卡別（選填）
-                  </label>
-                  <input
-                    data-testid="input-cardType"
-                    type="text"
-                    maxLength={5}
-                    value={cardType}
-                    onChange={(e) => setCardType(e.target.value)}
-                    placeholder="例：M3"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    期別起 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-listPeriodStart"
-                    type="number"
-                    min={0}
-                    max={999}
-                    required
-                    value={listPeriodStart}
-                    onChange={(e) => setListPeriodStart(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    期別迄 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-listPeriodEnd"
-                    type="number"
-                    min={0}
-                    max={999}
-                    required
-                    value={listPeriodEnd}
-                    onChange={(e) => setListPeriodEnd(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    間隔 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    data-testid="input-listInterval"
-                    type="number"
-                    min={0}
-                    max={999}
-                    required
-                    value={listInterval}
-                    onChange={(e) => setListInterval(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* 4: 動態篩選條件 (MVP 簡化) */}
-            <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
-                    4
-                  </span>
-                  <h2 className="text-base font-semibold text-gray-800">篩選條件（選填）</h2>
-                  <span className="text-[10px] text-gray-400 ml-1">
-                    每筆條件 column + 多 value，以「且」（AND）連接
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={addCondition}
-                  data-testid="btn-add-condition"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-primary text-primary rounded-md hover:bg-blue-50"
-                >
-                  <Plus className="w-4 h-4" />
-                  新增條件
-                </button>
-              </div>
-
-              {conditions.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gray-200 p-6 flex flex-col items-center text-center">
-                  <FileText className="w-6 h-6 text-gray-400 mb-2" />
-                  <p className="text-xs text-gray-500">尚未新增任何篩選條件</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {conditions.map((c, idx) => (
-                    <div
-                      key={c.id}
-                      data-testid={`condition-row-${idx}`}
-                      className="flex items-start gap-2 p-3 bg-gray-50/50 border border-gray-200 rounded-md"
-                    >
-                      <input
-                        type="text"
-                        placeholder="欄位名（如 BANK_BR_NO）"
-                        value={c.columnName}
-                        onChange={(e) =>
-                          updateCondition(c.id, { columnName: e.target.value })
-                        }
-                        className="w-48 px-3 py-1.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                      <input
-                        type="text"
-                        placeholder="值（逗號分隔，如 001,002,003）"
-                        value={c.values}
-                        onChange={(e) =>
-                          updateCondition(c.id, { values: e.target.value })
-                        }
-                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCondition(c.id)}
-                        className="p-1.5 text-gray-400 hover:text-danger hover:bg-red-50 rounded-md"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Footer actions */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-200 -mx-6 px-6 py-3 flex items-center justify-between">
               <Button
                 type="button"
                 variant="secondary"
@@ -553,23 +941,35 @@ export function ListCreateDraftPage() {
               >
                 取消
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                loading={submitting}
-                loadingText="儲存中..."
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Save className="w-4 h-4" />
-                  儲存為草稿
-                </span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="btn-advance"
+                  onClick={openAdvanceModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  儲存並推進至部門比例
+                </button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  data-testid="btn-save-draft"
+                  loading={submitting}
+                  loadingText="儲存中..."
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Save className="w-4 h-4" />
+                    儲存草稿
+                  </span>
+                </Button>
+              </div>
             </div>
           </form>
         </div>
       </main>
 
-      {/* Phase 3 P2-6：從上月複製 modal */}
+      {/* 從上月複製 modal */}
       <CopyFromPrevMonthModal
         open={copyModalOpen}
         prevYm={prevYm}
@@ -578,6 +978,265 @@ export function ListCreateDraftPage() {
         onCopy={handleCopyApply}
         onClose={() => setCopyModalOpen(false)}
       />
+
+      {/* AdvanceConfirmModal — 對齊 prototype 27a L387-433 */}
+      {advanceModalOpen && (
+        <AdvanceConfirmModal
+          listNm={listNm}
+          condCount={conditions.length}
+          crEnabled={crEnabled}
+          inactiveDetails={inactiveDetails}
+          inactiveAcknowledged={inactiveAcknowledged}
+          onToggleAck={setInactiveAcknowledged}
+          loading={submitting}
+          onCancel={() => setAdvanceModalOpen(false)}
+          onConfirm={() => void confirmAdvance()}
+        />
+      )}
     </AppLayout>
+  );
+}
+
+// ============================================================================
+// Sub-component: CategoricalValuesPicker
+// ============================================================================
+interface CategoricalValuesPickerProps {
+  idx: number;
+  cond: BuilderCondition;
+  options: PooldataOption[];
+  dropdownOpen: boolean;
+  onToggleDropdown: () => void;
+  onToggleValue: (v: string) => void;
+}
+
+function CategoricalValuesPicker({
+  idx,
+  cond,
+  options,
+  dropdownOpen,
+  onToggleDropdown,
+  onToggleValue,
+}: CategoricalValuesPickerProps) {
+  const selected = cond.values ?? [];
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-gray-500 font-mono">IN</span>
+      <div className="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-gray-200 rounded-md bg-white">
+        {selected.length === 0 ? (
+          <span className="text-xs text-gray-400">未選擇任何值</span>
+        ) : (
+          selected.map((v) => {
+            const opt = options.find((o) => o.optionValue === v);
+            const isInactive = opt ? !opt.isActive : false;
+            const label = opt ? opt.optionLabel : v;
+            return (
+              <span
+                key={v}
+                data-testid={`value-chip-${idx}-${v}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                  isInactive
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : 'bg-blue-100 text-blue-800'
+                }`}
+              >
+                {isInactive && <AlertTriangle className="w-2.5 h-2.5" />}
+                {v} · {label}
+                <button
+                  type="button"
+                  onClick={() => onToggleValue(v)}
+                  className="hover:text-blue-900"
+                  aria-label={`移除 ${v}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          })
+        )}
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            data-testid={`btn-open-values-${idx}`}
+            onClick={onToggleDropdown}
+            className="text-xs px-2 py-1 border border-gray-200 rounded-md text-primary hover:bg-blue-50 inline-flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" />
+            選擇值
+            <span className="text-gray-400">({options.filter((o) => o.isActive).length})</span>
+          </button>
+          {dropdownOpen && (
+            <div
+              data-testid={`values-dropdown-${idx}`}
+              className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto"
+            >
+              {options.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-gray-400">
+                  無可選值
+                </div>
+              ) : (
+                options.map((o) => (
+                  <label
+                    key={o.optionValue}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.isActive ? 'opacity-70' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      data-testid={`value-checkbox-${idx}-${o.optionValue}`}
+                      checked={selected.includes(o.optionValue)}
+                      onChange={() => onToggleValue(o.optionValue)}
+                      className="rounded text-primary"
+                    />
+                    <span className="font-mono text-xs text-gray-500 w-8">
+                      {o.optionValue}
+                    </span>
+                    <span className="text-gray-700">
+                      {o.optionLabel}
+                      {!o.isActive && (
+                        <span className="text-amber-600 ml-1">(已停用)</span>
+                      )}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Sub-component: AdvanceConfirmModal
+// ============================================================================
+interface AdvanceConfirmModalProps {
+  listNm: string;
+  condCount: number;
+  crEnabled: boolean;
+  inactiveDetails: Array<{ columnName: string; value: string; label: string }>;
+  inactiveAcknowledged: boolean;
+  onToggleAck: (v: boolean) => void;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function AdvanceConfirmModal({
+  listNm,
+  condCount,
+  crEnabled,
+  inactiveDetails,
+  inactiveAcknowledged,
+  onToggleAck,
+  loading,
+  onCancel,
+  onConfirm,
+}: AdvanceConfirmModalProps) {
+  const hasInactive = inactiveDetails.length > 0;
+  const confirmDisabled = loading || (hasInactive && !inactiveAcknowledged);
+
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      data-testid="advance-confirm-modal"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+              <ArrowRightCircle className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-800">
+                儲存並推進至部門比例階段？
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">F078 原子性上線約束流程</p>
+            </div>
+          </div>
+          <div className="p-5 space-y-3">
+            <p className="text-sm text-gray-700">推進後將同時：</p>
+            <ul className="text-sm text-gray-600 space-y-1.5 pl-5 list-disc">
+              <li>建立 LIST_NO 並寫入草稿快照</li>
+              <li>鎖定篩選條件與 CR 開關（僅能 Rollback 退回後再修改）</li>
+              <li>進入部門比例設定階段，處長將收到通知</li>
+            </ul>
+            <div className="rounded-md bg-gray-50 border border-gray-200 p-3 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">名稱</span>
+                <span className="text-gray-800 font-medium">{listNm || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">條件數</span>
+                <span className="text-gray-800 font-medium">{condCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">CR 狀態</span>
+                <span className="text-gray-800 font-medium">
+                  {crEnabled ? '啟用' : '停用'}
+                </span>
+              </div>
+            </div>
+            {hasInactive && (
+              <div
+                data-testid="advance-inactive-warn"
+                className="rounded-md bg-amber-50 border border-amber-300 p-3 text-xs space-y-2"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-amber-900">
+                      條件含已停用選項，推進後月跑 Stage 1 將忽略這些值
+                    </p>
+                    <p className="mt-1 text-amber-800">
+                      推進後條件即被固化（離化），如需重填需先{' '}
+                      <strong>Rollback 至草稿</strong>。
+                    </p>
+                    <p className="mt-1 text-amber-700">
+                      {inactiveDetails
+                        .map((d) => `${d.columnName}.${d.value}（${d.label}）`)
+                        .join('、')}
+                    </p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 mt-2 pl-6 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    data-testid="checkbox-inactive-acknowledge"
+                    checked={inactiveAcknowledged}
+                    onChange={(e) => onToggleAck(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-xs text-amber-900 font-medium">
+                    我已了解推進後條件將被固化
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50/50">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-gray-200"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="btn-confirm-advance"
+              onClick={onConfirm}
+              disabled={confirmDisabled}
+              className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+            >
+              <ArrowRight className="w-4 h-4" />
+              確認推進
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
