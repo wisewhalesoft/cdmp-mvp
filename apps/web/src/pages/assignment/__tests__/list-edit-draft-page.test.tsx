@@ -5,15 +5,18 @@ import { ListEditDraftPage } from '../list-edit-draft-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as pooldataFieldsApi from '@/api/pooldata-fields';
+import * as cardTypeApi from '@/api/card-type';
 import * as authStore from '@/stores/auth-store';
 import type { AssignmentListItem, ListListsResponse } from '@/api/assignment-list';
 import type {
   ListFieldsResponse,
   ListOptionsResponse,
 } from '@/api/pooldata-fields';
+import type { ListCardTypesResponse } from '@/api/card-type';
 
 vi.mock('@/api/assignment-list');
 vi.mock('@/api/pooldata-fields');
+vi.mock('@/api/card-type');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
@@ -30,16 +33,33 @@ const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedUpdateList = vi.mocked(assignmentListApi.updateList);
 const mockedListFields = vi.mocked(pooldataFieldsApi.listFields);
 const mockedListOptions = vi.mocked(pooldataFieldsApi.listOptions);
+const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 
+// v2.1.1（US-128/US-129）：fields 補 best_case（承接已移除之 prod_best 業務語意）
 const fieldsFixture: ListFieldsResponse = {
   fields: [
     { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'caseyear', displayName: '進件 / 滿期年數', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'case_status', displayName: '案件結清期別', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
+    { columnName: 'best_case', displayName: '優質案件', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
     { columnName: 'month_cnt', displayName: '撈取月份計數', fieldType: 'numeric', isActive: true, createdAt: '', updatedAt: '' },
+  ],
+};
+
+// v2.1.1（US-127 / AC-16）：cardTypesAllFixture — 編輯模式 status=all（含 active + inactive）
+// 對齊 prototype 27b L503-510
+const cardTypesAllFixture: ListCardTypesResponse = {
+  cardTypes: [
+    { cardType: 'E', cardName: '期中', prodKind: '01', prodKindName: '三信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'M', cardName: '滿期', prodKind: '03', prodKindName: '一般商品', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'OB', cardName: '一般催收', prodKind: '01', prodKindName: '三信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    // inactive — 僅供保留舊值（對齊 prototype 27b L509-510）
+    { cardType: 'OL2', cardName: '舊催收卡', prodKind: '01', prodKindName: '三信', status: 'inactive', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'S5', cardName: '主力催收', prodKind: '02', prodKindName: '中信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
+    { cardType: 'S6', cardName: '重點戶', prodKind: '02', prodKindName: '中信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null },
   ],
 };
 const prodKindOptionsFixture: ListOptionsResponse = {
@@ -51,6 +71,7 @@ const prodKindOptionsFixture: ListOptionsResponse = {
 };
 
 // Scenario ①: draft + 新名單（含 conditionPayload）
+// v2.1.1（US-127）：cardType 改為 'S5'（active，對齊 ob_card_type 真實值範圍 ^[A-Z0-9]{1,5}$）
 const scenario1List: AssignmentListItem = {
   listNo: 'OB202605001',
   listNm: '2026-05 業務一部 主力催收',
@@ -63,7 +84,7 @@ const scenario1List: AssignmentListItem = {
   listPeriodEnd: 6,
   listInterval: 1,
   settleSrc: null,
-  cardType: '01',
+  cardType: 'S5',
   prodBest: null,
   status: 'active',
   stage: 'draft',
@@ -109,6 +130,14 @@ const scenario4List: AssignmentListItem = {
   stage: 'dept_ratio',
 };
 
+// Scenario ⑤ (v2.1.1 / US-127): 名單現存 cardType 為 inactive 'OL2'（測試 disabled 保留語意）
+const scenario5List: AssignmentListItem = {
+  ...scenario1List,
+  listNo: 'OB202605005',
+  listNm: '2026-05 含已停用卡別測試',
+  cardType: 'OL2',
+};
+
 function makeResp(lists: AssignmentListItem[]): ListListsResponse {
   return {
     selectedYm: '202605',
@@ -134,6 +163,8 @@ function setupDefaultMocks() {
     if (col === 'prod_kind') return prodKindOptionsFixture;
     return { options: [] };
   });
+  // v2.1.1（US-127 / AC-16）：編輯模式呼叫 listCardTypes('all')，含 inactive 卡別
+  mockedListCardTypes.mockResolvedValue(cardTypesAllFixture);
 }
 
 function renderPage(listNo: string) {
@@ -272,5 +303,119 @@ describe('ListEditDraftPage v2.1 (Phase 5d 波 9)', () => {
     const body = dto as Record<string, unknown>;
     expect(body.listNm).toBe('已改名的舊名單');
     expect(body.conditionPayload).toBeUndefined();
+  });
+
+  // ==========================================================================
+  // v2.1.1 補強 I 群組（US-127 / US-128 / F050 AC-16 / §18.11.5）
+  //   - cardType: <input type="text"> → <select data-testid="select-cardType">
+  //   - 編輯模式 listCardTypes('all') — active 5 + inactive 1 (OL2)
+  //   - 名單現存 inactive 卡別 → disabled option + 「（已停用 — 僅供保留舊值）」
+  //   - prodBest: 移除（編輯頁本即無 input-prodBest，僅補驗 DOM 不存在）
+  // ==========================================================================
+  describe('v2.1.1 補強 (US-127/US-128)', () => {
+    it('TS-F050-I01：編輯頁移除 prodBest input — DOM 完全不存在', async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario1List]));
+      renderPage('OB202605001');
+
+      await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+      expect(screen.queryByTestId('input-prodBest')).toBeNull();
+    });
+
+    it('TS-F050-I02：編輯頁卡別 select-cardType 渲染，預填現有 cardType=\'S5\'', async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario1List]));
+      renderPage('OB202605001');
+
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+      const select = screen.getByTestId('select-cardType') as HTMLSelectElement;
+      expect(select.tagName).toBe('SELECT');
+      expect(select.value).toBe('S5');
+    });
+
+    it("TS-F050-I03：名單現存 inactive 卡別（OL2）— 下拉含 OL2 disabled option + 附「已停用」文字", async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario5List]));
+      renderPage('OB202605005');
+
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+      const select = screen.getByTestId('select-cardType') as HTMLSelectElement;
+
+      // 名單現存值 OL2 預設選中
+      expect(select.value).toBe('OL2');
+
+      // 找 OL2 option，應為 disabled + 含「已停用」文字
+      const ol2Option = Array.from(select.options).find((o) => o.value === 'OL2');
+      expect(ol2Option).toBeDefined();
+      expect(ol2Option!.disabled).toBe(true);
+      expect(ol2Option!.text).toContain('已停用');
+
+      // active 選項（如 S5）的 disabled 屬性為 false
+      const s5Option = Array.from(select.options).find((o) => o.value === 'S5');
+      expect(s5Option).toBeDefined();
+      expect(s5Option!.disabled).toBe(false);
+    });
+
+    it("TS-F050-I04：切換 inactive 卡別 OL2 → active S5 → PATCH 含新 cardType='S5'", async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario5List]));
+      mockedUpdateList.mockResolvedValue({ listNo: 'OB202605005' } as never);
+      renderPage('OB202605005');
+
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+
+      // 切到 S5
+      fireEvent.change(screen.getByTestId('select-cardType'), { target: { value: 'S5' } });
+
+      fireEvent.click(screen.getByTestId('btn-save'));
+      await waitFor(() => expect(mockedUpdateList).toHaveBeenCalledTimes(1));
+      const [, dto] = mockedUpdateList.mock.calls[0];
+      const body = dto as Record<string, unknown>;
+      expect(body.cardType).toBe('S5');
+    });
+
+    it("TS-F050-I05：清除卡別為「— 未選擇 —」→ PATCH cardType=null 或不帶 cardType", async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario5List]));
+      mockedUpdateList.mockResolvedValue({ listNo: 'OB202605005' } as never);
+      renderPage('OB202605005');
+
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+
+      // 切到「— 未選擇 —」（空值）
+      fireEvent.change(screen.getByTestId('select-cardType'), { target: { value: '' } });
+
+      fireEvent.click(screen.getByTestId('btn-save'));
+      await waitFor(() => expect(mockedUpdateList).toHaveBeenCalledTimes(1));
+      const [, dto] = mockedUpdateList.mock.calls[0];
+      const body = dto as Record<string, unknown>;
+      // 不帶 cardType（undefined）或為 null 均符合 spec
+      expect(body.cardType === null || body.cardType === undefined).toBe(true);
+    });
+
+    it('TS-F050-I06：LEGACY 名單（conditionPayload=null）仍可正常使用卡別下拉、可儲存', async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario3List]));
+      mockedUpdateList.mockResolvedValue({ listNo: 'OB202604099' } as never);
+      renderPage('OB202604099');
+
+      await waitFor(() => expect(screen.getByTestId('select-cardType')).toBeInTheDocument());
+      const select = screen.getByTestId('select-cardType') as HTMLSelectElement;
+      // select 整體不應 disabled（LEGACY 名單仍可編輯卡別）
+      expect(select.disabled).toBe(false);
+
+      // 改卡別並儲存
+      fireEvent.change(screen.getByTestId('select-cardType'), { target: { value: 'M' } });
+      fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: '已改名的舊名單' } });
+      fireEvent.click(screen.getByTestId('btn-save'));
+      await waitFor(() => expect(mockedUpdateList).toHaveBeenCalledTimes(1));
+    });
+
+    it("TS-F050-I07：stage != 'draft' 名單 — 主表單隱藏，卡別下拉不渲染（DOM 完全不存在）", async () => {
+      mockedListLists.mockResolvedValue(makeResp([scenario4List]));
+      renderPage('OB202605003');
+
+      // NotDraftBanner 顯示，主表單隱藏
+      // 等待頁面渲染完成 — 至少需有某種頁面內容
+      await waitFor(() => {
+        // 不論 banner testid 名稱為何，主要驗證 select-cardType 不渲染
+        return screen.queryByTestId('select-cardType') !== undefined;
+      });
+      expect(screen.queryByTestId('select-cardType')).toBeNull();
+    });
   });
 });

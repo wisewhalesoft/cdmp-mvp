@@ -35,6 +35,7 @@ import {
   type PooldataOption,
   type FieldType,
 } from '@/api/pooldata-fields';
+import { listCardTypes, type CardTypeListItem } from '@/api/card-type';
 
 /**
  * F051 v2.1 — 編輯草稿名單頁（Phase 5d 波 9 全重寫）
@@ -133,6 +134,11 @@ export function ListEditDraftPage() {
   const [fields, setFields] = useState<PooldataField[]>([]);
   const [optionsByColumn, setOptionsByColumn] = useState<Record<string, PooldataOption[]>>({});
 
+  // v2.1.1（US-127 / AC-16）：cardTypes 下拉資料 + fallback 狀態
+  // 編輯模式呼叫 listCardTypes('all') 取得 active + inactive 卡別
+  const [cardTypes, setCardTypes] = useState<CardTypeListItem[]>([]);
+  const [cardTypesLoadFailed, setCardTypesLoadFailed] = useState(false);
+
   // 載入 fields
   useEffect(() => {
     let aborted = false;
@@ -142,6 +148,32 @@ export function ListEditDraftPage() {
         if (!aborted) setFields(data.fields ?? []);
       } catch {
         if (!aborted) setFields([]);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  // v2.1.1（US-127 / AC-16）：載入 cardTypes('all') — 編輯模式含 inactive 卡別
+  // 前端側 filter：active 正常可選；名單現存 inactive 值 → disabled option 保留
+  useEffect(() => {
+    let aborted = false;
+    void (async () => {
+      try {
+        const data = await listCardTypes('all');
+        if (!aborted) {
+          const sorted = [...(data.cardTypes ?? [])].sort((a, b) =>
+            a.cardType.localeCompare(b.cardType),
+          );
+          setCardTypes(sorted);
+          setCardTypesLoadFailed(false);
+        }
+      } catch {
+        if (!aborted) {
+          setCardTypes([]);
+          setCardTypesLoadFailed(true);
+        }
       }
     })();
     return () => {
@@ -557,18 +589,55 @@ export function ListEditDraftPage() {
                         className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </div>
-                    <div className="col-span-3">
+                    {/* v2.1.1（US-127 / AC-16）：卡別由 <input> 改為 <select>；options 來自
+                        ob_card_type（status=all，含 active + inactive）；前端 filter：
+                          - active 卡別正常可選
+                          - 名單現存 inactive 值 → disabled option + 附「（已停用 — 僅供保留舊值）」
+                        首選項「— 未選擇 —」（空值）；API 失敗時顯示 fallback。 */}
+                    <div className="col-span-6">
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         卡別 <span className="text-[10px] text-gray-400 font-normal">選填</span>
                       </label>
-                      <input
-                        data-testid="input-cardType"
-                        type="text"
-                        maxLength={2}
+                      <select
+                        data-testid="select-cardType"
                         value={cardType}
                         onChange={(e) => setCardType(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
+                        disabled={cardTypesLoadFailed}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">— 未選擇 —</option>
+                        {cardTypes.map((c) => {
+                          const isInactive = c.status === 'inactive';
+                          // 編輯模式 filter 規則：active 卡別正常顯示；inactive 卡別僅在
+                          //   等於名單現存 cardType 時才顯示（disabled），保留舊值
+                          if (isInactive && c.cardType !== cardType) {
+                            return null;
+                          }
+                          const label = `${c.cardType} — ${c.cardName}（${c.prodKindName ?? c.prodKind}）${isInactive ? '（已停用 — 僅供保留舊值）' : ''}`;
+                          return (
+                            <option
+                              key={c.cardType}
+                              value={c.cardType}
+                              disabled={isInactive}
+                            >
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {cardTypesLoadFailed && (
+                        <div
+                          data-testid="card-type-fallback"
+                          className="mt-2 flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-semibold text-amber-900">
+                              卡別資料載入失敗，請重新整理頁面
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </section>
