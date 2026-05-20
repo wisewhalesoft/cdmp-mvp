@@ -1,5 +1,4 @@
 export { AssignmentStubPage } from './assignment-stub-page';
-export { BaseCodesPage } from './base-codes-page';
 export { ScoringConfigPage } from './scoring-config-page';
 export { ListDefinitionPage } from './list-definition-page';
 export { ListCreateDraftPage } from './list-create-draft-page';
@@ -7,9 +6,8 @@ export { ListEditDraftPage } from './list-edit-draft-page';
 export { Stage0EstimatePage } from './stage0-estimate-page';
 export { TriggerRunPage } from './trigger-run-page';
 export { RunProgressPage } from './run-progress-page';
-export { FieldWhitelistPage } from './field-whitelist-page';
-export { FieldOptionsPage } from './field-options-page';
-// F050 v2.1 Phase 5d 波 2：新 2-Tab 容器（37a/37b 合併為 37）
+// F050 v2.1 Phase 5d 波 6：F068 廢除（base-codes / field-whitelist / field-options 三舊頁已刪）
+// 統一入口由 FieldBasePage 提供（2-Tab 容器：fields / options）
 export { FieldBasePage } from './field-base-page';
 export { RunHistoryPage } from './run-history-page';
 export { RunSummaryPage } from './run-summary-page';
