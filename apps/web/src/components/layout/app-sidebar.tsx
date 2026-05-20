@@ -8,7 +8,7 @@ import {
   Contact,
   ListChecks,
   ChevronRight,
-  Tags,
+  Filter,
   SlidersHorizontal,
   ClipboardList,
   Calculator,
@@ -115,17 +115,15 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
         requires: 'director_or_section_chief',
         defaultOpen: true,
         items: [
-          // M06 代碼維護：director + section_chief
+          // F050 v2.1 / J4：「代碼維護」rename「篩選欄位」+ icon Tags→Filter
+          // 對齊 prototype 37-base-code.html L60（單一 sidebar entry，37a/37b 合併為 2-Tab）
+          // 路由 /assignment/field-base?tab=fields|options（既有 base-codes / whitelist / whitelist/options 三條 route 已刪）
           {
-            to: '/assignment/base-codes',
-            label: '代碼維護',
-            icon: Tags,
+            to: '/assignment/field-base',
+            label: '篩選欄位',
+            icon: Filter,
             requires: 'director_or_section_chief',
           },
-          // F075 v1.4.1：F075 / F076 入口卡片已整合入代碼維護頁的「進階維護」區塊
-          // （對齊 prototype 37-base-code.html L186-243 設計）；sidebar 不再有獨立子項，
-          // 但路由 /assignment/whitelist + /assignment/whitelist/options 在 App.tsx
-          // 仍保留供卡片導向。
           // M02 計分卡：director only（F002 §4.6 M02 對 section_chief 整頁封鎖）
           {
             to: '/assignment/scoring',

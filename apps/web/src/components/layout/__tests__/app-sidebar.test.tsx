@@ -27,7 +27,9 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).toContain('資料擷取');
     expect(allLabels).toContain('ETL Pipeline');
     expect(allLabels).toContain('Customer 360');
-    expect(allLabels).toContain('代碼維護');
+    // F050 v2.1 / J4：sidebar「代碼維護」rename「篩選欄位」（prototype 37-base-code.html line 60）
+    expect(allLabels).toContain('篩選欄位');
+    expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).toContain('計分卡設定');
     expect(allLabels).toContain('名單定義');
   });
@@ -39,7 +41,8 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
       ...sec.groups.flatMap((g) => g.items.map((i) => i.label)),
     ]);
     expect(allLabels).toContain('Customer 360');
-    expect(allLabels).toContain('代碼維護');
+    expect(allLabels).toContain('篩選欄位');
+    expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).toContain('計分卡設定');
     expect(allLabels).toContain('名單定義');
     expect(allLabels).toContain('Stage 0 試算');
@@ -58,7 +61,8 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     ]);
     // 可見
     expect(allLabels).toContain('Customer 360');
-    expect(allLabels).toContain('代碼維護');
+    expect(allLabels).toContain('篩選欄位');
+    expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).toContain('名單定義');
     expect(allLabels).toContain('執行進度');
     expect(allLabels).toContain('執行歷史');
@@ -78,38 +82,75 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     ]);
     expect(allLabels).toContain('Customer 360');
     expect(allLabels).not.toContain('帳號管理');
+    expect(allLabels).not.toContain('篩選欄位');
     expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).not.toContain('名單定義');
     expect(allLabels).not.toContain('計分卡設定');
   });
 
-  it('menu 設定中 11 個 E07 子項（v1.4.1：篩選欄位管理已移出 sidebar，從代碼維護頁進入；含準備完成名單）', () => {
+  it('menu 設定中 11 個 E07 子項（v2.1：「代碼維護」rename「篩選欄位」+ icon Filter；含準備完成名單）', () => {
     const directorView = getVisibleMenuItems('user', 'director');
     const assignmentGroup = directorView
       .flatMap((s) => s.groups)
       .find((g) => g.label === '客戶名單分派');
     expect(assignmentGroup).toBeDefined();
-    // 10 個（v3.3）+ 1 個準備完成名單 = 11
-    // F075 v1.4.1：「篩選欄位管理」從 sidebar 移除（對齊 prototype 37-base-code.html L186-243 進階維護區塊設計）
+    // 11 個子項維持（rename 不改數量）
     expect(assignmentGroup!.items.length).toBe(11);
     const labels = assignmentGroup!.items.map((i) => i.label);
-    expect(labels).toContain('代碼維護');
+    // F050 v2.1 / J4：rename「代碼維護」→「篩選欄位」
+    expect(labels).toContain('篩選欄位');
+    expect(labels).not.toContain('代碼維護');
     expect(labels).toContain('準備完成名單');
-    // regression：sidebar 不應再有「篩選欄位管理」或「白名單管理」（v1.4.1 改放代碼維護頁進階維護區塊）
+    // v1.4.1 regression 沿用（已併入「篩選欄位」單一入口）
     expect(labels).not.toContain('篩選欄位管理');
     expect(labels).not.toContain('白名單管理');
   });
 
-  it('F075 v1.4.1 regression：admin 視角下 sidebar 也不應出現「篩選欄位管理」或「白名單管理」', () => {
+  it('F050 v2.1 W1：「篩選欄位」item 之 to=/assignment/field-base，icon 為 Filter', () => {
+    const directorView = getVisibleMenuItems('user', 'director');
+    const assignmentGroup = directorView
+      .flatMap((s) => s.groups)
+      .find((g) => g.label === '客戶名單分派');
+    const item = assignmentGroup!.items.find((i) => i.label === '篩選欄位');
+    expect(item).toBeDefined();
+    expect(item!.to).toBe('/assignment/field-base');
+    // icon 為 lucide Filter（function component，displayName === 'Filter'）
+    expect((item!.icon as unknown as { displayName?: string }).displayName).toBe('Filter');
+    // 既有的 /assignment/base-codes 路徑應已不存在
+    const allTos = assignmentGroup!.items.map((i) => i.to);
+    expect(allTos).not.toContain('/assignment/base-codes');
+  });
+
+  it('F068 廢除 regression (TS-F068-DEP-009 sidebar 部分)：sidebar 不含「指派代碼」/「AssignmentCode」/「base-codes」', () => {
+    for (const view of [
+      { role: 'admin' as const, businessRole: null },
+      { role: 'user' as const, businessRole: 'director' as BusinessRole },
+      { role: 'user' as const, businessRole: 'section_chief' as BusinessRole },
+    ]) {
+      const visible = getVisibleMenuItems(view.role, view.businessRole);
+      const allLabels = visible.flatMap((sec) => [
+        ...(sec.items?.map((i) => i.label) ?? []),
+        ...sec.groups.flatMap((g) => g.items.map((i) => i.label)),
+      ]);
+      const allTos = visible.flatMap((sec) => [
+        ...(sec.items?.map((i) => i.to) ?? []),
+        ...sec.groups.flatMap((g) => g.items.map((i) => i.to)),
+      ]);
+      expect(allLabels).not.toContain('指派代碼');
+      expect(allTos).not.toContain('/assignment/base-codes');
+    }
+  });
+
+  it('F050 v2.1 W1 regression：admin 視角 sidebar rename 一致', () => {
     const adminView = getVisibleMenuItems('admin', null);
     const allLabels = adminView.flatMap((sec) => [
       ...(sec.items?.map((i) => i.label) ?? []),
       ...sec.groups.flatMap((g) => g.items.map((i) => i.label)),
     ]);
+    expect(allLabels).toContain('篩選欄位');
+    expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).not.toContain('篩選欄位管理');
     expect(allLabels).not.toContain('白名單管理');
-    // 代碼維護仍應存在（F075 / F076 入口卡片放置於代碼維護頁內進階維護區塊）
-    expect(allLabels).toContain('代碼維護');
   });
 
   it('MENU_SECTIONS 為宣告式陣列且 immutable structure', () => {
@@ -163,6 +204,7 @@ describe('AppSidebar (component)', () => {
     expect(container.textContent).not.toContain('資料來源');
     expect(container.textContent).not.toContain('資料擷取');
     expect(container.textContent).not.toContain('ETL Pipeline');
+    expect(container.textContent).not.toContain('篩選欄位');
     expect(container.textContent).not.toContain('代碼維護');
     expect(container.textContent).not.toContain('名單定義');
   });
@@ -172,7 +214,7 @@ describe('AppSidebar (component)', () => {
     expect(screen.getByText('CDMP')).toBeInTheDocument();
   });
 
-  it('F075 v1.4.1 regression：DOM 中不應出現「篩選欄位管理」或「白名單管理」（admin / director / section_chief 三種視角）', () => {
+  it('F050 v2.1 W1 / F075 v1.4.1 regression：DOM 中不應出現「篩選欄位管理」/「白名單管理」/「代碼維護」（admin / director / section_chief 三種視角）', () => {
     for (const view of [
       { role: 'admin' as const, businessRole: null },
       { role: 'user' as const, businessRole: 'director' as BusinessRole },
@@ -181,8 +223,9 @@ describe('AppSidebar (component)', () => {
       const { container, unmount } = renderSidebar(view);
       expect(container.textContent).not.toContain('篩選欄位管理');
       expect(container.textContent).not.toContain('白名單管理');
-      // 代碼維護仍應在 sidebar 可見
-      expect(container.textContent).toContain('代碼維護');
+      // F050 v2.1 / J4：「代碼維護」已 rename「篩選欄位」
+      expect(container.textContent).not.toContain('代碼維護');
+      expect(container.textContent).toContain('篩選欄位');
       unmount();
     }
   });
