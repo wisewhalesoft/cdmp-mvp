@@ -54,10 +54,8 @@ const E07_WRITE_CONTROLLERS: ReadonlyArray<{
     label: 'card-type (F069~F072)',
     file: 'modules/assignment-scoring/controllers/card-type.controller.ts',
   },
-  {
-    label: 'assignment-code (F068)',
-    file: 'modules/assignment-code/assignment-code.controller.ts',
-  },
+  // F068 廢除（F050 v2.1 Phase 5c 波 12 / AD-E07-18 §18.7 Step 7）：
+  // assignment-code controller 已刪除，從覆蓋率檢查列表移除。
   {
     label: 'assignment-run trigger (F061)',
     file: 'modules/assignment/assignment-run.controller.ts',
@@ -102,8 +100,9 @@ describe('FeatureFlagGuard 套用範圍 regression', () => {
   }
 
   describe('regression：列表完整性', () => {
-    it('TC-FEATURE-FLAG-GUARD-COUNT：E07_WRITE_CONTROLLERS 至少 10 個', () => {
-      expect(E07_WRITE_CONTROLLERS.length).toBeGreaterThanOrEqual(10);
+    it('TC-FEATURE-FLAG-GUARD-COUNT：E07_WRITE_CONTROLLERS 至少 9 個（v2.1 F068 廢除後）', () => {
+      // v2.1 變更：F068 assignment-code 廢除後從 10 降至 9
+      expect(E07_WRITE_CONTROLLERS.length).toBeGreaterThanOrEqual(9);
     });
   });
 });
