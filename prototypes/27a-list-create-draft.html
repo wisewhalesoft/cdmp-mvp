@@ -50,6 +50,11 @@
     - <AdvanceConfirmModal>（含 INACTIVE 雙重確認，拍板 UI-Q1）
     - state 集中：useReducer 管 conditions array（取代 v2.0 之 12 個 useState）
     - DTO：移除 prodKind/caseYear/specTp/caseStatus/settleSrc 5 個欄位，改送 conditionPayload
+    - v2.1.1（2026-05-20 / US-126 / US-128 / US-129）：
+        * 移除 prodBest 欄位（前端不送出；entity column deprecated 由 US-128 migration 清空）
+        * cardType 從 <input type="text"> 改為 <select>；options 來自 GET /api/v1/assignment/scoring/card-types
+          建立模式僅列 status='active'；DTO 送出值為 ob_card_type.card_type 代碼字串
+        * conditionPayload.conditions 合法 columnName 集合新增 best_case（categorical / Y / N）
     ============================================================================
   -->
 
@@ -186,7 +191,7 @@
             </div>
           </div>
 
-          <!-- 名單名稱 + 卡別 + 最佳產品 -->
+          <!-- 名單名稱 + 卡別（v2.1.1：移除最佳產品；卡別改下拉） -->
           <div class="grid grid-cols-12 gap-4">
             <div class="col-span-6">
               <label for="listNm" class="block text-sm font-medium text-gray-700 mb-1.5">
@@ -202,15 +207,42 @@
                 <p class="text-[10px] text-gray-400 ml-auto"><span id="nameCount">0</span>/50</p>
               </div>
             </div>
-            <div class="col-span-3">
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">卡別 <span class="text-[10px] text-gray-400 font-normal">選填 · max 2</span></label>
-              <input id="cardType" type="text" maxlength="2" placeholder="例：01"
-                class="w-full px-3 py-2 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="col-span-3">
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">最佳產品 <span class="text-[10px] text-gray-400 font-normal">選填 · max 5</span></label>
-              <input id="prodBest" type="text" maxlength="5" placeholder="例：05"
-                class="w-full px-3 py-2 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+            <div class="col-span-6">
+              <label for="cardType" class="block text-sm font-medium text-gray-700 mb-1.5">
+                卡別 <span class="text-[10px] text-gray-400 font-normal">選填</span>
+                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200" title="v2.1.1 / US-126 / AC-16：options 來自 ob_card_type，建立模式僅列 status='active'">
+                  <i data-lucide="database" class="w-2.5 h-2.5 mr-0.5"></i>來自 ob_card_type
+                </span>
+              </label>
+              <!-- 正常狀態：下拉選單（v2.1.1 / US-126 / AC-16） -->
+              <select id="cardType" data-testid="select-cardType"
+                class="w-full px-3 py-2 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="" selected>— 未選擇 —</option>
+                <option value="E">E — 期中（01 三信）</option>
+                <option value="M">M — 滿期（03 一般商品）</option>
+                <option value="OB">OB — 一般催收（01 三信）</option>
+                <option value="S5">S5 — 主力催收（02 中信）</option>
+                <option value="S6">S6 — 重點戶（02 中信）</option>
+              </select>
+              <p class="text-[10px] text-gray-400 mt-1">
+                <i data-lucide="info" class="w-3 h-3 inline -mt-0.5"></i>
+                送出 DTO 時僅傳 card_type 代碼字串（如 <code class="font-mono text-gray-500">"S5"</code>），不含名稱顯示文字。
+              </p>
+
+              <!--
+                ============================================================
+                Demo: API fallback（GET /api/v1/assignment/scoring/card-types 失敗）
+                取消下方 div 的 `hidden` class 即可看到 fallback 樣貌（AC-16 / US-126 AC-4）。
+                React 落地時依 fetch error 狀態 toggle 顯示。
+                ============================================================
+              -->
+              <div id="cardTypeFallback" class="hidden mt-2 flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-warning mt-0.5 shrink-0"></i>
+                <div class="flex-1">
+                  <p class="font-semibold text-amber-900">卡別資料載入失敗，請重新整理頁面</p>
+                  <p class="text-amber-800 mt-0.5">卡別為選填欄位，您仍可不選卡別完成建立。</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -287,7 +319,7 @@
               <i data-lucide="filter" class="w-6 h-6 text-gray-400"></i>
             </div>
             <p class="text-sm text-gray-500">尚未新增任何篩選條件</p>
-            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。F075 v1.5 白名單提供 <span id="activeFieldsCnt">7</span> 個 active 欄位可選。</p>
+            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。F075 v1.6 白名單提供 <span id="activeFieldsCnt">8</span> 個 active 欄位可選。</p>
           </div>
 
           <!-- 條件列表 -->
@@ -505,7 +537,7 @@
     }
 
     // ============================================================
-    // F075 v1.5 白名單 mock（7 個欄位含拍板 UI-Q5 之 birth_date date type demo + 1 個 inactive）
+    // F075 v1.6 白名單 mock（v2.1.1：新增 best_case；共 8 個欄位含 birth_date date type + 1 個 inactive）
     // ============================================================
     const FIELDS = [
       { columnName: 'prod_kind',   displayName: '產品類別',         fieldType: 'categorical', isActive: true  },
@@ -513,18 +545,20 @@
       { columnName: 'spec_tp',     displayName: '專案類別',         fieldType: 'categorical', isActive: true  },
       { columnName: 'case_status', displayName: '案件結清期別',     fieldType: 'categorical', isActive: true  },
       { columnName: 'settle_src',  displayName: '他行代償',         fieldType: 'categorical', isActive: true  },
+      { columnName: 'best_case',   displayName: '優質案件',         fieldType: 'categorical', isActive: true  },  // v2.1.1 / US-128 / US-129：承接已移除之 prod_best
       { columnName: 'month_cnt',   displayName: '撈取月份計數',     fieldType: 'numeric',     isActive: true  },
       { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true  },
       { columnName: 'payt_term',   displayName: '還款期別',         fieldType: 'numeric',     isActive: false }  // 不出現在 dropdown
     ];
 
-    // F076 v1.5 categorical 可選值（對齊 spec seed；prod_kind '01' 設 inactive 用於琥珀 demo）
+    // F076 v1.6 categorical 可選值（對齊 spec seed；prod_kind '01' 設 inactive 用於琥珀 demo；v2.1.1：新增 best_case Y/N）
     const FIELD_VALUES = {
       prod_kind:   [ { v: '01', l: '汽車新車',    active: false, reason: 'manual' }, { v: '02', l: '機車', active: true }, { v: '03', l: '其他商品', active: true } ],
       caseyear:    [ { v: '0', l: '0 年', active: true }, { v: '1', l: '1 年', active: true }, { v: '2', l: '2 年', active: true }, { v: '3', l: '3 年', active: true }, { v: '4', l: '4 年', active: true }, { v: '5', l: '5 年', active: true }, { v: '6', l: '6 年（以上）', active: true }, { v: '99', l: '不限年數', active: true, special: true } ],
       spec_tp:     [ { v: '02', l: '中古車', active: true }, { v: '04', l: '原融代償', active: true }, { v: '05', l: '在庫融資', active: true }, { v: '06', l: '專案融資', active: true }, { v: '11', l: '保單', active: true }, { v: '12', l: '信貸', active: true } ],
       case_status: [ { v: '01', l: '期中（不含當月滿期）', active: true }, { v: '02', l: '中結', active: true }, { v: '03', l: '滿期（含當月滿期）', active: true }, { v: '04', l: '滿期（已結清）', active: true } ],
-      settle_src:  [ { v: 'Y', l: '含他行代償', active: true }, { v: 'N', l: '不含他行代償', active: true } ]
+      settle_src:  [ { v: 'Y', l: '含他行代償', active: true }, { v: 'N', l: '不含他行代償', active: true } ],
+      best_case:   [ { v: 'Y', l: '優質案件', active: true }, { v: 'N', l: '非優質案件', active: true } ]  // v2.1.1 / US-129 AC-1：F076 v1.6 seed
     };
 
     // case_status 業務語意 tooltip（對齊 F050 §5.1.1）
@@ -539,7 +573,7 @@
     // 上月可複製名單 mock（v2.1：過濾 condition_payload IS NOT NULL）
     // ============================================================
     const LAST_MONTH_LISTS = [
-      { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收', cr: true, conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:6 }], logic:'AND' } },
+      { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收', cr: true, conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'best_case', fieldType:'categorical', values:['Y'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:6 }], logic:'AND' } },
       { listNo: 'OB202604003', listNm: '2026-04 業務三部 信貸催收', cr: true, conditionPayload: { conditions: [{ columnName:'case_status', fieldType:'categorical', values:['01','02'] }, { columnName:'caseyear', fieldType:'categorical', values:['3','4','5'] }], logic:'AND' } },
       { listNo: 'OB202604005', listNm: '2026-04 業務二部 重點戶',   cr: true, conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'settle_src', fieldType:'categorical', values:['Y'] }, { columnName:'month_cnt', fieldType:'numeric', min:6, max:12 }], logic:'AND' } },
       // 舊格式名單範例（不應出現於 dropdown — 前端已過濾）
