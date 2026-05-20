@@ -2,11 +2,11 @@
 spec-id: F076
 title: 類別型欄位可選值管理
 feature-id: F076
-source-story: US-103, US-125
+source-story: US-103, US-125, US-129
 epic: E07
 module: M06 篩選欄位（v2.1 rename，原 M06 代碼維護（進階））
 priority: P0-MVP
-version: "1.5"
+version: "1.6"
 date: 2026-05-20
 status: Draft
 ---
@@ -14,6 +14,8 @@ status: Draft
 # F076: 類別型欄位可選值管理
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
+
+> **v1.6（2026-05-20 / F050 v2.1.1 業務複核補強 seed 對齊 US-129）**：AC-3 seed 清單擴充為 **7 欄**（v1.5 之 6 欄 + v1.6 新增 `best_case` 2 筆）。理由：F050 v2.1.1 將 `prod_best` 一級欄位移除（US-128 / Q-B B3），業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接；對應 F075 v1.6 已將 `best_case` 補入白名單 seed（categorical，display_name「優質案件」），本 v1.6 同步補其 options seed。(1) **AC-3 新增 best_case 2 筆**：`Y` = 優質案件、`N` = 非優質案件（皆 `is_active=true`；US-129 AC-1 / AC-2）；(2) **§3 前置條件**：補「對應之白名單欄位（含 v1.6 新增之 `best_case`）已存在」；(3) **§10 / §11 測試覆蓋目標 + 實作 checklist 同步補 best_case 2 筆**；(4) **F075 v1.6 cross-ref**：F075 v1.6 AC-1 之 `best_case` 條目為本 v1.6 之父表前置；(5) **F050 v2.1.1 / F051 v2.1.1 cross-ref**：F050 v2.1.1 §5.4 規則表 + §5.2 移除欄位段 + BR-12 引用本 v1.6 之 `best_case` Y/N seed；(6) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema（含 `deactivation_reason` ENUM `'manual'` / `'field_type_changed'`）、§6 BR 編號規則（BR-1 ~ BR-13 全保留，**不新增 BR**）、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO、Guard、error code、既有 AC-1 / AC-2 / AC-4 ~ AC-10 語意、prototype 與 reference；F075 PATCH 觸發本表批次軟停用（BR-11）之語意保留；`best_case` options seed 之 migration 由 system-architect 於 Phase 3a 落地。
 
 > **v1.5（2026-05-20 / F050 v2.1 重構 seed 對齊 US-125）**：AC-3 seed 清單依 US-125 全面對齊：(1) **新增 case_status 4 筆**（`01` 期中（不含當月滿期）/ `02` 中結 / `03` 滿期（含當月滿期）/ `04` 滿期；US-125 AC-2 / E4），業務語意對照引用 F050 v2.1 §5.1.1；對應 F075 v1.5 新增之 `case_status` 白名單條目；取代原 F068 `ob_code_df` `tbl_id='CASE_STATUS'` 之 4 筆代碼（A5）；(2) **caseyear seed 確認為 8 筆**（`0`~`6` + `99`；J5 拍板對應 m22 現行 8 筆 seed；取代 v2.0 F050 之前端 hardcoded 11 筆 0~10；A4），保留既有 v1.4.6 之 8 筆 seed 清單描述；(3) **spec_tp seed 從 placeholder 升級為真實 OBMCODEDF dump 32 筆**：m24 placeholder 3 筆改為依 `reference/DumpData/OBMCODEDF_20260505.csv` `TBL_ID='09'`（對應 SPEC_TP）之真實 dump 32 筆 OBMVALUE 列出（典型值：02 / 04 / 05 / 06 / 11 / 12 / 13 / 14 / 15 / 16 / 20 / 21 / 22 / 23 等；E5），`[ASSUMPTION]` 標記升 ✅ Resolved；(4) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema（含 `deactivation_reason` ENUM `'manual'` / `'field_type_changed'`）、§6 BR 編號規則（BR-1 ~ BR-13 全保留）、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO、Guard、error code、既有 AC-1 / AC-2 / AC-4 ~ AC-10 語意、prototype 與 reference；F075 PATCH 觸發本表批次軟停用（BR-11）之語意保留。
 
@@ -63,7 +65,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 - 使用者持 JWT 且 `business_role IN ('director', 'section_chief')` 或 admin
 - 寫入操作須 `business_role = 'director'` 或 admin
-- 對應之白名單欄位（`pooldata_field_whitelist`，由 **F075 v1.5** 維護，含 v1.5 新增之 `case_status` 條目；US-125 AC-5）已存在且 `field_type = 'categorical'`
+- 對應之白名單欄位（`pooldata_field_whitelist`，由 **F075 v1.6** 維護，含 v1.5 新增之 `case_status` 條目與 **v1.6 新增之 `best_case` 條目**；US-125 AC-5 / US-128 / US-129）已存在且 `field_type = 'categorical'`
 - 系統首次部署時 Admin 已執行 seed 腳本
 
 ## 4. 驗收標準
@@ -83,11 +85,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - **And** 頁面**不顯示**任何「新增可選值」「停用」「啟用」操作按鈕
 - **And** 若處長嘗試直接呼叫可選值寫入 API，後端回 403 `AUTH_FORBIDDEN`
 
-### AC-3：系統首次部署時自動 Seed 各欄位初始可選值（v1.5 全面對齊 US-125）
+### AC-3：系統首次部署時自動 Seed 各欄位初始可選值（v1.6 補 best_case；v1.5 全面對齊 US-125）
 
 - **Given** 系統首次部署
 - **When** Admin 執行初始化
-- **Then** 系統自動 seed 各 categorical 欄位之初始可選值（v1.5 對齊 F075 v1.5 之 **6 欄 seed 範圍** + US-125 AC-1/AC-2/E4/E5）：
+- **Then** 系統自動 seed 各 categorical 欄位之初始可選值（v1.6 對齊 F075 v1.6 之 **7 欄 seed 範圍** + US-129 補 `best_case`；v1.5 對齊 F075 v1.5 之 6 欄 + US-125 AC-1/AC-2/E4/E5）：
   - **prod_kind**：01（汽車新車）/ 02（機車）/ 03（其他商品），至少 3 筆
   - **list_type**：01（期中）/ 02（中結）/ 03（滿期），3 筆
   - **caseyear**：0 / 1 / 2 / 3 / 4 / 5 / 6 + 99（不限年數），共 **8 筆**（J5 拍板：對應 m22 現行 8 筆 seed；取代 v2.0 F050 之前端 hardcoded 11 筆 0~10；US-125 AC-1 / A4）。`99` UI 顯示輔助說明文字「不限年數（全選）」（§7）
@@ -99,6 +101,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
     - `03` 滿期（含當月滿期）
     - `04` 滿期
     - 4 個值之業務語意對照詳見 [F050 v2.1 §5.1.1 case_status 4 個值業務語意對照表](F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)（依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆，OQ-E07-23 ✅ Resolved 2026-05-12）
+  - **best_case**：**2 筆**（v1.6 新增，US-128 / US-129 AC-1 / AC-2，承接 F050 v2.1.1 已移除之 `prod_best` 業務語意；對應 F075 v1.6 之 `best_case` 白名單條目）：
+    - `Y` 優質案件（`is_active=true`）
+    - `N` 非優質案件（`is_active=true`）
+    - 業務語意：對應 `ob_pool_data.best_case`（Y/N 二元值），語意為「同一個客戶多個案件中的最佳案件」（取代 v2.1.1 前由 `ob_list_definition.prod_best` 一級欄位承載之語意）
 - **And** seed 為冪等操作（重複執行不產生重複資料）
 
 ### AC-4：部長 / Admin 新增可選值
@@ -411,7 +417,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 - 單元測試覆蓋率 ≥ 80%
 - 後端關鍵測試案例：
-  - 初始 seed（v1.5 / 6 欄）→ prod_kind 3 筆 / list_type 3 筆 / caseyear 8 筆（0~6 + 99）/ settle_src 2 筆 / spec_tp 32 筆（依 OBMCODEDF dump）/ **case_status 4 筆**（01/02/03/04）寫入；重複 seed → 不增加
+  - 初始 seed（v1.6 / 7 欄）→ prod_kind 3 筆 / list_type 3 筆 / caseyear 8 筆（0~6 + 99）/ settle_src 2 筆 / spec_tp 32 筆（依 OBMCODEDF dump）/ **case_status 4 筆**（01/02/03/04）/ **best_case 2 筆**（Y/N，v1.6 新增，US-129 AC-1）寫入；重複 seed → 不增加
   - 部長 GET `?active=true` → 只回啟用值
   - 部長 GET `?active=false` → 只回停用值
   - 部長 GET 不帶 query → 全部回傳
@@ -437,7 +443,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - [ ] 後端新增 GET / POST / PATCH 3 個端點 + Service
 - [ ] 後端套 `DirectorGuard`（寫入）/ `DirectorOrSectionChiefGuard`（GET）+ `FeatureFlagGuard`（寫入）
 - [ ] 後端 categorical 欄位類別檢查
-- [ ] Seed 腳本（v1.5 / 6 欄：prod_kind 3 / list_type 3 / caseyear 8 含 99 / settle_src 2 / spec_tp 32 依 OBMCODEDF dump / case_status 4）+ 冪等性測試
+- [ ] Seed 腳本（v1.6 / 7 欄：prod_kind 3 / list_type 3 / caseyear 8 含 99 / settle_src 2 / spec_tp 32 依 OBMCODEDF dump / case_status 4 / **best_case 2（Y/N，v1.6 新增）**）+ 冪等性測試
 - [ ] error-handling.md 新增 `POOLDATA_OPTION_DUPLICATE` / `POOLDATA_OPTION_NOT_FOUND` / `POOLDATA_OPTION_FIELD_TYPE_INVALID`
 - [ ] 前端「管理可選值」子頁面（自 F075 列表進入）
 - [ ] 前端列表 / 新增 / 停用 / 啟用 Modal
@@ -465,6 +471,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-103 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard` / `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
 | v1.3 | 2026-05-17 | **PO 決議 F076-C 軟停用機制補修**（v1.2 救援過程遺失，task #16 system-architect Phase 1 PO 決議）：(1) §5.0 新增概念 schema 區塊明列 `deactivation_reason VARCHAR(30) NULL` ENUM `'manual'` / `'field_type_changed'`；(2) AC-6 停用流程 reason 改為必填 textarea 200 字（OQ-E07-21 Resolved）+ 對應錯誤碼；(3) §5.1 GET 補 `includeInactive=true` query；(4) §5.3 PATCH 改為「啟用專用」、§5.4 新增 deactivate 專屬端點 `PATCH /:columnName/options/:optionValue/deactivate` + DTO `{ isActive: false, reason: string }` 200 字驗證；(5) 新增 BR-11 / BR-12 / BR-13；(6) 跨參照 data-model `pooldata_field_option.deactivation_reason` + error-handling `WHITELIST_OPTION_INACTIVE`；(7) 與 F075 v1.3 BR-7 對齊（F075 service 層觸發本表批次軟停用） |
 | v1.3.1 | 2026-05-19 | **case 對齊（依 F075 v1.4.3）**：AC-1 / AC-3 / AC-5 seed 欄位字串（`PROD_KIND` / `LIST_TYPE` / `BEST_CASE` / `SPEC_TP` / `CASEYEAR` / `SETTLE_SRC`）+ API 範例 columnName 由大寫改小寫，對齊 PostgreSQL `ob_pool_data` snake_case；§10 測試覆蓋目標欄位字串同步；`pooldata_field_option.column_name` 由 m22 / m24 seed migration 小寫；`spec_tp` / `best_case` 之 [ASSUMPTION] 留項不變（仍待 OBMCODEDF dump 確認 OBMVALUE），僅 column_name 對應改小寫 |
+| v1.6 | 2026-05-20 | **F050 v2.1.1 業務複核補強 seed 對齊 US-129**：(1) **Root cause**：F050 v2.1.1 將 `prod_best` 一級欄位移除（US-128 / Q-B B3），業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接；對應 F075 v1.6 已將 `best_case` 補入白名單 seed（categorical，display_name「優質案件」），本 v1.6 同步補其 options seed；(2) **AC-3 變更**：seed 清單由 6 欄擴充為 **7 欄**，新增 `best_case` 2 筆（`Y` 優質案件、`N` 非優質案件，皆 `is_active=true`；US-129 AC-1 / AC-2）；業務語意對應 `ob_pool_data.best_case`（Y/N 二元值，「同一個客戶多個案件中的最佳案件」）；(3) **§3 前置條件**：補「對應之白名單欄位（含 v1.6 新增之 `best_case`）已存在」；(4) **§10 / §11**：seed 寫入測試案例 + 實作 checklist 同步補 `best_case` 2 筆；(5) **F075 v1.6 cross-ref**：F075 v1.6 AC-1 之 `best_case` 條目為本 v1.6 之父表前置；(6) **F050 v2.1.1 / F051 v2.1.1 cross-ref**：F050 v2.1.1 §5.4 規則表 + §5.2 移除欄位段 + BR-12 引用本 v1.6 之 `best_case` Y/N seed；(7) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema（含 `deactivation_reason` ENUM）、§6 BR 編號規則（BR-1 ~ BR-13 全保留，**不新增 BR**）、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO / Guard / error code、既有 AC-1 / AC-2 / AC-4 ~ AC-10 語意、prototype 與 reference；F075 PATCH 觸發本表批次軟停用（BR-11）之語意保留；`best_case` options seed 之 migration 由 system-architect 於 Phase 3a 落地 |
 | v1.5 | 2026-05-20 | **F050 v2.1 重構 seed 全面對齊 US-125（補 case_status / caseyear 確認 8 筆 / spec_tp 升真實 dump 32 筆）**；**v1.5 補修（Phase 5c / 2026-05-20）**：spec_tp dump 來源從筆誤 `TBL_ID='09'` 修正為 **`TBL_ID='02'`**（實測 CSV 顯示 32 筆 SPEC_TP 在 `TBL_ID='02'`；`TBL_ID='09'` 只有 2 筆 `01='Y'` / `02='N'` 為 best_case flag，與 SPEC_TP 無關）；m150 轉碼後在 DB 中 `ob_code_df.tbl_id='SPEC_TP'`；m283 migration 直接從 CSV `TBL_ID='02'` 讀取真實 OBMCNAME1；典型代碼範例更新為 `01='新車'` / `02='中古車'` / `03='原融'` / `04='原融代償'` / `05='在庫融資'` 等（取代原列 `02 / 04 / 05 / 06 / 11 / 12 / 13 / 14 / 15 / 16 / 20 / 21 / 22 / 23` 之 OBMVALUE 列舉）。 (1) **Root cause**：F050 v2.1 重構決議 F068 整個 module 廢除（J2），原 `ob_code_df` `tbl_id='CASE_STATUS'` 之 4 筆代碼需遷移至 `pooldata_field_option` `column_name='case_status'`（US-125 AC-2 / E4 / A5）；caseyear 之 m22 現行 seed 8 筆（0~6 + 99）為拍板基準（J5），v2.0 F050 之前端 hardcoded 11 筆 0~10 為錯誤描述須以本 v1.5 為準（A4）；spec_tp 之 v1.4.6 m24 placeholder 3 筆 `[ASSUMPTION]` 已可由真實 OBMCODEDF dump 32 筆升 ✅ Resolved（E5）；(2) **AC-3 變更**：seed 清單由 5 欄擴充為 **6 欄**，新增 `case_status` 4 筆（01/02/03/04，業務語意對照引用 F050 v2.1 §5.1.1）；spec_tp 描述由「依 OBMCODEDF 當時記錄 seed（待真實 dump 確認 OBMVALUE，[ASSUMPTION]）」升級為「依 `reference/DumpData/OBMCODEDF_20260505.csv` `TBL_ID='09'` 之真實 OBMCODEDF dump 32 筆」；caseyear 保留 v1.4.6 之 8 筆描述；(3) **§3 前置條件**：補「對應之白名單欄位（含 v1.5 新增之 case_status）已存在」；(4) **§10 / §11**：seed 寫入測試案例 + 實作 checklist 同步補 case_status 4 筆 + spec_tp 32 筆 + caseyear 8 筆；(5) **§12 假設**：`spec_tp` 之 `[ASSUMPTION] 待 OBMCODEDF dump 確認 OBMVALUE` 升 ✅ Resolved；(6) **F075 v1.5 cross-ref**：F075 v1.5 AC-1 同步補 `case_status` 白名單條目（US-125 AC-5），為本 v1.5 之父表前置；(7) **F050 v2.1 / F051 v2.1 cross-ref**：F050 v2.1 §8 / F051 v2.1 §8 之 case_status 選項來源即為本 v1.5 之 case_status 4 筆 + caseyear 8 筆；(8) **F068 DEPRECATED**：F068 已標 DEPRECATED v1.3，原 `ob_code_df.tbl_id='CASE_STATUS'` 4 筆代碼之 DB 層遷移（E4）由 Phase 3a system-architect 執行；OBMCODEDF dump 32 筆完整對應寫入 migration（m25+，E5）亦由 Phase 3a 執行；本 spec 僅聲明 seed 內容範圍；(9) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema、§6 BR 編號規則、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO / Guard / error code、既有 AC-1 / AC-2 / AC-4 ~ AC-10 語意、prototype 與 reference |
 | v1.4.6 | 2026-05-19 | **seed 範圍對齊 F075 v1.4.6（同步收斂 5 欄）**：(1) **Root cause**：F075 v1.4.6 將 seed 由 8 筆收斂為 5 筆（對齊舊系統 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml` 之 5 個篩選欄位 `prod_kind` / `list_type` / `spec_tp` / `caseyear` / `settle_src`），原 F075 v1.4.3 seed 中之 `best_case`（runtime 未讀取）、`month_cnt`（scoring 直讀 `ob_pool_data.month_cnt` column；名單期數範圍 filter 由 `ob_list_definition` 一級欄位承擔）、`payt_term`（runtime 未讀取）已從 F075 whitelist 移除；F076 之 seed 為「掛載於 F075 whitelist categorical 欄位之 options」，必須同步收斂；(2) **決策依據**：`best_case` 整個欄位從 F075 whitelist 移除後，其 options 不再屬於 F076 維護範圍，AC-3 seed 清單之 `best_case` 行移除；`month_cnt` 與 `payt_term` 為 numeric 型別欄位，本即不在 F076 範圍（F076 僅維護 categorical 欄位之 options），無需在 AC-3 調整；`spec_tp` 仍為 F075 v1.4.6 seed 之 5 欄之一，AC-3 保留並維持 [ASSUMPTION] 待 OBMCODEDF dump 確認 OBMVALUE；(3) **AC / 範例更新**：AC-3 seed 清單移除「spec_tp / best_case：依 OBMCODEDF 當時記錄 seed」並改寫為「spec_tp：依 OBMCODEDF 當時記錄 seed（待真實 dump 確認 OBMVALUE，[ASSUMPTION]）」，prod_kind / list_type / caseyear / settle_src 維持原樣；§10 測試覆蓋目標既有描述「初始 seed → prod_kind / list_type / caseyear / settle_src 等寫入」不變（原本就未以 best_case 為例）；(4) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema（含 `deactivation_reason` ENUM `'manual'` / `'field_type_changed'`）、§6 BR 編號規則（BR-1 ~ BR-13 全保留）、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO、Guard、error code、既有 AC（AC-1 / AC-2 / AC-4 ~ AC-10）語意、prototype 與 reference；F075 PATCH 觸發本表批次軟停用（BR-11）之語意保留；既有 `best_case` 之 options seed migration（若已寫入 Dev DB）由 migration 同步收斂處理，非 spec 改動範圍 |
 | v1.4.5 | 2026-05-19 | **prototype 對齊翻新（main content 架構翻新）**：對齊 prototype 37b-categorical-field-values.html L100-465 之 main content 架構：(1) **§7 頁面架構翻新**：從單欄位 detail page 改為多欄位 accordion master page（對應 prototype L143）；頁面載入呼叫 `listFields({active:'true'})` 過濾 `fieldType==='categorical'` → 對每個欄位 `Promise.all` 呼叫 `listOptions`；(2) **§7 per-column 新增按鈕**：每個 accordion 內部底部「新增可選值」按鈕（context 由 accordion 提供）；testid `btn-add-option-{columnName}`；(3) **§7 全頁統計**：欄位數 / 啟用值總和 / 停用值總和；testid `option-stats` / `stats-fields-count` / `stats-active-count` / `stats-inactive-count`；(4) **§7「全部展開」按鈕**：testid `btn-expand-all`，點擊將所有 accordion 展開並寫入 localStorage；(5) **§7 `?col=XX` query 改為可選 hint**：自動展開指定 accordion；缺值不報錯（v1.0 ~ v1.3.1 為必填）；(6) **§7 三種狀態徽章**：啟用 / 自動停用（類別變更）/ 手動停用（依 `deactivationReason` 分流）；禁用辭彙「啟用中」「已停用」於徽章；(7) **§7 `field_type_changed` 啟用攔阻**：點 rotate-ccw icon 顯示 warning toast 而非呼叫 API；(8) **§7 localStorage persist 規範**：key `cdmp.f076.acc.{columnName}.expanded`；(9) **§7 新增 [DEFERRED] 區段**：明示 F076-M5（archived 欄位 UI 區塊，需 backend endpoint 或 N+1 query）暫不實作的設計決策（方案 C），避免未來 review 又被抓出；(10) **backend 不動**：既有 endpoints 足夠（listFields / listOptions / createOption / deactivateOption / reactivateOption）；(11) **不動範圍**：spec §5 API 路徑與 schema、backend service / DTO、sidebar、breadcrumb（v1.4.4 三層保留）、reference / prototype；既有 deactivate modal 結構保留；(12) **測試覆蓋**：F076 補 15 個 test cases（TS-F076-FE-V145-001 ~ 015），既有 single-detail 結構之 test cases 重寫為 multi-field accordion |

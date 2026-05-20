@@ -2,11 +2,11 @@
 spec-id: F075
 title: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
 feature-id: F075
-source-story: US-102, US-125
+source-story: US-102, US-125, US-128, US-129
 epic: E07
 module: M06 篩選欄位（v2.1 rename，原 M06 代碼維護（進階））
 priority: P0-MVP
-version: "1.5"
+version: "1.6"
 date: 2026-05-20
 status: Draft
 ---
@@ -14,6 +14,8 @@ status: Draft
 # F075: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
+
+> **v1.6（2026-05-20 / F050 v2.1.1 業務複核補強）**：seed 從 v1.5 之 6 筆擴充為 **7 筆全部啟用**，**新增 `best_case`**（categorical，display_name「優質案件」；US-128 / US-129）。理由：F050 v2.1.1 將 `prod_best` 一級欄位移除（US-128 / Q-B B3），業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接，`best_case` 為新名單必要篩選欄位，runtime 必讀（**v1.4.6 之「`best_case` runtime 未讀取」拔除決議在 F050 v2.1.1 後不再適用** — `best_case` 從 runtime 未讀取（因 `prod_best` 一級欄位承載業務語意）變為 runtime 必讀（因 `prod_best` 移除後 `best_case` condition 為唯一語意載體）；v1.4.6 變更紀錄保留作為歷史脈絡，本 v1.6 補上語境說明）。**對應 F076 v1.6**：補 `best_case` `Y` / `N` 兩筆 active options seed（US-129 AC-1）。**不動範圍**：spec §5 API 路徑與 schema、§5.5 過濾規則 / 排序 / `suggestedFieldType` 推斷規則 / `columnDescription` 取得規則（v1.4.7）、§6 BR 編號（不新增 BR）、§7 UI/UX 規範（含 v1.4.5 工具列 / 操作 column / Edit Modal / reactivate / filter / [DEFERRED]）、backend DTO、Guard、error code、既有 AC-2 ~ AC-17 之語意、`pooldata_field_whitelist` schema、prototype 與 reference。
 
 > **v1.5（2026-05-20 / F050 v2.1 重構 seed 對齊 US-125 AC-5）**：seed 從 v1.4.6 之 5 筆擴充為 **6 筆全部啟用**，新增 `case_status`（categorical）條目，對應 US-125 AC-5（caseyear / case_status 可選值遷移至 `pooldata_field_option`）；F050 v2.1 / F051 v2.1 之 case_status 動態選項來源即為此 + F076 v1.5 之 4 筆。**不動範圍**：spec §5 API 路徑與 schema、§5.5 過濾規則 / 排序 / `suggestedFieldType` 推斷規則 / `columnDescription` 取得規則（v1.4.7）、§6 BR 編號（不新增 BR）、§7 UI/UX 規範（含 v1.4.5 工具列 / 操作 column / Edit Modal / reactivate / filter / [DEFERRED]）、backend DTO、Guard、error code、既有 AC-1 ~ AC-17 之語意、`pooldata_field_whitelist` schema、prototype 與 reference。
 
@@ -52,7 +54,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 **範圍**：
 - 新建 `pooldata_field_whitelist` 表，欄位包含 `column_name`（唯一鍵）、`display_name`、`field_type`、`is_active`、`created_at`、`updated_at`
 - 部長 / Admin 可寫入；處長唯讀（可進入頁面查看，無編輯按鈕）
-- 系統首次部署時自動 seed **6 筆全部啟用**（v1.5：對齊舊系統 OBZ020 之 5 欄篩選欄位 + v2.1 重構新增 case_status 條目，US-125 AC-5）
+- 系統首次部署時自動 seed **7 筆全部啟用**（v1.6 對齊 F050 v2.1.1 補 `best_case`（US-128 / US-129）；v1.5：對齊舊系統 OBZ020 之 5 欄篩選欄位 + v2.1 重構新增 case_status 條目，US-125 AC-5）
 - 停用欄位「不回溯」既有名單條件，月跑讀取直接讀 `ob_list_definition.filter_conditions` JSONB，不 join 白名單做欄位有效性驗證
 
 **v1.4 新增**：新增欄位流程改為下拉選擇（dropdown） — 後端提供 `GET /api/v1/pooldata-fields/available-columns` 回傳 OBPOOLDATA 既有但尚未列入白名單之欄位清單（含其 PostgreSQL `dataType` 與系統推斷之 `suggestedFieldType`），前端 Modal 以下拉取代自由輸入 `columnName`；available-columns 查詢過濾**所有**已在 `pooldata_field_whitelist` 的紀錄（含 `is_active = false`），確保不會繞過 AC-5 唯一性。系統推斷之 `suggestedFieldType` 作為預選值，使用者仍可覆寫；此舉徹底消除 A-3 孤兒欄位於新增階段產生的風險。
@@ -73,17 +75,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 ## 4. 驗收標準
 
-### AC-1：系統首次部署時自動 Seed 白名單（v1.5 / 6 筆）
+### AC-1：系統首次部署時自動 Seed 白名單（v1.6 / 7 筆）
 
 - **Given** 系統首次部署
 - **When** Admin 執行初始化
-- **Then** 系統自動 seed **6 筆全部啟用**（v1.5 對齊 US-125 AC-5；v1.4.6 對齊舊系統 OBZ020 之 5 欄篩選欄位；v1.4.3 起 column_name 為小寫 snake_case，對齊 `ob_pool_data` PostgreSQL 實際欄位）：
-  - prod_kind（categorical，啟用）
-  - list_type（categorical，啟用）
-  - spec_tp（categorical，啟用）
-  - caseyear（categorical，啟用）
-  - settle_src（categorical，啟用）
-  - **case_status（categorical，啟用）** — v1.5 新增（US-125 AC-5；對應 F050 v2.1 / F051 v2.1 之 case_status 動態選項來源，取代原 F068 `ob_code_df` `tbl_id='CASE_STATUS'`，A5 / E4）
+- **Then** 系統自動 seed **7 筆全部啟用**（v1.6 對齊 F050 v2.1.1 補 `best_case`；v1.5 對齊 US-125 AC-5 補 `case_status`；v1.4.6 對齊舊系統 OBZ020 之 5 欄篩選欄位；v1.4.3 起 column_name 為小寫 snake_case，對齊 `ob_pool_data` PostgreSQL 實際欄位）：
+  - prod_kind（categorical，啟用，display_name「產品類別」）
+  - list_type（categorical，啟用，display_name「名單類型」）
+  - spec_tp（categorical，啟用，display_name「特殊類別」）
+  - caseyear（categorical，啟用，display_name「案件年度」）
+  - settle_src（categorical，啟用，display_name「結清來源」）
+  - **case_status（categorical，啟用，display_name「案件結清期別」）** — v1.5 新增（US-125 AC-5；對應 F050 v2.1 / F051 v2.1 之 case_status 動態選項來源，取代原 F068 `ob_code_df` `tbl_id='CASE_STATUS'`，A5 / E4）
+  - **best_case（categorical，啟用，display_name「優質案件」）** — v1.6 新增（US-128 / US-129；對應 F050 v2.1.1 之 `best_case` 篩選條件，承接已移除之 `prod_best` 業務語意；對應 F076 v1.6 之 `Y` / `N` 兩筆 options seed）
 - **And** 每筆欄位含 `column_name`、`display_name`、`field_type`、`is_active`
 - **And** seed 為冪等操作（重複執行不產生重複資料）
 
@@ -149,7 +152,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 ### AC-10：available-columns 端點僅回傳尚未列入白名單之欄位
 
-- **Given** `ob_pool_data` 含 120 個欄位，`pooldata_field_whitelist` 已有 **6 筆紀錄**（全為啟用，v1.5 對齊 US-125 AC-5 補 case_status；v1.4.6 對齊舊系統 OBZ020 之 5 欄篩選欄位）
+- **Given** `ob_pool_data` 含 120 個欄位，`pooldata_field_whitelist` 已有 **7 筆紀錄**（全為啟用，v1.6 對齊 F050 v2.1.1 補 `best_case`；v1.5 對齊 US-125 AC-5 補 `case_status`；v1.4.6 對齊舊系統 OBZ020 之 5 欄篩選欄位）
 - **When** 部長 / Admin 呼叫 `GET /api/v1/pooldata-fields/available-columns`
 - **Then** Response 回傳 `ob_pool_data` 既有欄位中**未出現於** `pooldata_field_whitelist` 的所有欄位（過濾邏輯**不論 `is_active` 為何**均排除；v1.4.6 起初始 seed 已無 inactive 紀錄，但本規則仍保留以防部長日後手動停用某欄位後繞過 AC-5 唯一性）
 - **And** 每筆含 `columnName`、`dataType`（PostgreSQL information_schema 原始型別字串）、`suggestedFieldType`
@@ -400,7 +403,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | BR-6 | **字串映射不維護外鍵**：白名單之 `column_name` 為 OBPOOLDATA 欄位名稱字串，不維護 FK 約束（因 OBPOOLDATA 為 ETL 同步資料，欄位可能動態變化） |
 | BR-7 | **categorical → 非 categorical 之 field_type 變更（v1.3 / 2026-05-17 / PO 決議 F076-C 落地）**：F075 PATCH 將某欄位 `field_type` 從 `'categorical'` 改為其他類別時，service 層於同一 transaction 內對 `pooldata_field_option` 執行批次 `SET is_active = false, deactivation_reason = 'field_type_changed' WHERE column_name = :columnName AND is_active = true`（軟停用）；**不 CASCADE 刪除**，歷史保留供追溯（沿用 F076 v1.3 BR-6 + BR-7）；UI 顯示 confirm Modal 提示「將自動停用 N 個可選值」（N 由 GET options API 動態取得）；批次 UPDATE 失敗則整個 PATCH transaction rollback |
 | BR-8 | **稽核失敗不 rollback**：沿用 F050 v2.0 BR-11 |
-| BR-9 | **Seed 冪等性**：seed 腳本以 `INSERT ... ON CONFLICT (column_name) DO NOTHING` 實現；重複執行不產生重複資料；v1.5 起 seed 數量為 **6 筆**（v1.4.6 起 5 筆對齊舊系統 OBZ020 + v1.5 新增 case_status 對齊 US-125 AC-5） |
+| BR-9 | **Seed 冪等性**：seed 腳本以 `INSERT ... ON CONFLICT (column_name) DO NOTHING` 實現；重複執行不產生重複資料；v1.6 起 seed 數量為 **7 筆**（v1.4.6 起 5 筆對齊舊系統 OBZ020 + v1.5 新增 case_status 對齊 US-125 AC-5 + v1.6 新增 best_case 對齊 F050 v2.1.1 / US-128 / US-129） |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F075 寫入端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED`；GET 端點不受限以保證 F050 / F076 仍能讀取 |
 | BR-11 | **新增欄位限下拉選擇（v1.4）**：自由文字輸入 `columnName` 之路徑已移除；新增 Modal 之 `columnName` 來源限定為 `GET /api/v1/pooldata-fields/available-columns` 回傳之 `availableColumns`。此規則徹底消除 A-3 孤兒欄位於新增階段產生之風險。不保留 fallback toggle |
 | BR-12 | **`suggestedFieldType` 推斷規則 + 預選非強制（v1.4）**：available-columns 端點針對每筆欄位回傳 `suggestedFieldType`（推斷規則見 §5.5）；前端 Modal 以該值預選 `field_type` radio 並顯示「系統推斷」hint；使用者覆寫後 hint 改為「使用者選擇」。最終寫入之 `field_type` 以使用者送出值為準，**不強制等同系統推斷** |
@@ -504,7 +507,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 - 單元測試覆蓋率 ≥ 80%
 - 後端關鍵測試案例：
-  - 初始 seed（**6 筆全部啟用**，v1.5 對齊 US-125 AC-5 補 case_status；v1.4.6 對齊舊系統 OBZ020 之 5 欄篩選欄位）→ 全部寫入；重複執行 seed → 不增加
+  - 初始 seed（**7 筆全部啟用**，v1.6 對齊 F050 v2.1.1 補 `best_case`；v1.5 對齊 US-125 AC-5 補 `case_status`；v1.4.6 對齊舊系統 OBZ020 之 5 欄篩選欄位）→ 全部寫入；重複執行 seed → 不增加
   - 部長 POST 新增 categorical 欄位 → 201 Created + 稽核
   - Admin POST → 201
   - 處長 POST → 403 `AUTH_FORBIDDEN`
@@ -599,4 +602,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | v1.4.5 | 2026-05-19 | **prototype 對齊翻新（main content）**：對齊 prototype 37a-pooldata-whitelist.html L106-720 之 main content 設計：(1) **§7 工具列結構**補：「新增篩選欄位」按鈕移至工具列（與搜尋 / type filter / status filter / 統計同一橫排，prototype L126-157）；補「清除」按鈕（rotate-ccw icon，重置 3 個 filter 狀態）；(2) **§7 操作 column 3 icon**：list-checks（categorical only）+ pencil（編輯）+ ban/rotate-ccw（停用/啟用 toggle），對應 prototype L613-619；testid 規範：`btn-options-{col}` / `btn-edit-{col}` / `btn-disable-{col}` / `btn-reactivate-{col}`；(3) **§7 Edit 流程**：reverse v1.4 D-iii 決議，補回 Edit Modal — `columnName` 唯讀 chip + 不渲染推斷 hint（AC-14 限定僅新增流程，prototype L704-705）+ 不渲染 dropdown trigger；categorical→其他 fieldType 切換時 reuse 既有 CategorySwitchConfirmModal；testid `edit-field-modal` / `readonly-column-name` / `edit-input-display-name` / `edit-field-type-radio-{type}` / `btn-submit-edit-field`；提交 PATCH `/api/v1/pooldata-fields/{columnName}` 帶 `{ displayName, fieldType }`；成功 toast「欄位『{displayName}』已編輯」；(4) **§7 reactivate 流程**：inactive 欄位 rotate-ccw icon 直接 PATCH `{ isActive: true }`（沿用既有 PATCH 端點）；無確認 Modal；成功 toast「欄位『{displayName}』已啟用」；(5) **§7 filter 字串對齊**：`filter-active` 字串 `「啟用中 / 已停用 / 全部」` → `「狀態：全部 / 僅顯示啟用 / 僅顯示停用」`（對齊 prototype L142-146）；`filter-type` 補 zh-tw 後綴「（類別型）」「（數值型）」「（日期型）」（對齊 prototype L133-138）；status filter 預設值由 `'active'` 改為 `'all'`；(6) **§7 新增 [DEFERRED] 區段**：明示 F075-M8（scope 提示區塊，已被 React 描述行替代）與 F075-M9（seed 來源 column，需 backend entity 加欄位）不實作的設計決策，避免未來 review 又被抓出；(7) **backend 不動**：既有 `UpdatePooldataFieldDto.isActive` 已支援 reactivate；PATCH 端點足夠；(8) **不動範圍**：spec §5 API 路徑與 schema、backend DTO、sidebar（v1.4.1 已對齊）、breadcrumb（v1.4.4 已對齊）、reference / prototype / 00-design-system；CategorySwitchConfirmModal 既有 component reuse；(9) **測試覆蓋**：F075 補 14 個 test cases（TS-F075-FE-V145-001 ~ 014），既有 28 PASS 全保留 |
 | v1.4.6 | 2026-05-19 | **seed 範圍對齊舊系統 OBZ020**：(1) **Root cause**：原 v1.4.3 起 seed 8 筆（prod_kind / list_type / best_case / spec_tp / caseyear / settle_src / month_cnt / payt_term）與舊系統 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml` 之 9 欄篩選欄位範圍不對齊；OBZ020 9 欄中 3 欄（`list_period_start` / `list_period_end` / `list_interval`）已由 `ob_list_definition` 一級欄位承擔、1 欄（`list_nm`）為名單名稱非篩選欄位，剩 5 欄才是真正的篩選欄位；(2) **決策依據**：`best_case` runtime 未讀取（`fn_calc_tier_level.sql` 與 `assignment-run-pipeline.service.ts` 均未引用）→ 拔除；`month_cnt` scoring 之 LIST_MONTH 計分碼**直接讀 `ob_pool_data.month_cnt` column**（不經 whitelist），且名單期數範圍 filter 由 `ob_list_definition.list_period_start` / `list_period_end` / `list_interval` 三個一級欄位承擔，whitelist 重複維護無意義 → 拔除（**column 在 `ob_pool_data` 仍保留供 scoring 直讀，僅 whitelist 不列**）；`payt_term` runtime 未讀取 → 拔除；(3) **AC / 範例更新**：§1 功能摘要「seed 8 筆」→「seed 5 筆全部啟用」；AC-1 seed 清單由 8 筆收斂為 5 筆（prod_kind / list_type / spec_tp / caseyear / settle_src）並移除「7 啟用 + 1 停用 payt_term」字樣；AC-10 範例「`pooldata_field_whitelist` 已有 8 筆紀錄（7 啟用 + 1 停用 payt_term）」→「5 筆全為啟用」並移除「已停用之 payt_term 亦不列入 available-columns」字樣，但保留 BR-13 過濾邏輯之語意說明（防部長日後手動停用某欄位繞過 AC-5）；§5.1 GET response 範例之 `month_cnt` 範例改為 `spec_tp`（保留 prod_kind 與另一 categorical 為代表）；§6 BR-9 seed 冪等性說明補充 v1.4.6 5 筆；§10 測試覆蓋目標「初始 seed（8 筆）」→「初始 seed（5 筆全部啟用）」；(4) **不動範圍**：spec §5 API 路徑與 schema、§6 BR 編號規則（BR-1 ~ BR-14 全保留）、§7 UI/UX 規範、§12 假設清單、backend DTO、Guard、error code、既有 AC（AC-2 ~ AC-15）語意、prototype 與 reference；`ob_pool_data` 表結構（含 `month_cnt` column）；F076 v1.4.6 同步收斂 seed（best_case 整個欄位從 whitelist 移除後，其 options 不再屬於 F076 維護範圍） |
 | v1.5 | 2026-05-20 | **F050 v2.1 重構 seed 對齊 US-125 AC-5**：(1) **Root cause**：F050 v2.1 重構決議（J1）F075 + F076 為唯一篩選欄位來源；F068 整個 module 廢除（J2）；原 `ob_code_df` `tbl_id='CASE_STATUS'` 之 4 筆代碼需遷移至 `pooldata_field_option` `column_name='case_status'`（US-125 AC-2），父表 `pooldata_field_whitelist` 必須先有 `case_status` 條目；(2) **變更項目**：AC-1 seed 由 5 筆擴充為 **6 筆**，新增 `case_status`（categorical，啟用）；§1 功能摘要「seed 5 筆」→「seed 6 筆」；AC-10 範例「已有 5 筆紀錄」→「已有 6 筆紀錄」；§6 BR-9 seed 冪等性「v1.4.6 起 5 筆」→「v1.5 起 6 筆」；§10 測試覆蓋目標「初始 seed（5 筆全部啟用）」→「6 筆全部啟用」；(3) **F050 v2.1 / F051 v2.1 cross-ref**：F050 v2.1 §3 前置條件、F050 v2.1 §8 case_status 選項來源、F051 v2.1 §8 case_status 選項來源均引用本 v1.5 seed；(4) **F076 v1.5 同步**：F076 v1.5 AC-3 seed 補 case_status 4 筆 + caseyear 改 8 筆 + spec_tp 補 OBMCODEDF dump 32 筆；(5) **F068 DEPRECATED**：F068 已標 DEPRECATED v1.3，原 `ob_code_df` `tbl_id='CASE_STATUS'` 4 筆代碼之 DB 層遷移由 Phase 3a system-architect 執行（GAP-LIST §E4）；(6) **不動範圍**：spec §5 API 路徑與 schema、§5.5 過濾規則 / 排序 / `suggestedFieldType` 推斷規則 / `columnDescription` 取得規則（v1.4.7）、§6 BR 編號（**不新增 BR**）、§7 UI/UX 規範（含 v1.4.5 工具列 / 操作 column / Edit Modal / reactivate / filter / [DEFERRED] 區段）、backend DTO、Guard、error code、既有 AC-2 ~ AC-17 之語意、`pooldata_field_whitelist` schema、prototype 與 reference / 00-design-system |
+| v1.6 | 2026-05-20 | **F050 v2.1.1 業務複核補強 seed 對齊 US-128 / US-129**：(1) **Root cause**：F050 v2.1.1 業務複核 D2 決議將 `prod_best` 一級欄位移除（US-128 / Q-B B3），其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接；`best_case` 從「runtime 未讀取」（v1.4.6 拔除理由）轉為「runtime 必讀」（因 `prod_best` 移除後 `best_case` condition 為唯一語意載體），v1.4.6 之拔除決議在 F050 v2.1.1 後不再適用；(2) **變更項目**：AC-1 seed 由 6 筆擴充為 **7 筆**，新增 `best_case`（categorical，啟用，display_name「優質案件」）；§1 功能摘要「seed 6 筆」→「seed 7 筆」；AC-10 範例「已有 6 筆紀錄」→「已有 7 筆紀錄」；§6 BR-9 seed 冪等性「v1.5 起 6 筆」→「v1.6 起 7 筆」；§10 測試覆蓋目標「初始 seed（6 筆全部啟用）」→「7 筆全部啟用」；(3) **F050 v2.1.1 / F076 v1.6 cross-ref**：F050 v2.1.1 §3 前置條件 + §5.4 規則表 + §5.2 移除欄位段 + BR-12 + §9 相依性引用本 v1.6 之 `best_case` 條目；F076 v1.6 同步補 `best_case` `Y` / `N` 兩筆 active options seed（US-129 AC-1）；(4) **v1.4.6 拔除決議語境補述**：v1.4.6 變更紀錄保留作為歷史脈絡，本 v1.6 補上語境說明「v1.4.6 之拔除決議在 F050 v2.1.1（`prod_best` 移除）後不再適用 — `best_case` 從 runtime 未讀取（因 `prod_best` 一級欄位承載業務語意）變為 runtime 必讀（因 `prod_best` 移除後 `best_case` condition 為唯一語意載體）」；不刪 v1.4.6 紀錄；(5) **不動範圍**：spec §5 API 路徑與 schema、§5.5 過濾規則 / 排序 / `suggestedFieldType` 推斷規則 / `columnDescription` 取得規則（v1.4.7）、§6 BR 編號（**不新增 BR**）、§7 UI/UX 規範、backend DTO、Guard、error code、既有 AC-2 ~ AC-17 之語意、`pooldata_field_whitelist` schema、prototype 與 reference / 00-design-system；F076 v1.6 之 options seed 由 system-architect 於 migration 落地（Phase 3a） |
 | v1.4.7 | 2026-05-19 | **available-columns 端點補 columnDescription + Modal 自動填入 displayName**：(1) **Root cause**：舊系統 OBZ020 之 dropdown 顯示中文欄位描述（來源為 SQL Server `sys.extended_properties` 之 `MS_Description`），新系統 available-columns 端點未回傳該描述，使用者新增篩選欄位時須自行輸入中文 `displayName`，UX 較差；(2) **決策依據**：description 為錦上添花 metadata，採靜默降級設計（連線失敗 / 無 task / 無描述均省略欄位而非報錯），避免污染主流程；Modal 自動填入僅限 create 流程且只在 `displayName` 為空時觸發，避免覆寫使用者已輸入內容；(3) **變更項目**：新增 AC-16（端點 `columnDescription` 欄位 + 三種降級情境）+ AC-17（Modal create 流程自動填入 + 不覆寫 / 不影響 Edit）；§5.5 Response 範例補 `columnDescription` 欄位（同時示意有 / 無 description 兩種）+ 新增「`columnDescription` 取得規則」子段落（查詢來源 / datasource 解析 / 降級條件 / 降級行為 / 日誌等級）；§7 「新增篩選欄位 Modal」`displayName` 描述補自動填入行為說明；§10 補後端 5 條 + 前端 5 條 test cases；§11 補 5 項實作 checklist；§13 順手修正 v1.4.5 / v1.4.6 順序錯亂；(4) **不動範圍**：spec §5 端點路徑 / 權限 / Guard、§5.5 過濾規則 / 排序規則 / `suggestedFieldType` 推斷規則、§6 BR 編號（**不新增 BR**，兩個 AC 已自足）、§5.5 錯誤代碼表（降級不丟錯，**不新增** errCode）、既有 AC-1 ~ AC-15 語意、§7 工具列 / 操作 column / Edit Modal / reactivate / filter / [DEFERRED] 規範、prototype 與 reference、`pooldata_field_whitelist` schema、`extraction_tasks` / `ExtractionTask` entity 名稱（**不可改名**）、F076 |
