@@ -352,4 +352,71 @@ describe('CardTypeService — F069 listCardTypes', () => {
 
     expect(result.cardTypes[0].createdBy).toBeNull();
   });
+
+  /**
+   * v2.1.1 補強（US-126 / US-127 / architecture-spec §18.11.5）：
+   *   listCardTypes query param contract — `?status='active'|'all'`
+   *
+   * 對應 test spec：F050-test.md §十四 D 群組（TS-F050-D01 ~ D05）
+   * 補測重點：明確驗證現有 service 已合規 §18.11.5 contract（無需改實作）。
+   * 與既有 TC-F069-11 / TC-F069-11b 互補但不重複（更細粒度地驗 repo.find 被 where 呼叫）。
+   */
+  describe('v2.1.1 補強 — D 群組 card-type ?status query param contract', () => {
+    beforeEach(() => {
+      cardTypeRepo.find.mockResolvedValue([]);
+      optionRepo.find.mockResolvedValue([]);
+      versionRepo.find.mockResolvedValue([]);
+      userRepo.find.mockResolvedValue([]);
+    });
+
+    it('TS-F050-D01：listCardTypes({}) — 預設 status=active，repo 以 { where: { status: \'active\' } } 呼叫', async () => {
+      await service.listCardTypes({});
+      expect(cardTypeRepo.find).toHaveBeenCalledWith({
+        where: { status: 'active' },
+      });
+    });
+
+    it('TS-F050-D02：listCardTypes({ status: \'all\' }) — repo 以 { where: {} } 查詢（無 status 過濾）', async () => {
+      await service.listCardTypes({ status: 'all' });
+      expect(cardTypeRepo.find).toHaveBeenCalledWith({ where: {} });
+    });
+
+    it('TS-F050-D03：listCardTypes({ status: \'active\' }) — 與無 query 行為一致', async () => {
+      await service.listCardTypes({ status: 'active' });
+      expect(cardTypeRepo.find).toHaveBeenCalledWith({
+        where: { status: 'active' },
+      });
+    });
+
+    it('TS-F050-D04：Response shape — 含 cardType / cardName / prodKind / status 四欄；依 cardType 升冪', async () => {
+      cardTypeRepo.find.mockResolvedValue([
+        // 故意逆序：S5 / E
+        { card_type: 'S5', card_name: '主力催收', prod_kind: '02', status: 'active' },
+        { card_type: 'E', card_name: '滿期', prod_kind: '01', status: 'active' },
+      ]);
+
+      const result = await service.listCardTypes({ status: 'active' });
+
+      // 升冪：E 在前，S5 在後
+      expect(result.cardTypes).toHaveLength(2);
+      expect(result.cardTypes[0].cardType).toBe('E');
+      expect(result.cardTypes[1].cardType).toBe('S5');
+
+      // 必含 4 欄
+      for (const ct of result.cardTypes) {
+        expect(ct).toHaveProperty('cardType');
+        expect(ct).toHaveProperty('cardName');
+        expect(ct).toHaveProperty('prodKind');
+        expect(ct).toHaveProperty('status');
+      }
+    });
+
+    it('TS-F050-D05：邊界 — 表內無 active 卡別 → 回 { cardTypes: [] }，不拋 500', async () => {
+      cardTypeRepo.find.mockResolvedValue([]);
+
+      const result = await service.listCardTypes({ status: 'active' });
+
+      expect(result).toEqual({ cardTypes: [] });
+    });
+  });
 });
