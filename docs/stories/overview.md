@@ -2,19 +2,19 @@
 
 > **專案名稱**：CDMP（Customer Data Management Platform）企業客戶資料治理平台
 > **版本**：v1.0 (MVP)
-> **最後更新**：2026-04-21
+> **最後更新**：2026-05-19
 
 ## 快速統計
 
 | 指標 | 數量 |
 |------|------|
 | Epic 總數 | 7 |
-| User Story 總數 | 93（含 A~H 組全批重構；廢棄 4 Story；US-078 保留為流程外查詢入口）|
+| User Story 總數 | 98（含 A~H 組全批重構 + v2.1 重構；廢棄 5 Story；US-078 保留為流程外查詢入口）|
 | 非功能需求（NFR）總數 | 5 |
 | 目標階段 | Phase 1（MVP）+ Phase 2（Customer 360） |
 | 目標使用者 | 企業內部團隊（500+ 人） |
 | 主要角色 | Admin（管理者）、User（使用者）、部長（Director）、處長（Section Chief） |
-| 最後更新 | 2026-05-15（E07 重構 E~H 組：新增 US-109~119；廢棄 US-079/091；補修 US-081/090/101/104/105/106/108；M03 拆分為 M03a/M03b/M03c/M03d） |
+| 最後更新 | 2026-05-19（E07 F050 v2.1 重構：新增 US-121~125；廢棄 US-092；修改 US-070/102/103/106；M06「代碼維護」rename「篩選欄位」） |
 
 ## Epic 索引
 
@@ -80,7 +80,7 @@
 | E05 | [US-058](epics/E05-etl-pipeline/US-058-lookup-node-dual-input.md) | Lookup 節點雙輸入重設計 | Must Have |
 | E06 | [US-060](epics/E06-customer-360/US-060-customer-search-list.md) | 客戶搜尋與清單 | Must Have |
 | E06 | [US-061](epics/E06-customer-360/US-061-customer-360-view.md) | 單一客戶 360 檢視 | Must Have |
-| E07 | [US-070](epics/E07-app-customer-list-assignment/US-070-M01-view-list-definition.md) | 查看本月名單定義清單 | Must Have |
+| E07 | [US-070](epics/E07-app-customer-list-assignment/US-070-M01-view-list-definition.md) | 查看本月名單定義清單 **（v2.1 修改）** | Must Have |
 | E07 | [US-071](epics/E07-app-customer-list-assignment/US-071-M01-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | Must Have |
 | E07 | [US-072](epics/E07-app-customer-list-assignment/US-072-M02-view-scoring-dimensions.md) | 查看計分維度設定 | Must Have |
 | E07 | [US-073](epics/E07-app-customer-list-assignment/US-073-M02-edit-scoring-dimension.md) | 編輯計分維度與分數 | Must Have |
@@ -101,17 +101,22 @@
 | E07 | [US-089](epics/E07-app-customer-list-assignment/US-089-M01-edit-list-definition.md) | 編輯名單定義 | Must Have |
 | E07 | [US-090](epics/E07-app-customer-list-assignment/US-090-M01-disable-list-definition.md) | 停用名單定義 | Must Have |
 | E07 | [US-091](epics/E07-app-customer-list-assignment/US-091-M03-edit-per-list-dept-ratio.md) | 設定 per-LIST_NO 部門比例 | Must Have |
-| E07 | [US-092](epics/E07-app-customer-list-assignment/US-092-M06-edit-base-code.md) | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | Must Have |
+| E07 | ~~[US-092](epics/E07-app-customer-list-assignment/US-092-M06-edit-base-code.md)~~ | ~~E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR）~~（**已廢棄 v2.1，由 US-102+103+124+125 取代**）| ~~Must Have~~ |
 | E07 | [US-100](epics/E07-app-customer-list-assignment/US-100-M07-define-director-role.md) | 部長角色定義與 E07 全模組操作權限 | Must Have |
 | E07 | [US-101](epics/E07-app-customer-list-assignment/US-101-M07-define-section-chief-role.md) | 處長角色定義與可見範圍（收斂版） | Must Have |
-| E07 | [US-102](epics/E07-app-customer-list-assignment/US-102-M06-manage-pooldata-field-whitelist.md) | 管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata） | Must Have |
-| E07 | [US-103](epics/E07-app-customer-list-assignment/US-103-M06-manage-categorical-field-values.md) | 管理類別型欄位的可選值 | Must Have |
+| E07 | [US-102](epics/E07-app-customer-list-assignment/US-102-M06-manage-pooldata-field-whitelist.md) | 管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata）**（v2.1 修改）** | Must Have |
+| E07 | [US-103](epics/E07-app-customer-list-assignment/US-103-M06-manage-categorical-field-values.md) | 管理類別型欄位的可選值 **（v2.1 修改）** | Must Have |
 | E07 | [US-104](epics/E07-app-customer-list-assignment/US-104-M01-month-switch-history-readonly.md) | 月份切換與歷史月份唯讀 | Must Have |
 | E07 | [US-105](epics/E07-app-customer-list-assignment/US-105-M01-list-stage-overview.md) | 名單五階段狀態總覽 | Must Have |
-| E07 | [US-106](epics/E07-app-customer-list-assignment/US-106-M01-draft-create-list-with-filter.md) | 草稿階段建立名單與篩選條件 | Must Have |
+| E07 | [US-106](epics/E07-app-customer-list-assignment/US-106-M01-draft-create-list-with-filter.md) | 草稿階段建立名單與篩選條件 **（v2.1 修改）** | Must Have |
 | E07 | [US-107](epics/E07-app-customer-list-assignment/US-107-M01-draft-per-list-cr-toggle.md) | 草稿階段 per-LIST_NO CR 回分開關設定 | Must Have |
 | E07 | [US-108](epics/E07-app-customer-list-assignment/US-108-M01-draft-advance-to-dept-ratio.md) | 草稿階段推進至部門比例設定 | Must Have |
 | E07 | [US-120](epics/E07-app-customer-list-assignment/US-120-M01-cr-storage-spec-correction.md) | CR 回分儲存位置 spec 落差修正 | Must Have |
+| E07 | [US-121](epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md) | whitelist-driven 篩選條件驗證規則（condition_payload 為 source of truth）**（v2.1 新增）** | Must Have |
+| E07 | [US-122](epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md) | 月跑 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）** | Must Have |
+| E07 | [US-123](epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md) | 舊名單 backward-compat 讀取（condition_payload IS NULL fallback）**（v2.1 新增）** | Must Have |
+| E07 | [US-124](epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md) | F068（代碼維護 module）廢除與篩選欄位合併管理頁 **（v2.1 新增）** | Must Have |
+| E07 | [US-125](epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md) | caseyear / case_status 可選值遷移至 pooldata_field_option **（v2.1 新增）** | Must Have |
 | E07 | [US-109](epics/E07-app-customer-list-assignment/US-109-M03a-set-dept-ratio.md) | 部門比例設定（各部門分配比例）| Must Have |
 | E07 | [US-110](epics/E07-app-customer-list-assignment/US-110-M03a-advance-to-personnel-ratio.md) | 部門比例設定階段推進至個別業務比例設定 | Must Have |
 | E07 | [US-111](epics/E07-app-customer-list-assignment/US-111-M03a-rollback-to-draft.md) | 部門比例設定階段 Rollback 至草稿 | Must Have |
@@ -149,10 +154,12 @@
 ### Phase 1（新增）— 客戶名單分派（E07）
 重點：部長 / Admin 可獨立操作名單定義五階段流程、計分設定、分派比例、觸發月跑、匯出結果與查看歷史快照；處長僅可操作個別業務比例設定與準備完成查詢，IT 零介入
 
-- E07 全部 Stories（US-070 ~ US-092、US-097、US-100 ~ US-120，含 M03a/b/c/d 各子模組）
+- E07 全部 Stories（US-070 ~ US-092、US-097、US-100 ~ US-125，含 M03a/b/c/d 各子模組）
 - US-088 / US-089 已廢棄（由 US-106 取代），保留歷史記錄
 - US-079 已廢棄（由 US-112 取代），US-091 已廢棄（由 US-109 取代），保留歷史記錄
+- **US-092 已廢棄（v2.1，由 US-102 + US-103 + US-124 + US-125 取代），保留歷史記錄**
 - US-078 保留為「流程外人員比例查詢入口」（與 US-118 準備完成摘要並行存在）
+- **v2.1 新增 US-121~125（F050 whitelist-driven 重構）**
 - NFR-003（分派執行效能）、NFR-004（快照原子性）、NFR-005（結果準確性）
 
 ### Phase 2 — Customer 360

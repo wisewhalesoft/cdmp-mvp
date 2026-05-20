@@ -4,8 +4,8 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：46（含 A~H 組重構全批；廢棄 US-088/089/079/091；US-078 保留為流程外查詢入口）
-> **最後更新**：2026-05-15（重構 E~H 組：新增 US-109~119；廢棄 US-079/091；補修 US-081/090/101/104/105/106/108；M03 拆分為 M03a/M03b/M03c/M03d）
+> **Stories 數量**：50（含 A~H 組 + v2.1 重構；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
+> **最後更新**：2026-05-19（v2.1 重構：新增 US-121~125；廢棄 US-092；修改 US-070/102/103/106；M06「代碼維護」rename「篩選欄位」）
 
 ## Epic 目標
 
@@ -19,15 +19,17 @@
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
-| US-070 | 查看本月名單定義清單 | Must Have | [US-070-M01-view-list-definition.md](US-070-M01-view-list-definition.md) |
+| US-070 | 查看本月名單定義清單 **（v2.1 修改）** | Must Have | [US-070-M01-view-list-definition.md](US-070-M01-view-list-definition.md) |
 | US-071 | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | Must Have | [US-071-M01-stage0-daily-estimate.md](US-071-M01-stage0-daily-estimate.md) |
 | US-104 | 月份切換與歷史月份唯讀 | Must Have | [US-104-M01-month-switch-history-readonly.md](US-104-M01-month-switch-history-readonly.md) |
 | US-105 | 名單五階段狀態總覽 | Must Have | [US-105-M01-list-stage-overview.md](US-105-M01-list-stage-overview.md) |
-| US-106 | 草稿階段建立名單與篩選條件 | Must Have | [US-106-M01-draft-create-list-with-filter.md](US-106-M01-draft-create-list-with-filter.md) |
+| US-106 | 草稿階段建立名單與篩選條件 **（v2.1 修改）** | Must Have | [US-106-M01-draft-create-list-with-filter.md](US-106-M01-draft-create-list-with-filter.md) |
 | US-107 | 草稿階段 per-LIST_NO CR 回分開關設定 | Must Have | [US-107-M01-draft-per-list-cr-toggle.md](US-107-M01-draft-per-list-cr-toggle.md) |
 | US-108 | 草稿階段推進至部門比例設定 | Must Have | [US-108-M01-draft-advance-to-dept-ratio.md](US-108-M01-draft-advance-to-dept-ratio.md) |
 | US-120 | CR 回分儲存位置 spec 落差修正 | Must Have | [US-120-M01-cr-storage-spec-correction.md](US-120-M01-cr-storage-spec-correction.md) |
 | US-090 | 名單定義停用（草稿階段退出）| Must Have | [US-090-M01-disable-list-definition.md](US-090-M01-disable-list-definition.md) |
+| **US-121** | **whitelist-driven 篩選條件驗證規則（condition_payload 為 source of truth）**（v2.1 新增）| Must Have | [US-121-M01-whitelist-condition-payload.md](US-121-M01-whitelist-condition-payload.md) |
+| **US-123** | **舊名單 backward-compat 讀取（condition_payload IS NULL fallback）**（v2.1 新增）| Must Have | [US-123-M01-backward-compat-list-read.md](US-123-M01-backward-compat-list-read.md) |
 | ~~US-088~~ | ~~新增名單定義~~（**已廢棄，由 US-106 取代**）| 廢棄 | [US-088-M01-create-list-definition.md](US-088-M01-create-list-definition.md) |
 | ~~US-089~~ | ~~編輯名單定義~~（**已廢棄，由 US-106 取代**）| 廢棄 | [US-089-M01-edit-list-definition.md](US-089-M01-edit-list-definition.md) |
 
@@ -97,6 +99,7 @@
 | US-082 | 查看分派執行進度 | Must Have | [US-082-M04-view-run-progress.md](US-082-M04-view-run-progress.md) |
 | US-083 | 查看分派結果摘要 | Must Have | [US-083-M04-view-run-result-summary.md](US-083-M04-view-run-result-summary.md) |
 | US-084 | 匯出分派結果 | Must Have | [US-084-M04-export-assignment-result.md](US-084-M04-export-assignment-result.md) |
+| **US-122** | **月跑 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）| Must Have | [US-122-M04-stage1-dynamic-filter.md](US-122-M04-stage1-dynamic-filter.md) |
 
 ### M05 — 快照歷史
 
@@ -106,13 +109,17 @@
 | US-086 | 查看執行快照詳情 | Must Have | [US-086-M05-view-run-snapshot-detail.md](US-086-M05-view-run-snapshot-detail.md) |
 | US-087 | 比對兩次執行結果差異 | Should Have | [US-087-M05-compare-run-results.md](US-087-M05-compare-run-results.md) |
 
-### M06 — 代碼維護
+### M06 — ~~代碼維護~~ 篩選欄位（v2.1 rename）
+
+> **[v2.1 重構決策，2026-05-19]**：M06 模組由「代碼維護」rename「篩選欄位」（J4）。US-092（F068 代碼維護）已廢棄，由 US-102 + US-103 + US-124 + US-125 承接。sidebar「代碼維護」入口改為「篩選欄位」，37a / 37b 合併為新 37 的 2-Tab 頁面。
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
-| US-092 | E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR） | Must Have | [US-092-M06-edit-base-code.md](US-092-M06-edit-base-code.md) |
-| US-102 | 管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata） | Must Have | [US-102-M06-manage-pooldata-field-whitelist.md](US-102-M06-manage-pooldata-field-whitelist.md) |
-| US-103 | 管理類別型欄位的可選值 | Must Have | [US-103-M06-manage-categorical-field-values.md](US-103-M06-manage-categorical-field-values.md) |
+| ~~US-092~~ | ~~E07 相關代碼維護（PROD_KIND / SPEC_TP / CASEYEAR）~~（**已廢棄，由 US-102 + US-103 + US-124 + US-125 取代**）| 廢棄 | [US-092-M06-edit-base-code.md](US-092-M06-edit-base-code.md) |
+| US-102 | 管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata）**（v2.1 修改）** | Must Have | [US-102-M06-manage-pooldata-field-whitelist.md](US-102-M06-manage-pooldata-field-whitelist.md) |
+| US-103 | 管理類別型欄位的可選值 **（v2.1 修改）** | Must Have | [US-103-M06-manage-categorical-field-values.md](US-103-M06-manage-categorical-field-values.md) |
+| **US-124** | **F068（代碼維護 module）廢除與篩選欄位合併管理頁**（v2.1 新增）| Must Have | [US-124-M06-deprecate-f068-merge-field-base.md](US-124-M06-deprecate-f068-merge-field-base.md) |
+| **US-125** | **caseyear / case_status 可選值遷移至 pooldata_field_option**（v2.1 新增）| Must Have | [US-125-M06-migrate-options-to-whitelist.md](US-125-M06-migrate-options-to-whitelist.md) |
 
 ### M07 — 角色與可見範圍
 
@@ -165,6 +172,8 @@
 
 ### OBMCODEDF（既有，代碼維護）
 
+> **[v2.1 重構決策，2026-05-19]**：`ob_code_df` 中 PROD_KIND / SPEC_TP / CASE_STATUS 三個 `tbl_id` 的資料已遷移至 `pooldata_field_option`（US-125），前端不再讀取這三類代碼。DB 層資料清除（`DELETE FROM ob_code_df WHERE tbl_id IN (...)`) 由 Phase 3a system-architect 執行（GAP E7）。`ob_code_df` entity 本身保留（其他 tbl_id 仍可能使用）。
+
 | 欄位（參考） | 說明 |
 |------------|------|
 | CODE_TYPE | 代碼類別（PROD_KIND / SPEC_TP / CASEYEAR） |
@@ -172,7 +181,8 @@
 | CODE_NM | 顯示名稱 |
 | STATUS | 啟用/停用 |
 
-參照 Story：US-092（代碼維護）、US-088/089（表單選項來源）
+~~參照 Story：US-092（代碼維護）、US-088/089（表單選項來源）~~
+**v2.1 後**：參照 Story：~~US-092~~（已廢棄）；代碼選項改由 US-103 + US-125 透過 `pooldata_field_option` 管理
 
 ### per-LIST_NO 部門比例表（待確認）
 

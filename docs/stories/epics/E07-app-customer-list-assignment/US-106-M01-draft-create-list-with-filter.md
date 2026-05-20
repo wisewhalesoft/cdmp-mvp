@@ -1,3 +1,9 @@
+---
+last-updated: 2026-05-19
+version: v2.1-refactor
+change-summary: "v2.1 修改：AC-5 類別型欄位選項來源改為 pooldata_field_option（移除 ob_code_df 依賴）；新增 AC-12（condition_payload 必填驗證）；新增 AC-13（columnName 白名單驗證）；依賴關係補 US-121/US-125。GAP 覆蓋：A1、A2、A3、A4、A5、B1~B3、F4。"
+---
+
 # US-106：草稿階段建立名單與篩選條件
 
 > **Story ID**：US-106
@@ -67,11 +73,18 @@
 
 ### AC-5：類別型欄位顯示多選元件
 
-- **Given** 部長或 Admin 選取白名單中 `field_type = categorical` 的欄位（例如 PROD_KIND）
+~~（v1.0 原文）選項來源為 US-103 中該欄位 is_active = true 的可選值。~~
+
+**（v2.1 修改）**
+
+- **Given** 部長或 Admin 選取白名單中 `field_type = categorical` 的欄位（例如 PROD_KIND、caseyear、case_status）
 - **When** 欄位被加入篩選條件區塊
-- **Then** 顯示多選清單，選項來源為 US-103 中該欄位 `is_active = true` 的可選值
+- **Then** 顯示多選清單，選項來源為 **`pooldata_field_option`**（US-103 維護），該欄位 `is_active = true` 的可選值；**不讀取 `ob_code_df`**
 - **And** 選項顯示 `option_label`，送出時儲存 `option_value`
 - **And** 至少選取一個值方可儲存
+- **And** caseyear 選項顯示 8 筆（`0`~`6` + `99`），case_status 選項顯示 4 筆（01~04），均動態載入，不 hardcode
+
+> **業務意義（A4/A5/F3/F4）**：caseyear 與 case_status 選項來源改為 pooldata_field_option，與 PROD_KIND / SPEC_TP 等欄位統一管理方式。
 
 ### AC-6：條件之間 AND 邏輯
 
@@ -118,6 +131,25 @@
 - **When** 後端寫入資料
 - **Then** 篩選條件以 JSONB 格式儲存於 `ob_list_definition` 對應欄位（格式由 system-architect 設計）
 - **And** 每個條件包含 `column_name`、`field_type`、`values`（類別型）或 `min`/`max`（數值型）
+
+### AC-12：condition_payload 必填驗證（v2.1 新增）
+
+> **涵蓋 GAP**：A1、A2、B2、G2（condition_payload 為 source of truth；5 個固定欄不再必填）
+
+- **Given** 部長或 Admin 在建立或編輯草稿名單表單中點擊「儲存」
+- **When** 篩選條件區塊未新增任何條件（conditions 陣列為空）
+- **Then** 前端顯示錯誤提示「請至少設定一個篩選條件」，儲存不執行
+- **And** 後端額外驗證：若 condition_payload.conditions 為空，回傳 422，錯誤訊息「篩選條件不得為空，請至少設定一個欄位」（詳見 US-121 AC-1）
+- **And** 本 AC 取代舊設計的「9 個固定欄位必填」語意；名單的 PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC / CASE_STATUS 欄位由後端依 condition_payload 衍生，前端不需個別驗證這 5 個欄位
+
+### AC-13：篩選條件 columnName 白名單驗證（v2.1 新增）
+
+> **涵蓋 GAP**：A3、B2、B3（columnName 必須在 whitelist active 集合）
+
+- **Given** 部長或 Admin 設定篩選條件後儲存
+- **When** 前端送出 condition_payload
+- **Then** 前端在送出前，以本地白名單快取確認所有 `columnName` 均來自 `is_active = true` 的欄位（前端 dropdown 來源即為白名單，正常操作下不會發生違規）
+- **And** 後端額外驗證（defense-in-depth）：若任一 `columnName` 不在白名單啟用集合，回傳 422，`error_code: CONDITION_COLUMN_NOT_IN_WHITELIST`（詳見 US-121 AC-2）
 
 ---
 
@@ -201,7 +233,7 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-105（五階段總覽，建立入口在清單頁）、US-102（白名單欄位，篩選條件選項來源）、US-103（可選值，類別型欄位多選選項）、US-100（部長角色定義，確立建立操作權限）
+- **Blocked By**：US-105（五階段總覽，建立入口在清單頁）、US-102（白名單欄位，篩選條件選項來源）、US-103（可選值，類別型欄位多選選項）、US-100（部長角色定義，確立建立操作權限）、**US-121（condition_payload 驗證規則，AC-12/AC-13 依賴）**、**US-125（caseyear / case_status 選項來源就緒，AC-5 依賴）**
 - **Blocks**：US-107（per-LIST_NO CR 回分開關，需先有草稿名單）、US-108（推進至部門比例設定，需先有草稿名單）、US-090（停用，草稿名單才可停用）
 
 ---
@@ -230,4 +262,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **取代**：US-088（已廢棄）、US-089（已廢棄）
-- **相關 Stories**：US-105（五階段總覽與清單入口）、US-102（白名單欄位）、US-103（類別型可選值）、US-107（CR 回分開關）、US-108（推進至部門比例）、US-090（停用草稿名單）、US-100（部長角色定義）
+- **相關 Stories**：US-105（五階段總覽與清單入口）、US-102（白名單欄位）、US-103（類別型可選值）、US-107（CR 回分開關）、US-108（推進至部門比例）、US-090（停用草稿名單）、US-100（部長角色定義）、US-121（condition_payload 驗證規則，v2.1）、US-125（caseyear / case_status 選項遷移，v2.1）
+- **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（A1、A2、A3、A4、A5、B1~B3、F4）

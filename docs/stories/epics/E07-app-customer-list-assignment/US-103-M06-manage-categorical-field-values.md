@@ -1,8 +1,14 @@
+---
+last-updated: 2026-05-19
+version: v2.1-refactor
+change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位」；AC-3 Seed 補 caseyear 8 筆（J5 拍板）+ case_status 4 筆，移除 ob_code_df 依賴描述；新增 AC-11（不回溯規則延伸至 caseyear / case_status）。GAP 覆蓋：A4、A5、E4、E5、E6、J5。"
+---
+
 # US-103：管理類別型欄位的可選值
 
 > **Story ID**：US-103
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
-> **模組**：M06 代碼維護（進階）
+> **模組**：~~M06 代碼維護（進階）~~ **M06 篩選欄位（v2.1 rename）**
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：5
@@ -55,7 +61,11 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 
 ### AC-1：部長 / Admin 查看某 categorical 欄位的可選值列表
 
-- **Given** 部長或 Admin 進入 M06 代碼維護 > POOLDATA 篩選欄位分頁，點擊某個 `field_type = categorical` 欄位的「管理可選值」
+~~（v1.0 原文）進入 M06 代碼維護 > POOLDATA 篩選欄位分頁。~~
+
+**（v2.1 修改）**
+
+- **Given** 部長或 Admin 進入 sidebar **「篩選欄位」**，切換至 **Tab 2「可選值管理」**（由 US-124 統一 rename），點擊某個 `field_type = categorical` 欄位的「管理可選值」
 - **When** 頁面載入
 - **Then** 以表格顯示該欄位現有全部可選值，欄位包含：值（`option_value`）、顯示標籤（`option_label`）、狀態（啟用 / 停用）
 - **And** 停用的可選值仍顯示於列表，以灰色或停用標記區分（不隱藏）
@@ -70,14 +80,20 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 
 ### AC-3：系統首次部署時自動 Seed 各欄位初始可選值
 
+~~（v1.0 原文）CASEYEAR：0~6（各年數）+ 99（不限年數），共 8 筆；SPEC_TP / BEST_CASE：依 OBMCODEDF 當時記錄 seed。~~
+
+**（v2.1 修改）**
+
 - **Given** 系統首次部署或執行初始化腳本
 - **When** Admin 執行初始化
 - **Then** 系統自動 seed 各 categorical 欄位的初始可選值（依「初始 Seed 清單」段落）：
-  - PROD_KIND：至少含 01 / 02 / 03 三筆
+  - PROD_KIND：至少含 01 / 02 / 03 三筆（依 OBMCODEDF 真實 dump 比對確認，GAP E6；具體值由 Phase 3a 補充）
   - LIST_TYPE：01 / 02 / 03 三筆
-  - CASEYEAR：0~6（各年數）+ 99（不限年數），共 8 筆
+  - **CASEYEAR：`0`（0年）、`1`（1年）、`2`（2年）、`3`（3年）、`4`（4年）、`5`（5年）、`6`（6年以上）、`99`（不限年數），共 8 筆**（v2.1 修改，J5 拍板；不採 11 筆；不讀取 ob_code_df）
   - SETTLE_SRC：Y / N 兩筆
-  - SPEC_TP / BEST_CASE：依 OBMCODEDF 當時記錄 seed
+  - SPEC_TP：依 OBMCODEDF 真實 dump 確認（32 筆，GAP E5；具體值由 Phase 3a 補充；**不再依賴 m24 placeholder 3 筆**）
+  - BEST_CASE：依 OBMCODEDF 當時記錄 seed
+  - **CASE_STATUS：`01`（期中，不含當月滿期）、`02`（中結）、`03`（滿期，含當月滿期）、`04`（滿期），共 4 筆**（v2.1 新增，GAP A5/E4；來源為 ob_code_df tbl_id='22' 真實資料；遷入後不再讀取 ob_code_df）
 - **And** seed 為冪等操作（重複執行不產生重複資料）
 
 ### AC-4：部長 / Admin 新增可選值
@@ -126,6 +142,16 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 - **Given** 白名單欄位 `PROD_KIND`（categorical）有 5 個可選值，其中 2 個已停用
 - **When** 部長或 Admin 開啟新名單定義表單，選擇 PROD_KIND 作為篩選欄位
 - **Then** 多選元件只呈現 3 個啟用值，不顯示已停用的 2 個值
+
+### AC-11：caseyear / case_status 選項變更的不回溯語意（v2.1 新增）
+
+> **涵蓋 GAP**：A4、A5（caseyear / case_status 選項管理行為與其他 categorical 欄位一致）
+
+- **Given** 某名單定義的篩選條件已包含 caseyear IN ['1', '2'] 或 case_status IN ['01']；管理員事後透過本頁（Tab 2）停用 caseyear 的某個可選值（如 `2`）或 case_status 的某個值（如 `01`）
+- **When** 觸發月跑（US-081）
+- **Then** 月跑 Stage 1 仍以既有 condition_payload 中固化的值過濾 OBPOOLDATA，不因 caseyear / case_status 可選值被停用而報錯或移除條件
+- **And** 停用的可選值不再出現在**新建**名單定義的 caseyear / case_status 多選元件選項中
+- **And** caseyear / case_status 的不回溯語意與 PROD_KIND / SPEC_TP 等其他 categorical 欄位**完全一致**（沿用 AC-6 / AC-7 既有規則）
 
 ---
 
@@ -198,8 +224,8 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 
 ## 依賴關係
 
-- **Blocked By**：US-102（白名單建立，本 Story 的可選值必須掛載於已存在的 categorical 欄位）、US-100（部長角色定義，確立操作權限）
-- **Blocks**：US-106（新建名單定義草稿階段，動態多選選項來源）
+- **Blocked By**：US-102（白名單建立，本 Story 的可選值必須掛載於已存在的 categorical 欄位）、US-100（部長角色定義，確立操作權限）、US-125（caseyear / case_status Seed 遷移，需先確認白名單條目存在）
+- **Blocks**：US-106（新建名單定義草稿階段，動態多選選項來源）、US-121（INACTIVE 可選值警示，依賴 pooldata_field_option 資料完整）
 
 ---
 
@@ -234,6 +260,7 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-102（POOLDATA 篩選欄位白名單，本 Story 的父資料）、US-092（現有 M06 代碼維護基礎）、US-081（月跑 Stage 1 篩選條件讀取）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-106（新名單定義草稿階段，動態多選選項來源）
+- **相關 Stories**：US-102（POOLDATA 篩選欄位白名單，本 Story 的父資料）、~~US-092（現有 M06 代碼維護基礎）~~（v2.1 DEPRECATED）、US-081（月跑 Stage 1 篩選條件讀取）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-106（新名單定義草稿階段，動態多選選項來源）、US-124（篩選欄位合併頁 Tab 2 入口，v2.1）、US-125（caseyear / case_status Seed 遷移，v2.1）
+- **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（A4、A5、E4、E5、E6、J5）
 - **Reference SP**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`（篩選欄位與可選值初始 seed 來源）
 - **Reference Table**：`reference/TableSchema/OB/OBPOOLDATA.sql`、`reference/TableSchema/OB/OBMCODEDF.sql`（現有代碼維護，categorical 欄位初始值的參照來源）

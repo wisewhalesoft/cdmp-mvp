@@ -1,11 +1,31 @@
+---
+last-updated: 2026-05-19
+version: v2.1-deprecated
+change-summary: "v2.1 廢棄：US-092 管理的 4 個代碼類別（PROD_KIND / SPEC_TP / CASEYEAR / CASE_STATUS）已改由 pooldata_field_option（US-103 + US-125）承接；F068 module 廢除（US-124）。保留歷史紀錄，不可再依據本 Story 進行實作或 spec 撰寫。"
+---
+
 # US-092：E07 相關代碼維護
+
+> **[DEPRECATED — 由 US-102 + US-103 + US-124 + US-125 取代]**
+> 本 Story 已於 **2026-05-19（F050 v2.1 重構）** 廢棄。
+>
+> **廢棄原因**：
+> - 本 Story 所管理的代碼選項來源（`ob_code_df`）已由 `pooldata_field_option`（F076）取代（J1 決議）
+> - PROD_KIND / SPEC_TP / CASEYEAR / CASE_STATUS 4 個類別的可選值維護，改由 **US-103**（管理可選值）+ **US-125**（caseyear / case_status Seed 遷移）承接
+> - `ob_code_df` CRUD 介面（F068 module）由 **US-124** 廢除；sidebar「代碼維護」改名「篩選欄位」
+>
+> **請勿基於本 Story 進行實作或 spec 撰寫。**
+> 原文內容保留作為歷史紀錄。
+> 廢棄時間：2026-05-19（F050 v2.1 重構）
+
+---
 
 > **Story ID**：US-092
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
-> **模組**：M06 基礎代碼維護
-> **優先級**：Must Have
+> **模組**：M06 基礎代碼維護（已廢棄）
+> **優先級**：~~Must Have~~（已廢棄）
 > **階段**：Phase 1（MVP）
-> **預估點數**：5
+> **預估點數**：5（歷史估算，不再適用）
 
 ---
 

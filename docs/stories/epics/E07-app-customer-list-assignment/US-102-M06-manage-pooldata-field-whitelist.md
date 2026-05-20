@@ -1,8 +1,14 @@
+---
+last-updated: 2026-05-19
+version: v2.1-refactor
+change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位」；AC-1 Seed 補 case_status 條目（共 9 筆）；AC-2 頁面入口改為 2-Tab 合併頁（US-124）；新增 AC-10（case_status 白名單條目唯讀保護）。GAP 覆蓋：E3、H1、J4。"
+---
+
 # US-102：管理 POOLDATA 篩選欄位白名單（含欄位類別 metadata）
 
 > **Story ID**：US-102
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
-> **模組**：M06 代碼維護（進階）
+> **模組**：~~M06 代碼維護（進階）~~ **M06 篩選欄位（v2.1 rename）**
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：8
@@ -66,9 +72,13 @@
 
 ### AC-1：系統首次部署時自動 Seed 白名單
 
+~~（v1.0 原文）seed 以下 7 筆啟用欄位（+ 1 筆停用）：PROD_KIND / LIST_TYPE / BEST_CASE / SPEC_TP / CASEYEAR / SETTLE_SRC / MONTH_CNT / PAYT_TERM（停用）。~~
+
+**（v2.1 修改）**
+
 - **Given** 系統首次部署或執行初始化腳本
 - **When** Admin 執行初始化
-- **Then** 系統自動 seed 以下 7 筆啟用欄位（+ 1 筆停用）：
+- **Then** 系統自動 seed 以下 **8 筆啟用欄位（+ 1 筆停用）**，共 9 筆：
   - PROD_KIND（類別型，啟用）
   - LIST_TYPE（類別型，啟用）
   - BEST_CASE（類別型，啟用）
@@ -76,14 +86,19 @@
   - CASEYEAR（類別型，啟用）
   - SETTLE_SRC（類別型，啟用）
   - MONTH_CNT（數值型，啟用）
+  - **CASE_STATUS（類別型，啟用）**（v2.1 新增，GAP E3）
   - PAYT_TERM（數值型，**停用**）
 - **And** 每筆欄位含 `column_name`、`display_name`、`field_type`、`is_active`
 - **And** seed 為冪等操作（重複執行不產生重複資料）
 
 ### AC-2：部長 / Admin 查看白名單列表
 
-- **Given** 部長或 Admin 登入並進入 M06 代碼維護 > POOLDATA 篩選欄位分頁
-- **When** 頁面載入
+~~（v1.0 原文）進入 M06 代碼維護 > POOLDATA 篩選欄位分頁。~~
+
+**（v2.1 修改）**
+
+- **Given** 部長或 Admin 登入並點擊 sidebar **「篩選欄位」**（由 US-124 統一 rename）
+- **When** 頁面載入，切換至 **Tab 1「POOLDATA 篩選欄位」**
 - **Then** 以表格顯示白名單所有欄位，欄位包含：欄位名稱（`column_name`）、顯示名稱（`display_name`）、欄位類別（`field_type`）、狀態（啟用 / 停用）
 - **And** 停用欄位以灰色或標記區分，仍顯示於列表（不隱藏）
 
@@ -138,6 +153,15 @@
 - **Then** 表單元件為多選列表（可選值由 US-103 維護的列表取得）
 - **And** 若 `field_type = numeric`，表單元件為數值範圍輸入（min / max）
 - **And** 若 `field_type = date`，表單元件為日期範圍選擇器
+
+### AC-10：caseyear 與 case_status 白名單條目存在且處長唯讀（v2.1 新增）
+
+> **涵蓋 GAP**：E3（whitelist 新增 case_status 條目）
+
+- **Given** 系統完成初始化（含 v2.1 Seed）
+- **When** 部長、Admin 或處長進入 Tab 1「POOLDATA 篩選欄位」查看白名單列表
+- **Then** 列表中包含 `caseyear`（進件/滿期/中結年數，類別型，啟用）與 `case_status`（案件結清期別，類別型，啟用）兩個條目
+- **And** 處長查看此頁面時，`caseyear` 與 `case_status` 條目旁均無「編輯」或「停用」按鈕（處長唯讀規則沿用 AC-3）
 
 ---
 
@@ -204,8 +228,8 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-092（M06 代碼維護基礎頁面架構，本 Story 為新分頁擴充）、US-100（部長角色定義，確立操作權限）
-- **Blocks**：US-103（類別型欄位可選值維護，依賴本 Story 的 `field_type = categorical` 標記）、US-106（新建名單定義的動態篩選條件欄位選單，依賴本白名單）
+- **Blocked By**：~~US-092（M06 代碼維護基礎頁面架構）~~ **US-124（v2.1：篩選欄位合併頁入口）**、US-100（部長角色定義，確立操作權限）
+- **Blocks**：US-103（類別型欄位可選值維護，依賴本 Story 的 `field_type = categorical` 標記）、US-106（新建名單定義的動態篩選條件欄位選單，依賴本白名單）、US-121（condition_payload columnName 白名單驗證，依賴本白名單條目完整性）
 
 ---
 
@@ -238,6 +262,7 @@
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-092（M06 代碼維護現有頁面）、US-103（POOLDATA 類別型欄位可選值）、US-106（新名單定義草稿階段，條件篩選欄位來源）、US-081（月跑 Stage 1 讀取篩選條件）、US-100（部長角色定義）、US-101（處長唯讀規則）
+- **相關 Stories**：~~US-092（M06 代碼維護現有頁面）~~（v2.1 DEPRECATED）、US-103（POOLDATA 類別型欄位可選值）、US-106（新名單定義草稿階段，條件篩選欄位來源）、US-081（月跑 Stage 1 讀取篩選條件）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-124（篩選欄位合併頁入口，v2.1）、US-125（caseyear / case_status 選項遷移，v2.1）
+- **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（E3、H1、J4）
 - **Reference SP**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`（Stage 1 篩選邏輯，初始 seed 欄位來源）
 - **Reference Table**：`reference/TableSchema/OB/OBPOOLDATA.sql`（OBPOOLDATA 欄位清單，作為白名單欄位 `column_name` 的合法參照）
