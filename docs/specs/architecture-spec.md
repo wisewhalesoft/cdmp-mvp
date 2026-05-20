@@ -3791,7 +3791,11 @@ step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆�
 
 #### AD-E07-18　F050 v2.1 whitelist-driven 名單定義重構架構設計
 
-> **版本**：1.0（2026-05-20）| **作者**：System Architect Agent（Phase 3a）| **對應 GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`
+> **版本**：1.1（2026-05-20）| **作者**：System Architect Agent（Phase 3a + 3b）| **對應 GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`
+>
+> **v1.1 covers 新增**：F050 v2.1.1 / F075 v1.6 / F076 v1.6 / US-126 / US-127 / US-128 / US-129（2026-05-20 業務複核 D1/D2/D4/Q-A/Q-B 決議落地；§18.11）
+>
+> **v1.0 covers**：F050 v2.1 / F051 v2.1 / F068 DEPRECATED / F075 v1.5 / F076 v1.5 相關 GAP-LIST §A~K 解除
 
 ---
 
@@ -3850,11 +3854,11 @@ step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆�
 
 ---
 
-##### 18.3 Migration 序列（E1~E7 解除）
+##### 18.3 Migration 序列（E1~E7 解除 + v2.1.1 補強）
 
-> **範圍**：本節定義 5 個 migration 的邏輯設計。完整 TypeScript 實作由 **Phase 5 tdd-implementation** 執行；本節不寫完整程式碼，僅描述邏輯重點、idempotency 策略與依賴順序。
+> **範圍**：本節定義 7 個 migration 的邏輯設計（v1.0：M1~M5；v1.1 新增：M-A1 / M-A2）。完整 TypeScript 實作由 **Phase 5 tdd-implementation** 執行；本節不寫完整程式碼，僅描述邏輯重點、idempotency 策略與依賴順序。
 
-**命名規範**：沿用 `1711360000NNN-PascalCase.ts`，NNN ≥ 281（現有最高：m280）。
+**命名規範**：沿用 `1711360000NNN-PascalCase.ts`，NNN ≥ 281（現有最高 v1.0：m285；v1.1 新增：m286 / m287）。
 
 ```mermaid
 graph LR
@@ -3864,12 +3868,18 @@ graph LR
     M3 --> M5["M5 (285)\nDeleteObCodeDfRedundantTblIds"]
     M4 --> M5
     F069["F069 service 改讀\npooldata_field_option"] --> M5
+    M5 --> MA1["M-A1 (286)\nSeedBestCaseFieldAndOptions\n(v2.1.1 補強)"]
+    MA1 --> MA2["M-A2 (287)\nDeprecateProdBestColumn\n(v2.1.1 補強)"]
 
     style M5 fill:#f9c,stroke:#c00
     style F069 fill:#ffc,stroke:#990
+    style MA1 fill:#d4edda,stroke:#28a745
+    style MA2 fill:#d4edda,stroke:#28a745
 ```
 
-> **注意**：M5（紅色）為高風險操作（刪除資料列），必須在 M3、M4 及 F069 service 改完後同 PR 部署（§18.2.7 拍板 / §18.7 Step 8）。
+> **注意**：
+> - M5（紅色）為高風險操作（刪除資料列），必須在 M3、M4 及 F069 service 改完後同 PR 部署（§18.2.7 拍板 / §18.7 Step 8）。
+> - M-A1 / M-A2（綠色）為 v2.1.1 補強 migration，依序執行；M-A1 先行確保 `best_case` whitelist + options 就緒（US-129），M-A2 再清空 `prod_best` 資料並放寬 NOT NULL 約束（US-128 / Q-B B3）。兩者邏輯設計詳見 §18.11.3 / §18.11.4。
 
 ###### M1：`1711360000281-AddObListDefinitionConditionPayload.ts`
 
@@ -4316,9 +4326,215 @@ F069 service 修改內容（Phase 5 執行）：
 
 ---
 
-*本節版本 1.0（2026-05-20），由 System Architect Agent（Phase 3a）新增。主要變更：*
-- *新增架構決策 AD-E07-18（F050 v2.1 whitelist-driven 名單定義重構：migration M1~M5 設計 + Service 流程 + Stage 1 動態 SQL + 衍生規則 + F068 廢除步驟 + prod_kind 唯一性語意）*
-- *covers 清單新增 F050 v2.1 / F051 v2.1 / F068 DEPRECATED / F075 v1.5 / F076 v1.5 相關 GAP-LIST §A~K 解除*
+*本節版本 1.1（2026-05-20），由 System Architect Agent（Phase 3a + 3b）更新。*
+- *v1.0 新增：AD-E07-18（F050 v2.1 whitelist-driven 名單定義重構：migration M1~M5 設計 + Service 流程 + Stage 1 動態 SQL + 衍生規則 + F068 廢除步驟 + prod_kind 唯一性語意）*
+- *v1.0 covers：F050 v2.1 / F051 v2.1 / F068 DEPRECATED / F075 v1.5 / F076 v1.5 相關 GAP-LIST §A~K 解除*
+- *v1.1 新增：AD-E07-18 §18.11（F050 v2.1.1 補強架構設計：M-A1 / M-A2 migration + card-type 下拉 API contract + prodBest DTO 處置 + Stage 1 best_case 確認）*
+- *v1.1 covers 新增：F050 v2.1.1 / F075 v1.6 / F076 v1.6 / US-126 / US-127 / US-128 / US-129*
+
+---
+
+##### 18.11 F050 v2.1.1 補強架構設計（US-126/127/128/129，2026-05-20）
+
+> **版本**：1.0（2026-05-20）| **作者**：System Architect Agent（Phase 3b）| **對應 spec**：F050 v2.1.1 / F075 v1.6 / F076 v1.6
+
+---
+
+###### 18.11.1 背景
+
+**觸發事件**：2026-05-20 業務複核決議 D1 / D2 / D4 / Q-A / Q-B。F050 v2.1 whitelist-driven 重構的直接後續補強，4 個 Story 落地（US-126 / US-127 / US-128 / US-129）。
+
+**核心決議摘要**：
+
+| 決議 | 內容 | 對應 Story |
+|---|---|---|
+| D1 | 卡別（`card_type`）從自由文字輸入改為 `ob_card_type` 動態下拉 | US-126（建立頁）/ US-127（編輯頁） |
+| D2 | `prod_best` 一級欄位移除，業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接 | US-128 |
+| D4 | 建立頁 `maxLength={2}` 修正為 5，對齊 `ob_card_type.card_type VARCHAR(5)` | US-126 / US-127 |
+| Q-A | 建立模式只列 `status='active'` 卡別；編輯模式含「現存 inactive 值」disabled 保留（可保留不可重選） | US-127 |
+| Q-B B3 | `ob_list_definition.prod_best` 既有資料一次性清空為 NULL（v2.1 以前確認無業務語意保留價值） | US-128 |
+
+**架構邊界**：本 §18.11 新增 migration 設計（M-A1 / M-A2）、card-type API query param contract、backend DTO 處置決定、Stage 1 `best_case` 確認。前端實作（`list-create-draft-page.tsx` / `list-edit-draft-page.tsx`）屬 tdd-implementation 範疇。
+
+---
+
+###### 18.11.2 設計決策表
+
+| 決策 ID | 決策內容 | 拒絕方案 | 理由 |
+|---|---|---|---|
+| 18.11.1 | M-A1 / M-A2 拆為兩個獨立 migration（286 / 287） | 合併為單一 migration | 語意分離：M-A1 對應 US-129（options seed，可獨立驗收）；M-A2 對應 US-128（schema 修改 + 資料清空）；拆分後 down migration 邊界清晰，避免合併 migration 的 rollback 語意混亂 |
+| 18.11.2 | M-A1 採 UPSERT（`ON CONFLICT DO UPDATE SET option_label`），覆寫既有 m240 的 N='一般案件' label | DO NOTHING（保留舊 label） | m240 的 `best_case N='一般案件'` 與 F076 v1.6 / US-129 Q2 決議（N='非優質案件'）不符；spec 一致性優先；MVP 環境無終端用戶依賴舊 label（user 已確認） |
+| 18.11.3 | M-A2 schema 修改（NOT NULL → NULL）與資料清空（UPDATE SET NULL）合併於同一 migration | schema / 資料拆兩個 migration | 兩者語意緊耦合：資料清空後 schema 才能放寬 NOT NULL；分拆會造成中間狀態（nullable 但資料未清，或反之）；此操作不可逆，分拆無業務收益 |
+| 18.11.4 | 編輯模式 inactive 卡別補填：`GET /card-types?status=all` + 前端側 filter | 新增獨立 endpoint 或新增 `?status=inactive` param | `status=all` 已存在於現有 `ListCardTypesQueryDto`；1 次 API call 前端 filter 最簡實作；無需後端改動；現有 response schema 已含 `status` 欄位足以判斷 |
+| 18.11.5 | Backend DTO `prodBest` 採方案 Y：保留 `@IsOptional()` 接受但 service 層 ignore，不寫入 entity | 方案 X（直接刪除欄位）/ 方案 Z（warn log + 延遲刪除） | 現有測試 fixture 大量含 `prodBest: null`；既有 API 客戶端若仍送此欄位不應 422；方案 X 刪除欄位會導致大量 fixture 需同步更新且破壞 backward-compat；方案 Z 過重，MVP 無 API 客戶端管理需求 |
+| 18.11.6 | Stage 1 `best_case` 走路徑 A 通用 categorical fragment，不加特殊規則 | 新增 `best_case` 特殊 case | `buildCategoricalFragment` 對非 `caseyear` 欄位走通用路徑 `"${colName}" IN (:...vals)`；`best_case` columnName 符合 `/^[a-z][a-z0-9_]{0,63}$/`；無 wildcard 語意（Y/N 均為有效值，無類似 caseyear='99' 的特殊邏輯） |
+
+---
+
+###### 18.11.3 M-A1 設計規格
+
+**`1711360000286-SeedBestCaseFieldAndOptions.ts`**
+
+> 對應：US-129 AC-1 / AC-3 / AC-4；F075 v1.6 AC-1；F076 v1.6 AC-3
+
+| 項目 | 說明 |
+|---|---|
+| **目的** | ① 確保 `pooldata_field_whitelist` 含 `best_case` 條目（防呆）；② 補入 / 修正 `pooldata_field_option` 中 `best_case` Y / N 兩筆 options，label 對齊 F076 v1.6 / US-129 Q2 決議 |
+| **Step 1 — whitelist 防呆 UPSERT** | INSERT INTO `pooldata_field_whitelist` `(column_name='best_case', display_name='優質案件', field_type='categorical', is_active=true)`；PG：`ON CONFLICT (column_name) DO UPDATE SET is_active=true, display_name=EXCLUDED.display_name`；SQLite：`INSERT OR REPLACE INTO` |
+| **Step 2 — options UPSERT** | INSERT INTO `pooldata_field_option` 兩筆：`(best_case, 'Y', '優質案件', true)` / `(best_case, 'N', '非優質案件', true)`；PG：`ON CONFLICT (column_name, option_value) DO UPDATE SET option_label=EXCLUDED.option_label, is_active=true`；SQLite：`INSERT OR REPLACE INTO`（**覆寫 m240 的 N='一般案件' 為 '非優質案件'，對齊 F076 v1.6 / US-129 Q2 決議，§18.11.2 決策 18.11.2**） |
+| **down() 邏輯重點** | DELETE FROM `pooldata_field_option` WHERE `column_name='best_case' AND option_value IN ('Y','N')`（僅刪本 migration seed 的 2 筆，不動管理員透過 F076 手動新增的其他紀錄）；不 rollback whitelist（`best_case` 在 m220 / m280 之前版本即已存在，不屬本 migration 新建） |
+| **Idempotency** | PG UPSERT `ON CONFLICT DO UPDATE`；SQLite `INSERT OR REPLACE INTO`；重複執行結果等冪 |
+| **依賴** | `pooldata_field_whitelist`（m200）及 `pooldata_field_option`（m210）表須存在；無需等待 M1~M5 之特定完成狀態（可在 m285 之後任意時間執行）；**必須在 M-A2（287）之前執行** |
+
+---
+
+###### 18.11.4 M-A2 設計規格
+
+**`1711360000287-DeprecateProdBestColumn.ts`**
+
+> 對應：US-128 AC-3；F050 v2.1.1 §5.3；BR-12 §(2)
+
+| 項目 | 說明 |
+|---|---|
+| **目的** | ① 一次性清空 `ob_list_definition.prod_best` 所有非 NULL 值（Q-B B3「直接清空」決議）；② 放寬 schema 約束 NOT NULL → NULL（deprecated column，為未來 v2.2+ DROP COLUMN 鋪路） |
+| **up() Step 1 — 資料清空** | `UPDATE ob_list_definition SET prod_best = NULL WHERE prod_best IS NOT NULL`（幂等：重複執行 0 affected 不報錯） |
+| **up() Step 2 — 放寬 NOT NULL（PG）** | `ALTER TABLE ob_list_definition ALTER COLUMN prod_best DROP NOT NULL` |
+| **up() Step 2 — 放寬 NOT NULL（SQLite）** | SQLite 不支援 `ALTER COLUMN DROP NOT NULL`；須採 **TypeORM 表重建模式**（`CREATE TABLE ob_list_definition_new ... (prod_best VARCHAR(5) NULL, ...)` → `INSERT INTO new SELECT * FROM old` → `DROP TABLE old` → `ALTER TABLE new RENAME TO ob_list_definition`）；參考既有 M1（`1711360000281-AddObListDefinitionConditionPayload.ts`）中 SQLite `PRAGMA table_info` guard 模式作為範本；完整表重建 SQL 由 **tdd-implementation** 實作 |
+| **down() 邏輯重點** | ① PG：`ALTER TABLE ob_list_definition ALTER COLUMN prod_best SET NOT NULL`（需先確認全列無 NULL，否則 throw）；② `UPDATE ob_list_definition SET prod_best = '' WHERE prod_best IS NULL`（還原空字串，不還原原始資料）；標記 `// down(): emergency rollback only — original data is irrecoverable` |
+| **Idempotency** | UP Step 1 `WHERE IS NOT NULL` 幂等；UP Step 2 PG `ALTER COLUMN DROP NOT NULL` 對已 nullable 欄位再次執行為 no-op |
+| **依賴** | 必須在 M-A1（286）之後執行；entity `ob-list-definition.entity.ts` 的 `prod_best` 欄位宣告需同步由 `@Column({ type: 'varchar', length: 5 })` 改為 `@Column({ type: 'varchar', length: 5, nullable: true })`，型別從 `string` 改為 `string \| null`（**tdd-implementation 執行**） |
+
+**Entity 修改指引（tdd-implementation 執行）**：
+
+`apps/api/src/database/entities/ob-list-definition.entity.ts` 第 68~69 行：
+
+```
+// 修改前
+@Column({ name: 'prod_best', type: 'varchar', length: 5 })
+prod_best: string;
+
+// 修改後
+@Column({ name: 'prod_best', type: 'varchar', length: 5, nullable: true })
+prod_best: string | null;
+```
+
+> **follow-up note（Q2）**：SQLite 表重建 SQL 由 tdd-implementation 依 M1 既有 `PRAGMA table_info` guard 模式實作；須列出 `ob_list_definition` 全欄位清單（`list_no` / `list_nm` / `prod_kind` / `prod_best` / ... / `condition_payload`）確保重建時不遺漏欄位。
+>
+> **follow-up note（Q3）**：dev / CI 環境若開啟 `synchronize: true`，TypeORM 會在 entity 修改後自動同步 DB schema；若同時執行 M-A2 migration，`prod_best` NOT NULL → NULL 的 DDL 可能重複觸發（TypeORM synchronize + migration 各執行一次）。建議 tdd-implementation 在執行 M-A2 前確認 dev / CI 環境的 `synchronize` 設定；若為 `true`，先暫時關閉、執行 migration 後再開啟，避免 schema 狀態與 migration 執行紀錄不一致。
+
+---
+
+###### 18.11.5 API Endpoint 設計：card-type 下拉 query param contract
+
+**既有端點**：`GET /api/v1/assignment/scoring/card-types`（`card-type.controller.ts` / `CardTypeService.listCardTypes`）
+
+**現況**：`ListCardTypesQueryDto` 已支援 `?status='active'|'all'`（`@IsOptional()`，未傳時 service 預設 `active`）。**不新增 endpoint，不新增 query param 值**。
+
+**Query param contract（本次確立）**：
+
+| 參數 | 型別 | 預設值 | 說明 |
+|---|---|---|---|
+| `status` | `'active' \| 'all'` | `'active'`（service 層 fallback） | `active`：只回傳啟用中卡別；`all`：回傳全部含 inactive |
+
+**前端使用模式**：
+
+| 使用情境 | 呼叫方式 | 前端行為 |
+|---|---|---|
+| 建立模式（F050 / US-126） | `GET /card-types`（不傳 status，預設 active） | 只顯示 active 選項，首選項「— 未選擇 —」 |
+| 編輯模式（F051 / US-127） | `GET /card-types?status=all` | 前端側 filter：active 選項正常可選；若名單現存 `card_type` 在 response 中 `status='inactive'` → 加入下拉並設 HTML `disabled`，文字附「（已停用 — 僅供保留舊值）」；若現存 `card_type` 在 `status=all` response 中完全不存在（資料不一致邊界情境） → 顯示 `{cardType}（已停用 — 僅供保留舊值）`，`card_name` / `prod_kind` 顯示「—」 |
+
+**Response shape**：不修改現有 response schema。現有 response 已含 `card_type`、`card_name`、`prod_kind`、`status` 欄位，前端已可由 `status` 欄位判斷 active / inactive，顯示格式 `{card_type} — {card_name}（{prod_kind}）` 由前端組合。
+
+---
+
+###### 18.11.6 Backend DTO 處置決定
+
+**決定：採方案 Y — 保留 `@IsOptional()` 接受 `prodBest` 欄位，但 service 層完全 ignore，不寫入 entity**
+
+**理由**：§18.11.2 決策 18.11.5。
+
+**DTO 現況（不修改）**：
+
+- `apps/api/src/modules/assignment-list/dto/create-list.dto.ts:58~61`：`@IsOptional() @IsString() @MaxLength(5) prodBest?: string | null`
+- `apps/api/src/modules/assignment-list/dto/update-list.dto.ts:53~56`：同上
+
+**Service 層改動指引（tdd-implementation 執行）**：
+
+`apps/api/src/modules/assignment-list/assignment-list.service.ts` 兩處：
+
+| 位置 | 現況 | 改動後 |
+|---|---|---|
+| L378（`createList`，entity 建立區） | `prod_best: dto.prodBest ?? ''` | `prod_best: null`（entity 已 nullable，M-A2 執行後）|
+| L540（`updateList`，entity 更新區） | `existing.prod_best = dto.prodBest ?? ''` | 整行刪除（不再賦值；migration M-A2 已一次性清空，後續寫入維持 NULL，service 不主動覆寫） |
+
+**測試 fixture 處置**：現有測試中 `prodBest: null` 的 fixture **保留即可**（DTO 仍接受此欄位，不 422）；需追加驗證：service 寫入 entity 後 `prod_best` 應為 `null`（非空字串 `''`）。
+
+---
+
+###### 18.11.7 Stage 1 `best_case` Architecture Note
+
+**確認：`best_case` condition 由路徑 A 通用 categorical fragment 邏輯自動處理，無需任何特殊規則。**
+
+**驗證依據**：
+
+- `stage1-query-composer.ts` 的 `buildCategoricalFragment`（L278）：對非 `caseyear` 的 categorical condition 一律走通用路徑，生成 `"${cond.columnName}" IN (:...${paramName})`
+- `best_case` 的 `columnName = 'best_case'` 完全符合 `/^[a-z][a-z0-9_]{0,63}$/` allowlist guard（L62）
+- `ob_pool_data.best_case` 欄位已存在於 entity（`ob-pool-data.entity.ts:297`，`varchar(1) nullable`）且由 ETL 灌入（migration `1711360000142-RelaxObPoolDataNullability.ts` 記錄首次 OBPOOLDATA-Load 暴露 BEST_CASE 有 366,754 列為空，確認 ETL 對應 `BEST_CASE → best_case` 欄位映射已運作）
+- `best_case` 無 wildcard 語意（Y/N 均為有效值，不同於 `caseyear='99'` 的不限年數語意），無需特殊 case
+
+**SQL 行為確認（F050 v2.1.1 BR-12 §(3) 對齊）**：
+
+當 `condition_payload.conditions` 含 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }` 時，Stage 1 路徑 A 生成：
+
+```sql
+"best_case" IN (:...cat0)
+-- params: { cat0: ['Y'] }
+```
+
+對 `ob_pool_data.best_case` 直接過濾，無需 entity column mapping（路徑 A 動態欄位，不走 `PATH_B_MAPPING`）。
+
+**設計架構原則**：此確認強化了 F075 / F076 whitelist-driven 設計的核心優勢 — 任何 categorical 欄位加入 whitelist 後，Stage 1 路徑 A 即可自動支援，**無需修改 query composer**。未來新增篩選欄位只需維護 F075 / F076，月跑邏輯零改動。
+
+---
+
+###### 18.11.8 NFR 對應
+
+| NFR | 架構決策 | 對應設計 |
+|---|---|---|
+| **Correctness（業務語意）** | `best_case` 由 `condition_payload` 承接 `prod_best` 語意（BR-12）| Stage 1 路徑 A 直接對 `ob_pool_data.best_case` 過濾，語意一致 |
+| **Backward-compat** | `prod_best` entity column 保留為 deprecated nullable（NOT NULL 放寬，不 DROP）| 舊讀取端（F048 清單頁、F051 編輯頁 fallback）不中斷；v2.2+ 後再 DROP COLUMN |
+| **Data Safety** | M-A2 down migration 不還原資料，僅還原 NOT NULL 約束 | Q-B B3 一次性清空為不可逆決策；down 附 `// emergency rollback only` 警示 |
+| **Idempotency** | M-A1 全程 UPSERT；M-A2 `WHERE IS NOT NULL` 幂等 | migration 可安全重複執行（CI 環境友善） |
+| **Maintainability** | card-type 下拉採現有 `?status=all` param，無新增 endpoint | 減少 API surface 膨脹；前端側 filter inactive 邏輯集中於 `list-edit-draft-page.tsx` |
+| **Security** | card-type API 仍套用 `DirectorOrSectionChiefGuard`（既有 class-level guard）| 不引入新的存取控制邊界 |
+
+---
+
+###### 18.11.9 風險與 follow-up
+
+###### R8：m240 `best_case N='一般案件'` 被 M-A1 覆寫
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | migration `1711360000240-SeedBestCaseSpecTpOptions.ts` 已 seed `best_case N='一般案件'`；M-A1 UPSERT 將覆寫為「非優質案件」 |
+| **緩解** | user 已確認 MVP 環境無終端用戶依賴舊 label（Q1 決議）；UPSERT 語意可安全覆寫；§18.11.2 決策 18.11.2 記錄 |
+| **追蹤** | M-A1 PR description 需附「m240 N label 覆寫說明」供 reviewer 知悉 |
+
+###### R9：M-A2 SQLite 表重建完整欄位清單遺漏風險
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | SQLite 表重建需手動列出 `ob_list_definition` 全欄位（含 `condition_payload` JSONB / `stage` / `cr_enabled` 等後期新增欄位）；若遺漏任一欄位，重建後資料丟失 |
+| **緩解** | tdd-implementation 實作前必須讀取 `ob-list-definition.entity.ts` 所有 `@Column` 宣告並逐一對應 CREATE TABLE 語句；建議先執行 `PRAGMA table_info(ob_list_definition)` 取得完整欄位清單再組裝 SQL |
+| **追蹤** | M-A2 PR review 時需附 `ob_list_definition` 新舊欄位數量對照 |
+
+###### R10：`ob_list_definition.prod_best` NOT NULL 在 M-A2 前的 service 層 L378 / L540 仍寫空字串
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | tdd-implementation 若先改 service 層（L378 / L540 改為寫 `null`）但 M-A2 尚未執行（column 仍 NOT NULL），PG 會拋 constraint violation；SQLite 同理 |
+| **緩解** | tdd-implementation 執行順序：M-A1 → M-A2 → entity 修改 → service 修改。即 M-A2 執行後 column 已 nullable，service 再改為寫 `null` |
+| **追蹤** | Phase 5 PR checklist 明確標示「service L378 / L540 修改必須在 M-A2 migration 已執行環境上驗證」 |
 
 ---
 
