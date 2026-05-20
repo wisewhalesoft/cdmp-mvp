@@ -457,7 +457,7 @@ export function ListEditDraftPage() {
       }
     >
       <main className="flex-1 p-6">
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="space-y-4">
           {loading && (
             <div className="text-center text-gray-400 py-12" data-testid="edit-loading">
               載入中...

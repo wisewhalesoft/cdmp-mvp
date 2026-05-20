@@ -15,6 +15,8 @@ import {
   ArrowRight,
   ArrowRightCircle,
   Trash2,
+  HelpCircle,
+  Calculator,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -133,6 +135,7 @@ export function ListCreateDraftPage() {
   const [valueDropdownOpen, setValueDropdownOpen] = useState<number | null>(null);
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [inactiveAcknowledged, setInactiveAcknowledged] = useState(false);
+  const [crTooltipOpen, setCrTooltipOpen] = useState(false);
 
   // ─── Whitelist fields / options ───
   const [fields, setFields] = useState<PooldataField[]>([]);
@@ -147,6 +150,10 @@ export function ListCreateDraftPage() {
         return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
       })();
   const prevYm = computePrevYm(currentYm);
+  const currentYmDisplay =
+    currentYm.length === 6 ? `${currentYm.slice(0, 4)}-${currentYm.slice(4)}` : currentYm;
+  const prevYmDisplay =
+    prevYm.length === 6 ? `${prevYm.slice(0, 4)}-${prevYm.slice(4)}` : prevYm;
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [prevLists, setPrevLists] = useState<AssignmentListItem[]>([]);
   const [prevLoading, setPrevLoading] = useState(false);
@@ -272,6 +279,17 @@ export function ListCreateDraftPage() {
   }, [conditions, optionsByColumn]);
 
   const hasInactive = inactiveDetails.length > 0;
+
+  // ─── Stage 0 預覽 mock（對齊 prototype 27a L767-775） ───
+  const previewCount = useMemo(() => {
+    const valid = conditions.filter(isConditionComplete);
+    if (valid.length === 0) return null;
+    let n = 12500;
+    valid.forEach((_c, i) => {
+      n = Math.floor(n * (0.85 - i * 0.08));
+    });
+    return Math.max(0, n);
+  }, [conditions]);
 
   // ─── validation ───
   const validate = useCallback((): string | null => {
@@ -475,20 +493,30 @@ export function ListCreateDraftPage() {
           </span>
         </div>
       }
-      actions={
-        <button
-          type="button"
-          data-testid="btn-open-copy-modal"
-          onClick={handleOpenCopyModal}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-primary border border-blue-200 rounded-md hover:bg-blue-50"
-        >
-          <Copy className="w-4 h-4" />
-          從上月複製
-        </button>
-      }
     >
       <main className="flex-1 p-6">
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="space-y-4">
+          {/* 主標題列：H1 + 月份副標 + 從上月複製 CTA（對齊 prototype 27a L146-156） */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-800">建立草稿名單</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                月份 <code className="font-mono text-primary">{currentYmDisplay}</code> ·
+                將以草稿階段建立，可隨後推進至部門比例。
+              </p>
+            </div>
+            <button
+              type="button"
+              data-testid="btn-open-copy-modal"
+              onClick={handleOpenCopyModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-primary text-primary rounded-md hover:bg-blue-50 shrink-0"
+            >
+              <Copy className="w-4 h-4" />
+              從上月複製
+              <span className="text-[10px] text-gray-400 ml-1">{prevYmDisplay}</span>
+            </button>
+          </div>
+
           {/* 從上月複製成功 banner */}
           {copyFromListNo && (
             <div
@@ -534,14 +562,18 @@ export function ListCreateDraftPage() {
                 <h2 className="text-base font-semibold text-gray-800">基本資訊</h2>
               </div>
 
-              {/* LIST_NO 預覽 */}
+              {/* LIST_NO 預覽（對齊 prototype 27a L180-187） */}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
                   LIST_NO（系統自動產生）
                 </label>
                 <div className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md font-mono text-sm text-gray-500">
                   <Hash className="w-4 h-4 text-gray-400" />
-                  儲存時依當月序號產生
+                  OB{currentYm}
+                  <span className="text-gray-400">XXX</span>
+                  <span className="text-[10px] text-gray-400 ml-1 font-sans">
+                    儲存時依當月序號產生
+                  </span>
                 </div>
               </div>
 
@@ -651,6 +683,16 @@ export function ListCreateDraftPage() {
                     />
                     <span className="text-xs text-gray-500 shrink-0">個月</span>
                   </div>
+                  {listPeriodStart !== '' &&
+                    listPeriodEnd !== '' &&
+                    Number(listPeriodEnd) < Number(listPeriodStart) && (
+                      <p
+                        data-testid="period-error"
+                        className="text-xs text-danger mt-1"
+                      >
+                        結束期數需大於等於開始期數
+                      </p>
+                    )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -741,7 +783,13 @@ export function ListCreateDraftPage() {
                     <Filter className="w-6 h-6 text-gray-400" />
                   </div>
                   <p className="text-sm text-gray-500">尚未新增任何篩選條件</p>
-                  <p className="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    至少需要 1 個條件方可儲存。白名單提供{' '}
+                    <span data-testid="active-fields-count">
+                      {fields.filter((f) => f.isActive).length}
+                    </span>{' '}
+                    個 active 欄位可選。
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -898,9 +946,37 @@ export function ListCreateDraftPage() {
                   </div>
                 </div>
               )}
+
+              {/* Stage 0 預覽 banner（mock，對齊 prototype 27a L307-316） */}
+              {previewCount !== null && (
+                <div
+                  data-testid="stage0-preview-banner"
+                  className="rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm"
+                >
+                  <Calculator className="w-5 h-5 text-primary shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-primary">
+                      依此條件預估命中{' '}
+                      <span data-testid="stage0-preview-count" className="text-lg">
+                        {previewCount.toLocaleString()}
+                      </span>{' '}
+                      筆案件
+                    </p>
+                    <p className="text-xs text-blue-700/80 mt-0.5">
+                      基於上月 POOLDATA 樣本估算（mock）。完整試算請使用 Stage 0 試算頁。
+                    </p>
+                  </div>
+                  <Link
+                    to="/assignment/estimate"
+                    className="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100"
+                  >
+                    開啟 Stage 0 試算
+                  </Link>
+                </div>
+              )}
             </section>
 
-            {/* ─────────── 4: CR 回分規則 ─────────── */}
+            {/* ─────────── 4: CR 回分規則（對齊 prototype 27a L319-345） ─────────── */}
             <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">
@@ -909,18 +985,20 @@ export function ListCreateDraftPage() {
                 <h2 className="text-base font-semibold text-gray-800">CR 回分規則</h2>
                 <span className="text-[10px] text-gray-400 ml-1">per-LIST 設定</span>
               </div>
-              <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50/50 rounded-lg border border-gray-200">
-                <input
-                  type="checkbox"
-                  data-testid="input-crEnabled"
-                  checked={crEnabled}
-                  onChange={(e) => setCrEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-700">
-                    本名單啟用 CR 回分
-                  </span>
+              <div className="flex items-start justify-between gap-4 p-3 bg-gray-50/50 rounded-lg border border-gray-200">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">本名單啟用 CR 回分</span>
+                    <button
+                      type="button"
+                      data-testid="btn-cr-help"
+                      onClick={() => setCrTooltipOpen((v) => !v)}
+                      className="text-gray-400 hover:text-primary"
+                      aria-label="CR 名詞解釋"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <p
                     className={`text-xs mt-0.5 ${crEnabled ? 'text-success' : 'text-gray-500'}`}
                   >
@@ -929,7 +1007,32 @@ export function ListCreateDraftPage() {
                       : '已停用：僅納入新增及尚未被分派的客戶'}
                   </p>
                 </div>
-              </label>
+                {/* Toggle switch（Tailwind peer pattern，對齊 prototype CR switch） */}
+                <label className="relative inline-block w-10 h-[22px] shrink-0 mt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    data-testid="input-crEnabled"
+                    checked={crEnabled}
+                    onChange={(e) => setCrEnabled(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <span className="absolute inset-0 rounded-full bg-gray-300 transition peer-checked:bg-success" />
+                  <span className="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white shadow transition peer-checked:translate-x-[18px]" />
+                </label>
+              </div>
+              {crTooltipOpen && (
+                <div
+                  data-testid="cr-tooltip-box"
+                  className="text-xs text-gray-600 bg-blue-50/50 border border-blue-100 rounded-md p-3"
+                >
+                  <p className="font-semibold text-primary mb-1">
+                    CR = Customer Recycling（客戶回分）
+                  </p>
+                  <p>
+                    啟用時，過去月份曾被分派但未成交（未進入結案流程）的客戶將被重新納入本次分派候選名單。停用則僅納入新增及尚未被分派的客戶。
+                  </p>
+                </div>
+              )}
             </section>
 
             {/* Footer */}
