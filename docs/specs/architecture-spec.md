@@ -3789,6 +3789,531 @@ step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆�
 
 ---
 
+#### AD-E07-18　F050 v2.1 whitelist-driven 名單定義重構架構設計
+
+> **版本**：1.0（2026-05-20）| **作者**：System Architect Agent（Phase 3a）| **對應 GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`
+
+---
+
+##### 18.1 背景與動機
+
+**觸發事件**：F050 v2.1 名單定義 whitelist-driven 重構（GAP-LIST Phase 0，2026-05-19）盤點出 47 個 spec / 實作 / migration 落差。本 AD 為 Phase 3a 架構設計，依 Phase 2 已核可 spec 落地可實作規格。
+
+**GAP-LIST §A1~A6 矛盾解法摘要**：
+
+| 矛盾 # | 問題 | 解法 |
+|---|---|---|
+| A1 / A2 | 5 個一級欄位 vs `condition_payload` 為 source of truth | `condition_payload` 升為必填 source of truth；5 個欄位降為後端衍生 backward-compat（§18.6） |
+| A3 | columnName 驗證未定義 | Service 層補白名單 active check；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（§18.4） |
+| A4 | caseyear 前端 hardcoded 11 筆 | 改為 `pooldata_field_option` 動態載入 8 筆（J5 拍板；§18.3 M4） |
+| A5 | case_status 來源 `ob_code_df` | 遷移至 `pooldata_field_option`（§18.3 M4）後刪除 `ob_code_df` 重疊資料（M5） |
+| A6 | LIKE 三段比對 vs 動態 SQL | Stage 1 改用 `IN (...)` / `BETWEEN`（§18.5）；舊名單 fallback 路徑同樣改用 `IN` |
+
+**J1~J8 決定（已 user 拍板，不可推翻）**：
+
+| 決定 | 內容 |
+|---|---|
+| J1 | F075 + F076 為唯一篩選欄位來源；`ob_code_df` 重疊代碼搬完後刪 |
+| J2 | F068 整個 module 廢除（`ob_code_df` entity 保留） |
+| J3 | 27a / 27b prototype 全重寫（Phase 3b 執行） |
+| J4 | sidebar「代碼維護」rename「篩選欄位」；37a / 37b 合併新 37 之 2-Tab（Phase 3b 執行） |
+| J5 | caseyear options 保留 m22 seed 8 筆（`0`~`6` + `99`） |
+| J6 | 6 個 entity column 保留為 backward-compat read-through |
+| J7 | 五階段流程 guard / rollback / 推進語意完整保留（K1~K5） |
+| J8 | `list_period_start/end/interval` 不入 whitelist，留一級欄位 |
+
+**K1~K5 五階段流程保全聲明**：
+
+| 約束 | 本次重構影響評估 |
+|---|---|
+| K1：`condition_payload` 寫入限 `stage='draft'` | 不破壞；`updateList` 補強確認 conditionPayload 存在時觸發既有 stage guard |
+| K2：F052 軟刪除限 `stage='draft'` | 不影響；`disableList` 邏輯無改動 |
+| K3：Rollback 後 condition_payload 重新可寫 | 不破壞；rollback 路徑（M03a/b/c/d）退回 draft 後 service 層正常接受 conditionPayload |
+| K4：Stage 1 月跑只讀 `stage='ready'` 名單 | 不影響；Stage 0 篩選邏輯未改 |
+| K5：推進 API（F078/F080/F084/F086）不受影響 | 不影響；推進 API 邏輯未改動 |
+
+---
+
+##### 18.2 設計決策表
+
+| 決策 ID | 決策內容 | 拒絕方案 | 理由 |
+|---|---|---|---|
+| 18.2.1 | `condition_payload` 為 source of truth；5 個 entity column 降為後端衍生 backward-compat | 繼續以 5 個 column 作為主要欄位 | 支援動態白名單新增任意欄位；backward-compat 衍生確保舊讀取端不中斷（J6 / BR-10） |
+| 18.2.2 | prod_kind 唯一性採**值集合交集語意**（intersection ≠ ∅ → 衝突） | 完全相等 / 子集語意 | 交集語意防止同客戶被兩名單重複命中；完全相等過寬鬆（`01` vs `01$$02` 不衝突但業務上重疊）；子集語意不對稱（詳見 §18.8） |
+| 18.2.3 | E2 backfill（entity column → `condition_payload`）一次性執行，**無 per-user confirm 流程** | 逐筆 confirm 轉換 | 避免部分轉換 / 部分未轉換造成系統中混亂中間狀態（拍板 2 / J6） |
+| 18.2.4 | F069 `prod_kind_name` 改讀 `pooldata_field_option`（`column_name='prod_kind'`，取 `option_label`） | 繼續讀 `ob_code_df` | M5 刪除 `ob_code_df.PROD_KIND` 資料列後若未改，`prodKindName` 全部回 null；F075/F076 已為唯一篩選欄位來源（J1） |
+| 18.2.5 | PG GIN index 合併入 M1 migration，SQLite 不建 | 獨立 M6 migration | 減少 migration 檔案數；GIN index 與 `ADD COLUMN` 同屬表結構變更，合併部署原子性更佳 |
+| 18.2.6 | error code rename（`LIST_FILTER_FIELD_NOT_IN_WHITELIST` → `CONDITION_COLUMN_NOT_IN_WHITELIST`）不走 DB migration，僅標記 `@deprecated` 並新增新 code | DB migration | error code 為 Service code 層常數，非 DB schema 變更；雙 code 並存支援平滑過渡（Phase 2 拍板 Q1） |
+| **18.2.7（新增拍板）** | **F069 service 修改（`prod_kind_name` 讀 `pooldata_field_option`）必須與 M5 migration 同 commit、同 PR 部署** | F069 單獨先行 / M5 單獨先行 | M5 刪除 `ob_code_df.PROD_KIND` 後若 F069 未改，線上 `prodKindName` 全部回 null（用戶可見 bug）；同 PR 確保 deployment gate（§18.7 Step 8） |
+| **18.2.8（拍板 OQ-TEST-001）** | **`caseyear` condition values 含 `'99'`（不限年數 wildcard）→ 完全 skip `year_cnt` SQL fragment**；values 不含 `'99'` 走正常 `year_cnt IN (...)` 比對 | 將 `99` 視為一般代碼加入 `IN (...)` | `ob_pool_data.year_cnt` 為整數欄位；`'99'` 在舊系統語意為「不限年數」，若加入 `IN` 比對會造成 year_cnt=99 的案件才符合，與業務「全年數皆符合」語意不符（§18.5.1） |
+| **18.2.9（拍板 OQ-TEST-002）** | **Stage 1 路徑 A 遇 `conditions: []`（含 `_backfill_empty: true` 名單）→ skip 該名單，不撈案件，`Logger.warn` 記錄**；assignment_run 不因此 fail；result summary 標 skipped + reason="EMPTY_CONDITIONS" | 允許空 conditions 撈全表 | 空 conditions 撈全表會造成無預期的大量案件湧入，業務風險遠高於 skip；異常名單應在 M2 執行前由人工修補（§18.5.2 / §18.10 R3） |
+
+---
+
+##### 18.3 Migration 序列（E1~E7 解除）
+
+> **範圍**：本節定義 5 個 migration 的邏輯設計。完整 TypeScript 實作由 **Phase 5 tdd-implementation** 執行；本節不寫完整程式碼，僅描述邏輯重點、idempotency 策略與依賴順序。
+
+**命名規範**：沿用 `1711360000NNN-PascalCase.ts`，NNN ≥ 281（現有最高：m280）。
+
+```mermaid
+graph LR
+    M1["M1 (281)\nAddObListDefinitionConditionPayload\n+ GIN index"] --> M2["M2 (282)\nBackfillListDefinitionConditionPayload"]
+    M3["M3 (283)\nUpsertSpecTpOptions32"]
+    M4["M4 (284)\nSeedCaseStatusWhitelistAndOptions"]
+    M3 --> M5["M5 (285)\nDeleteObCodeDfRedundantTblIds"]
+    M4 --> M5
+    F069["F069 service 改讀\npooldata_field_option"] --> M5
+
+    style M5 fill:#f9c,stroke:#c00
+    style F069 fill:#ffc,stroke:#990
+```
+
+> **注意**：M5（紅色）為高風險操作（刪除資料列），必須在 M3、M4 及 F069 service 改完後同 PR 部署（§18.2.7 拍板 / §18.7 Step 8）。
+
+###### M1：`1711360000281-AddObListDefinitionConditionPayload.ts`
+
+**對應 GAP-LIST §E1**
+
+| 項目 | 說明 |
+|---|---|
+| **up() 邏輯重點** | ① PG：`ALTER TABLE ob_list_definition ADD COLUMN IF NOT EXISTS condition_payload JSONB NULL`；② SQLite：先 `PRAGMA table_info(ob_list_definition)` guard 判斷欄位是否存在，若不存在才執行 `ADD COLUMN condition_payload TEXT NULL`；③ PG 補建 GIN index：`CREATE INDEX IF NOT EXISTS idx_ob_list_def_cp_gin ON ob_list_definition USING gin(condition_payload)` |
+| **down() 邏輯重點** | ① PG：`DROP INDEX IF EXISTS idx_ob_list_def_cp_gin`；② `ALTER TABLE ob_list_definition DROP COLUMN IF EXISTS condition_payload` |
+| **Idempotency** | PG `ADD COLUMN IF NOT EXISTS`；SQLite PRAGMA guard；`CREATE INDEX IF NOT EXISTS` |
+| **依賴** | 無前置依賴（可最先執行） |
+
+###### M2：`1711360000282-BackfillListDefinitionConditionPayload.ts`
+
+**對應 GAP-LIST §E2（拍板 2 一次性 backfill）**
+
+| 項目 | 說明 |
+|---|---|
+| **up() 邏輯重點** | ① `SELECT list_no, prod_kind, caseyear, spec_tp, case_status, settle_src FROM ob_list_definition WHERE condition_payload IS NULL`；② 對每筆以 TypeScript loop 組裝 JSON（非純 SQL，原因：SQLite 無 JSONB 函數）；③ 組裝規則詳見 §18.6 衍生規則；④ 若所有 5 欄均為空 / NULL，寫入 `{ "conditions": [], "logic": "AND", "_backfill_empty": true }` 並記錄 `Logger.warn`；**月跑 Stage 1 行為：路徑 A 解析到 `conditions: []` 時 skip 該名單（見 §18.5.2）**；⑤ `UPDATE ob_list_definition SET condition_payload = :json WHERE list_no = :listNo` 逐筆更新；⑥ 每 100 筆記錄 `Logger.log` 進度 |
+| **down() 邏輯重點** | `UPDATE ob_list_definition SET condition_payload = NULL`（全數清空；down M1 會 DROP 欄位） |
+| **Idempotency** | `WHERE condition_payload IS NULL`；重複執行不影響已 backfill 紀錄 |
+| **依賴** | 必須在 M1 之後執行（condition_payload column 須存在） |
+
+###### M3：`1711360000283-UpsertSpecTpOptions32.ts`
+
+**對應 GAP-LIST §E5（取代 m24 placeholder 3 筆，升 ✅ Resolved）**
+
+| 項目 | 說明 |
+|---|---|
+| **up() 邏輯重點** | ① DELETE FROM `pooldata_field_option` WHERE `column_name = 'spec_tp'`（清除 m24 placeholder 3 筆）；② INSERT 32 筆真實 OBMCODEDF dump（TBL_ID='09'，來源：`reference/DumpData/OBMCODEDF_20260505.csv`）；典型代碼：02 / 04 / 05 / 06 / 11 / 12 / 13 / 14 / 15 / 16 / 20 / 21 / 22 / 23 等（完整 32 筆由 Phase 5 從 CSV 讀取）；③ 每筆：`(column_name='spec_tp', option_value=OBMVALUE, option_label=OBMCNAME1, is_active=TRUE)`；④ PG：`ON CONFLICT (column_name, option_value) DO UPDATE SET option_label = EXCLUDED.option_label, is_active = EXCLUDED.is_active`；⑤ SQLite：`INSERT OR REPLACE INTO` |
+| **down() 邏輯重點** | DELETE FROM `pooldata_field_option` WHERE `column_name = 'spec_tp'`；重新 INSERT m24 原 3 筆 placeholder（idempotent） |
+| **Idempotency** | ON CONFLICT UPSERT；DELETE + INSERT 組合冪等 |
+| **依賴** | 無（`pooldata_field_option` 表已存在於 m210）；可與 M4 任意順序執行，但均須在 M5 之前 |
+
+###### M4：`1711360000284-SeedCaseStatusWhitelistAndOptions.ts`
+
+**對應 GAP-LIST §E3（whitelist 新增 case_status）+ §E4（4 筆 options backfill）**
+
+| 項目 | 說明 |
+|---|---|
+| **up() 邏輯重點** | ① Step 1 — INSERT `pooldata_field_whitelist`：`(column_name='case_status', display_name='案件結清期別', field_type='categorical', is_active=TRUE)`；PG `ON CONFLICT (column_name) DO NOTHING`；SQLite `INSERT OR IGNORE`；② Step 2 — INSERT 4 筆 `pooldata_field_option`：`01` 期中（不含當月滿期）/ `02` 中結 / `03` 滿期（含當月滿期）/ `04` 滿期；PG `ON CONFLICT (column_name, option_value) DO NOTHING`；SQLite `INSERT OR IGNORE` |
+| **down() 邏輯重點** | ① DELETE FROM `pooldata_field_option` WHERE `column_name = 'case_status'`（FK 安全：先刪子表）；② DELETE FROM `pooldata_field_whitelist` WHERE `column_name = 'case_status'` |
+| **Idempotency** | DO NOTHING / INSERT OR IGNORE；FK 順序（子表先刪）確保 down 冪等 |
+| **依賴** | `pooldata_field_whitelist`（m200）及 `pooldata_field_option`（m210）表須存在；可與 M3 任意順序，但均須在 M5 之前 |
+
+###### M5：`1711360000285-DeleteObCodeDfRedundantTblIds.ts`
+
+**對應 GAP-LIST §E7（搬完後刪）⚠️ 高風險：刪除資料，須嚴守 §18.7 Step 8 deployment gate**
+
+| 項目 | 說明 |
+|---|---|
+| **up() 邏輯重點** | ① 安全前置確認：讀取 `pooldata_field_option` 中 `column_name IN ('prod_kind', 'spec_tp', 'case_status')` 確認各欄位有 options 資料，若缺任一則 `throw new Error('M5 pre-condition failed: ...')` 阻止 migration；② DELETE FROM `ob_code_df` WHERE `tbl_id IN ('PROD_KIND', 'SPEC_TP', 'CASE_STATUS')`；③ `ob_code_df` entity 及 table 本身保留（J2） |
+| **down() 邏輯重點** | 從 `pooldata_field_option` 對應資料反向 INSERT 回 `ob_code_df`（PROD_KIND / SPEC_TP / CASE_STATUS 三組；注意 tbl_id 大寫常數映射）；標記 `// down(): partial restore, for CI rollback use only` |
+| **Idempotency** | DELETE 冪等（0 affected 不報錯） |
+| **依賴** | ① M3 完成（spec_tp 32 筆已 UPSERT）；② M4 完成（case_status 4 筆已 seed）；③ **F069 service 修改已合入同 PR**（拍板 §18.2.7）——此為 deployment gate，不可早於 F069 改完單獨部署 |
+
+---
+
+##### 18.4 Service 寫入流程（C1~C3 解除）
+
+> 本節描述 `AssignmentListService.createList` / `updateList` 之 v2.1 重構後 transaction flow。不含完整程式碼，供 Phase 5 tdd-implementation 參考。
+
+**新增 private methods**：
+- `validateConditionPayload(payload)`：白名單 active check + reserved field 防呆 + fieldType / values 完整性驗證
+- `deriveBackwardCompatColumns(payload)`：condition_payload → 6 個 entity 值（含衍生規則，詳見 §18.6）
+- `extractProdKindValues(payload)`：取出 `conditions[columnName='prod_kind'].values`（唯一性比對用，詳見 §18.8）
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant S as AssignmentListService
+    participant DB as Database (QueryRunner)
+    participant WR as WhitelistRepo
+    participant OR as OptionRepo
+    participant LR as ListRepo
+    participant AL as AuditLog
+
+    C->>S: createList(dto, actor, currentWorkYm)
+    S->>S: assertNoRunningRun()
+    S->>WR: fetchActiveColumnNames()
+    S->>S: validateConditionPayload(dto.conditionPayload)
+    Note over S: ① conditions.length ≥ 1<br/>② columnName ∈ whitelist active<br/>③ columnName ∉ reserved fields<br/>④ fieldType/values/min/max/dateStart/dateEnd 完整性
+
+    S->>S: deriveBackwardCompatColumns(dto.conditionPayload)
+    Note over S: 返回 { prod_kind, caseyear,<br/>spec_tp, case_status, settle_src }
+
+    S->>S: extractProdKindValues(dto.conditionPayload)
+    S->>LR: findActivePkCardTypeConflict(ym, prodKindValues, cardType)
+    Note over S: 交集語意唯一性檢查（§18.8）
+
+    S->>S: generateNextListNo(currentWorkYm)
+
+    S->>DB: beginTransaction()
+    S->>LR: save(entity)<br/>(含 condition_payload + 6 個衍生欄位)
+    S->>AL: writeAudit(CREATE)
+    S->>DB: commit()
+
+    S->>OR: calculateInactiveOptionWarnings(conditionPayload)
+    Note over S: 非阻擋 warning，transaction 外執行
+
+    S-->>C: { listNo, listNm, status, projectWorkym, stage, warnings }
+```
+
+**updateList 差異點**：
+
+| 步驟 | create | update |
+|---|---|---|
+| `assertNotHistorical` | 不需要 | 需要（防歷史月份覆寫） |
+| stage guard | 不需要（新建固定 draft） | `若 dto.conditionPayload 存在 AND existing.stage ≠ 'draft' → 422 LIST_STAGE_TRANSITION_FORBIDDEN` |
+| `existing.status` check | 不需要 | `status='inactive' → 422 ASSIGNMENT_LIST_INACTIVE` |
+| excludeListNo（唯一性比對） | 不需要 | 需要（排除自身） |
+
+---
+
+##### 18.5 Stage 1 動態 SQL 演算法（D1~D4 解除）
+
+> 本節描述 `AssignmentRunPipelineService` Stage 1 之重構設計。不含完整程式碼，供 Phase 5 tdd-implementation 參考。
+
+**新增 private method**：`buildStage1Query(list: ObListDefinition): QueryBuilder`
+
+```mermaid
+graph TD
+    A["Stage 1 入口\n對每個 validList 執行"] --> B{list.condition_payload\nIS NULL?}
+    B -- "否（新名單）" --> C["路徑 A\nJSON 解析 condition_payload"]
+    B -- "是（舊名單）" --> D["路徑 B\nfallback 讀 5 個 entity column"]
+
+    C --> E["對每個 condition\n依 fieldType 產生 SQL fragment"]
+    E --> E1["categorical →\ncolName IN (:...vals_N)"]
+    E --> E2["numeric →\ncolName BETWEEN :min_N AND :max_N"]
+    E --> E3["date →\ncolName BETWEEN :dateStart_N AND :dateEnd_N"]
+    E1 & E2 & E3 --> F["fragments AND 組合\n+ month_cnt BETWEEN 比對"]
+
+    D --> G["prod_kind → pool_data.prod_kind IN\ncaseyear → year_cnt IN\nspec_tp → spec_tp IN\ncase_status → list_type IN（若非空）\nsettle_src → settle_src IN（若非空）"]
+    G --> F
+
+    F --> H["columnName allowlist check\n/^[a-z][a-z0-9_]{0,63}$/ guard\n不符 → skip + Logger.warn"]
+    H --> I["poolRepo.createQueryBuilder()\n.where(...fragments)\n.andWhere(...params)\n.getMany()"]
+    I --> J["stage1Cases.push(list, pool)"]
+
+    style B fill:#e8f4f8
+    style D fill:#fff3cd
+    style E fill:#d4edda
+```
+
+**路徑 A（新名單）— SQL fragment patterns**：
+
+| fieldType | WHERE 子句 pattern | 參數 |
+|---|---|---|
+| `categorical` | `"ob_pool_data"."${colName}" IN (:...vals_${idx})` | `vals_${idx}: string[]` |
+| `numeric` | `"ob_pool_data"."${colName}" BETWEEN :min_${idx} AND :max_${idx}` | `min_${idx}: number, max_${idx}: number` |
+| `date` | `"ob_pool_data"."${colName}" BETWEEN :dateStart_${idx} AND :dateEnd_${idx}` | `dateStart_${idx}: string, dateEnd_${idx}: string` |
+
+###### §18.5.1 特殊欄位比對規則（拍板 OQ-TEST-001）
+
+**`caseyear` wildcard 規則**：`caseyear` 為 categorical condition 時，在產生 SQL fragment 前需先檢查 values 是否含 `'99'`（不限年數）。
+
+| values 內容 | SQL 行為 | 說明 |
+|---|---|---|
+| 含 `'99'`（無論是否有其他值）| 完全 skip `year_cnt` 比對條件，不加任何 WHERE fragment | `'99'` 語意為「全年數皆符合」；加入 `IN` 只會匹配 year_cnt=99 的案件，業務語意錯誤 |
+| 不含 `'99'` | 正常走 `"ob_pool_data"."year_cnt" IN (:...vals_N)` | 標準 categorical 路徑 |
+
+**判斷範例**：
+
+| condition values | year_cnt fragment | 說明 |
+|---|---|---|
+| `['99']` | 無（skip）| 單選「不限年數」 |
+| `['1', '99', '3']` | 無（skip）| 含 `'99'` 即 wildcard，覆蓋所有年數 |
+| `['1', '3']` | `year_cnt IN ('1', '3')` | 正常比對 |
+| `[]`（空）| 無（skip，但見 §18.5.2）| 空 values 本不應通過 validateConditionPayload |
+
+> **注意**：`caseyear` wildcard 規則僅適用於路徑 A（condition_payload IS NOT NULL）。路徑 B fallback（entity column）之 `caseyear` 欄位若含 `'99'`，同樣 skip `year_cnt` 比對（`'99'.split('$$')` 包含 `'99'` 時不加條件）。
+
+###### §18.5.2 空 conditions 名單 skip（拍板 OQ-TEST-002）
+
+**適用場景**：路徑 A 解析 `condition_payload` 後，若 `conditions.length === 0`（含 M2 backfill 產生的 `_backfill_empty: true` 名單及任何 conditions 陣列為空的異常狀態）。
+
+**Stage 1 行為**：
+
+1. **跳過此名單**：不對 `ob_pool_data` 發出任何查詢，不寫入 `ob_pool_data_list`
+2. **記錄警告**：`Logger.warn('[Stage1] Skipping list ${listNo}: empty conditions (backfilled empty or invalid state)')`
+3. **不中斷月跑**：`assignment_run` 繼續執行其他名單；整體月跑不因此 fail
+4. **result summary 標記**：該名單在月跑結果摘要中列為 skipped，`reason: "EMPTY_CONDITIONS"`
+
+> **設計理由**（對應 §18.2.9）：空 conditions 若不 skip 而改撈全表，會造成無預期大量案件湧入 Stage 2，業務風險極高。異常名單（`_backfill_empty: true`）應在 M2 上線前由人工確認並補值，不應讓月跑自動處理。
+
+**list_period_* 比對（路徑 A / B 共用）**：
+
+```
+month_cnt BETWEEN :periodStart AND :periodEnd
+（若 list_interval > 1）AND (month_cnt - :periodStart) % :interval = 0
+```
+
+**路徑 B（舊名單 fallback）— entity column mapping**：
+
+| entity column | ob_pool_data 欄位 | 空值處置 |
+|---|---|---|
+| `prod_kind` | `prod_kind` | 空字串 → skip（不加此條件） |
+| `caseyear` | `year_cnt` | null → skip |
+| `spec_tp` | `spec_tp` | null → skip |
+| `case_status` | `list_type`（注意：ob_pool_data.list_type，非 ob_list_definition.list_type）| 空字串 → skip |
+| `settle_src` | `settle_src` | null → skip |
+
+**PG vs SQLite 差異處理**：
+
+| 項目 | PostgreSQL | SQLite |
+|---|---|---|
+| `condition_payload` 讀取 | TypeORM 自動反序列化 JSONB → object | `JSON.parse(list.condition_payload as string)` |
+| `IN (:...params)` | 原生支援 | TypeORM 原生支援 |
+| GIN index 效益 | 有效（JSONB 索引） | 無 GIN（全表 scan，測試可接受） |
+| `BETWEEN` | 支援 | 支援 |
+
+**舊 SP LIKE 三段比對完全廢棄聲明**：`LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 已棄用（A6 / D3 解除）。路徑 B fallback 一律改用 `IN (...)`；路徑 A 使用 `IN` / `BETWEEN`。
+
+---
+
+##### 18.6 衍生規則規範（BR-10 / J6）
+
+> `deriveBackwardCompatColumns(payload)` 之完整規則，Phase 5 實作必須嚴格遵守。
+
+**Mapping 演算法**：
+
+對 `payload.conditions` 每個 condition item：
+
+| fieldType | 衍生值 | 說明 |
+|---|---|---|
+| `categorical` | `values.join('$$')` | 多值以 `$$` 分隔（對齊 BR-3 舊格式） |
+| `numeric` | `\`${min}$$${max}\`` | backward-compat 格式；fallback 路徑 BETWEEN 取得 |
+| `date` | `\`${dateStart}$$${dateEnd}\`` | 同上 |
+
+僅衍生 5 個 backward-compat entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）。其他 columnName（如 `birth_date`、`month_cnt`）**忽略**（entity 無對應欄位）。
+
+**無條件之 columnName 對應 entity column 邊界值（核心規則）**：
+
+| entity column | DB 約束 | conditions 無對應 columnName 時的值 | 說明 |
+|---|---|---|---|
+| `prod_kind` | NOT NULL VARCHAR(255) | `''`（空字串）| NOT NULL 不可設 null；空字串代表「未設定此條件」；Stage 1 路徑 B fallback skip 空字串 |
+| `caseyear` | NULL VARCHAR(255) | `null` | nullable，直接設 null |
+| `spec_tp` | NULL VARCHAR(255) | `null` | 同上 |
+| `case_status` | NOT NULL VARCHAR(14) | `''`（空字串）| **重要**：NOT NULL 不可設 null；月跑路徑 B 遇空字串 skip 此欄位比對 |
+| `settle_src` | NULL VARCHAR(6) | `null` | nullable，直接設 null |
+
+**多條件同一 columnName 防禦規則**：
+- `validateConditionPayload` 中補驗「同一 columnName 不得重複出現」，違反回 422 `VALIDATION_ERROR`
+- `deriveBackwardCompatColumns` 中萬一遇到重複（理論上 validateConditionPayload 已攔截）→ last-wins（取陣列最後一筆），不報錯
+
+**M2 backfill 時的 $$ 解析規則**：
+
+| entity column | backfill 讀法 |
+|---|---|
+| `prod_kind` | `prod_kind.split('$$').filter(Boolean)`（NOT NULL，理論上有值）|
+| `caseyear` | `(caseyear ?? '').split('$$').filter(Boolean)`；空陣列 → conditions 不加此欄位 |
+| `spec_tp` | 同 caseyear |
+| `case_status` | `case_status.split('$$').filter(Boolean)`（NOT NULL；若無任何值見 §18.10 R3）|
+| `settle_src` | `(settle_src ?? '').split('$$').filter(Boolean)` |
+
+---
+
+##### 18.7 F068 廢除步驟（§I 解除）
+
+> F068 `apps/api/src/modules/assignment-code/` 整個 module 刪除。執行順序避免中間狀態 compile 失敗。
+
+**Step 1：`app.module.ts`**
+移除 `AssignmentCodeModule` import 宣告與 `imports[]` 陣列項目。
+
+**Step 2：`__tests__/` 下 2 個 spec 檔案刪除**
+- `assignment-code.controller.spec.ts`
+- `assignment-code.service.spec.ts`
+
+**Step 3：`dto/` 下 3 個 DTO 檔案刪除**
+- `create-code.dto.ts`
+- `update-code.dto.ts`
+- `list-codes-query.dto.ts`
+
+**Step 4：`assignment-code.controller.ts` 刪除**
+
+**Step 5：`assignment-code.service.ts` 刪除**
+
+**Step 6：`assignment-code.module.ts` 刪除**
+
+**Step 7：`apps/api/src/modules/assignment-code/` 目錄刪除**（此時應已清空）
+
+**Step 8：`error-codes.ts` — 刪除 3 個專屬 error code**
+
+| error code | 引用現狀 | 處置 |
+|---|---|---|
+| `CODE_TYPE_INVALID` | 僅 `assignment-code/` 內引用（Grep 確認） | 從 `ERROR_CODES` + `ERROR_MESSAGES` 兩個 object 一併刪除 |
+| `CODE_IN_USE` | 同上 | 同上 |
+| `CODE_NOT_FOUND` | 同上（名稱泛用但目前無外部引用） | 同上；若未來其他模組有類似需求，應自定義更具體的錯誤碼 |
+
+**前置驗證**（Step 8 執行前）：Phase 5 執行 `grep -r "CODE_NOT_FOUND\|CODE_IN_USE\|CODE_TYPE_INVALID" apps/api/src --exclude-dir=assignment-code` 確認零引用後才可刪除。
+
+**E2E test 處置**：確認無 E2E suite 呼叫 `/api/v1/assignment/codes/*` 路由；若有則同步標記刪除。路由刪除後驗收標準：以下路由回 404：
+- `GET /api/v1/assignment/codes/:tblId`
+- `POST /api/v1/assignment/codes/:tblId`
+- `PUT /api/v1/assignment/codes/:tblId/:tblCd`
+- `POST /api/v1/assignment/codes/:tblId/:tblCd/disable`
+
+---
+
+⚠️ **M5 deployment gate（拍板 §18.2.7）**：
+
+M5 migration（`DeleteObCodeDfRedundantTblIds`）**必須與 F069 service 修改同 commit、同 PR 部署**。
+
+F069 service 修改內容（Phase 5 執行）：
+- 原：`JOIN ob_code_df WHERE tbl_id = 'PROD_KIND' AND tbl_cd = ob_card_type.prod_kind` 取 `tbl_desc1` 作為 `prodKindName`
+- 改：`JOIN pooldata_field_option WHERE column_name = 'prod_kind' AND option_value = ob_card_type.prod_kind` 取 `option_label` 作為 `prodKindName`
+- 若無對應 option → `prodKindName = null`（UI 顯示「—」，與原行為一致）
+
+**部署順序**（同一 PR 內）：M1 → M2 → M3 → M4 → F069 service → M5。M5 up() 自帶安全前置確認（pre-condition check），若 `pooldata_field_option` 資料不足則 throw，阻止 migration 繼續執行。
+
+---
+
+##### 18.8 prod_kind 唯一性語意（BR-2 補述 / Q5 閉合）
+
+**選定語意：值集合交集（Intersection）不為空 → 衝突**
+
+| 比對語意 | 評估 | 結論 |
+|---|---|---|
+| **交集（∩ ≠ ∅）** | 防止同 prod_kind 代碼的客戶被兩名單重複命中；最嚴格且業務直觀 | **選定** |
+| 完全相等（A = B） | 過寬鬆：`['01']` vs `['01','02']` 不衝突，但 prod_kind=`01` 客戶仍被兩名單都撈到 | 拒絕 |
+| 子集（A ⊆ B 或 B ⊆ A） | 不對稱（需定義方向）；邏輯複雜，超出 MVP 需要 | 拒絕 |
+
+**`findActivePkCardTypeConflict` 重寫邏輯（Phase 5 參考）**：
+
+1. 查詢同 `project_workym + status='active' + card_type` 之所有候選名單
+2. 對每筆候選：
+   - `condition_payload IS NOT NULL` → 取 `extractProdKindValues(候選.condition_payload)`
+   - `condition_payload IS NULL` → 取 `候選.prod_kind.split('$$').filter(Boolean)`
+3. 計算 `input ∩ candidate`：若交集 `size > 0` → 回傳候選 `list_no`（衝突）
+4. `inputProdKindValues.length === 0` → 跳過唯一性檢查（未設定 prod_kind 條件）
+
+**422 LIST_NO_DUPLICATE response detail 結構**：
+
+```json
+{
+  "error": "LIST_NO_DUPLICATE",
+  "message": "相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: OB202605001），請停用既有名單或修改條件",
+  "details": {
+    "conflictListNo": "OB202605001",
+    "conflictingProdKindValues": ["01", "02"],
+    "inputProdKindValues": ["01", "03"],
+    "intersectionValues": ["01"]
+  }
+}
+```
+
+**BR-2 v2.1 補述（供 spec-writer 下輪追補 F050 / F051）**：
+
+> `prod_kind` 唯一性比對以 `condition_payload` 衍生之 values 集合交集語意執行：若新名單之 prod_kind values 集合（來自 condition_payload）與當月同 card_type 既有 active 名單之 prod_kind values 集合有任何交集（∩ ≠ ∅），則回 422 `LIST_NO_DUPLICATE`；若新名單未設定 prod_kind 條件（values 為空），不做唯一性檢查；舊名單（condition_payload IS NULL）之 prod_kind values 從 entity column `$$` 分隔讀取。
+
+---
+
+##### 18.9 NFR 對應
+
+| NFR | 架構決策 | 對應設計 |
+|---|---|---|
+| **Performance** | GIN index（§18.3 M1）+ Stage 1 動態 WHERE（§18.5）| Stage 1 從全表 `O(n)` 降為 JSONB index 過濾；條件越多 WHERE 越精確，案件池縮小效果更佳 |
+| **Performance（backfill）** | M2 分批 Logger.log 每 100 筆 | backfill 為一次性 migration，不影響線上效能；進度可觀察 |
+| **Security** | columnName allowlist `/^[a-z][a-z0-9_]{0,63}$/` guard（§18.5）| 防止儲存在 JSONB 內的 columnName 被篡改後造成 SQL Injection；不符規則的欄位 skip 並記錄 warn，不 crash Stage 1 |
+| **Backward-compat** | 舊名單 fallback 路徑 B（§18.5）+ 5 個 entity column 保留（J6）| `condition_payload IS NULL` 名單月跑不中斷；舊讀取端（F048 / F051 fallback）繼續可用 entity column |
+| **Availability** | M5 deployment gate（§18.2.7）| 防止 `ob_code_df.PROD_KIND` 刪除後 F069 `prodKindName` 全部返回 null 造成可見 bug |
+| **Observability** | M2 backfill 進度 log；Stage 1 路徑 B columnName skip warn log | 可在 log 中觀察 backfill 進度與 Stage 1 的 skip 行為 |
+| **Maintainability** | 單一 source of truth（condition_payload）+ 白名單驅動（F075 / F076）| 業務部長可自助新增篩選欄位而無需重新部署；spec 對齊 data-model.md + F050 §5.4 |
+
+---
+
+##### 18.10 風險與後續 follow-up
+
+###### R1：`prod_kind` entity column NOT NULL 但 v2.1 允許不設定 prod_kind 條件
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | 名單未含 prod_kind condition → 衍生值 `entity.prod_kind = ''`（空字串）；entity 定義無 `nullable: true`，PG 層可寫入但語意不明確 |
+| **緩解** | Stage 1 路徑 B fallback 已設計 skip 空字串；短期可接受。Phase 5 實作時評估是否在 M1 中加 `ALTER COLUMN prod_kind SET DEFAULT ''`（PG），或保持現狀 |
+| **追蹤** | 需在 M1 PR review 時決議 |
+
+###### R2：spec_tp 32 筆完整 OBMVALUE 在本 AD 中未逐一列出
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | M3 migration 依賴 `reference/DumpData/OBMCODEDF_20260505.csv` TBL_ID='09' 的實際內容；若 CSV 讀取有誤，spec_tp options 數量 / 值可能有偏差 |
+| **緩解** | Phase 5 TDD Developer 實作 M3 前必須先讀取 CSV 並核實 32 筆 OBMVALUE；M3 為 UPSERT，日後補充 / 更正仍可追加 migration 修正 |
+| **追蹤** | Phase 5 實作 M3 時需附上從 CSV 讀取的完整 32 筆清單供 reviewer 核實 |
+
+###### R3：M2 backfill 可能產生 `_backfill_empty: true` 異常名單
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | 若既有名單 5 個欄位均為空 / NULL（異常資料），backfill 後產生 `{ "conditions": [], ..., "_backfill_empty": true }`；此類名單無法透過 F051 v2.1 編輯（conditions 為空違反 BR-6） |
+| **緩解** | Phase 5 上線前執行 `SELECT count(*), prod_kind, caseyear, spec_tp, case_status, settle_src FROM ob_list_definition WHERE condition_payload IS NULL GROUP BY ...` 統計異常名單數量；若有業務意義名單，人工補值後再執行 M2 |
+| **追蹤** | M2 PR 合入前需附異常名單數量查詢結果（預期為 0 筆） |
+| **OQ-TEST-002 拍板後處置** | Stage 1 對 `conditions: []` 名單採 skip + `Logger.warn`（§18.5.2 / §18.2.9），避免異常名單撈全表造成業務影響；建議 Phase 5 後續 follow-up 補一個 admin alert 機制，讓管理員在月跑後可察覺 skipped 名單 |
+
+###### R4：F069 spec 尚未於 Phase 2 更新（`prod_kind_name` 依賴 `ob_code_df`）
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | F069 v1.x spec §3 前置條件仍寫「`ob_code_df` 中至少有 PROD_KIND 啟用紀錄」；M5 執行後若 F069 service 未改，`prodKindName` 全部返回 null（用戶可見 bug）|
+| **緩解** | §18.2.7 拍板：F069 service 修改與 M5 同 PR 部署（硬性 gate）；spec-writer 下輪追補 F069 v1.x 版本備注（非本 AD 執行範圍）|
+| **追蹤** | Phase 5 PR checklist 需確認 F069 service 測試通過後才可合入 M5 |
+
+###### R5：SQLite E2E test `condition_payload` TEXT 型別解析
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | E2E 用 SQLite；`condition_payload` 存為 TEXT。若 TypeORM entity 無 transformer，讀取時返回字串而非物件，Stage 1 `buildStage1Query` 會 throw |
+| **緩解** | Phase 5 在 `ObListDefinition` entity 新增 `condition_payload` 欄位時加入 `transformer: { from: (v) => (typeof v === 'string' ? JSON.parse(v) : v), to: JSON.stringify }`；或在 `buildStage1Query` 加防禦型 `typeof === 'string' ? JSON.parse(...)` |
+| **追蹤** | E2E test suite 執行時驗證 Stage 1 路徑 A 可正確解析 condition_payload |
+
+###### R6：caseyear=99 wildcard 語意未對齊月跑 Stage 2 計分（拍板 OQ-TEST-001 衍生）
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | Stage 1 路徑 A 以 wildcard（skip `year_cnt` fragment）處理 `caseyear=['99']`，正確撈入全年數案件；但 Stage 2 `fn_calc_tier_level` 中若有對 `year_cnt` / `caseyear` 進行計分維度比對的邏輯，未必感知到「此名單選了 wildcard caseyear」——可能造成計分結果與業務預期不符 |
+| **緩解** | Phase 5 實作前需查閱 `fn_calc_tier_level.sql` 確認是否有 `caseyear` / `year_cnt` 計分維度；若有，評估 wildcard 情境是否需要特殊處理；若 Stage 2 只讀 `ob_pool_data.year_cnt` 直接計分（不 join ob_list_definition），則無影響 |
+| **追蹤** | Phase 5 開工前列為 spike item；若 Stage 2 無 caseyear 計分維度則關閉此風險 |
+
+---
+
+**Phase 4 test-designer 高風險邊界 case 提示**：
+
+| 優先級 | 邊界 Case | 測試重點 |
+|---|---|---|
+| 極高 | M2 backfill idempotency | 執行兩次 up() 結果相同；backfill 後 condition_payload 可被路徑 A 正確解析 |
+| 極高 | Stage 1 路徑 A / B 並存 | 同月跑內，路徑 A 名單（condition_payload IS NOT NULL）與路徑 B 名單（IS NULL）各走正確路徑，結果不互相干擾 |
+| 高 | case_status 空字串 fallback | 路徑 B：`case_status = ''` 不加 `list_type` 比對條件；與舊名單語意一致 |
+| 高 | prod_kind 交集唯一性 | `['01','02']` vs `['02','03']` → 交集 `['02']` → 422；`['03']` vs `['01','02']` → 無交集 → 通過 |
+| 高 | columnName SQL Injection 防禦 | 植入含非法字元的 columnName → Stage 1 skip 該欄位 + Logger.warn，不 crash |
+| 高 | SQLite JSON 解析（R5）| E2E condition_payload TEXT → object 正確反序列化 |
+| 中 | conditions 含 INACTIVE option | 201 Created + warnings body 正確；Stage 1 月跑仍執行 |
+| 中 | M5 pre-condition 失敗 | `pooldata_field_option` 資料不足時 M5 up() throw，migration 終止 |
+| 中 | F068 route 刪除後 404 確認 | E2E 驗 `/api/v1/assignment/codes/*` 全部回 404 |
+| 中 | K3 rollback 後 condition_payload 重新可寫 | rollback 退回 draft 後 updateList 可正常接受新 conditionPayload |
+| 高 | caseyear=99 wildcard（OQ-TEST-001）| `caseyear=['99']` → Stage 1 無 year_cnt fragment，全年數案件均入選；`caseyear=['1','99']` → 同樣 skip；`caseyear=['1','3']` → `year_cnt IN ('1','3')`（正常路徑） |
+| 高 | 空 conditions 名單 skip（OQ-TEST-002）| `conditions: []` 名單 → Stage 1 skip，不撈案件；Logger.warn 記錄 listNo；月跑不 fail；result summary 含 skipped + reason="EMPTY_CONDITIONS" |
+
+---
+
+*本節版本 1.0（2026-05-20），由 System Architect Agent（Phase 3a）新增。主要變更：*
+- *新增架構決策 AD-E07-18（F050 v2.1 whitelist-driven 名單定義重構：migration M1~M5 設計 + Service 流程 + Stage 1 動態 SQL + 衍生規則 + F068 廢除步驟 + prod_kind 唯一性語意）*
+- *covers 清單新增 F050 v2.1 / F051 v2.1 / F068 DEPRECATED / F075 v1.5 / F076 v1.5 相關 GAP-LIST §A~K 解除*
+
+---
+
 ### E07-G　M02 計分設定擴充 Migration 設計（F069~F072，2026-05-14）
 
 > **範圍**：本節定義 F069~F072（CARD_TYPE CRUD）新增的 3 個 migration 設計草案。實際 TypeORM migration 程式碼由 TDD Developer 實作。
