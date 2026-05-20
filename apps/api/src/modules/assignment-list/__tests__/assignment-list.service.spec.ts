@@ -641,4 +641,59 @@ describe('AssignmentListService', () => {
       expect(res.lists.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  /**
+   * v2.1.1 補強 — K 群組 / Regression guard（fs + regex）
+   *
+   * 依據 [[feedback_grep_negative_lookahead]]：rename / 移除 dead code 之驗證
+   *   必須以 fs.readFileSync + regex 驗證實檔，不可僅靠 Grep 工具（負向 lookahead
+   *   行為跨工具不一致）。
+   *
+   * 對應 test spec：F050-test.md §十四 K 群組（TS-F050-K01a / K01b / K01c）
+   */
+  describe('v2.1.1 regression guard — prodBest dead code removed (K 群組)', () => {
+    it('TS-F050-K01a：backend regression — assignment-list.service.ts 不再含 dto.prodBest 讀取', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const filePath = path.resolve(
+        __dirname,
+        '../assignment-list.service.ts',
+      );
+      const src = fs.readFileSync(filePath, 'utf-8');
+
+      // 不應再含 `dto.prodBest` 讀取
+      expect(src).not.toMatch(/dto\.prodBest/);
+      // 不應再含 `prodBest ??` 寫入 entity 模式
+      expect(src).not.toMatch(/prodBest\s*\?\?/);
+    });
+
+    it('TS-F050-K01b：frontend regression — list-create-draft-page.tsx 不再含 setProdBest / prodBest = / dto.prodBest =', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const filePath = path.resolve(
+        __dirname,
+        '../../../../../web/src/pages/assignment/list-create-draft-page.tsx',
+      );
+      const src = fs.readFileSync(filePath, 'utf-8');
+
+      expect(src).not.toMatch(/setProdBest/);
+      // `prodBest = `（含空白邊界）— 用 \b 確保不誤殺 dto.prodBest 之外的場景；
+      // 此處驗 state assignment 與 DTO 寫入 dead code
+      expect(src).not.toMatch(/\bsetProdBest\b/);
+      expect(src).not.toMatch(/dto\.prodBest\s*=/);
+    });
+
+    it('TS-F050-K01c：frontend regression — list-edit-draft-page.tsx 不再含 setProdBest / prodBest = / dto.prodBest =', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const filePath = path.resolve(
+        __dirname,
+        '../../../../../web/src/pages/assignment/list-edit-draft-page.tsx',
+      );
+      const src = fs.readFileSync(filePath, 'utf-8');
+
+      expect(src).not.toMatch(/\bsetProdBest\b/);
+      expect(src).not.toMatch(/dto\.prodBest\s*=/);
+    });
+  });
 });
