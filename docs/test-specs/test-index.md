@@ -1,6 +1,6 @@
 ---
 type: test-design-index
-version: "2.13"
+version: "2.14"
 status: draft
 last_updated: 2026-05-20
 covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F050, F051, F053, F054, F055, F056, F068, F073, F074, F075, F076]
@@ -10,7 +10,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **測試文件總數**：67 份（4 策略文件 + 56 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1119 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 63** + **E07 M06 篩選欄位管理 F075 共 50** + **E07 M08 Whitelist-Driven F050/F051/F076/F068-deprecated 共 66** + **M01 整合測試 21** + **M01-MIG Migration 測試 26**；另 F039-strategy 4 個策略場景另計）
+> **總測試場景數**：1169 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 63** + **E07 M06 篩選欄位管理 F075 共 53** + **E07 M08 Whitelist-Driven F050/F051/F076/F068-deprecated 共 116** + **M01 整合測試 21** + **M01-MIG Migration 測試 26**；另 F039-strategy 4 個策略場景另計）
+> **F050 v2.1.1 補強（2026-05-20）**：F050 新增 45 個場景（TS-F050-A01~K01c）：US-126 card-type dropdown 建立頁（A/D/E/H 群組）、US-127 card-type dropdown 編輯頁（I 群組）、US-128 prodBest 欄位移除（B/C/F 群組）、US-129 best_case Y/N options seed（A/G 群組）、E2E 整合（J 群組）、Regression Guard fs+regex（K 群組）。F076 v1.6 新增 3 個場景（TS-F076-009~011）：best_case Y/N seed 正確性、N 標籤覆寫驗證（UPSERT DO UPDATE）、冪等。F075 v1.6 新增 3 個場景（TS-F075-051~053）：M-A1 whitelist seed 驗證、冪等、API 整合。共 +50 個場景。
 > **E07 M08 Whitelist-Driven 新增（2026-05-20）**：新增 F050 v2.1（30 場景）、F051 v2.1（19 場景）、F076 v1.5（8 場景）、F068-deprecated（9 場景）測試設計，共 66 個場景。新增 M01-whitelist-driven-integration-test.md（21 場景，含 OQ-TEST-001 caseyear wildcard 3 個 + OQ-TEST-002 _backfill_empty skip 2 個）及 M01-migration-test.md（26 場景，M1~M5）。M06-regression-guards.md 更新 v2.0（+3 個 F068 廢棄 guard）。F075 +2 個 v1.5 配套場景（TS-F075-049/050）。GAP 47/47 + §18.10 10/10 + K1~K5 100% 覆蓋。
 > **E07 M06 篩選欄位管理新增（2026-05-18）**：新增 F075（POOLDATA 篩選欄位白名單管理 v1.4）測試設計，共 48 個場景。涵蓋 `GET /api/v1/pooldata-fields/available-columns` 端點（AC-10~AC-15）、`getAvailableColumns()` service 單元測試（4 場景）、`_inferSuggestedFieldType()` pure function 逐型別驗證（14 場景）、SQLite E2E 權限矩陣 / Feature Flag / 路由排序（8 場景）、PostgreSQL Test Container 過濾邏輯（2 場景）、前端 dropdown / hint 狀態機 / toast（16 場景）、跨模組整合（2 場景）、命名漂移 regression guard（2 場景）。環境策略：方案 C 分層（Guard/路由 → SQLite；過濾邏輯 → `pooldata-available-columns.integration-spec.ts`）。新增 M06 regression guard 文件（`regression/M06-regression-guards.md`）。
 > **E07 M07 角色整合補修 v2.0（2026-05-16）**：business_role 合併重構對齊 AD-E07 v3.0。移除 TC-ORTHO-400~407（正交維度 section，is_sales_manager 廢棄）；TC-E02-100~108 endpoint 更名為 `/business-role`；TC-AUTH-200~205 claim 更名為 `businessRole`；Guard 更名為 DirectorOrAdminGuard / SectionChiefOrAboveGuard，移除 SalesManagerGuard 相關場景。新增：TC-MERGED（合併互斥約束，10 場景）、TC-MIG（m14 遷移，8 場景）、TC-LEGACY（legacy JWT，5 場景）、TC-DEPRECATED（廢棄端點，5 場景）。總場景數由 43 增至 63（+20）。Fixture builder 更新：新增 buildLegacyUser()、移除 buildUserOrthogonalSectionChief() / buildUserWithSalesManagerFlag() / buildUserE07Null()，更名 buildDirectorUser / buildSectionChiefUser / buildRegularUser。新增開放問題 OQ-MIG-001 / OQ-DEPR-001。
@@ -131,17 +132,17 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F073-F074-E02 | E07 角色指派 E02 整合（PATCH /business-role / Guard / JWT / 合併約束 / m14 遷移 / legacy / deprecated） | P0-MVP | [F073-F074-e02-integration-test.md](features/F073-F074-e02-integration-test.md) | 63 | Draft |
 | **E07 M07 小計** | | | **1 file** | **63** | |
 | **E07 M06 篩選欄位管理** | | | | | |
-| F075 | POOLDATA 篩選欄位白名單管理（含 v1.4 available-columns 端點、suggestedFieldType 推斷、dropdown Modal；v1.5 +2 場景） | P0-MVP | [F075-test.md](features/F075-test.md) | 50 | Draft |
-| **E07 M06 小計** | | | **1 file** | **50** | |
+| F075 | POOLDATA 篩選欄位白名單管理（含 v1.4 available-columns 端點、suggestedFieldType 推斷、dropdown Modal；v1.5 +2 場景；v1.6 +3 場景 M-A1 seed 配套） | P0-MVP | [F075-test.md](features/F075-test.md) | 53 | Draft |
+| **E07 M06 小計** | | | **1 file** | **53** | |
 | **E07 M08 Whitelist-Driven 重構** | | | | | |
-| F050 | 建立名單定義（v2.1 whitelist-driven condition_payload） | P0-MVP | [F050-test.md](features/F050-test.md) | 30 | Draft |
+| F050 | 建立名單定義（v2.1 whitelist-driven condition_payload；v2.1.1 +45 場景：US-126/127/128/129 card-type dropdown、prodBest 移除、best_case seed） | P0-MVP | [F050-test.md](features/F050-test.md) | 75 | Draft |
 | F051 | 編輯名單定義（v2.1 whitelist-driven condition_payload） | P0-MVP | [F051-test.md](features/F051-test.md) | 19 | Draft |
-| F076 | 類別型欄位可選值管理（v1.5 seed 重構） | P0-MVP | [F076-test.md](features/F076-test.md) | 8 | Draft |
+| F076 | 類別型欄位可選值管理（v1.5 seed 重構 +8 場景；v1.6 +3 場景 best_case Y/N options 配套） | P0-MVP | [F076-test.md](features/F076-test.md) | 11 | Draft |
 | F068-deprecated | 指派代碼查詢（已廢棄，9 個廢棄驗證場景） | P0-MVP | [F068-deprecated-test.md](features/F068-deprecated-test.md) | 9 | Draft |
 | M01-INT | Whitelist-Driven 條件 Payload 端對端整合測試（含 OQ-TEST-001/002） | P0-MVP | [integration/M01-whitelist-driven-integration-test.md](integration/M01-whitelist-driven-integration-test.md) | 21 | Draft |
 | M01-MIG | F050 v2.1 Migration M1~M5 測試設計 | P0-MVP | [migration/M01-migration-test.md](migration/M01-migration-test.md) | 26 | Draft |
-| **E07 M08 小計** | | | **6 files** | **113** | |
-| **總合計** | | | **60 files** | **1119** | |
+| **E07 M08 小計** | | | **6 files** | **161** | |
+| **總合計** | | | **60 files** | **1169** | |
 
 ---
 

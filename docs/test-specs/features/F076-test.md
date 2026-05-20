@@ -1,21 +1,22 @@
 ---
 type: test-design-feature
 feature_id: F076
-feature_name: 類別型欄位可選值管理（v1.5）
+feature_name: 類別型欄位可選值管理（v1.6）
 priority: P0-MVP
 related_spec: /docs/specs/features/F076-manage-categorical-field-values.md
-spec_version: "1.5"
+spec_version: "1.6"
 covers:
   - F076
   - US-103
   - US-125
+  - US-129
 date: 2026-05-20
 last_updated: 2026-05-20
 ---
 
 # F076：類別型欄位可選值管理（v1.5）— 測試設計
 
-> **v1.5 測試設計範圍**：本文件覆蓋 F076 v1.5 重構 seed 新增的 8 個測試場景：case_status 4 筆 seed 正確性、caseyear 8 筆確認、spec_tp 32 筆真實 dump（非 placeholder）、冪等執行驗證、停用選項的動態載入、停用不回溯語意，及 RBAC 防呆。對應 GAP-LIST §E4、§E5、§E6。v1.0~v1.4 既有 AC（AC-1~AC-10）的測試場景由既有 E2E suite 覆蓋，不在本文件重複列出。
+> **v1.6 測試設計範圍**：本文件覆蓋 F076 v1.5 重構 seed 新增的 8 個測試場景（TS-F076-001~008），以及 v1.6 新增的 F050 v2.1.1 配套場景（TS-F076-009~011）：best_case Y/N 選項 seed 正確性、`'N'` 標籤覆寫驗證（UPSERT DO UPDATE）、及冪等執行。對應 GAP-LIST §E4、§E5、§E6（v1.5）及 F050 v2.1.1 US-129（v1.6）。v1.0~v1.4 既有 AC（AC-1~AC-10）的測試場景由既有 E2E suite 覆蓋，不在本文件重複列出。
 
 ---
 
@@ -157,6 +158,59 @@ last_updated: 2026-05-20
 
 ---
 
+## 五、v1.6 新增測試場景（F050 v2.1.1 best_case Y/N options 配套）
+
+> **v1.6 範圍說明**：F050 v2.1.1 引入 Migration M-A1（`m286-SeedBestCaseFieldAndOptions.ts`），在 `pooldata_field_option` 中 UPSERT `best_case` 欄位的 Y/N 兩個可選值。本節場景驗證 options seed 正確落地，並與 F050-test.md A 群組形成雙向引用。
+>
+> **cross-ref**：`docs/test-specs/features/F050-test.md` § 十四 A 群組：TS-F050-A02（Y/N 2 筆存在）、TS-F050-A03（UPSERT DO UPDATE 語意）、TS-F050-A04（`N` label 覆寫驗證）
+>
+> **大小寫警告**：`best_case` 選項值在 ob_pool_data 中為 ETL 落地的 varchar(1)，儲存為大寫 `'Y'` / `'N'`。所有 mock、seed、assertion 必須使用大寫，否則 Stage 1 `IN` 比對會 silent miss（見 `[[feedback_mock_real_system_contract]]`）。
+
+---
+
+### TS-F076-009：M-A1 seed 後 best_case 有 Y / N 兩筆可選值
+
+- **關聯需求**：US-129 AC-1 / F076 AC-3 / TS-F050-A02（跨 Feature 引用）
+- **測試類型**：Positive / Migration Integration（DB 驗證）
+- **前置條件**：M-A1（`m286-SeedBestCaseFieldAndOptions.ts`）up() 已執行
+- **步驟**：
+  1. 查詢 `SELECT option_value, option_label, is_active FROM pooldata_field_option WHERE column_name = 'best_case' ORDER BY option_value`
+- **預期結果**：
+  - 回傳 2 筆，option_value 分別為 `'N'`、`'Y'`（字母排序）
+  - 兩筆均 `is_active = true`
+  - `'Y'` 的 option_label 含「優質」（例：`'優質案件'`）
+  - `'N'` 的 option_label 含「非優質」（例：`'非優質案件'`）；**不應為「一般案件」**（m240 舊標籤）
+
+---
+
+### TS-F076-010：M-A1 `'N'` 標籤覆寫驗證（UPSERT DO UPDATE — 非 DO NOTHING）
+
+- **關聯需求**：US-129 AC-3 / F076 AC-3 v1.6 / TS-F050-A03、TS-F050-A04（跨 Feature 引用）
+- **測試類型**：Boundary / Migration Integration（DB 驗證）
+- **前置條件**：
+  - `pooldata_field_option` 中已有一筆 `{ column_name: 'best_case', option_value: 'N', option_label: '一般案件' }`（模擬 m240 的舊標籤殘留）
+  - 執行 M-A1 up()
+- **步驟**：
+  1. 查詢 `SELECT option_label FROM pooldata_field_option WHERE column_name = 'best_case' AND option_value = 'N'`
+- **預期結果**：
+  - `option_label` 為 `'非優質案件'`（或設計文件所定義的新標籤）
+  - **不應為** `'一般案件'`（確認 DO UPDATE SET option_label = EXCLUDED.option_label 有效執行，非 DO NOTHING 跳過）
+- **說明**：此場景是 F076 options seed 與 F075 whitelist seed 的關鍵差異——options 必須用 DO UPDATE 以確保標籤可覆寫；whitelist 用 DO NOTHING 因無 label 欄位需更新。
+
+---
+
+### TS-F076-011：best_case options seed 重複執行後仍為 2 筆（冪等）
+
+- **關聯需求**：US-129 AC-5 / F076 AC-3 / TS-F050-A06（跨 Feature 引用）
+- **測試類型**：Boundary / Migration Integration（DB 驗證）
+- **前置條件**：M-A1 up() 已執行一次
+- **步驟**：
+  1. 再次執行 M-A1 up()（第二次）
+  2. 查詢 `SELECT COUNT(*) FROM pooldata_field_option WHERE column_name = 'best_case'`
+- **預期結果**：count = 2（UPSERT 冪等，重複執行不新增重複記錄）
+
+---
+
 ## 附錄：GAP 覆蓋對照
 
 | GAP | 覆蓋場景 |
@@ -164,3 +218,4 @@ last_updated: 2026-05-20
 | E4 | TS-F076-001（case_status 4 筆 seed） |
 | E5 | TS-F076-003（spec_tp 32 筆 dump） |
 | E6 | TS-F076-002（caseyear / prod_kind seed 確認） |
+| F050 v2.1.1 US-129 | TS-F076-009~011（best_case Y/N options seed） |

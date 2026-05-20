@@ -4,8 +4,8 @@ feature_id: F075
 feature_name: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
 priority: P0-MVP
 related_spec: /docs/specs/features/F075-manage-pooldata-field-whitelist.md
-spec_version: "1.4"
-last_updated: 2026-05-18
+spec_version: "1.6"
+last_updated: 2026-05-20
 covers_ac: [AC-10, AC-11, AC-12, AC-13, AC-14, AC-15]
 new_in_v1_4: true
 ---
@@ -752,5 +752,66 @@ new_in_v1_4: true
 | Frontend component（A+B+C+D+E+F+G） | TS-F075-FE-001~016 | 16 |
 | 跨模組整合 | TS-F075-INT-001~002 | 2 |
 | v1.5 新增（F050 v2.1 配套） | TS-F075-049~050 | 2 |
+| v1.6 新增（F050 v2.1.1 M-A1 配套） | TS-F075-051~053 | 3 |
 | Regression Guard（見 M06-regression-guards.md） | TC-GUARD-M06-NAMING-001~002 | 2 |
-| **合計** | | **48** |
+| **合計** | | **51** |
+
+---
+
+## 九、v1.6 新增測試場景（F050 v2.1.1 M-A1 seed 配套）
+
+> **v1.6 範圍說明**：F050 v2.1.1 引入 Migration M-A1（`m286-SeedBestCaseFieldAndOptions.ts`），將 `best_case` 寫入 `pooldata_field_whitelist`，使其成為合法篩選欄位。本節場景驗證此 whitelist seed 正確落地，並與 F050-test.md A 群組（TS-F050-A01~A07）形成雙向引用。
+>
+> **cross-ref**：`docs/test-specs/features/F050-test.md` § 十四 A 群組（Migration M-A1 驗證，TS-F050-A01~A07）
+
+---
+
+### TS-F075-051：M-A1 seed 後 pooldata_field_whitelist 含 best_case 欄位
+
+- **關聯需求**：F075 AC-1 / US-129 AC-2 / TS-F050-A01（跨 Feature 引用）
+- **測試類型**：Positive / Migration Integration（DB 驗證）
+- **前置條件**：M-A1（`m286-SeedBestCaseFieldAndOptions.ts`）up() 已執行；`pooldata_field_whitelist` 中 `best_case` 尚不存在（或 M-A1 為初次執行）
+- **步驟**：
+  1. 查詢 `SELECT column_name, field_type, is_active FROM pooldata_field_whitelist WHERE column_name = 'best_case'`
+- **預期結果**：
+  - 回傳 1 筆
+  - `field_type = 'categorical'`
+  - `is_active = true`
+
+---
+
+### TS-F075-052：M-A1 seed 重複執行後 best_case 在 whitelist 僅 1 筆（DO NOTHING 冪等）
+
+- **關聯需求**：F075 AC-1 / US-129 AC-5（冪等） / TS-F050-A05（跨 Feature 引用）
+- **測試類型**：Boundary / Migration Integration（DB 驗證）
+- **前置條件**：M-A1 up() 已執行一次
+- **步驟**：
+  1. 再次執行 M-A1 up()（第二次）
+  2. 查詢 `SELECT COUNT(*) FROM pooldata_field_whitelist WHERE column_name = 'best_case'`
+- **預期結果**：count = 1（DO NOTHING 語意，重複執行不新增）
+
+---
+
+### TS-F075-053：M-A1 seed 後 GET /api/v1/pooldata-fields/whitelist 回傳含 best_case
+
+- **關聯需求**：F075 AC-1 / F050 AC-6（columnName 需通過 whitelist 驗證）/ TS-F050-A07（跨 Feature 引用）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：M-A1 seed 已執行；應用程式正常啟動
+- **步驟**：
+  1. GET `/api/v1/pooldata-fields/whitelist?active=true`
+  2. 驗證 response 含 best_case
+- **預期結果**：
+  - response items 陣列含 `{ columnName: "best_case", fieldType: "categorical", isActive: true }`
+  - F050 POST 建立名單時 `columnName: "best_case"` 可通過 whitelist 驗證（不回 422 CONDITION_COLUMN_NOT_IN_WHITELIST）
+  - **注意**：`best_case` 的有效選項值為大寫 `'Y'`、`'N'`（ob_pool_data ETL 儲存為 varchar(1) 大寫；mock 必須使用大寫，見 [[feedback_mock_real_system_contract]]）
+
+---
+
+### M-A1 UPSERT 語意說明（for TDD Developer）
+
+> **重要**：M-A1 best_case whitelist 的 INSERT 使用 **`DO NOTHING`**（與 M-A2 M-A1 best_case options 的 `DO UPDATE SET option_label` 不同）。原因：whitelist 欄位本身無 label 欄位需覆寫；而 `pooldata_field_option` 的 best_case 選項（`Y` / `N`）使用 `DO UPDATE SET option_label = EXCLUDED.option_label`，確保覆寫 m240 可能的舊標籤（例如 `N='一般案件'` → `N='非優質案件'`）。
+>
+> - whitelist seed：`INSERT ... ON CONFLICT (column_name) DO NOTHING`
+> - options seed：`INSERT ... ON CONFLICT (column_name, option_value) DO UPDATE SET option_label = EXCLUDED.option_label`
+>
+> **cross-ref**：TS-F050-A03（DO UPDATE 語意驗證）、TS-F050-A04（label 覆寫驗證）
