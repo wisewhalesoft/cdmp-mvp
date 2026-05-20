@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-03-20
+last_updated: 2026-05-20
 ---
 
 # 風險與缺口
@@ -629,3 +629,68 @@ last_updated: 2026-03-20
 - **影響**：若 F042 尚未完成，TS-F043-058 無法執行；扇出時 `inputs['lookup-input']` 的路由正確性只能在整合層驗證，單元測試無法覆蓋
 - **建議**：①F043 TDD 時先跳過 TS-F043-058，以 TS-F043-045~057 單元測試完成 LookupExecutor 實作；②F042 完成後再補充 TS-F043-058 整合測試；③確認 US-058 Technical Notes 描述的 `collectInputs()` 路由邏輯（`edge.targetHandle ?? 'default'`）已在 F042 測試中覆蓋（TS-F042-xxx 系列）
 - **風險等級**：低（有明確的實作與測試順序，非阻斷性風險）
+
+---
+
+## E07 M08 Whitelist-Driven 重構測試風險（2026-05-20 新增）
+
+> 以下 TEST-RISK 項目對應 F050 v2.1 / F051 v2.1 / F076 v1.5 / F068-deprecated 測試設計所識別的風險。
+> 覆蓋 GAP-LIST §A~K 中未能完全確定的測試前提。
+
+### TEST-RISK-001：_backfill_empty 標記的實作位置不明確
+
+- **來源**：OQ-TEST-002 解答 / MT-M2-003 / IT-M01-016
+- **問題**：`_backfill_empty = true` 的具體儲存位置（獨立 DB 欄位 vs condition_payload metadata vs 其他）在規格中未明確定義。測試設計假設存在可查詢的標記欄位，但實際欄位名稱待 architecture-spec §18.2.12 補充。
+- **影響**：IT-M01-016 Step 2 的「查詢 _backfill_empty 標記」驗證步驟需在實作確定後補充具體 SQL
+- **建議**：Phase 5 TDD Developer 在 M2 migration 設計時確認欄位名稱，並回報更新 MT-M2-003 / IT-M01-016 預期結果
+- **風險等級**：中（影響 2 個場景的具體驗證語句，但不影響整體語意）
+
+---
+
+### TEST-RISK-002：Stage 1 生成 SQL 的攔截方式未確定
+
+- **來源**：IT-M01-009、IT-M01-010、IT-M01-011、IT-M01-012
+- **問題**：Stage 1 動態 SQL 生成後，測試無法直接斷言 SQL 字串。驗證需透過：①攔截 ORM query builder log；②查詢 DB 結果（間接驗證）；③在 Service 層注入 SQL spy
+- **影響**：若採用間接驗證（查詢結果），測試資料設計複雜度高；若採用 SQL spy，需 Architecture 確認 test seam 位置
+- **建議**：優先採用「查詢 staging 結果」間接驗證（確認篩選後 ob_pool_data 筆數符合 SQL 邏輯）；test seam（QueryBuilder spy）作為 Unit 補充
+- **風險等級**：中（影響 4 個整合場景的驗證機制，需 Phase 5 決策）
+
+---
+
+### TEST-RISK-003：prod_kind 交集唯一性衝突的確切錯誤碼待確認
+
+- **來源**：IT-M01-018 / TS-F050-013~016
+- **問題**：architecture-spec §18.8 定義 prod_kind 交集唯一性規則，但 error-handling.md v1.15 中未見對應錯誤碼。IT-M01-018 斷言「error_code 含 prod_kind 衝突語意」但無法指定確切錯誤碼。
+- **影響**：測試 assertion 不完整（只驗 HTTP 409，不驗確切 error_code 字串）
+- **建議**：向 Architecture / Product Analyst 確認錯誤碼定義（建議 `PROD_KIND_INTERSECTION_CONFLICT` 或類似）；確認後更新 IT-M01-018 + TS-F050-013
+- **風險等級**：中（影響 error contract 驗證完整性）
+
+---
+
+### TEST-RISK-004：M5 migration 測試只能在 staging/CI 執行，不可自動化於 prod
+
+- **來源**：MT-M5-001~006 / AD-E07-18 §18.4.5（M5 高風險）
+- **問題**：M5 DELETE ob_code_df 為不可逆操作。自動化測試若不小心在 prod 環境執行，將永久刪除生產資料。
+- **影響**：MT-M5-002~006 需要明確的環境隔離機制（如 `NODE_ENV=test` + DB connection guard）
+- **建議**：①在 migration test runner 加入環境檢查（reject prod connection string）；②M5 tests 加 `@skip('prod')` 標記；③ CI pipeline 使用獨立 staging Test Container（不連接 prod DB）
+- **風險等級**：高（誤執行可能導致生產資料永久損失）
+
+---
+
+### TEST-RISK-005：spec_tp 32 筆確認需 Phase 5 Developer 讀取 CSV
+
+- **來源**：TS-F076-003 / MT-M3-001
+- **問題**：`reference/DumpData/OBMCODEDF_20260505.csv` 中 TBL_ID='09' 的確切筆數由 test-designer 估計為 32，但未實際讀取 CSV 驗證。若實際筆數非 32，MT-M3-001 的 count assertion 將失敗。
+- **影響**：MT-M3-001 的 `count = 32` assertion 可能需要調整
+- **建議**：Phase 5 TDD Developer 在撰寫 M3 migration 前讀取 CSV（`SELECT COUNT(*) WHERE TBL_ID='09'`），確認確切筆數，並更新 MT-M3-001 / TS-F076-003 的 assertion value
+- **風險等級**：低（可修正，不影響測試邏輯正確性）
+
+---
+
+### TEST-RISK-006：caseyear wildcard 語意（99）的 Stage 1 SQL 生成邊界尚待 Architecture 確認
+
+- **來源**：IT-M01-013、IT-M01-014 / OQ-TEST-001 解答
+- **問題**：OQ-TEST-001 解答確認 values 含 99 → 不加 year_cnt 條件。但未確認：①若 values=['99'] 且無其他 categorical 條件，Stage 1 是否生成完全無 WHERE 的 SQL（可能全表掃描）；②values=['99','0'] 時是否正確跳過（而非只跳過 99 的部分）
+- **影響**：IT-M01-013/014 的 SQL 攔截驗證需確認「完全無 year_cnt 條件」vs「year_cnt IS NULL 條件」的差異
+- **建議**：Architecture 確認 Stage 1 SQL 生成邏輯：caseyear=99 wildcard 時完全省略 year_cnt JOIN/WHERE 子句，而非生成 `year_cnt IS NULL`；若邊界未定義，IT-M01-013 將成為 Architecture 決策的 regression guard
+- **風險等級**：中（影響全表掃描效能風險評估）

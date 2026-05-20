@@ -1,11 +1,11 @@
 ---
 type: test-design-regression-guards
 module: M06
-module_name: 篩選欄位管理（POOLDATA 白名單）
-covers: [F075]
-version: 1.0
+module_name: 篩選欄位管理（POOLDATA 白名單）+ F068 廢棄驗證
+covers: [F075, F068]
+version: 2.0
 status: draft
-last_updated: 2026-05-18
+last_updated: 2026-05-20
 sources:
   - C:\Users\cacab\.claude\agent-memory\test-designer\MEMORY.md（feedback_tdd_naming_drift / feedback_grep_negative_lookahead）
   - docs/test-specs/features/F075-test.md（Glossary 節 + RISK-F075-002/004）
@@ -29,6 +29,9 @@ sources:
 |----------|------|------|----------------|
 | TC-GUARD-M06-NAMING-001 | 命名存在性 | spec + prototype 關鍵字出現次數驗證（正向掃描） | F075 |
 | TC-GUARD-M06-NAMING-002 | 命名漂移 | source code 禁用識別符不得存在（負向掃描） | F075 |
+| TC-GUARD-M06-F068-001 | 廢棄模組刪除 | F068 assignment-code 模組目錄與 import 不存在（F050 v2.1 配套） | F068（deprecated） |
+| TC-GUARD-M06-F068-002 | 廢棄錯誤碼刪除 | F068 廢棄錯誤碼字串不得存在於 src/（負向掃描） | F068（deprecated） |
+| TC-GUARD-M06-SIDEBAR-001 | 廢棄 Sidebar 入口 | Sidebar 不含 F068 指派代碼入口（DOM + 靜態掃描） | F068（deprecated） |
 
 ---
 
@@ -137,14 +140,106 @@ sources:
 
 ---
 
+---
+
+## Guard 3：F068 廢棄模組目錄與 Import 刪除驗證
+
+### TC-GUARD-M06-F068-001
+
+**分類**：Static Analysis / Build-time 防護（F050 v2.1 配套）
+**引發原因**：F050 v2.1 重構刪除整個 `assignment-code/` module（AD-E07-18 §18.2.11）。若 PR 合併後此目錄或 app.module.ts 中的 import 仍存在，代表刪除不完整，會導致廢棄路由復活。
+
+**驗證目標**：
+
+| 驗證項目 | 預期 |
+|---------|------|
+| `src/` 下 `assignment-code/` 目錄存在性 | 不存在（`fs.existsSync` 回傳 false） |
+| `src/app.module.ts` 含 `AssignmentCodeModule` import | 出現次數 = 0 |
+| `src/` 下任意 `.ts` 含 `assignment-code.module` 字串 | 出現次數 = 0 |
+| `src/` 下任意 `.ts` 含 `AssignmentCodeController` 字串 | 出現次數 = 0 |
+| `src/` 下任意 `.ts` 含 `AssignmentCodeService` 字串 | 出現次數 = 0 |
+
+**步驟**：
+
+1. `fs.existsSync('src/assignment-code/')` 斷言為 false
+2. 讀取 `src/app.module.ts`，統計 `AssignmentCodeModule` 出現次數，斷言 = 0
+3. glob 掃描 `src/**/*.ts`，統計 `assignment-code.module`、`AssignmentCodeController`、`AssignmentCodeService` 出現次數，各斷言 = 0
+
+**預期結果**：全部斷言通過（F068 模組完整刪除）
+
+**失敗判定**：任一目錄仍存在或識別符仍存在 → F068 廢棄刪除不完整，需補完 PR
+
+---
+
+## Guard 4：F068 廢棄錯誤碼不存在於 src/
+
+### TC-GUARD-M06-F068-002
+
+**分類**：Static Analysis / Build-time 防護（F050 v2.1 配套）
+**引發原因**：F068 廢棄時須同步刪除 3 個錯誤碼常數與所有引用。殘留的錯誤碼字串會讓 error-handling 規格不一致，也可能導致測試引用不存在的常數而靜默失敗。
+
+**廢棄錯誤碼掃描清單（src/ 零比對）**：
+
+| 廢棄錯誤碼 | 說明 |
+|-----------|------|
+| `ASSIGNMENT_CODE_NOT_FOUND` | F068 指派代碼不存在錯誤碼 |
+| `ASSIGNMENT_CODE_DUPLICATE` | F068 指派代碼重複錯誤碼 |
+| `ASSIGNMENT_CODE_INVALID_FORMAT` | F068 格式驗證錯誤碼 |
+
+**掃描範圍**：`src/**/*.ts`、`src/**/*.tsx`
+
+**步驟**：
+
+1. glob 掃描所有 `.ts` / `.tsx` 檔案
+2. 對 3 個廢棄錯誤碼各統計出現次數
+3. 斷言各出現次數 = 0
+
+**預期結果**：3 個廢棄錯誤碼全部出現 0 次
+
+**失敗判定**：任一錯誤碼出現次數 > 0 → 廢棄未完整，需尋找殘留引用並刪除
+
+---
+
+## Guard 5：Sidebar 不含 F068 廢棄入口
+
+### TC-GUARD-M06-SIDEBAR-001
+
+**分類**：Static Analysis + Frontend Component 防護（F050 v2.1 配套）
+**引發原因**：F068 廢棄時前端 Sidebar 需同步移除「指派代碼」導覽入口。若殘留（即使 CSS 隱藏），使用者仍可能嘗試存取廢棄路由，導致 404 困惑體驗。本 guard 雙重驗證：靜態掃描 + DOM 驗證。
+
+**驗證目標 A — 靜態掃描（Sidebar 相關 .tsx 檔）**：
+
+| 禁用字串 | 掃描範圍 | 預期 |
+|---------|---------|------|
+| `assignment-code` | Sidebar `.tsx` 檔 | 出現次數 = 0 |
+| `指派代碼` | Sidebar `.tsx` 檔 | 出現次數 = 0（路由或 label 均不含） |
+| `AssignmentCode` | Sidebar `.tsx` 檔 | 出現次數 = 0 |
+
+**驗證目標 B — RTL Component 測試**：
+
+1. 渲染 `<Sidebar>` 組件（任意角色 JWT）
+2. `screen.queryByText('指派代碼')` 斷言回傳 `null`
+3. `screen.queryByRole('link', { name: /assignment/i })` 斷言回傳 `null`
+
+**不接受的實作方式**：`display: none` / `visibility: hidden` / `aria-hidden="true"` — 必須 DOM 完全不渲染
+
+**預期結果**：靜態掃描零比對 + RTL 斷言 null，通過
+
+**失敗判定**：任一比對有結果 → Sidebar 廢棄入口殘留，需刪除
+
+---
+
 ## 執行優先順序
 
 依缺陷嚴重度排列：
 
 | 優先 | Guard ID | 嚴重度 | 理由 |
 |------|----------|--------|------|
-| 1 | TC-GUARD-M06-NAMING-002 | High | 實作端識別符錯誤導致 API contract 不一致，前後端斷裂 |
-| 2 | TC-GUARD-M06-NAMING-001 | Medium | spec / prototype 命名漂移，影響下游 agent 實作正確性 |
+| 1 | TC-GUARD-M06-F068-001 | Critical | F068 廢棄路由若殘留，會導致不應存在的 API 回應 |
+| 2 | TC-GUARD-M06-NAMING-002 | High | 實作端識別符錯誤導致 API contract 不一致，前後端斷裂 |
+| 3 | TC-GUARD-M06-F068-002 | High | 廢棄錯誤碼殘留影響 error-handling contract |
+| 4 | TC-GUARD-M06-SIDEBAR-001 | Medium | Sidebar 廢棄入口影響使用者體驗，可能觸發 404 |
+| 5 | TC-GUARD-M06-NAMING-001 | Medium | spec / prototype 命名漂移，影響下游 agent 實作正確性 |
 
 ---
 
@@ -152,6 +247,7 @@ sources:
 
 - `docs/test-specs/features/F075-test.md` §Glossary — 完整識別符防漂移清單
 - `docs/test-specs/features/F075-test.md` §七「迴歸防護參考」— 本文件引用點
-- `docs/specs/features/F075-manage-pooldata-field-whitelist.md` §13 v1.4 — 附帶清理說明（prototype + FE footer `WHITELIST_FIELD_DUPLICATE` 修正）
+- `docs/test-specs/features/F068-deprecated-test.md` — F068 完整廢棄驗證場景
+- `docs/specs/features/F075-manage-pooldata-field-whitelist.md` §13 v1.4 — 附帶清理說明
 - `docs/test-specs/regression/M02-regression-guards.md` — M02 模組防護範本（格式參照）
 - `C:\Users\cacab\.claude\agent-memory\test-designer\MEMORY.md` — feedback_tdd_naming_drift, feedback_grep_negative_lookahead

@@ -699,11 +699,46 @@ new_in_v1_4: true
 
 ---
 
+## 八、v1.5 新增測試場景（F050 v2.1 重構配套）
+
+> 以下 2 個場景對應 F075 v1.5 修訂（whitelist seed 從 5 筆更新為 6 筆，加入 case_status）及 F050 v2.1 whitelist-driven 整合需求。
+
+### TS-F075-049：whitelist seed 含 case_status 欄位（v1.5，共 6 筆）
+
+- **關聯需求**：F075 AC-1 v1.5 / F076 AC-3 v1.5 / MT-M4-002
+- **測試類型**：Positive / Migration Integration（DB 驗證）
+- **前置條件**：M4（`1711360000284-SeedCaseStatusWhitelistAndOptions.ts`）up() 已執行
+- **步驟**：
+  1. 查詢 `SELECT COUNT(*) FROM pooldata_field_whitelist WHERE is_active = true`
+  2. 查詢 `SELECT column_name FROM pooldata_field_whitelist WHERE column_name = 'case_status'`
+- **預期結果**：
+  - whitelist 共 6 筆（prod_kind / caseyear / spec_tp / case_status / settle_src + 1 筆視 spec 確認）
+  - `case_status` 欄位存在，`field_type = 'categorical'`，`is_active = true`
+
+---
+
+### TS-F075-050：GET /api/v1/pooldata-fields/whitelist 回傳 case_status（v1.5 整合）
+
+- **關聯需求**：F075 AC-1 v1.5 / F050 AC-6（columnName 需通過 whitelist 驗證）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：M4 seed 已執行；應用程式正常啟動
+- **步驟**：
+  1. GET `/api/v1/pooldata-fields/whitelist?active=true`
+  2. 驗證 response 中含 case_status 欄位
+- **預期結果**：
+  - response items 陣列含 `{ columnName: "case_status", fieldType: "categorical", isActive: true }`
+  - F050 POST 建立名單時 `columnName: "case_status"` 可通過 whitelist 驗證（不回 422 CONDITION_COLUMN_NOT_IN_WHITELIST）
+
+---
+
 ## 七、迴歸防護參考
 
 - `docs/test-specs/regression/M06-regression-guards.md`（本 Feature 對應迴歸防護文件）
   - TC-GUARD-M06-NAMING-001：spec + prototype 關鍵字存在性 / 禁用字串掃描
   - TC-GUARD-M06-NAMING-002：source code 禁用識別符掃描
+  - TC-GUARD-M06-F068-001：F068 module 目錄刪除驗證（F050 v2.1 配套）
+  - TC-GUARD-M06-F068-002：F068 廢棄錯誤碼不存在於 src/ 驗證
+  - TC-GUARD-M06-SIDEBAR-001：Sidebar 不含 F068 廢棄入口（F050 v2.1 配套）
 
 ---
 
@@ -716,5 +751,6 @@ new_in_v1_4: true
 | Backend Integration — PostgreSQL TC（A） | TS-F075-INT-BE-001~002 | 2 |
 | Frontend component（A+B+C+D+E+F+G） | TS-F075-FE-001~016 | 16 |
 | 跨模組整合 | TS-F075-INT-001~002 | 2 |
+| v1.5 新增（F050 v2.1 配套） | TS-F075-049~050 | 2 |
 | Regression Guard（見 M06-regression-guards.md） | TC-GUARD-M06-NAMING-001~002 | 2 |
 | **合計** | | **48** |
