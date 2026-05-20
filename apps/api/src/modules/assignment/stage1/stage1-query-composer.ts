@@ -142,11 +142,31 @@ function buildPathA(
       continue;
     }
 
-    // 波 2~5 補：numeric / date / 其他
+    if (cond.fieldType === 'numeric') {
+      const built = buildNumericFragment(cond, paramIdx, warnings);
+      if (built) {
+        fragments.push(built.fragment);
+        Object.assign(params, built.params);
+        paramIdx += 1;
+      }
+      continue;
+    }
+
+    if (cond.fieldType === 'date') {
+      const built = buildDateFragment(cond, paramIdx, warnings);
+      if (built) {
+        fragments.push(built.fragment);
+        Object.assign(params, built.params);
+        paramIdx += 1;
+      }
+      continue;
+    }
+
+    // 未知 fieldType（理論上 validateConditionPayload 應已攔截）
     warnings.push({
       code: 'UNKNOWN_FIELD_TYPE',
       columnName: cond.columnName,
-      reason: `fieldType=${cond.fieldType} not yet supported`,
+      reason: `fieldType=${(cond as { fieldType?: string }).fieldType} not supported`,
     });
   }
 
@@ -221,5 +241,78 @@ function buildCategoricalFragment(
   return {
     fragment: `"${cond.columnName}" IN (:...${paramName})`,
     params: { [paramName]: cond.values },
+  };
+}
+
+/**
+ * 建構 numeric fragment：
+ *   - `"colName" BETWEEN :minN AND :maxN`
+ *   - 缺 min 或 max → skip + warn
+ */
+function buildNumericFragment(
+  cond: { columnName: string; min?: number; max?: number },
+  paramIdx: number,
+  warnings: Stage1ComposerWarning[],
+): { fragment: string; params: Record<string, unknown> } | null {
+  if (!SAFE_COLUMN_NAME_RE.test(cond.columnName)) {
+    warnings.push({
+      code: 'INVALID_COLUMN_NAME',
+      columnName: cond.columnName,
+      reason: `columnName violates ${SAFE_COLUMN_NAME_RE}`,
+    });
+    return null;
+  }
+
+  if (cond.min === undefined || cond.min === null || cond.max === undefined || cond.max === null) {
+    warnings.push({
+      code: 'INCOMPLETE_NUMERIC_RANGE',
+      columnName: cond.columnName,
+      reason: 'min or max missing',
+    });
+    return null;
+  }
+
+  const minParam = `numMin${paramIdx}`;
+  const maxParam = `numMax${paramIdx}`;
+  return {
+    fragment: `"${cond.columnName}" BETWEEN :${minParam} AND :${maxParam}`,
+    params: { [minParam]: cond.min, [maxParam]: cond.max },
+  };
+}
+
+/**
+ * 建構 date fragment：
+ *   - `"colName" BETWEEN :dateStartN AND :dateEndN`
+ *   - 缺 dateStart 或 dateEnd → skip + warn
+ *   - 日期值保留 ISO 字串（'YYYY-MM-DD'），PG / SQLite 均相容
+ */
+function buildDateFragment(
+  cond: { columnName: string; dateStart?: string; dateEnd?: string },
+  paramIdx: number,
+  warnings: Stage1ComposerWarning[],
+): { fragment: string; params: Record<string, unknown> } | null {
+  if (!SAFE_COLUMN_NAME_RE.test(cond.columnName)) {
+    warnings.push({
+      code: 'INVALID_COLUMN_NAME',
+      columnName: cond.columnName,
+      reason: `columnName violates ${SAFE_COLUMN_NAME_RE}`,
+    });
+    return null;
+  }
+
+  if (!cond.dateStart || !cond.dateEnd) {
+    warnings.push({
+      code: 'INCOMPLETE_DATE_RANGE',
+      columnName: cond.columnName,
+      reason: 'dateStart or dateEnd missing',
+    });
+    return null;
+  }
+
+  const startParam = `dateStart${paramIdx}`;
+  const endParam = `dateEnd${paramIdx}`;
+  return {
+    fragment: `"${cond.columnName}" BETWEEN :${startParam} AND :${endParam}`,
+    params: { [startParam]: cond.dateStart, [endParam]: cond.dateEnd },
   };
 }

@@ -144,3 +144,127 @@ describe('Stage1QueryComposer 波 1 — Path A categorical', () => {
     expect(result.where).toBeNull();
   });
 });
+
+// ===========================================================================
+// 波 2：Path A numeric + date
+// ===========================================================================
+
+describe('Stage1QueryComposer 波 2 — Path A numeric + date', () => {
+  it('UCQ-006：numeric condition → 產生 BETWEEN（或 >=/<=）fragment', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'year_cnt', fieldType: 'numeric', min: 2, max: 5 },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"year_cnt"');
+    // 接受 BETWEEN 或 >= AND <= 兩種等價寫法
+    expect(result.where).toMatch(/BETWEEN|>=/);
+    // 應有 min/max 兩個參數
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContain(2);
+    expect(paramVals).toContain(5);
+  });
+
+  it('UCQ-007：numeric condition min=max=同值 → 仍產生有效 fragment', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'month_cnt', fieldType: 'numeric', min: 10, max: 10 },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"month_cnt"');
+  });
+
+  it('UCQ-008：numeric 缺 min 或 max → skip 該 fragment + warning INCOMPLETE_NUMERIC_RANGE', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'year_cnt', fieldType: 'numeric', min: 2 }, // 缺 max
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    // 只有此一條件，全部 skip → skipReason='EMPTY_CONDITIONS'
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.warnings.some((w) => w.code === 'INCOMPLETE_NUMERIC_RANGE')).toBe(true);
+  });
+
+  it('UCQ-009：date condition → 產生 BETWEEN（或 >=/<=）fragment，dateStart/dateEnd 保留 ISO 字串', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          {
+            columnName: 'eff_date',
+            fieldType: 'date',
+            dateStart: '2024-01-01',
+            dateEnd: '2024-12-31',
+          },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"eff_date"');
+    expect(result.where).toMatch(/BETWEEN|>=/);
+    const paramVals = Object.values(result.params);
+    expect(paramVals).toContain('2024-01-01');
+    expect(paramVals).toContain('2024-12-31');
+  });
+
+  it('UCQ-010：date condition 缺 dateStart 或 dateEnd → skip + INCOMPLETE_DATE_RANGE', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'eff_date', fieldType: 'date', dateStart: '2024-01-01' }, // 缺 dateEnd
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(result.warnings.some((w) => w.code === 'INCOMPLETE_DATE_RANGE')).toBe(true);
+  });
+
+  it('UCQ-011：mixed categorical + numeric + date 三條件 → 三個 fragment AND 連接', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'year_cnt', fieldType: 'numeric', min: 1, max: 5 },
+          {
+            columnName: 'eff_date',
+            fieldType: 'date',
+            dateStart: '2024-01-01',
+            dateEnd: '2024-12-31',
+          },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    // 三 fragment → 至少兩個 AND 連接
+    const andCount = (result.where ?? '').match(/AND/g)?.length ?? 0;
+    expect(andCount).toBeGreaterThanOrEqual(2);
+    expect(result.where).toContain('"prod_kind"');
+    expect(result.where).toContain('"year_cnt"');
+    expect(result.where).toContain('"eff_date"');
+  });
+});
