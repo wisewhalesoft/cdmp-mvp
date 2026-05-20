@@ -1,71 +1,53 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsIn,
+  IsDefined,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { ConditionPayloadDto } from './condition-payload.dto';
 
 /**
- * F050 v2.0 POST /api/v1/assignment/lists
+ * F050 v2.1 POST /api/v1/assignment/lists（路由 v1：/lists；spec 標 list-definitions，本階段沿用實作）
  *
- * 必填欄位（spec §5.1）：list_nm / prod_kind / caseyear / spec_tp /
- *   case_status / list_period_start / list_period_end / list_interval / settle_src
+ * v2.1 重寫（2026-05-20 / AD-E07-18）：
+ *   - 移除 v2.0 之 prodKind / caseYear / specTp / caseStatus / settleSrc 5 個一級欄位
+ *     （改由後端依 conditionPayload 衍生填入 entity column，BR-10 / §18.6）
+ *   - conditionPayload 升為必填 source of truth（§F050 §5.4）
  *
- * 多值欄位以 `$$` 分隔字串儲存（spec BR-3 / data-model.md L844）。
+ * 必填欄位（spec §5.1 v2.1）：list_nm / list_period_start / list_period_end /
+ *   list_interval / conditionPayload（至少 1 個 conditions）
  *
- * 系統管理欄位（list_no / list_type / project_workym / status / audit）
+ * 系統管理欄位（list_no / list_type / project_workym / status / stage / audit）
  *   不在表單中，由 service 端產生。
  */
 export class CreateListDto {
   @IsString()
   @IsNotEmpty({ message: '此欄位為必填' })
   @MaxLength(45)
-  listNm: string;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  prodKind: string;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  caseYear: string; // 多選 `$$` 分隔（例：'1$$2'）
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  specTp: string; // 多選 `$$` 分隔
-
-  /**
-   * case_status：必填多選（spec AC-7b / BR-6）。
-   * 多值以 `$$` 分隔（例：'01$$02'），可選代碼來源 `ob_code_df` tbl_id='CASE_STATUS'。
-   * 422 `CASE_STATUS_REQUIRED` 由 service 額外驗證（spec API §6.1）。
-   */
-  @IsString({ message: '案件結清期別為必填，請至少選取一項' })
-  @IsNotEmpty({ message: '案件結清期別為必填，請至少選取一項' })
-  caseStatus: string;
+  listNm!: string;
 
   @IsInt()
   @Min(0)
   @Max(999)
-  listPeriodStart: number;
+  listPeriodStart!: number;
 
   @IsInt()
   @Min(0)
   @Max(999)
-  listPeriodEnd: number;
+  listPeriodEnd!: number;
 
   @IsInt()
   @Min(0)
   @Max(999)
-  listInterval: number;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  settleSrc: string;
+  listInterval!: number;
 
   // 選填欄位
   @IsOptional()
@@ -82,30 +64,22 @@ export class CreateListDto {
   @IsBoolean()
   crEnabled?: boolean;
 
-  // spec §6.1：選填，用於稽核紀錄來源
+  // spec §6.1：選填，用於稽核紀錄來源（前端 copy 模式，service 校驗 source legacy）
   @IsOptional()
   @IsString()
   copyFromListNo?: string | null;
 
   /**
-   * F050 v2.0 動態篩選條件（data-model.md L850）
+   * F050 v2.1 動態篩選條件（必填；§F050 §5.4 JSON Schema）。
    *
-   * schema: `{ conditions: [{ columnName, fieldType, values?, ... }], logic: 'AND' | 'OR' }`
-   *
-   * 本 MVP 批次（P2 補完）：尚未持久化至 ob_list_definition.condition_payload 欄位
-   * （該欄位 migration 未實作），但接受 DTO 並用於 WHITELIST_OPTION_INACTIVE warning 計算。
-   *
-   * 後續批次將補 entity column + migration + 月跑 Stage 1 動態 SQL 組成。
+   * Service 層另校驗：
+   *   - 每 columnName ∈ F075 active whitelist（CONDITION_COLUMN_NOT_IN_WHITELIST）
+   *   - columnName ∉ {list_period_start, list_period_end, list_interval}（RESERVED_FIELD_IN_CONDITIONS）
+   *   - 同 columnName 不重複（VALIDATION_ERROR）
    */
-  @IsOptional()
-  conditionPayload?: {
-    conditions?: Array<{
-      columnName: string;
-      fieldType?: string;
-      values?: string[];
-      [k: string]: unknown;
-    }>;
-    logic?: 'AND' | 'OR';
-    [k: string]: unknown;
-  };
+  @IsDefined({ message: 'conditionPayload 為必填' })
+  @IsObject({ message: 'conditionPayload 必須為物件' })
+  @ValidateNested()
+  @Type(() => ConditionPayloadDto)
+  conditionPayload!: ConditionPayloadDto;
 }

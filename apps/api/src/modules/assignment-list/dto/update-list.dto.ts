@@ -1,60 +1,49 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { ConditionPayloadDto } from './condition-payload.dto';
 
 /**
- * F051 v2.0 PUT /api/v1/assignment/lists/:listNo
+ * F051 v2.1 PUT /api/v1/assignment/lists/:listNo
  *
- * 與 CreateListDto 同欄位（不含 copyFromListNo），覆寫式更新。
- * `case_status` 必填（不允許清空，spec AC-6b / BR-6）。
+ * v2.1 重寫（2026-05-20 / AD-E07-18）：
+ *   - 移除 v2.0 之 prodKind / caseYear / specTp / caseStatus / settleSrc 5 個一級欄位
+ *     （後端依 conditionPayload 衍生填入 entity column）
+ *   - conditionPayload 為 OPTIONAL（舊名單 condition_payload IS NULL 可只送 listNm 等非篩選欄位）；
+ *     service 層判斷 4-state（new + provided / new + omitted / legacy + provided / legacy + omitted）
+ *
+ * 不接受 copyFromListNo（屬 Create 專屬）。
  */
 export class UpdateListDto {
   @IsString()
   @IsNotEmpty({ message: '此欄位為必填' })
   @MaxLength(45)
-  listNm: string;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  prodKind: string;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  caseYear: string;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  specTp: string;
-
-  @IsString({ message: '案件結清期別為必填，請至少選取一項' })
-  @IsNotEmpty({ message: '案件結清期別為必填，請至少選取一項' })
-  caseStatus: string;
+  listNm!: string;
 
   @IsInt()
   @Min(0)
   @Max(999)
-  listPeriodStart: number;
+  listPeriodStart!: number;
 
   @IsInt()
   @Min(0)
   @Max(999)
-  listPeriodEnd: number;
+  listPeriodEnd!: number;
 
   @IsInt()
   @Min(0)
   @Max(999)
-  listInterval: number;
-
-  @IsString()
-  @IsNotEmpty({ message: '此欄位為必填' })
-  settleSrc: string;
+  listInterval!: number;
 
   @IsOptional()
   @IsString()
@@ -71,18 +60,17 @@ export class UpdateListDto {
   crEnabled?: boolean;
 
   /**
-   * F051 v2.0 / F050 v2.0 一致：動態篩選條件（data-model.md L850）。
-   * 接受 DTO 並用於 WHITELIST_OPTION_INACTIVE warning 計算（不持久化於本批次）。
+   * F051 v2.1 動態篩選條件（OPTIONAL；§F050 §5.4 JSON Schema）。
+   *
+   * 4-state semantics（service 層處理）：
+   *   - existing.condition_payload IS NULL + dto.conditionPayload provided → 422 LEGACY_LIST_CONDITION_READONLY
+   *   - existing.condition_payload IS NULL + dto.conditionPayload undefined → OK（PUT 非篩選欄位）
+   *   - existing.condition_payload NOT NULL + dto.conditionPayload undefined → 422 VALIDATION_ERROR
+   *   - existing.condition_payload NOT NULL + dto.conditionPayload provided + stage='draft' → 正常覆寫
    */
   @IsOptional()
-  conditionPayload?: {
-    conditions?: Array<{
-      columnName: string;
-      fieldType?: string;
-      values?: string[];
-      [k: string]: unknown;
-    }>;
-    logic?: 'AND' | 'OR';
-    [k: string]: unknown;
-  };
+  @IsObject({ message: 'conditionPayload 必須為物件' })
+  @ValidateNested()
+  @Type(() => ConditionPayloadDto)
+  conditionPayload?: ConditionPayloadDto;
 }
