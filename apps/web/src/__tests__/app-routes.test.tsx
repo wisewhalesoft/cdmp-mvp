@@ -14,6 +14,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from '../App';
+import { ToastProvider } from '@/components/ui/toast';
 import * as authStore from '@/stores/auth-store';
 
 vi.mock('@/stores/auth-store', () => ({
@@ -41,7 +42,9 @@ vi.mock('@/api/assignment-list');
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
