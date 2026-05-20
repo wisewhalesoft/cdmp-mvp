@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>代碼維護 — 客戶名單分派 - CDMP</title>
+  <title>篩選欄位 — 客戶名單分派 - CDMP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -15,15 +15,26 @@
   <style>
     body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .modal-backdrop { background: rgba(0,0,0,0.5); }
-    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
     .tab-btn { position: relative; }
     .tab-btn.active { color: #2563EB; }
     .tab-btn.active::after {
       content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #2563EB;
     }
+    @keyframes slide-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .animate-slide-in { animation: slide-in 0.25s ease-out; }
   </style>
 </head>
 <body class="bg-bg min-h-screen">
+
+  <!--
+    ============================================================================
+    React component 拆分提示（Phase 5 tdd-implementation 取用，不執行）
+    - FieldBasePage 為 Tab 容器；FieldBasePage.FieldsTab / OptionsTab 為兩個內嵌頁
+    - FieldBasePage.TabRouter 同步 URL ?tab=fields|options
+    - 移植來源：37a-pooldata-whitelist.html (Tab 1) + 37b-categorical-field-values.html (Tab 2)
+    - 廢除 F068 ob_code_df CRUD（v2.1 / J2）
+    ============================================================================
+  -->
 
   <!-- ===== Sidebar ===== -->
   <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
@@ -32,95 +43,51 @@
       <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
     </div>
     <nav class="flex-1 py-3">
-
-      <!-- Group: 資料治理 -->
       <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
-      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="users" class="w-4 h-4"></i>帳號管理
-      </a>
-      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="database" class="w-4 h-4"></i>資料來源
-      </a>
-      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取
-      </a>
-      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline
-      </a>
-
-      <!-- Divider -->
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
       <div class="mx-5 my-3 border-t border-border"></div>
-
-      <!-- Group: 應用模組 -->
       <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
-      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="contact" class="w-4 h-4"></i>Customer 360
-      </a>
-
-      <!-- Collapsible：客戶名單分派 -->
-      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="false"
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="true"
         class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <span class="flex items-center gap-3">
-          <i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派
-        </span>
+        <span class="flex items-center gap-3"><i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派</span>
         <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200"></i>
       </button>
       <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 0px;">
-      <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
-        <i data-lucide="tags" class="w-4 h-4"></i>代碼維護
-      </a>
-      <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定
-      </a>
-      <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義
-      </a>
-      <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定
-      </a>
-      <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例
-      </a>
-      <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱
-      </a>
-      <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要
-      </a>
-      <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
-      </a>
-      <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
-      </a>
-      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
-      </a>
-      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
-      </a>
-      <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="history" class="w-4 h-4"></i>執行歷史
-      </a>
-      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
-      </a>
-      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
-      </a>
-      <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
-      <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
-        <i data-lucide="archive" class="w-4 h-4"></i>比例設定
-        <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
-      </a>
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="filter" class="w-4 h-4"></i>篩選欄位</a>
+        <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+        <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+        <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
+        <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例</a>
+        <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱</a>
+        <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
+        <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="activity" class="w-4 h-4"></i>執行進度</a>
+        <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要</a>
+        <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+        <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
+        <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
+        <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
+        <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
+          <i data-lucide="archive" class="w-4 h-4"></i>比例設定
+          <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
+        </a>
       </div>
     </nav>
   </aside>
 
   <!-- ===== Header ===== -->
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
-    <h1 class="text-base font-semibold text-gray-800">代碼維護</h1>
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2 text-sm">
+      <span class="text-gray-500">客戶名單分派</span>
+      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
+      <span class="font-semibold text-gray-800">篩選欄位</span>
+    </div>
+    <div class="flex items-center gap-3">
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
@@ -131,7 +98,7 @@
         </select>
       </div>
       <div id="role-badge-container"></div>
-      <span class="text-sm text-gray-600" id="user-name">王部長</span>
+      <span class="text-sm text-gray-600" id="user-name">王小明</span>
     </div>
   </header>
 
@@ -139,13 +106,13 @@
   <main class="ml-56 pt-14">
 
     <!-- 業務員封鎖卡片 -->
-    <div id="salesBlockedBanner" class="hidden p-6">
+    <div id="userBlockedBanner" class="hidden p-6">
       <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
         <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
           <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
         </div>
         <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
-        <p class="text-sm text-gray-500 max-w-md">「代碼維護」為部長 / Admin / 處長專屬功能。業務員角色請至 Customer 360 查看您被分派的客戶名單。</p>
+        <p class="text-sm text-gray-500 max-w-md">「篩選欄位」為部長 / Admin / 處長專屬功能。業務員角色請至 Customer 360 查看您被分派的客戶名單。</p>
         <a href="25-customer-360-list.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
           <i data-lucide="contact" class="w-4 h-4"></i>前往 Customer 360
         </a>
@@ -153,669 +120,654 @@
     </div>
 
     <div id="mainContent">
-    <!-- Demo Bar -->
-    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-gray-400 mr-1">Demo:</span>
-      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常清單</button>
-      <button onclick="showDemoState('effective-only')" id="demo-effective-only" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">僅顯示生效中</button>
-      <button onclick="showDemoState('expired-included')" id="demo-expired-included" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">含已過期代碼</button>
+
+    <!-- 標題列 -->
+    <div class="px-6 pt-5 pb-3">
+      <h1 class="text-xl font-semibold text-gray-800">篩選欄位</h1>
+      <p class="text-sm text-gray-500 mt-1">F075 v1.5 白名單 + F076 v1.5 類別型欄位可選值（v2.1 取代 F068 代碼維護）</p>
     </div>
 
-    <div class="p-6">
-
-      <!-- Scope 提示 -->
-      <div class="mb-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
-        <i data-lucide="lock" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-        <div>
-          <p class="font-semibold text-primary">本功能限定 E07 三類代碼維護（BR-1）</p>
-          <p class="text-xs text-gray-600 mt-0.5">
-            <code>PROD_KIND</code>（產品類別）/ <code>SPEC_TP</code>（專案類別）/ <code>CASE_STATUS</code>（案件結清期別）。
-            其他 <code>tbl_id</code> 一律回傳 422 <code>CODE_TYPE_INVALID</code>。資料表 <code>ob_code_df</code> · <code>system_id = 'OB'</code>（OQ-E07-11 ✅ 2026-05-05 確認）
-          </p>
-          <p class="text-xs text-gray-500 mt-1">
-            <i data-lucide="info" class="w-3 h-3 inline-block align-text-bottom"></i>
-            <span class="font-medium">AD-E07-14 tbl_id 英文常數映射</span>：原系統 <code>'01'</code>→<code>PROD_KIND</code>、<code>'02'</code>→<code>SPEC_TP</code>、<code>'22'</code>→<code>CASE_STATUS</code>（CDMP 兩階段 migration 後改用英文常數，畫面與 API 一律使用英文常數）。
-          </p>
-          <p class="text-xs text-amber-700 mt-1 flex items-start gap-1">
-            <i data-lucide="alert-triangle" class="w-3 h-3 mt-0.5 shrink-0"></i>
-            <span><span class="font-medium">CASEYEAR 不在本功能維護範圍</span>：探查 <code>reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235</code> 發現舊系統 CASEYEAR 為前端 hard-coded 0~10 共 11 個 CheckBox，不從 <code>ob_code_df</code> 動態載入；CDMP 沿用此設計，由 F050/F051 表單前端固定提供。</span>
-          </p>
+    <!-- v2.1 廢除通知（顯示一次） -->
+    <div class="px-6 mb-3">
+      <div class="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+        <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+        <div class="flex-1">
+          <p class="font-semibold text-amber-900">F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）已於 v2.1 廢除</p>
+          <p class="mt-0.5">PROD_KIND / SPEC_TP / CASE_STATUS 之可選值已遷移至本頁「可選值管理」（F076 v1.5）；舊 <code>ob_code_df</code> 表中對應 <code>tbl_id</code> 之資料於 Phase 3a migration 後刪除。caseyear 與 settle_src 之可選值亦由本頁統一管理（J1 / J2 / E4 / E5）。</p>
         </div>
       </div>
+    </div>
 
-      <!-- E07 重構：M06 進階維護入口（F075 / F076） -->
-      <div class="mb-5">
-        <div class="flex items-center gap-2 mb-2.5">
-          <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
-          <h2 class="text-sm font-semibold text-gray-800">進階維護</h2>
-          <span class="text-[10px] text-gray-400 px-1.5 py-0.5 bg-blue-50 text-primary rounded border border-blue-200">E07 重構新增</span>
-          <span class="text-xs text-gray-500">— F075 / F076 v1.4：篩選欄位管理與類別型欄位可選值</span>
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          <!-- 入口 1：F075 篩選欄位管理 -->
-          <a href="37a-pooldata-whitelist.html"
-            class="group bg-white border border-border rounded-lg p-4 hover:border-primary hover:shadow-md transition flex items-start gap-3">
-            <div class="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition">
-              <i data-lucide="filter" class="w-5 h-5 text-primary"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">篩選欄位管理</h3>
-                <span class="text-[10px] text-gray-400 font-mono">F075</span>
-              </div>
-              <p class="text-xs text-gray-500 leading-relaxed">管理可作為名單定義條件的 <code>OBPOOLDATA</code> 欄位，並為每個欄位標記 <code>field_type</code>（numeric / categorical / date）驅動 US-106 新表單條件元件型態。</p>
-              <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
-                <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>pooldata_field_whitelist</span>
-                <span>·</span>
-                <span class="inline-flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>部長 + Admin</span>
-                <span>·</span>
-                <span class="inline-flex items-center gap-1"><i data-lucide="package" class="w-3 h-3"></i>Seed 8 筆</span>
-              </div>
-            </div>
-            <i data-lucide="arrow-up-right" class="w-4 h-4 text-gray-300 group-hover:text-primary transition shrink-0"></i>
-          </a>
-
-          <!-- 入口 2：F076 類別型欄位可選值 -->
-          <a href="37b-categorical-field-values.html"
-            class="group bg-white border border-border rounded-lg p-4 hover:border-primary hover:shadow-md transition flex items-start gap-3">
-            <div class="w-10 h-10 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition">
-              <i data-lucide="list-checks" class="w-5 h-5 text-purple-600"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <h3 class="text-sm font-semibold text-gray-900 group-hover:text-primary transition">類別型欄位可選值</h3>
-                <span class="text-[10px] text-gray-400 font-mono">F076</span>
-              </div>
-              <p class="text-xs text-gray-500 leading-relaxed">管理篩選欄位清單中 <code>field_type = 'categorical'</code> 欄位的選項清單（<code>option_value</code> / <code>option_label</code>），供新名單定義表單之多選元件動態載入；含 PO 決議 F076-C 軟停用機制。</p>
-              <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
-                <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3 h-3"></i>categorical_field_value</span>
-                <span>·</span>
-                <span class="inline-flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>部長 + Admin</span>
-                <span>·</span>
-                <span class="inline-flex items-center gap-1"><i data-lucide="layers" class="w-3 h-3"></i>6 欄位 × N 值</span>
-              </div>
-            </div>
-            <i data-lucide="arrow-up-right" class="w-4 h-4 text-gray-300 group-hover:text-primary transition shrink-0"></i>
-          </a>
-
-        </div>
-      </div>
-
-      <!-- 基礎代碼分區標題（既有 F068） -->
-      <div class="flex items-center gap-2 mb-2.5">
-        <i data-lucide="tags" class="w-4 h-4 text-gray-600"></i>
-        <h2 class="text-sm font-semibold text-gray-800">基礎代碼維護</h2>
-        <span class="text-xs text-gray-500">— F068：PROD_KIND / SPEC_TP / CASE_STATUS（沿用 ob_code_df）</span>
-      </div>
-
-      <!-- Tabs -->
-      <div class="bg-white rounded-t-lg border border-border border-b-0">
+    <!-- Tab 導覽 -->
+    <div class="px-6">
+      <div class="bg-white border border-border border-b-0 rounded-t-lg">
         <div class="flex items-center justify-between px-4 border-b border-border">
           <div class="flex items-center gap-1">
-            <button id="tab-PROD_KIND" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('PROD_KIND')">
-              <i data-lucide="package" class="w-3.5 h-3.5 inline mr-1"></i>
-              PROD_KIND
-              <span class="ml-1 text-xs text-gray-400">產品類別</span>
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full" id="cnt-PROD_KIND">3</span>
+            <button id="tabFields" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('fields')">
+              <i data-lucide="filter" class="w-3.5 h-3.5 inline mr-1.5 -mt-0.5"></i>
+              欄位管理
+              <span class="ml-1.5 text-[10px] text-gray-400">F075</span>
+              <span class="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full" id="fieldsCnt">7</span>
             </button>
-            <button id="tab-SPEC_TP" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('SPEC_TP')">
-              <i data-lucide="layers" class="w-3.5 h-3.5 inline mr-1"></i>
-              SPEC_TP
-              <span class="ml-1 text-xs text-gray-400">專案類別</span>
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-SPEC_TP">32</span>
-            </button>
-            <button id="tab-CASE_STATUS" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('CASE_STATUS')">
-              <i data-lucide="check-circle" class="w-3.5 h-3.5 inline mr-1"></i>
-              CASE_STATUS
-              <span class="ml-1 text-xs text-gray-400">案件結清期別</span>
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="cnt-CASE_STATUS">4</span>
+            <button id="tabOptions" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('options')">
+              <i data-lucide="list-checks" class="w-3.5 h-3.5 inline mr-1.5 -mt-0.5"></i>
+              可選值管理
+              <span class="ml-1.5 text-[10px] text-gray-400">F076</span>
+              <span class="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="optionsCnt">5</span>
             </button>
           </div>
-          <div class="pr-3">
-            <code class="text-xs text-gray-400">tbl_id = <span id="curTblId" class="text-gray-600 font-medium">PROD_KIND</span></code>
+          <div class="pr-3 text-[10px] text-gray-400">
+            <span id="tabUrlHint">URL: ?tab=fields</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Tab 1：欄位管理（F075 v1.5 / 移植自 37a）                    -->
+    <!-- ============================================================ -->
+    <div id="panelFields" class="px-6 pb-6">
+      <div class="bg-white border border-border border-t-0 rounded-b-lg shadow-sm">
+
+        <!-- Scope 提示 -->
+        <div class="mx-4 mt-4 mb-3 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700">
+          <i data-lucide="filter" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-primary">F075 v1.5 — POOLDATA 篩選欄位白名單</p>
+            <p class="text-gray-600 mt-0.5">
+              管理可作為名單條件的 <code>OBPOOLDATA</code> 欄位；每欄位標記 <code>field_type</code>（categorical / numeric / date），驅動 F050/F051 名單表單之條件元件型態。
+              停用為軟刪除（<code>is_active = false</code>），不回溯既有名單條件（BR-3）。
+              資料表 <code>pooldata_field_whitelist</code>。
+            </p>
           </div>
         </div>
 
-        <!-- Filter -->
-        <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3 flex-wrap">
+        <!-- 工具列 -->
+        <div class="mx-4 mb-3 flex items-center gap-3 flex-wrap">
           <div class="relative flex-1 min-w-[240px] max-w-[400px]">
             <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-            <input id="searchKw" oninput="renderTable()" type="text" placeholder="搜尋 tbl_cd / tbl_desc1 / tbl_desc2..."
+            <input id="fieldSearch" oninput="renderFields()" type="text" placeholder="搜尋 column_name / display_name..."
               class="w-full pl-9 pr-3 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
           </div>
-          <div class="relative">
-            <select id="statusFilter" onchange="renderTable()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
-              <option value="all">狀態：全部</option>
-              <option value="active">僅顯示生效中（stadt ≤ 今日 ≤ enddt）</option>
-              <option value="future">未生效（stadt &gt; 今日）</option>
-              <option value="expired">已過期（enddt &lt; 今日）</option>
-            </select>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-          </div>
-          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-border rounded-md hover:bg-white transition" onclick="document.getElementById('searchKw').value=''; document.getElementById('statusFilter').value='all'; renderTable();">
-            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-            清除
-          </button>
-          <span class="ml-auto text-xs text-gray-400">今日 <span class="font-mono">20260509</span></span>
-          <button onclick="openCodeModal('create')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            新增代碼
+          <select id="fieldTypeFilter" onchange="renderFields()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white">
+            <option value="all">類別：全部</option>
+            <option value="categorical">categorical</option>
+            <option value="numeric">numeric</option>
+            <option value="date">date</option>
+          </select>
+          <select id="fieldStatusFilter" onchange="renderFields()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white">
+            <option value="all">狀態：全部</option>
+            <option value="active">僅啟用</option>
+            <option value="inactive">僅停用</option>
+          </select>
+          <span class="ml-auto text-xs text-gray-400">總計 <span id="fieldsTotal" class="font-mono text-gray-600">7</span> · 啟用 <span id="fieldsActive" class="text-success">6</span> / 停用 <span id="fieldsInactive" class="text-gray-500">1</span></span>
+          <button data-write-action onclick="openCreateFieldModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>新增篩選欄位
           </button>
         </div>
-      </div>
 
-      <!-- CASE_STATUS 專屬：4 個代碼業務語意對照 banner（僅在 CASE_STATUS tab 顯示，視覺接合 Tabs 與表格） -->
-      <div id="caseStatusSemanticBanner" class="hidden bg-blue-50/40 border-l border-r border-border">
-        <details class="group" open>
-          <summary class="cursor-pointer list-none flex items-start gap-2 px-4 py-2.5 hover:bg-blue-50/70 transition border-b border-blue-100/60">
-            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-            <div class="flex-1 text-xs">
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-gray-700">
-                  4 個代碼業務語意對照
-                  <span class="text-gray-500 font-normal">— 同為「滿期」字面，但 <code class="text-primary font-semibold">03</code> 與 <code class="text-primary font-semibold">04</code> 案件實況截然不同</span>
-                </span>
-                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform shrink-0"></i>
-              </div>
-            </div>
-          </summary>
-          <div class="overflow-x-auto bg-white border-b border-border">
-            <table class="w-full text-xs">
-              <thead>
-                <tr class="bg-blue-50/30 border-b border-blue-100">
-                  <th class="text-left px-4 py-2 font-semibold text-gray-600 w-16">代碼</th>
-                  <th class="text-left px-3 py-2 font-semibold text-gray-600 w-40">名稱（tbl_desc1）</th>
-                  <th class="text-left px-3 py-2 font-semibold text-gray-600 w-32">對應 STA_CODE</th>
-                  <th class="text-left px-3 py-2 font-semibold text-gray-600">案件實況</th>
-                  <th class="text-left px-3 py-2 font-semibold text-gray-600 w-40">業務目標</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr class="border-b border-blue-50">
-                  <td class="px-4 py-2 font-mono font-semibold text-primary">01</td>
-                  <td class="px-3 py-2 text-gray-700">期中(不含當月滿期)</td>
-                  <td class="px-3 py-2 font-mono text-gray-600">05~89（active）</td>
-                  <td class="px-3 py-2 text-gray-600">處理中，距滿期 &gt; 1 個月 或 剩餘期數 &gt; 2</td>
-                  <td class="px-3 py-2 text-gray-700">一般期中案件管理</td>
-                </tr>
-                <tr class="border-b border-blue-50">
-                  <td class="px-4 py-2 font-mono font-semibold text-primary">02</td>
-                  <td class="px-3 py-2 text-gray-700">中結</td>
-                  <td class="px-3 py-2 font-mono text-gray-600">98</td>
-                  <td class="px-3 py-2 text-gray-600">已中途結清</td>
-                  <td class="px-3 py-2 text-gray-700">中結客戶聯繫</td>
-                </tr>
-                <tr class="border-b border-blue-50 bg-amber-50/30">
-                  <td class="px-4 py-2 font-mono font-semibold text-amber-700">03</td>
-                  <td class="px-3 py-2 text-gray-700">滿期(含當月滿期)</td>
-                  <td class="px-3 py-2 font-mono text-gray-700"><span class="inline-flex items-center px-1.5 py-0.5 mr-1 text-[10px] font-semibold rounded bg-green-100 text-green-700">active</span>05~89</td>
-                  <td class="px-3 py-2 text-gray-700">本月即將到期但<span class="font-semibold">尚未結清</span></td>
-                  <td class="px-3 py-2 text-amber-800 font-medium">主動續貸 / 防流失</td>
-                </tr>
-                <tr class="bg-gray-50/40">
-                  <td class="px-4 py-2 font-mono font-semibold text-gray-700">04</td>
-                  <td class="px-3 py-2 text-gray-700">滿期</td>
-                  <td class="px-3 py-2 font-mono text-gray-700"><span class="inline-flex items-center px-1.5 py-0.5 mr-1 text-[10px] font-semibold rounded bg-gray-200 text-gray-600">已完成</span>90</td>
-                  <td class="px-3 py-2 text-gray-700"><span class="font-semibold">已完整結清完成</span></td>
-                  <td class="px-3 py-2 text-gray-700 font-medium">回找維繫 / 再行銷</td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="px-4 py-2 text-[11px] text-gray-500 bg-gray-50/30 border-t border-blue-50">
-              <span class="font-medium text-gray-600">語意來源：</span>舊系統 SP <code>USP_OB_OBPOOLDATA.sql:189-216</code> 依 <code>obccfdate.STA_CODE</code> 判斷案件狀態並寫入 dump 表的 <code>list_type</code> 欄。新系統 Stage 1 沿用相同 4 個值匹配 <code>ob_pool_data.list_type</code>，業務語意由匯入端維持。
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <!-- 表格 panel -->
-      <div class="bg-white rounded-b-lg border border-border border-t-0 shadow-sm">
+        <!-- 表格 -->
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-border bg-gray-50/60">
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">system_id</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">tbl_id</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">tbl_cd</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">tbl_desc1</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">tbl_desc2</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">stadt</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">enddt</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
-                <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[16%]">column_name</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[18%]">display_name</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[12%]">field_type</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[24%]">columnDescription</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[10%]">狀態</th>
+                <th class="text-right px-5 py-3 font-semibold text-gray-600 w-[20%]">操作</th>
               </tr>
             </thead>
-            <tbody id="codeTbody"></tbody>
+            <tbody id="fieldsTbody"></tbody>
           </table>
         </div>
-        <div class="flex items-center justify-between px-5 py-3 border-t border-border">
-          <span class="text-sm text-gray-500" id="paginationInfo">顯示 1-8 / 共 8 筆</span>
-          <div class="flex items-center gap-1">
-            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
-              <i data-lucide="chevron-left" class="w-4 h-4"></i>
-            </button>
-            <button class="px-3 py-1.5 text-sm border border-primary rounded-md text-white bg-primary font-medium">1</button>
-            <button disabled class="px-3 py-1.5 text-sm border border-border rounded-md text-gray-300 bg-white cursor-not-allowed">
-              <i data-lucide="chevron-right" class="w-4 h-4"></i>
-            </button>
+
+        <div class="mx-4 mb-4 mt-3 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-[11px] text-gray-600">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-medium text-gray-700 mb-0.5">F075 v1.5 商業規則摘要</p>
+            <ul class="list-disc list-inside space-y-0.5">
+              <li><strong>BR-1</strong>：<code>column_name</code> 為唯一鍵，新增時不分啟用 / 停用一律檢查重複（違反回 409 <code>POOLDATA_FIELD_DUPLICATE</code>）。</li>
+              <li><strong>BR-3</strong>：停用「不回溯」既有名單條件，F050/F051 寫入時驗證 <code>is_active = true</code>；F048 列表頁讀取既有名單時不阻擋。</li>
+              <li><strong>BR-4</strong>：<code>field_type</code> 由 categorical 改為其他類別時，<strong>不自動刪除</strong> F076 既有可選值（軟停用，<code>deactivation_reason = 'field_type_changed'</code>）。</li>
+              <li><strong>BR-8（v1.5）</strong>：<code>list_period_start</code> / <code>list_period_end</code> / <code>list_interval</code> 為一級保留欄位，禁止入白名單（J8）。</li>
+            </ul>
           </div>
         </div>
-      </div>
 
-      <!-- footer note -->
-      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
-        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-        <div>
-          <p class="font-medium text-gray-700 mb-0.5">代碼維護操作說明</p>
-          <p>停用為軟刪除（更新 <code>enddt</code>，BR-2 不刪除紀錄）。停用代碼不再出現於 F050/F051 名單定義表單下拉，但既有名單定義中已選用的代碼值不被回溯修改（BR-4）。代碼值唯一性檢查範圍為同 tbl_id 下啟用期間紀錄（BR-3，違反時 422 <code>CODE_IN_USE</code>）。Admin 與業務主管均可存取（BR-5）。</p>
-        </div>
       </div>
-
     </div>
+
+    <!-- ============================================================ -->
+    <!-- Tab 2：可選值管理（F076 v1.5 / 移植自 37b）                  -->
+    <!-- ============================================================ -->
+    <div id="panelOptions" class="px-6 pb-6 hidden">
+      <div class="bg-white border border-border border-t-0 rounded-b-lg shadow-sm">
+
+        <!-- Scope 提示 -->
+        <div class="mx-4 mt-4 mb-3 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700">
+          <i data-lucide="list-checks" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-primary">F076 v1.5 — 類別型欄位可選值</p>
+            <p class="text-gray-600 mt-0.5">
+              針對 F075 白名單中 <code>field_type = 'categorical'</code> 的欄位維護可選值（<code>option_value</code> + <code>option_label</code>），供 F050/F051 名單表單之多選元件動態載入。
+              v2.1 起 caseyear / case_status / prod_kind / spec_tp / settle_src 之可選值統一在此維護（F068 廢除後）。
+            </p>
+          </div>
+        </div>
+
+        <!-- 左：欄位清單 + 右：可選值清單 -->
+        <div class="grid grid-cols-12 gap-0 border-t border-border">
+
+          <!-- 左欄：categorical 欄位清單 -->
+          <aside class="col-span-4 border-r border-border bg-gray-50/40">
+            <div class="px-4 py-3 border-b border-border">
+              <div class="text-xs font-semibold text-gray-700 mb-1">類別型欄位</div>
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                <input id="optColSearch" oninput="renderOptionColumns()" type="text" placeholder="搜尋欄位..."
+                  class="w-full pl-8 pr-2 py-1.5 text-xs border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              </div>
+            </div>
+            <ul id="optColList" class="divide-y divide-border"></ul>
+          </aside>
+
+          <!-- 右欄：選定欄位之可選值清單 -->
+          <section class="col-span-8">
+            <div class="px-5 py-3 border-b border-border flex items-center gap-3 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500">當前欄位：</span>
+                <code id="curColName" class="font-mono text-sm font-semibold text-primary">caseyear</code>
+                <span class="text-sm text-gray-700">（<span id="curColDisplay">進件 / 滿期年數</span>）</span>
+              </div>
+              <label class="ml-auto inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                <input id="showInactiveOptToggle" type="checkbox" onchange="renderOptionValues()" class="rounded">
+                <span>顯示已停用值</span>
+              </label>
+              <button data-write-action onclick="openCreateOptionModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 shadow-sm">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>新增可選值
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-border bg-gray-50/60">
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[20%]">option_value</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[35%]">option_label</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[15%]">狀態</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[15%]">停用原因</th>
+                    <th class="text-right px-5 py-2.5 font-semibold text-gray-600 w-[15%]">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="optionsTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+
+        <div class="mx-4 my-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-[11px] text-gray-600">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-medium text-gray-700 mb-0.5">F076 v1.5 商業規則摘要</p>
+            <ul class="list-disc list-inside space-y-0.5">
+              <li><strong>BR-1</strong>：<code>(column_name, option_value)</code> 複合唯一鍵；違反回 422 <code>OPTION_VALUE_DUPLICATE</code>。</li>
+              <li><strong>BR-3 / BR-4</strong>：停用「不回溯」既有名單；inactive 值保留供歷史追溯與「上月複製」UI 警示。</li>
+              <li><strong>v1.5 新增</strong>：caseyear / case_status / prod_kind / spec_tp / settle_src 之可選值統一在此管理（取代 F068 ob_code_df）。</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     </div><!-- /#mainContent -->
   </main>
 
-  <!-- ===== Modal: 新增 / 編輯代碼 ===== -->
-  <div id="codeModal" class="fixed inset-0 z-50 hidden">
-    <div class="modal-backdrop absolute inset-0" onclick="closeModal('codeModal')"></div>
+  <!-- ===== Modal: 新增欄位（簡化版，移植 37a 之核心欄位） ===== -->
+  <div id="createFieldModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('createFieldModal')"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
       <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
         <div class="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
-            <h3 id="codeModalTitle" class="text-lg font-semibold text-gray-900">新增代碼</h3>
-            <p id="codeModalSubtitle" class="text-xs text-gray-500 mt-0.5">tbl_id = PROD_KIND</p>
+            <h3 class="text-lg font-semibold text-gray-900">新增篩選欄位</h3>
+            <p class="text-xs text-gray-500 mt-0.5">POST /api/v1/pooldata-fields</p>
           </div>
-          <button onclick="closeModal('codeModal')" class="p-1 hover:bg-gray-100 rounded-md">
-            <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
-          </button>
+          <button onclick="closeModal('createFieldModal')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
         </div>
         <div class="px-6 py-5 space-y-4">
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">system_id</label>
-              <input type="text" value="OB" disabled class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-gray-50 text-gray-500 font-mono">
-              <p class="text-xs text-gray-400 mt-1">固定 'OB'（OQ-E07-11）</p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">tbl_id</label>
-              <input id="formTblId" type="text" value="PROD_KIND" disabled class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-gray-50 text-gray-500 font-mono">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">columnName <span class="text-danger">*</span></label>
+            <select class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option>請選擇 OBPOOLDATA 既有欄位...</option>
+              <option>year_cnt</option>
+              <option>month_cnt</option>
+              <option>cust_age</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">自 OBPOOLDATA 既有但尚未加入白名單之欄位中選擇（dropdown 模式，移植自 v1.4.7）。完整 columnDescription 自動填入。</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">fieldType <span class="text-danger">*</span></label>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
+                <input type="radio" name="newFieldType" value="categorical" class="mt-0.5">
+                <div><div class="text-sm font-medium text-gray-800">categorical</div><div class="text-[11px] text-gray-500 mt-0.5">多選列表</div></div>
+              </label>
+              <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
+                <input type="radio" name="newFieldType" value="numeric" class="mt-0.5">
+                <div><div class="text-sm font-medium text-gray-800">numeric</div><div class="text-[11px] text-gray-500 mt-0.5">min/max</div></div>
+              </label>
+              <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
+                <input type="radio" name="newFieldType" value="date" class="mt-0.5">
+                <div><div class="text-sm font-medium text-gray-800">date</div><div class="text-[11px] text-gray-500 mt-0.5">日期範圍</div></div>
+              </label>
             </div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">tbl_cd <span class="text-danger">*</span></label>
-            <input id="formTblCd" type="text" maxlength="4" placeholder="例：05"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <p class="text-xs text-gray-400 mt-1">VARCHAR(4)，同 tbl_id 下啟用期間唯一</p>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">tbl_desc1 <span class="text-danger">*</span></label>
-            <input id="formTblDesc1" type="text" maxlength="40" placeholder="例：商用車貸款"
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">displayName <span class="text-danger">*</span></label>
+            <input type="text" maxlength="50" placeholder="例：撈取月份計數"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <p class="text-xs text-gray-400 mt-1">最多 40 字元（顯示名稱）</p>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">tbl_desc2（optional）</label>
-            <input id="formTblDesc2" type="text" maxlength="40" placeholder="例：商業用途汽車貸款"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">stadt 生效日</label>
-              <input id="formStadt" type="text" placeholder="20260509" maxlength="8"
-                class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-              <p class="text-xs text-gray-400 mt-1">YYYYMMDD（預設今日）</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">enddt 失效日</label>
-              <input id="formEnddt" type="text" placeholder="99991231" value="99991231" maxlength="8"
-                class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-              <p class="text-xs text-gray-400 mt-1">99991231 表示無時限</p>
-            </div>
-          </div>
-
-          <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-700 flex items-start gap-2">
-            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-            <div>
-              <p>新增 / 修改寫入 <code>assignment_audit_log</code>（action=CREATE / UPDATE，entity_type=ob_code_df，entity_id = tbl_id + tbl_cd）。違反唯一性 → 422 <code>CODE_IN_USE</code>。</p>
-            </div>
           </div>
         </div>
-        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
-          <button onclick="closeModal('codeModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
-          <button onclick="closeModal('codeModal')" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm">儲存</button>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
+          <button onclick="closeModal('createFieldModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-white">取消</button>
+          <button onclick="submitCreateField()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700">儲存</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ===== Modal: 停用確認 ===== -->
-  <div id="disableModal" class="fixed inset-0 z-50 hidden">
-    <div class="modal-backdrop absolute inset-0" onclick="closeModal('disableModal')"></div>
+  <!-- ===== Modal: 新增可選值 ===== -->
+  <div id="createOptionModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('createOptionModal')"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-md relative">
-        <div class="px-6 pt-6 pb-2 text-center">
-          <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
-            <i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i>
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">新增可選值</h3>
+            <p class="text-xs text-gray-500 mt-0.5">欄位 <code id="createOptColCode" class="font-mono">caseyear</code> · POST /api/v1/pooldata-fields/:column/options</p>
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">停用代碼</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
-            確定停用代碼 <code class="font-mono font-semibold text-gray-800" id="disableTblCd">04</code><br>
-            「<span class="font-semibold text-gray-800" id="disableTblDesc">房屋貸款</span>」？
-          </p>
+          <button onclick="closeModal('createOptionModal')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
         </div>
-        <div class="px-6 pb-2">
-          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
-            <div class="flex items-start gap-2">
-              <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
-              <div>
-                <p class="font-semibold text-warning mb-1">軟刪除（更新 enddt）</p>
-                <ul class="list-disc list-inside space-y-0.5 text-gray-600">
-                  <li>停用後 F050/F051 表單將不再顯示此選項</li>
-                  <li>既有名單定義中已選用的此代碼值不被回溯修改</li>
-                  <li>寫入 assignment_audit_log（action=DISABLE）</li>
-                </ul>
-              </div>
-            </div>
+        <div class="px-6 py-5 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">option_value <span class="text-danger">*</span></label>
+            <input id="newOptValue" type="text" maxlength="20" placeholder="例：7"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-xs text-gray-400 mt-1">對應 <code>ob_pool_data</code> 中該欄位的實際儲存值（VARCHAR(20)）</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">option_label <span class="text-danger">*</span></label>
+            <input id="newOptLabel" type="text" maxlength="100" placeholder="例：7 年"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
           </div>
         </div>
-        <div class="flex items-center justify-end gap-3 px-6 py-4">
-          <button onclick="closeModal('disableModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
-          <button onclick="closeModal('disableModal')" class="px-4 py-2 text-sm font-medium text-white bg-warning rounded-lg hover:bg-amber-600 transition shadow-sm">確認停用</button>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
+          <button onclick="closeModal('createOptionModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-white">取消</button>
+          <button onclick="submitCreateOption()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700">儲存</button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed top-20 right-4 z-[60] space-y-2"></div>
 
   <script>
-    // ===== Mock Data: 三類代碼 =====
-    const TODAY = '20260509';
-    // ─────────────────────────────────────────────────────────────────────────
-    // Sample data 來源：reference/Dumpdata/OBMCODEDF_20260505.csv
-    //
-    // AD-E07-14 決議：CDMP 兩階段 migration 後，ob_code_df.tbl_id 由原系統
-    //   數字編碼改用英文常數。畫面與 API 一律以英文常數呈現。
-    //     dump '01' → 新系統 'PROD_KIND'   （產品類別，3 筆）
-    //     dump '02' → 新系統 'SPEC_TP'     （專案類別，32 筆）
-    //     dump '22' → 新系統 'CASE_STATUS' （案件結清期別，4 筆）
-    //
-    // 落差說明：
-    //   - PROD_KIND：dump 對應 tbl_id='01' 真實 3 筆，已採用。
-    //   - SPEC_TP：dump 對應 tbl_id='02' 真實 32 筆，已採用。
-    //   - CASE_STATUS：dump 對應 tbl_id='22' 真實 4 筆，已採用：
-    //     '01' 期中(不含當月滿期)、'02' 中結、'03' 滿期(含當月滿期)、'04' 滿期。
-    //
-    //   - dump 全部 stadt='20220913'~'20001101' / enddt='20991231'，故所有
-    //     dump 來源資料皆為 active。
-    //
-    // 為何移除 CASEYEAR：
-    //   探查舊系統前端 reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235 發現
-    //   CASEYEAR 為前端 hard-coded 0~10 共 11 個 CheckBox（第 12 個 99=10年以上
-    //   被 Razor @*...*@ 註解掉，未啟用），不從 ob_code_df 動態載入。
-    //   CDMP 沿用此設計：F068 不維護 CASEYEAR；該 enum 由 F050/F051 表單前端
-    //   固定提供。
-    // ─────────────────────────────────────────────────────────────────────────
-    const codes = {
-      // dump tbl_id='01'（產品類別，3 筆）
-      PROD_KIND: [
-        { tblCd: '01', tblDesc1: '汽車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '02', tblDesc1: '機車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '03', tblDesc1: '一般商品', tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-      ],
-      // dump tbl_id='02'（專案類別，32 筆）
-      SPEC_TP: [
-        { tblCd: '01', tblDesc1: '新車',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '02', tblDesc1: '中古車',       tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '03', tblDesc1: '原融',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '04', tblDesc1: '原融代償',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '05', tblDesc1: '在庫融資',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '11', tblDesc1: '保單',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '12', tblDesc1: '信貸',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '31', tblDesc1: '遠信機車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '32', tblDesc1: '遠信圖書',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '33', tblDesc1: '遠信綜合',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '41', tblDesc1: '機器設備',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '42', tblDesc1: '重型機車',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '51', tblDesc1: '一般分期',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '52', tblDesc1: '諾蒂亞',       tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '61', tblDesc1: '亞太策盟A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '62', tblDesc1: '亞太策盟B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '63', tblDesc1: '第一專案A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '64', tblDesc1: '第一專案B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '65', tblDesc1: '廿一專案A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '66', tblDesc1: '廿一專案B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '67', tblDesc1: '台灣才將專案A', tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '68', tblDesc1: '台灣才將專案B', tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '69', tblDesc1: '遠信AR專案A',  tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '70', tblDesc1: '遠信AR專案B',  tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '71', tblDesc1: '遠信AR專案C',  tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '72', tblDesc1: '和灣專案A',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '73', tblDesc1: '和灣專案B',    tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '74', tblDesc1: '機車原融',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '75', tblDesc1: '機車自承',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '76', tblDesc1: '商品分期',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '77', tblDesc1: '機車買賣',     tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-        { tblCd: '99', tblDesc1: '其他',         tblDesc2: '', stadt: '20001101', enddt: '20991231' },
-      ],
-      // dump tbl_id='22'（案件結清期別，4 筆生效中）
-      CASE_STATUS: [
-        { tblCd: '01', tblDesc1: '期中(不含當月滿期)', tblDesc2: '期中',     stadt: '20220913', enddt: '20991231' },
-        { tblCd: '02', tblDesc1: '中結',               tblDesc2: '中結',     stadt: '20220913', enddt: '20991231' },
-        { tblCd: '03', tblDesc1: '滿期(含當月滿期)',   tblDesc2: '當月滿期', stadt: '20220913', enddt: '20991231' },
-        { tblCd: '04', tblDesc1: '滿期',               tblDesc2: '滿期',     stadt: '20220913', enddt: '20991231' },
-      ],
-    };
+    lucide.createIcons();
 
-    let currentTbl = 'PROD_KIND';
-
-    function statusOf(c) {
-      if (c.stadt > TODAY) return 'future';
-      if (c.enddt < TODAY) return 'expired';
-      return 'active';
-    }
-
-    function statusBadge(c) {
-      const s = statusOf(c);
-      if (s === 'active') return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-success"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>生效中</span>';
-      if (s === 'future') return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>未生效</span>';
-      return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>已過期</span>';
-    }
-
-    function renderTable() {
-      const list = codes[currentTbl];
-      const kw = (document.getElementById('searchKw').value || '').toLowerCase();
-      const filterStatus = document.getElementById('statusFilter').value;
-      const filtered = list.filter(c => {
-        const matchKw = !kw || c.tblCd.toLowerCase().includes(kw) || c.tblDesc1.toLowerCase().includes(kw) || (c.tblDesc2 || '').toLowerCase().includes(kw);
-        if (!matchKw) return false;
-        if (filterStatus === 'all') return true;
-        return statusOf(c) === filterStatus;
-      });
-
-      const tbody = document.getElementById('codeTbody');
-      if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-12 text-gray-400 text-sm">無符合條件的代碼</td></tr>`;
-      } else {
-        tbody.innerHTML = filtered.map(c => {
-          const isActive = statusOf(c) === 'active';
-          return `
-            <tr class="border-b border-border hover:bg-gray-50/50 transition ${!isActive ? 'opacity-70' : ''}">
-              <td class="px-5 py-3 font-mono text-xs text-gray-500">OB</td>
-              <td class="px-5 py-3 font-mono text-xs text-gray-700">${currentTbl}</td>
-              <td class="px-5 py-3 font-mono text-sm font-semibold text-gray-900">${c.tblCd}</td>
-              <td class="px-5 py-3 text-gray-900">${c.tblDesc1}</td>
-              <td class="px-5 py-3 text-xs text-gray-500">${c.tblDesc2 || '<span class="text-gray-300">—</span>'}</td>
-              <td class="px-5 py-3 font-mono text-xs text-gray-600">${c.stadt}</td>
-              <td class="px-5 py-3 font-mono text-xs ${c.enddt === '99991231' ? 'text-emerald-600' : 'text-gray-600'}">${c.enddt}</td>
-              <td class="px-5 py-3">${statusBadge(c)}</td>
-              <td class="px-5 py-3 text-right">
-                <div class="inline-flex items-center gap-1">
-                  <button onclick="openCodeModal('edit', '${c.tblCd}')" title="修改" class="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded transition">
-                    <i data-lucide="pencil" class="w-4 h-4"></i>
-                  </button>
-                  <button onclick="openDisableModal('${c.tblCd}', '${c.tblDesc1}')" title="停用" class="p-1.5 text-gray-500 hover:text-warning hover:bg-amber-50 rounded transition ${!isActive ? 'opacity-30 pointer-events-none' : ''}">
-                    <i data-lucide="ban" class="w-4 h-4"></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join('');
+    // ============================================================
+    // Sidebar collapsible
+    // ============================================================
+    (function() {
+      const assignmentPages = ['27-list-definition.html','28-scoring-config.html','29-ratio-config.html','29a-dept-ratio-config.html','29b-personnel-ratio-config.html','29c-approval-review.html','29d-ready-summary.html','30-stage0-estimate.html','31-trigger-run.html','32-run-progress.html','33-run-summary.html','34-run-history.html','35-snapshot-detail.html','36-run-compare.html','37-base-code.html','37a-pooldata-whitelist.html','37b-categorical-field-values.html','27a-list-create-draft.html','27b-list-edit-draft.html'];
+      const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
+      const isAssignmentPage = assignmentPages.includes(currentPage);
+      window.toggleAssignmentSection = function() {
+        const header = document.getElementById('assignment-section-header');
+        const expanded = header.getAttribute('aria-expanded') === 'true';
+        setExp(!expanded, true);
+      };
+      function setExp(exp, persist) {
+        const section = document.getElementById('assignment-section');
+        const chevron = document.getElementById('assignment-chevron');
+        const header = document.getElementById('assignment-section-header');
+        if (!section) return;
+        if (exp) { section.style.maxHeight = section.scrollHeight + 'px'; chevron.style.transform = 'rotate(90deg)'; header.setAttribute('aria-expanded','true'); }
+        else { section.style.maxHeight = '0px'; chevron.style.transform = 'rotate(0deg)'; header.setAttribute('aria-expanded','false'); }
+        if (persist) localStorage.setItem('cdmp.sidebar.assignment.expanded', exp ? '1' : '0');
       }
-
-      document.getElementById('paginationInfo').textContent = `顯示 1-${filtered.length} / 共 ${filtered.length} 筆`;
-      // Update tab counts (active only)
-      ['PROD_KIND','SPEC_TP','CASE_STATUS'].forEach(t => {
-        const cnt = codes[t].filter(c => statusOf(c) === 'active').length;
-        document.getElementById('cnt-' + t).textContent = cnt;
+      document.addEventListener('DOMContentLoaded', function() {
+        const stored = localStorage.getItem('cdmp.sidebar.assignment.expanded');
+        setExp(isAssignmentPage || stored === '1', false);
       });
-      lucide.createIcons();
-    }
+    })();
 
-    // ===== Tab switch =====
-    function switchTab(name) {
-      currentTbl = name;
-      ['PROD_KIND','SPEC_TP','CASE_STATUS'].forEach(t => {
-        document.getElementById('tab-' + t).classList.toggle('active', t === name);
-        document.getElementById('tab-' + t).classList.toggle('text-gray-500', t !== name);
-        document.getElementById('cnt-' + t).className = (t === name)
-          ? 'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full'
-          : 'ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full';
-      });
-      document.getElementById('curTblId').textContent = name;
-      // CASE_STATUS 專屬業務語意 banner：只在該 tab 顯示
-      document.getElementById('caseStatusSemanticBanner').classList.toggle('hidden', name !== 'CASE_STATUS');
-      renderTable();
-    }
-
-    // ===== Modal =====
-    function openModal(id) { document.getElementById(id).classList.remove('hidden'); document.body.style.overflow='hidden'; }
-    function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.body.style.overflow=''; }
-
-    function openCodeModal(mode, tblCd) {
-      document.getElementById('formTblId').value = currentTbl;
-      document.getElementById('codeModalSubtitle').textContent = `tbl_id = ${currentTbl}`;
-      if (mode === 'create') {
-        document.getElementById('codeModalTitle').textContent = '新增代碼';
-        document.getElementById('formTblCd').value = '';
-        document.getElementById('formTblCd').disabled = false;
-        document.getElementById('formTblDesc1').value = '';
-        document.getElementById('formTblDesc2').value = '';
-        document.getElementById('formStadt').value = TODAY;
-        document.getElementById('formEnddt').value = '99991231';
-      } else {
-        const c = codes[currentTbl].find(x => x.tblCd === tblCd);
-        if (!c) return;
-        document.getElementById('codeModalTitle').textContent = '修改代碼';
-        document.getElementById('formTblCd').value = c.tblCd;
-        document.getElementById('formTblCd').disabled = true; // PK 不可改
-        document.getElementById('formTblDesc1').value = c.tblDesc1;
-        document.getElementById('formTblDesc2').value = c.tblDesc2 || '';
-        document.getElementById('formStadt').value = c.stadt;
-        document.getElementById('formEnddt').value = c.enddt;
-      }
-      openModal('codeModal');
-    }
-
-    function openDisableModal(tblCd, tblDesc1) {
-      document.getElementById('disableTblCd').textContent = tblCd;
-      document.getElementById('disableTblDesc').textContent = tblDesc1;
-      openModal('disableModal');
-    }
-
-    // ===== Role toggle (B7 standard 4-role) =====
+    // ============================================================
+    // Role badge
+    // ============================================================
     const ROLE_META = {
       admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
       director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
       section_chief: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長' },
       user:          { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',      name: '陳業務' }
     };
-    let currentRole = 'director';
-    function renderRoleBadge(role) {
-      const m = ROLE_META[role] || ROLE_META.sales;
-      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
-    }
     function setRole(role) {
-      currentRole = role;
-      const sw = document.getElementById('role-switcher'); if (sw) sw.value = role;
-      document.getElementById('role-badge-container').innerHTML = renderRoleBadge(role);
-      document.getElementById('user-name').textContent = ROLE_META[role].name;
-      const blocked = (role === 'user');
-      document.getElementById('mainContent').classList.toggle('hidden', blocked);
-      document.getElementById('salesBlockedBanner').classList.toggle('hidden', !blocked);
+      const m = ROLE_META[role] || ROLE_META.admin;
+      document.getElementById('role-badge-container').innerHTML =
+        `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+      document.getElementById('user-name').textContent = m.name;
+      // role guard
+      const isUser = role === 'user';
+      document.getElementById('userBlockedBanner').classList.toggle('hidden', !isUser);
+      document.getElementById('mainContent').classList.toggle('hidden', isUser);
+      // 部長 + Admin 可寫；處長唯讀（disable [data-write-action]）
+      const readonly = role === 'section_chief';
+      document.querySelectorAll('[data-write-action]').forEach(el => {
+        el.classList.toggle('opacity-40', readonly);
+        el.classList.toggle('cursor-not-allowed', readonly);
+        el.classList.toggle('pointer-events-none', readonly);
+        el.title = readonly ? '處長僅可查看，無寫入權限' : '';
+      });
       lucide.createIcons();
     }
-    document.addEventListener('DOMContentLoaded', function(){ setRole('director'); });
 
-    // ===== Demo state =====
-    function showDemoState(state) {
-      ['normal','effective-only','expired-included'].forEach(s => {
-        const btn = document.getElementById('demo-' + s);
-        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
-        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
-      });
-
-      if (state === 'normal') {
-        document.getElementById('searchKw').value = '';
-        document.getElementById('statusFilter').value = 'all';
-      } else if (state === 'effective-only') {
-        document.getElementById('searchKw').value = '';
-        document.getElementById('statusFilter').value = 'active';
-      } else if (state === 'expired-included') {
-        document.getElementById('searchKw').value = '';
-        document.getElementById('statusFilter').value = 'expired';
-      }
-      renderTable();
+    // ============================================================
+    // Tab 切換（含 URL ?tab=fields|options deep-link）
+    // ============================================================
+    function switchTab(tab) {
+      const isFields = tab === 'fields';
+      document.getElementById('tabFields').classList.toggle('active', isFields);
+      document.getElementById('tabFields').classList.toggle('text-gray-500', !isFields);
+      document.getElementById('tabOptions').classList.toggle('active', !isFields);
+      document.getElementById('tabOptions').classList.toggle('text-gray-500', isFields);
+      document.getElementById('panelFields').classList.toggle('hidden', !isFields);
+      document.getElementById('panelOptions').classList.toggle('hidden', isFields);
+      document.getElementById('tabUrlHint').textContent = 'URL: ?tab=' + tab;
+      // URL 同步（不 reload）
+      const url = new URL(location.href);
+      url.searchParams.set('tab', tab);
+      history.replaceState({}, '', url);
+      if (!isFields) renderOptionValues();
     }
 
-    // ===== Init =====
-    renderTable();
-    lucide.createIcons();
-  </script>
-  <script>
-    // ===== Sidebar collapsible：客戶名單分派 =====
-    (function() {
-      const assignmentPages = [
-        '27-list-definition.html', '28-scoring-config.html', '29-ratio-config.html',
-        '30-stage0-estimate.html', '31-trigger-run.html', '32-run-progress.html',
-        '33-run-summary.html', '34-run-history.html', '35-snapshot-detail.html',
-        '36-run-compare.html', '37-base-code.html',
-        '37a-pooldata-whitelist.html', '37b-categorical-field-values.html'
-      ];
-      const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
-      const isAssignmentPage = assignmentPages.includes(currentPage);
+    // 進入頁面讀 URL query
+    function applyInitialTab() {
+      const params = new URLSearchParams(location.search);
+      const tab = params.get('tab') === 'options' ? 'options' : 'fields';
+      const column = params.get('column');
+      switchTab(tab);
+      if (tab === 'options' && column) selectOptionColumn(column);
+    }
 
-      window.toggleAssignmentSection = function() {
-        const header = document.getElementById('assignment-section-header');
-        const expanded = header.getAttribute('aria-expanded') === 'true';
-        setAssignmentExpanded(!expanded, true);
+    // ============================================================
+    // Mock 資料（F075 + F076 v1.5）
+    // ============================================================
+    // 7 筆白名單欄位（含 1 個 inactive + 拍板 UI-Q5 之 birth_date date 型 demo）
+    const FIELDS = [
+      { columnName: 'prod_kind',   displayName: '產品類別',         fieldType: 'categorical', isActive: true,  columnDescription: 'OBPOOLDATA.PROD_KIND — 產品類別代碼（01 汽車新車 / 02 機車 / 03 其他）' },
+      { columnName: 'caseyear',    displayName: '進件 / 滿期年數',  fieldType: 'categorical', isActive: true,  columnDescription: 'OBPOOLDATA.YEAR_CNT — 進件年數（0~6 + 99 不限）' },
+      { columnName: 'spec_tp',     displayName: '專案類別',         fieldType: 'categorical', isActive: true,  columnDescription: 'OBPOOLDATA.SPEC_TP — 專案類別代碼（v2.1 自 OBMCODEDF dump 32 筆遷入）' },
+      { columnName: 'case_status', displayName: '案件結清期別',     fieldType: 'categorical', isActive: true,  columnDescription: 'OBPOOLDATA.LIST_TYPE — 案件結清期別（01 期中 / 02 中結 / 03 滿期含當月 / 04 滿期已結清）' },
+      { columnName: 'settle_src',  displayName: '他行代償',         fieldType: 'categorical', isActive: true,  columnDescription: 'OBPOOLDATA.SETTLE_SRC — 是否包含他行代償案件（Y/N）' },
+      { columnName: 'month_cnt',   displayName: '撈取月份計數',     fieldType: 'numeric',     isActive: true,  columnDescription: 'OBPOOLDATA.MONTH_CNT — 從進件月起算之月份計數（INT）' },
+      { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true,  columnDescription: 'OBPOOLDATA.BIRTH_DATE — 客戶出生日期（DATE）。Phase 3a 由 system-architect 與業務確認 OBPOOLDATA 實際是否含此欄位；此 prototype 僅為 UI demo 完整性（拍板 UI-Q5）' },
+      { columnName: 'payt_term',   displayName: '還款期別',         fieldType: 'numeric',     isActive: false, columnDescription: '已停用：v2.0 起改由 month_cnt 取代' }
+    ];
+
+    // F076 categorical 可選值（對齊 spec § seed）
+    const OPTIONS = {
+      prod_kind: [
+        { v: '01', l: '汽車新車', active: true,  reason: null },
+        { v: '02', l: '機車',     active: true,  reason: null },
+        { v: '03', l: '其他商品', active: true,  reason: null }
+      ],
+      caseyear: [
+        { v: '0',  l: '0 年',      active: true, reason: null },
+        { v: '1',  l: '1 年',      active: true, reason: null },
+        { v: '2',  l: '2 年',      active: true, reason: null },
+        { v: '3',  l: '3 年',      active: true, reason: null },
+        { v: '4',  l: '4 年',      active: true, reason: null },
+        { v: '5',  l: '5 年',      active: true, reason: null },
+        { v: '6',  l: '6 年（以上）', active: true, reason: null },
+        { v: '99', l: '不限年數（YEAR_CNT 無上限）', active: true, reason: null, special: true }
+      ],
+      spec_tp: [
+        // 32 筆中 demo 6 筆
+        { v: '02', l: '中古車',   active: true, reason: null },
+        { v: '04', l: '原融代償', active: true, reason: null },
+        { v: '05', l: '在庫融資', active: true, reason: null },
+        { v: '06', l: '專案融資', active: true, reason: null },
+        { v: '11', l: '保單',     active: true, reason: null },
+        { v: '12', l: '信貸',     active: true, reason: null }
+        // ... 完整 32 筆於 Phase 3a migration E5 補
+      ],
+      case_status: [
+        { v: '01', l: '期中（不含當月滿期）', active: true, reason: null },
+        { v: '02', l: '中結',                 active: true, reason: null },
+        { v: '03', l: '滿期（含當月滿期）',   active: true, reason: null },
+        { v: '04', l: '滿期（已結清）',       active: true, reason: null }
+      ],
+      settle_src: [
+        { v: 'Y', l: '含他行代償',   active: true, reason: null },
+        { v: 'N', l: '不含他行代償', active: true, reason: null }
+      ]
+    };
+
+    // ============================================================
+    // Tab 1：欄位管理
+    // ============================================================
+    function fieldTypeBadge(type) {
+      const map = {
+        categorical: { bg:'#DBEAFE', fg:'#1D4ED8', icon:'list' },
+        numeric:     { bg:'#EDE9FE', fg:'#6D28D9', icon:'hash' },
+        date:        { bg:'#CFFAFE', fg:'#0E7490', icon:'calendar' }
       };
+      const m = map[type] || { bg:'#F3F4F6', fg:'#6B7280', icon:'help-circle' };
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${type}</span>`;
+    }
+    function activeBadge(active) {
+      return active
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-green-100 text-success"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>啟用</span>'
+        : '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-gray-100 text-gray-500"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>停用</span>';
+    }
 
-      function setAssignmentExpanded(expanded, persist) {
-        const section = document.getElementById('assignment-section');
-        const chevron = document.getElementById('assignment-chevron');
-        const header = document.getElementById('assignment-section-header');
-        if (!section || !chevron || !header) return;
-        if (expanded) {
-          section.style.maxHeight = section.scrollHeight + 'px';
-          chevron.style.transform = 'rotate(90deg)';
-          header.setAttribute('aria-expanded', 'true');
-        } else {
-          section.style.maxHeight = '0px';
-          chevron.style.transform = 'rotate(0deg)';
-          header.setAttribute('aria-expanded', 'false');
-        }
-        if (persist) {
-          localStorage.setItem('cdmp.sidebar.assignment.expanded', expanded ? '1' : '0');
-        }
-      }
-
-      document.addEventListener('DOMContentLoaded', function() {
-        const stored = localStorage.getItem('cdmp.sidebar.assignment.expanded');
-        const shouldExpand = isAssignmentPage || stored === '1';
-        setAssignmentExpanded(shouldExpand, false);
+    function renderFields() {
+      const kw = (document.getElementById('fieldSearch').value || '').toLowerCase().trim();
+      const fType = document.getElementById('fieldTypeFilter').value;
+      const status = document.getElementById('fieldStatusFilter').value;
+      let rows = FIELDS.filter(f => {
+        if (kw && !(f.columnName.toLowerCase().includes(kw) || f.displayName.includes(kw))) return false;
+        if (fType !== 'all' && f.fieldType !== fType) return false;
+        if (status === 'active' && !f.isActive) return false;
+        if (status === 'inactive' && f.isActive) return false;
+        return true;
       });
-    })();
+      document.getElementById('fieldsTotal').textContent = FIELDS.length;
+      document.getElementById('fieldsActive').textContent = FIELDS.filter(f=>f.isActive).length;
+      document.getElementById('fieldsInactive').textContent = FIELDS.filter(f=>!f.isActive).length;
+      document.getElementById('fieldsCnt').textContent = FIELDS.length;
+
+      const tbody = document.getElementById('fieldsTbody');
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-sm text-gray-400">無符合條件的欄位</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(f => `
+        <tr class="border-b border-border hover:bg-blue-50/20 ${f.isActive ? '' : 'opacity-60'}">
+          <td class="px-5 py-3"><code class="font-mono text-sm text-gray-800">${f.columnName}</code></td>
+          <td class="px-5 py-3 text-sm text-gray-700">${f.displayName}</td>
+          <td class="px-5 py-3">${fieldTypeBadge(f.fieldType)}</td>
+          <td class="px-5 py-3 text-xs text-gray-500 leading-relaxed">${f.columnDescription || '<span class="text-gray-300 italic">未設定</span>'}</td>
+          <td class="px-5 py-3">${activeBadge(f.isActive)}</td>
+          <td class="px-5 py-3 text-right">
+            <div class="inline-flex items-center gap-1">
+              <button data-write-action onclick="editField('${f.columnName}')" class="px-2 py-1 text-[11px] text-primary border border-border rounded-md hover:bg-blue-50"><i data-lucide="pencil" class="w-3 h-3 inline -mt-0.5"></i> 編輯</button>
+              ${f.fieldType === 'categorical' ? `<a href="?tab=options&column=${f.columnName}" onclick="switchTab('options');selectOptionColumn('${f.columnName}');return false;" class="px-2 py-1 text-[11px] text-purple-600 border border-purple-200 rounded-md hover:bg-purple-50"><i data-lucide="list-checks" class="w-3 h-3 inline -mt-0.5"></i> 可選值</a>` : ''}
+              <button data-write-action onclick="toggleField('${f.columnName}')" class="px-2 py-1 text-[11px] ${f.isActive ? 'text-warning border-amber-200 hover:bg-amber-50' : 'text-success border-green-200 hover:bg-green-50'} border rounded-md"><i data-lucide="${f.isActive ? 'ban' : 'check'}" class="w-3 h-3 inline -mt-0.5"></i> ${f.isActive ? '停用' : '啟用'}</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+      // 套用 role guard 到新渲染的 [data-write-action]
+      reapplyRoleGuard();
+    }
+
+    function reapplyRoleGuard() {
+      const role = document.getElementById('role-switcher').value;
+      const readonly = role === 'section_chief';
+      document.querySelectorAll('[data-write-action]').forEach(el => {
+        el.classList.toggle('opacity-40', readonly);
+        el.classList.toggle('cursor-not-allowed', readonly);
+        el.classList.toggle('pointer-events-none', readonly);
+      });
+    }
+
+    function editField(col) { showToast('info','編輯欄位（demo）','在實作時將開啟編輯 modal 並 populate ' + col); }
+    function toggleField(col) {
+      const f = FIELDS.find(x => x.columnName === col);
+      if (!f) return;
+      f.isActive = !f.isActive;
+      renderFields();
+      showToast(f.isActive ? 'success' : 'warning', f.isActive ? '欄位已啟用' : '欄位已停用', `${col}（停用「不回溯」既有名單）`);
+    }
+    function openCreateFieldModal() { document.getElementById('createFieldModal').classList.remove('hidden'); }
+    function submitCreateField() { closeModal('createFieldModal'); showToast('success','新增欄位成功（demo）','實作時將 POST /api/v1/pooldata-fields 並重新整理列表'); }
+
+    // ============================================================
+    // Tab 2：可選值管理
+    // ============================================================
+    let curOptionColumn = 'caseyear';
+
+    function renderOptionColumns() {
+      const kw = (document.getElementById('optColSearch').value || '').toLowerCase().trim();
+      const cats = FIELDS.filter(f => f.fieldType === 'categorical' && f.isActive);
+      const filtered = cats.filter(f => !kw || f.columnName.toLowerCase().includes(kw) || f.displayName.includes(kw));
+      const ul = document.getElementById('optColList');
+      document.getElementById('optionsCnt').textContent = cats.length;
+      if (filtered.length === 0) {
+        ul.innerHTML = '<li class="px-4 py-6 text-center text-xs text-gray-400">無符合欄位</li>';
+        return;
+      }
+      ul.innerHTML = filtered.map(f => {
+        const active = f.columnName === curOptionColumn;
+        const optCnt = (OPTIONS[f.columnName] || []).length;
+        return `
+          <li>
+            <button onclick="selectOptionColumn('${f.columnName}')" class="w-full text-left px-4 py-2.5 flex items-center gap-2 ${active ? 'bg-blue-50 border-l-2 border-primary' : 'hover:bg-gray-50 border-l-2 border-transparent'}">
+              <i data-lucide="list" class="w-3.5 h-3.5 ${active ? 'text-primary' : 'text-gray-400'}"></i>
+              <div class="flex-1 min-w-0">
+                <div class="font-mono text-xs ${active ? 'text-primary font-semibold' : 'text-gray-700'}">${f.columnName}</div>
+                <div class="text-[11px] text-gray-500 truncate">${f.displayName}</div>
+              </div>
+              <span class="text-[10px] px-1.5 py-0.5 rounded ${active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}">${optCnt}</span>
+            </button>
+          </li>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function selectOptionColumn(col) {
+      if (!OPTIONS[col]) return;
+      curOptionColumn = col;
+      const f = FIELDS.find(x => x.columnName === col);
+      document.getElementById('curColName').textContent = col;
+      document.getElementById('curColDisplay').textContent = f ? f.displayName : '';
+      document.getElementById('createOptColCode').textContent = col;
+      // URL 同步
+      const url = new URL(location.href);
+      url.searchParams.set('tab', 'options');
+      url.searchParams.set('column', col);
+      history.replaceState({}, '', url);
+      document.getElementById('tabUrlHint').textContent = 'URL: ?tab=options&column=' + col;
+      renderOptionColumns();
+      renderOptionValues();
+    }
+
+    function renderOptionValues() {
+      const opts = OPTIONS[curOptionColumn] || [];
+      const showInactive = document.getElementById('showInactiveOptToggle').checked;
+      const filtered = opts.filter(o => showInactive || o.active);
+      const tbody = document.getElementById('optionsTbody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-8 text-center text-sm text-gray-400">尚無可選值${showInactive ? '' : '（含已停用值，請勾選上方 toggle 查看）'}</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = filtered.map(o => `
+        <tr class="border-b border-border hover:bg-blue-50/20 ${o.active ? '' : 'opacity-60'}">
+          <td class="px-5 py-2.5"><code class="font-mono text-sm text-gray-800">${o.v}</code>${o.special ? ' <span class="ml-1 text-[10px] text-amber-600 font-medium">SPECIAL</span>' : ''}</td>
+          <td class="px-5 py-2.5 text-sm text-gray-700">${o.l}</td>
+          <td class="px-5 py-2.5">${activeBadge(o.active)}</td>
+          <td class="px-5 py-2.5 text-xs text-gray-500">${o.reason || '<span class="text-gray-300">—</span>'}</td>
+          <td class="px-5 py-2.5 text-right">
+            <button data-write-action onclick="toggleOption('${o.v}')" class="px-2 py-1 text-[11px] ${o.active ? 'text-warning border-amber-200 hover:bg-amber-50' : 'text-success border-green-200 hover:bg-green-50'} border rounded-md"><i data-lucide="${o.active ? 'ban' : 'check'}" class="w-3 h-3 inline -mt-0.5"></i> ${o.active ? '停用' : '啟用'}</button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+      reapplyRoleGuard();
+    }
+
+    function toggleOption(v) {
+      const opts = OPTIONS[curOptionColumn] || [];
+      const o = opts.find(x => x.v === v);
+      if (!o) return;
+      o.active = !o.active;
+      o.reason = o.active ? null : 'manual';
+      renderOptionValues();
+      showToast(o.active ? 'success' : 'warning', o.active ? '可選值已啟用' : '可選值已停用', `${curOptionColumn} = ${v}（${o.l}）。停用「不回溯」既有名單條件。`);
+    }
+    function openCreateOptionModal() { document.getElementById('createOptionModal').classList.remove('hidden'); }
+    function submitCreateOption() {
+      const v = (document.getElementById('newOptValue').value || '').trim();
+      const l = (document.getElementById('newOptLabel').value || '').trim();
+      if (!v || !l) { showToast('error','驗證失敗','option_value 與 option_label 皆為必填'); return; }
+      const opts = OPTIONS[curOptionColumn] || (OPTIONS[curOptionColumn] = []);
+      if (opts.some(o => o.v === v)) { showToast('error','OPTION_VALUE_DUPLICATE','此 option_value 已存在'); return; }
+      opts.push({ v, l, active: true, reason: null });
+      document.getElementById('newOptValue').value = '';
+      document.getElementById('newOptLabel').value = '';
+      closeModal('createOptionModal');
+      renderOptionValues();
+      renderOptionColumns();
+      showToast('success','新增可選值成功','已新增 ' + curOptionColumn + ' = ' + v);
+    }
+
+    // ============================================================
+    // Modal & Toast 共用
+    // ============================================================
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+    function showToast(type, title, message) {
+      const container = document.getElementById('toast-container');
+      const colors = { success: 'border-success', error: 'border-danger', warning: 'border-warning', info: 'border-primary' };
+      const icons = { success: 'check-circle', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
+      const iconColors = { success: 'text-success', error: 'text-danger', warning: 'text-warning', info: 'text-primary' };
+      const toast = document.createElement('div');
+      toast.className = `bg-white border-l-4 ${colors[type]} rounded-lg shadow-lg p-4 min-w-[320px] max-w-md flex items-start gap-3 animate-slide-in`;
+      toast.innerHTML = `
+        <i data-lucide="${icons[type]}" class="w-5 h-5 ${iconColors[type]} flex-shrink-0 mt-0.5"></i>
+        <div class="flex-1"><p class="text-sm font-semibold text-gray-900">${title}</p><p class="text-sm text-gray-600 mt-0.5">${message}</p></div>
+        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600 flex-shrink-0"><i data-lucide="x" class="w-4 h-4"></i></button>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons();
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 4500);
+    }
+
+    // ============================================================
+    // 初始化
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+      setRole('admin');
+      renderFields();
+      renderOptionColumns();
+      renderOptionValues();
+      applyInitialTab();
+    });
   </script>
 </body>
 </html>

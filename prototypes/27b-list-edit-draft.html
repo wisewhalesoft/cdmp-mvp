@@ -32,11 +32,29 @@
     .val-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: #DBEAFE; color: #1E40AF; border-radius: 9999px; font-size: 11px; font-weight: 500; }
     .val-chip button { line-height: 1; padding: 0; background: transparent; border: none; cursor: pointer; color: #1E40AF; }
     .val-chip button:hover { color: #1D4ED8; }
+    .val-chip-inactive { background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D; }
+    /* LEGACY (舊名單 read-only) 樣式 */
+    .legacy-chip { display: inline-flex; align-items: center; padding: 2px 8px; background: #E2E8F0; color: #475569; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+    .demo-btn { cursor: pointer; border-color: #E5E7EB; color: #4B5563; transition: all 0.15s; }
+    .demo-btn:hover { background: #F3F4F6; }
+    .demo-btn.is-active { border-color: #2563EB; background: #EFF6FF; color: #1D4ED8; font-weight: 500; }
   </style>
 </head>
 <body class="bg-bg min-h-screen">
 
-  <!-- Sidebar（沿用） -->
+  <!--
+    ============================================================================
+    React component 拆分提示（Phase 5 tdd-implementation 取用，不執行）
+    - ListEditDraftPage 容器；載入時依 condition_payload IS NULL 與 stage 分流
+    - <ConditionRow> / <ConditionRow.LegacyReadonly>（舊名單時用後者）
+    - <LegacyListBanner>（灰底 LEGACY tag + 提示文字）
+    - <StageProtectionBanner>（黃底 stage != draft 全頁 banner）
+    - <DeactivateModal>（F052 軟刪除，僅 draft 可見）
+    - submit 時舊名單前端主動 omit conditionPayload；後端 LEGACY_LIST_CONDITION_READONLY 為 defense-in-depth
+    ============================================================================
+  -->
+
+  <!-- ===== Sidebar ===== -->
   <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
     <div class="px-5 py-4 border-b border-border">
       <div class="text-xl font-bold text-primary">CDMP</div>
@@ -57,7 +75,7 @@
         <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200"></i>
       </button>
       <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 0px;">
-        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="tags" class="w-4 h-4"></i>代碼維護</a>
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="filter" class="w-4 h-4"></i>篩選欄位</a>
         <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
@@ -86,7 +104,7 @@
       <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
       <span class="font-semibold text-gray-800">編輯草稿名單</span>
       <code id="headerListNo" class="ml-1 font-mono text-primary text-xs">OB202605001</code>
-      <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background:#F3F4F6;color:#6B7280;">
+      <span id="headerStageBadge" class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background:#F3F4F6;color:#6B7280;">
         <i data-lucide="pencil" class="w-3 h-3"></i>草稿階段
       </span>
     </div>
@@ -107,7 +125,7 @@
 
   <main class="ml-56 pt-14">
 
-    <!-- 角色封鎖 banner（director / sales） -->
+    <!-- 角色封鎖 banner -->
     <div id="roleBlockedBanner" class="hidden p-6">
       <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
         <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
@@ -121,7 +139,7 @@
       </div>
     </div>
 
-    <!-- 非 draft 階段 banner（rollback 提示） -->
+    <!-- 場景④：非 draft 階段 banner（stage protection / K1 / K3） -->
     <div id="notDraftBanner" class="hidden p-6">
       <div class="bg-white rounded-xl border border-amber-200 p-8 flex items-start gap-4">
         <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
@@ -129,13 +147,13 @@
         </div>
         <div class="flex-1">
           <h3 class="text-base font-semibold text-amber-900">無法編輯篩選條件</h3>
-          <p class="text-sm text-gray-700 mt-1">名單 <code id="notDraftListNo" class="font-mono text-primary">OB202605008</code> 已進入「<span id="notDraftStage" class="font-semibold">待簽核</span>」階段，根據 F051 規格僅 <code>draft</code> 階段可編輯篩選條件與 CR 開關。</p>
-          <p class="text-sm text-gray-700 mt-2">如需修改，請先執行 <span class="font-semibold text-danger">Rollback</span> 回到草稿階段（部門 / 個別比例設定將清空），再回此頁編輯。</p>
+          <p class="text-sm text-gray-700 mt-1">名單 <code id="notDraftListNo" class="font-mono text-primary">OB202605008</code> 已進入「<span id="notDraftStage" class="font-semibold">部門比例</span>」階段，根據 F051 v2.1 規格僅 <code>draft</code> 階段可寫入 <code>condition_payload</code>（K1 約束）。</p>
+          <p class="text-sm text-gray-700 mt-2">如需修改篩選條件，請先執行 <span class="font-semibold text-danger">Rollback</span> 回到草稿階段（K3：rollback 後 condition_payload 重新可寫入），再回此頁編輯。</p>
           <div class="mt-4 flex items-center gap-2">
             <a href="27-list-definition.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
               <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
             </a>
-            <button onclick="openRollbackHint()" class="inline-flex items-center gap-1.5 px-4 py-2 border border-danger text-danger text-sm rounded-md hover:bg-red-50">
+            <button onclick="showToast('info','Rollback 流程','從名單列表頁的對應階段管理頁觸發；rollback 將清空當前 stage 之比例 / 簽核資料。')" class="inline-flex items-center gap-1.5 px-4 py-2 border border-danger text-danger text-sm rounded-md hover:bg-red-50">
               <i data-lucide="undo-2" class="w-4 h-4"></i>了解 Rollback 流程
             </button>
           </div>
@@ -152,21 +170,20 @@
           <h1 class="text-xl font-semibold text-gray-800">編輯草稿名單 <code id="titleListNo" class="font-mono text-primary text-base ml-1">OB202605001</code></h1>
           <p class="text-sm text-gray-500 mt-1">月份 <code class="font-mono text-primary">2026-05</code> · 建立者 <span id="metaCreatedBy">王部長</span> · 建立時間 <span id="metaCreatedAt">2026-05-02</span></p>
         </div>
-        <!-- 停用按鈕（destructive，僅 draft 階段可見） -->
         <button type="button" onclick="openDeactivateModal()"
           class="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-danger text-danger rounded-md hover:bg-red-50">
           <i data-lucide="archive" class="w-4 h-4"></i>停用此名單
         </button>
       </div>
 
-      <!-- Demo 切換器（本頁額外提供：可預覽不同 listNo / 不同 stage 場景） -->
+      <!-- Demo 場景切換器（4 個場景） -->
       <div class="mb-4 bg-white border border-border rounded-lg px-4 py-2 flex items-center gap-2 flex-wrap text-xs">
         <span class="text-gray-400 mr-1">Demo 場景：</span>
-        <button onclick="loadList('OB202605001')" class="demo-btn px-2.5 py-1 border rounded">OB202605001 草稿（雙條件 + CR）</button>
-        <button onclick="loadList('OB202605002')" class="demo-btn px-2.5 py-1 border rounded">OB202605002 草稿（單條件）</button>
-        <button onclick="loadList('OB202605008')" class="demo-btn px-2.5 py-1 border rounded">OB202605008 待簽核（rollback 提示）</button>
-        <button onclick="loadList('OB202605003')" class="demo-btn px-2.5 py-1 border rounded">OB202605003 部門比例（rollback 提示）</button>
-        <span class="text-[10px] text-gray-400 ml-auto">或於 URL 加 ?listNo=OB202605001</span>
+        <button onclick="loadList('OB202605001')" id="demo-btn-1" class="demo-btn px-2.5 py-1 border rounded">① 雙條件 + draft</button>
+        <button onclick="loadList('OB202605002')" id="demo-btn-2" class="demo-btn px-2.5 py-1 border rounded">② 含 INACTIVE values</button>
+        <button onclick="loadList('OB202604099')" id="demo-btn-3" class="demo-btn px-2.5 py-1 border rounded">③ NULL 舊名單（read-only）</button>
+        <button onclick="loadList('OB202605003')" id="demo-btn-4" class="demo-btn px-2.5 py-1 border rounded">④ stage=dept_ratio（已推進）</button>
+        <span class="text-[10px] text-gray-400 ml-auto">或於 URL 加 ?listNo=...</span>
       </div>
 
       <form id="editForm" onsubmit="submitEdit(event)" class="space-y-4">
@@ -177,115 +194,160 @@
             <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">1</span>
             <h2 class="text-base font-semibold text-gray-800">基本資訊</h2>
           </div>
-
-          <!-- LIST_NO 唯讀 -->
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">LIST_NO（唯讀，無法修改）</label>
+          <div class="grid grid-cols-12 gap-4">
+            <div class="col-span-3">
+              <label class="block text-xs text-gray-500 mb-1">LIST_NO（唯讀）</label>
               <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-md font-mono text-sm text-gray-700 w-full">
                 <i data-lucide="hash" class="w-4 h-4 text-gray-400"></i>
                 <span id="roListNo">OB202605001</span>
                 <i data-lucide="lock" class="w-3 h-3 text-gray-400 ml-auto" title="F051：建立後不允許變更"></i>
               </div>
             </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">建立者（唯讀）</label>
-              <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-md text-sm text-gray-700 w-full">
-                <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
-                <span id="roCreatedBy">王部長</span>
+            <div class="col-span-6">
+              <label for="listNm" class="block text-sm font-medium text-gray-700 mb-1.5">
+                名單名稱 <span class="text-danger">*</span>
+                <span class="text-[10px] text-gray-400 font-normal ml-1">1~50 字</span>
+              </label>
+              <input id="listNm" type="text" required maxlength="50"
+                oninput="validateName()"
+                class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+              <div class="flex items-center justify-between mt-1">
+                <p id="nameError" class="hidden text-xs text-danger">請輸入名單名稱</p>
+                <p class="text-[10px] text-gray-400 ml-auto"><span id="nameCount">0</span>/50</p>
               </div>
             </div>
-          </div>
-
-          <!-- 名單名稱 -->
-          <div>
-            <label for="listNm" class="block text-sm font-medium text-gray-700 mb-1.5">
-              名單名稱 <span class="text-danger">*</span>
-              <span class="text-[10px] text-gray-400 font-normal ml-1">1~50 字</span>
-            </label>
-            <input id="listNm" type="text" required maxlength="50"
-              oninput="validateName()"
-              class="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            <div class="flex items-center justify-between mt-1">
-              <p id="nameError" class="hidden text-xs text-danger">請輸入名單名稱</p>
-              <p class="text-[10px] text-gray-400 ml-auto"><span id="nameCount">0</span>/50</p>
+            <div class="col-span-3">
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">卡別 <span class="text-[10px] text-gray-400 font-normal">選填</span></label>
+              <input id="cardType" type="text" maxlength="2"
+                class="w-full px-3 py-2 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
             </div>
           </div>
         </section>
 
-        <!-- 區塊 2：CR 回分開關 -->
-        <section class="bg-white rounded-xl border border-border p-5 space-y-3">
+        <!-- 區塊 2：撈案期間（一級保留欄位） -->
+        <section class="bg-white rounded-xl border border-border p-5 space-y-4">
           <div class="flex items-center gap-2">
             <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">2</span>
+            <h2 class="text-base font-semibold text-gray-800">撈案期間</h2>
+            <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
+              <i data-lucide="shield-check" class="w-3 h-3 mr-0.5"></i>一級保留欄位
+            </span>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">開始撈取期數 <span class="text-danger">*</span></label>
+              <div class="flex items-center gap-2">
+                <input id="listPeriodStart" type="number" min="0" max="999" step="1" required oninput="onPeriodChange()"
+                  class="w-full px-3 py-2 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+                <span class="text-xs text-gray-500 shrink-0">個月</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">結束撈取期數 <span class="text-danger">*</span></label>
+              <div class="flex items-center gap-2">
+                <input id="listPeriodEnd" type="number" min="0" max="999" step="1" required oninput="onPeriodChange()"
+                  class="w-full px-3 py-2 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+                <span class="text-xs text-gray-500 shrink-0">個月</span>
+              </div>
+              <p id="periodError" class="hidden text-xs text-danger mt-1">結束期數需大於等於開始期數</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">間隔期數 <span class="text-danger">*</span></label>
+              <div class="flex items-center gap-2">
+                <input id="listInterval" type="number" min="0" max="999" step="1" required oninput="onPeriodChange()"
+                  class="w-full px-3 py-2 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+                <span class="text-xs text-gray-500 shrink-0">個月</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 區塊 3：篩選條件（一般 / LEGACY 兩種模式） -->
+        <section class="bg-white rounded-xl border border-border p-5 space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">3</span>
+              <h2 class="text-base font-semibold text-gray-800">篩選條件</h2>
+              <span id="legacyTag" class="hidden inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300">
+                <i data-lucide="archive" class="w-3 h-3 mr-0.5"></i>LEGACY v2.0
+              </span>
+              <span class="text-[10px] text-gray-400 ml-1">條件間以「且」（AND）連接</span>
+            </div>
+            <div class="relative">
+              <button id="btnAddCond" type="button" onclick="toggleAddFieldDropdown()"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-primary text-primary rounded-md hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                <i data-lucide="plus" class="w-4 h-4"></i>新增條件
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+              </button>
+              <div id="addFieldDropdown" class="hidden absolute right-0 top-full mt-1 w-80 bg-white border border-border rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
+                <div class="p-2 border-b border-border">
+                  <input type="text" placeholder="搜尋欄位..." oninput="filterAddFieldDropdown(this.value)"
+                    class="w-full px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+                <ul id="addFieldList" class="py-1"></ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- 場景③：LEGACY 舊名單 banner（read-only） -->
+          <div id="legacyBanner" class="hidden rounded-lg p-4 bg-slate-50 border border-slate-300 flex items-start gap-3">
+            <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+              <i data-lucide="archive" class="w-5 h-5 text-slate-600"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-800">此名單使用舊格式儲存，篩選條件暫時無法編輯</p>
+              <p class="text-xs text-slate-600 mt-1">系統將於 Phase 3a 完成資料轉換（E2 backfill migration）後恢復編輯。目前您仍可調整名單名稱、撈案期間與 CR 設定，並可推進階段 / 停用名單（US-123 AC-2 / 拍板 2）。</p>
+            </div>
+          </div>
+
+          <!-- 條件列表（一般模式 + LEGACY 模式共用容器，靠 JS render 切換樣式） -->
+          <div id="condEmpty" class="rounded-lg border border-dashed border-border p-8 flex flex-col items-center text-center hidden">
+            <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+              <i data-lucide="filter" class="w-6 h-6 text-gray-400"></i>
+            </div>
+            <p class="text-sm text-gray-500">此名單尚無篩選條件</p>
+            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。</p>
+          </div>
+          <div id="condList" class="space-y-2"></div>
+
+          <!-- INACTIVE 警示 -->
+          <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+            <div class="flex-1">
+              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑 Stage 1 不會匹配</p>
+              <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
+              <p class="text-xs text-amber-700 mt-1">如需重新啟用請至 <a href="37-base-code.html?tab=options" class="underline font-medium">「篩選欄位 &gt; 可選值管理」</a>。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 區塊 4：CR 設定 -->
+        <section class="bg-white rounded-xl border border-border p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">4</span>
             <h2 class="text-base font-semibold text-gray-800">CR 回分規則</h2>
           </div>
           <div class="flex items-start justify-between gap-4 p-3 bg-gray-50/50 rounded-lg border border-border/60">
             <div class="flex-1">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700">本名單啟用 CR 回分</span>
-                <button type="button" onclick="document.getElementById('crTooltipBox').classList.toggle('hidden')" class="text-gray-400 hover:text-primary"><i data-lucide="help-circle" class="w-3.5 h-3.5"></i></button>
-              </div>
-              <p id="crStatusLabel" class="text-xs text-success mt-0.5">啟用中</p>
+              <span class="text-sm font-medium text-gray-700">本名單啟用 CR 回分</span>
+              <p id="crStatusLabel" class="text-xs text-success mt-0.5">啟用中：曾被分派但未成交的客戶將重新納入分派</p>
             </div>
             <label class="switch shrink-0 mt-1">
               <input type="checkbox" id="crToggle" checked onchange="onCrToggle(this.checked)">
               <span class="switch-slider"></span>
             </label>
           </div>
-          <div id="crTooltipBox" class="hidden text-xs text-gray-600 bg-blue-50/50 border border-blue-100 rounded-md p-3">
-            <p class="font-semibold text-primary mb-1">CR = Customer Recycling（客戶回分）</p>
-            <p>啟用時，過去月份曾被分派但未成交的客戶將被重新納入本次分派候選名單。</p>
-          </div>
         </section>
 
-        <!-- 區塊 3：篩選條件 -->
-        <section class="bg-white rounded-xl border border-border p-5 space-y-4">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">3</span>
-              <h2 class="text-base font-semibold text-gray-800">篩選條件</h2>
-              <span class="text-[10px] text-gray-400 ml-1">條件間以「且」（AND）連接</span>
-            </div>
-            <button type="button" onclick="addCondition()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-primary text-primary rounded-md hover:bg-blue-50">
-              <i data-lucide="plus" class="w-4 h-4"></i>新增條件
-            </button>
-          </div>
-          <div id="condEmpty" class="hidden rounded-lg border border-dashed border-border p-8 flex flex-col items-center text-center">
-            <i data-lucide="filter" class="w-6 h-6 text-gray-400 mb-2"></i>
-            <p class="text-sm text-gray-500">尚未新增任何篩選條件</p>
-            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存</p>
-          </div>
-          <div id="condList" class="space-y-2"></div>
-          <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
-            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
-            <div class="flex-1">
-              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用</p>
-              <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
-            </div>
-          </div>
-          <div id="previewBanner" class="hidden rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm">
-            <i data-lucide="calculator" class="w-5 h-5 text-primary shrink-0"></i>
-            <div class="flex-1">
-              <p class="font-semibold text-primary">依此條件預估命中 <span id="previewCount" class="text-lg">0</span> 筆案件</p>
-              <p class="text-xs text-blue-700/80 mt-0.5">基於上月 POOLDATA 樣本估算（mock）</p>
-            </div>
-            <a href="30-stage0-estimate.html" class="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100">開啟 Stage 0 試算</a>
-          </div>
-        </section>
-
-        <!-- 底部 sticky 操作列 -->
+        <!-- 底部操作列 -->
         <div class="sticky bottom-0 bg-white/95 backdrop-blur border-t border-border -mx-6 px-6 py-3 flex items-center justify-between">
           <a href="27-list-definition.html" class="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1">
             <i data-lucide="x" class="w-4 h-4"></i>取消
           </a>
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="submitEdit(null, 'advance')" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-border text-gray-700 rounded-md hover:bg-gray-50">
-              <i data-lucide="arrow-right" class="w-4 h-4"></i>儲存並推進至部門比例
-            </button>
-            <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
-              <i data-lucide="save" class="w-4 h-4"></i>儲存編輯
-            </button>
-          </div>
+          <button id="btnSave" type="submit"
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
+            <i data-lucide="save" class="w-4 h-4"></i><span id="btnSaveLabel">儲存變更</span>
+          </button>
         </div>
 
       </form>
@@ -300,101 +362,31 @@
           <i data-lucide="archive" class="w-5 h-5 text-danger"></i>
         </div>
         <div>
-          <h3 class="text-base font-semibold text-gray-800">確認停用名單 <code id="deactListNo" class="font-mono text-primary">OB202605001</code>？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F052 v2.0 · 軟刪除操作</p>
+          <h3 class="text-base font-semibold text-gray-800">停用名單 <code id="deactListNo" class="font-mono text-primary">OB202605001</code>？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F052 軟刪除，僅 draft 階段可執行</p>
         </div>
       </div>
       <div class="p-5 space-y-3">
-        <div class="rounded-md bg-red-50/50 border border-red-100 p-3 text-sm text-red-800">
-          <p class="font-semibold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-4 h-4"></i>此操作將軟刪除名單</p>
-          <p class="text-xs mt-1 text-red-700">已停用名單可在「已停用」分區查詢；無法直接還原，如需復原請聯絡 Admin。</p>
-        </div>
-        <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
-          <div class="flex justify-between"><span class="text-gray-500">名單名稱</span><span class="text-gray-800 font-medium" id="deactName">—</span></div>
-          <div class="flex justify-between"><span class="text-gray-500">階段</span><span class="text-gray-800 font-medium">草稿</span></div>
-          <div class="flex justify-between"><span class="text-gray-500">條件數</span><span class="text-gray-800 font-medium" id="deactCond">0</span></div>
-        </div>
-        <label class="flex items-start gap-2 cursor-pointer">
-          <input type="checkbox" id="deactConfirm" onchange="document.getElementById('btnDeactConfirm').disabled = !this.checked" class="mt-0.5 rounded text-danger focus:ring-danger">
-          <span class="text-sm text-gray-700">我確認停用此名單，理解此操作將軟刪除並無法於本頁直接還原。</span>
-        </label>
+        <p class="text-sm text-gray-700">停用後此名單將不會出現在月跑 Stage 1 候選名單中，僅可於「已停用」分頁查詢。停用為軟刪除，紀錄保留供稽核。</p>
       </div>
       <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
         <button onclick="closeDeactivateModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
-        <button id="btnDeactConfirm" disabled onclick="confirmDeactivate()"
-          class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-md hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed">
-          <i data-lucide="archive" class="w-4 h-4 inline -mt-0.5"></i> 確認停用
-        </button>
+        <button onclick="confirmDeactivate()" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-md hover:bg-red-700">確認停用</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== Modal：儲存並推進 ===== -->
-  <div id="advanceModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate-pop-in">
-      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
-        <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
-          <i data-lucide="arrow-right-circle" class="w-5 h-5 text-primary"></i>
-        </div>
-        <div>
-          <h3 class="text-base font-semibold text-gray-800">儲存並推進至部門比例階段？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F078 原子性上線約束流程</p>
-        </div>
-      </div>
-      <div class="p-5 space-y-3">
-        <p class="text-sm text-gray-700">推進後將同時：</p>
-        <ul class="text-sm text-gray-600 space-y-1.5 pl-5 list-disc">
-          <li>儲存當前編輯內容</li>
-          <li>鎖定篩選條件與 CR 開關（僅能 Rollback 退回後再修改）</li>
-          <li>進入部門比例設定階段，處長將收到通知</li>
-        </ul>
-        <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
-          <div class="flex justify-between"><span class="text-gray-500">LIST_NO</span><span class="text-primary font-mono" id="advListNo">OB202605001</span></div>
-          <div class="flex justify-between"><span class="text-gray-500">名稱</span><span class="text-gray-800 font-medium" id="advName">—</span></div>
-          <div class="flex justify-between"><span class="text-gray-500">條件數</span><span class="text-gray-800 font-medium" id="advCondCount">0</span></div>
-          <div class="flex justify-between"><span class="text-gray-500">CR 狀態</span><span class="text-gray-800 font-medium" id="advCr">啟用</span></div>
-        </div>
-      </div>
-      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
-        <button onclick="closeAdvanceModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
-        <button onclick="confirmAdvance()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700">
-          <i data-lucide="arrow-right" class="w-4 h-4 inline -mt-0.5"></i> 確認推進
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== Modal：Rollback 提示（資訊用，停留在說明） ===== -->
-  <div id="rollbackHintModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate-pop-in">
-      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
-        <i data-lucide="undo-2" class="w-5 h-5 text-warning"></i>
-        <h3 class="text-base font-semibold text-gray-800">Rollback 至草稿流程</h3>
-      </div>
-      <div class="p-5 space-y-2 text-sm text-gray-700">
-        <p>Rollback 是 destructive 動作：</p>
-        <ol class="list-decimal pl-5 space-y-1 text-gray-600 text-xs">
-          <li>部門比例 → 草稿：將清空所有部門比例設定</li>
-          <li>個別比例 → 部門比例：將清空所有個別比例設定（但保留部門比例）</li>
-          <li>待簽核 → 個別比例：取消當前簽核流程</li>
-          <li>準備完成 → 待簽核：取消準備完成狀態</li>
-        </ol>
-        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2">Rollback 入口位於名單列表的「退回」按鈕（B5 將於 29a 部門比例頁實作）。</p>
-      </div>
-      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
-        <a href="27-list-definition.html" class="px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-blue-700">前往名單定義列表</a>
-      </div>
-    </div>
-  </div>
-
+  <!-- Toast container -->
   <div id="toastContainer" class="fixed top-20 right-6 z-50 flex flex-col gap-2"></div>
 
   <script>
     lucide.createIcons();
 
+    // ============================================================
     // Sidebar collapsible
+    // ============================================================
     (function() {
-      const assignmentPages = ['27-list-definition.html','28-scoring-config.html','29-ratio-config.html','30-stage0-estimate.html','31-trigger-run.html','32-run-progress.html','33-run-summary.html','34-run-history.html','35-snapshot-detail.html','36-run-compare.html','37-base-code.html','37a-pooldata-whitelist.html','37b-categorical-field-values.html','27a-list-create-draft.html','27b-list-edit-draft.html'];
+      const assignmentPages = ['27-list-definition.html','28-scoring-config.html','29-ratio-config.html','29a-dept-ratio-config.html','29b-personnel-ratio-config.html','29c-approval-review.html','29d-ready-summary.html','30-stage0-estimate.html','31-trigger-run.html','32-run-progress.html','33-run-summary.html','34-run-history.html','35-snapshot-detail.html','36-run-compare.html','37-base-code.html','37a-pooldata-whitelist.html','37b-categorical-field-values.html','27a-list-create-draft.html','27b-list-edit-draft.html'];
       const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
       const isAssignmentPage = assignmentPages.includes(currentPage);
       window.toggleAssignmentSection = function() {
@@ -407,8 +399,8 @@
         const chevron = document.getElementById('assignment-chevron');
         const header = document.getElementById('assignment-section-header');
         if (!section) return;
-        if (exp) { section.style.maxHeight = section.scrollHeight + 'px'; chevron.style.transform = 'rotate(90deg)'; header.setAttribute('aria-expanded', 'true'); }
-        else { section.style.maxHeight = '0px'; chevron.style.transform = 'rotate(0deg)'; header.setAttribute('aria-expanded', 'false'); }
+        if (exp) { section.style.maxHeight = section.scrollHeight + 'px'; chevron.style.transform = 'rotate(90deg)'; header.setAttribute('aria-expanded','true'); }
+        else { section.style.maxHeight = '0px'; chevron.style.transform = 'rotate(0deg)'; header.setAttribute('aria-expanded','false'); }
         if (persist) localStorage.setItem('cdmp.sidebar.assignment.expanded', exp ? '1' : '0');
       }
       document.addEventListener('DOMContentLoaded', function() {
@@ -417,9 +409,15 @@
       });
     })();
 
+    // ============================================================
+    // Toast
+    // ============================================================
     function showToast(type, msg, sub) {
       const c = document.getElementById('toastContainer');
-      const cls = type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' : type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-green-50 border-green-200 text-green-800';
+      const cls = type === 'error' ? 'bg-red-50 border-red-200 text-red-800'
+                : type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800'
+                : 'bg-green-50 border-green-200 text-green-800';
       const icon = type === 'error' ? 'x-circle' : type === 'warning' ? 'alert-triangle' : type === 'info' ? 'info' : 'check-circle';
       const el = document.createElement('div');
       el.className = `toast toast-enter rounded-lg shadow-lg px-4 py-2.5 text-sm border max-w-sm flex items-start gap-2 ${cls}`;
@@ -427,10 +425,12 @@
       c.appendChild(el);
       lucide.createIcons();
       requestAnimationFrame(() => { el.classList.remove('toast-enter'); el.classList.add('toast-show'); });
-      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
     }
 
-    // 角色
+    // ============================================================
+    // 角色控制
+    // ============================================================
     const ROLE_META = {
       admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
       director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
@@ -443,133 +443,279 @@
         `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
       document.getElementById('user-name').textContent = m.name;
       const canAccess = role === 'director' || role === 'admin';
+      const okStage = currentList && currentList.stage === 'draft';
+      document.getElementById('mainForm').classList.toggle('hidden', !canAccess || !okStage);
+      document.getElementById('notDraftBanner').classList.toggle('hidden', !canAccess || okStage);
+      document.getElementById('roleBlockedBanner').classList.toggle('hidden', canAccess);
       if (!canAccess) {
-        document.getElementById('mainForm').classList.add('hidden');
         document.getElementById('notDraftBanner').classList.add('hidden');
-        document.getElementById('roleBlockedBanner').classList.remove('hidden');
-      } else {
-        document.getElementById('roleBlockedBanner').classList.add('hidden');
-        // 重新依當前 listNo 決定 mainForm vs notDraftBanner
-        applyStageGuard();
       }
       lucide.createIcons();
     }
 
-    // F075 / F076 mock（同 27a）
+    // ============================================================
+    // F075 v1.5 白名單（同 27a / 含拍板 UI-Q5 birth_date）
+    // ============================================================
     const FIELDS = [
-      { code: 'PROD_KIND',  label: '產品類別',        type: 'categorical', active: true },
-      { code: 'LIST_TYPE',  label: '名單類別',        type: 'categorical', active: true },
-      { code: 'BEST_CASE',  label: '最佳產品',        type: 'categorical', active: true },
-      { code: 'SPEC_TP',    label: '專案類別',        type: 'categorical', active: true },
-      { code: 'CASEYEAR',   label: '進件 / 滿期年數', type: 'categorical', active: true },
-      { code: 'SETTLE_SRC', label: '他行代償',        type: 'categorical', active: true },
-      { code: 'MONTH_CNT',  label: '撈取月份計數',    type: 'numeric',     active: true },
-      { code: 'PAYT_TERM',  label: '還款期別',        type: 'numeric',     active: false }
+      { columnName: 'prod_kind',   displayName: '產品類別',         fieldType: 'categorical', isActive: true  },
+      { columnName: 'caseyear',    displayName: '進件 / 滿期年數',  fieldType: 'categorical', isActive: true  },
+      { columnName: 'spec_tp',     displayName: '專案類別',         fieldType: 'categorical', isActive: true  },
+      { columnName: 'case_status', displayName: '案件結清期別',     fieldType: 'categorical', isActive: true  },
+      { columnName: 'settle_src',  displayName: '他行代償',         fieldType: 'categorical', isActive: true  },
+      { columnName: 'month_cnt',   displayName: '撈取月份計數',     fieldType: 'numeric',     isActive: true  },
+      { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true  },
+      { columnName: 'payt_term',   displayName: '還款期別',         fieldType: 'numeric',     isActive: false }
     ];
+    // F076 v1.5 options（同 27a；prod_kind '01' inactive 用於琥珀 demo）
     const FIELD_VALUES = {
-      PROD_KIND:  [ { v: '01', l: '汽車新車', active: false, deactReason: 'manual' }, { v: '02', l: '機車', active: true }, { v: '03', l: '其他商品', active: true } ],
-      LIST_TYPE:  [ { v: '01', l: '期中', active: true }, { v: '02', l: '中結', active: true }, { v: '03', l: '滿期', active: true } ],
-      BEST_CASE:  [ { v: '01', l: '汽車', active: true }, { v: '02', l: '機車', active: true }, { v: '03', l: '一般', active: true }, { v: '04', l: '保單', active: false, deactReason: 'manual' }, { v: '05', l: '信貸', active: true } ],
-      SPEC_TP:    [ { v: '02', l: '中古車', active: true }, { v: '04', l: '原融代償', active: true }, { v: '05', l: '在庫融資', active: true }, { v: '06', l: '專案融資', active: true }, { v: '11', l: '保單', active: true }, { v: '12', l: '信貸', active: true } ],
-      CASEYEAR:   [ { v: '0', l: '0 年', active: true }, { v: '1', l: '1 年', active: true }, { v: '2', l: '2 年', active: true }, { v: '3', l: '3 年', active: true }, { v: '4', l: '4 年', active: true }, { v: '5', l: '5 年', active: true }, { v: '6', l: '6 年以上', active: true }, { v: '99', l: '不限', active: true } ],
-      SETTLE_SRC: [ { v: 'Y', l: '含他行代償', active: true }, { v: 'N', l: '不含他行代償', active: true } ]
+      prod_kind:   [ { v: '01', l: '汽車新車',    active: false, reason: 'manual' }, { v: '02', l: '機車', active: true }, { v: '03', l: '其他商品', active: true } ],
+      caseyear:    [ { v: '0', l: '0 年', active: true }, { v: '1', l: '1 年', active: true }, { v: '2', l: '2 年', active: true }, { v: '3', l: '3 年', active: true }, { v: '4', l: '4 年', active: true }, { v: '5', l: '5 年', active: true }, { v: '6', l: '6 年（以上）', active: true }, { v: '99', l: '不限年數', active: true, special: true } ],
+      spec_tp:     [ { v: '02', l: '中古車', active: true }, { v: '04', l: '原融代償', active: true }, { v: '05', l: '在庫融資', active: true }, { v: '06', l: '專案融資', active: true }, { v: '11', l: '保單', active: true }, { v: '12', l: '信貸', active: true } ],
+      case_status: [ { v: '01', l: '期中（不含當月滿期）', active: true }, { v: '02', l: '中結', active: true }, { v: '03', l: '滿期（含當月滿期）', active: true }, { v: '04', l: '滿期（已結清）', active: true } ],
+      settle_src:  [ { v: 'Y', l: '含他行代償', active: true }, { v: 'N', l: '不含他行代償', active: true } ]
     };
-    const NUM_OPS = ['>', '<', '=', '>=', '<='];
-
-    // Mock 名單（每筆預填資料）
-    const MOCK = {
-      OB202605001: { stage: 'draft',       listNm: '2026-05 業務一部 主力催收',   createdBy: '王部長', createdAt: '2026-05-02', cr: true,  conds: [{ field: 'PROD_KIND', vals: ['01','02','03'] }, { field: 'MONTH_CNT', op: '>=', val: 2 }] },
-      OB202605002: { stage: 'draft',       listNm: '2026-05 業務二部 主力催收',   createdBy: '王部長', createdAt: '2026-05-03', cr: true,  conds: [{ field: 'LIST_TYPE', vals: ['01','02'] }] },
-      OB202605003: { stage: 'dept_ratio',  listNm: '2026-05 業務三部 信貸催收',   createdBy: '王部長', createdAt: '2026-05-04', cr: true,  conds: [{ field: 'BEST_CASE', vals: ['05'] }] },
-      OB202605008: { stage: 'approval',    listNm: '2026-05 業務二部 即將到期',   createdBy: '王部長', createdAt: '2026-05-08', cr: true,  conds: [{ field: 'MONTH_CNT', op: '>=', val: 2 }] }
+    const CASE_STATUS_TOOLTIPS = {
+      '01': '處理中，距滿期 > 1 月 或 剩餘期數 > 2',
+      '02': '已中途結清（CRM 記帳狀態）',
+      '03': '本月即將到期但尚未結清；主動續貸 / 防流失',
+      '04': '已完整結清完成；回找維繫 / 再行銷'
     };
-    const STAGE_LABEL = { draft: '草稿', dept_ratio: '部門比例', indiv_ratio: '個別比例', approval: '待簽核', ready: '準備完成' };
 
-    let currentListNo = 'OB202605001';
+    // ============================================================
+    // Demo 4 場景：以 listNo 為 key 之 mock 名單
+    // ============================================================
+    const LISTS = {
+      // ① 雙條件 + draft + categorical/numeric/date 三種型態
+      'OB202605001': {
+        listNo: 'OB202605001', listNm: '2026-05 業務一部 主力催收',
+        stage: 'draft', createdBy: '王部長', createdAt: '2026-05-02',
+        cardType: '01', cr: true,
+        listPeriodStart: 1, listPeriodEnd: 6, listInterval: 1,
+        conditionPayload: {
+          conditions: [
+            { columnName:'prod_kind', fieldType:'categorical', values:['02','03'] },
+            { columnName:'month_cnt', fieldType:'numeric', min:2, max:6 },
+            { columnName:'birth_date', fieldType:'date', dateStart:'1990-01-01', dateEnd:'2005-12-31' }
+          ],
+          logic: 'AND'
+        }
+      },
+      // ② 單條件含 INACTIVE values + draft
+      'OB202605002': {
+        listNo: 'OB202605002', listNm: '2026-05 業務二部 含已停用值',
+        stage: 'draft', createdBy: '王部長', createdAt: '2026-05-03',
+        cardType: '02', cr: true,
+        listPeriodStart: 2, listPeriodEnd: 4, listInterval: 1,
+        conditionPayload: {
+          conditions: [
+            // prod_kind '01' 在 mock 中為 inactive，觸發琥珀警示
+            { columnName:'prod_kind', fieldType:'categorical', values:['01','02'] }
+          ],
+          logic: 'AND'
+        }
+      },
+      // ③ condition_payload IS NULL 舊名單 + draft
+      'OB202604099': {
+        listNo: 'OB202604099', listNm: '2026-04 舊格式遷移名單',
+        stage: 'draft', createdBy: '李處長', createdAt: '2026-04-15',
+        cardType: '01', cr: true,
+        listPeriodStart: 2, listPeriodEnd: 4, listInterval: 1,
+        conditionPayload: null,
+        // backward-compat 5 個 entity column 之 $$ 分隔值
+        legacyEntityFallback: {
+          prod_kind:   '01$$02',
+          caseyear:    '1$$2$$3',
+          spec_tp:     '02$$04',
+          case_status: '01$$02',
+          settle_src:  'Y'
+        }
+      },
+      // ④ stage=dept_ratio（已推進，不可編輯）
+      'OB202605003': {
+        listNo: 'OB202605003', listNm: '2026-05 業務三部 信貸催收',
+        stage: 'dept_ratio', createdBy: '王部長', createdAt: '2026-05-04',
+        cardType: '03', cr: true,
+        listPeriodStart: 3, listPeriodEnd: 5, listInterval: 1,
+        conditionPayload: {
+          conditions: [
+            { columnName:'case_status', fieldType:'categorical', values:['01','02'] }
+          ],
+          logic: 'AND'
+        }
+      }
+    };
+    const STAGE_META = {
+      draft:       { label: '草稿',     bg: '#F3F4F6', fg: '#6B7280', icon: 'pencil' },
+      dept_ratio:  { label: '部門比例', bg: '#DBEAFE', fg: '#1E40AF', icon: 'building-2' },
+      indiv_ratio: { label: '個別比例', bg: '#CFFAFE', fg: '#0E7490', icon: 'users' },
+      approval:    { label: '待簽核',   bg: '#FEF3C7', fg: '#92400E', icon: 'stamp' },
+      ready:       { label: '準備完成', bg: '#DCFCE7', fg: '#15803D', icon: 'check-circle-2' }
+    };
+
+    // ============================================================
+    // 狀態
+    // ============================================================
+    let currentList = null;
     let conditions = [];
     let condIdSeq = 1;
+    let isLegacy = false;  // condition_payload IS NULL
 
+    // ============================================================
+    // 載入名單到表單
+    // ============================================================
     function loadList(listNo) {
-      currentListNo = listNo;
-      const m = MOCK[listNo];
-      if (!m) { showToast('error', '查無此名單', listNo); return; }
-      document.getElementById('headerListNo').textContent = listNo;
-      document.getElementById('titleListNo').textContent = listNo;
-      document.getElementById('roListNo').textContent = listNo;
-      document.getElementById('roCreatedBy').textContent = m.createdBy;
-      document.getElementById('metaCreatedBy').textContent = m.createdBy;
-      document.getElementById('metaCreatedAt').textContent = m.createdAt;
-      document.getElementById('listNm').value = m.listNm;
-      document.getElementById('nameCount').textContent = m.listNm.length;
-      document.getElementById('crToggle').checked = m.cr;
-      onCrToggle(m.cr);
-      // 條件
+      const L = LISTS[listNo];
+      if (!L) { showToast('error','找不到名單 ' + listNo); return; }
+      currentList = L;
+
+      // demo 切換器 active 狀態
+      document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('is-active'));
+      const idxMap = { 'OB202605001':1, 'OB202605002':2, 'OB202604099':3, 'OB202605003':4 };
+      const btn = document.getElementById('demo-btn-' + (idxMap[listNo] || 1));
+      if (btn) btn.classList.add('is-active');
+
+      // 階段 badge
+      const sm = STAGE_META[L.stage] || STAGE_META.draft;
+      document.getElementById('headerStageBadge').style.background = sm.bg;
+      document.getElementById('headerStageBadge').style.color = sm.fg;
+      document.getElementById('headerStageBadge').innerHTML = `<i data-lucide="${sm.icon}" class="w-3 h-3"></i>${sm.label}階段`;
+      document.getElementById('headerListNo').textContent = L.listNo;
+
+      // 場景④：非 draft → 全頁 banner，主表單隱藏
+      if (L.stage !== 'draft') {
+        document.getElementById('mainForm').classList.add('hidden');
+        document.getElementById('notDraftBanner').classList.remove('hidden');
+        document.getElementById('notDraftListNo').textContent = L.listNo;
+        document.getElementById('notDraftStage').textContent = sm.label;
+        lucide.createIcons();
+        return;
+      }
+      document.getElementById('mainForm').classList.remove('hidden');
+      document.getElementById('notDraftBanner').classList.add('hidden');
+
+      // 填入欄位
+      document.getElementById('titleListNo').textContent = L.listNo;
+      document.getElementById('roListNo').textContent = L.listNo;
+      document.getElementById('metaCreatedBy').textContent = L.createdBy;
+      document.getElementById('metaCreatedAt').textContent = L.createdAt;
+      document.getElementById('listNm').value = L.listNm;
+      document.getElementById('nameCount').textContent = L.listNm.length;
+      document.getElementById('cardType').value = L.cardType || '';
+      document.getElementById('listPeriodStart').value = L.listPeriodStart;
+      document.getElementById('listPeriodEnd').value = L.listPeriodEnd;
+      document.getElementById('listInterval').value = L.listInterval;
+      document.getElementById('crToggle').checked = !!L.cr;
+      onCrToggle(!!L.cr);
+
+      // 載入篩選條件（兩種模式）
+      isLegacy = (L.conditionPayload == null);
+      document.getElementById('legacyBanner').classList.toggle('hidden', !isLegacy);
+      document.getElementById('legacyTag').classList.toggle('hidden', !isLegacy);
+
       conditions = [];
       condIdSeq = 1;
-      m.conds.forEach(src => {
-        const f = FIELDS.find(x => x.code === src.field);
-        if (!f) return;
-        const c = { id: condIdSeq++, field: src.field };
-        if (f.type === 'numeric') { c.op = src.op || '>='; c.val = src.val; c.vals = []; }
-        else { c.op = 'in'; c.val = ''; c.vals = src.vals ? [...src.vals] : []; }
-        conditions.push(c);
-      });
-      renderConditions();
-      applyStageGuard();
-    }
 
-    function applyStageGuard() {
-      const m = MOCK[currentListNo];
-      const stage = m ? m.stage : 'draft';
-      const isDraft = stage === 'draft';
-      document.getElementById('mainForm').classList.toggle('hidden', !isDraft);
-      document.getElementById('notDraftBanner').classList.toggle('hidden', isDraft);
-      if (!isDraft) {
-        document.getElementById('notDraftListNo').textContent = currentListNo;
-        document.getElementById('notDraftStage').textContent = STAGE_LABEL[stage] || stage;
+      if (isLegacy) {
+        // 舊名單：read-only 模式
+        document.getElementById('btnAddCond').disabled = true;
+        document.getElementById('btnAddCond').title = '舊格式名單暫不可新增條件';
+        renderLegacyConditions(L.legacyEntityFallback || {});
+      } else {
+        // 一般編輯模式
+        document.getElementById('btnAddCond').disabled = false;
+        document.getElementById('btnAddCond').title = '';
+        (L.conditionPayload.conditions || []).forEach(src => {
+          const c = { id: condIdSeq++, columnName: src.columnName, fieldType: src.fieldType };
+          if (src.fieldType === 'categorical') c.values = [...(src.values || [])];
+          else if (src.fieldType === 'numeric') { c.min = src.min; c.max = src.max; }
+          else if (src.fieldType === 'date') { c.dateStart = src.dateStart; c.dateEnd = src.dateEnd; }
+          conditions.push(c);
+        });
+        renderConditions();
       }
+
+      // 儲存按鈕文字
+      document.getElementById('btnSaveLabel').textContent = isLegacy ? '儲存（不含篩選條件）' : '儲存變更';
+      document.getElementById('btnSave').title = isLegacy ? '僅儲存名單名稱、撈案期間、CR 設定。篩選條件需待系統完成資料轉換後方可修改。' : '';
+
+      lucide.createIcons();
     }
 
-    // 條件 builder（與 27a 一致）
+    // ============================================================
+    // 一般模式：渲染 condition rows
+    // ============================================================
     function availableFields(excludeId) {
-      const used = new Set(conditions.filter(c => c.id !== excludeId && c.field).map(c => c.field));
-      return FIELDS.filter(f => f.active && !used.has(f.code));
+      const usedCols = new Set(conditions.filter(c => c.id !== excludeId && c.columnName).map(c => c.columnName));
+      return FIELDS.filter(f => f.isActive && !usedCols.has(f.columnName));
     }
-    function addCondition() {
-      conditions.push({ id: condIdSeq++, field: '', op: '', val: '', vals: [] });
-      renderConditions();
+    function toggleAddFieldDropdown() {
+      if (document.getElementById('btnAddCond').disabled) return;
+      const dd = document.getElementById('addFieldDropdown');
+      dd.classList.toggle('hidden');
+      if (!dd.classList.contains('hidden')) renderAddFieldList('');
     }
-    function removeCondition(id) { conditions = conditions.filter(c => c.id !== id); renderConditions(); }
-    function setField(id, code) {
-      const c = conditions.find(x => x.id === id);
-      if (!c) return;
-      c.field = code;
-      const f = FIELDS.find(x => x.code === code);
-      if (f) {
-        if (f.type === 'numeric') { c.op = '>='; c.val = ''; c.vals = []; }
-        else { c.op = 'in'; c.val = ''; c.vals = []; }
+    function filterAddFieldDropdown(kw) { renderAddFieldList(kw); }
+    function renderAddFieldList(kw) {
+      const ul = document.getElementById('addFieldList');
+      const k = (kw || '').toLowerCase().trim();
+      const avail = availableFields().filter(f => !k || f.columnName.toLowerCase().includes(k) || f.displayName.includes(k));
+      if (avail.length === 0) {
+        ul.innerHTML = '<li class="px-3 py-4 text-center text-xs text-gray-400">所有 active 欄位皆已加入條件中</li>';
+        return;
       }
-      renderConditions();
-    }
-    function setOp(id, op) { const c = conditions.find(x => x.id === id); if (c) { c.op = op; renderConditions(); } }
-    function setNumValue(id, val) { const c = conditions.find(x => x.id === id); if (c) { c.val = val; updatePreview(); } }
-    function toggleCatValue(id, val) {
-      const c = conditions.find(x => x.id === id);
-      if (!c) return;
-      if (!c.vals) c.vals = [];
-      if (c.vals.includes(val)) c.vals = c.vals.filter(v => v !== val);
-      else c.vals.push(val);
-      renderConditions();
-    }
-    function toggleValueDropdown(id) {
-      document.querySelectorAll('[id^="valDrop-"]').forEach(d => { if (d.id !== `valDrop-${id}`) d.classList.add('hidden'); });
-      document.getElementById(`valDrop-${id}`).classList.toggle('hidden');
+      ul.innerHTML = avail.map(f => {
+        const typeBg = f.fieldType === 'categorical' ? '#DBEAFE' : f.fieldType === 'numeric' ? '#EDE9FE' : '#CFFAFE';
+        const typeFg = f.fieldType === 'categorical' ? '#1D4ED8' : f.fieldType === 'numeric' ? '#6D28D9' : '#0E7490';
+        return `
+          <li>
+            <button type="button" onclick="addConditionByCol('${f.columnName}')" class="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-gray-800">${f.displayName}</div>
+                <code class="text-[10px] font-mono text-gray-500">${f.columnName}</code>
+              </div>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${typeBg};color:${typeFg};">${f.fieldType}</span>
+            </button>
+          </li>
+        `;
+      }).join('');
+      lucide.createIcons();
     }
     document.addEventListener('click', function(e) {
+      if (!e.target.closest('#addFieldDropdown') && !e.target.closest('button[onclick="toggleAddFieldDropdown()"]')) {
+        document.getElementById('addFieldDropdown').classList.add('hidden');
+      }
       if (!e.target.closest('[id^="valDrop-"]') && !e.target.closest('button[onclick^="toggleValueDropdown"]')) {
         document.querySelectorAll('[id^="valDrop-"]').forEach(d => d.classList.add('hidden'));
       }
     });
+
+    function addConditionByCol(col) {
+      const f = FIELDS.find(x => x.columnName === col);
+      if (!f) return;
+      const c = { id: condIdSeq++, columnName: col, fieldType: f.fieldType };
+      if (f.fieldType === 'categorical') c.values = [];
+      else if (f.fieldType === 'numeric') { c.min = ''; c.max = ''; }
+      else if (f.fieldType === 'date') { c.dateStart = ''; c.dateEnd = ''; }
+      conditions.push(c);
+      document.getElementById('addFieldDropdown').classList.add('hidden');
+      renderConditions();
+    }
+    function removeCondition(id) { conditions = conditions.filter(c => c.id !== id); renderConditions(); }
+    function toggleCatValue(id, val) {
+      const c = conditions.find(x => x.id === id);
+      if (!c) return;
+      if (!c.values) c.values = [];
+      if (c.values.includes(val)) c.values = c.values.filter(v => v !== val);
+      else c.values.push(val);
+      renderConditions();
+    }
+    function setNumeric(id, key, v) { const c = conditions.find(x => x.id === id); if (c) { c[key] = v === '' ? '' : Number(v); renderConditions(); } }
+    function setDate(id, key, v) { const c = conditions.find(x => x.id === id); if (c) { c[key] = v; renderConditions(); } }
+    function toggleValueDropdown(id) {
+      const all = document.querySelectorAll('[id^="valDrop-"]');
+      all.forEach(d => { if (d.id !== `valDrop-${id}`) d.classList.add('hidden'); });
+      document.getElementById(`valDrop-${id}`).classList.toggle('hidden');
+    }
 
     function renderConditions() {
       const list = document.getElementById('condList');
@@ -577,189 +723,254 @@
       if (conditions.length === 0) {
         list.innerHTML = '';
         empty.classList.remove('hidden');
-        document.getElementById('previewBanner').classList.add('hidden');
         document.getElementById('inactiveValueWarn').classList.add('hidden');
         return;
       }
       empty.classList.add('hidden');
       list.innerHTML = conditions.map((c, idx) => {
-        const f = FIELDS.find(x => x.code === c.field);
-        const fieldOpts = availableFields(c.id).map(o => `<option value="${o.code}" ${o.code === c.field ? 'selected' : ''}>${o.code} — ${o.label}</option>`).join('');
-        const fieldSelect = `
-          <select onchange="setField(${c.id}, this.value)" class="px-2.5 py-1.5 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary min-w-[200px]">
-            <option value="">-- 選擇欄位 --</option>
-            ${fieldOpts}
-            ${c.field && !availableFields(c.id).some(o => o.code === c.field) ? `<option value="${c.field}" selected>${c.field} — ${(FIELDS.find(x=>x.code===c.field)||{}).label||''}</option>` : ''}
-          </select>`;
+        const f = FIELDS.find(x => x.columnName === c.columnName);
+        if (!f) return '';
+        const fieldHeader = `
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-mono text-gray-400 w-6">#${idx + 1}</span>
+            <span class="font-medium text-sm text-gray-800">${f.displayName}</span>
+            <code class="text-[10px] font-mono text-gray-500">${f.columnName}</code>
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${f.fieldType==='categorical'?'#DBEAFE':f.fieldType==='numeric'?'#EDE9FE':'#CFFAFE'};color:${f.fieldType==='categorical'?'#1D4ED8':f.fieldType==='numeric'?'#6D28D9':'#0E7490'};">${f.fieldType}</span>
+          </div>
+        `;
+
         let valueUI = '';
-        if (!f) {
-          valueUI = `<span class="text-xs text-gray-400 italic">請先選擇欄位</span>`;
-        } else if (f.type === 'numeric') {
-          const opOpts = NUM_OPS.map(o => `<option value="${o}" ${o === c.op ? 'selected' : ''}>${o}</option>`).join('');
-          valueUI = `
-            <select onchange="setOp(${c.id}, this.value)" class="px-2 py-1.5 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary font-mono w-16">${opOpts}</select>
-            <input type="number" value="${c.val}" oninput="setNumValue(${c.id}, this.value)" placeholder="數值"
-              class="w-28 px-2.5 py-1.5 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            <span class="text-xs text-gray-400">${f.code === 'MONTH_CNT' ? '個月' : ''}</span>`;
-        } else if (f.type === 'categorical') {
-          const opts = FIELD_VALUES[f.code] || [];
-          const selected = c.vals || [];
-          const chips = selected.map(v => {
+        if (f.fieldType === 'categorical') {
+          const opts = FIELD_VALUES[f.columnName] || [];
+          const selectedVals = c.values || [];
+          const chips = selectedVals.map(v => {
             const opt = opts.find(o => o.v === v);
             const label = opt ? opt.l : v;
             const isInactive = opt && !opt.active;
-            const chipCls = isInactive
-              ? 'inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200 rounded-full text-[11px]'
-              : 'val-chip';
+            const chipCls = isInactive ? 'val-chip val-chip-inactive' : 'val-chip';
             const icon = isInactive ? '<i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i>' : '';
             return `<span class="${chipCls}">${icon}${v} · ${label}<button type="button" onclick="toggleCatValue(${c.id}, '${v}')"><i data-lucide="x" class="w-3 h-3"></i></button></span>`;
           }).join(' ');
           const dropdownOpts = opts.map(o => {
-            const sel = selected.includes(o.v);
-            const tag = !o.active ? ' <span class="text-amber-600">(已停用)</span>' : '';
-            return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}">
-              <input type="checkbox" ${sel ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
+            const selected = selectedVals.includes(o.v);
+            const inactiveTag = !o.active ? ' <span class="text-amber-600">(已停用)</span>' : '';
+            const tip = c.columnName === 'case_status' && CASE_STATUS_TOOLTIPS[o.v] ? ` title="${CASE_STATUS_TOOLTIPS[o.v]}"` : '';
+            return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}"${tip}>
+              <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
               <span class="font-mono text-xs text-gray-500 w-8">${o.v}</span>
-              <span class="text-gray-700">${o.l}${tag}</span>
+              <span class="text-gray-700">${o.l}${inactiveTag}</span>
             </label>`;
           }).join('');
           valueUI = `
-            <span class="text-xs text-gray-500 font-mono mr-1">in</span>
+            <span class="text-xs text-gray-500 font-mono">IN</span>
             <div class="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-border rounded-md bg-white">
               ${chips || '<span class="text-xs text-gray-400">未選擇任何值</span>'}
               <div class="relative ml-auto">
                 <button type="button" onclick="toggleValueDropdown(${c.id})" class="text-xs px-2 py-1 border border-border rounded-md text-primary hover:bg-blue-50 inline-flex items-center gap-1">
                   <i data-lucide="plus" class="w-3 h-3"></i>選擇值
-                  <span class="text-gray-400">(${opts.filter(o => o.active).length})</span>
                 </button>
-                <div id="valDrop-${c.id}" class="hidden absolute right-0 top-full mt-1 w-64 bg-white border border-border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">${dropdownOpts}</div>
+                <div id="valDrop-${c.id}" class="hidden absolute right-0 top-full mt-1 w-72 bg-white border border-border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+                  ${dropdownOpts}
+                </div>
               </div>
             </div>`;
+        } else if (f.fieldType === 'numeric') {
+          valueUI = `
+            <span class="text-xs text-gray-500 font-mono">BETWEEN</span>
+            <input type="number" min="0" step="1" value="${c.min ?? ''}" oninput="setNumeric(${c.id}, 'min', this.value)" placeholder="min" class="w-24 px-2.5 py-1.5 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+            <span class="text-xs text-gray-400">~</span>
+            <input type="number" min="0" step="1" value="${c.max ?? ''}" oninput="setNumeric(${c.id}, 'max', this.value)" placeholder="max" class="w-24 px-2.5 py-1.5 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+            ${(c.min !== '' && c.max !== '' && Number(c.max) < Number(c.min)) ? '<span class="text-[11px] text-danger ml-1">max 需 ≥ min</span>' : ''}
+          `;
+        } else if (f.fieldType === 'date') {
+          valueUI = `
+            <span class="text-xs text-gray-500 font-mono">BETWEEN</span>
+            <input type="date" value="${c.dateStart || ''}" onchange="setDate(${c.id}, 'dateStart', this.value)" class="px-2.5 py-1.5 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+            <span class="text-xs text-gray-400">~</span>
+            <input type="date" value="${c.dateEnd || ''}" onchange="setDate(${c.id}, 'dateEnd', this.value)" class="px-2.5 py-1.5 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+            ${(c.dateStart && c.dateEnd && c.dateEnd < c.dateStart) ? '<span class="text-[11px] text-danger ml-1">end 需 ≥ start</span>' : ''}
+          `;
         }
+
         const andLabel = idx > 0 ? `<div class="flex items-center gap-2 py-1 -mb-1"><div class="flex-1 h-px bg-border"></div><span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">且 AND</span><div class="flex-1 h-px bg-border"></div></div>` : '';
+
         return `
           ${andLabel}
-          <div class="cond-row flex items-center gap-2 p-3 bg-gray-50/50 border border-border rounded-lg">
-            <span class="text-[10px] font-mono text-gray-400 w-6">#${idx + 1}</span>
-            ${fieldSelect}
-            <div class="flex items-center gap-2 flex-1">${valueUI}</div>
-            <button type="button" onclick="removeCondition(${c.id})" title="移除條件" class="cond-remove p-1.5 text-gray-400 hover:text-danger hover:bg-red-50 rounded transition shrink-0">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
-          </div>`;
+          <div class="cond-row p-3 bg-gray-50/50 border border-border rounded-lg space-y-2" data-cond-id="${c.id}">
+            <div class="flex items-center justify-between gap-2">
+              ${fieldHeader}
+              <button type="button" onclick="removeCondition(${c.id})" title="移除條件"
+                class="cond-remove p-1.5 text-gray-400 hover:text-danger hover:bg-red-50 rounded transition shrink-0">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">${valueUI}</div>
+          </div>
+        `;
       }).join('');
       lucide.createIcons();
-      updatePreview();
       updateInactiveWarn();
     }
 
     function updateInactiveWarn() {
       const warned = [];
       conditions.forEach(c => {
-        const f = FIELDS.find(x => x.code === c.field);
-        if (!f || f.type !== 'categorical') return;
-        const opts = FIELD_VALUES[f.code] || [];
-        (c.vals || []).forEach(v => {
+        if (c.fieldType !== 'categorical') return;
+        const opts = FIELD_VALUES[c.columnName] || [];
+        (c.values || []).forEach(v => {
           const opt = opts.find(o => o.v === v);
-          if (opt && !opt.active) warned.push(`${f.code}.${v}（${opt.l}）`);
+          if (opt && !opt.active) warned.push(`${c.columnName}.${v}（${opt.l}）`);
         });
       });
       const box = document.getElementById('inactiveValueWarn');
       if (warned.length === 0) { box.classList.add('hidden'); return; }
       box.classList.remove('hidden');
-      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將於儲存時被忽略`;
-      document.getElementById('inactiveWarnDetail').textContent = warned.join('、') + '。';
+      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑 Stage 1 不會匹配`;
+      document.getElementById('inactiveWarnDetail').textContent = warned.join('、');
     }
 
-    function updatePreview() {
-      const valid = conditions.filter(c => {
-        const f = FIELDS.find(x => x.code === c.field);
-        if (!f) return false;
-        if (f.type === 'numeric') return c.val !== '' && c.val !== null;
-        if (f.type === 'categorical') return (c.vals || []).length > 0;
-        return false;
-      });
-      const banner = document.getElementById('previewBanner');
-      if (valid.length === 0) { banner.classList.add('hidden'); return; }
-      banner.classList.remove('hidden');
-      let n = 12500;
-      valid.forEach((c, i) => { n = Math.floor(n * (0.85 - i * 0.08)); });
-      document.getElementById('previewCount').textContent = n.toLocaleString();
+    // ============================================================
+    // 場景③：LEGACY 模式渲染 (5 個 entity column fallback)
+    // ============================================================
+    const LEGACY_ENTITY_DISPLAY = {
+      prod_kind:   { displayName: '產品類別',         opts: FIELD_VALUES.prod_kind },
+      caseyear:    { displayName: '進件 / 滿期年數',  opts: FIELD_VALUES.caseyear },
+      spec_tp:     { displayName: '專案類別',         opts: FIELD_VALUES.spec_tp },
+      case_status: { displayName: '案件結清期別',     opts: FIELD_VALUES.case_status },
+      settle_src:  { displayName: '他行代償',         opts: FIELD_VALUES.settle_src }
+    };
+    function renderLegacyConditions(fallback) {
+      const list = document.getElementById('condList');
+      const empty = document.getElementById('condEmpty');
+      empty.classList.add('hidden');
+      document.getElementById('inactiveValueWarn').classList.add('hidden');
+
+      const rows = Object.keys(LEGACY_ENTITY_DISPLAY)
+        .filter(col => fallback[col])
+        .map((col, idx) => {
+          const meta = LEGACY_ENTITY_DISPLAY[col];
+          const rawVals = fallback[col].split('$$');
+          const chips = rawVals.map(v => {
+            const opt = meta.opts ? meta.opts.find(o => o.v === v) : null;
+            const label = opt ? opt.l : v;
+            return `<span class="legacy-chip">${v} · ${label}</span>`;
+          }).join(' ');
+          const andLabel = idx > 0 ? `<div class="flex items-center gap-2 py-1 -mb-1"><div class="flex-1 h-px bg-slate-200"></div><span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">且 AND</span><div class="flex-1 h-px bg-slate-200"></div></div>` : '';
+          return `
+            ${andLabel}
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2" aria-disabled="true">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-mono text-slate-400 w-6">#${idx + 1}</span>
+                  <span class="font-medium text-sm text-slate-700">${meta.displayName}</span>
+                  <code class="text-[10px] font-mono text-slate-500">${col}</code>
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-200 text-slate-600">LEGACY</span>
+                </div>
+                <span class="text-xs text-slate-400 italic">read-only</span>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-slate-500 font-mono">IN</span>
+                <div class="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-slate-200 rounded-md bg-slate-100/50">
+                  ${chips || '<span class="text-xs text-slate-400">無值</span>'}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      list.innerHTML = rows;
+      lucide.createIcons();
     }
 
+    // ============================================================
+    // CR + 名稱 + 期間 validate
+    // ============================================================
     function onCrToggle(checked) {
       const lbl = document.getElementById('crStatusLabel');
       if (checked) { lbl.className = 'text-xs text-success mt-0.5'; lbl.textContent = '啟用中：曾被分派但未成交的客戶將重新納入分派'; }
       else { lbl.className = 'text-xs text-gray-500 mt-0.5'; lbl.textContent = '已停用：僅納入新增及尚未被分派的客戶'; }
     }
-
     function validateName() {
       const v = document.getElementById('listNm').value.trim();
       document.getElementById('nameCount').textContent = v.length;
+      document.getElementById('nameError').classList.add('hidden');
+    }
+    function onPeriodChange() {
+      const s = document.getElementById('listPeriodStart').value;
+      const e = document.getElementById('listPeriodEnd').value;
+      const err = document.getElementById('periodError');
+      if (s !== '' && e !== '' && Number(e) < Number(s)) err.classList.remove('hidden');
+      else err.classList.add('hidden');
     }
 
-    function validate() {
+    function isConditionComplete(c) {
+      if (c.fieldType === 'categorical') return (c.values || []).length >= 1;
+      if (c.fieldType === 'numeric')     return c.min !== '' && c.max !== '' && Number(c.max) >= Number(c.min);
+      if (c.fieldType === 'date')        return c.dateStart && c.dateEnd && c.dateEnd >= c.dateStart;
+      return false;
+    }
+
+    function submitEdit(ev) {
+      ev.preventDefault();
       const name = document.getElementById('listNm').value.trim();
-      if (!name) { document.getElementById('nameError').classList.remove('hidden'); document.getElementById('listNm').focus(); showToast('error', '請輸入名單名稱'); return false; }
-      if (conditions.length === 0) { showToast('error', '請至少新增 1 個篩選條件'); return false; }
-      const incomplete = conditions.find(c => {
-        const f = FIELDS.find(x => x.code === c.field);
-        if (!f) return true;
-        if (f.type === 'numeric') return c.val === '' || c.val === null;
-        if (f.type === 'categorical') return (c.vals || []).filter(v => { const opt = (FIELD_VALUES[f.code]||[]).find(o => o.v === v); return opt && opt.active; }).length === 0;
-        return false;
-      });
-      if (incomplete) { showToast('error', '部分條件尚未填寫完整', '請補齊欄位、運算子、或至少選擇 1 個 active 可選值'); return false; }
-      return true;
-    }
+      if (!name) { document.getElementById('nameError').classList.remove('hidden'); showToast('error','請輸入名單名稱'); return; }
+      const s = document.getElementById('listPeriodStart').value;
+      const e = document.getElementById('listPeriodEnd').value;
+      const intv = document.getElementById('listInterval').value;
+      if (s === '' || e === '' || intv === '') { showToast('error','撈案期間三欄皆為必填'); return; }
+      if (Number(e) < Number(s)) { showToast('error','結束期數需大於等於開始期數'); return; }
 
-    function submitEdit(ev, action) {
-      if (ev) ev.preventDefault();
-      if (!validate()) return;
-      if (action === 'advance') {
-        document.getElementById('advListNo').textContent = currentListNo;
-        document.getElementById('advName').textContent = document.getElementById('listNm').value.trim();
-        document.getElementById('advCondCount').textContent = conditions.length;
-        document.getElementById('advCr').textContent = document.getElementById('crToggle').checked ? '啟用' : '停用';
-        document.getElementById('advanceModal').classList.remove('hidden');
-        lucide.createIcons();
-      } else {
-        showToast('success', `${currentListNo} 編輯已儲存`, '即將返回名單定義頁...');
-        setTimeout(() => { location.href = '27-list-definition.html'; }, 1200);
+      // PUT body：舊名單時主動 omit conditionPayload
+      const body = {
+        listNm: name,
+        listPeriodStart: Number(s), listPeriodEnd: Number(e), listInterval: Number(intv),
+        cardType: document.getElementById('cardType').value || null,
+        crEnabled: document.getElementById('crToggle').checked
+      };
+      if (!isLegacy) {
+        if (conditions.length === 0) { showToast('error','請至少設定一個篩選條件'); return; }
+        const incomplete = conditions.find(c => !isConditionComplete(c));
+        if (incomplete) { showToast('error','部分條件尚未填寫完整','categorical 需至少 1 個值；numeric 需 min/max；date 需起迄'); return; }
+        body.conditionPayload = {
+          conditions: conditions.map(c => {
+            const base = { columnName: c.columnName, fieldType: c.fieldType };
+            if (c.fieldType === 'categorical') return { ...base, values: c.values };
+            if (c.fieldType === 'numeric')     return { ...base, min: c.min, max: c.max };
+            if (c.fieldType === 'date')        return { ...base, dateStart: c.dateStart, dateEnd: c.dateEnd };
+            return base;
+          }),
+          logic: 'AND'
+        };
       }
-    }
-    function closeAdvanceModal() { document.getElementById('advanceModal').classList.add('hidden'); }
-    function confirmAdvance() {
-      closeAdvanceModal();
-      showToast('success', `${currentListNo} 已推進至部門比例`, '處長將收到通知');
+      console.log('[DEMO] PUT /api/v1/assignment/list-definitions/' + currentList.listNo, body);
+      const tip = isLegacy ? '舊名單僅更新名稱 / 期間 / CR，篩選條件保持原樣' : '篩選條件已覆寫';
+      showToast('success', `${currentList.listNo} 已儲存`, tip);
       setTimeout(() => { location.href = '27-list-definition.html'; }, 1500);
     }
 
-    // 停用名單
+    // ============================================================
+    // 停用 modal
+    // ============================================================
     function openDeactivateModal() {
-      document.getElementById('deactListNo').textContent = currentListNo;
-      document.getElementById('deactName').textContent = document.getElementById('listNm').value.trim();
-      document.getElementById('deactCond').textContent = conditions.length;
-      document.getElementById('deactConfirm').checked = false;
-      document.getElementById('btnDeactConfirm').disabled = true;
+      document.getElementById('deactListNo').textContent = currentList.listNo;
       document.getElementById('deactivateModal').classList.remove('hidden');
-      lucide.createIcons();
     }
     function closeDeactivateModal() { document.getElementById('deactivateModal').classList.add('hidden'); }
     function confirmDeactivate() {
       closeDeactivateModal();
-      showToast('warning', `${currentListNo} 已停用`, '可於名單列表「已停用」分區查詢');
+      showToast('warning', `${currentList.listNo} 已停用`, '可於名單列表「已停用」分區查詢');
       setTimeout(() => { location.href = '27-list-definition.html'; }, 1500);
     }
-    function openRollbackHint() { document.getElementById('rollbackHintModal').classList.remove('hidden'); lucide.createIcons(); }
 
-    // Init：解析 ?listNo=
-    (function init() {
-      setRole('director');
-      const urlParams = new URLSearchParams(location.search);
-      const listNo = urlParams.get('listNo') || 'OB202605001';
+    // ============================================================
+    // Init
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // URL ?listNo=
+      const params = new URLSearchParams(location.search);
+      const listNo = params.get('listNo') || 'OB202605001';
       loadList(listNo);
-    })();
+      setRole('director');
+    });
   </script>
 </body>
 </html>
