@@ -21,7 +21,6 @@ import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
 import {
   AssignmentStubPage,
-  BaseCodesPage,
   ScoringConfigPage,
   ListDefinitionPage,
   ListCreateDraftPage,
@@ -29,8 +28,7 @@ import {
   Stage0EstimatePage,
   TriggerRunPage,
   RunProgressPage,
-  FieldWhitelistPage,
-  FieldOptionsPage,
+  FieldBasePage,
   RunHistoryPage,
   RunSummaryPage,
   SnapshotDetailPage,
@@ -184,29 +182,13 @@ export function App() {
         }
       />
       {/* E07 客戶名單分派 stub 路由（SalesManagerRoute Guard） */}
-      {/* F068：代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS） */}
+      {/* F050 v2.1 / J4：「代碼維護」+「篩選欄位管理」+「可選值管理」三舊路由合併為單一新 route
+        對齊 prototype 37-base-code.html 2-Tab 容器設計（?tab=fields|options） */}
       <Route
-        path="/assignment/base-codes"
+        path="/assignment/field-base"
         element={
           <DirectorOrSectionChiefRoute>
-            <BaseCodesPage />
-          </DirectorOrSectionChiefRoute>
-        }
-      />
-      {/* F075 / F076：POOLDATA 篩選欄位管理 + 可選值管理（v1.4 UI 命名標準化） */}
-      <Route
-        path="/assignment/whitelist"
-        element={
-          <DirectorOrSectionChiefRoute>
-            <FieldWhitelistPage />
-          </DirectorOrSectionChiefRoute>
-        }
-      />
-      <Route
-        path="/assignment/whitelist/options"
-        element={
-          <DirectorOrSectionChiefRoute>
-            <FieldOptionsPage />
+            <FieldBasePage />
           </DirectorOrSectionChiefRoute>
         }
       />
