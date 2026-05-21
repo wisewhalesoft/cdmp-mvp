@@ -7,6 +7,9 @@ import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.ent
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { User } from '@/database/entities/user.entity';
@@ -34,6 +37,9 @@ import { Stage0EstimateService } from './stage0-estimate.service';
       AssignmentRun,
       ObPoolData,
       ObCalendar,
+      ObDeptPct,
+      ObEmplSet,
+      ObEmphire,
       PooldataFieldOption,
       PooldataFieldWhitelist,
       User,

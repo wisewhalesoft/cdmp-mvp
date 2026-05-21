@@ -14,12 +14,23 @@ import {
   ObListDefinitionConditionPayload,
 } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { CreateListDto } from './dto/create-list.dto';
 import type { UpdateListDto } from './dto/update-list.dto';
+import type {
+  ListSnapshotResponse,
+  SnapshotDeptRatio,
+  SnapshotPersonnelRatio,
+  SnapshotPersonnelRatioMember,
+  SnapshotAuditTrailItem,
+} from './dto/list-snapshot-response.dto';
 
 /**
  * F050 v2.1 / AD-E07-18 §18.4：list_period_* 為一級保留欄位，不可入 conditions
@@ -61,6 +72,14 @@ export class AssignmentListService {
     private readonly optionRepo: Repository<PooldataFieldOption>,
     @InjectRepository(PooldataFieldWhitelist)
     private readonly whitelistRepo: Repository<PooldataFieldWhitelist>,
+    @InjectRepository(ObDeptPct)
+    private readonly deptPctRepo: Repository<ObDeptPct>,
+    @InjectRepository(ObEmplSet)
+    private readonly emplSetRepo: Repository<ObEmplSet>,
+    @InjectRepository(ObEmphire)
+    private readonly emphireRepo: Repository<ObEmphire>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly assignmentRunGuard: AssignmentRunGuardService,
   ) {}
 
@@ -872,5 +891,149 @@ export class AssignmentListService {
           `action=${args.action}, actor=${args.actorId}: ${err?.message ?? err}`,
       );
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // F050 v2.2 §6.2 — GET full-snapshot（US-131 Detail Drawer）
+  // -------------------------------------------------------------------------
+
+  /**
+   * F050 v2.2 §6.2：取得指定名單之完整快照。
+   *
+   * 唯讀端點：
+   *   - 不攔截 LIST_HISTORICAL_READONLY（歷史月份可開啟）
+   *   - 不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING（月跑中可開啟）
+   *   - 不攔截 FeatureFlagGuard（為展示用唯讀資料）
+   *
+   * 處長轄區隔離（US-131 AC-4）：
+   *   - 沿用既有 SectionChiefScopeService pattern：actor 為 section_chief 時，
+   *     依 ob_empl_set.created_by = actor.userId 限縮 personnelRatios 範圍（取 deptid_m 集合）
+   *   - admin / director / 無 actor → bypass（全可見）
+   *   - deptRatios 不過濾（處長仍可見全名單分配輪廓）
+   *
+   * Stage-aware null state（US-131 AC-3）：
+   *   - draft：deptRatios=[], personnelRatios=[]
+   *   - dept_ratio：deptRatios 有值, personnelRatios=[]
+   *   - personnel_ratio / approval / ready：兩者皆有值
+   *
+   * @param listNo 11 碼名單編號
+   * @param actor 當前使用者（含 role / businessRole / userId）
+   * @throws NotFoundException 404 ASSIGNMENT_LIST_NOT_FOUND
+   */
+  async getFullSnapshot(
+    listNo: string,
+    actor: { userId: string; role: string; businessRole: string | null },
+  ): Promise<ListSnapshotResponse> {
+    // 1. 名單存在性
+    const entity = await this.listRepo.findOne({ where: { list_no: listNo } });
+    if (!entity) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ASSIGNMENT_LIST_NOT_FOUND,
+        message: ERROR_MESSAGES.ASSIGNMENT_LIST_NOT_FOUND,
+      });
+    }
+
+    // 2. legacyEntityFallback：condition_payload IS NULL 時非 null
+    const legacyEntityFallback =
+      entity.condition_payload === null
+        ? {
+            prodKind: entity.prod_kind ?? null,
+            caseyear: entity.caseyear ?? null,
+            specTp: entity.spec_tp ?? null,
+            caseStatus: entity.case_status ?? null,
+            settleSrc: entity.settle_src ?? null,
+          }
+        : null;
+
+    // 3. deptRatios（依 ob_dept_pct；不過濾 section_chief 轄區）
+    const deptRows = await this.deptPctRepo.find({
+      where: { list_no: listNo },
+      order: { obdeptid: 'ASC' },
+    });
+    const deptRatios: SnapshotDeptRatio[] = deptRows.map((r) => ({
+      deptCode: r.obdeptid,
+      deptName: r.obdeptnm ?? null,
+      ration: Number(r.ration),
+    }));
+
+    // 4. personnelRatios（依 ob_empl_set group by deptid_m；section_chief 轄區隔離）
+    const isSectionChief =
+      actor.role !== 'admin' && actor.businessRole === 'section_chief';
+    const emplQb = this.emplSetRepo
+      .createQueryBuilder('s')
+      .where('s.list_no = :listNo', { listNo });
+    if (isSectionChief) {
+      emplQb.andWhere('s.created_by = :uid', { uid: actor.userId });
+    }
+    const emplRows = await emplQb.getMany();
+
+    // 收集所有 emplid 一次性查 ob_emphire（避免 N+1）
+    const emplIds = Array.from(new Set(emplRows.map((r) => r.emplid))).filter(
+      (x): x is string => typeof x === 'string' && x.length > 0,
+    );
+    const emphireMap = new Map<string, ObEmphire>();
+    if (emplIds.length > 0) {
+      const emphires = await this.emphireRepo.find({ where: { emp_id: In(emplIds) } });
+      for (const e of emphires) emphireMap.set(e.emp_id, e);
+    }
+
+    // Group by deptid_m
+    const groupMap = new Map<string, { deptName: string | null; members: SnapshotPersonnelRatioMember[] }>();
+    for (const row of emplRows) {
+      const deptCode = row.deptid_m ?? '';
+      if (!deptCode) continue;
+      let group = groupMap.get(deptCode);
+      if (!group) {
+        const emphire = row.emplid ? emphireMap.get(row.emplid) : undefined;
+        group = { deptName: emphire?.dept_name ?? null, members: [] };
+        groupMap.set(deptCode, group);
+      }
+      const empInfo = row.emplid ? emphireMap.get(row.emplid) : undefined;
+      group.members.push({
+        emplid: row.emplid ?? '',
+        empNm: empInfo?.emp_nm ?? null,
+        ration: Number(row.ration),
+      });
+    }
+    const personnelRatios: SnapshotPersonnelRatio[] = Array.from(groupMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([deptCode, g]) => ({ deptCode, deptName: g.deptName, members: g.members }));
+
+    // 5. auditTrail（依 created_at ASC）
+    const auditRows = await this.auditRepo.find({
+      where: { entity_type: 'ob_list_definition', entity_id: listNo },
+      order: { created_at: 'ASC' },
+    });
+    const auditTrail: SnapshotAuditTrailItem[] = auditRows.map((r) => ({
+      action: r.action,
+      operatorId: r.actor_id,
+      operatorEmpNm: r.actor_name ?? null,
+      before: r.before_value ?? null,
+      after: r.after_value ?? null,
+      at: r.created_at,
+    }));
+
+    return {
+      list: {
+        listNo: entity.list_no,
+        listNm: entity.list_nm,
+        stage: entity.stage,
+        status: entity.status,
+        projectWorkym: entity.project_workym ?? null,
+        cardType: entity.card_type ?? null,
+        crEnabled: entity.cr_enabled ?? false,
+        listPeriodStart: entity.list_period_start ?? null,
+        listPeriodEnd: entity.list_period_end ?? null,
+        listInterval: entity.list_interval ?? null,
+        conditionPayload: entity.condition_payload ?? null,
+        legacyEntityFallback,
+        createdBy: entity.created_by ?? null,
+        createdAt: entity.created_at ?? null,
+        updatedAt: entity.updated_at ?? null,
+      },
+      deptRatios,
+      personnelRatios,
+      auditTrail,
+    };
   }
 }

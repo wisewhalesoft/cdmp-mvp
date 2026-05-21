@@ -97,6 +97,25 @@ export class AssignmentListController {
   }
 
   // -------------------------------------------------------------------------
+  // F050 v2.2 §6.2 — GET full-snapshot（US-131 Detail Drawer）
+  //
+  // 唯讀端點：class 級 DirectorOrSectionChiefGuard，method 不加 @RequireDirector。
+  // 不套 FeatureFlagGuard / 不攔截 LIST_HISTORICAL_READONLY /
+  //   ASSIGNMENT_RUN_ALREADY_RUNNING（spec §6.2 末段明定）。
+  // 路由排序：宣告於 @Get(':listNo') 之前避免被通用路徑誤捕（雖目前無 :listNo route，預防未來增加）。
+  // -------------------------------------------------------------------------
+
+  @Get(':listNo/full-snapshot')
+  async getFullSnapshot(@Param('listNo') listNo: string, @Req() req: any) {
+    const actor = {
+      userId: req.user.userId,
+      role: req.user.role,
+      businessRole: req.user.businessRole ?? null,
+    };
+    return this.service.getFullSnapshot(listNo, actor);
+  }
+
+  // -------------------------------------------------------------------------
   // F048 / F077 — GET
   // -------------------------------------------------------------------------
 
