@@ -48,9 +48,38 @@ const mockedAdvancePersonnel = vi.mocked(assignmentStageApi.advanceToPersonnelRa
 const mockedAdvanceApproval = vi.mocked(assignmentStageApi.advanceToApproval);
 const mockedApprove = vi.mocked(assignmentStageApi.approveList);
 const mockedRollbackDraft = vi.mocked(assignmentStageApi.rollbackToDraft);
-const mockedRollbackDept = vi.mocked(assignmentStageApi.rollbackToDeptRatio);
-const mockedRejectList = vi.mocked(assignmentStageApi.rejectList);
 const mockedGetApprovalHistory = vi.mocked(assignmentStageApi.getApprovalHistory);
+
+/** 對齊 spec F079 §5.1 之完整 GET response shape */
+function getDeptResp(
+  deptRatios: Array<{ obdeptId: string; obdeptNm: string; ration: number }>,
+): assignmentStageApi.GetDeptRatiosResponse {
+  return {
+    listNo: 'OB202605003',
+    listNm: '測試名單',
+    projectWorkym: '202605',
+    stage: 'dept_ratio',
+    deptRatios: deptRatios.map((d) => ({ ...d, isActive: true })),
+    total: deptRatios.reduce((s, d) => s + d.ration, 0),
+    isReadOnly: false,
+  };
+}
+
+/** 對齊 spec F082 §5.1 之完整 GET response shape */
+function getPersonnelResp(
+  departments: assignmentStageApi.PersonnelRatioDepartment[] = [],
+): assignmentStageApi.GetPersonnelRatiosResponse {
+  return {
+    listNo: 'OB202605003',
+    listNm: '測試名單',
+    projectWorkym: '202605',
+    stage: 'personnel_ratio',
+    isReadOnly: false,
+    viewerRole: 'director',
+    departments,
+    latestRejection: null,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -139,14 +168,12 @@ function buildBaseList(stage: string, listNo = 'OB202605003') {
 describe('F050 v2.2 §7 BR-13 — Producer 端（TS-F050-SIG-001~003）', () => {
   it('SIG-001 F079（29a dept-ratio）推進成功 → 寫 pendingToast → 跳回 M01', async () => {
     mockedListLists.mockResolvedValue(buildBaseList('dept_ratio'));
-    mockedGetDeptRatios.mockResolvedValue({
-      listNo: 'OB202605003',
-      deptRatios: [
+    mockedGetDeptRatios.mockResolvedValue(
+      getDeptResp([
         { obdeptId: 'XTA0', obdeptNm: '業務一部', ration: 60 },
         { obdeptId: 'XTB0', obdeptNm: '業務二部', ration: 40 },
-      ],
-      total: 100,
-    });
+      ]),
+    );
     mockedAdvancePersonnel.mockResolvedValue({
       listNo: 'OB202605003',
       stage: 'personnel_ratio',
@@ -179,11 +206,7 @@ describe('F050 v2.2 §7 BR-13 — Producer 端（TS-F050-SIG-001~003）', () => 
 
   it('SIG-001b F079 退回草稿成功 → 寫 info pendingToast → 跳回 M01', async () => {
     mockedListLists.mockResolvedValue(buildBaseList('dept_ratio'));
-    mockedGetDeptRatios.mockResolvedValue({
-      listNo: 'OB202605003',
-      deptRatios: [],
-      total: 0,
-    });
+    mockedGetDeptRatios.mockResolvedValue(getDeptResp([]));
     mockedRollbackDraft.mockResolvedValue({ listNo: 'OB202605003', stage: 'draft' });
 
     renderPage('/dept-ratio');
@@ -210,16 +233,10 @@ describe('F050 v2.2 §7 BR-13 — Producer 端（TS-F050-SIG-001~003）', () => 
 
   it('SIG-002 F082（29b personnel-ratio）推進成功 → 寫 success pendingToast → 跳回 M01', async () => {
     mockedListLists.mockResolvedValue(buildBaseList('personnel_ratio'));
-    mockedGetDeptRatios.mockResolvedValue({
-      listNo: 'OB202605003',
-      deptRatios: [{ obdeptId: 'XTA0', obdeptNm: '業務一部', ration: 100 }],
-      total: 100,
-    });
-    mockedGetPersonnelRatios.mockResolvedValue({
-      listNo: 'OB202605003',
-      employees: [],
-      total: 0,
-    });
+    mockedGetDeptRatios.mockResolvedValue(
+      getDeptResp([{ obdeptId: 'XTA0', obdeptNm: '業務一部', ration: 100 }]),
+    );
+    mockedGetPersonnelRatios.mockResolvedValue(getPersonnelResp());
     mockedAdvanceApproval.mockResolvedValue({
       listNo: 'OB202605003',
       stage: 'approval',
@@ -249,16 +266,10 @@ describe('F050 v2.2 §7 BR-13 — Producer 端（TS-F050-SIG-001~003）', () => 
 
   it('SIG-003 F086（29c approval）核准成功 → 寫 success pendingToast → 跳回 M01', async () => {
     mockedListLists.mockResolvedValue(buildBaseList('approval'));
-    mockedGetDeptRatios.mockResolvedValue({
-      listNo: 'OB202605003',
-      deptRatios: [{ obdeptId: 'XTA0', obdeptNm: '業務一部', ration: 100 }],
-      total: 100,
-    });
-    mockedGetPersonnelRatios.mockResolvedValue({
-      listNo: 'OB202605003',
-      employees: [],
-      total: 0,
-    });
+    mockedGetDeptRatios.mockResolvedValue(
+      getDeptResp([{ obdeptId: 'XTA0', obdeptNm: '業務一部', ration: 100 }]),
+    );
+    mockedGetPersonnelRatios.mockResolvedValue(getPersonnelResp());
     mockedGetApprovalHistory.mockResolvedValue({
       listNo: 'OB202605003',
       history: [],

@@ -7,11 +7,19 @@ import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
 import * as authStore from '@/stores/auth-store';
 import type { AssignmentListItem, ListListsResponse } from '@/api/assignment-list';
+import type {
+  GetPersonnelRatiosResponse,
+  PersonnelRatioDepartment,
+  LatestRejection,
+} from '@/api/assignment-stage';
 
 /**
  * 29b 個別業務比例設定獨立頁面測試
  *
- * 對應 prototype 29b-personnel-ratio-config.html
+ * 對應 prototype 29b-personnel-ratio-config.html / spec F082 §5.1
+ *
+ * 重點：mock 必須使用後端真實 response shape（departments[] 而非 employees[]），
+ * 對齊 feedback_mock_real_system_contract 教訓。
  */
 
 vi.mock('@/api/assignment-list');
@@ -29,13 +37,42 @@ vi.mock('@/stores/auth-store', async () => {
 });
 
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
-const mockedGetDeptRatios = vi.mocked(assignmentStageApi.getDeptRatios);
 const mockedGetPersonnelRatios = vi.mocked(assignmentStageApi.getPersonnelRatios);
 const mockedAdvanceApproval = vi.mocked(assignmentStageApi.advanceToApproval);
-const mockedRollbackDept = vi.mocked(assignmentStageApi.rollbackToDeptRatio);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
+
+function buildDepartment(
+  overrides: Partial<PersonnelRatioDepartment> & { deptCode: string; deptName: string },
+): PersonnelRatioDepartment {
+  return {
+    deptRatio: 50,
+    isInScope: true,
+    activeCount: 0,
+    sumValidated: false,
+    allResigned: false,
+    employees: [],
+    deptSum: 0,
+    ...overrides,
+  };
+}
+
+function buildPersonnelResponse(
+  departments: PersonnelRatioDepartment[],
+  latestRejection: LatestRejection | null = null,
+): GetPersonnelRatiosResponse {
+  return {
+    listNo: 'OB202605007',
+    listNm: '2026-05 主力催收名單 C',
+    projectWorkym: '202605',
+    stage: 'personnel_ratio',
+    isReadOnly: false,
+    viewerRole: 'director',
+    departments,
+    latestRejection,
+  };
+}
 
 const list: AssignmentListItem = {
   listNo: 'OB202605007',
@@ -105,20 +142,12 @@ describe('PersonnelRatioConfigPage (29b)', () => {
       businessRole: 'director',
     } as any);
     mockedListLists.mockResolvedValue(mockListsResp);
-    mockedGetDeptRatios.mockResolvedValue({
-      listNo: 'OB202605007',
-      deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 50 },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 50 },
-      ],
-      total: 2,
-    });
-    // personnel ratio API 預設 mock：無 latestRejection
-    mockedGetPersonnelRatios.mockResolvedValue({
-      listNo: 'OB202605007',
-      employees: [],
-      total: 0,
-    } as any);
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({ deptCode: 'D01', deptName: '北一處', deptRatio: 50 }),
+        buildDepartment({ deptCode: 'D02', deptName: '南一處', deptRatio: 50 }),
+      ]),
+    );
   });
 
   afterEach(() => {
@@ -133,7 +162,7 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     expect(screen.getByText(/2026-05 主力催收名單 C/)).toBeInTheDocument();
   });
 
-  it('載入時依 dept list 渲染多部門 accordion', async () => {
+  it('載入時依 departments[] 渲染多部門 accordion', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('dept-accordion-header-D01')).toBeInTheDocument();
@@ -142,18 +171,18 @@ describe('PersonnelRatioConfigPage (29b)', () => {
   });
 
   it('有 latestRejection 時顯示 rejection banner', async () => {
-    mockedGetPersonnelRatios.mockResolvedValue({
-      listNo: 'OB202605007',
-      employees: [],
-      total: 0,
-      latestRejection: {
-        rejectReason: '某員工新進，建議下調至 15% 以下',
-        rejectorId: 'dir-001',
-        rejectorName: '張部長',
-        rejectorRole: 'director',
-        rejectedAt: '2026-05-15T13:42:00Z',
-      },
-    } as any);
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse(
+        [buildDepartment({ deptCode: 'D01', deptName: '北一處' })],
+        {
+          rejectReason: '某員工新進，建議下調至 15% 以下',
+          rejectorId: 'dir-001',
+          rejectorName: '張部長',
+          rejectorRole: 'director',
+          rejectedAt: '2026-05-15T13:42:00Z',
+        },
+      ),
+    );
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('rejection-banner-full')).toBeInTheDocument();
@@ -215,16 +244,53 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     });
   });
 
-  it('depts 列表為空時顯示「無部門」', async () => {
-    mockedGetDeptRatios.mockResolvedValue({
-      listNo: 'OB202605007',
-      deptRatios: [],
-      total: 0,
-    });
+  it('departments 為空時 accordion 顯示「無部門」', async () => {
+    mockedGetPersonnelRatios.mockResolvedValue(buildPersonnelResponse([]));
     renderPage();
     await waitFor(() => {
       expect(screen.getByText(/無部門|尚無/)).toBeInTheDocument();
     });
+  });
+
+  it('全員離職部門顯示對應 banner', async () => {
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({
+          deptCode: 'D99',
+          deptName: '舊東區處',
+          allResigned: true,
+          activeCount: 0,
+          employees: [
+            { empId: 'E001', empName: '舊員工', ration: null, isResigned: true, createdBy: null },
+          ],
+        }),
+      ]),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('dept-all-resigned-D99')).toBeInTheDocument();
+    });
+  });
+
+  it('員工含離職時顯示「已離職」徽章 + ration disabled', async () => {
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({
+          deptCode: 'D01',
+          deptName: '北一處',
+          activeCount: 2,
+          employees: [
+            { empId: 'E001', empName: '在職員', ration: 100, isResigned: false, createdBy: 'd1' },
+            { empId: 'E099', empName: '離職員', ration: null, isResigned: true, createdBy: null },
+          ],
+        }),
+      ]),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('empl-resigned-badge-E099')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('empl-resigned-badge-E001')).not.toBeInTheDocument();
   });
 
   it('名單階段不是 personnel_ratio 時顯示警告', async () => {

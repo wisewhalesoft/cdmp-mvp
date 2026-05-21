@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Check,
   XCircle,
-  Filter,
   Building2,
   Users,
   History,
@@ -132,26 +131,23 @@ export function ApprovalReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listNo]);
 
-  // 載入 dept ratios + 各部門員工
+  // 載入 dept ratios + 各部門員工（一次 personnel-ratios 呼叫，避免 N 個 endpoint 競態）
   useEffect(() => {
     if (!listNo) return;
     let aborted = false;
     void (async () => {
       try {
-        const d = await getDeptRatios(listNo);
+        const [d, p] = await Promise.all([
+          getDeptRatios(listNo),
+          getPersonnelRatios(listNo),
+        ]);
         if (aborted) return;
         setDepts(d.deptRatios ?? []);
-        // 載入每部門員工
         const byDept: Record<string, PersonnelRatioEmployee[]> = {};
-        for (const dept of d.deptRatios ?? []) {
-          try {
-            const p = await getPersonnelRatios(listNo, dept.obdeptId);
-            byDept[dept.obdeptId] = p.employees ?? [];
-          } catch {
-            byDept[dept.obdeptId] = [];
-          }
+        for (const dept of p.departments ?? []) {
+          byDept[dept.deptCode] = dept.employees;
         }
-        if (!aborted) setPersonnelByDept(byDept);
+        setPersonnelByDept(byDept);
       } catch {
         // ignore
       }

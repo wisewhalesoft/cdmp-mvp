@@ -1,4 +1,4 @@
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ReadySummaryDetailPage } from '../ready-summary-detail-page';
@@ -102,17 +102,26 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     mockedListLists.mockResolvedValue(mockListsResp);
     mockedGetDeptRatios.mockResolvedValue({
       listNo: 'OB202605002',
+      listNm: '測試名單',
+      projectWorkym: '202605',
+      stage: 'ready',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60 },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40 },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true },
       ],
-      total: 2,
+      total: 100,
+      isReadOnly: true,
     });
     mockedGetPersonnelRatios.mockResolvedValue({
       listNo: 'OB202605002',
-      employees: [],
-      total: 0,
-    } as any);
+      listNm: '測試名單',
+      projectWorkym: '202605',
+      stage: 'ready',
+      isReadOnly: true,
+      viewerRole: 'director',
+      departments: [],
+      latestRejection: null,
+    });
     mockedGetApprovalHistory.mockResolvedValue({
       listNo: 'OB202605002',
       history: [

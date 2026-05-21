@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Undo2, AlertTriangle } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -12,10 +12,9 @@ import {
 } from '@/api/assignment-list';
 import {
   advanceToApproval,
-  getDeptRatios,
   getPersonnelRatios,
   rollbackToDeptRatio,
-  type DeptRatioItem,
+  type PersonnelRatioDepartment,
 } from '@/api/assignment-stage';
 import { PersonnelRatioForm } from './_components/personnel-ratio-form';
 import { ListSummaryCard } from './_components/list-summary-card';
@@ -41,7 +40,8 @@ import { writePendingToast } from './_utils/pending-toast';
  * 主要區塊：
  *   - RejectionBanner（latestRejection 非 null 時顯示）
  *   - ListSummaryCard（名單摘要 + 篩選條件 chips）
- *   - PersonnelRatioAccordion（多部門 accordion，每 dept body 套 PersonnelRatioForm）
+ *   - PersonnelRatioAccordion（多部門 accordion，每 dept body 套 PersonnelRatioForm；
+ *     departments 由 getPersonnelRatios(listNo) 一次取得，避免兩個 endpoint 競態）
  *   - 操作 bar：返回 / 退回部門比例（director only） / 推進至簽核
  *
  * 階段守衛：list.stage 必為 'personnel_ratio'
@@ -64,8 +64,8 @@ function splitConditionsFromList(list: AssignmentListItem): string[] {
 }
 
 interface DeptWithProgress extends AccordionDept {
-  obdeptId: string;
-  obdeptNm: string;
+  /** 完整後端資料供 form 使用 */
+  department: PersonnelRatioDepartment;
 }
 
 export function PersonnelRatioConfigPage() {
@@ -76,7 +76,7 @@ export function PersonnelRatioConfigPage() {
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState<AssignmentListItem | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [depts, setDepts] = useState<DeptRatioItem[]>([]);
+  const [departments, setDepartments] = useState<PersonnelRatioDepartment[]>([]);
   const [latestRejection, setLatestRejection] = useState<LatestRejection | null>(
     null,
   );
@@ -119,24 +119,7 @@ export function PersonnelRatioConfigPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listNo]);
 
-  // 載入 dept list（accordion header 用）
-  useEffect(() => {
-    if (!listNo) return;
-    let aborted = false;
-    void (async () => {
-      try {
-        const data = await getDeptRatios(listNo);
-        if (!aborted) setDepts(data.deptRatios ?? []);
-      } catch {
-        // 靜默；form 內部會自行 retry
-      }
-    })();
-    return () => {
-      aborted = true;
-    };
-  }, [listNo, refreshTick]);
-
-  // 載入 latestRejection（從 personnel-ratio GET response）
+  // 載入 departments 與 latestRejection（單一 endpoint）
   useEffect(() => {
     if (!listNo) return;
     let aborted = false;
@@ -144,18 +127,20 @@ export function PersonnelRatioConfigPage() {
       try {
         const data = await getPersonnelRatios(listNo);
         if (aborted) return;
-        const rej = (data as { latestRejection?: LatestRejection | null })
-          .latestRejection;
-        if (rej) setLatestRejection(rej);
-        else setLatestRejection(null);
-      } catch {
-        // 忽略；banner 可不顯示
+        setDepartments(data.departments ?? []);
+        setLatestRejection(data.latestRejection ?? null);
+      } catch (err: unknown) {
+        if (!aborted) {
+          const e = err as { response?: { data?: { message?: string } } };
+          showToast(e?.response?.data?.message ?? '載入部門資料失敗', 'error');
+        }
       }
     })();
     return () => {
       aborted = true;
     };
-  }, [listNo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listNo, refreshTick]);
 
   const stageMismatch = list && list.stage !== 'personnel_ratio';
 
@@ -199,12 +184,24 @@ export function PersonnelRatioConfigPage() {
     }
   };
 
-  const accordionDepts: DeptWithProgress[] = depts.map((d) => ({
-    deptCode: d.obdeptId,
-    deptName: d.obdeptNm,
-    obdeptId: d.obdeptId,
-    obdeptNm: d.obdeptNm,
-  }));
+  const accordionDepts: DeptWithProgress[] = useMemo(
+    () =>
+      departments.map((d) => ({
+        deptCode: d.deptCode,
+        deptName: d.deptName,
+        sum: d.deptSum,
+        // allResigned 視為「不需設定即完成」（spec F082 v1.3 決議 #1 短路放行）
+        complete: d.allResigned ? true : d.sumValidated,
+        offline: d.allResigned, // accordion 用同一個旗標 hint「不需編輯」
+        department: d,
+      })),
+    [departments],
+  );
+
+  const totalEmployees = useMemo(
+    () => departments.reduce((acc, d) => acc + d.activeCount, 0),
+    [departments],
+  );
 
   const handleFormSaved = useCallback(() => {
     setRefreshTick((t) => t + 1);
@@ -286,9 +283,11 @@ export function PersonnelRatioConfigPage() {
               depts={accordionDepts}
               defaultOpen
               showProgress
-              renderDept={() => (
+              totalEmployees={totalEmployees}
+              renderDept={(d) => (
                 <PersonnelRatioForm
                   listNo={list.listNo}
+                  department={d.department}
                   readOnly={!!stageMismatch}
                   onSaved={handleFormSaved}
                 />

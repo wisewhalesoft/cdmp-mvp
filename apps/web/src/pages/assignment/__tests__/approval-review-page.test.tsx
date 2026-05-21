@@ -103,17 +103,26 @@ describe('ApprovalReviewPage (29c)', () => {
     mockedListLists.mockResolvedValue(mockListsResp);
     mockedGetDeptRatios.mockResolvedValue({
       listNo: 'OB202605008',
+      listNm: '測試名單',
+      projectWorkym: '202605',
+      stage: 'approval',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 50 },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 50 },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 50, isActive: true },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 50, isActive: true },
       ],
-      total: 2,
+      total: 100,
+      isReadOnly: true,
     });
     mockedGetPersonnelRatios.mockResolvedValue({
       listNo: 'OB202605008',
-      employees: [],
-      total: 0,
-    } as any);
+      listNm: '測試名單',
+      projectWorkym: '202605',
+      stage: 'approval',
+      isReadOnly: true,
+      viewerRole: 'director',
+      departments: [],
+      latestRejection: null,
+    });
     mockedGetApprovalHistory.mockResolvedValue({
       listNo: 'OB202605008',
       history: [],

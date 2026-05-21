@@ -130,19 +130,17 @@ export function ReadySummaryDetailPage() {
     let aborted = false;
     void (async () => {
       try {
-        const d = await getDeptRatios(listNo);
+        const [d, p] = await Promise.all([
+          getDeptRatios(listNo),
+          getPersonnelRatios(listNo),
+        ]);
         if (aborted) return;
         setDepts(d.deptRatios ?? []);
         const byDept: Record<string, PersonnelRatioEmployee[]> = {};
-        for (const dept of d.deptRatios ?? []) {
-          try {
-            const p = await getPersonnelRatios(listNo, dept.obdeptId);
-            byDept[dept.obdeptId] = p.employees ?? [];
-          } catch {
-            byDept[dept.obdeptId] = [];
-          }
+        for (const dept of p.departments ?? []) {
+          byDept[dept.deptCode] = dept.employees;
         }
-        if (!aborted) setPersonnelByDept(byDept);
+        setPersonnelByDept(byDept);
       } catch {
         // ignore
       }
