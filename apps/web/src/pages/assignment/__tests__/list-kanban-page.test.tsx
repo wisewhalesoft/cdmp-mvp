@@ -434,6 +434,259 @@ describe('F048 v2.0 — 搜尋過濾（TS-F048-K-009~010）', () => {
   });
 });
 
+describe('F048 v2.0 — Detail Drawer（TS-F048-D-001~003）', () => {
+  it('D-001 點擊「查看」→ 觸發 full-snapshot → Drawer 滑入含 4 個頁籤', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [makeItem({ listNo: 'OB202605001', stage: 'draft' })],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    const mockedGetFullSnapshot = vi.mocked(assignmentListApi.getFullSnapshot);
+    mockedGetFullSnapshot.mockResolvedValue({
+      list: {
+        listNo: 'OB202605001',
+        listNm: '車貸催收名單',
+        stage: 'draft',
+        status: 'active',
+        projectWorkym: '202605',
+        cardType: null,
+        crEnabled: true,
+        listPeriodStart: '1',
+        listPeriodEnd: '6',
+        listInterval: '1',
+        conditionPayload: {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+          logic: 'AND',
+        },
+        legacyEntityFallback: null,
+        createdBy: 'u-1',
+        createdAt: '2026-05-09T01:14:00Z',
+        updatedAt: '2026-05-09T01:14:00Z',
+      },
+      deptRatios: [],
+      personnelRatios: [],
+      auditTrail: [
+        {
+          action: 'CREATE',
+          operatorId: 'u-1',
+          operatorEmpNm: '王部長',
+          before: null,
+          after: { stage: 'draft' },
+          at: '2026-05-09T01:14:00Z',
+        },
+      ],
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-view-OB202605001')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('btn-view-OB202605001'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-drawer')).toBeTruthy();
+    });
+    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001');
+    // 4 個頁籤
+    expect(screen.getByTestId('drawer-tab-conditions')).toBeTruthy();
+    expect(screen.getByTestId('drawer-tab-dept')).toBeTruthy();
+    expect(screen.getByTestId('drawer-tab-personnel')).toBeTruthy();
+    expect(screen.getByTestId('drawer-tab-history')).toBeTruthy();
+  });
+
+  it('D-002 draft 階段 Drawer — 部門比例頁籤顯示「尚未設定」', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [makeItem({ listNo: 'OB202605001', stage: 'draft' })],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    const mockedGetFullSnapshot = vi.mocked(assignmentListApi.getFullSnapshot);
+    mockedGetFullSnapshot.mockResolvedValue({
+      list: {
+        listNo: 'OB202605001',
+        listNm: '車貸催收名單',
+        stage: 'draft',
+        status: 'active',
+        projectWorkym: '202605',
+        cardType: null,
+        crEnabled: true,
+        listPeriodStart: '1',
+        listPeriodEnd: '6',
+        listInterval: '1',
+        conditionPayload: { conditions: [], logic: 'AND' },
+        legacyEntityFallback: null,
+        createdBy: 'u-1',
+        createdAt: null,
+        updatedAt: null,
+      },
+      deptRatios: [],
+      personnelRatios: [],
+      auditTrail: [],
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-view-OB202605001')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-view-OB202605001'));
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-drawer')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('drawer-tab-dept'));
+    await waitFor(() => {
+      const panel = screen.getByTestId('drawer-panel-dept');
+      expect(panel.textContent).toContain('尚未設定');
+    });
+  });
+
+  it('D-003 月跑執行中「查看」按鈕仍可觸發 Drawer', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lockState: { locked: true, reason: '分派執行中' },
+        lists: [makeItem({ listNo: 'OB202605001', stage: 'draft' })],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    const mockedGetFullSnapshot = vi.mocked(assignmentListApi.getFullSnapshot);
+    mockedGetFullSnapshot.mockResolvedValue({
+      list: {
+        listNo: 'OB202605001',
+        listNm: '車貸催收名單',
+        stage: 'draft',
+        status: 'active',
+        projectWorkym: '202605',
+        cardType: null,
+        crEnabled: true,
+        listPeriodStart: '1',
+        listPeriodEnd: '6',
+        listInterval: '1',
+        conditionPayload: { conditions: [], logic: 'AND' },
+        legacyEntityFallback: null,
+        createdBy: 'u-1',
+        createdAt: null,
+        updatedAt: null,
+      },
+      deptRatios: [],
+      personnelRatios: [],
+      auditTrail: [],
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-view-OB202605001')).toBeTruthy();
+    });
+    const viewBtn = screen.getByTestId('btn-view-OB202605001') as HTMLButtonElement;
+    expect(viewBtn.disabled).toBe(false);
+    fireEvent.click(viewBtn);
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-drawer')).toBeTruthy();
+    });
+    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001');
+  });
+});
+
+describe('F049 v1.1 / F061 v1.4 — Ready CTA Banner（TS-F049-CTA-001~005 + F061-CTA-001~003）', () => {
+  function withReady(readyCount: number, locked = false, historical = false) {
+    return buildResponse({
+      isHistorical: historical,
+      lockState: locked
+        ? { locked: true, reason: '分派執行中' }
+        : { locked: false, reason: null },
+      lists: Array.from({ length: readyCount }, (_, i) =>
+        makeItem({ listNo: `OB202605R${String(i).padStart(2, '0')}`, stage: 'ready' }),
+      ),
+      stageCounts: {
+        draft: 0,
+        dept_ratio: 0,
+        personnel_ratio: 0,
+        approval: 0,
+        ready: readyCount,
+        disabled: 0,
+      },
+    });
+  }
+
+  it('F049-CTA-001 / F061-CTA-001 ready ≥1 且非歷史月份、非月跑鎖 → Banner 渲染含主按鈕 + secondary 試算', async () => {
+    mockedListLists.mockResolvedValue(withReady(2));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-cta-banner')).toBeTruthy();
+    });
+    const main = screen.getByTestId('btn-trigger-run') as HTMLButtonElement;
+    expect(main.disabled).toBe(false);
+    // 試算為 react-router Link → <a> 元素；非 locked 時應為 anchor 而非 disabled button
+    const sec = screen.getByTestId('btn-estimate');
+    expect(sec.tagName.toLowerCase()).toBe('a');
+    expect(sec.getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('F049-CTA-002 / F061-CTA-002 ready=0 → CTA Banner DOM 完全不存在', async () => {
+    mockedListLists.mockResolvedValue(withReady(0));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('kanban-board')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('ready-cta-banner')).toBeNull();
+  });
+
+  it('F049-CTA-003 歷史月份 → CTA Banner DOM 完全不存在', async () => {
+    mockedListLists.mockResolvedValue(withReady(3, false, true));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('historical-banner')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('ready-cta-banner')).toBeNull();
+  });
+
+  it('F049-CTA-004 / F061-CTA-003 月跑執行中 → Banner disabled，主按鈕 + 試算均 disabled', async () => {
+    mockedListLists.mockResolvedValue(withReady(2, true));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-cta-banner')).toBeTruthy();
+    });
+    const main = screen.getByTestId('btn-trigger-run') as HTMLButtonElement;
+    const sec = screen.getByTestId('btn-estimate') as HTMLButtonElement;
+    expect(main.disabled).toBe(true);
+    expect(sec.disabled).toBe(true);
+  });
+
+  it('F049-CTA-005 secondary「試算」按鈕點擊 → 導向 stage 0 估算頁', async () => {
+    mockedListLists.mockResolvedValue(withReady(1));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-estimate')).toBeTruthy();
+    });
+    const sec = screen.getByTestId('btn-estimate') as HTMLAnchorElement;
+    // 預期 anchor href 為 /assignment/estimate（App.tsx 既有 route）
+    expect(sec.getAttribute('href')).toContain('/assignment/estimate');
+  });
+});
+
 describe('F048 v2.0 — Banner（TS-F048-B-001~002）', () => {
   it('B-001 歷史月份 → 紅色橫幅；寫入按鈕 DOM 不存在', async () => {
     mockedListLists.mockResolvedValue(

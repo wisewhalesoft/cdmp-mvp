@@ -37,6 +37,8 @@ import {
 import { getEffectiveIdentity } from '@/stores/auth-store';
 import type { EffectiveIdentity } from '@cdmp/shared';
 import { RoleStageActions } from './_components/RoleStageActions';
+import { ListDetailDrawer } from './_components/ListDetailDrawer';
+import { ReadyCtaBanner } from './_components/ReadyCtaBanner';
 import { readAndClearPendingToast } from './_utils/pending-toast';
 
 /**
@@ -249,6 +251,9 @@ export function ListDefinitionPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
+  // F048 v2.0 / F050 v2.2 Detail Drawer：當前開啟的 listNo（null = 關閉）
+  const [drawerListNo, setDrawerListNo] = useState<string | null>(null);
+
   // F050 v2.2 BR-13 / US-133：mount 時 consume pending toast（commit 6 完整接入）
   useEffect(() => {
     const payload = readAndClearPendingToast();
@@ -346,8 +351,10 @@ export function ListDefinitionPage() {
 
   // Handlers
   const handleView = (l: AssignmentListItem) => {
-    // commit 5：開 Detail Drawer；本 commit 暫以 noop
-    void l;
+    setDrawerListNo(l.listNo);
+  };
+  const handleTriggerRun = () => {
+    navigate('/assignment/run');
   };
   const handleEdit = (l: AssignmentListItem) =>
     navigate(`/assignment/list-definitions/${l.listNo}/edit`);
@@ -606,7 +613,15 @@ export function ListDefinitionPage() {
                     <div className={`h-full ${STAGE_BAR_COLOR[s]}`} style={{ width: `${colPct}%` }} />
                   </div>
                 </div>
-                {/* Ready 欄頂 CTA Banner — commit 5 接入 */}
+                {/* Ready 欄頂 CTA Banner — F049 v1.1 + F061 v1.4 */}
+                {s === 'ready' && totalInStage > 0 && !isHistorical && (
+                  <ReadyCtaBanner
+                    readyCount={totalInStage}
+                    workYm={ym}
+                    isLocked={isLocked}
+                    onTriggerRun={handleTriggerRun}
+                  />
+                )}
                 <div className="flex-1 p-2 space-y-2 bg-white min-h-[100px]">
                   {colItems.length === 0 ? (
                     <div className="p-4 text-center text-[11px] text-gray-400 italic">無名單</div>
@@ -637,6 +652,9 @@ export function ListDefinitionPage() {
             );
           })}
         </section>
+
+        {/* Detail Drawer — F048 v2.0 + F050 v2.2 §6.2 */}
+        <ListDetailDrawer listNo={drawerListNo} onClose={() => setDrawerListNo(null)} />
       </main>
     </AppLayout>
   );
