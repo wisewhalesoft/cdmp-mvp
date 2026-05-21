@@ -32,6 +32,11 @@ import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.e
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { SeedBestCaseFieldAndOptions1711360000286 } from '@/database/migrations/1711360000286-SeedBestCaseFieldAndOptions';
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+// F050 v2.2：getFullSnapshot 加 inject ObDeptPct / ObEmplSet / ObEmphire / User
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 
 const YM = '202605';
 const ACTOR = { userId: 'dir-v211', ipAddress: '127.0.0.1' };
@@ -58,6 +63,11 @@ async function buildEnv(): Promise<Env> {
           AssignmentRun,
           PooldataFieldOption,
           PooldataFieldWhitelist,
+          // F050 v2.2 service inject 增補
+          ObDeptPct,
+          ObEmplSet,
+          ObEmphire,
+          User,
         ],
         synchronize: true,
       }),
@@ -67,6 +77,11 @@ async function buildEnv(): Promise<Env> {
         AssignmentRun,
         PooldataFieldOption,
         PooldataFieldWhitelist,
+        // F050 v2.2 service inject 增補
+        ObDeptPct,
+        ObEmplSet,
+        ObEmphire,
+        User,
       ]),
     ],
     providers: [AssignmentListService, AssignmentRunGuardService],

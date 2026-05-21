@@ -24,6 +24,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ListDefinitionPage } from '../list-definition-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
+import * as assignmentStageApi from '@/api/assignment-stage';
 import * as authStore from '@/stores/auth-store';
 import type {
   ListListsResponse,
@@ -31,6 +32,7 @@ import type {
 } from '@/api/assignment-list';
 
 vi.mock('@/api/assignment-list');
+vi.mock('@/api/assignment-stage');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
@@ -861,6 +863,151 @@ describe('F050 v2.2 §7 BR-13 — Consumer：M01 主頁 sessionStorage Toast（T
     if (container) {
       expect(container.children.length).toBe(0);
     }
+  });
+});
+
+describe('F081 / F085 / F089 v1.3 — Rollback toast + 卡片即時遷移（TS-F081/085/089-005~007）', () => {
+  it('F081 dept_ratio Rollback 成功 → info toast「已退回草稿，部門比例已清空」+ 卡片從 dept_ratio 欄遷至 draft 欄', async () => {
+    const mockedRollbackDraft = vi.mocked(assignmentStageApi.rollbackToDraft);
+    mockedRollbackDraft.mockResolvedValue({ listNo: 'OB202605010', stage: 'draft' });
+    let callCount = 0;
+    mockedListLists.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return buildResponse({
+          lists: [makeItem({ listNo: 'OB202605010', stage: 'dept_ratio' })],
+          stageCounts: {
+            draft: 0,
+            dept_ratio: 1,
+            personnel_ratio: 0,
+            approval: 0,
+            ready: 0,
+            disabled: 0,
+          },
+        });
+      }
+      // Rollback 後刷新：卡片到 draft 欄
+      return buildResponse({
+        lists: [makeItem({ listNo: 'OB202605010', stage: 'draft' })],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      const card = screen.getByTestId('kanban-card-OB202605010');
+      expect(within(screen.getByTestId('kanban-column-dept_ratio')).getByTestId('kanban-card-OB202605010')).toBe(card);
+    });
+    fireEvent.click(screen.getByTestId('btn-rollback-OB202605010'));
+
+    // 卡片遷移
+    await waitFor(() => {
+      expect(within(screen.getByTestId('kanban-column-draft')).getByTestId('kanban-card-OB202605010')).toBeTruthy();
+    });
+    expect(within(screen.getByTestId('kanban-column-dept_ratio')).queryByTestId('kanban-card-OB202605010')).toBeNull();
+
+    // info toast
+    await waitFor(() => {
+      expect(screen.getByText(/已退回/)).toBeTruthy();
+    });
+    expect(mockedRollbackDraft).toHaveBeenCalledWith('OB202605010');
+  });
+
+  it('F085 personnel_ratio Rollback → 卡片從 personnel_ratio 欄遷至 dept_ratio 欄', async () => {
+    const mockedRollbackDept = vi.mocked(assignmentStageApi.rollbackToDeptRatio);
+    mockedRollbackDept.mockResolvedValue({ listNo: 'OB202605020', stage: 'dept_ratio' });
+    let callCount = 0;
+    mockedListLists.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return buildResponse({
+          lists: [makeItem({ listNo: 'OB202605020', stage: 'personnel_ratio' })],
+          stageCounts: {
+            draft: 0,
+            dept_ratio: 0,
+            personnel_ratio: 1,
+            approval: 0,
+            ready: 0,
+            disabled: 0,
+          },
+        });
+      }
+      return buildResponse({
+        lists: [makeItem({ listNo: 'OB202605020', stage: 'dept_ratio' })],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 1,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(within(screen.getByTestId('kanban-column-personnel_ratio')).getByTestId('kanban-card-OB202605020')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-rollback-OB202605020'));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId('kanban-column-dept_ratio')).getByTestId('kanban-card-OB202605020')).toBeTruthy();
+    });
+    expect(mockedRollbackDept).toHaveBeenCalledWith('OB202605020');
+  });
+
+  it('F089 ready Rollback → 卡片從 ready 欄遷至 approval 欄；CTA Banner 因 ready=0 消失', async () => {
+    const mockedRollbackApproval = vi.mocked(assignmentStageApi.rollbackToApproval);
+    mockedRollbackApproval.mockResolvedValue({ listNo: 'OB202605030', stage: 'approval' });
+    let callCount = 0;
+    mockedListLists.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return buildResponse({
+          lists: [makeItem({ listNo: 'OB202605030', stage: 'ready' })],
+          stageCounts: {
+            draft: 0,
+            dept_ratio: 0,
+            personnel_ratio: 0,
+            approval: 0,
+            ready: 1,
+            disabled: 0,
+          },
+        });
+      }
+      return buildResponse({
+        lists: [makeItem({ listNo: 'OB202605030', stage: 'approval' })],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 1,
+          ready: 0,
+          disabled: 0,
+        },
+      });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-cta-banner')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-rollback-OB202605030'));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId('kanban-column-approval')).getByTestId('kanban-card-OB202605030')).toBeTruthy();
+    });
+    // CTA Banner 因 ready=0 消失
+    expect(screen.queryByTestId('ready-cta-banner')).toBeNull();
+    expect(mockedRollbackApproval).toHaveBeenCalledWith('OB202605030');
   });
 });
 
