@@ -6,15 +6,21 @@ source-story: US-117
 epic: E07
 module: M03c 簽核階段
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.2.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F087: 部長拒絕名單並退回個別業務比例設定（簽核拒絕）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum 與 real code 雙寫實況：
+> 1. **`AC` 內 `action = 'REJECT'` 字串修正**：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）為 `STAGE_REJECT`（VARCHAR(30)，不包含 `REJECT`）；F087 拒絕走 `StageTransitionService.rejectTo()` → 寫入 `action = 'STAGE_REJECT'`（`stage-transition.service.ts:118-138`）。spec 內 `action = 'REJECT'` 改為 `action = 'STAGE_REJECT'`。
+> 2. **新增 §6.X 拒絕記錄之資料雙寫範式**：明列 real code 行為 — F087 拒絕於**同一 transaction** 內**雙寫兩張表**：(a) `assignment_audit_log` action='STAGE_REJECT'（stage transition 稽核）；(b) `assignment_approval` action='reject' + reject_reason（小寫 enum，記錄簽核者 + 拒絕原因，供 F082 v1.1 latestRejection banner 觸發機制查詢）。
+> 3. **與 F086 核准單寫之不對稱**：F086 核准目前僅單寫 audit log（不寫 assignment_approval；詳見 [F086 v1.2.1 §6.X](F086-approve-to-ready.md)）；F087 雙寫為**唯一**寫入 `assignment_approval` 表的入口；兩者不對稱屬 code 現況，若 PM 希望對稱化需另開 follow-up。
+> 4. **本 v1.2.1 不變動 entity / migration / code / prototype / Transaction / Guard**；BR-11 既已規範 assignment_approval 寫入，本 v1.2.1 補充 §6.X 將兩張表寫入語意整合為完整範式。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔，本版本依 US-117 + AD-E07 v3.0 一致性決議完整重建；Guard 統一為 `DirectorGuard`（拒絕僅部長 / Admin 可操作；廢除 `SalesManagerGuard`）；business_role 欄位語意對齊；保留 v1.1 之 banner 觸發機制與 OQ-C-02 決議。
 > **v1.1 修訂（2026-05-16 / OQ-E07-21 落地）**：新增 BR-11「拒絕原因儲存與 banner 觸發來源」明確 F087 寫入 `assignment_approval`、F082 GET 讀取後渲染 banner（UI 規格詳 F082 §7.x）。
 
@@ -86,7 +92,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
   1. UPDATE `ob_list_definition.stage` FROM `'approval'` TO `'personnel_ratio'`
   2. DELETE FROM `ob_empl_set` WHERE `list_no = {listNo}`（清空所有部門之個別業務比例）
   3. INSERT INTO `assignment_approval`（`list_no`、`action = 'reject'`、`reject_reason`、`approver_id = currentUserId`、`approved_at = now()`）
-  4. INSERT INTO `assignment_audit_log`（`action = 'REJECT'`、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'personnel_ratio', rejectReason: '...' }`）
+  4. INSERT INTO `assignment_audit_log`（`action = 'STAGE_REJECT'`、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'personnel_ratio', rejectReason: '...' }`）（v1.2.1 修正：對齊 entity enum，原 `REJECT` 不存在於 entity union；real flow 經 `StageTransitionService.rejectTo()`）
+  5. **同 transaction** INSERT INTO `assignment_approval`（`action = 'reject'`（小寫）、`list_no`、`reject_reason`、`approver_id`、`approver_name`、`approver_role`、`approved_at`）（v1.2.1 補述：雙寫範式，BR-11 既有規範，詳見 §6.X）
 - **And** 頁面成功提示「名單『{listNm}』已拒絕並退回個別業務比例設定階段」
 - **And** 清單刷新顯示新階段
 
@@ -136,7 +143,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 - **Given** 任一成功拒絕操作
 - **When** 操作完成
-- **Then** `assignment_audit_log` 寫入一筆：`action = 'REJECT'`、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'personnel_ratio', rejectReason: '原文', rejectorId: 'user-uuid' }`
+- **Then** `assignment_audit_log` 寫入一筆：`action = 'STAGE_REJECT'`（v1.2.1 修正：對齊 entity enum）、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'personnel_ratio', rejectReason: '原文', rejectorId: 'user-uuid' }`
+- **And** **同 transaction** `assignment_approval` 寫入一筆：`action = 'reject'`（**小寫**，對齊 `AssignmentApproval.action` entity enum）、`reject_reason`、`approver_id`、`approver_name`、`approver_role`、`approved_at`（v1.2.1 補述：雙寫範式，BR-11 既有規範，詳見 §6.X）
 
 ## 5. API 規格
 
@@ -202,6 +210,53 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-10 | **歷史月份阻截**：`project_workym < current_work_ym` 一律 403 `LIST_HISTORICAL_READONLY` |
 | BR-11 | **拒絕原因儲存與 banner 觸發來源（v1.1 新增 / OQ-E07-21 落地）**：(1) `assignment_approval` 寫入時包含 `{ list_no, action: 'reject', reject_reason, approver_id, approved_at }`；(2) F082 GET response `latestRejection` 欄位之資料來源：`SELECT TOP 1 reject_reason, approver_id AS rejector_id, approver_name, approver_role AS rejector_role, approved_at AS rejected_at FROM assignment_approval WHERE list_no = :listNo AND action = 'reject' ORDER BY approved_at DESC`；若最近一筆為 `action = 'approve'` 或無 approval 紀錄，回 `null`；(3) banner UI 規格詳 [F082 §7.x](F082-set-personnel-ratio.md#7x-拒絕-banner-渲染與互動規格)（本 spec 不重複描述 UI）；(4) F086 核准或 F089 Rollback 後，`latestRejection` 變為 `null`（banner 自動消失） |
 | BR-12 | **Feature Flag fallback**：本 spec POST 端點掛 `FeatureFlagGuard`；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED`（沿用 F082 BR-16） |
+
+### 6.X 拒絕記錄之資料雙寫範式（v1.2.1 新增 / D1 follow-up / real code 行為對照）
+
+> Source-of-truth：`apps/api/src/modules/assignment-stage/stage-action.service.ts:284-356` `rejectToPersonnelRatio()` 方法 + `apps/api/src/modules/assignment/services/stage-transition.service.ts:118-138` `rejectTo()` helper。
+
+**Real code 行為**：F087 拒絕操作於**同一 DB transaction** 內執行**雙寫兩張表** + 一個業務動作：
+
+1. `UPDATE ob_list_definition SET stage = 'personnel_ratio' WHERE list_no = :listNo`
+2. `DELETE FROM ob_empl_set WHERE list_no = :listNo`（清空所有部門業務員 RATION）
+3. `INSERT INTO assignment_audit_log` 一筆（由 `StageTransitionService.rejectTo()` 寫入）：
+   - `action = 'STAGE_REJECT'`（VARCHAR(30)，對齊 entity union；v1.2.1 修正：原 spec 寫 `'REJECT'` 為錯）
+   - `entity_type = 'list_definition'`
+   - `entity_id = list_no`
+   - `actor_id = currentUserId`
+   - `after_value = { fromStage: 'approval', toStage: 'personnel_ratio', rejectReason }`
+4. `INSERT INTO assignment_approval` 一筆（由 `stage-action.service.ts:332-344` 之 postActionFn 寫入）：
+   - `action = 'reject'`（**小寫**，VARCHAR(10)，對齊 `AssignmentApproval.action` entity union `'approve' | 'reject'`）
+   - `list_no`
+   - `reject_reason`（trimmed，≤500 字）
+   - `approver_id = currentUserId`
+   - `approver_name = currentUserId`（placeholder，real code 行為，未來可補真實姓名 lookup）
+   - `approver_role`（`admin` 為 `'admin'`，否則為 `actor.businessRole`）
+   - `approved_at = rejectedAt`（同一 Date 物件，與 audit log timestamp 一致）
+
+**設計理由：為何雙寫兩張表？**
+
+| 資料表 | 用途 | enum 風格 | 寫入欄位 |
+|---|---|---|---|
+| `assignment_audit_log` | 通用稽核：所有 stage transition / CRUD / 月跑 / 角色變更（12 種 action） | 大寫 SNAKE_CASE | 共用欄位（`before_value` / `after_value` JSON）|
+| `assignment_approval` | 簽核專屬：僅 approve / reject 兩種行為 | 小寫 | 專屬欄位（`reject_reason` / `approver_*`）|
+
+兩張表並存原因：
+- 通用稽核需要保持 schema 一致以支援 EXPORT / RUN / CANCEL / SCORING_INTEGRITY_WARN 等多種 action；不適合塞 `reject_reason` 等專屬欄位
+- 簽核需要 banner 觸發機制（F082 v1.1 latestRejection）以 `assignment_approval.action='reject'` 為唯一查詢源（avoiding JSON path lookup on `audit_log.after_value`）
+- 兩張表透過同一 DB transaction 保持原子性，避免狀態不一致
+
+**與 F086 核准之不對稱**：
+
+- F086 核准目前**僅單寫** `assignment_audit_log` action='STAGE_ADVANCE'，**不**寫 `assignment_approval`（詳見 [F086 v1.2.1 §6.X](F086-approve-to-ready.md)）
+- 結果：`assignment_approval` 表在 production 環境理論上**只會累積 `action='reject'` 紀錄**
+- 影響 F082 v1.1 latestRejection banner：實際使用上不受影響（banner 僅查 reject），但若未來需顯示「核准歷史」需先解決 F086 不寫 approval 表之 follow-up
+
+**事務原子性保證**：
+
+- 4 個 DB write 於同一 `dataSource.transaction(async (mgr) => {...})` 區塊內執行
+- 任一 step 失敗（含 audit log insert 失敗），整個 transaction rollback；spec 既有 BR-7 規範
+- BR-8 之「稽核失敗不 rollback」**不適用**於本流程之 audit_log INSERT（該 INSERT 在 transaction 內，必失敗則 rollback）；BR-8 適用範圍為 service-layer logger error，而非 DB transaction 內的 audit INSERT
 
 ## 7. UI/UX 需求
 
@@ -315,3 +370,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（對應 US-117，E07 補修批次 5）：依 OQ-C-02 確認以「拒絕」取代 Rollback button；新增拒絕原因必填驗證；清空 `ob_empl_set` + 保留 `ob_dept_pct`；新增 `REJECT_REASON_REQUIRED` / `REJECT_REASON_TOO_LONG` 2 個錯誤碼 |
 | v1.1 | 2026-05-16 | **E07 補修批次 6 修訂（OQ-E07-21 落地）**：新增 BR-11「拒絕原因儲存與 banner 觸發來源」，明確 F087 寫入 `assignment_approval`、F082 GET 讀取後渲染 banner（UI 規格詳 F082 §7.x，本 spec 不重複描述 UI） |
 | **v1.2** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-117 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 統一為 `DirectorGuard`（廢除 `SalesManagerGuard`）；business_role 欄位語意對齊 F074 v2.0；保留 v1.1 之 banner 觸發機制與 OQ-C-02 決議 |
+| v1.2.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1 follow-up）**：(1) 對齊 `AssignmentAuditLog.action` entity enum — 將 spec 內 `action = 'REJECT'` 字串修正為 `action = 'STAGE_REJECT'`（AC-4 / AC-13），entity union 為 `STAGE_REJECT`（VARCHAR(30)），原 `REJECT` 不存在；real flow 經 `StageTransitionService.rejectTo()`；(2) AC-4 step 4 / AC-13 補述同 transaction INSERT `assignment_approval`（`action='reject'` 小寫，對齊 AssignmentApproval entity union）；(3) 新增 §6.X 拒絕記錄之資料雙寫範式：明列 real code 同 transaction 內 4 個 DB write 順序（UPDATE stage / DELETE ob_empl_set / INSERT assignment_audit_log STAGE_REJECT / INSERT assignment_approval reject）+ 設計理由（為何雙寫兩張表）+ 與 F086 不對稱說明 + 事務原子性保證。不變動業務邏輯 / API endpoint / Transaction / Guard |

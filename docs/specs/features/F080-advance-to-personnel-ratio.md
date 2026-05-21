@@ -6,15 +6,17 @@ source-story: US-110
 epic: E07
 module: M03a 部門比例設定階段（推進至 M03b）
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.2.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F080: 部門比例設定階段推進至個別業務比例設定
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）：將 spec 內 `action = 'STAGE_ADVANCE'` 字串修正為 **`action = 'STAGE_ADVANCE'`**（entity 實際 enum 為 `STAGE_ADVANCE`，VARCHAR(30)）；real flow 經 `StageTransitionService.advanceTo()` 統一寫入。不變動 entity / migration / code / prototype；不變更其他 BR / AC / 業務邏輯。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-110 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorGuard`；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -90,7 +92,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Given** 部長 / Admin 點擊「確認推進」
 - **When** 後端處理請求（POST `/api/v1/assignment/lists/{listNo}/stage/advance-to-personnel-ratio`）
 - **Then** 系統更新 `ob_list_definition.stage` 由 `'dept_ratio'` 為 `'personnel_ratio'`
-- **And** 寫入 `assignment_audit_log`（`action = 'ADVANCE_STAGE'`、before/after stage、operator_id）
+- **And** 寫入 `assignment_audit_log`（`action = 'STAGE_ADVANCE'`、before/after stage、operator_id）
 - **And** 頁面顯示成功提示「名單『{listNm}』已推進至個別業務比例設定階段」，清單刷新
 
 ### AC-5：推進後部門比例不可修改
@@ -123,7 +125,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 - **Given** 任一推進成功
 - **When** 寫入完成
-- **Then** `assignment_audit_log` 新增一筆 `action = 'ADVANCE_STAGE'`，含 before/after stage、operator_id、timestamp
+- **Then** `assignment_audit_log` 新增一筆 `action = 'STAGE_ADVANCE'`，含 before/after stage、operator_id、timestamp
 
 ## 5. API 規格
 
@@ -268,3 +270,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-110，E07 補修批次 4）：限 `stage = 'dept_ratio'` 推進；限部長 + Admin（`DirectorGuard`）；前置條件「部門比例加總 = 100%」；共用 `STAGE_ADVANCE_PRECONDITION_FAILED` 錯誤碼 |
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #6：BR-8 補「`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現」；(2) 決議 #2：新增 BR-9 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`） |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-110 + AD-E07 v3.0 一致性決議完整重建；保留 v1.0 / v1.1 所有設計決議 |
+| v1.2.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）— 將 spec 全文之 `action = 'ADVANCE_STAGE'` 字串修正為 `action = 'STAGE_ADVANCE'`；real flow 經 `StageTransitionService.advanceTo()` 統一寫入。不變動業務邏輯 / API endpoint / Transaction / Guard |

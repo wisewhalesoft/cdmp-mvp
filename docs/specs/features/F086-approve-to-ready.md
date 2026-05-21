@@ -6,15 +6,21 @@ source-story: US-116
 epic: E07
 module: M03c 簽核階段
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.2.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F086: 部長核准名單（簽核 → 準備完成）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum 與 real code 雙寫實況：
+> 1. **`AC` 內 `action = 'APPROVE'` 字串修正**：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）**不包含** `APPROVE`；F086 核准走 `StageTransitionService.advanceTo()` → 寫入 `action = 'STAGE_ADVANCE'`（`stage-transition.service.ts:89`）。spec 內 `action = 'APPROVE'` 改為 `action = 'STAGE_ADVANCE'`。
+> 2. **新增 §6.X 核准記錄之資料寫入範式**：明列 real code 行為 — F086 目前**僅單寫** `assignment_audit_log`（action='STAGE_ADVANCE'，含 stage transition），**不寫** `assignment_approval` 表（與 F087 拒絕之雙寫對稱不一致；`stage-action.service.ts:254-279` 之 `approveToReady` 未呼叫 `assignment_approval.insert`）。
+> 3. **設計現況 vs spec 預期差距 flag**：F082 v1.1 latestRejection banner 機制透過 `assignment_approval.action='reject'` 查詢觸發；F086 不寫 approval 表，故 `assignment_approval` 表理論上只會累積 reject 記錄。若 PM 希望 F086 也寫 `assignment_approval.action='approve'`（含 approver_name / approved_at），需開另一輪 spec + code 變更（屬未來 enhancement，本 v1.2.1 不規範）。
+> 4. **本 v1.2.1 不變動 entity / migration / code / prototype / Transaction / Guard**；僅修 AC 字串 + 新增說明 sub-section。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-116 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorGuard`；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -89,7 +95,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Given** 部長 / Admin 點擊「確認核准」
 - **When** 後端處理請求（POST `/api/v1/assignment/lists/{listNo}/stage/approve`）
 - **Then** 系統更新 `ob_list_definition.stage` 由 `'approval'` 為 `'ready'`
-- **And** 寫入 `assignment_audit_log`（`action = 'APPROVE'`、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'ready' }`、`operator_id = currentUserId`）
+- **And** 寫入 `assignment_audit_log`（`action = 'STAGE_ADVANCE'`、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'ready' }`、`operator_id = currentUserId`）（v1.2.1 修正：對齊 entity enum，原 `APPROVE` 不存在於 entity union；real flow 經 `StageTransitionService.advanceTo()`）
+- **And** **不**寫入 `assignment_approval` 表（v1.2.1 補述 / real code 行為對照）：F086 目前僅單寫 audit log；如需簽核者資訊（approver_name / approved_at），現況無法從 `assignment_approval` 查得 approve 紀錄。詳見 §6.X 補述
 - **And** 頁面顯示成功提示「名單『{listNm}』已核准，進入準備完成階段」，清單刷新
 
 ### AC-5：核准後名單出現在「準備完成」清單
@@ -128,7 +135,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 - **Given** 任一核准成功
 - **When** 寫入完成
-- **Then** `assignment_audit_log` 新增一筆 `action = 'APPROVE'`，含 before/after stage、operator_id、timestamp
+- **Then** `assignment_audit_log` 新增一筆 `action = 'STAGE_ADVANCE'`，含 before/after stage、operator_id、timestamp（v1.2.1 修正：對齊 entity enum）
+- **And** **不**寫入 `assignment_approval` 表（real code 行為；詳見 §6.X 補述 / 設計現況差距 flag）
 
 ## 5. API 規格
 
@@ -180,6 +188,34 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-8 | **月跑並發守衛（v1.1 / 決議 #6）**：F086 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
 | BR-9 | **Feature Flag fallback（v1.1 / 決議 #2）**：F086 端點受 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
 | BR-10 | **核准後 ready 名單可由 F089 退回**：核准後若需修改，部長可透過 F089 將 `ready` 退回 `approval`，再透過 F087 拒絕退回 `personnel_ratio` |
+
+### 6.X 核准記錄之資料寫入範式（v1.2.1 新增 / D1 follow-up / real code 行為對照）
+
+> Source-of-truth：`apps/api/src/modules/assignment-stage/stage-action.service.ts:254-279` `approveToReady()` 方法 + `apps/api/src/modules/assignment/services/stage-transition.service.ts:77-93` `advanceTo()` helper。
+
+**Real code 行為**：F086 核准操作於同一 DB transaction 內僅執行兩個 DB write：
+
+1. `UPDATE ob_list_definition SET stage = 'ready' WHERE list_no = :listNo`
+2. `INSERT INTO assignment_audit_log` 一筆（由 `StageTransitionService.advanceTo()` 統一寫入）：
+   - `action = 'STAGE_ADVANCE'`（VARCHAR(30)，對齊 entity union）
+   - `entity_type = 'list_definition'`
+   - `entity_id = list_no`
+   - `actor_id = currentUserId`
+   - `after_value = { fromStage: 'approval', toStage: 'ready' }`
+
+**Real code **不**寫入** `assignment_approval` 表**：
+
+- `stage-action.service.ts:254-279` 之 `approveToReady()` 未呼叫 `assignment_approval.insert`；對照 `rejectToPersonnelRatio()`（行 284-356）顯式呼叫 `mgr.insert(AssignmentApproval, ...)`（行 333-343）
+- 結果：`assignment_approval` 表在 production 環境理論上**只會累積 `action='reject'` 紀錄**，不會有 `action='approve'` 紀錄
+- 影響範圍：
+  - F082 v1.1 latestRejection banner 透過 `assignment_approval WHERE action='reject'` 查詢觸發，**不**受 F086 寫入缺失影響（仍可正確顯示最新拒絕原因）
+  - 若 UI 需顯示「上一次核准者 / 核准時間」資訊，現況**無法**從 `assignment_approval` 查得；僅能從 `assignment_audit_log WHERE action='STAGE_ADVANCE' AND after_value->>'toStage' = 'ready'` 反推
+
+**設計現況 vs spec 預期差距 flag**：
+
+- v2.2.1 follow-up flag 與本次 D1 修正 task 之 user 指示原本預期 F086 採「雙寫範式」（同 F087 reject 之 audit_log + assignment_approval 雙寫）；但 real code 僅單寫 audit log
+- 本 v1.2.1 **不變更 code**，僅對齊 spec 至 real flow；若 PM 確認 F086 應補寫 `assignment_approval.action='approve'`（含 `approver_name` / `approved_at` / `approver_role`），需開新一輪 spec + code 變更（屬未來 enhancement）
+- 建議追蹤 issue：F086 是否補雙寫 — 屬 future decision，本 v1.2.1 不規範
 
 ## 7. UI/UX 需求
 
@@ -277,3 +313,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-116，E07 補修批次 4）：限 `stage = 'approval'` 核准；限部長 + Admin（`DirectorGuard`）；新增 `APPROVE` action 至稽核；定義與 F087 / F089 之關係 |
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #6：BR-8 補「`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現」；(2) 決議 #2：新增 BR-9 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`） |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-116 + AD-E07 v3.0 一致性決議完整重建；保留 v1.0 / v1.1 所有設計決議 |
+| v1.2.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1 follow-up）**：(1) 對齊 `AssignmentAuditLog.action` entity enum — 將 spec 內 `action = 'APPROVE'` 字串修正為 `action = 'STAGE_ADVANCE'`（AC-4 / AC-10），entity union 不含 `APPROVE`；real flow 經 `StageTransitionService.advanceTo()` 統一寫入；(2) 新增 §6.X 核准記錄之資料寫入範式：明列 real code 只單寫 audit log，**不**寫 `assignment_approval`（與 F087 拒絕之雙寫不對稱），含設計現況 vs spec 預期之差距 flag。不變動業務邏輯 / API endpoint / Transaction / Guard |

@@ -6,15 +6,17 @@ source-story: US-114
 epic: E07
 module: M03b 個別業務比例設定階段（推進至 M03c）
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.2.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F084: 個別業務比例設定階段推進至簽核
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）：將 spec 內 `action = 'STAGE_ADVANCE'` 字串修正為 **`action = 'STAGE_ADVANCE'`**（entity 實際 enum 為 `STAGE_ADVANCE`，VARCHAR(30)）；real flow 經 `StageTransitionService.advanceTo()` 統一寫入。不變動 entity / migration / code / prototype；不變更其他 BR / AC / 業務邏輯。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-114 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorOrSectionChiefGuard`（處長亦可推進，前提是「所有部門均完成設定」）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -93,7 +95,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Given** 使用者點擊「確認推進」
 - **When** 後端處理請求（POST `/api/v1/assignment/lists/{listNo}/stage/advance-to-approval`）
 - **Then** 系統更新 `ob_list_definition.stage` 由 `'personnel_ratio'` 為 `'approval'`
-- **And** 寫入 `assignment_audit_log`（`action = 'ADVANCE_STAGE'`、before/after stage、operator_id）
+- **And** 寫入 `assignment_audit_log`（`action = 'STAGE_ADVANCE'`、before/after stage、operator_id）
 - **And** 頁面顯示成功提示「名單『{listNm}』已推進至簽核階段，等待部長核准」，清單刷新
 
 ### AC-5：無代理處長時部長可代推進
@@ -131,7 +133,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 - **Given** 任一推進成功
 - **When** 寫入完成
-- **Then** `assignment_audit_log` 新增一筆 `action = 'ADVANCE_STAGE'`，含 before/after stage、operator_id、timestamp、operator_role
+- **Then** `assignment_audit_log` 新增一筆 `action = 'STAGE_ADVANCE'`，含 before/after stage、operator_id、timestamp、operator_role
 
 ## 5. API 規格
 
@@ -289,3 +291,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-114，E07 補修批次 4）：限 `stage = 'personnel_ratio'` 推進；Actor 新增處長（前提是所有部門完成）；Guard 為 `DirectorOrSectionChiefGuard`；前置條件「所有部門加總 = 100%」；response 含 `incompleteDepts` |
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #6：BR-9 補「`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現」；(2) 決議 #2：新增 BR-10 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`） |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-114 + AD-E07 v3.0 一致性決議完整重建；保留 v1.0 / v1.1 所有設計決議 |
+| v1.2.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）— 將 spec 全文之 `action = 'ADVANCE_STAGE'` 字串修正為 `action = 'STAGE_ADVANCE'`；real flow 經 `StageTransitionService.advanceTo()` 統一寫入。不變動業務邏輯 / API endpoint / Transaction / Guard |
