@@ -39,6 +39,7 @@ import type { EffectiveIdentity } from '@cdmp/shared';
 import { RoleStageActions } from './_components/RoleStageActions';
 import { ListDetailDrawer } from './_components/ListDetailDrawer';
 import { ReadyCtaBanner } from './_components/ReadyCtaBanner';
+import { DisableListModal } from './_components/DisableListModal';
 import { readAndClearPendingToast } from './_utils/pending-toast';
 
 /**
@@ -254,6 +255,10 @@ export function ListDefinitionPage() {
   // F048 v2.0 / F050 v2.2 Detail Drawer：當前開啟的 listNo（null = 關閉）
   const [drawerListNo, setDrawerListNo] = useState<string | null>(null);
 
+  // F052 v2.1 停用 modal target（null = 關閉）
+  const [disableTarget, setDisableTarget] = useState<AssignmentListItem | null>(null);
+  const [disableLoading, setDisableLoading] = useState(false);
+
   // F050 v2.2 BR-13 / US-133：mount 時 consume pending toast（commit 6 完整接入）
   useEffect(() => {
     const payload = readAndClearPendingToast();
@@ -370,15 +375,24 @@ export function ListDefinitionPage() {
       showToast(e?.response?.data?.message ?? '推進失敗', 'error');
     }
   };
-  const handleDisable = async (l: AssignmentListItem) => {
-    // commit 6 改為 DisableListModal 確認流程；目前直接呼叫 API
+  const handleDisable = (l: AssignmentListItem) => {
+    // 開啟 DisableListModal，等使用者勾選 checkbox 後再呼叫 API
+    setDisableTarget(l);
+  };
+
+  const handleDisableConfirm = async () => {
+    if (!disableTarget) return;
+    setDisableLoading(true);
     try {
-      await apiDisableList(l.listNo);
-      showToast(`名單 ${l.listNo} 已停用`, 'success');
+      await apiDisableList(disableTarget.listNo);
+      showToast(`名單 ${disableTarget.listNo} 已停用`, 'success');
+      setDisableTarget(null);
       await fetchData(ym);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '停用失敗', 'error');
+    } finally {
+      setDisableLoading(false);
     }
   };
   const handleConfigure = (l: AssignmentListItem) => {
@@ -655,6 +669,14 @@ export function ListDefinitionPage() {
 
         {/* Detail Drawer — F048 v2.0 + F050 v2.2 §6.2 */}
         <ListDetailDrawer listNo={drawerListNo} onClose={() => setDrawerListNo(null)} />
+
+        {/* F052 v2.1 停用名單確認對話框（「停用」全寫） */}
+        <DisableListModal
+          target={disableTarget}
+          loading={disableLoading}
+          onConfirm={handleDisableConfirm}
+          onCancel={() => setDisableTarget(null)}
+        />
       </main>
     </AppLayout>
   );

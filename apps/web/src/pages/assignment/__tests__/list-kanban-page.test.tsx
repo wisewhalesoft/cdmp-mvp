@@ -687,6 +687,183 @@ describe('F049 v1.1 / F061 v1.4 — Ready CTA Banner（TS-F049-CTA-001~005 + F06
   });
 });
 
+describe('F052 v2.1 — 「停用」全寫 label（TS-F052-TXT-001~003）', () => {
+  it('TXT-001 Kanban draft 欄卡片「停用」按鈕文字為全寫', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [makeItem({ listNo: 'OB202605001', stage: 'draft' })],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-disable-OB202605001')).toBeTruthy();
+    });
+    const btn = screen.getByTestId('btn-disable-OB202605001');
+    expect(btn.textContent).toContain('停用');
+    expect(screen.queryByRole('button', { name: /^停$/ })).toBeNull();
+  });
+
+  it('TXT-002 點擊「停用」→ 確認對話框含「停用」全寫，無「停」縮寫', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [makeItem({ listNo: 'OB202605001', stage: 'draft' })],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-disable-OB202605001')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-disable-OB202605001'));
+    await waitFor(() => {
+      expect(screen.getByTestId('disable-confirm-modal')).toBeTruthy();
+    });
+    const modal = screen.getByTestId('disable-confirm-modal');
+    expect(modal.textContent).toContain('停用');
+    // 不應有單字「停」獨立按鈕
+    expect(within(modal).queryByRole('button', { name: /^停$/ })).toBeNull();
+    // 確認按鈕為「確認停用」全寫
+    const confirmBtn = within(modal).getByTestId('btn-disable-confirm');
+    expect(confirmBtn.textContent).toContain('停用');
+  });
+
+  it('TXT-003 確認停用 → API 200 → 卡片從草稿欄消失', async () => {
+    const mockedDisableList = vi.mocked(assignmentListApi.disableList);
+    mockedDisableList.mockResolvedValue({});
+    let callCount = 0;
+    mockedListLists.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return buildResponse({
+          lists: [makeItem({ listNo: 'OB202605001', stage: 'draft' })],
+          stageCounts: {
+            draft: 1,
+            dept_ratio: 0,
+            personnel_ratio: 0,
+            approval: 0,
+            ready: 0,
+            disabled: 0,
+          },
+        });
+      }
+      // 停用後刷新：list 已不含 OB202605001
+      return buildResponse({
+        lists: [],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 1,
+        },
+      });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('kanban-card-OB202605001')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-disable-OB202605001'));
+    await waitFor(() => {
+      expect(screen.getByTestId('disable-confirm-modal')).toBeTruthy();
+    });
+    // 必須先勾選確認 checkbox 才能點「確認停用」
+    fireEvent.click(screen.getByTestId('disable-confirm-checkbox'));
+    fireEvent.click(screen.getByTestId('btn-disable-confirm'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('kanban-card-OB202605001')).toBeNull();
+    });
+    expect(mockedDisableList).toHaveBeenCalledWith('OB202605001');
+  });
+});
+
+describe('F050 v2.2 §7 BR-13 — Consumer：M01 主頁 sessionStorage Toast（TS-F050-SIG-004~007）', () => {
+  it('SIG-004 mount 時讀取 cdmp.pendingToast → 顯示 toast → 立即 removeItem', async () => {
+    window.sessionStorage.setItem(
+      'cdmp.pendingToast',
+      JSON.stringify({
+        type: 'success',
+        msg: '車貸名單 OB202605001 部門比例已儲存',
+        sub: '已推進至個別比例設定階段',
+      }),
+    );
+    mockedListLists.mockResolvedValue(buildResponse({ lists: [] }));
+    renderPage();
+    await waitFor(() => {
+      // toast 內容應出現在頁面（ToastProvider container）
+      expect(
+        screen.getByText(/車貸名單 OB202605001 部門比例已儲存/),
+      ).toBeTruthy();
+    });
+    expect(window.sessionStorage.getItem('cdmp.pendingToast')).toBeNull();
+  });
+
+  it('SIG-005 頁面重整後 toast 不重複顯示（consume-once）', async () => {
+    window.sessionStorage.setItem(
+      'cdmp.pendingToast',
+      JSON.stringify({ type: 'success', msg: '已儲存', sub: '' }),
+    );
+    mockedListLists.mockResolvedValue(buildResponse({ lists: [] }));
+    const { unmount } = renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/已儲存/)).toBeTruthy();
+    });
+    unmount();
+    cleanup();
+    // 第二次 render → 不應再顯示 toast
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('kanban-board')).toBeTruthy();
+    });
+    expect(screen.queryByText(/已儲存/)).toBeNull();
+  });
+
+  it('SIG-006 cdmp.pendingToast 含無效 JSON → 靜默不顯示，不拋 exception', async () => {
+    window.sessionStorage.setItem('cdmp.pendingToast', 'not-valid-json');
+    mockedListLists.mockResolvedValue(buildResponse({ lists: [] }));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('kanban-board')).toBeTruthy();
+    });
+    // 無 toast 渲染（toast container 應該為空）
+    const container = screen.queryByTestId('toast-container');
+    if (container) {
+      expect(container.children.length).toBe(0);
+    }
+    // BR-13 (4)：consume-once 仍清除殘留
+    expect(window.sessionStorage.getItem('cdmp.pendingToast')).toBeNull();
+  });
+
+  it('SIG-007 cdmp.pendingToast key 不存在 → 靜默不執行任何動作', async () => {
+    expect(window.sessionStorage.getItem('cdmp.pendingToast')).toBeNull();
+    mockedListLists.mockResolvedValue(buildResponse({ lists: [] }));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('kanban-board')).toBeTruthy();
+    });
+    const container = screen.queryByTestId('toast-container');
+    if (container) {
+      expect(container.children.length).toBe(0);
+    }
+  });
+});
+
 describe('F048 v2.0 — Banner（TS-F048-B-001~002）', () => {
   it('B-001 歷史月份 → 紅色橫幅；寫入按鈕 DOM 不存在', async () => {
     mockedListLists.mockResolvedValue(
