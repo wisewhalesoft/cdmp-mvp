@@ -654,7 +654,7 @@
             <tbody class="divide-y divide-border">
               <tr><td class="px-3 py-2 font-mono">draft</td><td class="px-3 py-2">草稿</td><td class="px-3 py-2"><code>#F3F4F6 / #6B7280</code></td><td class="px-3 py-2"><code>pencil</code></td><td class="px-3 py-2 text-gray-500">清單建立後尚未送出</td></tr>
               <tr><td class="px-3 py-2 font-mono">dept_ratio</td><td class="px-3 py-2">部門比例</td><td class="px-3 py-2"><code>#DBEAFE / #1E40AF</code></td><td class="px-3 py-2"><code>building-2</code></td><td class="px-3 py-2 text-gray-500">部長設定中</td></tr>
-              <tr><td class="px-3 py-2 font-mono">indiv_ratio</td><td class="px-3 py-2">個別比例</td><td class="px-3 py-2"><code>#CFFAFE / #0E7490</code></td><td class="px-3 py-2"><code>users</code></td><td class="px-3 py-2 text-gray-500">處長設定中</td></tr>
+              <tr><td class="px-3 py-2 font-mono">personnel_ratio</td><td class="px-3 py-2">個別比例</td><td class="px-3 py-2"><code>#CFFAFE / #0E7490</code></td><td class="px-3 py-2"><code>users</code></td><td class="px-3 py-2 text-gray-500">處長設定中</td></tr>
               <tr><td class="px-3 py-2 font-mono">approval</td><td class="px-3 py-2">待簽核</td><td class="px-3 py-2"><code>#FEF3C7 / #92400E</code></td><td class="px-3 py-2"><code>stamp</code></td><td class="px-3 py-2 text-gray-500">已送出，等待上層確認</td></tr>
               <tr><td class="px-3 py-2 font-mono">ready</td><td class="px-3 py-2">備援可用</td><td class="px-3 py-2"><code>#DCFCE7 / #15803D</code></td><td class="px-3 py-2"><code>check-circle-2</code></td><td class="px-3 py-2 text-gray-500">月跑可使用此版本</td></tr>
             </tbody>
@@ -1018,8 +1018,8 @@
         <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700 mt-4">
           <p class="font-semibold text-primary mb-1">4 變體差異：</p>
           <ul class="list-disc ml-5 space-y-0.5">
-            <li><span class="font-medium text-danger">Rollback</span>（紅色頂條 + 警示）：例如 indiv_ratio → dept_ratio，會清空已輸入資料，需顯示影響範圍預覽</li>
-            <li><span class="font-medium text-primary">推進</span>（藍色頂條）：例如 dept_ratio → indiv_ratio，提醒下一階段會鎖定本階段</li>
+            <li><span class="font-medium text-danger">Rollback</span>（紅色頂條 + 警示）：例如 personnel_ratio → dept_ratio，會清空已輸入資料，需顯示影響範圍預覽</li>
+            <li><span class="font-medium text-primary">推進</span>（藍色頂條）：例如 dept_ratio → personnel_ratio，提醒下一階段會鎖定本階段</li>
             <li><span class="font-medium text-warning">拒絕原因</span>（琥珀頂條）：textarea 1~500 字，必填 + 字數計</li>
             <li><span class="font-medium text-gray-700">F089 變體</span>（中性灰）：ready → approval rollback 不會清空資料，因此文案避免「清空」字眼</li>
           </ul>
@@ -1326,7 +1326,7 @@
     const STAGE_META = {
       draft:       { label: '草稿',     bg: '#F3F4F6', fg: '#6B7280', icon: 'pencil' },
       dept_ratio:  { label: '部門比例', bg: '#DBEAFE', fg: '#1E40AF', icon: 'building-2' },
-      indiv_ratio: { label: '個別比例', bg: '#CFFAFE', fg: '#0E7490', icon: 'users' },
+      personnel_ratio: { label: '個別比例', bg: '#CFFAFE', fg: '#0E7490', icon: 'users' },
       approval:    { label: '待簽核',   bg: '#FEF3C7', fg: '#92400E', icon: 'stamp' },
       ready:       { label: '備援可用', bg: '#DCFCE7', fg: '#15803D', icon: 'check-circle-2' }
     };

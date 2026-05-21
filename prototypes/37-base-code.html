@@ -60,9 +60,6 @@
         <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="filter" class="w-4 h-4"></i>篩選欄位</a>
         <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
-        <a href="29a-dept-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="building-2" class="w-4 h-4"></i>部門比例設定</a>
-        <a href="29b-personnel-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users-round" class="w-4 h-4"></i>個別業務比例</a>
-        <a href="29c-approval-review.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="check-circle-2" class="w-4 h-4"></i>簽核審閱</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
         <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
@@ -71,11 +68,6 @@
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
         <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="camera" class="w-4 h-4"></i>快照詳情</a>
         <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="git-compare" class="w-4 h-4"></i>結果比對</a>
-        <div class="mx-12 my-1.5 border-t border-dashed border-gray-200"></div>
-        <a href="29-ratio-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-400 italic hover:bg-gray-50 transition" title="已廢棄：請改用部門比例設定 / 個別業務比例 / 簽核審閱 / 準備完成摘要">
-          <i data-lucide="archive" class="w-4 h-4"></i>比例設定
-          <span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">已廢棄</span>
-        </a>
       </div>
     </nav>
   </aside>
@@ -422,7 +414,7 @@
     // Sidebar collapsible
     // ============================================================
     (function() {
-      const assignmentPages = ['27-list-definition.html','28-scoring-config.html','29-ratio-config.html','29a-dept-ratio-config.html','29b-personnel-ratio-config.html','29c-approval-review.html','29d-ready-summary.html','30-stage0-estimate.html','31-trigger-run.html','32-run-progress.html','33-run-summary.html','34-run-history.html','35-snapshot-detail.html','36-run-compare.html','37-base-code.html','37a-pooldata-whitelist.html','37b-categorical-field-values.html','27a-list-create-draft.html','27b-list-edit-draft.html'];
+      const assignmentPages = ['27-list-definition.html','28-scoring-config.html','29d-ready-summary.html','30-stage0-estimate.html','31-trigger-run.html','32-run-progress.html','33-run-summary.html','34-run-history.html','35-snapshot-detail.html','36-run-compare.html','37-base-code.html','37a-pooldata-whitelist.html','37b-categorical-field-values.html','27a-list-create-draft.html','27b-list-edit-draft.html'];
       const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
       const isAssignmentPage = assignmentPages.includes(currentPage);
       window.toggleAssignmentSection = function() {
