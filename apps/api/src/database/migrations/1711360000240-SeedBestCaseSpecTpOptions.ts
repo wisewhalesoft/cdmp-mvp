@@ -24,6 +24,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   - spec_tp：'01' / '02' / '03'（placeholder）
  *     - 依 F076 v1.3 §4 BR-4 標 [ASSUMPTION]，待 OBMCODEDF OBMTYPE='SPEC_TP' 之 OBMVALUE
  *       dump 後以 m25+ migration 補修對齊
+ *     - **[SUPERSEDED 2026-05-21] spec_tp 部分已被 m283（UpsertSpecTpOptions32）取代為
+ *       OBMCODEDF_20260505.csv TBL_ID='12' 真實 dump 52 筆（本牌/他牌/重車 等品牌前綴）。
+ *       本 migration 寫入的 3 筆 placeholder 會在 m283 up() 的 DELETE column_name='spec_tp'
+ *       階段被清除；保留本 migration 僅為 down() 對稱性（m283 down() 還原至此 3 筆）。**
  *
  * Idempotent：
  *   - PostgreSQL：ON CONFLICT (column_name, option_value) DO NOTHING

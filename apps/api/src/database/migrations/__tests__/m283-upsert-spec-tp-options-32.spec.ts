@@ -3,25 +3,27 @@
  *   F050 v2.1 重構（AD-E07-18 §18.3 M3 / F076 v1.5 §AC-3 / GAP-LIST §E5）
  *
  * 對應 test spec：
- *   - MT-M3-001：M3 up() 後 spec_tp 共 32 筆
+ *   - MT-M3-001：M3 up() 後 spec_tp 共 52 筆
  *   - MT-M3-002：M3 up() 重複執行不產生重複（UPSERT 冪等）
  *   - MT-M3-003：M3 down() 移除 spec_tp 所有 option 記錄
- *   - TS-F076-003：seed spec_tp 32 筆（真實 OBMCODEDF dump）非 placeholder 3 筆
+ *   - TS-F076-003：seed spec_tp 52 筆（真實 OBMCODEDF dump）非 placeholder 3 筆
  *   - TS-F076-004：spec_tp seed 重複執行不產生重複（UPSERT 冪等）
  *
- * 來源資料：reference/DumpData/OBMCODEDF_20260505.csv TBL_ID='02'（m150 轉碼後 DB 為 'SPEC_TP'）
- *   - C1+C2 spec 補修（commit 6d3a9c6）已對齊：CSV TBL_ID='02' 才是 32 筆 SPEC_TP，
- *     CSV TBL_ID='09' 僅 2 筆（屬其他用途）。
+ * 來源資料：reference/DumpData/OBMCODEDF_20260505.csv **TBL_ID='12'**（OBMSPEC_TP 真實 dump，
+ *   含本牌 / 他牌 / 重車 等品牌前綴細分；m150 轉碼後 DB 為 'SPEC_TP'）
+ *   - v1（commit 273fc0b）：32 筆來源誤指向 `TBL_ID='02'`（OBPROD_KIND 產品大類，3 筆），
+ *     業務語意對應「汽車/機車/一般商品」三大類，與名單篩選欄位實際需求不符。
+ *   - v2（本次）：改回真正的 `TBL_ID='12'` 52 筆（OBPOOLDATA.SPEC_TP 實際出現代碼集）。
  *
  * 涵蓋 cases：
- *   - PostgreSQL up()：DELETE column_name='spec_tp' → INSERT 32 筆 → ON CONFLICT DO UPDATE
- *   - SQLite up()：DELETE column_name='spec_tp' → INSERT OR REPLACE 32 筆
- *   - 32 筆內容含典型 OBMVALUE（01 新車 / 02 中古車 / 99 其他）
- *   - 32 筆全 is_active = true / TRUE
+ *   - PostgreSQL up()：DELETE column_name='spec_tp' → INSERT 52 筆 → ON CONFLICT DO UPDATE
+ *   - SQLite up()：DELETE column_name='spec_tp' → INSERT OR REPLACE 52 筆
+ *   - 52 筆內容含典型 TBL_CD（01 本牌/新車 / 11 他牌/新車 / 42 重車_新車 / 99 其他）
+ *   - 52 筆全 is_active = true / TRUE
  *   - DELETE 限定 column_name='spec_tp'，不誤刪其他欄位
  *   - down()：DELETE column_name='spec_tp' + INSERT m24 placeholder 3 筆（01/02/03）
- *   - functional：SQLite in-memory 跑 m283 後 count=32
- *   - functional：第二次跑 up()（UPSERT 冪等）count 仍 32
+ *   - functional：SQLite in-memory 跑 m283 後 count=52
+ *   - functional：第二次跑 up()（UPSERT 冪等）count 仍 52
  *   - functional：down() 後僅剩 m24 placeholder 3 筆
  *   - 不涉 pooldata_field_whitelist（spec_tp whitelist 由 m22 owns）
  */
@@ -51,7 +53,7 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
       delete process.env.DB_TYPE;
     });
 
-    it('MT-M3-001 / TS-F076-003：DELETE column_name=spec_tp → INSERT 32 筆', async () => {
+    it('MT-M3-001 / TS-F076-003：DELETE column_name=spec_tp → INSERT 52 筆', async () => {
       await migration.up(queryRunner as unknown as QueryRunner);
       const sqls = queryRunner.query.mock.calls.map((c) => c[0] as string);
 
@@ -61,12 +63,12 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
       );
       expect(deleteIdx).toBeGreaterThanOrEqual(0);
 
-      // 32 筆 INSERT（每筆獨立 SQL）
+      // 52 筆 INSERT（每筆獨立 SQL）
       const inserts = sqls.filter((s) =>
         /INSERT\s+INTO\s+pooldata_field_option/i.test(s) &&
         /'spec_tp'/.test(s),
       );
-      expect(inserts.length).toBe(32);
+      expect(inserts.length).toBe(52);
 
       // DELETE 必先於 INSERT
       const firstInsertIdx = sqls.findIndex((s) =>
@@ -88,23 +90,24 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
       }
     });
 
-    it('32 筆內容含典型 OBMVALUE（01 新車 / 02 中古車 / 99 其他）', async () => {
+    it('52 筆內容含典型 TBL_CD（01 本牌/新車 / 11 他牌/新車 / 42 重車_新車 / 99 其他）', async () => {
       await migration.up(queryRunner as unknown as QueryRunner);
       const allInsertSql = queryRunner.query.mock.calls
         .map((c) => c[0] as string)
         .filter((s) => /INSERT\s+INTO\s+pooldata_field_option/i.test(s))
         .join('\n');
 
-      // 典型值（spec §18.3 M3 列舉）
-      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'01'[^;]*'新車'/);
-      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'02'[^;]*'中古車'/);
+      // 典型值（CSV TBL_ID='12' 取 TBL_CD / TBL_DESC1）
+      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'01'[^;]*'本牌\/新車'/);
+      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'11'[^;]*'他牌\/新車'/);
+      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'42'[^;]*'重車_新車'/);
       expect(allInsertSql).toMatch(/'spec_tp'[^;]*'99'[^;]*'其他'/);
-      // 其他 dump 中真實值
-      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'31'[^;]*'遠信機車'/);
-      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'51'[^;]*'一般分期'/);
+      // 2026-04 新增之 3C/居家/娛樂類別
+      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'48'[^;]*'3C通訊家電'/);
+      expect(allInsertSql).toMatch(/'spec_tp'[^;]*'53'[^;]*'B專案\(附擔保\)'/);
     });
 
-    it('32 筆 is_active 全為 TRUE', async () => {
+    it('52 筆 is_active 全為 TRUE', async () => {
       await migration.up(queryRunner as unknown as QueryRunner);
       const inserts = queryRunner.query.mock.calls
         .map((c) => c[0] as string)
@@ -154,7 +157,7 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
         .map((c) => c[0] as string)
         .filter((s) => /INSERT/i.test(s) && /pooldata_field_option/i.test(s));
 
-      expect(inserts.length).toBe(32);
+      expect(inserts.length).toBe(52);
       for (const sql of inserts) {
         expect(sql).toMatch(/INSERT\s+OR\s+REPLACE\s+INTO\s+pooldata_field_option/i);
         expect(sql).not.toMatch(/ON\s+CONFLICT/i);
@@ -176,7 +179,7 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
   });
 
   describe('down()', () => {
-    it('MT-M3-003：DELETE column_name=spec_tp（清空 32 筆）', async () => {
+    it('MT-M3-003：DELETE column_name=spec_tp（清空 52 筆）', async () => {
       await migration.down(queryRunner as unknown as QueryRunner);
       const sqls = queryRunner.query.mock.calls.map((c) => c[0] as string);
       const deleteSql = sqls.find((s) =>
@@ -208,7 +211,7 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
   });
 
   describe('functional: SQLite in-memory', () => {
-    it('MT-M3-001：跑 m283 up() 後 spec_tp count=32', async () => {
+    it('MT-M3-001：跑 m283 up() 後 spec_tp count=52', async () => {
       process.env.DB_TYPE = 'sqlite';
       const ds = await setupSqlite();
       try {
@@ -222,13 +225,13 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
         const rows = await ds.query<Array<{ cnt: number }>>(
           `SELECT COUNT(*) as cnt FROM pooldata_field_option WHERE column_name = 'spec_tp'`,
         );
-        expect(Number(rows[0].cnt)).toBe(32);
+        expect(Number(rows[0].cnt)).toBe(52);
 
         // is_active 全 1
         const active = await ds.query<Array<{ cnt: number }>>(
           `SELECT COUNT(*) as cnt FROM pooldata_field_option WHERE column_name = 'spec_tp' AND is_active = 1`,
         );
-        expect(Number(active[0].cnt)).toBe(32);
+        expect(Number(active[0].cnt)).toBe(52);
       } finally {
         await ds.destroy();
       }
@@ -249,7 +252,7 @@ describe('Migration 1711360000283: UpsertSpecTpOptions32 (TC-MIG-m283 / MT-M3-00
         const rows = await ds.query<Array<{ cnt: number }>>(
           `SELECT COUNT(*) as cnt FROM pooldata_field_option WHERE column_name = 'spec_tp'`,
         );
-        expect(Number(rows[0].cnt)).toBe(32);
+        expect(Number(rows[0].cnt)).toBe(52);
       } finally {
         await ds.destroy();
       }
