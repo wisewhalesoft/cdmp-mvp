@@ -30,7 +30,7 @@ Priority: P0-MVP | Status: **DEPRECATED v1.3** | Last Updated: 2026-05-20
 >
 > **承接 spec**：
 > - **F075 v1.5**：POOLDATA 篩選欄位白名單（補 `case_status` 條目，對齊 US-125 AC-5）
-> - **F076 v1.5**：類別型欄位可選值（含 case_status 4 筆 + caseyear 8 筆 + spec_tp 32 筆 OBMCODEDF dump）
+> - **F076 v1.5**：類別型欄位可選值（含 case_status 4 筆 + caseyear 8 筆 + spec_tp **52 筆** OBMCODEDF dump，TBL_ID='12'）
 > - **US-124**：F068 入口廢除與「篩選欄位」2-Tab 合併管理頁
 > - **US-125**：caseyear / case_status 可選值遷移至 `pooldata_field_option`
 >

@@ -68,7 +68,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 ## 3. 前置條件
 
 - 業務部長已登入並持有有效 JWT Token；`businessRole='director'`（M01 名單 CRUD 寫入限部長，後端套用 `DirectorGuard`，依 F002 §4.6.2）
-- **`pooldata_field_whitelist`（由 F075 v1.5 維護）已 seed 含 caseyear 與 case_status 條目**，對應 `pooldata_field_option`（由 F076 v1.5 維護）已 seed 對應可選值（caseyear 8 筆、case_status 4 筆、prod_kind 3 筆、spec_tp 32 筆 OBMCODEDF dump、settle_src 2 筆、list_type 3 筆；US-125 AC-1 / AC-2 / AC-5）
+- **`pooldata_field_whitelist`（由 F075 v1.5 維護）已 seed 含 caseyear 與 case_status 條目**，對應 `pooldata_field_option`（由 F076 v1.5 維護）已 seed 對應可選值（caseyear 8 筆、case_status 4 筆、prod_kind 3 筆、spec_tp **52 筆 OBMCODEDF dump（TBL_ID='12'）**、settle_src 2 筆、list_type 3 筆；US-125 AC-1 / AC-2 / AC-5）
 - ~~`ob_code_df` 中 `PROD_KIND` / `SPEC_TP` / `CASE_STATUS` 代碼已維護（由 F068 處理）~~（**v2.1 廢除**：F068 已 DEPRECATED；篩選欄位可選值來源改為 F075 + F076，J1 / J2）
 - ~~`CASEYEAR` 不從 `ob_code_df` 載入，由前端固定 11 個 CheckBox（value 0~10）渲染~~（**v2.1 廢除**：caseyear 改為 `pooldata_field_option` 動態載入 8 筆 0~6 + 99，A4 / J5）
 - **v2.1.1（2026-05-20 / US-128 / US-129）**：`pooldata_field_whitelist` 已 seed `best_case`（display_name「優質案件」、categorical、`is_active=true`；F075 v1.6 / US-128）；對應 `pooldata_field_option` 已 seed `best_case` `Y` / `N` 兩筆 active options（F076 v1.6 / US-129 AC-1）
@@ -224,7 +224,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 |---|---|---|
 | ~~產品類別~~ | ~~`prod_kind`~~ | 改由 condition_payload 動態欄位設定；後端衍生填入 entity column |
 | ~~進件/滿期/中結年數~~ | ~~`caseyear`~~ | 同上；選項來源從前端 hardcoded 11 筆改為 `pooldata_field_option` 動態 8 筆（J5 / A4） |
-| ~~專案類別~~ | ~~`spec_tp`~~ | 同上；選項來源從 `ob_code_df` 改為 `pooldata_field_option`（F076 v1.5 補真實 OBMCODEDF dump 32 筆） |
+| ~~專案類別~~ | ~~`spec_tp`~~ | 同上；選項來源從 `ob_code_df` 改為 `pooldata_field_option`（F076 v1.5 補真實 OBMCODEDF dump **52 筆**，TBL_ID='12'） |
 | ~~案件結清期別~~ | ~~`case_status`~~ | 同上；選項來源從 `ob_code_df` `tbl_id='CASE_STATUS'` 改為 `pooldata_field_option` `column_name='case_status'`（A5 / E4） |
 | ~~被他行代償案件~~ | ~~`settle_src`~~ | 同上 |
 

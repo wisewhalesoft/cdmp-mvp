@@ -677,13 +677,12 @@ last_updated: 2026-05-20
 
 ---
 
-### TEST-RISK-005：spec_tp 32 筆確認需 Phase 5 Developer 讀取 CSV
+### TEST-RISK-005 ✅ Resolved（2026-05-21 v2）：spec_tp 52 筆 / TBL_ID='12'
 
 - **來源**：TS-F076-003 / MT-M3-001
-- **問題**：`reference/DumpData/OBMCODEDF_20260505.csv` 中 TBL_ID='09' 的確切筆數由 test-designer 估計為 32，但未實際讀取 CSV 驗證。若實際筆數非 32，MT-M3-001 的 count assertion 將失敗。
-- **影響**：MT-M3-001 的 `count = 32` assertion 可能需要調整
-- **建議**：Phase 5 TDD Developer 在撰寫 M3 migration 前讀取 CSV（`SELECT COUNT(*) WHERE TBL_ID='09'`），確認確切筆數，並更新 MT-M3-001 / TS-F076-003 的 assertion value
-- **風險等級**：低（可修正，不影響測試邏輯正確性）
+- **問題**（歷史）：`reference/DumpData/OBMCODEDF_20260505.csv` 中 SPEC_TP 對應的 TBL_ID 經歷兩次筆誤更正：v1 寫 `TBL_ID='09'`（實際為 best_case Y/N flag，2 筆）；v1.1 改為 `TBL_ID='02'`（實際為 PROD_KIND 3 筆 / 汽車・機車・一般商品三大類）。
+- **解決**（v2 / 2026-05-21）：實際 SPEC_TP 在 `TBL_ID='12'`，共 **52 筆**（含本牌 / 他牌 / 重車 等品牌前綴細分；典型代碼 `01='本牌/新車'` / `11='他牌/新車'` / `42='重車_新車'` / `48='3C通訊家電'` / `99='其他'`）。option_value 取 TBL_CD、option_label 取 TBL_DESC1。MT-M3-001 / TS-F076-003 assertion 已更新為 `count = 52`。m283 v2 hardcoded 52 筆完整清單。
+- **風險等級**：✅ 已解除（v2 落地後 assertion 與實際 dump 一致）
 
 ---
 

@@ -21,7 +21,7 @@ last_updated: 2026-05-20
 
 > 本文件覆蓋 F050 v2.1 重構涉及的 5 個 migration（M1~M5）的單元測試與整合測試。
 > 重點驗證：M1 ADD COLUMN 與 GIN index、M2 backfill 正確性（含 OQ-TEST-002 _backfill_empty 語意）、
-> M3 spec_tp 32 筆 UPSERT 冪等、M4 case_status 4 筆 + whitelist 1 筆 DO NOTHING 冪等、
+> M3 spec_tp 52 筆 UPSERT 冪等（OBMCODEDF TBL_ID='12'）、M4 case_status 4 筆 + whitelist 1 筆 DO NOTHING 冪等、
 > M5 高風險刪除 ob_code_df 與回滾。
 > 對應 GAP-LIST §E。
 
@@ -204,20 +204,20 @@ last_updated: 2026-05-20
 
 ---
 
-## M3：spec_tp 32 筆 UPSERT
+## M3：spec_tp 52 筆 UPSERT
 
-### MT-M3-001：M3 up() 後 pooldata_field_option spec_tp 共 32 筆
+### MT-M3-001：M3 up() 後 pooldata_field_option spec_tp 共 52 筆
 
-- **關聯需求**：F076 AC-3 v1.5 / §18.4.3（M3）/ GAP E5 / TS-F076-003
+- **關聯需求**：F076 AC-3 v1.5（2026-05-21 二次更正）/ §18.4.3（M3）/ GAP E5 / TS-F076-003
 - **測試類型**：Positive / Migration Integration（DB 驗證）
 - **前置條件**：M3（`1711360000283-UpsertSpecTpOptions32.ts`）之前的 migration 已執行
 - **步驟**：
   1. 執行 M3 up()
   2. 查詢 `SELECT COUNT(*) FROM pooldata_field_option WHERE column_name = 'spec_tp'`
 - **預期結果**：
-  - count = 32（真實 OBMCODEDF TBL_ID='09' dump）
-  - 所有 32 筆 `is_active = true`
-  - **注意**：TEST-RISK-005 — Phase 5 TDD Developer 需先讀取 `reference/DumpData/OBMCODEDF_20260505.csv` 核實確切筆數，若非 32 則以 CSV 實際值為準
+  - count = 52（真實 OBMCODEDF TBL_ID='12' dump，option_value=TBL_CD、option_label=TBL_DESC1）
+  - 所有 52 筆 `is_active = true`
+  - **歷史**：TEST-RISK-005 已 ✅ Resolved 兩次（v1：32 筆 / `TBL_ID='02'` 筆誤；v2：52 筆 / `TBL_ID='12'` 正解，2026-05-21）
 
 ---
 
@@ -413,7 +413,7 @@ last_updated: 2026-05-20
 | E2（M2 backfill 正確性） | MT-M2-001、MT-M2-002、MT-M2-003、MT-M2-004、MT-M2-005、MT-M2-006 |
 | E3（M5 DELETE ob_code_df） | MT-M5-002、MT-M5-003、MT-M5-004、MT-M5-005 |
 | E4（M4 case_status seed） | MT-M4-001、MT-M4-002、MT-M4-003、MT-M4-004 |
-| E5（M3 spec_tp 32 筆） | MT-M3-001、MT-M3-002、MT-M3-003 |
+| E5（M3 spec_tp 52 筆，TBL_ID='12'） | MT-M3-001、MT-M3-002、MT-M3-003 |
 | OQ-TEST-002（M2 _backfill_empty） | MT-M2-003 |
 
 ## 附錄：AD-E07-18 §18.10 高風險案例覆蓋

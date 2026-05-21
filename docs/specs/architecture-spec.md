@@ -3992,7 +3992,7 @@ graph LR
 
 | 項目 | 說明 |
 |---|---|
-| **up() 邏輯重點** | ① DELETE FROM `pooldata_field_option` WHERE `column_name = 'spec_tp'`（清除 m24 placeholder 3 筆）；② INSERT 32 筆真實 OBMCODEDF dump（**TBL_ID='02'**，m150 轉碼前；DB 中為 `tbl_id='SPEC_TP'`；來源：`reference/DumpData/OBMCODEDF_20260505.csv`）；典型代碼：`01='新車'` / `02='中古車'` / `03='原融'` / `04='原融代償'` / `05='在庫融資'` 等（完整 32 筆由 Phase 5 從 CSV `TBL_ID='02'` 讀取）；③ 每筆：`(column_name='spec_tp', option_value=OBMVALUE, option_label=OBMCNAME1, is_active=TRUE)`；④ PG：`ON CONFLICT (column_name, option_value) DO UPDATE SET option_label = EXCLUDED.option_label, is_active = EXCLUDED.is_active`；⑤ SQLite：`INSERT OR REPLACE INTO` |
+| **up() 邏輯重點** | ① DELETE FROM `pooldata_field_option` WHERE `column_name = 'spec_tp'`（清除 m24 placeholder 3 筆 / m283 v1 之 32 筆）；② INSERT 52 筆真實 OBMCODEDF dump（**TBL_ID='12'**，OBMSPEC_TP；m150 轉碼後 DB 中為 `tbl_id='SPEC_TP'`；來源：`reference/DumpData/OBMCODEDF_20260505.csv`）；典型代碼：`01='本牌/新車'` / `11='他牌/新車'` / `42='重車_新車'` / `48='3C通訊家電'` / `99='其他'` 等（完整 52 筆 hardcoded 於 m283 SPEC_TP_OPTIONS 陣列，含本牌 / 他牌 / 重車 等品牌前綴細分）；③ 每筆：`(column_name='spec_tp', option_value=TBL_CD, option_label=TBL_DESC1, is_active=TRUE)`；④ PG：`ON CONFLICT (column_name, option_value) DO UPDATE SET option_label = EXCLUDED.option_label, is_active = EXCLUDED.is_active`；⑤ SQLite：`INSERT OR REPLACE INTO` |
 | **down() 邏輯重點** | DELETE FROM `pooldata_field_option` WHERE `column_name = 'spec_tp'`；重新 INSERT m24 原 3 筆 placeholder（idempotent） |
 | **Idempotency** | ON CONFLICT UPSERT；DELETE + INSERT 組合冪等 |
 | **依賴** | 無（`pooldata_field_option` 表已存在於 m210）；可與 M4 任意順序執行，但均須在 M5 之前 |
@@ -4017,7 +4017,7 @@ graph LR
 | **up() 邏輯重點** | ① 安全前置確認：讀取 `pooldata_field_option` 中 `column_name IN ('prod_kind', 'spec_tp', 'case_status')` 確認各欄位有 options 資料，若缺任一則 `throw new Error('M5 pre-condition failed: ...')` 阻止 migration；② DELETE FROM `ob_code_df` WHERE `tbl_id IN ('PROD_KIND', 'SPEC_TP', 'CASE_STATUS')`（**tbl_id 為英文常數，對齊 m150 `1711360000150-ExtendObCodeDfTblIdToVarchar11.ts` 轉碼後 DB 狀態 + F068 ALLOWED_TBL_IDS 白名單；m150 映射規則：`'01'→'PROD_KIND'` / `'02'→'SPEC_TP'` / `'22'→'CASE_STATUS'`；禁止使用數字常數 `'01'`/`'02'`/`'22'` 作為 DELETE WHERE clause 值，否則 0 affected 不報錯而靜默失敗**）；③ `ob_code_df` entity 及 table 本身保留（J2） |
 | **down() 邏輯重點** | 從 `pooldata_field_option` 對應資料反向 INSERT 回 `ob_code_df`（PROD_KIND / SPEC_TP / CASE_STATUS 三組；注意 tbl_id 大寫常數映射）；標記 `// down(): partial restore, for CI rollback use only` |
 | **Idempotency** | DELETE 冪等（0 affected 不報錯） |
-| **依賴** | ① M3 完成（spec_tp 32 筆已 UPSERT）；② M4 完成（case_status 4 筆已 seed）；③ **F069 service 修改已合入同 PR**（拍板 §18.2.7）——此為 deployment gate，不可早於 F069 改完單獨部署 |
+| **依賴** | ① M3 完成（spec_tp 52 筆已 UPSERT）；② M4 完成（case_status 4 筆已 seed）；③ **F069 service 修改已合入同 PR**（拍板 §18.2.7）——此為 deployment gate，不可早於 F069 改完單獨部署 |
 
 ---
 
@@ -4339,13 +4339,13 @@ F069 service 修改內容（Phase 5 執行）：
 | **緩解** | Stage 1 路徑 B fallback 已設計 skip 空字串；短期可接受。Phase 5 實作時評估是否在 M1 中加 `ALTER COLUMN prod_kind SET DEFAULT ''`（PG），或保持現狀 |
 | **追蹤** | 需在 M1 PR review 時決議 |
 
-###### R2：spec_tp 32 筆完整 OBMVALUE 在本 AD 中未逐一列出
+###### R2：spec_tp 52 筆完整 TBL_DESC1 在本 AD 中未逐一列出
 
 | 項目 | 說明 |
 |---|---|
-| **風險** | M3 migration 依賴 `reference/DumpData/OBMCODEDF_20260505.csv` **TBL_ID='02'**（m150 轉碼前對應 SPEC_TP；DB 中為 `tbl_id='SPEC_TP'`）的實際內容；若 CSV 讀取有誤，spec_tp options 數量 / 值可能有偏差。**Phase 5c 補修（R7）**：原本筆誤寫 `TBL_ID='09'`，實測 `TBL_ID='09'` 只有 2 筆 `Y`/`N`（屬 best_case flag），32 筆 SPEC_TP 真實值在 `TBL_ID='02'` |
-| **緩解** | Phase 5 TDD Developer 實作 M3 前必須先讀取 CSV 並核實 32 筆 OBMVALUE；M3 為 UPSERT，日後補充 / 更正仍可追加 migration 修正 |
-| **追蹤** | Phase 5 實作 M3 時需附上從 CSV 讀取的完整 32 筆清單供 reviewer 核實 |
+| **風險** | M3 migration 依賴 `reference/DumpData/OBMCODEDF_20260505.csv` **TBL_ID='12'**（OBMSPEC_TP 真實 dump，含本牌 / 他牌 / 重車 等品牌前綴細分；m150 轉碼後 DB 中為 `tbl_id='SPEC_TP'`）的實際內容；若 CSV 讀取有誤，spec_tp options 數量 / 值可能有偏差。**Phase 5c 補修歷史（R7）**：原本筆誤經兩次更正（`TBL_ID='09'` → `TBL_ID='02'` → 最終 `TBL_ID='12'`）；前兩者實際對應 best_case flag（2 筆）與 PROD_KIND 產品大類（3 筆），皆非 SPEC_TP；52 筆真正 SPEC_TP 在 `TBL_ID='12'` |
+| **緩解** | Phase 5 TDD Developer 實作 M3 前必須先讀取 CSV 並核實 52 筆 TBL_CD / TBL_DESC1；M3 為 UPSERT，日後補充 / 更正仍可追加 migration 修正 |
+| **追蹤** | Phase 5 實作 M3 時需附上從 CSV 讀取的完整 52 筆清單供 reviewer 核實 |
 
 ###### R3：M2 backfill 可能產生 `_backfill_empty: true` 異常名單
 
@@ -4380,13 +4380,13 @@ F069 service 修改內容（Phase 5 執行）：
 | **緩解** | Phase 5 實作前需查閱 `fn_calc_tier_level.sql` 確認是否有 `caseyear` / `year_cnt` 計分維度；若有，評估 wildcard 情境是否需要特殊處理；若 Stage 2 只讀 `ob_pool_data.year_cnt` 直接計分（不 join ob_list_definition），則無影響 |
 | **追蹤** | Phase 5 開工前列為 spike item；若 Stage 2 無 caseyear 計分維度則關閉此風險 |
 
-###### R7（Phase 5c 補修）：spec_tp dump 來源 TBL_ID 筆誤更正
+###### R7（Phase 5c 補修 → 2026-05-21 二次更正）：spec_tp dump 來源 TBL_ID 兩次筆誤更正
 
 | 項目 | 說明 |
 |---|---|
-| **風險** | 原 spec（含 §18.3 M3 up() 邏輯重點、§18.10 R2、F076 v1.5 AC-3）寫「spec_tp 來自 `reference/DumpData/OBMCODEDF_20260505.csv` `TBL_ID='09'`」為**筆誤**；實測 CSV 顯示：(a) `TBL_ID='09'` 只有 2 筆（`01='Y'` / `02='N'`，屬 best_case flag）；(b) `TBL_ID='02'` 才是 SPEC_TP 真正的 32 筆（`01='新車'` / `02='中古車'` / `03='原融'` / `04='原融代償'` / `05='在庫融資'` / ...）；若依原 spec 讀取 `TBL_ID='09'` 將只取得 2 筆 Y/N 寫入 `pooldata_field_option.column_name='spec_tp'`，造成 F050 v2.1 表單 spec_tp 多選元件僅 2 個錯誤選項，且月跑 Stage 1 過濾邏輯失效 |
-| **緩解** | Phase 5c spec-writer 補修：(a) §18.3 M3 up() 邏輯重點：`TBL_ID='09'` → `TBL_ID='02'`，典型代碼範例改為 `01='新車'` / `02='中古車'` / 等；(b) §18.10 R2：dump 來源描述對齊；(c) F076 v1.5 §AC-3：spec_tp seed 來源描述同步修正；m150 轉碼後在 DB 中 `ob_code_df.tbl_id='SPEC_TP'`，但 m283 migration 直接讀 CSV 原始 `TBL_ID='02'`，不依賴 `ob_code_df` 既有資料（與 §18.7 M5 deployment gate 解耦） |
-| **追蹤** | Phase 5 tdd-implementation 實作 m283 時必須核實 CSV `TBL_ID='02'` 的 32 筆 OBMVALUE 與 OBMCNAME1，並附完整清單於 PR description 供 reviewer 核實（沿用 R2 追蹤項目；本 R7 為 R2 的筆誤更正） |
+| **風險** | 原 spec（含 §18.3 M3 up() 邏輯重點、§18.10 R2、F076 v1.5 AC-3）寫「spec_tp 來自 `reference/DumpData/OBMCODEDF_20260505.csv` `TBL_ID='09'`」為**第一次筆誤**；Phase 5c 改為 `TBL_ID='02'` 為**第二次筆誤**（`TBL_ID='02'` 實為 OBPROD_KIND 產品大類 3 筆，業務語意為「汽車/機車/一般商品」三大類，非 SPEC_TP）。實測 CSV 顯示：(a) `TBL_ID='09'` 只有 2 筆 `Y`/`N`（屬 best_case flag）；(b) `TBL_ID='02'` 為 PROD_KIND 3 筆；(c) **`TBL_ID='12'` 才是真正的 SPEC_TP 52 筆**（含本牌 / 他牌 / 重車 等品牌前綴細分，如 `01='本牌/新車'` / `11='他牌/新車'` / `42='重車_新車'`）。若依舊 spec 讀取錯誤 TBL_ID 將寫入錯誤選項，造成 F050 v2.1 表單 spec_tp 多選元件選項與業務不符 |
+| **緩解** | 2026-05-21 spec-writer 二次補修：(a) §18.3 M3 up() 邏輯重點：來源改為 `TBL_ID='12'`，count 32 → 52，典型代碼範例改為 `01='本牌/新車'` / `11='他牌/新車'` / `42='重車_新車'` / `99='其他'`；(b) §18.10 R2：dump 來源描述對齊（02 → 12，32 → 52）；(c) F076 v1.5 §AC-3：spec_tp seed 來源描述同步修正；m150 轉碼後在 DB 中 `ob_code_df.tbl_id='SPEC_TP'`，但 m283 migration 直接讀 CSV 原始 `TBL_ID='12'`，不依賴 `ob_code_df` 既有資料（與 §18.7 M5 deployment gate 解耦） |
+| **追蹤** | m283 v2 已實作完成（2026-05-21）；52 筆完整清單見 `apps/api/src/database/migrations/1711360000283-UpsertSpecTpOptions32.ts` SPEC_TP_OPTIONS 陣列 |
 
 ---
 

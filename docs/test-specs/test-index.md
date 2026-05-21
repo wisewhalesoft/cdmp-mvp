@@ -371,7 +371,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **caseyear wildcard（OQ-TEST-001 解答）**：values 含 `99` → Stage 1 完全省略 year_cnt 條件（不加任何 IN / = / BETWEEN）；見 IT-M01-013/014/015
 - **_backfill_empty（OQ-TEST-002 解答）**：conditions=[] 且 _backfill_empty=true → Stage 1 skip + Logger.warn + assignment_run 不 fail；result summary status='skipped' reason='EMPTY_CONDITIONS'；見 IT-M01-016/017、MT-M2-003
 - **M5 不可逆 + 部署閘門**：M5（DELETE ob_code_df）需先確認 F069 已切換來源（TC-GUARD-M06-F068-001/TS-F068-DEP-008）；M5 只在 staging/CI 執行測試；M5 down() 為 no-op（不可還原，需備份）
-- **spec_tp 32 筆確認（TEST-RISK-005）**：Phase 5 TDD Developer 需讀取 `reference/DumpData/OBMCODEDF_20260505.csv`（TBL_ID='09'）核實確切筆數；若非 32 筆，以 CSV 實際值為準並更新 MT-M3-001 / TS-F076-003 assertion
+- **spec_tp 52 筆 / TBL_ID='12'（TEST-RISK-005 ✅ Resolved 2026-05-21 v2）**：實際 SPEC_TP 在 OBMCODEDF TBL_ID='12'，共 **52 筆**（option_value=TBL_CD、option_label=TBL_DESC1）；MT-M3-001 / TS-F076-003 已對齊 count=52
 - **backward-compat 衍生規則**：categorical → `values.join('$')`；numeric → `${min}$${max}`；date_range → `${dateStart}$${dateEnd}`；欄位不在 conditions 中 → DB 欄位為 NULL
 - **Path A/B Stage 1 切換**：condition_payload IS NOT NULL → Path A（conditions 解析）；IS NULL → Path B（entity 欄位 fallback）；兩條路徑均需獨立 IT-M01 驗證（IT-M01-009/011）
 - **K1~K5 五階段保護**：condition_payload 僅允許在 draft stage 寫入（K1）；rollback 還原 draft 可編輯性（K3）；Stage 1 只讀 ready stage 名單（K5）

@@ -10,7 +10,7 @@ status: Draft
 
 > **v3.4 / 2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構**：依 GAP-LIST §A1~A6 解除 spec 內部矛盾。本輪變更檔案：
 > - **升 v2.1**：[F050-create-list-definition.md](features/F050-create-list-definition.md)、[F051-edit-list-definition.md](features/F051-edit-list-definition.md)（condition_payload 為 source of truth；新增 4 個 error code 引用：`CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_CONDITION_READONLY` / `LEGACY_LIST_NOT_COPYABLE`）
-> - **升 v1.5**：[F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md)（seed 補 case_status，6 筆）、[F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md)（seed 補 case_status 4 筆 + caseyear 確認 8 筆 + spec_tp 升真實 dump 32 筆）
+> - **升 v1.5**：[F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md)（seed 補 case_status，6 筆）、[F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md)（seed 補 case_status 4 筆 + caseyear 確認 8 筆 + spec_tp 升真實 dump **52 筆**，OBMCODEDF TBL_ID='12'）
 > - **整份 DEPRECATED v1.3**：[F068-edit-base-code.md](features/F068-edit-base-code.md)（保留歷史內容 + banner；F075 v1.5 + F076 v1.5 + US-124 + US-125 承接）
 > - **支援文件更新**：data-model.md v1.13、error-handling.md v1.15、[diagrams/F050-draft-create-flow.mmd](diagrams/F050-draft-create-flow.mmd)（whitelist 節點 rename + 補 RESERVED 節點）
 > - **對應 User Story**：US-121（whitelist-condition-payload）、US-122（Stage 1 dynamic filter）、US-123（backward-compat list read）、US-124（deprecate F068 + merge field-base）、US-125（migrate options to whitelist）；既有修改：US-070 / US-102 / US-103 / US-106；DEPRECATED：US-092
@@ -255,7 +255,7 @@ status: Draft
 |------------|------|------|-----------|--------|------|
 | ~~F068~~ | ~~[F068-edit-base-code.md](features/F068-edit-base-code.md)~~ | ~~E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS）~~ | ~~US-092~~ | P0-MVP | **DEPRECATED v1.3（2026-05-20 / F050 v2.1 重構 / J2）— 由 F075 v1.5 + F076 v1.5 + US-124 + US-125 承接；保留歷史內容 + banner** |
 | F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；**v1.5 / 2026-05-20**：seed 從 5 筆擴充為 **6 筆全部啟用**，新增 `case_status`（categorical），對應 US-125 AC-5；不動 API / BR / UI；v1.4.7：available-columns 端點補 `columnDescription` + Modal 自動填入 displayName；v1.4 UI 命名改「篩選欄位管理」/「新增篩選欄位」內部保留 `pooldata_field_whitelist` + `/api/v1/pooldata-fields`；新增 `GET /available-columns` 端點 + dropdown 唯一新增路徑 + `suggestedFieldType` 推斷；v1.4.3 case 對齊小寫 snake_case） | US-102, US-125 | P0-MVP | **v1.5** |
-| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（**v1.5 / 2026-05-20**：AC-3 seed 補 `case_status` 4 筆（01/02/03/04，業務語意對照引用 F050 v2.1 §5.1.1）+ caseyear 確認 8 筆（0~6 + 99，J5 拍板）+ spec_tp 升真實 OBMCODEDF dump 32 筆（取代 m24 placeholder 3 筆，E5 ✅ Resolved）；v1.4.5 多欄位 accordion master 架構；v1.3 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 deactivate 端點 + reason 必填 200 字 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103, US-125 | P0-MVP | **v1.5** |
+| F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（**v1.5 / 2026-05-20**：AC-3 seed 補 `case_status` 4 筆（01/02/03/04，業務語意對照引用 F050 v2.1 §5.1.1）+ caseyear 確認 8 筆（0~6 + 99，J5 拍板）+ spec_tp 升真實 OBMCODEDF dump **52 筆**（TBL_ID='12'，取代 m24 placeholder 3 筆，E5 ✅ Resolved；2026-05-21 二次更正：原為 TBL_ID='02' 32 筆筆誤）；v1.4.5 多欄位 accordion master 架構；v1.3 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 deactivate 端點 + reason 必填 200 字 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103, US-125 | P0-MVP | **v1.5** |
 
 #### M07 角色與可見範圍（E07 重構批次 1，2026-05-15）
 
@@ -442,7 +442,7 @@ F002 v1.3 §4.6 ──權威定義──> F073, F074, ~~F068~~（DEPRECATED v1.3
 F073 ──> F074（處長以部長為對比基準）、F075 v1.5、F076 v1.5、~~F068 v1.2~~（DEPRECATED v1.3）、F055 v1.6（部長 / 處長 Guard 行為導入）
 F074 ──> ~~F068 v1.2~~（DEPRECATED v1.3 / 改參照 F075 v1.5 + F076 v1.5）、F055 v1.6（M02 處長 Nav 完全不可見 cross-ref）
 F075 v1.5 ──> F076 v1.5（categorical 欄位可選值掛父表；v1.5 新增 case_status 父表條目）、F050 v2.1 / F051 v2.1（新名單動態篩選欄位來源；含 caseyear / case_status / prod_kind / spec_tp / settle_src / list_type 6 欄）
-F076 v1.5 ──> F050 v2.1 / F051 v2.1（新名單多選元件選項來源；caseyear 8 筆 0~6 + 99、case_status 4 筆 01/02/03/04、prod_kind 3 筆、spec_tp 32 筆 OBMCODEDF dump、settle_src 2 筆、list_type 3 筆）
+F076 v1.5 ──> F050 v2.1 / F051 v2.1（新名單多選元件選項來源；caseyear 8 筆 0~6 + 99、case_status 4 筆 01/02/03/04、prod_kind 3 筆、spec_tp 52 筆 OBMCODEDF dump（TBL_ID='12'）、settle_src 2 筆、list_type 3 筆）
 ~~F068~~（DEPRECATED v1.3 / 2026-05-20 / F050 v2.1 重構 / J2） ──> ~~F050, F051~~（v2.1 已移除 F068 引用，改引 F075 v1.5 + F076 v1.5）
 F048 v2.0 ──> F077（互動補強：月份切換 + 階段總覽）
 F048 v2.0 + F077 ──> F049（Stage 0 估算於清單頁觸發）

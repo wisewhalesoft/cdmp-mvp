@@ -34,7 +34,7 @@ last_updated: 2026-05-20
 | 項目 | 說明 |
 |---|---|
 | 主要測試層 | Migration Integration（Test Container 或 SQLite in-memory + 實際 migration 執行）、後端 Integration（Supertest）、前端 Component（RTL + MSW） |
-| seed 冪等依賴 | M3（spec_tp 32 筆 UPSERT）/ M4（case_status 4 筆 + whitelist 1 筆 DO NOTHING）；見 `migration/M01-migration-test.md` |
+| seed 冪等依賴 | M3（spec_tp **52 筆** UPSERT，OBMCODEDF TBL_ID='12'）/ M4（case_status 4 筆 + whitelist 1 筆 DO NOTHING）；見 `migration/M01-migration-test.md` |
 
 ---
 
@@ -68,18 +68,19 @@ last_updated: 2026-05-20
 
 ---
 
-### TS-F076-003：seed spec_tp 32 筆（真實 OBMCODEDF dump）非 placeholder 3 筆
+### TS-F076-003：seed spec_tp 52 筆（真實 OBMCODEDF dump）非 placeholder 3 筆
 
-- **關聯需求**：F076 AC-3 v1.5 / GAP E5 / M3
+- **關聯需求**：F076 AC-3 v1.5（2026-05-21 二次更正）/ GAP E5 / M3
 - **測試類型**：Positive / Migration Integration（DB 驗證）
 - **前置條件**：執行 M3（`1711360000283-UpsertSpecTpOptions32.ts`）up()
 - **步驟**：
   1. 查詢 `SELECT COUNT(*) FROM pooldata_field_option WHERE column_name = 'spec_tp'`
   2. 查詢確認 m24 placeholder 的 3 筆代碼（`01`/`02`/`03`，若為 placeholder）**不再**是唯一存在的 3 筆
+  3. 確認典型代碼：`01='本牌/新車'`、`11='他牌/新車'`、`42='重車_新車'`、`48='3C通訊家電'`、`99='其他'`
 - **預期結果**：
-  - count = 32（真實 OBMCODEDF TBL_ID='09' dump 筆數）
-  - 所有 32 筆 `is_active = true`
-  - **注意**：Phase 5 TDD Developer 實作前需先讀取 `reference/DumpData/OBMCODEDF_20260505.csv` 核實確切 32 筆 OBMVALUE；若實際筆數非 32，以 CSV 實際值為準並更新本 assertion（TEST-RISK-005）
+  - count = 52（真實 OBMCODEDF TBL_ID='12' dump 筆數，option_value=TBL_CD、option_label=TBL_DESC1）
+  - 所有 52 筆 `is_active = true`
+  - **歷史**：TEST-RISK-005 已 ✅ Resolved 兩次（v1：32 筆 / `TBL_ID='09'` 筆誤；v1.1：`TBL_ID='02'` 32 筆筆誤；v2：52 筆 / `TBL_ID='12'` 正解，2026-05-21）
 
 ---
 
@@ -216,6 +217,6 @@ last_updated: 2026-05-20
 | GAP | 覆蓋場景 |
 |---|---|
 | E4 | TS-F076-001（case_status 4 筆 seed） |
-| E5 | TS-F076-003（spec_tp 32 筆 dump） |
+| E5 | TS-F076-003（spec_tp 52 筆 dump，TBL_ID='12'） |
 | E6 | TS-F076-002（caseyear / prod_kind seed 確認） |
 | F050 v2.1.1 US-129 | TS-F076-009~011（best_case Y/N options seed） |

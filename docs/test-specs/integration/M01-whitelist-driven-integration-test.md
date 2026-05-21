@@ -42,7 +42,7 @@ last_updated: 2026-05-20
 |---|---|
 | 測試層 | Integration（Supertest + Test Container PostgreSQL / SQLite） |
 | DB 環境 | PostgreSQL（condition_payload 為 JSONB）；SQLite（condition_payload 為 TEXT + transformer）|
-| 資料前置 | 每個 test suite 前執行 factory：seedPooldataFieldWhitelist（6 rows）+ seedPooldataFieldOptions（caseyear 8 rows / case_status 4 rows / spec_tp 32 rows）|
+| 資料前置 | 每個 test suite 前執行 factory：seedPooldataFieldWhitelist（6 rows）+ seedPooldataFieldOptions（caseyear 8 rows / case_status 4 rows / spec_tp **52 rows**，OBMCODEDF TBL_ID='12'）|
 | 清理策略 | afterEach truncate customer_list_definition + condition_payload（CASCADE） |
 
 ---

@@ -895,7 +895,7 @@ PK：`list_no`
 - **Phase 2**：執行驗證查詢確認無 NULL 餘留後，`ALTER COLUMN case_status SET NOT NULL`；同步將 `list_type` 全數更新為常數 `'01'`
 - **Phase 3（v2.1 / 2026-05-20，US-125 AC-2 / E4 解除）**：CASE_STATUS 4 筆代碼（`01` / `02` / `03` / `04`）從 `ob_code_df.tbl_id='CASE_STATUS'` backfill 至 `pooldata_field_option.column_name='case_status'`；同時 F075 v1.5 `pooldata_field_whitelist` 新增 `case_status` 條目（US-125 AC-5）；DELETE FROM `ob_code_df` WHERE `tbl_id = 'CASE_STATUS'`（GAP-LIST §E7）。本階段由 Phase 3a system-architect 執行 migration 腳本，本段不展開細節。
 
-完整 migration SQL 見 architecture-spec.md AD-E07-14；v2.1 Phase 3 migration 詳見 **architecture-spec.md AD-E07-18 §18.3**（Phase 3a 落地，2026-05-20）：M1（m281）ADD COLUMN condition_payload + GIN index、M2（m282）backfill、M3（m283）spec_tp 32 筆 UPSERT、M4（m284）case_status whitelist + options seed、M5（m285）刪除 ob_code_df 重疊 tbl_id（deployment gate：與 F069 service 改讀 pooldata_field_option 同 PR）。
+完整 migration SQL 見 architecture-spec.md AD-E07-14；v2.1 Phase 3 migration 詳見 **architecture-spec.md AD-E07-18 §18.3**（Phase 3a 落地，2026-05-20；M3 於 2026-05-21 二次更正為 TBL_ID='12' 52 筆）：M1（m281）ADD COLUMN condition_payload + GIN index、M2（m282）backfill、M3（m283）**spec_tp 52 筆 UPSERT（OBMCODEDF TBL_ID='12'）**、M4（m284）case_status whitelist + options seed、M5（m285）刪除 ob_code_df 重疊 tbl_id（deployment gate：與 F069 service 改讀 pooldata_field_option 同 PR）。
 
 **索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）、`(project_workym, stage, status)`（M01 入口 F048 列表 + 階段篩選）、`(created_by)`（處長轄區過濾，F074 / F077 BR-10）
 

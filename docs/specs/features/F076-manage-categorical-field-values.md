@@ -15,6 +15,8 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
+> **v1.6.1（2026-05-21 / spec_tp 來源二次更正）**：spec_tp dump 來源從 `TBL_ID='02'` 32 筆更正為 **`TBL_ID='12'` 52 筆**（option_value=TBL_CD、option_label=TBL_DESC1）。原 v1.5 描述為「`TBL_ID='02'` 32 筆 SPEC_TP」係筆誤；實測 `TBL_ID='02'` 為 PROD_KIND 3 筆（業務語意「汽車/機車/一般商品」三大類），真正 SPEC_TP 在 `TBL_ID='12'`（含本牌/他牌/重車品牌前綴細分 52 筆）；典型代碼範例更新為 `01='本牌/新車'` / `11='他牌/新車'` / `42='重車_新車'` / `48='3C通訊家電'` / `99='其他'`。對應 m283 v2 已落地（2026-05-21）；§AC-3 / §10 / §11 之 spec_tp 32 筆全面修正為 52 筆。不動範圍：spec §5 API / schema、§6 BR、§7 UI、prototype、reference。
+
 > **v1.6（2026-05-20 / F050 v2.1.1 業務複核補強 seed 對齊 US-129）**：AC-3 seed 清單擴充為 **7 欄**（v1.5 之 6 欄 + v1.6 新增 `best_case` 2 筆）。理由：F050 v2.1.1 將 `prod_best` 一級欄位移除（US-128 / Q-B B3），業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接；對應 F075 v1.6 已將 `best_case` 補入白名單 seed（categorical，display_name「優質案件」），本 v1.6 同步補其 options seed。(1) **AC-3 新增 best_case 2 筆**：`Y` = 優質案件、`N` = 非優質案件（皆 `is_active=true`；US-129 AC-1 / AC-2）；(2) **§3 前置條件**：補「對應之白名單欄位（含 v1.6 新增之 `best_case`）已存在」；(3) **§10 / §11 測試覆蓋目標 + 實作 checklist 同步補 best_case 2 筆**；(4) **F075 v1.6 cross-ref**：F075 v1.6 AC-1 之 `best_case` 條目為本 v1.6 之父表前置；(5) **F050 v2.1.1 / F051 v2.1.1 cross-ref**：F050 v2.1.1 §5.4 規則表 + §5.2 移除欄位段 + BR-12 引用本 v1.6 之 `best_case` Y/N seed；(6) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema（含 `deactivation_reason` ENUM `'manual'` / `'field_type_changed'`）、§6 BR 編號規則（BR-1 ~ BR-13 全保留，**不新增 BR**）、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO、Guard、error code、既有 AC-1 / AC-2 / AC-4 ~ AC-10 語意、prototype 與 reference；F075 PATCH 觸發本表批次軟停用（BR-11）之語意保留；`best_case` options seed 之 migration 由 system-architect 於 Phase 3a 落地。
 
 > **v1.5（2026-05-20 / F050 v2.1 重構 seed 對齊 US-125）**：AC-3 seed 清單依 US-125 全面對齊：(1) **新增 case_status 4 筆**（`01` 期中（不含當月滿期）/ `02` 中結 / `03` 滿期（含當月滿期）/ `04` 滿期；US-125 AC-2 / E4），業務語意對照引用 F050 v2.1 §5.1.1；對應 F075 v1.5 新增之 `case_status` 白名單條目；取代原 F068 `ob_code_df` `tbl_id='CASE_STATUS'` 之 4 筆代碼（A5）；(2) **caseyear seed 確認為 8 筆**（`0`~`6` + `99`；J5 拍板對應 m22 現行 8 筆 seed；取代 v2.0 F050 之前端 hardcoded 11 筆 0~10；A4），保留既有 v1.4.6 之 8 筆 seed 清單描述；(3) **spec_tp seed 從 placeholder 升級為真實 OBMCODEDF dump 32 筆**：m24 placeholder 3 筆改為依 `reference/DumpData/OBMCODEDF_20260505.csv` `TBL_ID='09'`（對應 SPEC_TP）之真實 dump 32 筆 OBMVALUE 列出（典型值：02 / 04 / 05 / 06 / 11 / 12 / 13 / 14 / 15 / 16 / 20 / 21 / 22 / 23 等；E5），`[ASSUMPTION]` 標記升 ✅ Resolved；(4) **不動範圍**：spec §5 API 路徑與 schema、§5.0 概念 schema（含 `deactivation_reason` ENUM `'manual'` / `'field_type_changed'`）、§6 BR 編號規則（BR-1 ~ BR-13 全保留）、§7 UI/UX 規範（含 v1.4.5 多欄位 accordion master 架構）、backend DTO、Guard、error code、既有 AC-1 / AC-2 / AC-4 ~ AC-10 語意、prototype 與 reference；F075 PATCH 觸發本表批次軟停用（BR-11）之語意保留。
@@ -94,7 +96,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
   - **list_type**：01（期中）/ 02（中結）/ 03（滿期），3 筆
   - **caseyear**：0 / 1 / 2 / 3 / 4 / 5 / 6 + 99（不限年數），共 **8 筆**（J5 拍板：對應 m22 現行 8 筆 seed；取代 v2.0 F050 之前端 hardcoded 11 筆 0~10；US-125 AC-1 / A4）。`99` UI 顯示輔助說明文字「不限年數（全選）」（§7）
   - **settle_src**：Y（含他行代償）/ N（不含他行代償），2 筆
-  - **spec_tp**：依 `reference/DumpData/OBMCODEDF_20260505.csv` **`TBL_ID='02'`**（對應 SPEC_TP；m150 轉碼後在 DB 中為 `ob_code_df.tbl_id='SPEC_TP'`；新系統 m283 直接從 CSV `TBL_ID='02'` 讀取真實 OBMCNAME1，不依賴 `ob_code_df` 既有資料）之真實 OBMCODEDF dump，共 **32 筆** OBMVALUE（典型代碼：`01='新車'` / `02='中古車'` / `03='原融'` / `04='原融代償'` / `05='在庫融資'` 等；E5 / 取代 v1.4.6 之 m24 placeholder 3 筆 [ASSUMPTION]；本 v1.5 升 ✅ Resolved，具體 32 筆完整對應由 Phase 5 tdd-implementation 從 CSV `TBL_ID='02'` 讀取寫入 m283 migration）
+  - **spec_tp**：依 `reference/DumpData/OBMCODEDF_20260505.csv` **`TBL_ID='12'`**（對應 OBMSPEC_TP；m150 轉碼後在 DB 中為 `ob_code_df.tbl_id='SPEC_TP'`；新系統 m283 直接從 CSV `TBL_ID='12'` 讀取真實 TBL_DESC1，不依賴 `ob_code_df` 既有資料）之真實 OBMCODEDF dump，共 **52 筆**（option_value 取 TBL_CD、option_label 取 TBL_DESC1；典型代碼：`01='本牌/新車'` / `11='他牌/新車'` / `42='重車_新車'` / `48='3C通訊家電'` / `99='其他'` 等，含本牌 / 他牌 / 重車 等品牌前綴細分；E5 / 取代 v1.4.6 之 m24 placeholder 3 筆 [ASSUMPTION]；本 v1.5 升 ✅ Resolved；**2026-05-21 二次更正**：原 v1.5 描述為 `TBL_ID='02'` 32 筆係筆誤，實際 `TBL_ID='02'` 為 PROD_KIND 3 筆，真正 SPEC_TP 在 `TBL_ID='12'` 52 筆；完整 52 筆 hardcoded 於 m283 SPEC_TP_OPTIONS 陣列）
   - **case_status**：**4 筆**（v1.5 新增，US-125 AC-2 / A5 / E4，取代原 F068 `ob_code_df` `tbl_id='CASE_STATUS'`）：
     - `01` 期中（不含當月滿期）
     - `02` 中結
@@ -417,7 +419,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 - 單元測試覆蓋率 ≥ 80%
 - 後端關鍵測試案例：
-  - 初始 seed（v1.6 / 7 欄）→ prod_kind 3 筆 / list_type 3 筆 / caseyear 8 筆（0~6 + 99）/ settle_src 2 筆 / spec_tp 32 筆（依 OBMCODEDF dump）/ **case_status 4 筆**（01/02/03/04）/ **best_case 2 筆**（Y/N，v1.6 新增，US-129 AC-1）寫入；重複 seed → 不增加
+  - 初始 seed（v1.6 / 7 欄）→ prod_kind 3 筆 / list_type 3 筆 / caseyear 8 筆（0~6 + 99）/ settle_src 2 筆 / spec_tp **52 筆**（依 OBMCODEDF dump TBL_ID='12'）/ **case_status 4 筆**（01/02/03/04）/ **best_case 2 筆**（Y/N，v1.6 新增，US-129 AC-1）寫入；重複 seed → 不增加
   - 部長 GET `?active=true` → 只回啟用值
   - 部長 GET `?active=false` → 只回停用值
   - 部長 GET 不帶 query → 全部回傳
@@ -443,7 +445,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - [ ] 後端新增 GET / POST / PATCH 3 個端點 + Service
 - [ ] 後端套 `DirectorGuard`（寫入）/ `DirectorOrSectionChiefGuard`（GET）+ `FeatureFlagGuard`（寫入）
 - [ ] 後端 categorical 欄位類別檢查
-- [ ] Seed 腳本（v1.6 / 7 欄：prod_kind 3 / list_type 3 / caseyear 8 含 99 / settle_src 2 / spec_tp 32 依 OBMCODEDF dump / case_status 4 / **best_case 2（Y/N，v1.6 新增）**）+ 冪等性測試
+- [ ] Seed 腳本（v1.6 / 7 欄：prod_kind 3 / list_type 3 / caseyear 8 含 99 / settle_src 2 / spec_tp **52 依 OBMCODEDF dump TBL_ID='12'** / case_status 4 / **best_case 2（Y/N，v1.6 新增）**）+ 冪等性測試
 - [ ] error-handling.md 新增 `POOLDATA_OPTION_DUPLICATE` / `POOLDATA_OPTION_NOT_FOUND` / `POOLDATA_OPTION_FIELD_TYPE_INVALID`
 - [ ] 前端「管理可選值」子頁面（自 F075 列表進入）
 - [ ] 前端列表 / 新增 / 停用 / 啟用 Modal
