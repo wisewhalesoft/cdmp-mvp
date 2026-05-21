@@ -17,6 +17,7 @@ import {
 import { DeptRatioForm } from './_components/dept-ratio-form';
 import { ListSummaryCard } from './_components/list-summary-card';
 import { getBusinessRole } from '@/stores/auth-store';
+import { writePendingToast } from './_utils/pending-toast';
 
 /**
  * F079 / F080 / F081 — 部門比例設定獨立頁
@@ -113,9 +114,14 @@ export function DeptRatioConfigPage() {
     setAdvancing(true);
     try {
       await advanceToPersonnelRatio(listNo);
-      showToast(`名單 ${listNo} 已推進至個別業務比例階段`, 'success');
+      // F050 v2.2 §7 BR-13 Producer：推進成功 → 寫 pendingToast 後跳回 M01 主頁
+      writePendingToast({
+        type: 'success',
+        msg: `名單 ${listNo} 部門比例已儲存`,
+        sub: '已推進至個別比例設定階段',
+      });
       setShowAdvance(false);
-      navigate(`/assignment/lists/${listNo}/personnel-ratio`);
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '推進失敗', 'error');
@@ -129,9 +135,14 @@ export function DeptRatioConfigPage() {
     setRollbacking(true);
     try {
       await rollbackToDraft(listNo);
-      showToast(`名單 ${listNo} 已退回草稿階段`, 'warning');
+      // F050 v2.2 §7 BR-13 Producer：退回成功 → 寫 pendingToast 後跳回 M01 主頁
+      writePendingToast({
+        type: 'info',
+        msg: `名單 ${listNo} 已退回草稿`,
+        sub: '部門比例已清空',
+      });
       setShowRollback(false);
-      navigate(`/assignment/list-definitions/${listNo}/edit`);
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '退回失敗', 'error');

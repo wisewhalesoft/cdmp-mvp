@@ -28,6 +28,7 @@ import {
   type AccordionDept,
 } from './_components/personnel-ratio-accordion';
 import { getBusinessRole } from '@/stores/auth-store';
+import { writePendingToast } from './_utils/pending-toast';
 
 /**
  * F082 / F083 / F084 / F085 — 個別業務比例設定獨立頁
@@ -163,9 +164,13 @@ export function PersonnelRatioConfigPage() {
     setAdvancing(true);
     try {
       await advanceToApproval(listNo);
-      showToast(`名單 ${listNo} 已推進至簽核階段`, 'success');
+      writePendingToast({
+        type: 'success',
+        msg: `名單 ${listNo} 個別比例已儲存`,
+        sub: '已推進至簽核階段',
+      });
       setShowAdvance(false);
-      navigate(`/assignment/lists/${listNo}/approval`);
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '推進失敗', 'error');
@@ -179,9 +184,13 @@ export function PersonnelRatioConfigPage() {
     setRollbacking(true);
     try {
       await rollbackToDeptRatio(listNo);
-      showToast(`名單 ${listNo} 已退回部門比例階段`, 'warning');
+      writePendingToast({
+        type: 'info',
+        msg: `名單 ${listNo} 已退回部門比例`,
+        sub: '處長設定將清空',
+      });
       setShowRollback(false);
-      navigate(`/assignment/lists/${listNo}/dept-ratio`);
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '退回失敗', 'error');

@@ -39,6 +39,7 @@ import {
 import { ApprovalHistoryTimeline } from './_components/approval-history-timeline';
 import { RejectReasonChips } from './_components/reject-reason-chips';
 import { getBusinessRole } from '@/stores/auth-store';
+import { writePendingToast } from './_utils/pending-toast';
 
 /**
  * F086 / F087 — 簽核審閱獨立頁
@@ -189,9 +190,13 @@ export function ApprovalReviewPage() {
     setApproving(true);
     try {
       await approveList(listNo);
-      showToast(`名單 ${listNo} 已核准，進入準備完成階段`, 'success');
+      writePendingToast({
+        type: 'success',
+        msg: `名單 ${listNo} 已核准`,
+        sub: '進入準備完成階段',
+      });
       setShowApprove(false);
-      navigate(`/assignment/ready-summary/${listNo}`);
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '核准失敗', 'error');
@@ -205,10 +210,14 @@ export function ApprovalReviewPage() {
     setRejecting(true);
     try {
       await rejectList(listNo, { rejectReason: trimmedReason });
-      showToast(`名單 ${listNo} 已拒絕，退回個別業務比例階段`, 'warning');
+      writePendingToast({
+        type: 'warning',
+        msg: `名單 ${listNo} 已拒絕`,
+        sub: '退回個別業務比例階段',
+      });
       setShowReject(false);
       setRejectReason('');
-      navigate(`/assignment/lists/${listNo}/personnel-ratio`);
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '拒絕失敗', 'error');
