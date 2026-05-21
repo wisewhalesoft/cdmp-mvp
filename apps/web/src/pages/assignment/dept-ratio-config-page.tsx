@@ -235,7 +235,7 @@ export function DeptRatioConfigPage() {
 
             <DeptRatioForm
               listNo={list.listNo}
-              readOnly={!canWrite || stageMismatch}
+              readOnly={!canWrite || !!stageMismatch}
             />
 
             {canWrite && !stageMismatch && (

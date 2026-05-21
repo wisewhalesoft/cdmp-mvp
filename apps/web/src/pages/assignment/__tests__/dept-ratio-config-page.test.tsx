@@ -30,7 +30,6 @@ vi.mock('@/stores/auth-store', async () => {
 
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedGetDeptRatios = vi.mocked(assignmentStageApi.getDeptRatios);
-const mockedSetDeptRatios = vi.mocked(assignmentStageApi.setDeptRatios);
 const mockedAdvance = vi.mocked(assignmentStageApi.advanceToPersonnelRatio);
 const mockedRollback = vi.mocked(assignmentStageApi.rollbackToDraft);
 const mockedGetUser = vi.mocked(authStore.getUser);
@@ -107,11 +106,15 @@ describe('DeptRatioConfigPage (29a)', () => {
     mockedListLists.mockResolvedValue(mockListsResp);
     mockedGetDeptRatios.mockResolvedValue({
       listNo: 'OB202605003',
+      listNm: '測試名單',
+      projectWorkym: '202605',
+      stage: 'dept_ratio',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60 },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40 },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true },
       ],
-      total: 2,
+      total: 100,
+      isReadOnly: false,
     });
   });
 

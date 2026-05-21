@@ -9,6 +9,25 @@ vi.mock('@/api/assignment-stage');
 const mockedGet = vi.mocked(stageApi.getDeptRatios);
 const mockedSet = vi.mocked(stageApi.setDeptRatios);
 
+/**
+ * 對齊後端 spec F079 §5.1 之完整 response shape；test 必須使用相同 shape，
+ * 避免再次發生 mock 與真實 contract drift（feedback_mock_real_system_contract）。
+ */
+function buildGetResponse(
+  deptRatios: Array<{ obdeptId: string; obdeptNm: string; ration: number; isActive?: boolean }>,
+): stageApi.GetDeptRatiosResponse {
+  const items = deptRatios.map((d) => ({ isActive: true, ...d }));
+  return {
+    listNo: 'OB202605001',
+    listNm: '測試名單',
+    projectWorkym: '202605',
+    stage: 'dept_ratio',
+    deptRatios: items,
+    total: items.reduce((s, d) => s + d.ration, 0),
+    isReadOnly: false,
+  };
+}
+
 function renderForm() {
   return render(
     <ToastProvider>
@@ -24,65 +43,88 @@ describe('DeptRatioForm (M03a / F079)', () => {
 
   afterEach(() => cleanup());
 
-  it('載入已存在的部門比例並顯示', async () => {
-    mockedGet.mockResolvedValue({
-      listNo: 'OB202605001',
-      deptRatios: [
+  it('載入後端回的部門列並顯示（obdeptId / obdeptNm 為唯讀文字）', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([
         { obdeptId: 'D001', obdeptNm: '業務一部', ration: 50 },
         { obdeptId: 'D002', obdeptNm: '業務二部', ration: 50 },
-      ],
-      total: 100,
-    });
+      ]),
+    );
     renderForm();
     await waitFor(() =>
       expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
     );
-    expect(screen.getByDisplayValue('D001')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('業務一部')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('業務二部')).toBeInTheDocument();
+    // obdeptId / obdeptNm 不應該是可編輯 input，應該是純文字
+    expect(screen.queryByDisplayValue('D001')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('業務一部')).not.toBeInTheDocument();
+    expect(screen.getByText('D001')).toBeInTheDocument();
+    expect(screen.getByText('業務一部')).toBeInTheDocument();
+    expect(screen.getByText('業務二部')).toBeInTheDocument();
+    // ration 仍為可編輯 input
+    expect(screen.getByLabelText('ratio-D001')).toBeInTheDocument();
+  });
+
+  it('isActive=false 的部門顯示「已下線」徽章', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([
+        { obdeptId: 'D001', obdeptNm: '業務一部', ration: 70, isActive: true },
+        { obdeptId: 'D099', obdeptNm: '舊東區處', ration: 30, isActive: false },
+      ]),
+    );
+    renderForm();
+    await waitFor(() =>
+      expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('dept-inactive-badge-D099')).toBeInTheDocument();
+    expect(screen.queryByTestId('dept-inactive-badge-D001')).not.toBeInTheDocument();
+  });
+
+  it('UI 不再提供「新增部門」按鈕（部門列由後端決定）', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([{ obdeptId: 'D001', obdeptNm: '業務一部', ration: 100 }]),
+    );
+    renderForm();
+    await waitFor(() =>
+      expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('btn-add-dept')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /新增部門/ })).not.toBeInTheDocument();
   });
 
   it('加總 = 100 顯示 valid indicator', async () => {
-    mockedGet.mockResolvedValue({
-      listNo: 'OB202605001',
-      deptRatios: [
+    mockedGet.mockResolvedValue(
+      buildGetResponse([
         { obdeptId: 'D001', obdeptNm: '業務一部', ration: 60 },
         { obdeptId: 'D002', obdeptNm: '業務二部', ration: 40 },
-      ],
-      total: 100,
-    });
+      ]),
+    );
     renderForm();
     await waitFor(() =>
       expect(screen.getByTestId('ratio-sum-indicator').dataset.valid).toBe('true'),
     );
   });
 
-  it('加總 ≠ 100 + 點儲存 → 顯示錯誤訊息', async () => {
-    mockedGet.mockResolvedValue({
-      listNo: 'OB202605001',
-      deptRatios: [{ obdeptId: 'D001', obdeptNm: '業務一部', ration: 50 }],
-      total: 50,
-    });
+  it('加總 ≠ 100 時儲存按鈕 disabled，不會 PUT', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([{ obdeptId: 'D001', obdeptNm: '業務一部', ration: 50 }]),
+    );
     renderForm();
     await waitFor(() =>
       expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('button', { name: /儲存部門比例/ }));
-    await waitFor(() =>
-      expect(screen.getByTestId('dept-ratio-error')).toHaveTextContent(/加總須為 100/),
-    );
+    const btn = screen.getByRole('button', { name: /儲存部門比例/ });
+    expect(btn).toBeDisabled();
+    fireEvent.click(btn);
     expect(mockedSet).not.toHaveBeenCalled();
   });
 
-  it('合法 payload + 點儲存 → 呼叫 setDeptRatios API', async () => {
-    mockedGet.mockResolvedValue({
-      listNo: 'OB202605001',
-      deptRatios: [
+  it('合法 payload + 點儲存 → 呼叫 setDeptRatios API（不送 isActive 欄位）', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([
         { obdeptId: 'D001', obdeptNm: '業務一部', ration: 60 },
         { obdeptId: 'D002', obdeptNm: '業務二部', ration: 40 },
-      ],
-      total: 100,
-    });
+      ]),
+    );
     mockedSet.mockResolvedValue({
       listNo: 'OB202605001',
       savedCount: 2,
@@ -97,22 +139,21 @@ describe('DeptRatioForm (M03a / F079)', () => {
     fireEvent.click(screen.getByRole('button', { name: /儲存部門比例/ }));
     await waitFor(() => expect(mockedSet).toHaveBeenCalledTimes(1));
     expect(mockedSet.mock.calls[0][0]).toBe('OB202605001');
-    expect((mockedSet.mock.calls[0][1] as { deptRatios: unknown[] }).deptRatios).toHaveLength(2);
+    const sentBody = mockedSet.mock.calls[0][1] as unknown as {
+      deptRatios: Array<Record<string, unknown>>;
+    };
+    expect(sentBody.deptRatios).toHaveLength(2);
+    // PUT body 不應夾帶 isActive
+    expect(sentBody.deptRatios[0]).not.toHaveProperty('isActive');
+    expect(sentBody.deptRatios[0]).toEqual({ obdeptId: 'D001', obdeptNm: '業務一部', ration: 60 });
   });
 
-  it('新增 + 移除部門 row 運作正常', async () => {
-    mockedGet.mockResolvedValue({
-      listNo: 'OB202605001',
-      deptRatios: [{ obdeptId: 'D001', obdeptNm: '業務一部', ration: 100 }],
-      total: 100,
-    });
+  it('後端回空陣列時顯示空狀態（不引導使用者手動新增）', async () => {
+    mockedGet.mockResolvedValue(buildGetResponse([]));
     renderForm();
     await waitFor(() =>
-      expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
+      expect(screen.getByTestId('dept-ratio-empty')).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByTestId('btn-add-dept'));
-    // 現在應有 2 個 row（原 1 + 新增 1）
-    const inputs = screen.getAllByPlaceholderText('例：D001');
-    expect(inputs).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /儲存部門比例/ })).not.toBeInTheDocument();
   });
 });
