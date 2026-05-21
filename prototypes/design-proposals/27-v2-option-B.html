@@ -1,0 +1,1130 @@
+<!--
+  ============================================================
+  名單定義 v2 — Option B：Kanban 看板版（5 欄並列）
+  ============================================================
+  設計重點：
+  - 5 階段 = 5 個欄位，名單卡片橫向陳列，一眼掌握每階段現況
+  - 月準備度進度條置於 KPI 與看板之間（中段位置）
+  - 每欄頂部 mini progress bar 顯示該欄佔比
+  - 視覺強調「看板式管理 / 分階段任務追蹤」
+  - 適合：偏好「卡片化、可比較欄位高度」的部長
+
+  ⚠️ Role 邏輯修正（已修 v1 27-list-definition.html line 794-796 / line 687-689 bug）
+  - admin / director：看全部名單（不過濾轄區）
+  - section_chief：過濾自己轄區（mock 用 createdBy === '李處長'）
+  - user：整頁 blocked
+
+  落地時請順手修正：
+  - 27-list-definition.html line 794-796 的錯誤過濾條件
+  - 27-list-definition.html line 687-689 的「轄區外」誤判
+
+  ============================================================
+  Changelog
+  ============================================================
+  v2.0 (2026-05-20) - 初版三方案發布
+  v2.1 (2026-05-21) - 三項補強（使用者已選此方案落地）：
+    [1] 補 Rollback 退回按鈕（regression bug 修正）
+        - dept_ratio / personnel_ratio / ready 階段加「退回」按鈕（gray + undo-2 icon）
+        - mutate mock row.stage 往前一格，並 showToast('info', ...) 給 feedback
+        - 文案沿用 v1 27-list-definition.html line 703/705/709
+    [2] 加統一 Detail Drawer（修補 Q2 簽核盲簽問題）
+        - 右側 slide-in drawer，含 4 個 tab：篩選條件 / 部門比例 / 個別比例 / 簽核歷史
+        - 任何角色在任何階段點「查看」即可打開（包含 draft 與歷史月份）
+        - 部門比例 / 個別比例使用 mock placeholder；簽核歷史 mock timeline
+        - 落地時對應新 API：GET /api/v1/assignment/list-definitions/:listNo/full-snapshot
+    [3] 「停」按鈕改回「停用」全寫（卡片可接受換行）
+  v2.2 (2026-05-21) - 月跑觸發語意修正 + 升為 canonical：
+    [1] 移除 ready 階段 per-card「觸發」按鈕（語意錯誤）
+        - 月跑是月份級操作，per-list 觸發違反 F078 原子性月跑語意
+        - ready 卡片現只保留「檢視 + 退回」兩按鈕
+    [2] Ready 欄頂部加入 CTA banner（替代 per-card 觸發）
+        - 位於欄頭 + count badge 與卡片 list 之間
+        - 文案：「✅ N 份名單已準備完成」+ 主要按鈕「執行 YYYY-MM 月跑」（藍底白字，連 31-trigger-run.html）
+        - cnt.ready === 0 → 不渲染（避免空狀態誤導）
+        - currentDemoState === 'locked' → CTA 改禁用狀態 + 文字「分派執行中，無法重新觸發」
+        - isHistoricalMonth → 不渲染（歷史月份不可操作）
+    [3] 升為 canonical：本檔之內容已 port 至 prototypes/27-list-definition.html
+        - design-proposals/27-v2-option-B.html 保留作為原始設計檔
+        - 落地版本 sidebar 路徑、active state 已對應調整
+  v2.3 (2026-05-21) - Toolbar 清理 + Ready CTA secondary action：
+    [1] Toolbar 移除「執行月跑」與「Stage 0 試算」（消除重複入口）
+        - Toolbar 第一列現只剩搜尋框 + 新增名單
+    [2] Ready CTA 加「試算」secondary action
+        - 主按鈕：藍底白字「執行 YYYY-MM 月跑」（連 ../31-trigger-run.html）
+        - secondary：白底藍邊「試算」icon calculator（連 ../30-stage0-estimate.html）
+        - locked 狀態主按鈕禁用 + 「試算」也禁用（gray）
+    [3] Canonical 27 同步：sidebar 移除 29a/b/c 與 deprecated 29 entries（本設計檔 sidebar 早無此 entries，僅 changelog 記錄）
+-->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>名單定義 v2 — Option B Kanban 看板版 - CDMP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
+    .kanban-col { min-height: 360px; }
+    .kanban-card { transition: all 0.15s ease; cursor: default; }
+    .kanban-col-body .kanban-card:hover { transform: translateY(-1px); box-shadow: 0 6px 12px -4px rgba(0,0,0,0.12); }
+    .kanban-col-body { max-height: 720px; overflow-y: auto; scrollbar-width: thin; }
+    .kanban-col-body::-webkit-scrollbar { width: 6px; }
+    .kanban-col-body::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+    .ready-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #F3F4F6; }
+    .ready-seg { transition: width 0.4s ease; min-width: 1px; }
+    .readonly-row [data-write-action] { display: none !important; }
+    .toast { transition: all 0.3s ease; }
+    .toast.toast-enter { opacity: 0; transform: translateY(-8px); }
+    .toast.toast-show { opacity: 1; transform: translateY(0); }
+    @keyframes pop-in { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    /* ====== Detail Drawer (v2.1) ====== */
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 49; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .drawer-backdrop.is-open { opacity: 1; pointer-events: auto; }
+    .drawer-panel { position: fixed; top: 0; right: 0; height: 100vh; width: 580px; max-width: 92vw; background: white; box-shadow: -8px 0 24px -8px rgba(0,0,0,0.18); z-index: 50; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.32,0.72,0.32,1); display: flex; flex-direction: column; }
+    .drawer-panel.is-open { transform: translateX(0); }
+    .drawer-tab { padding: 8px 14px; font-size: 12px; font-weight: 500; color: #6B7280; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s; }
+    .drawer-tab:hover { color: #2563EB; }
+    .drawer-tab.is-active { color: #2563EB; border-bottom-color: #2563EB; }
+    .drawer-tab-panel { display: none; }
+    .drawer-tab-panel.is-active { display: block; }
+    .timeline-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
+      <a href="../07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="../08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="../12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="../17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+      <div class="mx-5 my-3 border-t border-border"></div>
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
+      <a href="../25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+      <div class="px-5 py-2 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary flex items-center gap-3">
+        <i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派
+      </div>
+      <a href="../27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義 (v1)
+      </a>
+      <a href="27-v2-option-A.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50">
+        <i data-lucide="git-branch" class="w-4 h-4"></i>v2-A 流水線
+      </a>
+      <a href="27-v2-option-B.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
+        <i data-lucide="kanban" class="w-4 h-4"></i>v2-B Kanban
+      </a>
+      <a href="27-v2-option-C.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50">
+        <i data-lucide="rows" class="w-4 h-4"></i>v2-C 分組表格
+      </a>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-3">
+      <h1 class="text-base font-semibold text-gray-800">客戶名單分派 — 名單定義</h1>
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-purple-100 text-purple-700">v2 設計提案 B · Kanban 看板版</span>
+      <span id="scopeBadge" class="hidden inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-medium rounded-full" style="background:#CFFAFE;color:#0E7490;">
+        <i data-lucide="filter" class="w-3 h-3"></i>轄區檢視
+      </span>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-1">
+        <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
+        <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief">業務處長</option>
+          <option value="user">一般使用者</option>
+        </select>
+      </div>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">張部長</span>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- Demo Bar -->
+    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2">
+      <span class="text-xs text-gray-400 mr-1">Demo:</span>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常（當月）</button>
+      <button onclick="showDemoState('historical')" id="demo-historical" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">切歷史月份</button>
+      <span class="text-xs text-gray-400 ml-3 italic">提示：右上角切角色 / 月份觀察差異</span>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <div id="salesBlockedBanner" class="hidden">
+        <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+          <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
+          <p class="text-sm text-gray-500 max-w-md">「名單定義」為部長 / 處長 / Admin 專屬功能。</p>
+        </div>
+      </div>
+
+      <div id="mainContent">
+
+        <!-- 歷史月份 banner -->
+        <div id="historicalBanner" class="hidden rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-sm">
+          <i data-lucide="lock" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+          <div class="flex-1">
+            <p class="font-semibold text-red-800">歷史月份資料為唯讀</p>
+            <p class="text-xs text-red-700 mt-0.5">您正在檢視 <span id="historicalMonthLabel" class="font-mono font-semibold">2026-04</span> 的歷史快照。寫入操作已自動隱藏。</p>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             B1. KPI 卡片區（簡化 4 卡）
+             ============================================================ -->
+        <section class="grid grid-cols-4 gap-3">
+          <div class="bg-white rounded-xl border border-border px-4 py-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><i data-lucide="layers" class="w-5 h-5 text-gray-600"></i></div>
+            <div>
+              <p class="text-[11px] text-gray-500">名單總數</p>
+              <p class="text-2xl font-semibold text-gray-900 leading-tight"><span id="kpi-total">0</span><span class="text-xs font-normal text-gray-400 ml-1">份</span></p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-border px-4 py-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:#DBEAFE;"><i data-lucide="loader" class="w-5 h-5" style="color:#1E40AF;"></i></div>
+            <div>
+              <p class="text-[11px] text-gray-500">進行中</p>
+              <p class="text-2xl font-semibold leading-tight" style="color:#1E40AF;"><span id="kpi-progress">0</span></p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-border px-4 py-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:#FEF3C7;"><i data-lucide="stamp" class="w-5 h-5" style="color:#92400E;"></i></div>
+            <div>
+              <p class="text-[11px] text-gray-500">待簽核</p>
+              <p class="text-2xl font-semibold leading-tight" style="color:#92400E;"><span id="kpi-approval">0</span></p>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-border px-4 py-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:#DCFCE7;"><i data-lucide="check-circle-2" class="w-5 h-5" style="color:#15803D;"></i></div>
+            <div>
+              <p class="text-[11px] text-gray-500">準備完成</p>
+              <p class="text-2xl font-semibold leading-tight" style="color:#15803D;"><span id="kpi-ready">0</span></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             B2. 該月準備度進度條（中段位置，KPI 與 Kanban 之間）
+             ============================================================ -->
+        <section class="bg-white rounded-xl border border-border p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="gauge" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-sm font-semibold text-gray-800"><span id="readyHeader">2026-05 月份準備度</span></h3>
+              <span class="text-xs text-gray-500">|</span>
+              <span class="text-xs text-gray-600">
+                ready <span id="readyCount" class="font-semibold text-success">0</span> / <span id="readyTotal" class="font-semibold">0</span>
+                <span class="ml-1 font-semibold text-success" id="readyPctLabel">0%</span>
+              </span>
+            </div>
+            <span class="text-xs text-gray-500" id="readyHint">尚有 <span id="readyRemain" class="font-semibold text-warning">0</span> 份未完成準備</span>
+          </div>
+          <div class="ready-bar" id="readyBar">
+            <div class="ready-seg" data-stage="draft"       style="width:0%; background:#9CA3AF;" title="草稿"></div>
+            <div class="ready-seg" data-stage="dept_ratio"  style="width:0%; background:#3B82F6;" title="部門比例"></div>
+            <div class="ready-seg" data-stage="personnel_ratio" style="width:0%; background:#06B6D4;" title="個別比例"></div>
+            <div class="ready-seg" data-stage="approval"    style="width:0%; background:#F59E0B;" title="待簽核"></div>
+            <div class="ready-seg" data-stage="ready"       style="width:0%; background:#22C55E;" title="準備完成"></div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             B3. 工具列
+             ============================================================ -->
+        <section class="bg-white rounded-xl border border-border p-3 flex items-center gap-2 flex-wrap">
+          <div class="relative flex-1 max-w-md min-w-[240px]">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input id="searchInput" type="text" oninput="renderAll()" placeholder="搜尋名單名稱或 LIST_NO..." class="w-full pl-9 pr-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            <!-- v2.3: 移除「Stage 0 試算」與「執行月跑」（消除重複入口；改由 Ready CTA 提供） -->
+            <a id="btnCreate" href="../27a-list-create-draft.html" data-write-action="create" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
+              <i data-lucide="plus" class="w-4 h-4"></i>新增名單
+            </a>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             B4. 5 欄看板（Kanban）
+             ============================================================ -->
+        <section class="grid grid-cols-5 gap-3" id="kanbanGrid">
+          <!-- 5 cols 由 JS 渲染 -->
+        </section>
+
+      </div><!-- /mainContent -->
+    </div>
+  </main>
+
+  <!-- ===== Modal：停用名單 ===== -->
+  <div id="deactivateModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md" style="animation: pop-in 0.18s ease-out;">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+          <i data-lucide="archive" class="w-5 h-5 text-danger"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-gray-800">確認停用名單 <code id="deactListNo" class="font-mono text-primary">OB202605001</code>？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F052 v2.0 · 軟刪除（限 draft 階段）</p>
+        </div>
+      </div>
+      <div class="p-5 space-y-3">
+        <div class="rounded-md bg-red-50/50 border border-red-100 p-3 text-sm text-red-800">
+          <p class="font-semibold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-4 h-4"></i>此操作將軟刪除名單</p>
+          <p class="text-xs mt-1 text-red-700">已停用名單可於「已停用」分區查詢；無法直接還原。</p>
+        </div>
+        <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
+          <div class="flex justify-between"><span class="text-gray-500">名單名稱</span><span class="text-gray-800 font-medium" id="deactName">—</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">階段</span><span class="text-gray-800 font-medium" id="deactStage">草稿</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">建立者</span><span class="text-gray-800 font-medium" id="deactBy">—</span></div>
+        </div>
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="deactConfirm" onchange="document.getElementById('btnDeactConfirm').disabled = !this.checked" class="mt-0.5 rounded text-danger focus:ring-danger">
+          <span class="text-sm text-gray-700">我確認停用此名單。</span>
+        </label>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeDeactivateModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
+        <button id="btnDeactConfirm" disabled onclick="confirmDeactivate()" class="px-4 py-2 text-sm font-medium text-white bg-danger rounded-md hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed">
+          <i data-lucide="archive" class="w-4 h-4 inline -mt-0.5"></i> 確認停用
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal：推進至部門比例 ===== -->
+  <div id="advanceModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md" style="animation: pop-in 0.18s ease-out;">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+          <i data-lucide="arrow-right-circle" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-gray-800">推進至部門比例設定階段？</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F078 · 原子性上線約束流程</p>
+        </div>
+      </div>
+      <div class="p-5 space-y-3">
+        <p class="text-sm text-gray-700">推進後將同時：</p>
+        <ul class="text-sm text-gray-600 space-y-1.5 pl-5 list-disc">
+          <li>鎖定篩選條件與 CR 開關</li>
+          <li>進入部門比例設定階段，處長將收到通知</li>
+        </ul>
+        <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
+          <div class="flex justify-between"><span class="text-gray-500">LIST_NO</span><span class="text-primary font-mono" id="advListNo">—</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">名稱</span><span class="text-gray-800 font-medium" id="advName">—</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">條件數</span><span class="text-gray-800 font-medium" id="advCondCount">0</span></div>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
+        <button onclick="closeAdvanceModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
+        <button onclick="confirmAdvance()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700">
+          <i data-lucide="arrow-right" class="w-4 h-4 inline -mt-0.5"></i> 確認推進
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       Detail Drawer（v2.1 補強）
+       對應新 API：GET /api/v1/assignment/list-definitions/:listNo/full-snapshot
+       ============================================================ -->
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+  <aside id="drawerPanel" class="drawer-panel" role="dialog" aria-labelledby="drawerTitle">
+    <div class="px-5 py-4 border-b border-border flex items-start gap-3">
+      <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+        <i data-lucide="file-search" class="w-5 h-5 text-primary"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <code id="drawerListNo" class="font-mono text-sm text-primary">—</code>
+          <span id="drawerStageBadge"></span>
+          <span id="drawerCrBadge"></span>
+        </div>
+        <h3 id="drawerTitle" class="text-base font-semibold text-gray-800 mt-1 truncate">—</h3>
+        <p id="drawerMeta" class="text-xs text-gray-500 mt-0.5">—</p>
+      </div>
+      <button onclick="closeDrawer()" class="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100" aria-label="關閉">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="px-5 border-b border-border flex items-center gap-1">
+      <button class="drawer-tab is-active" data-drawer-tab="conditions" onclick="switchDrawerTab('conditions')">
+        <i data-lucide="filter" class="w-3 h-3 inline -mt-0.5"></i> 篩選條件
+      </button>
+      <button class="drawer-tab" data-drawer-tab="dept" onclick="switchDrawerTab('dept')">
+        <i data-lucide="building-2" class="w-3 h-3 inline -mt-0.5"></i> 部門比例
+      </button>
+      <button class="drawer-tab" data-drawer-tab="indiv" onclick="switchDrawerTab('indiv')">
+        <i data-lucide="users" class="w-3 h-3 inline -mt-0.5"></i> 個別比例
+      </button>
+      <button class="drawer-tab" data-drawer-tab="history" onclick="switchDrawerTab('history')">
+        <i data-lucide="history" class="w-3 h-3 inline -mt-0.5"></i> 簽核歷史
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-5 py-4">
+      <div id="drawer-panel-conditions" class="drawer-tab-panel is-active">
+        <p class="text-xs text-gray-500 mb-3">完整條件列表（含每個 condition 的 field、type、values / range）</p>
+        <div id="drawerConditionsList" class="space-y-2"></div>
+        <div class="mt-4 p-3 rounded-md bg-gray-50 border border-border text-[11px] text-gray-500">
+          <span class="font-semibold">logic：</span><span id="drawerLogic" class="font-mono">AND</span>
+          <span class="ml-3 font-semibold">condition_payload 來源：</span><span id="drawerPayloadSource" class="font-mono text-primary">condition_payload</span>
+        </div>
+      </div>
+      <div id="drawer-panel-dept" class="drawer-tab-panel">
+        <p class="text-xs text-gray-500 mb-3">部門配比設定（由業務部長於 dept_ratio 階段設定）</p>
+        <div id="drawerDeptContent"></div>
+      </div>
+      <div id="drawer-panel-indiv" class="drawer-tab-panel">
+        <p class="text-xs text-gray-500 mb-3">業務員個別配比（由各業務處長於 personnel_ratio 階段設定）</p>
+        <div id="drawerIndivContent"></div>
+      </div>
+      <div id="drawer-panel-history" class="drawer-tab-panel">
+        <p class="text-xs text-gray-500 mb-3">名單從 draft 至目前階段的完整 timeline</p>
+        <div id="drawerHistoryContent"></div>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-border bg-gray-50/50 flex items-center justify-between">
+      <span class="text-[10px] text-gray-400">資料：<code class="font-mono">GET /assignment/list-definitions/<span id="drawerApiHint">—</span>/full-snapshot</code></span>
+      <button onclick="closeDrawer()" class="px-4 py-1.5 text-sm text-gray-600 hover:bg-white rounded-md border border-border">關閉</button>
+    </div>
+  </aside>
+
+  <!-- Toast container -->
+  <div id="toastContainer" class="fixed top-20 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    // ============================================================
+    // 共用：Lucide / Toast
+    // ============================================================
+    lucide.createIcons();
+
+    function showToast(type, msg, sub) {
+      const c = document.getElementById('toastContainer');
+      const cls = type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+                  type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                  type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                                    'bg-green-50 border-green-200 text-green-800';
+      const icon = type === 'error' ? 'x-circle' : type === 'warning' ? 'alert-triangle' : type === 'info' ? 'info' : 'check-circle';
+      const el = document.createElement('div');
+      el.className = `toast toast-enter rounded-lg shadow-lg px-4 py-2.5 text-sm border max-w-sm flex items-start gap-2 ${cls}`;
+      el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 mt-0.5 shrink-0"></i><div><div class="font-semibold">${msg}</div>${sub ? `<div class="text-xs opacity-80 mt-0.5">${sub}</div>` : ''}</div>`;
+      c.appendChild(el);
+      lucide.createIcons();
+      requestAnimationFrame(() => { el.classList.remove('toast-enter'); el.classList.add('toast-show'); });
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
+    }
+
+    // ============================================================
+    // 月份切換器
+    // ============================================================
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function shiftYm(ym, delta) {
+      const [y, m] = ym.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+    const DEMO_TODAY_YM = '2026-05';
+    function todayYm() { return DEMO_TODAY_YM; }
+    function isHistoricalMonth(ym) { return ym < todayYm(); }
+    const mpState = { current: todayYm(), min: shiftYm(todayYm(), -12), max: shiftYm(todayYm(), 12) };
+
+    function dsBuildMonthOptions() {
+      const sel = document.getElementById('mp-select');
+      sel.innerHTML = '';
+      let cur = mpState.min;
+      const today = todayYm();
+      while (cur <= mpState.max) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        opt.textContent = cur < today ? `${cur}（歷史）` : cur > today ? `${cur}（未來）` : `${cur}（當月）`;
+        if (cur < today) opt.style.color = '#9CA3AF';
+        if (cur === mpState.current) opt.selected = true;
+        sel.appendChild(opt);
+        cur = shiftYm(cur, 1);
+      }
+    }
+    function dsMonthShift(delta) {
+      const next = shiftYm(mpState.current, delta);
+      if (next < mpState.min || next > mpState.max) return;
+      mpState.current = next;
+      dsBuildMonthOptions();
+      onMonthChanged();
+    }
+    function dsMonthChange(ym) { mpState.current = ym; onMonthChanged(); }
+    function onMonthChanged() {
+      document.getElementById('mp-prev').disabled = mpState.current <= mpState.min;
+      document.getElementById('mp-next').disabled = mpState.current >= mpState.max;
+      renderAll();
+    }
+
+    // ============================================================
+    // 角色
+    // ============================================================
+    const ROLE_META = {
+      admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
+      director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
+      section_chief: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長' },
+      user:          { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',      name: '陳業務' }
+    };
+    let currentRole = 'director';
+
+    function renderRoleBadge(role) {
+      const m = ROLE_META[role] || ROLE_META.user;
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+    }
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('role-switcher').value = role;
+      document.getElementById('role-badge-container').innerHTML = renderRoleBadge(role);
+      document.getElementById('user-name').textContent = ROLE_META[role].name;
+      lucide.createIcons();
+      document.getElementById('scopeBadge').classList.toggle('hidden', role !== 'section_chief');
+      if (role === 'user') {
+        document.getElementById('mainContent').classList.add('hidden');
+        document.getElementById('salesBlockedBanner').classList.remove('hidden');
+        lucide.createIcons();
+      } else {
+        document.getElementById('mainContent').classList.remove('hidden');
+        document.getElementById('salesBlockedBanner').classList.add('hidden');
+        renderAll();
+      }
+    }
+
+    // ============================================================
+    // Mock 資料
+    // ============================================================
+    const OPT_LABELS = {
+      prod_kind:   { '01': '汽車新車', '02': '機車', '03': '其他商品' },
+      spec_tp:     { '02':'中古車','04':'原融代償','05':'在庫融資','06':'專案融資','11':'保單','12':'信貸' },
+      case_status: { '01':'期中','02':'中結','03':'滿期(含當月)','04':'滿期(已結清)' }
+    };
+    const FIELD_DISPLAY = {
+      prod_kind: '產品類別', caseyear: '年數', spec_tp: '專案類別',
+      case_status: '結清期別', settle_src: '他行代償', month_cnt: '撈取月份', birth_date: '生日'
+    };
+    const MOCK_LISTS = [
+      { listNo: 'OB202605001', listNm: '2026-05 業務一部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-02', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:3 }], logic:'AND' } },
+      { listNo: 'OB202605002', listNm: '2026-05 業務二部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-03', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:4 }], logic:'AND' } },
+      { listNo: 'OB202605003', listNm: '2026-05 業務三部 信貸催收',  stage: 'dept_ratio',  cr: true,  createdBy: '李處長',  createdAt: '2026-05-04', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
+      { listNo: 'OB202605004', listNm: '2026-05 業務一部 房貸專案',  stage: 'dept_ratio',  cr: false, createdBy: '王部長',  createdAt: '2026-05-05', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
+      { listNo: 'OB202605005', listNm: '2026-05 業務二部 高風險名單', stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-05-06', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
+      { listNo: 'OB202605006', listNm: '2026-05 業務一部 重點戶',     stage: 'personnel_ratio', cr: true,  createdBy: '王部長',  createdAt: '2026-05-07', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
+      { listNo: 'OB202605007', listNm: '2026-05 業務三部 退回重做',   stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-05-07', ym: '2026-05', hasReject: true,
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
+      { listNo: 'OB202605008', listNm: '2026-05 業務二部 即將到期',   stage: 'approval',    cr: true,  createdBy: '王部長',  createdAt: '2026-05-08', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }], logic:'AND' } },
+      { listNo: 'OB202605009', listNm: '2026-05 業務一部 結清強催',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-09', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['02'] }], logic:'AND' } },
+      { listNo: 'OB202605010', listNm: '2026-05 業務二部 標準名單',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-09', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
+      { listNo: 'OB202605011', listNm: '2026-05 業務三部 房貸標準',   stage: 'ready',       cr: true,  createdBy: '李處長',  createdAt: '2026-05-10', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
+      { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收',   stage: 'ready', cr: true, createdBy: '王部長', createdAt: '2026-04-02', ym: '2026-04',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }], logic:'AND' } },
+      { listNo: 'OB202604002', listNm: '2026-04 業務二部 主力催收',   stage: 'ready', cr: true, createdBy: '王部長', createdAt: '2026-04-03', ym: '2026-04',
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
+      { listNo: 'OB202604098', listNm: '2026-04 舊系統遷移名單 A',   stage: 'ready', cr: true, createdBy: '李處長', createdAt: '2026-04-04', ym: '2026-04',
+        conditionPayload: null, legacyEntityFallback: { prod_kind:'01$$02', spec_tp:'02$$04' } }
+    ];
+
+    const STAGE_META = {
+      draft:       { label: '草稿',     bg: '#F3F4F6', fg: '#6B7280', solid: '#9CA3AF', icon: 'pencil',          colHead: '#F9FAFB', colBorder: '#D1D5DB' },
+      dept_ratio:  { label: '部門比例', bg: '#DBEAFE', fg: '#1E40AF', solid: '#3B82F6', icon: 'building-2',      colHead: '#EFF6FF', colBorder: '#BFDBFE' },
+      personnel_ratio: { label: '個別比例', bg: '#CFFAFE', fg: '#0E7490', solid: '#06B6D4', icon: 'users',           colHead: '#ECFEFF', colBorder: '#A5F3FC' },
+      approval:    { label: '待簽核',   bg: '#FEF3C7', fg: '#92400E', solid: '#F59E0B', icon: 'stamp',           colHead: '#FFFBEB', colBorder: '#FDE68A' },
+      ready:       { label: '準備完成', bg: '#DCFCE7', fg: '#15803D', solid: '#22C55E', icon: 'check-circle-2',  colHead: '#F0FDF4', colBorder: '#BBF7D0' }
+    };
+    const STAGES_ORDER = ['draft','dept_ratio','personnel_ratio','approval','ready'];
+
+    function initStageBadge(stage) {
+      const m = STAGE_META[stage];
+      return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+    }
+
+    function renderFilterChipsCompact(row) {
+      if (row.conditionPayload == null) {
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase bg-slate-100 text-slate-600 border border-slate-200"><i data-lucide="archive" class="w-2.5 h-2.5"></i>LEGACY</span>`;
+      }
+      const conds = (row.conditionPayload && row.conditionPayload.conditions) || [];
+      if (conds.length === 0) return '<span class="text-[10px] text-gray-400 italic">無條件</span>';
+      const show = conds.slice(0, 2);
+      const chips = show.map(c => {
+        const dn = FIELD_DISPLAY[c.columnName] || c.columnName;
+        if (c.fieldType === 'categorical') {
+          const opts = OPT_LABELS[c.columnName] || {};
+          const labels = (c.values || []).map(v => opts[v] || v);
+          const txt = labels.slice(0, 2).join('/') + (labels.length > 2 ? `+${labels.length - 2}` : '');
+          return `<span class="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px] mr-0.5 mb-0.5">${dn}:${txt}</span>`;
+        }
+        if (c.fieldType === 'numeric') return `<span class="inline-block px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-[10px] mr-0.5 mb-0.5">${dn}:${c.min}~${c.max}</span>`;
+        return `<span class="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] mr-0.5 mb-0.5">${dn}</span>`;
+      }).join('');
+      const more = conds.length > 2 ? `<span class="text-[10px] text-gray-400">+${conds.length - 2}</span>` : '';
+      return chips + more;
+    }
+
+    // ============================================================
+    // ⚠️ Role 邏輯（已修正 v1 bug）
+    // ============================================================
+    function getScopedRows(ym) {
+      let rows = MOCK_LISTS.filter(r => r.ym === ym);
+      if (currentRole === 'section_chief') {
+        rows = rows.filter(r => r.createdBy === '李處長');
+      }
+      return rows;
+    }
+
+    // ============================================================
+    // Ready Bar
+    // ============================================================
+    function renderReadyBar(rows) {
+      const total = rows.length;
+      const cnt = { draft:0, dept_ratio:0, personnel_ratio:0, approval:0, ready:0 };
+      rows.forEach(r => cnt[r.stage]++);
+      const ready = cnt.ready;
+      const pct = total === 0 ? 0 : Math.round(ready / total * 100);
+      document.getElementById('readyHeader').textContent = `${mpState.current} 月份準備度`;
+      document.getElementById('readyCount').textContent = ready;
+      document.getElementById('readyTotal').textContent = total;
+      document.getElementById('readyPctLabel').textContent = pct + '%';
+      document.getElementById('readyRemain').textContent = total - ready;
+      STAGES_ORDER.forEach(s => {
+        const seg = document.querySelector(`#readyBar .ready-seg[data-stage="${s}"]`);
+        const w = total === 0 ? 0 : (cnt[s] / total) * 100;
+        seg.style.width = w + '%';
+      });
+    }
+
+    // ============================================================
+    // Kanban 渲染
+    // ============================================================
+    function renderKanban(rows) {
+      const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const cnt = { draft:0, dept_ratio:0, personnel_ratio:0, approval:0, ready:0 };
+      rows.forEach(r => cnt[r.stage]++);
+      // 更新 KPI
+      document.getElementById('kpi-total').textContent = rows.length;
+      document.getElementById('kpi-progress').textContent = cnt.dept_ratio + cnt.personnel_ratio + cnt.approval;
+      document.getElementById('kpi-approval').textContent = cnt.approval;
+      document.getElementById('kpi-ready').textContent = cnt.ready;
+
+      const grid = document.getElementById('kanbanGrid');
+      grid.innerHTML = '';
+      const isHist = isHistoricalMonth(mpState.current);
+      const isLocked = currentDemoState === 'locked';
+      STAGES_ORDER.forEach(s => {
+        const m = STAGE_META[s];
+        const stageRows = rows.filter(r => r.stage === s).filter(r => !q || r.listNm.toLowerCase().includes(q) || r.listNo.toLowerCase().includes(q));
+        const totalInStage = cnt[s];
+        const col = document.createElement('div');
+        col.className = 'kanban-col bg-white rounded-xl border-2 overflow-hidden flex flex-col';
+        col.style.borderColor = m.colBorder;
+
+        // v2.2: Ready 欄頂 CTA banner（位於欄頭 + 占比條 與 卡片 list 之間）
+        // v2.3: 加 secondary「試算」按鈕 (white border-primary)
+        let readyCtaHtml = '';
+        if (s === 'ready' && totalInStage > 0 && !isHist) {
+          if (isLocked) {
+            readyCtaHtml = `
+              <div class="px-3 py-2 border-y" style="background:#FEF3C7; border-color:#FDE68A;">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <i data-lucide="alert-triangle" class="w-3.5 h-3.5" style="color:#92400E;"></i>
+                  <span class="text-[11px] font-semibold" style="color:#92400E;">${totalInStage} 份名單已準備完成</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" disabled class="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded bg-gray-300 text-gray-500 cursor-not-allowed">
+                    <i data-lucide="lock" class="w-3 h-3"></i>分派執行中，無法重新觸發
+                  </button>
+                  <button type="button" disabled class="shrink-0 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded border border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed">
+                    <i data-lucide="calculator" class="w-3 h-3"></i>試算
+                  </button>
+                </div>
+              </div>`;
+          } else {
+            readyCtaHtml = `
+              <div class="px-3 py-2 border-y" style="background:#F0FDF4; border-color:#BBF7D0;">
+                <div class="flex items-center gap-1.5 mb-1.5">
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5" style="color:#15803D;"></i>
+                  <span class="text-[11px] font-semibold" style="color:#15803D;">${totalInStage} 份名單已準備完成</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <a href="../31-trigger-run.html" data-write-action="trigger-month-run"
+                    class="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded bg-primary text-white hover:bg-blue-700 shadow-sm transition">
+                    <i data-lucide="play-circle" class="w-3 h-3"></i>執行 ${mpState.current} 月跑
+                  </a>
+                  <a href="../30-stage0-estimate.html"
+                    class="shrink-0 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded border border-primary text-primary bg-white hover:bg-blue-50 transition" title="Stage 0 試算（預估月跑筆數與分配）">
+                    <i data-lucide="calculator" class="w-3 h-3"></i>試算
+                  </a>
+                </div>
+              </div>`;
+          }
+        }
+
+        col.innerHTML = `
+          <div class="px-3 py-2.5 border-b-2 flex items-center justify-between" style="background:${m.colHead}; border-color:${m.colBorder};">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="${m.icon}" class="w-4 h-4" style="color:${m.fg};"></i>
+              <span class="text-xs font-semibold" style="color:${m.fg};">${m.label}</span>
+            </div>
+            <span class="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 rounded-full text-[11px] font-bold" style="background:${m.solid};color:white;">${totalInStage}</span>
+          </div>
+          <div class="px-3 pt-2 pb-1">
+            <div class="h-1 rounded-full bg-gray-100 overflow-hidden">
+              <div class="h-full transition-all duration-500" style="width:${rows.length === 0 ? 0 : (totalInStage / rows.length * 100)}%; background:${m.solid};"></div>
+            </div>
+            <div class="text-[10px] text-gray-400 mt-1 text-right">${rows.length === 0 ? '—' : Math.round(totalInStage / rows.length * 100) + '%'} 占比</div>
+          </div>
+          ${readyCtaHtml}
+          <div class="kanban-col-body flex-1 p-2 space-y-2" data-col-body="${s}"></div>
+        `;
+        grid.appendChild(col);
+        const body = col.querySelector('[data-col-body="' + s + '"]');
+        if (stageRows.length === 0) {
+          body.innerHTML = `<div class="p-4 text-center text-[11px] text-gray-400 italic">無名單</div>`;
+        } else {
+          stageRows.forEach(r => {
+            // isHist 沿用上方 forEach 外層宣告（v2.2 移除冗餘 re-declare）
+            const card = document.createElement('div');
+            card.className = `kanban-card bg-white rounded-lg border ${isHist ? 'readonly-row' : ''} p-2.5 hover:border-gray-300 transition`;
+            card.style.borderColor = '#E5E7EB';
+            const rejectBadge = r.hasReject ? `<span class="ml-1 inline-flex items-center gap-0.5 px-1 py-0.5 bg-red-50 text-danger rounded text-[9px]"><i data-lucide="alert-circle" class="w-2 h-2"></i>拒絕</span>` : '';
+            const crBadge = r.cr
+              ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-success rounded-full text-[9px]"><span class="w-1 h-1 rounded-full bg-success"></span>CR</span>`
+              : `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[9px]"><span class="w-1 h-1 rounded-full bg-gray-400"></span>CR 停</span>`;
+            card.innerHTML = `
+              <div class="flex items-center justify-between mb-1">
+                <code class="font-mono text-[10px] text-primary truncate">${r.listNo}</code>
+                ${crBadge}
+              </div>
+              <div class="text-xs font-medium text-gray-800 mb-1.5 leading-tight">${r.listNm}${rejectBadge}</div>
+              <div class="flex flex-wrap mb-1.5">${renderFilterChipsCompact(r)}</div>
+              <div class="flex items-center justify-between text-[10px] text-gray-500 mb-2">
+                <span class="inline-flex items-center gap-1"><i data-lucide="${r.createdBy === '李處長' ? 'user-cog' : 'crown'}" class="w-2.5 h-2.5 text-gray-400"></i>${r.createdBy}</span>
+                <span class="font-mono">${r.createdAt}</span>
+              </div>
+              <div class="flex items-center gap-1 flex-wrap">${renderActions(r)}</div>
+            `;
+            body.appendChild(card);
+          });
+        }
+      });
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // 操作按鈕（已修正 role 邏輯）
+    // ============================================================
+    function renderActions(row) {
+      const stage = row.stage;
+      const role = currentRole;
+      const isHist = isHistoricalMonth(mpState.current);
+
+      // v2.1：viewBtn 改為打開 Detail Drawer（卡片內接受換行）
+      const viewBtn = `<button type="button" onclick="openDrawer('${row.listNo}')" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-gray-500 hover:text-primary hover:bg-gray-50 rounded"><i data-lucide="eye" class="w-2.5 h-2.5"></i>查看</button>`;
+
+      if (isHist) return viewBtn;
+
+      const btn = (label, color, icon, onclick) => {
+        const colorMap = { primary: 'text-primary border-primary hover:bg-blue-50', danger: 'text-danger border-danger hover:bg-red-50', gray: 'text-gray-700 border-border hover:bg-gray-50' };
+        return `<button type="button" data-write-action="${label}" onclick="${onclick}" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium border rounded ${colorMap[color]}"><i data-lucide="${icon}" class="w-2.5 h-2.5"></i>${label}</button>`;
+      };
+
+      let btns = '';
+      // v2.1：補 Rollback「退回」按鈕；「停」改回「停用」全寫；viewBtn 統一掛入每階段
+      if (role === 'director' || role === 'admin') {
+        if (stage === 'draft') {
+          btns = btn('編輯', 'primary', 'pencil', `gotoEdit('${row.listNo}')`) + btn('推進', 'primary', 'arrow-right', `openAdvanceModal('${row.listNo}')`) + btn('停用', 'danger', 'archive', `openDeactivateModal('${row.listNo}')`) + viewBtn;
+        } else if (stage === 'dept_ratio') {
+          btns = `<a href="../29a-dept-ratio-config.html" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium border rounded text-primary border-primary hover:bg-blue-50"><i data-lucide="building-2" class="w-2.5 h-2.5"></i>設定</a>` + btn('退回', 'gray', 'undo-2', `rollbackStage('${row.listNo}')`) + viewBtn;
+        } else if (stage === 'personnel_ratio') {
+          btns = `<a href="../29b-personnel-ratio-config.html" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium border rounded text-primary border-primary hover:bg-blue-50"><i data-lucide="users" class="w-2.5 h-2.5"></i>檢視</a>` + btn('退回', 'gray', 'undo-2', `rollbackStage('${row.listNo}')`) + viewBtn;
+        } else if (stage === 'approval') {
+          btns = btn('核准', 'primary', 'check', `showToast('success','已核准','名單已推進至準備完成')`) + btn('拒絕', 'gray', 'x', `showToast('warning','已拒絕','已退回個別比例')`) + viewBtn;
+        } else if (stage === 'ready') {
+          // v2.2: 移除 per-card「觸發」按鈕；月跑為月份級操作，請使用 Ready 欄頂 CTA banner 或 toolbar 入口
+          btns = btn('退回', 'gray', 'undo-2', `rollbackStage('${row.listNo}')`) + viewBtn;
+        }
+      } else if (role === 'section_chief') {
+        if (stage === 'personnel_ratio') {
+          btns = `<a href="../29b-personnel-ratio-config.html" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium border rounded text-primary border-primary hover:bg-blue-50"><i data-lucide="user-cog" class="w-2.5 h-2.5"></i>設定本部門</a>` + viewBtn;
+        } else {
+          btns = viewBtn;
+        }
+      }
+      return btns;
+    }
+
+    function gotoEdit(listNo) { location.href = `../27b-list-edit-draft.html?listNo=${listNo}`; }
+
+    // ============================================================
+    // Modals
+    // ============================================================
+    let modalTargetListNo = null;
+    function openDeactivateModal(listNo) {
+      const row = MOCK_LISTS.find(r => r.listNo === listNo);
+      if (!row) return;
+      modalTargetListNo = listNo;
+      document.getElementById('deactListNo').textContent = listNo;
+      document.getElementById('deactName').textContent = row.listNm;
+      document.getElementById('deactStage').textContent = (STAGE_META[row.stage] || {}).label || row.stage;
+      document.getElementById('deactBy').textContent = row.createdBy;
+      document.getElementById('deactConfirm').checked = false;
+      document.getElementById('btnDeactConfirm').disabled = true;
+      document.getElementById('deactivateModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeDeactivateModal() { document.getElementById('deactivateModal').classList.add('hidden'); }
+    function confirmDeactivate() {
+      const listNo = modalTargetListNo;
+      closeDeactivateModal();
+      const idx = MOCK_LISTS.findIndex(r => r.listNo === listNo);
+      if (idx >= 0) MOCK_LISTS.splice(idx, 1);
+      renderAll();
+      showToast('warning', `${listNo} 已停用`, '可於名單列表「已停用」分區查詢');
+    }
+    function openAdvanceModal(listNo) {
+      const row = MOCK_LISTS.find(r => r.listNo === listNo);
+      if (!row) return;
+      modalTargetListNo = listNo;
+      document.getElementById('advListNo').textContent = listNo;
+      document.getElementById('advName').textContent = row.listNm;
+      const condCount = row.conditionPayload != null ? (row.conditionPayload.conditions || []).length : Object.keys(row.legacyEntityFallback || {}).length;
+      document.getElementById('advCondCount').textContent = condCount;
+      document.getElementById('advanceModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeAdvanceModal() { document.getElementById('advanceModal').classList.add('hidden'); }
+    function confirmAdvance() {
+      const listNo = modalTargetListNo;
+      closeAdvanceModal();
+      const row = MOCK_LISTS.find(r => r.listNo === listNo);
+      if (row) row.stage = 'dept_ratio';
+      renderAll();
+      showToast('success', `${listNo} 已推進至部門比例`, '處長將收到通知');
+    }
+
+    // ============================================================
+    // v2.1: Rollback helper
+    // ============================================================
+    const STAGE_PREV = { dept_ratio: 'draft', personnel_ratio: 'dept_ratio', approval: 'personnel_ratio', ready: 'approval' };
+    const STAGE_PREV_TOAST = {
+      dept_ratio:  { title: '已退回草稿',     sub: '需重新調整名單條件' },
+      personnel_ratio: { title: '已退回部門比例', sub: '處長設定將清空' },
+      ready:       { title: '已退回簽核',     sub: '需重新簽核' }
+    };
+    function rollbackStage(listNo) {
+      const row = MOCK_LISTS.find(r => r.listNo === listNo);
+      if (!row) return;
+      const prev = STAGE_PREV[row.stage];
+      if (!prev) return;
+      const t = STAGE_PREV_TOAST[row.stage] || { title: '已退回', sub: '' };
+      row.stage = prev;
+      renderAll();
+      showToast('info', t.title, t.sub);
+    }
+
+    // ============================================================
+    // v2.1: Detail Drawer（共用 4 tabs）
+    // ============================================================
+    function openDrawer(listNo) {
+      const row = MOCK_LISTS.find(r => r.listNo === listNo);
+      if (!row) return;
+      document.getElementById('drawerListNo').textContent = listNo;
+      document.getElementById('drawerTitle').textContent = row.listNm;
+      document.getElementById('drawerStageBadge').innerHTML = initStageBadge(row.stage);
+      document.getElementById('drawerCrBadge').innerHTML = row.cr
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-success rounded-full text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>CR 啟用</span>'
+        : '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>CR 停用</span>';
+      document.getElementById('drawerMeta').textContent = `建立者：${row.createdBy} · 建立日：${row.createdAt} · 月份：${row.ym}`;
+      document.getElementById('drawerApiHint').textContent = listNo;
+      renderDrawerConditions(row);
+      renderDrawerDept(row);
+      renderDrawerIndiv(row);
+      renderDrawerHistory(row);
+      switchDrawerTab('conditions');
+      document.getElementById('drawerBackdrop').classList.add('is-open');
+      document.getElementById('drawerPanel').classList.add('is-open');
+      lucide.createIcons();
+    }
+    function closeDrawer() {
+      document.getElementById('drawerBackdrop').classList.remove('is-open');
+      document.getElementById('drawerPanel').classList.remove('is-open');
+    }
+    function switchDrawerTab(name) {
+      document.querySelectorAll('.drawer-tab').forEach(t => t.classList.toggle('is-active', t.getAttribute('data-drawer-tab') === name));
+      document.querySelectorAll('.drawer-tab-panel').forEach(p => p.classList.toggle('is-active', p.id === 'drawer-panel-' + name));
+    }
+    function renderDrawerConditions(row) {
+      const list = document.getElementById('drawerConditionsList');
+      list.innerHTML = '';
+      document.getElementById('drawerLogic').textContent = row.conditionPayload ? (row.conditionPayload.logic || 'AND') : 'AND';
+      document.getElementById('drawerPayloadSource').textContent = row.conditionPayload == null ? 'legacy entity column fallback' : 'condition_payload (JSONB)';
+      if (row.conditionPayload == null) {
+        const fb = row.legacyEntityFallback || {};
+        Object.keys(fb).forEach(col => {
+          const dn = FIELD_DISPLAY[col] || col;
+          const values = (fb[col] || '').split('$$');
+          list.innerHTML += `
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-slate-600 border border-slate-200"><i data-lucide="archive" class="w-2.5 h-2.5"></i>LEGACY</span>
+                <span class="text-sm font-medium text-gray-800">${dn}</span>
+                <code class="text-[10px] font-mono text-gray-500">${col}</code>
+              </div>
+              <div class="text-xs text-gray-600">values: <span class="font-mono">${values.join(', ')}</span></div>
+            </div>`;
+        });
+        if (Object.keys(fb).length === 0) list.innerHTML = '<p class="text-xs text-gray-400 italic">無條件</p>';
+        return;
+      }
+      const conds = (row.conditionPayload && row.conditionPayload.conditions) || [];
+      if (conds.length === 0) { list.innerHTML = '<p class="text-xs text-gray-400 italic">無條件</p>'; return; }
+      conds.forEach((c, i) => {
+        const dn = FIELD_DISPLAY[c.columnName] || c.columnName;
+        let detail = '';
+        if (c.fieldType === 'categorical') {
+          const opts = OPT_LABELS[c.columnName] || {};
+          detail = (c.values || []).map(v => `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px]">${v}<span class="text-gray-400 ml-1">${opts[v] || ''}</span></span>`).join('');
+        } else if (c.fieldType === 'numeric') {
+          detail = `<span class="inline-block px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-[10px]">範圍：${c.min} ~ ${c.max}</span>`;
+        } else if (c.fieldType === 'date') {
+          detail = `<span class="inline-block px-1.5 py-0.5 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded text-[10px]">${c.dateStart} ~ ${c.dateEnd}</span>`;
+        }
+        list.innerHTML += `
+          <div class="rounded-lg border border-border p-3">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold">${i + 1}</span>
+                <span class="text-sm font-medium text-gray-800">${dn}</span>
+                <code class="text-[10px] font-mono text-gray-500">${c.columnName}</code>
+              </div>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">${c.fieldType}</span>
+            </div>
+            <div class="text-xs">${detail}</div>
+          </div>`;
+      });
+      lucide.createIcons();
+    }
+    function renderDrawerDept(row) {
+      const body = document.getElementById('drawerDeptContent');
+      const stageOrder = ['draft','dept_ratio','personnel_ratio','approval','ready'];
+      const hasData = stageOrder.indexOf(row.stage) >= stageOrder.indexOf('dept_ratio') && row.stage !== 'draft';
+      if (!hasData) {
+        body.innerHTML = `<div class="p-6 rounded-lg border border-dashed border-border bg-gray-50/50 text-center">
+          <i data-lucide="clock" class="w-6 h-6 text-gray-400 mx-auto mb-2"></i>
+          <p class="text-sm font-medium text-gray-700">尚未設定部門比例</p>
+          <p class="text-[11px] text-gray-500 mt-1">名單需推進至「部門比例」階段後，由業務部長設定各部門配比</p>
+        </div>`;
+        lucide.createIcons();
+        return;
+      }
+      const deptRows = [
+        { name: '業務一部', ratio: 35, headcount: 12 },
+        { name: '業務二部', ratio: 28, headcount: 10 },
+        { name: '業務三部', ratio: 22, headcount: 8 },
+        { name: '業務四部', ratio: 15, headcount: 6 }
+      ];
+      const total = deptRows.reduce((s, r) => s + r.ratio, 0);
+      body.innerHTML = `
+        <div class="rounded-lg border border-border overflow-hidden">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                <th class="text-left px-3 py-2 font-medium">部門</th>
+                <th class="text-right px-3 py-2 font-medium">配比 %</th>
+                <th class="text-right px-3 py-2 font-medium">業務員數</th>
+                <th class="text-left px-3 py-2 font-medium">分布</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              ${deptRows.map(d => `
+                <tr>
+                  <td class="px-3 py-2 text-sm text-gray-800"><i data-lucide="building-2" class="w-3 h-3 inline -mt-0.5 text-gray-400"></i> ${d.name}</td>
+                  <td class="px-3 py-2 text-right font-mono text-sm font-semibold text-primary">${d.ratio}%</td>
+                  <td class="px-3 py-2 text-right text-xs text-gray-500">${d.headcount} 人</td>
+                  <td class="px-3 py-2"><div class="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div class="h-full bg-primary" style="width:${d.ratio * 2.5}%"></div></div></td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot class="bg-gray-50 text-xs">
+              <tr>
+                <td class="px-3 py-2 font-semibold text-gray-700">合計</td>
+                <td class="px-3 py-2 text-right font-mono font-bold ${total === 100 ? 'text-success' : 'text-danger'}">${total}%</td>
+                <td class="px-3 py-2 text-right text-gray-500">${deptRows.reduce((s, r) => s + r.headcount, 0)} 人</td>
+                <td class="px-3 py-2 text-[10px] text-gray-400">${total === 100 ? '已平衡' : '需調整至 100%'}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="text-[10px] text-gray-400 mt-2 italic">資料來源：mock placeholder（落地時由 /full-snapshot.dept_ratios 提供）</p>
+      `;
+      lucide.createIcons();
+    }
+    function renderDrawerIndiv(row) {
+      const body = document.getElementById('drawerIndivContent');
+      const stageOrder = ['draft','dept_ratio','personnel_ratio','approval','ready'];
+      const hasData = stageOrder.indexOf(row.stage) >= stageOrder.indexOf('personnel_ratio');
+      if (!hasData) {
+        body.innerHTML = `<div class="p-6 rounded-lg border border-dashed border-border bg-gray-50/50 text-center">
+          <i data-lucide="clock" class="w-6 h-6 text-gray-400 mx-auto mb-2"></i>
+          <p class="text-sm font-medium text-gray-700">尚未設定個別業務比例</p>
+          <p class="text-[11px] text-gray-500 mt-1">名單需推進至「個別比例」階段後，由各業務處長設定本部門業務員配比</p>
+        </div>`;
+        lucide.createIcons();
+        return;
+      }
+      const indivRows = [
+        { dept: '業務一部', name: '陳大明', ratio: 12 },
+        { dept: '業務一部', name: '林小華', ratio: 13 },
+        { dept: '業務一部', name: '王志強', ratio: 10 },
+        { dept: '業務二部', name: '吳美玲', ratio: 15 },
+        { dept: '業務二部', name: '張偉', ratio: 13 },
+        { dept: '業務三部', name: '黃淑芬', ratio: 22 },
+        { dept: '業務四部', name: '李建宏', ratio: 15 }
+      ];
+      const total = indivRows.reduce((s, r) => s + r.ratio, 0);
+      body.innerHTML = `
+        <div class="rounded-lg border border-border overflow-hidden">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                <th class="text-left px-3 py-2 font-medium">部門</th>
+                <th class="text-left px-3 py-2 font-medium">業務員</th>
+                <th class="text-right px-3 py-2 font-medium">配比 %</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              ${indivRows.map(p => `
+                <tr>
+                  <td class="px-3 py-2 text-xs text-gray-500">${p.dept}</td>
+                  <td class="px-3 py-2 text-sm text-gray-800"><i data-lucide="user" class="w-3 h-3 inline -mt-0.5 text-gray-400"></i> ${p.name}</td>
+                  <td class="px-3 py-2 text-right font-mono text-sm font-semibold text-primary">${p.ratio}%</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot class="bg-gray-50 text-xs">
+              <tr>
+                <td colspan="2" class="px-3 py-2 font-semibold text-gray-700">合計</td>
+                <td class="px-3 py-2 text-right font-mono font-bold ${total === 100 ? 'text-success' : 'text-danger'}">${total}%</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="text-[10px] text-gray-400 mt-2 italic">資料來源：mock placeholder（落地時由 /full-snapshot.personnel_ratios 提供）</p>
+      `;
+      lucide.createIcons();
+    }
+    function renderDrawerHistory(row) {
+      const body = document.getElementById('drawerHistoryContent');
+      const events = [
+        { time: row.createdAt + ' 09:14', icon: 'pencil', color: '#6B7280', title: '建立草稿', desc: `由 ${row.createdBy} 建立名單 ${row.listNo}`, stage: 'draft' }
+      ];
+      const stageOrder = ['draft','dept_ratio','personnel_ratio','approval','ready'];
+      const curIdx = stageOrder.indexOf(row.stage);
+      if (curIdx >= 1) events.push({ time: '2026-05-06 11:32', icon: 'arrow-right', color: '#3B82F6', title: '推進至部門比例', desc: '條件鎖定 / CR 鎖定', stage: 'dept_ratio' });
+      if (curIdx >= 2) events.push({ time: '2026-05-07 14:08', icon: 'building-2', color: '#3B82F6', title: '部門配比已設定', desc: '4 個部門配比合計 100%（由張部長設定）', stage: 'dept_ratio' });
+      if (curIdx >= 2) events.push({ time: '2026-05-08 10:21', icon: 'arrow-right', color: '#06B6D4', title: '推進至個別比例', desc: '通知所有業務處長', stage: 'personnel_ratio' });
+      if (curIdx >= 3) events.push({ time: '2026-05-09 16:45', icon: 'user-cog', color: '#06B6D4', title: '個別比例已完成', desc: '4 部門業務員配比已設定（7 人，合計 100%）', stage: 'personnel_ratio' });
+      if (curIdx >= 3) events.push({ time: '2026-05-10 09:00', icon: 'arrow-right', color: '#F59E0B', title: '送出簽核', desc: '等待業務部長核准', stage: 'approval' });
+      if (row.hasReject) events.push({ time: '2026-05-10 14:22', icon: 'x', color: '#EF4444', title: '簽核拒絕', desc: '理由：部門配比不合理，需重新調整。已退回個別比例階段。', stage: 'approval' });
+      if (curIdx >= 4) events.push({ time: '2026-05-11 09:15', icon: 'check', color: '#22C55E', title: '簽核核准', desc: '由業務部長核准，名單推進至準備完成', stage: 'ready' });
+      body.innerHTML = `
+        <ol class="relative border-l border-gray-200 ml-2 space-y-4 pl-5 pt-1">
+          ${events.map(e => `
+            <li class="relative">
+              <span class="absolute -left-[26px] top-1 timeline-dot" style="background:${e.color}; box-shadow: 0 0 0 2px ${e.color}30;"></span>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-mono text-gray-400">${e.time}</span>
+                <i data-lucide="${e.icon}" class="w-3 h-3" style="color:${e.color};"></i>
+                <span class="text-sm font-medium text-gray-800">${e.title}</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">${e.desc}</p>
+            </li>
+          `).join('')}
+        </ol>
+        <p class="text-[10px] text-gray-400 mt-3 italic">資料來源：mock placeholder（落地時由 /full-snapshot.audit_trail 提供，依 created_at ASC 排序）</p>
+      `;
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // 主渲染
+    // ============================================================
+    function renderAll() {
+      const rows = getScopedRows(mpState.current);
+      const isHist = isHistoricalMonth(mpState.current);
+      document.getElementById('historicalBanner').classList.toggle('hidden', !isHist);
+      if (isHist) document.getElementById('historicalMonthLabel').textContent = mpState.current;
+      const canCreate = (currentRole === 'director' || currentRole === 'admin') && !isHist;
+      document.getElementById('btnCreate').style.display = canCreate ? 'inline-flex' : 'none';
+      renderReadyBar(rows);
+      renderKanban(rows);
+      lucide.createIcons();
+    }
+
+    // v2.2: currentDemoState 預設 'normal'；落地時 React 用 assignment_run.status 判斷 locked
+    //       本 demo 不在 demo bar 暴露 locked 切換（保留邏輯但不開放，避免測試干擾）
+    let currentDemoState = 'normal';
+    function showDemoState(state) {
+      currentDemoState = state;
+      ['normal','historical'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+      if (state === 'historical') {
+        mpState.current = '2026-04';
+      } else {
+        mpState.current = todayYm();
+      }
+      dsBuildMonthOptions();
+      document.getElementById('mp-prev').disabled = mpState.current <= mpState.min;
+      document.getElementById('mp-next').disabled = mpState.current >= mpState.max;
+      renderAll();
+    }
+
+    // Init
+    dsBuildMonthOptions();
+    document.getElementById('mp-prev').disabled = mpState.current <= mpState.min;
+    document.getElementById('mp-next').disabled = mpState.current >= mpState.max;
+    setRole('director');
+  </script>
+</body>
+</html>
