@@ -2,19 +2,30 @@
 spec-id: F050
 title: 新增名單定義
 feature-id: F050
-source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US-128, US-129
+source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US-128, US-129, US-131, US-133
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.1.1"
-date: 2026-05-20
+version: "2.2.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F050: 新增名單定義
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v2.2.1（2026-05-21 / Phase 5 TDD code drift 修正）**：Phase 5 TDD implementation 完成後發現 spec 與 entity / production pattern 不一致；本版本以 **code 為 source of truth** 修 spec 文字（不變動 entity / migration / code / prototype）：
+> 1. **§6.2 `auditTrail[].action` 列舉值對齊 entity**（D1）：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）為 `CREATE` / `UPDATE` / `DELETE` / `RUN` / `EXPORT` / `CANCEL` / `STAGE_ADVANCE` / `STAGE_ROLLBACK` / `STAGE_REJECT` / `ASSIGN_ROLE` / `REVOKE_ROLE` / `SCORING_INTEGRITY_WARN`（length VARCHAR(30)）；spec 之 `ADVANCE_STAGE` / `APPROVE` 等命名為錯，已修正。
+> 2. **§6.2 核准 / 拒絕記錄之資料來源**（D1）：核准 / 拒絕**不**寫 `assignment_audit_log`，而寫 `assignment_approval` 表（`apps/api/src/database/entities/assignment-approval.entity.ts`，action enum 為小寫 `approve` / `reject`）；故 §6.2 response.`auditTrail` 之 ready 階段範例已移除「APPROVE」條目；如需顯示簽核 timeline 需另起 endpoint（建議 `GET /assignment/list-definitions/:listNo/approvals`），本 v2.2.1 不規範新 endpoint，屬未來 enhancement。
+> 3. **§6.2 處長轄區隔離 mechanism 對齊 production pattern**（D2）：User entity 無 `dept_code` 欄位；改為沿用 `SectionChiefScopeService`（`apps/api/src/modules/assignment/services/section-chief-scope.service.ts`）之既有 production pattern — 以 `ob_empl_set.created_by = currentUserId` 過濾。cross-reference F063 v1.1 / F064 v1.1 / F066 v1.1 / F067 v1.1 之 SectionChiefScopeService scopeByCreator pattern。
+> 4. **本 v2.2.1 不變更 v2.2 既有 BR / AC / sessionStorage signal protocol（BR-13）內容**；僅修 §6.2 範例 JSON / response schema 描述 / 處長轄區段落文字。
+>
+> **v2.2（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 GAP-G1 / GAP-G2 補完）**：將 Phase 1 確認之兩個 GAP 集中歸入本 spec，避免另立增量 spec：
+> 1. **新增 §6.2 Detail Snapshot API**（GAP-G1 / US-131）：新增 `GET /api/v1/assignment/list-definitions/:listNo/full-snapshot` 端點規格（auth / response schema 4 sections / stage-aware null state / error codes），供 [F048 v2.0](F048-view-list-definition.md) Kanban 卡片「查看」按鈕觸發 Detail Drawer 使用。**Detail Snapshot API 為本 spec 之 source-of-truth**，其他 spec 透過 cross-reference 引用。
+> 2. **新增 §7 BR-13 sessionStorage Signal Protocol**（GAP-G2 / US-133）：定義 `cdmp.pendingToast` key 命名、payload schema（`{type, msg, sub}`）、producer / consumer 行為、consume-once 語意、適用範圍（限子頁工作流：29a F079 / 29b F082 / 29c F086 / F087 完成或取消後跳回 M01 主頁）。**Signal Protocol 為本 spec 之 single authority**，F079 / F082 / F086 / F087 透過 cross-reference 引用。
+> 3. **本 v2.2 不變更既有「新增名單」業務 AC（AC-1~AC-16）/ BR（BR-1~BR-12）**；僅在 §6 與 §7 各新增一個獨立 subsection。既有 v2.1.1 / v2.1 / v2.0 之 contract 完整保留。
+>
 > **v2.1.1（2026-05-20 / 業務複核補強）**：F050 v2.1 之後依 2026-05-20 業務複核 D1 / D2 / D4 / Q-A / Q-B 決議補強 3 項。核心變更：
 > 1. **卡別（`card_type`）改為動態下拉**（US-126 / US-127 / D1 / D4 / Q-A）：UI 元件從文字輸入改為下拉選單，選項來源 `GET /api/v1/assignment/scoring/card-types`；建立模式只列 `status='active'` 卡別；編輯模式（F051）額外保留「該名單已存的 inactive 值」（disabled，可保留不可重選）；首選項為「— 未選擇 —」（空值，預設選中）；前端 v2.0 之 `maxLength={2}` 限制移除（下拉自然消除，後端 `@MaxLength(5)` 對齊 `ob_card_type.card_type VARCHAR(5)`）；具體 API query 形式由 system-architect 決定。
 > 2. **「最佳產品（`prod_best`）」一級欄位移除**（US-128 / D2 / Q-B B3）：表單基本資訊區「最佳產品」輸入框移除，前端不再送出 `prodBest` 欄位；`ob_list_definition.prod_best` schema 欄位保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL（Q-B B3「直接清空」決議；v2.2+ 後續可考慮 DROP COLUMN）；業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見第 3 點）。後端 DTO 對 `prodBest` 之處置（`@IsOptional()` backward-compat 接受或刪除）由 system-architect 決定。
@@ -317,6 +328,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 ## 6. API 規格
 
+> **v2.2 結構說明**：本節包含兩個獨立端點：§6.1 POST 建立名單（既有，v2.1 重寫）、§6.2 GET Detail Snapshot（新增，GAP-G1 / US-131）。
+
 ### 6.1 POST /api/v1/assignment/list-definitions（v2.1 重寫）
 
 **Request Body**
@@ -388,6 +401,144 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | 422 | VALIDATION_ERROR | 欄位驗證失敗（詳見 details；含 condition_payload schema 違反，例：conditions 為空、columnName 非 lowercase snake_case、fieldType 不合法、numeric `max < min` 等） |
 | ~~422~~ | ~~CASE_STATUS_REQUIRED~~ | **v2.1 移除**：case_status 改由 `condition_payload` 必填與 columnName 白名單驗證統一覆蓋（A1 / A5） |
 
+### 6.2 GET /api/v1/assignment/list-definitions/:listNo/full-snapshot（v2.2 新增 / GAP-G1 / US-131）
+
+**用途**：取得指定名單之完整快照，供 [F048 v2.0](F048-view-list-definition.md) Kanban 卡片「查看」按鈕觸發 Detail Drawer 顯示 4 個頁籤（篩選條件 / 部門比例 / 個別比例 / 簽核歷史）使用。本端點為**唯讀**，不修改任何資料。
+
+| 認證 | JWT 必填 |
+|---|---|
+| 權限 | `DirectorOrSectionChiefGuard`（沿用 [F048 v2.0](F048-view-list-definition.md) §5.1 既有 pattern，依 F002 §4.6.2 / `feedback_e07_b2_rbac_replace_pattern` 標準模式：class 級 `DirectorOrSectionChief` 基準閘 + method 級唯讀，無 `@RequireDirector`） |
+
+**Path Parameter**：
+
+| 名稱 | 型別 | 必填 | 說明 |
+|---|---|---|---|
+| `listNo` | string | 是 | 11 碼名單編號，regex `^OB[0-9]{9}$` |
+
+**Query Parameter**：無
+
+**Response — 200 OK**
+
+```json
+{
+  "list": {
+    "listNo": "OB202605009",
+    "listNm": "2026-05 業務一部 結清強催",
+    "stage": "ready",
+    "stageLabel": "準備完成",
+    "status": "active",
+    "projectWorkym": "202605",
+    "cardType": "S5",
+    "crEnabled": true,
+    "listPeriodStart": 1,
+    "listPeriodEnd": 6,
+    "listInterval": 1,
+    "conditionPayload": {
+      "conditions": [
+        { "columnName": "spec_tp", "fieldType": "categorical", "values": ["12"] },
+        { "columnName": "case_status", "fieldType": "categorical", "values": ["02"] }
+      ],
+      "logic": "AND"
+    },
+    "legacyEntityFallback": null,
+    "createdBy": "user-uuid-001",
+    "createdByEmpNm": "王部長",
+    "createdAt": "2026-05-09T01:14:00Z",
+    "updatedAt": "2026-05-11T01:15:00Z"
+  },
+  "deptRatios": [
+    { "deptCode": "XTA0", "deptName": "業務一部", "ration": 35 },
+    { "deptCode": "XTB0", "deptName": "業務二部", "ration": 28 }
+  ],
+  "personnelRatios": [
+    {
+      "deptCode": "XTA0",
+      "deptName": "業務一部",
+      "members": [
+        { "emplid": "E001", "empNm": "陳大明", "ration": 12 },
+        { "emplid": "E002", "empNm": "林小華", "ration": 13 }
+      ]
+    }
+  ],
+  "auditTrail": [
+    { "action": "CREATE", "operatorId": "user-uuid-001", "operatorEmpNm": "王部長", "before": null, "after": { "stage": "draft" }, "at": "2026-05-09T01:14:00Z" },
+    { "action": "STAGE_ADVANCE", "operatorId": "user-uuid-001", "operatorEmpNm": "王部長", "before": { "stage": "draft" }, "after": { "stage": "dept_ratio" }, "at": "2026-05-09T03:32:00Z" },
+    { "action": "STAGE_ADVANCE", "operatorId": "user-uuid-001", "operatorEmpNm": "王部長", "before": { "stage": "dept_ratio" }, "after": { "stage": "personnel_ratio" }, "at": "2026-05-10T02:21:00Z" },
+    { "action": "STAGE_ADVANCE", "operatorId": "user-uuid-001", "operatorEmpNm": "王部長", "before": { "stage": "personnel_ratio" }, "after": { "stage": "approval" }, "at": "2026-05-10T08:45:00Z" },
+    { "action": "STAGE_ADVANCE", "operatorId": "user-uuid-001", "operatorEmpNm": "王部長", "before": { "stage": "approval" }, "after": { "stage": "ready" }, "at": "2026-05-11T01:15:00Z" }
+  ]
+}
+```
+
+**Response Schema 規範**：
+
+| 區段 | 型別 | 說明 |
+|---|---|---|
+| `list` | object | 名單基本資料 + 篩選條件；`conditionPayload` 為 JSONB 整段（可為 `null`，舊遷移名單）；`legacyEntityFallback` 僅當 `conditionPayload IS NULL` 時非 null，含 5 個 backward-compat entity column 值（`prodKind` / `caseyear` / `specTp` / `caseStatus` / `settleSrc`，以 `$$` 分隔字串原樣回傳，由前端解析顯示） |
+| `deptRatios[]` | array | 各部門配比（依 `ob_dept_pct`）；空陣列代表「尚未設定部門比例」 |
+| `personnelRatios[]` | array | 業務員個別配比，依部門分組；空陣列代表「尚未設定個別比例」 |
+| `auditTrail[]` | array | 流程 timeline（依 `assignment_audit_log`，過濾 `list_no = :listNo`），依 `created_at` ASC 排序；**僅含 `assignment_audit_log` 之 action enum 條目**（見下方 §6.2.1 對齊 entity） |
+
+**§6.2.1 `auditTrail[].action` 列舉值（v2.2.1 / D1 / 對齊 entity）**：
+
+實際 `AssignmentAuditLog.action` enum 為 VARCHAR(30)，定義於 `apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`：
+
+| action | 寫入時機 | 對應 spec |
+|---|---|---|
+| `CREATE` | 名單建立 | F050 v2.1.1 AC-9（本 spec） |
+| `UPDATE` | 名單編輯（草稿階段） | F051 |
+| `DELETE` | 名單實體刪除（MVP 未使用，停用採軟刪除） | — |
+| `RUN` | 月跑觸發 | F061 v1.4 |
+| `EXPORT` | 分派結果匯出 | F064 v1.1 AC-5 |
+| `CANCEL` | 月跑取消 | F062 Phase 2 |
+| `STAGE_ADVANCE` | 階段推進（draft → dept_ratio / dept_ratio → personnel_ratio / personnel_ratio → approval / approval → ready） | F078 / F080 / F084 / F086 |
+| `STAGE_ROLLBACK` | 階段退回（dept_ratio → draft / personnel_ratio → dept_ratio / ready → approval） | F081 v1.3 / F085 v1.3 / F089 v1.3 |
+| `STAGE_REJECT` | 簽核拒絕（approval → personnel_ratio） | F087 |
+| `ASSIGN_ROLE` / `REVOKE_ROLE` | 角色指派 / 撤銷 | F073 / F074 |
+| `SCORING_INTEGRITY_WARN` | Stage 2 計分完整性警告（彙總列） | F061 v1.3 BR-13 |
+
+**§6.2.2 核准 / 拒絕記錄之資料來源（v2.2.1 / D1）**：
+
+核准（approve）/ 拒絕（reject）**不**寫入 `assignment_audit_log`，而是寫入獨立的 `assignment_approval` 表（`apps/api/src/database/entities/assignment-approval.entity.ts`）：
+
+- 該表 `action` enum 為**小寫** `approve` / `reject`（VARCHAR(10)），與 `assignment_audit_log.action` 為兩套獨立 enum
+- 設計理由：核准 / 拒絕需額外欄位（`reject_reason` / `approver_name` / `approver_role` / `approved_at`），不適合塞入 audit log 之 `before_value` / `after_value` JSON；同時 F087 v1.1 / F082 v1.1 之 latestRejection banner 觸發機制需以 `assignment_approval` 為查詢來源
+- 拒絕另寫一筆 `assignment_audit_log.action='STAGE_REJECT'`（簽核拒絕的 stage 轉換稽核）— 兩張表並存
+- **§6.2 `auditTrail[]` 不含 approval 條目**；如需顯示完整簽核 timeline（含 approve / reject 之 `approver_name` / `reject_reason`），需另起 endpoint（建議 `GET /assignment/list-definitions/:listNo/approvals`）；本 v2.2.1 不規範新 endpoint，屬未來 enhancement
+
+**Stage-aware null state**（對應 US-131 AC-3 / AC-4 / AC-5，v2.2.1 已對齊 entity enum）：
+
+| stage | `deptRatios` | `personnelRatios` | `auditTrail` |
+|---|---|---|---|
+| `draft` | `[]` | `[]` | 至少含 `CREATE` 一筆（剛建立時） |
+| `dept_ratio` | 有值（合計 100%） | `[]` | 含 `CREATE` / `STAGE_ADVANCE` 至 dept_ratio |
+| `personnel_ratio` | 有值 | 有值（合計 100%） | 含上述 + `STAGE_ADVANCE` 至 personnel_ratio |
+| `approval` | 有值 | 有值 | 含上述 + `STAGE_ADVANCE` 至 approval |
+| `ready` | 有值 | 有值 | 完整 timeline（含多筆 `STAGE_ADVANCE`；可能含 `STAGE_REJECT` 中途退回後再次 `STAGE_ADVANCE`） — **不含**核准 / 拒絕之 `approver_name` / `reject_reason`，該等資料在 `assignment_approval` 表（見 §6.2.2） |
+
+**處長轄區隔離（對應 US-131 AC-4 / v2.2.1 D2 對齊 production pattern）**：
+
+當 `role = 'user'` 且 `businessRole = 'section_chief'` 呼叫本端點時：
+- `personnelRatios[]` 中**僅回傳本處長轄區之 `members`**：以 **`ob_empl_set.created_by = currentUserId`** 過濾（沿用 `SectionChiefScopeService` 既有 production pattern，見 `apps/api/src/modules/assignment/services/section-chief-scope.service.ts`；與 F063 v1.1 BR-6 / BR-7 / F064 v1.1 / F066 v1.1 / F067 v1.1 之 scopeByCreator pattern 一致）
+- **不**以 `dept_code` 過濾（User entity 無 `dept_code` 欄位；ob_emphire 亦無 `created_by` 欄位，故不可用 ob_emphire 反查部門）
+- 過濾粒度為 emplid（個別業務員），故同一部門內可能僅顯示部分業務員（該部門其他業務員若屬其他處長轄區，不會出現於 `members`）
+- `deptRatios[]` 不過濾（仍回所有部門配比，因處長可看到全名單分配輪廓）
+- `list.createdBy` 不過濾（即使該名單由其他處長 / 部長建立，仍可開啟 Drawer 唯讀檢視；本端點屬唯讀，與 F048 主清單之「處長僅見本轄區卡片」過濾為不同 layer 之 guard）
+
+**錯誤回應**
+
+| HTTP | 錯誤碼 | 說明 |
+|---|---|---|
+| 401 | AUTH_TOKEN_MISSING / AUTH_TOKEN_EXPIRED | 未登入或 Token 過期 |
+| 403 | AUTH_FORBIDDEN | `role = 'user'` 或 `businessRole` 不在 `('director','section_chief')`（`DirectorOrSectionChiefGuard` 攔截） |
+| 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
+| 500 | SYSTEM_INTERNAL_ERROR | 伺服器內部錯誤 |
+
+**註**：本端點**不**攔截 `LIST_HISTORICAL_READONLY`（歷史月份）— 對應 US-131 AC-1 之明定行為：「歷史月份與目前月份均可開啟 Drawer」；歷史月份限制僅套用於寫入端點，本唯讀端點不適用。同理本端點**不**攔截 `ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑鎖中）— Drawer 在月跑執行中仍可開啟唯讀檢視。
+
+**呼叫者**：
+- [F048 v2.0](F048-view-list-definition.md) Kanban 卡片「查看」按鈕（所有 role / 所有 stage / 歷史月份 / 月跑鎖中皆可觸發，對齊 [F077 v1.3 BR-7 C-5](F077-month-switch-and-stage-overview.md)）
+
 ## 7. 商業規則
 
 | 規則編號 | 說明 |
@@ -404,6 +555,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | BR-10 | **backward-compat 衍生欄位（v2.1 新增，J6 / C3）**：5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）由後端依 `condition_payload` 衍生填入並寫入 `ob_list_definition`；衍生規則之具體實作（單值 / 多值 `$$` 分隔組合方式、categorical/numeric/date 轉換語意）由 **Phase 3a system-architect** 設計；本 spec 僅聲明意圖。讀取端（F048 清單頁、F051 編輯頁 fallback、月跑 Stage 1 condition_payload IS NULL fallback）使用此 5 個欄位作為 backward-compat 資料來源。**v2.1.1 補述（US-128）**：`prod_best` **不**在本 BR-10 範圍內（即不由 `condition_payload` 衍生填入；亦不作為 backward-compat 讀取欄位）；其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見 BR-12） |
 | BR-11 | **columnName 大小寫 normalize（v2.1 新增）**：API 接受 `conditions[].columnName` 時統一為 lowercase snake_case，對齊 `ob_pool_data` 與 F075 v1.4.3 BR-14；regex 為 `/^[a-z][a-z0-9_]{0,63}$/`；違反回 422 `VALIDATION_ERROR`。**不影響** F068（DEPRECATED v1.3）之 `ob_code_df.tbl_id` 大寫業務常數（屬獨立語境） |
 | BR-12 | **best_case 取代 prod_best 之語意映射（v2.1.1 新增，US-128 / US-129 / D2 / Q-B B3）**：(1) 業務語意「最佳產品 / 優質案件」改由 `condition_payload.conditions[columnName='best_case', fieldType='categorical', values: ['Y'\|'N']]` 表達；(2) `ob_list_definition.prod_best` schema 欄位保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL（Q-B B3 決議）；新名單寫入不填值（後端 DTO 處置由 system-architect 決定）；(3) 月跑 Stage 1 不再讀 `prod_best` 欄位；依 `condition_payload.conditions` 之 `best_case` 條件對 `ob_pool_data.best_case` 以 `IN (...)` 過濾（對應 BR-7）；(4) `best_case` options 來源 = F076 v1.6 `pooldata_field_option WHERE column_name='best_case'`（`Y` = 優質案件、`N` = 非優質案件；US-129 AC-1）；(5) 完全 DROP COLUMN 屬 v2.2+ 後續決策，本 v2.1.1 不執行 |
+| BR-13 | **sessionStorage Signal Protocol — `cdmp.pendingToast`（v2.2 新增 / GAP-G2 / US-133 / single authority）**：跨頁 toast 訊號協定，限「子頁工作流完成後返回 M01 主頁」之情境使用。本 BR-13 為**唯一權威來源**，F079 / F082 / F086 / F087 之 §7 UI/UX 需求透過 cross-reference 引用本 BR-13，不重複定義。完整規範如下：<br><br>**(1) Key 命名**：`cdmp.pendingToast`（全小寫、點分隔；對齊 `cdmp.*` 全域 sessionStorage / localStorage key 命名規範）。<br><br>**(2) Payload JSON Schema**：<br>```json<br>{<br>  "type": "success" \| "info" \| "warning" \| "error",  // 必填<br>  "msg": string,                                       // 必填，主訊息（建議 ≤ 60 字）<br>  "sub": string                                        // 選填，副訊息（建議 ≤ 80 字）<br>}<br>```<br>對應 toast UI 4 種樣式（success = 綠 / info = 藍 / warning = 琥珀 / error = 紅）；前端 toast 元件依 `type` 渲染對應 icon 與顏色。<br><br>**(3) Producer 規範**（子頁寫入）：<br>- **寫入時機**：成功 / 取消決定後、`location.href` 跳轉**前**執行<br>- **寫入方式**：`sessionStorage.setItem('cdmp.pendingToast', JSON.stringify(payload))`<br>- **失敗處理**：以 `try/catch` 包覆，sessionStorage API 不可用（無痕模式 / 配額耗盡）時靜默吞 exception，不阻擋跳轉<br>- **適用子頁**：[F079](F079-set-dept-ratio.md) 部門比例設定（29a）、[F082](F082-set-per-sales-ratio.md) 個別比例設定（29b）、[F086](F086-approve-to-ready.md) 簽核核准 / [F087](F087-reject-to-personnel-ratio.md) 簽核拒絕（29c）；其他寫入操作 spec 如需採用須先 cross-reference 本 BR-13<br><br>**(4) Consumer 規範**（M01 主頁讀取）：<br>- **讀取時機**：M01 主頁（[F048 v2.0](F048-view-list-definition.md) Kanban 頁）`DOMContentLoaded`（或 React `useEffect([])`）執行、Kanban 渲染**之後**<br>- **行為**：`sessionStorage.getItem('cdmp.pendingToast')` → `JSON.parse`（包 try/catch）→ 依 `type` 顯示對應樣式 toast → 立即 `sessionStorage.removeItem('cdmp.pendingToast')`<br>- **無效 JSON / 無 key**：靜默不顯示、清除殘留 key（若有）；不拋出 uncaught exception<br><br>**(5) Consume-once 語意**：M01 主頁讀取後**立即** `removeItem`，確保：<br>- 同一 toast 不因頁面重整（F5）重複顯示<br>- 同一 toast 不因瀏覽器返回（browser back）重複顯示<br>- 同一 toast 不因多分頁同時開啟 M01 而重複顯示<br><br>**(6) 適用情境（限定範圍）**：<br>- **適用**：子頁完成（儲存 / 取消）後跳回 M01 主頁之 toast 提示（範例：「{LIST_NM} 部門比例已儲存 / 名單已推進至個別比例設定階段」、「已取消，返回名單定義」）<br>- **不適用**：同頁面內操作 toast（直接用 React state 即可）、Detail Drawer 操作回饋、橫向跨模組跳頁（如 M01 → M02）<br><br>**(7) 跨 spec reference**：F079 / F082 / F086 / F087 spec 之 §7 UI/UX 需求**僅描述**「子頁完成後依 [F050 v2.2 §7 BR-13](F050-create-list-definition.md) 寫入 `cdmp.pendingToast` 並跳回 M01 主頁」即可，不重複展開 payload / consume-once / key 命名等細節。 |
 | ~~BR-6 v2.0~~ | ~~`case_status` 為獨立業務欄位...必填，至少選 1 項；可選代碼由 F068 維護~~ | **v2.1 廢除**：case_status 改由 condition_payload 必填 + columnName 白名單驗證統一覆蓋（A1 / A5）；可選代碼來源改為 F076 v1.5 `pooldata_field_option`（US-125 AC-2） |
 | ~~BR-7 v2.0~~ | ~~`case_status` 多選的篩選邏輯為 **OR**~~ | **v2.1 重寫**：OR / IN 語意適用所有 categorical 條件（BR-7），不限 case_status |
 
@@ -431,6 +583,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - **Blocked By**：F048（清單頁入口）、F075 v1.6（POOLDATA 篩選欄位白名單；含 case_status 條目 v1.5 + **`best_case` 條目 v1.6**）、F076 v1.6（類別型欄位可選值；caseyear / case_status 動態選項來源 v1.5 + **`best_case` Y/N options seed v1.6**；US-125 AC-1 / AC-2 / AC-5、US-129 AC-1）、F069（卡別計分卡主檔；`ob_card_type` 為卡別下拉資料來源；US-126 / US-127）、US-121（condition_payload 驗證規則）、US-125（caseyear / case_status 選項遷移）、**US-129（`best_case` Y/N options seed）**
 - ~~F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）~~（**v2.1 廢除**：F068 DEPRECATED v1.3）
 - **Blocks**：F061（月跑需有 active 名單定義）、F060（per-LIST_NO 部門比例）
+- **§6.2 Detail Snapshot API（v2.2 / GAP-G1）Consumers**：[F048 v2.0](F048-view-list-definition.md)（Kanban 卡片「查看」按鈕觸發 Detail Drawer）
+- **§7 BR-13 sessionStorage Signal Protocol（v2.2 / GAP-G2）Consumers**：[F079](F079-set-dept-ratio.md)（29a 部門比例儲存 / 取消）、[F082](F082-set-per-sales-ratio.md)（29b 個別比例儲存 / 取消）、[F086](F086-approve-to-ready.md)（29c 簽核核准）、[F087](F087-reject-to-personnel-ratio.md)（29c 簽核拒絕）
 
 ### 9.1 v2.1.1 補強實作順序（解決雙向依賴）
 
@@ -447,5 +601,5 @@ Backend DTO 對 `prodBest` 之處置（`@IsOptional()` 接受或直接刪除）�
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_list_definition.condition_payload`、`ob_list_definition.prod_best` v2.1.1 DEPRECATED、`ob_list_definition.card_type` v2.1.1 下拉契約補述、[`ob_card_type` entity](../data-model.md#ob-card-type-entity)）
 - 錯誤處理：[error-handling.md#assignment-list-errors](../error-handling.md#assignment-list-errors)（含 v2.1 新增 `CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_NOT_COPYABLE`）
 - 架構決策：AD-E07-1、AD-E07-2、**AD-E07-18**（F050 v2.1 whitelist-driven 重構：migration M1~M5 / Service 衍生規則 / Stage 1 動態 SQL / prod_kind 唯一性語意 / F068 廢除步驟；Phase 3a 落地，2026-05-20）；Phase 3a 待設計項目已全數由 AD-E07-18 覆蓋（BR-2 / BR-10 / E1~E7）。**v2.1.1 補強之 migration（`prod_best` 清空 / `best_case` whitelist + options seed）與 backend DTO 處置由 system-architect 補入 AD-E07-18 或衍生決策**（spec-writer 不規範架構細節）
-- 相關功能：[F048](F048-view-list-definition.md)、[F051](F051-edit-list-definition.md)、[F069](F069-edit-card-type.md)（卡別計分卡主檔；卡別下拉資料來源 `ob_card_type`）、[F075 v1.6](F075-manage-pooldata-field-whitelist.md)、[F076 v1.6](F076-manage-categorical-field-values.md)、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
-- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、[US-124](../../stories/epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md)、[US-125](../../stories/epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md)、[US-126](../../stories/epics/E07-app-customer-list-assignment/US-126-M01-cardtype-dropdown-create.md)、[US-127](../../stories/epics/E07-app-customer-list-assignment/US-127-M01-cardtype-dropdown-edit.md)、[US-128](../../stories/epics/E07-app-customer-list-assignment/US-128-M01-remove-prodbest-field.md)、[US-129](../../stories/epics/E07-app-customer-list-assignment/US-129-M06-seed-bestcase-options.md)
+- 相關功能：[F048](F048-view-list-definition.md)、[F051](F051-edit-list-definition.md)、[F069](F069-edit-card-type.md)（卡別計分卡主檔；卡別下拉資料來源 `ob_card_type`）、[F075 v1.6](F075-manage-pooldata-field-whitelist.md)、[F076 v1.6](F076-manage-categorical-field-values.md)、[F077 v1.3](F077-month-switch-and-stage-overview.md)（Role × Stage 矩陣 single authority，本 spec §6.2 / §7 BR-13 對齊）、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
+- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、[US-124](../../stories/epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md)、[US-125](../../stories/epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md)、[US-126](../../stories/epics/E07-app-customer-list-assignment/US-126-M01-cardtype-dropdown-create.md)、[US-127](../../stories/epics/E07-app-customer-list-assignment/US-127-M01-cardtype-dropdown-edit.md)、[US-128](../../stories/epics/E07-app-customer-list-assignment/US-128-M01-remove-prodbest-field.md)、[US-129](../../stories/epics/E07-app-customer-list-assignment/US-129-M06-seed-bestcase-options.md)、**[US-131](../../stories/epics/E07-app-customer-list-assignment/US-131-M01-detail-drawer.md)（§6.2 Detail Snapshot API 來源）**、**[US-133](../../stories/epics/E07-app-customer-list-assignment/US-133-M01-pending-toast-signal.md)（§7 BR-13 sessionStorage Signal Protocol 來源）**

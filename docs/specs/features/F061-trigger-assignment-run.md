@@ -2,19 +2,25 @@
 spec-id: F061
 title: 觸發分派月跑
 feature-id: F061
-source-story: US-081
+source-story: US-081, US-132
 epic: E07
 module: M04 分派執行
 priority: P0-MVP
-version: "1.3"
-date: 2026-05-18
+version: "1.4"
+date: 2026-05-21
 status: Draft
 ---
 
 # F061: 觸發分派月跑
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.4（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 / GAP-G3 對應 US-132）**：核心變更：
+> 1. **§4 新增 AC-Banner-1~3**：月跑唯一入口為 [F048 v2.0](F048-view-list-definition.md) Kanban Ready 欄頂 CTA Banner 主按鈕（藍底白字「執行 YYYY-MM 月跑」，附 play-circle icon），對應 US-132 GAP-G3。
+> 2. **§4 AC-No-Per-Card-Trigger 新增**：Ready 階段名單卡片**完全不渲染** per-card「觸發」按鈕（月跑為月份級操作，per-list 觸發違反 F078 原子性月跑語意；對應 US-132 AC-6）。
+> 3. **§9 UI/UX 補 CTA Banner 規範**：渲染條件（`stageCounts.ready ≥ 1` + 目前作業月份 + 月跑未鎖）、disabled 狀態（月跑執行中改琥珀色）、與 secondary「試算」按鈕並排佈局（spec 見 [F049 v1.1 §8](F049-stage0-daily-estimate.md)）；Toolbar 不再渲染「執行月跑」按鈕（重複入口移除）。
+> 4. **本 v1.4 不變更月跑業務邏輯**（API endpoint / 前置條件檢查 / 非同步執行 / 快照原子性 / 月跑鎖 / Stage 2 soft check）；僅 UI 入口位置與按鈕渲染規則變更。
+>
 > **v1.3（2026-05-18）**：新增「分數區間空集合」soft check 機制：
 > 1. **AC-7c 新增**：Stage 2 偵測某維度 `ob_levelcard_score` 為空 → 該維度跳過計分，記入 `assignment_run.skipped_cases` 與 `warning_summary='ALL_SCORES_EMPTY'`
 > 2. **BR-13 新增**：soft check 在 application 層（`ScoringIntegrityCheckService`）獨立執行，**不嵌入 `fn_calc_tier_level`**；每維度每 rule_violated 寫一筆彙總 audit log（含 `violatedRowCount`）
@@ -150,6 +156,48 @@ Stage 2 計分前由 application 層 `ScoringIntegrityCheckService` 執行 soft 
 - **Then** 前置條件通過（completed 不阻擋重跑），系統建立新月跑並產生新 `run_id`（`'new-002'`）
 - **And** 前次月跑快照（`'prev-001'`）完整保留於 `assignment_run_snapshot`，不被覆蓋或刪除
 
+### AC-Banner-1：月跑唯一入口為 Ready 欄頂 CTA Banner 主按鈕（v1.4 新增 / US-132 / GAP-G3）
+
+- **Given** 業務部長 / Admin 在 [F048 v2.0](F048-view-list-definition.md) Kanban 主頁、目前作業月份、`stageCounts.ready ≥ 1`、月跑未鎖
+- **When** Kanban Ready 欄渲染
+- **Then** 欄頭與卡片區之間顯示 CTA Banner（綠色底色 `#F0FDF4` + 綠色邊框 `#BBF7D0`）
+- **And** Banner 上半部文字：「✓ `{stageCounts.ready}` 份名單已準備完成」（綠色 `#15803D`，附 check-circle-2 icon）
+- **And** Banner 下半部含兩個並排按鈕：
+  1. **主按鈕**（藍底白字）：「執行 `{currentWorkYm}` 月跑」，附 play-circle icon；點擊跳轉至 `31-trigger-run` 觸發月跑流程（最終呼叫 POST `/api/v1/assignment/runs`）
+  2. **secondary 按鈕**（白底藍邊）：「試算」，附 calculator icon；點擊跳轉至 `30-stage0-estimate` Stage 0 試算頁（spec 見 [F049 v1.1 §8](F049-stage0-daily-estimate.md)）
+- **And** 兩按鈕同列（`flex items-center gap-2`），主按鈕為 `flex-1`（撐滿剩餘空間），secondary 為 `shrink-0`（固定寬度）
+- **And** Toolbar 不再渲染「執行月跑」按鈕（重複入口移除，對應 [F048 v2.0 AC-K7](F048-view-list-definition.md)）
+
+### AC-Banner-2：Ready 欄無就緒名單時不渲染 Banner（v1.4 新增 / US-132 AC-2）
+
+- **Given** `stageCounts.ready = 0`
+- **When** Kanban 渲染
+- **Then** Ready 欄頂部**不渲染** CTA Banner（欄頭直接銜接「無名單」提示）
+- **And** 月跑入口完全不可達；使用者需先將至少 1 份名單推進至 ready 階段（透過 F086 簽核核准）才能觸發月跑
+
+### AC-Banner-3：歷史月份不渲染 Banner（v1.4 新增 / US-132 AC-3）
+
+- **Given** 使用者切換至歷史月份（`ym < current_work_ym`）
+- **When** Kanban 渲染歷史月份 ready 欄
+- **Then** 即使該月 ready 欄有名單，也**不渲染** CTA Banner（避免歷史月份觸發月跑）
+- **And** ready 欄卡片進入唯讀模式（依 [F048 v2.0 AC-K6](F048-view-list-definition.md) / [F077 v1.3 BR-7 C-1](F077-month-switch-and-stage-overview.md)）
+
+### AC-Banner-4：月跑執行中 Banner 進入禁用狀態（v1.4 新增 / US-132 AC-4）
+
+- **Given** 目前有 `AssignmentRun.status IN ('pending','running')` 之月跑
+- **When** Kanban 渲染（目前作業月份、ready 欄有 ≥1 名單）
+- **Then** CTA Banner 底色改為琥珀色（`#FEF3C7` + 邊框 `#FDE68A`），頂部文字改為「分派執行中，無法重新觸發」（附 alert-triangle icon）
+- **And** 主按鈕與 secondary「試算」按鈕**均為 disabled**（灰色背景 / 灰色文字 / `cursor-not-allowed`），點擊無動作
+- **And** 主按鈕文字改為「分派執行中，無法重新觸發」（附 lock icon）
+
+### AC-No-Per-Card-Trigger：Ready 階段卡片**不**渲染 per-card 觸發按鈕（v1.4 新增 / US-132 AC-6）
+
+- **Given** 部長 / Admin 查看 `ready` 階段名單卡片
+- **When** 卡片渲染操作按鈕區
+- **Then** 卡片上**無任何**「觸發月跑」 / 「執行」 / 「Run」相關按鈕（per-list 觸發違反 F078 原子性月跑語意 — 月跑為**月份級**操作）
+- **And** ready 階段卡片之操作按鈕依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣僅顯示：「退回」（F089）/ 「查看」（觸發 Detail Drawer，依 F050 v2.2 §6.2）
+- **And** 月跑入口統一由 Ready 欄頂 CTA Banner 提供（AC-Banner-1）
+
 ## 5. API 規格
 
 ### 5.1 POST /api/v1/assignment/runs
@@ -212,13 +260,45 @@ Stage 2 計分前由 application 層 `ScoringIntegrityCheckService` 執行 soft 
 | 邊緣 CARD_TYPE 案件 | 跳過，記 `warning_summary='BR-12_EDGE_CARD_TYPE_SKIPPED'`，月跑 completed | AC-7b / BR-12 |
 | 分數區間空集合 | 該維度跳過，記 `warning_summary='ALL_SCORES_EMPTY'`，月跑 completed（v1.3 新增） | AC-7c / BR-13 |
 
-## 9. UI/UX 需求
+## 9. UI/UX 需求（v1.4 重寫）
 
-- 執行月跑按鈕：頁首顯要位置
-- 前置條件失敗：Modal 顯示失敗項目清單，提供跳轉修正入口（F060 / F058 / F048 等）
+### 9.1 月跑唯一入口：Ready 欄頂 CTA Banner（v1.4 / US-132 / GAP-G3）
+
+**位置**：[F048 v2.0](F048-view-list-definition.md) Kanban 主頁之 `ready` 欄頭與卡片區之間。
+
+**渲染條件矩陣**（依 AC-Banner-1~4）：
+
+| 條件 | Banner 樣式 | 主按鈕（執行月跑） | secondary 按鈕（試算） |
+|---|---|---|---|
+| `ready ≥ 1` + 當月 + 月跑未鎖 | 綠色底色（`#F0FDF4`）+ 綠色邊框 | 藍底白字「執行 `{ym}` 月跑」+ play-circle icon，可點擊 | 白底藍邊「試算」+ calculator icon，可點擊 |
+| `ready = 0` | 不渲染整個 Banner | — | — |
+| 歷史月份 | 不渲染整個 Banner | — | — |
+| 月跑執行中（`status IN ('pending','running')`） | 琥珀色底色（`#FEF3C7`）+ alert-triangle icon | 文字改為「分派執行中，無法重新觸發」+ lock icon，**disabled** | **disabled** |
+
+**佈局規範**：兩按鈕同列 `flex items-center gap-2`；主按鈕 `flex-1`（撐滿）、secondary `shrink-0`（固定）。
+
+### 9.2 Toolbar 規則（v1.4 / US-070 v2.3）
+
+- F048 v2.0 Toolbar **不渲染**「執行月跑」按鈕（重複入口移除；月跑唯一入口為本節 §9.1 Ready CTA Banner 主按鈕）
+- F048 v2.0 Toolbar **不渲染**「Stage 0 試算」按鈕（試算入口為本節 §9.1 Ready CTA Banner secondary 按鈕，spec 見 [F049 v1.1 §8](F049-stage0-daily-estimate.md)）
+
+### 9.3 Per-card 觸發按鈕已移除（v1.4 / US-132 AC-6）
+
+- Ready 階段卡片**不渲染** per-card「觸發月跑」/「執行」按鈕（依 AC-No-Per-Card-Trigger）
+- Ready 階段卡片操作按鈕依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) 矩陣僅顯示「退回」+「查看」
+
+### 9.4 觸發後流程
+
 - 確認對話框：顯示本次執行的關鍵參數（作業年月 / active 名單數 / 計分版本）
 - 觸發後自動跳轉 F062 進度頁
+- 前置條件失敗：Modal 顯示失敗項目清單，提供跳轉修正入口（F079 / F082 / F048 等）
 - 月跑完成時若 `warning_summary` 非空：F063 結果摘要頁以醒目橫幅顯示警告碼與對應筆數（v1.3）
+
+### 9.5 Prototype canonical reference
+
+`prototypes/27-list-definition.html` v2.3 之 `readyCtaHtml` 段落（正常 banner + locked banner 兩個樣式）：
+- 正常 banner：綠底（`bg:#F0FDF4`）+ 主按鈕（藍底「執行 {ym} 月跑」）+ secondary（白底藍邊「試算」）
+- locked banner：琥珀底（`bg:#FEF3C7`）+ 主按鈕（灰底「分派執行中，無法重新觸發」disabled）+ secondary（灰底「試算」disabled）
 
 ## 10. 相依性
 
@@ -248,3 +328,4 @@ Stage 2 計分前由 application 層 `ScoringIntegrityCheckService` 執行 soft 
 | v1.1 | 2026-05-13 | 補入 AC-7 允許 completed 重跑、BR-4 / BR-5 規則 |
 | v1.2 | 2026-05-16 | 依 F002 v2.0 / AD-E07 v3.0 重構：Guard 改 `DirectorGuard`、前置條件擴充 CARD_TYPE active 檢查、新增 BR-12 邊緣 CARD_TYPE 跳過（AC-7b）、CR 回分由全域開關改為 per-list flag（BR-6 / `ob_list_definition.cr_enabled`） |
 | v1.3 | 2026-05-18 | （1）新增 AC-7c 分數區間空集合 soft check：active 維度若 `ob_levelcard_score` 為空，該維度跳過計分，記入 `skipped_cases` 與 `warning_summary='ALL_SCORES_EMPTY'`。（2）新增 BR-13：soft check 在 application 層 `ScoringIntegrityCheckService` 獨立執行（不嵌入 `fn_calc_tier_level`）；每維度每 `rule_violated` 寫一筆彙總 audit log 含 `violated_row_count`，不寫 appl_no 明細。（3）新增 BR-14：Stage 2 比對 `card_level` ↔ `level1` 套用 F054 v1.3 BR-9 規一化（NULL ↔ '' 等價、TRIM）。（4）以 `rule_violated='ALL_SCORES_EMPTY'` 取代「最高警示等級」概念；多警告碼以陣列 / 逗號分隔。（5）AC-3 Stage 2 流程補入 soft check 前置節點與規一化規則。（6）效能補 soft check < 5 秒閾值。（7）§11 註記待 system-architect 同步 data-model.md / error-handling.md / diagram 之項目。（8）與 F054 AC-1b 互為時點互補防護網。 |
+| v1.4 | 2026-05-21 | **M01 v2.0~v2.3 Kanban 重構 / GAP-G3 對應 US-132**：(1) 新增 AC-Banner-1~4：月跑唯一入口為 Kanban Ready 欄頂 CTA Banner 主按鈕（綠底「執行 {ym} 月跑」），月跑執行中改琥珀色 disabled；(2) 新增 AC-No-Per-Card-Trigger：Ready 階段卡片完全不渲染 per-card 觸發按鈕（per-list 觸發違反 F078 原子性月跑語意）；(3) §9 UI/UX 重寫，補 CTA Banner 渲染條件矩陣 + Toolbar 規則（不渲染重複入口）+ Per-card 移除 + Prototype reference；(4) 本 v1.4 不變更月跑業務邏輯（API / 前置條件 / 非同步 / 快照原子性 / soft check 等）；(5) 與 [F048 v2.0 AC-K7](F048-view-list-definition.md) / [F049 v1.1 AC-Banner-Entry](F049-stage0-daily-estimate.md) 共構月跑唯一入口邊界 |

@@ -2,18 +2,23 @@
 spec-id: F049
 title: Stage 0 每日分派數量估算
 feature-id: F049
-source-story: US-071
+source-story: US-071, US-132
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-24
+version: "1.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F049: Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
+
+> **v1.1（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 / GAP-G3 對應 US-132）**：核心變更：
+> 1. **§4 新增 AC-Banner-Entry**：Stage 0 試算頁之唯一入口從 [F048 v2.0](F048-view-list-definition.md) Toolbar 移至 Kanban Ready 欄頂 CTA Banner 之 secondary「試算」按鈕（白底藍邊，附 calculator icon）；對應 US-132 GAP-G3。
+> 2. **§8 UI/UX 補充入口規範**：Ready CTA Banner secondary 按鈕之渲染條件（僅 ready 欄有 ≥1 名單 / 非歷史月份 / 月跑鎖中 disabled）；對應 prototype `27-list-definition.html` v2.3 段落。
+> 3. **本 v1.1 不變更既有 Stage 0 估算邏輯**（GET API / 估算公式 / 試算逾時保護 / Pool 警示門檻）；僅入口位置變更。
 
 ## Agent Loading Guide
 
@@ -69,6 +74,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 - **When** 業務部長點擊該列的「計算案件數量」按鈕
 - **Then** 系統讀取 `ob_list_definition` 中該 `list_no` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start` ~ `list_period_end` / `settle_src`），對共享案件池 `ob_pool_data` 套用對應 WHERE 子句即時 COUNT，回傳「符合條件案件數：N 筆」（`ob_pool_data` 為共享池，無 `list_no` 欄位，篩選邏輯與月跑 Stage 1 一致）
 - **And** 此試算不執行實際月跑，不寫入 `ob_pool_data_list`，不建立 `assignment_run` 紀錄
+
+### AC-Banner-Entry：Stage 0 試算頁之唯一入口為 Ready CTA Banner secondary 按鈕（v1.1 新增 / US-132 / GAP-G3）
+
+- **Given** 業務部長 / Admin 在 M01 名單定義主頁（[F048 v2.0](F048-view-list-definition.md) Kanban 主頁）
+- **When** Kanban `ready` 欄之名單數量 ≥ 1 且月份為目前作業月份（非歷史月份）
+- **Then** Ready 欄頂 CTA Banner 渲染 secondary 按鈕「試算」（白底藍邊，附 calculator icon），點擊跳轉至 Stage 0 試算頁
+- **And** Toolbar **不**渲染「Stage 0 試算」按鈕（移除重複入口；對應 [F048 v2.0 AC-K7](F048-view-list-definition.md)）
+- **And** 歷史月份 / `ready` 欄無名單時：整個 CTA Banner 不渲染（依 [F061 v1.4 §9](F061-trigger-assignment-run.md)），「試算」按鈕亦不可達；使用者改以 sidebar 直接導航 `30-stage0-estimate` 為替代方案（屬主動 IA 入口，未來 enhancement）
+- **And** 月跑執行中（`AssignmentRun.status IN ('pending','running')`）：CTA Banner 改琥珀色 disabled 樣式，「試算」按鈕 disabled，點擊無動作
+- **And** 入口按鈕之 UI 配置（按鈕並排於主按鈕右側、gap-2、calculator icon）對齊 prototype `27-list-definition.html` v2.3 readyCtaHtml 段落
 
 ### AC-5：試算逾時保護
 
@@ -140,10 +155,28 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 8. UI/UX 需求
 
+### 8.1 試算頁本體
+
 - 每日估算表：日期 / 星期 / 預估件數 + 底部總計
 - 橘色警示列：Pool 筆數低於門檻時顯示
 - 單一 LIST_NO 試算：清單列的「計算案件數量」按鈕觸發 Modal 或 inline 顯示結果
 - 試算結果以粗體顯示：「符合條件案件數：N 筆」
+
+### 8.2 入口規範（v1.1 新增 / US-132 / GAP-G3）
+
+**唯一入口**：[F048 v2.0](F048-view-list-definition.md) Kanban Ready 欄頂 CTA Banner 之 secondary「試算」按鈕。
+
+| 條件 | secondary「試算」按鈕渲染狀態 |
+|---|---|
+| ready 欄有 ≥1 名單 + 目前作業月份 + 月跑未鎖 | 渲染（白底藍邊 + calculator icon + 文字「試算」），點擊跳轉至 `30-stage0-estimate` |
+| ready 欄無名單 / 歷史月份 | 整個 CTA Banner 不渲染（依 [F061 v1.4 §9](F061-trigger-assignment-run.md)），「試算」按鈕亦不可達 |
+| 月跑執行中（`AssignmentRun.status IN ('pending','running')`） | CTA Banner 改琥珀色 disabled 樣式，「試算」按鈕 disabled，點擊無動作 |
+
+**v1.0 已移除入口**（依 US-070 v2.3 / US-132 GAP-G3）：
+- ~~F048 v1.0 主頁 Toolbar 之「Stage 0 試算」按鈕~~ — v2.0 已移除，避免重複入口
+- ~~每列「計算案件數量」按鈕作為單一 LIST_NO 試算之入口~~ — 該功能於 v2.0 改由 Detail Drawer 內提示或試算頁內查詢實作；本 v1.1 暫不變更（屬未來 enhancement）
+
+**Prototype canonical reference**：`prototypes/27-list-definition.html` v2.3 readyCtaHtml 段落（secondary 按鈕 hover 樣式：`bg-white hover:bg-blue-50`）
 
 ## 9. 相依性
 

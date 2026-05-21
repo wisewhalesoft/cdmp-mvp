@@ -2,19 +2,27 @@
 spec-id: F077
 title: 月份切換與名單五階段總覽
 feature-id: F077
-source-story: US-104, US-105
+source-story: US-104, US-105, US-130, US-131, US-132
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.3"
+date: 2026-05-21
 status: Draft
 ---
 
 # F077: 月份切換與名單五階段總覽
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.3（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 + GAP-G6 收斂）**：依 US-105 v2.3 修正版 + US-130 Kanban + US-131 Detail Drawer + US-132 Ready CTA 補完角色 × 階段操作矩陣（GAP-G6 單一權威）：
+> 1. **AC-11 / BR-7 矩陣完整化**：擴增為 5 stage × 4 role 全矩陣（含 `admin` 列、`user` 整頁封鎖列）；按鈕文字以對齊 prototype `27-list-definition.html` 為準，並修正 v1.2 漏列項目。
+> 2. **AC-11 新增「查看」按鈕為跨 role / 跨 stage 通用操作**：所有 role 在所有 stage（含歷史月份、月跑鎖中）均可觸發 Detail Drawer（資料來源 `GET /assignment/list-definitions/:listNo/full-snapshot`，spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)）。
+> 3. **AC-11 修正「停」→「停用」全寫**（US-105 v2.3）；ready stage 移除 per-card 月跑觸發按鈕（US-132；月跑唯一入口為 Ready 欄頂 CTA Banner，spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)）。
+> 4. **AC-11 修正 `director` 可見範圍**：`admin` / `director` 均**全可見**（不過濾轄區）；v1.2 BR-4「處長 `created_by` 過濾」維持不變（修正 US-105 v1 既存 bug 之 spec 描述）。
+> 5. **BR-7 矩陣表格之 5 個橫切條件統一收斂**（歷史月份 / 月跑鎖 / 已停用 / 處長轄區 / 「查看」按鈕通用性）以避免每個 cell 重複描述。
+> 6. **新增 BR-10 `user` 整頁封鎖**：`role='user'`（business_role 不論值）一律封鎖整頁，顯示「名單定義為部長 / 處長 / Admin 專屬功能」說明卡。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-104 + US-105 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorOrSectionChiefGuard`（清單瀏覽開放至處長）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
 > **v1.1 修訂（2026-05-16）**：補完角色 × 階段操作矩陣與 `current_work_ym` 計算規則之單一權威來源。
 
@@ -144,11 +152,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Then** 僅顯示本處長轄區（`created_by = currentUserId`）的名單；其他處長轄區不顯示
 - **And** 頁面（含頂部 Tab 與側邊 Nav）**不顯示 M02 計分設定的任何入口連結**（OQ-C-03 決議）
 
-### AC-11：各角色可見操作按鈕依階段與角色決定（角色 × 階段操作矩陣）
+### AC-11：各角色可見操作按鈕依階段與角色決定（角色 × 階段操作矩陣 / v1.3 完整化）
 
-- **Given** 使用者在清單頁查看名單列表
-- **When** 頁面顯示各名單操作欄
-- **Then** 各名單顯示的操作按鈕依「階段 × 角色」矩陣決定（詳見 §6 BR-7 矩陣表）
+- **Given** 使用者在 M01 名單定義主頁（Kanban 主頁，見 [F048 v2.0](F048-view-list-definition.md)）查看名單卡片
+- **When** 頁面渲染卡片操作按鈕
+- **Then** 各名單卡片顯示的操作按鈕依「stage × role」矩陣決定（5 stage × 4 role 完整矩陣，詳見 §6 BR-7 矩陣表）
+- **And** 「查看」按鈕為跨 role / 跨 stage / 跨歷史月份 / 跨月跑鎖中之**通用操作**：所有 role（含 `user`，但 `user` 整頁已封鎖故不適用）在所有 stage（draft / dept_ratio / personnel_ratio / approval / ready）皆可點擊「查看」觸發 Detail Drawer；資料來源 `GET /api/v1/assignment/list-definitions/:listNo/full-snapshot`，spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)
+- **And** `ready` stage 無 per-card 月跑觸發按鈕（v1.3 / US-132 GAP-G3）；月跑唯一入口為 Ready 欄頂 CTA Banner（spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)）
+- **And** `draft` stage 之「停用」按鈕為**全寫**（不可縮寫為「停」；v1.3 / US-105 v2.3 修正）
+- **And** 矩陣表中之 5 個橫切條件（歷史月份 / 月跑鎖中 / 已停用名單 / 處長轄區 / 「查看」按鈕通用性）統一收斂於 §6 BR-7 表格下方，避免每 cell 重複描述
 
 ### AC-12：階段狀態顯示支援歷史月份
 
@@ -238,20 +250,31 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-4 | **處長轄區隔離**：處長 GET 列表時，後端依 `created_by = currentUserId` 過濾；admin / director 可跨轄區 |
 | BR-5 | **預設不顯示已停用名單**：GET 列表預設 `includeDisabled = false`；使用者可選擇顯示 |
 | BR-6 | **stage ENUM 定義**：`draft` / `dept_ratio` / `personnel_ratio` / `approval` / `ready`；UI 對應中文標籤定義於本 spec §7 |
-| BR-7 | **角色 × 階段操作矩陣（單一權威）**：本表為其他 E07 spec 之共用權威；各 spec 之 §7 UI/UX 渲染條件須對齊本表
+| BR-7 | **角色 × 階段操作矩陣（v1.3 / GAP-G6 單一權威）**：本表為其他 E07 spec 之共用權威；各 spec 之 §7 UI/UX 渲染條件須對齊本表（不重複定義）。完整矩陣（5 stage × 4 role）見下方表格，5 個橫切條件統一於矩陣下方收斂。
 
-| 階段 | Admin | 部長（director） | 處長（section_chief） |
-|---|---|---|---|
-| draft | 停用 / 推進至部門比例（F078） | 停用 / 推進至部門比例（F078） | **完全不渲染**任何操作 |
-| dept_ratio | 設定部門比例（F079）/ 推進至個別業務（F080）/ 退回草稿（F081） | 設定部門比例（F079）/ 推進至個別業務（F080）/ 退回草稿（F081） | **完全不渲染**任何操作 |
-| personnel_ratio | 設定個別比例（F082）/ 推進至簽核（F084）/ 退回部門比例（F085）/ 快速模板（F083） | 設定個別比例（F082）/ 推進至簽核（F084）/ 退回部門比例（F085）/ 快速模板（F083） | 設定個別比例（F082，限轄區）/ 推進至簽核（F084，所有部門完成時可觸發） |
-| approval | 核准（F086）/ 拒絕（F087） | 核准（F086）/ 拒絕（F087） | **完全不渲染**任何操作 |
-| ready | 退回簽核（F089） | 退回簽核（F089） | **完全不渲染**任何操作 |
-| 歷史月份（任一階段） | 全部唯讀 | 全部唯讀 | 全部唯讀 |
-| 已停用 | 完全不渲染 | 完全不渲染 | 完全不渲染 |
+**Role × Stage 操作矩陣（M01 Kanban 卡片可見按鈕，v1.3）**：
+
+| stage | admin | director | section_chief | user |
+|---|---|---|---|---|
+| `draft` | 編輯 / 推進（F078） / **停用**（F052，全寫） / 查看 | 編輯 / 推進（F078） / **停用**（F052，全寫） / 查看 | 查看 | **整頁封鎖**（BR-10） |
+| `dept_ratio` | 設定（F079） / 退回（F081） / 查看 | 設定（F079） / 退回（F081） / 查看 | 查看 | **整頁封鎖**（BR-10） |
+| `personnel_ratio` | 檢視（F082 唯讀進入） / 退回（F085） / 查看 / 快速模板（F083） | 檢視（F082 唯讀進入） / 退回（F085） / 查看 / 快速模板（F083） | **設定本部門**（F082，限轄區） / 查看 | **整頁封鎖**（BR-10） |
+| `approval` | 核准（F086） / 拒絕（F087） / 查看 | 核准（F086） / 拒絕（F087） / 查看 | 查看 | **整頁封鎖**（BR-10） |
+| `ready` | 退回（F089） / 查看（**無** per-card 月跑觸發按鈕） | 退回（F089） / 查看（**無** per-card 月跑觸發按鈕） | 查看 | **整頁封鎖**（BR-10） |
+
+**5 個橫切條件（套用於上述所有 cell）**：
+
+| # | 條件 | 行為 |
+|---|---|---|
+| C-1 | **歷史月份**（`ym < current_work_ym`） | 所有 role 之**寫入按鈕完全不渲染**（編輯 / 推進 / 停用 / 設定 / 退回 / 核准 / 拒絕 / 快速模板）；僅保留「查看」按鈕；頁面頂部紅色「歷史月份資料為唯讀」橫幅（AC-2） |
+| C-2 | **月跑鎖中**（`AssignmentRun.status IN ('pending','running')`） | 所有 role 之**寫入按鈕 disabled** + hover tooltip「分派執行中，無法 {操作}」；「查看」按鈕**不受影響**；Ready 欄頂 CTA Banner 改琥珀色 disabled 樣式（spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)） |
+| C-3 | **已停用名單**（`status = 'inactive'`） | Kanban 主視圖**不渲染**該卡片（隱藏）；若 [F048 v2.0](F048-view-list-definition.md) 提供「已停用」filter 顯示時，所有 role 僅顯示「查看」按鈕，無任何寫入操作 |
+| C-4 | **處長轄區隔離**（`role = 'section_chief'`） | 後端依 `created_by = currentUserId` 過濾 Kanban 卡片來源；非本轄區卡片**不渲染於 Kanban**；本轄區卡片之 cell 按鈕仍依矩陣決定（沿用 BR-4） |
+| C-5 | **「查看」按鈕通用性** | 「查看」按鈕在所有 role / 所有 stage / 歷史月份 / 月跑鎖中**皆可用**（不受 C-1 / C-2 影響）；觸發 Detail Drawer，資料來源 `GET /assignment/list-definitions/:listNo/full-snapshot`（spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)），不跳頁 |
 
 | BR-8 | **未來月份預先建立草稿**：限部長 / Admin；其他階段操作（推進 / 設定比例）於未來月份不受限（但依矩陣決定可否顯示）|
 | BR-9 | **M02 對處長隱藏（OQ-C-03）**：M02 計分設定之頂部 Tab + 側邊 Nav 入口連結對處長**完全隱藏**；F077 對應 SidebarNav 元件須依 `business_role` 條件渲染 |
+| BR-10 | **`user` 整頁封鎖（v1.3 / US-130 AC-7）**：`role = 'user'`（business_role 不論值）一律封鎖整頁，Kanban 主體與 Toolbar 均不渲染；頁面顯示封鎖說明卡（圖示 + 「您無此頁面權限」標題 + 「『名單定義』為部長 / 處長 / Admin 專屬功能」說明）；對應 API（GET `/api/v1/assignment/lists`）後端 `DirectorOrSectionChiefGuard` 攔截，回 403 `AUTH_FORBIDDEN` |
 
 ## 7. UI/UX 需求
 
@@ -375,3 +398,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-104 + US-105，E07 補修批次 4）：合併兩 story 為「月份切換 + 階段總覽」單一 spec；新增 `current_work_ym` 計算服務；定義階段 ENUM + 中文標籤 + 配色；定義角色 × 階段操作矩陣（BR-7）作為其他 spec 之單一權威；處長 M02 隱藏（OQ-C-03） |
 | v1.1 | 2026-05-16 | 補完角色 × 階段操作矩陣（明列 F082 / F083 / F087 / F088 / F089）與 `current_work_ym` 計算規則之單一權威說明 |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-104 + US-105 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
+| v1.3 | 2026-05-21 | **M01 v2.0~v2.3 Kanban 重構 + GAP-G6 收斂**：(1) AC-11 完整化為 5 stage × 4 role 全矩陣，含 `admin` 列、`user` 整頁封鎖列；(2) AC-11 新增「查看」按鈕為跨 role / 跨 stage 通用操作，觸發 Detail Drawer（資料來源 F050 v2.2 §6.2 `/full-snapshot`）；(3) AC-11 修正「停」→「停用」全寫（US-105 v2.3）；ready stage 移除 per-card 月跑觸發按鈕（US-132），月跑唯一入口為 Ready 欄頂 CTA Banner（F061 v1.4 §9）；(4) 修正 `director` 全可見（不過濾轄區，BR-4 處長轄區隔離不變）；(5) BR-7 矩陣 5 個橫切條件統一收斂（C-1 歷史月份 / C-2 月跑鎖 / C-3 已停用 / C-4 處長轄區 / C-5「查看」通用性）；(6) 新增 BR-10 `user` 整頁封鎖（對應 US-130 AC-7） |

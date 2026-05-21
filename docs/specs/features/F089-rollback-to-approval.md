@@ -6,15 +6,23 @@ source-story: US-119
 epic: E07
 module: M03d 準備完成階段（Rollback）
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.3.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F089: 準備完成階段 Rollback 至簽核（月跑前重新審核）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v1.3.1（2026-05-21 / Phase 5 TDD code drift 修正 / D1）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）：將 spec 內 `action = 'STAGE_ROLLBACK'` 字串修正為 **`action = 'STAGE_ROLLBACK'`**（entity 實際 enum 為 `STAGE_ROLLBACK`，VARCHAR(30)）；不變動 entity / migration / code / prototype；不變更其他 BR / AC / 業務邏輯。
+>
+> **v1.3（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 / US-119 v2.0）**：核心變更：
+> 1. **§4 AC-1 修訂**：入口由 F048 v1.0 表格列改為 [F048 v2.0](F048-view-list-definition.md) Kanban 主頁 `ready` 階段卡片操作欄之「退回」按鈕（灰色邊框 + undo-2 icon），依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣渲染。
+> 2. **§4 AC-3 補充**：Rollback 成功後 toast 訊息為 `info` 樣式「已退回簽核 — 需重新簽核」；Kanban 卡片即時遷移欄位（從 `ready` 欄移至 `approval` 欄，無跳頁）；Ready 欄 CTA Banner 之 `stageCounts.ready` 計數同步遞減（若 `ready` 降至 0 則 Banner 不再渲染，spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md) AC-Banner-2）。
+> 3. **§7 UI/UX 補入口與遷移行為**：按鈕渲染條件 reference F077 v1.3 BR-7（不重複定義）；卡片遷移動畫沿用 prototype `27-list-definition.html` `rollbackStage()` mock 行為。
+> 4. **本 v1.3 不變更既有業務邏輯**（API endpoint / 設定資料全部保留不清空 / Transaction 原子性 / 月跑鎖 / 稽核 / Feature Flag）；僅入口位置與成功 toast 行為變更。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-119 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorGuard`（處長無 Rollback 權限）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
 > **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -63,12 +71,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 ## 4. 驗收標準
 
-### AC-1：準備完成階段顯示「退回簽核」按鈕
+### AC-1：準備完成階段顯示「退回」按鈕（v1.3 修訂 / US-119 v2.0）
 
-- **Given** 部長 / Admin 在 F048 / F077 清單頁或 F088 準備完成清單頁查看 `stage = 'ready'` 名單
-- **When** 頁面顯示操作欄
-- **Then** 顯示「退回簽核」按鈕
-- **And** 處長帳號**完全不渲染**「退回簽核」按鈕
+- **Given** 部長 / Admin 在 [F048 v2.0](F048-view-list-definition.md) Kanban 主頁 `ready` 欄查看名單卡片（或於 F088 準備完成清單頁查看 `stage = 'ready'` 名單）
+- **When** 頁面渲染卡片操作按鈕
+- **Then** Kanban `ready` 卡片操作欄顯示「退回」按鈕（灰色邊框 / `text-gray-700 border-border hover:bg-gray-50`，附 undo-2 icon）
+- **And** Kanban `ready` 卡片**不渲染** per-card「觸發月跑」按鈕（依 [F061 v1.4 AC-No-Per-Card-Trigger](F061-trigger-assignment-run.md)；月跑唯一入口為 Ready 欄頂 CTA Banner）
+- **And** 處長帳號**完全不渲染**「退回」按鈕（依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) 矩陣 `ready` × `section_chief` cell 僅顯示「查看」）
+- **And** 渲染條件依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) 5 個橫切條件（歷史月份 / 月跑鎖 / 已停用 / 處長轄區 / 「查看」通用性）；本 spec 不重複定義
 
 ### AC-2：Rollback 確認對話框
 
@@ -84,8 +94,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Then** 系統執行：
   1. UPDATE `ob_list_definition.stage` 由 `'ready'` 為 `'approval'`
   2. 設定資料（篩選條件 / `ob_dept_pct` / `ob_empl_set` / CR 開關）**全部保留不清空**
-  3. 寫入 `assignment_audit_log`（`action = 'ROLLBACK_STAGE'`、`before_value = { stage: 'ready' }`、`after_value = { stage: 'approval' }`）
-- **And** 頁面顯示成功提示「名單『{listNm}』已退回簽核階段，設定資料保留」，清單刷新
+  3. 寫入 `assignment_audit_log`（`action = 'STAGE_ROLLBACK'`、`before_value = { stage: 'ready' }`、`after_value = { stage: 'approval' }`）
+- **And** 頁面顯示成功提示 toast（**info 樣式**，藍色）「已退回簽核 — 需重新簽核」（v1.3 修訂 / US-119 v2.0）
+- **And** Kanban 卡片即時從 `ready` 欄遷移至 `approval` 欄（無跳頁，無 full page reload；前端 React state 更新 + 卡片動畫過渡）；對應 prototype `27-list-definition.html` `rollbackStage()` mock 行為
+- **And** Ready 欄頂 CTA Banner 之 `stageCounts.ready` 計數同步遞減（依 [F061 v1.4 AC-Banner-1](F061-trigger-assignment-run.md)）；若 `ready` 計數降至 0，CTA Banner 不再渲染（依 F061 v1.4 AC-Banner-2）
 
 ### AC-4：退回後名單從準備完成清單移出
 
@@ -137,7 +149,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 - **Given** 任一 Rollback 成功
 - **When** 寫入完成
-- **Then** `assignment_audit_log` 新增一筆 `action = 'ROLLBACK_STAGE'`，含 before/after stage、operator_id、timestamp
+- **Then** `assignment_audit_log` 新增一筆 `action = 'STAGE_ROLLBACK'`，含 before/after stage、operator_id、timestamp
 
 ## 5. API 規格
 
@@ -190,20 +202,39 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-9 | **月跑並發守衛（v1.1 / 決議 #6）**：F089 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F089 端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED` |
 
-## 7. UI/UX 需求
+## 7. UI/UX 需求（v1.3 重寫）
 
-- **「退回簽核」按鈕**：
-  - 位於 F048 / F077 清單頁準備完成階段名單操作欄、F088 準備完成清單頁操作欄
-  - 處長身份**完全不渲染**
-  - 已停用 / 非 `ready` 階段 / 歷史月份**完全不渲染**
-  - 月跑進行中 disabled + hover 提示
-- **確認對話框**：
-  - 標題：「Rollback 確認」
-  - 內容：「確認將名單『{listNm}』（{listNo}）退回簽核階段？退回後名單將從準備完成清單移出，需重新核准才能再次進入準備完成。設定資料不受影響。」
-  - 按鈕：「確認退回」（warning）/「取消」
-- **成功提示 toast**：「名單『{listNm}』已退回簽核階段，設定資料保留」
-- **Rollback 後狀態**：清單頁該名單階段標籤更新為「簽核」，操作欄顯示「核准」（F086）+「拒絕」（F087）
-- **F088 即時更新**：F088 頁面之「月跑前置條件提示」依本 Rollback 動態重新計算
+### 7.1 「退回」按鈕（v1.3 / US-119 v2.0）
+
+- **入口位置**：[F048 v2.0](F048-view-list-definition.md) Kanban 主頁 `ready` 階段卡片操作欄；F088 準備完成清單頁操作欄
+- **按鈕文字**：「退回」（簡短，配合 Kanban 卡片空間限制）
+- **按鈕樣式**：灰色邊框（`text-gray-700 border-border hover:bg-gray-50`），附 undo-2 icon
+- **渲染條件**：依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣 — 僅 `ready` 階段 + `director` / `admin` role 渲染
+- **歷史月份 / 月跑鎖中 / 處長 / 已停用**：依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) 5 個橫切條件（C-1 / C-2 / C-3 / C-4），本 spec 不重複定義
+- **`ready` 卡片不渲染 per-card 觸發按鈕**：依 [F061 v1.4 AC-No-Per-Card-Trigger](F061-trigger-assignment-run.md)；月跑唯一入口為 Ready 欄頂 CTA Banner
+
+### 7.2 確認對話框
+
+- 標題：「Rollback 確認」
+- 內容：「確認將名單『{listNm}』（{listNo}）退回簽核階段？退回後名單將從準備完成清單移出，需重新核准才能再次進入準備完成。設定資料不受影響。」
+- 按鈕：「確認退回」（warning 樣式）/「取消」
+
+### 7.3 成功提示 toast（v1.3 修訂 / US-119 v2.0）
+
+- Toast 樣式：**info**（藍色背景 `bg-blue-50` + 邊框 `border-blue-200` + 文字 `text-blue-800`）
+- 主訊息：「已退回簽核 — 需重新簽核」
+- Kanban 即時刷新：該名單卡片從 `ready` 欄遷移至 `approval` 欄，無頁面跳轉
+- Ready 欄頂 CTA Banner 之 `stageCounts.ready` 計數同步遞減（依 [F061 v1.4 AC-Banner-1](F061-trigger-assignment-run.md)）；若 `ready` 降至 0，Banner 不再渲染
+- Prototype canonical reference：`27-list-definition.html` `rollbackStage()` 函式 + `STAGE_PREV_TOAST.ready`
+
+### 7.4 Rollback 後狀態（v1.3 補述）
+
+- Kanban `approval` 欄該名單卡片之操作按鈕欄依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) 矩陣顯示：核准（F086）/ 拒絕（F087）/ 查看
+- 設定資料（篩選條件 / `ob_dept_pct` / `ob_empl_set` / CR 開關）全部保留不清空
+
+### 7.5 F088 即時更新
+
+- F088 頁面之「月跑前置條件提示」依本 Rollback 動態重新計算
 
 ## 8. 依賴關係
 
@@ -284,3 +315,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-119，E07 補修批次 4 / OQ-C-02 確認新增）：限 `stage = 'ready'` Rollback；限部長 + Admin（`DirectorGuard`）；**設定資料保留不清空**；新增 F088 即時更新機制；與 F087 分工說明 |
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #6：BR-9 補「`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現」；(2) 決議 #2：新增 BR-10 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`） |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-119 + AD-E07 v3.0 一致性決議完整重建；保留 v1.0 / v1.1 所有設計決議 |
+| v1.3 | 2026-05-21 | **M01 v2.0~v2.3 Kanban 重構 / US-119 v2.0 操作入口調整**：(1) AC-1 修訂：入口由表格列改為 [F048 v2.0](F048-view-list-definition.md) Kanban 主頁 `ready` 階段卡片操作欄之「退回」按鈕（灰色邊框 + undo-2 icon），渲染條件 reference [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) 不重複定義；補述 ready 卡片不渲染 per-card 觸發按鈕（依 [F061 v1.4 AC-No-Per-Card-Trigger](F061-trigger-assignment-run.md)）；(2) AC-3 補充：Rollback 成功後 info 樣式 toast「已退回簽核 — 需重新簽核」；Kanban 卡片即時遷移至 approval 欄；Ready CTA Banner `stageCounts.ready` 計數同步遞減；(3) §7 UI/UX 重寫，補入口規範 + 卡片遷移行為 + Banner 計數同步 + Prototype reference；(4) 本 v1.3 不變更業務邏輯（API / 設定資料全保留 / Transaction / 月跑鎖 / Feature Flag） |
+| v1.3.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）— 將 spec 全文之 `action = 'ROLLBACK_STAGE'` 字串修正為 `action = 'STAGE_ROLLBACK'`（AC-3 / AC-10）；entity 實際 enum 為 `STAGE_ROLLBACK`（VARCHAR(30)）。不變動業務邏輯 / API endpoint / Transaction / Guard |

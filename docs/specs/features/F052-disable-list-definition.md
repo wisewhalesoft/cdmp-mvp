@@ -2,19 +2,24 @@
 spec-id: F052
 title: 停用名單定義
 feature-id: F052
-source-story: US-090
+source-story: US-090, US-105
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.0"
-date: 2026-05-16
+version: "2.1"
+date: 2026-05-21
 status: Draft
 ---
 
 # F052: 停用名單定義
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
+> **v2.1（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 / US-105 v2.3 文字修正）**：核心變更：
+> 1. **§4 AC-1 / §7 UI/UX：按鈕文字「停」→「停用」全寫**（對應 US-105 v2.3 修正版；卡片設計允許換行不需縮寫）。
+> 2. **入口從表格列改為 Kanban 卡片按鈕**：F048 v2.0 Kanban 主頁之 `draft` 階段卡片操作欄之「停用」按鈕（依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣）。
+> 3. **本 v2.1 不變更既有業務邏輯**（API endpoint / 軟刪除語意 / 月跑鎖 / 重複停用阻擋 / 5 個 AC 之核心行為）；僅按鈕文字與入口位置變更。
+>
 > **v2.0（2026-05-16）**：依 F002 v2.0 / AD-E07 v3.0 重構：Guard 改為 `DirectorGuard`（M01 名單 CRUD 寫入限部長）。
 
 ## Agent Loading Guide
@@ -46,12 +51,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 ## 4. 驗收標準
 
-### AC-1：停用確認對話框
+### AC-1：停用確認對話框（v2.1 補述）
 
-- **Given** 業務部長在 F048 清單頁點擊某個 `status = 'active'` 名單的「停用」按鈕
+- **Given** 業務部長 / Admin 在 [F048 v2.0](F048-view-list-definition.md) Kanban 主頁 `draft` 階段卡片操作欄點擊「停用」按鈕（按鈕文字為**全寫「停用」**，非縮寫「停」；依 US-105 v2.3）
 - **When** 系統彈出確認對話框
-- **Then** 對話框顯示警告文字：「確定停用名單『{list_nm}』（{list_no}）？停用後此名單將不再用於未來月跑，且無法在本系統重新啟用。歷史快照資料不受影響。」
-- **And** 對話框提供「確認停用」與「取消」兩個按鈕
+- **Then** 對話框標題：「確認停用名單 `{list_no}`？」；副標：「F052 v2.1 · 軟刪除（限 `draft` 階段）」
+- **And** 對話框警告區顯示：「此操作將軟刪除名單。已停用名單可於『已停用』分區查詢；無法直接還原。」
+- **And** 顯示名單基本資訊（名稱 / 階段 / 建立者）供確認
+- **And** 「確認停用」按鈕預設 disabled；使用者勾選「我確認停用此名單」checkbox 後始啟用
+- **And** 提供「確認停用」（紅底白字）與「取消」兩個按鈕
+- **And** 對話框內按鈕文字為**全寫「確認停用」**，避免使用者誤判操作範圍
 
 ### AC-2：執行停用（軟刪除）
 
@@ -132,12 +141,35 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-4 | 停用後的名單不會被未來月跑 Stage 1 讀取（Stage 1 `WHERE status = 'active'`） |
 | BR-5 | 歷史 `assignment_run_snapshot` 為不可變紀錄，停用後仍完整保留當時的 input_list / result |
 
-## 7. UI/UX 需求
+## 7. UI/UX 需求（v2.1 重寫）
 
-- Modal 確認對話框：顯示警告文字（含 `list_nm` + `list_no`）+ 兩個按鈕
-- 成功提示 toast：「名單『{list_nm}』已停用」
-- 已停用頁籤：記錄為唯讀，不顯示任何操作按鈕
-- 月跑鎖定時：停用按鈕 disabled + hover 提示
+### 7.1 入口（v2.1 變更 / US-105 v2.3 / US-130）
+
+- **入口位置**：[F048 v2.0](F048-view-list-definition.md) Kanban 主頁之 `draft` 階段卡片操作欄之「停用」按鈕
+- **按鈕文字**：**全寫「停用」**（v2.1 修正：v1.0 / v2.0 prototype 之縮寫「停」已於 US-105 v2.3 統一改回全寫；卡片設計允許換行不需縮寫）
+- **按鈕樣式**：危險樣式（紅色邊框 / `text-danger border-danger hover:bg-red-50`），附 `archive` icon
+- **渲染條件**：依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣 — 僅 `draft` 階段 + `director` / `admin` role 渲染；其他 stage 不渲染停用按鈕（非草稿階段名單需先 Rollback 至草稿才可停用，由 F081 / F085 / F089 提供反向路徑）
+- **歷史月份 / 月跑鎖中**：依 F077 v1.3 BR-7 C-1 / C-2 — 歷史月份不渲染；月跑鎖中 disabled + hover tooltip「分派執行中，無法停用名單定義」
+
+### 7.2 確認對話框
+
+- Modal 確認對話框：顯示警告文字（含 `list_nm` + `list_no` + 階段 + 建立者）+ 「我確認停用此名單」checkbox + 兩個按鈕（「確認停用」/「取消」）
+- 「確認停用」按鈕預設 disabled，checkbox 勾選後啟用
+- 「確認停用」按鈕文字為**全寫**（非縮寫「停」）
+
+### 7.3 成功提示 toast
+
+- 成功提示 toast：「`{list_no}` 已停用」+ 副訊息「可於名單列表『已停用』分區查詢」（warning 樣式）
+- Kanban 主頁即時刷新，該名單卡片從 `draft` 欄移除（依 [F077 v1.3 BR-7 C-3](F077-month-switch-and-stage-overview.md)，已停用名單不渲染於 Kanban 主視圖）
+
+### 7.4 月跑鎖定行為
+
+- 月跑鎖定時：「停用」按鈕 disabled + hover 提示「分派執行中，無法停用名單定義」
+- 已開啟之停用確認對話框於月跑鎖觸發後：建議前端 polling lockState 即時關閉對話框並提示（屬未來 enhancement；本 v2.1 不規範 polling 機制）
+
+### 7.5 Prototype canonical reference
+
+`prototypes/27-list-definition.html` 之 `deactivateModal` 與 `renderActions` `draft` cell（行 826-828）：按鈕文字「停用」、icon `archive`、紅色邊框樣式
 
 ## 8. 相依性
 
