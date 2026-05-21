@@ -11,8 +11,8 @@ export class ObDeptPct {
   @Column({ name: 'created_by_prog', type: 'varchar', length: 10 })
   created_by_prog: string; // A_PRGID
 
-  @Column({ name: 'created_by', type: 'varchar', length: 10 })
-  created_by: string; // A_USERID
+  @Column({ name: 'created_by', type: 'varchar', length: 50 })
+  created_by: string; // A_USERID（length:50 對齊 users.id UUID 36 字元，沿用 bcedc04 ob_list_definition pattern；2026-05-21 hotfix F079 PUT 500）
 
   // E07 P1 B4 補完 (2026-05-17)：timestamp → dateColumnType helper（sqlite 相容）
   // 依 memory feedback_typeorm_timestamp 規則。
@@ -22,8 +22,8 @@ export class ObDeptPct {
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 10 })
   updated_by_prog: string; // U_PRGID
 
-  @Column({ name: 'updated_by', type: 'varchar', length: 10 })
-  updated_by: string; // U_USERID
+  @Column({ name: 'updated_by', type: 'varchar', length: 50 })
+  updated_by: string; // U_USERID（length:50 對齊 users.id UUID 36 字元；2026-05-21 hotfix）
 
   @Column({ name: 'updated_at', type: dateColumnType })
   updated_at: Date; // U_SYSDT

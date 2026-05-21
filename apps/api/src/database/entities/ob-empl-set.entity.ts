@@ -11,8 +11,8 @@ export class ObEmplSet {
   @Column({ name: 'created_by_prog', type: 'varchar', length: 10, nullable: true })
   created_by_prog: string | null; // A_PRGID
 
-  @Column({ name: 'created_by', type: 'varchar', length: 10, nullable: true })
-  created_by: string | null; // A_USERID
+  @Column({ name: 'created_by', type: 'varchar', length: 50, nullable: true })
+  created_by: string | null; // A_USERID（length:50 對齊 users.id UUID 36 字元，沿用 bcedc04 ob_list_definition pattern；2026-05-21 hotfix F082 PUT）
 
   // P1 B1 / AD-E07-17 議題 3 / 2026-05-16：改用 dateColumnType helper（postgres=timestamp / sqlite=datetime）
   // 對應 memory feedback_typeorm_timestamp 規則
@@ -22,8 +22,8 @@ export class ObEmplSet {
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 10, nullable: true })
   updated_by_prog: string | null; // U_PRGID
 
-  @Column({ name: 'updated_by', type: 'varchar', length: 10, nullable: true })
-  updated_by: string | null; // U_USERID
+  @Column({ name: 'updated_by', type: 'varchar', length: 50, nullable: true })
+  updated_by: string | null; // U_USERID（length:50 對齊 users.id UUID 36 字元；2026-05-21 hotfix）
 
   @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
