@@ -5,14 +5,21 @@
  *   ob_card_type, ob_levelcard_version, ob_levelcard_column,
  *   ob_levelcard_score, ob_levelcard_level, ob_tier
  *
+ * 並 upsert 5 個 E07 ETL pipelines 至 etl_pipelines + etl_pipeline_versions：
+ *   E07-OBEMPHIRE-Load, E07-OBCALENDAR-Load,
+ *   E07-OBARRETURNDF_MIN_CAP-Load, E07-OBPOOLDATA-Load, ETL for Customer Core
+ *
  * 來源資料：apps/api/src/database/seeds/data/*.json
- *   （從 reference/DumpData/*.csv 2026-05-05 dump 預先生成，含 OBTIER 正規化）
+ *   （計分卡資料從 reference/DumpData/*.csv 2026-05-05 dump 預先生成；
+ *    pipelines 從 dev DB 2026-05-21 dump 後手 commit）
  *
  * 安全機制：
  *   - 每表先 SELECT COUNT(*)，若 > 0 則 SKIP，不覆寫業務既有資料
  *   - ob_levelcard_column 特例：用 UPDATE WHERE column_label IS NULL 補
  *     中文標籤（不洗現有 column_label）
  *   - ob_levelcard_column.match_type 在 score 載入後重新依資料推導
+ *   - etl_pipelines 以 name 為 idempotency key，存在即 SKIP，不洗 production
+ *     使用者手動編輯過的版本
  *
  * 用法：
  *   docker compose --profile data-seed up data-seed
@@ -65,6 +72,48 @@ interface Tier {
   card_type: string;
   card_level: string | null;
   tier_level: string;
+}
+
+interface EtlPipelineSeed {
+  name: string;
+  description: string | null;
+  version: number;
+  step_count: number;
+  status: string;
+  schedule: string | null;
+  enabled: boolean;
+  version_status: string;
+  definition: { nodes: unknown[]; edges: unknown[] };
+}
+
+/**
+ * etl_pipelines.created_by 必填 FK 至 users。本 seed 採以下順序解析 user id：
+ *   1) env ETL_SEED_USER_EMAIL（顯式指定；prod 部署時建議帶）
+ *   2) dev seed 固定 admin UUID（admin@cdmp.test，僅 dev env 由 seed.ts 寫入）
+ *   3) DB 中任一 role='admin' AND status='active' 的最早建立者
+ * 全部找不到 → fail-fast，要求 ops 先建 admin 帳號。
+ */
+const DEV_ADMIN_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+async function resolveSeedUserId(qr: QueryRunner): Promise<string> {
+  const envEmail = process.env.ETL_SEED_USER_EMAIL?.trim();
+  if (envEmail) {
+    const r = await qr.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [envEmail]);
+    if (r[0]?.id) return r[0].id;
+    throw new Error(
+      `etl_pipelines seed 中止：ETL_SEED_USER_EMAIL='${envEmail}' 對應 user 不存在。`,
+    );
+  }
+  const devCheck = await qr.query(`SELECT id FROM users WHERE id = $1`, [DEV_ADMIN_UUID]);
+  if (devCheck[0]?.id) return DEV_ADMIN_UUID;
+  const fallback = await qr.query(
+    `SELECT id FROM users WHERE role='admin' AND status='active' ORDER BY created_at ASC LIMIT 1`,
+  );
+  if (fallback[0]?.id) return fallback[0].id;
+  throw new Error(
+    `etl_pipelines seed 中止：找不到可用 admin user。請先建立 admin 帳號，` +
+      `或設定環境變數 ETL_SEED_USER_EMAIL 指向實際 admin email。`,
+  );
 }
 
 function dataPath(file: string): string {
@@ -199,6 +248,62 @@ async function seedTiers(qr: QueryRunner): Promise<void> {
   console.log(`  ob_tier: INSERT ${rows.length} 列（OBTIER 正規化後）`);
 }
 
+async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
+  const rows = loadJson<EtlPipelineSeed>('etl-pipelines.json');
+  // 先檢查是否有任何 pipeline 需要 INSERT（避免無需 admin 也觸發 user lookup）
+  let needInsert = false;
+  for (const p of rows) {
+    const exists = await qr.query(
+      `SELECT 1 FROM etl_pipelines WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+      [p.name],
+    );
+    if (exists.length === 0) {
+      needInsert = true;
+      break;
+    }
+  }
+  let userId: string | null = null;
+  if (needInsert) {
+    userId = await resolveSeedUserId(qr);
+    console.log(`  etl_pipelines: 使用 user ${userId} 作為 created_by`);
+  }
+  let inserted = 0;
+  let skipped = 0;
+  for (const p of rows) {
+    const existing = await qr.query(
+      `SELECT id FROM etl_pipelines WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+      [p.name],
+    );
+    if (existing.length > 0) {
+      skipped++;
+      console.log(`    ${p.name}: SKIP（已存在）`);
+      continue;
+    }
+    const inserted_pipeline = await qr.query(
+      `INSERT INTO etl_pipelines (name, description, version, step_count, status, schedule, enabled, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+       RETURNING id`,
+      [p.name, p.description, p.version, p.step_count, p.status, p.schedule, p.enabled, userId],
+    );
+    const pipelineId = inserted_pipeline[0].id;
+    await qr.query(
+      `INSERT INTO etl_pipeline_versions (pipeline_id, version, definition, status, change_summary, created_by, created_at)
+       VALUES ($1, $2, $3::text, $4, $5, $6, NOW())`,
+      [
+        pipelineId,
+        p.version,
+        JSON.stringify(p.definition),
+        p.version_status,
+        'seeded by prod-data-seed',
+        userId,
+      ],
+    );
+    inserted++;
+    console.log(`    ${p.name}: INSERT（${p.step_count} 節點）`);
+  }
+  console.log(`  etl_pipelines: ${inserted} 新增 / ${skipped} 已存在`);
+}
+
 async function deriveMatchType(qr: QueryRunner): Promise<void> {
   // 依 score 真實資料重新推導 ob_levelcard_column.match_type
   // 已存在 match_type 仍會被覆寫——seed 階段以 dump 真實資料為準
@@ -261,6 +366,7 @@ async function main(): Promise<void> {
     } else {
       console.log(`  ob_levelcard_column.match_type: SKIP derive（column 已存在，保留業務值）`);
     }
+    await seedEtlPipelines(qr);
     await qr.commitTransaction();
     console.log('Prod data seed complete.');
   } catch (err) {

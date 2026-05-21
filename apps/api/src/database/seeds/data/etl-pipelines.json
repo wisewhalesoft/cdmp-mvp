@@ -1,0 +1,3137 @@
+[
+  {
+    "name": "E07-OBARRETURNDF_MIN_CAP-Load",
+    "description": "raw OB_ARRETURNDF_MIN_CAP → ob_arreturndf_min_cap（fullMode 全量替換，AD-E07-12 / AD-E07-10 lookup 約定）",
+    "version": 1,
+    "step_count": 3,
+    "status": "active",
+    "schedule": "30 2 1 * *",
+    "enabled": false,
+    "version_status": "draft",
+    "definition": {
+      "nodes": [
+        {
+          "id": "e1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "ob_arreturndf_min_cap 來源",
+            "rawTable": "raw_970da79c",
+            "subtitle": "APYHFC16.OB / raw_970da79c",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.OB",
+              "sourceTable": "raw_970da79c"
+            }
+          }
+        },
+        {
+          "id": "fm1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 250,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "CAPS → snake_case",
+            "subtitle": "2 欄位",
+            "mappings": [
+              {
+                "sourceColumn": "APPL_NO",
+                "targetColumn": "appl_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ADD_UN_CAPITAL",
+                "targetColumn": "add_un_capital",
+                "defaultValue": null
+              }
+            ],
+            "dropUnmapped": true
+          }
+        },
+        {
+          "id": "tl1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 500,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "target_load",
+            "label": "載入 ob_arreturndf_min_cap",
+            "subtitle": "ob_arreturndf_min_cap",
+            "targetTable": "ob_arreturndf_min_cap",
+            "fullMode": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-fm1",
+          "source": "e1",
+          "target": "fm1"
+        },
+        {
+          "id": "fm1-tl1",
+          "source": "fm1",
+          "target": "tl1"
+        }
+      ]
+    }
+  },
+  {
+    "name": "E07-OBCALENDAR-Load",
+    "description": "raw OBCALENDAR → ob_calendar（fullMode 全量替換，AD-E07-12）",
+    "version": 1,
+    "step_count": 3,
+    "status": "active",
+    "schedule": "30 4 1 1 *",
+    "enabled": false,
+    "version_status": "draft",
+    "definition": {
+      "nodes": [
+        {
+          "id": "e1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "ob_calendar 來源",
+            "rawTable": "raw_dfb3b313",
+            "subtitle": "APYHFC16.OB / raw_dfb3b313",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.OB",
+              "sourceTable": "raw_dfb3b313"
+            }
+          }
+        },
+        {
+          "id": "fm1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 250,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "CAPS → snake_case",
+            "subtitle": "2 欄位",
+            "mappings": [
+              {
+                "sourceColumn": "CALENDAR_DATE",
+                "targetColumn": "calendar_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "REST_FLG",
+                "targetColumn": "rest_flg",
+                "defaultValue": null
+              }
+            ],
+            "dropUnmapped": true
+          }
+        },
+        {
+          "id": "tl1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 500,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "target_load",
+            "label": "載入 ob_calendar",
+            "subtitle": "ob_calendar",
+            "targetTable": "ob_calendar",
+            "fullMode": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-fm1",
+          "source": "e1",
+          "target": "fm1"
+        },
+        {
+          "id": "fm1-tl1",
+          "source": "fm1",
+          "target": "tl1"
+        }
+      ]
+    }
+  },
+  {
+    "name": "E07-OBEMPHIRE-Load",
+    "description": "raw OBEMPHIRE → ob_emphire（fullMode 全量替換，AD-E07-12）",
+    "version": 1,
+    "step_count": 4,
+    "status": "active",
+    "schedule": "30 3 * * *",
+    "enabled": false,
+    "version_status": "draft",
+    "definition": {
+      "nodes": [
+        {
+          "id": "e1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "ob_emphire 來源",
+            "rawTable": "raw_e1e951d7",
+            "subtitle": "APYHFC16.OB / raw_e1e951d7",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.OB",
+              "sourceTable": "raw_e1e951d7"
+            }
+          }
+        },
+        {
+          "id": "fm1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 250,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "CAPS → snake_case",
+            "subtitle": "13 欄位",
+            "mappings": [
+              {
+                "sourceColumn": "EMP_ID",
+                "targetColumn": "emp_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EMP_NM",
+                "targetColumn": "emp_nm",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ID",
+                "targetColumn": "id_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEPT_CODE",
+                "targetColumn": "dept_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEPT_NAME",
+                "targetColumn": "dept_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "TITLE_CODE",
+                "targetColumn": "title_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "TITLE_NAME",
+                "targetColumn": "title_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "JFUN_ID",
+                "targetColumn": "jfun_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "JFUN_NM",
+                "targetColumn": "jfun_nm",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HIRE_DATE",
+                "targetColumn": "hire_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "RESIGN_DATE",
+                "targetColumn": "resign_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EMAIL",
+                "targetColumn": "email",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "IS_AUTH",
+                "targetColumn": "is_auth",
+                "defaultValue": null
+              }
+            ],
+            "dropUnmapped": true
+          }
+        },
+        {
+          "id": "cd1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 500,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "conditional",
+            "label": "9999-12-31 哨兵 → NULL",
+            "subtitle": "resign_date 歸一",
+            "rules": [
+              {
+                "targetColumn": "resign_date",
+                "conditions": [
+                  {
+                    "when": "left.resign_date = '9999-12-31'",
+                    "then": "NULL"
+                  }
+                ],
+                "elseValue": "left.resign_date"
+              }
+            ]
+          }
+        },
+        {
+          "id": "tl1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 750,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "target_load",
+            "label": "載入 ob_emphire",
+            "subtitle": "ob_emphire",
+            "targetTable": "ob_emphire",
+            "fullMode": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-fm1",
+          "source": "e1",
+          "target": "fm1"
+        },
+        {
+          "id": "fm1-cd1",
+          "source": "fm1",
+          "target": "cd1"
+        },
+        {
+          "id": "cd1-tl1",
+          "source": "cd1",
+          "target": "tl1"
+        }
+      ]
+    }
+  },
+  {
+    "name": "E07-OBPOOLDATA-Load",
+    "description": "raw OBPOOLDATA → ob_pool_data（fullMode 全量替換，AD-E07-12）",
+    "version": 1,
+    "step_count": 3,
+    "status": "active",
+    "schedule": null,
+    "enabled": false,
+    "version_status": "draft",
+    "definition": {
+      "nodes": [
+        {
+          "id": "e1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "ob_pool_data 來源",
+            "rawTable": "raw_6d58393b",
+            "subtitle": "APYHFC16.OB / raw_6d58393b",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.OB",
+              "sourceTable": "raw_6d58393b"
+            }
+          }
+        },
+        {
+          "id": "fm1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 250,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "CAPS → snake_case",
+            "subtitle": "114 欄位",
+            "mappings": [
+              {
+                "sourceColumn": "ORGNO",
+                "targetColumn": "orgno",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "APPL_NO",
+                "targetColumn": "appl_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTO_NO",
+                "targetColumn": "custo_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUST_NAME",
+                "targetColumn": "cust_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LIC_NO",
+                "targetColumn": "lic_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "STA_CODE_NA",
+                "targetColumn": "sta_code_na",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROJECT_TP",
+                "targetColumn": "project_tp",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SPEC_NO",
+                "targetColumn": "spec_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SPEC_NAME",
+                "targetColumn": "spec_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEPT_NAME",
+                "targetColumn": "dept_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAY_RESOUC_CODE",
+                "targetColumn": "pay_resouc_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BREAK_PCT",
+                "targetColumn": "break_pct",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EXTEND_DAY",
+                "targetColumn": "extend_day",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAY_RESOUC",
+                "targetColumn": "pay_resouc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "COMMUTE",
+                "targetColumn": "commute",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CYCLE_PAY_NA",
+                "targetColumn": "cycle_pay_na",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CYCLE_PAY_VAL",
+                "targetColumn": "cycle_pay_val",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEAL_NUM",
+                "targetColumn": "deal_num",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PRO_RATE",
+                "targetColumn": "pro_rate",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "B_CASE_IRR",
+                "targetColumn": "b_case_irr",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FIRST_PAY_DT",
+                "targetColumn": "first_pay_dt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FAPCON_DT",
+                "targetColumn": "fapcon_dt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "MATURITY_DT",
+                "targetColumn": "maturity_dt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEAL_MARK",
+                "targetColumn": "deal_mark",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAY_WAY",
+                "targetColumn": "pay_way",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LOAN_TOTAMT",
+                "targetColumn": "loan_totamt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LOAN_CAPITAL",
+                "targetColumn": "loan_capital",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LOAN_ODDAMT",
+                "targetColumn": "loan_oddamt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "COMMISSION",
+                "targetColumn": "commission",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SETTLE_DATE",
+                "targetColumn": "settle_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LOAN_RATE",
+                "targetColumn": "loan_rate",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "STA_CODE",
+                "targetColumn": "sta_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OFI_DATE",
+                "targetColumn": "ofi_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEPT_ID",
+                "targetColumn": "dept_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAY_WAY_NA",
+                "targetColumn": "pay_way_na",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BRNH_NO",
+                "targetColumn": "brnh_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DLR_NO",
+                "targetColumn": "dlr_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BROKER",
+                "targetColumn": "broker",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SALES_NO",
+                "targetColumn": "sales_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BROKER_AGENT",
+                "targetColumn": "broker_agent",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HFS_SALES",
+                "targetColumn": "hfs_sales",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SALES",
+                "targetColumn": "sales",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "AGENT_HEAD_ID",
+                "targetColumn": "agent_head_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROMOTER_DEPT",
+                "targetColumn": "promoter_dept",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "AGENT_ID",
+                "targetColumn": "agent_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROMOTER",
+                "targetColumn": "promoter",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BRAND_NO",
+                "targetColumn": "brand_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BRAND_NAME",
+                "targetColumn": "brand_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CAR_NAME",
+                "targetColumn": "car_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "INQUIRY",
+                "targetColumn": "inquiry",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "APPROVAL",
+                "targetColumn": "approval",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "MANAGER_LIMIT",
+                "targetColumn": "manager_limit",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SPEC_MK_NA",
+                "targetColumn": "spec_mk_na",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SPEC_TYPE_NA",
+                "targetColumn": "spec_type_na",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ATM_BUSINESS",
+                "targetColumn": "atm_business",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "NO_DUTY",
+                "targetColumn": "no_duty",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "YEAR_PRODU",
+                "targetColumn": "year_produ",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DLR_NAME",
+                "targetColumn": "dlr_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BRNH_NAME",
+                "targetColumn": "brnh_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROJECT_TP_CD",
+                "targetColumn": "project_tp_cd",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "APPL_DATE",
+                "targetColumn": "appl_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "APMACC_MEMO",
+                "targetColumn": "apmacc_memo",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SALES_STS_NA",
+                "targetColumn": "sales_sts_na",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SUB_CODE",
+                "targetColumn": "sub_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CC_NBR",
+                "targetColumn": "cc_nbr",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "THROU_MON",
+                "targetColumn": "throu_mon",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FUND_SRC",
+                "targetColumn": "fund_src",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SECRET_FLG",
+                "targetColumn": "secret_flg",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "RATE_CHOICE",
+                "targetColumn": "rate_choice",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PER_INFO",
+                "targetColumn": "per_info",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "TIE_DOWN_NUM",
+                "targetColumn": "tie_down_num",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "REST_AMT",
+                "targetColumn": "rest_amt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OVER_TIE_NUM",
+                "targetColumn": "over_tie_num",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OPEN_CODE",
+                "targetColumn": "open_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EMPLID",
+                "targetColumn": "emplid",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EMPLID_DEPTID",
+                "targetColumn": "emplid_deptid",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CASE_TYPE",
+                "targetColumn": "case_type",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HOTAI_AGREE",
+                "targetColumn": "hotai_agree",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CALL_DEPT",
+                "targetColumn": "call_dept",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "C_CLASS",
+                "targetColumn": "c_class",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAYT_NUM",
+                "targetColumn": "payt_num",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LIST_TYPE",
+                "targetColumn": "list_type",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROD_TYPE",
+                "targetColumn": "prod_type",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROD_TYPE_NAME",
+                "targetColumn": "prod_type_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROD_CLASS",
+                "targetColumn": "prod_class",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROD_CLASS_NAME",
+                "targetColumn": "prod_class_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROD_KIND",
+                "targetColumn": "prod_kind",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROD_KIND_NAME",
+                "targetColumn": "prod_kind_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BEST_CASE",
+                "targetColumn": "best_case",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ACC_DATE",
+                "targetColumn": "acc_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ORDER1",
+                "targetColumn": "order1",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ORDER2",
+                "targetColumn": "order2",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAYT_TERM",
+                "targetColumn": "payt_term",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "TERM_AMT",
+                "targetColumn": "term_amt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "NONPAYT_TERM",
+                "targetColumn": "nonpayt_term",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OVERDUE_AMT",
+                "targetColumn": "overdue_amt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OVERDUE_DAY",
+                "targetColumn": "overdue_day",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "COLL_EMPL",
+                "targetColumn": "coll_empl",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CAR_MODEL",
+                "targetColumn": "car_model",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAY_USER",
+                "targetColumn": "pay_user",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PAY_ADD",
+                "targetColumn": "pay_add",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FLEET_CAR",
+                "targetColumn": "fleet_car",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PROMOTER_TEL",
+                "targetColumn": "promoter_tel",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SALES_TEL",
+                "targetColumn": "sales_tel",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "MEMO1",
+                "targetColumn": "memo1",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CASEYEAR",
+                "targetColumn": "caseyear",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OB_DEPT",
+                "targetColumn": "ob_dept",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OB_EMPLID",
+                "targetColumn": "ob_emplid",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LAST_PAY_DATE",
+                "targetColumn": "last_pay_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "MONTH_CNT",
+                "targetColumn": "month_cnt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "YEAR_CNT",
+                "targetColumn": "year_cnt",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SETTLE_SRC",
+                "targetColumn": "settle_src",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SPEC_TP",
+                "targetColumn": "spec_tp",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUS_LEVEL",
+                "targetColumn": "cus_level",
+                "defaultValue": null
+              }
+            ],
+            "dropUnmapped": true
+          }
+        },
+        {
+          "id": "tl1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 500,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "target_load",
+            "label": "載入 ob_pool_data",
+            "subtitle": "ob_pool_data",
+            "targetTable": "ob_pool_data",
+            "fullMode": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-fm1",
+          "source": "e1",
+          "target": "fm1"
+        },
+        {
+          "id": "fm1-tl1",
+          "source": "fm1",
+          "target": "tl1"
+        }
+      ]
+    }
+  },
+  {
+    "name": "ETL for Customer Core",
+    "description": "��X 5 �ӷ��]2 ZZIP + 3 MLMC�^�� customer_core �ؼЪ�",
+    "version": 13,
+    "step_count": 53,
+    "status": "active",
+    "schedule": null,
+    "enabled": true,
+    "version_status": "published",
+    "definition": {
+      "nodes": [
+        {
+          "id": "e1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "[和潤]ZZIP",
+            "rawTable": "raw_101f6b3e",
+            "subtitle": "[和潤]小車/機車/商品客戶主檔擷取"
+          }
+        },
+        {
+          "id": "e2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "[和勁]ZZIP",
+            "rawTable": "raw_35d85504",
+            "subtitle": "[和勁]重車客戶主檔擷取"
+          }
+        },
+        {
+          "id": "df_zzip_ctype_pad1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 160,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "[和潤]CUSTOM_MK補零",
+            "subtitle": "padStart(CUSTOM_MK, 2, '0')",
+            "expressions": [
+              {
+                "outputColumn": "CUSTOM_MK",
+                "expression": "padStart(CUSTOM_MK, 2, '0')",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "df_zzip_ctype_pad2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 160,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "[和勁]CUSTOM_MK補零",
+            "subtitle": "padStart(CUSTOM_MK, 2, '0')",
+            "expressions": [
+              {
+                "outputColumn": "CUSTOM_MK",
+                "expression": "padStart(CUSTOM_MK, 2, '0')",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "lk_edu1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 320,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_edu",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'A2'",
+            "matchColumn": "EDUCAT_BACK",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "education_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_occ1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 480,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_occ",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'A4'",
+            "matchColumn": "VOCATION_CODE",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "occupation_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_job1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 640,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_job",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'A5'",
+            "matchColumn": "JOB_TITLE",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "job_title_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_marry1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 800,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_marry",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = '33'",
+            "matchColumn": "CMARRY_MK",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "marital_status_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_ctype1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 960,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_ctype",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = '55'",
+            "matchColumn": "CUSTOM_MK",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "customer_type_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_incsrc1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1120,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_incsrc",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'Y0'",
+            "matchColumn": "INCOME_SOURCE",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "income_source_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_indus1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1280,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_indus",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'AA'",
+            "matchColumn": "INDUSTRY",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "industry_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_joblv1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1440,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_joblv",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'A6'",
+            "matchColumn": "JOB_LEVEL",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "job_level_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_income1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1600,
+            "y": 50
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤_income",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_e5a2345c",
+            "lookupFilter": "\"TBL_ID\" = 'A3'",
+            "matchColumn": "MONTH_INCOME",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "monthly_income_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_edu2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 320,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_edu",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = 'A2'",
+            "matchColumn": "EDUCAT_BACK",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "education_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_occ2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 480,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_occ",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = 'A4'",
+            "matchColumn": "VOCATION_CODE",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "occupation_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_job2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 640,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_job",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = 'A5'",
+            "matchColumn": "JOB_TITLE",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "job_title_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_marry2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 800,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_marry",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = '33'",
+            "matchColumn": "CMARRY_MK",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "marital_status_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_ctype2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 960,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_ctype",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = '55'",
+            "matchColumn": "CUSTOM_MK",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "customer_type_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_joblv2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1120,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_joblv",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = 'A6'",
+            "matchColumn": "JOB_LEVEL",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "job_level_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_income2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1280,
+            "y": 200
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁_income",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_6fce5258",
+            "lookupFilter": "\"TBL_ID\" = 'A3'",
+            "matchColumn": "MONTH_INCOME",
+            "lookupMatchColumn": "TBL_CD",
+            "outputColumns": [
+              {
+                "lookupColumn": "TBL_DESC1",
+                "outputAlias": "monthly_income_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "m1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1760,
+            "y": 125
+          },
+          "data": {
+            "nodeType": "merge",
+            "label": "ZZIP合併",
+            "subtitle": "FULL JOIN",
+            "joinType": "FULL",
+            "conditions": [
+              {
+                "leftColumn": "CUSTO_NO",
+                "rightColumn": "CUSTO_NO",
+                "operator": "="
+              }
+            ]
+          }
+        },
+        {
+          "id": "d1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1920,
+            "y": 125
+          },
+          "data": {
+            "nodeType": "dedup",
+            "label": "ZZIP去重",
+            "subtitle": "CUSTO_NO",
+            "keyColumns": [
+              "CUSTO_NO"
+            ],
+            "keepStrategy": "latest_timestamp",
+            "timestampColumn": "UPDATE_DATE"
+          }
+        },
+        {
+          "id": "df1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2080,
+            "y": 125
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "ZZIP電話合併",
+            "subtitle": "3 組電話（含分機）",
+            "expressions": [
+              {
+                "outputColumn": "home_phone",
+                "expression": "mergePhone(CAREA_NO1, CTEL_NO1, CEXTEN_NO1)",
+                "outputType": "VARCHAR"
+              },
+              {
+                "outputColumn": "contact_phone",
+                "expression": "mergePhone(CAREA_NO2, CTEL_NO2, CEXTEN_NO2)",
+                "outputType": "VARCHAR"
+              },
+              {
+                "outputColumn": "office_phone",
+                "expression": "mergePhone(CO_CAREA_NO, CO_CTEL_NO, CO_CEXTEN_NO)",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "tc_zzip",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2240,
+            "y": 125
+          },
+          "data": {
+            "nodeType": "type_cast",
+            "label": "ZZIP型別轉換",
+            "subtitle": "1 欄位",
+            "castRules": [
+              {
+                "column": "MONTH_INCOME",
+                "sourceType": "VARCHAR",
+                "targetType": "DECIMAL"
+              }
+            ]
+          }
+        },
+        {
+          "id": "fm1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2400,
+            "y": 125
+          },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "ZZIP映射",
+            "subtitle": "57 組對應",
+            "dropUnmapped": true,
+            "mappings": [
+              {
+                "sourceColumn": "CUSTO_NO",
+                "targetColumn": "source_customer_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTOM_MK",
+                "targetColumn": "customer_type_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUS_NAME",
+                "targetColumn": "name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ENG_NAME",
+                "targetColumn": "english_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUS_SEX",
+                "targetColumn": "gender",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BITBE_DATE",
+                "targetColumn": "date_of_birth",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CMARRY_MK",
+                "targetColumn": "marital_status_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EDUCAT_BACK",
+                "targetColumn": "education_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "education_desc",
+                "targetColumn": "education_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "SPOUSE_NM",
+                "targetColumn": "spouse_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FATHER_NM",
+                "targetColumn": "father_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "MOTHER_NM",
+                "targetColumn": "mother_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ISSUE_CLASS",
+                "targetColumn": "id_issue_type",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ISSUE_DATE",
+                "targetColumn": "id_issue_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ISSUE_ADD",
+                "targetColumn": "id_issue_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DRIVE_LIC",
+                "targetColumn": "driver_license",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CELLULAR",
+                "targetColumn": "mobile_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "home_phone",
+                "targetColumn": "home_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "contact_phone",
+                "targetColumn": "contact_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "office_phone",
+                "targetColumn": "office_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "E_MAIL",
+                "targetColumn": "email",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LINE_ACCT",
+                "targetColumn": "line_account",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HPOST_NUM",
+                "targetColumn": "residential_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HPOST_ADD",
+                "targetColumn": "residential_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CPOST_NUM",
+                "targetColumn": "mailing_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "COMM_ADD",
+                "targetColumn": "mailing_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CO_NUM",
+                "targetColumn": "company_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "UNIT_ADD",
+                "targetColumn": "company_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EPRPOST_NUM",
+                "targetColumn": "maturity_mailing_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EPRPOST_ADD",
+                "targetColumn": "maturity_mailing_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CO_NAME",
+                "targetColumn": "company_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CROLE",
+                "targetColumn": "role",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "VOCATION_CODE",
+                "targetColumn": "occupation_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "occupation_desc",
+                "targetColumn": "occupation_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "JOB_TITLE",
+                "targetColumn": "job_title_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "job_title_desc",
+                "targetColumn": "job_title_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "JOB_LEVEL",
+                "targetColumn": "job_level_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "INDUSTRY",
+                "targetColumn": "industry_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "N_WORK_YEAR",
+                "targetColumn": "work_years",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "COMP_DIM",
+                "targetColumn": "company_scale",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "MONTH_INCOME",
+                "targetColumn": "monthly_income_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "INCOME_APPROVED",
+                "targetColumn": "approved_income",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "INCOME_SOURCE",
+                "targetColumn": "income_source_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CAPITAL",
+                "targetColumn": "capital",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "IMMOPRO_MK",
+                "targetColumn": "has_real_estate",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "DEBT_FLG",
+                "targetColumn": "debt_flag",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FINE_FLG",
+                "targetColumn": "fine_flag",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ADDR_FLG",
+                "targetColumn": "address_anomaly_flag",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LAND_FLG",
+                "targetColumn": "mainland_flag",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "INSERT_DATE",
+                "targetColumn": "source_created_at",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "UPDATE_DATE",
+                "targetColumn": "source_updated_at",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "marital_status_desc",
+                "targetColumn": "marital_status_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "customer_type_desc",
+                "targetColumn": "customer_type_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "income_source_desc",
+                "targetColumn": "income_source_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "industry_desc",
+                "targetColumn": "industry_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "job_level_desc",
+                "targetColumn": "job_level_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "monthly_income_desc",
+                "targetColumn": "monthly_income_desc",
+                "defaultValue": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "e3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 500
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "[和潤]MLMC",
+            "rawTable": "raw_1138803c",
+            "subtitle": "[和潤]企金客戶主檔擷取"
+          }
+        },
+        {
+          "id": "e4",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 650
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "[和勁]MLMC",
+            "rawTable": "raw_aec93e7c",
+            "subtitle": "[和勁]企金客戶主檔擷取"
+          }
+        },
+        {
+          "id": "m2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 800,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "merge",
+            "label": "MLMC合併1",
+            "subtitle": "FULL JOIN",
+            "joinType": "FULL",
+            "conditions": [
+              {
+                "leftColumn": "CUSTID",
+                "rightColumn": "CUSTID",
+                "operator": "="
+              }
+            ]
+          }
+        },
+        {
+          "id": "e5",
+          "type": "pipelineNode",
+          "position": {
+            "x": 0,
+            "y": 800
+          },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "[興業]MLMC",
+            "rawTable": "raw_50172f04",
+            "subtitle": "[興業]客戶主檔擷取"
+          }
+        },
+        {
+          "id": "lk_m_ctype1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 160,
+            "y": 500
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤M_ctype",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_8b80671e",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+            "matchColumn": "CUTYPE",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "customer_type_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_emp1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 320,
+            "y": 500
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤M_emp",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_8b80671e",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+            "matchColumn": "EMPLOYEE",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "employee_count_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_listed1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 480,
+            "y": 500
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤M_listed",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_8b80671e",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+            "matchColumn": "LISTED",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "is_listed_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_indus1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 640,
+            "y": 500
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和潤M_indus",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_b9558d10",
+            "matchColumn": "INDUID",
+            "lookupMatchColumn": "INDUID",
+            "outputColumns": [
+              {
+                "lookupColumn": "INDUNM",
+                "outputAlias": "industry_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_ctype2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 160,
+            "y": 650
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁M_ctype",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_9dd0eca5",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+            "matchColumn": "CUTYPE",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "customer_type_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_emp2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 320,
+            "y": 650
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁M_emp",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_9dd0eca5",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+            "matchColumn": "EMPLOYEE",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "employee_count_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_listed2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 480,
+            "y": 650
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁M_listed",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_9dd0eca5",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+            "matchColumn": "LISTED",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "is_listed_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_indus2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 640,
+            "y": 650
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_和勁M_indus",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_3acd58e7",
+            "matchColumn": "INDUID",
+            "lookupMatchColumn": "INDUID",
+            "outputColumns": [
+              {
+                "lookupColumn": "INDUNM",
+                "outputAlias": "industry_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_ctype3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 160,
+            "y": 800
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_興業M_ctype",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_9dcaf414",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+            "matchColumn": "CUTYPE",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "customer_type_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_emp3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 320,
+            "y": 800
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_興業M_emp",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_9dcaf414",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+            "matchColumn": "EMPLOYEE",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "employee_count_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_listed3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 480,
+            "y": 800
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_興業M_listed",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_9dcaf414",
+            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+            "matchColumn": "LISTED",
+            "lookupMatchColumn": "MCODE",
+            "outputColumns": [
+              {
+                "lookupColumn": "MNAME1",
+                "outputAlias": "is_listed_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_m_indus3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 640,
+            "y": 800
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_興業M_indus",
+            "subtitle": "代碼對照表對照",
+            "lookupSource": "raw_afe6a874",
+            "matchColumn": "INDUID",
+            "lookupMatchColumn": "INDUID",
+            "outputColumns": [
+              {
+                "lookupColumn": "INDUNM",
+                "outputAlias": "industry_desc"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "m3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 960,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "merge",
+            "label": "MLMC合併2",
+            "subtitle": "FULL JOIN",
+            "joinType": "FULL",
+            "conditions": [
+              {
+                "leftColumn": "CUSTID",
+                "rightColumn": "CUSTID",
+                "operator": "="
+              }
+            ]
+          }
+        },
+        {
+          "id": "d2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1120,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "dedup",
+            "label": "MLMC去重",
+            "subtitle": "CUSTID",
+            "keyColumns": [
+              "CUSTID"
+            ],
+            "keepStrategy": "latest_timestamp",
+            "timestampColumn": "U_SYSDT"
+          }
+        },
+        {
+          "id": "tc1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1280,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "type_cast",
+            "label": "MLMC型別轉換",
+            "subtitle": "2 欄位",
+            "column": "CUSTNOWCAPTIAL",
+            "targetType": "DECIMAL",
+            "castRules": [
+              {
+                "column": "CUSTNOWCAPTIAL",
+                "sourceType": "VARCHAR",
+                "targetType": "DECIMAL"
+              },
+              {
+                "column": "CUSTCREATECAPTIAL",
+                "sourceType": "VARCHAR",
+                "targetType": "DECIMAL"
+              }
+            ]
+          }
+        },
+        {
+          "id": "df2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1440,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "MLMC轉換",
+            "subtitle": "4 組電話/傳真",
+            "expressions": [
+              {
+                "outputColumn": "office_phone",
+                "expression": "mergePhone(BUSINESSTTELCODE, BUSINESSTTEL)",
+                "outputType": "VARCHAR"
+              },
+              {
+                "outputColumn": "registered_phone",
+                "expression": "mergePhone(CUSTTELCODE, CUSTTEL)",
+                "outputType": "VARCHAR"
+              },
+              {
+                "outputColumn": "registered_fax",
+                "expression": "mergePhone(CUSTFAXCODE, CUSTFAX)",
+                "outputType": "VARCHAR"
+              },
+              {
+                "outputColumn": "business_fax",
+                "expression": "mergePhone(BUSINESSFAXCODE, BUSINESSFAX)",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "fm2",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1600,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "MLMC映射",
+            "subtitle": "37 組對應",
+            "dropUnmapped": true,
+            "mappings": [
+              {
+                "sourceColumn": "CUSTID",
+                "targetColumn": "source_customer_no",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUTYPE",
+                "targetColumn": "customer_type_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTNAME",
+                "targetColumn": "name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTMOBILE",
+                "targetColumn": "mobile_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "office_phone",
+                "targetColumn": "office_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "registered_phone",
+                "targetColumn": "registered_phone",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "registered_fax",
+                "targetColumn": "registered_fax",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "business_fax",
+                "targetColumn": "business_fax",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BUSINESSMOBILE",
+                "targetColumn": "business_mobile",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTZIPCODE",
+                "targetColumn": "registered_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTADDR",
+                "targetColumn": "registered_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BUSINESSZIPCODE",
+                "targetColumn": "company_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BUSINESSADDR",
+                "targetColumn": "company_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "BUSINESS",
+                "targetColumn": "business_item",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "INDUID",
+                "targetColumn": "industry_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTNOWCAPTIAL",
+                "targetColumn": "capital",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTCREATECAPTIAL",
+                "targetColumn": "established_capital",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "FAMOUNT",
+                "targetColumn": "credit_limit",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HFAMOUNT",
+                "targetColumn": "highest_transaction_amount",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "HCDATE",
+                "targetColumn": "highest_transaction_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "EMPLOYEE",
+                "targetColumn": "employee_count_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "LISTED",
+                "targetColumn": "is_listed_code",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ORGATYPE",
+                "targetColumn": "organization_type",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OWNER",
+                "targetColumn": "owner_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OWNERID",
+                "targetColumn": "owner_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OWNERBIRTH",
+                "targetColumn": "owner_birth",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OWNERZIPCODE",
+                "targetColumn": "owner_zip",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "OWNERADDR",
+                "targetColumn": "owner_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "GROUPOWNER",
+                "targetColumn": "group_owner",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PARENTCUSTID",
+                "targetColumn": "parent_customer_id",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "PARENTCUSTNAME",
+                "targetColumn": "parent_customer_name",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ISSUE_CLASS",
+                "targetColumn": "id_issue_type",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ISSUE_DT",
+                "targetColumn": "id_issue_date",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "ISSUE_ADD",
+                "targetColumn": "id_issue_address",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CUSTCREATEDATE",
+                "targetColumn": "source_created_at",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "U_SYSDT",
+                "targetColumn": "source_updated_at",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "customer_type_desc",
+                "targetColumn": "customer_type_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "employee_count_desc",
+                "targetColumn": "employee_count_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "is_listed_desc",
+                "targetColumn": "is_listed_desc",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "industry_desc",
+                "targetColumn": "industry_desc",
+                "defaultValue": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "df_mlmc_ctype_map",
+          "type": "pipelineNode",
+          "position": {
+            "x": 1760,
+            "y": 575
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "MLMC客戶類型轉換",
+            "subtitle": "code mapping → 01/02/04",
+            "expressions": [
+              {
+                "outputColumn": "customer_type_code",
+                "expression": "CASE WHEN customer_type_code = '1' THEN '01' WHEN customer_type_code = '2' THEN '02' WHEN customer_type_code = '3' THEN '04' ELSE customer_type_code END",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "m4",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2560,
+            "y": 350
+          },
+          "data": {
+            "nodeType": "merge",
+            "label": "最終合併",
+            "subtitle": "FULL OUTER JOIN",
+            "joinType": "FULL",
+            "conditions": [
+              {
+                "leftColumn": "source_customer_no",
+                "rightColumn": "source_customer_no",
+                "operator": "="
+              }
+            ]
+          }
+        },
+        {
+          "id": "cd1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2720,
+            "y": 350
+          },
+          "data": {
+            "nodeType": "conditional",
+            "label": "衝突解決",
+            "subtitle": "以較新者為準",
+            "rules": [
+              {
+                "targetColumn": "customer_type_code",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.customer_type_code"
+                  }
+                ],
+                "elseValue": "right.customer_type_code"
+              },
+              {
+                "targetColumn": "name",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.name"
+                  }
+                ],
+                "elseValue": "right.name"
+              },
+              {
+                "targetColumn": "mobile_phone",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.mobile_phone"
+                  }
+                ],
+                "elseValue": "right.mobile_phone"
+              },
+              {
+                "targetColumn": "office_phone",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.office_phone"
+                  }
+                ],
+                "elseValue": "right.office_phone"
+              },
+              {
+                "targetColumn": "company_zip",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.company_zip"
+                  }
+                ],
+                "elseValue": "right.company_zip"
+              },
+              {
+                "targetColumn": "company_address",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.company_address"
+                  }
+                ],
+                "elseValue": "right.company_address"
+              },
+              {
+                "targetColumn": "industry_code",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.industry_code"
+                  }
+                ],
+                "elseValue": "right.industry_code"
+              },
+              {
+                "targetColumn": "capital",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.capital"
+                  }
+                ],
+                "elseValue": "right.capital"
+              },
+              {
+                "targetColumn": "id_issue_type",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.id_issue_type"
+                  }
+                ],
+                "elseValue": "right.id_issue_type"
+              },
+              {
+                "targetColumn": "id_issue_date",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.id_issue_date"
+                  }
+                ],
+                "elseValue": "right.id_issue_date"
+              },
+              {
+                "targetColumn": "id_issue_address",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.id_issue_address"
+                  }
+                ],
+                "elseValue": "right.id_issue_address"
+              },
+              {
+                "targetColumn": "source_created_at",
+                "conditions": [
+                  {
+                    "when": "left.source_created_at <= right.source_created_at",
+                    "then": "left.source_created_at"
+                  }
+                ],
+                "elseValue": "right.source_created_at"
+              },
+              {
+                "targetColumn": "customer_type_desc",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.customer_type_desc"
+                  }
+                ],
+                "elseValue": "right.customer_type_desc"
+              },
+              {
+                "targetColumn": "industry_desc",
+                "conditions": [
+                  {
+                    "when": "left.source_updated_at >= right.source_updated_at",
+                    "then": "left.industry_desc"
+                  }
+                ],
+                "elseValue": "right.industry_desc"
+              }
+            ]
+          }
+        },
+        {
+          "id": "df_ctype_desc_std",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2880,
+            "y": 350
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "客戶類型描述標準化",
+            "subtitle": "統一 customer_type_desc",
+            "expressions": [
+              {
+                "outputColumn": "customer_type_desc",
+                "expression": "CASE WHEN customer_type_code = '01' THEN '個人' WHEN customer_type_code = '02' THEN '法人' WHEN customer_type_code = '04' THEN '外籍人士' WHEN customer_type_code = '05' THEN '虛擬車商編號' ELSE customer_type_desc END",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "df3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 3040,
+            "y": 350
+          },
+          "data": {
+            "nodeType": "derived_field",
+            "label": "data_source標記",
+            "subtitle": "data_source + UUID",
+            "expressions": [
+              {
+                "outputColumn": "data_source",
+                "expression": "CASE WHEN source_customer_no_left IS NOT NULL AND source_customer_no_right IS NOT NULL THEN 'ZZIP_BAMCUST_M+MLMCUSTOMER' WHEN source_customer_no_left IS NOT NULL THEN 'ZZIP_BAMCUST_M' ELSE 'MLMCUSTOMER' END",
+                "outputType": "VARCHAR"
+              },
+              {
+                "outputColumn": "customer_id",
+                "expression": "gen_random_uuid()",
+                "outputType": "VARCHAR"
+              }
+            ]
+          }
+        },
+        {
+          "id": "d3",
+          "type": "pipelineNode",
+          "position": {
+            "x": 3200,
+            "y": 350
+          },
+          "data": {
+            "nodeType": "dedup",
+            "label": "最終去重",
+            "subtitle": "source_customer_no",
+            "keyColumns": [
+              "source_customer_no"
+            ],
+            "keepStrategy": "latest_timestamp",
+            "timestampColumn": "source_updated_at"
+          }
+        },
+        {
+          "id": "tl1",
+          "type": "pipelineNode",
+          "position": {
+            "x": 3360,
+            "y": 350
+          },
+          "data": {
+            "nodeType": "target_load",
+            "label": "載入 customer_core",
+            "subtitle": "customer_core",
+            "targetTable": "customer_core",
+            "fullMode": false,
+            "fieldMappings": {
+              "customer_id": "customer_id",
+              "source_customer_no": "source_customer_no",
+              "customer_type_code": "customer_type_code",
+              "name": "name",
+              "english_name": "english_name",
+              "gender": "gender",
+              "date_of_birth": "date_of_birth",
+              "marital_status_code": "marital_status_code",
+              "education_code": "education_code",
+              "education_desc": "education_desc",
+              "spouse_name": "spouse_name",
+              "father_name": "father_name",
+              "mother_name": "mother_name",
+              "id_issue_type": "id_issue_type",
+              "id_issue_date": "id_issue_date",
+              "id_issue_address": "id_issue_address",
+              "driver_license": "driver_license",
+              "mobile_phone": "mobile_phone",
+              "home_phone": "home_phone",
+              "contact_phone": "contact_phone",
+              "office_phone": "office_phone",
+              "registered_phone": "registered_phone",
+              "registered_fax": "registered_fax",
+              "business_fax": "business_fax",
+              "business_mobile": "business_mobile",
+              "email": "email",
+              "line_account": "line_account",
+              "residential_zip": "residential_zip",
+              "residential_address": "residential_address",
+              "mailing_zip": "mailing_zip",
+              "mailing_address": "mailing_address",
+              "registered_zip": "registered_zip",
+              "registered_address": "registered_address",
+              "company_zip": "company_zip",
+              "company_address": "company_address",
+              "maturity_mailing_zip": "maturity_mailing_zip",
+              "maturity_mailing_address": "maturity_mailing_address",
+              "company_name": "company_name",
+              "role": "role",
+              "occupation_code": "occupation_code",
+              "occupation_desc": "occupation_desc",
+              "job_title_code": "job_title_code",
+              "job_title_desc": "job_title_desc",
+              "job_level_code": "job_level_code",
+              "industry_code": "industry_code",
+              "industry_desc": "industry_desc",
+              "work_years": "work_years",
+              "company_scale": "company_scale",
+              "monthly_income_code": "monthly_income_code",
+              "approved_income": "approved_income",
+              "income_source_code": "income_source_code",
+              "capital": "capital",
+              "credit_limit": "credit_limit",
+              "highest_transaction_amount": "highest_transaction_amount",
+              "highest_transaction_date": "highest_transaction_date",
+              "has_real_estate": "has_real_estate",
+              "debt_flag": "debt_flag",
+              "fine_flag": "fine_flag",
+              "address_anomaly_flag": "address_anomaly_flag",
+              "mainland_flag": "mainland_flag",
+              "owner_name": "owner_name",
+              "owner_id": "owner_id",
+              "owner_birth": "owner_birth",
+              "owner_zip": "owner_zip",
+              "owner_address": "owner_address",
+              "group_owner": "group_owner",
+              "established_capital": "established_capital",
+              "employee_count_code": "employee_count_code",
+              "employee_count_desc": "employee_count_desc",
+              "is_listed_code": "is_listed_code",
+              "is_listed_desc": "is_listed_desc",
+              "business_item": "business_item",
+              "organization_type": "organization_type",
+              "parent_customer_id": "parent_customer_id",
+              "parent_customer_name": "parent_customer_name",
+              "source_created_at": "source_created_at",
+              "source_updated_at": "source_updated_at",
+              "data_source": "data_source",
+              "marital_status_desc": "marital_status_desc",
+              "customer_type_desc": "customer_type_desc",
+              "income_source_desc": "income_source_desc",
+              "job_level_desc": "job_level_desc",
+              "monthly_income_desc": "monthly_income_desc"
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge-e1-df_zzip_ctype_pad1",
+          "source": "e1",
+          "target": "df_zzip_ctype_pad1"
+        },
+        {
+          "id": "edge-df_zzip_ctype_pad1-lk_edu1",
+          "source": "df_zzip_ctype_pad1",
+          "target": "lk_edu1"
+        },
+        {
+          "id": "edge-lk_edu1-lk_occ1",
+          "source": "lk_edu1",
+          "target": "lk_occ1"
+        },
+        {
+          "id": "edge-lk_occ1-lk_job1",
+          "source": "lk_occ1",
+          "target": "lk_job1"
+        },
+        {
+          "id": "edge-lk_job1-lk_marry1",
+          "source": "lk_job1",
+          "target": "lk_marry1"
+        },
+        {
+          "id": "edge-lk_marry1-lk_ctype1",
+          "source": "lk_marry1",
+          "target": "lk_ctype1"
+        },
+        {
+          "id": "edge-lk_ctype1-lk_incsrc1",
+          "source": "lk_ctype1",
+          "target": "lk_incsrc1"
+        },
+        {
+          "id": "edge-lk_incsrc1-lk_indus1",
+          "source": "lk_incsrc1",
+          "target": "lk_indus1"
+        },
+        {
+          "id": "edge-lk_indus1-lk_joblv1",
+          "source": "lk_indus1",
+          "target": "lk_joblv1"
+        },
+        {
+          "id": "edge-lk_joblv1-lk_income1",
+          "source": "lk_joblv1",
+          "target": "lk_income1"
+        },
+        {
+          "id": "edge-lk_income1-m1",
+          "source": "lk_income1",
+          "target": "m1",
+          "targetHandle": "left-input"
+        },
+        {
+          "id": "edge-e2-df_zzip_ctype_pad2",
+          "source": "e2",
+          "target": "df_zzip_ctype_pad2"
+        },
+        {
+          "id": "edge-df_zzip_ctype_pad2-lk_edu2",
+          "source": "df_zzip_ctype_pad2",
+          "target": "lk_edu2"
+        },
+        {
+          "id": "edge-lk_edu2-lk_occ2",
+          "source": "lk_edu2",
+          "target": "lk_occ2"
+        },
+        {
+          "id": "edge-lk_occ2-lk_job2",
+          "source": "lk_occ2",
+          "target": "lk_job2"
+        },
+        {
+          "id": "edge-lk_job2-lk_marry2",
+          "source": "lk_job2",
+          "target": "lk_marry2"
+        },
+        {
+          "id": "edge-lk_marry2-lk_ctype2",
+          "source": "lk_marry2",
+          "target": "lk_ctype2"
+        },
+        {
+          "id": "edge-lk_ctype2-lk_joblv2",
+          "source": "lk_ctype2",
+          "target": "lk_joblv2"
+        },
+        {
+          "id": "edge-lk_joblv2-lk_income2",
+          "source": "lk_joblv2",
+          "target": "lk_income2"
+        },
+        {
+          "id": "edge-lk_income2-m1",
+          "source": "lk_income2",
+          "target": "m1",
+          "targetHandle": "right-input"
+        },
+        {
+          "id": "edge-m1-d1",
+          "source": "m1",
+          "target": "d1"
+        },
+        {
+          "id": "edge-d1-df1",
+          "source": "d1",
+          "target": "df1"
+        },
+        {
+          "id": "edge-df1-tc_zzip",
+          "source": "df1",
+          "target": "tc_zzip"
+        },
+        {
+          "id": "edge-tc_zzip-fm1",
+          "source": "tc_zzip",
+          "target": "fm1"
+        },
+        {
+          "id": "edge-e3-lk_m_ctype1",
+          "source": "e3",
+          "target": "lk_m_ctype1"
+        },
+        {
+          "id": "edge-lk_m_ctype1-lk_m_emp1",
+          "source": "lk_m_ctype1",
+          "target": "lk_m_emp1"
+        },
+        {
+          "id": "edge-lk_m_emp1-lk_m_listed1",
+          "source": "lk_m_emp1",
+          "target": "lk_m_listed1"
+        },
+        {
+          "id": "edge-lk_m_listed1-lk_m_indus1",
+          "source": "lk_m_listed1",
+          "target": "lk_m_indus1"
+        },
+        {
+          "id": "edge-lk_m_indus1-m2",
+          "source": "lk_m_indus1",
+          "target": "m2",
+          "targetHandle": "left-input"
+        },
+        {
+          "id": "edge-e4-lk_m_ctype2",
+          "source": "e4",
+          "target": "lk_m_ctype2"
+        },
+        {
+          "id": "edge-lk_m_ctype2-lk_m_emp2",
+          "source": "lk_m_ctype2",
+          "target": "lk_m_emp2"
+        },
+        {
+          "id": "edge-lk_m_emp2-lk_m_listed2",
+          "source": "lk_m_emp2",
+          "target": "lk_m_listed2"
+        },
+        {
+          "id": "edge-lk_m_listed2-lk_m_indus2",
+          "source": "lk_m_listed2",
+          "target": "lk_m_indus2"
+        },
+        {
+          "id": "edge-lk_m_indus2-m2",
+          "source": "lk_m_indus2",
+          "target": "m2",
+          "targetHandle": "right-input"
+        },
+        {
+          "id": "edge-m2-m3",
+          "source": "m2",
+          "target": "m3",
+          "targetHandle": "left-input"
+        },
+        {
+          "id": "edge-e5-lk_m_ctype3",
+          "source": "e5",
+          "target": "lk_m_ctype3"
+        },
+        {
+          "id": "edge-lk_m_ctype3-lk_m_emp3",
+          "source": "lk_m_ctype3",
+          "target": "lk_m_emp3"
+        },
+        {
+          "id": "edge-lk_m_emp3-lk_m_listed3",
+          "source": "lk_m_emp3",
+          "target": "lk_m_listed3"
+        },
+        {
+          "id": "edge-lk_m_listed3-lk_m_indus3",
+          "source": "lk_m_listed3",
+          "target": "lk_m_indus3"
+        },
+        {
+          "id": "edge-lk_m_indus3-m3",
+          "source": "lk_m_indus3",
+          "target": "m3",
+          "targetHandle": "right-input"
+        },
+        {
+          "id": "edge-m3-d2",
+          "source": "m3",
+          "target": "d2"
+        },
+        {
+          "id": "edge-d2-tc1",
+          "source": "d2",
+          "target": "tc1"
+        },
+        {
+          "id": "edge-tc1-df2",
+          "source": "tc1",
+          "target": "df2"
+        },
+        {
+          "id": "edge-df2-fm2",
+          "source": "df2",
+          "target": "fm2"
+        },
+        {
+          "id": "edge-fm1-m4",
+          "source": "fm1",
+          "target": "m4",
+          "targetHandle": "left-input"
+        },
+        {
+          "id": "edge-fm2-df_mlmc_ctype_map",
+          "source": "fm2",
+          "target": "df_mlmc_ctype_map"
+        },
+        {
+          "id": "edge-df_mlmc_ctype_map-m4",
+          "source": "df_mlmc_ctype_map",
+          "target": "m4",
+          "targetHandle": "right-input"
+        },
+        {
+          "id": "edge-m4-cd1",
+          "source": "m4",
+          "target": "cd1"
+        },
+        {
+          "id": "edge-cd1-df_ctype_desc_std",
+          "source": "cd1",
+          "target": "df_ctype_desc_std"
+        },
+        {
+          "id": "edge-df_ctype_desc_std-df3",
+          "source": "df_ctype_desc_std",
+          "target": "df3"
+        },
+        {
+          "id": "edge-df3-d3",
+          "source": "df3",
+          "target": "d3"
+        },
+        {
+          "id": "edge-d3-tl1",
+          "source": "d3",
+          "target": "tl1"
+        }
+      ]
+    }
+  }
+]
