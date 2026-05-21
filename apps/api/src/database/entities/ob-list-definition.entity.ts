@@ -38,8 +38,8 @@ export class ObListDefinition {
   @Column({ name: 'created_by_prog', type: 'varchar', length: 20 })
   created_by_prog: string; // A_PRGID
 
-  @Column({ name: 'created_by', type: 'varchar', length: 20 })
-  created_by: string; // A_USERID
+  @Column({ name: 'created_by', type: 'varchar', length: 50 })
+  created_by: string; // A_USERID（length:50 對齊 users.id UUID 36 字元，與 ob-card-type / ob-levelcard-version 等 E07 新表一致；2026-05-21 hotfix）
 
   // E2E sqlite 相容：採 dateColumnType（postgres=timestamp / sqlite=datetime）
   // 依 memory feedback_typeorm_timestamp 規則；遷移到 ob_card_type 模組（F069~F072 Iter 2）
@@ -50,8 +50,8 @@ export class ObListDefinition {
   @Column({ name: 'updated_by_prog', type: 'varchar', length: 20 })
   updated_by_prog: string; // U_PRGID
 
-  @Column({ name: 'updated_by', type: 'varchar', length: 20 })
-  updated_by: string; // U_USERID
+  @Column({ name: 'updated_by', type: 'varchar', length: 50 })
+  updated_by: string; // U_USERID（length:50 對齊 users.id UUID 36 字元；2026-05-21 hotfix）
 
   @Column({ name: 'updated_at', type: dateColumnType })
   updated_at: Date; // U_SYSDT
