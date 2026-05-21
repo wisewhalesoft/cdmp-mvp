@@ -333,6 +333,16 @@ export class AssignmentListService {
         createdBy: r.created_by,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
+        // F048 v2.0：補 conditionPayload + legacyEntityFallback（2026-05-21 hotfix
+        // 對齊 spec §5 要求，前端 list-edit-draft-page 依此預填條件 builder）
+        conditionPayload: r.condition_payload ?? null,
+        legacyEntityFallback: r.condition_payload === null ? {
+          prodKind: r.prod_kind ?? null,
+          caseyear: r.caseyear ?? null,
+          specTp: r.spec_tp ?? null,
+          caseStatus: r.case_status ?? null,
+          settleSrc: r.settle_src ?? null,
+        } : null,
       })),
       stageCounts,
     };
