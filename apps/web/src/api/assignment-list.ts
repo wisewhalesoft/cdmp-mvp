@@ -208,3 +208,84 @@ export async function deleteList(listNo: string) {
   const response = await apiClient.delete(`/assignment/lists/${listNo}`);
   return response.data;
 }
+
+// ============================================================================
+// F050 v2.2 §6.2 / US-131 — Detail Snapshot API
+// ============================================================================
+
+/** LEGACY 名單 fallback（conditionPayload IS NULL 時非 null） */
+export interface LegacyEntityFallback {
+  prodKind: string | null;
+  caseyear: string | null;
+  specTp: string | null;
+  caseStatus: string | null;
+  settleSrc: string | null;
+}
+
+export interface SnapshotListSection {
+  listNo: string;
+  listNm: string;
+  stage: ListStage;
+  status: ListStatus;
+  projectWorkym: string | null;
+  cardType: string | null;
+  crEnabled: boolean;
+  listPeriodStart: string | null;
+  listPeriodEnd: string | null;
+  listInterval: string | null;
+  conditionPayload: ConditionPayload | null;
+  legacyEntityFallback: LegacyEntityFallback | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface SnapshotDeptRatio {
+  deptCode: string;
+  deptName: string | null;
+  ration: number;
+}
+
+export interface SnapshotPersonnelRatioMember {
+  emplid: string;
+  empNm: string | null;
+  ration: number;
+}
+
+export interface SnapshotPersonnelRatio {
+  deptCode: string;
+  deptName: string | null;
+  members: SnapshotPersonnelRatioMember[];
+}
+
+export interface SnapshotAuditTrailItem {
+  action: string;
+  operatorId: string;
+  operatorEmpNm: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  at: string;
+}
+
+export interface FullSnapshotResponse {
+  list: SnapshotListSection;
+  deptRatios: SnapshotDeptRatio[];
+  personnelRatios: SnapshotPersonnelRatio[];
+  auditTrail: SnapshotAuditTrailItem[];
+}
+
+/**
+ * F050 v2.2 §6.2：取得指定名單之完整快照（Detail Drawer 4-tab 資料來源）。
+ *
+ * - 唯讀端點：DirectorOrSectionChiefGuard 攔截 user role（403）
+ * - 處長轄區隔離：personnelRatios 僅含本轄區 deptCode
+ * - 歷史月份 / 月跑執行中均可呼叫（後端不攔截）
+ *
+ * 對應 React Drawer：apps/web/src/pages/assignment/_components/ListDetailDrawer.tsx
+ */
+export async function getFullSnapshot(listNo: string): Promise<FullSnapshotResponse> {
+  const response = await apiClient.get<FullSnapshotResponse>(
+    `/assignment/lists/${listNo}/full-snapshot`,
+  );
+  return response.data;
+}
