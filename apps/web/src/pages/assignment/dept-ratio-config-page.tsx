@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Undo2, Eye, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Eye, AlertTriangle, Check, GitBranch } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
-import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/e07/ConfirmModal';
 import { StageBadge, type Stage } from '@/components/e07/StageBadge';
 import { useToast } from '@/components/ui/toast';
@@ -27,11 +26,11 @@ import { writePendingToast } from './_utils/pending-toast';
  * 路由：/assignment/lists/:listNo/dept-ratio
  * RBAC：DirectorRoute（寫入）；section_chief 可進入但只能讀（透過 readOnly）
  *
- * 主要區塊：
+ * 主要區塊（由上至下）：
+ *   - 5-step stage breadcrumb
  *   - 處長唯讀 banner（businessRole='section_chief'）
  *   - ListSummaryCard（名單摘要 + 篩選條件 chips + CR 開關）
- *   - DeptRatioForm（部門比例編輯表）
- *   - 操作 bar：返回 / 退回草稿 / 儲存並推進至個別業務比例
+ *   - DeptRatioForm（部門比例編輯表 + Sum Banner + 操作 bar）
  *
  * 階段守衛：list.stage 必為 'dept_ratio'，否則顯示 stage-mismatch-warning
  */
@@ -59,6 +58,64 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+type StepState = 'done' | 'current' | 'todo';
+
+function StageStep({ state, idx, label }: { state: StepState; idx: number; label: string }) {
+  const dotClass = {
+    done: 'bg-green-100 text-green-700',
+    current: 'bg-blue-100 text-blue-700 ring-2 ring-blue-300',
+    todo: 'bg-gray-100 text-gray-400',
+  }[state];
+  const labelClass = {
+    done: 'text-gray-500',
+    current: 'font-semibold text-primary',
+    todo: 'text-gray-400',
+  }[state];
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <span
+        className={`inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[10px] font-semibold ${dotClass}`}
+        data-testid={`stage-step-${idx}-${state}`}
+      >
+        {state === 'done' ? <Check className="w-3 h-3" /> : idx}
+      </span>
+      <span className={labelClass}>{label}</span>
+    </span>
+  );
+}
+
+function StageBreadcrumb({ currentStage }: { currentStage: string }) {
+  // 5 階段順序（與 prototype 29a 對齊）
+  const stages = [
+    { key: 'draft', label: '草稿' },
+    { key: 'dept_ratio', label: '部門比例' },
+    { key: 'personnel_ratio', label: '個別業務比例' },
+    { key: 'approval', label: '簽核' },
+    { key: 'ready', label: '準備完成' },
+  ];
+  const currentIdx = stages.findIndex((s) => s.key === currentStage);
+  return (
+    <div
+      className="bg-white border border-gray-200 rounded-lg px-6 py-3 flex items-center gap-3 flex-wrap"
+      data-testid="stage-breadcrumb"
+    >
+      <span className="text-xs text-gray-400 mr-1">階段路徑：</span>
+      {stages.map((s, i) => {
+        const state: StepState = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'todo';
+        return (
+          <span key={s.key} className="inline-flex items-center gap-2">
+            <StageStep state={state} idx={i + 1} label={s.label} />
+            {i < stages.length - 1 && <span className="text-gray-300 text-sm">›</span>}
+          </span>
+        );
+      })}
+      <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-gray-400">
+        <GitBranch className="w-3 h-3" />F079 / F080 / F081
+      </span>
+    </div>
+  );
 }
 
 export function DeptRatioConfigPage() {
@@ -114,7 +171,6 @@ export function DeptRatioConfigPage() {
     setAdvancing(true);
     try {
       await advanceToPersonnelRatio(listNo);
-      // F050 v2.2 §7 BR-13 Producer：推進成功 → 寫 pendingToast 後跳回 M01 主頁
       writePendingToast({
         type: 'success',
         msg: `名單 ${listNo} 部門比例已儲存`,
@@ -135,7 +191,6 @@ export function DeptRatioConfigPage() {
     setRollbacking(true);
     try {
       await rollbackToDraft(listNo);
-      // F050 v2.2 §7 BR-13 Producer：退回成功 → 寫 pendingToast 後跳回 M01 主頁
       writePendingToast({
         type: 'info',
         msg: `名單 ${listNo} 已退回草稿`,
@@ -169,7 +224,7 @@ export function DeptRatioConfigPage() {
     >
       <main className="flex-1 p-6 space-y-4">
         {loading && (
-          <div className="text-center text-gray-400 py-12" data-testid="dept-ratio-loading">
+          <div className="text-center text-gray-400 py-12" data-testid="dept-ratio-page-loading">
             載入中...
           </div>
         )}
@@ -188,6 +243,8 @@ export function DeptRatioConfigPage() {
 
         {!loading && list && (
           <>
+            <StageBreadcrumb currentStage={list.stage} />
+
             {isSectionChief && (
               <div
                 data-testid="director-readonly-banner"
@@ -235,45 +292,12 @@ export function DeptRatioConfigPage() {
 
             <DeptRatioForm
               listNo={list.listNo}
+              totalEstimate={null}
               readOnly={!canWrite || !!stageMismatch}
+              onRequestAdvance={canWrite && !stageMismatch ? () => setShowAdvance(true) : undefined}
+              onRequestRollback={canWrite && !stageMismatch ? () => setShowRollback(true) : undefined}
+              onCancel={() => navigate('/assignment/list-definitions')}
             />
-
-            {canWrite && !stageMismatch && (
-              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate('/assignment/list-definitions')}
-                  className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  返回名單列表
-                </button>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="warning"
-                    data-testid="btn-rollback-draft"
-                    onClick={() => setShowRollback(true)}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Undo2 className="w-4 h-4" />
-                      退回草稿
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    data-testid="btn-advance-personnel-ratio"
-                    onClick={() => setShowAdvance(true)}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <ArrowRight className="w-4 h-4" />
-                      儲存並推進至個別業務比例
-                    </span>
-                  </Button>
-                </div>
-              </div>
-            )}
           </>
         )}
       </main>

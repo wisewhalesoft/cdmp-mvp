@@ -59,7 +59,7 @@ function getDeptResp(
     listNm: '測試名單',
     projectWorkym: '202605',
     stage: 'dept_ratio',
-    deptRatios: deptRatios.map((d) => ({ ...d, isActive: true })),
+    deptRatios: deptRatios.map((d) => ({ ...d, isActive: true, directorName: null })),
     total: deptRatios.reduce((s, d) => s + d.ration, 0),
     isReadOnly: false,
   };

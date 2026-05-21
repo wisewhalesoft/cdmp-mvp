@@ -170,17 +170,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
   "projectWorkym": "202605",
   "stage": "dept_ratio",
   "deptRatios": [
-    { "obdeptId": "XTC0", "obdeptNm": "業務一部", "ration": 30.0, "isActive": true },
-    { "obdeptId": "XTD0", "obdeptNm": "業務二部", "ration": 25.0, "isActive": true },
-    { "obdeptId": "XTE0", "obdeptNm": "業務三部", "ration": 0.0,  "isActive": true },
-    { "obdeptId": "XTF0", "obdeptNm": "業務四部（已下線）", "ration": 15.0, "isActive": false }
+    { "obdeptId": "XTC0", "obdeptNm": "業務一部", "ration": 30.0, "isActive": true, "directorName": "李處長" },
+    { "obdeptId": "XTD0", "obdeptNm": "業務二部", "ration": 25.0, "isActive": true, "directorName": "王處長" },
+    { "obdeptId": "XTE0", "obdeptNm": "業務三部", "ration": 0.0,  "isActive": true, "directorName": null },
+    { "obdeptId": "XTF0", "obdeptNm": "業務四部（已下線）", "ration": 15.0, "isActive": false, "directorName": null }
   ],
   "total": 70.0,
   "isReadOnly": false
 }
 ```
 
-> `isActive = false` 表示該部門已不在 `ob_emphire` 在職清單中。`isReadOnly = true` 表示該名單階段已非 `dept_ratio`（推進後 / Rollback 後唯讀檢視）。
+> - `isActive = false` 表示該部門已不在 `ob_emphire` 在職清單中。`isReadOnly = true` 表示該名單階段已非 `dept_ratio`（推進後 / Rollback 後唯讀檢視）。
+> - `directorName` 為該部門目前處長姓名（見 BR-13 定義），無對應人員時為 `null`。
 
 ### 5.2 PUT /api/v1/assignment/ratios/dept/{listNo}
 
@@ -248,6 +249,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-11 | **不可在月跑進行中操作**：`assignment_run.status IN ('pending', 'running')` 時禁止寫入；GET 不受影響。**`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現（v1.1 / 決議 #6）**：F079 PUT service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；月跑結束後（`status = 'completed'` / `'failed'`）即可重新操作 |
 | BR-12 | **`obdeptnm` 由 request 攜帶**：寫入時 request 帶入之 `obdeptnm` 寫入 `ob_dept_pct.obdeptnm`；GET 時自 `ob_emphire` 即時填入 `dept_name`（避免改名後 UI 顯示舊值） |
 | BR-13 | **Feature Flag fallback（v1.1 / 決議 #2）**：F079 端點受 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 **503 + `FEATURE_NOT_ENABLED`**（沿用 F050 v2.0 §13.2 統一行為） |
+| BR-14 | **處長欄位來源（v1.3 / 2026-05-21）**：GET response 之 `directorName` 由 `ob_emphire` 推導，SQL 規格：`SELECT TRIM(emp_nm) FROM ob_emphire WHERE TRIM(dept_code)=? AND resign_date IS NULL AND TRIM(jfun_nm)='處長' ORDER BY hire_date ASC LIMIT 1`。同部門有多位處長時取最早入職者；查無對應人員時回傳 `null`。不過濾 `noDeputy` 旗標（v1.3 PO 決議：MVP 不引入代理機制，部長/Admin 在 dept_ratio 與 personnel_ratio 階段直接可寫，不需處長代理） |
 
 ## 7. UI/UX 需求
 

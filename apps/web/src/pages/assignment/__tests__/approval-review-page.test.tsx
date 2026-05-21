@@ -107,8 +107,8 @@ describe('ApprovalReviewPage (29c)', () => {
       projectWorkym: '202605',
       stage: 'approval',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 50, isActive: true },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 50, isActive: true },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 50, isActive: true, directorName: '李處長' },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 50, isActive: true, directorName: '王處長' },
       ],
       total: 100,
       isReadOnly: true,

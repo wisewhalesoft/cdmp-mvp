@@ -106,8 +106,8 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
       projectWorkym: '202605',
       stage: 'ready',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true, directorName: '李處長' },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true, directorName: null },
       ],
       total: 100,
       isReadOnly: true,

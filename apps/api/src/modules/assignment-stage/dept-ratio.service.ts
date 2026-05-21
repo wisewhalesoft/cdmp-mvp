@@ -56,7 +56,13 @@ export class DeptRatioService {
     listNm: string;
     projectWorkym: string;
     stage: string;
-    deptRatios: Array<{ obdeptId: string; obdeptNm: string; ration: number; isActive: boolean }>;
+    deptRatios: Array<{
+      obdeptId: string;
+      obdeptNm: string;
+      ration: number;
+      isActive: boolean;
+      directorName: string | null;
+    }>;
     total: number;
     isReadOnly: boolean;
   }> {
@@ -78,6 +84,26 @@ export class DeptRatioService {
       if (code) activeMap.set(code, (row.dept_name ?? '').trim() || code);
     }
 
+    // 各部門處長：jfun_nm='處長' 且在職、同部門取最早入職者（BR-14）
+    // 排序：dept_code → hire_date IS NULL 排後 → hire_date ASC（跨 PG/SQLite 相容）
+    const directorRows = await this.emphireRepo
+      .createQueryBuilder('e')
+      .select('TRIM(e.dept_code)', 'dept_code')
+      .addSelect('TRIM(e.emp_nm)', 'emp_nm')
+      .where('e.resign_date IS NULL')
+      .andWhere(`TRIM(e.jfun_nm) = '處長'`)
+      .orderBy('TRIM(e.dept_code)', 'ASC')
+      .addOrderBy('CASE WHEN e.hire_date IS NULL THEN 1 ELSE 0 END', 'ASC')
+      .addOrderBy('e.hire_date', 'ASC')
+      .getRawMany<{ dept_code: string; emp_nm: string }>();
+    const directorMap = new Map<string, string>();
+    for (const row of directorRows) {
+      const code = row.dept_code;
+      if (code && !directorMap.has(code)) {
+        directorMap.set(code, row.emp_nm || '');
+      }
+    }
+
     // 既有 RATION
     const existing = await this.deptPctRepo.find({
       where: { project_workym: list.project_workym ?? '', list_no: listNo },
@@ -97,6 +123,7 @@ export class DeptRatioService {
           obdeptNm: existingRow?.obdeptnm?.trim() ?? activeMap.get(code) ?? code,
           ration: existingRow ? Number(existingRow.ration) : 0,
           isActive,
+          directorName: directorMap.get(code) ?? null,
         };
       });
 

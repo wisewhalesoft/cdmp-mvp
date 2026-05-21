@@ -40,9 +40,9 @@ const F079_GET_FIXTURE = {
   projectWorkym: '202605',
   stage: 'dept_ratio',
   deptRatios: [
-    { obdeptId: 'XTC0', obdeptNm: '業務一部', ration: 30.0, isActive: true },
-    { obdeptId: 'XTD0', obdeptNm: '業務二部', ration: 25.0, isActive: true },
-    { obdeptId: 'XTF0', obdeptNm: '業務四部（已下線）', ration: 15.0, isActive: false },
+    { obdeptId: 'XTC0', obdeptNm: '業務一部', ration: 30.0, isActive: true, directorName: '李處長' },
+    { obdeptId: 'XTD0', obdeptNm: '業務二部', ration: 25.0, isActive: true, directorName: null },
+    { obdeptId: 'XTF0', obdeptNm: '業務四部（已下線）', ration: 15.0, isActive: false, directorName: null },
   ],
   total: 70.0,
   isReadOnly: false,

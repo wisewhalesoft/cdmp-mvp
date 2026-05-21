@@ -110,8 +110,8 @@ describe('DeptRatioConfigPage (29a)', () => {
       projectWorkym: '202605',
       stage: 'dept_ratio',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true, directorName: '李處長' },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true, directorName: null },
       ],
       total: 100,
       isReadOnly: false,

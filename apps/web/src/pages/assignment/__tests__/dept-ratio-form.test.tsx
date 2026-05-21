@@ -16,7 +16,7 @@ const mockedSet = vi.mocked(stageApi.setDeptRatios);
 function buildGetResponse(
   deptRatios: Array<{ obdeptId: string; obdeptNm: string; ration: number; isActive?: boolean }>,
 ): stageApi.GetDeptRatiosResponse {
-  const items = deptRatios.map((d) => ({ isActive: true, ...d }));
+  const items = deptRatios.map((d) => ({ isActive: true, directorName: null, ...d }));
   return {
     listNo: 'OB202605001',
     listNm: '測試名單',
@@ -91,7 +91,7 @@ describe('DeptRatioForm (M03a / F079)', () => {
     expect(screen.queryByRole('button', { name: /新增部門/ })).not.toBeInTheDocument();
   });
 
-  it('加總 = 100 顯示 valid indicator', async () => {
+  it('加總 = 100 顯示獨立 Sum Banner valid 狀態', async () => {
     mockedGet.mockResolvedValue(
       buildGetResponse([
         { obdeptId: 'D001', obdeptNm: '業務一部', ration: 60 },
@@ -100,7 +100,7 @@ describe('DeptRatioForm (M03a / F079)', () => {
     );
     renderForm();
     await waitFor(() =>
-      expect(screen.getByTestId('ratio-sum-indicator').dataset.valid).toBe('true'),
+      expect(screen.getByTestId('dept-ratio-sum-banner').dataset.valid).toBe('true'),
     );
   });
 
@@ -112,7 +112,7 @@ describe('DeptRatioForm (M03a / F079)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
     );
-    const btn = screen.getByRole('button', { name: /儲存部門比例/ });
+    const btn = screen.getByTestId('btn-save-dept-ratio');
     expect(btn).toBeDisabled();
     fireEvent.click(btn);
     expect(mockedSet).not.toHaveBeenCalled();
@@ -136,24 +136,60 @@ describe('DeptRatioForm (M03a / F079)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('button', { name: /儲存部門比例/ }));
+    fireEvent.click(screen.getByTestId('btn-save-dept-ratio'));
     await waitFor(() => expect(mockedSet).toHaveBeenCalledTimes(1));
     expect(mockedSet.mock.calls[0][0]).toBe('OB202605001');
     const sentBody = mockedSet.mock.calls[0][1] as unknown as {
       deptRatios: Array<Record<string, unknown>>;
     };
     expect(sentBody.deptRatios).toHaveLength(2);
-    // PUT body 不應夾帶 isActive
+    // PUT body 不應夾帶 isActive / directorName
     expect(sentBody.deptRatios[0]).not.toHaveProperty('isActive');
+    expect(sentBody.deptRatios[0]).not.toHaveProperty('directorName');
     expect(sentBody.deptRatios[0]).toEqual({ obdeptId: 'D001', obdeptNm: '業務一部', ration: 60 });
   });
 
-  it('後端回空陣列時顯示空狀態（不引導使用者手動新增）', async () => {
+  it('後端回空陣列時顯示空狀態（save/advance 不渲染，但 cancel/rollback 仍可顯示）', async () => {
     mockedGet.mockResolvedValue(buildGetResponse([]));
     renderForm();
     await waitFor(() =>
       expect(screen.getByTestId('dept-ratio-empty')).toBeInTheDocument(),
     );
-    expect(screen.queryByRole('button', { name: /儲存部門比例/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('btn-save-dept-ratio')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('btn-advance-personnel-ratio')).not.toBeInTheDocument();
+  });
+
+  it('directorName 有值時顯示處長，無則顯示「—」', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([
+        { obdeptId: 'XVE1', obdeptNm: '北區電銷1', ration: 50, directorName: '盧淑娟' } as any,
+        { obdeptId: 'AI000', obdeptNm: '企劃部', ration: 50, directorName: null } as any,
+      ]),
+    );
+    renderForm();
+    await waitFor(() =>
+      expect(screen.getByTestId('dept-director-XVE1')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('dept-director-XVE1')).toHaveTextContent('盧淑娟');
+    expect(screen.getByTestId('dept-director-none-AI000')).toBeInTheDocument();
+  });
+
+  it('totalEstimate 給定時顯示預估案件數 = totalEstimate × ration / 100', async () => {
+    mockedGet.mockResolvedValue(
+      buildGetResponse([
+        { obdeptId: 'D001', obdeptNm: '業務一部', ration: 30 },
+        { obdeptId: 'D002', obdeptNm: '業務二部', ration: 70 },
+      ]),
+    );
+    render(
+      <ToastProvider>
+        <DeptRatioForm listNo="OB202605001" totalEstimate={1200} />
+      </ToastProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('dept-case-count-D001')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('dept-case-count-D001')).toHaveTextContent('360');
+    expect(screen.getByTestId('dept-case-count-D002')).toHaveTextContent('840');
   });
 });

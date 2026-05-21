@@ -26,12 +26,14 @@ import { apiClient } from './client';
 /**
  * GET response 中的部門列。
  * `isActive = false` 表示該部門已不在 ob_emphire 在職清單中（spec F079 §5.1）。
+ * `directorName` 為該部門目前處長姓名（spec F079 BR-14；無對應則 null）。
  */
 export interface DeptRatioItem {
   obdeptId: string;
   obdeptNm: string;
   ration: number;
   isActive: boolean;
+  directorName: string | null;
 }
 
 /**
