@@ -1,9 +1,9 @@
 ---
 type: test-design-index
-version: "2.14"
+version: "2.15"
 status: draft
-last_updated: 2026-05-20
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F050, F051, F053, F054, F055, F056, F068, F073, F074, F075, F076]
+last_updated: 2026-05-21
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089]
 ---
 
 # CDMP MVP — 測試設計索引
@@ -11,6 +11,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
 > **測試文件總數**：67 份（4 策略文件 + 56 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
 > **總測試場景數**：1169 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 63** + **E07 M06 篩選欄位管理 F075 共 53** + **E07 M08 Whitelist-Driven F050/F051/F076/F068-deprecated 共 116** + **M01 整合測試 21** + **M01-MIG Migration 測試 26**；另 F039-strategy 4 個策略場景另計）
+> **M01 v2.0~v2.3 Kanban 重構 + Detail Snapshot + Signal（2026-05-21）**：新增 9 個 test spec 檔（F048/F049/F052/F061 v1.4/F077/F081/F085/F089；F050 升版 v2.2）。新增場景合計 **103 個**：F050 v2.2 +19（SS 群 12 + SIG 群 7）、F048 v2.0 新建 15（K 群 8 + 搜尋 2 + Drawer 3 + Banner 2）、F049 v1.1 新建 5（CTA-001~005）、F052 v2.1 新建 3（TXT-001~003）、F077 v1.3 新建 23（矩陣 15 + 橫切 6 + Integration 2）、F081 v1.3 新建 6（Integration 4 + Component 2）、F085 v1.3 新建 6（Integration 4 + Component 2）、F089 v1.3 新建 7（Integration 4 + Component 3）、F061 v1.4 新建 3（CTA-001~003）。Deprecated 標記：F048 v1.0 表格列 AC-1 + 頁籤 AC-5；F052 「停」縮寫按鈕斷言。
+>
 > **F050 v2.1.1 補強（2026-05-20）**：F050 新增 45 個場景（TS-F050-A01~K01c）：US-126 card-type dropdown 建立頁（A/D/E/H 群組）、US-127 card-type dropdown 編輯頁（I 群組）、US-128 prodBest 欄位移除（B/C/F 群組）、US-129 best_case Y/N options seed（A/G 群組）、E2E 整合（J 群組）、Regression Guard fs+regex（K 群組）。F076 v1.6 新增 3 個場景（TS-F076-009~011）：best_case Y/N seed 正確性、N 標籤覆寫驗證（UPSERT DO UPDATE）、冪等。F075 v1.6 新增 3 個場景（TS-F075-051~053）：M-A1 whitelist seed 驗證、冪等、API 整合。共 +50 個場景。
 > **E07 M08 Whitelist-Driven 新增（2026-05-20）**：新增 F050 v2.1（30 場景）、F051 v2.1（19 場景）、F076 v1.5（8 場景）、F068-deprecated（9 場景）測試設計，共 66 個場景。新增 M01-whitelist-driven-integration-test.md（21 場景，含 OQ-TEST-001 caseyear wildcard 3 個 + OQ-TEST-002 _backfill_empty skip 2 個）及 M01-migration-test.md（26 場景，M1~M5）。M06-regression-guards.md 更新 v2.0（+3 個 F068 廢棄 guard）。F075 +2 個 v1.5 配套場景（TS-F075-049/050）。GAP 47/47 + §18.10 10/10 + K1~K5 100% 覆蓋。
 > **E07 M06 篩選欄位管理新增（2026-05-18）**：新增 F075（POOLDATA 篩選欄位白名單管理 v1.4）測試設計，共 48 個場景。涵蓋 `GET /api/v1/pooldata-fields/available-columns` 端點（AC-10~AC-15）、`getAvailableColumns()` service 單元測試（4 場景）、`_inferSuggestedFieldType()` pure function 逐型別驗證（14 場景）、SQLite E2E 權限矩陣 / Feature Flag / 路由排序（8 場景）、PostgreSQL Test Container 過濾邏輯（2 場景）、前端 dropdown / hint 狀態機 / toast（16 場景）、跨模組整合（2 場景）、命名漂移 regression guard（2 場景）。環境策略：方案 C 分層（Guard/路由 → SQLite；過濾邏輯 → `pooldata-available-columns.integration-spec.ts`）。新增 M06 regression guard 文件（`regression/M06-regression-guards.md`）。
@@ -40,7 +42,10 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
   - **E05 ETL Pipeline 管理**：F027、F028、F029、F030、F031、F032、F033、F034、F035、F036、F037
   - **E04+E05 系統啟動修復**：F038（孤兒任務回收，跨 E04/E05）
   - **E06 Customer 360**：F046（客戶搜尋與清單）、F047（單一客戶詳情）
+  - **E07 客戶名單分派（M01 名單定義）**：F048（查看本月名單清單 Kanban v2.0）、F049（Stage 0 每日估算 v1.1）、F050（新增名單定義 v2.2）、F051（編輯名單定義 v2.1）、F052（停用名單定義 v2.1）、F061（月跑計分執行 v1.4）、F077（月份切換與五階段總覽 v1.3）、F081（Rollback 至草稿 v1.3）、F085（Rollback 至部門比例 v1.3）、F089（Rollback 至簽核 v1.3）
   - **E07 客戶名單分派（M02 計分設定）**：F053（查看計分維度）、F054（編輯計分維度與分數）、F055（編輯 CARD_LEVEL 門檻）、F056（編輯 TIER_LEVEL 對應表）
+  - **E07 客戶名單分派（M06 篩選欄位管理）**：F075（POOLDATA 篩選欄位白名單管理 v1.6）、F076（類別型欄位可選值管理 v1.6）
+  - **E07 客戶名單分派（M07 角色整合）**：F073/F074（E02 角色整合）
 - 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程；新增 F026 raw data 預覽效能）
 - 65 個錯誤碼的驗證覆蓋（新增 C360_CUSTOMER_NOT_FOUND、C360_SEARCH_MIN_LENGTH for E06；新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
 

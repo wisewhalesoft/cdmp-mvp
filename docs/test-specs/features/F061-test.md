@@ -4,8 +4,13 @@ feature_id: F061
 feature_name: 月跑計分執行（AssignmentRunPipeline）
 priority: P0-MVP
 related_spec: /docs/specs/features/F061-assignment-run-pipeline.md
-last_updated: 2026-05-18
-spec_version: "1.3"
+last_updated: 2026-05-21
+spec_version: "1.4"
+covers_new_in_v1_4:
+  - US-132
+  - AC-Banner-Entry
+  - AC-Banner-1
+  - AC-Banner-2
 ---
 
 # F061: 月跑計分執行 — 測試設計
@@ -124,6 +129,62 @@ spec_version: "1.3"
 | TS-F061-INT / PRE（Unit） | 高 | vi.fn() mock；無外部依賴 |
 | TS-F061-013（Integration PG） | 中 | 需 Docker PostgreSQL；connectFailed 條件跳過 |
 | TS-F061-E2E（Composite） | 高（框架），中（body 待實作） | Supertest + SQLite；fn_calc_tier_level 以簡化版替代 |
+| TS-F061-CTA-001~003（v1.4 CTA Banner） | 高 | RTL + MSW；純前端渲染邏輯 |
+
+---
+
+## v1.4 補強：Ready 欄頂 CTA Banner（US-132 / GAP-G3）
+
+> **spec 版本**：F061 v1.4（2026-05-21）
+> **新增背景**：v1.4 將月跑執行入口從 F048 Toolbar 移至 Kanban 主頁 Ready 欄頂 CTA Banner（US-132 GAP-G3）。本節新增 3 個前端 Component 場景，覆蓋 CTA Banner 渲染條件與月跑鎖中 disabled 行為。
+> **cross-reference**：CTA Banner secondary「試算」按鈕場景見 F049-test.md TS-F049-CTA-001~005；本節僅覆蓋主按鈕（月跑觸發）行為。
+
+### TS-F061-CTA-001：stageCounts.ready ≥1 且非歷史月份、非月跑鎖 → CTA Banner 渲染，主按鈕可點擊
+
+- **關聯需求**：F061 v1.4 §9 AC-Banner-Entry / US-132 AC-1
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：
+  - MSW stub `GET /api/v1/assignment/lists?ym=202605` → `stageCounts: { ..., ready: 3 }`
+  - 非歷史月份（`isHistorical: false`）；無月跑鎖（`assignment_run.status='idle'` 或無 running 紀錄）
+- **步驟**：
+  1. render `<ListKanbanPage />`（含 Ready 欄頂 CTA Banner 元件）
+  2. 等待渲染完成
+  3. 驗證 CTA Banner 主按鈕
+- **預期結果**：
+  - Ready 欄頂 CTA Banner 存在（`data-testid="ready-cta-banner"` 或對應 selector）
+  - 主按鈕（觸發月跑，如「執行月跑」）存在且 enabled（`not.toBeDisabled()`）
+  - 主按鈕點擊後觸發月跑 API 請求（MSW 確認收到 `POST /api/v1/assignment/runs/run`）
+
+---
+
+### TS-F061-CTA-002：stageCounts.ready = 0 → CTA Banner DOM 完全不存在（非 display:none）
+
+- **關聯需求**：F061 v1.4 §9 AC-Banner-2 / US-132 AC-2
+- **測試類型**：Negative / Component（RTL）
+- **前置條件**：MSW stub → `stageCounts: { ..., ready: 0 }`；`lists` 無 `stage='ready'` 名單
+- **步驟**：
+  1. render `<ListKanbanPage />`
+  2. 驗證 Ready 欄頂
+- **預期結果**：
+  - CTA Banner DOM **完全不存在**（`document.querySelector('[data-testid="ready-cta-banner"]') === null`）
+  - 不可僅為 `display: none`（DOM 不存在才符合規範）
+
+---
+
+### TS-F061-CTA-003：月跑執行中 → CTA Banner 改 disabled 樣式；主按鈕 disabled
+
+- **關聯需求**：F061 v1.4 §9（月跑鎖中 CTA Banner disabled）/ F048 v2.0 AC-4 / F077 v1.3 BR-7 C-2
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：
+  - MSW stub `stageCounts.ready = 2`（Banner 應渲染）
+  - MSW stub assignment_run → `{ status: 'running' }`（月跑執行中）
+- **步驟**：
+  1. render `<ListKanbanPage />` 呈現月跑執行中狀態
+  2. 驗證 CTA Banner 狀態
+- **預期結果**：
+  - CTA Banner DOM **存在**（月跑鎖不移除 Banner，改 disabled 樣式）
+  - 主按鈕 disabled（`toBeDisabled()`）
+  - Banner 有琥珀色 / disabled 視覺指示（有對應 CSS class 或 aria-disabled）
 
 ---
 

@@ -1,10 +1,10 @@
 ---
 type: test-design-feature
 feature_id: F050
-feature_name: 新增名單定義（whitelist-driven v2.1.1）
+feature_name: 新增名單定義（whitelist-driven v2.2）
 priority: P0-MVP
 related_spec: /docs/specs/features/F050-create-list-definition.md
-spec_version: "2.1.1"
+spec_version: "2.2"
 covers:
   - F050
   - US-106
@@ -15,8 +15,10 @@ covers:
   - US-127
   - US-128
   - US-129
+  - US-131
+  - US-133
 date: 2026-05-20
-last_updated: 2026-05-20
+last_updated: 2026-05-21
 ---
 
 # F050：新增名單定義（whitelist-driven v2.1.1）— 測試設計
@@ -1269,3 +1271,324 @@ last_updated: 2026-05-20
 | **修改** | `apps/web/src/pages/assignment/__tests__/list-create-draft-page.test.tsx` | H 群組（追加，8 場景） |
 | **修改** | `apps/web/src/pages/assignment/__tests__/list-edit-draft-page.test.tsx` | I 群組（追加，7 場景） |
 | **新建** | `apps/api/test/f050-v211-e2e.spec.ts` | J 群組（4 場景） |
+
+---
+
+## 十五、v2.2 補強測試設計（§6.2 Detail Snapshot API / §7 BR-13 sessionStorage Signal）
+
+> **spec 版本**：F050 v2.2（2026-05-21）
+> **新增 US**：US-131（Detail Drawer）、US-133（pendingToast Signal Protocol）
+> **關鍵 memory 引用**：[[feedback_mock_real_system_contract]]（stage ENUM 用 PG 小寫 snake_case；role guard 用真實 decorator pattern）；[[feedback_e07_b2_rbac_replace_pattern]]（DirectorOrSectionChiefGuard 為 class 級，無 @RequireDirector）
+
+---
+
+### SS 群組：Detail Snapshot API — GET /assignment/list-definitions/:listNo/full-snapshot
+
+> **測試類型**：Integration（Supertest + SQLite in-memory）
+> **測試檔案（新建）**：`apps/api/test/f050-v22-snapshot.e2e.spec.ts`
+> **Fixture 規範**：
+> - `ob_list_definition` seed 含 5 個不同 stage 名單（draft / dept_ratio / personnel_ratio / approval / ready），PG ENUM 值用**小寫 snake_case**（`'draft'`、`'dept_ratio'`、`'personnel_ratio'`、`'approval'`、`'ready'`）
+> - `ob_dept_pct` seed：dept_ratio / personnel_ratio / approval / ready 名單各自 seed 部門比例
+> - `ob_empl_set` seed：personnel_ratio / approval / ready 名單 seed 個別比例（含 2 個 deptCode：`'XTA0'` / `'XTB0'`）
+> - `assignment_audit_log` seed：各名單含對應操作歷程（`action` 值用大寫：`'CREATE'`、`'ADVANCE_STAGE'`、`'APPROVE'`）
+> - 處長帳號（section_chief）的 `dept_code = 'XTA0'`
+
+---
+
+#### TS-F050-SS-001：draft 名單快照 — deptRatios/personnelRatios 皆為空陣列，auditTrail 含 CREATE
+
+- **關聯需求**：F050 v2.2 §6.2 / US-131 AC-3（stage-aware null state：draft）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - DB 有 `list_no='OB202605001'`、`stage='draft'`、`status='active'`
+  - `assignment_audit_log` 含 `list_no='OB202605001'`、`action='CREATE'` 一筆
+  - 無 `ob_dept_pct` / `ob_empl_set` 對應此名單
+- **步驟**：
+  1. 以 DirectorToken（`businessRole='director'`）請求 `GET /api/v1/assignment/list-definitions/OB202605001/full-snapshot`
+  2. 驗證回應
+- **預期結果**：
+  - HTTP 200
+  - `list.stage === 'draft'`
+  - `deptRatios` 為 `[]`（空陣列，非 null）
+  - `personnelRatios` 為 `[]`（空陣列，非 null）
+  - `auditTrail` 長度 ≥ 1，首筆 `action === 'CREATE'`
+  - Response 不含 `password`、`prod_best`（deprecated）等敏感欄位
+
+---
+
+#### TS-F050-SS-002：dept_ratio 名單快照 — deptRatios 有值，personnelRatios 空陣列
+
+- **關聯需求**：F050 v2.2 §6.2 / US-131 AC-3（stage-aware null state：dept_ratio）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - DB 有 `list_no='OB202605002'`、`stage='dept_ratio'`
+  - `ob_dept_pct` 含此名單 2 筆（`deptCode='XTA0'` ration=60、`deptCode='XTB0'` ration=40）
+  - 無 `ob_empl_set` 對應此名單
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202605002/full-snapshot`
+- **預期結果**：
+  - `deptRatios.length === 2`；兩筆 ration 合計 = 100
+  - `personnelRatios` 為 `[]`
+
+---
+
+#### TS-F050-SS-003：personnel_ratio 名單快照 — 兩者皆有值
+
+- **關聯需求**：F050 v2.2 §6.2 / US-131 AC-3（stage-aware null state：personnel_ratio）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - `list_no='OB202605003'`、`stage='personnel_ratio'`
+  - `ob_dept_pct` 含 2 筆；`ob_empl_set` 含 2 個部門各 2 名業務員
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202605003/full-snapshot`
+- **預期結果**：
+  - `deptRatios.length === 2`
+  - `personnelRatios.length === 2`；每個部門的 `members` 長度 ≥ 1
+
+---
+
+#### TS-F050-SS-004：ready 名單快照 — 完整 timeline（含 APPROVE）
+
+- **關聯需求**：F050 v2.2 §6.2 / US-131 AC-3（stage-aware null state：ready）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - `list_no='OB202605005'`、`stage='ready'`
+  - `assignment_audit_log` 含 `CREATE`、`ADVANCE_STAGE`（×3）、`APPROVE` 共 5 筆，依 `at` ASC 排序
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202605005/full-snapshot`
+- **預期結果**：
+  - `auditTrail.length === 5`
+  - 最後一筆 `action === 'APPROVE'`
+  - `auditTrail` 依 `at` ASC 排列
+
+---
+
+#### TS-F050-SS-005：LEGACY 名單（conditionPayload IS NULL）→ legacyEntityFallback 非 null
+
+- **關聯需求**：F050 v2.2 §6.2 Response Schema 規範（`conditionPayload IS NULL` 舊遷移名單）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - `list_no='OB202605099'`、`condition_payload IS NULL`
+  - `ob_list_definition.prod_kind='01'`、`caseyear='0$$1'`（`$$` 分隔格式，真實 DB 值）
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202605099/full-snapshot`
+- **預期結果**：
+  - `list.conditionPayload === null`
+  - `list.legacyEntityFallback` 非 null，含 `prodKind`、`caseyear` 等 backward-compat 欄位（原始 `$$` 分隔字串）
+
+---
+
+#### TS-F050-SS-006：section_chief 呼叫 — personnelRatios 僅含本轄區 deptCode
+
+- **關聯需求**：F050 v2.2 §6.2「處長轄區隔離」/ US-131 AC-4
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - `list_no='OB202605003'`（personnel_ratio 階段，含 XTA0 / XTB0 兩部門成員）
+  - SectionChiefToken：`businessRole='section_chief'`、帳號 `dept_code='XTA0'`
+- **步驟**：
+  1. SectionChiefToken → `GET /api/v1/assignment/list-definitions/OB202605003/full-snapshot`
+- **預期結果**：
+  - `personnelRatios.length === 1`
+  - 唯一元素 `deptCode === 'XTA0'`
+  - `deptCode === 'XTB0'` 完全不出現於 `personnelRatios` 陣列
+  - `deptRatios` 不過濾（仍含 XTA0 / XTB0 兩筆）
+
+---
+
+#### TS-F050-SS-007：director 呼叫 — personnelRatios 含全部部門（不過濾）
+
+- **關聯需求**：F050 v2.2 §6.2「處長轄區隔離」對比驗證
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：同 TS-F050-SS-006，但使用 DirectorToken（`businessRole='director'`）
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202605003/full-snapshot`
+- **預期結果**：
+  - `personnelRatios.length === 2`（XTA0 / XTB0 均出現）
+
+---
+
+#### TS-F050-SS-008：403 — role='user'（DirectorOrSectionChiefGuard 攔截）
+
+- **關聯需求**：F050 v2.2 §6.2 錯誤回應表 / F077 v1.3 BR-10
+- **測試類型**：Negative / Integration（Supertest）
+- **前置條件**：持有 UserToken（`role='user'`、`businessRole='user'`，非 director/section_chief）
+- **步驟**：
+  1. UserToken → `GET /api/v1/assignment/list-definitions/OB202605001/full-snapshot`
+- **預期結果**：
+  - HTTP 403
+  - `error_code === 'AUTH_FORBIDDEN'`
+- **Mock 對齊注意**：Controller decorator 用 class 級 `@UseGuards(DirectorOrSectionChiefGuard)`，無 method 級 `@RequireDirector`（唯讀端點，對齊 [[feedback_e07_b2_rbac_replace_pattern]] 模式）
+
+---
+
+#### TS-F050-SS-009：401 — 無 Token
+
+- **關聯需求**：F050 v2.2 §6.2 錯誤回應表
+- **測試類型**：Negative / Integration（Supertest）
+- **步驟**：
+  1. 無 Authorization Header → `GET /api/v1/assignment/list-definitions/OB202605001/full-snapshot`
+- **預期結果**：HTTP 401；`error_code === 'AUTH_TOKEN_MISSING'`
+
+---
+
+#### TS-F050-SS-010：404 — listNo 不存在
+
+- **關聯需求**：F050 v2.2 §6.2 錯誤回應表
+- **測試類型**：Negative / Integration（Supertest）
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB999999999/full-snapshot`
+- **預期結果**：HTTP 404；`error_code === 'ASSIGNMENT_LIST_NOT_FOUND'`
+
+---
+
+#### TS-F050-SS-011：歷史月份名單可開啟 Drawer（API 不阻擋 isHistorical）
+
+- **關聯需求**：F050 v2.2 §6.2 末段「本端點不攔截 LIST_HISTORICAL_READONLY」/ US-131 AC-1
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：`list_no='OB202504001'`、`project_workym='202504'`（歷史月份）
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202504001/full-snapshot`
+- **預期結果**：HTTP 200（不回 403 LIST_HISTORICAL_READONLY）；回應結構正常
+
+---
+
+#### TS-F050-SS-012：月跑執行中仍可取得快照（API 不攔截月跑鎖）
+
+- **關聯需求**：F050 v2.2 §6.2 末段「本端點不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING」/ US-131 AC-1
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：
+  - `assignment_run` 含 `status='running'` 一筆，seed 必填欄位：`run_id`（UUID）、`project_workym='202605'`、`triggered_by`（operator UUID）、`created_at`（timestamp）
+- **步驟**：
+  1. DirectorToken → `GET /api/v1/assignment/list-definitions/OB202605001/full-snapshot`
+- **預期結果**：HTTP 200（不回 409 ASSIGNMENT_RUN_ALREADY_RUNNING）
+
+---
+
+### SIG 群組：sessionStorage Signal Protocol — BR-13（cdmp.pendingToast）
+
+> **測試類型**：Component（React Testing Library + vitest）
+> **測試檔案**：
+> - Producer 端測試：`apps/web/src/pages/assignment/__tests__/pending-toast-producer.test.tsx`（新建，涵蓋 F079 / F082 / F086 producer 場景）
+> - Consumer 端測試：`apps/web/src/pages/assignment/__tests__/list-kanban-page.test.tsx`（修改，追加 SIG 群組）
+> **注意**：sessionStorage 在 jsdom 環境預設可用；各 test 之間需呼叫 `sessionStorage.clear()` 進行隔離
+
+---
+
+#### TS-F050-SIG-001：F079（29a）儲存完成後寫入 cdmp.pendingToast，跳轉前已寫入
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (3) Producer 規範 / US-133 AC-1
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：F079 部門比例設定頁已掛載，MSW stub `PATCH /api/v1/assignment/list-definitions/:listNo/dept-ratio` 回 200
+- **步驟**：
+  1. 使用者點擊「儲存」按鈕
+  2. 攔截 `sessionStorage.setItem` 呼叫（或於 `location.href` 重導向前讀取 sessionStorage）
+  3. 驗證 sessionStorage 內容
+- **預期結果**：
+  - `sessionStorage.getItem('cdmp.pendingToast')` 非 null
+  - 解析後 JSON 含 `type: 'success'`、`msg` 非空字串（含 LIST_NM 或操作說明）
+  - 寫入動作發生在 `location.href` 跳轉**之前**
+
+---
+
+#### TS-F050-SIG-002：F082（29b）儲存完成後寫入 cdmp.pendingToast
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (3) Producer 規範 / US-133 AC-1
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：F082 個別比例設定頁，MSW stub PATCH 回 200
+- **步驟**：
+  1. 使用者點擊「儲存」
+  2. 讀取 sessionStorage
+- **預期結果**：`cdmp.pendingToast` 存在；`type === 'success'`；`msg` 含個別比例相關文字
+
+---
+
+#### TS-F050-SIG-003：F086（29c）核准完成後寫入 cdmp.pendingToast
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (3) Producer 規範 / US-133 AC-2
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：F086 核准頁，MSW stub POST approve 回 200
+- **步驟**：
+  1. 使用者點擊「核准」按鈕
+  2. 讀取 sessionStorage
+- **預期結果**：`cdmp.pendingToast` 存在；`type === 'success'`
+
+---
+
+#### TS-F050-SIG-004：M01 主頁 mount 時讀取 cdmp.pendingToast → 顯示 toast → 立即 removeItem
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (4) Consumer 規範 / US-133 AC-3（consume-once）
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：
+  - 在 render 之前，先設定 `sessionStorage.setItem('cdmp.pendingToast', JSON.stringify({ type: 'success', msg: '車貸名單 OB202605001 部門比例已儲存', sub: '已推進至個別比例設定階段' }))`
+  - MSW stub GET lists API 回正常資料
+- **步驟**：
+  1. render `<ListKanbanPage />`（M01 主頁）
+  2. 等待 `useEffect` 執行
+  3. 驗證 toast 顯示
+  4. 驗證 sessionStorage 狀態
+- **預期結果**：
+  - 頁面顯示 success toast，文字含「車貸名單 OB202605001 部門比例已儲存」
+  - `sessionStorage.getItem('cdmp.pendingToast') === null`（立即 removeItem）
+
+---
+
+#### TS-F050-SIG-005：頁面重整後 toast 不重複顯示（consume-once 語意）
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (5) Consume-once 語意 / US-133 AC-3
+- **測試類型**：Positive / Component（RTL）
+- **前置條件**：同 TS-F050-SIG-004，但在 render 後（toast 已顯示一次）模擬頁面重整（`unmount + remount`）
+- **步驟**：
+  1. 第一次 render → toast 顯示 → sessionStorage 清除
+  2. unmount + remount（模擬 F5 重整）
+  3. 驗證第二次 render
+- **預期結果**：第二次 render 不顯示任何 toast（sessionStorage 已在第一次 consume 時清除）
+
+---
+
+#### TS-F050-SIG-006：cdmp.pendingToast 含無效 JSON → 靜默不顯示，不拋 uncaught exception
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (4) Consumer 規範「`JSON.parse`（包 try/catch）」
+- **測試類型**：Negative / Component（RTL）
+- **前置條件**：`sessionStorage.setItem('cdmp.pendingToast', 'not-valid-json')`
+- **步驟**：
+  1. render `<ListKanbanPage />`
+  2. 驗證無 toast 元素渲染
+  3. 驗證無 uncaught exception（test 不報錯）
+- **預期結果**：頁面正常渲染（Kanban 正常顯示），不顯示 toast，不拋例外
+
+---
+
+#### TS-F050-SIG-007：cdmp.pendingToast key 不存在 → 靜默不執行任何動作
+
+- **關聯需求**：F050 v2.2 §7 BR-13 (4) Consumer 規範「無 key」
+- **測試類型**：Negative / Component（RTL）
+- **前置條件**：sessionStorage 不含 `cdmp.pendingToast`（`sessionStorage.clear()` 確保）
+- **步驟**：
+  1. render `<ListKanbanPage />`
+  2. 驗證無 toast 渲染
+- **預期結果**：頁面正常；無 toast；無 exception
+
+---
+
+## 附錄 D：v2.2 覆蓋對應表（Story AC → 測試場景）
+
+| Story | AC | 測試場景 |
+|---|---|---|
+| US-131 AC-1 | 歷史月份 / 月跑中均可開啟 Drawer | TS-F050-SS-011、SS-012 |
+| US-131 AC-2 | 4 個頁籤呈現（前端驗證見 F048-test.md TS-F048-D-001） | — |
+| US-131 AC-3 | stage-aware null state（5 個 stage） | TS-F050-SS-001~004 |
+| US-131 AC-4 | section_chief personnelRatios 過濾 | TS-F050-SS-006、SS-007 |
+| US-131 AC-5 | LEGACY 名單 legacyEntityFallback | TS-F050-SS-005 |
+| US-133 AC-1 | Producer 寫入 cdmp.pendingToast（F079/F082/F086） | TS-F050-SIG-001~003 |
+| US-133 AC-2 | Consumer 顯示 toast + consume-once | TS-F050-SIG-004、SIG-005 |
+| US-133 AC-3 | 無效 JSON / 無 key 靜默處理 | TS-F050-SIG-006、SIG-007 |
+
+---
+
+## 附錄 E：v2.2 檔案分布計劃
+
+| 操作 | 測試檔案路徑 | 涵蓋群組 |
+|---|---|---|
+| **新建** | `apps/api/test/f050-v22-snapshot.e2e.spec.ts` | SS 群組（12 場景） |
+| **新建** | `apps/web/src/pages/assignment/__tests__/pending-toast-producer.test.tsx` | SIG-001~003（Producer 端） |
+| **修改** | `apps/web/src/pages/assignment/__tests__/list-kanban-page.test.tsx` | SIG-004~007（Consumer 端，追加） |
