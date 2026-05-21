@@ -314,7 +314,11 @@
       "PowerShell(head *)",
       "PowerShell(pnpm *)",
       "PowerShell(npx pnpm -F web typecheck 2>&1 | Select-Object -Last 80)",
-      "PowerShell(Test-Path *)"
+      "PowerShell(Test-Path *)",
+      "PowerShell($body = @{ email = \"manager@cdmp.test\"; password = \"P@ssw0rd123\"; rememberMe = $false } | ConvertTo-Json; try { Invoke-WebRequest -Uri \"http://localhost:5173/api/v1/auth/login\" -Method POST -Body $body -ContentType \"application/json\" -ErrorAction Stop } catch { Write-Output \"STATUS: $\\($_.Exception.Response.StatusCode.value__\\)\"; $reader = [System.IO.StreamReader]::new\\($_.Exception.Response.GetResponseStream\\(\\)\\); Write-Output \"BODY: $\\($reader.ReadToEnd\\(\\)\\)\" })",
+      "PowerShell($body = @{ email = \"manager@cdmp.test\"; password = \"P@ssw0rd123\"; rememberMe = $false } | ConvertTo-Json; try { $resp = Invoke-WebRequest -Uri \"http://localhost:5173/api/v1/auth/login\" -Method POST -Body $body -ContentType \"application/json\" -ErrorAction Stop; Write-Output \"STATUS: $\\($resp.StatusCode\\)\"; Write-Output \"BODY: $\\($resp.Content\\)\" } catch { Write-Output \"STATUS: $\\($_.Exception.Response.StatusCode.value__\\)\"; $reader = [System.IO.StreamReader]::new\\($_.Exception.Response.GetResponseStream\\(\\)\\); Write-Output \"BODY: $\\($reader.ReadToEnd\\(\\)\\)\" })",
+      "PowerShell(docker cp C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api\\\\scripts\\\\rerun-m283.ts cdmp-api:/app/src/database/__rerun-m283.ts; docker exec cdmp-api ls /app/src/database/__rerun-m283.ts)",
+      "PowerShell(docker cp C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api\\\\scripts\\\\rerun-m283.ts cdmp-api:/app/src/database/__rerun-m283.ts; docker exec cdmp-api npx ts-node -r tsconfig-paths/register src/database/__rerun-m283.ts)"
     ],
     "defaultMode": "default"
   },
