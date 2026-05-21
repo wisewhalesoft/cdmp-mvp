@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
-type ToastType = 'success' | 'error' | 'warning';
+// F081/F085/F089 v1.3 / F050 v2.2 BR-13：擴入 'info'
+//   - success：綠色（既有）
+//   - error：紅色（既有）
+//   - warning：橘色（既有）
+//   - info：藍色（新增；Rollback / 中性提示）
+type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 interface Toast {
   id: number;
@@ -46,6 +51,7 @@ const bgClassMap: Record<ToastType, string> = {
   success: 'bg-green-600',
   error: 'bg-red-600',
   warning: 'bg-orange-500',
+  info: 'bg-blue-600',
 };
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) => void }) {
