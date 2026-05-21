@@ -12,13 +12,32 @@ import { apiClient } from './client';
  *   - /api/v1/assignment/ratios/dept
  *   - /api/v1/assignment/ratios/personnel
  *   - /api/v1/assignment/lists/:listNo/stage/...
+ *
+ * 與後端 contract 對齊：
+ *   - dept-ratio.service.ts:54-114（GET）/ 127-196（PUT）
+ *   - personnel-ratio.service.ts:68-197（GET）/ 240-382（PUT）
+ *   - 對齊 spec F079 §5.1/5.2、F082 §5.1/5.2
  */
 
 // =====================================================================
 // M03a — 部門比例（F079）
 // =====================================================================
 
+/**
+ * GET response 中的部門列。
+ * `isActive = false` 表示該部門已不在 ob_emphire 在職清單中（spec F079 §5.1）。
+ */
 export interface DeptRatioItem {
+  obdeptId: string;
+  obdeptNm: string;
+  ration: number;
+  isActive: boolean;
+}
+
+/**
+ * PUT body 中的部門列（不需 isActive；後端 DTO 忽略）。
+ */
+export interface SetDeptRatioItem {
   obdeptId: string;
   obdeptNm: string;
   ration: number;
@@ -26,12 +45,16 @@ export interface DeptRatioItem {
 
 export interface GetDeptRatiosResponse {
   listNo: string;
+  listNm: string;
+  projectWorkym: string;
+  stage: string;
   deptRatios: DeptRatioItem[];
   total: number;
+  isReadOnly: boolean;
 }
 
 export interface SetDeptRatiosRequest {
-  deptRatios: DeptRatioItem[];
+  deptRatios: SetDeptRatioItem[];
 }
 
 export interface SetDeptRatiosResponse {
@@ -64,10 +87,53 @@ export async function setDeptRatios(
 // M03b — 個別業務比例（F082 / F083）
 // =====================================================================
 
+/**
+ * GET response 中的單一員工列。
+ * `isResigned = true` 時，`ration` 為 null（離職員工不參與分配；spec F082-A 決議）。
+ * `createdBy` 用於處長視角的 scopeByCreator filter（v1.3 BR-14）。
+ */
 export interface PersonnelRatioEmployee {
   empId: string;
   empName: string;
+  ration: number | null;
+  isResigned: boolean;
+  createdBy: string | null;
+}
+
+/**
+ * PUT body 中的員工列（不需 isResigned / createdBy）。
+ */
+export interface SetPersonnelRatioEmployee {
+  empId: string;
+  empName: string;
   ration: number;
+}
+
+/**
+ * GET response 中的部門容器。
+ * 後端 personnel-ratio.service.ts:138-177 之輸出單元。
+ */
+export interface PersonnelRatioDepartment {
+  deptCode: string;
+  deptName: string;
+  deptRatio: number | null;
+  isInScope: boolean;
+  activeCount: number;
+  sumValidated: boolean;
+  allResigned: boolean;
+  employees: PersonnelRatioEmployee[];
+  deptSum: number;
+}
+
+/**
+ * F087 v1.1 BR-11 — 最新一筆拒絕紀錄；若最近一筆為 approve / 無紀錄 → null。
+ */
+export interface LatestRejection {
+  rejectReason: string;
+  rejectorId: string;
+  rejectorName: string | null;
+  rejectorRole: string | null;
+  rejectedAt: string;
 }
 
 export interface AppliedTemplate {
@@ -77,15 +143,19 @@ export interface AppliedTemplate {
 
 export interface GetPersonnelRatiosResponse {
   listNo: string;
-  deptCode?: string | null;
-  employees: PersonnelRatioEmployee[];
-  total: number;
+  listNm: string;
+  projectWorkym: string;
+  stage: string;
+  isReadOnly: boolean;
+  viewerRole: 'admin' | 'director' | 'section_chief';
+  departments: PersonnelRatioDepartment[];
+  latestRejection: LatestRejection | null;
 }
 
 export interface SetPersonnelRatiosRequest {
   deptCode: string;
   deptName?: string;
-  employees: PersonnelRatioEmployee[];
+  employees: SetPersonnelRatioEmployee[];
   appliedTemplate?: AppliedTemplate;
 }
 
@@ -93,7 +163,7 @@ export interface SetPersonnelRatiosResponse {
   listNo: string;
   deptCode: string;
   savedCount: number;
-  total: number;
+  deptSum: number;
   savedAt: string;
   savedBy: string;
 }
