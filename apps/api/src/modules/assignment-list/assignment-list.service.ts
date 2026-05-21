@@ -1040,7 +1040,7 @@ export class AssignmentListService {
         listNo: entity.list_no,
         listNm: entity.list_nm,
         stage: entity.stage,
-        status: entity.status,
+        status: entity.status as 'active' | 'inactive',
         projectWorkym: entity.project_workym ?? null,
         cardType: entity.card_type ?? null,
         crEnabled: entity.cr_enabled ?? false,
