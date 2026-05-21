@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Undo2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Undo2, AlertTriangle, Save, X } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/e07/ConfirmModal';
@@ -16,8 +16,13 @@ import {
   rollbackToDeptRatio,
   type PersonnelRatioDepartment,
 } from '@/api/assignment-stage';
-import { PersonnelRatioForm } from './_components/personnel-ratio-form';
+import {
+  PersonnelRatioForm,
+  type PersonnelRatioFormHandle,
+} from './_components/personnel-ratio-form';
 import { ListSummaryCard } from './_components/list-summary-card';
+import { StageBreadcrumb } from './_components/stage-breadcrumb';
+import { PersonnelProgressBanner } from './_components/personnel-progress-banner';
 import {
   RejectionBanner,
   type LatestRejection,
@@ -25,6 +30,7 @@ import {
 import {
   PersonnelRatioAccordion,
   type AccordionDept,
+  type DeptStatus,
 } from './_components/personnel-ratio-accordion';
 import { getBusinessRole } from '@/stores/auth-store';
 import { writePendingToast } from './_utils/pending-toast';
@@ -34,15 +40,13 @@ import { writePendingToast } from './_utils/pending-toast';
  *
  * 對應 prototype: /prototypes/29b-personnel-ratio-config.html
  *
- * 路由：/assignment/lists/:listNo/personnel-ratio
- * RBAC：DirectorOrSectionChiefRoute（讀寫；section_chief 只能設定自己轄區）
- *
- * 主要區塊：
+ * 主要區塊（由上至下）：
+ *   - 5-step stage breadcrumb（current=personnel_ratio）
  *   - RejectionBanner（latestRejection 非 null 時顯示）
  *   - ListSummaryCard（名單摘要 + 篩選條件 chips）
- *   - PersonnelRatioAccordion（多部門 accordion，每 dept body 套 PersonnelRatioForm；
- *     departments 由 getPersonnelRatios(listNo) 一次取得，避免兩個 endpoint 競態）
- *   - 操作 bar：返回 / 退回部門比例（director only） / 推進至簽核
+ *   - PersonnelProgressBanner（整體完成進度 + 業務員總數）
+ *   - PersonnelRatioAccordion（多部門 accordion；每 dept body 套 PersonnelRatioForm）
+ *   - 操作 bar：取消 / 退回部門比例 / 儲存全部 / 儲存並推進至簽核
  *
  * 階段守衛：list.stage 必為 'personnel_ratio'
  */
@@ -64,8 +68,14 @@ function splitConditionsFromList(list: AssignmentListItem): string[] {
 }
 
 interface DeptWithProgress extends AccordionDept {
-  /** 完整後端資料供 form 使用 */
   department: PersonnelRatioDepartment;
+}
+
+function deriveStatus(d: PersonnelRatioDepartment): DeptStatus {
+  if (d.allResigned) return 'done';
+  if (d.deptSum === 0) return 'todo';
+  if (d.sumValidated) return 'done';
+  return 'pending';
 }
 
 export function PersonnelRatioConfigPage() {
@@ -77,14 +87,16 @@ export function PersonnelRatioConfigPage() {
   const [list, setList] = useState<AssignmentListItem | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [departments, setDepartments] = useState<PersonnelRatioDepartment[]>([]);
-  const [latestRejection, setLatestRejection] = useState<LatestRejection | null>(
-    null,
-  );
+  const [latestRejection, setLatestRejection] = useState<LatestRejection | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
   const [showRollback, setShowRollback] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [rollbacking, setRollbacking] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [savingAll, setSavingAll] = useState(false);
+
+  // form refs（依 deptCode 收集；給「儲存全部」遍歷使用）
+  const formRefs = useRef<Map<string, PersonnelRatioFormHandle>>(new Map());
 
   const businessRole = getBusinessRole();
   const isSectionChief = businessRole === 'section_chief';
@@ -184,15 +196,39 @@ export function PersonnelRatioConfigPage() {
     }
   };
 
+  const handleSaveAll = async () => {
+    setSavingAll(true);
+    try {
+      const entries = Array.from(formRefs.current.entries());
+      const savable = entries.filter(([, ref]) => ref.isSavable());
+      if (savable.length === 0) {
+        showToast('無可儲存部門（加總非 100% 或全員離職）', 'warning');
+        return;
+      }
+      const results = await Promise.all(savable.map(([, ref]) => ref.save()));
+      const okCount = results.filter(Boolean).length;
+      if (okCount === savable.length) {
+        showToast(`已儲存全部 ${okCount} 個部門`, 'success');
+      } else {
+        showToast(`部分儲存失敗（${okCount}/${savable.length} 成功）`, 'warning');
+      }
+      setRefreshTick((t) => t + 1);
+    } finally {
+      setSavingAll(false);
+    }
+  };
+
   const accordionDepts: DeptWithProgress[] = useMemo(
     () =>
       departments.map((d) => ({
         deptCode: d.deptCode,
         deptName: d.deptName,
+        directorName: d.directorName,
+        deptRatio: d.deptRatio,
+        activeCount: d.activeCount,
         sum: d.deptSum,
-        // allResigned 視為「不需設定即完成」（spec F082 v1.3 決議 #1 短路放行）
-        complete: d.allResigned ? true : d.sumValidated,
-        offline: d.allResigned, // accordion 用同一個旗標 hint「不需編輯」
+        status: deriveStatus(d),
+        offline: d.allResigned,
         department: d,
       })),
     [departments],
@@ -202,6 +238,13 @@ export function PersonnelRatioConfigPage() {
     () => departments.reduce((acc, d) => acc + d.activeCount, 0),
     [departments],
   );
+
+  const doneCount = useMemo(
+    () => accordionDepts.filter((d) => d.status === 'done').length,
+    [accordionDepts],
+  );
+
+  const allDone = doneCount === accordionDepts.length && accordionDepts.length > 0;
 
   const handleFormSaved = useCallback(() => {
     setRefreshTick((t) => t + 1);
@@ -218,9 +261,7 @@ export function PersonnelRatioConfigPage() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-base font-semibold text-gray-800">
-            個別業務比例設定
-          </h1>
+          <h1 className="text-base font-semibold text-gray-800">個別業務比例設定</h1>
           {list && <StageBadge stage={list.stage as Stage} />}
         </div>
       }
@@ -249,6 +290,11 @@ export function PersonnelRatioConfigPage() {
 
         {!loading && list && (
           <>
+            <StageBreadcrumb
+              currentStage={list.stage}
+              featureIds="F082 / F083 / F084 / F085 / F087"
+            />
+
             <RejectionBanner latestRejection={latestRejection} />
 
             {stageMismatch && (
@@ -279,13 +325,23 @@ export function PersonnelRatioConfigPage() {
               crEnabled={true}
             />
 
+            {accordionDepts.length > 0 && (
+              <PersonnelProgressBanner
+                doneCount={doneCount}
+                totalCount={accordionDepts.length}
+                totalEmployees={totalEmployees}
+              />
+            )}
+
             <PersonnelRatioAccordion
               depts={accordionDepts}
               defaultOpen
-              showProgress
-              totalEmployees={totalEmployees}
               renderDept={(d) => (
                 <PersonnelRatioForm
+                  ref={(handle) => {
+                    if (handle) formRefs.current.set(d.deptCode, handle);
+                    else formRefs.current.delete(d.deptCode);
+                  }}
                   listNo={list.listNo}
                   department={d.department}
                   readOnly={!!stageMismatch}
@@ -295,16 +351,15 @@ export function PersonnelRatioConfigPage() {
             />
 
             {!stageMismatch && (
-              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between gap-3">
+              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
                 <button
                   type="button"
                   onClick={() => navigate('/assignment/list-definitions')}
                   className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  返回名單列表
+                  <X className="w-4 h-4" />取消（返回名單列表）
                 </button>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {canRollbackDept && (
                     <Button
                       type="button"
@@ -313,20 +368,32 @@ export function PersonnelRatioConfigPage() {
                       onClick={() => setShowRollback(true)}
                     >
                       <span className="inline-flex items-center gap-1.5">
-                        <Undo2 className="w-4 h-4" />
-                        退回部門比例
+                        <Undo2 className="w-4 h-4" />退回部門比例
                       </span>
                     </Button>
                   )}
                   <Button
                     type="button"
+                    variant="secondary"
+                    data-testid="btn-save-all"
+                    loading={savingAll}
+                    loadingText="儲存中..."
+                    disabled={!allDone}
+                    onClick={handleSaveAll}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Save className="w-4 h-4" />儲存全部
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
                     variant="primary"
                     data-testid="btn-advance-approval"
+                    disabled={!allDone}
                     onClick={() => setShowAdvance(true)}
                   >
                     <span className="inline-flex items-center gap-1.5">
-                      <ArrowRight className="w-4 h-4" />
-                      儲存並推進至簽核
+                      <ArrowRight className="w-4 h-4" />儲存並推進至簽核
                     </span>
                   </Button>
                 </div>

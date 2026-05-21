@@ -48,6 +48,7 @@ function buildDepartment(
 ): PersonnelRatioDepartment {
   return {
     deptRatio: 50,
+    directorName: null,
     isInScope: true,
     activeCount: 0,
     sumValidated: false,
@@ -225,7 +226,22 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     expect(screen.queryByTestId('btn-rollback-dept-ratio')).not.toBeInTheDocument();
   });
 
-  it('「推進至簽核」按鈕觸發 advanceToApproval API + 跳轉', async () => {
+  it('「推進至簽核」按鈕觸發 advanceToApproval API + 跳轉（所有部門完成時）', async () => {
+    // 所有部門必須 sumValidated=true 或 allResigned=true 才能 enable advance（對齊 prototype）
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({
+          deptCode: 'D01',
+          deptName: '北一處',
+          sumValidated: true,
+          deptSum: 100,
+          activeCount: 1,
+          employees: [
+            { empId: 'E001', empName: '甲', ration: 100, isResigned: false, createdBy: 'd1' },
+          ],
+        }),
+      ]),
+    );
     mockedAdvanceApproval.mockResolvedValue({
       listNo: 'OB202605007',
       stage: 'approval',
@@ -242,6 +258,16 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     await waitFor(() => {
       expect(mockedAdvanceApproval).toHaveBeenCalledWith('OB202605007');
     });
+  });
+
+  it('未全部完成時，「推進至簽核」按鈕 disabled', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-advance-approval')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('btn-advance-approval')).toBeDisabled();
+    // 「儲存全部」也 disabled
+    expect(screen.getByTestId('btn-save-all')).toBeDisabled();
   });
 
   it('departments 為空時 accordion 顯示「無部門」', async () => {

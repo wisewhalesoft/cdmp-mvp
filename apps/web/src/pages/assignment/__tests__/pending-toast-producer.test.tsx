@@ -236,7 +236,25 @@ describe('F050 v2.2 §7 BR-13 — Producer 端（TS-F050-SIG-001~003）', () => 
     mockedGetDeptRatios.mockResolvedValue(
       getDeptResp([{ obdeptId: 'XTA0', obdeptNm: '業務一部', ration: 100 }]),
     );
-    mockedGetPersonnelRatios.mockResolvedValue(getPersonnelResp());
+    // 全部部門必須 sumValidated=true，advance 按鈕才會 enable（對齊 prototype 29b updateProgress）
+    mockedGetPersonnelRatios.mockResolvedValue(
+      getPersonnelResp([
+        {
+          deptCode: 'XTA0',
+          deptName: '業務一部',
+          deptRatio: 100,
+          directorName: null,
+          isInScope: true,
+          activeCount: 1,
+          sumValidated: true,
+          allResigned: false,
+          employees: [
+            { empId: 'E001', empName: '甲', ration: 100, isResigned: false, createdBy: 'd1' },
+          ],
+          deptSum: 100,
+        },
+      ]),
+    );
     mockedAdvanceApproval.mockResolvedValue({
       listNo: 'OB202605003',
       stage: 'approval',

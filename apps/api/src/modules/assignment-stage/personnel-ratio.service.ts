@@ -83,6 +83,25 @@ export class PersonnelRatioService {
       .addOrderBy('e.emp_id', 'ASC')
       .getMany();
 
+    // 各部門處長（沿用 F079 BR-14 定義；jfun_nm='處長' + hire_date ASC 取最早入職者）
+    const directorRows = await this.emphireRepo
+      .createQueryBuilder('e')
+      .select('TRIM(e.dept_code)', 'dept_code')
+      .addSelect('TRIM(e.emp_nm)', 'emp_nm')
+      .where('e.resign_date IS NULL')
+      .andWhere(`TRIM(e.jfun_nm) = '處長'`)
+      .orderBy('TRIM(e.dept_code)', 'ASC')
+      .addOrderBy('CASE WHEN e.hire_date IS NULL THEN 1 ELSE 0 END', 'ASC')
+      .addOrderBy('e.hire_date', 'ASC')
+      .getRawMany<{ dept_code: string; emp_nm: string }>();
+    const directorMap = new Map<string, string>();
+    for (const row of directorRows) {
+      const code = row.dept_code;
+      if (code && !directorMap.has(code)) {
+        directorMap.set(code, row.emp_nm || '');
+      }
+    }
+
     // 既有 ob_empl_set
     let emplSetQb = this.emplSetRepo
       .createQueryBuilder('s')
@@ -167,6 +186,7 @@ export class PersonnelRatioService {
         deptCode: code,
         deptName: (deptPct?.obdeptnm?.trim() ?? emps[0]?.dept_name?.trim() ?? code),
         deptRatio: deptPct ? Number(deptPct.ration) : null,
+        directorName: directorMap.get(code) ?? null,
         isInScope: isSectionChief ? setRows.length > 0 : true,
         activeCount,
         sumValidated,

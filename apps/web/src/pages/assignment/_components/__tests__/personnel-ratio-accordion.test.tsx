@@ -7,16 +7,40 @@ import { PersonnelRatioAccordion } from '../personnel-ratio-accordion';
  *
  * 設計：
  *   - 接 dept list，每個 dept 渲染一個可摺疊 panel
- *   - panel header 顯示 dept 名稱 + 該 dept 加總狀態 (sum / complete)
+ *   - panel header 顯示 dept 名稱 / 處長 / 部門配額 / 在職人數 / 加總 / 三狀態 chip
  *   - panel body 由父層 renderDept callback 提供
  *   - 全部展開 / 全部摺疊
  *   - 個別 dept 也可獨立 toggle
  */
 
 const DEPTS = [
-  { deptCode: 'D01', deptName: '北一處', sum: 100, complete: true },
-  { deptCode: 'D02', deptName: '北二處', sum: 95, complete: false },
-  { deptCode: 'D03', deptName: '南一處', sum: 100, complete: true },
+  {
+    deptCode: 'D01',
+    deptName: '北一處',
+    directorName: '李處長',
+    deptRatio: 30,
+    activeCount: 5,
+    sum: 100,
+    status: 'done' as const,
+  },
+  {
+    deptCode: 'D02',
+    deptName: '北二處',
+    directorName: '王處長',
+    deptRatio: 25,
+    activeCount: 4,
+    sum: 95,
+    status: 'pending' as const,
+  },
+  {
+    deptCode: 'D03',
+    deptName: '南一處',
+    directorName: null,
+    deptRatio: 20,
+    activeCount: 3,
+    sum: 0,
+    status: 'todo' as const,
+  },
 ];
 
 describe('PersonnelRatioAccordion', () => {
@@ -32,28 +56,34 @@ describe('PersonnelRatioAccordion', () => {
     expect(screen.getByText(/南一處/)).toBeInTheDocument();
   });
 
-  it('每個 dept header 顯示加總百分比', () => {
+  it('header 顯示處長姓名', () => {
     render(
-      <PersonnelRatioAccordion
-        depts={DEPTS}
-        renderDept={(d) => <div>{d.deptCode}</div>}
-      />,
+      <PersonnelRatioAccordion depts={DEPTS} renderDept={(d) => <div>{d.deptCode}</div>} />,
     );
-    const d01 = screen.getByTestId('dept-accordion-header-D01');
-    expect(d01.textContent).toContain('100');
-    const d02 = screen.getByTestId('dept-accordion-header-D02');
-    expect(d02.textContent).toContain('95');
+    expect(screen.getByTestId('dept-director-D01')).toHaveTextContent('李處長');
+    expect(screen.queryByTestId('dept-director-D03')).not.toBeInTheDocument();
   });
 
-  it('complete=true 顯示已完成標記', () => {
+  it('header 顯示部門配額 / 在職人數 / 加總百分比', () => {
     render(
-      <PersonnelRatioAccordion
-        depts={DEPTS}
-        renderDept={(d) => <div>{d.deptCode}</div>}
-      />,
+      <PersonnelRatioAccordion depts={DEPTS} renderDept={(d) => <div>{d.deptCode}</div>} />,
     );
     const d01 = screen.getByTestId('dept-accordion-header-D01');
-    expect(d01.textContent).toMatch(/完成|✓/);
+    expect(d01.textContent).toContain('30%');
+    expect(d01.textContent).toContain('5');
+    expect(d01.textContent).toContain('100%');
+  });
+
+  it('三狀態 chip 對應 status: todo / pending / done', () => {
+    render(
+      <PersonnelRatioAccordion depts={DEPTS} renderDept={(d) => <div>{d.deptCode}</div>} />,
+    );
+    const d01 = screen.getByTestId('dept-accordion-header-D01');
+    const d02 = screen.getByTestId('dept-accordion-header-D02');
+    const d03 = screen.getByTestId('dept-accordion-header-D03');
+    expect(d01.textContent).toMatch(/已完成/);
+    expect(d02.textContent).toMatch(/待儲存/);
+    expect(d03.textContent).toMatch(/未設定/);
   });
 
   it('預設全部展開：所有 dept content 可見', () => {
@@ -121,24 +151,18 @@ describe('PersonnelRatioAccordion', () => {
 
   it('depts = [] 顯示「無部門」訊息', () => {
     render(
-      <PersonnelRatioAccordion
-        depts={[]}
-        renderDept={() => <div />}
-      />,
+      <PersonnelRatioAccordion depts={[]} renderDept={() => <div />} />,
     );
     expect(screen.getByText(/無部門|尚無/)).toBeInTheDocument();
   });
 
-  it('顯示整體完成進度（X / Y）', () => {
+  it('offline=true 顯示「全員離職」徽章', () => {
     render(
       <PersonnelRatioAccordion
-        depts={DEPTS}
+        depts={[{ ...DEPTS[0], offline: true }]}
         renderDept={(d) => <div>{d.deptCode}</div>}
-        showProgress
       />,
     );
-    const prog = screen.getByTestId('overall-progress');
-    expect(prog.textContent).toContain('2');
-    expect(prog.textContent).toContain('3');
+    expect(screen.getByTestId('dept-offline-D01')).toBeInTheDocument();
   });
 });

@@ -119,6 +119,8 @@ export interface PersonnelRatioDepartment {
   deptCode: string;
   deptName: string;
   deptRatio: number | null;
+  /** 該部門目前處長姓名（沿用 F079 BR-14 定義；無對應人員回 null）。 */
+  directorName: string | null;
   isInScope: boolean;
   activeCount: number;
   sumValidated: boolean;

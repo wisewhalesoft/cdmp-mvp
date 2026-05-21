@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Eye, AlertTriangle, Check, GitBranch } from 'lucide-react';
+import { ArrowLeft, Eye, AlertTriangle } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { ConfirmModal } from '@/components/e07/ConfirmModal';
 import { StageBadge, type Stage } from '@/components/e07/StageBadge';
@@ -15,6 +15,7 @@ import {
 } from '@/api/assignment-stage';
 import { DeptRatioForm } from './_components/dept-ratio-form';
 import { ListSummaryCard } from './_components/list-summary-card';
+import { StageBreadcrumb } from './_components/stage-breadcrumb';
 import { getBusinessRole } from '@/stores/auth-store';
 import { writePendingToast } from './_utils/pending-toast';
 
@@ -58,64 +59,6 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
-}
-
-type StepState = 'done' | 'current' | 'todo';
-
-function StageStep({ state, idx, label }: { state: StepState; idx: number; label: string }) {
-  const dotClass = {
-    done: 'bg-green-100 text-green-700',
-    current: 'bg-blue-100 text-blue-700 ring-2 ring-blue-300',
-    todo: 'bg-gray-100 text-gray-400',
-  }[state];
-  const labelClass = {
-    done: 'text-gray-500',
-    current: 'font-semibold text-primary',
-    todo: 'text-gray-400',
-  }[state];
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
-      <span
-        className={`inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[10px] font-semibold ${dotClass}`}
-        data-testid={`stage-step-${idx}-${state}`}
-      >
-        {state === 'done' ? <Check className="w-3 h-3" /> : idx}
-      </span>
-      <span className={labelClass}>{label}</span>
-    </span>
-  );
-}
-
-function StageBreadcrumb({ currentStage }: { currentStage: string }) {
-  // 5 階段順序（與 prototype 29a 對齊）
-  const stages = [
-    { key: 'draft', label: '草稿' },
-    { key: 'dept_ratio', label: '部門比例' },
-    { key: 'personnel_ratio', label: '個別業務比例' },
-    { key: 'approval', label: '簽核' },
-    { key: 'ready', label: '準備完成' },
-  ];
-  const currentIdx = stages.findIndex((s) => s.key === currentStage);
-  return (
-    <div
-      className="bg-white border border-gray-200 rounded-lg px-6 py-3 flex items-center gap-3 flex-wrap"
-      data-testid="stage-breadcrumb"
-    >
-      <span className="text-xs text-gray-400 mr-1">階段路徑：</span>
-      {stages.map((s, i) => {
-        const state: StepState = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'todo';
-        return (
-          <span key={s.key} className="inline-flex items-center gap-2">
-            <StageStep state={state} idx={i + 1} label={s.label} />
-            {i < stages.length - 1 && <span className="text-gray-300 text-sm">›</span>}
-          </span>
-        );
-      })}
-      <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-gray-400">
-        <GitBranch className="w-3 h-3" />F079 / F080 / F081
-      </span>
-    </div>
-  );
 }
 
 export function DeptRatioConfigPage() {
@@ -243,7 +186,7 @@ export function DeptRatioConfigPage() {
 
         {!loading && list && (
           <>
-            <StageBreadcrumb currentStage={list.stage} />
+            <StageBreadcrumb currentStage={list.stage} featureIds="F079 / F080 / F081" />
 
             {isSectionChief && (
               <div
