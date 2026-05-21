@@ -1,10 +1,12 @@
 ---
 type: architecture-spec
-version: "2.12"
+version: "2.13"
 status: draft
-last_updated: 2026-05-18
+last_updated: 2026-05-21
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089]
 ---
+
+> **v2.13 / 2026-05-21 變更摘要（v2.3 Sidebar IA 重整決策 AD-E02-4-F）**：新增 §AD-E02-4-F「Assignment Module Sidebar IA v2.3 重整」：(1) 確立「客戶名單分派」sidebar section 最終 11 個 entry 清單（對應 37/28/27/29d/30/31/32/33/34/35/36 原型頁）；(2) 定義「工作流子頁 vs. 獨立功能入口」判準，明確 29a/29b/29c 定位為工作流子頁、不出現在 sidebar；(3) 記錄 `deprecated 29-ratio-config.html` 移除決策；(4) 新增 5 條架構不變式 I-NAV-01 ~ I-NAV-05；(5) Agent Loading Guide 補入 UI/UX Designer 欄 AD-E02-4-F。
 
 > **v2.12 / 2026-05-18 變更摘要（F075 v1.4 available-columns 端點架構決策）**：(1) 新增 `GET /api/v1/pooldata-fields/available-columns` 端點，掛載於既有 `PooldataFieldWhitelistController`，靜態路由 `available-columns` 置頂於動態路由 `:columnName` 之前（NestJS 靜態路由優先規則）；(2) Guard 鏈：method 級 `@RequireDirector()` + `@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')`（503 fallback，與 POST 寫入端點一致；此端點為新增 Modal dropdown 資料來源，強耦合於寫入流程，不屬下游唯讀 GET）；(3) `DataSource.query()` raw SQL 查詢 `information_schema.columns WHERE table_schema='public' AND table_name='ob_pool_data'`，子查詢排除所有 `pooldata_field_whitelist.column_name`（**含** `is_active=false`，BR-13）；(4) `suggestedFieldType` 推斷邏輯由 service 層 `private _inferSuggestedFieldType(dataType)` pure function 實作（三類：`numeric` / `date` / `categorical`），不使用 SQL CASE；(5) `ob_pool_data` 不存在 / available 為空 → 回 200 + 空陣列（合法狀態）；(6) 不加 cache（information_schema catalog 查詢 < 5ms，呼叫頻率低，加 cache 引入失效複雜度不值得）；(7) §3.10 服務表補入 `PooldataFieldWhitelistService` v1.4 bullet；(8) A-3（OBPOOLDATA 欄位孤兒新增風險）升級為 [RESOLVED]（新增階段）。
 
@@ -18,7 +20,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 |-----------|------------|
 | Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程）、10. 技術棧決策 |
 | TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
-| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**）、10. 技術棧決策（React Flow） |
+| UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
 | E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）** |
@@ -711,6 +713,87 @@ interface MenuSection {
 7. 逐一將各 page 的 sidebar 渲染移除，改為套用 `<AppLayout>`
 
 **風險：RISK-AD-E02-4-1**（中等）：`UserInfo.isSalesManager` 為 `optional` 欄位（`isSalesManager?: boolean`），舊 token 可能為 `undefined`。所有判斷必須以 `=== true` 嚴格比對，不可使用 truthy 判斷式。影響：`SalesManagerRoute`、sidebar 過濾邏輯、`getIsSalesManager()` helper 均需遵循此規則。
+
+##### AD-E02-4-F：Assignment Module Sidebar IA v2.3 重整（2026-05-21）
+
+> **決策背景**：prototype v2.3 同步更新了全部 35 個 HTML 的 sidebar 結構（`assignmentPages` array）。本節記錄該次重整的架構決策與不變式，作為 React 落地時的導覽 IA ground truth。
+
+###### AD-E02-4-F-1：Sidebar Entry 最終清單（11 entries）
+
+「客戶名單分派」可折疊群組的最終 entry 清單如下，以 prototype `assignmentPages` array 為唯一權威。React `<AppSidebar>` 的 menu config 必須與此清單一一對應。
+
+| # | Label | Prototype 檔案 | React Route（預計） |
+|---|---|---|---|
+| 1 | 篩選欄位 | `37-base-code.html` | `/assignment/base-codes` |
+| 2 | 計分卡設定 | `28-scoring-config.html` | `/assignment/scoring` |
+| 3 | 名單定義 | `27-list-definition.html` | `/assignment/list-definitions` |
+| 4 | 準備完成摘要 | `29d-ready-summary.html` | `/assignment/ready-summary` |
+| 5 | Stage 0 試算 | `30-stage0-estimate.html` | `/assignment/estimate` |
+| 6 | 觸發月跑 | `31-trigger-run.html` | `/assignment/run` |
+| 7 | 執行進度 | `32-run-progress.html` | `/assignment/run-progress` |
+| 8 | 結果摘要 | `33-run-summary.html` | `/assignment/run-summary` |
+| 9 | 執行歷史 | `34-run-history.html` | `/assignment/history` |
+| 10 | 快照詳情 | `35-snapshot-detail.html` | `/assignment/snapshots` |
+| 11 | 結果比對 | `36-run-compare.html` | `/assignment/compare` |
+
+**注意**：prototype `37-base-code.html` 對應代碼維護（已依 E07 Phase 3b 決策 rename 為「篩選欄位」）。AD-E02-4-E 舊版 menu config 中的 `/assignment/base-codes`（label「代碼維護」）落地時應使用本表 label「篩選欄位」。
+
+###### AD-E02-4-F-2：工作流子頁 vs. 獨立功能入口判準
+
+**判準定義**：
+
+| 分類 | 定義 | 處置 |
+|---|---|---|
+| **獨立功能入口** | 使用者可主動導覽至此頁、不依賴特定上游操作作為前提 | 列入 sidebar entry |
+| **工作流子頁** | 只能從特定 Kanban 卡片按鈕（per-stage 操作）進入、無法從 sidebar 直接抵達且不具獨立語意 | 不列入 sidebar；唯一入口為 M01 主頁卡片按鈕 |
+
+**29a / 29b / 29c 的定位（v2.3 決策）**：
+
+| 原型檔案 | 功能 | 分類 | 唯一入口 | 對應 Feature Spec |
+|---|---|---|---|---|
+| `29a-draft-review.html` | draft 審核（提交申請） | 工作流子頁 | 27 Kanban「draft」欄卡片按鈕 | F084（advance-to-approval）|
+| `29b-dept-ratio.html` | 部門比例設定 | 工作流子頁 | 27 Kanban「dept_ratio」欄卡片按鈕 | [F079](features/F079-set-dept-ratio.md) |
+| `29c-approval.html` | 個別比例簽核 | 工作流子頁 | 27 Kanban「personnel_ratio」欄卡片按鈕 | [F082](features/F082-set-personnel-ratio.md)、[F086](features/F086-approve-to-ready.md)、[F087](features/F087-reject-to-personnel-ratio.md) |
+
+**子頁離開行為**：子頁完成或取消後跳回 M01 主頁（`/assignment/list-definitions`），並透過 `sessionStorage['cdmp.pendingToast']` signal 通知主頁顯示 toast。Signal Protocol 之完整定義見 **[F050 v2.2 §7 BR-13](features/F050-create-list-definition.md)**（本節不重複定義）。
+
+M01 主頁為上述所有子頁的 consumer，init 時讀取 signal 並顯示 toast，詳見 **[F048 v2.0](features/F048-view-list-definition.md)**。
+
+子頁入口操作矩陣（各角色在各 stage 可見哪些進入子頁的按鈕）見 **[F077 v1.3 §6 BR-7](features/F077-month-switch-and-stage-overview.md)**（本節不重複定義）。
+
+###### AD-E02-4-F-3：Deprecated 項目
+
+| 原型檔案 | 棄用原因 | 處置 |
+|---|---|---|
+| `29-ratio-config.html` | 被 29a / 29b / 29c / 29d 四頁取代；v2.3 已從所有 35 個原型的 sidebar 移除 | React 落地時不建立對應 route；如收到舊書籤請求，可 redirect 至 `/assignment/list-definitions` |
+
+###### AD-E02-4-F-4：架構不變式（I-NAV-01 ~ I-NAV-05）
+
+以下不變式在 prototype 同步完成（v2.3 / 2026-05-21）後成立，React 落地及後續 UI 迭代必須維持。
+
+| ID | 不變式 |
+|---|---|
+| **I-NAV-01** | `assignmentPages` array（`toggleAssignmentSection()` 函式內）是 35 個 prototype HTML 之 sidebar entry 唯一定義來源；修改 sidebar entry 清單必須同步更新全部 35 個 prototype 檔案，不得只改部分。 |
+| **I-NAV-02** | 「客戶名單分派」sidebar section 只列**獨立功能 / module 入口**（使用者可主動導覽），不列**工作流子頁**（依賴特定 Kanban 卡片按鈕才能合法進入的頁面）。 |
+| **I-NAV-03** | 29a / 29b / 29c 三頁為工作流子頁，唯一入口為 M01 Kanban（`27-list-definition.html`）對應 stage 欄的卡片操作按鈕，**不在 sidebar 出現，不建立獨立 sidebar route stub**。 |
+| **I-NAV-04** | 工作流子頁（29a / 29b / 29c）完成或取消離開時，必須透過 `sessionStorage['cdmp.pendingToast']` signal 通知 M01 主頁顯示 toast；不得以直接導覽或 URL query param 傳遞訊息。（Signal Protocol 見 F050 v2.2 §7 BR-13。） |
+| **I-NAV-05** | `deprecated 29-ratio-config.html` 對應的 URL 在 React 落地時不建立 route；若接收到對應 URL 請求，redirect 至 `/assignment/list-definitions`，不回傳 404。 |
+
+###### AD-E02-4-F-5：未來擴充原則
+
+新增「客戶名單分派」相關頁面時，依以下決策樹判斷 sidebar 處置：
+
+```mermaid
+graph TD
+    A[新增頁面] --> B{使用者可從 sidebar<br/>主動導覽至此頁？}
+    B -- 是 --> C{此頁是否具備<br/>獨立業務語意<br/>（非特定 stage 的<br/>工作流步驟）？}
+    C -- 是 --> D[列入 sidebar entry<br/>更新 assignmentPages array<br/>同步 35 個 prototype HTML]
+    C -- 否 --> E[定位為工作流子頁<br/>入口由 M01 Kanban 卡片提供]
+    B -- 否 --> E
+    E --> F[不列入 sidebar<br/>遵循 I-NAV-02 / I-NAV-03]
+```
+
+**注意**：sidebar 入口增加會同步影響所有 35 個 prototype HTML（I-NAV-01），應在 prototype 同步完成後才進行 React 落地，避免 prototype 與 React 實作分歧。
 
 ---
 
