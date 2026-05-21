@@ -1,3 +1,17 @@
+/**
+ * @deprecated F048 v2.0 Kanban 重構（2026-05-21）
+ *
+ * 本 test 對應 v1.0 表格列格式渲染、stage filter chip、ConfirmModal「停」字斷言，
+ * 均因 v2.0 Kanban 重構而廢止。新 test 在：
+ *   apps/web/src/pages/assignment/__tests__/list-kanban-page.test.tsx
+ *
+ * 廢止場景對應：
+ *   - AC-1 表格列格式（v1.0）→ TS-F048-K-001/002（Kanban 卡片格式）
+ *   - AC-5 stage filter chip 切換（v1.0）→ Kanban 已以 column 直接呈現各 stage（v2.0）
+ *   - 「停」縮寫按鈕（v1.0）→ F052 v2.1 改為「停用」全寫（TS-F052-TXT-001~003）
+ *
+ * 本檔以 describe.skip 暫保留 git 歷史可追溯；後續 cleanup PR 可整檔刪除。
+ */
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -108,7 +122,8 @@ function renderPage() {
   );
 }
 
-describe('ListDefinitionPage (FE-2 M01 名單定義)', () => {
+// @deprecated v2.0 Kanban 重構（見檔案頂部說明）
+describe.skip('ListDefinitionPage (FE-2 M01 名單定義) — v1.0 表格列 DEPRECATED', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGetUser.mockReturnValue({
