@@ -151,3 +151,27 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **相關 Stories**：US-105（五階段總覽，退回入口）、US-108（草稿推進至部門比例，Rollback 的逆操作）、US-109（部門比例設定，清空其資料）、US-090（停用草稿名單，退回後可執行）
+
+---
+
+## v2.0 更新（2026-05-21）
+
+> **變更來源**：M01 主頁改為 Kanban 看板（US-130），操作入口隨之調整
+
+### AC-1 修訂（v2.0）：操作入口改為 Kanban 卡片按鈕
+
+> 取代原 AC-1 中「在 M01 名單五階段總覽（US-105）查看操作欄」的描述。
+
+- **Given** 部長或 Admin 在 M01 名單定義主頁（Kanban，US-130）查看 `dept_ratio` 欄的名單卡片
+- **When** 頁面渲染卡片操作按鈕
+- **Then** 卡片上顯示「退回」按鈕（灰色邊框，undo-2 icon）
+- **And** 處長帳號的 `dept_ratio` 卡片**不顯示「退回」按鈕**
+
+### AC-3 補充（v2.0）：Rollback 完成後留在 Kanban 主頁
+
+> 補充 AC-3 的 UI 結果行為（原版未指定頁面行為）。
+
+- **Given** 部長或 Admin 確認退回草稿
+- **When** 後端處理成功
+- **Then** 名單卡片從 `dept_ratio` 欄移動至 `draft` 欄（Kanban 即時刷新，無跳頁）
+- **And** 頁面顯示 info toast：「{LIST_NO} 已退回草稿，部門比例已清空」

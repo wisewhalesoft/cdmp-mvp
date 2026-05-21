@@ -157,3 +157,31 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 - **相關 Stories**：US-071（Stage 0 估算）、US-106（建立/編輯名單，v2.1）、US-090（停用名單）、US-081（觸發月跑）、US-123（舊名單 fallback 顯示）
 - **Reference**：`reference/TableSchema/OB/OBMLISTDF.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`
 - **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（F6、G6）
+
+---
+
+## v2.3 更新（2026-05-21）
+
+> **變更來源**：v2.3 Toolbar 清理 + Kanban 重構後主頁架構變更
+
+### AC-1 修訂（v2.3）：Toolbar 規則更新
+
+> 補充 v2.3 Toolbar 清理規則，取代原 AC-1 中「新增名單定義按鈕」的描述範圍。
+
+- **Given** 部長、Admin 或處長進入 M01 名單定義主頁
+- **When** 頁面載入完成
+- **Then** Toolbar 區域（工具列）**僅**包含以下元素：
+  1. 搜尋框（全角色可見）：搜尋名單名稱或 LIST_NO
+  2. 「新增名單」按鈕（僅 `director` / `admin` 可見）：點擊進入 US-106 建立名單流程
+- **And** Toolbar 上**不存在**「執行月跑」按鈕（移除重複入口，月跑唯一入口為 Ready 欄頂 CTA banner，見 US-132）
+- **And** Toolbar 上**不存在**「Stage 0 試算」按鈕（移除重複入口，試算入口改至 Ready CTA banner 的 secondary 按鈕）
+
+### AC-4 補充（v2.3）：月跑執行中 Toolbar 鎖定行為
+
+> 補充 AC-4 月跑鎖定時 Toolbar 的行為，與 US-132 AC-4 對齊。
+
+- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **When** 部長或 Admin 在 M01 名單定義主頁
+- **Then** 「新增名單」按鈕為停用（disabled）狀態
+- **And** Ready 欄頂 CTA banner 進入禁用樣式（琥珀色，見 US-132 AC-4）
+- **And** 頁面顯示橘色通知列：「分派執行中，名單定義暫時鎖定，無法進行新增、編輯、推進或退回操作」

@@ -153,3 +153,29 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **相關 Stories**：US-105（五階段總覽，退回入口）、US-116（核准，Rollback 的逆操作）、US-117（拒絕，退回後可執行）、US-118（準備完成查詢，退回後移出清單）、US-081（月跑觸發，受退回影響的前置條件）
+
+---
+
+## v2.0 / v2.2 更新（2026-05-21）
+
+> **變更來源**：v2.0 Kanban 重構（操作入口調整）+ v2.2 移除 per-card 月跑觸發
+
+### AC-1 修訂（v2.0）：操作入口改為 Kanban 卡片按鈕
+
+> 取代原 AC-1 中「在 M01 名單五階段總覽（US-105）或準備完成清單頁（US-118）」的操作欄描述。
+
+- **Given** 部長或 Admin 在 M01 名單定義主頁（Kanban，US-130）查看 `ready` 欄的名單卡片
+- **When** 頁面渲染卡片操作按鈕
+- **Then** 卡片上顯示「退回」按鈕（灰色邊框，undo-2 icon）
+- **And** 處長帳號的 `ready` 卡片**不顯示「退回」按鈕**
+- **And** `ready` 卡片上**不存在**任何「觸發月跑」或「執行」相關按鈕（v2.2 移除，月跑唯一入口為 US-132 Ready CTA banner）
+
+### AC-3 補充（v2.0）：Rollback 完成後留在 Kanban 主頁
+
+> 補充 AC-3 的 UI 結果行為（原版未指定頁面行為）。
+
+- **Given** 部長或 Admin 確認退回簽核
+- **When** 後端處理成功
+- **Then** 名單卡片從 `ready` 欄移動至 `approval` 欄（Kanban 即時刷新，無跳頁）
+- **And** 頁面顯示 info toast：「{LIST_NO} 已退回簽核階段，設定資料保留」
+- **And** Ready 欄頂 CTA banner 的名單數量即時更新（N-1）
