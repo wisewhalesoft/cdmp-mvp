@@ -481,15 +481,12 @@ describe('F081 / F085 / F089 v1.3 Rollback E2E + F077 v1.3 section_chief 隔離'
   });
 
   // ============================================================
-  // F077-SC：section_chief 轄區隔離
+  // F077-SC：section_chief 轄區隔離（D3 follow-up 2026-05-21）
   //
-  // 註：current AssignmentListService.listLists 尚未實作 section_chief
-  // 轄區過濾（spec §6 BR-4）。本 e2e 同時驗：
-  //   (a) section_chief 仍可登入並取得 lists（403/permission 通過）
-  //   (b) director 取得完整清單（兩個處長之名單均可見）
-  //
-  // 若 (a) 不過濾，會回傳兩個處長之名單，這即為已知 gap，
-  // 標 .skip + TODO 提醒 spec-writer / Phase 6 補上 section_chief 過濾邏輯。
+  // AssignmentListService.listLists() 已於本 commit 補實作 section_chief
+  // 轄區過濾（spec §6 BR-4）—— 依 actor.businessRole='section_chief' 時加上
+  // `WHERE created_by = actor.userId`，與既有 SectionChiefScopeService
+  // 判斷 pattern 一致（filter 對象由 emplid 改為 list created_by）。
   // ============================================================
   describe('F077-SC v1.3 section_chief 轄區隔離', () => {
     it('TS-F077-SC-002 director Token → GET /lists 回傳所有處長之名單', async () => {
@@ -506,9 +503,7 @@ describe('F081 / F085 / F089 v1.3 Rollback E2E + F077 v1.3 section_chief 隔離'
       expect(listNos).toContain('OB202605SC2');
     });
 
-    // F077-SC-001：section_chief 應只見本轄區，但目前 listLists service 尚未實作過濾
-    // 標 .skip 並 cross-reference 至 Phase 6 補實作
-    it.skip('TS-F077-SC-001 section_chief A → 僅回本轄區名單（gap：listLists service 待補 section_chief filter）', async () => {
+    it('TS-F077-SC-001 section_chief A → 僅回本轄區名單（D3 / BR-4）', async () => {
       await seedList(ds, { listNo: 'OB202605SC1', stage: 'draft', createdBy: SECTION_CHIEF_A.id });
       await seedList(ds, { listNo: 'OB202605SC2', stage: 'draft', createdBy: SECTION_CHIEF_B.id });
 
@@ -518,8 +513,38 @@ describe('F081 / F085 / F089 v1.3 Rollback E2E + F077 v1.3 section_chief 隔離'
 
       expect(res.status).toBe(200);
       const listNos = (res.body.lists as Array<{ listNo: string }>).map((l) => l.listNo);
+      // SC_A 為 OB202605SC1 之 created_by → 可見
       expect(listNos).toContain('OB202605SC1');
+      // OB202605SC2 由 SC_B 建立 → SC_A 不可見
       expect(listNos).not.toContain('OB202605SC2');
+      expect(listNos.length).toBe(1);
+    });
+
+    it('TS-F077-SC-001b section_chief B → 僅回本轄區名單（對稱驗證）', async () => {
+      await seedList(ds, { listNo: 'OB202605SC1', stage: 'draft', createdBy: SECTION_CHIEF_A.id });
+      await seedList(ds, { listNo: 'OB202605SC2', stage: 'draft', createdBy: SECTION_CHIEF_B.id });
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/assignment/lists?ym=202605')
+        .set('Authorization', `Bearer ${scBToken}`);
+
+      expect(res.status).toBe(200);
+      const listNos = (res.body.lists as Array<{ listNo: string }>).map((l) => l.listNo);
+      expect(listNos).toContain('OB202605SC2');
+      expect(listNos).not.toContain('OB202605SC1');
+      expect(listNos.length).toBe(1);
+    });
+
+    it('TS-F077-SC-001c director（admin role 變體）— 不過濾，仍見全部', async () => {
+      // 即使 admin role 帳號不帶 businessRole='director'，shouldFilter 仍 bypass（admin role 短路）
+      await seedList(ds, { listNo: 'OB202605SC1', stage: 'draft', createdBy: SECTION_CHIEF_A.id });
+      await seedList(ds, { listNo: 'OB202605SC2', stage: 'draft', createdBy: SECTION_CHIEF_B.id });
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/assignment/lists?ym=202605')
+        .set('Authorization', `Bearer ${directorToken}`);
+      const listNos = (res.body.lists as Array<{ listNo: string }>).map((l) => l.listNo);
+      expect(listNos.length).toBe(2);
     });
   });
 });

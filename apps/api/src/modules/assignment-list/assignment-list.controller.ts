@@ -120,7 +120,7 @@ export class AssignmentListController {
   // -------------------------------------------------------------------------
 
   @Get()
-  async list(@Query() query: ListListsQueryDto) {
+  async list(@Query() query: ListListsQueryDto, @Req() req: any) {
     const currentWorkYm = AssignmentListController.computeCurrentWorkYm();
     const ym = query.ym ?? currentWorkYm;
     this.assertYmInRange(ym, currentWorkYm);
@@ -133,10 +133,18 @@ export class AssignmentListController {
     const includeDisabled =
       query.includeDisabled === true || query.includeDisabled === 'true';
 
+    // F077 v1.3 §6 BR-4 / D3：傳入 actor 以套用 section_chief 轄區過濾
+    const actor = {
+      userId: req.user.userId,
+      role: req.user.role,
+      businessRole: req.user.businessRole ?? null,
+    };
+
     const result = await this.service.listLists({
       ym,
       stages,
       includeDisabled,
+      actor,
     });
 
     return {

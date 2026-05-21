@@ -237,6 +237,17 @@ export class AssignmentListService {
     ym: string;
     stages?: string[];
     includeDisabled?: boolean;
+    /**
+     * F077 v1.3 §6 BR-4 / D3 follow-up（2026-05-21）：
+     * actor 為 section_chief 時，僅回傳 `created_by = actor.userId` 之名單；
+     * admin / director（or null actor — backward-compat）→ bypass（看全部）。
+     *
+     * shouldFilter 判斷邏輯與既有 SectionChiefScopeService.shouldFilter() 一致
+     * （F063/F064/F066/F067 v1.1 同 pattern），但 filter 對象為
+     * `ob_list_definition.created_by` 而非 emplid，故不 inject Service，
+     * 直接 inline 判斷以避免跨 module 依賴。
+     */
+    actor?: { userId: string; role: string; businessRole: string | null } | null;
   }): Promise<{
     selectedYm: string;
     isHistorical: boolean;
@@ -245,7 +256,7 @@ export class AssignmentListService {
     lists: Array<Record<string, unknown>>;
     stageCounts: Record<string, number>;
   }> {
-    const { ym, stages, includeDisabled } = opts;
+    const { ym, stages, includeDisabled, actor } = opts;
 
     const qb = this.listRepo
       .createQueryBuilder('l')
@@ -257,6 +268,17 @@ export class AssignmentListService {
 
     if (!includeDisabled) {
       qb.andWhere("l.status = 'active'");
+    }
+
+    // F077 v1.3 §6 BR-4 / D3：section_chief 轄區隔離
+    //   admin / director / 無 actor → bypass（不過濾）
+    //   section_chief → 限 created_by = self
+    const isSectionChief =
+      actor != null &&
+      actor.role !== 'admin' &&
+      actor.businessRole === 'section_chief';
+    if (isSectionChief && actor) {
+      qb.andWhere('l.created_by = :scopeUid', { scopeUid: actor.userId });
     }
 
     qb.orderBy('l.list_no', 'ASC');
