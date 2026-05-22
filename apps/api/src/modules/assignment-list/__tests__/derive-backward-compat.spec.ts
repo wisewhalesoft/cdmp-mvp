@@ -15,11 +15,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssignmentListService } from '../assignment-list.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 
 async function buildEnv() {
   const app = await Test.createTestingModule({
@@ -32,7 +37,7 @@ async function buildEnv() {
           AssignmentAuditLog,
           AssignmentRun,
           PooldataFieldOption,
-          PooldataFieldWhitelist,
+          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
         ],
         synchronize: true,
       }),
@@ -41,10 +46,10 @@ async function buildEnv() {
         AssignmentAuditLog,
         AssignmentRun,
         PooldataFieldOption,
-        PooldataFieldWhitelist,
+        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
       ]),
     ],
-    providers: [AssignmentListService, AssignmentRunGuardService],
+    providers: [AssignmentListService, AssignmentRunGuardService, { provide: SectionChiefScopeService, useValue: { getScopeDeptCode: () => Promise.resolve(null) } }],
   }).compile();
   await app.init();
   return app;

@@ -13,11 +13,11 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
-import { User } from '@/database/entities/user.entity';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { SetPersonnelRatioDto, AppliedTemplateDto } from './dto/set-personnel-ratio.dto';
 
@@ -55,44 +55,12 @@ export class PersonnelRatioService {
     private readonly emphireRepo: Repository<ObEmphire>,
     @InjectRepository(AssignmentApproval)
     private readonly approvalRepo: Repository<AssignmentApproval>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
     private readonly ratioValidation: RatioValidationService,
     private readonly personnelRatioValidation: PersonnelRatioValidationService,
     private readonly stageTransition: StageTransitionService,
     private readonly runGuard: AssignmentRunGuardService,
+    private readonly scopeService: SectionChiefScopeService,
   ) {}
-
-  /**
-   * 反查處長 (section_chief) 的轄區部門代碼 (F082 BR-3 / F074 BR-1 修訂版)。
-   *
-   * 設計：透過 users.email <-> ob_emphire.email 比對，找出該帳號對應之員工，
-   *       並要求該員工 `jfun_nm = '處長'` 且在職；取其 dept_code 為轄區。
-   *       一個處長 = 一個 dept_code。
-   *
-   * 取代原 spec 之 `scopeByCreator(ob_empl_set.created_by)` 邏輯，避免 chicken-and-egg
-   * （首次進頁面時 ob_empl_set 為空 → 處長看不到任何部門 → 無法建立第一筆）。
-   *
-   * 回傳：
-   *   - dept_code（trimmed）若處長帳號對應到「在職處長」員工
-   *   - null 若：(a) email 對不上 ob_emphire 任何在職員工，
-   *             (b) 對應員工的 jfun_nm 非「處長」，
-   *             (c) dept_code 為空
-   */
-  private async resolveSectionChiefScope(userId: string): Promise<string | null> {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user?.email) return null;
-    const emp = await this.emphireRepo
-      .createQueryBuilder('e')
-      .where('LOWER(TRIM(e.email)) = LOWER(:email)', { email: user.email.trim() })
-      .andWhere('e.resign_date IS NULL')
-      .getOne();
-    if (!emp) return null;
-    const jfunNm = (emp.jfun_nm ?? '').trim();
-    if (jfunNm !== '處長') return null;
-    const deptCode = (emp.dept_code ?? '').trim();
-    return deptCode || null;
-  }
 
   /**
    * GET /api/v1/assignment/ratios/personnel/{listNo}
@@ -110,7 +78,7 @@ export class PersonnelRatioService {
     // 處長視角下，先反查其轄區 dept_code（spec F082 BR-3 修訂；email 對 ob_emphire.email
     // + jfun_nm='處長' + 在職）。對應不到 → null（後端視同無轄區回空清單）。
     const sectionChiefScope: string | null = isSectionChief
-      ? await this.resolveSectionChiefScope(actor.userId)
+      ? await this.scopeService.getScopeDeptCode(actor.userId)
       : null;
 
     // 員工清單來源：ob_emphire 全部（不過濾 resign_date；BR-6）
@@ -344,7 +312,7 @@ export class PersonnelRatioService {
     // 改為依 users.email <-> ob_emphire.email + jfun_nm='處長' 反查 dept_code。
     // dto.deptCode 必須等於 scope，否則攔截。
     if (this.isSectionChiefOnly(actor)) {
-      const scope = await this.resolveSectionChiefScope(actor.userId);
+      const scope = await this.scopeService.getScopeDeptCode(actor.userId);
       if (!scope || scope !== dto.deptCode.trim()) {
         throw new ForbiddenException({
           error: ERROR_CODES.PERSONNEL_RATIO_OUT_OF_SCOPE,

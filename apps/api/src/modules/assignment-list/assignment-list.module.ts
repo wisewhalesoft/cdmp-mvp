@@ -15,6 +15,7 @@ import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-white
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { AssignmentListController } from './assignment-list.controller';
 import { AssignmentListService } from './assignment-list.service';
 import { Stage0EstimateController } from './stage0-estimate.controller';
@@ -56,6 +57,7 @@ import { Stage0EstimateService } from './stage0-estimate.service';
   providers: [
     AssignmentListService,
     AssignmentRunGuardService,
+    SectionChiefScopeService,
     Stage0EstimateService,
   ],
   exports: [AssignmentListService, Stage0EstimateService],

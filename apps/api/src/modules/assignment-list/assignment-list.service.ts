@@ -21,6 +21,7 @@ import { User } from '@/database/entities/user.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { CreateListDto } from './dto/create-list.dto';
 import type { UpdateListDto } from './dto/update-list.dto';
@@ -81,6 +82,7 @@ export class AssignmentListService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly assignmentRunGuard: AssignmentRunGuardService,
+    private readonly scopeService: SectionChiefScopeService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -238,14 +240,13 @@ export class AssignmentListService {
     stages?: string[];
     includeDisabled?: boolean;
     /**
-     * F077 v1.3 §6 BR-4 / D3 follow-up（2026-05-21）：
-     * actor 為 section_chief 時，僅回傳 `created_by = actor.userId` 之名單；
-     * admin / director（or null actor — backward-compat）→ bypass（看全部）。
+     * F077 v1.4 §6 BR-4（2026-05-21 修訂）：
+     * actor 為 section_chief 時，僅回傳「ob_dept_pct 含處長轄區 dept_code」之名單；
+     * admin / director（或 null actor — backward-compat）→ bypass。
      *
-     * shouldFilter 判斷邏輯與既有 SectionChiefScopeService.shouldFilter() 一致
-     * （F063/F064/F066/F067 v1.1 同 pattern），但 filter 對象為
-     * `ob_list_definition.created_by` 而非 emplid，故不 inject Service，
-     * 直接 inline 判斷以避免跨 module 依賴。
+     * 廢除原 `created_by = actor.userId` 過濾（chicken-and-egg：處長不會建名單，
+     * 該欄位永遠不可能 match）。改為透過 SectionChiefScopeService.getScopeDeptCode
+     * 反查 ob_emphire 取得 dept_code，再 EXISTS join ob_dept_pct 過濾。
      */
     actor?: { userId: string; role: string; businessRole: string | null } | null;
   }): Promise<{
@@ -270,15 +271,25 @@ export class AssignmentListService {
       qb.andWhere("l.status = 'active'");
     }
 
-    // F077 v1.3 §6 BR-4 / D3：section_chief 轄區隔離
+    // F077 v1.4 §6 BR-4：section_chief 轄區隔離（2026-05-21 改用 ob_emphire 反查）
     //   admin / director / 無 actor → bypass（不過濾）
-    //   section_chief → 限 created_by = self
+    //   section_chief → 限 ob_dept_pct 含處長轄區 dept_code 之名單
+    //   scope=null（email 對不上 ob_emphire 處長員工）→ 回空清單
     const isSectionChief =
       actor != null &&
       actor.role !== 'admin' &&
       actor.businessRole === 'section_chief';
     if (isSectionChief && actor) {
-      qb.andWhere('l.created_by = :scopeUid', { scopeUid: actor.userId });
+      const scope = await this.scopeService.getScopeDeptCode(actor.userId);
+      if (!scope) {
+        // 對不上 ob_emphire 處長員工 → 視同無轄區回空清單
+        qb.andWhere('1 = 0');
+      } else {
+        qb.andWhere(
+          `EXISTS (SELECT 1 FROM ob_dept_pct p WHERE p.list_no = l.list_no AND TRIM(p.obdeptid) = :scope)`,
+          { scope },
+        );
+      }
     }
 
     qb.orderBy('l.list_no', 'ASC');

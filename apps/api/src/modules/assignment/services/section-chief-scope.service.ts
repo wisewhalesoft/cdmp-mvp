@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 
 export interface ActorUser {
   userId: string;
@@ -10,27 +12,55 @@ export interface ActorUser {
 }
 
 /**
- * SectionChiefScopeService — F063/F064/F066/F067 v1.1 共用 scopeByCreator helper
+ * SectionChiefScopeService — E07 處長轄區共用 helper
  *
  * 對應 spec：
- *   - F063 v1.1 BR-6 + BR-7
- *   - F064 v1.1 / F066 v1.1 / F067 v1.1（同 pattern）
+ *   - F074 v2.1 BR-1（轄區判定改用 ob_emphire 反查）
+ *   - F077 v1.4 BR-4（list-definition 處長過濾）
+ *   - F082 v1.5 BR-3 / BR-14（personnel ratio 處長過濾）
+ *   - F063 v1.1 BR-6 / F064 v1.1 / F066 v1.1 / F067 v1.1（月跑後報表 emplid 過濾，沿用 created_by）
  *
- * 設計（與 PersonnelRatioService.isSectionChiefOnly + emplSet.created_by 過濾 pattern 一致）：
- *   - admin / director：bypass（不過濾）
- *   - section_chief：依 ob_empl_set.created_by = currentUserId 取得處長轄區 emplid 集合
- *   - 過濾語意（非拒絕）：縮小集合，不會回 403 / 422
- *
- * 注意：scope 以 ob_empl_set.created_by 為依據（與 personnel-ratio.service 一致），
- *       而非 ob_emphire（後者無 created_by 欄位）。月跑 snapshot 中的 assignments[].emplid
- *       對應到此 emplid 集合，故能正確 filter。
+ * 兩種 scope 機制並存：
+ *   - **getScopeDeptCode(userId)**（v2.1 新增）：透過 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職`
+ *     反查 dept_code。給「需操作或檢視名單／個別比例設定」之 feature 使用（F077 / F082 / F088 / F089）。
+ *     避免 chicken-and-egg（首次 GET 時 ob_empl_set 為空 → 無轄區資料 → 處長看不到任何東西）。
+ *   - **getScopeEmplIds(userId)**（舊 API）：依 `ob_empl_set.created_by = currentUserId` 取得 emplid。
+ *     只給「月跑後的指派結果報表」用（F063/F064/F066/F067），因該情境下 ob_empl_set 必然已有資料。
  */
 @Injectable()
 export class SectionChiefScopeService {
   constructor(
     @InjectRepository(ObEmplSet)
     private readonly emplSetRepo: Repository<ObEmplSet>,
+    @InjectRepository(ObEmphire)
+    private readonly emphireRepo: Repository<ObEmphire>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
+
+  /**
+   * 透過 ob_emphire 反查處長的轄區 dept_code（F074 v2.1 BR-1 / F077 v1.4 / F082 v1.5）。
+   *
+   * 條件：
+   *   - users.email 對應某個 ob_emphire 員工的 email（trimmed + case-insensitive）
+   *   - 該員工在職（resign_date IS NULL）
+   *   - 該員工 jfun_nm = '處長'
+   *
+   * @returns 對應的 dept_code（trimmed），或 null 表示對不上 / 非處長身份
+   */
+  async getScopeDeptCode(userId: string): Promise<string | null> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user?.email) return null;
+    const emp = await this.emphireRepo
+      .createQueryBuilder('e')
+      .where('LOWER(TRIM(e.email)) = LOWER(:email)', { email: user.email.trim() })
+      .andWhere('e.resign_date IS NULL')
+      .getOne();
+    if (!emp) return null;
+    if ((emp.jfun_nm ?? '').trim() !== '處長') return null;
+    const deptCode = (emp.dept_code ?? '').trim();
+    return deptCode || null;
+  }
 
   /**
    * 判斷是否需要 scope filter。

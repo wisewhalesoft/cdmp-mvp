@@ -10,6 +10,7 @@ import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
@@ -50,6 +51,7 @@ import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment
       ObPoolDataList,
       ObDeptPct,
       ObEmplSet,
+      ObEmphire,
       ObCardType,
       ObLevelcardVersion,
       ObLevelcardColumn,

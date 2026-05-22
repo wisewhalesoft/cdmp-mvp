@@ -28,11 +28,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { AssignmentListService } from '../assignment-list.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const HISTORICAL_YM = '202504'; // 歷史月份
@@ -81,7 +86,7 @@ describe('AssignmentListService — historical month readonly (TC-M01-HIST)', ()
             AssignmentAuditLog,
             AssignmentRun,
             PooldataFieldOption,
-            PooldataFieldWhitelist,
+            PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
           ],
           synchronize: true,
         }),
@@ -90,10 +95,10 @@ describe('AssignmentListService — historical month readonly (TC-M01-HIST)', ()
           AssignmentAuditLog,
           AssignmentRun,
           PooldataFieldOption,
-          PooldataFieldWhitelist,
+          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
         ]),
       ],
-      providers: [AssignmentListService, AssignmentRunGuardService],
+      providers: [AssignmentListService, AssignmentRunGuardService, { provide: SectionChiefScopeService, useValue: { getScopeDeptCode: () => Promise.resolve(null) } }],
     }).compile();
     await app.init();
 

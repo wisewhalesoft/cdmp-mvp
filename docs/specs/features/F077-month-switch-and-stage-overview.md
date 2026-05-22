@@ -247,7 +247,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | BR-1 | **`current_work_ym` 計算單一權威**：後端依系統時鐘判斷每月 1 號 0:00 切換；前端不自行計算，一律由 GET `/api/v1/system/current-work-ym` 取得；後端可由 config 覆蓋 |
 | BR-2 | **月份範圍限制**：可選範圍 `current_work_ym ± 12`（共 25 月）；超出 → 400 `INVALID_YM_RANGE` |
 | BR-3 | **歷史月份唯讀（單一權威）**：所有 E07 寫入端點（F050 / F078 / F079 / F080 / F081 / F082 / F084 / F085 / F086 / F087 / F089）依 `request.ym < current_work_ym` 攔截並回 403 `LIST_HISTORICAL_READONLY`；本 spec 為此規則之單一權威 |
-| BR-4 | **處長轄區隔離**：處長 GET 列表時，後端依 `created_by = currentUserId` 過濾；admin / director 可跨轄區 |
+| BR-4 | **處長轄區隔離（v1.4 修訂 / 2026-05-21）**：處長 GET 列表時，後端用 `SectionChiefScopeService.getScopeDeptCode(userId)` 反查（`users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職`）取 dept_code，再 `EXISTS (SELECT 1 FROM ob_dept_pct WHERE list_no = l.list_no AND TRIM(obdeptid) = :scope)` 過濾。scope=null 時回空清單。admin / director 可跨轄區。**廢除 v1.3 之 `l.created_by = currentUserId` 過濾**（chicken-and-egg：處長不會建名單，永遠 0 match）。詳 [F074 v2.1 BR-1](F074-define-section-chief-role.md#6-商業規則) |
 | BR-5 | **預設不顯示已停用名單**：GET 列表預設 `includeDisabled = false`；使用者可選擇顯示 |
 | BR-6 | **stage ENUM 定義**：`draft` / `dept_ratio` / `personnel_ratio` / `approval` / `ready`；UI 對應中文標籤定義於本 spec §7 |
 | BR-7 | **角色 × 階段操作矩陣（v1.3 / GAP-G6 單一權威）**：本表為其他 E07 spec 之共用權威；各 spec 之 §7 UI/UX 渲染條件須對齊本表（不重複定義）。完整矩陣（5 stage × 4 role）見下方表格，5 個橫切條件統一於矩陣下方收斂。

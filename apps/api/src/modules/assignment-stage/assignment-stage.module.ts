@@ -15,6 +15,7 @@ import { AssignmentRunGuardService } from '@/modules/assignment/services/assignm
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { DeptRatioController } from './dept-ratio.controller';
 import { DeptRatioService } from './dept-ratio.service';
 import { PersonnelRatioController } from './personnel-ratio.controller';
@@ -67,6 +68,7 @@ import { StageActionService } from './stage-action.service';
     StageTransitionService,
     RatioValidationService,
     PersonnelRatioValidationService,
+    SectionChiefScopeService,
   ],
   exports: [DeptRatioService, PersonnelRatioService, StageActionService],
 })

@@ -24,6 +24,11 @@ import { AssignmentRunGuardService } from '@/modules/assignment/services/assignm
 import { ERROR_CODES } from '@/common/errors/error-codes';
 import type { CreateListDto } from '../dto/create-list.dto';
 import type { UpdateListDto } from '../dto/update-list.dto';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 
 const YM = '202605';
 
@@ -46,6 +51,10 @@ async function buildModule(): Promise<Env> {
           AssignmentAuditLog,
           PooldataFieldOption,
           PooldataFieldWhitelist,
+          ObDeptPct,
+          ObEmplSet,
+          ObEmphire,
+          User,
         ],
         synchronize: true,
       }),
@@ -54,6 +63,10 @@ async function buildModule(): Promise<Env> {
         AssignmentAuditLog,
         PooldataFieldOption,
         PooldataFieldWhitelist,
+        ObDeptPct,
+        ObEmplSet,
+        ObEmphire,
+        User,
       ]),
     ],
     providers: [
@@ -61,6 +74,10 @@ async function buildModule(): Promise<Env> {
       {
         provide: AssignmentRunGuardService,
         useValue: { assertNoRunningRun: vi.fn().mockResolvedValue(undefined) },
+      },
+      {
+        provide: SectionChiefScopeService,
+        useValue: { getScopeDeptCode: () => Promise.resolve(null) },
       },
     ],
   }).compile();
