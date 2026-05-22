@@ -13,6 +13,7 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
+import { User } from '@/database/entities/user.entity';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
@@ -54,11 +55,44 @@ export class PersonnelRatioService {
     private readonly emphireRepo: Repository<ObEmphire>,
     @InjectRepository(AssignmentApproval)
     private readonly approvalRepo: Repository<AssignmentApproval>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly ratioValidation: RatioValidationService,
     private readonly personnelRatioValidation: PersonnelRatioValidationService,
     private readonly stageTransition: StageTransitionService,
     private readonly runGuard: AssignmentRunGuardService,
   ) {}
+
+  /**
+   * 反查處長 (section_chief) 的轄區部門代碼 (F082 BR-3 / F074 BR-1 修訂版)。
+   *
+   * 設計：透過 users.email <-> ob_emphire.email 比對，找出該帳號對應之員工，
+   *       並要求該員工 `jfun_nm = '處長'` 且在職；取其 dept_code 為轄區。
+   *       一個處長 = 一個 dept_code。
+   *
+   * 取代原 spec 之 `scopeByCreator(ob_empl_set.created_by)` 邏輯，避免 chicken-and-egg
+   * （首次進頁面時 ob_empl_set 為空 → 處長看不到任何部門 → 無法建立第一筆）。
+   *
+   * 回傳：
+   *   - dept_code（trimmed）若處長帳號對應到「在職處長」員工
+   *   - null 若：(a) email 對不上 ob_emphire 任何在職員工，
+   *             (b) 對應員工的 jfun_nm 非「處長」，
+   *             (c) dept_code 為空
+   */
+  private async resolveSectionChiefScope(userId: string): Promise<string | null> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user?.email) return null;
+    const emp = await this.emphireRepo
+      .createQueryBuilder('e')
+      .where('LOWER(TRIM(e.email)) = LOWER(:email)', { email: user.email.trim() })
+      .andWhere('e.resign_date IS NULL')
+      .getOne();
+    if (!emp) return null;
+    const jfunNm = (emp.jfun_nm ?? '').trim();
+    if (jfunNm !== '處長') return null;
+    const deptCode = (emp.dept_code ?? '').trim();
+    return deptCode || null;
+  }
 
   /**
    * GET /api/v1/assignment/ratios/personnel/{listNo}
@@ -73,6 +107,11 @@ export class PersonnelRatioService {
     const list = await this.findListOrThrow(listNo);
 
     const isSectionChief = this.isSectionChiefOnly(actor);
+    // 處長視角下，先反查其轄區 dept_code（spec F082 BR-3 修訂；email 對 ob_emphire.email
+    // + jfun_nm='處長' + 在職）。對應不到 → null（後端視同無轄區回空清單）。
+    const sectionChiefScope: string | null = isSectionChief
+      ? await this.resolveSectionChiefScope(actor.userId)
+      : null;
 
     // 員工清單來源：ob_emphire 全部（不過濾 resign_date；BR-6）
     const emphireRows = await this.emphireRepo
@@ -102,13 +141,13 @@ export class PersonnelRatioService {
       }
     }
 
-    // 既有 ob_empl_set
+    // 既有 ob_empl_set。處長視角不再用 created_by 過濾（chicken-and-egg），
+    // 改為依 sectionChiefScope 過濾 deptid_m（spec F082 BR-3 修訂）。
     let emplSetQb = this.emplSetRepo
       .createQueryBuilder('s')
       .where('s.list_no = :listNo', { listNo });
-    // 處長：scopeByCreator (BR-3 / v1.3 決議 #4)
-    if (isSectionChief) {
-      emplSetQb = emplSetQb.andWhere('s.created_by = :uid', { uid: actor.userId });
+    if (isSectionChief && sectionChiefScope) {
+      emplSetQb = emplSetQb.andWhere('TRIM(s.deptid_m) = :scope', { scope: sectionChiefScope });
     }
     const emplSetRows = await emplSetQb.getMany();
 
@@ -143,12 +182,11 @@ export class PersonnelRatioService {
       empByDept.set(code, arr);
     }
 
-    // 處長視角：只回包含自己 created_by 之部門
+    // 處長視角：只回 sectionChiefScope 對應的部門（spec F082 BR-3 修訂）。
+    // sectionChiefScope 為 null 時（email 對不上 ob_emphire 任何在職處長），回空清單。
     let visibleDeptCodes: string[] = Array.from(empByDept.keys());
     if (isSectionChief) {
-      const inScope = new Set<string>();
-      for (const r of emplSetRows) inScope.add(r.deptid_m.trim());
-      visibleDeptCodes = visibleDeptCodes.filter((c) => inScope.has(c));
+      visibleDeptCodes = sectionChiefScope ? visibleDeptCodes.filter((c) => c === sectionChiefScope) : [];
     }
     if (targetDeptCodes) {
       visibleDeptCodes = visibleDeptCodes.filter((c) => targetDeptCodes!.includes(c));
@@ -187,7 +225,8 @@ export class PersonnelRatioService {
         deptName: (deptPct?.obdeptnm?.trim() ?? emps[0]?.dept_name?.trim() ?? code),
         deptRatio: deptPct ? Number(deptPct.ration) : null,
         directorName: directorMap.get(code) ?? null,
-        isInScope: isSectionChief ? setRows.length > 0 : true,
+        // 處長視角下 isInScope = (code === sectionChiefScope)；部長/Admin 永遠 true
+        isInScope: isSectionChief ? code === sectionChiefScope : true,
         activeCount,
         sumValidated,
         allResigned,
@@ -301,17 +340,12 @@ export class PersonnelRatioService {
 
     const activeCount = emphireRows.filter((e) => e.resign_date == null).length;
 
-    // 處長轄區檢查（v1.3 BR-14）
+    // 處長轄區檢查（spec F082 BR-3 修訂）：
+    // 改為依 users.email <-> ob_emphire.email + jfun_nm='處長' 反查 dept_code。
+    // dto.deptCode 必須等於 scope，否則攔截。
     if (this.isSectionChiefOnly(actor)) {
-      // deptCode 屬於處長：要求 ob_empl_set 該 dept 中至少 1 筆 created_by = actor.userId
-      // 首次設定時無紀錄，採寬鬆策略：仍允許處長寫入該 dept（後續以 created_by 鎖定）。
-      // 但若 dept 既有紀錄全屬他人，且處長嘗試寫，則攔截。
-      const existing = await this.emplSetRepo.find({
-        where: { list_no: listNo, deptid_m: dto.deptCode },
-      });
-      const hasMine = existing.some((r) => r.created_by === actor.userId);
-      const hasOthers = existing.some((r) => r.created_by !== actor.userId && r.created_by != null);
-      if (hasOthers && !hasMine) {
+      const scope = await this.resolveSectionChiefScope(actor.userId);
+      if (!scope || scope !== dto.deptCode.trim()) {
         throw new ForbiddenException({
           error: ERROR_CODES.PERSONNEL_RATIO_OUT_OF_SCOPE,
           message: ERROR_MESSAGES.PERSONNEL_RATIO_OUT_OF_SCOPE,

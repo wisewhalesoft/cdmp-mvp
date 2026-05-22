@@ -24,6 +24,7 @@ describe('PersonnelRatioService (F082 + F083)', () => {
   let emplSetRepo: any;
   let emphireRepo: any;
   let approvalRepo: any;
+  let userRepo: any;
   let stageTransition: any;
   let ratioValidation: any;
   let personnelRatioValidation: any;
@@ -76,6 +77,10 @@ describe('PersonnelRatioService (F082 + F083)', () => {
     ratioValidation = { assertEachInRange: vi.fn() };
     personnelRatioValidation = { assertDeptSumEquals100: vi.fn() };
     runGuard = { assertNoRunningRun: vi.fn().mockResolvedValue(undefined) };
+    // F082 BR-3 修訂：userRepo 用於反查 section_chief.email → ob_emphire.email
+    userRepo = {
+      findOne: vi.fn().mockResolvedValue(null),
+    };
 
     svc = new PersonnelRatioService(
       dataSource,
@@ -84,6 +89,7 @@ describe('PersonnelRatioService (F082 + F083)', () => {
       emplSetRepo,
       emphireRepo,
       approvalRepo,
+      userRepo,
       ratioValidation,
       personnelRatioValidation,
       stageTransition,

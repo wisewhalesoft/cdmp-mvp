@@ -130,11 +130,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | `DirectorGuard`（v2.0 新增） | `role = 'admin'` OR `business_role = 'director'` | 部長專屬功能 + **M02 全部端點**（含 GET，因處長對 M02 完全不可見） |
 | `SectionChiefGuard`（v2.0 新增） | `business_role = 'section_chief'` | 處長專用端點（少數明確標記）|
 
-**`created_by` 過濾邏輯**（業務層）：
+**處長轄區判定邏輯**（v2.1 / 2026-05-21 修訂；廢除 `created_by` 過濾，改 ob_emphire 反查）：
 
-- 處長視角：所有讀寫操作隱式 WHERE `created_by = currentUserId`（除部長 + Admin）
-- 部長 + Admin 視角：不加 `created_by` 過濾
-- 實作位置：service 層統一 helper（`scopeByCreator(query, currentUser)`），避免散落於各 controller
+- **新邏輯**：處長帳號 → `users.email` ↔ `ob_emphire.email` 比對 → 取該員工之 `dept_code` 作為轄區
+  - 要求該員工 `resign_date IS NULL`（在職）且 `TRIM(jfun_nm) = '處長'`
+  - 一個處長帳號精確對應一個 `dept_code`；對應不到回 null（視同無轄區，回空清單）
+  - 實作位置：service 層 helper（建議命名 `resolveSectionChiefScope(userId): Promise<string | null>`，由 M03b / M03d 引用）
+- **廢除原因**（chicken-and-egg）：原 `scopeByCreator(query, currentUser)` 邏輯依賴 `ob_empl_set.created_by`，但首次 GET 時 `ob_empl_set` 為空 → 處長視角永遠回空清單 → 無法建立第一筆紀錄
+- 部長 + Admin 視角：不過濾轄區
+- 前提：HR 同步進 `ob_emphire` 之處長員工 email 必須與 `users.email` 一致（部署時須由 admin / ops 確保）
 
 ### 5.3 錯誤碼
 
@@ -150,14 +154,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 | 規則編號 | 說明 |
 |---|---|
-| BR-1 | **轄區識別**：以 `created_by` 欄位過濾（名單 / 業務員紀錄之建立者帳號 ID）；**不**引入獨立 `section_id` 欄位 |
+| BR-1 | **轄區識別（v2.1 修訂 / 2026-05-21）**：以 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` 反查 `dept_code` 作為轄區；一個處長帳號 = 一個 `dept_code`；**不**引入獨立 `section_id` 欄位或 `users.dept_code` 欄位。**廢除 v2.0 之 `created_by` 過濾**（chicken-and-egg：首次 GET 時 ob_empl_set 為空無法建立第一筆）。實作 helper：`resolveSectionChiefScope(userId)`，由 M03b/d service 共用 |
 | BR-2 | 處長**唯一**可寫入功能：個別業務比例設定（M03b，F082~F085） |
 | BR-3 | 處長**唯一**可查詢（唯讀）功能：準備完成階段（M03d，F088~F089） |
 | BR-4 | M02 對處長完全不可見：Nav 隱藏（DOM 不渲染）+ 後端 `DirectorGuard` 防禦（GET 也回 403）+ 前端路由守衛攔截 |
 | BR-5 | **部長與處長互斥**（單一欄位設計）：不可同時持有；切換時 F006a 直接覆寫即可（v1.x 之並任規則已廢除） |
 | BR-6 | 角色指派 / 撤銷之 audit log 由 [F006a](F006a-update-business-role.md) 統一寫入（本 spec 不獨立寫入） |
 | BR-7 | 處長對個別業務比例設定 / 準備完成階段以外的所有 E07 功能：後端回 403 `AUTH_FORBIDDEN`（由 `DirectorGuard` 攔截），前端不渲染對應操作入口 |
-| BR-8 | 跨轄區存取防護：service 層必須在所有處長身份的查詢與寫入路徑加入 `created_by = currentUserId` 過濾；遺漏者視為高優先 bug |
+| BR-8 | 跨轄區存取防護（v2.1 修訂）：service 層必須在所有處長身份的查詢與寫入路徑呼叫 `resolveSectionChiefScope(userId)` 取得轄區 dept_code 後過濾；scope=null 視同越權回空清單 / 403；遺漏者視為高優先 bug |
 | BR-9 | E07 角色矩陣之**唯一權威來源**為 [F002 v2.0 §4.6](F002-user-login.md#e07-角色矩陣) |
 | BR-10 | **業務角色變更入口唯一性（v2.0 / E07 合併重構）**：`users.business_role` 欄位之**唯一**寫入入口為 [F006a](F006a-update-business-role.md) PATCH `/business-role`（Admin only） |
 | BR-11 | **Token revoke 同步觸發**：由 F006a 統一規範（本 spec 不重複描述） |

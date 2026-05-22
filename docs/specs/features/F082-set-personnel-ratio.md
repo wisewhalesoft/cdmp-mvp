@@ -248,8 +248,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 | Method | Guard 行為 | 越權回應 |
 |---|---|---|
-| GET | 不攔截 | service 走 `scopeByCreator(currentUserId)` 統一 filter；越權帶 `deptCode` 回 200 OK + `departments = []`（不洩漏存在性） |
-| PUT / POST | 攔截 | 越權之 `deptCode` 或 `empIds` 不屬處長轄區 → 403 `PERSONNEL_RATIO_OUT_OF_SCOPE` |
+| GET | 不攔截 | service 呼叫 `resolveSectionChiefScope(userId)` 取 dept_code 後過濾 `visibleDeptCodes`；scope=null 或越權帶 `deptCode` 回 200 OK + `departments = []`（不洩漏存在性） |
+| PUT / POST | 攔截 | 比對 `dto.deptCode === scope`，不符或 scope=null → 403 `PERSONNEL_RATIO_OUT_OF_SCOPE` |
 
 > Guard 與 service 層分工：(1) GET 路徑由 service `scopeByCreator()` 統一 WHERE 過濾，避免揭露他人轄區存在性；(2) PUT / POST 路徑由 Guard 攔截，避免進入 service 層；(3) admin / director 任意 method 直接放行，不執行轄區檢查。
 
@@ -314,7 +314,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-1 | **per-LIST_NO + per-DEPT 設計**：本 Feature 以 per-LIST_NO + per-DEPT 業務員比例為單位；PUT 端點僅寫入單一部門；多部門需多次呼叫（簡化前端 Guard 與稽核日誌寫入語意） |
 | BR-2 | **比例驗證（I-8）**：每 `(list_no, deptid_m)` 下所有 RATION 加總落於 [99.99, 100.01]（容忍 ±0.01%）；任一 RATION 落於 [0, 100]。**注意**：與 F079 之「per-LIST_NO 加總 100%」語意不同；本 Feature 為「per-DEPT 加總 100%」 |
 | BR-2a | **「相對 %」UI 顯示語意（OQ-E07-40 用戶決議落地，2026-05-15）**：本 Feature 顯示給處長 / 部長 / Admin 之 RATION 數值均為**相對部門內**的百分比（部門內加總 = 100%），**不顯示對全名單之絕對百分比**（例：部門配額 30%，3 人各介面顯示 ~33.33%，意指相對值）；DB 落地語意（相對 % vs 絕對 %）由 system-architect 決議（[ASSUMPTION] 詳 §12 A-7） |
-| BR-3 | **轄區規則（I-3）**：處長僅能存取 `ob_empl_set.created_by = currentUserId` 之紀錄；新建紀錄之 `created_by` 由後端自動填為 `currentUserId`；Service 層 `scopeByCreator()` helper 在 SQL WHERE 統一補 `AND (currentUserRole IN ('director','admin') OR created_by = :currentUserId)` |
+| BR-3 | **轄區規則（v1.5 修訂 / 2026-05-21；I-3）**：處長轄區由 `resolveSectionChiefScope(userId)` 反查決定（`users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` → 取 `dept_code`）；service 層改用此 scope 過濾 GET 之 `visibleDeptCodes` 與 PUT 之 `dto.deptCode` 越權檢查。**廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯**（chicken-and-egg：首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單）。scope=null 時：GET 回 `departments=[]`、PUT 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`。詳 [F074 v2.1 BR-1](F074-define-section-chief-role.md#6-商業規則) |
 | BR-4 | **角色矩陣（I-7）**：本 Feature 開放 `admin` / `business_role = 'director'` / `business_role = 'section_chief'`；其他角色回 403 `AUTH_FORBIDDEN`（與 F079 不同；本 Feature 處長為主要 Actor） |
 | BR-5 | **`stage = 'personnel_ratio'` 限制**：只允許此階段寫入；非此階段一律 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（透過 `StageTransitionService.assertStageEquals(listNo, 'personnel_ratio')` helper 統一檢查） |
 | BR-6 | **業務員清單來源（v1.2 修訂 / PO 決議 F082-A）**：`SELECT emp_id, emp_name, dept_code, dept_name, (resign_date IS NOT NULL) AS is_resigned FROM appdb.ob_emphire ORDER BY dept_code, is_resigned ASC, emp_id`；**全部員工，不過濾 resign_date**；在職員工排序在前；`appdb.ob_emphire` 來源於 [data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity） |
@@ -325,7 +325,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-11 | **歷史月份阻截（沿用 F077 BR-3）**：`project_workym < current_work_ym` 一律 403 `LIST_HISTORICAL_READONLY` |
 | BR-12 | **前置條件 `ob_dept_pct` 必先建立**：寫入前 service 層查詢 `ob_dept_pct WHERE (project_workym, list_no, obdeptid = :deptCode)` 至少 1 筆；不存在則 422 `PERSONNEL_RATIO_DEPT_NOT_FOUND`（防範前置斷裂；F080 推進已驗證） |
 | BR-13 | **離職員工顯示與比例計算規則（v1.2 修訂 / PO 決議 F082-A）**：(1) UI 顯示：`isResigned = true` 員工於業務員清單顯示「離職」badge（灰底 / 警示色），ration 輸入框 disabled 不可編輯；(2) 比例驗證（per-DEPT 加總 100%）：**僅含 `isResigned = false` 之在職員工**；離職員工 ration 不參與加總，亦不影響「儲存」按鈕啟用條件；(3) 既有 `ob_empl_set` 紀錄保留：員工為設定當下在職且已寫入 ration，後續離職時 `ob_empl_set.ration` 紀錄不主動清除（保歷史追溯）；(4) 寫入時防護：PUT request body 的 `employees[]` **不可包含** `isResigned = true` 之員工；若 service 層偵測到 body 含離職 `empId`，回 422 `RATIO_OUT_OF_RANGE`（暫沿用此錯誤碼，提示「員工不存在 / 已離職」之語意，details 含 `invalidEmpIds` + `resignedEmpIds`）；後續批次再評估獨立錯誤碼 `PERSONNEL_RATIO_INVALID_EMPLOYEE` |
-| BR-14 | **`SectionChiefScopeGuard` 設計（v1.3 RESOLVED）**：(1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：GET **不攔截**，由 service 走 `scopeByCreator(currentUserId)` helper 統一在 SQL WHERE 過濾（越權帶 `deptCode` 回 200 + `departments = []`）；PUT / POST **攔截**：從 request body / params 取出 `deptCode` + `empIds`，比對 `ob_empl_set.created_by`，不符回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(3) 後續 M03d / 簽核流程沿用此設計。對照表詳 §5.x |
+| BR-14 | **`SectionChiefScopeGuard` 設計（v1.5 修訂 / 2026-05-21）**：(1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：GET **不攔截**，由 service 呼叫 `resolveSectionChiefScope(userId)` 取得 dept_code 後過濾 `visibleDeptCodes`（scope=null 或越權帶 `deptCode` 回 200 + `departments=[]`）；PUT / POST **攔截**：比對 `dto.deptCode === scope`，不符或 scope=null 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(3) **廢除 v1.3 之「`ob_empl_set.created_by` 比對」**（chicken-and-egg）；(4) 後續 M03d / 簽核流程沿用此設計。對照表詳 §5.x |
 | BR-15 | **月跑並發守衛（v1.3 / 決議 #6）**：所有 F082 寫入 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；該 service 由 `AssignmentRunGuardService` 集中實現（架構位置：assignment 模組底層，與 `StageTransitionService` 同層）；查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑必須 `status = 'completed'` / `'failed'`）方能繼續寫入 |
 | BR-16 | **Feature Flag fallback（v1.3 / 決議 #2）**：F082 PUT / GET 端點均掛 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = true 時正常運作 |
 
