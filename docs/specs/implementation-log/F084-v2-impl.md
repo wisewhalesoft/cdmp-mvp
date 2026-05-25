@@ -2,9 +2,9 @@
 type: implementation-log
 feature_id: F084
 feature_name: 個別業務比例設定階段「自動推進」至簽核（auto-advance v2.0）
-status: partial
+status: complete
 last_updated: 2026-05-25
-phase: Phase 1（後端 + 30 unit）+ Phase 3（integration defer 文件）完成；Phase 2（前端）暫停
+phase: Phase 1（後端 + 30 unit）+ Phase 2（前端 + 11 unit）+ Phase 3（integration defer 文件）完成
 related_spec: /docs/specs/features/F084-advance-to-approval.md
 related_spec_version: "2.0.1"
 related_arch: /docs/specs/architecture-spec.md#AD-E07-19
@@ -18,8 +18,49 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
 | Phase | 內容 | 狀態 |
 |-------|------|------|
 | Phase 1 | 後端 auto-advance 主路徑 + 30 unit | ✅ 完成（commit e43dcc6） |
-| Phase 2 | 前端 response 分支（toast/redirect/fallback）+ 11 unit | ⏸ 暫停（待 prototype 29b 更新後接續；FLAG-2 決策） |
-| Phase 3 | 4 integration defer 標記 + staging 手動驗證文件 | ✅ 完成 |
+| Phase 2 | 前端 response 分支（toast/redirect/fallback）+ prototype 29b + 11 unit | ✅ 完成（commit 51d6379） |
+| Phase 3 | 4 integration defer 標記 + staging 手動驗證文件 | ✅ 完成（commit f6eb78f） |
+
+## Phase 2 測試結果（前端 Unit）
+
+> 執行：`npx vitest run .../personnel-ratio-config-page.test.tsx .../personnel-ratio-auto-advance.test.tsx .../assignment-stage.contract.test.ts`
+> 結果：**31 passed (3 files)** — 新 11 FE + 既有 page 14 + contract 6。typecheck 觸碰前端檔零錯誤。
+
+| Scenario ID | 說明 | Status |
+|-------------|------|--------|
+| TC-F084-FE-001 | autoAdvanced=true → 自動推進 toast + redirect 名單列表 | PASS |
+| TC-F084-FE-002 | autoAdvanced=true → redirect 至名單列表頁 | PASS |
+| TC-F084-FE-003 | failReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月跑 toast + fallback 按鈕 + 不 redirect | PASS |
+| TC-F084-FE-004 | 月跑 guard 跳過 → fallback 按鈕 disabled + tooltip「分派執行中，無法推進」 | PASS |
+| TC-F084-FE-005 | 部分完成（autoAdvanced:false 無 failReason）→ 僅既有儲存 toast、不 redirect | PASS |
+| TC-F084-FE-006 | 所有部門完成 → 顯示可點擊手動推進按鈕（flag off / fallback） | PASS |
+| TC-F084-FE-007 | stage=approval（isReadOnly:true）→ 推進按鈕完全不渲染 | PASS |
+| TC-F084-FE-008 | 歷史月份（isReadOnly:true）→ 推進按鈕完全不渲染 | PASS |
+| TC-F084-FE-009 | 手動 fallback → 確認對話框 + 成功推進 + redirect | PASS |
+| TC-F084-FE-010 | 手動推進「取消」→ 不呼叫 API、不 redirect | PASS |
+| TC-F084-FE-011 | 手動推進 422 → 顯示錯誤訊息、不 redirect | PASS |
+
+### Phase 2 前端決策
+
+- **flag 讀取方案（response-driven，前端無 flag）**：grep 確認前端無 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL`
+  / `import.meta.env` flag 機制（唯一 match 為 `trigger-run-page.tsx` 一句錯誤訊息字串）。依 prototype 29b
+  L26-30 採 response-driven：前端不需知 flag 狀態，僅依 PUT response（autoAdvanced / newStage /
+  autoAdvanceFailReason）+ `allDone` 分支。flag off 時 response 永遠 autoAdvanced:false 無 failReason
+  → allDone 時自然顯示 fallback 手動按鈕（= 既有手動行為）。
+- **FLAG-1（批准）**：`PersonnelRatioFormHandle.save()` 回傳 `Promise<SetPersonnelRatiosResponse | null>`；
+  `onSaved` 回呼攜帶 response。「儲存全部」Promise.all 收集所有 response，任一 autoAdvanced=true → redirect、
+  任一 failReason → 月跑 toast + fallback。
+- **fallback 按鈕渲染**：`showFallbackAdvance = (stage=personnel_ratio 且非 isReadOnly) 且 (allDone 或
+  月跑 guard 跳過)`；disabled：月跑進行中 / 處長本部門未完成 / 尚有部門未完成（對齊 prototype renderActionBar）。
+
+### Phase 2 更新的既有測試斷言（保留原驗收意圖）
+
+| 既有測試 | 原斷言 | 新斷言 | 理由 |
+|---------|--------|--------|------|
+| 「顯示推進按鈕（部長+處長皆可）」 | 預設 mock（部門未完成）即斷言按鈕存在 | 改 mock 為部門完成後斷言按鈕存在 | 按鈕改 response-driven（allDone 才渲染）；保留「兩角色皆可見」原意 |
+| 「section_chief 不顯示退回按鈕」 | 斷言推進按鈕存在（incidental）+ 退回按鈕不存在（core） | mock 部門完成使推進按鈕存在 + 保留退回按鈕不存在 | core 意圖（處長無退回按鈕）完整保留；incidental 推進按鈕斷言因渲染條件改變而補 mock |
+| 「未全部完成時按鈕 disabled」 | 斷言推進按鈕存在且 disabled | 斷言推進按鈕**不存在** + 儲存全部 disabled | 行為變更：!allDone 時按鈕完全不渲染（原為渲染+disabled），對齊 prototype showFallbackBtn |
+
 
 ## Phase 1 測試結果（後端 Unit）
 
