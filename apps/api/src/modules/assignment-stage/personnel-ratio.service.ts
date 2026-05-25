@@ -159,6 +159,16 @@ export class PersonnelRatioService {
     if (targetDeptCodes) {
       visibleDeptCodes = visibleDeptCodes.filter((c) => targetDeptCodes!.includes(c));
     }
+    // 只回 deptRatio > 0 的部門（spec F082 v1.6 / 2026-05-25）：
+    //   - deptRatio = null（ob_dept_pct 沒紀錄）→ 隱藏
+    //   - deptRatio = 0（部長刻意排除本月）→ 隱藏
+    //   - deptRatio > 0 → 顯示供設定個別比例
+    // 處長視角下若自己唯一轄區 deptRatio = 0/null，會回 departments=[]，
+    // FE 顯示「本部門本月無配額」no-scope banner。
+    visibleDeptCodes = visibleDeptCodes.filter((c) => {
+      const pct = deptPctMap.get(c);
+      return pct != null && Number(pct.ration) > 0;
+    });
 
     const departments = visibleDeptCodes.map((code) => {
       const emps = empByDept.get(code) ?? [];
