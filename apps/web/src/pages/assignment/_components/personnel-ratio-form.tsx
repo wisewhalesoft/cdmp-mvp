@@ -31,25 +31,34 @@ import {
  * 對應 prototype: /prototypes/29b-personnel-ratio-config.html
  * 對應 spec:      F082 §5.1 / §5.2、F083 §5.2
  *
- * 範圍：
- *   - 員工列由 props.department 提供（後端 ob_emphire 全取 + service 計算 isResigned）。
- *   - 表格 7 欄：checkbox / 員工 ID / 姓名 / 狀態 / 比例 / 獎懲快速調整 / 分配占比。
- *   - Per-dept Sum Banner：加總狀態 + appliedTemplate chip + 5 個部門模板按鈕
- *     （均等分配 + ±20% + ±10%）+ 「儲存本部門」按鈕。
- *   - 部門模板可「套用至選定員工」（有勾選）或「全體在職」（無勾選）。
- *   - F083 模板二次校驗在後端；前端送 appliedTemplate hint。
- *   - 全員離職分支：無在職員工 → 顯示 banner、無法套用 / 儲存。
+ * 比例計算模型（baseline + per-emp template，2026-05-21 / 用戶決議重構）：
+ *   ration = clamp(baseline[empId] + delta(template[empId]), 0, 100)  // 有 template 之員工
+ *          = baseline[empId] × untemplatedScale                       // 無 template 之員工
+ *   其中 untemplatedScale = (100 - templatedSum) / untemplatedBaselineSum
+ *
+ * 設計目的：保證「相同 baseline 員工套同樣 template 必得相同結果」（對稱性）。
+ *   - 員工1 baseline=3.7%, 員工2 baseline=3.7%
+ *   - 點員工1 +10% → 員工1=13.7%, 員工2=baseline×scale
+ *   - 點員工2 +10% → 員工1=13.7%, 員工2=13.7% （同 baseline 同操作，同結果）
+ *
+ * Baseline 變更時機：
+ *   - 首次進入: 用後端回傳 ration；全為 0/null 則用 100/n 均分
+ *   - 「均等分配」按鈕: 重設為 100/n 均分，並清除所有 template
+ *   - 手動編輯 RatioInput: 該員工 baseline 改為輸入值，並清除其 template
+ *   - 父層 refresh: 重置整個 state
+ *
+ * Template 行為：
+ *   - 點 ±N% 按鈕設定該員工 template；點同一按鈕第二次 toggle off
+ *   - 不同 ±N% 互相覆蓋（點 +10% 後再點 +20% → 替換為 +20%）
+ *   - 部門級模板（applyDeptTemplate）批次設定選定/全體員工 template
  *
  * Imperative API（給「儲存全部」用）：ref.save() → Promise；不可儲存時短路。
  */
 
 export interface PersonnelRatioFormProps {
   listNo: string;
-  /** 該部門完整資料（含員工列、配額、狀態旗標）；由父層從 getPersonnelRatios 取得後傳入。 */
   department: PersonnelRatioDepartment;
-  /** 完成寫入後通知父層（用於 refresh）。 */
   onSaved?: () => void;
-  /** 唯讀（stage !== 'personnel_ratio' 時鎖定，或處長視角且 isInScope=false）。 */
   readOnly?: boolean;
 }
 
@@ -58,41 +67,142 @@ export interface PersonnelRatioFormHandle {
   isSavable: () => boolean;
 }
 
-interface EditableRow {
-  empId: string;
-  empName: string;
-  isResigned: boolean;
-  ration: number | null;
-  selected: boolean;
+type TemplateKey = '+10%' | '+20%' | '-10%' | '-20%';
+
+function deltaOf(template: TemplateKey): number {
+  return template === '+10%' ? 10 : template === '+20%' ? 20 : template === '-10%' ? -10 : -20;
 }
 
-function toEditableRows(employees: PersonnelRatioEmployee[]): EditableRow[] {
-  return employees.map((e) => ({
-    empId: e.empId,
-    empName: e.empName,
-    isResigned: e.isResigned,
-    ration: e.isResigned ? null : (e.ration ?? 0),
-    selected: false,
-  }));
+/** 建立初始 baseline map：用後端回傳 ration；全為 0/null 則用 100/n。 */
+function buildInitialBaselines(employees: PersonnelRatioEmployee[]): Map<string, number> {
+  const map = new Map<string, number>();
+  const actives = employees.filter((e) => !e.isResigned);
+  const hasAnyRation = actives.some((e) => e.ration != null && (e.ration ?? 0) > 0);
+  if (hasAnyRation) {
+    for (const e of actives) map.set(e.empId, e.ration ?? 0);
+    return map;
+  }
+  const n = actives.length;
+  if (n === 0) return map;
+  const base = Math.round((100 / n) * 100) / 100;
+  const tail = Math.round((100 - base * (n - 1)) * 100) / 100;
+  actives.forEach((e, idx) => {
+    map.set(e.empId, idx === n - 1 ? tail : base);
+  });
+  return map;
+}
+
+/**
+ * 由 baseline + templates 計算每位在職員工的最終 ration。保證加總 = 100（FP 容忍 ±0.01）。
+ */
+function computeRations(
+  employees: PersonnelRatioEmployee[],
+  baselines: Map<string, number>,
+  templates: Map<string, TemplateKey>,
+): Map<string, number> {
+  const result = new Map<string, number>();
+  const actives = employees.filter((e) => !e.isResigned);
+
+  // Step 1: templated 員工取 baseline + delta（clamped）
+  let templatedSum = 0;
+  for (const e of actives) {
+    const tpl = templates.get(e.empId);
+    if (!tpl) continue;
+    const baseline = baselines.get(e.empId) ?? 0;
+    const target = Math.max(0, Math.min(100, Math.round((baseline + deltaOf(tpl)) * 100) / 100));
+    result.set(e.empId, target);
+    templatedSum += target;
+  }
+
+  // Step 2: untemplated 員工按 baseline 比例吸收剩餘
+  const untemplated = actives.filter((e) => !templates.has(e.empId));
+  if (untemplated.length === 0) {
+    return result; // 全 templated，sum 可能 ≠ 100（會 fail sumValid check）
+  }
+  const remaining = Math.max(0, 100 - templatedSum);
+  const untemplatedBaselineSum = untemplated.reduce(
+    (s, e) => s + (baselines.get(e.empId) ?? 0),
+    0,
+  );
+
+  let assigned = 0;
+  for (let i = 0; i < untemplated.length; i++) {
+    const e = untemplated[i];
+    const isLast = i === untemplated.length - 1;
+    let ration: number;
+    if (isLast) {
+      // 尾差吸收：保證最後一位讓總和精確 = 100 - templatedSum
+      ration = Math.max(0, Math.round((remaining - assigned) * 100) / 100);
+    } else if (untemplatedBaselineSum > 0) {
+      const baseline = baselines.get(e.empId) ?? 0;
+      const scale = remaining / untemplatedBaselineSum;
+      ration = Math.max(0, Math.round(baseline * scale * 100) / 100);
+    } else {
+      // untemplated baseline 全為 0 → 等分剩餘
+      ration = Math.max(
+        0,
+        Math.round((remaining / untemplated.length) * 100) / 100,
+      );
+    }
+    result.set(e.empId, ration);
+    if (!isLast) assigned += ration;
+  }
+  return result;
+}
+
+/** 重設為均等分配 baseline。 */
+function buildEqualBaselines(employees: PersonnelRatioEmployee[]): Map<string, number> {
+  const actives = employees.filter((e) => !e.isResigned);
+  const map = new Map<string, number>();
+  const n = actives.length;
+  if (n === 0) return map;
+  const base = Math.round((100 / n) * 100) / 100;
+  const tail = Math.round((100 - base * (n - 1)) * 100) / 100;
+  actives.forEach((e, idx) => {
+    map.set(e.empId, idx === n - 1 ? tail : base);
+  });
+  return map;
 }
 
 export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, PersonnelRatioFormProps>(
   function PersonnelRatioForm({ listNo, department, onSaved, readOnly }, ref) {
     const { showToast } = useToast();
 
-    const [rows, setRows] = useState<EditableRow[]>(() => toEditableRows(department.employees));
+    const [baselines, setBaselines] = useState<Map<string, number>>(() =>
+      buildInitialBaselines(department.employees),
+    );
+    const [templates, setTemplates] = useState<Map<string, TemplateKey>>(new Map());
+    const [selectedSet, setSelectedSet] = useState<Set<string>>(new Set());
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [appliedTemplate, setAppliedTemplate] = useState<AppliedTemplate | null>(null);
     const [appliedTemplateLabel, setAppliedTemplateLabel] = useState<string | null>(null);
 
-    // 當父層更新 department（例如 refresh 後）時，重置編輯狀態
+    // 當父層更新 department（例如 refresh 後）時重置 state
     useEffect(() => {
-      setRows(toEditableRows(department.employees));
-      setAppliedTemplate(null);
-      setAppliedTemplateLabel(null);
+      setBaselines(buildInitialBaselines(department.employees));
+      setTemplates(new Map());
+      setSelectedSet(new Set());
       setError(null);
+      setAppliedTemplateLabel(null);
     }, [department.deptCode, department.employees]);
+
+    // 由 baseline + templates 推導每位員工的最終 ration
+    const computedRations = useMemo(
+      () => computeRations(department.employees, baselines, templates),
+      [department.employees, baselines, templates],
+    );
+
+    const rows = useMemo(
+      () =>
+        department.employees.map((e) => ({
+          empId: e.empId,
+          empName: e.empName,
+          isResigned: e.isResigned,
+          ration: e.isResigned ? null : (computedRations.get(e.empId) ?? 0),
+          selected: selectedSet.has(e.empId),
+        })),
+      [department.employees, computedRations, selectedSet],
+    );
 
     const activeRows = useMemo(() => rows.filter((r) => !r.isResigned), [rows]);
     const selectedActive = useMemo(
@@ -100,10 +210,7 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
       [activeRows],
     );
     const allSelected = activeRows.length > 0 && selectedActive.length === activeRows.length;
-    const values = useMemo(
-      () => activeRows.map((r) => r.ration ?? 0),
-      [activeRows],
-    );
+    const values = useMemo(() => activeRows.map((r) => r.ration ?? 0), [activeRows]);
     const sum = useMemo(
       () => Math.round(values.reduce((a, b) => a + b, 0) * 100) / 100,
       [values],
@@ -113,176 +220,132 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
 
     const canEdit = !readOnly && department.isInScope && !department.allResigned;
 
+    /** 手動編輯 RatioInput：更新該員工 baseline，清除其 template；其他員工按比例吸收。 */
     const updateRation = (empId: string, ration: number) => {
-      setRows((prev) =>
-        prev.map((r) => (r.empId === empId && !r.isResigned ? { ...r, ration } : r)),
-      );
-      setAppliedTemplate(null);
+      setBaselines((prev) => {
+        const next = new Map(prev);
+        next.set(empId, ration);
+        return next;
+      });
+      setTemplates((prev) => {
+        if (!prev.has(empId)) return prev;
+        const next = new Map(prev);
+        next.delete(empId);
+        return next;
+      });
       setAppliedTemplateLabel(null);
     };
 
-    const toggleSelect = (empId: string, checked: boolean) =>
-      setRows((prev) =>
-        prev.map((r) => (r.empId === empId && !r.isResigned ? { ...r, selected: checked } : r)),
-      );
-
-    const toggleSelectAll = (checked: boolean) =>
-      setRows((prev) =>
-        prev.map((r) => (!r.isResigned ? { ...r, selected: checked } : r)),
-      );
-
-    /**
-     * F083 模板：對單一員工套 ±N%（**以該員工當前 ration 為基底**）。
-     *
-     * 語意（per 用戶決議 2026-05-21）：
-     *   targetNew = clamp(currentRation + delta, 0, 100)
-     *   其中 delta = ±10 / ±20 個百分點
-     *
-     * 連續點擊行為：每次點擊都以「點擊當下」的 ration 為基底，因此 +10% 後再 +10%
-     *               等於從新基底再加 10 個百分點（不是固定從原始值算）。
-     *               不同員工的 +10% 各自從自身當前 ration 計算，互不影響。
-     *
-     * 其他在職員工依當前 ration 比例吸收差額，使加總仍 = 100。
-     */
-    const applyTemplateOne = (
-      targetEmpId: string,
-      template: '+10%' | '+20%' | '-10%' | '-20%',
-    ) => {
-      if (activeRows.length < 2) return;
-      const target = activeRows.find((r) => r.empId === targetEmpId);
-      if (!target) return;
-      const targetCurrent = target.ration ?? 0;
-      const delta = template === '+10%' ? 10 : template === '+20%' ? 20 : template === '-10%' ? -10 : -20;
-      // 以「當前 ration」為基底加 delta 個百分點；clamp [0,100]
-      const targetNew = Math.max(
-        0,
-        Math.min(100, Math.round((targetCurrent + delta) * 100) / 100),
-      );
-      const realDelta = targetNew - targetCurrent;
-      if (Math.abs(realDelta) < 0.001) return; // 無變化（已 clamp 在邊界）
-
-      const others = activeRows.filter((r) => r.empId !== targetEmpId);
-      const otherSum = others.reduce((a, b) => a + (b.ration ?? 0), 0);
-
-      // 其他員工依當前 ration 比例吸收 realDelta；若 otherSum=0 改為等量分擔
-      const newRows = rows.map((r) => {
-        if (r.isResigned) return r;
-        if (r.empId === targetEmpId) return { ...r, ration: targetNew };
-        const v = r.ration ?? 0;
-        const adjust = otherSum > 0
-          ? (realDelta * v) / otherSum
-          : realDelta / others.length;
-        const newR = Math.max(0, Math.round((v - adjust) * 100) / 100);
-        return { ...r, ration: newR };
+    const toggleSelect = (empId: string, checked: boolean) => {
+      setSelectedSet((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(empId);
+        else next.delete(empId);
+        return next;
       });
+    };
 
-      // 浮點誤差校正：確保最終加總 = 100（差額丟給除 target 外最大值員工吸收）
-      const sumAfter = newRows
-        .filter((r) => !r.isResigned)
-        .reduce((a, r) => a + (r.ration ?? 0), 0);
-      const diff = Math.round((100 - sumAfter) * 100) / 100;
-      if (Math.abs(diff) >= 0.01) {
-        let maxIdx = -1;
-        let maxVal = -1;
-        for (let i = 0; i < newRows.length; i++) {
-          const r = newRows[i];
-          if (r.isResigned || r.empId === targetEmpId) continue;
-          if ((r.ration ?? 0) > maxVal) {
-            maxVal = r.ration ?? 0;
-            maxIdx = i;
-          }
-        }
-        if (maxIdx >= 0) {
-          newRows[maxIdx] = {
-            ...newRows[maxIdx],
-            ration: Math.max(0, Math.round(((newRows[maxIdx].ration ?? 0) + diff) * 100) / 100),
-          };
-        }
-      }
-
-      setRows(newRows);
-      setAppliedTemplate({ template, targetEmpId });
-      setAppliedTemplateLabel(`${template} / ${target.empName}（基底 ${targetCurrent.toFixed(2)}%）`);
+    const toggleSelectAll = (checked: boolean) => {
+      setSelectedSet(() => {
+        if (!checked) return new Set();
+        return new Set(activeRows.map((r) => r.empId));
+      });
     };
 
     /**
-     * 部門級「均等分配」：所有在職員工各 100/n。
+     * F083 per-row 模板：以該員工 baseline + delta 為 target。
      *
-     * 演算法（保證 sum = 100.00 exact，無浮點累積誤差）：
-     *   - 前 n-1 人各得 base = Math.round((100/n)*100)/100
-     *   - 第 n 人取確切餘額 = round(100 - base*(n-1), 2)
+     * 對稱性保證：相同 baseline 員工套相同 template 得相同 ration。
+     * Toggle 行為：點同一按鈕第二次取消該員工 template；點不同 ±N% 互相替換。
+     */
+    const applyTemplateOne = (targetEmpId: string, template: TemplateKey) => {
+      if (activeRows.length < 2) {
+        showToast('部門僅 1 位在職員工，無法套用模板', 'warning');
+        return;
+      }
+      const baseline = baselines.get(targetEmpId) ?? 0;
+      const targetWouldBe = Math.max(0, Math.min(100, baseline + deltaOf(template)));
+      if (targetWouldBe < 0 || targetWouldBe > 100) {
+        showToast(`套用 ${template} 後比例越界（baseline ${baseline}%）`, 'warning');
+        return;
+      }
+
+      setTemplates((prev) => {
+        const next = new Map(prev);
+        const current = next.get(targetEmpId);
+        if (current === template) {
+          // 同按鈕第二次 → toggle off
+          next.delete(targetEmpId);
+        } else {
+          // 不同按鈕 → 替換
+          next.set(targetEmpId, template);
+        }
+        return next;
+      });
+
+      const target = activeRows.find((r) => r.empId === targetEmpId);
+      const isToggleOff = templates.get(targetEmpId) === template;
+      if (isToggleOff) {
+        setAppliedTemplateLabel(`已取消 ${target?.empName ?? ''} 之 ${template} 模板`);
+      } else {
+        setAppliedTemplateLabel(
+          `${template} / ${target?.empName ?? ''}（baseline ${baseline.toFixed(2)}%）`,
+        );
+      }
+    };
+
+    /**
+     * 部門級「均等分配」：重置 baseline = 100/n，清除所有 template。
+     * 保證 sum = 100.00 exact。
      */
     const applyEqual = () => {
       const n = activeRows.length;
       if (n === 0) return;
-      const base = Math.round((100 / n) * 100) / 100;
-      const tailRation = Math.round((100 - base * (n - 1)) * 100) / 100;
-      let activeIdx = 0;
-      const newRows = rows.map((r) => {
-        if (r.isResigned) return r;
-        activeIdx++;
-        const isLast = activeIdx === n;
-        return { ...r, ration: isLast ? tailRation : base };
-      });
-      setRows(newRows);
-      setAppliedTemplate(null);
-      setAppliedTemplateLabel('均等分配');
+      setBaselines(buildEqualBaselines(department.employees));
+      setTemplates(new Map());
+      setAppliedTemplateLabel(`均等分配（${n} 人各 ${(Math.round((100 / n) * 100) / 100).toFixed(2)}%）`);
     };
 
-    /** 部門級 ±N%：套用至「選定員工」或「全體在職」(無勾選時)。 */
-    const applyDeptTemplate = (template: '+10%' | '+20%' | '-10%' | '-20%') => {
+    /** 部門級 ±N%：批次設定選定（或全體）員工 template。 */
+    const applyDeptTemplate = (template: TemplateKey) => {
       const n = activeRows.length;
       if (n === 0) return;
-      const selected = selectedActive.length > 0 ? selectedActive : activeRows;
-      const delta = template === '+10%' ? 10 : template === '+20%' ? 20 : template === '-10%' ? -10 : -20;
-      const base = 100 / n;
-      const newR = Math.round(base * (1 + delta / 100) * 100) / 100;
-      if (newR < 0 || newR > 100) {
-        showToast(`套用 ${template} 後比例 ${newR}% 越界，無法套用`, 'warning');
-        return;
-      }
-      if (selected.length === n) {
-        // 全體都調 → 加總不可能 = 100，警示
+      const targets = selectedActive.length > 0 ? selectedActive : activeRows;
+      if (targets.length === n) {
         showToast(
           `套用 ${template} 至全體會使加總 ≠ 100%；請先勾選部分員工，或用「均等分配」`,
           'warning',
         );
         return;
       }
-      const restCount = n - selected.length;
-      const restEach = Math.round(((100 - newR * selected.length) / restCount) * 100) / 100;
-      if (restEach < 0 || restEach > 100) {
-        showToast(`套用後其餘員工比例 ${restEach}% 越界，無法套用`, 'warning');
-        return;
-      }
-      const selectedIds = new Set(selected.map((s) => s.empId));
-      const newRows = rows.map((r) => {
-        if (r.isResigned) return r;
-        return { ...r, ration: selectedIds.has(r.empId) ? newR : restEach };
-      });
-      // 尾差吸收（非選定員工的最後一位）
-      let actualSum = 0;
-      for (const r of newRows) if (!r.isResigned) actualSum += r.ration ?? 0;
-      const diffTail = Math.round((100 - actualSum) * 100) / 100;
-      if (Math.abs(diffTail) > 0.001) {
-        for (let i = newRows.length - 1; i >= 0; i--) {
-          if (!newRows[i].isResigned && !selectedIds.has(newRows[i].empId)) {
-            newRows[i] = {
-              ...newRows[i],
-              ration: Math.round(((newRows[i].ration ?? 0) + diffTail) * 100) / 100,
-            };
-            break;
-          }
+      // 確認每個 target baseline + delta 都在 [0,100]
+      for (const t of targets) {
+        const baseline = baselines.get(t.empId) ?? 0;
+        const wouldBe = baseline + deltaOf(template);
+        if (wouldBe < 0 || wouldBe > 100) {
+          showToast(
+            `${t.empName} 套用 ${template} 後越界（baseline ${baseline}%），無法套用`,
+            'warning',
+          );
+          return;
         }
       }
-      setRows(newRows);
-      // 標 appliedTemplate hint：取選定員工的第一位作為 targetEmpId
-      // （後端二次校驗 F083 只支援單員工模板，部門級套用後不傳 appliedTemplate）
-      setAppliedTemplate(null);
+      setTemplates((prev) => {
+        const next = new Map(prev);
+        for (const t of targets) next.set(t.empId, template);
+        return next;
+      });
       const scopeLabel =
-        selected.length === activeRows.length ? '全體在職' : `${selected.length} 位選定`;
+        targets.length === activeRows.length ? '全體在職' : `${targets.length} 位選定`;
       setAppliedTemplateLabel(`${template} / ${scopeLabel}`);
     };
+
+    /** 從 templates 推導 AppliedTemplate（F083 後端二次校驗用；僅單一員工模板生效）。 */
+    const appliedTemplate: AppliedTemplate | null = useMemo(() => {
+      if (templates.size !== 1) return null;
+      const [empId, tpl] = templates.entries().next().value as [string, TemplateKey];
+      return { template: tpl, targetEmpId: empId };
+    }, [templates]);
 
     const handleSave = useCallback(async (): Promise<boolean> => {
       setError(null);
@@ -335,7 +398,6 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
       sumValid,
     ]);
 
-    // 暴露 imperative API 給「儲存全部」用
     useImperativeHandle(
       ref,
       () => ({
@@ -421,88 +483,103 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {rows.map((r) => (
-                  <tr
-                    key={r.empId}
-                    data-testid={`empl-row-${r.empId}`}
-                    className={
-                      r.isResigned
-                        ? 'bg-gray-50/60 text-gray-500'
-                        : r.selected
-                        ? 'bg-blue-50/40'
-                        : ''
-                    }
-                  >
-                    <td className="px-3 py-2 text-center">
-                      {canEdit && !r.isResigned ? (
-                        <input
-                          type="checkbox"
-                          data-testid={`empl-select-${r.empId}`}
-                          checked={r.selected}
-                          onChange={(e) => toggleSelect(r.empId, e.target.checked)}
-                          className="w-3.5 h-3.5 rounded border-gray-300"
-                        />
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.empId}</td>
-                    <td className="px-3 py-2 text-sm">{r.empName}</td>
-                    <td className="px-3 py-2">
-                      {r.isResigned ? (
-                        <span
-                          data-testid={`empl-resigned-badge-${r.empId}`}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200"
-                        >
-                          <UserX className="w-2.5 h-2.5" />已離職
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
-                          在職
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {r.isResigned ? (
-                        <span className="text-xs text-gray-400 font-mono">—</span>
-                      ) : (
-                        <RatioInput
-                          value={r.ration ?? 0}
-                          disabled={!canEdit}
-                          onChange={(v) => updateRation(r.empId, v)}
-                          aria-label={`empl-ratio-${r.empId}`}
-                        />
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {canEdit && !r.isResigned && activeRows.length >= 2 ? (
-                        <div className="inline-flex items-center gap-1">
-                          {(['+20%', '+10%', '-10%', '-20%'] as const).map((tpl) => (
-                            <button
-                              key={tpl}
-                              type="button"
-                              data-testid={`tpl-${tpl}-${r.empId}`}
-                              onClick={() => applyTemplateOne(r.empId, tpl)}
-                              className={`px-1.5 py-0.5 text-[10px] font-mono border rounded hover:bg-gray-50 ${
-                                tpl.startsWith('+')
-                                  ? 'border-green-300 text-green-700 hover:bg-green-50'
-                                  : 'border-red-300 text-red-600 hover:bg-red-50'
-                              }`}
-                            >
-                              {tpl}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td
-                      className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums"
-                      data-testid={`empl-alloc-pct-${r.empId}`}
+                {rows.map((r) => {
+                  const rowTemplate = templates.get(r.empId);
+                  return (
+                    <tr
+                      key={r.empId}
+                      data-testid={`empl-row-${r.empId}`}
+                      className={
+                        r.isResigned
+                          ? 'bg-gray-50/60 text-gray-500'
+                          : r.selected
+                          ? 'bg-blue-50/40'
+                          : ''
+                      }
                     >
-                      {allocPctFor(r.ration)}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-3 py-2 text-center">
+                        {canEdit && !r.isResigned ? (
+                          <input
+                            type="checkbox"
+                            data-testid={`empl-select-${r.empId}`}
+                            checked={r.selected}
+                            onChange={(e) => toggleSelect(r.empId, e.target.checked)}
+                            className="w-3.5 h-3.5 rounded border-gray-300"
+                          />
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{r.empId}</td>
+                      <td className="px-3 py-2 text-sm">{r.empName}</td>
+                      <td className="px-3 py-2">
+                        {r.isResigned ? (
+                          <span
+                            data-testid={`empl-resigned-badge-${r.empId}`}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200"
+                          >
+                            <UserX className="w-2.5 h-2.5" />已離職
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                            在職
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {r.isResigned ? (
+                          <span className="text-xs text-gray-400 font-mono">—</span>
+                        ) : (
+                          <RatioInput
+                            value={r.ration ?? 0}
+                            disabled={!canEdit}
+                            onChange={(v) => updateRation(r.empId, v)}
+                            aria-label={`empl-ratio-${r.empId}`}
+                          />
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {canEdit && !r.isResigned && activeRows.length >= 2 ? (
+                          <div className="inline-flex items-center gap-1">
+                            {(['+20%', '+10%', '-10%', '-20%'] as const).map((tpl) => {
+                              const active = rowTemplate === tpl;
+                              const cls = tpl.startsWith('+')
+                                ? active
+                                  ? 'border-green-500 bg-green-100 text-green-800'
+                                  : 'border-green-300 text-green-700 hover:bg-green-50'
+                                : active
+                                ? 'border-red-500 bg-red-100 text-red-800'
+                                : 'border-red-300 text-red-600 hover:bg-red-50';
+                              return (
+                                <button
+                                  key={tpl}
+                                  type="button"
+                                  data-testid={`tpl-${tpl}-${r.empId}`}
+                                  data-active={active}
+                                  onClick={() => applyTemplateOne(r.empId, tpl)}
+                                  className={`px-1.5 py-0.5 text-[10px] font-mono border rounded ${cls}`}
+                                  title={
+                                    active
+                                      ? `已套用 ${tpl}；點擊取消`
+                                      : `以該員工 baseline 為基底套 ${tpl}`
+                                  }
+                                >
+                                  {tpl}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums"
+                        data-testid={`empl-alloc-pct-${r.empId}`}
+                      >
+                        {allocPctFor(r.ration)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -534,6 +611,7 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
                   在職 {activeRows.length} 人
                   {rows.filter((r) => r.isResigned).length > 0 &&
                     ` / 離職 ${rows.filter((r) => r.isResigned).length} 人不計`}
+                  {templates.size > 0 && ` / ${templates.size} 位套模板`}
                 </span>
               </div>
               {appliedTemplateLabel && (
@@ -542,7 +620,7 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700"
                 >
                   <Zap className="w-2.5 h-2.5" />
-                  目前套用：{appliedTemplateLabel}
+                  {appliedTemplateLabel}
                 </span>
               )}
             </div>
