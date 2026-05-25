@@ -1,10 +1,12 @@
 ---
 type: architecture-spec
-version: "2.13"
+version: "2.14"
 status: draft
-last_updated: 2026-05-21
+last_updated: 2026-05-25
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089]
 ---
+
+> **v2.14 / 2026-05-25 變更摘要（F084 v2.0 auto-advance 架構設計 AD-E07-19）**：(1) 新增 AD-E07-19「F084 v2.0 auto-advance 架構設計」，落實三個 assumption：A-5（advisory lock 機制選型：採 blocking `pg_advisory_xact_lock`，拒絕 try-lock 以避免並發可見性導致 stage 永遠卡住）、A-6（transaction 邊界：`StageTransitionService.advanceToInMgr()` 新增過載接受外部 EntityManager；`PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr()` 新增 EntityManager 版本；`setPersonnelRatios()` tx scope 擴大涵蓋 lock + 偵測 + stage 更新 + 稽核）、A-7（`operator_role` 推導沿用 `advancedByRole` pattern 寫入 `metadata` JSONB）；(2) §3.10 元件表更新：`StageTransitionService`（補登 `advanceToInMgr` 過載）、`PersonnelRatioValidationService`（補登 `assertAllDeptsSumEquals100WithMgr`）、`AssignmentRatio Service`（補登 `PersonnelRatioService.setPersonnelRatios()` tx scope 說明）、`FeatureFlagGuard`（補登 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` 雙 flag 關係）；(3) 本決議推翻 F084 spec §5.2/BR-13 的 try-lock 降級假設，spec 將由 spec-writer 對齊。
 
 > **v2.13 / 2026-05-21 變更摘要（v2.3 Sidebar IA 重整決策 AD-E02-4-F）**：新增 §AD-E02-4-F「Assignment Module Sidebar IA v2.3 重整」：(1) 確立「客戶名單分派」sidebar section 最終 11 個 entry 清單（對應 37/28/27/29d/30/31/32/33/34/35/36 原型頁）；(2) 定義「工作流子頁 vs. 獨立功能入口」判準，明確 29a/29b/29c 定位為工作流子頁、不出現在 sidebar；(3) 記錄 `deprecated 29-ratio-config.html` 移除決策；(4) 新增 5 條架構不變式 I-NAV-01 ~ I-NAV-05；(5) Agent Loading Guide 補入 UI/UX Designer 欄 AD-E02-4-F。
 
@@ -1225,17 +1227,17 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
 | AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應；**F056 v1.5 起：所有寫入端點加入 CARD_TYPE 範圍鎖（assertCardTypeActive）**；**F054 v1.3：match_type 欄位 atomic delete + update + insert（AD-E07-2 補充）** | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3）；**F056 TIER_LEVEL 列舉驗證（T1~T10）；Fallback/Standard 互斥檢查**（應用層 Mutex）；**ob_tier fallback 紀錄刪除必須用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）**；**`scoresClear` 原子操作（F054 v1.3）**：match_type 切換時先 `DELETE ob_levelcard_score WHERE (card_type, card_version, column_name) = (:ct, :cv, :cn)` 再重新 INSERT，確保舊 score 紀錄不殘留；整段在同一 DB Transaction 中執行（DELETE + INSERT + UPDATE ob_levelcard_column.match_type）；Transaction 失敗時 Rollback，回傳 500 | US-072, US-073, US-074, US-075 |
 | CardType Service（**F069~F072 新增**） | `ob_card_type` CRUD；查詢清單（JOIN `ob_code_df` 取 prodKindName）；新增（同 transaction 自動建立 v1 `ob_levelcard_version`）；編輯（card_name / prod_kind 僅此兩欄）；刪除預覽（5 張下游表筆數統計 + ob_list_definition active 引用數）；級聯 hard delete（6 步驟 transaction）；審計日誌同 transaction 寫入 | **依賴 Repository**：`ObCardType`（新建 Entity）/ `ObLevelcardVersion` / `ObLevelcardColumn` / `ObLevelcardScore` / `ObLevelcardLevel` / `ObTier` / `ObCodeDf`（需新增 module import）/ `AssignmentRun` / `AssignmentAuditLog`；F070 同 transaction：INSERT ob_card_type + INSERT ob_levelcard_version（v1，sdate=今日 / edate=20991231 / status=active）；F072 採應用層 transaction（AD-E07-16，不使用 `ON DELETE CASCADE`） | US-093, US-094, US-095, US-096 |
-| AssignmentRatio Service | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關 | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表） | US-078, US-079, US-080, US-091 |
+| AssignmentRatio Service（含 `PersonnelRatioService`） | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關；**F084 v2.0 auto-advance 觸發宿主（AD-E07-19 補登）** | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表）；**`PersonnelRatioService.setPersonnelRatios()` 擴大後 transaction scope（AD-E07-19）**：`dataSource.transaction(async (mgr) => {` (1) `mgr.query('SELECT pg_advisory_xact_lock($1)', [lockKey])`（tx 開頭取得 blocking advisory lock，`lockKey = hashtext(listNo)::bigint`）→ (2) DELETE `ob_empl_set` WHERE `(list_no, deptid_m)` → (3) INSERT 新員工比例紀錄 → (4) INSERT `assignment_audit_log`（`SET_PERSONNEL_RATIO`）→ (5)（若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` = on）呼叫 `assertAllDeptsSumEquals100WithMgr(listNo, mgr)` 偵測完成度 → (6)（若全部完成且 `stage = 'personnel_ratio'`）月跑 guard check → (7) `stageTransition.advanceToInMgr(listNo, 'personnel_ratio', 'approval', actorId, mgr, { auto_advanced_by_completion: true, operator_role })` → `})`；tx commit 時 advisory lock 自動釋放；lock 等待超時（`lock_timeout = 5000ms`）→ auto-advance 跳過、PUT 仍回 200 + `autoAdvanced: false` | US-078, US-079, US-080, US-091 |
 | AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASE_STATUS **三類**代碼維護；**CASEYEAR 不納入**，因 CASEYEAR 為前端 hard-coded 的 11 個固定 enum 選項 0~10，不從 `ob_code_df` 動態載入，證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；`tbl_id` 使用英文常數（非原系統數字代碼），映射規則：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（AD-E07-14；初版含 `'04'→'CASEYEAR'`，於 2026-05-12 OQ-E07-24 Resolved 後移除） | Admin 與業務主管均可存取；代碼用於名單定義表單選項；F050/F051 `case_status` 欄位多選選項來源為 `tbl_id='CASE_STATUS'`；F050/F051 `caseyear` 欄位為前端固定 11 個選項（0~10），非 ob_code_df 動態載入 | US-092 |
 | AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；匯出 CSV | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid | US-081, US-082, US-083, US-084 |
 | AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
 | AssignmentAudit Service | E07 所有 CRUD 操作後寫入 `assignment_audit_log` | 不對外暴露 API；由各 Service 呼叫；保留 3 年，Cleanup Cron 每日清理 | 所有 E07 Stories |
 | **ScoringIntegrityCheckService**（**v1.3 / 2026-05-18 新增，F054 v1.3 / F061 v1.3**） | Stage 2 前置計分設定完整性稽核；提供 `checkAndWarn(runId, cardType, cardVersion)` method | 稽核內容：(1) `MATCH_TYPE_FIELD_MISMATCH`：`ob_levelcard_column.match_type` 與對應 `ob_levelcard_score` 紀錄之 level1 / level2_s 組合不一致；(2) `CATEGORY_DUPLICATE`：`match_type = 'CATEGORY'` 下同 `column_name + level1` 重複；稽核發現問題時**不拋錯、不中斷月跑**，而是：(a) 寫入 `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`）；(b) 更新 `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`；稽核通過（無問題）時不寫任何紀錄；位置：`AssignmentModule` 底下，與 `AssignmentRunGuardService` 同層 | F054 v1.3, F061 v1.3 |
 | **AssignmentRunGuardService**（2026-05-16 新增 / 決議 #6） | 月跑並發守衛集中實作；提供 `assertNoRunningRun(workYm?)` method | 查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`；所有 E07 寫入 service method 最頂層呼叫；月跑結束（`status = 'completed'` / `'failed'`）後自動解除阻擋；位置：assignment 模組底下，與 `StageTransitionService` 同層 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082 v1.3, F083（透過 F082 PUT）, F084, F085, F086, F087, F089 |
-| **StageTransitionService**（2026-05-15 新增 / E07 重構批次 4 引入；2026-05-16 補登元件說明） | 五階段流程引擎共用 helper；提供 `advanceTo` / `rollbackTo` / `rejectTo` / `assertStageEquals` 4 個 method | `advanceTo(listNo, fromStage, toStage, preconditionFn, postActionFn?)` 用於 F078 / F080 / F084 / F086；`rollbackTo(listNo, fromStage, toStage, cleanupFn)` 用於 F081 / F085 / F089；`rejectTo(listNo, fromStage, toStage, rejectReason, cleanupFn?, postActionFn?)` 用於 F087；`assertStageEquals(listNo, expectedStage)` 由各 service 共用；所有寫入操作於同一 DB transaction 內完成（含稽核 INSERT，稽核失敗例外） | F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
-| **PersonnelRatioValidationService**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補全員離職邊界） | per-DEPT 個別業務比例驗算 helper；提供 `assertDeptSumEquals100` / `assertAllDeptsSumEquals100` 2 個 method | `assertDeptSumEquals100(deptCode, ratios)` 用於 F082 PUT 寫入校驗（**v1.3 / 決議 #1**：若 `activeEmployeeCount === 0` **短路 return**，允許部門 sum = 0%、不阻擋儲存）；`assertAllDeptsSumEquals100(listNo)` 用於 F084 推進前置條件驗證（內部查詢 `ob_empl_set` GROUP BY deptid_m）；錯誤碼 `PERSONNEL_RATIO_SUM_NOT_100`（per-DEPT 語意，與 `RatioValidationService` 之 per-LIST_NO 語意區隔） | F082, F084 |
+| **StageTransitionService**（2026-05-15 新增 / E07 重構批次 4 引入；2026-05-16 補登元件說明；**2026-05-25 補登 `advanceToInMgr` 過載 / AD-E07-19**） | 五階段流程引擎共用 helper；提供 `advanceTo` / `advanceToInMgr` / `rollbackTo` / `rejectTo` / `assertStageEquals` 5 個 method | `advanceTo(listNo, fromStage, toStage, actorId, preconditionFn, postActionFn?)` 自開 transaction，用於 F078 / F080 / F084 fallback 手動路徑 / F086；**`advanceToInMgr(listNo, fromStage, toStage, actorId, mgr, auditMetadata?)`（AD-E07-19 新增）**：接受外部 `EntityManager`、不自開 transaction，供 F084 v2.0 auto-advance 掛入 `setPersonnelRatios()` 的同一 tx；`auditMetadata` 為選擇性 JSONB 附加欄位（用於寫入 `metadata.auto_advanced_by_completion = true` / `metadata.operator_role`）；`rollbackTo(listNo, fromStage, toStage, actorId, cleanupFn)` 用於 F081 / F085 / F089；`rejectTo(listNo, fromStage, toStage, actorId, rejectReason, cleanupFn?, postActionFn?)` 用於 F087；`assertStageEquals(listNo, expectedStage, mgr?)` 接受可選 EntityManager，由各 service 共用；所有寫入操作於同一 DB transaction 內完成（含稽核 INSERT，稽核失敗例外）| F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
+| **PersonnelRatioValidationService**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補全員離職邊界；**2026-05-25 補登 `assertAllDeptsSumEquals100WithMgr` / AD-E07-19**） | per-DEPT 個別業務比例驗算 helper；提供 `assertDeptSumEquals100` / `assertAllDeptsSumEquals100` / `assertAllDeptsSumEquals100WithMgr` 3 個 method | `assertDeptSumEquals100(deptCode, ratios, activeEmployeeCount)` 用於 F082 PUT 寫入校驗（**v1.3 / 決議 #1**：若 `activeEmployeeCount === 0` **短路 return**，允許部門 sum = 0%、不阻擋儲存）；`assertAllDeptsSumEquals100(listNo)` 用於 F084 fallback 手動路徑推進前置條件驗證（使用 Repository 直查 `ob_empl_set`）；**`assertAllDeptsSumEquals100WithMgr(listNo, mgr)`（AD-E07-19 新增）**：接受外部 `EntityManager`，使用 `mgr.createQueryBuilder()` 查詢，確保能讀到 F082 PUT 同一 tx 內剛寫入但未 commit 的 `ob_empl_set` 資料（READ COMMITTED 隔離下 Repository 直查看不到未 commit 資料），供 F084 v2.0 auto-advance 偵測使用；全員離職部門（`activeEmployeeCount === 0`）短路邏輯兩個版本相同；錯誤碼 `PERSONNEL_RATIO_SUM_NOT_100`（per-DEPT 語意，與 `RatioValidationService` 之 per-LIST_NO 語意區隔） | F082, F084 |
 | **RatioValidationService**（2026-05-15 新增 / E07 重構批次 4 引入） | per-LIST_NO 部門比例驗算 helper；提供 `assertSumEquals100` / `assertEachInRange` 2 個 method | `assertSumEquals100(ratios)` 用於 F079 PUT + F080 推進前置條件驗證；`assertEachInRange(ratios, [0, 100])` 用於單欄位邊界校驗；錯誤碼 `RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE` | F079, F080 |
-| **FeatureFlagGuard**（2026-05-16 補登 / 決議 #2） | Feature flag 控制 Guard；於 E07 重構批次 3~6 端點啟動 `ENABLE_E07_REFACTOR_PHASE3` 檢查 | flag = `false` 時統一回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = `true` 時放行；實作機制（環境變數 vs config 表 vs LaunchDarkly）由 system-architect 於 batch 3 architecture 階段決議 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
+| **FeatureFlagGuard**（2026-05-16 補登 / 決議 #2；**2026-05-25 補登 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` 雙 flag 關係 / AD-E07-19**） | Feature flag 控制 Guard；管理兩個 E07 flag：`ENABLE_E07_REFACTOR_PHASE3`（P3 整體功能集）與 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL`（auto-advance 細粒度控制） | **`ENABLE_E07_REFACTOR_PHASE3`**：gate 整個 E07 P3 功能集（含 F082 PUT 本體 + F084 手動 endpoint 等所有 P3 端點）；`false` 時統一回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；**`ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL`**（AD-E07-19 新增，prod 預設 **off**）：細粒度 gate「F082 PUT 觸發 auto-advance」行為；`false` 時 auto-advance 邏輯完全不執行，PUT response `autoAdvanced: false`，退回 v1.x 手動推進行為；**雙 flag 組合行為**：(1) phase3 = off → 所有 P3 端點 503，auto flag 無作用；(2) phase3 = on + auto = off → F082 PUT 正常，手動 F084 endpoint 正常，auto-advance 不觸發；(3) phase3 = on + auto = on → F082 PUT 觸發 auto-advance（主路徑）；實作機制（環境變數）沿用既有設計 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
 | **SectionChiefScopeGuard**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補 method 分支） | 處長轄區隔離 Guard；於 F082 端點套用 | (1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：**GET 不攔截**（由 service 層 `scopeByCreator(currentUserId)` 統一過濾，越權回 200 + `departments = []`）；**PUT / POST 攔截**（從 request body / params 抽 `deptCode` + `empIds`，比對 `ob_empl_set.created_by`，不符回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`）；後續 M03d / 簽核流程可重用 | F082 v1.3 |
 | **PooldataFieldWhitelistService**（F075 v1.3 / 2026-05-16；**v1.4 補登 2026-05-18**） | `pooldata_field_whitelist` CRUD（新增 / 編輯 / 軟刪除）；欄位類別管理（field_type：numeric / categorical / date）；F076-C 級聯軟停用（categorical 切離時同 transaction 批次 SET pooldata_field_option.is_active=false）；**[v1.4 新增]** `getAvailableColumns()`：以 `DataSource.query()` raw SQL 查詢 `information_schema.columns WHERE table_schema='public' AND table_name='ob_pool_data'` 並排除所有 `pooldata_field_whitelist.column_name`（含 is_active=false，BR-13）；`private _inferSuggestedFieldType(dataType)` pure function 推斷三類型（numeric / date / categorical） | 寫入限 admin / director（`DirectorGuard`）；讀取開放至 section_chief（`DirectorOrSectionChiefGuard`）；`GET /available-columns` 受 `DirectorGuard` + `FeatureFlagGuard`（`ENABLE_E07_REFACTOR_PHASE3`）保護；column_name 唯一性由 DB UNIQUE index + 應用層雙重保證（衝突 → 409 POOLDATA_FIELD_DUPLICATE，BR-1）；ob_pool_data 不存在時回空陣列（非 500）；稽核失敗不 rollback（BR-8）；不快取 available-columns 查詢結果（information_schema catalog 查詢成本可忽略，呼叫頻率低） | F075, F076, US-092 |
 
@@ -4618,6 +4620,278 @@ prod_best: string | null;
 | **風險** | tdd-implementation 若先改 service 層（L378 / L540 改為寫 `null`）但 M-A2 尚未執行（column 仍 NOT NULL），PG 會拋 constraint violation；SQLite 同理 |
 | **緩解** | tdd-implementation 執行順序：M-A1 → M-A2 → entity 修改 → service 修改。即 M-A2 執行後 column 已 nullable，service 再改為寫 `null` |
 | **追蹤** | Phase 5 PR checklist 明確標示「service L378 / L540 修改必須在 M-A2 migration 已執行環境上驗證」 |
+
+---
+
+#### AD-E07-19　F084 v2.0 Auto-Advance 架構設計（2026-05-25）
+
+> **版本**：1.0（2026-05-25）| **作者**：System Architect Agent | **對應 spec**：F084 v2.0 / F082 v1.7
+>
+> **本決議落實假設 A-5 / A-6 / A-7**，並明確推翻 F084 spec §5.2/BR-13 的 try-lock 降級假設。spec 將由 spec-writer 對齊（FLAG-1）。
+
+---
+
+##### 19.1 背景與動機
+
+**觸發事件**：F084 v2.0（2026-05-25）將「個別業務比例 → 簽核」推進由使用者手動點擊改為 **F082 PUT `setPersonnelRatios()` 成功後同一 transaction 內自動觸發**（auto-advance）。spec 留下三個 assumption（A-5 / A-6 / A-7）由 system-architect 決議。
+
+**架構挑戰**：
+1. **A-5**：Advisory lock 具體 API — try-lock vs blocking lock 的並發正確性分析
+2. **A-6**：Transaction 邊界 — `StageTransitionService.advanceTo()` 自開 tx，無法參與呼叫端既有 tx；需新增過載
+3. **A-7**：`operator_role` 推導來源與稽核寫入方式
+
+---
+
+##### 19.2 A-5：Advisory Lock 機制選型
+
+###### 19.2.1 並發可見性問題分析（try-lock 的致命缺陷）
+
+spec §5.2 BR-13「拿不到 lock → no-op」**隱含 `pg_try_advisory_xact_lock`（try-lock）語意**。以下分析證明 try-lock 在特定並發場景會導致 stage 永久卡住：
+
+```
+並發場景（READ COMMITTED 隔離級別）：
+  處長 A 的 PUT tx 開始 → A 取得 try-lock → A 偵測完成度
+  處長 B 的 PUT tx 同時開始 → B 拿不到 lock → B no-op（autoAdvanced: false）
+
+  A 偵測時 B 的寫入尚未 commit → A 看不到 B 的 ob_empl_set → A 判斷未完成 → A no-op
+
+  A tx commit → B tx commit
+
+結果：A PUT 與 B PUT 均成功 commit，所有部門均已完成設定，
+      但 stage 永遠卡在 personnel_ratio（兩個 auto-advance 路徑均未觸發）。
+      需手動 fallback 才能推進。
+```
+
+**結論：try-lock 與 auto-advance 的 UX 目標直接矛盾**。spec 的 try-lock 隱含假設為**錯誤的並發設計**，本 AD 推翻此假設。
+
+###### 19.2.2 決策：採用 Blocking Lock（`pg_advisory_xact_lock`）
+
+| 比較項目 | Try-Lock（`pg_try_advisory_xact_lock`） | **Blocking Lock（`pg_advisory_xact_lock`）**（採用） |
+|---|---|---|
+| 並發完成場景 | Stage 卡住（bug） | B 等 A commit 後取得 lock，重新偵測，正確觸發推進 |
+| 第二筆 PUT 行為 | 立即 no-op | 短暫等待（通常 < 100ms）後取得 lock |
+| UX 影響 | 可能需手動 fallback | 幾乎感受不到延遲；A 推進後 B 偵測 stage 已 `approval` → idempotent no-op |
+| 死鎖風險 | 無 | 極低（lock 以 `listNo` 為 key，不同名單間無競爭；同名單順序確定） |
+| Timeout 降級 | 不需要 | 設 `lock_timeout = 5000ms`；超時回 `autoAdvanced: false`（不報 5xx） |
+
+**Lock Key 設計**：`hashtext(listNo)::bigint`，PostgreSQL 內建函數，接受 text 輸入，輸出確定性 64-bit integer，符合 `pg_advisory_xact_lock(bigint)` 簽名。
+
+**Lock Scope**：`pg_advisory_xact_lock`（transaction-scoped）— tx commit 或 rollback 時自動釋放，無需手動 unlock，防止 lock 洩漏。
+
+**對 spec 的影響**（需 spec-writer 對齊；完整 GAP 清單見 §19.8）：
+- F084 §5.2 step 2：「拿不到 advisory lock → 跳過 auto-advance」應修改為「取得 advisory lock（blocking，等待其他 tx 先完成）→ 重新偵測完成度 → 若 stage 已 `approval` 則 idempotent no-op；若 lock 等待逾時（5s）則降級 no-op」
+- F084 BR-13：「無法取得 advance lock（代表另一並發請求正在處理推進）→ 跳過本次 auto-advance」語意不再適用；改為「取得 lock 後偵測 stage 若已 `approval` → idempotent no-op」；超時降級補充為「lock 等待逾時 → `autoAdvanced: false`、不帶 `failReason`」
+- F084 §5.2 降級行為彙總表中「拿不到 advisory lock」列，應更新描述為「lock 等待逾時（> 5s）時 no-op」
+- **（Option B 補充）**：lock 超時降級時，ob_empl_set 比例寫入**已保留**（寫入在 lock 取得前完成）；PUT 回 200 + `autoAdvanced: false`（不帶 `autoAdvanceFailReason`），使用者可待稍後再次 PUT 或改走手動 fallback 觸發推進。此語意需在 F084 §5.2 降級行為彙總表的「lock 等待逾時」列補充說明「比例寫入已儲存，僅 auto-advance 未執行」
+
+---
+
+##### 19.3 A-6：Transaction 邊界設計
+
+###### 19.3.1 實作現況分析
+
+| 元件 | 現況 | auto-advance 相容性 |
+|---|---|---|
+| `StageTransitionService.advanceTo()` | 第 85 行 `this.dataSource.transaction(async (mgr) => {...})` **自開 tx** | **不相容**：若直接呼叫，會在 `setPersonnelRatios()` 的 tx 外再開一個獨立 tx，無法保證原子性 |
+| `PersonnelRatioValidationService.assertAllDeptsSumEquals100()` | 使用 `@InjectRepository(ObEmplSet)` 直查 | **不相容**：READ COMMITTED 下直查看不到 `setPersonnelRatios()` 同一 tx 內剛 INSERT 但未 commit 的 `ob_empl_set` 資料 |
+| `setPersonnelRatios()` tx scope | L371 `dataSource.transaction(async (mgr) => { DELETE + INSERT + audit })` | 需擴大以納入 advisory lock + auto-advance 偵測 + stage 更新 |
+
+###### 19.3.2 決策：新增 `advanceToInMgr()` 過載 + `assertAllDeptsSumEquals100WithMgr()`
+
+**原則**：最小改動，不破壞既有呼叫者（F078/F080/F084 fallback/F086 繼續使用原 `advanceTo()`）。
+
+**`StageTransitionService` 新增**：
+
+```typescript
+// 新增過載（不自開 tx，接受外部 EntityManager）
+async advanceToInMgr(
+  listNo: string,
+  fromStage: StageName,
+  toStage: StageName,
+  actorId: string,
+  mgr: EntityManager,
+  auditMetadata?: Record<string, unknown>,   // 附加到 after_value.metadata
+): Promise<void>
+```
+
+實作：使用傳入的 `mgr` 執行 `assertStageEquals` + `UPDATE ob_list_definition` + `INSERT assignment_audit_log`，**不呼叫 `this.dataSource.transaction()`**。`auditMetadata` 合併進 `after_value`：`{ fromStage, toStage, metadata: auditMetadata }`。
+
+**`PersonnelRatioValidationService` 新增**：
+
+```typescript
+// 新增 EntityManager 版本
+async assertAllDeptsSumEquals100WithMgr(
+  listNo: string,
+  mgr: EntityManager,
+): Promise<void>
+```
+
+實作：使用 `mgr.createQueryBuilder(ObEmplSet, 'e').select(...).where('e.list_no = :listNo').groupBy('e.deptid_m').getRawMany()`，確保讀取 tx 內尚未 commit 的 INSERT 結果；全員離職短路邏輯與原版本相同。
+
+###### 19.3.3 擴大後的 `setPersonnelRatios()` Transaction Scope
+
+```
+setPersonnelRatios(listNo, dto, actor, currentWorkYm) {
+  // ─── tx 外：guard / validation（不需原子性）───────────────────────
+  await runGuard.assertNoRunningRun()
+  list = await findListOrThrow(listNo)
+  assertNotHistorical(list.project_workym, currentWorkYm)
+  assertListActive(list)
+  await stageTransition.assertStageEquals(listNo, 'personnel_ratio')
+  // 部門存在、轄區、員工有效性、數值範圍、per-DEPT 加總（寫入前校驗）...
+
+  // ─── dataSource.transaction(async (mgr) => { ─────────────────────
+  //   [1] DELETE ob_empl_set WHERE (list_no, deptid_m)
+  //   [2] INSERT ob_empl_set（新員工比例資料）
+  //   [3] INSERT assignment_audit_log（SET_PERSONNEL_RATIO）
+  //       ↑ [1]~[3] 寫入在 lock 取得之前完成，確保 lock 超時時寫入仍保留
+  //
+  //   [4] if (ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL) {
+  //     [4a] 取得 blocking advisory lock
+  //          try {
+  //            await mgr.query(
+  //              'SET LOCAL lock_timeout = \'5000ms\'; ' +
+  //              'SELECT pg_advisory_xact_lock($1)',
+  //              [hashtext(listNo)]
+  //            )
+  //          } catch (e) {
+  //            if (isPgLockNotAvailable(e)) {
+  //              // 55P03 lock_not_available → 超時降級：
+  //              // 不 rethrow，tx 照常 commit，[1]~[3] 寫入保留
+  //              autoAdvanced = false   // 不帶 autoAdvanceFailReason
+  //              return                 // 跳過 [4b]~[4d]
+  //            }
+  //            throw e  // 其他錯誤仍向上拋
+  //          }
+  //     [4b] 月跑 guard（tx 內，對應 BR-15）
+  //          if (await runGuard.isRunning()) →
+  //            autoAdvanced = false, autoAdvanceFailReason = 'ASSIGNMENT_RUN_ALREADY_RUNNING'
+  //            return  // 跳過 [4c]~[4d]，tx 仍 commit
+  //     [4c] assertAllDeptsSumEquals100WithMgr(listNo, mgr)
+  //          ↑ 偵測完成度（讀取 tx 內 [1]~[3] 剛寫入的 ob_empl_set）
+  //          若有部門未完成 → autoAdvanced = false，return
+  //     [4d] if stage = 'personnel_ratio'（idempotent guard）→
+  //          stageTransition.advanceToInMgr(
+  //            listNo, 'personnel_ratio', 'approval', actor.userId, mgr,
+  //            { auto_advanced_by_completion: true, operator_role: resolveOperatorRole(actor) }
+  //          )
+  //          → autoAdvanced = true, newStage = 'approval'
+  //   }
+  // }) ────────────────────────────────────────────────────────────────
+
+  return { listNo, deptCode, savedCount, deptSum, savedAt, savedBy,
+           autoAdvanced, newStage, autoAdvanceFailReason }
+}
+```
+
+> **操作順序設計說明（Option B，已拍板）**：寫入（DELETE/INSERT ob_empl_set + 稽核）在 lock 取得**之前**完成於同一 tx 內。lock 超時時（PostgreSQL `55P03 lock_not_available`），catch 後不 rethrow，tx 照常 commit，[1]~[3] 的比例寫入**完整保留**；僅 auto-advance 跳過（`autoAdvanced: false`，不帶 `autoAdvanceFailReason`）。此為拍板決策，不需與 spec-writer 二次確認。
+
+> **並發正確性確認**：「寫入在 lock 前」**不破壞** auto-advance 的序列化正確性。Lock 序列化的是「完成度偵測（[4c]）+ stage 更新（[4d]）」這個 check-then-act 段，而非整個 tx。B 等待 A 的 tx commit 後才取得 lock，此時 A 的 [1]~[3] INSERT 已 commit 可見，B 的 `assertAllDeptsSumEquals100WithMgr` 正確讀取到所有部門資料。並發安全性不受影響。
+
+**隔離級別**：維持 **READ COMMITTED**（PostgreSQL 預設）。Advisory lock 已充分序列化 auto-advance 偵測，不需 REPEATABLE READ（引入死鎖風險且效能差）。
+
+---
+
+##### 19.4 A-7：`operator_role` 推導與稽核寫入
+
+**推導邏輯**（沿用 `stage-action.service.ts` L204 / L321 既有 `advancedByRole` pattern）：
+
+```typescript
+const operatorRole = actor.role === 'admin'
+  ? 'admin'
+  : (actor.businessRole ?? 'section_chief');
+// actor.businessRole 來自 JWT payload 的 businessRole claim（'director' | 'section_chief'）
+```
+
+**稽核寫入**：透過 `advanceToInMgr()` 的 `auditMetadata` 參數注入，合併進 `assignment_audit_log.after_value` JSONB：
+
+```json
+{
+  "fromStage": "personnel_ratio",
+  "toStage": "approval",
+  "metadata": {
+    "auto_advanced_by_completion": true,
+    "operator_role": "section_chief"
+  }
+}
+```
+
+**不擴充 `AssignmentAuditLog.action` enum**：沿用既有 `STAGE_ADVANCE`；以 `metadata.auto_advanced_by_completion = true` 區分自動 / 手動路徑，與 F084 BR-14 一致。手動 fallback 路徑（`stageTransition.advanceTo()`）不傳 `auditMetadata`，故 `metadata` 欄位不含 `auto_advanced_by_completion`。
+
+---
+
+##### 19.5 Feature Flag 雙 flag 關係
+
+| Flag | 預設值（prod） | Gate 範圍 | 關係 |
+|---|---|---|---|
+| `ENABLE_E07_REFACTOR_PHASE3` | on（已啟用） | 整個 E07 P3 功能集，含 F082 PUT + F084 手動 endpoint | 外層 Gate；off 時所有 P3 端點 503 |
+| `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` | **off** | 僅 F082 PUT 內的 auto-advance 觸發邏輯 | 內層 Gate；off 時退回 v1.x 手動推進行為 |
+
+**組合行為**：
+
+```
+phase3 = off  →  所有 P3 端點 503（auto flag 無作用，PUT 被攔截）
+phase3 = on, auto = off  →  F082 PUT 正常（autoAdvanced: false）；手動 F084 endpoint 正常
+phase3 = on, auto = on   →  F082 PUT 觸發 auto-advance（主路徑）；手動 F084 endpoint 作為 fallback
+```
+
+---
+
+##### 19.6 設計決策表
+
+| 決策 ID | 決策內容 | 拒絕方案 | 理由 |
+|---|---|---|---|
+| 19.1 | Advisory lock 採 `pg_advisory_xact_lock`（blocking，tx-scoped） | `pg_try_advisory_xact_lock`（try-lock） | Try-lock 在並發完成場景導致兩個 auto-advance 均不觸發，stage 永遠卡住（詳 §19.2.1） |
+| 19.2 | Lock key 採 `hashtext(listNo)::bigint` | string-based advisory lock / application-level mutex | PostgreSQL 原生，確定性雜湊，無需額外基礎設施；tx-scoped 自動釋放防洩漏 |
+| 19.3 | `StageTransitionService` 新增 `advanceToInMgr()` 過載（不自開 tx） | 改造原 `advanceTo()` 支援可選 EntityManager | 最小改動原則；保持向下相容（F078/F080/F086 等呼叫者零修改）；分離「自開 tx」與「參與既有 tx」兩種語意 |
+| 19.4 | `PersonnelRatioValidationService` 新增 `assertAllDeptsSumEquals100WithMgr()` | 在 tx 提交後再偵測（兩階段設計） | 「偵測 + 推進」必須原子性（F084 BR-11 / BR-7）；tx 提交後偵測無法保證原子性，另一請求可能在 commit 後、偵測前搶先修改 stage |
+| 19.5 | 隔離級別維持 READ COMMITTED + blocking advisory lock | REPEATABLE READ 或 SERIALIZABLE | Blocking lock 已序列化關鍵段，READ COMMITTED 在 lock 保護下可見 A 的 committed 資料；REPEATABLE READ 引入死鎖風險且效能差 |
+| 19.6 | `operator_role` 寫入 `after_value.metadata` JSONB | 新增 `operator_role` 稽核 entity 欄位 | 避免 schema 變更；沿用 `assignment_audit_log.after_value` 既有 JSONB 彈性欄位；A-3 假設既有模式（v1.2.1）不變 |
+| 19.7 | `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` prod 預設 **off** | prod 預設 on | 新行為需觀察期；prod off 時完全退回 v1.x 手動推進，不影響現有流程；staging on 驗收後再 prod 啟用 |
+
+---
+
+##### 19.7 NFR 對應
+
+| NFR | 架構決策 | 影響 |
+|---|---|---|
+| **Correctness（並發安全）** | Blocking advisory lock 序列化 auto-advance 偵測 | 消除 try-lock 並發卡住 bug；stage 更新保證 exactly-once |
+| **Atomicity** | auto-advance 偵測 + stage 更新 + 稽核與 ob_empl_set 寫入同一 tx | commit/rollback 一致，不存在部分成功狀態 |
+| **Observability** | `metadata.auto_advanced_by_completion = true` + `operator_role` 寫入稽核 | 可區分自動 / 手動推進路徑，便於事後追溯 |
+| **Maintainability** | `advanceToInMgr()` 過載最小改動，原呼叫者零修改 | 降低重構風險；TDD 測試邊界清晰 |
+| **Availability** | `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` prod 預設 off，支援快速 rollback | 新功能問題時可關 flag 退回手動推進，不需 hotfix |
+
+---
+
+##### 19.8 對 Spec 的修正要求（需 spec-writer 對齊 F084）
+
+> **本節明確記錄架構層決策與 F084 spec 的落差，待 spec-writer 修正後關閉。**
+
+| 落差 # | Spec 位置 | 現有描述（需修正） | 架構決策（本 AD 依據） | 修改方向 |
+|---|---|---|---|---|
+| GAP-AD19-1 | F084 §5.2 step 2 | 「若無法取得 advance lock（代表另一並發請求正在處理推進）→ 跳過本次 auto-advance、PUT 仍回 200 + `autoAdvanced: false`、不帶 `autoAdvanceFailReason`、不報 5xx」 | Blocking lock（等待前一 tx commit）；等待後取得 lock 重新偵測 stage，若已 `approval` 則 idempotent no-op；超時（> 5s）才降級 | 修正 step 2 為：「以 `listNo` 為 key 取得 blocking advisory lock（`pg_advisory_xact_lock`）；等待前一並發 tx 完成後重新偵測 stage。若 stage 已 `approval`（先到者已推進）→ idempotent no-op，`autoAdvanced: false`；若 lock 等待逾時（5s）→ 跳過 auto-advance，`autoAdvanced: false`，不帶 `autoAdvanceFailReason`」 |
+| GAP-AD19-2 | F084 BR-13 | 「(1) **拿不到 lock**（另一並發請求正在處理）→ 跳過本次 auto-advance...」 | Blocking lock 不存在「拿不到 lock」的立即 no-op；只有「取得 lock 後偵測 stage 已 `approval`」與「等待超時」兩種降級 | 修正 BR-13(1) 為：「取得 blocking lock 後偵測 `stage != 'personnel_ratio'`（已被先到請求推進）→ idempotent no-op、不重複寫稽核；lock 等待超時（5s）→ 降級 no-op（同 no-op 語意，但原因為超時）；兩種情境 PUT 均回 200 + `autoAdvanced: false`、不帶 `autoAdvanceFailReason`」 |
+| GAP-AD19-3 | F084 §5.2 降級行為彙總表 | 「拿不到 advisory lock」行：`autoAdvanced: false`、`autoAdvanceFailReason:（不帶）` | 改為「lock 等待超時（> 5s）」；並發第二筆 PUT 在 blocking lock 下**不再是 no-op，而是等待後 idempotent 成功或超時降級** | 更新彙總表：(a) 刪除「拿不到 advisory lock」列；(b) 新增「lock 等待逾時（> 5s）」列（`autoAdvanced: false`、不帶 `failReason`；**比例寫入已儲存**，僅 auto-advance 跳過）；(c) 新增「並發第二筆 PUT（等待後取得 lock，stage 已 `approval`，idempotent no-op）」列（`autoAdvanced: false`、不帶 `failReason`）|
+| GAP-AD19-4 | F084 §5.2 降級行為彙總表（lock 超時列語意） | 現有 spec 無此列（原 try-lock 設計無「超時」概念） | **Option B（已拍板）**：ob_empl_set 比例寫入在 lock 取得**之前**完成，lock 超時 catch 後 tx 照常 commit，寫入**完整保留**；僅 auto-advance 跳過 | 在彙總表新增「lock 等待逾時（> 5s）」列，說明欄補充：「比例已儲存，auto-advance 未執行；使用者可再次 PUT 觸發，或改走手動 fallback」；此行為為 Option B 拍板決策，**不需再次與 spec-writer 確認前提** |
+
+**並發第二筆 PUT 的行為描述（給 spec-writer 的完整語意）**：
+
+Blocking lock + Option B（寫入在 lock 前）下，並發第二筆 PUT 的完整流程為：
+1. A 和 B 幾乎同時進入 tx，各自先執行 [1]~[3] DELETE/INSERT ob_empl_set + audit（寫入在 lock 前）
+2. B 的 tx 嘗試取得 `pg_advisory_xact_lock(hashtext(listNo))`，進入等待（A 先取得）
+3. A 完成 [4b]~[4d]（偵測 + advanceToInMgr），tx commit（B 的 ob_empl_set 寫入此時已蓋過 A 的，但 stage = `approval` 已確立）
+4. B 取得 lock → B 的 `assertAllDeptsSumEquals100WithMgr` 偵測（讀取 B 自己在 [1]~[3] 寫入、A 也 commit 的最新 ob_empl_set 狀態）
+5. B 的 idempotent guard：`assertStageEquals` 偵測到 `stage = 'approval'`（A 已推進）→ no-op，不重複寫 STAGE_ADVANCE 稽核
+6. B 的 tx commit（B 的 ob_empl_set 寫入保留，stage 維持 `approval`）
+7. B PUT 回 200 + `autoAdvanced: false`（不帶 `autoAdvanceFailReason`）
+
+此行為補一列進 F084 §5.2 降級行為彙總表：「並發第二筆 PUT（stage 已 `approval`，idempotent no-op）」，`autoAdvanced: false`、不帶 `failReason`，與「所有部門完成、成功推進」列並存。
+
+---
+
+*本節版本 1.1（2026-05-25），由 System Architect Agent 更新。*
+- *v1.0 新增：AD-E07-19（F084 v2.0 auto-advance 架構設計：A-5 blocking lock 選型 + 並發可見性分析、A-6 `advanceToInMgr` 過載 + tx scope 擴大、A-7 `operator_role` 推導；§19.8 spec 修正要求三條 GAP）*
+- *v1.1 修訂（2026-05-25）：§19.3.3 採 Option B（寫入在 lock 前，lock 超時時比例寫入保留）；更新 §19.2.2「對 spec 的影響」補 Option B 語意；§19.8 GAP-AD19-3 補「比例寫入已儲存」語意、新增 GAP-AD19-4（lock 超時列說明）；§19.8 並發第二筆 PUT 流程說明對應 Option B 更新*
 
 ---
 

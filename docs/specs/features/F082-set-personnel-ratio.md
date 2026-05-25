@@ -6,7 +6,7 @@ source-story: US-112
 epic: E07
 module: M03b 個別業務比例設定階段
 priority: P0-MVP
-version: "1.6"
+version: "1.7"
 date: 2026-05-25
 status: Draft
 ---
@@ -15,6 +15,8 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
+> **v1.7 修訂（2026-05-25 / F084 v2.0 auto-advance 改造同步）**：本 PUT `setPersonnelRatios` 成為 F084 v2.0「自動推進至簽核」之**觸發宿主**。(1) §5.2 PUT response 補 `autoAdvanced: boolean` / `newStage: string | null` / `autoAdvanceFailReason?: string | null` 三欄位 + 欄位語意說明；(2) 新增 §6 BR-19「Auto-Advance 觸發宿主」（觸發行為 / advisory lock / 月跑 guard 降級 / 稽核細節全由 F084 規範，本 BR 僅說明觸發掛載點）；(3) §8 Blocks 之 F084 條目補註「auto-advance 觸發宿主」。**本 PUT 既有寫入 / 校驗 / 容差 ±0.01% / 轄區 Guard / 稽核語意完全不變**；auto-advance 由 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag（prod 預設 off）控制，flag off 時完全不執行。
+>
 > **v1.6 修訂（2026-05-25 / commits 6402cd3 / 150acbe / 38eb0dc 落地）**：(1) 新 BR-17 FE per-row ±N% 模板採「baseline + per-employee templates」模型保證對稱性（baseline 設定時機三種：首次進入 / 均等分配 / 手動編輯）；(2) 新 BR-18 service GET 只回 `deptRatio > 0` 之部門（null / 0 隱藏；> 0 顯示）；(3) §5.1 GET response 補 `directorName: string | null` 欄位，定義對齊 F079 §5.1。
 > **v1.5 修訂（2026-05-22 / commit 977ed09 落地；補入 changelog）**：處長轄區判定改用 `resolveSectionChiefScope(userId)` 由 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` 反查 `dept_code`，廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯以解「首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單」之 chicken-and-egg；BR-3 / BR-14 / §5.x 已於 977ed09 commit body 更新但漏記 changelog，本次補入。
 > **v1.4 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔內容，本版本依 US-112 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorOrSectionChiefGuard` + `SectionChiefScopeGuard`（廢除 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim 為 `businessRole`；保留 v1.0~v1.3 所有設計決議與 6 風險決議落地。
@@ -291,9 +293,19 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   "savedCount": 3,
   "deptSum": 100.0,
   "savedAt": "2026-05-15T13:00:00Z",
-  "savedBy": "user-uuid-section-chief-A"
+  "savedBy": "user-uuid-section-chief-A",
+  "autoAdvanced": false,
+  "newStage": null,
+  "autoAdvanceFailReason": null
 }
 ```
+
+> **`autoAdvanced` / `newStage` / `autoAdvanceFailReason`（v1.7 新增 / F084 v2.0 auto-advance 改造）**：本 PUT 為 F084 v2.0「自動推進至簽核」之**觸發宿主**。PUT 寫入成功後，若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag = on，後端於**同一 transaction 內**偵測該名單所有有在職員工的部門 RATION 加總是否均 = 100%（容忍 ±0.01%，沿用 BR-2 / I-8；全員離職部門短路通過，沿用 BR-13 / F084 BR-12），完成則自動將 `stage` 由 `'personnel_ratio'` 推進至 `'approval'`。三欄位語意：
+> - **`autoAdvanced: boolean`**：本次 PUT 是否觸發了自動推進成功。`true` = stage 已自動推進至 `approval`；`false` = 未推進（部分部門未完成 / flag off / 競爭條件 no-op / 月跑 guard 阻擋）。
+> - **`newStage: string | null`**：`autoAdvanced = true` 時為 `"approval"`；否則為 `null`。
+> - **`autoAdvanceFailReason?: string | null`**：僅於「auto-advance 因月跑 guard 阻擋而跳過」時為 `"ASSIGNMENT_RUN_ALREADY_RUNNING"`（PUT 本身仍回 200、不 rollback）；其餘 `autoAdvanced = false` 情境（部分完成 / flag off / lock 等待逾時降級 / stage 已推進之 idempotent no-op）一律為 `null`（不帶 failReason）。
+>
+> 觸發流程、advisory lock、idempotent 與降級行為彙總詳 [F084 §5.2](F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint) 與 [F084 §6 BR-11~BR-16](F084-advance-to-approval.md#6-業務規則)。**本 PUT 既有寫入語意（覆寫式、轄區 Guard、容差 ±0.01%、稽核）完全不變**；auto-advance 為附加於成功寫入後之同一 tx 行為。
 
 **錯誤回應**
 
@@ -335,6 +347,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | BR-16 | **Feature Flag fallback（v1.3 / 決議 #2）**：F082 PUT / GET 端點均掛 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = true 時正常運作 |
 | BR-17 | **FE per-row ±N% 模板採 baseline + per-employee templates 模型（v1.6 / commit 6402cd3）**：FE 套用 F083 之 ±N% 模板時，以「baseline + per-employee templates」資料模型計算各業務員之最終 ration，保證**對稱性**（同一 baseline 下，不同員工套用同一 template 必得相同 ration；同一員工反覆套用同一 template 必得相同結果）。**baseline 設定時機（三種）**：(1) **首次進入頁面**：baseline = 後端 GET 回傳之該員工 ration；若全員 ration 皆為 0 或 null（無 `ob_empl_set` 紀錄）則 fallback 為 `100 / activeCount` 均分；(2) **點擊「均等分配」按鈕**：所有員工 baseline 重置為 `100 / activeCount` + 清除所有 per-employee template；(3) **手動編輯 RatioInput**：該員工 baseline = 輸入值 + 清除該員工之 template（不影響其他員工 baseline）。模板計算後仍由 F082 PUT 之主流程 `assertDeptSumEquals100` 校驗（容忍 ±0.01%）；F083 後端 `appliedTemplate` 校驗已弱化為「audit hint + invariant 最小校驗」（詳 [F083 v1.4 §5.2 / BR-9](F083-quick-ratio-template.md#52-後端儲存路徑沿用-f082)） |
 | BR-18 | **GET 過濾 deptRatio > 0 部門（v1.6 / commit 150acbe）**：service `getPersonnelRatios()` 只回 `deptRatio > 0` 之部門；`deptRatio = null`（`ob_dept_pct` 無紀錄）或 `deptRatio = 0`（部長刻意排除本月）均**隱藏**。此規則對處長 / 部長 / Admin 一致。理由：個別業務比例設定階段不應呈現本月不參與分派之部門（避免處長對 0% 部門徒勞設定個別比例）。詳 §5.1 GET response 說明 |
+| BR-19 | **Auto-Advance 觸發宿主（v1.7 / F084 v2.0 auto-advance 改造）**：本 PUT 為 F084 v2.0「自動推進至簽核」之觸發點。PUT 寫入成功後，若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag = on，後端於**同一 transaction 內**呼叫 F084 auto-advance 完成度偵測；所有有在職員工的部門 RATION 加總均 = 100%（±0.01%，沿用 BR-2；全員離職部門短路沿用 BR-13）則自動推進 `stage` → `'approval'`。觸發行為、advisory lock + idempotent、月跑 guard 降級、稽核（`STAGE_ADVANCE` + `metadata.auto_advanced_by_completion = true`）等細節**全部由 F084 規範**（[F084 §5.2 / §6 BR-11~BR-16](F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint)）；本 BR 僅說明「F082 PUT 為觸發宿主」。結果經本 PUT response `autoAdvanced` / `newStage` / `autoAdvanceFailReason` 三欄位回傳（見 §5.2）。**本 PUT 既有寫入 / 校驗 / 容差 / 轄區 Guard 語意完全不變**；flag = off 時 auto-advance 完全不執行（response `autoAdvanced: false`）。advisory lock 具體 API 與 transaction 邊界待 system-architect（F084 §12 A-5~A-7） |
 
 ## 7. UI/UX 需求
 
@@ -401,7 +414,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - F077 v1.0（`current_work_ym` + `stage` + 角色 × 階段操作矩陣）
 - **Blocks**：
   - F083（獎懲快速比例模板；本 Feature 之 UI 子模組）
-  - F084（個別業務比例設定階段推進至簽核，前置條件含本 Feature 之部門加總 = 100%）
+  - F084 v2.0（個別業務比例設定階段「自動推進」至簽核；**本 PUT 為 auto-advance 觸發宿主**，前置條件含本 Feature 之部門加總 = 100%；詳 BR-19 / §5.2）
   - F061（月跑 Stage 4 之人員比例讀取 `ob_empl_set`）
 - **Rollback 反向**：F085（M03b Rollback 至 M03a，清空本 Feature 寫入之 `ob_empl_set`）
 - **取代**：[F058 v1.x DEPRECATED](F058-edit-personnel-ratio.md)
@@ -535,3 +548,4 @@ resign_date DATE NULL    (NULL = 在職; 非 NULL = 離職)
 | **v1.4** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-112 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 名稱統一為 `DirectorOrSectionChiefGuard` + `SectionChiefScopeGuard`（廢除 `SalesManagerGuard`）；business_role 欄位語意對齊 F074 v2.0；JWT claim 為 `businessRole`；保留 v1.0~v1.3 所有設計決議與 6 風險決議落地 |
 | **v1.5** | **2026-05-22** | **【處長轄區改用 ob_emphire 反查解 chicken-and-egg / commit 977ed09；補入 changelog】**：BR-3 / BR-14 / §5.x 已於 977ed09 commit 落地但漏記 changelog，本次補入。修改要點：(1) BR-3 改寫：處長轄區由 `resolveSectionChiefScope(userId)` 反查（`users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` → `dept_code`），廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯（chicken-and-egg：首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單）；scope=null 時 GET 回 `departments=[]`、PUT 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(2) BR-14 改寫：`SectionChiefScopeGuard` GET 由 service 走 `resolveSectionChiefScope()`、PUT/POST 攔截 `dto.deptCode === scope`；(3) §5.x Guard 對照表同步更新。沿用 F074 v2.1 BR-1「`jfun_nm='處長'` 為 source of truth」設計，與處長姓名顯示同一資料來源 |
 | **v1.6** | **2026-05-25** | **【FE baseline 模板模型 + GET deptRatio>0 過濾 + directorName 欄位 / commits 6402cd3 / 150acbe / 38eb0dc】**：(1) **§6 BR-17 新增**：FE per-row ±N% 模板採「baseline + per-employee templates」模型保證對稱性；列出 baseline 三種設定時機（首次進入 / 均等分配 / 手動編輯）；模板計算後仍由 PUT 主流程 `assertDeptSumEquals100` 校驗；交叉引用 F083 v1.4 弱化校驗（commit 6402cd3）；(2) **§6 BR-18 新增**：service GET 只回 `deptRatio > 0` 部門；`null`（無紀錄）/ `0`（刻意排除）均隱藏；對所有角色一致（commit 150acbe）；(3) **§5.1 GET response 補 `directorName: string | null` 欄位** + 範例 + 定義對齊 [F079 §5.1 / BR-14](F079-set-dept-ratio.md#5-api-規格)（commit 38eb0dc） |
+| **v1.7** | **2026-05-25** | **【F084 v2.0 auto-advance 改造同步 / 對應 US-114 v2.0】**：本 PUT 成為 F084 v2.0「自動推進至簽核」之觸發宿主。(1) **§5.2 PUT response 補 `autoAdvanced` / `newStage` / `autoAdvanceFailReason` 三欄位** + 欄位語意說明（`autoAdvanced=true` 時 `newStage="approval"`；僅月跑 guard 阻擋時帶 `autoAdvanceFailReason="ASSIGNMENT_RUN_ALREADY_RUNNING"`，其餘 no-op 情境不帶 failReason）；(2) **§6 BR-19 新增**：「Auto-Advance 觸發宿主」——PUT 成功後同一 tx 內若 flag = on 則呼叫 F084 完成度偵測 + 自動推進；觸發行為 / advisory lock / 月跑 guard 降級 / 稽核（`STAGE_ADVANCE` + `auto_advanced_by_completion`）細節全由 F084 §5.2 / BR-11~BR-16 規範，本 BR 僅說明掛載點；(3) **§8 Blocks** 之 F084 條目補註「auto-advance 觸發宿主」。**既有寫入 / 校驗 / 容差 ±0.01% / 轄區 Guard / 稽核語意完全不變**；由 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag（prod 預設 off）控制，flag off 時完全不執行 |
