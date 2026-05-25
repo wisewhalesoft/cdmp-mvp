@@ -1087,16 +1087,16 @@ PK：`(project_workym, list_no, obdeptid, ration)`
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
 | created_by_prog | VARCHAR(10) | NOT NULL | A_PRGID | 建立程式代碼 |
-| created_by | VARCHAR(10) | NOT NULL | A_USERID | 建立者 |
+| created_by | VARCHAR(50) | NOT NULL | A_USERID | 建立者 UUID（**v2 修訂，2026-05-25 / commit 736e9c4**：原 VARCHAR(10) → VARCHAR(50) 對齊 `users.id` UUID 36 字元） |
 | created_at | TIMESTAMP | NOT NULL | A_SYSDT | 建立時間 |
 | updated_by_prog | VARCHAR(10) | NOT NULL | U_PRGID | 更新程式代碼 |
-| updated_by | VARCHAR(10) | NOT NULL | U_USERID | 更新者 |
+| updated_by | VARCHAR(50) | NOT NULL | U_USERID | 更新者 UUID（**v2 修訂**：同 `created_by`，VARCHAR(10) → VARCHAR(50)） |
 | updated_at | TIMESTAMP | NOT NULL | U_SYSDT | 更新時間 |
 | project_workym | VARCHAR(6) | NOT NULL | PROJECT_WORKYM | **PK**，作業年月 |
 | list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號 |
 | obdeptid | VARCHAR(6) | NOT NULL | OBDEPTID | **PK**，催收部門代碼 |
 | obdeptnm | VARCHAR(10) | NOT NULL | OBDEPTNM | 催收部門名稱 |
-| ration | NUMERIC(9,1) | NOT NULL | RATION | **PK**，分配比例 |
+| ration | NUMERIC(9,2) | NOT NULL | RATION | **PK**，分配比例（**v2 修訂，2026-05-25 / commit 98a2f56**：scale 1→2；原 NUMERIC(9,1) 會將 FE 之 2-decimal 值 round 至 1-decimal，22 員工均等分配 4.55 round 成 4.6 導致 sum=101.1。Follow-up：prod migration 需手動 ALTER；dev synchronize 已生效，prod `migration:run` **不會自動 ALTER**） |
 
 **索引**：複合 PK 即為主索引。`(project_workym, list_no)` 為月跑查詢索引。
 
@@ -1136,15 +1136,15 @@ PK：`(list_no, deptid_m, emplid, ration)`
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
 | created_by_prog | VARCHAR(10) | NULL | A_PRGID | 建立程式代碼 |
-| created_by | VARCHAR(10) | NULL | A_USERID | 建立者 |
+| created_by | VARCHAR(50) | NULL | A_USERID | 建立者 UUID（**v2 修訂，2026-05-25 / commit 736e9c4**：原 VARCHAR(10) → VARCHAR(50) 對齊 `users.id` UUID 36 字元） |
 | created_at | TIMESTAMP | NULL | A_SYSDT | 建立時間（**entity 必須使用 `dateColumnType()` helper，禁用 `type: 'timestamp'` 固定字串**，見 AD-E07-17 議題 2） |
 | updated_by_prog | VARCHAR(10) | NULL | U_PRGID | 更新程式代碼 |
-| updated_by | VARCHAR(10) | NULL | U_USERID | 更新者 |
+| updated_by | VARCHAR(50) | NULL | U_USERID | 更新者 UUID（**v2 修訂**：同 `created_by`，VARCHAR(10) → VARCHAR(50)） |
 | updated_at | TIMESTAMP | NULL | U_SYSDT | 更新時間（**同 created_at，使用 `dateColumnType()` helper**） |
 | list_no | VARCHAR(11) | NOT NULL | LIST_NO | **PK**，名單編號 |
 | deptid_m | VARCHAR(50) | NOT NULL | DEPTID_M | **PK**，催收人員所屬部門（組合鍵；遷移時 `RTRIM(deptid_m)`，見下方註腳） |
 | emplid | VARCHAR(6) | NOT NULL | EMPLID | **PK**，催收人員工號 |
-| ration | NUMERIC(10,1) | NOT NULL | RATION | **PK**，分配比例 |
+| ration | NUMERIC(10,2) | NOT NULL | RATION | **PK**，分配比例（**v2 修訂，2026-05-25 / commit 98a2f56**：scale 1→2；原 NUMERIC(10,1) 會將 FE 之 2-decimal 值 round 至 1-decimal，22 員工均等分配 4.55 round 成 4.6 導致 sum=101.1。Follow-up：prod migration 需手動 ALTER；dev synchronize 已生效，prod `migration:run` **不會自動 ALTER**） |
 | prod_type | VARCHAR(255) | NULL | PROD_TYPE | 商品類型（多值） |
 
 > ⚠️ **`deptid_m` 尾隨空白填充處理**：舊 `OBEMPLSETMF.DEPTID_M` 雖宣告 `VARCHAR(50)`，dump 觀察實際業務值為 4 字元部門代碼（如 `XTC0`）但被 padded 至 50 字元（範例：`"XTC0                                              "`）。遷移時統一執行 `RTRIM(deptid_m)`，AppDB 存入 trim 後的值（即實際 4 字元代碼），避免 join `ob_emphire.dept_code`（不含 padding）失敗。AppDB 寫入路徑（F082 / 月跑 Stage 4）亦不可保留尾隨空白。
@@ -1193,6 +1193,14 @@ PK：`(list_no, deptid_m, emplid, ration)`
 > 既有 OBEMPLSETMF schema **無 `project_workym` 欄位**（PK 僅 `(list_no, deptid_m, emplid, ration)`）；F085 Rollback 以 `list_no` 為條件 DELETE 已可達月份隔離（`list_no` 含 `OB{YYYYMM}{NNN}` 格式內含月份）。
 >
 > **本 spec 不要求補建 `project_workym`**，但 system-architect 應評估是否補建以對齊 `ob_dept_pct` 之設計一致性（如補建可簡化跨月份查詢與索引設計）。詳見 [F082 §12 A-3](features/F082-set-personnel-ratio.md#12-假設)。
+
+**Follow-up：prod migration（2026-05-25 / commits 98a2f56 + 736e9c4）**：
+
+> 本批 entity 改動共兩項：
+> 1. `ob_empl_set.ration` / `ob_dept_pct.ration` 之 `scale` 由 1 → 2（避免 22 員工均等分配 4.55 round 成 4.6 → sum=101.1）
+> 2. `ob_empl_set.created_by` / `updated_by` / `ob_dept_pct.created_by` / `updated_by` 由 VARCHAR(10) → VARCHAR(50)（對齊 `users.id` UUID 36 字元）
+>
+> Dev 環境採 TypeORM `synchronize: true`，entity 改動於下次啟動即生效；**prod 環境 `migration:run` 不會自動 ALTER 既有欄位**，需手動撰寫 migration script（`ALTER TABLE ob_empl_set ALTER COLUMN ration TYPE NUMERIC(10,2)` 等四個 ALTER）並驗證既有資料不溢位（既有值皆 ≤ 100，scale 擴大不會 truncate；既有 user UUID 長度 36 < 50，欄位擴大不會截斷）。撰寫細節由 system-architect / DevOps 決議，本 spec 不展開 migration script。
 
 ---
 

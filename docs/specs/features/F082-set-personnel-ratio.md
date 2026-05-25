@@ -6,15 +6,17 @@ source-story: US-112
 epic: E07
 module: M03b 個別業務比例設定階段
 priority: P0-MVP
-version: "1.4"
-date: 2026-05-16
+version: "1.6"
+date: 2026-05-25
 status: Draft
 ---
 
 # F082: 個別業務比例設定（per-LIST_NO 各部門業務員 RATION，處長主操 + 部長代操作）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
+> **v1.6 修訂（2026-05-25 / commits 6402cd3 / 150acbe / 38eb0dc 落地）**：(1) 新 BR-17 FE per-row ±N% 模板採「baseline + per-employee templates」模型保證對稱性（baseline 設定時機三種：首次進入 / 均等分配 / 手動編輯）；(2) 新 BR-18 service GET 只回 `deptRatio > 0` 之部門（null / 0 隱藏；> 0 顯示）；(3) §5.1 GET response 補 `directorName: string | null` 欄位，定義對齊 F079 §5.1。
+> **v1.5 修訂（2026-05-22 / commit 977ed09 落地；補入 changelog）**：處長轄區判定改用 `resolveSectionChiefScope(userId)` 由 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` 反查 `dept_code`，廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯以解「首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單」之 chicken-and-egg；BR-3 / BR-14 / §5.x 已於 977ed09 commit body 更新但漏記 changelog，本次補入。
 > **v1.4 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔內容，本版本依 US-112 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorOrSectionChiefGuard` + `SectionChiefScopeGuard`（廢除 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim 為 `businessRole`；保留 v1.0~v1.3 所有設計決議與 6 風險決議落地。
 > **v1.3 修訂（2026-05-16 / system-architect Phase 1 風險決議落地）**：(1) **全員離職部門**（決議 #1，選項 D）：per-DEPT sum = 0% 容許；GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位；新增 AC-14。(2) **Feature Flag fallback**（決議 #2，選項 A）：F082 上 `FeatureFlagGuard`，flag=false 時回 503 + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13 統一行為）；新增 AC-15。(3) **SectionChiefScopeGuard method 分支**（決議 #4）：GET 不攔截、service 走 `scopeByCreator()` 統一 filter；PUT / POST 攔截，越權回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`。(4) **月跑並發守衛**（決議 #6）：所有寫入 service method 入口層呼叫 `AssignmentRunGuardService.assertNoRunningRun()` 集中實現。(5) **test fixture 策略**（決議 #5）：integration test 使用 `apps/api/test/fixtures/ob-emphire.fixture.ts` 之 `buildObEmphire()` factory + `allResignedDeptSeed` 等場景 helper。(6) §12 A-1 / A-6 升 ✅ Resolved。
 > **v1.2 修訂（2026-05-16 / E07 衍生補修）**：PO 決議 F082-A 落地：業務員清單來源改為**全部含已離職員工**（`isResigned = true` flag），UI 顯示「離職」badge；per-DEPT 比例驗證**僅排除離職員工**；既有 `ob_empl_set` ration 紀錄保留供歷史追溯；GET response 補 `isResigned` 欄位；`appdb.ob_emphire` 由 ETL E07-OBEMPHIRE-Load pipeline 載入至 AppDB 表。
@@ -220,6 +222,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
       "deptCode": "XTC0",
       "deptName": "業務一處",
       "deptRatio": 30.0,
+      "directorName": "李處長",
       "isInScope": true,
       "activeCount": 3,
       "sumValidated": true,
@@ -241,6 +244,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 > `viewerRole` 用於前端決定是否顯示「部門切換器」（部長 / Admin 顯示，處長隱藏）。
 > **`isResigned`（v1.2 新增 / PO 決議 F082-A）**：`true` 表示該員工於 `ob_emphire.resign_date IS NOT NULL`；前端應顯示「離職」badge；`deptSum` 計算僅含 `isResigned = false` 員工；既有 `ration` 紀錄保留供歷史追溯。
 > **`activeCount` / `sumValidated` / `allResigned`（v1.3 新增 / 決議 #1 全員離職分支）**：(1) `activeCount`：該部門 `isResigned = false` 員工人數；(2) `sumValidated`：本次回傳之 `deptSum` 是否通過 100% 驗證（容忍 ±0.01%），若 `activeCount === 0` 自動為 `false`；(3) `allResigned`：`activeCount === 0` 時為 `true`，表示該部門所有員工皆已離職，per-DEPT 驗證已跳過儲存，且 `deptSum = 0%` 屬合法情境，前端應於該部門子表顯示警示「此部門所有員工皆已離職，比例驗證已跳過」。
+> **`directorName`（v1.6 新增 / commit 38eb0dc）**：該部門目前處長姓名，定義對齊 [F079 §5.1 / F079 BR-14](F079-set-dept-ratio.md#5-api-規格)（`SELECT TRIM(emp_nm) FROM ob_emphire WHERE TRIM(dept_code)=? AND resign_date IS NULL AND TRIM(jfun_nm)='處長' ORDER BY hire_date ASC LIMIT 1`；同部門有多位處長時取最早入職者；查無對應人員時為 `null`）。F082 與 F079 共用同一來源以保持兩頁面顯示一致。
+> **`deptRatio > 0` 過濾語意（v1.6 新增 / commit 150acbe / BR-18）**：service GET 只回傳 `deptRatio > 0` 之部門：(1) `deptRatio = null`（該 `(project_workym, list_no, deptCode)` 於 `ob_dept_pct` 無紀錄）→ **隱藏**；(2) `deptRatio = 0`（部長刻意將該部門排除本月分派）→ **隱藏**；(3) `deptRatio > 0` → 顯示。此規則對處長 / 部長 / Admin 一致；用意為個別業務比例設定階段不應呈現本月不參與分派之部門。
 
 #### 5.x SectionChiefScopeGuard 行為對照表（v1.3 新增 / 決議 #4）
 
@@ -328,6 +333,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-14 | **`SectionChiefScopeGuard` 設計（v1.5 修訂 / 2026-05-21）**：(1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：GET **不攔截**，由 service 呼叫 `resolveSectionChiefScope(userId)` 取得 dept_code 後過濾 `visibleDeptCodes`（scope=null 或越權帶 `deptCode` 回 200 + `departments=[]`）；PUT / POST **攔截**：比對 `dto.deptCode === scope`，不符或 scope=null 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(3) **廢除 v1.3 之「`ob_empl_set.created_by` 比對」**（chicken-and-egg）；(4) 後續 M03d / 簽核流程沿用此設計。對照表詳 §5.x |
 | BR-15 | **月跑並發守衛（v1.3 / 決議 #6）**：所有 F082 寫入 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；該 service 由 `AssignmentRunGuardService` 集中實現（架構位置：assignment 模組底層，與 `StageTransitionService` 同層）；查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑必須 `status = 'completed'` / `'failed'`）方能繼續寫入 |
 | BR-16 | **Feature Flag fallback（v1.3 / 決議 #2）**：F082 PUT / GET 端點均掛 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = true 時正常運作 |
+| BR-17 | **FE per-row ±N% 模板採 baseline + per-employee templates 模型（v1.6 / commit 6402cd3）**：FE 套用 F083 之 ±N% 模板時，以「baseline + per-employee templates」資料模型計算各業務員之最終 ration，保證**對稱性**（同一 baseline 下，不同員工套用同一 template 必得相同 ration；同一員工反覆套用同一 template 必得相同結果）。**baseline 設定時機（三種）**：(1) **首次進入頁面**：baseline = 後端 GET 回傳之該員工 ration；若全員 ration 皆為 0 或 null（無 `ob_empl_set` 紀錄）則 fallback 為 `100 / activeCount` 均分；(2) **點擊「均等分配」按鈕**：所有員工 baseline 重置為 `100 / activeCount` + 清除所有 per-employee template；(3) **手動編輯 RatioInput**：該員工 baseline = 輸入值 + 清除該員工之 template（不影響其他員工 baseline）。模板計算後仍由 F082 PUT 之主流程 `assertDeptSumEquals100` 校驗（容忍 ±0.01%）；F083 後端 `appliedTemplate` 校驗已弱化為「audit hint + invariant 最小校驗」（詳 [F083 v1.4 §5.2 / BR-9](F083-quick-ratio-template.md#52-後端儲存路徑沿用-f082)） |
+| BR-18 | **GET 過濾 deptRatio > 0 部門（v1.6 / commit 150acbe）**：service `getPersonnelRatios()` 只回 `deptRatio > 0` 之部門；`deptRatio = null`（`ob_dept_pct` 無紀錄）或 `deptRatio = 0`（部長刻意排除本月）均**隱藏**。此規則對處長 / 部長 / Admin 一致。理由：個別業務比例設定階段不應呈現本月不參與分派之部門（避免處長對 0% 部門徒勞設定個別比例）。詳 §5.1 GET response 說明 |
 
 ## 7. UI/UX 需求
 
@@ -526,3 +533,5 @@ resign_date DATE NULL    (NULL = 在職; 非 NULL = 離職)
 | v1.2 | 2026-05-16 | **E07 衍生補修（PO 決議 F082-A 落地）**：(1) §1 業務員清單來源改為「全部含已離職員工」（取消 `resign_date IS NULL` 過濾），明確 `appdb.ob_emphire` 由 ETL E07-OBEMPHIRE-Load pipeline 載入至 AppDB 表；(2) §4 AC-2 補「離職員工 GET 仍回傳 + `deptSum` 僅計算在職員工」；(3) §5.1 GET response 補 `isResigned: boolean` 欄位於 employees[] + 範例補離職員工樣本；(4) §6 BR-6 SQL 改為全部 + 加上離職欄位；(5) §6 BR-13 重寫為「離職員工顯示 + 比例驗證規則 + UI badge / 驗證排除 / 歷史紀錄保留 / PUT 防護」4 子規則；(6) §9 補 ETL 來源 cross-ref；(7) §12 A-5 標 ✅ Resolved（PO 決議） |
 | v1.3 | 2026-05-16 | **E07 衍生補修（system-architect Phase 1 / 6 個風險決議落地）**：(1) **決議 #1 全員離職部門（選項 D）**：BR-13 補「per-DEPT sum = 0% 容許 + 短路 return」；§5.1 GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位 + 範例；新增 AC-14「全員離職部門容許儲存」；(2) **決議 #2 Feature Flag fallback**：新增 §6 BR-16 + §5.2 錯誤碼表補 503 `FEATURE_NOT_ENABLED`；新增 AC-15；§12 A-6 標 ✅ Resolved；(3) **決議 #4 SectionChiefScopeGuard method 分支**：補 BR-14 重寫 + 新增 §5.x Guard 行為對照表；§12 A-1 標 ✅ Resolved；(4) **決議 #6 月跑並發守衛**：新增 §6 BR-15 引用 `AssignmentRunGuardService.assertNoRunningRun()`；AC-11 補述 service 集中實現；(5) **決議 #5 測試 fixture 策略**：§11 補測試 Fixture 策略章節（`apps/api/test/fixtures/ob-emphire.fixture.ts` + ob_emphire 必填欄位清單）；(6) §10 測試覆蓋率補 5 個新測試 case；(7) §11 實作 Checklist 補 5 個新工項 |
 | **v1.4** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-112 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 名稱統一為 `DirectorOrSectionChiefGuard` + `SectionChiefScopeGuard`（廢除 `SalesManagerGuard`）；business_role 欄位語意對齊 F074 v2.0；JWT claim 為 `businessRole`；保留 v1.0~v1.3 所有設計決議與 6 風險決議落地 |
+| **v1.5** | **2026-05-22** | **【處長轄區改用 ob_emphire 反查解 chicken-and-egg / commit 977ed09；補入 changelog】**：BR-3 / BR-14 / §5.x 已於 977ed09 commit 落地但漏記 changelog，本次補入。修改要點：(1) BR-3 改寫：處長轄區由 `resolveSectionChiefScope(userId)` 反查（`users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` → `dept_code`），廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯（chicken-and-egg：首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單）；scope=null 時 GET 回 `departments=[]`、PUT 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(2) BR-14 改寫：`SectionChiefScopeGuard` GET 由 service 走 `resolveSectionChiefScope()`、PUT/POST 攔截 `dto.deptCode === scope`；(3) §5.x Guard 對照表同步更新。沿用 F074 v2.1 BR-1「`jfun_nm='處長'` 為 source of truth」設計，與處長姓名顯示同一資料來源 |
+| **v1.6** | **2026-05-25** | **【FE baseline 模板模型 + GET deptRatio>0 過濾 + directorName 欄位 / commits 6402cd3 / 150acbe / 38eb0dc】**：(1) **§6 BR-17 新增**：FE per-row ±N% 模板採「baseline + per-employee templates」模型保證對稱性；列出 baseline 三種設定時機（首次進入 / 均等分配 / 手動編輯）；模板計算後仍由 PUT 主流程 `assertDeptSumEquals100` 校驗；交叉引用 F083 v1.4 弱化校驗（commit 6402cd3）；(2) **§6 BR-18 新增**：service GET 只回 `deptRatio > 0` 部門；`null`（無紀錄）/ `0`（刻意排除）均隱藏；對所有角色一致（commit 150acbe）；(3) **§5.1 GET response 補 `directorName: string | null` 欄位** + 範例 + 定義對齊 [F079 §5.1 / BR-14](F079-set-dept-ratio.md#5-api-規格)（commit 38eb0dc） |

@@ -6,15 +6,16 @@ source-story: US-109
 epic: E07
 module: M03a 部門比例設定階段
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.3"
+date: 2026-05-25
 status: Draft
 ---
 
 # F079: 部門比例設定（per-LIST_NO 各部門分派比例）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
+> **v1.3 修訂（2026-05-25 / commit 38eb0dc 落地）**：§7 UI/UX 補述「Prototype 29a 對齊」項目（5-step stage breadcrumb / Sum Banner / 預估案件數欄）。`directorName` GET response 欄位 v1.x 已有定義，commit 38eb0dc 為實作落地，spec 本身無欄位變動。
 > **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔內容，本版本依 US-109 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard`（廢除 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim 為 `businessRole`；保留 v1.0 / v1.1 所有設計決議與 Phase 1 風險決議落地。
 > **v1.1 修訂（2026-05-16 / E07 衍生補修 / system-architect Phase 1 風險決議 #6 落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`；Feature Flag fallback 沿用 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
@@ -269,6 +270,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **「部門已下線」徽章**：`isActive = false` 之列以灰色背景 + 「已下線」徽章顯示，仍可編輯 RATION（給使用者決議是否歸零或保留歷史紀錄）
 - **成功提示 toast**：「名單『{listNm}』部門比例設定已儲存」
 - **唯讀模式**：當 `stage != 'dept_ratio'`（推進後 / Rollback 後檢視），顯示唯讀表格，不渲染「儲存」按鈕，表格上方顯示「此名單已推進至 {currentStage} 階段，部門比例為唯讀；如需修改請先 Rollback 至部門比例設定階段」
+- **Prototype 對齊（v1.3 補述，2026-05-25 / commit 38eb0dc）**：實作以 `prototypes/dept-ratio-29a.html`（prototype 29a）為 ground truth；包含 (a) 5-step stage breadcrumb（草稿 → 部門比例 → 個別業務比例 → 簽核 → 完成）、(b) Sum Banner（頁面頂部即時加總顯示）、(c) 「預估案件數」欄位（依 `deptRatio × 該名單總筆數` 即時換算）。具體版面 / 色塊 / spacing 以 prototype 為準；React 實作偏離 prototype 視同 bug 需依 CLAUDE.md frontend 規則回報
 
 ## 8. 依賴關係
 
@@ -360,3 +362,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（取代 US-109，E07 補修批次 4）：取代 F060 v1.x；限 `stage = 'dept_ratio'` 寫入；限部長 + Admin（`DirectorGuard`）；新增 `RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE` 錯誤碼；新增「部門已下線」UX 徽章；新增 [F079-dept-ratio-flow.mmd](../diagrams/F079-dept-ratio-flow.mmd) 圖表；feature flag gating 評估納入 §12 A-5 待 system-architect 決議 |
 | v1.1 | 2026-05-16 | **E07 補修衍生（system-architect Phase 1 風險決議落地）**：(1) **決議 #6**：BR-11 補「`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現」；(2) **決議 #2**：新增 BR-13 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`） |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪 PowerShell 編碼事故損毀本檔內容，依 US-109 + AD-E07 v3.0 一致性決議完整重建；保留 v1.0 / v1.1 所有設計決議 |
+| v1.3 | 2026-05-25 | **【Prototype 29a 對齊補述 / commit 38eb0dc】**：§7 UI/UX 補述「Prototype 對齊」項目，列出 prototype 29a 已落地之三項：(1) 5-step stage breadcrumb；(2) Sum Banner；(3) 預估案件數欄位。BR-14 之 `directorName` 欄位於 commit 38eb0dc 已實作並寫入 GET response（spec 在 v1.x 已有此欄位定義，無需再動）。本次只追加 §7 對齊註腳 + 本變更紀錄 |
