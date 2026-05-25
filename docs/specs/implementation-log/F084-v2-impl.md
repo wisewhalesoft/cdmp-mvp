@@ -147,3 +147,25 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
   - TC-F084-FE-001~011 共 11 個前端 unit
 - F084 spec §10 末補測試設計文件連結（§6.4 要求）：因 `/docs/specs/features/` 為唯讀，**未在本輪改動**，
   提醒由 spec-writer 或經使用者確認後補上。
+
+## Bugfix v2.0.2（2026-05-26）：完成度偵測 universe 錯誤導致提早推進
+
+**現象**：OB202605002 有 4 個 deptRatio>0 部門（XVE1~4），僅 1 個（XVE4）設定即自動推進至簽核。
+
+**根因**：`assertAllDeptsSumEquals100` / `assertAllDeptsSumEquals100WithMgr` 以 `GROUP BY ob_empl_set.deptid_m` 為 universe（只驗「已有 empl_set 紀錄的部門」），「該設但完全沒設」之部門（0 筆）不在迴圈中 → 漏檢。此 gap 手動 fallback 路徑亦有（但部長通常全設完才按推進故未引爆）。
+
+**修正**（`personnel-ratio-validation.service.ts`）：
+- universe 改為 `ob_dept_pct` 中 `ration > 0` 之部門（對齊 F082 BR-18 / GET 顯示範圍）；注入 `ObDeptPct` repo（mgr 版用 `mgr.find(ObDeptPct)`）。
+- 該 universe 部門 active>0 但 empl_set 0 筆 → 加總=0 → 視為未完成、攔截；active=0 → BR-8 短路；deptRatio=0 不在 universe。
+- 同步修 spec F084 §5.2 step 1 / BR-2 / BR-12（v2.0.2 changelog）。
+
+**測試**：
+- `personnel-ratio-validation.service.spec.ts`：補「deptRatio>0 完全沒設 → 422」+「deptRatio=0 不要求」；既有案例改 seed deptPctRepo universe。
+- `personnel-ratio-auto-advance.service.spec.ts` §3.9：buildMgr 補 `find`（universe）；新增 TC-F084-023b（4 部門僅 1 設定 → 拋）。
+- 全部相關後端測試綠（validation + auto-advance + personnel-ratio）。
+
+**資料修正**：OB202605002 stage 由 approval 直接 UPDATE 回 personnel_ratio（保留 XVE4 已設資料）；bogus STAGE_ADVANCE 稽核（15:48:48）保留為歷史紀錄。
+
+**環境**：docker-compose.yml 已於 e4ca81b 補 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL=true`；cdmp-api 已重啟載入本 fix。
+
+**4 個真 PG integration 測試**：仍 defer（決策 B）；本 bug 的迴歸已由 unit（validation universe）覆蓋。

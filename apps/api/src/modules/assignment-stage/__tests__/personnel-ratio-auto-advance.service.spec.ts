@@ -598,8 +598,15 @@ describe('PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr — 
   let emphireRepo: any;
   let mockMgr: any;
 
-  function buildMgr(groups: Array<{ deptid_m: string; sumRation: string }>, activeMap: Record<string, number>) {
+  // requiredDepts: ob_dept_pct 中 ration>0 之 universe；groups: ob_empl_set 加總
+  function buildMgr(
+    requiredDepts: Array<{ obdeptid: string; ration: string }>,
+    groups: Array<{ deptid_m: string; sumRation: string }>,
+    activeMap: Record<string, number>,
+  ) {
     return {
+      // mgr.find(ObDeptPct, { where: { list_no } }) → universe
+      find: vi.fn(async () => requiredDepts),
       createQueryBuilder: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         addSelect: vi.fn().mockReturnThis(),
@@ -617,12 +624,17 @@ describe('PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr — 
   beforeEach(() => {
     emplSetRepo = { createQueryBuilder: vi.fn() };
     emphireRepo = { count: vi.fn() };
-    svc = new PersonnelRatioValidationService(emplSetRepo, emphireRepo);
+    const deptPctRepo = { find: vi.fn().mockResolvedValue([]) };
+    svc = new PersonnelRatioValidationService(emplSetRepo, emphireRepo, deptPctRepo as any);
   });
 
   // TC-F084-022
   it('TC-F084-022：使用傳入的 EntityManager 查詢（不用全域 repo），全部完成不拋', async () => {
     mockMgr = buildMgr(
+      [
+        { obdeptid: 'XTC0', ration: '50' },
+        { obdeptid: 'XTD0', ration: '50' },
+      ],
       [
         { deptid_m: 'XTC0', sumRation: '100' },
         { deptid_m: 'XTD0', sumRation: '100' },
@@ -633,6 +645,7 @@ describe('PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr — 
     await expect(
       svc.assertAllDeptsSumEquals100WithMgr('OB202506001', mockMgr as any),
     ).resolves.toBeUndefined();
+    expect(mockMgr.find).toHaveBeenCalled();
     expect(mockMgr.createQueryBuilder).toHaveBeenCalled();
   });
 
@@ -641,7 +654,10 @@ describe('PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr — 
     // XTE0 active=0 → 短路；XTC0 sum=100 → 通過
     const mgrPass = buildMgr(
       [
-        { deptid_m: 'XTE0', sumRation: '0' },
+        { obdeptid: 'XTE0', ration: '50' },
+        { obdeptid: 'XTC0', ration: '50' },
+      ],
+      [
         { deptid_m: 'XTC0', sumRation: '100' },
       ],
       { XTE0: 0, XTC0: 2 },
@@ -653,13 +669,37 @@ describe('PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr — 
     // XTC0 sum=80 → 非離職部門仍被驗證 → 拋
     const mgrFail = buildMgr(
       [
-        { deptid_m: 'XTE0', sumRation: '0' },
+        { obdeptid: 'XTE0', ration: '50' },
+        { obdeptid: 'XTC0', ration: '50' },
+      ],
+      [
         { deptid_m: 'XTC0', sumRation: '80' },
       ],
       { XTE0: 0, XTC0: 2 },
     );
     await expect(
       svc.assertAllDeptsSumEquals100WithMgr('OB202506001', mgrFail as any),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  // TC-F084-023b（迴歸）：universe = deptRatio>0（非 group-by-empl_set）。
+  // 修復 OB202605002：4 個 deptRatio>0 部門僅 1 個設定即提早推進的 bug。
+  it('TC-F084-023b：deptRatio>0 部門「完全沒設」（0 筆）且 active>0 → 拋（不可提早推進）', async () => {
+    const mgr = buildMgr(
+      // 4 個 deptRatio>0 部門
+      [
+        { obdeptid: 'XVE1', ration: '25' },
+        { obdeptid: 'XVE2', ration: '25' },
+        { obdeptid: 'XVE3', ration: '25' },
+        { obdeptid: 'XVE4', ration: '25' },
+      ],
+      // 只有 XVE4 有 empl_set 紀錄
+      [{ deptid_m: 'XVE4', sumRation: '100' }],
+      // 全部都有在職員工
+      { XVE1: 27, XVE2: 28, XVE3: 22, XVE4: 14 },
+    );
+    await expect(
+      svc.assertAllDeptsSumEquals100WithMgr('OB202605002', mgr as any),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 });

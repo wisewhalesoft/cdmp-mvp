@@ -6,7 +6,7 @@ source-story: US-114
 epic: E07
 module: M03b 個別業務比例設定階段（推進至 M03c）
 priority: P0-MVP
-version: "2.0.1"
+version: "2.0.2"
 date: 2026-05-25
 status: Draft
 ---
@@ -249,8 +249,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 > **前置（Option B 寫入保留）**：本流程於 F082 PUT 之 `ob_empl_set` 比例寫入**完成之後**才執行；auto-advance 任一降級或失敗皆**不 rollback 已完成的比例寫入**，tx 照常 commit（依 AD-E07-19 §19.3.3）。
 
-1. **完成度偵測**：偵測該名單所有「有在職員工的部門」之 `ob_empl_set` RATION 加總是否均 = 100%（容忍 ±0.01%；沿用 F082 BR-2 / I-8）。全員離職部門（`activeEmployeeCount === 0`）短路通過，不參與判斷（BR-12 / F082 BR-8）。
-   - 若任一部門尚未完成 → 不推進；PUT response `autoAdvanced: false`、`newStage: null`、不帶 `autoAdvanceFailReason`。
+1. **完成度偵測**：universe = 該名單 `ob_dept_pct` 中 **`ration > 0`（部長有配額、F082 GET 會顯示供設定）之部門**。對每個 universe 部門驗證其 `ob_empl_set` RATION 加總 = 100%（容忍 ±0.01%；沿用 F082 BR-2 / I-8）。
+   - **「該設但完全沒設」**（universe 部門且 `activeEmployeeCount > 0`，但 `ob_empl_set` 0 筆 → 加總 = 0）→ **視為未完成**，不推進。
+   - **全員離職部門**（universe 部門但 `activeEmployeeCount === 0`）→ 短路通過，不參與判斷（BR-12 / F082 BR-8）。
+   - `deptRatio = 0` 之部門 → **不在 universe**，不要求設定。
+   - 若任一 universe 部門尚未完成 → 不推進；PUT response `autoAdvanced: false`、`newStage: null`、不帶 `autoAdvanceFailReason`。
 2. **競爭條件序列化（blocking advisory lock，依 AD-E07-19）**：以 `listNo` 為 key 取得 **blocking** advisory lock（若已有並發 tx 持有同一 key，則**等待**其 commit 後再取得），將並發 PUT 之 auto-advance 偵測序列化。
    - **取得 lock 後重新偵測 `stage`**：若 `stage` 已為 `'approval'`（代表先到的並發請求已完成推進）→ idempotent no-op、不重複寫稽核、PUT 回 200 + `autoAdvanced: false`、不帶 `autoAdvanceFailReason`。
    - **lock 等待逾時**（`lock_timeout = 5000ms`，5 秒內仍無法取得）→ 降級為 no-op、PUT 仍回 200 + `autoAdvanced: false`、不帶 `autoAdvanceFailReason`、不報 5xx；**已完成的比例寫入保留**（不 rollback）；使用者可再次 PUT 觸發，或改走手動 fallback（§5.1）。
@@ -279,7 +282,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | **`stage = 'personnel_ratio'` 限制**：透過 `StageTransitionService.assertStageEquals(listNo, 'personnel_ratio')` 統一檢查 |
-| BR-2 | **前置條件：所有部門加總 = 100%**：對每個 `ob_emphire` 在職部門驗證 `ob_empl_set` RATION 加總；任一部門加總 ≠ 100% 或無紀錄 →（手動路徑）422 `STAGE_ADVANCE_PRECONDITION_FAILED` + response 含 `incompleteDepts` 陣列；（auto-advance 路徑）不推進、`autoAdvanced: false`（不報錯，PUT 仍 200） |
+| BR-2 | **前置條件：所有 deptRatio>0 部門加總 = 100%**：universe = `ob_dept_pct` 中 `ration > 0` 之部門（= 部長有配額、F082 GET 顯示供設定者；對齊 F082 BR-18）。對每個 universe 部門驗證 `ob_empl_set` RATION 加總；任一部門加總 ≠ 100% **或完全無紀錄（0 筆，視為未完成）** →（手動路徑）422 `STAGE_ADVANCE_PRECONDITION_FAILED` + response 含 `incompleteDepts` 陣列；（auto-advance 路徑）不推進、`autoAdvanced: false`（不報錯，PUT 仍 200）。**2026-05-25 修正**：universe 由「`ob_empl_set` group-by-dept（只驗有紀錄的部門）」改為「`ob_dept_pct` ration>0」，修復「該設但完全沒設之部門被漏檢、提早推進」（見 §13 v2.0.2） |
 | BR-3 | **角色矩陣（I-7 變體）**：手動 fallback 端點為 M03b 階段唯一可由處長觸發之推進；後端 Guard 為 `DirectorOrSectionChiefGuard`（admin / director / section_chief 皆通過）；處長無轄區限制（因前置條件已驗證所有部門完成）。auto-advance 路徑之觸發者沿用 F082 PUT 的合法寫入者身份（含 section_chief） |
 | BR-4 | **歷史月份攔截**：沿用 F077 BR-3 |
 | BR-5 | **推進後個別業務比例鎖定**：後端依 `stage != 'personnel_ratio'` 拒絕 `ob_empl_set` 寫入（由 F082 PUT API 統一檢查） |
@@ -289,7 +292,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | BR-9 | **月跑並發守衛（v1.1 / 決議 #6）**：F084 手動 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；auto-advance 路徑之月跑 guard 行為見 BR-15（不報 409，改 `autoAdvanceFailReason`） |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F084 手動端點受 `FeatureFlagGuard`（`ENABLE_E07_REFACTOR_PHASE3`）保護；flag = false 時回 503 `FEATURE_NOT_ENABLED`。auto-advance 之 flag 關係見 BR-16 |
 | BR-11 | **Auto-Advance 觸發點（v2.0）**：auto-advance 偵測與推進邏輯附著於 **F082 PUT `setPersonnelRatios`** service method 成功後，於**同一 database transaction 內**執行；完成度通過則於同一 tx 內執行 stage 更新與稽核寫入。**無獨立 HTTP endpoint**；結果透過 F082 PUT response 欄位回傳（詳 §5.2 / F082 §5.2 / F082 BR-19） |
-| BR-12 | **Auto-Advance 完成度判斷（v2.0）**：「所有有在職員工的部門 RATION 加總 = 100%（容忍 **±0.01%**，沿用 I-8 / F082 BR-2）」；全員離職部門（`activeEmployeeCount === 0`）短路通過，不參與判斷（沿用 BR-8 / F082 BR-8，**不新開規則**）。**容差未變動** |
+| BR-12 | **Auto-Advance 完成度判斷（v2.0；universe 2026-05-25 修正）**：universe = `ob_dept_pct` 中 **`ration > 0`** 之部門（非「所有有在職員工的部門」）。對每個 universe 部門：(a) `activeEmployeeCount === 0` → 短路通過（沿用 BR-8 / F082 BR-8）；(b) `activeEmployeeCount > 0` → `ob_empl_set` RATION 加總須 = 100%（容忍 **±0.01%**，沿用 I-8 / F082 BR-2），**0 筆（完全沒設）→ 加總 = 0 → 未完成**。容差未變動；`deptRatio = 0` 部門不在 universe |
 | BR-13 | **競爭條件 blocking advisory lock + idempotent（v2.0 / 依 AD-E07-19）**：以 `listNo` 為 key 之 **blocking** advisory lock 將並發 auto-advance 偵測序列化（並發第二筆 PUT 會**等待**前一並發 tx commit 後再取得 lock）；(1) **取得 lock 後重新偵測，`stage` 已為 `'approval'`**（已被先到請求推進）→ idempotent no-op、**不重複寫稽核日誌**、PUT 回 200 + `autoAdvanced: false`、不帶 `autoAdvanceFailReason`；(2) **lock 等待逾時**（`lock_timeout = 5000ms`，5 秒內仍無法取得）→ 降級為 no-op、PUT 仍回 200 + `autoAdvanced: false`、**不帶 `autoAdvanceFailReason`**、**不報 5xx**。兩種情境均為 200 + `autoAdvanced: false` 且不帶 failReason。**Option B 寫入保留**：lock 超時 / no-op 降級時，本次 PUT 之比例寫入（在 lock 取得之前完成）**保留、不 rollback**，tx 照常 commit（依 AD-E07-19 §19.3.3）；使用者可再次 PUT 觸發，或改走手動 fallback（§5.1）。lock 機制（blocking + `lock_timeout`）依 AD-E07-19 已定案 |
 | BR-14 | **稽核沿用 STAGE_ADVANCE（不擴 enum）（v2.0）**：auto-advance 路徑稽核沿用既有 `AssignmentAuditLog.action = 'STAGE_ADVANCE'` enum（**不新增 enum 值**），以 `metadata.auto_advanced_by_completion = true` 區分自動 / 手動；`operator_id` = 最後觸發完成的 PUT 寫入者 user_id；`metadata.operator_role` = 觸發者角色。**手動 fallback 路徑不含 `auto_advanced_by_completion` metadata**（用以區分兩條路徑） |
 | BR-15 | **月跑 guard 失敗不 rollback PUT（v2.0）**：auto-advance 偵測到月跑進行中（`assignment_run.status IN ('pending', 'running')`）時，**跳過推進但不 rollback 本次 F082 PUT**；PUT 仍回 200 + `autoAdvanced: false` + `autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"`。此情境下使用者可待月跑完成後改走手動 fallback（§5.1） |
@@ -434,3 +437,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | v1.2.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）— 將 spec 全文之 `action = 'ADVANCE_STAGE'` 字串修正為 `action = 'STAGE_ADVANCE'`；real flow 經 `StageTransitionService.advanceTo()` 統一寫入。不變動業務邏輯 / API endpoint / Transaction / Guard |
 | **v2.0** | **2026-05-25** | **【auto-advance 改造 / 對應 US-114 v2.0】**：個別業務比例 → 簽核推進由「使用者手動點按」改為「F082 PUT `setPersonnelRatios` 成功後同一 transaction 內偵測所有部門完成即自動推進」，手動 POST endpoint 降為 fallback。(1) §1/§2 主路徑改為系統 auto-advance（Actor 補「系統後端 auto-advance 機制」），保留 fallback 視角；(2) §3 拆分 3.1 auto-advance 觸發前置條件 + 3.2 fallback 前置條件；(3) §4 AC 重構對齊 US-114 AC-1~AC-11（auto-advance 觸發 / 稽核 / 部分完成 / 競爭條件 / 月跑 guard / UX / fallback 顯示 / flag off / 代操處長 / 推進後鎖定 / 歷史月份）+ 新增 AC-12 fallback 手動路徑（彙整 v1.2.1 AC-2/3/4/5/6）；(4) §5.1 標為 fallback、新增 §5.2 Auto-Advance 觸發流程（無獨立 endpoint，附著 F082 PUT，含降級行為彙總表）；(5) §6 新增 BR-11~BR-16（觸發點 / 完成度判斷沿用 BR-8 與 ±0.01% / advisory lock + idempotent / `STAGE_ADVANCE` 不擴 enum + metadata flag / 月跑 guard 不 rollback / 雙 flag 關係）；(6) §7 拆分 7.1 auto-advance UX + 7.2 fallback 手動按鈕；(7) §10 測試對齊 US-114 TC-114-01~08；(8) §12 新增 A-5~A-7（advisory lock API、tx 邊界、operator_role 推導待 system-architect）。**容差維持 ±0.01% 未變動**；**稽核沿用 STAGE_ADVANCE enum，未擴 enum**；**section_chief 仍為合法 PUT 觸發者**；**全員離職沿用既有 BR-8**。保留 v1.0~v1.2.1 所有設計決議與手動 fallback 行為 |
 | **v2.0.1** | **2026-05-25** | **【§5.2 / BR-13 降級行為依 AD-E07-19 改採 blocking lock】**：system-architect 完成 AD-E07-19 後，**推翻 v2.0 原 try-lock 降級假設，改採 blocking advisory lock**（以 `listNo` 為 key、`lock_timeout = 5000ms`）。(1) §5.2 step 2 改寫：取得 blocking lock（等待前一並發 tx commit）後重新偵測 stage，已 `approval` → idempotent no-op、lock 等待逾時（>5s）→ 降級 no-op；(2) §5.2 降級表刪除「拿不到 advisory lock」列，新增「並發第二筆 PUT（等待後取得 lock、stage 已 approval、idempotent no-op）」與「lock 等待逾時（>5s）」兩列，並補 說明 欄；(3) BR-13 改寫為 blocking lock 語意，刪除「拿不到 lock 立即 no-op」；(4) **Option B 寫入保留語意（AD-E07-19 §19.3.3）**：lock 超時 / no-op 降級時比例寫入保留、不 rollback PUT，tx 照常 commit；§5.2 / 降級表 / BR-13 / §10 測試均明示；(5) §12 A-5 標 ✅ Resolved（blocking + 5s timeout 已定案）。**月跑 guard 列不動**（仍帶 `autoAdvanceFailReason='ASSIGNMENT_RUN_ALREADY_RUNNING'`）；容差 ±0.01% / STAGE_ADVANCE 不擴 enum / section_chief 觸發者 / 全員離職 BR-8 均不變 |
+| **v2.0.2** | **2026-05-25** | **【完成度偵測 universe 修正 / bugfix：提早推進】**：修復實際 bug — 名單 OB202605002 有 4 個 deptRatio>0 部門（XVE1~4），僅 1 個（XVE4）設定即自動推進至簽核。根因：完成度偵測（`assertAllDeptsSumEquals100` / `assertAllDeptsSumEquals100WithMgr`）以 **`GROUP BY ob_empl_set.deptid_m`** 為 universe（只驗「已有 empl_set 紀錄的部門」），導致「該設但完全沒設」之部門被漏檢。(1) universe 改為 **`ob_dept_pct` 中 `ration > 0` 之部門**（= 部長有配額、F082 GET 顯示供設定者；對齊 F082 BR-18）；(2) 該 universe 部門 `activeEmployeeCount > 0` 但 `ob_empl_set` 0 筆 → 加總 = 0 → 視為未完成、攔截；(3) 全員離職（active=0）仍短路（BR-8）；(4) `deptRatio = 0` 部門不在 universe。同步修 §5.2 step 1 / BR-2 / BR-12；實作 `PersonnelRatioValidationService` 注入 `ObDeptPct` repo；補迴歸測試（validation spec「deptRatio>0 完全沒設 → 422」+ auto-advance spec TC-F084-023b）。**手動 fallback 路徑（`assertAllDeptsSumEquals100`）同樣修正**（原有相同 gap，但手動觸發時部長通常已全設完故未引爆）。容差 / enum / section_chief / 全員離職規則不變 |
