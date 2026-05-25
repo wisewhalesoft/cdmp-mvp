@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Not, Repository } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
@@ -286,6 +286,9 @@ export class PersonnelRatioService {
     deptSum: number;
     savedAt: Date;
     savedBy: string;
+    autoAdvanced: boolean;
+    newStage: string | null;
+    autoAdvanceFailReason?: string | null;
   }> {
     await this.runGuard.assertNoRunningRun();
 
@@ -368,7 +371,14 @@ export class PersonnelRatioService {
       where: { list_no: listNo, deptid_m: dto.deptCode },
     });
 
+    // ── auto-advance 結果（F084 v2.0）──────────────────────────────────────
+    // 預設未推進；於 tx 內依偵測結果覆寫。
+    let autoAdvanced = false;
+    let newStage: string | null = null;
+    let autoAdvanceFailReason: string | null = null;
+
     await this.dataSource.transaction(async (mgr) => {
+      // [1] DELETE + [2] INSERT ob_empl_set（覆寫式）
       await mgr.delete(ObEmplSet, { list_no: listNo, deptid_m: dto.deptCode });
       for (const e of dto.employees) {
         await mgr.insert(ObEmplSet, {
@@ -386,6 +396,7 @@ export class PersonnelRatioService {
         } as Partial<ObEmplSet>);
       }
 
+      // [3] INSERT 個別比例稽核（SET_PERSONNEL_RATIO；沿用既有 action='UPDATE'，不擴 enum）
       try {
         await mgr.insert(AssignmentAuditLog, {
           entity_type: 'ob_empl_set',
@@ -400,6 +411,17 @@ export class PersonnelRatioService {
       } catch (err) {
         this.logger.error(`SET_PERSONNEL_RATIO audit log 寫入失敗 (listNo=${listNo}, dept=${dto.deptCode}): ${(err as Error).message}`);
       }
+
+      // [4] auto-advance 偵測 + 推進（Option B：寫入 [1]~[3] 已於 lock 前完成）
+      //     由 ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL flag gate（prod 預設 off）。
+      if (!this.isAutoAdvanceEnabled()) {
+        return;
+      }
+
+      const result = await this.tryAutoAdvance(listNo, list.stage, actor, mgr);
+      autoAdvanced = result.autoAdvanced;
+      newStage = result.newStage;
+      autoAdvanceFailReason = result.autoAdvanceFailReason;
     });
 
     const deptSum = ratios.reduce((acc, v) => acc + v, 0);
@@ -410,7 +432,127 @@ export class PersonnelRatioService {
       deptSum: Math.round(deptSum * 100) / 100,
       savedAt,
       savedBy: actor.userId,
+      autoAdvanced,
+      newStage,
+      autoAdvanceFailReason,
     };
+  }
+
+  /**
+   * F084 v2.0 auto-advance 偵測 + 推進（於 setPersonnelRatios tx 內呼叫；AD-E07-19 §19.3.3 [4]）。
+   *
+   * 步驟：
+   *   [4a] 取得 blocking advisory lock（PostgreSQL 限定；lock_timeout=5000ms）；
+   *        - lock 等待逾時（55P03 lock_not_available）→ catch 不 rethrow、autoAdvanced=false、
+   *          不帶 failReason、跳過後續（tx 照常 commit，[1]~[3] 寫入保留）
+   *        - **SQLite 相容**：DB_TYPE !== 'postgres' 時跳過 advisory lock，直接做偵測+推進
+   *   [4b] tx 內月跑 guard（runGuard.isRunning() 回 boolean）→ true 則 autoAdvanced=false +
+   *        autoAdvanceFailReason='ASSIGNMENT_RUN_ALREADY_RUNNING'、跳過後續（PUT 仍 200，不 rollback）
+   *   [4c] assertAllDeptsSumEquals100WithMgr（讀 tx 內 [1]~[3] 剛寫入的 ob_empl_set）；
+   *        未完成 → 拋 422，由本方法 catch 轉為 autoAdvanced=false（不帶 failReason）
+   *   [4d] 取得 lock 後重新偵測 stage 仍為 personnel_ratio（idempotent guard）→ advanceToInMgr 推進
+   *        → autoAdvanced=true、newStage='approval'
+   *
+   * @returns auto-advance 結果（autoAdvanced / newStage / autoAdvanceFailReason）
+   */
+  private async tryAutoAdvance(
+    listNo: string,
+    currentStage: string,
+    actor: ActorUser,
+    mgr: EntityManager,
+  ): Promise<{ autoAdvanced: boolean; newStage: string | null; autoAdvanceFailReason: string | null }> {
+    const noAdvance = { autoAdvanced: false, newStage: null, autoAdvanceFailReason: null as string | null };
+
+    // 進 tx 時 stage 已非 personnel_ratio（理論上 assertStageEquals 已擋；防禦性）→ 不推進
+    if (currentStage !== 'personnel_ratio') {
+      return noAdvance;
+    }
+
+    // [4a] blocking advisory lock（僅 PostgreSQL；SQLite 跳過）
+    if (this.isPostgres()) {
+      try {
+        await mgr.query(`SET LOCAL lock_timeout = '5000ms'`);
+        await mgr.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [listNo]);
+      } catch (err) {
+        if (this.isPgLockNotAvailable(err)) {
+          // lock 等待逾時：不 rethrow、降級 no-op、不帶 failReason、tx 照常 commit（寫入保留）
+          this.logger.warn(`auto-advance lock 等待逾時（55P03），listNo=${listNo}，降級 no-op`);
+          return noAdvance;
+        }
+        throw err;
+      }
+    }
+
+    // [4b] tx 內月跑 guard（輕量版，回 boolean）
+    if (await this.runGuard.isRunning()) {
+      this.logger.log(`auto-advance 偵測到月跑進行中，listNo=${listNo}，跳過推進（PUT 仍 200）`);
+      return {
+        autoAdvanced: false,
+        newStage: null,
+        autoAdvanceFailReason: ERROR_CODES.ASSIGNMENT_RUN_ALREADY_RUNNING,
+      };
+    }
+
+    // [4c] 完成度偵測（讀 tx 內未 commit 寫入）；未完成 → 不推進、不帶 failReason
+    try {
+      await this.personnelRatioValidation.assertAllDeptsSumEquals100WithMgr(listNo, mgr);
+    } catch (err) {
+      if (err instanceof UnprocessableEntityException) {
+        return noAdvance;
+      }
+      throw err;
+    }
+
+    // [4d] idempotent advance：透過 advanceToInMgr 走同一 tx 推進 + 稽核
+    //      advanceToInMgr 內部 assertStageEquals 再次確認 stage 仍為 personnel_ratio；
+    //      若先到者已推進（stage='approval'）→ 拋 422 → catch 轉為 idempotent no-op（不帶 failReason）
+    try {
+      await this.stageTransition.advanceToInMgr(
+        listNo,
+        'personnel_ratio',
+        'approval',
+        actor.userId,
+        mgr,
+        {
+          auto_advanced_by_completion: true,
+          operator_role: this.resolveOperatorRole(actor),
+        },
+      );
+    } catch (err) {
+      if (err instanceof UnprocessableEntityException) {
+        // idempotent no-op：stage 已被先到請求推進
+        return noAdvance;
+      }
+      throw err;
+    }
+
+    return { autoAdvanced: true, newStage: 'approval', autoAdvanceFailReason: null };
+  }
+
+  /**
+   * operator_role 推導（AD-E07-19 §19.4）：
+   *   actor.role === 'admin' ? 'admin' : (actor.businessRole ?? 'section_chief')
+   *
+   * 注意 admin 優先（businessRole=null 時不 fallback 至 section_chief）。
+   */
+  private resolveOperatorRole(actor: ActorUser): string {
+    return actor.role === 'admin' ? 'admin' : (actor.businessRole ?? 'section_chief');
+  }
+
+  /** ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL flag（prod 預設 off；沿用 feature-flag 環境變數機制）。 */
+  private isAutoAdvanceEnabled(): boolean {
+    return (process.env.ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL ?? '').toLowerCase() === 'true';
+  }
+
+  /** 是否為 PostgreSQL（決定是否執行 advisory lock；SQLite 測試 infra 降級跳過）。 */
+  private isPostgres(): boolean {
+    const dbType = (process.env.DB_TYPE ?? 'postgres').toLowerCase();
+    return dbType === 'postgres' || dbType === 'postgresql' || dbType === 'pg';
+  }
+
+  /** 判斷是否為 PostgreSQL lock 等待逾時（55P03 lock_not_available）。 */
+  private isPgLockNotAvailable(err: unknown): boolean {
+    return !!err && typeof err === 'object' && (err as { code?: string }).code === '55P03';
   }
 
   /**

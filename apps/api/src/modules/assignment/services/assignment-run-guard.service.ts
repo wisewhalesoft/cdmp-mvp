@@ -47,4 +47,26 @@ export class AssignmentRunGuardService {
       });
     }
   }
+
+  /**
+   * 輕量版月跑守衛（F084 v2.0 auto-advance tx 內使用 / AD-E07-19 §19.3.3 [4b]）。
+   *
+   * 與 assertNoRunningRun() 區分（測試設計 §6.3 警告 4）：
+   *   - assertNoRunningRun()：tx 外呼叫，有 pending/running 即**拋 409**（PUT 整體失敗）
+   *   - isRunning()：tx 內呼叫，回 **boolean**（true → 跳過 auto-advance 但 PUT 仍 200）
+   *
+   * 兩者是不同的 contract，不可互換。
+   *
+   * @param workYm 可選，限定特定月份；未提供則檢查全部月份（最嚴格）
+   * @returns 有 pending / running 月跑時為 true，否則 false
+   */
+  async isRunning(workYm?: string): Promise<boolean> {
+    const where: Record<string, unknown> = {
+      status: In(['pending', 'running']),
+    };
+    if (workYm) where.project_workym = workYm;
+
+    const count = await this.runRepo.count({ where });
+    return count > 0;
+  }
 }

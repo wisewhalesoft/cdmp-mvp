@@ -1,6 +1,6 @@
 import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
@@ -92,9 +92,63 @@ export class PersonnelRatioValidationService {
     }
   }
 
+  /**
+   * F084 v2.0 auto-advance 完成度偵測（EntityManager 版本 / AD-E07-19 §19.3.2）。
+   *
+   * 與 assertAllDeptsSumEquals100 行為相同，但使用呼叫端傳入的 `mgr` 查詢，
+   * 以讀取「同一 transaction 內剛 INSERT 但尚未 commit」的 ob_empl_set 資料
+   * （READ COMMITTED 下，全域 repository 看不到同 tx 未 commit 的寫入）。
+   *
+   * 全員離職部門（active=0）短路放行，邏輯與原版本一致。
+   *
+   * @throws 422 PERSONNEL_RATIO_SUM_NOT_100（首個違規部門）
+   */
+  async assertAllDeptsSumEquals100WithMgr(
+    listNo: string,
+    mgr: EntityManager,
+  ): Promise<void> {
+    const groups: Array<{ deptid_m: string; sumRation: string | number }> =
+      await mgr
+        .createQueryBuilder(ObEmplSet, 'e')
+        .select('e.deptid_m', 'deptid_m')
+        .addSelect('SUM(e.ration)', 'sumRation')
+        .where('e.list_no = :listNo', { listNo })
+        .groupBy('e.deptid_m')
+        .getRawMany();
+
+    for (const row of groups) {
+      const deptCode = row.deptid_m;
+      const sum = Number(row.sumRation ?? 0);
+      const active = await this.countActiveEmployeesWithMgr(deptCode, mgr);
+      if (active === 0) {
+        this.logger.log(
+          `Dept ${deptCode}: 全員離職邊界，listNo=${listNo} auto-advance 偵測短路放行`,
+        );
+        continue;
+      }
+      if (Math.abs(sum - 100) > PersonnelRatioValidationService.FLOAT_TOLERANCE) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.PERSONNEL_RATIO_SUM_NOT_100,
+          message: ERROR_MESSAGES.PERSONNEL_RATIO_SUM_NOT_100,
+          details: [{ deptCode, listNo, actualSum: Math.round(sum * 100) / 100 }],
+        });
+      }
+    }
+  }
+
   /** 計算指定部門 active（未離職）員工數。 */
   private async countActiveEmployees(deptCode: string): Promise<number> {
     return this.emphireRepo.count({
+      where: { dept_code: deptCode, resign_date: IsNull() },
+    });
+  }
+
+  /** 計算指定部門 active 員工數（EntityManager 版本，走同一 tx）。 */
+  private async countActiveEmployeesWithMgr(
+    deptCode: string,
+    mgr: EntityManager,
+  ): Promise<number> {
+    return mgr.count(ObEmphire, {
       where: { dept_code: deptCode, resign_date: IsNull() },
     });
   }

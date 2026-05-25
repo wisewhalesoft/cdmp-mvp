@@ -93,6 +93,45 @@ export class StageTransitionService {
   }
 
   /**
+   * 推進（過載）：使用外部傳入的 EntityManager，**不自開 tx**。
+   *
+   * F084 v2.0 auto-advance 主路徑專用（AD-E07-19 §19.3.2）：
+   *   auto-advance 偵測 + stage 更新 + 稽核須與 setPersonnelRatios() 的 ob_empl_set
+   *   寫入同屬一個 transaction，因此不能呼叫 this.dataSource.transaction()（會另開 tx）。
+   *
+   * 流程（皆用傳入 mgr）：
+   *   1) assertStageEquals(listNo, fromStage, mgr)（idempotent guard：若 stage 已變則拋 422）
+   *   2) UPDATE ob_list_definition.stage = toStage
+   *   3) INSERT assignment_audit_log（action='STAGE_ADVANCE'）
+   *      - auditMetadata 合併進 after_value.metadata（用以區分自動 / 手動路徑）
+   *
+   * @param auditMetadata 可選；提供時寫入 after_value.metadata（例如
+   *                      { auto_advanced_by_completion: true, operator_role: 'section_chief' }）；
+   *                      省略時 after_value 不含 metadata 欄位（手動 fallback 路徑語意）。
+   * @throws 422 LIST_STAGE_TRANSITION_FORBIDDEN — stage 不符 fromStage
+   */
+  async advanceToInMgr(
+    listNo: string,
+    fromStage: StageName,
+    toStage: StageName,
+    actorId: string,
+    mgr: EntityManager,
+    auditMetadata?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.assertStageEquals(listNo, fromStage, mgr);
+    await mgr.update(ObListDefinition, { list_no: listNo }, { stage: toStage } as any);
+    const payload: Record<string, unknown> = { fromStage, toStage };
+    if (auditMetadata !== undefined) {
+      payload.metadata = auditMetadata;
+    }
+    await mgr.insert(
+      AssignmentAuditLog,
+      this.buildAudit('STAGE_ADVANCE', listNo, actorId, payload) as any,
+    );
+    this.logger.log(`STAGE_ADVANCE(inMgr) list=${listNo} ${fromStage} → ${toStage} by ${actorId}`);
+  }
+
+  /**
    * Rollback：fromStage → toStage（往前退）。
    * 與 advanceTo 結構相同，但 audit action='STAGE_ROLLBACK'，且必須執行 cleanupFn（清空當前階段資料）。
    */
