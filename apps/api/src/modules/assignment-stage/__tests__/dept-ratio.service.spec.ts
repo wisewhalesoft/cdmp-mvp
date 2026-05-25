@@ -53,8 +53,10 @@ describe('DeptRatioService (F079)', () => {
         select: vi.fn().mockReturnThis(),
         addSelect: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
+        addOrderBy: vi.fn().mockReturnThis(),
         getRawMany: vi.fn().mockResolvedValue([
           { dept_code: 'XTC0', dept_name: '業務一部' },
           { dept_code: 'XTD0', dept_name: '業務二部' },

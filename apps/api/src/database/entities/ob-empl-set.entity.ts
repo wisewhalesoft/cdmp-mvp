@@ -37,7 +37,10 @@ export class ObEmplSet {
   @PrimaryColumn({ name: 'emplid', type: 'varchar', length: 6 })
   emplid: string;
 
-  @PrimaryColumn({ name: 'ration', type: 'numeric', precision: 10, scale: 1 })
+  // scale 1→2 對齊 spec F082 BR-2 之「容忍 ±0.01% 雙小數精度」與 FE RatioInput step=0.01；
+  // 原 scale=1 會把 4.55 round 至 4.6 → 22 員工均等分配 sum = 21×4.6 + 4.5 = 101.1 ≠ 100
+  // → sumValidated=false → UI 顯示「待儲存」（2026-05-25 hotfix）
+  @PrimaryColumn({ name: 'ration', type: 'numeric', precision: 10, scale: 2 })
   ration: string;
 
   @Column({ name: 'prod_type', type: 'varchar', length: 255, nullable: true })

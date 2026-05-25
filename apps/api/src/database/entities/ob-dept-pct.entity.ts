@@ -40,6 +40,8 @@ export class ObDeptPct {
   @Column({ name: 'obdeptnm', type: 'varchar', length: 10 })
   obdeptnm: string;
 
-  @PrimaryColumn({ name: 'ration', type: 'numeric', precision: 9, scale: 1 })
+  // scale 1→2 對齊 spec F079 BR-2 之「容忍 ±0.01% 雙小數精度」與 FE RatioInput step=0.01
+  // （與 ob_empl_set 同步；2026-05-25 hotfix）
+  @PrimaryColumn({ name: 'ration', type: 'numeric', precision: 9, scale: 2 })
   ration: string;
 }
