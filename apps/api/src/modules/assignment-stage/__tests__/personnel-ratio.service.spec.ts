@@ -187,11 +187,11 @@ describe('PersonnelRatioService (F082 + F083)', () => {
     }
   });
 
-  // TC-M03b-005 — F083 後端二次校驗
-  it('PUT 含 appliedTemplate +10%；正確結果 → 通過', async () => {
+  // TC-M03b-005 — F083 v1.4 弱化校驗：appliedTemplate 僅作 audit hint，不再驗 ration 公式
+  it('PUT 含 appliedTemplate +10%；ration 任意值 + 加總=100% → 通過', async () => {
     listRepo.findOne.mockResolvedValue(validList);
     deptPctRepo.findOne.mockResolvedValue({ obdeptid: 'XTC0' });
-    // 2 人 → defaultRation = 50；+10% = 60；其餘均分 (100-60)/1 = 40
+    // baseline 模型下 ration 可為任何值（13.6 / 3.2 等），只要加總 = 100
     const res = await svc.setPersonnelRatios(
       'L1',
       {
@@ -208,27 +208,50 @@ describe('PersonnelRatioService (F082 + F083)', () => {
     expect(res.savedCount).toBe(2);
   });
 
-  // TC-M03b-006
-  it('PUT 含 appliedTemplate 但 ration 與模板計算不符 → 422 BONUS_PENALTY_TEMPLATE_INVALID', async () => {
+  // TC-M03b-005b — F083 v1.4 弱化校驗下，先前 v1.3 公式不符的 case 現也通過
+  it('PUT appliedTemplate ration 與舊公式不符（13.6 vs 13.57）→ 通過（v1.4 不再嚴格驗）', async () => {
     listRepo.findOne.mockResolvedValue(validList);
     deptPctRepo.findOne.mockResolvedValue({ obdeptid: 'XTC0' });
+    const res = await svc.setPersonnelRatios(
+      'L1',
+      {
+        deptCode: 'XTC0',
+        employees: [
+          { empId: 'EMP001', empName: '張三', ration: 70 }, // 舊公式算 60，差 10
+          { empId: 'EMP002', empName: '李四', ration: 30 },
+        ],
+        appliedTemplate: { template: '+10%', targetEmpId: 'EMP001' },
+      },
+      validActor,
+      '202605',
+    );
+    expect(res.savedCount).toBe(2);
+  });
+
+  // TC-M03b-006 — F083 v1.4 弱化校驗保留之 invariant：targetEmpId 必須存在
+  it('PUT appliedTemplate.targetEmpId 不在 employees → 422 BONUS_PENALTY_TEMPLATE_INVALID', async () => {
+    listRepo.findOne.mockResolvedValue(validList);
+    deptPctRepo.findOne.mockResolvedValue({ obdeptid: 'XTC0' });
+    let caught: any = null;
     try {
       await svc.setPersonnelRatios(
         'L1',
         {
           deptCode: 'XTC0',
           employees: [
-            { empId: 'EMP001', empName: '張三', ration: 70 }, // 模板算為 60
-            { empId: 'EMP002', empName: '李四', ration: 30 },
+            { empId: 'EMP001', empName: '張三', ration: 60 },
+            { empId: 'EMP002', empName: '李四', ration: 40 },
           ],
-          appliedTemplate: { template: '+10%', targetEmpId: 'EMP001' },
+          appliedTemplate: { template: '+10%', targetEmpId: 'EMP999' }, // 不存在
         },
         validActor,
         '202605',
       );
     } catch (e: any) {
-      expect(e.response.error).toBe(ERROR_CODES.BONUS_PENALTY_TEMPLATE_INVALID);
+      caught = e;
     }
+    expect(caught).not.toBeNull();
+    expect(caught.response.error).toBe(ERROR_CODES.BONUS_PENALTY_TEMPLATE_INVALID);
   });
 
   // TC-M03b-007

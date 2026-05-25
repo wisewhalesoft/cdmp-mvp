@@ -407,46 +407,42 @@ export class PersonnelRatioService {
    * F083 §5.2 後端二次校驗：依 template 重算結果，與 request payload 比對。
    * 偏差超過容忍誤差 → 422 BONUS_PENALTY_TEMPLATE_INVALID。
    */
+  /**
+   * F083 v1.4 弱化校驗（2026-05-21 / 用戶決議）：
+   *
+   * 變更理由：原 v1.3 校驗假設 `ration = (100/N) + delta`（prototype 模型），
+   * 但前端 v1.5 改用 baseline + per-employee templates 模型，baseline 可為
+   * 任何值（均等分配 round 後 / 手動編輯 / 之前儲存的值），不再固定 100/N。
+   * 後端無法獨立復現前端 baseline，因此「精確公式比對」失去意義。
+   *
+   * 弱化後校驗範圍：
+   *   1. targetEmpId 必須存在於 employees[]（防 typo）
+   *   2. 部門員工數 ≥ 2（單員工模板無意義）
+   *   3. 其他驗證沿用 service 既有：每筆 ration ∈ [0,100]（assertEachInRange）、
+   *      per-DEPT 加總 = 100%（assertDeptSumEquals100）— 由 setPersonnelRatios
+   *      流程之 BR-13 / BR-2 處理
+   *
+   * appliedTemplate 仍寫入 assignment_audit_log.after_value 供 audit 追溯
+   * 「此次寫入是由 +N% 模板觸發」之語意，不再用於攔截。
+   */
   private validateAppliedTemplate(
     template: AppliedTemplateDto,
     employees: Array<{ empId: string; ration: number }>,
   ): void {
-    const N = employees.length;
-    if (N <= 1) {
+    if (employees.length <= 1) {
       throw new UnprocessableEntityException({
         error: ERROR_CODES.BONUS_PENALTY_TEMPLATE_INVALID,
         message: '部門僅 1 位業務員，無法套用相對調整模板',
         details: [{ template: template.template, reason: 'single-employee' }],
       });
     }
-    const defaultRation = 100 / N;
-    const delta = parseInt(template.template, 10);
-    const targetExpected = defaultRation + delta;
-    const remainingExpected = (100 - targetExpected) / (N - 1);
-
-    if (targetExpected < 0 || targetExpected > 100 || remainingExpected < 0 || remainingExpected > 100) {
+    const targetExists = employees.some((e) => e.empId === template.targetEmpId);
+    if (!targetExists) {
       throw new UnprocessableEntityException({
         error: ERROR_CODES.BONUS_PENALTY_TEMPLATE_INVALID,
-        message: '快速模板計算結果越界',
-        details: [{ template: template.template, targetExpected, remainingExpected }],
+        message: 'appliedTemplate.targetEmpId 不存在於 employees[]',
+        details: [{ template: template.template, targetEmpId: template.targetEmpId }],
       });
-    }
-
-    for (const e of employees) {
-      const expected = e.empId === template.targetEmpId ? targetExpected : remainingExpected;
-      if (Math.abs(Number(e.ration) - expected) > 0.02) {
-        throw new UnprocessableEntityException({
-          error: ERROR_CODES.BONUS_PENALTY_TEMPLATE_INVALID,
-          message: '快速模板套用結果與後端二次校驗不符',
-          details: [{
-            template: template.template,
-            targetEmpId: template.targetEmpId,
-            empId: e.empId,
-            actualRation: Number(e.ration),
-            expectedRation: Math.round(expected * 100) / 100,
-          }],
-        });
-      }
     }
   }
 
