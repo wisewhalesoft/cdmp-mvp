@@ -199,7 +199,23 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     expect(screen.queryByTestId('rejection-banner-full')).not.toBeInTheDocument();
   });
 
-  it('顯示「儲存並推進至簽核」按鈕（部長 + 處長皆可）', async () => {
+  // F084 v2.0：fallback 手動推進按鈕改為 response-driven（allDone 且非唯讀時顯示）。
+  // 原意「部長 + 處長皆可看到推進按鈕」保留，但前置改為「所有部門完成」才渲染（對齊 prototype renderActionBar）。
+  it('所有部門完成時顯示 fallback「推進至簽核」按鈕（部長 + 處長皆可）', async () => {
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({
+          deptCode: 'D01',
+          deptName: '北一處',
+          sumValidated: true,
+          deptSum: 100,
+          activeCount: 1,
+          employees: [
+            { empId: 'E001', empName: '甲', ration: 100, isResigned: false, createdBy: 'd1' },
+          ],
+        }),
+      ]),
+    );
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('btn-advance-approval')).toBeInTheDocument();
@@ -219,10 +235,27 @@ describe('PersonnelRatioConfigPage (29b)', () => {
       role: 'user',
       businessRole: 'section_chief',
     } as any);
+    // 所有部門完成 → fallback 推進按鈕渲染（response-driven）；本測試核心驗證「處長不顯示退回按鈕」
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({
+          deptCode: 'D01',
+          deptName: '北一處',
+          sumValidated: true,
+          deptSum: 100,
+          activeCount: 1,
+          isInScope: true,
+          employees: [
+            { empId: 'E001', empName: '甲', ration: 100, isResigned: false, createdBy: 'd1' },
+          ],
+        }),
+      ]),
+    );
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('btn-advance-approval')).toBeInTheDocument();
     });
+    // 核心驗收：處長不顯示「退回部門比例」（director only）
     expect(screen.queryByTestId('btn-rollback-dept-ratio')).not.toBeInTheDocument();
   });
 
@@ -260,13 +293,16 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     });
   });
 
-  it('未全部完成時，「推進至簽核」按鈕 disabled', async () => {
+  // F084 v2.0 行為變更：fallback 推進按鈕改為 response-driven。未全部完成（!allDone）時
+  // 按鈕「完全不渲染」（原行為為「渲染但 disabled」）；對齊 prototype renderActionBar 之
+  // showFallbackBtn 條件。原意「未完成不可推進」保留，斷言改為「按鈕不存在 + 儲存全部 disabled」。
+  it('未全部完成時，fallback 推進按鈕不渲染，且「儲存全部」disabled', async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId('btn-advance-approval')).toBeInTheDocument();
+      // 預設 2 部門 sumValidated:false（未完成）→ 按鈕不渲染
+      expect(screen.getByTestId('btn-save-all')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('btn-advance-approval')).toBeDisabled();
-    // 「儲存全部」也 disabled
+    expect(screen.queryByTestId('btn-advance-approval')).not.toBeInTheDocument();
     expect(screen.getByTestId('btn-save-all')).toBeDisabled();
   });
 

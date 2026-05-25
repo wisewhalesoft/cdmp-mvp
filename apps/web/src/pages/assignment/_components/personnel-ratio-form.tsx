@@ -23,6 +23,7 @@ import {
   type AppliedTemplate,
   type PersonnelRatioDepartment,
   type PersonnelRatioEmployee,
+  type SetPersonnelRatiosResponse,
 } from '@/api/assignment-stage';
 
 /**
@@ -58,12 +59,17 @@ import {
 export interface PersonnelRatioFormProps {
   listNo: string;
   department: PersonnelRatioDepartment;
-  onSaved?: () => void;
+  /**
+   * 儲存成功後回呼，攜帶後端 PUT response（含 F084 auto-advance 欄位）。
+   * 由 page 層依 response 決定 auto-advance toast / redirect / fallback（FLAG-1 批准）。
+   */
+  onSaved?: (res: SetPersonnelRatiosResponse) => void;
   readOnly?: boolean;
 }
 
 export interface PersonnelRatioFormHandle {
-  save: () => Promise<boolean>;
+  /** 成功時回傳後端 PUT response；不可儲存 / 失敗時回 null。 */
+  save: () => Promise<SetPersonnelRatiosResponse | null>;
   isSavable: () => boolean;
 }
 
@@ -347,15 +353,15 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
       return { template: tpl, targetEmpId: empId };
     }, [templates]);
 
-    const handleSave = useCallback(async (): Promise<boolean> => {
+    const handleSave = useCallback(async (): Promise<SetPersonnelRatiosResponse | null> => {
       setError(null);
       if (department.allResigned) {
         setError('本部門全員離職，無法儲存個別比例（後端會短路放行階段推進）');
-        return false;
+        return null;
       }
       if (activeRows.length > 0 && !sumValid) {
         setError(`加總須為 100%，目前為 ${sum.toFixed(2)}%`);
-        return false;
+        return null;
       }
       setSaving(true);
       try {
@@ -369,19 +375,21 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
           })),
           ...(appliedTemplate ? { appliedTemplate } : {}),
         };
-        await setPersonnelRatios(listNo, payload);
+        const res = await setPersonnelRatios(listNo, payload);
+        // 既有 per-dept「已儲存」toast 保留（對齊 prototype saveDept；§7.1 部分完成行為）；
+        // auto-advance toast / redirect 由 page 依 res 統一處理（FLAG-1）。
         showToast(
           `${department.deptCode} ${department.deptName} 已儲存（${activeRows.length} 人 / 加總 ${sum}%）`,
           'success',
         );
-        onSaved?.();
-        return true;
+        onSaved?.(res);
+        return res;
       } catch (err: unknown) {
         const e = err as { response?: { status?: number; data?: { message?: string } } };
         const msg = e?.response?.data?.message ?? '儲存失敗，請稍後再試';
         setError(msg);
         showToast(msg, 'error');
-        return false;
+        return null;
       } finally {
         setSaving(false);
       }

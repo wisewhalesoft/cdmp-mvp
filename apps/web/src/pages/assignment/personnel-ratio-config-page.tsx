@@ -15,6 +15,7 @@ import {
   getPersonnelRatios,
   rollbackToDeptRatio,
   type PersonnelRatioDepartment,
+  type SetPersonnelRatiosResponse,
 } from '@/api/assignment-stage';
 import {
   PersonnelRatioForm,
@@ -88,12 +89,18 @@ export function PersonnelRatioConfigPage() {
   const [notFound, setNotFound] = useState(false);
   const [departments, setDepartments] = useState<PersonnelRatioDepartment[]>([]);
   const [latestRejection, setLatestRejection] = useState<LatestRejection | null>(null);
+  // F084 v2.0：GET personnel ratios 回傳之 isReadOnly（歷史月份 / 非 personnel_ratio / 已停用）
+  // 與 stage，用於 fallback 手動推進按鈕的渲染守衛（§7.2 / AC-7）
+  const [ratiosReadOnly, setRatiosReadOnly] = useState(false);
+  const [ratiosStage, setRatiosStage] = useState<string | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
   const [showRollback, setShowRollback] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [rollbacking, setRollbacking] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [savingAll, setSavingAll] = useState(false);
+  // F084 v2.0：auto-advance 因月跑 guard 跳過時，退回顯示 fallback 手動推進按鈕（§7.1 月跑分支 / §7.2）
+  const [guardSkippedShowFallback, setGuardSkippedShowFallback] = useState(false);
 
   // form refs（依 deptCode 收集；給「儲存全部」遍歷使用）
   const formRefs = useRef<Map<string, PersonnelRatioFormHandle>>(new Map());
@@ -141,6 +148,8 @@ export function PersonnelRatioConfigPage() {
         if (aborted) return;
         setDepartments(data.departments ?? []);
         setLatestRejection(data.latestRejection ?? null);
+        setRatiosReadOnly(!!data.isReadOnly);
+        setRatiosStage(data.stage ?? null);
       } catch (err: unknown) {
         if (!aborted) {
           const e = err as { response?: { data?: { message?: string } } };
@@ -163,8 +172,8 @@ export function PersonnelRatioConfigPage() {
       await advanceToApproval(listNo);
       writePendingToast({
         type: 'success',
-        msg: `名單 ${listNo} 個別比例已儲存`,
-        sub: '已推進至簽核階段',
+        msg: `名單『${list?.listNm ?? listNo}』已推進至簽核階段`,
+        sub: '等待部長核准（手動推進 fallback）',
       });
       setShowAdvance(false);
       navigate('/assignment/list-definitions');
@@ -206,16 +215,66 @@ export function PersonnelRatioConfigPage() {
         return;
       }
       const results = await Promise.all(savable.map(([, ref]) => ref.save()));
-      const okCount = results.filter(Boolean).length;
+      const okCount = results.filter((r) => r != null).length;
       if (okCount === savable.length) {
         showToast(`已儲存全部 ${okCount} 個部門`, 'success');
       } else {
         showToast(`部分儲存失敗（${okCount}/${savable.length} 成功）`, 'warning');
       }
-      setRefreshTick((t) => t + 1);
+      // F084 v2.0：Promise.all 並發存多部門 → 依任一 response 的 auto-advance 結果分支
+      const handled = handleAutoAdvanceResult(results);
+      // auto-advance 成功（已 redirect）時不需 refresh（頁面即將離開）
+      if (!handled.redirected) {
+        setRefreshTick((t) => t + 1);
+      }
     } finally {
       setSavingAll(false);
     }
+  };
+
+  /**
+   * F084 v2.0 auto-advance response 分支（§7.1 / AC-5 / AC-6；前端 response-driven，無 flag）。
+   *
+   * 「儲存全部」為 Promise.all 並發存多部門，故收集所有 response 後：
+   *   - 任一 autoAdvanced=true → 自動推進成功 toast + 跨頁 pendingToast + redirect 名單列表
+   *   - 否則任一 autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月跑 warning toast +
+   *     退回顯示 fallback 手動按鈕（不 redirect）
+   *   - 否則（部分完成 / flag off → autoAdvanced:false 無 failReason）→ 不額外 toast
+   *     （子元件已顯示各部門「已儲存」toast）
+   *
+   * @returns { redirected } 是否已觸發 redirect（呼叫端據此決定是否 refresh）
+   */
+  const handleAutoAdvanceResult = (
+    results: Array<SetPersonnelRatiosResponse | null>,
+  ): { redirected: boolean } => {
+    const responses = results.filter((r): r is SetPersonnelRatiosResponse => r != null);
+    const listNm = list?.listNm ?? listNo ?? '';
+
+    if (responses.some((r) => r.autoAdvanced)) {
+      // auto-advance 成功（§7.1 / AC-6）
+      writePendingToast({
+        type: 'success',
+        msg: `名單『${listNm}』已自動推進至簽核階段`,
+        sub: '等待部長核准（auto-advance）',
+      });
+      showToast(`名單『${listNm}』已自動推進至簽核階段，等待部長核准`, 'success');
+      navigate('/assignment/list-definitions');
+      return { redirected: true };
+    }
+
+    if (
+      responses.some(
+        (r) => r.autoAdvanceFailReason === 'ASSIGNMENT_RUN_ALREADY_RUNNING',
+      )
+    ) {
+      // 月跑 guard 跳過（§7.1 月跑分支 / AC-5）：退回 fallback 手動按鈕
+      setGuardSkippedShowFallback(true);
+      showToast('比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核', 'warning');
+      return { redirected: false };
+    }
+
+    // 部分完成 / flag off：不額外 toast（子元件已顯示「已儲存」）
+    return { redirected: false };
   };
 
   const accordionDepts: DeptWithProgress[] = useMemo(
@@ -246,9 +305,43 @@ export function PersonnelRatioConfigPage() {
 
   const allDone = doneCount === accordionDepts.length && accordionDepts.length > 0;
 
-  const handleFormSaved = useCallback(() => {
-    setRefreshTick((t) => t + 1);
-  }, []);
+  // 處長本部門（isInScope）是否完成（§7.2 / AC-7：處長本部門未完成時 fallback 按鈕 disabled）
+  const ownDeptDone = useMemo(() => {
+    if (!isSectionChief) return true;
+    const own = departments.filter((d) => d.isInScope);
+    if (own.length === 0) return false;
+    return own.every((d) => d.allResigned || d.sumValidated);
+  }, [isSectionChief, departments]);
+
+  // F084 v2.0 fallback 手動推進按鈕渲染 / disabled 守衛（response-driven，對齊 prototype renderActionBar）
+  //   - 渲染條件（§7.2 / AC-7）：stage=personnel_ratio 且非唯讀（歷史 / 停用 / 非此階段 → 完全不渲染）
+  //     且（allDone 或 月跑 guard 跳過退回 fallback）。flag off 時 response 永遠 autoAdvanced:false
+  //     無 failReason → allDone 時自然顯示手動按鈕（= 既有手動行為）。
+  //   - disabled：月跑進行中（guard 跳過）/ 處長本部門未完成 / 尚有部門未完成。
+  const fallbackStageOk = (ratiosStage ?? list?.stage) === 'personnel_ratio' && !ratiosReadOnly;
+  const showFallbackAdvance = fallbackStageOk && (allDone || guardSkippedShowFallback);
+  const fallbackDisabled =
+    guardSkippedShowFallback || (isSectionChief && !ownDeptDone) || !allDone;
+  const fallbackTip = guardSkippedShowFallback
+    ? '分派執行中，無法推進'
+    : isSectionChief && !ownDeptDone
+    ? '本部門業務員比例尚未設定完成'
+    : !allDone
+    ? '尚有部門的個別業務比例未完成設定'
+    : '';
+
+  const handleFormSaved = useCallback(
+    (res: SetPersonnelRatiosResponse) => {
+      // 單一部門儲存（含處長存自己最後一個部門）→ 同樣依 response 觸發 auto-advance 分支
+      const handled = handleAutoAdvanceResult([res]);
+      if (!handled.redirected) {
+        setRefreshTick((t) => t + 1);
+      }
+    },
+    // handleAutoAdvanceResult 依賴 list / listNo / navigate / showToast，皆為穩定或 page 級值
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [list, listNo],
+  );
 
   return (
     <AppLayout
@@ -385,17 +478,21 @@ export function PersonnelRatioConfigPage() {
                       <Save className="w-4 h-4" />儲存全部
                     </span>
                   </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    data-testid="btn-advance-approval"
-                    disabled={!allDone}
-                    onClick={() => setShowAdvance(true)}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <ArrowRight className="w-4 h-4" />儲存並推進至簽核
+                  {showFallbackAdvance && (
+                    <span title={fallbackTip || undefined} className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        data-testid="btn-advance-approval"
+                        disabled={fallbackDisabled}
+                        onClick={() => setShowAdvance(true)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <ArrowRight className="w-4 h-4" />推進至簽核
+                        </span>
+                      </Button>
                     </span>
-                  </Button>
+                  )}
                 </div>
               </div>
             )}

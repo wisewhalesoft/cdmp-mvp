@@ -120,7 +120,8 @@ const F082_GET_FIXTURE_NO_REJECTION = {
 
 // ============================================================
 // F082 PUT response
-// 對應後端 personnel-ratio.service.ts:374-381（注意：是 deptSum 不是 total）
+// 對應後端 personnel-ratio.service.ts setPersonnelRatios return
+// （F084 v2.0：補 autoAdvanced / newStage / autoAdvanceFailReason 三欄位）
 // ============================================================
 const F082_PUT_FIXTURE = {
   listNo: 'OB202605007',
@@ -129,6 +130,9 @@ const F082_PUT_FIXTURE = {
   deptSum: 100,
   savedAt: '2026-05-15T13:30:00Z',
   savedBy: 'user-uuid-xxx',
+  autoAdvanced: false,
+  newStage: null,
+  autoAdvanceFailReason: null,
 } satisfies SetPersonnelRatiosResponse;
 
 describe('assignment-stage API contract', () => {

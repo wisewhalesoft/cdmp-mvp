@@ -1,4 +1,35 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  F084 v2.0 Auto-Advance — UI/UX ground truth（下游 React 落地請對照本原型）
+  spec: docs/specs/features/F084-advance-to-approval.md v2.0.1 §7.1 / §7.2
+  test: docs/specs/handoffs/F084-v2-auto-advance-test-design.md §5
+  ----------------------------------------------------------------------------
+  個別業務比例（personnel_ratio）→ 簽核（approval）有兩條推進路徑：
+
+  【主路徑 — Auto-Advance（flag = ON，§7.1）】
+   - 使用者完成「最後一個讓所有部門加總 = 100%」的儲存（F082 PUT）後，
+     後端於同一 transaction 內偵測完成度並「自動推進」，無需點任何推進按鈕。
+   - 成功 → toast「名單『…』已自動推進至簽核階段，等待部長核准」+ redirect 名單列表。
+   - 月跑 guard 跳過 → toast「比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核」
+     + 此時退回顯示 fallback 手動按鈕（見下）；不 redirect。
+   - 部分完成 → 只顯示既有「已儲存」toast，無推進訊息。
+
+  【Fallback — 手動「推進至簽核」按鈕（flag = OFF 或 auto-advance 被月跑 guard 跳過，§7.2）】
+   - 部長 / Admin：始終顯示（全部完成才 enabled）。
+   - 處長：顯示，本部門未完成時 disabled + hover「本部門業務員比例尚未設定完成」。
+   - 月跑進行中：disabled + hover「分派執行中，無法推進」。
+   - 非 personnel_ratio / 已停用 / 歷史月份：完全不渲染（本原型固定當月 personnel_ratio，僅以註解標示）。
+   - 點按 → advanceModal 確認對話框（保留作 fallback 確認）。
+
+  【Feature Flag 對應】
+   - 頁面上方 Demo Bar 的「自動推進 ON/OFF」toggle 對應後端 ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL
+     （prod 預設 OFF；本原型預設 ON 以展示主路徑）。
+   - 「模擬月跑進行中」toggle 展示 AC-5：auto-advance 被月跑 guard 跳過 → 退回 fallback 按鈕。
+   - 以上 toggle 僅為原型教學用，React 落地時由後端 flag + PUT response 欄位
+     （autoAdvanced / newStage / autoAdvanceFailReason）驅動，非前端 toggle。
+  ============================================================================
+-->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
@@ -155,6 +186,29 @@
       <span class="text-[10px] text-gray-400">mock · 不發 API</span>
     </div>
 
+    <!-- F084 v2.0 路徑 toggle（原型教學用，非前端真實開關） -->
+    <div class="bg-blue-50/40 border-b border-blue-100 px-6 py-2 flex items-center gap-4 flex-wrap text-xs">
+      <span class="inline-flex items-center gap-1.5 font-medium text-primary"><i data-lucide="git-branch" class="w-3.5 h-3.5"></i>F084 推進路徑</span>
+      <!-- auto-advance flag toggle -->
+      <div class="inline-flex items-center gap-1.5">
+        <span class="text-gray-500">自動推進</span>
+        <div class="inline-flex rounded-md border border-blue-200 overflow-hidden">
+          <button id="flagOn" onclick="setAutoAdvanceFlag(true)" class="px-2.5 py-1 text-[11px] font-medium bg-primary text-white">ON（主路徑）</button>
+          <button id="flagOff" onclick="setAutoAdvanceFlag(false)" class="px-2.5 py-1 text-[11px] font-medium bg-white text-gray-500 hover:bg-gray-50">OFF（手動 fallback）</button>
+        </div>
+      </div>
+      <span class="text-gray-300">|</span>
+      <!-- 月跑進行中 toggle -->
+      <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+        <input type="checkbox" id="monthlyRunToggle" onchange="setMonthlyRunRunning(this.checked)" class="w-3.5 h-3.5 rounded border-gray-300 text-warning focus:ring-warning">
+        <span class="text-gray-600">模擬月跑進行中</span>
+        <span class="has-tooltip"><i data-lucide="help-circle" class="w-3 h-3 text-gray-400"></i><span class="tip">勾選後 auto-advance 會被月跑 guard 跳過（AC-5），退回顯示 fallback 按鈕</span></span>
+      </label>
+      <span class="ml-auto text-[10px] text-gray-400 inline-flex items-center gap-1">
+        <i data-lucide="info" class="w-3 h-3"></i>對應後端 <code class="font-mono bg-white/70 px-1 rounded border border-blue-100">ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL</code>（prod 預設 OFF）· 此原型預設 ON 展示主路徑
+      </span>
+    </div>
+
     <!-- 角色封鎖 banner（sales） -->
     <div id="roleBlockedBanner" class="hidden p-6">
       <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
@@ -283,7 +337,19 @@
         <p class="text-sm text-gray-500 max-w-md">處長僅能設定自己轄區之個別業務比例；本名單可能未包含您的部門，或您並非任何部門之處長。</p>
       </div>
 
+      <!-- ===== auto-advance 提示條（flag = ON 主路徑，§7.1）===== -->
+      <!-- 顯示條件：flag ON。內容隨「是否全部完成」調整文案，但不論完成與否皆無推進按鈕（系統自動推進） -->
+      <div id="autoAdvanceHint" class="hidden rounded-lg bg-blue-50/60 border border-blue-200 px-4 py-3 flex items-start gap-2.5">
+        <i data-lucide="sparkles" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+        <div class="text-xs text-blue-900">
+          <p class="font-semibold">自動推進已啟用</p>
+          <p id="autoAdvanceHintBody" class="mt-0.5 text-blue-800"></p>
+        </div>
+      </div>
+
       <!-- ===== 操作按鈕區 ===== -->
+      <!-- 推進區（btnAdvanceFallback）為 fallback：僅 flag OFF 或 auto-advance 被月跑 guard 跳過時渲染（§7.2 / AC-7）。
+           React 落地時：非 personnel_ratio / 已停用 / 歷史月份 → 整個 btnAdvanceFallback 不渲染（本原型固定當月 personnel_ratio）。 -->
       <div id="actionBar" class="bg-white rounded-xl border border-border px-5 py-4 flex items-center justify-between gap-3">
         <a href="27-list-definition.html" class="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1">
           <i data-lucide="x" class="w-4 h-4"></i>取消（返回名單列表）
@@ -294,13 +360,17 @@
             <i data-lucide="undo-2" class="w-4 h-4"></i>退回部門比例
           </button>
           <button id="btnSaveAll" type="button" onclick="onSaveAll()"
-            class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm border border-primary text-primary rounded-md hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent">
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary">
             <i data-lucide="save" class="w-4 h-4"></i>儲存全部
           </button>
-          <button id="btnAdvance" type="button" onclick="openAdvanceModal()"
-            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary">
-            <i data-lucide="arrow-right" class="w-4 h-4"></i>儲存並推進至簽核
-          </button>
+          <!-- fallback 手動推進按鈕（預設隱藏，由 renderActionBar() 控制顯示 / disabled / tooltip） -->
+          <div id="advanceFallbackWrap" class="hidden has-tooltip">
+            <button id="btnAdvanceFallback" type="button" onclick="openAdvanceModal()"
+              class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary">
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>推進至簽核
+            </button>
+            <span id="advanceFallbackTip" class="tip hidden"></span>
+          </div>
         </div>
       </div>
 
@@ -315,13 +385,13 @@
           <i data-lucide="arrow-right-circle" class="w-5 h-5 text-primary"></i>
         </div>
         <div class="flex-1">
-          <h3 class="text-base font-semibold text-gray-800">推進至簽核階段？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F084 · stage: personnel_ratio → approval</p>
+          <h3 class="text-base font-semibold text-gray-800">推進確認</h3>
+          <p class="text-xs text-gray-500 mt-0.5">F084 · fallback 手動推進 · stage: personnel_ratio → approval</p>
         </div>
         <button onclick="closeAdvanceModal()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="p-5 space-y-3">
-        <p class="text-sm text-gray-700">確認將名單「<span class="font-medium">2026-05 主力催收名單 C</span>」（<span class="font-mono">OB202605007</span>）推進至簽核階段？</p>
+        <p class="text-sm text-gray-700">確認將名單「<span class="font-medium">2026-05 主力催收名單 C</span>」（<span class="font-mono">OB202605007</span>）推進至簽核階段？推進後個別業務比例將鎖定，無法再修改（如需修改請先 Rollback）。</p>
 
         <div class="rounded-lg bg-blue-50/50 border border-blue-200 p-3">
           <p class="text-xs font-semibold text-primary mb-2"><i data-lucide="list" class="w-3.5 h-3.5 inline mr-0.5"></i>各部門完成狀態（將鎖定）</p>
@@ -454,11 +524,42 @@
       const isSectionChief = role.startsWith('section_chief');
       document.getElementById('roleBlockedBanner').classList.toggle('hidden', !isUser);
       document.getElementById('mainContent').classList.toggle('hidden', isUser);
-      // 業務處長：隱藏推進、隱藏 rollback、隱藏「儲存全部」（僅可「儲存本部門」）
+      // 業務處長：隱藏 rollback、隱藏「儲存全部」（僅可「儲存本部門」）
       document.getElementById('btnRollback').classList.toggle('hidden', isSectionChief);
-      document.getElementById('btnAdvance').classList.toggle('hidden', isSectionChief);
       document.getElementById('btnSaveAll').classList.toggle('hidden', isSectionChief);
+      // 推進按鈕（fallback）顯示與否改由 renderActionBar() 依 flag / 完成度 / 角色 / 月跑決定
       renderAll();
+      lucide.createIcons();
+    }
+
+    // ============================================================
+    // F084 v2.0 路徑開關（原型教學用 / 模擬後端 flag + 月跑 guard）
+    // ============================================================
+    let AUTO_ADVANCE_FLAG = true;     // 對應 ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL（prod 預設 off；原型預設 on）
+    let MONTHLY_RUN_RUNNING = false;  // 模擬 assignment_run.status IN ('pending','running')
+    // 月跑 guard 跳過後，使用者本次儲存仍需看到 fallback 按鈕 → 以此 flag 鎖定本頁顯示
+    let GUARD_SKIPPED_SHOW_FALLBACK = false;
+
+    function setAutoAdvanceFlag(on) {
+      AUTO_ADVANCE_FLAG = on;
+      GUARD_SKIPPED_SHOW_FALLBACK = false; // 切換 flag 時重置 guard 旗標
+      const onBtn = document.getElementById('flagOn');
+      const offBtn = document.getElementById('flagOff');
+      if (on) {
+        onBtn.className = 'px-2.5 py-1 text-[11px] font-medium bg-primary text-white';
+        offBtn.className = 'px-2.5 py-1 text-[11px] font-medium bg-white text-gray-500 hover:bg-gray-50';
+      } else {
+        onBtn.className = 'px-2.5 py-1 text-[11px] font-medium bg-white text-gray-500 hover:bg-gray-50';
+        offBtn.className = 'px-2.5 py-1 text-[11px] font-medium bg-primary text-white';
+      }
+      renderActionBar();
+      lucide.createIcons();
+    }
+
+    function setMonthlyRunRunning(running) {
+      MONTHLY_RUN_RUNNING = running;
+      if (!running) GUARD_SKIPPED_SHOW_FALLBACK = false; // 月跑結束 → 不再強制顯示 fallback
+      renderActionBar();
       lucide.createIcons();
     }
 
@@ -538,6 +639,7 @@
       renderDeptRatioSummary();
       renderAccordions();
       updateProgress();
+      renderActionBar();
       lucide.createIcons();
     }
 
@@ -935,20 +1037,137 @@
       document.getElementById('progressText').textContent = `${done} / ${total}`;
       document.getElementById('totalEmployees').textContent = totalEmp;
       document.getElementById('progressBar').style.width = `${(done/total)*100}%`;
-      const allDone = (done === total);
-      document.getElementById('btnAdvance').disabled = !allDone;
-      document.getElementById('btnSaveAll').disabled = !allDone;
+      // 「儲存全部」始終可按（spec：任一 PUT 皆可觸發完成度偵測；部分完成也允許儲存）
+      const btnSaveAll = document.getElementById('btnSaveAll');
+      if (btnSaveAll) btnSaveAll.disabled = false;
+      // 推進區（auto-advance 提示 / fallback 按鈕）交由 renderActionBar() 處理
+      renderActionBar();
+    }
+
+    // 完成度：所有部門加總均 = 100%（容忍 ±0.01%，對齊 BR-12 / I-8）
+    function allDeptsDone() {
+      return DEPTS.length > 0 && DEPTS.every(d => deptStatus(d) === 'done');
+    }
+    // 處長本部門是否完成（fallback 按鈕 disabled 判斷用）
+    function ownDeptDone() {
+      const scope = ROLE_META[currentRole].scope;
+      if (!scope) return allDeptsDone();
+      const d = DEPTS.find(x => x.code === scope);
+      return d ? deptStatus(d) === 'done' : false;
+    }
+
+    // ============================================================
+    // renderActionBar — 依 flag / 完成度 / 角色 / 月跑 決定推進區呈現（§7.1 / §7.2）
+    // ============================================================
+    function renderActionBar() {
+      const hint = document.getElementById('autoAdvanceHint');
+      const hintBody = document.getElementById('autoAdvanceHintBody');
+      const fallbackWrap = document.getElementById('advanceFallbackWrap');
+      const fallbackBtn = document.getElementById('btnAdvanceFallback');
+      const fallbackTip = document.getElementById('advanceFallbackTip');
+      if (!hint || !fallbackWrap) return;
+
+      const isSectionChief = currentRole.startsWith('section_chief');
+      const isUser = currentRole === 'user';
+      const allDone = allDeptsDone();
+
+      // user 無權頁面（mainContent 已隱藏）——保險起見全收起
+      if (isUser) {
+        hint.classList.add('hidden');
+        fallbackWrap.classList.add('hidden');
+        return;
+      }
+
+      // 主路徑：flag ON 且 auto-advance 未被月跑 guard 跳過 → 顯示提示條、無推進按鈕
+      const showAutoHint = AUTO_ADVANCE_FLAG && !GUARD_SKIPPED_SHOW_FALLBACK;
+      // fallback 按鈕：flag OFF，或 auto-advance 被月跑 guard 跳過（GUARD_SKIPPED_SHOW_FALLBACK）
+      const showFallbackBtn = !AUTO_ADVANCE_FLAG || GUARD_SKIPPED_SHOW_FALLBACK;
+
+      // --- auto-advance 提示條 ---
+      hint.classList.toggle('hidden', !showAutoHint);
+      if (showAutoHint) {
+        hintBody.textContent = allDone
+          ? '所有部門均已完成設定。完成最後一筆儲存後，系統已（或將）自動推進至簽核階段，無需手動操作。'
+          : '完成所有部門的業務員比例並儲存後，系統會自動推進至簽核階段，無需手動點擊推進按鈕。';
+      }
+
+      // --- fallback 手動推進按鈕 ---
+      fallbackWrap.classList.toggle('hidden', !showFallbackBtn);
+      if (showFallbackBtn) {
+        // disabled 與 tooltip 判斷（§7.2 / AC-7）
+        let disabled = false;
+        let tip = '';
+        if (MONTHLY_RUN_RUNNING) {
+          disabled = true;
+          tip = '分派執行中，無法推進';
+        } else if (isSectionChief && !ownDeptDone()) {
+          disabled = true;
+          tip = '本部門業務員比例尚未設定完成';
+        } else if (!allDone) {
+          // 部長 / Admin 始終顯示，但全部未完成時 disabled
+          disabled = true;
+          tip = '尚有部門的個別業務比例未完成設定';
+        }
+        fallbackBtn.disabled = disabled;
+        if (tip) {
+          fallbackTip.textContent = tip;
+          fallbackTip.classList.remove('hidden');
+        } else {
+          fallbackTip.classList.add('hidden');
+        }
+      }
     }
 
     // ============================================================
     // 儲存
     // ============================================================
+    const LIST_NM = '2026-05 主力催收名單 C';
+
     function saveDept(deptIdx) {
       const d = DEPTS[deptIdx];
-      toast(`${d.code} ${d.name} 已儲存（mock 不發 PUT /api/v1/assignment/ratios/personnel/${LIST_NO}）`, 'success');
+      // 既有「已儲存」toast（對齊 §7.1 部分完成 / 既有 F082 行為）
+      toast(`${d.code} ${d.name} 個別業務比例已儲存（mock 不發 PUT /api/v1/assignment/ratios/personnel/${LIST_NO}）`, 'success');
+      // 任一 PUT 成功後皆嘗試 auto-advance 偵測（處長存自己最後一個部門也會觸發）
+      tryAutoAdvance();
     }
     function onSaveAll() {
       toast(`所有部門（${DEPTS.length} 個）個別業務比例已儲存`, 'success');
+      tryAutoAdvance();
+    }
+
+    // ============================================================
+    // tryAutoAdvance — 模擬後端「F082 PUT 成功後同一 tx 內偵測完成度自動推進」（§5.2 / §7.1）
+    //   前端真實落地時：由 PUT response 的 autoAdvanced / autoAdvanceFailReason 欄位驅動，
+    //   非前端自行判斷；此處原型以 JS 模擬該行為以展示三條 UX 分支。
+    // ============================================================
+    function tryAutoAdvance() {
+      // flag off → auto-advance 完全不執行；fallback 按鈕已由 renderActionBar 顯示（§7.1 / AC-8）
+      if (!AUTO_ADVANCE_FLAG) { renderActionBar(); return; }
+
+      // 部分完成 → autoAdvanced:false 無 failReason；僅留既有「已儲存」toast，無推進訊息（§7.1）
+      if (!allDeptsDone()) { renderActionBar(); return; }
+
+      // 全部完成 + 月跑進行中 → guard 跳過（autoAdvanceFailReason: ASSIGNMENT_RUN_ALREADY_RUNNING，AC-5）
+      if (MONTHLY_RUN_RUNNING) {
+        GUARD_SKIPPED_SHOW_FALLBACK = true; // 退回顯示 fallback 手動按鈕
+        renderActionBar();
+        toast('比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核', 'warning');
+        return;
+      }
+
+      // 全部完成 + 月跑未進行 → auto-advance 成功（autoAdvanced:true, newStage:approval，§7.1 / AC-6）
+      GUARD_SKIPPED_SHOW_FALLBACK = false;
+      renderActionBar();
+      toast(`名單『${LIST_NM}』已自動推進至簽核階段，等待部長核准`, 'success');
+      // 示意 redirect 至名單列表（沿用既有 sessionStorage pendingToast 跨頁 signal）
+      try {
+        sessionStorage.setItem('cdmp.pendingToast', JSON.stringify({
+          type: 'success',
+          msg: `名單『${LIST_NM}』已自動推進至簽核階段`,
+          sub: `${LIST_NO} 等待部長核准（auto-advance）`
+        }));
+      } catch (e) { /* sessionStorage may be unavailable */ }
+      setTimeout(() => { window.location.href = '27-list-definition.html'; }, 1300);
     }
 
     // ============================================================
@@ -982,12 +1201,12 @@
     function closeAdvanceModal() { document.getElementById('advanceModal').classList.add('hidden'); }
     function confirmAdvance() {
       closeAdvanceModal();
-      // v2.3: 用 sessionStorage 帶 toast signal 跨頁傳遞（27 init 時消化）
+      // fallback 手動推進成功（§7.2 成功 toast）；v2.3: sessionStorage 跨頁傳遞 toast（27 init 消化）
       try {
         sessionStorage.setItem('cdmp.pendingToast', JSON.stringify({
           type: 'success',
-          msg: '個別比例已儲存',
-          sub: `${LIST_NO} 已推進至待簽核階段`
+          msg: `名單『${LIST_NM}』已推進至簽核階段`,
+          sub: `${LIST_NO} 等待部長核准（手動推進 fallback）`
         }));
       } catch (e) { /* sessionStorage may be unavailable */ }
       window.location.href = '27-list-definition.html';
@@ -1073,6 +1292,7 @@
         btn.classList.remove('border-gray-300', 'bg-white');
       }
       LATEST_REJECTION = null;
+      GUARD_SKIPPED_SHOW_FALLBACK = false; // 切換場景 → 重置月跑 guard 旗標
       document.getElementById('role-switcher').value = 'director';
 
       if (state === 'normal') {
@@ -1137,6 +1357,7 @@
     // ============================================================
     // Init
     // ============================================================
+    setAutoAdvanceFlag(true);   // 原型預設 ON（展示 auto-advance 主路徑）
     loadFromURL();
     lucide.createIcons();
   </script>
