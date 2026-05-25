@@ -131,7 +131,19 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
         prev.map((r) => (!r.isResigned ? { ...r, selected: checked } : r)),
       );
 
-    /** F083 模板：對單一員工套 ±N%，其他在職成員按比例吸收差額。 */
+    /**
+     * F083 模板：對單一員工套 ±N%（**以該員工當前 ration 為基底**）。
+     *
+     * 語意（per 用戶決議 2026-05-21）：
+     *   targetNew = clamp(currentRation + delta, 0, 100)
+     *   其中 delta = ±10 / ±20 個百分點
+     *
+     * 連續點擊行為：每次點擊都以「點擊當下」的 ration 為基底，因此 +10% 後再 +10%
+     *               等於從新基底再加 10 個百分點（不是固定從原始值算）。
+     *               不同員工的 +10% 各自從自身當前 ration 計算，互不影響。
+     *
+     * 其他在職員工依當前 ration 比例吸收差額，使加總仍 = 100。
+     */
     const applyTemplateOne = (
       targetEmpId: string,
       template: '+10%' | '+20%' | '-10%' | '-20%',
@@ -141,55 +153,77 @@ export const PersonnelRatioForm = forwardRef<PersonnelRatioFormHandle, Personnel
       if (!target) return;
       const targetCurrent = target.ration ?? 0;
       const delta = template === '+10%' ? 10 : template === '+20%' ? 20 : template === '-10%' ? -10 : -20;
+      // 以「當前 ration」為基底加 delta 個百分點；clamp [0,100]
       const targetNew = Math.max(
         0,
         Math.min(100, Math.round((targetCurrent + delta) * 100) / 100),
       );
       const realDelta = targetNew - targetCurrent;
+      if (Math.abs(realDelta) < 0.001) return; // 無變化（已 clamp 在邊界）
+
       const others = activeRows.filter((r) => r.empId !== targetEmpId);
       const otherSum = others.reduce((a, b) => a + (b.ration ?? 0), 0);
-      if (otherSum === 0) return;
-      setRows((prev) =>
-        prev.map((r) => {
-          if (r.isResigned) return r;
-          if (r.empId === targetEmpId) return { ...r, ration: targetNew };
-          const v = r.ration ?? 0;
-          const adjust = (realDelta * v) / otherSum;
-          const newR = Math.max(0, Math.round((v - adjust) * 100) / 100);
-          return { ...r, ration: newR };
-        }),
-      );
+
+      // 其他員工依當前 ration 比例吸收 realDelta；若 otherSum=0 改為等量分擔
+      const newRows = rows.map((r) => {
+        if (r.isResigned) return r;
+        if (r.empId === targetEmpId) return { ...r, ration: targetNew };
+        const v = r.ration ?? 0;
+        const adjust = otherSum > 0
+          ? (realDelta * v) / otherSum
+          : realDelta / others.length;
+        const newR = Math.max(0, Math.round((v - adjust) * 100) / 100);
+        return { ...r, ration: newR };
+      });
+
+      // 浮點誤差校正：確保最終加總 = 100（差額丟給除 target 外最大值員工吸收）
+      const sumAfter = newRows
+        .filter((r) => !r.isResigned)
+        .reduce((a, r) => a + (r.ration ?? 0), 0);
+      const diff = Math.round((100 - sumAfter) * 100) / 100;
+      if (Math.abs(diff) >= 0.01) {
+        let maxIdx = -1;
+        let maxVal = -1;
+        for (let i = 0; i < newRows.length; i++) {
+          const r = newRows[i];
+          if (r.isResigned || r.empId === targetEmpId) continue;
+          if ((r.ration ?? 0) > maxVal) {
+            maxVal = r.ration ?? 0;
+            maxIdx = i;
+          }
+        }
+        if (maxIdx >= 0) {
+          newRows[maxIdx] = {
+            ...newRows[maxIdx],
+            ration: Math.max(0, Math.round(((newRows[maxIdx].ration ?? 0) + diff) * 100) / 100),
+          };
+        }
+      }
+
+      setRows(newRows);
       setAppliedTemplate({ template, targetEmpId });
-      setAppliedTemplateLabel(`${template} / ${target.empName}`);
+      setAppliedTemplateLabel(`${template} / ${target.empName}（基底 ${targetCurrent.toFixed(2)}%）`);
     };
 
-    /** 部門級「均等分配」：所有在職員工 100/n，尾差由最後一位吸收。 */
+    /**
+     * 部門級「均等分配」：所有在職員工各 100/n。
+     *
+     * 演算法（保證 sum = 100.00 exact，無浮點累積誤差）：
+     *   - 前 n-1 人各得 base = Math.round((100/n)*100)/100
+     *   - 第 n 人取確切餘額 = round(100 - base*(n-1), 2)
+     */
     const applyEqual = () => {
       const n = activeRows.length;
       if (n === 0) return;
-      const each = Math.round((100 / n) * 100) / 100;
-      let assigned = 0;
+      const base = Math.round((100 / n) * 100) / 100;
+      const tailRation = Math.round((100 - base * (n - 1)) * 100) / 100;
+      let activeIdx = 0;
       const newRows = rows.map((r) => {
         if (r.isResigned) return r;
-        assigned += each;
-        return { ...r, ration: each };
+        activeIdx++;
+        const isLast = activeIdx === n;
+        return { ...r, ration: isLast ? tailRation : base };
       });
-      // 尾差吸收到最後一位在職員工
-      const diffTail = Math.round((100 - assigned) * 100) / 100;
-      if (Math.abs(diffTail) > 0.001) {
-        let lastFound = false;
-        for (let i = newRows.length - 1; i >= 0; i--) {
-          if (!newRows[i].isResigned) {
-            newRows[i] = {
-              ...newRows[i],
-              ration: Math.round(((newRows[i].ration ?? 0) + diffTail) * 100) / 100,
-            };
-            lastFound = true;
-            break;
-          }
-        }
-        void lastFound;
-      }
       setRows(newRows);
       setAppliedTemplate(null);
       setAppliedTemplateLabel('均等分配');
