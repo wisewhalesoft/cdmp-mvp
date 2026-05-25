@@ -36,6 +36,7 @@ import {
   type FieldType,
 } from '@/api/pooldata-fields';
 import { listCardTypes, type CardTypeListItem } from '@/api/card-type';
+import { advanceToDeptRatio } from '@/api/assignment-stage';
 import {
   CopyFromPrevMonthModal,
   computePrevYm,
@@ -352,7 +353,7 @@ export function ListCreateDraftPage() {
     };
   }, [conditions]);
 
-  const submitDraft = useCallback(async () => {
+  const submitDraft = useCallback(async (autoAdvance: boolean = false) => {
     setError(null);
     const err = validate();
     if (err) {
@@ -376,7 +377,22 @@ export function ListCreateDraftPage() {
       if (copyFromListNo) dto.copyFromListNo = copyFromListNo;
 
       const result = (await createList(dto)) as { listNo: string };
-      showToast(`名單 ${result.listNo} 已建立`, 'success');
+      // 「儲存並推進」按鈕：createList 寫 stage='draft'，後端不會自動升級階段；
+      // 需在此再呼叫 advance-to-dept-ratio 才會真的進入部門比例階段（修正
+      // 舊版註解「後端會處理 stage 升級」的誤解）。
+      if (autoAdvance) {
+        try {
+          await advanceToDeptRatio(result.listNo);
+          showToast(`名單 ${result.listNo} 已建立並推進至部門比例`, 'success');
+        } catch (advErr: unknown) {
+          const ae = advErr as { response?: { data?: { message?: string } } };
+          const advMsg = ae?.response?.data?.message ?? '推進至部門比例失敗';
+          // 草稿已建立、僅推進失敗 → 提示用戶可至列表手動推進
+          showToast(`名單 ${result.listNo} 已建立草稿；${advMsg}`, 'warning');
+        }
+      } else {
+        showToast(`名單 ${result.listNo} 已建立`, 'success');
+      }
       navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as {
@@ -424,8 +440,9 @@ export function ListCreateDraftPage() {
   }, [validate, showToast]);
 
   const confirmAdvance = useCallback(async () => {
-    // 推進＝先存草稿（後端會處理 stage 升級；MVP 此處沿用 createList）
-    await submitDraft();
+    // 推進＝先存草稿（POST createList → stage='draft'），再呼 advance-to-dept-ratio
+    // 將階段升至 dept_ratio；兩步串接由 submitDraft(autoAdvance=true) 處理。
+    await submitDraft(true);
     setAdvanceModalOpen(false);
   }, [submitDraft]);
 

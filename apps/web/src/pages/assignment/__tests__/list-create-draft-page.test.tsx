@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ListCreateDraftPage } from '../list-create-draft-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
+import * as assignmentStageApi from '@/api/assignment-stage';
 import * as pooldataFieldsApi from '@/api/pooldata-fields';
 import * as cardTypeApi from '@/api/card-type';
 import * as authStore from '@/stores/auth-store';
@@ -15,6 +16,7 @@ import type {
 import type { ListCardTypesResponse } from '@/api/card-type';
 
 vi.mock('@/api/assignment-list');
+vi.mock('@/api/assignment-stage');
 vi.mock('@/api/pooldata-fields');
 vi.mock('@/api/card-type');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
@@ -31,6 +33,7 @@ vi.mock('@/stores/auth-store', async () => {
 
 const mockedCreateList = vi.mocked(assignmentListApi.createList);
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
+const mockedAdvanceToDeptRatio = vi.mocked(assignmentStageApi.advanceToDeptRatio);
 const mockedListFields = vi.mocked(pooldataFieldsApi.listFields);
 const mockedListOptions = vi.mocked(pooldataFieldsApi.listOptions);
 const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
@@ -470,6 +473,71 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
     // 勾選後 enabled
     fireEvent.click(screen.getByTestId('checkbox-inactive-acknowledge'));
     expect(confirmBtn).not.toBeDisabled();
+  });
+
+  // ─────────────────────────────────────────
+  // lc.test#12.b — 「儲存並推進」一鍵流：createList 之後必呼 advanceToDeptRatio
+  //   修復 2026-05-25 bug：舊版只 createList、不 advance，名單留在 draft，
+  //   用戶以為已推進到 dept_ratio。
+  // ─────────────────────────────────────────
+  // Helper：填表單到滿足 validate() 通過的最小集（一個 categorical 條件 = prod_kind:01）
+  const fillFormWithMinCondition = async (listNm: string) => {
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: listNm } });
+    fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+    fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-prod_kind')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('add-field-prod_kind'));
+    await waitFor(() => expect(mockedListOptions).toHaveBeenCalledWith('prod_kind', expect.any(Object)));
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() => expect(screen.getByTestId('value-checkbox-0-01')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('value-checkbox-0-01'));
+  };
+
+  it('lc.test#12.b: 「儲存並推進」依序呼叫 createList → advanceToDeptRatio（修復 stage 卡 draft）', async () => {
+    mockedCreateList.mockResolvedValue({ listNo: 'OB202605099' } as any);
+    mockedAdvanceToDeptRatio.mockResolvedValue({
+      listNo: 'OB202605099',
+      stage: 'dept_ratio',
+    });
+
+    renderPage();
+    await fillFormWithMinCondition('推進測試');
+
+    fireEvent.click(screen.getByTestId('btn-advance'));
+    await waitFor(() => expect(screen.getByTestId('advance-confirm-modal')).toBeInTheDocument());
+    // INACTIVE checkbox 因含 prod_kind=01 仍會被要求勾選
+    fireEvent.click(screen.getByTestId('checkbox-inactive-acknowledge'));
+    fireEvent.click(screen.getByTestId('btn-confirm-advance'));
+
+    await waitFor(() => {
+      expect(mockedCreateList).toHaveBeenCalledTimes(1);
+      expect(mockedAdvanceToDeptRatio).toHaveBeenCalledWith('OB202605099');
+    });
+    // create 必先於 advance
+    const createOrder = mockedCreateList.mock.invocationCallOrder[0];
+    const advanceOrder = mockedAdvanceToDeptRatio.mock.invocationCallOrder[0];
+    expect(createOrder).toBeLessThan(advanceOrder);
+  });
+
+  it('lc.test#12.c: createList 失敗 → 不呼叫 advanceToDeptRatio', async () => {
+    mockedCreateList.mockRejectedValue({
+      response: { data: { message: '建立失敗 mock' } },
+    });
+
+    renderPage();
+    await fillFormWithMinCondition('失敗測試');
+
+    fireEvent.click(screen.getByTestId('btn-advance'));
+    await waitFor(() => expect(screen.getByTestId('advance-confirm-modal')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('checkbox-inactive-acknowledge'));
+    fireEvent.click(screen.getByTestId('btn-confirm-advance'));
+
+    await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+    expect(mockedAdvanceToDeptRatio).not.toHaveBeenCalled();
   });
 
   // ==========================================================================
