@@ -38,6 +38,9 @@ services:
       # 受保護端點：F075 寫入 + available-columns / F050 v2.0 草稿 / F076 寫入
       # 預設關閉以支援漸進 rollout（BR-10）；dev 明確啟用以使用 v1.4 dropdown 等功能
       ENABLE_E07_REFACTOR_PHASE3: "true"
+      # F084 v2.0 — 個別業務比例完成後自動推進至簽核（AD-E07-19）
+      # prod 預設 off（漸進 rollout / BR-16）；dev 明確啟用以測試 auto-advance 主路徑
+      ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL: "true"
     volumes:
       - ./apps/api/src:/app/src
       - ./apps/api/test:/app/test
