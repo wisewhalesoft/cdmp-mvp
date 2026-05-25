@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { Save, Building2, Archive, UserCog, X, ArrowRight, Undo2, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RatioInput } from '@/components/e07/RatioInput';
@@ -43,7 +43,19 @@ export interface DeptRatioFormProps {
   onCancel?: () => void;
 }
 
-export function DeptRatioForm({
+/**
+ * forwardRef 對外契約：父層可呼叫 saveCurrent() 取得「將目前表單值 PUT 至後端」
+ * 的能力，用於「儲存並推進」一鍵流（先 save 再 advance；任一步失敗中止）。
+ *
+ * - 加總非 100% / 無列 → 拋 Error（與 btn-save-dept-ratio disable 條件對齊）
+ * - 後端 4xx/5xx → 透傳 axios 錯誤；呼叫者自行決定 UX
+ * - 成功不觸發 toast / onSaved；交由呼叫者決定（避免「儲存 toast + 推進 toast」雙跳）
+ */
+export interface DeptRatioFormHandle {
+  saveCurrent: () => Promise<void>;
+}
+
+export const DeptRatioForm = forwardRef<DeptRatioFormHandle, DeptRatioFormProps>(function DeptRatioForm({
   listNo,
   totalEstimate,
   onSaved,
@@ -51,7 +63,7 @@ export function DeptRatioForm({
   onRequestAdvance,
   onRequestRollback,
   onCancel,
-}: DeptRatioFormProps) {
+}: DeptRatioFormProps, ref) {
   const { showToast } = useToast();
   const [rows, setRows] = useState<DeptRatioItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,33 +106,43 @@ export function DeptRatioForm({
 
   const clearRation = (obdeptId: string) => updateRation(obdeptId, 0);
 
-  const handleSave = async () => {
-    setError(null);
+  /** 核心 PUT 流程（共用於「儲存」按鈕與「儲存並推進」一鍵流）。
+   *  - 前置條件不符 → throw（呼叫者自行 toast）
+   *  - 後端錯誤 → 透傳 axios 錯誤
+   *  - 成功 → 不 toast、不呼叫 onSaved（由呼叫者決定 UX 連動）。 */
+  const performSave = async (): Promise<void> => {
     if (rows.length === 0) {
-      setError('無可設定部門（ob_emphire 在職員工為空）');
-      return;
+      throw new Error('無可設定部門（ob_emphire 在職員工為空）');
     }
     if (!sumValid) {
-      setError(`加總須為 100%，目前為 ${sum.toFixed(2)}%`);
-      return;
+      throw new Error(`加總須為 100%，目前為 ${sum.toFixed(2)}%`);
     }
+    const payload = rows.map((r) => ({
+      obdeptId: r.obdeptId,
+      obdeptNm: r.obdeptNm,
+      ration: Number(r.ration ?? 0),
+    }));
     setSaving(true);
     try {
-      const payload = rows.map((r) => ({
-        obdeptId: r.obdeptId,
-        obdeptNm: r.obdeptNm,
-        ration: Number(r.ration ?? 0),
-      }));
       await setDeptRatios(listNo, { deptRatios: payload });
-      showToast(`部門比例已儲存（${payload.length} 部門 / 加總 ${sum}%）`, 'success');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ saveCurrent: performSave }), [rows, sumValid, sum, listNo]);
+
+  const handleSave = async () => {
+    setError(null);
+    try {
+      await performSave();
+      showToast(`部門比例已儲存（${rows.length} 部門 / 加總 ${sum}%）`, 'success');
       onSaved?.();
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
-      const msg = e?.response?.data?.message ?? '儲存失敗，請稍後再試';
+      const msg = e?.response?.data?.message ?? (err instanceof Error ? err.message : '儲存失敗，請稍後再試');
       setError(msg);
       showToast(msg, 'error');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -364,4 +386,4 @@ export function DeptRatioForm({
       )}
     </div>
   );
-}
+});

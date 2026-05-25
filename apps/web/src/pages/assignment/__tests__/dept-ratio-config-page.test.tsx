@@ -30,6 +30,7 @@ vi.mock('@/stores/auth-store', async () => {
 
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedGetDeptRatios = vi.mocked(assignmentStageApi.getDeptRatios);
+const mockedSetDeptRatios = vi.mocked(assignmentStageApi.setDeptRatios);
 const mockedAdvance = vi.mocked(assignmentStageApi.advanceToPersonnelRatio);
 const mockedRollback = vi.mocked(assignmentStageApi.rollbackToDraft);
 const mockedGetUser = vi.mocked(authStore.getUser);
@@ -153,7 +154,14 @@ describe('DeptRatioConfigPage (29a)', () => {
     });
   });
 
-  it('「推進」按鈕觸發 advanceToPersonnelRatio API + 跳轉', async () => {
+  it('「儲存並推進」按鈕：先 PUT setDeptRatios 再 POST advance（修復 STAGE_ADVANCE_PRECONDITION_FAILED）', async () => {
+    mockedSetDeptRatios.mockResolvedValue({
+      listNo: 'OB202605003',
+      savedCount: 2,
+      total: 100,
+      savedAt: '2026-05-25T00:00:00.000Z',
+      savedBy: 'd1',
+    });
     mockedAdvance.mockResolvedValue({
       listNo: 'OB202605003',
       stage: 'personnel_ratio',
@@ -168,8 +176,37 @@ describe('DeptRatioConfigPage (29a)', () => {
     });
     fireEvent.click(screen.getByTestId('btn-confirm-advance'));
     await waitFor(() => {
+      expect(mockedSetDeptRatios).toHaveBeenCalledWith('OB202605003', expect.objectContaining({
+        deptRatios: expect.arrayContaining([
+          expect.objectContaining({ obdeptId: 'D01', ration: 60 }),
+          expect.objectContaining({ obdeptId: 'D02', ration: 40 }),
+        ]),
+      }));
       expect(mockedAdvance).toHaveBeenCalledWith('OB202605003');
     });
+    // save 必先於 advance 呼叫（避免「只 advance 沒 save → 後端 0 rows → 422」回歸）
+    const setOrder = mockedSetDeptRatios.mock.invocationCallOrder[0];
+    const advanceOrder = mockedAdvance.mock.invocationCallOrder[0];
+    expect(setOrder).toBeLessThan(advanceOrder);
+  });
+
+  it('「儲存並推進」若 PUT 失敗 → 不呼叫 advance，跳 error toast', async () => {
+    mockedSetDeptRatios.mockRejectedValue({
+      response: { data: { message: '部門比例儲存失敗 mock' } },
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-advance-personnel-ratio')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('btn-advance-personnel-ratio'));
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-advance-modal')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('btn-confirm-advance'));
+    await waitFor(() => {
+      expect(mockedSetDeptRatios).toHaveBeenCalledTimes(1);
+    });
+    expect(mockedAdvance).not.toHaveBeenCalled();
   });
 
   it('「退回草稿」按鈕觸發 rollbackToDraft API', async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, AlertTriangle } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -13,7 +13,7 @@ import {
   advanceToPersonnelRatio,
   rollbackToDraft,
 } from '@/api/assignment-stage';
-import { DeptRatioForm } from './_components/dept-ratio-form';
+import { DeptRatioForm, type DeptRatioFormHandle } from './_components/dept-ratio-form';
 import { ListSummaryCard } from './_components/list-summary-card';
 import { StageBreadcrumb } from './_components/stage-breadcrumb';
 import { getBusinessRole } from '@/stores/auth-store';
@@ -73,6 +73,7 @@ export function DeptRatioConfigPage() {
   const [showRollback, setShowRollback] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [rollbacking, setRollbacking] = useState(false);
+  const formRef = useRef<DeptRatioFormHandle>(null);
 
   const businessRole = getBusinessRole();
   const isSectionChief = businessRole === 'section_chief';
@@ -113,6 +114,18 @@ export function DeptRatioConfigPage() {
     if (!listNo) return;
     setAdvancing(true);
     try {
+      // 按鈕文案為「儲存並推進」：先 PUT 表單目前值再 POST advance；
+      // 任一步失敗即中止，避免「按鈕說 save 但實際只 advance」的歧異
+      // （舊行為導致首次使用者點此鈕得到 STAGE_ADVANCE_PRECONDITION_FAILED）。
+      try {
+        await formRef.current?.saveCurrent();
+      } catch (err: unknown) {
+        const e = err as { response?: { data?: { message?: string } } };
+        const msg = e?.response?.data?.message
+          ?? (err instanceof Error ? err.message : '部門比例儲存失敗');
+        showToast(msg, 'error');
+        return;
+      }
       await advanceToPersonnelRatio(listNo);
       writePendingToast({
         type: 'success',
@@ -234,6 +247,7 @@ export function DeptRatioConfigPage() {
             />
 
             <DeptRatioForm
+              ref={formRef}
               listNo={list.listNo}
               totalEstimate={null}
               readOnly={!canWrite || !!stageMismatch}
