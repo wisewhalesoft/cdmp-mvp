@@ -5,6 +5,7 @@ import { ReadySummaryDetailPage } from '../ready-summary-detail-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
+import * as assignmentRunApi from '@/api/assignment-run';
 import * as authStore from '@/stores/auth-store';
 import type { AssignmentListItem, ListListsResponse } from '@/api/assignment-list';
 
@@ -16,6 +17,7 @@ import type { AssignmentListItem, ListListsResponse } from '@/api/assignment-lis
 
 vi.mock('@/api/assignment-list');
 vi.mock('@/api/assignment-stage');
+vi.mock('@/api/assignment-run');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
@@ -33,6 +35,7 @@ const mockedGetDeptRatios = vi.mocked(assignmentStageApi.getDeptRatios);
 const mockedGetPersonnelRatios = vi.mocked(assignmentStageApi.getPersonnelRatios);
 const mockedGetApprovalHistory = vi.mocked(assignmentStageApi.getApprovalHistory);
 const mockedRollbackApproval = vi.mocked(assignmentStageApi.rollbackToApproval);
+const mockedGetListEstimate = vi.mocked(assignmentRunApi.getListEstimate);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 
@@ -119,8 +122,43 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
       stage: 'ready',
       isReadOnly: true,
       viewerRole: 'director',
-      departments: [],
+      departments: [
+        {
+          deptCode: 'D01',
+          deptName: '北一處',
+          deptRatio: 60,
+          directorName: '李處長',
+          isInScope: true,
+          activeCount: 2,
+          sumValidated: true,
+          allResigned: false,
+          deptSum: 100,
+          employees: [
+            { empId: 'E1', empName: '王小明', ration: 60, isResigned: false, createdBy: null },
+            { empId: 'E2', empName: '林小美', ration: 40, isResigned: false, createdBy: null },
+          ],
+        },
+        {
+          deptCode: 'D02',
+          deptName: '南一處',
+          deptRatio: 40,
+          directorName: null,
+          isInScope: true,
+          activeCount: 1,
+          sumValidated: true,
+          allResigned: false,
+          deptSum: 100,
+          employees: [
+            { empId: 'E3', empName: '張大華', ration: 100, isResigned: false, createdBy: null },
+            { empId: 'E9', empName: '潘秀英', ration: null, isResigned: true, createdBy: null },
+          ],
+        },
+      ],
       latestRejection: null,
+    });
+    mockedGetListEstimate.mockResolvedValue({
+      listNo: 'OB202605002',
+      count: 12400,
     });
     mockedGetApprovalHistory.mockResolvedValue({
       listNo: 'OB202605002',
@@ -243,5 +281,90 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('list-not-found')).toBeInTheDocument();
     });
+  });
+
+  it('麵包屑：含「名單定義」根節點與「準備完成摘要 — 詳情」leaf + listNo', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-detail-breadcrumb')).toBeInTheDocument();
+    });
+    const bc = screen.getByTestId('ready-detail-breadcrumb');
+    expect(bc.textContent).toContain('名單定義');
+    expect(bc.textContent).toContain('準備完成摘要');
+    expect(bc.textContent).toContain('OB202605002');
+  });
+
+  it('顯示 5-step 階段路徑（StageBreadcrumb，current=ready）', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('stage-breadcrumb')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('stage-step-5-current')).toBeInTheDocument();
+  });
+
+  it('stat：預估案件數來自 getListEstimate（~12,400）', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-stat-estimate')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('detail-stat-estimate').textContent,
+      ).toContain('12,400');
+    });
+  });
+
+  it('stat：在職業務員排除離職並顯示「X 位離職不計」', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-stat-emp-count')).toBeInTheDocument();
+    });
+    const stat = screen.getByTestId('detail-stat-emp-count');
+    // 在職 3（D01:2 + D02:1）、離職 1（潘秀英）
+    expect(stat.textContent).toContain('3');
+    expect(stat.textContent).toContain('1 位離職不計');
+  });
+
+  it('stat：簽核紀錄顯示 approve · reject 拆分', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('detail-stat-history-count'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('detail-stat-history-count').textContent,
+    ).toContain('1 approve · 0 reject');
+  });
+
+  it('部門比例表含「處長」欄（李處長）', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-dept-ratio-table')).toBeInTheDocument();
+    });
+    const table = screen.getByTestId('detail-dept-ratio-table');
+    expect(table.textContent).toContain('處長');
+    expect(table.textContent).toContain('李處長');
+  });
+
+  it('個別比例展開後：員工表含「名單分配占比」欄與離職 badge', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('dept-accordion-header-D01')).toBeInTheDocument();
+    });
+    // D01 預設摺疊 → 展開
+    fireEvent.click(screen.getByTestId('dept-accordion-header-D01'));
+    await waitFor(() => {
+      // D01 deptRatio=60 × E1 ration=60% ⇒ 名單分配占比 36.00%
+      expect(screen.getByText('名單分配占比')).toBeInTheDocument();
+    });
+    expect(screen.getByText('36.00%')).toBeInTheDocument();
+
+    // D02 含離職員工（潘秀英）→ 展開後顯示「離職」badge
+    fireEvent.click(screen.getByTestId('dept-accordion-header-D02'));
+    await waitFor(() => {
+      expect(screen.getByText('潘秀英')).toBeInTheDocument();
+    });
+    expect(screen.getAllByText('離職').length).toBeGreaterThan(0);
   });
 });

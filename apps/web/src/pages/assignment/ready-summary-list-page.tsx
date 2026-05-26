@@ -7,19 +7,22 @@ import {
   ListChecks,
   Eye,
   ArrowRight,
+  ChevronRight,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { MonthPicker } from '@/components/e07/MonthPicker';
+import { StageBadge } from '@/components/e07/StageBadge';
 import {
   listLists,
   type AssignmentListItem,
 } from '@/api/assignment-list';
 import { getBusinessRole } from '@/stores/auth-store';
+import { StageBreadcrumb } from './_components/stage-breadcrumb';
 
 /**
- * F088 / M03d — 準備完成名單清單（29d 模式 A）
+ * F088 / M03d — 準備完成摘要清單（29d 模式 A）
  *
  * 對應 prototype: /prototypes/29d-ready-summary.html L177-222
  *
@@ -90,10 +93,24 @@ export function ReadySummaryListPage() {
 
   return (
     <AppLayout
-      title="準備完成名單"
+      headerLeft={
+        <div className="flex items-center gap-2 text-sm" data-testid="ready-breadcrumb">
+          <Link
+            to="/assignment/list-definitions"
+            className="text-gray-500 hover:text-primary transition"
+          >
+            名單定義
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <span className="font-semibold text-gray-800">準備完成摘要</span>
+          <StageBadge stage="ready" />
+        </div>
+      }
       actions={<MonthPicker value={ym} onChange={setYm} />}
     >
       <main className="flex-1 p-6 space-y-4">
+        <StageBreadcrumb currentStage="ready" featureIds="F088 v1.1 / F089" />
+
         {isSectionChief && (
           <div
             data-testid="section-chief-scope-banner"
@@ -130,7 +147,7 @@ export function ReadySummaryListPage() {
                         本月所有名單均已 ready · 可執行月跑
                       </h2>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        共 <strong>{readyLists.length}</strong> 筆名單已準備完成
+                        {ym} 共 <strong>{readyLists.length}</strong> 筆名單已準備完成，待觸發月跑
                       </p>
                     </div>
                   </div>
@@ -251,8 +268,19 @@ export function ReadySummaryListPage() {
                   {readyLists.map((l) => (
                     <div
                       key={l.listNo}
+                      role="button"
+                      tabIndex={0}
                       data-testid={`ready-card-${l.listNo}`}
-                      className="rounded-lg border border-gray-200 hover:border-primary hover:shadow-sm transition p-4 flex items-center justify-between gap-3"
+                      onClick={() =>
+                        navigate(`/assignment/ready-summary/${l.listNo}`)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/assignment/ready-summary/${l.listNo}`);
+                        }
+                      }}
+                      className="rounded-lg border border-gray-200 hover:border-primary hover:shadow-sm transition p-4 flex items-center justify-between gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-200"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -268,16 +296,17 @@ export function ReadySummaryListPage() {
                           {l.listNm}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          建立者 {l.createdBy} · {l.createdAt.slice(0, 10)}
+                          建立者 {l.createdBy} · {l.createdAt.slice(0, 10)} 建立
                         </p>
                       </div>
                       <Link
                         to={`/assignment/ready-summary/${l.listNo}`}
                         data-testid={`ready-card-link-${l.listNo}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary border border-blue-200 rounded-md hover:bg-blue-50"
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary border border-blue-200 rounded-md hover:bg-blue-50"
                       >
                         <Eye className="w-3 h-3" />
-                        查看詳情
+                        查看摘要
                         <ArrowRight className="w-3 h-3" />
                       </Link>
                     </div>

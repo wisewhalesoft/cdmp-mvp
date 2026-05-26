@@ -18,7 +18,7 @@ import {
   History,
   Camera,
   GitCompare,
-  CheckCircle2,
+  ClipboardCheck,
   type LucideIcon,
 } from 'lucide-react';
 import type { BusinessRole, UserRole } from '@cdmp/shared';
@@ -139,11 +139,12 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: ClipboardList,
             requires: 'director_or_section_chief',
           },
-          // M03d 準備完成名單：director + section_chief（觀察可月跑前置）
+          // M03d 準備完成摘要：director + section_chief（觀察可月跑前置）
+          // 對齊 prototype 29d-ready-summary.html L65（label「準備完成摘要」+ icon clipboard-check）
           {
             to: '/assignment/ready-summary',
-            label: '準備完成名單',
-            icon: CheckCircle2,
+            label: '準備完成摘要',
+            icon: ClipboardCheck,
             requires: 'director_or_section_chief',
           },
           // M03 Stage 0 試算：director only

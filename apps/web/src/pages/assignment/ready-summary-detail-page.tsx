@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Undo2,
   PlayCircle,
-  CheckCircle2,
   Building2,
   Users,
+  UserCog,
+  UserMinus,
   History,
   Crown,
   AlertTriangle,
   Calendar,
+  ChevronRight,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -27,15 +29,17 @@ import {
   getApprovalHistory,
   rollbackToApproval,
   type DeptRatioItem,
-  type PersonnelRatioEmployee,
+  type PersonnelRatioDepartment,
   type ApprovalHistoryItem,
 } from '@/api/assignment-stage';
+import { getListEstimate } from '@/api/assignment-run';
 import { ListSummaryCard } from './_components/list-summary-card';
 import {
   PersonnelRatioAccordion,
   type AccordionDept,
 } from './_components/personnel-ratio-accordion';
 import { ApprovalHistoryTimeline } from './_components/approval-history-timeline';
+import { StageBreadcrumb } from './_components/stage-breadcrumb';
 import { getBusinessRole } from '@/stores/auth-store';
 
 /**
@@ -84,9 +88,11 @@ export function ReadySummaryDetailPage() {
   const [list, setList] = useState<AssignmentListItem | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [depts, setDepts] = useState<DeptRatioItem[]>([]);
-  const [personnelByDept, setPersonnelByDept] = useState<
-    Record<string, PersonnelRatioEmployee[]>
-  >({});
+  const [personnelDepts, setPersonnelDepts] = useState<
+    PersonnelRatioDepartment[]
+  >([]);
+  const [estimate, setEstimate] = useState<number | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(true);
   const [history, setHistory] = useState<ApprovalHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [showRollback, setShowRollback] = useState(false);
@@ -136,13 +142,30 @@ export function ReadySummaryDetailPage() {
         ]);
         if (aborted) return;
         setDepts(d.deptRatios ?? []);
-        const byDept: Record<string, PersonnelRatioEmployee[]> = {};
-        for (const dept of p.departments ?? []) {
-          byDept[dept.deptCode] = dept.employees;
-        }
-        setPersonnelByDept(byDept);
+        setPersonnelDepts(p.departments ?? []);
       } catch {
         // ignore
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [listNo]);
+
+  // 預估案件數（F049 Stage 0 試算）— 失敗 / 缺資料時顯示「—」，不阻擋頁面
+  useEffect(() => {
+    if (!listNo) return;
+    let aborted = false;
+    void (async () => {
+      setEstimateLoading(true);
+      try {
+        const data = await getListEstimate(listNo);
+        if (aborted) return;
+        setEstimate(data?.count ?? data?.estimatedCount ?? null);
+      } catch {
+        if (!aborted) setEstimate(null);
+      } finally {
+        if (!aborted) setEstimateLoading(false);
       }
     })();
     return () => {
@@ -178,7 +201,8 @@ export function ReadySummaryDetailPage() {
       await rollbackToApproval(listNo);
       showToast(`名單 ${listNo} 已退回簽核階段`, 'warning');
       setShowRollback(false);
-      navigate(`/assignment/lists/${listNo}/approval`);
+      // 29c 審閱頁已移除：退回後導回名單定義頁，於「待簽核」欄卡片就地重新核准/拒絕
+      navigate('/assignment/list-definitions');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '退回失敗', 'error');
@@ -187,45 +211,86 @@ export function ReadySummaryDetailPage() {
     }
   };
 
-  const totalEmployees = Object.values(personnelByDept).reduce(
-    (a, emps) => a + emps.length,
+  // deptCode → 員工清單（給 accordion body 與分配占比計算）
+  const personnelByDept: Record<string, PersonnelRatioDepartment['employees']> =
+    Object.fromEntries(personnelDepts.map((d) => [d.deptCode, d.employees]));
+
+  // 在職 / 離職人數（在職業務員 stat；離職不計副字）
+  const activeEmployees = personnelDepts.reduce(
+    (a, d) => a + d.activeCount,
     0,
   );
+  const resignedEmployees = personnelDepts.reduce(
+    (a, d) => a + d.employees.filter((e) => e.isResigned).length,
+    0,
+  );
+
+  // 簽核 approve / reject 拆分
+  const approveCount = history.filter((h) => h.action === 'approve').length;
+  const rejectCount = history.filter((h) => h.action === 'reject').length;
   const lastApprove = history.find((h) => h.action === 'approve');
 
+  // 部門配額查表（deptCode → RATION），給員工「名單分配占比」計算
+  const deptQuotaByCode: Record<string, number> = Object.fromEntries(
+    depts.map((d) => [d.obdeptId, d.ration]),
+  );
+
+  // accordion：以部門比例表為主，合併個別比例 department metadata（處長/在職/狀態）
   const accordionDepts: AccordionDept[] = depts.map((d) => {
-    const emps = personnelByDept[d.obdeptId] ?? [];
+    const pd = personnelDepts.find((p) => p.deptCode === d.obdeptId);
+    const emps = pd?.employees ?? [];
     const sum =
       emps.length > 0
-        ? Math.round(emps.reduce((a, e) => a + (e.ration ?? 0), 0) * 100) / 100
+        ? Math.round(
+            emps.reduce((a, e) => a + (e.ration ?? 0), 0) * 100,
+          ) / 100
         : 0;
+    const status: AccordionDept['status'] = pd
+      ? pd.allResigned || pd.sumValidated
+        ? 'done'
+        : pd.deptSum > 0
+          ? 'pending'
+          : 'todo'
+      : Math.abs(sum - 100) <= 0.01
+        ? 'done'
+        : 'todo';
     return {
       deptCode: d.obdeptId,
       deptName: d.obdeptNm,
+      directorName: pd?.directorName ?? d.directorName,
+      deptRatio: d.ration,
+      activeCount: pd?.activeCount ?? emps.filter((e) => !e.isResigned).length,
       sum,
-      complete: Math.abs(sum - 100) <= 0.01,
+      status,
+      offline: pd?.allResigned ?? false,
     };
   });
 
   return (
     <AppLayout
       headerLeft={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/ready-summary')}
-            className="text-gray-400 hover:text-gray-700"
+        <div
+          className="flex items-center gap-2 text-sm"
+          data-testid="ready-detail-breadcrumb"
+        >
+          <Link
+            to="/assignment/list-definitions"
+            className="text-gray-500 hover:text-primary transition"
           >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">
-            準備完成詳情
-          </h1>
+            名單定義
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <span className="font-semibold text-gray-800">準備完成摘要 — 詳情</span>
           {list && <StageBadge stage={list.stage as Stage} />}
+          {listNo && (
+            <span className="font-mono text-xs text-gray-400">{listNo}</span>
+          )}
         </div>
       }
     >
       <main className="flex-1 p-6 space-y-4">
+        <StageBreadcrumb currentStage="ready" featureIds="F088 v1.1 / F089" />
+
         {loading && (
           <div
             className="text-center text-gray-400 py-12"
@@ -308,24 +373,36 @@ export function ReadySummaryDetailPage() {
                     在職業務員
                   </p>
                   <p className="text-xl font-semibold text-gray-800 tabular-nums mt-0.5">
-                    {totalEmployees}
+                    {activeEmployees}
                   </p>
+                  {resignedEmployees > 0 && (
+                    <p className="text-[10px] text-gray-500">
+                      {resignedEmployees} 位離職不計
+                    </p>
+                  )}
                 </div>
-                <div className="text-center">
+                <div className="text-center" data-testid="detail-stat-estimate">
                   <p className="text-[10px] text-gray-400 uppercase tracking-wider">
-                    階段
+                    預估案件數
                   </p>
-                  <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">
-                    <CheckCircle2 className="w-3 h-3" />
-                    準備完成
-                  </div>
+                  <p className="text-xl font-semibold text-primary tabular-nums mt-0.5">
+                    {estimateLoading
+                      ? '—'
+                      : estimate != null
+                        ? `~${estimate.toLocaleString()}`
+                        : '—'}
+                  </p>
+                  <p className="text-[10px] text-gray-500">由 Stage 0 試算</p>
                 </div>
                 <div className="text-center" data-testid="detail-stat-history-count">
                   <p className="text-[10px] text-gray-400 uppercase tracking-wider">
                     簽核紀錄
                   </p>
-                  <p className="text-xl font-semibold text-gray-800 tabular-nums mt-0.5">
+                  <p className="text-xl font-semibold text-green-700 tabular-nums mt-0.5">
                     {history.length}
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    {approveCount} approve · {rejectCount} reject
                   </p>
                 </div>
               </div>
@@ -358,6 +435,7 @@ export function ReadySummaryDetailPage() {
                     <tr>
                       <th className="text-left px-4 py-2 font-medium">部門代碼</th>
                       <th className="text-left px-4 py-2 font-medium">部門名稱</th>
+                      <th className="text-left px-4 py-2 font-medium">處長</th>
                       <th className="text-right px-4 py-2 font-medium">RATION</th>
                     </tr>
                   </thead>
@@ -368,6 +446,16 @@ export function ReadySummaryDetailPage() {
                           {d.obdeptId}
                         </td>
                         <td className="px-4 py-2 text-gray-800">{d.obdeptNm}</td>
+                        <td className="px-4 py-2 text-xs text-gray-600">
+                          {d.directorName ? (
+                            <span className="inline-flex items-center gap-1">
+                              <UserCog className="w-3 h-3 text-purple-600" />
+                              {d.directorName}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-right font-mono">
                           {formatPct(d.ration)}
                         </td>
@@ -397,26 +485,46 @@ export function ReadySummaryDetailPage() {
                       </p>
                     );
                   }
+                  const quota = deptQuotaByCode[dept.deptCode] ?? 0;
                   return (
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 text-xs text-gray-500">
                         <tr>
                           <th className="text-left px-3 py-2 font-medium">員工編號</th>
                           <th className="text-left px-3 py-2 font-medium">姓名</th>
-                          <th className="text-right px-3 py-2 font-medium">RATION</th>
+                          <th className="text-right px-3 py-2 font-medium">
+                            RATION（部門內）
+                          </th>
+                          <th className="text-right px-3 py-2 font-medium">
+                            名單分配占比
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {emps.map((e) => (
-                          <tr key={e.empId}>
+                          <tr
+                            key={e.empId}
+                            className={e.isResigned ? 'opacity-55 bg-gray-50' : ''}
+                          >
                             <td className="px-3 py-1.5 font-mono text-xs text-primary">
                               {e.empId}
                             </td>
                             <td className="px-3 py-1.5 text-gray-800">
                               {e.empName}
+                              {e.isResigned && (
+                                <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-500">
+                                  <UserMinus className="w-2.5 h-2.5" />
+                                  離職
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-1.5 text-right font-mono">
-                              {formatPct(e.ration ?? 0)}
+                              {e.isResigned ? '—' : formatPct(e.ration ?? 0)}
+                            </td>
+                            <td className="px-3 py-1.5 text-right font-mono text-xs text-gray-500">
+                              {e.isResigned
+                                ? '—'
+                                : formatPct((quota * (e.ration ?? 0)) / 100)}
                             </td>
                           </tr>
                         ))}

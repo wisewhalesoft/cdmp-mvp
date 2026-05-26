@@ -1,4 +1,4 @@
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ReadySummaryListPage } from '../ready-summary-list-page';
@@ -80,6 +80,10 @@ function renderPage() {
           <Route
             path="/assignment/ready-summary"
             element={<ReadySummaryListPage />}
+          />
+          <Route
+            path="/assignment/ready-summary/:listNo"
+            element={<div data-testid="detail-landing" />}
           />
         </Routes>
       </ToastProvider>
@@ -169,10 +173,49 @@ describe('ReadySummaryListPage (29d 模式 A)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('ready-card-OB001')).toBeInTheDocument();
     });
-    // 卡片內部含「查看詳情」link/button
+    // 卡片內部含「查看摘要」link/button
     expect(
       screen.getByTestId('ready-card-link-OB001'),
     ).toHaveAttribute('href', '/assignment/ready-summary/OB001');
+  });
+
+  it('整張卡片可點（點卡片本體即跳轉詳情，對齊 29d:616）', async () => {
+    mockedListLists.mockResolvedValue(
+      makeResp([makeList('OB001', 'ready')]),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-card-OB001')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('ready-card-OB001'));
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-landing')).toBeInTheDocument();
+    });
+  });
+
+  it('麵包屑：含「名單定義」根節點與「準備完成摘要」leaf', async () => {
+    mockedListLists.mockResolvedValue(
+      makeResp([makeList('OB001', 'ready')]),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-breadcrumb')).toBeInTheDocument();
+    });
+    const bc = screen.getByTestId('ready-breadcrumb');
+    expect(bc.textContent).toContain('名單定義');
+    expect(bc.textContent).toContain('準備完成摘要');
+  });
+
+  it('顯示 5-step 階段路徑（StageBreadcrumb，current=ready）', async () => {
+    mockedListLists.mockResolvedValue(
+      makeResp([makeList('OB001', 'ready')]),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('stage-breadcrumb')).toBeInTheDocument();
+    });
+    // 第 5 步（ready）為 current
+    expect(screen.getByTestId('stage-step-5-current')).toBeInTheDocument();
   });
 
   it('「執行月跑」按鈕在沒有任何 ready 時 disabled', async () => {

@@ -88,7 +88,7 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).not.toContain('計分卡設定');
   });
 
-  it('menu 設定中 11 個 E07 子項（v2.1：「代碼維護」rename「篩選欄位」+ icon Filter；含準備完成名單）', () => {
+  it('menu 設定中 11 個 E07 子項（v2.1：「代碼維護」rename「篩選欄位」+ icon Filter；含準備完成摘要）', () => {
     const directorView = getVisibleMenuItems('user', 'director');
     const assignmentGroup = directorView
       .flatMap((s) => s.groups)
@@ -100,7 +100,8 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     // F050 v2.1 / J4：rename「代碼維護」→「篩選欄位」
     expect(labels).toContain('篩選欄位');
     expect(labels).not.toContain('代碼維護');
-    expect(labels).toContain('準備完成名單');
+    expect(labels).toContain('準備完成摘要');
+    expect(labels).not.toContain('準備完成名單');
     // v1.4.1 regression 沿用（已併入「篩選欄位」單一入口）
     expect(labels).not.toContain('篩選欄位管理');
     expect(labels).not.toContain('白名單管理');
