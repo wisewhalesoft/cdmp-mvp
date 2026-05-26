@@ -146,6 +146,111 @@ describe('ExtractHandler', () => {
     expect(result.rowCount).toBe(0);
     expect(result.tempTable).toBeTruthy(); // temp table still created
   });
+
+  // ===== F090 / AD-E07-21 DP-AD21-1：extract 層歷史限定 sourceFilter =====
+
+  // TS-F090-ETL-001：currentMonthFirstDay → WHERE "ASSIGNDAY" < '<yyyyMM01>'
+  it('TS-F090-ETL-001: sourceFilter currentMonthFirstDay 產生 WHERE ASSIGNDAY < 本月第一天', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 3 });
+    const ctx = makeContext(
+      {
+        rawTable: 'raw_obpooldata_list',
+        sourceFilter: { column: 'ASSIGNDAY', operator: '<', valueExpr: 'currentMonthFirstDay' },
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    await handler.execute(ctx);
+
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall).toBeDefined();
+    // 本月第一天 yyyyMM01（由當下日期計算）
+    const now = new Date();
+    const expectedFirstDay = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}01`;
+    expect(createCall.sql).toContain(`WHERE "ASSIGNDAY" < '${expectedFirstDay}'`);
+    // yyyyMMdd 8 碼 + 結尾 01
+    expect(expectedFirstDay).toMatch(/^\d{6}01$/);
+  });
+
+  // 無 sourceFilter → SELECT * 不含 WHERE（既有行為 regression guard）
+  it('TS-F090-ETL-001b: 無 sourceFilter → SELECT * FROM 不含 WHERE', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 3 });
+    const ctx = makeContext({ rawTable: 'raw_test_table' }, {}, {
+      nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr,
+    });
+
+    await handler.execute(ctx);
+
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall.sql).toContain('SELECT * FROM "raw_test_table"');
+    expect(createCall.sql).not.toContain('WHERE');
+  });
+
+  // currentWorkym 保留字仍支援（yyyyMM）
+  it('TS-F090-ETL-001c: sourceFilter currentWorkym → WHERE col < yyyyMM', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 1 });
+    const ctx = makeContext(
+      {
+        rawTable: 'raw_x',
+        sourceFilter: { column: 'PROJECT_WORKYM', operator: '<', valueExpr: 'currentWorkym' },
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    await handler.execute(ctx);
+
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    const now = new Date();
+    const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    expect(createCall.sql).toContain(`WHERE "PROJECT_WORKYM" < '${ym}'`);
+  });
+
+  // 非保留字 valueExpr → 視為字面值
+  it('TS-F090-ETL-001d: sourceFilter 字面 valueExpr → 原樣帶入', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 1 });
+    const ctx = makeContext(
+      {
+        rawTable: 'raw_x',
+        sourceFilter: { column: 'ASSIGNDAY', operator: '<', valueExpr: '20260501' },
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+
+    await handler.execute(ctx);
+    const createCall = qr.calls.find((c: any) => c.sql.includes('CREATE TEMP TABLE'));
+    expect(createCall.sql).toContain(`WHERE "ASSIGNDAY" < '20260501'`);
+  });
+
+  // 防注入：非法欄位名拋錯
+  it('TS-F090-ETL-001e: sourceFilter 非法欄位名拋錯（防注入）', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 1 });
+    const ctx = makeContext(
+      {
+        rawTable: 'raw_x',
+        sourceFilter: { column: 'ASSIGNDAY; DROP TABLE x', operator: '<', valueExpr: '20260501' },
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+    await expect(handler.execute(ctx)).rejects.toThrow(/欄位名不合法/);
+  });
+
+  // 不支援的運算子拋錯
+  it('TS-F090-ETL-001f: sourceFilter 不支援運算子拋錯', async () => {
+    const qr = createMockQueryRunner({ tableExists: true, rowCount: 1 });
+    const ctx = makeContext(
+      {
+        rawTable: 'raw_x',
+        sourceFilter: { column: 'ASSIGNDAY', operator: 'LIKE', valueExpr: '20260501' },
+      },
+      {},
+      { nodeType: 'raw_data_extract', nodeId: 'e1', logId: 'abcd1234-5678', queryRunner: qr },
+    );
+    await expect(handler.execute(ctx)).rejects.toThrow(/不支援的運算子/);
+  });
 });
 
 // ===== MergeHandler Tests =====

@@ -613,6 +613,86 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
       spy.mockRestore();
     });
   });
+
+  // =========================================================================
+  // F090 / AD-E07-21 §21.3（BR-4）：月跑寫入標記 data_source='monthly_run'
+  // 對應 TS-F090-MON-001 / MON-002（SQLite in-memory integration，
+  // 對齊本 spec 既有 better-sqlite3 module；非 PG TestContainer）
+  // =========================================================================
+  describe('TS-F090-MON：月跑 Stage 1 寫入標記 data_source', () => {
+    it('TS-F090-MON-001: 所有月跑插入列 data_source=monthly_run（無 NULL / etl_legacy）', async () => {
+      await seedMinimalScenario(env);
+      const run = await seedRun(env.runRepo, YM);
+
+      await env.service.runPipeline(run.run_id, YM);
+
+      const rows = await env.resultRepo.find({ where: { list_no: 'OB202605001' } });
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.data_source === 'monthly_run')).toBe(true);
+    });
+
+    it('TS-F090-MON-002: 月跑寫入不刪既有 etl_legacy 歷史列（不同 PK 並存）', async () => {
+      await seedMinimalScenario(env);
+
+      // 預先 seed 一筆 ETL 歷史列（不同 appl_no PK，模擬 legacy 載入）
+      await env.resultRepo.save(
+        env.resultRepo.create({
+          list_no: 'OB202605001',
+          orgno: '01',
+          appl_no: 'LEGACY999',
+          custo_no: 'CE001',
+          settle_src: 'OBDATA',
+          assignday: '20250301',
+          data_source: 'etl_legacy',
+        } as Partial<ObPoolDataList>),
+      );
+
+      const run = await seedRun(env.runRepo, YM);
+      await env.service.runPipeline(run.run_id, YM);
+
+      // etl_legacy 列仍存在（未被月跑刪除）
+      const legacyRows = await env.resultRepo.find({ where: { data_source: 'etl_legacy' } });
+      expect(legacyRows).toHaveLength(1);
+      expect(legacyRows[0].appl_no).toBe('LEGACY999');
+
+      // 月跑列為 monthly_run
+      const monthlyRows = await env.resultRepo.find({ where: { data_source: 'monthly_run' } });
+      expect(monthlyRows.length).toBeGreaterThan(0);
+      expect(monthlyRows.every((r) => r.appl_no !== 'LEGACY999')).toBe(true);
+    });
+
+    it('TS-F090-MON-003(前置): 去重查詢讀 etl_legacy + monthly_run + NULL 聯集（不加 data_source 過濾）', async () => {
+      await seedMinimalScenario(env);
+      const run = await seedRun(env.runRepo, YM);
+      await env.service.runPipeline(run.run_id, YM);
+
+      // 補三類來源資料（assignday 落在去重視窗）
+      await env.resultRepo.save([
+        env.resultRepo.create({
+          list_no: 'L_E', orgno: '01', appl_no: 'AE1', custo_no: 'CE001',
+          settle_src: 'OBDATA', assignday: '20250301', data_source: 'etl_legacy',
+        } as Partial<ObPoolDataList>),
+        env.resultRepo.create({
+          list_no: 'L_M', orgno: '01', appl_no: 'AM1', custo_no: 'CM001',
+          settle_src: 'OBDATA', assignday: '20250302', data_source: 'monthly_run',
+        } as Partial<ObPoolDataList>),
+        env.resultRepo.create({
+          list_no: 'L_N', orgno: '01', appl_no: 'AN1', custo_no: 'CN001',
+          settle_src: 'OBDATA', assignday: '20250303', data_source: null,
+        } as Partial<ObPoolDataList>),
+      ]);
+
+      // 去重查詢：不加 data_source 過濾
+      const result = await env.ds.query(
+        `SELECT DISTINCT custo_no FROM ob_pool_data_list
+          WHERE assignday >= '20250201' AND assignday <= '20250531' AND custo_no IS NOT NULL`,
+      );
+      const custoNos = result.map((r: any) => r.custo_no);
+      expect(custoNos).toContain('CE001');
+      expect(custoNos).toContain('CM001');
+      expect(custoNos).toContain('CN001');
+    });
+  });
 });
 
 // vitest auto-import

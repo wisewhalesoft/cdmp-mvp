@@ -150,22 +150,57 @@ function buildPipelineDefinition(pipelineCfg, rawTableName, datasourceName) {
     defaultValue: null,
   }));
 
+  // F090 / AD-E07-21：partition-replace 載入模式（ob_pool_data_list 雙重角色表）。
+  // 預設沿用 AD-E07-12 fullMode 全量替換；config 顯式設 loadMode='partition_replace'
+  // 時改走 per-partition 截斷（DELETE WHERE <col>=<val> 後 INSERT 並標記），不全表 TRUNCATE。
+  const isPartitionReplace = pipelineCfg.loadMode === 'partition_replace';
+  const targetLoadData = isPartitionReplace
+    ? {
+        nodeType: 'target_load',
+        label: `載入 ${pipelineCfg.targetTable}`,
+        subtitle: pipelineCfg.targetTable,
+        targetTable: pipelineCfg.targetTable,
+        loadMode: 'partition_replace',
+        partitionColumn: pipelineCfg.partitionColumn,
+        partitionValue: pipelineCfg.partitionValue,
+      }
+    : {
+        nodeType: 'target_load',
+        label: `載入 ${pipelineCfg.targetTable}`,
+        subtitle: pipelineCfg.targetTable,
+        targetTable: pipelineCfg.targetTable,
+        fullMode: true,
+      };
+
+  // F090 / AD-E07-21 DP-AD21-1：歷史限定（PROJECT_WORKYM < 本月）於 extract 層套用，
+  // 必須在 field_mapping dropUnmapped 丟掉過濾欄位之前過濾。當 sourceFilterColumn 為 null
+  // 時不套用（spec gap：來源表實際無 PROJECT_WORKYM 欄，待裁示後填正確欄位）。
+  const hl = pipelineCfg._historicalLimit;
+  const extractData = {
+    nodeType: 'raw_data_extract',
+    label: `${pipelineCfg.targetTable} 來源`,
+    rawTable: rawTableName,
+    subtitle: `${datasourceName} / ${rawTableName}`,
+    extractionRef: {
+      datasourceName,
+      sourceTable: rawTableName,
+    },
+  };
+  if (hl && hl.sourceFilterColumn) {
+    extractData.sourceFilter = {
+      column: hl.sourceFilterColumn,
+      operator: hl.sourceFilterOperator || '<',
+      valueExpr: hl.sourceFilterValueExpr,
+    };
+  }
+
   return {
     nodes: [
       {
         id: 'e1',
         type: 'pipelineNode',
         position: { x: 0, y: 50 },
-        data: {
-          nodeType: 'raw_data_extract',
-          label: `${pipelineCfg.targetTable} 來源`,
-          rawTable: rawTableName,
-          subtitle: `${datasourceName} / ${rawTableName}`,
-          extractionRef: {
-            datasourceName,
-            sourceTable: rawTableName,
-          },
-        },
+        data: extractData,
       },
       {
         id: 'fm1',
@@ -183,13 +218,7 @@ function buildPipelineDefinition(pipelineCfg, rawTableName, datasourceName) {
         id: 'tl1',
         type: 'pipelineNode',
         position: { x: 500, y: 50 },
-        data: {
-          nodeType: 'target_load',
-          label: `載入 ${pipelineCfg.targetTable}`,
-          subtitle: pipelineCfg.targetTable,
-          targetTable: pipelineCfg.targetTable,
-          fullMode: true,
-        },
+        data: targetLoadData,
       },
     ],
     edges: [
@@ -224,7 +253,10 @@ async function ensurePipeline(pipelineCfg, extractionTask, datasourceName) {
 
   const result = await api('PUT', `/api/v1/etl/pipelines/${pipeline.id}/definition`, {
     definition,
-    changeSummary: `[seed] AD-E07-12 雙層 ETL：${pipelineCfg.targetTable} fullMode 全量替換`,
+    changeSummary:
+      pipelineCfg.loadMode === 'partition_replace'
+        ? `[seed] F090 / AD-E07-21 雙層 ETL：${pipelineCfg.targetTable} partition-replace（${pipelineCfg.partitionColumn}=${pipelineCfg.partitionValue}）`
+        : `[seed] AD-E07-12 雙層 ETL：${pipelineCfg.targetTable} fullMode 全量替換`,
   });
   console.log(`  ✓ definition 已寫入 (versionId=${result.versionId}, stepCount=${result.stepCount})`);
   return pipeline;

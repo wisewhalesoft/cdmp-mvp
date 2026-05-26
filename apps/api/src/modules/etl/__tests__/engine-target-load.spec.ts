@@ -434,6 +434,168 @@ describe('TargetLoadHandler - fullMode 通用全量替換路徑（AD-E07-12）',
   });
 });
 
+// ===== F090: partition-replace load mode (AD-E07-21 §21.3) =====
+// 覆蓋 TS-F090-ETL-002 / ETL-003（handler 行為層，mock queryRunner 斷言 SQL）
+// 真實 PG 端到端（含歷史限定過濾 / 多 data_source 共存資料筆數）→ Integration，
+// 本專案無 PG TestContainer（package 未安裝），標 DEFERRED 於 staging 手動驗證。
+
+describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
+  const handler = new TargetLoadHandler();
+
+  function makePartitionCtx(
+    input: DataSet,
+    opts: {
+      columns?: string[];
+      partitionColumn?: string;
+      partitionValue?: string | undefined;
+      queryRunner?: any;
+      omitPartitionValue?: boolean;
+    } = {},
+  ): NodeExecutionContext {
+    const columns = opts.columns ?? ['list_no', 'orgno', 'appl_no', 'custo_no', 'assignday', 'data_source'];
+    const queryRunner = opts.queryRunner ?? createMockQueryRunner({ columns, rowCount: input.rowCount });
+    const data: Record<string, unknown> = {
+      nodeType: 'target_load',
+      label: '載入',
+      targetTable: 'ob_pool_data_list',
+      loadMode: 'partition_replace',
+      partitionColumn: opts.partitionColumn ?? 'data_source',
+    };
+    if (!opts.omitPartitionValue) {
+      data.partitionValue = opts.partitionValue ?? 'etl_legacy';
+    }
+    return {
+      node: { id: 'tl1', type: 'pipelineNode', position: { x: 0, y: 0 }, data },
+      inputs: { default: input },
+      pipelineId: 'test-pipeline-uuid-123',
+      logId: 'test-log-1234',
+      isTestRun: false,
+      queryRunner,
+    } as NodeExecutionContext;
+  }
+
+  // TS-F090-ETL-002（regression guard）：前置 DELETE 精確只刪 data_source='etl_legacy'，
+  // 不刪 monthly_run / NULL（不可全表 TRUNCATE）
+  it('TS-F090-ETL-002: 前置 DELETE 只針對 partition（data_source=etl_legacy），不 TRUNCATE 全表', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3));
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    const allSql = qr.calls.map((c: any) => c.sql).join('\n');
+
+    // 不可全表 TRUNCATE
+    expect(allSql).not.toContain('TRUNCATE');
+
+    // DELETE 精確針對 partition
+    const deleteCall = qr.calls.find((c: any) => c.sql.includes('DELETE FROM'));
+    expect(deleteCall).toBeDefined();
+    expect(deleteCall.sql).toContain('DELETE FROM "ob_pool_data_list"');
+    expect(deleteCall.sql).toContain(`"data_source" = 'etl_legacy'`);
+
+    // 不可出現未限定 partition 的 DELETE（regression guard）
+    expect(allSql).not.toContain('DELETE FROM "ob_pool_data_list" WHERE "list_no"');
+  });
+
+  // TS-F090-ETL-003：INSERT 每列填 partitionValue（'etl_legacy' AS "data_source"）
+  it('TS-F090-ETL-003: INSERT 對每列填 data_source=etl_legacy（SELECT 加常數欄）', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 5));
+    const result = await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).toContain('INSERT INTO "ob_pool_data_list"');
+    // SELECT 必含常數 partition 欄
+    expect(insertCall.sql).toContain(`'etl_legacy' AS "data_source"`);
+    // INSERT 欄位清單含 data_source
+    expect(insertCall.sql).toContain('"data_source"');
+    // 非 UPSERT、非 customer_core 專屬
+    expect(insertCall.sql).not.toContain('ON CONFLICT');
+    expect(insertCall.sql).not.toContain('source_customer_no');
+    expect(result.rowCount).toBe(5);
+  });
+
+  // DELETE 必須在 INSERT 之前（per-partition 截斷語意）
+  it('partition_replace: DELETE 在 INSERT 之前', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 2));
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    const deleteIdx = qr.calls.findIndex((c: any) => c.sql.includes('DELETE FROM'));
+    const insertIdx = qr.calls.findIndex((c: any) => c.sql.includes('INSERT INTO'));
+    expect(deleteIdx).toBeGreaterThanOrEqual(0);
+    expect(insertIdx).toBeGreaterThan(deleteIdx);
+  });
+
+  // partitionColumn 不應在來源映射欄位中重複出現（由 handler 填值）
+  it('partition_replace: INSERT 欄位清單中 partitionColumn 僅出現一次（末尾）', async () => {
+    const columns = ['list_no', 'orgno', 'appl_no', 'data_source'];
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 1), { columns });
+    await handler.execute(ctx);
+
+    const qr = ctx.queryRunner;
+    const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
+    // INSERT (...) 子句中 "data_source" 只出現一次
+    const colListPart = insertCall.sql.split(') ')[0]; // INSERT INTO "t" (... 到第一個 ") "
+    const occurrences = (colListPart.match(/"data_source"/g) || []).length;
+    expect(occurrences).toBe(1);
+  });
+
+  // 缺 partitionValue → 明確錯誤
+  it('partition_replace: 缺 partitionValue 拋明確錯誤', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 1), { omitPartitionValue: true });
+    await expect(handler.execute(ctx)).rejects.toThrow(/partitionColumn 與 partitionValue/);
+  });
+
+  // 空 input → 不 DELETE 不 INSERT（沿用 handler 早退）
+  it('partition_replace: 空 DataSet 不執行 DELETE/INSERT', async () => {
+    const ctx = makePartitionCtx(makeDs('', 0));
+    const result = await handler.execute(ctx);
+    const qr = ctx.queryRunner;
+    expect(qr.calls.filter((c: any) => c.sql.includes('DELETE FROM'))).toHaveLength(0);
+    expect(qr.calls.filter((c: any) => c.sql.includes('INSERT INTO'))).toHaveLength(0);
+    expect(result.rowCount).toBe(0);
+  });
+
+  // isTestRun → 跳過寫入
+  it('partition_replace: isTestRun 跳過 DELETE/INSERT', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3));
+    (ctx as any).isTestRun = true;
+    const result = await handler.execute(ctx);
+    const qr = ctx.queryRunner;
+    expect(qr.calls.filter((c: any) => c.sql.includes('DELETE FROM'))).toHaveLength(0);
+    expect(qr.calls.filter((c: any) => c.sql.includes('INSERT INTO'))).toHaveLength(0);
+    expect(result.rowCount).toBe(3);
+  });
+
+  // INSERT 失敗 → 錯誤含 offset / 已寫入數
+  it('partition_replace: INSERT 失敗錯誤含 offset 與已寫入數', async () => {
+    const columns = ['list_no', 'orgno', 'appl_no', 'data_source'];
+    const qr = createMockQueryRunner({
+      columns,
+      rowCount: 3,
+      customHandler: (sql: string) => {
+        if (sql.includes('INSERT INTO') && !sql.includes('CREATE')) {
+          throw new Error('disk full');
+        }
+        return undefined;
+      },
+    });
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3), { columns, queryRunner: qr });
+    await expect(handler.execute(ctx)).rejects.toThrow(/partition_replace INSERT 批次失敗.*offset: 0/s);
+  });
+
+  // 不破壞既有 fullMode：partition_replace 不應觸發 TRUNCATE 或 ON CONFLICT 路徑
+  it('partition_replace: 不走 fullMode（無 TRUNCATE）也不走 UPSERT（無 ON CONFLICT）', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 2));
+    await handler.execute(ctx);
+    const allSql = ctx.queryRunner.calls.map((c: any) => c.sql).join('\n');
+    expect(allSql).not.toContain('TRUNCATE');
+    expect(allSql).not.toContain('ON CONFLICT');
+    expect(allSql).not.toContain('DO UPDATE');
+  });
+});
+
 // ===== Batch Size Calculation =====
 
 describe('calculateBatchSize', () => {

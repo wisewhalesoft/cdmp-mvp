@@ -396,4 +396,12 @@ export class ObPoolDataList {
   // 對齊架構文件 L3408 `UPDATE ob_pool_data_list pdl SET score = calc.score`。
   @Column({ name: 'score', type: 'integer', nullable: true })
   score: number | null;
+
+  // F090 / AD-E07-21 §21.3（DP-AD21-2 方案 A）：區分資料來源。
+  // 'etl_legacy'  → E07-OBPOOLDATA_LIST-Load 載入的 legacy 派案歷史（去重查詢用）
+  // 'monthly_run' → 月跑 Stage 1 寫入的本月分派結果（Stage 3/4 更新用）
+  // NULL          → migration 前既有資料（語意同 'monthly_run'）
+  // ⚠️ 與 migration 1711360000291 保持一致：任一邊改動，另一邊同步修
+  @Column({ name: 'data_source', type: 'varchar', length: 20, nullable: true })
+  data_source: string | null;
 }

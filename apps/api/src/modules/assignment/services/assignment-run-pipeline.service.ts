@@ -226,6 +226,13 @@ export class AssignmentRunPipelineService {
       };
 
       const now = new Date();
+      // F090 / AD-E07-21 §21.3（BR-4）：月跑 Stage 1 寫入 ob_pool_data_list 一律標
+      // data_source='monthly_run'，與 ETL 載入的 'etl_legacy' 歷史共存於同表。
+      // 去重查詢（F091）讀兩者聯集，不依賴此欄過濾；此標記僅供 ETL partition-replace
+      // 與月跑 per-list 截斷各自保護對方分區（不互刪）。
+      for (const r of stage4Results) {
+        r.data_source = 'monthly_run';
+      }
       await this.dataSource.transaction(async (txm) => {
         if (stage4Results.length > 0) {
           await txm

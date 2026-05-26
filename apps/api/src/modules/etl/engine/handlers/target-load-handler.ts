@@ -109,9 +109,65 @@ export class TargetLoadHandler implements NodeExecutor {
 
     // Determine write mode
     const fullMode = context.node.data.fullMode === true;
+    const loadMode = context.node.data.loadMode as string | undefined;
 
     const batchSize = 5000;
     let totalUpserted = 0;
+
+    // === F090 / AD-E07-21 §21.3：partition-replace load mode ===
+    // 適用於 ob_pool_data_list（雙重角色表）：只替換某一分區（如 data_source='etl_legacy'），
+    // 不可全表 TRUNCATE（會清掉月跑寫入的 'monthly_run' 列 → Stage 3/4 資料遺失，BR-3）。
+    //   1. DELETE FROM target WHERE "<partitionColumn>" = '<partitionValue>'
+    //   2. INSERT 並對每列填 partitionValue（SELECT 加 '<value>' AS "<col>"）
+    // 歷史限定（PROJECT_WORKYM < 本月，DP-AD21-1）由 extract 層 sourceFilter 處理，
+    // 非本 handler；handler 只負責 per-partition 截斷與標記。
+    if (loadMode === 'partition_replace') {
+      const partitionColumn = context.node.data.partitionColumn as string;
+      const partitionValue = context.node.data.partitionValue as string;
+
+      if (!partitionColumn || partitionValue === undefined || partitionValue === null) {
+        throw new Error(
+          `partition_replace 模式需設定 partitionColumn 與 partitionValue（node.data）`,
+        );
+      }
+
+      // partitionColumn 不應出現在來源映射欄位中（由 handler 填值，避免重複 col）
+      const insertColumns = allColumns.filter((c) => c !== partitionColumn);
+      const insertColumnList = [...insertColumns, partitionColumn]
+        .map((c) => `"${c}"`)
+        .join(', ');
+      const escapedPartitionValue = partitionValue.replace(/'/g, "''");
+
+      // 1. per-partition 截斷（只刪本分區，保護其他來源列）
+      try {
+        await context.queryRunner.query(
+          `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
+        );
+      } catch (err: any) {
+        throw new Error(
+          `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
+        );
+      }
+
+      // 2. 批次 INSERT，每列填 partitionValue
+      const selectColsForInsert = insertColumns.map((c) => `"${c}"`).join(', ');
+      for (let offset = 0; offset < input.rowCount; offset += batchSize) {
+        const selectSql = `SELECT ${selectColsForInsert}, '${escapedPartitionValue}' AS "${partitionColumn}" FROM "${tempTable}" LIMIT ${batchSize} OFFSET ${offset}`;
+        const insertSql = `INSERT INTO "${targetTable}" (${insertColumnList}) ${selectSql}`;
+
+        try {
+          await context.queryRunner.query(insertSql);
+          totalUpserted += Math.min(batchSize, input.rowCount - offset);
+        } catch (err: any) {
+          throw new Error(
+            `partition_replace INSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
+          );
+        }
+      }
+
+      await context.queryRunner.query(`DROP TABLE IF EXISTS "${tempTable}"`);
+      return { tempTable: '', rowCount: totalUpserted };
+    }
 
     if (fullMode) {
       // fullMode: 通用全量替換路徑（TRUNCATE + batch INSERT）
