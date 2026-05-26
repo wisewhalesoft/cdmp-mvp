@@ -329,6 +329,8 @@ async function seedAuditLog(
     before?: object | null;
     after?: object | null;
     createdAt?: Date;
+    /** 預設 'ob_list_definition'；傳 'list_definition' 模擬 2026-05-26 前的舊階段事件 */
+    entityType?: string;
   }>,
 ): Promise<void> {
   const repo = ds.getRepository(AssignmentAuditLog);
@@ -336,7 +338,7 @@ async function seedAuditLog(
     const r = rows[i];
     await repo.save(
       repo.create({
-        entity_type: 'ob_list_definition',
+        entity_type: r.entityType ?? 'ob_list_definition',
         entity_id: listNo,
         action: r.action as any,
         actor_id: r.actorId ?? DIRECTOR_USER.id,
@@ -556,6 +558,35 @@ describe('F050 v2.2 §6.2 — GET full-snapshot E2E (SS 群組 12 場景)', () =
   });
 
   // ============================================================
+  // SS-004b：階段事件 entity_type 放寬查詢（涵蓋 2026-05-26 前 'list_definition' 舊資料）
+  // ============================================================
+  it('TS-F050-SS-004b：auditTrail 涵蓋 entity_type=list_definition 舊階段事件 + 拒絕原因', async () => {
+    const listNo = 'OB202605004B';
+    await seedList(ds, { listNo, stage: 'personnel_ratio', conditionPayload: baseConditionPayload });
+    await seedAuditLog(ds, listNo, [
+      { action: 'CREATE', after: { stage: 'draft' } }, // entity_type='ob_list_definition'（新 writer）
+      {
+        // 舊階段事件以 'list_definition' 寫入（fix 前）；放寬查詢後仍須查得到
+        action: 'STAGE_REJECT',
+        before: null,
+        after: { fromStage: 'approval', toStage: 'personnel_ratio', rejectReason: '比例不合理' },
+        entityType: 'list_definition',
+      },
+    ]);
+
+    const res = await request(app.getHttpServer())
+      .get(snapshotUrl(listNo))
+      .set('Authorization', `Bearer ${directorToken}`);
+
+    expect(res.status).toBe(200);
+    const actions = res.body.auditTrail.map((a: any) => a.action);
+    expect(actions).toContain('CREATE');
+    expect(actions).toContain('STAGE_REJECT'); // 舊 entity_type 仍被查到
+    const rejectRow = res.body.auditTrail.find((a: any) => a.action === 'STAGE_REJECT');
+    expect(rejectRow.after.rejectReason).toBe('比例不合理');
+  });
+
+  // ============================================================
   // SS-005：LEGACY 名單 → legacyEntityFallback 非 null
   // ============================================================
   it('TS-F050-SS-005：LEGACY 名單（conditionPayload IS NULL）→ legacyEntityFallback 非 null', async () => {
@@ -722,6 +753,35 @@ describe('F050 v2.2 §6.2 — GET full-snapshot E2E (SS 群組 12 場景)', () =
 
     expect(res.status).toBe(200);
     expect(res.body.list.projectWorkym).toBe('202504');
+  });
+
+  // ============================================================
+  // SS-013：行為人姓名解析（actor_name 為 UUID placeholder → users.name）
+  // ============================================================
+  it('TS-F050-SS-013：auditTrail operatorEmpNm 由 actor_id 解析為 users.name', async () => {
+    const listNo = 'OB202605013';
+    await seedList(ds, { listNo, stage: 'approval', conditionPayload: baseConditionPayload });
+    // 模擬真實 writer：actor_name 寫入 actor_id（UUID placeholder），姓名需由 users 表解析
+    await seedAuditLog(ds, listNo, [
+      {
+        action: 'STAGE_REJECT',
+        actorId: DIRECTOR_USER.id,
+        actorName: DIRECTOR_USER.id,
+        after: { fromStage: 'approval', toStage: 'personnel_ratio', rejectReason: '需調整' },
+        entityType: 'list_definition',
+      },
+    ]);
+
+    const res = await request(app.getHttpServer())
+      .get(snapshotUrl(listNo))
+      .set('Authorization', `Bearer ${directorToken}`);
+
+    expect(res.status).toBe(200);
+    const row = res.body.auditTrail.find((a: any) => a.action === 'STAGE_REJECT');
+    expect(row).toBeDefined();
+    // operatorEmpNm 解析為真實姓名，而非 UUID
+    expect(row.operatorEmpNm).toBe(DIRECTOR_USER.name);
+    expect(row.operatorId).toBe(DIRECTOR_USER.id);
   });
 
   // ============================================================

@@ -142,6 +142,10 @@ describe('StageTransitionService', () => {
       const auditPayload = auditCall[1];
       // audit 中應紀錄 rejectReason
       expect(JSON.stringify(auditPayload)).toContain('比例不合理');
+      // 2026-05-26 regression guard：entity_type 必須與 getFullSnapshot 查詢值一致
+      //（'ob_list_definition'）；否則拒絕事件不會出現在 Detail Drawer 簽核歷史。
+      expect(auditPayload.entity_type).toBe('ob_list_definition');
+      expect(auditPayload.action).toBe('STAGE_REJECT');
     });
   });
 });

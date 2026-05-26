@@ -183,9 +183,12 @@ export class StageTransitionService {
     payload: Record<string, unknown>,
   ): Partial<AssignmentAuditLog> {
     // m16 / 2026-05-16：column 已擴為 varchar(30) + entity union 已含 STAGE_*，可寫完整名稱
+    // 2026-05-26：entity_type 對齊 assignment-list.service writeAudit 與 getFullSnapshot 查詢值
+    //   （原 'list_definition' 與查詢用 'ob_list_definition' 不一致，導致階段事件在 Detail Drawer
+    //    簽核歷史完全查不到 —— 拒絕/核准/推進/退回都漏顯示）。table 名為 ob_list_definition，故以此為準。
     return {
       action: action as AssignmentAuditLog['action'],
-      entity_type: 'list_definition',
+      entity_type: 'ob_list_definition',
       entity_id: listNo,
       actor_id: actorId,
       actor_name: actorId, // placeholder：上層 service 可覆寫

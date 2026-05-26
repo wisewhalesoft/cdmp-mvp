@@ -295,6 +295,17 @@ export class AssignmentListService {
     qb.orderBy('l.list_no', 'ASC');
     const records = await qb.getMany();
 
+    // 建立者姓名解析：created_by 為 user id（A_USERID），清單頁需顯示姓名而非 UUID。
+    // 對齊 card-type.service Iter 9「JOIN users 取 createdBy name」模式；批次查避免 N+1。
+    const creatorIds = Array.from(
+      new Set(records.map((r) => r.created_by).filter((id): id is string => !!id)),
+    );
+    const creatorNameById = new Map<string, string>();
+    if (creatorIds.length > 0) {
+      const users = await this.userRepo.find({ where: { id: In(creatorIds) } });
+      for (const u of users) creatorNameById.set(u.id, u.name);
+    }
+
     // 月跑鎖：assertNoRunningRun 失敗即視為 locked
     let locked = false;
     try {
@@ -341,7 +352,8 @@ export class AssignmentListService {
         prodBest: r.prod_best,
         status: r.status,
         stage: r.stage,
-        createdBy: r.created_by,
+        // 行為人姓名（fallback 回 created_by 原值，確保系統值 / 查無 user 時仍可顯示）
+        createdBy: creatorNameById.get(r.created_by) ?? r.created_by,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
         // F048 v2.0：補 conditionPayload + legacyEntityFallback（2026-05-21 hotfix
@@ -1043,14 +1055,29 @@ export class AssignmentListService {
       .map(([deptCode, g]) => ({ deptCode, deptName: g.deptName, members: g.members }));
 
     // 5. auditTrail（依 created_at ASC）
+    // entity_type 放寬涵蓋舊資料：階段轉換 audit 於 2026-05-26 前以 'list_definition' 寫入
+    //（已修為 'ob_list_definition'，見 stage-transition.service.buildAudit）；兩值並查確保歷史列不漏。
     const auditRows = await this.auditRepo.find({
-      where: { entity_type: 'ob_list_definition', entity_id: listNo },
+      where: {
+        entity_type: In(['ob_list_definition', 'list_definition']),
+        entity_id: listNo,
+      },
       order: { created_at: 'ASC' },
     });
+    // 解析行為人姓名：audit.actor_name 目前寫入 actor_id placeholder（見 writeAudit / buildAudit），
+    // 改以 users.name 解析後顯示，timeline 才看得到操作者姓名而非 UUID。
+    const actorIds = Array.from(
+      new Set(auditRows.map((r) => r.actor_id).filter((id): id is string => !!id)),
+    );
+    const actorNameById = new Map<string, string>();
+    if (actorIds.length > 0) {
+      const users = await this.userRepo.find({ where: { id: In(actorIds) } });
+      for (const u of users) actorNameById.set(u.id, u.name);
+    }
     const auditTrail: SnapshotAuditTrailItem[] = auditRows.map((r) => ({
       action: r.action,
       operatorId: r.actor_id,
-      operatorEmpNm: r.actor_name ?? null,
+      operatorEmpNm: actorNameById.get(r.actor_id) ?? r.actor_name ?? null,
       before: r.before_value ?? null,
       after: r.after_value ?? null,
       at: r.created_at,

@@ -194,6 +194,7 @@ describe('AssignmentListService', () => {
     await listRepo.createQueryBuilder().delete().execute();
     await runRepo.clear();
     await whitelistRepo.clear();
+    await listRepo.manager.getRepository(User).clear();
     await seedWhitelist(whitelistRepo);
   });
 
@@ -587,6 +588,34 @@ describe('AssignmentListService', () => {
       );
       const res = await service.listLists({ ym: YM });
       expect(res.lists[0].crEnabled).toBe(false);
+    });
+
+    // 行為人姓名：created_by(user id) 解析為 users.name（清單頁顯示姓名而非 UUID）
+    it('LIST-NAME：listLists 將 created_by 解析為使用者姓名', async () => {
+      const userRepo = listRepo.manager.getRepository(User);
+      await userRepo.save(
+        userRepo.create({
+          id: ACTOR.userId,
+          name: '王部長',
+          email: 'creator-name@cdmp.test',
+          password_hash: 'x',
+          role: 'user',
+          status: 'active',
+          is_sales_manager: true,
+          business_role: 'director',
+        } as any),
+      );
+      await service.createList(baseCreateDto() as any, ACTOR, YM);
+
+      const res = await service.listLists({ ym: YM });
+      expect(res.lists[0].createdBy).toBe('王部長');
+    });
+
+    it('LIST-NAME-fallback：查無對應 user 時 createdBy 回退為原值（不為空）', async () => {
+      await service.createList(baseCreateDto() as any, ACTOR, YM);
+      const res = await service.listLists({ ym: YM });
+      // users 表為空 → fallback 回 created_by 原值（ACTOR.userId）
+      expect(res.lists[0].createdBy).toBe(ACTOR.userId);
     });
   });
 
