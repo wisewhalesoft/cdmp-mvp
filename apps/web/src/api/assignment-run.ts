@@ -17,26 +17,57 @@ import { apiClient } from './client';
 // F049 — Stage 0 試算
 // =====================================================================
 
+/** F049 v1.3：工作日來源（對齊後端 calendarSource） */
+export type CalendarSource = 'weekday' | 'weekday-only' | 'all';
+
+/** F049 v1.3 跳過原因 */
+export type SkipReason = '週末' | '國定假日';
+
+/**
+ * F049 v1.3 Design A：daily-estimate 每筆日期（含跳過日）
+ *   - 後端 total-agnostic，不回每日件數；件數由前端以 round(ratioPerMille/1000 × total) 計算
+ */
 export interface DailyEstimateRow {
   date: string;
   weekday: string;
-  estimate: number;
+  isWorkday: boolean;
+  skipReason: SkipReason | null;
+  /** 千分位 ratio（工作日=baseRatio 或 baseRatio+1；非工作日=0）。SUM(工作日)=1000 */
+  ratioPerMille: number;
 }
 
 export interface DailyEstimateResponse {
   ym: string;
+  calendarSource: CalendarSource;
+  startDate: string;
+  endDate: string;
   workingDays: number;
-  totalEstimate: number;
+  /** FLOOR(1000 / workingDays)（千分位 ‰） */
+  baseRatio: number;
+  /** 1000 mod workingDays */
+  remainder: number;
   dailyEstimates: DailyEstimateRow[];
-  /** F049 Phase 2：ob_pool_data 共享池實際筆數 */
+  /** ob_pool_data 共享池實際筆數（僅供 Pool 偏低警示，與 total 無關） */
   poolCount?: number;
-  /** F049 Phase 2：poolCount < threshold 時為 'POOL_COUNT_LOW' */
+  /** poolCount < threshold 時為 'POOL_COUNT_LOW' */
   warning?: 'POOL_COUNT_LOW' | null;
 }
 
-export async function getDailyEstimate(ym?: string): Promise<DailyEstimateResponse> {
+export interface DailyEstimateParams {
+  calendarSource?: CalendarSource;
+  startDate?: string;
+  endDate?: string;
+}
+
+export async function getDailyEstimate(
+  ym?: string,
+  opts: DailyEstimateParams = {},
+): Promise<DailyEstimateResponse> {
   const params: Record<string, string> = {};
   if (ym) params.ym = ym;
+  if (opts.calendarSource) params.calendarSource = opts.calendarSource;
+  if (opts.startDate) params.startDate = opts.startDate;
+  if (opts.endDate) params.endDate = opts.endDate;
   const response = await apiClient.get<DailyEstimateResponse>(
     '/assignment/stage0/daily-estimate',
     { params },

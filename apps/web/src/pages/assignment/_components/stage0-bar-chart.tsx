@@ -1,24 +1,27 @@
 import { BarChart3 } from 'lucide-react';
+import type { SkipReason } from '@/api/assignment-run';
 
 /**
- * F049 + AD-E07-8：每日預估筆數 bar chart（純 div）
+ * F049 v1.3 + AD-E07-8：每日預估筆數 bar chart（純 div）
  *
- * 對應 prototype 30-stage0-estimate.html L304-318
+ * 對應 prototype 30-stage0-estimate.html `recompute()` chart innerHTML（L420-435）。
  *
- * 演算法（pure function `computeAdE07Distribution`）：
- *   base = FLOOR(total / workingDays)
- *   rem = total mod workingDays
- *   per_date = base
- *   最後 rem 個工作日: per_date = base + 1
+ * 演算法分工（Design A，§13.3）：
+ *   - 後端 daily-estimate 回傳每日 `ratioPerMille`（千分位 ratio，calendar 相依）
+ *   - 前端以 `estimate = round(ratioPerMille / 1000 × total)` 計算件數（total 相依）
+ *   - `isBonus` = 該工作日 ratioPerMille > baseRatio（即餘數補 +1 的日子）
  *
- * 不採用 recharts — 直接用 div height percentage 渲染，簡潔且不依賴 chart lib
- * （與 prototype 對齊；recharts 用於更複雜的 chart 場景如 run-summary chart）。
+ * 不採用 recharts — 直接用 div height percentage 渲染，對齊 prototype。
  */
 
 export interface Stage0DayInput {
   date: string;
   weekday: string;
   isWorkday: boolean;
+  /** 後端千分位 ratio（工作日=baseRatio 或 baseRatio+1；非工作日=0） */
+  ratioPerMille: number;
+  /** 後端跳過原因（工作日為 null） */
+  skipReason?: SkipReason | null;
 }
 
 export interface Stage0Row extends Stage0DayInput {
@@ -29,37 +32,29 @@ export interface Stage0Row extends Stage0DayInput {
   cumulative: number;
 }
 
+/**
+ * 消費後端 ratioPerMille + 前端 total → 每日件數（Design A）。
+ *
+ * @param total 選取名單之 per-list COUNT（前端輸入）
+ * @param days  後端 dailyEstimates（含 ratioPerMille / isWorkday）
+ */
 export function computeAdE07Distribution(
   total: number,
   days: Stage0DayInput[],
 ): Stage0Row[] {
-  const workdayIdxs: number[] = days.reduce<number[]>((acc, d, idx) => {
-    if (d.isWorkday) acc.push(idx);
-    return acc;
-  }, []);
-  const workingDays = workdayIdxs.length;
-
-  if (workingDays === 0 || total <= 0) {
-    return days.map((d) => ({
-      ...d,
-      estimate: 0,
-      isBonus: false,
-      cumulative: 0,
-    }));
-  }
-
-  const base = Math.floor(total / workingDays);
-  const rem = total - base * workingDays;
-  const bonusFromIdx = workingDays - rem; // 第 bonusFromIdx 個工作日開始 +1
+  // baseRatio = 工作日中最小的 ratioPerMille（餘數補日 = baseRatio+1）
+  const workdayRatios = days
+    .filter((d) => d.isWorkday)
+    .map((d) => d.ratioPerMille);
+  const baseRatio = workdayRatios.length > 0 ? Math.min(...workdayRatios) : 0;
 
   let cumulative = 0;
-  return days.map((d, idx) => {
-    if (!d.isWorkday) {
+  return days.map((d) => {
+    if (!d.isWorkday || total <= 0) {
       return { ...d, estimate: 0, isBonus: false, cumulative };
     }
-    const workdayRank = workdayIdxs.indexOf(idx); // 第幾個工作日
-    const isBonus = workdayRank >= bonusFromIdx;
-    const estimate = isBonus ? base + 1 : base;
+    const estimate = Math.round((d.ratioPerMille / 1000) * total);
+    const isBonus = d.ratioPerMille > baseRatio;
     cumulative += estimate;
     return { ...d, estimate, isBonus, cumulative };
   });
@@ -114,26 +109,35 @@ export function Stage0BarChart({ rows }: Stage0BarChartProps) {
             : r.isBonus
               ? 'bg-blue-700'
               : 'bg-blue-500';
+          // 跳過日固定低高度灰 bar（對齊 prototype recompute() heightPct=12）
+          const barHeight = isWorkday ? Math.max(heightPct, 8) : 12;
           return (
             <div
               key={r.date}
               data-testid={`bar-${r.date}`}
-              className="flex flex-col items-center"
+              className="flex flex-col items-center gap-1.5"
             >
-              <div className="h-32 w-full flex items-end justify-center">
+              {/* 件數標籤（在上，對齊 prototype 順序：件數 → bar → 日期 → 星期） */}
+              <div
+                className={`text-[10px] font-mono ${
+                  isWorkday ? 'text-gray-700 font-semibold' : 'text-gray-300'
+                }`}
+              >
+                {isWorkday ? r.estimate : '—'}
+              </div>
+              <div className="h-20 w-full flex items-end">
                 <div
-                  className={`w-6 rounded-t ${barColor} transition-all`}
-                  style={{ height: `${Math.max(heightPct, isWorkday ? 8 : 4)}%` }}
-                  title={`${r.date} ${r.weekday}：${r.estimate}`}
+                  className={`w-full rounded-t ${barColor} transition-all`}
+                  style={{ height: `${barHeight}%` }}
+                  title={`${r.date} ${r.weekday}：${
+                    isWorkday ? `${r.estimate}件` : (r.skipReason ?? '跳過')
+                  }`}
                 />
               </div>
-              <div className="mt-1 text-[10px] text-gray-500 tabular-nums">
-                {r.date.slice(5)}
+              <div className="text-[10px] font-mono text-gray-500 tabular-nums">
+                {r.date.slice(8)}
               </div>
               <div className="text-[10px] text-gray-400">{r.weekday}</div>
-              <div className="text-[11px] font-mono text-gray-700 mt-0.5">
-                {r.estimate}
-              </div>
             </div>
           );
         })}

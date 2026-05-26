@@ -33,12 +33,15 @@ export interface Stage0InputPanelProps {
   lists: Stage0ListOption[];
   value: Stage0Input;
   onChange: (next: Stage0Input) => void;
+  /** F049 v1.3 空狀態：無 active 名單時 selector disabled、KPI/total 顯示「—」 */
+  disabled?: boolean;
 }
 
 export function Stage0InputPanel({
   lists,
   value,
   onChange,
+  disabled = false,
 }: Stage0InputPanelProps) {
   const update = (patch: Partial<Stage0Input>) => onChange({ ...value, ...patch });
 
@@ -66,20 +69,20 @@ export function Stage0InputPanel({
               id="stage0-list-no"
               data-testid="input-list-no"
               value={value.listNo}
+              disabled={disabled || lists.length === 0}
               onChange={(e) => update({ listNo: e.target.value })}
-              className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none"
+              className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
             >
               {lists.length === 0 ? (
+                // F049 v1.3 AC-4-Default：無 active 名單 → 空狀態（無「— 請選擇 —」空選項）
                 <option value="">尚無可選名單</option>
               ) : (
-                <>
-                  <option value="">— 請選擇 —</option>
-                  {lists.map((l) => (
-                    <option key={l.listNo} value={l.listNo}>
-                      {l.listNo} — {l.listNm}
-                    </option>
-                  ))}
-                </>
+                // 對齊 prototype：直接從第一個 option 開始（無空選項），由父層預設選第一筆
+                lists.map((l) => (
+                  <option key={l.listNo} value={l.listNo}>
+                    {l.listNo} — {l.listNm}
+                  </option>
+                ))
               )}
             </select>
             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -187,11 +190,11 @@ export function Stage0InputPanel({
         >
           <div className="flex items-center gap-1.5 text-gray-500 font-sans font-medium mb-1.5">
             <FunctionSquare className="w-3.5 h-3.5" />
-            AD-E07-8 演算法（base + remainder）
+            AD-E07-8 演算法
           </div>
-          base = FLOOR(total / working_days)
+          base = FLOOR(1000 / working_days)
           <br />
-          rem = total mod working_days
+          rem = 1000 mod working_days
           <br />
           per_date = base
           <br />

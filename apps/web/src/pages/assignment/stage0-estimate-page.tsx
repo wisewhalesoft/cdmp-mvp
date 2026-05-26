@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Calculator,
-  RefreshCw,
   AlertTriangle,
   CalendarCheck,
   Users,
@@ -9,10 +8,11 @@ import {
   PlusCircle,
   Table,
   Eye,
-  Database,
+  Check,
+  X,
+  Plus,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
-import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/e07/MonthPicker';
 import {
   getDailyEstimate,
@@ -43,9 +43,6 @@ import { getBusinessRole } from '@/stores/auth-store';
  *   - 右 8 欄：4 KPI + Pool 警示 + bar chart + 明細表（calendar_date/星期/工作日/預估件數/累積/餘數補）
  */
 
-function toYYYYMM(yyyymm: string): string {
-  return `${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`;
-}
 function toYYYYMMRaw(yyyyMm: string): string {
   return yyyyMm.replace('-', '');
 }
@@ -54,12 +51,6 @@ function currentYmDisplay(): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
-}
-
-function inferIsWorkday(weekday: string): boolean {
-  // 後端 dailyEstimates 已過濾為工作日（estimate > 0）；
-  // 此處保留容錯：若 weekday='六'/'日' 視為非工作日。
-  return weekday !== '六' && weekday !== '日';
 }
 
 export function Stage0EstimatePage() {
@@ -73,38 +64,66 @@ export function Stage0EstimatePage() {
   const [lists, setLists] = useState<Array<{ listNo: string; listNm: string }>>(
     [],
   );
+  const hasActiveList = lists.length > 0;
 
   const [input, setInput] = useState<Stage0Input>({
     listNo: '',
-    totalCount: 9500,
+    totalCount: 0, // F049 v1.3：移除寫死 9500；total 一律來自選取名單 per-list COUNT
     startDate: '',
     endDate: '',
     calendarSource: 'weekday',
   });
   const [listEstimating, setListEstimating] = useState(false);
 
-  // 載入 daily-estimate + lists
+  // 載入 lists（依 ym）→ 自動選第一筆 active 名單（AC-4-Default）
+  useEffect(() => {
+    let aborted = false;
+    void (async () => {
+      try {
+        const data = await listLists({ ym: toYYYYMMRaw(ym) });
+        if (aborted) return;
+        const active = (data.lists ?? [])
+          .filter((l) => l.status === 'active')
+          .map((l) => ({ listNo: l.listNo, listNm: l.listNm }));
+        setLists(active);
+        // 自動選第一筆 active 名單（input.listNo 未設或不在清單中時）
+        setInput((prev) => {
+          const stillValid = active.some((l) => l.listNo === prev.listNo);
+          if (stillValid) return prev;
+          return {
+            ...prev,
+            listNo: active[0]?.listNo ?? '',
+            totalCount: active.length === 0 ? 0 : prev.totalCount,
+          };
+        });
+      } catch {
+        if (!aborted) setLists([]);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [ym]);
+
+  // 載入 daily-estimate（calendarSource / startDate / endDate 納入依賴 → 切換即重抓重算）
   useEffect(() => {
     let aborted = false;
     void (async () => {
       setLoading(true);
       setError(null);
       try {
-        const result = await getDailyEstimate(toYYYYMMRaw(ym));
+        const result = await getDailyEstimate(toYYYYMMRaw(ym), {
+          calendarSource: input.calendarSource,
+          startDate: input.startDate || undefined,
+          endDate: input.endDate || undefined,
+        });
         if (!aborted) {
           setDailyData(result);
+          // 起訖日未設時，以後端回顯之整月範圍回填（供 input 顯示，不再觸發重抓）
           setInput((prev) => ({
             ...prev,
-            totalCount:
-              prev.totalCount && prev.totalCount > 0
-                ? prev.totalCount
-                : result.totalEstimate ?? 0,
-            startDate:
-              prev.startDate || result.dailyEstimates?.[0]?.date || '',
-            endDate:
-              prev.endDate ||
-              result.dailyEstimates?.[result.dailyEstimates.length - 1]?.date ||
-              '',
+            startDate: prev.startDate || result.startDate,
+            endDate: prev.endDate || result.endDate,
           }));
         }
       } catch (err: unknown) {
@@ -115,28 +134,17 @@ export function Stage0EstimatePage() {
         if (!aborted) setLoading(false);
       }
     })();
-    void (async () => {
-      try {
-        const data = await listLists({ ym: toYYYYMMRaw(ym) });
-        if (!aborted) {
-          setLists(
-            (data.lists ?? [])
-              .filter((l) => l.status === 'active')
-              .map((l) => ({ listNo: l.listNo, listNm: l.listNm })),
-          );
-        }
-      } catch {
-        // 無 lists 不影響 stage0 試算
-      }
-    })();
     return () => {
       aborted = true;
     };
-  }, [ym]);
+  }, [ym, input.calendarSource, input.startDate, input.endDate]);
 
   // input.listNo 變化 → 呼叫 list-estimate 取得該 LIST_NO COUNT，套用到 totalCount
   useEffect(() => {
-    if (!input.listNo) return;
+    if (!input.listNo) {
+      setInput((prev) => (prev.totalCount === 0 ? prev : { ...prev, totalCount: 0 }));
+      return;
+    }
     let aborted = false;
     setListEstimating(true);
     void (async () => {
@@ -147,7 +155,7 @@ export function Stage0EstimatePage() {
           setInput((prev) => ({ ...prev, totalCount: count }));
         }
       } catch {
-        // 忽略；使用既有 totalCount
+        // 忽略；保留既有 totalCount
       } finally {
         if (!aborted) setListEstimating(false);
       }
@@ -157,21 +165,18 @@ export function Stage0EstimatePage() {
     };
   }, [input.listNo]);
 
-  // 計算 AD-E07-8 分配（FE 端）
+  // 每日件數 = round(ratioPerMille/1000 × total)（前端消費後端 ratioPerMille）
   const distribution = useMemo<Stage0Row[]>(() => {
     if (!dailyData?.dailyEstimates) return [];
-    const days = dailyData.dailyEstimates.map((d) => ({
-      date: d.date,
-      weekday: d.weekday,
-      isWorkday: inferIsWorkday(d.weekday),
-    }));
-    return computeAdE07Distribution(input.totalCount, days);
+    return computeAdE07Distribution(input.totalCount, dailyData.dailyEstimates);
   }, [dailyData, input.totalCount]);
 
   const workingDays = dailyData?.workingDays ?? 0;
-  const base = workingDays > 0 ? Math.floor(input.totalCount / workingDays) : 0;
-  const remainder =
-    workingDays > 0 ? input.totalCount - base * workingDays : 0;
+  // KPI base / remainder 直接採後端千分位值（AD-E07-8）
+  const base = dailyData?.baseRatio ?? 0;
+  const remainder = dailyData?.remainder ?? 0;
+  // 空狀態：無 active 名單 → KPI total 顯示「—」
+  const totalDisplay = hasActiveList ? input.totalCount.toLocaleString() : '—';
 
   return (
     <AppLayout
@@ -203,7 +208,7 @@ export function Stage0EstimatePage() {
               Daily estimate 不寫入 ob_assign_set
             </p>
             <p className="text-xs text-gray-600 mt-0.5">
-              本頁為 F049 試算預覽，演算法 = FLOOR(total/工作日) + 餘數補最近 N 天工作日（AD-E07-8）。
+              本頁為 F049 試算預覽，演算法 = FLOOR(1000/工作日) + 餘數補最近日期（AD-E07-8）。
               實際寫入由月跑 Stage 0 正式執行（F061）。
             </p>
           </div>
@@ -226,6 +231,7 @@ export function Stage0EstimatePage() {
               lists={lists}
               value={input}
               onChange={setInput}
+              disabled={!hasActiveList}
             />
           </div>
 
@@ -274,10 +280,14 @@ export function Stage0EstimatePage() {
                   <Users className="w-4 h-4 text-emerald-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {input.totalCount.toLocaleString()}
+                  {totalDisplay}
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
-                  {listEstimating ? '即時試算中...' : '符合 LIST_NO 篩選條件'}
+                  {!hasActiveList
+                    ? '無 active 名單'
+                    : listEstimating
+                      ? '即時試算中...'
+                      : '符合 LIST_NO 篩選條件'}
                 </p>
               </div>
               <div
@@ -285,13 +295,13 @@ export function Stage0EstimatePage() {
                 className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">base 基數</span>
+                  <span className="text-xs text-gray-500">base ratio</span>
                   <Divide className="w-4 h-4 text-purple-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {base}
+                  {hasActiveList ? base : '—'}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">FLOOR(total/工作日)</p>
+                <p className="text-xs text-gray-400 mt-1">FLOOR(1000/工作日) ‰</p>
               </div>
               <div
                 data-testid="kpi-remainder"
@@ -302,7 +312,7 @@ export function Stage0EstimatePage() {
                   <PlusCircle className="w-4 h-4 text-amber-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {remainder}
+                  {hasActiveList ? remainder : '—'}
                 </div>
                 <p className="text-xs text-gray-400 mt-1">補至最近 N 個工作日</p>
               </div>
@@ -366,8 +376,15 @@ export function Stage0EstimatePage() {
                       </tr>
                     )}
                     {distribution.map((r) => (
-                      <tr key={r.date}>
-                        <td className="px-5 py-2 font-mono text-xs text-gray-700">
+                      <tr
+                        key={r.date}
+                        className={r.isWorkday ? '' : 'bg-gray-50/50'}
+                      >
+                        <td
+                          className={`px-5 py-2 font-mono text-xs ${
+                            r.isWorkday ? 'text-gray-700' : 'text-gray-400'
+                          }`}
+                        >
                           {r.date}
                         </td>
                         <td className="px-5 py-2 text-xs text-gray-600">
@@ -375,22 +392,36 @@ export function Stage0EstimatePage() {
                         </td>
                         <td className="px-5 py-2 text-xs">
                           {r.isWorkday ? (
-                            <span className="text-emerald-700 font-medium">✓</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                              <Check className="w-3 h-3" />Y (rest_flg=0)
+                            </span>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500">
+                              <X className="w-3 h-3" />N ({r.skipReason})
+                            </span>
                           )}
                         </td>
-                        <td className="px-5 py-2 text-right font-mono text-gray-900">
-                          {r.estimate}
+                        <td
+                          className={`px-5 py-2 text-right font-mono ${
+                            r.isWorkday
+                              ? 'text-gray-900 font-semibold'
+                              : 'text-gray-300'
+                          }`}
+                        >
+                          {r.isWorkday ? r.estimate : '—'}
                         </td>
-                        <td className="px-5 py-2 text-right font-mono text-gray-600">
-                          {r.cumulative}
+                        <td
+                          className={`px-5 py-2 text-right font-mono ${
+                            r.isWorkday ? 'text-gray-600' : 'text-gray-300'
+                          }`}
+                        >
+                          {r.isWorkday ? r.cumulative.toLocaleString() : '—'}
                         </td>
                         <td className="px-5 py-2 text-xs">
                           {r.isBonus ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold">
-                              <PlusCircle className="w-3 h-3" />
-                              +1
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                              <Plus className="w-3 h-3" />
+                              base+1（餘數補）
                             </span>
                           ) : (
                             <span className="text-gray-300">—</span>

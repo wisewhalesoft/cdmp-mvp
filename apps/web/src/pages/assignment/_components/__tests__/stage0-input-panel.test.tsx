@@ -125,6 +125,48 @@ describe('Stage0InputPanel', () => {
     expect(sel.textContent).toContain('尚無可選名單');
   });
 
+  // TS-F049-V13F-001（panel 層）：lists 非空時 selector 無「— 請選擇 —」空選項
+  it('TS-F049-V13F-001：lists 非空 → 無空選項（option[value=""] 不存在）', () => {
+    const { container } = render(
+      <Stage0InputPanel
+        lists={LISTS}
+        value={{
+          listNo: 'OB202605001',
+          totalCount: 5000,
+          startDate: '2026-05-01',
+          endDate: '2026-05-31',
+          calendarSource: 'weekday',
+        }}
+        onChange={() => {}}
+      />,
+    );
+    const sel = screen.getByTestId('input-list-no') as HTMLSelectElement;
+    // 第一個 option 即第一筆名單，無「— 請選擇 —」
+    expect(sel.textContent).not.toContain('請選擇');
+    expect(container.querySelector('option[value=""]')).toBeNull();
+    expect(sel.options.length).toBe(LISTS.length);
+  });
+
+  // TS-F049-V13F-009（panel 層）：disabled 時 selector disabled
+  it('TS-F049-V13F-009：disabled prop → selector disabled', () => {
+    render(
+      <Stage0InputPanel
+        lists={[]}
+        disabled
+        value={{
+          listNo: '',
+          totalCount: 0,
+          startDate: '',
+          endDate: '',
+          calendarSource: 'weekday',
+        }}
+        onChange={() => {}}
+      />,
+    );
+    const sel = screen.getByTestId('input-list-no') as HTMLSelectElement;
+    expect(sel.disabled).toBe(true);
+  });
+
   it('顯示 AD-E07-8 演算法說明', () => {
     render(
       <Stage0InputPanel
