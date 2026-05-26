@@ -15,7 +15,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { Stage0EstimateService } from '../stage0-estimate.service';
+import {
+  Stage0EstimateService,
+  resolveCalendarDay,
+  type CalendarSource,
+} from '../stage0-estimate.service';
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
@@ -93,6 +97,35 @@ async function seedActiveList(
   );
 }
 
+/**
+ * Seed 2026-05 全月 ob_calendar（31 筆）。
+ *   - 2026-05-01 星期五 = 勞動節 → rest_flg='1'（國定假日）
+ *   - 週末（5/2,3,9,10,16,17,23,24,30,31）→ rest_flg='1'
+ *   - 其餘工作日 → rest_flg='0'
+ *   weekday 模式工作日 = 20；weekday-only 模式工作日 = 21（含勞動節）。
+ */
+async function seedMay2026Calendar(
+  calRepo: Repository<ObCalendar>,
+): Promise<void> {
+  const holidays = new Set(['2026-05-01']); // 勞動節
+  const rows: ObCalendar[] = [];
+  for (let day = 1; day <= 31; day++) {
+    const d = new Date(Date.UTC(2026, 4, day));
+    const ymd = `2026-05-${String(day).padStart(2, '0')}`;
+    const dow = d.getUTCDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const restFlg = isWeekend || holidays.has(ymd) ? '1' : '0';
+    rows.push(
+      calRepo.create({ calendar_date: new Date(ymd), rest_flg: restFlg }),
+    );
+  }
+  await calRepo.save(rows);
+}
+
+function sumRatio(rows: { ratioPerMille: number }[]): number {
+  return rows.reduce((s, r) => s + r.ratioPerMille, 0);
+}
+
 describe('Stage0EstimateService', () => {
   let env: Awaited<ReturnType<typeof buildModule>>;
 
@@ -112,18 +145,205 @@ describe('Stage0EstimateService', () => {
     await env.ds.query('DELETE FROM ob_calendar');
   });
 
-  describe('calculateDailyEstimate', () => {
-    it('AC-1：依工作日數平均分配（workingDays / dailyEstimates / totalEstimate）', async () => {
-      // 模擬 ob_calendar：2026-05 共 3 個工作日
-      await env.calRepo.save([
-        env.calRepo.create({ calendar_date: new Date('2026-05-04'), rest_flg: '0' }),
-        env.calRepo.create({ calendar_date: new Date('2026-05-05'), rest_flg: '0' }),
-        env.calRepo.create({ calendar_date: new Date('2026-05-06'), rest_flg: '0' }),
-        env.calRepo.create({ calendar_date: new Date('2026-05-02'), rest_flg: '1' }),
-      ]);
+  // =========================================================================
+  // 三、後端 calculateDailyEstimate 千分位 ratio + calendarSource（F049 v1.3）
+  //   Design A：total-agnostic、全日期回傳、SUM(工作日 ratioPerMille)=1000
+  // =========================================================================
+  describe('calculateDailyEstimate（v1.3 千分位 ratio + calendarSource）', () => {
+    // ---- resolveCalendarDay 純函式（含 CAL-002 weekday-only 邏輯，無需 PG）----
+    describe('resolveCalendarDay 純函式', () => {
+      it('weekday：rest_flg=0 → 工作日；週末 rest_flg=1 → 週末；平日 rest_flg=1 → 國定假日', () => {
+        // 2026-05-04 一（工作日）
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 4)), '0', 'weekday'),
+        ).toEqual({ isWorkday: true, skipReason: null });
+        // 2026-05-02 六（週末）
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 2)), '1', 'weekday'),
+        ).toEqual({ isWorkday: false, skipReason: '週末' });
+        // 2026-05-01 五（勞動節，rest_flg=1 但非週末）→ 國定假日
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 1)), '1', 'weekday'),
+        ).toEqual({ isWorkday: false, skipReason: '國定假日' });
+      });
 
-      // 模擬 ob_pool_data：6 筆
-      for (let i = 1; i <= 6; i++) {
+      it('weekday-only（CAL-002 純函式覆蓋 EXTRACT(DOW)）：僅排除週末，假日視為工作日', () => {
+        // 2026-05-01 五（勞動節 rest_flg=1）→ 非週末 → 工作日
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 1)), '1', 'weekday-only'),
+        ).toEqual({ isWorkday: true, skipReason: null });
+        // 2026-05-02 六 → 週末
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 2)), '0', 'weekday-only'),
+        ).toEqual({ isWorkday: false, skipReason: '週末' });
+        // 2026-05-03 日 → 週末
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 3)), '0', 'weekday-only'),
+        ).toEqual({ isWorkday: false, skipReason: '週末' });
+      });
+
+      it('all：全部 isWorkday=true、skipReason=null', () => {
+        expect(
+          resolveCalendarDay(new Date(Date.UTC(2026, 4, 2)), '1', 'all'),
+        ).toEqual({ isWorkday: true, skipReason: null });
+      });
+    });
+
+    // ---- TS-F049-CAL-001：weekday → 20 工作日 ----
+    it('TS-F049-CAL-001：calendarSource=weekday → workingDays=20；全 31 日回傳', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+      });
+      expect(res.calendarSource).toBe('weekday');
+      expect(res.workingDays).toBe(20);
+      expect(res.dailyEstimates).toHaveLength(31);
+      expect(res.dailyEstimates.filter((d) => d.isWorkday)).toHaveLength(20);
+      expect(res.dailyEstimates.filter((d) => !d.isWorkday)).toHaveLength(11);
+    });
+
+    // ---- TS-F049-CAL-002：weekday-only → 21 工作日（5/1 假日視為工作日）----
+    // 註：isWorkday 改於 TS 端（resolveCalendarDay）計算，不用 SQL EXTRACT(DOW)，
+    //     故可用 SQLite in-memory 覆蓋，無需 PG TestContainer。
+    it('TS-F049-CAL-002：calendarSource=weekday-only → workingDays=21；5/1 勞動節為工作日', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday-only',
+      });
+      expect(res.workingDays).toBe(21);
+      const may1 = res.dailyEstimates.find((d) => d.date === '2026-05-01');
+      expect(may1?.isWorkday).toBe(true);
+      expect(may1?.skipReason).toBeNull();
+      const may2 = res.dailyEstimates.find((d) => d.date === '2026-05-02');
+      expect(may2?.isWorkday).toBe(false);
+      expect(may2?.skipReason).toBe('週末');
+      const may3 = res.dailyEstimates.find((d) => d.date === '2026-05-03');
+      expect(may3?.skipReason).toBe('週末');
+    });
+
+    // ---- TS-F049-CAL-003：all → 31 工作日 ----
+    it('TS-F049-CAL-003：calendarSource=all → workingDays=31；全部 isWorkday', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'all',
+      });
+      expect(res.workingDays).toBe(31);
+      expect(res.dailyEstimates).toHaveLength(31);
+      expect(res.dailyEstimates.every((d) => d.isWorkday)).toBe(true);
+      expect(res.dailyEstimates.every((d) => d.skipReason === null)).toBe(true);
+      expect(res.dailyEstimates.every((d) => d.ratioPerMille > 0)).toBe(true);
+      expect(sumRatio(res.dailyEstimates)).toBe(1000);
+    });
+
+    // ---- TS-F049-CAL-004：ratio 模型 ----
+    it('TS-F049-CAL-004a：20 工作日 → baseRatio=50 remainder=0；全工作日 ratio=50；SUM=1000', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+      });
+      expect(res.baseRatio).toBe(50); // FLOOR(1000/20)
+      expect(res.remainder).toBe(0); // 1000 mod 20
+      expect(
+        res.dailyEstimates.filter((d) => d.isWorkday).every((d) => d.ratioPerMille === 50),
+      ).toBe(true);
+      expect(res.dailyEstimates.filter((d) => !d.isWorkday).every((d) => d.ratioPerMille === 0)).toBe(true);
+      expect(sumRatio(res.dailyEstimates)).toBe(1000);
+    });
+
+    it('TS-F049-CAL-004b：21 工作日（weekday-only）→ baseRatio=47 remainder=13；DESC 前 13 個工作日=48；SUM=1000', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday-only',
+      });
+      expect(res.baseRatio).toBe(47); // FLOOR(1000/21)
+      expect(res.remainder).toBe(13); // 1000 mod 21
+      const workdaysDesc = res.dailyEstimates
+        .filter((d) => d.isWorkday)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      // 前 13 個（月末）= 48
+      expect(workdaysDesc.slice(0, 13).every((d) => d.ratioPerMille === 48)).toBe(true);
+      // 其餘 8 個 = 47
+      expect(workdaysDesc.slice(13).every((d) => d.ratioPerMille === 47)).toBe(true);
+      expect(sumRatio(res.dailyEstimates)).toBe(1000); // 13×48 + 8×47 = 1000
+    });
+
+    // ---- TS-F049-CAL-005：自訂 startDate/endDate + 預設整月 ----
+    it('TS-F049-CAL-005a：自訂 startDate/endDate（中旬 12 天）', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+        startDate: '2026-05-11',
+        endDate: '2026-05-22',
+      });
+      expect(res.startDate).toBe('2026-05-11');
+      expect(res.endDate).toBe('2026-05-22');
+      expect(res.dailyEstimates).toHaveLength(12);
+      // 5/11~5/22 共 12 日，僅 5/16(六)/5/17(日) 為週末 → 10 工作日
+      expect(res.workingDays).toBe(10);
+      expect(res.dailyEstimates.some((d) => d.date === '2026-05-10')).toBe(false);
+      expect(res.dailyEstimates.some((d) => d.date === '2026-05-23')).toBe(false);
+    });
+
+    it('TS-F049-CAL-005b：不帶 startDate/endDate → 預設整月', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+      });
+      expect(res.startDate).toBe('2026-05-01');
+      expect(res.endDate).toBe('2026-05-31');
+      expect(res.dailyEstimates).toHaveLength(31);
+    });
+
+    // ---- TS-F049-CAL-006：含所有日期（含跳過日）skipReason / isWorkday / ratio ----
+    it('TS-F049-CAL-006：dailyEstimates 含所有日期；skipReason / isWorkday / ratioPerMille 正確', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+      });
+      const may1 = res.dailyEstimates.find((d) => d.date === '2026-05-01')!;
+      expect(may1.isWorkday).toBe(false);
+      expect(may1.skipReason).toBe('國定假日');
+      expect(may1.ratioPerMille).toBe(0);
+
+      const may2 = res.dailyEstimates.find((d) => d.date === '2026-05-02')!;
+      expect(may2.isWorkday).toBe(false);
+      expect(may2.skipReason).toBe('週末');
+      expect(may2.ratioPerMille).toBe(0);
+
+      const may4 = res.dailyEstimates.find((d) => d.date === '2026-05-04')!;
+      expect(may4.isWorkday).toBe(true);
+      expect(may4.skipReason).toBeNull();
+      expect(may4.ratioPerMille).toBeGreaterThanOrEqual(1);
+
+      // 每筆均含五個欄位
+      for (const d of res.dailyEstimates) {
+        expect(d).toHaveProperty('date');
+        expect(d).toHaveProperty('weekday');
+        expect(d).toHaveProperty('isWorkday');
+        expect(d).toHaveProperty('skipReason');
+        expect(d).toHaveProperty('ratioPerMille');
+      }
+    });
+
+    // ---- TS-F049-CAL-007：Design A regression guard — 不含 total / estimate ----
+    it('TS-F049-CAL-007：response 不含 total / totalEstimate / listNo；dailyEstimates 不含 estimate / count', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+      });
+      expect('total' in res).toBe(false);
+      expect('totalEstimate' in res).toBe(false);
+      expect('listNo' in res).toBe(false);
+      for (const d of res.dailyEstimates) {
+        expect('estimate' in d).toBe(false);
+        expect('count' in d).toBe(false);
+      }
+    });
+
+    // ---- TS-F049-CAL-008：poolCount + warning（與 ratio 計算獨立）----
+    it('TS-F049-CAL-008a：poolCount=800 < 1000 → warning=POOL_COUNT_LOW；ratio 仍正常', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      for (let i = 1; i <= 800; i++) {
         await env.poolRepo.save(
           env.poolRepo.create({
             orgno: '01',
@@ -137,35 +357,23 @@ describe('Stage0EstimateService', () => {
           } as Partial<ObPoolData>),
         );
       }
-
       const res = await env.service.calculateDailyEstimate(YM);
-
-      expect(res.ym).toBe(YM);
-      expect(res.workingDays).toBe(3);
-      expect(res.poolCount).toBe(6);
-      expect(res.totalEstimate).toBe(6);
-      expect(res.dailyEstimates).toHaveLength(3);
-      // 等分：每天 = floor(6/3) = 2
-      expect(res.dailyEstimates[0].estimate).toBe(2);
-    });
-
-    it('AC-3：Pool 筆數低於門檻（預設 1000）→ warning = POOL_COUNT_LOW', async () => {
-      await env.calRepo.save([
-        env.calRepo.create({ calendar_date: new Date('2026-05-04'), rest_flg: '0' }),
-      ]);
-      // pool 0 筆 < 1000
-      const res = await env.service.calculateDailyEstimate(YM);
+      expect(res.poolCount).toBe(800);
       expect(res.warning).toBe('POOL_COUNT_LOW');
-      expect(res.poolCount).toBe(0);
+      expect(res.baseRatio).toBe(50);
+      expect(sumRatio(res.dailyEstimates)).toBe(1000);
     });
 
-    it('AC-3：環境變數 STAGE0_POOL_WARN_THRESHOLD 可覆蓋門檻', async () => {
-      await env.calRepo.save([
-        env.calRepo.create({ calendar_date: new Date('2026-05-04'), rest_flg: '0' }),
-      ]);
-      process.env.STAGE0_POOL_WARN_THRESHOLD = '5';
+    it('TS-F049-CAL-008b：poolCount=0 預設門檻 → warning=POOL_COUNT_LOW', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM);
+      expect(res.poolCount).toBe(0);
+      expect(res.warning).toBe('POOL_COUNT_LOW');
+    });
 
-      // pool 6 筆 > 5 → no warning
+    it('TS-F049-CAL-008c：STAGE0_POOL_WARN_THRESHOLD env 可配置門檻', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      process.env.STAGE0_POOL_WARN_THRESHOLD = '5';
       for (let i = 1; i <= 6; i++) {
         await env.poolRepo.save(
           env.poolRepo.create({
@@ -181,15 +389,22 @@ describe('Stage0EstimateService', () => {
         );
       }
       const res = await env.service.calculateDailyEstimate(YM);
-      expect(res.warning).toBeNull();
+      expect(res.warning).toBeNull(); // 6 >= 5
     });
 
-    it('workingDays = 0 時：totalEstimate = 0 並回傳空 dailyEstimates', async () => {
-      // 無 calendar 資料
-      const res = await env.service.calculateDailyEstimate(YM);
+    // ---- TS-F049-CAL-009：workingDays=0 邊界 ----
+    it('TS-F049-CAL-009：無工作日範圍（週末）→ workingDays=0；baseRatio=0；remainder=0；不除零', async () => {
+      await seedMay2026Calendar(env.calRepo);
+      const res = await env.service.calculateDailyEstimate(YM, {
+        calendarSource: 'weekday',
+        startDate: '2026-05-02', // 六
+        endDate: '2026-05-03', // 日
+      });
       expect(res.workingDays).toBe(0);
-      expect(res.totalEstimate).toBe(0);
-      expect(res.dailyEstimates).toEqual([]);
+      expect(res.baseRatio).toBe(0);
+      expect(res.remainder).toBe(0);
+      expect(res.dailyEstimates.every((d) => d.ratioPerMille === 0)).toBe(true);
+      expect(sumRatio(res.dailyEstimates)).toBe(0);
     });
   });
 

@@ -12,7 +12,10 @@ import {
   RequireDirector,
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
-import { Stage0EstimateService } from './stage0-estimate.service';
+import {
+  Stage0EstimateService,
+  type CalendarSource,
+} from './stage0-estimate.service';
 
 /**
  * F049 v1.0 — Stage 0 每日估算 + 單一 LIST_NO 試算 Controller
@@ -39,9 +42,22 @@ export class Stage0EstimateController {
 
   @Get('stage0/daily-estimate')
   @RequireDirector()
-  async dailyEstimate(@Query('ym') ym?: string) {
+  async dailyEstimate(
+    @Query('ym') ym?: string,
+    @Query('calendarSource') calendarSource?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     const effectiveYm = ym ?? Stage0EstimateController.computeCurrentWorkYm();
-    return this.service.calculateDailyEstimate(effectiveYm);
+    const source: CalendarSource =
+      calendarSource === 'weekday-only' || calendarSource === 'all'
+        ? calendarSource
+        : 'weekday';
+    return this.service.calculateDailyEstimate(effectiveYm, {
+      calendarSource: source,
+      startDate,
+      endDate,
+    });
   }
 
   @Get('list-definitions/:listNo/estimate')

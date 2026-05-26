@@ -46,8 +46,12 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
     serviceMock = {
       calculateDailyEstimate: vi.fn().mockResolvedValue({
         ym: '202605',
-        workingDays: 22,
-        totalEstimate: 50000,
+        calendarSource: 'weekday',
+        startDate: '2026-05-01',
+        endDate: '2026-05-31',
+        workingDays: 20,
+        baseRatio: 50,
+        remainder: 0,
         dailyEstimates: [],
         poolCount: 50000,
         warning: null,
@@ -117,14 +121,17 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
   };
 
   describe('GET /stage0/daily-estimate', () => {
-    it('director → 200 + daily estimate', async () => {
+    it('director → 200 + daily estimate（預設 calendarSource=weekday）', async () => {
       currentUser = director;
       const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/stage0/daily-estimate',
       );
       expect(res.status).toBe(200);
       expect(res.body.ym).toBe('202605');
-      expect(serviceMock.calculateDailyEstimate).toHaveBeenCalledWith('202605');
+      expect(serviceMock.calculateDailyEstimate).toHaveBeenCalledWith(
+        '202605',
+        expect.objectContaining({ calendarSource: 'weekday' }),
+      );
     });
 
     it('帶 ym query → 傳給 service', async () => {
@@ -132,7 +139,33 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
       await request(app.getHttpServer()).get(
         '/api/v1/assignment/stage0/daily-estimate?ym=202604',
       );
-      expect(serviceMock.calculateDailyEstimate).toHaveBeenCalledWith('202604');
+      expect(serviceMock.calculateDailyEstimate).toHaveBeenCalledWith(
+        '202604',
+        expect.objectContaining({ calendarSource: 'weekday' }),
+      );
+    });
+
+    it('v1.3：帶 calendarSource / startDate / endDate query → 傳給 service', async () => {
+      currentUser = director;
+      await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/daily-estimate?ym=202605&calendarSource=all&startDate=2026-05-11&endDate=2026-05-22',
+      );
+      expect(serviceMock.calculateDailyEstimate).toHaveBeenCalledWith('202605', {
+        calendarSource: 'all',
+        startDate: '2026-05-11',
+        endDate: '2026-05-22',
+      });
+    });
+
+    it('v1.3：非法 calendarSource → fallback weekday', async () => {
+      currentUser = director;
+      await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/daily-estimate?calendarSource=garbage',
+      );
+      expect(serviceMock.calculateDailyEstimate).toHaveBeenCalledWith(
+        '202605',
+        expect.objectContaining({ calendarSource: 'weekday' }),
+      );
     });
 
     it('section_chief → 403 E07_REQUIRES_DIRECTOR', async () => {

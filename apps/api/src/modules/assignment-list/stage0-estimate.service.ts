@@ -12,19 +12,47 @@ import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
+/**
+ * F049 v1.3：工作日來源模式（對齊 §5.1 calendarSource）
+ *   - weekday      ：rest_flg='0'（排除週末 + 國定假日；預設，對齊原系統 SP）
+ *   - weekday-only ：僅排除週末（JS getDay∈{0,6}），國定假日視為工作日
+ *   - all          ：不排除（全部視為工作日）
+ */
+export type CalendarSource = 'weekday' | 'weekday-only' | 'all';
+
+/** F049 v1.3 跳過原因 */
+export type SkipReason = '週末' | '國定假日';
+
 export interface DailyEstimateRow {
   date: string; // YYYY-MM-DD
   weekday: string; // 一 / 二 / ... / 日
-  estimate: number;
+  isWorkday: boolean;
+  skipReason: SkipReason | null;
+  /** 千分位 ratio（工作日 = baseRatio 或 baseRatio+1；非工作日 = 0）。SUM(工作日) = 1000 */
+  ratioPerMille: number;
 }
 
+/**
+ * F049 v1.3 Design A：daily-estimate response（total-agnostic）
+ *   - 不含 total / 每日件數（estimate）；件數由前端以 round(ratioPerMille/1000 × total) 計算
+ */
 export interface Stage0DailyEstimateResult {
   ym: string;
+  calendarSource: CalendarSource;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
   workingDays: number;
-  totalEstimate: number;
+  baseRatio: number;
+  remainder: number;
   dailyEstimates: DailyEstimateRow[];
   poolCount: number;
   warning: 'POOL_COUNT_LOW' | null;
+}
+
+export interface CalculateDailyEstimateOptions {
+  calendarSource?: CalendarSource;
+  startDate?: string; // YYYY-MM-DD（選填，預設 ym 整月第一天）
+  endDate?: string; // YYYY-MM-DD（選填，預設 ym 整月最後一天）
 }
 
 export interface Stage0ListCountResult {
@@ -33,6 +61,38 @@ export interface Stage0ListCountResult {
 }
 
 const WEEKDAY_TW = ['日', '一', '二', '三', '四', '五', '六'];
+
+/**
+ * F049 v1.3 純函式：依日期 / rest_flg / 模式判定 isWorkday 與 skipReason。
+ *
+ * isWorkday / weekday 在 TS 端計算（非 SQL EXTRACT(DOW)），確保 SQLite e2e 相容。
+ *   - weekday      ：isWorkday = rest_flg==='0'；非工作日 skipReason：週六/日→'週末'，否則→'國定假日'
+ *   - weekday-only ：isWorkday = 非週末（getDay∉{0,6}）；週末→'週末'（假日視為工作日）
+ *   - all          ：全部 isWorkday=true、skipReason=null
+ */
+export function resolveCalendarDay(
+  date: Date,
+  restFlg: string,
+  mode: CalendarSource,
+): { isWorkday: boolean; skipReason: SkipReason | null } {
+  const dow = date.getUTCDay(); // 0=日, 6=六
+  const isWeekend = dow === 0 || dow === 6;
+
+  if (mode === 'all') {
+    return { isWorkday: true, skipReason: null };
+  }
+  if (mode === 'weekday-only') {
+    if (isWeekend) return { isWorkday: false, skipReason: '週末' };
+    return { isWorkday: true, skipReason: null };
+  }
+  // weekday（預設）：rest_flg='0' 才是工作日
+  if (restFlg === '0') {
+    return { isWorkday: true, skipReason: null };
+  }
+  // 非工作日：週末 vs 國定假日
+  if (isWeekend) return { isWorkday: false, skipReason: '週末' };
+  return { isWorkday: false, skipReason: '國定假日' };
+}
 
 /**
  * Stage0EstimateService — F049 Stage 0 估算 service
@@ -57,49 +117,98 @@ export class Stage0EstimateService {
   ) {}
 
   /**
-   * F049 AC-1 + AC-2 + AC-3：每日估算表
+   * F049 v1.3 AC-1 + AC-2 + AC-3：每日 ratio 估算表（Design A，total-agnostic）
    *
-   * 規則：
-   *   - workingDays：ob_calendar.rest_flg = '0' 且日期落在指定月份範圍
-   *   - poolCount：ob_pool_data 全表筆數（共享池）
-   *   - totalEstimate：等於 poolCount（每月所有案件分散到工作日）
-   *   - dailyEstimates：依工作日數平均分配 floor(poolCount / workingDays)
+   * 規則（§5.1 / §13 AD-E07-8 千分位 ratio 模型）：
+   *   - 範圍：calendar_date BETWEEN startDate AND endDate（預設 ym 整月）
+   *   - 取 ob_calendar 之 (calendar_date, rest_flg)，於 TS 端依 calendarSource 判定 isWorkday/skipReason
+   *     （不使用 SQL EXTRACT(DOW)，確保 SQLite e2e 相容）
+   *   - workingDays = Σ isWorkday
+   *   - baseRatio = FLOOR(1000 / workingDays)；remainder = 1000 mod workingDays
+   *   - 工作日按 calendar_date DESC 排序，前 remainder 個 ratioPerMille = baseRatio+1，其餘 = baseRatio
+   *   - 非工作日 ratioPerMille = 0；workingDays=0 時 baseRatio/remainder=0、全 0（不除零）
+   *   - poolCount：ob_pool_data 全表筆數（共享池），僅供 AC-3 Pool 偏低警示
    *   - warning：poolCount < STAGE0_POOL_WARN_THRESHOLD（預設 1000）
+   *
+   * 本 API 不回傳 total / 每日件數；件數由前端以 round(ratioPerMille/1000 × total) 計算。
    */
-  async calculateDailyEstimate(ym: string): Promise<Stage0DailyEstimateResult> {
-    const { startDate, endDate } = this.monthRange(ym);
+  async calculateDailyEstimate(
+    ym: string,
+    opts: CalculateDailyEstimateOptions = {},
+  ): Promise<Stage0DailyEstimateResult> {
+    const calendarSource: CalendarSource = opts.calendarSource ?? 'weekday';
+    const month = this.monthRange(ym);
+    const startYmd = opts.startDate ?? this.formatDate(month.startDate);
+    const endYmd = opts.endDate ?? this.formatDate(month.endDate);
 
-    // 1) 工作日清單
-    const workdays = await this.calendarRepo.find({
-      where: {
-        calendar_date: Between(startDate, endDate),
-        rest_flg: '0',
-      },
+    // 1) 範圍內所有日期（含跳過日），依 calendar_date ASC
+    //    以 YYYY-MM-DD 字串為界，避免 Date 物件被 driver 序列化為 local-time 字串
+    //    造成跨時區日期 ±1（date 欄位字串比較在 SQLite / PostgreSQL 皆正確）。
+    const rows = await this.calendarRepo.find({
+      where: { calendar_date: Between(startYmd as never, endYmd as never) },
       order: { calendar_date: 'ASC' },
     });
-    const workingDays = workdays.length;
 
-    // 2) Pool 筆數（共享池，無 list_no 概念）
-    const poolCount = await this.poolRepo.count();
-
-    // 3) 計算每日估算
-    const totalEstimate = poolCount;
-    const perDay = workingDays > 0 ? Math.floor(totalEstimate / workingDays) : 0;
-    const dailyEstimates: DailyEstimateRow[] = workdays.map((row) => {
-      const d = new Date(row.calendar_date);
+    // 2) TS 端判定 isWorkday / skipReason / weekday
+    const days = rows.map((row) => {
+      const d = this.toUtcDate(row.calendar_date);
+      const { isWorkday, skipReason } = resolveCalendarDay(
+        d,
+        row.rest_flg,
+        calendarSource,
+      );
       return {
         date: this.formatDate(d),
-        weekday: WEEKDAY_TW[d.getDay()],
-        estimate: perDay,
+        weekday: WEEKDAY_TW[d.getUTCDay()],
+        isWorkday,
+        skipReason,
       };
     });
 
-    // 4) 警示門檻
+    // 3) 千分位 ratio 分配
+    const workingDays = days.filter((d) => d.isWorkday).length;
+    const baseRatio = workingDays > 0 ? Math.floor(1000 / workingDays) : 0;
+    const remainder = workingDays > 0 ? 1000 % workingDays : 0;
+
+    // 餘數補：工作日按 calendar_date DESC 排序，前 remainder 個 +1
+    const bonusDates = new Set(
+      days
+        .filter((d) => d.isWorkday)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, remainder)
+        .map((d) => d.date),
+    );
+
+    const dailyEstimates: DailyEstimateRow[] = days.map((d) => ({
+      date: d.date,
+      weekday: d.weekday,
+      isWorkday: d.isWorkday,
+      skipReason: d.skipReason,
+      ratioPerMille: !d.isWorkday
+        ? 0
+        : bonusDates.has(d.date)
+          ? baseRatio + 1
+          : baseRatio,
+    }));
+
+    // 4) Pool 筆數（共享池，無 list_no 概念）+ 警示門檻
+    const poolCount = await this.poolRepo.count();
     const threshold = this.resolveWarnThreshold();
     const warning: Stage0DailyEstimateResult['warning'] =
       poolCount < threshold ? 'POOL_COUNT_LOW' : null;
 
-    return { ym, workingDays, totalEstimate, dailyEstimates, poolCount, warning };
+    return {
+      ym,
+      calendarSource,
+      startDate: startYmd,
+      endDate: endYmd,
+      workingDays,
+      baseRatio,
+      remainder,
+      dailyEstimates,
+      poolCount,
+      warning,
+    };
   }
 
   /**
@@ -215,6 +324,31 @@ export class Stage0EstimateService {
     const start = new Date(Date.UTC(y, m - 1, 1));
     const end = new Date(Date.UTC(y, m, 0)); // 該月最後一天
     return { startDate: start, endDate: end };
+  }
+
+  /** 'YYYY-MM-DD' → UTC midnight Date */
+  private parseYmd(ymd: string): Date {
+    const [y, m, d] = ymd.split('-').map((v) => parseInt(v, 10));
+    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  }
+
+  /**
+   * ob_calendar.calendar_date 在不同 driver 回傳型別不一：
+   *   - better-sqlite3 date 欄位 → 'YYYY-MM-DD' 字串
+   *   - PostgreSQL date 欄位 → Date 物件
+   * 統一轉為 UTC midnight Date，避免本地時區造成日期 ±1。
+   */
+  private toUtcDate(value: Date | string): Date {
+    if (value instanceof Date) {
+      return new Date(
+        Date.UTC(
+          value.getUTCFullYear(),
+          value.getUTCMonth(),
+          value.getUTCDate(),
+        ),
+      );
+    }
+    return this.parseYmd(String(value).slice(0, 10));
   }
 
   private resolveWarnThreshold(): number {
