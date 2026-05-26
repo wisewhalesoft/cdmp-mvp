@@ -33,13 +33,17 @@ import {
   rollbackToDraft,
   rollbackToDeptRatio,
   rollbackToApproval,
+  approveList,
+  rejectList,
 } from '@/api/assignment-stage';
+import { ConfirmModal } from '@/components/e07/ConfirmModal';
 import { getEffectiveIdentity } from '@/stores/auth-store';
 import type { EffectiveIdentity } from '@cdmp/shared';
 import { RoleStageActions } from './_components/RoleStageActions';
 import { ListDetailDrawer } from './_components/ListDetailDrawer';
 import { ReadyCtaBanner } from './_components/ReadyCtaBanner';
 import { DisableListModal } from './_components/DisableListModal';
+import { RejectReasonModal } from './_components/reject-reason-modal';
 import { readAndClearPendingToast } from './_utils/pending-toast';
 
 /**
@@ -259,6 +263,12 @@ export function ListDefinitionPage() {
   const [disableTarget, setDisableTarget] = useState<AssignmentListItem | null>(null);
   const [disableLoading, setDisableLoading] = useState(false);
 
+  // F086/F087 簽核就地操作（29c 審閱頁移除後改在卡片就地核准/拒絕）
+  const [approveTarget, setApproveTarget] = useState<AssignmentListItem | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<AssignmentListItem | null>(null);
+  const [rejecting, setRejecting] = useState(false);
+
   // F050 v2.2 BR-13 / US-133：mount 時 consume pending toast（commit 6 完整接入）
   useEffect(() => {
     const payload = readAndClearPendingToast();
@@ -415,10 +425,41 @@ export function ListDefinitionPage() {
   };
   const handleReview = (l: AssignmentListItem) =>
     navigate(`/assignment/lists/${l.listNo}/personnel-ratio`);
-  const handleApprove = (l: AssignmentListItem) =>
-    navigate(`/assignment/lists/${l.listNo}/approval`);
-  const handleReject = (l: AssignmentListItem) =>
-    navigate(`/assignment/lists/${l.listNo}/approval`);
+  // F086/F087：核准 / 拒絕改為卡片就地彈 modal，確認後就地呼叫 API + refetch（不離開頁面）
+  const handleApprove = (l: AssignmentListItem) => setApproveTarget(l);
+  const handleReject = (l: AssignmentListItem) => setRejectTarget(l);
+
+  const handleApproveConfirm = async () => {
+    if (!approveTarget) return;
+    setApproving(true);
+    try {
+      await approveList(approveTarget.listNo);
+      showToast(`名單 ${approveTarget.listNo} 已核准`, 'success');
+      setApproveTarget(null);
+      await fetchData(ym);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      showToast(e?.response?.data?.message ?? '核准失敗', 'error');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleRejectConfirm = async (reason: string) => {
+    if (!rejectTarget) return;
+    setRejecting(true);
+    try {
+      await rejectList(rejectTarget.listNo, { rejectReason: reason });
+      showToast(`名單 ${rejectTarget.listNo} 已拒絕`, 'warning');
+      setRejectTarget(null);
+      await fetchData(ym);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      showToast(e?.response?.data?.message ?? '拒絕失敗', 'error');
+    } finally {
+      setRejecting(false);
+    }
+  };
   const handleQuickTemplate = (l: AssignmentListItem) =>
     navigate(`/assignment/lists/${l.listNo}/personnel-ratio`);
   const handleSetMyDept = (l: AssignmentListItem) =>
@@ -677,6 +718,37 @@ export function ListDefinitionPage() {
           onConfirm={handleDisableConfirm}
           onCancel={() => setDisableTarget(null)}
         />
+
+        {/* F086 核准確認對話框（就地） */}
+        <ConfirmModal
+          open={!!approveTarget}
+          variant="success"
+          title={`核准名單 ${approveTarget?.listNo ?? ''}？`}
+          description={
+            <div className="space-y-2 text-xs text-gray-600">
+              <p>名單將進入「準備完成」階段，並於下次月跑觸發時參與分派。</p>
+              <p>assignment_approval 將寫入 1 筆 approve 紀錄。</p>
+            </div>
+          }
+          confirmLabel="確認核准"
+          loading={approving}
+          loadingText="核准中..."
+          onConfirm={handleApproveConfirm}
+          onCancel={() => !approving && setApproveTarget(null)}
+          testId="confirm-approve-modal"
+          confirmTestId="btn-confirm-approve"
+        />
+
+        {/* F087 拒絕對話框（就地；含必填原因 + 快速 chip） */}
+        {rejectTarget && (
+          <RejectReasonModal
+            open
+            listNo={rejectTarget.listNo}
+            loading={rejecting}
+            onConfirm={handleRejectConfirm}
+            onCancel={() => setRejectTarget(null)}
+          />
+        )}
       </main>
     </AppLayout>
   );

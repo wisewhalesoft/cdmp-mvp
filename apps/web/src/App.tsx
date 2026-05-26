@@ -35,7 +35,6 @@ import {
   RunComparePage,
   DeptRatioConfigPage,
   PersonnelRatioConfigPage,
-  ApprovalReviewPage,
   ReadySummaryListPage,
   ReadySummaryDetailPage,
 } from '@/pages/assignment';
@@ -245,15 +244,7 @@ export function App() {
           </DirectorOrSectionChiefRoute>
         }
       />
-      {/* M03c 簽核審閱：director（寫入），section_chief 可進但唯讀 */}
-      <Route
-        path="/assignment/lists/:listNo/approval"
-        element={
-          <DirectorOrSectionChiefRoute>
-            <ApprovalReviewPage />
-          </DirectorOrSectionChiefRoute>
-        }
-      />
+      {/* M03c 簽核：核准/拒絕已改為名單定義頁卡片就地操作（29c 審閱頁於 2026-05-26 移除） */}
       {/* M03d 準備完成名單清單 + 詳情：director + section_chief */}
       <Route
         path="/assignment/ready-summary"

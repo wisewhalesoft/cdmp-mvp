@@ -13,8 +13,9 @@ status: Draft
 
 # F087: 部長拒絕名單並退回個別業務比例設定（簽核拒絕）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **UI 實作註記（2026-05-26）**：拒絕操作改為 **27-list-definition.html「待簽核」欄卡片就地** 進行（點「拒絕」→ reason modal（必填 1-500 字 + 快速 chip）→ `rejectList`）；此與 AC-2「點拒絕→彈出拒絕對話框」一致，僅由原 29c 審閱頁底部移至卡片就地。原 29c「簽核審閱獨立頁」已移除，prototype `29c-approval-review.html` 標記 SUPERSEDED。後端 API / 雙寫語意 / Guard 不變。
 > **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum 與 real code 雙寫實況：
 > 1. **`AC` 內 `action = 'REJECT'` 字串修正**：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）為 `STAGE_REJECT`（VARCHAR(30)，不包含 `REJECT`）；F087 拒絕走 `StageTransitionService.rejectTo()` → 寫入 `action = 'STAGE_REJECT'`（`stage-transition.service.ts:118-138`）。spec 內 `action = 'REJECT'` 改為 `action = 'STAGE_REJECT'`。
 > 2. **新增 §6.X 拒絕記錄之資料雙寫範式**：明列 real code 行為 — F087 拒絕於**同一 transaction** 內**雙寫兩張表**：(a) `assignment_audit_log` action='STAGE_REJECT'（stage transition 稽核）；(b) `assignment_approval` action='reject' + reject_reason（小寫 enum，記錄簽核者 + 拒絕原因，供 F082 v1.1 latestRejection banner 觸發機制查詢）。

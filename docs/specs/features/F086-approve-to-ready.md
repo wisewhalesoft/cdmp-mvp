@@ -13,8 +13,9 @@ status: Draft
 
 # F086: 部長核准名單（簽核 → 準備完成）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **UI 實作註記（2026-05-26）**：核准操作改為 **27-list-definition.html「待簽核」欄卡片就地** 進行（點「核准」→ success confirm modal → `approveList`）；原 29c「簽核審閱獨立頁」（`approval-review-page.tsx` + 路由 `/assignment/lists/:listNo/approval`）已移除，prototype `29c-approval-review.html` 標記 SUPERSEDED。審閱完整快照改由卡片「查看」Detail Drawer（4-tab）提供。後端 API / Guard / 寫入語意不變（本註記不改 AC，僅記錄 UI 入口變更）。
 > **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum 與 real code 雙寫實況：
 > 1. **`AC` 內 `action = 'APPROVE'` 字串修正**：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）**不包含** `APPROVE`；F086 核准走 `StageTransitionService.advanceTo()` → 寫入 `action = 'STAGE_ADVANCE'`（`stage-transition.service.ts:89`）。spec 內 `action = 'APPROVE'` 改為 `action = 'STAGE_ADVANCE'`。
 > 2. **新增 §6.X 核准記錄之資料寫入範式**：明列 real code 行為 — F086 目前**僅單寫** `assignment_audit_log`（action='STAGE_ADVANCE'，含 stage transition），**不寫** `assignment_approval` 表（與 F087 拒絕之雙寫對稱不一致；`stage-action.service.ts:254-279` 之 `approveToReady` 未呼叫 `assignment_approval.insert`）。

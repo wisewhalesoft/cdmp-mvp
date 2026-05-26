@@ -16,6 +16,6 @@ export { RunComparePage } from './run-compare-page';
 // E07 P1 — M03 5 個獨立頁
 export { DeptRatioConfigPage } from './dept-ratio-config-page';
 export { PersonnelRatioConfigPage } from './personnel-ratio-config-page';
-export { ApprovalReviewPage } from './approval-review-page';
+// 29c ApprovalReviewPage 已於 2026-05-26 移除（核准/拒絕改名單定義頁卡片就地操作）
 export { ReadySummaryListPage } from './ready-summary-list-page';
 export { ReadySummaryDetailPage } from './ready-summary-detail-page';

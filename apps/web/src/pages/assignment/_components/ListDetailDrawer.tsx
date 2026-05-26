@@ -16,10 +16,24 @@
  */
 
 import { useEffect, useState } from 'react';
-import { X, Filter, Building2, Users, History as HistoryIcon, Archive } from 'lucide-react';
+import {
+  X,
+  Filter,
+  Building2,
+  Users,
+  History as HistoryIcon,
+  Archive,
+  Pencil,
+  ArrowRight,
+  Send,
+  Check,
+  XCircle,
+  RotateCcw,
+} from 'lucide-react';
 import {
   getFullSnapshot,
   type FullSnapshotResponse,
+  type SnapshotAuditTrailItem,
   type ConditionItem,
 } from '@/api/assignment-list';
 
@@ -293,20 +307,103 @@ function PersonnelPanel({ data }: { data: FullSnapshotResponse }) {
   );
 }
 
+/**
+ * 簽核 / 設定歷程 timeline — 對齊 prototype 27 renderDrawerHistory（L1109-1140）。
+ *
+ * 每個 audit 事件依 action（+ after.toStage）映射為：彩色 icon / 簡短標題 / 事件說明，
+ * 事件說明內嵌行為人姓名（由後端 getFullSnapshot 以 users.name 解析）。
+ */
+const STAGE_LABEL_ZH: Record<string, string> = {
+  draft: '草稿',
+  dept_ratio: '部門比例',
+  personnel_ratio: '個別業務比例',
+  approval: '簽核',
+  ready: '準備完成',
+};
+
+interface HistoryView {
+  Icon: typeof Pencil;
+  color: string;
+  title: string;
+  desc: string;
+}
+
+function describeHistory(a: SnapshotAuditTrailItem): HistoryView {
+  const after = a.after;
+  const actor = a.operatorEmpNm ?? a.operatorId;
+  const toStage = (after?.toStage ?? after?.stage) as string | undefined;
+  const fromStage = after?.fromStage as string | undefined;
+  const rejectReason =
+    after && typeof after.rejectReason === 'string' ? (after.rejectReason as string) : null;
+
+  switch (a.action) {
+    case 'CREATE':
+      return { Icon: Pencil, color: '#6B7280', title: '建立名單', desc: `由 ${actor} 建立` };
+    case 'UPDATE':
+      return { Icon: Pencil, color: '#6B7280', title: '編輯名單', desc: `由 ${actor} 編輯名單內容` };
+    case 'STAGE_ADVANCE':
+      if (toStage === 'dept_ratio')
+        return { Icon: ArrowRight, color: '#3B82F6', title: '推進至部門比例', desc: `由 ${actor} 推進｜條件鎖定 / CR 鎖定` };
+      if (toStage === 'personnel_ratio')
+        return { Icon: ArrowRight, color: '#06B6D4', title: '推進至個別比例', desc: `由 ${actor} 推進｜通知各業務處長設定` };
+      if (toStage === 'approval')
+        return { Icon: Send, color: '#F59E0B', title: '送出簽核', desc: `由 ${actor} 送出，等待業務部長核准` };
+      if (toStage === 'ready')
+        return { Icon: Check, color: '#22C55E', title: '簽核核准', desc: `由 ${actor} 核准，名單推進至準備完成` };
+      return { Icon: ArrowRight, color: '#3B82F6', title: '推進階段', desc: `由 ${actor} 推進` };
+    case 'STAGE_ROLLBACK':
+      return {
+        Icon: RotateCcw,
+        color: '#F59E0B',
+        title: '退回階段',
+        desc:
+          fromStage && toStage
+            ? `由 ${actor} 退回（${STAGE_LABEL_ZH[fromStage] ?? fromStage} → ${STAGE_LABEL_ZH[toStage] ?? toStage}）`
+            : `由 ${actor} 退回上一階段`,
+      };
+    case 'STAGE_REJECT':
+      return {
+        Icon: XCircle,
+        color: '#EF4444',
+        title: '簽核拒絕',
+        desc: `由 ${actor} 拒絕。理由：${rejectReason ?? '（未填）'}。已退回個別業務比例階段。`,
+      };
+    default:
+      return { Icon: Pencil, color: '#6B7280', title: a.action, desc: `由 ${actor}` };
+  }
+}
+
+function formatHistoryTime(at: string): string {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return String(at);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function HistoryPanel({ data }: { data: FullSnapshotResponse }) {
   if (data.auditTrail.length === 0) {
     return <p className="text-sm text-gray-500 italic">尚無操作歷史</p>;
   }
   return (
-    <ul className="space-y-2 text-xs">
-      {data.auditTrail.map((a, idx) => (
-        <li key={idx} className="border-l-2 border-gray-200 pl-3 py-1">
-          <div className="font-semibold text-gray-700">{a.action}</div>
-          <div className="text-gray-500">
-            {a.operatorEmpNm ?? a.operatorId} · {new Date(a.at).toLocaleString()}
-          </div>
-        </li>
-      ))}
-    </ul>
+    <ol className="relative border-l border-gray-200 ml-2 space-y-4 pl-5 pt-1">
+      {data.auditTrail.map((a, idx) => {
+        const v = describeHistory(a);
+        const Icon = v.Icon;
+        return (
+          <li key={idx} data-testid={`history-item-${idx}`} className="relative">
+            <span
+              className="absolute -left-[26px] top-1.5 w-2.5 h-2.5 rounded-full"
+              style={{ background: v.color, boxShadow: `0 0 0 2px ${v.color}30` }}
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono text-gray-400">{formatHistoryTime(String(a.at))}</span>
+              <Icon className="w-3 h-3 shrink-0" style={{ color: v.color }} />
+              <span className="text-sm font-medium text-gray-800">{v.title}</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">{v.desc}</p>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

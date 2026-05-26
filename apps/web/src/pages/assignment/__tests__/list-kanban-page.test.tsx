@@ -18,7 +18,6 @@
  *   - commit 8：F081 / F085 / F089 Rollback toast + 卡片遷移
  */
 import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ListDefinitionPage } from '../list-definition-page';
@@ -49,6 +48,8 @@ const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
+const mockedApproveList = vi.mocked(assignmentStageApi.approveList);
+const mockedRejectList = vi.mocked(assignmentStageApi.rejectList);
 
 function makeItem(over: Partial<AssignmentListItem>): AssignmentListItem {
   return {
@@ -612,6 +613,103 @@ describe('F048 v2.0 — Detail Drawer（TS-F048-D-001~003）', () => {
   });
 });
 
+describe('Detail Drawer 簽核歷史 — 階段事件 + 拒絕原因（entity_type fix 2026-05-26）', () => {
+  function snapshotWithHistory() {
+    return {
+      list: {
+        listNo: 'OB202605050',
+        listNm: '簽核歷史測試名單',
+        stage: 'personnel_ratio' as const,
+        status: 'active' as const,
+        projectWorkym: '202605',
+        cardType: null,
+        crEnabled: true,
+        listPeriodStart: '1',
+        listPeriodEnd: '6',
+        listInterval: '1',
+        conditionPayload: { conditions: [], logic: 'AND' as const },
+        legacyEntityFallback: null,
+        createdBy: 'u-1',
+        createdAt: '2026-05-09T01:14:00Z',
+        updatedAt: '2026-05-09T01:14:00Z',
+      },
+      deptRatios: [],
+      personnelRatios: [],
+      auditTrail: [
+        {
+          action: 'CREATE',
+          operatorId: 'u-1',
+          operatorEmpNm: '王部長',
+          before: null,
+          after: { stage: 'draft' },
+          at: '2026-05-09T01:14:00Z',
+        },
+        {
+          action: 'STAGE_ADVANCE',
+          operatorId: 'u-1',
+          operatorEmpNm: '王部長',
+          before: { fromStage: 'personnel_ratio' },
+          after: { fromStage: 'personnel_ratio', toStage: 'approval' },
+          at: '2026-05-10T09:00:00Z',
+        },
+        {
+          action: 'STAGE_REJECT',
+          operatorId: 'u-1',
+          operatorEmpNm: '王部長',
+          before: null,
+          after: { fromStage: 'approval', toStage: 'personnel_ratio', rejectReason: '比例分配不均，請重新調整' },
+          at: '2026-05-10T14:22:00Z',
+        },
+      ],
+    };
+  }
+
+  it('DRW-HIST-001 簽核歷史頁籤顯示階段事件人類可讀標題（送出簽核）+ 拒絕原因', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [makeItem({ listNo: 'OB202605050', stage: 'personnel_ratio' })],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 1,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    const mockedGetFullSnapshot = vi.mocked(assignmentListApi.getFullSnapshot);
+    mockedGetFullSnapshot.mockResolvedValue(snapshotWithHistory());
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-view-OB202605050')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-view-OB202605050'));
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-drawer')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('drawer-tab-history'));
+    await waitFor(() => {
+      const panel = screen.getByTestId('drawer-panel-history');
+      // raw enum 不再裸露；改為人類可讀標題
+      expect(panel.textContent).toContain('建立名單');
+      expect(panel.textContent).toContain('送出簽核'); // STAGE_ADVANCE → approval
+      expect(panel.textContent).toContain('簽核拒絕'); // STAGE_REJECT
+      expect(panel.textContent).not.toContain('STAGE_REJECT');
+    });
+    const panel = screen.getByTestId('drawer-panel-history');
+    // 事件說明內嵌行為人姓名（由 getFullSnapshot 解析 users.name）
+    expect(panel.textContent).toContain('王部長');
+    // 拒絕原因顯示於事件說明
+    expect(panel.textContent).toMatch(/比例分配不均，請重新調整/);
+    // 時間軸結構：每事件一個 history-item，時間格式 YYYY-MM-DD HH:mm
+    expect(screen.getByTestId('history-item-0')).toBeTruthy();
+    expect(panel.textContent).toMatch(/2026-05-\d{2} \d{2}:\d{2}/);
+  });
+});
+
 describe('F049 v1.1 / F061 v1.4 — Ready CTA Banner（TS-F049-CTA-001~005 + F061-CTA-001~003）', () => {
   function withReady(readyCount: number, locked = false, historical = false) {
     return buildResponse({
@@ -1008,6 +1106,162 @@ describe('F081 / F085 / F089 v1.3 — Rollback toast + 卡片即時遷移（TS-F
     // CTA Banner 因 ready=0 消失
     expect(screen.queryByTestId('ready-cta-banner')).toBeNull();
     expect(mockedRollbackApproval).toHaveBeenCalledWith('OB202605030');
+  });
+});
+
+describe('F086 / F087 — approval 卡片就地核准 / 拒絕（29c 審閱頁移除後）', () => {
+  function approvalResponse() {
+    return buildResponse({
+      lists: [makeItem({ listNo: 'OB202605040', stage: 'approval' })],
+      stageCounts: {
+        draft: 0,
+        dept_ratio: 0,
+        personnel_ratio: 0,
+        approval: 1,
+        ready: 0,
+        disabled: 0,
+      },
+    });
+  }
+
+  it('APV-001 點「核准」→ 開核准 confirm modal（不離開頁面，無導航）', async () => {
+    mockedListLists.mockResolvedValue(approvalResponse());
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-approve-OB202605040')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-approve-OB202605040'));
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-approve-modal')).toBeTruthy();
+    });
+    // 仍停留在 Kanban（就地操作，非導航至審閱頁）
+    expect(screen.getByTestId('kanban-board')).toBeTruthy();
+  });
+
+  it('APV-002 核准確認 → 呼叫 approveList + refetch → 卡片離開待簽核欄', async () => {
+    mockedApproveList.mockResolvedValue({ listNo: 'OB202605040', stage: 'ready' });
+    let callCount = 0;
+    mockedListLists.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) return approvalResponse();
+      // 核准後 refetch：卡片到 ready 欄
+      return buildResponse({
+        lists: [makeItem({ listNo: 'OB202605040', stage: 'ready' })],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 1,
+          disabled: 0,
+        },
+      });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-approve-OB202605040')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-approve-OB202605040'));
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-confirm-approve')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-confirm-approve'));
+
+    await waitFor(() => {
+      expect(mockedApproveList).toHaveBeenCalledWith('OB202605040');
+    });
+    // refetch 後卡片遷至 ready 欄
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId('kanban-column-ready')).getByTestId('kanban-card-OB202605040'),
+      ).toBeTruthy();
+    });
+    expect(
+      within(screen.getByTestId('kanban-column-approval')).queryByTestId('kanban-card-OB202605040'),
+    ).toBeNull();
+  });
+
+  it('APV-003 點「拒絕」→ 開 reject modal 含快速 chip', async () => {
+    mockedListLists.mockResolvedValue(approvalResponse());
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-reject-OB202605040')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-reject-OB202605040'));
+    await waitFor(() => {
+      expect(screen.getByTestId('reject-modal')).toBeTruthy();
+    });
+    expect(screen.getByTestId('reject-reason-chips')).toBeTruthy();
+    // reason 為空 → 確認拒絕 disabled
+    expect((screen.getByTestId('btn-confirm-reject') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('APV-004 填拒絕原因 → 確認 → 呼叫 rejectList(reason) + refetch', async () => {
+    mockedRejectList.mockResolvedValue({
+      listNo: 'OB202605040',
+      stage: 'personnel_ratio',
+    });
+    let callCount = 0;
+    mockedListLists.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) return approvalResponse();
+      return buildResponse({
+        lists: [makeItem({ listNo: 'OB202605040', stage: 'personnel_ratio' })],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 0,
+          personnel_ratio: 1,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-reject-OB202605040')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-reject-OB202605040'));
+    await waitFor(() => {
+      expect(screen.getByTestId('reject-modal')).toBeTruthy();
+    });
+    fireEvent.change(screen.getByTestId('reject-reason-textarea'), {
+      target: { value: '比例分配不均，請重新調整' },
+    });
+    const confirmBtn = screen.getByTestId('btn-confirm-reject') as HTMLButtonElement;
+    expect(confirmBtn.disabled).toBe(false);
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockedRejectList).toHaveBeenCalledWith('OB202605040', {
+        rejectReason: '比例分配不均，請重新調整',
+      });
+    });
+    // refetch 後卡片遷至 personnel_ratio 欄
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId('kanban-column-personnel_ratio')).getByTestId(
+          'kanban-card-OB202605040',
+        ),
+      ).toBeTruthy();
+    });
+  });
+
+  it('APV-005 套用快速 chip → 填入 textarea', async () => {
+    mockedListLists.mockResolvedValue(approvalResponse());
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-reject-OB202605040')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-reject-OB202605040'));
+    await waitFor(() => {
+      expect(screen.getByTestId('reject-modal')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('比例分配不均'));
+    const textarea = screen.getByTestId('reject-reason-textarea') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('比例分配不均，請參考 4 月慣例調整為均衡分配');
   });
 });
 
