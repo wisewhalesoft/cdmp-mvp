@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.15"
+version: "2.16"
 status: draft
-last_updated: 2026-05-21
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089]
+last_updated: 2026-05-26
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：67 份（4 策略文件 + 56 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1169 個（E01～E04 共 289 + F002SM 共 25 + E05 Pipeline 管理 11 Features 共 273 + F038 共 45 + F039 共 22 + F040 共 6 + F041 共 12 + F042 共 21 + F043 共 58 + F044 共 17 + E06 F046 共 31 + F047 共 38 + E07 M02 計分設定 F053 共 13 + F054 共 24 + F055 共 21 + F056 共 28 + **E07 M07 角色整合 F073/F074 E02 整合 共 63** + **E07 M06 篩選欄位管理 F075 共 53** + **E07 M08 Whitelist-Driven F050/F051/F076/F068-deprecated 共 116** + **M01 整合測試 21** + **M01-MIG Migration 測試 26**；另 F039-strategy 4 個策略場景另計）
+> **測試文件總數**：70 份（4 策略文件 + 59 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
+> **總測試場景數**：1225 個（前 1169 + **E07 Stage 1 精確化工程 F090 共 13 + F091 共 30 + F092 共 26 = +56**，合計 1225）
+> **Stage 1 精確化工程新增（2026-05-26）**：新增 3 個 test spec 檔（F090 / F091 / F092）。Phase 1（F090）ETL + data_source schema 13 個場景；Phase 2（F091）Stage 1 三步驟補完整 30 個場景（MONTH_CNT × 6 + 去重 × 5 + 特殊 DELETE × 8 + 封裝 × 5 + Regression × 3 + 誤差 × 3）；Phase 3（F092）dry-run 精確估算 26 個場景（唯讀 × 4 + 一致性 × 3 + estimateListCount 升級 × 4 + F049/F088 升級 × 4 + Regression × 3）。⚠️ F091 為唯一改變 production 月跑案件數的階段（deploy 後立即生效、無 flag）；既有 Stage 1 pipeline integration test baseline 需同步更新。
 > **M01 v2.0~v2.3 Kanban 重構 + Detail Snapshot + Signal（2026-05-21）**：新增 9 個 test spec 檔（F048/F049/F052/F061 v1.4/F077/F081/F085/F089；F050 升版 v2.2）。新增場景合計 **103 個**：F050 v2.2 +19（SS 群 12 + SIG 群 7）、F048 v2.0 新建 15（K 群 8 + 搜尋 2 + Drawer 3 + Banner 2）、F049 v1.1 新建 5（CTA-001~005）、F052 v2.1 新建 3（TXT-001~003）、F077 v1.3 新建 23（矩陣 15 + 橫切 6 + Integration 2）、F081 v1.3 新建 6（Integration 4 + Component 2）、F085 v1.3 新建 6（Integration 4 + Component 2）、F089 v1.3 新建 7（Integration 4 + Component 3）、F061 v1.4 新建 3（CTA-001~003）。Deprecated 標記：F048 v1.0 表格列 AC-1 + 頁籤 AC-5；F052 「停」縮寫按鈕斷言。
 >
 > **F050 v2.1.1 補強（2026-05-20）**：F050 新增 45 個場景（TS-F050-A01~K01c）：US-126 card-type dropdown 建立頁（A/D/E/H 群組）、US-127 card-type dropdown 編輯頁（I 群組）、US-128 prodBest 欄位移除（B/C/F 群組）、US-129 best_case Y/N options seed（A/G 群組）、E2E 整合（J 群組）、Regression Guard fs+regex（K 群組）。F076 v1.6 新增 3 個場景（TS-F076-009~011）：best_case Y/N seed 正確性、N 標籤覆寫驗證（UPSERT DO UPDATE）、冪等。F075 v1.6 新增 3 個場景（TS-F075-051~053）：M-A1 whitelist seed 驗證、冪等、API 整合。共 +50 個場景。
@@ -147,7 +148,12 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | M01-INT | Whitelist-Driven 條件 Payload 端對端整合測試（含 OQ-TEST-001/002） | P0-MVP | [integration/M01-whitelist-driven-integration-test.md](integration/M01-whitelist-driven-integration-test.md) | 21 | Draft |
 | M01-MIG | F050 v2.1 Migration M1~M5 測試設計 | P0-MVP | [migration/M01-migration-test.md](migration/M01-migration-test.md) | 26 | Draft |
 | **E07 M08 小計** | | | **6 files** | **161** | |
-| **總合計** | | | **60 files** | **1169** | |
+| **E07 Stage 1 精確化工程** | | | | | |
+| F090 | OBPOOLDATA_LIST ETL 載入與 data_source 標記（Phase 1） | P0-MVP | [F090-test.md](features/F090-test.md) | 13 | Draft |
+| F091 | Stage 1 補完整（MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE）（Phase 2）⚠️ | P0-MVP | [F091-test.md](features/F091-test.md) | 30 | Draft |
+| F092 | Stage 1 完整鏈 Dry-run 精確估算（Phase 3） | P0-MVP | [F092-test.md](features/F092-test.md) | 26 | Draft |
+| **E07 Stage 1 精確化小計** | | | **3 files** | **69** | |
+| **總合計** | | | **63 files** | **1225** | |
 
 ---
 
@@ -379,6 +385,19 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **整合測試位置**：M01 整合測試 → `integration/M01-whitelist-driven-integration-test.md`；Migration 測試 → `migration/M01-migration-test.md`
 - **建議載入順序補充**：F050/F051 實作前需先完成 F075/F076 + M3/M4 migration；F068 廢棄需在 F069 切換完成後執行 M5
 
+**E07 Stage 1 精確化工程特殊注意（F090 / F091 / F092）：**
+- **建議載入順序**：F090 → F091 → F092（三者相依，依序 deploy）
+- **F090 migration no-op 慣例**：migration `1711360000291-AddObPoolDataListDataSource` 在 SQLite 環境為 no-op（DB_TYPE 分支）；PostgreSQL TestContainer 才執行 ALTER TABLE / CREATE INDEX
+- **F090 ETL fullMode 護欄**：`E07-OBPOOLDATA_LIST-Load.fullMode` **必須為 false**（不可 TRUNCATE 全表，否則清除月跑輸出）；TS-F090-ETL-005 靜態 grep 驗證
+- **F091 PRODUCTION 行為變更（⚠️ 必讀）**：F091 是三階段唯一改變 production 月跑案件數的階段，deploy 後立即生效（無 flag）。既有 `assignment-run-pipeline.service.spec.ts` 等 Stage 1 pipeline Integration test 的**案件數 baseline 必須在 F091 PR merge 前更新**（詳見 TS-F091-RG-002）
+- **F091 mock 注意**：`list_nm` 字串比對（中結 / 強案 / 年資 / 白牌）mock 必須含**真實繁體中文**；`assignday` mock 必須為 `yyyyMMdd` 字串格式（與 F090 ETL 格式一致）
+- **F091 特殊 DELETE 型別**：`deal_num` 在 entity 為 `string | null`（NUMERIC），比較前必須 `Number()` 轉換；`year_produ` 為 `string | null`，字串比較（固定 4 碼，等效數值比較）
+- **F091 執行順序**：詐騙白牌（SP L69）在近 3 個月去重（SP L77）**之前**執行；中結強案（SP L90）在中結（SP L98）之前（忠實複刻 SP 順序）
+- **F091 + F092 互依**：TS-F091-CH-004（dry-run ≡ run 一致性）是 F092 AC-3 的前置驗證；F091 CH-004 必須先 pass，F092 才能合理驗收
+- **F092 estimateListCount 升級**：升級後呼叫 `executeStage1Chain({ dryRun: true })`；舊版 `buildPoolCountQuery` / `buildStage1WhereConditions().count()` 路徑應移除（TS-F092-RG-001 grep 驗證）
+- **F092 dry-run 去重查詢**：dry-run 允許讀取 `ob_pool_data_list`（去重 SELECT），但**不寫入**（TS-F092-DR-001 spy 驗證區分讀寫）
+- **F049 BR-6 語意矛盾**：F092 部署後「估算為上界」描述已過時；TS-F092-RG-002 標注需更新 F049-test.md + F049 spec BR-6（由後續 spec-writer 或本輪使用者確認後處理）
+
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
 - `test-levels.md` — 各層級測試策略
@@ -423,6 +442,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-05-26 | **Stage 1 精確化工程（F090/F091/F092）新增（v2.16）**：新增 3 個 test spec 檔，共 56 個測試場景。F090（13 場景）：migration m291 可逆 + ETL 歷史限定 + per-data_source 截斷不傷月跑 + 欄位映射完整性。F091（30 場景）：MONTH_CNT 期別過濾純函式 × 6、近 3 個月去重 × 5（含 Integration PG TC 聯集驗證）、特殊 DELETE 四類 SP 逐條對照 × 8、Stage1FilterChain 封裝與執行順序 × 5、Regression × 3（⚠️ 既有 Stage 1 pipeline baseline 需更新）。F092（26 場景）：dry-run 唯讀 × 4、dry-run ≡ run 精確一致（核心）× 3、estimateListCount 升級 × 4、F049/F088 升級 × 4、Regression × 3。版本升至 v2.16；總場景數由 1169 增至 1225 | Test Designer Agent |
 | 2026-03-12 | 初版建立，16 個 Feature 測試設計 + 4 個策略文件 | Test Designer Agent |
 | 2026-03-18 | 新增 E04 資料擷取（F017–F025）9 個 Feature 測試文件，共 79 個測試場景 | Test Designer Agent |
 | 2026-03-18 | raw data 落地需求變更：更新 F017/F019（targetTable → sourceTable, rawTableName）、大幅更新 F021（動態建表/批次寫入/全量截斷/增量追加/SQL Injection）、更新 F022（「預覽資料」連結顯示條件）、新增 F026（raw data 預覽，36 個測試場景）；總測試場景數由 196 增至 247 | Test Designer Agent |

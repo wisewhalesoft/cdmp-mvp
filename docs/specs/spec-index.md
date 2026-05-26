@@ -1,13 +1,21 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.4"
-date: 2026-05-20
+version: "3.5"
+date: 2026-05-26
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.5 / 2026-05-26 / Stage 1 精確化工程三階段交付（AD-E07-21~24）**：依 system-architect AD-E07-21~24 v1.1（全部 DP Resolved），新建 3 個 feature spec 落地 Stage 1 精確化三階段。本輪變更檔案：
+> - **新建 v1.0**：[F090-obpooldata-list-etl.md](features/F090-obpooldata-list-etl.md)（Phase 1 — OBPOOLDATA_LIST 雙層 ETL + `data_source` 欄 migration `1711360000291`，歷史限定 `PROJECT_WORKYM < 本月`）、[F091-stage1-complete-month-cnt-dedup-special-delete.md](features/F091-stage1-complete-month-cnt-dedup-special-delete.md)（Phase 2 — Stage 1 補完整：MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，忠實複刻 SP，封裝 `Stage1FilterChain`）、[F092-stage1-dry-run-estimate.md](features/F092-stage1-dry-run-estimate.md)（Phase 3 — 完整鏈 dry-run 精確估算，per-list estimate / F088 物化升級）
+> - **對應 User Story**：US-133（Phase 1 ETL）、US-134（Phase 2 Stage 1 補完整）、US-135（Phase 3 dry-run）
+> - **權威來源**：[architecture-spec.md AD-E07-21~24 v1.1](architecture-spec.md)（system-architect 維護，全部 6 個 DP Resolved）；[data-model.md v1.15](data-model.md)（`ob_pool_data_list.data_source` 欄已由 system-architect 同步）
+> - **⚠️ Production 影響**：F091（Phase 2）為唯一改變 production 月跑分派案件數之階段，**無 feature flag、deploy 後直接生效**（DP-AD23-2），須 deploy 前業務知會。F090 / F092 不影響月跑案件數。
+> - **對既有 spec 影響（交叉引用，未逕自改寫）**：F092 升級 estimate 語意（「條件符合上界」→「完整 Stage 1 預估」），影響 [F049 BR-6](features/F049-stage0-daily-estimate.md) 與 [F088 estimateCases / BR-10](features/F088-ready-stage-summary.md)；F092 §11 已標示矛盾點，正式改寫 F049 BR-6 / F088 BR-10 由後續輪次或用戶確認後處理
+> - **刻意未動**：architecture-spec.md / data-model.md（system-architect 範疇）；code / test（tdd-implementation 範疇）；無新建 prototype（Phase 3 沿用 `30-stage0-estimate.html` + `29d-ready-summary.html`）
+>
 > **v3.4 / 2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構**：依 GAP-LIST §A1~A6 解除 spec 內部矛盾。本輪變更檔案：
 > - **升 v2.1**：[F050-create-list-definition.md](features/F050-create-list-definition.md)、[F051-edit-list-definition.md](features/F051-edit-list-definition.md)（condition_payload 為 source of truth；新增 4 個 error code 引用：`CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_CONDITION_READONLY` / `LEGACY_LIST_NOT_COPYABLE`）
 > - **升 v1.5**：[F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md)（seed 補 case_status，6 筆）、[F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md)（seed 補 case_status 4 筆 + caseyear 確認 8 筆 + spec_tp 升真實 dump **52 筆**，OBMCODEDF TBL_ID='12'）
@@ -56,9 +64,9 @@ status: Draft
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 38 |
+| Feature 文件（E07） | 41 |
 | Mermaid 圖表 | 39 |
-| **總計** | **131** |
+| **總計** | **134** |
 
 ---
 
@@ -240,6 +248,16 @@ status: Draft
 | F062 | [F062-view-run-progress.md](features/F062-view-run-progress.md) | 查看分派執行進度（3 秒 Polling） | US-082 | P0-MVP |
 | F063 | [F063-view-run-result-summary.md](features/F063-view-run-result-summary.md) | 查看分派結果摘要（部門偏差 / 等級分佈） | US-083 | P0-MVP |
 | F064 | [F064-export-assignment-result.md](features/F064-export-assignment-result.md) | 匯出分派結果（Excel / CSV streaming） | US-084 | P0-MVP |
+
+#### M04 — Stage 1 精確化工程（三階段交付，AD-E07-21~24 / 2026-05-26）
+
+> 依 [architecture-spec.md AD-E07-21~24 v1.1](architecture-spec.md)（全部 DP Resolved）落地。三階段相依序列 F090 → F091 → F092。**⚠️ F091（Phase 2）為唯一改變 production 月跑分派案件數之階段，無 feature flag、deploy 後直接生效（DP-AD23-2），須 deploy 前業務知會。**
+
+| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+|------------|------|------|-----------|--------|
+| F090 | [F090-obpooldata-list-etl.md](features/F090-obpooldata-list-etl.md) | **Phase 1 — OBPOOLDATA_LIST ETL 載入與 `data_source` 標記**（E07-OBPOOLDATA_LIST-Extract/-Load 雙層 ETL + migration `1711360000291-AddObPoolDataListDataSource`；歷史限定 `PROJECT_WORKYM < 本月`；不影響 production 月跑） | US-133 | P0-MVP（**v1.0 新增**）|
+| F091 | [F091-stage1-complete-month-cnt-dedup-special-delete.md](features/F091-stage1-complete-month-cnt-dedup-special-delete.md) | **Phase 2 — Stage 1 補完整**（MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE 忠實複刻 SP；封裝 `Stage1FilterChain`；**⚠️ 改變 production 月跑案件數、無 flag 直接生效**） | US-134 | P0-MVP（**v1.0 新增**）|
+| F092 | [F092-stage1-dry-run-estimate.md](features/F092-stage1-dry-run-estimate.md) | **Phase 3 — Stage 1 完整鏈 Dry-run 精確估算**（per-list estimate / F088 物化升級為完整鏈唯讀 dry-run COUNT ≡ 月跑；影響 F049 BR-6 / F088 estimateCases 語意，不寫表） | US-135 | P0-MVP（**v1.0 新增**）|
 
 #### M05 快照歷史
 

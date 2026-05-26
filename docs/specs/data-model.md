@@ -1,10 +1,12 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.14"
+version: "1.15"
 date: 2026-05-26
 status: Draft
 ---
+
+> **v1.15（2026-05-26 / Stage 1 精確化工程 AD-E07-21）**：`ob_pool_data_list` 欄位表新增 `data_source VARCHAR(20) NULL`（本系統新增欄位，值域 `'etl_legacy'` / `'monthly_run'`；migration `1711360000291-AddObPoolDataListDataSource`；AD-E07-21 DP-AD21-2 方案 A）。索引補入 `(data_source)` 與 `(assignday)`（去重視窗查詢用）。
 
 > **v1.14（2026-05-26 / F088 準備完成摘要）**：`ob_list_definition` 新增 `stage0_estimate_count`（INT, NULL）與 `stage0_estimated_at`（TIMESTAMP, NULL）兩欄，支援 approve→ready 物化估算快取（AD-E07-20）。`ob_dept_pct.created_by` 補入「設定者姓名查詢」用途說明。
 
@@ -1078,10 +1080,11 @@ PK：`(list_no, orgno, appl_no)`
 | is_cr | VARCHAR(1) | NULL | IS_CR | 是否為前業務員管理案件 |
 | cr_id | VARCHAR(20) | NULL | CR_ID | 前業務員工號 |
 | cr_nm | VARCHAR(50) | NULL | CR_NM | 前業務員姓名 |
+| data_source | VARCHAR(20) | NULL | —（本系統新增）| **資料來源標記**（AD-E07-21 DP-AD21-2 方案 A）。值域：`'etl_legacy'`（由 `E07-OBPOOLDATA_LIST-Load` ETL 載入的 legacy 派案歷史）/ `'monthly_run'`（由本系統月跑 Stage 1 寫入的本月分派結果）/ NULL（migration 前既有資料，語意同 `'monthly_run'`）。非 legacy 欄位，OBPOOLDATA_LIST 來源無此欄位；migration `1711360000291-AddObPoolDataListDataSource` 新增。 |
 
 > 其餘業務欄位（貸款明細、車輛資訊、業務員資訊等）完整映射 OBPOOLDATA_LIST，命名規範同上（snake_case，nvarchar → VARCHAR/TEXT，datetime → TIMESTAMP，numeric → NUMERIC，money → NUMERIC(19,4)）。
 
-**索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, emplid)`、`(list_no, dept_id)`
+**索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, emplid)`、`(list_no, dept_id)`、`(data_source)`（ETL DELETE 與路由用）、`(assignday)`（近 3 個月去重視窗查詢用，建議加 WHERE assignday IS NOT NULL，AD-E07-22 §22.3）
 
 ---
 

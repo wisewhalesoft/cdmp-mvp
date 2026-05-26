@@ -1,10 +1,12 @@
 ---
 type: architecture-spec
-version: "2.15"
+version: "2.16"
 status: draft
 last_updated: 2026-05-26
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089]
 ---
+
+> **v2.16 / 2026-05-26 變更摘要（Stage 1 精確化工程：AD-E07-21~24 + 6 個 DP 全部 Resolved）**：新增 AD-E07-21「OBPOOLDATA_LIST ETL 設計與 ob_pool_data_list 雙重角色」（ETL 雙層流程、DP-AD21-1 歷史限定策略、DP-AD21-2 方案 A `data_source` 欄 + migration `1711360000291`、DP-AD21-3 近似上界 WORKDT-1、欄位映射全表確認）；AD-E07-22「Stage 1 補完整：遺漏步驟對照 SP 落地設計」（MONTH_CNT 期別過濾 `buildMonthCntFragment`、近 3 個月去重應用層 + DP-AD21-3 上界確認、特殊 DELETE DP-AD22-1 忠實複刻決議 + OQ-STAGE1-01 結構化旗標 follow-up）；AD-E07-23「Stage 1 完整鏈 Dry-run 架構」（`Stage1FilterChain.executeStage1Chain` 單一入口、DP-AD23-1 完整鏈精確 dry-run、DP-AD23-2 無 flag 直接生效）；AD-E07-24「分階段交付計劃」（Phase 2 影響欄更新為「直接生效、需 deploy 前業務知會」；§24.3 風險管控改為無 flag 版本；§24.4 決策彙總表全 Resolved；§24.6 新增 OQ follow-up）。data-model.md 同步補入 `ob_pool_data_list.data_source` 欄位說明。
 
 > **v2.15 / 2026-05-26 變更摘要（F088 準備完成摘要：AD-E07-20 物化估算快取設計）**：新增 AD-E07-20「F088 準備完成摘要：物化估算快取設計」，涵蓋 (1) `ob_list_definition` 兩欄新增（`stage0_estimate_count` INTEGER NULL + `stage0_estimated_at` TIMESTAMP NULL）設計理由與 nullable 策略；(2) migration 命名（`1711360000290-AddObListDefinitionStage0EstimateCache`）+ PG/SQLite e2e 相容 DDL 草案；(3) `approveToReady()` best-effort hook 架構原則（transaction 之外、catch 不 rethrow）；(4) `AssignmentListModule` → `AssignmentStageModule` 單向 import wiring，`Stage0EstimateService` 注入路徑與循環依賴分析；(5) `ob_dept_pct.created_by` JOIN `users` 無 schema 變更之設計者姓名解析方案。
 
@@ -27,7 +29,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）** |
 
 ## 目錄
 
@@ -5054,6 +5056,519 @@ constructor(
 
 ---
 
+#### AD-E07-21　OBPOOLDATA_LIST ETL 設計與 ob_pool_data_list 雙重角色（2026-05-26）
+
+> **範圍**：本節定義 `OBPOOLDATA_LIST`（legacy 派案歷史）的 ETL 載入架構，以及 `ob_pool_data_list` 表的「雙重角色」如何在不引入資料衝突下共存。
+
+##### 21.1 背景
+
+**現況**：
+- `ob_pool_data_list`（migration m111）已由本系統月跑 Stage 1 寫入，為「本系統產出層」。
+- Legacy SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 執行時對 `OBPOOLDATA_LIST` 做 `DELETE WHERE LIST_NO = @LIST_NO` 後重新寫入，每次月跑為**全量取代（per list_no）**。
+- 近 3 個月去重規則（SP L74~L87）需查詢 `OBPOOLDATA_LIST.ASSIGNDAY` 判定近期已派案客戶，確認哪些 `CUSTO_NO` 不得重複派案。
+- 目前 `ob_pool_data_list` 為 0 筆，無 ETL，近 3 個月去重查詢將永遠回空集合，造成大量案件漏過去重過濾。
+
+**使用者指示**：比照 `ob_pool_data` 建 Extract + ETL job。
+
+##### 21.2 雙重角色模型
+
+`ob_pool_data_list` 承擔兩類資料的混合容器：
+
+| 資料來源 | 類型 | 代表欄位 |
+|---------|------|---------|
+| Legacy 歷史（ETL 載入，per LIST_NO 全量替換） | **歷史派案紀錄**，用於去重查詢 | `assignday`（VARCHAR 日期）, `custo_no`, `list_no` |
+| 本系統月跑輸出（Stage 1 寫入） | **本月分派結果**，用於 Stage 3/4 更新 `ob_dept` / `ob_emplid` | `ob_dept`, `ob_emplid`, `list_no` |
+
+**共存機制（per list_no 分區語意）**：
+
+SP 行為已提供天然邊界：每次執行前 `DELETE WHERE LIST_NO = @LIST_NO`，因此 `list_no` 是天然的「分區鍵」。本系統月跑與 ETL 歷史資料不重疊的條件如下：
+
+- ETL 載入對象：**上個月（或更早）已執行過的 LIST_NO 的歷史記錄**，這些 `list_no` 本月月跑前即已存在於 `OBPOOLDATA_LIST`（legacy 累積）。
+- 本系統月跑寫入：**本月新跑的 LIST_NO 記錄**，Stage 1 先 `DELETE WHERE list_no = :listNo` 再 INSERT，語意與 SP 完全對齊。
+
+**衝突風險評估**：若 ETL 載入目標月份（本月）與月跑同時執行同一 `list_no`，兩者均會 DELETE + INSERT，形成 race condition。
+
+> **[DP-AD21-1 ✅ Resolved 2026-05-26]**：採**歷史限定策略**。ETL Load Pipeline 僅載入 `PROJECT_WORKYM < 本月` 的歷史記錄，完全排除本月資料，消除與月跑的並發衝突。E05 Pipeline Load 節點於 SELECT 時加上 `WHERE PROJECT_WORKYM < :currentWorkym` 過濾條件。
+
+##### 21.3 ETL 設計（仿照 E07-OBPOOLDATA 雙層架構）
+
+| 層 | 名稱 | 說明 |
+|----|------|------|
+| E04 任務 | `E07-OBPOOLDATA_LIST-Extract` | `sourceSchema: 'dbo'`, `sourceTable: 'OBPOOLDATA_LIST'`, `mode: 'full'` |
+| E05 Pipeline | `E07-OBPOOLDATA_LIST-Load` | `targetTable: 'ob_pool_data_list'`, `fullMode: false`（**非全量替換**，見下方說明） |
+
+**關鍵設計決策：Load Mode 採 per-list_no 截斷而非全表 TRUNCATE**
+
+`ob_pool_data_list` 同時承載本系統月跑輸出，若採用 `fullMode: true`（TRUNCATE 全表）則每次 ETL 會清除本月月跑結果，造成 Stage 3/4 資料遺失。
+
+因此 E07-OBPOOLDATA_LIST-Load **不可用**既有的 `fullMode: true`，需採用客製化 Load 策略。
+
+**[DP-AD21-2 ✅ Resolved 2026-05-26]**：採**方案 A（`data_source` 欄標記）**。
+
+**選定方案說明**：
+
+| 面向 | 決策 |
+|------|------|
+| 新增欄位 | `ob_pool_data_list.data_source VARCHAR(20) NULL` |
+| 值域 | `'etl_legacy'`（ETL 歷史載入）/ `'monthly_run'`（本系統月跑 Stage 1 寫入）|
+| ETL Load 行為 | 先 `DELETE FROM ob_pool_data_list WHERE data_source = 'etl_legacy'`，再批次 INSERT（所有插入列填 `data_source = 'etl_legacy'`） |
+| Stage 1 月跑行為 | 每個 list_no 執行時先 `DELETE WHERE list_no = :listNo AND data_source = 'monthly_run'`，再 INSERT（所有插入列填 `data_source = 'monthly_run'`） |
+| 去重查詢 | 讀兩者聯集：`WHERE assignday BETWEEN ... AND ...`（不加 data_source 過濾，涵蓋所有來源）|
+
+**需新增 migration**（由 spec-writer / TDD Developer 實作）：
+
+```sql
+-- migration 命名建議：1711360000291-AddObPoolDataListDataSource
+ALTER TABLE ob_pool_data_list ADD COLUMN data_source VARCHAR(20) NULL;
+
+-- 建議同步補 INDEX（去重刪除用）
+CREATE INDEX idx_ob_pool_data_list_data_source ON ob_pool_data_list (data_source);
+```
+
+**需更新 Entity**（`ob-pool-data-list.entity.ts`）：
+```typescript
+@Column({ name: 'data_source', type: 'varchar', length: 20, nullable: true })
+data_source: string | null;
+```
+
+**data-model.md 同步**：已在 data-model.md 的 `ob_pool_data_list` 欄位表補入 `data_source` 說明（見 §data-model.md 同步記錄）。
+
+##### 21.4 欄位映射確認（OBPOOLDATA_LIST → ob_pool_data_list）
+
+SP INSERT 的欄位清單（SP L120~L140）與 `ob_pool_data_list.entity.ts` 逐一比對：
+
+| SP 欄位（OBPOOLDATA_LIST 來源）| entity 欄位 | 狀態 |
+|-------------------------------|------------|------|
+| A_PRGID | `created_by_prog` | ✅ 存在 |
+| A_USERID | `created_by` | ✅ 存在 |
+| A_SYSDT | `created_at` | ✅ 存在 |
+| U_PRGID | `updated_by_prog` | ✅ 存在 |
+| U_USERID | `updated_by` | ✅ 存在 |
+| U_SYSDT | `updated_at` | ✅ 存在 |
+| LIST_NO | `list_no` | ✅ 存在（PK） |
+| ORGNO | `orgno` | ✅ 存在（PK） |
+| APPL_NO | `appl_no` | ✅ 存在（PK） |
+| CUSTO_NO | `custo_no` | ✅ 存在 |
+| MONTH_CNT | `month_cnt` | ✅ 存在 |
+| YEAR_CNT | `year_cnt` | ✅ 存在（`ob_pool_data_list.entity.ts` L362） |
+| SETTLE_SRC | `settle_src` | ✅ 存在 |
+| ASSIGNDAY | `assignday` | ✅ 存在（VARCHAR 100） |
+| SPEC_TP | `spec_tp` | ✅ 存在 |
+| CUS_LEVEL | `cus_level` | ✅ 存在 |
+| CARD_LEVEL | `card_level` | ✅ 存在 |
+| TIER_LEVEL | `tier_level` | ✅ 存在 |
+| HOT_RECYCLE | `hot_recycle` | ✅ 存在 |
+| CR_ID | `cr_id` | ✅ 存在 |
+| CR_NM | `cr_nm` | ✅ 存在 |
+| IS_CR | `is_cr` | ✅ 存在 |
+| PAYT_TERM | `payt_term` | ✅ 存在（INTEGER） |
+| DEAL_NUM | `deal_num` | ✅ 存在 |
+| APPL_NO（LIKE 'T%' / 'Y%' 判斷用）| `appl_no` | ✅ 存在（PK） |
+| SPEC_NAME | `spec_name` | ✅ 存在 |
+| YEAR_PRODU | `year_produ` | ✅ 存在 |
+
+**結論**：Special-delete 規則所需的所有欄位（`payt_term`、`deal_num`、`appl_no`、`spec_name`、`year_produ`、`month_cnt`、`custo_no`、`assignday`）均已存在於 `ob_pool_data_list.entity.ts`。
+
+> **注意（DP-AD21-2 已決議）**：因採方案 A（`data_source` 欄），需新增一條 migration（`1711360000291-AddObPoolDataListDataSource`），以及 entity `@Column` 補充。此欄位為本系統新增，非 legacy 欄位，ETL 載入與 Stage 1 寫入均需設值。
+
+##### 21.5 去重查詢視窗資料來源
+
+SP 近 3 個月去重視窗查詢（L74~L87）：
+
+```sql
+-- SP 原始語意
+SET @Q_ASSIGNDAY_S = CONVERT(VARCHAR, DATEADD(MONTH, -3, @WORKDT), 112)  -- 3個月前
+SET @Q_ASSIGNDAY_E = ISNULL(MAX(o.CASEDT), @Q_ASSIGNDAY_E)                -- MAX CASEDT of OBASSSIGNSET
+FROM OBASSSIGNSET WHERE WORKDT < @WORKDT  -- 取前次執行日期調整上界
+
+;WITH TMP AS (
+  SELECT DISTINCT CUSTO_NO
+  FROM OBPOOLDATA_LIST
+  WHERE ASSIGNDAY >= @Q_ASSIGNDAY_S
+    AND ASSIGNDAY <= @Q_ASSIGNDAY_E
+)
+DELETE A FROM #TargetCase A JOIN TMP B ON A.CUSTO_NO = B.CUSTO_NO
+```
+
+**本系統應用層等效設計**：
+
+近 3 個月去重查詢資料來源為 `ob_pool_data_list`（含 ETL 歷史 + 本系統過去月跑輸出）。查詢條件：
+
+```sql
+SELECT DISTINCT custo_no
+FROM ob_pool_data_list
+WHERE assignday >= :assigndayStart  -- WORKDT - 3 個月（yyyyMMdd 字串比對）
+  AND assignday <= :assigndayEnd    -- 本月前一日；或取 max casedt 調整（見下方 OBASSSIGNSET 依賴說明）
+```
+
+**OBASSSIGNSET（`@Q_ASSIGNDAY_E` 上界調整）依賴問題**：
+
+SP 使用 `MAX(OBASSSIGNSET.CASEDT)` 動態調整上界。`OBASSSIGNSET` 為 legacy OB 系統的分派批次執行紀錄表。
+
+> **[DP-AD21-3 ✅ Resolved 2026-05-26]**：採**近似上界（WORKDT − 1 日）**。Phase 1 不建立 `OBASSSIGNSET` ETL，以 `workdt - 1 day`（本月第一天前一日，即上月末日）作為 `@Q_ASSIGNDAY_E` 的近似值。此為 SP 原始 ISNULL fallback 值，業務可接受。如未來精確度需求提升，再評估補建 `E07-OBASSSIGNSET-Extract` + Load（作為 OQ follow-up 項目，見 §24.5）。
+
+##### 21.6 近 3 個月去重與本系統月跑輸出的聯集策略（DP-AD21-1 已決議）
+
+ETL 只載入非本月歷史；本系統月跑輸出（`data_source='monthly_run'`）記錄過去幾個月的已派案 `custo_no`。近 3 個月去重查詢應涵蓋兩者，因為兩者都代表已派案的 custo_no。
+
+此需求由「兩類資料共存於同一表」的設計自然滿足：去重查詢 `ob_pool_data_list WHERE assignday BETWEEN :start AND :end`（不加 `data_source` 過濾）即自動涵蓋 ETL 歷史與本系統月跑輸出，無需 UNION 或特殊處理。
+
+##### 21.7 ETL 執行頻率與月跑前置條件
+
+| 時機 | 操作 |
+|------|------|
+| 月跑前（月初手動）| 執行 `E07-OBPOOLDATA_LIST-Extract` + `E07-OBPOOLDATA_LIST-Load`，確保去重歷史最新 |
+| 月跑執行（Stage 1）| 每個 list_no 先 DELETE ob_pool_data_list WHERE list_no = :listNo，再 INSERT 本次案件池 |
+
+> 注意：ETL 不應於月跑 Stage 1 進行中執行（避免 per-list DELETE 互相干擾）。月跑前手動完成 ETL 後才啟動月跑。
+
+---
+
+*本節版本 1.1（2026-05-26），由 System Architect Agent 依據使用者拍板決議更新（DP-AD21-1~3 全部 Resolved）。*
+- *v1.0 新增（2026-05-26）：初始設計*
+- *v1.1 更新（2026-05-26）：DP-AD21-1 歷史限定策略、DP-AD21-2 方案 A（data_source 欄 + migration 規範）、DP-AD21-3 近似上界決議*
+
+---
+
+#### AD-E07-22　Stage 1 補完整：遺漏步驟對照 SP 落地設計（2026-05-26）
+
+> **範圍**：本節定義 `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 中現行 pipeline 尚未實作的三個步驟的落地架構設計。
+
+##### 22.1 現行 Stage 1 缺口盤點
+
+| SP 步驟 | SP 所在位置 | 現行 pipeline 狀態 | 影響 |
+|--------|------------|------------------|------|
+| MONTH_CNT 期別過濾 | SP L38~L65（`@TmpTbl` + `WHERE MONTH_CNT IN (...)`) | `stage1-query-composer.ts` L157（流程圖提及 `month_cnt BETWEEN`，但 `stage1-query-composer.ts` 未實作此 fragment） | 未過濾期別，案件數偏多 |
+| 近 3 個月去重（CUSTO_NO） | SP L74~L87 | 完全未實作 | 重複派案風險 |
+| 特殊 DELETE（LIST_NM 字串比對） | SP L90~L112 | 完全未實作 | 中結強案/滿期/年資15年 案件混入 |
+
+##### 22.2 步驟一：MONTH_CNT 期別過濾
+
+**SP 邏輯**（L17~L65）：
+
+```sql
+-- 建立 @TmpTbl：從 LIST_PERIOD_START 到 LIST_PERIOD_END，步進 LIST_INTERVAL
+WHILE @LIST_PERIOD_START <= @LIST_PERIOD_END
+BEGIN
+  INSERT @TmpTbl VALUES (@LIST_PERIOD_START)
+  SET @LIST_PERIOD_START = @LIST_PERIOD_START + @LIST_INTERVAL
+END
+
+-- 篩選條件（FROM OBPOOLDATA WHERE MONTH_CNT IN (SELECT Data FROM @TmpTbl)）
+WHERE o.MONTH_CNT IN (SELECT Data FROM @TmpTbl)
+```
+
+**來源欄位**：`ob_list_definition.list_period_start`、`ob_list_definition.list_period_end`、`ob_list_definition.list_interval`（均為 INTEGER，對應 SP 的 `LIST_PERIOD_START`、`LIST_PERIOD_END`、`LIST_INTERVAL`）
+
+**落地設計**：
+
+在 `buildStage1WhereConditions()` 函式中新增「MONTH_CNT 期別集合生成」子函式：
+
+```
+function buildMonthCntFragment(
+  list: ObListDefinition
+): { fragment: string; params: Record<string, unknown> } | null
+
+邏輯：
+  若 list_period_start / list_period_end / list_interval 任一為 null → skip（不加 fragment，記 warning）
+  若 list_interval <= 0 → skip + warning（防 infinite loop）
+  生成 months = []
+  for m = list_period_start; m <= list_period_end; m += list_interval
+    months.push(m)
+  若 months.length === 0 → skip
+  return { fragment: '"month_cnt" IN (:...monthCntVals)', params: { monthCntVals: months } }
+```
+
+此 fragment 以 AND 連接至現有欄位篩選 fragments。
+
+**架構不變式**：`list_period_start / list_period_end / list_interval` 已確認為 J8 拍板「不入 whitelist，留一級欄位」（§18.2 J8），因此本步驟讀取 entity 一級欄位（路徑 A / B 共用）。
+
+##### 22.3 步驟二：近 3 個月已派案去重（CUSTO_NO）
+
+**SP 邏輯**（L73~L87）：
+
+```sql
+DECLARE @Q_ASSIGNDAY_S = CONVERT(VARCHAR, DATEADD(MONTH, -3, @WORKDT), 112)
+DECLARE @Q_ASSIGNDAY_E = ISNULL(MAX(o.CASEDT), DATEADD(DD,-1,@WORKDT))
+  FROM OBASSSIGNSET WHERE WORKDT < @WORKDT
+
+;WITH TMP AS (
+  SELECT DISTINCT CUSTO_NO FROM OBPOOLDATA_LIST
+  WHERE ASSIGNDAY >= @Q_ASSIGNDAY_S AND ASSIGNDAY <= @Q_ASSIGNDAY_E
+)
+DELETE A FROM #TargetCase A JOIN TMP B ON A.CUSTO_NO = B.CUSTO_NO
+```
+
+**SP 特殊點**：`@Q_ASSIGNDAY_E` 以 `OBASSSIGNSET.MAX(CASEDT)` 動態調整（非固定月初前一日）。**[DP-AD21-3 ✅ Resolved]** 採近似實作：`assigndayEnd = workdt - 1 day`（本月第一天前一日，即上月末日 yyyyMMdd 字串），不建立 OBASSSIGNSET ETL。
+
+**落地設計**：
+
+此步驟無法在純 SQL fragment（`buildStage1WhereConditions` pure function）中完成，因為需要**先查詢 `ob_pool_data_list`**（async DB 操作）。應於 `AssignmentRunPipelineService.runStage1ForList()` 中新增去重 subquery：
+
+```
+async runStage1ForList(list, workdt):
+  1. 計算去重視窗 [assigndayStart, assigndayEnd]
+     assigndayStart = workdt - 3 months（yyyyMMdd 字串）
+     assigndayEnd   = workdt - 1 day  （Phase 1 近似）
+  2. 從 ob_pool_data_list 查詢去重 CUSTO_NO 集合
+     recentAssignedCustoNos = SELECT DISTINCT custo_no FROM ob_pool_data_list
+                               WHERE assignday >= assigndayStart
+                                 AND assignday <= assigndayEnd
+                               AND custo_no IS NOT NULL
+  3. 取得欄位篩選後的 pool（現有邏輯 buildStage1WhereConditions + MONTH_CNT 過濾）
+  4. pool.filter(case => !recentAssignedCustoNos.has(case.custo_no))  — 應用層去重
+```
+
+**效能考量**：若 `ob_pool_data_list` 去重視窗記錄量龐大（N × 3 個月），可在 `assignday` 欄位建立 INDEX。**[建議新增 migration]**：`CREATE INDEX idx_ob_pool_data_list_assignday ON ob_pool_data_list (assignday) WHERE assignday IS NOT NULL`。
+
+> 注意：`assignday` 在 entity 為 `VARCHAR(100)`，字串比對大小寫/格式須與 ETL 載入的格式一致（yyyyMMdd）。
+
+##### 22.4 步驟三：特殊 DELETE（LIST_NM 字串比對）
+
+**SP 邏輯**（L90~L112）：
+
+```sql
+-- 規則 1：中結強案（同時符合 LIST_NM LIKE '%中結%強案%' 或 '%中結%_強案%'）
+IF EXISTS (SELECT * FROM OBMLISTDF WHERE LIST_NO = @LIST_NO AND LIST_NM LIKE '%中結%強案%')
+BEGIN
+  DELETE FROM #TargetCase
+  WHERE (PAYT_TERM >= DEAL_NUM - 3)          -- 已繳期數 >= 總期數 - 3（接近中結）
+     OR (APPL_NO LIKE 'T%' OR APPL_NO LIKE 'Y%')  -- 特定前綴 APPL_NO
+END
+
+-- 規則 2：中結（LIST_NM 含 '中結' 但不含 '強案'：注意 SP L98 僅判 '%中結%'，與規則 1 共用？）
+IF EXISTS (SELECT * FROM OBMLISTDF WHERE LIST_NO = @LIST_NO AND LIST_NM LIKE '%中結%')
+BEGIN
+  DELETE FROM #TargetCase
+  WHERE PAYT_NUM > DEAL_NUM - 8 AND SPEC_NAME LIKE '%滿%'  -- 最後 8 期且 spec 含滿
+END
+
+-- 規則 3：年資 15 年（LIST_NM 含 '年資' 或 '15年'）
+IF EXISTS (SELECT * FROM OBMLISTDF WHERE LIST_NO = @LIST_NO AND LIST_NM LIKE '%年資%')
+BEGIN
+  DELETE FROM #TargetCase
+  WHERE (ISNULL(YEAR_PRODU, '1900') < DATEPART(YEAR, @WORKDT) - 15)  -- 出廠年份距今 > 15 年
+END
+```
+
+> **注意**：SP L98 的 `LIST_NM LIKE '%中結%'` 實際上**比 L90 的中結強案判斷更寬**（包含中結強案），可能造成雙重刪除。本系統應用層應精確依照 SP 邏輯順序實作，不做優化合併。
+
+**LIST_NM 字串比對的脆弱性評估**（已知風險，業務接受）：
+
+| 風險 | 說明 | 嚴重度 |
+|------|------|--------|
+| 名稱多樣性 | `ob_list_definition.list_nm` 由使用者手動輸入，未來命名變更（如「中結強案 v2」）可能不 match | 高 |
+| Unicode 比對 | 「中結」「強案」「年資」為繁體中文字串，若 DB collation 與 SP 不一致可能 miss | 中 |
+| 邏輯耦合 | 刪除規則藏在名稱字串，無明確的業務規則欄位 | 高 |
+
+**[DP-AD22-1 ✅ Resolved 2026-05-26]**：採**忠實複刻方案（LIST_NM 字串比對）**。上述脆弱性為業務明確接受的風險；結構化旗標（方案 B）保留為未來 enhancement，記錄為 Follow-up OQ（見 §24.5 OQ-STAGE1-01）。
+
+**已決議落地方式（選項 A）**：
+
+於 `runStage1ForList()` 在應用層 pool 上依序套用：
+
+```typescript
+// 規則 1：中結強案
+if (list.list_nm?.includes('中結') && list.list_nm?.includes('強案')) {
+  pool = pool.filter(c =>
+    !(Number(c.payt_term) >= Number(c.deal_num) - 3 ||
+      c.appl_no.startsWith('T') || c.appl_no.startsWith('Y'))
+  );
+}
+// 規則 2：中結（含中結強案，依 SP 順序不合併）
+if (list.list_nm?.includes('中結')) {
+  pool = pool.filter(c =>
+    !(c.payt_num > Number(c.deal_num) - 8 && c.spec_name?.includes('滿'))
+  );
+}
+// 規則 3：年資 15 年
+if (list.list_nm?.includes('年資')) {
+  const currentYear = workdt.getFullYear();
+  pool = pool.filter(c =>
+    !((c.year_produ ?? '1900') < String(currentYear - 15))
+  );
+}
+```
+
+> **重要**：`payt_term`、`deal_num`、`payt_num`、`spec_name`、`appl_no`、`year_produ` 均已確認存在於 `ob_pool_data` entity 中，**無需新增欄位**。型別需注意：`payt_term` 為 INTEGER，`deal_num` / `payt_num` 為 NUMERIC（entity 宣告為 `string | null`），比較前需 `Number()` 轉換。
+
+##### 22.5 ob_pool_data 欄位完整性確認
+
+| Special-delete 規則所需欄位 | ob_pool_data entity 狀態 | 型別 |
+|--------------------------|------------------------|------|
+| `payt_term` | ✅ L309（INTEGER nullable）| `number \| null` |
+| `deal_num` | ✅ L82（NUMERIC(3,0) nullable）| `string \| null`（需 Number 轉換） |
+| `appl_no` | ✅ L34（VARCHAR PK）| `string` |
+| `spec_name` | ✅ L55（VARCHAR 45 nullable）| `string \| null` |
+| `year_produ` | ✅ L199（VARCHAR 4 nullable）| `string \| null` |
+| `month_cnt` | ✅ L360（INTEGER nullable）| `number \| null` |
+| `custo_no` | ✅ L37（VARCHAR 11）| `string` |
+
+**結論**：所有 special-delete 規則所需欄位均已存在，**無需新增 entity 欄位或 migration**。
+
+---
+
+*本節版本 1.1（2026-05-26），由 System Architect Agent 依據使用者拍板決議更新（DP-AD21-3、DP-AD22-1 Resolved）。*
+- *v1.0 新增（2026-05-26）：初始設計*
+- *v1.1 更新（2026-05-26）：DP-AD21-3 去重上界近似方案落地、DP-AD22-1 忠實複刻決議*
+
+---
+
+#### AD-E07-23　Stage 1 完整鏈 Dry-run 架構：唯讀複用設計（2026-05-26）
+
+> **範圍**：本節定義「正式月跑 Stage 1」與「dry-run 估算」共用同一完整篩選鏈的架構設計，消除 estimate / run 雙軌 drift 風險。
+
+##### 23.1 核心設計原則：Single Source of Truth
+
+**問題根源**：現行 `Stage0EstimateService.estimateListCount()` 使用 `buildStage1WhereConditions()` COUNT，但這只涵蓋欄位篩選（路徑 A/B），**不包含** MONTH_CNT 期別過濾、近 3 個月去重、特殊 DELETE 三步驟。正式月跑完成三步驟後，兩者估算結果必然偏差。
+
+**設計目標**：完整 Stage 1 篩選鏈應**只有一套實作**，供月跑（寫入模式）和 dry-run（唯讀模式）共用。
+
+##### 23.2 抽象層設計
+
+```
+Stage1FilterChain（新增，純函式群組，無副作用）
+├── buildStage1WhereConditions()   ← 現有（欄位篩選，路徑 A/B）
+├── buildMonthCntFragment()        ← AD-E07-22 §22.2 新增
+├── applySpecialDeletes()          ← AD-E07-22 §22.4 新增（應用層 array filter）
+└── executeStage1Chain(            ← 新增主入口
+      list: ObListDefinition,
+      workdt: Date,
+      poolRepo: Repository<ObPoolData>,
+      poolDataListRepo: Repository<ObPoolDataList>,  ← 去重查詢用
+      opts: { dryRun: boolean }
+    ): Promise<Stage1ChainResult>
+```
+
+**`Stage1ChainResult` 介面**：
+
+```typescript
+interface Stage1ChainResult {
+  count: number;        // 篩選後案件數（dry-run 與 run 均返回）
+  cases?: ObPoolData[]; // run 模式返回完整案件列表；dry-run 模式為 undefined（不載入記憶體）
+  skipped: boolean;
+  skipReason?: Stage1SkipReason;
+  warnings: Stage1ComposerWarning[];
+  // dry-run 模式下 count 來自 COUNT(*) SQL，不拉資料列
+}
+```
+
+##### 23.3 Dry-run（唯讀）執行路徑
+
+**設計原則**：
+
+1. **不寫入任何表**：不寫 `ob_pool_data_list`、不寫 `assignment_run`、不寫 `assignment_run_snapshot`
+2. **COUNT 而非 SELECT \***：dry-run 模式下最終 SQL 改為 `SELECT COUNT(*) FROM ob_pool_data WHERE <完整鏈條件>`，避免拉取百萬列至記憶體
+3. **去重估算**：近 3 個月去重步驟在 dry-run 模式下可以：
+   - **選項 A（精確）**：執行相同 `ob_pool_data_list` 查詢得到去重集合，再以 subquery 排除（`NOT IN`）— 精確但 SQL 複雜
+   - **選項 B（近似）**：同樣執行去重查詢取得 custo_no 集合，在應用層 filter COUNT 結果 — 效能佳（去重集合通常較小）
+   - **建議 Phase 1 採選項 B**：先取 pool 的 COUNT 結果，再減去「與去重集合相交的案件數」
+
+4. **特殊 DELETE 估算**：**[DP-AD23-1 ✅ Resolved]** 採完整鏈精確模式。dry-run 模式下特殊 DELETE 規則同樣執行：若規則適用（`list_nm` includes 比對成立），執行 `SELECT appl_no, payt_term, deal_num, spec_name, year_produ FROM ob_pool_data WHERE <欄位篩選 + MONTH_CNT 過濾>` 載入必要欄位（非全欄位 `SELECT *`），在應用層套用 filter 後計算 count，確保 dry-run 結果與正式月跑一致。
+
+##### 23.4 對既有 per-list estimate 的影響
+
+**現行**：`Stage0EstimateService.estimateListCount()` → `buildStage1WhereConditions()` COUNT（欄位篩選版）
+
+**升級策略**：
+
+| 使用端 | 現行 | 升級後 | 影響評估 |
+|--------|------|--------|---------|
+| F088 準備完成摘要卡片快取（AD-E07-20 hook）| 欄位篩選版 | **完整鏈 dry-run COUNT** | 估算數字更精確；計算耗時可能增加（去重需查 ob_pool_data_list） |
+| Stage 0 試算頁總計（F049）| 欄位篩選版 | **完整鏈 dry-run COUNT** | 同上；Stage 0 試算頁數字將更接近實際月跑 |
+| 月跑 Stage 1 正式執行 | 欄位篩選版（僅）| **完整鏈執行（寫入模式）**| 加入 MONTH_CNT / 去重 / 特殊 DELETE 後**實際月跑案件數將改變（production behavior change）**；**[DP-AD23-2 ✅ Resolved] 無 feature flag 保護，deploy 後立即生效** |
+
+> **[DP-AD23-2 ✅ Resolved 2026-05-26]**：**不加 feature flag，deploy 後直接生效**。Phase 2 deploy 即改變所有環境（含 production）的月跑分派案件數。此為使用者明確接受之風險；分階段交付的風險管控改為「deploy 前業務知會」（見 §24.3 更新）。
+
+##### 23.5 `Stage0EstimateService.estimateListCount()` 升級路徑
+
+**現行簽名**（`stage0-estimate.service.ts`，依現有架構推斷）：
+```typescript
+async estimateListCount(listNo: string): Promise<number>
+```
+
+**升級後**：內部呼叫 `executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, { dryRun: true })` 取得 `result.count`。`workdt` 以當前月份 `WORKYM + '01'` 推算。
+
+**循環依賴分析**：`Stage0EstimateService` 注入 `ObPoolDataListRepository` 需確認模組 import 關係是否新增 `AssignmentRunModule` → `AssignmentStageModule` 依賴（或 `Stage1FilterChain` 作為獨立 Injectable，由兩個模組共享）。
+
+> **建議**：將 `Stage1FilterChain` 提取為**獨立 Service**（`Stage1FilterChainService`），放置於 `AssignmentStageModule`（或共用 `AssignmentCoreModule`），避免 `AssignmentListModule` 直接依賴 `AssignmentRunModule` 的 repository。
+
+---
+
+*本節版本 1.1（2026-05-26），由 System Architect Agent 依據使用者拍板決議更新（DP-AD23-1~2 Resolved）。*
+- *v1.0 新增（2026-05-26）：初始設計*
+- *v1.1 更新（2026-05-26）：DP-AD23-1 完整鏈精確模式確認、DP-AD23-2 無 flag 保護直接生效*
+
+---
+
+#### AD-E07-24　Stage 1 精確化工程分階段交付計劃（2026-05-26）
+
+> **範圍**：定義 ETL、Stage 1 補完整、Dry-run 三個工作項目的相依序列、可獨立交付邊界、以及對 production 月跑行為的影響。
+
+##### 24.1 分階段交付序列
+
+```mermaid
+graph TD
+    P1["Phase 1 — ETL 建立<br/>E07-OBPOOLDATA_LIST-Extract<br/>E07-OBPOOLDATA_LIST-Load<br/>執行一次歷史載入"]
+    P2["Phase 2 — Stage 1 補完整<br/>① MONTH_CNT 期別過濾（buildMonthCntFragment）<br/>② 近 3 個月去重（ob_pool_data_list 查詢）<br/>③ 特殊 DELETE（list_nm 字串比對）"]
+    P3["Phase 3 — Dry-run 完整鏈複用<br/>Stage0EstimateService 升級<br/>Stage 0 試算頁 / F088 快取數字更新"]
+
+    P1 --> P2
+    P2 --> P3
+
+    style P1 fill:#d4edda
+    style P2 fill:#fff3cd
+    style P3 fill:#e8f4f8
+```
+
+##### 24.2 各階段邊界與影響
+
+| 階段 | 前置條件 | 交付後狀態 | 對 production 月跑的影響 |
+|------|---------|----------|------------------------|
+| **Phase 1（ETL）** | migration m111 已存在；E04/E05 引擎可用 | ob_pool_data_list 有 legacy 歷史資料 | **不影響月跑**（Stage 1 尚未讀取 ob_pool_data_list 去重） |
+| **Phase 2（Stage 1 補完整）** | Phase 1 完成（ob_pool_data_list 有資料） | Stage 1 包含 MONTH_CNT 過濾 + 去重 + 特殊 DELETE | **⚠️ 直接生效、無 flag 保護**：deploy 後立即改變所有環境（含 production）月跑分派案件數；**需 deploy 前完成業務知會**（DP-AD23-2 已拍板，此為明確接受風險） |
+| **Phase 3（Dry-run 升級）** | Phase 2 完成 | estimate / dry-run 結果精確對齊月跑 | **不影響月跑**（只改變估算計算路徑） |
+
+##### 24.3 Phase 2 上線風險管控（DP-AD23-2 已決議：無 feature flag）
+
+Phase 2 是唯一改變 production 月跑案件數的階段。**業務已明確接受「deploy 後直接生效」的風險，不加 feature flag 保護**。因此風險管控聚焦於 deploy 前的人為確認：
+
+1. **Deploy 前業務知會（必要）**：Phase 2 PR merge 前，業務主管須已知悉本次 deploy 將改變月跑分派案件數（MONTH_CNT 過濾 + 去重 + 特殊 DELETE 生效），並確認 deploy 時間點不在月跑執行中。
+2. **部署前 dry-run 驗證（建議）**：在 staging/dev 環境執行完整月跑 dry-run（Phase 3 完成後才可完整驗證），比對 deploy 前後案件數差異，確認過濾量與業務預期相符。
+3. **無 feature flag 回滾**：一旦 deploy，無法透過 flag 回滾；若月跑結果不符預期，需提交 hotfix PR 回退三個步驟（移除 MONTH_CNT fragment、去重、特殊 DELETE filter）。此為明確接受的 trade-off。
+
+##### 24.4 決策彙總（全部 Resolved 2026-05-26）
+
+| 決策 ID | 問題 | 決議結論 | 影響 |
+|--------|------|---------|------|
+| DP-AD21-1 ✅ | ETL 載入策略 | **歷史限定**（`PROJECT_WORKYM < 本月`）| E05 Load Pipeline 加 WHERE 過濾 |
+| DP-AD21-2 ✅ | ETL Load Mode | **方案 A：`data_source VARCHAR(20) NULL` 欄**（`'etl_legacy'` / `'monthly_run'`）| 需新增 migration `1711360000291-AddObPoolDataListDataSource`；entity 補 @Column |
+| DP-AD21-3 ✅ | 去重上界 | **近似 WORKDT − 1 日**（不建 OBASSSIGNSET ETL）| Phase 1 無額外 ETL 工作；上界 = 上月末日 yyyyMMdd |
+| DP-AD22-1 ✅ | 特殊 DELETE 落地 | **忠實複刻**（LIST_NM `includes` 比對 + JS filter）| 繼承字串脆弱性；結構化旗標保留為 follow-up OQ-STAGE1-01 |
+| DP-AD23-1 ✅ | Dry-run 精確度 | **完整鏈**（三步驟全部執行，COUNT 模式）| dry-run 結果與月跑嚴格一致 |
+| DP-AD23-2 ✅ | Feature flag 保護 | **不加 flag，deploy 後直接生效**| Phase 2 deploy 即改變所有環境月跑行為；需 deploy 前業務知會 |
+
+##### 24.5 各階段不影響的範圍
+
+- **不影響 Stage 2~4**：Stage 2（計分）、Stage 3/4（部門 / 人員分配）讀取的是 `ob_pool_data_list`（Stage 1 寫入後），對 Stage 1 的案件數變化是下游消費，無需改動
+- **不影響現有 API 介面**：所有改動均在 service / pure function 層，API endpoint 簽名不變
+- **Phase 1 Schema 變更**：新增 `data_source` 欄（migration `1711360000291`）；`e07-etl-config.json` 補充 `E07-OBPOOLDATA_LIST-Extract` + `E07-OBPOOLDATA_LIST-Load` 設定
+
+##### 24.6 Open Questions / Follow-up（非阻擋）
+
+| OQ ID | 問題 | 優先度 | 觸發條件 |
+|-------|------|--------|---------|
+| OQ-STAGE1-01 | 特殊 DELETE 結構化旗標（`ob_list_definition.special_delete_rules`）改良 | Low | 業務反映名稱異動導致規則未生效時觸發 |
+| OQ-STAGE1-02 | `OBASSSIGNSET` ETL 精確上界（`@Q_ASSIGNDAY_E`）同步 | Low | 業務驗收近似上界誤差不可接受時觸發 |
+
+---
+
+*本節版本 1.1（2026-05-26），由 System Architect Agent 依據使用者拍板決議更新（所有 6 個 DP 全部 Resolved）。*
+- *v1.0 新增（2026-05-26）：初始設計*
+- *v1.1 更新（2026-05-26）：DP-AD21~23 全部 Resolved；§24.2 Phase 2 影響欄更新為「直接生效、需 deploy 前業務知會」；§24.3 風險管控改為無 flag 版本；§24.4 決策彙總表全部標為 Resolved；§24.5 更新 Phase 1 schema 變更；§24.6 新增 OQ follow-up 項目*
+
+---
+
 ### E07-G　M02 計分設定擴充 Migration 設計（F069~F072，2026-05-14）
 
 > **範圍**：本節定義 F069~F072（CARD_TYPE CRUD）新增的 3 個 migration 設計草案。實際 TypeORM migration 程式碼由 TDD Developer 實作。
@@ -5415,6 +5930,16 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 - *新增架構決策 AD-E07-17（Schema 修補三議題決議：議題 1 `assignment_audit_log.action` VARCHAR(10)→VARCHAR(30)；議題 2 `ob_empl_set` 時間欄位 entity 改用 `dateColumnType()` helper；議題 3 `ObListDefinition.stage` 確認歸屬 m100 migration，m12 data backfill 仍有效）*
 - *data-model.md 同步更新：`assignment_audit_log.action` 欄位說明更新 VARCHAR(30) + stage 系列 action 值；`ob_empl_set.created_at/updated_at` 補入 dateColumnType helper 強制說明；`ob_list_definition.stage` 欄位補入 migration 歸屬明示*
+
+---
+
+*本文件版本 2.16（v1.1 patch），由 System Architect Agent 依據使用者拍板 6 個 DP 決策（2026-05-26）更新。主要變更：*
+
+- *AD-E07-21 v1.1：DP-AD21-1（歷史限定策略）、DP-AD21-2（方案 A `data_source` 欄 + migration `1711360000291-AddObPoolDataListDataSource` 規範）、DP-AD21-3（近似上界 WORKDT−1 日）全部 Resolved*
+- *AD-E07-22 v1.1：DP-AD21-3 去重上界落地、DP-AD22-1（忠實複刻決議 + OQ-STAGE1-01 結構化旗標 follow-up）Resolved；§22.3 SP 特殊點說明更新；§22.4 建議落地方式改為「已決議落地方式」*
+- *AD-E07-23 v1.1：DP-AD23-1（完整鏈精確 dry-run）、DP-AD23-2（無 flag 直接生效 + §23.4 影響表更新）Resolved*
+- *AD-E07-24 v1.1：§24.2 Phase 2 影響欄更新（直接生效、需 deploy 前業務知會）；§24.3 風險管控改為無 flag 版本（3 點重寫）；§24.4 決策彙總表全 Resolved；§24.5 Phase 1 schema 變更說明更新；§24.6 新增 OQ follow-up 表*
+- *data-model.md 同步：ob_pool_data_list 欄位表補入 `data_source` 欄位說明（nullable、值域、用途）*
 
 ---
 
