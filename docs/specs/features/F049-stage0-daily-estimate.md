@@ -6,15 +6,27 @@ source-story: US-071, US-132
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "1.1"
-date: 2026-05-21
+version: "1.2.1"
+date: 2026-05-26
 status: Draft
 ---
 
 # F049: Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **v1.2.1（2026-05-26 / SP 溯源驗證 + 估算範圍澄清 + caseyear '99' follow-up）**：以原系統 ground-truth SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list`（Stage 1 實際撈案 SP）驗證 v1.2 之欄位映射與篩選範圍，**不變更任何篩選行為**。核心補述：
+> 1. **§4 AC-4 篩選機制表下方新增「SP 溯源驗證」註記**：欄位映射 `case_status → ob_pool_data.list_type`、`caseyear → year_cnt` 已對照 SP 確認逐欄位吻合（SP 以 `o.LIST_TYPE IN (split(OBMLISTDF.LIST_TYPE))`、`o.YEAR_CNT IN (split(CASEYEAR))` 撈案；新系統 AD-E07-14 將原 `OBMLISTDF.LIST_TYPE` 期別語意拆為 `case_status`、`list_type` 改填常數 '01'）。
+> 2. **§6 新增 BR-6「估算為條件符合上界」**：Stage 0 per-list 試算僅套用名單欄位篩選條件，不含月跑 Stage 1 額外施加的 `MONTH_CNT`（list_period × interval）區間過濾、近 3 個月已派案去重、詐騙/中結/滿期等特殊 DELETE 規則；故試算值為「符合名單欄位條件之案件數上界」，實際分派數更少（與 BR-1「實際件數以月跑結果為準」一致）。
+> 3. **§12 新增 follow-up 段落（含 OQ-E07-STAGE0-99）**：composer 對 `caseyear='99'` 採「完全跳過 year_cnt 條件」（§18.5.1），與 SP 之 `year_cnt >= 0 AND year_cnt < 15`（0–14 封頂）語意不同；因 '99' 在原系統前端為停用選項（有效值僅 0–10）屬理論邊界，本次維持 §18.5.1 skip 決策不變，標記為未來與 SP 對齊之待決議項。
+> 4. **不變更**：v1.2 既定之篩選演算法（複用 `buildStage1WhereConditions()`）、路徑 A/B、欄位映射、AC-1~AC-5、AC-Banner-Entry、§5 API 規格、§8 UI/UX 入口規範、BR-1~BR-5 行為均原樣保留。
+>
+> **v1.2（2026-05-26 / 對齊 F050 v2.1 / AD-E07-18 §18.4~§18.6 / 修正試算與月跑 Stage 1 脫節）**：本次**僅更新 AC-4 的「篩選機制描述」**以對齊 F050 v2.1，使單一 LIST_NO 試算與月跑 Stage 1 逐欄位一致；**不變更其他任何 AC、API 規格、估算公式、入口規範**。核心變更：
+> 1. **§4 改寫 AC-4 機制描述**：篩選來源由 v1.1 列舉的 5 個 legacy 一級欄位（`prod_kind` / `caseyear` / `spec_tp` / `settle_src` 等）改為以 `condition_payload`（§18.4，source of truth）為依據，並**直接複用月跑 Stage 1 之 `buildStage1WhereConditions()` 演算法**（§18.5，定義於 [architecture-spec.md §18.5](../architecture-spec.md)），明確記述路徑 A / 路徑 B、欄位映射、`caseyear='99'` wildcard。原因：v1.1 的機制描述在 F050 v2.1 將 `condition_payload` 改為 source of truth 後從未更新，導致試算（舊實作以 `=` 比對 `$$` 分隔字串、欄位映射錯誤）與月跑結果脫節，4 個 ready 名單預估筆數全為 0。
+> 2. **§6 新增 BR-5**：當篩選條件解析後無任何有效條件（composer 回 `skipReason='EMPTY_CONDITIONS'`）→ 試算 `count = 0`，與月跑 Stage 1「skip 該名單、不分派」行為一致。
+> 3. **§7 錯誤場景表**新增「名單無有效篩選條件」一列。
+> 4. **不變更**：AC-4「不寫入 `ob_pool_data_list` / `assignment_run`」「`ob_pool_data` 為共享池」「篩選邏輯與月跑 Stage 1 一致」之原則、AC-1/2/3、AC-5 逾時保護、AC-Banner-Entry、§5 API 規格、§8 UI/UX 入口規範均原樣保留。
+>
 > **v1.1（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 / GAP-G3 對應 US-132）**：核心變更：
 > 1. **§4 新增 AC-Banner-Entry**：Stage 0 試算頁之唯一入口從 [F048 v2.0](F048-view-list-definition.md) Toolbar 移至 Kanban Ready 欄頂 CTA Banner 之 secondary「試算」按鈕（白底藍邊，附 calculator icon）；對應 US-132 GAP-G3。
 > 2. **§8 UI/UX 補充入口規範**：Ready CTA Banner secondary 按鈕之渲染條件（僅 ready 欄有 ≥1 名單 / 非歷史月份 / 月跑鎖中 disabled）；對應 prototype `27-list-definition.html` v2.3 段落。
@@ -72,8 +84,26 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
 - **Given** 業務部長在名單定義清單（F048）中查看某 `status = 'active'` 的名單
 - **When** 業務部長點擊該列的「計算案件數量」按鈕
-- **Then** 系統讀取 `ob_list_definition` 中該 `list_no` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start` ~ `list_period_end` / `settle_src`），對共享案件池 `ob_pool_data` 套用對應 WHERE 子句即時 COUNT，回傳「符合條件案件數：N 筆」（`ob_pool_data` 為共享池，無 `list_no` 欄位，篩選邏輯與月跑 Stage 1 一致）
+- **Then** 系統以該 `list_no` 的 `condition_payload`（§18.4，名單篩選條件之 source of truth）為篩選依據，對共享案件池 `ob_pool_data` 即時 COUNT，回傳「符合條件案件數：N 筆」（`ob_pool_data` 為共享池，無 `list_no` 欄位）
+- **And** 試算之 WHERE 子句**直接複用月跑 Stage 1 之 `buildStage1WhereConditions()` 演算法**（[architecture-spec.md §18.5](../architecture-spec.md)），確保 estimate 與實際月跑 Stage 1 逐欄位一致，不得另寫一套篩選邏輯
 - **And** 此試算不執行實際月跑，不寫入 `ob_pool_data_list`，不建立 `assignment_run` 紀錄
+
+**篩選機制（對齊 F050 v2.1 / §18.5；複用 `buildStage1WhereConditions()`）**
+
+| 項目 | 規則 |
+|---|---|
+| 路徑 A（`condition_payload IS NOT NULL`） | 解析 `condition_payload.conditions[]`，依 `fieldType` 生成 fragment：`categorical` → `"<col>" IN (...)`；`numeric` → `"<col>" BETWEEN :min AND :max`；`date` → `"<col>" BETWEEN :start AND :end`。各 fragment 以 `AND` 連接 |
+| 路徑 B（`condition_payload IS NULL`，legacy 名單 fallback） | 讀 5 個 backward-compat 一級欄位（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`），各欄位值以 `$$` split、trim、去空後轉為 `IN (...)` fragment；空字串 / NULL 之欄位跳過（不加 fragment） |
+| 欄位映射（路徑 A 與路徑 B 共用） | `caseyear`（單值年數 0–10）→ `ob_pool_data.year_cnt`（**整數**比對，非 4 位數西元年 `ob_pool_data.caseyear`）；`case_status` → `ob_pool_data.list_type`；其餘欄位同名映射至 `ob_pool_data` 對應欄位 |
+| `caseyear = '99'`（不限年數）wildcard | 跳過該 `year_cnt` fragment（不對 `year_cnt` 加任何條件），路徑 A 與路徑 B 皆適用（§18.5.1） |
+| 防注入 | `columnName` 須符合 `SAFE_COLUMN_NAME_RE`（`/^[a-z][a-z0-9_]{0,63}$/`）；不符者 skip 該 fragment 並記錄 warning，不 throw（§18.5） |
+| 無有效條件 | composer 回 `skipReason='EMPTY_CONDITIONS'` 時，試算依 BR-5 回 `count = 0`（詳見 §6 BR-5） |
+
+> **SP 溯源驗證（v1.2.1 新增）**：上述欄位映射已對照原系統 ground-truth SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list`（Stage 1 實際撈案 SP，路徑 `reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`）逐欄位確認：
+> - **`case_status → ob_pool_data.list_type` 吻合**：SP 以 `o.LIST_TYPE IN (SELECT field FROM fn_SplitString_cte(OBMLISTDF.LIST_TYPE, '$$'))` 撈案，原系統 `OBMLISTDF.LIST_TYPE` 欄位即「期別」值（SP 註解：`01:其中 / 02:中結 / 03:滿期`）。新系統（AD-E07-14）將該期別語意拆出獨立的 `case_status` 一級欄位、原 `list_type` 欄位改填常數 `'01'`；故名單之 `case_status` 須映射至 `ob_pool_data.list_type` 比對，與 SP 邏輯逐欄位吻合。
+> - **`caseyear → ob_pool_data.year_cnt` 吻合**：SP 以 `o.YEAR_CNT IN (SELECT field FROM fn_SplitString_cte(OBMLISTDF.CASEYEAR, '$$'))` 對整數年數欄位 `YEAR_CNT` 比對（非 4 位數西元年），與本 spec 之 `caseyear`（單值年數）→ `year_cnt`（整數）一致。
+> - **`prod_kind` / `spec_tp` / `settle_src` 同名映射**：SP 各以 `o.<COL> IN (split(OBMLISTDF.<COL>, '$$'))` 撈案，與路徑 B `$$` split → IN 行為一致。
+> - **`caseyear='99'` wildcard 之 SP 語意差異**：見 §12 follow-up（OQ-E07-STAGE0-99）。
 
 ### AC-Banner-Entry：Stage 0 試算頁之唯一入口為 Ready CTA Banner secondary 按鈕（v1.1 新增 / US-132 / GAP-G3）
 
@@ -144,6 +174,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | BR-2 | 工作日計算排除週末與假日；資料來源為 AppDB `ob_calendar`（採 E04 + E05 雙層 ETL 從舊 OB DB 同步，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)），篩選條件 `WHERE rest_flg = '0' AND calendar_date BETWEEN :startDate AND :endDate` |
 | BR-3 | 試算查詢逾時上限 10 秒，超過則回傳 `STAGE0_ESTIMATE_TIMEOUT` |
 | BR-4 | Pool 筆數警示門檻可於環境變數 `STAGE0_POOL_WARN_THRESHOLD` 配置（預設 1000） |
+| BR-5 | 當 `condition_payload` 解析結果無任何有效篩選條件（`buildStage1WhereConditions()` 回 `skipReason='EMPTY_CONDITIONS'`；含 `conditions=[]`、`_backfill_empty=true`、或所有條件均被 `caseyear='99'` wildcard / 無效值過濾後 fragment 數為 0 之情形）→ 試算 `count = 0`，與月跑 Stage 1「skip 該名單、不分派」行為一致（§18.5.2） |
+| BR-6 | **估算為「條件符合上界」**：Stage 0 per-list 試算僅套用名單之「欄位篩選條件」（複用 `buildStage1WhereConditions()` 之欄位 `IN`/`BETWEEN` fragment），**不含**月跑 Stage 1 另外施加的後續過濾：(a) `list_period_start`~`list_period_end` × `list_interval` 推導之 `MONTH_CNT` 區間過濾；(b) 近 3 個月已派案去重（比對 `ob_pool_data_list` 之 `ASSIGNDAY`）；(c) 詐騙(白牌)/中結/滿期等特殊業務 `DELETE` 規則。因此試算值為「**符合名單欄位條件之案件數上界**」，實際分派數會更少 —— 與 BR-1「實際件數以月跑結果為準」一致。本規則經 SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 證實（SP 於 `#TargetCase` 撈案後另施加 `WHERE o.MONTH_CNT IN (@TmpTbl)`、近 3 月 `ASSIGNDAY` 去重 `DELETE`、及多段 `LIST_NM LIKE` 觸發之特殊 `DELETE`） |
 
 ## 7. 錯誤場景
 
@@ -152,6 +184,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | `list_no` 不存在 | 404 `ASSIGNMENT_LIST_NOT_FOUND` | error-handling.md#assignment-errors |
 | 試算查詢逾時 | 500 `STAGE0_ESTIMATE_TIMEOUT` | error-handling.md#assignment-errors |
 | Pool 資料為空 | 200 `{ count: 0 }` | — |
+| 名單無有效篩選條件（`skipReason='EMPTY_CONDITIONS'`） | 200 `{ count: 0 }`（與月跑 Stage 1 skip 該名單行為一致；見 BR-5） | — |
 
 ## 8. UI/UX 需求
 
@@ -188,8 +221,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_pool_data`、`ob_list_definition`）；[data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity)（工作日表，採 E04 + E05 雙層 ETL 同步）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
 - 流程圖：[diagrams/F049-stage0-estimate-flow.mmd](../diagrams/F049-stage0-estimate-flow.mmd)
-- 架構決策：AD-E07-1（OB 資料遷移）、E07 與 E04 依賴關係
-- 相關功能：[F048](F048-view-list-definition.md)、[F061](F061-trigger-assignment-run.md)
+- 架構決策：AD-E07-1（OB 資料遷移）、AD-E07-18（F050 v2.1 名單篩選 condition_payload / Stage 1 動態 SQL 演算法，§18.4~§18.6 為 AC-4 試算機制之權威來源）、E07 與 E04 依賴關係
+- 篩選機制權威來源：[architecture-spec.md §18.5](../architecture-spec.md)（`buildStage1WhereConditions()` 演算法）、§18.4（`condition_payload` schema）、§18.6（路徑 B 欄位映射表）；試算須複用同一演算法，不另寫一套
+- 相關功能：[F048](F048-view-list-definition.md)、[F061](F061-trigger-assignment-run.md)、[F050](F050-create-list-definition.md)（condition_payload source of truth）
 
 ## 11. 假設
 
@@ -197,3 +231,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 |---|---|---|
 | A-1 | ~~工作日/假日表由現有系統基礎資料或 `ob_calendar` 提供~~ **已解決（2026-05-04，2026-05-05 同步機制更新）**：採 `ob_calendar`（AppDB），透過 **E04 + E05 雙層 ETL** 從舊 OB DB `OBCALENDAR` 同步至 AppDB（E04 抓 raw → E05 Pipeline TargetLoad full replace）；詳見 [data-model.md#ob-calendar-entity](../data-model.md#ob-calendar-entity) 與 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)。對應 OQ-E07-10 / OQ-E07-15 已 Resolved。 | Resolved |
 | A-2 | 每日分派比例係數為「`ob_pool_data` 總筆數 / 工作天數」等分 | [ASSUMPTION] |
+
+## 12. Follow-up / Open Questions（v1.2.1 新增）
+
+| OQ 編號 | 議題 | 現況決策 | 影響 / 建議 | 狀態 |
+|---|---|---|---|---|
+| OQ-E07-STAGE0-99 | `caseyear='99'`（不限年數）wildcard 之 `year_cnt` 語意與 ground-truth SP 不一致：composer 目前採「**完全跳過** `year_cnt` 條件」（架構決策 §18.5.1），而 SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 對 `'99'` 採 `o.YEAR_CNT >= 0 AND o.YEAR_CNT < 15`（即 0–14 封頂，排除 `year_cnt >= 15` 之案件） | **維持 §18.5.1 skip 決策不變更**。因 `'99'` 在原系統前端為**停用選項**（有效選項僅年數 0–10），名單實際不會帶入 `'99'`，屬理論邊界；兩種語意對 0–10 有效值之撈案結果相同，差異僅出現在 `year_cnt >= 15` 之案件是否納入 | 若未來開放 `'99'` 為有效選項，須由 system-architect 評估是否將 §18.5.1 改為對齊 SP 之 `0 <= year_cnt < 15` 封頂語意（同步影響月跑 Stage 1 與本試算）；本變更屬 architecture-spec.md §18.5.1 範疇，spec-writer 不於本文件逕自變更篩選行為 | Open（理論邊界，暫不處理） |
