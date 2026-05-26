@@ -87,6 +87,39 @@ interface EtlPipelineSeed {
 }
 
 /**
+ * F090 reproducible-seed：E07 擷取任務 seed 來源（data/extraction-tasks.json）。
+ * id 為固定 UUID（與 dev DB API seed-e07-etl.mjs 建立者相同），確保 raw_table_name
+ * 衍生值（'raw_' + id 前 8 hex）與 etl-pipelines.json 寫死的 raw_xxx 等價，
+ * pipeline 才能於執行期 resolveRawTable fallback 命中正確 raw 表。
+ */
+export interface ExtractionTaskSeed {
+  id: string;
+  name: string;
+  datasourceName: string;
+  mode: 'full' | 'incremental';
+  sourceSchema: string | null;
+  sourceTable: string;
+  rawTableName: string;
+  schedule: string;
+  description?: string;
+  sourceFilter?: {
+    column: string;
+    operator: string;
+    valueExpr: string;
+    _comment?: string;
+  };
+}
+
+/**
+ * 由 extraction_task id 衍生 raw_table_name，與 extraction-task.service.createTask 完全一致：
+ *   'raw_' + id.replace(/-/g, '').substring(0, 8)
+ * extraction-tasks.json 預存 rawTableName，本函式用於測試/驗證一致性。
+ */
+export function deriveRawTableName(id: string): string {
+  return 'raw_' + id.replace(/-/g, '').substring(0, 8);
+}
+
+/**
  * etl_pipelines.created_by 必填 FK 至 users。本 seed 採以下順序解析 user id：
  *   1) env ETL_SEED_USER_EMAIL（顯式指定；prod 部署時建議帶）
  *   2) dev seed 固定 admin UUID（admin@cdmp.test，僅 dev env 由 seed.ts 寫入）
@@ -304,6 +337,92 @@ async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
   console.log(`  etl_pipelines: ${inserted} 新增 / ${skipped} 已存在`);
 }
 
+/**
+ * F090 reproducible-seed：seed 全部 5 個 E07 extraction_tasks（冪等 by name）。
+ *
+ * mirror seedEtlPipelines 的安全機制：
+ *   - 以 name 為 idempotency key，存在（deleted_at IS NULL）即 SKIP，不洗 production
+ *   - 只在有任何 task 需 INSERT 時才解析 datasource_id / created_by（避免無謂 lookup）
+ *   - datasource_id 以 name 'APYHFC16.OB' 動態解析（prod datasource UUID 可能與 dev 不同）；
+ *     找不到 → fail-fast（避免建立懸空 FK 的 extraction_task）
+ *   - created_by 沿用 resolveSeedUserId（同 etl_pipelines seed）
+ *   - id 為固定 UUID（取自 extraction-tasks.json）以使 raw_table_name 與 pipeline 寫死值等價
+ */
+export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
+  const rows = loadJson<ExtractionTaskSeed>('extraction-tasks.json');
+
+  // 先檢查是否有任何 task 需 INSERT（避免無需 datasource/user 也觸發 lookup）
+  let needInsert = false;
+  for (const t of rows) {
+    const exists = await qr.query(
+      `SELECT id FROM extraction_tasks WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+      [t.name],
+    );
+    if (exists.length === 0) {
+      needInsert = true;
+      break;
+    }
+  }
+
+  if (!needInsert) {
+    console.log(`  extraction_tasks: 0 新增 / ${rows.length} 已存在`);
+    return;
+  }
+
+  // 解析 datasource_id（同一 datasource APYHFC16.OB；by name 動態解析）
+  const datasourceName = rows[0].datasourceName;
+  const dsResult = await qr.query(
+    `SELECT id FROM datasources WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    [datasourceName],
+  );
+  const datasourceId: string | undefined = dsResult[0]?.id;
+  if (!datasourceId) {
+    throw new Error(
+      `extraction_tasks seed 中止：找不到 datasource '${datasourceName}'。` +
+        `請先建立該 datasource（E07 ETL 來源 OB DB），或調整 extraction-tasks.json 的 datasourceName。`,
+    );
+  }
+
+  const userId = await resolveSeedUserId(qr);
+  console.log(
+    `  extraction_tasks: 使用 datasource ${datasourceId}（${datasourceName}）、user ${userId} 作為 created_by`,
+  );
+
+  let inserted = 0;
+  let skipped = 0;
+  for (const t of rows) {
+    const existing = await qr.query(
+      `SELECT id FROM extraction_tasks WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+      [t.name],
+    );
+    if (existing.length > 0) {
+      skipped++;
+      console.log(`    ${t.name}: SKIP（已存在）`);
+      continue;
+    }
+    await qr.query(
+      `INSERT INTO extraction_tasks
+         (id, name, datasource_id, mode, status, source_table, source_schema,
+          raw_table_name, schedule, enabled, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'scheduled', $5, $6, $7, $8, true, $9, NOW(), NOW())`,
+      [
+        t.id,
+        t.name,
+        datasourceId,
+        t.mode,
+        t.sourceTable,
+        t.sourceSchema,
+        t.rawTableName,
+        t.schedule,
+        userId,
+      ],
+    );
+    inserted++;
+    console.log(`    ${t.name}: INSERT（id=${t.id}, raw=${t.rawTableName}）`);
+  }
+  console.log(`  extraction_tasks: ${inserted} 新增 / ${skipped} 已存在`);
+}
+
 async function deriveMatchType(qr: QueryRunner): Promise<void> {
   // 依 score 真實資料重新推導 ob_levelcard_column.match_type
   // 已存在 match_type 仍會被覆寫——seed 階段以 dump 真實資料為準
@@ -366,6 +485,7 @@ async function main(): Promise<void> {
     } else {
       console.log(`  ob_levelcard_column.match_type: SKIP derive（column 已存在，保留業務值）`);
     }
+    await seedExtractionTasks(qr);
     await seedEtlPipelines(qr);
     await qr.commitTransaction();
     console.log('Prod data seed complete.');
@@ -379,4 +499,8 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+// 僅在直接執行（npm run data-seed / node prod-data-seed.js）時連線並跑 seed；
+// 被測試 import 時不自動執行（避免 DataSource 連線副作用）。
+if (require.main === module) {
+  main();
+}
