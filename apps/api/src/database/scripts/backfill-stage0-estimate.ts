@@ -1,49 +1,52 @@
 /**
- * 一次性 backfill：重算既有 ready 名單的物化 Stage 0 估算（F049 v1.2 / F088 修復）
+ * 一次性 backfill：重算既有 ready 名單的物化 Stage 0 估算
  *
- * 背景：approve→ready 物化 hook（F086）原先用脫節的舊篩選邏輯，導致既有 ready 名單
- *       的 stage0_estimate_count 為錯誤的 0 / NULL。改 code 不會回填既有資料 ——
- *       本腳本以修正後的篩選邏輯（複用月跑 Stage 1 的 buildStage1WhereConditions）
- *       對所有 stage='ready' 名單重算並 UPDATE。
- *
- * 與 StageActionService.materializeStage0Estimate / Stage0EstimateService.buildPoolCountQuery
- * 完全相同的演算法（同一純函式），確保 estimate ≡ 月跑 Stage 1 逐欄位一致。
+ * F092（2026-05-26）起，per-list 估算升級為完整 Stage1FilterChain dry-run
+ * （欄位篩選 + month_cnt 期別 + 近3月去重 + 特殊 DELETE，與月跑同源 → estimate ≡ run）。
+ * 改 code 不回填既有 ready 名單的 stage0_estimate_count，故以本腳本用**同一條 chain**
+ * （executeStage1Chain dryRun:true）重算並寫回，與 estimateListCount / 月跑邏輯一致。
  *
  * 用法（本機，讀 apps/api/.env，連 localhost:5432）：
  *   cd apps/api && npx ts-node -r tsconfig-paths/register src/database/scripts/backfill-stage0-estimate.ts
  *
- * 冪等：可重複執行；每次以當下 ob_pool_data 重算覆寫。
- * 注意：prod / staging 既有 ready 名單需同樣執行本腳本（或下次 re-approve 自動物化）。
+ * 冪等：可重複執行。注意：ob_pool_data_list 無 ETL 歷史時去重不減（dev）；prod 載入歷史後數值會更精確。
  */
 
 import 'reflect-metadata';
 import AppDataSource from '../data-source';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
-import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
+
+/** 'YYYYMM' → 本月第一天 Date（對應 SP @WORKDT = PROJECT_WORKYM + '01'） */
+function deriveWorkdt(ym: string | null): Date {
+  if (ym && /^\d{6}$/.test(ym)) {
+    return new Date(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(4, 6), 10) - 1, 1);
+  }
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
   const listRepo = AppDataSource.getRepository(ObListDefinition);
   const poolRepo = AppDataSource.getRepository(ObPoolData);
+  const poolDataListRepo = AppDataSource.getRepository(ObPoolDataList);
 
   const readyLists = await listRepo.find({ where: { stage: 'ready' } });
-  console.log(`找到 ${readyLists.length} 張 ready 名單，開始重算 Stage 0 估算…\n`);
+  console.log(`找到 ${readyLists.length} 張 ready 名單，以完整 Stage1 鏈 dry-run 重算…\n`);
 
   let updated = 0;
   for (const list of readyLists) {
     const before = list.stage0_estimate_count;
+    const workdt = deriveWorkdt(list.project_workym);
 
-    // 與 Stage0EstimateService.buildPoolCountQuery（修正後）相同邏輯
-    const fragment = buildStage1WhereConditions(list);
-    let count: number;
-    if (fragment.skipReason === 'EMPTY_CONDITIONS') {
-      count = 0; // BR-5：無有效條件 → 0（與 Stage 1 skip 一致）
-    } else {
-      const qb = poolRepo.createQueryBuilder('ob_pool_data');
-      if (fragment.where) qb.where(fragment.where, fragment.params);
-      count = await qb.getCount();
-    }
+    // 與 estimateListCount（F092）/ 月跑同源：完整鏈唯讀 COUNT
+    const result = await executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, {
+      dryRun: true,
+    });
+    const count = result.count;
 
     await listRepo.update(
       { list_no: list.list_no },
@@ -52,7 +55,8 @@ async function main(): Promise<void> {
     updated += 1;
     console.log(
       `  ${list.list_no}  ${list.list_nm}` +
-        `\n      ${before === null || before === undefined ? '—' : before} → ${count.toLocaleString()}`,
+        `\n      ${before === null || before === undefined ? '—' : before.toLocaleString()} → ${count.toLocaleString()}` +
+        `${result.skipped ? '  (skipped: ' + result.skipReason + ')' : ''}`,
     );
   }
 
