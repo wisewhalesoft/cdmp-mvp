@@ -84,6 +84,20 @@ const PATH_B_MAPPING: ReadonlyArray<{
   { entityCol: 'settle_src', poolDataCol: 'settle_src' },
 ];
 
+/**
+ * §18.5 路徑 A categorical condition columnName → ob_pool_data 欄位映射。
+ *
+ * 與 PATH_B_MAPPING 共用語意（F049 v1.2 AC-4「欄位映射 路徑 A 與路徑 B 共用」）：
+ *   - `case_status` → `list_type`（ob_pool_data 無 case_status 欄位；架構 §18.5 流程圖 D 節點 +
+ *     L4169 映射表）
+ *   - `caseyear` → `year_cnt`（整數比對，於 buildCategoricalFragment 另以 wildcard 規則處理，
+ *     不經本表）
+ *   - 其餘欄位同名映射至 ob_pool_data 對應欄位（不在表中者直接沿用 columnName）
+ */
+const PATH_A_COLUMN_MAPPING: Readonly<Record<string, string>> = {
+  case_status: 'list_type',
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -324,9 +338,14 @@ function buildCategoricalFragment(
     };
   }
 
+  // §18.5 路徑 A / B 共用映射（F049 v1.2 AC-4 欄位映射表）：
+  //   case_status → ob_pool_data.list_type（ob_pool_data 無 case_status 欄位）。
+  //   與路徑 B PATH_B_MAPPING 一致，確保 estimate 與月跑 Stage 1 逐欄位相同。
+  const poolDataCol = PATH_A_COLUMN_MAPPING[cond.columnName] ?? cond.columnName;
+
   const paramName = `cat${paramIdx}`;
   return {
-    fragment: `"${cond.columnName}" IN (:...${paramName})`,
+    fragment: `"${poolDataCol}" IN (:...${paramName})`,
     params: { [paramName]: cond.values },
   };
 }

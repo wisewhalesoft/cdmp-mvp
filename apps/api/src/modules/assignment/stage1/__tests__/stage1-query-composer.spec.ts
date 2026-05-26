@@ -143,6 +143,25 @@ describe('Stage1QueryComposer 波 1 — Path A categorical', () => {
     expect(result.skipReason).toBe('EMPTY_CONDITIONS');
     expect(result.where).toBeNull();
   });
+
+  it('UCQ-005b：Path A case_status → 對應 ob_pool_data.list_type（§18.5 路徑 A/B 共用映射；F049 v1.2 AC-4）', () => {
+    // 既有盲區補完：路徑 A 之 case_status condition 過去產生 "case_status" IN(...)，
+    // 打到 ob_pool_data 不存在的欄位（與路徑 B / 流程圖 §18.5 不一致）。
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'case_status', fieldType: 'categorical', values: ['02', '03'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"list_type" IN (');
+    expect(result.where).not.toContain('"case_status" IN (');
+    expect(Object.values(result.params)).toContainEqual(['02', '03']);
+  });
 });
 
 // ===========================================================================

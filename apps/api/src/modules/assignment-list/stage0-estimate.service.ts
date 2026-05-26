@@ -9,6 +9,7 @@ import { Between, Repository } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
+import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 export interface DailyEstimateRow {
@@ -166,26 +167,42 @@ export class Stage0EstimateService {
   }
 
   // -------------------------------------------------------------------------
-  // 內部：建構 ob_pool_data COUNT query（依 spec L70 篩選邏輯）
+  // 內部：建構 ob_pool_data COUNT query
+  //
+  // F049 v1.2（AC-4 / BR-5 / §18.5）：直接複用月跑 Stage 1 之 buildStage1WhereConditions()
+  // 演算法，確保試算與實際月跑逐欄位一致（消除 v1.1 以 `=` 比對 `$$` 多值字串 + caseyear
+  // 比到 ob_pool_data.caseyear 西元年欄位的脫節缺陷）。
+  //
+  // 用法與 AssignmentRunPipelineService.runStage1ForList 完全一致：
+  //   - skipReason='EMPTY_CONDITIONS'（含空 conditions / wildcard 後零 fragment）→ COUNT=0
+  //     （BR-5，與月跑 Stage 1 skip 該名單行為一致）
+  //   - 否則 createQueryBuilder('ob_pool_data').where(fragment.where, fragment.params).getCount()
+  //     （composer 產生 bare quoted 欄位名如 `"year_cnt" IN (...)`，無 alias 前綴）
   // -------------------------------------------------------------------------
 
   private async buildPoolCountQuery(def: ObListDefinition): Promise<number> {
-    const qb = this.poolRepo.createQueryBuilder('p');
+    const fragment = buildStage1WhereConditions(def);
 
-    if (def.prod_kind) {
-      qb.andWhere('p.prod_kind = :prodKind', { prodKind: def.prod_kind });
-    }
-    if (def.caseyear) {
-      qb.andWhere('p.caseyear = :caseyear', { caseyear: def.caseyear });
-    }
-    if (def.spec_tp) {
-      qb.andWhere('p.spec_tp = :specTp', { specTp: def.spec_tp });
-    }
-    if (def.settle_src) {
-      qb.andWhere('p.settle_src = :settleSrc', { settleSrc: def.settle_src });
+    // 非阻擋型 warning 紀錄（與月跑 Stage 1 一致）
+    for (const w of fragment.warnings) {
+      this.logger.warn(
+        `[Stage0Estimate] composer warning list_no=${def.list_no} code=${w.code} column=${w.columnName ?? '-'} reason=${w.reason}`,
+      );
     }
 
-    return qb.getCount();
+    // BR-5 / §18.5.2：無有效篩選條件 → 與月跑 Stage 1 skip 一致，回 count=0
+    if (fragment.skipReason === 'EMPTY_CONDITIONS') {
+      this.logger.warn(
+        `[Stage0Estimate] list ${def.list_no} (${def.list_nm}) empty conditions → count=0`,
+      );
+      return 0;
+    }
+
+    // skipReason=null 時 fragment.where 必非 null
+    return this.poolRepo
+      .createQueryBuilder('ob_pool_data')
+      .where(fragment.where!, fragment.params)
+      .getCount();
   }
 
   // -------------------------------------------------------------------------
