@@ -2,11 +2,11 @@
 spec-id: F049
 title: Stage 0 每日分派數量估算
 feature-id: F049
-source-story: US-071, US-132
+source-story: US-071, US-132, US-135
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "1.3"
+version: "1.4"
 date: 2026-05-26
 status: Draft
 ---
@@ -15,6 +15,14 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **v1.4（2026-05-26 / estimate 語意升級為完整 Stage 1 dry-run，對齊 F092 / AD-E07-23）**：[F092](F092-stage1-dry-run-estimate.md)（Stage 1 精確化工程 Phase 3）已落地，將 per-list estimate 從「欄位篩選版 COUNT」升級為**完整 Stage 1 篩選鏈之唯讀 dry-run COUNT**（複用 `executeStage1Chain({ dryRun: true })`，[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md) `Stage1FilterChain`）。本版同步更新 estimate 語意之文字漂移：
+> 1. **§6 BR-6 改寫**：原「估算為條件符合上界（不含 month_cnt/去重/特殊 DELETE，實際更少）」→ 升級為「**完整 Stage 1 預估（≡ 月跑分派案件數）**」，已含 MONTH_CNT 期別過濾 + 近 3 個月去重（含 `data_source` 聯集）+ 特殊 DELETE（含詐騙白牌 `LIST_TYPE='01' AND SPEC_NAME LIKE '%白牌%'`）。保留 BR-1（試算唯讀預覽、最終以月跑為準）。歷史語意保留為紀錄。
+> 2. **§4 AC-4 對齊**：篩選機制由「複用 `buildStage1WhereConditions()`（欄位篩選）」更新為「複用完整鏈 `executeStage1Chain(..., { dryRun: true })`」，並標明為唯讀 dry-run（不寫表）。
+> 3. **§5.2 estimate API**：response shape 不變（`{ listNo, count }`），`count` 語意升級為完整鏈 dry-run COUNT（精確 ≡ 月跑），補逾時風險說明。
+> 4. **交叉引用**：[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md)（三步驟 SP 對照）、[F092](F092-stage1-dry-run-estimate.md)（dry-run 升級 + §11 對 F049 影響表）、[architecture-spec.md AD-E07-23](../architecture-spec.md)（Stage1FilterChain 單一來源）。
+> 5. **不變更**：千分位 ratio 演算法（§13）、AC-1~AC-3 / AC-4-Default / AC-5 / AC-Banner-Entry、§5.1 daily-estimate API、§8 UI/UX、BR-1~BR-5、§11~§13 均原樣保留（本版僅同步 estimate「語意定義」之文字，不變更 ratio 演算法或入口規範）。
+> 6. **刻意未動**：code / test（F092 已落地實作，本版僅同步 docs 文字漂移）、architecture-spec.md / data-model.md（system-architect 範疇）。
+>
 > **v1.3（2026-05-26 / Stage 0 試算頁對齊 prototype 30-stage0-estimate.html + 千分位 ratio 演算法 + calendarSource 互動）**：使用者回報 `/assignment/estimate` 試算頁 React 實作（`apps/web/src/pages/assignment/stage0-estimate-page.tsx` + `_components/stage0-input-panel.tsx` + `_components/stage0-bar-chart.tsx`）與 prototype `30-stage0-estimate.html` 脫節之 4 個問題，已拍板修法並寫入本版。核心變更：
 > 1. **§5.1 GET daily-estimate API 改寫（千分位 ratio 模型 + 三參數互動）**：新增 query 參數 `calendarSource`（`weekday` 預設 / `weekday-only` / `all`）、`startDate` / `endDate`（選填，預設 = ym 整月）；`dailyEstimates[]` 由「僅工作日 + 直接件數」改為「**範圍內所有日期**，每筆含 `{ date, weekday, isWorkday, skipReason, ratioPerMille }`」，使非工作日（週末 / 國定假日）以「跳過」列呈現（對齊 prototype 灰 bar）。明述 `ratioPerMille` 加總 = 1000（跨工作日）。
 > 2. **新增 AD-E07-8 演算法定義（修正 §11 A-2 與既有「平均件數」描述）**：採原系統 ground-truth SP `Stage0_估算每日分派案件數量.sql` 之**千分位 ratio 模型** —— `base_ratio = FLOOR(1000 / workingDays)`、`rem = 1000 mod workingDays`、工作日按 `calendar_date DESC` 排序前 `rem` 個 `ratio = base_ratio + 1`、非工作日 `ratio = 0`；**每日件數 = round(ratioPerMille / 1000 × total)**，total 為前端輸入（選取名單之 per-list COUNT，AC-4）。後端僅算 ratio 分配（calendar 相依），前端負責乘 total（total 相依），與 SP「存 `RATIO_RATE`、件數於後段套用」分工一致（詳見 §13）。
@@ -102,8 +110,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **Given** 業務部長在名單定義清單（F048）中查看某 `status = 'active'` 的名單
 - **When** 業務部長點擊該列的「計算案件數量」按鈕
 - **Then** 系統以該 `list_no` 的 `condition_payload`（§18.4，名單篩選條件之 source of truth）為篩選依據，對共享案件池 `ob_pool_data` 即時 COUNT，回傳「符合條件案件數：N 筆」（`ob_pool_data` 為共享池，無 `list_no` 欄位）
-- **And** 試算之 WHERE 子句**直接複用月跑 Stage 1 之 `buildStage1WhereConditions()` 演算法**（[architecture-spec.md §18.5](../architecture-spec.md)），確保 estimate 與實際月跑 Stage 1 逐欄位一致，不得另寫一套篩選邏輯
-- **And** 此試算不執行實際月跑，不寫入 `ob_pool_data_list`，不建立 `assignment_run` 紀錄
+- **And**（v1.4 升級）試算**直接複用月跑 Stage 1 之完整篩選鏈 `executeStage1Chain(..., { dryRun: true })`**（[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md) 之 `Stage1FilterChain`；演算法見 [architecture-spec.md AD-E07-23](../architecture-spec.md)），涵蓋欄位篩選（`buildStage1WhereConditions()`，[§18.5](../architecture-spec.md)）+ MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，確保 estimate 與實際月跑 Stage 1 **逐步驟一致**（dry-run ≡ run，[F092 AC-3](F092-stage1-dry-run-estimate.md)），不得另寫一套篩選邏輯。<br>（**歷史**：v1.2~v1.3 此處僅複用欄位篩選版 `buildStage1WhereConditions()` COUNT；F092 升級為完整鏈 dry-run 後已對齊月跑，見 BR-6 + [F092 §11](F092-stage1-dry-run-estimate.md)）
+- **And** 此試算為唯讀 dry-run，不執行實際月跑，不寫入 `ob_pool_data_list`，不建立 `assignment_run` 紀錄（[F092 AC-2](F092-stage1-dry-run-estimate.md)）
 
 **篩選機制（對齊 F050 v2.1 / §18.5；複用 `buildStage1WhereConditions()`）**
 
@@ -224,6 +232,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 }
 ```
 
+> **`count` 語意（v1.4 升級）**：response shape **不變**（`{ listNo, count }`），但 `count` 來源升級為**完整 Stage 1 鏈 dry-run COUNT**（`executeStage1Chain({ dryRun: true })`，[F092 AC-1](F092-stage1-dry-run-estimate.md)），已含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，**精確等於月跑 Stage 1 案件數**（見 BR-6）。升級前（v1.2~v1.3）`count` 為欄位篩選版 COUNT（上界，偏高）。`STAGE0_ESTIMATE_TIMEOUT` 逾時上限沿用 10 秒；完整鏈含去重查詢，逾時風險較高（[F092 AC-7](F092-stage1-dry-run-estimate.md)）。
+
 **錯誤回應**
 
 | HTTP | 錯誤碼 | 說明 |
@@ -242,7 +252,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | BR-3 | 試算查詢逾時上限 10 秒，超過則回傳 `STAGE0_ESTIMATE_TIMEOUT` |
 | BR-4 | Pool 筆數警示門檻可於環境變數 `STAGE0_POOL_WARN_THRESHOLD` 配置（預設 1000） |
 | BR-5 | 當 `condition_payload` 解析結果無任何有效篩選條件（`buildStage1WhereConditions()` 回 `skipReason='EMPTY_CONDITIONS'`；含 `conditions=[]`、`_backfill_empty=true`、或所有條件均被 `caseyear='99'` wildcard / 無效值過濾後 fragment 數為 0 之情形）→ 試算 `count = 0`，與月跑 Stage 1「skip 該名單、不分派」行為一致（§18.5.2） |
-| BR-6 | **估算為「條件符合上界」**：Stage 0 per-list 試算僅套用名單之「欄位篩選條件」（複用 `buildStage1WhereConditions()` 之欄位 `IN`/`BETWEEN` fragment），**不含**月跑 Stage 1 另外施加的後續過濾：(a) `list_period_start`~`list_period_end` × `list_interval` 推導之 `MONTH_CNT` 區間過濾；(b) 近 3 個月已派案去重（比對 `ob_pool_data_list` 之 `ASSIGNDAY`）；(c) 詐騙(白牌)/中結/滿期等特殊業務 `DELETE` 規則。因此試算值為「**符合名單欄位條件之案件數上界**」，實際分派數會更少 —— 與 BR-1「實際件數以月跑結果為準」一致。本規則經 SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 證實（SP 於 `#TargetCase` 撈案後另施加 `WHERE o.MONTH_CNT IN (@TmpTbl)`、近 3 月 `ASSIGNDAY` 去重 `DELETE`、及多段 `LIST_NM LIKE` 觸發之特殊 `DELETE`） |
+| BR-6 | **估算為「完整 Stage 1 預估」（≡ 月跑分派案件數；v1.4 升級，取代原「條件符合上界」語意）**：自 [F092](F092-stage1-dry-run-estimate.md)（Stage 1 精確化 Phase 3）落地起，Stage 0 per-list 試算已升級為**完整 Stage 1 篩選鏈之唯讀 dry-run COUNT**（複用 `executeStage1Chain(list, workdt, ..., { dryRun: true })`，定義於 [architecture-spec.md AD-E07-23](../architecture-spec.md)；封裝於 [F091](F091-stage1-complete-month-cnt-dedup-special-delete.md) 之 `Stage1FilterChain`），**已含**月跑 Stage 1 之全部後續過濾：(a) `list_period_start`~`list_period_end` × `list_interval` 推導之 `MONTH_CNT` 期別過濾；(b) 近 3 個月已派案去重（比對 `ob_pool_data_list` 之 `ASSIGNDAY`，含 `data_source` = `etl_legacy`/`monthly_run` 聯集）；(c) 詐騙(白牌)/中結/滿期/年資等特殊業務 `DELETE` 規則。因此試算值**精確等於正式月跑 Stage 1 之分派案件數**（同一鏈，dry-run ≡ run，[F092 AC-3](F092-stage1-dry-run-estimate.md)），不再是「上界」。三步驟之逐條 SP 對照定義見 F091（SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list`：`#TargetCase` 撈案後施加 `WHERE o.MONTH_CNT IN (@TmpTbl)`、近 3 月 `ASSIGNDAY` 去重 `DELETE`、`LIST_TYPE='01' AND SPEC_NAME LIKE '%白牌%'` 與多段 `LIST_NM LIKE` 觸發之特殊 `DELETE`）。**註（與 BR-1 一致）**：試算仍為唯讀預覽、不寫入任何分派結果；最終分派以月跑實際執行結果為準。<br><br>**歷史語意（v1.2.1~v1.3，已被 v1.4 取代）**：升級前此規則述「估算為條件符合上界」（僅套欄位篩選 `buildStage1WhereConditions()`、不含 month_cnt/去重/特殊 DELETE、實際分派更少）；該描述於 F092 完整鏈 dry-run 落地後已不成立，保留為歷史紀錄。 |
 
 ## 7. 錯誤場景
 
@@ -327,9 +337,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - 流程圖：[diagrams/F049-stage0-estimate-flow.mmd](../diagrams/F049-stage0-estimate-flow.mmd)
 - **UI ground truth（v1.3）**：`prototypes/30-stage0-estimate.html`（`recompute()` / `buildCalendar(start, end, mode)` 為每日 ratio 計算與渲染之 ground truth；selector 無空選項、bar `w-full`、跳過日灰 bar、KPI 千分位、pill badge）
 - **演算法 ground truth（v1.3）**：`reference/SP/Stage0_估算每日分派案件數量.sql`（原系統 `RATIO_RATE` 千分位模型，§13.2 逐行對應）
-- 架構決策：AD-E07-1（OB 資料遷移）、**AD-E07-8（Stage 0 每日 ratio 千分位演算法，§13 為 feature 層行為規格、權威定義於 architecture-spec.md）**、AD-E07-18（F050 v2.1 名單篩選 condition_payload / Stage 1 動態 SQL 演算法，§18.4~§18.6 為 AC-4 試算機制之權威來源）、E07 與 E04 依賴關係
-- 篩選機制權威來源：[architecture-spec.md §18.5](../architecture-spec.md)（`buildStage1WhereConditions()` 演算法）、§18.4（`condition_payload` schema）、§18.6（路徑 B 欄位映射表）；試算須複用同一演算法，不另寫一套
-- 相關功能：[F048](F048-view-list-definition.md)、[F061](F061-trigger-assignment-run.md)、[F050](F050-create-list-definition.md)（condition_payload source of truth）
+- 架構決策：AD-E07-1（OB 資料遷移）、**AD-E07-8（Stage 0 每日 ratio 千分位演算法，§13 為 feature 層行為規格、權威定義於 architecture-spec.md）**、AD-E07-18（F050 v2.1 名單篩選 condition_payload / Stage 1 動態 SQL 演算法，§18.4~§18.6 為 AC-4 試算機制之權威來源）、**AD-E07-23（v1.4：estimate / dry-run 完整鏈唯讀複用，AC-4 / BR-6 試算機制之權威來源）**、E07 與 E04 依賴關係
+- 篩選機制權威來源（v1.4）：[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md) `Stage1FilterChain`（完整鏈 = 欄位篩選 + MONTH_CNT + 去重 + 特殊 DELETE）、[architecture-spec.md AD-E07-23](../architecture-spec.md)（`executeStage1Chain` dry-run）、[§18.5](../architecture-spec.md)（`buildStage1WhereConditions()` 欄位篩選子步驟）；試算須複用同一完整鏈，不另寫一套
+- 相關功能：[F048](F048-view-list-definition.md)、[F061](F061-trigger-assignment-run.md)、[F050](F050-create-list-definition.md)（condition_payload source of truth）、**[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md)（Stage 1 補完整三步驟）、[F092](F092-stage1-dry-run-estimate.md)（dry-run 升級，§11 對 F049 影響表）**
 
 ## 11. 假設
 

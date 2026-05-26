@@ -6,7 +6,7 @@ source-story: US-118
 epic: E07
 module: M03d 準備完成階段
 priority: P0-MVP
-version: "1.3"
+version: "1.3.1"
 date: 2026-05-26
 status: Draft
 ---
@@ -15,6 +15,8 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **v1.3.1（2026-05-26 / estimateCases 物化 COUNT 來源升級補註，對齊 F092）**：[F092](F092-stage1-dry-run-estimate.md)（Stage 1 精確化工程 Phase 3）已落地，per-list estimate 升級為完整 Stage 1 鏈唯讀 dry-run。本版**僅補註** `estimateCases` 物化所用之 Stage 0 估算 COUNT 來源由「欄位篩選版」升級為「**完整 Stage 1 鏈 dry-run（≡ 月跑案件數）**」（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT + 近 3 個月去重 + 特殊 DELETE）。影響段落：**§6 BR-10**（補物化 COUNT 來源升級註）、**§5 清單回應欄位表 `estimateCases`**（補來源升級註）。**物化讀寫機制、UI、權限、其他 AC/BR 均不變**；僅 COUNT 內涵升級。交叉引用 [F092 AC-6](F092-stage1-dry-run-estimate.md) / [architecture-spec.md AD-E07-23](../architecture-spec.md)。
+>
 > **v1.3（2026-05-26 / prototype 29d 對齊 + 重用端點落地）**：本版本對齊 prototype `prototypes/29d-ready-summary.html` 與 real code 之實作落差，重點：
 > 1. **§5 API 重用既有端點**：清單頁與詳情頁**不使用**原規劃之專屬端點 `GET /lists/{listNo}/ready-summary`，改為**重用既有端點**：清單頁 `GET /assignment/lists`；詳情頁 `GET /assignment/ratios/dept/{listNo}` + `GET /assignment/ratios/personnel/{listNo}` + `GET /assignment/lists/{listNo}/approval-history`；Stage 0 試算 `GET /assignment/list-definitions/{listNo}/estimate`。原 5.1 / 5.2 描述保留並標記為「規劃版」，實作以 §5.0 重用端點清單為準。
 > 2. **§5 清單回應新增欄位**：`GET /assignment/lists` 每筆 list item 新增 `deptCount`（部門數）、`empCount`（業務員數）、`approvedAt`（最新核准時間）、`approverName`（核准者姓名）、`estimateCases`（物化 Stage 0 估算值，可為 null）。
@@ -160,7 +162,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | `empCount` | number | `COUNT(ob_empl_set WHERE list_no = :listNo)` | 該名單之業務員（個別比例）數；29d 卡片標示為「業務員」 |
 | `approvedAt` | string \| null | `assignment_approval` 中最新 `action='approve'` 之 `approved_at` | 最新核准時間；ISO 8601；無核准紀錄時為 `null`（依賴 F086 v1.3 補寫，見 §5.0.2） |
 | `approverName` | string \| null | 最新 `action='approve'` 之 `approver_name` | 核准者姓名；無核准紀錄時為 `null` |
-| `estimateCases` | number \| null | `ob_list_definition` 物化估算欄位（由 F086 approve→ready 計算並存，見 BR-10） | 預估案件數；尚未物化或計算失敗時為 `null`，前端顯示「—」 |
+| `estimateCases` | number \| null | `ob_list_definition` 物化估算欄位（由 F086 approve→ready 計算並存，見 BR-10）；**物化 COUNT 來源自 [F092](F092-stage1-dry-run-estimate.md) 起升級為完整 Stage 1 鏈 dry-run（≡ 月跑案件數），非欄位篩選版** | 預估案件數；尚未物化或計算失敗時為 `null`，前端顯示「—」 |
 
 > **效能原則（A-3 resolved）**：`estimateCases` 採**物化快取**讀取存值，**不**在 `listLists` 內逐筆即時對 `ob_pool_data`（百萬列）執行 COUNT；理由：per-list COUNT × N 張卡 = N 次重查詢，違反 ETL/scale 原則。`deptCount` / `empCount` 為對小表（`ob_dept_pct` / `ob_empl_set`，每名單數十列）之 COUNT，可即時聚合。
 
@@ -275,7 +277,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | BR-7 | **歷史月份允許查詢**：與 F082 / F079 寫入端點不同，本 spec 查詢端點允許歷史月份；UI 標示「歷史月份」即可 |
 | BR-8 | **CR 開關來源**：`cr_enabled` 欄位儲存位置依 F048 / US-120 規範；本 spec 僅讀取 |
 | BR-9 | **Feature Flag fallback**：本 spec 兩端點均掛 `FeatureFlagGuard`；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
-| BR-10 | **預估案件數採物化快取（v1.3 新增）**：`estimateCases` 於 F086 approve→ready 當下計算一次 Stage 0 估算並物化儲存至 `ob_list_definition`（欄位 / migration 細節由 system-architect 規範）；計算為 **best-effort**，失敗僅 log、**不**阻擋 approve（見 [F086 v1.3 §6.X](F086-approve-to-ready.md)）。清單頁 `GET /assignment/lists` **直接讀取存值**，**不**在 `listLists` 內逐筆對 `ob_pool_data` 即時 COUNT（per-list COUNT × N 卡 = N 次掃百萬列重查詢，違反 ETL/scale 原則）。物化值缺失（尚未計算 / 計算失敗）時回 `null`，前端顯示「—」。詳情頁另可呼叫 `GET /assignment/list-definitions/{listNo}/estimate` 取即時試算值。 |
+| BR-10 | **預估案件數採物化快取（v1.3 新增；v1.3.1 補註物化 COUNT 來源升級）**：`estimateCases` 於 F086 approve→ready 當下計算一次 Stage 0 估算並物化儲存至 `ob_list_definition`（欄位 / migration 細節由 system-architect 規範）；計算為 **best-effort**，失敗僅 log、**不**阻擋 approve（見 [F086 v1.3 §6.X](F086-approve-to-ready.md)）。清單頁 `GET /assignment/lists` **直接讀取存值**，**不**在 `listLists` 內逐筆對 `ob_pool_data` 即時 COUNT（per-list COUNT × N 卡 = N 次掃百萬列重查詢，違反 ETL/scale 原則）。物化值缺失（尚未計算 / 計算失敗）時回 `null`，前端顯示「—」。詳情頁另可呼叫 `GET /assignment/list-definitions/{listNo}/estimate` 取即時試算值。<br>**物化 COUNT 來源升級（自 [F092](F092-stage1-dry-run-estimate.md) Stage 1 精確化 Phase 3 起）**：物化計算所用之 Stage 0 估算 COUNT 由「欄位篩選版」升級為**完整 Stage 1 鏈唯讀 dry-run COUNT**（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，精確 ≡ 月跑案件數；見 [F092 AC-6](F092-stage1-dry-run-estimate.md) / [architecture-spec.md AD-E07-23](../architecture-spec.md)）。**物化讀寫機制（best-effort、清單頁讀存值、不即時逐筆 COUNT）不變**，僅 COUNT 內涵升級；因完整鏈含去重查詢，approve→ready 物化計算耗時可能略增，由物化（非即時）設計吸收。 |
 | BR-11 | **設定者 / 代設定判定（v1.3 新增）**：詳情頁部門比例表之「設定者」欄由 `ob_dept_pct.created_by` 解析：以 `created_by` 查 user 取得姓名與 `business_role`；(1) 若該設定者 `businessRole = 'director'`，視為**「部長代設定」**（29d chip：「該部門由部長代設定」，warning 色）；(2) 否則視為**「由處長設定」**（29d chip：「由 {處長姓名} 設定」，green 色）。「處長」欄顯示該部門所屬處長姓名（部門 → 處長對應沿用 F074 轄區定義）。 |
 
 ## 7. UI/UX 需求

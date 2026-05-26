@@ -4,17 +4,20 @@ feature_id: F049
 feature_name: Stage 0 每日分派數量估算（v1.3）
 priority: P0-MVP
 related_spec: /docs/specs/features/F049-stage0-daily-estimate.md
-spec_version: "1.3"
+spec_version: "1.4"
 covers:
   - F049
   - US-071
   - US-132
+  - US-135
 date: 2026-05-21
 last_updated: 2026-05-26
 ---
 
-# F049：Stage 0 每日分派數量估算（v1.3）— 測試設計
+# F049：Stage 0 每日分派數量估算（v1.4）— 測試設計
 
+> **v1.4 測試設計更新（2026-05-26 / estimate 升級為完整 Stage 1 dry-run，對齊 F092）**：F049 v1.4 / [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 將 per-list estimate 由「欄位篩選版 COUNT」升級為「完整 Stage 1 鏈 dry-run COUNT（≡ 月跑案件數）」。本版**僅更新 TS-F049-EST-010**（整合層）：原預期固定值 `≈ 241,978`（欄位篩選版上界）已過時 → 改為「dry-run COUNT === 月跑 Stage 1（不再 assert 固定值）；完整鏈後 COUNT ≤ 241,978；dev `ob_pool_data_list` 空時去重不減、但 month_cnt / 特殊 DELETE 仍可能減」，並標記為 **Integration DEFERRED**（需真實 PG + ob_pool_data_list seed）。完整鏈三步驟（month_cnt / 去重 / 特殊 DELETE）之單元測試由 F091-test 覆蓋，本檔不重複。其餘案例群組（CAL / V13F / EST-001~009）不變。
+>
 > **v1.3 測試設計追加（2026-05-26）**：新增「後端 `calculateDailyEstimate` 千分位 ratio + calendarSource 三模式」案例群組（TS-F049-CAL-001 ~ TS-F049-CAL-009）及「前端元件對齊 prototype」案例群組（TS-F049-V13F-001 ~ TS-F049-V13F-009）。後端群組驗證 Design A contract（total-agnostic、全日期回傳、SUM(ratioPerMille)=1000）；前端群組驗證自動選第一筆、calendarSource 切換重呼 API、無寫死 9500、bar `w-full`、跳過日灰 bar 等 prototype 對齊項。詳見 F049 v1.3 AC-1/AC-2/AC-3/AC-4-Default/§5.1/§8.1/§13。
 >
 > **v1.2 測試設計追加（2026-05-26）**：新增「後端 Stage 0 per-list 試算篩選邏輯」案例群組（TS-F049-EST-001 ~ TS-F049-EST-009），驗證 `estimateListCount` / `buildPoolCountQuery` 修正後行為 —— 改為複用月跑 Stage 1 之 `buildStage1WhereConditions()` 演算法，確保 `IN` 多值、欄位映射（caseyear → year_cnt、case_status → list_type）、wildcard、EMPTY_CONDITIONS 均正確，並保留原有 404 / 逾時 regression 驗證。詳見 F049 v1.2 AC-4 篩選機制對照表 / BR-5 / §7。
@@ -72,7 +75,7 @@ last_updated: 2026-05-26
 | TS-F049-EST-007 | 1 | 高 | Unit | numeric BETWEEN / date BETWEEN fragment 驗證 |
 | TS-F049-EST-008 | 1 | 高 | Unit | 路徑 B legacy fallback；SQLite in-memory seed + COUNT 驗證 |
 | TS-F049-EST-009 | 1 | 高 | Unit | 404 / timeout regression；現有測試架構延伸 |
-| TS-F049-EST-010 | 1 | 低（需真實 DB）| Integration | 真實 ob_pool_data 比對 COUNT ≈ 241,978；CI 需 PostgreSQL TestContainer |
+| TS-F049-EST-010 | 1 | 低（需真實 DB）| Integration（**DEFERRED**）| 完整鏈 dry-run COUNT === 月跑 Stage 1（F092 AC-3）；COUNT ≤ 241,978（去重+month_cnt+特殊 DELETE 後更少，不再 assert 固定值）；CI 需 PostgreSQL TestContainer + ob_pool_data_list seed |
 
 ### 前端元件案例群組自動化就緒度（v1.3 新增）
 
@@ -190,7 +193,7 @@ last_updated: 2026-05-26
 | TS-F049-CAL-003~009（all 模式 + ratio + 邊界）| 高 | SQLite in-memory 或純函式；無外部依賴 |
 | TS-F049-V13F-001~009（前端 v1.3 元件）| 高 | RTL + MSW stub；純前端邏輯；`computeAdE07Distribution` 可純函式測試 |
 | TS-F049-EST-001~009（後端試算篩選邏輯 Unit） | 高 | `buildStage1WhereConditions` 純函式 + SQLite in-memory；無外部依賴 |
-| TS-F049-EST-010（整合層 COUNT 驗證） | 低 | 需 PostgreSQL + 真實 ob_pool_data seed；僅 CI 環境可行 |
+| TS-F049-EST-010（整合層完整鏈 dry-run ≡ 月跑 COUNT 驗證；**DEFERRED**） | 低 | 需 PostgreSQL + 真實 ob_pool_data + ob_pool_data_list seed；僅 CI 環境可行 |
 
 ---
 
@@ -463,15 +466,19 @@ last_updated: 2026-05-26
 
 ---
 
-### TS-F049-EST-010：Integration — 真實 ob_pool_data COUNT 與 Stage 1 月跑結果一致（OB202605004 基準）
+### TS-F049-EST-010：Integration — 真實 ob_pool_data 完整鏈 dry-run COUNT 與 Stage 1 月跑結果一致（OB202605004 基準）
 
-- **關聯需求**：F049 v1.2 AC-4「試算之 WHERE 子句直接複用 Stage 1 演算法，確保 estimate 與實際月跑 Stage 1 逐欄位一致」
+> **更新（對齊 F049 v1.4 / F092 完整鏈 dry-run）**：estimate 自 [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 起改為**完整 Stage 1 鏈 dry-run**（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE），不再是「欄位篩選版」。故原預期值 `≈ 241,978`（欄位篩選版上界）**已過時**：完整鏈後 COUNT 會 **≤ 該值**（被 month_cnt / 去重 / 特殊 DELETE 進一步過濾）。本案例核心驗收改為「dry-run COUNT === 月跑 Stage 1 案件數（同一鏈，[F092 AC-3](../../specs/features/F092-stage1-dry-run-estimate.md)）」，不再 assert 固定數字。
+>
+> **標記：Integration DEFERRED**（需真實 PostgreSQL + ob_pool_data + ob_pool_data_list seed；單元層由 F091 三步驟純函式 / SQLite 覆蓋，見 F091-test）。
+
+- **關聯需求**：F049 v1.4 AC-4 / BR-6「試算複用完整 Stage 1 鏈 `executeStage1Chain({dryRun:true})`，dry-run COUNT 精確 ≡ 月跑 Stage 1 案件數」；[F092 AC-3](../../specs/features/F092-stage1-dry-run-estimate.md)
 - **測試類型**：Positive / Integration
-- **測試層**：Integration（PostgreSQL TestContainer；需真實 ob_pool_data seed）
-- **自動化就緒度**：低（需 CI PostgreSQL）；建議在 E2E 或特定 integration suite 中執行
+- **測試層**：Integration（PostgreSQL TestContainer；需真實 ob_pool_data + ob_pool_data_list seed）— **DEFERRED（需真實 PG，CI 環境才可行）**
+- **自動化就緒度**：低（需 CI PostgreSQL）；建議在 E2E 或特定 integration suite 中執行；單元層以 F091 三步驟純函式 / SQLite 替代
 - **前置條件**：
   - PostgreSQL TestContainer 已啟動
-  - ob_list_definition 含一筆名單 `list_no='OB202605004'`，`status='active'`
+  - ob_list_definition 含一筆名單 `list_no='OB202605004'`，`status='active'`，且 `list_period_start`/`list_period_end`/`list_interval`（MONTH_CNT 過濾用）、`list_nm`（特殊 DELETE 字串比對用）有對應值
   - `condition_payload.conditions` 含：
     - `{ fieldType: 'categorical', columnName: 'prod_kind', values: ['01'] }`
     - `{ fieldType: 'categorical', columnName: 'case_status', values: ['02'] }`（映射為 list_type）
@@ -479,15 +486,19 @@ last_updated: 2026-05-26
     - `{ fieldType: 'categorical', columnName: 'settle_src', values: ['N'] }`
     - `{ fieldType: 'categorical', columnName: 'spec_tp', values: ['A','B','C', ...] }`（多值）
   - ob_pool_data 已載入對應 202605 月份資料（E04 + E05 ETL seed）
+  - ob_pool_data_list 去重歷史（[F090](../../specs/features/F090-obpooldata-list-etl.md) ETL）：dev / CI 可能為空 → 去重不減（見下方備註）
 - **步驟**：
-  1. 呼叫 `estimateListCount('OB202605004')`，記錄 `estimateCount`
-  2. 獨立執行 Stage 1 月跑 pipeline 對同一名單，取得實際 `stage1Count`
+  1. 呼叫 `estimateListCount('OB202605004')`（內部走 `executeStage1Chain({ dryRun: true })`），記錄 `estimateCount`
+  2. 獨立執行 Stage 1 月跑 pipeline（`executeStage1Chain({ dryRun: false })`）對同一名單，取得實際 `stage1Count`
   3. 比較兩個數值
 - **預期結果**：
-  - `estimateCount === stage1Count`（允許±0，確保試算與月跑完全一致）
-  - 預期 `estimateCount ≈ 241,978`（以真實 ob_pool_data 資料為基準）
-  - `estimateCount` **不為 0**（regression guard：舊版實作全為 0 的缺陷已修正）
-- **備註**：本案例主要驗證篩選演算法一致性；若 ob_pool_data 資料量不同，COUNT 數字可能略有差異，但必須非 0 且與 Stage 1 一致。CI 環境需確保 PostgreSQL 版本與 prod 一致（避免 BETWEEN 語意差異）。
+  - `estimateCount === stage1Count`（允許±0，確保 dry-run 與月跑完全一致 — 此為本案例核心驗收）
+  - `estimateCount` **不為 0**（regression guard：舊版欄位篩選實作全為 0 的缺陷已修正）
+  - `estimateCount` **≤ 241,978**（241,978 為升級前欄位篩選版上界；完整鏈套 month_cnt / 去重 / 特殊 DELETE 後只會更少或相等，**不再 assert 等於固定值**）
+- **備註**：
+  - 本案例核心為驗證 dry-run ≡ run **演算法一致性**，非固定 COUNT 數字。
+  - **dev / CI `ob_pool_data_list` 為空時**：近 3 個月去重不減任何案件（去重集合為空），但 **MONTH_CNT 期別過濾與特殊 DELETE（中結/強案/滿期/年資/詐騙白牌）仍可能減少 COUNT**；故 `estimateCount` 仍可能 < 241,978。需以真實 `ob_pool_data_list` seed 才能完整驗證去重減量。
+  - CI 環境需確保 PostgreSQL 版本與 prod 一致（避免 BETWEEN / `IN` 語意差異）。
 
 ---
 
