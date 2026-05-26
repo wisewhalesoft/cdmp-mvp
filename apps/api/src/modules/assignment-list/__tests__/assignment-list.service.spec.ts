@@ -35,6 +35,7 @@ import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-white
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -63,7 +64,7 @@ async function buildModule(): Promise<{
           AssignmentAuditLog,
           AssignmentRun,
           PooldataFieldOption,
-          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
+          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
         ],
         synchronize: true,
       }),
@@ -72,7 +73,7 @@ async function buildModule(): Promise<{
         AssignmentAuditLog,
         AssignmentRun,
         PooldataFieldOption,
-        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
+        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
       ]),
     ],
     providers: [
@@ -195,6 +196,10 @@ describe('AssignmentListService', () => {
     await runRepo.clear();
     await whitelistRepo.clear();
     await listRepo.manager.getRepository(User).clear();
+    // F088：清空清單卡片聚合來源表，避免跨 test 殘留（list_no 重用會誤帶 stale 計數）
+    await listRepo.manager.getRepository(ObDeptPct).createQueryBuilder().delete().execute();
+    await listRepo.manager.getRepository(ObEmplSet).createQueryBuilder().delete().execute();
+    await listRepo.manager.getRepository(AssignmentApproval).createQueryBuilder().delete().execute();
     await seedWhitelist(whitelistRepo);
   });
 
@@ -616,6 +621,65 @@ describe('AssignmentListService', () => {
       const res = await service.listLists({ ym: YM });
       // users 表為空 → fallback 回 created_by 原值（ACTOR.userId）
       expect(res.lists[0].createdBy).toBe(ACTOR.userId);
+    });
+
+    // F088 v1.3 §5.0.1：清單卡片聚合欄位
+    it('F088：listLists 回傳 deptCount / empCount / approvedAt / approverName / estimateCases', async () => {
+      const userRepo = listRepo.manager.getRepository(User);
+      await userRepo.save(
+        userRepo.create({
+          id: 'approver-uuid-001',
+          name: '張部長',
+          email: 'approver@cdmp.test',
+          password_hash: 'x',
+          role: 'user',
+          status: 'active',
+          business_role: 'director',
+        } as any),
+      );
+      await service.createList(baseCreateDto() as any, ACTOR, YM);
+      const listNo = (await service.listLists({ ym: YM })).lists[0].listNo as string;
+
+      // 物化 estimate 直接寫 entity
+      await listRepo.update(
+        { list_no: listNo },
+        { stage0_estimate_count: 12400 } as any,
+      );
+      // 2 部門 / 3 員工
+      const deptRepo = listRepo.manager.getRepository(ObDeptPct);
+      await deptRepo.save([
+        { project_workym: YM, list_no: listNo, obdeptid: 'XTC0', obdeptnm: '北一處', ration: '60', created_by_prog: 'T', created_by: ACTOR.userId, created_at: new Date(), updated_by_prog: 'T', updated_by: ACTOR.userId, updated_at: new Date() },
+        { project_workym: YM, list_no: listNo, obdeptid: 'XTC1', obdeptnm: '北二處', ration: '40', created_by_prog: 'T', created_by: ACTOR.userId, created_at: new Date(), updated_by_prog: 'T', updated_by: ACTOR.userId, updated_at: new Date() },
+      ] as any);
+      const emplRepo = listRepo.manager.getRepository(ObEmplSet);
+      await emplRepo.save([
+        { list_no: listNo, deptid_m: 'XTC0', emplid: 'E001', ration: '50' },
+        { list_no: listNo, deptid_m: 'XTC0', emplid: 'E002', ration: '50' },
+        { list_no: listNo, deptid_m: 'XTC1', emplid: 'E003', ration: '100' },
+      ] as any);
+      const apprRepo = listRepo.manager.getRepository(AssignmentApproval);
+      await apprRepo.save([
+        { list_no: listNo, action: 'approve', reject_reason: null, approver_id: 'approver-uuid-001', approver_name: 'approver-uuid-001', approver_role: 'director', approved_at: new Date('2026-05-14T18:05:00Z'), created_at: new Date('2026-05-14T18:05:00Z') },
+      ] as any);
+
+      const res = await service.listLists({ ym: YM });
+      const item = res.lists.find((l) => l.listNo === listNo)!;
+      expect(item.deptCount).toBe(2);
+      expect(item.empCount).toBe(3);
+      expect(item.estimateCases).toBe(12400);
+      expect(item.approverName).toBe('張部長');
+      expect(item.approvedAt).not.toBeNull();
+    });
+
+    it('F088：無部門 / 無員工 / 未核准 / 未估算 → 0 / 0 / null / null', async () => {
+      await service.createList(baseCreateDto() as any, ACTOR, YM);
+      const res = await service.listLists({ ym: YM });
+      const item = res.lists[0];
+      expect(item.deptCount).toBe(0);
+      expect(item.empCount).toBe(0);
+      expect(item.approvedAt).toBeNull();
+      expect(item.approverName).toBeNull();
+      expect(item.estimateCases).toBeNull();
     });
   });
 

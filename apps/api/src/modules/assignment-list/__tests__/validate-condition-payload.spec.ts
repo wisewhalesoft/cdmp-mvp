@@ -30,6 +30,7 @@ import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-white
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -61,7 +62,7 @@ async function buildEnv(): Promise<{
           AssignmentAuditLog,
           AssignmentRun,
           PooldataFieldOption,
-          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
+          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
         ],
         synchronize: true,
       }),
@@ -70,7 +71,7 @@ async function buildEnv(): Promise<{
         AssignmentAuditLog,
         AssignmentRun,
         PooldataFieldOption,
-        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, User,
+        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
       ]),
     ],
     providers: [AssignmentListService, AssignmentRunGuardService, { provide: SectionChiefScopeService, useValue: { getScopeDeptCode: () => Promise.resolve(null) } }],

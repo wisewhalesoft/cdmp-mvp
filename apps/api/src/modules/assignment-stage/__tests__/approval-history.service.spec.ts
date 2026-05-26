@@ -20,6 +20,7 @@ import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { StageActionService } from '../stage-action.service';
+import { Stage0EstimateService } from '@/modules/assignment-list/stage0-estimate.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
@@ -73,6 +74,10 @@ async function buildModule(): Promise<Env> {
       {
         provide: AssignmentRunGuardService,
         useValue: { assertNoRunningRun: vi.fn().mockResolvedValue(undefined) },
+      },
+      {
+        provide: Stage0EstimateService,
+        useValue: { estimateListCount: vi.fn().mockResolvedValue({ count: 0 }) },
       },
     ],
   }).compile();

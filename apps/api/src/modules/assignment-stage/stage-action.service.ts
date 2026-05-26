@@ -16,6 +16,7 @@ import { StageTransitionService } from '@/modules/assignment/services/stage-tran
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
+import { Stage0EstimateService } from '@/modules/assignment-list/stage0-estimate.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 interface ActorUser {
@@ -58,6 +59,7 @@ export class StageActionService {
     private readonly ratioValidation: RatioValidationService,
     private readonly personnelRatioValidation: PersonnelRatioValidationService,
     private readonly runGuard: AssignmentRunGuardService,
+    private readonly stage0Estimate: Stage0EstimateService,
   ) {}
 
   // ===========================================================================
@@ -261,21 +263,66 @@ export class StageActionService {
     this.assertListActive(list);
     this.assertNotHistorical(list.project_workym, currentWorkYm);
 
+    const approvedAt = new Date();
+    const approverRole =
+      actor.role === 'admin' ? 'admin' : (actor.businessRole ?? null);
+
     await this.stageTransition.advanceTo(
       listNo,
       'approval',
       'ready',
       actor.userId,
       async () => undefined,
+      // F086 v1.3 BR-11：同 transaction 寫入 assignment_approval(action='approve')
+      //（mirror F087 reject 之 postActionFn；亦為 F088 清單卡片 approvedAt / 詳情簽核歷史 approve 列來源）
+      async (mgr: EntityManager) => {
+        await mgr.insert(AssignmentApproval, {
+          list_no: listNo,
+          action: 'approve',
+          reject_reason: null,
+          approver_id: actor.userId,
+          approver_name: actor.userId,
+          approver_role: approverRole,
+          approved_at: approvedAt,
+          created_at: approvedAt,
+        } as Partial<AssignmentApproval>);
+      },
     );
+
+    // F086 v1.3 BR-12 / AD-E07-20：commit 後 best-effort 物化 Stage 0 估算
+    //（transaction 外執行；計算 / 寫入失敗僅 log，不影響 approve 結果）
+    await this.materializeStage0Estimate(listNo);
 
     return {
       listNo,
       previousStage: 'approval',
       currentStage: 'ready',
       advancedBy: actor.userId,
-      advancedAt: new Date(),
+      advancedAt: approvedAt,
     };
+  }
+
+  /**
+   * F086 v1.3 BR-12 / AD-E07-20：best-effort 物化 Stage 0 估算至 ob_list_definition。
+   *
+   * 失敗（estimate timeout / 名單異常 / UPDATE 失敗）僅 Logger.warn，不拋出 —
+   * approve→ready 已完成，估算僅為清單頁顯示用快取，不可因此 rollback。
+   */
+  private async materializeStage0Estimate(listNo: string): Promise<void> {
+    try {
+      const { count } = await this.stage0Estimate.estimateListCount(listNo);
+      await this.listRepo.update(
+        { list_no: listNo },
+        {
+          stage0_estimate_count: count,
+          stage0_estimated_at: new Date(),
+        },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `物化 Stage 0 估算失敗 (listNo=${listNo}): ${(err as Error).message}`,
+      );
+    }
   }
 
   // ===========================================================================

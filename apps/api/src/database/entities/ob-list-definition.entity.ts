@@ -148,4 +148,14 @@ export class ObListDefinition {
   //   - 對應 migration m282：1711360000282-BackfillListDefinitionConditionPayload
   @Column({ name: 'condition_payload', type: jsonColumnType, nullable: true })
   condition_payload: ObListDefinitionConditionPayload | null;
+
+  // F088 v1.3 / AD-E07-20（2026-05-26）— 物化 Stage 0 估算快取
+  //   - approve→ready（F086）成功後 best-effort 計算並寫入；清單頁直接讀存值（避免逐筆 COUNT 百萬列 ob_pool_data）
+  //   - nullable：舊名單 / 尚未 approve / 計算失敗皆為 NULL，前端顯示「—」
+  //   - 對應 migration m289：1711360000289-AddObListDefinitionStage0EstimateCache
+  @Column({ name: 'stage0_estimate_count', type: 'int', nullable: true })
+  stage0_estimate_count: number | null;
+
+  @Column({ name: 'stage0_estimated_at', type: dateColumnType, nullable: true })
+  stage0_estimated_at: Date | null;
 }

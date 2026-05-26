@@ -20,6 +20,7 @@ import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { StageActionService } from '../stage-action.service';
+import { Stage0EstimateService } from '@/modules/assignment-list/stage0-estimate.service';
 import { PersonnelRatioService } from '../personnel-ratio.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
@@ -31,6 +32,7 @@ import { AssignmentRunGuardService } from '@/modules/assignment/services/assignm
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 
 const YM = '202605';
 
@@ -76,6 +78,14 @@ async function buildModule(): Promise<Env> {
       {
         provide: AssignmentRunGuardService,
         useValue: { assertNoRunningRun: vi.fn().mockResolvedValue(undefined) },
+      },
+      {
+        provide: Stage0EstimateService,
+        useValue: { estimateListCount: vi.fn().mockResolvedValue({ count: 0 }) },
+      },
+      {
+        provide: SectionChiefScopeService,
+        useValue: { getScopeDeptCode: vi.fn().mockResolvedValue(null) },
       },
     ],
   }).compile();

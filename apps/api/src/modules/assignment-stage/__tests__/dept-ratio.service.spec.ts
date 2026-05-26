@@ -24,6 +24,7 @@ describe('DeptRatioService (F079)', () => {
   let listRepo: any;
   let deptPctRepo: any;
   let emphireRepo: any;
+  let userRepo: any;
   let stageTransition: any;
   let ratioValidation: any;
   let runGuard: any;
@@ -71,12 +72,15 @@ describe('DeptRatioService (F079)', () => {
       assertSumEquals100: vi.fn(),
     };
     runGuard = { assertNoRunningRun: vi.fn().mockResolvedValue(undefined) };
+    // F088 v1.3：設定者解析（created_by → users）
+    userRepo = { find: vi.fn().mockResolvedValue([]) };
 
     svc = new DeptRatioService(
       dataSource,
       listRepo,
       deptPctRepo,
       emphireRepo,
+      userRepo,
       ratioValidation,
       stageTransition,
       runGuard,
@@ -104,6 +108,33 @@ describe('DeptRatioService (F079)', () => {
     const xtf = res.deptRatios.find((d) => d.obdeptId === 'XTF0');
     expect(xtf?.isActive).toBe(false);
     expect(res.isReadOnly).toBe(false);
+  });
+
+  // F088 v1.3 BR-11：設定者 / 部長代設定 解析
+  it('F088 GET：設定者解析 — director 設定 → proxyByDirector=true；section_chief → false', async () => {
+    listRepo.findOne.mockResolvedValue({
+      list_no: 'OB202605001',
+      list_nm: '車貸',
+      project_workym: '202605',
+      stage: 'ready',
+      status: 'active',
+    });
+    deptPctRepo.find.mockResolvedValue([
+      { obdeptid: 'XTC0', obdeptnm: '業務一部', ration: '60', created_by: 'u-director' },
+      { obdeptid: 'XTD0', obdeptnm: '業務二部', ration: '40', created_by: 'u-chief' },
+    ]);
+    userRepo.find.mockResolvedValue([
+      { id: 'u-director', name: '張部長', role: 'user', business_role: 'director' },
+      { id: 'u-chief', name: '李處長', role: 'user', business_role: 'section_chief' },
+    ]);
+
+    const res = await svc.getDeptRatios('OB202605001');
+    const xtc0 = res.deptRatios.find((d) => d.obdeptId === 'XTC0')!;
+    const xtd0 = res.deptRatios.find((d) => d.obdeptId === 'XTD0')!;
+    expect(xtc0.setByName).toBe('張部長');
+    expect(xtc0.proxyByDirector).toBe(true);
+    expect(xtd0.setByName).toBe('李處長');
+    expect(xtd0.proxyByDirector).toBe(false);
   });
 
   // TC-M03a-002

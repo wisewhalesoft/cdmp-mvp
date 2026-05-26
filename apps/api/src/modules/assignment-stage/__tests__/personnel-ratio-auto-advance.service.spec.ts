@@ -740,11 +740,12 @@ describe('StageActionService.advancePersonnelRatioToApproval — F084 v2.0 fallb
     };
     // StageActionService constructor 注入順序：
     //   (listRepo, deptPctRepo, emplSetRepo, approvalRepo,
-    //    stageTransition, ratioValidation, personnelRatioValidation, runGuard)
+    //    stageTransition, ratioValidation, personnelRatioValidation, runGuard, stage0Estimate)
     const deptPctRepo = { find: vi.fn().mockResolvedValue([]), findOne: vi.fn() };
     const emplSetRepo = { find: vi.fn().mockResolvedValue([]) };
     const approvalRepo = { createQueryBuilder: vi.fn() };
     const ratioValidation = { assertEachInRange: vi.fn() };
+    const stage0Estimate = { estimateListCount: vi.fn().mockResolvedValue({ count: 0 }) };
     svc = new StageActionService(
       listRepo,
       deptPctRepo,
@@ -754,6 +755,7 @@ describe('StageActionService.advancePersonnelRatioToApproval — F084 v2.0 fallb
       ratioValidation,
       personnelRatioValidation,
       runGuard,
+      stage0Estimate,
     );
     deps = { svc };
   });

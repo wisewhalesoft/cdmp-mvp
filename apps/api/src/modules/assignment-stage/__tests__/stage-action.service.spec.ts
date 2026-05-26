@@ -25,9 +25,10 @@ describe('StageActionService', () => {
   let ratioValidation: any;
   let personnelRatioValidation: any;
   let runGuard: any;
+  let stage0Estimate: any;
 
   beforeEach(() => {
-    listRepo = { findOne: vi.fn() };
+    listRepo = { findOne: vi.fn(), update: vi.fn().mockResolvedValue({ affected: 1 }) };
     deptPctRepo = {};
     emplSetRepo = {};
     approvalRepo = {
@@ -40,8 +41,13 @@ describe('StageActionService', () => {
     };
     stageTransition = {
       advanceTo: vi.fn().mockImplementation(async (_l, _f, _t, _u, pre, post) => {
-        await pre({ find: vi.fn().mockResolvedValue([]), delete: vi.fn().mockResolvedValue({ affected: 0 }) });
-        if (post) await post({});
+        const mgr = {
+          find: vi.fn().mockResolvedValue([]),
+          delete: vi.fn().mockResolvedValue({ affected: 0 }),
+          insert: vi.fn().mockResolvedValue({}),
+        };
+        await pre(mgr);
+        if (post) await post(mgr);
       }),
       rollbackTo: vi.fn().mockImplementation(async (_l, _f, _t, _u, cleanup) => {
         await cleanup({ delete: vi.fn().mockResolvedValue({ affected: 5 }) });
@@ -53,6 +59,10 @@ describe('StageActionService', () => {
     ratioValidation = { assertSumEquals100: vi.fn() };
     personnelRatioValidation = { assertAllDeptsSumEquals100: vi.fn().mockResolvedValue(undefined) };
     runGuard = { assertNoRunningRun: vi.fn().mockResolvedValue(undefined) };
+    // F086 v1.3：物化 Stage 0 估算
+    stage0Estimate = {
+      estimateListCount: vi.fn().mockResolvedValue({ listNo: 'L1', count: 9999 }),
+    };
 
     svc = new StageActionService(
       listRepo,
@@ -63,6 +73,7 @@ describe('StageActionService', () => {
       ratioValidation,
       personnelRatioValidation,
       runGuard,
+      stage0Estimate,
     );
   });
 
@@ -139,7 +150,53 @@ describe('StageActionService', () => {
     listRepo.findOne.mockResolvedValue(okList('approval'));
     const res = await svc.approveToReady('L1', actor, '202605');
     expect(res.currentStage).toBe('ready');
-    expect(stageTransition.advanceTo).toHaveBeenCalledWith('L1', 'approval', 'ready', 'u1', expect.any(Function));
+    // v1.3：advanceTo 多帶 postActionFn（寫 approve 紀錄）
+    expect(stageTransition.advanceTo).toHaveBeenCalledWith(
+      'L1',
+      'approval',
+      'ready',
+      'u1',
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  // F086 v1.3：approve 同 transaction 寫入 assignment_approval(action='approve')
+  it('F086 approveToReady：postActionFn 寫入 assignment_approval(action=approve)', async () => {
+    listRepo.findOne.mockResolvedValue(okList('approval'));
+    const insertSpy = vi.fn().mockResolvedValue({});
+    stageTransition.advanceTo = vi
+      .fn()
+      .mockImplementation(async (_l, _f, _t, _u, _pre, post) => {
+        if (post) await post({ insert: insertSpy });
+      });
+    await svc.approveToReady('L1', actor, '202605');
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ list_no: 'L1', action: 'approve', approver_id: 'u1' }),
+    );
+  });
+
+  // F086 v1.3：commit 後物化 Stage 0 估算
+  it('F086 approveToReady：物化 Stage 0 估算寫回 stage0_estimate_count', async () => {
+    listRepo.findOne.mockResolvedValue(okList('approval'));
+    await svc.approveToReady('L1', actor, '202605');
+    expect(stage0Estimate.estimateListCount).toHaveBeenCalledWith('L1');
+    expect(listRepo.update).toHaveBeenCalledWith(
+      { list_no: 'L1' },
+      expect.objectContaining({ stage0_estimate_count: 9999 }),
+    );
+  });
+
+  // F086 v1.3：物化估算失敗 → best-effort，不影響 approve 結果
+  it('F086 approveToReady：估算失敗不阻擋 approve（best-effort）', async () => {
+    listRepo.findOne.mockResolvedValue(okList('approval'));
+    stage0Estimate.estimateListCount = vi
+      .fn()
+      .mockRejectedValue(new Error('STAGE0_ESTIMATE_TIMEOUT'));
+    const res = await svc.approveToReady('L1', actor, '202605');
+    expect(res.currentStage).toBe('ready');
+    expect(listRepo.update).not.toHaveBeenCalled();
   });
 
   // F087

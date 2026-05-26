@@ -6,11 +6,12 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { User } from '@/database/entities/user.entity';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
@@ -41,6 +42,8 @@ export class DeptRatioService {
     private readonly deptPctRepo: Repository<ObDeptPct>,
     @InjectRepository(ObEmphire)
     private readonly emphireRepo: Repository<ObEmphire>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly ratioValidation: RatioValidationService,
     private readonly stageTransition: StageTransitionService,
     private readonly runGuard: AssignmentRunGuardService,
@@ -62,6 +65,10 @@ export class DeptRatioService {
       ration: number;
       isActive: boolean;
       directorName: string | null;
+      /** F088 v1.3 BR-11：該部門比例設定者姓名（ob_dept_pct.created_by → users.name）；無既有設定為 null */
+      setByName: string | null;
+      /** F088 v1.3 BR-11：設定者為部長（business_role='director' 或 admin）→ true（「部長代設定」） */
+      proxyByDirector: boolean;
     }>;
     total: number;
     isReadOnly: boolean;
@@ -112,18 +119,35 @@ export class DeptRatioService {
     const existingMap = new Map<string, ObDeptPct>();
     for (const e of existing) existingMap.set(e.obdeptid.trim(), e);
 
+    // F088 v1.3 BR-11：設定者解析 — ob_dept_pct.created_by → users（姓名 + business_role）
+    //   批次查避免 N+1；proxyByDirector = 設定者為部長（business_role='director'）或 admin。
+    const setterIds = Array.from(
+      new Set(existing.map((e) => e.created_by).filter((id): id is string => !!id)),
+    );
+    const setterById = new Map<string, User>();
+    if (setterIds.length > 0) {
+      const setters = await this.userRepo.find({ where: { id: In(setterIds) } });
+      for (const u of setters) setterById.set(u.id, u);
+    }
+
     const allDeptIds = new Set<string>([...activeMap.keys(), ...existingMap.keys()]);
     const deptRatios = Array.from(allDeptIds)
       .sort()
       .map((code) => {
         const existingRow = existingMap.get(code);
         const isActive = activeMap.has(code);
+        const setter = existingRow?.created_by
+          ? setterById.get(existingRow.created_by)
+          : undefined;
         return {
           obdeptId: code,
           obdeptNm: existingRow?.obdeptnm?.trim() ?? activeMap.get(code) ?? code,
           ration: existingRow ? Number(existingRow.ration) : 0,
           isActive,
           directorName: directorMap.get(code) ?? null,
+          setByName: setter?.name ?? null,
+          proxyByDirector:
+            !!setter && (setter.role === 'admin' || setter.business_role === 'director'),
         };
       });
 

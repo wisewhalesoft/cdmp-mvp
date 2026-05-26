@@ -10,6 +10,7 @@ import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { User } from '@/database/entities/user.entity';
@@ -41,6 +42,7 @@ import { Stage0EstimateService } from './stage0-estimate.service';
       ObDeptPct,
       ObEmplSet,
       ObEmphire,
+      AssignmentApproval,
       PooldataFieldOption,
       PooldataFieldWhitelist,
       User,

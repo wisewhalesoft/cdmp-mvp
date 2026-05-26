@@ -17,6 +17,7 @@ import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.ent
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
@@ -79,6 +80,8 @@ export class AssignmentListService {
     private readonly emplSetRepo: Repository<ObEmplSet>,
     @InjectRepository(ObEmphire)
     private readonly emphireRepo: Repository<ObEmphire>,
+    @InjectRepository(AssignmentApproval)
+    private readonly approvalRepo: Repository<AssignmentApproval>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly assignmentRunGuard: AssignmentRunGuardService,
@@ -295,14 +298,56 @@ export class AssignmentListService {
     qb.orderBy('l.list_no', 'ASC');
     const records = await qb.getMany();
 
-    // 建立者姓名解析：created_by 為 user id（A_USERID），清單頁需顯示姓名而非 UUID。
-    // 對齊 card-type.service Iter 9「JOIN users 取 createdBy name」模式；批次查避免 N+1。
-    const creatorIds = Array.from(
-      new Set(records.map((r) => r.created_by).filter((id): id is string => !!id)),
+    // F088 v1.3 §5.0.1：清單卡片聚合欄位（deptCount / empCount / approvedAt / approverName）
+    //   - 全部以「list_no IN (...)」批次查詢，避免 N+1（estimateCases 直接讀 entity 物化欄位，免查詢）
+    const listNos = records.map((r) => r.list_no);
+    const deptCountMap = new Map<string, number>();
+    const empCountMap = new Map<string, number>();
+    const approvedAtMap = new Map<string, Date>();
+    const approverIdMap = new Map<string, string>();
+    if (listNos.length > 0) {
+      const deptCountRows = await this.deptPctRepo
+        .createQueryBuilder('d')
+        .select('d.list_no', 'listNo')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('d.list_no IN (:...nos)', { nos: listNos })
+        .groupBy('d.list_no')
+        .getRawMany<{ listNo: string; cnt: string }>();
+      for (const r of deptCountRows) deptCountMap.set(r.listNo, Number(r.cnt));
+
+      const empCountRows = await this.emplSetRepo
+        .createQueryBuilder('e')
+        .select('e.list_no', 'listNo')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('e.list_no IN (:...nos)', { nos: listNos })
+        .groupBy('e.list_no')
+        .getRawMany<{ listNo: string; cnt: string }>();
+      for (const r of empCountRows) empCountMap.set(r.listNo, Number(r.cnt));
+
+      // 最新一筆 approve（依 approved_at DESC，first-wins）→ approvedAt + approverId
+      const approveRows = await this.approvalRepo.find({
+        where: { list_no: In(listNos), action: 'approve' },
+        order: { approved_at: 'DESC' },
+      });
+      for (const a of approveRows) {
+        if (!approvedAtMap.has(a.list_no)) {
+          approvedAtMap.set(a.list_no, a.approved_at);
+          if (a.approver_id) approverIdMap.set(a.list_no, a.approver_id);
+        }
+      }
+    }
+
+    // 建立者 / 核准者姓名解析：created_by / approver_id 為 user id（A_USERID），
+    // 清單頁需顯示姓名而非 UUID。對齊 card-type.service Iter 9「JOIN users」模式；批次查避免 N+1。
+    const userIds = Array.from(
+      new Set([
+        ...records.map((r) => r.created_by),
+        ...approverIdMap.values(),
+      ].filter((id): id is string => !!id)),
     );
     const creatorNameById = new Map<string, string>();
-    if (creatorIds.length > 0) {
-      const users = await this.userRepo.find({ where: { id: In(creatorIds) } });
+    if (userIds.length > 0) {
+      const users = await this.userRepo.find({ where: { id: In(userIds) } });
       for (const u of users) creatorNameById.set(u.id, u.name);
     }
 
@@ -356,6 +401,16 @@ export class AssignmentListService {
         createdBy: creatorNameById.get(r.created_by) ?? r.created_by,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
+        // F088 v1.3 §5.0.1：清單卡片聚合欄位
+        deptCount: deptCountMap.get(r.list_no) ?? 0,
+        empCount: empCountMap.get(r.list_no) ?? 0,
+        approvedAt: approvedAtMap.get(r.list_no) ?? null,
+        approverName: (() => {
+          const aid = approverIdMap.get(r.list_no);
+          return aid ? (creatorNameById.get(aid) ?? aid) : null;
+        })(),
+        // 物化 Stage 0 估算（approve→ready 寫入；未計算 / 舊名單為 null）
+        estimateCases: r.stage0_estimate_count ?? null,
         // F048 v2.0：補 conditionPayload + legacyEntityFallback（2026-05-21 hotfix
         // 對齊 spec §5 要求，前端 list-edit-draft-page 依此預填條件 builder）
         conditionPayload: r.condition_payload ?? null,

@@ -28,6 +28,7 @@ import { SectionChiefScopeService } from '@/modules/assignment/services/section-
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
 
 const YM = '202605';
@@ -54,6 +55,7 @@ async function buildModule(): Promise<Env> {
           ObDeptPct,
           ObEmplSet,
           ObEmphire,
+          AssignmentApproval,
           User,
         ],
         synchronize: true,
@@ -66,6 +68,7 @@ async function buildModule(): Promise<Env> {
         ObDeptPct,
         ObEmplSet,
         ObEmphire,
+          AssignmentApproval,
         User,
       ]),
     ],
