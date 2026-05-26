@@ -178,6 +178,9 @@ describe('StageActionService', () => {
   });
 
   // F086 v1.3：commit 後物化 Stage 0 估算
+  // F092 AC-6（TS-F092-UPG-003）：物化計算改用完整鏈 dry-run COUNT；hook 對 estimateListCount
+  //   內部如何算 count 不敏感（升級後仍呼叫同簽名 estimateListCount(listNo)），故本案例同時涵蓋
+  //   F092 物化來源升級的 hook 接點驗證（estimateListCount 被呼叫、count 寫回 stage0_estimate_count）。
   it('F086 approveToReady：物化 Stage 0 估算寫回 stage0_estimate_count', async () => {
     listRepo.findOne.mockResolvedValue(okList('approval'));
     await svc.approveToReady('L1', actor, '202605');
@@ -189,6 +192,9 @@ describe('StageActionService', () => {
   });
 
   // F086 v1.3：物化估算失敗 → best-effort，不影響 approve 結果
+  // F092 AC-6（TS-F092-UPG-004）：完整鏈 dry-run 因含去重查詢耗時較高、逾時風險較大；
+  //   best-effort 機制不變 —— estimateListCount 拋錯（如 STAGE0_ESTIMATE_TIMEOUT）時 approve 仍成功、
+  //   stage0_estimate_count 不更新（保留舊值），錯誤僅 log。
   it('F086 approveToReady：估算失敗不阻擋 approve（best-effort）', async () => {
     listRepo.findOne.mockResolvedValue(okList('approval'));
     stage0Estimate.estimateListCount = vi

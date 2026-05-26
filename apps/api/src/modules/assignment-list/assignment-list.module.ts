@@ -6,6 +6,7 @@ import { ObListDefinition } from '@/database/entities/ob-list-definition.entity'
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
+import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
@@ -38,6 +39,7 @@ import { Stage0EstimateService } from './stage0-estimate.service';
       AssignmentAuditLog,
       AssignmentRun,
       ObPoolData,
+      ObPoolDataList,
       ObCalendar,
       ObDeptPct,
       ObEmplSet,

@@ -188,6 +188,28 @@ describe('Stage0EstimatePage (v1.3 Design A)', () => {
     expect(document.body.textContent).not.toContain('9500');
   });
 
+  // ---- TS-F092-UPG-001 / UPG-002：Stage 0 total 來自升級後完整鏈 dry-run COUNT（前端值流不變）----
+  // F092 將 per-list estimate 後端語意由「欄位篩選版上界」升級為「完整 Stage 1 dry-run」（含期別/去重/特殊排除），
+  // API 契約 { listNo, count } 不變；前端僅渲染 API 回傳之 count（無寫死）。本案例驗證：
+  //   - total 顯示 API count（升級後通常較舊版小，此處 8,200 模擬精確值）
+  //   - 每日件數以 total 重算（round(ratioPerMille/1000 × total)），不寫死任何估算值
+  it('TS-F092-UPG-001：Stage 0 total 完全來自 API count（完整鏈 dry-run），每日件數依 total 重算', async () => {
+    mockedListLists.mockResolvedValue(listsResp([activeList('OB202606001', '汽車期中')]));
+    // 升級後精確 count（含去重 / 期別 / 特殊排除，通常 ≤ 舊欄位篩選版）
+    mockedGetListEstimate.mockResolvedValue({ listNo: 'OB202606001', count: 8200 });
+    mockedGetDaily.mockResolvedValue(dailyResp({ workingDays: 20, baseRatio: 50 }));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('8,200');
+    });
+    // 每日件數 = round(50/1000 × 8200) = 410，前端依 total 重算（值流驗證）
+    await waitFor(() => {
+      expect(screen.getByTestId('stage0-daily-table').textContent).toContain('410');
+    });
+    // regression guard：不得出現舊版寫死估算值
+    expect(document.body.textContent).not.toContain('9,500');
+  });
+
   // ---- TS-F049-V13F-003：切換 calendarSource → 重新呼叫 daily-estimate（帶新參數）----
   it('TS-F049-V13F-003：切換 calendarSource=all → 重新呼叫 daily-estimate 帶 calendarSource=all；KPI 更新', async () => {
     mockedGetDaily.mockImplementation(async (_ym, opts) => {

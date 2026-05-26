@@ -8,8 +8,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
+import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
-import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+// F092 / AD-E07-23 §23.5：per-list 估算升級為完整 Stage 1 篩選鏈唯讀 dry-run，
+// 與月跑共用同一 executeStage1Chain（消除 estimate / run 雙軌 drift）。
+// 以 namespace import 引用，確保 dry-run 路徑與 AssignmentRunPipelineService 月跑同源，
+// 並使 unit test 之 vi.spyOn(chainModule, 'executeStage1Chain') 可攔截內部呼叫。
+import * as stage1Chain from '@/modules/assignment/stage1/stage1-filter-chain';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 /**
@@ -112,6 +117,10 @@ export class Stage0EstimateService {
     private readonly listRepo: Repository<ObListDefinition>,
     @InjectRepository(ObPoolData)
     private readonly poolRepo: Repository<ObPoolData>,
+    // F092：去重查詢（近 3 個月已派 custo_no）需 ob_pool_data_list；
+    // executeStage1Chain 以參數注入此 repo（非 NestJS Injectable），無循環依賴（AD-E07-23 §23.5）。
+    @InjectRepository(ObPoolDataList)
+    private readonly poolDataListRepo: Repository<ObPoolDataList>,
     @InjectRepository(ObCalendar)
     private readonly calendarRepo: Repository<ObCalendar>,
   ) {}
@@ -212,14 +221,21 @@ export class Stage0EstimateService {
   }
 
   /**
-   * F049 AC-4：單一 LIST_NO 即時試算
+   * F049 AC-4 + F092 AC-1：單一 LIST_NO 即時試算（完整 Stage 1 篩選鏈唯讀 dry-run）
    *
-   * - 讀取 list_no 對應 ob_list_definition 之篩選條件
-   * - 對 ob_pool_data 套用相同 WHERE → COUNT
-   * - 不寫入任何分派結果
+   * F092 升級（AD-E07-23 §23.5 / DP-AD23-1）：
+   *   - 內部改呼叫 `executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, { dryRun: true })`，
+   *     取 `result.count`，取代原欄位篩選版 COUNT（F049 v1.2 buildPoolCountQuery 路徑）。
+   *   - 估算涵蓋完整鏈：欄位篩選 + MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，
+   *     與正式月跑 Stage 1 案件數嚴格一致（與 AssignmentRunPipelineService 同源 executeStage1Chain）。
+   *   - dry-run 唯讀：不寫 ob_pool_data_list / assignment_run / assignment_run_snapshot（F092 AC-2 / BR-2）。
+   *   - EMPTY_CONDITIONS → result.skipped=true → count=0（與月跑 skip 一致；F049 BR-5）。
+   *
+   * workdt 推導：以名單 project_workym（'YYYYMM'）轉為當月 1 日 Date（PROJECT_WORKYM + '01'），
+   * 與 AssignmentRunPipelineService.parseWorkdt 同規則（去重視窗 + 年資特殊 DELETE 取當年）。
    *
    * @throws 404 ASSIGNMENT_LIST_NOT_FOUND — list_no 不存在或 status = 'inactive'
-   * @throws 500 STAGE0_ESTIMATE_TIMEOUT — 查詢超過 timeoutMs（spec BR-3 預設 10s）
+   * @throws 500 STAGE0_ESTIMATE_TIMEOUT — 查詢超過 timeoutMs（spec BR-3 / F049 AC-5 預設 10s）
    */
   async estimateListCount(
     listNo: string,
@@ -243,7 +259,7 @@ export class Stage0EstimateService {
       });
     }
 
-    const countPromise = this.buildPoolCountQuery(def);
+    const countPromise = this.dryRunChainCount(def);
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(
         () =>
@@ -276,42 +292,63 @@ export class Stage0EstimateService {
   }
 
   // -------------------------------------------------------------------------
-  // 內部：建構 ob_pool_data COUNT query
+  // 內部：完整 Stage 1 篩選鏈唯讀 dry-run COUNT（F092 / AD-E07-23 §23.5）
   //
-  // F049 v1.2（AC-4 / BR-5 / §18.5）：直接複用月跑 Stage 1 之 buildStage1WhereConditions()
-  // 演算法，確保試算與實際月跑逐欄位一致（消除 v1.1 以 `=` 比對 `$$` 多值字串 + caseyear
-  // 比到 ob_pool_data.caseyear 西元年欄位的脫節缺陷）。
+  // 取代 F049 v1.2 欄位篩選版 buildPoolCountQuery。改呼叫與月跑同源的
+  // executeStage1Chain({ dryRun: true })，使試算涵蓋：
+  //   ① 欄位篩選（buildStage1WhereConditions，路徑 A/B 不變）
+  //   ② MONTH_CNT 期別過濾
+  //   ③ 詐騙白牌 / 中結強案 / 中結 / 年資 特殊 DELETE
+  //   ④ 近 3 個月去重（查 ob_pool_data_list）
+  // 確保 estimate 數字 ≡ 正式月跑 Stage 1 案件數（DP-AD23-1 完整鏈精確模式）。
   //
-  // 用法與 AssignmentRunPipelineService.runStage1ForList 完全一致：
-  //   - skipReason='EMPTY_CONDITIONS'（含空 conditions / wildcard 後零 fragment）→ COUNT=0
-  //     （BR-5，與月跑 Stage 1 skip 該名單行為一致）
-  //   - 否則 createQueryBuilder('ob_pool_data').where(fragment.where, fragment.params).getCount()
-  //     （composer 產生 bare quoted 欄位名如 `"year_cnt" IN (...)`，無 alias 前綴）
+  // dry-run 唯讀（F092 AC-2 / BR-2）：executeStage1Chain dryRun:true 僅 SELECT，
+  // 不寫 ob_pool_data_list / assignment_run / assignment_run_snapshot。
+  //
+  // EMPTY_CONDITIONS（含空 conditions / wildcard 後零 fragment）→ result.skipped=true →
+  // count=0（與月跑 Stage 1 skip 該名單一致；F049 BR-5）。
   // -------------------------------------------------------------------------
 
-  private async buildPoolCountQuery(def: ObListDefinition): Promise<number> {
-    const fragment = buildStage1WhereConditions(def);
+  private async dryRunChainCount(def: ObListDefinition): Promise<number> {
+    const workdt = this.deriveWorkdt(def.project_workym);
+
+    const result = await stage1Chain.executeStage1Chain(
+      def,
+      workdt,
+      this.poolRepo,
+      this.poolDataListRepo,
+      { dryRun: true },
+    );
 
     // 非阻擋型 warning 紀錄（與月跑 Stage 1 一致）
-    for (const w of fragment.warnings) {
+    for (const w of result.warnings) {
       this.logger.warn(
-        `[Stage0Estimate] composer warning list_no=${def.list_no} code=${w.code} column=${w.columnName ?? '-'} reason=${w.reason}`,
+        `[Stage0Estimate] chain warning list_no=${def.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,
       );
     }
 
-    // BR-5 / §18.5.2：無有效篩選條件 → 與月跑 Stage 1 skip 一致，回 count=0
-    if (fragment.skipReason === 'EMPTY_CONDITIONS') {
+    if (result.skipped) {
       this.logger.warn(
-        `[Stage0Estimate] list ${def.list_no} (${def.list_nm}) empty conditions → count=0`,
+        `[Stage0Estimate] list ${def.list_no} (${def.list_nm}) skipped (${result.skipReason}) → count=0`,
       );
-      return 0;
     }
 
-    // skipReason=null 時 fragment.where 必非 null
-    return this.poolRepo
-      .createQueryBuilder('ob_pool_data')
-      .where(fragment.where!, fragment.params)
-      .getCount();
+    return result.count;
+  }
+
+  /**
+   * F092：PROJECT_WORKYM（'YYYYMM' 字串）→ workdt Date（當月 1 日，本地時間）。
+   * 對應 SP `@WORKDT = PROJECT_WORKYM + '01'`，與 AssignmentRunPipelineService.parseWorkdt 同規則。
+   * project_workym 缺值時退化為當前月份（dry-run 去重視窗仍可計算，不阻擋估算）。
+   */
+  private deriveWorkdt(projectWorkym: string | null): Date {
+    if (projectWorkym && /^\d{6}$/.test(projectWorkym)) {
+      const year = parseInt(projectWorkym.slice(0, 4), 10);
+      const month = parseInt(projectWorkym.slice(4, 6), 10); // 1-based
+      return new Date(year, month - 1, 1);
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
   // -------------------------------------------------------------------------

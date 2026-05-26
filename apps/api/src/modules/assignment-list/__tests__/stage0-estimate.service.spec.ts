@@ -23,6 +23,7 @@ import {
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
+import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -41,10 +42,16 @@ async function buildModule(): Promise<{
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [ObListDefinition, ObPoolData, ObCalendar],
+        // F092：Stage0EstimateService 升級為完整鏈 dry-run，注入 ObPoolDataList（去重查詢）
+        entities: [ObListDefinition, ObPoolData, ObPoolDataList, ObCalendar],
         synchronize: true,
       }),
-      TypeOrmModule.forFeature([ObListDefinition, ObPoolData, ObCalendar]),
+      TypeOrmModule.forFeature([
+        ObListDefinition,
+        ObPoolData,
+        ObPoolDataList,
+        ObCalendar,
+      ]),
     ],
     providers: [Stage0EstimateService],
   }).compile();
@@ -142,6 +149,7 @@ describe('Stage0EstimateService', () => {
     // 清空所有測試表（FK 順序：list / pool / cal 彼此無 FK 直接清）
     await env.ds.query('DELETE FROM ob_list_definition');
     await env.ds.query('DELETE FROM ob_pool_data');
+    await env.ds.query('DELETE FROM ob_pool_data_list');
     await env.ds.query('DELETE FROM ob_calendar');
   });
 
@@ -413,6 +421,9 @@ describe('Stage0EstimateService', () => {
       // v1.2：condition_payload=null → 路徑 B fallback。
       // 篩選欄位：prod_kind='01' / settle_src='N' / case_status='02'（→ list_type）。
       // 不用 caseyear（year_cnt 整數比對在 SQLite 型別親和性與 PG 不同，整數映射另以純函式驗證）。
+      // F092：estimateListCount 升級為完整鏈 dry-run，月跑 MONTH_CNT 期別過濾一併套用。
+      //   seedActiveList 預設 list_period_start='001'/end='030'/interval='030' → month_cnt IN (1,31)。
+      //   故所有受測列補 month_cnt:1（落在期別集合內），讓本案例之鑑別維持於欄位篩選（prod/settle/list_type）。
       await seedActiveList(env.listRepo, 'OB202605001', {
         condition_payload: null,
         prod_kind: '01',
@@ -442,6 +453,7 @@ describe('Stage0EstimateService', () => {
             list_type: s.lt,
             settle_src: s.settle,
             prod_kind: s.prod,
+            month_cnt: 1, // F092：落在期別集合 (1,31) 內，不被 MONTH_CNT 過濾
             _cdmp_extracted_at: new Date(),
           } as Partial<ObPoolData>),
         );
@@ -484,6 +496,7 @@ describe('Stage0EstimateService', () => {
             list_type: '01',
             settle_src: 'N',
             prod_kind: r.prod,
+            month_cnt: 1, // F092：落在期別集合 (1,31) 內，不被 MONTH_CNT 過濾
             _cdmp_extracted_at: new Date(),
           } as Partial<ObPoolData>),
         );
@@ -573,6 +586,7 @@ describe('Stage0EstimateService', () => {
             list_type: '01',
             settle_src: 'N',
             prod_kind: rows[i],
+            month_cnt: 1, // F092：落在期別集合 (1,31) 內，不被 MONTH_CNT 過濾
             _cdmp_extracted_at: new Date(),
           } as Partial<ObPoolData>),
         );
