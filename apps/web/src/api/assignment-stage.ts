@@ -34,6 +34,10 @@ export interface DeptRatioItem {
   ration: number;
   isActive: boolean;
   directorName: string | null;
+  /** F088 v1.3 BR-11：該部門比例設定者姓名（無既有設定為 null） */
+  setByName?: string | null;
+  /** F088 v1.3 BR-11：設定者為部長（director/admin）→「部長代設定」 */
+  proxyByDirector?: boolean;
 }
 
 /**

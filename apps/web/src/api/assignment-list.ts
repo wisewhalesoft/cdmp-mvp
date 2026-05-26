@@ -68,6 +68,17 @@ export interface AssignmentListItem {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** F088 v1.3 §5.0.1：清單卡片聚合欄位（後端 listLists 回傳） */
+  /** 部門數（ob_dept_pct count） */
+  deptCount?: number;
+  /** 業務員數（ob_empl_set count） */
+  empCount?: number;
+  /** 最新一筆 approve 時間（ISO；未核准為 null） */
+  approvedAt?: string | null;
+  /** 最新一筆 approve 之核准者姓名（未核准為 null） */
+  approverName?: string | null;
+  /** 物化 Stage 0 估算件數（approve→ready 寫入；未計算 / 舊名單為 null） */
+  estimateCases?: number | null;
   /**
    * F050 v2.1：condition_payload read-through
    * - 新名單為 ConditionPayload object（v2.1 寫入或 M2 backfill 後）

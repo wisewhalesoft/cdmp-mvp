@@ -193,6 +193,27 @@ describe('ReadySummaryListPage (29d 模式 A)', () => {
     });
   });
 
+  it('F088：卡片顯示 部門數 / 業務員數 / 預估案件數 / 核准時間', async () => {
+    const item: AssignmentListItem = {
+      ...makeList('OB001', 'ready', '名單 A'),
+      deptCount: 5,
+      empCount: 17,
+      estimateCases: 12400,
+      approvedAt: '2026-05-14T18:05:00.000Z',
+      approverName: '張部長',
+    };
+    mockedListLists.mockResolvedValue(makeResp([item]));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ready-card-OB001')).toBeInTheDocument();
+    });
+    const card = screen.getByTestId('ready-card-OB001');
+    expect(card.textContent).toContain('5 部門');
+    expect(card.textContent).toContain('17 業務員');
+    expect(card.textContent).toContain('12,400');
+    expect(card.textContent).toContain('核准');
+  });
+
   it('麵包屑：含「名單定義」根節點與「準備完成摘要」leaf', async () => {
     mockedListLists.mockResolvedValue(
       makeResp([makeList('OB001', 'ready')]),

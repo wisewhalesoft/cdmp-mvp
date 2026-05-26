@@ -109,8 +109,8 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
       projectWorkym: '202605',
       stage: 'ready',
       deptRatios: [
-        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true, directorName: '李處長' },
-        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true, directorName: null },
+        { obdeptId: 'D01', obdeptNm: '北一處', ration: 60, isActive: true, directorName: '李處長', setByName: '張部長', proxyByDirector: true },
+        { obdeptId: 'D02', obdeptNm: '南一處', ration: 40, isActive: true, directorName: null, setByName: '李處長', proxyByDirector: false },
       ],
       total: 100,
       isReadOnly: true,
@@ -345,6 +345,19 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     const table = screen.getByTestId('detail-dept-ratio-table');
     expect(table.textContent).toContain('處長');
     expect(table.textContent).toContain('李處長');
+  });
+
+  it('部門比例表含「設定者」欄：proxyByDirector → 部長代設定；否則 由 X 設定', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-dept-ratio-table')).toBeInTheDocument();
+    });
+    const table = screen.getByTestId('detail-dept-ratio-table');
+    expect(table.textContent).toContain('設定者');
+    // D01 proxyByDirector=true → 部長代設定
+    expect(table.textContent).toContain('部長代設定');
+    // D02 proxyByDirector=false + setByName=李處長 → 由 李處長 設定
+    expect(table.textContent).toContain('由 李處長 設定');
   });
 
   it('個別比例展開後：員工表含「名單分配占比」欄與離職 badge', async () => {

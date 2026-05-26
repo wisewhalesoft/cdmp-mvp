@@ -8,6 +8,11 @@ import {
   Eye,
   ArrowRight,
   ChevronRight,
+  Building2,
+  Users,
+  FileText,
+  User,
+  Check,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -295,9 +300,34 @@ export function ReadySummaryListPage() {
                         <p className="text-sm font-medium text-gray-800 truncate">
                           {l.listNm}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          建立者 {l.createdBy} · {l.createdAt.slice(0, 10)} 建立
-                        </p>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 flex-wrap">
+                          <span className="inline-flex items-center gap-1">
+                            <Building2 className="w-3 h-3" />
+                            {l.deptCount ?? 0} 部門
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {l.empCount ?? 0} 業務員
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="w-3 h-3" />
+                            {l.estimateCases != null
+                              ? `~${l.estimateCases.toLocaleString()}`
+                              : '—'}{' '}
+                            案件
+                          </span>
+                          <span className="text-gray-300">·</span>
+                          <span className="inline-flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {l.createdBy} 建立
+                          </span>
+                          {l.approvedAt && (
+                            <span className="inline-flex items-center gap-1">
+                              <Check className="w-3 h-3 text-green-600" />
+                              {l.approvedAt.slice(0, 10)} 核准
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <Link
                         to={`/assignment/ready-summary/${l.listNo}`}

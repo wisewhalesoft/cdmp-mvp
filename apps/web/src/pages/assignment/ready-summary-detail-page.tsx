@@ -436,6 +436,7 @@ export function ReadySummaryDetailPage() {
                       <th className="text-left px-4 py-2 font-medium">部門代碼</th>
                       <th className="text-left px-4 py-2 font-medium">部門名稱</th>
                       <th className="text-left px-4 py-2 font-medium">處長</th>
+                      <th className="text-left px-4 py-2 font-medium">設定者</th>
                       <th className="text-right px-4 py-2 font-medium">RATION</th>
                     </tr>
                   </thead>
@@ -451,6 +452,21 @@ export function ReadySummaryDetailPage() {
                             <span className="inline-flex items-center gap-1">
                               <UserCog className="w-3 h-3 text-purple-600" />
                               {d.directorName}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          {d.proxyByDirector ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              <Crown className="w-2.5 h-2.5" />
+                              部長代設定
+                            </span>
+                          ) : d.setByName ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                              <UserCog className="w-2.5 h-2.5" />
+                              由 {d.setByName} 設定
                             </span>
                           ) : (
                             <span className="text-gray-300">—</span>
