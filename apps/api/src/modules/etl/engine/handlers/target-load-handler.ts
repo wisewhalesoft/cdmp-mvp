@@ -117,15 +117,36 @@ export class TargetLoadHandler implements NodeExecutor {
       // fullMode: 通用全量替換路徑（TRUNCATE + batch INSERT）
       // 跳過 customer_core 專屬的 ghost record gate 與 source_customer_no dedup，
       // 適用於 ob_pool_data / ob_emphire / ob_calendar 等通用目標表（AD-E07-12）
+
+      // 防禦性 PK 去重：來源端 SQL Server schema（如 dbo.OBEMPHIRE / dbo.OBCALENDAR）
+      // 未必有 PK / unique constraint，可能挾帶重複 row 進 raw 表。若 target 端有 PK，
+      // 同批 INSERT 內部撞 PK 會直接拋 unique violation，需在 TRUNCATE 前先用
+      // DISTINCT ON (pk_cols) 去重。
+      const pkColumns = await this.getPrimaryKeyColumns(context, targetTable);
+      let insertSourceTable = tempTable;
+      let totalRows = input.rowCount;
+
+      if (pkColumns.length > 0) {
+        const dedupTable = `${tempTable}_dq`;
+        const pkColList = pkColumns.map((c) => `"${c}"`).join(', ');
+        await context.queryRunner.query(
+          `CREATE TEMP TABLE "${dedupTable}" AS SELECT DISTINCT ON (${pkColList}) ${columnList} FROM "${tempTable}" ORDER BY ${pkColList}`,
+        );
+        const dedupCountResult = await context.queryRunner.query(
+          `SELECT COUNT(*)::int AS cnt FROM "${dedupTable}"`,
+        );
+        totalRows = dedupCountResult[0]?.cnt ?? 0;
+        insertSourceTable = dedupTable;
+      }
+
       try {
         await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
       } catch (err: any) {
         throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
       }
 
-      const totalRows = input.rowCount;
       for (let offset = 0; offset < totalRows; offset += batchSize) {
-        const selectSql = `SELECT ${columnList} FROM "${tempTable}" LIMIT ${batchSize} OFFSET ${offset}`;
+        const selectSql = `SELECT ${columnList} FROM "${insertSourceTable}" LIMIT ${batchSize} OFFSET ${offset}`;
         const insertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql}`;
 
         try {
@@ -138,6 +159,9 @@ export class TargetLoadHandler implements NodeExecutor {
         }
       }
 
+      if (insertSourceTable !== tempTable) {
+        await context.queryRunner.query(`DROP TABLE IF EXISTS "${insertSourceTable}"`);
+      }
       await context.queryRunner.query(`DROP TABLE IF EXISTS "${tempTable}"`);
       return { tempTable: '', rowCount: totalUpserted };
     }
@@ -152,41 +176,31 @@ export class TargetLoadHandler implements NodeExecutor {
       .map((col) => `"${col}" = EXCLUDED."${col}"`)
       .join(', ');
 
-    // BUG-2 fix: Data quality gate
-    // 1. Ghost record filter: source_customer_no length >= 5
-    // 2. NOT NULL business key filter: skip rows where DB NOT NULL columns are null
-    //    (these would fail on INSERT anyway; filtering here avoids batch-level failures)
-    const notNullTargetCols = await context.queryRunner.query(
-      `SELECT column_name FROM information_schema.columns
-       WHERE table_name = $1 AND is_nullable = 'NO'
-       AND column_name NOT IN ('customer_id', '_etl_loaded_at', '_etl_pipeline_id', 'data_source')`,
-      [targetTable],
-    );
-    const notNullChecks = notNullTargetCols
-      .filter((r: any) => allColumns.includes(r.column_name))
-      .map((r: any) => `"${r.column_name}" IS NOT NULL`);
-
-    const ghostGate = [
-      `LENGTH(TRIM("source_customer_no")) >= 5`,
-      ...notNullChecks,
-    ].join(' AND ');
-
-    // Count valid rows (after data quality gate filtering + post-normalization dedup)
-    // DISTINCT ON handles collisions caused by NULLIF(TRIM()) normalization
-    // (e.g., "A12345 " and "A12345" become the same after TRIM)
-    const validCountSql = `SELECT COUNT(*)::int AS cnt FROM (SELECT DISTINCT ON ("source_customer_no") * FROM "${tempTable}" WHERE ${ghostGate} ORDER BY "source_customer_no") _dq`;
-    const validCountResult = await context.queryRunner.query(validCountSql);
-    const validCount = validCountResult[0]?.cnt ?? 0;
+    // BUG-2 fix: Data quality gate — ghost record filter ONLY.
+    // source_customer_no 經 TRIM 後長度 >= 5 才視為有效（過短為 ghost record，跳過）。
+    // TS-F044-018：不再隱性過濾「target NOT NULL 欄位為 null」的列 —— 那會誤刪業務上
+    // 合法的資料（例如 name=null 仍是有效客戶）；NOT NULL 約束交由 DB 於 INSERT 階段強制，
+    // 而非在此靜默丟棄。
+    const ghostGate = `LENGTH(TRIM("source_customer_no")) >= 5`;
 
     // Create a deduped temp table for batched UPSERT (avoids "cannot affect row a second time")
+    // DISTINCT ON handles collisions caused by NULLIF(TRIM()) normalization
+    // (e.g., "A12345 " and "A12345" become the same after TRIM)。ghost gate 僅依
+    // source_customer_no（即 dedup 鍵），故 dedup 後再套 gate 與 gate 後再 dedup 等價。
     const dedupTable = `${tempTable}_dq`;
     await context.queryRunner.query(
-      `CREATE TEMP TABLE "${dedupTable}" AS SELECT DISTINCT ON ("source_customer_no") ${columnList} FROM "${tempTable}" WHERE ${ghostGate} ORDER BY "source_customer_no"`,
+      `CREATE TEMP TABLE "${dedupTable}" AS SELECT DISTINCT ON ("source_customer_no") ${columnList} FROM "${tempTable}" ORDER BY "source_customer_no"`,
     );
 
-    // UPSERT mode: batch INSERT ON CONFLICT
+    // Count valid rows after ghost record gate
+    const validCountResult = await context.queryRunner.query(
+      `SELECT COUNT(*)::int AS cnt FROM "${dedupTable}" WHERE ${ghostGate}`,
+    );
+    const validCount = validCountResult[0]?.cnt ?? 0;
+
+    // UPSERT mode: batch INSERT ON CONFLICT — ghost gate 套在 INSERT 的 SELECT WHERE（TS-F044-019）
     for (let offset = 0; offset < validCount; offset += batchSize) {
-      const selectSql = `SELECT ${columnList} FROM "${dedupTable}" LIMIT ${batchSize} OFFSET ${offset}`;
+      const selectSql = `SELECT ${columnList} FROM "${dedupTable}" WHERE ${ghostGate} ORDER BY "source_customer_no" LIMIT ${batchSize} OFFSET ${offset}`;
       const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
 
       try {
@@ -209,6 +223,24 @@ export class TargetLoadHandler implements NodeExecutor {
   private async getColumns(context: NodeExecutionContext, tableName: string): Promise<string[]> {
     const result = await context.queryRunner.query(
       `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+      [tableName],
+    );
+    return result.map((r: any) => r.column_name);
+  }
+
+  private async getPrimaryKeyColumns(
+    context: NodeExecutionContext,
+    tableName: string,
+  ): Promise<string[]> {
+    const result = await context.queryRunner.query(
+      `SELECT kcu.column_name
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+        WHERE tc.table_name = $1
+          AND tc.constraint_type = 'PRIMARY KEY'
+        ORDER BY kcu.ordinal_position`,
       [tableName],
     );
     return result.map((r: any) => r.column_name);

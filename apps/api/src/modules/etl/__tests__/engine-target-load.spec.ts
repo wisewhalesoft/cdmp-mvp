@@ -15,9 +15,10 @@ function createMockQueryRunner(opts: {
   tableExists?: boolean;
   columns?: string[];
   rowCount?: number;
+  pkColumns?: string[];
   customHandler?: (sql: string, params?: any[]) => any;
 } = {}) {
-  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name', '_etl_loaded_at', '_etl_pipeline_id'], rowCount = 0, customHandler } = opts;
+  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name', '_etl_loaded_at', '_etl_pipeline_id'], rowCount = 0, pkColumns = [], customHandler } = opts;
   const calls: { sql: string; params?: any[] }[] = [];
 
   const query = vi.fn(async (sql: string, params?: any[]) => {
@@ -30,6 +31,11 @@ function createMockQueryRunner(opts: {
 
     if (sql.includes('information_schema.tables')) {
       return tableExists ? [{ table_name: 'customer_core' }] : [];
+    }
+
+    // PK lookup for fullMode dedup
+    if (sql.includes('information_schema.table_constraints')) {
+      return pkColumns.map((c, i) => ({ column_name: c, ordinal_position: i + 1 }));
     }
 
     // BUG-2 fix: data_type query for VARCHAR detection
@@ -265,9 +271,9 @@ describe('TargetLoadHandler - fullMode 通用全量替換路徑（AD-E07-12）',
   const handler = new TargetLoadHandler();
 
   // fullMode 對 ob_emphire 等通用目標表跳過 customer_core 專屬邏輯
-  it('fullMode + 非 customer_core 目標表：SQL 不含 source_customer_no 相關邏輯', async () => {
+  it('fullMode + 非 customer_core 目標表：SQL 不含 customer_core 專屬字串', async () => {
     const obEmphireColumns = ['emp_id', 'emp_nm', 'dept_code', 'resign_date'];
-    const qr = createMockQueryRunner({ columns: obEmphireColumns, rowCount: 100 });
+    const qr = createMockQueryRunner({ columns: obEmphireColumns, rowCount: 100, pkColumns: ['emp_id'] });
     const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 100), {
       queryRunner: qr,
       targetTable: 'ob_emphire',
@@ -278,14 +284,88 @@ describe('TargetLoadHandler - fullMode 通用全量替換路徑（AD-E07-12）',
     const result = await handler.execute(ctx);
     expect(result.rowCount).toBe(100);
 
-    // 不應出現 customer_core 專屬的 ghost gate / dedup / UPSERT 字串
+    // 不應出現 customer_core 專屬的 ghost gate / UPSERT 字串
     const allSql = qr.calls.map((c: any) => c.sql).join('\n');
     expect(allSql).not.toContain('source_customer_no');
     expect(allSql).not.toContain('LENGTH(TRIM');
-    expect(allSql).not.toContain('DISTINCT ON');
+    expect(allSql).not.toContain('DISTINCT ON ("source_customer_no")');
     expect(allSql).not.toContain('ON CONFLICT');
     expect(allSql).not.toContain('DO UPDATE');
     expect(allSql).not.toContain('is_nullable');
+  });
+
+  // fullMode + 有 PK 的 target：在 TRUNCATE 前用 DISTINCT ON (pk) 去重，
+  // 防禦來源端可能挾帶的重複 PK row（例：dbo.OBEMPHIRE / dbo.OBCALENDAR
+  // 在 source 端無 PK constraint，曾觀察到每筆 row × 2）
+  it('fullMode：target 有 PK 時用 DISTINCT ON (pk) 去重', async () => {
+    const obEmphireColumns = ['emp_id', 'emp_nm', 'dept_code'];
+    const qr = createMockQueryRunner({ columns: obEmphireColumns, rowCount: 100, pkColumns: ['emp_id'] });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 100), {
+      queryRunner: qr,
+      targetTable: 'ob_emphire',
+      columns: obEmphireColumns,
+      fullMode: true,
+    });
+    await handler.execute(ctx);
+
+    // dedup temp table 用 DISTINCT ON ("emp_id") 建立，且 ORDER BY emp_id
+    const dedupCreate = qr.calls.find((c: any) =>
+      c.sql.includes('CREATE TEMP TABLE') && c.sql.includes('DISTINCT ON ("emp_id")'),
+    );
+    expect(dedupCreate).toBeDefined();
+    expect(dedupCreate.sql).toMatch(/ORDER BY "emp_id"/);
+
+    // dedup 必須在 TRUNCATE 之前
+    const dedupIdx = qr.calls.indexOf(dedupCreate);
+    const truncateIdx = qr.calls.findIndex((c: any) => c.sql.includes('TRUNCATE TABLE'));
+    expect(dedupIdx).toBeLessThan(truncateIdx);
+
+    // INSERT 讀取的是 dedup 表（_dq 後綴），不是原 enriched 表
+    const insertCall = qr.calls.find((c: any) =>
+      c.sql.includes('INSERT INTO "ob_emphire"'),
+    );
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).toMatch(/FROM "[^"]+_dq"/);
+  });
+
+  // fullMode + 複合 PK：DISTINCT ON 用所有 PK 欄位
+  it('fullMode：複合 PK 的 target 使用全部 PK 欄位去重', async () => {
+    const columns = ['col_a', 'col_b', 'payload'];
+    const qr = createMockQueryRunner({ columns, rowCount: 10, pkColumns: ['col_a', 'col_b'] });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 10), {
+      queryRunner: qr,
+      targetTable: 'composite_pk_table',
+      columns,
+      fullMode: true,
+    });
+    await handler.execute(ctx);
+
+    const dedupCreate = qr.calls.find((c: any) =>
+      c.sql.includes('CREATE TEMP TABLE') && c.sql.includes('DISTINCT ON'),
+    );
+    expect(dedupCreate).toBeDefined();
+    expect(dedupCreate.sql).toContain('DISTINCT ON ("col_a", "col_b")');
+    expect(dedupCreate.sql).toContain('ORDER BY "col_a", "col_b"');
+  });
+
+  // fullMode + 無 PK 的 target：跳過 dedup，沿用既有 TRUNCATE + INSERT 行為
+  it('fullMode：target 無 PK 時跳過 dedup', async () => {
+    const columns = ['col_a', 'col_b'];
+    const qr = createMockQueryRunner({ columns, rowCount: 5, pkColumns: [] });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_extract', 5), {
+      queryRunner: qr,
+      targetTable: 'no_pk_table',
+      columns,
+      fullMode: true,
+    });
+    await handler.execute(ctx);
+
+    const allSql = qr.calls.map((c: any) => c.sql).join('\n');
+    expect(allSql).not.toContain('DISTINCT ON');
+    // INSERT 應直接從 enriched temp 表讀（非 _dq）
+    const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO "no_pk_table"'));
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).not.toMatch(/_dq"/);
   });
 
   it('fullMode：執行 TRUNCATE TABLE 後批次 INSERT', async () => {
