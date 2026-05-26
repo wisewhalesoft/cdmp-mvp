@@ -7,7 +7,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
-import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -135,8 +135,11 @@ export class AssignmentRunPipelineService {
         reason: 'EMPTY_CONDITIONS';
       }> = [];
 
+      // F091 / AD-E07-22：workdt = PROJECT_WORKYM + '01'（去重視窗 + 年資特殊 DELETE 取當年）
+      const workdt = parseWorkdt(ym);
+
       for (const list of validLists) {
-        const result = await this.runStage1ForList(list);
+        const result = await this.runStage1ForList(list, workdt);
         if (result.skipped) {
           stage1SkippedLists.push({
             listNo: list.list_no,
@@ -607,38 +610,47 @@ export class AssignmentRunPipelineService {
   // =========================================================================
 
   /**
-   * Phase 5b / AD-E07-18 §18.5：對單一 list 執行 Stage 1 動態 SQL 案件挑選。
+   * Phase 5b / AD-E07-18 §18.5 + F091 / AD-E07-22~23：對單一 list 執行 Stage 1 完整篩選鏈。
    *
+   * F091（Phase 2 Stage 1 補完整）：改呼叫共用的 `executeStage1Chain`（dryRun:false），
+   * 在既有欄位篩選之上補入 MONTH_CNT 期別過濾、近 3 個月去重、特殊 DELETE 三步驟。
+   * ⚠️ 此改動改變正式月跑分派案件數（無 feature flag，deploy 後直接生效 — DP-AD23-2）。
+   *
+   * @param list   名單定義
+   * @param workdt 月跑工作日 PROJECT_WORKYM+'01'（去重視窗 + 年資規則）
    * @returns
-   *   - `{ skipped: true }`：composer 回 skipReason → 不撈 pool（已 logger.warn）
-   *   - `{ skipped: false, pool }`：SQL 過濾後的 ob_pool_data 案件清單
+   *   - `{ skipped: true }`：composer 回 skipReason='EMPTY_CONDITIONS' → 不撈 pool（已 logger.warn）
+   *   - `{ skipped: false, pool }`：完整篩選鏈過濾後的 ob_pool_data 案件清單
    */
   private async runStage1ForList(
     list: ObListDefinition,
+    workdt: Date,
   ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
-    const fragment = buildStage1WhereConditions(list);
+    const result = await executeStage1Chain(
+      list,
+      workdt,
+      this.poolRepo,
+      this.resultRepo,
+      { dryRun: false },
+    );
 
-    // 非阻擋型 warning 紀錄
-    for (const w of fragment.warnings) {
+    // 非阻擋型 warning 紀錄（含 composer 欄位篩選 + F091 month_cnt skip 等）
+    for (const w of result.warnings) {
       this.logger.warn(
-        `[Stage1] composer warning list_no=${list.list_no} code=${w.code} column=${w.columnName ?? '-'} reason=${w.reason}`,
+        `[Stage1] chain warning list_no=${list.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,
       );
     }
 
     // §18.5.2：空 conditions / wildcard 後零有效 fragment → skip
-    if (fragment.skipReason === 'EMPTY_CONDITIONS') {
+    if (result.skipped) {
       this.logger.warn(
         `[Stage1] Skipping list ${list.list_no} (${list.list_nm}): empty conditions (backfilled empty or invalid state)`,
       );
       return { skipped: true };
     }
 
-    // fragment.where 已保證非 null（skipReason=null 時必有 where）
-    const pool = await this.poolRepo
-      .createQueryBuilder('ob_pool_data')
-      .where(fragment.where!, fragment.params)
-      .getMany();
-    return { skipped: false, pool };
+    // dryRun:false → cases 必為陣列（executeStage1Chain 契約保證）
+    return { skipped: false, pool: result.cases ?? [] };
   }
 
   private async completeRun(
@@ -707,4 +719,15 @@ export class AssignmentRunPipelineService {
       })),
     };
   }
+}
+
+/**
+ * F091 / AD-E07-22：將 PROJECT_WORKYM（'YYYYMM' 字串）轉為 workdt Date（當月 1 日）。
+ * 對應 SP `@WORKDT = PROJECT_WORKYM + '01'`，供 Stage 1 去重視窗計算與年資特殊 DELETE 取當年。
+ * 以本地時間 new Date(year, monthIndex, 1) 建構，與 Stage1FilterChain 內 getFullYear/getMonth/getDate 一致。
+ */
+function parseWorkdt(ym: string): Date {
+  const year = parseInt(ym.slice(0, 4), 10);
+  const month = parseInt(ym.slice(4, 6), 10); // 1-based
+  return new Date(year, month - 1, 1);
 }

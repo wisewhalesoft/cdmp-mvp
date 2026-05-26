@@ -165,7 +165,9 @@ async function seedList(
       list_type: '01',
       list_period_start: '001',
       list_period_end: '030',
-      list_interval: '030',
+      // F091：list_interval='001' → month_cnt 集合 [1..30]，涵蓋 seedPool monthCnt 1/2/10
+      // （原 '030' → 僅 [1]，會排除 monthCnt=2/10 案件）。維持既有 v2 計分案件數 baseline。
+      list_interval: '001',
       project_workym: YM,
       caseyear: '113',
       settle_src: '01',
@@ -206,7 +208,9 @@ async function seedPool(
       list_type: '01',
       settle_src: '01',
       commission: opts.commission ?? '1000',
-      month_cnt: opts.monthCnt ?? null,
+      // F091：seedList list_interval='001' → month_cnt 集合 [1..30]；
+      // 預設 month_cnt=1（原 null 會被 F091 MONTH_CNT 過濾排除）。明確傳入 monthCnt 之測試不受影響。
+      month_cnt: opts.monthCnt ?? 1,
       // Phase 5b：seedList 預設 condition_payload.prod_kind=['A']，
       // seedPool 須對應 prod_kind='A' 以通過 Stage 1 SQL 過濾。
       prod_kind: opts.prodKind ?? 'A',

@@ -152,7 +152,9 @@ async function seedList(
       list_type: '01',
       list_period_start: '001',
       list_period_end: '030',
-      list_interval: '030',
+      // F091：list_interval='001' → month_cnt 集合 [1..30]，涵蓋 seedPool 預設 month_cnt=1
+      // （原 '030' → 僅 [1]；改為 '001' 維持既有案件數 baseline，不受 F091 MONTH_CNT 過濾影響）
+      list_interval: '001',
       project_workym: YM,
       caseyear: '113',
       settle_src: '01',
@@ -181,7 +183,7 @@ async function seedList(
 
 async function seedPool(
   repo: Repository<ObPoolData>,
-  opts: { applNo: string; orgno?: string; staCode?: string; commission?: string; prodKind?: string },
+  opts: { applNo: string; orgno?: string; staCode?: string; commission?: string; prodKind?: string; monthCnt?: number },
 ): Promise<void> {
   await repo.save(
     repo.create({
@@ -196,6 +198,9 @@ async function seedPool(
       // Phase 5b：seedList 預設 condition_payload.prod_kind=['A']，
       // seedPool 須對應 prod_kind='A' 以通過 Stage 1 SQL 過濾。
       prod_kind: opts.prodKind ?? 'A',
+      // F091：seedList list_interval='001' → month_cnt 集合 [1..30]；
+      // 預設 month_cnt=1 確保通過 F091 MONTH_CNT 過濾，維持既有案件數 baseline。
+      month_cnt: opts.monthCnt ?? 1,
       _cdmp_extracted_at: new Date(),
     } as Partial<ObPoolData>),
   );

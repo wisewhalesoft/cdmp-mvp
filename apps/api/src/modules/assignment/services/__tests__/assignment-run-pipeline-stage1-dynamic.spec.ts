@@ -180,6 +180,7 @@ async function seedPool(
     specTp?: string | null;
     settleSrc?: string;
     listType?: string;
+    monthCnt?: number | null;
   },
 ): Promise<void> {
   await repo.save(
@@ -195,6 +196,9 @@ async function seedPool(
       prod_kind: opts.prodKind ?? null,
       year_cnt: opts.yearCnt ?? null,
       spec_tp: opts.specTp ?? null,
+      // F091：seedList list_interval='001' → month_cnt 集合 [1..30]；
+      // 預設 month_cnt=1 確保通過 F091 MONTH_CNT 過濾，維持既有案件數 baseline。
+      month_cnt: opts.monthCnt ?? 1,
       _cdmp_extracted_at: new Date(),
     } as Partial<ObPoolData>),
   );
