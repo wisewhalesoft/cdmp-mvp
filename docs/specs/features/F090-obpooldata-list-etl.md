@@ -15,6 +15,8 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **v1.0.1（2026-05-26 / 歷史限定過濾欄位修正）**：實作發現來源表 `OBPOOLDATA_LIST` **無 `PROJECT_WORKYM` 欄位**（`PROJECT_WORKYM` 係名單定義表 `OBMLISTDF` 之欄位），其唯一可用之時間欄為 `ASSIGNDAY`（派案日，yyyyMMdd 字串）。故歷史限定過濾條件由 `WHERE PROJECT_WORKYM < 本月` 修正為 **`WHERE ASSIGNDAY < 本月第一天 (yyyyMMdd)`**（`本月第一天 = WORKYM + '01'`）。此修正源於源表 schema 事實、已與 AD-E07-21 同步裁示。影響段落：AC-3、§5.2 Load Pipeline 表、BR-1、§7 錯誤場景、§8.1 / A-3。**其餘設計不變。**
+>
 > **v1.0（2026-05-26 / Stage 1 精確化工程 Phase 1）**：本 feature 為「Stage 1 精確化工程」三階段交付之第一階段（F090 → F091 → F092），依 [architecture-spec.md AD-E07-21 v1.1](../architecture-spec.md)（全部 DP 已 Resolved）落地。核心目標：比照 `ob_pool_data` 既有雙層 ETL（E04 Extract + E05 Pipeline Load），為 legacy 派案歷史表 `OBPOOLDATA_LIST` 建立 ETL，使 `ob_pool_data_list` 取得歷史派案紀錄，供 F091 Phase 2「近 3 個月去重」查詢使用；並引入 `data_source` 欄解決「ETL 歷史」與「本系統月跑輸出」共存於同一表的衝突。
 >
 > **Phase 邊界**：本 feature **僅交付 ETL 建立 + schema 變更**，不改變月跑 Stage 1 篩選行為（Stage 1 補完整為 F091）。依 [AD-E07-24 §24.2](../architecture-spec.md)，Phase 1 交付**不影響 production 月跑**（Stage 1 此時尚未讀取 `ob_pool_data_list` 去重）。
@@ -77,7 +79,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **Given** AC-2 之 raw 擷取資料可用
 - **When** 比照 `E07-OBPOOLDATA-Load` 建立 `E07-OBPOOLDATA_LIST-Load` Pipeline
 - **Then** Pipeline 設定為：`extractionTaskName: 'E07-OBPOOLDATA_LIST-Extract'`、`targetTable: 'ob_pool_data_list'`、**非 `fullMode`（不可 TRUNCATE 全表）**
-- **And** Pipeline Load 節點僅載入 **`PROJECT_WORKYM < 本月`** 之歷史記錄（DP-AD21-1 歷史限定；SELECT 加 `WHERE PROJECT_WORKYM < :currentWorkym` 過濾，排除本月資料以消除與月跑並發衝突）
+- **And** Pipeline Load 節點僅載入 **`ASSIGNDAY < 本月第一天 (yyyyMMdd)`** 之歷史記錄（DP-AD21-1 歷史限定；SELECT 加 `WHERE ASSIGNDAY < :currentMonthFirstDay` 過濾，排除本月資料以消除與月跑並發衝突）
+- **And**（schema 事實修正）來源表 `OBPOOLDATA_LIST` **無 `PROJECT_WORKYM` 欄位**（`PROJECT_WORKYM` 係 `OBMLISTDF` 名單定義表之欄位）；`OBPOOLDATA_LIST` 唯一可用之時間欄為 `ASSIGNDAY`（派案日，yyyyMMdd 字串）。故歷史限定過濾改以 `ASSIGNDAY < 本月第一天 (yyyyMMdd)` 達成（與 AD-E07-21 同步裁示）。`本月第一天` = `WORKYM + '01'`（如 `'20260501'`）
 - **And** Load 策略採 §6 BR-3 之 per-`data_source` 截斷：先 `DELETE FROM ob_pool_data_list WHERE data_source = 'etl_legacy'`，再批次 INSERT，**所有 ETL 插入列 `data_source = 'etl_legacy'`**
 - **And** Load **不得**清除 `data_source = 'monthly_run'`（或 `NULL`）之列（保護本系統月跑輸出，避免 Stage 3/4 資料遺失）
 
@@ -122,18 +125,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | `extractionTaskName` | `E07-OBPOOLDATA_LIST-Extract` |
 | `targetTable` | `ob_pool_data_list` |
 | `fullMode` | `false`（**關鍵：不可 TRUNCATE 全表**，見 AC-3 / BR-3） |
-| Load 過濾 | `WHERE PROJECT_WORKYM < :currentWorkym`（歷史限定，DP-AD21-1） |
+| Load 過濾 | `WHERE ASSIGNDAY < :currentMonthFirstDay`（歷史限定，DP-AD21-1；`本月第一天 = WORKYM + '01'` yyyyMMdd。**schema 事實**：來源表無 `PROJECT_WORKYM`，唯一時間欄為 `ASSIGNDAY`，見 AC-3） |
 | Load 前置 DELETE | `DELETE FROM ob_pool_data_list WHERE data_source = 'etl_legacy'` |
 | 插入列 `data_source` | 固定 `'etl_legacy'` |
 | `fieldMappings` | 依 §21.4 對照表（snake_case 映射，涵蓋 PK 三欄 + 去重 / 特殊 DELETE 所需欄位） |
 
-> **[ASSUMPTION] A-3**：`E07-OBPOOLDATA_LIST-Load` 因採「歷史限定 + per-data_source DELETE」之客製化 Load 策略，**與既有 `fullMode: true`（TRUNCATE）行為不同**。此客製 Load 行為（`PROJECT_WORKYM < 本月` 過濾 + `WHERE data_source='etl_legacy'` 截斷 + 插入列填 `'etl_legacy'`）之引擎落地方式（既有 Pipeline 引擎是否支援，或需新增 Load mode）由 tdd-implementation 依 [AD-E07-21 §21.3](../architecture-spec.md) 與 E05 引擎現況決定；本 feature 定義對外行為契約。
+> **[ASSUMPTION] A-3**：`E07-OBPOOLDATA_LIST-Load` 因採「歷史限定 + per-data_source DELETE」之客製化 Load 策略，**與既有 `fullMode: true`（TRUNCATE）行為不同**。此客製 Load 行為（`ASSIGNDAY < 本月第一天 (yyyyMMdd)` 過濾 + `WHERE data_source='etl_legacy'` 截斷 + 插入列填 `'etl_legacy'`）之引擎落地方式（既有 Pipeline 引擎是否支援，或需新增 Load mode）由 tdd-implementation 依 [AD-E07-21 §21.3](../architecture-spec.md) 與 E05 引擎現況決定；本 feature 定義對外行為契約。
 
 ## 6. 商業規則
 
 | 規則編號 | 說明 |
 |---|---|
-| BR-1 | **歷史限定**（DP-AD21-1）：ETL 僅載入 `PROJECT_WORKYM < 本月` 之記錄，完全排除本月資料，消除與月跑的並發 race condition |
+| BR-1 | **歷史限定**（DP-AD21-1）：ETL 僅載入 `ASSIGNDAY < 本月第一天 (yyyyMMdd)` 之記錄，完全排除本月資料，消除與月跑的並發 race condition。**schema 事實修正**：來源表 `OBPOOLDATA_LIST` 無 `PROJECT_WORKYM` 欄位（該欄屬 `OBMLISTDF`），唯一時間欄為 `ASSIGNDAY`，故以 `ASSIGNDAY` 作歷史限定過濾（與 AD-E07-21 同步裁示） |
 | BR-2 | **雙重角色共存**：`ob_pool_data_list` 同時承載「ETL 歷史派案紀錄」（去重查詢用）與「本系統月跑輸出」（Stage 3/4 更新 `ob_dept`/`ob_emplid` 用）；以 `data_source` 欄區分，`list_no` 為天然分區鍵（§21.2） |
 | BR-3 | **ETL Load 不可全表 TRUNCATE**：`E07-OBPOOLDATA_LIST-Load` 採 `DELETE WHERE data_source = 'etl_legacy'` 後 INSERT；若誤用 `fullMode: true` 會清除月跑輸出，造成 Stage 3/4 資料遺失 |
 | BR-4 | **月跑寫入標記 `'monthly_run'`**：月跑 Stage 1 per-`list_no` 寫入時 `DELETE WHERE list_no = :listNo AND data_source = 'monthly_run'` 後 INSERT（`data_source='monthly_run'`），不傷 `'etl_legacy'` 列 |
@@ -144,7 +147,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 | 場景 | 系統回應 | 參考 |
 |---|---|---|
-| ETL 載入與月跑同時操作同一 `list_no` | 本設計以「歷史限定（`PROJECT_WORKYM < 本月`）」消除此衝突（BR-1）；理論上不再發生 | [AD-E07-21 §21.2](../architecture-spec.md) |
+| ETL 載入與月跑同時操作同一 `list_no` | 本設計以「歷史限定（`ASSIGNDAY < 本月第一天`）」消除此衝突（BR-1）；理論上不再發生 | [AD-E07-21 §21.2](../architecture-spec.md) |
 | 誤用 `fullMode: true` 致月跑輸出被清 | 須由 Pipeline 設定 review 攔截（BR-3）；建議於 TDD 補 regression test 確認 Load 不刪 `monthly_run` 列 | — |
 | `OBPOOLDATA_LIST` 來源無 `data_source` 欄 | 預期行為：來源無此欄，Load 策略自動填 `'etl_legacy'`（AC-4 / AC-3） | — |
 | ETL 載入後 `assignday` 格式與去重查詢不一致 | `assignday` 為 `VARCHAR(100)`，字串比對須與 ETL 載入格式一致（yyyyMMdd）；格式不一致將致 F091 去重 miss（見 F091 OQ） | [AD-E07-22 §22.3](../architecture-spec.md) |

@@ -5088,7 +5088,11 @@ SP 行為已提供天然邊界：每次執行前 `DELETE WHERE LIST_NO = @LIST_N
 
 **衝突風險評估**：若 ETL 載入目標月份（本月）與月跑同時執行同一 `list_no`，兩者均會 DELETE + INSERT，形成 race condition。
 
-> **[DP-AD21-1 ✅ Resolved 2026-05-26]**：採**歷史限定策略**。ETL Load Pipeline 僅載入 `PROJECT_WORKYM < 本月` 的歷史記錄，完全排除本月資料，消除與月跑的並發衝突。E05 Pipeline Load 節點於 SELECT 時加上 `WHERE PROJECT_WORKYM < :currentWorkym` 過濾條件。
+> **[DP-AD21-1 ✅ Resolved 2026-05-26；schema 修正 2026-05-26]**：採**歷史限定策略**。
+>
+> **源表 schema 修正**：`OBPOOLDATA_LIST`（128 欄）**不含 `PROJECT_WORKYM` 欄**——該欄屬於 `OBMLISTDF`（名單定義表），非派案結果表。SP 本身亦不以 `PROJECT_WORKYM` 過濾 `OBPOOLDATA_LIST`。唯一可用的時間欄為 `ASSIGNDAY (VARCHAR yyyyMMdd)`。
+>
+> **修正後結論**：ETL Load Pipeline 僅載入 `ASSIGNDAY < 本月第一天 (yyyyMMdd)` 的歷史記錄，完全排除本月及未來派案，消除與月跑的並發衝突。E05 Pipeline Load 節點於 SELECT 時加上 `WHERE ASSIGNDAY < :currentMonthFirstDay`（格式：`'yyyyMM01'`）過濾條件。
 
 ##### 21.3 ETL 設計（仿照 E07-OBPOOLDATA 雙層架構）
 
@@ -5224,9 +5228,10 @@ ETL 只載入非本月歷史；本系統月跑輸出（`data_source='monthly_run
 
 ---
 
-*本節版本 1.1（2026-05-26），由 System Architect Agent 依據使用者拍板決議更新（DP-AD21-1~3 全部 Resolved）。*
+*本節版本 1.2（2026-05-26），由 System Architect Agent 依據源表 schema 事實修正。*
 - *v1.0 新增（2026-05-26）：初始設計*
 - *v1.1 更新（2026-05-26）：DP-AD21-1 歷史限定策略、DP-AD21-2 方案 A（data_source 欄 + migration 規範）、DP-AD21-3 近似上界決議*
+- *v1.2 修正（2026-05-26）：DP-AD21-1 過濾欄位由 `PROJECT_WORKYM`（OBMLISTDF 欄，不存在於 OBPOOLDATA_LIST）更正為 `ASSIGNDAY < 本月第一天 yyyyMM01`；§24.4 決策彙總表同步修正*
 
 ---
 
@@ -5541,7 +5546,7 @@ Phase 2 是唯一改變 production 月跑案件數的階段。**業務已明確�
 
 | 決策 ID | 問題 | 決議結論 | 影響 |
 |--------|------|---------|------|
-| DP-AD21-1 ✅ | ETL 載入策略 | **歷史限定**（`PROJECT_WORKYM < 本月`）| E05 Load Pipeline 加 WHERE 過濾 |
+| DP-AD21-1 ✅ | ETL 載入策略 | **歷史限定**（`ASSIGNDAY < 本月第一天 yyyyMM01`）；注意：`PROJECT_WORKYM` 不存在於 `OBPOOLDATA_LIST`，過濾欄位修正為 `ASSIGNDAY` | E05 Load Pipeline 加 `WHERE ASSIGNDAY < :currentMonthFirstDay` 過濾 |
 | DP-AD21-2 ✅ | ETL Load Mode | **方案 A：`data_source VARCHAR(20) NULL` 欄**（`'etl_legacy'` / `'monthly_run'`）| 需新增 migration `1711360000291-AddObPoolDataListDataSource`；entity 補 @Column |
 | DP-AD21-3 ✅ | 去重上界 | **近似 WORKDT − 1 日**（不建 OBASSSIGNSET ETL）| Phase 1 無額外 ETL 工作；上界 = 上月末日 yyyyMMdd |
 | DP-AD22-1 ✅ | 特殊 DELETE 落地 | **忠實複刻**（LIST_NM `includes` 比對 + JS filter）| 繼承字串脆弱性；結構化旗標保留為 follow-up OQ-STAGE1-01 |
