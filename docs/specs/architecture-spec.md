@@ -1,10 +1,12 @@
 ---
 type: architecture-spec
-version: "2.14"
+version: "2.15"
 status: draft
-last_updated: 2026-05-25
+last_updated: 2026-05-26
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089]
 ---
+
+> **v2.15 / 2026-05-26 變更摘要（F088 準備完成摘要：AD-E07-20 物化估算快取設計）**：新增 AD-E07-20「F088 準備完成摘要：物化估算快取設計」，涵蓋 (1) `ob_list_definition` 兩欄新增（`stage0_estimate_count` INTEGER NULL + `stage0_estimated_at` TIMESTAMP NULL）設計理由與 nullable 策略；(2) migration 命名（`1711360000290-AddObListDefinitionStage0EstimateCache`）+ PG/SQLite e2e 相容 DDL 草案；(3) `approveToReady()` best-effort hook 架構原則（transaction 之外、catch 不 rethrow）；(4) `AssignmentListModule` → `AssignmentStageModule` 單向 import wiring，`Stage0EstimateService` 注入路徑與循環依賴分析；(5) `ob_dept_pct.created_by` JOIN `users` 無 schema 變更之設計者姓名解析方案。
 
 > **v2.14 / 2026-05-25 變更摘要（F084 v2.0 auto-advance 架構設計 AD-E07-19）**：(1) 新增 AD-E07-19「F084 v2.0 auto-advance 架構設計」，落實三個 assumption：A-5（advisory lock 機制選型：採 blocking `pg_advisory_xact_lock`，拒絕 try-lock 以避免並發可見性導致 stage 永遠卡住）、A-6（transaction 邊界：`StageTransitionService.advanceToInMgr()` 新增過載接受外部 EntityManager；`PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr()` 新增 EntityManager 版本；`setPersonnelRatios()` tx scope 擴大涵蓋 lock + 偵測 + stage 更新 + 稽核）、A-7（`operator_role` 推導沿用 `advancedByRole` pattern 寫入 `metadata` JSONB）；(2) §3.10 元件表更新：`StageTransitionService`（補登 `advanceToInMgr` 過載）、`PersonnelRatioValidationService`（補登 `assertAllDeptsSumEquals100WithMgr`）、`AssignmentRatio Service`（補登 `PersonnelRatioService.setPersonnelRatios()` tx scope 說明）、`FeatureFlagGuard`（補登 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` 雙 flag 關係）；(3) 本決議推翻 F084 spec §5.2/BR-13 的 try-lock 降級假設，spec 將由 spec-writer 對齊。
 
@@ -4895,6 +4897,163 @@ Blocking lock + Option B（寫入在 lock 前）下，並發第二筆 PUT 的完
 
 ---
 
+#### AD-E07-20　F088 準備完成摘要：物化估算快取設計（2026-05-26）
+
+> **範圍**：本節定義 F088「準備完成摘要」卡片所需的 `stage0_estimate_count` 物化快取設計，涵蓋 Schema 變更、Migration 設計、approve→ready hook 架構原則、以及跨模組 wiring 規範。
+
+##### 20.1 背景與決策
+
+**問題**：F088 準備完成摘要清單頁每張卡片需顯示「預估案件數」。若即時讀取，需對 `ob_pool_data`（百萬列）執行 COUNT 並套用 per-list 篩選條件，N 張卡即 N 次全表掃描 → 嚴重違反 ETL/scale NFR。
+
+**決策（已拍板，2026-05-26）**：採用**物化快取（Materialized Cache）**策略：
+
+| 面向 | 決策 |
+|------|------|
+| 計算時機 | 名單 approve→ready（F086）成功後，**transaction 之外** best-effort 計算 |
+| 計算呼叫 | `Stage0EstimateService.estimateListCount(listNo)` — 既有服務，不重寫邏輯 |
+| 儲存位置 | `ob_list_definition.stage0_estimate_count`（INTEGER, NULL）/ `stage0_estimated_at`（TIMESTAMP, NULL） |
+| 讀取端 | F088 列表查詢直接讀欄位值，O(1) 讀取 |
+| Graceful Degradation | 計算/更新失敗僅 logger.warn，approve 結果不受影響；前端顯示 NULL 時呈現「—」 |
+
+##### 20.2 Schema 變更
+
+**新增欄位（ob_list_definition）**：
+
+| 欄位名 | 型別（PG）| 型別（SQLite e2e）| NULL | 說明 |
+|--------|-----------|-------------------|------|------|
+| `stage0_estimate_count` | INTEGER | INTEGER | YES | 物化預估案件數；NULL = 未計算 / 計算失敗 |
+| `stage0_estimated_at` | TIMESTAMP | DATETIME（via `dateColumnType`）| YES | 估算執行時間戳（UTC）；必須使用 `dateColumnType` helper，禁用 `type: 'timestamp'` 字串（AD-E07-17 / feedback_typeorm_timestamp）|
+
+**nullable 設計理由**：
+- 既有遷移名單（stage='ready'，從未經過 approve→ready hook）保留 NULL
+- 計算 timeout（10s 預設）或 `estimateListCount` 拋出例外時不回填
+- 前端 F088 對 NULL 顯示「—」（前端層業務規則，非 DB 預設值）
+
+**不提供 backfill**：既有 ready 名單需等下次 re-approve（F089 rollback → re-approve）才填；此為業務上可接受的「漸進式填充」策略。
+
+##### 20.3 Migration 設計
+
+**Migration 命名慣例**：沿用專案既有 timestamp 前綴 pattern（最後一個為 `1711360000288-AlignE07RatioColumnTypes`），新 migration 使用遞增 timestamp：
+
+```
+1711360000290-AddObListDefinitionStage0EstimateCache.ts
+```
+
+**DDL 設計草案**（TypeORM migration up/down）：
+
+```sql
+-- PostgreSQL（up）
+ALTER TABLE ob_list_definition
+  ADD COLUMN stage0_estimate_count INTEGER NULL,
+  ADD COLUMN stage0_estimated_at   TIMESTAMP NULL;
+
+-- SQLite e2e（TypeORM migration 需依 DB_TYPE 條件分支）
+ALTER TABLE ob_list_definition ADD COLUMN stage0_estimate_count INTEGER NULL;
+ALTER TABLE ob_list_definition ADD COLUMN stage0_estimated_at   DATETIME NULL;
+
+-- down（兩種 DB 均可用 DROP COLUMN，SQLite < 3.35 不支援；e2e SQLite 版本需確認）
+ALTER TABLE ob_list_definition DROP COLUMN stage0_estimate_count;
+ALTER TABLE ob_list_definition DROP COLUMN stage0_estimated_at;
+```
+
+**PG / SQLite 相容注意事項**：
+- PG：`TIMESTAMP NULL` 無預設值，ALTER TABLE ADD COLUMN 即 nullable，無需額外 DEFAULT
+- SQLite（e2e）：TypeORM 以 `dateColumnType` helper 自動解析為 `datetime`；e2e migration 須以 `DB_TYPE === 'sqlite'` 分支（同既有 `dateColumnType` 實作慣例）
+- SQLite 3.35 以前不支援 `DROP COLUMN`，down migration 可設為空（e2e 不需 down）
+- **無 backfill**：兩欄皆 nullable，ADD COLUMN 後既有列自動為 NULL，無需 UPDATE
+
+##### 20.4 approve→ready Hook 架構設計
+
+**Hook 位置**：`StageActionService.approveToReady()`（`apps/api/src/modules/assignment-stage/stage-action.service.ts`）
+
+**執行原則（Graceful Degradation）**：
+
+```
+approveToReady():
+  1. [TRANSACTION] stageTransition.advanceTo('approval', 'ready') + audit log
+  2. tx commit（stage 正式變更為 'ready'）
+  3. [TRANSACTION 之外 / best-effort]
+     try {
+       const { count } = await stage0EstimateService.estimateListCount(listNo)
+       await listRepo.update({ list_no: listNo }, {
+         stage0_estimate_count: count,
+         stage0_estimated_at: new Date(),
+       })
+     } catch (e) {
+       this.logger.warn(`stage0 estimate failed for ${listNo}: ${e.message}`)
+       // 不 rethrow；approve 結果已確立
+     }
+```
+
+**關鍵原則**：
+- Step 2（tx commit）與 Step 3（估算 UPDATE）**非同一 transaction**：即使 Step 3 失敗，approve 結果已持久化，API 仍回 200 `currentStage: 'ready'`
+- Step 3 的 `listRepo.update()` 使用**獨立 UPDATE**（非讀-改-寫），避免 race condition 覆蓋其他欄位
+- Step 3 timeout 由 `estimateListCount` 內建 10s 限制控制（既有 BR-3），無需額外 wrapper
+- F089 rollback（ready → approval）**不清空**估算欄位（保留上次計算值作歷史參考；re-approve 時覆寫）
+
+##### 20.5 跨模組 Wiring 設計
+
+**現況**：`Stage0EstimateService` 由 `AssignmentListModule` 宣告並 export；`StageActionService` 由 `AssignmentStageModule` 宣告，目前未注入 `Stage0EstimateService`。
+
+**Wiring 方案**：
+
+```
+AssignmentListModule
+  providers: [Stage0EstimateService, ...]
+  exports:   [Stage0EstimateService, ...]   ← 已 export（確認現況）
+
+AssignmentStageModule
+  imports: [AssignmentListModule]           ← 新增此 import
+  providers: [StageActionService, ...]
+```
+
+`StageActionService` constructor 新增注入：
+
+```typescript
+constructor(
+  // ... 既有注入 ...
+  private readonly stage0Estimate: Stage0EstimateService,
+) {}
+```
+
+**Wiring 注意事項**：
+
+| 項目 | 說明 |
+|------|------|
+| 循環依賴風險 | `AssignmentListModule` 不 import `AssignmentStageModule`（目前確認），故 `AssignmentStageModule` import `AssignmentListModule` 為單向依賴，**無循環** |
+| Entity 重複注冊 | `AssignmentListModule` 已注冊 `ObPoolData` / `ObCalendar` / `ObListDefinition` 供 `Stage0EstimateService` 使用；`AssignmentStageModule` 同樣注冊 `ObListDefinition`；TypeORM `forFeature` 允許多模組共用同一 entity（不衝突） |
+| 測試隔離 | `StageActionService` unit test 須新增 `Stage0EstimateService` mock（jest mock），以驗證 best-effort 失敗不影響 approve 結果；E2E test（F086 spec）須驗證 `stage0_estimate_count` 在 approve 後寫入非 NULL |
+
+##### 20.6 設定者資料來源設計
+
+**F088 卡片「設定者/部長代設定」顯示**：
+
+- 資料來源：`ob_dept_pct.created_by`（已存在，user id / UUID 格式）
+- 解析方式：F088 查詢端 JOIN `users` 表（`ob_dept_pct.created_by = users.id`）取得 `users.name`（姓名）與 `users.business_role`（業務角色）
+- **無需 schema 變更**：`ob_dept_pct.created_by` 已為 VARCHAR(50) 對齊 `users.id` UUID 格式（2026-05-21 hotfix 已修訂，見 data-model.md ob_dept_pct 章節）
+- JOIN 範圍：每月名單僅取最新一筆 `ob_dept_pct.created_by`（依 `created_at DESC LIMIT 1`），或取 `created_by`（首次設定者）視 F088 spec 語意決定；本 AD 不強制，由 F088 spec-writer 確認
+
+**資料完整性注意事項**：
+- 舊遷移名單（`ob_dept_pct.created_by` 為舊系統程式帳號如 `OBZ`）JOIN `users` 可能無結果 → 前端顯示原始 `created_by` 字串或「—」，由 F088 spec 決定
+- 已下線業務員（`users.status = 'inactive'`）JOIN 仍可取得姓名，無需特殊處理
+
+##### 20.7 NFR 對應
+
+| NFR | 架構回應 |
+|-----|---------|
+| **Performance** | F088 列表查詢讀物化欄位（O(1)）；消除 N 次 ob_pool_data COUNT 掃描 |
+| **Scalability** | `ob_pool_data` 百萬列規模下不影響 F088 讀取效能；估算計算僅在 approve 時發生一次（低頻） |
+| **Availability** | Graceful degradation：估算失敗不中斷 approve；前端以「—」優雅降級 |
+| **Data Consistency** | 物化值可能略舊（approve 後 ob_pool_data 異動不自動重算）；此為已知 trade-off，業務接受 |
+| **Maintainability** | 重用既有 `Stage0EstimateService.estimateListCount()` 無新邏輯；hook 封裝在 `approveToReady()` 不擴散 |
+
+---
+
+*本節版本 1.0（2026-05-26），由 System Architect Agent 依據 F088 準備完成摘要需求新增。*
+- *v1.0 新增：AD-E07-20（ob_list_definition 物化估算欄位設計 + migration 草案 + approve→ready hook 架構 + AssignmentListModule→AssignmentStageModule wiring + ob_dept_pct.created_by JOIN users 設計者查詢）*
+
+---
+
 ### E07-G　M02 計分設定擴充 Migration 設計（F069~F072，2026-05-14）
 
 > **範圍**：本節定義 F069~F072（CARD_TYPE CRUD）新增的 3 個 migration 設計草案。實際 TypeORM migration 程式碼由 TDD Developer 實作。
@@ -5256,3 +5415,10 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 - *新增架構決策 AD-E07-17（Schema 修補三議題決議：議題 1 `assignment_audit_log.action` VARCHAR(10)→VARCHAR(30)；議題 2 `ob_empl_set` 時間欄位 entity 改用 `dateColumnType()` helper；議題 3 `ObListDefinition.stage` 確認歸屬 m100 migration，m12 data backfill 仍有效）*
 - *data-model.md 同步更新：`assignment_audit_log.action` 欄位說明更新 VARCHAR(30) + stage 系列 action 值；`ob_empl_set.created_at/updated_at` 補入 dateColumnType helper 強制說明；`ob_list_definition.stage` 欄位補入 migration 歸屬明示*
+
+---
+
+*本文件版本 2.15，由 System Architect Agent 依據 F088 準備完成摘要需求（2026-05-26）更新。主要變更：*
+
+- *新增架構決策 AD-E07-20（F088 準備完成摘要：物化估算快取設計）：`ob_list_definition` 新增 `stage0_estimate_count` / `stage0_estimated_at` 兩欄；migration 命名 `1711360000290-AddObListDefinitionStage0EstimateCache`；`approveToReady()` best-effort hook 架構（tx 之外 / catch 不 rethrow）；`AssignmentListModule` → `AssignmentStageModule` 單向 import wiring（含循環依賴排除分析）；`ob_dept_pct.created_by` JOIN `users` 無 schema 變更之設計者查詢方案*
+- *data-model.md v1.14 同步更新：`ob_list_definition` 欄位表新增兩欄定義 + nullable 理由；草稿階段欄位編輯規則表補入估算欄位列；`ob_dept_pct.created_by` F088 用途說明*

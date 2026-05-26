@@ -1,10 +1,12 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.13"
-date: 2026-05-20
+version: "1.14"
+date: 2026-05-26
 status: Draft
 ---
+
+> **v1.14（2026-05-26 / F088 準備完成摘要）**：`ob_list_definition` 新增 `stage0_estimate_count`（INT, NULL）與 `stage0_estimated_at`（TIMESTAMP, NULL）兩欄，支援 approve→ready 物化估算快取（AD-E07-20）。`ob_dept_pct.created_by` 補入「設定者姓名查詢」用途說明。
 
 > **v1.13（2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構）**：依 GAP-LIST §A1~A6 對齊文字描述。核心變更（**不動 entity 結構，不增不減 column**）：
 > 1. **L850 condition_payload 描述**：BR 引用版號 v2.0 → v2.1；新增 list_period_* 保留欄位（F050 v2.1 BR-8）+ INACTIVE 選項警示（F050 v2.1 BR-9）；明列 5 個 entity column 為 backward-compat 衍生欄位（J6 / F050 v2.1 BR-10）
@@ -859,6 +861,8 @@ PK：`list_no`
 | stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入；**migration 歸屬：`1711360000100-CreateE07ObSettingsTables`（m100）中 `ob_list_definition` CREATE TABLE 時同步加入此欄位；m12 data backfill UPDATE 僅寫資料不建欄，見 AD-E07-17 議題 3**） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月跑 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
 | cr_enabled | BOOLEAN | NOT NULL DEFAULT TRUE | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代 F059 OBASSIGNSET 全域路徑**） | per-LIST_NO CR 回分開關；草稿階段（`stage = 'draft'`）由 F050 v2.0 / F051 v2.0 透過 `crEnabled` 欄位設定；推進至非草稿階段後鎖定（透過 F051 v2.0 BR-3 統一拒絕，無需獨立鎖定欄位）；月跑 Stage 3 讀取本欄位決定是否執行 CR 回分（false = 跳過）；既有 OBMLISTDF 遷移之名單初始 `true`（保持現行行為）；US-120 spec 落差修正之唯一儲存位置；F059 v2.0 標記 DEPRECATED 不再讀寫 |
 | condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入；**v2.1（2026-05-20）取代 v2.0 固定欄位 prod_kind / caseyear / spec_tp / case_status / settle_src 等之必填語意，成為 source of truth**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；完整 schema 規範詳見 [F050 v2.1 §5.4](features/F050-create-list-definition.md#54-condition_payload-json-schemav21-新增--a2-解除)；F050 v2.1 新建必填（至少 1 個 conditions）；F051 v2.1 草稿階段可整段覆寫（限 `stage='draft'`，K1 / F051 v2.1 BR-9）；**F050 v2.1 BR-6** 強制 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`，違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1 / A3 解除）；**F050 v2.1 BR-8** 強制 `columnName` 不得為 `list_period_start` / `list_period_end` / `list_interval`（一級保留欄位，J8 / 拍板 3），違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；**F050 v2.1 BR-9**：若 conditions 含 `pooldata_field_option.is_active=false` 之 categorical option，寫入仍成功但 response 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（非阻擋；對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings)）；月跑 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（**F050 v2.1 BR-7**：categorical `IN (...)`、numeric `BETWEEN`、date `BETWEEN`；US-122 AC-1~AC-3 / A6 / D3 解除）；**5 個 entity column（prod_kind / caseyear / spec_tp / case_status / settle_src）由後端依本欄位衍生填入並寫入 entity column，為 backward-compat 讀取欄位**（J6 / F050 v2.1 BR-10；衍生規則由 Phase 3a system-architect 設計）；既有 OBMLISTDF 遷移之名單初始 `NULL`，月跑 Stage 1 fallback 至 5 個 entity column 讀取（D4 / US-122 AC-4 / US-123 AC-3）；E2 backfill（entity column → condition_payload 一次性轉換）由 Phase 3a system-architect 執行（拍板 2 / 無 confirm 流程）。**v2.1.1（2026-05-20 / US-128 / US-129）**：`best_case` 為合法 `conditions[].columnName` 之一（F075 v1.6 seed），值為 categorical `Y` / `N`（F076 v1.6 seed）；承接已移除之 `prod_best` 一級欄位業務語意（見上方 `prod_best` 欄位 DEPRECATED 說明 + [F050 v2.1.1 BR-12](features/F050-create-list-definition.md#7-商業規則)）；月跑 Stage 1 對 `ob_pool_data.best_case` 以 `IN (...)` 過濾。|
+| stage0_estimate_count | INTEGER | NULL | （AppDB 新建欄位，2026-05-26 / F088 準備完成摘要 / AD-E07-20 引入） | **物化 Stage 0 預估案件數快取**。於名單 `approve→ready`（F086）成功後，`StageActionService.approveToReady()` 在 transaction 之外呼叫 `Stage0EstimateService.estimateListCount(listNo)` 計算並以 best-effort UPDATE 寫入本欄。計算失敗（timeout / 找不到名單）僅 logger.warn，不影響 approve 結果（graceful degradation，見 AD-E07-20）。值語意：ob_pool_data 套用該名單 condition_payload 篩選後之 COUNT（INTEGER）。**nullable 理由**：（1）既有歷史名單（遷移時 stage='ready'）從未經過 approve→ready hook，保留 NULL 表示「未計算」；（2）計算失敗或 timeout 亦保留 NULL。前端 F088 卡片顯示 NULL 時呈現「—」。**不提供 backfill**：既有 ready 名單下次 re-approve 才填（F089 rollback 至 approval 再 re-approve 觸發）。 |
+| stage0_estimated_at | TIMESTAMP | NULL | （AppDB 新建欄位，2026-05-26 / F088 準備完成摘要 / AD-E07-20 引入；**實作必須使用 `dateColumnType` helper，禁用 `type: 'timestamp'` 字串**，見 AD-E07-17 / memory feedback_typeorm_timestamp） | **物化估算時間戳**。與 `stage0_estimate_count` 同步寫入，記錄計算執行當下之 UTC 時間。nullable 理由同上欄（未計算 / 計算失敗為 NULL）。前端 F088 可選擇性顯示此欄位（如 tooltip「預估時間：YYYY-MM-DD HH:mm」），由 F088 spec 決定。 |
 
 **多值欄位儲存規範（v2.1 重寫）**：
 
@@ -943,6 +947,7 @@ UPDATE ob_list_definition
 | `stage` | ❌（不可手動覆寫） | ❌（不可手動覆寫） | F078 / 後續 M03a~d 推進 / Rollback spec |
 | `list_no` / `project_workym` / `created_by` / `created_at` | ❌（建立後永久不可改） | ❌（永久不可改） | F050 v2.1 寫入後鎖定 |
 | backward-compat 衍生欄位（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`） | ❌（前端不直接編輯；由後端依 `condition_payload` 衍生填入；J6 / F050 v2.1 BR-10） | ❌ | F050 v2.1 / F051 v2.1 + Phase 3a system-architect 設計衍生規則 |
+| `stage0_estimate_count` / `stage0_estimated_at` | ❌（系統自動寫入；F086 approve→ready 時 best-effort 更新） | ❌（F086 approve→ready 才觸發更新，其他推進不觸及） | F088 / AD-E07-20 |
 
 > **規則來源**：F050 v2.1 BR-2 / F051 v2.1 BR-4 / BR-9 / BR-10 / F052 v2.0 BR-3 / F077 BR-9 角色 × 階段操作矩陣。
 > **退出鎖定途徑**：透過後續批次 spec 之 Rollback 機制（M03a/b/c/d Rollback；如 US-111 / US-115 / US-117）退回 `'draft'` 階段後，本表「草稿可改」欄位重新可編輯。
@@ -1087,7 +1092,7 @@ PK：`(project_workym, list_no, obdeptid, ration)`
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
 | created_by_prog | VARCHAR(10) | NOT NULL | A_PRGID | 建立程式代碼 |
-| created_by | VARCHAR(50) | NOT NULL | A_USERID | 建立者 UUID（**v2 修訂，2026-05-25 / commit 736e9c4**：原 VARCHAR(10) → VARCHAR(50) 對齊 `users.id` UUID 36 字元） |
+| created_by | VARCHAR(50) | NOT NULL | A_USERID | 建立者 UUID（**v2 修訂，2026-05-25 / commit 736e9c4**：原 VARCHAR(10) → VARCHAR(50) 對齊 `users.id` UUID 36 字元）。**F088 用途（2026-05-26 / AD-E07-20）**：F088「準備完成摘要」卡片顯示「設定者/部長代設定者」姓名時，以本欄位（`ob_dept_pct.created_by`）JOIN `users.id` 解析姓名（`users.name`）與業務角色（`users.business_role`）；**無需 schema 變更**，僅需在 F088 查詢端 JOIN users 表。 |
 | created_at | TIMESTAMP | NOT NULL | A_SYSDT | 建立時間 |
 | updated_by_prog | VARCHAR(10) | NOT NULL | U_PRGID | 更新程式代碼 |
 | updated_by | VARCHAR(50) | NOT NULL | U_USERID | 更新者 UUID（**v2 修訂**：同 `created_by`，VARCHAR(10) → VARCHAR(50)） |

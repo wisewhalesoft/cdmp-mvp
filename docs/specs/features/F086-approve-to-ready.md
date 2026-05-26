@@ -6,8 +6,8 @@ source-story: US-116
 epic: E07
 module: M03c 簽核階段
 priority: P0-MVP
-version: "1.2.1"
-date: 2026-05-21
+version: "1.3"
+date: 2026-05-26
 status: Draft
 ---
 
@@ -15,6 +15,12 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **v1.3（2026-05-26 / approve 雙寫 + 物化估算）**：對齊 prototype `prototypes/29d-ready-summary.html` 與 F088 v1.3 清單卡片 / 詳情頁簽核歷史之資料需求，補上原 v1.2.1 §6.X flag 之 enhancement（PM 已拍板採行）：
+> 1. **approve→ready 補寫 `assignment_approval(action='approve')`**：於**同一 transaction** 內 mirror F087 reject 之寫入範式，新增 `INSERT INTO assignment_approval`（`action='approve'`、`approver_id`、`approver_name`、`approver_role`、`approved_at`）。此為 F088 清單卡片 `approvedAt` / `approverName` 與詳情頁簽核歷史 approve 列之資料來源。v1.2.1 §6.X 之「F086 不寫 approval 表」差距 flag 由本版本 resolve。
+> 2. **best-effort 物化 Stage 0 估算**：approve→ready 成功 commit 後，best-effort 計算 Stage 0 估算值並物化至 `ob_list_definition`（欄位 / migration 細節由 system-architect 規範）；**計算失敗僅 log、不 rollback approve**。供 F088 清單頁 `estimateCases` 讀存值（見 F088 v1.3 BR-10）。
+> 3. 新增 AC-11（approve 雙寫）+ AC-12（物化估算 best-effort）+ BR-11 / BR-12；§6.X 由「差距 flag」改為「已實作之雙寫範式」。
+> 4. 本 v1.3 **不變動** entity / migration / data-model.md / architecture-spec.md（欄位與 migration 細節由 system-architect 規範，本 spec 僅描述行為與資料來源）。
+>
 > **UI 實作註記（2026-05-26）**：核准操作改為 **27-list-definition.html「待簽核」欄卡片就地** 進行（點「核准」→ success confirm modal → `approveList`）；原 29c「簽核審閱獨立頁」（`approval-review-page.tsx` + 路由 `/assignment/lists/:listNo/approval`）已移除，prototype `29c-approval-review.html` 標記 SUPERSEDED。審閱完整快照改由卡片「查看」Detail Drawer（4-tab）提供。後端 API / Guard / 寫入語意不變（本註記不改 AC，僅記錄 UI 入口變更）。
 > **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum 與 real code 雙寫實況：
 > 1. **`AC` 內 `action = 'APPROVE'` 字串修正**：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）**不包含** `APPROVE`；F086 核准走 `StageTransitionService.advanceTo()` → 寫入 `action = 'STAGE_ADVANCE'`（`stage-transition.service.ts:89`）。spec 內 `action = 'APPROVE'` 改為 `action = 'STAGE_ADVANCE'`。
@@ -95,9 +101,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 - **Given** 部長 / Admin 點擊「確認核准」
 - **When** 後端處理請求（POST `/api/v1/assignment/lists/{listNo}/stage/approve`）
-- **Then** 系統更新 `ob_list_definition.stage` 由 `'approval'` 為 `'ready'`
+- **Then** 系統於**同一 transaction** 內更新 `ob_list_definition.stage` 由 `'approval'` 為 `'ready'`
 - **And** 寫入 `assignment_audit_log`（`action = 'STAGE_ADVANCE'`、`entity_type = 'list_definition'`、`entity_id = list_no`、`before_value = { stage: 'approval' }`、`after_value = { stage: 'ready' }`、`operator_id = currentUserId`）（v1.2.1 修正：對齊 entity enum，原 `APPROVE` 不存在於 entity union；real flow 經 `StageTransitionService.advanceTo()`）
-- **And** **不**寫入 `assignment_approval` 表（v1.2.1 補述 / real code 行為對照）：F086 目前僅單寫 audit log；如需簽核者資訊（approver_name / approved_at），現況無法從 `assignment_approval` 查得 approve 紀錄。詳見 §6.X 補述
+- **And** **同 transaction** 寫入 `assignment_approval`（`action = 'approve'`（小寫）、`list_no`、`approver_id = currentUserId`、`approver_name`、`approver_role`、`approved_at = now()`）（v1.3 新增：mirror F087 reject 之雙寫範式，供 F088 清單卡片 `approvedAt` / `approverName` 與簽核歷史 approve 列查詢；詳見 §6.X）
 - **And** 頁面顯示成功提示「名單『{listNm}』已核准，進入準備完成階段」，清單刷新
 
 ### AC-5：核准後名單出現在「準備完成」清單
@@ -137,7 +143,23 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **Given** 任一核准成功
 - **When** 寫入完成
 - **Then** `assignment_audit_log` 新增一筆 `action = 'STAGE_ADVANCE'`，含 before/after stage、operator_id、timestamp（v1.2.1 修正：對齊 entity enum）
-- **And** **不**寫入 `assignment_approval` 表（real code 行為；詳見 §6.X 補述 / 設計現況差距 flag）
+- **And** **同 transaction** `assignment_approval` 新增一筆 `action = 'approve'`（**小寫**，對齊 `AssignmentApproval.action` entity union `'approve' | 'reject'`）、`approver_id`、`approver_name`、`approver_role`、`approved_at`（v1.3 新增：雙寫範式，詳見 §6.X）
+
+### AC-11：核准寫入 assignment_approval（簽核者資訊 / v1.3 新增）
+
+- **Given** 部長 / Admin 核准成功
+- **When** 寫入完成
+- **Then** `assignment_approval` 含該名單一筆 `action = 'approve'` 紀錄，含 `approver_id` / `approver_name` / `approver_role` / `approved_at`
+- **And** F088 清單卡片 `approvedAt` / `approverName` 與詳情頁簽核歷史 approve 列可由此紀錄取得（最新 `action='approve'` 依 `approved_at DESC`）
+- **And** `assignment_approval` 寫入須與 stage 更新 + audit log 於**同一 transaction**；任一失敗整體 rollback
+
+### AC-12：核准後 best-effort 物化 Stage 0 估算（v1.3 新增）
+
+- **Given** approve→ready transaction 已成功 commit
+- **When** 系統於 commit 後執行 Stage 0 估算物化
+- **Then** best-effort 計算該名單 Stage 0 估算值並寫入 `ob_list_definition` 物化估算欄位（供 F088 清單頁 `estimateCases` 讀取）
+- **And** 估算計算 / 寫入失敗時**僅 Logger.error、不 rollback approve**（approve 已 commit，名單仍為 `ready`）；F088 清單頁該名單 `estimateCases` 顯示為 `null`（「—」）
+- **And** 物化計算**不**阻擋 approve 之回應（approve response 不等待估算完成 / 或估算失敗不影響 200 OK）
 
 ## 5. API 規格
 
@@ -158,9 +180,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   "previousStage": "approval",
   "currentStage": "ready",
   "approvedAt": "2026-05-15T13:00:00Z",
-  "approvedBy": "user-uuid-xxx"
+  "approvedBy": "user-uuid-xxx",
+  "approverName": "張部長",
+  "approverRole": "director"
 }
 ```
+
+> v1.3：`approverName` / `approverRole` 為 `assignment_approval(action='approve')` 寫入之欄位（mirror F087 reject response）；`approverRole` 為 `'admin'`（admin 核准）或核准者之 `business_role`（director）。
 
 **錯誤代碼**
 
@@ -189,12 +215,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | BR-8 | **月跑並發守衛（v1.1 / 決議 #6）**：F086 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
 | BR-9 | **Feature Flag fallback（v1.1 / 決議 #2）**：F086 端點受 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
 | BR-10 | **核准後 ready 名單可由 F089 退回**：核准後若需修改，部長可透過 F089 將 `ready` 退回 `approval`，再透過 F087 拒絕退回 `personnel_ratio` |
+| BR-11 | **核准雙寫 `assignment_approval`（v1.3 新增）**：approve→ready 於**同一 transaction** 內 mirror F087 reject 之寫入範式，新增 `INSERT INTO assignment_approval`（`action='approve'`（小寫）、`list_no`、`approver_id = currentUserId`、`approver_name`、`approver_role`（admin 為 `'admin'`，否則 `actor.businessRole`）、`approved_at`）。此寫入與 stage 更新 + audit log 同 transaction（沿用 BR-7 原子性）；任一失敗整體 rollback。實作上由 `approveToReady()` 傳入 `advanceTo()` 之 `postActionFn`（原為 `async () => undefined`），mirror `rejectToPersonnelRatio()` 之 `postActionFn`。**此 BR resolve v1.2.1 §6.X 之「F086 不寫 approval 表」差距 flag**。 |
+| BR-12 | **核准後 best-effort 物化 Stage 0 估算（v1.3 新增）**：approve→ready transaction **成功 commit 後**，best-effort 計算該名單 Stage 0 估算值並物化至 `ob_list_definition`（供 F088 v1.3 BR-10 之 `estimateCases` 讀取）。計算 / 寫入失敗僅 `Logger.error`、**不 rollback approve**（approve 已 commit）；物化**不**阻擋 approve 之 200 OK 回應。估算來源沿用 `Stage0EstimateService.estimateListCount(listNo)`（`GET /assignment/list-definitions/{listNo}/estimate` 之底層 service）。 |
 
-### 6.X 核准記錄之資料寫入範式（v1.2.1 新增 / D1 follow-up / real code 行為對照）
+### 6.X 核准記錄之資料寫入範式（v1.3 / 雙寫已採行 + 物化估算）
 
-> Source-of-truth：`apps/api/src/modules/assignment-stage/stage-action.service.ts:254-279` `approveToReady()` 方法 + `apps/api/src/modules/assignment/services/stage-transition.service.ts:77-93` `advanceTo()` helper。
+> Source-of-truth（v1.2.1 對照基準）：`apps/api/src/modules/assignment-stage/stage-action.service.ts:254-279` `approveToReady()` 方法 + `apps/api/src/modules/assignment/services/stage-transition.service.ts:77-93` `advanceTo()` helper。
+>
+> **v1.3 變更說明**：v1.2.1 §6.X 標記之「F086 僅單寫 audit log、不寫 assignment_approval」之**差距 flag 已由 PM 拍板採行雙寫**；本 §6.X 改為規範 approve 之**雙寫範式 + 物化估算**目標行為（mirror F087 reject），entity / migration 細節仍由 system-architect 規範。
 
-**Real code 行為**：F086 核准操作於同一 DB transaction 內僅執行兩個 DB write：
+**v1.3 目標行為**：F086 核准操作於**同一 DB transaction** 內執行**雙寫兩張表**，commit 後另做 best-effort 物化估算：
 
 1. `UPDATE ob_list_definition SET stage = 'ready' WHERE list_no = :listNo`
 2. `INSERT INTO assignment_audit_log` 一筆（由 `StageTransitionService.advanceTo()` 統一寫入）：
@@ -203,20 +233,30 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
    - `entity_id = list_no`
    - `actor_id = currentUserId`
    - `after_value = { fromStage: 'approval', toStage: 'ready' }`
+3. `INSERT INTO assignment_approval` 一筆（v1.3 新增；由 `approveToReady()` 傳入 `advanceTo()` 之 `postActionFn` 寫入，mirror `rejectToPersonnelRatio()` 之 `postActionFn`）：
+   - `action = 'approve'`（**小寫**，VARCHAR(10)，對齊 `AssignmentApproval.action` entity union `'approve' | 'reject'`）
+   - `list_no`
+   - `approver_id = currentUserId`
+   - `approver_name`（real code reject 現以 `currentUserId` 作 placeholder；approve 沿用相同範式，未來可補真實姓名 lookup）
+   - `approver_role`（`admin` 為 `'admin'`，否則為 `actor.businessRole`）
+   - `approved_at`（與 audit log timestamp 一致之同一 Date 物件）
+   - `reject_reason = null`（approve 無拒絕原因）
 
-**Real code **不**寫入** `assignment_approval` 表**：
+**Commit 後（transaction 外）best-effort 物化 Stage 0 估算（v1.3 新增）**：
 
-- `stage-action.service.ts:254-279` 之 `approveToReady()` 未呼叫 `assignment_approval.insert`；對照 `rejectToPersonnelRatio()`（行 284-356）顯式呼叫 `mgr.insert(AssignmentApproval, ...)`（行 333-343）
-- 結果：`assignment_approval` 表在 production 環境理論上**只會累積 `action='reject'` 紀錄**，不會有 `action='approve'` 紀錄
-- 影響範圍：
-  - F082 v1.1 latestRejection banner 透過 `assignment_approval WHERE action='reject'` 查詢觸發，**不**受 F086 寫入缺失影響（仍可正確顯示最新拒絕原因）
-  - 若 UI 需顯示「上一次核准者 / 核准時間」資訊，現況**無法**從 `assignment_approval` 查得；僅能從 `assignment_audit_log WHERE action='STAGE_ADVANCE' AND after_value->>'toStage' = 'ready'` 反推
+- approve transaction 成功 commit 後，呼叫 `Stage0EstimateService.estimateListCount(listNo)` 計算估算值並 `UPDATE ob_list_definition` 之物化估算欄位
+- 此步驟於 transaction **外**執行，失敗僅 `Logger.error`、**不 rollback** 已 commit 之 approve（名單仍為 `ready`，僅 `estimateCases` 為 `null`）
+- 不阻擋 approve 之 200 OK 回應（沿用 BR-12）
 
-**設計現況 vs spec 預期差距 flag**：
+**雙寫範式對稱性（v1.3 已對齊 F087）**：
 
-- v2.2.1 follow-up flag 與本次 D1 修正 task 之 user 指示原本預期 F086 採「雙寫範式」（同 F087 reject 之 audit_log + assignment_approval 雙寫）；但 real code 僅單寫 audit log
-- 本 v1.2.1 **不變更 code**，僅對齊 spec 至 real flow；若 PM 確認 F086 應補寫 `assignment_approval.action='approve'`（含 `approver_name` / `approved_at` / `approver_role`），需開新一輪 spec + code 變更（屬未來 enhancement）
-- 建議追蹤 issue：F086 是否補雙寫 — 屬 future decision，本 v1.2.1 不規範
+| 資料表 | approve（F086 v1.3） | reject（F087） | 用途 |
+|---|---|---|---|
+| `assignment_audit_log` | `action='STAGE_ADVANCE'` | `action='STAGE_REJECT'` | 通用稽核（大寫 SNAKE_CASE） |
+| `assignment_approval` | `action='approve'`（v1.3 新增） | `action='reject'` | 簽核專屬（小寫；approver_* + reject_reason） |
+
+- v1.3 後 `assignment_approval` 表會同時累積 `approve` 與 `reject` 紀錄；F082 v1.1 latestRejection banner 之查詢仍 `WHERE action='reject'`，**不**受 approve 紀錄新增影響（查詢條件已過濾 action）
+- F088 清單卡片 `approvedAt` / `approverName` 與詳情頁簽核歷史 approve 列由 `assignment_approval WHERE action='approve'`（最新一筆，依 `approved_at DESC`）取得
 
 ## 7. UI/UX 需求
 
@@ -281,6 +321,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - 已停用名單核准 → 422 `ASSIGNMENT_LIST_INACTIVE`
   - 稽核 `before_value` / `after_value` 含 stage 轉換完整資訊
   - 設定資料保留：核准前後 `ob_dept_pct` / `ob_empl_set` / 篩選條件 row 數不變
+  - **核准雙寫（v1.3）**：核准成功後 `assignment_approval` 新增一筆 `action='approve'`，含 `approver_id` / `approver_name` / `approver_role` / `approved_at`，且與 stage 更新 + audit log 同 transaction
+  - **Transaction 完整性（v1.3）**：approve 過程中若 INSERT `assignment_approval` 失敗 → stage 與 audit log 一併 rollback（名單仍為 `approval`）
+  - **物化估算 best-effort（v1.3）**：approve commit 後 `Stage0EstimateService.estimateListCount` 計算失敗 → 僅 log、名單仍為 `ready`、物化估算欄位為 `null`、approve 回應仍 200 OK
 - 前端關鍵測試案例：
   - 處長 / 非 `approval` 階段 / 已停用 / 歷史月份「核准」按鈕**完全不渲染**
   - 確認對話框文案 / 按鈕渲染
@@ -291,7 +334,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 - [ ] 後端新增 `POST /api/v1/assignment/lists/{listNo}/stage/approve` 端點 + Service
 - [ ] 後端套 `DirectorGuard` + `StageTransitionService.assertStageEquals(listNo, 'approval')` + `LIST_HISTORICAL_READONLY` Guard + `AssignmentRunGuardService.assertNoRunningRun()` + `FeatureFlagGuard`
-- [ ] 後端 stage 更新與稽核寫入於同一 transaction
+- [ ] 後端 stage 更新 + 稽核寫入 + `assignment_approval(action='approve')` 寫入於同一 transaction（v1.3：`approveToReady()` 傳入 `advanceTo()` 之 `postActionFn`，mirror reject）
+- [ ] 後端 approve commit 後 best-effort 物化 Stage 0 估算至 `ob_list_definition`（失敗僅 log、不 rollback）（v1.3）
 - [ ] 前端「核准」按鈕渲染條件
 - [ ] 前端核准前摘要面板（含完整設定）
 - [ ] 前端確認對話框
@@ -306,6 +350,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | A-2 | **核准備註欄位（comment）**：MVP 不要求填寫；保留欄位於 API request schema 但設為 optional；未來可擴充至稽核 `metadata` 欄 | [ASSUMPTION] 待 PO |
 | A-3 | **核准後通知**：核准後是否觸發 email / 站內通知通知處長，MVP 不實作；待 OQ-E07-25 決議 | [ASSUMPTION] 待 PO |
 | A-4 | **Feature Flag gating 範圍**：F086 與 F079 / F080 / F081 / F084 / F085 / F087 / F089 同屬 `ENABLE_E07_REFACTOR_PHASE3` flag gating；關閉時整批回 503 | [ASSUMPTION] 沿用 F050 v2.0 §13.2 |
+| A-5 | **`approver_name` 來源（v1.3）**：approve 寫入 `assignment_approval.approver_name`；real code reject 現以 `currentUserId` 作 placeholder，approve 沿用相同範式；真實姓名 lookup（由 `approver_id` 查 user 表）屬未來增強 | [ASSUMPTION] 沿用 F087 §6.X placeholder 範式 |
+| A-6 | **物化估算欄位與 migration（v1.3）**：`ob_list_definition` 之 Stage 0 物化估算欄位名稱、型別（建議 nullable integer）、migration 由 system-architect 規範；本 spec 僅描述「approve→ready commit 後 best-effort 寫入、清單頁讀存值」之行為與來源 | [ASSUMPTION] 待 system-architect / data-model.md |
 
 ## 13. 變更紀錄
 
@@ -315,3 +361,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | v1.1 | 2026-05-16 | **Phase 1 風險決議落地**：(1) 決議 #6：BR-8 補「`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現」；(2) 決議 #2：新增 BR-9 Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`） |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-116 + AD-E07 v3.0 一致性決議完整重建；保留 v1.0 / v1.1 所有設計決議 |
 | v1.2.1 | 2026-05-21 | **Phase 5 TDD code drift 修正（D1 follow-up）**：(1) 對齊 `AssignmentAuditLog.action` entity enum — 將 spec 內 `action = 'APPROVE'` 字串修正為 `action = 'STAGE_ADVANCE'`（AC-4 / AC-10），entity union 不含 `APPROVE`；real flow 經 `StageTransitionService.advanceTo()` 統一寫入；(2) 新增 §6.X 核准記錄之資料寫入範式：明列 real code 只單寫 audit log，**不**寫 `assignment_approval`（與 F087 拒絕之雙寫不對稱），含設計現況 vs spec 預期之差距 flag。不變動業務邏輯 / API endpoint / Transaction / Guard |
+| **v1.3** | **2026-05-26** | **【approve 雙寫 + 物化估算 / 對齊 prototype 29d + F088 v1.3】**：(1) **approve→ready 補寫 `assignment_approval(action='approve')`**：於同一 transaction mirror F087 reject 之 `postActionFn` 寫入範式（`approver_id` / `approver_name` / `approver_role` / `approved_at`），AC-4 / AC-10 由「不寫 approval 表」改為「同 transaction 雙寫」，新增 AC-11；新增 BR-11；§6.X 由「差距 flag」改寫為「已採行之雙寫範式 + 對稱性表」，resolve v1.2.1 §6.X 差距 flag；(2) **best-effort 物化 Stage 0 估算**：approve commit 後 best-effort 計算估算值並物化至 `ob_list_definition`（失敗僅 log、不 rollback approve），供 F088 清單 `estimateCases` 讀存值，新增 AC-12 + BR-12；(3) §5.1 response 新增 `approverName` / `approverRole`；(4) 新增假設 A-5（approver_name placeholder）/ A-6（物化估算欄位 + migration 待 system-architect）。不變動 entity / migration / data-model.md / architecture-spec.md（欄位細節由 system-architect 規範） |

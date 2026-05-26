@@ -6,15 +6,23 @@ source-story: US-118
 epic: E07
 module: M03d 準備完成階段
 priority: P0-MVP
-version: "1.2"
-date: 2026-05-16
+version: "1.3"
+date: 2026-05-26
 status: Draft
 ---
 
 # F088: 準備完成階段查詢摘要（部長 + 處長 + Admin 唯讀，含轄區過濾）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
+> **v1.3（2026-05-26 / prototype 29d 對齊 + 重用端點落地）**：本版本對齊 prototype `prototypes/29d-ready-summary.html` 與 real code 之實作落差，重點：
+> 1. **§5 API 重用既有端點**：清單頁與詳情頁**不使用**原規劃之專屬端點 `GET /lists/{listNo}/ready-summary`，改為**重用既有端點**：清單頁 `GET /assignment/lists`；詳情頁 `GET /assignment/ratios/dept/{listNo}` + `GET /assignment/ratios/personnel/{listNo}` + `GET /assignment/lists/{listNo}/approval-history`；Stage 0 試算 `GET /assignment/list-definitions/{listNo}/estimate`。原 5.1 / 5.2 描述保留並標記為「規劃版」，實作以 §5.0 重用端點清單為準。
+> 2. **§5 清單回應新增欄位**：`GET /assignment/lists` 每筆 list item 新增 `deptCount`（部門數）、`empCount`（業務員數）、`approvedAt`（最新核准時間）、`approverName`（核准者姓名）、`estimateCases`（物化 Stage 0 估算值，可為 null）。
+> 3. **§7 UI 對齊 29d**：清單卡片欄位改為部門數 / 業務員數 / 預估案件數 / 建立者 / 核准時間（整卡可點，按鈕「查看摘要」）；詳情頁部門比例表新增「處長」「設定者（含『部長代設定』chip）」欄。
+> 4. **新增 BR-10 / BR-11**：物化估算（estimate 於 F086 approve→ready 計算並存，best-effort，計算失敗不阻擋 approve，清單頁讀存值）；設定者 / 代設定判定（`ob_dept_pct.created_by` 解析 user 姓名與 business_role，`businessRole='director'` 視為「部長代設定」）。
+> 5. **§12 假設 A-3 標記 resolved**（物化方案取代逐筆即時 COUNT）。
+> 6. 本 v1.3 **不變動** entity / migration / data-model.md / architecture-spec.md（欄位與 migration 細節由 system-architect 規範，本 spec 僅描述行為與資料來源）；`approvedAt` / `approverName` 之資料來源依賴 F086 v1.3 補寫 `assignment_approval(action='approve')`。
+>
 > **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔，本版本依 US-118 + AD-E07 v3.0 一致性決議完整重建；Guard 統一為 `DirectorOrSectionChiefGuard`（admin / director / section_chief 三角色 + service 層 `scopeByCreator()` 過濾處長轄區）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊；保留 v1.1 之月跑前置條件聚合提示。
 
 ## Agent Loading Guide
@@ -62,22 +70,25 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 ## 4. 驗收標準
 
+> **v1.3 端點對照**：以下 AC 內 `ready-summary` 端點為原規劃版，real code 改以 §5.0 重用既有端點組裝（清單 `GET /assignment/lists`、詳情 `ratios/dept` + `ratios/personnel` + `approval-history` + `estimate`）。AC 之**行為驗收（顯示內容 / 過濾 / 權限）不變**，僅資料取得管道改為重用端點；下游 agent 以 §5.0 為實作依據。
+
 ### AC-1：準備完成名單清單頁
 
-- **Given** 部長 / Admin 進入 F077 五階段總覽頁
-- **When** 篩選顯示 `stage = 'ready'` 之名單，或點擊「準備完成」頁籤
-- **Then** 顯示所有 ready 狀態之名單清單（`list_no` / `list_nm` / 最後更新時間 / 核准者帳號 / 核准時間）
+- **Given** 部長 / Admin 進入準備完成摘要頁（sidebar「準備完成摘要」或 F077「準備完成」頁籤）
+- **When** 清單頁載入（`GET /assignment/lists?ym={ym}&stage=ready`）
+- **Then** 顯示所有 ready 狀態之名單卡片（每卡含 `listNo` / `listNm` / `ready` badge / **部門數** / **業務員數** / **預估案件數** / **建立者** / **核准時間**；卡片欄位見 §5.0.1 / §7）
 - **And** 處長進入相同頁面時，**僅顯示本轄區**（service 層依 `scopeByCreator()` 過濾）之 ready 名單
+- **And** `approvedAt` / `approverName` 來源見 §5.0.2（依賴 F086 v1.3 補寫 `assignment_approval`）；`estimateCases` 為物化值（見 BR-10），缺值顯示「—」
 
 ### AC-2：查看單一名單完整設定摘要
 
-- **Given** 部長 / 處長 / Admin 在 ready 名單清單點擊某名單
-- **When** 進入名單詳情頁（GET `/api/v1/assignment/lists/{listNo}/ready-summary`）
-- **Then** 顯示以下 4 個區塊（均為唯讀）：
+- **Given** 部長 / 處長 / Admin 在 ready 名單清單點擊某卡片（整卡可點 / 「查看摘要」按鈕）
+- **When** 進入名單詳情頁（§5.0「詳情頁」端點組裝：`GET /assignment/lists`（該筆）+ `ratios/dept/{listNo}` + `ratios/personnel/{listNo}` + `lists/{listNo}/approval-history`）
+- **Then** 顯示以下區塊（均為唯讀）：
   1. **篩選條件**：展開顯示所有篩選欄位與條件值（JSONB 轉換為可讀格式）
-  2. **部門比例**：各部門 `dept_name` + `ration`（%）表格，底部顯示加總（應 = 100%）
+  2. **部門比例**：各部門 `dept_name` + **處長** + **設定者（含『部長代設定』chip，見 BR-11）** + `ration`（%）表格，底部顯示加總（應 = 100%）
   3. **個別業務比例**：按部門分組，各業務員 `emp_nm` + `ration`（%），各部門底部顯示加總
-  4. **CR 回分開關**：顯示「啟用 / 停用」狀態
+  4. **簽核歷史**：approve / reject 紀錄時間軸（approve 列來源見 §5.0.2 / F086 v1.3）
 - **And** 頁面無任何「編輯」「修改」「儲存」等可操作按鈕或控件
 
 ### AC-3：處長僅可查看本轄區業務員比例
@@ -91,9 +102,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 - **Given** 部長或 Admin 在 ready 名單清單頁
 - **When** 頁面載入
-- **Then** 系統呼叫 GET `/api/v1/assignment/ready-summary?ym={currentWorkYm}` 取得當月 active 名單聚合狀態
-- **And** 若本月所有 active 名單（`status = 'active'` 且非 `'draft'`）均已進入 `'ready'` 狀態，頁面頂部顯示綠色提示「所有名單已就緒，可觸發月跑」
-- **And** 若仍有名單未達 ready，頁面頂部顯示警告提示「以下名單尚未就緒：{listNm}（{stage 中文}）...」，含跳轉連結至對應名單
+- **Then** 系統由 `GET /assignment/lists`（ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝當月 active 名單就緒狀態（原規劃版 `GET /assignment/ready-summary` 未實作，見 §5.0 / §5.2）
+- **And** 若本月所有 active 名單（`status = 'active'` 且非 `'draft'`）均已進入 `'ready'` 狀態，頁面頂部顯示綠色提示「本月所有名單均已 ready · 可執行月跑」
+- **And** 若仍有名單未達 ready，頁面頂部顯示警告提示「本月仍有 {N} 筆名單未進入 ready 階段，無法執行月跑」，列出未就緒名單（`{listNo}（{stage}）`）
 
 ### AC-5：唯讀保護（後端守衛）
 
@@ -111,13 +122,55 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 ### AC-7：處長跨轄區查詢防護
 
 - **Given** 處長 A 嘗試查詢處長 B 之轄區業務員比例
-- **When** GET `/api/v1/assignment/lists/{listNo}/ready-summary?deptCode={處長 B 轄區之部門}`
-- **Then** service 層 `scopeByCreator()` 過濾後，回 200 OK 但 `individualRatios.departments` 為空陣列（不洩漏他人轄區存在性）
-- **And** 篩選條件、部門比例、CR 開關仍正常顯示（這些為全名單共用資料）
+- **When** GET `/api/v1/assignment/ratios/personnel/{listNo}`（詳情頁個別業務比例端點）
+- **Then** service 層 `scopeByCreator()` 過濾後，回 200 OK 但個別業務比例之部門陣列僅含處長 A 本轄區部門（他人轄區部門不出現，不洩漏其存在性）
+- **And** 篩選條件、部門比例（`ratios/dept`）仍正常顯示（這些為全名單共用資料）
 
 ## 5. API 規格
 
-### 5.1 GET /api/v1/assignment/lists/{listNo}/ready-summary
+### 5.0 重用既有端點（v1.3 / real code 實作以此為準）
+
+> **實作落差說明**：原規劃版（§5.1 / §5.2）設計專屬端點 `GET /lists/{listNo}/ready-summary` 與 `GET /assignment/ready-summary`，但 real code **未實作**該專屬端點；前端清單頁與詳情頁改為**重用既有端點**組裝資料。§5.1 / §5.2 之 response 範例保留作為「資料概念對照（規劃版）」，下游 agent 實作時以本 §5.0 重用端點清單為準。
+
+**清單頁（模式 A · 所有 ready 名單）**
+
+| 端點 | 用途 | 授權 | 備註 |
+|---|---|---|---|
+| `GET /api/v1/assignment/lists?ym={ym}&stage=ready` | 取得 ready 名單清單（含本 spec v1.3 新增之卡片欄位，見 §5.0.1） | `DirectorOrSectionChiefGuard`（唯讀，class 級 base guard） | service 層依 `actor` 套用處長轄區過濾（沿用 F077 v1.3 BR-4） |
+
+**詳情頁（模式 B · 單一名單摘要）**
+
+| 端點 | 用途 | 授權 |
+|---|---|---|
+| `GET /api/v1/assignment/lists?ym={ym}&stage=ready`（取出對應 listNo 該筆） | 名單標題 / 篩選條件 / 卡片欄位（部門數 / 業務員數 / 預估案件數 / 建立者 / 核准資訊） | `DirectorOrSectionChiefGuard` |
+| `GET /api/v1/assignment/ratios/dept/{listNo}` | 部門比例表（含處長 / 設定者欄之來源資料，見 §7） | `DirectorOrSectionChiefGuard` |
+| `GET /api/v1/assignment/ratios/personnel/{listNo}` | 個別業務比例（按部門分組，處長視角僅本轄區） | `DirectorOrSectionChiefGuard` |
+| `GET /api/v1/assignment/lists/{listNo}/approval-history` | 簽核歷史（approve / reject 紀錄，依 `approved_at DESC`；approve 列來源見 §5.0.2 / F086 v1.3） | `DirectorOrSectionChiefGuard` |
+| `GET /api/v1/assignment/list-definitions/{listNo}/estimate` | Stage 0 即時試算（詳情頁可即時重算，與清單頁物化值並存；見 BR-10） | `DirectorGuard` |
+
+> **聚合 banner（模式 A · 部長 / Admin 月跑前置條件提示）**：原 §5.2 之 `GET /api/v1/assignment/ready-summary?ym={ym}` 聚合端點屬規劃版；real code 中月跑就緒狀態由清單回應（`GET /assignment/lists` 之 ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝，前端據以渲染綠色 / 警告 banner（UI 規格見 §7）。
+
+#### 5.0.1 GET /api/v1/assignment/lists 每筆 list item — v1.3 新增欄位
+
+> 本 spec 在既有 `GET /assignment/lists` 回應之每筆名單物件上新增以下欄位，供清單卡片（§7）渲染；其餘既有欄位（`listNo` / `listNm` / `stage` / `projectWorkym` / 篩選欄位等）不變。
+
+| 欄位 | 型別 | 來源 | 說明 |
+|---|---|---|---|
+| `deptCount` | number | `COUNT(ob_dept_pct WHERE list_no = :listNo)` | 該名單之部門數 |
+| `empCount` | number | `COUNT(ob_empl_set WHERE list_no = :listNo)` | 該名單之業務員（個別比例）數；29d 卡片標示為「業務員」 |
+| `approvedAt` | string \| null | `assignment_approval` 中最新 `action='approve'` 之 `approved_at` | 最新核准時間；ISO 8601；無核准紀錄時為 `null`（依賴 F086 v1.3 補寫，見 §5.0.2） |
+| `approverName` | string \| null | 最新 `action='approve'` 之 `approver_name` | 核准者姓名；無核准紀錄時為 `null` |
+| `estimateCases` | number \| null | `ob_list_definition` 物化估算欄位（由 F086 approve→ready 計算並存，見 BR-10） | 預估案件數；尚未物化或計算失敗時為 `null`，前端顯示「—」 |
+
+> **效能原則（A-3 resolved）**：`estimateCases` 採**物化快取**讀取存值，**不**在 `listLists` 內逐筆即時對 `ob_pool_data`（百萬列）執行 COUNT；理由：per-list COUNT × N 張卡 = N 次重查詢，違反 ETL/scale 原則。`deptCount` / `empCount` 為對小表（`ob_dept_pct` / `ob_empl_set`，每名單數十列）之 COUNT，可即時聚合。
+
+#### 5.0.2 approve 列之資料來源（依賴 F086 v1.3）
+
+> 清單卡片之 `approvedAt` / `approverName` 與詳情頁簽核歷史之 approve 列，資料來源為 `assignment_approval` 表中 `action='approve'` 之紀錄。F086 v1.2.1 之 real code **僅單寫** `assignment_audit_log`、**不寫** `assignment_approval`，故該資料來源在 F086 v1.3 補寫 `assignment_approval(action='approve')` 後方可用（見 [F086 v1.3 §6.X](F086-approve-to-ready.md)）。在 F086 v1.3 落地前，`approvedAt` / `approverName` 可能為 `null`，approve 列可能缺失。
+
+### 5.1 [規劃版 / 未實作] GET /api/v1/assignment/lists/{listNo}/ready-summary
+
+> **規劃版資料概念對照**：本端點為原始設計，real code **未實作**；保留以下 response 作為「單一名單摘要應涵蓋之資料概念」之對照。實際取得方式見 §5.0「詳情頁」端點組裝。
 
 | 屬性 | 值 |
 |---|---|
@@ -165,7 +218,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 > 處長視角下，`individualRatios.departments` 僅含本轄區部門；部長 / Admin 視角下含所有部門。
 
-### 5.2 GET /api/v1/assignment/ready-summary
+### 5.2 [規劃版 / 未實作] GET /api/v1/assignment/ready-summary
+
+> **規劃版資料概念對照**：本聚合端點為原始設計，real code **未實作**；月跑就緒狀態於實作中改由 `GET /assignment/lists`（ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝（見 §5.0）。保留以下 response 作為「聚合狀態應涵蓋之資料概念」之對照。
 
 | 屬性 | 值 |
 |---|---|
@@ -220,21 +275,29 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | BR-7 | **歷史月份允許查詢**：與 F082 / F079 寫入端點不同，本 spec 查詢端點允許歷史月份；UI 標示「歷史月份」即可 |
 | BR-8 | **CR 開關來源**：`cr_enabled` 欄位儲存位置依 F048 / US-120 規範；本 spec 僅讀取 |
 | BR-9 | **Feature Flag fallback**：本 spec 兩端點均掛 `FeatureFlagGuard`；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
+| BR-10 | **預估案件數採物化快取（v1.3 新增）**：`estimateCases` 於 F086 approve→ready 當下計算一次 Stage 0 估算並物化儲存至 `ob_list_definition`（欄位 / migration 細節由 system-architect 規範）；計算為 **best-effort**，失敗僅 log、**不**阻擋 approve（見 [F086 v1.3 §6.X](F086-approve-to-ready.md)）。清單頁 `GET /assignment/lists` **直接讀取存值**，**不**在 `listLists` 內逐筆對 `ob_pool_data` 即時 COUNT（per-list COUNT × N 卡 = N 次掃百萬列重查詢，違反 ETL/scale 原則）。物化值缺失（尚未計算 / 計算失敗）時回 `null`，前端顯示「—」。詳情頁另可呼叫 `GET /assignment/list-definitions/{listNo}/estimate` 取即時試算值。 |
+| BR-11 | **設定者 / 代設定判定（v1.3 新增）**：詳情頁部門比例表之「設定者」欄由 `ob_dept_pct.created_by` 解析：以 `created_by` 查 user 取得姓名與 `business_role`；(1) 若該設定者 `businessRole = 'director'`，視為**「部長代設定」**（29d chip：「該部門由部長代設定」，warning 色）；(2) 否則視為**「由處長設定」**（29d chip：「由 {處長姓名} 設定」，green 色）。「處長」欄顯示該部門所屬處長姓名（部門 → 處長對應沿用 F074 轄區定義）。 |
 
 ## 7. UI/UX 需求
 
-- **準備完成名單清單頁**：
-  - F077 五階段總覽頁中「準備完成」頁籤
-  - 表格欄位：`list_no` / `list_nm` / 最後更新時間 / 核准者 / 核准時間 / 「查看摘要」連結
-  - 部長 / Admin 視角：頁首顯示**月跑前置條件聚合提示 banner**：
-    - `allReady = true` → 綠色 banner「所有名單已就緒，可觸發月跑」+ 「觸發月跑」按鈕（連至 F061）
-    - `allReady = false` → 警告色 banner「以下名單尚未就緒：{listNm}（{stage 中文}）...」+ 各名單之跳轉連結
-  - 處長視角：僅顯示本轄區之 ready 名單（無聚合提示 banner）
+- **準備完成名單清單頁**（v1.3 對齊 prototype 29d 模式 A，`prototypes/29d-ready-summary.html` L168-214）：
+  - 入口：左側 sidebar「客戶名單分派」群組下「準備完成摘要」（29d L65）；亦可由 F077 五階段總覽頁「準備完成」頁籤進入
+  - **名單卡片列表**（取代原表格，依 `created_at` 倒序）：每張卡可整卡點擊進入詳情；卡片欄位對齊 29d L615-640：
+    - 上排：`listNo`（mono）+ `ready` 階段 badge（綠）
+    - 標題：`listNm`
+    - 資訊列（icon + 值）：**部門數**（`deptCount`）/ **業務員數**（`empCount`）/ **預估案件數**（`~{estimateCases}`，物化值，`null` 顯示「—」）/ **建立者**（`createdBy`）/ **核准時間**（`approvedAt`）
+    - 卡片右側按鈕「查看摘要」（eye icon）；點按鈕或整卡均進入詳情（`event.stopPropagation` 避免重複觸發）
+  - 部長 / Admin 視角：頁首顯示**月跑前置條件聚合提示 banner**（29d L171-201）：
+    - 所有 active 名單均已 ready → 綠色 banner「本月所有名單均已 ready · 可執行月跑」+「執行月跑」按鈕（連至 F061）
+    - 仍有名單未就緒 → 警告色 banner「本月仍有 {N} 筆名單未進入 ready 階段，無法執行月跑」+ 未就緒名單清單（`{listNo}（{stage}）`）；「執行月跑」按鈕 disabled
+  - 處長視角：僅顯示本轄區之 ready 名單（依 `scopeByCreator()` 過濾）；無「執行月跑」權限（按鈕不渲染）；轄區無 ready 名單時顯示空狀態卡（29d L604-611）
 - **名單詳情頁布局**：
   - 標題：「準備完成階段摘要：{listNm}（{listNo}）」
   - 唯讀提示 banner：「此名單已進入準備完成階段，所有設定為唯讀。如需修改請先 Rollback 至簽核階段（部長 / Admin）」
   - 區塊 1 — **篩選條件**：可摺疊區塊，展開顯示 JSONB 之各欄位與條件值（建議以 key-value table 或巢狀清單呈現）
-  - 區塊 2 — **部門比例**：表格，欄位：部門代號 / 部門名稱 / 比例（%）；底部「加總：100%」
+  - 區塊 2 — **部門比例**：表格（對齊 29d L299-313），欄位：**部門代號 / 部門名稱 / 處長 / 設定者 / RATION（%）**；底部「加總：100%」
+    - **處長**欄：顯示該部門所屬處長姓名（user-cog icon）
+    - **設定者**欄：依 BR-11 判定 — 「部長代設定」時顯示 warning 色 chip「該部門由部長代設定」（crown icon）；否則顯示 green 色 chip「由 {處長姓名} 設定」（user-cog icon）
   - 區塊 3 — **個別業務比例**：按部門分組之子區塊，每部門一表格，欄位：員工工號 / 員工姓名 / 比例（%）；各部門底部「加總：100%」
     - 處長視角：僅本轄區部門
     - 部長 / Admin 視角：所有部門
@@ -330,7 +393,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 |---|---|---|
 | A-1 | **CR 開關儲存位置**：本 spec 假設 `cr_enabled` 欄位存於 `ob_list_definition`；具體位置由 US-120 / F048 spec 規範 | [ASSUMPTION] 待 F048 / US-120 確認 |
 | A-2 | **`monthlyRunStatus` 計算邏輯**：本 spec 預設取「當月最新一筆 `assignment_run` 之 status」；若同月有多筆 run（如重試），以最新一筆為準；具體邏輯由 F061 spec 規範 | [ASSUMPTION] 待 F061 spec 確認 |
-| A-3 | **聚合 API 效能**：當月 active 名單預估 10~50 份，單次查詢可接受；若未來規模擴大需考慮 cache 或物化視圖 | [ASSUMPTION] 待 system-architect 評估 |
+| A-3 | **聚合 / 估算效能**：~~當月 active 名單預估 10~50 份，單次查詢可接受；若未來規模擴大需考慮 cache 或物化視圖~~ → **RESOLVED（v1.3）**：採**物化快取**方案 —`estimateCases` 於 F086 approve→ready 當下計算一次並存至 `ob_list_definition`，清單頁直接讀存值；不在 `listLists` 內逐筆對 `ob_pool_data`（百萬列）即時 COUNT。`deptCount` / `empCount` 為對小表之即時 COUNT，效能無虞。詳見 BR-10 / [F086 v1.3 §6.X](F086-approve-to-ready.md) | **RESOLVED (v1.3)** |
 | A-4 | **歷史月份是否顯示月跑前置條件 banner**：本 spec 預設僅當月顯示；歷史月份頁面不顯示聚合 banner（避免誤觸發月跑） | [ASSUMPTION] 待 UI/UX 確認 |
 
 ## 13. 變更紀錄
@@ -340,3 +403,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | v1.0 | 2026-05-15 | 初版（對應 US-118，E07 補修批次 5）：依五階段流程提供 ready 名單摘要查詢；新增 5.2 聚合端點供月跑前置條件確認；完全唯讀（不提供寫入端點）；處長轄區過濾以 `scopeByCreator()` helper 統一實作 |
 | v1.1 | 2026-05-16 | **E07 補修批次 6 修訂**：補充月跑前置條件聚合 banner UI 規格（綠色 / 警告色雙態）；新增 `monthlyRunStatus` 欄位於 5.2 response；BR-6 描述月跑狀態欄位語意 |
 | **v1.2** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-118 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 統一為 `DirectorOrSectionChiefGuard`（5.1 端點）+ `DirectorGuard`（5.2 聚合端點）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊 F074 v2.0；保留 v1.1 之月跑前置條件聚合提示 |
+| **v1.3** | **2026-05-26** | **【prototype 29d 對齊 + 重用端點落地】**：(1) 新增 §5.0 重用既有端點清單（`GET /assignment/lists` 清單 + `ratios/dept` / `ratios/personnel` / `approval-history` 詳情 + `list-definitions/{listNo}/estimate` 試算），原 §5.1 / §5.2 標記「規劃版 / 未實作」作資料概念對照；(2) §5.0.1 `GET /assignment/lists` 每筆 list item 新增 `deptCount` / `empCount` / `approvedAt` / `approverName` / `estimateCases` 5 欄位；§5.0.2 標註 approve 列依賴 F086 v1.3 補寫 `assignment_approval`；(3) §7 清單卡片改為 29d 卡片布局（部門數 / 業務員數 / 預估案件數 / 建立者 / 核准時間 + 整卡可點 + 「查看摘要」），詳情頁部門比例表新增「處長」「設定者（含『部長代設定』chip）」欄；(4) 新增 BR-10（物化估算 best-effort）+ BR-11（設定者 / 代設定判定）；(5) 假設 A-3 標記 RESOLVED（物化方案）。不變動 entity / migration / data-model.md / architecture-spec.md |
