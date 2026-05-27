@@ -458,6 +458,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('客戶資料同步')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -482,6 +483,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                    <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button class="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -518,6 +520,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('互動紀錄整合')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="測試執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled title="需先發布 Pipeline 才能啟用">
                       <i data-lucide="toggle-left" class="w-4 h-4"></i>
@@ -545,6 +548,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('客服案件同步')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-warning hover:text-orange-600" title="重新執行"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
                     <button onclick="togglePipeline(this, 'failed')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -569,6 +573,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('風控資料更新')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button onclick="togglePipeline(this, 'disabled')" class="p-1.5 hover:bg-gray-100 rounded text-gray-400" title="啟用"><i data-lucide="toggle-left" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -591,6 +596,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('會員等級計算')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -612,6 +618,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('逾期通知整合')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -633,6 +640,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('信用評分更新')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="測試執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled>
                       <i data-lucide="toggle-left" class="w-4 h-4"></i>
@@ -657,6 +665,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('合約到期提醒')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button onclick="togglePipeline(this, 'active')" class="p-1.5 hover:bg-gray-100 rounded text-success" title="停用"><i data-lucide="toggle-right" class="w-4 h-4"></i></button>
                     <a href="20-pipeline-versions.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="版本管理"><i data-lucide="git-branch" class="w-4 h-4"></i></a>
@@ -678,6 +687,7 @@
                 <td class="px-4 py-3 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <a href="18-pipeline-editor.html" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="編輯"><i data-lucide="pencil" class="w-4 h-4"></i></a>
+                    <button onclick="openEditModal('地址正規化')" class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-primary" title="設定"><i data-lucide="settings" class="w-4 h-4"></i></button>
                     <button class="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-warning" title="測試執行"><i data-lucide="play" class="w-4 h-4"></i></button>
                     <button class="p-1.5 rounded text-gray-300 cursor-not-allowed relative group" disabled>
                       <i data-lucide="toggle-left" class="w-4 h-4"></i>
@@ -779,6 +789,70 @@
       <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
         <button onclick="closeCreateModal()" class="px-4 py-2 text-sm text-gray-600 border border-border rounded-lg hover:bg-gray-50">取消</button>
         <button id="createBtn" class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>建立</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Edit Pipeline Modal (編輯 Pipeline metadata：名稱 + 排程) -->
+  <!-- ============================================================ -->
+  <div id="editModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeEditModal()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-[520px]">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+        <h2 class="text-lg font-semibold">編輯 Pipeline</h2>
+        <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="px-6 py-5 space-y-5">
+        <!-- Name -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Pipeline 名稱 <span class="text-danger">*</span></label>
+          <input type="text" id="editPipelineName" placeholder="輸入 Pipeline 名稱" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" oninput="validateEditForm()">
+          <p id="editNameError" class="text-xs text-danger mt-1 hidden">此欄位為必填</p>
+        </div>
+        <!-- Description -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">描述</label>
+          <textarea id="editPipelineDesc" placeholder="輸入 Pipeline 描述（選填）" rows="3" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"></textarea>
+        </div>
+        <!-- Schedule (Cron UI) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">排程設定（選填）</label>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <select id="editCronFreq" class="text-sm border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="updateEditCronPreview()">
+                <option value="">不設定排程</option>
+                <option value="hourly">每小時</option>
+                <option value="daily" selected>每日</option>
+                <option value="weekly">每週</option>
+                <option value="monthly">每月</option>
+              </select>
+              <div class="flex items-center gap-1">
+                <input type="number" id="editCronHour" value="2" min="0" max="23" class="w-16 text-sm border border-border rounded-lg px-2 py-2 text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="updateEditCronPreview()">
+                <span class="text-gray-500">:</span>
+                <input type="number" id="editCronMin" value="0" min="0" max="59" class="w-16 text-sm border border-border rounded-lg px-2 py-2 text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" onchange="updateEditCronPreview()">
+              </div>
+            </div>
+            <!-- Cron Manual Toggle -->
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="editCronManualToggle" class="rounded border-gray-300" onchange="toggleEditCronManual()">
+              <label for="editCronManualToggle" class="text-xs text-gray-500">手動輸入 Cron 表達式</label>
+            </div>
+            <div id="editCronManualInput" class="hidden">
+              <input type="text" placeholder="0 2 * * *" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+            </div>
+            <!-- Cron Preview -->
+            <div class="bg-gray-50 rounded-lg p-3 text-sm" id="editCronPreview">
+              <p class="text-gray-600"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1"></i>每日凌晨 02:00 UTC</p>
+              <p class="text-xs text-gray-400 mt-1">Cron: <code class="bg-gray-200 px-1 rounded">0 2 * * *</code></p>
+              <p class="text-xs text-gray-400 mt-0.5">下次執行：2026-03-21 02:00 (UTC+8)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+        <button onclick="closeEditModal()" class="px-4 py-2 text-sm text-gray-600 border border-border rounded-lg hover:bg-gray-50">取消</button>
+        <button id="editBtn" class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" onclick="closeEditModal()">儲存</button>
       </div>
     </div>
   </div>
@@ -905,6 +979,63 @@
       } else {
         btn.disabled = true;
       }
+    }
+
+    // ---- Edit Modal (編輯 Pipeline metadata：名稱 + 排程) ----
+    function openEditModal(name) {
+      // Pre-fill name from the clicked row
+      document.getElementById('editPipelineName').value = name;
+      document.getElementById('editPipelineDesc').value = '';
+      // Static demo pre-fill：示意目前排程為「每日 02:00」
+      document.getElementById('editCronFreq').value = 'daily';
+      document.getElementById('editCronHour').value = 2;
+      document.getElementById('editCronMin').value = 0;
+      document.getElementById('editCronManualToggle').checked = false;
+      document.getElementById('editCronManualInput').classList.add('hidden');
+      updateEditCronPreview();
+      validateEditForm();
+      document.getElementById('editModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeEditModal() {
+      document.getElementById('editModal').classList.add('hidden');
+    }
+    function validateEditForm() {
+      const name = document.getElementById('editPipelineName').value.trim();
+      const btn = document.getElementById('editBtn');
+      const err = document.getElementById('editNameError');
+      if (name.length > 0) {
+        btn.disabled = false;
+        err.classList.add('hidden');
+        document.getElementById('editPipelineName').classList.remove('border-danger');
+      } else {
+        btn.disabled = true;
+      }
+    }
+    function updateEditCronPreview() {
+      const freq = document.getElementById('editCronFreq').value;
+      const h = document.getElementById('editCronHour').value;
+      const m = document.getElementById('editCronMin').value;
+      let desc = '', cron = '';
+      const pad = n => String(n).padStart(2, '0');
+      switch(freq) {
+        case 'hourly': desc = `每小時 ${pad(m)} 分`; cron = `${m} * * * *`; break;
+        case 'daily': desc = `每日 ${pad(h)}:${pad(m)} UTC`; cron = `${m} ${h} * * *`; break;
+        case 'weekly': desc = `每週一 ${pad(h)}:${pad(m)} UTC`; cron = `${m} ${h} * * 1`; break;
+        case 'monthly': desc = `每月 1 日 ${pad(h)}:${pad(m)} UTC`; cron = `${m} ${h} 1 * *`; break;
+        default: desc = '不設定排程'; cron = '-';
+      }
+      const preview = document.getElementById('editCronPreview');
+      if (freq) {
+        preview.innerHTML = `<p class="text-gray-600"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1"></i>${desc}</p><p class="text-xs text-gray-400 mt-1">Cron: <code class="bg-gray-200 px-1 rounded">${cron}</code></p><p class="text-xs text-gray-400 mt-0.5">下次執行：2026-03-21 ${pad(h)}:${pad(m)} (UTC+8)</p>`;
+      } else {
+        preview.innerHTML = `<p class="text-gray-400">未設定排程</p>`;
+      }
+      lucide.createIcons();
+    }
+    function toggleEditCronManual() {
+      const manual = document.getElementById('editCronManualInput');
+      manual.classList.toggle('hidden');
     }
 
     // ---- Delete Dialog ----
