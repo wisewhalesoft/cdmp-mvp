@@ -6,15 +6,17 @@ source-story: US-135
 epic: E07
 module: M01 名單定義 / M03d 準備完成（Stage 1 精確化工程 Phase 3）
 priority: P0-MVP
-version: "1.0"
-date: 2026-05-26
+version: "1.1"
+date: 2026-05-27
 status: Draft
 ---
 
 # F092: Stage 1 完整鏈 Dry-run 精確估算（Stage 1 精確化 Phase 3）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
+> **v1.1（2026-05-27 / 同步 F091 v2.0 + F094 落點變更）**：本輪為 note-only 同步（不改 dry-run 行為契約）。因 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 之 Stage 1 篩選鏈已升級（特例 DELETE trigger SP 修正：期中機車 / 期中 / 年以上；去重上界改 `MIN(MAX(assignday), workdt−1日)`），且月跑寫入目標改為 `ob_monthly_run_result`（[F094](F094-monthly-run-result-table.md)），本 feature 之 dry-run 行為自動跟隨升級：dry-run COUNT ≡ 月跑案件數之「精確一致」基準（AC-3）已涵蓋修正後之 trigger 與去重上界。AC-2「dry-run 不寫入任何表」之表清單同步更新（月跑寫入目標已改 `ob_monthly_run_result`，dry-run 仍不寫入）。dry-run 本身仍唯讀、不寫入、不改 API 簽名。
+>
 > **v1.0（2026-05-26 / Stage 1 精確化工程 Phase 3）**：依 [architecture-spec.md AD-E07-23 v1.1](../architecture-spec.md)（全部 DP 已 Resolved）落地。將 per-list 估算（estimate / dry-run）從現行「欄位篩選版 COUNT」升級為**完整 Stage 1 篩選鏈之唯讀 dry-run COUNT**，使估算數字與正式月跑 Stage 1 嚴格一致（消除 estimate / run 雙軌 drift）。dry-run 複用 [F091](F091-stage1-complete-month-cnt-dedup-special-delete.md) 之 `Stage1FilterChain`（`dryRun: true`），不寫入任何表。
 >
 > **估算語意升級（重要 — 影響 F049 / F088）**：本 feature 改變 per-list estimate 的**定義**：
@@ -67,15 +69,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 - **Given** dry-run 模式（`{ dryRun: true }`）
 - **When** 執行 `executeStage1Chain`
-- **Then** **不寫入** `ob_pool_data_list`、**不建立** `assignment_run`、**不寫入** `assignment_run_snapshot`
-- **And** dry-run 模式之 `Stage1ChainResult.cases` 為 `undefined`（不載入百萬列至記憶體），`count` 來自 `SELECT COUNT(*)` SQL + 應用層去重 / 特殊 DELETE 修正
+- **Then** **不寫入** `ob_monthly_run_result`（v1.1：月跑寫入目標，見 [F094](F094-monthly-run-result-table.md)）、**不寫入** `ob_pool_data_list`、**不建立** `assignment_run`、**不寫入** `assignment_run_snapshot`
+- **And** dry-run 模式之 `Stage1ChainResult.cases` 為 `undefined`（不載入百萬列至記憶體），`count` 來自 `SELECT COUNT(*)` SQL + 應用層去重 / 特例 DELETE 修正
 
 ### AC-3：dry-run COUNT ≡ 正式月跑 Stage 1 案件數（同一鏈）
 
 - **Given** 同一名單、同一 `workdt`、同一 `ob_pool_data` / `ob_pool_data_list` 資料快照
 - **When** 分別執行 dry-run（`{ dryRun: true }`）與月跑（`{ dryRun: false }`）
-- **Then** dry-run `result.count` **等於**月跑寫入 `ob_pool_data_list` 之該名單案件數（精確一致，[DP-AD23-1 完整鏈精確模式](../architecture-spec.md)）
-- **And** 此一致性對所有篩選步驟成立：期別過濾、去重、特殊 DELETE、`EMPTY_CONDITIONS` skip（skip 名單 dry-run count = 0）
+- **Then** dry-run `result.count` **等於**月跑寫入 `ob_monthly_run_result`（v1.1，見 [F094](F094-monthly-run-result-table.md)）之該名單案件數（精確一致，[DP-AD23-1 完整鏈精確模式](../architecture-spec.md)）
+- **And** 此一致性對所有篩選步驟成立：期別過濾、去重（含 v2.0 上界 `MIN(MAX(assignday), workdt−1日)`）、特例 DELETE（含 v2.0 修正後 trigger：期中機車 / 期中 / 年以上）、`EMPTY_CONDITIONS` skip（skip 名單 dry-run count = 0）
 
 ### AC-4：dry-run 去重與特殊 DELETE 之精確模式（DP-AD23-1）
 

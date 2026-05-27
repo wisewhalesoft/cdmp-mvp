@@ -331,6 +331,34 @@
           </div>
         </section>
 
+        <!-- ============================================================
+             F095：系統特例排除規則（唯讀，依名單名稱讀時推導）
+             - 刻意放在「篩選條件」（使用者可編輯）之下、與其視覺區隔：
+               整塊灰底 + 鎖頭 icon + 「系統規則 · 唯讀」標籤，無任何編輯控制項
+             - 名單名稱（區塊 1 listNm）變動時即時重算（oninput 觸發 refreshSpecialRules）
+             - 落地：唯讀展示，資料源 appliedSpecialRules[]（spec F095 §5.1）
+             ============================================================ -->
+        <section class="rounded-xl border border-gray-300 bg-gray-50 overflow-hidden">
+          <div class="px-5 py-4 flex items-start gap-3 border-b border-gray-200 bg-gray-100/70">
+            <span class="w-6 h-6 rounded-full bg-gray-300 text-gray-600 inline-flex items-center justify-center shrink-0">
+              <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-semibold text-gray-700">系統特例排除規則</h2>
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-600 border border-gray-300">
+                  <i data-lucide="shield" class="w-3 h-3"></i>系統規則 · 唯讀
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1 leading-relaxed">
+                以下為系統<span class="font-medium text-gray-600">依名單名稱自動套用</span>之特例排除規則，<span class="font-medium text-gray-600">無法在此編輯</span>，會影響本名單月跑實際分派的案件數。
+                調整上方「名單名稱」可能改變觸發的規則。
+              </p>
+            </div>
+          </div>
+          <div id="specialRulesList" class="p-5 pt-4 space-y-2"></div>
+        </section>
+
         <!-- 區塊 4：CR 設定 -->
         <section class="bg-white rounded-xl border border-border p-5 space-y-3">
           <div class="flex items-center gap-2">
@@ -533,7 +561,7 @@
     const LISTS = {
       // ① 雙條件 + draft + categorical/numeric/date 三種型態（v2.1.1：cardType 改 'S5' 對齊 ob_card_type）
       'OB202605001': {
-        listNo: 'OB202605001', listNm: '2026-05 業務一部 主力催收',
+        listNo: 'OB202605001', listNm: '2026-05 機車期中主力催收',
         stage: 'draft', createdBy: '王部長', createdAt: '2026-05-02',
         cardType: 'S5', cr: true,
         listPeriodStart: 1, listPeriodEnd: 6, listInterval: 1,
@@ -613,6 +641,64 @@
     };
 
     // ============================================================
+    // F095：系統特例排除規則 — 讀時推導（對齊 spec §5.2 偽碼 / AD-E07-26 §26.5）
+    // 純前端 mock；落地後由後端 deriveAppliedSpecialRules(list_nm) 回傳 appliedSpecialRules[]，
+    // 與 F091 月跑 applyListNmSpecialDeletes 共用同一 trigger pure utility（保證 UI 與實際一致）。
+    // ============================================================
+    function deriveAppliedSpecialRules(listNm) {
+      const nm = listNm || '';
+      const rules = [];
+      rules.push({ ruleId: 'R-FRAUD-WHITEBOARD', ruleName: '詐騙白牌排除', isSystemMandatory: true,
+        exclusionDescription: '排除名單類別為期中（list_type=01）且規格名稱含「白牌」之案件' });
+      if (nm.includes('期中') && nm.includes('機車')) rules.push({ ruleId: 'R-PERIOD-MOTORCYCLE', ruleName: '機車期中滿期前3個月排除', isSystemMandatory: false,
+        exclusionDescription: '排除已繳期數接近總期數減3（接近滿期）或申請號以 T／Y 開頭之案件' });
+      if (nm.includes('期中')) rules.push({ ruleId: 'R-PERIOD-XIAOZI', ruleName: '期中小資最後七期排除', isSystemMandatory: false,
+        exclusionDescription: '排除已繳期數超過總期數減8（最後七期）且規格名稱含「小資」之案件' });
+      if (nm.includes('年以上')) rules.push({ ruleId: 'R-YEAR-ABOVE', ruleName: '年以上車齡超15年排除', isSystemMandatory: false,
+        exclusionDescription: '排除出廠年份距今超過 15 年之案件' });
+      return rules;
+    }
+    function renderSpecialRules(listNm) {
+      const box = document.getElementById('specialRulesList');
+      if (!box) return;
+      const rules = deriveAppliedSpecialRules(listNm);
+      const hasNamedRule = rules.some(r => !r.isSystemMandatory);
+      let html = '';
+      if (!hasNamedRule) {
+        html += `<div class="rounded-md border border-dashed border-gray-300 bg-white/60 px-3 py-2.5 flex items-center gap-2 text-xs text-gray-500">
+          <i data-lucide="info" class="w-4 h-4 text-gray-400 shrink-0"></i>
+          此名單名稱未觸發其他具名特例規則，僅套用下方通用系統規則（詐騙白牌排除）。
+        </div>`;
+      }
+      html += rules.map(r => {
+        const mandatory = r.isSystemMandatory;
+        const tagHtml = mandatory
+          ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-600 border border-gray-300"><i data-lucide="lock" class="w-3 h-3"></i>系統強制 · 全名單套用</span>`
+          : `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><i data-lucide="tag" class="w-3 h-3"></i>依名單名稱觸發</span>`;
+        return `
+          <div class="rounded-lg border ${mandatory ? 'border-gray-300' : 'border-amber-100'} bg-white p-3">
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="${mandatory ? 'shield-alert' : 'filter-x'}" class="w-4 h-4 mt-0.5 shrink-0 ${mandatory ? 'text-gray-500' : 'text-amber-500'}"></i>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-semibold text-gray-800">${r.ruleName}</span>
+                  ${tagHtml}
+                </div>
+                <p class="text-xs text-gray-500 mt-1 leading-relaxed">${r.exclusionDescription}</p>
+                <code class="text-[10px] font-mono text-gray-400 mt-1 inline-block">${r.ruleId}</code>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+      box.innerHTML = html;
+      lucide.createIcons();
+    }
+    function refreshSpecialRules() {
+      const nm = (document.getElementById('listNm') || {}).value || '';
+      renderSpecialRules(nm);
+    }
+
+    // ============================================================
     // 狀態
     // ============================================================
     let currentList = null;
@@ -660,6 +746,7 @@
       document.getElementById('metaCreatedAt').textContent = L.createdAt;
       document.getElementById('listNm').value = L.listNm;
       document.getElementById('nameCount').textContent = L.listNm.length;
+      renderSpecialRules(L.listNm);  // F095：依名單名稱推導系統特例排除規則（唯讀）
       // v2.1.1 / US-127 / AC-16：依名單現存 cardType 動態 build select options
       renderCardTypeOptions(L.cardType || '');
       document.getElementById('listPeriodStart').value = L.listPeriodStart;
@@ -954,6 +1041,7 @@
       const v = document.getElementById('listNm').value.trim();
       document.getElementById('nameCount').textContent = v.length;
       document.getElementById('nameError').classList.add('hidden');
+      refreshSpecialRules();  // F095：名單名稱變動即時重算觸發的特例規則
     }
     function onPeriodChange() {
       const s = document.getElementById('listPeriodStart').value;

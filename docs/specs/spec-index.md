@@ -1,13 +1,21 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.5.1"
-date: 2026-05-26
+version: "3.6"
+date: 2026-05-27
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.6 / 2026-05-27 / ob_pool_data_list 單源化（AD-E07-25）+ 特例規則 SP 落差修正（AD-E07-26）— architecture-spec v2.18**：依 system-architect AD-E07-25 + AD-E07-26（全 DP Resolved）新建 3 個 feature + 升版 3 個既有 feature。本輪變更檔案：
+> - **新建 v1.0**：[F094-monthly-run-result-table.md](features/F094-monthly-run-result-table.md)（單源化 Phase A — 月跑結果表 `ob_monthly_run_result` + pipeline 落點切換，migration `1711360000292`）、[F095-applied-special-rules-readonly.md](features/F095-applied-special-rules-readonly.md)（特例規則前端唯讀 `appliedSpecialRules[]` 讀時推導，無新 DB 欄位）、[F096-pooldata-whitelist-list-type-cleanup.md](features/F096-pooldata-whitelist-list-type-cleanup.md)（白名單 `list_type` 停用，migration/seed `1711360000293`）
+> - **升 v2.0**：[F091](features/F091-stage1-complete-month-cnt-dedup-special-delete.md)（**high-severity bug fix**：特例 DELETE trigger 由 mojibake 誤判「中結強案/中結/年資+滿」修正為 SP 正確版「**期中機車/期中/年以上+小資/白牌**」；去重上界 `MIN(MAX(assignday), workdt−1日)`；year_produ 補 `parseInt`；月跑寫入目標改 `ob_monthly_run_result`）、[F090](features/F090-obpooldata-list-etl.md)（單源化：`data_source` 值域 `'etl_load'`、月跑不再寫本表）
+> - **升 v1.1**（note-only 同步）：[F092](features/F092-stage1-dry-run-estimate.md)（dry-run 同步 F091 v2.0 修正後 trigger / 去重上界 + 月跑落點 `ob_monthly_run_result`；唯讀行為不變）
+> - **權威來源**：[architecture-spec.md AD-E07-25 / AD-E07-26 v2.18](architecture-spec.md)（system-architect 維護，全 DP Resolved）；[data-model.md v1.15](data-model.md)（`ob_monthly_run_result` 新表 + `ob_pool_data_list.data_source` 值域 `'etl_load'` 已由 system-architect 同步）；`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`（**已 UTF-16LE 解碼驗證** SP 真實 trigger）
+> - **⚠️ Production 影響（Phase A 群組）**：F091 v2.0（特例修正）+ F094（落點切換）+ F095（前端唯讀）**同批 deploy、無 feature flag、deploy 後直接生效**（DP-AD23-2 / DP-AD26-1）。F091 v2.0 之 trigger bug fix 將顯著改變各類名單案件數（含「中結/強案/年資」名單案件數增加、含「期中機車/期中小資/年以上」名單案件數減少），**須 deploy 前業務知會 + 各類名單案件數差異驗收**。F090（ETL）/ F092（dry-run）/ F096（白名單清理）不改月跑案件數。
+> - **刻意未動**：architecture-spec.md / data-model.md（system-architect 範疇，本輪 AD-E07-25/26 + `ob_monthly_run_result` 已由其寫入）；code / test（tdd-implementation 範疇）；F095 之名單詳情頁唯讀區塊**無對應 prototype**（`27-list-definition.html` / `27b-list-edit-draft.html` 待 UI/UX 補，見 F095 §7）；既有名單 `condition_payload` 中 `list_type` 條件之 backfill 清理（F096 OQ-WL-01，本輪不處理）
+>
 > **v3.5.1 / 2026-05-26 / F092 落地後 estimate 語意漂移同步（F049 → v1.4、F088 → v1.3.1）+ F090 歷史限定欄位修正**：F092 已落地（estimate 改為完整 `Stage1FilterChain` dry-run，≡ 月跑），本輪同步既有 spec 之 estimate 語意文字漂移（只動 docs，不碰 code/test）：
 > - **F049 升 v1.4**：[F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) BR-6 由「估算為條件符合上界」改為「**完整 Stage 1 預估（≡ 月跑分派案件數）**」（已含 month_cnt + 去重 + 特殊 DELETE）；AC-4 / §5.2 對齊（複用 `executeStage1Chain({dryRun:true})`）；保留 BR-1（最終以月跑為準）；交叉引用 F091 / F092 / AD-E07-23。
 > - **F088 升 v1.3.1**：[F088-ready-stage-summary.md](features/F088-ready-stage-summary.md) BR-10 + §5 欄位表 `estimateCases` 補註物化 COUNT 來源自 F092 起升級為完整鏈 dry-run（物化機制不變）。
@@ -70,9 +78,9 @@ status: Draft
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 41 |
+| Feature 文件（E07） | 44 |
 | Mermaid 圖表 | 39 |
-| **總計** | **134** |
+| **總計** | **137** |
 
 ---
 
@@ -255,15 +263,18 @@ status: Draft
 | F063 | [F063-view-run-result-summary.md](features/F063-view-run-result-summary.md) | 查看分派結果摘要（部門偏差 / 等級分佈） | US-083 | P0-MVP |
 | F064 | [F064-export-assignment-result.md](features/F064-export-assignment-result.md) | 匯出分派結果（Excel / CSV streaming） | US-084 | P0-MVP |
 
-#### M04 — Stage 1 精確化工程（三階段交付，AD-E07-21~24 / 2026-05-26）
+#### M04 — Stage 1 精確化 / ob_pool_data_list 單源化 + 特例規則 SP 修正工程（AD-E07-21~26）
 
-> 依 [architecture-spec.md AD-E07-21~24 v1.1](architecture-spec.md)（全部 DP Resolved）落地。三階段相依序列 F090 → F091 → F092。**⚠️ F091（Phase 2）為唯一改變 production 月跑分派案件數之階段，無 feature flag、deploy 後直接生效（DP-AD23-2），須 deploy 前業務知會。**
+> **v3.6 / 2026-05-27 / AD-E07-25 + AD-E07-26（architecture-spec v2.18）**：在原 Stage 1 精確化三階段（F090~F092）之上，依 AD-E07-25（資料單源化）+ AD-E07-26（特例規則 SP 落差修正）新增 F094~F096 並升版 F090/F091/F092。**⚠️ Phase A 群組（F091 v2.0 + F094 + F095）同批 deploy，無 feature flag、deploy 後直接生效（DP-AD23-2 / DP-AD26-1），改變 production 月跑各類名單案件數，須 deploy 前業務知會 + 案件數差異驗收。** 詳見各 feature §13。
 
-| Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
+| Feature ID | 文件 | 標題 | 來源 | 優先級 |
 |------------|------|------|-----------|--------|
-| F090 | [F090-obpooldata-list-etl.md](features/F090-obpooldata-list-etl.md) | **Phase 1 — OBPOOLDATA_LIST ETL 載入與 `data_source` 標記**（E07-OBPOOLDATA_LIST-Extract/-Load 雙層 ETL + migration `1711360000291-AddObPoolDataListDataSource`；歷史限定 `PROJECT_WORKYM < 本月`；不影響 production 月跑） | US-133 | P0-MVP（**v1.0 新增**）|
-| F091 | [F091-stage1-complete-month-cnt-dedup-special-delete.md](features/F091-stage1-complete-month-cnt-dedup-special-delete.md) | **Phase 2 — Stage 1 補完整**（MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE 忠實複刻 SP；封裝 `Stage1FilterChain`；**⚠️ 改變 production 月跑案件數、無 flag 直接生效**） | US-134 | P0-MVP（**v1.0 新增**）|
-| F092 | [F092-stage1-dry-run-estimate.md](features/F092-stage1-dry-run-estimate.md) | **Phase 3 — Stage 1 完整鏈 Dry-run 精確估算**（per-list estimate / F088 物化升級為完整鏈唯讀 dry-run COUNT ≡ 月跑；影響 F049 BR-6 / F088 estimateCases 語意，不寫表） | US-135 | P0-MVP（**v1.0 新增**）|
+| F090 | [F090-obpooldata-list-etl.md](features/F090-obpooldata-list-etl.md) | **Phase 1 + Phase B 單源化 — OBPOOLDATA_LIST ETL 載入 + `data_source` 單源化**（雙層 ETL；**v2.0**：`data_source` 值域單一化 `'etl_load'`、月跑改寫 `ob_monthly_run_result` 不再寫本表、Load 前置 DELETE 可全量；歷史限定 `ASSIGNDAY < 本月第一天`；ETL 不影響 production 月跑案件數） | AD-E07-25 / US-133 | P0-MVP（**v2.0**）|
+| F091 | [F091-stage1-complete-month-cnt-dedup-special-delete.md](features/F091-stage1-complete-month-cnt-dedup-special-delete.md) | **Phase 2 + Phase A 特例修正 — Stage 1 補完整 + 特例 DELETE SP 修正**（MONTH_CNT 期別 + 近 3 月去重 + 特例 DELETE；**v2.0 high-severity bug fix**：trigger 由誤判「中結強案/中結/年資+滿」修正為 SP 正確版「**期中機車/期中/年以上+小資/白牌**」、去重上界改 `MIN(MAX(assignday), workdt−1日)`、year_produ 補 `parseInt`；`Stage1FilterChain`；**⚠️ 改變 production 月跑各類名單案件數、無 flag 直接生效**） | AD-E07-22/25/26 / US-134 | P0-MVP（**v2.0**）|
+| F092 | [F092-stage1-dry-run-estimate.md](features/F092-stage1-dry-run-estimate.md) | **Phase 3 — Stage 1 完整鏈 Dry-run 精確估算**（per-list estimate / F088 物化升級為完整鏈唯讀 dry-run COUNT ≡ 月跑；**v1.1**：同步 F091 v2.0 修正後 trigger / 去重上界 + 月跑落點 `ob_monthly_run_result`；唯讀不寫表） | AD-E07-23 / US-135 | P0-MVP（**v1.1**）|
+| **F094** | [**F094-monthly-run-result-table.md**](features/F094-monthly-run-result-table.md) | **單源化 Phase A — 月跑分派結果表 `ob_monthly_run_result`**（migration `1711360000292`；PK=run_id+list_no+orgno+appl_no、FK→assignment_run CASCADE、nullable assignday；月跑 Stage 1 寫入 + Stage 3/4 讀取由 `ob_pool_data_list` 切換至本表；同一 PR 完整切換；snapshot 雙軌短期保留；**⚠️ Phase A 同批 deploy，結構切換不改案件數但須完整回歸**） | AD-E07-25 | P0-MVP（**v1.0 新增**）|
+| **F095** | [**F095-applied-special-rules-readonly.md**](features/F095-applied-special-rules-readonly.md) | **特例規則前端唯讀呈現 — `appliedSpecialRules[]`**（名單詳情 API 讀時推導 list_nm → 規則清單，**無新 DB 欄位**；前端唯讀資訊區塊「此名單套用之系統特例規則」；trigger 判斷與 F091 v2.0 共用 pure utility；**prototype 落差待補**；Phase A 同批 deploy，唯讀不改月跑） | AD-E07-26 §26.5 | **P1**（**v1.0 新增**）|
+| **F096** | [**F096-pooldata-whitelist-list-type-cleanup.md**](features/F096-pooldata-whitelist-list-type-cleanup.md) | **白名單清理 Phase B — `pooldata_field_whitelist.list_type` 停用**（migration/seed `1711360000293` 設 `is_active=false`；available-columns dropdown 不再顯示；澄清 `case_status → ob_pool_data.list_type` 為唯一期別篩選路徑；不改月跑案件數） | AD-E07-26 §26.7 | **P1**（**v1.0 新增**）|
 
 #### M05 快照歷史
 

@@ -403,11 +403,43 @@
     </div>
     <div class="flex-1 overflow-y-auto px-5 py-4">
       <div id="drawer-panel-conditions" class="drawer-tab-panel is-active">
+        <!-- 使用者自設篩選條件（可編輯來源：condition_payload）-->
+        <div class="flex items-center gap-2 mb-2">
+          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-primary"></i>
+          <h4 class="text-xs font-semibold text-gray-700">使用者自設篩選條件</h4>
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+            <i data-lucide="pencil" class="w-2.5 h-2.5"></i>建立 / 編輯階段可調整
+          </span>
+        </div>
         <p class="text-xs text-gray-500 mb-3">完整條件列表（含每個 condition 的 field、type、values / range）</p>
         <div id="drawerConditionsList" class="space-y-2"></div>
         <div class="mt-4 p-3 rounded-md bg-gray-50 border border-border text-[11px] text-gray-500">
           <span class="font-semibold">logic：</span><span id="drawerLogic" class="font-mono">AND</span>
           <span class="ml-3 font-semibold">condition_payload 來源：</span><span id="drawerPayloadSource" class="font-mono text-primary">condition_payload</span>
+        </div>
+
+        <!-- ============================================================
+             F095：系統特例排除規則（唯讀，依 list_nm 讀時推導）
+             - 與上方「使用者自設篩選條件」視覺區隔：灰底卡 + 鎖頭 + 「系統規則」標籤
+             - 純展示：無任何編輯 / 開關 / 刪除控制項
+             - 落地：full-snapshot response 補 appliedSpecialRules[]（spec F095 §5.0）
+             ============================================================ -->
+        <div class="mt-5 rounded-lg border border-gray-300 bg-gray-50 overflow-hidden">
+          <div class="px-4 py-3 bg-gray-100/80 border-b border-gray-200 flex items-start gap-2.5">
+            <div class="w-7 h-7 rounded-md bg-gray-200 flex items-center justify-center shrink-0">
+              <i data-lucide="lock" class="w-4 h-4 text-gray-500"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm font-semibold text-gray-700">系統特例排除規則</h4>
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-200 text-gray-600 border border-gray-300">
+                  <i data-lucide="shield" class="w-2.5 h-2.5"></i>系統規則 · 唯讀
+                </span>
+              </div>
+              <p class="text-[11px] text-gray-500 mt-1 leading-relaxed">以下為系統依名單名稱自動套用之特例排除規則，<span class="text-gray-600 font-medium">不可編輯</span>，影響本名單月跑實際分派的案件數。</p>
+            </div>
+          </div>
+          <div id="drawerSpecialRulesList" class="p-3 space-y-2"></div>
         </div>
       </div>
       <div id="drawer-panel-dept" class="drawer-tab-panel">
@@ -589,13 +621,13 @@
     const MOCK_LISTS = [
       { listNo: 'OB202605001', listNm: '2026-05 業務一部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-02', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:3 }], logic:'AND' } },
-      { listNo: 'OB202605002', listNm: '2026-05 業務二部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-03', ym: '2026-05',
-        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:4 }], logic:'AND' } },
+      { listNo: 'OB202605002', listNm: '2026-05 機車期中滿期前3月',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-03', ym: '2026-05',
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
       { listNo: 'OB202605003', listNm: '2026-05 業務三部 信貸催收',  stage: 'dept_ratio',  cr: true,  createdBy: '李處長',  createdAt: '2026-05-04', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
       { listNo: 'OB202605004', listNm: '2026-05 業務一部 房貸專案',  stage: 'dept_ratio',  cr: false, createdBy: '王部長',  createdAt: '2026-05-05', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
-      { listNo: 'OB202605005', listNm: '2026-05 業務二部 高風險名單', stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-05-06', ym: '2026-05',
+      { listNo: 'OB202605005', listNm: '2026-05 汽車期中小資專案', stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-05-06', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
       { listNo: 'OB202605006', listNm: '2026-05 業務一部 重點戶',     stage: 'personnel_ratio', cr: true,  createdBy: '王部長',  createdAt: '2026-05-07', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
@@ -607,7 +639,7 @@
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['02'] }], logic:'AND' } },
       { listNo: 'OB202605010', listNm: '2026-05 業務二部 標準名單',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-09', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
-      { listNo: 'OB202605011', listNm: '2026-05 業務三部 房貸標準',   stage: 'ready',       cr: true,  createdBy: '李處長',  createdAt: '2026-05-10', ym: '2026-05',
+      { listNo: 'OB202605011', listNm: '2026-05 車齡10年以上名單',   stage: 'ready',       cr: true,  createdBy: '李處長',  createdAt: '2026-05-10', ym: '2026-05',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
       { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收',   stage: 'ready', cr: true, createdBy: '王部長', createdAt: '2026-04-02', ym: '2026-04',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }], logic:'AND' } },
@@ -625,6 +657,79 @@
       ready:       { label: '準備完成', bg: '#DCFCE7', fg: '#15803D', solid: '#22C55E', icon: 'check-circle-2',  colHead: '#F0FDF4', colBorder: '#BBF7D0' }
     };
     const STAGES_ORDER = ['draft','dept_ratio','personnel_ratio','approval','ready'];
+
+    // ============================================================
+    // F095：系統特例排除規則 — 讀時推導（對齊 spec §5.2 偽碼 / AD-E07-26 §26.5）
+    // 純前端 mock；落地後由後端 deriveAppliedSpecialRules(list_nm) 回傳 appliedSpecialRules[]，
+    // 與 F091 月跑 applyListNmSpecialDeletes 共用同一 trigger pure utility（保證 UI 與實際一致）。
+    // ============================================================
+    function deriveAppliedSpecialRules(listNm) {
+      const nm = listNm || '';
+      const rules = [];
+      // R-FRAUD-WHITEBOARD：無條件套用（所有名單）
+      rules.push({
+        ruleId: 'R-FRAUD-WHITEBOARD',
+        ruleName: '詐騙白牌排除',
+        isSystemMandatory: true,
+        exclusionDescription: '排除名單類別為期中（list_type=01）且規格名稱含「白牌」之案件'
+      });
+      if (nm.includes('期中') && nm.includes('機車')) rules.push({
+        ruleId: 'R-PERIOD-MOTORCYCLE',
+        ruleName: '機車期中滿期前3個月排除',
+        isSystemMandatory: false,
+        exclusionDescription: '排除已繳期數接近總期數減3（接近滿期）或申請號以 T／Y 開頭之案件'
+      });
+      if (nm.includes('期中')) rules.push({
+        ruleId: 'R-PERIOD-XIAOZI',
+        ruleName: '期中小資最後七期排除',
+        isSystemMandatory: false,
+        exclusionDescription: '排除已繳期數超過總期數減8（最後七期）且規格名稱含「小資」之案件'
+      });
+      if (nm.includes('年以上')) rules.push({
+        ruleId: 'R-YEAR-ABOVE',
+        ruleName: '年以上車齡超15年排除',
+        isSystemMandatory: false,
+        exclusionDescription: '排除出廠年份距今超過 15 年之案件'
+      });
+      return rules;
+    }
+
+    function renderSpecialRules(listNm) {
+      const box = document.getElementById('drawerSpecialRulesList');
+      if (!box) return;
+      const rules = deriveAppliedSpecialRules(listNm);
+      // 是否有具名（list_nm 觸發）規則 — 用於空態提示文案（AC-5）
+      const hasNamedRule = rules.some(r => !r.isSystemMandatory);
+      let html = '';
+      if (!hasNamedRule) {
+        html += `<div class="rounded-md border border-dashed border-gray-300 bg-white/60 px-3 py-2 flex items-center gap-2 text-[11px] text-gray-500">
+          <i data-lucide="info" class="w-3.5 h-3.5 text-gray-400 shrink-0"></i>
+          此名單名稱未觸發其他具名特例規則，僅套用下方通用系統規則。
+        </div>`;
+      }
+      html += rules.map(r => {
+        const mandatory = r.isSystemMandatory;
+        const tagHtml = mandatory
+          ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-200 text-gray-600 border border-gray-300"><i data-lucide="lock" class="w-2.5 h-2.5"></i>系統強制 · 全名單套用</span>`
+          : `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><i data-lucide="tag" class="w-2.5 h-2.5"></i>依名單名稱觸發</span>`;
+        return `
+          <div class="rounded-md border ${mandatory ? 'border-gray-300 bg-white' : 'border-amber-100 bg-white'} p-2.5">
+            <div class="flex items-start gap-2">
+              <i data-lucide="${mandatory ? 'shield-alert' : 'filter-x'}" class="w-4 h-4 mt-0.5 shrink-0 ${mandatory ? 'text-gray-500' : 'text-amber-500'}"></i>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-semibold text-gray-800">${r.ruleName}</span>
+                  ${tagHtml}
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1 leading-relaxed">${r.exclusionDescription}</p>
+                <code class="text-[10px] font-mono text-gray-400 mt-1 inline-block">${r.ruleId}</code>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+      box.innerHTML = html;
+      lucide.createIcons();
+    }
 
     function initStageBadge(stage) {
       const m = STAGE_META[stage];
@@ -930,6 +1035,7 @@
       document.getElementById('drawerMeta').textContent = `建立者：${row.createdBy} · 建立日：${row.createdAt} · 月份：${row.ym}`;
       document.getElementById('drawerApiHint').textContent = listNo;
       renderDrawerConditions(row);
+      renderSpecialRules(row.listNm);  // F095：依 list_nm 推導系統特例排除規則（唯讀）
       renderDrawerDept(row);
       renderDrawerIndiv(row);
       renderDrawerHistory(row);

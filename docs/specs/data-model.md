@@ -1080,11 +1080,57 @@ PK：`(list_no, orgno, appl_no)`
 | is_cr | VARCHAR(1) | NULL | IS_CR | 是否為前業務員管理案件 |
 | cr_id | VARCHAR(20) | NULL | CR_ID | 前業務員工號 |
 | cr_nm | VARCHAR(50) | NULL | CR_NM | 前業務員姓名 |
-| data_source | VARCHAR(20) | NULL | —（本系統新增）| **資料來源標記**（AD-E07-21 DP-AD21-2 方案 A）。值域：`'etl_legacy'`（由 `E07-OBPOOLDATA_LIST-Load` ETL 載入的 legacy 派案歷史）/ `'monthly_run'`（由本系統月跑 Stage 1 寫入的本月分派結果）/ NULL（migration 前既有資料，語意同 `'monthly_run'`）。非 legacy 欄位，OBPOOLDATA_LIST 來源無此欄位；migration `1711360000291-AddObPoolDataListDataSource` 新增。 |
+| data_source | VARCHAR(20) | NULL | —（本系統新增）| **資料來源標記**（AD-E07-21 DP-AD21-2 方案 A；AD-E07-25 DP-AD25-1 更新）。**AD-E07-25 Phase A 後值域**：`'etl_load'`（由 `E07-OBPOOLDATA_LIST-Load` ETL 載入的 legacy 派案歷史，單一值）。**舊值域（廢止）**：`'etl_legacy'` / `'monthly_run'`（Phase A deploy 前存在）/ NULL（migration 前既有資料）。月跑提案結果自 Phase A 起改寫入 `ob_monthly_run_result`，不再寫入本表。非 legacy 欄位，OBPOOLDATA_LIST 來源無此欄位；migration `1711360000291-AddObPoolDataListDataSource` 新增。 |
 
 > 其餘業務欄位（貸款明細、車輛資訊、業務員資訊等）完整映射 OBPOOLDATA_LIST，命名規範同上（snake_case，nvarchar → VARCHAR/TEXT，datetime → TIMESTAMP，numeric → NUMERIC，money → NUMERIC(19,4)）。
 
 **索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, emplid)`、`(list_no, dept_id)`、`(data_source)`（ETL DELETE 與路由用）、`(assignday)`（近 3 個月去重視窗查詢用，建議加 WHERE assignday IS NOT NULL，AD-E07-22 §22.3）
+
+> **AD-E07-25（2026-05-27）**：`data_source` 值域自 AD-E07-25 Phase A 起改為 `'etl_load'`（單一值）。`'etl_legacy'` / `'monthly_run'` 為舊值域，Phase A deploy 後廢止。月跑分派提案改寫入 `ob_monthly_run_result`（見下節）。
+
+---
+
+#### ob_monthly_run_result（月跑分派結果 — 本系統新增）
+
+**新建表（migration `1711360000292-CreateObMonthlyRunResult`）**。承載每次月跑對各名單的分派提案結果，為 AD-E07-25 單源化設計的核心產出。
+
+PK：`(run_id, list_no, orgno, appl_no)`
+
+| 欄位名 | 型別 | NULL | 說明 |
+|--------|------|------|------|
+| run_id | UUID | NOT NULL | **PK**；FK → `assignment_run.run_id`（ON DELETE CASCADE） |
+| list_no | VARCHAR(100) | NOT NULL | **PK**；名單編號 |
+| orgno | VARCHAR(2) | NOT NULL | **PK**；機構代碼 |
+| appl_no | VARCHAR(10) | NOT NULL | **PK**；案件申請號 |
+| custo_no | VARCHAR(11) | NULL | 客戶號 |
+| settle_src | TEXT | NOT NULL DEFAULT 'N' | 結案來源標記（Stage 1 計算結果） |
+| score | INTEGER | NULL | Stage 2 計分結果 |
+| card_level | VARCHAR(1) | NULL | Stage 2 卡片等級 |
+| tier_level | VARCHAR(5) | NULL | Stage 2 分層等級 |
+| is_cr | VARCHAR(1) | NULL | Stage 3：是否為前業務員管理案件 |
+| cr_id | VARCHAR(20) | NULL | Stage 3：前業務員工號 |
+| cr_nm | VARCHAR(50) | NULL | Stage 3：前業務員姓名 |
+| dept_id | VARCHAR(6) | NULL | Stage 4：分派部門代碼 |
+| emplid | VARCHAR(10) | NULL | Stage 4：分派業務員工號 |
+| emplid_deptid | VARCHAR(6) | NULL | Stage 4：業務員所屬部門代碼 |
+| result_status | VARCHAR(20) | NULL DEFAULT 'PENDING' | 業務系統回填狀態（`'PENDING'` / `'SUCCESS'` / `'FAILED'`） |
+| assignday | VARCHAR(100) | NULL | Forward-compat 欄位：業務派案日期（供業務查詢派案紀錄用，DP-AD25-6） |
+| created_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 建立時間 |
+| updated_at | TIMESTAMP | NOT NULL DEFAULT CURRENT_TIMESTAMP | 更新時間 |
+
+**外鍵**：`fk_omrr_run` → `assignment_run(run_id)` ON DELETE CASCADE
+
+**索引**：
+- `idx_omrr_run_id`：`(run_id)`（月跑結果整批查詢）
+- `idx_omrr_list_run`：`(list_no, run_id)`（按名單查詢某次月跑結果）
+- `idx_omrr_custo_no`：`(custo_no) WHERE custo_no IS NOT NULL`（客戶號查詢）
+- `idx_omrr_assignday`：`(assignday) WHERE assignday IS NOT NULL`（派案日期查詢）
+
+**設計原則**：
+- 僅保留 Stage 2~4 計算結果欄位，不複製 `ob_pool_data_list` 的全部業務欄位（DP-AD25-2 方案 A）
+- Stage 2 計算所需業務欄位（spec_name、year_produ、payt_term 等）在計算時由 `ob_pool_data` JOIN 取得
+- `run_id` FK + CASCADE DELETE：月跑 run 刪除時自動清除對應所有結果列
+- `assignment_run_snapshot` type=result 短期雙軌保留（DP-AD25-3），`collectCrCandidates()` 短期維持讀 snapshot
 
 ---
 
