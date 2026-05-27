@@ -18,6 +18,7 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { MonthPicker } from '@/components/e07/MonthPicker';
+import { useAssignmentWorkYm } from '@/contexts/assignment-work-ym-context';
 import { StageBadge } from '@/components/e07/StageBadge';
 import {
   listLists,
@@ -44,18 +45,17 @@ import { StageBreadcrumb } from './_components/stage-breadcrumb';
 function toYYYYMMRaw(yyyyMm: string): string {
   return yyyyMm.replace('-', '');
 }
-
-function currentYmDisplay(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+function toHyphen(yyyymm: string): string {
+  if (!yyyymm || yyyymm.length < 6) return '';
+  return `${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`;
 }
 
 export function ReadySummaryListPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [ym, setYm] = useState(currentYmDisplay());
+  // F097 / US-137：分派作業月份取自共享 Context（target_work_ym）
+  const { currentWorkYm, targetWorkYm, setTargetWorkYm } = useAssignmentWorkYm();
+  const ym = toHyphen(targetWorkYm);
   const [loading, setLoading] = useState(true);
   const [lists, setLists] = useState<AssignmentListItem[]>([]);
 
@@ -63,6 +63,7 @@ export function ReadySummaryListPage() {
   const isSectionChief = businessRole === 'section_chief';
 
   useEffect(() => {
+    if (!ym) return;
     let aborted = false;
     void (async () => {
       setLoading(true);
@@ -111,7 +112,23 @@ export function ReadySummaryListPage() {
           <StageBadge stage="ready" />
         </div>
       }
-      actions={<MonthPicker value={ym} onChange={setYm} />}
+      actions={
+        ym ? (
+          <div
+            className="flex items-center gap-2"
+            data-testid="ready-summary-month-picker"
+          >
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              分派作業月份
+            </span>
+            <MonthPicker
+              value={ym}
+              currentYm={toHyphen(currentWorkYm) || ym}
+              onChange={(next) => setTargetWorkYm(next.replace('-', ''))}
+            />
+          </div>
+        ) : undefined
+      }
     >
       <main className="flex-1 p-6 space-y-4">
         <StageBreadcrumb currentStage="ready" featureIds="F088 v1.1 / F089" />

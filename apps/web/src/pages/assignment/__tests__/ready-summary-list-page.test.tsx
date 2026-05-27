@@ -2,6 +2,7 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ReadySummaryListPage } from '../ready-summary-list-page';
+import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as authStore from '@/stores/auth-store';
@@ -27,6 +28,7 @@ vi.mock('@/stores/auth-store', async () => {
 });
 
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
+const mockedGetCurrentWorkYm = vi.mocked(assignmentListApi.getCurrentWorkYm);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 
@@ -76,16 +78,18 @@ function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/assignment/ready-summary']}>
       <ToastProvider>
-        <Routes>
-          <Route
-            path="/assignment/ready-summary"
-            element={<ReadySummaryListPage />}
-          />
-          <Route
-            path="/assignment/ready-summary/:listNo"
-            element={<div data-testid="detail-landing" />}
-          />
-        </Routes>
+        <AssignmentWorkYmProvider>
+          <Routes>
+            <Route
+              path="/assignment/ready-summary"
+              element={<ReadySummaryListPage />}
+            />
+            <Route
+              path="/assignment/ready-summary/:listNo"
+              element={<div data-testid="detail-landing" />}
+            />
+          </Routes>
+        </AssignmentWorkYmProvider>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -103,6 +107,8 @@ describe('ReadySummaryListPage (29d 模式 A)', () => {
       status: 'active',
     } as any);
     mockedGetBusinessRole.mockReturnValue('director');
+    // F097：Context 初始化錨點月（targetWorkYm = 202606）
+    mockedGetCurrentWorkYm.mockResolvedValue({ currentWorkYm: '202605' });
   });
 
   afterEach(() => {

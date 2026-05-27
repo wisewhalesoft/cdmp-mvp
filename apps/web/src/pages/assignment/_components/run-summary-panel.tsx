@@ -69,7 +69,7 @@ export function RunSummaryPanel({
           <div>
             <p className="text-gray-400 inline-flex items-center gap-1 mb-0.5">
               <Calendar className="w-3 h-3" />
-              作業年月
+              分派作業月份
             </p>
             <p className="font-mono text-sm font-semibold text-gray-900">
               {formatYm(workYm)}（{workYm}）

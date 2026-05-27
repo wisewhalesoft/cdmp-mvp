@@ -2,6 +2,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { Stage0EstimatePage } from '../stage0-estimate-page';
+import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context';
 import { ToastProvider } from '@/components/ui/toast';
 import * as runApi from '@/api/assignment-run';
 import * as listApi from '@/api/assignment-list';
@@ -32,6 +33,7 @@ vi.mock('@/stores/auth-store', async () => {
 const mockedGetDaily = vi.mocked(runApi.getDailyEstimate);
 const mockedGetListEstimate = vi.mocked(runApi.getListEstimate);
 const mockedListLists = vi.mocked(listApi.listLists);
+const mockedGetCurrentWorkYm = vi.mocked(listApi.getCurrentWorkYm);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 
@@ -106,7 +108,9 @@ function renderPage() {
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <Stage0EstimatePage />
+        <AssignmentWorkYmProvider>
+          <Stage0EstimatePage />
+        </AssignmentWorkYmProvider>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -132,6 +136,8 @@ describe('Stage0EstimatePage (v1.3 Design A)', () => {
     );
     mockedGetDaily.mockResolvedValue(dailyResp());
     mockedGetListEstimate.mockResolvedValue({ listNo: 'OB202605001', count: 8500 });
+    // F097：Context 初始化錨點月（targetWorkYm = 202606）
+    mockedGetCurrentWorkYm.mockResolvedValue({ currentWorkYm: '202605' });
   });
   afterEach(() => cleanup());
 

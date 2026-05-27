@@ -2,6 +2,7 @@ import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-li
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TriggerRunPage } from '../trigger-run-page';
+import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context';
 import { ToastProvider } from '@/components/ui/toast';
 import * as runApi from '@/api/assignment-run';
 import * as listApi from '@/api/assignment-list';
@@ -32,6 +33,7 @@ vi.mock('@/stores/auth-store', async () => {
 const mockedGetReadiness = vi.mocked(runApi.getReadiness);
 const mockedTriggerRun = vi.mocked(runApi.triggerRun);
 const mockedListLists = vi.mocked(listApi.listLists);
+const mockedGetCurrentWorkYm = vi.mocked(listApi.getCurrentWorkYm);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 
@@ -96,10 +98,12 @@ function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/assignment/run']}>
       <ToastProvider>
-        <Routes>
-          <Route path="/assignment/run" element={<TriggerRunPage />} />
-          <Route path="/assignment/run-progress" element={<div data-testid="progress-stub" />} />
-        </Routes>
+        <AssignmentWorkYmProvider>
+          <Routes>
+            <Route path="/assignment/run" element={<TriggerRunPage />} />
+            <Route path="/assignment/run-progress" element={<div data-testid="progress-stub" />} />
+          </Routes>
+        </AssignmentWorkYmProvider>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -119,6 +123,8 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
     mockedGetBusinessRole.mockReturnValue('director');
     mockedGetReadiness.mockResolvedValue(makeReadiness());
     mockedListLists.mockResolvedValue(makeListsResp([READY_LIST]));
+    // F097：Context 初始化 → currentWorkYm=202605 → targetWorkYm=202606（下月）
+    mockedGetCurrentWorkYm.mockResolvedValue({ currentWorkYm: '202605' });
   });
 
   afterEach(() => cleanup());
@@ -135,9 +141,8 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
   it('全部 pre-check pass 時「啟動月跑」按鈕 enabled', async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId('btn-start-run')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-start-run')).not.toBeDisabled();
     });
-    expect(screen.getByTestId('btn-start-run')).not.toBeDisabled();
   });
 
   it('有 pre-check fail 時「啟動月跑」按鈕 disabled', async () => {
@@ -189,7 +194,7 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
   it('點「啟動月跑」開啟 confirm modal', async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId('btn-start-run')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-start-run')).not.toBeDisabled();
     });
     fireEvent.click(screen.getByTestId('btn-start-run'));
     await waitFor(() => {
@@ -200,13 +205,13 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
   it('confirm 後觸發 triggerRun API + 導向進度頁', async () => {
     mockedTriggerRun.mockResolvedValue({
       runId: 'r-1',
-      ym: '202605',
+      ym: '202606',
       status: 'pending',
       triggeredAt: '2026-05-15T12:00:00Z',
     });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId('btn-start-run')).toBeInTheDocument();
+      expect(screen.getByTestId('btn-start-run')).not.toBeDisabled();
     });
     fireEvent.click(screen.getByTestId('btn-start-run'));
     await waitFor(() => {
@@ -216,5 +221,76 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
     await waitFor(() => {
       expect(mockedTriggerRun).toHaveBeenCalled();
     });
+  });
+
+  // =====================================================================
+  // F097 — readiness 帶選定月 / triggerRun(workYm) / modal / MonthPicker / labels
+  // =====================================================================
+
+  it('TS-F097-TRIGGER-001：readiness check 使用選定月 ?ym=202606（非 202605）', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(mockedGetReadiness).toHaveBeenCalledWith('202606');
+    });
+    // listLists 同步帶選定月
+    expect(mockedListLists).toHaveBeenCalledWith({ ym: '202606' });
+    // 不以 new Date() 執行月（202605）查詢
+    expect(mockedGetReadiness).not.toHaveBeenCalledWith('202605');
+  });
+
+  it('TS-F097-TRIGGER-002：triggerRun 帶 workYm=202606', async () => {
+    mockedTriggerRun.mockResolvedValue({
+      runId: 'r-1',
+      ym: '202606',
+      status: 'pending',
+      triggeredAt: '2026-05-15T12:00:00Z',
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-start-run')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('btn-start-run'));
+    await waitFor(() => expect(screen.getByTestId('btn-confirm-trigger')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-confirm-trigger'));
+    await waitFor(() => expect(mockedTriggerRun).toHaveBeenCalledWith('202606'));
+  });
+
+  it('TS-F097-TRIGGER-003：confirm modal 標題顯示選定月份 2026-06（非 2026-05）', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-start-run')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('btn-start-run'));
+    await waitFor(() => {
+      const modal = screen.getByTestId('confirm-trigger-modal');
+      expect(modal.textContent).toContain('2026-06');
+      expect(modal.textContent).not.toContain('2026-05');
+    });
+  });
+
+  it('TS-F097-TRIGGER-004 / 005：trigger-run-month-picker + btn-start-run + confirm-trigger-modal testid 保留', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-start-run')).not.toBeDisabled());
+    expect(screen.getByTestId('trigger-run-month-picker')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('btn-start-run'));
+    await waitFor(() => expect(screen.getByTestId('confirm-trigger-modal')).toBeInTheDocument());
+  });
+
+  it('TS-F097-RBAC-001：section_chief → MonthPicker disabled，仍顯示 202606', async () => {
+    mockedGetBusinessRole.mockReturnValue('section_chief');
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('trigger-run-month-picker')).toBeInTheDocument();
+    });
+    const picker = screen.getByTestId('trigger-run-month-picker');
+    const select = within(picker).getByTestId('month-picker-select') as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe('2026-06');
+  });
+
+  it('TS-F097-LABEL-001 / 002：MonthPicker label 「分派作業月份」，無「作業年月」舊字串', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('trigger-run-month-picker')).toBeInTheDocument());
+    // MonthPicker 標籤存在於 trigger-run-month-picker 內
+    const picker = screen.getByTestId('trigger-run-month-picker');
+    expect(within(picker).getByText('分派作業月份')).toBeInTheDocument();
+    // 整頁無「作業年月」舊字串
+    expect(screen.queryByText(/作業年月/)).not.toBeInTheDocument();
   });
 });

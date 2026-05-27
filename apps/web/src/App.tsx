@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context';
 import { LoginPage } from '@/pages/login/login-page';
 import { UserInfoPage } from '@/pages/user-info/user-info-page';
 import { AccountListPage } from '@/pages/accounts/account-list-page';
@@ -201,15 +202,54 @@ export function App() {
         }
       />
       {/* /assignment/ratios stub 已移除 — M03 比例設定併入名單定義頁 row actions (FE-4 inline 元件) */}
-      {/* M01 名單定義：director + section_chief（讀），director only（寫入） */}
+      {/* F097 / US-137 / AD-E07-27 §27.5：四頁共享「分派作業月份」狀態（AssignmentWorkYmProvider）。
+          以 layout route 包覆，使四頁間導航時 Provider 不卸載 → 一處切換、跨頁同步。
+          run-history（/assignment/history）與下游結果頁不納入此 Provider。 */}
       <Route
-        path="/assignment/list-definitions"
         element={
-          <DirectorOrSectionChiefRoute>
-            <ListDefinitionPage />
-          </DirectorOrSectionChiefRoute>
+          <AssignmentWorkYmProvider>
+            <Outlet />
+          </AssignmentWorkYmProvider>
         }
-      />
+      >
+        {/* M01 名單定義：director + section_chief（讀），director only（寫入） */}
+        <Route
+          path="/assignment/list-definitions"
+          element={
+            <DirectorOrSectionChiefRoute>
+              <ListDefinitionPage />
+            </DirectorOrSectionChiefRoute>
+          }
+        />
+        {/* M03d 準備完成名單清單：director + section_chief（共享分派作業月份） */}
+        <Route
+          path="/assignment/ready-summary"
+          element={
+            <DirectorOrSectionChiefRoute>
+              <ReadySummaryListPage />
+            </DirectorOrSectionChiefRoute>
+          }
+        />
+        {/* M03 Stage 0 試算：director only（共享分派作業月份） */}
+        <Route
+          path="/assignment/estimate"
+          element={
+            <DirectorRoute>
+              <Stage0EstimatePage />
+            </DirectorRoute>
+          }
+        />
+        {/* M04 觸發月跑：director only（共享分派作業月份） */}
+        <Route
+          path="/assignment/run"
+          element={
+            <DirectorRoute>
+              <TriggerRunPage />
+            </DirectorRoute>
+          }
+        />
+      </Route>
+      {/* —— 以下頁面不納入 AssignmentWorkYmProvider —— */}
       <Route
         path="/assignment/list-definitions/new"
         element={
@@ -245,39 +285,13 @@ export function App() {
         }
       />
       {/* M03c 簽核：核准/拒絕已改為名單定義頁卡片就地操作（29c 審閱頁於 2026-05-26 移除） */}
-      {/* M03d 準備完成名單清單 + 詳情：director + section_chief */}
-      <Route
-        path="/assignment/ready-summary"
-        element={
-          <DirectorOrSectionChiefRoute>
-            <ReadySummaryListPage />
-          </DirectorOrSectionChiefRoute>
-        }
-      />
+      {/* M03d 準備完成名單詳情：director + section_chief（單筆詳情，不共享月份 Context） */}
       <Route
         path="/assignment/ready-summary/:listNo"
         element={
           <DirectorOrSectionChiefRoute>
             <ReadySummaryDetailPage />
           </DirectorOrSectionChiefRoute>
-        }
-      />
-      {/* M03 Stage 0 試算：director only */}
-      <Route
-        path="/assignment/estimate"
-        element={
-          <DirectorRoute>
-            <Stage0EstimatePage />
-          </DirectorRoute>
-        }
-      />
-      {/* M04 觸發月跑：director only */}
-      <Route
-        path="/assignment/run"
-        element={
-          <DirectorRoute>
-            <TriggerRunPage />
-          </DirectorRoute>
         }
       />
       {/* M04 執行進度：director + section_chief */}

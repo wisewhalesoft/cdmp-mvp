@@ -21,6 +21,7 @@ import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-li
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ListDefinitionPage } from '../list-definition-page';
+import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
@@ -45,6 +46,7 @@ vi.mock('@/stores/auth-store', async () => {
 });
 
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
+const mockedGetCurrentWorkYm = vi.mocked(assignmentListApi.getCurrentWorkYm);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
@@ -106,7 +108,9 @@ function renderPage() {
   return render(
     <ToastProvider>
       <MemoryRouter>
-        <ListDefinitionPage />
+        <AssignmentWorkYmProvider>
+          <ListDefinitionPage />
+        </AssignmentWorkYmProvider>
       </MemoryRouter>
     </ToastProvider>,
   );
@@ -123,6 +127,8 @@ beforeEach(() => {
   });
   mockedGetBusinessRole.mockReturnValue('director');
   mockedGetEffectiveIdentity.mockReturnValue('director');
+  // F097：Context 初始化錨點月（targetWorkYm = 202606）
+  mockedGetCurrentWorkYm.mockResolvedValue({ currentWorkYm: '202605' });
   if (typeof window !== 'undefined' && window.sessionStorage) {
     window.sessionStorage.clear();
   }
@@ -155,18 +161,19 @@ describe('F048 v2.0 Kanban 主頁 — 渲染（TS-F048-K-001~008）', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId('kanban-board')).toBeTruthy();
+      // 等待資料載入完成（Context → getCurrentWorkYm → listLists 之非同步鏈）
+      const draftHeader = screen.getByTestId('kanban-column-draft');
+      expect(
+        within(draftHeader).getByTestId('column-count-draft').textContent,
+      ).toContain('2');
     });
 
+    expect(screen.getByTestId('kanban-board')).toBeTruthy();
     expect(screen.getByTestId('kanban-column-draft')).toBeTruthy();
     expect(screen.getByTestId('kanban-column-dept_ratio')).toBeTruthy();
     expect(screen.getByTestId('kanban-column-personnel_ratio')).toBeTruthy();
     expect(screen.getByTestId('kanban-column-approval')).toBeTruthy();
     expect(screen.getByTestId('kanban-column-ready')).toBeTruthy();
-
-    // 各欄頭 badge 數字
-    const draftHeader = screen.getByTestId('kanban-column-draft');
-    expect(within(draftHeader).getByTestId('column-count-draft').textContent).toContain('2');
   });
 
   it('K-002 名單以卡片形式正確渲染（list_no / listNm / CR badge / condition chips）', async () => {
@@ -307,7 +314,8 @@ describe('F048 v2.0 Kanban 主頁 — 渲染（TS-F048-K-001~008）', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId('kpi-total')).toBeTruthy();
+      // 等待資料載入（非同步鏈）後 KPI 總數出現
+      expect(screen.getByTestId('kpi-total').textContent).toContain('9');
     });
 
     // 名單總數 = 2+1+1+2+3 = 9
@@ -338,7 +346,9 @@ describe('F048 v2.0 Kanban 主頁 — 渲染（TS-F048-K-001~008）', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId('ready-progress-bar')).toBeTruthy();
+      // 等待資料載入（非同步鏈）後進度條反映 ready 3 / total 9
+      const bar = screen.getByTestId('ready-progress-bar');
+      expect(bar.textContent).toMatch(/33|3\s*\/\s*9/);
     });
 
     const progress = screen.getByTestId('ready-progress-bar');

@@ -102,9 +102,14 @@ export interface TriggerRunResponse {
   triggeredAt: string;
 }
 
-export async function triggerRun(): Promise<TriggerRunResponse> {
-  // body 為空 — backend 用 currentWorkYm + req.user.userId
-  const response = await apiClient.post<TriggerRunResponse>('/assignment/runs', {});
+/**
+ * F097 / AC-6（breaking change）：以使用者選定之分派作業月份（target_work_ym，YYYYMM）觸發月跑。
+ *   - request body 必帶 `{ workYm }`；後端寫入 AssignmentRun.project_workym = workYm（不再自算 new Date()）。
+ */
+export async function triggerRun(workYm: string): Promise<TriggerRunResponse> {
+  const response = await apiClient.post<TriggerRunResponse>('/assignment/runs', {
+    workYm,
+  });
   return response.data;
 }
 

@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
+import { MonthPicker } from '@/components/e07/MonthPicker';
 import { ConfirmModal } from '@/components/e07/ConfirmModal';
 import { useToast } from '@/components/ui/toast';
+import { useAssignmentWorkYm } from '@/contexts/assignment-work-ym-context';
 import {
   getReadiness,
   triggerRun,
@@ -49,9 +51,13 @@ import { getBusinessRole, getUser } from '@/stores/auth-store';
  * RBAC：DirectorRoute（route guard 已掛）；section_chief 可進但顯示 readonly banner。
  */
 
-function currentWorkYm(): string {
-  const now = new Date();
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+/** YYYYMM ↔ YYYY-MM 轉換（Context 用 YYYYMM；MonthPicker 用 YYYY-MM） */
+function toHyphen(yyyymm: string): string {
+  if (!yyyymm || yyyymm.length < 6) return '';
+  return `${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`;
+}
+function toRaw(yyyyMm: string): string {
+  return yyyyMm.replace('-', '');
 }
 
 function buildRunSummaryLists(
@@ -76,7 +82,9 @@ export function TriggerRunPage() {
   const canWrite = !isSectionChief;
   const triggeredByName = getUser()?.name ?? '當前使用者';
 
-  const ym = currentWorkYm();
+  // F097 / US-138：分派作業月份取自共享 Context（target_work_ym），非 new Date() 自算
+  const { currentWorkYm, targetWorkYm, setTargetWorkYm } = useAssignmentWorkYm();
+  const ym = targetWorkYm;
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(true);
   const [summaryLists, setSummaryLists] = useState<RunSummaryListItem[]>([]);
@@ -85,6 +93,7 @@ export function TriggerRunPage() {
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
+    if (!ym) return;
     let aborted = false;
     void (async () => {
       setReadinessLoading(true);
@@ -126,7 +135,8 @@ export function TriggerRunPage() {
   const handleTrigger = async () => {
     setRunning(true);
     try {
-      const result = await triggerRun();
+      // F097 / AC-6：以選定之分派作業月份（target_work_ym）觸發
+      const result = await triggerRun(ym);
       showToast(`月跑已觸發（runId: ${result.runId}）`, 'success');
       setShowConfirm(false);
       navigate(`/assignment/run-progress?runId=${result.runId}`);
@@ -149,7 +159,27 @@ export function TriggerRunPage() {
   };
 
   return (
-    <AppLayout title="觸發月跑">
+    <AppLayout
+      title="觸發月跑"
+      actions={
+        ym ? (
+          <div
+            className="flex items-center gap-2"
+            data-testid="trigger-run-month-picker"
+          >
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              分派作業月份
+            </span>
+            <MonthPicker
+              value={toHyphen(ym)}
+              currentYm={toHyphen(currentWorkYm) || toHyphen(ym)}
+              onChange={(next) => setTargetWorkYm(toRaw(next))}
+              disabled={isSectionChief}
+            />
+          </div>
+        ) : undefined
+      }
+    >
       <main className="flex-1 p-6">
         <div className="max-w-6xl mx-auto space-y-4">
           {/* 處長唯讀 banner */}
@@ -205,7 +235,7 @@ export function TriggerRunPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-primary">
                     <Clock className="w-3 h-3" />
-                    作業年月 {ym}
+                    分派作業月份 {ym}
                   </span>
                   <span className="text-xs text-gray-400">project_workym</span>
                 </div>
@@ -296,7 +326,7 @@ export function TriggerRunPage() {
       <ConfirmModal
         open={showConfirm}
         variant="warning"
-        title={`確認觸發 ${ym} 月跑？`}
+        title={`確認觸發 ${toHyphen(ym)} 月跑？`}
         description={
           <div className="space-y-2 text-xs text-gray-600">
             <p>

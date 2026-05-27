@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { MonthPicker } from '@/components/e07/MonthPicker';
+import { useAssignmentWorkYm } from '@/contexts/assignment-work-ym-context';
 import { useToast } from '@/components/ui/toast';
 import {
   type AssignmentListItem,
@@ -249,8 +250,15 @@ export function ListDefinitionPage() {
   const isWriter = identity === 'admin' || identity === 'director';
   const isSalesBlocked = identity === 'user';
 
-  const [ym, setYm] = useState<string>('');
-  const [currentWorkYm, setCurrentWorkYm] = useState<string>('');
+  // F097 / US-137：分派作業月份取自共享 Context（target_work_ym），四頁同步
+  const {
+    currentWorkYm: ctxCurrentWorkYm,
+    targetWorkYm,
+    setTargetWorkYm,
+  } = useAssignmentWorkYm();
+  const ym = toYYYYMM(targetWorkYm); // 本頁內部沿用 YYYY-MM
+  const setYm = (next: string) => setTargetWorkYm(toYYYYMMRaw(next));
+  const currentWorkYm = toYYYYMM(ctxCurrentWorkYm);
   const [data, setData] = useState<ListListsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -288,8 +296,6 @@ export function ListDefinitionPage() {
       const ymParam = selectedYm ? toYYYYMMRaw(selectedYm) : undefined;
       const result = await listLists({ ym: ymParam });
       setData(result);
-      if (!selectedYm) setYm(toYYYYMM(result.selectedYm));
-      setCurrentWorkYm(toYYYYMM(result.currentWorkYm));
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string; message?: string } } };
       setErrorMsg(e?.response?.data?.message ?? '載入名單失敗，請稍後再試');
@@ -298,20 +304,16 @@ export function ListDefinitionPage() {
     }
   }, []);
 
+  // F097：以共享 Context 之 target_work_ym（ym）驅動載入；ym 變更即重抓（一處切換全頁同步）
   useEffect(() => {
     if (isSalesBlocked) {
       setLoading(false);
       return;
     }
-    void fetchData('');
-  }, [fetchData, isSalesBlocked]);
-
-  useEffect(() => {
-    if (!ym || !data) return;
-    if (toYYYYMM(data.selectedYm) === ym) return;
+    if (!ym) return; // Context 初始化前不抓
     void fetchData(ym);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ym]);
+  }, [ym, isSalesBlocked]);
 
   const isHistorical = data?.isHistorical ?? false;
   const isLocked = data?.lockState?.locked ?? false;
@@ -493,13 +495,21 @@ export function ListDefinitionPage() {
     <AppLayout
       title="客戶名單分派 — 名單定義"
       actions={
-        ym && (
-          <MonthPicker
-            value={ym}
-            onChange={setYm}
-            currentYm={currentWorkYm || ym}
-          />
-        )
+        ym ? (
+          <div
+            className="flex items-center gap-2"
+            data-testid="list-definition-month-picker"
+          >
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              分派作業月份
+            </span>
+            <MonthPicker
+              value={ym}
+              onChange={setYm}
+              currentYm={currentWorkYm || ym}
+            />
+          </div>
+        ) : undefined
       }
     >
       <main className="flex-1 p-6 space-y-4">

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { MonthPicker } from '@/components/e07/MonthPicker';
+import { useAssignmentWorkYm } from '@/contexts/assignment-work-ym-context';
 import {
   getDailyEstimate,
   getListEstimate,
@@ -46,18 +47,18 @@ import { getBusinessRole } from '@/stores/auth-store';
 function toYYYYMMRaw(yyyyMm: string): string {
   return yyyyMm.replace('-', '');
 }
-function currentYmDisplay(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+function toHyphen(yyyymm: string): string {
+  if (!yyyymm || yyyymm.length < 6) return '';
+  return `${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`;
 }
 
 export function Stage0EstimatePage() {
   const businessRole = getBusinessRole();
   const isSectionChief = businessRole === 'section_chief';
 
-  const [ym, setYm] = useState(currentYmDisplay());
+  // F097 / US-137：分派作業月份取自共享 Context（target_work_ym）
+  const { currentWorkYm, targetWorkYm, setTargetWorkYm } = useAssignmentWorkYm();
+  const ym = toHyphen(targetWorkYm); // 本頁內部沿用 YYYY-MM
   const [dailyData, setDailyData] = useState<DailyEstimateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export function Stage0EstimatePage() {
 
   // 載入 lists（依 ym）→ 自動選第一筆 active 名單（AC-4-Default）
   useEffect(() => {
+    if (!ym) return;
     let aborted = false;
     void (async () => {
       try {
@@ -107,6 +109,7 @@ export function Stage0EstimatePage() {
 
   // 載入 daily-estimate（calendarSource / startDate / endDate 納入依賴 → 切換即重抓重算）
   useEffect(() => {
+    if (!ym) return;
     let aborted = false;
     void (async () => {
       setLoading(true);
@@ -181,7 +184,23 @@ export function Stage0EstimatePage() {
   return (
     <AppLayout
       title="Stage 0 試算"
-      actions={<MonthPicker value={ym} onChange={setYm} />}
+      actions={
+        ym ? (
+          <div
+            className="flex items-center gap-2"
+            data-testid="stage0-month-picker"
+          >
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              分派作業月份
+            </span>
+            <MonthPicker
+              value={ym}
+              currentYm={toHyphen(currentWorkYm) || ym}
+              onChange={(next) => setTargetWorkYm(next.replace('-', ''))}
+            />
+          </div>
+        ) : undefined
+      }
     >
       <main className="flex-1 p-6 space-y-4">
         {isSectionChief && (
