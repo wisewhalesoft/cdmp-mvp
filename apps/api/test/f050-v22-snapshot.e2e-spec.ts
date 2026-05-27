@@ -798,4 +798,82 @@ describe('F050 v2.2 §6.2 — GET full-snapshot E2E (SS 群組 12 場景)', () =
 
     expect(res.status).toBe(200);
   });
+
+  // ============================================================
+  // F095：full-snapshot 回 appliedSpecialRules[]（讀時推導，無新 DB 欄位）
+  // 對應 TS-F095-API-001 / API-002 / API-003
+  // ============================================================
+  describe('F095 — appliedSpecialRules[] 唯讀呈現', () => {
+    it('TS-F095-API-001：含「機車期中」名單 → 回 3 條規則（fraud + motorcycle + xiaozi）', async () => {
+      const listNo = 'OB202605F95A';
+      await seedList(ds, {
+        listNo,
+        stage: 'ready',
+        listNm: '機車期中催收名單',
+        conditionPayload: baseConditionPayload,
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(snapshotUrl(listNo))
+        .set('Authorization', `Bearer ${directorToken}`);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.appliedSpecialRules)).toBe(true);
+      const ids = res.body.appliedSpecialRules.map((r: any) => r.ruleId);
+      expect(ids).toEqual([
+        'R-FRAUD-WHITEBOARD',
+        'R-PERIOD-MOTORCYCLE',
+        'R-PERIOD-XIAOZI',
+      ]);
+      // 每筆含 ruleId / ruleName / isSystemMandatory / exclusionDescription（AC-2）
+      for (const r of res.body.appliedSpecialRules) {
+        expect(typeof r.ruleId).toBe('string');
+        expect(typeof r.ruleName).toBe('string');
+        expect(typeof r.isSystemMandatory).toBe('boolean');
+        expect(typeof r.exclusionDescription).toBe('string');
+      }
+      expect(
+        res.body.appliedSpecialRules.find((r: any) => r.ruleId === 'R-FRAUD-WHITEBOARD')
+          .isSystemMandatory,
+      ).toBe(true);
+    });
+
+    it('TS-F095-API-001b：一般名單 → 至少含 R-FRAUD-WHITEBOARD（空集合防護 AC-5）', async () => {
+      const listNo = 'OB202605F95B';
+      await seedList(ds, {
+        listNo,
+        stage: 'draft',
+        listNm: '一般催收名單',
+        conditionPayload: baseConditionPayload,
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(snapshotUrl(listNo))
+        .set('Authorization', `Bearer ${directorToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.appliedSpecialRules.map((r: any) => r.ruleId)).toEqual([
+        'R-FRAUD-WHITEBOARD',
+      ]);
+    });
+
+    it('TS-F095-API-001c：含 v1.0 誤判字「中結強案年資」名單 → 僅 R-FRAUD-WHITEBOARD（不誤判，AC-3）', async () => {
+      const listNo = 'OB202605F95C';
+      await seedList(ds, {
+        listNo,
+        stage: 'draft',
+        listNm: '中結強案年資催收名單',
+        conditionPayload: baseConditionPayload,
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(snapshotUrl(listNo))
+        .set('Authorization', `Bearer ${directorToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.appliedSpecialRules.map((r: any) => r.ruleId)).toEqual([
+        'R-FRAUD-WHITEBOARD',
+      ]);
+    });
+  });
 });

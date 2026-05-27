@@ -15,6 +15,9 @@
  */
 
 import type { ObListDefinitionConditionPayload } from '@/database/entities/ob-list-definition.entity';
+import type { AppliedSpecialRule } from '@/modules/assignment/stage1/special-rules';
+
+export type { AppliedSpecialRule };
 
 /**
  * LEGACY 名單 fallback —— 僅當 condition_payload IS NULL 時非 null，
@@ -79,4 +82,10 @@ export interface ListSnapshotResponse {
   deptRatios: SnapshotDeptRatio[];
   personnelRatios: SnapshotPersonnelRatio[];
   auditTrail: SnapshotAuditTrailItem[];
+  /**
+   * F095 / AD-E07-26 §26.5：本名單本次月跑套用之系統特例排除規則（唯讀，read-time 推導）。
+   * 由 Service 層依 list_nm 即時推導（無新 DB 欄位），與 F091 月跑 trigger 共用同一 pure utility。
+   * 至少含 R-FRAUD-WHITEBOARD（無條件），不為空陣列（F095 AC-5）。
+   */
+  appliedSpecialRules: AppliedSpecialRule[];
 }

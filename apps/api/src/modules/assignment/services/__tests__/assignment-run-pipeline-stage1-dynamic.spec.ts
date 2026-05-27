@@ -23,6 +23,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -62,6 +63,7 @@ async function buildModule(): Promise<Env> {
           ObListDefinition,
           ObPoolData,
           ObPoolDataList,
+          ObMonthlyRunResult,
           ObDeptPct,
           ObEmplSet,
           ObCardType,
@@ -79,6 +81,7 @@ async function buildModule(): Promise<Env> {
         ObListDefinition,
         ObPoolData,
         ObPoolDataList,
+        ObMonthlyRunResult,
         ObDeptPct,
         ObEmplSet,
         ObCardType,
@@ -99,7 +102,7 @@ async function buildModule(): Promise<Env> {
     runRepo: app.get(getRepositoryToken(AssignmentRun)),
     listRepo: app.get(getRepositoryToken(ObListDefinition)),
     poolRepo: app.get(getRepositoryToken(ObPoolData)),
-    resultRepo: app.get(getRepositoryToken(ObPoolDataList)),
+    resultRepo: app.get(getRepositoryToken(ObMonthlyRunResult)),
     deptPctRepo: app.get(getRepositoryToken(ObDeptPct)),
     emplSetRepo: app.get(getRepositoryToken(ObEmplSet)),
     cardTypeRepo: app.get(getRepositoryToken(ObCardType)),
@@ -309,6 +312,7 @@ describe('AssignmentRunPipelineService Stage 1 動態 SQL — Phase 5b', () => {
 
   beforeEach(async () => {
     await env.ds.query('DELETE FROM assignment_run_snapshot');
+    await env.ds.query('DELETE FROM ob_monthly_run_result');
     await env.ds.query('DELETE FROM assignment_run');
     await env.ds.query('DELETE FROM ob_pool_data_list');
     await env.ds.query('DELETE FROM ob_pool_data');

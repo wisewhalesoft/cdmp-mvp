@@ -278,11 +278,33 @@ export interface SnapshotAuditTrailItem {
   at: string;
 }
 
+/**
+ * F095 / AD-E07-26 §26.5：名單套用之系統特例排除規則（唯讀，後端依 list_nm 讀時推導）。
+ */
+export interface AppliedSpecialRule {
+  ruleId:
+    | 'R-FRAUD-WHITEBOARD'
+    | 'R-PERIOD-MOTORCYCLE'
+    | 'R-PERIOD-XIAOZI'
+    | 'R-YEAR-ABOVE';
+  /** 規則中文名稱，供前端直接顯示 */
+  ruleName: string;
+  /** true → 全名單強制套用（前端顯示為灰色不可關閉的系統規則） */
+  isSystemMandatory: boolean;
+  /** 人類可讀排除說明（描述「排除什麼樣的案件」） */
+  exclusionDescription: string;
+}
+
 export interface FullSnapshotResponse {
   list: SnapshotListSection;
   deptRatios: SnapshotDeptRatio[];
   personnelRatios: SnapshotPersonnelRatio[];
   auditTrail: SnapshotAuditTrailItem[];
+  /**
+   * F095：本名單套用之系統特例排除規則（唯讀）。至少含 R-FRAUD-WHITEBOARD（無條件）。
+   * 舊版 API 未回此欄時前端容錯隱藏整個區塊（漸進增強）。
+   */
+  appliedSpecialRules?: AppliedSpecialRule[];
 }
 
 /**

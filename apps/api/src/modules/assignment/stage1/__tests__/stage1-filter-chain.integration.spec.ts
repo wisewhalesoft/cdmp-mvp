@@ -145,6 +145,30 @@ describe('F091 整合 — Stage1FilterChain（better-sqlite3 in-memory）', () =
     expect(result.cases!.map((c) => c.custo_no)).toEqual(['C002']);
   });
 
+  it('DDv2-001c(int)：MAX(assignday) 為異常未來日 → 上界封頂 workdt-1（拒絕穿越本月）', async () => {
+    const list = await makeList();
+    await seedPool({ applNo: 'A1', custoNo: 'C001' });
+    await seedPool({ applNo: 'A2', custoNo: 'C002' });
+    // 表中最大 assignday = 20261231（異常未來日，> workdt-1 = 20260531）→ 上界封頂 20260531
+    // C001 派於 20260410（落於 [20260301, 20260531] 視窗內）→ 去重
+    // C002 派於 20261231（> 封頂上界 20260531，本月之後）→ 不去重
+    await seedPoolDataList({ applNo: 'H1', custoNo: 'C001', assignday: '20260410', dataSource: 'etl_legacy' });
+    await seedPoolDataList({ applNo: 'H2', custoNo: 'C002', assignday: '20261231', dataSource: 'etl_legacy' });
+
+    const result = await executeStage1Chain(list, WORKDT, poolRepo, pdlRepo, { dryRun: false });
+    // C002（未來日，被 workdt-1 封頂排除於視窗外）保留；C001 被去重
+    expect(result.cases!.map((c) => c.custo_no)).toEqual(['C002']);
+  });
+
+  it('DDv2-001b(int)：MAX(assignday) 為 NULL（無歷史）→ 上界退化 workdt-1，不過濾', async () => {
+    const list = await makeList();
+    await seedPool({ applNo: 'A1', custoNo: 'C001' });
+    await seedPool({ applNo: 'A2', custoNo: 'C002' });
+    // ob_pool_data_list 全空 → MAX(assignday)=NULL → 退化 workdt-1，去重集合空 → 不過濾
+    const result = await executeStage1Chain(list, WORKDT, poolRepo, pdlRepo, { dryRun: false });
+    expect(result.count).toBe(2);
+  });
+
   it('CH-003：月跑模式回完整案件列（MONTH_CNT 過濾 + 去重交互）', async () => {
     const list = await makeList(); // list_period 1~6 interval 1 → month_cnt IN (1..6)
     // 7 筆 month_cnt 1~6 入選 month_cnt 過濾；3 筆 month_cnt=9 被排除

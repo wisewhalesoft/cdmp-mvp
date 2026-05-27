@@ -24,6 +24,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -41,7 +42,10 @@ interface Env {
   snapshotRepo: Repository<AssignmentRunSnapshot>;
   listRepo: Repository<ObListDefinition>;
   poolRepo: Repository<ObPoolData>;
-  resultRepo: Repository<ObPoolDataList>;
+  /** F094：月跑提案結果表（ob_monthly_run_result，取代 ob_pool_data_list 寫入目標） */
+  resultRepo: Repository<ObMonthlyRunResult>;
+  /** F094：去重來源（ob_pool_data_list，仍只讀不寫） */
+  poolDataListRepo: Repository<ObPoolDataList>;
   deptPctRepo: Repository<ObDeptPct>;
   emplSetRepo: Repository<ObEmplSet>;
   cardTypeRepo: Repository<ObCardType>;
@@ -64,6 +68,7 @@ async function buildModule(): Promise<Env> {
           ObListDefinition,
           ObPoolData,
           ObPoolDataList,
+          ObMonthlyRunResult,
           ObDeptPct,
           ObEmplSet,
           ObCardType,
@@ -81,6 +86,7 @@ async function buildModule(): Promise<Env> {
         ObListDefinition,
         ObPoolData,
         ObPoolDataList,
+        ObMonthlyRunResult,
         ObDeptPct,
         ObEmplSet,
         ObCardType,
@@ -102,7 +108,8 @@ async function buildModule(): Promise<Env> {
     snapshotRepo: app.get(getRepositoryToken(AssignmentRunSnapshot)),
     listRepo: app.get(getRepositoryToken(ObListDefinition)),
     poolRepo: app.get(getRepositoryToken(ObPoolData)),
-    resultRepo: app.get(getRepositoryToken(ObPoolDataList)),
+    resultRepo: app.get(getRepositoryToken(ObMonthlyRunResult)),
+    poolDataListRepo: app.get(getRepositoryToken(ObPoolDataList)),
     deptPctRepo: app.get(getRepositoryToken(ObDeptPct)),
     emplSetRepo: app.get(getRepositoryToken(ObEmplSet)),
     cardTypeRepo: app.get(getRepositoryToken(ObCardType)),
@@ -349,8 +356,9 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
   });
 
   beforeEach(async () => {
-    // 依 FK 順序清空
+    // 依 FK 順序清空（ob_monthly_run_result FK → assignment_run，須先於 assignment_run 清）
     await env.ds.query('DELETE FROM assignment_run_snapshot');
+    await env.ds.query('DELETE FROM ob_monthly_run_result');
     await env.ds.query('DELETE FROM assignment_run');
     await env.ds.query('DELETE FROM ob_pool_data_list');
     await env.ds.query('DELETE FROM ob_pool_data');
@@ -620,82 +628,130 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
   });
 
   // =========================================================================
-  // F090 / AD-E07-21 §21.3（BR-4）：月跑寫入標記 data_source='monthly_run'
-  // 對應 TS-F090-MON-001 / MON-002（SQLite in-memory integration，
-  // 對齊本 spec 既有 better-sqlite3 module；非 PG TestContainer）
+  // F094 / AD-E07-25 Phase A：月跑 Stage 1~4 寫入 ob_monthly_run_result（切換落點）
+  // 對應 TS-F094-ST1-001~003 / ST34-001~002 / SN-001 / DEDUP-001
+  // （SQLite in-memory integration，對齊本 spec 既有 better-sqlite3 module；非 PG TestContainer）
   // =========================================================================
-  describe('TS-F090-MON：月跑 Stage 1 寫入標記 data_source', () => {
-    it('TS-F090-MON-001: 所有月跑插入列 data_source=monthly_run（無 NULL / etl_legacy）', async () => {
+  describe('TS-F094-ST1：月跑 Stage 1 寫入 ob_monthly_run_result（不再寫 ob_pool_data_list）', () => {
+    it('TS-F094-ST1-001: 月跑提案寫入 ob_monthly_run_result（帶 run_id, result_status=PENDING）；ob_pool_data_list 不被寫入', async () => {
       await seedMinimalScenario(env);
       const run = await seedRun(env.runRepo, YM);
 
       await env.service.runPipeline(run.run_id, YM);
 
-      const rows = await env.resultRepo.find({ where: { list_no: 'OB202605001' } });
+      // 月跑結果寫入新表，帶 run_id + PK 四欄 + result_status='PENDING'
+      const rows = await env.resultRepo.find({ where: { run_id: run.run_id } });
       expect(rows.length).toBeGreaterThan(0);
-      expect(rows.every((r) => r.data_source === 'monthly_run')).toBe(true);
+      expect(rows.every((r) => r.run_id === run.run_id)).toBe(true);
+      expect(rows.every((r) => !!r.list_no && !!r.orgno && !!r.appl_no)).toBe(true);
+      expect(rows.every((r) => r.result_status === 'PENDING')).toBe(true);
+
+      // regression guard：ob_pool_data_list 未被月跑寫入（單源化 — 僅 ETL 來源）
+      const pdlRows = await env.poolDataListRepo.find();
+      expect(pdlRows).toHaveLength(0);
     });
 
-    it('TS-F090-MON-002: 月跑寫入不刪既有 etl_legacy 歷史列（不同 PK 並存）', async () => {
+    it('TS-F094-ST1-001b: ob_pool_data_list 既有 ETL 歷史不受月跑影響（不寫入該表）', async () => {
       await seedMinimalScenario(env);
 
-      // 預先 seed 一筆 ETL 歷史列（不同 appl_no PK，模擬 legacy 載入）
-      await env.resultRepo.save(
-        env.resultRepo.create({
-          list_no: 'OB202605001',
-          orgno: '01',
-          appl_no: 'LEGACY999',
-          custo_no: 'CE001',
-          settle_src: 'OBDATA',
-          assignday: '20250301',
-          data_source: 'etl_legacy',
+      // 預先 seed 一筆 ETL 歷史列（單源化後 data_source='etl_load'）
+      await env.poolDataListRepo.save(
+        env.poolDataListRepo.create({
+          list_no: 'HIST', orgno: '01', appl_no: 'LEGACY999', custo_no: 'CE001',
+          settle_src: 'OBDATA', assignday: '20250301', data_source: 'etl_load',
         } as Partial<ObPoolDataList>),
       );
 
       const run = await seedRun(env.runRepo, YM);
       await env.service.runPipeline(run.run_id, YM);
 
-      // etl_legacy 列仍存在（未被月跑刪除）
-      const legacyRows = await env.resultRepo.find({ where: { data_source: 'etl_legacy' } });
-      expect(legacyRows).toHaveLength(1);
-      expect(legacyRows[0].appl_no).toBe('LEGACY999');
+      // ETL 歷史列仍存在且仍只有 1 筆（月跑未寫入 ob_pool_data_list）
+      const pdlRows = await env.poolDataListRepo.find();
+      expect(pdlRows).toHaveLength(1);
+      expect(pdlRows[0].appl_no).toBe('LEGACY999');
 
-      // 月跑列為 monthly_run
-      const monthlyRows = await env.resultRepo.find({ where: { data_source: 'monthly_run' } });
-      expect(monthlyRows.length).toBeGreaterThan(0);
-      expect(monthlyRows.every((r) => r.appl_no !== 'LEGACY999')).toBe(true);
+      // 月跑結果在新表
+      const resultRows = await env.resultRepo.find({ where: { run_id: run.run_id } });
+      expect(resultRows.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('TS-F094-ST34：Stage 3/4 結果寫入 ob_monthly_run_result', () => {
+    it('TS-F094-ST34-001: Stage 3 CR 回分結果（is_cr）寫入本表', async () => {
+      await seedMinimalScenario(env, { crEnabled: true });
+      const run = await seedRun(env.runRepo, YM);
+
+      await env.service.runPipeline(run.run_id, YM);
+
+      const rows = await env.resultRepo.find({ where: { run_id: run.run_id } });
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.is_cr === 'Y')).toBe(true);
     });
 
-    it('TS-F090-MON-003(前置): 去重查詢讀 etl_legacy + monthly_run + NULL 聯集（不加 data_source 過濾）', async () => {
+    it('TS-F094-ST34-002: Stage 4 部門/業務員分配（dept_id/emplid/emplid_deptid）寫入本表', async () => {
+      await seedMinimalScenario(env);
+      const run = await seedRun(env.runRepo, YM);
+
+      await env.service.runPipeline(run.run_id, YM);
+
+      const rows = await env.resultRepo.find({ where: { run_id: run.run_id } });
+      expect(rows.every((r) => r.dept_id === 'D001')).toBe(true);
+      expect(rows.every((r) => r.emplid === 'E001')).toBe(true);
+      expect(rows.every((r) => r.emplid_deptid === 'D001')).toBe(true);
+    });
+  });
+
+  describe('TS-F094-SN：snapshot type=result 短期雙軌保留', () => {
+    it('TS-F094-SN-001: 月跑完成後仍寫 assignment_run_snapshot type=result（與本表並存）', async () => {
+      await seedMinimalScenario(env);
+      const run = await seedRun(env.runRepo, YM);
+
+      await env.service.runPipeline(run.run_id, YM);
+
+      const resultSnap = await env.snapshotRepo.findOne({
+        where: { run_id: run.run_id, snapshot_type: 'result' },
+      });
+      expect(resultSnap).toBeTruthy();
+      // 同時 ob_monthly_run_result 亦有對應 run_id 列（雙軌並存）
+      const resultRows = await env.resultRepo.find({ where: { run_id: run.run_id } });
+      expect(resultRows.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('TS-F094-FK：FK ON DELETE CASCADE', () => {
+    it('TS-F094-FK-001: 刪除 assignment_run → ob_monthly_run_result 對應列 CASCADE 清除', async () => {
       await seedMinimalScenario(env);
       const run = await seedRun(env.runRepo, YM);
       await env.service.runPipeline(run.run_id, YM);
 
-      // 補三類來源資料（assignday 落在去重視窗）
-      await env.resultRepo.save([
-        env.resultRepo.create({
-          list_no: 'L_E', orgno: '01', appl_no: 'AE1', custo_no: 'CE001',
-          settle_src: 'OBDATA', assignday: '20250301', data_source: 'etl_legacy',
-        } as Partial<ObPoolDataList>),
-        env.resultRepo.create({
-          list_no: 'L_M', orgno: '01', appl_no: 'AM1', custo_no: 'CM001',
-          settle_src: 'OBDATA', assignday: '20250302', data_source: 'monthly_run',
-        } as Partial<ObPoolDataList>),
-        env.resultRepo.create({
-          list_no: 'L_N', orgno: '01', appl_no: 'AN1', custo_no: 'CN001',
-          settle_src: 'OBDATA', assignday: '20250303', data_source: null,
-        } as Partial<ObPoolDataList>),
-      ]);
+      const before = await env.resultRepo.find({ where: { run_id: run.run_id } });
+      expect(before.length).toBeGreaterThan(0);
 
-      // 去重查詢：不加 data_source 過濾
-      const result = await env.ds.query(
-        `SELECT DISTINCT custo_no FROM ob_pool_data_list
-          WHERE assignday >= '20250201' AND assignday <= '20250531' AND custo_no IS NOT NULL`,
-      );
-      const custoNos = result.map((r: any) => r.custo_no);
-      expect(custoNos).toContain('CE001');
-      expect(custoNos).toContain('CM001');
-      expect(custoNos).toContain('CN001');
+      // 刪除 run（snapshot FK 亦 CASCADE；須先清 snapshot 由其自身 FK CASCADE 處理）
+      await env.ds.query('DELETE FROM assignment_run_snapshot WHERE run_id = ?', [run.run_id]);
+      await env.ds.query('DELETE FROM assignment_run WHERE run_id = ?', [run.run_id]);
+
+      const after = await env.resultRepo.find({ where: { run_id: run.run_id } });
+      expect(after).toHaveLength(0);
+    });
+  });
+
+  describe('TS-F094-DEDUP：去重來源仍只讀 ob_pool_data_list（不讀本表）', () => {
+    it('TS-F094-DEDUP-001: 月跑兩次 — 第二次去重不因第一次提案（本表）而排除（提案非真相）', async () => {
+      await seedMinimalScenario(env);
+
+      // 第一次月跑：寫入 ob_monthly_run_result（custo_no=CA001 / CA002）
+      const run1 = await seedRun(env.runRepo, YM);
+      await env.service.runPipeline(run1.run_id, YM);
+      const firstRows = await env.resultRepo.find({ where: { run_id: run1.run_id } });
+      expect(firstRows.length).toBe(2);
+
+      // 第二次月跑：去重只讀 ob_pool_data_list（空）→ 不因第一次本表提案而去重
+      const run2 = await seedRun(env.runRepo, YM);
+      await env.service.runPipeline(run2.run_id, YM);
+      const secondRows = await env.resultRepo.find({ where: { run_id: run2.run_id } });
+      // 第二次仍挑到 2 筆（本表提案不納入去重；ob_pool_data_list 為空）
+      expect(secondRows.length).toBe(2);
     });
   });
 });

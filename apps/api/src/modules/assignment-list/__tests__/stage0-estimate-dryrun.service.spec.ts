@@ -229,6 +229,7 @@ describe('F092 Stage0EstimateService dry-run 完整鏈升級', () => {
           cases: undefined,
           skipped: false,
           warnings: [],
+          appliedRuleIds: ['R-FRAUD-WHITEBOARD'],
         });
 
       const res = await env.service.estimateListCount('OB202606004');
@@ -408,6 +409,7 @@ describe('F092 Stage0EstimateService dry-run 完整鏈升級', () => {
           cases: undefined,
           skipped: false,
           warnings: [],
+          appliedRuleIds: ['R-FRAUD-WHITEBOARD'],
         });
 
       const res = await env.service.estimateListCount('OB202606A01');
@@ -433,6 +435,7 @@ describe('F092 Stage0EstimateService dry-run 完整鏈升級', () => {
           cases: undefined,
           skipped: false,
           warnings: [],
+          appliedRuleIds: ['R-FRAUD-WHITEBOARD'],
         });
 
       const res = await env.service.estimateListCount('OB202606B01');

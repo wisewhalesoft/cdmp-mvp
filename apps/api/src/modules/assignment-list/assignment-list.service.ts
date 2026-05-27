@@ -23,6 +23,8 @@ import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.e
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
+// F095 / AD-E07-26 §26.5：與 F091 月跑共用同一 trigger pure utility（read-time 推導，無新 DB 欄位）
+import { deriveAppliedSpecialRules } from '@/modules/assignment/stage1/special-rules';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import type { CreateListDto } from './dto/create-list.dto';
 import type { UpdateListDto } from './dto/update-list.dto';
@@ -1159,6 +1161,8 @@ export class AssignmentListService {
       deptRatios,
       personnelRatios,
       auditTrail,
+      // F095：依 list_nm 讀時推導套用之系統特例規則（與 F091 月跑共用 deriveAppliedSpecialRules）
+      appliedSpecialRules: deriveAppliedSpecialRules(entity.list_nm),
     };
   }
 }

@@ -23,6 +23,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -40,7 +41,7 @@ interface Env {
   snapshotRepo: Repository<AssignmentRunSnapshot>;
   listRepo: Repository<ObListDefinition>;
   poolRepo: Repository<ObPoolData>;
-  resultRepo: Repository<ObPoolDataList>;
+  resultRepo: Repository<ObMonthlyRunResult>;
   deptPctRepo: Repository<ObDeptPct>;
   emplSetRepo: Repository<ObEmplSet>;
   cardTypeRepo: Repository<ObCardType>;
@@ -65,6 +66,7 @@ async function buildModule(): Promise<Env> {
           ObListDefinition,
           ObPoolData,
           ObPoolDataList,
+          ObMonthlyRunResult,
           ObDeptPct,
           ObEmplSet,
           ObCardType,
@@ -82,6 +84,7 @@ async function buildModule(): Promise<Env> {
         ObListDefinition,
         ObPoolData,
         ObPoolDataList,
+        ObMonthlyRunResult,
         ObDeptPct,
         ObEmplSet,
         ObCardType,
@@ -103,7 +106,7 @@ async function buildModule(): Promise<Env> {
     snapshotRepo: app.get(getRepositoryToken(AssignmentRunSnapshot)),
     listRepo: app.get(getRepositoryToken(ObListDefinition)),
     poolRepo: app.get(getRepositoryToken(ObPoolData)),
-    resultRepo: app.get(getRepositoryToken(ObPoolDataList)),
+    resultRepo: app.get(getRepositoryToken(ObMonthlyRunResult)),
     deptPctRepo: app.get(getRepositoryToken(ObDeptPct)),
     emplSetRepo: app.get(getRepositoryToken(ObEmplSet)),
     cardTypeRepo: app.get(getRepositoryToken(ObCardType)),
@@ -379,6 +382,7 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
 
   beforeEach(async () => {
     await env.ds.query('DELETE FROM assignment_run_snapshot');
+    await env.ds.query('DELETE FROM ob_monthly_run_result');
     await env.ds.query('DELETE FROM assignment_run');
     await env.ds.query('DELETE FROM ob_pool_data_list');
     await env.ds.query('DELETE FROM ob_pool_data');

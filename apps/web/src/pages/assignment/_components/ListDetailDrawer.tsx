@@ -29,12 +29,19 @@ import {
   Check,
   XCircle,
   RotateCcw,
+  Lock,
+  Shield,
+  ShieldAlert,
+  FilterX,
+  Tag,
+  Info,
 } from 'lucide-react';
 import {
   getFullSnapshot,
   type FullSnapshotResponse,
   type SnapshotAuditTrailItem,
   type ConditionItem,
+  type AppliedSpecialRule,
 } from '@/api/assignment-list';
 
 export interface ListDetailDrawerProps {
@@ -196,6 +203,17 @@ function DrawerTabBtn({ id, label, icon: Icon, active, onClick }: DrawerTabBtnPr
 }
 
 function ConditionsPanel({ data }: { data: FullSnapshotResponse }) {
+  return (
+    <div>
+      <UserConditions data={data} />
+      {/* F095：系統特例排除規則（唯讀，依 list_nm 讀時推導）— 對齊 prototype 27-list-definition.html */}
+      <AppliedSpecialRulesPanel rules={data.appliedSpecialRules} />
+    </div>
+  );
+}
+
+/** 使用者自設篩選條件（含 LEGACY fallback / 無條件） */
+function UserConditions({ data }: { data: FullSnapshotResponse }) {
   if (data.list.conditionPayload === null) {
     return (
       <div>
@@ -247,6 +265,107 @@ function ConditionsPanel({ data }: { data: FullSnapshotResponse }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * F095 — 系統特例排除規則唯讀區塊（AD-E07-26 §26.5）。
+ *
+ * 對齊 prototype/27-list-definition.html（L421~443 / renderSpecialRules）：
+ *   - 灰底卡 + 鎖頭 + 「系統規則 · 唯讀」pill，與使用者自設篩選條件視覺區隔
+ *   - 純展示：無任何 input / button / select / checkbox / switch（F095 AC-4 純唯讀）
+ *   - isSystemMandatory=true（詐騙白牌）→ 灰「系統強制 · 全名單套用」標籤
+ *   - isSystemMandatory=false → amber「依名單名稱觸發」標籤
+ *   - 空態（無具名規則）顯示提示文字；至少含詐騙白牌一筆（F095 AC-5）
+ *
+ * 容錯（漸進增強）：appliedSpecialRules 未回傳（舊版 API）時隱藏整個區塊。
+ */
+export function AppliedSpecialRulesPanel({
+  rules,
+}: {
+  rules?: AppliedSpecialRule[];
+}) {
+  if (!rules) return null; // 舊版 API 容錯：欄位缺失隱藏區塊
+  const hasNamedRule = rules.some((r) => !r.isSystemMandatory);
+
+  return (
+    <div
+      data-testid="applied-special-rules-panel"
+      className="mt-5 rounded-lg border border-gray-300 bg-gray-50 overflow-hidden"
+    >
+      <div className="px-4 py-3 bg-gray-100/80 border-b border-gray-200 flex items-start gap-2.5">
+        <div className="w-7 h-7 rounded-md bg-gray-200 flex items-center justify-center shrink-0">
+          <Lock className="w-4 h-4 text-gray-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-semibold text-gray-700">系統特例排除規則</h4>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-200 text-gray-600 border border-gray-300">
+              <Shield className="w-2.5 h-2.5" />
+              系統規則 · 唯讀
+            </span>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+            以下為系統依名單名稱自動套用之特例排除規則，
+            <span className="text-gray-600 font-medium">不可編輯</span>
+            ，影響本名單月跑實際分派的案件數。
+          </p>
+        </div>
+      </div>
+      <div className="p-3 space-y-2">
+        {!hasNamedRule && (
+          <div className="rounded-md border border-dashed border-gray-300 bg-white/60 px-3 py-2 flex items-center gap-2 text-[11px] text-gray-500">
+            <Info className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            此名單名稱未觸發其他具名特例規則，僅套用下方通用系統規則。
+          </div>
+        )}
+        {rules.map((r) => {
+          const mandatory = r.isSystemMandatory;
+          const RuleIcon = mandatory ? ShieldAlert : FilterX;
+          return (
+            <div
+              key={r.ruleId}
+              data-testid={`special-rule-${r.ruleId}`}
+              className={`rounded-md border p-2.5 ${mandatory ? 'border-gray-300 bg-white' : 'border-amber-100 bg-white'}`}
+            >
+              <div className="flex items-start gap-2">
+                <RuleIcon
+                  className={`w-4 h-4 mt-0.5 shrink-0 ${mandatory ? 'text-gray-500' : 'text-amber-500'}`}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-gray-800">{r.ruleName}</span>
+                    {mandatory ? (
+                      <span
+                        data-testid="rule-tag-mandatory"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-200 text-gray-600 border border-gray-300"
+                      >
+                        <Lock className="w-2.5 h-2.5" />
+                        系統強制 · 全名單套用
+                      </span>
+                    ) : (
+                      <span
+                        data-testid="rule-tag-named"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                      >
+                        <Tag className="w-2.5 h-2.5" />
+                        依名單名稱觸發
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    {r.exclusionDescription}
+                  </p>
+                  <code className="text-[10px] font-mono text-gray-400 mt-1 inline-block">
+                    {r.ruleId}
+                  </code>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

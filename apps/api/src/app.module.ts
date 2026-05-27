@@ -45,6 +45,7 @@ import { ObEmphire } from './database/entities/ob-emphire.entity';
 import { ObCalendar } from './database/entities/ob-calendar.entity';
 import { ObPoolData } from './database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from './database/entities/ob-pool-data-list.entity';
+import { ObMonthlyRunResult } from './database/entities/ob-monthly-run-result.entity';
 import { AssignmentRun } from './database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from './database/entities/assignment-run-snapshot.entity';
 import { AssignmentRunStageLog } from './database/entities/assignment-run-stage-log.entity';
@@ -62,7 +63,7 @@ import { PooldataFieldOption } from './database/entities/pooldata-field-option.e
 const E07_ENTITIES = [
   ObCodeDf, ObListDefinition, ObDeptPct, ObEmplSet,
   ObLevelcardVersion, ObLevelcardColumn, ObLevelcardScore, ObLevelcardLevel,
-  ObTier, ObEmphire, ObCalendar, ObPoolData, ObPoolDataList,
+  ObTier, ObEmphire, ObCalendar, ObPoolData, ObPoolDataList, ObMonthlyRunResult,
   AssignmentRun, AssignmentRunSnapshot, AssignmentRunStageLog, AssignmentAuditLog, AssignmentApproval,
   ObAssignConfig, ObAssignSet,
   ObArreturndfMinCap,

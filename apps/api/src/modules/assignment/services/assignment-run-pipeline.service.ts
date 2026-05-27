@@ -7,6 +7,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
@@ -60,8 +61,17 @@ export class AssignmentRunPipelineService {
     private readonly listRepo: Repository<ObListDefinition>,
     @InjectRepository(ObPoolData)
     private readonly poolRepo: Repository<ObPoolData>,
+    /**
+     * F091 近 3 個月去重來源（ETL 單一來源；F094 切換後仍只讀本表，不寫入）。
+     * 月跑提案改寫入 ob_monthly_run_result（resultRepo），不再寫 ob_pool_data_list。
+     */
     @InjectRepository(ObPoolDataList)
-    private readonly resultRepo: Repository<ObPoolDataList>,
+    private readonly poolDataListRepo: Repository<ObPoolDataList>,
+    /**
+     * F094 / AD-E07-25：月跑 Stage 1~4 分派提案結果寫入目標（取代 ob_pool_data_list）。
+     */
+    @InjectRepository(ObMonthlyRunResult)
+    private readonly resultRepo: Repository<ObMonthlyRunResult>,
     @InjectRepository(ObDeptPct)
     private readonly deptPctRepo: Repository<ObDeptPct>,
     @InjectRepository(ObEmplSet)
@@ -194,14 +204,15 @@ export class AssignmentRunPipelineService {
       }
 
       // Stage 2 / 3 / 4 — 依 v1 / v2 分支執行
-      type ResultRow = Partial<ObPoolDataList>;
+      // F094：回傳型別由 Partial<ObPoolDataList>[] 改為 Partial<ObMonthlyRunResult>[]，每列帶 run_id
+      type ResultRow = Partial<ObMonthlyRunResult>;
       const stage4Results: ResultRow[] = useV2
-        ? await this.executeV2(stage1Cases, ym)
-        : await this.executeV1(stage1Cases, ym);
+        ? await this.executeV2(stage1Cases, ym, runId)
+        : await this.executeV1(stage1Cases, ym, runId);
 
       const totalCases = stage4Results.length;
 
-      // 三份快照 + ob_pool_data_list 原子寫入
+      // 三份快照 + ob_monthly_run_result 原子寫入
       const configPayload = await this.buildConfigPayload(ym, validLists);
       const inputListPayload = {
         cases: stage1Cases.flatMap(({ list, pool }) =>
@@ -229,18 +240,14 @@ export class AssignmentRunPipelineService {
       };
 
       const now = new Date();
-      // F090 / AD-E07-21 §21.3（BR-4）：月跑 Stage 1 寫入 ob_pool_data_list 一律標
-      // data_source='monthly_run'，與 ETL 載入的 'etl_legacy' 歷史共存於同表。
-      // 去重查詢（F091）讀兩者聯集，不依賴此欄過濾；此標記僅供 ETL partition-replace
-      // 與月跑 per-list 截斷各自保護對方分區（不互刪）。
-      for (const r of stage4Results) {
-        r.data_source = 'monthly_run';
-      }
+      // F094 / AD-E07-25 Phase A：月跑 Stage 1~4 提案結果寫入 ob_monthly_run_result（帶 run_id），
+      // **不再寫入 ob_pool_data_list**（後者回歸 ETL 單一來源；去重仍只讀 ob_pool_data_list）。
+      // snapshot type=result 短期雙軌保留（DP-AD25-3），作為稽核快照與本表並存。
       await this.dataSource.transaction(async (txm) => {
         if (stage4Results.length > 0) {
           await txm
-            .getRepository(ObPoolDataList)
-            .save(stage4Results as ObPoolDataList[]);
+            .getRepository(ObMonthlyRunResult)
+            .save(stage4Results as ObMonthlyRunResult[]);
         }
         await txm.getRepository(AssignmentRunSnapshot).save([
           { run_id: runId, snapshot_type: 'config', payload: configPayload, created_at: now },
@@ -318,11 +325,12 @@ export class AssignmentRunPipelineService {
   private async executeV1(
     stage1Cases: Array<{ list: ObListDefinition; pool: ObPoolData[] }>,
     ym: string,
-  ): Promise<Partial<ObPoolDataList>[]> {
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
     const allLevels = await this.levelRepo.find();
     const allTiers = await this.tierRepo.find();
     const now = new Date();
-    const out: Partial<ObPoolDataList>[] = [];
+    const out: Partial<ObMonthlyRunResult>[] = [];
 
     for (const { list, pool } of stage1Cases) {
       const depts = await this.deptPctRepo.find({
@@ -345,6 +353,7 @@ export class AssignmentRunPipelineService {
         const isCr = list.cr_enabled ? 'Y' : 'N';
 
         out.push({
+          run_id: runId,
           list_no: list.list_no,
           orgno: p.orgno,
           appl_no: p.appl_no,
@@ -356,6 +365,8 @@ export class AssignmentRunPipelineService {
           is_cr: isCr,
           dept_id: dept?.obdeptid ?? null,
           emplid: empl?.emplid ?? null,
+          emplid_deptid: empl?.deptid_m ?? null,
+          result_status: 'PENDING',
           created_at: now,
           updated_at: now,
         });
@@ -370,7 +381,8 @@ export class AssignmentRunPipelineService {
   private async executeV2(
     stage1Cases: Array<{ list: ObListDefinition; pool: ObPoolData[] }>,
     ym: string,
-  ): Promise<Partial<ObPoolDataList>[]> {
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
     const allTiers = await this.tierRepo.find();
     const allEmpl = await this.emplSetRepo.find();
     const allColumns = await this.columnRepo.find();
@@ -388,7 +400,7 @@ export class AssignmentRunPipelineService {
     }
 
     const now = new Date();
-    const out: Partial<ObPoolDataList>[] = [];
+    const out: Partial<ObMonthlyRunResult>[] = [];
 
     // ----- 預先收集 CR 候選（cr_enabled list 才查歷史 snapshot）-----
     const crEnabledListNos = stage1Cases
@@ -471,6 +483,7 @@ export class AssignmentRunPipelineService {
         const empl = exchangeSet.has(i) ? seniorEmpls[0] : defaultEmpl;
 
         out.push({
+          run_id: runId,
           list_no: list.list_no,
           orgno: p.orgno,
           appl_no: p.appl_no,
@@ -482,6 +495,8 @@ export class AssignmentRunPipelineService {
           is_cr: isCr,
           dept_id: dept?.obdeptid ?? null,
           emplid: empl?.emplid ?? null,
+          emplid_deptid: empl?.deptid_m ?? null,
+          result_status: 'PENDING',
           created_at: now,
           updated_at: now,
         });
@@ -630,7 +645,8 @@ export class AssignmentRunPipelineService {
       list,
       workdt,
       this.poolRepo,
-      this.resultRepo,
+      // F094：去重來源仍為 ob_pool_data_list（poolDataListRepo），非月跑結果表（AC-7）
+      this.poolDataListRepo,
       { dryRun: false },
     );
 
