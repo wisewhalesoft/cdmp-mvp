@@ -11,6 +11,7 @@ import {
   Hash,
   Plus,
   Pencil,
+  Settings,
   Play,
   RotateCcw,
   ToggleRight,
@@ -34,6 +35,7 @@ import {
   deletePipeline,
 } from '@/api/etl-pipelines';
 import { CreatePipelineModal } from './create-pipeline-modal';
+import { EditPipelineModal } from './edit-pipeline-modal';
 import type {
   PipelineListItem,
   PipelineStatsResponse,
@@ -83,6 +85,9 @@ export function PipelineListPage() {
   const [statusFilter, setStatusFilter] = useState<EtlPipelineStatus | ''>('');
   const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // F093: Edit metadata modal target (null = closed)
+  const [editTarget, setEditTarget] = useState<PipelineListItem | null>(null);
 
   // Execution state
   const [executingIds, setExecutingIds] = useState<Set<string>>(new Set());
@@ -271,6 +276,22 @@ export function PipelineListPage() {
             data-testid={`edit-pipeline-${pipeline.id}`}
           >
             <Pencil className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Settings (F093: edit metadata — name / description / schedule) */}
+        {isRunning ? (
+          <button className="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中">
+            <Settings className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setEditTarget(pipeline)}
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-blue-600"
+            title="設定"
+            data-testid={`settings-pipeline-${pipeline.id}`}
+          >
+            <Settings className="w-4 h-4" />
           </button>
         )}
 
@@ -650,6 +671,20 @@ export function PipelineListPage() {
           fetchData();
         }}
       />
+
+      {/* F093: Edit Pipeline metadata modal */}
+      {editTarget && (
+        <EditPipelineModal
+          open={!!editTarget}
+          pipeline={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSuccess={() => {
+            setEditTarget(null);
+            showToast('Pipeline 已更新', `${editTarget.name} 的設定已儲存`);
+            fetchData();
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Dialog (F034) — per prototype 17-pipeline-management.html */}
       {deleteTarget && (

@@ -13,6 +13,8 @@ import type {
   TestPipelineResponse,
   PipelineProgressResponse,
   TogglePipelineResponse,
+  UpdatePipelineRequest,
+  UpdatePipelineResponse,
   DeletePipelineResponse,
   PublishVersionResponse,
   PipelineLogListResponse,
@@ -109,6 +111,18 @@ export async function togglePipeline(id: string, enabled: boolean): Promise<Togg
   const response = await apiClient.patch<TogglePipelineResponse>(
     `/etl/pipelines/${id}/toggle`,
     { enabled },
+  );
+  return response.data;
+}
+
+// F093: Edit Pipeline metadata (name / description / schedule)
+export async function updatePipeline(
+  id: string,
+  payload: UpdatePipelineRequest,
+): Promise<UpdatePipelineResponse> {
+  const response = await apiClient.patch<UpdatePipelineResponse>(
+    `/etl/pipelines/${id}`,
+    payload,
   );
   return response.data;
 }

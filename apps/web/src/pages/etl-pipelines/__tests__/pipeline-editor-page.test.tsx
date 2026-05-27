@@ -196,6 +196,7 @@ const pipelinesData = {
     {
       id: 'pl-1',
       name: '客戶資料同步',
+      description: null,
       version: 3,
       stepCount: 4,
       status: 'draft' as const,

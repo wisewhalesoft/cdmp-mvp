@@ -29,6 +29,7 @@ const mockListResponse: PipelineListResponse = {
     {
       id: 'pl-1',
       name: '每日客戶同步 Pipeline',
+      description: '每日同步客戶資料',
       version: 2,
       stepCount: 5,
       status: 'active',
@@ -42,6 +43,7 @@ const mockListResponse: PipelineListResponse = {
     {
       id: 'pl-2',
       name: 'ETL Daily Pipeline',
+      description: null,
       version: 1,
       stepCount: 3,
       status: 'draft',
@@ -55,6 +57,7 @@ const mockListResponse: PipelineListResponse = {
     {
       id: 'pl-3',
       name: '庫存同步 Pipeline',
+      description: '庫存資料同步',
       version: 1,
       stepCount: 2,
       status: 'running',
@@ -359,6 +362,92 @@ describe('PipelineListPage', () => {
     // Tab navigation should be outside <main>
     const main = tabContainer.closest('main');
     expect(main).toBeNull();
+  });
+
+  // =====================================================
+  // F093: Edit Pipeline Metadata — gear button
+  // =====================================================
+
+  // TS-F093-FE-001: gear 按鈕出現在每列 pencil 之後、execute/toggle 之前
+  it('TS-F093-FE-001: should render a settings gear button after the edit pencil', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // active and draft pipelines have an enabled gear; running has a disabled one
+    const settingsActive = screen.getByTestId('settings-pipeline-pl-1');
+    const settingsDraft = screen.getByTestId('settings-pipeline-pl-2');
+    expect(settingsActive).not.toBeNull();
+    expect(settingsDraft).not.toBeNull();
+    expect(settingsActive.getAttribute('title')).toBe('設定');
+
+    // DOM ordering: edit pencil comes BEFORE the gear within the same row
+    const row = screen.getByTestId('pipeline-row-pl-1');
+    const buttons = Array.from(row.querySelectorAll('button'));
+    const editIdx = buttons.findIndex((b) => b.getAttribute('data-testid') === 'edit-pipeline-pl-1');
+    const gearIdx = buttons.findIndex((b) => b.getAttribute('data-testid') === 'settings-pipeline-pl-1');
+    const execIdx = buttons.findIndex((b) => b.getAttribute('data-testid') === 'execute-pipeline-pl-1');
+    expect(editIdx).toBeGreaterThanOrEqual(0);
+    expect(gearIdx).toBeGreaterThan(editIdx);
+    expect(execIdx).toBeGreaterThan(gearIdx);
+  });
+
+  // TS-F093-FE-002 / FE-022: running Pipeline 的 gear 為 disabled，點擊不開 Modal
+  it('TS-F093-FE-002: should disable the gear button for a running pipeline', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // pl-3 is running — gear must be disabled (DOM-level), with cursor-not-allowed styling
+    const row = screen.getByTestId('pipeline-row-pl-3');
+    const gear = row.querySelector('button[title="執行中"]') as HTMLButtonElement | null;
+    // The running row should NOT expose a clickable settings testid
+    expect(screen.queryByTestId('settings-pipeline-pl-3')).toBeNull();
+    // There must be a disabled settings-style button (cursor-not-allowed) in the running row
+    const disabledGear = Array.from(row.querySelectorAll('button')).find(
+      (b) => b.disabled && b.className.includes('cursor-not-allowed'),
+    );
+    expect(disabledGear).toBeDefined();
+    expect(gear).not.toBeNull();
+  });
+
+  // TS-F093-FE-022: running gear click 不開 Modal
+  it('TS-F093-FE-022: clicking does not open modal for a running pipeline', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    // No edit-pipeline-modal should be present, even after attempting interactions
+    expect(screen.queryByTestId('edit-pipeline-modal')).toBeNull();
+  });
+
+  // TS-F093-FE-003: 非 running 點擊 gear → Modal 開啟並預填
+  it('TS-F093-FE-003: clicking the gear opens the edit modal pre-filled', async () => {
+    mockedGetPipelines.mockResolvedValue(mockListResponse);
+    mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+    await act(async () => {
+      renderPage();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('settings-pipeline-pl-1'));
+    });
+
+    const modal = screen.getByTestId('edit-pipeline-modal');
+    expect(modal).toBeDefined();
+    expect(modal.textContent).toContain('編輯 Pipeline');
+    const nameInput = screen.getByTestId('pipeline-name-input') as HTMLInputElement;
+    expect(nameInput.value).toBe('每日客戶同步 Pipeline');
   });
 
   // TS-F031-014: 停用成功後列表即時更新
