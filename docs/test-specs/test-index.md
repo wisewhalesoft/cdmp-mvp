@@ -1,16 +1,17 @@
 ---
 type: test-design-index
-version: "2.17"
+version: "2.18"
 status: draft
 last_updated: 2026-05-27
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096]
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：73 份（4 策略文件 + 62 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1309 個（前 1225 + **Phase A/B 精確化工程 +84**：F090 v2.0 更新 +8 + F091 v2.0 更新 +17 + F094 新建 17 + F095 新建 23 + F096 新建 9 + F090/F091 廢棄 v1.0 場景 -9，合計 1309）
+> **測試文件總數**：74 份（4 策略文件 + 63 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
+> **總測試場景數**：1357 個（前 1309 + **F097 作業月語意統一 +48**：後端 Unit/Integration 27（SVC 5 + CTL 4 + DTO 7 + GUARD 4 + RUN 2 + DEDUP 4 + NODEDUP 1）+ 前端 Component/靜態 20（CTX 6 + TRIGGER 5 + RBAC 1 + DOWNSTREAM 4 + LABEL 3 + FORWARD 1）+ E2E 1，合計 1357）
+> **F097 作業月語意統一新增（2026-05-27）**：新增 F097 test spec（48 個場景）。涵蓋後端 `SystemService.getDefaultTargetWorkYm()`（一般月 +1 / 跨年邊界 / OVERRIDE）、`POST /api/v1/assignment/runs` DTO `workYm` 三分支驗證（缺省 400 / 格式錯 422 `WORK_YM_INVALID_FORMAT` / 過去月 422 `RUN_WORKYM_PAST`）、過去月 guard 邊界（`>=` 語意：目標月 1 號當天合法）、三 controller `computeCurrentWorkYm()` 移除 regression、`project_workym` 寫入目標月（非執行月）驗證、Stage 1 去重視窗 `workdt` 對齊（`project_workym='202606'` → 上界 `2026-05-31`，後移一月 regression）、`computeDedupWindow` 函式不改靜態 git diff 驗證（AC-20）、前端 `AssignmentWorkYmContext` 四頁同步 / `run-history` 獨立 / 處長 MonthPicker disabled / 下游結果頁無 MonthPicker 靜態月份、UI 標籤「分派作業月份」regression、forward-only 注釋存在性、E2E 全鏈整合。命名鎖定對齊 glossary.md（`current_work_ym` / `target_work_ym` / `project_workym` / `workdt` / `AssignmentWorkYmContext` / `getDefaultTargetWorkYm` / `RUN_WORKYM_PAST`）。
 > **Stage 1 精確化工程 Phase A/B 更新（2026-05-27）**：F090 v2.0（data_source 單源化 `etl_load` + ETL Delete 全量放寬 + 月跑不再寫本表 Regression）；F091 v2.0（特例 DELETE trigger 關鍵字 SP bug fix：期中機車 / 期中 / 年以上，v1.0 誤判字中結/強案/年資/滿已廢棄；去重上界動態計算 `MIN(MAX(assignday), workdt-1)`；year_produ 改 parseInt）；新增 F094（ob_monthly_run_result migration + Stage 1/3/4 落點切換 + FK CASCADE）；新增 F095（appliedSpecialRules[] 讀時推導 + 觸發一致性 + 前端唯讀 Component RTL）；新增 F096（pooldata_field_whitelist list_type 停用 m293 + available-columns regression + 既有條件相容）。⚠️ **F091 v2.0 SP bug fix 為最高風險變更**：v1.0 SD-002~006（中結/強案/年資觸發）全面廢棄，以 SDv2 系列取代；所有 mock `list_nm` 字串須更新為 v2.0 正確繁體中文（期中機車/期中/年以上）。
 > **Stage 1 精確化工程新增（2026-05-26）**：新增 3 個 test spec 檔（F090 / F091 / F092）。Phase 1（F090）ETL + data_source schema 13 個場景；Phase 2（F091）Stage 1 三步驟補完整 30 個場景（MONTH_CNT × 6 + 去重 × 5 + 特殊 DELETE × 8 + 封裝 × 5 + Regression × 3 + 誤差 × 3）；Phase 3（F092）dry-run 精確估算 26 個場景（唯讀 × 4 + 一致性 × 3 + estimateListCount 升級 × 4 + F049/F088 升級 × 4 + Regression × 3）。⚠️ F091 為唯一改變 production 月跑案件數的階段（deploy 後立即生效、無 flag）；既有 Stage 1 pipeline integration test baseline 需同步更新。
 > **M01 v2.0~v2.3 Kanban 重構 + Detail Snapshot + Signal（2026-05-21）**：新增 9 個 test spec 檔（F048/F049/F052/F061 v1.4/F077/F081/F085/F089；F050 升版 v2.2）。新增場景合計 **103 個**：F050 v2.2 +19（SS 群 12 + SIG 群 7）、F048 v2.0 新建 15（K 群 8 + 搜尋 2 + Drawer 3 + Banner 2）、F049 v1.1 新建 5（CTA-001~005）、F052 v2.1 新建 3（TXT-001~003）、F077 v1.3 新建 23（矩陣 15 + 橫切 6 + Integration 2）、F081 v1.3 新建 6（Integration 4 + Component 2）、F085 v1.3 新建 6（Integration 4 + Component 2）、F089 v1.3 新建 7（Integration 4 + Component 3）、F061 v1.4 新建 3（CTA-001~003）。Deprecated 標記：F048 v1.0 表格列 AC-1 + 頁籤 AC-5；F052 「停」縮寫按鈕斷言。
