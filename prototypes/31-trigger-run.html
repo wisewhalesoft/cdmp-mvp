@@ -114,6 +114,19 @@
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
     <h1 class="text-base font-semibold text-gray-800">觸發月跑</h1>
     <div class="flex items-center gap-4">
+      <!-- 分派作業月份 MonthPicker（仿 27 名單定義頁 header 樣式；F097 §5.1 / AC-4 / AC-7） -->
+      <div class="flex items-center gap-2" data-testid="trigger-run-month-picker">
+        <span class="text-xs text-gray-500 whitespace-nowrap">分派作業月份</span>
+        <div class="flex items-center gap-1">
+          <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"></select>
+          <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
@@ -151,7 +164,7 @@
       <i data-lucide="eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
       <div class="flex-1">
         <p class="font-semibold text-purple-900">處長角色為唯讀檢視</p>
-        <p class="text-xs text-purple-800 mt-0.5">您可查看本月月跑前置檢查與三份快照規劃，但無法觸發月跑（僅部長 / Admin 可執行）。</p>
+        <p class="text-xs text-purple-800 mt-0.5">您可查看分派作業月份月跑前置檢查與三份快照規劃（分派作業月份為唯讀），但無法觸發月跑（僅部長 / Admin 可執行）。</p>
       </div>
     </div>
     <!-- Demo Bar -->
@@ -169,7 +182,7 @@
         <i data-lucide="alert-octagon" class="w-5 h-5 text-warning mt-0.5 shrink-0"></i>
         <div class="flex-1">
           <p class="font-semibold text-warning">月跑執行中（無法重複觸發）</p>
-          <p class="text-sm text-gray-700 mt-0.5">202605 月跑 <code class="font-mono text-xs">run_id: 550e8400-e29b-41d4-a716-446655440000</code> 處於 <span class="font-semibold">running</span> 狀態。</p>
+          <p class="text-sm text-gray-700 mt-0.5"><span data-target-ym-compact>202606</span> 月跑 <code class="font-mono text-xs">run_id: 550e8400-e29b-41d4-a716-446655440000</code> 處於 <span class="font-semibold">running</span> 狀態。</p>
           <p class="text-xs text-gray-600 mt-1">API 回應：<code>409 ASSIGNMENT_RUN_ALREADY_RUNNING</code> — 請等待完成後再觸發。同月僅允許一個 pending/running 月跑（BR-2）。</p>
           <a href="32-run-progress.html" class="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
             <i data-lucide="activity" class="w-4 h-4"></i>
@@ -185,11 +198,11 @@
             <div class="flex items-center gap-2 mb-2">
               <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
                 <i data-lucide="calendar" class="w-3 h-3"></i>
-                作業年月 202605
+                分派作業月份 <span data-target-ym-compact>202606</span>
               </span>
               <span class="text-xs text-gray-400">project_workym</span>
             </div>
-            <h2 class="text-xl font-bold text-gray-900">觸發 2026-05 月跑</h2>
+            <h2 class="text-xl font-bold text-gray-900">觸發 <span data-target-ym-dash>2026-06</span> 月跑</h2>
             <p class="text-sm text-gray-600 mt-1">啟動全流程 Stage 0~4 + 三份快照原子性寫入。本次將處理 <span class="font-semibold text-gray-900" id="ctaActiveListCount">8</span> 個 active 名單，預估 <span class="font-semibold text-gray-900" id="ctaTotalCount">9,500</span> 筆案件。</p>
 
             <div class="mt-3 flex items-center gap-4 text-xs text-gray-500">
@@ -242,7 +255,7 @@
                   <h4 class="text-sm font-semibold text-gray-800">名單定義已建立</h4>
                   <span class="check-badge text-xs"></span>
                 </div>
-                <p class="text-xs text-gray-500 mt-0.5">本月（202605）至少 1 筆 <code>ob_list_definition</code> 處於 status='active'</p>
+                <p class="text-xs text-gray-500 mt-0.5">分派作業月份（<span data-target-ym-compact>202606</span>）至少 1 筆 <code>ob_list_definition</code> 處於 status='active'</p>
                 <p class="check-detail text-xs mt-1.5"></p>
               </div>
             </div>
@@ -325,8 +338,8 @@
             </div>
             <div class="p-5 space-y-3">
               <div class="flex items-center justify-between text-sm">
-                <span class="text-gray-500">作業年月</span>
-                <span class="font-mono font-semibold text-gray-900">202605</span>
+                <span class="text-gray-500">分派作業月份</span>
+                <span class="font-mono font-semibold text-gray-900" data-target-ym-compact>202606</span>
               </div>
               <div class="flex items-center justify-between text-sm">
                 <span class="text-gray-500">active 名單數</span>
@@ -480,14 +493,14 @@
           <div class="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <i data-lucide="play-circle" class="w-7 h-7 text-danger"></i>
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">確認啟動 2026-05 月跑？</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">確認啟動 <span data-target-ym-dash>2026-06</span> 月跑？</h3>
           <p class="text-sm text-gray-600 leading-relaxed">系統將立即建立 <code class="font-mono text-xs">assignment_run</code>（status=pending）並開始非同步執行。</p>
         </div>
         <div class="px-6 pb-2">
           <div class="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 leading-relaxed space-y-1">
             <div class="flex items-center justify-between">
               <span class="text-gray-500">project_workym</span>
-              <span class="font-mono font-semibold">202605</span>
+              <span class="font-mono font-semibold" data-target-ym-compact>202606</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-gray-500">active 名單數</span>
@@ -523,6 +536,72 @@
   </div>
 
   <script>
+    // ===== 分派作業月份 MonthPicker（F097：target_work_ym，預設下月）=====
+    // 仿 27-list-definition.html header MonthPicker（prev/select/next）。
+    // current_work_ym（系統錨點月，日曆當月）僅作為計算基準；UI 呈現之選定值為 target_work_ym（預設 = 錨點月 + 1）。
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function shiftYm(ym, delta) {
+      const [y, m] = ym.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+    const CURRENT_WORK_YM = '2026-05';                       // 系統錨點月（demo 固定）
+    const DEFAULT_TARGET_WORK_YM = shiftYm(CURRENT_WORK_YM, 1); // 預設作業月 = 下月 → 2026-06
+    const mpState = {
+      current: DEFAULT_TARGET_WORK_YM,
+      min: shiftYm(CURRENT_WORK_YM, -12),
+      max: shiftYm(CURRENT_WORK_YM, 12)
+    };
+    function ymCompact(ym) { return ym.replace('-', ''); }   // '2026-06' → '202606'
+    function ymDash(ym) { return ym; }                       // '2026-06'
+
+    function dsBuildMonthOptions() {
+      const sel = document.getElementById('mp-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+      let cur = mpState.min;
+      const anchor = CURRENT_WORK_YM;
+      const nextM = DEFAULT_TARGET_WORK_YM;
+      while (cur <= mpState.max) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        let suffix = '';
+        if (cur < anchor) suffix = '（歷史）';
+        else if (cur === anchor) suffix = '（錨點月）';
+        else if (cur === nextM) suffix = '（下月・預設）';
+        else suffix = '（未來）';
+        opt.textContent = cur + suffix;
+        if (cur < anchor) opt.style.color = '#9CA3AF';
+        if (cur === mpState.current) opt.selected = true;
+        sel.appendChild(opt);
+        cur = shiftYm(cur, 1);
+      }
+    }
+    function dsMonthShift(delta) {
+      const next = shiftYm(mpState.current, delta);
+      if (next < mpState.min || next > mpState.max) return;
+      mpState.current = next;
+      dsBuildMonthOptions();
+      onMonthChanged();
+    }
+    function dsMonthChange(ym) { mpState.current = ym; onMonthChanged(); }
+    function onMonthChanged() {
+      const prev = document.getElementById('mp-prev');
+      const next = document.getElementById('mp-next');
+      // section_chief 唯讀時整組 disabled，不重新開啟
+      const readonly = (currentRole === 'section_chief');
+      if (prev) prev.disabled = readonly || mpState.current <= mpState.min;
+      if (next) next.disabled = readonly || mpState.current >= mpState.max;
+      renderSelectedMonth();
+    }
+    // 將選定之 target_work_ym 同步到頁面所有月份呈現處
+    function renderSelectedMonth() {
+      const dash = ymDash(mpState.current);     // 2026-06
+      const compact = ymCompact(mpState.current); // 202606
+      document.querySelectorAll('[data-target-ym-dash]').forEach(el => el.textContent = dash);
+      document.querySelectorAll('[data-target-ym-compact]').forEach(el => el.textContent = compact);
+    }
+
     // ===== Check item state helpers =====
     function setCheckItemStatus(num, status, detail) {
       const item = document.querySelector(`.check-item[data-check="${num}"]`);
@@ -565,11 +644,11 @@
 
     // 預設細節
     const defaultDetails = {
-      1: '<span class="text-emerald-600">8 個 active 名單已就緒（OB202605001 ~ OB202605008）</span>',
+      1: '<span class="text-emerald-600">8 個 active 名單已就緒（OB202606001 ~ OB202606008）</span>',
       2: '<span class="text-emerald-600">所有 8 個 LIST_NO 部門比例加總均 = 100.0%</span>',
       3: '<span class="text-emerald-600">所有部門 × LIST_NO 組合人員比例加總 = 100.0%</span>',
       4: '<span class="text-emerald-600">6 個 CARD_TYPE 計分版本 (H/S/E/S5/E5/M) 全部 active</span>',
-      5: '<span class="text-emerald-600">無 pending/running 月跑（最近一次 completed: 202604, 已完成）</span>',
+      5: '<span class="text-emerald-600">無 pending/running 月跑（最近一次 completed: 202605, 已完成）</span>',
       6: ''
     };
     [1,2,3,4,5,6].forEach(n => setCheckItemStatus(n, 'pass', defaultDetails[n]));
@@ -625,9 +704,17 @@
       document.getElementById('directorReadonlyBanner').classList.toggle('hidden', !directorReadonly);
       const btnStart = document.getElementById('btnStartRun');
       if (btnStart) btnStart.style.display = directorReadonly ? 'none' : '';
+      // 處長（section_chief）唯讀：分派作業月份 MonthPicker disabled（F097 AC-7）
+      const mpSelect = document.getElementById('mp-select');
+      if (mpSelect) mpSelect.disabled = directorReadonly;
+      onMonthChanged(); // 依角色重算 prev/next disabled 狀態
       lucide.createIcons();
     }
-    document.addEventListener('DOMContentLoaded', function(){ setRole('director'); });
+    document.addEventListener('DOMContentLoaded', function(){
+      dsBuildMonthOptions();
+      renderSelectedMonth();
+      setRole('director');
+    });
 
     // ===== Demo state =====
     function showDemoState(state) {
@@ -658,8 +745,8 @@
         btn.classList.add('opacity-50','cursor-not-allowed');
         // 部分失敗
         setCheckItemStatus(1, 'pass', defaultDetails[1]);
-        setCheckItemStatus(2, 'fail', '<span class="text-danger">LIST_NO <code>OB202605003</code> 部門比例加總 = 90.0%（缺 10%）；LIST_NO <code>OB202605007</code> 部門比例加總 = 110.0%（多 10%）</span>');
-        setCheckItemStatus(3, 'fail', '<span class="text-danger">LIST_NO <code>OB202605004</code> × 部門 <code>XTC1</code> 人員比例加總 = 95.0%（缺 5%）</span>');
+        setCheckItemStatus(2, 'fail', '<span class="text-danger">LIST_NO <code>OB202606003</code> 部門比例加總 = 90.0%（缺 10%）；LIST_NO <code>OB202606007</code> 部門比例加總 = 110.0%（多 10%）</span>');
+        setCheckItemStatus(3, 'fail', '<span class="text-danger">LIST_NO <code>OB202606004</code> × 部門 <code>XTC1</code> 人員比例加總 = 95.0%（缺 5%）</span>');
         setCheckItemStatus(4, 'pass', defaultDetails[4]);
         setCheckItemStatus(5, 'pass', defaultDetails[5]);
         setCheckItemStatus(6, 'warn', '<span class="text-warning">OB_ARRETURNDF_MIN_CAP 上次同步時間為 2026-05-08 02:00，超過 24 小時建議重跑 ETL</span>');

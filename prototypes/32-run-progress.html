@@ -175,7 +175,7 @@
         </div>
         <div class="px-5 py-4 grid grid-cols-5 gap-4">
           <div>
-            <div class="text-xs text-gray-500 mb-1">作業年月</div>
+            <div class="text-xs text-gray-500 mb-1">分派作業月份</div>
             <div class="text-sm font-semibold text-gray-800 font-mono">202605</div>
           </div>
           <div>
@@ -370,28 +370,28 @@
     // ===== Mock Data: 5 Stages =====
     const stagesByState = {
       running: [
-        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算分派作業月份每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
         { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'completed', startedAt: '2026-05-09 12:00:08', finishedAt: '2026-05-09 12:01:42', processed: 50000, unit: '筆', err: null },
         { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'running', startedAt: '2026-05-09 12:01:42', finishedAt: null, processed: 28400, unit: '/ 50,000 筆', err: null, percent: 57 },
         { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
         { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
       ],
       completed: [
-        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算分派作業月份每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
         { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'completed', startedAt: '2026-05-09 12:00:08', finishedAt: '2026-05-09 12:01:42', processed: 50000, unit: '筆', err: null },
         { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'completed', startedAt: '2026-05-09 12:01:42', finishedAt: '2026-05-09 12:08:15', processed: 50000, unit: '筆', err: null },
         { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'completed', startedAt: '2026-05-09 12:08:15', finishedAt: '2026-05-09 12:18:40', processed: 9500, unit: '筆', err: null },
         { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'completed', startedAt: '2026-05-09 12:18:40', finishedAt: '2026-05-09 12:30:17', processed: 9500, unit: '筆', err: null },
       ],
       failed: [
-        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算分派作業月份每日應分派量上限', status: 'completed', startedAt: '2026-05-09 12:00:05', finishedAt: '2026-05-09 12:00:08', processed: 31, unit: '日', err: null },
         { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'completed', startedAt: '2026-05-09 12:00:08', finishedAt: '2026-05-09 12:01:42', processed: 50000, unit: '筆', err: null },
         { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'completed', startedAt: '2026-05-09 12:01:42', finishedAt: '2026-05-09 12:08:15', processed: 50000, unit: '筆', err: null },
         { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'failed', startedAt: '2026-05-09 12:08:15', finishedAt: '2026-05-09 12:08:42', processed: 1820, unit: '/ 9,500 筆', err: 'ASSIGNMENT_DEPT_RATIO_MISMATCH: 部門 D03 設定比例 25% 但實際可分配人員工作量已飽和（available_capacity = 0）' },
         { id: 4, name: 'Stage 4 — 人員分配', desc: '依 ob_empl_set 將案件分配到業務員', status: 'skipped', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
       ],
       pending: [
-        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算當月每日應分派量上限', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
+        { id: 0, name: 'Stage 0 — 日比例試算', desc: '計算分派作業月份每日應分派量上限', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
         { id: 1, name: 'Stage 1 — 案件池篩選', desc: '依 active LIST_NO 從 ob_pool_data 撈案件', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
         { id: 2, name: 'Stage 2 — 計分（fn_calc_tier_level）', desc: '計算 score / card_level / tier_level', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },
         { id: 3, name: 'Stage 3 — 部門分配', desc: '依 ob_dept_pct 將案件分配到部門', status: 'pending', startedAt: null, finishedAt: null, processed: null, unit: '', err: null },

@@ -86,13 +86,18 @@
       <span class="ml-1 font-mono text-xs text-gray-400" id="hdrListNo"></span>
     </div>
     <div class="flex items-center gap-3">
-      <div class="has-tooltip">
-        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-gray-50 border border-border rounded-md text-gray-500 cursor-not-allowed">
-          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-          <span class="font-mono">2026-05</span>
-          <i data-lucide="lock" class="w-3 h-3 text-gray-400"></i>
+      <!-- 分派作業月份 MonthPicker（仿 27 名單定義頁 header 樣式；F097 §5.1 / US-143：共享 target_work_ym，預設下月） -->
+      <div class="flex items-center gap-2" data-testid="ready-summary-month-picker">
+        <span class="text-xs text-gray-500 whitespace-nowrap">分派作業月份</span>
+        <div class="flex items-center gap-1">
+          <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
+          <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
         </div>
-        <span class="tip">摘要階段：月份鎖定於名單所屬月份</span>
       </div>
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>

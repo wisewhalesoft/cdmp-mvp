@@ -103,6 +103,19 @@
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
     <h1 class="text-base font-semibold text-gray-800">Stage 0 試算</h1>
     <div class="flex items-center gap-4">
+      <!-- 分派作業月份 MonthPicker（仿 27 名單定義頁 header 樣式；F097 §5.1，預設下月 target_work_ym） -->
+      <div class="flex items-center gap-2" data-testid="stage0-month-picker">
+        <span class="text-xs text-gray-500 whitespace-nowrap">分派作業月份</span>
+        <div class="flex items-center gap-1">
+          <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
+          <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
@@ -233,7 +246,7 @@
 
               <!-- API ref -->
               <div class="text-xs text-gray-400 pt-2 border-t border-border">
-                <code>GET /api/v1/assignment/stage0/daily-estimate?ym=202605</code>
+                <code>GET /api/v1/assignment/stage0/daily-estimate?ym=<span data-target-ym-compact>202606</span></code>
               </div>
             </div>
           </div>
@@ -259,7 +272,7 @@
                 <i data-lucide="calendar-check" class="w-4 h-4 text-blue-500"></i>
               </div>
               <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiWorkdays">21</div>
-              <p class="text-xs text-gray-400 mt-1">本月可分派天數</p>
+              <p class="text-xs text-gray-400 mt-1">分派作業月份可分派天數</p>
             </div>
             <div class="bg-white rounded-lg border border-border shadow-sm p-4">
               <div class="flex items-center justify-between mb-2">
@@ -345,6 +358,59 @@
   </main>
 
   <script>
+    // ===== 分派作業月份 MonthPicker（F097：target_work_ym，預設下月）=====
+    // 仿 27-list-definition.html header MonthPicker（prev/select/next）。
+    // 註：本頁試算行事曆 mock 仍以 2026-05 區間示範（demo 資料可混月）；picker 提供共享 target_work_ym 語意與 API ?ym= 連動。
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function shiftYm(ym, delta) {
+      const [y, m] = ym.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+    const CURRENT_WORK_YM = '2026-05';                          // 系統錨點月（demo 固定）
+    const DEFAULT_TARGET_WORK_YM = shiftYm(CURRENT_WORK_YM, 1); // 預設作業月 = 下月 → 2026-06
+    const mpState = { current: DEFAULT_TARGET_WORK_YM, min: shiftYm(CURRENT_WORK_YM, -12), max: shiftYm(CURRENT_WORK_YM, 12) };
+    function ymCompact(ym) { return ym.replace('-', ''); }      // '2026-06' → '202606'
+
+    function dsBuildMonthOptions() {
+      const sel = document.getElementById('mp-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+      let cur = mpState.min;
+      const anchor = CURRENT_WORK_YM;
+      while (cur <= mpState.max) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        let suffix;
+        if (cur < anchor) suffix = '（歷史）';
+        else if (cur === anchor) suffix = '（錨點月）';
+        else if (cur === DEFAULT_TARGET_WORK_YM) suffix = '（下月・分派作業月）';
+        else suffix = '（未來）';
+        opt.textContent = `${cur}${suffix}`;
+        if (cur < anchor) opt.style.color = '#9CA3AF';
+        if (cur === mpState.current) opt.selected = true;
+        sel.appendChild(opt);
+        cur = shiftYm(cur, 1);
+      }
+    }
+    function dsMonthShift(delta) {
+      const next = shiftYm(mpState.current, delta);
+      if (next < mpState.min || next > mpState.max) return;
+      mpState.current = next;
+      dsBuildMonthOptions();
+      onMonthChanged();
+    }
+    function dsMonthChange(ym) { mpState.current = ym; onMonthChanged(); }
+    function onMonthChanged() {
+      const prev = document.getElementById('mp-prev');
+      const next = document.getElementById('mp-next');
+      if (prev) prev.disabled = mpState.current <= mpState.min;
+      if (next) next.disabled = mpState.current >= mpState.max;
+      // 將選定之 target_work_ym 同步到頁面所有月份呈現處（API ?ym= 等）
+      const compact = ymCompact(mpState.current);
+      document.querySelectorAll('[data-target-ym-compact]').forEach(el => el.textContent = compact);
+    }
+
     // ===== Mock: 2026-05 行事曆 =====
     // 每日：date, weekday, isWorkday (依 mode 不同)
     function buildCalendar(start, end, mode) {
@@ -479,9 +545,20 @@
       const blocked = (role === 'section_chief' || role === 'user');
       document.getElementById('mainContent').classList.toggle('hidden', blocked);
       document.getElementById('roleBlockedBanner').classList.toggle('hidden', !blocked);
+      // 無權限角色：分派作業月份 MonthPicker disabled（整頁封鎖時無意義）
+      const mpSelect = document.getElementById('mp-select');
+      const mpPrev = document.getElementById('mp-prev');
+      const mpNext = document.getElementById('mp-next');
+      if (mpSelect) mpSelect.disabled = blocked;
+      if (mpPrev) mpPrev.disabled = blocked || mpState.current <= mpState.min;
+      if (mpNext) mpNext.disabled = blocked || mpState.current >= mpState.max;
       lucide.createIcons();
     }
-    document.addEventListener('DOMContentLoaded', function(){ setRole('director'); });
+    document.addEventListener('DOMContentLoaded', function(){
+      dsBuildMonthOptions();
+      onMonthChanged();
+      setRole('director');
+    });
 
     // ===== Demo state =====
     function showDemoState(state) {

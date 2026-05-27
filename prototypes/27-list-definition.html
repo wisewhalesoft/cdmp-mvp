@@ -152,14 +152,18 @@
       </span>
     </div>
     <div class="flex items-center gap-4">
-      <div class="flex items-center gap-1">
-        <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
-          <i data-lucide="chevron-left" class="w-4 h-4"></i>
-        </button>
-        <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
-        <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
-          <i data-lucide="chevron-right" class="w-4 h-4"></i>
-        </button>
+      <!-- 分派作業月份 MonthPicker（F097 / US-143：預設下月 target_work_ym；保留 F077 瀏覽錨點後綴） -->
+      <div class="flex items-center gap-2" data-testid="list-definition-month-picker">
+        <span class="text-xs text-gray-500 whitespace-nowrap">分派作業月份</span>
+        <div class="flex items-center gap-1">
+          <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
+          <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
       </div>
       <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
         <span class="text-[10px] text-gray-400 px-1">角色</span>
@@ -181,7 +185,7 @@
     <!-- Demo Bar -->
     <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2">
       <span class="text-xs text-gray-400 mr-1">Demo:</span>
-      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常（當月）</button>
+      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常（分派作業月份）</button>
       <button onclick="showDemoState('historical')" id="demo-historical" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">切歷史月份</button>
       <span class="text-xs text-gray-400 ml-3 italic">提示：右上角切角色 / 月份觀察差異</span>
     </div>
@@ -539,10 +543,12 @@
       const d = new Date(y, m - 1 + delta, 1);
       return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
     }
-    const DEMO_TODAY_YM = '2026-05';
+    const DEMO_TODAY_YM = '2026-05';                          // 系統錨點月（current_work_ym，日曆當月）
     function todayYm() { return DEMO_TODAY_YM; }
     function isHistoricalMonth(ym) { return ym < todayYm(); }
-    const mpState = { current: todayYm(), min: shiftYm(todayYm(), -12), max: shiftYm(todayYm(), 12) };
+    // F097 / US-143：分派作業月份（target_work_ym）預設 = 錨點月 + 1（下月）；瀏覽範圍維持錨點 ±12
+    const DEFAULT_TARGET_WORK_YM = shiftYm(DEMO_TODAY_YM, 1);  // 2026-06
+    const mpState = { current: DEFAULT_TARGET_WORK_YM, min: shiftYm(todayYm(), -12), max: shiftYm(todayYm(), 12) };
 
     function dsBuildMonthOptions() {
       const sel = document.getElementById('mp-select');
@@ -552,7 +558,12 @@
       while (cur <= mpState.max) {
         const opt = document.createElement('option');
         opt.value = cur;
-        opt.textContent = cur < today ? `${cur}（歷史）` : cur > today ? `${cur}（未來）` : `${cur}（當月）`;
+        let suffix;
+        if (cur < today) suffix = '（歷史）';
+        else if (cur === today) suffix = '（錨點月）';
+        else if (cur === DEFAULT_TARGET_WORK_YM) suffix = '（下月・分派作業月）';
+        else suffix = '（未來）';
+        opt.textContent = `${cur}${suffix}`;
         if (cur < today) opt.style.color = '#9CA3AF';
         if (cur === mpState.current) opt.selected = true;
         sel.appendChild(opt);
@@ -619,27 +630,27 @@
       case_status: '結清期別', settle_src: '他行代償', month_cnt: '撈取月份', birth_date: '生日'
     };
     const MOCK_LISTS = [
-      { listNo: 'OB202605001', listNm: '2026-05 業務一部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-02', ym: '2026-05',
+      { listNo: 'OB202606001', listNm: '2026-06 業務一部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-02', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:3 }], logic:'AND' } },
-      { listNo: 'OB202605002', listNm: '2026-05 機車期中滿期前3月',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-03', ym: '2026-05',
+      { listNo: 'OB202606002', listNm: '2026-06 機車期中滿期前3月',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-03', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
-      { listNo: 'OB202605003', listNm: '2026-05 業務三部 信貸催收',  stage: 'dept_ratio',  cr: true,  createdBy: '李處長',  createdAt: '2026-05-04', ym: '2026-05',
+      { listNo: 'OB202606003', listNm: '2026-06 業務三部 信貸催收',  stage: 'dept_ratio',  cr: true,  createdBy: '李處長',  createdAt: '2026-06-04', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
-      { listNo: 'OB202605004', listNm: '2026-05 業務一部 房貸專案',  stage: 'dept_ratio',  cr: false, createdBy: '王部長',  createdAt: '2026-05-05', ym: '2026-05',
+      { listNo: 'OB202606004', listNm: '2026-06 業務一部 房貸專案',  stage: 'dept_ratio',  cr: false, createdBy: '王部長',  createdAt: '2026-06-05', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
-      { listNo: 'OB202605005', listNm: '2026-05 汽車期中小資專案', stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-05-06', ym: '2026-05',
+      { listNo: 'OB202606005', listNm: '2026-06 汽車期中小資專案', stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-06-06', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
-      { listNo: 'OB202605006', listNm: '2026-05 業務一部 重點戶',     stage: 'personnel_ratio', cr: true,  createdBy: '王部長',  createdAt: '2026-05-07', ym: '2026-05',
+      { listNo: 'OB202606006', listNm: '2026-06 業務一部 重點戶',     stage: 'personnel_ratio', cr: true,  createdBy: '王部長',  createdAt: '2026-06-07', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
-      { listNo: 'OB202605007', listNm: '2026-05 業務三部 退回重做',   stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-05-07', ym: '2026-05', hasReject: true,
+      { listNo: 'OB202606007', listNm: '2026-06 業務三部 退回重做',   stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-06-07', ym: '2026-06', hasReject: true,
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
-      { listNo: 'OB202605008', listNm: '2026-05 業務二部 即將到期',   stage: 'approval',    cr: true,  createdBy: '王部長',  createdAt: '2026-05-08', ym: '2026-05',
+      { listNo: 'OB202606008', listNm: '2026-06 業務二部 即將到期',   stage: 'approval',    cr: true,  createdBy: '王部長',  createdAt: '2026-06-08', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }], logic:'AND' } },
-      { listNo: 'OB202605009', listNm: '2026-05 業務一部 結清強催',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-09', ym: '2026-05',
+      { listNo: 'OB202606009', listNm: '2026-06 業務一部 結清強催',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-09', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['02'] }], logic:'AND' } },
-      { listNo: 'OB202605010', listNm: '2026-05 業務二部 標準名單',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-05-09', ym: '2026-05',
+      { listNo: 'OB202606010', listNm: '2026-06 業務二部 標準名單',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-09', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
-      { listNo: 'OB202605011', listNm: '2026-05 車齡10年以上名單',   stage: 'ready',       cr: true,  createdBy: '李處長',  createdAt: '2026-05-10', ym: '2026-05',
+      { listNo: 'OB202606011', listNm: '2026-06 車齡10年以上名單',   stage: 'ready',       cr: true,  createdBy: '李處長',  createdAt: '2026-06-10', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
       { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收',   stage: 'ready', cr: true, createdBy: '王部長', createdAt: '2026-04-02', ym: '2026-04',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }], logic:'AND' } },
@@ -1273,7 +1284,7 @@
       if (state === 'historical') {
         mpState.current = '2026-04';
       } else {
-        mpState.current = todayYm();
+        mpState.current = DEFAULT_TARGET_WORK_YM; // 預設分派作業月份（下月）
       }
       dsBuildMonthOptions();
       document.getElementById('mp-prev').disabled = mpState.current <= mpState.min;
