@@ -1,13 +1,21 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.6"
+version: "3.7"
 date: 2026-05-27
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.7 / 2026-05-27 / F097 客戶名單分派「作業月」語意統一（US-137~US-143）**：新建 1 個 feature + 升版 F077。依 [glossary.md](glossary.md)（命名單一權威）+ [proposals/work-ym-semantics-unification.md](proposals/work-ym-semantics-unification.md)（已拍板）落地：
+> - **新建 v1.0**：[F097-work-ym-semantics-unification.md](features/F097-work-ym-semantics-unification.md)（分離 `current_work_ym` / `target_work_ym`；前端 `AssignmentWorkYmContext` 四頁共享預設下月；`POST /runs` 必填 `workYm` + 過去月 guard `>=`；`SystemService` 收斂 + `getDefaultTargetWorkYm()`；下游結果頁讀 `run.project_workym`；Stage 1 去重靠正確 `workdt` 自動對齊；forward-only 不回填）
+> - **升 v1.4**：[F077](features/F077-month-switch-and-stage-overview.md)（US-143 限定範圍：月份預設改 `target_work_ym`（下月）+ 四頁共享 `AssignmentWorkYmContext` + UI 標籤「分派作業月份」+ 順修 BR-7 C-4 殘留舊文字；**未動** §5.2 ym error code 既有技術債）
+> - **錯誤碼（error-handling.md v1.16）**：方案 A（OQ-F097-01）— 缺省 → 400（缺必填）；帶值格式錯 / 月份非 01~12 → 422 沿用 `WORK_YM_INVALID_FORMAT`；過去月 → 422 **新增 `RUN_WORKYM_PAST`**。**未新增** `INVALID_YM_FORMAT`。
+> - **breaking change**：`POST /api/v1/assignment/runs` body 新增必填 `workYm`（方案 A，無 `new Date()` fallback）。歷史 run `project_workym` 採 **forward-only 不回填**。
+> - **權威來源**：[glossary.md](glossary.md)（F097 命名）；`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` L24-34（過去月 guard ground truth，UTF-16LE 解碼驗證）
+> - **刻意未動**：architecture-spec.md / data-model.md（system-architect 範疇；`project_workym` 不改名、無新欄位、無 migration）；code / test（tdd-implementation 範疇）；F091 `computeDedupWindow` 邏輯（不改，靠正確 `workdt` 自動對齊）；F077 §5.2 ym error code 既有技術債（OQ-F097-01 方案 A 不清，僅加 note 指向未來 cleanup 選項 C）
+>
 > **v3.6 / 2026-05-27 / ob_pool_data_list 單源化（AD-E07-25）+ 特例規則 SP 落差修正（AD-E07-26）— architecture-spec v2.18**：依 system-architect AD-E07-25 + AD-E07-26（全 DP Resolved）新建 3 個 feature + 升版 3 個既有 feature。本輪變更檔案：
 > - **新建 v1.0**：[F094-monthly-run-result-table.md](features/F094-monthly-run-result-table.md)（單源化 Phase A — 月跑結果表 `ob_monthly_run_result` + pipeline 落點切換，migration `1711360000292`）、[F095-applied-special-rules-readonly.md](features/F095-applied-special-rules-readonly.md)（特例規則前端唯讀 `appliedSpecialRules[]` 讀時推導，無新 DB 欄位）、[F096-pooldata-whitelist-list-type-cleanup.md](features/F096-pooldata-whitelist-list-type-cleanup.md)（白名單 `list_type` 停用，migration/seed `1711360000293`）
 > - **升 v2.0**：[F091](features/F091-stage1-complete-month-cnt-dedup-special-delete.md)（**high-severity bug fix**：特例 DELETE trigger 由 mojibake 誤判「中結強案/中結/年資+滿」修正為 SP 正確版「**期中機車/期中/年以上+小資/白牌**」；去重上界 `MIN(MAX(assignday), workdt−1日)`；year_produ 補 `parseInt`；月跑寫入目標改 `ob_monthly_run_result`）、[F090](features/F090-obpooldata-list-etl.md)（單源化：`data_source` 值域 `'etl_load'`、月跑不再寫本表）
@@ -194,7 +202,7 @@ status: Draft
 | F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位 + caseyear / case_status 改 `pooldata_field_option` 動態載入 + SQL `IN`/`BETWEEN` 取代舊 `LIKE '%val$$%'`；解除 GAP-LIST §A1~A6；v2.0 重寫合併 US-106 / US-107 / US-120）** | US-106, US-107, US-120, US-121, US-125 | P0-MVP（**v2.1**）|
 | F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.1 對齊 F050 v2.1：condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`（拍板 2：無 confirm 轉換流程，E2 backfill 由 Phase 3a 一次性執行）；限 `stage = 'draft'`，v2.0 重寫合併 US-106 AC-7 + US-107 AC-2/AC-5）** | US-106, US-107, US-121, US-123 | P0-MVP（**v2.1**）|
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
-| F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105） | US-104, US-105 | P0-MVP |
+| F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105；**v1.4 / 2026-05-27**：F097 月份預設改 `target_work_ym`（下月）、UI 標籤「分派作業月份」、順修 BR-7 C-4 殘留舊文字） | US-104, US-105, US-143 | P0-MVP（**v1.4**）|
 | F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|
 
 #### M02 計分設定（5 Tab 結構，2026-05-14 擴充）
@@ -275,6 +283,7 @@ status: Draft
 | **F094** | [**F094-monthly-run-result-table.md**](features/F094-monthly-run-result-table.md) | **單源化 Phase A — 月跑分派結果表 `ob_monthly_run_result`**（migration `1711360000292`；PK=run_id+list_no+orgno+appl_no、FK→assignment_run CASCADE、nullable assignday；月跑 Stage 1 寫入 + Stage 3/4 讀取由 `ob_pool_data_list` 切換至本表；同一 PR 完整切換；snapshot 雙軌短期保留；**⚠️ Phase A 同批 deploy，結構切換不改案件數但須完整回歸**） | AD-E07-25 | P0-MVP（**v1.0 新增**）|
 | **F095** | [**F095-applied-special-rules-readonly.md**](features/F095-applied-special-rules-readonly.md) | **特例規則前端唯讀呈現 — `appliedSpecialRules[]`**（名單詳情 API 讀時推導 list_nm → 規則清單，**無新 DB 欄位**；前端唯讀資訊區塊「此名單套用之系統特例規則」；trigger 判斷與 F091 v2.0 共用 pure utility；**prototype 落差待補**；Phase A 同批 deploy，唯讀不改月跑） | AD-E07-26 §26.5 | **P1**（**v1.0 新增**）|
 | **F096** | [**F096-pooldata-whitelist-list-type-cleanup.md**](features/F096-pooldata-whitelist-list-type-cleanup.md) | **白名單清理 Phase B — `pooldata_field_whitelist.list_type` 停用**（migration/seed `1711360000293` 設 `is_active=false`；available-columns dropdown 不再顯示；澄清 `case_status → ob_pool_data.list_type` 為唯一期別篩選路徑；不改月跑案件數） | AD-E07-26 §26.7 | **P1**（**v1.0 新增**）|
+| **F097** | [**F097-work-ym-semantics-unification.md**](features/F097-work-ym-semantics-unification.md) | **客戶名單分派「作業月」語意統一**（分離 `current_work_ym` / `target_work_ym`；前端 `AssignmentWorkYmContext` 四頁共享預設下月；`POST /runs` 接受必填 `workYm` + 過去月 guard `>=`；`SystemService` 收斂 + `getDefaultTargetWorkYm()`；下游結果頁讀 `run.project_workym`；Stage 1 去重靠正確 `workdt` 自動對齊不改 `computeDedupWindow`；forward-only 不回填。錯誤碼方案 A：缺省 400 / 格式 422 `WORK_YM_INVALID_FORMAT` 沿用 / 過去月 422 `RUN_WORKYM_PAST` 新增。**OQ-F097-01/02/03 已裁示；F077 已同步 v1.4；error-handling.md 已登記**） | US-137~US-143 / proposals/work-ym-semantics-unification.md | **P0-MVP**（**v1.0 新增**）|
 
 #### M05 快照歷史
 

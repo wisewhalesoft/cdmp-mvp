@@ -1,10 +1,12 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.15"
-date: 2026-05-20
+version: "1.16"
+date: 2026-05-27
 status: Draft
 ---
+
+> **v1.16 修訂（2026-05-27 / F097 作業月語意統一）**：`#assignment-run-errors` 新增 `RUN_WORKYM_PAST`（422，`POST /assignment/runs` 過去月 guard，對應 ground-truth SP `@WORKDT < getdate()` 等價移植，邊界 `>=`）。`workYm` 驗證三分支（OQ-F097-01 方案 A）：缺省 → 400（缺必要欄位）；帶值格式錯 / 月份非 01~12 → 422 沿用 `WORK_YM_INVALID_FORMAT`（`#assignment-list-errors`，相關功能欄補 F097 + v1.16 補述）；過去月 → 422 `RUN_WORKYM_PAST`。**刻意未新增** `INVALID_YM_FORMAT`（避免第三套命名 + 違反「400 僅限缺必填/JSON 壞」之 status 慣例）。詳 [F097 §5.6](features/F097-work-ym-semantics-unification.md)。
 
 > **v1.15 修訂（2026-05-20 / F050 v2.1 名單定義 whitelist-driven 重構）**：(1) `#assignment-list-errors` 新增 4 個錯誤碼支援 F050 v2.1 / F051 v2.1：`CONDITION_COLUMN_NOT_IN_WHITELIST`（422，columnName 不在 F075 v1.5 白名單；拍板 1）、`RESERVED_FIELD_IN_CONDITIONS`（400，list_period_* 入 conditions 防呆；拍板 3）、`LEGACY_LIST_CONDITION_READONLY`（422，舊名單 condition_payload 寫入防呆；拍板 Q3 / 拍板 2）、`LEGACY_LIST_NOT_COPYABLE`（422，舊名單作為複製來源防呆；拍板 Q4）。(2) `LIST_FILTER_FIELD_NOT_IN_WHITELIST`（v2.0 引入）標 **DEPRECATED v2.1 + 並存**：新實作一律改用 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 Q1）；既有 service code rename 由 Phase 3a system-architect 安排。(3) `CASE_STATUS_REQUIRED`（v2.0 引入）標 **DEPRECATED v2.1**：v2.1 之 case_status 必填語意由 `CONDITION_COLUMN_NOT_IN_WHITELIST`（白名單驗證） + condition_payload 必填統一覆蓋（A1 / A5）。(4) `#assignment-code-errors` 表中 `CODE_IN_USE` / `CODE_TYPE_INVALID` / `CODE_NOT_FOUND` 相關功能欄補註「F068 DEPRECATED v1.3，本錯誤碼是否保留待 Phase 3a 評估（GAP-LIST §I）」。(5) `#assignment-run-warnings` 表中 `WHITELIST_OPTION_INACTIVE` 相關功能欄版號更新 F050/F051 v2.0 → v2.1。(6) 行為矩陣表補對應 4 個新錯誤碼之列。
 
@@ -249,7 +251,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | ASSIGNMENT_LIST_INACTIVE | 422 | 已停用名單不可編輯 | 嘗試編輯 `status = 'inactive'` 的名單 | F051 |
 | ASSIGNMENT_LIST_ALREADY_INACTIVE | 422 | 名單已處於停用狀態，無需重複操作 | 嘗試停用已 inactive 的名單 | F052 |
 | WORK_YM_OUT_OF_RANGE | 422 | 作業月份 {ym} 超出可選範圍（{rangeMin} ~ {rangeMax}） | request `ym` query 或 body `project_workym` 超出 `current_work_ym ± 12 個月`；同樣適用於 GET 列表 / current-work-ym 與所有 M01 寫入端點。範圍規則見 [data-model.md#current-work-ym-rule](data-model.md#current-work-ym-rule)（v1.0 / 2026-05-15 / F077 v1.0 引入） | F048, F050, F051, F052, F060, F061, F077, 後續 M03a~d 寫入 spec |
-| WORK_YM_INVALID_FORMAT | 422 | 作業月份格式錯誤，需為 6 位 YYYYMM | request 之 `ym` 非 6 位數字格式；前端阻擋後的後端保護（v1.0 / 2026-05-15 / F077 v1.0 引入） | F048, F077, 所有引用 `ym` 之 M01 / M03 / M04 端點 |
+| WORK_YM_INVALID_FORMAT | 422 | 作業月份格式錯誤，需為 6 位 YYYYMM | request 之 `ym` 非 6 位數字格式；前端阻擋後的後端保護（v1.0 / 2026-05-15 / F077 v1.0 引入）。**v1.16 補述（2026-05-27 / F097）**：擴充適用至 `POST /api/v1/assignment/runs` body `workYm`——帶值但非 6 碼或月份非 01~12（如 `'20266'` / `'202613'`）回此碼（建議嚴格 regex `^\d{4}(0[1-9]|1[0-2])$`）；`workYm` 缺省（未帶）則回 400（缺必要欄位，非本碼）。F097 採方案 A 沿用本碼，**不新增** `INVALID_YM_FORMAT` | F048, F077, F097, 所有引用 `ym` 之 M01 / M03 / M04 端點 |
 | LIST_HISTORICAL_READONLY | 403 | 歷史月份資料為唯讀，不可修改 | 任一 M01 / M03 / M04 寫入端點之 `request.project_workym < current_work_ym`；GET 端點不受影響。Guard 於各下游 controller 寫入路徑統一攔截。規則來源見 [F077 §6 BR-3](features/F077-month-switch-and-stage-overview.md) 與 [data-model.md#current-work-ym-rule](data-model.md#current-work-ym-rule)（v1.0 / 2026-05-15 / F077 v1.0 引入） | F050, F051, F052, F060, F061, F077, 後續 M03a~d 寫入 spec |
 | LIST_FILTER_FIELD_NOT_IN_WHITELIST | 422 | 篩選條件欄位 `{columnName}` 不在 POOLDATA 白名單或已停用 | **DEPRECATED v2.1（2026-05-20 / F050 v2.1 重構，拍板 Q1）**：請改用 `CONDITION_COLUMN_NOT_IN_WHITELIST`（語意完全相同；拍板 1 命名）；本錯誤碼 v2.1 起新實作不再拋出，僅保留供既有 service code 過渡，由 Phase 3a system-architect 安排 rename。原語意：F050 v2.0 / F051 v2.0 寫入名單時，`condition_payload.conditions[].columnName` 未存在於 F075 白名單或 `is_active = false`；service 層校驗（v2.0 / 2026-05-15 / E07 重構批次 3 引入）| ~~F050 v2.0, F051 v2.0~~（DEPRECATED；新版見 `CONDITION_COLUMN_NOT_IN_WHITELIST`）|
 
@@ -317,6 +319,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 |--------|------------|------|------|----------|
 | ASSIGNMENT_RUN_ALREADY_RUNNING | 409 | 分派執行中（run_id: {currentRunId}），請等待完成後再觸發 | 同月已有 `status IN ('pending', 'running')` 紀錄時嘗試觸發新月跑，或於月跑執行中嘗試修改任何 E07 設定。**v1.12 / 2026-05-16 / 決議 #6 補備註**：由 `AssignmentRunGuardService.assertNoRunningRun(workYm?)` 集中拋出（assignment 模組底下，與 `StageTransitionService` 同層）；所有 E07 寫入 service method 最頂層呼叫此 guard；月跑結束（`status = 'completed'` / `'failed'`）後自動解除阻擋。套用範圍：F050 v2.0 / F051 / F052 / F078 / F079 / F080 / F081 / F082 v1.3 / F083（透過 F082 PUT）/ F084 / F085 / F086 / F087 / F089。**v1.16 / 2026-05-25 / F084 v2.0 auto-advance 補備註**：F084 v2.0 auto-advance 路徑（附著於 F082 PUT 同一 tx）偵測到月跑進行中時，**不回 409**、不 rollback 該次 PUT，而由 F082 PUT response 之 `autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"` 字串攜帶此碼語意，PUT 本身仍回 200（詳 [F084 §5.2 / BR-15](features/F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint)）；F084 手動 fallback 端點與其他 E07 寫入端點仍正常拋 409 | F048-F052, F054-F060, F061, F068, F078-F089 |
 | ASSIGNMENT_RUN_PRECHECK_FAILED | 422 | 前置條件未滿足：{details} | 月跑 Stage 0 前置條件檢查失敗（5 項任一未通過） | F061 |
+| RUN_WORKYM_PAST | 422 | 不可對已開始或過去的作業月觸發月跑 | **v1.16 / 2026-05-27 新增（F097 作業月語意統一 / US-139 AC-4）**：`POST /api/v1/assignment/runs` 過去月 guard——body `workYm` 對應之目標月 1 號（`workdt = workYm + '01'`）< server 今天時拒絕觸發。邊界採 `>=`（目標月 1 號當天合法可跑，對應 ground-truth SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` L31 `@WORKDT < getdate() → RETURN` 之等價移植）；比對基準由 `SystemService.getCurrentWorkYm()` 計算（不依賴前端時鐘）。於 `AssignmentRunService.triggerRun()` 格式驗證後、`assertNoRunningRun` 前檢查。**注意**：`workYm` 缺省（未帶）回 400（缺必要欄位）；`workYm` 帶值但格式錯 / 月份非 01~12 回 422 `WORK_YM_INVALID_FORMAT`（見 `#assignment-list-errors`）；本碼僅用於「格式合法但月份已過去」之業務 guard | F097, F061 |
 | ASSIGNMENT_RUN_NOT_FOUND | 404 | 找不到該月跑紀錄或快照不完整 | `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 三份快照不完整 | F062, F063, F064, F066, F067 |
 | ASSIGNMENT_RUN_NOT_COMPLETED | 422 | 月跑尚未完成，該操作不可用 | 對 `status != 'completed'` 的月跑執行結果查詢、匯出等操作 | F063, F064 |
 | ASSIGNMENT_RUN_NOT_COMPARABLE | 422 | 僅 completed 狀態的月跑可比對 | 比對操作的任一 `run_id` 非 `completed` 狀態 | F067 |
@@ -467,6 +470,9 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | PROD_KIND + CARD_TYPE 組合重複 | 422 | LIST_NO_DUPLICATE | 相同產品類別與卡別的有效名單已存在 | 不新增/更新 |
 | 月跑執行中觸發新月跑或修改 E07 設定 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 分派執行中 | 拒絕請求 |
 | 月跑前置條件失敗 | 422 | ASSIGNMENT_RUN_PRECHECK_FAILED | 前置條件未滿足 | 顯示失敗項目清單 |
+| 月跑 `workYm` 對應目標月已過去（F097）| 422 | RUN_WORKYM_PAST | 不可對已開始或過去的作業月觸發月跑 | 拒絕觸發（邊界 `>=`，目標月 1 號當天合法）|
+| 月跑 `workYm` 帶值但格式錯 / 月份非 01~12（F097）| 422 | WORK_YM_INVALID_FORMAT | 作業月份格式錯誤，需為 6 位 YYYYMM | 拒絕請求 |
+| 月跑 `workYm` 缺省（未帶）（F097）| 400 | （通用缺必填）| 缺少必要欄位 workYm | 拒絕請求（無 new Date() fallback）|
 | 部門比例加總 ≠ 100%（F079，per-LIST_NO） | 422 | RATIO_SUM_NOT_100 | 部門比例加總需調整至 100%（容忍 ±0.01%） | 儲存按鈕停用 |
 | 個別業務比例加總 ≠ 100%（F082，per-DEPT） | 422 | PERSONNEL_RATIO_SUM_NOT_100 | 部門個別業務比例加總需調整至 100% | 該部門儲存按鈕停用 |
 | F082 寫入前部門尚未於 ob_dept_pct 配置 | 422 | PERSONNEL_RATIO_DEPT_NOT_FOUND | 部門尚未於部門比例設定階段配置 | 拒絕請求（防呆）|
