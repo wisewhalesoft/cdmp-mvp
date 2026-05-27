@@ -1853,3 +1853,263 @@ describe('F034: Delete Pipeline E2E', () => {
     expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
   });
 });
+
+// =============================================
+// F093: 編輯 Pipeline 中繼資料（名稱 / 排程 / 描述）E2E
+// =============================================
+
+describe('F093: Edit Pipeline Metadata E2E', () => {
+  let app: INestApplication;
+  let adminToken: string;
+  let userToken: string;
+  let dataSource: DataSource;
+  let pipelineRepo: Repository<EtlPipeline>;
+  let versionRepo: Repository<EtlPipelineVersion>;
+  let logRepo: Repository<EtlPipelineLog>;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    adminToken = await getAdminToken(app);
+    userToken = await getUserToken(app);
+    dataSource = app.get(DataSource);
+    pipelineRepo = dataSource.getRepository(EtlPipeline);
+    versionRepo = dataSource.getRepository(EtlPipelineVersion);
+    logRepo = dataSource.getRepository(EtlPipelineLog);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  beforeEach(async () => {
+    await versionRepo.createQueryBuilder().delete().from(EtlPipelineVersion).execute();
+    await logRepo.createQueryBuilder().delete().from(EtlPipelineLog).execute();
+    await pipelineRepo.createQueryBuilder().delete().from(EtlPipeline).execute();
+  });
+
+  // TS-F093-E2E-001: PATCH 端點存在且路徑正確（非 404 路由未掛載）
+  it('TS-F093-E2E-001: PATCH endpoint should exist and route correctly', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'Route-001' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Route-001-updated' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Route-001-updated');
+  });
+
+  // Route non-shadowing: PATCH :id/toggle still works (not captured by PATCH :id)
+  it('TS-F093-E2E-001b: PATCH :id should NOT shadow PATCH :id/toggle', async () => {
+    // Create a pipeline with a published version so it can be enabled
+    const pipeline = await createPipeline(pipelineRepo, { status: 'disabled', name: 'NoShadow-toggle' });
+    const version = versionRepo.create({
+      pipeline_id: pipeline.id,
+      version: 1,
+      status: 'published',
+      definition: { nodes: [], edges: [] },
+      created_by: ADMIN_ACTIVE.id,
+    });
+    await versionRepo.save(version);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}/toggle`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('active');
+    expect(res.body.enabled).toBe(true);
+  });
+
+  // TS-F093-E2E-002: 未認證 → 401
+  it('TS-F093-E2E-002: should return 401 when no token provided', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'Auth-002' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .send({ name: 'X' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('AUTH_TOKEN_MISSING');
+  });
+
+  // TS-F093-E2E-003: 非 admin → 403
+  it('TS-F093-E2E-003: user role should get 403', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'Rbac-003' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ name: 'X' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('AUTH_FORBIDDEN');
+
+    // Verify not modified
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.name).toBe('Rbac-003');
+  });
+
+  // TS-F093-E2E-004: 合法更新（整合驗證 DB 持久化 + 版本定義不變）
+  it('TS-F093-E2E-004: should persist name/description/schedule without touching version definition', async () => {
+    const pipeline = await createPipeline(pipelineRepo, {
+      status: 'draft',
+      name: '原始名稱',
+      schedule: null,
+    });
+    // Seed a version with a non-empty definition
+    const version = versionRepo.create({
+      pipeline_id: pipeline.id,
+      version: 1,
+      status: 'draft',
+      definition: {
+        nodes: [{ id: 'n1', type: 'extract', position: { x: 0, y: 0 }, data: {} }],
+        edges: [],
+      },
+      created_by: ADMIN_ACTIVE.id,
+    });
+    await versionRepo.save(version);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '更新後', schedule: '0 8 * * *', description: '新描述' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('更新後');
+    expect(res.body.description).toBe('新描述');
+    expect(res.body.schedule).toBe('0 8 * * *');
+    expect(res.body.updatedAt).toBeDefined();
+
+    // DB verification
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.name).toBe('更新後');
+    expect(dbRow!.description).toBe('新描述');
+    expect(dbRow!.schedule).toBe('0 8 * * *');
+
+    // Version definition untouched
+    const dbVersion = await versionRepo.findOne({ where: { pipeline_id: pipeline.id } });
+    expect(dbVersion!.definition.nodes).toHaveLength(1);
+    expect(dbVersion!.version).toBe(1);
+  });
+
+  // OD-F093-02: next_execution_at must NOT be touched by an update
+  it('TS-F093-E2E-004b: should not modify next_execution_at when updating schedule', async () => {
+    const existingNext = new Date('2026-06-01T02:00:00.000Z');
+    const pipeline = await createPipeline(pipelineRepo, {
+      status: 'draft',
+      name: 'NextExec-004b',
+      schedule: null,
+      next_execution_at: existingNext,
+    });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ schedule: '0 2 * * *' });
+
+    expect(res.status).toBe(200);
+
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(new Date(dbRow!.next_execution_at!).getTime()).toBe(existingNext.getTime());
+  });
+
+  // OD-F093-03: renaming to the pipeline's own current name should succeed
+  it('TS-F093-E2E-004c: should allow renaming to its own current name (self-exclusion)', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: '相同名稱' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '相同名稱' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('相同名稱');
+  });
+
+  // TS-F093-E2E-005: 名稱衝突（另一 Pipeline 已用此名稱）→ 409
+  it('TS-F093-E2E-005: duplicate name (another pipeline) should return 409', async () => {
+    await createPipeline(pipelineRepo, { status: 'draft', name: '已存在名稱' });
+    const target = await createPipeline(pipelineRepo, { status: 'draft', name: '原本名稱' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${target.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '已存在名稱' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('PIPELINE_NAME_EXISTS');
+
+    // Verify not modified
+    const dbRow = await pipelineRepo.findOne({ where: { id: target.id } });
+    expect(dbRow!.name).toBe('原本名稱');
+  });
+
+  // TS-F093-E2E-006: 無效 cron → 422
+  it('TS-F093-E2E-006: invalid cron should return 422', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'Cron-006' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ schedule: 'not-a-cron' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_INVALID_CRON');
+  });
+
+  // TS-F093-E2E-007: Pipeline 不存在 → 404
+  it('TS-F093-E2E-007: non-existent pipeline should return 404', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/etl/pipelines/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'X' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('PIPELINE_NOT_FOUND');
+  });
+
+  // OD-F093-01: running pipeline cannot be edited → 409 PIPELINE_RUNNING
+  it('TS-F093-E2E-008: should return 409 PIPELINE_RUNNING when editing a running pipeline', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'running', name: 'Running-008' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '新名稱' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('PIPELINE_RUNNING');
+
+    const dbRow = await pipelineRepo.findOne({ where: { id: pipeline.id } });
+    expect(dbRow!.name).toBe('Running-008');
+  });
+
+  // 名稱空白 → 422（DTO 層 @IsNotEmpty）
+  it('TS-F093-E2E-009: empty name should return 422 VALIDATION_ERROR', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'EmptyName-009' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  // 名稱 256 字元 → 422（DTO 層 @MaxLength(255)）
+  it('TS-F093-E2E-010: name with 256 chars should return 422', async () => {
+    const pipeline = await createPipeline(pipelineRepo, { status: 'draft', name: 'LongName-010' });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/etl/pipelines/${pipeline.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'A'.repeat(256) });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+});

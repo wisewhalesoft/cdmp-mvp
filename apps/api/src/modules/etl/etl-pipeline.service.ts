@@ -10,6 +10,7 @@ import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
 import { ListPipelineLogsDto } from './dto/list-pipeline-logs.dto';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
+import { UpdatePipelineDto } from './dto/update-pipeline.dto';
 import { SaveDefinitionDto } from './dto/save-definition.dto';
 
 function getTodayRangeUTC() {
@@ -38,32 +39,44 @@ export class EtlPipelineService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreatePipelineDto, userId: string) {
-    // Validate cron expression if provided (BR-4: must be 5 or 6 fields)
-    if (dto.schedule) {
-      const fields = dto.schedule.trim().split(/\s+/).length;
-      if (fields < 5 || fields > 6) {
-        throw new UnprocessableEntityException({
-          error: ERROR_CODES.VALIDATION_INVALID_CRON,
-          message: ERROR_MESSAGES.VALIDATION_INVALID_CRON,
-        });
-      }
-      try {
-        CronExpressionParser.parse(dto.schedule, { tz: 'UTC' });
-      } catch {
-        throw new UnprocessableEntityException({
-          error: ERROR_CODES.VALIDATION_INVALID_CRON,
-          message: ERROR_MESSAGES.VALIDATION_INVALID_CRON,
-        });
-      }
+  /**
+   * BR-4: cron 必須為 5 或 6 欄位，且可被 CronExpressionParser 成功解析（UTC）。
+   * 非法時拋出 422 VALIDATION_INVALID_CRON。
+   */
+  private validateCronOrThrow(schedule: string) {
+    const fields = schedule.trim().split(/\s+/).length;
+    if (fields < 5 || fields > 6) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_INVALID_CRON,
+        message: ERROR_MESSAGES.VALIDATION_INVALID_CRON,
+      });
+    }
+    try {
+      CronExpressionParser.parse(schedule, { tz: 'UTC' });
+    } catch {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_INVALID_CRON,
+        message: ERROR_MESSAGES.VALIDATION_INVALID_CRON,
+      });
+    }
+  }
+
+  /**
+   * 名稱唯一性檢查（僅比對未軟刪除的 Pipeline）。
+   * excludeId 用於 F093 更新時排除自身（OD-F093-03），避免「改為自身當前名稱」誤判 409。
+   * 衝突時拋出 409 PIPELINE_NAME_EXISTS。
+   */
+  private async ensureNameUniqueOrThrow(name: string, excludeId?: string) {
+    const qb = this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.name = :name', { name })
+      .andWhere('p.deleted_at IS NULL');
+
+    if (excludeId) {
+      qb.andWhere('p.id != :selfId', { selfId: excludeId });
     }
 
-    // Check name uniqueness (only among non-deleted)
-    const existingPipeline = await this.pipelineRepository
-      .createQueryBuilder('p')
-      .where('p.name = :name', { name: dto.name })
-      .andWhere('p.deleted_at IS NULL')
-      .getOne();
+    const existingPipeline = await qb.getOne();
 
     if (existingPipeline) {
       throw new ConflictException({
@@ -71,6 +84,16 @@ export class EtlPipelineService {
         message: ERROR_MESSAGES.PIPELINE_NAME_EXISTS,
       });
     }
+  }
+
+  async create(dto: CreatePipelineDto, userId: string) {
+    // Validate cron expression if provided (BR-4: must be 5 or 6 fields)
+    if (dto.schedule) {
+      this.validateCronOrThrow(dto.schedule);
+    }
+
+    // Check name uniqueness (only among non-deleted)
+    await this.ensureNameUniqueOrThrow(dto.name);
 
     // Use transaction to create pipeline + initial version atomically
     return this.dataSource.transaction(async (manager) => {
@@ -116,6 +139,80 @@ export class EtlPipelineService {
         updatedAt: savedPipeline.updated_at.toISOString(),
       };
     });
+  }
+
+  /**
+   * F093: 編輯 Pipeline 中繼資料（名稱 / 描述 / 排程）。
+   * PATCH 語意：僅覆寫有傳入的欄位；不觸碰 Pipeline 定義（nodes/edges/versions）。
+   * OD-F093-01: status=running 時禁止編輯（409 PIPELINE_RUNNING）。
+   * OD-F093-02: 不重算 next_execution_at（排程器以 on-the-fly shouldTrigger 觸發）。
+   * OD-F093-03: 名稱唯一性檢查排除自身，允許改為自身當前名稱。
+   */
+  async updatePipeline(pipelineId: string, dto: UpdatePipelineDto) {
+    // 1. Load non-soft-deleted pipeline
+    const pipeline = await this.pipelineRepository
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: pipelineId })
+      .andWhere('p.deleted_at IS NULL')
+      .getOne();
+
+    if (!pipeline) {
+      throw new NotFoundException({
+        error: ERROR_CODES.PIPELINE_NOT_FOUND,
+        message: ERROR_MESSAGES.PIPELINE_NOT_FOUND,
+      });
+    }
+
+    // 2. OD-F093-01: running pipelines cannot be edited
+    if (pipeline.status === 'running') {
+      throw new ConflictException({
+        error: ERROR_CODES.PIPELINE_RUNNING,
+        message: ERROR_MESSAGES.PIPELINE_RUNNING,
+      });
+    }
+
+    // 3. schedule (when key provided): empty string / null → null (skip cron validation)
+    if (dto.schedule !== undefined) {
+      const trimmed = dto.schedule == null ? '' : dto.schedule.trim();
+      if (trimmed === '') {
+        pipeline.schedule = null;
+      } else {
+        this.validateCronOrThrow(trimmed);
+        pipeline.schedule = trimmed;
+      }
+    }
+
+    // 4. name (when key provided): trim + non-empty + uniqueness (excluding self)
+    if (dto.name !== undefined) {
+      const trimmedName = (dto.name ?? '').trim();
+      if (trimmedName === '') {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.VALIDATION_ERROR,
+          message: ERROR_MESSAGES.VALIDATION_ERROR,
+        });
+      }
+      await this.ensureNameUniqueOrThrow(trimmedName, pipelineId);
+      pipeline.name = trimmedName;
+    }
+
+    // 5. description (when key provided): null clears it
+    if (dto.description !== undefined) {
+      pipeline.description = dto.description ?? null;
+    }
+
+    // OD-F093-02: next_execution_at intentionally left untouched.
+
+    const saved = await this.pipelineRepository.save(pipeline);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      description: saved.description,
+      status: saved.status,
+      enabled: saved.enabled,
+      schedule: saved.schedule,
+      updatedAt: saved.updated_at.toISOString(),
+    };
   }
 
   async getStats() {
@@ -183,6 +280,7 @@ export class EtlPipelineService {
     const data = pipelines.map((p) => ({
       id: p.id,
       name: p.name,
+      description: p.description,
       version: p.version,
       stepCount: p.step_count,
       status: p.status,

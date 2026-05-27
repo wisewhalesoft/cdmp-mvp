@@ -631,6 +631,7 @@ export interface PipelineStatsResponse {
 export interface PipelineListItem {
   id: string;
   name: string;
+  description: string | null;
   version: number;
   stepCount: number;
   status: EtlPipelineStatus;
@@ -906,6 +907,23 @@ export interface TogglePipelineRequest {
 export interface TogglePipelineResponse {
   id: string;
   name: string;
+  status: EtlPipelineStatus;
+  enabled: boolean;
+  schedule: string | null;
+  updatedAt: string;
+}
+
+// F093: Edit Pipeline metadata (name / description / schedule)
+export interface UpdatePipelineRequest {
+  name?: string;
+  description?: string | null;
+  schedule?: string | null;
+}
+
+export interface UpdatePipelineResponse {
+  id: string;
+  name: string;
+  description: string | null;
   status: EtlPipelineStatus;
   enabled: boolean;
   schedule: string | null;

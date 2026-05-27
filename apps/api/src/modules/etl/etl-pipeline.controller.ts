@@ -7,6 +7,7 @@ import { EtlPipelineExecutionService } from './etl-pipeline-execution.service';
 import { ListPipelineDto } from './dto/list-pipeline.dto';
 import { ListPipelineLogsDto } from './dto/list-pipeline-logs.dto';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
+import { UpdatePipelineDto } from './dto/update-pipeline.dto';
 import { SaveDefinitionDto } from './dto/save-definition.dto';
 import { TogglePipelineDto } from './dto/toggle-pipeline.dto';
 
@@ -55,6 +56,14 @@ export class EtlPipelineController {
   @Patch(':id/toggle')
   async toggle(@Param('id') id: string, @Body() dto: TogglePipelineDto) {
     return this.etlPipelineService.togglePipeline(id, dto.enabled);
+  }
+
+  // F093: Edit Pipeline metadata (name / description / schedule).
+  // NOTE: deeper-path PATCH routes (:id/toggle, :id/versions/:versionId/publish)
+  // are matched by their own handlers and are NOT shadowed by this :id route.
+  @Patch(':id')
+  async updatePipeline(@Param('id') id: string, @Body() dto: UpdatePipelineDto) {
+    return this.etlPipelineService.updatePipeline(id, dto);
   }
 
   @Get(':id/logs')
