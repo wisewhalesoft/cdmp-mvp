@@ -16,7 +16,7 @@ import { DirectorOrSectionChiefGuard } from '@/common/guards/director-or-section
 import { RequireDirectorOrSectionChief } from '@/common/decorators/business-role.decorator';
 import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
 import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
-import { AssignmentListController } from '@/modules/assignment-list/assignment-list.controller';
+import { SystemService } from '@/modules/system/system.service';
 import { PersonnelRatioService } from './personnel-ratio.service';
 import { SetPersonnelRatioDto } from './dto/set-personnel-ratio.dto';
 
@@ -38,7 +38,11 @@ import { SetPersonnelRatioDto } from './dto/set-personnel-ratio.dto';
 @RequireDirectorOrSectionChief()
 @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
 export class PersonnelRatioController {
-  constructor(private readonly service: PersonnelRatioService) {}
+  constructor(
+    private readonly service: PersonnelRatioService,
+    // F097 / AD-E07-27 §27.3：current_work_ym 取值改用 SystemService（行為不變）
+    private readonly systemService: SystemService,
+  ) {}
 
   @Get(':listNo')
   async get(
@@ -72,7 +76,7 @@ export class PersonnelRatioController {
         businessRole: user.businessRole,
         ipAddress: req.ip ?? null,
       },
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 }

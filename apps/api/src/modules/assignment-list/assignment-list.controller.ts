@@ -24,6 +24,7 @@ import {
 import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
 import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import { SystemService } from '@/modules/system/system.service';
 import { AssignmentListService } from './assignment-list.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
@@ -51,22 +52,11 @@ import { ListListsQueryDto } from './dto/list-lists-query.dto';
 )
 @RequireDirectorOrSectionChief()
 export class AssignmentListController {
-  constructor(private readonly service: AssignmentListService) {}
-
-  /**
-   * 計算當前作業月份。
-   *
-   * 規則：依 F077 §6 BR-1 / data-model.md current-work-ym rule：
-   *   - 環境變數 `OVERRIDE_CURRENT_WORK_YM=YYYYMM` 強制覆蓋（測試 / 災難復原）
-   *   - 否則：每月 1 號 0:00 切換為當月，即 `YYYYMM of today`
-   */
-  static computeCurrentWorkYm(now: Date = new Date()): string {
-    const override = process.env.OVERRIDE_CURRENT_WORK_YM;
-    if (override && /^\d{6}$/.test(override)) return override;
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    return `${y}${String(m).padStart(2, '0')}`;
-  }
+  constructor(
+    private readonly service: AssignmentListService,
+    // F097 / AD-E07-27 §27.3：current_work_ym 計算收斂至 SystemService（移除三 controller static copy）
+    private readonly systemService: SystemService,
+  ) {}
 
   /**
    * 計算 ym 是否在 current_work_ym ± 12 範圍內（含本月，共 25 月）。
@@ -121,7 +111,7 @@ export class AssignmentListController {
 
   @Get()
   async list(@Query() query: ListListsQueryDto, @Req() req: any) {
-    const currentWorkYm = AssignmentListController.computeCurrentWorkYm();
+    const currentWorkYm = this.systemService.getCurrentWorkYm();
     const ym = query.ym ?? currentWorkYm;
     this.assertYmInRange(ym, currentWorkYm);
 
@@ -164,7 +154,7 @@ export class AssignmentListController {
   @RequireDirector()
   @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async create(@Body() dto: CreateListDto, @Req() req: any) {
-    const currentWorkYm = AssignmentListController.computeCurrentWorkYm();
+    const currentWorkYm = this.systemService.getCurrentWorkYm();
     const actor = {
       userId: req.user.userId,
       ipAddress: req.ip ?? null,
@@ -184,7 +174,7 @@ export class AssignmentListController {
     @Body() dto: UpdateListDto,
     @Req() req: any,
   ) {
-    const currentWorkYm = AssignmentListController.computeCurrentWorkYm();
+    const currentWorkYm = this.systemService.getCurrentWorkYm();
     const actor = {
       userId: req.user.userId,
       ipAddress: req.ip ?? null,
@@ -200,7 +190,7 @@ export class AssignmentListController {
   @RequireDirector()
   @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async disable(@Param('listNo') listNo: string, @Req() req: any) {
-    const currentWorkYm = AssignmentListController.computeCurrentWorkYm();
+    const currentWorkYm = this.systemService.getCurrentWorkYm();
     const actor = {
       userId: req.user.userId,
       ipAddress: req.ip ?? null,
@@ -216,7 +206,7 @@ export class AssignmentListController {
   @RequireDirector()
   @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async deleteList(@Param('listNo') listNo: string, @Req() req: any) {
-    const currentWorkYm = AssignmentListController.computeCurrentWorkYm();
+    const currentWorkYm = this.systemService.getCurrentWorkYm();
     const actor = {
       userId: req.user.userId,
       ipAddress: req.ip ?? null,

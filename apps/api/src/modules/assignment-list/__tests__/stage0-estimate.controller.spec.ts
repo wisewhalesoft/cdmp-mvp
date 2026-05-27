@@ -25,6 +25,7 @@ import {
 import request from 'supertest';
 import { Stage0EstimateController } from '../stage0-estimate.controller';
 import { Stage0EstimateService } from '../stage0-estimate.service';
+import { SystemService } from '@/modules/system/system.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { ERROR_CODES } from '@/common/errors/error-codes';
@@ -66,7 +67,11 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [Stage0EstimateController],
-      providers: [{ provide: Stage0EstimateService, useValue: serviceMock }],
+      providers: [
+        { provide: Stage0EstimateService, useValue: serviceMock },
+        // F097：current_work_ym 收斂至 SystemService（真實實例，沿用 OVERRIDE_CURRENT_WORK_YM）
+        { provide: SystemService, useValue: new SystemService() },
+      ],
     })
       .overrideGuard(AuthGuard)
       .useValue({

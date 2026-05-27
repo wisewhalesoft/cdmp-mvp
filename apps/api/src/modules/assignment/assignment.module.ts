@@ -32,6 +32,7 @@ import { AssignmentRunReportService } from './services/assignment-run-report.ser
 import { SectionChiefScopeService } from './services/section-chief-scope.service';
 import { AssignmentRunController } from './assignment-run.controller';
 import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment-scoring.module';
+import { SystemModule } from '@/modules/system/system.module';
 
 /**
  * AssignmentModule — F061 / F062 / F065 / F066（M04 月跑觸發 + 歷史 + 詳情）
@@ -73,6 +74,8 @@ import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment
     }),
     // F061 v1.3：Stage 2 前置 soft check（ScoringIntegrityCheckService）
     AssignmentScoringModule,
+    // F097 / AD-E07-27 §27.3：current_work_ym 收斂至 SystemService（過去月 guard + readiness 取值）
+    SystemModule,
   ],
   controllers: [AssignmentRunController],
   providers: [

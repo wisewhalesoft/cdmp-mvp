@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -10,6 +11,7 @@ import {
   Query,
   Req,
   Res,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -30,6 +32,8 @@ import { TriggerRunDto } from './dto/trigger-run.dto';
 import { ExportQueryDto } from './dto/export-query.dto';
 import { SnapshotQueryDto } from './dto/snapshot-query.dto';
 import { CompareRunsQueryDto } from './dto/compare-runs-query.dto';
+import { SystemService } from '@/modules/system/system.service';
+import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 /**
  * F061~F067 — 月跑觸發 + 歷史 + 詳情 + 摘要 + 匯出 + 比對 Controller
@@ -61,30 +65,68 @@ export class AssignmentRunController {
     private readonly snapshotService: AssignmentRunSnapshotService,
     private readonly reportService: AssignmentRunReportService,
     private readonly readinessService: MonthlyRunReadinessService,
+    private readonly systemService: SystemService,
   ) {}
 
-  /**
-   * F049 / F050 / F051 / F052 對齊：current_work_ym 計算
-   */
-  static computeCurrentWorkYm(now: Date = new Date()): string {
-    const override = process.env.OVERRIDE_CURRENT_WORK_YM;
-    if (override && /^\d{6}$/.test(override)) return override;
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    return `${y}${String(m).padStart(2, '0')}`;
-  }
-
   // -------------------------------------------------------------------------
-  // F061 — POST 觸發月跑
+  // F061 / F097 — POST 觸發月跑
+  //
+  // F097（forward-only，生效日期 = F097 部署日）：本 handler 以使用者選定之「目標分派月」
+  // （dto.workYm）作為 AssignmentRun.project_workym，不再以 new Date() 自算執行月。
+  // 既有 F097 部署前歷史 run 之 project_workym 為「執行月」語意，採 forward-only 不回填
+  // （業務接受語意混雜；見 AssignmentRunService.triggerRun 附近注釋與 glossary §7）。
   // -------------------------------------------------------------------------
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   @RequireDirector()
   @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
-  async triggerRun(@Body() _dto: TriggerRunDto, @Req() req: any) {
-    const ym = AssignmentRunController.computeCurrentWorkYm();
-    return this.service.triggerRun(ym, req.user.userId);
+  async triggerRun(@Body() dto: TriggerRunDto, @Req() req: any) {
+    const workYm = this.resolveWorkYm(dto);
+    this.assertWorkYmNotPast(workYm);
+    return this.service.triggerRun(workYm, req.user.userId);
+  }
+
+  /**
+   * F097 §5.6 分支 (1)(2)：workYm 必填 + 格式驗證。
+   *   - 缺省（未帶 / null / 空字串）→ 400（缺必填，無 new Date() fallback；BR-4）
+   *   - 帶值但非 6 碼 / MM ∉ 01~12 → 422 WORK_YM_INVALID_FORMAT（嚴格 regex；OQ-F097-03）
+   */
+  private resolveWorkYm(dto: TriggerRunDto): string {
+    const raw = dto?.workYm;
+    if (raw === undefined || raw === null || raw === '') {
+      throw new BadRequestException({
+        error: 'VALIDATION_ERROR',
+        message: '缺少必要欄位 workYm',
+      });
+    }
+    if (!/^\d{4}(0[1-9]|1[0-2])$/.test(raw)) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.WORK_YM_INVALID_FORMAT,
+        message: ERROR_MESSAGES.WORK_YM_INVALID_FORMAT,
+      });
+    }
+    return raw;
+  }
+
+  /**
+   * F097 §5.6 分支 (3) / AD-E07-27 §27.4：過去月 guard（對應 SP `@WORKDT < getdate()`）。
+   *   - workdt = workYm + '01'（目標月 1 號）
+   *   - today  = SystemService.getCurrentWorkYm() 對應之當月 1 號（server 時鐘；BR-6）
+   *   - workdt < today → 422 RUN_WORKYM_PAST；workdt >= today 通過（邊界：當月 1 號當天合法）
+   */
+  private assertWorkYmNotPast(workYm: string): void {
+    const currentWorkYm = this.systemService.getCurrentWorkYm();
+    const toFirstDay = (ym: string) =>
+      new Date(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(4, 6), 10) - 1, 1);
+    const workdt = toFirstDay(workYm);
+    const today = toFirstDay(currentWorkYm);
+    if (workdt < today) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.RUN_WORKYM_PAST,
+        message: ERROR_MESSAGES.RUN_WORKYM_PAST,
+      });
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -103,7 +145,7 @@ export class AssignmentRunController {
 
   @Get('readiness')
   async getReadiness(@Query('ym') ym?: string) {
-    const effectiveYm = ym ?? AssignmentRunController.computeCurrentWorkYm();
+    const effectiveYm = ym ?? this.systemService.getCurrentWorkYm();
     return this.readinessService.calculateReadiness(effectiveYm);
   }
 

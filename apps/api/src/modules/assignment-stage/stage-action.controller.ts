@@ -19,7 +19,7 @@ import {
 } from '@/common/decorators/business-role.decorator';
 import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
 import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
-import { AssignmentListController } from '@/modules/assignment-list/assignment-list.controller';
+import { SystemService } from '@/modules/system/system.service';
 import { StageActionService } from './stage-action.service';
 import { ApproveListDto, RejectListDto } from './dto/reject.dto';
 
@@ -40,7 +40,11 @@ import { ApproveListDto, RejectListDto } from './dto/reject.dto';
 @UseGuards(AuthGuard, FeatureFlagGuard)
 @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
 export class StageActionController {
-  constructor(private readonly service: StageActionService) {}
+  constructor(
+    private readonly service: StageActionService,
+    // F097 / AD-E07-27 §27.3：current_work_ym 取值改用 SystemService（行為不變）
+    private readonly systemService: SystemService,
+  ) {}
 
   // F078: draft → dept_ratio
   @Post(':listNo/stage/advance-to-dept-ratio')
@@ -51,7 +55,7 @@ export class StageActionController {
     return this.service.advanceDraftToDeptRatio(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -64,7 +68,7 @@ export class StageActionController {
     return this.service.advanceDeptRatioToPersonnelRatio(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -77,7 +81,7 @@ export class StageActionController {
     return this.service.rollbackDeptRatioToDraft(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -90,7 +94,7 @@ export class StageActionController {
     return this.service.advancePersonnelRatioToApproval(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -103,7 +107,7 @@ export class StageActionController {
     return this.service.rollbackPersonnelRatioToDeptRatio(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -120,7 +124,7 @@ export class StageActionController {
     return this.service.approveToReady(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -138,7 +142,7 @@ export class StageActionController {
       listNo,
       dto.rejectReason,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 
@@ -151,7 +155,7 @@ export class StageActionController {
     return this.service.rollbackReadyToApproval(
       listNo,
       this.actor(req),
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 

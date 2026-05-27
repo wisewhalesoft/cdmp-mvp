@@ -28,6 +28,7 @@ import { AssignmentRunService } from '../services/assignment-run.service';
 import { AssignmentRunSnapshotService } from '../services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from '../services/assignment-run-report.service';
 import { MonthlyRunReadinessService } from '../services/monthly-run-readiness.service';
+import { SystemService } from '@/modules/system/system.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { ERROR_CODES } from '@/common/errors/error-codes';
@@ -148,6 +149,11 @@ describe('AssignmentRunController — RBAC + Routes', () => {
             }),
           },
         },
+        {
+          // F097：POST /runs 過去月 guard 以 SystemService.getCurrentWorkYm() 為基準
+          provide: SystemService,
+          useValue: { getCurrentWorkYm: () => '202605' },
+        },
       ],
     })
       .overrideGuard(AuthGuard)
@@ -218,11 +224,11 @@ describe('AssignmentRunController — RBAC + Routes', () => {
   // -------------------------------------------------------------------------
 
   describe('POST /runs', () => {
-    it('director → 202 + runId + status=pending', async () => {
+    it('director → 202 + runId + status=pending（F097：帶 workYm）', async () => {
       currentUser = director;
       const res = await request(app.getHttpServer())
         .post('/api/v1/assignment/runs')
-        .send({});
+        .send({ workYm: '202605' });
       expect(res.status).toBe(202);
       expect(res.body.runId).toBe('run-uuid-1');
       expect(res.body.status).toBe('pending');
@@ -233,7 +239,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       currentUser = sectionChief;
       const res = await request(app.getHttpServer())
         .post('/api/v1/assignment/runs')
-        .send({});
+        .send({ workYm: '202605' });
       expect(res.status).toBe(403);
       expect(res.body.error).toBe(ERROR_CODES.E07_REQUIRES_DIRECTOR);
     });
@@ -242,7 +248,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       currentUser = plain;
       const res = await request(app.getHttpServer())
         .post('/api/v1/assignment/runs')
-        .send({});
+        .send({ workYm: '202605' });
       expect(res.status).toBe(403);
       expect(res.body.error).toBe(ERROR_CODES.E07_ROLE_NOT_ASSIGNED);
     });
@@ -251,7 +257,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       authShouldThrow401 = true;
       const res = await request(app.getHttpServer())
         .post('/api/v1/assignment/runs')
-        .send({});
+        .send({ workYm: '202605' });
       expect(res.status).toBe(401);
     });
   });

@@ -24,6 +24,7 @@ import {
 import request from 'supertest';
 import { AssignmentListController } from '../assignment-list.controller';
 import { AssignmentListService } from '../assignment-list.service';
+import { SystemService } from '@/modules/system/system.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 
@@ -90,7 +91,11 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AssignmentListController],
-      providers: [{ provide: AssignmentListService, useValue: serviceMock }],
+      providers: [
+        { provide: AssignmentListService, useValue: serviceMock },
+        // F097：current_work_ym 收斂至 SystemService（真實實例，沿用 OVERRIDE_CURRENT_WORK_YM）
+        { provide: SystemService, useValue: new SystemService() },
+      ],
     })
       .overrideGuard(AuthGuard)
       .useValue({

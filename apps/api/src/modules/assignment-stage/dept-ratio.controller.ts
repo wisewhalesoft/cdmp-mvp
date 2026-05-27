@@ -15,7 +15,7 @@ import { DirectorGuard } from '@/common/guards/director.guard';
 import { RequireDirector } from '@/common/decorators/business-role.decorator';
 import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
 import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
-import { AssignmentListController } from '@/modules/assignment-list/assignment-list.controller';
+import { SystemService } from '@/modules/system/system.service';
 import { DeptRatioService } from './dept-ratio.service';
 import { SetDeptRatioDto } from './dto/set-dept-ratio.dto';
 
@@ -34,7 +34,11 @@ import { SetDeptRatioDto } from './dto/set-dept-ratio.dto';
 @RequireDirector()
 @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
 export class DeptRatioController {
-  constructor(private readonly service: DeptRatioService) {}
+  constructor(
+    private readonly service: DeptRatioService,
+    // F097 / AD-E07-27 §27.3：current_work_ym 取值改用 SystemService（行為不變）
+    private readonly systemService: SystemService,
+  ) {}
 
   @Get(':listNo')
   async getDeptRatios(@Param('listNo') listNo: string) {
@@ -56,7 +60,7 @@ export class DeptRatioController {
         userId: user.userId,
         ipAddress: req.ip ?? null,
       },
-      AssignmentListController.computeCurrentWorkYm(),
+      this.systemService.getCurrentWorkYm(),
     );
   }
 }

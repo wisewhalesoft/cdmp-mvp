@@ -65,7 +65,15 @@ export class AssignmentRunService {
   ) {}
 
   /**
-   * F061 v1.2 AC-1 + AC-2 + AC-6：觸發月跑
+   * F061 v1.2 AC-1 + AC-2 + AC-6 / F097 AC-14：觸發月跑。
+   *
+   * F097（生效日期 = F097 部署日）：`ym` 參數即使用者選定之「目標分派月」（target_work_ym），
+   * 由 controller 自 dto.workYm 傳入並通過格式驗證 + 過去月 guard；本服務直接寫入
+   * `AssignmentRun.project_workym = ym`，**不再以 new Date() 自算執行月**。
+   *
+   * ⚠️ forward-only（歷史資料不回填，glossary §7 / AC-18）：F097 部署前既有歷史 run 之
+   * `project_workym` 為「執行月」語意，與目標分派月不同；無可靠方式反推，業務決策為接受
+   * 此語意混雜，**不進行任何資料回填或修正**，僅以本注釋 + CHANGELOG 標注邊界，不呈現給一般使用者。
    */
   async triggerRun(ym: string, actorId: string): Promise<TriggerRunResult> {
     // BR-2 / AC-6：併發保護（同月 pending/running → 409）

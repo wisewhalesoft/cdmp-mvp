@@ -17,6 +17,7 @@ import { RatioValidationService } from '@/modules/assignment/services/ratio-vali
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
 import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { AssignmentListModule } from '@/modules/assignment-list/assignment-list.module';
+import { SystemModule } from '@/modules/system/system.module';
 import { DeptRatioController } from './dept-ratio.controller';
 import { DeptRatioService } from './dept-ratio.service';
 import { PersonnelRatioController } from './personnel-ratio.controller';
@@ -62,6 +63,8 @@ import { StageActionService } from './stage-action.service';
     // F088 v1.3 / AD-E07-20：approve→ready 後 best-effort 物化 Stage 0 估算，
     // 需 Stage0EstimateService（由 AssignmentListModule export；單向依賴無循環）
     AssignmentListModule,
+    // F097 / AD-E07-27 §27.3：注入 SystemService（dept-ratio / personnel-ratio / stage-action）
+    SystemModule,
   ],
   controllers: [DeptRatioController, PersonnelRatioController, StageActionController],
   providers: [

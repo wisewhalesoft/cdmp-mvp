@@ -23,4 +23,25 @@ export class SystemService {
     const m = now.getMonth() + 1;
     return `${y}${String(m).padStart(2, '0')}`;
   }
+
+  /**
+   * F097 / AC-16：分派作業月份（target_work_ym）的預設值 = 系統錨點月（current_work_ym）+ 1 個月。
+   *
+   * - 基準月一律經由 {@link getCurrentWorkYm} 取得（含 OVERRIDE_CURRENT_WORK_YM 套用），
+   *   本方法不直接呼叫 `new Date()`（[glossary §1]：唯一合法 new Date() 之處為 getCurrentWorkYm）。
+   * - 跨年邊界正確：'202512' → '202601'（非 '202513'）。
+   *
+   * @param now 可選注入，便於單元測試邊界（透傳給 getCurrentWorkYm）
+   * @returns 下個月的 YYYYMM 字串
+   */
+  getDefaultTargetWorkYm(now?: Date): string {
+    const current = this.getCurrentWorkYm(now);
+    const y = parseInt(current.slice(0, 4), 10);
+    const m = parseInt(current.slice(4, 6), 10); // 1-based
+    // 進位：m=12 → 次年 1 月
+    const totalMonths = y * 12 + (m - 1) + 1; // +1 個月
+    const ny = Math.floor(totalMonths / 12);
+    const nm = (totalMonths % 12) + 1;
+    return `${ny}${String(nm).padStart(2, '0')}`;
+  }
 }
