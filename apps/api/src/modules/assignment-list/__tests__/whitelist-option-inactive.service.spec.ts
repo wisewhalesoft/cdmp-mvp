@@ -172,7 +172,7 @@ describe('AssignmentListService — WHITELIST_OPTION_INACTIVE warnings (F050/F05
       env.optionRepo.create({
         column_name: 'prod_kind',
         option_value: '01',
-        option_label: '汽車新車',
+        option_label: '汽車',
         is_active: true,
         deactivation_reason: null,
         created_at: now,

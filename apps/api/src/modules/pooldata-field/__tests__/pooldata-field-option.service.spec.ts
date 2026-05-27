@@ -42,7 +42,7 @@ describe('PooldataFieldOptionService', () => {
   ): PooldataFieldOption => ({
     column_name: 'prod_kind',
     option_value: '01',
-    option_label: '汽車新車',
+    option_label: '汽車',
     is_active: true,
     deactivation_reason: null,
     created_at: NOW,
@@ -284,10 +284,10 @@ describe('PooldataFieldOptionService', () => {
       const result = await service.reactivateOption(
         'prod_kind',
         '01',
-        { optionLabel: '汽車新車（更新）' },
+        { optionLabel: '汽車（更新）' },
         actor,
       );
-      expect(result.optionLabel).toBe('汽車新車（更新）');
+      expect(result.optionLabel).toBe('汽車（更新）');
     });
   });
 });
