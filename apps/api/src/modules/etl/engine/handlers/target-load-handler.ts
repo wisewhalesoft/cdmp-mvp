@@ -114,12 +114,15 @@ export class TargetLoadHandler implements NodeExecutor {
     const batchSize = 5000;
     let totalUpserted = 0;
 
-    // === F090 / AD-E07-21 §21.3：partition-replace load mode ===
-    // 適用於 ob_pool_data_list（雙重角色表）：只替換某一分區（如 data_source='etl_legacy'），
-    // 不可全表 TRUNCATE（會清掉月跑寫入的 'monthly_run' 列 → Stage 3/4 資料遺失，BR-3）。
+    // === F090 / AD-E07-21 §21.3 + v2.0 AD-E07-25 §25.3：partition-replace load mode ===
+    // 適用於 ob_pool_data_list：只替換某一分區（v2.0 partitionValue='etl_load'），
+    // fullMode 仍為 false → 引擎層不 TRUNCATE 全表（BR-3，保留表結構/索引）。
     //   1. DELETE FROM target WHERE "<partitionColumn>" = '<partitionValue>'
     //   2. INSERT 並對每列填 partitionValue（SELECT 加 '<value>' AS "<col>"）
-    // 歷史限定（PROJECT_WORKYM < 本月，DP-AD21-1）由 extract 層 sourceFilter 處理，
+    // v2.0 單源化：ob_pool_data_list 為 ETL 單一來源，月跑提案改寫 ob_monthly_run_result（F094），
+    // 本表不再混入月跑資料；partition DELETE（data_source='etl_load'）等效全量覆寫
+    // （殘留 'monthly_run' / NULL 舊列由全量覆寫自然淘汰，DP-AD25-5）。
+    // 歷史限定（ASSIGNDAY < 本月第一天，DP-AD21-1）由 extract 層 sourceFilter 處理，
     // 非本 handler；handler 只負責 per-partition 截斷與標記。
     if (loadMode === 'partition_replace') {
       const partitionColumn = context.node.data.partitionColumn as string;

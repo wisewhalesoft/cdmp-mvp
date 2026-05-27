@@ -462,7 +462,8 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
       partitionColumn: opts.partitionColumn ?? 'data_source',
     };
     if (!opts.omitPartitionValue) {
-      data.partitionValue = opts.partitionValue ?? 'etl_legacy';
+      // v2.0（AD-E07-25 DP-AD25-1 單源化）：partitionValue 預設 'etl_load'（取代 'etl_legacy'）
+      data.partitionValue = opts.partitionValue ?? 'etl_load';
     }
     return {
       node: { id: 'tl1', type: 'pipelineNode', position: { x: 0, y: 0 }, data },
@@ -474,30 +475,32 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
     } as NodeExecutionContext;
   }
 
-  // TS-F090-ETL-002（regression guard）：前置 DELETE 精確只刪 data_source='etl_legacy'，
-  // 不刪 monthly_run / NULL（不可全表 TRUNCATE）
-  it('TS-F090-ETL-002: 前置 DELETE 只針對 partition（data_source=etl_legacy），不 TRUNCATE 全表', async () => {
+  // TS-F090-ETL-002v2（regression guard）：前置 DELETE 針對 partition（v2.0：data_source='etl_load'），
+  // 不可全表 TRUNCATE（BR-3：fullMode 仍為 false，引擎層不 TRUNCATE）
+  it('TS-F090-ETL-002v2: 前置 DELETE 針對 partition（data_source=etl_load），不 TRUNCATE 全表', async () => {
     const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3));
     await handler.execute(ctx);
 
     const qr = ctx.queryRunner;
     const allSql = qr.calls.map((c: any) => c.sql).join('\n');
 
-    // 不可全表 TRUNCATE
+    // 不可全表 TRUNCATE（BR-3）
     expect(allSql).not.toContain('TRUNCATE');
 
-    // DELETE 精確針對 partition
+    // DELETE 精確針對 partition（v2.0 partitionValue='etl_load'；AD-E07-25 §25.3 等效全量）
     const deleteCall = qr.calls.find((c: any) => c.sql.includes('DELETE FROM'));
     expect(deleteCall).toBeDefined();
     expect(deleteCall.sql).toContain('DELETE FROM "ob_pool_data_list"');
-    expect(deleteCall.sql).toContain(`"data_source" = 'etl_legacy'`);
+    expect(deleteCall.sql).toContain(`"data_source" = 'etl_load'`);
+    // v2.0：不再以 'etl_legacy' 為 partition 值
+    expect(deleteCall.sql).not.toContain(`'etl_legacy'`);
 
     // 不可出現未限定 partition 的 DELETE（regression guard）
     expect(allSql).not.toContain('DELETE FROM "ob_pool_data_list" WHERE "list_no"');
   });
 
-  // TS-F090-ETL-003：INSERT 每列填 partitionValue（'etl_legacy' AS "data_source"）
-  it('TS-F090-ETL-003: INSERT 對每列填 data_source=etl_legacy（SELECT 加常數欄）', async () => {
+  // TS-F090-ETL-003v2：INSERT 每列填 partitionValue（v2.0：'etl_load' AS "data_source"）
+  it('TS-F090-ETL-003v2: INSERT 對每列填 data_source=etl_load（SELECT 加常數欄）', async () => {
     const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 5));
     const result = await handler.execute(ctx);
 
@@ -505,8 +508,10 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
     const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
     expect(insertCall).toBeDefined();
     expect(insertCall.sql).toContain('INSERT INTO "ob_pool_data_list"');
-    // SELECT 必含常數 partition 欄
-    expect(insertCall.sql).toContain(`'etl_legacy' AS "data_source"`);
+    // SELECT 必含常數 partition 欄（v2.0 值域）
+    expect(insertCall.sql).toContain(`'etl_load' AS "data_source"`);
+    // v2.0：不再以 'etl_legacy' 為插入值
+    expect(insertCall.sql).not.toContain(`'etl_legacy'`);
     // INSERT 欄位清單含 data_source
     expect(insertCall.sql).toContain('"data_source"');
     // 非 UPSERT、非 customer_core 專屬

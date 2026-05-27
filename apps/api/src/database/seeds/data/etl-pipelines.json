@@ -986,7 +986,7 @@
   },
   {
     "name": "E07-OBPOOLDATA_LIST-Load",
-    "description": "F090 / AD-E07-21：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_legacy 後 INSERT，每列填 data_source=etl_legacy；不可全表 TRUNCATE（會清掉月跑 monthly_run 列，BR-3）",
+    "description": "F090 v2.0 / AD-E07-25 §25.3（單源化）：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_load 後 INSERT，每列填 data_source=etl_load（單一來源批次標記）；fullMode 仍 false，引擎層不 TRUNCATE（BR-3）。月跑改寫 ob_monthly_run_result（F094），本表為 ETL 單一來源",
     "version": 1,
     "step_count": 3,
     "status": "active",
@@ -1658,7 +1658,7 @@
             "targetTable": "ob_pool_data_list",
             "loadMode": "partition_replace",
             "partitionColumn": "data_source",
-            "partitionValue": "etl_legacy"
+            "partitionValue": "etl_load"
           }
         }
       ],

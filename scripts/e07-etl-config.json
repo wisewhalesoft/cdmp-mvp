@@ -617,13 +617,13 @@
     },
     {
       "name": "E07-OBPOOLDATA_LIST-Load",
-      "description": "F090 / AD-E07-21：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_legacy 後 INSERT，每列填 data_source=etl_legacy；不可全表 TRUNCATE（會清掉月跑 monthly_run 列，BR-3）",
+      "description": "F090 v2.0 / AD-E07-25 §25.3（單源化）：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_load 後 INSERT，每列填 data_source=etl_load（單一來源批次標記）；fullMode 仍為 false，引擎層不 TRUNCATE（BR-3）。本表自 v2.0 為 ETL 單一來源，月跑改寫 ob_monthly_run_result（F094），不再寫本表，故 partition DELETE 等效全量（殘留 monthly_run/NULL 由全量覆寫自然淘汰，DP-AD25-5）",
       "schedule": null,
       "extractionTaskName": "E07-OBPOOLDATA_LIST-Extract",
       "targetTable": "ob_pool_data_list",
       "loadMode": "partition_replace",
       "partitionColumn": "data_source",
-      "partitionValue": "etl_legacy",
+      "partitionValue": "etl_load",
       "fullMode": false,
       "_historicalLimit": {
         "_comment": "F090 / AD-E07-21 DP-AD21-1 歷史限定：只載入本月之前的歷史派案。原 spec 寫 PROJECT_WORKYM < 本月，但來源表 OBPOOLDATA_LIST（128 欄）無 PROJECT_WORKYM 欄（該欄屬 OBMLISTDF 名單定義表）。經裁示改用 ASSIGNDAY（唯一時間欄，yyyyMMdd，亦為 F091 近 3 個月去重所用之同一欄，語意一致）：ASSIGNDAY < 本月第一天，排除本月資料以消除與月跑並發衝突。",

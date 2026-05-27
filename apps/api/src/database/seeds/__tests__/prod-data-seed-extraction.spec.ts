@@ -104,11 +104,13 @@ describe('data/etl-pipelines.json E07-OBPOOLDATA_LIST-Load', () => {
     }
   });
 
-  it('target_load node 為 partition_replace（data_source=etl_legacy），非 fullMode', () => {
+  it('target_load node 為 partition_replace（data_source=etl_load），非 fullMode', () => {
     const tl = list.definition.nodes.find((n: any) => n.data.nodeType === 'target_load');
     expect(tl.data.loadMode).toBe('partition_replace');
     expect(tl.data.partitionColumn).toBe('data_source');
-    expect(tl.data.partitionValue).toBe('etl_legacy');
+    // v2.0（AD-E07-25 DP-AD25-1 單源化）：partitionValue 'etl_legacy' → 'etl_load'
+    expect(tl.data.partitionValue).toBe('etl_load');
+    expect(tl.data.partitionValue).not.toBe('etl_legacy');
     expect(tl.data.targetTable).toBe('ob_pool_data_list');
     // 與 dev DB 一致：partition_replace 不輸出 fullMode 欄位
     expect(tl.data.fullMode).toBeUndefined();

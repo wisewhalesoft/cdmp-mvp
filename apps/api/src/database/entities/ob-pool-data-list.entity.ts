@@ -397,10 +397,15 @@ export class ObPoolDataList {
   @Column({ name: 'score', type: 'integer', nullable: true })
   score: number | null;
 
-  // F090 / AD-E07-21 §21.3（DP-AD21-2 方案 A）：區分資料來源。
-  // 'etl_legacy'  → E07-OBPOOLDATA_LIST-Load 載入的 legacy 派案歷史（去重查詢用）
-  // 'monthly_run' → 月跑 Stage 1 寫入的本月分派結果（Stage 3/4 更新用）
-  // NULL          → migration 前既有資料（語意同 'monthly_run'）
+  // F090 v2.0 / AD-E07-25 §25.3（DP-AD25-1 方案 A，單源化）：標記 ETL 載入批次。
+  // 值域單一化為 'etl_load'（取代 v1.0 之 'etl_legacy' / 'monthly_run' 雙值）：
+  //   'etl_load' → E07-OBPOOLDATA_LIST-Load 載入的 legacy 派案歷史（去重查詢用，單一來源）
+  // ob_pool_data_list 自 v2.0 起為 ETL 單一來源；本系統月跑提案結果改寫入
+  // ob_monthly_run_result（F094），不再寫入本表。
+  // 廢止值域（不再作為現行寫入值）：
+  //   'etl_legacy'  → v1.0 過渡值，已由 'etl_load' 取代
+  //   'monthly_run' → 月跑改寫 ob_monthly_run_result（F094），不再寫入本表
+  //   NULL          → migration 前既有資料，由 ETL 全量覆寫自然淘汰（DP-AD25-5）
   // ⚠️ 與 migration 1711360000291 保持一致：任一邊改動，另一邊同步修
   @Column({ name: 'data_source', type: 'varchar', length: 20, nullable: true })
   data_source: string | null;

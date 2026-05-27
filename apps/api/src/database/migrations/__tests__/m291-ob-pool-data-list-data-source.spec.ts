@@ -164,6 +164,27 @@ describe('Entity ob-pool-data-list.entity.ts — data_source（F090 ENT）', () 
     const entSrc = readFileSync(ENTITY_PATH, 'utf8');
     expect(entSrc).toContain('任一邊改動，另一邊同步修');
   });
+
+  // TS-F090-ENT-001v2：entity data_source 值域說明更新為 'etl_load'（單源化，AD-E07-25 DP-AD25-1）
+  it('TS-F090-ENT-001v2: data_source 註解含 etl_load（v2.0 單源化值域說明）', () => {
+    const entSrc = readFileSync(ENTITY_PATH, 'utf8');
+    // data_source @Column 上方註解段落須含 'etl_load' 單一值域
+    expect(entSrc).toMatch(/'etl_load'/);
+    expect(entSrc).toMatch(/AD-E07-25/);
+  });
+
+  it('TS-F090-ENT-001v2b: data_source 註解不再以 etl_legacy / monthly_run 作為現行值域（已廢止）', () => {
+    const entSrc = readFileSync(ENTITY_PATH, 'utf8');
+    // 截取 data_source 欄位前的註解區塊（從 F090 標記到 @Column data_source）
+    const block = entSrc.slice(
+      entSrc.indexOf('F090'),
+      entSrc.indexOf("name: 'data_source'") + 40,
+    );
+    // 廢止值域不應作為「現行/寫入者」說明出現在 data_source 區塊
+    // （允許出現在「已廢止」措辭中，故以 monthly_run 作為寫入者語意為禁）
+    expect(block).not.toMatch(/月跑 Stage 1 寫入的本月分派結果/);
+    expect(block).toContain('etl_load');
+  });
 });
 
 // ---- TS-F090-ETL-005 ----
@@ -196,12 +217,23 @@ describe('ETL config E07-OBPOOLDATA_LIST-Load 護欄（F090 ETL-005）', () => {
     expect(pipe.fullMode).toBe(false);
     expect(pipe.loadMode).toBe('partition_replace');
     expect(pipe.partitionColumn).toBe('data_source');
-    expect(pipe.partitionValue).toBe('etl_legacy');
+    // v2.0（AD-E07-25 DP-AD25-1 單源化）：partitionValue 由 'etl_legacy' 改為 'etl_load'
+    expect(pipe.partitionValue).toBe('etl_load');
   });
 
   it('TS-F090-ETL-005b: 設定檔不含 TRUNCATE ob_pool_data_list（regression guard）', () => {
     const raw = readFileSync(ETL_CONFIG_PATH, 'utf8');
     expect(raw).not.toMatch(/TRUNCATE\s+(TABLE\s+)?["']?ob_pool_data_list/i);
+  });
+
+  // TS-F090-RGv2-003：Grep guard — config 不含 'etl_legacy' 作為 partitionValue（v2.0 單源化）
+  it('TS-F090-RGv2-003a: e07-etl-config.json 不含 etl_legacy 作為 partitionValue（已替換為 etl_load）', () => {
+    const pipe = config.pipelines.find(
+      (p: any) => p.name === 'E07-OBPOOLDATA_LIST-Load',
+    );
+    // partitionValue 絕不可再是 'etl_legacy'
+    expect(pipe.partitionValue).not.toBe('etl_legacy');
+    expect(pipe.partitionValue).toBe('etl_load');
   });
 
   // F090 spec gap 已裁示：歷史限定改用 ASSIGNDAY < 本月第一天（來源表無 PROJECT_WORKYM）
