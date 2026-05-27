@@ -1,11 +1,15 @@
 ---
 type: architecture-spec
-version: "2.18"
+version: "2.19"
 status: draft
 last_updated: 2026-05-27
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092]
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097]
 ---
 
+> **v2.19 / 2026-05-27 變更摘要（AD-E07-27 作業月語意統一架構決策）**：
+>
+> 新增 **AD-E07-27「F097 作業月語意統一（target_work_ym 分離 + SystemService 收斂 + 前端共享狀態 + 過去月 guard + 去重視窗對齊）」**：(1) 概念分離：`current_work_ym`（系統錨點月，唯一 `new Date()` 來源）vs `target_work_ym`（作業月，預設 `current_work_ym + 1`）；(2) `SystemService.getCurrentWorkYm()` 單一來源 + 新增 `getDefaultTargetWorkYm()`，收斂三個 controller static `computeCurrentWorkYm()`；(3) 過去月 guard `RUN_WORKYM_PAST`（422）落點於 `AssignmentRunController` / `AssignmentRunService`，比對基準 `SystemService.getCurrentWorkYm()` / SP `getdate()`，邊界 `>=`；(4) 前端 `AssignmentWorkYmContext`（React Context）Provider 掛載於 assignment 區段 layout，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發），`run-history` 與下游結果頁排除；(5) 月跑觸發寫入 `AssignmentRun.project_workym = target_work_ym` 為下游單一真實來源；(6) `computeDedupWindow` 邏輯不改，靠 `workdt = parseWorkdt(project_workym)` 帶目標月自動對齊 `[workdt−3月, workdt−1日]`，關聯既有 OQ-STAGE1-02；(7) forward-only 不回填策略記錄為架構註記。covers 補入 F097。
+>
 > **v2.18 / 2026-05-27 變更摘要（AD-E07-25 + AD-E07-26 全 DP Resolved，進入可實作狀態）**：
 >
 > **AD-E07-25 全 6 DP Resolved**：DP-AD25-1 保留 `data_source` 欄改值域為 `'etl_load'`；DP-AD25-2 精簡 schema（Stage 2 仍 JOIN ob_pool_data）；DP-AD25-3 短期雙軌保留 snapshot type=result；DP-AD25-4 去重上界改 `MAX(ob_pool_data_list.assignday)`（NULL 退化 WORKDT-1）；DP-AD25-5 既有 monthly_run 資料自然淘汰；DP-AD25-6 新增 `assignday VARCHAR(100) NULL` 欄位（Forward-compat）。`ob_monthly_run_result` schema 含 assignday 欄已確認，migration `1711360000292`。
@@ -43,7 +47,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化設計稿：待 DP-AD25-1~6 拍板）**；**AD-E07-26（特例規則 SP 落差修正 + 結構化模型設計稿：待 DP-AD26-1~3 拍板）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）** |
 
 ## 目錄
 
@@ -5931,6 +5935,274 @@ WHERE  column_name = 'list_type';
 
 ---
 
+#### AD-E07-27　F097 作業月語意統一（target_work_ym 分離 + SystemService 收斂 + 前端共享狀態 + 過去月 guard + 去重視窗對齊）（2026-05-27）
+
+> **範圍**：本節記錄 F097「客戶名單分派作業月語意統一」之所有已拍板架構決策，涵蓋前後端概念分離、服務層收斂、前端共享狀態、過去月保護邏輯、Stage 1 去重視窗對齊，以及歷史資料 forward-only 策略。本 AD 不引入新 DB 欄位、不變更 `data-model.md`（`assignment_run.project_workym` 欄位名稱維持不動）。
+>
+> **狀態**：**所有決策均已拍板（2026-05-27）。可進入實作。**
+>
+> **命名權威**：[glossary.md](../docs/specs/glossary.md)（`current_work_ym` / `target_work_ym` / `project_workym` / `workdt` / 過去月 guard / 去重視窗 / forward-only / 共享月份狀態）——下游 TDD Developer 必讀。
+>
+> **相依前提（已存在）**：`GET /api/v1/system/current-work-ym` 端點（F077 §5.1）；`SystemService.getCurrentWorkYm()` Injectable（F077）；`computeDedupWindow(workdt, poolDataListRepo)` 函式（F091 v2.0）；`assignment_run.project_workym` 欄位（現有）。
+
+##### 27.1 核心問題與決策背景
+
+分派模組中「當月」一詞同時代表兩種語意：
+
+| 語意 | 代表 | 現況問題 |
+|------|------|---------|
+| **執行當下日曆月** | `new Date()` 的 YYYYMM | `AssignmentRunController` / `Stage0EstimateController` / `AssignmentListController` 各自持有 static `computeCurrentWorkYm()`，三份重複 |
+| **名單要派去的目標月** | 通常是下個月（5 月跑 6 月名單）| 前端 `trigger-run-page` 寫死 `new Date()`；`POST /assignment/runs` 忽略 body 自行計算 → 5 月選 6 月預覽卻觸發 5 月月跑 |
+
+ground-truth SP（`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`，UTF-16LE）L25 / L31：
+
+```sql
+@WORKDT = PROJECT_WORKYM + '01'
+IF ISNULL(@IS_ASSIGNED,'N')='Y' OR @WORKDT < getdate()  BEGIN RETURN END
+```
+
+原系統 `PROJECT_WORKYM` = 目標作業月（未來月），且有「目標月 1 號 >= 今天」的 guard，現況後端完全未移植此 guard。
+
+##### 27.2 概念分離：`current_work_ym` vs `target_work_ym`
+
+> **決策：已拍板**（F097 BR-1 / F097 §4 / proposal §4）
+
+| 概念 | 識別碼 | 語意 | 唯一計算點 | 用途 |
+|------|--------|------|-----------|------|
+| 系統錨點月 | `current_work_ym` | 真實日曆當月（YYYYMM）；每月 1 號 0:00 切換 | **後端 `SystemService.getCurrentWorkYm()`**（全系統唯一合法 `new Date()` 之處） | 判定歷史/未來/唯讀（F077 BR-3）；月份範圍 ± 12；衍生 `target_work_ym` 預設值 |
+| 分派作業月份 | `target_work_ym` | 使用者正在作業的目標月份（YYYYMM）；預設 = `current_work_ym + 1` | 前端 `AssignmentWorkYmContext`（使用者透過 top-bar MonthPicker 選定） | 名單篩選、Stage 0 估算、月跑觸發 → 寫入 `AssignmentRun.project_workym` |
+
+**不做什麼**：`current_work_ym` 不直接用於月跑觸發的 `project_workym`（那是 `target_work_ym` 的職責）；前端不得自行呼叫 `new Date()` 計算月份。
+
+```mermaid
+graph LR
+    subgraph Backend["後端 SystemService"]
+        SYS["SystemService<br/>getCurrentWorkYm()<br/>唯一 new Date() 來源<br/>OVERRIDE_CURRENT_WORK_YM 支援"]
+        DEF["SystemService<br/>getDefaultTargetWorkYm()<br/>= getCurrentWorkYm() + 1 個月"]
+    end
+
+    subgraph Frontend["前端 AssignmentWorkYmContext"]
+        CTX["AssignmentWorkYmProvider<br/>currentWorkYm<br/>targetWorkYm（預設 +1）<br/>setTargetWorkYm"]
+    end
+
+    subgraph RunTrigger["月跑觸發"]
+        DTO["TriggerRunDto.workYm（必填）"]
+        RUN["AssignmentRun<br/>project_workym = workYm"]
+    end
+
+    SYS -->|"GET /api/v1/system/current-work-ym"| CTX
+    DEF -.->|"語意來源"| CTX
+    CTX -->|"target_work_ym → workYm"| DTO
+    DTO --> RUN
+```
+
+##### 27.3 SystemService 單一來源：收斂三個 controller static method
+
+> **決策：已拍板**（F097 BR-7 / AC-15 / AC-16）
+
+**廢棄**（F097 移除）：
+- `AssignmentListController.computeCurrentWorkYm()` static method
+- `Stage0EstimateController.computeCurrentWorkYm()` static method
+- `AssignmentRunController.computeCurrentWorkYm()` static method（`triggerRun` handler）
+
+**取代為**：各 controller 注入 `SystemService`（來自 `SystemModule`），呼叫 `this.systemService.getCurrentWorkYm()`。
+
+**新增方法**：`SystemService.getDefaultTargetWorkYm(now?: Date): string`，回傳 `getCurrentWorkYm(now)` 加一個月（跨年邊界正確：`'202512'` → `'202601'`；`OVERRIDE_CURRENT_WORK_YM` 套用）。
+
+**依賴關係圖**：
+
+```mermaid
+graph TD
+    SystemModule["SystemModule<br/>（exports SystemService）"]
+    AssignmentListMod["AssignmentListModule<br/>AssignmentListController"]
+    Stage0Mod["AssignmentStageModule<br/>Stage0EstimateController"]
+    AssignmentRunMod["AssignmentRunModule<br/>AssignmentRunController"]
+    AssignmentStageMod["assignment-stage controllers<br/>dept-ratio / personnel-ratio / stage-action"]
+
+    SystemModule --> AssignmentListMod
+    SystemModule --> Stage0Mod
+    SystemModule --> AssignmentRunMod
+    SystemModule --> AssignmentStageMod
+```
+
+> **注意**：`assignment-stage` 下各 controller 呼叫方（`dept-ratio.controller` / `personnel-ratio.controller` / `stage-action.controller` 等）同步改呼叫 `SystemService.getCurrentWorkYm()`，業務行為不變（純 refactor）。既有 service 層（`assertYmInRange` / `assertNotHistorical` 等）邏輯不需改動，僅改 controller 取值來源。
+
+##### 27.4 過去月 guard：`RUN_WORKYM_PAST`（422）落點與語意
+
+> **決策：已拍板**（F097 BR-5 / BR-6 / AC-11 / AC-12 / AC-13）
+
+**ground-truth**：SP L25 / L31（UTF-16LE 解碼驗證）：
+```sql
+SELECT @WORKDT = PROJECT_WORKYM + '01' FROM OBMLISTDF ...
+IF ISNULL(@IS_ASSIGNED,'N')='Y' OR @WORKDT < getdate()  BEGIN  RETURN  END
+```
+
+**後端等價移植**（`POST /api/v1/assignment/runs` 業務邏輯順序）：
+
+```
+1. ValidationPipe：workYm 必填（缺省 → 400）；格式驗證 /^\d{4}(0[1-9]|1[0-2])$/ （違反 → 422 WORK_YM_INVALID_FORMAT）
+2. 過去月 guard（AC-11 / AC-12 / AC-13）：
+       workdt = new Date(workYm + '01')
+       today  = SystemService.getCurrentWorkYm() 對應的當月 1 號（server 時鐘）
+       if workdt < today → 422 RUN_WORKYM_PAST
+       （workdt >= today → 通過；邊界：當月 1 號當天合法）
+3. assertNoRunningRun(workYm)  → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+4. readiness / precheck         → 422 ASSIGNMENT_RUN_PRECHECK_FAILED
+5. 建立 run：project_workym = workYm
+```
+
+**落點選擇**：guard 邏輯於 `AssignmentRunController.triggerRun()` handler 或 `AssignmentRunService.triggerRun()` 之最頂層（ValidationPipe 通過後、`assertNoRunningRun` 之前）執行。具體插入點由 TDD Developer 依既有 pipeline 決定，此為 [ASSUMPTION]（F097 A-4）。
+
+**邊界語意**：`workdt >= today` 通過（當月 1 號當天即合法觸發），對應 SP `@WORKDT < getdate()` 的等價移植。`workYm = '202613'`（MM=13）已於格式層攔截，不依賴本 guard 的 Invalid Date 行為。
+
+**比對基準**：`SystemService.getCurrentWorkYm()` 為 server 時鐘權威，不依賴前端時鐘（BR-6）。
+
+##### 27.5 前端共享月份狀態架構：`AssignmentWorkYmContext`
+
+> **決策：已拍板**（F097 BR-3 / AC-1 / AC-2 / AC-3 / AC-4 / glossary §8）
+
+**實作選型（已鎖定）**：**React Context**（`AssignmentWorkYmContext`），Provider（`AssignmentWorkYmProvider`）。不使用 Zustand / Redux / URL query param。
+
+**掛載位置**：assignment 區段的 layout 元件（`AssignmentLayout` 或等效 Router children wrapper）。具體元件名稱由 TDD Developer 依既有路由結構確認（F097 A-1）。
+
+**Context 提供值**：
+
+| 值 | 型別 | 說明 |
+|----|------|------|
+| `currentWorkYm` | `string` (YYYYMM) | 系統錨點月，由 `GET /api/v1/system/current-work-ym` 取得 |
+| `targetWorkYm` | `string` (YYYYMM) | 作業月，初始值 = `currentWorkYm + 1`；使用者可透過 MonthPicker 變更 |
+| `setTargetWorkYm` | `(ym: string) => void` | 更新 setter，合法範圍 `currentWorkYm ± 12`（F077 BR-2）|
+
+**初始化流程**：
+
+```mermaid
+sequenceDiagram
+    participant P as AssignmentWorkYmProvider（掛載）
+    participant API as GET /api/v1/system/current-work-ym
+    participant CTX as AssignmentWorkYmContext
+
+    P->>API: 呼叫一次（Provider 掛載時）
+    API-->>P: currentWorkYm（YYYYMM）
+    P->>P: targetWorkYm = addOneMonth(currentWorkYm)
+    P->>CTX: 提供 { currentWorkYm, targetWorkYm, setTargetWorkYm }
+```
+
+**涵蓋頁面 vs 排除頁面**：
+
+| 頁面 | 路由 | Context 關係 | 月份來源 |
+|------|------|-------------|---------|
+| 名單定義（F048/F077） | `list-definition` | consume `AssignmentWorkYmContext` | `targetWorkYm` |
+| 準備完成摘要（F088） | `ready-summary` | consume `AssignmentWorkYmContext` | `targetWorkYm` |
+| Stage 0 試算（F049） | `stage0-estimate` | consume `AssignmentWorkYmContext` | `targetWorkYm` |
+| 月跑觸發（F061） | `trigger-run` | consume `AssignmentWorkYmContext` | `targetWorkYm`（處長觸發頁 MonthPicker 唯讀） |
+| **月跑歷史（F065）** | `run-history` | **不 consume**，獨立 local state | 使用者選定（查詢任意月歷史 run，語意不同） |
+| **下游結果頁（F062/F063/F066/F067）** | `run-progress` / `run-summary` / `run-snapshot` / `run-compare` | **不 consume**，不加 MonthPicker | `run.project_workym`（靜態標籤，讀 `GET /assignment/runs/:runId` 回傳 `projectWorkym`） |
+
+**UI 標籤**：所有四頁 MonthPicker 之 label / placeholder 一律顯示「分派作業月份」（[glossary §2](../docs/specs/glossary.md)）。舊標籤字串「作業年月」、「當月」、「本月」（指作業月）廢棄移除。
+
+##### 27.6 資料流：月跑觸發寫入 `project_workym` 為下游單一真實來源
+
+> **決策：已拍板**（F097 BR-8 / AC-14 / AC-17）
+
+```mermaid
+sequenceDiagram
+    participant FE as 前端（觸發頁）
+    participant CTX as AssignmentWorkYmContext
+    participant API as POST /api/v1/assignment/runs
+    participant SVC as AssignmentRunService
+    participant DB as assignment_run.project_workym
+
+    FE->>CTX: 讀取 targetWorkYm（如 '202606'）
+    FE->>API: body { workYm: '202606' }
+    API->>API: 格式驗證 + 過去月 guard（§27.4）
+    API->>SVC: triggerRun(workYm)
+    SVC->>DB: INSERT project_workym = '202606'（目標月，非 new Date()）
+    DB-->>FE: TriggerRunResponse.ym = '202606'
+
+    Note over FE,DB: 下游結果頁讀 GET /runs/:runId → projectWorkym = '202606'<br/>（不 consume AssignmentWorkYmContext，月份不隨他頁切換變動）
+```
+
+**`project_workym` 語意確認**（DB 欄位不改名，[glossary §3](../docs/specs/glossary.md)）：
+- **F097 後（新 run）**：= `target_work_ym`（使用者選定之目標分派月）
+- **F097 前（歷史 run）**：= `new Date()` 當時的執行月（forward-only 不回填，見 §27.8）
+
+下游四頁（進度 / 摘要 / 快照 / 比對）以 `runId` 為主鍵，月份取自 `GET /assignment/runs/:runId` response 之 `projectWorkym`（camelCase）。
+
+##### 27.7 Stage 1 去重視窗對齊：`workdt` 帶目標月自動成立
+
+> **決策：已拍板**（F097 BR-10 / AC-19 / AC-20 / AC-21 / proposal §0.1）
+
+**核心設計**：`computeDedupWindow` 函式本身**不修改**（F091 v2.0 AC-20）；語意對齊完全依靠傳入正確的 `workdt`。
+
+| 項目 | F097 前（錯誤）| F097 後（正確）|
+|------|---------------|---------------|
+| `project_workym` | `'202605'`（執行月）| `'202606'`（目標月）|
+| `workdt` | `new Date('2026-05-01')` | `new Date('2026-06-01')` |
+| 去重視窗上界 | `2026-04-30`（執行月上月底）| `2026-05-31`（作業月上月底）|
+| 去重視窗下界 | `2026-02-01` | `2026-03-01` |
+| SP 語意對齊 | 偏移一個月 | **完全對齊** |
+
+**`workdt` 計算路徑**：
+
+```
+AssignmentRun.project_workym = '202606'
+  ↓ executeStage1Chain / runStage1ForList
+workdt = parseWorkdt('202606') = new Date('2026-06-01')
+  ↓ computeDedupWindow(workdt, poolDataListRepo)
+去重視窗 = [2026-03-01, MIN(MAX(ob_pool_data_list.assignday), 2026-05-31)]
+```
+
+**ETL 切點近似落差（已接受，關聯 OQ-STAGE1-02）**：ETL 載入 `ob_pool_data_list` 上界為真實日曆本月 1 號（執行時），非目標月相對。5 月下旬跑 6 月月跑時，`MAX(assignday)` 可能不含 5 月最後幾天；`MIN()` 以 `workdt − 1 日`（2026-05-31）兜底。此為已接受之近似，以程式碼注釋標記於 `computeDedupWindow` 附近，本輪不修正（OQ-STAGE1-02 非本輪範疇）。
+
+##### 27.8 forward-only 資料策略：歷史 run 不回填
+
+> **決策：已拍板**（F097 BR-9 / AC-18 / proposal §0.2）
+
+**策略**：F097 部署後，既有歷史 `assignment_run.project_workym`（儲存「執行月」語意）**不進行任何資料回填或修正**，維持原值。
+
+**理由**：歷史 run 的「執行月」與「目標月」無可靠反推方式（`new Date()` 當時不一定 = 對應業務目標月）；業務決策接受此語意混雜，以文件標注邊界。
+
+**標注要求**（不呈現給一般使用者）：
+- `AssignmentRunService.triggerRun()` 函式附近加程式碼注釋，明確標注 forward-only 策略生效日期 = F097 部署日
+- CHANGELOG 記載此語意邊界
+
+**架構不變式**：下游結果頁顯示既有 `projectWorkym` 值，系統不進行資料修補。
+
+##### 27.9 錯誤碼與 API 契約影響（方案 A，已拍板）
+
+**`POST /api/v1/assignment/runs` 三分支（F097 §5.6 / AC-9 / AC-10 / AC-11）**：
+
+| 分支 | 條件 | HTTP | 錯誤碼 | 登記狀態 |
+|------|------|------|--------|---------|
+| (1) 缺省 | body 未帶 `workYm`（空 body / null）| 400 | 通用缺必填（ValidationPipe 預設）| 沿用既有 400 慣例 |
+| (2) 格式錯誤 | `workYm` 帶值但非 6 碼或 MM ∉ 01~12 | 422 | `WORK_YM_INVALID_FORMAT`（**沿用**）| 既有碼，擴充適用至 POST /runs body |
+| (3) 過去月 | `workYm` 合法但目標月 1 號 < 今天 | 422 | `RUN_WORKYM_PAST`（**新增**）| 已登記至 `error-handling.md#assignment-run-errors` |
+
+**`TriggerRunDto` 變更（breaking change）**：新增必填 `workYm: string`；後端不提供任何 `new Date()` fallback（BR-4）。
+
+**`TriggerRunResponse`**：`ym` 欄位回傳選定 `workYm`（目標月）。
+
+**DB schema 無變更**：`assignment_run.project_workym` 欄位名稱維持不動（[glossary §3](../docs/specs/glossary.md)）；無新增欄位；無 migration。
+
+##### 27.10 架構不變式（F097 邊界）
+
+以下項目 F097 明確**不修改**：
+
+| 項目 | 理由 |
+|------|------|
+| `data-model.md`（DB schema）| `project_workym` 語意本就正確，僅預設值來源錯誤；無新欄位，無 migration 風險 |
+| `computeDedupWindow` 函式簽名與邏輯 | 靠傳入正確 `workdt` 自動對齊，函式本身無需改動（AC-20）|
+| F077 §5.2 既有 ym error code 技術債 | OQ-F097-01 方案 A 不清此塊；僅加 note 指向未來 cleanup |
+| ETL `currentMonthFirstDay` 計算點 | 維持日曆相對（已接受近似），非本輪修正範疇（OQ-STAGE1-02）|
+| F061 月跑觸發 Guard（權限控管）| 部長觸發；處長唯讀 MonthPicker；Guard 本身不變更 |
+| `assertion` service 層（`assertYmInRange` / `assertNotHistorical` 等）| 邏輯不改，僅改 controller 取值來源 |
+
+---
+
+*本節版本 1.0（2026-05-27），由 System Architect Agent 依據 F097 spec-writer 定稿 + glossary + proposal §0 拍板決策新增。所有決策均已拍板，可進入 TDD 實作。*
+
+---
+
 ### E07-G　M02 計分設定擴充 Migration 設計（F069~F072，2026-05-14）
 
 > **範圍**：本節定義 F069~F072（CARD_TYPE CRUD）新增的 3 個 migration 設計草案。實際 TypeORM migration 程式碼由 TDD Developer 實作。
@@ -6292,6 +6564,14 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 - *新增架構決策 AD-E07-17（Schema 修補三議題決議：議題 1 `assignment_audit_log.action` VARCHAR(10)→VARCHAR(30)；議題 2 `ob_empl_set` 時間欄位 entity 改用 `dateColumnType()` helper；議題 3 `ObListDefinition.stage` 確認歸屬 m100 migration，m12 data backfill 仍有效）*
 - *data-model.md 同步更新：`assignment_audit_log.action` 欄位說明更新 VARCHAR(30) + stage 系列 action 值；`ob_empl_set.created_at/updated_at` 補入 dateColumnType helper 強制說明；`ob_list_definition.stage` 欄位補入 migration 歸屬明示*
+
+---
+
+*本文件版本 2.19（2026-05-27），由 System Architect Agent 依據 F097 spec-writer 定稿 + glossary.md + proposals/work-ym-semantics-unification.md §0 拍板決策新增。主要變更：*
+
+- *新增架構決策 AD-E07-27（F097 作業月語意統一）：概念分離（current_work_ym vs target_work_ym）；SystemService 單一來源（收斂 3 個 controller static method + 新增 getDefaultTargetWorkYm()）；過去月 guard RUN_WORKYM_PAST（422）落點與邊界語意（`>=`，對應 SP L31 `@WORKDT < getdate()`）；AssignmentWorkYmContext React Context 架構（Provider 掛載 assignment 區段 layout、四頁涵蓋、run-history/下游結果頁排除）；月跑觸發寫入 project_workym = target_work_ym 為下游單一真實來源；computeDedupWindow 靠正確 workdt 自動對齊（函式不改）；forward-only 不回填架構策略*
+- *covers 補入 F097*
+- *Agent Loading Guide E07 TDD Developer 行補入 AD-E07-27 引用*
 
 ---
 
