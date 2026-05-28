@@ -1,10 +1,12 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.15"
-date: 2026-05-26
+version: "1.16"
+date: 2026-05-28
 status: Draft
 ---
+
+> **v1.16（2026-05-28 / US-144 / AD-E07-18 §18.12）**：`pooldata_field_whitelist`（`field_whitelist` 實體）新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位，標記系統固定篩選條件（F075 v1.7 / migration m295 M-B1）；seed 更新：`best_case.is_system_fixed = true`，其餘 6 筆 `= false`；補充 is_system_fixed 業務規則（BR-15 不可停用 / BR-16 dropdown 排除）；seed 備注對齊 m293 list_type 停用狀態。
 
 > **v1.15（2026-05-26 / Stage 1 精確化工程 AD-E07-21）**：`ob_pool_data_list` 欄位表新增 `data_source VARCHAR(20) NULL`（本系統新增欄位，值域 `'etl_legacy'` / `'monthly_run'`；migration `1711360000291-AddObPoolDataListDataSource`；AD-E07-21 DP-AD21-2 方案 A）。索引補入 `(data_source)` 與 `(assignday)`（去重視窗查詢用）。
 
@@ -2140,6 +2142,7 @@ PK：`calendar_date`
 | display_name | VARCHAR(100) | NOT NULL | 業務可讀之中文標籤（如「產品類別」） |
 | field_type | VARCHAR(20) | NOT NULL | 欄位類別列舉：`numeric` / `categorical` / `date`（CHECK constraint 限三值） |
 | is_active | BOOLEAN | NOT NULL DEFAULT TRUE | 啟用狀態；停用後新名單表單不再顯示，但既有名單條件不受影響（F075 BR-3） |
+| is_system_fixed | BOOLEAN | NOT NULL DEFAULT FALSE | **v1.7 新增（2026-05-28 / US-144 / AD-E07-18 §18.12 / migration m295）**：標記此欄位為「系統固定篩選條件」；`true` 時：(1) F050 v2.3 / F051 v2.2 `injectSystemFixedConditions` 於 createList / updateList 強制注入且不可移除；(2) F075 BR-15 不可停用（422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`）；(3) F050 / F051「新增條件」dropdown 排除（BR-16）。目前唯一 `true` 值：`best_case`（優質案件，對齊舊系統 `OBMLISTDF.PROD_BEST` 恆 `'Y'` 業務語意）。PG 型別 `BOOLEAN`；SQLite 映射為 `INTEGER 0/1`（TypeORM boolean column） |
 | created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
 | updated_at | TIMESTAMP | NOT NULL | 最後更新時間（UTC） |
 | created_by | UUID | NULL | 建立者 user_id（[ASSUMPTION] 由 system-architect 確認是否必填） |
@@ -2151,14 +2154,17 @@ PK：`calendar_date`
 - 停用為軟刪除（`is_active = false`），MVP 不支援硬刪除（F075 BR-9，OQ-102-02 暫定）
 - 與 PostgreSQL `ob_pool_data` 之欄位名稱為字串映射關係，不維護外鍵約束（F075 BR-8）
 - 月跑 Stage 1 不 join 本表做欄位有效性驗證，直接讀取 `ob_list_definition.condition_payload`（避免停用後月跑失敗）
+- **`is_system_fixed = true` 欄位不可停用**（F075 BR-15）；service 層回 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；前端 M06 管理頁停用按鈕 disabled（F075 AC-20）
 
 **索引**：`column_name`（PK）、`(field_type, is_active)`（多選元件查詢）
 
-**初始 Seed**（8 筆，依 F075 §4.4，冪等以 `column_name` 為鍵；v1.4.3 起 column_name 小寫對齊 `ob_pool_data` PostgreSQL snake_case）：
-- 7 筆 `is_active = true`：prod_kind（categorical）/ list_type（categorical）/ best_case（categorical）/ spec_tp（categorical）/ caseyear（categorical）/ settle_src（categorical）/ month_cnt（numeric）
-- 1 筆 `is_active = false`：payt_term（numeric，現行 SP 已被 month_cnt 取代）
+**初始 Seed**（v1.7 / US-144 更新，7 筆全部啟用，migration m295 同批 UPSERT `is_system_fixed`；v1.6 對齊 F050 v2.1.1 補 best_case；v1.5 對齊 US-125 AC-5 補 case_status；v1.4.6 對齊舊系統 OBZ020 收斂 5 筆核心篩選欄位）：
+- 6 筆 `is_active = true, is_system_fixed = false`：prod_kind（categorical）/ spec_tp（categorical）/ caseyear（categorical）/ settle_src（categorical）/ case_status（categorical）/ list_type（categorical，is_active=false per AD-E07-26 §26.7 m293）
+- 1 筆 `is_active = true, is_system_fixed = true`：best_case（categorical，display_name「優質案件」；系統固定篩選條件，F050 v2.3 / F051 v2.2 強制注入）
+- （list_type 已於 m293 停用，is_active=false，is_system_fixed=false；best_case 由 m295 M-B1 設 is_system_fixed=true）
 
 **相關功能**：[F075](features/F075-manage-pooldata-field-whitelist.md)、[F076](features/F076-manage-categorical-field-values.md)（FK 父表）
+**相關架構決策**：AD-E07-18 §18.12（migration M-B1 / M-B2 規格）
 
 ---
 

@@ -1,10 +1,14 @@
 ---
 type: architecture-spec
-version: "2.19"
+version: "2.20"
 status: draft
-last_updated: 2026-05-27
+last_updated: 2026-05-28
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097]
 ---
+
+> **v2.20 / 2026-05-28 變更摘要（AD-E07-18 §18.12 US-144 best_case 系統固定篩選條件 Design A）**：
+>
+> 新增 **AD-E07-18 §18.12「US-144 best_case 系統固定篩選條件架構設計（Design A）」**，涵蓋：(1) `pooldata_field_whitelist` 新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位設計（PG + SQLite 雙模式）；(2) `injectSystemFixedConditions(payload, systemFixedFields)` helper 設計：call-stack 置於 `validateConditionPayload` 之後、`deriveBackwardCompatColumns` + DB write 之前，`createList` 及 `updateList`（僅 conditionPayload 有傳值時）皆適用；固定值由 whitelist query 動態取得，不 hardcode 欄位名；(3) pooldata-field service 層 deactivation guard（422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`）defense-in-depth 設計；(4) 兩個 migration 規格：M-B1（`1711360000295-AddIsSystemFixedToPooldataFieldWhitelist.ts`，schema + seed）與 M-B2（`1711360000296-BackfillBestCaseConditionPayloadDraftLists.ts`，draft 名單回填，idempotent）；(5) 明確 Stage 1 無需任何改動。data-model.md `field_whitelist` 表補入 `is_system_fixed` 欄位說明。
 
 > **v2.19 / 2026-05-27 變更摘要（AD-E07-27 作業月語意統一架構決策）**：
 >
@@ -47,7 +51,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）** |
 
 ## 目錄
 
@@ -4642,6 +4646,271 @@ prod_best: string | null;
 | **風險** | tdd-implementation 若先改 service 層（L378 / L540 改為寫 `null`）但 M-A2 尚未執行（column 仍 NOT NULL），PG 會拋 constraint violation；SQLite 同理 |
 | **緩解** | tdd-implementation 執行順序：M-A1 → M-A2 → entity 修改 → service 修改。即 M-A2 執行後 column 已 nullable，service 再改為寫 `null` |
 | **追蹤** | Phase 5 PR checklist 明確標示「service L378 / L540 修改必須在 M-A2 migration 已執行環境上驗證」 |
+
+---
+
+##### 18.12 US-144 best_case 系統固定篩選條件架構設計（Design A，2026-05-28）
+
+> **版本**：1.0（2026-05-28）| **作者**：System Architect Agent | **對應 spec**：F050 v2.3 / F051 v2.2 / F075 v1.7 / error-handling.md v1.17 / US-144
+
+---
+
+###### 18.12.1 背景與動機
+
+**觸發事件**：US-144 將 `best_case`（優質案件）鎖定為系統固定篩選條件，對齊舊系統 `OBPOOLDATA.BEST_CASE` / `OBMLISTDF.PROD_BEST` 恆為 `'Y'` 的業務語意。採 **Design A（condition_payload 注入鎖定）**：後端強制注入，前端以 `isSystemFixed` 旗標驅動 UI（不 hardcode `'best_case'` 字串）。
+
+**架構邊界**：本 §18.12 負責：
+1. `pooldata_field_whitelist.is_system_fixed` schema 決策
+2. `injectSystemFixedConditions` helper 設計與 call-stack 置放
+3. pooldata-field service 層 deactivation guard 設計
+4. 兩個 migration（M-B1 / M-B2）規格
+5. 明確聲明 Stage 1 無需改動
+
+前端 UI（鎖定列、dropdown 排除、M06 停用按鈕 disabled）屬 tdd-implementation 範疇，依 `isSystemFixed` API 回應驅動，不在本 AD 展開。
+
+---
+
+###### 18.12.2 設計決策表
+
+| 決策 ID | 決策內容 | 拒絕方案 | 理由 |
+|---|---|---|---|
+| 18.12.1 | `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 加入 `pooldata_field_whitelist` | 獨立 `system_fixed_fields` 設定表 | whitelist 已是 system-of-record；獨立表增加 JOIN 複雜度且違反單一責任於單一欄位可表達的場景 |
+| 18.12.2 | `injectSystemFixedConditions` 為 service private helper，接受 `(payload, systemFixedFields[])` 兩個參數；固定值由 caller 傳入 whitelist query 結果（`systemFixedFields` 含 `columnName` + `fieldType` + 固定值對映） | service method hardcode `'best_case'` → `['Y']` | 不 hardcode 單一欄位名，為未來新增系統固定欄位預留擴充點；call site 只需一次 whitelist query 即可處理所有 system-fixed 欄位 |
+| 18.12.3 | 固定值來源：`best_case` → `['Y']`，於 **M-B1 whitelist UPSERT 之後**以 DB query 動態取得；helper 設計接受 `{ columnName, fixedValues: string[] }[]` 陣列（目前 1 筆，未來可擴充）。固定值 mapping 儲存策略：短期以 hardcoded constant 於 service layer（`private static readonly SYSTEM_FIXED_VALUES`），不另開新表 | 新增 `fixed_value` column 於 `pooldata_field_whitelist` | MVP 僅 best_case 一個 system-fixed 欄位，新增 DB column 有 schema 膨脹風險且回填語意不清；service constant 易測試、易改動；日後如需 per-field 固定值設定可再 migration 新增 `fixed_values JSONB NULL` 欄位 |
+| 18.12.4 | `updateList` 僅當 `conditionPayload` 有傳值（DTO `conditionPayload` 非 undefined / null）時才執行 `injectSystemFixedConditions`；legacy null-payload 名單不觸碰 | 無條件注入（含 null-payload 名單） | null-payload 名單屬舊系統遷移路徑 B；其 `condition_payload IS NULL` 語意為「使用 entity column fallback」；強制注入會使 payload 從 NULL 變為僅含 best_case 的 JSON，改變名單月跑路徑（B → A），語意破壞風險高；應由 M-B2 data migration 負責回填 draft 名單，updateList 不主動觸發路徑切換 |
+| 18.12.5 | deactivation guard 置於 `PooldataFieldWhitelistService.deactivate()` / `update()` 方法 service 層，回 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；前端停用按鈕 disabled 為 UX 層防護，service 層為 defense-in-depth | 僅前端 disabled，後端不驗 | 前端 disabled 可被繞過（直接 curl）；service 層驗證確保 API 合約安全 |
+| 18.12.6 | M-B1 與 M-B2 拆為兩個獨立 migration（295 / 296） | 合併 | 語意分離：M-B1 schema + seed（可獨立驗收，與 M-B2 資料操作無依賴關係）；M-B2 draft 名單回填（需 M-B1 已提供 `is_system_fixed` 欄位 + best_case=true 才能正確查詢） |
+| 18.12.7 | condition_payload IS NULL 的 draft 名單**不**在 M-B2 回填範圍內 | 回填全部 draft 包含 null-payload | null-payload draft 屬遷移中間態；強行注入 best_case 會使 payload 從 NULL 變為部分 JSON，month跑路徑從 B 跳 A，而其他欄位條件尚未對齊 condition_payload（E2 backfill 已完成，但 null-payload 遺留表示舊名單未完整遷移）；正確處理是人工確認後透過 F051 edit 完整設定 condition_payload，而非僅注入 best_case |
+
+---
+
+###### 18.12.3 `is_system_fixed` 欄位 Schema 決策
+
+**新增欄位**：`pooldata_field_whitelist.is_system_fixed`
+
+| 項目 | 規格 |
+|---|---|
+| 型別（PG） | `BOOLEAN NOT NULL DEFAULT false` |
+| 型別（SQLite） | `INTEGER NOT NULL DEFAULT 0`（SQLite 以 0/1 表示 boolean；TypeORM 的 `boolean` 欄位在 SQLite 映射為 INTEGER） |
+| 索引 | 無獨立索引（查詢量低，`WHERE is_system_fixed = true` 結果集極小；與 `(field_type, is_active)` 複合索引不干涉） |
+| entity 修改 | `apps/api/src/database/entities/pooldata-field-whitelist.entity.ts` 新增 `@Column({ name: 'is_system_fixed', type: 'boolean', default: false }) isSystemFixed: boolean`（tdd-implementation 執行） |
+| DTO 修改 | `GET /api/v1/pooldata-fields` response DTO 新增 `isSystemFixed: boolean`（對應 F075 v1.7 AC-19；tdd-implementation 執行） |
+
+**PG / SQLite 雙模式注意事項**：TypeORM entity 宣告 `type: 'boolean'` 時，PG 輸出 `BOOLEAN` DDL，SQLite 輸出 `INTEGER`；M-B1 中 PG `ALTER TABLE` SQL 使用 `BOOLEAN NOT NULL DEFAULT false`，SQLite 使用 `INTEGER NOT NULL DEFAULT 0`，對齊 m286 之 `isSqlite` dual-SQL pattern。
+
+---
+
+###### 18.12.4 `injectSystemFixedConditions` Helper 設計
+
+**設計原則**：pure-ish（無 DB 副作用，僅操作記憶體中的 payload 物件）；call site 負責在呼叫前從 DB 取得 system-fixed 欄位清單，並以 constant mapping 補充固定值。
+
+**函式簽章（概念層）**：
+
+```
+private injectSystemFixedConditions(
+  payload: ConditionPayload,
+  systemFixedFields: Array<{ columnName: string; fieldType: string; fixedValues: string[] }>
+): ConditionPayload
+```
+
+**行為規格**：
+
+1. 對每個 `systemFixedField`（目前唯一：`{ columnName: 'best_case', fieldType: 'categorical', fixedValues: ['Y'] }`）：
+   - 若 `payload.conditions` 中不含對應 `columnName` 條目 → **靜默注入**整筆 `{ columnName, fieldType, values: fixedValues }`
+   - 若已含對應 `columnName` 條目但 `values` ≠ `fixedValues` → **靜默正規化** `values` 為 `fixedValues`（tamper-proof；不拒絕請求）
+   - 若已含且 `values === fixedValues`（深度相等，順序無關）→ 不動（idempotent）
+2. 回傳修改後的 payload（immutable pattern：回傳新物件，不 mutate 傳入參數）
+3. 不觸碰 `payload.logic`、其他 conditions、`_backfill_empty` 旗標
+
+**固定值來源（service constant pattern）**：
+
+```typescript
+// assignment-list.service.ts（或抽出至 injection-helper.ts）
+private static readonly SYSTEM_FIXED_VALUE_MAP: Record<string, string[]> = {
+  best_case: ['Y'],
+  // 未來新增系統固定欄位在此擴充，無需改動 injectSystemFixedConditions 邏輯
+};
+```
+
+**Call-stack 取得 systemFixedFields 的方式**：service 注入 `PooldataFieldWhitelistRepository`（或透過 `PooldataFieldWhitelistService.findAllActive()`），在 `createList` / `updateList` 開頭查詢 `WHERE is_system_fixed = true AND is_active = true`，再與 `SYSTEM_FIXED_VALUE_MAP` 合併，組裝 `systemFixedFields` 陣列傳入 `injectSystemFixedConditions`。
+
+---
+
+###### 18.12.5 Call-Stack 置放規格（createList / updateList）
+
+**`createList`（~L435）完整呼叫順序**：
+
+```
+1. validateConditionPayload(conditionPayload)          ← 現有（whitelist active check, 422 CONDITION_COLUMN_NOT_IN_WHITELIST）
+2. const systemFixed = await repo.findBy({ isSystemFixed: true, isActive: true })
+   const systemFixedFields = systemFixed.map(f => ({
+     columnName: f.columnName,
+     fieldType: f.fieldType,
+     fixedValues: AssignmentListService.SYSTEM_FIXED_VALUE_MAP[f.columnName] ?? [],
+   }))
+3. conditionPayload = this.injectSystemFixedConditions(conditionPayload, systemFixedFields)
+                                                       ← 新增（§18.12.4）
+4. deriveBackwardCompatColumns(conditionPayload)       ← 現有（~L171）
+5. DB write（entity save）
+```
+
+**`updateList`（~L573）完整呼叫順序**（conditionPayload 有傳值時才執行步驟 2~3）：
+
+```
+1. 讀取既有名單（stage guard — 限 draft）
+2. 若 dto.conditionPayload 有值（非 undefined / null）：
+   2a. validateConditionPayload(dto.conditionPayload)
+   2b. const systemFixed = await repo.findBy({ isSystemFixed: true, isActive: true })
+       const systemFixedFields = systemFixed.map(...)
+   2c. dto.conditionPayload = this.injectSystemFixedConditions(dto.conditionPayload, systemFixedFields)
+   2d. deriveBackwardCompatColumns(dto.conditionPayload)
+3. DB write
+```
+
+**架構不變式**：
+- `validateConditionPayload` 先於 `injectSystemFixedConditions`：確保 system-fixed 欄位在注入前通過格式驗證（columnName regex、fieldType 值域等）；注入後不需再次驗證（helper 輸出符合 payload schema）
+- `injectSystemFixedConditions` 先於 `deriveBackwardCompatColumns`：backward-compat 衍生需讀取完整 conditions，best_case 不在 5 個 backward-compat 欄位範圍內（BR-12），故順序不影響 backward-compat 結果；但為明確語意保持此順序
+- legacy null-payload 名單（`condition_payload IS NULL`）走路徑 B，`updateList` 當 `dto.conditionPayload` 為 undefined / null 時跳過整個 step 2，名單月跑路徑不改變
+
+---
+
+###### 18.12.6 Pooldata-Field Service 層 Deactivation Guard
+
+**置放位置**：`apps/api/src/modules/pooldata-field/services/pooldata-field-whitelist.service.ts`
+
+**防護觸發條件（兩個進入點）**：
+
+| 端點 | 觸發條件 | 錯誤碼 |
+|---|---|---|
+| `DELETE /api/v1/pooldata-fields/:columnName`（停用，`is_active = false`）| 目標 `is_system_fixed = true` | 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE` |
+| `PATCH /api/v1/pooldata-fields/:columnName`（帶 `{ isActive: false }`）| 目標 `is_system_fixed = true` AND dto.isActive 明確為 false | 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE` |
+
+**不攔截情境**：
+- `PATCH` 僅改 `displayName`（dto.isActive 未設定或 undefined）→ 正常處理
+- `field_type` 變更（沿用 BR-7 `categorical → 非 categorical` 批次停用 options，不在 US-144 範圍）
+
+**實作模式（tdd-implementation 執行）**：
+
+```typescript
+// 在 deactivate() 方法最前端（先 load entity，再 guard）
+const field = await this.repo.findOne({ where: { columnName } });
+if (!field) throw new NotFoundException(...)
+if (field.isSystemFixed) {
+  throw new HttpException({ error_code: 'SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE' }, HttpStatus.UNPROCESSABLE_ENTITY);
+}
+// 同樣邏輯置於 update() 中檢查 dto.isActive === false 時
+```
+
+**defense-in-depth 層次**：
+- 第一層（UX）：前端 M06 管理頁依 `isSystemFixed` 旗標 disabled「停用」按鈕（F075 v1.7 AC-20）
+- 第二層（API）：controller 接受請求後 service 層驗證，回 422（本 guard）
+- 無第三層（DB constraint）：MVP 不加 DB-level trigger；DB constraint 會增加 migration 複雜度且錯誤訊息不友善
+
+---
+
+###### 18.12.7 Stage 1 無需改動（明確聲明）
+
+**結論**：`stage1-query-composer.ts` 無需任何修改。
+
+**理由**：
+- M-B2 migration 確保所有 draft 名單的 `condition_payload` 在進入 `ready` 狀態前已含 `best_case: ['Y']` 條目
+- `createList` / `updateList` 的 `injectSystemFixedConditions` 確保自本 migration 執行後新建 / 更新的名單都含 `best_case: ['Y']`
+- Stage 1 路徑 A 對 `best_case` categorical condition 已生成正確 SQL：`"best_case" IN ('Y')`（§18.11.7 已確認）
+- `best_case` 無 wildcard 語意，不需特殊 case（與 `caseyear='99'` 不同）
+
+**架構原則再確認**：F075 / F076 whitelist-driven 設計確保任何 categorical 欄位進入白名單後 Stage 1 路徑 A 自動支援，**月跑邏輯零改動**。
+
+---
+
+###### 18.12.8 Migration 序列（M-B1 / M-B2）
+
+```mermaid
+graph LR
+    MA2["M-A2 (287)\nDeprecateProdBestColumn"] --> MB1["M-B1 (295)\nAddIsSystemFixed\n+ UPSERT best_case=true"]
+    MB1 --> MB2["M-B2 (296)\nBackfillBestCase\nDraftLists（idempotent）"]
+
+    style MB1 fill:#d4edda,stroke:#28a745
+    style MB2 fill:#d4edda,stroke:#28a745
+```
+
+> **序列說明**：M-B1 / M-B2 為本 §18.12 新增，NNN = 295 / 296（接續現有最高序號 294）。兩者均在 M-A2（287）之後執行；M-B1 先於 M-B2（M-B2 依賴 M-B1 寫入的 `is_system_fixed` 欄位）。M-B1 / M-B2 與 m288~m294 之間順序無強制依賴（不涉及共同表結構變更），但為清晰起見置於 294 之後。
+
+---
+
+###### 18.12.9 M-B1 設計規格
+
+**`1711360000295-AddIsSystemFixedToPooldataFieldWhitelist.ts`**
+
+> 對應：F075 v1.7 AC-18 / AC-5（US-144）；data-model.md `#field-whitelist-entity`
+
+| 項目 | 說明 |
+|---|---|
+| **目的** | ① 新增 `is_system_fixed` column（BOOLEAN NOT NULL DEFAULT false）至 `pooldata_field_whitelist`；② backfill 既有列為 false；③ UPSERT `best_case.is_system_fixed = true`（UPSERT-safe：m286 已確保 best_case 存在，本步驟直接 UPDATE） |
+| **up() Step 1 — ADD COLUMN（PG）** | `ALTER TABLE pooldata_field_whitelist ADD COLUMN IF NOT EXISTS is_system_fixed BOOLEAN NOT NULL DEFAULT false` |
+| **up() Step 1 — ADD COLUMN（SQLite）** | `PRAGMA table_info(pooldata_field_whitelist)` guard：若欄位不存在才執行 `ALTER TABLE pooldata_field_whitelist ADD COLUMN is_system_fixed INTEGER NOT NULL DEFAULT 0`（SQLite 不支援 `IF NOT EXISTS` 於 `ADD COLUMN`；參照 m281 SQLite guard pattern） |
+| **up() Step 2 — Backfill false（冪等）** | PG：`UPDATE pooldata_field_whitelist SET is_system_fixed = false WHERE is_system_fixed IS NULL`（`DEFAULT false` 使新增列已為 false，此 step 為防 migration 中間態的安全措施，通常 0 affected）；SQLite：同 logic 改 `0` |
+| **up() Step 3 — Set best_case = true** | PG：`UPDATE pooldata_field_whitelist SET is_system_fixed = true, updated_at = CURRENT_TIMESTAMP WHERE column_name = 'best_case'`（冪等：重複執行仍正確）；SQLite：同 SQL（`true` 在 SQLite 等同 `1`；TypeORM 轉換時正確處理） |
+| **down() 邏輯重點** | `UPDATE pooldata_field_whitelist SET is_system_fixed = false WHERE column_name = 'best_case'`（先還原資料）→ PG：`ALTER TABLE pooldata_field_whitelist DROP COLUMN IF EXISTS is_system_fixed`；SQLite：表重建（移除 `is_system_fixed` column，完整欄位清單由 tdd-implementation 確認 entity 欄位數） |
+| **Idempotency** | PG `ADD COLUMN IF NOT EXISTS`；SQLite PRAGMA guard；`UPDATE WHERE` 冪等 |
+| **依賴** | `pooldata_field_whitelist` 表須存在（m200）；`best_case` 條目須存在（m286 M-A1）；必須在 M-B2 之前執行 |
+
+---
+
+###### 18.12.10 M-B2 設計規格
+
+**`1711360000296-BackfillBestCaseConditionPayloadDraftLists.ts`**
+
+> 對應：F075 v1.7 AC-18 / US-144 AC-8；TC-144-06
+
+| 項目 | 說明 |
+|---|---|
+| **目的** | 對 `stage = 'draft'` 且 `condition_payload IS NOT NULL` 之名單：若 `conditions` 中不含 `best_case` 條目則補入；若已含但 values ≠ `['Y']` 則正規化為 `['Y']`。確保 draft 名單推進至 ready 後月跑 Stage 1 路徑 A 一定可生成 `best_case IN ('Y')` 條件 |
+| **回填範圍決策** | ✅ 回填：`stage = 'draft' AND condition_payload IS NOT NULL`；✅ 跳過：`condition_payload IS NULL`（legacy null-payload，§18.12.2 決策 18.12.7）；✅ 跳過：`stage IN ('dept_ratio', 'personnel_ratio', 'approval', 'ready')`（凍結快照，Business Rule：已推進的名單為不可變快照） |
+| **up() 邏輯重點** | ① `SELECT list_no, condition_payload FROM ob_list_definition WHERE stage = 'draft' AND condition_payload IS NOT NULL`；② 對每筆：TypeScript 解析 JSON（SQLite 存為 TEXT，需 `JSON.parse`；PG 為 JSONB，TypeORM 自動反序列化）；③ 檢查 `payload.conditions` 是否含 `columnName = 'best_case'` 條目；④ 若無 → push `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`；若有但 `JSON.stringify(values.sort()) !== JSON.stringify(['Y'])` → 設 `values = ['Y']`；⑤ 若無需修改（已含正確值）→ skip（idempotent）；⑥ `UPDATE ob_list_definition SET condition_payload = :json, updated_at = CURRENT_TIMESTAMP WHERE list_no = :listNo`；⑦ 每 50 筆 `Logger.log` 進度（draft 名單數量有限，無需分批複雜設計） |
+| **down() 邏輯重點** | 從 `condition_payload.conditions` 中移除 `columnName = 'best_case'` 條目（逆操作）；對所有 `stage = 'draft' AND condition_payload IS NOT NULL` 執行；標記 `// down(): removes best_case injection — for emergency rollback only` |
+| **Idempotency** | Step ⑤ skip already-correct rows；重複 up() 對已含正確 `best_case: ['Y']` 之名單無任何資料異動 |
+| **依賴** | ① `ob_list_definition.condition_payload` 欄位須存在（m281 M1）；② `pooldata_field_whitelist.is_system_fixed` 欄位須存在（M-B1）。**注意**：本 migration up() 本身不查 whitelist（固定值於 migration code 中 hardcode `'best_case'` → `['Y']`，migration 為一次性操作，hardcode 不影響 production service 的可擴充性） |
+| **null-payload 名單不回填** | `WHERE condition_payload IS NOT NULL` 確保 null-payload legacy 名單完全不受影響；此為架構決策（§18.12.2 決策 18.12.7），不是疏漏 |
+
+---
+
+###### 18.12.11 NFR 對應
+
+| NFR | 架構決策 | 對應設計 |
+|---|---|---|
+| **Correctness（業務語意一致性）** | `injectSystemFixedConditions` 在 createList / updateList 強制注入，tamper-proof | 對齊舊系統 `OBPOOLDATA.BEST_CASE` 恆 `'Y'` 業務語意；前端竄改靜默正規化，不暴露 422 給合法使用者 |
+| **Security（defense-in-depth）** | service 層 deactivation guard 422 + 前端 disabled（兩層） | 即使前端被繞過，後端 API 合約仍安全 |
+| **Idempotency** | M-B1 `IF NOT EXISTS` + `UPDATE WHERE` 冪等；M-B2 skip already-correct rows | CI 環境反覆執行 migration 安全 |
+| **Backward-compat** | updateList null-payload 名單不觸碰；M-B2 不回填 null-payload | legacy 路徑 B 名單月跑不受干擾 |
+| **Extensibility** | `SYSTEM_FIXED_VALUE_MAP` constant + `injectSystemFixedConditions` 接受陣列 | 未來新增系統固定欄位只需：(a) M 新增欄位 `is_system_fixed=true`；(b) `SYSTEM_FIXED_VALUE_MAP` 補一筆 constant；(c) 無需改動 injectSystemFixedConditions 邏輯或 Stage 1 |
+| **Stage 1 不改動** | best_case condition 由路徑 A categorical fragment 自動處理 | 維持「whitelist-driven，月跑邏輯零改動」架構原則（§18.11.7 確認）|
+| **Observability** | M-B2 每 50 筆 Logger.log 進度；skip 時無日誌（idempotent run 靜默） | 可於 migration 執行日誌確認回填筆數 |
+
+---
+
+###### 18.12.12 風險與 follow-up
+
+###### R11：M-B2 draft 名單中 condition_payload 為 TEXT（SQLite E2E 環境）
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | SQLite E2E 環境 `condition_payload` 儲存為 TEXT；`queryRunner.query()` 讀取後為字串，需 `JSON.parse`；若未加防禦型 parse 可能 throw |
+| **緩解** | M-B2 up() 對每筆 `condition_payload` 加 `typeof v === 'string' ? JSON.parse(v) : v` 防禦；對齊 m282 M2 SQLite 處理模式（§18.3 M2 / R5） |
+| **追蹤** | tdd-implementation 必須在 E2E 環境（SQLite）驗證 M-B2 執行無 throw |
+
+###### R12：M-B2 回填後 approved / ready 名單若原先不含 best_case（歷史遷移資料）
+
+| 項目 | 說明 |
+|---|---|
+| **風險** | 凍結快照（approved / ready）不被 M-B2 回填；Stage 1 月跑這些名單時若缺 best_case 條目，仍走路徑 A 但不過濾 best_case（不符業務語意：應只撈優質案件）|
+| **緩解** | 在 m286 M-A1 / m287 M-A2 之前（US-128 / US-129 完成時）這些名單已在舊系統以 `prod_best='Y'` 語意執行，遷移後若已推進至 approved / ready 即屬歷史快照，業務上視為已確認；本系統月跑若使用這些舊快照，應在業務層確認是否重建名單。架構層不回填凍結快照（K4 原則：月跑只讀 ready 名單，不回溯修改） |
+| **追蹤** | 上線前由業務確認是否有 `stage='ready'` 且 `condition_payload IS NOT NULL` 且缺 `best_case` 的名單；若有，建議重建名單（F052 rollback → draft → 重新 approve → ready） |
+
+---
+
+*本節版本 1.0（2026-05-28），由 System Architect Agent 新增。*
+- *v1.0 新增：AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）*
+- *v1.0 covers：F050 v2.3 / F051 v2.2 / F075 v1.7 / error-handling.md v1.17 / US-144*
 
 ---
 
