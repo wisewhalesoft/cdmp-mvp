@@ -19,7 +19,7 @@
  */
 import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ListDefinitionPage } from '../list-definition-page';
 import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context';
 import { ToastProvider } from '@/components/ui/toast';
@@ -1337,5 +1337,38 @@ describe('F048 v2.0 — Banner（TS-F048-B-001~002）', () => {
     expect(editBtn.disabled).toBe(true);
     const viewBtn = screen.getByTestId('btn-view-OB202605001') as HTMLButtonElement;
     expect(viewBtn.disabled).toBe(false);
+  });
+});
+
+// ===========================================================================
+// F097 fix — 「新增名單」導航帶分派作業月份（target_work_ym）
+// ===========================================================================
+describe('F097 fix — 新增名單導航帶作業月', () => {
+  function LocationProbe() {
+    const loc = useLocation();
+    return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+  }
+
+  it('點「新增名單」→ navigate 至 /assignment/list-definitions/new?ym=2026-06（下月）', async () => {
+    mockedListLists.mockResolvedValue(buildResponse());
+    render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={['/assignment/list-definitions']}>
+          <AssignmentWorkYmProvider>
+            <ListDefinitionPage />
+            <LocationProbe />
+          </AssignmentWorkYmProvider>
+        </MemoryRouter>
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('btn-create')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('btn-create'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('loc').textContent).toBe(
+        '/assignment/list-definitions/new?ym=2026-06',
+      ),
+    );
   });
 });

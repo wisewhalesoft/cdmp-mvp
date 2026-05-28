@@ -154,8 +154,10 @@ export function ListCreateDraftPage() {
   const currentYm = fromYm
     ? fromYm.replace('-', '')
     : (() => {
+        // F097：無 ?ym 時 fallback 為「下月」（作業月預設），與共享 AssignmentWorkYmContext 一致
         const now = new Date();
-        return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const d = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
       })();
   const prevYm = computePrevYm(currentYm);
   const currentYmDisplay =
@@ -370,6 +372,8 @@ export function ListCreateDraftPage() {
         listInterval: Number(listInterval),
         crEnabled,
         conditionPayload: buildPayload(),
+        // F097 fix：以分派作業月份（target_work_ym）建立名單，而非後端當月
+        workYm: currentYm,
       };
       if (cardType) dto.cardType = cardType;
       // v2.1.1（US-128）：prodBest 不再從 DTO 送出（業務語意改由 condition_payload

@@ -132,9 +132,9 @@ function setupDefaultMocks() {
   mockedListLists.mockResolvedValue(emptyPrevMonthLists);
 }
 
-function renderPage() {
+function renderPage(entry = '/assignment/list-definitions/new') {
   return render(
-    <MemoryRouter initialEntries={['/assignment/list-definitions/new']}>
+    <MemoryRouter initialEntries={[entry]}>
       <ToastProvider>
         <ListCreateDraftPage />
       </ToastProvider>
@@ -229,6 +229,45 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
       expect(screen.getByTestId('form-error')).toHaveTextContent('請至少設定一個篩選條件');
     });
     expect(mockedCreateList).not.toHaveBeenCalled();
+  });
+
+  // ─────────────────────────────────────────
+  // F097 fix — 建立名單帶分派作業月份 workYm（來自共享作業月 ?ym）
+  // ─────────────────────────────────────────
+  it('F097: ?ym=2026-06（作業月）送出 → createList body 含 workYm=202606', async () => {
+    mockedCreateList.mockResolvedValue({ listNo: 'OB202606099' } as never);
+    renderPage('/assignment/list-definitions/new?ym=2026-06');
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: '2026-06 測試名單' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+    fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('add-field-caseyear'));
+    await waitFor(() => expect(mockedListOptions).toHaveBeenCalledWith('caseyear', expect.any(Object)));
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() => expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+
+    fireEvent.click(screen.getByTestId('btn-save-draft'));
+
+    await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+    const dto = mockedCreateList.mock.calls[0][0] as Record<string, unknown>;
+    expect(dto.workYm).toBe('202606');
+  });
+
+  it('F097: 複製上月以「作業月的上月」查詢（?ym=2026-06 → listLists ym=202605）', async () => {
+    renderPage('/assignment/list-definitions/new?ym=2026-06');
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-copy-modal')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-copy-modal'));
+    await waitFor(() =>
+      expect(mockedListLists).toHaveBeenCalledWith({ ym: '202605' }),
+    );
   });
 
   // ─────────────────────────────────────────

@@ -635,7 +635,9 @@ export function ListDefinitionPage() {
             <button
               type="button"
               data-testid="btn-create"
-              onClick={() => navigate('/assignment/list-definitions/new')}
+              onClick={() =>
+                navigate(`/assignment/list-definitions/new?ym=${ym}`)
+              }
               disabled={!isWriter || isHistorical || isLocked}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
