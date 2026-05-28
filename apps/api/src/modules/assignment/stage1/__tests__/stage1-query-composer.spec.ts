@@ -757,3 +757,32 @@ describe('Stage1QueryComposer 波 6 — best_case categorical (v2.1.1 / §18.11.
     expect(result.skipReason).toBeNull();
   });
 });
+
+// ===========================================================================
+// 波 7 — US-144 best_case 系統注入後 Stage 1 驗證（TS-F050-P01）
+//   說明：模擬 createList injectSystemFixedConditions 注入後存入 DB 的 condition_payload
+//         （prod_kind 使用者條件 + best_case:['Y'] 系統固定條件），驗證 composer 端對端產生
+//         "best_case" IN ('Y')；對齊 §18.12.7「Stage 1 零改動」原則。
+// ===========================================================================
+describe('Stage1QueryComposer 波 7 — US-144 best_case 系統注入後 Stage 1 驗證', () => {
+  it('TS-F050-P01：注入後名單 → composer 產生 "best_case" IN (...)，params 含 [Y]', () => {
+    // 此 payload 形狀即 createList 注入後寫入 DB 的內容（使用者送 prod_kind，後端補 best_case）
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+        ],
+      },
+    });
+    const result = buildStage1WhereConditions(list);
+
+    expect(result.skipReason).toBeNull();
+    expect(result.where).toContain('"best_case"');
+    expect(result.where).toMatch(/"best_case"\s+IN\s*\(:\.\.\.[a-zA-Z0-9_]+\)/);
+    // params 其中一個值為大寫 ['Y']（[[feedback_mock_real_system_contract]]）
+    const paramValues = Object.values(result.params);
+    expect(paramValues).toContainEqual(['Y']);
+  });
+});

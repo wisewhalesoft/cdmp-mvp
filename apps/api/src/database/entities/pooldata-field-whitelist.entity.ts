@@ -35,6 +35,20 @@ export class PooldataFieldWhitelist {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   is_active: boolean;
 
+  /**
+   * US-144 / AD-E07-18 §18.12.3：系統固定篩選欄位旗標。
+   *
+   * `is_system_fixed = true` 之欄位（目前唯一：`best_case`）：
+   *   - createList / updateList 強制注入其固定值（SYSTEM_FIXED_VALUE_MAP；best_case → ['Y']）
+   *   - validateConditionPayload 最低條件數計算排除此欄位（§18.12.8）
+   *   - M06 管理頁不可停用（service 層 deactivation guard 回 422
+   *     SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE）
+   *
+   * 對齊 m295 migration（PG: BOOLEAN NOT NULL DEFAULT false / SQLite: INTEGER NOT NULL DEFAULT 0）。
+   */
+  @Column({ name: 'is_system_fixed', type: 'boolean', default: false })
+  isSystemFixed: boolean;
+
   @Column({ name: 'created_at', type: dateColumnType })
   created_at: Date;
 

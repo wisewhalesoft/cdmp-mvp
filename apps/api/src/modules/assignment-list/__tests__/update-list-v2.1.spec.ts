@@ -518,4 +518,185 @@ describe('F051 v2.1 updateList integration (Phase 5a 波7)', () => {
     expect((last.before_value as any).condition_payload).toEqual(beforePayload);
     expect((last.after_value as any).condition_payload).toEqual(newPayload);
   });
+
+  // ==================================================================
+  // N 群組（US-144）：injectSystemFixedConditions (updateList)
+  // 對應 F050-test.md §十六 N 群組 TS-F050-N01~N04 / F051-test.md TS-F051-020~025
+  // ==================================================================
+  describe('v2.3 / v2.3.1 — injectSystemFixedConditions (updateList)', () => {
+    beforeEach(async () => {
+      const now = new Date();
+      await env.whitelistRepo.save(
+        env.whitelistRepo.create({
+          column_name: 'best_case',
+          display_name: '優質案件',
+          field_type: 'categorical',
+          is_active: true,
+          isSystemFixed: true,
+          created_at: now,
+          updated_at: now,
+        } as Partial<PooldataFieldWhitelist>),
+      );
+    });
+
+    function findBest(payload: any) {
+      return payload?.conditions?.find((c: any) => c.columnName === 'best_case');
+    }
+
+    it('TS-F050-N01：payload 不含 best_case → DB 更新後含 best_case:[Y]，prod_kind 保留', async () => {
+      const listNo = await seedList(env.listRepo);
+      await env.service.updateList(
+        listNo,
+        baseUpdateDto({
+          conditionPayload: {
+            conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] }],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+      expect(
+        saved!.condition_payload!.conditions.find((c) => c.columnName === 'prod_kind'),
+      ).toBeDefined();
+    });
+
+    it('TS-F050-N02 / TS-F051-021：payload 含 best_case:[N]（竄改）→ 靜默正規化為 [Y]，不拋例外', async () => {
+      const listNo = await seedList(env.listRepo);
+      await env.service.updateList(
+        listNo,
+        baseUpdateDto({
+          conditionPayload: {
+            conditions: [
+              { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] },
+              { columnName: 'best_case', fieldType: 'categorical', values: ['N'] },
+            ],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+    });
+
+    it('TS-F050-N03 / TS-F051-024：condition_payload IS NULL 舊名單 + 不帶 conditionPayload → 不注入', async () => {
+      const listNo = await seedList(env.listRepo, {
+        list_no: 'OB202605050',
+        condition_payload: null,
+        prod_kind: '01',
+      });
+      // 只改 listNm，不帶 conditionPayload
+      await env.service.updateList(
+        listNo,
+        {
+          listNm: '修改後名稱',
+          listPeriodStart: 1,
+          listPeriodEnd: 6,
+          listInterval: 1,
+          cardType: 'A',
+          crEnabled: false,
+        } as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: listNo } });
+      expect(saved!.condition_payload).toBeNull();
+      expect(saved!.list_nm).toBe('修改後名稱');
+    });
+
+    it('TS-F050-N04：stage=dept_ratio 名單帶 conditionPayload → 422 LIST_STAGE_TRANSITION_FORBIDDEN（guard 先於注入）', async () => {
+      const listNo = await seedList(env.listRepo, {
+        list_no: 'OB202605051',
+        stage: 'dept_ratio',
+      });
+      try {
+        await env.service.updateList(
+          listNo,
+          baseUpdateDto({
+            conditionPayload: {
+              conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] }],
+              logic: 'AND',
+            },
+          }) as any,
+          ACTOR,
+          YM,
+        );
+        throw new Error('expected throw');
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(UnprocessableEntityException);
+        expect(e.getResponse().error).toBe(ERROR_CODES.LIST_STAGE_TRANSITION_FORBIDDEN);
+      }
+    });
+
+    it('TS-F051-022：updateList min-count — 僅含 best_case → 422 VALIDATION_ERROR', async () => {
+      const listNo = await seedList(env.listRepo);
+      try {
+        await env.service.updateList(
+          listNo,
+          baseUpdateDto({
+            conditionPayload: {
+              conditions: [{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }],
+              logic: 'AND',
+            },
+          }) as any,
+          ACTOR,
+          YM,
+        );
+        throw new Error('expected throw');
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(UnprocessableEntityException);
+        expect(e.getResponse().error).toBe(ERROR_CODES.VALIDATION_ERROR);
+      }
+    });
+
+    it('TS-F051-023：updateList min-count — 1 個非系統固定 + best_case → 通過（200）', async () => {
+      const listNo = await seedList(env.listRepo);
+      const res = await env.service.updateList(
+        listNo,
+        baseUpdateDto({
+          conditionPayload: {
+            conditions: [
+              { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] },
+              { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+            ],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      expect(res.listNo).toBe(listNo);
+      const saved = await env.listRepo.findOne({ where: { list_no: listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+    });
+
+    it('TS-F051-025：舊名單（condition_payload IS NULL）+ 帶 conditionPayload → 422 LEGACY_LIST_CONDITION_READONLY（注入不執行）', async () => {
+      const listNo = await seedList(env.listRepo, {
+        list_no: 'OB202605052',
+        condition_payload: null,
+        prod_kind: '01',
+      });
+      try {
+        await env.service.updateList(
+          listNo,
+          baseUpdateDto({
+            conditionPayload: {
+              conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] }],
+              logic: 'AND',
+            },
+          }) as any,
+          ACTOR,
+          YM,
+        );
+        throw new Error('expected throw');
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(UnprocessableEntityException);
+        expect(e.getResponse().error).toBe(ERROR_CODES.LEGACY_LIST_CONDITION_READONLY);
+      }
+    });
+  });
 });

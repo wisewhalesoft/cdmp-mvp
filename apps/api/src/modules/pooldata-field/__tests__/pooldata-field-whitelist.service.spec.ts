@@ -749,4 +749,66 @@ describe('PooldataFieldWhitelistService', () => {
       expect(c.columnDescription).toBe('風險等級');
     });
   });
+
+  // ==================================================================
+  // v1.7（US-144 / §18.12.6）：is_system_fixed deactivation guard + isSystemFixed 暴露
+  // 對應 F075-test.md §十 TS-F075-v17-003~006（+ _toItem isSystemFixed）
+  // ==================================================================
+  describe('v1.7 — system-fixed deactivation guard + isSystemFixed', () => {
+    it('TS-F075-v17-003：updateField isActive=false 於 system-fixed 欄位 → 422 SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE', async () => {
+      fieldRepo.findOne.mockResolvedValue(
+        makeRow({ column_name: 'best_case', display_name: '優質案件', isSystemFixed: true }),
+      );
+      await expect(
+        service.updateField('best_case', { isActive: false }, actor),
+      ).rejects.toMatchObject({
+        response: { error: 'SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE' },
+      });
+      // DB 未被改（save 未被呼叫於本路徑）
+      expect(fieldRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('TS-F075-v17-004：disableField（DELETE 等效）於 system-fixed 欄位 → 422', async () => {
+      fieldRepo.findOne.mockResolvedValue(
+        makeRow({ column_name: 'best_case', display_name: '優質案件', isSystemFixed: true }),
+      );
+      await expect(service.disableField('best_case', actor)).rejects.toMatchObject({
+        response: { error: 'SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE' },
+      });
+      expect(fieldRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('TS-F075-v17-005：updateField 僅改 displayName 於 system-fixed 欄位 → 不觸發 guard（成功）', async () => {
+      fieldRepo.findOne.mockResolvedValue(
+        makeRow({ column_name: 'best_case', display_name: '優質案件', isSystemFixed: true }),
+      );
+      const result = await service.updateField(
+        'best_case',
+        { displayName: '優質案件（測試）' },
+        actor,
+      );
+      expect(result.displayName).toBe('優質案件（測試）');
+      expect(result.isSystemFixed).toBe(true);
+    });
+
+    it('TS-F075-v17-006：非 system-fixed 欄位（prod_kind）isActive=false → 正常停用（不觸發 guard）', async () => {
+      fieldRepo.findOne.mockResolvedValue(
+        makeRow({ column_name: 'prod_kind', isSystemFixed: false }),
+      );
+      const result = await service.updateField('prod_kind', { isActive: false }, actor);
+      expect(result.isActive).toBe(false);
+    });
+
+    it('_toItem 暴露 isSystemFixed（best_case=true）', async () => {
+      fieldRepo.find.mockResolvedValue([
+        makeRow({ column_name: 'best_case', display_name: '優質案件', isSystemFixed: true }),
+        makeRow({ column_name: 'prod_kind', isSystemFixed: false }),
+      ]);
+      const { fields } = await service.listFields();
+      const best = fields.find((f) => f.columnName === 'best_case');
+      const prod = fields.find((f) => f.columnName === 'prod_kind');
+      expect(best?.isSystemFixed).toBe(true);
+      expect(prod?.isSystemFixed).toBe(false);
+    });
+  });
 });

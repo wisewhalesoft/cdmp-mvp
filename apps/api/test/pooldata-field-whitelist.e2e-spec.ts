@@ -304,3 +304,127 @@ describe('F075 v1.4: GET /api/v1/pooldata-fields/available-columns E2E', () => {
     expect(res.body.error).not.toBe('POOLDATA_FIELD_NOT_FOUND');
   });
 });
+
+// ===========================================================================
+// F075 v1.7（US-144）：is_system_fixed isSystemFixed 暴露 + deactivation guard
+// 對應 F075-test.md §十 TS-F075-v17-002~006
+// ===========================================================================
+const POOLDATA_BASE = '/api/v1/api/v1/pooldata-fields';
+
+describe('F075 v1.7: is_system_fixed deactivation guard + isSystemFixed E2E (TS-F075-v17-002~006)', () => {
+  let app: INestApplication;
+  let directorToken: string;
+  let ds: DataSource;
+
+  beforeAll(async () => {
+    process.env.ENABLE_E07_REFACTOR_PHASE3 = 'true';
+    app = await createTestApp();
+    ds = app.get(DataSource);
+    directorToken = await login(app, DIRECTOR_USER.email);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  beforeEach(async () => {
+    process.env.ENABLE_E07_REFACTOR_PHASE3 = 'true';
+    const repo = ds.getRepository(PooldataFieldWhitelist);
+    await repo.clear();
+    const now = new Date();
+    // best_case：系統固定（is_system_fixed=true）
+    await repo.save(
+      repo.create({
+        column_name: 'best_case',
+        display_name: '優質案件',
+        field_type: 'categorical',
+        is_active: true,
+        isSystemFixed: true,
+        created_at: now,
+        updated_at: now,
+      } as Partial<PooldataFieldWhitelist>),
+    );
+    // prod_kind：非系統固定（對照組）
+    await repo.save(
+      repo.create({
+        column_name: 'prod_kind',
+        display_name: '產品類別',
+        field_type: 'categorical',
+        is_active: true,
+        isSystemFixed: false,
+        created_at: now,
+        updated_at: now,
+      } as Partial<PooldataFieldWhitelist>),
+    );
+  });
+
+  it('TS-F075-v17-002：GET /pooldata-fields 每筆回傳 isSystemFixed（best_case=true，其餘=false；camelCase）', async () => {
+    const res = await request(app.getHttpServer())
+      .get(POOLDATA_BASE)
+      .set('Authorization', `Bearer ${directorToken}`);
+    expect(res.status).toBe(200);
+    const fields = res.body.fields as Array<Record<string, unknown>>;
+    const best = fields.find((f) => f.columnName === 'best_case');
+    const prod = fields.find((f) => f.columnName === 'prod_kind');
+    expect(best!.isSystemFixed).toBe(true);
+    expect(prod!.isSystemFixed).toBe(false);
+    // camelCase key，不含 snake_case
+    expect(best).not.toHaveProperty('is_system_fixed');
+  });
+
+  it('TS-F075-v17-002b：GET /pooldata-fields?active=true 同樣回傳 isSystemFixed', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`${POOLDATA_BASE}?active=true`)
+      .set('Authorization', `Bearer ${directorToken}`);
+    expect(res.status).toBe(200);
+    const fields = res.body.fields as Array<Record<string, unknown>>;
+    expect(fields.find((f) => f.columnName === 'best_case')!.isSystemFixed).toBe(true);
+  });
+
+  it('TS-F075-v17-003：PATCH best_case { isActive:false } → 422 SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE，DB 未變', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`${POOLDATA_BASE}/best_case`)
+      .set('Authorization', `Bearer ${directorToken}`)
+      .send({ isActive: false });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE');
+    const row = await ds
+      .getRepository(PooldataFieldWhitelist)
+      .findOne({ where: { column_name: 'best_case' } });
+    expect(row!.is_active).toBe(true);
+  });
+
+  it('TS-F075-v17-004：DELETE best_case（停用等效端點）→ 422 SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE', async () => {
+    const res = await request(app.getHttpServer())
+      .delete(`${POOLDATA_BASE}/best_case`)
+      .set('Authorization', `Bearer ${directorToken}`);
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE');
+  });
+
+  it('TS-F075-v17-005：PATCH best_case 僅改 displayName → 200 OK（不觸發 guard）', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`${POOLDATA_BASE}/best_case`)
+      .set('Authorization', `Bearer ${directorToken}`)
+      .send({ displayName: '優質案件（測試）' });
+    expect(res.status).toBe(200);
+    expect(res.body.displayName).toBe('優質案件（測試）');
+    const row = await ds
+      .getRepository(PooldataFieldWhitelist)
+      .findOne({ where: { column_name: 'best_case' } });
+    expect(row!.is_active).toBe(true);
+    expect(row!.isSystemFixed).toBe(true);
+  });
+
+  it('TS-F075-v17-006：PATCH prod_kind { isActive:false } → 200 OK（非系統固定不觸發 guard）', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`${POOLDATA_BASE}/prod_kind`)
+      .set('Authorization', `Bearer ${directorToken}`)
+      .send({ isActive: false });
+    expect(res.status).toBe(200);
+    const row = await ds
+      .getRepository(PooldataFieldWhitelist)
+      .findOne({ where: { column_name: 'prod_kind' } });
+    expect(row!.is_active).toBe(false);
+  });
+});

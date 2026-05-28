@@ -780,4 +780,172 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
     expect(birth.dateStart).toBe('2000-01-01');
     expect(birth.dateEnd).toBe('2005-12-31');
   });
+
+  // ==================================================================
+  // L 群組（US-144）：injectSystemFixedConditions (createList)
+  // 對應 F050-test.md §十六 L 群組 TS-F050-L01~L05
+  // ==================================================================
+  describe('v2.3 / v2.3.1 — injectSystemFixedConditions (createList)', () => {
+    beforeEach(async () => {
+      // best_case 系統固定欄位（is_system_fixed=true）；其餘 seedWhitelistDefault 已含
+      const now = new Date();
+      await env.whitelistRepo.save(
+        env.whitelistRepo.create({
+          column_name: 'best_case',
+          display_name: '優質案件',
+          field_type: 'categorical',
+          is_active: true,
+          isSystemFixed: true,
+          created_at: now,
+          updated_at: now,
+        } as Partial<PooldataFieldWhitelist>),
+      );
+    });
+
+    function findBest(payload: any) {
+      return payload?.conditions?.find((c: any) => c.columnName === 'best_case');
+    }
+
+    it('TS-F050-L01：payload 不含 best_case → DB 自動注入 best_case:[Y]，使用者條件保留', async () => {
+      const res = await env.service.createList(
+        baseDto({
+          conditionPayload: {
+            conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: res.listNo } });
+      const best = findBest(saved!.condition_payload);
+      expect(best).toBeDefined();
+      expect(best.fieldType).toBe('categorical');
+      expect(best.values).toEqual(['Y']);
+      // 使用者條件 prod_kind 仍存在
+      expect(
+        saved!.condition_payload!.conditions.find((c) => c.columnName === 'prod_kind'),
+      ).toBeDefined();
+    });
+
+    it('TS-F050-L02：payload 含 best_case:[N]（竄改）→ 靜默正規化為 [Y]，不拋例外', async () => {
+      const res = await env.service.createList(
+        baseDto({
+          conditionPayload: {
+            conditions: [
+              { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+              { columnName: 'best_case', fieldType: 'categorical', values: ['N'] },
+            ],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: res.listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+    });
+
+    it('TS-F050-L03：payload 含 best_case:[]（空陣列竄改）→ 正規化為 [Y]', async () => {
+      const res = await env.service.createList(
+        baseDto({
+          conditionPayload: {
+            conditions: [
+              { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+              { columnName: 'best_case', fieldType: 'categorical', values: [] },
+            ],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: res.listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+    });
+
+    it('TS-F050-L04：payload 含 best_case:[Y,N]（多值竄改）→ 正規化為 [Y] 單值', async () => {
+      const res = await env.service.createList(
+        baseDto({
+          conditionPayload: {
+            conditions: [
+              { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+              { columnName: 'best_case', fieldType: 'categorical', values: ['Y', 'N'] },
+            ],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: res.listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+    });
+
+    it('TS-F050-L05：copy-from-prev-month 來源不含 best_case → 強制注入後 DB 含 best_case:[Y]', async () => {
+      // 先建立來源名單（含 prod_kind，注入後也會含 best_case）
+      const src = await env.service.createList(
+        baseDto({
+          cardType: 'A',
+          conditionPayload: {
+            conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['09'] }],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      // copy：前端送入不含 best_case 的 payload
+      const res = await env.service.createList(
+        baseDto({
+          listNm: '複製名單',
+          cardType: 'B',
+          copyFromListNo: src.listNo,
+          conditionPayload: {
+            conditions: [{ columnName: 'caseyear', fieldType: 'categorical', values: ['1'] }],
+            logic: 'AND',
+          },
+        }) as any,
+        ACTOR,
+        YM,
+      );
+      const saved = await env.listRepo.findOne({ where: { list_no: res.listNo } });
+      expect(findBest(saved!.condition_payload).values).toEqual(['Y']);
+    });
+
+    it('TS-F050-M04：驗證順序 — validateConditionPayload 先於 injectSystemFixedConditions', async () => {
+      const calls: string[] = [];
+      const validateSpy = vi
+        .spyOn(env.service as any, 'validateConditionPayload')
+        .mockImplementation(async () => {
+          calls.push('validate');
+        });
+      const injectSpy = vi
+        .spyOn(env.service as any, 'injectSystemFixedConditions')
+        .mockImplementation((p: any) => {
+          calls.push('inject');
+          return p;
+        });
+      try {
+        await env.service.createList(
+          baseDto({
+            conditionPayload: {
+              conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+              logic: 'AND',
+            },
+          }) as any,
+          ACTOR,
+          YM,
+        );
+        const validateIdx = calls.indexOf('validate');
+        const injectIdx = calls.indexOf('inject');
+        expect(validateIdx).toBeGreaterThanOrEqual(0);
+        expect(injectIdx).toBeGreaterThanOrEqual(0);
+        expect(validateIdx).toBeLessThan(injectIdx);
+      } finally {
+        validateSpy.mockRestore();
+        injectSpy.mockRestore();
+      }
+    });
+  });
 });

@@ -41,6 +41,8 @@ export interface PooldataFieldItem {
   displayName: string;
   fieldType: 'numeric' | 'categorical' | 'date';
   isActive: boolean;
+  // F075 v1.7 / US-144 AC-19：系統固定欄位旗標（best_case=true，其餘=false）
+  isSystemFixed: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -208,6 +210,15 @@ export class PooldataFieldWhitelistService {
   ): Promise<UpdatePooldataFieldResult> {
     const before = await this.findOneOrFail(columnName);
 
+    // F075 v1.7 / US-144 AC-6 / §18.12.6：系統固定欄位 deactivation guard。
+    //   僅當明確傳入 isActive=false（停用意圖）時攔截；displayName / fieldType 編輯不受影響。
+    if (input.isActive === false && before.isSystemFixed) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE,
+        message: ERROR_MESSAGES.SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE,
+      });
+    }
+
     const beforeSnapshot = this._toItem(before);
     const wasCategorical = before.field_type === 'categorical';
     const willBeCategorical = input.fieldType
@@ -272,6 +283,15 @@ export class PooldataFieldWhitelistService {
     actor: ActorContext,
   ): Promise<DisablePooldataFieldResult> {
     const before = await this.findOneOrFail(columnName);
+
+    // F075 v1.7 / US-144 AC-6 / §18.12.6：DELETE（停用等效端點）亦受系統固定 guard 保護。
+    if (before.isSystemFixed) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE,
+        message: ERROR_MESSAGES.SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE,
+      });
+    }
+
     const beforeSnapshot = this._toItem(before);
 
     before.is_active = false;
@@ -460,6 +480,9 @@ export class PooldataFieldWhitelistService {
       displayName: row.display_name,
       fieldType: row.field_type,
       isActive: row.is_active,
+      // F075 v1.7 / US-144 AC-19：camelCase isSystemFixed（DB 欄位 is_system_fixed）；
+      //   舊資料 / 未設定時防呆為 false
+      isSystemFixed: row.isSystemFixed ?? false,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

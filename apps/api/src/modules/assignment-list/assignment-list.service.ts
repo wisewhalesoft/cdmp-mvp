@@ -67,6 +67,17 @@ export interface ListResponseWarning {
 export class AssignmentListService {
   private readonly logger = new Logger(AssignmentListService.name);
 
+  /**
+   * US-144 / AD-E07-18 §18.12.4：系統固定篩選欄位之固定值對映。
+   *
+   * `injectSystemFixedConditions` 由 caller 傳入 whitelist query 結果（columnName + fieldType），
+   * 固定值則自本 constant 取得。未來新增系統固定欄位於此擴充一筆即可，
+   * 無需改動 injectSystemFixedConditions 邏輯或 Stage 1。
+   */
+  private static readonly SYSTEM_FIXED_VALUE_MAP: Record<string, string[]> = {
+    best_case: ['Y'],
+  };
+
   constructor(
     @InjectRepository(ObListDefinition)
     private readonly listRepo: Repository<ObListDefinition>,
@@ -103,18 +114,30 @@ export class AssignmentListService {
    *   3. CONDITION_COLUMN_NOT_IN_WHITELIST（422）— columnName 不在 F075 active whitelist
    *
    * @param payload — 已通過 DTO 驗證的 ConditionPayload；若 undefined / null 視為呼叫端責任，本 method 不處理
+   * @param systemFixedColumnNames — US-144 / §18.12.8：系統固定欄位 columnName 集合；
+   *        最低條件數計算（step 0）排除這些欄位（best_case 等由後端強制注入，不代表使用者設定條件）。
+   *        省略時視為空集合（向後相容：所有條件皆計入最低數）。
    */
   private async validateConditionPayload(
     payload: ObListDefinitionConditionPayload | null | undefined,
+    systemFixedColumnNames: Set<string> = new Set<string>(),
   ): Promise<void> {
     if (!payload || !Array.isArray(payload.conditions)) return;
     const conditions = payload.conditions as ObListDefinitionConditionItem[];
 
-    // 0. conditions 至少 1 個（DTO ArrayMinSize 已擋；service 層 defense-in-depth）
-    if (conditions.length === 0) {
+    // 0. 最低條件數（DTO ArrayMinSize 已擋；service 層 defense-in-depth）
+    //    US-144 / §18.12.8：排除系統固定欄位後，至少需 1 個非系統固定條件，
+    //    否則 422 VALIDATION_ERROR（空 [] 或僅含 best_case 皆拒絕）。
+    const nonSystemFixedCount = conditions.filter(
+      (c) => !systemFixedColumnNames.has(c.columnName),
+    ).length;
+    if (nonSystemFixedCount === 0) {
       throw new UnprocessableEntityException({
         error: ERROR_CODES.VALIDATION_ERROR,
-        message: '篩選條件不得為空，請至少設定一個欄位',
+        message:
+          systemFixedColumnNames.size > 0
+            ? '請至少新增 1 個篩選條件（優質案件為系統固定，不計入）'
+            : '篩選條件不得為空，請至少設定一個欄位',
       });
     }
 
@@ -151,6 +174,75 @@ export class AssignmentListService {
         });
       }
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // US-144 / AD-E07-18 §18.12.4：系統固定篩選條件注入（best_case → ['Y']）
+  // -------------------------------------------------------------------------
+
+  /**
+   * 查詢系統固定欄位集合（is_system_fixed = true AND is_active = true），
+   * 並與 SYSTEM_FIXED_VALUE_MAP 合併為 injectSystemFixedConditions 所需陣列。
+   *
+   * createList / updateList 各呼叫一次（§18.12.5 step 1），結果同時供：
+   *   - validateConditionPayload min-count 排除（systemFixedColumnNames）
+   *   - injectSystemFixedConditions（systemFixedFields 含固定值）
+   */
+  private async loadSystemFixedFields(): Promise<
+    Array<{ columnName: string; fieldType: string; fixedValues: string[] }>
+  > {
+    const rows = await this.whitelistRepo.findBy({
+      isSystemFixed: true,
+      is_active: true,
+    });
+    return rows.map((r) => ({
+      columnName: r.column_name,
+      fieldType: r.field_type,
+      fixedValues:
+        AssignmentListService.SYSTEM_FIXED_VALUE_MAP[r.column_name] ?? [],
+    }));
+  }
+
+  /**
+   * US-144 / §18.12.4：強制注入系統固定條件至 condition_payload（tamper-proof）。
+   *
+   * 對每個 systemFixedField：
+   *   - payload.conditions 中無對應 columnName → 靜默注入整筆
+   *   - 已含但 values ≠ fixedValues → 靜默正規化 values 為 fixedValues（不拒絕請求）
+   *   - 已含且 values 相等（順序無關）→ 不動（idempotent）
+   *
+   * immutable pattern：回傳新物件，不 mutate 傳入參數；不觸碰 logic / 其他 conditions。
+   */
+  private injectSystemFixedConditions(
+    payload: ObListDefinitionConditionPayload,
+    systemFixedFields: Array<{
+      columnName: string;
+      fieldType: string;
+      fixedValues: string[];
+    }>,
+  ): ObListDefinitionConditionPayload {
+    const conditions: ObListDefinitionConditionItem[] = Array.isArray(
+      payload.conditions,
+    )
+      ? payload.conditions.map((c) => ({ ...c }))
+      : [];
+
+    for (const sf of systemFixedFields) {
+      const idx = conditions.findIndex((c) => c.columnName === sf.columnName);
+      const fixed: ObListDefinitionConditionItem = {
+        columnName: sf.columnName,
+        fieldType: sf.fieldType as ObListDefinitionConditionItem['fieldType'],
+        values: [...sf.fixedValues],
+      };
+      if (idx === -1) {
+        conditions.push(fixed);
+      } else {
+        // 正規化 values 為固定值（tamper-proof）；保留其餘欄位語意以固定值為準
+        conditions[idx] = fixed;
+      }
+    }
+
+    return { ...payload, conditions };
   }
 
   /**
@@ -447,9 +539,28 @@ export class AssignmentListService {
     // 1. BR / spec AC-6：月跑鎖（最頂層）
     await this.assignmentRunGuard.assertNoRunningRun();
 
+    // 1b. US-144 / §18.12.5 step 1：載入系統固定欄位（best_case）一次，
+    //     供 min-count 排除（step 2）與 injectSystemFixedConditions（step 3）共用。
+    const systemFixedFields = await this.loadSystemFixedFields();
+    const systemFixedColumnNames = new Set(
+      systemFixedFields.map((f) => f.columnName),
+    );
+
     // 2. v2.1 / AC-11 / AC-12 / §18.4：condition_payload 校驗
-    //    （reserved 400 > 同名重複 422 > whitelist 422）
-    await this.validateConditionPayload(dto.conditionPayload);
+    //    （reserved 400 > 同名重複 422 > whitelist 422 + §18.12.8 min-count 排除 system-fixed）
+    await this.validateConditionPayload(
+      dto.conditionPayload,
+      systemFixedColumnNames,
+    );
+
+    // 2b. US-144 / §18.12.5 step 3：注入系統固定條件（best_case → ['Y']）
+    //     在驗證通過後、衍生 backward-compat 之前執行（tamper-proof 靜默正規化）。
+    if (dto.conditionPayload) {
+      dto.conditionPayload = this.injectSystemFixedConditions(
+        dto.conditionPayload,
+        systemFixedFields,
+      );
+    }
 
     // 3. v2.1 / AC-5 / 拍板 Q4：copyFromListNo legacy 防呆
     //    （前端 copy 模式：dto.conditionPayload 已含完整 payload；本步驟只校驗 source）
@@ -633,6 +744,8 @@ export class AssignmentListService {
 
     if (hasDtoPayload) {
       // 6. stage guard（僅 draft 可寫入 condition_payload；K1 / K3）
+      //    US-144 / §18.12.5：stage guard 在 injectSystemFixedConditions 之前執行
+      //    （dept_ratio 等非 draft 名單帶 conditionPayload → 422，不進入注入邏輯）。
       if (existing.stage !== 'draft') {
         throw new UnprocessableEntityException({
           error: ERROR_CODES.LIST_STAGE_TRANSITION_FORBIDDEN,
@@ -641,8 +754,24 @@ export class AssignmentListService {
         });
       }
 
-      // 7. validate condition_payload
-      await this.validateConditionPayload(dto.conditionPayload!);
+      // 6b. US-144 / §18.12.5 step 1：載入系統固定欄位（best_case）一次。
+      const systemFixedFields = await this.loadSystemFixedFields();
+      const systemFixedColumnNames = new Set(
+        systemFixedFields.map((f) => f.columnName),
+      );
+
+      // 7. validate condition_payload（含 §18.12.8 min-count 排除 system-fixed）
+      await this.validateConditionPayload(
+        dto.conditionPayload!,
+        systemFixedColumnNames,
+      );
+
+      // 7b. US-144 / §18.12.5 step 3：注入系統固定條件（best_case → ['Y']）
+      //     在 stage guard + 驗證通過後、衍生 backward-compat 之前執行。
+      dto.conditionPayload = this.injectSystemFixedConditions(
+        dto.conditionPayload!,
+        systemFixedFields,
+      );
 
       // 8. derive backward-compat
       derived = this.deriveBackwardCompatColumns(dto.conditionPayload!);

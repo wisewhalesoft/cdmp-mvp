@@ -275,4 +275,69 @@ describe('AssignmentListService.validateConditionPayload (Phase 5a 波4)', () =>
     expect(thrown).toBeInstanceOf(BadRequestException);
     expect(thrown.getResponse().error).toBe(ERROR_CODES.RESERVED_FIELD_IN_CONDITIONS);
   });
+
+  // ==================================================================
+  // M 群組（US-144 / §18.12.8）：min-count 排除 system-fixed
+  // 對應 F050-test.md §十六 M 群組 TS-F050-M01~M04
+  // ==================================================================
+  describe('v2.3.1 — min-count 排除 system-fixed', () => {
+    // best_case 為系統固定欄位（呼叫端傳入的 systemFixedColumnNames）
+    const SYSTEM_FIXED = new Set(['best_case']);
+
+    beforeEach(async () => {
+      const now = new Date();
+      await whitelistRepo.save(
+        whitelistRepo.create({
+          column_name: 'best_case',
+          display_name: '優質案件',
+          field_type: 'categorical',
+          is_active: true,
+          isSystemFixed: true,
+          created_at: now,
+          updated_at: now,
+        } as Partial<PooldataFieldWhitelist>),
+      );
+    });
+
+    it('TS-F050-M01：payload 僅含 best_case（system-fixed）→ 422 VALIDATION_ERROR', async () => {
+      const payload: PayloadInput = {
+        conditions: [{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }],
+        logic: 'AND',
+      };
+      let thrown: any = null;
+      try {
+        await (service as any).validateConditionPayload(payload, SYSTEM_FIXED);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(UnprocessableEntityException);
+      expect(thrown.getResponse().error).toBe(ERROR_CODES.VALIDATION_ERROR);
+      expect(thrown.getResponse().message).toMatch(/系統固定|不計入/);
+    });
+
+    it('TS-F050-M02：payload 完全為空 conditions:[] → 422 VALIDATION_ERROR', async () => {
+      const payload: PayloadInput = { conditions: [], logic: 'AND' };
+      let thrown: any = null;
+      try {
+        await (service as any).validateConditionPayload(payload, SYSTEM_FIXED);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(UnprocessableEntityException);
+      expect(thrown.getResponse().error).toBe(ERROR_CODES.VALIDATION_ERROR);
+    });
+
+    it('TS-F050-M03：1 個非系統固定 + best_case → 通過驗證（resolve void）', async () => {
+      const payload: PayloadInput = {
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+        ],
+        logic: 'AND',
+      };
+      await expect(
+        (service as any).validateConditionPayload(payload, SYSTEM_FIXED),
+      ).resolves.toBeUndefined();
+    });
+  });
 });
