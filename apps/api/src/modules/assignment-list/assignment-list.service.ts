@@ -213,14 +213,14 @@ export class AssignmentListService {
    *
    * immutable pattern：回傳新物件，不 mutate 傳入參數；不觸碰 logic / 其他 conditions。
    */
-  private injectSystemFixedConditions(
-    payload: ObListDefinitionConditionPayload,
+  private injectSystemFixedConditions<T extends ObListDefinitionConditionPayload>(
+    payload: T,
     systemFixedFields: Array<{
       columnName: string;
       fieldType: string;
       fixedValues: string[];
     }>,
-  ): ObListDefinitionConditionPayload {
+  ): T {
     const conditions: ObListDefinitionConditionItem[] = Array.isArray(
       payload.conditions,
     )
@@ -242,7 +242,10 @@ export class AssignmentListService {
       }
     }
 
-    return { ...payload, conditions };
+    // 泛型保留 caller 傳入之 payload 型別（CreateListDto/UpdateListDto 之 ConditionPayloadDto
+    // 含 index signature；entity ObListDefinitionConditionPayload 無），回寫 dto.conditionPayload
+    // 才不會型別不相容（TS2322）。
+    return { ...payload, conditions } as T;
   }
 
   /**
