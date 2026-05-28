@@ -1,12 +1,12 @@
 ---
 type: test-design-feature
 feature_id: F075
-feature_name: POOLDATA 篩選欄位白名單管理（含 field_type metadata）
+feature_name: POOLDATA 篩選欄位白名單管理（含 field_type metadata、is_system_fixed）
 priority: P0-MVP
 related_spec: /docs/specs/features/F075-manage-pooldata-field-whitelist.md
-spec_version: "1.6"
-last_updated: 2026-05-20
-covers_ac: [AC-10, AC-11, AC-12, AC-13, AC-14, AC-15]
+spec_version: "1.7"
+last_updated: 2026-05-28
+covers_ac: [AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-18, AC-19, AC-20]
 new_in_v1_4: true
 ---
 
@@ -817,3 +817,222 @@ new_in_v1_4: true
 > **兩者均為 UPSERT，但目標 column 不同**：whitelist UPDATE `is_active + display_name`，options UPDATE `option_label + is_active`。
 >
 > **cross-ref**：TS-F050-A02（whitelist DO UPDATE 語意驗證）、TS-F050-A03（options DO UPDATE 語意驗證）、TS-F050-A04（label 覆寫驗證）
+
+---
+
+## 十、v1.7 新增測試場景（US-144 is_system_fixed 旗標 / deactivation guard / API 暴露 isSystemFixed）
+
+> **spec 版本**：F075 v1.7（2026-05-28 / US-144）
+> **架構引用**：AD-E07-18 §18.12.6（deactivation guard）、§18.12.8（is_system_fixed migration m295）
+> **命名鎖定**：`is_system_fixed`（DB 欄位）、`isSystemFixed`（API camelCase）、`SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422 error_code）、`btn-disable-{columnName}`（testid）、`field-row-best_case`（M06 列 testid）
+
+---
+
+### A. is_system_fixed seed 正確性驗證（AC-18）
+
+#### TS-F075-v17-001：m295 執行後 pooldata_field_whitelist.best_case.is_system_fixed = true；其他欄位 = false
+
+- **關聯需求**：F075 AC-18 / US-144 AC-5 / TS-F050-O03（cross-ref）
+- **測試類型**：Positive / Migration Integration（DB 驗證）
+- **前置條件**：m295 up() 已執行
+- **步驟**：
+  1. 查詢 `SELECT column_name, is_system_fixed FROM pooldata_field_whitelist ORDER BY column_name`
+- **預期結果**：
+  - `best_case.is_system_fixed = true`
+  - 所有其他欄位（prod_kind / list_type / spec_tp / caseyear / settle_src / case_status）`is_system_fixed = false`
+  - 欄位 `BOOLEAN NOT NULL DEFAULT false`（無 null 值）
+
+---
+
+### B. GET /api/v1/pooldata-fields — 回傳 isSystemFixed（AC-19）
+
+#### TS-F075-v17-002：GET /api/v1/pooldata-fields 每筆回傳 isSystemFixed；best_case 為 true，其他為 false
+
+- **關聯需求**：F075 AC-19 / US-144
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：m295 已執行；應用程式正常啟動；部長 JWT
+- **步驟**：
+  1. GET `/api/v1/pooldata-fields`
+  2. 驗證 response
+- **預期結果**：
+  - HTTP 200
+  - `fields[]` 每筆含 `isSystemFixed` boolean 欄位
+  - `fields[best_case].isSystemFixed === true`
+  - 其他所有欄位 `isSystemFixed === false`
+  - response key 為 `isSystemFixed`（camelCase），不含 `is_system_fixed`（snake_case）
+
+---
+
+#### TS-F075-v17-002b：GET /api/v1/pooldata-fields?active=true 同樣回傳 isSystemFixed
+
+- **關聯需求**：F075 AC-19 / F050 v2.3 「新增條件」dropdown 需此欄位過濾
+- **測試類型**：Positive / Integration（Supertest）
+- **步驟**：GET `/api/v1/pooldata-fields?active=true`；驗證 fields 每筆含 isSystemFixed
+- **預期結果**：同 TS-F075-v17-002；filter 參數不影響 isSystemFixed 欄位回傳
+
+---
+
+### C. Deactivation Guard（AC-20 / BR-15）
+
+#### TS-F075-v17-003：PATCH /api/v1/pooldata-fields/best_case `{ isActive: false }` → 422 SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE
+
+- **關聯需求**：F075 AC-20 / BR-15 / US-144 TC-144-05 / US-144 AC-6
+- **測試類型**：Negative / Integration（Supertest）
+- **前置條件**：部長 JWT；m295 已執行（best_case.is_system_fixed=true）
+- **步驟**：
+  1. PATCH `/api/v1/pooldata-fields/best_case`，body `{ isActive: false }`
+  2. 驗證回應
+- **預期結果**：
+  - HTTP 422
+  - `error_code: SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`
+  - `best_case.is_active` 仍為 `true`（DB 未被修改）
+
+---
+
+#### TS-F075-v17-004：DELETE /api/v1/pooldata-fields/best_case（停用等效端點）→ 422 SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE
+
+- **關聯需求**：F075 AC-20 / BR-15（「或 DELETE … 停用」）
+- **測試類型**：Negative / Integration（Supertest）
+- **前置條件**：同 TS-F075-v17-003
+- **步驟**：DELETE `/api/v1/pooldata-fields/best_case`（若此端點語意為停用）
+- **預期結果**：
+  - HTTP 422，`error_code: SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`
+  - 或 405 Method Not Allowed（若 DELETE 端點不存在；此情況亦視為 PASS，因守衛靠 PATCH 端點覆蓋）
+- **說明**：若系統以 PATCH `{ isActive: false }` 作為唯一停用路徑（無獨立 DELETE 停用端點），本場景可略；以實際 API 設計為準
+
+---
+
+#### TS-F075-v17-005：PATCH /api/v1/pooldata-fields/best_case 僅改 displayName → 200 OK（不觸發 system-fixed guard）
+
+- **關聯需求**：F075 AC-20「本守衛僅攔截停用操作，不影響 displayName 編輯」/ BR-15
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：部長 JWT；best_case.is_system_fixed=true
+- **步驟**：
+  1. PATCH `/api/v1/pooldata-fields/best_case`，body `{ displayName: '優質案件（測試）' }`（不含 isActive）
+  2. 驗證回應及 DB
+- **預期結果**：
+  - HTTP 200
+  - DB `best_case.display_name = '優質案件（測試）'`
+  - `is_active` 仍為 `true`；`is_system_fixed` 仍為 `true`
+
+---
+
+#### TS-F075-v17-006：非系統固定欄位（prod_kind）仍可正常停用 → 200 OK
+
+- **關聯需求**：F075 AC-20 / BR-15（guard 僅作用於 is_system_fixed=true 欄位）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：部長 JWT；prod_kind.is_system_fixed=false；prod_kind.is_active=true
+- **步驟**：
+  1. PATCH `/api/v1/pooldata-fields/prod_kind`，body `{ isActive: false }`
+  2. 驗證回應
+- **預期結果**：
+  - HTTP 200
+  - DB `prod_kind.is_active = false`
+  - 無 422 錯誤（is_system_fixed=false 不觸發守衛）
+
+---
+
+### D. M06 前端 UI — system-fixed badge + disabled deactivate button（AC-20）
+
+> **測試檔案（修改現有）**：`apps/web/src/pages/assignment/__tests__/field-whitelist-page.test.tsx`
+> **修改方式**：末尾追加 `describe('v1.7 — is_system_fixed 旗標 UI（US-144）')`
+> **prototype ground truth**：`prototypes/37-base-code.html`（`field-row-best_case`、`btn-disable-best_case`）
+> **Mock 策略**：`GET /api/v1/pooldata-fields` 回傳含 `isSystemFixed` 的 fixture
+
+**v1.7 fieldsFixture（含 isSystemFixed）**：
+```json
+{
+  "fields": [
+    { "columnName": "prod_kind", "displayName": "產品類別",  "fieldType": "categorical", "isActive": true,  "isSystemFixed": false },
+    { "columnName": "best_case", "displayName": "優質案件",  "fieldType": "categorical", "isActive": true,  "isSystemFixed": true  },
+    { "columnName": "caseyear",  "displayName": "案件年度",  "fieldType": "categorical", "isActive": true,  "isSystemFixed": false }
+  ]
+}
+```
+
+#### TS-F075-v17-007：M06 列表 — best_case 那一列 `data-testid="field-row-best_case"` 含 `data-system-fixed="true"`
+
+- **關聯需求**：F075 AC-20 / US-144 AC-6 / prototype 37 testid `field-row-best_case`
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：render 篩選欄位管理頁（部長角色）；v1.7 fieldsFixture
+- **步驟**：
+  1. `await waitFor(() => screen.getByTestId('field-row-best_case'))`
+  2. 取 `data-system-fixed` 屬性
+- **預期結果**：
+  - `field-row-best_case` 元素存在
+  - `getAttribute('data-system-fixed') === 'true'`
+  - prod_kind 列（`field-row-prod_kind`）的 `data-system-fixed === 'false'` 或屬性不存在
+
+---
+
+#### TS-F075-v17-008：M06 best_case 停用按鈕（`btn-disable-best_case`）為 disabled 狀態，含 aria-disabled="true"
+
+- **關聯需求**：F075 AC-20 / US-144 AC-6 / prototype 37 testid `btn-disable-{columnName}`
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：同 TS-F075-v17-007
+- **步驟**：
+  1. `screen.getByTestId('btn-disable-best_case')`
+  2. 驗證 disabled 狀態
+- **預期結果**：
+  - 元素存在（按鈕存在但 disabled，而非 DOM 不存在）
+  - `element.disabled === true` 或 `element.getAttribute('aria-disabled') === 'true'`
+
+---
+
+#### TS-F075-v17-009：M06 prod_kind 停用按鈕（`btn-disable-prod_kind`）不為 disabled（對照組）
+
+- **關聯需求**：F075 AC-20 / BR-15（非 system-fixed 欄位不受影響）
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：同 TS-F075-v17-007
+- **步驟**：`screen.getByTestId('btn-disable-prod_kind')`；驗證 disabled 屬性
+- **預期結果**：
+  - 元素存在
+  - `element.disabled === false`（或無 disabled / aria-disabled="false"）
+
+---
+
+#### TS-F075-v17-010：M06 best_case 停用按鈕 click → 不發出 PATCH 請求（disabled 阻擋互動）
+
+- **關聯需求**：F075 AC-20（UI 層完整阻擋）
+- **測試類型**：Negative / Frontend Component（RTL）
+- **前置條件**：同 TS-F075-v17-007；mock `PATCH /api/v1/pooldata-fields/best_case` spy
+- **步驟**：
+  1. `userEvent.click` `btn-disable-best_case`
+  2. 驗證 PATCH spy 呼叫次數
+- **預期結果**：PATCH spy call count = 0（disabled 按鈕 click 不觸發 API 呼叫）
+
+---
+
+## 測試案例數統計（更新）
+
+| 分區 | 案例 ID 範圍 | 數量 |
+|------|------------|------|
+| Backend service 單元測試（A+B） | TS-F075-BE-001~024 | 18 |
+| Backend E2E — SQLite（A+B+C） | TS-F075-E2E-001~008 | 8 |
+| Backend Integration — PostgreSQL TC（A） | TS-F075-INT-BE-001~002 | 2 |
+| Frontend component（A+B+C+D+E+F+G） | TS-F075-FE-001~016 | 16 |
+| 跨模組整合 | TS-F075-INT-001~002 | 2 |
+| v1.5 新增（F050 v2.1 配套） | TS-F075-049~050 | 2 |
+| v1.6 新增（F050 v2.1.1 M-A1 配套） | TS-F075-051~053 | 3 |
+| **v1.7 新增（US-144 is_system_fixed）** | **TS-F075-v17-001~010 + 002b** | **11** |
+| Regression Guard（見 M06-regression-guards.md） | TC-GUARD-M06-NAMING-001~002 | 2 |
+| **合計** | | **64** |
+
+> **v1.7 場景分佈**：seed 驗證（001）、API isSystemFixed 回傳（002、002b）、deactivation guard（003~006）、M06 前端 disabled UI（007~010）
+
+---
+
+## 十一、v1.7 覆蓋對應表（Story AC → 測試場景）
+
+| AC / BR | 說明 | 測試場景 |
+|---|---|---|
+| F075 AC-18 | is_system_fixed seed（best_case=true，其他=false） | TS-F075-v17-001（+ TS-F050-O03 cross-ref） |
+| F075 AC-19 | GET /api/v1/pooldata-fields 回傳 isSystemFixed | TS-F075-v17-002、002b |
+| F075 AC-20 / BR-15 | PATCH isActive=false → 422 守衛 | TS-F075-v17-003、004 |
+| F075 AC-20 | displayName 編輯不受守衛影響 | TS-F075-v17-005 |
+| F075 AC-20 | 非 system-fixed 欄位正常停用 | TS-F075-v17-006 |
+| F075 AC-20 UI | M06 best_case 列 data-system-fixed | TS-F075-v17-007 |
+| F075 AC-20 UI | M06 btn-disable-best_case disabled | TS-F075-v17-008 |
+| F075 AC-20 UI | M06 prod_kind 可停用（對照） | TS-F075-v17-009 |
+| F075 AC-20 UI | disabled click 不觸發 PATCH | TS-F075-v17-010 |
+| US-144 TC-144-05 | M06 停用系統固定欄位 API 攔截 | TS-F075-v17-003 |

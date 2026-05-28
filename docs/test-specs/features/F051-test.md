@@ -1,17 +1,18 @@
 ---
 type: test-design-feature
 feature_id: F051
-feature_name: 編輯名單定義（whitelist-driven v2.1）
+feature_name: 編輯名單定義（whitelist-driven v2.2.1）
 priority: P0-MVP
 related_spec: /docs/specs/features/F051-edit-list-definition.md
-spec_version: "2.1"
+spec_version: "2.2.1"
 covers:
   - F051
   - US-106
   - US-121
   - US-123
+  - US-144
 date: 2026-05-20
-last_updated: 2026-05-20
+last_updated: 2026-05-28
 ---
 
 # F051：編輯名單定義（whitelist-driven v2.1）— 測試設計
@@ -325,3 +326,109 @@ last_updated: 2026-05-20
 | G5 | TS-F051-015 |
 | K1 | TS-F051-007/008 |
 | K3 | TS-F051-009 |
+
+---
+
+## 十四、v2.2 / v2.2.1 補強測試設計（US-144 best_case 系統固定篩選條件）
+
+> **spec 版本**：F051 v2.2（updateList 注入 BR-14）/ v2.2.1（最低條件數語意修正 AC-6）
+> **對應 Story**：US-144 AC-2（updateList 竄改正規化）
+> **架構引用**：AD-E07-18 §18.12.4（injectSystemFixedConditions 契約）、§18.12.5（呼叫堆疊 updateList 路徑）
+> **說明**：updateList 場景測試設計同 F050 N 群組，F051-test.md 額外補充前端編輯頁場景（已移至 F050-test.md R 群組，此處記錄 cross-ref）以及 min-count 語意更新場景（F051 v2.2.1 AC-6）
+
+### TS-F051-020：updateList — 有提供 conditionPayload + 不含 best_case → DB 更新後含 best_case: ['Y']
+
+- **關聯需求**：F051 v2.2 AC-14 / US-144 AC-2
+- **測試類型**：Positive / Service Integration（SQLite in-memory）
+- **前置條件**：
+  - DB 中有效 draft 名單（`condition_payload IS NOT NULL`）
+  - `pooldata_field_whitelist.best_case.is_system_fixed = true`
+- **步驟**：
+  1. PUT `/api/v1/assignment/list-definitions/{listNo}`，body `conditionPayload.conditions` 含 1 個非系統固定條件（如 `prod_kind`），不含 `best_case`
+  2. 讀回 DB
+- **預期結果**：
+  - HTTP 200
+  - `condition_payload.conditions` 含 `best_case: ['Y']`；`prod_kind` 條目仍存在
+
+---
+
+### TS-F051-021：updateList — payload 含 best_case values: ['N']（竄改）→ 靜默正規化，200 OK
+
+- **關聯需求**：F051 v2.2 AC-14 tamper-normalization / US-144 TC-144-02
+- **測試類型**：Boundary（tamper-proof）/ Integration（Supertest）
+- **前置條件**：同 TS-F051-020；名單 stage=draft
+- **步驟**：
+  1. PUT body 含 `conditionPayload.conditions`: `[{ columnName: 'prod_kind', ... }, { columnName: 'best_case', fieldType: 'categorical', values: ['N'] }]`
+- **預期結果**：
+  - HTTP 200（不 422）
+  - DB 中 `best_case.values === ['Y']`（靜默修正，不回錯誤）
+
+---
+
+### TS-F051-022：updateList min-count（v2.2.1）— 僅含 best_case（system-fixed）→ 422 VALIDATION_ERROR
+
+- **關聯需求**：F051 v2.2.1 AC-6 / US-144 / §18.12.8
+- **測試類型**：Negative / Integration（Supertest）
+- **前置條件**：名單 stage=draft；`condition_payload IS NOT NULL`
+- **步驟**：
+  1. PUT body `conditionPayload.conditions = [{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }]`（僅系統固定條件）
+  2. 驗證回應
+- **預期結果**：
+  - HTTP 422
+  - `error_code: VALIDATION_ERROR`
+  - 訊息含「至少 1 個非系統固定」語意
+
+---
+
+### TS-F051-023：updateList min-count — 1 個非系統固定 + best_case → 通過驗證（最小合法 payload 邊界）
+
+- **關聯需求**：F051 v2.2.1 AC-6 OK path（Boundary）
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：同 TS-F051-022
+- **步驟**：
+  1. PUT body `conditionPayload.conditions = [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }, { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }]`
+  2. 驗證回應
+- **預期結果**：HTTP 200；DB 含 best_case: ['Y']
+
+---
+
+### TS-F051-024：updateList — condition_payload IS NULL 舊名單 + 不帶 conditionPayload → 不觸發注入（LEGACY 路徑不變）
+
+- **關聯需求**：F051 v2.2 AC-14「僅在有提供 conditionPayload 時套用」/ AC-11 LEGACY 路徑
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：名單 `condition_payload IS NULL`（舊遷移名單）
+- **步驟**：
+  1. PUT body 只含 `{ listNm: '修改後名稱' }`（不帶 conditionPayload）
+  2. 讀回 DB
+- **預期結果**：
+  - HTTP 200
+  - `condition_payload` 仍為 `null`（未被注入 best_case）
+  - `list_nm` 已更新
+
+---
+
+### TS-F051-025：updateList — 提供 conditionPayload 給舊名單（condition_payload IS NULL）→ 422 LEGACY_LIST_CONDITION_READONLY（注入不執行）
+
+- **關聯需求**：F051 AC-11 防呆在 injectSystemFixedConditions 之前執行（§18.12.5 call-stack 順序）
+- **測試類型**：Negative / Integration（Supertest）
+- **前置條件**：名單 `condition_payload IS NULL`；stage=draft
+- **步驟**：
+  1. PUT body 含有效 `conditionPayload`
+- **預期結果**：
+  - HTTP 422
+  - `error_code: LEGACY_LIST_CONDITION_READONLY`
+  - 不回 best_case 相關錯誤（LEGACY guard 先觸發，inject 邏輯不進入）
+
+---
+
+## 附錄 B：v2.2 / v2.2.1 覆蓋對應表（Story AC → 測試場景）
+
+| AC / TC | 說明 | 測試場景 |
+|---|---|---|
+| US-144 AC-2 / TC-144-02 | updateList 竄改正規化（N → Y） | TS-F051-021 |
+| F051 v2.2 AC-14 | updateList 注入 + 不含 best_case → 補入 | TS-F051-020 |
+| F051 v2.2 AC-14（4-state） | 舊名單（IS NULL）不注入 | TS-F051-024 |
+| F051 v2.2 AC-12（ordering） | LEGACY guard 先於 inject | TS-F051-025 |
+| F051 v2.2.1 AC-6 | min-count 排除 system-fixed（updateList） | TS-F051-022、TS-F051-023 |
+
+> **前端編輯頁鎖定列場景**（AC-3 / AC-4）已移至 F050-test.md 十六節 R 群組（TS-F050-R01~R03），因前端建立與編輯頁共用同一 list-edit-draft-page 測試檔案，集中管理避免重複。

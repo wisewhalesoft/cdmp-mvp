@@ -1,10 +1,10 @@
 ---
 type: test-design-feature
 feature_id: F050
-feature_name: 新增名單定義（whitelist-driven v2.2）
+feature_name: 新增名單定義（whitelist-driven v2.3.1）
 priority: P0-MVP
 related_spec: /docs/specs/features/F050-create-list-definition.md
-spec_version: "2.2"
+spec_version: "2.3.1"
 covers:
   - F050
   - US-106
@@ -17,8 +17,9 @@ covers:
   - US-129
   - US-131
   - US-133
+  - US-144
 date: 2026-05-20
-last_updated: 2026-05-21
+last_updated: 2026-05-28
 ---
 
 # F050：新增名單定義（whitelist-driven v2.1.1）— 測試設計
@@ -1592,3 +1593,494 @@ last_updated: 2026-05-21
 | **新建** | `apps/api/test/f050-v22-snapshot.e2e.spec.ts` | SS 群組（12 場景） |
 | **新建** | `apps/web/src/pages/assignment/__tests__/pending-toast-producer.test.tsx` | SIG-001~003（Producer 端） |
 | **修改** | `apps/web/src/pages/assignment/__tests__/list-kanban-page.test.tsx` | SIG-004~007（Consumer 端，追加） |
+
+---
+
+## 十六、v2.3 / v2.3.1 補強測試設計（US-144 best_case 系統固定篩選條件）
+
+> **spec 版本**：F050 v2.3（injectSystemFixedConditions BR-14）/ v2.3.1（最低條件數語意修正 AC-10）
+> **對應 Story**：US-144（TC-144-01 ~ TC-144-07 為 seed cases）
+> **關鍵架構引用**：AD-E07-18 §18.12.4（injectSystemFixedConditions 契約）、§18.12.5（呼叫堆疊）、§18.12.6（deactivation guard）、§18.12.8（min-count 排除 system-fixed）
+> **testid ground truth**：prototype `27a-list-create-draft.html`（`condition-row-best_case`、`value-best_case`；`remove-condition-best_case` 不存在）
+> **命名鎖定**：`injectSystemFixedConditions`（service private method）、`SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）、`is_system_fixed`（DB 欄位）、`isSystemFixed`（API / DTO camelCase）
+
+---
+
+### L 群組：Backend Service — injectSystemFixedConditions（createList 注入）
+
+> **測試檔案（修改現有）**：`apps/api/src/modules/assignment-list/__tests__/create-list-v2.1.spec.ts`
+> **修改方式**：末尾追加 `describe('v2.3 / v2.3.1 — injectSystemFixedConditions (createList)')`，不修改現有 test
+
+#### TS-F050-L01：createList — payload 不含 best_case → DB 中 condition_payload 自動注入 best_case: ['Y']
+
+- **關聯需求**：F050 AC-1 / AC-17（v2.3）/ US-144 TC-144-01
+- **測試類型**：Positive / Service Integration（SQLite in-memory）
+- **前置條件**：
+  - `pooldata_field_whitelist` seed 含 `best_case`（`is_system_fixed=true`）及至少 1 筆非系統固定欄位（如 `prod_kind`）
+  - `pooldata_field_option` seed 含 `best_case` `Y`/`N` 兩筆
+- **步驟**：
+  1. `service.createList({ conditionPayload: { conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }], logic: 'AND' }, ...otherRequired }, actor)`
+  2. 讀回 DB `ob_list_definition.condition_payload`
+- **預期結果**：
+  - HTTP 201（或 service 不拋例外）
+  - `condition_payload.conditions` 含 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }` 一筆
+  - 原使用者條件 `prod_kind` 亦存在（注入不覆蓋使用者條件）
+
+---
+
+#### TS-F050-L02：createList — payload 含 best_case values: ['N']（竄改）→ 靜默正規化為 ['Y']，回 201
+
+- **關聯需求**：F050 AC-17（v2.3）tamper-normalization / US-144 TC-144-02
+- **測試類型**：Boundary（tamper-proof）/ Service Integration
+- **前置條件**：同 L01
+- **步驟**：
+  1. `service.createList({ conditionPayload: { conditions: [{ columnName: 'prod_kind', ... }, { columnName: 'best_case', fieldType: 'categorical', values: ['N'] }], ... }, ... }, actor)`
+  2. 讀回 DB
+- **預期結果**：
+  - 不拋例外（不回 422）
+  - DB 中 `best_case.values === ['Y']`（非 `['N']`）
+
+---
+
+#### TS-F050-L03：createList — payload 含 best_case values: []（空陣列竄改）→ 靜默正規化為 ['Y']
+
+- **關聯需求**：F050 AC-17（v2.3）/ US-144 AC-1
+- **測試類型**：Boundary（tamper-proof）/ Service Integration
+- **步驟**：`conditionPayload.conditions` 含 `{ columnName: 'best_case', values: [] }`
+- **預期結果**：不拋例外；DB 中 `best_case.values === ['Y']`
+
+---
+
+#### TS-F050-L04：createList — payload 含 best_case values: ['Y', 'N']（多值竄改）→ 靜默正規化為 ['Y']
+
+- **關聯需求**：F050 AC-17（v2.3）
+- **測試類型**：Boundary（tamper-proof）/ Service Integration
+- **步驟**：`conditionPayload.conditions` 含 `{ columnName: 'best_case', values: ['Y', 'N'] }`（正確 + 錯誤混合）
+- **預期結果**：不拋例外；DB 中 `best_case.values === ['Y']`（單值）
+
+---
+
+#### TS-F050-L05：createList — copy-from-prev-month 來源不含 best_case → 強制注入後 DB 含 best_case: ['Y']
+
+- **關聯需求**：F050 AC-9（US-144）/ US-144 TC-144-07
+- **測試類型**：Positive / Service Integration
+- **前置條件**：DB 中存在舊名單（`condition_payload.conditions` 不含 `best_case`）
+- **步驟**：
+  1. `service.createList({ copyFromListNo: '<oldListNo>', conditionPayload: <copyPayload 不含 best_case>, ... }, actor)`
+  2. 讀回新建名單 DB 紀錄
+- **預期結果**：新名單 `condition_payload.conditions` 含 `best_case: ['Y']`
+
+---
+
+### M 群組：Backend Service — validateConditionPayload 最低條件數（min-count 排除 system-fixed）
+
+> **測試檔案（修改現有）**：`apps/api/src/modules/assignment-list/__tests__/validate-condition-payload.spec.ts`
+> **修改方式**：末尾追加 `describe('v2.3.1 — min-count 排除 system-fixed')`
+
+#### TS-F050-M01：payload 僅含 best_case（is_system_fixed=true）→ 422 VALIDATION_ERROR（非系統固定條件數 = 0）
+
+- **關聯需求**：F050 AC-10（v2.3.1）/ US-144 / §18.12.8
+- **測試類型**：Negative / Unit
+- **前置條件**：mock `pooldata_field_whitelist`：`best_case.is_system_fixed=true`；其他欄位 `is_system_fixed=false`
+- **步驟**：
+  1. 呼叫 `validateConditionPayload({ conditions: [{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }], logic: 'AND' })`
+  2. 驗證回應
+- **預期結果**：拋出 `VALIDATION_ERROR`（422）；訊息含「至少 1 個非系統固定」或「優質案件為系統固定，不計入」
+
+---
+
+#### TS-F050-M02：payload 完全為空 conditions: [] → 422 VALIDATION_ERROR（0 非系統固定條件）
+
+- **關聯需求**：F050 AC-10（v2.3.1）/ US-144
+- **測試類型**：Negative / Unit
+- **步驟**：`validateConditionPayload({ conditions: [], logic: 'AND' })`
+- **預期結果**：422 VALIDATION_ERROR（與 TS-F050-001 相同，維持向後相容）
+
+---
+
+#### TS-F050-M03：payload 含 1 個非系統固定條件 + best_case → 通過驗證（非系統固定條件數 = 1）
+
+- **關聯需求**：F050 AC-10（v2.3.1）OK path
+- **測試類型**：Positive / Unit（Boundary — 最小合法 payload）
+- **步驟**：
+  1. `validateConditionPayload({ conditions: [{ columnName: 'prod_kind', ... }, { columnName: 'best_case', ... }], ... })`
+- **預期結果**：不拋例外；通過驗證
+
+---
+
+#### TS-F050-M04：驗證順序 — min-count 在 injectSystemFixedConditions 之前執行（payload 送入時 best_case 未注入）
+
+- **關聯需求**：F050 AC-10 v2.3.1「驗證順序明示」/ §18.12.8
+- **測試類型**：Positive / Unit（call-order 驗證）
+- **步驟**：
+  1. spy `validateConditionPayload` 與 `injectSystemFixedConditions`
+  2. 呼叫 `service.createList(validPayload, actor)`
+  3. 比較 call 順序
+- **預期結果**：`validateConditionPayload` call 順序索引 < `injectSystemFixedConditions` call 順序索引（validate 先、inject 後）
+
+---
+
+### N 群組：Backend Service — injectSystemFixedConditions（updateList 注入）
+
+> **測試檔案（修改現有）**：`apps/api/src/modules/assignment-list/__tests__/update-list-v2.1.spec.ts`
+> **修改方式**：末尾追加 `describe('v2.3 / v2.3.1 — injectSystemFixedConditions (updateList)')`
+
+#### TS-F050-N01：updateList — payload 不含 best_case → DB 更新後含 best_case: ['Y']
+
+- **關聯需求**：F050（F051 v2.2 AC-14）/ US-144 AC-2
+- **測試類型**：Positive / Service Integration
+- **前置條件**：DB 中 draft 名單（`condition_payload` 非 null），`pooldata_field_whitelist` 含 `best_case is_system_fixed=true`
+- **步驟**：
+  1. `service.updateList(listNo, { conditionPayload: { conditions: [{ columnName: 'prod_kind', ... }], logic: 'AND' } }, actor)`
+  2. 讀回 DB
+- **預期結果**：`condition_payload.conditions` 含 `best_case: ['Y']`；`prod_kind` 仍存在
+
+---
+
+#### TS-F050-N02：updateList — payload 含 best_case values: ['N']（竄改）→ 靜默正規化，回 200
+
+- **關聯需求**：US-144 TC-144-02 / F051 v2.2 AC-14
+- **測試類型**：Boundary（tamper-proof）/ Service Integration
+- **步驟**：`conditionPayload.conditions` 含 `{ columnName: 'best_case', values: ['N'] }` + 至少 1 個非系統固定條件
+- **預期結果**：不拋例外；DB 中 `best_case.values === ['Y']`
+
+---
+
+#### TS-F050-N03：updateList — condition_payload IS NULL 舊名單 → 不注入（LEGACY_LIST_CONDITION_READONLY 路徑不受影響）
+
+- **關聯需求**：F051 v2.2 AC-14（「僅在有提供 conditionPayload 時套用」）
+- **測試類型**：Positive / Service Integration
+- **前置條件**：DB 中名單 `condition_payload IS NULL`（舊遷移名單）
+- **步驟**：
+  1. `service.updateList(listNo, { listNm: '修改名稱' /* 不帶 conditionPayload */ }, actor)`
+  2. 讀回 DB
+- **預期結果**：`condition_payload` 仍為 `null`（未被注入 best_case）；`list_nm` 已更新
+
+---
+
+#### TS-F050-N04：updateList — stage=dept_ratio 名單有 conditionPayload → stage guard 先於注入（422 LIST_STAGE_TRANSITION_FORBIDDEN）
+
+- **關聯需求**：F051 v2.2 AC-12 / §18.12.5（stage guard 在 inject 之前）
+- **測試類型**：Negative / Service Integration
+- **前置條件**：名單 stage=dept_ratio
+- **步驟**：帶有效 conditionPayload 的 updateList 請求
+- **預期結果**：422 `LIST_STAGE_TRANSITION_FORBIDDEN`（stage guard 攔截，不進入注入邏輯）
+
+---
+
+### O 群組：Migration m295 / m296 測試
+
+> **測試檔案（新建）**：`apps/api/src/database/migrations/__tests__/m295-is-system-fixed-column.spec.ts`
+> **測試檔案（新建）**：`apps/api/src/database/migrations/__tests__/m296-backfill-draft-best-case.spec.ts`
+> **Pattern 對齊**：沿用 m286 spec（mock queryRunner + functional SQLite in-memory）
+
+#### TS-F050-O01：m295 up() PG — `pooldata_field_whitelist` 新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位
+
+- **關聯需求**：F075 v1.7 AC-18 / US-144 AC-5 / §18.12.8
+- **測試類型**：Positive / Migration Unit（mock queryRunner）
+- **步驟**：
+  1. 執行 `m295.up(queryRunner)`
+  2. 過濾 `ALTER TABLE pooldata_field_whitelist` 的 SQL
+- **預期結果**：
+  - 含 `ALTER TABLE pooldata_field_whitelist ADD COLUMN is_system_fixed`（或等效 DDL）
+  - 欄位定義含 `BOOLEAN NOT NULL DEFAULT false`
+
+---
+
+#### TS-F050-O02：m295 up() PG — best_case 的 is_system_fixed UPDATE 為 true；其他欄位保持 false（DEFAULT）
+
+- **關聯需求**：F075 v1.7 AC-18 / US-144 AC-5
+- **測試類型**：Positive / Migration Unit（mock queryRunner）
+- **步驟**：
+  1. 執行 `m295.up(queryRunner)`
+  2. 過濾 `UPDATE pooldata_field_whitelist SET is_system_fixed = true` 的 SQL
+- **預期結果**：
+  - 含 `UPDATE ... SET is_system_fixed = true WHERE column_name = 'best_case'`
+  - ADD COLUMN 索引 < UPDATE 索引（先加欄再更新，FK / NOT NULL 安全）
+
+---
+
+#### TS-F050-O03：m295 functional（SQLite in-memory）— 執行後 best_case.is_system_fixed=true；prod_kind.is_system_fixed=false
+
+- **關聯需求**：F075 v1.7 AC-18 / US-144 AC-5
+- **測試類型**：Positive / Migration Functional（SQLite in-memory）
+- **前置條件**：
+  - SQLite DB 建立 `pooldata_field_whitelist` 表（不含 `is_system_fixed` 欄位）
+  - 插入 `best_case`（is_active=1）、`prod_kind`（is_active=1）兩筆
+- **步驟**：
+  1. 執行 `m295.up(qr)`
+  2. 查詢 `SELECT is_system_fixed FROM pooldata_field_whitelist WHERE column_name = ?`
+- **預期結果**：
+  - `best_case.is_system_fixed === true`
+  - `prod_kind.is_system_fixed === false`
+
+---
+
+#### TS-F050-O04：m295 idempotent — 連續執行 2 次無 error；best_case.is_system_fixed 仍為 true
+
+- **關聯需求**：F075 v1.7 AC-18 idempotency
+- **測試類型**：Boundary / Migration Functional（SQLite in-memory）
+- **步驟**：執行 `m295.up(qr1)` → 再執行 `m295.up(qr2)`
+- **預期結果**：兩次均無 error；`best_case.is_system_fixed === true`（不重複 ADD COLUMN）
+
+---
+
+#### TS-F050-O05：m295 up() SQLite — 使用 `ALTER TABLE ... ADD COLUMN`（SQLite 支援此語法）
+
+- **關聯需求**：架構決策 SQLite 路徑
+- **測試類型**：Positive / Migration Unit（mock queryRunner + DB_TYPE=sqlite）
+- **步驟**：`process.env.DB_TYPE = 'sqlite'`；執行 `m295.up(queryRunner)`；驗證 SQL
+- **預期結果**：含 `ALTER TABLE pooldata_field_whitelist ADD COLUMN is_system_fixed`；不拋「SQLite 不支援此語法」的錯誤
+
+---
+
+#### TS-F050-O06：m295 down() — 移除 `is_system_fixed` 欄位（或等效回滾）
+
+- **關聯需求**：migration down() 回滾完整性
+- **測試類型**：Positive / Migration Unit（mock queryRunner）
+- **步驟**：執行 `m295.down(queryRunner)`；驗證 SQL
+- **預期結果**：含 `ALTER TABLE pooldata_field_whitelist DROP COLUMN is_system_fixed`（PG）或 SQLite 表重建模式移除該欄
+
+---
+
+#### TS-F050-O07：m296 up() — stage='draft' 且 condition_payload IS NOT NULL 且不含 best_case 的名單 → 補入 best_case: ['Y']
+
+- **關聯需求**：F050 AC-8（v2.3）/ US-144 TC-144-06（backfill draft only）
+- **測試類型**：Positive / Migration Functional（SQLite in-memory）
+- **前置條件**：
+  - SQLite DB 中有 `LIST_A`（stage='draft'，condition_payload=`{"conditions":[],"logic":"AND"}` 不含 best_case）
+  - 有 `LIST_B`（stage='ready'，condition_payload 不含 best_case）
+  - 有 `LIST_C`（stage='draft'，condition_payload IS NULL）
+- **步驟**：
+  1. 執行 `m296.up(qr)`
+  2. 查詢三筆名單的 condition_payload
+- **預期結果**：
+  - `LIST_A.condition_payload.conditions` 包含 `best_case: ['Y']`（draft 非 null → 回填）
+  - `LIST_B.condition_payload` 不變（stage=ready → 不回填）
+  - `LIST_C.condition_payload` 仍為 null（null-payload → 不回填）
+
+---
+
+#### TS-F050-O08：m296 up() — stage='draft' 且 condition_payload 已含 best_case values: ['N'] → 正規化為 ['Y']
+
+- **關聯需求**：F050 AC-8 v2.3「若已含 best_case 但 values 不為 ['Y']，則更新為 ['Y']」
+- **測試類型**：Boundary / Migration Functional（SQLite in-memory）
+- **前置條件**：`LIST_D`（stage='draft'，condition_payload 含 `best_case.values=['N']`）
+- **步驟**：執行 `m296.up(qr)`；讀回 `LIST_D.condition_payload`
+- **預期結果**：`best_case.values === ['Y']`（竄改值被正規化）
+
+---
+
+#### TS-F050-O09：m296 idempotent — 已含 best_case: ['Y'] 的 draft 名單連續執行 2 次 → 紀錄無異動
+
+- **關聯需求**：F050 AC-8「idempotent」/ US-144 AC-8
+- **測試類型**：Boundary / Migration Functional（SQLite in-memory）
+- **前置條件**：`LIST_E`（stage='draft'，condition_payload 已含 `best_case.values=['Y']`）
+- **步驟**：執行 `m296.up(qr1)` → 再執行 `m296.up(qr2)` → 讀回
+- **預期結果**：兩次均無 error；`best_case.values` 仍為 `['Y']`（不重複 push）；condition_payload 中 best_case 條目不重複出現
+
+---
+
+#### TS-F050-O10：m296 down() — 回滾將 draft 名單的 best_case 條目移除（恢復到注入前狀態）
+
+- **關聯需求**：migration down() 回滾完整性
+- **測試類型**：Positive / Migration Functional（SQLite in-memory）
+- **前置條件**：`LIST_A`（draft，condition_payload 已含 best_case: ['Y']，僅此一條）
+- **步驟**：執行 `m296.down(qr)`；讀回 condition_payload
+- **預期結果**：`condition_payload.conditions` 不含 `best_case` 條目（已移除）
+
+---
+
+### P 群組：Stage 1 Composer — best_case IN query（US-144 AC-7 補充）
+
+> **測試檔案（修改現有）**：`apps/api/src/modules/assignment/stage1/__tests__/stage1-query-composer.spec.ts`
+> **修改方式**：在 G 群組波 6 之後追加 `describe('波 7 — US-144 best_case 系統注入後 Stage 1 驗證')`
+> **說明**：G 群組已覆蓋 `best_case` categorical path A；本群組補充「injectSystemFixedConditions 注入後的名單，Stage 1 能正確產生 SQL」之端對端路徑驗證
+
+#### TS-F050-P01：完整名單（經 createList 注入後存入 DB）→ Stage 1 composer 產生 `"best_case" IN ('Y')`
+
+- **關聯需求**：US-144 AC-7 / US-144 TC-144-01（E2E 驗證鏈）
+- **測試類型**：Positive / Integration（Service + Stage1 Composer）
+- **前置條件**：
+  - 使用 SQLite in-memory 建立 draft 名單（透過 `service.createList()`，payload 不含 best_case）
+  - 讀回 DB 中的 `condition_payload`
+- **步驟**：
+  1. 呼叫 `buildStage1WhereConditions(listWithInjectedPayload)`
+  2. 驗證 result
+- **預期結果**：
+  - `result.skipReason` 為 null
+  - `result.where` 含 `"best_case" IN (:...`
+  - `Object.values(result.params)` 其中一個值為 `['Y']`（大寫）
+
+---
+
+### Q 群組：Frontend Tests — 建立頁 best_case 鎖定列（US-144 AC-3 / AC-4）
+
+> **測試檔案（修改現有）**：`apps/web/src/pages/assignment/__tests__/list-create-draft-page.test.tsx`
+> **修改方式**：在 H 群組之後追加 `describe('v2.3 — best_case 系統固定鎖定列（US-144 AC-3/4）')`
+> **prototype ground truth**：`prototypes/27a-list-create-draft.html`
+> **Mock 策略**：`GET /api/v1/pooldata-fields` 回傳含 `isSystemFixed` 欄位的 fixture；`best_case.isSystemFixed=true`，其他欄位 `isSystemFixed=false`
+
+**v2.3 fieldsFixture 更新（在現有 H 群組 fixture 基礎上補 isSystemFixed 欄位）**：
+```
+{ fields: [
+  { columnName: 'prod_kind', displayName: '產品類別',  fieldType: 'categorical', isActive: true,  isSystemFixed: false },
+  { columnName: 'best_case', displayName: '優質案件',  fieldType: 'categorical', isActive: true,  isSystemFixed: true  },
+  { columnName: 'caseyear',  displayName: '案件年度',  fieldType: 'categorical', isActive: true,  isSystemFixed: false },
+  // ...其他欄位
+] }
+```
+
+#### TS-F050-Q01：建立頁渲染後 — `condition-row-best_case` 存在於 DOM，`data-system-fixed="true"` 屬性正確
+
+- **關聯需求**：F050 AC-3（v2.3）/ US-144 TC-144-03 / prototype 27a testid `condition-row-best_case`
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：v2.3 fieldsFixture（含 isSystemFixed）；renderPage（建立頁）
+- **步驟**：
+  1. `await waitFor(() => screen.getByTestId('condition-row-best_case'))`
+  2. 取該元素 `data-system-fixed` 屬性
+- **預期結果**：
+  - 元素存在（DOM 有渲染）
+  - `getAttribute('data-system-fixed') === 'true'`
+
+---
+
+#### TS-F050-Q02：`remove-condition-best_case` 元素在 DOM 中完全不存在（非 CSS 隱藏）
+
+- **關聯需求**：F050 AC-3（v2.3）/ US-144 AC-3「不存在刪除按鈕」/ prototype 27a
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：同 Q01；頁面已完全渲染
+- **步驟**：`screen.queryByTestId('remove-condition-best_case')`
+- **預期結果**：回傳 `null`（DOM 中不存在，不是 `display:none` 或 `hidden` 的元素）
+
+---
+
+#### TS-F050-Q03：best_case 值 chip（`value-best_case`）處於 disabled，使用者無法修改選取
+
+- **關聯需求**：F050 AC-3（v2.3）/ US-144 AC-3「值的多選元件 disabled」
+- **測試類型**：Positive / Frontend Component（RTL）
+- **步驟**：
+  1. 取 `data-testid="value-best_case"` 元素（或包含 best_case 值的 input/checkbox）
+  2. 驗證 disabled 狀態
+- **預期結果**：元素具有 `disabled` 屬性（`element.disabled === true` 或 `aria-disabled="true"`）
+
+---
+
+#### TS-F050-Q04：「新增條件」dropdown 展開後不含 `best_case`（優質案件）選項
+
+- **關聯需求**：F050 AC-4（v2.3）/ US-144 TC-144-04 / BR-16
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：v2.3 fieldsFixture；頁面已渲染
+- **步驟**：
+  1. 點擊「新增條件」按鈕，dropdown 展開
+  2. 查詢 dropdown 內所有選項文字
+- **預期結果**：
+  - 選項清單不包含「優質案件」文字（best_case 被排除）
+  - 其他非系統固定欄位（如「產品類別」`prod_kind`）仍正常出現
+  - 以 `isSystemFixed === false` 為過濾準則（不 hardcode 字串 'best_case'）
+
+---
+
+#### TS-F050-Q05：前端阻擋送出 — 僅有 best_case 系統固定條件時顯示最低條件數錯誤提示
+
+- **關聯需求**：F050 AC-10（v2.3.1）/ US-144 AC-10 前端錯誤文案
+- **測試類型**：Negative / Frontend Component（RTL）
+- **說明**：建立頁初始顯示 best_case 鎖定列（系統固定），但使用者尚未新增任何非系統固定條件；點儲存時前端應阻擋
+- **步驟**：
+  1. renderPage（初始狀態，無非系統固定條件）
+  2. 填入 list_nm / list_period 等必填基本欄位
+  3. 不新增任何非系統固定條件（best_case 鎖定列已存在）
+  4. 點擊「儲存草稿」
+- **預期結果**：
+  - POST 請求未發出（前端攔截）
+  - 頁面顯示錯誤文字「請至少新增 1 個篩選條件（優質案件為系統固定，不計入）」（精確文案，對齊 prototype 27a）
+
+---
+
+#### TS-F050-Q06：best_case 鎖定列顯示「系統固定」標籤（🔒 圖示或文字）
+
+- **關聯需求**：F050 AC-3（v2.3）/ US-144 AC-3「🔒 圖示與標籤『優質案件（系統固定）』」
+- **測試類型**：Positive / Frontend Component（RTL）
+- **步驟**：取 `data-testid="condition-row-best_case"` 元素的 textContent
+- **預期結果**：textContent 含「系統固定」字串；並顯示「Y（優質案件）」或對應的值顯示文字（唯讀）
+
+---
+
+### R 群組：Frontend Tests — 編輯頁 best_case 鎖定列（US-144 AC-2 / AC-3）
+
+> **測試檔案（修改現有）**：`apps/web/src/pages/assignment/__tests__/list-edit-draft-page.test.tsx`
+> **修改方式**：在 I 群組之後追加 `describe('v2.3 — best_case 系統固定鎖定列（US-144 AC-2/3）')`
+> **prototype ground truth**：`prototypes/27b-list-edit-draft.html`
+
+#### TS-F050-R01：編輯頁載入含 best_case 的 condition_payload → `condition-row-best_case` 以鎖定列渲染
+
+- **關聯需求**：F050（F051 v2.2）AC-1 + US-144 AC-3
+- **測試類型**：Positive / Frontend Component（RTL + MSW）
+- **前置條件**：
+  - MSW stub `GET /api/v1/assignment/list-definitions/OB202605001` 回傳含 `conditionPayload.conditions` 包含 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }` 的名單
+  - MSW stub `GET /api/v1/pooldata-fields` 回傳 v2.3 fieldsFixture（含 `best_case.isSystemFixed=true`）
+- **步驟**：renderPage('OB202605001')；`await waitFor(...)`
+- **預期結果**：
+  - `data-testid="condition-row-best_case"` 存在，`data-system-fixed="true"`
+  - `remove-condition-best_case` 不存在
+  - 值元件 disabled
+
+---
+
+#### TS-F050-R02：編輯頁「新增條件」dropdown 不含 best_case
+
+- **關聯需求**：US-144 AC-4（編輯頁 dropdown 同樣排除 best_case）
+- **測試類型**：Positive / Frontend Component（RTL）
+- **前置條件**：同 R01
+- **步驟**：點擊「新增條件」；查詢 dropdown 選項
+- **預期結果**：選項不含「優質案件」；其他欄位正常顯示
+
+---
+
+#### TS-F050-R03：編輯頁前端阻擋送出 — 使用者刪除所有非系統固定條件後點儲存 → 顯示錯誤提示
+
+- **關聯需求**：F050 AC-10（v2.3.1）/ US-144（編輯頁最低條件數前端阻擋）
+- **測試類型**：Negative / Frontend Component（RTL）
+- **步驟**：
+  1. 名單載入含 `prod_kind` + `best_case` 兩個條件
+  2. 使用者刪除 `prod_kind` 條件（只剩 best_case 鎖定列）
+  3. 點「儲存變更」
+- **預期結果**：PUT 未發出；顯示「請至少新增 1 個篩選條件（優質案件為系統固定，不計入）」
+
+---
+
+## 附錄 F：v2.3 / v2.3.1 覆蓋對應表（Story AC → 測試場景）
+
+| AC / TC | 說明 | 測試場景 |
+|---|---|---|
+| US-144 TC-144-01 | createList 注入 best_case（使用者未傳入） | TS-F050-L01 |
+| US-144 TC-144-02 | updateList 值竄改正規化（N → Y） | TS-F050-N02 |
+| US-144 TC-144-03 | 前端建立頁鎖定列 DOM 驗證 | TS-F050-Q01、Q02、Q03 |
+| US-144 TC-144-04 | 「新增條件」dropdown 排除 best_case | TS-F050-Q04 |
+| US-144 TC-144-05 | M06 停用系統固定欄位 API 攔截 | TS-F075-v17-003（F075-test.md） |
+| US-144 TC-144-06 | Migration 回填僅影響 draft 名單 | TS-F050-O07 |
+| US-144 TC-144-07 | copy-from-prev-month 強制保留鎖定 | TS-F050-L05 |
+| F050 AC-1 / AC-17 | createList 注入（absent + tamper） | TS-F050-L01~L04 |
+| F050 AC-2 | updateList 注入 + 正規化 | TS-F050-N01~N02 |
+| F050 AC-3 | 前端 best_case 鎖定列（建立 + 編輯） | TS-F050-Q01~Q06、R01~R03 |
+| F050 AC-4 | dropdown 排除 best_case | TS-F050-Q04、R02 |
+| F050 AC-8 | migration 回填 draft only + idempotent | TS-F050-O07~O10 |
+| F050 AC-9 | copy-from-prev 強制注入 | TS-F050-L05 |
+| F050 AC-10 v2.3.1 | min-count 排除 system-fixed + 前端阻擋 | TS-F050-M01~M04、Q05、R03 |
+| F050 AC-7（US-144） | Stage 1 best_case IN ('Y') SQL | TS-F050-P01 |
+| F075 AC-18 | m295 is_system_fixed seed | TS-F050-O01~O06 |
+
+---
+
+## 附錄 G：v2.3 / v2.3.1 檔案分布計劃
+
+| 操作 | 測試檔案路徑 | 涵蓋群組 |
+|---|---|---|
+| **新建** | `apps/api/src/database/migrations/__tests__/m295-is-system-fixed-column.spec.ts` | O 群組前 6 場景（m295） |
+| **新建** | `apps/api/src/database/migrations/__tests__/m296-backfill-draft-best-case.spec.ts` | O 群組後 4 場景（m296） |
+| **修改** | `apps/api/src/modules/assignment-list/__tests__/create-list-v2.1.spec.ts` | L 群組（追加，5 場景） |
+| **修改** | `apps/api/src/modules/assignment-list/__tests__/validate-condition-payload.spec.ts` | M 群組（追加，4 場景） |
+| **修改** | `apps/api/src/modules/assignment-list/__tests__/update-list-v2.1.spec.ts` | N 群組（追加，4 場景） |
+| **修改** | `apps/api/src/modules/assignment/stage1/__tests__/stage1-query-composer.spec.ts` | P 群組（波 7，追加，1 場景） |
+| **修改** | `apps/web/src/pages/assignment/__tests__/list-create-draft-page.test.tsx` | Q 群組（追加，6 場景） |
+| **修改** | `apps/web/src/pages/assignment/__tests__/list-edit-draft-page.test.tsx` | R 群組（追加，3 場景） |

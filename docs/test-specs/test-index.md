@@ -1,8 +1,8 @@
 ---
 type: test-design-index
-version: "2.18"
+version: "2.19"
 status: draft
-last_updated: 2026-05-27
+last_updated: 2026-05-28
 covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097]
 ---
 
@@ -29,7 +29,9 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 > **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，85 欄位），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
-> **最後更新**：2026-05-13
+> **v2.19 US-144 best_case 系統固定篩選條件（2026-05-28）**：補強 3 個 test spec（F050 v2.3.1 / F051 v2.2.1 / F075 v1.7）。共新增 **50 個場景**：F050 +33（L 群 5：createList 注入 + tamper；M 群 4：min-count 排除 system-fixed；N 群 4：updateList 注入；O 群 10：m295/m296 migration；P 群 1：Stage 1 整合；Q 群 6：建立頁前端 best_case 鎖定列；R 群 3：編輯頁前端鎖定列）、F051 +6（TS-F051-020~025：updateList 注入 + 正規化 + min-count v2.2.1 + LEGACY guard ordering）、F075 +11（TS-F075-v17-001~010 + 002b：seed / API isSystemFixed / deactivation guard / M06 UI disabled button）。命名鎖定：`injectSystemFixedConditions`、`SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）、`is_system_fixed` DB / `isSystemFixed` API、`condition-row-best_case` / `remove-condition-best_case` / `value-best_case` / `btn-disable-best_case` / `field-row-best_case` prototype testid。
+>
+> **最後更新**：2026-05-28
 
 ---
 
@@ -140,16 +142,16 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F073-F074-E02 | E07 角色指派 E02 整合（PATCH /business-role / Guard / JWT / 合併約束 / m14 遷移 / legacy / deprecated） | P0-MVP | [F073-F074-e02-integration-test.md](features/F073-F074-e02-integration-test.md) | 63 | Draft |
 | **E07 M07 小計** | | | **1 file** | **63** | |
 | **E07 M06 篩選欄位管理** | | | | | |
-| F075 | POOLDATA 篩選欄位白名單管理（含 v1.4 available-columns 端點、suggestedFieldType 推斷、dropdown Modal；v1.5 +2 場景；v1.6 +3 場景 M-A1 seed 配套） | P0-MVP | [F075-test.md](features/F075-test.md) | 53 | Draft |
-| **E07 M06 小計** | | | **1 file** | **53** | |
+| F075 | POOLDATA 篩選欄位白名單管理（含 v1.4 available-columns 端點、suggestedFieldType 推斷、dropdown Modal；v1.5 +2；v1.6 +3 M-A1 seed；**v1.7 +11 is_system_fixed / deactivation guard / M06 UI**） | P0-MVP | [F075-test.md](features/F075-test.md) | 64 | Draft |
+| **E07 M06 小計** | | | **1 file** | **64** | |
 | **E07 M08 Whitelist-Driven 重構** | | | | | |
-| F050 | 建立名單定義（v2.1 whitelist-driven condition_payload；v2.1.1 +45 場景：US-126/127/128/129 card-type dropdown、prodBest 移除、best_case seed） | P0-MVP | [F050-test.md](features/F050-test.md) | 75 | Draft |
-| F051 | 編輯名單定義（v2.1 whitelist-driven condition_payload） | P0-MVP | [F051-test.md](features/F051-test.md) | 19 | Draft |
+| F050 | 建立名單定義（v2.1 30；v2.1.1 +45；v2.2 +19 SS/SIG；**v2.3/v2.3.1 +33 US-144 injectSystemFixedConditions / min-count / migration m295/m296 / Stage1 / frontend locked row**） | P0-MVP | [F050-test.md](features/F050-test.md) | 127 | Draft |
+| F051 | 編輯名單定義（v2.1 19；**v2.2/v2.2.1 +6 US-144 updateList inject / tamper-normalization / min-count**） | P0-MVP | [F051-test.md](features/F051-test.md) | 25 | Draft |
 | F076 | 類別型欄位可選值管理（v1.5 seed 重構 +8 場景；v1.6 +3 場景 best_case Y/N options 配套） | P0-MVP | [F076-test.md](features/F076-test.md) | 11 | Draft |
 | F068-deprecated | 指派代碼查詢（已廢棄，9 個廢棄驗證場景） | P0-MVP | [F068-deprecated-test.md](features/F068-deprecated-test.md) | 9 | Draft |
 | M01-INT | Whitelist-Driven 條件 Payload 端對端整合測試（含 OQ-TEST-001/002） | P0-MVP | [integration/M01-whitelist-driven-integration-test.md](integration/M01-whitelist-driven-integration-test.md) | 21 | Draft |
 | M01-MIG | F050 v2.1 Migration M1~M5 測試設計 | P0-MVP | [migration/M01-migration-test.md](migration/M01-migration-test.md) | 26 | Draft |
-| **E07 M08 小計** | | | **6 files** | **161** | |
+| **E07 M08 小計** | | | **6 files** | **219** | |
 | **E07 Stage 1 精確化工程** | | | | | |
 | F090 | OBPOOLDATA_LIST ETL 載入與 data_source 單源化標記（Phase 1 / Phase B，v2.0 更新）⚠️ | P0-MVP | [F090-test.md](features/F090-test.md) | 18 | Draft |
 | F091 | Stage 1 補完整（MONTH_CNT + 去重 v2.0 動態上界 + 特例 DELETE SP bug fix）（Phase 2，v2.0 更新）⚠️ | P0-MVP | [F091-test.md](features/F091-test.md) | 38 | Implemented |
@@ -158,7 +160,9 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F095 | 名單套用之系統特例規則前端唯讀呈現（appliedSpecialRules[] 讀時推導）| P1 | [F095-test.md](features/F095-test.md) | 23 | Implemented |
 | F096 | POOLDATA 篩選欄位白名單 list_type 停用（期別篩選唯一路徑澄清）| P1 | [F096-test.md](features/F096-test.md) | 9 | Draft |
 | **E07 Stage 1 精確化 / Phase A/B 小計** | | | **6 files** | **131** | |
-| **總合計** | | | **66 files** | **1309** | |
+| F097 | 作業月語意統一（SystemService getDefaultTargetWorkYm / workYm DTO / 過去月 guard / Stage 1 去重視窗 / AssignmentWorkYmContext） | P0-MVP | [F097-test.md](features/F097-test.md) | 48 | Draft |
+| **E07 作業月語意** | | | **1 file** | **48** | |
+| **總合計** | | | **67 files** | **1426** | |
 
 ---
 
