@@ -1,10 +1,12 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.16"
-date: 2026-05-27
+version: "1.17"
+date: 2026-05-28
 status: Draft
 ---
+
+> **v1.17 修訂（2026-05-28 / US-144 best_case 系統固定篩選條件 Design A）**：`#assignment-errors`（代碼維護 / 篩選欄位區段，緊接 F075/F076 之 `WHITELIST_FIELD_*` / `OPTION_*` 錯誤碼）新增 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）：對 `pooldata_field_whitelist.is_system_fixed = true` 之欄位（如 `best_case`）執行停用（`DELETE /api/v1/pooldata-fields/{columnName}` 或 `PATCH` 帶 `{ isActive: false }`）時拋出；系統固定欄位之 `is_active` 恆維持 `true`，僅攔截停用 / `is_active = false`（`display_name` 編輯不受限）。對應 [F075 v1.7 BR-15 / AC-20](features/F075-manage-pooldata-field-whitelist.md)、[F050 v2.3 BR-14](features/F050-create-list-definition.md)、[F051 v2.2 BR-14](features/F051-edit-list-definition.md)。
 
 > **v1.16 修訂（2026-05-27 / F097 作業月語意統一）**：`#assignment-run-errors` 新增 `RUN_WORKYM_PAST`（422，`POST /assignment/runs` 過去月 guard，對應 ground-truth SP `@WORKDT < getdate()` 等價移植，邊界 `>=`）。`workYm` 驗證三分支（OQ-F097-01 方案 A）：缺省 → 400（缺必要欄位）；帶值格式錯 / 月份非 01~12 → 422 沿用 `WORK_YM_INVALID_FORMAT`（`#assignment-list-errors`，相關功能欄補 F097 + v1.16 補述）；過去月 → 422 `RUN_WORKYM_PAST`。**刻意未新增** `INVALID_YM_FORMAT`（避免第三套命名 + 違反「400 僅限缺必填/JSON 壞」之 status 慣例）。詳 [F097 §5.6](features/F097-work-ym-semantics-unification.md)。
 
@@ -359,6 +361,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | OPTION_VALUE_DUPLICATE | 422 | 此可選值已存在（狀態：{startus}），如需重新使用請改為啟用操作 | F076 新增可選值時 `(column_name, option_value)` 已存在於 `categorical_field_value`（無論啟用或停用） | F076 §5.2 |
 | OPTION_VALUE_NOT_FOUND | 404 | 找不到指定的可選值 | F076 操作 `(column_name, option_value)` 不存在於 `categorical_field_value` | F076 §5.3~5.4 |
 | OPTION_FIELD_TYPE_MISMATCH | 422 | 此欄位非類別型（categorical），無可選值維護 | F076 對 `field_whitelist.field_type != 'categorical'` 之欄位呼叫可選值端點 | F076 §5.1~5.4 |
+| SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE | 422 | 此為系統固定篩選欄位，無法停用 | **v1.17 / 2026-05-28 新增（F075 v1.7 / US-144 AC-6 / Design A）**：對 `pooldata_field_whitelist.is_system_fixed = true` 之欄位（如 `best_case`）執行停用操作（`DELETE /api/v1/pooldata-fields/{columnName}` 或 `PATCH /api/v1/pooldata-fields/{columnName}` 帶 `{ isActive: false }`）；系統固定欄位之 `is_active` 恆維持 `true`，由 F050 v2.3 / F051 v2.2 `injectSystemFixedConditions` 自動注入名單條件，不可停用。service 層 defense-in-depth（前端 M06 管理頁該列「停用」按鈕已依 `isSystemFixed` 旗標 disabled）。**僅攔截停用 / `is_active = false`**；`display_name` 編輯不受限 | F075 v1.7 §5.3 / §5.4 |
 
 ---
 

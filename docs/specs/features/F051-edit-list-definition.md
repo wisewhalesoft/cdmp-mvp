@@ -2,19 +2,25 @@
 spec-id: F051
 title: 編輯名單定義
 feature-id: F051
-source-story: US-089, US-106, US-107, US-121, US-123
+source-story: US-089, US-106, US-107, US-121, US-123, US-144
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.1"
-date: 2026-05-20
+version: "2.2"
+date: 2026-05-28
 status: Draft
 ---
 
 # F051: 編輯名單定義
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
+> **v2.2（2026-05-28 / US-144 best_case 系統固定篩選條件 Design A）**：對齊 [F050 v2.3](F050-create-list-definition.md)。將 `best_case`（優質案件）鎖定為系統固定（system-fixed）篩選條件。核心變更（不動既有 v2.1 / v2.0 之 AC / BR / API contract，僅新增）：
+> 1. **新增 AC-14 + BR-14：`updateList` 強制注入 / 正規化 system-fixed 條件**：對「有提供 `conditionPayload`」之名單（即 `condition_payload IS NOT NULL` 之新名單），`updateList` 於 condition_payload 驗證通過後、覆寫 DB 前，呼叫 `injectSystemFixedConditions`（語意與 [F050 v2.3 BR-14](F050-create-list-definition.md#7-商業規則) 完全相同），強制注入 / 正規化 `best_case → ['Y']`；使用者就 `best_case` 之任何竄改（`['N']` / `[]` / 缺漏 / 多值）一律靜默正規化為 `['Y']`，仍回 **200 OK（不拒絕、不回錯誤碼）**（對應 US-144 AC-2 / TC-144-02）。
+> 2. **尊重既有 4-state update 邏輯**：注入**僅**在「有提供 condition_payload」時套用；**舊遷移名單（`condition_payload IS NULL`）篩選條件區塊維持唯讀**（沿用 AC-11 / BR-11 `LEGACY_LIST_CONDITION_READONLY`），不對其注入 system-fixed 條件（注入待 backfill migration 將舊名單轉為新格式後，於下次帶 payload 之編輯時生效）。
+> 3. **驅動旗標**：system-fixed 欄位以 F075 v1.7 `pooldata_field_whitelist.is_system_fixed = true` 為準，**不** hardcode 字串 `'best_case'`；前端鎖定列 / dropdown 排除由 `isSystemFixed` 旗標驅動（US-144 AC-3 / AC-4）。
+> 4. **best_case 非 backward-compat 衍生欄位**：沿用 [F050 v2.3 BR-12](F050-create-list-definition.md#7-商業規則)，`best_case` 僅存於 `condition_payload`，不在 BR-13 之 5 個衍生 entity column 範圍內。
+>
 > **v2.1（2026-05-20 / 名單定義 whitelist-driven 重構）**：對齊 F050 v2.1。核心變更：
 > 1. **`condition_payload` 為 source of truth 之覆寫式編輯**（取代 v2.0 之 5 個一級欄位必填語意；A1 / A2）。
 > 2. **舊名單（condition_payload IS NULL）篩選條件區塊唯讀**（拍板 2：無「confirm 轉換」流程；E2 backfill 由 Phase 3a system-architect 一次性執行；US-123 AC-2）。
@@ -158,6 +164,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - **Then** 5 個 backward-compat 欄位（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）由後端依新 `condition_payload` 衍生填入並一併覆寫 entity column（衍生規則由 Phase 3a system-architect 設計；GAP-LIST §C3）
 - **And** GET API 回應 body 同時含 `conditionPayload` 與 5 個衍生欄位；條件來源以 `conditionPayload` 為準
 
+### AC-14：best_case 系統固定條件強制注入與 tamper-normalization（v2.2 新增 / US-144 / Design A）
+
+- **Given** 業務部長或 Admin 編輯一份 `condition_payload IS NOT NULL` 之 draft 名單，修改其他篩選條件後點擊「儲存」（送出 `conditionPayload`）
+- **When** 後端 `updateList` 服務方法於 condition_payload 驗證通過後、覆寫 DB 前執行 `injectSystemFixedConditions`（BR-14，語意同 [F050 v2.3 BR-14](F050-create-list-definition.md#7-商業規則)）
+- **Then** 覆寫後之 `condition_payload.conditions` 必定包含 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`，無論使用者是否自行加入（對應 US-144 AC-2）
+- **And** 若前端傳入 `best_case` 之 `values` 為 `['N']` / `[]` / 多值，後端**靜默正規化**為 `['Y']`，回 **200 OK（不拒絕、不回錯誤碼）**；若前端完全省略 `best_case` 條目，後端自動補入（tamper-proof；對應 US-144 AC-2 / TC-144-02）
+- **And** 注入**僅**在「有提供 `conditionPayload`」時套用；**舊遷移名單（`condition_payload IS NULL`）篩選條件區塊維持唯讀**（沿用 AC-11 / BR-11），不對其注入 system-fixed 條件，亦不因此觸發 `LEGACY_LIST_CONDITION_READONLY` 以外之新行為（注入待 backfill migration 將舊名單轉為新格式後生效）
+- **And** system-fixed 欄位之判定以 F075 v1.7 `pooldata_field_whitelist.is_system_fixed = true` 為準，後端**不** hardcode 字串 `'best_case'`（BR-14）
+- **And** `best_case` 僅寫入 `condition_payload`，**不**屬於 BR-13 之 5 個 backward-compat 衍生 entity column 範圍（沿用 [F050 v2.3 BR-12](F050-create-list-definition.md#7-商業規則)）
+- **And** 前端編輯頁篩選條件區之 `best_case` 鎖定列渲染（🔒、無刪除按鈕、值 disabled）與「新增條件」dropdown 排除 `best_case` 之 UI 行為，依 F075 v1.7 API 回傳之 `isSystemFixed` 旗標驅動（US-144 AC-3 / AC-4；UI 細節由 ui-ux-designer 決議）
+
 ## 5. 表單欄位規範
 
 詳見 [F050 v2.1 §5 表單欄位規範](F050-create-list-definition.md#5-表單欄位規範)。F050 v2.1 與 F051 v2.1 共用完全相同的必填 / 選填 / 系統管理欄位定義，含 `condition_payload` JSON schema（[§5.4](F050-create-list-definition.md#54-condition_payload-json-schemav21-新增--a2-解除)）。
@@ -225,6 +242,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | BR-11 | **舊名單篩選條件區塊唯讀（v2.1 新增，US-123 AC-2 / 拍板 2 / 拍板 Q3）**：對 `condition_payload IS NULL` 之名單寫入 conditionPayload 回 422 `LEGACY_LIST_CONDITION_READONLY`；前端編輯頁該區塊以 read-only 呈現，非篩選欄位（list_nm / list_period_* / cr_enabled）仍可改；**不提供** confirm 轉換流程，E2 backfill 由 Phase 3a system-architect 一次性執行 |
 | BR-12 | **INACTIVE 選項警示（v2.1 新增，非阻擋，對齊 F050 v2.1 BR-9）**：寫入時若 conditions 含 `is_active=false` 之 categorical option，回 200 OK + `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]` |
 | BR-13 | **backward-compat 衍生欄位（v2.1 新增，J6 / C3，對齊 F050 v2.1 BR-10）**：5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）由後端依新 `condition_payload` 衍生填入；衍生規則由 Phase 3a system-architect 設計 |
+| BR-14 | **系統固定篩選條件強制注入（`injectSystemFixedConditions`）（v2.2 新增 / US-144 / Design A）**：`updateList` 對「有提供 `conditionPayload`」之名單（`condition_payload IS NOT NULL` 之新名單），於 condition_payload 驗證（BR-6 ~ BR-10 / BR-12）通過後、覆寫 DB 前，呼叫 `injectSystemFixedConditions(payload)`，契約與 tamper-normalization 靜默語意**完全同 [F050 v2.3 BR-14](F050-create-list-definition.md#7-商業規則)**（best_case 強制為 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`；竄改靜默修正回 200 OK 不報錯；以 F075 v1.7 `is_system_fixed` 旗標驅動，不 hardcode 字串）。**4-state update 邊界**：注入僅在 condition_payload 提供時套用；舊遷移名單（`condition_payload IS NULL`）篩選條件區塊維持唯讀（BR-11 `LEGACY_LIST_CONDITION_READONLY`），不對其注入，待 backfill migration 後生效。`best_case` 不在 BR-13 衍生欄位範圍（沿用 [F050 v2.3 BR-12](F050-create-list-definition.md#7-商業規則)）。對應 AC-14 / US-144 AC-2 / TC-144-02 |
 | ~~BR-6 v2.0~~ | ~~`case_status` 為獨立業務欄位...允許覆寫修改多選值,但不允許清空為空值；可選代碼由 F068 維護~~ | **v2.1 廢除**：case_status 改由 condition_payload 必填 + columnName 白名單驗證統一覆蓋；可選代碼來源改為 F076 v1.5 `pooldata_field_option`（US-125 AC-2） |
 | ~~BR-7 v2.0~~ | ~~`case_status` 多選的篩選邏輯為 **OR**~~ | **v2.1 重寫**：OR / IN 語意適用所有 categorical 條件（BR-7） |
 
@@ -244,7 +262,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 ## 9. 相依性
 
-- **Blocked By**：F048（清單頁入口）、F050 v2.1（需先有名單才能編輯；本 spec §5 引用 F050 v2.1 §5 / §5.1.1 / §5.4）、F075 v1.5（POOLDATA 篩選欄位白名單）、F076 v1.5（類別型欄位可選值；caseyear / case_status 動態選項來源）、US-121（condition_payload 驗證規則）、US-123（舊名單 backward-compat 讀取）
+- **Blocked By**：F048（清單頁入口）、**F050 v2.3**（需先有名單才能編輯；本 spec §5 引用 F050 §5 / §5.1.1 / §5.4，BR-14 / AC-14 對齊 F050 v2.3）、**F075 v1.7（POOLDATA 篩選欄位白名單；`is_system_fixed` 旗標來源，驅動 best_case 鎖定 / dropdown 排除；US-144）**、F076 v1.5（類別型欄位可選值；caseyear / case_status 動態選項來源）、US-121（condition_payload 驗證規則）、US-123（舊名單 backward-compat 讀取）、**US-144（best_case 鎖定為系統固定篩選條件 Design A）**
 - ~~F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）~~（**v2.1 廢除**：F068 DEPRECATED v1.3）
 - **Blocks**：無
 
@@ -253,5 +271,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_list_definition.condition_payload`）
 - 錯誤處理：[error-handling.md#assignment-list-errors](../error-handling.md#assignment-list-errors)（含 v2.1 新增 `CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_CONDITION_READONLY`）
 - 架構決策：AD-E07-1、**AD-E07-18**（F050 v2.1 whitelist-driven 重構：migration M1~M5 / Service 衍生規則 / Stage 1 動態 SQL / prod_kind 唯一性語意（BR-5）/ F068 廢除步驟；Phase 3a 落地，2026-05-20）；Phase 3a 待設計項目已全數由 AD-E07-18 覆蓋（BR-5 / BR-13 / E2）
-- 相關功能：[F048](F048-view-list-definition.md)、[F050 v2.1](F050-create-list-definition.md)、[F052](F052-disable-list-definition.md)、[F075 v1.5](F075-manage-pooldata-field-whitelist.md)、[F076 v1.5](F076-manage-categorical-field-values.md)、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
-- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)
+- 相關功能：[F048](F048-view-list-definition.md)、[F050 v2.3](F050-create-list-definition.md)、[F052](F052-disable-list-definition.md)、**[F075 v1.7](F075-manage-pooldata-field-whitelist.md)（`is_system_fixed` 旗標來源）**、[F076 v1.5](F076-manage-categorical-field-values.md)、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
+- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、**[US-144](../../stories/epics/E07-app-customer-list-assignment/US-144-M01-bestcase-system-fixed-condition.md)（AC-14 / BR-14 best_case 系統固定條件 Design A 來源）**

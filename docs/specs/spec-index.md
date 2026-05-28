@@ -1,13 +1,21 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.7"
-date: 2026-05-27
+version: "3.8"
+date: 2026-05-28
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.8 / 2026-05-28 / US-144 best_case 鎖定為系統固定篩選條件（Design A）**：將 `best_case`（優質案件）鎖定為系統固定篩選條件，使用者不可移除 / 修改其值（對齊舊系統硬編碼 `'Y'`）。本輪變更檔案：
+> - **升 v2.3**：[F050-create-list-definition.md](features/F050-create-list-definition.md)（新增 BR-14 `injectSystemFixedConditions` 注入契約 + AC-17：`createList` 於驗證後強制注入 / 正規化 `best_case → ['Y']`，竄改靜默修正回 201；`best_case` 非 backward-compat 衍生欄位；驅動旗標 `is_system_fixed`，不 hardcode 字串）
+> - **升 v2.2**：[F051-edit-list-definition.md](features/F051-edit-list-definition.md)（新增 BR-14 + AC-14：`updateList` 對「有提供 conditionPayload」之名單同套 `injectSystemFixedConditions`，竄改靜默修正回 200；尊重 4-state — 舊名單 `condition_payload IS NULL` 維持唯讀，不注入）
+> - **升 v1.7**：[F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md)（新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位，`best_case = true`；BR-15 系統固定欄位不可停用 → 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；BR-16 從名單「新增條件」可選池排除；AC-18/19/20；GET API 回應暴露 `isSystemFixed`）
+> - **錯誤碼（error-handling.md v1.17）**：`#assignment-errors` 新增 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）
+> - **對應 User Story**：US-144（M01 best_case 系統固定條件 Design A）
+> - **刻意未動（system-architect 範疇）**：AD-E07-18（或衍生決策）需補 `is_system_fixed` 欄位 migration + 既有列 backfill `false` + `best_case` 設 `true`、draft-only 之 `best_case: ['Y']` 回填 migration（idempotent）、上述與既有 v2.1/v2.1.1 migration 之 ordering；backend DTO / Guard 實作（tdd-implementation 範疇）；prototype（27b 鎖定列 + 27/dropdown 排除 + 37a M06 停用按鈕 disabled，UI/UX-designer 範疇）；data-model.md `pooldata_field_whitelist` 補 `is_system_fixed` 欄位（system-architect 範疇）
+>
 > **v3.7 / 2026-05-27 / F097 客戶名單分派「作業月」語意統一（US-137~US-143）**：新建 1 個 feature + 升版 F077。依 [glossary.md](glossary.md)（命名單一權威）+ [proposals/work-ym-semantics-unification.md](proposals/work-ym-semantics-unification.md)（已拍板）落地：
 > - **新建 v1.0**：[F097-work-ym-semantics-unification.md](features/F097-work-ym-semantics-unification.md)（分離 `current_work_ym` / `target_work_ym`；前端 `AssignmentWorkYmContext` 四頁共享預設下月；`POST /runs` 必填 `workYm` + 過去月 guard `>=`；`SystemService` 收斂 + `getDefaultTargetWorkYm()`；下游結果頁讀 `run.project_workym`；Stage 1 去重靠正確 `workdt` 自動對齊；forward-only 不回填）
 > - **升 v1.4**：[F077](features/F077-month-switch-and-stage-overview.md)（US-143 限定範圍：月份預設改 `target_work_ym`（下月）+ 四頁共享 `AssignmentWorkYmContext` + UI 標籤「分派作業月份」+ 順修 BR-7 C-4 殘留舊文字；**未動** §5.2 ym error code 既有技術債）
@@ -199,8 +207,8 @@ status: Draft
 |------------|------|------|-----------|--------|
 | F048 | [F048-view-list-definition.md](features/F048-view-list-definition.md) | M01 名單定義入口（月份 + 階段總覽，v2.0 升版合併 US-104/105 入口骨架） | US-070, US-104, US-105 | P0-MVP |
 | F049 | [F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | US-071 | P0-MVP |
-| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位 + caseyear / case_status 改 `pooldata_field_option` 動態載入 + SQL `IN`/`BETWEEN` 取代舊 `LIKE '%val$$%'`；解除 GAP-LIST §A1~A6；v2.0 重寫合併 US-106 / US-107 / US-120）** | US-106, US-107, US-120, US-121, US-125 | P0-MVP（**v2.1**）|
-| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.1 對齊 F050 v2.1：condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`（拍板 2：無 confirm 轉換流程，E2 backfill 由 Phase 3a 一次性執行）；限 `stage = 'draft'`，v2.0 重寫合併 US-106 AC-7 + US-107 AC-2/AC-5）** | US-106, US-107, US-121, US-123 | P0-MVP（**v2.1**）|
+| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.3 / 2026-05-28 / US-144：best_case 系統固定條件 — 新增 BR-14 `injectSystemFixedConditions` 注入契約 + AC-17，`createList` 驗證後強制注入 / 正規化 `best_case → ['Y']`，竄改靜默修正回 201；v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位；解除 GAP-LIST §A1~A6）** | US-106, US-107, US-120, US-121, US-125, US-144 | P0-MVP（**v2.3**）|
+| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.2 / 2026-05-28 / US-144：對齊 F050 v2.3 — 新增 BR-14 + AC-14，`updateList` 對「有提供 conditionPayload」之名單同套 `injectSystemFixedConditions`，竄改靜默修正回 200，舊名單 `condition_payload IS NULL` 維持唯讀不注入；v2.1 condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`；限 `stage = 'draft'`）** | US-106, US-107, US-121, US-123, US-144 | P0-MVP（**v2.2**）|
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
 | F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105；**v1.4 / 2026-05-27**：F097 月份預設改 `target_work_ym`（下月）、UI 標籤「分派作業月份」、順修 BR-7 C-4 殘留舊文字） | US-104, US-105, US-143 | P0-MVP（**v1.4**）|
 | F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|
@@ -298,7 +306,7 @@ status: Draft
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 | 版本 |
 |------------|------|------|-----------|--------|------|
 | ~~F068~~ | ~~[F068-edit-base-code.md](features/F068-edit-base-code.md)~~ | ~~E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS）~~ | ~~US-092~~ | P0-MVP | **DEPRECATED v1.3（2026-05-20 / F050 v2.1 重構 / J2）— 由 F075 v1.5 + F076 v1.5 + US-124 + US-125 承接；保留歷史內容 + banner** |
-| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；**v1.5 / 2026-05-20**：seed 從 5 筆擴充為 **6 筆全部啟用**，新增 `case_status`（categorical），對應 US-125 AC-5；不動 API / BR / UI；v1.4.7：available-columns 端點補 `columnDescription` + Modal 自動填入 displayName；v1.4 UI 命名改「篩選欄位管理」/「新增篩選欄位」內部保留 `pooldata_field_whitelist` + `/api/v1/pooldata-fields`；新增 `GET /available-columns` 端點 + dropdown 唯一新增路徑 + `suggestedFieldType` 推斷；v1.4.3 case 對齊小寫 snake_case） | US-102, US-125 | P0-MVP | **v1.5** |
+| F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；**v1.7 / 2026-05-28 / US-144**：新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位（`best_case = true`）+ BR-15 系統固定欄位不可停用 → 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE` + BR-16 從名單「新增條件」可選池排除 + GET API 暴露 `isSystemFixed`（AC-18/19/20）；**v1.6 / 2026-05-20**：seed 擴充為 **7 筆全部啟用**，新增 `best_case`（categorical），對應 US-128 / US-129；**v1.5**：seed 補 `case_status`，6 筆，對應 US-125 AC-5；v1.4.7：available-columns 補 `columnDescription` + Modal 自動填入；v1.4 UI 命名改「篩選欄位管理」+ `GET /available-columns` dropdown 唯一新增路徑 + `suggestedFieldType` 推斷；v1.4.3 case 對齊小寫 snake_case） | US-102, US-125, US-128, US-129, US-144 | P0-MVP | **v1.7** |
 | F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（**v1.5 / 2026-05-20**：AC-3 seed 補 `case_status` 4 筆（01/02/03/04，業務語意對照引用 F050 v2.1 §5.1.1）+ caseyear 確認 8 筆（0~6 + 99，J5 拍板）+ spec_tp 升真實 OBMCODEDF dump **52 筆**（TBL_ID='12'，取代 m24 placeholder 3 筆，E5 ✅ Resolved；2026-05-21 二次更正：原為 TBL_ID='02' 32 筆筆誤）；v1.4.5 多欄位 accordion master 架構；v1.3 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 deactivate 端點 + reason 必填 200 字 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103, US-125 | P0-MVP | **v1.5** |
 
 #### M07 角色與可見範圍（E07 重構批次 1，2026-05-15）

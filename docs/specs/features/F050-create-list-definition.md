@@ -2,19 +2,27 @@
 spec-id: F050
 title: 新增名單定義
 feature-id: F050
-source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US-128, US-129, US-131, US-133
+source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US-128, US-129, US-131, US-133, US-144
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.2.1"
-date: 2026-05-21
+version: "2.3"
+date: 2026-05-28
 status: Draft
 ---
 
 # F050: 新增名單定義
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
+> **v2.3（2026-05-28 / US-144 best_case 系統固定篩選條件 Design A）**：將 `best_case`（優質案件）鎖定為系統固定（system-fixed）篩選條件，使用者無法移除或修改其值，與舊系統（`OBPOOLDATA.BEST_CASE` / `OBMLISTDF.PROD_BEST` 硬編碼 `'Y'`）維持相同業務語意。核心變更（不動既有 v2.2.1 / v2.2 / v2.1.1 / v2.1 之 AC / BR / API contract，僅新增）：
+> 1. **新增 BR-14 系統固定條件強制注入（`injectSystemFixedConditions` 契約）**：`createList` 於 condition_payload 驗證（§5.4）通過後、寫入 DB 前，對所有 F075 v1.7 白名單中 `is_system_fixed = true` 之欄位強制注入 / 正規化其固定值（best_case → `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`）；契約見 BR-14（input payload → output payload，補齊所有 system-fixed 欄位且值強制為固定值）。
+> 2. **tamper-normalization 靜默語意**：使用者傳入 `best_case` 之 values 為 `['N']` / `[]` / 缺漏 / 多值，後端**靜默正規化**為 `['Y']`，仍回 201 Created（**不**拒絕、**不**回錯誤碼）；對應新增 AC-17。
+> 3. **best_case 非 backward-compat 衍生欄位**：`best_case` 僅存在於 `condition_payload`，**不**在 BR-10 之 5 個 backward-compat 衍生 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）範圍內（沿用 v2.1.1 BR-12，已移除之 `prod_best` 一級欄位語意改由 `best_case` condition 承接）。
+> 4. **驅動旗標**：系統固定欄位之判定以 F075 v1.7 `pooldata_field_whitelist.is_system_fixed` 旗標為準，**不** hardcode 字串 `'best_case'`（為未來擴充其他系統固定欄位預留）。
+> 5. **回填範圍**：Migration 僅回填 `stage = 'draft'` 名單（凍結快照不回填）；migration ordering 與 `is_system_fixed` 欄位 / seed 之 DB 落地由 system-architect（AD-E07-18 或衍生決策）owns，本 spec 僅引用。
+> 6. **更新 §6.1 POST 範例 / 錯誤回應表 / §9 相依性 / §10 交叉參考**對齊 US-144（F075 v1.6 → v1.7）。
+>
 > **v2.2.1（2026-05-21 / Phase 5 TDD code drift 修正）**：Phase 5 TDD implementation 完成後發現 spec 與 entity / production pattern 不一致；本版本以 **code 為 source of truth** 修 spec 文字（不變動 entity / migration / code / prototype）：
 > 1. **§6.2 `auditTrail[].action` 列舉值對齊 entity**（D1）：實際 `AssignmentAuditLog.action` enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）為 `CREATE` / `UPDATE` / `DELETE` / `RUN` / `EXPORT` / `CANCEL` / `STAGE_ADVANCE` / `STAGE_ROLLBACK` / `STAGE_REJECT` / `ASSIGN_ROLE` / `REVOKE_ROLE` / `SCORING_INTEGRITY_WARN`（length VARCHAR(30)）；spec 之 `ADVANCE_STAGE` / `APPROVE` 等命名為錯，已修正。
 > 2. **§6.2 核准 / 拒絕記錄之資料來源**（D1）：核准 / 拒絕**不**寫 `assignment_audit_log`，而寫 `assignment_approval` 表（`apps/api/src/database/entities/assignment-approval.entity.ts`，action enum 為小寫 `approve` / `reject`）；故 §6.2 response.`auditTrail` 之 ready 階段範例已移除「APPROVE」條目；如需顯示簽核 timeline 需另起 endpoint（建議 `GET /assignment/list-definitions/:listNo/approvals`），本 v2.2.1 不規範新 endpoint，屬未來 enhancement。
@@ -206,6 +214,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - **And** 若 `GET /api/v1/assignment/scoring/card-types` API 呼叫失敗（網路錯誤或 5xx），卡別欄位顯示 fallback 提示「卡別資料載入失敗，請重新整理頁面」；不阻擋其他欄位填寫與儲存（卡別為選填欄位，使用者仍可以「不選卡別」方式完成建立）
 - **And** 載入中下拉為 disabled 狀態，避免選項未就緒時送出
 
+### AC-17：best_case 系統固定條件強制注入與 tamper-normalization（v2.3 新增 / US-144 / Design A）
+
+- **Given** 業務部長或 Admin 填妥基本資訊與其他篩選條件，點擊「儲存」
+- **When** 後端 `createList` 服務方法於 condition_payload 驗證（§5.4）通過後、寫入 DB 前執行 `injectSystemFixedConditions`（BR-14）
+- **Then** 寫入 `ob_list_definition.condition_payload` 之 `conditions` 中必定包含 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }` 條目，無論使用者是否自行加入（對應 US-144 AC-1）
+- **And** 若使用者 payload 中未包含 `best_case`，後端靜默注入；若已包含但 `values` 不為 `['Y']`（例如傳入 `['N']` / `[]` / 多值），後端靜默正規化為 `['Y']`，仍回 **201 Created（不拒絕、不回錯誤碼）**（tamper-proof；對應 US-144 AC-1 / TC-144-01）
+- **And** 系統固定欄位之判定以 F075 v1.7 `pooldata_field_whitelist.is_system_fixed = true` 為準，後端**不** hardcode 字串 `'best_case'`（BR-14；為未來擴充其他系統固定欄位預留）
+- **And** `best_case` 僅寫入 `condition_payload`，**不**屬於 BR-10 之 5 個 backward-compat 衍生 entity column 範圍（沿用 BR-12；其業務語意承接已移除之 `prod_best` 一級欄位）
+- **And** 「從上月名單複製」場景（AC-5）即使來源名單 `condition_payload` 不含 `best_case`，`injectSystemFixedConditions` 仍於 `createList` 強制注入 `best_case: ['Y']`（對應 US-144 AC-9）
+- **And** 前端篩選條件區之鎖定列渲染（🔒、無刪除按鈕、值 disabled）與「新增條件」dropdown 排除 `best_case` 之 UI 行為，依 F075 v1.7 API 回傳之 `isSystemFixed` 旗標驅動（US-144 AC-3 / AC-4；UI 細節由 ui-ux-designer 決議）
+
 ## 5. 表單欄位規範
 
 ### 5.1 必填欄位（v2.1 重寫）
@@ -325,6 +344,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | categorical values 含 `is_active=false` 之 option | 非阻擋，僅警示 | 201 Created + `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（AC-13） |
 
 > **v2.1.1 補述（2026-05-20 / US-128 / US-129）**：`best_case`（categorical，display_name「優質案件」）為 F075 v1.6 白名單之一；對應 options `Y` / `N`（F076 v1.6 / US-129 AC-1）；本欄位語意承接已移除之 `prod_best` 一級欄位（見 §5.2 移除欄位段）。
+>
+> **v2.3 補述（2026-05-28 / US-144 / Design A）**：`best_case` 自 F075 v1.7 起為**系統固定**篩選條件（`pooldata_field_whitelist.is_system_fixed = true`）。使用者送出之 payload 中 `best_case` 之 `values` 無論為何（含 `['N']` / `[]` / 缺漏 / 多值），均於 `injectSystemFixedConditions`（BR-14）階段被**靜默正規化**為 `['Y']`；上表「categorical 條件須含 `values: string[]`（≥1 元素）」「categorical values 含 `is_active=false` 之 option」等一般規則**不**對 system-fixed 欄位拋錯或警示（系統固定值恆為合法）。本注入發生於上表所列一般 condition_payload schema 驗證**之後**，故使用者就 `best_case` 的任何竄改不影響 201 Created 結果（對應 AC-17 / US-144 AC-1）。`best_case` 仍從「新增條件」dropdown 排除、且 UI 渲染為鎖定列（US-144 AC-3 / AC-4），由 `isSystemFixed` 旗標驅動。
 
 ## 6. API 規格
 
@@ -365,6 +386,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - **移除 `prodBest` 欄位**（US-128 / D2 / Q-B B3）：前端不送出；後端 DTO 對 `prodBest` 之處置（`@IsOptional()` backward-compat 接受或刪除）由 system-architect 決定。
 - **`cardType` 值來源變更**（US-126 / US-127 / D1 / D4）：從文字輸入改為 `ob_card_type` 動態下拉送出之代碼字串（範例由 `"01"` 改為 `"S5"` 以示 `ob_card_type.card_type` 真實值範圍）。
 - **`conditionPayload.conditions` 合法 columnName 集合擴增**（US-128 / US-129）：新增 `best_case`（categorical，承接已移除之 `prod_best` 業務語意；F075 v1.6 seed）。
+
+**v2.3 變更**（2026-05-28 / US-144 / Design A）：
+- **`best_case` 為系統固定條件**：上方 request body 範例之 `best_case` 條目即使前端**完全省略**或傳入非 `['Y']` 之值，後端 `injectSystemFixedConditions`（BR-14）仍於驗證後注入 / 正規化為 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`；請求一律回 201 Created（不因 `best_case` 竄改拒絕；AC-17）。Response body 之名單讀取（如 §6.2 full-snapshot）將反映正規化後之 `best_case: ['Y']`。
 
 `crEnabled` 為選填 boolean（預設 false），v2.0 新增 per-list flag，取代 F059 全域開關。
 
@@ -556,6 +580,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | BR-11 | **columnName 大小寫 normalize（v2.1 新增）**：API 接受 `conditions[].columnName` 時統一為 lowercase snake_case，對齊 `ob_pool_data` 與 F075 v1.4.3 BR-14；regex 為 `/^[a-z][a-z0-9_]{0,63}$/`；違反回 422 `VALIDATION_ERROR`。**不影響** F068（DEPRECATED v1.3）之 `ob_code_df.tbl_id` 大寫業務常數（屬獨立語境） |
 | BR-12 | **best_case 取代 prod_best 之語意映射（v2.1.1 新增，US-128 / US-129 / D2 / Q-B B3）**：(1) 業務語意「最佳產品 / 優質案件」改由 `condition_payload.conditions[columnName='best_case', fieldType='categorical', values: ['Y'\|'N']]` 表達；(2) `ob_list_definition.prod_best` schema 欄位保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL（Q-B B3 決議）；新名單寫入不填值（後端 DTO 處置由 system-architect 決定）；(3) 月跑 Stage 1 不再讀 `prod_best` 欄位；依 `condition_payload.conditions` 之 `best_case` 條件對 `ob_pool_data.best_case` 以 `IN (...)` 過濾（對應 BR-7）；(4) `best_case` options 來源 = F076 v1.6 `pooldata_field_option WHERE column_name='best_case'`（`Y` = 優質案件、`N` = 非優質案件；US-129 AC-1）；(5) 完全 DROP COLUMN 屬 v2.2+ 後續決策，本 v2.1.1 不執行 |
 | BR-13 | **sessionStorage Signal Protocol — `cdmp.pendingToast`（v2.2 新增 / GAP-G2 / US-133 / single authority）**：跨頁 toast 訊號協定，限「子頁工作流完成後返回 M01 主頁」之情境使用。本 BR-13 為**唯一權威來源**，F079 / F082 / F086 / F087 之 §7 UI/UX 需求透過 cross-reference 引用本 BR-13，不重複定義。完整規範如下：<br><br>**(1) Key 命名**：`cdmp.pendingToast`（全小寫、點分隔；對齊 `cdmp.*` 全域 sessionStorage / localStorage key 命名規範）。<br><br>**(2) Payload JSON Schema**：<br>```json<br>{<br>  "type": "success" \| "info" \| "warning" \| "error",  // 必填<br>  "msg": string,                                       // 必填，主訊息（建議 ≤ 60 字）<br>  "sub": string                                        // 選填，副訊息（建議 ≤ 80 字）<br>}<br>```<br>對應 toast UI 4 種樣式（success = 綠 / info = 藍 / warning = 琥珀 / error = 紅）；前端 toast 元件依 `type` 渲染對應 icon 與顏色。<br><br>**(3) Producer 規範**（子頁寫入）：<br>- **寫入時機**：成功 / 取消決定後、`location.href` 跳轉**前**執行<br>- **寫入方式**：`sessionStorage.setItem('cdmp.pendingToast', JSON.stringify(payload))`<br>- **失敗處理**：以 `try/catch` 包覆，sessionStorage API 不可用（無痕模式 / 配額耗盡）時靜默吞 exception，不阻擋跳轉<br>- **適用子頁**：[F079](F079-set-dept-ratio.md) 部門比例設定（29a）、[F082](F082-set-per-sales-ratio.md) 個別比例設定（29b）、[F086](F086-approve-to-ready.md) 簽核核准 / [F087](F087-reject-to-personnel-ratio.md) 簽核拒絕（29c）；其他寫入操作 spec 如需採用須先 cross-reference 本 BR-13<br><br>**(4) Consumer 規範**（M01 主頁讀取）：<br>- **讀取時機**：M01 主頁（[F048 v2.0](F048-view-list-definition.md) Kanban 頁）`DOMContentLoaded`（或 React `useEffect([])`）執行、Kanban 渲染**之後**<br>- **行為**：`sessionStorage.getItem('cdmp.pendingToast')` → `JSON.parse`（包 try/catch）→ 依 `type` 顯示對應樣式 toast → 立即 `sessionStorage.removeItem('cdmp.pendingToast')`<br>- **無效 JSON / 無 key**：靜默不顯示、清除殘留 key（若有）；不拋出 uncaught exception<br><br>**(5) Consume-once 語意**：M01 主頁讀取後**立即** `removeItem`，確保：<br>- 同一 toast 不因頁面重整（F5）重複顯示<br>- 同一 toast 不因瀏覽器返回（browser back）重複顯示<br>- 同一 toast 不因多分頁同時開啟 M01 而重複顯示<br><br>**(6) 適用情境（限定範圍）**：<br>- **適用**：子頁完成（儲存 / 取消）後跳回 M01 主頁之 toast 提示（範例：「{LIST_NM} 部門比例已儲存 / 名單已推進至個別比例設定階段」、「已取消，返回名單定義」）<br>- **不適用**：同頁面內操作 toast（直接用 React state 即可）、Detail Drawer 操作回饋、橫向跨模組跳頁（如 M01 → M02）<br><br>**(7) 跨 spec reference**：F079 / F082 / F086 / F087 spec 之 §7 UI/UX 需求**僅描述**「子頁完成後依 [F050 v2.2 §7 BR-13](F050-create-list-definition.md) 寫入 `cdmp.pendingToast` 並跳回 M01 主頁」即可，不重複展開 payload / consume-once / key 命名等細節。 |
+| BR-14 | **系統固定篩選條件強制注入（`injectSystemFixedConditions` 契約）（v2.3 新增 / US-144 / Design A）**：(1) **觸發點**：`createList` 於 §5.4 condition_payload schema 驗證（含 AC-10 ~ AC-13 / BR-6 ~ BR-9 / BR-11）**通過後、寫入 `ob_list_definition` 前**，呼叫 `injectSystemFixedConditions(payload)`。(2) **契約**：input 為通過驗證之 condition_payload；service 層查 F075 v1.7 `pooldata_field_whitelist WHERE is_system_fixed = true` 之所有欄位，對每個 system-fixed 欄位於 output payload 之 `conditions` 中**確保存在對應條目且 `values` 強制為該欄位之固定值**——若 input 缺漏該條目則補入；若已存在則覆寫其 `values`（及 `fieldType`）為固定值。MVP 範圍唯一 system-fixed 欄位為 `best_case`，固定為 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`。(3) **tamper-normalization 靜默語意**：使用者就 system-fixed 欄位之任何竄改（傳 `['N']` / `[]` / 多值 / 完全省略）一律靜默正規化，**不**拒絕請求、**不**回錯誤碼，仍回 201 Created（對應 AC-17 / US-144 AC-1 / TC-144-01 / TC-144-02）。(4) **驅動旗標**：固定欄位集合與固定值之判定以 `pooldata_field_whitelist.is_system_fixed` 旗標為準（F075 v1.7 BR-15），**不** hardcode 字串 `'best_case'`，為未來擴充其他系統固定欄位預留。(5) **與 backward-compat 衍生欄位之關係**：`best_case` **不**在 BR-10 之 5 個衍生 entity column 範圍內（沿用 BR-12），僅存於 `condition_payload`。(6) **複製場景**：「從上月複製」（AC-5）之來源名單即使不含 `best_case`，注入仍於 `createList` 強制執行（US-144 AC-9）。(7) **Stage 1 無需修改**：注入後之 `best_case: ['Y']` 由既有 categorical `IN (...)` path（BR-7）產生 `"best_case" IN ('Y')`（US-144 AC-7）。(8) **回填**：既有 `stage = 'draft'` 名單之 `best_case` 回填由 migration 執行（draft only，凍結快照不回填，idempotent；US-144 AC-8）；migration 設計與 ordering 由 system-architect owns（AD-E07-18 或衍生決策），本 spec 僅引用 |
 | ~~BR-6 v2.0~~ | ~~`case_status` 為獨立業務欄位...必填，至少選 1 項；可選代碼由 F068 維護~~ | **v2.1 廢除**：case_status 改由 condition_payload 必填 + columnName 白名單驗證統一覆蓋（A1 / A5）；可選代碼來源改為 F076 v1.5 `pooldata_field_option`（US-125 AC-2） |
 | ~~BR-7 v2.0~~ | ~~`case_status` 多選的篩選邏輯為 **OR**~~ | **v2.1 重寫**：OR / IN 語意適用所有 categorical 條件（BR-7），不限 case_status |
 
@@ -580,7 +605,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
 ## 9. 相依性
 
-- **Blocked By**：F048（清單頁入口）、F075 v1.6（POOLDATA 篩選欄位白名單；含 case_status 條目 v1.5 + **`best_case` 條目 v1.6**）、F076 v1.6（類別型欄位可選值；caseyear / case_status 動態選項來源 v1.5 + **`best_case` Y/N options seed v1.6**；US-125 AC-1 / AC-2 / AC-5、US-129 AC-1）、F069（卡別計分卡主檔；`ob_card_type` 為卡別下拉資料來源；US-126 / US-127）、US-121（condition_payload 驗證規則）、US-125（caseyear / case_status 選項遷移）、**US-129（`best_case` Y/N options seed）**
+- **Blocked By**：F048（清單頁入口）、**F075 v1.7（POOLDATA 篩選欄位白名單；含 case_status 條目 v1.5 + `best_case` 條目 v1.6 + `is_system_fixed` 旗標 v1.7：`best_case.is_system_fixed = true`，驅動 BR-14 注入與前端鎖定列 / dropdown 排除；US-144）**、F076 v1.6（類別型欄位可選值；caseyear / case_status 動態選項來源 v1.5 + **`best_case` Y/N options seed v1.6**；US-125 AC-1 / AC-2 / AC-5、US-129 AC-1）、F069（卡別計分卡主檔；`ob_card_type` 為卡別下拉資料來源；US-126 / US-127）、US-121（condition_payload 驗證規則）、US-125（caseyear / case_status 選項遷移）、**US-129（`best_case` Y/N options seed）**、**US-144（`best_case` 鎖定為系統固定篩選條件 Design A）**
 - ~~F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）~~（**v2.1 廢除**：F068 DEPRECATED v1.3）
 - **Blocks**：F061（月跑需有 active 名單定義）、F060（per-LIST_NO 部門比例）
 - **§6.2 Detail Snapshot API（v2.2 / GAP-G1）Consumers**：[F048 v2.0](F048-view-list-definition.md)（Kanban 卡片「查看」按鈕觸發 Detail Drawer）
@@ -600,6 +625,6 @@ Backend DTO 對 `prodBest` 之處置（`@IsOptional()` 接受或直接刪除）�
 
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_list_definition.condition_payload`、`ob_list_definition.prod_best` v2.1.1 DEPRECATED、`ob_list_definition.card_type` v2.1.1 下拉契約補述、[`ob_card_type` entity](../data-model.md#ob-card-type-entity)）
 - 錯誤處理：[error-handling.md#assignment-list-errors](../error-handling.md#assignment-list-errors)（含 v2.1 新增 `CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_NOT_COPYABLE`）
-- 架構決策：AD-E07-1、AD-E07-2、**AD-E07-18**（F050 v2.1 whitelist-driven 重構：migration M1~M5 / Service 衍生規則 / Stage 1 動態 SQL / prod_kind 唯一性語意 / F068 廢除步驟；Phase 3a 落地，2026-05-20）；Phase 3a 待設計項目已全數由 AD-E07-18 覆蓋（BR-2 / BR-10 / E1~E7）。**v2.1.1 補強之 migration（`prod_best` 清空 / `best_case` whitelist + options seed）與 backend DTO 處置由 system-architect 補入 AD-E07-18 或衍生決策**（spec-writer 不規範架構細節）
-- 相關功能：[F048](F048-view-list-definition.md)、[F051](F051-edit-list-definition.md)、[F069](F069-edit-card-type.md)（卡別計分卡主檔；卡別下拉資料來源 `ob_card_type`）、[F075 v1.6](F075-manage-pooldata-field-whitelist.md)、[F076 v1.6](F076-manage-categorical-field-values.md)、[F077 v1.3](F077-month-switch-and-stage-overview.md)（Role × Stage 矩陣 single authority，本 spec §6.2 / §7 BR-13 對齊）、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
-- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、[US-124](../../stories/epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md)、[US-125](../../stories/epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md)、[US-126](../../stories/epics/E07-app-customer-list-assignment/US-126-M01-cardtype-dropdown-create.md)、[US-127](../../stories/epics/E07-app-customer-list-assignment/US-127-M01-cardtype-dropdown-edit.md)、[US-128](../../stories/epics/E07-app-customer-list-assignment/US-128-M01-remove-prodbest-field.md)、[US-129](../../stories/epics/E07-app-customer-list-assignment/US-129-M06-seed-bestcase-options.md)、**[US-131](../../stories/epics/E07-app-customer-list-assignment/US-131-M01-detail-drawer.md)（§6.2 Detail Snapshot API 來源）**、**[US-133](../../stories/epics/E07-app-customer-list-assignment/US-133-M01-pending-toast-signal.md)（§7 BR-13 sessionStorage Signal Protocol 來源）**
+- 架構決策：AD-E07-1、AD-E07-2、**AD-E07-18**（F050 v2.1 whitelist-driven 重構：migration M1~M5 / Service 衍生規則 / Stage 1 動態 SQL / prod_kind 唯一性語意 / F068 廢除步驟；Phase 3a 落地，2026-05-20）；Phase 3a 待設計項目已全數由 AD-E07-18 覆蓋（BR-2 / BR-10 / E1~E7）。**v2.1.1 補強之 migration（`prod_best` 清空 / `best_case` whitelist + options seed）與 backend DTO 處置由 system-architect 補入 AD-E07-18 或衍生決策**（spec-writer 不規範架構細節）。**v2.3 補強（US-144）需 system-architect 補入**：(1) `pooldata_field_whitelist.is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位 migration + `best_case` seed `is_system_fixed = true`（見 F075 v1.7）；(2) draft-only 之 `best_case: ['Y']` 回填 migration（idempotent，凍結快照不回填）；(3) 上述兩個 migration 與既有 v2.1 / v2.1.1 migration 之 ordering；spec-writer 僅以 BR-14 規範 service 層注入契約，不規範 migration / schema 細節
+- 相關功能：[F048](F048-view-list-definition.md)、[F051](F051-edit-list-definition.md)、[F069](F069-edit-card-type.md)（卡別計分卡主檔；卡別下拉資料來源 `ob_card_type`）、**[F075 v1.7](F075-manage-pooldata-field-whitelist.md)（`is_system_fixed` 旗標來源；`best_case.is_system_fixed = true`）**、[F076 v1.6](F076-manage-categorical-field-values.md)、[F077 v1.3](F077-month-switch-and-stage-overview.md)（Role × Stage 矩陣 single authority，本 spec §6.2 / §7 BR-13 對齊）、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
+- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、[US-124](../../stories/epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md)、[US-125](../../stories/epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md)、[US-126](../../stories/epics/E07-app-customer-list-assignment/US-126-M01-cardtype-dropdown-create.md)、[US-127](../../stories/epics/E07-app-customer-list-assignment/US-127-M01-cardtype-dropdown-edit.md)、[US-128](../../stories/epics/E07-app-customer-list-assignment/US-128-M01-remove-prodbest-field.md)、[US-129](../../stories/epics/E07-app-customer-list-assignment/US-129-M06-seed-bestcase-options.md)、**[US-131](../../stories/epics/E07-app-customer-list-assignment/US-131-M01-detail-drawer.md)（§6.2 Detail Snapshot API 來源）**、**[US-133](../../stories/epics/E07-app-customer-list-assignment/US-133-M01-pending-toast-signal.md)（§7 BR-13 sessionStorage Signal Protocol 來源）**、**[US-144](../../stories/epics/E07-app-customer-list-assignment/US-144-M01-bestcase-system-fixed-condition.md)（§4 AC-17 / §7 BR-14 best_case 系統固定條件 Design A 來源）**
