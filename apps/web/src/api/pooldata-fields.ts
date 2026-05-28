@@ -25,6 +25,12 @@ export interface PooldataField {
   displayName: string;
   fieldType: FieldType;
   isActive: boolean;
+  /**
+   * F075 v1.7 / US-144 AC-19：系統固定篩選欄位旗標（best_case=true）。
+   * 驅動前端鎖定列、「新增條件」dropdown 排除、M06 停用按鈕 disabled（不 hardcode 'best_case'）。
+   * 後端舊回應未含此欄位時前端應視為 false。
+   */
+  isSystemFixed?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;

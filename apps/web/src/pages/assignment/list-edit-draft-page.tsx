@@ -269,6 +269,21 @@ export function ListEditDraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conditions.length]);
 
+  // US-144 AC-3：載入名單後，後端注入的 best_case 會出現在 conditionPayload；
+  //   系統固定欄位改以鎖定列渲染，故自使用者 conditions 陣列移除（依 fields isSystemFixed 旗標，
+  //   fields 載入後執行；避免重複列 + 不計入最低條件數）。
+  useEffect(() => {
+    if (fields.length === 0) return;
+    const systemFixedCols = new Set(
+      fields.filter((f) => f.isSystemFixed).map((f) => f.columnName),
+    );
+    if (systemFixedCols.size === 0) return;
+    setConditions((prev) => {
+      const filtered = prev.filter((c) => !systemFixedCols.has(c.columnName));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [fields, conditions]);
+
   // 場景判定
   const isDraft = list?.stage === 'draft';
   const isLegacy = list?.conditionPayload == null && list?.stage === 'draft';
@@ -279,10 +294,23 @@ export function ListEditDraftPage() {
     () => new Set(conditions.map((c) => c.columnName)),
     [conditions],
   );
+  // US-144 AC-4：系統固定欄位（best_case）以鎖定列恆顯示，從「新增條件」dropdown 排除
   const availableFields = useMemo(
-    () => fields.filter((f) => f.isActive && !usedCols.has(f.columnName)),
+    () =>
+      fields.filter(
+        (f) => f.isActive && !f.isSystemFixed && !usedCols.has(f.columnName),
+      ),
     [fields, usedCols],
   );
+
+  // US-144 AC-3：系統固定欄位清單，渲染為鎖定列
+  const systemFixedFields = useMemo(
+    () => fields.filter((f) => f.isActive && f.isSystemFixed),
+    [fields],
+  );
+
+  const systemFixedValueLabel = (columnName: string): string =>
+    columnName === 'best_case' ? 'Y · 優質案件' : 'Y';
 
   const addConditionByCol = useCallback(
     (col: string) => {
@@ -393,9 +421,12 @@ export function ListEditDraftPage() {
 
       // 非 LEGACY 才送 conditionPayload；LEGACY 主動 omit（defense-in-depth）
       if (!isLegacy) {
+        // US-144 AC-10：最低條件數只計入非系統固定條件（best_case 鎖定列不計入）。
+        //   conditions 已於載入後移除系統固定欄位，故 length 即非固定條件數。
         if (conditions.length === 0) {
-          setError('請至少設定一個篩選條件');
-          showToast('請至少設定一個篩選條件', 'error');
+          const msg = '請至少新增 1 個篩選條件（優質案件為系統固定，不計入）';
+          setError(msg);
+          showToast(msg, 'error');
           return;
         }
         const incomplete = conditions.find((c) => !isConditionComplete(c));
@@ -805,13 +836,65 @@ export function ListEditDraftPage() {
                     <ReadOnlyConditionSummary list={list} />
                   )}
 
+                  {/* US-144 AC-3：系統固定條件鎖定列（best_case → Y），恆顯示於使用者條件之上 */}
+                  {!isLegacy &&
+                    systemFixedFields.map((f) => (
+                      <div
+                        key={`sysfixed-${f.columnName}`}
+                        data-testid={`condition-row-${f.columnName}`}
+                        data-system-fixed="true"
+                        className="p-3 bg-blue-50/40 border border-blue-200 rounded-lg space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="font-medium text-sm text-gray-800">
+                              {f.displayName}（系統固定）
+                            </span>
+                            <code className="text-[10px] font-mono text-gray-500">
+                              {f.columnName}
+                            </code>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                              系統固定
+                            </span>
+                          </div>
+                          {/* US-144 AC-3：刻意不渲染 remove-condition-{columnName}（不可移除） */}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-500 font-mono">IN</span>
+                          <div className="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-blue-200 rounded-md bg-blue-50/60">
+                            <span
+                              data-testid={`value-${f.columnName}`}
+                              aria-disabled="true"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-800"
+                            >
+                              <Lock className="w-2.5 h-2.5" />
+                              {systemFixedValueLabel(f.columnName)}
+                            </span>
+                            <span
+                              className="ml-auto inline-flex items-center gap-1 text-[10px] text-gray-400"
+                              aria-disabled="true"
+                            >
+                              <Lock className="w-3 h-3" />
+                              唯讀
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-500">
+                          此條件由系統固定為 Y（優質案件），無法移除或修改。
+                        </p>
+                      </div>
+                    ))}
+
                   {/* 一般模式 condition list */}
                   {!isLegacy && conditions.length === 0 && (
                     <div className="rounded-lg border border-dashed border-gray-200 p-8 flex flex-col items-center text-center">
                       <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                         <Filter className="w-6 h-6 text-gray-400" />
                       </div>
-                      <p className="text-sm text-gray-500">此名單尚無篩選條件</p>
+                      <p className="text-sm text-gray-500">
+                        除系統固定的「優質案件」外，此名單尚無其他篩選條件
+                      </p>
                     </div>
                   )}
                   {!isLegacy && conditions.length > 0 && (

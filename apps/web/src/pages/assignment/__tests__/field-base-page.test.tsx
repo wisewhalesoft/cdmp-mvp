@@ -123,4 +123,63 @@ describe('FieldBasePage — Phase 5d 波 3', () => {
     expect(nav).toHaveTextContent('客戶名單分派');
     expect(nav).toHaveTextContent('篩選欄位');
   });
+
+  // ==========================================================================
+  // v1.7（US-144 AC-6）：is_system_fixed 旗標 UI — system-fixed badge + disabled 停用按鈕
+  // 對應 F075-test.md §十 TS-F075-v17-007~010
+  // prototype ground truth：37-base-code.html（field-row-best_case / btn-disable-best_case）
+  // ==========================================================================
+  describe('v1.7 — is_system_fixed 旗標 UI（US-144）', () => {
+    // v1.7 fieldsFixture（含 isSystemFixed；best_case=true，其他=false）
+    const v17Fields = {
+      fields: [
+        { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-01T00:00:00Z' },
+        { columnName: 'best_case', displayName: '優質案件', fieldType: 'categorical', isActive: true, isSystemFixed: true, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-01T00:00:00Z' },
+        { columnName: 'caseyear', displayName: '案件年度', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-01T00:00:00Z' },
+      ],
+    };
+
+    beforeEach(async () => {
+      const pooldataApi = await import('@/api/pooldata-fields');
+      vi.mocked(pooldataApi.listFields).mockResolvedValue(v17Fields as never);
+    });
+
+    it('TS-F075-v17-007：best_case 列 field-row-best_case 含 data-system-fixed="true"；prod_kind 列為 false', async () => {
+      renderAt();
+      const bestRow = await screen.findByTestId('field-row-best_case');
+      expect(bestRow.getAttribute('data-system-fixed')).toBe('true');
+      const prodRow = screen.getByTestId('field-row-prod_kind');
+      expect(prodRow.getAttribute('data-system-fixed')).toBe('false');
+    });
+
+    it('TS-F075-v17-008：best_case 停用按鈕 btn-disable-best_case 為 disabled（aria-disabled=true）', async () => {
+      renderAt();
+      const btn = (await screen.findByTestId('btn-disable-best_case')) as HTMLButtonElement;
+      expect(
+        btn.disabled === true || btn.getAttribute('aria-disabled') === 'true',
+      ).toBe(true);
+    });
+
+    it('TS-F075-v17-009：prod_kind 停用按鈕（對照組）不為 disabled', async () => {
+      renderAt();
+      const btn = (await screen.findByTestId('btn-disable-prod_kind')) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+      expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+    });
+
+    it('TS-F075-v17-010：click best_case 停用按鈕 → 不發出 PATCH/DELETE 請求', async () => {
+      const pooldataApi = await import('@/api/pooldata-fields');
+      const disableSpy = vi.mocked(pooldataApi.disableField);
+      renderAt();
+      const btn = await screen.findByTestId('btn-disable-best_case');
+      fireEvent.click(btn);
+      expect(disableSpy).not.toHaveBeenCalled();
+    });
+
+    it('TS-F075-v17-007b：best_case 列顯示「系統固定」badge', async () => {
+      renderAt();
+      const badge = await screen.findByTestId('system-fixed-badge-best_case');
+      expect(badge).toHaveTextContent('系統固定');
+    });
+  });
 });

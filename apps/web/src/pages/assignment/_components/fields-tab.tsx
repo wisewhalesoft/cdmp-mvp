@@ -17,6 +17,7 @@ import {
   Pencil,
   RotateCcw,
   Filter,
+  Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -566,10 +567,26 @@ export function FieldsTab() {
                 {filteredFields.map((f) => (
                   <tr
                     key={f.columnName}
+                    data-testid={`field-row-${f.columnName}`}
+                    data-system-fixed={f.isSystemFixed ? 'true' : 'false'}
                     className={`hover:bg-gray-50/50 ${!f.isActive ? 'bg-gray-50/30 opacity-80' : ''}`}
                   >
                     <td className="px-5 py-3 font-mono text-primary">{f.columnName}</td>
-                    <td className="px-5 py-3 text-gray-900">{f.displayName}</td>
+                    <td className="px-5 py-3 text-gray-900">
+                      <span className="inline-flex items-center gap-1.5">
+                        {f.displayName}
+                        {/* F075 v1.7 / US-144 AC-6：系統固定欄位標記 */}
+                        {f.isSystemFixed && (
+                          <span
+                            data-testid={`system-fixed-badge-${f.columnName}`}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700"
+                          >
+                            <Lock className="w-2.5 h-2.5" />
+                            系統固定
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">
                       <FieldTypeBadge type={f.fieldType} />
                     </td>
@@ -613,10 +630,16 @@ export function FieldsTab() {
                         {f.isActive ? (
                           <button
                             type="button"
-                            disabled={!canWrite}
-                            onClick={() => void startDisable(f)}
+                            // F075 v1.7 / US-144 AC-6：系統固定欄位停用按鈕 disabled（aria-disabled）；
+                            //   依 isSystemFixed 旗標，不 hardcode 'best_case'。後端亦有 422 guard（defense-in-depth）。
+                            disabled={!canWrite || f.isSystemFixed}
+                            aria-disabled={f.isSystemFixed ? 'true' : undefined}
+                            onClick={() => {
+                              if (f.isSystemFixed) return;
+                              void startDisable(f);
+                            }}
                             data-testid={`btn-disable-${f.columnName}`}
-                            title="停用"
+                            title={f.isSystemFixed ? '系統固定欄位無法停用' : '停用'}
                             className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-warning border border-amber-200 rounded-md hover:bg-amber-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
                           >
                             <Ban className="w-3 h-3" />

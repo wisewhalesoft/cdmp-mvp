@@ -1,4 +1,4 @@
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ListEditDraftPage } from '../list-edit-draft-page';
@@ -38,14 +38,14 @@ const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 
-// v2.1.1（US-128/US-129）：fields 補 best_case（承接已移除之 prod_best 業務語意）
+// v2.1.1（US-128/US-129）：fields 補 best_case；v2.3（US-144）：補 isSystemFixed（best_case=true）
 const fieldsFixture: ListFieldsResponse = {
   fields: [
-    { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
-    { columnName: 'caseyear', displayName: '進件 / 滿期年數', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
-    { columnName: 'case_status', displayName: '案件結清期別', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
-    { columnName: 'best_case', displayName: '優質案件', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
-    { columnName: 'month_cnt', displayName: '撈取月份計數', fieldType: 'numeric', isActive: true, createdAt: '', updatedAt: '' },
+    { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+    { columnName: 'caseyear', displayName: '進件 / 滿期年數', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+    { columnName: 'case_status', displayName: '案件結清期別', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+    { columnName: 'best_case', displayName: '優質案件', fieldType: 'categorical', isActive: true, isSystemFixed: true, createdAt: '', updatedAt: '' },
+    { columnName: 'month_cnt', displayName: '撈取月份計數', fieldType: 'numeric', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
   ],
 };
 
@@ -416,6 +416,74 @@ describe('ListEditDraftPage v2.1 (Phase 5d 波 9)', () => {
         return screen.queryByTestId('select-cardType') !== undefined;
       });
       expect(screen.queryByTestId('select-cardType')).toBeNull();
+    });
+  });
+
+  // ==========================================================================
+  // R 群組（US-144 AC-2/AC-3）：best_case 系統固定鎖定列（編輯頁）
+  // 對應 F050-test.md §十六 R 群組 TS-F050-R01~R03
+  // ==========================================================================
+  describe('v2.3 — best_case 系統固定鎖定列（US-144 AC-2/3）', () => {
+    // 場景：draft 名單載入含 best_case（後端注入後）+ prod_kind 使用者條件
+    const listWithBestCase: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202605001',
+      conditionPayload: {
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] },
+          { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+        ],
+        logic: 'AND',
+      },
+    };
+
+    it('TS-F050-R01：載入含 best_case 的 payload → condition-row-best_case 鎖定列渲染，無 remove，值唯讀', async () => {
+      mockedListLists.mockResolvedValue(makeResp([listWithBestCase]));
+      renderPage('OB202605001');
+      await waitFor(() =>
+        expect(screen.getByTestId('condition-row-best_case')).toBeInTheDocument(),
+      );
+      const row = screen.getByTestId('condition-row-best_case');
+      expect(row.getAttribute('data-system-fixed')).toBe('true');
+      expect(screen.queryByTestId('remove-condition-best_case')).toBeNull();
+      const chip = screen.getByTestId('value-best_case');
+      expect(
+        (chip as HTMLElement).getAttribute('aria-disabled') === 'true' ||
+          (chip as HTMLInputElement).disabled === true,
+      ).toBe(true);
+    });
+
+    it('TS-F050-R02：編輯頁「新增條件」dropdown 不含 best_case', async () => {
+      mockedListLists.mockResolvedValue(makeResp([listWithBestCase]));
+      renderPage('OB202605001');
+      await waitFor(() =>
+        expect(screen.getByTestId('condition-row-best_case')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('btn-add-condition'));
+      await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+      const dropdown = screen.getByTestId('add-field-dropdown');
+      expect(within(dropdown).queryByText('優質案件')).toBeNull();
+      // prod_kind 已被使用者選用（在 conditions 中），故不在 dropdown；改驗其他可選非系統固定欄位
+      expect(within(dropdown).getByText('進件 / 滿期年數')).toBeInTheDocument();
+    });
+
+    it('TS-F050-R03：刪除唯一非系統固定條件後點儲存 → 顯示最低條件數錯誤，updateList 不被呼叫', async () => {
+      mockedListLists.mockResolvedValue(makeResp([listWithBestCase]));
+      renderPage('OB202605001');
+      // 等待使用者條件 prod_kind 列（index 0）渲染（best_case 已過濾為鎖定列）
+      await waitFor(() => expect(screen.getByTestId('condition-row-0')).toBeInTheDocument());
+
+      // 刪除 prod_kind（唯一非系統固定條件）
+      fireEvent.click(screen.getByTestId('btn-remove-condition-0'));
+      await waitFor(() => expect(screen.queryByTestId('condition-row-0')).toBeNull());
+
+      fireEvent.click(screen.getByTestId('btn-save'));
+      await waitFor(() => {
+        expect(screen.getByTestId('form-error')).toHaveTextContent(
+          '請至少新增 1 個篩選條件（優質案件為系統固定，不計入）',
+        );
+      });
+      expect(mockedUpdateList).not.toHaveBeenCalled();
     });
   });
 });
