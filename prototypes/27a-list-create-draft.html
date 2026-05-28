@@ -311,7 +311,7 @@
               <i data-lucide="filter" class="w-6 h-6 text-gray-400"></i>
             </div>
             <p class="text-sm text-gray-500">尚未新增任何篩選條件</p>
-            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。F075 v1.6 白名單提供 <span id="activeFieldsCnt">8</span> 個 active 欄位可選。</p>
+            <p class="text-xs text-gray-400 mt-1">除系統固定的「優質案件」外，至少需新增 1 個篩選條件方可儲存。F075 v1.7 白名單提供 <span id="activeFieldsCnt">7</span> 個可選欄位。</p>
           </div>
 
           <!-- 條件列表 -->
@@ -705,15 +705,17 @@
     function renderConditions() {
       const list = document.getElementById('condList');
       const empty = document.getElementById('condEmpty');
-      document.getElementById('activeFieldsCnt').textContent = FIELDS.filter(f=>f.isActive).length;
+      // v1.7 / US-144：可選欄位數 / 空狀態只計「非系統固定」欄位（best_case 恆存在但不計入使用者條件）
+      document.getElementById('activeFieldsCnt').textContent = FIELDS.filter(f => f.isActive && !f.isSystemFixed).length;
+      const userCondCount = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); }).length;
+      // 無任何使用者（非固定）條件時顯示空狀態提示；鎖定列仍會在下方條件列表中渲染
+      empty.classList.toggle('hidden', userCondCount > 0);
       if (conditions.length === 0) {
         list.innerHTML = '';
-        empty.classList.remove('hidden');
         document.getElementById('previewBanner').classList.add('hidden');
         document.getElementById('inactiveValueWarn').classList.add('hidden');
         return;
       }
-      empty.classList.add('hidden');
       list.innerHTML = conditions.map((c, idx) => {
         const f = FIELDS.find(x => x.columnName === c.columnName);
         if (!f) return '';
@@ -993,7 +995,9 @@
       const intv = document.getElementById('listInterval').value;
       if (s === '' || e === '' || intv === '') { showToast('error', '撈案期間三欄皆為必填'); return false; }
       if (Number(e) < Number(s)) { showToast('error', '結束期數需大於等於開始期數'); return false; }
-      if (conditions.length === 0) { showToast('error', '請至少設定一個篩選條件', '對應 422 訊息：「篩選條件不得為空，請至少設定一個欄位」'); return false; }
+      // v1.7 / US-144：最小條件數只計入「非系統固定」條件（best_case 不計入）
+      const userConditions = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); });
+      if (userConditions.length === 0) { showToast('error', '請至少新增 1 個篩選條件（優質案件為系統固定，不計入）', '對應 422 訊息：「篩選條件不得為空，請至少設定一個欄位」'); return false; }
       const incomplete = conditions.find(c => !isConditionComplete(c));
       if (incomplete) {
         showToast('error', '部分條件尚未填寫完整', 'categorical 需至少 1 個值；numeric 需 min/max；date 需起迄');

@@ -1,10 +1,14 @@
 ---
 type: architecture-spec
-version: "2.20"
+version: "2.21"
 status: draft
 last_updated: 2026-05-28
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097]
 ---
+
+> **v2.21 / 2026-05-28 變更摘要（AD-E07-18 §18.12 validateConditionPayload min-count 精化）**：
+>
+> 精化 §18.12.2 決策表（新增 18.12.8）與 §18.12.5 call-stack：`validateConditionPayload` 的「最少 1 條 condition」最低數量檢查，現改為**排除 `is_system_fixed = true` 的系統固定欄位**後計算；即要求「使用者自行提供且非系統固定的 conditions 數量 ≥ 1」，否則回 422 `VALIDATION_ERROR`。`best_case`（系統固定，由 `injectSystemFixedConditions` 自動注入）不計入此最低數。驗證仍在注入前執行（先驗使用者原始 payload，注入在驗證通過後）。injection / migration / deactivation guard / Stage 1 均不受影響。
 
 > **v2.20 / 2026-05-28 變更摘要（AD-E07-18 §18.12 US-144 best_case 系統固定篩選條件 Design A）**：
 >
@@ -4681,6 +4685,7 @@ prod_best: string | null;
 | 18.12.5 | deactivation guard 置於 `PooldataFieldWhitelistService.deactivate()` / `update()` 方法 service 層，回 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；前端停用按鈕 disabled 為 UX 層防護，service 層為 defense-in-depth | 僅前端 disabled，後端不驗 | 前端 disabled 可被繞過（直接 curl）；service 層驗證確保 API 合約安全 |
 | 18.12.6 | M-B1 與 M-B2 拆為兩個獨立 migration（295 / 296） | 合併 | 語意分離：M-B1 schema + seed（可獨立驗收，與 M-B2 資料操作無依賴關係）；M-B2 draft 名單回填（需 M-B1 已提供 `is_system_fixed` 欄位 + best_case=true 才能正確查詢） |
 | 18.12.7 | condition_payload IS NULL 的 draft 名單**不**在 M-B2 回填範圍內 | 回填全部 draft 包含 null-payload | null-payload draft 屬遷移中間態；強行注入 best_case 會使 payload 從 NULL 變為部分 JSON，month跑路徑從 B 跳 A，而其他欄位條件尚未對齊 condition_payload（E2 backfill 已完成，但 null-payload 遺留表示舊名單未完整遷移）；正確處理是人工確認後透過 F051 edit 完整設定 condition_payload，而非僅注入 best_case |
+| **18.12.8（2026-05-28 使用者決策）** | **`validateConditionPayload` 最低條件數計算排除系統固定欄位**：min-count check 要求「`conditions` 中 `columnName` **不**屬於 `is_system_fixed = true` 集合的條目數 ≥ 1」，否則回 422 `VALIDATION_ERROR`；`best_case` 等系統固定欄位不計入此最低數 | 沿用舊語意（`conditions.length ≥ 1` 含系統固定欄位）| 系統固定欄位由後端強制注入，若計入最低數則使用者送空 `conditions: []` 時只要後端注入 best_case 便通過最低檢查，但業務語意是「使用者必須至少設定一個有意義的篩選條件」；排除系統固定欄位後語意精確：空 `[]` 或僅含 best_case 的 payload 仍回 422，強迫使用者至少設定一個非固定條件 |
 
 ---
 
@@ -4741,36 +4746,53 @@ private static readonly SYSTEM_FIXED_VALUE_MAP: Record<string, string[]> = {
 **`createList`（~L435）完整呼叫順序**：
 
 ```
-1. validateConditionPayload(conditionPayload)          ← 現有（whitelist active check, 422 CONDITION_COLUMN_NOT_IN_WHITELIST）
-2. const systemFixed = await repo.findBy({ isSystemFixed: true, isActive: true })
-   const systemFixedFields = systemFixed.map(f => ({
+1. const systemFixed = await repo.findBy({ isSystemFixed: true, isActive: true })
+   // 取得系統固定欄位集合（columnName set），供 validateConditionPayload min-count 排除用
+   const systemFixedColumnNames = new Set(systemFixed.map(f => f.columnName))
+
+2. validateConditionPayload(conditionPayload, systemFixedColumnNames)
+      ← 現有邏輯 + §18.12.8 min-count 精化：
+        ① columnName ∈ whitelist active（422 CONDITION_COLUMN_NOT_IN_WHITELIST）
+        ② columnName ∉ reserved fields
+        ③ fieldType / values / min / max / dateStart / dateEnd 完整性
+        ④ 同一 columnName 不重複
+        ⑤ count(conditions where columnName ∉ systemFixedColumnNames) ≥ 1
+           若 = 0 → 422 VALIDATION_ERROR（使用者未提供任何非系統固定條件）
+
+3. const systemFixedFields = systemFixed.map(f => ({
      columnName: f.columnName,
      fieldType: f.fieldType,
      fixedValues: AssignmentListService.SYSTEM_FIXED_VALUE_MAP[f.columnName] ?? [],
    }))
-3. conditionPayload = this.injectSystemFixedConditions(conditionPayload, systemFixedFields)
-                                                       ← 新增（§18.12.4）
+   conditionPayload = this.injectSystemFixedConditions(conditionPayload, systemFixedFields)
+                                                       ← 新增（§18.12.4）；在驗證通過後執行
+
 4. deriveBackwardCompatColumns(conditionPayload)       ← 現有（~L171）
 5. DB write（entity save）
 ```
 
-**`updateList`（~L573）完整呼叫順序**（conditionPayload 有傳值時才執行步驟 2~3）：
+**`updateList`（~L573）完整呼叫順序**（conditionPayload 有傳值時才執行步驟 1~4）：
 
 ```
-1. 讀取既有名單（stage guard — 限 draft）
-2. 若 dto.conditionPayload 有值（非 undefined / null）：
-   2a. validateConditionPayload(dto.conditionPayload)
-   2b. const systemFixed = await repo.findBy({ isSystemFixed: true, isActive: true })
-       const systemFixedFields = systemFixed.map(...)
-   2c. dto.conditionPayload = this.injectSystemFixedConditions(dto.conditionPayload, systemFixedFields)
-   2d. deriveBackwardCompatColumns(dto.conditionPayload)
-3. DB write
+0. 讀取既有名單（stage guard — 限 draft）
+1. 若 dto.conditionPayload 有值（非 undefined / null）：
+   1a. const systemFixed = await repo.findBy({ isSystemFixed: true, isActive: true })
+       const systemFixedColumnNames = new Set(systemFixed.map(f => f.columnName))
+   1b. validateConditionPayload(dto.conditionPayload, systemFixedColumnNames)
+       （同 createList step 2，含 §18.12.8 min-count 精化）
+   1c. const systemFixedFields = systemFixed.map(...)
+       dto.conditionPayload = this.injectSystemFixedConditions(dto.conditionPayload, systemFixedFields)
+   1d. deriveBackwardCompatColumns(dto.conditionPayload)
+2. DB write
 ```
+
+> **實作效率注意**：`repo.findBy({ isSystemFixed: true, isActive: true })` 在 createList / updateList 各執行一次（step 1），結果同時用於 validateConditionPayload（min-count 排除）與 injectSystemFixedConditions（注入），避免重複查詢 DB。
 
 **架構不變式**：
-- `validateConditionPayload` 先於 `injectSystemFixedConditions`：確保 system-fixed 欄位在注入前通過格式驗證（columnName regex、fieldType 值域等）；注入後不需再次驗證（helper 輸出符合 payload schema）
-- `injectSystemFixedConditions` 先於 `deriveBackwardCompatColumns`：backward-compat 衍生需讀取完整 conditions，best_case 不在 5 個 backward-compat 欄位範圍內（BR-12），故順序不影響 backward-compat 結果；但為明確語意保持此順序
-- legacy null-payload 名單（`condition_payload IS NULL`）走路徑 B，`updateList` 當 `dto.conditionPayload` 為 undefined / null 時跳過整個 step 2，名單月跑路徑不改變
+- **§18.12.8（新增）`validateConditionPayload` min-count 排除系統固定欄位**：驗證時先取得 `isSystemFixed=true` 欄位集合（同一次 DB query），從 `conditions` 中排除這些 columnName 後計算數量；要求非系統固定 conditions ≥ 1，否則 422 `VALIDATION_ERROR`。此驗證作用於使用者原始送入的 payload，`injectSystemFixedConditions` 尚未執行——即使使用者送 `conditions: []`，驗證仍拒絕（注入後雖有 best_case 但那是系統行為，不代表使用者設定了任何條件）
+- `validateConditionPayload` 先於 `injectSystemFixedConditions`：確保格式與最低數量在注入前驗證；注入後不需再次驗證（helper 輸出符合 payload schema）
+- `injectSystemFixedConditions` 先於 `deriveBackwardCompatColumns`：語意明確，backward-compat 衍生讀取完整 conditions；best_case 不在 5 個 backward-compat 欄位範圍內（BR-12），順序不影響衍生結果
+- legacy null-payload 名單（`condition_payload IS NULL`）走路徑 B，`updateList` 當 `dto.conditionPayload` 為 undefined / null 時跳過整個 step 1，名單月跑路徑不改變
 
 ---
 

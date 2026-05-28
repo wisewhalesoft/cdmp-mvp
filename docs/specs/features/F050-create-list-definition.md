@@ -6,7 +6,7 @@ source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.3"
+version: "2.3.1"
 date: 2026-05-28
 status: Draft
 ---
@@ -15,6 +15,12 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
+> **v2.3.1（2026-05-28 / US-144 最低條件數語意修正 — 系統固定欄位不計入「≥1 條件」門檻）**：依用戶決議，「名單至少 1 個篩選條件」之門檻改為**僅計算非系統固定（`is_system_fixed = false`）之 conditions**——`best_case`（系統固定、自動注入）**不**計入最低數；使用者必須自行提供至少 1 個非系統固定 condition，否則拒絕（更貼近舊系統：名單必有 `prod_kind` / `list_type` 等使用者條件）。核心變更（不動 v2.3 之 BR-14 注入契約 / AC-17，僅細化最低條件數驗證；沿用既有 `VALIDATION_ERROR` 422，**不**新增錯誤碼）：
+> 1. **AC-10 重寫**：最低條件數驗證改為「非系統固定 conditions 數 = 0 即拒絕」；訊息精修為明示「至少 1 個非系統固定 / 使用者自訂篩選條件」。
+> 2. **BR-6 補述**：condition_payload 必填之「至少 1 個」語意限定為「至少 1 個 `is_system_fixed = false` 之 condition」。
+> 3. **驗證順序明示**：最低條件數檢查發生於 **`validateConditionPayload` 階段、`injectSystemFixedConditions`（BR-14）之前**，故計數對象為**使用者送入之 payload**；無論 incoming payload 是否含 `best_case`，`best_case`（及任何 `is_system_fixed = true` 欄位）一律從計數排除。
+> 4. **§5.4 規則表**「`conditions` 至少 1 個」列細化為「至少 1 個非系統固定 condition」。
+>
 > **v2.3（2026-05-28 / US-144 best_case 系統固定篩選條件 Design A）**：將 `best_case`（優質案件）鎖定為系統固定（system-fixed）篩選條件，使用者無法移除或修改其值，與舊系統（`OBPOOLDATA.BEST_CASE` / `OBMLISTDF.PROD_BEST` 硬編碼 `'Y'`）維持相同業務語意。核心變更（不動既有 v2.2.1 / v2.2 / v2.1.1 / v2.1 之 AC / BR / API contract，僅新增）：
 > 1. **新增 BR-14 系統固定條件強制注入（`injectSystemFixedConditions` 契約）**：`createList` 於 condition_payload 驗證（§5.4）通過後、寫入 DB 前，對所有 F075 v1.7 白名單中 `is_system_fixed = true` 之欄位強制注入 / 正規化其固定值（best_case → `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`）；契約見 BR-14（input payload → output payload，補齊所有 system-fixed 欄位且值強制為固定值）。
 > 2. **tamper-normalization 靜默語意**：使用者傳入 `best_case` 之 values 為 `['N']` / `[]` / 缺漏 / 多值，後端**靜默正規化**為 `['Y']`，仍回 201 Created（**不**拒絕、**不**回錯誤碼）；對應新增 AC-17。
@@ -154,12 +160,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **And** 返回 F048 名單定義清單頁，新建名單出現在「使用中」頁籤清單中
 - **And** 寫入 `assignment_audit_log`（`action = 'CREATE'`, `entity_type = 'ob_list_definition'`, `entity_id = list_no`）
 
-### AC-10：condition_payload 必填驗證（v2.1 新增 / US-121 AC-1 / US-106 AC-12）
+### AC-10：condition_payload 最低條件數驗證（v2.3.1 重寫 / US-144 / 原 v2.1 新增 US-121 AC-1 / US-106 AC-12）
 
-- **Given** 業務部長在新增表單之篩選條件區塊未新增任何條件
+- **Given** 業務部長在新增表單之篩選條件區塊未新增任何**非系統固定**篩選條件（即除自動注入之 `best_case` 外，無使用者自訂條件；可能完全為空，或僅含 `best_case`）
 - **When** 點擊「儲存」
-- **Then** 前端阻擋送出並顯示錯誤「請至少設定一個篩選條件」
-- **And** 若前端被繞過，後端驗證 `condition_payload.conditions` 為空時回 422，訊息「篩選條件不得為空，請至少設定一個欄位」
+- **Then** 前端阻擋送出並顯示錯誤「請至少設定一個篩選條件」（系統固定條件如優質案件不計入）
+- **And** 若前端被繞過，後端於 `validateConditionPayload` 計算 `condition_payload.conditions` 中 `is_system_fixed = false` 之條件數；若該數為 0 即回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」
+- **And** **驗證順序**：本最低條件數檢查在 `validateConditionPayload` 階段、`injectSystemFixedConditions`（BR-14）**之前**執行，故計數對象為**使用者送入之 payload**；無論 incoming payload 是否已含 `best_case`，`best_case`（及任何 `is_system_fixed = true` 之欄位）一律從計數排除（系統固定欄位即使存在亦不滿足最低門檻）
+- **And** 系統固定欄位之判定以 F075 v1.7 `pooldata_field_whitelist.is_system_fixed = true` 為準（不 hardcode 字串；對齊 BR-14 / BR-16）
+- **And** 沿用既有 `VALIDATION_ERROR`（422），**不**新增錯誤碼
 - **And** 本 AC 取代 v2.0 AC-7「9 個一級欄位必填」語意（A1 / A2）
 
 ### AC-11：columnName 白名單驗證（v2.1 新增 / US-121 AC-2 / US-106 AC-13）
@@ -332,7 +341,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
 | 規則 | 說明 | 違反處置 |
 |---|---|---|
-| `conditions` 至少 1 個 | 不可為空陣列 | 422，訊息「篩選條件不得為空」（AC-10） |
+| `conditions` 至少 1 個**非系統固定** condition（v2.3.1 / US-144） | `is_system_fixed = false` 之條件數須 ≥ 1；系統固定欄位（如 `best_case`）不計入。檢查於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload | 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（AC-10 / BR-6） |
 | `logic` 固定 `"AND"` | MVP 僅支援多欄位 AND 組合（同欄位多值為 IN/OR 語意，見 BR-7） | 422 `VALIDATION_ERROR` |
 | `columnName` 必在 F075 白名單 `is_active=true` | 後端 service 層校驗（defense-in-depth） | 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（AC-11 / BR-6） |
 | `columnName` lowercase snake_case | regex `/^[a-z][a-z0-9_]{0,63}$/`（對齊 F075 v1.4.3 BR-14） | 422 `VALIDATION_ERROR`（BR-11） |
@@ -572,7 +581,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | BR-3 | 多值欄位（`caseyear` / `spec_tp` / `settle_src` / `case_status` / `prod_kind`）寫入 entity column 時以 `$$` 為分隔符儲存（如 `0$$1$$2$$3`、`01$$02$$03`）；v2.1 起此為**後端衍生填入之 backward-compat 格式**（BR-10），前端不直接送出此格式。**v2.1.1 補述（US-128）**：`prod_best` 已從一級欄位移除，**不**屬於 BR-3 衍生欄位之一；其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見 BR-12） |
 | BR-4 | 月跑執行鎖由 `assignment_run.status IN ('pending', 'running')` 判斷 |
 | BR-5 | 所有寫入操作必須同步寫入 `assignment_audit_log`；稽核寫入失敗僅記錄 Logger.error，不 rollback 業務操作 |
-| BR-6 | **condition_payload 為 source of truth（v2.1 重寫，A1 / A2 / A3 解除）**：(1) 必填，`conditions` 至少 1 個；(2) 每個 `conditions[].columnName` 必須存在於 F075 v1.5 `pooldata_field_whitelist` 且 `is_active = true`；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1）；(3) service 層校驗於寫入前執行（defense-in-depth，即使前端 dropdown 已過濾）；(4) `data-model.md` `ob_list_definition.condition_payload` JSONB 欄位之 schema 規範由本 §5.4 定義 |
+| BR-6 | **condition_payload 為 source of truth（v2.1 重寫，A1 / A2 / A3 解除；v2.3.1 最低條件數修正 / US-144）**：(1) 必填，`conditions` 至少 1 個**非系統固定（`is_system_fixed = false`）condition**——系統固定欄位（如 `best_case`）不計入最低門檻；計數於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload（無論是否含 `best_case`，一律排除 `is_system_fixed = true` 欄位）；非系統固定條件數為 0 時回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（AC-10）；(2) 每個 `conditions[].columnName` 必須存在於 F075 v1.5 `pooldata_field_whitelist` 且 `is_active = true`；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1）；(3) service 層校驗於寫入前執行（defense-in-depth，即使前端 dropdown 已過濾）；(4) `data-model.md` `ob_list_definition.condition_payload` JSONB 欄位之 schema 規範由本 §5.4 定義 |
 | BR-7 | **多值 / 區間 SQL 比對語意（v2.1 重寫，A6 / D3 解除）**：(1) categorical 條件以 SQL `columnName IN (v1, v2, ...)` 語意（同欄位多值 OR，符合任一即納入；對應 US-122 AC-2）；(2) numeric 條件以 `columnName BETWEEN min AND max`（含邊界，US-122 AC-3）；(3) date 條件以 `columnName BETWEEN dateStart AND dateEnd`；(4) 多欄位之間以 `AND` 組合；(5) **舊 SP 之 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對已棄用**，僅保留於 `condition_payload IS NULL` 之舊名單 fallback 路徑（D4 / US-122 AC-4，由 Phase 3a 實作） |
 | BR-8 | **list_period_* 為一級保留欄位（v2.1 新增，J8 / 拍板 3）**：`list_period_start` / `list_period_end` / `list_interval` 為 `ob_list_definition` 一級欄位，禁止納入 `condition_payload.conditions`；違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；前端 dropdown 不列出此三個欄位，後端 service 層 defense-in-depth 校驗 |
 | BR-9 | **INACTIVE 選項警示（v2.1 新增，非阻擋）**：寫入時若 `conditions[].values` 含 `pooldata_field_option.is_active=false` 之 option，回 201 Created + `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`；與 F076 v1.5 BR-4「停用後不回溯」語意一致；月跑 Stage 1 仍以已固化條件過濾 |

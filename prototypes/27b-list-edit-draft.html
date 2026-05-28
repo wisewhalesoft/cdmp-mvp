@@ -316,7 +316,7 @@
               <i data-lucide="filter" class="w-6 h-6 text-gray-400"></i>
             </div>
             <p class="text-sm text-gray-500">此名單尚無篩選條件</p>
-            <p class="text-xs text-gray-400 mt-1">至少需要 1 個條件方可儲存。</p>
+            <p class="text-xs text-gray-400 mt-1">除系統固定的「優質案件」外，至少需新增 1 個篩選條件方可儲存。</p>
           </div>
           <div id="condList" class="space-y-2"></div>
 
@@ -900,13 +900,15 @@
     function renderConditions() {
       const list = document.getElementById('condList');
       const empty = document.getElementById('condEmpty');
+      // v1.7 / US-144：空狀態只計「非系統固定」條件（best_case 鎖定列恆存在但不計入）
+      const userCondCount = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); }).length;
+      // 無任何使用者（非固定）條件時顯示空狀態提示；鎖定列仍會在下方條件列表中渲染
+      empty.classList.toggle('hidden', userCondCount > 0);
       if (conditions.length === 0) {
         list.innerHTML = '';
-        empty.classList.remove('hidden');
         document.getElementById('inactiveValueWarn').classList.add('hidden');
         return;
       }
-      empty.classList.add('hidden');
       list.innerHTML = conditions.map((c, idx) => {
         const f = FIELDS.find(x => x.columnName === c.columnName);
         if (!f) return '';
@@ -1145,7 +1147,9 @@
         crEnabled: document.getElementById('crToggle').checked
       };
       if (!isLegacy) {
-        if (conditions.length === 0) { showToast('error','請至少設定一個篩選條件'); return; }
+        // v1.7 / US-144：最小條件數只計入「非系統固定」條件（best_case 不計入）
+        const userConditions = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); });
+        if (userConditions.length === 0) { showToast('error','請至少新增 1 個篩選條件（優質案件為系統固定，不計入）'); return; }
         const incomplete = conditions.find(c => !isConditionComplete(c));
         if (incomplete) { showToast('error','部分條件尚未填寫完整','categorical 需至少 1 個值；numeric 需 min/max；date 需起迄'); return; }
         body.conditionPayload = {

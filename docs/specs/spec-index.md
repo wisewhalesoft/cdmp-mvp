@@ -1,13 +1,19 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.8"
+version: "3.8.1"
 date: 2026-05-28
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.8.1 / 2026-05-28 / US-144 最低條件數語意修正（系統固定欄位不計入「≥1 條件」門檻）**：依用戶決議，名單「至少 1 個篩選條件」門檻改為**僅計算非系統固定（`is_system_fixed = false`）之 conditions**——`best_case`（系統固定、自動注入）不計入；使用者須自行提供至少 1 個非系統固定 condition（更貼近舊系統名單必有 prod_kind / list_type 等）。本輪變更檔案（細化 v3.8 之最低條件數驗證；沿用既有 `VALIDATION_ERROR` 422，**不**新增錯誤碼）：
+> - **升 v2.3.1**：[F050-create-list-definition.md](features/F050-create-list-definition.md)（AC-10 重寫 + BR-6 補述 + §5.4 規則表「conditions 至少 1 個」列細化：最低條件數檢查於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload，排除所有 `is_system_fixed = true` 欄位；非系統固定條件數為 0 時回 422 `VALIDATION_ERROR`，訊息精修為「至少設定一個非系統固定（使用者自訂）篩選欄位」）
+> - **升 v2.2.1**：[F051-edit-list-definition.md](features/F051-edit-list-definition.md)（AC-6 + BR-6 鏡像同規則；僅在提供 `conditionPayload` 時套用，舊名單 `condition_payload IS NULL` 唯讀不受影響）
+> - **不動**：F075 v1.7 / error-handling.md v1.17（最低條件數沿用 `VALIDATION_ERROR`，無新錯誤碼）
+> - **對應 User Story**：US-144（最低條件數語意修正）
+>
 > **v3.8 / 2026-05-28 / US-144 best_case 鎖定為系統固定篩選條件（Design A）**：將 `best_case`（優質案件）鎖定為系統固定篩選條件，使用者不可移除 / 修改其值（對齊舊系統硬編碼 `'Y'`）。本輪變更檔案：
 > - **升 v2.3**：[F050-create-list-definition.md](features/F050-create-list-definition.md)（新增 BR-14 `injectSystemFixedConditions` 注入契約 + AC-17：`createList` 於驗證後強制注入 / 正規化 `best_case → ['Y']`，竄改靜默修正回 201；`best_case` 非 backward-compat 衍生欄位；驅動旗標 `is_system_fixed`，不 hardcode 字串）
 > - **升 v2.2**：[F051-edit-list-definition.md](features/F051-edit-list-definition.md)（新增 BR-14 + AC-14：`updateList` 對「有提供 conditionPayload」之名單同套 `injectSystemFixedConditions`，竄改靜默修正回 200；尊重 4-state — 舊名單 `condition_payload IS NULL` 維持唯讀，不注入）
@@ -207,8 +213,8 @@ status: Draft
 |------------|------|------|-----------|--------|
 | F048 | [F048-view-list-definition.md](features/F048-view-list-definition.md) | M01 名單定義入口（月份 + 階段總覽，v2.0 升版合併 US-104/105 入口骨架） | US-070, US-104, US-105 | P0-MVP |
 | F049 | [F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | US-071 | P0-MVP |
-| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.3 / 2026-05-28 / US-144：best_case 系統固定條件 — 新增 BR-14 `injectSystemFixedConditions` 注入契約 + AC-17，`createList` 驗證後強制注入 / 正規化 `best_case → ['Y']`，竄改靜默修正回 201；v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位；解除 GAP-LIST §A1~A6）** | US-106, US-107, US-120, US-121, US-125, US-144 | P0-MVP（**v2.3**）|
-| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.2 / 2026-05-28 / US-144：對齊 F050 v2.3 — 新增 BR-14 + AC-14，`updateList` 對「有提供 conditionPayload」之名單同套 `injectSystemFixedConditions`，竄改靜默修正回 200，舊名單 `condition_payload IS NULL` 維持唯讀不注入；v2.1 condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`；限 `stage = 'draft'`）** | US-106, US-107, US-121, US-123, US-144 | P0-MVP（**v2.2**）|
+| F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.3.1 / 2026-05-28 / US-144：最低條件數修正 — 「≥1 條件」門檻僅計非系統固定 condition，best_case 不計入，計數於 inject 前看使用者 payload，AC-10 / BR-6 / §5.4 重寫，沿用 `VALIDATION_ERROR` 422；v2.3 best_case 系統固定條件 — BR-14 `injectSystemFixedConditions` 注入契約 + AC-17，`createList` 驗證後強制注入 / 正規化 `best_case → ['Y']`，竄改靜默修正回 201；v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位；解除 GAP-LIST §A1~A6）** | US-106, US-107, US-120, US-121, US-125, US-144 | P0-MVP（**v2.3.1**）|
+| F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.2.1 / 2026-05-28 / US-144：最低條件數修正 — 鏡像 F050 v2.3.1，「≥1 條件」僅計非系統固定 condition，僅在提供 conditionPayload 時套用，AC-6 / BR-6 補述；v2.2 對齊 F050 v2.3 — BR-14 + AC-14，`updateList` 對「有提供 conditionPayload」之名單同套 `injectSystemFixedConditions`，竄改靜默修正回 200，舊名單 `condition_payload IS NULL` 維持唯讀不注入；v2.1 condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`；限 `stage = 'draft'`）** | US-106, US-107, US-121, US-123, US-144 | P0-MVP（**v2.2.1**）|
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
 | F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105；**v1.4 / 2026-05-27**：F097 月份預設改 `target_work_ym`（下月）、UI 標籤「分派作業月份」、順修 BR-7 C-4 殘留舊文字） | US-104, US-105, US-143 | P0-MVP（**v1.4**）|
 | F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|

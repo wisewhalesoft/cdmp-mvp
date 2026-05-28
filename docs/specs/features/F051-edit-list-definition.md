@@ -6,7 +6,7 @@ source-story: US-089, US-106, US-107, US-121, US-123, US-144
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.2"
+version: "2.2.1"
 date: 2026-05-28
 status: Draft
 ---
@@ -15,6 +15,12 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
+> **v2.2.1（2026-05-28 / US-144 最低條件數語意修正 — 系統固定欄位不計入「≥1 條件」門檻）**：對齊 [F050 v2.3.1](F050-create-list-definition.md)。依用戶決議，`updateList` 之「至少 1 個 condition」門檻改為**僅計算非系統固定（`is_system_fixed = false`）之 conditions**——`best_case`（系統固定、自動注入）不計入；使用者須自行提供至少 1 個非系統固定 condition，否則拒絕。核心變更（不動 v2.2 之 BR-14 / AC-14，僅細化最低條件數；沿用既有 `VALIDATION_ERROR` 422，**不**新增錯誤碼）：
+> 1. **AC-6 補述**：最低條件數驗證改為「非系統固定 conditions 數 = 0 即拒絕」，訊息精修明示「至少 1 個非系統固定 / 使用者自訂篩選條件」。
+> 2. **BR-6 補述**：「至少 1 個」語意限定為「至少 1 個 `is_system_fixed = false` 之 condition」。
+> 3. **適用範圍**：僅當 `updateList` **有提供 `conditionPayload`** 時套用（即 `condition_payload IS NOT NULL` 之新名單）；舊遷移名單（`condition_payload IS NULL`）篩選條件區塊唯讀、不送 `conditionPayload`，**不受**本最低條件數規則影響（沿用 AC-11 / BR-11）。
+> 4. **驗證順序明示**：最低條件數檢查於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload。
+>
 > **v2.2（2026-05-28 / US-144 best_case 系統固定篩選條件 Design A）**：對齊 [F050 v2.3](F050-create-list-definition.md)。將 `best_case`（優質案件）鎖定為系統固定（system-fixed）篩選條件。核心變更（不動既有 v2.1 / v2.0 之 AC / BR / API contract，僅新增）：
 > 1. **新增 AC-14 + BR-14：`updateList` 強制注入 / 正規化 system-fixed 條件**：對「有提供 `conditionPayload`」之名單（即 `condition_payload IS NOT NULL` 之新名單），`updateList` 於 condition_payload 驗證通過後、覆寫 DB 前，呼叫 `injectSystemFixedConditions`（語意與 [F050 v2.3 BR-14](F050-create-list-definition.md#7-商業規則) 完全相同），強制注入 / 正規化 `best_case → ['Y']`；使用者就 `best_case` 之任何竄改（`['N']` / `[]` / 缺漏 / 多值）一律靜默正規化為 `['Y']`，仍回 **200 OK（不拒絕、不回錯誤碼）**（對應 US-144 AC-2 / TC-144-02）。
 > 2. **尊重既有 4-state update 邏輯**：注入**僅**在「有提供 condition_payload」時套用；**舊遷移名單（`condition_payload IS NULL`）篩選條件區塊維持唯讀**（沿用 AC-11 / BR-11 `LEGACY_LIST_CONDITION_READONLY`），不對其注入 system-fixed 條件（注入待 backfill migration 將舊名單轉為新格式後，於下次帶 payload 之編輯時生效）。
@@ -105,9 +111,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **Given** 業務部長清空任一必填欄位後點擊「儲存」
 - **When** 前端進行表單驗證
 - **Then** 對應欄位顯示紅色邊框與錯誤訊息「此欄位為必填」，儲存請求不發送
-- **And** 必填欄位範圍縮減為：`list_nm` / `list_period_start` / `list_period_end` / `list_interval` / `condition_payload`（至少 1 個 conditions）
+- **And** 必填欄位範圍縮減為：`list_nm` / `list_period_start` / `list_period_end` / `list_interval` / `condition_payload`（至少 1 個**非系統固定** condition，v2.2.1 / US-144）
 - **And** 5 個原 v2.0 一級欄位（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）**不再為前端必填欄位**；由後端依 `condition_payload` 衍生填入（J6 / BR-10）
-- **And** 若前端被繞過，後端驗證 `condition_payload.conditions` 為空時回 422，訊息「篩選條件不得為空，請至少設定一個欄位」
+- **And** 若前端被繞過，後端於 `validateConditionPayload` 計算 `condition_payload.conditions` 中 `is_system_fixed = false` 之條件數；若該數為 0（含完全為空、或僅含 `best_case` 等系統固定欄位）即回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（v2.2.1 / US-144；對齊 F050 v2.3.1 AC-10）
+- **And** **驗證順序**：本最低條件數檢查在 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload，`best_case`（及任何 `is_system_fixed = true` 欄位）一律排除；系統固定欄位之判定以 F075 v1.7 `is_system_fixed` 旗標為準（不 hardcode 字串）。沿用既有 `VALIDATION_ERROR`（422），**不**新增錯誤碼。**僅**在提供 `conditionPayload` 時套用；舊名單（`condition_payload IS NULL`）唯讀、不送 `conditionPayload`，不受本規則影響（AC-11 / BR-11）
 
 ### AC-7：PROD_KIND + CARD_TYPE 組合變更後的重複檢查
 
@@ -234,7 +241,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | BR-3 | `card_type` 為獨立輸入欄位，不由 `list_nm` 解析（A43 決議：遷移沿用舊值） |
 | BR-4 | 編輯已停用名單需回傳 `ASSIGNMENT_LIST_INACTIVE`；前端額外於 `status = 'inactive'` 時隱藏編輯按鈕；非 draft 階段名單回 `LIST_STAGE_TRANSITION_FORBIDDEN`（BR-9） |
 | BR-5 | `prod_kind + card_type` 重複檢查範圍：當前作業年月內的其他 active 名單（不含本身）。**v2.1 補述**：v2.1 重構後 `prod_kind` 由 `condition_payload` 衍生（BR-7），唯一性檢查的具體比對語意（多值交集 / 子集 / 完全相等）由 **Phase 3a system-architect** 設計，本 spec 暫保留 v2.0 語意作為過渡定義（拍板 Q5） |
-| BR-6 | **condition_payload 為 source of truth（v2.1 重寫，A1 / A2 / A3 解除，對齊 F050 v2.1 BR-6）**：必填、`conditions` 至少 1 個；每個 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST` |
+| BR-6 | **condition_payload 為 source of truth（v2.1 重寫，A1 / A2 / A3 解除，對齊 F050 v2.1 BR-6；v2.2.1 最低條件數修正 / US-144）**：必填、`conditions` 至少 1 個**非系統固定（`is_system_fixed = false`）condition**——`best_case` 等系統固定欄位不計入；計數於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload（排除 `is_system_fixed = true` 欄位）；非系統固定條件數為 0 時回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（AC-6；對齊 F050 v2.3.1 BR-6）。每個 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`。僅在提供 `conditionPayload` 時套用（舊名單 `condition_payload IS NULL` 唯讀不受影響，BR-11） |
 | BR-7 | **多值 / 區間 SQL 比對語意（v2.1 重寫，A6 / D3，對齊 F050 v2.1 BR-7）**：categorical 條件 `IN (...)`、numeric `BETWEEN min AND max`、date `BETWEEN dateStart AND dateEnd`；多欄位之間 AND；舊 SP 之 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對已棄用，僅保留於 `condition_payload IS NULL` 之舊名單 fallback（D4 / US-122 AC-4） |
 | BR-8 | 多值欄位（`caseyear` / `spec_tp` / `settle_src` / `case_status` / `prod_kind`）寫入 entity column 時以 `$$` 為分隔符（v2.1：此為後端衍生填入之 backward-compat 格式，前端不直接送出此格式） |
 | BR-9 | **stage 保護（v2.1 新增）**：condition_payload 寫入限 `stage = 'draft'`；非 draft 階段名單寫入回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（沿用既有錯誤碼；K1 / K3） |
