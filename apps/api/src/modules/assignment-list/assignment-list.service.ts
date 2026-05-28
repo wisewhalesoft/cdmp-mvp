@@ -435,7 +435,7 @@ export class AssignmentListService {
   async createList(
     dto: CreateListDto,
     actor: { userId: string; ipAddress: string | null },
-    currentWorkYm: string,
+    targetWorkYm: string,
   ): Promise<{
     listNo: string;
     listNm: string;
@@ -478,7 +478,7 @@ export class AssignmentListService {
     // 5. v2.1 / §18.8：prod_kind 交集唯一性
     const inputProdKindValues = this.extractProdKindValues(dto.conditionPayload);
     const conflict = await this.findActivePkCardTypeConflict(
-      currentWorkYm,
+      targetWorkYm,
       inputProdKindValues,
       dto.cardType ?? null,
     );
@@ -491,7 +491,7 @@ export class AssignmentListService {
     }
 
     // 6. AC-2 / AC-3 / BR-1：LIST_NO 自動產生
-    const listNo = await this.generateNextListNo(currentWorkYm);
+    const listNo = await this.generateNextListNo(targetWorkYm);
 
     const now = new Date();
     const entity = this.listRepo.create({
@@ -519,7 +519,7 @@ export class AssignmentListService {
       total_amount: null,
       reserved_amount: null,
       is_assigned: null,
-      project_workym: currentWorkYm,
+      project_workym: targetWorkYm,
       casenumber: null,
       name: null,
       caseyearnm: null,
@@ -561,7 +561,7 @@ export class AssignmentListService {
       listNm: dto.listNm,
       status: 'active',
       stage: 'draft',
-      projectWorkym: currentWorkYm,
+      projectWorkym: targetWorkYm,
       warnings,
     };
   }

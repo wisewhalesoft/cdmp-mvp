@@ -360,6 +360,60 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
   });
 
   // =========================================================================
+  // TC-CREATE-WORKYM — 建立名單採用作業月 target_work_ym（F097 fix）
+  // =========================================================================
+
+  describe('TC-CREATE-WORKYM — 建立名單作業月（F097 fix）', () => {
+    beforeEach(() => {
+      currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
+    });
+
+    it('帶 workYm=202606（下月）→ 201，service.createList 以 targetWorkYm=202606 呼叫', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/lists')
+        .send({ ...baseCreateBody, workYm: '202606' });
+      expect(res.status).toBe(201);
+      expect(serviceMock.createList).toHaveBeenCalledTimes(1);
+      expect(serviceMock.createList.mock.calls[0][2]).toBe('202606');
+    });
+
+    it('未帶 workYm → fallback 當月 202605（向下相容）', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/lists')
+        .send({ ...baseCreateBody });
+      expect(res.status).toBe(201);
+      expect(serviceMock.createList.mock.calls[0][2]).toBe('202605');
+    });
+
+    it('workYm 歷史月（202604 < 當月）→ 403 LIST_HISTORICAL_READONLY，service 不被呼叫', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/lists')
+        .send({ ...baseCreateBody, workYm: '202604' });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('LIST_HISTORICAL_READONLY');
+      expect(serviceMock.createList).not.toHaveBeenCalled();
+    });
+
+    it('workYm 格式錯（202613，MM>12）→ 422 WORK_YM_INVALID_FORMAT，service 不被呼叫', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/lists')
+        .send({ ...baseCreateBody, workYm: '202613' });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('WORK_YM_INVALID_FORMAT');
+      expect(serviceMock.createList).not.toHaveBeenCalled();
+    });
+
+    it('workYm 超出 ±12（202404）→ 400 INVALID_YM_RANGE，service 不被呼叫', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/lists')
+        .send({ ...baseCreateBody, workYm: '202404' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_YM_RANGE');
+      expect(serviceMock.createList).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
   // TC-PAYLOAD — DTO 驗證（v2.1 migrate）
   // =========================================================================
 

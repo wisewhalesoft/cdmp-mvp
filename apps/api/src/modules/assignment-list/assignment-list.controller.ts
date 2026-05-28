@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   BadRequestException,
+  UnprocessableEntityException,
   Post,
   Put,
   Query,
@@ -155,11 +156,24 @@ export class AssignmentListController {
   @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
   async create(@Body() dto: CreateListDto, @Req() req: any) {
     const currentWorkYm = this.systemService.getCurrentWorkYm();
+    // F097 fix：建立名單採用使用者選定的分派作業月份（target_work_ym），缺省 fallback 當月。
+    let targetWorkYm = currentWorkYm;
+    if (dto.workYm != null && dto.workYm !== '') {
+      if (!/^\d{4}(0[1-9]|1[0-2])$/.test(dto.workYm)) {
+        throw new UnprocessableEntityException({
+          error: ERROR_CODES.WORK_YM_INVALID_FORMAT,
+          message: ERROR_MESSAGES.WORK_YM_INVALID_FORMAT,
+        });
+      }
+      targetWorkYm = dto.workYm;
+    }
+    this.assertYmInRange(targetWorkYm, currentWorkYm);
+    this.assertNotHistorical(targetWorkYm, currentWorkYm);
     const actor = {
       userId: req.user.userId,
       ipAddress: req.ip ?? null,
     };
-    return this.service.createList(dto, actor, currentWorkYm);
+    return this.service.createList(dto, actor, targetWorkYm);
   }
 
   // -------------------------------------------------------------------------

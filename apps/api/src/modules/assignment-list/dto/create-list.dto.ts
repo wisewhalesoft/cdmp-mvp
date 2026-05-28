@@ -70,6 +70,15 @@ export class CreateListDto {
   copyFromListNo?: string | null;
 
   /**
+   * F097 fix：分派作業月份 target_work_ym（YYYYMM）。前端帶共享 AssignmentWorkYmContext
+   * 的作業月；後端據此寫 project_workym、LIST_NO 前綴與同月唯一性範圍。缺省時 controller
+   * fallback 為 current_work_ym。格式（MM 01-12）/ ±12 範圍 / 歷史月 guard 於 controller 驗證。
+   */
+  @IsOptional()
+  @IsString()
+  workYm?: string;
+
+  /**
    * F050 v2.1 動態篩選條件（必填；§F050 §5.4 JSON Schema）。
    *
    * Service 層另校驗：
