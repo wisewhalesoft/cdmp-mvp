@@ -189,7 +189,10 @@ export function ListEditDraftPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await listLists({});
+        // F097：名單 project_workym 可能為未來月（作業月＝下月）；listNo 內嵌 YYYYMM
+        // （OB + YYYYMM + NNN），以此查詢對應月份，避免 listLists 預設當月找不到下月名單。
+        const ymFromListNo = listNo.match(/^OB(\d{6})/)?.[1];
+        const data = await listLists(ymFromListNo ? { ym: ymFromListNo } : {});
         if (aborted) return;
         const found = data.lists.find((l) => l.listNo === listNo);
         if (!found) {
