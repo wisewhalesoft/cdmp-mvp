@@ -66,6 +66,33 @@ export interface IExtractionExecutor {
   }): Promise<{ rows: Record<string, any>[]; lastKeyValue?: any; hasMore: boolean }>;
 
   /**
+   * Stream the entire source table over a single forward-only cursor, delivering
+   * rows in batches via `onBatch`. Unlike `readBatch` (OFFSET/keyset pagination),
+   * this reads each row exactly once — O(n) instead of OFFSET's O(n²) — and holds
+   * one connection for the whole extraction. Implementations apply backpressure so
+   * memory stays bounded regardless of table size.
+   *
+   * Optional: only implemented by executors whose driver supports row streaming
+   * (currently MSSQL). Callers must feature-detect via `supportsStreaming`.
+   * Used for `mode === 'full'` only; incremental still uses `readBatch`.
+   */
+  streamBatches?(
+    params: {
+      datasourceId: string;
+      sourceTable: string;
+      sourceSchema?: string | null;
+      batchSize: number;
+    },
+    onBatch: (rows: Record<string, any>[]) => Promise<void>,
+  ): Promise<void>;
+
+  /**
+   * Whether the executor resolved for this datasource supports `streamBatches`.
+   * Optional; absence is treated as `false` by callers.
+   */
+  supportsStreaming?(datasourceId: string): Promise<boolean>;
+
+  /**
    * List available schemas in the datasource.
    */
   listSchemas(params: { datasourceId: string }): Promise<string[]>;

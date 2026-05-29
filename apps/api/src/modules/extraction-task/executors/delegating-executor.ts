@@ -86,4 +86,34 @@ export class DelegatingExecutor implements IExtractionExecutor {
     const executor = await this.resolve(params.datasourceId);
     return executor.execute(params);
   }
+
+  /**
+   * Whether the executor resolved for this datasource implements `streamBatches`.
+   * Resolves the concrete executor (one datasource lookup) and feature-detects it.
+   */
+  async supportsStreaming(datasourceId: string): Promise<boolean> {
+    const executor = await this.resolve(datasourceId);
+    return typeof executor.streamBatches === 'function'
+      && (typeof executor.supportsStreaming === 'function'
+        ? executor.supportsStreaming(datasourceId)
+        : true);
+  }
+
+  async streamBatches(
+    params: {
+      datasourceId: string;
+      sourceTable: string;
+      sourceSchema?: string | null;
+      batchSize: number;
+    },
+    onBatch: (rows: Record<string, any>[]) => Promise<void>,
+  ): Promise<void> {
+    const executor = await this.resolve(params.datasourceId);
+    if (typeof executor.streamBatches !== 'function') {
+      throw new Error(
+        `streamBatches is not supported for datasource ${params.datasourceId}`,
+      );
+    }
+    return executor.streamBatches(params, onBatch);
+  }
 }

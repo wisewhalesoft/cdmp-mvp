@@ -175,49 +175,66 @@ export class ExtractionExecutionService {
       let lastKeyValue: any = undefined;
       let offset = 0;
       const columnNames = metadata.map((c) => this.rawDataService.sanitizeColumnName(c.name));
+      const allColumns = [...columnNames, '_cdmp_extracted_at'];
       const primaryKeyCol = metadata.find((c) => c.isPrimary)?.name || null;
 
-      while (true) {
-        const batch = await this.executor.readBatch({
-          datasourceId: task.datasource_id,
-          sourceTable: task.source_table,
-          sourceSchema: task.source_schema,
-          mode: task.mode,
-          incrementalColumn: task.incremental_column,
-          lastIncrementalValue: task.last_incremental_value,
-          batchSize: BATCH_SIZE,
-          lastKeyValue,
-          primaryKeyColumn: primaryKeyCol,
-          offset,
-        });
+      // Fast path: full mode + streaming-capable source (MSSQL) + COPY-capable
+      // target (PostgreSQL). A single forward cursor (O(n)) replaces OFFSET
+      // pagination (O(n²)), and COPY FROM STDIN replaces per-batch INSERT.
+      // Any other combination keeps the original readBatch + insertBatch loop.
+      const canStream =
+        task.mode === 'full' &&
+        !!task.raw_table_name &&
+        this.rawDataService.supportsCopy() &&
+        typeof this.executor.supportsStreaming === 'function' &&
+        typeof this.executor.streamBatches === 'function' &&
+        (await this.executor.supportsStreaming(task.datasource_id));
 
-        if (batch.rows.length === 0) break;
+      if (canStream) {
+        extractedCount = await this.streamExtractWithCopy(task, totalCount, allColumns);
+      } else {
+        while (true) {
+          const batch = await this.executor.readBatch({
+            datasourceId: task.datasource_id,
+            sourceTable: task.source_table,
+            sourceSchema: task.source_schema,
+            mode: task.mode,
+            incrementalColumn: task.incremental_column,
+            lastIncrementalValue: task.last_incremental_value,
+            batchSize: BATCH_SIZE,
+            lastKeyValue,
+            primaryKeyColumn: primaryKeyCol,
+            offset,
+          });
 
-        // Append _cdmp_extracted_at to each row
-        const now = new Date().toISOString();
-        for (const row of batch.rows) {
-          row._cdmp_extracted_at = now;
+          if (batch.rows.length === 0) break;
+
+          // Append _cdmp_extracted_at to each row
+          const now = new Date().toISOString();
+          for (const row of batch.rows) {
+            row._cdmp_extracted_at = now;
+          }
+
+          // Write to AppDB
+          if (task.raw_table_name) {
+            await this.rawDataService.insertBatch(
+              task.raw_table_name,
+              allColumns,
+              batch.rows,
+            );
+          }
+
+          extractedCount += batch.rows.length;
+          lastKeyValue = batch.lastKeyValue;
+          offset += batch.rows.length;
+
+          // Update progress
+          task.extracted_count = extractedCount;
+          task.progress_percent = Math.round((extractedCount / totalCount) * 100);
+          await this.taskRepository.save(task);
+
+          if (!batch.hasMore) break;
         }
-
-        // Write to AppDB
-        if (task.raw_table_name) {
-          await this.rawDataService.insertBatch(
-            task.raw_table_name,
-            [...columnNames, '_cdmp_extracted_at'],
-            batch.rows,
-          );
-        }
-
-        extractedCount += batch.rows.length;
-        lastKeyValue = batch.lastKeyValue;
-        offset += batch.rows.length;
-
-        // Update progress
-        task.extracted_count = extractedCount;
-        task.progress_percent = Math.round((extractedCount / totalCount) * 100);
-        await this.taskRepository.save(task);
-
-        if (!batch.hasMore) break;
       }
 
       // 7. Completion
@@ -274,5 +291,57 @@ export class ExtractionExecutionService {
       task.error_message = errorMessage;
       await this.taskRepository.save(task);
     }
+  }
+
+  /**
+   * Full-mode fast path: stream the whole source table over one forward cursor
+   * and pipe each batch into a single long-lived COPY FROM STDIN writer.
+   * Progress is persisted at most ~once per second (vs once per batch) to avoid
+   * thousands of AppDB UPDATEs. Returns the number of rows extracted.
+   */
+  private async streamExtractWithCopy(
+    task: ExtractionTask,
+    totalCount: number,
+    allColumns: string[],
+  ): Promise<number> {
+    const writer = await this.rawDataService.openCopyWriter(
+      task.raw_table_name!,
+      allColumns,
+    );
+    let extractedCount = 0;
+    let lastProgressAt = 0;
+    try {
+      await this.executor.streamBatches!(
+        {
+          datasourceId: task.datasource_id,
+          sourceTable: task.source_table,
+          sourceSchema: task.source_schema,
+          batchSize: BATCH_SIZE,
+        },
+        async (rows) => {
+          const now = new Date().toISOString();
+          for (const row of rows) {
+            row._cdmp_extracted_at = now;
+          }
+          await writer.writeRows(rows);
+          extractedCount += rows.length;
+
+          // Throttle progress persistence to ~1/sec to avoid per-batch UPDATEs.
+          const nowMs = Date.now();
+          if (nowMs - lastProgressAt >= 1000) {
+            task.extracted_count = extractedCount;
+            task.progress_percent =
+              totalCount > 0 ? Math.round((extractedCount / totalCount) * 100) : 0;
+            await this.taskRepository.save(task);
+            lastProgressAt = nowMs;
+          }
+        },
+      );
+      await writer.finish();
+    } catch (err) {
+      await writer.abort(err);
+      throw err;
+    }
+    return extractedCount;
   }
 }

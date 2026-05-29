@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, IsNull } from 'typeorm';
+import { from as copyFrom } from 'pg-copy-streams';
 import { ColumnMetadata } from './extraction-executor.provider';
 import { ExtractionTask } from '@/database/entities/extraction-task.entity';
 import { ExtractionLog } from '@/database/entities/extraction-log.entity';
@@ -8,6 +9,20 @@ import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { GetRawDataDto } from './dto/get-raw-data.dto';
 
 const SYSTEM_COLUMNS = ['_cdmp_id', '_cdmp_extracted_at'];
+
+/**
+ * A long-lived PostgreSQL `COPY ... FROM STDIN` writer. Open once at the start of
+ * an extraction, push every streamed batch through `writeRows`, then `finish`.
+ * Backpressure is honoured per write so memory stays bounded.
+ */
+export interface CopyWriter {
+  /** Append rows to the COPY stream (reads each row by the columns given at open). */
+  writeRows(rows: Record<string, any>[]): Promise<void>;
+  /** Flush, end the COPY stream, and release the connection. */
+  finish(): Promise<void>;
+  /** Abort the COPY (on error) and release the connection. Never throws. */
+  abort(err?: any): Promise<void>;
+}
 
 export interface RawDataColumn {
   name: string;
@@ -346,6 +361,121 @@ export class RawDataService {
     }
 
     return inserted;
+  }
+
+  /**
+   * Whether the target AppDB supports `COPY FROM STDIN` (PostgreSQL only).
+   * SQLite (test env) falls back to parameterized INSERT.
+   */
+  supportsCopy(): boolean {
+    return this.isPostgres;
+  }
+
+  /**
+   * Format a single value for a PostgreSQL `COPY ... FROM STDIN` stream in the
+   * default TEXT format: NULL is `\N`, and backslash / tab / newline / CR are
+   * backslash-escaped (backslash MUST be escaped first). UTF-8 (e.g. Chinese)
+   * passes through untouched.
+   */
+  formatCopyValue(value: any): string {
+    if (value === null || value === undefined) {
+      return '\\N';
+    }
+    if (Buffer.isBuffer(value)) {
+      // bytea text input: escaped-backslash + hex form (\\x...)
+      return '\\\\x' + value.toString('hex');
+    }
+    let s: string;
+    if (value instanceof Date) {
+      s = value.toISOString();
+    } else if (typeof value === 'object') {
+      s = JSON.stringify(value);
+    } else {
+      s = String(value);
+    }
+    return s
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+  }
+
+  /**
+   * Open a `COPY <table> (<cols>) FROM STDIN` writer (PostgreSQL only).
+   * Rows are read by the sanitized `columns` (same identifiers as the COPY
+   * header), matching `insertBatch`'s read semantics. Throws for non-PostgreSQL.
+   */
+  async openCopyWriter(
+    rawTableName: string,
+    columns: string[],
+  ): Promise<CopyWriter> {
+    this.validateTableName(rawTableName);
+    if (!this.isPostgres) {
+      throw new Error('openCopyWriter is only supported for PostgreSQL targets');
+    }
+    if (columns.length === 0) {
+      throw new Error(`Cannot open COPY writer for "${rawTableName}" with no columns`);
+    }
+
+    const safeCols = columns.map((c) => this.sanitizeColumnName(c));
+    const colList = safeCols.map((c) => `"${c}"`).join(', ');
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    // The underlying node-postgres Client/PoolClient (needed for COPY streaming).
+    const client: any = (queryRunner as any).databaseConnection;
+
+    const copyStream: any = client.query(
+      copyFrom(`COPY "${rawTableName}" (${colList}) FROM STDIN WITH (FORMAT text)`),
+    );
+
+    // Capture the first stream error so subsequent ops fail fast.
+    let streamError: any = null;
+    copyStream.on('error', (err: any) => {
+      if (!streamError) streamError = err;
+    });
+
+    const formatValue = this.formatCopyValue.bind(this);
+
+    const writeChunk = (chunk: string): Promise<void> =>
+      new Promise<void>((resolve, reject) => {
+        if (streamError) return reject(streamError);
+        const onError = (err: any) => {
+          copyStream.removeListener('drain', onDrain);
+          reject(err);
+        };
+        const onDrain = () => {
+          copyStream.removeListener('error', onError);
+          resolve();
+        };
+        const ok = copyStream.write(chunk);
+        if (ok) return resolve();
+        copyStream.once('error', onError);
+        copyStream.once('drain', onDrain);
+      });
+
+    return {
+      async writeRows(rows: Record<string, any>[]): Promise<void> {
+        if (rows.length === 0) return;
+        let buf = '';
+        for (const row of rows) {
+          buf += safeCols.map((c) => formatValue(row[c])).join('\t') + '\n';
+        }
+        await writeChunk(buf);
+      },
+      async finish(): Promise<void> {
+        await new Promise<void>((resolve, reject) => {
+          copyStream.once('error', reject);
+          copyStream.once('finish', resolve);
+          copyStream.end();
+        });
+        await queryRunner.release();
+      },
+      async abort(err?: any): Promise<void> {
+        try { copyStream.destroy(err); } catch { /* ignore */ }
+        try { await queryRunner.release(); } catch { /* ignore */ }
+      },
+    };
   }
 
   /**

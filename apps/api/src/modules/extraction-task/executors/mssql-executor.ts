@@ -28,10 +28,15 @@ export class MSSQLExecutor extends BaseExecutor {
   /**
    * Create an isolated ConnectionPool per call to avoid global pool conflicts
    * when multiple extraction tasks run concurrently.
+   *
+   * `requestTimeout` defaults to REQUEST_TIMEOUT (5 min) for bounded queries.
+   * Streaming a full table (`streamBatches`) can legitimately run for many
+   * minutes, so it passes `0` (disable the per-request timeout).
    */
   private async withConnection<T>(
     datasourceId: string,
     fn: (pool: any) => Promise<T>,
+    requestTimeout: number = REQUEST_TIMEOUT,
   ): Promise<T> {
     const connInfo = await this.resolveConnection(datasourceId);
     const pool = new this.driver.ConnectionPool({
@@ -44,7 +49,7 @@ export class MSSQLExecutor extends BaseExecutor {
         encrypt: false,
         trustServerCertificate: true,
         connectTimeout: CONNECT_TIMEOUT,
-        requestTimeout: REQUEST_TIMEOUT,
+        requestTimeout,
       },
     });
     try {
@@ -251,5 +256,91 @@ export class MSSQLExecutor extends BaseExecutor {
 
       return { rows: resultRows, lastKeyValue: lastKeyVal, hasMore };
     });
+  }
+
+  /** MSSQL supports row streaming via tedious (`request.stream = true`). */
+  async supportsStreaming(): Promise<boolean> {
+    return true;
+  }
+
+  /**
+   * Stream the full table over one forward-only cursor and deliver rows in
+   * batches of `batchSize`. No OFFSET, no ORDER BY — each row is read exactly
+   * once (O(n)), eliminating OFFSET pagination's O(n²) cost and the latent
+   * skip/duplicate risk of `ORDER BY (SELECT NULL)` paging.
+   *
+   * Backpressure: the request is paused once a batch fills and resumed only
+   * after `onBatch` resolves, so at most ~one batch is buffered in memory.
+   * `onBatch` invocations are chained, never overlapped.
+   */
+  async streamBatches(
+    params: {
+      datasourceId: string;
+      sourceTable: string;
+      sourceSchema?: string | null;
+      batchSize: number;
+    },
+    onBatch: (rows: Record<string, any>[]) => Promise<void>,
+  ): Promise<void> {
+    return this.withConnection(
+      params.datasourceId,
+      (pool) =>
+        new Promise<void>((resolve, reject) => {
+          const tableName = this.qualifiedTable(params.sourceSchema, params.sourceTable);
+          const request = pool.request();
+          request.stream = true;
+
+          let buffer: Record<string, any>[] = [];
+          let chain: Promise<void> = Promise.resolve();
+          let settled = false;
+
+          const fail = (err: any) => {
+            if (settled) return;
+            settled = true;
+            try { request.cancel(); } catch { /* ignore */ }
+            reject(err instanceof Error ? err : new Error(String(err)));
+          };
+
+          const enqueue = (rows: Record<string, any>[]): Promise<void> => {
+            chain = chain.then(() => {
+              if (settled || rows.length === 0) return;
+              return onBatch(rows);
+            });
+            return chain;
+          };
+
+          request.on('row', (row: Record<string, any>) => {
+            if (settled) return;
+            buffer.push(row);
+            if (buffer.length >= params.batchSize) {
+              const chunk = buffer;
+              buffer = [];
+              request.pause();
+              enqueue(chunk).then(
+                () => { if (!settled) request.resume(); },
+                fail,
+              );
+            }
+          });
+
+          request.on('error', fail);
+
+          request.on('done', () => {
+            const tail = buffer;
+            buffer = [];
+            enqueue(tail).then(
+              () => { if (!settled) { settled = true; resolve(); } },
+              fail,
+            );
+          });
+
+          try {
+            request.query(`SELECT * FROM ${tableName}`);
+          } catch (err) {
+            fail(err);
+          }
+        }),
+      0, // disable per-request timeout for long-running full-table streams
+    );
   }
 }
