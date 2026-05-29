@@ -143,7 +143,9 @@ describe('MySQLExecutor', () => {
   });
 
   // --- readBatch ---
-  it('should generate correct SELECT with LIMIT for full mode readBatch', async () => {
+  // Full mode uses OFFSET pagination (no ORDER BY, no lastKeyValue) to avoid
+  // data loss with composite PKs; keyset is reserved for incremental mode.
+  it('should generate correct SELECT with LIMIT/OFFSET for full mode readBatch', async () => {
     mockQuery.mockResolvedValue([[
       { id: 1, name: 'Alice' },
       { id: 2, name: 'Bob' },
@@ -158,12 +160,12 @@ describe('MySQLExecutor', () => {
     });
 
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM `mydb`.`users` ORDER BY `id` ASC LIMIT ?',
-      [100],
+      'SELECT * FROM `mydb`.`users` LIMIT ? OFFSET ?',
+      [100, 0],
     );
     expect(result.rows).toHaveLength(2);
     expect(result.hasMore).toBe(false);
-    expect(result.lastKeyValue).toBe(2);
+    expect(result.lastKeyValue).toBeUndefined();
   });
 
   it('should generate correct SELECT with WHERE for incremental mode readBatch', async () => {
@@ -190,14 +192,15 @@ describe('MySQLExecutor', () => {
     expect(result.hasMore).toBe(true);
   });
 
-  it('should use keyset pagination with lastKeyValue', async () => {
+  it('should use keyset pagination with lastKeyValue in incremental mode', async () => {
     mockQuery.mockResolvedValue([[{ id: 11, name: 'Charlie' }]]);
 
     const result = await executor.readBatch({
       datasourceId: 'ds-1',
       sourceTable: 'users',
       sourceSchema: 'mydb',
-      mode: 'full',
+      mode: 'incremental',
+      incrementalColumn: 'id',
       batchSize: 10,
       lastKeyValue: 10,
     });

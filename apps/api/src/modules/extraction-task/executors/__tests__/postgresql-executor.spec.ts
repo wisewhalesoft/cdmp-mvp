@@ -155,7 +155,9 @@ describe('PostgreSQLExecutor', () => {
   });
 
   // --- readBatch ---
-  it('should use LIMIT $N for readBatch in full mode', async () => {
+  // Full mode uses OFFSET pagination (no ORDER BY) to avoid data loss with
+  // composite PKs; keyset is reserved for incremental mode (see test below).
+  it('should use LIMIT/OFFSET for readBatch in full mode', async () => {
     mockQuery.mockResolvedValue({
       rows: [{ id: 1, name: 'Alice' }],
     });
@@ -169,8 +171,8 @@ describe('PostgreSQLExecutor', () => {
     });
 
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM "public"."users" ORDER BY "id" ASC LIMIT $1',
-      [500],
+      'SELECT * FROM "public"."users" LIMIT $1 OFFSET $2',
+      [500, 0],
     );
     expect(result.rows).toHaveLength(1);
     expect(result.hasMore).toBe(false);

@@ -163,7 +163,9 @@ describe('MSSQLExecutor', () => {
   });
 
   // --- readBatch ---
-  it('should use OFFSET/FETCH NEXT for readBatch in full mode', async () => {
+  // Full mode uses OFFSET pagination (ORDER BY (SELECT NULL)) to avoid data loss
+  // with composite PKs; keyset is reserved for incremental mode (see test below).
+  it('should use OFFSET @offsetVal/FETCH NEXT for readBatch in full mode', async () => {
     mockRequestQuery.mockResolvedValue({
       recordset: [{ id: 1, name: 'A' }],
     });
@@ -177,8 +179,9 @@ describe('MSSQLExecutor', () => {
     });
 
     expect(mockRequestInput).toHaveBeenCalledWith('batchSize', 200);
+    expect(mockRequestInput).toHaveBeenCalledWith('offsetVal', 0);
     expect(mockRequestQuery).toHaveBeenCalledWith(
-      expect.stringContaining('OFFSET 0 ROWS FETCH NEXT @batchSize ROWS ONLY'),
+      expect.stringContaining('OFFSET @offsetVal ROWS FETCH NEXT @batchSize ROWS ONLY'),
     );
     expect(mockRequestQuery).toHaveBeenCalledWith(
       expect.stringContaining('[dbo].[customers]'),
@@ -187,14 +190,15 @@ describe('MSSQLExecutor', () => {
     expect(result.hasMore).toBe(false);
   });
 
-  it('should add keyset WHERE with @lastKey for pagination', async () => {
+  it('should add keyset WHERE with @lastKey for pagination in incremental mode', async () => {
     mockRequestQuery.mockResolvedValue({ recordset: [] });
 
     await executor.readBatch({
       datasourceId: 'ds-ms',
       sourceTable: 'customers',
       sourceSchema: 'dbo',
-      mode: 'full',
+      mode: 'incremental',
+      incrementalColumn: 'id',
       batchSize: 50,
       lastKeyValue: 100,
     });
