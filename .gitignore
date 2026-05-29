@@ -10,3 +10,6 @@ dist
 # 個人工作文件 / 進度報告（不入版控）
 進度報告*.md
 *-Peter-v*.md
+
+# Claude Code 排程器執行期 lock（暫存檔，不入版控）
+.claude/scheduled_tasks.lock
