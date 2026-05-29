@@ -215,6 +215,28 @@ describe('ListEditDraftPage v2.1 (Phase 5d 波 9)', () => {
   });
 
   // ─────────────────────────────────────────
+  // F097 fix — 未來月名單（project_workym＝下月）以 listNo 內嵌月份查詢
+  //   原 listLists({}) 預設當月 → 下月名單不在清單 → 誤報「找不到名單」。
+  // ─────────────────────────────────────────
+  it('le.test#F097: 未來月名單 OB202606001 → listLists 以 ym=202606 查詢並帶入資料', async () => {
+    const futureList: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202606001',
+      listNm: '2026-06 業務一部 主力催收',
+    };
+    mockedListLists.mockResolvedValue({
+      ...makeResp([futureList]),
+      selectedYm: '202606',
+      isFuture: true,
+    });
+    renderPage('OB202606001');
+    await waitFor(() =>
+      expect(screen.getByTestId('input-listNm')).toHaveValue('2026-06 業務一部 主力催收'),
+    );
+    expect(mockedListLists).toHaveBeenCalledWith({ ym: '202606' });
+  });
+
+  // ─────────────────────────────────────────
   // le.test#2 — 場景③（draft + LEGACY, conditionPayload IS NULL）→ 唯讀摘要 + LegacyBanner
   // ─────────────────────────────────────────
   it('le.test#2: 場景③ LEGACY (conditionPayload IS NULL) → 顯示 LEGACY banner 與唯讀條件摘要', async () => {

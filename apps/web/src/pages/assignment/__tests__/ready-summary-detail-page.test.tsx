@@ -283,6 +283,28 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     });
   });
 
+  // F097 fix：名單 project_workym 可能為未來月（作業月＝下月）。listNo 內嵌 YYYYMM，
+  // 頁面須以此查詢對應月份，否則 listLists 預設當月找不到下月名單 → 誤報「找不到」。
+  it('F097: 未來月名單 OB202606001 → listLists 以 ym=202606 查詢並成功載入', async () => {
+    const futureList = {
+      ...list,
+      listNo: 'OB202606001',
+      listNm: '2026-06 業務二部 主力催收',
+    };
+    mockedListLists.mockResolvedValue({
+      ...mockListsResp,
+      selectedYm: '202606',
+      isFuture: true,
+      lists: [futureList],
+    });
+    renderPage('OB202606001');
+    await waitFor(() => {
+      expect(screen.getAllByText(/2026-06 業務二部 主力催收/).length).toBeGreaterThan(0);
+    });
+    expect(mockedListLists).toHaveBeenCalledWith({ ym: '202606' });
+    expect(screen.queryByTestId('list-not-found')).not.toBeInTheDocument();
+  });
+
   it('麵包屑：含「名單定義」根節點與「準備完成摘要 — 詳情」leaf + listNo', async () => {
     renderPage();
     await waitFor(() => {
