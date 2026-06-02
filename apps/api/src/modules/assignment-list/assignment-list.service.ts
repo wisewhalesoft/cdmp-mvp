@@ -309,21 +309,77 @@ export class AssignmentListService {
   }
 
   /**
-   * F050 v2.1 / AD-E07-18 §18.8：抽取 prod_kind 條件之 values 集合（唯一性交集比對用）
+   * F050 v2.2 / F051 v2.2 / §18.8（完整條件集相等語意）：
+   * 將 condition_payload 正規化為可比對的 canonical 簽章字串。
    *
-   * - 僅取 fieldType=categorical 之 prod_kind condition
-   * - 過濾空字串 values
-   * - 未設定 / 非 categorical → 回空陣列（呼叫端依此跳過唯一性檢查）
+   * - conditions 依 columnName 排序（條件無序比對）
+   * - 排除 system-fixed 欄位（如 best_case）：常數注入、無鑑別度，且 seed 名單未注入，
+   *   排除後 service-injected 與 seed 名單方能對稱比對
+   * - categorical：values 去重後排序；numeric：min~max；date：dateStart~dateEnd
+   * - 併入 logic（AND/OR 影響命中集合，須納入比對）
+   *
+   * 回傳空字串代表「無可比對條件」，呼叫端視為永不衝突。
    */
-  private extractProdKindValues(
+  private normalizeConditionPayload(
     payload: ObListDefinitionConditionPayload | null | undefined,
-  ): string[] {
-    if (!payload || !Array.isArray(payload.conditions)) return [];
-    const cond = payload.conditions.find(
-      (c) => c.columnName === 'prod_kind' && c.fieldType === 'categorical',
-    );
-    if (!cond || !Array.isArray(cond.values)) return [];
-    return cond.values.filter((v): v is string => typeof v === 'string' && v.length > 0);
+    systemFixedColumnNames: Set<string>,
+  ): string {
+    if (!payload || !Array.isArray(payload.conditions)) return '';
+    const parts: string[] = [];
+    for (const c of payload.conditions as ObListDefinitionConditionItem[]) {
+      if (systemFixedColumnNames.has(c.columnName)) continue;
+      if (c.fieldType === 'categorical' && Array.isArray(c.values)) {
+        const vals = [
+          ...new Set(
+            c.values.filter(
+              (v): v is string => typeof v === 'string' && v.length > 0,
+            ),
+          ),
+        ].sort();
+        if (vals.length === 0) continue;
+        parts.push(`${c.columnName}:cat:${vals.join(',')}`);
+      } else if (
+        c.fieldType === 'numeric' &&
+        c.min !== undefined &&
+        c.max !== undefined
+      ) {
+        parts.push(`${c.columnName}:num:${c.min}~${c.max}`);
+      } else if (c.fieldType === 'date' && c.dateStart && c.dateEnd) {
+        parts.push(`${c.columnName}:date:${c.dateStart}~${c.dateEnd}`);
+      }
+    }
+    if (parts.length === 0) return '';
+    parts.sort();
+    const logic = (payload.logic ?? 'AND').toUpperCase();
+    return `${logic}|${parts.join('|')}`;
+  }
+
+  /**
+   * 將舊名單（condition_payload IS NULL）之 5 個 backward-compat entity column
+   * 還原為 categorical 條件，供與輸入名單以相同正規化邏輯比對（§18.8）。
+   */
+  private legacyEntityToConditionPayload(
+    entity: ObListDefinition,
+  ): ObListDefinitionConditionPayload {
+    const BACKWARD_COMPAT_FIELDS = [
+      'prod_kind',
+      'caseyear',
+      'spec_tp',
+      'case_status',
+      'settle_src',
+    ] as const;
+    const conditions: ObListDefinitionConditionItem[] = [];
+    for (const col of BACKWARD_COMPAT_FIELDS) {
+      const raw = (entity as unknown as Record<string, unknown>)[col];
+      if (typeof raw === 'string' && raw.length > 0) {
+        conditions.push({
+          columnName: col,
+          fieldType: 'categorical',
+          values: raw.split('$$').filter((v) => v.length > 0),
+        } as ObListDefinitionConditionItem);
+      }
+    }
+    return { conditions, logic: 'AND' };
   }
 
   // -------------------------------------------------------------------------
@@ -589,12 +645,12 @@ export class AssignmentListService {
     // 4. v2.1 / §18.6：derive backward-compat columns
     const derived = this.deriveBackwardCompatColumns(dto.conditionPayload);
 
-    // 5. v2.1 / §18.8：prod_kind 交集唯一性
-    const inputProdKindValues = this.extractProdKindValues(dto.conditionPayload);
-    const conflict = await this.findActivePkCardTypeConflict(
+    // 5. v2.2 / §18.8：完整條件集相等唯一性（取代 v2.1 prod_kind 交集）
+    const conflict = await this.findActiveConditionDuplicate(
       targetWorkYm,
-      inputProdKindValues,
+      dto.conditionPayload,
       dto.cardType ?? null,
+      systemFixedColumnNames,
     );
     if (conflict) {
       throw new UnprocessableEntityException({
@@ -779,12 +835,12 @@ export class AssignmentListService {
       // 8. derive backward-compat
       derived = this.deriveBackwardCompatColumns(dto.conditionPayload!);
 
-      // 9. prod_kind 交集唯一性（排除自身）
-      const inputProdKindValues = this.extractProdKindValues(dto.conditionPayload!);
-      const conflict = await this.findActivePkCardTypeConflict(
+      // 9. v2.2 / §18.8：完整條件集相等唯一性（排除自身）
+      const conflict = await this.findActiveConditionDuplicate(
         existing.project_workym ?? '',
-        inputProdKindValues,
+        dto.conditionPayload!,
         dto.cardType ?? null,
+        systemFixedColumnNames,
         listNo,
       );
       if (conflict) {
@@ -1038,31 +1094,36 @@ export class AssignmentListService {
   }
 
   /**
-   * F050 v2.1 / F051 v2.1 / AD-E07-18 §18.8：prod_kind 交集唯一性比對
+   * F050 v2.2 / F051 v2.2 / §18.8（v2.2 完整條件集相等語意，取代 v2.1 prod_kind 交集）：
    *
-   * 比對語意（取代 v2.0 完全相等）：
-   *   - 對同 (project_workym, status='active', card_type) 既有候選名單，
-   *     計算其 prod_kind values 集合（path A：condition_payload；path B：split entity.prod_kind by $$）
-   *   - 與 inputProdKindValues 取交集；首次發現交集 ≠ ∅ 即回衝突
-   *   - inputProdKindValues 為空（未設 prod_kind 條件）→ 跳過檢查
+   * 重複判定：同 (project_workym, status='active', card_type) 之既有名單中，
+   *   若有任一筆「正規化後 condition_payload 與輸入名單完全相同」即為重複。
+   *   - 候選 condition_payload != null → 直接正規化比對
+   *   - 候選 condition_payload == null（舊遷移名單）→ 由 5 個 backward-compat 欄位還原後比對
+   *   - system-fixed 欄位（best_case）於兩端皆排除（常數、無鑑別度）
+   *   - 輸入正規化為空（無可比對條件）→ 跳過檢查
    *   - excludeListNo（F051 update）→ 排除自身
    *
-   * @returns { conflictListNo, intersectionValues, conflictingProdKindValues, inputProdKindValues } 或 null
+   * card_type 仍為比對 key 的一部分（由 query 過濾）：legacy 實際資料存在「條件全同、
+   *   僅 card_type 不同」之合法名單（如 M/M3、HC/SEC），不可誤判為重複。
+   *
+   * @returns { conflictListNo, cardType } 或 null
    */
-  async findActivePkCardTypeConflict(
+  async findActiveConditionDuplicate(
     ym: string,
-    inputProdKindValues: string[],
+    inputPayload: ObListDefinitionConditionPayload | null | undefined,
     cardType: string | null,
+    systemFixedColumnNames: Set<string>,
     excludeListNo?: string,
   ): Promise<{
     conflictListNo: string;
-    intersectionValues: string[];
-    conflictingProdKindValues: string[];
-    inputProdKindValues: string[];
+    cardType: string | null;
   } | null> {
-    if (!Array.isArray(inputProdKindValues) || inputProdKindValues.length === 0) {
-      return null;
-    }
+    const inputSig = this.normalizeConditionPayload(
+      inputPayload,
+      systemFixedColumnNames,
+    );
+    if (inputSig === '') return null;
 
     const qb = this.listRepo
       .createQueryBuilder('l')
@@ -1081,22 +1142,17 @@ export class AssignmentListService {
 
     const candidates = await qb.getMany();
     for (const candidate of candidates) {
-      let candidateValues: string[];
-      if (candidate.condition_payload !== null && candidate.condition_payload !== undefined) {
-        candidateValues = this.extractProdKindValues(candidate.condition_payload);
-      } else {
-        candidateValues = (candidate.prod_kind ?? '')
-          .split('$$')
-          .filter((v) => v.length > 0);
-      }
-      const intersection = inputProdKindValues.filter((v) => candidateValues.includes(v));
-      if (intersection.length > 0) {
-        return {
-          conflictListNo: candidate.list_no,
-          intersectionValues: intersection,
-          conflictingProdKindValues: candidateValues,
-          inputProdKindValues,
-        };
+      const candPayload =
+        candidate.condition_payload !== null &&
+        candidate.condition_payload !== undefined
+          ? candidate.condition_payload
+          : this.legacyEntityToConditionPayload(candidate);
+      const candSig = this.normalizeConditionPayload(
+        candPayload,
+        systemFixedColumnNames,
+      );
+      if (candSig !== '' && candSig === inputSig) {
+        return { conflictListNo: candidate.list_no, cardType: cardType ?? null };
       }
     }
     return null;

@@ -235,7 +235,7 @@ export const ERROR_MESSAGES = {
   ASSIGNMENT_RUN_ALREADY_RUNNING: '分派執行中',
   // E07 M01 名單 CRUD
   LIST_NO_LIMIT_EXCEEDED: '本月名單定義已達 999 筆上限，無法新增',
-  LIST_NO_DUPLICATE: '相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在',
+  LIST_NO_DUPLICATE: '完全相同篩選條件與卡別（CARD_TYPE）的有效名單已存在',
   CASE_STATUS_REQUIRED: '案件結清期別為必填，請至少選取一項',
   ASSIGNMENT_LIST_NOT_FOUND: '找不到指定的名單定義',
   ASSIGNMENT_LIST_INACTIVE: '已停用名單不可編輯',
