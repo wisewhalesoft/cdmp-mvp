@@ -207,17 +207,17 @@ last_updated: 2026-05-28
 
 ---
 
-## 十、prod_kind 交集唯一性（UPDATE 場景）
+## 十、完整條件集相等唯一性（UPDATE 場景，§18.8 v2.2）
 
-### TS-F051-013：prod_kind 唯一性交集語意（UPDATE 場景，排除自身）
+### TS-F051-013：完整條件集相同（UPDATE 場景，排除自身）
 
-- **關聯需求**：F051 AC-7 / §18.8
+- **關聯需求**：F051 AC-7 / §18.8 v2.2
 - **測試類型**：Boundary / Integration（Supertest）
-- **前置條件**：名單 `OB202605008` stage=draft，card_type='A'；同月另有名單 `OB202605009`（active），`prod_kind = "02"`
+- **前置條件**：名單 `OB202605008` stage=draft，card_type='A'，`prod_kind=['01']`；同月另有名單 `OB202605009`（active），condition_payload `prod_kind = ['02']`、card_type='A'
 - **步驟**：
-  1. PUT `/api/v1/assignment/list-definitions/OB202605008`，`conditions` 含 `prod_kind values: ["02"]`，`card_type: "A"`
+  1. PUT `/api/v1/assignment/list-definitions/OB202605008`，`conditions` 含 `prod_kind values: ["02"]`，`card_type: "A"`（改為與 OB202605009 完全相同）
   2. 驗證回應
-- **預期結果**：HTTP 422，`LIST_NO_DUPLICATE`（與 `OB202605009` 有交集；自身 `OB202605008` 已排除比對）
+- **預期結果**：HTTP 422，`LIST_NO_DUPLICATE`（正規化條件集與 `OB202605009` 全等；自身 `OB202605008` 由 excludeListNo 排除比對）
 
 ---
 

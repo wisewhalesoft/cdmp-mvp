@@ -26,7 +26,7 @@ last_updated: 2026-05-28
 
 > **v2.1.1 測試設計補強（2026-05-20）**：在 v2.1 版 30 個場景基礎上，依 2026-05-20 業務複核決議 D1 / D2 / D4 / Q-A / Q-B 新增 4 個 stories（US-126 / US-127 / US-128 / US-129）的測試設計，共新增 **45 個測試場景**（A 群組 7 個 migration、B 群組 6 個 migration、C 群組 3 個 entity、D 群組 5 個 API、E 群組 6 個 DTO、F 群組 5 個 service、G 群組 5 個 Stage 1 composer、H 群組 8 個前端建立頁、I 群組 7 個前端編輯頁、J 群組 4 個 E2E、K 群組 2 個 regression guard）。核心新增：卡別改為動態下拉（US-126/127）、移除 prodBest 一級欄位（US-128）、best_case Y/N options seed（US-129）。
 
-> **v2.1 測試設計範圍**：本文件覆蓋 F050 v2.1 whitelist-driven 重構全部 30 個測試場景，包含 condition_payload 必填驗證、columnName 白名單驗證、list_period_* 保留欄位防呆、backward-compat 衍生欄位、prod_kind 交集唯一性、caseyear/case_status 動態選項、INACTIVE 選項警示、LEGACY_LIST_NOT_COPYABLE，以及前端必填驗證 UI。對應 GAP-LIST §A1~A3、§B1~B3、§C1~C3、§G1~G4 的完整解除驗收。
+> **v2.1 測試設計範圍**：本文件覆蓋 F050 v2.1 whitelist-driven 重構全部 30 個測試場景，包含 condition_payload 必填驗證、columnName 白名單驗證、list_period_* 保留欄位防呆、backward-compat 衍生欄位、完整條件集相等唯一性（v2.2）、caseyear/case_status 動態選項、INACTIVE 選項警示、LEGACY_LIST_NOT_COPYABLE，以及前端必填驗證 UI。對應 GAP-LIST §A1~A3、§B1~B3、§C1~C3、§G1~G4 的完整解除驗收。
 
 ---
 
@@ -230,57 +230,84 @@ last_updated: 2026-05-28
 
 ---
 
-## 六、prod_kind 交集唯一性（§18.8）
+## 六、完整條件集相等唯一性（§18.8 v2.2，取代 prod_kind 交集）
 
-### TS-F050-013：prod_kind 交集語意衝突（['01','02'] vs ['02','03']）回 422 LIST_NO_DUPLICATE
+> **v2.2 改版（2026-06-02）**：唯一性由「prod_kind 值集合交集」改為「正規化後 `condition_payload` 完全相同 + 同 `card_type`」。v2.1 交集語意非 legacy 沿用且誤擋每月「他新中古-H / 非他新中古-H」配對（legacy dump 619 筆有 125 組同 prod_kind+card_type 並存，僅差 spec_tp）。詳見 architecture-spec §18.8.1。
 
-- **關聯需求**：F050 AC-4 / §18.8 / §18.10 高風險
-- **測試類型**：Negative / Integration（Supertest）
-- **前置條件**：DB 已存在名單 `OB202605001`（active, stage=ready, card_type='A'），其 `prod_kind = "02$$03"`（代表 values = ['02','03']）；當前 project_workym 為 202605
+### TS-F050-013：部分交集（值集合不同）不再衝突 → 201（v2.2 改交集為完整相等）
+
+- **關聯需求**：F050 AC-4 / §18.8 v2.2
+- **測試類型**：Positive / Integration（Supertest）
+- **前置條件**：DB 已存在名單 `OB202605001`（active, card_type='A'），其 condition_payload `prod_kind = ['02','03']`；當前 project_workym 為 202605
 - **步驟**：
   1. POST `/api/v1/assignment/list-definitions`，`conditions` 含 `prod_kind values: ["01","02"]`，`card_type: "A"`
   2. 驗證回應
-- **預期結果**：
-  - HTTP 422
-  - `error_code: LIST_NO_DUPLICATE`
-  - response detail 含 `conflictListNo: "OB202605001"`、`intersectionValues: ["02"]`
+- **預期結果**：HTTP 201（`['01','02']` ≠ `['02','03']` → 條件集不相等 → 放行；v2.1 曾因交集 `['02']` 誤擋）
 
 ---
 
-### TS-F050-014：prod_kind 無交集（['03'] vs ['01','02']）通過唯一性檢查
+### TS-F050-013a：同 prod_kind 同 card_type 僅 spec_tp 不同（他新/非他新中古-H）→ 201
 
-- **關聯需求**：§18.8
+- **關聯需求**：F050 AC-4 / §18.8.1（legacy 對齊）
+- **測試類型**：Positive / Integration（Supertest）— **核心回歸**
+- **前置條件**：DB 已存在「他新中古-H」名單（`prod_kind=['01']`、`spec_tp=['02','04','05']`、`card_type='H'`、active）
+- **步驟**：
+  1. POST 建「非他新中古-H」（`prod_kind=['01']`、`spec_tp=['01','03']`、`card_type='H'`）
+  2. 驗證回應
+- **預期結果**：HTTP 201（僅 `spec_tp` 不同 → 條件集不相等 → 放行，對齊 legacy 每月並存作業）
+
+---
+
+### TS-F050-013b：完整條件集相同（多欄位）→ 422 LIST_NO_DUPLICATE
+
+- **關聯需求**：F050 AC-4 / §18.8 v2.2
+- **測試類型**：Negative / Integration（Supertest）
+- **前置條件**：DB 已存在名單（`prod_kind=['01']`、`spec_tp=['01','03']`、`card_type='H'`、active）
+- **步驟**：
+  1. POST 送出**完全相同**之 condition_payload + `card_type='H'`
+  2. 驗證回應
+- **預期結果**：HTTP 422；`error_code: LIST_NO_DUPLICATE`；response detail 含 `conflictListNo`、`cardType: "H"`
+
+---
+
+### TS-F050-013c：條件/values 順序不同但集合相同 → 422（正規化無序比對）
+
+- **關聯需求**：§18.8.3 normalizeConditionPayload
+- **測試類型**：Boundary / Integration（Supertest）
+- **前置條件**：DB 已存在名單（`prod_kind=['01','02']`、`card_type='A'`、active）
+- **步驟**：POST 送 `prod_kind values: ['02','01']`（順序顛倒）、`card_type='A'`
+- **預期結果**：HTTP 422（正規化後簽章相同 → 視為重複）
+
+---
+
+### TS-F050-014：不同 prod_kind 集合（['03'] vs ['01','02']）→ 201
+
+- **關聯需求**：§18.8 v2.2
 - **測試類型**：Positive / Integration（Supertest）
-- **前置條件**：DB 已存在名單，其 `prod_kind = "01$$02"`（values=['01','02']）；card_type='A'
-- **步驟**：
-  1. POST `/api/v1/assignment/list-definitions`，`conditions` 含 `prod_kind values: ["03"]`，`card_type: "A"`
-  2. 驗證回應
-- **預期結果**：HTTP 201（成功建立，無衝突）
+- **前置條件**：DB 已存在名單，其 condition_payload `prod_kind = ['01','02']`；card_type='A'
+- **步驟**：POST `conditions` 含 `prod_kind values: ["03"]`，`card_type: "A"`
+- **預期結果**：HTTP 201（條件集不相等 → 放行）
 
 ---
 
-### TS-F050-015：新名單未設 prod_kind 條件時跳過唯一性檢查
+### TS-F050-015：條件欄位不同（prod_kind vs caseyear）→ 201
 
-- **關聯需求**：§18.8 規則第 4 點
+- **關聯需求**：§18.8 v2.2
 - **測試類型**：Boundary / Integration（Supertest）
-- **前置條件**：DB 已存在名單，其 `prod_kind = "01"`；card_type='A'
-- **步驟**：
-  1. POST `/api/v1/assignment/list-definitions`，`conditions` 不含 `prod_kind`（values 空），`card_type: "A"`
-  2. 驗證回應
-- **預期結果**：HTTP 201（prod_kind 無條件 → 跳過唯一性檢查）
+- **前置條件**：DB 已存在名單，其 condition_payload 僅 `prod_kind = ['01']`；card_type='A'
+- **步驟**：POST `conditions` 僅含 `caseyear values: ['1']`（無 prod_kind），`card_type: "A"`
+- **預期結果**：HTTP 201（不同欄位 → 條件集不相等 → 放行）
 
 ---
 
-### TS-F050-016：唯一性比對對象為舊名單（IS NULL）時從 entity column 讀取
+### TS-F050-016：唯一性比對對象為舊名單（IS NULL）時由 5 個 backward-compat 欄位還原比對
 
-- **關聯需求**：§18.8 規則第 2 點
+- **關聯需求**：§18.8.3（legacy NULL 路徑）
 - **測試類型**：Boundary / Integration（Supertest）
-- **前置條件**：DB 已存在舊名單（`condition_payload IS NULL`，`prod_kind = "02"` entity column，`card_type='A'`，status=active）
-- **步驟**：
-  1. POST `/api/v1/assignment/list-definitions`，`conditions` 含 `prod_kind values: ["02"]`，`card_type: "A"`
-  2. 驗證回應
+- **前置條件**：DB 已存在舊名單（`condition_payload IS NULL`，entity `prod_kind = "02"`，其餘 backward-compat 欄位空，`card_type='A'`，status=active）
+- **步驟**：POST `conditions` 含 `prod_kind values: ["02"]`，`card_type: "A"`
 - **預期結果**：
-  - HTTP 422，`LIST_NO_DUPLICATE`（舊名單 prod_kind `"02"` 與新名單 `["02"]` 有交集）
+  - HTTP 422，`LIST_NO_DUPLICATE`（舊名單還原為 `{prod_kind:['02']}` 與新名單條件集相同）
   - 即使舊名單 condition_payload IS NULL，唯一性檢查仍正確觸發
 
 ---

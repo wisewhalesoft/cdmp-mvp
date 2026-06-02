@@ -115,12 +115,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **Then** 系統回傳 422 `LIST_NO_LIMIT_EXCEEDED`，訊息：「本月（YYYYMM）名單定義已達 999 筆上限，無法新增」
 - **And** 不產生新紀錄
 
-### AC-4：PROD_KIND + CARD_TYPE 組合重複檢查
+### AC-4：完整條件集 + CARD_TYPE 重複檢查（v2.2）
 
-- **Given** 業務部長填入的 `prod_kind + card_type` 組合，在當前作業年月下已存在 `status = 'active'` 的名單
+- **Given** 業務部長填入的篩選條件（正規化後 `condition_payload`）與 `card_type`，在當前作業年月下已存在**條件完全相同**之 `status = 'active'` 名單
 - **When** 業務部長點擊「儲存」
-- **Then** 系統硬阻擋，回傳 422 `LIST_NO_DUPLICATE`，訊息：「相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {衝突 list_no}），請停用既有名單或修改條件」
+- **Then** 系統硬阻擋，回傳 422 `LIST_NO_DUPLICATE`，訊息：「完全相同篩選條件與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {衝突 list_no}）」
 - **And** 不產生新紀錄
+- **And**（v2.2）僅篩選條件任一欄位不同（如 `spec_tp`）即放行——對齊 legacy 每月「他新中古-H / 非他新中古-H」並存作業（見 architecture-spec §18.8）
 
 ### AC-5：複製名單功能
 
@@ -429,7 +430,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 422 | CONDITION_COLUMN_NOT_IN_WHITELIST | `conditions[].columnName` 不在 F075 v1.5 白名單或對應欄位 `is_active=false`（AC-11 / BR-6 / 拍板 1） |
 | 422 | LEGACY_LIST_NOT_COPYABLE | `copyFromListNo` 指向之來源名單 `condition_payload IS NULL`（舊遷移名單）（AC-5 / 拍板 Q4） |
 | 422 | LIST_NO_LIMIT_EXCEEDED | 本月已達 999 筆 |
-| 422 | LIST_NO_DUPLICATE | `prod_kind + card_type` 組合已存在 active 名單（v2.1：prod_kind 由 condition_payload 衍生後再做檢查，衍生規則由 Phase 3a 設計，BR-2） |
+| 422 | LIST_NO_DUPLICATE | **v2.2**：正規化後 `condition_payload` 完全相同 + 同 `card_type` 之 active 名單已存在（BR-2；取代 v2.1 prod_kind 交集，詳見 architecture-spec §18.8） |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | （F051 編輯場景）對非 draft 階段名單寫入 condition_payload（AC-14 / K1） |
 | 422 | VALIDATION_ERROR | 欄位驗證失敗（詳見 details；含 condition_payload schema 違反，例：conditions 為空、columnName 非 lowercase snake_case、fieldType 不合法、numeric `max < min` 等） |
 | ~~422~~ | ~~CASE_STATUS_REQUIRED~~ | **v2.1 移除**：case_status 改由 `condition_payload` 必填與 columnName 白名單驗證統一覆蓋（A1 / A5） |
@@ -577,7 +578,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | `list_no` 產生邏輯：後端查詢當月最大既有流水號 + 1；若無既有則從 001 開始；達 999 回傳 `LIST_NO_LIMIT_EXCEEDED` |
-| BR-2 | `prod_kind + card_type` 組合僅在 `status = 'active'` 範圍內檢查唯一性；停用紀錄不納入。**v2.1 補述**：v2.1 重構後，`prod_kind` 由 `condition_payload` 衍生（BR-10），唯一性檢查的具體比對語意（多值交集 / 子集 / 完全相等等）由 **Phase 3a system-architect** 設計；本 spec 暫保留 v2.0 語意作為過渡定義（拍板 Q5） |
+| BR-2 | 名單唯一性僅在 `status = 'active'` 範圍內檢查；停用紀錄不納入。**v2.2 定義（2026-06-02）**：以**正規化後 `condition_payload` 完全相同 + 同 `card_type`** 判定重複（正規化：條件與 values 皆無序、排除 system-fixed 欄位 best_case、含 logic）；新名單無有效條件 → 跳過；舊名單（`condition_payload IS NULL`）由 5 個 backward-compat 欄位還原比對。`card_type` 保留為比對 key（legacy 有條件全同僅 card_type 不同之合法名單）。**v2.1 prod_kind 交集語意已棄用**（非 legacy 沿用且誤擋他新/非他新中古配對，詳見 architecture-spec §18.8） |
 | BR-3 | 多值欄位（`caseyear` / `spec_tp` / `settle_src` / `case_status` / `prod_kind`）寫入 entity column 時以 `$$` 為分隔符儲存（如 `0$$1$$2$$3`、`01$$02$$03`）；v2.1 起此為**後端衍生填入之 backward-compat 格式**（BR-10），前端不直接送出此格式。**v2.1.1 補述（US-128）**：`prod_best` 已從一級欄位移除，**不**屬於 BR-3 衍生欄位之一；其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見 BR-12） |
 | BR-4 | 月跑執行鎖由 `assignment_run.status IN ('pending', 'running')` 判斷 |
 | BR-5 | 所有寫入操作必須同步寫入 `assignment_audit_log`；稽核寫入失敗僅記錄 Logger.error，不 rollback 業務操作 |

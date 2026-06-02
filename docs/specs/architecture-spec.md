@@ -3958,7 +3958,7 @@ step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆�
 | 決策 ID | 決策內容 | 拒絕方案 | 理由 |
 |---|---|---|---|
 | 18.2.1 | `condition_payload` 為 source of truth；5 個 entity column 降為後端衍生 backward-compat | 繼續以 5 個 column 作為主要欄位 | 支援動態白名單新增任意欄位；backward-compat 衍生確保舊讀取端不中斷（J6 / BR-10） |
-| 18.2.2 | prod_kind 唯一性採**值集合交集語意**（intersection ≠ ∅ → 衝突） | 完全相等 / 子集語意 | 交集語意防止同客戶被兩名單重複命中；完全相等過寬鬆（`01` vs `01$$02` 不衝突但業務上重疊）；子集語意不對稱（詳見 §18.8） |
+| 18.2.2 | 名單唯一性採 **v2.2 完整條件集相等語意**（normalized condition_payload 全等 + 同 card_type → 衝突） | ~~v2.1 值集合交集~~ / 子集語意 | v2.1 交集語意非 legacy 沿用且誤擋他新/非他新中古配對（legacy 619 筆有 125 組同 prod_kind+card_type 並存，僅差 spec_tp）；改為完整條件集相等，零誤殺（詳見 §18.8） |
 | 18.2.3 | E2 backfill（entity column → `condition_payload`）一次性執行，**無 per-user confirm 流程** | 逐筆 confirm 轉換 | 避免部分轉換 / 部分未轉換造成系統中混亂中間狀態（拍板 2 / J6） |
 | 18.2.4 | F069 `prod_kind_name` 改讀 `pooldata_field_option`（`column_name='prod_kind'`，取 `option_label`） | 繼續讀 `ob_code_df` | M5 刪除 `ob_code_df.PROD_KIND` 資料列後若未改，`prodKindName` 全部回 null；F075/F076 已為唯一篩選欄位來源（J1） |
 | 18.2.5 | PG GIN index 合併入 M1 migration，SQLite 不建 | 獨立 M6 migration | 減少 migration 檔案數；GIN index 與 `ADD COLUMN` 同屬表結構變更，合併部署原子性更佳 |
@@ -4081,9 +4081,8 @@ sequenceDiagram
     S->>S: deriveBackwardCompatColumns(dto.conditionPayload)
     Note over S: 返回 { prod_kind, caseyear,<br/>spec_tp, case_status, settle_src }
 
-    S->>S: extractProdKindValues(dto.conditionPayload)
-    S->>LR: findActivePkCardTypeConflict(ym, prodKindValues, cardType)
-    Note over S: 交集語意唯一性檢查（§18.8）
+    S->>LR: findActiveConditionDuplicate(ym, conditionPayload, cardType, systemFixedColumnNames)
+    Note over S: 完整條件集相等唯一性檢查（§18.8 v2.2）
 
     S->>S: generateNextListNo(currentWorkYm)
 
@@ -4307,43 +4306,64 @@ F069 service 修改內容（Phase 5 執行）：
 
 ---
 
-##### 18.8 prod_kind 唯一性語意（BR-2 補述 / Q5 閉合）
+##### 18.8 名單唯一性語意（BR-2）— v2.2 完整條件集相等（取代 v2.1 prod_kind 交集）
 
-**選定語意：值集合交集（Intersection）不為空 → 衝突**
+**選定語意（v2.2，2026-06-02 拍板）：同 `card_type` 下，正規化後 `condition_payload` 完全相同 → 衝突**
+
+###### 18.8.1 v2.1 交集語意之缺陷（為何改）
+
+v2.1 採「prod_kind 值集合交集 ≠ ∅ + card_type」判定重複，但此規則**非 legacy 沿用、且會誤擋 legacy 每月固定作業**。三層 legacy 證據（皆在 `reference/`）：
+
+| 證據 | 內容 |
+|---|---|
+| `TableSchema/OB/OBMLISTDF.sql` | 名單定義表主鍵僅 `LIST_NO`，**無 `PROD_KIND`/`CARD_TYPE` unique constraint/index** |
+| `SP/USP_OBZ020_I00.sql` | legacy「新增名單」SP 僅做各欄位非空檢核就 `INSERT`，**無任何重複檢查；連 `CARD_TYPE` 參數都沒有** |
+| `DumpData/OBMLISTDF_20260505.csv`（619 筆） | **125 組**同 `月份+PROD_KIND+CARD_TYPE` 並存；每月固定成對的「他新中古-H / 非他新中古-H」(`prod_kind=01`、`card_type=H` 全同，**僅差 `spec_tp` 02/04/05.. vs 01/03 與 `list_period_start` 8 vs 12**) 被 v2.1 交集規則誤判為重複 |
+
+legacy 的客戶去重在下游 pool-data 層（`ob_pool_data_list (assignday, custo_no)` 去重，m297 index），**不靠名單定義唯一性**。
+
+###### 18.8.2 v2.2 選定語意
 
 | 比對語意 | 評估 | 結論 |
 |---|---|---|
-| **交集（∩ ≠ ∅）** | 防止同 prod_kind 代碼的客戶被兩名單重複命中；最嚴格且業務直觀 | **選定** |
-| 完全相等（A = B） | 過寬鬆：`['01']` vs `['01','02']` 不衝突，但 prod_kind=`01` 客戶仍被兩名單都撈到 | 拒絕 |
-| 子集（A ⊆ B 或 B ⊆ A） | 不對稱（需定義方向）；邏輯複雜，超出 MVP 需要 | 拒絕 |
+| **完整條件集相等（normalized condition_payload 全等 + 同 card_type）** | 僅擋「條件與卡別都完全相同」之真重複；放行 spec_tp/settle_src 等任一欄位不同之合法配對 | **選定（v2.2）** |
+| ~~值集合交集（∩ ≠ ∅）~~ | 誤擋他新/非他新中古配對等 legacy 標準作業（見 18.8.1） | v2.1，**已棄用** |
+| 完全相等（僅比 prod_kind） | 忽略其他篩選欄位，仍過寬鬆/過嚴不一 | 拒絕 |
 
-**`findActivePkCardTypeConflict` 重寫邏輯（Phase 5 參考）**：
+**`card_type` 必須留在比對 key**：legacy 實際資料有 7 組「條件全同、僅 `card_type` 不同」之合法名單（如 `M`/`M3`、`HC`/`SEC`、`HB`/`SEB`），同案件群不同卡別計分，不可誤判。套用 v2.2 規則於 619 筆 legacy 資料 → **精確全條件+card_type 重複 = 0 筆（零誤殺）**。
 
-1. 查詢同 `project_workym + status='active' + card_type` 之所有候選名單
-2. 對每筆候選：
-   - `condition_payload IS NOT NULL` → 取 `extractProdKindValues(候選.condition_payload)`
-   - `condition_payload IS NULL` → 取 `候選.prod_kind.split('$$').filter(Boolean)`
-3. 計算 `input ∩ candidate`：若交集 `size > 0` → 回傳候選 `list_no`（衝突）
-4. `inputProdKindValues.length === 0` → 跳過唯一性檢查（未設定 prod_kind 條件）
+###### 18.8.3 `findActiveConditionDuplicate` 邏輯
 
-**422 LIST_NO_DUPLICATE response detail 結構**：
+1. `normalizeConditionPayload(輸入, systemFixedColumnNames)` 取得輸入簽章 `inputSig`；空字串 → 跳過檢查
+2. 查詢同 `project_workym + status='active' + card_type` 之候選名單（`excludeListNo` 排除自身）
+3. 對每筆候選計算簽章 `candSig`：
+   - `condition_payload IS NOT NULL` → `normalizeConditionPayload(候選.condition_payload, ...)`
+   - `condition_payload IS NULL`（舊遷移名單）→ 由 5 個 backward-compat 欄位還原 categorical 條件後正規化
+4. `candSig !== '' && candSig === inputSig` → 回傳候選 `list_no`（衝突）
+
+**`normalizeConditionPayload` 正規化規則**：
+- conditions 依 `columnName` 排序（**條件無序比對**）
+- **排除 system-fixed 欄位**（`best_case`）：常數注入無鑑別度，且 seed/legacy 名單未注入，排除後方能對稱比對
+- categorical：`values` 去重後排序；numeric：`min~max`；date：`dateStart~dateEnd`
+- 併入 `logic`（AND/OR 影響命中集合）
+- 無有效條件 → 回空字串（呼叫端視為永不衝突）
+
+**422 LIST_NO_DUPLICATE response detail 結構（v2.2）**：
 
 ```json
 {
   "error": "LIST_NO_DUPLICATE",
-  "message": "相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: OB202605001），請停用既有名單或修改條件",
+  "message": "完全相同篩選條件與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: OB202605001）",
   "details": {
     "conflictListNo": "OB202605001",
-    "conflictingProdKindValues": ["01", "02"],
-    "inputProdKindValues": ["01", "03"],
-    "intersectionValues": ["01"]
+    "cardType": "H"
   }
 }
 ```
 
-**BR-2 v2.1 補述（供 spec-writer 下輪追補 F050 / F051）**：
+**BR-2 v2.2 定義（F050 / F051）**：
 
-> `prod_kind` 唯一性比對以 `condition_payload` 衍生之 values 集合交集語意執行：若新名單之 prod_kind values 集合（來自 condition_payload）與當月同 card_type 既有 active 名單之 prod_kind values 集合有任何交集（∩ ≠ ∅），則回 422 `LIST_NO_DUPLICATE`；若新名單未設定 prod_kind 條件（values 為空），不做唯一性檢查；舊名單（condition_payload IS NULL）之 prod_kind values 從 entity column `$$` 分隔讀取。
+> 名單唯一性以**正規化後 `condition_payload` 完全相同 + 同 `card_type`** 判定：若新名單之正規化條件簽章與當月同 `card_type` 既有 active 名單之簽章相同，則回 422 `LIST_NO_DUPLICATE`；正規化排除 system-fixed 欄位、條件與 values 皆無序比對、含 `logic`。新名單無有效條件（簽章為空）→ 跳過檢查；舊名單（`condition_payload IS NULL`）由 5 個 backward-compat 欄位（`$$` 分隔）還原後比對。**v2.1 prod_kind 交集語意已棄用**（誤擋 legacy 他新/非他新中古配對，見 18.8.1）。
 
 ---
 
@@ -4429,7 +4449,7 @@ F069 service 修改內容（Phase 5 執行）：
 | 極高 | M2 backfill idempotency | 執行兩次 up() 結果相同；backfill 後 condition_payload 可被路徑 A 正確解析 |
 | 極高 | Stage 1 路徑 A / B 並存 | 同月跑內，路徑 A 名單（condition_payload IS NOT NULL）與路徑 B 名單（IS NULL）各走正確路徑，結果不互相干擾 |
 | 高 | case_status 空字串 fallback | 路徑 B：`case_status = ''` 不加 `list_type` 比對條件；與舊名單語意一致 |
-| 高 | prod_kind 交集唯一性 | `['01','02']` vs `['02','03']` → 交集 `['02']` → 422；`['03']` vs `['01','02']` → 無交集 → 通過 |
+| 高 | 完整條件集相等唯一性（v2.2）| 同 card_type 條件全等 → 422；同 prod_kind 同 card_type 僅 spec_tp 不同（他新/非他新中古-H）→ 通過；條件/values 順序不同但集合相同 → 422（無序）；不同 card_type 條件全等 → 通過 |
 | 高 | columnName SQL Injection 防禦 | 植入含非法字元的 columnName → Stage 1 skip 該欄位 + Logger.warn，不 crash |
 | 高 | SQLite JSON 解析（R5）| E2E condition_payload TEXT → object 正確反序列化 |
 | 中 | conditions 含 INACTIVE option | 201 Created + warnings body 正確；Stage 1 月跑仍執行 |
@@ -4441,7 +4461,9 @@ F069 service 修改內容（Phase 5 執行）：
 
 ---
 
-*本節版本 1.1（2026-05-20），由 System Architect Agent（Phase 3a + 3b）更新。*
+*本節版本 1.2（2026-06-02），§18.8 唯一性語意改版。*
+- *v1.2（2026-06-02）：§18.8 名單唯一性由 v2.1「prod_kind 值集合交集」改為 v2.2「完整正規化 condition_payload 相等 + card_type」。理由：v2.1 交集語意非 legacy 沿用且誤擋 legacy 每月固定的他新/非他新中古名單配對（reference dump 619 筆有 125 組同 prod_kind+card_type 並存）。`findActivePkCardTypeConflict` → `findActiveConditionDuplicate`；新增 `normalizeConditionPayload`（無序、排除 system-fixed）。*
+- *v1.1（2026-05-20）：System Architect Agent（Phase 3a + 3b）更新。*
 - *v1.0 新增：AD-E07-18（F050 v2.1 whitelist-driven 名單定義重構：migration M1~M5 設計 + Service 流程 + Stage 1 動態 SQL + 衍生規則 + F068 廢除步驟 + prod_kind 唯一性語意）*
 - *v1.0 covers：F050 v2.1 / F051 v2.1 / F068 DEPRECATED / F075 v1.5 / F076 v1.5 相關 GAP-LIST §A~K 解除*
 - *v1.1 新增：AD-E07-18 §18.11（F050 v2.1.1 補強架構設計：M-A1 / M-A2 migration + card-type 下拉 API contract + prodBest DTO 處置 + Stage 1 best_case 確認）*

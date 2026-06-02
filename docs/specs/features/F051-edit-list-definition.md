@@ -116,13 +116,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **And** 若前端被繞過，後端於 `validateConditionPayload` 計算 `condition_payload.conditions` 中 `is_system_fixed = false` 之條件數；若該數為 0（含完全為空、或僅含 `best_case` 等系統固定欄位）即回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（v2.2.1 / US-144；對齊 F050 v2.3.1 AC-10）
 - **And** **驗證順序**：本最低條件數檢查在 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload，`best_case`（及任何 `is_system_fixed = true` 欄位）一律排除；系統固定欄位之判定以 F075 v1.7 `is_system_fixed` 旗標為準（不 hardcode 字串）。沿用既有 `VALIDATION_ERROR`（422），**不**新增錯誤碼。**僅**在提供 `conditionPayload` 時套用；舊名單（`condition_payload IS NULL`）唯讀、不送 `conditionPayload`，不受本規則影響（AC-11 / BR-11）
 
-### AC-7：PROD_KIND + CARD_TYPE 組合變更後的重複檢查
+### AC-7：完整條件集 + CARD_TYPE 變更後的重複檢查（v2.2）
 
-- **Given** 業務部長修改 `condition_payload` 中 `prod_kind` 條件或 `card_type` 使其與當月其他 active 名單組合衝突
+- **Given** 業務部長修改 `condition_payload` 或 `card_type`，使其與當月其他 active 名單（排除本身）之**正規化條件集完全相同且 card_type 相同**
 - **When** 業務部長點擊「儲存」
-- **Then** 系統回傳 422 `LIST_NO_DUPLICATE`，訊息：「相同 PROD_KIND 與 CARD_TYPE 的有效名單已存在（LIST_NO: {衝突 list_no}）」
+- **Then** 系統回傳 422 `LIST_NO_DUPLICATE`，訊息：「完全相同篩選條件與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {衝突 list_no}）」
 - **And** 不更新紀錄
-- **And** **v2.1 補述**：`prod_kind` 由 `condition_payload` 衍生（BR-10），唯一性檢查的具體比對語意（多值交集 / 子集 / 完全相等）由 Phase 3a system-architect 設計（BR-5 / 拍板 Q5）
+- **And**（v2.2）僅篩選條件任一欄位不同（如 `spec_tp`）即放行；唯一性以正規化後 `condition_payload` 全等 + 同 card_type 判定（取代 v2.1 prod_kind 交集，詳見 architecture-spec §18.8）
 
 ### AC-8：columnName 白名單驗證（v2.1 新增 / US-121 AC-2 / 對齊 F050 v2.1 AC-11）
 
@@ -227,7 +227,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 422 | ASSIGNMENT_LIST_INACTIVE | 已停用名單不可編輯 |
 | 422 | CONDITION_COLUMN_NOT_IN_WHITELIST | `conditions[].columnName` 不在 F075 v1.5 白名單或對應欄位 `is_active=false`（AC-8 / 拍板 1） |
 | 422 | LEGACY_LIST_CONDITION_READONLY | 對 `condition_payload IS NULL` 之舊遷移名單寫入 `conditionPayload`（AC-11 / 拍板 Q3） |
-| 422 | LIST_NO_DUPLICATE | `prod_kind + card_type` 組合衝突（v2.1：prod_kind 由 condition_payload 衍生，比對語意由 Phase 3a 設計） |
+| 422 | LIST_NO_DUPLICATE | **v2.2**：正規化後 `condition_payload` 完全相同 + 同 `card_type`（排除本身）已存在 active 名單（取代 v2.1 prod_kind 交集，詳見 architecture-spec §18.8） |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | 對非 draft 階段名單寫入 condition_payload（AC-12 / K1） |
 | 422 | VALIDATION_ERROR | 欄位驗證失敗（含 condition_payload schema 違反） |
 | ~~422~~ | ~~CASE_STATUS_REQUIRED~~ | **v2.1 移除**：case_status 改由 condition_payload 必填與 columnName 白名單驗證統一覆蓋（A1 / A5） |
@@ -240,7 +240,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | BR-2 | `list_no` 不可修改；系統管理欄位（`list_type` / `project_workym` / `status` / `stage` / audit）不在表單中 |
 | BR-3 | `card_type` 為獨立輸入欄位，不由 `list_nm` 解析（A43 決議：遷移沿用舊值） |
 | BR-4 | 編輯已停用名單需回傳 `ASSIGNMENT_LIST_INACTIVE`；前端額外於 `status = 'inactive'` 時隱藏編輯按鈕；非 draft 階段名單回 `LIST_STAGE_TRANSITION_FORBIDDEN`（BR-9） |
-| BR-5 | `prod_kind + card_type` 重複檢查範圍：當前作業年月內的其他 active 名單（不含本身）。**v2.1 補述**：v2.1 重構後 `prod_kind` 由 `condition_payload` 衍生（BR-7），唯一性檢查的具體比對語意（多值交集 / 子集 / 完全相等）由 **Phase 3a system-architect** 設計，本 spec 暫保留 v2.0 語意作為過渡定義（拍板 Q5） |
+| BR-5 | 重複檢查範圍：當前作業年月內的其他 active 名單（**排除本身** via excludeListNo）。**v2.2 定義（2026-06-02）**：以**正規化後 `condition_payload` 完全相同 + 同 `card_type`** 判定（正規化：條件與 values 無序、排除 system-fixed best_case、含 logic）。**v2.1 prod_kind 交集語意已棄用**（非 legacy 沿用且誤擋他新/非他新中古配對，詳見 architecture-spec §18.8） |
 | BR-6 | **condition_payload 為 source of truth（v2.1 重寫，A1 / A2 / A3 解除，對齊 F050 v2.1 BR-6；v2.2.1 最低條件數修正 / US-144）**：必填、`conditions` 至少 1 個**非系統固定（`is_system_fixed = false`）condition**——`best_case` 等系統固定欄位不計入；計數於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload（排除 `is_system_fixed = true` 欄位）；非系統固定條件數為 0 時回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（AC-6；對齊 F050 v2.3.1 BR-6）。每個 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`。僅在提供 `conditionPayload` 時套用（舊名單 `condition_payload IS NULL` 唯讀不受影響，BR-11） |
 | BR-7 | **多值 / 區間 SQL 比對語意（v2.1 重寫，A6 / D3，對齊 F050 v2.1 BR-7）**：categorical 條件 `IN (...)`、numeric `BETWEEN min AND max`、date `BETWEEN dateStart AND dateEnd`；多欄位之間 AND；舊 SP 之 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對已棄用，僅保留於 `condition_payload IS NULL` 之舊名單 fallback（D4 / US-122 AC-4） |
 | BR-8 | 多值欄位（`caseyear` / `spec_tp` / `settle_src` / `case_status` / `prod_kind`）寫入 entity column 時以 `$$` 為分隔符（v2.1：此為後端衍生填入之 backward-compat 格式，前端不直接送出此格式） |
