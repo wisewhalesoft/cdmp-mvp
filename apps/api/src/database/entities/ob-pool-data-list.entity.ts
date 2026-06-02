@@ -6,7 +6,38 @@
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
 import { dateColumnType } from '@/common/database/column-types';
 
+/**
+ * idx_ob_pool_data_list_assignday_custo（2026-06-01）— Stage 1 近 3 個月去重視窗查詢加速。
+ *
+ * Stage1FilterChain.computeDedupWindow / queryRecentAssignedCustoNos 依
+ *   WHERE assignday BETWEEN :start AND :end AND custo_no IS NOT NULL
+ * 篩出近 3 月已派 custo_no 集合。本表為 ETL legacy 派案歷史，列數可達數百萬；
+ * 無索引時該查詢需全表 seq scan（dev 實測 ~17.5s／7.8M 列），直接撐爆 Stage 0 估算
+ * 10s 逾時（STAGE0_ESTIMATE_TIMEOUT → 物化失敗、試算頁顯示 0）。
+ *
+ * 複合索引 (assignday, custo_no)：assignday 前綴支援視窗 range scan，custo_no 隨後
+ * 供 DISTINCT／NOT EXISTS anti-join 覆蓋（dev 實測估算 10s→5s）。月跑去重亦受惠。
+ *
+ * ⚠️ Entity 必須與 migration 保持一致（m297）：任一邊改動，另一邊同步修。
+ */
+/**
+ * idx_ob_pool_data_list_score_notnull（2026-06-02）— F055 CARD_LEVEL preview 分佈試算加速。
+ *
+ * AssignmentScoringService.previewCardLevels 將分桶 COUNT 下推 PostgreSQL：
+ *   SELECT CASE ... END AS bucket FROM ob_pool_data_list WHERE score IS NOT NULL ...
+ * 本表為 ETL legacy 派案歷史（dev 7.8M 列 / ~14GB）。無索引時上述聚合需全表 seq scan
+ * （dev 實測 ~16-50s）—— 雖已不再像舊 find() 全表載入 Node 造成 heap OOM／進程崩潰，
+ * 但仍拖慢 debounce preview。partial index (score) WHERE score IS NOT NULL：尚未計分
+ * （score=NULL）的列不入索引 —— dev 現況全 NULL → 空索引、查詢即時回 0；生產有分數後
+ * 走 index-only scan（僅掃窄 score 欄、不碰 14GB 寬表）。
+ *
+ * ⚠️ Entity 必須與 migration 保持一致（m298）：任一邊改動，另一邊同步修。
+ */
 @Entity('ob_pool_data_list')
+@Index('idx_ob_pool_data_list_assignday_custo', ['assignday', 'custo_no'])
+@Index('idx_ob_pool_data_list_score_notnull', ['score'], {
+  where: 'score IS NOT NULL',
+})
 export class ObPoolDataList {
   @Column({ name: 'created_by_prog', type: 'varchar', length: 20, nullable: true })
   created_by_prog: string | null; // A_PRGID
