@@ -33,6 +33,12 @@ import { SectionChiefScopeService } from './services/section-chief-scope.service
 import { AssignmentRunController } from './assignment-run.controller';
 import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment-scoring.module';
 import { SystemModule } from '@/modules/system/system.module';
+import { RunQueueProducer } from './queue/run-queue.producer';
+import { CancellationPoller } from './queue/cancellation-poller';
+import {
+  pgBossProvider,
+  runQueueTuningProvider,
+} from './queue/pg-boss.provider';
 
 /**
  * AssignmentModule — F061 / F062 / F065 / F066（M04 月跑觸發 + 歷史 + 詳情）
@@ -87,12 +93,28 @@ import { SystemModule } from '@/modules/system/system.module';
     MonthlyRunReadinessService,
     StageTransitionService,
     SectionChiefScopeService,
+    // F098 / AD-E07-28 P1：API 側只註冊入列 producer + pg-boss 實例 + tuning。
+    // worker 側（RunQueueConsumer / CancellationPoller / OrphanReaper）由 worker bootstrap
+    // 之 AssignmentWorkerModule 註冊，不掛在 API module（API 程序不消費、不執行 pipeline）。
+    RunQueueProducer,
+    // CancellationPoller 註冊於此，使 worker 之 pipeline（同 module scope）可注入取消檢查；
+    // API 程序之 pipeline 雖也注入，但 API 程序不執行 pipeline → 無副作用（既有 pipeline
+    // unit test 未提供此 provider，@Optional 維持 undefined → baseline 不變）。
+    CancellationPoller,
+    pgBossProvider,
+    runQueueTuningProvider,
   ],
   exports: [
     AssignmentRunGuardService,
     MonthlyRunReadinessService,
     StageTransitionService,
     SectionChiefScopeService,
+    // worker module 重用 pipeline + pg-boss 實例 + tuning + producer（producer 供 pending 取消快路徑）
+    AssignmentRunPipelineService,
+    RunQueueProducer,
+    CancellationPoller,
+    pgBossProvider,
+    runQueueTuningProvider,
   ],
 })
 export class AssignmentModule {}

@@ -21,6 +21,8 @@ import {
   IntegrityIssue,
   ScoringIntegrityCheckService,
 } from '@/modules/assignment-scoring/services/scoring-integrity-check.service';
+import { CancellationPoller } from '../queue/cancellation-poller';
+import { RunCancelledException } from '../queue/run-cancelled.exception';
 
 /**
  * AssignmentRunPipelineService — F061 Stage 1~4 pipeline + 三份快照原子寫入
@@ -95,11 +97,19 @@ export class AssignmentRunPipelineService {
      */
     @Optional()
     private readonly integrityCheckService?: ScoringIntegrityCheckService,
+    /**
+     * F098 / AD-E07-28 §9.3 / AC-5：worker 內取消輪詢器。於可中斷邊界（list 之間 /
+     * Stage 之間）查 status，被取消（標 failed）則拋 RunCancelledException 提早結束。
+     * @Optional：API 程序 / 舊 pipeline unit test 未提供時，pipeline 行為與 P1 前一致（不檢查取消）。
+     */
+    @Optional()
+    private readonly cancellationPoller?: CancellationPoller,
   ) {}
 
   /**
    * 執行 Stage 1~4 pipeline + 快照原子寫入。
-   * 失敗時 swallow 不重拋（背景非同步 hook 由 AssignmentRunService.kickoffPipeline 啟動）。
+   * 失敗時 swallow 不重拋（F098 P1 起由 cdmp-worker 之 RunQueueConsumer 呼叫；
+   * 配合 retryLimit=0，pipeline 內部已標 status='failed'，handler 視為已處理不重派）。
    */
   async runPipeline(runId: string, ym: string): Promise<void> {
     const startedAt = new Date();
@@ -149,6 +159,8 @@ export class AssignmentRunPipelineService {
       const workdt = parseWorkdt(ym);
 
       for (const list of validLists) {
+        // F098 AC-5 / A-2：list 邊界為可中斷點 — 處理下一份 list 前查是否已被取消
+        await this.checkCancelled(runId);
         const result = await this.runStage1ForList(list, workdt);
         if (result.skipped) {
           stage1SkippedLists.push({
@@ -203,6 +215,9 @@ export class AssignmentRunPipelineService {
         }
       }
 
+      // F098 AC-5 / A-2：Stage 之間為可中斷點 — 進入 Stage 2~4 計分前查是否已被取消
+      await this.checkCancelled(runId);
+
       // Stage 2 / 3 / 4 — 依 v1 / v2 分支執行
       // F094：回傳型別由 Partial<ObPoolDataList>[] 改為 Partial<ObMonthlyRunResult>[]，每列帶 run_id
       type ResultRow = Partial<ObMonthlyRunResult>;
@@ -238,6 +253,11 @@ export class AssignmentRunPipelineService {
           status: 'PENDING', // v2.0 預設待回收（業務回填後改 SUCCESS / FAILED）
         })),
       };
+
+      // F098 AC-5 / TS-F098-CANCEL-002：寫入快照 / result 前最後一道可中斷點。
+      //   若此刻已被取消，拋 RunCancelledException → 不寫三份快照、不寫 ob_monthly_run_result、
+      //   不呼叫 completeRun（run 維持 cancelRun 標記之 'failed'，不被覆寫回 'completed'）。
+      await this.checkCancelled(runId);
 
       const now = new Date();
       // F094 / AD-E07-25 Phase A：月跑 Stage 1~4 提案結果寫入 ob_monthly_run_result（帶 run_id），
@@ -305,6 +325,14 @@ export class AssignmentRunPipelineService {
         skippedJson,
       );
     } catch (err: any) {
+      // F098 AC-5：取消屬正常提早結束 — run 已被 cancelRun 標 'failed'（error_message='使用者取消'），
+      //   不覆寫狀態 / 文案、不寫任何結果（已在 checkCancelled 邊界提前 return 前拋出）。
+      if (err instanceof RunCancelledException) {
+        this.logger.log(
+          `Pipeline cancelled: run=${runId} ym=${ym}（使用者取消，保留 failed 狀態，不寫結果）`,
+        );
+        return;
+      }
       this.logger.error(
         `Pipeline failed: run=${runId} ym=${ym} err=${err?.message ?? err}`,
       );
@@ -316,6 +344,16 @@ export class AssignmentRunPipelineService {
           error_message: String(err?.message ?? err).slice(0, 1000),
         },
       );
+    }
+  }
+
+  /**
+   * F098 AC-5：可中斷邊界取消檢查。poller 未注入（API 程序 / 舊 unit test）時 no-op，
+   * pipeline 行為與 P1 前一致。
+   */
+  private async checkCancelled(runId: string): Promise<void> {
+    if (this.cancellationPoller) {
+      await this.cancellationPoller.throwIfCancelled(runId);
     }
   }
 
