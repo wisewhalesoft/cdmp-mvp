@@ -846,25 +846,52 @@ export class AssignmentScoringService {
       });
     }
 
-    // 載入 pool_data_list 之 H 型 score（套用新門檻試算分佈）
-    // 註：F055 §5.2 / risk-1：preview 以既有 score 套用新門檻，非重新呼叫 fn_calc_tier_level
-    const poolRows = await this.poolDataListRepo.find();
-
+    // F055 §5.2 / risk-1：preview 以既有 score 套用新門檻試算分佈（非重呼 fn_calc_tier_level）。
+    //
+    // ⚠️ 效能修正（2026-06-02 OOM 事故）：原實作 `poolDataListRepo.find()` 會把整張
+    // ob_pool_data_list（生產規模可達數百萬列）全數 hydrate 進 Node 記憶體再於 JS 分桶，
+    // 導致 heap 撞 ~2GB 上限 → 進程 OOM 崩潰 → 該頁所有在途 API 收到 500（違反 CLAUDE.md
+    // 「巨量資料勿用 in-memory，須 streaming / SQL 下推」鐵則）。改為將分桶 COUNT 下推
+    // PostgreSQL：單一 GROUP BY 聚合僅回傳各等級計數，記憶體佔用與資料量脫鉤。
     const distribution: Record<string, number> = {};
     for (const l of parsedLevels) {
       distribution[l.cardLevel] = 0;
     }
 
-    for (const row of poolRows) {
-      const rawScore = (row as any).score;
-      const numericScore =
-        typeof rawScore === 'number' ? rawScore : Number(rawScore);
-      if (!Number.isFinite(numericScore)) continue;
-      for (const l of parsedLevels) {
-        if (numericScore >= l.scoreS && numericScore <= l.scoreE) {
-          distribution[l.cardLevel] = (distribution[l.cardLevel] ?? 0) + 1;
-          break;
-        }
+    // 無等級可分桶時直接回傳（避免組出非法的空 CASE 子句）
+    if (parsedLevels.length === 0) {
+      return { distribution };
+    }
+
+    // 動態組裝 first-match-wins 的 CASE 分桶（等級區間不重疊由 BR-3 保證）。
+    // score 為 NULL（尚未計分）的列一律不計入任何等級；所有使用者輸入均以參數化
+    // 佔位符傳入，杜絕 SQL injection。
+    const whenClauses: string[] = [];
+    const params: Array<number | string> = [];
+    for (const l of parsedLevels) {
+      params.push(l.scoreS, l.scoreE, l.cardLevel);
+      const n = params.length;
+      whenClauses.push(
+        `WHEN score >= $${n - 2} AND score <= $${n - 1} THEN $${n}`,
+      );
+    }
+
+    const bucketRows: Array<{ bucket: string; cnt: number | string }> =
+      await this.poolDataListRepo.query(
+        `SELECT bucket, COUNT(*)::int AS cnt
+           FROM (
+             SELECT CASE ${whenClauses.join(' ')} ELSE NULL END AS bucket
+               FROM ob_pool_data_list
+              WHERE score IS NOT NULL
+           ) sub
+          WHERE bucket IS NOT NULL
+          GROUP BY bucket`,
+        params,
+      );
+
+    for (const r of bucketRows) {
+      if (Object.prototype.hasOwnProperty.call(distribution, r.bucket)) {
+        distribution[r.bucket] = Number(r.cnt);
       }
     }
 

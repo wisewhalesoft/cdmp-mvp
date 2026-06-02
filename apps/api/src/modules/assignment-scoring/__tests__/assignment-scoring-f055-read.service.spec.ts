@@ -30,6 +30,37 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { User } from '@/database/entities/user.entity';
 
+/**
+ * 模擬修正後 previewCardLevels 下推 PostgreSQL 的分桶 COUNT 查詢（取代原先把整張
+ * ob_pool_data_list find() 載入 JS 的 OOM 寫法）。給定 pool_data_list 的 score 清單，
+ * 依 service 傳入的參數化 levels（[s0,e0,l0, s1,e1,l1, ...]）重現 SQL 端
+ * 「skip NULL + first-match-wins」分桶語意，回傳 GROUP BY 結果 [{ bucket, cnt }]
+ * （僅含有命中列的等級，與真實 SQL 一致）。
+ */
+function bucketingQueryMock(scores: Array<number | null>) {
+  return vi.fn(async (_sql: string, params: Array<number | string>) => {
+    const levels: Array<{ s: number; e: number; l: string }> = [];
+    for (let i = 0; i + 3 <= params.length; i += 3) {
+      levels.push({
+        s: params[i] as number,
+        e: params[i + 1] as number,
+        l: params[i + 2] as string,
+      });
+    }
+    const counts: Record<string, number> = {};
+    for (const raw of scores) {
+      if (raw === null || !Number.isFinite(raw)) continue;
+      for (const lv of levels) {
+        if (raw >= lv.s && raw <= lv.e) {
+          counts[lv.l] = (counts[lv.l] ?? 0) + 1;
+          break;
+        }
+      }
+    }
+    return Object.entries(counts).map(([bucket, cnt]) => ({ bucket, cnt }));
+  });
+}
+
 describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', () => {
   let service: AssignmentScoringService;
   let versionRepo: any;
@@ -48,7 +79,11 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     scoreRepo = { find: vi.fn() };
     levelRepo = { find: vi.fn(), findOne: vi.fn(), save: vi.fn() };
     tierRepo = { find: vi.fn() };
-    poolDataListRepo = { find: vi.fn().mockResolvedValue([]) };
+    // 修正後 previewCardLevels 改用 query()（SQL 分桶下推）；find() 保留給其他方法
+    poolDataListRepo = {
+      find: vi.fn().mockResolvedValue([]),
+      query: bucketingQueryMock([]),
+    };
     runRepo = { findOne: vi.fn().mockResolvedValue(null) };
     auditRepo = { create: vi.fn(), save: vi.fn() };
     userRepo = { findOne: vi.fn() };
@@ -169,12 +204,12 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     // 植入 100 筆 H 型 pool_data_list，分數分佈：
     //   A 級 20 筆（score >= 243）、B 級 40 筆（214-242）、
     //   C 級 30 筆（185-213）、D 級 10 筆（0-184）
-    const poolRows: any[] = [];
-    for (let i = 0; i < 20; i++) poolRows.push({ score: 250 });
-    for (let i = 0; i < 40; i++) poolRows.push({ score: 220 });
-    for (let i = 0; i < 30; i++) poolRows.push({ score: 200 });
-    for (let i = 0; i < 10; i++) poolRows.push({ score: 100 });
-    poolDataListRepo.find.mockResolvedValue(poolRows);
+    const scores: number[] = [];
+    for (let i = 0; i < 20; i++) scores.push(250);
+    for (let i = 0; i < 40; i++) scores.push(220);
+    for (let i = 0; i < 30; i++) scores.push(200);
+    for (let i = 0; i < 10; i++) scores.push(100);
+    poolDataListRepo.query = bucketingQueryMock(scores);
 
     const levels = JSON.stringify([
       { cardLevel: 'A', scoreS: 243, scoreE: 999 },
@@ -199,7 +234,7 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
   });
 
   it('TS-F055-014：URL-encoded levels 範例字串能正確解析', async () => {
-    poolDataListRepo.find.mockResolvedValue([{ score: 250 }, { score: 50 }]);
+    poolDataListRepo.query = bucketingQueryMock([250, 50]);
 
     // spec 5.2 範例：levels=%5B%7B%22cardLevel%22%3A%22A%22%2C%22scoreS%22%3A243%2C%22scoreE%22%3A999%7D%5D
     const encoded =
@@ -215,7 +250,7 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
   });
 
   it('BE-F055-003：ob_pool_data_list 為空時 distribution 各等級=0', async () => {
-    poolDataListRepo.find.mockResolvedValue([]);
+    poolDataListRepo.query = bucketingQueryMock([]);
 
     const levels = JSON.stringify([
       { cardLevel: 'A', scoreS: 243, scoreE: 999 },
@@ -234,7 +269,7 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
 
   it('preview 月跑鎖不阻擋（純讀取）', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
-    poolDataListRepo.find.mockResolvedValue([]);
+    poolDataListRepo.query = bucketingQueryMock([]);
 
     // 預期 200 而非 409
     const result = await service.previewCardLevels({
@@ -242,5 +277,37 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
       levels: JSON.stringify([{ cardLevel: 'A', scoreS: 0, scoreE: 999 }]),
     });
     expect(result.distribution).toEqual({ A: 0 });
+  });
+
+  // ===== 2026-06-02 OOM 事故回歸守門 =====
+
+  it('REG-OOM：preview 不得 find() 全表載入 Node，須以 query() 下推 SQL 分桶', async () => {
+    // 原 bug：poolDataListRepo.find() 把整張 ob_pool_data_list（生產 ~780 萬列）
+    // hydrate 進記憶體 → heap OOM → 進程崩潰 → 整頁 API 500。
+    poolDataListRepo.find = vi.fn().mockResolvedValue([]);
+    poolDataListRepo.query = bucketingQueryMock([250]);
+
+    await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([{ cardLevel: 'A', scoreS: 0, scoreE: 999 }]),
+    });
+
+    expect(poolDataListRepo.find).not.toHaveBeenCalled();
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('REG-OOM：score 為 NULL 的列不得計入任何等級（修正前 Number(null)=0 誤入含 0 桶）', async () => {
+    poolDataListRepo.query = bucketingQueryMock([250, null, null, null]);
+
+    const result = await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([
+        { cardLevel: 'A', scoreS: 243, scoreE: 999 },
+        { cardLevel: 'D', scoreS: 0, scoreE: 184 },
+      ]),
+    });
+
+    // 250 命中 A；三筆 NULL 全部跳過（不得落入含 0 的 D 桶）
+    expect(result.distribution).toEqual({ A: 1, D: 0 });
   });
 });
