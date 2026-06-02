@@ -3,7 +3,7 @@ type: test-design-index
 version: "2.21"
 status: draft
 last_updated: 2026-06-02
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099]
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100]
 ---
 
 # CDMP MVP — 測試設計索引
@@ -30,6 +30,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，85 欄位），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
 > **v2.20 F098 月跑 Worker 抽離 P1（2026-06-02）**：新增 F098 test spec（**51 個場景**，**僅 P1**，不含 P2/P3 SQL 下推）。涵蓋 AD-E07-28 P1「月跑由 cdmp-api 同程序 `setImmediate` 改為入列 pg-boss → 獨立 `cdmp-worker` 容器消費」。分層：TRIG 6（I-TRIGGER-01 核心：`triggerRun` 改入列、`runPipeline` 0 次、立即回 202）+ CONS 6（worker 消費 → status pending→running→completed/failed）+ RETRY 3（`retryLimit=0` OQ-AD28-04）+ SER 3（單 worker 序列化 OQ-AD28-05 + `assertNoRunningRun` 不回歸）+ CANCEL 7（`CancellationPoller` 修現有「背景不真停」bug：偵測 failed → 拋 `RunCancelledException` → 不寫快照/result；list 級取消粒度）+ ORPHAN 7（`OrphanReaper` 殭屍 running 回收 + 誤殺邊界 + 不新增 schema 欄位 OQ-AD28-02）+ PGINT 5（真 pg-boss 入列/消費/冪等/expiration + schema migration OQ-AD28-01）+ NFR 3（月跑期間 API 仍可回應，解 F1）+ WORKER 4（worker entrypoint 不掛 HTTP / 共用 flag）+ RG 5（回歸基準 + `setImmediate` 移除 grep + tsc gate）+ OQ 2（OQ-F098-01 待裁）。**18 個案例強制需 Postgres**（PGINT/NFR + RETRY/SER/CANCEL/ORPHAN 之 PG 子案例），連動 CI 須能起 Postgres Test Container。命名鎖定：`RunQueueProducer` / `RunQueueConsumer` / `CancellationPoller` / `OrphanReaper` / `RunCancelledException` / queue `'assignment-run'` / payload `{ runId, ym }` / error_message `'worker 中斷，請重新觸發'`。
+>
+> **v2.22 F100 Stage 2~4 SQL 下推 + v2 真實計分引擎 P3（2026-06-02）**：新增 F100 test spec（**52 個場景**，**僅 P3**，不含 P1/P2（已完成提交））。涵蓋 AD-E07-28 P3「Stage 2 計分（`ob_levelcard_score` 區間/類別權重 `SUM(CASE…)` + `LEFT JOIN customer_core` 補完客戶屬性欄位）/ score→card_level→tier_level（`LEFT JOIN`）/ Stage 3 CR（`EXISTS`）/ Stage 4 st4_exchange（`ROW_NUMBER()` 視窗 + `CEIL(×0.1)` 保底 1）由 JS 下推為 SQL，並把計分引擎由 v1 簡化版升級為 v2 真實版」。**與 P1/P2 本質差異：P3 非純等價變更**——現行 `computeScore` 對 customer_core 欄位回 `''` 不計分（標 v2.1 補完），P3 以 LEFT JOIN 補上。**故 golden oracle = 依計分卡規則 + customer_core 屬性手算之預期值（寫死於 §一矩陣、人複核），非跑 v1 JS**（跑 v1 會把升級補上的正確分判為 fail）。分層：**EQ 8（P3 DoD AC-8 — SQL 逐列 == 升級後手算預期，每案標 (a) 升級差異 / (b) 下推等價）** + SCORE 7（`SUM(CASE…)` 區間/類別/NULL vs 0）+ CJOIN 4（LEFT JOIN match/NULL，攔 INNER JOIN 漏案）+ LEVTIER 5（score NULL vs card_level NULL 之 tier fallback 分歧）+ CR 5（`EXISTS` cr_enabled 開/關）+ **EXCH 8（st4_exchange：`CEIL` 非 SP `ROUND`、保底 1、`PARTITION BY list_no`、deterministic 選案精確比對、單一 senior；SP 主管↔專員配對交換 out-of-scope 不測）** + RUNEST 2 + NOLOAD 3 + IDEM 3 + **UPGR 4（F067 計分升級差異報告 + 業務驗收 gate，§9/NFR-005，上線硬性前置）** + RG 3。**約 40 個案例強制需 Postgres**（視窗函式 / `SUM(CASE…)` / `LEFT JOIN` / `EXISTS` 在 SQLite 不具代表性），沿用 postgres-test 容器。**4 個待確認 open question**：OQ-F100-T1（transaction 範圍 spec 未明 → IDEM-003 blocked）、OQ-F100-T2（score=NULL 時 tier 走 fallback T3 或 NULL，spec 未逐字明列）、OQ-F100-T3（customer_core entity 目前不存在於 entities 目錄 → P3 LEFT JOIN 前置）、OQ-F100-T4（CUS_SEX/AGE 計分欄位映射對齊 §3.10 表，tdd 交接項）。命名鎖定：`executeV2` / `computeScore` / `collectCrCandidates`；oracle=手算矩陣（禁跑 v1 當 (a) 案件 oracle）；st4_exchange `Math.max(1, Math.ceil(n*0.1))`。
 >
 > **v2.21 F099 Stage 1 SQL 下推 P2（2026-06-02）**：新增 F099 test spec（**38 個場景**，**僅 P2**，不含 P1（F098 已完成）/P3（F100））。涵蓋 AD-E07-28 P2「`executeStage1Chain` 全載 + 應用層 filter → 單一 set-based `buildStage1Sql(list, workdt)`（run `INSERT…SELECT` 與 estimate `SELECT COUNT(*)` 共用同一 WHERE/JOIN core）」。分層：**EQ 14（P2 Definition of Done — JS↔SQL 逐 list 結果集精確等價，PG 真庫逐列 PK `toEqual`，assignday 恆 NULL 斷言）** + RUNEST 4 + **PORT 7（I-PORT-01：year-above `year_produ` 前導數字/空字串/非數字/null/cutoff 邊界，PORT-004/005/007 守三個 PG 實作陷阱，**強制 PG 禁 SQLite**）** + NOLOAD 3 + IDEM 3 + SQLG 4 + GMT 3（**作廢 `RGv2-005`/`SDv2-*` JS-pin guard**）。**26 個案例強制需 Postgres**（EQ 14 + PORT 7 + RUNEST(PG) 2 + IDEM 3）。**所有 OQ 已裁定（OQ-F099-01/02/03 均 ✅ RESOLVED）**：oracle=JS、assignday 恆 NULL、CI 必起 PG。命名鎖定：`buildStage1Sql`；保留 JS `executeStage1Chain` 為等價 oracle 不可刪。
 >
@@ -169,8 +171,9 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **E07 月跑執行模型重構（AD-E07-28）** | | | | | |
 | F098 | 月跑 Worker 抽離 P1（pg-boss 入列 + cdmp-worker 容器 + cancellation 真生效 + OrphanReaper；**僅 P1**，不含 P2/P3 SQL 下推） | P0-MVP | [F098-test.md](features/F098-test.md) | 51 | Draft |
 | F099 | Stage 1 SQL 下推 P2（`buildStage1Sql` set-based + estimate≡run 共用 core + JS↔SQL 逐 list 等價 PG 真庫；**僅 P2**，不含 P1/P3） | P0-MVP | [F099-test.md](features/F099-test.md) | 38 | Draft |
-| **E07 月跑執行模型 小計** | | | **2 files** | **89** | |
-| **總合計** | | | **69 files** | **1515** | |
+| F100 | Stage 2~4 SQL 下推 + v2 真實計分引擎 P3（`SUM(CASE…)` 區間/類別計分 + `LEFT JOIN customer_core` 補完 + score→level→tier + CR `EXISTS` + st4_exchange 視窗函式；**僅 P3**，不含 P1/P2；oracle=手算預期，非跑 v1 JS）⚠️ | P0-MVP | [F100-test.md](features/F100-test.md) | 52 | Draft |
+| **E07 月跑執行模型 小計** | | | **3 files** | **141** | |
+| **總合計** | | | **70 files** | **1567** | |
 
 ---
 
@@ -442,6 +445,21 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（vitest 不檢型別；US-144 登入 500 教訓）
 - **所有 OQ 已裁定（無待裁項目）**：OQ-F099-01（CI 必起 PG）✅、OQ-F099-02（oracle=現行 JS，含前導數字 `'1980abc'`→1980，PORT-007 守陷阱）✅、OQ-F099-03（assignday 恆 NULL，下推 SELECT 寫 NULL，EQ 步驟 4 斷言）✅
 
+**E07 Stage 2~4 SQL 下推 + v2 真實計分引擎 P3 特殊注意（F100，AD-E07-28 P3）：**
+- **範圍嚴格限 P3**：F100-test.md 只設計「Stage 2 計分 / Stage 3 CR / Stage 4 st4_exchange SQL 下推 + v2 計分升級」；P1（F098）與 P2（F099）已完成提交、不在範圍
+- **⚠️ golden oracle = 手算預期，非跑 v1 JS（P3 與 P1/P2 最大差異）**：P3 把計分由 v1 簡化版升級為 v2 真實版——現行 `computeScore` 對 customer_core 欄位回 `''` 不計分，P3 以 LEFT JOIN 補上。若以「跑 v1 JS」當 oracle，凡有 customer_core 計分欄位之案件，v1 會少算 → SQL 正確補上反被判 fail。**正解：用確定性 seed 把計分卡規則寫死，依規則手算每筆 score/level/tier（F100-test §一矩陣，寫死數字、人複核）當 oracle**
+- **(a) 升級差異 vs (b) 下推等價 必須分流**：(b) 案件（無 customer_core 欄位 / LEFT JOIN 無 match）SQL 須 == 手算 == v1 JS（三方相等，守 regression）；(a) 案件 SQL == 手算 v2 **且** ≠ v1 JS（證明補完生效）。EQ 矩陣每案已標 (a)/(b)
+- **customer_core 用 `LEFT JOIN` 非 `INNER JOIN`**（RISK-F100-002）：無對應客戶之案件不可整列消失（漏案）；屬性 NULL 不取分
+- **st4_exchange oracle = `Math.max(1, Math.ceil(n*0.1))`（CEIL + 保底 1），非 SP 的 `ROUND`**（OQ-F100-01 對齊現行 JS）：下推 SQL 用 `CEIL(count*0.1)`；EXCH-006（11→2）/ EXCH-004（保底 1）守此。`PARTITION BY list_no`（非 SP per-主管）+ deterministic `ORDER BY orgno, appl_no` → 「哪些被交換」可精確 `toEqual` 比對；交換對象單一 `seniorEmpls[0]`。**SP 主管↔專員等量配對交換 / 寄信告警 / 整批回滾 out-of-scope、不測**
+- **score NULL（無 active version）vs score 0（有 active 0 命中）分案**（SCORE-006/007）；**score NULL vs card_level NULL 之 tier fallback 分歧**（LEVTIER-003 tier=T3 vs LEVTIER-004 tier=NULL）——下推 SQL 易把兩種 NULL 混為一談
+- **CR `EXISTS` 來源表對齊現行 `collectCrCandidates`（A-2）**：oracle = JS 未成交集合等價，不綁定子查詢對 snapshot 或對 result 表；「未成交」= `result_status='PENDING'` 或無 status
+- **I-NOLOAD-01：Stage 2~4 下推路徑禁 `pool.map(computeScore)` 全物化 heap**（NOLOAD-001）；現行 `executeV2` L465 `scoredPool = pool.map(...)` 須移出下推路徑。**I-RUN-EST-01 延續**：estimate 只跑 Stage 1 COUNT，不含 Stage 2~4 計分 join（A-4）
+- **F067 升級差異報告 + 業務驗收（UPGR）為上線硬性前置**：EQ 全綠（技術正確）+ UPGR-004 業務簽核（業務接受升級結果變化）並列 P3 上線門檻（§9 / NFR-005）。UPGR 不斷言 v1==v2（升級本就改變結果），而是「差異已量化 + 業務簽核接受」
+- **約 40 個案例強制需 Postgres**（EQ 8 + SCORE 7 + CJOIN 4 + LEVTIER 5 + CR 5 + EXCH 8 + IDEM 2 + UPGR 3），沿用 `docker-compose.test.yml` postgres-test（F099 `stage1-sql-pushdown.pg.spec.ts` 連線/skip 模式可複用）；**禁 better-sqlite3**（視窗函式 / `SUM(CASE…)` / `LEFT JOIN` / `EXISTS` 在 SQLite 不具代表性）
+- **4 個待確認 open question（tdd 實作前釐清）**：OQ-F100-T1（P3 是否單一 transaction、失敗全回滾 → spec/AD 未明 → IDEM-003 blocked）、OQ-F100-T2（score=NULL 時 tier 走 fallback T3 或 NULL → spec 未逐字明列，本案以現行 JS 推導為基準）、OQ-F100-T3（`customer_core` entity 目前不存在於 `apps/api/src/database/entities/` → P3 LEFT JOIN 前置 blocker）、OQ-F100-T4（CUS_SEX/AGE 計分欄位映射對齊 architecture-spec.md §3.10 表 → tdd 交接項，§一矩陣欄位名為測試 seed）
+- **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（vitest 不檢型別；US-144 登入 500 教訓）
+- **SP 為 UTF-16LE**（feedback_sp_utf16le_decode）：spec §5 已據解碼結果完成 OQ-06 推導，tdd 沿用結論；中文版 Stage4 mojibake 不採信
+
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
 - `test-levels.md` — 各層級測試策略
@@ -486,6 +504,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-06-02 | **F100 Stage 2~4 SQL 下推 + v2 真實計分引擎 P3 測試設計新增（v2.22）**：新增 `features/F100-test.md`，**52 個場景，僅涵蓋 AD-E07-28 P3**（Stage 2 計分 `SUM(CASE…)` + `LEFT JOIN customer_core` 補完 / score→level→tier / Stage 3 CR `EXISTS` / Stage 4 st4_exchange 視窗函式），不設計 P1/P2（已完成提交）。**與 P1/P2 本質差異：P3 非純等價變更**——計分引擎由 v1 簡化版升級為 v2 真實版（customer_core 欄位 v1 回 `''` 不計分 → v2 LEFT JOIN 補上），**故 oracle = 手算預期矩陣（§一，寫死數字人複核），非跑 v1 JS**（跑 v1 會把升級補上的正確分判 fail）。分層：EQ 8（DoD AC-8，每案標 (a) 升級差異 / (b) 下推等價）+ SCORE 7 + CJOIN 4 + LEVTIER 5 + CR 5 + EXCH 8（`CEIL` 非 SP `ROUND`、保底 1、`PARTITION BY list_no`、deterministic 選案；SP 配對交換 out-of-scope）+ RUNEST 2 + NOLOAD 3 + IDEM 3 + UPGR 4（F067 升級差異報告 + 業務驗收 gate，上線硬性前置）+ RG 3。**約 40 案例強制需 Postgres**（視窗函式 / `SUM(CASE…)` / `LEFT JOIN` / `EXISTS` 在 SQLite 不具代表性）。**4 個待確認 OQ**：OQ-F100-T1（transaction 範圍 spec 未明 → IDEM-003 blocked）、T2（score=NULL 之 tier fallback 語意）、T3（customer_core entity 不存在 → P3 前置 blocker）、T4（計分欄位映射對齊 §3.10 表）。總場景數由 1515 增至 1567；總文件數 69→70 | Test Designer Agent |
+| 2026-06-02 | **F099 Stage 1 SQL 下推 P2 測試設計新增（v2.21）**：新增 `features/F099-test.md`，**38 個場景，僅涵蓋 AD-E07-28 P2**（`buildStage1Sql` set-based 下推 + estimate≡run 共用 core + JS↔SQL 逐 list 等價）。EQ 14（P2 DoD）+ RUNEST 4 + PORT 7（year-above 數值化，強制 PG 禁 SQLite）+ NOLOAD 3 + IDEM 3 + SQLG 4 + GMT 3（作廢 RGv2-005/SDv2-*）。26 案例強制需 PG。所有 OQ 已裁定 | Test Designer Agent |
 | 2026-06-02 | **F098 月跑 Worker 抽離 P1 測試設計新增（v2.20）**：新增 `features/F098-test.md`，**51 個場景，僅涵蓋 AD-E07-28 P1**（執行容器抽離 + cancellation + orphan 回收），不設計 P2/P3 SQL 下推。核心不變式 I-TRIGGER-01（`triggerRun` 改入列、不在 API 程序跑 pipeline、`runPipeline` spy 0 次）；修復現行 `cancelRun` 自承「背景不真停」之 bug（`CancellationPoller` 於 list/stage 邊界輪詢 → `RunCancelledException` → 不寫快照/result）；`OrphanReaper` 殭屍 running 回收（不新增 schema 欄位，靠 pg-boss job expiration）；`retryLimit=0` + 單 worker 序列化 + `assertNoRunningRun` 不回歸；月跑期間 API 仍可回應之 NFR 驗證。**18 個案例強制需 Postgres**（pg-boss 為 Postgres 專屬，真實入列/消費/冪等/expiration/schema migration 須真庫；unit 層以 mock pg-boss 守 triggerRun 入列 + 不執行 pipeline）。連動 CI 決策：須能起 Postgres Test Container。總場景數由 1426 增至 1477；總文件數 67→68 | Test Designer Agent |
 | 2026-05-26 | **Stage 1 精確化工程（F090/F091/F092）新增（v2.16）**：新增 3 個 test spec 檔，共 56 個測試場景。F090（13 場景）：migration m291 可逆 + ETL 歷史限定 + per-data_source 截斷不傷月跑 + 欄位映射完整性。F091（30 場景）：MONTH_CNT 期別過濾純函式 × 6、近 3 個月去重 × 5（含 Integration PG TC 聯集驗證）、特殊 DELETE 四類 SP 逐條對照 × 8、Stage1FilterChain 封裝與執行順序 × 5、Regression × 3（⚠️ 既有 Stage 1 pipeline baseline 需更新）。F092（26 場景）：dry-run 唯讀 × 4、dry-run ≡ run 精確一致（核心）× 3、estimateListCount 升級 × 4、F049/F088 升級 × 4、Regression × 3。版本升至 v2.16；總場景數由 1169 增至 1225 | Test Designer Agent |
 | 2026-03-12 | 初版建立，16 個 Feature 測試設計 + 4 個策略文件 | Test Designer Agent |
