@@ -1,9 +1,9 @@
 ---
 type: test-design-index
-version: "2.19"
+version: "2.20"
 status: draft
-last_updated: 2026-05-28
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097]
+last_updated: 2026-06-02
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098]
 ---
 
 # CDMP MVP — 測試設計索引
@@ -29,6 +29,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 > **F042~F044 新增**：2026-03-27 新增 ETL 執行引擎測試設計：F042 核心框架（21 場景）、F043 節點執行器（44 場景）、F044 Target Load（17 場景）
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，85 欄位），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
+> **v2.20 F098 月跑 Worker 抽離 P1（2026-06-02）**：新增 F098 test spec（**51 個場景**，**僅 P1**，不含 P2/P3 SQL 下推）。涵蓋 AD-E07-28 P1「月跑由 cdmp-api 同程序 `setImmediate` 改為入列 pg-boss → 獨立 `cdmp-worker` 容器消費」。分層：TRIG 6（I-TRIGGER-01 核心：`triggerRun` 改入列、`runPipeline` 0 次、立即回 202）+ CONS 6（worker 消費 → status pending→running→completed/failed）+ RETRY 3（`retryLimit=0` OQ-AD28-04）+ SER 3（單 worker 序列化 OQ-AD28-05 + `assertNoRunningRun` 不回歸）+ CANCEL 7（`CancellationPoller` 修現有「背景不真停」bug：偵測 failed → 拋 `RunCancelledException` → 不寫快照/result；list 級取消粒度）+ ORPHAN 7（`OrphanReaper` 殭屍 running 回收 + 誤殺邊界 + 不新增 schema 欄位 OQ-AD28-02）+ PGINT 5（真 pg-boss 入列/消費/冪等/expiration + schema migration OQ-AD28-01）+ NFR 3（月跑期間 API 仍可回應，解 F1）+ WORKER 4（worker entrypoint 不掛 HTTP / 共用 flag）+ RG 5（回歸基準 + `setImmediate` 移除 grep + tsc gate）+ OQ 2（OQ-F098-01 待裁）。**18 個案例強制需 Postgres**（PGINT/NFR + RETRY/SER/CANCEL/ORPHAN 之 PG 子案例），連動 CI 須能起 Postgres Test Container。命名鎖定：`RunQueueProducer` / `RunQueueConsumer` / `CancellationPoller` / `OrphanReaper` / `RunCancelledException` / queue `'assignment-run'` / payload `{ runId, ym }` / error_message `'worker 中斷，請重新觸發'`。
+>
 > **v2.19 US-144 best_case 系統固定篩選條件（2026-05-28）**：補強 3 個 test spec（F050 v2.3.1 / F051 v2.2.1 / F075 v1.7）。共新增 **50 個場景**：F050 +33（L 群 5：createList 注入 + tamper；M 群 4：min-count 排除 system-fixed；N 群 4：updateList 注入；O 群 10：m295/m296 migration；P 群 1：Stage 1 整合；Q 群 6：建立頁前端 best_case 鎖定列；R 群 3：編輯頁前端鎖定列）、F051 +6（TS-F051-020~025：updateList 注入 + 正規化 + min-count v2.2.1 + LEGACY guard ordering）、F075 +11（TS-F075-v17-001~010 + 002b：seed / API isSystemFixed / deactivation guard / M06 UI disabled button）。命名鎖定：`injectSystemFixedConditions`、`SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）、`is_system_fixed` DB / `isSystemFixed` API、`condition-row-best_case` / `remove-condition-best_case` / `value-best_case` / `btn-disable-best_case` / `field-row-best_case` prototype testid。
 >
 > **最後更新**：2026-05-28
@@ -162,7 +164,10 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **E07 Stage 1 精確化 / Phase A/B 小計** | | | **6 files** | **131** | |
 | F097 | 作業月語意統一（SystemService getDefaultTargetWorkYm / workYm DTO / 過去月 guard / Stage 1 去重視窗 / AssignmentWorkYmContext） | P0-MVP | [F097-test.md](features/F097-test.md) | 48 | Draft |
 | **E07 作業月語意** | | | **1 file** | **48** | |
-| **總合計** | | | **67 files** | **1426** | |
+| **E07 月跑執行模型重構（AD-E07-28）** | | | | | |
+| F098 | 月跑 Worker 抽離 P1（pg-boss 入列 + cdmp-worker 容器 + cancellation 真生效 + OrphanReaper；**僅 P1**，不含 P2/P3 SQL 下推） | P0-MVP | [F098-test.md](features/F098-test.md) | 51 | Draft |
+| **E07 月跑執行模型 小計** | | | **1 file** | **51** | |
+| **總合計** | | | **68 files** | **1477** | |
 
 ---
 
@@ -407,6 +412,19 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **F092 dry-run 去重查詢**：dry-run 允許讀取 `ob_pool_data_list`（去重 SELECT），但**不寫入**（TS-F092-DR-001 spy 驗證區分讀寫）
 - **F049 BR-6 語意矛盾**：F092 部署後「估算為上界」描述已過時；TS-F092-RG-002 標注需更新 F049-test.md + F049 spec BR-6（由後續 spec-writer 或本輪使用者確認後處理）
 
+**E07 月跑 Worker 抽離 P1 特殊注意（F098，AD-E07-28 P1）：**
+- **範圍嚴格限 P1**：F098-test.md 只設計「執行容器抽離 + cancellation + orphan 回收」；P2/P3 SQL 下推（F099/F100）之 JS↔SQL 等價測試、I-RUN-EST-01 SQL core 斷言**不在 F098 範圍**，勿提前實作
+- **I-TRIGGER-01 為驗收紅線**：`triggerRun` 改入列後，spy `AssignmentRunPipelineService.runPipeline` 必須 **0 次**；現行 `assignment-run.service.ts` L119 `kickoffPipeline` → L257 `setImmediate(runPipeline)` 路徑須移除（保留 dead code 會讓 TS-F098-RG-001 grep guard 失敗）
+- **pg-boss = Postgres 專屬，必須分層**：unit 層以 **mock/fake** `RunQueueProducer`（`send` spy）驗「有入列 + payload `{ runId, ym }` + 不執行 pipeline」；真實入列→消費→冪等→job expiration→schema migration 一律 **PG Integration（Test Container 強制）**。**18 個案例強制需 Postgres**（TS-F098-PGINT-001~005、NFR-001/003，及 RETRY-002 / SER-002 / CANCEL-006/007 / ORPHAN-007）
+- **mock 須模擬真實 pg-boss contract**（feedback_mock_real_system_contract）：`send` 回傳 jobId（非 void）；work handler 收到 `{ id, name, data }`，payload 在 `job.data`（非 handler 參數本身）；`retryLimit=0` → handler 拋錯後**不自動重派**（mock 不可自動重呼）；`teamConcurrency=1` 序列化（mock 不可平行呼叫）
+- **cancellation 修現有 bug**：`cancelRun`（L173-216）API 側不變（標 failed + audit CANCEL）；**新增** worker 側 `CancellationPoller` 於 list 迴圈（`runPipeline` L151）/ stage 邊界輪詢 → 偵測 failed 拋 `RunCancelledException` → 快照寫入（L215 起）0 次。取消粒度為 **list 級**（單 list 內無讓出點，TS-F098-CANCEL-004 誠實揭露）
+- **OrphanReaper**：結構可參考 F038 `OrphanRecoveryService`（`onApplicationBootstrap` + Test Container），但本案在 **worker** 程序啟動；不新增 `worker_id`/`heartbeat_at` 欄位（OQ-AD28-02），靠 pg-boss job expiration + **可注入閾值**；誤殺邊界（執行中 run 不回收）為核心（TS-F098-ORPHAN-003/004）；error_message 精確 = `'worker 中斷，請重新觸發'`
+- **poller / reaper 閾值與週期必須可注入**（env/config），否則測試只能等真實逾時 → 不可行
+- **AssignmentRun seed 四欄位必填**（run_id / project_workym / triggered_by / created_at），PG Integration / orphan seed 缺一即 NOT NULL 失敗（feedback_assignment_run_e2e_seed）
+- **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（TS-F098-RG-005）：vitest 不檢型別，pg-boss 型別錯誤會潛伏至 prod build（US-144 登入 500 教訓）
+- **回歸基準**：P1 不改演算法 → `assignment-run-pipeline.service.spec.ts`（案件數 baseline）+ `assignment-run.service.spec.ts`（併發/readiness/cancel）須維持綠燈；至多改 harness（pipeline 改由 worker 注入），不改期望結果
+- **待裁**：OQ-F098-01（入列失敗之 pending run 是否由 OrphanReaper 涵蓋）→ TS-F098-OQ-001/002 待拍板後啟用
+
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備
 - `test-levels.md` — 各層級測試策略
@@ -451,6 +469,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-06-02 | **F098 月跑 Worker 抽離 P1 測試設計新增（v2.20）**：新增 `features/F098-test.md`，**51 個場景，僅涵蓋 AD-E07-28 P1**（執行容器抽離 + cancellation + orphan 回收），不設計 P2/P3 SQL 下推。核心不變式 I-TRIGGER-01（`triggerRun` 改入列、不在 API 程序跑 pipeline、`runPipeline` spy 0 次）；修復現行 `cancelRun` 自承「背景不真停」之 bug（`CancellationPoller` 於 list/stage 邊界輪詢 → `RunCancelledException` → 不寫快照/result）；`OrphanReaper` 殭屍 running 回收（不新增 schema 欄位，靠 pg-boss job expiration）；`retryLimit=0` + 單 worker 序列化 + `assertNoRunningRun` 不回歸；月跑期間 API 仍可回應之 NFR 驗證。**18 個案例強制需 Postgres**（pg-boss 為 Postgres 專屬，真實入列/消費/冪等/expiration/schema migration 須真庫；unit 層以 mock pg-boss 守 triggerRun 入列 + 不執行 pipeline）。連動 CI 決策：須能起 Postgres Test Container。總場景數由 1426 增至 1477；總文件數 67→68 | Test Designer Agent |
 | 2026-05-26 | **Stage 1 精確化工程（F090/F091/F092）新增（v2.16）**：新增 3 個 test spec 檔，共 56 個測試場景。F090（13 場景）：migration m291 可逆 + ETL 歷史限定 + per-data_source 截斷不傷月跑 + 欄位映射完整性。F091（30 場景）：MONTH_CNT 期別過濾純函式 × 6、近 3 個月去重 × 5（含 Integration PG TC 聯集驗證）、特殊 DELETE 四類 SP 逐條對照 × 8、Stage1FilterChain 封裝與執行順序 × 5、Regression × 3（⚠️ 既有 Stage 1 pipeline baseline 需更新）。F092（26 場景）：dry-run 唯讀 × 4、dry-run ≡ run 精確一致（核心）× 3、estimateListCount 升級 × 4、F049/F088 升級 × 4、Regression × 3。版本升至 v2.16；總場景數由 1169 增至 1225 | Test Designer Agent |
 | 2026-03-12 | 初版建立，16 個 Feature 測試設計 + 4 個策略文件 | Test Designer Agent |
 | 2026-03-18 | 新增 E04 資料擷取（F017–F025）9 個 Feature 測試文件，共 79 個測試場景 | Test Designer Agent |

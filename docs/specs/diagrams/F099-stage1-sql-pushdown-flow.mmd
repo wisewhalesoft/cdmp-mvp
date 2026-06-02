@@ -1,0 +1,34 @@
+%% F099 Stage 1 SQL 下推（AD-E07-28 P2）：buildStage1Sql 單一 core，run 與 estimate 共用（I-RUN-EST-01）
+%% 四特例規則全 SQL 下推（選項 A，OQ-AD28-03 使用者 2026-06-02 拍板）；core 含 year-above，無應用層 filter
+flowchart TD
+    Start([Stage 1 執行：list + workdt]) --> Core["buildStage1Sql(list, workdt)<br/>產生唯一 WHERE/JOIN core（全 SQL）"]
+
+    subgraph CoreParts["WHERE/JOIN core 組成（100% 純 SQL，PG 真庫驗收）"]
+        direction TB
+        F1["① 欄位篩選<br/>buildStage1WhereConditions（沿用）"]
+        F2["② MONTH_CNT 期別<br/>buildMonthCntFragment（沿用）"]
+        F3["③ 詐騙白牌 DELETE<br/>WHERE NOT (list_type='01' AND spec_name LIKE '%白牌%')"]
+        F4["④ 近 3 月去重<br/>NOT EXISTS anti-join（不載 Set 進 heap）"]
+        F5["⑤ 機車期中 / 期中小資<br/>WHERE NOT (...)（trigger 由 matchesSpecialRule JS 判斷）"]
+        F6["⑥ year-above（車齡超 15 年）<br/>WHERE NOT (...)，year_produ 用 CAST+NULLIF（缺值退化 '1900'）<br/>選項 A：全 SQL，無應用層 filter，PG 真庫驗收（I-PORT-01）"]
+        F1 --> F2 --> F3 --> F4 --> F5 --> F6
+    end
+
+    Core --> CoreParts
+    CoreParts --> Branch{"dryRun ?"}
+
+    Branch -->|"false（run）"| RunSql["INSERT INTO ob_monthly_run_result (…)<br/>SELECT … FROM ob_pool_data o WHERE &lt;core&gt;"]
+    Branch -->|"true（estimate）"| EstSql["SELECT COUNT(*)<br/>FROM ob_pool_data o WHERE &lt;core&gt;"]
+
+    RunSql --> Idem["I-IDEM-01：寫入前 DELETE WHERE run_id=:runId"]
+    Idem --> Result[("ob_monthly_run_result<br/>Stage 1 案件列")]
+    EstSql --> Count([回傳估算 COUNT])
+
+    classDef core fill:#fef9c3,stroke:#ca8a04
+    classDef run fill:#dcfce7,stroke:#16a34a
+    classDef est fill:#dbeafe,stroke:#2563eb
+    classDef inv fill:#fee2e2,stroke:#dc2626
+    class F1,F2,F3,F4,F5,F6,Core core
+    class RunSql,Idem,Result run
+    class EstSql,Count est
+    class Branch inv

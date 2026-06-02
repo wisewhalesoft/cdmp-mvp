@@ -1,0 +1,42 @@
+%% F100 Stage 2~4 SQL 下推 + v2 真實計分引擎（AD-E07-28 P3）
+%% 在 P2 已寫入之 ob_monthly_run_result 上下推計分 / CR / st4_exchange；含 OQ-06 排序鍵結論
+flowchart TD
+    P2In[("ob_monthly_run_result<br/>P2 Stage 1 已寫入案件列")] --> S2
+
+    subgraph S2["Stage 2 計分（SQL）"]
+        direction TB
+        Score["SUM(CASE WHEN 區間/類別命中 THEN score) <br/>JOIN ob_levelcard_score<br/>LEFT JOIN customer_core（補客戶屬性，取代 JS TODO）"]
+        Level["score → card_level<br/>LEFT JOIN ob_levelcard_level (score BETWEEN score_s AND score_e)"]
+        Tier["card_level → tier_level<br/>LEFT JOIN ob_tier (card_type + card_level)"]
+        Score --> Level --> Tier
+    end
+
+    Tier --> S3
+
+    subgraph S3["Stage 3 CR（SQL）"]
+        CR["cr_enabled 名單：is_cr = CASE WHEN EXISTS<br/>(查歷史未成交案件 result_status='PENDING') THEN 'Y' ELSE 'N'"]
+    end
+
+    CR --> S4
+
+    subgraph S4["Stage 4 st4_exchange（視窗函式）"]
+        direction TB
+        Rank["ROW_NUMBER() OVER (PARTITION BY list_no<br/>ORDER BY orgno, appl_no)  -- OQ-06：SP 為隨機 NEWID() → 採 deterministic 等價"]
+        Count["交換數 = CEIL(可交換 T1/T2 案件數 × 0.1)，保底 1<br/>（需該部門有 T3 資深員工）"]
+        Assign["在交換集 → 資深員工；其餘 → defaultEmpl<br/>部門過濾沿用 ob_dept_pct.deptid_m"]
+        Rank --> Count --> Assign
+    end
+
+    Assign --> Out[("ob_monthly_run_result<br/>score / card_level / tier_level / is_cr / dept_id / emplid")]
+    Out --> DoD{"PG 真庫 JS↔SQL 逐列等價測試<br/>（P3 Definition of Done）"}
+    DoD -->|"通過"| Deploy([可上線 + §9 計分升級差異業務知會])
+    DoD -->|"不通過"| Block([阻擋上線])
+
+    classDef s2 fill:#fef9c3,stroke:#ca8a04
+    classDef s3 fill:#e0e7ff,stroke:#4f46e5
+    classDef s4 fill:#dbeafe,stroke:#2563eb
+    classDef gate fill:#fee2e2,stroke:#dc2626
+    class Score,Level,Tier s2
+    class CR s3
+    class Rank,Count,Assign s4
+    class DoD,Block gate

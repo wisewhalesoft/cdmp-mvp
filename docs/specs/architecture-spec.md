@@ -1,11 +1,15 @@
 ---
 type: architecture-spec
-version: "2.21"
+version: "2.22"
 status: draft
-last_updated: 2026-05-28
+last_updated: 2026-06-02
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097]
 ---
 
+> **v2.22 / 2026-06-02 變更摘要（AD-E07-28 月跑執行模型重構：Worker 抽離 + Stage 1~4 SQL 下推）**：
+>
+> 新增 **§5.13「月跑執行模型重構」** 與 **AD-E07-28**（決策記錄 [`implementation-log/AD-E07-v3.1-monthly-run-execution-model.md`](implementation-log/AD-E07-v3.1-monthly-run-execution-model.md)）。背景：月跑 pipeline 現與 Web API 同程序 / 同 event loop / 同 heap（`AssignmentRunService.kickoffPipeline()` 之 `setImmediate(() => pipeline.runPipeline(...))`），造成 (F1) event loop 阻塞——月跑期間 API 全逾時（實測 202606 dev 3 份名單卡滿一核 >25 分鐘 / 0 DB query）；(F2) `stage1-filter-chain.ts` 全載 `ob_pool_data` 進 heap → prod 量級 OOM → 整站 500。目標架構：`triggerRun` 改入列 **pg-boss**（靠現有 Postgres，免 Redis）→ 獨立 **`cdmp-worker`** 容器消費 → Stage 1~4 set-based SQL `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data WHERE …`。分階段：**P1** worker 抽離（pg-boss + 容器 + triggerRun 改入列 + cancellation poller + orphan reaper，解 F1）；**P2** Stage 1 SQL 下推（解 F2 Stage1）；**P3** Stage 2~4 SQL 下推 + v2 真實計分引擎（`ob_levelcard_*` 區間/類別權重 `SUM(CASE…)`、`customer_core` LEFT JOIN、CR `EXISTS`、st4_exchange `ROW_NUMBER()+CEIL(×0.1)`，解 F2 全）。四個踩雷前例調和：estimate≡run 共用 `buildStage1Sql` core（**I-RUN-EST-01**）；廢除 RGv2-005 grep-JS guard，改 PG 真庫 JS↔SQL 等價測試為驗收門檻；year-above CAST portability 採選項 C 保留應用層（**I-PORT-01**）；冪等清理（**I-IDEM-01**）。6 個 OQ-AD28-* 待使用者拍板（pg-boss schema 固定方式 / orphan 欄位 / portability 選項 / 重試策略 / worker scaling / st4 排序鍵）。修訂 AD-E07-22/23/25，不影響 AD-E07-26/27。covers 不變（F061/F062/F065/F066/F091/F092/F094 已在列）。
+>
 > **v2.21 / 2026-05-28 變更摘要（AD-E07-18 §18.12 validateConditionPayload min-count 精化）**：
 >
 > 精化 §18.12.2 決策表（新增 18.12.8）與 §18.12.5 call-stack：`validateConditionPayload` 的「最少 1 條 condition」最低數量檢查，現改為**排除 `is_system_fixed = true` 的系統固定欄位**後計算；即要求「使用者自行提供且非系統固定的 conditions 數量 ≥ 1」，否則回 422 `VALIDATION_ERROR`。`best_case`（系統固定，由 `injectSystemFixedConditions` 自動注入）不計入此最低數。驗證仍在注入前執行（先驗使用者原始 payload，注入在驗證通過後）。injection / migration / deactivation guard / Stage 1 均不受影響。
@@ -50,12 +54,12 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程）、10. 技術棧決策 |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程、**5.13 月跑執行模型重構**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、10. 技術棧決策 |
 | TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
-| DevOps / CI/CD | 7. 部署與執行時期視圖、10. 技術棧決策 |
+| DevOps / CI/CD | 7. 部署與執行時期視圖、**5.13.7（cdmp-worker 容器 / pg-boss schema / docker-compose 變更 / dev synchronize vs prod migration）**、**AD-E07-28 §7~8（pg-boss schema migration 固定、worker entrypoint、不引入 Redis）**、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月跑執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）** |
 
 ## 目錄
 
@@ -2075,6 +2079,135 @@ sequenceDiagram
 **C360 與其他模組的執行時期關係**
 
 C360 模組在執行時期**不依賴** Extraction 模組或 ETL Pipeline 模組。它只消費 ETL 執行後留存於 AppDB 的 `customer_core` 資料，屬於資料消費者（Read Consumer），而非資料生產者（Data Producer）。若 ETL Pipeline 尚未執行，`customer_core` 無資料，C360 的統計摘要將顯示全零，清單顯示空狀態——此為預期行為，不構成錯誤。
+
+---
+
+### 5.13 月跑執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）（AD-E07-28）
+
+> 完整決策、四個踩雷前例調和方案、P1/P2/P3 階段邊界與相依、Open Questions：見
+> [`implementation-log/AD-E07-v3.1-monthly-run-execution-model.md`](implementation-log/AD-E07-v3.1-monthly-run-execution-model.md)。
+> 本節為架構主文之概要 + 目標時序，供 Test Designer / TDD Developer / DevOps 快速定位。
+
+#### 5.13.1 問題與目標（一句話）
+
+月跑 pipeline 現與 Web API **同程序、同 event loop、同 heap**（`AssignmentRunService.kickoffPipeline()`
+之 `setImmediate(() => pipeline.runPipeline(...))`），造成兩個失效面：**F1 event loop 阻塞**（同步 JS
+迴圈無讓出點 → 月跑期間 API 全逾時；實測 202606 dev 3 份名單即卡滿一核 >25 分鐘、0 DB query）、
+**F2 OOM**（`stage1-filter-chain.ts` 全載 `ob_pool_data` 進 heap → prod 量級程序崩 → 整站 500）。
+
+**目標架構**：`triggerRun` 改入列 **pg-boss**（靠現有 Postgres，免 Redis）job → 獨立 **`cdmp-worker`**
+容器消費 → Stage 1~4 以 set-based SQL `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data
+WHERE …` 在 DB 內完成，使 API event loop 與 heap 完全脫離月跑負載。
+
+#### 5.13.2 目標元件與資料流
+
+```mermaid
+graph TD
+    subgraph apiC["cdmp-api（Web API）"]
+        RunSvc["AssignmentRunService<br/>triggerRun / cancelRun"]
+        Producer["RunQueueProducer（pgboss.send）"]
+    end
+    subgraph pg["PostgreSQL 16（單一實例）"]
+        PgBoss["pgboss schema（job 佇列）"]
+        RunTbl["assignment_run（狀態機）"]
+        Src["ob_pool_data / ob_pool_data_list<br/>ob_levelcard_* / customer_core"]
+        Result["ob_monthly_run_result（下推目標）"]
+    end
+    subgraph workerC["cdmp-worker（新增容器）"]
+        Consumer["RunQueueConsumer（pgboss.work）"]
+        Pipeline["Pipeline（set-based SQL 編排）"]
+        Reaper["CancellationPoller + OrphanReaper"]
+    end
+
+    RunSvc -->|"INSERT pending"| RunTbl
+    RunSvc --> Producer -->|"send(runId, ym)"| PgBoss
+    PgBoss -->|"work()"| Consumer --> Pipeline
+    Pipeline -->|"UPDATE running/completed/failed"| RunTbl
+    Pipeline -->|"INSERT … SELECT"| Result
+    Pipeline -->|"讀篩選/計分來源"| Src
+    Reaper -->|"輪詢 status / orphan 回收"| RunTbl
+
+    classDef api fill:#dcfce7,stroke:#16a34a
+    classDef db fill:#fef9c3,stroke:#ca8a04
+    classDef worker fill:#dbeafe,stroke:#2563eb
+    class RunSvc,Producer api
+    class PgBoss,RunTbl,Src,Result db
+    class Consumer,Pipeline,Reaper worker
+```
+
+#### 5.13.3 目標觸發時序
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器（SPA）
+    participant API as cdmp-api
+    participant DB as PostgreSQL（assignment_run + pgboss）
+    participant Worker as cdmp-worker
+
+    Browser->>API: POST /api/v1/assignment-runs { workYm }
+    API->>API: assertNoRunningRun + readiness 前置（不變）
+    API->>DB: INSERT assignment_run(status=pending)
+    API->>DB: pgboss.send('assignment-run', {runId, ym})
+    API-->>Browser: 202 { runId, status: pending }
+    Note over API: API event loop 立即釋放（不再 setImmediate 跑 pipeline）
+
+    DB-->>Worker: pgboss.work() 派發 job
+    Worker->>DB: UPDATE assignment_run SET status=running
+    loop 每份 ready 名單（可中斷邊界）
+        Worker->>DB: INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data WHERE <Stage1 SQL>
+        Worker->>DB: 查 assignment_run.status（CancellationPoller）
+        alt 已被 cancelRun 標 failed
+            Worker->>Worker: 拋 RunCancelledException → 提早結束
+        end
+    end
+    Worker->>DB: 原子寫快照 + UPDATE status=completed
+    Note over Browser: 前端 polling getRunById 收到 completed
+```
+
+#### 5.13.4 階段邊界（P1 / P2 / P3）
+
+| 階段 | 範圍 | 解決 | 相依 |
+|------|------|------|------|
+| **P1 Worker 抽離** | pg-boss + `cdmp-worker` 容器 + `triggerRun` 改入列 + cancellation poller + orphan reaper（pipeline 仍 JS） | **F1**（event loop 阻塞）；OOM 改炸 worker 不炸 API（整站不再 500） | 無 |
+| **P2 Stage 1 SQL 下推** | `executeStage1Chain` 改 `INSERT…SELECT`：欄位篩選 + month_cnt + 詐騙白牌 + 近 3 月去重 anti-join + 機車/小資特例（year-above 例外） | **F2**（Stage 1 範圍） | P1 |
+| **P3 Stage 2~4 SQL 下推 + v2 計分** | `ob_levelcard_*` 區間/類別權重以 `SUM(CASE…)`、`customer_core` `LEFT JOIN`、CR `EXISTS`、st4_exchange `ROW_NUMBER()+CEIL(×0.1)` 視窗函式 | **F2**（全） | P2 |
+
+#### 5.13.5 四個踩雷前例調和（摘要，細節見 AD 文件 §6）
+
+| 前例 | 調和方案 | 不變式 |
+|------|---------|-------|
+| **estimate≡run 不可分叉**（F049 根因） | run（`INSERT…SELECT`）與 estimate（`SELECT COUNT(*)`）共用同一 `buildStage1Sql` 輸出之 WHERE/JOIN core | **I-RUN-EST-01**：兩路徑 SQL core 必須來自同一函式輸出 |
+| **regression guard 衝突**（RGv2-005 pin JS `includes`） | 廢除 grep-原始碼型 guard；改 PG 真庫 JS↔SQL 結果等價測試為 P2/P3 驗收門檻（trigger 判斷 `matchesSpecialRule` 仍 JS，受既有單元測試保護） | 等價比對為「結果可證等價」落地 |
+| **portability（year-above CAST PG≠SQLite）** | 採選項 C：fraud/motorcycle/xiaozi 下推 SQL，**year-above 保留 worker 應用層 filter**（對 SQL 已縮小結果集套用）；OQ-AD28-03 待確認 | **I-PORT-01**：CAST 行為差異規則須有 PG integration test |
+| **效益門檻已變** | 從「省 1s」升為「整站可用性 + 防 OOM」，量級不同，故重評推翻前否決 | — |
+
+#### 5.13.6 失敗 / 取消 / orphan / 冪等
+
+- **失敗**：pipeline try/catch（已存在）標 `status='failed'`；worker 崩潰由 OrphanReaper 掃
+  `status='running'` 但 job 已 expire → 標 failed。
+- **取消**：`cancelRun` 仍標 `assignment_run.status='failed'`（API 側不變）；worker `CancellationPoller`
+  於每份 list / 每 Stage 之間查 status，被取消則拋 `RunCancelledException` 提早結束（補齊現況
+  `cancelRun` 註解自承「背景不會真停」之缺陷）。
+- **冪等（I-IDEM-01）**：重試 / 重觸發前須 `DELETE FROM ob_monthly_run_result WHERE run_id=:runId`
+  + 清快照（PK `(run_id, list_no, orgno, appl_no)` + FK ON DELETE CASCADE 支援）。
+
+#### 5.13.7 pg-boss 與既有 Postgres 整合 / docker-compose / migration
+
+- **單一 Postgres**：pg-boss 自帶 `pgboss` schema 與 `cdmp_dev` 同庫，**不引入 Redis、不引入第二庫**。
+- **docker-compose**：新增 `worker` service（`build.context: ./apps/api`、worker entrypoint、共用 DB_* /
+  AES / feature-flag 環境變數、`depends_on: postgres healthy`、**不 expose port**）；`api` 移除「同程序跑
+  pipeline」職責，新增 producer 初始化。`ASSIGNMENT_PIPELINE_V2` 等 flag 須同時供 worker（真正執行者）。
+- **dev synchronize vs prod migration**：`ob_monthly_run_result` 既有（migration `1711360000292`）；
+  pg-boss schema **非 TypeORM entity**，須以「migration 包 DDL」或「部署腳本明確 `boss.start()`」二擇一
+  固定（**OQ-AD28-01**），不可僅依賴 worker 首啟自建（prod 多 worker 首啟 race）；任何新欄位（如 orphan
+  偵測之 `heartbeat_at`，OQ-AD28-02）同步補 migration。
+
+#### 5.13.8 與既有 AD 的關係
+
+修訂 **AD-E07-22 / AD-E07-23**（Stage 1 由「欄位 SQL + 應用層 month_cnt/去重/特例」→「全步驟 set-based
+SQL，year-above 例外」，estimate≡run 共用原則保留並強化）、修訂 **AD-E07-25**（寫入 `ob_monthly_run_result`
+方式由 JS `save()` → `INSERT…SELECT`）；**不影響 AD-E07-26**（trigger 判斷仍 JS）、**不影響 AD-E07-27**
+（workdt / 去重視窗語意不變，僅計算位置移入 SQL）。
 
 ---
 
