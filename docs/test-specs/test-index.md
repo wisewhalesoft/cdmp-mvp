@@ -1,9 +1,9 @@
 ---
 type: test-design-index
-version: "2.20"
+version: "2.21"
 status: draft
 last_updated: 2026-06-02
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098]
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099]
 ---
 
 # CDMP MVP — 測試設計索引
@@ -30,6 +30,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 > **F039~F041 新增**：2026-03-27 新增 ETL Pipeline 編輯器「節點欄位變化」測試設計：F039 Badge（22 場景）、F040 Inspector Diff（6 場景）、F041 Tooltip（12 場景）
 > **F036 更新**：2026-03-25 依 US-049 修訂版重新設計，目標表由 4 個改為 1 個（customer_core，85 欄位），場景數由 20 增至 40（新增 ETL 轉換規則、衝突解決、前端介面測試）
 > **v2.20 F098 月跑 Worker 抽離 P1（2026-06-02）**：新增 F098 test spec（**51 個場景**，**僅 P1**，不含 P2/P3 SQL 下推）。涵蓋 AD-E07-28 P1「月跑由 cdmp-api 同程序 `setImmediate` 改為入列 pg-boss → 獨立 `cdmp-worker` 容器消費」。分層：TRIG 6（I-TRIGGER-01 核心：`triggerRun` 改入列、`runPipeline` 0 次、立即回 202）+ CONS 6（worker 消費 → status pending→running→completed/failed）+ RETRY 3（`retryLimit=0` OQ-AD28-04）+ SER 3（單 worker 序列化 OQ-AD28-05 + `assertNoRunningRun` 不回歸）+ CANCEL 7（`CancellationPoller` 修現有「背景不真停」bug：偵測 failed → 拋 `RunCancelledException` → 不寫快照/result；list 級取消粒度）+ ORPHAN 7（`OrphanReaper` 殭屍 running 回收 + 誤殺邊界 + 不新增 schema 欄位 OQ-AD28-02）+ PGINT 5（真 pg-boss 入列/消費/冪等/expiration + schema migration OQ-AD28-01）+ NFR 3（月跑期間 API 仍可回應，解 F1）+ WORKER 4（worker entrypoint 不掛 HTTP / 共用 flag）+ RG 5（回歸基準 + `setImmediate` 移除 grep + tsc gate）+ OQ 2（OQ-F098-01 待裁）。**18 個案例強制需 Postgres**（PGINT/NFR + RETRY/SER/CANCEL/ORPHAN 之 PG 子案例），連動 CI 須能起 Postgres Test Container。命名鎖定：`RunQueueProducer` / `RunQueueConsumer` / `CancellationPoller` / `OrphanReaper` / `RunCancelledException` / queue `'assignment-run'` / payload `{ runId, ym }` / error_message `'worker 中斷，請重新觸發'`。
+>
+> **v2.21 F099 Stage 1 SQL 下推 P2（2026-06-02）**：新增 F099 test spec（**38 個場景**，**僅 P2**，不含 P1（F098 已完成）/P3（F100））。涵蓋 AD-E07-28 P2「`executeStage1Chain` 全載 + 應用層 filter → 單一 set-based `buildStage1Sql(list, workdt)`（run `INSERT…SELECT` 與 estimate `SELECT COUNT(*)` 共用同一 WHERE/JOIN core）」。分層：**EQ 14（P2 Definition of Done — JS↔SQL 逐 list 結果集精確等價，PG 真庫逐列 PK `toEqual`，assignday 恆 NULL 斷言）** + RUNEST 4 + **PORT 7（I-PORT-01：year-above `year_produ` 前導數字/空字串/非數字/null/cutoff 邊界，PORT-004/005/007 守三個 PG 實作陷阱，**強制 PG 禁 SQLite**）** + NOLOAD 3 + IDEM 3 + SQLG 4 + GMT 3（**作廢 `RGv2-005`/`SDv2-*` JS-pin guard**）。**26 個案例強制需 Postgres**（EQ 14 + PORT 7 + RUNEST(PG) 2 + IDEM 3）。**所有 OQ 已裁定（OQ-F099-01/02/03 均 ✅ RESOLVED）**：oracle=JS、assignday 恆 NULL、CI 必起 PG。命名鎖定：`buildStage1Sql`；保留 JS `executeStage1Chain` 為等價 oracle 不可刪。
 >
 > **v2.19 US-144 best_case 系統固定篩選條件（2026-05-28）**：補強 3 個 test spec（F050 v2.3.1 / F051 v2.2.1 / F075 v1.7）。共新增 **50 個場景**：F050 +33（L 群 5：createList 注入 + tamper；M 群 4：min-count 排除 system-fixed；N 群 4：updateList 注入；O 群 10：m295/m296 migration；P 群 1：Stage 1 整合；Q 群 6：建立頁前端 best_case 鎖定列；R 群 3：編輯頁前端鎖定列）、F051 +6（TS-F051-020~025：updateList 注入 + 正規化 + min-count v2.2.1 + LEGACY guard ordering）、F075 +11（TS-F075-v17-001~010 + 002b：seed / API isSystemFixed / deactivation guard / M06 UI disabled button）。命名鎖定：`injectSystemFixedConditions`、`SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）、`is_system_fixed` DB / `isSystemFixed` API、`condition-row-best_case` / `remove-condition-best_case` / `value-best_case` / `btn-disable-best_case` / `field-row-best_case` prototype testid。
 >
@@ -166,8 +168,9 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **E07 作業月語意** | | | **1 file** | **48** | |
 | **E07 月跑執行模型重構（AD-E07-28）** | | | | | |
 | F098 | 月跑 Worker 抽離 P1（pg-boss 入列 + cdmp-worker 容器 + cancellation 真生效 + OrphanReaper；**僅 P1**，不含 P2/P3 SQL 下推） | P0-MVP | [F098-test.md](features/F098-test.md) | 51 | Draft |
-| **E07 月跑執行模型 小計** | | | **1 file** | **51** | |
-| **總合計** | | | **68 files** | **1477** | |
+| F099 | Stage 1 SQL 下推 P2（`buildStage1Sql` set-based + estimate≡run 共用 core + JS↔SQL 逐 list 等價 PG 真庫；**僅 P2**，不含 P1/P3） | P0-MVP | [F099-test.md](features/F099-test.md) | 38 | Draft |
+| **E07 月跑執行模型 小計** | | | **2 files** | **89** | |
+| **總合計** | | | **69 files** | **1515** | |
 
 ---
 
@@ -424,6 +427,20 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（TS-F098-RG-005）：vitest 不檢型別，pg-boss 型別錯誤會潛伏至 prod build（US-144 登入 500 教訓）
 - **回歸基準**：P1 不改演算法 → `assignment-run-pipeline.service.spec.ts`（案件數 baseline）+ `assignment-run.service.spec.ts`（併發/readiness/cancel）須維持綠燈；至多改 harness（pipeline 改由 worker 注入），不改期望結果
 - **待裁**：OQ-F098-01（入列失敗之 pending run 是否由 OrphanReaper 涵蓋）→ TS-F098-OQ-001/002 待拍板後啟用
+
+**E07 Stage 1 SQL 下推 P2 特殊注意（F099，AD-E07-28 P2）：**
+- **範圍嚴格限 P2**：F099-test.md 只設計「Stage 1 set-based SQL 下推 + estimate≡run 共用 core」；P1（F098 worker 抽離，已完成）與 P3（F100 Stage 2~4 下推）不在範圍
+- **EQ 群組是 P2 驗收紅線（Definition of Done）**：14 個「JS↔SQL 逐 list 結果集精確等價」案例（PG 真庫、逐列 PK `toEqual`，非僅 count）全綠才可上線。**以現行 JS `executeStage1Chain` 為唯一 golden oracle**；禁止以「SQL 自我斷言預期值」取代與 JS 的逐 list 比對（SQL 與 JS 同錯則假綠）。**JS 版 `executeStage1Chain` 不可刪除**——保留為 oracle
+- **I-PORT-01 強制 PG，禁 SQLite**：year-above（`year_produ` 數值化）之 PORT 群組（6 案例）+ EQ 全群組一律對 postgres-test 容器跑；現行 `stage1-filter-chain.integration.spec.ts` 的 **better-sqlite3** harness 對 year-above / 數值 CAST 不具代表性（SQLite `CAST('N/A')`=0、無 POSIX regexp），會假綠
+- **year-above 對齊現行 JS，不是 SP（除非 OQ-F099-02 改判）**：`null`→排除（退化 1900）、`''`/`'N/A'`→**保留**（JS `parseInt`→NaN，`NaN<cutoff`=false）。⚠️ **勿直接照搬 AD 建議的 `NULLIF(REGEXP_REPLACE(...),'')`**——那會把 `''`/`'N/A'` 也誤判為排除（與 JS 不符）。建議 `CASE WHEN year_produ IS NULL THEN 1900 WHEN year_produ ~ '^[0-9]+$' THEN year_produ::int ELSE NULL END < :cutoff`
+- **去重用 `NOT EXISTS`/anti-join，不用 `NOT IN`**（含 NULL 子查詢「全部不 match」陷阱，spec A-1）；custo_no=NULL 不被去重誤排（EQ-012）；去重視窗上界 `MIN(MAX(assignday), workdt−1)` 語意不變，只是計算移入 SQL（C-2）
+- **I-RUN-EST-01（F049 老坑）**：單一 `buildStage1Sql`，run（`INSERT…SELECT`）/ estimate（`SELECT COUNT(*)`）只差最外層包裝；RUNEST-001 結構斷言「兩路徑 SQL core 同源」+ RUNEST-002/003「run 列數==estimate COUNT」（含 year-above 不漏套）
+- **I-NOLOAD-01 無例外**：下推路徑禁 `getMany()`/`find()` 全載 `ob_pool_data`（含 year-above）；現行 L408 `qb.getMany()` 須移出下推路徑（NOLOAD-001/002 靜態 grep guard）
+- **guard 移轉防假綠**：作廢 F091-test 之 `RGv2-005`（grep `includes('小資')`/`includes('白牌')`）與整套 `SDv2-*`（pin JS array filter）**前**，須先確認對應 EQ 案例已綠（GMT-001/002 + SDv2→EQ 映射表）；`special-rules.spec.ts`（trigger 仍 JS，C-1）維持綠燈（GMT-003）
+- **冪等 I-IDEM-01**：下推實質寫入前先 `DELETE FROM ob_monthly_run_result WHERE run_id=:runId`（FK CASCADE 為輔）；IDEM 群組（3 案例）守同 run_id 重跑列集合一致
+- **26 個案例強制需 Postgres**（EQ 14 + PORT 7 + RUNEST(PG) 2 + IDEM 3），沿用 `docker-compose.test.yml` postgres-test（F038/F075/M01/F098 慣例）；CI 未起 PG → P2 DoD 無法驗收
+- **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（vitest 不檢型別；US-144 登入 500 教訓）
+- **所有 OQ 已裁定（無待裁項目）**：OQ-F099-01（CI 必起 PG）✅、OQ-F099-02（oracle=現行 JS，含前導數字 `'1980abc'`→1980，PORT-007 守陷阱）✅、OQ-F099-03（assignday 恆 NULL，下推 SELECT 寫 NULL，EQ 步驟 4 斷言）✅
 
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備

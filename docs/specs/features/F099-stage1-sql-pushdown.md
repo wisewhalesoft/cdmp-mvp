@@ -38,10 +38,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
 | 路徑 | 外層包裝 | 共用核心 |
 |------|---------|---------|
-| **run**（dryRun:false） | `INSERT INTO ob_monthly_run_result (run_id, list_no, orgno, appl_no, custo_no, settle_src, assignday, created_at, updated_at) SELECT :runId, :listNo, o.orgno, o.appl_no, o.custo_no, o.settle_src, o.assignday, NOW(), NOW() FROM ob_pool_data o WHERE <core>` | `buildStage1Sql` 回傳之 `<core>` |
+| **run**（dryRun:false） | `INSERT INTO ob_monthly_run_result (run_id, list_no, orgno, appl_no, custo_no, settle_src, created_at, updated_at) SELECT :runId, :listNo, o.orgno, o.appl_no, o.custo_no, o.settle_src, NOW(), NOW() FROM ob_pool_data o WHERE <core>` | `buildStage1Sql` 回傳之 `<core>` |
 | **estimate**（dryRun:true） | `SELECT COUNT(*) FROM ob_pool_data o WHERE <core>` | 同一份 `<core>` |
 
-> **[ASSUMPTION] A-0**：上述 `INSERT` 欄位清單為 P2 範圍（Stage 1 寫入案件識別 + custo_no/settle_src/assignday）；Stage 2~4 之計分 / CR / 分派欄位（score / card_level / tier_level / is_cr / dept_id / emplid 等）於 P2 維持 JS 寫入（讀回 heap 計分後 `UPDATE`）或 NULL，P3 才下推。實際 `INSERT` 欄位由 tdd-implementation 對齊 [F094 entity](F094-monthly-run-result-table.md) 與既有 pipeline 寫入。
+> **[ASSUMPTION] A-0**：上述 `INSERT` 欄位清單為 P2 範圍（Stage 1 寫入案件識別 + custo_no/settle_src）；Stage 2~4 之計分 / CR / 分派欄位（score / card_level / tier_level / is_cr / dept_id / emplid 等）於 P2 維持 JS 寫入（讀回 heap 計分後 `UPDATE`）或 NULL，P3 才下推。實際 `INSERT` 欄位由 tdd-implementation 對齊 [F094 entity](F094-monthly-run-result-table.md) 與既有 pipeline 寫入。
+>
+> **[RESOLVED] OQ-F099-03（assignday 不下推，保持 NULL）**：下推 SELECT **不取 `assignday`**——`ob_pool_data` **無 `assignday` 欄**（該欄在 `ob_pool_data_list`），且現行 JS pipeline（`assignment-run-pipeline.service.ts`）**從不寫 assignday**（月跑結果該欄一直為 NULL）。`ob_monthly_run_result.assignday` entity 註解標明為「Forward-compat 業務派案日期（DP-AD25-6）」，**由業務系統日後回填**。故 P2 下推 INSERT 欄位清單**不含 assignday**（該欄寫 NULL），與現行 JS 等價。**不可**寫 `o.assignday`（會因 `ob_pool_data` 無此欄而 SQL error）。
 
 ## 2. 使用者故事
 
@@ -119,10 +121,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
 ### AC-8：四特例規則全 SQL 下推（portability 選項 A）
 
-- **Given** 四條特例規則（fraud / motorcycle / xiaozi / year-above），其中 year-above（車齡超 15 年，現行 JS `parseInt(c.year_produ ?? '1900', 10)`，SQLite 與 PG `CAST` 行為不同）為唯一 portability 風險點
+- **Given** 四條特例規則（fraud / motorcycle / xiaozi / year-above），其中 year-above（車齡超 15 年）之 golden oracle = **現行 JS**：`parseInt(c.year_produ ?? '1900', 10) < (workdt.getFullYear() − 15)` 才 DELETE。P2 為「對現行 JS 結果等價」（**非**復刻 SP），year-above 之 `year_produ` 數值化為唯一 portability 風險點
 - **When** Stage 1 執行
 - **Then** **四條規則全部 set-based 下推為 SQL，無任何應用層 filter**；year-above 與 fraud / motorcycle / xiaozi 一致皆於 `buildStage1Sql` 之 `<core>` 內以 SQL 表達
-- **And** year_produ 數值化採 **PG 可移植寫法**：明確 `CAST` + `NULLIF`（缺值退化等同現行 `?? '1900'`）/ 或 regexp 數值擷取先過濾非數字，再做車齡比較；具體寫法由 tdd-implementation 定，**須對齊現行 JS 之 `'1900'` 缺值語意**，等價性由 AC-7 / 本 AC 之 PG 真庫測試守住
+- **And** year-above 之 SQL 規格定義為「**行為等價於 JS `parseInt(year_produ ?? '1900', 10) < cutoff`**」，須完整對齊以下三類 JS `parseInt` 語意（cutoff = `workdt 年份 − 15`）：
+  - **NULL / undefined** → JS `?? '1900'` → `1900` →（`1900 < cutoff` 通常成立）→ **被刪**
+  - **空字串 `''` / 純非數字（如 `'N/A'`）** → JS `parseInt` → `NaN` → `NaN < cutoff` = `false` → **保留（不刪）**
+  - **前導數字（如 `'1980abc'`）** → JS `parseInt` 取前導數字 = `1980`（**leading-digit 解析，非 strict all-digit**）→ **被刪**
+- **And** **不硬 pin 死某一句 SQL**——精確寫法由 tdd-implementation 在 PG 真庫 EQ 等價測試（AC-7）下滿足上述三類即可。**⚠️ 禁用 `year_produ ~ '^[0-9]+$'` strict all-digit 過濾**（會把 `'1980abc'` 誤判為非數字而保留，與 JS leading-digit 解析**不等價**）；亦不可用 `NULLIF(REGEXP_REPLACE(...))` 之類把前導數字 case 一併排除的寫法。PG 可用 `substring(year_produ FROM '^\s*-?\d+')`（擷取前導整數）→ `CAST` → 缺值 / 擷取失敗時 `COALESCE` 退化為 `1900`，再與 cutoff 比較（僅供方向參考，非強制寫法）
 - **And** 此規則之數值化行為 **PG 真庫驗收，不靠 SQLite**（SQLite e2e 對此規則不具代表性；I-PORT-01）
 - **And** estimate≡run 仍共用同一份 `buildStage1Sql` 輸出——year-above 既已 SQL 化、納入 `<core>`，run / estimate 兩路徑自動共用，無「只在 run 套、estimate 漏」之 fork 風險（I-RUN-EST-01 由共用 core 自然保證）
 
@@ -169,7 +175,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 |------|-----------|---------|
 | **I-RUN-EST-01**：run / estimate SQL core 同源（AC-1） | test-designer | SQL core 字串相等 OR run 列數 === estimate COUNT（同一 list） |
 | **JS↔SQL 逐 list 等價矩陣**（AC-7，P2 DoD） | test-designer | PG 真庫；每特例規則 ≥1 觸發樣本 + 去重上下界 + NULL custo_no；列集合精確相等 |
-| **I-PORT-01**：year-above 數值化 PG integration test（AC-8） | test-designer | PG 真庫（不靠 SQLite）；year-above 全 SQL 結果（含 CAST / 非數字 / 缺值退化 '1900' 對齊 JS）|
+| **I-PORT-01**：year-above 數值化 PG integration test（AC-8 / OQ-F099-02） | test-designer | PG 真庫（不靠 SQLite）；oracle = 現行 JS `parseInt`；三類邊界各 ≥1 樣本：**NULL→1900 被刪 / 非數字（''、'N/A'）→NaN 保留 / 前導數字 '1980abc'→1980 被刪**；驗證 `^[0-9]+$` strict 寫法會 fail（對 '1980abc' 不等價）|
+| **assignday 不下推、保持 NULL（AC §4 / OQ-F099-03）** | test-designer | 斷言月跑結果 `assignday IS NULL`（與現行 JS 等價）；下推 SQL 無 `o.assignday` 引用 |
 | **I-IDEM-01**：重觸發前清理（AC-9） | test-designer | 同 run_id 重跑產出一致 |
 | **I-NOLOAD-01**：不全載 heap（AC-3） | test-designer | 斷言下推路徑無 `getMany()` / `find()` 全載（含 year-above，無例外）|
 | 四特例規則（詐騙白牌 / 機車期中 / 期中小資 / year-above）全 SQL `WHERE NOT` 等價（AC-4/AC-6/AC-8） | test-designer | 各規則觸發 / 不觸發兩態；全 set-based |
@@ -185,6 +192,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 |----|------|------|------|
 | **OQ-AD28-03** | ✅ **RESOLVED（使用者 2026-06-02 拍板）= 選項 A** | 四特例規則（含 year-above）**全 SQL 下推、無應用層 filter**；等價測試一律走 **PG 真庫**（CI 強制起 Postgres）。AD 文件雖以選項 C 為預設，使用者已改採 A，以使用者拍板為準（AC-8 / I-PORT-01 已對齊） | Stage 1 100% 純 SQL；CI 必起 Postgres |
 | **OQ-F099-01** | ✅ **已決：CI 必須起 Postgres** | OQ-03=A 之必然結果——year-above 等 PG≠SQLite 規則只能在 PG 真庫驗收，故 JS↔SQL 等價測試（AC-7）+ portability 測試（AC-8）之 CI 環境**必須提供 Postgres service**（非僅 local / nightly） | JS↔SQL 等價測試（AC-7 / AC-8）於 CI 可跑 |
+| **OQ-F099-02**（P2 測試設計揪出） | ✅ **RESOLVED：golden oracle = 現行 JS** | year-above 等價基準 = 現行 JS `parseInt(year_produ ?? '1900', 10) < cutoff`（**非** SP）。SQL 須等價對齊三類 `parseInt` 語意（NULL→1900 被刪、非數字→NaN 保留、前導數字 `'1980abc'`→1980 被刪）；**禁用 `^[0-9]+$` strict** 過濾（對 `'1980abc'` 不等價）。不硬 pin SQL，tdd 於 PG 真庫 EQ 測試滿足即可（AC-8 已對齊） | year-above 等價測試以 JS 為 oracle；三類邊界樣本須各一 |
+| **OQ-F099-03**（P2 測試設計揪出） | ✅ **RESOLVED：assignday 不下推、保持 NULL** | `ob_pool_data` 無 `assignday` 欄（在 `ob_pool_data_list`），且現行 JS pipeline 從不寫 assignday（該欄一直 NULL）；`ob_monthly_run_result.assignday` 為 Forward-compat 業務回填欄（DP-AD25-6）。下推 INSERT 欄位清單**不含 assignday**（寫 NULL），與現行 JS 等價，**不可** `SELECT o.assignday`（§4 / A-0 已修正） | INSERT 欄位清單移除 assignday；該欄保持 NULL |
 
 ## 10. 相關
 

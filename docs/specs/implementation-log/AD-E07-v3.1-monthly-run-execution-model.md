@@ -4,7 +4,7 @@ decision_id: AD-E07-28
 title: 月跑執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）
 status: proposed
 last_updated: 2026-06-02
-oq_resolved: [OQ-AD28-01, OQ-AD28-02, OQ-AD28-03, OQ-AD28-04, OQ-AD28-05, OQ-AD28-06, OQ-F100-01]
+oq_resolved: [OQ-AD28-01, OQ-AD28-02, OQ-AD28-03, OQ-AD28-04, OQ-AD28-05, OQ-AD28-06, OQ-F100-01, OQ-F099-02, OQ-F099-03]
 oq_open: []
 covers: [F061, F062, F065, F066, F091, F092, F094]
 supersedes_partial: [AD-E07-22, AD-E07-23, AD-E07-25]
@@ -148,9 +148,11 @@ graph TD
 - ④ 詐騙白牌 DELETE → SQL `WHERE NOT (list_type='01' AND spec_name LIKE '%白牌%')`（可移植）。
 - ⑤ 近 3 月去重 → SQL `WHERE custo_no NOT IN (SELECT DISTINCT custo_no FROM ob_pool_data_list WHERE assignday BETWEEN … )` 或 `NOT EXISTS` / anti-join（DB 內完成，不載 Set 進 heap）。
 - ⑥ 特例 DELETE 機車期中 / 期中小資 → SQL `WHERE NOT (...)`（數值比較用 `CAST(... AS numeric)`；integration test 一律 PG 真庫，見 §6.3 OQ-AD28-03 RESOLVED）。
-- ⑥ **年以上規則** → SQL `WHERE NOT (CAST(NULLIF(REGEXP_REPLACE(year_produ,'[^0-9]','','g'),'') AS integer) < :cutoffYear)`（PG 專屬語法；CI 強制 PG 跑，見 §6.3 OQ-AD28-03 RESOLVED = 選項 A）。
+- ⑥ **年以上規則** → PG 專屬 SQL（CI 強制 PG 跑，見 §6.3 OQ-AD28-03 RESOLVED = 選項 A）；**精確 SQL 由 tdd 在 PG 等價測試下滿足，golden oracle = 現行 JS**：`parseInt(year_produ ?? '1900', 10) < cutoff`（NULL→1900、非數字→NaN→false 保留、前導數字 `'1980abc'`→1980）。初版示範寫法 `NULLIF(REGEXP_REPLACE(...))` 對 `''`/`'N/A'` 會誤排，**不可直接採用**；tdd 須以 JS oracle 的邊界案例驗收 SQL 實作。
 
-run 路徑：外層包 `INSERT INTO ob_monthly_run_result (run_id, list_no, orgno, appl_no, custo_no, settle_src, created_at, updated_at) SELECT :runId, :listNo, o.orgno, o.appl_no, o.custo_no, o.settle_src, NOW(), NOW() FROM ob_pool_data o WHERE <②③④⑤⑥ 合成>`。
+run 路徑：外層包 `INSERT INTO ob_monthly_run_result (run_id, list_no, orgno, appl_no, custo_no, settle_src, assignday, created_at, updated_at) SELECT :runId, :listNo, o.orgno, o.appl_no, o.custo_no, o.settle_src, NULL, NOW(), NOW() FROM ob_pool_data o WHERE <②③④⑤⑥ 合成>`。
+
+> **Schema 注意（測試設計揪出，2026-06-02）**：`ob_pool_data` **無** `assignday` 欄；現行 JS pipeline 從不寫 assignday（月跑結果該欄恆 NULL；entity 標 `forward-compat` 業務回填，見 `ob-monthly-run-result.entity.ts`）。下推 SELECT 須明確寫 `NULL`，不可嘗試從 `ob_pool_data` 取值。
 
 estimate 路徑：外層包 `SELECT COUNT(*) FROM ob_pool_data o WHERE <同一份 WHERE>`。
 
@@ -391,6 +393,8 @@ ON DELETE CASCADE。故同一 `run_id` 重跑前，須先 `DELETE FROM ob_monthl
 | **OQ-AD28-05** | ✅ **RESOLVED 2026-06-02** | 裁定：單一 worker（`teamConcurrency=1`）序列化，MVP 階段足夠。 | worker scaling 固定；DB 連線池壓力最小 |
 | **OQ-AD28-06** | ✅ **RESOLVED 2026-06-02** | spec-writer 從 legacy SP（UTF-16LE 解碼 `SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`）確認選案鍵 = `NEWID()`（隨機、無業務優先序）。下推改用 deterministic `ROW_NUMBER() OVER (PARTITION BY list_no ORDER BY orgno, appl_no)`，業務等價於隨機且可等價測試。 | Stage 4 排序鍵確定 |
 | **OQ-F100-01** | ✅ **RESOLVED 2026-06-02** | 裁定：對齊現行 JS 簡化版——`PARTITION BY list_no` + 單一 senior + deterministic 排序（`ORDER BY orgno, appl_no`）。legacy SP 的主管↔專員等量配對交換、寄信告警、整批回滾等副作用明確 **out-of-scope**。 | Stage 4 P3 實作範圍確定；不復刻 SP 配對語意 |
+| **OQ-F099-02** | ✅ **RESOLVED（測試設計階段，2026-06-02）** | assignday 下推寫 NULL（`ob_pool_data` 無此欄；月跑結果 assignday 恆 NULL，業務日後回填）。JS↔SQL 等價測試須斷言 `assignday IS NULL`。 | 下推 SELECT 欄位清單已更正（§5 P2）；無 schema 變更 |
+| **OQ-F099-03** | ✅ **RESOLVED（測試設計階段，2026-06-02）** | year-above SQL 之 golden oracle = 現行 JS（`parseInt(year_produ ?? '1900') < cutoff`；NULL→1900、非數字→NaN→保留、前導數字正確解析）；初版示範 SQL 對 `''`/`'N/A'` 有誤排，精確實作由 tdd 以 PG 等價測試滿足。 | year-above SQL 實作方式已在 §5 P2 補充說明；tdd 負責邊界驗收 |
 
 ## 13. 與既有 AD 的關係
 

@@ -10,7 +10,7 @@ flowchart TD
         F3["③ 詐騙白牌 DELETE<br/>WHERE NOT (list_type='01' AND spec_name LIKE '%白牌%')"]
         F4["④ 近 3 月去重<br/>NOT EXISTS anti-join（不載 Set 進 heap）"]
         F5["⑤ 機車期中 / 期中小資<br/>WHERE NOT (...)（trigger 由 matchesSpecialRule JS 判斷）"]
-        F6["⑥ year-above（車齡超 15 年）<br/>WHERE NOT (...)，year_produ 用 CAST+NULLIF（缺值退化 '1900'）<br/>選項 A：全 SQL，無應用層 filter，PG 真庫驗收（I-PORT-01）"]
+        F6["⑥ year-above（車齡超 15 年）<br/>WHERE NOT (...)；oracle=現行 JS parseInt(year_produ ?? '1900')<br/>NULL→1900 刪 / 非數字→NaN 留 / 前導數字 '1980abc'→1980 刪（禁 ^[0-9]+$ strict）<br/>選項 A：全 SQL，無應用層 filter，PG 真庫驗收（I-PORT-01）"]
         F1 --> F2 --> F3 --> F4 --> F5 --> F6
     end
 
