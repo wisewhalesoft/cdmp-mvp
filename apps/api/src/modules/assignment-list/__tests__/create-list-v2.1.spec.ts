@@ -382,10 +382,15 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
   });
 
   // -----------------------------------------------------------------
-  // CL-013 ~ CL-016 / TS-F050-013~016：prod_kind 交集唯一性
+  // CL-013 ~ CL-016 / TS-F050-013~016：唯一性（v2.2 完整條件集相等語意）
+  //
+  // v2.2 §18.8：唯一性由「prod_kind 值集合交集」改為「完整正規化 condition_payload
+  // 相等 + card_type」。legacy 證據：OBMLISTDF 無 prod_kind/card_type unique
+  // constraint；新增 SP 無重複檢查；dump 619 筆有 125 組同月+prod_kind+card_type
+  // 並存（他新中古-H / 非他新中古-H 僅差 spec_tp）。
   // -----------------------------------------------------------------
 
-  it('CL-013 / TS-F050-013：交集衝突 ["02","03"] vs 新["01","02"] → 422 LIST_NO_DUPLICATE', async () => {
+  it('CL-013 / TS-F050-013：部分交集（值集合不同）不再衝突 → 201（v2.2 改交集為完整相等）', async () => {
     // seed 既有名單 OB202605001 含 condition_payload prod_kind = ["02","03"]
     await env.service.createList(
       baseDto({
@@ -399,12 +404,101 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
       YM,
     );
 
+    // prod_kind 值集合不同（["01","02"] ≠ ["02","03"]）→ 條件集不相等 → 放行
+    const res2 = await env.service.createList(
+      baseDto({
+        cardType: 'A',
+        conditionPayload: {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '02'] }],
+          logic: 'AND',
+        },
+      }) as any,
+      ACTOR,
+      YM,
+    );
+    expect(res2.listNo).toBe('OB202605002');
+  });
+
+  it('CL-013a：同 prod_kind 同 card_type 僅 spec_tp 不同（他新中古/非他新中古-H）→ 201', async () => {
+    // 他新中古-H：prod_kind=01, spec_tp=[02,04,05], card_type=H
+    await env.service.createList(
+      baseDto({
+        cardType: 'H',
+        conditionPayload: {
+          conditions: [
+            { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+            { columnName: 'spec_tp', fieldType: 'categorical', values: ['02', '04', '05'] },
+          ],
+          logic: 'AND',
+        },
+      }) as any,
+      ACTOR,
+      YM,
+    );
+    // 非他新中古-H：prod_kind=01, spec_tp=[01,03], card_type=H → 條件集不同 → 放行
+    const res2 = await env.service.createList(
+      baseDto({
+        cardType: 'H',
+        conditionPayload: {
+          conditions: [
+            { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+            { columnName: 'spec_tp', fieldType: 'categorical', values: ['01', '03'] },
+          ],
+          logic: 'AND',
+        },
+      }) as any,
+      ACTOR,
+      YM,
+    );
+    expect(res2.listNo).toBe('OB202605002');
+  });
+
+  it('CL-013b：完整條件集相同（多欄位）→ 422 LIST_NO_DUPLICATE', async () => {
+    const payload = {
+      conditions: [
+        { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+        { columnName: 'spec_tp', fieldType: 'categorical', values: ['01', '03'] },
+      ],
+      logic: 'AND' as const,
+    };
+    await env.service.createList(
+      baseDto({ cardType: 'H', conditionPayload: payload }) as any,
+      ACTOR,
+      YM,
+    );
+    try {
+      await env.service.createList(
+        baseDto({ cardType: 'H', conditionPayload: payload }) as any,
+        ACTOR,
+        YM,
+      );
+      throw new Error('expected throw');
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(UnprocessableEntityException);
+      expect(e.getResponse().error).toBe(ERROR_CODES.LIST_NO_DUPLICATE);
+      expect(e.getResponse().details.conflictListNo).toBe('OB202605001');
+      expect(e.getResponse().details.cardType).toBe('H');
+    }
+  });
+
+  it('CL-013c：條件相同但 values 順序不同 → 仍視為相同 → 422（正規化無序比對）', async () => {
+    await env.service.createList(
+      baseDto({
+        cardType: 'A',
+        conditionPayload: {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '02'] }],
+          logic: 'AND',
+        },
+      }) as any,
+      ACTOR,
+      YM,
+    );
     try {
       await env.service.createList(
         baseDto({
           cardType: 'A',
           conditionPayload: {
-            conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '02'] }],
+            conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['02', '01'] }],
             logic: 'AND',
           },
         }) as any,
@@ -415,7 +509,6 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
     } catch (e: any) {
       expect(e).toBeInstanceOf(UnprocessableEntityException);
       expect(e.getResponse().error).toBe(ERROR_CODES.LIST_NO_DUPLICATE);
-      expect(e.getResponse().details.intersectionValues).toEqual(['02']);
       expect(e.getResponse().details.conflictListNo).toBe('OB202605001');
     }
   });

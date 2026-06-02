@@ -8,7 +8,7 @@
  *   - CASE_STATUS_REQUIRED 場景改為 conditions=[] → VALIDATION_ERROR
  *
  * 對應 spec：
- *   - F050 v2.1：建立草稿 — LIST_NO 自動產生、999 上限、prod_kind 交集唯一、
+ *   - F050 v2.1：建立草稿 — LIST_NO 自動產生、999 上限、完整條件集相等唯一（v2.2）、
  *                conditionPayload 必填、月跑鎖
  *   - F051 v2.1：覆寫式編輯 — 404 / inactive / 4-state semantics / 衝突排除自身
  *   - F052 v2.0：軟刪除 — 重複停用阻擋、月跑鎖
@@ -239,7 +239,7 @@ describe('AssignmentListService', () => {
         listRepo.create({
           list_no: 'OB202605999',
           list_nm: 'last',
-          prod_kind: 'ZZ', // 與新建 prod_kind=['01'] 無交集
+          prod_kind: 'ZZ', // 與新建條件不同 + card_type='99'≠'01' → 不衝突
           prod_best: '',
           spec_tp: null,
           list_type: '01',
@@ -273,9 +273,9 @@ describe('AssignmentListService', () => {
       }
     });
 
-    it('TC-M01-CREATE-004：prod_kind 交集衝突 → 422 LIST_NO_DUPLICATE', async () => {
+    it('TC-M01-CREATE-004：完整條件集相同 → 422 LIST_NO_DUPLICATE', async () => {
       await service.createList(baseCreateDto() as any, ACTOR, YM);
-      // 第二個用同 cardType + 同 prod_kind 條件，應交集衝突
+      // 第二個用同 cardType + 同 condition_payload，條件集完全相同 → 衝突
       await expect(
         service.createList(baseCreateDto() as any, ACTOR, YM),
       ).rejects.toThrow(UnprocessableEntityException);
@@ -411,7 +411,7 @@ describe('AssignmentListService', () => {
         ACTOR,
         YM,
       );
-      // 將 listB 改為與 listA 同 cardType=01 + prod_kind=['01']（交集衝突）
+      // 將 listB 改為與 listA 同 cardType=01 + prod_kind=['01']（完整條件相同）
       try {
         await service.updateList(
           listB.listNo,

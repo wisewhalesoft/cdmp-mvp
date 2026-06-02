@@ -6,7 +6,7 @@
  * 對應 AD：
  *   - AD-E07-18 §18.4 service 寫入流程（含 updateList 4-state semantics）
  *   - §18.6 衍生規則
- *   - §18.8 prod_kind 交集唯一性（excludeListNo）
+ *   - §18.8 完整條件集相等唯一性（v2.2；excludeListNo）
  *   - K1（stage guard）/ K3（rollback 後可寫）
  */
 
@@ -441,7 +441,7 @@ describe('F051 v2.1 updateList integration (Phase 5a 波7)', () => {
   // -----------------------------------------------------------------
   // UL-013 / TS-F051-013
   // -----------------------------------------------------------------
-  it('UL-013 / TS-F051-013：prod_kind 交集衝突 + excludeListNo 自身 → 422 LIST_NO_DUPLICATE', async () => {
+  it('UL-013 / TS-F051-013：完整條件集相同 + excludeListNo 自身 → 422 LIST_NO_DUPLICATE', async () => {
     // OB202605008（draft, cardType=A）
     await seedList(env.listRepo, {
       list_no: 'OB202605008',

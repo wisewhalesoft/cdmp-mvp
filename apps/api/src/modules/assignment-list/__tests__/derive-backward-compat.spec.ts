@@ -1,11 +1,11 @@
 /**
- * F050 v2.1 / AD-E07-18 §18.6：deriveBackwardCompatColumns / extractProdKindValues 純函數測試
+ * F050 §18.6：deriveBackwardCompatColumns / §18.8 v2.2：normalizeConditionPayload 純函數測試
  *
- * Phase 5a 波 5：5 個 backward-compat entity column 衍生規則 + prod_kind 唯一性所需 values 抽取
+ * 5 個 backward-compat entity column 衍生規則 + 完整條件集相等唯一性所需之正規化簽章
  *
  * 對應 spec：
  *   - AD-E07-18 §18.6 衍生規則表（NOT NULL 邊界：prod_kind / case_status → ''；其他 → null）
- *   - AD-E07-18 §18.8 prod_kind 交集唯一性語意
+ *   - AD-E07-18 §18.8 v2.2 完整條件集相等唯一性語意（正規化無序、排除 system-fixed）
  *   - test design：TS-F050-008~011；TS-F051-012；TS-F050-013~016
  */
 
@@ -56,7 +56,7 @@ async function buildEnv() {
   return app;
 }
 
-describe('AssignmentListService.deriveBackwardCompatColumns + extractProdKindValues (Phase 5a 波5)', () => {
+describe('AssignmentListService.deriveBackwardCompatColumns + normalizeConditionPayload (§18.6 / §18.8 v2.2)', () => {
   let app: TestingModule;
   let service: AssignmentListService;
 
@@ -190,46 +190,95 @@ describe('AssignmentListService.deriveBackwardCompatColumns + extractProdKindVal
     });
   });
 
-  describe('extractProdKindValues（§18.8）', () => {
-    it('EPK-001：conditions 含 prod_kind categorical values=["01","02"] → ["01","02"]', () => {
-      const payload = {
-        conditions: [{ columnName: 'prod_kind', fieldType: 'categorical' as const, values: ['01', '02'] }],
-        logic: 'AND' as const,
-      };
-      const out = (service as any).extractProdKindValues(payload);
-      expect(out).toEqual(['01', '02']);
+  describe('normalizeConditionPayload（§18.8 v2.2 完整條件集相等）', () => {
+    const noFixed = new Set<string>();
+
+    it('NCP-001：categorical values 去重排序，併入 logic → canonical', () => {
+      const out = (service as any).normalizeConditionPayload(
+        {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['02', '01', '01'] }],
+          logic: 'AND',
+        },
+        noFixed,
+      );
+      expect(out).toBe('AND|prod_kind:cat:01,02');
     });
 
-    it('EPK-002：conditions 無 prod_kind → []', () => {
-      const payload = {
-        conditions: [{ columnName: 'caseyear', fieldType: 'categorical' as const, values: ['1'] }],
-        logic: 'AND' as const,
-      };
-      const out = (service as any).extractProdKindValues(payload);
-      expect(out).toEqual([]);
+    it('NCP-002：條件順序 + values 順序不同 → 相同 canonical（無序比對）', () => {
+      const a = (service as any).normalizeConditionPayload(
+        {
+          conditions: [
+            { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+            { columnName: 'spec_tp', fieldType: 'categorical', values: ['03', '01'] },
+          ],
+          logic: 'AND',
+        },
+        noFixed,
+      );
+      const b = (service as any).normalizeConditionPayload(
+        {
+          conditions: [
+            { columnName: 'spec_tp', fieldType: 'categorical', values: ['01', '03'] },
+            { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          ],
+          logic: 'AND',
+        },
+        noFixed,
+      );
+      expect(a).toBe(b);
     });
 
-    it('EPK-003：conditions 之 prod_kind fieldType=numeric（防禦）→ []', () => {
-      const payload = {
-        conditions: [{ columnName: 'prod_kind', fieldType: 'numeric' as const, min: 1, max: 2 }],
-        logic: 'AND' as const,
-      };
-      const out = (service as any).extractProdKindValues(payload);
-      expect(out).toEqual([]);
+    it('NCP-003：system-fixed 欄位（best_case）被排除，不影響簽章', () => {
+      const withFixed = (service as any).normalizeConditionPayload(
+        {
+          conditions: [
+            { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+            { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+          ],
+          logic: 'AND',
+        },
+        new Set(['best_case']),
+      );
+      const without = (service as any).normalizeConditionPayload(
+        {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+          logic: 'AND',
+        },
+        new Set(['best_case']),
+      );
+      expect(withFixed).toBe(without);
     });
 
-    it('EPK-004：prod_kind values 含空字串 → 過濾掉', () => {
-      const payload = {
-        conditions: [{ columnName: 'prod_kind', fieldType: 'categorical' as const, values: ['01', '', '02'] }],
-        logic: 'AND' as const,
-      };
-      const out = (service as any).extractProdKindValues(payload);
-      expect(out).toEqual(['01', '02']);
+    it('NCP-004：numeric min/max 納入簽章', () => {
+      const out = (service as any).normalizeConditionPayload(
+        {
+          conditions: [{ columnName: 'month_cnt', fieldType: 'numeric', min: 2, max: 6 }],
+          logic: 'AND',
+        },
+        noFixed,
+      );
+      expect(out).toBe('AND|month_cnt:num:2~6');
     });
 
-    it('EPK-005：payload = null → []', () => {
-      const out = (service as any).extractProdKindValues(null);
-      expect(out).toEqual([]);
+    it('NCP-005：categorical values 含空字串 → 過濾掉', () => {
+      const out = (service as any).normalizeConditionPayload(
+        {
+          conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '', '02'] }],
+          logic: 'AND',
+        },
+        noFixed,
+      );
+      expect(out).toBe('AND|prod_kind:cat:01,02');
+    });
+
+    it('NCP-006：payload = null / 無有效條件 → 空字串（呼叫端視為永不衝突）', () => {
+      expect((service as any).normalizeConditionPayload(null, noFixed)).toBe('');
+      expect(
+        (service as any).normalizeConditionPayload(
+          { conditions: [{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }], logic: 'AND' },
+          new Set(['best_case']),
+        ),
+      ).toBe('');
     });
   });
 });
