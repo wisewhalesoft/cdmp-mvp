@@ -9,6 +9,7 @@ import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
+import { runStage1SqlInsert } from '@/modules/assignment/stage1/stage1-sql-executor';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -161,7 +162,7 @@ export class AssignmentRunPipelineService {
       for (const list of validLists) {
         // F098 AC-5 / A-2：list 邊界為可中斷點 — 處理下一份 list 前查是否已被取消
         await this.checkCancelled(runId);
-        const result = await this.runStage1ForList(list, workdt);
+        const result = await this.runStage1ForList(list, workdt, runId);
         if (result.skipped) {
           stage1SkippedLists.push({
             listNo: list.list_no,
@@ -663,19 +664,111 @@ export class AssignmentRunPipelineService {
   // =========================================================================
 
   /**
-   * Phase 5b / AD-E07-18 §18.5 + F091 / AD-E07-22~23：對單一 list 執行 Stage 1 完整篩選鏈。
+   * Phase 5b / AD-E07-18 §18.5 + F091 / AD-E07-22~23 + F099 / AD-E07-28 P2：
+   * 對單一 list 執行 Stage 1 案件挑選。
    *
-   * F091（Phase 2 Stage 1 補完整）：改呼叫共用的 `executeStage1Chain`（dryRun:false），
-   * 在既有欄位篩選之上補入 MONTH_CNT 期別過濾、近 3 個月去重、特殊 DELETE 三步驟。
-   * ⚠️ 此改動改變正式月跑分派案件數（無 feature flag，deploy 後直接生效 — DP-AD23-2）。
+   * F099（P2 Stage 1 SQL 下推）：當 DB_TYPE='postgres' 時改走 set-based SQL 下推
+   * （`buildStage1Sql` → `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o WHERE <core>`），
+   * Stage 1 案件挑選於 PG 內完成、不全載 ob_pool_data 進 heap（解 F2/OOM，I-NOLOAD-01）。
+   * 之後僅 re-hydrate「Stage 1 已挑選之有界子集」（依寫入 ob_monthly_run_result 的 PK）回 heap，
+   * 供 Stage 2~4 計分（演算法不改，C-3）。re-hydrate 為有界子集（非全 pool）→ 非全載。
+   *
+   * 非 PG（better-sqlite3 測試 / 非 PG 環境）：沿用 `executeStage1Chain`（JS golden oracle，
+   * 與 SQL 路徑逐 list 結果集等價由 PG 真庫 EQ 群組驗收，F099 AC-7 / DoD）。下推 SQL 之
+   * `::int` / `SUBSTRING(... FROM …)` / `CAST(... AS numeric)` 為 PG 專屬，SQLite 不具代表性
+   * 且不支援（I-PORT-01）；故以 DB_TYPE gate 分流，與 pg-boss / advisory-lock 既有 PG-only gate 一致。
    *
    * @param list   名單定義
    * @param workdt 月跑工作日 PROJECT_WORKYM+'01'（去重視窗 + 年資規則）
+   * @param runId  月跑 ID（PG 下推 INSERT…SELECT 之 run_id 常數；非 PG 路徑不使用）
    * @returns
    *   - `{ skipped: true }`：composer 回 skipReason='EMPTY_CONDITIONS' → 不撈 pool（已 logger.warn）
-   *   - `{ skipped: false, pool }`：完整篩選鏈過濾後的 ob_pool_data 案件清單
+   *   - `{ skipped: false, pool }`：Stage 1 過濾後的 ob_pool_data 案件清單（供 Stage 2~4）
    */
   private async runStage1ForList(
+    list: ObListDefinition,
+    workdt: Date,
+    runId: string,
+  ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
+    const dbType = process.env.DB_TYPE;
+    if (dbType === 'postgres') {
+      return this.runStage1SqlPushdown(list, workdt, runId);
+    }
+    return this.runStage1JsChain(list, workdt);
+  }
+
+  /**
+   * F099 P2 PG 下推路徑：set-based SQL 取案寫入 ob_monthly_run_result，再 re-hydrate 有界子集供 Stage 2~4。
+   */
+  private async runStage1SqlPushdown(
+    list: ObListDefinition,
+    workdt: Date,
+    runId: string,
+  ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
+    // run（INSERT…SELECT）與 estimate（SELECT COUNT(*)）共用同一 buildStage1Sql core（I-RUN-EST-01）。
+    const { inserted, core } = await runStage1SqlInsert(
+      this.dataSource.manager,
+      list,
+      workdt,
+      this.poolDataListRepo,
+      { runId, listNo: list.list_no },
+    );
+
+    for (const w of core.warnings) {
+      this.logger.warn(
+        `[Stage1] sql warning list_no=${list.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,
+      );
+    }
+
+    if (core.skip) {
+      this.logger.warn(
+        `[Stage1] Skipping list ${list.list_no} (${list.list_nm}): empty conditions (backfilled empty or invalid state)`,
+      );
+      return { skipped: true };
+    }
+
+    if (inserted === 0) {
+      return { skipped: false, pool: [] };
+    }
+
+    // re-hydrate Stage 1 已挑選之有界子集（依寫入 ob_monthly_run_result 之 PK），供 Stage 2~4 計分。
+    // 非全載 ob_pool_data（I-NOLOAD-01）：僅取本 run/list 已挑選案件（Stage 1 大幅收斂後之子集）。
+    const selected: Array<{ orgno: string; appl_no: string }> = await this.resultRepo
+      .createQueryBuilder('r')
+      .select(['r.orgno AS orgno', 'r.appl_no AS appl_no'])
+      .where('r.run_id = :runId AND r.list_no = :listNo', {
+        runId,
+        listNo: list.list_no,
+      })
+      .getRawMany();
+
+    const pool = await this.hydratePoolByPk(selected);
+    return { skipped: false, pool };
+  }
+
+  /**
+   * 依 (orgno, appl_no) PK 子集 re-hydrate ob_pool_data 業務列（供 Stage 2~4 計分讀回 heap）。
+   * 以 IN ((orgno, appl_no), …) 一次撈有界子集（Stage 1 收斂後之案件數，非全 pool）。
+   */
+  private async hydratePoolByPk(
+    keys: Array<{ orgno: string; appl_no: string }>,
+  ): Promise<ObPoolData[]> {
+    if (keys.length === 0) return [];
+    const qb = this.poolRepo.createQueryBuilder('o');
+    const orClauses: string[] = [];
+    const params: Record<string, unknown> = {};
+    keys.forEach((k, i) => {
+      orClauses.push(`(o.orgno = :org${i} AND o.appl_no = :appl${i})`);
+      params[`org${i}`] = k.orgno;
+      params[`appl${i}`] = k.appl_no;
+    });
+    return qb.where(orClauses.join(' OR '), params).getMany();
+  }
+
+  /**
+   * 非 PG 路徑：沿用 executeStage1Chain（JS golden oracle，SQLite 相容）。
+   */
+  private async runStage1JsChain(
     list: ObListDefinition,
     workdt: Date,
   ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
