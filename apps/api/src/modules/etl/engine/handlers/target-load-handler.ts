@@ -6,14 +6,6 @@
 
 import { NodeExecutor, NodeExecutionContext, DataSet, makeTempTableName, emptyDataSet } from '../types';
 
-const MAX_PARAMS_PER_QUERY = 65535;
-const DEFAULT_BATCH_SIZE = 5000;
-
-export function calculateBatchSize(columnsPerRow: number, configuredBatchSize: number = DEFAULT_BATCH_SIZE): number {
-  const maxBatchSize = Math.floor(MAX_PARAMS_PER_QUERY / columnsPerRow);
-  return Math.min(configuredBatchSize, maxBatchSize);
-}
-
 export class TargetLoadHandler implements NodeExecutor {
   readonly nodeType = 'target_load';
 
@@ -111,7 +103,6 @@ export class TargetLoadHandler implements NodeExecutor {
     const fullMode = context.node.data.fullMode === true;
     const loadMode = context.node.data.loadMode as string | undefined;
 
-    const batchSize = 5000;
     let totalUpserted = 0;
 
     // === F090 / AD-E07-21 §21.3 + v2.0 AD-E07-25 §25.3：partition-replace load mode ===
@@ -152,20 +143,19 @@ export class TargetLoadHandler implements NodeExecutor {
         );
       }
 
-      // 2. 批次 INSERT，每列填 partitionValue
+      // 2. 單條 INSERT…SELECT，每列填 partitionValue
+      // In-DB 的 INSERT…SELECT 不帶任何 bind 參數，不受 PG 65535 參數上限約束，
+      // 故無需分批；單條語句一次搬移全部列為 O(n)（取代原 LIMIT/OFFSET 分批——
+      // 每批 OFFSET 都要重掃前面所有列，總掃描量 O(n²)，大表會嚴重劣化）。
       const selectColsForInsert = insertColumns.map((c) => `"${c}"`).join(', ');
-      for (let offset = 0; offset < input.rowCount; offset += batchSize) {
-        const selectSql = `SELECT ${selectColsForInsert}, '${escapedPartitionValue}' AS "${partitionColumn}" FROM "${tempTable}" LIMIT ${batchSize} OFFSET ${offset}`;
-        const insertSql = `INSERT INTO "${targetTable}" (${insertColumnList}) ${selectSql}`;
+      const selectSql = `SELECT ${selectColsForInsert}, '${escapedPartitionValue}' AS "${partitionColumn}" FROM "${tempTable}"`;
+      const insertSql = `INSERT INTO "${targetTable}" (${insertColumnList}) ${selectSql}`;
 
-        try {
-          await context.queryRunner.query(insertSql);
-          totalUpserted += Math.min(batchSize, input.rowCount - offset);
-        } catch (err: any) {
-          throw new Error(
-            `partition_replace INSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
-          );
-        }
+      try {
+        await context.queryRunner.query(insertSql);
+        totalUpserted = input.rowCount;
+      } catch (err: any) {
+        throw new Error(`partition_replace INSERT 失敗：${err.message}`);
       }
 
       await context.queryRunner.query(`DROP TABLE IF EXISTS "${tempTable}"`);
@@ -204,18 +194,16 @@ export class TargetLoadHandler implements NodeExecutor {
         throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
       }
 
-      for (let offset = 0; offset < totalRows; offset += batchSize) {
-        const selectSql = `SELECT ${columnList} FROM "${insertSourceTable}" LIMIT ${batchSize} OFFSET ${offset}`;
-        const insertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql}`;
+      // 單條 INSERT…SELECT（理由同 partition_replace）：In-DB 搬移無 bind 參數，
+      // 不需分批，O(n) 取代原 LIMIT/OFFSET 分批的 O(n²)。
+      const selectSql = `SELECT ${columnList} FROM "${insertSourceTable}"`;
+      const insertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql}`;
 
-        try {
-          await context.queryRunner.query(insertSql);
-          totalUpserted += Math.min(batchSize, totalRows - offset);
-        } catch (err: any) {
-          throw new Error(
-            `fullMode INSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
-          );
-        }
+      try {
+        await context.queryRunner.query(insertSql);
+        totalUpserted = totalRows;
+      } catch (err: any) {
+        throw new Error(`fullMode INSERT 失敗：${err.message}`);
       }
 
       if (insertSourceTable !== tempTable) {
@@ -235,12 +223,29 @@ export class TargetLoadHandler implements NodeExecutor {
       .map((col) => `"${col}" = EXCLUDED."${col}"`)
       .join(', ');
 
-    // BUG-2 fix: Data quality gate — ghost record filter ONLY.
-    // source_customer_no 經 TRIM 後長度 >= 5 才視為有效（過短為 ghost record，跳過）。
-    // TS-F044-018：不再隱性過濾「target NOT NULL 欄位為 null」的列 —— 那會誤刪業務上
-    // 合法的資料（例如 name=null 仍是有效客戶）；NOT NULL 約束交由 DB 於 INSERT 階段強制，
-    // 而非在此靜默丟棄。
-    const ghostGate = `LENGTH(TRIM("source_customer_no")) >= 5`;
+    // Data quality gate（2026-05-29 復原必填欄守門）：
+    // ① ghost record：source_customer_no TRIM 後長度 >= 5（過短視為無效，跳過）。
+    // ② 必填欄守門：target 端 NOT NULL 的業務欄位若為 null，整列排除。
+    //    背景：customer_core 的 `衝突解決`(conditional) 對 MLMC-only 合併列會留下
+    //    customer_type_code / name = null（皆為 schema NOT NULL）。若不在此過濾，該列會在
+    //    INSERT 階段違反 NOT NULL constraint —— 改單條 INSERT 後更會讓「整批」rollback、
+    //    customer_core 零落地。這些列 DB 本就會拒收，於此先濾掉只是避免整批失敗。
+    //    （此邏輯為 2026-05-26 commit 2b1e876 / TS-F044-018 一度移除，今依裁示復原。）
+    //    NOT IN 排除 handler 自填欄（customer_id / _etl_* / data_source）。
+    //    被排除的列數可由 node_logs 的 inputRowCount vs outputRowCount 差值觀察。
+    const notNullTargetCols = await context.queryRunner.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = $1 AND is_nullable = 'NO'
+          AND column_name NOT IN ('customer_id', '_etl_loaded_at', '_etl_pipeline_id', 'data_source')`,
+      [targetTable],
+    );
+    const notNullChecks = notNullTargetCols
+      .filter((r: any) => allColumns.includes(r.column_name))
+      .map((r: any) => `"${r.column_name}" IS NOT NULL`);
+    const ghostGate = [
+      `LENGTH(TRIM("source_customer_no")) >= 5`,
+      ...notNullChecks,
+    ].join(' AND ');
 
     // Create a deduped temp table for batched UPSERT (avoids "cannot affect row a second time")
     // DISTINCT ON handles collisions caused by NULLIF(TRIM()) normalization
@@ -257,19 +262,18 @@ export class TargetLoadHandler implements NodeExecutor {
     );
     const validCount = validCountResult[0]?.cnt ?? 0;
 
-    // UPSERT mode: batch INSERT ON CONFLICT — ghost gate 套在 INSERT 的 SELECT WHERE（TS-F044-019）
-    for (let offset = 0; offset < validCount; offset += batchSize) {
-      const selectSql = `SELECT ${columnList} FROM "${dedupTable}" WHERE ${ghostGate} ORDER BY "source_customer_no" LIMIT ${batchSize} OFFSET ${offset}`;
-      const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
+    // UPSERT mode: 單條 INSERT…SELECT…ON CONFLICT — ghost gate 套在 SELECT WHERE（TS-F044-019）。
+    // dedupTable 已 DISTINCT ON (source_customer_no) 去重，單條 INSERT 內不會出現同鍵兩次，
+    // 不觸發 "cannot affect row a second time"，故無需分批；In-DB INSERT…SELECT 無 bind 參數
+    // 不受 65535 上限約束，O(n) 取代原 LIMIT/OFFSET 分批的 O(n²)。
+    const selectSql = `SELECT ${columnList} FROM "${dedupTable}" WHERE ${ghostGate}`;
+    const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
 
-      try {
-        await context.queryRunner.query(upsertSql);
-        totalUpserted += Math.min(batchSize, validCount - offset);
-      } catch (err: any) {
-        throw new Error(
-          `UPSERT 批次失敗（offset: ${offset}，已成功寫入: ${totalUpserted}）：${err.message}`,
-        );
-      }
+    try {
+      await context.queryRunner.query(upsertSql);
+      totalUpserted = validCount;
+    } catch (err: any) {
+      throw new Error(`UPSERT 失敗：${err.message}`);
     }
 
     // Drop temp tables

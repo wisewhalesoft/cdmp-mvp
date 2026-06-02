@@ -3,7 +3,7 @@
  * 覆蓋 TS-F044-001 ~ TS-F044-016
  */
 import { describe, it, expect, vi } from 'vitest';
-import { TargetLoadHandler, calculateBatchSize } from '../engine/handlers/target-load-handler';
+import { TargetLoadHandler } from '../engine/handlers/target-load-handler';
 import { NodeExecutionContext, DataSet, makeTempTableName } from '../engine/types';
 
 // --- Helpers ---
@@ -16,9 +16,10 @@ function createMockQueryRunner(opts: {
   columns?: string[];
   rowCount?: number;
   pkColumns?: string[];
+  notNullColumns?: string[];
   customHandler?: (sql: string, params?: any[]) => any;
 } = {}) {
-  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name', '_etl_loaded_at', '_etl_pipeline_id'], rowCount = 0, pkColumns = [], customHandler } = opts;
+  const { tableExists = true, columns = ['customer_id', 'source_customer_no', 'name', '_etl_loaded_at', '_etl_pipeline_id'], rowCount = 0, pkColumns = [], notNullColumns, customHandler } = opts;
   const calls: { sql: string; params?: any[] }[] = [];
 
   const query = vi.fn(async (sql: string, params?: any[]) => {
@@ -36,6 +37,13 @@ function createMockQueryRunner(opts: {
     // PK lookup for fullMode dedup
     if (sql.includes('information_schema.table_constraints')) {
       return pkColumns.map((c, i) => ({ column_name: c, ordinal_position: i + 1 }));
+    }
+
+    // NOT NULL 必填欄清單查詢（customer_core 守門用）：模擬 target 端 is_nullable='NO' 欄位，
+    // 預設為所有欄位扣除 handler 自填欄（對齊真實 SQL 的 NOT IN 排除）
+    if (sql.includes('is_nullable')) {
+      const handlerOwned = new Set(['customer_id', '_etl_loaded_at', '_etl_pipeline_id', 'data_source']);
+      return (notNullColumns ?? columns.filter((c) => !handlerOwned.has(c))).map((c) => ({ column_name: c }));
     }
 
     // BUG-2 fix: data_type query for VARCHAR detection
@@ -182,14 +190,19 @@ describe('TargetLoadHandler - UPSERT', () => {
   });
 
   // TS-F044-008: Single SQL UPSERT (no batch needed — SQL handles all rows)
-  it('TS-F044-008: single SQL UPSERT for all rows (no memory batching needed)', async () => {
-    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 100));
+  // Regression guard: 即使列數遠大於舊的 5000 批次門檻，仍只發一條 INSERT…SELECT
+  // （防止 LIMIT/OFFSET 分批 O(n²) 反模式被重新引入）。
+  it('TS-F044-008: single SQL UPSERT for all rows regardless of row count (no OFFSET batching)', async () => {
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 100000));
     const result = await handler.execute(ctx);
-    expect(result.rowCount).toBe(100);
+    expect(result.rowCount).toBe(100000);
 
     const qr = ctx.queryRunner;
     const insertCalls = qr.calls.filter((c: any) => c.sql.includes('INSERT INTO'));
-    expect(insertCalls.length).toBe(1); // Single SQL UPSERT
+    expect(insertCalls.length).toBe(1); // Single SQL UPSERT — 一條搬全部
+    // 不得出現 LIMIT/OFFSET 分頁（O(n²) 反模式）
+    expect(insertCalls[0].sql).not.toMatch(/OFFSET/i);
+    expect(insertCalls[0].sql).not.toMatch(/LIMIT/i);
   });
 
   // TS-F044-011: 空 DataSet 不執行 UPSERT
@@ -214,8 +227,7 @@ describe('TargetLoadHandler - UPSERT', () => {
     });
 
     const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 10), { queryRunner: qr });
-    await expect(handler.execute(ctx)).rejects.toThrow('UPSERT 批次失敗');
-    await expect(handler.execute(ctx)).rejects.toThrow('offset: 0');
+    await expect(handler.execute(ctx)).rejects.toThrow('UPSERT 失敗：DB connection lost');
   });
 });
 
@@ -224,19 +236,26 @@ describe('TargetLoadHandler - UPSERT', () => {
 describe('TargetLoadHandler - BUG-2 fixes', () => {
   const handler = new TargetLoadHandler();
 
-  // TS-F044-018: [BUG-2] name=null 記錄正常寫入，不被隱性過濾排除
-  it('TS-F044-018: name=null row is NOT filtered out by implicit NOT NULL check', async () => {
-    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 1));
+  // TS-F044-018: 必填欄守門 — target NOT NULL 業務欄位為 null 的列以 IS NOT NULL 過濾排除。
+  // 2026-05-29 依裁示復原（commit 2b1e876 一度移除）：customer_core.name / customer_type_code
+  // 皆為 schema NOT NULL，MLMC-only 合併列會留 null；不先濾掉會讓單條 INSERT 整批 rollback。
+  it('TS-F044-018: rows with null NOT-NULL business columns are gated out via IS NOT NULL filter', async () => {
+    const columns = ['customer_id', 'source_customer_no', 'name', 'customer_type_code', '_etl_loaded_at', '_etl_pipeline_id'];
+    const qr = createMockQueryRunner({ columns, rowCount: 10 });
+    const ctx = makeTargetLoadContext(makeDs('etl_tmp_df3', 10), { queryRunner: qr, columns });
     await handler.execute(ctx);
 
-    const qr = ctx.queryRunner;
-    // After BUG-2 fix: no information_schema.columns query for is_nullable
+    // 會查 target NOT NULL 欄位清單
     const isNullableCall = qr.calls.find((c: any) => c.sql.includes('is_nullable'));
-    expect(isNullableCall).toBeUndefined();
-    // UPSERT SQL should NOT contain any IS NOT NULL WHERE filter
+    expect(isNullableCall).toBeDefined();
+    // UPSERT 的 SELECT WHERE 對必填業務欄加 IS NOT NULL
     const insertCall = qr.calls.find((c: any) => c.sql.includes('INSERT INTO'));
     expect(insertCall).toBeDefined();
-    expect(insertCall.sql).not.toContain('IS NOT NULL');
+    expect(insertCall.sql).toContain('"name" IS NOT NULL');
+    expect(insertCall.sql).toContain('"customer_type_code" IS NOT NULL');
+    // handler 自填欄不納入守門條件
+    expect(insertCall.sql).not.toContain('"customer_id" IS NOT NULL');
+    expect(insertCall.sql).not.toContain('"_etl_loaded_at" IS NOT NULL');
   });
 
   // TS-F044-019: [BUG-2] ghost record 閘門 — source_customer_no 長度 < 5 被跳過
@@ -407,15 +426,13 @@ describe('TargetLoadHandler - fullMode 通用全量替換路徑（AD-E07-12）',
     await expect(handler.execute(ctx)).rejects.toThrow('fullMode TRUNCATE 失敗：permission denied');
   });
 
-  it('fullMode：INSERT 批次失敗時錯誤訊息含 offset 與已寫入數', async () => {
-    let insertCount = 0;
+  it('fullMode：INSERT 失敗時拋出明確錯誤訊息（單條 INSERT…SELECT）', async () => {
     const qr = createMockQueryRunner({
       columns: ['emp_id'],
       rowCount: 6000,
       customHandler: (sql) => {
         if (sql.includes('INSERT INTO') && !sql.includes('CREATE')) {
-          insertCount++;
-          if (insertCount === 2) throw new Error('disk full');
+          throw new Error('disk full');
         }
         return undefined;
       },
@@ -427,10 +444,13 @@ describe('TargetLoadHandler - fullMode 通用全量替換路徑（AD-E07-12）',
       fullMode: true,
     });
 
-    // 單次執行同時驗證兩個 substring（避免跨呼叫狀態累積）
-    await expect(handler.execute(ctx)).rejects.toThrow(
-      /fullMode INSERT 批次失敗.*offset: 5000.*已成功寫入: 5000/s,
+    await expect(handler.execute(ctx)).rejects.toThrow('fullMode INSERT 失敗：disk full');
+
+    // 列數遠大於舊 5000 門檻仍只一條 INSERT（regression guard：無 OFFSET 分批）
+    const insertCalls = qr.calls.filter(
+      (c: any) => c.sql.includes('INSERT INTO') && !c.sql.includes('CREATE'),
     );
+    expect(insertCalls.length).toBe(1);
   });
 });
 
@@ -573,8 +593,8 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
     expect(result.rowCount).toBe(3);
   });
 
-  // INSERT 失敗 → 錯誤含 offset / 已寫入數
-  it('partition_replace: INSERT 失敗錯誤含 offset 與已寫入數', async () => {
+  // INSERT 失敗 → 拋明確錯誤訊息
+  it('partition_replace: INSERT 失敗拋明確錯誤訊息', async () => {
     const columns = ['list_no', 'orgno', 'appl_no', 'data_source'];
     const qr = createMockQueryRunner({
       columns,
@@ -587,7 +607,7 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
       },
     });
     const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3), { columns, queryRunner: qr });
-    await expect(handler.execute(ctx)).rejects.toThrow(/partition_replace INSERT 批次失敗.*offset: 0/s);
+    await expect(handler.execute(ctx)).rejects.toThrow('partition_replace INSERT 失敗：disk full');
   });
 
   // 不破壞既有 fullMode：partition_replace 不應觸發 TRUNCATE 或 ON CONFLICT 路徑
@@ -598,28 +618,6 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
     expect(allSql).not.toContain('TRUNCATE');
     expect(allSql).not.toContain('ON CONFLICT');
     expect(allSql).not.toContain('DO UPDATE');
-  });
-});
-
-// ===== Batch Size Calculation =====
-
-describe('calculateBatchSize', () => {
-  // TS-F044-015: 批次大小計算 45 欄位
-  it('TS-F044-015: 45 columns → batchSize = 1456', () => {
-    expect(calculateBatchSize(45, 5000)).toBe(1456);
-  });
-
-  // TS-F044-016: 欄位數少時以 configuredBatchSize 為準
-  it('TS-F044-016: 10 columns → uses configuredBatchSize 500', () => {
-    expect(calculateBatchSize(10, 500)).toBe(500);
-  });
-
-  it('maxBatchSize calculation: floor(65535/45) = 1456', () => {
-    expect(Math.floor(65535 / 45)).toBe(1456);
-  });
-
-  it('maxBatchSize calculation: floor(65535/10) = 6553', () => {
-    expect(Math.floor(65535 / 10)).toBe(6553);
   });
 });
 
@@ -738,7 +736,7 @@ describe('TargetLoadHandler - fullMode', () => {
     try {
       await handler.execute(ctx);
     } catch (e: any) {
-      expect(e.message).toMatch(/fullMode|INSERT 批次失敗/);
+      expect(e.message).toMatch(/fullMode INSERT 失敗/);
     }
   });
 
