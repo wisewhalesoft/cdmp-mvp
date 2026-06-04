@@ -66,10 +66,11 @@ services:
       DB_PASSWORD: cdmp_secret
       DB_NAME: cdmp_dev
       AES_ENCRYPTION_KEY: 2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2
-      # worker 才是真正執行 pipeline 者 → v1/v2 分支 flag 須供 worker（AC-8 / TS-F098-WORKER-003）
+      # worker 才是真正執行 pipeline 者（AC-8 / TS-F098-WORKER-003）
       ENABLE_E07_REFACTOR_PHASE3: "true"
       ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL: "true"
-      # ASSIGNMENT_PIPELINE_V2 預設未設（v1 簡化）；如需 v2 真實計分，於此設 "true"
+      # Bug A 修復（AD-E07-28）：PG 一律走 v2 SQL 下推（gate = DB_TYPE='postgres'）→ 真實計分。
+      #   ASSIGNMENT_PIPELINE_V2 對 PG 已無意義（僅非 PG in-memory 路徑用於選 v1/v2），故此處不設。
     volumes:
       - ./apps/api/src:/app/src
       - ./apps/api/test:/app/test

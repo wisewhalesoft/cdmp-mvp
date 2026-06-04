@@ -8,6 +8,82 @@ last_updated: 2026-06-04
 
 # F100：Stage 2~4 SQL 下推 + v2 真實計分引擎 — Implementation Log
 
+---
+
+## Bug A 修復（2026-06-04，branch feat/monthly-run-execution-model-refactor）
+
+> app 實測迴歸：**PG + ASSIGNMENT_PIPELINE_V2 未設**（dev/prod 預設）時月跑只產生無計分 identity 列。
+
+### 根因
+
+原 gate `useStage2to4Pushdown = useV2 && DB_TYPE==='postgres'`。當 PG 但 `ASSIGNMENT_PIPELINE_V2`
+未設 → gate=false → 走壞掉的 v1-PG fallback `executeV1(stage1Cases)`。但 PG 模式下 Stage 1 是
+SQL INSERT 寫表、`stage1Cases` 之 pool 為 `skipHydration=true` 之空陣列 → `executeV1` 計分 0 筆。
+實測：寫了 55,863 列但 `score/tier/emplid` 全 NULL、`total_cases=0`（v2 on 時 totalCases=55863 正確）。
+PG 模式並無「v1 簡化計分的 SQL 版」（P3 僅建 v2 真實版）。
+
+### 修法（使用者 2026-06-04 拍板：PG 一律走 SQL 下推）
+
+| 項目 | 修法 |
+|---|---|
+| **gate** | 抽出純函式 `resolveStage2to4Strategy(env)`；PG 一律 `pushdown`（gate = `DB_TYPE==='postgres'`，拿掉 `useV2 &&`）；非 PG 依 `ASSIGNMENT_PIPELINE_V2` 選 `v2Inmemory`/`v1Inmemory`。`ASSIGNMENT_PIPELINE_V2` 在 PG **已 deprecated / 無意義**（docstring 標明）。 |
+| **total_cases** | 下推路徑改取 `resultRepo.count({where:{run_id}})`（SQL COUNT）；不再用 `stage4Results.length`（下推路徑該陣列為快照用之讀回，且全載違反 I-NOLOAD）。非 PG 路徑維持 `.length`（in-memory 全列）。 |
+| **快照讀回有界** | `executeStage2to4Pushdown` 末段 `resultRepo.find({where:{run_id}})`（entity hydration 全列）→ 抽 `readResultRowsForSnapshot`，改 `createQueryBuilder().select([需要欄位]).getRawMany()`（無 entity 變更追蹤 metadata），PG numeric 經 raw 回字串 → `Number()` 正規化。 |
+| **docker-compose** | worker service 移除 `ASSIGNMENT_PIPELINE_V2: "true"`（L72 附近）；註解改「PG 一律走 v2 SQL 下推（gate=DB_TYPE）；flag 僅非 PG in-memory 用」。 |
+
+### 快照 bound 後語意（**需知會**）
+
+`result` / `input_list` 快照 payload 之 `assignments` / `cases` **仍為完整 per-case 記錄（非 sample）**
+—— 這是其契約：下游 **F063 摘要 / F064 匯出 / F066 快照詳情 / F067 比對 / Stage 3 CR 偵測**
+（`collectCrCandidates` 讀歷史 result snapshot 全 assignments 找未成交案件）皆依賴完整資料集。
+故**不可**把快照裁切成 LIMIT N sample（會破壞上述全部用途）。本次 bound 僅作用於**讀回機制**：
+`getRawMany`（輕量 raw，只取所需欄位、不 hydrate entity）取代 `find()`（每列帶 ORM metadata），
+消除全列 entity 物化之 heap 放大；**資料集本身不變、語意不變**。
+
+> ⚠️ 殘留 latent：快照 payload 本質仍是「完整 per-case JSON 寫進一個 JSONB 欄位」。對 55k 列而言，
+> 組裝該 JSON + 寫入時仍會一次性持有完整陣列（此為快照設計之固有成本，非本次 gate bug）。若未來
+> 需對超大 run 進一步降 heap，須重新設計快照儲存（如改存 per-list 分片或直接以 `ob_monthly_run_result`
+> 表為快照來源），屬獨立 follow-up，已超出 Bug A 範圍。
+
+### Bug A 測試（紅→綠）
+
+| Scenario ID | Description | Status |
+|---|---|---|
+| resolveStage2to4Strategy ×6 | PG（v2 未設/true/false）→ pushdown；非 PG（v2 true/未設）→ v2/v1 Inmemory | PASS（unit，純函式）|
+| BUGA-000 | 環境前提：DB_TYPE=postgres 且 ASSIGNMENT_PIPELINE_V2 未設 | PASS（PG）|
+| BUGA-001 | PG + v2 未設 → 計分正確（score/level/tier 正確、非全 NULL，走 P3 非 v1 fallback）| PASS（PG）|
+| BUGA-002 | total_cases == 實際寫入列數（非 0；== `resultRepo.count`，資料驅動）| PASS（PG）|
+| BUGA-003 | result/input_list 快照 assignments/cases 為完整 per-case（== 表內列數，非 sample）| PASS（PG）|
+
+> RED 驗證：暫將 gate 還原為 `useV2 && DB_TYPE==='postgres'`，BUGA-001/002/003 失敗
+> （total_cases=0、score NULL、快照 assignments=0），與 app 實測一致；還原修法後全綠。
+
+### Bug A Files Changed
+
+| File Path | Change Type | Description |
+|---|---|---|
+| `apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts` | modified | 新增 export `resolveStage2to4Strategy` 純函式 + `Stage2to4Strategy` type；`runPipeline` gate 改用之；Stage 2~4 分支由 `useV2` 改 `strategy`；`total_cases` 下推路徑改 `resultRepo.count`；新增 `readResultRowsForSnapshot`（getRawMany 輕量讀回）取代 `executeStage2to4Pushdown` 末段 `resultRepo.find`；class/gate docstring 標 PG flag deprecation |
+| `apps/api/src/modules/assignment/services/__tests__/assignment-run-pipeline-gate.bugfix.spec.ts` | new | `resolveStage2to4Strategy` 純函式 gate 決策 6 案（unit，免真 PG）|
+| `apps/api/src/modules/assignment/services/__tests__/assignment-run-pipeline-bugfix.pg.spec.ts` | new | PG + v2 未設 → 下推 / 真實計分 / total_cases / 完整快照 4 案（PG 真庫，逐檔執行）|
+| `docker-compose.yml` | modified | worker service 移除 `ASSIGNMENT_PIPELINE_V2: "true"` + 更新註解 |
+
+### Bug A 回歸狀況（逐檔，F-D 隔離）
+
+- 新 PG：`assignment-run-pipeline-bugfix.pg.spec.ts` 4/4 綠。
+- 既有 PG 等價（維持綠）：`assignment-run-pipeline-p3.pg.spec.ts` 7/7、`stage1-sql-pushdown.pg.spec.ts` 26/26、`stage2to4-sql-pushdown.pg.spec.ts` 28/28。
+- 非 PG（維持綠）：`assignment-run-pipeline.service.spec.ts` 20/20（v1）、`assignment-run-pipeline-v2.service.spec.ts` 8/8（v2 in-memory，DB_TYPE=sqlite → 不受 gate 改動影響）、`stage1-dynamic` 7/7、`f098-static-guards` 8/8（docker-compose 改動後仍綠）。
+- 非 PG assignment 全套件：962 passed / 40 skipped / 11 todo；**3 failed 為 pre-existing**（F-E `assignment-run-report.scope` / `assignment-run-report.service` / `assignment-run-snapshot.service` 之 `SectionChiefScopeService` DI 缺 `ObEmphireRepository`）——已用 `git stash` 對 baseline 重跑確認同樣失敗、與 Bug A 無關。
+- `tsc --noEmit -p tsconfig.build.json`（cwd=apps/api）：**EXIT 0**。
+
+### Rollout 含意（已認可）
+
+PG 一律 v2 真實計分 → **F067 計分差異報告 + 業務簽核為「本重構 deploy 上 prod 的 GO/NO-GO 閘」**（非每跑 flag）。
+原 `ASSIGNMENT_PIPELINE_V2` 之「漸進 rollout 開關」語意在 PG 失效；漸進控制改由「是否 deploy 本 branch」承擔。
+
+---
+
+## 原始 P3 實作（AD-E07-28）
+
 > 範圍 P3。P1（F098 worker）/ P2（F099 Stage 1 `buildStage1Sql`）核心契約未動，僅於 pipeline
 > 整合層調整呼叫方式（Stage 2~4 改走 SQL 下推路徑，gate = `DB_TYPE='postgres'` + `ASSIGNMENT_PIPELINE_V2='true'`）。
 

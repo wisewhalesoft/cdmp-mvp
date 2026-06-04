@@ -30,6 +30,38 @@ import { CancellationPoller } from '../queue/cancellation-poller';
 import { RunCancelledException } from '../queue/run-cancelled.exception';
 
 /**
+ * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28）。
+ *
+ * - `pushdown`    ：PG SQL 下推（P3，Stage 1 INSERT + Stage 2~4 UPDATE，I-NOLOAD-01）。
+ * - `v2Inmemory`  ：非 PG（SQLite 測試 / in-memory）真實計分 golden oracle（executeV2）。
+ * - `v1Inmemory`  ：非 PG v1 簡化計分（executeV1，向後相容）。
+ */
+export type Stage2to4Strategy = 'pushdown' | 'v2Inmemory' | 'v1Inmemory';
+
+/**
+ * 依環境決定 Stage 2~4 執行策略（純函式，無副作用，供 unit 測試免真 PG）。
+ *
+ * **Bug A 修復（2026-06-04）**：PG **一律**走 SQL 下推（gate = `DB_TYPE==='postgres'`），
+ * 與 `ASSIGNMENT_PIPELINE_V2` 無關。原 gate `useV2 && DB_TYPE==='postgres'` 在
+ * 「PG + v2 未設」時落入壞掉的 v1-PG fallback（`executeV1(stage1Cases)`，但 PG 下 Stage 1 為
+ * SQL INSERT 寫表、pool 為空 → 計分 0 筆、total_cases=0、score/tier/emplid 全 NULL）。
+ * PG 模式並無「v1 簡化計分的 SQL 版」（P3 僅建 v2 真實版），故 PG 一律走 P3 真實計分下推。
+ *
+ * `ASSIGNMENT_PIPELINE_V2` 在 PG **已無意義**（@deprecated for PG）；僅非 PG in-memory 路徑用於
+ * 選 v1 / v2（executeV1 / executeV2）。
+ *
+ * **Rollout 含意**：PG 一律 v2 真實計分 → F067 計分差異報告 + 業務簽核為「本重構 deploy 上 prod 的
+ * GO/NO-GO 閘」（非每跑 flag）。
+ */
+export function resolveStage2to4Strategy(env: {
+  DB_TYPE?: string;
+  ASSIGNMENT_PIPELINE_V2?: string;
+}): Stage2to4Strategy {
+  if (env.DB_TYPE === 'postgres') return 'pushdown';
+  return env.ASSIGNMENT_PIPELINE_V2 === 'true' ? 'v2Inmemory' : 'v1Inmemory';
+}
+
+/**
  * AssignmentRunPipelineService — F061 Stage 1~4 pipeline + 三份快照原子寫入
  *
  * 對應 spec：
@@ -43,7 +75,14 @@ import { RunCancelledException } from '../queue/run-cancelled.exception';
  *   - Stage 4 名單交換：依 dept_pct + empl_set round-robin 第一筆
  *   - CR per-LIST：僅依 cr_enabled 標 is_cr Y/N（無歷史動態回分）
  *
- * **v2.0 真實邏輯（feature flag `ASSIGNMENT_PIPELINE_V2=true`）**：
+ * **PG 一律 SQL 下推（Bug A 修復 / AD-E07-28，gate = `DB_TYPE='postgres'`）**：
+ *   PG 模式不論 `ASSIGNMENT_PIPELINE_V2` 是否設定，一律走 P3 Stage 2~4 SQL 下推真實計分
+ *   （Stage 1 INSERT + Stage 2~4 UPDATE，不 re-hydrate pool，I-NOLOAD-01）。
+ *   `ASSIGNMENT_PIPELINE_V2` 在 PG **已 deprecated / 無意義**——僅非 PG（SQLite 測試 / in-memory）
+ *   路徑用於選 v1（executeV1）/ v2（executeV2）。
+ *   策略決策見 {@link resolveStage2to4Strategy}。
+ *
+ * **v2.0 真實邏輯（非 PG，feature flag `ASSIGNMENT_PIPELINE_V2=true`）**：
  *   - Stage 2 真實計分：讀 ob_levelcard_version（active）+ ob_levelcard_column（active）
  *     + ob_levelcard_score（區間 / 類別權重）累加 score；score → ob_levelcard_level
  *     → card_level → ob_tier → tier_level
@@ -118,12 +157,15 @@ export class AssignmentRunPipelineService {
    */
   async runPipeline(runId: string, ym: string): Promise<void> {
     const startedAt = new Date();
-    const useV2 = process.env.ASSIGNMENT_PIPELINE_V2 === 'true';
-    // F100 / AD-E07-28 P3：Stage 2~4 SQL 下推僅在 PG 真庫 + v2 啟用時走（與 P2 Stage 1 下推同 gate）。
-    //   SQLite / 非 PG 沿用 JS executeV2（golden oracle）；視窗函式 / SUM(CASE…) / customer_core
-    //   LEFT JOIN / EXISTS 在 SQLite 不具代表性（I-PORT-01）。
-    const useStage2to4Pushdown =
-      useV2 && process.env.DB_TYPE === 'postgres';
+    // Bug A 修復（AD-E07-28）：PG 一律 Stage 2~4 SQL 下推（gate = DB_TYPE='postgres'，與
+    //   P2 Stage 1 下推同 gate）；非 PG（SQLite 測試 / in-memory）依 ASSIGNMENT_PIPELINE_V2 選
+    //   v1（executeV1）/ v2（executeV2）。視窗函式 / SUM(CASE…) / customer_core LEFT JOIN /
+    //   EXISTS 在 SQLite 不具代表性（I-PORT-01）。
+    const strategy = resolveStage2to4Strategy({
+      DB_TYPE: process.env.DB_TYPE,
+      ASSIGNMENT_PIPELINE_V2: process.env.ASSIGNMENT_PIPELINE_V2,
+    });
+    const useStage2to4Pushdown = strategy === 'pushdown';
 
     try {
       await this.runRepo.update(
@@ -248,20 +290,26 @@ export class AssignmentRunPipelineService {
       // F100 P3：下推路徑之 Stage 2~4 已直接 UPDATE ob_monthly_run_result（無 heap 物化）；
       //   stage4ResultsPersisted=true → 後段不再 save()（避免雙寫 / 覆寫已下推之計分）。
       let stage4ResultsPersisted = false;
-      if (useStage2to4Pushdown) {
+      if (strategy === 'pushdown') {
         stage4Results = await this.executeStage2to4Pushdown(
           stage1WrittenLists,
           ym,
           runId,
         );
         stage4ResultsPersisted = true;
-      } else if (useV2) {
+      } else if (strategy === 'v2Inmemory') {
         stage4Results = await this.executeV2(stage1Cases, ym, runId);
       } else {
         stage4Results = await this.executeV1(stage1Cases, ym, runId);
       }
 
-      const totalCases = stage4Results.length;
+      // Bug A 修復：下推路徑 total_cases 改取 SQL COUNT（resultRepo.count by run_id），
+      //   不靠 stage4Results.length（下推路徑該陣列現為快照用之有界讀回，且全載違反 I-NOLOAD）。
+      //   非 PG（in-memory）路徑 stage4Results 即記憶體內全列 → .length 即真實筆數。
+      const totalCases =
+        strategy === 'pushdown'
+          ? await this.resultRepo.count({ where: { run_id: runId } })
+          : stage4Results.length;
 
       // 三份快照 + ob_monthly_run_result 原子寫入
       const configPayload = await this.buildConfigPayload(ym, validLists);
@@ -672,10 +720,69 @@ export class AssignmentRunPipelineService {
       await runStage2to4Sql(manager, ctx);
     }
 
-    // 讀回本 run 已下推之列（有界子集）供快照 payload；列已在表內，呼叫端不再 save()。
+    // 讀回本 run 已下推之列供快照 payload；列已在表內，呼叫端不再 save()。
+    // Bug A 修復：改以 getRawMany 只取快照所需欄位（不做 TypeORM entity hydration —— 後者每列帶
+    //   change-tracking metadata，55k 列放大 heap）。snapshot payload 語意不變（仍為完整 per-case
+    //   記錄，下游 F063/F064/F066/F067 + CR 偵測依賴完整 assignments）；僅讀回機制改輕量化。
     const writtenListNos = stage1WrittenLists.map(({ list }) => list.list_no);
     if (writtenListNos.length === 0) return [];
-    return this.resultRepo.find({ where: { run_id: runId } });
+    return this.readResultRowsForSnapshot(runId);
+  }
+
+  /**
+   * Bug A 修復：以輕量 raw select 讀回本 run 之下推結果列供快照 payload（input_list / result）。
+   *
+   * 對比 `resultRepo.find()`：getRawMany 不做 entity hydration（無 change-tracking metadata），
+   * 只取快照所需欄位（list_no / appl_no / orgno / dept_id / emplid / score / card_level /
+   * tier_level / is_cr）→ 每列 heap 佔用顯著縮小。回傳形狀仍為 `Partial<ObMonthlyRunResult>[]`，
+   * 與既有快照組裝路徑相容。
+   *
+   * 語意：snapshot payload 仍為**完整** per-case 記錄（非 sample）—— 此為其契約（下游 F063 摘要 /
+   * F064 匯出 / F066 快照詳情 / F067 比對 / Stage 3 CR 偵測皆讀完整 assignments）。bound 僅作用於
+   * 讀回機制（raw vs hydrated），不裁切資料集。
+   */
+  private async readResultRowsForSnapshot(
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
+    const raw = await this.resultRepo
+      .createQueryBuilder('r')
+      .select([
+        'r.list_no AS list_no',
+        'r.appl_no AS appl_no',
+        'r.orgno AS orgno',
+        'r.dept_id AS dept_id',
+        'r.emplid AS emplid',
+        'r.score AS score',
+        'r.card_level AS card_level',
+        'r.tier_level AS tier_level',
+        'r.is_cr AS is_cr',
+      ])
+      .where('r.run_id = :runId', { runId })
+      .getRawMany<{
+        list_no: string;
+        appl_no: string;
+        orgno: string;
+        dept_id: string | null;
+        emplid: string | null;
+        score: number | string | null;
+        card_level: string | null;
+        tier_level: string | null;
+        is_cr: string | null;
+      }>();
+
+    return raw.map((r) => ({
+      run_id: runId,
+      list_no: r.list_no,
+      appl_no: r.appl_no,
+      orgno: r.orgno,
+      dept_id: r.dept_id,
+      emplid: r.emplid,
+      // PG numeric 經 raw 可能回字串 → 正規化為 number | null（snapshot 數值一致）。
+      score: r.score === null || r.score === undefined ? null : Number(r.score),
+      card_level: r.card_level,
+      tier_level: r.tier_level,
+      is_cr: r.is_cr,
+    }));
   }
 
   /**
