@@ -15,6 +15,9 @@ import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 // 以 namespace import 引用，確保 dry-run 路徑與 AssignmentRunPipelineService 月跑同源，
 // 並使 unit test 之 vi.spyOn(chainModule, 'executeStage1Chain') 可攔截內部呼叫。
 import * as stage1Chain from '@/modules/assignment/stage1/stage1-filter-chain';
+// F099 / AD-E07-28 P2：estimate 改與月跑 run 共用 buildStage1Sql core（I-RUN-EST-01）。
+// PG 走 SELECT COUNT(*) 下推；非 PG（SQLite 測試）沿用 executeStage1Chain dry-run（JS oracle）。
+import { estimateStage1SqlCount } from '@/modules/assignment/stage1/stage1-sql-executor';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 /**
@@ -311,6 +314,28 @@ export class Stage0EstimateService {
 
   private async dryRunChainCount(def: ObListDefinition): Promise<number> {
     const workdt = this.deriveWorkdt(def.project_workym);
+
+    // F099 P2：PG 走 SELECT COUNT(*) 下推（與月跑 run 之 INSERT…SELECT 共用 buildStage1Sql core，
+    // I-RUN-EST-01）；非 PG（SQLite 測試）沿用 executeStage1Chain dry-run（JS oracle，PG-only CAST 不適用）。
+    if (process.env.DB_TYPE === 'postgres') {
+      const { count, core } = await estimateStage1SqlCount(
+        this.poolRepo.manager,
+        def,
+        workdt,
+        this.poolDataListRepo,
+      );
+      for (const w of core.warnings) {
+        this.logger.warn(
+          `[Stage0Estimate] sql warning list_no=${def.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,
+        );
+      }
+      if (core.skip) {
+        this.logger.warn(
+          `[Stage0Estimate] list ${def.list_no} (${def.list_nm}) skipped (${core.skipReason}) → count=0`,
+        );
+      }
+      return count;
+    }
 
     const result = await stage1Chain.executeStage1Chain(
       def,

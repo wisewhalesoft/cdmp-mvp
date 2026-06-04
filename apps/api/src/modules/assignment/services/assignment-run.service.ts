@@ -11,7 +11,7 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentRunGuardService } from './assignment-run-guard.service';
 import { MonthlyRunReadinessService } from './monthly-run-readiness.service';
-import { AssignmentRunPipelineService } from './assignment-run-pipeline.service';
+import { RunQueueProducer } from '../queue/run-queue.producer';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 export interface TriggerRunResult {
@@ -38,7 +38,7 @@ export interface RunSummary {
  * AssignmentRunService — F061 月跑觸發 + F062/F065/F066 查詢
  *
  * 三大流程：
- *   - triggerRun(ym, actorId)：前置 → INSERT pending → audit RUN → 觸發背景 pipeline
+ *   - triggerRun(ym, actorId)：前置 → INSERT pending → audit RUN → 入列 pg-boss job（F098 P1，回 202）
  *   - listRuns({ ym? })：歷史月跑清單（F065）
  *   - getRunById(runId)：單一月跑詳情（F062 / F066）
  *
@@ -48,7 +48,8 @@ export interface RunSummary {
  *      - 無 ready 名單 → 422 NO_READY_LIST_FOUND
  *      - 部分名單未 ready → 422 ASSIGNMENT_RUN_PRECHECK_FAILED + details
  *
- * 注意：Stage 1~4 pipeline 在 B5+ 階段補實作；目前僅完成 record + audit 寫入。
+ * F098 / AD-E07-28 P1：pipeline 不再於本（API）程序執行，改入列 pg-boss job →
+ *   獨立 cdmp-worker 容器消費（RunQueueConsumer → AssignmentRunPipelineService.runPipeline）。
  */
 @Injectable()
 export class AssignmentRunService {
@@ -61,7 +62,12 @@ export class AssignmentRunService {
     private readonly auditRepo: Repository<AssignmentAuditLog>,
     private readonly runGuard: AssignmentRunGuardService,
     private readonly readiness: MonthlyRunReadinessService,
-    @Optional() private readonly pipeline?: AssignmentRunPipelineService,
+    /**
+     * F098 / AD-E07-28 P1：月跑入列 producer。triggerRun 改為「INSERT pending → 入列 → 回 202」，
+     * 不再於 API 程序內呼叫 runPipeline（I-TRIGGER-01）。
+     * @Optional：少數舊 unit test harness 未提供 producer（其 triggerRun 測試會自行提供 fake）。
+     */
+    @Optional() private readonly queueProducer?: RunQueueProducer,
   ) {}
 
   /**
@@ -115,8 +121,34 @@ export class AssignmentRunService {
     // AC-2：寫入 audit log（action='RUN'）
     await this.writeAudit(saved.run_id, actorId, ym);
 
-    // AC-3：觸發背景 pipeline（P1 B4 暫保留 setImmediate hook；Stage 1~4 待 B5+ 補實作）
-    this.kickoffPipeline(saved.run_id, ym);
+    // F098 / AD-E07-28 P1 AC-1 / I-TRIGGER-01：入列 pg-boss job，立即回 202。
+    //   不再 setImmediate(runPipeline)；pipeline 一律於 cdmp-worker 程序執行。
+    //   入列在 pending INSERT + audit 之後（TS-F098-TRIG-003），確保 worker 取到 job 時 run 已存在。
+    //   入列失敗（DB 不可用）→ 向上拋；不留下孤兒 pending（OQ-F098-01 / TS-F098-OQ-001）。
+    if (this.queueProducer) {
+      try {
+        await this.queueProducer.send({ runId: saved.run_id, ym });
+      } catch (err: any) {
+        // 入列失敗：補償 — 標該 pending run 為 failed，避免孤兒 pending 卡住同月併發保護。
+        this.logger.error(
+          `enqueue failed: run=${saved.run_id} ym=${ym}: ${err?.message ?? err}`,
+        );
+        await this.runRepo.update(
+          { run_id: saved.run_id },
+          {
+            status: 'failed',
+            finished_at: new Date(),
+            error_message: '月跑入列失敗，請重新觸發',
+          },
+        );
+        throw err;
+      }
+    } else {
+      // 防呆：正常部署 module 一律提供 producer；此分支僅出現於未注入 producer 的舊 test harness。
+      this.logger.warn(
+        `RunQueueProducer 未注入，run=${saved.run_id} ym=${ym} 未入列（測試 harness 或設定缺漏）`,
+      );
+    }
 
     return {
       runId: saved.run_id,
@@ -244,30 +276,6 @@ export class AssignmentRunService {
         `assignment_audit_log write failed: run=${runId}, action=RUN: ${err?.message ?? err}`,
       );
     }
-  }
-
-  /**
-   * 觸發背景 Stage 1~4 pipeline。
-   *
-   * P1 B4 補完（2026-05-17）：串接 AssignmentRunPipelineService.runPipeline。
-   *   - 非同步（setImmediate）；triggerRun() 已 return 202 後才執行
-   *   - pipeline 內部自行更新 status='running' → 'completed' / 'failed'
-   *   - pipeline 注入為 @Optional()，原 8 個 service unit tests 不依賴 pipeline 仍可通過
-   */
-  private kickoffPipeline(runId: string, ym: string): void {
-    setImmediate(() => {
-      if (!this.pipeline) {
-        this.logger.log(
-          `Pipeline hook: run=${runId} ym=${ym} (pipeline service not provided — placeholder mode)`,
-        );
-        return;
-      }
-      this.pipeline.runPipeline(runId, ym).catch((err: any) => {
-        this.logger.error(
-          `Pipeline kickoff failure: run=${runId} ym=${ym} err=${err?.message ?? err}`,
-        );
-      });
-    });
   }
 
   private toSummary(r: AssignmentRun): RunSummary {

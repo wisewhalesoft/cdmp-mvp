@@ -9,6 +9,11 @@ import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
+import { runStage1SqlInsert } from '@/modules/assignment/stage1/stage1-sql-executor';
+import {
+  runStage2to4Sql,
+  type Stage2to4ListContext,
+} from '@/modules/assignment/stage1/stage2to4-sql-executor';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -21,6 +26,40 @@ import {
   IntegrityIssue,
   ScoringIntegrityCheckService,
 } from '@/modules/assignment-scoring/services/scoring-integrity-check.service';
+import { CancellationPoller } from '../queue/cancellation-poller';
+import { RunCancelledException } from '../queue/run-cancelled.exception';
+
+/**
+ * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28）。
+ *
+ * - `pushdown`    ：PG SQL 下推（P3，Stage 1 INSERT + Stage 2~4 UPDATE，I-NOLOAD-01）。
+ * - `v2Inmemory`  ：非 PG（SQLite 測試 / in-memory）真實計分 golden oracle（executeV2）。
+ * - `v1Inmemory`  ：非 PG v1 簡化計分（executeV1，向後相容）。
+ */
+export type Stage2to4Strategy = 'pushdown' | 'v2Inmemory' | 'v1Inmemory';
+
+/**
+ * 依環境決定 Stage 2~4 執行策略（純函式，無副作用，供 unit 測試免真 PG）。
+ *
+ * **Bug A 修復（2026-06-04）**：PG **一律**走 SQL 下推（gate = `DB_TYPE==='postgres'`），
+ * 與 `ASSIGNMENT_PIPELINE_V2` 無關。原 gate `useV2 && DB_TYPE==='postgres'` 在
+ * 「PG + v2 未設」時落入壞掉的 v1-PG fallback（`executeV1(stage1Cases)`，但 PG 下 Stage 1 為
+ * SQL INSERT 寫表、pool 為空 → 計分 0 筆、total_cases=0、score/tier/emplid 全 NULL）。
+ * PG 模式並無「v1 簡化計分的 SQL 版」（P3 僅建 v2 真實版），故 PG 一律走 P3 真實計分下推。
+ *
+ * `ASSIGNMENT_PIPELINE_V2` 在 PG **已無意義**（@deprecated for PG）；僅非 PG in-memory 路徑用於
+ * 選 v1 / v2（executeV1 / executeV2）。
+ *
+ * **Rollout 含意**：PG 一律 v2 真實計分 → F067 計分差異報告 + 業務簽核為「本重構 deploy 上 prod 的
+ * GO/NO-GO 閘」（非每跑 flag）。
+ */
+export function resolveStage2to4Strategy(env: {
+  DB_TYPE?: string;
+  ASSIGNMENT_PIPELINE_V2?: string;
+}): Stage2to4Strategy {
+  if (env.DB_TYPE === 'postgres') return 'pushdown';
+  return env.ASSIGNMENT_PIPELINE_V2 === 'true' ? 'v2Inmemory' : 'v1Inmemory';
+}
 
 /**
  * AssignmentRunPipelineService — F061 Stage 1~4 pipeline + 三份快照原子寫入
@@ -36,7 +75,14 @@ import {
  *   - Stage 4 名單交換：依 dept_pct + empl_set round-robin 第一筆
  *   - CR per-LIST：僅依 cr_enabled 標 is_cr Y/N（無歷史動態回分）
  *
- * **v2.0 真實邏輯（feature flag `ASSIGNMENT_PIPELINE_V2=true`）**：
+ * **PG 一律 SQL 下推（Bug A 修復 / AD-E07-28，gate = `DB_TYPE='postgres'`）**：
+ *   PG 模式不論 `ASSIGNMENT_PIPELINE_V2` 是否設定，一律走 P3 Stage 2~4 SQL 下推真實計分
+ *   （Stage 1 INSERT + Stage 2~4 UPDATE，不 re-hydrate pool，I-NOLOAD-01）。
+ *   `ASSIGNMENT_PIPELINE_V2` 在 PG **已 deprecated / 無意義**——僅非 PG（SQLite 測試 / in-memory）
+ *   路徑用於選 v1（executeV1）/ v2（executeV2）。
+ *   策略決策見 {@link resolveStage2to4Strategy}。
+ *
+ * **v2.0 真實邏輯（非 PG，feature flag `ASSIGNMENT_PIPELINE_V2=true`）**：
  *   - Stage 2 真實計分：讀 ob_levelcard_version（active）+ ob_levelcard_column（active）
  *     + ob_levelcard_score（區間 / 類別權重）累加 score；score → ob_levelcard_level
  *     → card_level → ob_tier → tier_level
@@ -95,15 +141,31 @@ export class AssignmentRunPipelineService {
      */
     @Optional()
     private readonly integrityCheckService?: ScoringIntegrityCheckService,
+    /**
+     * F098 / AD-E07-28 §9.3 / AC-5：worker 內取消輪詢器。於可中斷邊界（list 之間 /
+     * Stage 之間）查 status，被取消（標 failed）則拋 RunCancelledException 提早結束。
+     * @Optional：API 程序 / 舊 pipeline unit test 未提供時，pipeline 行為與 P1 前一致（不檢查取消）。
+     */
+    @Optional()
+    private readonly cancellationPoller?: CancellationPoller,
   ) {}
 
   /**
    * 執行 Stage 1~4 pipeline + 快照原子寫入。
-   * 失敗時 swallow 不重拋（背景非同步 hook 由 AssignmentRunService.kickoffPipeline 啟動）。
+   * 失敗時 swallow 不重拋（F098 P1 起由 cdmp-worker 之 RunQueueConsumer 呼叫；
+   * 配合 retryLimit=0，pipeline 內部已標 status='failed'，handler 視為已處理不重派）。
    */
   async runPipeline(runId: string, ym: string): Promise<void> {
     const startedAt = new Date();
-    const useV2 = process.env.ASSIGNMENT_PIPELINE_V2 === 'true';
+    // Bug A 修復（AD-E07-28）：PG 一律 Stage 2~4 SQL 下推（gate = DB_TYPE='postgres'，與
+    //   P2 Stage 1 下推同 gate）；非 PG（SQLite 測試 / in-memory）依 ASSIGNMENT_PIPELINE_V2 選
+    //   v1（executeV1）/ v2（executeV2）。視窗函式 / SUM(CASE…) / customer_core LEFT JOIN /
+    //   EXISTS 在 SQLite 不具代表性（I-PORT-01）。
+    const strategy = resolveStage2to4Strategy({
+      DB_TYPE: process.env.DB_TYPE,
+      ASSIGNMENT_PIPELINE_V2: process.env.ASSIGNMENT_PIPELINE_V2,
+    });
+    const useStage2to4Pushdown = strategy === 'pushdown';
 
     try {
       await this.runRepo.update(
@@ -148,8 +210,19 @@ export class AssignmentRunPipelineService {
       // F091 / AD-E07-22：workdt = PROJECT_WORKYM + '01'（去重視窗 + 年資特殊 DELETE 取當年）
       const workdt = parseWorkdt(ym);
 
+      // F100 P3 pushdown：Stage 1 已寫入 ob_monthly_run_result 之 list（inserted>0），
+      //   供 Stage 2~4 SQL 逐 list UPDATE（不 re-hydrate pool 回 heap，I-NOLOAD-01）。
+      const stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }> = [];
+
       for (const list of validLists) {
-        const result = await this.runStage1ForList(list, workdt);
+        // F098 AC-5 / A-2：list 邊界為可中斷點 — 處理下一份 list 前查是否已被取消
+        await this.checkCancelled(runId);
+        const result = await this.runStage1ForList(
+          list,
+          workdt,
+          runId,
+          useStage2to4Pushdown,
+        );
         if (result.skipped) {
           stage1SkippedLists.push({
             listNo: list.list_no,
@@ -157,6 +230,10 @@ export class AssignmentRunPipelineService {
             reason: 'EMPTY_CONDITIONS',
           });
           continue;
+        }
+        if (useStage2to4Pushdown) {
+          // 下推路徑：Stage 1 已 INSERT 列，不 re-hydrate pool（pool 為空陣列佔位）。
+          stage1WrittenLists.push({ list, inserted: result.inserted });
         }
         stage1Cases.push({ list, pool: result.pool });
       }
@@ -203,26 +280,60 @@ export class AssignmentRunPipelineService {
         }
       }
 
-      // Stage 2 / 3 / 4 — 依 v1 / v2 分支執行
+      // F098 AC-5 / A-2：Stage 之間為可中斷點 — 進入 Stage 2~4 計分前查是否已被取消
+      await this.checkCancelled(runId);
+
+      // Stage 2 / 3 / 4 — 依 v1 / v2 / P3 SQL 下推分支執行
       // F094：回傳型別由 Partial<ObPoolDataList>[] 改為 Partial<ObMonthlyRunResult>[]，每列帶 run_id
       type ResultRow = Partial<ObMonthlyRunResult>;
-      const stage4Results: ResultRow[] = useV2
-        ? await this.executeV2(stage1Cases, ym, runId)
-        : await this.executeV1(stage1Cases, ym, runId);
+      let stage4Results: ResultRow[];
+      // F100 P3：下推路徑之 Stage 2~4 已直接 UPDATE ob_monthly_run_result（無 heap 物化）；
+      //   stage4ResultsPersisted=true → 後段不再 save()（避免雙寫 / 覆寫已下推之計分）。
+      let stage4ResultsPersisted = false;
+      if (strategy === 'pushdown') {
+        stage4Results = await this.executeStage2to4Pushdown(
+          stage1WrittenLists,
+          ym,
+          runId,
+        );
+        stage4ResultsPersisted = true;
+      } else if (strategy === 'v2Inmemory') {
+        stage4Results = await this.executeV2(stage1Cases, ym, runId);
+      } else {
+        stage4Results = await this.executeV1(stage1Cases, ym, runId);
+      }
 
-      const totalCases = stage4Results.length;
+      // Bug A 修復：下推路徑 total_cases 改取 SQL COUNT（resultRepo.count by run_id），
+      //   不靠 stage4Results.length（下推路徑該陣列現為快照用之有界讀回，且全載違反 I-NOLOAD）。
+      //   非 PG（in-memory）路徑 stage4Results 即記憶體內全列 → .length 即真實筆數。
+      const totalCases =
+        strategy === 'pushdown'
+          ? await this.resultRepo.count({ where: { run_id: runId } })
+          : stage4Results.length;
 
       // 三份快照 + ob_monthly_run_result 原子寫入
       const configPayload = await this.buildConfigPayload(ym, validLists);
+      // input_list 快照：JS 路徑由 re-hydrate 之 pool 組；P3 下推路徑 pool 為空，改由
+      //   已下推之 stage4Results（讀回 ob_monthly_run_result 之有界子集）組（cardType 由 list 對照）。
+      const cardTypeByListNo = new Map<string, string | null>(
+        validLists.map((l) => [l.list_no, l.card_type ?? null]),
+      );
       const inputListPayload = {
-        cases: stage1Cases.flatMap(({ list, pool }) =>
-          pool.map((p) => ({
-            listNo: list.list_no,
-            applNo: p.appl_no,
-            orgno: p.orgno,
-            cardType: list.card_type,
-          })),
-        ),
+        cases: useStage2to4Pushdown
+          ? stage4Results.map((r) => ({
+              listNo: r.list_no,
+              applNo: r.appl_no,
+              orgno: r.orgno,
+              cardType: cardTypeByListNo.get(r.list_no ?? '') ?? null,
+            }))
+          : stage1Cases.flatMap(({ list, pool }) =>
+              pool.map((p) => ({
+                listNo: list.list_no,
+                applNo: p.appl_no,
+                orgno: p.orgno,
+                cardType: list.card_type,
+              })),
+            ),
       };
       const resultPayload = {
         assignments: stage4Results.map((r) => ({
@@ -239,12 +350,19 @@ export class AssignmentRunPipelineService {
         })),
       };
 
+      // F098 AC-5 / TS-F098-CANCEL-002：寫入快照 / result 前最後一道可中斷點。
+      //   若此刻已被取消，拋 RunCancelledException → 不寫三份快照、不寫 ob_monthly_run_result、
+      //   不呼叫 completeRun（run 維持 cancelRun 標記之 'failed'，不被覆寫回 'completed'）。
+      await this.checkCancelled(runId);
+
       const now = new Date();
       // F094 / AD-E07-25 Phase A：月跑 Stage 1~4 提案結果寫入 ob_monthly_run_result（帶 run_id），
       // **不再寫入 ob_pool_data_list**（後者回歸 ETL 單一來源；去重仍只讀 ob_pool_data_list）。
       // snapshot type=result 短期雙軌保留（DP-AD25-3），作為稽核快照與本表並存。
       await this.dataSource.transaction(async (txm) => {
-        if (stage4Results.length > 0) {
+        // P3 下推路徑：列已由 Stage 1 INSERT + Stage 2~4 UPDATE 寫入 ob_monthly_run_result，
+        //   不再 save()（避免雙寫 / 以 Partial 覆寫掉已下推之計分欄位）。
+        if (!stage4ResultsPersisted && stage4Results.length > 0) {
           await txm
             .getRepository(ObMonthlyRunResult)
             .save(stage4Results as ObMonthlyRunResult[]);
@@ -305,6 +423,14 @@ export class AssignmentRunPipelineService {
         skippedJson,
       );
     } catch (err: any) {
+      // F098 AC-5：取消屬正常提早結束 — run 已被 cancelRun 標 'failed'（error_message='使用者取消'），
+      //   不覆寫狀態 / 文案、不寫任何結果（已在 checkCancelled 邊界提前 return 前拋出）。
+      if (err instanceof RunCancelledException) {
+        this.logger.log(
+          `Pipeline cancelled: run=${runId} ym=${ym}（使用者取消，保留 failed 狀態，不寫結果）`,
+        );
+        return;
+      }
       this.logger.error(
         `Pipeline failed: run=${runId} ym=${ym} err=${err?.message ?? err}`,
       );
@@ -316,6 +442,16 @@ export class AssignmentRunPipelineService {
           error_message: String(err?.message ?? err).slice(0, 1000),
         },
       );
+    }
+  }
+
+  /**
+   * F098 AC-5：可中斷邊界取消檢查。poller 未注入（API 程序 / 舊 unit test）時 no-op，
+   * pipeline 行為與 P1 前一致。
+   */
+  private async checkCancelled(runId: string): Promise<void> {
+    if (this.cancellationPoller) {
+      await this.cancellationPoller.throwIfCancelled(runId);
     }
   }
 
@@ -505,6 +641,150 @@ export class AssignmentRunPipelineService {
     return out;
   }
 
+  // =========================================================================
+  // F100 / AD-E07-28 P3：Stage 2~4 SQL 下推（PG 真庫）
+  // =========================================================================
+  /**
+   * 對每份「Stage 1 已 INSERT 列」之 list，以 SQL UPDATE 補 score / card_level / tier_level /
+   * is_cr / dept_id / emplid（消除 re-hydrate heap，I-NOLOAD-01）。計分卡 / 員工編排資料以
+   * repo 查好後傳入純函式群組（stage2to4-sql-executor）。最後讀回 ob_monthly_run_result 有界子集
+   * 供快照 payload（input_list / result）；列已在表內，呼叫端不再 save()。
+   */
+  private async executeStage2to4Pushdown(
+    stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }>,
+    ym: string,
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
+    const allEmpl = await this.emplSetRepo.find();
+    const allColumns = await this.columnRepo.find();
+    const allScores = await this.scoreRepo.find();
+    const allVersions = await this.versionRepo.find({ where: { status: 'active' } });
+
+    // 員工 tier 標記（ob_empl_set.prod_type='TIER:T*'，slice(5)，與 executeV2 一致，C-2）。
+    const emplTier = new Map<string, string>();
+    for (const e of allEmpl) {
+      if (e.prod_type?.startsWith('TIER:')) {
+        emplTier.set(e.emplid, e.prod_type.slice(5));
+      }
+    }
+
+    const manager = this.dataSource.manager;
+
+    for (const { list } of stage1WrittenLists) {
+      const cardType = list.card_type ?? '';
+      const activeVer = allVersions.find((v) => v.card_type === cardType);
+      const cardVersion =
+        activeVer && activeVer.card_version !== null ? activeVer.card_version : null;
+      const activeColumns =
+        activeVer && cardVersion !== null
+          ? allColumns.filter(
+              (c) =>
+                c.card_type === cardType &&
+                c.card_version === cardVersion &&
+                c.status === 'active',
+            )
+          : [];
+
+      // Stage 4 員工編排（與 executeV2 一致）：dept = ob_dept_pct 第一筆；
+      //   listEmpls = 該 list + dept 過濾；senior = T3 第一位；default = newEmpls[0] ?? listEmpls[0]。
+      const dept =
+        (
+          await this.deptPctRepo.find({
+            where: { project_workym: ym, list_no: list.list_no },
+          })
+        )[0] ?? null;
+      const listEmpls = allEmpl.filter(
+        (e) => e.list_no === list.list_no && (!dept || e.deptid_m === dept.obdeptid),
+      );
+      const newEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) !== 'T3');
+      const seniorEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) === 'T3');
+      const defaultEmpl = newEmpls[0] ?? listEmpls[0] ?? null;
+      const senior = seniorEmpls[0] ?? null;
+
+      const ctx: Stage2to4ListContext = {
+        runId,
+        listNo: list.list_no,
+        cardType,
+        cardVersion,
+        activeColumns,
+        scoreRows: allScores,
+        crEnabled: !!list.cr_enabled,
+        ym,
+        deptId: dept?.obdeptid ?? null,
+        seniorEmplid: senior?.emplid ?? null,
+        seniorDeptid: senior?.deptid_m ?? null,
+        defaultEmplid: defaultEmpl?.emplid ?? null,
+        defaultDeptid: defaultEmpl?.deptid_m ?? null,
+      };
+
+      await runStage2to4Sql(manager, ctx);
+    }
+
+    // 讀回本 run 已下推之列供快照 payload；列已在表內，呼叫端不再 save()。
+    // Bug A 修復：改以 getRawMany 只取快照所需欄位（不做 TypeORM entity hydration —— 後者每列帶
+    //   change-tracking metadata，55k 列放大 heap）。snapshot payload 語意不變（仍為完整 per-case
+    //   記錄，下游 F063/F064/F066/F067 + CR 偵測依賴完整 assignments）；僅讀回機制改輕量化。
+    const writtenListNos = stage1WrittenLists.map(({ list }) => list.list_no);
+    if (writtenListNos.length === 0) return [];
+    return this.readResultRowsForSnapshot(runId);
+  }
+
+  /**
+   * Bug A 修復：以輕量 raw select 讀回本 run 之下推結果列供快照 payload（input_list / result）。
+   *
+   * 對比 `resultRepo.find()`：getRawMany 不做 entity hydration（無 change-tracking metadata），
+   * 只取快照所需欄位（list_no / appl_no / orgno / dept_id / emplid / score / card_level /
+   * tier_level / is_cr）→ 每列 heap 佔用顯著縮小。回傳形狀仍為 `Partial<ObMonthlyRunResult>[]`，
+   * 與既有快照組裝路徑相容。
+   *
+   * 語意：snapshot payload 仍為**完整** per-case 記錄（非 sample）—— 此為其契約（下游 F063 摘要 /
+   * F064 匯出 / F066 快照詳情 / F067 比對 / Stage 3 CR 偵測皆讀完整 assignments）。bound 僅作用於
+   * 讀回機制（raw vs hydrated），不裁切資料集。
+   */
+  private async readResultRowsForSnapshot(
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
+    const raw = await this.resultRepo
+      .createQueryBuilder('r')
+      .select([
+        'r.list_no AS list_no',
+        'r.appl_no AS appl_no',
+        'r.orgno AS orgno',
+        'r.dept_id AS dept_id',
+        'r.emplid AS emplid',
+        'r.score AS score',
+        'r.card_level AS card_level',
+        'r.tier_level AS tier_level',
+        'r.is_cr AS is_cr',
+      ])
+      .where('r.run_id = :runId', { runId })
+      .getRawMany<{
+        list_no: string;
+        appl_no: string;
+        orgno: string;
+        dept_id: string | null;
+        emplid: string | null;
+        score: number | string | null;
+        card_level: string | null;
+        tier_level: string | null;
+        is_cr: string | null;
+      }>();
+
+    return raw.map((r) => ({
+      run_id: runId,
+      list_no: r.list_no,
+      appl_no: r.appl_no,
+      orgno: r.orgno,
+      dept_id: r.dept_id,
+      emplid: r.emplid,
+      // PG numeric 經 raw 可能回字串 → 正規化為 number | null（snapshot 數值一致）。
+      score: r.score === null || r.score === undefined ? null : Number(r.score),
+      card_level: r.card_level,
+      tier_level: r.tier_level,
+      is_cr: r.is_cr,
+    }));
+  }
+
   /**
    * v2.0 Stage 2 純 JS 等價計分：依 column_name 從 pool row 取值，對應 score row 累加。
    *
@@ -625,19 +905,128 @@ export class AssignmentRunPipelineService {
   // =========================================================================
 
   /**
-   * Phase 5b / AD-E07-18 §18.5 + F091 / AD-E07-22~23：對單一 list 執行 Stage 1 完整篩選鏈。
+   * Phase 5b / AD-E07-18 §18.5 + F091 / AD-E07-22~23 + F099 / AD-E07-28 P2：
+   * 對單一 list 執行 Stage 1 案件挑選。
    *
-   * F091（Phase 2 Stage 1 補完整）：改呼叫共用的 `executeStage1Chain`（dryRun:false），
-   * 在既有欄位篩選之上補入 MONTH_CNT 期別過濾、近 3 個月去重、特殊 DELETE 三步驟。
-   * ⚠️ 此改動改變正式月跑分派案件數（無 feature flag，deploy 後直接生效 — DP-AD23-2）。
+   * F099（P2 Stage 1 SQL 下推）：當 DB_TYPE='postgres' 時改走 set-based SQL 下推
+   * （`buildStage1Sql` → `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o WHERE <core>`），
+   * Stage 1 案件挑選於 PG 內完成、不全載 ob_pool_data 進 heap（解 F2/OOM，I-NOLOAD-01）。
+   * 之後僅 re-hydrate「Stage 1 已挑選之有界子集」（依寫入 ob_monthly_run_result 的 PK）回 heap，
+   * 供 Stage 2~4 計分（演算法不改，C-3）。re-hydrate 為有界子集（非全 pool）→ 非全載。
+   *
+   * 非 PG（better-sqlite3 測試 / 非 PG 環境）：沿用 `executeStage1Chain`（JS golden oracle，
+   * 與 SQL 路徑逐 list 結果集等價由 PG 真庫 EQ 群組驗收，F099 AC-7 / DoD）。下推 SQL 之
+   * `::int` / `SUBSTRING(... FROM …)` / `CAST(... AS numeric)` 為 PG 專屬，SQLite 不具代表性
+   * 且不支援（I-PORT-01）；故以 DB_TYPE gate 分流，與 pg-boss / advisory-lock 既有 PG-only gate 一致。
    *
    * @param list   名單定義
    * @param workdt 月跑工作日 PROJECT_WORKYM+'01'（去重視窗 + 年資規則）
+   * @param runId  月跑 ID（PG 下推 INSERT…SELECT 之 run_id 常數；非 PG 路徑不使用）
    * @returns
    *   - `{ skipped: true }`：composer 回 skipReason='EMPTY_CONDITIONS' → 不撈 pool（已 logger.warn）
-   *   - `{ skipped: false, pool }`：完整篩選鏈過濾後的 ob_pool_data 案件清單
+   *   - `{ skipped: false, pool }`：Stage 1 過濾後的 ob_pool_data 案件清單（供 Stage 2~4）
    */
   private async runStage1ForList(
+    list: ObListDefinition,
+    workdt: Date,
+    runId: string,
+    skipHydration = false,
+  ): Promise<
+    { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
+  > {
+    const dbType = process.env.DB_TYPE;
+    if (dbType === 'postgres') {
+      return this.runStage1SqlPushdown(list, workdt, runId, skipHydration);
+    }
+    const jsResult = await this.runStage1JsChain(list, workdt);
+    if (jsResult.skipped) return jsResult;
+    return { skipped: false, pool: jsResult.pool, inserted: jsResult.pool.length };
+  }
+
+  /**
+   * F099 P2 PG 下推路徑：set-based SQL 取案寫入 ob_monthly_run_result。
+   *
+   * - skipHydration=false（P2 / Stage 2~4 走 JS）：re-hydrate Stage 1 已挑選有界子集供 JS 計分。
+   * - skipHydration=true（F100 P3 / Stage 2~4 走 SQL 下推）：**不** re-hydrate pool（pool 為空），
+   *   Stage 2~4 直接對 ob_monthly_run_result 已寫入列 SQL UPDATE（I-NOLOAD-01 全程不全載 heap）。
+   */
+  private async runStage1SqlPushdown(
+    list: ObListDefinition,
+    workdt: Date,
+    runId: string,
+    skipHydration = false,
+  ): Promise<
+    { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
+  > {
+    // run（INSERT…SELECT）與 estimate（SELECT COUNT(*)）共用同一 buildStage1Sql core（I-RUN-EST-01）。
+    const { inserted, core } = await runStage1SqlInsert(
+      this.dataSource.manager,
+      list,
+      workdt,
+      this.poolDataListRepo,
+      { runId, listNo: list.list_no },
+    );
+
+    for (const w of core.warnings) {
+      this.logger.warn(
+        `[Stage1] sql warning list_no=${list.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,
+      );
+    }
+
+    if (core.skip) {
+      this.logger.warn(
+        `[Stage1] Skipping list ${list.list_no} (${list.list_nm}): empty conditions (backfilled empty or invalid state)`,
+      );
+      return { skipped: true };
+    }
+
+    if (inserted === 0) {
+      return { skipped: false, pool: [], inserted: 0 };
+    }
+
+    // F100 P3：Stage 2~4 走 SQL 下推 → 不 re-hydrate pool（pool 為空），消除 read-back heap（I-NOLOAD-01）。
+    if (skipHydration) {
+      return { skipped: false, pool: [], inserted };
+    }
+
+    // re-hydrate Stage 1 已挑選之有界子集（依寫入 ob_monthly_run_result 之 PK），供 Stage 2~4 計分。
+    // 非全載 ob_pool_data（I-NOLOAD-01）：僅取本 run/list 已挑選案件（Stage 1 大幅收斂後之子集）。
+    const selected: Array<{ orgno: string; appl_no: string }> = await this.resultRepo
+      .createQueryBuilder('r')
+      .select(['r.orgno AS orgno', 'r.appl_no AS appl_no'])
+      .where('r.run_id = :runId AND r.list_no = :listNo', {
+        runId,
+        listNo: list.list_no,
+      })
+      .getRawMany();
+
+    const pool = await this.hydratePoolByPk(selected);
+    return { skipped: false, pool, inserted };
+  }
+
+  /**
+   * 依 (orgno, appl_no) PK 子集 re-hydrate ob_pool_data 業務列（供 Stage 2~4 計分讀回 heap）。
+   * 以 IN ((orgno, appl_no), …) 一次撈有界子集（Stage 1 收斂後之案件數，非全 pool）。
+   */
+  private async hydratePoolByPk(
+    keys: Array<{ orgno: string; appl_no: string }>,
+  ): Promise<ObPoolData[]> {
+    if (keys.length === 0) return [];
+    const qb = this.poolRepo.createQueryBuilder('o');
+    const orClauses: string[] = [];
+    const params: Record<string, unknown> = {};
+    keys.forEach((k, i) => {
+      orClauses.push(`(o.orgno = :org${i} AND o.appl_no = :appl${i})`);
+      params[`org${i}`] = k.orgno;
+      params[`appl${i}`] = k.appl_no;
+    });
+    return qb.where(orClauses.join(' OR '), params).getMany();
+  }
+
+  /**
+   * 非 PG 路徑：沿用 executeStage1Chain（JS golden oracle，SQLite 相容）。
+   */
+  private async runStage1JsChain(
     list: ObListDefinition,
     workdt: Date,
   ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {

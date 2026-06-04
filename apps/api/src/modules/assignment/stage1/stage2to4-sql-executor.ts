@@ -1,0 +1,220 @@
+/**
+ * Stage 2~4 SQL 下推 run 包裝（F100 / AD-E07-28 P3）
+ *
+ * P2（F099）已 INSERT Stage 1 案件至 ob_monthly_run_result（score/level/tier/emplid 皆 NULL）。
+ * P3 在其上以兩道 UPDATE 補計分 / CR / 分派（單表 set-based，消 re-hydrate heap，I-NOLOAD-01）：
+ *
+ *   ① runStage2and3Sql：UPDATE r SET score / card_level / tier_level / is_cr
+ *      - FROM ob_pool_data o LEFT JOIN customer_core cc ON o.custo_no = cc.source_customer_no
+ *        LEFT JOIN ob_levelcard_level lv（score 區間 → card_level）
+ *        LEFT JOIN ob_tier ti（card_type + card_level NULL-aware → tier_level）
+ *      - score = Stage 2 SUM(CASE…)（buildStage2ScoreExpr）；無 active version → NULL
+ *      - is_cr = EXISTS(歷史 result snapshot 未成交同案件) AND cr_enabled ? 'Y' : 'N'
+ *
+ *   ② runStage4Sql：UPDATE r SET dept_id / emplid / emplid_deptid
+ *      - st4_exchange：T1/T2 案件以 ROW_NUMBER() OVER (PARTITION BY list_no ORDER BY orgno, appl_no)
+ *        取前 CEIL(n*0.1)（保底 1）件 → senior；其餘 → defaultEmpl（OQ-F100-01 對齊現行 JS 簡化版）。
+ *      - 須在 ① 之後執行（依賴 tier_level 已寫入）。
+ *
+ * DB_TYPE gate：本路徑一律 PG（呼叫端以 DB_TYPE==='postgres' gate；SQLite 沿用 JS executeV2）。
+ * customer_core 無 entity（AD-E06-1）→ raw SQL LEFT JOIN，僅在 PG 庫存在時可 join。
+ */
+
+import type { EntityManager } from 'typeorm';
+
+import { buildStage2ScoreExpr } from './stage2to4-sql-builder';
+import type { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
+import type { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
+
+/** Stage 2~4 下推單一 list 之輸入（呼叫端已查好之計分 / 員工編排資料）。 */
+export interface Stage2to4ListContext {
+  runId: string;
+  listNo: string;
+  cardType: string;
+  /** active version（null → 無 active version → score NULL）。 */
+  cardVersion: number | null;
+  activeColumns: ObLevelcardColumn[];
+  scoreRows: ObLevelcardScore[];
+  crEnabled: boolean;
+  /** 月跑工作年月（YYYYMM 字串），CR EXISTS 之歷史視窗界（< ym）。 */
+  ym: string;
+  /** 部門（ob_dept_pct 第一筆 obdeptid）；null → 無部門過濾。 */
+  deptId: string | null;
+  /** 該部門單一 senior（T3）員工 emplid；null → 無 senior → 不交換。 */
+  seniorEmplid: string | null;
+  seniorDeptid: string | null;
+  /** default 員工（newEmpls[0] ?? listEmpls[0]）。 */
+  defaultEmplid: string | null;
+  defaultDeptid: string | null;
+}
+
+function escape(
+  manager: EntityManager,
+  sqlWithNamedParams: string,
+  params: Record<string, unknown>,
+): [string, unknown[]] {
+  return manager.connection.driver.escapeQueryWithParameters(
+    sqlWithNamedParams,
+    params,
+    {},
+  );
+}
+
+/**
+ * Stage 2 計分 + Stage 3 CR：UPDATE ob_monthly_run_result SET score / card_level / tier_level / is_cr。
+ *
+ * 設計：以 derived join 在 UPDATE…FROM 內完成 score→level→tier：
+ *   - score 子查詢（SUM CASE WHEN）需 LEFT JOIN customer_core（若有客戶屬性維度）。
+ *   - card_level：score BETWEEN ob_levelcard_level.score_s/score_e（同 card_type + version）。
+ *   - tier_level：ob_tier 同 card_type，card_level IS NOT DISTINCT FROM <card_level>（NULL-aware fallback）。
+ *   - score NULL（無 active version）→ 不查 level（card_level NULL）；tier 亦不走 fallback（NULL，LEVTIER-004）。
+ */
+export async function runStage2and3Sql(
+  manager: EntityManager,
+  ctx: Stage2to4ListContext,
+): Promise<void> {
+  const { scoreExpr, needsCustomerCore, params: scoreParams } =
+    buildStage2ScoreExpr(
+      ctx.cardType,
+      ctx.cardVersion,
+      ctx.activeColumns,
+      ctx.scoreRows,
+      'sc',
+    );
+
+  const params: Record<string, unknown> = {
+    runId: ctx.runId,
+    listNo: ctx.listNo,
+    cardType: ctx.cardType,
+    ...scoreParams,
+  };
+
+  // customer_core LEFT JOIN（僅在有客戶屬性維度時 join，避免無謂掃描；AD-E06-1 raw SQL）。
+  const customerCoreJoin = needsCustomerCore
+    ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
+    : '';
+
+  // score 表達式：無 active version → NULL；否則 SUM(CASE…)（needsCustomerCore 時 cc 已 join）。
+  const scoreSelect = scoreExpr === null ? 'NULL::int' : `(${scoreExpr})::int`;
+
+  // ----- Stage 3 CR：EXISTS 歷史 result snapshot 未成交同案件（對齊 JS collectCrCandidates）-----
+  // 來源 = assignment_run_snapshot（type='result'）之 payload.assignments[*]，
+  //   歷史 completed run 且 project_workym < ym；未成交 = status PENDING / null / 無 status。
+  // PG：payload JSONB → jsonb_array_elements 展開比對 orgno / applNo。
+  // cr_enabled=false → 一律 'N'（不查歷史，AC-4）。
+  let crExpr = "'N'";
+  if (ctx.crEnabled) {
+    params.crYm = ctx.ym;
+    crExpr =
+      `(CASE WHEN EXISTS (` +
+      `SELECT 1 FROM assignment_run_snapshot s ` +
+      `JOIN assignment_run ar ON ar.run_id = s.run_id ` +
+      `CROSS JOIN LATERAL jsonb_array_elements(s.payload->'assignments') AS a(elem) ` +
+      `WHERE s.snapshot_type = 'result' ` +
+      `AND ar.status = 'completed' ` +
+      `AND ar.project_workym < :crYm ` +
+      `AND a.elem->>'orgno' = o.orgno ` +
+      `AND a.elem->>'applNo' = o.appl_no ` +
+      `AND (a.elem->>'status' IS NULL OR a.elem->>'status' = 'PENDING')` +
+      `) THEN 'Y' ELSE 'N' END)`;
+  }
+
+  const sql =
+    `UPDATE ob_monthly_run_result r SET ` +
+    `score = sub.score, ` +
+    `card_level = lv.card_level, ` +
+    `tier_level = ti.tier_level, ` +
+    `is_cr = sub.is_cr, ` +
+    `updated_at = CURRENT_TIMESTAMP ` +
+    `FROM ob_pool_data o ` +
+    `${customerCoreJoin} ` +
+    // score / is_cr 以 LATERAL 計算（讓 lv / ti join 可引用 sub.score）。
+    `CROSS JOIN LATERAL (SELECT ${scoreSelect} AS score, ${crExpr} AS is_cr) sub ` +
+    `LEFT JOIN ob_levelcard_level lv ON lv.card_type = :cardType ` +
+    `AND lv.card_version = :lvVersion ` +
+    `AND sub.score IS NOT NULL ` +
+    `AND sub.score >= lv.score_s AND sub.score <= lv.score_e ` +
+    // tier：card_type 相符 + card_level NULL-aware（sub.score NULL → lv.card_level NULL →
+    //   仍可命中 ob_tier 之 card_level IS NULL fallback 列；但 score NULL（無 active version）時
+    //   不走 fallback（LEVTIER-004）→ 以 sub.score IS NOT NULL 守 fallback 邊界）。
+    `LEFT JOIN ob_tier ti ON ti.card_type = :cardType ` +
+    `AND ti.card_level IS NOT DISTINCT FROM lv.card_level ` +
+    `AND (sub.score IS NOT NULL OR lv.card_level IS NOT NULL) ` +
+    `WHERE r.run_id = :runId AND r.list_no = :listNo ` +
+    `AND o.orgno = r.orgno AND o.appl_no = r.appl_no`;
+
+  params.lvVersion = ctx.cardVersion;
+
+  const [escaped, parameters] = escape(manager, sql, params);
+  await manager.query(escaped, parameters);
+}
+
+/**
+ * Stage 4 st4_exchange：UPDATE ob_monthly_run_result SET dept_id / emplid / emplid_deptid。
+ *
+ * - 全列預設 dept_id=:deptId、emplid=:defaultEmplid（對齊 JS：交換集外 → defaultEmpl）。
+ * - 交換集（T1/T2 案件前 CEIL(n*0.1) 件，保底 1）→ emplid=:seniorEmplid。
+ *   僅在有 senior（seniorEmplid 非 null）且有可交換案件時才交換。
+ * - PARTITION BY list_no（單名單已由 WHERE 限定）+ deterministic ORDER BY orgno, appl_no（OQ-F100-01）。
+ */
+export async function runStage4Sql(
+  manager: EntityManager,
+  ctx: Stage2to4ListContext,
+): Promise<void> {
+  const params: Record<string, unknown> = {
+    runId: ctx.runId,
+    listNo: ctx.listNo,
+    deptId: ctx.deptId,
+    defaultEmplid: ctx.defaultEmplid,
+    defaultDeptid: ctx.defaultDeptid,
+  };
+
+  // ① 全列先設為 default（dept_id / emplid / emplid_deptid）。
+  const defaultSql =
+    `UPDATE ob_monthly_run_result SET ` +
+    `dept_id = :deptId, emplid = :defaultEmplid, emplid_deptid = :defaultDeptid, ` +
+    `updated_at = CURRENT_TIMESTAMP ` +
+    `WHERE run_id = :runId AND list_no = :listNo`;
+  {
+    const [escaped, parameters] = escape(manager, defaultSql, params);
+    await manager.query(escaped, parameters);
+  }
+
+  // ② 無 senior 或無可交換案件 → 不交換（與 JS seniorEmpls.length>0 gate 等價）。
+  if (!ctx.seniorEmplid) return;
+
+  // 交換集：T1/T2 案件以 ROW_NUMBER() 標序，取前 CEIL(count*0.1)（保底 1）件 → senior。
+  // CEIL（非 SP ROUND，OQ-F100-01 對齊 JS Math.ceil + Math.max(1,...)）。
+  const exchangeSql =
+    `WITH exchangeable AS (` +
+    `SELECT run_id, list_no, orgno, appl_no, ` +
+    `ROW_NUMBER() OVER (PARTITION BY list_no ORDER BY orgno, appl_no) AS rn, ` +
+    `COUNT(*) OVER (PARTITION BY list_no) AS total ` +
+    `FROM ob_monthly_run_result ` +
+    `WHERE run_id = :runId AND list_no = :listNo ` +
+    `AND tier_level IN ('T1', 'T2')` +
+    `) ` +
+    `UPDATE ob_monthly_run_result r SET ` +
+    `emplid = :seniorEmplid, emplid_deptid = :seniorDeptid, updated_at = CURRENT_TIMESTAMP ` +
+    `FROM exchangeable e ` +
+    `WHERE r.run_id = e.run_id AND r.list_no = e.list_no ` +
+    `AND r.orgno = e.orgno AND r.appl_no = e.appl_no ` +
+    `AND e.rn <= GREATEST(1, CEIL(e.total * 0.1))`;
+  const exParams: Record<string, unknown> = {
+    runId: ctx.runId,
+    listNo: ctx.listNo,
+    seniorEmplid: ctx.seniorEmplid,
+    seniorDeptid: ctx.seniorDeptid,
+  };
+  const [escaped, parameters] = escape(manager, exchangeSql, exParams);
+  await manager.query(escaped, parameters);
+}
+
+/** Stage 2~4 完整下推（單一 list）：先 Stage 2+3，再 Stage 4（依賴 tier_level）。 */
+export async function runStage2to4Sql(
+  manager: EntityManager,
+  ctx: Stage2to4ListContext,
+): Promise<void> {
+  await runStage2and3Sql(manager, ctx);
+  await runStage4Sql(manager, ctx);
+}

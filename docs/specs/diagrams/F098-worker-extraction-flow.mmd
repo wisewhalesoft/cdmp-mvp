@@ -1,0 +1,24 @@
+%% F098 月跑 Worker 抽離（AD-E07-28 P1）：triggerRun 入列 pg-boss → cdmp-worker 消費 + cancellation / orphan 回收
+%% run 業務狀態機（pending → running → completed / failed）含取消與 orphan 轉移來源
+stateDiagram-v2
+    [*] --> pending: triggerRun（INSERT assignment_run + pgboss.send，立即回 202）
+    pending --> running: cdmp-worker work() 開始（UPDATE status=running）
+    pending --> failed: 使用者 cancelRun（尚未被消費；pgboss.cancel(jobId) 快路徑）
+    running --> completed: pipeline 成功 + 三份快照原子寫入
+    running --> failed: pipeline 錯誤 / OOM（OrphanReaper 掃 running 但 job 已 expire → 標 failed）
+    running --> failed: 使用者 cancelRun（CancellationPoller 於 list / stage 邊界偵測 → 拋 RunCancelledException）
+    completed --> [*]
+    failed --> [*]
+
+    note right of pending
+        I-TRIGGER-01：triggerRun 回應後
+        cdmp-api 不執行任何 Stage 1~4 運算
+        （pipeline 一律於 cdmp-worker 程序）
+    end note
+
+    note right of failed
+        orphan error_message='worker 中斷，請重新觸發'
+        OQ-AD28-02：靠 pg-boss job expiration
+        不新增 worker_id / heartbeat_at 欄位
+        OQ-AD28-04：月跑 job retryLimit=0
+    end note

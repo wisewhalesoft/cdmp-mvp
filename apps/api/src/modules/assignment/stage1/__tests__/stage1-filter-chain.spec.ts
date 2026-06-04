@@ -566,13 +566,19 @@ describe('F091 五、Regression 防回退（v2.0 BR-8）', () => {
     expect(out.map((c) => c.appl_no)).toEqual(['A1']); // 保留（v1.0「滿」排除行為不再）
   });
 
-  it('RGv2-005：trigger / 排除邏輯含 v2.0 正確關鍵字（期中 / 機車 / 年以上 / 小資 / 白牌）', () => {
-    // special-rules.ts trigger 含期中 / 機車 / 年以上；chain 排除條件含小資；fraud 含白牌
+  // ⚠️ F099 / AD-E07-28 P2（GMT-001，2026-06-02）：RGv2-005 已作廢移除。
+  //    原 guard 以 grep CHAIN_SRC 含 includes('小資')/includes('白牌') pin JS chain 之排除字串；
+  //    P2 Stage 1 SQL 下推後，排除字串移至 buildStage1Sql 之 SQL `LIKE '%白牌%'`/`'%小資%'`（params 綁定），
+  //    JS chain（保留為 golden oracle）不再以 includes('小資') 表達排除 → 原 grep 失去意義。
+  //    保護目標移轉：① special-rules.ts trigger 正確性仍由本檔 RGv2-001（禁 v1.0 誤判字）+ 下方
+  //    GMT-003（stage1-sql-builder.spec.ts）守；② 白牌 / 小資排除結果等價由 PG 真庫 EQ-006 / EQ-008
+  //    （stage1-sql-pushdown.pg.spec.ts，已綠）承接（移除前已確認 EQ 對應案例綠燈，防假綠）。
+  it('RGv2-005（已作廢移轉）：special-rules trigger 仍含 v2.0 正確關鍵字（期中 / 機車 / 年以上）', () => {
+    // chain 排除字串已 SQL 化（不再 grep CHAIN_SRC 含 includes('小資')/includes('白牌')）；
+    // 此處僅續守 special-rules trigger 關鍵字（與 GMT-003 一致，trigger 仍 JS / C-1）。
     expect(SPECIAL_RULES_SRC).toMatch(/includes\(\s*['"]期中['"]\s*\)/);
     expect(SPECIAL_RULES_SRC).toMatch(/includes\(\s*['"]機車['"]\s*\)/);
     expect(SPECIAL_RULES_SRC).toMatch(/includes\(\s*['"]年以上['"]\s*\)/);
-    expect(CHAIN_SRC).toMatch(/includes\(\s*['"]小資['"]\s*\)/);
-    expect(CHAIN_SRC).toMatch(/includes\(\s*['"]白牌['"]\s*\)/);
   });
 });
 

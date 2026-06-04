@@ -693,3 +693,48 @@ last_updated: 2026-05-20
 - **影響**：IT-M01-013/014 的 SQL 攔截驗證需確認「完全無 year_cnt 條件」vs「year_cnt IS NULL 條件」的差異
 - **建議**：Architecture 確認 Stage 1 SQL 生成邏輯：caseyear=99 wildcard 時完全省略 year_cnt JOIN/WHERE 子句，而非生成 `year_cnt IS NULL`；若邊界未定義，IT-M01-013 將成為 Architecture 決策的 regression guard
 - **風險等級**：中（影響全表掃描效能風險評估）
+
+---
+
+## F100 Stage 2~4 SQL 下推 + v2 真實計分引擎 P3 風險與待決（AD-E07-28 P3）
+
+> 完整風險矩陣（RISK-F100-001~010）見 [features/F100-test.md](features/F100-test.md) §十一。本節僅彙整需 Product / Architecture / tdd 釐清之 **open question**（4 項）與最高優先風險。
+
+### RISK-F100-001（高）：oracle 取錯 → 升級補上的正確分被判 fail
+
+- **問題**：P3 把計分由 v1 簡化版升級為 v2 真實版（customer_core 欄位 v1 回 `''` 不計分 → v2 LEFT JOIN 補上）。若沿用 P1/P2 慣例「跑現行 JS 當 golden oracle」，凡有 customer_core 計分欄位之案件，v1 oracle 會少算該欄權重 → SQL 正確補上反被判 fail。
+- **處置**：oracle = 依計分卡規則 + customer_core 屬性**手算之預期值**（F100-test §一矩陣，寫死數字、人複核）。EQ 矩陣每案標 (a) 升級差異 / (b) 下推等價；僅 (b) 案件可對 v1 JS 比對。**禁止以「跑 v1 JS」當 (a) 案件 oracle。**
+- **風險等級**：高（取錯 oracle 會讓正確實作全紅，或誤判假綠）
+
+### OQ-F100-T1（待 Architecture / spec 確認）：P3 transaction 範圍未定義
+
+- **問題**：F100 AC-7 只說「可中斷邊界為 list↔list / Stage↔Stage」「冪等延續 F099」，**未明確定義 P3 是否把 Stage 1~4 收進單一 transaction**（失敗即全回滾 vs 各 stage 獨立提交）。呼應 P2 follow-up F-1。
+- **影響**：IDEM-003「任一 stage 失敗 → 全 run 0 列 / 回到前狀態」之 rollback 斷言無法確定預期；現 blocked。
+- **建議**：spec/AD 明確定義 transaction 邊界後啟用 IDEM-003；現以 IDEM-001（冪等清理）+ IDEM-002（list 邊界）為基準。
+- **風險等級**：中（影響失敗回復行為之可測性）
+
+### OQ-F100-T2（待 spec 確認）：score=NULL 時 tier_level 走 fallback 或 NULL
+
+- **問題**：spec 未逐字明列「score=NULL（無 active version）時 tier_level 是否走 `ob_tier.card_level IS NULL` fallback（得 T3）或為 NULL」。現行 JS（L469 `score !== null` 才查 level；L481~483 對 `cardLevel===null` 一律命中 fallback）推導出「score=NULL → tier=T3」。
+- **影響**：LEVTIER-004 之 tier 預期值（T3 vs NULL）取決於此；與 LEVTIER-003（score 有值落 level 區間外 → tier fallback T3）構成關鍵 NULL 分歧。
+- **建議**：tdd 實作前與 spec 確認並鎖定；本案以現行 JS 推導（T3）為基準。
+- **風險等級**：高（NULL 語意混淆會讓 tier 全錯）
+
+### OQ-F100-T3（待 tdd 確認）：customer_core entity / 表尚未存在
+
+- **問題**：P3 LEFT JOIN customer_core 之 entity 在 `apps/api/src/database/entities/` **目前不存在**（僅 data-model.md / F036 定義目標表）。
+- **影響**：CJOIN 群組無從 join；P3 前置 blocker。
+- **建議**：tdd 須先確認 customer_core 表於月跑 PG 庫存在且可 join；缺則先補 entity / 確認 F036 ETL 已產出。
+- **風險等級**：高（P3 LEFT JOIN 前置硬性依賴）
+
+### OQ-F100-T4（tdd 交接項，非 blocker）：customer_core 計分欄位精確映射
+
+- **問題**：CUS_SEX / AGE 等 customer_core 計分欄位之精確欄位映射（architecture-spec.md §3.10 對照表）test-designer 無法獨立確定（A-1 載「由 tdd 對齊」）。
+- **處置**：F100-test §一矩陣之 customer_core 欄位名 / 分數為**測試確定性 seed**（非生產真值）；tdd 對齊 §3.10 表後同步調整 seed 欄位名，預期數字邏輯不變。
+- **風險等級**：低（交接項，不阻擋測試設計）
+
+### RISK-F100-003（高）：st4_exchange 取整誤用 ROUND/FLOOR
+
+- **問題**：legacy SP 用 `ROUND(×0.1)`，現行 JS / spec AC-5 用 `Math.ceil(×0.1)` + 保底 1。OQ-F100-01 裁定對齊 JS（CEIL），下推 SQL 須用 `CEIL`；若誤用 `ROUND`/`FLOOR`，11 件時得 1（應 2）。
+- **處置**：EXCH-006（11→2）/ EXCH-004（保底 1）；oracle = `Math.max(1, Math.ceil(n*0.1))`。
+- **風險等級**：高（交換數量錯 → 分派結果偏差）
