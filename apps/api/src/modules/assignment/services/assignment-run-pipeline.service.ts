@@ -10,6 +10,10 @@ import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
 import { runStage1SqlInsert } from '@/modules/assignment/stage1/stage1-sql-executor';
+import {
+  runStage2to4Sql,
+  type Stage2to4ListContext,
+} from '@/modules/assignment/stage1/stage2to4-sql-executor';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
@@ -115,6 +119,11 @@ export class AssignmentRunPipelineService {
   async runPipeline(runId: string, ym: string): Promise<void> {
     const startedAt = new Date();
     const useV2 = process.env.ASSIGNMENT_PIPELINE_V2 === 'true';
+    // F100 / AD-E07-28 P3：Stage 2~4 SQL 下推僅在 PG 真庫 + v2 啟用時走（與 P2 Stage 1 下推同 gate）。
+    //   SQLite / 非 PG 沿用 JS executeV2（golden oracle）；視窗函式 / SUM(CASE…) / customer_core
+    //   LEFT JOIN / EXISTS 在 SQLite 不具代表性（I-PORT-01）。
+    const useStage2to4Pushdown =
+      useV2 && process.env.DB_TYPE === 'postgres';
 
     try {
       await this.runRepo.update(
@@ -159,10 +168,19 @@ export class AssignmentRunPipelineService {
       // F091 / AD-E07-22：workdt = PROJECT_WORKYM + '01'（去重視窗 + 年資特殊 DELETE 取當年）
       const workdt = parseWorkdt(ym);
 
+      // F100 P3 pushdown：Stage 1 已寫入 ob_monthly_run_result 之 list（inserted>0），
+      //   供 Stage 2~4 SQL 逐 list UPDATE（不 re-hydrate pool 回 heap，I-NOLOAD-01）。
+      const stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }> = [];
+
       for (const list of validLists) {
         // F098 AC-5 / A-2：list 邊界為可中斷點 — 處理下一份 list 前查是否已被取消
         await this.checkCancelled(runId);
-        const result = await this.runStage1ForList(list, workdt, runId);
+        const result = await this.runStage1ForList(
+          list,
+          workdt,
+          runId,
+          useStage2to4Pushdown,
+        );
         if (result.skipped) {
           stage1SkippedLists.push({
             listNo: list.list_no,
@@ -170,6 +188,10 @@ export class AssignmentRunPipelineService {
             reason: 'EMPTY_CONDITIONS',
           });
           continue;
+        }
+        if (useStage2to4Pushdown) {
+          // 下推路徑：Stage 1 已 INSERT 列，不 re-hydrate pool（pool 為空陣列佔位）。
+          stage1WrittenLists.push({ list, inserted: result.inserted });
         }
         stage1Cases.push({ list, pool: result.pool });
       }
@@ -219,26 +241,51 @@ export class AssignmentRunPipelineService {
       // F098 AC-5 / A-2：Stage 之間為可中斷點 — 進入 Stage 2~4 計分前查是否已被取消
       await this.checkCancelled(runId);
 
-      // Stage 2 / 3 / 4 — 依 v1 / v2 分支執行
+      // Stage 2 / 3 / 4 — 依 v1 / v2 / P3 SQL 下推分支執行
       // F094：回傳型別由 Partial<ObPoolDataList>[] 改為 Partial<ObMonthlyRunResult>[]，每列帶 run_id
       type ResultRow = Partial<ObMonthlyRunResult>;
-      const stage4Results: ResultRow[] = useV2
-        ? await this.executeV2(stage1Cases, ym, runId)
-        : await this.executeV1(stage1Cases, ym, runId);
+      let stage4Results: ResultRow[];
+      // F100 P3：下推路徑之 Stage 2~4 已直接 UPDATE ob_monthly_run_result（無 heap 物化）；
+      //   stage4ResultsPersisted=true → 後段不再 save()（避免雙寫 / 覆寫已下推之計分）。
+      let stage4ResultsPersisted = false;
+      if (useStage2to4Pushdown) {
+        stage4Results = await this.executeStage2to4Pushdown(
+          stage1WrittenLists,
+          ym,
+          runId,
+        );
+        stage4ResultsPersisted = true;
+      } else if (useV2) {
+        stage4Results = await this.executeV2(stage1Cases, ym, runId);
+      } else {
+        stage4Results = await this.executeV1(stage1Cases, ym, runId);
+      }
 
       const totalCases = stage4Results.length;
 
       // 三份快照 + ob_monthly_run_result 原子寫入
       const configPayload = await this.buildConfigPayload(ym, validLists);
+      // input_list 快照：JS 路徑由 re-hydrate 之 pool 組；P3 下推路徑 pool 為空，改由
+      //   已下推之 stage4Results（讀回 ob_monthly_run_result 之有界子集）組（cardType 由 list 對照）。
+      const cardTypeByListNo = new Map<string, string | null>(
+        validLists.map((l) => [l.list_no, l.card_type ?? null]),
+      );
       const inputListPayload = {
-        cases: stage1Cases.flatMap(({ list, pool }) =>
-          pool.map((p) => ({
-            listNo: list.list_no,
-            applNo: p.appl_no,
-            orgno: p.orgno,
-            cardType: list.card_type,
-          })),
-        ),
+        cases: useStage2to4Pushdown
+          ? stage4Results.map((r) => ({
+              listNo: r.list_no,
+              applNo: r.appl_no,
+              orgno: r.orgno,
+              cardType: cardTypeByListNo.get(r.list_no ?? '') ?? null,
+            }))
+          : stage1Cases.flatMap(({ list, pool }) =>
+              pool.map((p) => ({
+                listNo: list.list_no,
+                applNo: p.appl_no,
+                orgno: p.orgno,
+                cardType: list.card_type,
+              })),
+            ),
       };
       const resultPayload = {
         assignments: stage4Results.map((r) => ({
@@ -265,7 +312,9 @@ export class AssignmentRunPipelineService {
       // **不再寫入 ob_pool_data_list**（後者回歸 ETL 單一來源；去重仍只讀 ob_pool_data_list）。
       // snapshot type=result 短期雙軌保留（DP-AD25-3），作為稽核快照與本表並存。
       await this.dataSource.transaction(async (txm) => {
-        if (stage4Results.length > 0) {
+        // P3 下推路徑：列已由 Stage 1 INSERT + Stage 2~4 UPDATE 寫入 ob_monthly_run_result，
+        //   不再 save()（避免雙寫 / 以 Partial 覆寫掉已下推之計分欄位）。
+        if (!stage4ResultsPersisted && stage4Results.length > 0) {
           await txm
             .getRepository(ObMonthlyRunResult)
             .save(stage4Results as ObMonthlyRunResult[]);
@@ -544,6 +593,91 @@ export class AssignmentRunPipelineService {
     return out;
   }
 
+  // =========================================================================
+  // F100 / AD-E07-28 P3：Stage 2~4 SQL 下推（PG 真庫）
+  // =========================================================================
+  /**
+   * 對每份「Stage 1 已 INSERT 列」之 list，以 SQL UPDATE 補 score / card_level / tier_level /
+   * is_cr / dept_id / emplid（消除 re-hydrate heap，I-NOLOAD-01）。計分卡 / 員工編排資料以
+   * repo 查好後傳入純函式群組（stage2to4-sql-executor）。最後讀回 ob_monthly_run_result 有界子集
+   * 供快照 payload（input_list / result）；列已在表內，呼叫端不再 save()。
+   */
+  private async executeStage2to4Pushdown(
+    stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }>,
+    ym: string,
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
+    const allEmpl = await this.emplSetRepo.find();
+    const allColumns = await this.columnRepo.find();
+    const allScores = await this.scoreRepo.find();
+    const allVersions = await this.versionRepo.find({ where: { status: 'active' } });
+
+    // 員工 tier 標記（ob_empl_set.prod_type='TIER:T*'，slice(5)，與 executeV2 一致，C-2）。
+    const emplTier = new Map<string, string>();
+    for (const e of allEmpl) {
+      if (e.prod_type?.startsWith('TIER:')) {
+        emplTier.set(e.emplid, e.prod_type.slice(5));
+      }
+    }
+
+    const manager = this.dataSource.manager;
+
+    for (const { list } of stage1WrittenLists) {
+      const cardType = list.card_type ?? '';
+      const activeVer = allVersions.find((v) => v.card_type === cardType);
+      const cardVersion =
+        activeVer && activeVer.card_version !== null ? activeVer.card_version : null;
+      const activeColumns =
+        activeVer && cardVersion !== null
+          ? allColumns.filter(
+              (c) =>
+                c.card_type === cardType &&
+                c.card_version === cardVersion &&
+                c.status === 'active',
+            )
+          : [];
+
+      // Stage 4 員工編排（與 executeV2 一致）：dept = ob_dept_pct 第一筆；
+      //   listEmpls = 該 list + dept 過濾；senior = T3 第一位；default = newEmpls[0] ?? listEmpls[0]。
+      const dept =
+        (
+          await this.deptPctRepo.find({
+            where: { project_workym: ym, list_no: list.list_no },
+          })
+        )[0] ?? null;
+      const listEmpls = allEmpl.filter(
+        (e) => e.list_no === list.list_no && (!dept || e.deptid_m === dept.obdeptid),
+      );
+      const newEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) !== 'T3');
+      const seniorEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) === 'T3');
+      const defaultEmpl = newEmpls[0] ?? listEmpls[0] ?? null;
+      const senior = seniorEmpls[0] ?? null;
+
+      const ctx: Stage2to4ListContext = {
+        runId,
+        listNo: list.list_no,
+        cardType,
+        cardVersion,
+        activeColumns,
+        scoreRows: allScores,
+        crEnabled: !!list.cr_enabled,
+        ym,
+        deptId: dept?.obdeptid ?? null,
+        seniorEmplid: senior?.emplid ?? null,
+        seniorDeptid: senior?.deptid_m ?? null,
+        defaultEmplid: defaultEmpl?.emplid ?? null,
+        defaultDeptid: defaultEmpl?.deptid_m ?? null,
+      };
+
+      await runStage2to4Sql(manager, ctx);
+    }
+
+    // 讀回本 run 已下推之列（有界子集）供快照 payload；列已在表內，呼叫端不再 save()。
+    const writtenListNos = stage1WrittenLists.map(({ list }) => list.list_no);
+    if (writtenListNos.length === 0) return [];
+    return this.resultRepo.find({ where: { run_id: runId } });
+  }
+
   /**
    * v2.0 Stage 2 純 JS 等價計分：依 column_name 從 pool row 取值，對應 score row 累加。
    *
@@ -689,22 +823,34 @@ export class AssignmentRunPipelineService {
     list: ObListDefinition,
     workdt: Date,
     runId: string,
-  ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
+    skipHydration = false,
+  ): Promise<
+    { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
+  > {
     const dbType = process.env.DB_TYPE;
     if (dbType === 'postgres') {
-      return this.runStage1SqlPushdown(list, workdt, runId);
+      return this.runStage1SqlPushdown(list, workdt, runId, skipHydration);
     }
-    return this.runStage1JsChain(list, workdt);
+    const jsResult = await this.runStage1JsChain(list, workdt);
+    if (jsResult.skipped) return jsResult;
+    return { skipped: false, pool: jsResult.pool, inserted: jsResult.pool.length };
   }
 
   /**
-   * F099 P2 PG 下推路徑：set-based SQL 取案寫入 ob_monthly_run_result，再 re-hydrate 有界子集供 Stage 2~4。
+   * F099 P2 PG 下推路徑：set-based SQL 取案寫入 ob_monthly_run_result。
+   *
+   * - skipHydration=false（P2 / Stage 2~4 走 JS）：re-hydrate Stage 1 已挑選有界子集供 JS 計分。
+   * - skipHydration=true（F100 P3 / Stage 2~4 走 SQL 下推）：**不** re-hydrate pool（pool 為空），
+   *   Stage 2~4 直接對 ob_monthly_run_result 已寫入列 SQL UPDATE（I-NOLOAD-01 全程不全載 heap）。
    */
   private async runStage1SqlPushdown(
     list: ObListDefinition,
     workdt: Date,
     runId: string,
-  ): Promise<{ skipped: true } | { skipped: false; pool: ObPoolData[] }> {
+    skipHydration = false,
+  ): Promise<
+    { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
+  > {
     // run（INSERT…SELECT）與 estimate（SELECT COUNT(*)）共用同一 buildStage1Sql core（I-RUN-EST-01）。
     const { inserted, core } = await runStage1SqlInsert(
       this.dataSource.manager,
@@ -728,7 +874,12 @@ export class AssignmentRunPipelineService {
     }
 
     if (inserted === 0) {
-      return { skipped: false, pool: [] };
+      return { skipped: false, pool: [], inserted: 0 };
+    }
+
+    // F100 P3：Stage 2~4 走 SQL 下推 → 不 re-hydrate pool（pool 為空），消除 read-back heap（I-NOLOAD-01）。
+    if (skipHydration) {
+      return { skipped: false, pool: [], inserted };
     }
 
     // re-hydrate Stage 1 已挑選之有界子集（依寫入 ob_monthly_run_result 之 PK），供 Stage 2~4 計分。
@@ -743,7 +894,7 @@ export class AssignmentRunPipelineService {
       .getRawMany();
 
     const pool = await this.hydratePoolByPk(selected);
-    return { skipped: false, pool };
+    return { skipped: false, pool, inserted };
   }
 
   /**
