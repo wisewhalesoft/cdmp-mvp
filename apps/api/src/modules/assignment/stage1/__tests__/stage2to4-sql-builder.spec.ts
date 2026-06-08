@@ -148,9 +148,12 @@ describe('F100 NOLOAD-001 — Stage 2~4 下推不 re-hydrate 全 pool（靜態�
   );
   const src = fs.readFileSync(pipelinePath, 'utf8');
 
-  it('Stage 2~4 下推方法存在且呼叫 runStage2to4Sql（set-based SQL）', () => {
+  it('Stage 2~4 下推方法存在且呼叫 set-based SQL（F101：runStage2and3Sql + runStage3to4RationSql）', () => {
     expect(src).toContain('executeStage2to4Pushdown');
-    expect(src).toContain('runStage2to4Sql');
+    // F101 / AD-E07-29：原 runStage2to4Sql（含 st4_exchange placeholder）拆為
+    //   runStage2and3Sql（計分 + CR）+ runStage3to4RationSql（真實比例分派），皆為 set-based SQL。
+    expect(src).toContain('runStage2and3Sql');
+    expect(src).toContain('runStage3to4RationSql');
   });
 
   it('下推路徑透過 skipHydration 跳過 re-hydrate（pool 為空，I-NOLOAD-01）', () => {

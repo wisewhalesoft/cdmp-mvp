@@ -26,6 +26,10 @@ export const ISSUE_TYPE_DESCRIPTIONS: Record<string, string> = {
   // 對齊 prototype map（BR-12 / 計分完整性兩類）
   BR12_EDGE_CARD_TYPE_SKIPPED: 'EDGE 客戶因 CARD_TYPE 未設定而跳過',
   SCORING_INTEGRITY_WARN: '計分完整性警示（系統使用 0 分代入）',
+  // F101 / AD-E07-29 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（月跑不中斷，對應欄位保持 NULL）
+  STAGE3_NO_DEPT_RATION: '電銷課比例未設定（該名單／Tier 案件未分派至電銷課，dept_id 保持空）',
+  STAGE4_NO_EMPL_WARN: '電銷課無人員比例設定（該課案件未分派至業務員，emplid 保持空）',
+  ASSIGNDAY_NO_CALENDAR_WARN: '當月無工作日日曆資料（案件未設定指派日，assignday 保持空）',
 };
 
 export interface ScoringWarningIssue {

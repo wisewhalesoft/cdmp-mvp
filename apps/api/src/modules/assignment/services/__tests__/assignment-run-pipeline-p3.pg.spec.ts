@@ -45,6 +45,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { MatchType } from '@/modules/assignment-scoring/dto/match-type.enum';
 
 const PG = {
@@ -62,6 +63,7 @@ const ENTITIES = [
   AssignmentRun, AssignmentRunSnapshot, ObListDefinition, ObPoolData,
   ObPoolDataList, ObMonthlyRunResult, ObDeptPct, ObEmplSet, ObCardType,
   ObLevelcardVersion, ObLevelcardColumn, ObLevelcardScore, ObLevelcardLevel, ObTier,
+  ObCalendar,
 ];
 
 function pgPortReachable(timeoutMs = 1000): Promise<boolean> {
@@ -348,7 +350,11 @@ describe('F100 EQ — runPipeline 端到端 Stage 1~4 SQL 下推（PG DoD）', (
     expect(rows[0].score).toBeNull();
     expect(rows[0].card_level).toBeNull();
     expect(rows[0].tier_level).toBeNull();
-    expect(rows[0].emplid).toBe('E_NEW'); // 分派仍寫入
+    // F101 / AD-E07-29（語意演進，非 regression）：Stage 3/4 比例分派只處理 tier_level IN ('T1'..'T5')
+    //   之案件（BR-F101-01 / I-PIPELINE-STAGE-ORDER）。無 active version → tier NULL → 不進 ration
+    //   分派 → dept_id / emplid 保持 NULL（取代舊 placeholder「全案件指向單一 defaultEmpl」行為）。
+    expect(rows[0].dept_id).toBeNull();
+    expect(rows[0].emplid).toBeNull();
   });
 
   it('EQ-006/007：CR 開（歷史未成交→Y）/ 關（→N）', async (ctx) => {

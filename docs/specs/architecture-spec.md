@@ -1,10 +1,15 @@
 ---
 type: architecture-spec
-version: "2.22"
+version: "2.23"
 status: draft
-last_updated: 2026-06-02
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097]
+last_updated: 2026-06-05
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101]
 ---
+
+> **v2.23 / 2026-06-05 變更摘要（AD-E07-29 F101 月跑 Stage 3/4 真實比例分派）**：
+>
+> 新增 **§5.14「月跑 Stage 3/4 真實比例分派（F101）」** 與 **AD-E07-29**（決策記錄 [`implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md`](implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md)）。背景：現行 `runStage4Sql` placeholder 全部案件指向 `dept[0]` + 單一 `defaultEmplid`，當 AI000 無員工設定時 `emplid=NULL`（Bug C）。取代方案：以 legacy SP（`st2_dept` / `st3_emplid`，UTF-16LE 解碼）算法為基底，Stage 3（dept）依三維分組（`ob_pool_data.dept_id`、`list_no`、`ob_monthly_run_result.tier_level`）FLOOR + 確定性差額補足，Stage 4（empl）依課內員工 FLOOR + 兩階段補足，ASSIGNDAY 複用 `calculateDailyEstimate(ym)`（I-RUN-EST-01 延伸）。**5 個 OQ 全部裁定**：OQ-F101-01 確定性鍵（obdeptid/emplid 升冪差額 + (orgno,appl_no) 升冪案件）；**OQ-F101-02 st4_exchange 廢除**（SP 硬編碼 `202408起停止交換` + simplified is_cr + F100 OQ-F100-01 三重佐證，`runStage4Sql` senior swap 由 F101 移除，不變式 I-NO-ST4-EXCHANGE）；OQ-F101-03 ob_assign_set vestigial 保留 entity 但排程獨立清理 sprint；OQ-F101-04 沿用 I-IDEM-01（per-list 清除 + per-run 冪等）；OQ-F101-05 警告寫 `assignment_run.skipped_cases.warnings[]` + `warning_summary`（不擴 audit_log enum，無 migration）。Schema Gap G-1 裁示：Stage 3 `tier_level` 讀 `ob_monthly_run_result`（Stage 2 輸出），pipeline 順序不變式 I-PIPELINE-STAGE-ORDER：Stage 2→Stage 3→Stage 4(empl)→ASSIGNDAY。修訂 AD-E07-28 P3 Stage 4 範圍（移除 senior swap）；不影響 P1/P2 / AD-E07-27 / AD-E07-26。
+>
 
 > **v2.22 / 2026-06-02 變更摘要（AD-E07-28 月跑執行模型重構：Worker 抽離 + Stage 1~4 SQL 下推）**：
 >
@@ -54,12 +59,12 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程、**5.13 月跑執行模型重構**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、10. 技術棧決策 |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程、**5.13 月跑執行模型重構**、**§5.14 Stage 3/4 真實比例分派**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、10. 技術棧決策 |
 | TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、**5.13.7（cdmp-worker 容器 / pg-boss schema / docker-compose 變更 / dev synchronize vs prod migration）**、**AD-E07-28 §7~8（pg-boss schema migration 固定、worker entrypoint、不引入 Redis）**、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月跑執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月跑執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）** |
 
 ## 目錄
 
@@ -2208,6 +2213,150 @@ sequenceDiagram
 SQL，year-above 例外」，estimate≡run 共用原則保留並強化）、修訂 **AD-E07-25**（寫入 `ob_monthly_run_result`
 方式由 JS `save()` → `INSERT…SELECT`）；**不影響 AD-E07-26**（trigger 判斷仍 JS）、**不影響 AD-E07-27**
 （workdt / 去重視窗語意不變，僅計算位置移入 SQL）。
+
+---
+
+### 5.14 月跑 Stage 3/4 真實比例分派（F101 / AD-E07-29）
+
+> 完整決策、5 個 OQ 裁示、確定性排序鍵表格、st4_exchange 廢除依據、Schema Gap G-1 裁示：見
+> [`implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md`](implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md)。
+> 本節為架構主文之概要，供 Test Designer / TDD Developer 快速定位。
+
+#### 5.14.1 問題與目標
+
+現行 `runStage4Sql` placeholder（F100 P3）全部案件指向 `dept[0]` + 單一 `defaultEmplid`；當 `dept[0]`
+（如 AI000）在 `ob_empl_set` 無員工設定時 `defaultEmplid = null` → 全部案件 `emplid = NULL`（**Bug C**，
+已於 OB202606001 名單驗證）。
+
+目標：以 legacy SP（`st2_dept` / `st3_emplid`）算法為基底，實作三維分組 FLOOR + 確定性比例分派，
+取代 placeholder，消除 Bug C，並確保分派結果可重現（US-150）。
+
+#### 5.14.2 Pipeline 執行順序不變式（I-PIPELINE-STAGE-ORDER）
+
+```mermaid
+graph LR
+    S2["Stage 2<br/>計分 + tier_level 寫入"]
+    S3["Stage 3<br/>dept ration 分配<br/>寫 dept_id"]
+    S4E["Stage 4<br/>empl ration 分配<br/>寫 emplid / emplid_deptid"]
+    S4A["Stage 4<br/>ASSIGNDAY<br/>寫 assignday"]
+
+    S2 --> S3 --> S4E --> S4A
+
+    classDef stage fill:#dbeafe,stroke:#2563eb
+    class S2,S3,S4E,S4A stage
+```
+
+**強制前置依賴**：Stage 3 依賴 `ob_monthly_run_result.tier_level`（Stage 2 輸出）與
+`ob_pool_data.dept_id`（Stage 1 輸出）；Stage 4 empl 依賴 `ob_monthly_run_result.dept_id`（Stage 3 輸出）；
+ASSIGNDAY 依賴 `emplid`（Stage 4 empl 輸出）。任何跳過或亂序均為錯誤（C-1，BR-F101-01）。
+
+#### 5.14.3 Stage 3 — 部門（電銷課）比例分配設計
+
+三維分組：`(ob_pool_data.dept_id, ob_monthly_run_result.list_no, ob_monthly_run_result.tier_level)`。
+
+| 步驟 | 操作 | 對齊 SP |
+|------|------|--------|
+| 1. 初始配額 | `FLOOR(group_cnt × ration / 100)` | SP `FLOOR(A.CNT*B.RATION/100)` |
+| 2. 差額補足 | 差額 = `group_cnt - Σ FLOOR`；`obdeptid ASC` 排序前差額課各 +1 | SP `ORDER BY NEWID()` → 改確定性 |
+| 3. 案件指派 | 各課依 `(orgno, appl_no) ASC` 從未分配池取前 N 件，寫 `dept_id` | SP `ORDER BY NEWID()` → 改確定性 |
+
+**Schema Gap G-1 裁示**：`tier_level` 讀 `ob_monthly_run_result`（Stage 2 已寫），非 `ob_pool_data`；
+`dept_id`（分處）讀 `ob_pool_data`，以 `JOIN ob_pool_data o ON o.orgno=r.orgno AND o.appl_no=r.appl_no`
+取得。
+
+**CR 預指移除**：legacy `st2_dept` SP 中 CR 業代優先分配整段邏輯（#OBPOOLDATA_LIST 臨時表 + CR
+UPDATE + 配額扣除）**完整移除**（BR-F101-12，simplified is_cr）。
+
+#### 5.14.4 Stage 4 — 員工比例分配設計
+
+分組粒度：每（`dept_id`〔Stage 3 已寫〕、`tier_level`）。
+
+| 步驟 | 操作 | 對齊 SP |
+|------|------|--------|
+| 1. 初始配額 | `FLOOR(dept_tier_cnt × ration / 100)` | SP `FLOOR(@r_APPL_TOTAL*RATION/100)` |
+| 2. 均攤（ADD_CNT） | `ADD_CNT = FLOOR(LEFT / empl_cnt)`；若 >0 每員工 + ADD_CNT，重算 LEFT | SP `@r_ADD_CNT = @r_LEFT_CNT / @count` |
+| 3. 前 N 各 +1 | 剩餘 LEFT，`emplid ASC` 前 LEFT 員工各 +1 | SP `SEQ <= @r_LEFT_CNT`，SEQ 由 `NEWID()` → 改確定性 |
+| 4. 案件指派 | 各員工依 `(orgno, appl_no) ASC` 取前 N 件，寫 `emplid` / `emplid_deptid` | SP `TOP(@r_EMPLID_COUNTS) ORDER BY SEQ`（SEQ=NEWID）→ 改確定性 |
+
+**T5 / 資深無分流**：T1–T5 使用同一 ration 演算法（BR-F101-11）。`ob_empl_set.prod_type` 僅供標記，
+F101 不依其分流。
+
+#### 5.14.5 Stage 4 — ASSIGNDAY 設計
+
+複用 `Stage0EstimateService.calculateDailyEstimate(ym)` 千分比日曆（BR-F101-13）：
+
+| 步驟 | 操作 |
+|------|------|
+| EMP_ORD | `ROW_NUMBER() OVER (PARTITION BY emplid ORDER BY orgno ASC, appl_no ASC)` |
+| per casedt | `FLOOR(M_EMP_ORD × ratioPerMille / 1000)` 件（累進，已分配 + FLOOR 新增） |
+| 最末 casedt | 吸收所有 FLOOR 捨去餘額（對齊 SP STEP 11 最後一筆全吸收語意） |
+| DIVIDE_LEFT | 跨 Tier 剩餘案件；`ASSIGN_ORDER = ROW_NUMBER() OVER (PARTITION BY emplid ORDER BY tier_level ASC, orgno ASC, appl_no ASC)`；round-robin `((ASSIGN_ORDER-1) % workingDays) + 1` |
+
+#### 5.14.6 st4_exchange 廢除決策（OQ-F101-02，最重要）
+
+```mermaid
+graph TD
+    EV1["SP 硬編碼停用<br/>202408起停止交換<br/>IF @LIST_YEAR_MONTH >= '202408' RETURN"]
+    EV2["業務語意消失<br/>simplified is_cr<br/>T1–T5 同一 ration 演算法"]
+    EV3["F100 OQ-F100-01<br/>明確排除 SP 配對語意/<br/>寄信告警/整批回滾"]
+    DEC["裁定：st4_exchange 不執行<br/>I-NO-ST4-EXCHANGE<br/>runStage4Sql senior swap 移除"]
+
+    EV1 --> DEC
+    EV2 --> DEC
+    EV3 --> DEC
+
+    classDef evidence fill:#fef9c3,stroke:#ca8a04
+    classDef decision fill:#dcfce7,stroke:#16a34a
+    class EV1,EV2,EV3 evidence
+    class DEC decision
+```
+
+**最終 Stage 4 實作路徑**：dept ration（Stage 3）→ empl ration（Stage 4）→ ASSIGNDAY（Stage 4）；
+無 senior swap 步驟。`Stage2to4ListContext` 的 `seniorEmplid` / `defaultEmplid` / `deptId` 欄位
+由 F101 廢棄，取代為 ration 查詢邏輯。
+
+#### 5.14.7 確定性排序鍵彙總（OQ-F101-01）
+
+| 場景 | 確定性鍵 |
+|------|---------|
+| Stage 3 差額補足（課順序） | `obdeptid ASC` |
+| Stage 3 案件指派（池排序） | `orgno ASC, appl_no ASC` |
+| Stage 4 差額補足——前 N 各 +1（員工順序） | `emplid ASC` |
+| Stage 4 案件指派（池排序） | `orgno ASC, appl_no ASC` |
+| ASSIGNDAY EMP_ORD（per-emplid 散佈） | `PARTITION BY emplid ORDER BY orgno ASC, appl_no ASC` |
+| DIVIDE_LEFT ASSIGN_ORDER | `PARTITION BY emplid ORDER BY tier_level ASC, orgno ASC, appl_no ASC` |
+
+**不變式 I-DET-01**：以上場景全程無 `NEWID()` / `Math.random()` / `ORDER BY RANDOM()` /
+`crypto.randomUUID()`；靜態掃描 AC-2 守住。
+
+#### 5.14.8 警告通道（OQ-F101-05）
+
+警告寫 `assignment_run.skipped_cases`（JSONB `warnings` 子鍵）+ `warning_summary`（VARCHAR 100），
+不擴展 `assignment_audit_log.action` union type / 不新增 migration：
+
+```json
+{
+  "warnings": [
+    { "event": "STAGE3_NO_DEPT_RATION", "list_no": "...", "tier_level": "T2", "case_count": 45 },
+    { "event": "STAGE4_NO_EMPL_WARN",   "dept_id": "AI000", "list_no": "...", "tier_level": "T1", "case_count": 50 },
+    { "event": "ASSIGNDAY_NO_CALENDAR_WARN", "list_no": "...", "work_ym": "202606" }
+  ]
+}
+```
+
+F063 摘要頁（US-083）`AssignmentRunReportService.getSummary()` 的 `warnings` 段即可呈現。
+
+#### 5.14.9 冪等與 ob_assign_set（OQ-F101-03/04）
+
+- **OQ-F101-04**：沿用 I-IDEM-01（run 級重觸發前 DELETE run_id；Stage 3 開始清 `dept_id / emplid / assignday`；`is_cr` 保留）。
+- **OQ-F101-03**：`ob_assign_set` vestigial 保留 entity 但 F101 不引用（BR-F101-18 / AC-18）；
+  獨立清理 sprint 執行 DROP TABLE + migration。
+
+#### 5.14.10 與既有 AD 的關係
+
+修訂 **AD-E07-28 P3 Stage 4 範圍**（`runStage4Sql` senior swap 移除，由 F101 ration 分派取代）；
+**不影響** AD-E07-28 P1/P2；延伸 **I-RUN-EST-01**（ASSIGNDAY 層）；**不影響** AD-E07-27（workym 語意）；
+**不影響** AD-E07-26（Stage 1 特例規則仍 JS）。
 
 ---
 

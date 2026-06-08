@@ -11,11 +11,12 @@ import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.en
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
 import { runStage1SqlInsert } from '@/modules/assignment/stage1/stage1-sql-executor';
 import {
-  runStage2to4Sql,
+  runStage2and3Sql,
   type Stage2to4ListContext,
 } from '@/modules/assignment/stage1/stage2to4-sql-executor';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
@@ -28,6 +29,16 @@ import {
 } from '@/modules/assignment-scoring/services/scoring-integrity-check.service';
 import { CancellationPoller } from '../queue/cancellation-poller';
 import { RunCancelledException } from '../queue/run-cancelled.exception';
+import {
+  distributeStage3to4,
+  buildWarningSummary,
+  type RationCase,
+  type DeptRation,
+  type EmplRation,
+  type RationWarning,
+} from '@/modules/assignment/stage1/stage3to4-ration';
+import { computeWorkingDayRatios } from '@/modules/assignment-list/stage0-estimate.service';
+import { runStage3to4RationSql } from '@/modules/assignment/stage1/stage3to4-ration-sql';
 
 /**
  * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28）。
@@ -98,6 +109,14 @@ export function resolveStage2to4Strategy(env: {
 export class AssignmentRunPipelineService {
   private readonly logger = new Logger(AssignmentRunPipelineService.name);
 
+  /**
+   * F101 / AD-E07-29 §4 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（per-run 暫存）。
+   * 每次 runPipeline 開始清空；executeV2 / executeStage2to4Pushdown 收集；runPipeline 尾段
+   * 寫入 assignment_run.skipped_cases.warnings[] + warning_summary。worker batchSize=1 + 單 worker
+   * 序列化執行 → 同實例不會並行兩 run，instance 暫存安全。
+   */
+  private rationWarnings: RationWarning[] = [];
+
   constructor(
     @InjectRepository(AssignmentRun)
     private readonly runRepo: Repository<AssignmentRun>,
@@ -122,6 +141,12 @@ export class AssignmentRunPipelineService {
     private readonly deptPctRepo: Repository<ObDeptPct>,
     @InjectRepository(ObEmplSet)
     private readonly emplSetRepo: Repository<ObEmplSet>,
+    /**
+     * F101 / AD-E07-29 §3.4：Stage 4 ASSIGNDAY 工作日來源（複用 computeWorkingDayRatios，
+     * 與 Stage 0 試算 calculateDailyEstimate 同算法，I-RUN-EST-01）。
+     */
+    @InjectRepository(ObCalendar)
+    private readonly calendarRepo: Repository<ObCalendar>,
     @InjectRepository(ObCardType)
     private readonly cardTypeRepo: Repository<ObCardType>,
     @InjectRepository(ObLevelcardVersion)
@@ -157,6 +182,8 @@ export class AssignmentRunPipelineService {
    */
   async runPipeline(runId: string, ym: string): Promise<void> {
     const startedAt = new Date();
+    // F101：清空上一 run 之比例分派警告暫存。
+    this.rationWarnings = [];
     // Bug A 修復（AD-E07-28）：PG 一律 Stage 2~4 SQL 下推（gate = DB_TYPE='postgres'，與
     //   P2 Stage 1 下推同 gate）；非 PG（SQLite 測試 / in-memory）依 ASSIGNMENT_PIPELINE_V2 選
     //   v1（executeV1）/ v2（executeV2）。視窗函式 / SUM(CASE…) / customer_core LEFT JOIN /
@@ -342,6 +369,8 @@ export class AssignmentRunPipelineService {
           orgno: r.orgno,
           deptId: r.dept_id,
           emplid: r.emplid,
+          emplidDeptid: r.emplid_deptid,
+          assignday: r.assignday,
           score: r.score,
           cardLevel: r.card_level,
           tierLevel: r.tier_level,
@@ -384,7 +413,14 @@ export class AssignmentRunPipelineService {
       if (stage1SkippedLists.length > 0) {
         warningCodes.push('EMPTY_CONDITIONS_SKIPPED');
       }
-      const warningSummary = warningCodes.length > 0 ? warningCodes.join(',') : null;
+      // F101 / AD-E07-29 §4 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告事件碼，以 '|' 連接為單一
+      //   summary token（去重、固定順序），與 AD-E07-29 §4 寫入格式
+      //   'STAGE3_NO_DEPT_RATION|STAGE4_NO_EMPL_WARN|ASSIGNDAY_NO_CALENDAR_WARN' 對齊。
+      const rationWarningSummary = buildWarningSummary(this.rationWarnings);
+      if (rationWarningSummary) warningCodes.push(rationWarningSummary);
+      // VARCHAR(100) 上限：截斷以保安全（警告為摘要表面化用途，不影響 skipped_cases.warnings 完整資料）。
+      const warningSummary =
+        warningCodes.length > 0 ? warningCodes.join(',').slice(0, 100) : null;
 
       // skipped_cases 合併 edge CARD_TYPE / ALL_SCORES_EMPTY / EMPTY_CONDITIONS 三類
       const integritySkipped = integrityIssues
@@ -402,14 +438,19 @@ export class AssignmentRunPipelineService {
         status: 'skipped' as const,
         reason: l.reason,
       }));
+      // F101 / AD-E07-29 §4 OQ-F101-05：Stage 3/4/ASSIGNDAY 警告 → skipped_cases.warnings[]
+      //   （JSONB 合併子鍵，與既有 cases / integrityIssues / lists 共存，不覆蓋；FALL-005）。
+      //   不寫 assignment_audit_log（I-WARNING-CHANNEL，FALL-006）。
       const skippedJson =
         skippedCases.length > 0 ||
         integritySkipped.length > 0 ||
-        skippedListsPayload.length > 0
+        skippedListsPayload.length > 0 ||
+        this.rationWarnings.length > 0
           ? {
               cases: skippedCases,
               integrityIssues: integritySkipped,
               lists: skippedListsPayload,
+              warnings: this.rationWarnings,
             }
           : null;
 
@@ -512,7 +553,12 @@ export class AssignmentRunPipelineService {
   }
 
   // =========================================================================
-  // v2.0 真實邏輯：Stage 2 計分 + Stage 3 CR 動態回分 + Stage 4 st4_exchange
+  // v2.0 / F101：Stage 2 計分 + Stage 3 CR 標記 + Stage 3/4 真實比例分派
+  //
+  // F101（AD-E07-29）：Stage 4 由 placeholder（dept[0] + 單一 defaultEmpl + st4_exchange 10%
+  // senior swap）改為 distributeStage3to4 真實比例分派——dept ration（ob_dept_pct）+ empl ration
+  // （ob_empl_set）+ ASSIGNDAY 千分比（computeWorkingDayRatios）。st4_exchange 移除
+  // （I-NO-ST4-EXCHANGE）。此 JS 路徑為 golden oracle，與 PG SQL 下推逐列確定性等價（AC-15 DoD）。
   // =========================================================================
   private async executeV2(
     stage1Cases: Array<{ list: ObListDefinition; pool: ObPoolData[] }>,
@@ -520,20 +566,14 @@ export class AssignmentRunPipelineService {
     runId: string,
   ): Promise<Partial<ObMonthlyRunResult>[]> {
     const allTiers = await this.tierRepo.find();
-    const allEmpl = await this.emplSetRepo.find();
     const allColumns = await this.columnRepo.find();
     const allScores = await this.scoreRepo.find();
     const allLevels = await this.levelRepo.find();
     const allVersions = await this.versionRepo.find({ where: { status: 'active' } });
 
-    // 員工 tier 標記表：透過 ob_empl_set.prod_type='TIER:T1|T2|T3' 暫存
-    // v2.1 升級後改讀 user.metadata（OQ-E07-26）
-    const emplTier = new Map<string, string>();
-    for (const e of allEmpl) {
-      if (e.prod_type?.startsWith('TIER:')) {
-        emplTier.set(e.emplid, e.prod_type.slice(5));
-      }
-    }
+    // F101：ASSIGNDAY 工作日千分比（複用 computeWorkingDayRatios，與 Stage 0 試算同算法，
+    //   I-RUN-EST-01）。每 run 一次查 ob_calendar（依 ym 整月）。
+    const workingDays = await this.loadWorkingDayRatios(ym);
 
     const now = new Date();
     const out: Partial<ObMonthlyRunResult>[] = [];
@@ -582,41 +622,51 @@ export class AssignmentRunPipelineService {
         return { pool: p, score, cardLevel, tierLevel };
       });
 
-      // ===== Stage 4 v2.0：st4_exchange（T1/T2 → T3 10% 轉資深）=====
-      const dept = (
+      // ===== Stage 3/4 F101：真實比例分派（dept ration + empl ration + ASSIGNDAY）=====
+      const deptRations: DeptRation[] = (
         await this.deptPctRepo.find({
           where: { project_workym: ym, list_no: list.list_no },
         })
-      )[0] ?? null;
-      const listEmpls = allEmpl.filter(
-        (e) => e.list_no === list.list_no && (!dept || e.deptid_m === dept.obdeptid),
+      )
+        .map((d) => ({ obdeptid: d.obdeptid, ration: Number(d.ration) }))
+        .filter((d) => d.ration > 0);
+
+      const emplRations: EmplRation[] = (
+        await this.emplSetRepo.find({ where: { list_no: list.list_no } })
+      )
+        .map((e) => ({
+          emplid: e.emplid,
+          deptid_m: e.deptid_m,
+          ration: Number(e.ration),
+        }))
+        .filter((e) => e.ration > 0);
+
+      const rationCases: RationCase[] = scoredPool.map(({ pool: p, tierLevel }) => ({
+        orgno: p.orgno,
+        appl_no: p.appl_no,
+        tier_level: tierLevel,
+        pool_dept_id: p.dept_id,
+      }));
+
+      const { assignments, warnings } = distributeStage3to4(
+        list.list_no,
+        ym,
+        rationCases,
+        deptRations,
+        emplRations,
+        workingDays,
       );
-      const newEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) !== 'T3');
-      const seniorEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) === 'T3');
-      const defaultEmpl = newEmpls[0] ?? listEmpls[0] ?? null;
+      this.rationWarnings.push(...warnings);
 
-      // 分組：T1/T2 案件可被交換；T3 案件不交換
-      const exchangeableIdx = scoredPool
-        .map((s, i) => ({ s, i }))
-        .filter(({ s }) => s.tierLevel === 'T1' || s.tierLevel === 'T2')
-        .map(({ i }) => i);
+      const assignByKey = new Map(
+        assignments.map((a) => [`${a.orgno} ${a.appl_no}`, a]),
+      );
 
-      // 10% 向上取整（保底 1）
-      const exchangeCount =
-        exchangeableIdx.length > 0 && seniorEmpls.length > 0
-          ? Math.max(1, Math.ceil(exchangeableIdx.length * 0.1))
-          : 0;
-      const exchangeSet = new Set(exchangeableIdx.slice(0, exchangeCount));
-
-      for (let i = 0; i < scoredPool.length; i++) {
-        const { pool: p, score, cardLevel, tierLevel } = scoredPool[i];
-
-        // CR 標記：cr_enabled + 該案件在歷史快照中
+      for (const { pool: p, score, cardLevel, tierLevel } of scoredPool) {
+        // CR 標記：cr_enabled + 該案件在歷史快照中（simplified is_cr，被動標記，BR-F101-12）。
         const isCr =
           list.cr_enabled && crApplPerList.has(`${p.orgno}:${p.appl_no}`) ? 'Y' : 'N';
-
-        // 員工分配：交換池 → senior；其餘 → defaultEmpl
-        const empl = exchangeSet.has(i) ? seniorEmpls[0] : defaultEmpl;
+        const a = assignByKey.get(`${p.orgno} ${p.appl_no}`);
 
         out.push({
           run_id: runId,
@@ -629,9 +679,10 @@ export class AssignmentRunPipelineService {
           card_level: cardLevel,
           tier_level: tierLevel,
           is_cr: isCr,
-          dept_id: dept?.obdeptid ?? null,
-          emplid: empl?.emplid ?? null,
-          emplid_deptid: empl?.deptid_m ?? null,
+          dept_id: a?.dept_id ?? null,
+          emplid: a?.emplid ?? null,
+          emplid_deptid: a?.emplid_deptid ?? null,
+          assignday: a?.assignday ?? null,
           result_status: 'PENDING',
           created_at: now,
           updated_at: now,
@@ -641,32 +692,51 @@ export class AssignmentRunPipelineService {
     return out;
   }
 
+  /**
+   * F101 / AD-E07-29 §3.4：載入 ym 整月之工作日千分比（複用 computeWorkingDayRatios）。
+   * 與 Stage 0 試算 calculateDailyEstimate 同算法 + 同 ob_calendar（I-RUN-EST-01）。
+   * 無工作日 → 回空陣列（distributeStage3to4 寫 ASSIGNDAY_NO_CALENDAR_WARN，月跑不中斷）。
+   */
+  private async loadWorkingDayRatios(
+    ym: string,
+  ): Promise<Array<{ casedt: string; ratioPerMille: number }>> {
+    const y = parseInt(ym.slice(0, 4), 10);
+    const m = parseInt(ym.slice(4, 6), 10);
+    const startYmd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`;
+    const endDate = new Date(Date.UTC(y, m, 0));
+    const endYmd = `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-${String(endDate.getUTCDate()).padStart(2, '0')}`;
+    const rows = await this.calendarRepo
+      .createQueryBuilder('c')
+      .select(['c.calendar_date AS calendar_date', 'c.rest_flg AS rest_flg'])
+      .where('c.calendar_date BETWEEN :s AND :e', { s: startYmd, e: endYmd })
+      .getRawMany<{ calendar_date: Date | string; rest_flg: string }>();
+    return computeWorkingDayRatios(rows);
+  }
+
   // =========================================================================
-  // F100 / AD-E07-28 P3：Stage 2~4 SQL 下推（PG 真庫）
+  // F100 / F101：Stage 2~4 SQL 下推（PG 真庫）
+  //
+  // F101（AD-E07-29）：Stage 4 由 placeholder st4_exchange 改為真實比例分派 SQL 下推
+  // （runStage3to4RationSql）——dept ration + empl ration + ASSIGNDAY 千分比。與 JS executeV2
+  // golden oracle 逐列確定性等價（AC-15 DoD）。
   // =========================================================================
   /**
    * 對每份「Stage 1 已 INSERT 列」之 list，以 SQL UPDATE 補 score / card_level / tier_level /
-   * is_cr / dept_id / emplid（消除 re-hydrate heap，I-NOLOAD-01）。計分卡 / 員工編排資料以
-   * repo 查好後傳入純函式群組（stage2to4-sql-executor）。最後讀回 ob_monthly_run_result 有界子集
-   * 供快照 payload（input_list / result）；列已在表內，呼叫端不再 save()。
+   * is_cr（runStage2and3Sql）+ dept_id / emplid / emplid_deptid / assignday（runStage3to4RationSql，
+   * F101 真實比例分派），消除 re-hydrate heap（I-NOLOAD-01）。最後讀回 ob_monthly_run_result
+   * 有界子集供快照 payload（input_list / result）；列已在表內，呼叫端不再 save()。
    */
   private async executeStage2to4Pushdown(
     stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }>,
     ym: string,
     runId: string,
   ): Promise<Partial<ObMonthlyRunResult>[]> {
-    const allEmpl = await this.emplSetRepo.find();
     const allColumns = await this.columnRepo.find();
     const allScores = await this.scoreRepo.find();
     const allVersions = await this.versionRepo.find({ where: { status: 'active' } });
 
-    // 員工 tier 標記（ob_empl_set.prod_type='TIER:T*'，slice(5)，與 executeV2 一致，C-2）。
-    const emplTier = new Map<string, string>();
-    for (const e of allEmpl) {
-      if (e.prod_type?.startsWith('TIER:')) {
-        emplTier.set(e.emplid, e.prod_type.slice(5));
-      }
-    }
+    // F101：ASSIGNDAY 工作日千分比（與 executeV2 / Stage 0 試算同源，I-RUN-EST-01）。
+    const workingDays = await this.loadWorkingDayRatios(ym);
 
     const manager = this.dataSource.manager;
 
@@ -685,22 +755,7 @@ export class AssignmentRunPipelineService {
             )
           : [];
 
-      // Stage 4 員工編排（與 executeV2 一致）：dept = ob_dept_pct 第一筆；
-      //   listEmpls = 該 list + dept 過濾；senior = T3 第一位；default = newEmpls[0] ?? listEmpls[0]。
-      const dept =
-        (
-          await this.deptPctRepo.find({
-            where: { project_workym: ym, list_no: list.list_no },
-          })
-        )[0] ?? null;
-      const listEmpls = allEmpl.filter(
-        (e) => e.list_no === list.list_no && (!dept || e.deptid_m === dept.obdeptid),
-      );
-      const newEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) !== 'T3');
-      const seniorEmpls = listEmpls.filter((e) => emplTier.get(e.emplid) === 'T3');
-      const defaultEmpl = newEmpls[0] ?? listEmpls[0] ?? null;
-      const senior = seniorEmpls[0] ?? null;
-
+      // Stage 2 計分 + Stage 3 CR（runStage2and3Sql 不變）。
       const ctx: Stage2to4ListContext = {
         runId,
         listNo: list.list_no,
@@ -710,14 +765,36 @@ export class AssignmentRunPipelineService {
         scoreRows: allScores,
         crEnabled: !!list.cr_enabled,
         ym,
-        deptId: dept?.obdeptid ?? null,
-        seniorEmplid: senior?.emplid ?? null,
-        seniorDeptid: senior?.deptid_m ?? null,
-        defaultEmplid: defaultEmpl?.emplid ?? null,
-        defaultDeptid: defaultEmpl?.deptid_m ?? null,
       };
+      await runStage2and3Sql(manager, ctx);
 
-      await runStage2to4Sql(manager, ctx);
+      // F101 Stage 3/4/ASSIGNDAY 真實比例分派（取代 st4_exchange placeholder）。
+      const deptRations: DeptRation[] = (
+        await this.deptPctRepo.find({
+          where: { project_workym: ym, list_no: list.list_no },
+        })
+      )
+        .map((d) => ({ obdeptid: d.obdeptid, ration: Number(d.ration) }))
+        .filter((d) => d.ration > 0);
+      const emplRations: EmplRation[] = (
+        await this.emplSetRepo.find({ where: { list_no: list.list_no } })
+      )
+        .map((e) => ({
+          emplid: e.emplid,
+          deptid_m: e.deptid_m,
+          ration: Number(e.ration),
+        }))
+        .filter((e) => e.ration > 0);
+
+      const warnings = await runStage3to4RationSql(manager, {
+        runId,
+        listNo: list.list_no,
+        ym,
+        deptRations,
+        emplRations,
+        workingDays,
+      });
+      this.rationWarnings.push(...warnings);
     }
 
     // 讀回本 run 已下推之列供快照 payload；列已在表內，呼叫端不再 save()。
@@ -752,6 +829,8 @@ export class AssignmentRunPipelineService {
         'r.orgno AS orgno',
         'r.dept_id AS dept_id',
         'r.emplid AS emplid',
+        'r.emplid_deptid AS emplid_deptid',
+        'r.assignday AS assignday',
         'r.score AS score',
         'r.card_level AS card_level',
         'r.tier_level AS tier_level',
@@ -764,6 +843,8 @@ export class AssignmentRunPipelineService {
         orgno: string;
         dept_id: string | null;
         emplid: string | null;
+        emplid_deptid: string | null;
+        assignday: string | null;
         score: number | string | null;
         card_level: string | null;
         tier_level: string | null;
@@ -777,6 +858,8 @@ export class AssignmentRunPipelineService {
       orgno: r.orgno,
       dept_id: r.dept_id,
       emplid: r.emplid,
+      emplid_deptid: r.emplid_deptid,
+      assignday: r.assignday,
       // PG numeric 經 raw 可能回字串 → 正規化為 number | null（snapshot 數值一致）。
       score: r.score === null || r.score === undefined ? null : Number(r.score),
       card_level: r.card_level,

@@ -1,0 +1,80 @@
+%% F101 月跑 Stage 3/4 真實比例分派流程：Stage 2 tier_level 就緒 → Stage 3 三維分組 FLOOR+差額 → Stage 4 員工 FLOOR+兩階段補足 → ASSIGNDAY 千分比+DIVIDE_LEFT；含 DB_TYPE dual-path（PG 下推 / JS oracle）gate 與 fallback 分支。
+flowchart TD
+    START([月跑 worker：list 迴圈]) --> S2DONE[Stage 2 完成<br/>score / card_level / tier_level<br/>已寫入 ob_monthly_run_result]
+
+    S2DONE --> CLEAR[BR-F101-06 重跑清除<br/>同月 T1-T5 之 dept_id / emplid / assignday 清空<br/>is_cr 保留]
+
+    CLEAR --> GATE{DB_TYPE == postgres ?}
+
+    GATE -- "PG（set-based SQL 下推，擴 stage2to4-sql-executor）" --> PG_S3
+    GATE -- "SQLite / JS（executeV2 golden oracle）" --> JS_S3
+
+    %% ===== PG 路徑 =====
+    subgraph PG[PG 路徑：set-based SQL 下推]
+        direction TB
+        PG_S3[Stage 3 dept 分配] --> PG_S4E[Stage 4 員工分配] --> PG_S4A[Stage 4 ASSIGNDAY]
+    end
+
+    %% ===== JS 路徑 =====
+    subgraph JS[JS 路徑：executeV2 golden oracle]
+        direction TB
+        JS_S3[Stage 3 dept 分配] --> JS_S4E[Stage 4 員工分配] --> JS_S4A[Stage 4 ASSIGNDAY]
+    end
+
+    %% ===== Stage 3 演算法（兩路徑等價）=====
+    PG_S3 --> S3ALGO
+    JS_S3 --> S3ALGO
+    subgraph S3ALGO[Stage 3 演算法 BR-F101-01~05]
+        direction TB
+        S3G[三維分組 計件<br/>by 分處 dept_id, list_no, tier_level<br/>tier_level 讀 ob_monthly_run_result] --> S3R{ob_dept_pct<br/>list_no 有 ration>0 ?}
+        S3R -- 否 --> S3WARN[fallback：dept_id=NULL<br/>月跑不中斷<br/>警告 STAGE3_NO_DEPT_RATION]
+        S3R -- 是 --> S3F[各課 FLOOR 分組件數 × ration/100]
+        S3F --> S3D[確定性差額補足<br/>差額=分組件數 − ΣFLOOR<br/>確定性排序前 N 課各 +1]
+        S3D --> S3A[依配額循序指派<br/>確定性鍵取 N 件 → 寫 dept_id]
+    end
+
+    %% ===== Stage 4 員工演算法 =====
+    PG_S4E --> S4EALGO
+    JS_S4E --> S4EALGO
+    S3A --> S4EALGO
+    subgraph S4EALGO[Stage 4 員工演算法 BR-F101-07~11]
+        direction TB
+        S4EG[每 課,Tier 內 by ob_empl_set] --> S4ER{deptid_m<br/>有 ration>0 員工 ?}
+        S4ER -- 否 --> S4EWARN[fallback：emplid=NULL<br/>月跑不中斷<br/>警告 STAGE4_NO_EMPL_WARN]
+        S4ER -- 是 --> S4EF[各員工 FLOOR 課Tier 總數 × ration/100]
+        S4EF --> S4E1[階段① 均攤<br/>ADD_CNT=FLOOR 剩餘/員工數<br/>每員工各 +ADD_CNT]
+        S4E1 --> S4E2[階段② 前 N 各 +1<br/>確定性排序前 N 員工 +1]
+        S4E2 --> S4EW[確定性循序指派<br/>寫 emplid / emplid_deptid]
+    end
+
+    %% ===== Stage 4 ASSIGNDAY 演算法 =====
+    PG_S4A --> S4AALGO
+    JS_S4A --> S4AALGO
+    S4EW --> S4AALGO
+    subgraph S4AALGO[Stage 4 ASSIGNDAY 演算法 BR-F101-13~18]
+        direction TB
+        S4ACAL[複用 calculateDailyEstimate ym<br/>weekday + resolveCalendarDay<br/>不查 ob_assign_set] --> S4AR{ob_calendar<br/>當月有工作日 ?}
+        S4AR -- 否 --> S4AWARN[fallback：assignday=NULL<br/>月跑 completed 非 failed<br/>警告 ASSIGNDAY_NO_CALENDAR_WARN]
+        S4AR -- 是 --> S4AF[per 員工 per casedt<br/>FLOOR 員工件數 × ratioPerMille/1000<br/>最末 casedt 吸收餘額]
+        S4AF --> S4ALEFT[跨 Tier DIVIDE_LEFT round-robin<br/>剩餘案件 SEQ= ASSIGN_ORDER-1 mod workingDays +1]
+        S4ALEFT --> S4AW[寫 assignday]
+    end
+
+    %% ===== 收斂與警告通道 =====
+    S3WARN --> WARNCH
+    S4EWARN --> WARNCH
+    S4AWARN --> WARNCH
+    WARNCH[警告通道 §5 G-2 / OQ-F101-05<br/>預設 assignment_run.report_payload / warning_summary<br/>非擴 assignment_audit_log enum]
+    WARNCH --> SUMMARY[摘要頁 US-083 / F063 顯示警告]
+
+    S4AW --> EQ
+    SUMMARY --> EQ
+    EQ[AC-15 DoD：PG SQL 下推 ↔ JS executeV2<br/>逐 list 等價 dept_id/emplid/emplid_deptid/assignday<br/>確定性使逐列精確比對]
+    EQ --> NEXT([下一 list / 月跑完成])
+
+    classDef warn fill:#fff3cd,stroke:#d39e00,color:#664d03;
+    classDef gate fill:#e2e3ff,stroke:#4b3fb0,color:#1a1a4b;
+    classDef dod fill:#d1e7dd,stroke:#0f5132,color:#0f5132;
+    class S3WARN,S4EWARN,S4AWARN,WARNCH warn;
+    class GATE,S3R,S4ER,S4AR gate;
+    class EQ dod;

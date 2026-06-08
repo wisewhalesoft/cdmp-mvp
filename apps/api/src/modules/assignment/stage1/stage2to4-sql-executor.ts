@@ -26,7 +26,13 @@ import { buildStage2ScoreExpr } from './stage2to4-sql-builder';
 import type { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
 import type { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 
-/** Stage 2~4 下推單一 list 之輸入（呼叫端已查好之計分 / 員工編排資料）。 */
+/**
+ * Stage 2~3 下推單一 list 之輸入（呼叫端已查好之計分資料）。
+ *
+ * F101（AD-E07-29 / I-NO-ST4-EXCHANGE）：Stage 4 分派（dept_id / emplid / emplid_deptid / assignday）
+ * 已移出本 context，改由 stage3to4-ration-sql（runStage3to4RationSql）以真實比例分派處理。
+ * 原 placeholder 之 deptId / seniorEmplid / defaultEmplid 等欄位已廢除（st4_exchange 移除）。
+ */
 export interface Stage2to4ListContext {
   runId: string;
   listNo: string;
@@ -38,14 +44,6 @@ export interface Stage2to4ListContext {
   crEnabled: boolean;
   /** 月跑工作年月（YYYYMM 字串），CR EXISTS 之歷史視窗界（< ym）。 */
   ym: string;
-  /** 部門（ob_dept_pct 第一筆 obdeptid）；null → 無部門過濾。 */
-  deptId: string | null;
-  /** 該部門單一 senior（T3）員工 emplid；null → 無 senior → 不交換。 */
-  seniorEmplid: string | null;
-  seniorDeptid: string | null;
-  /** default 員工（newEmpls[0] ?? listEmpls[0]）。 */
-  defaultEmplid: string | null;
-  defaultDeptid: string | null;
 }
 
 function escape(
@@ -149,72 +147,8 @@ export async function runStage2and3Sql(
   await manager.query(escaped, parameters);
 }
 
-/**
- * Stage 4 st4_exchange：UPDATE ob_monthly_run_result SET dept_id / emplid / emplid_deptid。
- *
- * - 全列預設 dept_id=:deptId、emplid=:defaultEmplid（對齊 JS：交換集外 → defaultEmpl）。
- * - 交換集（T1/T2 案件前 CEIL(n*0.1) 件，保底 1）→ emplid=:seniorEmplid。
- *   僅在有 senior（seniorEmplid 非 null）且有可交換案件時才交換。
- * - PARTITION BY list_no（單名單已由 WHERE 限定）+ deterministic ORDER BY orgno, appl_no（OQ-F100-01）。
- */
-export async function runStage4Sql(
-  manager: EntityManager,
-  ctx: Stage2to4ListContext,
-): Promise<void> {
-  const params: Record<string, unknown> = {
-    runId: ctx.runId,
-    listNo: ctx.listNo,
-    deptId: ctx.deptId,
-    defaultEmplid: ctx.defaultEmplid,
-    defaultDeptid: ctx.defaultDeptid,
-  };
-
-  // ① 全列先設為 default（dept_id / emplid / emplid_deptid）。
-  const defaultSql =
-    `UPDATE ob_monthly_run_result SET ` +
-    `dept_id = :deptId, emplid = :defaultEmplid, emplid_deptid = :defaultDeptid, ` +
-    `updated_at = CURRENT_TIMESTAMP ` +
-    `WHERE run_id = :runId AND list_no = :listNo`;
-  {
-    const [escaped, parameters] = escape(manager, defaultSql, params);
-    await manager.query(escaped, parameters);
-  }
-
-  // ② 無 senior 或無可交換案件 → 不交換（與 JS seniorEmpls.length>0 gate 等價）。
-  if (!ctx.seniorEmplid) return;
-
-  // 交換集：T1/T2 案件以 ROW_NUMBER() 標序，取前 CEIL(count*0.1)（保底 1）件 → senior。
-  // CEIL（非 SP ROUND，OQ-F100-01 對齊 JS Math.ceil + Math.max(1,...)）。
-  const exchangeSql =
-    `WITH exchangeable AS (` +
-    `SELECT run_id, list_no, orgno, appl_no, ` +
-    `ROW_NUMBER() OVER (PARTITION BY list_no ORDER BY orgno, appl_no) AS rn, ` +
-    `COUNT(*) OVER (PARTITION BY list_no) AS total ` +
-    `FROM ob_monthly_run_result ` +
-    `WHERE run_id = :runId AND list_no = :listNo ` +
-    `AND tier_level IN ('T1', 'T2')` +
-    `) ` +
-    `UPDATE ob_monthly_run_result r SET ` +
-    `emplid = :seniorEmplid, emplid_deptid = :seniorDeptid, updated_at = CURRENT_TIMESTAMP ` +
-    `FROM exchangeable e ` +
-    `WHERE r.run_id = e.run_id AND r.list_no = e.list_no ` +
-    `AND r.orgno = e.orgno AND r.appl_no = e.appl_no ` +
-    `AND e.rn <= GREATEST(1, CEIL(e.total * 0.1))`;
-  const exParams: Record<string, unknown> = {
-    runId: ctx.runId,
-    listNo: ctx.listNo,
-    seniorEmplid: ctx.seniorEmplid,
-    seniorDeptid: ctx.seniorDeptid,
-  };
-  const [escaped, parameters] = escape(manager, exchangeSql, exParams);
-  await manager.query(escaped, parameters);
-}
-
-/** Stage 2~4 完整下推（單一 list）：先 Stage 2+3，再 Stage 4（依賴 tier_level）。 */
-export async function runStage2to4Sql(
-  manager: EntityManager,
-  ctx: Stage2to4ListContext,
-): Promise<void> {
-  await runStage2and3Sql(manager, ctx);
-  await runStage4Sql(manager, ctx);
-}
+// F101 / AD-E07-29（I-NO-ST4-EXCHANGE）：原 runStage4Sql（st4_exchange placeholder：dept[0] +
+//   單一 defaultEmpl + 10% T1/T2→senior swap）已移除。Stage 4 真實比例分派（dept ration +
+//   empl ration + ASSIGNDAY）改由 stage3to4-ration-sql 之 runStage3to4RationSql 處理。
+//   原 runStage2to4Sql 包裝（runStage2and3Sql + runStage4Sql）亦移除——呼叫端改為
+//   runStage2and3Sql（本檔）+ runStage3to4RationSql（stage3to4-ration-sql）依序執行。

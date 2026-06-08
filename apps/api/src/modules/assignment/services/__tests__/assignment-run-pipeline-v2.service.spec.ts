@@ -32,6 +32,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 
 const YM = '202605';
 
@@ -75,6 +76,7 @@ async function buildModule(): Promise<Env> {
           ObLevelcardScore,
           ObLevelcardLevel,
           ObTier,
+          ObCalendar,
         ],
         synchronize: true,
       }),
@@ -93,6 +95,7 @@ async function buildModule(): Promise<Env> {
         ObLevelcardScore,
         ObLevelcardLevel,
         ObTier,
+        ObCalendar,
       ]),
     ],
     providers: [AssignmentRunPipelineService],
@@ -527,70 +530,28 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
   });
 
   // -------------------------------------------------------------------------
-  // TC-V2-STAGE4: 真實 st4_exchange（T1/T2 → T3 10% 轉資深）
+  // TC-V2-STAGE4: F101 真實比例分派（取代 st4_exchange；I-NO-ST4-EXCHANGE）
+  //
+  // F101 / AD-E07-29：st4_exchange（T1/T2 → senior 10% swap）已廢除。Stage 4 emplid 純由
+  // ob_empl_set ration 決定；prod_type='TIER:T*' 為被動標記，不再走任何 senior swap 路徑（REG-002/003）。
   // -------------------------------------------------------------------------
-  describe('TC-V2-STAGE4 Stage 4 真實 st4_exchange', () => {
-    it('T1 案件 10% 轉給該部門 T3（資深）員工', async () => {
+  describe('TC-V2-STAGE4 F101 員工比例分派（no st4_exchange）', () => {
+    it('REG-002：senior swap 不發生——T3 員工件數 = 純 ration（非 FLOOR + 10%）', async () => {
       await seedCardType(env.cardTypeRepo, 'T1');
       await seedList(env.listRepo, { listNo: 'OB202605001', cardType: 'T1' });
 
-      // 10 件案件 → T1 階級 → 應 1 件（10%）轉給 T3 員工
+      // 10 件 T1 案件；E_NEW ration=70、S1（T3 資深）ration=30。
       for (let i = 1; i <= 10; i++) {
         await seedPool(env.poolRepo, {
           applNo: `A${String(i).padStart(3, '0')}`, commission: '10000',
         });
       }
       await seedDeptPct(env.deptPctRepo, { listNo: 'OB202605001', deptId: 'D001', ration: '100.0' });
-      // 兩位員工：E_NEW (T1 新人) 與 E_SR (T3 資深)
       await seedEmpl(env.emplSetRepo, {
-        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_NEW', ration: '100.0',
+        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_NEW', ration: '70.0',
       });
       await seedEmpl(env.emplSetRepo, {
-        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_SR', ration: '0.0',
-      });
-
-      await seedVersion(env.versionRepo, { cardType: 'T1', cardVersion: 1 });
-      // 全部案件 score=0（不需 column/score）→ card_level='A'
-      await seedLevel(env.levelRepo, {
-        cardType: 'T1', cardVersion: 1, scoreS: 0, scoreE: 99999, cardLevel: 'A',
-      });
-      // A → T1
-      await seedTier(env.tierRepo, { cardType: 'T1', cardLevel: 'A', tierLevel: 'T1' });
-
-      // st4_exchange 設定：T1 → 該部門 T3 員工
-      // 透過 employee_tier_map 提供（v2.0 用 ob_empl_set 之 extension：先用 prod_type 暫存 tier 標記）
-      // 為了 v2.0 測試而設計：列出 E_SR 為 T3 員工（service 內查 emplToTier map）
-      await env.ds.query(
-        `UPDATE ob_empl_set SET prod_type = 'TIER:T3' WHERE emplid = 'E_SR'`,
-      );
-      await env.ds.query(
-        `UPDATE ob_empl_set SET prod_type = 'TIER:T1' WHERE emplid = 'E_NEW'`,
-      );
-
-      const run = await seedRun(env.runRepo);
-      await env.service.runPipeline(run.run_id, YM);
-
-      const rows = await env.resultRepo.find({ where: { list_no: 'OB202605001' } });
-      // 10 件案件中應有 1 件分給 E_SR（T3），9 件分給 E_NEW
-      const srCount = rows.filter((r) => r.emplid === 'E_SR').length;
-      const newCount = rows.filter((r) => r.emplid === 'E_NEW').length;
-      expect(srCount).toBe(1);
-      expect(newCount).toBe(9);
-    });
-
-    it('T1 / T2 案件不足 10 件時 — 至少轉 1 件給資深（保底）', async () => {
-      await seedCardType(env.cardTypeRepo, 'T1');
-      await seedList(env.listRepo, { listNo: 'OB202605001', cardType: 'T1' });
-      // 5 件 T1 案件 → 10% = 0.5，向上取整為 1 件
-      for (let i = 1; i <= 5; i++) {
-        await seedPool(env.poolRepo, { applNo: `A${String(i).padStart(3, '0')}` });
-      }
-      await seedDeptPct(env.deptPctRepo, { listNo: 'OB202605001', deptId: 'D001', ration: '100.0' });
-      await seedEmpl(env.emplSetRepo, {
-        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_NEW', ration: '100.0',
-      });
-      await seedEmpl(env.emplSetRepo, {
-        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_SR', ration: '0.0',
+        listNo: 'OB202605001', deptId: 'D001', emplid: 'S1', ration: '30.0',
       });
 
       await seedVersion(env.versionRepo, { cardType: 'T1', cardVersion: 1 });
@@ -598,49 +559,43 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
         cardType: 'T1', cardVersion: 1, scoreS: 0, scoreE: 99999, cardLevel: 'A',
       });
       await seedTier(env.tierRepo, { cardType: 'T1', cardLevel: 'A', tierLevel: 'T1' });
-
-      await env.ds.query(`UPDATE ob_empl_set SET prod_type = 'TIER:T3' WHERE emplid = 'E_SR'`);
+      // prod_type 被動標記（不影響 ration）。
+      await env.ds.query(`UPDATE ob_empl_set SET prod_type = 'TIER:T3' WHERE emplid = 'S1'`);
       await env.ds.query(`UPDATE ob_empl_set SET prod_type = 'TIER:T1' WHERE emplid = 'E_NEW'`);
 
       const run = await seedRun(env.runRepo);
       await env.service.runPipeline(run.run_id, YM);
 
       const rows = await env.resultRepo.find({ where: { list_no: 'OB202605001' } });
-      const srCount = rows.filter((r) => r.emplid === 'E_SR').length;
-      expect(srCount).toBeGreaterThanOrEqual(1);
+      // 純 ration：E_NEW=FLOOR(10×70/100)=7、S1=FLOOR(10×30/100)=3，diff=0。
+      // 若 st4_exchange 仍在，S1（T3）會額外多拿 10% swap → 件數 ≠ 3。
+      expect(rows.filter((r) => r.emplid === 'E_NEW').length).toBe(7);
+      expect(rows.filter((r) => r.emplid === 'S1').length).toBe(3);
     });
 
-    it('T3 案件不轉（已是資深）', async () => {
+    it('REG-004：is_cr 值不被 Stage 4 修改（被動標記）', async () => {
       await seedCardType(env.cardTypeRepo, 'T1');
       await seedList(env.listRepo, { listNo: 'OB202605001', cardType: 'T1' });
-      for (let i = 1; i <= 10; i++) {
+      for (let i = 1; i <= 4; i++) {
         await seedPool(env.poolRepo, { applNo: `A${String(i).padStart(3, '0')}` });
       }
       await seedDeptPct(env.deptPctRepo, { listNo: 'OB202605001', deptId: 'D001', ration: '100.0' });
       await seedEmpl(env.emplSetRepo, {
-        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_NEW', ration: '100.0',
+        listNo: 'OB202605001', deptId: 'D001', emplid: 'E1', ration: '100.0',
       });
-      await seedEmpl(env.emplSetRepo, {
-        listNo: 'OB202605001', deptId: 'D001', emplid: 'E_SR', ration: '0.0',
-      });
-
       await seedVersion(env.versionRepo, { cardType: 'T1', cardVersion: 1 });
       await seedLevel(env.levelRepo, {
-        cardType: 'T1', cardVersion: 1, scoreS: 0, scoreE: 99999, cardLevel: 'C',
+        cardType: 'T1', cardVersion: 1, scoreS: 0, scoreE: 99999, cardLevel: 'A',
       });
-      // C → T3（所有案件均為 T3 = 資深 → 不應轉）
-      await seedTier(env.tierRepo, { cardType: 'T1', cardLevel: 'C', tierLevel: 'T3' });
-
-      await env.ds.query(`UPDATE ob_empl_set SET prod_type = 'TIER:T3' WHERE emplid = 'E_SR'`);
-      await env.ds.query(`UPDATE ob_empl_set SET prod_type = 'TIER:T1' WHERE emplid = 'E_NEW'`);
+      await seedTier(env.tierRepo, { cardType: 'T1', cardLevel: 'A', tierLevel: 'T1' });
 
       const run = await seedRun(env.runRepo);
       await env.service.runPipeline(run.run_id, YM);
 
       const rows = await env.resultRepo.find({ where: { list_no: 'OB202605001' } });
-      // T3 案件不轉，但全部 ration 100% 在 E_NEW，故全部給 E_NEW
-      const srCount = rows.filter((r) => r.emplid === 'E_SR').length;
-      expect(srCount).toBe(0);
+      // cr_enabled=false → is_cr 全 'N'（Stage 4 不改）；emplid 全 E1（ration 100%）。
+      expect(rows.every((r) => r.is_cr === 'N')).toBe(true);
+      expect(rows.every((r) => r.emplid === 'E1')).toBe(true);
     });
   });
 

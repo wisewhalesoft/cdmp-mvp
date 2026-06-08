@@ -45,7 +45,6 @@ import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity'
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
 import {
-  runStage2to4Sql,
   runStage2and3Sql,
   type Stage2to4ListContext,
 } from '../stage2to4-sql-executor';
@@ -299,7 +298,13 @@ async function seedStandardCardT1(opts: { withCustomerCore?: boolean } = {}): Pr
   await seedTier({ cardType: 'T1', cardLevel: null, tierLevel: 'T3' });
 }
 
-/** 跑 Stage 2~4 下推（單一 list ctx）。 */
+/**
+ * 跑 Stage 2+3 下推（單一 list ctx）。
+ *
+ * F101（I-NO-ST4-EXCHANGE）：Stage 4 st4_exchange placeholder 已移除；F100 此 spec 之計分 /
+ * level / tier / CR 驗證僅需 runStage2and3Sql（dept_id / emplid 分派由 F101 stage3to4-ration 負責，
+ * 另由 stage3to4-ration-sql.pg.spec.ts 覆蓋）。
+ */
 async function pushdown(ctx: Partial<Stage2to4ListContext> & { listNo: string }): Promise<void> {
   const full: Stage2to4ListContext = {
     runId: RUN_ID,
@@ -309,22 +314,15 @@ async function pushdown(ctx: Partial<Stage2to4ListContext> & { listNo: string })
     scoreRows: [],
     crEnabled: false,
     ym: YM,
-    deptId: 'D001',
-    seniorEmplid: null,
-    seniorDeptid: null,
-    defaultEmplid: 'E_NEW',
-    defaultDeptid: 'D001',
     ...ctx,
   };
-  await runStage2to4Sql(manager, full);
+  await runStage2and3Sql(manager, full);
 }
 
-/** 以 active columns / scores 自 DB 載入並跑 Stage 2~4（標準卡）。 */
+/** 以 active columns / scores 自 DB 載入並跑 Stage 2+3（標準卡）。 */
 async function pushdownStandard(opts: {
   listNo: string;
   crEnabled?: boolean;
-  seniorEmplid?: string | null;
-  defaultEmplid?: string | null;
 }): Promise<void> {
   const activeColumns = await columnRepo.find({
     where: { card_type: 'T1', card_version: 1, status: 'active' },
@@ -337,9 +335,6 @@ async function pushdownStandard(opts: {
     activeColumns,
     scoreRows,
     crEnabled: opts.crEnabled ?? false,
-    seniorEmplid: opts.seniorEmplid ?? null,
-    seniorDeptid: opts.seniorEmplid ? 'D001' : null,
-    defaultEmplid: opts.defaultEmplid ?? 'E_NEW',
   });
 }
 
@@ -759,116 +754,8 @@ describe('F100 CR — Stage 3 EXISTS（PG 真庫）', () => {
   });
 });
 
-// ===========================================================================
-// EXCH — Stage 4 st4_exchange 視窗函式
-// ===========================================================================
-describe('F100 EXCH — Stage 4 st4_exchange（PG 真庫）', () => {
-  /** seed n 件 tier_level=T1 案件（score→A→T1）。 */
-  async function seedExchangeCases(opts: {
-    listNo: string;
-    n: number;
-    tierLevel?: 'T1' | 'T2' | 'T3';
-  }): Promise<void> {
-    const cardLevelByTier = { T1: 'A', T2: 'B', T3: 'C' } as const;
-    const tl = opts.tierLevel ?? 'T1';
-    await seedVersion('T1', 1);
-    await seedLevel({ cardType: 'T1', cardVersion: 1, scoreS: 0, scoreE: 99999, cardLevel: cardLevelByTier[tl] });
-    await seedTier({ cardType: 'T1', cardLevel: cardLevelByTier[tl], tierLevel: tl });
-    for (let i = 1; i <= opts.n; i++) {
-      await seedCase({ applNo: `X${String(i).padStart(3, '0')}`, listNo: opts.listNo, monthCnt: 1 });
-    }
-  }
-
-  async function pushExchange(opts: {
-    listNo: string;
-    hasSenior: boolean;
-  }): Promise<void> {
-    const activeColumns = await columnRepo.find({
-      where: { card_type: 'T1', card_version: 1, status: 'active' },
-    });
-    const scoreRows = await scoreRepo.find({ where: { card_type: 'T1', card_version: 1 } });
-    await pushdown({
-      listNo: opts.listNo,
-      activeColumns,
-      scoreRows,
-      seniorEmplid: opts.hasSenior ? 'E_SR' : null,
-      seniorDeptid: opts.hasSenior ? 'D001' : null,
-      defaultEmplid: 'E_NEW',
-    });
-  }
-
-  it('EXCH-002：無 senior → 0 交換（全 default）', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_EX2';
-    await seedExchangeCases({ listNo: L, n: 20 });
-    await pushExchange({ listNo: L, hasSenior: false });
-    const rows = await resultRepo.find({ where: { run_id: RUN_ID, list_no: L } });
-    expect(rows.every((r) => r.emplid === 'E_NEW')).toBe(true);
-  });
-
-  it('EXCH-003：20 件 → CEIL(2) 件交換，前 2 件（ORDER BY orgno,appl_no）', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_EX3';
-    await seedExchangeCases({ listNo: L, n: 20 });
-    await pushExchange({ listNo: L, hasSenior: true });
-    const rows = await resultRepo.find({ where: { run_id: RUN_ID, list_no: L } });
-    const sr = rows.filter((r) => r.emplid === 'E_SR').map((r) => r.appl_no).sort();
-    expect(sr).toEqual(['X001', 'X002']); // 前 2 件
-  });
-
-  it('EXCH-004：5 件 → 保底 1 件', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_EX4';
-    await seedExchangeCases({ listNo: L, n: 5 });
-    await pushExchange({ listNo: L, hasSenior: true });
-    const rows = await resultRepo.find({ where: { run_id: RUN_ID, list_no: L } });
-    expect(rows.filter((r) => r.emplid === 'E_SR').length).toBe(1);
-  });
-
-  it('EXCH-005：10 件 → CEIL(1.0)=1', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_EX5';
-    await seedExchangeCases({ listNo: L, n: 10 });
-    await pushExchange({ listNo: L, hasSenior: true });
-    const rows = await resultRepo.find({ where: { run_id: RUN_ID, list_no: L } });
-    expect(rows.filter((r) => r.emplid === 'E_SR').length).toBe(1);
-  });
-
-  it('EXCH-006：11 件 → CEIL(1.1)=2（攔截 ROUND/FLOOR）', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_EX6';
-    await seedExchangeCases({ listNo: L, n: 11 });
-    await pushExchange({ listNo: L, hasSenior: true });
-    const rows = await resultRepo.find({ where: { run_id: RUN_ID, list_no: L } });
-    expect(rows.filter((r) => r.emplid === 'E_SR').length).toBe(2);
-  });
-
-  it('EXCH-001：全 T3 案件 → 0 交換（T3 不可被交換）', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_EX1';
-    await seedExchangeCases({ listNo: L, n: 10, tierLevel: 'T3' });
-    await pushExchange({ listNo: L, hasSenior: true });
-    const rows = await resultRepo.find({ where: { run_id: RUN_ID, list_no: L } });
-    expect(rows.filter((r) => r.emplid === 'E_SR').length).toBe(0);
-  });
-
-  it('EXCH-008：跨 2 名單各 CEIL(10×0.1)=1（partition by list_no）', async (ctx) => {
-    ensurePg(ctx);
-    const LA = 'L_EX8A';
-    const LB = 'L_EX8B';
-    await seedVersion('T1', 1);
-    await seedLevel({ cardType: 'T1', cardVersion: 1, scoreS: 0, scoreE: 99999, cardLevel: 'A' });
-    await seedTier({ cardType: 'T1', cardLevel: 'A', tierLevel: 'T1' });
-    for (let i = 1; i <= 10; i++) await seedCase({ applNo: `AA${i}`, listNo: LA, monthCnt: 1 });
-    for (let i = 1; i <= 10; i++) await seedCase({ applNo: `BB${i}`, listNo: LB, monthCnt: 1 });
-    await pushExchange({ listNo: LA, hasSenior: true });
-    await pushExchange({ listNo: LB, hasSenior: true });
-    const rowsA = await resultRepo.find({ where: { run_id: RUN_ID, list_no: LA } });
-    const rowsB = await resultRepo.find({ where: { run_id: RUN_ID, list_no: LB } });
-    expect(rowsA.filter((r) => r.emplid === 'E_SR').length).toBe(1);
-    expect(rowsB.filter((r) => r.emplid === 'E_SR').length).toBe(1);
-  });
-});
+// F100 EXCH（Stage 4 st4_exchange 視窗函式）已隨 F101 / AD-E07-29 I-NO-ST4-EXCHANGE 移除——
+// senior swap 不再執行，Stage 4 分派改由 F101 真實比例分派（stage3to4-ration-sql.pg.spec.ts 覆蓋）。
 
 // ===========================================================================
 // EQ — SQL 版逐列 == 升級後手算預期（P3 DoD，AC-8）
@@ -930,12 +817,10 @@ describe('F100 — runStage2and3Sql 僅動計分欄位', () => {
     await runStage2and3Sql(manager, {
       runId: RUN_ID, listNo: L, cardType: 'T1', cardVersion: 1,
       activeColumns, scoreRows, crEnabled: false, ym: YM,
-      deptId: 'D001', seniorEmplid: null, seniorDeptid: null,
-      defaultEmplid: 'E_NEW', defaultDeptid: 'D001',
     });
     const r = await getRow('SEP1', L);
     expect(r.score).toBe(15);
-    expect(r.dept_id).toBeNull(); // Stage 4 尚未跑
+    expect(r.dept_id).toBeNull(); // Stage 4（F101 ration）尚未跑
     expect(r.emplid).toBeNull();
   });
 });

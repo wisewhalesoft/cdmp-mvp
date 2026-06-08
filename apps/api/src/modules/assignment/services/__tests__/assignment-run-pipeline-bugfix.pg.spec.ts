@@ -45,6 +45,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { MatchType } from '@/modules/assignment-scoring/dto/match-type.enum';
 
 const PG = {
@@ -62,6 +63,7 @@ const ENTITIES = [
   AssignmentRun, AssignmentRunSnapshot, ObListDefinition, ObPoolData,
   ObPoolDataList, ObMonthlyRunResult, ObDeptPct, ObEmplSet, ObCardType,
   ObLevelcardVersion, ObLevelcardColumn, ObLevelcardScore, ObLevelcardLevel, ObTier,
+  ObCalendar,
 ];
 
 function pgPortReachable(timeoutMs = 1000): Promise<boolean> {

@@ -33,6 +33,7 @@ import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entit
 import { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.entity';
 import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity';
 import { ObTier } from '@/database/entities/ob-tier.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 
 const YM = '202605';
 
@@ -77,6 +78,7 @@ async function buildModule(): Promise<Env> {
           ObLevelcardScore,
           ObLevelcardLevel,
           ObTier,
+          ObCalendar,
         ],
         synchronize: true,
       }),
@@ -95,6 +97,7 @@ async function buildModule(): Promise<Env> {
         ObLevelcardScore,
         ObLevelcardLevel,
         ObTier,
+        ObCalendar,
       ]),
     ],
     providers: [AssignmentRunPipelineService],

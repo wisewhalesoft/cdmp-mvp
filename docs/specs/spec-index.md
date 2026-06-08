@@ -1,13 +1,22 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.9"
-date: 2026-06-02
+version: "3.10"
+date: 2026-06-04
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.10 / 2026-06-04 / F101 月跑 Stage 3/4 真實比例分派（Bug C：OB202606001 全員 `emplid=NULL`）**：接續 AD-E07-28 系列（F098/F099/F100），依 5 個已核可 user story 新建 1 個 feature spec，**取代 F100 之 placeholder Stage 4**（僅取 `ob_dept_pct` 第一列電銷課 + 單一 `defaultEmpl`，全案件指向同一員工 → 該課無員工時全員 `emplid=NULL`）。本輪變更檔案：
+> - **新建 v1.0**：[F101-stage3-4-proportional-assignment.md](features/F101-stage3-4-proportional-assignment.md)（Stage 3 三維分組（分處 `dept_id`, `list_no`, `tier_level`）`FLOOR(件數×ob_dept_pct.ration/100)`+確定性差額補足 → 寫 `dept_id`；Stage 4 員工 `FLOOR(×ob_empl_set.ration/100)`+兩階段補足（均攤 `ADD_CNT` + 前 N 各 +1）→ 寫 `emplid`/`emplid_deptid`；ASSIGNDAY 複用 [F049](features/F049-stage0-daily-estimate.md) `calculateDailyEstimate(ym)` 千分比+最末 casedt 吸收餘額+跨 Tier `DIVIDE_LEFT` round-robin → 寫 `assignday`，estimate≡run **I-RUN-EST-01**；統一 **T1–T5 單一演算法**（migration `1711360000162` 收斂，無變體分流）；**simplified is_cr=被動標記**（無 legacy CR 優先 pre-assign / 無 CR 超額移除）；**全程確定性取代 `NEWID()`**（US-150；align Stage 1 OQ-06）；`ob_assign_set` vestigial 不引用（US-151）；dual-path gate=`DB_TYPE='postgres'`（PG SQL 下推延伸 stage2to4 builder/executor ／ SQLite=`executeV2` golden oracle）；**手算 oracle 等效性（AC-13/14）+ PG 真庫 JS↔SQL 逐列等價（AC-15）= DoD**；無新錯誤碼）
+> - **新建圖表**：[diagrams/F101-stage3-4-proportional-flow.mmd](diagrams/F101-stage3-4-proportional-flow.mmd)（Stage 2 tier_level 就緒 → Stage 3 三維分組 FLOOR+確定性差額 → Stage 4 員工 FLOOR+兩階段補足 → ASSIGNDAY 千分比+DIVIDE_LEFT；DB_TYPE dual-path PG/JS gate + 三 fallback 分支 + 警告通道）
+> - **SP ground truth（已 UTF-16LE 解碼）**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（Stage 3 dept→電銷課比例基底）、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`（Stage 4 員工 + ASSIGNDAY 基底，STEP 10–13）
+> - **⚠️ Production 影響**：F101 改變各名單 `dept_id`/`emplid`/`emplid_deptid`/`assignday` 真實分佈（placeholder 單一 default → 比例分派）；**JS↔SQL PG 真庫逐列等價測試為 DoD，未通過不得 deploy**；deploy 前須 [F067](features/F067-compare-run-results.md) 差異報告 + 業務知會驗收（NFR-005）
+> - **2 個 schema gap（spec-writer flag，交 system-architect）**：(G-1) `ob_pool_data` **無 `tier_level` 欄** → Stage 3 分組之 tier_level 須讀 `ob_monthly_run_result`（Stage 2 之後），分處=`ob_pool_data.dept_id`；(G-2) `assignment_audit_log.action` 為固定 union enum、**不含** story 自創的 `STAGE3_NO_DEPT_RATION`/`STAGE4_NO_EMPL_WARN`/`ASSIGNDAY_NO_CALENDAR_WARN` → 警告預設改走 `assignment_run.report_payload`/`warning_summary`（US-083/F063 摘要頁既有機制），不擴 enum（OQ-F101-05）
+> - **5 個 Open Question（保留 OPEN，交 system-architect 裁示，spec-writer 不自決）**：OQ-F101-01（確定性排序鍵各粒度，align OQ-06）／OQ-F101-02（**F101 ration 分派 vs F100 st4_exchange 10% senior-swap 交互/取代**，關鍵）／OQ-F101-03（`ob_assign_set` 是否退役）／OQ-F101-04（單一 transaction vs per-list 冪等，複用 I-IDEM-01）／OQ-F101-05（警告落點 report_payload vs 擴 audit enum+migration）
+> - **刻意未動（邊界）**：architecture-spec.md / AD 文件（system-architect 範疇）；data-model.md（無新 entity 欄位；`ob_monthly_run_result` 既有）；code / test / migration / docker（tdd-implementation / test-designer / DevOps 範疇）；F100 Stage 2 計分 / Stage 3 CR `EXISTS` / score→level→tier（F101 只換 dept / empl / ASSIGNDAY 分派）
+>
 > **v3.9 / 2026-06-02 / AD-E07-28 月跑執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）**：依 [architecture-spec.md §5.13 + AD-E07-28 v3.1](architecture-spec.md)（system-architect 維護，status: proposed）新建 3 個 feature spec，將月跑執行模型由「cdmp-api 同程序 `setImmediate` 背景跑」重構為「pg-boss 入列 → 獨立 cdmp-worker 容器消費 → Stage 1~4 set-based SQL `INSERT…SELECT`」，分 P1/P2/P3 三階段交付。本輪變更檔案：
 > - **新建 v1.0**：[F098-monthly-run-worker-extraction.md](features/F098-monthly-run-worker-extraction.md)（**P1** — Worker 抽離：pg-boss 入列 + `cdmp-worker` 容器 + `triggerRun` 改入列立即回 202 + `CancellationPoller`（補齊 cancelRun「背景不會真停」缺陷）+ `OrphanReaper`（殭屍 running run 回收）；解 F1 event loop 阻塞；I-TRIGGER-01）、[F099-stage1-sql-pushdown.md](features/F099-stage1-sql-pushdown.md)（**P2** — Stage 1 SQL 下推：`buildStage1Sql` 單一 core，run（`INSERT…SELECT`）與 estimate（`SELECT COUNT(*)`）共用，**I-RUN-EST-01**；year-above 保留應用層 filter（選項 C，**I-PORT-01**）；**JS↔SQL 逐 list 等價測試為 P2 DoD**，廢除 RGv2-005 / SDv2-* JS-pin guard；解 F2 Stage 1）、[F100-stage2-4-sql-pushdown-scoring.md](features/F100-stage2-4-sql-pushdown-scoring.md)（**P3** — Stage 2~4 SQL 下推 + v2 真實計分引擎：`ob_levelcard_*` `SUM(CASE…)` + `customer_core` LEFT JOIN 補完、CR `EXISTS`、st4_exchange `ROW_NUMBER()+CEIL(×0.1)`；**OQ-06 排序鍵已解**；JS↔SQL 逐列等價測試為 P3 DoD；解 F2 全）
 > - **新建圖表**：[diagrams/F098-worker-extraction-flow.mmd](diagrams/F098-worker-extraction-flow.mmd)（run 業務狀態機含取消 / orphan 轉移）、[diagrams/F099-stage1-sql-pushdown-flow.mmd](diagrams/F099-stage1-sql-pushdown-flow.mmd)（buildStage1Sql 單一 core 兩種外層包裝）、[diagrams/F100-stage2-4-pushdown-flow.mmd](diagrams/F100-stage2-4-pushdown-flow.mmd)（Stage 2~4 下推 + OQ-06 排序鍵 + DoD 門檻）
@@ -112,9 +121,9 @@ status: Draft
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 47 |
-| Mermaid 圖表 | 42 |
-| **總計** | **143** |
+| Feature 文件（E07） | 48 |
+| Mermaid 圖表 | 43 |
+| **總計** | **145** |
 
 ---
 
@@ -320,6 +329,7 @@ status: Draft
 | **F098** | [**F098-monthly-run-worker-extraction.md**](features/F098-monthly-run-worker-extraction.md) | **P1 — 月跑 Worker 抽離**（pg-boss 入列 + `cdmp-worker` 容器 + `triggerRun` 改入列立即回 202 + `CancellationPoller` 補齊取消 + `OrphanReaper` 殭屍回收；解 F1；retryLimit=0 / 單 worker 序列化 / 不新增 orphan 欄位；I-TRIGGER-01；無 HTTP 錯誤碼） | AD-E07-28 P1 | P0-MVP（**v1.0 新增**）|
 | **F099** | [**F099-stage1-sql-pushdown.md**](features/F099-stage1-sql-pushdown.md) | **P2 — Stage 1 SQL 下推**（`buildStage1Sql` 單一 core，run `INSERT…SELECT` ／ estimate `SELECT COUNT(*)` 共用 **I-RUN-EST-01**；**四特例規則（詐騙白牌 / 機車期中 / 期中小資 / year-above）全 SQL 下推、無應用層 filter（OQ-AD28-03=選項 A，2026-06-02 拍板）** + month_cnt + 去重 anti-join；year-above 數值化 PG 真庫驗收 **I-PORT-01**（CI 必起 Postgres）；冪等清理 **I-IDEM-01**；**JS↔SQL 逐 list 等價測試 = P2 DoD**，廢除 RGv2-005 / SDv2-*；解 F2 Stage 1；無新錯誤碼） | AD-E07-28 P2 / 修訂 AD-E07-22/23/25 | P0-MVP（**v1.0 新增**）|
 | **F100** | [**F100-stage2-4-sql-pushdown-scoring.md**](features/F100-stage2-4-sql-pushdown-scoring.md) | **P3 — Stage 2~4 SQL 下推 + v2 真實計分引擎**（`ob_levelcard_*` 區間/類別 `SUM(CASE…)` + `customer_core` LEFT JOIN 補完 + CR `EXISTS` + st4_exchange `ROW_NUMBER()+CEIL(×0.1)`；**OQ-06 排序鍵已解**：SP=隨機 NEWID()→採 deterministic `ORDER BY orgno,appl_no`；**OQ-F100-01 已解（2026-06-02）= 對齊現行 JS 簡化版**（`PARTITION BY list_no` + 單一 senior；SP 主管↔專員配對交換 out-of-scope、不復刻）；JS↔SQL 逐列等價 = P3 DoD；含計分簡化版→真實版升級須業務知會；解 F2 全；無新錯誤碼） | AD-E07-28 P3 / OQ-AD28-06（已解） | P0-MVP（**v1.0 新增**）|
+| **F101** | [**F101-stage3-4-proportional-assignment.md**](features/F101-stage3-4-proportional-assignment.md) | **月跑 Stage 3/4 真實比例分派**（取代 F100 placeholder Stage 4＝dept[0]+單一 defaultEmpl，修 OB202606001 全員 `emplid=NULL`／Bug C）：Stage 3 三維分組（分處 dept_id, list_no, tier_level）`FLOOR(件數×ob_dept_pct.ration/100)`+確定性差額；Stage 4 員工 `FLOOR(×ob_empl_set.ration/100)`+兩階段補足（均攤 ADD_CNT + 前 N 各 +1）；ASSIGNDAY 複用 `calculateDailyEstimate(ym)` 千分比+最末吸收+DIVIDE_LEFT round-robin（estimate≡run，I-RUN-EST-01）；統一 T1–T5 單一演算法（無變體分流）；simplified is_cr=被動標記（無 CR 優先/超額移除）；**全確定性取代 NEWID()**（手算 oracle AC-13/14 + JS↔SQL 逐列等價 = DoD AC-15）；**2 schema gap flag**（tier_level 來源/警告碼通道）+ **5 OQ 待架構師裁示**（確定性鍵/vs F100 st4_exchange 交互/ob_assign_set 退役/冪等粒度/警告落點）；無新錯誤碼） | US-145/146/149/150/151 | P0-MVP（**v1.0 新增**）|
 
 #### M05 快照歷史
 
@@ -399,6 +409,7 @@ status: Draft
 | [diagrams/F098-worker-extraction-flow.mmd](diagrams/F098-worker-extraction-flow.mmd) | **F098 v1.0 月跑 Worker 抽離 run 業務狀態機（pending→running→completed/failed，含 cancelRun / OrphanReaper 轉移來源 + I-TRIGGER-01）** | State | F098, F061 |
 | [diagrams/F099-stage1-sql-pushdown-flow.mmd](diagrams/F099-stage1-sql-pushdown-flow.mmd) | **F099 v1.0 Stage 1 SQL 下推：buildStage1Sql 單一 core 之 run / estimate 兩種外層包裝（I-RUN-EST-01）+ 四特例規則含 year-above 全 SQL 下推（選項 A，無應用層 filter）+ I-IDEM-01** | Flowchart | F099, F049, F091, F094 |
 | [diagrams/F100-stage2-4-pushdown-flow.mmd](diagrams/F100-stage2-4-pushdown-flow.mmd) | **F100 v1.0 Stage 2~4 SQL 下推 + v2 計分引擎（SUM(CASE) + customer_core LEFT JOIN + CR EXISTS + st4_exchange ROW_NUMBER；OQ-06 排序鍵；PG 真庫 JS↔SQL 等價 DoD 門檻）** | Flowchart | F100, F036, F067 |
+| [diagrams/F101-stage3-4-proportional-flow.mmd](diagrams/F101-stage3-4-proportional-flow.mmd) | **F101 v1.0 月跑 Stage 3/4 真實比例分派（Stage 2 tier_level 就緒 → Stage 3 三維分組 FLOOR+確定性差額 → Stage 4 員工 FLOOR+兩階段補足 → ASSIGNDAY 千分比+DIVIDE_LEFT；DB_TYPE dual-path PG 下推/JS oracle gate + 三 fallback 分支 + 警告通道 report_payload + JS↔SQL 等價 DoD）** | Flowchart | F101, F100, F049, F067 |
 
 ### 狀態圖
 
@@ -465,9 +476,9 @@ status: Draft
 F001, F002, F003, F004, F005, F006, F008, F009, F010, F011, F012, F013, F015, F017, F018, F019, F020, F021, F022, F023, F026, F027, F028, F029, F030, F031, F032, F036, F037, F038, F039, F042, F043, F044, F045, F046, F047
 
 **E07 新增**（42 個，2026-05-14 M02 計分設定擴充 +4，2026-05-15 M07 角色 + M06 進階 +4，2026-05-15 重構批次 2 +1，2026-05-15 重構批次 3 +1 含 F059 標 DEPRECATED，2026-05-15 重構批次 4 +3 含 F060 標 DEPRECATED，2026-05-15 重構批次 5 +4 含 F058 標 DEPRECATED，2026-05-15 重構批次 6 +4 M03c/d）：
-F048, F049, F050（v2.0.1）, F051（v2.0）, F052（v2.0）, F053, F054, F055, F056, F057（v1.1）, ~~F058（v2.0 DEPRECATED）~~, ~~F059（v2.0 DEPRECATED）~~, ~~F060（v2.0 DEPRECATED）~~, F061（v1.2）, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076（v1.1）, F077, **F078**, **F079（v1.1）**, **F080（v1.1）**, **F081（v1.1）**, **F082（v1.3）**, **F083（v1.2）**, **F084（v1.2）**, **F085（v1.2）**, **F086（v1.1）**, **F087（v1.1）**, **F088（v1.1）**, **F089（v1.1）**, **F098（v1.0 / AD-E07-28 P1）**, **F099（v1.0 / AD-E07-28 P2）**, **F100（v1.0 / AD-E07-28 P3）**
+F048, F049, F050（v2.0.1）, F051（v2.0）, F052（v2.0）, F053, F054, F055, F056, F057（v1.1）, ~~F058（v2.0 DEPRECATED）~~, ~~F059（v2.0 DEPRECATED）~~, ~~F060（v2.0 DEPRECATED）~~, F061（v1.2）, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076（v1.1）, F077, **F078**, **F079（v1.1）**, **F080（v1.1）**, **F081（v1.1）**, **F082（v1.3）**, **F083（v1.2）**, **F084（v1.2）**, **F085（v1.2）**, **F086（v1.1）**, **F087（v1.1）**, **F088（v1.1）**, **F089（v1.1）**, **F098（v1.0 / AD-E07-28 P1）**, **F099（v1.0 / AD-E07-28 P2）**, **F100（v1.0 / AD-E07-28 P3）**, **F101（v1.0 / Stage 3/4 真實比例分派）**
 
-**P0-MVP 總計：78 個 Feature**（37 既有 + 42 E07 新增 - 1 既有 F058 計入但已標 DEPRECATED 不再實作；實際新建構數 37 既有 + 41 E07 = 78。F058 / F059 / F060 標 DEPRECATED 之既有計算保留於索引以供脈絡追溯，但不重複實作）
+**P0-MVP 總計：79 個 Feature**（37 既有 + 43 E07 新增 - 1 既有 F058 計入但已標 DEPRECATED 不再實作；實際新建構數 37 既有 + 42 E07 = 79。F058 / F059 / F060 標 DEPRECATED 之既有計算保留於索引以供脈絡追溯，但不重複實作）
 
 ### P1（Should Have）— 9 個 Feature
 

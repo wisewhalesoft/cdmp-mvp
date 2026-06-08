@@ -103,6 +103,67 @@ export function resolveCalendarDay(
 }
 
 /**
+ * F101 / AD-E07-29 §3.4：純函式抽取——由 (calendar_date, rest_flg) 列產出工作日千分比表。
+ *
+ * 與 calculateDailyEstimate 共用同一算法（baseRatio=FLOOR(1000/workingDays) + calendar_date DESC
+ * 前 remainder 個 +1），使月跑 Stage 4 ASSIGNDAY（distributeStage3to4）與 Stage 0 試算同源
+ * （I-RUN-EST-01）。回傳僅工作日（isWorkday=true），依 calendar_date ASC 排序。
+ *
+ * @param rows           ob_calendar 列（calendar_date 為 Date | 'YYYY-MM-DD' 字串）
+ * @param calendarSource 工作日來源模式（預設 weekday，rest_flg='0'）
+ * @returns 工作日千分比表 `[{ casedt: 'YYYY-MM-DD', ratioPerMille }]`（Σ=1000；空 → []）
+ */
+export function computeWorkingDayRatios(
+  rows: Array<{ calendar_date: Date | string; rest_flg: string }>,
+  calendarSource: CalendarSource = 'weekday',
+): Array<{ casedt: string; ratioPerMille: number }> {
+  const toUtc = (value: Date | string): Date => {
+    if (value instanceof Date) {
+      return new Date(
+        Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
+      );
+    }
+    const [y, m, d] = String(value)
+      .slice(0, 10)
+      .split('-')
+      .map((v) => parseInt(v, 10));
+    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  };
+  const fmt = (dt: Date): string => {
+    const y = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    return `${y}-${mm}-${dd}`;
+  };
+
+  const days = rows
+    .map((row) => {
+      const dt = toUtc(row.calendar_date);
+      const { isWorkday } = resolveCalendarDay(dt, row.rest_flg, calendarSource);
+      return { date: fmt(dt), isWorkday };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date)); // calendar_date ASC
+
+  const workdays = days.filter((d) => d.isWorkday);
+  const workingDays = workdays.length;
+  if (workingDays === 0) return [];
+  const baseRatio = Math.floor(1000 / workingDays);
+  const remainder = 1000 % workingDays;
+  // 餘數補：工作日按 calendar_date DESC 前 remainder 個 +1（與 calculateDailyEstimate 一致）。
+  const bonus = new Set(
+    workdays
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, remainder)
+      .map((d) => d.date),
+  );
+  return workdays.map((d) => ({
+    casedt: d.date,
+    ratioPerMille: bonus.has(d.date) ? baseRatio + 1 : baseRatio,
+  }));
+}
+
+/**
  * Stage0EstimateService — F049 Stage 0 估算 service
  *
  * 提供：
