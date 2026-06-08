@@ -34,7 +34,7 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).toContain('名單定義');
   });
 
-  it('業務部長（user + director） → Customer 360 + 客戶名單分派完整 11 子項，無資料治理', () => {
+  it('業務部長（user + director） → Customer 360 + 客戶名單分派 7 子項（移除 run 詳情頁入口），無資料治理', () => {
     const visible = getVisibleMenuItems('user', 'director');
     const allLabels = visible.flatMap((sec) => [
       ...(sec.items?.map((i) => i.label) ?? []),
@@ -64,8 +64,12 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).toContain('篩選欄位');
     expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).toContain('名單定義');
-    expect(allLabels).toContain('執行進度');
+    // run 詳情頁（執行進度/結果摘要/快照詳情/結果比對）已從 sidebar 移除，改由「執行歷史」點選某筆 run 進入
     expect(allLabels).toContain('執行歷史');
+    expect(allLabels).not.toContain('執行進度');
+    expect(allLabels).not.toContain('結果摘要');
+    expect(allLabels).not.toContain('快照詳情');
+    expect(allLabels).not.toContain('結果比對');
     // 不可見（director_only）
     expect(allLabels).not.toContain('計分卡設定');
     expect(allLabels).not.toContain('Stage 0 試算');
@@ -88,15 +92,20 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).not.toContain('計分卡設定');
   });
 
-  it('menu 設定中 11 個 E07 子項（v2.1：「代碼維護」rename「篩選欄位」+ icon Filter；含準備完成摘要）', () => {
+  it('menu 設定中 7 個 E07 子項（移除 4 個 run 詳情頁入口：執行進度/結果摘要/快照詳情/結果比對，改由執行歷史進入）', () => {
     const directorView = getVisibleMenuItems('user', 'director');
     const assignmentGroup = directorView
       .flatMap((s) => s.groups)
       .find((g) => g.label === '客戶名單分派');
     expect(assignmentGroup).toBeDefined();
-    // 11 個子項維持（rename 不改數量）
-    expect(assignmentGroup!.items.length).toBe(11);
+    // run 詳情頁（執行進度/結果摘要/快照詳情/結果比對）移除後＝7 個子項
+    expect(assignmentGroup!.items.length).toBe(7);
     const labels = assignmentGroup!.items.map((i) => i.label);
+    expect(labels).toContain('執行歷史');
+    expect(labels).not.toContain('執行進度');
+    expect(labels).not.toContain('結果摘要');
+    expect(labels).not.toContain('快照詳情');
+    expect(labels).not.toContain('結果比對');
     // F050 v2.1 / J4：rename「代碼維護」→「篩選欄位」
     expect(labels).toContain('篩選欄位');
     expect(labels).not.toContain('代碼維護');

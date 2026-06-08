@@ -13,11 +13,7 @@ import {
   ClipboardList,
   Calculator,
   PlayCircle,
-  Activity,
-  FileBarChart,
   History,
-  Camera,
-  GitCompare,
   ClipboardCheck,
   type LucideIcon,
 } from 'lucide-react';
@@ -161,39 +157,13 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: PlayCircle,
             requires: 'director_only',
           },
-          // M04 執行進度：director + section_chief
-          {
-            to: '/assignment/run-progress',
-            label: '執行進度',
-            icon: Activity,
-            requires: 'director_or_section_chief',
-          },
-          // M05 結果摘要：director + section_chief
-          {
-            to: '/assignment/run-summary',
-            label: '結果摘要',
-            icon: FileBarChart,
-            requires: 'director_or_section_chief',
-          },
           // M05 執行歷史：director + section_chief
+          // run 詳情頁（執行進度/結果摘要/快照詳情/結果比對）不再有獨立 sidebar 入口，
+          // 一律由「執行歷史」點選某筆 run 帶 ?runId=（或 ?runA=&runB=）進入。
           {
             to: '/assignment/history',
             label: '執行歷史',
             icon: History,
-            requires: 'director_or_section_chief',
-          },
-          // M05 快照詳情：director + section_chief
-          {
-            to: '/assignment/snapshots',
-            label: '快照詳情',
-            icon: Camera,
-            requires: 'director_or_section_chief',
-          },
-          // M05 結果比對：director + section_chief
-          {
-            to: '/assignment/compare',
-            label: '結果比對',
-            icon: GitCompare,
             requires: 'director_or_section_chief',
           },
         ],

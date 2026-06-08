@@ -84,20 +84,8 @@
       <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
       </a>
-      <a href="32-run-progress.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="activity" class="w-4 h-4"></i>執行進度
-      </a>
-      <a href="33-run-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
-        <i data-lucide="file-bar-chart" class="w-4 h-4"></i>結果摘要
-      </a>
       <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="history" class="w-4 h-4"></i>執行歷史
-      </a>
-      <a href="35-snapshot-detail.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="camera" class="w-4 h-4"></i>快照詳情
-      </a>
-      <a href="36-run-compare.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="git-compare" class="w-4 h-4"></i>結果比對
       </a>
       </div>
     </nav>
@@ -402,6 +390,40 @@
           { key: 'column_name', label: '維度', cls: 'font-mono text-xs' },
           { key: 'warn_code', label: '警示碼', cls: 'font-mono text-xs text-amber-700' },
           { key: 'affected', label: '影響客戶數', cls: 'text-xs text-right tabular-nums font-semibold' },
+        ],
+      },
+      // F101 / AD-E07-29 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（月跑不中斷，對應欄位保持 NULL）
+      STAGE3_NO_DEPT_RATION: {
+        title: '電銷課比例未設定',
+        icon: 'building-2',
+        severity: 'warn',
+        description: '部分名單／Tier 於 ob_dept_pct 無有效比例設定，該分組案件未分派至電銷課（dept_id 保持空）。建議補齊部門分配比例後重跑。',
+        columns: [
+          { key: 'list_no', label: '名單', cls: 'font-mono text-xs font-semibold' },
+          { key: 'tier_level', label: 'Tier', cls: 'font-mono text-xs' },
+          { key: 'case_count', label: '影響案件數', cls: 'text-xs text-right tabular-nums font-semibold' },
+        ],
+      },
+      STAGE4_NO_EMPL_WARN: {
+        title: '電銷課無人員比例設定',
+        icon: 'user-x',
+        severity: 'warn',
+        description: '部分電銷課於 ob_empl_set 無有效人員比例，該課案件未分派至業務員（emplid 保持空）。建議補齊人員分配比例後重跑。',
+        columns: [
+          { key: 'dept_id', label: '電銷課', cls: 'font-mono text-xs font-semibold' },
+          { key: 'list_no', label: '名單', cls: 'font-mono text-xs' },
+          { key: 'tier_level', label: 'Tier', cls: 'font-mono text-xs' },
+          { key: 'case_count', label: '影響案件數', cls: 'text-xs text-right tabular-nums font-semibold' },
+        ],
+      },
+      ASSIGNDAY_NO_CALENDAR_WARN: {
+        title: '當月無工作日日曆資料',
+        icon: 'calendar-x',
+        severity: 'warn',
+        description: '當月 ob_calendar 無工作日資料，案件未設定指派日（assignday 保持空）。建議確認日曆 ETL 已執行後重跑。',
+        columns: [
+          { key: 'list_no', label: '名單', cls: 'font-mono text-xs font-semibold' },
+          { key: 'work_ym', label: '作業月', cls: 'font-mono text-xs' },
         ],
       },
     };
