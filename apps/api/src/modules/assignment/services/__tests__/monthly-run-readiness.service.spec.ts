@@ -33,7 +33,7 @@ describe('MonthlyRunReadinessService', () => {
     versionRepo = { count: vi.fn().mockResolvedValue(1) };
     etlLogRepo = {
       createQueryBuilder: vi.fn().mockReturnValue({
-        innerJoin: vi.fn().mockReturnThis(),
+        innerJoinAndSelect: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
@@ -172,7 +172,7 @@ describe('MonthlyRunReadinessService', () => {
       runRepo.findOne.mockResolvedValue(null);
       versionRepo.count.mockResolvedValue(1);
       etlLogRepo.createQueryBuilder.mockReturnValue({
-        innerJoin: vi.fn().mockReturnThis(),
+        innerJoinAndSelect: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
@@ -192,7 +192,7 @@ describe('MonthlyRunReadinessService', () => {
       versionRepo.count.mockResolvedValue(1);
       const finishedAt = new Date('2026-05-15T03:00:00Z');
       etlLogRepo.createQueryBuilder.mockReturnValue({
-        innerJoin: vi.fn().mockReturnThis(),
+        innerJoinAndSelect: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
@@ -209,6 +209,33 @@ describe('MonthlyRunReadinessService', () => {
       const res = await service.calculateReadiness('202605');
       expect((res.etlStatus as any).pooldata.status).toBe('completed');
       expect((res.etlStatus as any).pooldata.lastRunAt).toBe(finishedAt.toISOString());
+    });
+
+    // 回歸守門：calculateEtlStatus 在 JS 端讀 `l.pipeline?.name` 做 keyword 比對，
+    // 因此 join 必須 hydrate 關聯。裸 `innerJoin` 只過濾不載入 → pipeline 永遠
+    // undefined → 4 個 source 全 fallback 成 'missing'（prod 實測：DB 最新 log
+    // 皆 completed，readiness 卻全回 missing，月跑觸發頁 ETL pre-check 被誤鎖）。
+    // mock 無法用資料行為區分兩者（getMany 一律回預先塞好 pipeline 的物件），
+    // 故直接斷言呼叫了 innerJoinAndSelect、且未退回裸 innerJoin。
+    it('回歸：必須以 innerJoinAndSelect hydrate pipeline（禁裸 innerJoin）', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      versionRepo.count.mockResolvedValue(1);
+      const qb = {
+        innerJoin: vi.fn().mockReturnThis(),
+        innerJoinAndSelect: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+      };
+      etlLogRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.calculateReadiness('202605');
+
+      expect(qb.innerJoinAndSelect).toHaveBeenCalledWith('log.pipeline', 'pipeline');
+      expect(qb.innerJoin).not.toHaveBeenCalled();
     });
   });
 });

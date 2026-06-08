@@ -136,9 +136,13 @@ export class MonthlyRunReadinessService {
       arreturndf: { ...empty },
     };
 
+    // ⚠️ 必須用 innerJoinAndSelect（非 innerJoin）：下方迴圈在 JS 端讀
+    // `l.pipeline?.name` 做 keyword 比對。裸 innerJoin 只過濾、不 hydrate 關聯，
+    // 會讓 pipeline 永遠 undefined → 4 個 source 全 fallback 成 'missing'
+    // （即使 DB 內最新 log 皆 completed）。回歸測試見 spec「innerJoinAndSelect」案例。
     const logs = await this.etlLogRepo
       .createQueryBuilder('log')
-      .innerJoin('log.pipeline', 'pipeline')
+      .innerJoinAndSelect('log.pipeline', 'pipeline')
       .where('log.finished_at IS NOT NULL')
       .orderBy('log.finished_at', 'DESC')
       .limit(50)
