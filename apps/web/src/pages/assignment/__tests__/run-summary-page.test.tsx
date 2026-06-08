@@ -183,6 +183,101 @@ describe('RunSummaryPage (F063)', () => {
       expect(screen.getByTestId('card-legend-B')).toBeInTheDocument();
     });
 
+    it('分派業務員數 stat card 顯示 emplCount + 平均每人 X 案', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        stage4Count: 9500,
+        emplCount: 142,
+        deptSummary: [],
+        levelDistribution: [],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('empl-count')).toHaveTextContent('142'),
+      );
+      // 9500 / 142 = 66.9 → round 67
+      expect(screen.getByText(/平均每人 67 案/)).toBeInTheDocument();
+    });
+
+    it('emplCount=0（F101 未跑 / emplid 全 NULL）→ 顯示「尚無人員分派資料」不除零', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        stage4Count: 9500,
+        emplCount: 0,
+        deptSummary: [],
+        levelDistribution: [],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('empl-count')).toHaveTextContent('0'),
+      );
+      expect(screen.getByText(/尚無人員分派資料/)).toBeInTheDocument();
+    });
+
+    it('任一部門偏差 > 3% (alert) → 顯示 NFR-005 警示 note', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        stage4Count: 950,
+        deptSummary: [
+          {
+            deptId: 'D01',
+            configRatio: 0.25,
+            actualCount: 290,
+            actualRatio: 0.29,
+            deviation: 0.04,
+            alert: true,
+          },
+        ],
+        levelDistribution: [],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('nfr005-alert-note')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('nfr005-alert-note')).toHaveTextContent(/NFR-005/);
+    });
+
+    it('無偏差警示 → 不顯示 NFR-005 note', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        stage4Count: 950,
+        deptSummary: [
+          {
+            deptId: 'D01',
+            configRatio: 0.3,
+            actualCount: 285,
+            actualRatio: 0.285,
+            deviation: -0.015,
+            alert: false,
+          },
+        ],
+        levelDistribution: [],
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('total-assigned')).toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId('nfr005-alert-note')).toBeNull();
+    });
+
+    it('匯出區顯示 AD-E07-11 注意事項', async () => {
+      mockedGetSummary.mockResolvedValue({
+        runId: 'R001',
+        projectWorkym: '202605',
+        deptSummary: [],
+        levelDistribution: [],
+        stage4Count: 100,
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByText(/匯出注意事項（AD-E07-11）/)).toBeInTheDocument(),
+      );
+    });
+
     it('匯出 button 文案改為「匯出 Excel (streaming)」', async () => {
       mockedGetSummary.mockResolvedValue({
         runId: 'R001',

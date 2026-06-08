@@ -38,6 +38,8 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -56,7 +58,14 @@ async function buildModule(): Promise<Env> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog, ObEmplSet],
+        entities: [
+          AssignmentRun,
+          AssignmentRunSnapshot,
+          AssignmentAuditLog,
+          ObEmplSet,
+          ObEmphire,
+          User,
+        ],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
@@ -64,6 +73,8 @@ async function buildModule(): Promise<Env> {
         AssignmentRunSnapshot,
         AssignmentAuditLog,
         ObEmplSet,
+        ObEmphire,
+        User,
       ]),
     ],
     providers: [AssignmentRunReportService, SectionChiefScopeService],
@@ -145,11 +156,11 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       });
       await seedSnap(env.snapRepo, run.run_id, 'result', {
         assignments: [
-          { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1' },
-          { applNo: 'A2', deptId: 'D01', cardLevel: 'A', emplid: 'E1' },
-          { applNo: 'A3', deptId: 'D01', cardLevel: 'B', emplid: 'E1' },
-          { applNo: 'A4', deptId: 'D02', cardLevel: 'B', emplid: 'E2' },
-          { applNo: 'A5', deptId: 'D02', cardLevel: 'C', emplid: 'E2' },
+          { applNo: 'A1', deptId: 'D01', cardLevel: 'A', tierLevel: 'T1', emplid: 'E1' },
+          { applNo: 'A2', deptId: 'D01', cardLevel: 'A', tierLevel: 'T1', emplid: 'E1' },
+          { applNo: 'A3', deptId: 'D01', cardLevel: 'B', tierLevel: 'T2', emplid: 'E1' },
+          { applNo: 'A4', deptId: 'D02', cardLevel: 'B', tierLevel: 'T2', emplid: 'E2' },
+          { applNo: 'A5', deptId: 'D02', cardLevel: 'C', tierLevel: 'T3', emplid: 'E2' },
         ],
       });
 
@@ -159,6 +170,8 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       expect(s.stage1Count).toBe(10);
       expect(s.stage4Count).toBe(5);
       expect(s.coverageRate).toBe(0.5);
+      // F063 gap fix：分派業務員數（distinct emplid E1/E2 → 2）對齊 prototype「分派業務員數」stat card
+      expect(s.emplCount).toBe(2);
 
       const d01 = s.deptSummary.find((x) => x.deptId === 'D01');
       const d02 = s.deptSummary.find((x) => x.deptId === 'D02');
@@ -179,6 +192,20 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
 
       const aLevel = s.levelDistribution.find((x) => x.cardLevel === 'A');
       expect(aLevel).toMatchObject({ count: 2, ratio: 40 });
+
+      // F063 gap fix：TIER_LEVEL 分佈聚合（對齊 prototype 33-run-summary.html「TIER_LEVEL 分佈」）
+      expect(s.tierDistribution.find((x) => x.tierLevel === 'T1')).toMatchObject({
+        count: 2,
+        ratio: 40,
+      });
+      expect(s.tierDistribution.find((x) => x.tierLevel === 'T2')).toMatchObject({
+        count: 2,
+        ratio: 40,
+      });
+      expect(s.tierDistribution.find((x) => x.tierLevel === 'T3')).toMatchObject({
+        count: 1,
+        ratio: 20,
+      });
     });
 
     it('TC-M05-SUMMARY-002：未完成 run → 422', async () => {

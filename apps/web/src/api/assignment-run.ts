@@ -257,6 +257,12 @@ export interface SummaryLevelRow {
   ratio: number;
 }
 
+export interface SummaryTierRow {
+  tierLevel: string;
+  count: number;
+  ratio: number;
+}
+
 export interface RunSummaryResponse {
   runId: string;
   /** 後端欄位：projectWorkym（保留 ym 為 legacy alias） */
@@ -268,8 +274,12 @@ export interface RunSummaryResponse {
   stage1Count?: number;
   stage4Count?: number;
   coverageRate?: number;
+  /** F063 gap fix：分派業務員數（distinct emplid）— prototype「分派業務員數 / 平均每人 X 案」stat card */
+  emplCount?: number;
   deptSummary?: SummaryDeptRow[];
   levelDistribution?: SummaryLevelRow[];
+  /** F063 gap fix：TIER_LEVEL 分佈（對齊 prototype「fn_calc_tier_level 計算結果」chart） */
+  tierDistribution?: SummaryTierRow[];
   warnings?: {
     summaryCode: string | null;
     skippedCases: Record<string, unknown> | null;

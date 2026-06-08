@@ -1,4 +1,4 @@
-import { PieChart, Construction } from 'lucide-react';
+import { PieChart } from 'lucide-react';
 import type { SummaryLevelRow } from '@/api/assignment-run';
 
 /**
@@ -7,7 +7,7 @@ import type { SummaryLevelRow } from '@/api/assignment-run';
  * 對應 prototype 33-run-summary.html L278-293
  *
  * 用 conic-gradient + legend 實作 donut，不引入 chart 套件依賴。
- * Phase 3 P2-3 暫不做 TIER_LEVEL chart（Track D fn_calc_tier_level 完成後補）。
+ * TIER_LEVEL 分佈由 sibling 元件 TierLevelChart 呈現（並列於 grid-cols-2）。
  */
 
 const COLORS = [
@@ -108,11 +108,6 @@ export function CardLevelDonut({ rows }: CardLevelDonutProps) {
             </div>
           ))}
         </div>
-      </div>
-      {/* TIER_LEVEL placeholder（Track D 完成後補） */}
-      <div className="border-t border-gray-200 bg-gray-50/40 px-5 py-3 flex items-center gap-2 text-xs text-gray-500">
-        <Construction className="w-3.5 h-3.5 text-gray-400" />
-        TIER_LEVEL 分佈待 Track D（fn_calc_tier_level）完成後補上
       </div>
     </div>
   );

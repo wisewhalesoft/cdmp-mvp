@@ -2,12 +2,16 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  FileBarChart,
+  CheckCircle,
+  History,
   Download,
   Camera,
   Users,
   Building2,
+  UserCheck,
   AlertTriangle,
+  AlertCircle,
+  Info,
   Lock,
   Clock,
   TrendingUp,
@@ -25,6 +29,7 @@ import {
 } from '@/api/assignment-run';
 import { DeptDeviationChart } from './_components/dept-deviation-chart';
 import { CardLevelDonut } from './_components/card-level-donut';
+import { TierLevelChart } from './_components/tier-level-chart';
 import {
   ScoringWarningBanner,
   type ScoringWarningSummary,
@@ -35,12 +40,14 @@ import {
  *
  * 對應 prototype: /prototypes/33-run-summary.html
  *
- * 範圍：
- *   - 總分派數
- *   - 部門 breakdown 表（deptCode / deptName / 分派數 / ratio%）
- *   - 個別 breakdown 表（empId / empName / 分派數 / ratio%）
- *   - 匯出 CSV / XLSX (F064)
- *   - 跳轉至快照詳情頁
+ * 版面順序（嚴格對齊 prototype）：
+ *   1. Run Info Bar（狀態 / Run ID / 5 欄統計 + 快照 / 歷史導覽）
+ *   2. 3 Stat Cards（總分派客戶數 / 分派部門數 / 分派業務員數）
+ *   3. F063 警示橫幅（計分完整性 / BR-12 SKIPPED）
+ *   4. 部門分配偏差 chart
+ *   5. 等級分佈 grid（TIER_LEVEL bar + CARD_LEVEL donut）
+ *   6. 匯出區（F064 streaming xlsx / csv + AD-E07-11 注意事項）
+ *   7. NFR-005 偏差警示 footer note
  *
  * RBAC: DirectorOrSectionChiefRoute（處長限轄區 — backend filter）
  */
@@ -136,6 +143,13 @@ export function RunSummaryPage() {
     }
   };
 
+  // 派生統計（對齊 prototype stat cards / 匯出計數 / NFR-005 警示）
+  const stage4Count =
+    data?.stage4Count ?? data?.totalCases ?? data?.totalAssigned ?? 0;
+  const emplCount = data?.emplCount ?? 0;
+  const avgPerEmpl = emplCount > 0 ? Math.round(stage4Count / emplCount) : null;
+  const hasDeviationAlert = (data?.deptSummary ?? []).some((d) => d.alert);
+
   return (
     <AppLayout
       headerLeft={
@@ -175,18 +189,12 @@ export function RunSummaryPage() {
 
         {data && (
           <>
-            {/* F063 警告 Banner — 計分完整性 / BR-12 SKIPPED */}
-            <ScoringWarningBanner
-              warningSummary={extractWarningSummary(data)}
-              runStatus={(data as { status?: 'completed' | 'failed' }).status ?? 'completed'}
-            />
-
-            {/* Run Info Bar — READ-ONLY + 月份 / 完成時間 / 耗時 / Stage1 / 覆蓋率 */}
+            {/* 1. Run Info Bar — READ-ONLY + 月份 / 完成時間 / 耗時 / Stage1 / 覆蓋率 */}
             <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
               <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
-                    <FileBarChart className="w-3.5 h-3.5" />
+                    <CheckCircle className="w-3.5 h-3.5" />
                     已完成
                   </span>
                   <span className="text-xs text-gray-500">Run ID</span>
@@ -209,21 +217,21 @@ export function RunSummaryPage() {
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
                   >
                     <Camera className="w-3.5 h-3.5" />
-                    快照詳情
+                    查看快照詳情
                   </button>
                   <button
                     type="button"
                     onClick={() => navigate('/assignment/history')}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50"
                   >
-                    <FileBarChart className="w-3.5 h-3.5" />
+                    <History className="w-3.5 h-3.5" />
                     執行歷史
                   </button>
                 </div>
               </div>
               <div className="px-5 py-4 grid grid-cols-5 gap-4">
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">作業年月</div>
+                  <div className="text-xs text-gray-500 mb-1">分派作業月份</div>
                   <div className="text-sm font-semibold text-gray-800 font-mono">
                     {data.projectWorkym ?? data.ym ?? '—'}
                   </div>
@@ -265,25 +273,29 @@ export function RunSummaryPage() {
               </div>
             </section>
 
-            {/* 3 stat cards */}
+            {/* 2. 3 stat cards — 總分派客戶數 / 分派部門數 / 分派業務員數 */}
             <section className="grid grid-cols-3 gap-4">
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs font-medium text-gray-500">總分派客戶數</div>
-                  <Users className="w-4 h-4 text-primary" />
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-primary" />
+                  </div>
                 </div>
                 <div
                   data-testid="total-assigned"
                   className="text-3xl font-bold text-gray-900 tabular-nums"
                 >
-                  {(data.stage4Count ?? data.totalCases ?? data.totalAssigned ?? 0).toLocaleString()}
+                  {stage4Count.toLocaleString()}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">Stage 4 最終分派數</div>
               </div>
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs font-medium text-gray-500">分派部門數</div>
-                  <Building2 className="w-4 h-4 text-purple-600" />
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                    <Building2 className="w-4 h-4 text-purple-600" />
+                  </div>
                 </div>
                 <div
                   data-testid="dept-count"
@@ -297,79 +309,32 @@ export function RunSummaryPage() {
               </div>
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-medium text-gray-500">CARD_LEVEL 種類</div>
-                  <FileBarChart className="w-4 h-4 text-amber-600" />
+                  <div className="text-xs font-medium text-gray-500">分派業務員數</div>
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+                    <UserCheck className="w-4 h-4 text-warning" />
+                  </div>
                 </div>
                 <div
-                  data-testid="level-count"
+                  data-testid="empl-count"
                   className="text-3xl font-bold text-gray-900 tabular-nums"
                 >
-                  {data.levelDistribution?.length ?? 0}
+                  {emplCount.toLocaleString()}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">分派結果之等級數</div>
-              </div>
-            </section>
-
-            {/* 匯出區（streaming xlsx + csv） */}
-            <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex-1 min-w-[260px]">
-                  <p className="text-sm font-semibold text-gray-800 mb-1 inline-flex items-center gap-1.5">
-                    <Download className="w-4 h-4 text-primary" />
-                    匯出分派結果（F064）
-                  </p>
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    包含{' '}
-                    <strong>
-                      {(data.stage4Count ?? data.totalAssigned ?? 0).toLocaleString()}
-                    </strong>{' '}
-                    筆分派紀錄；欄位含 list_no / appl_no / card_level / tier_level / dept_id / emplid 等。
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    data-testid="btn-export-xlsx"
-                    loading={exporting === 'xlsx'}
-                    loadingText="匯出中..."
-                    disabled={exporting !== null}
-                    onClick={() => void handleExport('xlsx')}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <FileSpreadsheet className="w-3.5 h-3.5" />
-                      匯出 Excel (streaming)
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    data-testid="btn-export-csv"
-                    loading={exporting === 'csv'}
-                    loadingText="匯出中..."
-                    disabled={exporting !== null}
-                    onClick={() => void handleExport('csv')}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5" />
-                      匯出 CSV
-                    </span>
-                  </Button>
+                <div className="text-xs text-gray-500 mt-1">
+                  {avgPerEmpl != null
+                    ? `平均每人 ${avgPerEmpl.toLocaleString()} 案`
+                    : '尚無人員分派資料'}
                 </div>
               </div>
             </section>
 
-            {/* Phase 3 P2-3 部門偏差 chart（取代 deptBreakdown table） */}
-            {data.deptSummary && data.deptSummary.length > 0 && (
-              <DeptDeviationChart rows={data.deptSummary} />
-            )}
+            {/* 3. F063 警示橫幅 — 計分完整性 / BR-12 SKIPPED */}
+            <ScoringWarningBanner
+              warningSummary={extractWarningSummary(data)}
+              runStatus={(data as { status?: 'completed' | 'failed' }).status ?? 'completed'}
+            />
 
-            {/* Phase 3 P2-3 CARD_LEVEL 圓餅 + TIER placeholder */}
-            {data.levelDistribution && data.levelDistribution.length > 0 && (
-              <CardLevelDonut rows={data.levelDistribution} />
-            )}
-
-            {/* Phase 5d 波 10：skipped_cases.lists（5b ITP-006 / IT-M01-017） */}
+            {/* 3b. skipped_cases.lists（5b ITP-006 / IT-M01-017） */}
             {(() => {
               const skippedLists =
                 (data.warnings?.skippedCases as
@@ -415,7 +380,111 @@ export function RunSummaryPage() {
               );
             })()}
 
-            {/* Dept breakdown */}
+            {/* 4. 部門分配偏差 chart（取代 deptBreakdown table） */}
+            {data.deptSummary && data.deptSummary.length > 0 && (
+              <DeptDeviationChart rows={data.deptSummary} />
+            )}
+
+            {/* 5. 等級分佈：TIER_LEVEL 分佈 + CARD_LEVEL 等級佔比（prototype L263-292） */}
+            {((data.tierDistribution && data.tierDistribution.length > 0) ||
+              (data.levelDistribution && data.levelDistribution.length > 0)) && (
+              <div className="grid grid-cols-2 gap-4">
+                <TierLevelChart rows={data.tierDistribution ?? []} />
+                <CardLevelDonut rows={data.levelDistribution ?? []} />
+              </div>
+            )}
+
+            {/* 6. 匯出區（F064 streaming xlsx + csv） — prototype L294-344 */}
+            <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+                <Download className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-semibold text-gray-800">
+                  匯出分派結果（F064）
+                </h3>
+              </div>
+              <div className="px-5 py-5">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex-1 min-w-[280px]">
+                    <p className="text-sm text-gray-700 font-medium mb-1">
+                      將分派結果匯出為檔案
+                    </p>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      包含{' '}
+                      <strong>{stage4Count.toLocaleString()}</strong> 筆分派紀錄，欄位涵蓋
+                      list_no / appl_no / card_level / tier_level / dept_id / emplid /
+                      score / is_cr。
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      data-testid="btn-export-xlsx"
+                      loading={exporting === 'xlsx'}
+                      loadingText="匯出中..."
+                      disabled={exporting !== null}
+                      onClick={() => void handleExport('xlsx')}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        匯出 Excel (streaming)
+                      </span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      data-testid="btn-export-csv"
+                      loading={exporting === 'csv'}
+                      loadingText="匯出中..."
+                      disabled={exporting !== null}
+                      onClick={() => void handleExport('csv')}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5" />
+                        匯出 CSV
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 匯出注意事項（AD-E07-11） */}
+                <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50/50 border border-amber-100 rounded-lg text-xs text-gray-600">
+                  <Info className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium text-gray-700 mb-0.5">
+                      匯出注意事項（AD-E07-11）
+                    </p>
+                    <p>
+                      大檔案採 exceljs streaming mode 直接寫入，記憶體不會 OOM。資料來源為
+                      assignment_run_snapshot.payload (snapshot_type='result')，每次匯出將寫入
+                      assignment_audit_log 稽核紀錄。匯出超過 5 分鐘將回傳
+                      EXPORT_FILE_EXPIRED 錯誤。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 7. NFR-005 偏差警示 footer note（任一部門偏差 > 3% 時顯示） */}
+            {hasDeviationAlert && (
+              <div
+                data-testid="nfr005-alert-note"
+                className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-gray-700"
+              >
+                <AlertCircle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-danger mb-0.5">
+                    NFR-005 警示：偏差超過閾值
+                  </p>
+                  <p>
+                    本次月跑存在偏差超過 3% 的部門。建議檢查 ob_dept_pct 設定，或前往 F067
+                    比對近月結果確認分派演算法表現。
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Legacy dept breakdown table（舊 response shape 向後相容） */}
             {data.deptBreakdown && data.deptBreakdown.length > 0 && (
               <section
                 className="bg-white rounded-xl border border-gray-200 overflow-hidden"
@@ -455,7 +524,7 @@ export function RunSummaryPage() {
               </section>
             )}
 
-            {/* Personnel breakdown */}
+            {/* Legacy personnel breakdown table（舊 response shape 向後相容） */}
             {data.personnelBreakdown && data.personnelBreakdown.length > 0 && (
               <section
                 className="bg-white rounded-xl border border-gray-200 overflow-hidden"

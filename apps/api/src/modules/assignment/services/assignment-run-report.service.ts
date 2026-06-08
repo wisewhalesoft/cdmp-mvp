@@ -33,6 +33,12 @@ export interface SummaryLevelRow {
   ratio: number;
 }
 
+export interface SummaryTierRow {
+  tierLevel: string;
+  count: number;
+  ratio: number;
+}
+
 export interface SummaryResponse {
   runId: string;
   projectWorkym: string;
@@ -42,8 +48,12 @@ export interface SummaryResponse {
   stage1Count: number;
   stage4Count: number;
   coverageRate: number;
+  // F063 gap fix：分派業務員數（distinct emplid）— 對齊 prototype「分派業務員數 / 平均每人 X 案」stat card
+  emplCount: number;
   deptSummary: SummaryDeptRow[];
   levelDistribution: SummaryLevelRow[];
+  // F063 gap fix：TIER_LEVEL 分佈（對齊 prototype 33-run-summary.html「TIER_LEVEL 分佈」chart）
+  tierDistribution: SummaryTierRow[];
   // F063 AC-5：warnings 段含 skipped_cases 與 warning_summary 碼
   warnings: {
     summaryCode: string | null;
@@ -190,6 +200,16 @@ export class AssignmentRunReportService {
     const stage1Count = stage1Cases.length;
     const coverageRate = stage1Count === 0 ? 0 : stage4Count / stage1Count;
 
+    // 分派業務員數：distinct 非空 emplid（對齊 prototype「分派業務員數」stat card）。
+    // 已套 section_chief scope filter（assignments 為轄區子集），emplid 全 NULL（F101 未跑）→ 0。
+    const emplSet = new Set<string>();
+    for (const a of assignments) {
+      const e = a.emplid ?? null;
+      if (!e) continue;
+      emplSet.add(e);
+    }
+    const emplCount = emplSet.size;
+
     // 部門統計：聚合 result 中 deptId
     const deptActual = new Map<string, number>();
     for (const a of assignments) {
@@ -268,6 +288,25 @@ export class AssignmentRunReportService {
       }))
       .sort((a, b) => a.cardLevel.localeCompare(b.cardLevel));
 
+    // TIER_LEVEL 分佈（F063 gap fix；對齊 prototype「fn_calc_tier_level 計算結果」chart）。
+    // tier_level 由 F100/F101 月跑計分寫入（score→card_level→tier）；NULL 不計入。
+    const tierCounts = new Map<string, number>();
+    for (const a of assignments) {
+      const t = a.tierLevel ?? null;
+      if (!t) continue;
+      tierCounts.set(t, (tierCounts.get(t) ?? 0) + 1);
+    }
+    const tierDistribution: SummaryTierRow[] = Array.from(tierCounts.entries())
+      .map(([tierLevel, count]) => ({
+        tierLevel,
+        count,
+        ratio:
+          stage4Count === 0
+            ? 0
+            : Math.round((count / stage4Count) * 100 * 10) / 10,
+      }))
+      .sort((a, b) => a.tierLevel.localeCompare(b.tierLevel));
+
     // F063 AC-5：section_chief 視角下 totalCases 為轄區內子集（= stage4Count）；
     //            director / admin bypass，回原值（run.total_cases）。
     const totalCases = this.scope.shouldFilter(actor)
@@ -283,8 +322,10 @@ export class AssignmentRunReportService {
       stage1Count,
       stage4Count,
       coverageRate: Math.round(coverageRate * 10000) / 10000,
+      emplCount,
       deptSummary,
       levelDistribution,
+      tierDistribution,
       warnings: {
         summaryCode: run.warning_summary,
         skippedCases: run.skipped_cases,
