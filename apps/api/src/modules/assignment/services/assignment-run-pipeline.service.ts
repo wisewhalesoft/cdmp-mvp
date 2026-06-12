@@ -16,6 +16,7 @@ import {
 } from '@/modules/assignment/stage1/stage2to4-sql-executor';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
@@ -36,9 +37,21 @@ import {
   type DeptRation,
   type EmplRation,
   type RationWarning,
+  type CrPreassignedCase,
 } from '@/modules/assignment/stage1/stage3to4-ration';
 import { computeWorkingDayRatios } from '@/modules/assignment-list/stage0-estimate.service';
-import { runStage3to4RationSql } from '@/modules/assignment/stage1/stage3to4-ration-sql';
+import {
+  clearStage3Fields,
+  runStage3to4RationSql,
+} from '@/modules/assignment/stage1/stage3to4-ration-sql';
+import {
+  applyCrPriority,
+  computeCrSysDates,
+  type CrCase,
+  type CrEmplSet,
+  type CrEmphire,
+} from '@/modules/assignment/stage1/cr-priority';
+import { runCrPrioritySql } from '@/modules/assignment/stage1/cr-priority-sql';
 
 /**
  * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28）。
@@ -141,6 +154,12 @@ export class AssignmentRunPipelineService {
     private readonly deptPctRepo: Repository<ObDeptPct>,
     @InjectRepository(ObEmplSet)
     private readonly emplSetRepo: Repository<ObEmplSet>,
+    /**
+     * F102 / AD-E07-30：CR 失效規則步驟 2（離職清空）之 ob_emphire（emp_id / resign_date）來源。
+     * JS executeV2 路徑由本 repo 載入；PG 下推路徑由 cr-priority-sql 直接 JOIN ob_emphire。
+     */
+    @InjectRepository(ObEmphire)
+    private readonly emphireRepo: Repository<ObEmphire>,
     /**
      * F101 / AD-E07-29 §3.4：Stage 4 ASSIGNDAY 工作日來源（複用 computeWorkingDayRatios，
      * 與 Stage 0 試算 calculateDailyEstimate 同算法，I-RUN-EST-01）。
@@ -375,6 +394,9 @@ export class AssignmentRunPipelineService {
           cardLevel: r.card_level,
           tierLevel: r.tier_level,
           isCr: r.is_cr,
+          // F102：CR 三欄入 result 快照（F064 匯出 / F067 比對驗證 AC-13）。
+          crId: r.cr_id,
+          crNm: r.cr_nm,
           status: 'PENDING', // v2.0 預設待回收（業務回填後改 SUCCESS / FAILED）
         })),
       };
@@ -578,14 +600,14 @@ export class AssignmentRunPipelineService {
     const now = new Date();
     const out: Partial<ObMonthlyRunResult>[] = [];
 
-    // ----- 預先收集 CR 候選（cr_enabled list 才查歷史 snapshot）-----
-    const crEnabledListNos = stage1Cases
-      .filter(({ list }) => list.cr_enabled)
-      .map(({ list }) => list.list_no);
-
-    const crApplPerList = crEnabledListNos.length
-      ? await this.collectCrCandidates(ym)
-      : new Set<string>();
+    // F102 / AD-E07-30：CR 失效規則步驟 2 之 ob_emphire（全量載入；以 emp_id 索引）。
+    const allEmphire = await this.emphireRepo.find();
+    const crEmphire: CrEmphire[] = allEmphire.map((e) => ({
+      emp_id: e.emp_id,
+      resign_date: e.resign_date ? toYmd(e.resign_date) : null,
+    }));
+    // F102：@SYS_DT = project_workym + '01'（名單月第一天，'YYYY-MM-DD'）。
+    const { sysDate } = computeCrSysDates(ym);
 
     for (const { list, pool } of stage1Cases) {
       // ===== Stage 2 v2.0：真實計分 =====
@@ -622,6 +644,52 @@ export class AssignmentRunPipelineService {
         return { pool: p, score, cardLevel, tierLevel };
       });
 
+      // ===== F102 CR 前置步驟（在 Stage 3/4 比例分派之前，I-CR-ORDER-01）=====
+      // Stage 1 帶入之 cr_id/cr_nm/is_cr/appl_date 存於 ob_pool_data_list（I-CR-COLSRC-01）；
+      // 本 JS 路徑由 ob_pool_data_list（同 orgno+appl_no，本 list_no 限定）讀回 CR 三欄。
+      const crSourceRows = await this.poolDataListRepo.find({
+        where: { list_no: list.list_no },
+        select: ['orgno', 'appl_no', 'cr_id', 'cr_nm', 'is_cr', 'appl_date'],
+      });
+      const crByKey = new Map<
+        string,
+        { cr_id: string | null; cr_nm: string | null; is_cr: string; appl_date: string | null }
+      >();
+      for (const s of crSourceRows) {
+        crByKey.set(`${s.orgno} ${s.appl_no}`, {
+          cr_id: s.cr_id ?? null,
+          cr_nm: s.cr_nm ?? null,
+          is_cr: s.is_cr ?? 'N',
+          appl_date: s.appl_date ? toYmd(s.appl_date) : null,
+        });
+      }
+
+      // CR 步驟結果（per case key → CrAssignment）；cr_enabled=true 才執行步驟 1–3。
+      const crResultByKey = new Map<
+        string,
+        { cr_id: string | null; cr_nm: string | null; is_cr: string; emplid: string | null; dept_id: string | null; emplid_deptid: string | null }
+      >();
+      if (list.cr_enabled) {
+        const crEmplSet: CrEmplSet[] = (
+          await this.emplSetRepo.find({ where: { list_no: list.list_no } })
+        )
+          .map((e) => ({ emplid: e.emplid, deptid_m: e.deptid_m, ration: Number(e.ration) }))
+          .filter((e) => e.ration > 0);
+        const crCases: CrCase[] = scoredPool.map(({ pool: p }) => {
+          const src = crByKey.get(`${p.orgno} ${p.appl_no}`);
+          return {
+            orgno: p.orgno,
+            appl_no: p.appl_no,
+            cr_id: src?.cr_id ?? null,
+            cr_nm: src?.cr_nm ?? null,
+            is_cr: src?.is_cr ?? 'N',
+            appl_date: src?.appl_date ?? null,
+          };
+        });
+        const crResults = applyCrPriority(crCases, crEmplSet, crEmphire, sysDate);
+        for (const r of crResults) crResultByKey.set(`${r.orgno} ${r.appl_no}`, r);
+      }
+
       // ===== Stage 3/4 F101：真實比例分派（dept ration + empl ration + ASSIGNDAY）=====
       const deptRations: DeptRation[] = (
         await this.deptPctRepo.find({
@@ -641,12 +709,41 @@ export class AssignmentRunPipelineService {
         }))
         .filter((e) => e.ration > 0);
 
-      const rationCases: RationCase[] = scoredPool.map(({ pool: p, tierLevel }) => ({
-        orgno: p.orgno,
-        appl_no: p.appl_no,
-        tier_level: tierLevel,
-        pool_dept_id: p.dept_id,
-      }));
+      // 每案件最終 is_cr：cr_enabled=true → CR 步驟結果；cr_enabled=false → 強制 'N'（BR-F102-02）。
+      const finalCr = (orgno: string, applNo: string): string => {
+        if (!list.cr_enabled) return 'N';
+        return crResultByKey.get(`${orgno} ${applNo}`)?.is_cr ?? 'N';
+      };
+
+      // F102（I-CR-DEDUCT-01）：F101 比例分派只取 is_cr<>'Y'（CR 預指派件扣量、不入比例池）。
+      const rationCases: RationCase[] = scoredPool
+        .filter(({ pool: p }) => finalCr(p.orgno, p.appl_no) !== 'Y')
+        .map(({ pool: p, tierLevel }) => ({
+          orgno: p.orgno,
+          appl_no: p.appl_no,
+          tier_level: tierLevel,
+          pool_dept_id: p.dept_id,
+        }));
+
+      // F102（I-CR-ASSIGNDAY-01）：CR 預指派案件（is_cr='Y' 且已指派 emplid/dept_id）須納入 ASSIGNDAY
+      //   散佈（不扣量）。傳入 distributeStage3to4 之 crPreassigned，其 assignday 由 F101 ASSIGNDAY 計算。
+      const crPreassigned: CrPreassignedCase[] = scoredPool
+        .filter(({ pool: p }) => {
+          if (finalCr(p.orgno, p.appl_no) !== 'Y') return false;
+          const cr = crResultByKey.get(`${p.orgno} ${p.appl_no}`);
+          return !!(cr && cr.emplid && cr.dept_id);
+        })
+        .map(({ pool: p, tierLevel }) => {
+          const cr = crResultByKey.get(`${p.orgno} ${p.appl_no}`)!;
+          return {
+            orgno: p.orgno,
+            appl_no: p.appl_no,
+            tier_level: tierLevel,
+            emplid: cr.emplid as string,
+            dept_id: cr.dept_id as string,
+            emplid_deptid: cr.emplid_deptid as string,
+          };
+        });
 
       const { assignments, warnings } = distributeStage3to4(
         list.list_no,
@@ -655,6 +752,7 @@ export class AssignmentRunPipelineService {
         deptRations,
         emplRations,
         workingDays,
+        crPreassigned,
       );
       this.rationWarnings.push(...warnings);
 
@@ -663,11 +761,39 @@ export class AssignmentRunPipelineService {
       );
 
       for (const { pool: p, score, cardLevel, tierLevel } of scoredPool) {
-        // CR 標記：cr_enabled + 該案件在歷史快照中（simplified is_cr，被動標記，BR-F101-12）。
-        const isCr =
-          list.cr_enabled && crApplPerList.has(`${p.orgno}:${p.appl_no}`) ? 'Y' : 'N';
-        const a = assignByKey.get(`${p.orgno} ${p.appl_no}`);
-
+        const key = `${p.orgno} ${p.appl_no}`;
+        const cr = list.cr_enabled ? crResultByKey.get(key) : undefined;
+        const isCr = finalCr(p.orgno, p.appl_no);
+        if (cr && isCr === 'Y') {
+          // CR 預指派案件：emplid/dept_id 由 CR 步驟寫入，不走 F101 比例分派配額（不被覆蓋）。
+          // F102（I-CR-ASSIGNDAY-01）：assignday 由 distributeStage3to4（crPreassigned 納入散佈）計算，
+          //   與同 emplid 之非 CR 案件同基準（不再為 NULL）。
+          const aCr = assignByKey.get(key);
+          out.push({
+            run_id: runId,
+            list_no: list.list_no,
+            orgno: p.orgno,
+            appl_no: p.appl_no,
+            custo_no: p.custo_no ?? null,
+            settle_src: p.settle_src,
+            score,
+            card_level: cardLevel,
+            tier_level: tierLevel,
+            is_cr: 'Y',
+            cr_id: cr.cr_id,
+            cr_nm: cr.cr_nm,
+            dept_id: cr.dept_id,
+            emplid: cr.emplid,
+            emplid_deptid: cr.emplid_deptid,
+            assignday: aCr?.assignday ?? null,
+            result_status: 'PENDING',
+            created_at: now,
+            updated_at: now,
+          });
+          continue;
+        }
+        // 非 CR 案件：F101 比例分派結果；cr_id/cr_nm 保留 CR 步驟後值（清空案件已為 NULL）。
+        const a = assignByKey.get(key);
         out.push({
           run_id: runId,
           list_no: list.list_no,
@@ -679,6 +805,8 @@ export class AssignmentRunPipelineService {
           card_level: cardLevel,
           tier_level: tierLevel,
           is_cr: isCr,
+          cr_id: cr?.cr_id ?? (list.cr_enabled ? null : crByKey.get(key)?.cr_id ?? null),
+          cr_nm: cr?.cr_nm ?? (list.cr_enabled ? null : crByKey.get(key)?.cr_nm ?? null),
           dept_id: a?.dept_id ?? null,
           emplid: a?.emplid ?? null,
           emplid_deptid: a?.emplid_deptid ?? null,
@@ -755,7 +883,7 @@ export class AssignmentRunPipelineService {
             )
           : [];
 
-      // Stage 2 計分 + Stage 3 CR（runStage2and3Sql 不變）。
+      // Stage 2 計分（score / card_level / tier_level）。F102（I-CR-STAGE2-CLEAN-01）：不寫 is_cr。
       const ctx: Stage2to4ListContext = {
         runId,
         listNo: list.list_no,
@@ -763,12 +891,23 @@ export class AssignmentRunPipelineService {
         cardVersion,
         activeColumns,
         scoreRows: allScores,
-        crEnabled: !!list.cr_enabled,
         ym,
       };
       await runStage2and3Sql(manager, ctx);
 
-      // F101 Stage 3/4/ASSIGNDAY 真實比例分派（取代 st4_exchange placeholder）。
+      // ===== F102 CR 前置步驟（I-CR-ORDER-01：清除 → CR 前置 → F101 比例分派）=====
+      // ① Stage 3 前清除（dept_id/emplid/assignday=NULL，保留 is_cr）—— 必在 CR 步驟之前（C-2）。
+      await clearStage3Fields(manager, { runId, listNo: list.list_no });
+      // ② F102 CR 前置：cr_enabled=false → 強制 is_cr='N'；true → 步驟 1/2/3（失效清空 + 優先指派）。
+      const { sysDate } = computeCrSysDates(ym);
+      await runCrPrioritySql(manager, {
+        runId,
+        listNo: list.list_no,
+        crEnabled: !!list.cr_enabled,
+        sysDate,
+      });
+
+      // ③ F101 Stage 3/4/ASSIGNDAY 真實比例分派（案件池 WHERE is_cr<>'Y'，扣量 I-CR-DEDUCT-01）。
       const deptRations: DeptRation[] = (
         await this.deptPctRepo.find({
           where: { project_workym: ym, list_no: list.list_no },
@@ -835,6 +974,8 @@ export class AssignmentRunPipelineService {
         'r.card_level AS card_level',
         'r.tier_level AS tier_level',
         'r.is_cr AS is_cr',
+        'r.cr_id AS cr_id',
+        'r.cr_nm AS cr_nm',
       ])
       .where('r.run_id = :runId', { runId })
       .getRawMany<{
@@ -849,6 +990,8 @@ export class AssignmentRunPipelineService {
         card_level: string | null;
         tier_level: string | null;
         is_cr: string | null;
+        cr_id: string | null;
+        cr_nm: string | null;
       }>();
 
     return raw.map((r) => ({
@@ -865,6 +1008,9 @@ export class AssignmentRunPipelineService {
       card_level: r.card_level,
       tier_level: r.tier_level,
       is_cr: r.is_cr,
+      // F102：CR 三欄帶入快照（F064 匯出 / F067 比對需 cr_id/cr_nm/is_cr，AC-13）。
+      cr_id: r.cr_id,
+      cr_nm: r.cr_nm,
     }));
   }
 
@@ -942,46 +1088,9 @@ export class AssignmentRunPipelineService {
     }
   }
 
-  /**
-   * v2.0 Stage 3：CR 動態回分 — 蒐集歷史 result snapshot 中曾被分派但未成交（PENDING / 無 status）
-   * 的案件 key（`{orgno}:{appl_no}`）。
-   *
-   * 簡化版：掃描所有 status=completed 的歷史 run（早於本月 ym）的 result snapshot；
-   * 未成交判斷：assignments[i].status === 'PENDING' 或 undefined。
-   */
-  private async collectCrCandidates(ym: string): Promise<Set<string>> {
-    const result = new Set<string>();
-    // 取所有歷史 completed run（project_workym < ym 字串比較即可：YYYYMM 字串遞增等價時序）
-    const olderRuns = await this.runRepo
-      .createQueryBuilder('r')
-      .where('r.status = :status', { status: 'completed' })
-      .andWhere('r.project_workym < :ym', { ym })
-      .getMany();
-
-    if (olderRuns.length === 0) return result;
-
-    const runIds = olderRuns.map((r) => r.run_id);
-    const snaps = await this.snapshotRepo
-      .createQueryBuilder('s')
-      .where('s.run_id IN (:...ids)', { ids: runIds })
-      .andWhere('s.snapshot_type = :t', { t: 'result' })
-      .getMany();
-
-    for (const s of snaps) {
-      const payload = s.payload as { assignments?: Array<{
-        orgno?: string; applNo?: string; status?: string;
-      }> } | null;
-      if (!payload?.assignments) continue;
-      for (const a of payload.assignments) {
-        const status = a.status;
-        const unsettled = status === undefined || status === null || status === 'PENDING';
-        if (unsettled && a.orgno && a.applNo) {
-          result.add(`${a.orgno}:${a.applNo}`);
-        }
-      }
-    }
-    return result;
-  }
+  // F102 / AD-E07-30 §8 / §4.2：原 v2.0 之歷史 result snapshot 未成交掃描（simplified is_cr='Y'）
+  //   已整段移除。CR 真實業務語意（失效規則 + emplid 指派）由 cr-priority.ts applyCrPriority 接管；
+  //   is_cr 來源改為 Stage 1 由來源歷史表帶入 + F102 CR 前置步驟修改（I-CR-STAGE2-CLEAN-01 / I-CR-COLSRC-01）。
 
   // =========================================================================
   // 內部
@@ -1218,4 +1327,19 @@ function parseWorkdt(ym: string): Date {
   const year = parseInt(ym.slice(0, 4), 10);
   const month = parseInt(ym.slice(4, 6), 10); // 1-based
   return new Date(year, month - 1, 1);
+}
+
+/**
+ * F102：將 DATE 欄位（PG 回 Date / SQLite better-sqlite3 回 'YYYY-MM-DD' 字串）正規化為
+ * 'YYYY-MM-DD' 字串，供 CR 失效規則嚴格小於字串比較（feedback_typeorm_between_timezone）。
+ */
+function toYmd(value: Date | string | null): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return value.slice(0, 10);
 }

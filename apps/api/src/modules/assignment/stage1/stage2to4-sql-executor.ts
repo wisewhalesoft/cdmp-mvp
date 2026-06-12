@@ -4,12 +4,14 @@
  * P2（F099）已 INSERT Stage 1 案件至 ob_monthly_run_result（score/level/tier/emplid 皆 NULL）。
  * P3 在其上以兩道 UPDATE 補計分 / CR / 分派（單表 set-based，消 re-hydrate heap，I-NOLOAD-01）：
  *
- *   ① runStage2and3Sql：UPDATE r SET score / card_level / tier_level / is_cr
+ *   ① runStage2and3Sql：UPDATE r SET score / card_level / tier_level
  *      - FROM ob_pool_data o LEFT JOIN customer_core cc ON o.custo_no = cc.source_customer_no
  *        LEFT JOIN ob_levelcard_level lv（score 區間 → card_level）
  *        LEFT JOIN ob_tier ti（card_type + card_level NULL-aware → tier_level）
  *      - score = Stage 2 SUM(CASE…)（buildStage2ScoreExpr）；無 active version → NULL
- *      - is_cr = EXISTS(歷史 result snapshot 未成交同案件) AND cr_enabled ? 'Y' : 'N'
+ *      - F102（I-CR-STAGE2-CLEAN-01）：Stage 2 **不寫 is_cr**。is_cr 由 Stage 1 帶入原始值
+ *        （ob_pool_data_list），再由 F102 CR 前置步驟（cr-priority-sql.ts）依業務規則修改。
+ *        原 simplified is_cr（EXISTS 歷史 snapshot 未成交同案件）邏輯已移除。
  *
  *   ② runStage4Sql：UPDATE r SET dept_id / emplid / emplid_deptid
  *      - st4_exchange：T1/T2 案件以 ROW_NUMBER() OVER (PARTITION BY list_no ORDER BY orgno, appl_no)
@@ -41,8 +43,7 @@ export interface Stage2to4ListContext {
   cardVersion: number | null;
   activeColumns: ObLevelcardColumn[];
   scoreRows: ObLevelcardScore[];
-  crEnabled: boolean;
-  /** 月跑工作年月（YYYYMM 字串），CR EXISTS 之歷史視窗界（< ym）。 */
+  /** 月跑工作年月（YYYYMM 字串）。 */
   ym: string;
 }
 
@@ -66,6 +67,8 @@ function escape(
  *   - card_level：score BETWEEN ob_levelcard_level.score_s/score_e（同 card_type + version）。
  *   - tier_level：ob_tier 同 card_type，card_level IS NOT DISTINCT FROM <card_level>（NULL-aware fallback）。
  *   - score NULL（無 active version）→ 不查 level（card_level NULL）；tier 亦不走 fallback（NULL，LEVTIER-004）。
+ *   - F102（I-CR-STAGE2-CLEAN-01）：**不寫 is_cr**（移除原 CR 標記之 EXISTS 歷史 snapshot 邏輯）；
+ *     is_cr 由 Stage 1 帶入 + F102 CR 前置步驟（cr-priority-sql.ts）依業務規則修改。
  */
 export async function runStage2and3Sql(
   manager: EntityManager,
@@ -95,39 +98,16 @@ export async function runStage2and3Sql(
   // score 表達式：無 active version → NULL；否則 SUM(CASE…)（needsCustomerCore 時 cc 已 join）。
   const scoreSelect = scoreExpr === null ? 'NULL::int' : `(${scoreExpr})::int`;
 
-  // ----- Stage 3 CR：EXISTS 歷史 result snapshot 未成交同案件（對齊 JS collectCrCandidates）-----
-  // 來源 = assignment_run_snapshot（type='result'）之 payload.assignments[*]，
-  //   歷史 completed run 且 project_workym < ym；未成交 = status PENDING / null / 無 status。
-  // PG：payload JSONB → jsonb_array_elements 展開比對 orgno / applNo。
-  // cr_enabled=false → 一律 'N'（不查歷史，AC-4）。
-  let crExpr = "'N'";
-  if (ctx.crEnabled) {
-    params.crYm = ctx.ym;
-    crExpr =
-      `(CASE WHEN EXISTS (` +
-      `SELECT 1 FROM assignment_run_snapshot s ` +
-      `JOIN assignment_run ar ON ar.run_id = s.run_id ` +
-      `CROSS JOIN LATERAL jsonb_array_elements(s.payload->'assignments') AS a(elem) ` +
-      `WHERE s.snapshot_type = 'result' ` +
-      `AND ar.status = 'completed' ` +
-      `AND ar.project_workym < :crYm ` +
-      `AND a.elem->>'orgno' = o.orgno ` +
-      `AND a.elem->>'applNo' = o.appl_no ` +
-      `AND (a.elem->>'status' IS NULL OR a.elem->>'status' = 'PENDING')` +
-      `) THEN 'Y' ELSE 'N' END)`;
-  }
-
   const sql =
     `UPDATE ob_monthly_run_result r SET ` +
     `score = sub.score, ` +
     `card_level = lv.card_level, ` +
     `tier_level = ti.tier_level, ` +
-    `is_cr = sub.is_cr, ` +
     `updated_at = CURRENT_TIMESTAMP ` +
     `FROM ob_pool_data o ` +
     `${customerCoreJoin} ` +
-    // score / is_cr 以 LATERAL 計算（讓 lv / ti join 可引用 sub.score）。
-    `CROSS JOIN LATERAL (SELECT ${scoreSelect} AS score, ${crExpr} AS is_cr) sub ` +
+    // score 以 LATERAL 計算（讓 lv / ti join 可引用 sub.score）。
+    `CROSS JOIN LATERAL (SELECT ${scoreSelect} AS score) sub ` +
     `LEFT JOIN ob_levelcard_level lv ON lv.card_type = :cardType ` +
     `AND lv.card_version = :lvVersion ` +
     `AND sub.score IS NOT NULL ` +

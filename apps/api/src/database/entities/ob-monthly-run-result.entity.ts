@@ -78,6 +78,14 @@ export class ObMonthlyRunResult {
   @Column({ name: 'cr_nm', type: 'varchar', length: 50, nullable: true })
   cr_nm: string | null;
 
+  // F102 / AD-E07-30：CR 失效規則步驟 1（逾2年清空）以名單月 - 2 年比對 appl_date。
+  // Stage 1 INSERT…SELECT 由 ob_pool_data_list 帶入（I-CR-COLSRC-01）；CR 步驟只對本工作集 UPDATE，
+  // 不讀回 ob_pool_data_list。⚠️ AD §13「不需新增 migration」為疏漏 —— appl_date 原不在 result 表，
+  // 本 feature 補建欄位 + migration（見 impl log 偏離 spec/AD 段）。
+  // ⚠️ Entity 必須與 migration 1711360000300 保持一致：任一邊改動，另一邊同步修。
+  @Column({ name: 'appl_date', type: dateColumnType, nullable: true })
+  appl_date: Date | null;
+
   // ----- Stage 4 分派結果 -----
   @Column({ name: 'dept_id', type: 'varchar', length: 6, nullable: true })
   dept_id: string | null;

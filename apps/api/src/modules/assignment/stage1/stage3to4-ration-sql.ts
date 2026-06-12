@@ -78,6 +78,7 @@ async function runStage3DeptSql(
   ctx: Stage3to4SqlContext,
 ): Promise<RationWarning[]> {
   // 無 ration 課 → 全列 dept_id 保持 NULL；對每個 (tier_level) 分組發警告。
+  // F102（I-CR-DEDUCT-01）：案件池排除 is_cr='Y'（CR 預指派件不入比例池、不計入警告基數）。
   if (ctx.deptRations.length === 0) {
     const rows = await manager.query(
       ...escape(
@@ -86,6 +87,7 @@ async function runStage3DeptSql(
            FROM ob_monthly_run_result r
           WHERE r.run_id = :runId AND r.list_no = :listNo
             AND r.tier_level IN ('T1','T2','T3','T4','T5')
+            AND (r.is_cr IS NULL OR r.is_cr <> 'Y')
           GROUP BY r.tier_level`,
         { runId: ctx.runId, listNo: ctx.listNo },
       ),
@@ -116,12 +118,14 @@ WITH dept_pct(obdeptid, ration, dept_seq) AS (
   VALUES ${deptValues.join(', ')}
 ),
 -- 案件 + 分處（JOIN ob_pool_data 取 dept_id，G-1）。
+-- F102（I-CR-DEDUCT-01）：案件池排除 is_cr='Y'（CR 預指派件不被 Stage 3 覆蓋、不計入分組基數）。
 cases AS (
   SELECT r.orgno, r.appl_no, r.tier_level, o.dept_id AS pool_dept_id
     FROM ob_monthly_run_result r
     JOIN ob_pool_data o ON o.orgno = r.orgno AND o.appl_no = r.appl_no
    WHERE r.run_id = :runId AND r.list_no = :listNo
      AND r.tier_level IN ('T1','T2','T3','T4','T5')
+     AND (r.is_cr IS NULL OR r.is_cr <> 'Y')
 ),
 -- 分組件數（分處 + tier）。
 grp AS (
@@ -204,6 +208,7 @@ async function runStage4EmplSql(
         WHERE r.run_id = :runId AND r.list_no = :listNo
           AND r.dept_id IS NOT NULL
           AND r.tier_level IN ('T1','T2','T3','T4','T5')
+          AND (r.is_cr IS NULL OR r.is_cr <> 'Y')
         GROUP BY r.dept_id, r.tier_level`,
       { runId: ctx.runId, listNo: ctx.listNo },
     ),
@@ -253,13 +258,14 @@ async function runStage4EmplSql(
 WITH empl_set(emplid, deptid_m, ration, emp_seq) AS (
   VALUES ${emplValues.join(', ')}
 ),
--- 分組件數（dept_id + tier）。
+-- 分組件數（dept_id + tier）。F102（I-CR-DEDUCT-01）：排除 is_cr='Y'（CR 預指派件不計入員工分配基數）。
 grp AS (
   SELECT r.dept_id, r.tier_level, COUNT(*)::int AS grp_cnt
     FROM ob_monthly_run_result r
    WHERE r.run_id = :runId AND r.list_no = :listNo
      AND r.dept_id IS NOT NULL
      AND r.tier_level IN ('T1','T2','T3','T4','T5')
+     AND (r.is_cr IS NULL OR r.is_cr <> 'Y')
    GROUP BY r.dept_id, r.tier_level
 ),
 -- FLOOR 配額 + 員工數 + ΣFLOOR。
@@ -314,6 +320,7 @@ ranked AS (
    WHERE run_id = :runId AND list_no = :listNo
      AND dept_id IS NOT NULL
      AND tier_level IN ('T1','T2','T3','T4','T5')
+     AND (is_cr IS NULL OR is_cr <> 'Y')
 ),
 assigned AS (
   SELECT rk.orgno, rk.appl_no, b.emplid, b.dept_id AS emplid_deptid
@@ -344,6 +351,10 @@ async function runAssignDaySql(
 ): Promise<RationWarning[]> {
   const days = ctx.workingDays;
   // 是否有 emplid 案件（無則無需 assignday，也不發 calendar 警告）。
+  // F102 修正（I-CR-ASSIGNDAY-01）：ASSIGNDAY 階段**不**過濾 is_cr —— CR 預指派案件（is_cr='Y'）
+  //   亦有 emplid（=cr_id），須與同 emplid 之非 CR 案件一同納入指派日散佈，否則 CR 案 assignday
+  //   全 NULL（live 202606 抓到此 bug：2,073 筆 CR 全空，legacy 全有指派日）。
+  //   扣量（is_cr<>'Y'）僅作用於數量配額（Stage 3 cases/ranked + Stage 4 grp/ranked），不及 ASSIGNDAY。
   const hasEmplRows = (await manager.query(
     ...escape(
       manager,
@@ -404,7 +415,7 @@ bounded AS (
            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) + take) AS hi
     FROM per_day
 ),
--- 案件 per emplid (orgno, appl_no) ASC EMP_ORD（0-based）。
+-- 案件 per emplid (orgno, appl_no) ASC EMP_ORD（0-based）。CR 案件（is_cr='Y'）一同納入散佈（I-CR-ASSIGNDAY-01）。
 ranked AS (
   SELECT orgno, appl_no, emplid,
          (ROW_NUMBER() OVER (
@@ -429,8 +440,34 @@ UPDATE ob_monthly_run_result r
 }
 
 /**
+ * Stage 3 前清除（F102 / AD-E07-30 §4.3，I-CR-ORDER-01）：清 dept_id / emplid / emplid_deptid /
+ * assignday → NULL，**保留 is_cr**（BR-F101-06）。
+ *
+ * 須在 F102 CR 前置步驟（runCrPrioritySql）**之前**呼叫——否則 CR 步驟 3 寫入之 emplid / dept_id
+ * 會被本清除覆蓋（C-2 裁示）。執行順序：clearStage3Fields → runCrPrioritySql → runStage3to4RationSql。
+ *
+ * 冪等保護：下推路徑 Stage 1 INSERT 之列原即 dept 欄全 NULL，本清除為重跑安全護欄
+ * （重觸發同 run 時確保 ration 分派從乾淨狀態起算；is_cr 由 Stage 1 帶入後保留供 CR 步驟讀取）。
+ */
+export async function clearStage3Fields(
+  manager: EntityManager,
+  ctx: { runId: string; listNo: string },
+): Promise<void> {
+  const [sql, parameters] = escape(
+    manager,
+    `UPDATE ob_monthly_run_result
+        SET dept_id = NULL, emplid = NULL, emplid_deptid = NULL, assignday = NULL,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE run_id = :runId AND list_no = :listNo`,
+    { runId: ctx.runId, listNo: ctx.listNo },
+  );
+  await manager.query(sql, parameters);
+}
+
+/**
  * Stage 3/4/ASSIGNDAY 完整下推（單一 list）：dept ration → empl ration → ASSIGNDAY。
- * 須在 runStage2and3Sql（tier_level / is_cr 已寫）之後執行。回傳本 list 之三類警告。
+ * 須在 runStage2and3Sql（tier_level 已寫）+ F102 runCrPrioritySql（CR 預指派）之後執行。
+ * 案件池排除 is_cr='Y'（I-CR-DEDUCT-01）。回傳本 list 之三類警告。
  */
 export async function runStage3to4RationSql(
   manager: EntityManager,
