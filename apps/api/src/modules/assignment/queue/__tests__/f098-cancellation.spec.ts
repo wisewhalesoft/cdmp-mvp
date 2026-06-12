@@ -33,6 +33,7 @@ import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
@@ -52,6 +53,7 @@ const ENTITIES = [
   ObMonthlyRunResult,
   ObDeptPct,
   ObEmplSet,
+  ObEmphire,
   ObCardType,
   ObLevelcardVersion,
   ObLevelcardColumn,

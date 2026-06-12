@@ -39,6 +39,7 @@ import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObCardType } from '@/database/entities/ob-card-type.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
@@ -61,7 +62,7 @@ const YM = '202606';
 
 const ENTITIES = [
   AssignmentRun, AssignmentRunSnapshot, ObListDefinition, ObPoolData,
-  ObPoolDataList, ObMonthlyRunResult, ObDeptPct, ObEmplSet, ObCardType,
+  ObPoolDataList, ObMonthlyRunResult, ObDeptPct, ObEmplSet, ObEmphire, ObCardType,
   ObLevelcardVersion, ObLevelcardColumn, ObLevelcardScore, ObLevelcardLevel, ObTier,
   ObCalendar,
 ];
@@ -88,6 +89,8 @@ let R: {
   result: Repository<ObMonthlyRunResult>;
   deptPct: Repository<ObDeptPct>;
   empl: Repository<ObEmplSet>;
+  emphire: Repository<ObEmphire>;
+  poolList: Repository<ObPoolDataList>;
   cardType: Repository<ObCardType>;
   version: Repository<ObLevelcardVersion>;
   column: Repository<ObLevelcardColumn>;
@@ -153,6 +156,8 @@ beforeAll(async () => {
     result: app.get(getRepositoryToken(ObMonthlyRunResult)),
     deptPct: app.get(getRepositoryToken(ObDeptPct)),
     empl: app.get(getRepositoryToken(ObEmplSet)),
+    emphire: app.get(getRepositoryToken(ObEmphire)),
+    poolList: app.get(getRepositoryToken(ObPoolDataList)),
     cardType: app.get(getRepositoryToken(ObCardType)),
     version: app.get(getRepositoryToken(ObLevelcardVersion)),
     column: app.get(getRepositoryToken(ObLevelcardColumn)),
@@ -183,7 +188,7 @@ beforeEach(async () => {
   if (!reachable || !app) return;
   for (const t of [
     'ob_monthly_run_result', 'assignment_run_snapshot', 'ob_pool_data', 'ob_pool_data_list',
-    'ob_dept_pct', 'ob_empl_set', 'ob_card_type', 'ob_levelcard_version', 'ob_levelcard_column',
+    'ob_dept_pct', 'ob_empl_set', 'ob_emphire', 'ob_card_type', 'ob_levelcard_version', 'ob_levelcard_column',
     'ob_levelcard_score', 'ob_levelcard_level', 'ob_tier', 'ob_list_definition', 'assignment_run',
   ]) {
     await ds.query(`DELETE FROM ${t}`);
@@ -248,6 +253,23 @@ async function seedCustomerCore(opts: { src: string; gender?: string; dob?: stri
      VALUES ($1,'01','T',$2,$3,'test',now(),'00000000-0000-0000-0000-000000000099')`,
     [opts.src, opts.gender ?? null, opts.dob ?? null],
   );
+}
+/** F102：seed ob_pool_data_list 之 CR 三欄 + appl_date（Stage 1 由本表帶入 result，I-CR-COLSRC-01）。 */
+async function seedPoolList(opts: {
+  listNo: string; applNo: string; crId?: string | null; crNm?: string | null; isCr?: string; applDate?: string;
+}): Promise<void> {
+  await R.poolList.save(R.poolList.create({
+    list_no: opts.listNo, orgno: '01', appl_no: opts.applNo, custo_no: `C${opts.applNo}`, settle_src: '01',
+    cr_id: opts.crId ?? null, cr_nm: opts.crNm ?? null, is_cr: opts.isCr ?? 'N',
+    appl_date: opts.applDate ? new Date(`${opts.applDate}T00:00:00Z`) : null,
+  } as Partial<ObPoolDataList>));
+}
+/** F102：seed ob_emphire（CR 失效規則步驟 2 離職清空來源；resignDate null=在職）。 */
+async function seedEmphire(opts: { empId: string; resignDate?: string | null }): Promise<void> {
+  await R.emphire.save(R.emphire.create({
+    emp_id: opts.empId, emp_nm: `E-${opts.empId}`,
+    resign_date: opts.resignDate ? new Date(`${opts.resignDate}T00:00:00Z`) : null,
+  } as Partial<ObEmphire>));
 }
 async function seedStandardCard(withCC = false): Promise<void> {
   await R.version.save(R.version.create({ card_type: 'T1', card_name: 'T1', card_version: 1, sdate: '20250101', edate: '20991231', status: 'active' } as Partial<ObLevelcardVersion>));
@@ -357,56 +379,45 @@ describe('F100 EQ — runPipeline 端到端 Stage 1~4 SQL 下推（PG DoD）', (
     expect(rows[0].emplid).toBeNull();
   });
 
-  it('EQ-006/007：CR 開（歷史未成交→Y）/ 關（→N）', async (ctx) => {
+  // F102 / AD-E07-30：EQ-006/007 改測端到端 CR 優先分派（取代舊歷史 snapshot 動態回分）。
+  // YM='202606' → sysDate='2026-06-01'、twoYearsAgo='2024-06-01'。
+  it('EQ-006：CR 開名單端到端 → 有效 CR 案件 is_cr=Y、emplid=cr_id；新件 is_cr=N', async (ctx) => {
     ensurePg(ctx);
-    // 先建歷史 completed run + result snapshot（A_OLD PENDING）
-    const oldRunId = (await R.run.save(R.run.create({
-      project_workym: '202604', status: 'completed',
-      triggered_by: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
-      created_at: new Date(), started_at: new Date(), finished_at: new Date(),
-    } as Partial<AssignmentRun>))).run_id;
-    await app!.get<Repository<AssignmentRunSnapshot>>(getRepositoryToken(AssignmentRunSnapshot)).save({
-      run_id: oldRunId, snapshot_type: 'result',
-      payload: { assignments: [{ listNo: 'OLD', applNo: 'A_OLD', orgno: '01', status: 'PENDING' }] },
-      created_at: new Date(),
-    } as Partial<AssignmentRunSnapshot>);
-
-    // CR 開名單
     const LON = 'OBON';
     await seedCardType('T1');
     await seedList({ listNo: LON, cardType: 'T1', crEnabled: true });
     await seedStandardCard(false);
     await seedDeptPct(LON);
-    await seedEmpl(LON, 'E_NEW', 'T1');
-    await seedPool({ applNo: 'A_OLD', monthCnt: 2, specTp: '01' });
+    await seedEmpl(LON, 'E_CR', 'T1'); // E_CR 在 ob_empl_set（deptid_m='D001'，ration 100>0）
+    await seedEmphire({ empId: 'E_CR', resignDate: null }); // 在職
+    // ob_pool_data + ob_pool_data_list（Stage 1 帶入 CR 三欄）。
+    await seedPool({ applNo: 'A_CR', monthCnt: 2, specTp: '01' });
     await seedPool({ applNo: 'A_NEW', monthCnt: 2, specTp: '01' });
+    await seedPoolList({ listNo: LON, applNo: 'A_CR', crId: 'E_CR', crNm: '業代', isCr: 'Y', applDate: '2025-03-01' });
+    await seedPoolList({ listNo: LON, applNo: 'A_NEW', crId: null, crNm: null, isCr: 'N', applDate: '2025-03-01' });
     const runId = await seedRun();
     await service.runPipeline(runId, YM);
     const rows = await R.result.find({ where: { run_id: runId, list_no: LON } });
-    expect(rows.find((r) => r.appl_no === 'A_OLD')!.is_cr).toBe('Y');
-    expect(rows.find((r) => r.appl_no === 'A_NEW')!.is_cr).toBe('N');
+    const aCr = rows.find((r) => r.appl_no === 'A_CR')!;
+    const aNew = rows.find((r) => r.appl_no === 'A_NEW')!;
+    expect(aCr.is_cr).toBe('Y');
+    expect(aCr.emplid).toBe('E_CR'); // emplid=cr_id（CR 優先指派）
+    expect(aCr.dept_id).toBe('D001');
+    expect(aNew.is_cr).toBe('N'); // 新件走比例池
   });
 
-  it('EQ-007：CR 關名單（歷史有該案件 → 一律 N）', async (ctx) => {
+  it('EQ-007：CR 關名單端到端（cr_enabled=false → is_cr 全 N，含來源 is_cr=Y）', async (ctx) => {
     ensurePg(ctx);
-    const oldRunId = (await R.run.save(R.run.create({
-      project_workym: '202604', status: 'completed',
-      triggered_by: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
-      created_at: new Date(), started_at: new Date(), finished_at: new Date(),
-    } as Partial<AssignmentRun>))).run_id;
-    await app!.get<Repository<AssignmentRunSnapshot>>(getRepositoryToken(AssignmentRunSnapshot)).save({
-      run_id: oldRunId, snapshot_type: 'result',
-      payload: { assignments: [{ listNo: 'OLD', applNo: 'A_OLD', orgno: '01', status: 'PENDING' }] },
-      created_at: new Date(),
-    } as Partial<AssignmentRunSnapshot>);
-
     const LOFF = 'OBOFF';
     await seedCardType('T1');
     await seedList({ listNo: LOFF, cardType: 'T1', crEnabled: false });
     await seedStandardCard(false);
     await seedDeptPct(LOFF);
-    await seedEmpl(LOFF, 'E_NEW', 'T1');
-    await seedPool({ applNo: 'A_OLD', monthCnt: 2, specTp: '01' });
+    await seedEmpl(LOFF, 'E_CR', 'T1');
+    await seedEmphire({ empId: 'E_CR', resignDate: null });
+    await seedPool({ applNo: 'A_CR', monthCnt: 2, specTp: '01' });
+    // 來源 is_cr='Y'，但 cr_enabled=false → 強制清 N。
+    await seedPoolList({ listNo: LOFF, applNo: 'A_CR', crId: 'E_CR', crNm: '業代', isCr: 'Y', applDate: '2025-03-01' });
     const runId = await seedRun();
     await service.runPipeline(runId, YM);
     const rows = await R.result.find({ where: { run_id: runId, list_no: LOFF } });

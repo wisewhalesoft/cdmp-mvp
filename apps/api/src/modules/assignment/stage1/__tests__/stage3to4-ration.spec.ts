@@ -18,6 +18,7 @@ import {
   type DeptRation,
   type EmplRation,
   type WorkingDay,
+  type CrPreassignedCase,
 } from '../stage3to4-ration';
 
 const LIST = 'OB202606001';
@@ -378,6 +379,51 @@ describe('F101 ASGD — ASSIGNDAY 千分比（手算 oracle）', () => {
       list_no: LIST,
       work_ym: '202607',
     });
+  });
+
+  // F102 / AD-E07-30（I-CR-ASSIGNDAY-01）：CR 預指派案件納入 ASSIGNDAY 散佈但不參與 dept/empl 配額。
+  it('ASGD-CR-001：CR 預指派案件 assignday 全非 NULL 且散佈（不扣量於指派日）', () => {
+    // 21 件 CR 預指派至 E_CR（無 ration cases，配額池為空）。
+    const crPreassigned: CrPreassignedCase[] = Array.from({ length: 21 }, (_, i) => ({
+      orgno: '01',
+      appl_no: `C${String(i + 1).padStart(4, '0')}`,
+      tier_level: 'T1',
+      emplid: 'E_CR',
+      dept_id: 'XVE1',
+      emplid_deptid: 'XVE1',
+    }));
+    const r = distributeStage3to4(LIST, YM, [], [], [], workdays20(), crPreassigned);
+    const crRows = r.assignments.filter((a) => a.emplid === 'E_CR');
+    expect(crRows.length).toBe(21);
+    expect(crRows.every((a) => a.assignday !== null)).toBe(true);
+    const byDay = new Map<string, number>();
+    for (const a of crRows) byDay.set(a.assignday!, (byDay.get(a.assignday!) ?? 0) + 1);
+    expect(byDay.get('2026-06-20')).toBe(2); // 末日吸收（FLOOR(21×50/1000)=1 ×19 + 末日 2）
+    expect(byDay.size).toBe(20); // 散佈全 20 工作日
+  });
+
+  it('ASGD-CR-002：CR + 非 CR 同 emplid → 同基準散佈（CR 不扣量、配額仍只算非 CR）', () => {
+    // 10 件非 CR（ration 分派至 XVE1/E_CR）+ 10 件 CR 預指派 emplid=E_CR。
+    const cases = makeCases({ poolDeptId: 'XVF1', tier: 'T1', n: 10 });
+    const dept: DeptRation[] = [{ obdeptid: 'XVE1', ration: 100 }];
+    const empl: EmplRation[] = [{ emplid: 'E_CR', deptid_m: 'XVE1', ration: 100 }];
+    const crPreassigned: CrPreassignedCase[] = Array.from({ length: 10 }, (_, i) => ({
+      orgno: '01',
+      appl_no: `C${String(i + 1).padStart(4, '0')}`,
+      tier_level: 'T1',
+      emplid: 'E_CR',
+      dept_id: 'XVE1',
+      emplid_deptid: 'XVE1',
+    }));
+    const r = distributeStage3to4(LIST, YM, cases, dept, empl, workdays20(), crPreassigned);
+    // 全 20 件 emplid=E_CR（10 ration + 10 CR）。
+    expect(r.assignments.filter((a) => a.emplid === 'E_CR').length).toBe(20);
+    expect(r.assignments.every((a) => a.assignday !== null)).toBe(true);
+    const byDay = new Map<string, number>();
+    for (const a of r.assignments) byDay.set(a.assignday!, (byDay.get(a.assignday!) ?? 0) + 1);
+    // E_CR 20 件 / 20 工作日（FLOOR(20×50/1000)=1，整除 → 每日 1）。
+    expect(byDay.size).toBe(20);
+    expect([...byDay.values()].every((n) => n === 1)).toBe(true);
   });
 });
 

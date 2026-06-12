@@ -5,7 +5,7 @@
  *   - SCORE-001~007：Stage 2 SUM(CASE…) 區間 / 類別 / 邊界 / disabled / NULL vs 0
  *   - CJOIN-001~004：LEFT JOIN customer_core 補計分（match / 無 match / 純 pool / 混合）
  *   - LEVTIER-001~005：score → card_level → tier_level NULL fallback 分歧
- *   - CR-001~005：Stage 3 EXISTS 動態回分（cr_enabled 開/關；未成交語意）
+ *   - S2CLEAN-001/002：Stage 2 不寫 is_cr（F102 I-CR-STAGE2-CLEAN-01；原 CR-001~005 EXISTS 動態回分已移除）
  *   - EXCH-001~008：Stage 4 st4_exchange 視窗函式（CEIL / 保底 1 / partition / deterministic）
  *   - EQ-001~008：SQL 版逐列輸出 == 升級後手算預期（P3 DoD，AC-8）
  *   - RUNEST-001：estimate 路徑不含 Stage 2~4 計分 join（I-RUN-EST-01 延續）
@@ -100,6 +100,8 @@ async function seedResultRow(opts: {
   custoNo?: string | null;
   listNo: string;
   runId?: string;
+  /** F102：Stage 1 帶入之 is_cr（驗證 Stage 2 不修改，I-CR-STAGE2-CLEAN-01）。 */
+  isCr?: string | null;
 }): Promise<void> {
   applSeq += 1;
   await resultRepo.save(
@@ -110,6 +112,7 @@ async function seedResultRow(opts: {
       appl_no: opts.applNo,
       custo_no: opts.custoNo ?? `C${String(applSeq).padStart(6, '0')}`,
       settle_src: '01',
+      is_cr: opts.isCr ?? null,
       result_status: 'PENDING',
       created_at: new Date(),
       updated_at: new Date(),
@@ -146,12 +149,14 @@ async function seedCase(opts: {
   listNo: string;
   monthCnt?: number | null;
   specTp?: string | null;
+  isCr?: string | null;
 }): Promise<void> {
   await seedPool(opts);
   await seedResultRow({
     applNo: opts.applNo,
     custoNo: opts.custoNo,
     listNo: opts.listNo,
+    isCr: opts.isCr,
   });
 }
 
@@ -312,7 +317,6 @@ async function pushdown(ctx: Partial<Stage2to4ListContext> & { listNo: string })
     cardVersion: 1,
     activeColumns: [],
     scoreRows: [],
-    crEnabled: false,
     ym: YM,
     ...ctx,
   };
@@ -322,7 +326,6 @@ async function pushdown(ctx: Partial<Stage2to4ListContext> & { listNo: string })
 /** 以 active columns / scores 自 DB 載入並跑 Stage 2+3（標準卡）。 */
 async function pushdownStandard(opts: {
   listNo: string;
-  crEnabled?: boolean;
 }): Promise<void> {
   const activeColumns = await columnRepo.find({
     where: { card_type: 'T1', card_version: 1, status: 'active' },
@@ -334,7 +337,6 @@ async function pushdownStandard(opts: {
     cardVersion: 1,
     activeColumns,
     scoreRows,
-    crEnabled: opts.crEnabled ?? false,
   });
 }
 
@@ -672,85 +674,34 @@ describe('F100 LEVTIER — score→level→tier（PG 真庫）', () => {
 // ===========================================================================
 // CR — Stage 3 EXISTS 動態回分
 // ===========================================================================
-describe('F100 CR — Stage 3 EXISTS（PG 真庫）', () => {
-  async function seedHistorySnapshot(opts: {
-    applNo: string;
-    orgno?: string;
-    status?: string | null;
-    workym?: string;
-  }): Promise<void> {
-    const histRunId = '00000000-0000-0000-0000-0000000000d0';
-    await ds!.query(
-      `INSERT INTO assignment_run (run_id, project_workym, status, triggered_by, created_at)
-       VALUES ($1, $2, 'completed', '00000000-0000-0000-0000-000000000001', now())
-       ON CONFLICT (run_id) DO NOTHING`,
-      [histRunId, opts.workym ?? '202604'],
-    );
-    await snapshotRepo.save(
-      snapshotRepo.create({
-        run_id: histRunId,
-        snapshot_type: 'result',
-        payload: {
-          assignments: [
-            {
-              listNo: 'OLD',
-              applNo: opts.applNo,
-              orgno: opts.orgno ?? '01',
-              status: opts.status === undefined ? 'PENDING' : opts.status,
-            },
-          ],
-        },
-        created_at: new Date(),
-      } as Partial<AssignmentRunSnapshot>),
-    );
-  }
-
-  it('CR-001：cr_enabled + 歷史未成交 → is_cr Y', async (ctx) => {
+// F102 / AD-E07-30（I-CR-STAGE2-CLEAN-01）：原 F100 「Stage 3 EXISTS 動態回分」（cr_enabled + 歷史
+// snapshot 未成交 → is_cr='Y'）已整段移除——runStage2and3Sql 不再寫 is_cr。is_cr 由 Stage 1 帶入 +
+// F102 CR 前置步驟（cr-priority-sql.ts）修改。下列 S2CLEAN 群組驗證 Stage 2 不改 is_cr（保留 Stage 1 原值）。
+describe('F100→F102 S2CLEAN — Stage 2 不寫 is_cr（PG 真庫）', () => {
+  it('S2CLEAN-001：Stage 2 後 is_cr = Stage 1 帶入原值（Y/N 各保留）', async (ctx) => {
     ensurePg(ctx);
-    const L = 'L_CR1';
+    const L = 'L_S2C1';
     await seedStandardCardT1();
-    await seedCase({ applNo: 'P1', listNo: L, monthCnt: 2, specTp: '01' });
-    await seedHistorySnapshot({ applNo: 'P1', status: 'PENDING' });
-    await pushdownStandard({ listNo: L, crEnabled: true });
-    expect((await getRow('P1', L)).is_cr).toBe('Y');
+    await seedCase({ applNo: 'Y1', listNo: L, monthCnt: 2, specTp: '01', isCr: 'Y' });
+    await seedCase({ applNo: 'Y2', listNo: L, monthCnt: 2, specTp: '01', isCr: 'Y' });
+    await seedCase({ applNo: 'N1', listNo: L, monthCnt: 2, specTp: '01', isCr: 'N' });
+    await pushdownStandard({ listNo: L });
+    // Stage 2 計分後 is_cr 不變（I-CR-STAGE2-CLEAN-01）。
+    expect((await getRow('Y1', L)).is_cr).toBe('Y');
+    expect((await getRow('Y2', L)).is_cr).toBe('Y');
+    expect((await getRow('N1', L)).is_cr).toBe('N');
   });
 
-  it('CR-002：cr_enabled + 歷史已成交 / 無命中 → is_cr N', async (ctx) => {
+  it('S2CLEAN-002：Stage 1 未帶 is_cr（NULL）→ Stage 2 後仍 NULL（不誤寫）', async (ctx) => {
     ensurePg(ctx);
-    const L = 'L_CR2';
+    const L = 'L_S2C2';
     await seedStandardCardT1();
-    await seedCase({ applNo: 'Q1', listNo: L, monthCnt: 2, specTp: '01' }); // 歷史已成交
-    await seedCase({ applNo: 'Q2', listNo: L, monthCnt: 2, specTp: '01' }); // 歷史無命中
-    await seedHistorySnapshot({ applNo: 'Q1', status: 'SUCCESS' });
-    await pushdownStandard({ listNo: L, crEnabled: true });
-    expect((await getRow('Q1', L)).is_cr).toBe('N'); // 已成交
-    expect((await getRow('Q2', L)).is_cr).toBe('N'); // 無命中
-  });
-
-  it('CR-003：cr_enabled=false → 一律 N（不查歷史）', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_CR3';
-    await seedStandardCardT1();
-    await seedCase({ applNo: 'R1', listNo: L, monthCnt: 2, specTp: '01' });
-    await seedHistorySnapshot({ applNo: 'R1', status: 'PENDING' });
-    await pushdownStandard({ listNo: L, crEnabled: false });
-    expect((await getRow('R1', L)).is_cr).toBe('N');
-  });
-
-  it('CR-004：未成交（PENDING/無 status）算 CR；已成交不算', async (ctx) => {
-    ensurePg(ctx);
-    const L = 'L_CR4';
-    await seedStandardCardT1();
-    await seedCase({ applNo: 'S1', listNo: L, monthCnt: 2, specTp: '01' }); // PENDING
-    await seedCase({ applNo: 'S2', listNo: L, monthCnt: 2, specTp: '01' }); // 無 status
-    await seedCase({ applNo: 'S3', listNo: L, monthCnt: 2, specTp: '01' }); // 已成交
-    await seedHistorySnapshot({ applNo: 'S1', status: 'PENDING' });
-    await seedHistorySnapshot({ applNo: 'S2', status: null });
-    await seedHistorySnapshot({ applNo: 'S3', status: 'SUCCESS' });
-    await pushdownStandard({ listNo: L, crEnabled: true });
-    expect((await getRow('S1', L)).is_cr).toBe('Y');
-    expect((await getRow('S2', L)).is_cr).toBe('Y'); // null status = 未成交
-    expect((await getRow('S3', L)).is_cr).toBe('N');
+    await seedCase({ applNo: 'U1', listNo: L, monthCnt: 2, specTp: '01' }); // is_cr 未設 → NULL
+    await pushdownStandard({ listNo: L });
+    expect((await getRow('U1', L)).is_cr).toBeNull();
+    // Stage 2 仍寫 score / tier（驗證計分仍正常）。
+    const row = await getRow('U1', L);
+    expect(row.score).not.toBeUndefined();
   });
 });
 
