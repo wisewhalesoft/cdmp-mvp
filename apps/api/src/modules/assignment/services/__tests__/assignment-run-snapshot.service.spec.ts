@@ -21,6 +21,8 @@ import { SectionChiefScopeService } from '../section-chief-scope.service';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -38,10 +40,10 @@ async function buildModule(): Promise<Env> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [AssignmentRun, AssignmentRunSnapshot, ObEmplSet],
+        entities: [AssignmentRun, AssignmentRunSnapshot, ObEmplSet, ObEmphire, User],
         synchronize: true,
       }),
-      TypeOrmModule.forFeature([AssignmentRun, AssignmentRunSnapshot, ObEmplSet]),
+      TypeOrmModule.forFeature([AssignmentRun, AssignmentRunSnapshot, ObEmplSet, ObEmphire, User]),
     ],
     providers: [AssignmentRunSnapshotService, SectionChiefScopeService],
   }).compile();
