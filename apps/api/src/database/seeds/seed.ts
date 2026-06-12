@@ -44,15 +44,16 @@ const SEED_ACCOUNTS = [
   },
 ];
 
-// E07 ob_assign_config 全域設定（AD-E07-5）— 對應 migration 130 的 INSERT，
-// dev synchronize 不跑 migration 故此處 seed 補
-const SEED_ASSIGN_CONFIGS = [
-  {
-    config_key: 'cr_reassignment_enabled',
-    config_value: 'false',
-    description: 'CR 回分全域開關（F059）',
-  },
-];
+// [DEPRECATED-F102] E07 ob_assign_config 全域設定（AD-E07-5）。
+// F102 / AD-E07-30（US-154 AC-1）：移除 cr_reassignment_enabled config row —— 全域 CR 旗標已廢棄，
+// CR 開關唯一有效來源 = ob_list_definition.cr_enabled（per-list）。其餘 config_key（若未來新增）
+// 由各自 feature 自行 seed；F102 後本陣列為空（保留 ob_assign_config 表 / entity，OQ-4 裁定不 DROP）。
+// prod 既有 cr_reassignment_enabled 殘留記錄之清理：deploy checklist 手動評估（US-154 OQ-8），不自動執行。
+const SEED_ASSIGN_CONFIGS: Array<{
+  config_key: string;
+  config_value: string;
+  description: string;
+}> = [];
 
 async function seed() {
   const dbType = process.env.DB_TYPE || 'postgres';
