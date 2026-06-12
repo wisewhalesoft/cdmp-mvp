@@ -13,3 +13,6 @@ dist
 
 # Claude Code 排程器執行期 lock（暫存檔，不入版控）
 .claude/scheduled_tasks.lock
+
+# Legacy 參考用大型二進位（ground truth，留本機不入版控）
+reference/*.xlsx

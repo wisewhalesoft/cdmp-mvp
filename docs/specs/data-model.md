@@ -964,7 +964,7 @@ F050 v2.1 提供「從上月名單複製」起點，行為規則如下：
 |---|---|
 | **僅複製 `condition_payload`** | 整段 JSONB 複製至新名單；新名單需重新填寫 `list_nm` |
 | **不複製比例資料** | 部門比例（`ob_dept_pct`）/ 人員比例（`ob_empl_set`）為各自階段資料表，建立新草稿時恢復為空，需於後續 M03a / M03b 階段重新設定 |
-| **`cr_enabled` 恢復預設 `true`** | 不沿用上月設定（即使來源名單之 `cr_enabled = false`，新名單仍以預設 `true` 起算） |
+| **`cr_enabled` 恢復預設 `false`** | 不沿用上月設定；新名單 `cr_enabled` 恢復為欄位預設值 `false`（沿用 migration `1711360000182` 實際 `DEFAULT false`；汽車名單若需啟用 CR，須於 F050/F051 名單設定頁面由 admin 顯式設為 `true`；F102 US-154 確認，OQ-F102-3 裁示）。**注意**：原文「預設 true」為文件錯誤，entity / migration 一律為 `DEFAULT false`，無需新增 migration 修正。 |
 | **來源名單條件（v2.1 補述）** | `project_workym = targetWorkym - 1 month` AND `stage = 'ready'` AND `status = 'active'` AND `condition_payload IS NOT NULL`（避免複製到未完成的草稿、推進中、已停用名單，**或舊遷移名單**）。**舊名單不可作為複製來源**（拍板 Q4 / 拍板 2 一致性：舊名單條件需先由 Phase 3a E2 backfill 一次性轉換）；前端 dropdown 已過濾此情境，後端 defense-in-depth 違反回 422 `LEGACY_LIST_NOT_COPYABLE`（F050 v2.1 §6.1 錯誤回應表） |
 | **跨年計算** | 「上月」按 calendar month 計算（例：202501 - 1 = 202412） |
 | **稽核追溯** | 來源 `list_no` 寫入 `assignment_audit_log.before_value.copyFromListNo` 欄位 |

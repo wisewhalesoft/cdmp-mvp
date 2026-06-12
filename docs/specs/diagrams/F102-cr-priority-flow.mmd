@@ -1,0 +1,50 @@
+%% F102 月跑 CR 優先分派流程：Stage 2 tier_level 就緒 → 讀 cr_enabled 閘控 → (true) 步驟 1 逾2年清空 → 步驟 2 離職清空 → 步驟 3 CR 優先指派 → 步驟 4 扣量交 F101；(false) is_cr 強制 N 全案件入 F101 池。CR 段為確定性 SET-based UPDATE（無 NEWID()，align I-DET-01）；legacy st3_emplid CR 段死碼不引用。
+flowchart TD
+    START(["月跑 worker：per-list 迴圈"]) --> S2DONE["Stage 2 完成<br/>score / card_level / tier_level<br/>已寫入 ob_monthly_run_result"]
+
+    S2DONE --> CLEAR["F101 BR-F101-06 重跑清除<br/>同月 T1-T5 之 dept_id / emplid / assignday 清空<br/>is_cr 保留<br/>§8 C-2：須在步驟 3 之前"]
+
+    CLEAR --> GATE{"BR-F102-01 讀 cr_enabled 快照<br/>ob_list_definition.cr_enabled ?<br/>不讀全域旗標 BR-F102-03"}
+
+    GATE -- "false" --> FALSEN["BR-F102-02 強制 is_cr=N<br/>UPDATE ob_monthly_run_result<br/>SET is_cr=N WHERE list_no AND run_id<br/>無 Y 殘留"]
+    FALSEN --> F101POOL_ALL["全案件入 F101 比例分派池<br/>不扣量"]
+
+    GATE -- "true" --> STEP1
+
+    %% ===== CR 前置步驟（cr_enabled=true）=====
+    subgraph CRSTEPS["CR 前置步驟 BR-F102-04~11 確定性 SET-based"]
+        direction TB
+        STEP1["步驟 1 逾2年清空<br/>appl_date 早於 名單月減 2 年 嚴格小於<br/>SYS_DT = project_workym + 01<br/>清 cr_id / cr_nm，is_cr=N"]
+        STEP1 --> STEP2["步驟 2 離職清空<br/>JOIN ob_emphire emp_id=cr_id<br/>resign_date 早於 SYS_DT 嚴格小於<br/>查無記錄不清空 BR-F102-08<br/>清 cr_id / cr_nm，is_cr=N"]
+        STEP2 --> STEP3R{"步驟 3 剩餘 CR 案件<br/>cr_id 非空 ?"}
+        STEP3R -- "否" --> SKIP3["不指派<br/>is_cr 維持原值<br/>入比例池"]
+        STEP3R -- "是" --> STEP3J{"JOIN ob_empl_set<br/>list_no + emplid=cr_id<br/>ration 大於 0 ?"}
+        STEP3J -- "否（無設定或 ration=0）" --> SKIP3
+        STEP3J -- "是" --> STEP3A["CR 優先指派<br/>emplid=cr_id<br/>dept_id=emplid_deptid=deptid_m<br/>多筆 deptid_m 取 ASC 第一筆 OQ-2<br/>is_cr=Y"]
+    end
+
+    STEP3A --> STEP4
+    SKIP3 --> STEP4
+    STEP4["步驟 4 扣量 BR-F102-12<br/>F101 案件池 僅 is_cr 不等於 Y<br/>各課/員工基數扣 CR 預指派<br/>不覆蓋 CR 案 emplid / dept_id"]
+
+    STEP4 --> F101POOL["F101 Stage 3 部門比例 → Stage 4 員工 + ASSIGNDAY<br/>只跑 is_cr 不等於 Y 案件"]
+    F101POOL_ALL --> F101POOL
+
+    F101POOL --> VERIFY["AC-13 deploy 後重跑 202606<br/>F064 匯出：is_cr=Y 約 1.9%<br/>cr_id / cr_nm 非空，emplid=cr_id"]
+    VERIFY --> NEXT(["下一 list / 月跑完成"])
+
+    %% ===== 旁註：廢除全域旗標 + 死碼 =====
+    DEPRECATE["US-154 廢除全域旗標<br/>ob_assign_config.cr_reassignment_enabled<br/>per-list cr_enabled 唯一來源<br/>F059 doc body 已修正"]
+    DEPRECATE -.-> GATE
+
+    DEADCODE["legacy 死碼不引用<br/>st3_emplid CR 段為註解<br/>tblCfg_Person 電銷檢查 已註解<br/>PROD_KIND=01 與 機車 LIKE 排除"]
+    DEADCODE -.-> CRSTEPS
+
+    classDef gate fill:#e2e3ff,stroke:#4b3fb0,color:#1a1a4b;
+    classDef clear fill:#fff3cd,stroke:#d39e00,color:#664d03;
+    classDef assign fill:#d1e7dd,stroke:#0f5132,color:#0f5132;
+    classDef note fill:#f8f9fa,stroke:#6c757d,color:#343a40;
+    class GATE,STEP3R,STEP3J gate;
+    class STEP1,STEP2,FALSEN clear;
+    class STEP3A,STEP4,VERIFY assign;
+    class DEPRECATE,DEADCODE note;

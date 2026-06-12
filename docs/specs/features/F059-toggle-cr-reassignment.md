@@ -41,7 +41,9 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 ## 1. 功能摘要
 
-提供業務主管切換 CR（Customer Recycling，回收客戶）回分規則的啟用/停用狀態。CR 回分規則為全域開關，於月跑 Stage 3（部門分配）執行時作為優先指定機制。月跑執行中禁止切換。
+> **[DEPRECATED]（F102 US-154 / 2026-06-12）**：原設計之「全域開關」已廢止，CR 回分啟用/停用改為 **per-list 欄位** `ob_list_definition.cr_enabled`（BOOLEAN NOT NULL DEFAULT false），於名單建立 / 編輯階段設定；詳見 [F050](F050-create-list-definition.md) / [F051](F051-edit-list-definition.md)。CR 優先分派之執行邏輯由 [F102](F102-cr-priority-assignment.md) 承接（per-list `cr_enabled` 閘控 + 失效清空 + CR 優先指派 + 扣量）。全域旗標 `ob_assign_config.cr_reassignment_enabled` 已正式廢除（F102 US-154）。
+
+提供業務主管切換 CR（Customer Recycling，回收客戶）回分規則的啟用/停用狀態。~~CR 回分規則為全域開關~~（**[DEPRECATED]** 已改為 per-list 欄位 `ob_list_definition.cr_enabled`，見上方說明），於月跑 Stage 3（部門分配）執行時作為優先指定機制。月跑執行中禁止切換。
 
 ## 2. 使用者故事
 
@@ -124,7 +126,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 | 規則編號 | 說明 |
 |---|---|
-| BR-1 | CR 回分規則為全域開關，影響所有部門的當下以後月跑 |
+| BR-1 | **[DEPRECATED]（F102 US-154）** ~~CR 回分規則為全域開關，影響所有部門的當下以後月跑~~ → 已改為 **per-list 開關** `ob_list_definition.cr_enabled`：各名單獨立決定是否啟用 CR 優先分派，僅影響該名單；全域旗標 `ob_assign_config.cr_reassignment_enabled` 已廢除。執行邏輯見 [F102](F102-cr-priority-assignment.md) BR-F102-01~03。 |
 | BR-2 | 月跑執行中禁止切換；完成後自動恢復可切換 |
 | BR-3 | 每次切換必須透過確認對話框，避免誤操作 |
 | BR-4 | 目前狀態於月跑觸發時由 config 快照記錄，歷史可透過 F066 追溯 |

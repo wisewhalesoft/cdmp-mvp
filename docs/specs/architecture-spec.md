@@ -2231,24 +2231,39 @@ SQL，year-above 例外」，estimate≡run 共用原則保留並強化）、修
 目標：以 legacy SP（`st2_dept` / `st3_emplid`）算法為基底，實作三維分組 FLOOR + 確定性比例分派，
 取代 placeholder，消除 Bug C，並確保分派結果可重現（US-150）。
 
-#### 5.14.2 Pipeline 執行順序不變式（I-PIPELINE-STAGE-ORDER）
+#### 5.14.2 Pipeline 執行順序不變式（I-PIPELINE-STAGE-ORDER / I-CR-ORDER-01）
+
+> **F102 更新（AD-E07-30）**：在 Stage 2 與 Stage 3 之間插入 CR 優先分派前置步驟（F102），
+> 並在 CR 步驟之前執行 Stage 3 前清除（I-CR-ORDER-01）。
 
 ```mermaid
 graph LR
+    S1["Stage 1<br/>案件挑選<br/>帶入 cr_id/cr_nm/is_cr"]
     S2["Stage 2<br/>計分 + tier_level 寫入"]
-    S3["Stage 3<br/>dept ration 分配<br/>寫 dept_id"]
-    S4E["Stage 4<br/>empl ration 分配<br/>寫 emplid / emplid_deptid"]
-    S4A["Stage 4<br/>ASSIGNDAY<br/>寫 assignday"]
+    CLR["Stage 3 前清除<br/>dept_id/emplid/assignday→NULL<br/>is_cr 保留"]
+    CR["F102 CR 前置步驟<br/>閘控（per-list cr_enabled）<br/>步驟1 逾2年清空<br/>步驟2 離職清空<br/>步驟3 CR 優先指派"]
+    S3["Stage 3<br/>dept ration 分配<br/>配額基數排除 is_cr=Y<br/>寫 dept_id"]
+    S4E["Stage 4<br/>empl ration 分配<br/>配額基數排除 is_cr=Y<br/>寫 emplid / emplid_deptid"]
+    S4A["Stage 4<br/>ASSIGNDAY<br/>emplid IS NOT NULL（含 CR）<br/>寫 assignday"]
 
-    S2 --> S3 --> S4E --> S4A
+    S1 --> S2 --> CLR --> CR --> S3 --> S4E --> S4A
 
     classDef stage fill:#dbeafe,stroke:#2563eb
-    class S2,S3,S4E,S4A stage
+    classDef cr fill:#fef9c3,stroke:#ca8a04
+    classDef clear fill:#fee2e2,stroke:#dc2626
+    class S1,S2,S3,S4E,S4A stage
+    class CR cr
+    class CLR clear
 ```
 
-**強制前置依賴**：Stage 3 依賴 `ob_monthly_run_result.tier_level`（Stage 2 輸出）與
-`ob_pool_data.dept_id`（Stage 1 輸出）；Stage 4 empl 依賴 `ob_monthly_run_result.dept_id`（Stage 3 輸出）；
-ASSIGNDAY 依賴 `emplid`（Stage 4 empl 輸出）。任何跳過或亂序均為錯誤（C-1，BR-F101-01）。
+**強制前置依賴**（I-PIPELINE-STAGE-ORDER + I-CR-ORDER-01）：
+- Stage 2 依賴 Stage 1 寫入之 `cr_id` / `cr_nm` / `is_cr`（I-CR-COLSRC-01）。
+- Stage 3 前清除（`dept_id`/`emplid`/`assignday`→NULL，`is_cr` 保留）必須在 CR 步驟之前執行（C-2 / I-CR-ORDER-01）。
+- CR 步驟依賴 Stage 2 已寫之 `tier_level`；依 per-list `cr_enabled` 閘控（I-CR-SNAPSHOT-01）。
+- Stage 3/4 ration **配額基數**排除 `is_cr='Y'`（I-CR-DEDUCT-01）；CR 案件 `emplid`/`dept_id` 不被覆蓋。
+- **ASSIGNDAY 案件池 = `emplid IS NOT NULL`（含 CR 案件）**；CR 案件依其 emplid 同樣散佈至工作日（I-CR-ASSIGNDAY-01）。
+- Stage 4 empl 依賴 Stage 3 寫入之 `dept_id`；ASSIGNDAY 依賴 `emplid`。
+任何跳過或亂序均為錯誤（BR-F101-01 / BR-F102-09）。
 
 #### 5.14.3 Stage 3 — 部門（電銷課）比例分配設計
 
@@ -2264,8 +2279,10 @@ ASSIGNDAY 依賴 `emplid`（Stage 4 empl 輸出）。任何跳過或亂序均為
 `dept_id`（分處）讀 `ob_pool_data`，以 `JOIN ob_pool_data o ON o.orgno=r.orgno AND o.appl_no=r.appl_no`
 取得。
 
-**CR 預指移除**：legacy `st2_dept` SP 中 CR 業代優先分配整段邏輯（#OBPOOLDATA_LIST 臨時表 + CR
-UPDATE + 配額扣除）**完整移除**（BR-F101-12，simplified is_cr）。
+**CR 優先分派（F102 更新）**：legacy `st2_dept` SP 中 CR 業代優先分配邏輯（#OBPOOLDATA_LIST 臨時表 +
+失效清空 + CR UPDATE + 配額扣除）由 F102 `cr-priority.ts` / `cr-priority-sql.ts` 前置步驟實作，
+在 Stage 3 ration 分派前執行（BR-F102-12，I-CR-ORDER-01）。`cr_enabled=false` 名單之案件全入 ration 池
+（simplified is_cr 語意，與 F101 BR-F101-12 一致）；`cr_enabled=true` 名單執行完整 CR 邏輯（AD-E07-30）。
 
 #### 5.14.4 Stage 4 — 員工比例分配設計
 
@@ -7002,7 +7019,7 @@ ALTER TABLE ob_tier
 | # | 項目 | 狀態 | 備注 |
 |---|------|------|------|
 | S1 | F049 試算 API 與正式月跑 Stage 0 確認共用同一日比例演算法（AD-E07-8） | ✅ 確認 | F049 試算不寫入 ob_assign_set；月跑 Stage 0 正式寫入 |
-| S2 | F059 CR 回分開關：確認 `ob_assign_config.config_key = 'cr_reassignment_enabled'` 為唯一真實來源 | ✅ 確認（AD-E07-5） | |
+| S2 | `[DEPRECATED-F102]` 全域 CR 旗標 `ob_assign_config.cr_reassignment_enabled` 已由 F102 US-154（AD-E07-30）正式廢棄；CR 開關唯一有效來源 = `ob_list_definition.cr_enabled`（per-list，BOOLEAN NOT NULL DEFAULT false）。F059 doc body §1/§6 已加 `[DEPRECATED]` 標記（F102 spec 已執行）；任何 service / controller 讀取全域旗標均為錯誤（AC-12 靜態掃描為 DoD 門檻）。 | ✅ 廢棄並更新（F102 US-154 / AD-E07-30 OQ-5） | 原 AD-E07-5 裁示已由 F102 OQ-4/OQ-5 取代 |
 | S3 | F054/F057 月跑鎖：確認所有 E07 CRUD API 在寫入前查詢 `assignment_run WHERE status IN ('pending','running')` | ⬜ 待 TDD 實作驗證 | |
 | S4 | F064 匯出：確認使用 exceljs streaming mode（非全量 buffer），避免大資料集 OOM | ⬜ 待 TDD 實作驗證 | AD-E07-11（參考技術選型） |
 | S5 | 確認 `ob_emphire.resign_date IS NULL` 為在職判斷唯一條件（AD-E07-6），無其他停用欄位 | ✅ 確認 | |
