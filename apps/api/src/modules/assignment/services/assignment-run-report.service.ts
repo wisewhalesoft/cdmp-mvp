@@ -6,8 +6,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { PassThrough } from 'stream';
-import { Repository } from 'typeorm';
+import { PassThrough, Readable } from 'stream';
+import { DataSource, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
@@ -77,17 +77,88 @@ export interface ExportOptions {
 /** F064 BR-3：xlsx 串流匯出 timeout 上限（5 分鐘） */
 const EXPORT_TIMEOUT_MS_DEFAULT = 5 * 60 * 1000;
 
-/** F064 AC-2 / BR-1：xlsx + csv 共用欄位（8 欄） */
-const EXPORT_HEADER = [
-  'list_no',
-  'appl_no',
-  'card_level',
-  'tier_level',
-  'dept_id',
-  'emplid',
-  'score',
-  'is_cr',
+/**
+ * F064 v2.0 AC-2 / BR-F064-03 / AD-E07-31 §3.3：xlsx + csv 共用欄位（**23 欄**，
+ * 對齊 legacy `reference/202606 分派名單.xlsx` 工作表 1 欄序）。
+ *
+ * 不變式 I-EXP-COLSRC-01：不含 custo_no / cust_name / card_level / score（GAP-1 修正）。
+ */
+export const EXPORT_HEADER_V2 = [
+  '分處', // 1  pool.dept_name
+  '案號', // 2  r.appl_no
+  '指派日', // 3  r.assignday → YYYYMMDD
+  '名單代號', // 4  r.list_no
+  '名單名稱', // 5  list_def.list_nm（LEFT JOIN）
+  '進件日', // 6  pool.appl_date → YYYY/MM/DD（GAP-3：取 pool 端）
+  'CR_ID', // 7  r.cr_id
+  'CR_NM', // 8  r.cr_nm
+  '是否分配CR', // 9  r.is_cr
+  'TIER', // 10 r.tier_level
+  '部門代號', // 11 r.dept_id
+  '部門名稱', // 12 emphire.dept_name（LEFT JOIN，join-miss→空）
+  '員編', // 13 r.emplid
+  '姓名', // 14 emphire.emp_nm（LEFT JOIN，join-miss→空）
+  '職級', // 15 emphire.title_name（LEFT JOIN，join-miss→空）
+  '專案類別', // 16 pool.project_tp
+  '專案名稱', // 17 pool.spec_name
+  '逾期天數', // 18 pool.overdue_day（legacy 恆 NULL，保留欄）
+  '客戶利率', // 19 pool.pro_rate
+  'STA_CODE', // 20 pool.sta_code
+  '案件狀態', // 21 pool.sta_code_na
+  '廠牌名稱', // 22 pool.brand_name
+  '名單週期月數', // 23 pool.month_cnt
 ] as const;
+
+/**
+ * F064 v2.0 匯出 join SQL 之 raw row 型別（AD-E07-31 §2.1 SELECT 別名對應）。
+ * 所有欄位皆由單一 join SQL 提供（I-EXP-COLSRC-01）；型別為 DB 驅動回傳之原始值。
+ */
+export interface RawExportRow {
+  // pool
+  dept_name?: string | null; // 欄 1 分處（pool.dept_name）
+  appl_no?: string | null; // 欄 2 案號
+  list_no?: string | null; // 欄 4 名單代號
+  appl_date?: Date | string | null; // 欄 6 進件日（pool.appl_date，GAP-3）
+  project_tp?: string | null; // 欄 16
+  spec_name?: string | null; // 欄 17
+  overdue_day?: number | string | null; // 欄 18（恆 NULL）
+  pro_rate?: number | string | null; // 欄 19
+  sta_code?: string | null; // 欄 20
+  sta_code_na?: string | null; // 欄 21
+  brand_name?: string | null; // 欄 22
+  month_cnt?: number | string | null; // 欄 23
+  // run_result
+  assignday?: string | null; // 欄 3 指派日
+  cr_id?: string | null; // 欄 7
+  cr_nm?: string | null; // 欄 8
+  is_cr?: string | null; // 欄 9
+  tier_level?: string | null; // 欄 10
+  dept_id?: string | null; // 欄 11
+  emplid?: string | null; // 欄 13
+  // list_def（LEFT JOIN）
+  list_nm?: string | null; // 欄 5 名單名稱
+  // emphire（LEFT JOIN，別名 emphire_*）
+  emphire_dept_name?: string | null; // 欄 12 部門名稱
+  emp_nm?: string | null; // 欄 14 姓名
+  title_name?: string | null; // 欄 15 職級
+}
+
+/** formatRow() 回傳：23 欄字串陣列 + emphire join-miss 偵測（I-EXP-JOINMISS-01）。 */
+export interface FormattedExportRow {
+  row: string[];
+  empJoinMiss: boolean;
+  emplid: string | null;
+}
+
+/**
+ * F064 v2.0 匯出 join SQL spec（buildExportQuery 產出）。
+ * sql / params 由 streaming producer 餵 TypeORM queryRunner.stream()（I-EXP-NOOFFSET-01）。
+ */
+export interface ExportQuerySpec {
+  sql: string;
+  params: unknown[];
+  scopedByCreator: boolean;
+}
 
 export interface CompareResponse {
   base: { runId: string; projectWorkym: string; totalCases: number };
@@ -171,6 +242,8 @@ export class AssignmentRunReportService {
     @InjectRepository(AssignmentAuditLog)
     private readonly auditRepo: Repository<AssignmentAuditLog>,
     private readonly scope: SectionChiefScopeService,
+    // F064 v2.0 / AD-E07-31：匯出多表 join 下推 + server-side cursor streaming（I-EXP-STREAM-01）
+    private readonly dataSource: DataSource,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -337,6 +410,16 @@ export class AssignmentRunReportService {
   // F064 匯出（CSV）
   // -------------------------------------------------------------------------
 
+  /**
+   * F064 v2.0 匯出分派結果（23 欄對齊 legacy；AD-E07-31）。
+   *
+   * 重構要點（取代 v1.1）：
+   *   - **不再讀 assignment_run_snapshot.payload**（移除 loadAllPayloads，GAP-2 / I-EXP-COLSRC-01）；
+   *     改由 ob_monthly_run_result 多表 join 取 23 欄（buildExportQuery）。
+   *   - xlsx 與 CSV **共用同一 row-producer**（server-side cursor stream；I-EXP-STREAM-01 / I-EXP-NOOFFSET-01）。
+   *   - 處長 scope filter 以 **SQL WHERE 注入**（非 streaming 後 in-memory 過濾；I-EXP-SCOPE-01）。
+   *   - 日期格式於 formatRow() 集中轉換（I-EXP-FMT-01）；emphire join-miss fallback + WARNING 彙總（I-EXP-JOINMISS-01）。
+   */
   async exportResult(
     runId: string,
     format: 'csv' | 'xlsx' = 'csv',
@@ -345,81 +428,313 @@ export class AssignmentRunReportService {
     options?: ExportOptions,
   ): Promise<ExportResult> {
     const run = await this.requireCompletedRun(runId);
-    const { resultPayload } = await this.loadAllPayloads(runId);
-    const allAssignments: ResultAssignment[] = Array.isArray(
-      (resultPayload as any)?.assignments,
-    )
-      ? ((resultPayload as any).assignments as ResultAssignment[])
-      : [];
-    // F064 v1.1 scope filter
-    const assignments = await this.scope.filterByEmplId<ResultAssignment>(
-      allAssignments,
-      actor,
-    );
+    // F064 v2.0：建構 23 欄多表 join SQL（含處長 scope WHERE，BR-F064-13 / I-EXP-SCOPE-01）
+    const query = await this.buildExportQuery(runId, actor);
+    const timeoutMs = options?.timeoutMs ?? EXPORT_TIMEOUT_MS_DEFAULT;
 
     const shortId = run.run_id.replace(/-/g, '').slice(0, 8);
+    const joinMissEmplids: string[] = [];
+    let joinMissCount = 0;
+    let rowCount = 0;
+
+    // emphire join-miss 偵測 callback（彙總計數，避免 per-row log；AD-E07-31 §2.7）
+    const onRow = (formatted: FormattedExportRow): void => {
+      rowCount += 1;
+      if (formatted.empJoinMiss) {
+        joinMissCount += 1;
+        if (joinMissEmplids.length < 100 && formatted.emplid) {
+          joinMissEmplids.push(formatted.emplid);
+        }
+      }
+    };
+
+    let body: string | Buffer;
+    let contentType: string;
+    let ext: string;
 
     if (format === 'xlsx') {
-      const body = await this.buildXlsxStreaming(
-        assignments,
-        options?.timeoutMs ?? EXPORT_TIMEOUT_MS_DEFAULT,
-      );
-      const filename = `assignment_result_${run.project_workym}_${shortId}.xlsx`;
-      // F064 AC-5：稽核
-      await this.writeAudit(runId, actorId, 'xlsx', assignments.length);
-      return {
-        filename,
-        contentType:
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        body,
-        rowCount: assignments.length,
-      };
+      body = await this.buildExportXlsxStreaming(query, timeoutMs, onRow);
+      contentType =
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      ext = 'xlsx';
+    } else {
+      body = await this.buildExportCsvStreaming(query, timeoutMs, onRow);
+      contentType = 'text/csv; charset=utf-8';
+      ext = 'csv';
     }
 
-    // CSV path
-    const lines: string[] = [EXPORT_HEADER.join(',')];
-    for (const a of assignments) {
-      lines.push(
-        [
-          a.listNo,
-          a.applNo,
-          a.cardLevel,
-          a.tierLevel,
-          a.deptId,
-          a.emplid,
-          a.score,
-          a.isCr,
-        ]
-          .map((v) => this.csvEscape(v))
-          .join(','),
+    // I-EXP-JOINMISS-01：匯出完成後記一筆 WARNING log 彙總（含 emplid 與 run_id）
+    if (joinMissCount > 0) {
+      const shown = joinMissEmplids.join(', ');
+      const truncatedNote =
+        joinMissCount > 100 ? ` (truncated to 100 of ${joinMissCount} misses)` : '';
+      this.logger.warn(
+        `F064 export ob_emphire join-miss: run=${runId} count=${joinMissCount} emplids=[${shown}]${truncatedNote}`,
       );
     }
-    const body = lines.join('\n');
 
-    const filename = `assignment_result_${run.project_workym}_${shortId}.csv`;
+    const filename = `assignment_result_${run.project_workym}_${shortId}.${ext}`;
 
-    // F064 AC-5：稽核
-    await this.writeAudit(runId, actorId, 'csv', assignments.length);
+    // BR-F064-15 / AC-9：稽核（含 actorBusinessRole / scopedByCreator / exportedRowCount）
+    await this.writeAudit(runId, actorId, {
+      format,
+      actorBusinessRole: actor?.businessRole ?? 'unknown',
+      scopedByCreator: query.scopedByCreator,
+      exportedRowCount: rowCount,
+    });
 
-    return {
-      filename,
-      contentType: 'text/csv; charset=utf-8',
-      body,
-      rowCount: assignments.length,
-    };
+    return { filename, contentType, body, rowCount };
   }
 
   /**
-   * F064 AC-4 / BR-2：使用 exceljs WorkbookWriter（streaming mode），
-   * 逐 row commit，並支援 BR-3 timeout 監看（超過回 EXPORT_FILE_EXPIRED）。
+   * F064 v2.1 / AD-E07-31：建構 23 欄多表 join SQL（INNER JOIN ob_pool_data / LEFT JOIN emphire / list_def）
+   * + 處長 scope WHERE 注入（BR-F064-13）。
    *
-   * 採 PassThrough 為 sink，收集 chunks 到 Buffer（最終仍需回給 controller 寫 response），
-   * 但寫入過程為 streaming（exceljs sheet.commit() / workbook.commit() 觸發 partial flush），
-   * 避免一次性建立完整 in-memory Workbook 物件。
+   * I-EXP-LINEAGE-01：pool 屬性取自 ob_pool_data o（共享池，orgno+appl_no）——result 母體血緣源頭；
+   *   不取 ob_pool_data_list（per-list 去重表，連 list_no+orgno+appl_no 會掉列）。
+   * I-EXP-DET-01：ORDER BY r.list_no, r.orgno, r.appl_no（確定性輸出）。
+   * I-EXP-APLDATE-01：欄 6 進件日取 o.appl_date（pool 端，非 r.appl_date）。
+   * I-EXP-SCOPE-01：section_chief 以 emplid IN (...) WHERE 注入；director / admin bypass。
    */
-  private async buildXlsxStreaming(
-    rows: ResultAssignment[],
+  private async buildExportQuery(
+    runId: string,
+    actor?: ActorUser | null,
+  ): Promise<ExportQuerySpec> {
+    const params: unknown[] = [runId];
+    let scopeClause = '';
+    let scopedByCreator = false;
+
+    if (this.scope.shouldFilter(actor)) {
+      scopedByCreator = true;
+      const scope = await this.scope.getScopeEmplIds(actor!.userId);
+      const emplids = [...scope];
+      if (emplids.length === 0) {
+        // 無轄區 → 永不匹配（BR-F064-14：仍回 200 + 僅表頭）。1=0 確保 0 列。
+        scopeClause = ' AND 1 = 0';
+      } else {
+        const placeholders = emplids
+          .map((_, i) => `$${params.length + i + 1}`)
+          .join(', ');
+        scopeClause = ` AND r.emplid IN (${placeholders})`;
+        params.push(...emplids);
+      }
+    }
+
+    // I-EXP-LINEAGE-01（F064 v2.1 修正）：pool 屬性取自 **ob_pool_data o**（共享池，PK=orgno+appl_no），
+    // **非** ob_pool_data_list（per-list 去重表）。月跑 Stage 1 為
+    //   INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o
+    // → result 母體血緣源頭即 ob_pool_data（by orgno+appl_no）。改用 list_no+orgno+appl_no 連 pool_data_list
+    // 會掉列（202606 實測掉 6,438 列／11.5%，因部分 result 案件不在該名單之 per-list 去重表）。
+    // INNER JOIN 維持（血緣保證每筆 result 必有對應 ob_pool_data 列；INNER 更安全、可暴露完整性異常）。
+    const sql = `
+      SELECT
+        o.dept_name                          AS dept_name,
+        r.appl_no                            AS appl_no,
+        r.assignday                          AS assignday,
+        r.list_no                            AS list_no,
+        d.list_nm                            AS list_nm,
+        o.appl_date                          AS appl_date,
+        r.cr_id                              AS cr_id,
+        r.cr_nm                              AS cr_nm,
+        r.is_cr                              AS is_cr,
+        r.tier_level                         AS tier_level,
+        r.dept_id                            AS dept_id,
+        e.dept_name                          AS emphire_dept_name,
+        r.emplid                             AS emplid,
+        e.emp_nm                             AS emp_nm,
+        e.title_name                         AS title_name,
+        o.project_tp                         AS project_tp,
+        o.spec_name                          AS spec_name,
+        o.overdue_day                        AS overdue_day,
+        o.pro_rate                           AS pro_rate,
+        o.sta_code                           AS sta_code,
+        o.sta_code_na                        AS sta_code_na,
+        o.brand_name                         AS brand_name,
+        o.month_cnt                          AS month_cnt
+      FROM ob_monthly_run_result r
+      INNER JOIN ob_pool_data o
+              ON o.orgno   = r.orgno
+             AND o.appl_no = r.appl_no
+      LEFT JOIN ob_emphire e
+             ON e.emp_id = r.emplid
+      LEFT JOIN ob_list_definition d
+             ON d.list_no = r.list_no
+      WHERE r.run_id = $1${scopeClause}
+      ORDER BY r.list_no, r.orgno, r.appl_no
+    `;
+
+    return { sql, params, scopedByCreator };
+  }
+
+  /** F064 v2.0：server-side cursor 每批 FETCH 列數（記憶體與往返次數權衡）。 */
+  private static readonly EXPORT_FETCH_BATCH = 500;
+
+  /**
+   * F064 v2.0 共用 row-producer（I-EXP-STREAM-01）：PostgreSQL **native server-side cursor**
+   * （DECLARE … CURSOR + FETCH n）逐批 yield raw row，**不使用 OFFSET 分頁**（I-EXP-NOOFFSET-01）。
+   *
+   * 採 native cursor（非 TypeORM stream()）以避免引入 `pg-query-stream` 新依賴；
+   * cursor 須在 transaction 內宣告，逐批 FETCH 直至 0 列後 CLOSE + COMMIT + release。
+   *
+   * 回傳 objectMode Readable（push raw row 物件）；xlsx / CSV producer 以 `for await` 共用消費。
+   * SQLite（單元 / Integration 測試）無 native cursor → 由測試 mock 本方法（cursorRows）。
+   */
+  protected async cursorRows(query: ExportQuerySpec): Promise<Readable> {
+    const batch = AssignmentRunReportService.EXPORT_FETCH_BATCH;
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    // 以位置參數 ($1..$n) 宣告 cursor；FETCH 不帶參數。
+    await queryRunner.query(
+      `DECLARE export_cursor NO SCROLL CURSOR FOR ${query.sql}`,
+      query.params,
+    );
+
+    let finished = false;
+    const cleanup = async (): Promise<void> => {
+      if (finished) return;
+      finished = true;
+      try {
+        await queryRunner.query('CLOSE export_cursor');
+        await queryRunner.commitTransaction();
+      } catch {
+        try {
+          await queryRunner.rollbackTransaction();
+        } catch {
+          /* ignore */
+        }
+      } finally {
+        await queryRunner.release();
+      }
+    };
+
+    const readable = new Readable({
+      objectMode: true,
+      read() {
+        void (async () => {
+          try {
+            const rows: RawExportRow[] = await queryRunner.query(
+              `FETCH ${batch} FROM export_cursor`,
+            );
+            if (!rows || rows.length === 0) {
+              await cleanup();
+              this.push(null);
+              return;
+            }
+            for (const row of rows) {
+              this.push(row);
+            }
+          } catch (err) {
+            await cleanup();
+            this.destroy(err as Error);
+          }
+        })();
+      },
+    });
+    // 消費端提前中止（error / destroy）→ 確保 cursor / tx / queryRunner 釋放
+    readable.once('close', () => {
+      void cleanup();
+    });
+    return readable;
+  }
+
+  /**
+   * F064 v2.0 / AD-E07-31 §2.6 / BR-F064-03：將 join SQL raw row 轉為 23 欄字串陣列。
+   *
+   * - 日期格式（I-EXP-FMT-01）：指派日→YYYYMMDD；進件日→YYYY/MM/DD；兩欄輸出字串防 Excel 轉型。
+   * - NULL / undefined → 空字串（含 CR_ID/CR_NM 非 CR 案、overdue_day 恆空、list_nm join-miss）。
+   * - emphire join-miss（I-EXP-JOINMISS-01）：欄 12/14/15 空、欄 13 員編仍輸出原值。
+   */
+  formatRow(raw: RawExportRow): FormattedExportRow {
+    const s = (v: unknown): string =>
+      v === null || v === undefined ? '' : String(v);
+
+    const emplid = raw.emplid ?? null;
+    // emphire join-miss：emp_nm / title_name / emphire_dept_name 皆 null（LEFT JOIN 未命中）
+    const empJoinMiss =
+      (raw.emp_nm === null || raw.emp_nm === undefined) &&
+      (raw.title_name === null || raw.title_name === undefined) &&
+      (raw.emphire_dept_name === null || raw.emphire_dept_name === undefined);
+
+    const row: string[] = [
+      s(raw.dept_name), // 1  分處
+      s(raw.appl_no), // 2  案號
+      this.formatAssignday(raw.assignday), // 3  指派日 YYYYMMDD
+      s(raw.list_no), // 4  名單代號
+      s(raw.list_nm), // 5  名單名稱
+      this.formatApplDate(raw.appl_date), // 6  進件日 YYYY/MM/DD
+      s(raw.cr_id), // 7  CR_ID
+      s(raw.cr_nm), // 8  CR_NM
+      s(raw.is_cr), // 9  是否分配CR
+      s(raw.tier_level), // 10 TIER
+      s(raw.dept_id), // 11 部門代號
+      s(raw.emphire_dept_name), // 12 部門名稱（emphire，join-miss→空）
+      s(raw.emplid), // 13 員編（join-miss 仍輸出原值）
+      s(raw.emp_nm), // 14 姓名（emphire，join-miss→空）
+      s(raw.title_name), // 15 職級（emphire，join-miss→空）
+      s(raw.project_tp), // 16 專案類別
+      s(raw.spec_name), // 17 專案名稱
+      s(raw.overdue_day), // 18 逾期天數（恆空保留欄）
+      s(raw.pro_rate), // 19 客戶利率
+      s(raw.sta_code), // 20 STA_CODE
+      s(raw.sta_code_na), // 21 案件狀態
+      s(raw.brand_name), // 22 廠牌名稱
+      s(raw.month_cnt), // 23 名單週期月數
+    ];
+
+    return { row, empJoinMiss, emplid: emplid != null ? String(emplid) : null };
+  }
+
+  /**
+   * 指派日 → YYYYMMDD（8 位數字字串）。原始可能為 '20260601'（已正確）或 '2026-06-01'（ISO）。
+   * 移除所有非數字字元；輸出字串以防 Excel 解析為整數序號（I-EXP-FMT-01）。
+   */
+  private formatAssignday(v: Date | string | null | undefined): string {
+    if (v === null || v === undefined) return '';
+    let str: string;
+    if (v instanceof Date) {
+      // 防禦路徑：assignday 實際為 varchar，此分支罕至。用本地 getter 與進件日一致。
+      str =
+        `${v.getFullYear()}` +
+        `${String(v.getMonth() + 1).padStart(2, '0')}` +
+        `${String(v.getDate()).padStart(2, '0')}`;
+    } else {
+      str = String(v).replace(/[^0-9]/g, '');
+    }
+    return str;
+  }
+
+  /**
+   * 進件日 → YYYY/MM/DD（斜線分隔字串）。原始為 Date 物件或 'YYYY-MM-DD' 字串（I-EXP-FMT-01）。
+   *
+   * ⚠️ PostgreSQL `date` 欄位經 node-postgres 解析為**本地時區午夜** Date 物件
+   *    （非 UTC）。故 Date 分支須用本地 getter（getFullYear/getMonth/getDate），
+   *    否則 UTC+8 環境 `'2025-03-01'` 讀回 `2025-03-01T00:00+08:00` → getUTCDate() 漂移為 02-28
+   *    （feedback_typeorm_between_timezone 同源教訓）。字串分支取前 10 碼。
+   */
+  private formatApplDate(v: Date | string | null | undefined): string {
+    if (v === null || v === undefined) return '';
+    let ymd: string;
+    if (v instanceof Date) {
+      ymd =
+        `${v.getFullYear()}-` +
+        `${String(v.getMonth() + 1).padStart(2, '0')}-` +
+        `${String(v.getDate()).padStart(2, '0')}`;
+    } else {
+      // 'YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm:ss'：取日期部分
+      ymd = String(v).slice(0, 10);
+    }
+    return ymd.replace(/-/g, '/');
+  }
+
+  /**
+   * F064 v2.0 / AD-E07-31 §2.2：xlsx streaming（exceljs WorkbookWriter）。
+   * 共用 row-producer（cursorRows）逐列餵入；timeout 監看（BR-F064-10）。
+   */
+  private async buildExportXlsxStreaming(
+    query: ExportQuerySpec,
     timeoutMs: number,
+    onRow: (formatted: FormattedExportRow) => void,
   ): Promise<Buffer> {
     const sink = new PassThrough();
     const chunks: Buffer[] = [];
@@ -435,33 +750,74 @@ export class AssignmentRunReportService {
       useSharedStrings: false,
     });
     const sheet = workbook.addWorksheet('assignment_result');
-    sheet.columns = EXPORT_HEADER.map((key) => ({ header: key, key }));
-    // header style（粗體）
+    sheet.columns = EXPORT_HEADER_V2.map((header) => ({ header }));
     const headerRow = sheet.getRow(1);
     headerRow.font = { bold: true };
     headerRow.commit();
 
     const writeAndFinish = (async () => {
-      for (const a of rows) {
-        sheet
-          .addRow({
-            list_no: a.listNo ?? '',
-            appl_no: a.applNo ?? '',
-            card_level: a.cardLevel ?? '',
-            tier_level: a.tierLevel ?? '',
-            dept_id: a.deptId ?? '',
-            emplid: a.emplid ?? '',
-            score: a.score ?? '',
-            is_cr: a.isCr ?? '',
-          })
-          .commit();
+      const source = await this.cursorRows(query);
+      for await (const raw of source as AsyncIterable<RawExportRow>) {
+        const formatted = this.formatRow(raw);
+        onRow(formatted);
+        // 以字串型別逐欄寫入（防 Excel 將指派日 / 進件日誤判為數字序號，I-EXP-FMT-01）
+        sheet.addRow(formatted.row).commit();
       }
       sheet.commit();
-      // workbook.commit() 結束後 ExcelJS 會關閉 stream → sink 收到 end
       await workbook.commit();
       await sinkEnd;
     })();
 
+    await this.raceTimeout(writeAndFinish, timeoutMs);
+    return Buffer.concat(chunks);
+  }
+
+  /**
+   * F064 v2.0 / AD-E07-31 §2.2.1：CSV streaming（PassThrough 逐列 push）。
+   * **取代 v1.1 in-memory `lines.join()` 全量拼接**（I-EXP-STREAM-01）。
+   * 共用 row-producer（cursorRows）；timeout 監看（BR-F064-10）。
+   */
+  private async buildExportCsvStreaming(
+    query: ExportQuerySpec,
+    timeoutMs: number,
+    onRow: (formatted: FormattedExportRow) => void,
+  ): Promise<string> {
+    const csvSink = new PassThrough();
+    const chunks: Buffer[] = [];
+    csvSink.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const sinkEnd = new Promise<void>((resolve, reject) => {
+      csvSink.once('finish', () => resolve());
+      csvSink.once('error', reject);
+    });
+
+    // header row
+    csvSink.push(
+      EXPORT_HEADER_V2.map((h) => this.csvEscape(h)).join(',') + '\n',
+      'utf8',
+    );
+
+    const writeAndFinish = (async () => {
+      const source = await this.cursorRows(query);
+      for await (const raw of source as AsyncIterable<RawExportRow>) {
+        const formatted = this.formatRow(raw);
+        onRow(formatted);
+        csvSink.push(
+          formatted.row.map((v) => this.csvEscape(v)).join(',') + '\n',
+          'utf8',
+        );
+      }
+      csvSink.end();
+      await sinkEnd;
+    })();
+
+    await this.raceTimeout(writeAndFinish, timeoutMs);
+    return Buffer.concat(chunks).toString('utf8');
+  }
+
+  /**
+   * BR-F064-10：匯出 timeout race；超過上限 → 500 EXPORT_FILE_EXPIRED。
+   */
+  private async raceTimeout(work: Promise<void>, timeoutMs: number): Promise<void> {
     let timeoutHandle: NodeJS.Timeout | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
@@ -474,13 +830,11 @@ export class AssignmentRunReportService {
       }, timeoutMs);
       if (typeof timeoutHandle.unref === 'function') timeoutHandle.unref();
     });
-
     try {
-      await Promise.race([writeAndFinish, timeoutPromise]);
+      await Promise.race([work, timeoutPromise]);
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
     }
-    return Buffer.concat(chunks);
   }
 
   // -------------------------------------------------------------------------
@@ -603,15 +957,16 @@ export class AssignmentRunReportService {
     const shortA = cmp.base.runId.replace(/-/g, '').slice(0, 8);
     const shortB = cmp.compare.runId.replace(/-/g, '').slice(0, 8);
     const filename = `assignment_compare_${shortA}_${shortB}.xlsx`;
+    const compareRowCount =
+      cmp.personnelMismatch.list.length +
+      cmp.customerDiff.added.length +
+      cmp.customerDiff.removed.length;
     // F067 audit log：沿用 EXPORT action，entity_id 採 base run，after_value 加入兩端 run_id
-    await this.writeAudit(
-      cmp.base.runId,
-      actorId,
-      'xlsx',
-      cmp.personnelMismatch.list.length + cmp.customerDiff.added.length +
-        cmp.customerDiff.removed.length,
-      { compareRunId: cmp.compare.runId },
-    );
+    await this.writeAudit(cmp.base.runId, actorId, {
+      format: 'xlsx',
+      rowCount: compareRowCount,
+      compareRunId: cmp.compare.runId,
+    });
     return {
       filename,
       contentType:
@@ -950,16 +1305,19 @@ export class AssignmentRunReportService {
     };
   }
 
+  /**
+   * 寫入匯出稽核 log（action='EXPORT'）。
+   *
+   * @param afterValue 完整 after_value 物件。
+   *   - F064 v2.0（BR-F064-15）：`{ format, actorBusinessRole, scopedByCreator, exportedRowCount }`
+   *   - F067 compareRunsExport：`{ format, rowCount, compareRunId }`（沿用 v1.1 shape）
+   */
   private async writeAudit(
     runId: string,
     actorId: string | undefined,
-    format: string,
-    rowCount: number,
-    extra?: Record<string, unknown>,
+    afterValue: Record<string, unknown>,
   ): Promise<void> {
     if (!actorId) return;
-    const afterValue: Record<string, unknown> = { format, rowCount };
-    if (extra) Object.assign(afterValue, extra);
     try {
       await this.auditRepo.save(
         this.auditRepo.create({
