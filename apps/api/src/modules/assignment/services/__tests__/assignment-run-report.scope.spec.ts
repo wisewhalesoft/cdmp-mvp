@@ -21,9 +21,10 @@
  *   - TC-SCOPE-012：admin getSnapshot full → bypass（三份完整）
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
+import { Readable } from 'stream';
 import { Repository } from 'typeorm';
 
 import { AssignmentRunReportService } from '../assignment-run-report.service';
@@ -170,6 +171,7 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
     await env.app.close();
   });
   beforeEach(async () => {
+    vi.restoreAllMocks();
     await env.auditRepo.createQueryBuilder().delete().execute();
     await env.snapRepo.createQueryBuilder().delete().execute();
     await env.runRepo.createQueryBuilder().delete().execute();
@@ -241,46 +243,66 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
     });
   });
 
-  describe('exportResult scope', () => {
-    it('TC-SCOPE-004：section_chief CSV 僅含 D01 兩筆', async () => {
+  // F064 v2.0（AD-E07-31）：匯出改 SQL WHERE 注入 scope（I-EXP-SCOPE-01），不再 post-fetch
+  // filterByEmplId。SQLite 不支援 cursor stream → mock cursorRows，於此驗證 scope WHERE 構造。
+  // 真實「僅含轄區資料列」之 runtime 過濾於 f064-export-23col.pg.spec.ts（PG 真庫）。
+  describe('exportResult scope (F064 v2.0 — scope WHERE 注入)', () => {
+    function mockCursor(rows: unknown[]) {
+      return vi
+        .spyOn(env.reportService as any, 'cursorRows')
+        .mockImplementation(async () => Readable.from(rows));
+    }
+
+    it('TC-SCOPE-004：section_chief 匯出 SQL 含 emplid IN（轄區 E1/E2）+ scopedByCreator=true', async () => {
       const run = await seedStandardRun();
+      const spy = mockCursor([]);
       const out = await env.reportService.exportResult(
         run.run_id,
         'csv',
         SC_USER,
         ACTOR_SECTION_CHIEF,
       );
-      const body = out.body as string;
-      const lines = body.split('\n').filter(Boolean);
-      // header + 2 rows
-      expect(lines.length).toBe(3);
-      expect(out.rowCount).toBe(2);
-      expect(body).toContain('E1');
-      expect(body).toContain('E2');
-      expect(out.body).not.toContain('E3');
-      expect(out.body).not.toContain('E4');
+      const q = spy.mock.calls[0][0] as { sql: string; params: unknown[]; scopedByCreator: boolean };
+      expect(q.scopedByCreator).toBe(true);
+      expect(q.sql).toContain('r.emplid IN');
+      expect(q.params).toContain('E1');
+      expect(q.params).toContain('E2');
+      expect(q.params).not.toContain('E3');
+      expect(q.params).not.toContain('E4');
+      // 稽核 scopedByCreator=true
+      const logs = await env.auditRepo.find();
+      expect((logs[0].after_value as any).scopedByCreator).toBe(true);
+      expect(out.contentType).toContain('text/csv');
     });
 
-    it('TC-SCOPE-005：director CSV 含全部 4 筆', async () => {
+    it('TC-SCOPE-005：director 匯出 SQL 無 scope 子句 + scopedByCreator=false', async () => {
       const run = await seedStandardRun();
-      const out = await env.reportService.exportResult(
+      const spy = mockCursor([]);
+      await env.reportService.exportResult(
         run.run_id,
         'csv',
         ACTOR_DIRECTOR.userId,
         ACTOR_DIRECTOR,
       );
-      expect(out.rowCount).toBe(4);
+      const q = spy.mock.calls[0][0] as { sql: string; scopedByCreator: boolean };
+      expect(q.scopedByCreator).toBe(false);
+      expect(q.sql).not.toContain('r.emplid IN');
+      const logs = await env.auditRepo.find();
+      expect((logs[0].after_value as any).scopedByCreator).toBe(false);
     });
 
-    it('TC-SCOPE-006：admin CSV 含全部 4 筆', async () => {
+    it('TC-SCOPE-006：admin 匯出 bypass（scopedByCreator=false）', async () => {
       const run = await seedStandardRun();
-      const out = await env.reportService.exportResult(
+      const spy = mockCursor([]);
+      await env.reportService.exportResult(
         run.run_id,
         'csv',
         ACTOR_ADMIN.userId,
         ACTOR_ADMIN,
       );
-      expect(out.rowCount).toBe(4);
+      const q = spy.mock.calls[0][0] as { sql: string; scopedByCreator: boolean };
+      expect(q.scopedByCreator).toBe(false);
+      expect(q.sql).not.toContain('r.emplid IN');
     });
   });
 
