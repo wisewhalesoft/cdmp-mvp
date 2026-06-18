@@ -410,9 +410,11 @@ export function RunSummaryPage() {
                     </p>
                     <p className="text-xs text-gray-500 leading-relaxed">
                       包含{' '}
-                      <strong>{stage4Count.toLocaleString()}</strong> 筆分派紀錄，欄位涵蓋
-                      list_no / appl_no / card_level / tier_level / dept_id / emplid /
-                      score / is_cr。
+                      <strong>{stage4Count.toLocaleString()}</strong>{' '}
+                      筆分派紀錄，對齊 legacy 分派名單 23 欄明細（分處 / 案號 / 指派日 /
+                      名單代號 / 名單名稱 / 進件日 / CR_ID / CR_NM / 是否分配CR / TIER /
+                      部門代號 / 部門名稱 / 員編 / 姓名 / 職級 / 專案類別 / 專案名稱 /
+                      逾期天數 / 客戶利率 / STA_CODE / 案件狀態 / 廠牌名稱 / 名單週期月數）。
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -456,9 +458,9 @@ export function RunSummaryPage() {
                     </p>
                     <p>
                       大檔案採 exceljs streaming mode 直接寫入，記憶體不會 OOM。資料來源為
-                      assignment_run_snapshot.payload (snapshot_type='result')，每次匯出將寫入
-                      assignment_audit_log 稽核紀錄。匯出超過 5 分鐘將回傳
-                      EXPORT_FILE_EXPIRED 錯誤。
+                      ob_monthly_run_result 多表 join (ob_pool_data_list / ob_emphire /
+                      ob_list_definition)，每次匯出將寫入 assignment_audit_log 稽核紀錄。匯出超過 5
+                      分鐘將回傳 EXPORT_FILE_EXPIRED 錯誤。
                     </p>
                   </div>
                 </div>

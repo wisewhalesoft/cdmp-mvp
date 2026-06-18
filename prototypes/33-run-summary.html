@@ -302,7 +302,7 @@
             <div class="flex-1 min-w-[280px]">
               <p class="text-sm text-gray-700 font-medium mb-1">將分派結果匯出為檔案</p>
               <p class="text-xs text-gray-500 leading-relaxed">
-                包含 9,500 筆分派紀錄，欄位涵蓋客戶編號 / 客戶姓名 / CARD_LEVEL / TIER_LEVEL / 部門 / 人員工號 / 人員姓名 / 分配日期。檔案名稱：<span class="font-mono text-gray-600">assignment_result_202605_550e8400.{xlsx|csv}</span>
+                包含 9,500 筆分派紀錄，對齊 legacy 分派名單 23 欄明細（分處 / 案號 / 指派日 / 名單代號 / 名單名稱 / 進件日 / CR_ID / CR_NM / 是否分配CR / TIER / 部門代號 / 部門名稱 / 員編 / 姓名 / 職級 / 專案類別 / 專案名稱 / 逾期天數 / 客戶利率 / STA_CODE / 案件狀態 / 廠牌名稱 / 名單週期月數）。檔案名稱：<span class="font-mono text-gray-600">assignment_result_202605_550e8400.{xlsx|csv}</span>
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -337,7 +337,7 @@
             <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div>
               <p class="font-medium text-gray-700 mb-0.5">匯出注意事項（AD-E07-11）</p>
-              <p>大檔案採 exceljs streaming mode 直接寫入瀏覽器，記憶體不會 OOM。資料來源為 assignment_run_snapshot.payload (snapshot_type='result')，每次匯出將寫入 assignment_audit_log 稽核紀錄。匯出超過 5 分鐘將回傳 EXPORT_FILE_EXPIRED 錯誤。</p>
+              <p>大檔案採 exceljs streaming mode 直接寫入瀏覽器，記憶體不會 OOM。資料來源為 ob_monthly_run_result 多表 join (ob_pool_data_list / ob_emphire / ob_list_definition)，每次匯出將寫入 assignment_audit_log 稽核紀錄。匯出超過 5 分鐘將回傳 EXPORT_FILE_EXPIRED 錯誤。</p>
             </div>
           </div>
         </div>
