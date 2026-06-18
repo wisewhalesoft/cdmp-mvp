@@ -1,11 +1,17 @@
-# US-084：匯出分派結果
+# US-084：匯出分派結果（已由 US-155 取代）
+
+> ⚠️ **SUPERSEDED**：本 story 已由 [US-155](US-155-M04-export-assignment-result-23col.md) 取代（2026-06-17）。
+> US-155 對齊 legacy 23 欄並修正 AC-2 錯誤欄位（移除 custo_no/cust_name，改為 appl_no；資料來源從 snapshot 改為 ob_monthly_run_result 多表 join）。
+> **本檔案僅供歷史追溯，請勿用於新的實作。**
+
+---
 
 > **Story ID**：US-084
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
 > **模組**：M04 分派執行
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
-> **預估點數**：3
+> **預估點數**：3（已廢棄，請見 US-155）
 
 ---
 

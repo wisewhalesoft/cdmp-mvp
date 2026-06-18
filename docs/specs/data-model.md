@@ -1134,6 +1134,36 @@ PK：`(run_id, list_no, orgno, appl_no)`
 - `run_id` FK + CASCADE DELETE：月跑 run 刪除時自動清除對應所有結果列
 - `assignment_run_snapshot` type=result 短期雙軌保留（DP-AD25-3），`collectCrCandidates()` 短期維持讀 snapshot
 
+**F064 v2.0 匯出 join 路徑**（AD-E07-31 / US-155，2026-06-17）：
+
+F064 匯出端點（`GET /api/v1/assignment/runs/:runId/export`）採單一 SQL 多表 join 取 23 欄，不讀 `assignment_run_snapshot.payload`（GAP-2 修正）：
+
+> **⚠️ BUG-F064-POOL-JOIN-01（2026-06-17 修正）**：Pool 屬性 join 表為 **`ob_pool_data`**（Stage 1 血緣源，PK=orgno+appl_no），**不是 `ob_pool_data_list`**（legacy ETL per-list 去重表，PK=list_no+orgno+appl_no）。初版 AD 誤用後者，實測遺漏 11.5%（6,438/55,863 筆）。改用 `ob_pool_data` 後 55,863/55,863 全對（I-EXP-LINEAGE-01）。
+
+```
+ob_monthly_run_result r  (WHERE run_id = :runId)
+  → INNER JOIN ob_pool_data o
+              ON o.orgno = r.orgno AND o.appl_no = r.appl_no
+              [Stage 1 血緣源，PK=orgno+appl_no；血緣保證 100% 匹配，INNER JOIN 安全；
+               提供分處/進件日/專案類別/專案名稱/逾期天數/客戶利率/STA_CODE/案件狀態/廠牌名稱/名單週期月數]
+  → LEFT JOIN ob_emphire e
+              ON e.emp_id = r.emplid
+              [join-miss → 部門名稱/姓名/職級三欄空值；員編仍輸出 r.emplid；WARNING log 彙總（BR-F064-06）]
+  → LEFT JOIN ob_list_definition d
+              ON d.list_no = r.list_no
+              [join key = list_no 單鍵；join-miss → 名單名稱空值]
+ORDER BY r.list_no, r.orgno, r.appl_no  -- 確定性排序（I-EXP-DET-01）
+```
+
+關鍵設計決策（AD-E07-31）：
+- **pool 屬性來源表 = `ob_pool_data`**（Stage 1 血緣源，PK=orgno+appl_no；BUG-F064-POOL-JOIN-01 修正）；不使用 `ob_pool_data_list`（I-EXP-LINEAGE-01）。
+- **進件日（欄 6）取 `ob_pool_data.appl_date`**（`o.appl_date`，型別為 timestamp，格式化須取日期部分：`toISOString().slice(0,10)` → replace `-` 為 `/` → `YYYY/MM/DD`；I-EXP-APLDATE-01）；不取 `ob_monthly_run_result.appl_date`。
+- **INNER JOIN ob_pool_data**（血緣保證，非 LEFT JOIN 保護）。
+- **LEFT JOIN emphire / list_def**：ETL 延遲或員工不存在時不中斷匯出（BR-F064-06 / BR-F064-01）。
+- 23 欄欄序以 `reference/202606 分派名單.xlsx` 工作表 1 為 authority（BR-F064-03）；不含 `custo_no`/`cust_name`/`card_level`/`score`（BR-F064-04，GAP-1 修正）。
+- xlsx / CSV 雙格式共用 server-side cursor row-producer，不全量載入記憶體（I-EXP-STREAM-01）。
+- 處長 scope filter 以 SQL WHERE 注入（I-EXP-SCOPE-01），不在 fetch 後 in-memory 過濾。
+
 ---
 
 #### ob_dept_pct（OBMDEPTPCT — per-LIST_NO 部門比例）

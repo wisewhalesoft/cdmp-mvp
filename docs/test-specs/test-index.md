@@ -1,16 +1,16 @@
 ---
 type: test-design-index
-version: "2.24"
+version: "2.26"
 status: draft
-last_updated: 2026-06-12
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102]
+last_updated: 2026-06-17
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：76 份（4 策略文件 + 65 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1673 個（前 1618 + **F102 月跑 CR 優先分派 +55**：GATE 6 + STEP1 5 + STEP2 5 + STEP3 5 + DEDUCT 7 + EQ 7 + IDEM 3 + S2CLEAN 2 + S1SRC 3 + ORDER 2 + DET 3 + REG 4 + UPGR 3，合計 1673）
+> **測試文件總數**：77 份（4 策略文件 + 66 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
+> **總測試場景數**：1742 個（前 1673 + **F064 匯出分派結果 23 欄對齊 legacy +69**：COLSRC 6 + COLSEQ 4 + REGRESSION 6 + FMT 8 + CR 4 + JOINMISS 5 + OVERDUE 2 + STREAM 5 + SCOPE 5 + STATUS 4 + AUDIT 3 + DET 2 + APLDATE 2 + STATIC 5 + AUTH 3 + **LINEAGE 5（v2.1 補）**，合計 1742）
 > **F097 作業月語意統一新增（2026-05-27）**：新增 F097 test spec（48 個場景）。涵蓋後端 `SystemService.getDefaultTargetWorkYm()`（一般月 +1 / 跨年邊界 / OVERRIDE）、`POST /api/v1/assignment/runs` DTO `workYm` 三分支驗證（缺省 400 / 格式錯 422 `WORK_YM_INVALID_FORMAT` / 過去月 422 `RUN_WORKYM_PAST`）、過去月 guard 邊界（`>=` 語意：目標月 1 號當天合法）、三 controller `computeCurrentWorkYm()` 移除 regression、`project_workym` 寫入目標月（非執行月）驗證、Stage 1 去重視窗 `workdt` 對齊（`project_workym='202606'` → 上界 `2026-05-31`，後移一月 regression）、`computeDedupWindow` 函式不改靜態 git diff 驗證（AC-20）、前端 `AssignmentWorkYmContext` 四頁同步 / `run-history` 獨立 / 處長 MonthPicker disabled / 下游結果頁無 MonthPicker 靜態月份、UI 標籤「分派作業月份」regression、forward-only 注釋存在性、E2E 全鏈整合。命名鎖定對齊 glossary.md（`current_work_ym` / `target_work_ym` / `project_workym` / `workdt` / `AssignmentWorkYmContext` / `getDefaultTargetWorkYm` / `RUN_WORKYM_PAST`）。
 > **Stage 1 精確化工程 Phase A/B 更新（2026-05-27）**：F090 v2.0（data_source 單源化 `etl_load` + ETL Delete 全量放寬 + 月跑不再寫本表 Regression）；F091 v2.0（特例 DELETE trigger 關鍵字 SP bug fix：期中機車 / 期中 / 年以上，v1.0 誤判字中結/強案/年資/滿已廢棄；去重上界動態計算 `MIN(MAX(assignday), workdt-1)`；year_produ 改 parseInt）；新增 F094（ob_monthly_run_result migration + Stage 1/3/4 落點切換 + FK CASCADE）；新增 F095（appliedSpecialRules[] 讀時推導 + 觸發一致性 + 前端唯讀 Component RTL）；新增 F096（pooldata_field_whitelist list_type 停用 m293 + available-columns regression + 既有條件相容）。⚠️ **F091 v2.0 SP bug fix 為最高風險變更**：v1.0 SD-002~006（中結/強案/年資觸發）全面廢棄，以 SDv2 系列取代；所有 mock `list_nm` 字串須更新為 v2.0 正確繁體中文（期中機車/期中/年以上）。
 > **Stage 1 精確化工程新增（2026-05-26）**：新增 3 個 test spec 檔（F090 / F091 / F092）。Phase 1（F090）ETL + data_source schema 13 個場景；Phase 2（F091）Stage 1 三步驟補完整 30 個場景（MONTH_CNT × 6 + 去重 × 5 + 特殊 DELETE × 8 + 封裝 × 5 + Regression × 3 + 誤差 × 3）；Phase 3（F092）dry-run 精確估算 26 個場景（唯讀 × 4 + 一致性 × 3 + estimateListCount 升級 × 4 + F049/F088 升級 × 4 + Regression × 3）。⚠️ F091 為唯一改變 production 月跑案件數的階段（deploy 後立即生效、無 flag）；既有 Stage 1 pipeline integration test baseline 需同步更新。
@@ -41,7 +41,11 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 >
 > **v2.19 US-144 best_case 系統固定篩選條件（2026-05-28）**：補強 3 個 test spec（F050 v2.3.1 / F051 v2.2.1 / F075 v1.7）。共新增 **50 個場景**：F050 +33（L 群 5：createList 注入 + tamper；M 群 4：min-count 排除 system-fixed；N 群 4：updateList 注入；O 群 10：m295/m296 migration；P 群 1：Stage 1 整合；Q 群 6：建立頁前端 best_case 鎖定列；R 群 3：編輯頁前端鎖定列）、F051 +6（TS-F051-020~025：updateList 注入 + 正規化 + min-count v2.2.1 + LEGACY guard ordering）、F075 +11（TS-F075-v17-001~010 + 002b：seed / API isSystemFixed / deactivation guard / M06 UI disabled button）。命名鎖定：`injectSystemFixedConditions`、`SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）、`is_system_fixed` DB / `isSystemFixed` API、`condition-row-best_case` / `remove-condition-best_case` / `value-best_case` / `btn-disable-best_case` / `field-row-best_case` prototype testid。
 >
-> **最後更新**：2026-05-28
+> **v2.26 F064 v2.1 pool 表換源修正（2026-06-17）**：F064 spec_version 升至 v2.1；追加 **LINEAGE 5 案例**（+STATIC-005）共 **+6 個場景**（63→**69**），總場景 1736→**1742**。核心修正：pool join 表從 `ob_pool_data_list`（3-key INNER JOIN）改為 `ob_pool_data`（2-key: orgno+appl_no），消除 live run 11.5% 掉列（55,863→49,425 問題）。新增 invariant **I-EXP-LINEAGE-01**（匯出列數 = ob_monthly_run_result 列數，DoD 紅線）與 **BR-F064-16**。新案例：**LINEAGE-001**（ob_pool_data 50-row 全數匯出 vs ob_pool_data_list 40-row 差異辨別）；**LINEAGE-002**（ob_pool_data_list 缺少列不影響匯出）；**LINEAGE-003**（靜態 grep: buildExportQuery 含 ob_pool_data 不含 ob_pool_data_list）；**LINEAGE-004**（pool 屬性值回歸：dept_name/pro_rate/month_cnt 換表後不變）；**LINEAGE-005**（ob_pool_data.appl_date timestamp→Date 物件→YYYY/MM/DD）；**STATIC-005**（全 exportResult 路徑靜態掃描不含 ob_pool_data_list 字串）。修改案例：**COLSRC-001** 更名「INNER JOIN ob_pool_data 雙欄鍵命中（v2.1 修正）」。DoD 紅線擴充：REGRESSION + **LINEAGE-001** + COLSEQ-001/002 + STATIC-002/004 全綠。
+>
+> **v2.25 F064 匯出分派結果 23 欄對齊 legacy（2026-06-17）**：新增 F064 test spec（**63 個場景**）。對應 F064 v2.0（US-155，supersedes US-084）三項 SCHEMA GAP 修正：(GAP-1) 移除 `custo_no`/`cust_name`/`card_level`/`score`；(GAP-2) 資料來源改 `ob_monthly_run_result` 多表 join；(GAP-3) 進件日 source = `ob_pool_data.appl_date`（v2.1 前誤為 ob_pool_data_list）。所有 OQ 已裁定（AD-E07-31）。分層：**COLSRC 6** + **COLSEQ 4** + **REGRESSION 6** + **FMT 8** + **CR 4** + **JOINMISS 5** + **OVERDUE 2** + **STREAM 5** + **SCOPE 5** + **STATUS 4** + **AUDIT 3** + **DET 2** + **APLDATE 2** + **STATIC 4** + **AUTH 3**。Mock 換向：`snapshotRepo.find()` → `DataSource.query()`/`queryRunner.stream()`。
+>
+> **最後更新**：2026-06-17
 
 ---
 
@@ -178,7 +182,10 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F100 | Stage 2~4 SQL 下推 + v2 真實計分引擎 P3（`SUM(CASE…)` 區間/類別計分 + `LEFT JOIN customer_core` 補完 + score→level→tier + CR `EXISTS` + st4_exchange 視窗函式；**僅 P3**，不含 P1/P2；oracle=手算預期，非跑 v1 JS）⚠️ | P0-MVP | [F100-test.md](features/F100-test.md) | 52 | Draft |
 | F101 | Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 千分比；取代 F100 placeholder；oracle=手算 FLOOR+差額補足；JS↔SQL 逐列等價 DoD；I-NO-ST4-EXCHANGE senior swap 廢除回歸；所有 OQ 已裁定）⚠️ | P0-MVP | [F101-test.md](features/F101-test.md) | 51 | Draft |
 | **E07 月跑執行模型 小計** | | | **4 files** | **192** | |
-| **總合計** | | | **71 files** | **1618** | |
+| **E07 M04 分派匯出** | | | | | |
+| F064 | 匯出分派結果（23 欄 legacy 對齊，**v2.1**）——COLSRC 6 + COLSEQ 4 + REGRESSION 6（破壞性排除 DoD 紅線）+ FMT 8（日期格式邊界）+ CR 4 + JOINMISS 5 + OVERDUE 2 + STREAM 5 + SCOPE 5 + STATUS 4 + AUDIT 3 + DET 2 + APLDATE 2 + STATIC **5** + AUTH 3 + **LINEAGE 5**（v2.1：pool 表換源 ob_pool_data 不掉列 DoD 紅線）；GAP-1/2/3 + OQ F064-1~4 全部裁定；BR-F064-16 join ob_pool_data 2-key；不讀 snapshot；CSV PassThrough streaming；scope WHERE SQL 注入；DoD 紅線 = REGRESSION + LINEAGE-001 + 23 欄表頭 + tsc 乾淨 | P0-MVP | [F064-test.md](features/F064-test.md) | 69 | Draft |
+| **E07 M04 小計** | | | **1 file** | **69** | |
+| **總合計** | | | **72 files** | **1742** | |
 
 ---
 

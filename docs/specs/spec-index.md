@@ -1,13 +1,22 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.10"
-date: 2026-06-04
+version: "3.13"
+date: 2026-06-17
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.13 / 2026-06-17 / F064 v2.1 匯出 pool 源血緣 bug 修正（live 抓到掉 11.5% 列）**：[F064](features/F064-export-assignment-result.md) v2.0 之 pool 欄 join 源 `ob_pool_data_list`（per-list 去重表）**錯誤** → INNER JOIN 掉 11.5% 列。根因：月跑 Stage 1 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK orgno+appl_no，無 list_no），`ob_pool_data_list` 僅於 Stage 1 被 LEFT JOIN 取 CR 三欄、非 result 列母體。本輪變更檔案：
+> - **patch v2.0 → v2.1**：[F064-export-assignment-result.md](features/F064-export-assignment-result.md)（pool 欄 join 源由 `ob_pool_data_list` 改 **`ob_pool_data`（by orgno+appl_no，維持 INNER JOIN 不掉列）**；AC-2 欄位表 10 個 pool 欄來源 `ob_pool_data_list.*` → `ob_pool_data.*`（欄名不變）；進件日（欄 6）source 改 `ob_pool_data.appl_date`（`dateColumnType` timestamp，格式化只取日期 `YYYY/MM/DD`）；**新增 BR-F064-16 + 不變式 I-EXP-LINEAGE-01**：匯出列數 = 該 run 之 `ob_monthly_run_result` 列數（不掉列，DoD 門檻）；**新增 AC-2b** + GAP-2b + legacy 差異列 + 假設 A-3 改 Resolved。live 驗證：`ob_pool_data` 55,863/55,863 全對、matched 列值逐欄無回歸。architect 已同步修 AD（pool 源改 `ob_pool_data`）。其餘 v2.0 內容不變。）
+>
+> **v3.12 / 2026-06-17 / F064 v2.0 匯出分派結果對齊 legacy 23 欄**：依 [US-155](../stories/epics/E07-app-customer-list-assignment/US-155-M04-export-assignment-result-23col.md)（已核可，supersedes US-084）校正 [F064](features/F064-export-assignment-result.md) 匯出欄位與資料源。**破壞性修正**（與 v1.1 之 8~9 欄輸出不相容）。本輪變更檔案：
+> - **升版 v2.0**：[F064-export-assignment-result.md](features/F064-export-assignment-result.md)（**三項 SCHEMA GAP 修正**：GAP-1 刪除誤列 `custo_no`/`cust_name`、案號改 `appl_no`、欄位數 9→23；GAP-2 資料源由 `assignment_run_snapshot.payload`（8 欄瘦投影）改 `ob_monthly_run_result`（by run_id）join `ob_pool_data_list`(list_no+orgno+appl_no) + `ob_emphire`(emplid→emp_id) + `ob_list_definition`(list_no)；GAP-3 進件日 source = `ob_pool_data_list.appl_date`。**移除** `card_level`/`score`。**23 欄 authority** = `reference/202606 分派名單.xlsx` 工作表 1（AC-2 欄位表含來源+join 鍵+格式）。**新增 BR**：日期格式轉換（指派日 `YYYYMMDD` / 進件日 `YYYY/MM/DD`）、`ob_emphire` join-miss fallback（空值 + 後端 WARNING log 含 emplid，不中斷匯出）、`overdue_day` 恆空保留欄。**xlsx + CSV 皆 streaming**（補回 v1.1 CSV in-memory 拼接問題）。**保留** v1.1 AC-3 422 阻擋 / AC-5 稽核 / AC-6 處長 scope filter。前置 = [F102](features/F102-cr-priority-assignment.md)（CR 三欄/emplid/assignday 已填值，commit on main））
+> - **OQ 裁定（已和使用者確認，寫進 spec）**：`overdue_day` 恆空→保留欄輸出空值；`ob_emphire` join-miss→空值 + WARNING log；`ob_list_definition` join key = `list_no`；樞紐 sheet 先不做（另案）；5 分鐘 streaming timeout 維持。
+> - **4 個架構師 OQ（spec-writer 附建議，交 system-architect）**：OQ-1（多表 join 下推 SQL 設計 + 索引）／OQ-2（CSV streaming 實作機制，建議單一 row-producer 餵 format-specific writer）／OQ-3（200k+ 筆背景 job，建議維持同步 streaming，逾時另開 story 走 pg-boss worker）／OQ-4（`data-model.md` 補述匯出 join 路徑，system-architect 範疇）。
+> - **刻意未動（邊界，交 system-architect）**：AD-* / `architecture-spec.md`（join 下推 SQL / CSV streaming / 背景 job 機制）／`data-model.md`（匯出 join 路徑＝OQ-4）／code / test（TDD / test-designer 範疇）。
+>
 > **v3.11 / 2026-06-12 / F102 月跑 CR 優先分派（補 F101 simplified is_cr 缺口 + per-list `cr_enabled` 閘控 + 廢除全域旗標）**：接續 [F101](features/F101-stage3-4-proportional-assignment.md)（BR-F101-12 將 is_cr 簡化為被動標記、未實作 CR 優先分配），依 3 個已核可 user story 新建 1 個 feature spec，於 F101 Stage 3/4 比例分派**之前**插入 CR 優先分派前置處理。本輪變更檔案：
 > - **新建 v1.0**：[F102-cr-priority-assignment.md](features/F102-cr-priority-assignment.md)（**純後端、無新前端頁、無新錯誤碼**；legacy ground truth = `st2_dept.sql` 第 116–190 行 CR LIVE 段，已 UTF-16LE 解碼，`st3_emplid` 之 CR 段為 `/* */` 死碼不引用。**閘控**：per-list `ob_list_definition.cr_enabled` 快照（`true` 跑步驟 1–3／`false` 強制 `is_cr='N'` 全案件入 F101 池、不扣量；不讀全域旗標）。**步驟 1** 逾2年清空（`appl_date < DATEADD(YEAR,-2,@SYS_DT)` 嚴格小於，`@SYS_DT=project_workym+'01'`）→ `cr_id/cr_nm=NULL, is_cr='N'`；**步驟 2** 離職清空（join `ob_emphire.resign_date < @SYS_DT` 嚴格小於；查無 emp_id INNER JOIN 不命中=不清空，BR-F102-08 spec-writer 裁定）；**步驟 3** CR 優先指派（join `ob_empl_set ration>0` 才指派 `emplid=cr_id`/`dept_id=deptid_m`/`is_cr='Y'`，per-list 查詢鍵）；**步驟 4** 扣量（F101 案件池 `WHERE is_cr<>'Y'`，基數扣 CR、不覆蓋 CR 案）。**全確定性**（align AD-E07-29 **I-DET-01**，無 NEWID()）；**廢除全域旗標** `ob_assign_config.cr_reassignment_enabled`（US-154，per-list `cr_enabled` 為唯一來源）；驗收=deploy 後重跑 202606、`is_cr='Y'`≈1.9%、`cr_id` 非空、`emplid=cr_id`（AC-13））
 > - **新建圖表**：[diagrams/F102-cr-priority-flow.mmd](diagrams/F102-cr-priority-flow.mmd)（Stage 2 就緒 → F101 清除 → cr_enabled 閘控（true 步驟 1→2→3→4 扣量 ／ false 強制 N）→ F101 比例分派只跑 is_cr<>'Y' → 202606 驗證；旁註廢除全域旗標 + 死碼不引用）
@@ -315,7 +324,7 @@ status: Draft
 | F061 | [F061-trigger-assignment-run.md](features/F061-trigger-assignment-run.md) | **觸發分派月跑（Stage 0~4 + 三份快照原子性寫入；v1.2 PO 決議 OQ-E07-29-A 邊緣 CARD_TYPE HB/SEB/SEC 跳過 + report_payload.skippedCases JSONB + 月跑仍 completed；v1.1 補「所有 active 名單 stage = 'ready'」前置條件 + Stage 3 CR 路徑改 per-LIST_NO `cr_enabled` + `MONTHLY_RUN_BLOCKED_LIST_NOT_READY` 錯誤碼）** | US-081 | P0-MVP（**v1.2**）|
 | F062 | [F062-view-run-progress.md](features/F062-view-run-progress.md) | 查看分派執行進度（3 秒 Polling） | US-082 | P0-MVP |
 | F063 | [F063-view-run-result-summary.md](features/F063-view-run-result-summary.md) | 查看分派結果摘要（部門偏差 / 等級分佈） | US-083 | P0-MVP |
-| F064 | [F064-export-assignment-result.md](features/F064-export-assignment-result.md) | 匯出分派結果（Excel / CSV streaming） | US-084 | P0-MVP |
+| F064 | [F064-export-assignment-result.md](features/F064-export-assignment-result.md) | **匯出分派結果（v2.1：對齊 legacy 23 欄明細；**pool 源 = `ob_pool_data`(by orgno+appl_no，v2.1 血緣修正，非 `ob_pool_data_list`，不掉列 I-EXP-LINEAGE-01)**；GAP-1 刪 custo_no/cust_name 改 appl_no、GAP-2 資料源由 snapshot payload 改 `ob_monthly_run_result` join `ob_pool_data`/emphire/list_definition、GAP-3 進件日=`ob_pool_data.appl_date`(timestamp 只取日期)；移除 card_level/score；xlsx + CSV 皆 streaming；emphire join-miss fallback 空值+WARNING log；overdue_day 恆空保留欄；樞紐 sheet 另案）** | US-155（supersedes US-084）| P0-MVP（**v2.1**）|
 
 #### M04 — Stage 1 精確化 / ob_pool_data_list 單源化 + 特例規則 SP 修正工程（AD-E07-21~26）
 
