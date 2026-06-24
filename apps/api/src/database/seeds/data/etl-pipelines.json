@@ -2229,6 +2229,75 @@
           }
         },
         {
+          "id": "lk_hcity",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2240,
+            "y": 260
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_郵遞_戶籍縣市",
+            "subtitle": "郵遞區號對照(POSTAL_NO)",
+            "lookupSource": "raw_b4a48f10",
+            "matchColumn": "HPOST_NUM",
+            "lookupMatchColumn": "POSTAL_NO",
+            "outputColumns": [
+              {
+                "lookupColumn": "POSTAL_ADD",
+                "outputAlias": "hpost_city"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_ccity",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2320,
+            "y": 260
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_郵遞_通訊縣市",
+            "subtitle": "郵遞區號對照(POSTAL_NO)",
+            "lookupSource": "raw_b4a48f10",
+            "matchColumn": "CPOST_NUM",
+            "lookupMatchColumn": "POSTAL_NO",
+            "outputColumns": [
+              {
+                "lookupColumn": "POSTAL_ADD",
+                "outputAlias": "cpost_city"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
+          "id": "lk_cocity",
+          "type": "pipelineNode",
+          "position": {
+            "x": 2400,
+            "y": 260
+          },
+          "data": {
+            "nodeType": "lookup",
+            "label": "Lookup_郵遞_公司縣市",
+            "subtitle": "郵遞區號對照(POSTAL_NO)",
+            "lookupSource": "raw_b4a48f10",
+            "matchColumn": "CO_NUM",
+            "lookupMatchColumn": "POSTAL_NO",
+            "outputColumns": [
+              {
+                "lookupColumn": "POSTAL_ADD",
+                "outputAlias": "co_city"
+              }
+            ],
+            "noMatchStrategy": "null"
+          }
+        },
+        {
           "id": "fm1",
           "type": "pipelineNode",
           "position": {
@@ -2241,6 +2310,41 @@
             "subtitle": "57 組對應",
             "dropUnmapped": true,
             "mappings": [
+              {
+                "sourceColumn": "CUS_SEX",
+                "targetColumn": "cus_sex",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CAREA_NO1",
+                "targetColumn": "carea_no1",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CAREA_NO2",
+                "targetColumn": "carea_no2",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "CELLULAR",
+                "targetColumn": "cellular",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "hpost_city",
+                "targetColumn": "hpost_city",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "cpost_city",
+                "targetColumn": "cpost_city",
+                "defaultValue": null
+              },
+              {
+                "sourceColumn": "co_city",
+                "targetColumn": "co_city",
+                "defaultValue": null
+              },
               {
                 "sourceColumn": "CUSTO_NO",
                 "targetColumn": "source_customer_no",
@@ -3673,8 +3777,23 @@
           "target": "tc_zzip"
         },
         {
-          "id": "edge-tc_zzip-fm1",
+          "id": "edge-tc_zzip-lk_hcity",
           "source": "tc_zzip",
+          "target": "lk_hcity"
+        },
+        {
+          "id": "edge-lk_hcity-lk_ccity",
+          "source": "lk_hcity",
+          "target": "lk_ccity"
+        },
+        {
+          "id": "edge-lk_ccity-lk_cocity",
+          "source": "lk_ccity",
+          "target": "lk_cocity"
+        },
+        {
+          "id": "edge-lk_cocity-fm1",
+          "source": "lk_cocity",
           "target": "fm1"
         },
         {
