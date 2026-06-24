@@ -162,17 +162,17 @@ async function seedCase(opts: {
 
 async function seedCustomerCore(opts: {
   sourceCustomerNo: string;
-  gender?: string | null;
+  cusSex?: string | null;
   dateOfBirth?: string | null;
   educationCode?: string | null;
 }): Promise<void> {
   await ds!.query(
     `INSERT INTO customer_core
-       (source_customer_no, customer_type, name, gender, date_of_birth, education_code, data_source, _etl_loaded_at, _etl_pipeline_id)
+       (source_customer_no, customer_type, name, cus_sex, date_of_birth, education_code, data_source, _etl_loaded_at, _etl_pipeline_id)
      VALUES ($1, '01', 'T', $2, $3, $4, 'test', now(), '00000000-0000-0000-0000-000000000099')`,
     [
       opts.sourceCustomerNo,
-      opts.gender ?? null,
+      opts.cusSex ?? null,
       opts.dateOfBirth ?? null,
       opts.educationCode ?? null,
     ],
@@ -273,8 +273,9 @@ async function seedStandardCardT1(opts: { withCustomerCore?: boolean } = {}): Pr
     cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', matchType: MatchType.CATEGORY,
   });
   if (opts.withCustomerCore) {
+    // F104：CUS_SEX category→range（safe-cast cc.cus_sex）。
     await seedColumn({
-      cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', matchType: MatchType.CATEGORY,
+      cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', matchType: MatchType.RANGE,
     });
     await seedColumn({ cardType: 'T1', cardVersion: 1, columnName: 'AGE' });
   }
@@ -285,9 +286,9 @@ async function seedStandardCardT1(opts: { withCustomerCore?: boolean } = {}): Pr
   await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: '01', score: 5 });
   await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: '02', score: 15 });
   if (opts.withCustomerCore) {
-    // CUS_SEX 類別：'M'→20；'F'→8
-    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', level1: 'M', score: 20 });
-    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', level1: 'F', score: 8 });
+    // F104：CUS_SEX range：'1'→20；'2'→8（safe-cast cc.cus_sex）
+    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', level2S: '1', level2E: '1', score: 20 });
+    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', level2S: '2', level2E: '2', score: 8 });
     // AGE 區間：[0,39]→0；[40,100]→12
     await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'AGE', level2S: '0', level2E: '39', score: 0 });
     await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'AGE', level2S: '40', level2E: '100', score: 12 });
@@ -396,15 +397,15 @@ beforeAll(async () => {
       source_customer_no VARCHAR(20) NOT NULL,
       customer_type VARCHAR(2) NOT NULL,
       name VARCHAR(100) NOT NULL,
-      gender VARCHAR(1),
+      cus_sex VARCHAR(2),
       date_of_birth DATE,
       education_code VARCHAR(2),
-      home_phone VARCHAR(20),
-      contact_phone VARCHAR(20),
-      mobile_phone VARCHAR(20),
-      residential_zip VARCHAR(6),
-      mailing_zip VARCHAR(6),
-      company_zip VARCHAR(6),
+      carea_no1 VARCHAR(10),
+      carea_no2 VARCHAR(10),
+      cellular VARCHAR(20),
+      hpost_city VARCHAR(20),
+      cpost_city VARCHAR(20),
+      co_city VARCHAR(20),
       sales_sts_na VARCHAR(30),
       data_source VARCHAR(50) NOT NULL,
       _etl_loaded_at TIMESTAMP NOT NULL,
@@ -569,9 +570,9 @@ describe('F100 CJOIN — LEFT JOIN customer_core 補計分（PG 真庫）', () =
     const L = 'L_CJOIN1';
     await seedStandardCardT1({ withCustomerCore: true });
     await seedCase({ applNo: 'H1', custoNo: 'X001', listNo: L, monthCnt: 2, specTp: '01' });
-    await seedCustomerCore({ sourceCustomerNo: 'X001', gender: 'M', dateOfBirth: '1996-01-01' }); // age~30
+    await seedCustomerCore({ sourceCustomerNo: 'X001', cusSex: '1', dateOfBirth: '1996-01-01' }); // age~30
     await pushdownStandard({ listNo: L });
-    // 10(LIST_MONTH) + 5(PROJECT_TP) + 20(CUS_SEX M) + 0(AGE<40) = 35
+    // 10(LIST_MONTH) + 5(PROJECT_TP) + 20(CUS_SEX '1') + 0(AGE<40) = 35
     expect((await getRow('H1', L)).score).toBe(35);
     expect((await getRow('H1', L)).tier_level).toBe('T2'); // B
   });
@@ -584,20 +585,20 @@ describe('F100 CJOIN — LEFT JOIN customer_core 補計分（PG 真庫）', () =
     // 不 seed customer_core → LEFT JOIN NULL
     await pushdownStandard({ listNo: L });
     const r = await getRow('I1', L);
-    // 10 + 5 + 0(gender→'3' 無對應) + 0(age default 0 ∈ [0,39]) = 15；案件仍在
+    // 10 + 5 + 0(cus_sex 缺→計分 default 3，不落 [1,1]/[2,2]) + 0(age default 0 ∈ [0,39]) = 15；案件仍在
     expect(r.score).toBe(15);
     expect(r.card_level).toBe('C');
     expect(r.tier_level).toBe('T3');
   });
 
-  it('CJOIN-004：混合維度 cus_sex=F age=55（P-04）', async (ctx) => {
+  it('CJOIN-004：混合維度 cus_sex=2 age=55（P-04）', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_CJOIN4';
     await seedStandardCardT1({ withCustomerCore: true });
     await seedCase({ applNo: 'J1', custoNo: 'X004', listNo: L, monthCnt: 10, specTp: '02' });
-    await seedCustomerCore({ sourceCustomerNo: 'X004', gender: 'F', dateOfBirth: '1971-01-01' }); // age~55
+    await seedCustomerCore({ sourceCustomerNo: 'X004', cusSex: '2', dateOfBirth: '1971-01-01' }); // age~55
     await pushdownStandard({ listNo: L });
-    // 30 + 15 + 8(F) + 12(age≥40) = 65 → A → T1
+    // 30 + 15 + 8(CUS_SEX '2') + 12(age≥40) = 65 → A → T1
     expect((await getRow('J1', L)).score).toBe(65);
     expect((await getRow('J1', L)).tier_level).toBe('T1');
   });
@@ -716,12 +717,12 @@ describe('F100 EQ — 逐列等價（手算 oracle，P3 DoD）', () => {
     ensurePg(ctx);
     const L = 'L_EQ2';
     await seedStandardCardT1({ withCustomerCore: true });
-    // P-03：month=2 tp=01 M age=30 → 35 → B → T2
+    // P-03：month=2 tp=01 cus_sex=1 age=30 → 35 → B → T2
     await seedCase({ applNo: 'P03', custoNo: 'Y03', listNo: L, monthCnt: 2, specTp: '01' });
-    await seedCustomerCore({ sourceCustomerNo: 'Y03', gender: 'M', dateOfBirth: '1996-01-01' });
-    // P-04：month=10 tp=02 F age=55 → 65 → A → T1
+    await seedCustomerCore({ sourceCustomerNo: 'Y03', cusSex: '1', dateOfBirth: '1996-01-01' });
+    // P-04：month=10 tp=02 cus_sex=2 age=55 → 65 → A → T1
     await seedCase({ applNo: 'P04', custoNo: 'Y04', listNo: L, monthCnt: 10, specTp: '02' });
-    await seedCustomerCore({ sourceCustomerNo: 'Y04', gender: 'F', dateOfBirth: '1971-01-01' });
+    await seedCustomerCore({ sourceCustomerNo: 'Y04', cusSex: '2', dateOfBirth: '1971-01-01' });
     await pushdownStandard({ listNo: L });
     const p03 = await getRow('P03', L);
     expect({ score: p03.score, card: p03.card_level, tier: p03.tier_level }).toEqual({
@@ -733,19 +734,19 @@ describe('F100 EQ — 逐列等價（手算 oracle，P3 DoD）', () => {
     });
   });
 
-  it('EQ-004：trim 邊界（CUS_SEX level1 含 padding " M" / age=40 下界，P-05）', async (ctx) => {
+  it('EQ-004：trim 邊界（PROJECT_TP category level1 含 padding " 01" / age=40 下界，P-05）', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_EQ4';
-    // ⚠️ customer_core.gender 為 varchar(1)、spec_tp varchar(2)，無法存 padding；trim 對齊 JS = trim level1。
-    //    重設 CUS_SEX score：level1=' M'（含前導空白，trim→'M'）→ 20；驗證 gender='M' 仍命中。
+    // F104：CUS_SEX 改 range（不再 category），trim 邊界改以 category 欄 PROJECT_TP 驗證。
+    //    重設 PROJECT_TP score：level1=' 01'（含前導空白，trim→'01'）→ 5；驗證 spec_tp='01' 仍命中。
     await seedStandardCardT1({ withCustomerCore: true });
-    await scoreRepo.delete({ card_type: 'T1', card_version: 1, column_name: 'CUS_SEX' });
-    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', level1: ' M', score: 20 });
+    await scoreRepo.delete({ card_type: 'T1', card_version: 1, column_name: 'PROJECT_TP' });
+    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: ' 01', score: 5 });
     await seedCase({ applNo: 'P05', custoNo: 'Y05', listNo: L, monthCnt: 2, specTp: '01' });
-    await seedCustomerCore({ sourceCustomerNo: 'Y05', gender: 'M', dateOfBirth: '1986-06-01' }); // age 40
+    await seedCustomerCore({ sourceCustomerNo: 'Y05', cusSex: '1', dateOfBirth: '1986-06-01' }); // age 40
     await pushdownStandard({ listNo: L });
     const r = await getRow('P05', L);
-    // 10 + 5(01) + 20(level1 ' M' trim→'M' 相等) + 12(age 40 ∈[40,100]) = 47 → A → T1
+    // 10 + 5(level1 ' 01' trim→'01' 相等) + 20(CUS_SEX '1') + 12(age 40 ∈[40,100]) = 47 → A → T1
     expect({ score: r.score, card: r.card_level, tier: r.tier_level }).toEqual({
       score: 47, card: 'A', tier: 'T1',
     });

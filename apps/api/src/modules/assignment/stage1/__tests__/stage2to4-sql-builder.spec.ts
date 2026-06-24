@@ -73,11 +73,12 @@ describe('F100 buildStage2ScoreExpr — Stage 2 SUM(CASE…) 純函式', () => {
   });
 
   it('customer_core 維度 → needsCustomerCore=true（cc 引用）', () => {
+    // F104：CUS_SEX 改 range（safe-cast cc.cus_sex），需以 range score row。
     const r = buildStage2ScoreExpr(
-      'T1', 1, [col('CUS_SEX')], [catScore('CUS_SEX', 'M', 20)], 'p',
+      'T1', 1, [col('CUS_SEX')], [rangeScore('CUS_SEX', '1', '1', 20)], 'p',
     );
     expect(r.needsCustomerCore).toBe(true);
-    expect(r.scoreExpr).toContain('cc.gender');
+    expect(r.scoreExpr).toContain('cc.cus_sex');
   });
 
   it('純 ob_pool_data 維度 → needsCustomerCore=false（不 join customer_core）', () => {
@@ -88,16 +89,23 @@ describe('F100 buildStage2ScoreExpr — Stage 2 SUM(CASE…) 純函式', () => {
     expect(r.scoreExpr).not.toContain('cc.');
   });
 
-  it('未映射 column_name（如 TEST_X / ADD_UN_CAPITAL）→ 不取分（比照 JS default）', () => {
+  it('F103：ADD_UN_CAPITAL 已映射（ar）+ 未 hardcode 欄走通用 fallback（皆取分）', () => {
     const r = buildStage2ScoreExpr(
       'T1', 1,
-      [col('LIST_MONTH'), col('ADD_UN_CAPITAL'), col('TEST_X')],
-      [rangeScore('LIST_MONTH', '0', '5', 10), rangeScore('ADD_UN_CAPITAL', '0', '100', 99)],
+      [col('LIST_MONTH'), col('ADD_UN_CAPITAL'), col('LOAN_TOTAMT')],
+      [
+        rangeScore('LIST_MONTH', '0', '5', 10),
+        rangeScore('ADD_UN_CAPITAL', '0', '100', 99),
+        rangeScore('LOAN_TOTAMT', '0', '100000', 7),
+      ],
       'p',
     );
-    // ADD_UN_CAPITAL / TEST_X 無映射 → 不取分；scoreExpr 僅含 LIST_MONTH 之 CASE
-    expect(r.scoreExpr).toContain('o.month_cnt');
-    expect(r.scoreExpr).not.toContain('99'); // ADD_UN_CAPITAL 分數不入 SQL
+    // F103：ADD_UN_CAPITAL 改 hardcode 映射（ar.add_un_capital）→ 99 入 SQL、needsArCapital=true。
+    expect(r.scoreExpr).toContain('ar.add_un_capital');
+    expect(r.needsArCapital).toBe(true);
+    expect(Object.values(r.params)).toContain(99);
+    // F103：未 hardcode 之 pool 數值欄走通用 fallback（to_jsonb），亦取分。
+    expect(r.scoreExpr).toContain("to_jsonb(o)->>'loan_totamt'");
   });
 
   it('disabled column 已由呼叫端過濾（builder 不檢 status）— 僅傳 active', () => {
@@ -136,8 +144,9 @@ describe('F100 RG — 計分欄位映射命名鎖定（feedback_tdd_naming_drift
     expect(CUSTOMER_CORE_COLUMNS.has('LOAN_RATE')).toBe(false);
   });
 
-  it('ADD_UN_CAPITAL（ob_arreturndf_min_cap）未映射 → 不在已映射集合（open item）', () => {
-    expect(MAPPED_SCORING_COLUMNS as readonly string[]).not.toContain('ADD_UN_CAPITAL');
+  it('F103：ADD_UN_CAPITAL 已映射（ob_arreturndf_min_cap）+ COMMISSION 移除', () => {
+    expect(MAPPED_SCORING_COLUMNS as readonly string[]).toContain('ADD_UN_CAPITAL');
+    expect(MAPPED_SCORING_COLUMNS as readonly string[]).not.toContain('COMMISSION');
   });
 });
 

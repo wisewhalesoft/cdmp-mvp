@@ -141,9 +141,9 @@ beforeAll(async () => {
       customer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       source_customer_no VARCHAR(20) NOT NULL,
       customer_type VARCHAR(2) NOT NULL, name VARCHAR(100) NOT NULL,
-      gender VARCHAR(1), date_of_birth DATE, education_code VARCHAR(2),
-      home_phone VARCHAR(20), contact_phone VARCHAR(20), mobile_phone VARCHAR(20),
-      residential_zip VARCHAR(6), mailing_zip VARCHAR(6), company_zip VARCHAR(6),
+      cus_sex VARCHAR(2), date_of_birth DATE, education_code VARCHAR(2),
+      carea_no1 VARCHAR(10), carea_no2 VARCHAR(10), cellular VARCHAR(20),
+      hpost_city VARCHAR(20), cpost_city VARCHAR(20), co_city VARCHAR(20),
       data_source VARCHAR(50) NOT NULL, _etl_loaded_at TIMESTAMP NOT NULL,
       _etl_pipeline_id UUID NOT NULL
     );

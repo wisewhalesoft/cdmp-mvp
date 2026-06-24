@@ -141,9 +141,9 @@ beforeAll(async () => {
       customer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       source_customer_no VARCHAR(20) NOT NULL,
       customer_type VARCHAR(2) NOT NULL, name VARCHAR(100) NOT NULL,
-      gender VARCHAR(1), date_of_birth DATE, education_code VARCHAR(2),
-      home_phone VARCHAR(20), contact_phone VARCHAR(20), mobile_phone VARCHAR(20),
-      residential_zip VARCHAR(6), mailing_zip VARCHAR(6), company_zip VARCHAR(6),
+      cus_sex VARCHAR(2), date_of_birth DATE, education_code VARCHAR(2),
+      carea_no1 VARCHAR(10), carea_no2 VARCHAR(10), cellular VARCHAR(20),
+      hpost_city VARCHAR(20), cpost_city VARCHAR(20), co_city VARCHAR(20),
       data_source VARCHAR(50) NOT NULL, _etl_loaded_at TIMESTAMP NOT NULL,
       _etl_pipeline_id UUID NOT NULL
     );
@@ -247,11 +247,11 @@ async function seedEmpl(listNo: string, emplid: string, tier?: string): Promise<
     prod_type: tier ? `TIER:${tier}` : null, created_at: now, updated_at: now,
   } as Partial<ObEmplSet>));
 }
-async function seedCustomerCore(opts: { src: string; gender?: string; dob?: string }): Promise<void> {
+async function seedCustomerCore(opts: { src: string; cusSex?: string; dob?: string }): Promise<void> {
   await ds.query(
-    `INSERT INTO customer_core (source_customer_no, customer_type, name, gender, date_of_birth, data_source, _etl_loaded_at, _etl_pipeline_id)
+    `INSERT INTO customer_core (source_customer_no, customer_type, name, cus_sex, date_of_birth, data_source, _etl_loaded_at, _etl_pipeline_id)
      VALUES ($1,'01','T',$2,$3,'test',now(),'00000000-0000-0000-0000-000000000099')`,
-    [opts.src, opts.gender ?? null, opts.dob ?? null],
+    [opts.src, opts.cusSex ?? null, opts.dob ?? null],
   );
 }
 /** F102：seed ob_pool_data_list 之 CR 三欄 + appl_date（Stage 1 由本表帶入 result，I-CR-COLSRC-01）。 */
@@ -275,7 +275,7 @@ async function seedStandardCard(withCC = false): Promise<void> {
   await R.version.save(R.version.create({ card_type: 'T1', card_name: 'T1', card_version: 1, sdate: '20250101', edate: '20991231', status: 'active' } as Partial<ObLevelcardVersion>));
   const mk = (columnName: string, mt = MatchType.RANGE) => R.column.create({ card_type: 'T1', card_version: 1, column_name: columnName, column_label: columnName, status: 'active', match_type: mt } as Partial<ObLevelcardColumn>);
   await R.column.save([mk('LIST_MONTH'), mk('PROJECT_TP', MatchType.CATEGORY)]);
-  if (withCC) await R.column.save([mk('CUS_SEX', MatchType.CATEGORY), mk('AGE')]);
+  if (withCC) await R.column.save([mk('CUS_SEX', MatchType.RANGE), mk('AGE')]); // F104：CUS_SEX category→range
   const sc = (columnName: string, o: Partial<ObLevelcardScore>) => R.score.create({ card_type: 'T1', card_version: 1, column_name: columnName, level1: null, level2_s: null, level2_e: null, ...o } as Partial<ObLevelcardScore>);
   await R.score.save([
     sc('LIST_MONTH', { level2_s: '0', level2_e: '5', score: 10 }),
@@ -284,8 +284,8 @@ async function seedStandardCard(withCC = false): Promise<void> {
     sc('PROJECT_TP', { level1: '02', score: 15 }),
   ]);
   if (withCC) await R.score.save([
-    sc('CUS_SEX', { level1: 'M', score: 20 }),
-    sc('CUS_SEX', { level1: 'F', score: 8 }),
+    sc('CUS_SEX', { level2_s: '1', level2_e: '1', score: 20 }), // F104：CUS_SEX range '1'→20
+    sc('CUS_SEX', { level2_s: '2', level2_e: '2', score: 8 }), // '2'→8
     sc('AGE', { level2_s: '0', level2_e: '39', score: 0 }),
     sc('AGE', { level2_s: '40', level2_e: '100', score: 12 }),
   ]);
@@ -341,10 +341,10 @@ describe('F100 EQ — runPipeline 端到端 Stage 1~4 SQL 下推（PG DoD）', (
     await seedStandardCard(true);
     await seedDeptPct(L);
     await seedEmpl(L, 'E_NEW', 'T1');
-    // match：M age30 → 10+5+20+0 = 35 → B
+    // match：cus_sex=1 age30 → 10+5+20+0 = 35 → B
     await seedPool({ applNo: 'M1', custoNo: 'CC1', monthCnt: 2, specTp: '01' });
-    await seedCustomerCore({ src: 'CC1', gender: 'M', dob: '1996-01-01' });
-    // 無 match：gender→'3' → 10+5+0+0 = 15 → C
+    await seedCustomerCore({ src: 'CC1', cusSex: '1', dob: '1996-01-01' });
+    // 無 match：cus_sex 缺→計分 default 3（不落 [1,1]/[2,2]）→ 10+5+0+0 = 15 → C
     await seedPool({ applNo: 'M2', custoNo: 'NONE', monthCnt: 2, specTp: '01' });
     const runId = await seedRun();
     await service.runPipeline(runId, YM);
