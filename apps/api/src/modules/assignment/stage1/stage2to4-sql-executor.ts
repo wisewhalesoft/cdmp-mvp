@@ -74,7 +74,7 @@ export async function runStage2and3Sql(
   manager: EntityManager,
   ctx: Stage2to4ListContext,
 ): Promise<void> {
-  const { scoreExpr, needsCustomerCore, params: scoreParams } =
+  const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
     buildStage2ScoreExpr(
       ctx.cardType,
       ctx.cardVersion,
@@ -95,6 +95,12 @@ export async function runStage2and3Sql(
     ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
     : '';
 
+  // F103 BR-F103-01 / I-SCORE-AR-JOIN-01：ob_arreturndf_min_cap LEFT JOIN（僅 active ADD_UN_CAPITAL 欄時注入）。
+  //   alias 固定 ar；LEFT JOIN（無對應案件 → ar.add_un_capital NULL → COALESCE 0，不掉列）。
+  const arCapitalJoin = needsArCapital
+    ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
+    : '';
+
   // score 表達式：無 active version → NULL；否則 SUM(CASE…)（needsCustomerCore 時 cc 已 join）。
   const scoreSelect = scoreExpr === null ? 'NULL::int' : `(${scoreExpr})::int`;
 
@@ -106,6 +112,7 @@ export async function runStage2and3Sql(
     `updated_at = CURRENT_TIMESTAMP ` +
     `FROM ob_pool_data o ` +
     `${customerCoreJoin} ` +
+    `${arCapitalJoin} ` +
     // score 以 LATERAL 計算（讓 lv / ti join 可引用 sub.score）。
     `CROSS JOIN LATERAL (SELECT ${scoreSelect} AS score) sub ` +
     `LEFT JOIN ob_levelcard_level lv ON lv.card_type = :cardType ` +

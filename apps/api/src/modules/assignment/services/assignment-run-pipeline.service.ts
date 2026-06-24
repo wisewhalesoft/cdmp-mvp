@@ -30,6 +30,8 @@ import {
 } from '@/modules/assignment-scoring/services/scoring-integrity-check.service';
 import { CancellationPoller } from '../queue/cancellation-poller';
 import { RunCancelledException } from '../queue/run-cancelled.exception';
+// F104 / AD-E07-33：per-card default 常數表（PG/JS 共用單一真值來源）。
+import { cardDefault } from '@/modules/assignment/stage1/stage2to4-sql-builder';
 import {
   distributeStage3to4,
   buildWarningSummary,
@@ -52,6 +54,84 @@ import {
   type CrEmphire,
 } from '@/modules/assignment/stage1/cr-priority';
 import { runCrPrioritySql } from '@/modules/assignment/stage1/cr-priority-sql';
+
+/**
+ * F103 / AD-E07-v3.5 §6.1：JS oracle 計分之 customer_core / ob_arreturndf_min_cap plain-object
+ * 取值來源（呼叫端 batch pre-fetch 結果，OQ-1/OQ-2 定案）。customer_core 無 TypeORM entity
+ * （AD-E06-1）→ raw SQL 取回；ob_arreturndf_min_cap.add_un_capital 為 numeric → TypeORM string。
+ */
+export interface CustomerCoreRow {
+  source_customer_no: string;
+  /** F104 / US-161：raw CUS_SEX 文字（'1'男/'2'女/'3'法人；含 'C'/'D'/'8' 等髒值）。 */
+  cus_sex: string | null;
+  date_of_birth: Date | string | null;
+  education_code: string | null;
+  /** F104 / US-162：戶籍縣市（「縣市+區」，如 '臺北市中正區'）。 */
+  hpost_city: string | null;
+  /** F104 / US-162：通訊縣市（「縣市+區」）。 */
+  cpost_city: string | null;
+  /** F104 / US-162：公司縣市（「縣市+區」）。 */
+  co_city: string | null;
+  /** F104 / US-161：戶籍電話區碼（presence 計分）。 */
+  carea_no1: string | null;
+  /** F104 / US-161：聯絡電話區碼（presence 計分）。 */
+  carea_no2: string | null;
+  /** F104 / US-161：行動電話（presence 計分）。 */
+  cellular: string | null;
+}
+
+/**
+ * F104 / AD-E07-34：cus_sex NULL-safe int cast（JS）。
+ *   空字串 / NULL / undefined / 非數值髒值（'C'/'D'）→ null（不產生 NaN 污染 range 比對，BR-F104-13）。
+ */
+export function safeIntCusSex(raw: string | null | undefined): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) ? n : null;
+}
+
+/**
+ * F104 / AD-E07-34：五欄分流 gating「是否法人」判斷（JS，與 PG IS_PERSONAL_GATING 對稱反向）。
+ *   gating default = '1'（個人）：空字串/NULL/undefined → 個人（→ isCorporate=false）；
+ *   非數值髒值（'C'/'D'）→ safe_int null → 法人（→ true）；'1'/'2' → 個人；'3'/數值非 1/2 → 法人。
+ */
+export function isCorporateCusSex(raw: string | null | undefined): boolean {
+  // 空字串/NULL/undefined → gating default '1' → 個人。
+  if (raw == null || raw === '') return false;
+  const g = safeIntCusSex(raw); // 'C'/'D' → null
+  return !(g === 1 || g === 2);
+}
+
+export interface ArCapitalRow {
+  appl_no: string;
+  add_un_capital: string | number | null;
+}
+
+/**
+ * 計算整數年齡，語意等價 PostgreSQL `EXTRACT(YEAR FROM age(date_of_birth))`（F103 BR-F103-09 /
+ * I-SCORE-AGE-01）。PG age() 精確到月：本年生日未到者（月份較後、或同月但日較後），
+ * 年齡 = 當前年 − 出生年 − 1。此 JS 實作須完全對齊，確保 JS↔SQL EQ。
+ *
+ * @param dateOfBirth 出生日期（Date 或 'YYYY-MM-DD' 字串；SQLite date 欄回字串、PG 回 Date）。
+ * @param now         基準「今天」（可注入，EQ 測試傳固定 today 確保跨日確定性，GAP-F103-04）。
+ */
+export function calcAgeYears(dateOfBirth: Date | string, now: Date): number {
+  const dob = dateOfBirth instanceof Date ? dateOfBirth : new Date(dateOfBirth);
+  const birthYear = dob.getFullYear();
+  const birthMonth = dob.getMonth(); // 0-indexed
+  const birthDay = dob.getDate();
+
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth();
+  const nowDay = now.getDate();
+
+  let age = nowYear - birthYear;
+  // 本年生日尚未到（月份較後，或同月但日較後）→ 減 1（對齊 PG age() 語意）。
+  if (nowMonth < birthMonth || (nowMonth === birthMonth && nowDay < birthDay)) {
+    age -= 1;
+  }
+  return Math.max(0, age); // 邊界保護：不回負數。
+}
 
 /**
  * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28）。
@@ -621,9 +701,16 @@ export class AssignmentRunPipelineService {
           )
         : [];
 
+      // ── F103 / AD-E07-v3.5 §6.2：batch pre-fetch customer_core + ob_arreturndf_min_cap ──
+      //   每 list 各一次 IN 查詢（I-SCORE-PREFETCH-01，禁 N+1）；SQLite 測試環境表不存在時
+      //   graceful degrade（空 Map → cc/arCap=null → 屬性走 default，等價舊行為）。
+      const { ccMap, arMap } = await this.prefetchScoringSources(pool);
+
       const scoredPool = pool.map((p) => {
+        const cc = p.custo_no ? (ccMap.get(p.custo_no) ?? null) : null;
+        const arCap = p.appl_no ? (arMap.get(p.appl_no) ?? null) : null;
         const score = activeVer && activeVer.card_version !== null
-          ? this.computeScore(p, list.card_type ?? '', activeVer.card_version, activeColumns, allScores)
+          ? this.computeScore(p, list.card_type ?? '', activeVer.card_version, activeColumns, allScores, cc, arCap)
           : null;
         const lvl = activeVer && score !== null
           ? allLevels.find(
@@ -1033,11 +1120,13 @@ export class AssignmentRunPipelineService {
     cardVersion: number,
     activeColumns: ObLevelcardColumn[],
     allScores: ObLevelcardScore[],
+    cc: CustomerCoreRow | null, // F103：呼叫端 batch pre-fetch 結果（OQ-1）。
+    arCap: ArCapitalRow | null, // F103：呼叫端 batch pre-fetch 結果（OQ-2）。
   ): number {
     let total = 0;
     for (const col of activeColumns) {
       if (!col.column_name) continue;
-      const value = this.resolveColumnValue(pool, col.column_name);
+      const value = this.resolveColumnValue(pool, col.column_name, cc, arCap, cardType);
       const scoreRows = allScores.filter(
         (s) =>
           s.card_type === cardType &&
@@ -1067,25 +1156,187 @@ export class AssignmentRunPipelineService {
   }
 
   /**
-   * 依 column_name 從 ob_pool_data row 取值（含 default）。
-   * 對應 AD-E07-10-L 規則表（可從 pool 直接取的欄位子集）。
+   * 依 column_name 取計分值（F104 / AD-E07-10-L v4.0：全欄對齊 legacy SP）。
+   *
+   * 取值來源：ob_pool_data（pool）/ customer_core（cc，呼叫端 pre-fetch）/
+   *   ob_arreturndf_min_cap（arCap，呼叫端 pre-fetch）。與 PG `resolveColumnSource(col, cardType)`
+   *   逐欄等價（EQ DoD，I-SCORE-EQ-01 / BR-F104-15）。
+   *
+   * @param cardType F104 AD-E07-32：per-card default + 五欄分流 gating 需要。
+   *
+   * F104 變更：CUS_SEX category→range（safe-cast，計分 default 3）；五欄 isCorp 分流
+   *   （CAREA_NO1/NO2/CELLULAR/AGE/EDUCAT_BACK）；PROJECT_TP 關鍵字改「借新還舊」；SALES_STS 改「中古車商」；
+   *   縣市欄改讀 cc.*_city + slice(0,3) + per-card default；LIST_MONTH/LOAN_RATE/EDUCAT_BACK per-card default。
    */
-  private resolveColumnValue(pool: ObPoolData, columnName: string): string | number {
+  private resolveColumnValue(
+    pool: ObPoolData,
+    columnName: string,
+    cc: CustomerCoreRow | null,
+    arCap: ArCapitalRow | null,
+    cardType: string,
+  ): string | number {
     switch (columnName) {
+      // ── ob_pool_data 直接取 ──
       case 'LIST_MONTH':
-        return pool.month_cnt ?? 25;
+        // F104 BR-F104-12：per-card default（H/S→25；E/E5→12）。
+        return pool.month_cnt ?? (cardDefault('LIST_MONTH', cardType) as number);
+
       case 'PROJECT_TP':
-        return pool.spec_tp ?? '01';
+        // F104 BR-F104-01：spec_name '%借新還舊%' → 'A'；否則 spec_tp（缺值 '01'）。
+        return pool.spec_name?.includes('借新還舊') ? 'A' : (pool.spec_tp ?? '01');
+
       case 'CAR_YEAR': {
         const yp = pool.year_produ ? parseInt(pool.year_produ, 10) : null;
-        return yp ? new Date().getFullYear() - yp : 0;
+        return yp && !Number.isNaN(yp) ? new Date().getFullYear() - yp : 0;
       }
-      case 'COMMISSION':
-        return pool.commission ? parseInt(pool.commission, 10) : 0;
-      default:
-        // 其他客戶屬性需 join customer_core，v2.1 補完；此處回傳空字串 → 不匹配
-        return '';
+
+      case 'SALES_STS': {
+        // F104 BR-F104-02：CASE sales_sts_na，'中古車商'→'UCD'（取代舊系統別名）；缺值 'HFC'。
+        const s = pool.sales_sts_na;
+        if (s === 'AGENT') return 'AGENT';
+        if (s === '中古車商') return 'UCD';
+        return 'HFC';
+      }
+
+      case 'LOAN_RATE':
+        // F104 BR-F104-12：per-card default（S5→77；E/E5→12；其他→0）。
+        return pool.loan_rate != null
+          ? Number(pool.loan_rate)
+          : (cardDefault('LOAN_RATE', cardType) as number);
+
+      // ── ob_arreturndf_min_cap（F103 BR-F103-01 / OQ-2）──
+      case 'ADD_UN_CAPITAL':
+        return arCap?.add_un_capital != null ? Number(arCap.add_un_capital) : 0;
+
+      // ── customer_core 欄位（F104 對齊 legacy SP）──
+      case 'CUS_SEX':
+        // F104 BR-F104-03：range；計分 default = 3（safe-cast 髒值/空→null→3）。
+        return safeIntCusSex(cc?.cus_sex) ?? 3;
+
+      case 'AGE': {
+        // F104 BR-F104-07：isCorp 分流。法人→0；個人→年齡（>100 OR <0 → 0）。
+        if (isCorporateCusSex(cc?.cus_sex)) return 0;
+        if (!cc?.date_of_birth) return 0;
+        const age = calcAgeYears(cc.date_of_birth, new Date());
+        return age > 100 || age < 0 ? 0 : age;
+      }
+
+      case 'CAREA_NO1':
+        // F104 BR-F104-05：個人 presence（非 null 且非空）→1/0；法人→0。
+        if (isCorporateCusSex(cc?.cus_sex)) return 0;
+        return cc?.carea_no1 != null && cc.carea_no1 !== '' ? 1 : 0;
+
+      case 'CAREA_NO2':
+        if (isCorporateCusSex(cc?.cus_sex)) return 0;
+        return cc?.carea_no2 != null && cc.carea_no2 !== '' ? 1 : 0;
+
+      case 'CELLULAR':
+        if (isCorporateCusSex(cc?.cus_sex)) return 0;
+        return cc?.cellular != null && cc.cellular !== '' ? 1 : 0;
+
+      case 'EDUCAT_BACK': {
+        // F104 BR-F104-08：isCorp 分流；個人 RIGHT('0'||code,2) 缺值 per-card default；法人→per-card default。
+        const def = String(cardDefault('EDUCAT_BACK', cardType) ?? '02');
+        if (isCorporateCusSex(cc?.cus_sex)) return def;
+        const code = cc?.education_code;
+        if (code == null || code === '') return def;
+        return ('0' + code).slice(-2); // RIGHT('0'||code, 2) 補零等價
+      }
+
+      case 'HPOST_NUM_NM':
+        return this.resolveCityValue('HPOST_NUM_NM', cc?.hpost_city, cardType);
+
+      case 'CPOST_NUM_NM':
+        return this.resolveCityValue('CPOST_NUM_NM', cc?.cpost_city, cardType);
+
+      case 'CO_NUM_NM':
+        return this.resolveCityValue('CO_NUM_NM', cc?.co_city, cardType);
+
+      default: {
+        // F103 BR-F103-04 / I-SCORE-FALLBACK-01：通用 fallback（讀 pool 同名 lowercase 欄）。
+        //   對應 PG `COALESCE((to_jsonb(o)->>lower(column_name))::numeric, 0)`。
+        const key = columnName.toLowerCase() as keyof ObPoolData;
+        const raw = pool[key];
+        if (raw == null) {
+          // 幽靈欄位（BR-F103-08 / I-SCORE-GHOST-01）：pool 無此 key → +0 + warn，不拋例外。
+          this.logger.warn(
+            `[Stage2] 幽靈欄位 column_name="${columnName}"（pool 無對應欄），計 +0`,
+          );
+          return 0;
+        }
+        const num = Number(raw);
+        return Number.isNaN(num) ? 0 : num;
+      }
     }
+  }
+
+  /**
+   * F104 BR-F104-09/10/11：縣市欄取值（JS，對齊 PG `LEFT(COALESCE(NULLIF(cc.*_city,''),default),3)`）。
+   *   cc 縣市欄為「縣市+區」6 字 → slice(0,3) 取縣市；缺值 / 空字串 → per-card default（已 3 字）。
+   *   未列 card（cardDefault 回 null，BR-F104-16）→ '' → slice 仍 ''（不匹配任何 level1）。
+   */
+  private resolveCityValue(
+    columnName: string,
+    cityRaw: string | null | undefined,
+    cardType: string,
+  ): string {
+    const def = String(cardDefault(columnName, cardType) ?? '');
+    const value = cityRaw != null && cityRaw !== '' ? cityRaw : def;
+    return value.slice(0, 3);
+  }
+
+  /**
+   * F103 / AD-E07-v3.5 §6.2 / OQ-1/OQ-2 / I-SCORE-PREFETCH-01：為一個 list 之 pool 批次取回
+   * customer_core（by custo_no）+ ob_arreturndf_min_cap（by appl_no）計分來源，建 Map 供
+   * computeScore 讀（JS oracle）。每來源恰一次 IN 查詢（禁 N+1）。
+   *
+   * customer_core 無 entity（AD-E06-1）→ raw SQL。SQLite 測試環境二表不存在 → 查詢拋錯，
+   * 以 try/catch graceful degrade 回空 Map（cc/arCap=null → 屬性走 default，等價舊行為，OQ-3）。
+   * 正式月跑（PG）二表存在 → 正常取回。
+   */
+  private async prefetchScoringSources(pool: ObPoolData[]): Promise<{
+    ccMap: Map<string, CustomerCoreRow>;
+    arMap: Map<string, ArCapitalRow>;
+  }> {
+    const ccMap = new Map<string, CustomerCoreRow>();
+    const arMap = new Map<string, ArCapitalRow>();
+    const manager = this.dataSource.manager;
+
+    const custoNos = [
+      ...new Set(pool.map((p) => p.custo_no).filter((v): v is string => !!v)),
+    ];
+    if (custoNos.length > 0) {
+      try {
+        const rows: CustomerCoreRow[] = await manager.query(
+          `SELECT source_customer_no, cus_sex, date_of_birth, education_code,
+                  hpost_city, cpost_city, co_city,
+                  carea_no1, carea_no2, cellular
+           FROM customer_core
+           WHERE source_customer_no = ANY($1)`,
+          [custoNos],
+        );
+        for (const r of rows) ccMap.set(r.source_customer_no, r);
+      } catch {
+        // SQLite 測試環境無 customer_core 表 → 空 Map（OQ-3 graceful degrade）。
+      }
+    }
+
+    const applNos = [
+      ...new Set(pool.map((p) => p.appl_no).filter((v): v is string => !!v)),
+    ];
+    if (applNos.length > 0) {
+      try {
+        const rows: ArCapitalRow[] = await manager.query(
+          `SELECT appl_no, add_un_capital FROM ob_arreturndf_min_cap WHERE appl_no = ANY($1)`,
+          [applNos],
+        );
+        for (const r of rows) arMap.set(r.appl_no, r);
+      } catch {
+        // SQLite 測試環境無 ob_arreturndf_min_cap 表 → 空 Map（OQ-3 graceful degrade）。
+      }
+    }
+
+    return { ccMap, arMap };
   }
 
   // F102 / AD-E07-30 §8 / §4.2：原 v2.0 之歷史 result snapshot 未成交掃描（simplified is_cr='Y'）

@@ -44,96 +44,251 @@ import type { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.en
  * **不在此表** → 比照 JS resolveColumnValue default：回傳 NULL（range）/ ''（category）→ 不取分
  * （spec-schema-gap-first：不臆造來源欄位）。
  */
-interface ColumnSource {
+export interface ColumnSource {
   kind: 'range' | 'category';
   /** SQL 純量表達式（已含 COALESCE 缺值處理）。 */
   expr: string;
 }
 
+// ---------------------------------------------------------------------------
+// F104 / AD-E07-33：per-card default 常數表 CARD_DEFAULTS
+// ---------------------------------------------------------------------------
+
 /**
- * 解析 column_name 之 SQL 取值表達式。
+ * F104 / AD-E07-33：逐 (column_name, card_type) 之 per-card 缺值 default 值。
  *
- * **已映射（architecture-spec.md §3.10 + 現行 JS resolveColumnValue）**：
- *   ob_pool_data 直接取：
- *     - LIST_MONTH（range）← o.month_cnt（缺值 25，對齊 JS）
- *     - PROJECT_TP（category）← o.spec_tp（缺值 '01'，對齊 JS；§3.10 之 spec_name '%專案%' → LEVEL1='A'
- *       衍生屬 open item，比照 JS 不實作）
- *     - CAR_YEAR（range）← 當年 − o.year_produ（缺值 0，對齊 JS）
- *     - COMMISSION（range）← o.commission（缺值 0，對齊 JS）
- *   customer_core LEFT JOIN（P3 新增，§3.10）：
- *     - CUS_SEX（category）← cc.gender（缺值 '3'）
- *     - AGE（range）← 由 cc.date_of_birth 算年齡（缺值 0）
- *     - EDUCAT_BACK（category）← cc.education_code（缺值 ''）
- *     - CAREA_NO1/CAREA_NO2/CELLULAR（range）← (phone IS NOT NULL)::int（缺值 0）
- *     - HPOST_NUM_NM/CPOST_NUM_NM/CO_NUM_NM（category）← zip（缺值 ''）
- *     - SALES_STS（category）← o.sales_sts_na CASE（缺值 'HFC'）
- *     - LOAN_RATE（range）← o.loan_rate（缺值 0）
+ * - undefined（key 不存在）= 該欄在該 card 「不啟用」（不設 default）；引擎不查 default，
+ *   但實務上 activeColumns 來自 DB（`ob_levelcard_column`），不啟用之欄不會出現於 activeColumns，
+ *   故此處 undefined 僅為 fallback 安全網（BR-F104-16）。
+ * - 數值 default（LIST_MONTH / LOAN_RATE）→ number；字串 default（EDUCAT_BACK / 縣市欄）→ string。
  *
- * **未映射（回 undefined → 不取分，open item）**：
- *   - ADD_UN_CAPITAL：來源 ob_arreturndf_min_cap（非 customer_core，需額外 JOIN）→ 比照 JS default 不取分。
- *   - 其餘未列於 §3.10 之 column_name → 不臆造，不取分。
+ * 出處：legacy SP UTF-16LE 解碼查證（AD-E07-33 矩陣，2026-06-24）。
  */
-function resolveColumnSource(columnName: string): ColumnSource | undefined {
+const CARD_DEFAULTS: Record<string, Record<string, number | string>> = {
+  LIST_MONTH: { H: 25, S: 25, E: 12, E5: 12 }, // M/HM 不啟用
+  LOAN_RATE: { S5: 77, E: 12, E5: 12 }, // H/S/M/HM 不啟用；其他 card → 0（fallback）
+  EDUCAT_BACK: { S: '02', S5: '08', E: '02', E5: '02' },
+  HPOST_NUM_NM: { S5: '花蓮縣', M: '臺北市', HM: '臺北市' },
+  CPOST_NUM_NM: { M: '臺南市', HM: '臺南市' },
+  CO_NUM_NM: { S5: '金門縣', E5: '金門縣', M: '高雄市', HM: '高雄市' },
+};
+
+/**
+ * 取 (column, cardType) per-card default。未列 card → BR-F104-16 fallback（H/S 基準）。
+ *   - LIST_MONTH 未列 → 25（H 基準）；LOAN_RATE 未列 → 0（其他 card default）。
+ *   - EDUCAT_BACK 未列 → '02'（E 基準）。
+ *   - 縣市欄未列 → null（未知 card 不計分縣市欄，回 null 由呼叫端判斷）。
+ */
+export function cardDefault(
+  columnName: string,
+  cardType: string,
+): number | string | null {
+  const col = CARD_DEFAULTS[columnName];
+  if (col && cardType in col) return col[cardType];
+  // BR-F104-16 未知 / 未列 card_type fallback。
+  switch (columnName) {
+    case 'LIST_MONTH':
+      return 25;
+    case 'LOAN_RATE':
+      return 0;
+    case 'EDUCAT_BACK':
+      return '02';
+    case 'HPOST_NUM_NM':
+    case 'CPOST_NUM_NM':
+    case 'CO_NUM_NM':
+      return null; // 縣市欄未列 card → 不計分（無 default）。
+    default:
+      return null;
+  }
+}
+
+/**
+ * F104 / AD-E07-34：cus_sex NULL-safe int cast（PG fragment）。
+ *   非數值髒值（'C'/'D' 等）/ 空字串 / NULL → NULL（不拋 invalid input syntax，BR-F104-13）。
+ */
+const SAFE_INT_CUS_SEX = "CASE WHEN cc.cus_sex ~ '^[0-9]+$' THEN cc.cus_sex::int ELSE NULL END";
+
+/**
+ * F104 / AD-E07-34：五欄分流 gating「個人」判斷式（PG fragment）。
+ *   gating default = '1'（個人）：空/NULL → NULLIF →'1'→ 個人；
+ *   非數值髒值（'C'）→ NULLIF 保留 'C' → safe_int NULL → NULL IN(1,2)=UNKNOWN → COALESCE FALSE → 法人。
+ *   '1'/'2' → 個人；'3'/數值非 1/2 → 法人。
+ */
+const IS_PERSONAL_GATING =
+  "COALESCE((CASE WHEN COALESCE(NULLIF(cc.cus_sex,''),'1') ~ '^[0-9]+$' " +
+  "THEN COALESCE(NULLIF(cc.cus_sex,''),'1')::int ELSE NULL END) IN (1, 2), FALSE)";
+
+/** SQL 字串字面值跳脫（單引號加倍）。per-card default 為 DB 管理者設定之縣市名常數。 */
+function sqlLiteral(v: string): string {
+  return `'${v.replace(/'/g, "''")}'`;
+}
+
+/**
+ * 解析 column_name 之 SQL 取值表達式（F104 / AD-E07-10-L v4.0 全欄對齊 legacy SP）。
+ *
+ * @param columnName 計分欄位名
+ * @param cardType   名單 card_type（F104 AD-E07-32：per-card default + 分流 gating 需要）
+ *
+ * **已映射（AD-E07-10-L v4.0，architecture-spec.md §4063–4162；F104 對齊 legacy SP）**：
+ *   ob_pool_data 直接取：
+ *     - LIST_MONTH（range）← o.month_cnt（per-card default：H/S→25；E/E5→12，F104）
+ *     - PROJECT_TP（category）← spec_name '%借新還舊%' → 'A'，否則 COALESCE(o.spec_tp,'01')（F104 BR-F104-01）
+ *     - CAR_YEAR（range）← 當年 − o.year_produ（缺值 0，F103 不動）
+ *     - SALES_STS（category）← o.sales_sts_na CASE（'中古車商'→'UCD'，F104 BR-F104-02；缺值 'HFC'）
+ *     - LOAN_RATE（range）← o.loan_rate（per-card default：S5→77；E/E5→12；其他→0，F104）
+ *   customer_core LEFT JOIN（§3.10，F104 欄名 / 語意修正）：
+ *     - CUS_SEX（range）← COALESCE(<safe_int>(cc.cus_sex), 3)（F104 category→range；計分 default 3）
+ *     - AGE（range）← isCorp 分流：個人 age(cc.date_of_birth) >100/<0→0；法人→0（F104）
+ *     - EDUCAT_BACK（range，字串 BETWEEN）← isCorp 分流：個人 RIGHT('0'||code,2) 缺值 per-card default；法人→per-card default（F104）
+ *     - CAREA_NO1/CAREA_NO2/CELLULAR（range）← isCorp 分流：個人 presence(IS NOT NULL AND <>'')→1/0；法人→0（F104）
+ *     - HPOST_NUM_NM/CPOST_NUM_NM/CO_NUM_NM（category）← LEFT(COALESCE(NULLIF(cc.*_city,''),per-card default),3)（F104）
+ *   ob_arreturndf_min_cap LEFT JOIN（F103 BR-F103-01 補齊，alias ar）：
+ *     - ADD_UN_CAPITAL（range）← COALESCE(ar.add_un_capital, 0)（F103 不動）
+ *
+ * **F104 變更**（對齊 legacy SP，AD-E07-10-L v4.0）：
+ *   - cus_sex NULL-safe cast（BR-F104-13）：禁裸 `::int`，髒值 'C'/'D' → NULL（不拋例外、不中斷月跑）。
+ *   - 兩處 default 分離（BR-F104-13a）：CUS_SEX 計分欄 default=3；五欄分流 gating default='1'（個人）。
+ *   - 五欄 isCorp 分流（CAREA_NO1/NO2/CELLULAR/AGE/EDUCAT_BACK）：個人取自身屬性、法人取 0/per-card default。
+ *   - per-card default（LIST_MONTH/LOAN_RATE/EDUCAT_BACK/三縣市欄）依 cardType（CARD_DEFAULTS / AD-E07-33）。
+ *   - 縣市欄改讀 cc.*_city + LEFT(...,3)（cc 為「縣市+區」6 字，比對 level1 縣市-only 3 字）。
+ *
+ * **F103 變更（保留）**：COMMISSION 死碼移除；default 通用 fallback（I-SCORE-FALLBACK-01）。
+ */
+/**
+ * F104 BR-F104-09/10/11：三縣市欄共用取值表達式。
+ *   `LEFT(COALESCE(NULLIF(cc.<col>,''), <per-card default>), 3)` 比對 level1（縣市-only 3 字）。
+ *   cc 欄為「縣市+區」6 字 → LEFT3 取縣市。default 注入在 LEFT3 之前（default 本身已 3 字）。
+ *   未列 card（cardDefault 回 null，BR-F104-16）→ 不計分縣市欄 → 取 ''（不匹配任何 level1）。
+ */
+function cityColumnSource(
+  columnName: string,
+  ccCol: string,
+  cardType: string,
+): ColumnSource {
+  const def = cardDefault(columnName, cardType);
+  const defLiteral = def === null ? "''" : sqlLiteral(String(def));
+  return {
+    kind: 'category',
+    expr: `LEFT(COALESCE(NULLIF(${ccCol}, ''), ${defLiteral}), 3)`,
+  };
+}
+
+export function resolveColumnSource(columnName: string, cardType: string): ColumnSource {
   switch (columnName) {
     // ----- ob_pool_data 直接取（沿用現行 JS resolveColumnValue 映射，守 (b) 下推等價）-----
-    case 'LIST_MONTH':
-      return { kind: 'range', expr: 'COALESCE(o.month_cnt, 25)' };
+    case 'LIST_MONTH': {
+      // F104 BR-F104-12：per-card default（H/S→25；E/E5→12；其他 card → 25 fallback）。
+      const def = cardDefault('LIST_MONTH', cardType) as number;
+      return { kind: 'range', expr: `COALESCE(o.month_cnt, ${def})` };
+    }
     case 'PROJECT_TP':
-      return { kind: 'category', expr: "COALESCE(o.spec_tp, '01')" };
+      // F104 BR-F104-01：spec_name '%借新還舊%' → 'A'；否則 COALESCE(spec_tp,'01')。
+      return {
+        kind: 'category',
+        expr: "CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE COALESCE(o.spec_tp, '01') END",
+      };
     case 'CAR_YEAR':
-      // JS：year_produ 有值 → 當年 − year_produ；否則 0。
+      // JS：year_produ 有值 → 當年 − year_produ；否則 0（F103 不動）。
       return {
         kind: 'range',
         expr:
           "CASE WHEN o.year_produ IS NULL OR NULLIF(SUBSTRING(o.year_produ FROM '^[0-9]+'), '') IS NULL " +
           "THEN 0 ELSE EXTRACT(YEAR FROM CURRENT_DATE)::int - SUBSTRING(o.year_produ FROM '^[0-9]+')::int END",
       };
-    case 'COMMISSION':
-      return { kind: 'range', expr: 'COALESCE(CAST(o.commission AS numeric), 0)' };
-    // ----- customer_core LEFT JOIN（P3 新增，§3.10 已映射）-----
+    // F103 BR-F103-05：COMMISSION 死碼 case 移除（改走通用 fallback → +0）。
+    // ----- customer_core LEFT JOIN（§3.10 已映射）-----
     case 'CUS_SEX':
-      return { kind: 'category', expr: "COALESCE(cc.gender, '3')" };
-    case 'AGE':
+      // F104 BR-F104-03：range；計分 default = 3（與分流 gating default '1' 分離，BR-F104-13a）；
+      //   NULL-safe cast（BR-F104-13，禁裸 ::int）。
+      return { kind: 'range', expr: `COALESCE((${SAFE_INT_CUS_SEX}), 3)` };
+    case 'AGE': {
+      // F104 BR-F104-07：isCorp 分流（個人→年齡 >100/<0 排除；法人→0）。
+      const ageExpr =
+        'CASE WHEN cc.date_of_birth IS NULL THEN 0 ' +
+        'WHEN EXTRACT(YEAR FROM age(cc.date_of_birth))::int > 100 ' +
+        'OR EXTRACT(YEAR FROM age(cc.date_of_birth))::int < 0 THEN 0 ' +
+        'ELSE EXTRACT(YEAR FROM age(cc.date_of_birth))::int END';
+      return {
+        kind: 'range',
+        expr: `CASE WHEN ${IS_PERSONAL_GATING} THEN (${ageExpr}) ELSE 0 END`,
+      };
+    }
+    case 'EDUCAT_BACK': {
+      // F104 BR-F104-08：isCorp 分流；個人 → RIGHT('0'||code,2) 缺值 per-card default；法人 → per-card default。
+      // kind=range（已 DB 查證 0 category / 29 range，level2_s/level2_e 為補零字串如 '02'/'08'/'99'）。
+      //   ⚠️ OQ-TDS-F104-02：JS computeScore range 分支以 Number(value) 數值比較；PG 須對齊。
+      //   故取值表達式以 NULL-safe 數值化（補零字串 '05'→5；'0D' 等非數字→NULL→不命中，與 JS NaN→不命中等價）。
+      const def = sqlLiteral(String(cardDefault('EDUCAT_BACK', cardType) ?? '02'));
+      const personalStr = `COALESCE(NULLIF(RIGHT('0'||cc.education_code, 2), ''), ${def})`;
+      const valStr = `CASE WHEN ${IS_PERSONAL_GATING} THEN (${personalStr}) ELSE ${def} END`;
+      // 數值化（與 JS Number(value) 對齊；非數字 → NULL → range 比對 UNKNOWN → 不命中）。
+      const numExpr = `(CASE WHEN (${valStr}) ~ '^[0-9]+$' THEN (${valStr})::int ELSE NULL END)`;
+      return { kind: 'range', expr: numExpr };
+    }
+    case 'CAREA_NO1':
+      // F104 BR-F104-05：個人 → presence（IS NOT NULL AND <>''）→ 1/0；法人 → 0。
       return {
         kind: 'range',
         expr:
-          "CASE WHEN cc.date_of_birth IS NULL THEN 0 " +
-          "ELSE EXTRACT(YEAR FROM age(cc.date_of_birth))::int END",
+          `CASE WHEN ${IS_PERSONAL_GATING} ` +
+          `THEN (CASE WHEN cc.carea_no1 IS NOT NULL AND cc.carea_no1 <> '' THEN 1 ELSE 0 END) ELSE 0 END`,
       };
-    case 'EDUCAT_BACK':
-      return { kind: 'category', expr: "COALESCE(cc.education_code, '')" };
-    case 'CAREA_NO1':
-      return { kind: 'range', expr: '(cc.home_phone IS NOT NULL)::int' };
     case 'CAREA_NO2':
-      return { kind: 'range', expr: '(cc.contact_phone IS NOT NULL)::int' };
+      return {
+        kind: 'range',
+        expr:
+          `CASE WHEN ${IS_PERSONAL_GATING} ` +
+          `THEN (CASE WHEN cc.carea_no2 IS NOT NULL AND cc.carea_no2 <> '' THEN 1 ELSE 0 END) ELSE 0 END`,
+      };
     case 'CELLULAR':
-      return { kind: 'range', expr: '(cc.mobile_phone IS NOT NULL)::int' };
+      return {
+        kind: 'range',
+        expr:
+          `CASE WHEN ${IS_PERSONAL_GATING} ` +
+          `THEN (CASE WHEN cc.cellular IS NOT NULL AND cc.cellular <> '' THEN 1 ELSE 0 END) ELSE 0 END`,
+      };
     case 'HPOST_NUM_NM':
-      return { kind: 'category', expr: "COALESCE(cc.residential_zip, '')" };
+      return cityColumnSource('HPOST_NUM_NM', 'cc.hpost_city', cardType);
     case 'CPOST_NUM_NM':
-      return { kind: 'category', expr: "COALESCE(cc.mailing_zip, '')" };
+      return cityColumnSource('CPOST_NUM_NM', 'cc.cpost_city', cardType);
     case 'CO_NUM_NM':
-      return { kind: 'category', expr: "COALESCE(cc.company_zip, '')" };
+      return cityColumnSource('CO_NUM_NM', 'cc.co_city', cardType);
     case 'SALES_STS':
+      // F104 BR-F104-02：UCD key 改為「中古車商」（取代舊系統別名）。
       return {
         kind: 'category',
         expr:
-          "CASE o.sales_sts_na WHEN 'AGENT' THEN 'AGENT' WHEN '經銷商' THEN 'UCD' ELSE 'HFC' END",
+          "CASE o.sales_sts_na WHEN 'AGENT' THEN 'AGENT' WHEN '中古車商' THEN 'UCD' ELSE 'HFC' END",
       };
-    case 'LOAN_RATE':
-      return { kind: 'range', expr: 'COALESCE(CAST(o.loan_rate AS numeric), 0)' };
+    case 'LOAN_RATE': {
+      // F104 BR-F104-12：per-card default（S5→77；E/E5→12；其他→0）。
+      const def = cardDefault('LOAN_RATE', cardType) as number;
+      return { kind: 'range', expr: `COALESCE(CAST(o.loan_rate AS numeric), ${def})` };
+    }
+    // ----- ob_arreturndf_min_cap LEFT JOIN（F103 BR-F103-01，alias ar）-----
+    case 'ADD_UN_CAPITAL':
+      return { kind: 'range', expr: 'COALESCE(ar.add_un_capital, 0)' };
     default:
-      // 來源不明確（未列於 §3.10，或需額外表）→ 不臆造，比照 JS default 不取分（open item）。
-      return undefined;
+      // F103 BR-F103-04 / I-SCORE-FALLBACK-01：通用 fallback（AD-E07-10-L line 4091）。
+      //   未 hardcode 之 ob_pool_data 數值欄位 → to_jsonb(o) 取值 cast numeric。
+      //   安全性：column_name 來自 ob_levelcard_column.column_name（DB 管理者設定，非外部輸入）；
+      //     lower() 對齊大小寫；幽靈欄位（to_jsonb 無此 key）/ 非數值文字 → cast → NULL → COALESCE 0
+      //     （靜默 +0，不阻擋月跑，BR-F103-08）。category 維度已由 hardcode case 覆蓋，不進此分支。
+      return {
+        kind: 'range',
+        expr: `COALESCE((to_jsonb(o)->>'${columnName.toLowerCase()}')::numeric, 0)`,
+      };
   }
 }
 
-/** 公開供測試 / 文件：列出已映射之計分欄位（其餘 column_name 比照 JS 不計分）。 */
+/**
+ * 公開供測試 / 文件：列出明確 hardcode 之計分欄位（其餘 column_name 走通用 fallback，BR-F103-04）。
+ * F103：移除 'COMMISSION'（死碼）、新增 'ADD_UN_CAPITAL'（ob_arreturndf_min_cap）。
+ */
 export const MAPPED_SCORING_COLUMNS = [
   'LIST_MONTH',
   'PROJECT_TP',
   'CAR_YEAR',
-  'COMMISSION',
   'CUS_SEX',
   'AGE',
   'EDUCAT_BACK',
@@ -145,6 +300,7 @@ export const MAPPED_SCORING_COLUMNS = [
   'CO_NUM_NM',
   'SALES_STS',
   'LOAN_RATE',
+  'ADD_UN_CAPITAL',
 ] as const;
 
 /** customer_core 客戶屬性欄位（需 LEFT JOIN customer_core 才能取值）。 */
@@ -173,6 +329,11 @@ export interface Stage2ScoreSql {
   scoreExpr: string | null;
   /** 是否有任一已映射且 active 之 customer_core 欄位（決定是否需 LEFT JOIN customer_core）。 */
   needsCustomerCore: boolean;
+  /**
+   * F103 BR-F103-01 / I-SCORE-AR-JOIN-01：是否有 active 之 ADD_UN_CAPITAL 欄位
+   * （決定是否需 LEFT JOIN ob_arreturndf_min_cap ar）。
+   */
+  needsArCapital: boolean;
   params: Record<string, unknown>;
 }
 
@@ -196,19 +357,23 @@ export function buildStage2ScoreExpr(
 
   if (cardVersion === null) {
     // 無 active version → score NULL（AC-3 / SCORE-006），不查 column。
-    return { scoreExpr: null, needsCustomerCore: false, params };
+    return { scoreExpr: null, needsCustomerCore: false, needsArCapital: false, params };
   }
 
   const caseFragments: string[] = [];
   let needsCustomerCore = false;
+  let needsArCapital = false;
   let pIdx = 0;
 
   for (const col of activeColumns) {
     if (!col.column_name) continue;
-    const src = resolveColumnSource(col.column_name);
-    if (!src) continue; // 來源不明確 → 比照 JS 不取分（open item）。
+    // F103 I-SCORE-FALLBACK-01：resolveColumnSource 永不回 undefined（未 hardcode → 通用 fallback）。
+    // F104 AD-E07-32：傳入 cardType（per-card default + 分流 gating 需要）。
+    const src = resolveColumnSource(col.column_name, cardType);
 
     if (CUSTOMER_CORE_COLUMNS.has(col.column_name)) needsCustomerCore = true;
+    // F103 BR-F103-01 / I-SCORE-AR-JOIN-01：有 active ADD_UN_CAPITAL 欄 → 需 LEFT JOIN ob_arreturndf_min_cap。
+    if (col.column_name === 'ADD_UN_CAPITAL') needsArCapital = true;
 
     // 該 column 之 score rows（同 card_type + version + column_name）。
     const colScores = scoreRows.filter(
@@ -254,12 +419,13 @@ export function buildStage2ScoreExpr(
 
   if (caseFragments.length === 0) {
     // 有 active version 但無任一可計分維度命中規則 → score = 0（AC-3 / SCORE-007，與 NULL 區分）。
-    return { scoreExpr: '0', needsCustomerCore, params };
+    return { scoreExpr: '0', needsCustomerCore, needsArCapital, params };
   }
 
   return {
     scoreExpr: caseFragments.join(' + '),
     needsCustomerCore,
+    needsArCapital,
     params,
   };
 }
