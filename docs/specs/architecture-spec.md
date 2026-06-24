@@ -4060,43 +4060,220 @@ SELECT tier_level FROM ob_tier
 - Function 為純計算函式，不直接寫入任何表（副作用由呼叫方 UPDATE 負責）
 - function 參數 `p_pool_data_row ob_pool_data` 使用 PostgreSQL row type，需確保 `ob_pool_data` 表結構穩定；若 ETL 重建 `ob_pool_data`（TRUNCATE + COPY），row type 不受影響（schema 定義不變）
 
-#### AD-E07-10-L　客戶屬性與 loan 屬性 lookup 約定
+#### AD-E07-10-L　客戶屬性與 loan 屬性 lookup 約定（v4.0，F104 全欄對齊 legacy SP）
 
-**決策**：`fn_calc_tier_level` 函式簽章**保持不變**（僅接受 `p_pool_data_row ob_pool_data`），但函式內部以 LEFT JOIN 方式從 `customer_core` 取客戶屬性、從 `ob_arreturndf_min_cap` 取 `ADD_UN_CAPITAL`，以等價移植 SP 中各 join 邏輯，確保計分結果與 SQL Server 行為一致。
+> **版本歷程**：v1.0 初版 → v3.5（F103，2026-06-24，通用 fallback + ADD_UN_CAPITAL + JS oracle 補齊） → **v4.0（F104，2026-06-24，依 `SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql` UTF-16LE 解碼逐欄稽核，多欄語意修正）**。F103 補述保留（下方）但部分映射**已被 F104 覆蓋**（欄名：`gender`→`cus_sex`；關鍵字：`'專案'`→`'借新還舊'`；SALES_STS：`'經銷商'`→`'中古車商'`；縣市來源：zip 欄→`*_city` 欄 + LEFT3；CUS_SEX：category→range；五欄新增 isCorp 分流），詳見本節。
 
-**設計原則**：
+**設計原則**（繼承自 v1.0 / F103，不變）：
 - 外部 lookup 為 function **內部行為**，對呼叫方（`AssignmentScoringService`）完全透明
-- join key：`customer_core.source_customer_no = (p_pool_data).custo_no`；`ob_arreturndf_min_cap.appl_no = (p_pool_data).appl_no`
-- 所有欄位缺值行為以 `COALESCE` 處理，等價 SP 的 `ISNULL(...)` 語意
+- join key：`customer_core.source_customer_no = o.custo_no`；`ob_arreturndf_min_cap.appl_no = o.appl_no`（PG alias：`cc` / `ar`）
+- 所有欄位缺值行為以 `COALESCE` / NULL-safe cast 處理，等價 SP 的 `ISNULL(...)` 語意
 
-**column_name 對應規則表**（供 fn_calc_tier_level 實作參考）：
+**F104 新增架構約束**：
+- **兩條引擎路徑（PG 下推 `resolveColumnSource` / JS oracle `resolveColumnValue`）簽章須加 `cardType` 參數**（AD-E07-32）：per-card default 與縣市 default 均依 card_type 決定，現行 `resolveColumnSource(columnName)` 不收 cardType — F104 改為 `resolveColumnSource(columnName, cardType)`。
+- **`cus_sex` NULL-safe cast 為硬性要求**（AD-E07-34）：dev 資料含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串），PG 裸 `::int` 對非數值拋例外導致整支月跑 SQL 掛掉；JS `Number()` 對非數值字串返回 NaN。
+- **cus_sex 兩處 default 刻意分離**（AD-E07-34 / BR-F104-13a）：(i) CUS_SEX **計分欄** default = `3`；(ii) 五欄**分流 gating** default = `'1'`（個人）；兩者不可混用同一 COALESCE。
 
-| column_name（ob_levelcard_column） | 取值來源 | 缺值 default |
-|-----------------------------------|---------|-------------|
-| `CUS_SEX` | `customer_core.gender` | `'3'` |
-| `CAREA_NO1` | `(customer_core.home_phone IS NOT NULL)::int` | `0` |
-| `CAREA_NO2` | `(customer_core.contact_phone IS NOT NULL)::int` | `0` |
-| `CELLULAR` | `(customer_core.mobile_phone IS NOT NULL)::int` | `0` |
-| `AGE` | `EXTRACT(YEAR FROM age(customer_core.date_of_birth))` | `0` |
-| `EDUCAT_BACK` | `customer_core.education_code` | `''` |
-| `HPOST_NUM_NM` | `customer_core.residential_zip` | `''` |
-| `CPOST_NUM_NM` | `customer_core.mailing_zip` | `''` |
-| `CO_NUM_NM` | `customer_core.company_zip` | `''` |
-| `ADD_UN_CAPITAL` | `ob_arreturndf_min_cap.add_un_capital` | `0` |
-| `CAR_YEAR` | `EXTRACT(YEAR FROM CURRENT_DATE) - (p_pool_data).year_produ::int` | `0` |
-| `LIST_MONTH` | `(p_pool_data).month_cnt` | `25` |
-| `PROJECT_TP` | `(p_pool_data).spec_tp`；若 `spec_name LIKE '%專案%'` 則衍生 `LEVEL1='A'` | `spec_tp '01'`、`spec_name ''` |
-| `SALES_STS` | `CASE (p_pool_data).sales_sts_na WHEN 'AGENT' THEN 'AGENT' WHEN '經銷商' THEN 'UCD' ELSE 'HFC' END`，比對 `LEVEL1` | `'HFC'` |
-| `LOAN_RATE` | `(p_pool_data).loan_rate` | `0` |
-| （其餘維度） | 通用引擎：`to_jsonb(p_pool_data)->>lower(column_name)` cast to numeric，BETWEEN `level2_s` / `level2_e` | `0` |
+**column_name 對應規則表 v4.0**（legacy 真語意，F104 權威；引擎 alias `o`=ob_pool_data / `cc`=customer_core LEFT JOIN / `ar`=ob_arreturndf_min_cap LEFT JOIN；`<safe_int>` 定義見 AD-E07-34）：
 
-> **注意**：`ADD_UN_CAPITAL` 維度僅在 `ob_arreturndf_min_cap` ETL 同步資料就緒的情況下才有意義。若月跑前未完成 OB_ARRETURNDF_MIN_CAP ETL 同步，該表為空，所有案件 `ADD_UN_CAPITAL` 將 fallback 為 0，導致計分結果偏差。月跑前置條件應將此 ETL 同步納入必要檢核。
+| column_name | kind | per-card 啟用（legacy SP 查證）| 取值表達式 / 邏輯 | 缺值 default | F103→F104 變更 |
+|-------------|------|-------------------------------|-------------------|-------------|----------------|
+| `CUS_SEX` | range | 全卡（H L97）| `COALESCE(<safe_int>(cc.cus_sex), 3)` BETWEEN `level2_s/level2_e` | `3`（**計分 default**，⚠️ 與分流 gating default `'1'` 分離）| `gender`→`cus_sex`；category→**range**；default `'3'`→`3` |
+| `CAR_YEAR` | range | H/S/S5/E/E5（H L98）| `CASE WHEN year_produ 無效 THEN 0 ELSE 當年 − year_produ END` | `0` | 不動（F103 既有）|
+| `ADD_UN_CAPITAL` | range | H/E/E5（H L99）| `COALESCE(ar.add_un_capital, 0)` | `0` | 不動（F103 既有）|
+| `PROJECT_TP` | category | H/S/E/E5（H L100–101）| `CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE COALESCE(o.spec_tp,'01') END` 比對 `LEVEL1`；⚠️ legacy 真語意為複合條件（spec_tp BETWEEN AND 衍生=level1），本版維持 F103 category 單欄簡化，若 F067 差異顯示 PROJECT_TP 偏差再另立 story | `spec_tp`→`'01'`，`spec_name`→`''` | `'%專案%'`→`'%借新還舊%'` |
+| `LIST_MONTH` | range | H/S/E/E5（H L102）；**M/HM 不啟用**（SP 查證：M/HM scoring block 無此欄）| `COALESCE(o.month_cnt, <per-card default>)` | per-card（見 AD-E07-33）H/S→25；E/E5→12；M/HM 不啟用 | 固定 25 → per-card |
+| `LOAN_RATE` | range | S5/E/E5（S5 L83；E L111；E5 L111）；**M/HM 不啟用**（SP 查證：M/HM scoring block 無此欄）| `COALESCE(CAST(o.loan_rate AS numeric), <per-card default>)` | per-card（見 AD-E07-33）S5→77；E/E5→12；其他→0；M/HM 不啟用 | 固定 0 → per-card |
+| `SALES_STS` | category | H/S/E（H L105）| `CASE o.sales_sts_na WHEN 'AGENT' THEN 'AGENT' WHEN '中古車商' THEN 'UCD' ELSE 'HFC' END` 比對 `LEVEL1` | `'HFC'`（ELSE 分支）| `'經銷商'`→`'中古車商'` |
+| `CAREA_NO1` | range | H/S/S5/E/M/HM（H L103）| **isCorp 分流**：個人（`<safe_int>(COALESCE(NULLIF(cc.cus_sex,''),'1')) IN (1,2)` 含空/NULL→個人）→ `cc.carea_no1 IS NOT NULL AND <>'' → 1 ELSE 0`；法人→ 0 | `0` | `home_phone`→`cc.carea_no1` + isCorp 分流 |
+| `CAREA_NO2` | range | H/S/S5/E/E5/M/HM（H L104）| 同 CAREA_NO1 邏輯，取 `cc.carea_no2` | `0` | `contact_phone`→`cc.carea_no2` + isCorp 分流 |
+| `CELLULAR` | range | E5（E5 L114）| isCorp 分流：個人→ `cc.cellular IS NOT NULL AND <>'' → 1 ELSE 0`；法人→ 0 | `0` | `mobile_phone`→`cc.cellular` + isCorp 分流 |
+| `AGE` | range | S/S5/E/E5/M/HM（S L89）| isCorp 分流：個人→ `EXTRACT(YEAR FROM age(cc.date_of_birth))::int`，結果 `>100 OR <0 → 0`，`date_of_birth` NULL→0；法人→ 0 | `0` | 加 isCorp 分流 + >100 排除 |
+| `EDUCAT_BACK` | range（字串 BETWEEN）| S/S5/E/E5（S L95）| isCorp 分流：個人→ `RIGHT('0'\|\|cc.education_code, 2)`，缺值→ per-card default；法人→ per-card default；比對以字串 BETWEEN level2_s/level2_e（補零後 lexical range，NOT 數值比較）⚠️ tdd 落地前須驗 `ob_levelcard_score` EDUCAT_BACK score row 存於 level2（range）或 level1（category），若實為 category 則改字串相等 | per-card（見 AD-E07-33）E/S/E5→`'02'`；S5→`'08'` | category→**range（字串 BETWEEN）**；補零；per-card default；isCorp 分流 |
+| `HPOST_NUM_NM` | category | S5/M/HM（M L83）；**H/S/E/E5 不計分此欄** | `LEFT(COALESCE(NULLIF(cc.hpost_city,''), <per-card default>), 3)` 比對 `LEVEL1`（cc 為「縣市+區」6 字，LEFT3 取縣市，legacy M L42 同式）| per-card（見 AD-E07-33）S5→`'花蓮縣'`；M/HM→`'臺北市'` | `residential_zip`→`cc.hpost_city` + LEFT3 + per-card default |
+| `CPOST_NUM_NM` | category | M/HM（M L84）；**其他 card 不計分此欄** | `LEFT(COALESCE(NULLIF(cc.cpost_city,''), '臺南市'), 3)` 比對 `LEVEL1` | `'臺南市'`（M/HM 唯一 default）| `mailing_zip`→`cc.cpost_city` + LEFT3 + default |
+| `CO_NUM_NM` | category | S5/E5/M/HM（S5 L84；E5 L108）；**H/S/E 不計分此欄** | `LEFT(COALESCE(NULLIF(cc.co_city,''), <per-card default>), 3)` 比對 `LEVEL1` | per-card（見 AD-E07-33）S5/E5→`'金門縣'`；M/HM→`'高雄市'` | `company_zip`→`cc.co_city` + LEFT3 + per-card default |
+| （其餘維度）| range | — | 通用 fallback：`COALESCE((to_jsonb(o)->>lower(column_name))::numeric, 0)`（BR-F103-04 / I-SCORE-FALLBACK-01，F103 授權）| `0` | 不動（F103 既有）|
 
-**效能補述**：
+> **⚠️ 縣市欄 per-card 啟用矩陣（已 SP 查證，H/S 不計分縣市欄）**：legacy M L42–44 在 `#CASE_CUS` CTE 預先 `LEFT(POST.POSTAL_ADD,3)` 存入 `#CASE_CUS.POSTAL_ADD`，比對端為純 `=LEVEL1`（非 `LEFT(D.POSTAL_ADD,3)=LEVEL1`）。引擎實作須在 `resolveColumnSource` 縣市 case 之 expr 中直接包含 `LEFT(COALESCE(NULLIF(cc.*_city,''), <default>),3)`，使 category 比對端（TRIM 相等）不需調整。S5（L84-85）並未在 source 套 LEFT3，legacy 存在此跨卡不一致，但統一 LEFT3 在 expr 層為正確實作（分析見 F104 §10 OQ-4）。
+
+> **⚠️ isCorp 分流 gating default = `'1'`（個人），與 CUS_SEX 計分欄 default = `3` 完全分離（BR-F104-13a）**：
+> - **CUS_SEX 計分欄**：`COALESCE(<safe_int>(cc.cus_sex), 3)` — 空/NULL/非數值 → 3（legacy H L97 `ISNULL(CUS_SEX,3)`）
+> - **五欄分流 gating**：`<safe_int>(COALESCE(NULLIF(cc.cus_sex,''),'1')) IN (1,2)` — **空字串/NULL** → `NULLIF(cus_sex,'')=NULL` → `COALESCE(NULL,'1')='1'` → `safe_int('1')=1` → IN(1,2) → **個人分支**（legacy H L36 `ISNULL(CUS.CUS_SEX,'')='' THEN '1'`）；**非數值髒值（'C'/'D' 等有值非 1/2）** → `NULLIF('C','')='C'`（非空，不補 '1'）→ `safe_int('C')=NULL` → `COALESCE(NULL,'1')='1'`…
+>   **⚠️ 修正**：上行邏輯有誤——`NULLIF('C','')` 回傳 `'C'`（非空字串，不觸發 COALESCE），故 gating 表達式之正確求值路徑為：`COALESCE(NULLIF('C',''),'1') = 'C'` → `safe_int('C') = NULL` → `NULL IN (1,2)` = FALSE → **法人分支（→0）**（legacy SP `CUS_SEX NOT IN('1','2')` 純字串比較下 `'C' NOT IN('1','2')` → 法人，行為一致）。
+> - **⚠️ 髒值（'C'/'D' 等非數值有值）gating 行為（正確）**：`NULLIF('C','')='C'` → `COALESCE('C','1')='C'` → `safe_int('C')=NULL` → `NULL IN (1,2)` → FALSE → **法人分支**（取 0 / per-card default，不用自身屬性）。與**空字串/NULL → 個人**語意不同，實作必須分開處理。兩路徑（PG/JS）對此 edge case 須保持一致，EQ DoD 場景須覆蓋「cus_sex='C' → 法人分支（取 0）」。
+
+**計分流程圖（F104 修正後）**：
+
+```mermaid
+flowchart TD
+    START["active column 取值\nresolveColumnSource(col, cardType)"] --> KIND{"欄位類型"}
+
+    KIND -->|"CUS_SEX 計分欄（range）"| CSX["COALESCE 計分 default = 3\nsafe_int cc.cus_sex BETWEEN level2_s/level2_e\n★計分 default=3；空/髒值→safe_int NULL→3（BR-F104-13）"]
+
+    KIND -->|"CAREA_NO1 / CAREA_NO2 / CELLULAR\nAGE / EDUCAT_BACK"| BR{"isCorp 分流\ngating default=1（個人）\nsafe_int COALESCE NULLIF cus_sex '1' IN 1,2\n★與計分 default=3 分離（BR-F104-13a）"}
+    BR -->|"個人（1/2，或空/NULL→1）"| PERS["自身屬性：\nCAREA/CELLULAR → IS NOT NULL AND 非空 → 1/0\nAGE → age of date_of_birth，大於100或小於0→0\nEDUCAT → RIGHT 補零 2 碼"]
+    BR -->|"法人（3 或其他有值非 1/2）"| CORP["保證人停用複刻（BR-F104-06）：\nCAREA/CELLULAR/AGE → 0\nEDUCAT → per-card default\n不查保證人、不 JOIN"]
+
+    KIND -->|"HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM\n（僅 S5/E5/M/HM 啟用，H/S/E 不計分）"| CITY["category：\nLEFT COALESCE NULLIF cc.*_city 空, card_default, 3\n★per-card default：S5→花蓮縣/金門縣；M/HM→臺北市/臺南市/高雄市"]
+
+    KIND -->|"PROJECT_TP（H/S/E/E5）"| PT["category：spec_name LIKE 借新還舊 → A\n否則 COALESCE spec_tp,'01'\n★legacy 真語意為複合條件（F104 §10 殘留風險）"]
+
+    KIND -->|"SALES_STS（H/S/E）"| SS["category：CASE sales_sts_na\n'AGENT'→'AGENT'  '中古車商'→'UCD'  ELSE 'HFC'\n★F104 取代 '經銷商'"]
+
+    KIND -->|"LIST_MONTH（H/S/E/E5）\nLOAN_RATE（S5/E/E5）"| PCD["range + per-card default：\nLIST_MONTH H/S→25; E/E5→12; M/HM 不啟用\nLOAN_RATE S5→77; E/E5→12; 其他→0; M/HM 不啟用"]
+
+    KIND -->|"CAR_YEAR / ADD_UN_CAPITAL（F103 既有）"| F103["不動（沿用 F103）"]
+
+    KIND -->|"其餘欄（通用 fallback）"| FALLBACK["range：COALESCE to_jsonb(o)->>lower(col) numeric, 0\n（F103 I-SCORE-FALLBACK-01）"]
+
+    CSX --> MATCH["比對 ob_levelcard_score\nrange：value >= level2_s AND value <= level2_e\ncategory：TRIM 相等\n命中第一個 score row 取分（break）"]
+    PERS --> MATCH
+    CORP --> MATCH
+    CITY --> MATCH
+    PT --> MATCH
+    SS --> MATCH
+    PCD --> MATCH
+    F103 --> MATCH
+    FALLBACK --> MATCH
+
+    MATCH --> SUM["SUM → score → card_level → tier_level"]
+```
+
+> **ADD_UN_CAPITAL ETL 前置注意**：`ADD_UN_CAPITAL` 僅在 `ob_arreturndf_min_cap` ETL 同步就緒時有意義，表為空時所有案件 fallback 為 0。月跑前置條件應將此 ETL 同步納入必要檢核。
+
+> **F103 實作授權補述（AD-E07-v3.5，2026-06-24）【部分已被 F104 覆蓋，詳見上表 F103→F104 變更欄】**：
+>
+> 1. **通用 fallback 正式授權**（仍有效）：`resolveColumnSource` 之 `default` 分支授權實作通用引擎（`COALESCE((to_jsonb(o)->>lower(column_name))::numeric, 0)`）（I-SCORE-FALLBACK-01）。
+> 2. **ADD_UN_CAPITAL PG 路徑修正**（仍有效）：`Stage2ScoreSql` interface 擴充 `needsArCapital: boolean`（I-SCORE-AR-JOIN-01）。
+> 3. **COMMISSION 映射廢除確認**（仍有效）：`COMMISSION` 不在映射表，dead case 移除（I-SCORE-COMMISSION-01）。
+> 4. **JS oracle 補齊授權（OQ-1/2/3 定案）**（仍有效）：batch pre-fetch（I-SCORE-PREFETCH-01）；`computeScore` 加 `cc`/`arCap` 參數。**F104 進一步加 `cardType` 參數（AD-E07-32）**。
+> 5. **AGE 統一演算法**（仍有效，F104 新增 >100 排除）：JS `calcAgeYears()` 對齊 PG `EXTRACT(YEAR FROM age(date_of_birth))`（I-SCORE-AGE-01）。
+> 6. **PROJECT_TP 補衍生**（關鍵字已被 F104 更新）：原 `'%專案%'` → **F104 更正為 `'%借新還舊%'`**（BR-F104-01）。
+>
+> 詳見 [AD-E07-v3.5](implementation-log/AD-E07-v3.5-f103-stage2-score-column-source-fix.md)。
+
+**效能補述**（F103 繼承，不變）：
 - `customer_core` 已建 unique index on `source_customer_no`（dev 環境 2,167,620 筆已驗證查詢效能）
 - `ob_arreturndf_min_cap` 遷移時補建 PK on `appl_no`（index scan 查詢）
 - LATERAL JOIN 100K 案件 → 100K 次 `customer_core` lookup + 100K 次 `ob_arreturndf_min_cap` lookup（均走 index scan），預期 Stage 2 整體執行時間 < 30 秒（dev 環境基準）
-- 如 Stage 2 超出 10 分鐘 NFR 門檻，考慮以 `WITH cte AS (SELECT ... FROM customer_core WHERE source_customer_no IN (...))` 批次預取後 join，減少逐列 lookup 次數
+- 如 Stage 2 超出 10 分鐘 NFR 門檻，考慮以 `WITH cte AS (...)` 批次預取後 join
+
+---
+
+#### AD-E07-32　`resolveColumnSource` / `resolveColumnValue` 加 `cardType` 參數（F104，2026-06-24）
+
+**問題**：現行 `resolveColumnSource(columnName: string)` 不收 `cardType`，但 F104 多個欄位的缺值 default 因 card_type 而異（`LIST_MONTH` H/S→25 vs E/E5→12；`LOAN_RATE` S5→77 vs E/E5→12；三縣市欄 per-card default；`EDUCAT_BACK` per-card default）。固定回傳單一 default 的設計在 F103 時尚可（所有 card 同 default），F104 後無法正確表達 per-card 語意。
+
+**決策**：**同時更新 PG 路徑與 JS oracle 的介面 signature，加入 `cardType` 必選參數。**
+
+**PG 路徑**（`stage2to4-sql-builder.ts`）：
+```typescript
+// Before（F103）
+export function resolveColumnSource(columnName: string): ColumnSource
+
+// After（F104）
+export function resolveColumnSource(columnName: string, cardType: string): ColumnSource
+```
+呼叫端 `buildStage2ScoreExpr(cardType, ...)` 已持有 `cardType`（L211），傳入即可（L233 `resolveColumnSource(col.column_name)` → `resolveColumnSource(col.column_name, cardType)`）。
+
+**JS oracle**（`assignment-run-pipeline.service.ts`）：
+```typescript
+// Before（F103）
+private resolveColumnValue(pool, columnName, cc, arCap): string | number
+
+// After（F104）
+private resolveColumnValue(pool, columnName, cc, arCap, cardType: string): string | number
+```
+呼叫端 `computeScore(pool, cardType, ...)` 已持有 `cardType`（L1086），傳入即可（L1098 `resolveColumnValue(pool, col.column_name, cc, arCap)` → 加 `cardType`）。
+
+**公開集合不受影響**：`MAPPED_SCORING_COLUMNS`（const array）、`CUSTOMER_CORE_COLUMNS`（Set）均只列欄名，不含 default 邏輯，無需改動。
+
+**EQ DoD 要求**：PG/JS 兩路徑對同一 (columnName, cardType, 缺值狀態) 必須回傳相同值，由 EQ 群組測試強制驗收（BR-F104-15）。
+
+**型別安全**：signature 變更後 `tsc --noEmit -p tsconfig.build.json` 必須零錯誤（vitest 不做型別檢查，此步驟為硬性 DoD）。
+
+---
+
+#### AD-E07-33　per-card default 常數表 `CARD_DEFAULTS` + 未知 card_type fallback（F104，2026-06-24）
+
+**問題**：F104 涉及 6 個欄位的 per-card default，若散佈於 switch case 各 arm 中難以維護且易遺漏（如 M/HM 不啟用 LIST_MONTH/LOAN_RATE 須明確標注，避免誤落 fallback）。
+
+**決策**：實作端建立常數映射 `CARD_DEFAULTS`（或等效結構），**逐 (column_name, card_type) 明確定義 default 值或「不啟用」標記**。
+
+**完整 per-card default 矩陣**（legacy SP UTF-16LE 解碼查證，2026-06-24）：
+
+| column_name | H | S | S5 | E | E5 | M | HM | 未啟用說明 |
+|-------------|---|---|----|---|----|---|----|-----------|
+| `LIST_MONTH` | `25` | `25` | — | `12` | `12` | **不啟用** | **不啟用** | M/HM scoring block 無此欄（SP 查證：M L79-85 / HM L80-86）|
+| `LOAN_RATE` | — | — | `77` | `12` | `12` | **不啟用** | **不啟用** | H/S 亦不啟用（scoring block 無此欄）；M/HM SP 查證同上 |
+| `EDUCAT_BACK` | — | `'02'` | `'08'` | `'02'` | `'02'` | — | — | H 不啟用此欄；M/HM 不啟用此欄 |
+| `HPOST_NUM_NM` | — | — | `'花蓮縣'` | — | — | `'臺北市'` | `'臺北市'` | H/S/E/E5 不計分縣市欄；CPOST/CO_NUM 同理 |
+| `CPOST_NUM_NM` | — | — | — | — | — | `'臺南市'` | `'臺南市'` | 僅 M/HM 啟用 |
+| `CO_NUM_NM` | — | — | `'金門縣'` | — | `'金門縣'` | `'高雄市'` | `'高雄市'` | H/S/E 不計分縣市欄 |
+
+> **SP 查證出處**（LIST_MONTH / LOAN_RATE）：
+> - H L102：`ISNULL(D.MONTH_CNT,25)` → H default=25
+> - S L92：`ISNULL(D.MONTH_CNT,25)` → S default=25
+> - E L110：`ISNULL(D.MONTH_CNT,12)` / L111：`ISNULL(D.LOAN_RATE,12)` → E default LIST_MONTH=12 / LOAN_RATE=12
+> - E5 L110/111：同 E → E5 LIST_MONTH=12 / LOAN_RATE=12
+> - S5 L83：`ISNULL(D.LOAN_RATE,77)` → S5 LOAN_RATE=77（LIST_MONTH 不在 S5 scoring block）
+> - **M L79–85 / HM L80–86（完整 scoring block）**：僅含 AGE/CAREA_NO1/CAREA_NO2/CO_NUM_NM/HPOST_NUM_NM/CPOST_NUM_NM，**無 LIST_MONTH 也無 LOAN_RATE** → M/HM 兩欄均**不啟用**，不設 default，**不可落 fallback**
+
+**未知 card_type fallback 策略**（BR-F104-16）：
+1. 數值 per-card default 欄（LIST_MONTH、LOAN_RATE）：套 H 基準（LIST_MONTH→25、LOAN_RATE→0）
+2. 縣市欄（HPOST_NUM_NM/CPOST_NUM_NM/CO_NUM_NM）：未知 card_type 一律**不計分縣市欄**（無 default，回傳 null/skip），因縣市欄僅在特定 card 啟用，未知 card 貿然套 default 會引入錯誤計分
+3. EDUCAT_BACK：套 `'02'`（E 基準）
+4. **所有 fallback 均須 `logger.warn(card_type)` + 不阻擋月跑**
+
+---
+
+#### AD-E07-34　`cus_sex` NULL-safe cast 模式 + 兩處 default 分離（F104，2026-06-24）
+
+**問題**：`customer_core.cus_sex`（`varchar(2)`）dev 實測含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串 及少量 NULL），共約 3.7 萬筆髒值（總 350 萬筆中）。PG 裸 `cc.cus_sex::int` 對 `'C'` 等非數值字串拋 `invalid input syntax for type integer`，導致整支月跑 SQL 失敗。
+
+**決策：強制所有引用 `cus_sex` 的路徑套 `<safe_int>` wrapper，並嚴格區分兩處 default。**
+
+**`<safe_int>` 定義**：
+
+```sql
+-- PG（在 resolveColumnSource expr 中）
+CASE WHEN cc.cus_sex ~ '^[0-9]+$' THEN cc.cus_sex::int ELSE NULL END
+```
+
+```typescript
+// JS oracle（在 resolveColumnValue 中）
+function safeIntCusSex(raw: string | null | undefined): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) ? n : null;
+}
+```
+
+**cus_sex 兩處 default（BR-F104-13a，不可混用）**：
+
+| 用途 | default 值 | legacy 出處 | PG 表達式 |
+|------|-----------|------------|-----------|
+| **CUS_SEX 計分欄（range 比對）** | `3`（法人/未知）| H L97 `ISNULL(CUS_SEX,3)` | `COALESCE(<safe_int>(cc.cus_sex), 3)` |
+| **五欄分流 gating（CAREA/CELLULAR/AGE/EDUCAT 個人 vs 法人）** | `'1'`（個人）| H L36 `ISNULL(CUS.CUS_SEX,'')='' THEN '1'` | `<safe_int>(COALESCE(NULLIF(cc.cus_sex,''), '1')) IN (1,2)` |
+
+**JS 對稱**：
+```typescript
+// CUS_SEX 計分欄
+const cusSexScore = safeIntCusSex(cc?.cus_sex) ?? 3;
+
+// 五欄分流 gating（isCorporate helper）
+// 空字串/null/undefined → '1'（個人）；非空字串（含 '1'/'2'/'3'/'C'/'D' 等）→ 原值 safe-cast
+const raw = cc?.cus_sex ?? '';
+const gatingInt = raw === '' ? 1 : safeIntCusSex(raw); // null = 非數值髒值（如 'C'）
+const isCorporate = gatingInt === null || (gatingInt !== 1 && gatingInt !== 2);
+// 邏輯：空→個人；safe_int=null（非數值髒值，如 'C'/'D'）→ NOT IN(1,2) → 法人；
+//       '1'/'2'→個人；'3'→法人；數值非 1/2→法人。
+```
+
+> **非數值髒值（'C'/'D' 等有值非 1/2）の gating 行為（拍板 2026-06-24）**：`NULLIF('C','')='C'`（非空，不補 '1'）→ `safe_int('C')=null` → JS `gatingInt=null` → `isCorporate=true` → **法人分支（取 0 / per-card default）**。與「空字串/NULL → 個人」語意相反，兩者必須分開實作。PG/JS 兩路徑須一致；EQ DoD 場景須覆蓋「cus_sex='C' → **法人**分支 + CUS_SEX 計分欄 → 3」（而非個人）。
+
+**影響範圍**：`resolveColumnSource`（PG）/ `resolveColumnValue`（JS）/ `computeScore`（JS，`isCorporate` helper）。下游 `tsc --noEmit -p tsconfig.build.json` 必須零錯誤。
 
 ---
 

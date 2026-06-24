@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "2.5"
-date: 2026-05-12
+version: "2.6"
+date: 2026-06-24
 status: Draft
 ---
 
@@ -385,10 +385,41 @@ status: Draft
 
 ---
 
+## F104 Stage 2 計分引擎全欄對齊 legacy SP（2026-06-24）
+
+本批次新建 F104，將 Stage 2 計分引擎兩路徑（PG 下推 `resolveColumnSource` + JS oracle `resolveColumnValue`）由「對齊 AD-E07-10-L」改為「對齊 legacy `SP_OBLEVELCARD_*.sql` 真語意」（AD 本身經稽核確認有多欄偏差）。
+
+### 已查證／已解決（spec-writer 直接採用，寫入 F104 §13）
+
+| # | 問題 | 查證結論 | 出處 |
+|---|------|---------|------|
+| OQ-159-01 | SALES_STS 上游轉換是否等於 AD 之 CASE（`'經銷商'→'UCD'`）？ | **已解＝須修**。`SP_GET_CUSTATTRIB_OB.sql` 為客戶特質 OBOUT 資格查詢、**與 SALES_STS 無關**；SALES_STS CASE 在 `SP_OBLEVELCARD_*.sql` 就地完成，UCD key 確為 **`'中古車商'`**（非 `'經銷商'`）。現行引擎誤用 `'經銷商'`，F104 AC-2 修正 | F104 §13 / legacy H L40–43 |
+| 縣市比對粒度 | cc.*_city 為「縣市+區」，但 per-card default 為縣市-only——legacy 計分 LEVEL 是縣市-only 還是縣市+區？ | **已解＝縣市-only 3 字**。dev `ob_levelcard_score` 三縣市欄 level1 共 25 distinct、`MAX(char_length)=MIN=3`。cc.*_city 為 6 字（含區）。→ 引擎須 `LEFT(value,3)` 比對（legacy 自身亦 `LEFT(POSTAL_ADD,3)`）。F104 BR-F104-10 | F104 §13 / legacy M L42 |
+| per-card 啟用矩陣（縣市欄 card 別）| stories 列 HPOST H/S→臺北市、CO_NUM H→金門縣/S→高雄市 之 default | **RESOLVED（使用者 2026-06-24 拍板：依 legacy）**。stories 假設有誤——H/S **不計分**縣市欄；縣市欄 default 屬 S5/E5/M/HM。F104 §5 已依 legacy 修正、保留不動 | F104 §13 |
+| 空/NULL cus_sex 分流走向 | 五欄分流時空/NULL cus_sex 視為個人或法人？（先前版本採 CDMP=法人）| **RESOLVED（使用者 2026-06-24：改為 legacy＝個人）**。**分流(gating) default='1'（個人）**，空/NULL→個人、用自身屬性；**但 CUS_SEX 計分欄 default 仍=3**（range 計分）。**兩 default 刻意分離**，下游 impl 不可混用 | F104 BR-F104-04 / BR-F104-13a / legacy H L36 vs L97 |
+
+### 待 system-architect 裁示（spec-writer 附建議）→ 全部 RESOLVED（System Architect，2026-06-24）
+
+| # | 問題 | 裁定結論 |
+|---|------|---------|
+| OQ-F104-01 | **`resolveColumnSource` / `resolveColumnValue` signature 加 `cardType`** | **RESOLVED ✓**：採用建議。`resolveColumnSource(columnName, cardType)` + `resolveColumnValue(pool, columnName, cc, arCap, cardType)`。呼叫端 `buildStage2ScoreExpr`（L233）/ `computeScore`（L1098）已持有 cardType，直接傳入。`MAPPED_SCORING_COLUMNS`/`CUSTOMER_CORE_COLUMNS` 不變。EQ DoD 要求兩路徑對同 (column, card, 缺值) 回傳相同值。`tsc --noEmit -p tsconfig.build.json` 硬性 DoD。→ **AD-E07-32** |
+| OQ-F104-02 | **per-card default 完整 card 清單 + 未知 card fallback** | **RESOLVED ✓**：採用建議。建 `CARD_DEFAULTS` 常數映射（詳細矩陣見 AD-E07-33）。**M/HM LIST_MONTH 與 LOAN_RATE 不啟用**（SP 查證：M L79-85 / HM L80-86 scoring block 無此兩欄）。未知 card fallback：數值欄套 H 基準（LIST_MONTH→25/LOAN_RATE→0）；縣市欄未知 card 不計分（無 default）；EDUCAT→`'02'`；所有 fallback `logger.warn` + 不阻擋月跑（BR-F104-16）。→ **AD-E07-33** |
+| OQ-F104-03 | **AD-E07-10-L 全欄改寫（含 PROJECT_TP 複合條件 + SALES_STS）** | **RESOLVED ✓**：(a) AD-E07-10-L 依 F104 §5 全面改寫為 v4.0（見 AD-E07-10-L 節），F103 補述保留並標「部分已被 F104 覆蓋」。(b) **PROJECT_TP legacy 查證為複合條件**（H L100-101 / S L90-91 / E L112-113 / E5 L112-113：`spec_tp BETWEEN AND spec_name衍生=level1`）；**本版維持 F103 category 單欄 + 關鍵字修正（`'%專案%'`→`'%借新還舊%'`）**，不複刻完整複合語意；**在 AD 標注殘留風險，F067 差異若顯示 PROJECT_TP 偏差另立 story**（使用者 2026-06-24 拍板）。→ **AD-E07-10-L v4.0** |
+| OQ-F104-04 | **EDUCAT_BACK 比較型別 + 縣市 LEFT3 落點** | **RESOLVED ✓**：(a) **EDUCAT_BACK SP 查證**（S L95 / S5 L82 / E L109 / E5 L109）：值為 `RIGHT('0'+code,2)` 補零字串，用 `BETWEEN LEVEL2_S/LEVEL2_E` → **字串 lexical range**。`kind='range'`，PG/JS range 分支以 `Number()` 數值比較（補零字串 '02'/'08' 數值等價）；tdd 落地前須驗 ob_levelcard_score EDUCAT_BACK score row 是 level2（range），若實為 level1（category）則改字串相等（預留交接點）。(b) **縣市 LEFT3 落點**：在 `resolveColumnSource` 縣市 case 之 `expr` 直接含 `LEFT(COALESCE(NULLIF(cc.*_city,''),<default>),3)`，category 比對端不需改（對齊 legacy M L42-44 source CTE 預套 LEFT3 後直接 `=LEVEL1` 的語意）。→ **AD-E07-10-L v4.0 說明** |
+
+> **OQ-159-02（未知 card_type default）**＝spec-writer 裁定：F104 BR-F104-16（未知 card 套 H/S 基準 + warn，不阻擋月跑），不另交 architect。
+> **OQ-161-01（縣市萃取方案）/ OQ-161-02（gender vs cus_sex 保留）**＝已由使用者 ETL（m301）落地解決：縣市以 `POSTAL_NO→POSTAL_ADD` lookup 取「縣市+區」存 `*_city`；`cus_sex`（varchar）與既有 `gender` 並存，F104 計分改讀 `cus_sex`，`gender` 不再用於 CUS_SEX 計分（F105 可清理）。
+> **OQ-160-01（CAREA 區碼有無語意）**＝已解：cc.carea_no1/no2 為區碼字串，presence = `IS NOT NULL AND <>''`（BR-F104-05）。
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-06-24 | 新增 F104 全欄對齊 legacy SP：OQ-159-01／縣市粒度／per-card 矩陣 3 項已查證解決；OQ-F104-01~04 交 system-architect（附建議）；OQ-159-02／OQ-160-01／OQ-161-01/02 記為已解 | Spec Writer Agent |
+| 2026-06-24 | F104 定點修正（使用者拍板 2 項）：縣市計分卡別 RESOLVED＝依 legacy（H/S 不計分縣市、default 屬 S5/E5/M/HM，保留不動）；空/NULL cus_sex 分流走向 RESOLVED＝改 legacy＝個人（gating default='1'，與 CUS_SEX 計分欄 default=3 分離，BR-F104-04/13a） | Spec Writer Agent |
+| 2026-06-24 | OQ-F104-01~04 全部 RESOLVED：signature 加 cardType（AD-E07-32）、per-card default 完整矩陣 + M/HM 不啟用 LIST_MONTH/LOAN_RATE（AD-E07-33）、AD-E07-10-L 全欄改寫 v4.0 + PROJECT_TP 單欄簡化標殘留風險（使用者拍板）、EDUCAT_BACK 字串 BETWEEN + 縣市 LEFT3 落點（AD-E07-34）；新增 AD-E07-32/33/34 | System Architect |
 | 2026-03-06 | 初版建立 | Spec Writer Agent |
 | 2026-03-06 | OQ-1 ~ OQ-13 全部解決；OQ-7 決議移除稽核日誌，已同步更新 US-014 與 F008 | Product Owner |
 | 2026-03-17 | 新增 E04 相關開放問題 OQ-14 ~ OQ-19、假設 A8 ~ A12、已解決問題 R10 ~ R12 | Spec Writer Agent |

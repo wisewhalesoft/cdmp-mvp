@@ -1,16 +1,19 @@
 ---
 type: test-design-index
-version: "2.26"
+version: "2.28"
 status: draft
-last_updated: 2026-06-17
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102]
+last_updated: 2026-06-24
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102, F103, F104]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：77 份（4 策略文件 + 66 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1742 個（前 1673 + **F064 匯出分派結果 23 欄對齊 legacy +69**：COLSRC 6 + COLSEQ 4 + REGRESSION 6 + FMT 8 + CR 4 + JOINMISS 5 + OVERDUE 2 + STREAM 5 + SCOPE 5 + STATUS 4 + AUDIT 3 + DET 2 + APLDATE 2 + STATIC 5 + AUTH 3 + **LINEAGE 5（v2.1 補）**，合計 1742）
+> **測試文件總數**：78 份（4 策略文件 + 67 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
+> **總測試場景數**：1801 個（前 1742 + **F103 月跑計分引擎欄位來源修正 +59**：AR 5 + EQ 8 + AGE 4 + FALLBACK 5 + GHOST 4 + COMMISSION 4 + CC 10 + PROJECT_TP 4 + AUDIT 5 + PREFETCH 3 + UPGRADE 3 + REG 4，合計 1801）
+>
+> **v2.28 F104 Stage 2 全欄對齊 legacy SP（2026-06-24）**：新增 F104 test spec（**82 個場景**）。F103 等於對齊了一份有偏差的 AD-E07-10-L；本輪修正兩路徑（PG `resolveColumnSource`/`buildStage2ScoreExpr` + JS `resolveColumnValue`/`computeScore`）使其對齊 legacy SP 真語意。DoD = **EQ 12**（JS↔PG 逐列等價，PG 真庫，§8 矩陣全覆蓋）+ **cus_sex NULL-safe cast**（髒值 'C'/'D' 不拋例外，高嚴重度）+ **兩 default 分離**（計分 3 / gating 個人）+ **per-card default 逐格**（AD-E07-33 矩陣）。分層：**KW 6**（PROJECT_TP 借新還舊 + SALES_STS 中古車商，舊關鍵字全清）+ **SEX 4**（CUS_SEX category→range + safe-cast）+ **BRANCH 10**（五欄 isCorp 分流：個人取自身/法人 0-default/空→個人/髒值→法人）+ **SAFE 6**（cus_sex NULL-safe cast SQL 不拋例外）+ **AGE100 5**（>100 排除 + 法人 0）+ **EDU 7**（補零 + range 字串 BETWEEN + per-card default S→'02'/S5→'08'）+ **CITY 10**（三縣市欄 LEFT3 + per-card default）+ **PCD 8**（LIST_MONTH/LOAN_RATE per-card default）+ **EQ 12**（DoD）+ **SIG 4**（簽章加 cardType + CustomerCoreRow 改名）+ **UPGRADE 5**（202606 重跑 + 10 筆抽樣手算）+ **REG 5**（F103/F100/F101/F102 不退化 + tsc gate + 舊欄名靜態掃描）。**約 48 案例需 Postgres**（與 F098~F103 pg.spec 序列）。**test-designer 連 DB 查證**：EDUCAT_BACK=range（0 cat/29 range，level2 字串 BETWEEN）✅、三縣市欄=category ✅、CUS_SEX=range ✅、cc 新欄存在 ✅、cus_sex 髒值分佈（'C'/'D'/'8'/空）✅。**legacy SP 查證**：'C' 髒值 → 法人（`NOT IN('1','2')`），**OQ-TDS-F104-01 待 architect 確認**（AD line 4103 散文與算式矛盾，建議釘法人）；E5 無 CAREA_NO1 唯有 CELLULAR、HM 複用 M 設定。命名鎖定：`resolveColumnSource(columnName, cardType)` / `resolveColumnValue(pool, columnName, cc, arCap, cardType)` / `isCorporate` / `calcAgeYears` 加 >100 守門 / CustomerCoreRow 新欄名（cus_sex/carea_no1/carea_no2/cellular/hpost_city/cpost_city/co_city）。
+> **v2.27 F103 月跑計分引擎欄位來源修正（2026-06-24）**：新增 F103 test spec（**59 個場景**）。修正 Stage 2 計分引擎兩條路徑（PG 下推 `resolveColumnSource` + JS oracle `resolveColumnValue`）未完整對齊 AD-E07-10-L 映射表導致系統性低估（H 卡 score 81~152，理論上界 255，無案件達 card C 門檻 185 → 全 card D → 全 T3）。DoD = **EQ 8**（JS `computeScore` ↔ PG `buildStage2ScoreExpr` 生成 SQL，相同輸入 score 完全相等，誤差=0，PG 真庫）。分層：**AR 5**（I-SCORE-AR-JOIN-01：ADD_UN_CAPITAL `needsArCapital` flag + LEFT JOIN ob_arreturndf_min_cap + JS arCap=null/有值）+ **EQ 8**（DoD 紅線：ADD_UN_CAPITAL/cc=null/arCap=null/PROJECT_TP 含與不含「專案」/SALES_STS/AGE 三邊界/通用 fallback 各 1 場景）+ **AGE 4**（I-SCORE-AGE-01：生日前一天/當天/後一天 `calcAgeYears` 純函式 + cc=null fallback 0）+ **FALLBACK 5**（I-SCORE-FALLBACK-01：PG 有值/幽靈 key/非數值文字 + JS 有值/幽靈 key）+ **GHOST 4**（I-SCORE-GHOST-01：不拋例外/logger.warn/+0/月跑繼續，PG+JS 各測）+ **COMMISSION 4**（I-SCORE-COMMISSION-01：resolveColumnSource/resolveColumnValue/MAPPED_SCORING_COLUMNS 不含 COMMISSION/含 ADD_UN_CAPITAL 靜態掃描）+ **CC 10**（AC-8 JS oracle 全補齊：CUS_SEX/CAREA_NO1/CAREA_NO2/CELLULAR/AGE/EDUCAT_BACK/HPOST_NUM_NM/CPOST_NUM_NM/CO_NUM_NM/LOAN_RATE 各欄 null/有值）+ **PROJECT_TP 4**（BR-F103-03：JS 含/不含「專案」/null fallback/PG CASE WHEN 靜態）+ **AUDIT 5**（AC-5/7：MAPPED_SCORING_COLUMNS 完整性/CAREA 語意/ADD_UN_CAPITAL range/FALLBACK 永不 undefined）+ **PREFETCH 3**（I-SCORE-PREFETCH-01：customer_core IN 1 次/arreturndf IN 1 次/10 案件規模）+ **UPGRADE 3**（AC-11/12：202606 重跑定性 ≥2 種 card_level + tier 含 T1/T2/異常時空值率量測/score MAX 提升）+ **REG 4**（AC-13：F100/F101/F102 全綠/tsc gate/`pnpm test` 序列）。**43 案例強制需 Postgres**（EQ 8 + AR 3 + FALLBACK 3 + GHOST 2 + PREFETCH 3 + UPGRADE 3 + REG 2）。已裁定決策：OQ-1（呼叫端 batch pre-fetch merge，`cc`/`arCap` 新參數）/ OQ-2（同 OQ-1 流程）/ OQ-3（SQLite 單元測試無需建 cc/ar 表）/ OQ-156-02（通用 fallback 本輪納入）/ OQ-157-01（AGE 統一演算法）/ OQ-158-01（定性驗收）/ OQ-158-02（本輪根因，不推延）。命名鎖定：`computeScore(pool, cardType, cardVersion, activeColumns, allScores, cc: CustomerCoreRow | null, arCap: ArCapitalRow | null)` / `resolveColumnValue` / `resolveColumnSource` / `calcAgeYears(dateOfBirth, now)` / `needsArCapital` / `MAPPED_SCORING_COLUMNS`。
 > **F097 作業月語意統一新增（2026-05-27）**：新增 F097 test spec（48 個場景）。涵蓋後端 `SystemService.getDefaultTargetWorkYm()`（一般月 +1 / 跨年邊界 / OVERRIDE）、`POST /api/v1/assignment/runs` DTO `workYm` 三分支驗證（缺省 400 / 格式錯 422 `WORK_YM_INVALID_FORMAT` / 過去月 422 `RUN_WORKYM_PAST`）、過去月 guard 邊界（`>=` 語意：目標月 1 號當天合法）、三 controller `computeCurrentWorkYm()` 移除 regression、`project_workym` 寫入目標月（非執行月）驗證、Stage 1 去重視窗 `workdt` 對齊（`project_workym='202606'` → 上界 `2026-05-31`，後移一月 regression）、`computeDedupWindow` 函式不改靜態 git diff 驗證（AC-20）、前端 `AssignmentWorkYmContext` 四頁同步 / `run-history` 獨立 / 處長 MonthPicker disabled / 下游結果頁無 MonthPicker 靜態月份、UI 標籤「分派作業月份」regression、forward-only 注釋存在性、E2E 全鏈整合。命名鎖定對齊 glossary.md（`current_work_ym` / `target_work_ym` / `project_workym` / `workdt` / `AssignmentWorkYmContext` / `getDefaultTargetWorkYm` / `RUN_WORKYM_PAST`）。
 > **Stage 1 精確化工程 Phase A/B 更新（2026-05-27）**：F090 v2.0（data_source 單源化 `etl_load` + ETL Delete 全量放寬 + 月跑不再寫本表 Regression）；F091 v2.0（特例 DELETE trigger 關鍵字 SP bug fix：期中機車 / 期中 / 年以上，v1.0 誤判字中結/強案/年資/滿已廢棄；去重上界動態計算 `MIN(MAX(assignday), workdt-1)`；year_produ 改 parseInt）；新增 F094（ob_monthly_run_result migration + Stage 1/3/4 落點切換 + FK CASCADE）；新增 F095（appliedSpecialRules[] 讀時推導 + 觸發一致性 + 前端唯讀 Component RTL）；新增 F096（pooldata_field_whitelist list_type 停用 m293 + available-columns regression + 既有條件相容）。⚠️ **F091 v2.0 SP bug fix 為最高風險變更**：v1.0 SD-002~006（中結/強案/年資觸發）全面廢棄，以 SDv2 系列取代；所有 mock `list_nm` 字串須更新為 v2.0 正確繁體中文（期中機車/期中/年以上）。
 > **Stage 1 精確化工程新增（2026-05-26）**：新增 3 個 test spec 檔（F090 / F091 / F092）。Phase 1（F090）ETL + data_source schema 13 個場景；Phase 2（F091）Stage 1 三步驟補完整 30 個場景（MONTH_CNT × 6 + 去重 × 5 + 特殊 DELETE × 8 + 封裝 × 5 + Regression × 3 + 誤差 × 3）；Phase 3（F092）dry-run 精確估算 26 個場景（唯讀 × 4 + 一致性 × 3 + estimateListCount 升級 × 4 + F049/F088 升級 × 4 + Regression × 3）。⚠️ F091 為唯一改變 production 月跑案件數的階段（deploy 後立即生效、無 flag）；既有 Stage 1 pipeline integration test baseline 需同步更新。
@@ -181,11 +184,13 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F099 | Stage 1 SQL 下推 P2（`buildStage1Sql` set-based + estimate≡run 共用 core + JS↔SQL 逐 list 等價 PG 真庫；**僅 P2**，不含 P1/P3） | P0-MVP | [F099-test.md](features/F099-test.md) | 38 | Draft |
 | F100 | Stage 2~4 SQL 下推 + v2 真實計分引擎 P3（`SUM(CASE…)` 區間/類別計分 + `LEFT JOIN customer_core` 補完 + score→level→tier + CR `EXISTS` + st4_exchange 視窗函式；**僅 P3**，不含 P1/P2；oracle=手算預期，非跑 v1 JS）⚠️ | P0-MVP | [F100-test.md](features/F100-test.md) | 52 | Draft |
 | F101 | Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 千分比；取代 F100 placeholder；oracle=手算 FLOOR+差額補足；JS↔SQL 逐列等價 DoD；I-NO-ST4-EXCHANGE senior swap 廢除回歸；所有 OQ 已裁定）⚠️ | P0-MVP | [F101-test.md](features/F101-test.md) | 51 | Draft |
-| **E07 月跑執行模型 小計** | | | **4 files** | **192** | |
+| F102 | 月跑 CR 優先分派（失效清空 × 2 + CR 優先指派 + 扣量；per-list cr_enabled 閘控；EQ 7（JS applyCrPriority ↔ PG runCrPrioritySql 六欄逐列等價）；I-CR-ORDER-01；I-CR-ASSIGNDAY-01；Bug Fix I-CR-DEDUCT-01；所有 OQ 已裁定）⚠️ | P0-MVP | [F102-test.md](features/F102-test.md) | 55 | Draft |
+| F103 | 月跑計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + COMMISSION 移除 + JS oracle 補齊 cc + 202606 重跑驗收；EQ 8（JS↔SQL score 完全相等，誤差=0）；I-SCORE-AR-JOIN-01/FALLBACK-01/EQ-01/AGE-01/GHOST-01/COMMISSION-01；OQ-1/2/3/156-02/157-01/158-01/02 全裁定）⚠️ | P0-MVP | [F103-test.md](features/F103-test.md) | 59 | Draft |
+| **E07 月跑執行模型 小計** | | | **6 files** | **306** | |
 | **E07 M04 分派匯出** | | | | | |
 | F064 | 匯出分派結果（23 欄 legacy 對齊，**v2.1**）——COLSRC 6 + COLSEQ 4 + REGRESSION 6（破壞性排除 DoD 紅線）+ FMT 8（日期格式邊界）+ CR 4 + JOINMISS 5 + OVERDUE 2 + STREAM 5 + SCOPE 5 + STATUS 4 + AUDIT 3 + DET 2 + APLDATE 2 + STATIC **5** + AUTH 3 + **LINEAGE 5**（v2.1：pool 表換源 ob_pool_data 不掉列 DoD 紅線）；GAP-1/2/3 + OQ F064-1~4 全部裁定；BR-F064-16 join ob_pool_data 2-key；不讀 snapshot；CSV PassThrough streaming；scope WHERE SQL 注入；DoD 紅線 = REGRESSION + LINEAGE-001 + 23 欄表頭 + tsc 乾淨 | P0-MVP | [F064-test.md](features/F064-test.md) | 69 | Draft |
 | **E07 M04 小計** | | | **1 file** | **69** | |
-| **總合計** | | | **72 files** | **1742** | |
+| **總合計** | | | **73 files** | **1801** | |
 
 ---
 
@@ -488,6 +493,20 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **實作後必跑 `tsc --noEmit -p tsconfig.build.json`**（vitest 不檢型別，US-144 登入 500 教訓；`feedback_vitest_no_typecheck`）。
 - **SP 解碼**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql` / `_st3_emplid.sql` 為 **UTF-16LE**，須 `node -e "require('fs').readFileSync(path).toString('utf16le')"` 解碼（`feedback_sp_utf16le_decode`）。
 - **UPGR（NFR-005）為上線硬性前置**：EQ 全綠（技術）+ UPGR-002/003 業務驗收簽核（分派比例符合設定）並列上線門檻；UPGR-004 自動驗證 assignday 工作日分散性。
+
+**E07 月跑計分引擎欄位來源修正特殊注意（F103，AD-E07-v3.5）：**
+- **EQ DoD 為硬性門檻**（I-SCORE-EQ-01）：TS-F103-EQ-001~008（8 場景，PG 真庫）JS `computeScore` 與 PG `buildStage2ScoreExpr` 生成 SQL 對相同 `(pool, cc, arCap)` fixture 的 score 完全相等（整數，差異=0）；未全綠不得上線。
+- **`computeScore` 簽章擴充（OQ-1 裁定）**：新增 `cc: CustomerCoreRow | null` / `arCap: ArCapitalRow | null` 兩個尾參數；所有呼叫端必須更新，REG-003 `tsc --noEmit` 守門。SQLite 單元測試直接傳入 fixture 物件，**無需建 customer_core / ob_arreturndf_min_cap 表**（OQ-3 裁定）。
+- **AGE 統一演算法（I-SCORE-AGE-01）**：`calcAgeYears(dateOfBirth: Date, now: Date)` 須精確對齊 PG `EXTRACT(YEAR FROM age(date_of_birth))` 語意（精確到月，本年生日未到者不計當年）；**`now` 參數必須可注入**（非 hardcode `new Date()`），否則 EQ-007 在跨日邊界非確定性。三邊界：1990-06-23 → 36 / 1990-06-24 → 36（當天算已過）/ 1990-06-25 → 35。
+- **通用 fallback（I-SCORE-FALLBACK-01）**：`resolveColumnSource` switch `default` 分支**永不回 `undefined`**；未 hardcode 的 range 欄位一律回 `COALESCE((to_jsonb(o)->>lower(col))::numeric, 0)`；AUDIT-005 靜態掃描確認原始碼無 `return undefined`。
+- **幽靈欄位（I-SCORE-GHOST-01）**：PG 端 `to_jsonb(o)` 無此 key → COALESCE(NULL,0) = 0，靜默；JS 端 `pool[key] == null` → `logger.warn`（含 column_name + card_type）+ 回傳 0；**兩路徑皆不拋例外、不阻擋月跑**。
+- **COMMISSION 移除（I-SCORE-COMMISSION-01）**：`resolveColumnSource` / `resolveColumnValue` switch 無 `case 'COMMISSION'`；`MAPPED_SCORING_COLUMNS` 不含 'COMMISSION'，含 'ADD_UN_CAPITAL'；COMMISSION-001~004 靜態掃描驗證。
+- **needsArCapital flag（I-SCORE-AR-JOIN-01）**：`Stage2ScoreSql` interface 擴充 `needsArCapital: boolean`；executor 依 flag 條件注入 `LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no`；無 ADD_UN_CAPITAL active 欄時 **不注入** JOIN（效能保護，AR-002 驗證）。
+- **batch pre-fetch N+1 禁止（I-SCORE-PREFETCH-01）**：每個 list 恰好 customer_core IN clause 1 次 + arreturndf IN clause 1 次；PREFETCH-001~003 驗證（spy query call count）。
+- **202606 驗收為定性（OQ-158-01）**：card_level 出現 ≥2 種值、tier 含 T1/T2；仍異常時本輪內根因（AC-12，OQ-158-02 不推延）—量測 customer_core 空值率。
+- **F100/F101/F102 回歸**：F103 修正後 score / tier 分佈改變；F101 seed 固定 tier（T1/T2/T3 seed）不受影響，但需確認無隱性「全 T3」假設（REG-001/002 確認）。
+- **實作後必跑 `tsc --noEmit -p tsconfig.build.json`**（vitest 不檢型別；computeScore 簽章變更特別容易有隱性呼叫端漏補；feedback_vitest_no_typecheck）。
+- **F103 pg.spec 序列執行**：與 F098/F099/F100/F101/F102 共用 cdmp_test DB，必須序列執行，禁並行。
 
 **輔助參考：**
 - `test-data-strategy.md` — 測試資料準備

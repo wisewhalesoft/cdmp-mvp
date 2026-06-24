@@ -4,8 +4,8 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：54（含 A~H 組 + v2.1 重構 + 2026-05-20 業務複核補強；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
-> **最後更新**：2026-05-20（業務複核補強：新增 US-126~129；落地 D1/D2/D4/Q-A/Q-B 決議 — 卡別下拉、prodBest 移除、best_case options seed）
+> **Stories 數量**：57（含 A~H 組 + v2.1 重構 + 2026-05-20 業務複核補強 + 2026-06-24 F103 計分修正；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
+> **最後更新**：2026-06-24（F103 月跑計分引擎欄位來源修正：新增 US-156/157/158）
 
 ## Epic 目標
 
@@ -103,6 +103,23 @@
 | US-083 | 查看分派結果摘要 | Must Have | [US-083-M04-view-run-result-summary.md](US-083-M04-view-run-result-summary.md) |
 | US-084 | 匯出分派結果 | Must Have | [US-084-M04-export-assignment-result.md](US-084-M04-export-assignment-result.md) |
 | **US-122** | **月跑 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）| Must Have | [US-122-M04-stage1-dynamic-filter.md](US-122-M04-stage1-dynamic-filter.md) |
+| US-137 | 月跑觸發共用目標作業月狀態（F097）| Must Have | [US-137-M04-shared-target-work-ym-state.md](US-137-M04-shared-target-work-ym-state.md) |
+| US-138 | 月跑觸發月份選擇器（F097）| Must Have | [US-138-M04-trigger-run-month-picker.md](US-138-M04-trigger-run-month-picker.md) |
+| US-139 | 月跑後 API 路由以 project_workym 守衛（F097）| Must Have | [US-139-M04-post-runs-accept-workym-guard.md](US-139-M04-post-runs-accept-workym-guard.md) |
+| US-140 | 整合 current_work_ym service（F097）| Must Have | [US-140-M04-consolidate-current-work-ym-service.md](US-140-M04-consolidate-current-work-ym-service.md) |
+| US-141 | 下游讀取 run 的 project_workym（F097）| Must Have | [US-141-M04-downstream-read-run-project-workym.md](US-141-M04-downstream-read-run-project-workym.md) |
+| US-142 | Stage 1 去重視窗對齊目標月（F097）| Must Have | [US-142-M04-stage1-dedup-window-target-month.md](US-142-M04-stage1-dedup-window-target-month.md) |
+| US-145 | Stage 3 部門比例分派（F101）| Must Have | [US-145-M04-stage3-dept-proportional-assignment.md](US-145-M04-stage3-dept-proportional-assignment.md) |
+| US-146 | Stage 4 個別業務比例分派（F101）| Must Have | [US-146-M04-stage4-empl-proportional-assignment.md](US-146-M04-stage4-empl-proportional-assignment.md) |
+| US-149 | Stage 4 指派日曆來源（F101）| Must Have | [US-149-M04-stage4-assignday-calendar.md](US-149-M04-stage4-assignday-calendar.md) |
+| US-150 | Stage 3/4 決定性排序可重現性（F101）| Must Have | [US-150-M04-stage3-4-deterministic-reproducibility.md](US-150-M04-stage3-4-deterministic-reproducibility.md) |
+| US-151 | ASSIGNDAY 日曆資料來源（F101）| Must Have | [US-151-M04-assignday-calendar-source.md](US-151-M04-assignday-calendar-source.md) |
+| US-152 | CR 優先回分指派核心邏輯（F102）| Must Have | [US-152-M04-cr-priority-assignment-core.md](US-152-M04-cr-priority-assignment-core.md) |
+| US-153 | per-list CR 啟用閘（F102）| Must Have | [US-153-M04-cr-enabled-gate.md](US-153-M04-cr-enabled-gate.md) |
+| US-155 | 匯出分派結果對齊 Legacy 23 欄（F064 v2）| Must Have | [US-155-M04-export-assignment-result-23col.md](US-155-M04-export-assignment-result-23col.md) |
+| **US-156** | **Stage 2 計分欄位來源逐欄稽核（PG 下推路徑）**（F103 新增）| Must Have | [US-156-M04-stage2-score-column-source-audit.md](US-156-M04-stage2-score-column-source-audit.md) |
+| **US-157** | **Stage 2 計分 JS Oracle 補齊 customer_core 欄位取值**（F103 新增）| Must Have | [US-157-M04-stage2-score-js-oracle-customer-core.md](US-157-M04-stage2-score-js-oracle-customer-core.md) |
+| **US-158** | **Stage 2 計分修正後驗收：202606 重跑 card_level / tier spread**（F103 新增）| Must Have | [US-158-M04-stage2-tier-spread-validation.md](US-158-M04-stage2-tier-spread-validation.md) |
 
 ### M05 — 快照歷史
 

@@ -681,6 +681,8 @@ Phase 2/3 的 `customer_interaction`、`customer_financial`、`customer_service`
 
 85 欄位，分 8 個分類。完整欄位定義（含來源對應與轉換邏輯）請參見 [F036-target-tables.md 第 11 節](features/F036-target-tables.md#11-目標表欄位定義--customer_core)。
 
+> **F104 新增 7 欄（migration m301 / 1711360000301，2026-06-24）**：計分引擎 Stage 2 對齊 legacy SP 所需之新欄——`cus_sex varchar(2)` / `carea_no1 varchar(10)` / `carea_no2 varchar(10)` / `cellular varchar(20)` / `hpost_city varchar(20)` / `cpost_city varchar(20)` / `co_city varchar(20)`——已由使用者 ETL 載入 dev DB。binding contract（確切欄名 / 型別 / 填充率 / NULL-safe cast 要求）見 **[AD-E07-10-L v4.0](architecture-spec.md#ad-e07-10-l客戶屬性與-loan-屬性-lookup-約定v40f104-全欄對齊-legacy-sp)**。
+
 #### A. 識別與分類（5 欄位）
 
 | 欄位名稱 | 型別 | Nullable | PK | 說明 |
