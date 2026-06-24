@@ -1,0 +1,35 @@
+%% F104 Stage 2 計分引擎 CUS_SEX 分流與 legacy 真語意取值流程（取代 AD-E07-10-L 偏差版）
+flowchart TD
+    START["active column 取值<br/>resolveColumnSource(col, cardType)"] --> KIND{"欄位類型"}
+
+    KIND -->|"CUS_SEX 計分欄"| CSX["range：COALESCE 計分 default 3<br/>safe_int cc.cus_sex BETWEEN level2_s/level2_e<br/>★計分 default＝3；空/髒值→safe_int NULL→3（BR-13）"]
+
+    KIND -->|"CAREA_NO1 / CAREA_NO2 / CELLULAR / AGE / EDUCAT_BACK"| BR{"isCorporate 分流（gating default＝1 個人）<br/>safe_int of COALESCE NULLIF cus_sex then 1 是否非 1/2 ?<br/>★與計分 default 3 分離（BR-13a）"}
+    BR -->|"個人（1 或 2，或空/NULL→1）"| PERS["自身屬性：<br/>CAREA/CELLULAR → presence 1/0<br/>AGE → age of date_of_birth，大於100或小於0→0<br/>EDUCAT → RIGHT 補零 2 碼"]
+    BR -->|"法人（3 或其他有值非 1/2）"| CORP["保證人停用複刻（BR-06）：<br/>CAREA/CELLULAR/AGE → 0<br/>EDUCAT → per-card default<br/>（不查保證人、不 JOIN）"]
+
+    KIND -->|"HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM"| CITY["category：<br/>LEFT(COALESCE(NULLIF(cc.*_city,''), card_default), 3)<br/>★cc 為縣市+區，score row 縣市-only 3 字<br/>per-card default：S5 花蓮縣/金門縣；M-HM 臺北市/臺南市/高雄市"]
+
+    KIND -->|"PROJECT_TP"| PT["category：spec_name LIKE '%借新還舊%' → 'A'<br/>★F104 取代 '%專案%'，否則 COALESCE(spec_tp,'01')"]
+
+    KIND -->|"SALES_STS"| SS["category：CASE sales_sts_na<br/>'AGENT'→'AGENT'  '中古車商'→'UCD'  ELSE 'HFC'<br/>★F104 取代 '經銷商'"]
+
+    KIND -->|"LIST_MONTH / LOAN_RATE"| PCD["range + per-card default：<br/>LIST_MONTH H-S→25 / E-E5→12<br/>LOAN_RATE S5→77 / E-E5→12 / 其他→0"]
+
+    KIND -->|"CAR_YEAR / ADD_UN_CAPITAL（F103 既有）"| F103["不動（沿用 F103）"]
+
+    KIND -->|"未 hardcode 之 pool 數值欄"| FALLBACK["通用 fallback（F103 既有）：<br/>COALESCE(to_jsonb(o)-gt-lower(col)::numeric,0)"]
+
+    CSX --> MATCH["比對 ob_levelcard_score<br/>range：BETWEEN level2_s/level2_e<br/>category：TRIM 相等<br/>命中第一個 score row 取分（break）"]
+    PERS --> MATCH
+    CORP --> MATCH
+    CITY --> MATCH
+    PT --> MATCH
+    SS --> MATCH
+    PCD --> MATCH
+    F103 --> MATCH
+    FALLBACK --> MATCH
+
+    MATCH --> SUM["SUM(各欄取分) → score → card_level → tier_level"]
+
+    MATCH -.->|"PG 下推 resolveColumnSource<br/>JS oracle resolveColumnValue<br/>須 JS↔SQL EQ 等價（BR-15 DoD）"| EQ["EQ 群組測試<br/>stage2to4-sql-builder.spec.ts"]
