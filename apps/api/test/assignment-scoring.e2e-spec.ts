@@ -298,22 +298,29 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.version.createdAt).toBeNull();
     });
 
-    it("BE-F053-001：停用維度（status='inactive'）不出現於 dimensions", async () => {
+    // F106 AC-2 / BR-1（OQ-164-2）：getScoring 一律回傳 active + inactive 全部維度，
+    // 每維度帶 status。原 BE-F053-001（停用維度不出現）已被 F106 取代。
+    it('F106 AC-2：停用維度仍出現於 dimensions，且帶正確 status', async () => {
       await ds.getRepository(ObLevelcardVersion).save({
         card_type: 'H', card_name: '期中', card_version: 1,
         sdate: '20190823', edate: '20991231', status: 'active',
       } as any);
       await ds.getRepository(ObLevelcardColumn).save([
-        { card_type: 'H', card_version: 1, column_name: 'KEEP', column_label: '保留', status: 'active' },
-        { card_type: 'H', card_version: 1, column_name: 'DROP', column_label: '停用', status: 'inactive' },
+        { card_type: 'H', card_version: 1, column_name: 'KEEP', column_label: '保留', status: 'active', match_type: 'CATEGORY' },
+        { card_type: 'H', card_version: 1, column_name: 'DROP', column_label: '停用', status: 'inactive', match_type: 'CATEGORY' },
       ] as any);
 
       const res = await request(app.getHttpServer())
         .get('/api/v1/assignment/scoring?cardType=H')
         .set('Authorization', `Bearer ${smToken}`);
       expect(res.status).toBe(200);
-      expect(res.body.dimensions).toHaveLength(1);
-      expect(res.body.dimensions[0].columnName).toBe('KEEP');
+      // 兩維度都回傳（含 inactive）
+      expect(res.body.dimensions).toHaveLength(2);
+      const byName = Object.fromEntries(
+        res.body.dimensions.map((d: any) => [d.columnName, d.status]),
+      );
+      expect(byName.KEEP).toBe('active');
+      expect(byName.DROP).toBe('inactive');
     });
 
     // Iter 4 v1.2 新增 e2e：cardType 範圍鎖（AC-7 / BR-4）
@@ -371,9 +378,9 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       } as any);
       await ds.getRepository(ObLevelcardColumn).save([
         { card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE',
-          column_label: '帳齡', status: 'active' },
+          column_label: '帳齡', status: 'active', match_type: 'RANGE' },
         { card_type: 'H', card_version: 1, column_name: 'CELLULAR',
-          column_label: '有無手機', status: 'active' },
+          column_label: '有無手機', status: 'active', match_type: 'CATEGORY' },
       ] as any);
       await ds.getRepository(ObLevelcardScore).save([
         { card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE',
@@ -590,7 +597,9 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect((logs[0].after_value as any).status).toBe('inactive');
     });
 
-    it('TS-F054-009：停用後 GET /scoring 不再包含該維度（跨 F053 串聯）', async () => {
+    // F106 AC-2：停用後 GET /scoring 仍包含該維度，但 status='inactive'
+    // （原 TS-F054-009「停用後不再包含」已被 F106 取代）
+    it('TS-F054-009（F106 修正）：停用後 GET /scoring 仍含該維度且 status=inactive', async () => {
       await seedHWithAccountAge();
 
       // 先停用
@@ -599,14 +608,16 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${smToken}`)
         .expect(200);
 
-      // GET /scoring 不再包含 ACCOUNT_AGE
+      // GET /scoring 仍包含 ACCOUNT_AGE（但為 inactive）
       const res = await request(app.getHttpServer())
         .get('/api/v1/assignment/scoring?cardType=H')
         .set('Authorization', `Bearer ${smToken}`);
       expect(res.status).toBe(200);
-      const colNames = res.body.dimensions.map((d: any) => d.columnName);
-      expect(colNames).not.toContain('ACCOUNT_AGE');
-      expect(colNames).toContain('CELLULAR');
+      const byName = Object.fromEntries(
+        res.body.dimensions.map((d: any) => [d.columnName, d.status]),
+      );
+      expect(byName.ACCOUNT_AGE).toBe('inactive');
+      expect(byName.CELLULAR).toBe('active');
     });
 
     it('BE-F054-003：重複 disable 已 inactive 維度 → 404 SCORING_COLUMN_NOT_FOUND', async () => {
@@ -624,6 +635,87 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
         .set('Authorization', `Bearer ${smToken}`);
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('SCORING_COLUMN_NOT_FOUND');
+    });
+
+    // ---- F106 PUT /dimensions/:columnName/enable（對稱 disable）----
+
+    it('TS-F106-001 + TS-F106-002：enable 成功 + DB status=active + audit ENABLE', async () => {
+      await seedHWithAccountAge();
+      // 先停用，建立 inactive 維度
+      await request(app.getHttpServer())
+        .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/disable?cardType=H')
+        .set('Authorization', `Bearer ${smToken}`)
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/enable?cardType=H')
+        .set('Authorization', `Bearer ${smToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        cardType: 'H', cardVersion: 1,
+        columnName: 'ACCOUNT_AGE', status: 'active',
+      });
+      expect(res.body.enabledAt).toBeTruthy();
+
+      // DB column status 回 active
+      const col = await ds.getRepository(ObLevelcardColumn).findOne({
+        where: { card_type: 'H', column_name: 'ACCOUNT_AGE' },
+      });
+      expect(col?.status).toBe('active');
+
+      // scores 不刪
+      const scores = await ds.getRepository(ObLevelcardScore).find({
+        where: { card_type: 'H', column_name: 'ACCOUNT_AGE' },
+      });
+      expect(scores).toHaveLength(2);
+
+      // audit：先 DISABLE 後 ENABLE
+      const logs = await ds.getRepository(AssignmentAuditLog).find();
+      const enableLog = logs.find((l) => l.action === 'ENABLE');
+      expect(enableLog).toBeTruthy();
+      expect(enableLog!.entity_type).toBe('ob_levelcard_column');
+      expect(enableLog!.entity_id).toBe('H|1|ACCOUNT_AGE');
+      expect((enableLog!.before_value as any).status).toBe('inactive');
+      expect((enableLog!.after_value as any).status).toBe('active');
+    });
+
+    it('TS-F106-003（BR-3）：對已 active 維度 enable → 404 SCORING_COLUMN_NOT_FOUND', async () => {
+      await seedHWithAccountAge();
+      // ACCOUNT_AGE 仍是 active，直接 enable → 404
+      const res = await request(app.getHttpServer())
+        .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/enable?cardType=H')
+        .set('Authorization', `Bearer ${smToken}`);
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('SCORING_COLUMN_NOT_FOUND');
+    });
+
+    it('TS-F106-004（AC-5）：月跑鎖時 enable → 409 SCORING_VERSION_LOCKED', async () => {
+      await seedHWithAccountAge();
+      await request(app.getHttpServer())
+        .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/disable?cardType=H')
+        .set('Authorization', `Bearer ${smToken}`)
+        .expect(200);
+      await ds.getRepository(AssignmentRun).save({
+        run_id: '44444444-4444-4444-4444-444444444444',
+        project_workym: '202604',
+        status: 'running',
+        triggered_by: SM_USER.id,
+        created_at: new Date(),
+      } as any);
+
+      const res = await request(app.getHttpServer())
+        .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/enable?cardType=H')
+        .set('Authorization', `Bearer ${smToken}`);
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('SCORING_VERSION_LOCKED');
+    });
+
+    it('TS-F106-006（權限）：enable 非業務主管 → 403', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/enable?cardType=H')
+        .set('Authorization', `Bearer ${plainToken}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
     // ---- 月跑鎖 ----

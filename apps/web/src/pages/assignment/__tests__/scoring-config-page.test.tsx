@@ -45,6 +45,7 @@ vi.mock('@/api/assignment-scoring', async () => {
     updateDimensions: vi.fn(),
     createDimension: vi.fn(),
     disableDimension: vi.fn(),
+    enableDimension: vi.fn(), // F106 新增
     getCardLevels: vi.fn(),
     updateCardLevels: vi.fn(),
     previewCardLevels: vi.fn(),
@@ -115,6 +116,8 @@ const DEFAULT_DIMENSIONS = [
     columnName: 'ACCOUNT_AGE',
     columnLabel: '帳齡',
     scoreSummary: '2 個區間',
+    // F106 AC-2：後端必回 status；前端不再 fallback
+    status: 'active' as const,
     scores: [
       { level1: null, level2S: '0', level2E: '3', score: 10 },
       { level1: null, level2S: '4', level2E: '12', score: 20 },
@@ -124,6 +127,7 @@ const DEFAULT_DIMENSIONS = [
     columnName: 'CELLULAR',
     columnLabel: '有無手機',
     scoreSummary: '2 個區間',
+    status: 'active' as const,
     scores: [
       { level1: 'Y', level2S: null, level2E: null, score: 15 },
       { level1: 'N', level2S: null, level2E: null, score: 0 },
@@ -318,6 +322,7 @@ describe('ScoringConfigPage — F054 寫入互動', () => {
           columnName: 'CONTRACT_YEARS',
           columnLabel: '契約年資',
           scoreSummary: '1 個區間',
+          status: 'active' as const,
           scores: [{ level1: null, level2S: '0', level2E: '99', score: 10 }],
         },
       ],
@@ -840,6 +845,7 @@ describe('ScoringConfigPage — prototype 28 對齊（落差 1 / 2 / 5 / 8）', 
           columnName: 'EMPTY_DIM',
           columnLabel: '空維度',
           scoreSummary: '尚無分數',
+          status: 'active' as const,
           scores: [],
         },
       ],
@@ -894,9 +900,9 @@ describe('ScoringConfigPage — prototype 28 對齊（落差 1 / 2 / 5 / 8）', 
   });
 });
 
-// F054 v1.3 落差 4：DimensionsTab 「狀態」欄
-describe('ScoringConfigPage — DimensionsTab 狀態欄（落差 4）', () => {
-  it('TS-F054-NEW-06：每列顯示狀態 chip（後端未回 status 時 fallback 為 active）', async () => {
+// F054 v1.3 落差 4 / F106 AC-2：DimensionsTab 「狀態」欄（採後端真實 status，不再 fallback）
+describe('ScoringConfigPage — DimensionsTab 狀態欄（落差 4 / F106）', () => {
+  it('TS-F054-NEW-06（F106 修正）：每列顯示狀態 chip，採後端回傳的真實 status', async () => {
     render(wrap(<ScoringConfigPage />));
     await switchToLegacyTabs();
     await waitFor(() => {
@@ -1317,6 +1323,210 @@ describe('ScoringConfigPage — Iter 9 Banner stats integration', () => {
 
     // stats 不應該被呼叫（enabled: !!selectedCardType）
     expect(vi.mocked(cardTypeApi.getCardTypeStats)).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================
+// F106：顯示 inactive 維度 + 啟用功能（DimensionsTab）
+// ============================================================
+
+const mockedEnableDimension = vi.mocked(
+  (api as any).enableDimension as (...a: any[]) => Promise<any>,
+);
+
+// H 卡含 1 active + 1 inactive 維度（SALES_STS 模擬 m302 實害情境）
+const DIMENSIONS_WITH_INACTIVE = [
+  {
+    columnName: 'ACCOUNT_AGE',
+    columnLabel: '帳齡',
+    scoreSummary: '2 個區間',
+    status: 'active' as const,
+    scores: [
+      { level1: null, level2S: '0', level2E: '3', score: 10 },
+      { level1: null, level2S: '4', level2E: '12', score: 20 },
+    ],
+  },
+  {
+    columnName: 'SALES_STS',
+    columnLabel: '業務狀態',
+    scoreSummary: '3 個區間',
+    status: 'inactive' as const,
+    scores: [
+      { level1: 'A', level2S: null, level2E: null, score: 5 },
+    ],
+  },
+];
+
+describe('ScoringConfigPage — F106 顯示 inactive 維度 + 啟用', () => {
+  it('TS-F106-FE-01：清單同時顯示 active 與 inactive 維度，狀態 chip 正確', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-row-ACCOUNT_AGE')).toBeInTheDocument();
+    });
+    // inactive 維度也出現
+    expect(screen.getByTestId('dim-row-SALES_STS')).toBeInTheDocument();
+
+    // 狀態 chip
+    expect(
+      screen.getByTestId('dim-status-ACCOUNT_AGE').getAttribute('data-status'),
+    ).toBe('active');
+    expect(
+      screen.getByTestId('dim-status-SALES_STS').getAttribute('data-status'),
+    ).toBe('inactive');
+
+    // inactive 列具列級弱化標記
+    expect(
+      screen.getByTestId('dim-row-SALES_STS').getAttribute('data-inactive'),
+    ).toBe('true');
+    expect(
+      screen.getByTestId('dim-row-ACCOUNT_AGE').getAttribute('data-inactive'),
+    ).toBeNull();
+  });
+
+  it('TS-F106-FE-02：inactive 列顯示「啟用」鈕、active 列顯示「停用」鈕', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-row-SALES_STS')).toBeInTheDocument();
+    });
+
+    // inactive 列：有 enable、無 disable
+    expect(screen.getByTestId('enable-SALES_STS')).toBeInTheDocument();
+    expect(screen.queryByTestId('disable-SALES_STS')).toBeNull();
+    // inactive 列仍保留編輯入口
+    expect(screen.getByTestId('edit-dim-SALES_STS')).toBeInTheDocument();
+
+    // active 列：有 disable、無 enable
+    expect(screen.getByTestId('disable-ACCOUNT_AGE')).toBeInTheDocument();
+    expect(screen.queryByTestId('enable-ACCOUNT_AGE')).toBeNull();
+  });
+
+  it('TS-F106-FE-03（OQ-164-4）：「共 N 個維度」只計 active（不計 inactive）', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-row-SALES_STS')).toBeInTheDocument();
+    });
+    // 1 active + 1 inactive → 共 1 個維度
+    expect(screen.getByText('共 1 個維度')).toBeInTheDocument();
+  });
+
+  it('TS-F106-FE-04（OQ-164-4）：Tab badge 只計 active 維度數', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    // tab-dim badge 來自 useQuery（已 filter active）→ 1
+    await waitFor(() => {
+      const tabDim = screen.getByTestId('tab-dim');
+      expect(tabDim.textContent).toContain('1');
+    });
+  });
+
+  it('TS-F106-FE-05：點「啟用」開確認 Modal → 確認後呼叫 enableDimension + toast', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+    mockedEnableDimension.mockResolvedValue({
+      cardType: 'H', cardVersion: 1, columnName: 'SALES_STS',
+      status: 'active', enabledAt: '2026-06-25T00:00:00.000Z',
+    } as any);
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('enable-SALES_STS')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('enable-SALES_STS'));
+    await waitFor(() => {
+      expect(screen.getByTestId('enable-modal')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('enable-modal-confirm'));
+
+    await waitFor(() => {
+      expect(mockedEnableDimension).toHaveBeenCalledWith('H', 'SALES_STS');
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('toast')).toBeInTheDocument();
+    });
+  });
+
+  it('TS-F106-FE-06：點「啟用」後取消 → 不發 enable API', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('enable-SALES_STS')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('enable-SALES_STS'));
+    await waitFor(() => {
+      expect(screen.getByTestId('enable-modal')).toBeInTheDocument();
+    });
+    const modal = screen.getByTestId('enable-modal');
+    fireEvent.click(within(modal).getByText('取消'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('enable-modal')).not.toBeInTheDocument();
+    });
+    expect(mockedEnableDimension).not.toHaveBeenCalled();
+  });
+
+  it('TS-F106-FE-07（AC-5）：月跑鎖時 啟用 / 停用 鈕一併 disabled', async () => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_INACTIVE,
+    } as any);
+    // 透過 createDimension 409 觸發鎖 banner
+    mockedCreateDimension.mockRejectedValue({
+      response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
+    });
+
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-add-dim')).toBeInTheDocument();
+    });
+    // 觸發鎖
+    fireEvent.click(screen.getByTestId('btn-add-dim'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-modal')).toBeInTheDocument();
+    });
+    const modal = screen.getByTestId('dim-modal');
+    const inputs = modal.querySelectorAll('input[type="text"]');
+    fireEvent.change(inputs[0], { target: { value: 'X' } });
+    fireEvent.change(inputs[1], { target: { value: 'X' } });
+    fireEvent.click(screen.getByTestId('dim-modal-matchtype-RANGE'));
+    fireEvent.click(screen.getByTestId('dim-modal-submit'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lock-banner')).toBeInTheDocument();
+    });
+    // 鎖定後啟用 / 停用 鈕都應 disabled
+    expect(screen.getByTestId('enable-SALES_STS')).toBeDisabled();
+    expect(screen.getByTestId('disable-ACCOUNT_AGE')).toBeDisabled();
   });
 });
 

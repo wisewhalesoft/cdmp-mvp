@@ -215,27 +215,51 @@ describe('AssignmentScoringService — F053 getScoring', () => {
     }
   });
 
-  it("BE-F053-001：dimensions 不應包含 status='inactive' 的維度", async () => {
+  // F106 AC-2 / BR-1（OQ-164-2）：getScoring 不再以 status='active' 過濾維度；
+  // 一律回傳 active + inactive 全部維度，且每維度帶 status 欄位。
+  // 原 BE-F053-001（斷言過濾 active）已被 F106 取代，改寫為以下兩個測試。
+  it('F106 AC-2：dimensions 同時包含 active 與 inactive 維度（columnRepo.find 不帶 status 過濾）', async () => {
     versionRepo.findOne.mockResolvedValue({
       card_type: 'H', card_name: '期中', card_version: 1,
       sdate: '20190823', edate: '20991231', status: 'active',
       created_by: null, created_at: null,
     });
-    // service 應該以 status='active' 過濾呼叫 columnRepo.find
     columnRepo.find.mockResolvedValue([
       { card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE', column_label: '帳齡', status: 'active' },
+      { card_type: 'H', card_version: 1, column_name: 'SALES_STS', column_label: '業務狀態', status: 'inactive' },
     ]);
     scoreRepo.find.mockResolvedValue([]);
 
     const result = await service.getScoring({ cardType: 'H' });
 
-    expect(result.dimensions).toHaveLength(1);
-    // 驗證 columnRepo.find 呼叫時帶 status='active' 過濾
+    // inactive 維度也回傳（不被過濾）
+    expect(result.dimensions).toHaveLength(2);
+    // columnRepo.find 呼叫不應帶 status 過濾
     const findArgs = columnRepo.find.mock.calls[0][0];
-    expect(findArgs.where).toMatchObject({
-      card_type: 'H',
-      status: 'active',
+    expect(findArgs.where).toMatchObject({ card_type: 'H', card_version: 1 });
+    expect(findArgs.where).not.toHaveProperty('status');
+  });
+
+  it('F106 AC-2：每個 dimension 物件含正確 status（active / inactive）', async () => {
+    versionRepo.findOne.mockResolvedValue({
+      card_type: 'H', card_name: '期中', card_version: 1,
+      sdate: '20190823', edate: '20991231', status: 'active',
+      created_by: null, created_at: null,
     });
+    columnRepo.find.mockResolvedValue([
+      { card_type: 'H', card_version: 1, column_name: 'ACCOUNT_AGE', column_label: '帳齡', status: 'active' },
+      { card_type: 'H', card_version: 1, column_name: 'SALES_STS', column_label: '業務狀態', status: 'inactive' },
+    ]);
+    scoreRepo.find.mockResolvedValue([]);
+
+    const result = await service.getScoring({ cardType: 'H' });
+
+    // 依 column_name 升冪：ACCOUNT_AGE（active） / SALES_STS（inactive）
+    const byName = Object.fromEntries(
+      result.dimensions.map((d) => [d.columnName, d.status]),
+    );
+    expect(byName.ACCOUNT_AGE).toBe('active');
+    expect(byName.SALES_STS).toBe('inactive');
   });
 
   it("BE-F053-002：dimensions 中 scores 為空時，scoreSummary='0 個區間'", async () => {
