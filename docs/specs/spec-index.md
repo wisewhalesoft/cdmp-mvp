@@ -1,13 +1,19 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.16"
+version: "3.17"
 date: 2026-06-25
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.17 / 2026-06-25 / F106 顯示停用計分維度並支援重新啟用（M02 Tab 2 — 對稱補完 F054 disable）**：依已核可 US-164 新建 1 個 feature spec，打通「停用計分維度」之可見性與自助修復管線，修復「H 卡 SALES_STS 被誤標 inactive→UI 完全隱形→月跑長期少一維、靠 m302 手動修回」之盲區。本輪變更檔案：
+> - **新建 v1.0**：[F106-show-inactive-dimension-and-enable.md](features/F106-show-inactive-dimension-and-enable.md)（**無新錯誤碼、無新 DB 欄位 / migration**；三項變更：**(1)** `getScoring()` 維度查詢移除 `status='active'` 過濾 → 一律回傳 active+inactive 全部維度 + 每維度補 `status` 欄位（OQ-164-2，前端移除 `?? 'active'` fallback）；**(2)** **新增 enable 端點** `PUT /assignment/scoring/dimensions/:columnName/enable`，**完全對稱** disable（同 `DirectorGuard`+`@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')`+`assertNotLocked()`(409 SCORING_VERSION_LOCKED)+`assertCardTypeActive()`(404)+audit；唯一差異＝`findOne(status='inactive')`、寫 `status='active'`、`action='ENABLE'`、回 `enabledAt`；對已 active 維度啟用→404 SCORING_COLUMN_NOT_FOUND，OQ-164-3 對稱 disable 慣例、不採冪等）；**(3)** 前端 Tab 2 顯示 inactive 列（chip 樣式已就緒、補列級弱化）+ inactive 列「啟用」按鈕（對稱「停用」）+ 月跑鎖一併鎖 + badge / 「共 N 個維度」只計 active（OQ-164-4）+ 不加顯示切換 toggle（OQ-164-5）。**EQ 核心驗收＝enable⇄disable 對稱性**（§5.3 對照表）；沿用既有 `/assignment/scoring` 路由、無新側欄項。**OQ-164-1 decode UI 明確 out-of-scope、另立 Story**）
+> - **新建圖表**：[diagrams/F106-enable-dimension-flow.mmd](diagrams/F106-enable-dimension-flow.mmd)（啟用流程 sequenceDiagram：前端 inactive 列點啟用→PUT enable→Guard 鏈→service assertNotLocked(409)→assertCardTypeActive(404)→findOne(status=inactive，含重複啟用 404)→status=active save→writeAudit(ENABLE)→回 {status:active, enabledAt}→前端 refetch；對稱 disable；mermaid 已驗證）
+> - **刻意未動（邊界）**：`architecture-spec.md` / AD 文件（system-architect 範疇；F106 對應 AD 由其撰寫）；`data-model.md`（`ob_levelcard_column.status` / `assignment_audit_log.action` 既有，無新 entity 欄位）；`error-handling.md`（無新錯誤碼，僅將既有 SCORING_COLUMN_NOT_FOUND / SCORING_VERSION_LOCKED 之「相關功能」欄補列 F106）；code / test / 原型 HTML / migration / seed（tdd-implementation / test-designer / UI-UX / DevOps 範疇）；計分引擎採計範圍（inactive 仍不參與計分，不改）
+> - **本輪無殘留 open question**（OQ-164-1~5 已由使用者全數拍板並寫入 spec §11 Resolved Decisions）
+>
 > **v3.16 / 2026-06-25 / F105 PROJECT_TP composite 復原 + 計分衍生碼 Decode Dictionary + F067 tier 結案**：(1) **F105** 復原 PROJECT_TP COMPOSITE 真語意（推翻 F104 OQ-F104-03「只做關鍵字 category」簡化，使用者重新拍板）→ [architecture-spec.md](architecture-spec.md) AD-E07-10-L **v5.0** + 新增 **AD-E07-35**（引擎 `ColumnSource.kind:'composite'` 契約：`codeExpr=spec_tp` + `keywordExpr=借新還舊?'A':''`，每 row `code BETWEEN level2 字串 AND keyword=COALESCE(level1,'')`，兩路徑 EQ）；(2) **新建** [scorecard-derived-code-dictionary.md](scorecard-derived-code-dictionary.md)（**AD-E07-10-S**，業務簽核用 decode 層：每衍生碼 → 來源欄 + 規則 + 業務語意，補「config 有碼、語意在 engine code」可回溯缺口，如 `level1='A'`=借新還舊／`UCD`=中古車商；設計原則見 memory `feedback_scorecard_derived_code_traceability`）；(3) [F067 差異報告](implementation-log/F067-202606-cdmp-vs-legacy-diff.md) §6 **tier 維度 RESOLVED**（run `64555220` 三名單逐格對齊 legacy：001 T1=67.9 vs 69／002 59.1 vs 62.2／003 85.2 vs 83.8；靠 F104 引擎 + m302 SALES_STS + F105 composite 三段達成；config 本就對齊、真因＝raw score 偏低）。四維度（部門/員編/CR/tier）全可簽核。
 
 > **v3.15 / 2026-06-24 / F104 Stage 2 計分引擎 AD-E07-10-L 全欄對齊 legacy SP（AD 本身有 12+ 欄偏差，F103 對齊了有錯的 AD）**：深度稽核 legacy `SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql`（UTF-16LE 解碼）發現 AD-E07-10-L 本身與 legacy 真語意多欄偏差。依 5 個已核可 user story（US-159 AD 全欄修正 / US-160 CUS_SEX 分流引擎 / US-161 cc 新欄 contract / US-162 縣市欄 / US-163 202606 驗收）新建 1 個 feature spec，兩引擎路徑改對齊 **legacy SP**（非 AD 現況表）。本輪變更檔案：
@@ -291,8 +297,11 @@ status: Draft
 | F054 | [F054-edit-scoring-dimension.md](features/F054-edit-scoring-dimension.md) | 編輯計分維度與分數（M02 Tab 2 寫入） | US-073 | P0-MVP | v1.2 |
 | F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074、US-097 | P0-MVP | v1.6 |
 | F056 | [F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表（M02 Tab 5） | US-075 | P0-MVP | v1.5 |
+| F106 | [F106-show-inactive-dimension-and-enable.md](features/F106-show-inactive-dimension-and-enable.md) | 顯示停用計分維度並支援重新啟用（M02 Tab 2；對稱補完 F054 disable，getScoring 回 inactive+status + enable 端點 + 前端啟用入口；無新錯誤碼） | US-164 | P0-MVP | v1.0 |
 
-> M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入、Tab 3 = F054 分數設定子視圖、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。
+> M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入（+ F106 顯示 inactive 維度與啟用）、Tab 3 = F054 分數設定子視圖、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。
+>
+> **F054 ⇄ F106 對稱關係**：F054 提供「停用維度」（disable，`status active→inactive`），F106 對稱補完「顯示停用維度 + 重新啟用」（enable，`status inactive→active`）；兩端點除狀態方向 / 動詞 / 時間戳欄名外，guard / feature flag / 月跑鎖 / audit / 404 語意完全一致（見 F106 §5.3 對稱性對照表）。
 
 #### M03 分派比例（重構後拆分，2026-05-15）
 
@@ -453,6 +462,7 @@ status: Draft
 | [diagrams/F100-stage2-4-pushdown-flow.mmd](diagrams/F100-stage2-4-pushdown-flow.mmd) | **F100 v1.0 Stage 2~4 SQL 下推 + v2 計分引擎（SUM(CASE) + customer_core LEFT JOIN + CR EXISTS + st4_exchange ROW_NUMBER；OQ-06 排序鍵；PG 真庫 JS↔SQL 等價 DoD 門檻）** | Flowchart | F100, F036, F067 |
 | [diagrams/F101-stage3-4-proportional-flow.mmd](diagrams/F101-stage3-4-proportional-flow.mmd) | **F101 v1.0 月跑 Stage 3/4 真實比例分派（Stage 2 tier_level 就緒 → Stage 3 三維分組 FLOOR+確定性差額 → Stage 4 員工 FLOOR+兩階段補足 → ASSIGNDAY 千分比+DIVIDE_LEFT；DB_TYPE dual-path PG 下推/JS oracle gate + 三 fallback 分支 + 警告通道 report_payload + JS↔SQL 等價 DoD）** | Flowchart | F101, F100, F049, F067 |
 | [diagrams/F102-cr-priority-flow.mmd](diagrams/F102-cr-priority-flow.mmd) | **F102 v1.0 月跑 CR 優先分派（Stage 2 就緒 → F101 清除 → cr_enabled 閘控：true 步驟 1 逾2年清空→2 離職清空→3 CR 優先指派→4 扣量／false 強制 is_cr='N'；F101 比例分派只跑 is_cr<>'Y'；確定性 SET-based align I-DET-01；旁註廢除全域旗標 + 死碼不引用）** | Flowchart | F102, F101, F059, F064, F067 |
+| [diagrams/F106-enable-dimension-flow.mmd](diagrams/F106-enable-dimension-flow.mmd) | **F106 v1.0 啟用計分維度流程（對稱 disable）：前端 inactive 列點啟用 → PUT enable → Guard 鏈（Director + FeatureFlag）→ assertNotLocked(409 SCORING_VERSION_LOCKED) → assertCardTypeActive(404 CARD_TYPE_NOT_FOUND) → findOne(status=inactive，找不到/重複啟用 404 SCORING_COLUMN_NOT_FOUND) → status=active save → writeAudit(action=ENABLE) → 回 {status:active, enabledAt} → 前端 refetch getScoring；對稱 disable findOne(status=active)/寫 inactive/action=DISABLE** | Sequence | F106, F054, F053 |
 
 ### 狀態圖
 

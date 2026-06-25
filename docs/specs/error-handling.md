@@ -284,8 +284,8 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
 | SCORING_VERSION_NOT_FOUND | 404 | 目前無生效的計分版本，請聯繫 IT 確認設定 | `ob_levelcard_version` 無 `status = 'active'` 紀錄 | F053 |
-| SCORING_COLUMN_NOT_FOUND | 404 | 指定的計分維度不存在或已停用 | `(card_type, card_version, column_name)` 組合不存在於 `ob_levelcard_column`，或 `status = 'inactive'` | F054 |
-| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定 | F054, F055, F056, F070, F071, F072 |
+| SCORING_COLUMN_NOT_FOUND | 404 | 指定的計分維度不存在或已停用 | `(card_type, card_version, column_name)` 組合不存在於 `ob_levelcard_column`；disable 端點限定 `status='active'`（找不到 → 404，含重複停用）；**F106 enable 端點限定 `status='inactive'`（找不到 → 404，含對已 active 維度重複啟用，對稱慣例）** | F054, F106 |
+| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定（**F106 enable 端點沿用同一 `assertNotLocked()`，與 disable 一致**） | F054, F055, F056, F070, F071, F072, F106 |
 | SCORING_COLUMN_DUPLICATE | 422 | 計分維度 column_name `{columnName}` 已存在於 active 版本 | 新增維度時 `column_name` 已存在於同 `card_type + card_version` 的 `status = 'active'` 紀錄 | F054 |
 | SCORING_RANGE_OVERLAP | 422 | 分數區間重疊，請調整條件值 | 分數區間或 CARD_LEVEL 門檻區間重疊 | F054, F055 |
 | SCORING_INVALID_MATCH_TYPE | 422 | 比對模式（match_type）值不合法，允許值：CATEGORY / RANGE / COMPOSITE | **v1.3 / 2026-05-18 新增（F054 v1.3）**：PUT `/scoring/dimensions` 請求傳入的 `matchType` 不在允許列表；`details` 含 `allowedValues: ['CATEGORY','RANGE','COMPOSITE']` | F054 v1.3 |

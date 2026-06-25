@@ -1,0 +1,45 @@
+%% F106 啟用計分維度流程（對稱於 F054 disable）：前端 inactive 列點「啟用」→ PUT /assignment/scoring/dimensions/:columnName/enable → Guard 鏈（Auth/FeatureFlag/DirectorOrSectionChief/Director）→ service enableDimension：assertNotLocked(409)→assertCardTypeActive(404)→findOne(status=inactive，找不到 404 含重複啟用)→ status=active save → writeAudit(action=ENABLE) → 回 {status:active, enabledAt} → 前端 refetch getScoring。對稱點：disable 用 findOne(status=active)、寫 status=inactive、action=DISABLE。
+sequenceDiagram
+    autonumber
+    actor U as 業務部長 director
+    participant FE as 前端 DimensionsTab
+    participant API as 啟用端點 PUT .../:columnName/enable
+    participant G as Guard 鏈 Auth FeatureFlag DirectorOrSectionChief Director
+    participant SVC as AssignmentScoringService.enableDimension
+    participant DB as ob_levelcard_column
+    participant AUD as assignment_audit_log
+
+    U->>FE: 點 inactive 列「啟用」並確認
+    FE->>API: PUT enable ?cardType=X （columnName 於 path）
+    API->>G: 套用 class guard + @RequireDirector + @RequireFeatureFlag
+
+    alt 非部長 director
+        G-->>FE: 403 拒絕（DirectorGuard）
+    else feature flag 未開
+        G-->>FE: FeatureFlagGuard 拒絕（ENABLE_E07_REFACTOR_PHASE3）
+    else 通過權限
+        G->>SVC: enableDimension(cardType, columnName, actor)
+
+        SVC->>SVC: assertNotLocked()
+        alt 月跑執行中 pending/running
+            SVC-->>FE: 409 SCORING_VERSION_LOCKED（前端：分派執行中無法修改）
+        else 未鎖定
+            SVC->>SVC: assertCardTypeActive(cardType)
+            alt cardType 不存在/已停用
+                SVC-->>FE: 404 CARD_TYPE_NOT_FOUND
+            else cardType 有效
+                SVC->>DB: findOne(card_type, column_name, status='inactive')
+                alt 找不到（不存在 或 已是 active＝重複啟用）
+                    DB-->>SVC: null
+                    SVC-->>FE: 404 SCORING_COLUMN_NOT_FOUND（對稱 disable 慣例）
+                else 命中 inactive 維度
+                    DB-->>SVC: column 列
+                    SVC->>DB: status='inactive' → 'active' save
+                    SVC->>AUD: writeAudit ENABLE entity=ob_levelcard_column before{status:inactive} after{status:active}
+                    SVC-->>FE: 200 {cardType, cardVersion, columnName, status:'active', enabledAt}
+                    FE->>FE: refetch getScoring（含 inactive + status）→ chip 轉 active、列灰底移除
+                    FE-->>U: toast「維度已啟用」
+                end
+            end
+        end
+    end
