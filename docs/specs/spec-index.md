@@ -1,13 +1,19 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.17"
+version: "3.18"
 date: 2026-06-25
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.18 / 2026-06-25 / F107 計分卡設定頁顯示衍生碼業務語意（decode UI — 落實可回溯性設計原則的 UI 層）**：依已核可 US-165 新建 1 個 feature spec，把已存在的 decode 對照（AD-E07-10-S `scorecard-derived-code-dictionary.md`）呈現在計分卡設定頁，補「config 有碼（如 PROJECT_TP `level1='A'`）、語意只活在引擎 code / markdown」之 UI 呈現缺口。本輪變更檔案：
+> - **新建 v1.0**：[F107-scoring-derived-code-decode-ui.md](features/F107-scoring-derived-code-decode-ui.md)（**唯讀疊加說明、不改計分採計、無新錯誤碼、無新 DB 欄位 / migration、無新側欄/路由**；三項變更：**(1)** **後端同源供給**（OQ-decode-1）`getScoring()` 每個 dimension 新增唯讀 `decode`（`sourceField` + `derivationRule` + `codes[]`）；decode map 為**與引擎 `resolveColumnSource` 同源之後端共用對照常數**（非前端常數、非 config 表）；**(2)** 前端 Tab 3「分數設定」碼層**並陳 decode 業務語意**（原始碼保留利稽核：`A`→借新還舊／`AGENT/UCD/HFC`→代理商/中古車商/和潤自家／CUS_SEX `1/2/3`／三縣市），Tab 2「計分維度」欄層加「來源欄 + 衍生規則」摘要；**(3)** 涵蓋**全部衍生欄**（OQ-decode-2：PROJECT_TP/SALES_STS/CUS_SEX/三縣市/五欄個人法人分流 gating）。**核心 DoD＝OQ-decode-4 同步斷言**「UI/API decode ≡ 引擎衍生規則 + AD-E07-10-S 一致」（防 UI 說 A、引擎做 B 走鐘，BR-4）。與 F106「啟用維度」/ `matchType` 比對型說明**正交**、與 A1/F106 啟用功能不混。OQ-decode-1~4 已全數拍板（spec §13）；殘留 3 個架構師 OQ（decode 常數落點 / AD 同步契約定錨 / 回傳粒度，§10，均附建議預設）交 system-architect）
+> - **新建圖表**：[diagrams/F107-decode-ui-flow.mmd](diagrams/F107-decode-ui-flow.mmd)（decode 同源供給 sequenceDiagram：Tab 切換 → GET /assignment/scoring（唯讀 Guard）→ getScoring 查 columns/scores → 逐維度由 SCORING_DECODE 常數取 decode（無對應→null 優雅降級）→ 旁註 BR-4 同步斷言（decode ≡ resolveColumnSource + AD-E07-10-S §2）→ 回傳每維度附 decode → Tab 3 碼層並陳業務語意（原始碼保留）/ Tab 2 欄層來源欄+規則摘要；全程唯讀；mermaid 已驗證）
+> - **刻意未動（邊界）**：`architecture-spec.md` / AD-E07-10-S / AD-E07-10-L / `data-model.md`（system-architect 範疇；decode 常數落點 + AD decode 契約定錨列為 §10 OQ-F107-01~03 交 architect）；`error-handling.md`（無新錯誤碼，沿用既有 `GET /assignment/scoring` 之 CARD_TYPE_NOT_FOUND / SCORING_VERSION_NOT_FOUND）；code / test / 原型 HTML / migration / seed（tdd-implementation / test-designer / UI-UX 範疇）；計分引擎採計範圍（decode 純說明、不改 score/card_level/tier）
+> - **本輪對使用者無殘留 open question**（OQ-decode-1~4 已由使用者全數拍板並寫入 spec §13 Resolved Decisions；殘留 §10 OQ-F107-01~03 屬 architect 範疇）
+>
 > **v3.17 / 2026-06-25 / F106 顯示停用計分維度並支援重新啟用（M02 Tab 2 — 對稱補完 F054 disable）**：依已核可 US-164 新建 1 個 feature spec，打通「停用計分維度」之可見性與自助修復管線，修復「H 卡 SALES_STS 被誤標 inactive→UI 完全隱形→月跑長期少一維、靠 m302 手動修回」之盲區。本輪變更檔案：
 > - **新建 v1.0**：[F106-show-inactive-dimension-and-enable.md](features/F106-show-inactive-dimension-and-enable.md)（**無新錯誤碼、無新 DB 欄位 / migration**；三項變更：**(1)** `getScoring()` 維度查詢移除 `status='active'` 過濾 → 一律回傳 active+inactive 全部維度 + 每維度補 `status` 欄位（OQ-164-2，前端移除 `?? 'active'` fallback）；**(2)** **新增 enable 端點** `PUT /assignment/scoring/dimensions/:columnName/enable`，**完全對稱** disable（同 `DirectorGuard`+`@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')`+`assertNotLocked()`(409 SCORING_VERSION_LOCKED)+`assertCardTypeActive()`(404)+audit；唯一差異＝`findOne(status='inactive')`、寫 `status='active'`、`action='ENABLE'`、回 `enabledAt`；對已 active 維度啟用→404 SCORING_COLUMN_NOT_FOUND，OQ-164-3 對稱 disable 慣例、不採冪等）；**(3)** 前端 Tab 2 顯示 inactive 列（chip 樣式已就緒、補列級弱化）+ inactive 列「啟用」按鈕（對稱「停用」）+ 月跑鎖一併鎖 + badge / 「共 N 個維度」只計 active（OQ-164-4）+ 不加顯示切換 toggle（OQ-164-5）。**EQ 核心驗收＝enable⇄disable 對稱性**（§5.3 對照表）；沿用既有 `/assignment/scoring` 路由、無新側欄項。**OQ-164-1 decode UI 明確 out-of-scope、另立 Story**）
 > - **新建圖表**：[diagrams/F106-enable-dimension-flow.mmd](diagrams/F106-enable-dimension-flow.mmd)（啟用流程 sequenceDiagram：前端 inactive 列點啟用→PUT enable→Guard 鏈→service assertNotLocked(409)→assertCardTypeActive(404)→findOne(status=inactive，含重複啟用 404)→status=active save→writeAudit(ENABLE)→回 {status:active, enabledAt}→前端 refetch；對稱 disable；mermaid 已驗證）
@@ -166,9 +172,9 @@ status: Draft
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 50 |
-| Mermaid 圖表 | 44 |
-| **總計** | **148** |
+| Feature 文件（E07） | 51 |
+| Mermaid 圖表 | 45 |
+| **總計** | **150** |
 
 ---
 
@@ -298,10 +304,13 @@ status: Draft
 | F055 | [F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md) | 編輯 CARD_LEVEL 分級門檻（M02 Tab 4） | US-074、US-097 | P0-MVP | v1.6 |
 | F056 | [F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md) | 編輯 TIER_LEVEL 對應表（M02 Tab 5） | US-075 | P0-MVP | v1.5 |
 | F106 | [F106-show-inactive-dimension-and-enable.md](features/F106-show-inactive-dimension-and-enable.md) | 顯示停用計分維度並支援重新啟用（M02 Tab 2；對稱補完 F054 disable，getScoring 回 inactive+status + enable 端點 + 前端啟用入口；無新錯誤碼） | US-164 | P0-MVP | v1.0 |
+| F107 | [F107-scoring-derived-code-decode-ui.md](features/F107-scoring-derived-code-decode-ui.md) | 計分卡設定頁顯示衍生碼業務語意（decode UI；getScoring 每維度附唯讀 decode（來源欄+衍生規則+碼意義），Tab 3 碼層並陳語意/Tab 2 欄層摘要；decode 為與引擎同源共用常數+同步斷言；唯讀、不改採計、無新錯誤碼） | US-165 | P1 | v1.0 |
 
-> M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入（+ F106 顯示 inactive 維度與啟用）、Tab 3 = F054 分數設定子視圖、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。
+> M02 5 Tab 結構：Tab 1 = F069 CARD_TYPE 清單（含 F070/F071/F072 操作入口）、Tab 2 = F053 唯讀 + F054 寫入（+ F106 顯示 inactive 維度與啟用 + F107 欄層 decode 摘要）、Tab 3 = F054 分數設定子視圖（+ F107 碼層 decode 並陳）、Tab 4 = F055 CARD_LEVEL 門檻、Tab 5 = F056 TIER 對應；Tab 1 selectedCardType 驅動 Tab 2~5 篩選。
 >
 > **F054 ⇄ F106 對稱關係**：F054 提供「停用維度」（disable，`status active→inactive`），F106 對稱補完「顯示停用維度 + 重新啟用」（enable，`status inactive→active`）；兩端點除狀態方向 / 動詞 / 時間戳欄名外，guard / feature flag / 月跑鎖 / audit / 404 語意完全一致（見 F106 §5.3 對稱性對照表）。
+>
+> **F107 decode UI（與 F106 正交）**：F107 在同頁疊加「衍生碼 → 來源欄 + 衍生規則 + 業務語意」唯讀說明（落實 AD-E07-10-S 可回溯性原則的 UI 層）；decode 由 `getScoring()` 同源供給（與引擎 `resolveColumnSource` 共用常數，同步斷言 BR-4 為核心 DoD）。decode 與 F106 之 `status` chip、`matchType` 比對型說明三者並存不互相取代；本功能純呈現、不改計分採計。
 
 #### M03 分派比例（重構後拆分，2026-05-15）
 
@@ -463,6 +472,7 @@ status: Draft
 | [diagrams/F101-stage3-4-proportional-flow.mmd](diagrams/F101-stage3-4-proportional-flow.mmd) | **F101 v1.0 月跑 Stage 3/4 真實比例分派（Stage 2 tier_level 就緒 → Stage 3 三維分組 FLOOR+確定性差額 → Stage 4 員工 FLOOR+兩階段補足 → ASSIGNDAY 千分比+DIVIDE_LEFT；DB_TYPE dual-path PG 下推/JS oracle gate + 三 fallback 分支 + 警告通道 report_payload + JS↔SQL 等價 DoD）** | Flowchart | F101, F100, F049, F067 |
 | [diagrams/F102-cr-priority-flow.mmd](diagrams/F102-cr-priority-flow.mmd) | **F102 v1.0 月跑 CR 優先分派（Stage 2 就緒 → F101 清除 → cr_enabled 閘控：true 步驟 1 逾2年清空→2 離職清空→3 CR 優先指派→4 扣量／false 強制 is_cr='N'；F101 比例分派只跑 is_cr<>'Y'；確定性 SET-based align I-DET-01；旁註廢除全域旗標 + 死碼不引用）** | Flowchart | F102, F101, F059, F064, F067 |
 | [diagrams/F106-enable-dimension-flow.mmd](diagrams/F106-enable-dimension-flow.mmd) | **F106 v1.0 啟用計分維度流程（對稱 disable）：前端 inactive 列點啟用 → PUT enable → Guard 鏈（Director + FeatureFlag）→ assertNotLocked(409 SCORING_VERSION_LOCKED) → assertCardTypeActive(404 CARD_TYPE_NOT_FOUND) → findOne(status=inactive，找不到/重複啟用 404 SCORING_COLUMN_NOT_FOUND) → status=active save → writeAudit(action=ENABLE) → 回 {status:active, enabledAt} → 前端 refetch getScoring；對稱 disable findOne(status=active)/寫 inactive/action=DISABLE** | Sequence | F106, F054, F053 |
+| [diagrams/F107-decode-ui-flow.mmd](diagrams/F107-decode-ui-flow.mmd) | **F107 v1.0 decode UI 同源供給流程（唯讀）：Tab 切換 → GET /assignment/scoring（DirectorOrSectionChiefGuard 唯讀）→ getScoring 查 columns/scores → 逐維度由 SCORING_DECODE 共用常數取 decode（PROJECT_TP/SALES_STS/CUS_SEX/三縣市/五欄分流有；純數值欄→null 優雅降級 BR-6）→ 旁註 BR-4 同步斷言（decode codes/sourceField ≡ resolveColumnSource 衍生規則 + AD-E07-10-S §2）→ 回傳每維度附 decode → Tab 3 碼層並陳業務語意（原始碼保留）/ Tab 2 欄層來源欄+規則摘要；全程唯讀無寫入** | Sequence | F107, F053, F054, F106 |
 
 ### 狀態圖
 

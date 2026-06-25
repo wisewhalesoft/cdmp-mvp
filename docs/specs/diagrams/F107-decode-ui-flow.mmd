@@ -1,0 +1,33 @@
+%% F107 計分卡設定頁 decode UI 資料流：getScoring 同源供給 decode 至 Tab 3 碼層 / Tab 2 欄層（唯讀）
+sequenceDiagram
+    autonumber
+    actor U as 業務主管 / 稽核（部長 / 處長，唯讀）
+    participant FE as 前端 ScoringConfigPage（Tab 3 ScoresTab / Tab 2 DimensionsTab）
+    participant API as GET /assignment/scoring（DirectorOrSectionChiefGuard，唯讀）
+    participant SVC as AssignmentScoringService.getScoring
+    participant DEC as SCORING_DECODE 共用常數（與引擎同源）
+    participant ENG as resolveColumnSource（stage2to4-sql-builder，引擎衍生規則）
+    participant DB as ob_levelcard_column / ob_levelcard_score
+
+    U->>FE: Tab 1 選中 CARD_TYPE 後切換至 Tab 3 / Tab 2
+    FE->>API: GET cardType
+    API->>SVC: getScoring(cardType)
+    SVC->>DB: 查 active version 之 columns + scores
+    DB-->>SVC: dimensions（columnName / scores / matchType / status）
+
+    loop 每個 dimension（依 column_name）
+        SVC->>DEC: 依 columnName 取 decode 常數
+        alt 有對應 decode（PROJECT_TP / SALES_STS / CUS_SEX / 三縣市 / 五欄分流）
+            DEC-->>SVC: decode（sourceField + derivationRule + codes）
+        else 無對應 decode（純數值欄 LIST_MONTH / CAR_YEAR / LOAN_RATE …）
+            DEC-->>SVC: null（優雅降級 BR-6）
+        end
+    end
+
+    Note over DEC,ENG: BR-4 同步斷言（測試層）：decode 的 codes / sourceField 必須等於 ENG 衍生規則 + AD-E07-10-S §2，否則斷言失敗
+    SVC-->>API: dimensions（每維度附 decode，唯讀）
+    API-->>FE: 回傳 dimensions + decode
+
+    FE->>U: Tab 3 每列原始碼旁並陳業務語意（原始碼保留，A 顯示借新還舊 / AGENT 顯示代理商）
+    FE->>U: Tab 2 欄層顯示來源欄 + 衍生規則摘要
+    Note over FE,U: decode 一律唯讀（無新增 / 編輯 / 刪除入口，AC-3）；decode=null 之維度不渲染、不報錯
