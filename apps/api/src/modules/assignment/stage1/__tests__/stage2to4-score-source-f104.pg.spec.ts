@@ -213,6 +213,20 @@ async function seedCatScore(cardType: string, columnName: string, level1: string
     } as Partial<ObLevelcardScore>),
   );
 }
+/**
+ * F105 / AD-E07-35：composite score row（PROJECT_TP）。level2_s/e=spec_tp 字串區間；
+ *   level1=NULL → 非借新還舊（keyword ''）；level1='A' → 借新還舊。
+ */
+async function seedCompositeScore(
+  cardType: string, columnName: string, level1: string | null, lo: string, hi: string, score: number,
+): Promise<void> {
+  await scoreRepo.save(
+    scoreRepo.create({
+      card_type: cardType, card_version: 1, column_name: columnName,
+      level1, level2_s: lo, level2_e: hi, score,
+    } as Partial<ObLevelcardScore>),
+  );
+}
 
 async function pushdown(cardType: string, listNo: string): Promise<void> {
   const activeColumns = await columnRepo.find({
@@ -377,15 +391,16 @@ beforeEach(async () => {
 // KW — 借新還舊 / 中古車商 EQ
 // ===========================================================================
 describe('F104 KW — PROJECT_TP 借新還舊 / SALES_STS 中古車商（EQ）', () => {
-  it('KW-005：PROJECT_TP spec_name 含借新還舊 → A，JS=PG', async (ctx) => {
+  it('KW-005：PROJECT_TP composite spec_name 含借新還舊 → code 01 + keyword A，JS=PG', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_KW5';
-    await seedColumn('H', 'PROJECT_TP', MatchType.CATEGORY);
-    await seedCatScore('H', 'PROJECT_TP', '01', 5);
-    await seedCatScore('H', 'PROJECT_TP', 'A', 25);
+    // F105 / AD-E07-35：PROJECT_TP composite。非借新還舊（level1=NULL）'01'→5；借新還舊（level1='A'）'01'→25。
+    await seedColumn('H', 'PROJECT_TP', MatchType.COMPOSITE);
+    await seedCompositeScore('H', 'PROJECT_TP', null, '01', '01', 5);
+    await seedCompositeScore('H', 'PROJECT_TP', 'A', '01', '01', 25);
     await seedCase({ applNo: 'KW5', listNo: L, specTp: '01', specName: '汽車貸款借新還舊專案' });
     const score = await assertEq('H', 'KW5', L, null, null);
-    expect(score).toBe(25); // 命中 'A'
+    expect(score).toBe(25); // code 01 AND keyword A → 借新還舊 row 25
   });
 
   it('KW-006：SALES_STS AGENT/中古車商/DIRECT 三值，JS=PG', async (ctx) => {
@@ -781,5 +796,100 @@ describe('F104 EQ — 綜合大場景（DoD 核心，JS=PG 誤差 0）', () => {
     const score = await assertEq('S5', 'EQ12', L, cc, null);
     // AGE 36∈[30,40]→5 + CAREA1 1→4 + EDUCAT '08'→6 + LOAN_RATE 77→8 + CO_NUM 金門縣→9 + HPOST 臺北市→3 = 35
     expect(score).toBe(35);
+  });
+});
+
+// ===========================================================================
+// F105 / AD-E07-35 — PROJECT_TP COMPOSITE 真語意 EQ DoD（兩路徑同分）
+// ===========================================================================
+describe('F105 PROJECT_TP COMPOSITE — AD-E07-35 EQ DoD（JS=PG 誤差 0）', () => {
+  /**
+   * AD-E07-35 樣本計分卡（H 卡 v1，僅 PROJECT_TP composite 欄）：
+   *   借新還舊（level1='A'）   06→37  22→37
+   *   非借新還舊（level1=NULL） 06→35  12→28  22→37  01→19
+   * 「同代碼 A vs NULL 共存」（06：A→37 / NULL→35）驗 keyword AND 條件正確分流。
+   */
+  async function seedPjtpCard(): Promise<void> {
+    await seedColumn('H', 'PROJECT_TP', MatchType.COMPOSITE);
+    // 借新還舊（keyword 'A'）優先序在前——同代碼下 keyword 'A' 案件先命中 A row。
+    await seedCompositeScore('H', 'PROJECT_TP', 'A', '06', '06', 37);
+    await seedCompositeScore('H', 'PROJECT_TP', 'A', '22', '22', 37);
+    await seedCompositeScore('H', 'PROJECT_TP', null, '06', '06', 35);
+    await seedCompositeScore('H', 'PROJECT_TP', null, '12', '12', 28);
+    await seedCompositeScore('H', 'PROJECT_TP', null, '22', '22', 37);
+    await seedCompositeScore('H', 'PROJECT_TP', null, '01', '01', 19);
+  }
+
+  it('PJTP-EQ-01：借新還舊 + spec_tp 06 → A|06 row 37（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ1';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ1', listNo: L, specTp: '06', specName: '汽車貸款借新還舊專案' });
+    const score = await assertEq('H', 'PJ1', L, null, null);
+    expect(score).toBe(37);
+  });
+
+  it('PJTP-EQ-02：非借新還舊 + spec_tp 06 → NULL|06 row 35（同代碼 keyword 分流，JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ2';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ2', listNo: L, specTp: '06', specName: '一般專案' });
+    const score = await assertEq('H', 'PJ2', L, null, null);
+    expect(score).toBe(35);
+  });
+
+  it('PJTP-EQ-03：非借新還舊 + spec_tp 12 → NULL|12 row 28（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ3';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ3', listNo: L, specTp: '12', specName: '一般專案' });
+    const score = await assertEq('H', 'PJ3', L, null, null);
+    expect(score).toBe(28);
+  });
+
+  it('PJTP-EQ-04：非借新還舊 + spec_tp 01 → NULL|01 row 19（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ4';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ4', listNo: L, specTp: '01', specName: '一般專案' });
+    const score = await assertEq('H', 'PJ4', L, null, null);
+    expect(score).toBe(19);
+  });
+
+  it('PJTP-EQ-05：借新還舊 + spec_tp 22 → A|22 row 37（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ5';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ5', listNo: L, specTp: '22', specName: '借新還舊' });
+    const score = await assertEq('H', 'PJ5', L, null, null);
+    expect(score).toBe(37);
+  });
+
+  it('PJTP-EQ-06：非借新還舊 + spec_tp 22 → NULL|22 row 37（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ6';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ6', listNo: L, specTp: '22', specName: '一般專案' });
+    const score = await assertEq('H', 'PJ6', L, null, null);
+    expect(score).toBe(37);
+  });
+
+  it('PJTP-EQ-07：spec_tp 99（不在任何 row）→ 0（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ7';
+    await seedPjtpCard();
+    await seedCase({ applNo: 'PJ7', listNo: L, specTp: '99', specName: '無代碼' });
+    const score = await assertEq('H', 'PJ7', L, null, null);
+    expect(score).toBe(0);
+  });
+
+  it('PJTP-EQ-08：spec_tp NULL → COALESCE 01 → NULL|01 row 19（JS=PG）', async (ctx) => {
+    ensurePg(ctx);
+    const L = 'L_PJ8';
+    await seedPjtpCard();
+    // spec_tp NULL + spec_name NULL → code '01'（COALESCE）+ keyword ''。
+    await seedCase({ applNo: 'PJ8', listNo: L, specTp: null, specName: null });
+    const score = await assertEq('H', 'PJ8', L, null, null);
+    expect(score).toBe(19);
   });
 });

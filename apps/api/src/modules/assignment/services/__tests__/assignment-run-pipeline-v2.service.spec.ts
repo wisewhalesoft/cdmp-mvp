@@ -485,10 +485,11 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
         cardType: 'T1', cardVersion: 1, columnName: 'LIST_MONTH',
         level2S: '6', level2E: '12', score: 30,
       });
-      // PROJECT_TP 類別型：'01' → 5 分（所有案件 seed 預設無 spec_tp → 應對應 fallback default '01'）
+      // F105 / AD-E07-35：PROJECT_TP composite——code（spec_tp）字串區間 + keyword（借新還舊）。
+      //   案件 seed 預設無 spec_tp / spec_name → code '01'（COALESCE）+ keyword ''；命中非借新還舊 '01' row → 5 分。
       await seedScore(env.scoreRepo, {
         cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP',
-        level1: '01', score: 5,
+        level1: null, level2S: '01', level2E: '01', score: 5,
       });
 
       // CARD_LEVEL 門檻：0~20 → C；21~100 → A

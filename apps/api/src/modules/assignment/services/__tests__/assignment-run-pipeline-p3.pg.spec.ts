@@ -274,14 +274,16 @@ async function seedEmphire(opts: { empId: string; resignDate?: string | null }):
 async function seedStandardCard(withCC = false): Promise<void> {
   await R.version.save(R.version.create({ card_type: 'T1', card_name: 'T1', card_version: 1, sdate: '20250101', edate: '20991231', status: 'active' } as Partial<ObLevelcardVersion>));
   const mk = (columnName: string, mt = MatchType.RANGE) => R.column.create({ card_type: 'T1', card_version: 1, column_name: columnName, column_label: columnName, status: 'active', match_type: mt } as Partial<ObLevelcardColumn>);
-  await R.column.save([mk('LIST_MONTH'), mk('PROJECT_TP', MatchType.CATEGORY)]);
+  // F105 / AD-E07-35：PROJECT_TP 改 composite（codeExpr spec_tp 字串區間 + keywordExpr 借新還舊）。
+  await R.column.save([mk('LIST_MONTH'), mk('PROJECT_TP', MatchType.COMPOSITE)]);
   if (withCC) await R.column.save([mk('CUS_SEX', MatchType.RANGE), mk('AGE')]); // F104：CUS_SEX category→range
   const sc = (columnName: string, o: Partial<ObLevelcardScore>) => R.score.create({ card_type: 'T1', card_version: 1, column_name: columnName, level1: null, level2_s: null, level2_e: null, ...o } as Partial<ObLevelcardScore>);
   await R.score.save([
     sc('LIST_MONTH', { level2_s: '0', level2_e: '5', score: 10 }),
     sc('LIST_MONTH', { level2_s: '6', level2_e: '12', score: 30 }),
-    sc('PROJECT_TP', { level1: '01', score: 5 }),
-    sc('PROJECT_TP', { level1: '02', score: 15 }),
+    // F105：composite 非借新還舊（level1=NULL→keyword ''）：spec_tp '01'→5；'02'→15。
+    sc('PROJECT_TP', { level2_s: '01', level2_e: '01', score: 5 }),
+    sc('PROJECT_TP', { level2_s: '02', level2_e: '02', score: 15 }),
   ]);
   if (withCC) await R.score.save([
     sc('CUS_SEX', { level2_s: '1', level2_e: '1', score: 20 }), // F104：CUS_SEX range '1'→20

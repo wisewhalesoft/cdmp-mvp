@@ -265,12 +265,13 @@ async function seedTier(opts: {
   );
 }
 
-/** 標準 T1 計分卡（§一矩陣）：LIST_MONTH 區間 + PROJECT_TP 類別 + CUS_SEX + AGE customer_core。 */
+/** 標準 T1 計分卡（§一矩陣）：LIST_MONTH 區間 + PROJECT_TP 複合 + CUS_SEX + AGE customer_core。 */
 async function seedStandardCardT1(opts: { withCustomerCore?: boolean } = {}): Promise<void> {
   await seedVersion('T1', 1);
   await seedColumn({ cardType: 'T1', cardVersion: 1, columnName: 'LIST_MONTH' });
+  // F105 / AD-E07-35：PROJECT_TP 改 composite（codeExpr spec_tp 字串區間 + keywordExpr 借新還舊）。
   await seedColumn({
-    cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', matchType: MatchType.CATEGORY,
+    cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', matchType: MatchType.COMPOSITE,
   });
   if (opts.withCustomerCore) {
     // F104：CUS_SEX category→range（safe-cast cc.cus_sex）。
@@ -282,9 +283,9 @@ async function seedStandardCardT1(opts: { withCustomerCore?: boolean } = {}): Pr
   // LIST_MONTH 區間：[0,5]→10；[6,12]→30
   await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'LIST_MONTH', level2S: '0', level2E: '5', score: 10 });
   await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'LIST_MONTH', level2S: '6', level2E: '12', score: 30 });
-  // PROJECT_TP 類別：'01'→5；'02'→15
-  await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: '01', score: 5 });
-  await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: '02', score: 15 });
+  // F105：PROJECT_TP composite，非借新還舊（level1=NULL→keyword ''）：spec_tp '01'→5；'02'→15。
+  await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level2S: '01', level2E: '01', score: 5 });
+  await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level2S: '02', level2E: '02', score: 15 });
   if (opts.withCustomerCore) {
     // F104：CUS_SEX range：'1'→20；'2'→8（safe-cast cc.cus_sex）
     await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'CUS_SEX', level2S: '1', level2E: '1', score: 20 });
@@ -493,19 +494,20 @@ describe('F100 SCORE — Stage 2 SUM(CASE…) 計分（PG 真庫）', () => {
     expect((await getRow('B13', L)).score).toBe(5); // 0 + 5
   });
 
-  it('SCORE-003：類別 trim 相等（level1 含 padding / 值相等 / 99 無對應）', async (ctx) => {
+  it('SCORE-003：composite code trim 相等（level2 含 padding / 值相等 / 99 無對應）', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_SCORE3';
-    // ⚠️ ob_pool_data.spec_tp 為 varchar(2)，無法存 padding 值；trim 語意對齊 JS = trim level1（config 端）。
-    //    額外 seed PROJECT_TP level1=' EX'（含前導空白，trim 後 'EX'）對應 spec_tp='EX' → 取分。
+    // F105 / AD-E07-35：PROJECT_TP composite，codeExpr 兩端 TRIM。
+    //   ⚠️ ob_pool_data.spec_tp 為 varchar(2)，無法存 padding 值；trim 語意對齊 = trim level2_s/e（config 端）。
+    //    額外 seed PROJECT_TP level2_s/e=' EX'（含前導空白，trim 後 'EX'）對應 spec_tp='EX' → 取分。
     await seedStandardCardT1();
-    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: ' EX', score: 7 });
+    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level2S: ' EX', level2E: ' EX', score: 7 });
     await seedCase({ applNo: 'C1', listNo: L, monthCnt: 2, specTp: '01' });
     await seedCase({ applNo: 'C2', listNo: L, monthCnt: 2, specTp: 'EX' });
     await seedCase({ applNo: 'C3', listNo: L, monthCnt: 2, specTp: '99' });
     await pushdownStandard({ listNo: L });
     expect((await getRow('C1', L)).score).toBe(15); // 10 + 5（'01'）
-    expect((await getRow('C2', L)).score).toBe(17); // 10 + 7（level1 ' EX' trim→'EX' 相等）
+    expect((await getRow('C2', L)).score).toBe(17); // 10 + 7（level2 ' EX' trim→'EX' 相等）
     expect((await getRow('C3', L)).score).toBe(10); // 99 無對應 → 0
   });
 
@@ -734,19 +736,19 @@ describe('F100 EQ — 逐列等價（手算 oracle，P3 DoD）', () => {
     });
   });
 
-  it('EQ-004：trim 邊界（PROJECT_TP category level1 含 padding " 01" / age=40 下界，P-05）', async (ctx) => {
+  it('EQ-004：trim 邊界（PROJECT_TP composite code level2 含 padding " 01" / age=40 下界，P-05）', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_EQ4';
-    // F104：CUS_SEX 改 range（不再 category），trim 邊界改以 category 欄 PROJECT_TP 驗證。
-    //    重設 PROJECT_TP score：level1=' 01'（含前導空白，trim→'01'）→ 5；驗證 spec_tp='01' 仍命中。
+    // F105 / AD-E07-35：PROJECT_TP composite，codeExpr 兩端 TRIM；以 level2 padding 驗 trim 邊界。
+    //    重設 PROJECT_TP score：level2_s/e=' 01'（含前導空白，trim→'01'）→ 5；驗證 spec_tp='01' 仍命中。
     await seedStandardCardT1({ withCustomerCore: true });
     await scoreRepo.delete({ card_type: 'T1', card_version: 1, column_name: 'PROJECT_TP' });
-    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level1: ' 01', score: 5 });
+    await seedScore({ cardType: 'T1', cardVersion: 1, columnName: 'PROJECT_TP', level2S: ' 01', level2E: ' 01', score: 5 });
     await seedCase({ applNo: 'P05', custoNo: 'Y05', listNo: L, monthCnt: 2, specTp: '01' });
     await seedCustomerCore({ sourceCustomerNo: 'Y05', cusSex: '1', dateOfBirth: '1986-06-01' }); // age 40
     await pushdownStandard({ listNo: L });
     const r = await getRow('P05', L);
-    // 10 + 5(level1 ' 01' trim→'01' 相等) + 20(CUS_SEX '1') + 12(age 40 ∈[40,100]) = 47 → A → T1
+    // 10 + 5(level2 ' 01' trim→'01' 相等) + 20(CUS_SEX '1') + 12(age 40 ∈[40,100]) = 47 → A → T1
     expect({ score: r.score, card: r.card_level, tier: r.tier_level }).toEqual({
       score: 47, card: 'A', tier: 'T1',
     });

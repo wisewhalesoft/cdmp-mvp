@@ -20,6 +20,7 @@ import {
   AssignmentRunPipelineService,
   type CustomerCoreRow,
   type ArCapitalRow,
+  type CompositeValue,
 } from '../../services/assignment-run-pipeline.service';
 import { MAPPED_SCORING_COLUMNS, resolveColumnSource } from '../stage2to4-sql-builder';
 import type { ObPoolData } from '@/database/entities/ob-pool-data.entity';
@@ -46,7 +47,7 @@ type ResolveFn = (
   cc: CustomerCoreRow | null,
   arCap: ArCapitalRow | null,
   cardType: string,
-) => string | number;
+) => string | number | CompositeValue;
 
 function resolver(svc: AssignmentRunPipelineService): ResolveFn {
   return (svc as unknown as { resolveColumnValue: ResolveFn }).resolveColumnValue.bind(svc);
@@ -229,17 +230,22 @@ describe('F104 PROJECT_TP — spec_name 衍生（更新自 F103）', () => {
     r = resolver(makeService());
   });
 
-  it('PJTP-001：spec_name 含「借新還舊」→ "A"', () => {
-    expect(r(pool({ spec_name: '借新還舊專案' }), 'PROJECT_TP', null, null, 'H')).toBe('A');
+  // F105 / AD-E07-35：PROJECT_TP 改 composite，回傳 {code, keyword}（推翻 F104 category 簡化）。
+  it('PJTP-001：spec_name 含「借新還舊」→ keyword "A"', () => {
+    expect(r(pool({ spec_name: '借新還舊專案', spec_tp: '06' }), 'PROJECT_TP', null, null, 'H'))
+      .toEqual({ code: '06', keyword: 'A' });
   });
 
-  it('PJTP-002：spec_name 含「專案」但不含「借新還舊」→ spec_tp（不再命中）', () => {
-    expect(r(pool({ spec_name: '一般專案', spec_tp: '02' }), 'PROJECT_TP', null, null, 'H')).toBe('02');
+  it('PJTP-002：spec_name 含「專案」但不含「借新還舊」→ keyword ""（code=spec_tp）', () => {
+    expect(r(pool({ spec_name: '一般專案', spec_tp: '02' }), 'PROJECT_TP', null, null, 'H'))
+      .toEqual({ code: '02', keyword: '' });
   });
 
-  it('PJTP-003：spec_name=null → spec_tp；spec_tp=null → "01"', () => {
-    expect(r(pool({ spec_name: null, spec_tp: '03' }), 'PROJECT_TP', null, null, 'H')).toBe('03');
-    expect(r(pool({ spec_name: null, spec_tp: null }), 'PROJECT_TP', null, null, 'H')).toBe('01');
+  it('PJTP-003：spec_name=null → code=spec_tp；spec_tp=null → code "01"；keyword 皆 ""', () => {
+    expect(r(pool({ spec_name: null, spec_tp: '03' }), 'PROJECT_TP', null, null, 'H'))
+      .toEqual({ code: '03', keyword: '' });
+    expect(r(pool({ spec_name: null, spec_tp: null }), 'PROJECT_TP', null, null, 'H'))
+      .toEqual({ code: '01', keyword: '' });
   });
 });
 
@@ -256,7 +262,7 @@ describe('F103 FALLBACK / GHOST — JS 通用 fallback', () => {
     const svc = makeService();
     const r = resolver(svc);
     const warnSpy = (svc as unknown as { logger: { warn: ReturnType<typeof vi.fn> } }).logger.warn;
-    let result: string | number = -1;
+    let result: string | number | CompositeValue = -1;
     expect(() => {
       result = r(pool(), 'XYZ_COL', null, null, 'H');
     }).not.toThrow();
@@ -346,13 +352,14 @@ describe('F104 AUDIT — 映射完整性靜態稽核', () => {
 // PG resolveColumnSource — 靜態表達式（F104 更新 PJTP / 須保通過 fallback）
 // ===========================================================================
 describe('F104 PG resolveColumnSource — 靜態表達式', () => {
-  it('PJTP-004：PROJECT_TP 含 spec_name LIKE %借新還舊% + THEN A + COALESCE(spec_tp,01)', () => {
+  it('PJTP-004：PROJECT_TP composite — codeExpr COALESCE(spec_tp,01) + keywordExpr LIKE %借新還舊% THEN A', () => {
+    // F105 / AD-E07-35：composite kind（codeExpr + keywordExpr，取代舊 category expr）。
     const s = resolveColumnSource('PROJECT_TP', 'H');
-    expect(s.kind).toBe('category');
-    expect(s.expr).toContain("o.spec_name LIKE '%借新還舊%'");
-    expect(s.expr).toContain("THEN 'A'");
-    expect(s.expr).toContain("COALESCE(o.spec_tp, '01')");
-    expect(s.expr).not.toContain('%專案%');
+    expect(s.kind).toBe('composite');
+    expect(s.codeExpr).toBe("COALESCE(o.spec_tp, '01')");
+    expect(s.keywordExpr).toContain("o.spec_name LIKE '%借新還舊%'");
+    expect(s.keywordExpr).toContain("THEN 'A'");
+    expect(s.keywordExpr).not.toContain('%專案%');
   });
 
   it('COMMISSION-001：resolveColumnSource(COMMISSION) 走通用 fallback（非死碼 CAST 專屬 case）', () => {

@@ -26,6 +26,7 @@ import {
   AssignmentRunPipelineService,
   type CustomerCoreRow,
   type ArCapitalRow,
+  type CompositeValue,
 } from '../../services/assignment-run-pipeline.service';
 import {
   resolveColumnSource,
@@ -57,7 +58,7 @@ type ResolveFn = (
   cc: CustomerCoreRow | null,
   arCap: ArCapitalRow | null,
   cardType: string,
-) => string | number;
+) => string | number | CompositeValue;
 
 function resolver(svc: AssignmentRunPipelineService): ResolveFn {
   return (svc as unknown as { resolveColumnValue: ResolveFn }).resolveColumnValue.bind(svc);
@@ -101,17 +102,23 @@ describe('F104 KW — PROJECT_TP 借新還舊 / SALES_STS 中古車商', () => {
     r = resolver(makeService());
   });
 
-  it('KW-001：PG resolveColumnSource(PROJECT_TP) 含 %借新還舊%，不含 %專案%', () => {
+  it('KW-001：PG resolveColumnSource(PROJECT_TP) composite，keywordExpr 含 %借新還舊%，不含 %專案%', () => {
+    // F105 / AD-E07-35：PROJECT_TP 改 composite（codeExpr + keywordExpr），保留借新還舊關鍵字修正。
     const s = resolveColumnSource('PROJECT_TP', 'H');
-    expect(s.expr).toContain("o.spec_name LIKE '%借新還舊%'");
-    expect(s.expr).toContain("THEN 'A'");
-    expect(s.expr).toContain("COALESCE(o.spec_tp, '01')");
-    expect(s.expr).not.toContain('%專案%');
+    expect(s.kind).toBe('composite');
+    expect(s.codeExpr).toBe("COALESCE(o.spec_tp, '01')");
+    expect(s.keywordExpr).toContain("o.spec_name LIKE '%借新還舊%'");
+    expect(s.keywordExpr).toContain("THEN 'A'");
+    expect(s.keywordExpr).toContain("ELSE ''");
+    expect(s.keywordExpr).not.toContain('%專案%');
   });
 
-  it('KW-002：JS PROJECT_TP 以 spec_name.includes(借新還舊)；含「專案」不再命中', () => {
-    expect(r(pool({ spec_name: '借新還舊專案' }), 'PROJECT_TP', null, null, 'H')).toBe('A');
-    expect(r(pool({ spec_name: '汽車貸款專案', spec_tp: '02' }), 'PROJECT_TP', null, null, 'H')).toBe('02');
+  it('KW-002：JS PROJECT_TP composite 回 {code,keyword}；借新還舊→keyword A、含「專案」不命中', () => {
+    // F105 / AD-E07-35：回結構化 {code, keyword}。
+    expect(r(pool({ spec_name: '借新還舊專案', spec_tp: '06' }), 'PROJECT_TP', null, null, 'H'))
+      .toEqual({ code: '06', keyword: 'A' });
+    expect(r(pool({ spec_name: '汽車貸款專案', spec_tp: '02' }), 'PROJECT_TP', null, null, 'H'))
+      .toEqual({ code: '02', keyword: '' });
   });
 
   it('KW-003：PG resolveColumnSource(SALES_STS) 含 中古車商 THEN UCD，不含 經銷商', () => {

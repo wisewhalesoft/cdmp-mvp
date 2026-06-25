@@ -59,10 +59,11 @@ describe('F100 buildStage2ScoreExpr — Stage 2 SUM(CASE…) 純函式', () => {
   });
 
   it('區間 + 類別維度 → 巢狀 CASE 累加（+ 連接）', () => {
+    // F105：PROJECT_TP 改 composite（catScore level2 NULL 不命中）→ 改以 SALES_STS 驗 category。
     const r = buildStage2ScoreExpr(
       'T1', 1,
-      [col('LIST_MONTH'), col('PROJECT_TP')],
-      [rangeScore('LIST_MONTH', '0', '5', 10), catScore('PROJECT_TP', '01', 5)],
+      [col('LIST_MONTH'), col('SALES_STS')],
+      [rangeScore('LIST_MONTH', '0', '5', 10), catScore('SALES_STS', 'HFC', 5)],
       'p',
     );
     expect(r.scoreExpr).toContain('CASE');
@@ -70,6 +71,29 @@ describe('F100 buildStage2ScoreExpr — Stage 2 SUM(CASE…) 純函式', () => {
     // 區間用 >= / <=；類別用 TRIM(...) =
     expect(r.scoreExpr).toMatch(/>=/);
     expect(r.scoreExpr).toContain('TRIM');
+  });
+
+  it('F105：PROJECT_TP composite → 兩子條件 AND（code 字串區間 + keyword）', () => {
+    // 借新還舊 row（level1='A'，level2_s/e='06'/'06'，37）+ 非借新還舊 row（level1=NULL，'06'/'06'，35）。
+    const aRow = {
+      card_type: 'T1', card_version: 1, column_name: 'PROJECT_TP',
+      level1: 'A', level2_s: '06', level2_e: '06', score: 37,
+    } as ObLevelcardScore;
+    const nullRow = {
+      card_type: 'T1', card_version: 1, column_name: 'PROJECT_TP',
+      level1: null, level2_s: '06', level2_e: '06', score: 35,
+    } as ObLevelcardScore;
+    const r = buildStage2ScoreExpr('T1', 1, [col('PROJECT_TP')], [aRow, nullRow], 'p');
+    // 兩子條件 AND：codeExpr（spec_tp）字串區間 + keywordExpr（借新還舊）相等。
+    expect(r.scoreExpr).toContain('o.spec_tp');
+    expect(r.scoreExpr).toContain("o.spec_name LIKE '%借新還舊%'");
+    expect(r.scoreExpr).toContain('TRIM');
+    // composite 走 string param（lo/hi/v 皆字串）；level2_s/e='06' 不 Number() cast。
+    expect(Object.values(r.params)).toContain('06');
+    expect(Object.values(r.params)).toContain('A'); // 借新還舊 keyword
+    expect(Object.values(r.params)).toContain(''); // 非借新還舊 keyword（level1 NULL→''）
+    // PROJECT_TP 純 ob_pool_data → 不需 customer_core join。
+    expect(r.needsCustomerCore).toBe(false);
   });
 
   it('customer_core 維度 → needsCustomerCore=true（cc 引用）', () => {

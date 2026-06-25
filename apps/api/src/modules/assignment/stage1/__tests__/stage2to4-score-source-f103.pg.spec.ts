@@ -228,6 +228,20 @@ async function seedCatScore(columnName: string, level1: string, score: number): 
     } as Partial<ObLevelcardScore>),
   );
 }
+/**
+ * F105 / AD-E07-35：composite score row（PROJECT_TP）。level2_s/e=spec_tp 字串區間；
+ *   level1=NULL → 非借新還舊（keyword ''）；level1='A' → 借新還舊。
+ */
+async function seedCompositeScore(
+  columnName: string, level1: string | null, lo: string, hi: string, score: number,
+): Promise<void> {
+  await scoreRepo.save(
+    scoreRepo.create({
+      card_type: 'T1', card_version: 1, column_name: columnName,
+      level1, level2_s: lo, level2_e: hi, score,
+    } as Partial<ObLevelcardScore>),
+  );
+}
 
 async function pushdown(listNo: string): Promise<void> {
   const activeColumns = await columnRepo.find({
@@ -419,7 +433,8 @@ describe('F103 EQ — JS↔SQL 逐列等價（DoD，誤差=0）', () => {
   /** 設定一張涵蓋多欄位之卡（H 卡情境）。F104：CUS_SEX range、EDUCAT_BACK range 字串。 */
   async function seedFullCard(opts: { withArCap?: boolean; withCustomerCore?: boolean } = {}): Promise<void> {
     await seedColumn('LIST_MONTH', MatchType.RANGE);
-    await seedColumn('PROJECT_TP', MatchType.CATEGORY);
+    // F105 / AD-E07-35：PROJECT_TP 改 composite。
+    await seedColumn('PROJECT_TP', MatchType.COMPOSITE);
     await seedColumn('SALES_STS', MatchType.CATEGORY);
     if (opts.withCustomerCore) {
       await seedColumn('CUS_SEX', MatchType.RANGE);
@@ -431,9 +446,10 @@ describe('F103 EQ — JS↔SQL 逐列等價（DoD，誤差=0）', () => {
     // scores
     await seedRangeScore('LIST_MONTH', '0', '5', 10);
     await seedRangeScore('LIST_MONTH', '6', '12', 30);
-    await seedCatScore('PROJECT_TP', '01', 5);
-    await seedCatScore('PROJECT_TP', '02', 15);
-    await seedCatScore('PROJECT_TP', 'A', 25);
+    // F105：PROJECT_TP composite——非借新還舊（level1=NULL）spec_tp '01'→5 / '02'→15；借新還舊（level1='A'）spec_tp '01'→25。
+    await seedCompositeScore('PROJECT_TP', null, '01', '01', 5);
+    await seedCompositeScore('PROJECT_TP', null, '02', '02', 15);
+    await seedCompositeScore('PROJECT_TP', 'A', '01', '01', 25);
     await seedCatScore('SALES_STS', 'AGENT', 9);
     await seedCatScore('SALES_STS', 'UCD', 6);
     await seedCatScore('SALES_STS', 'HFC', 3);
@@ -501,24 +517,24 @@ describe('F103 EQ — JS↔SQL 逐列等價（DoD，誤差=0）', () => {
     await assertEq('EQ003', L, null, null);
   });
 
-  it('EQ-004：PROJECT_TP active + spec_name 含「借新還舊」→ A', async (ctx) => {
+  it('EQ-004：PROJECT_TP composite + spec_name 含「借新還舊」→ code 01 AND keyword A → 25', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_EQ4';
     await seedFullCard();
     await seedCase({ applNo: 'EQ004', listNo: L, monthCnt: 2, specTp: '01', specName: '汽車貸款借新還舊專案', salesStsNa: 'HFC' });
-    // PROJECT_TP → 'A'（25）
+    // F105：code '01' ∈ ['01','01'] AND keyword 'A' === 'A' → 借新還舊 row 25。
     const score = await assertEq('EQ004', L, null, null);
-    // 10(LIST_MONTH) + 25(PROJECT_TP 'A') + 3(SALES_STS HFC) = 38
+    // 10(LIST_MONTH) + 25(PROJECT_TP code 01 + keyword A) + 3(SALES_STS HFC) = 38
     expect(score).toBe(38);
   });
 
-  it('EQ-005：PROJECT_TP active + spec_name 不含「專案」→ spec_tp', async (ctx) => {
+  it('EQ-005：PROJECT_TP composite + spec_name 不含「借新還舊」→ code 02 AND keyword "" → 15', async (ctx) => {
     ensurePg(ctx);
     const L = 'L_EQ5';
     await seedFullCard();
     await seedCase({ applNo: 'EQ005', listNo: L, monthCnt: 2, specTp: '02', specName: '一般房貸方案', salesStsNa: 'HFC' });
     const score = await assertEq('EQ005', L, null, null);
-    // 10 + 15(PROJECT_TP '02') + 3(HFC) = 28
+    // F105：10 + 15(PROJECT_TP code 02 + keyword '') + 3(HFC) = 28
     expect(score).toBe(28);
   });
 
