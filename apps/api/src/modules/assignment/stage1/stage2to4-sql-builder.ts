@@ -38,6 +38,9 @@ import type { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.en
  * 計分欄位之 SQL 取值表達式。
  *   - kind='range'：數值欄位（與 ob_levelcard_score.level2_s/level2_e 區間比較）
  *   - kind='category'：字串欄位（與 ob_levelcard_score.level1 trim 後相等比較）
+ *   - kind='composite'：複合欄位（F105 / AD-E07-35）：每 score row 同時 AND 兩子條件——
+ *       `level2` 字串區間（codeExpr）AND `level1` 衍生關鍵字相等（keywordExpr）。
+ *       PROJECT_TP 專用（spec_tp 代碼 + 借新還舊衍生關鍵字）。
  *
  * 表達式以 alias `o`（ob_pool_data）/ `cc`（customer_core LEFT JOIN）引用。
  * 來源未明確（architecture-spec.md §3.10 未列、或需額外表如 ob_arreturndf_min_cap）之 column_name
@@ -45,9 +48,13 @@ import type { ObLevelcardScore } from '@/database/entities/ob-levelcard-score.en
  * （spec-schema-gap-first：不臆造來源欄位）。
  */
 export interface ColumnSource {
-  kind: 'range' | 'category';
-  /** SQL 純量表達式（已含 COALESCE 缺值處理）。 */
-  expr: string;
+  kind: 'range' | 'category' | 'composite';
+  /** kind='range'/'category' 時使用；kind='composite' 時忽略（AD-E07-35）。 */
+  expr?: string;
+  /** kind='composite' 專用（AD-E07-35）：spec_tp 代碼 SQL 取值表達式（含 COALESCE 缺值處理）。 */
+  codeExpr?: string;
+  /** kind='composite' 專用（AD-E07-35）：借新還舊衍生關鍵字 SQL 取值表達式（回傳 'A' 或 ''）。 */
+  keywordExpr?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +139,7 @@ function sqlLiteral(v: string): string {
  * **已映射（AD-E07-10-L v4.0，architecture-spec.md §4063–4162；F104 對齊 legacy SP）**：
  *   ob_pool_data 直接取：
  *     - LIST_MONTH（range）← o.month_cnt（per-card default：H/S→25；E/E5→12，F104）
- *     - PROJECT_TP（category）← spec_name '%借新還舊%' → 'A'，否則 COALESCE(o.spec_tp,'01')（F104 BR-F104-01）
+ *     - PROJECT_TP（composite，F105 / AD-E07-35）← codeExpr COALESCE(o.spec_tp,'01') + keywordExpr 借新還舊→'A'
  *     - CAR_YEAR（range）← 當年 − o.year_produ（缺值 0，F103 不動）
  *     - SALES_STS（category）← o.sales_sts_na CASE（'中古車商'→'UCD'，F104 BR-F104-02；缺值 'HFC'）
  *     - LOAN_RATE（range）← o.loan_rate（per-card default：S5→77；E/E5→12；其他→0，F104）
@@ -182,10 +189,14 @@ export function resolveColumnSource(columnName: string, cardType: string): Colum
       return { kind: 'range', expr: `COALESCE(o.month_cnt, ${def})` };
     }
     case 'PROJECT_TP':
-      // F104 BR-F104-01：spec_name '%借新還舊%' → 'A'；否則 COALESCE(spec_tp,'01')。
+      // F105 / AD-E07-35：復原 legacy COMPOSITE 真語意（推翻 F104 OQ-F104-03 category 簡化）。
+      //   每 score row 同時 AND 兩子條件：spec_tp 代碼字串區間（codeExpr）AND 借新還舊衍生關鍵字（keywordExpr）。
+      //   codeExpr：COALESCE(o.spec_tp,'01')（對齊 legacy ISNULL(CAST(SPEC_TP AS VARCHAR),'01')）。
+      //   keywordExpr：spec_name LIKE '%借新還舊%' → 'A'，否則 ''（F104 借新還舊關鍵字修正保留）。
       return {
-        kind: 'category',
-        expr: "CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE COALESCE(o.spec_tp, '01') END",
+        kind: 'composite',
+        codeExpr: "COALESCE(o.spec_tp, '01')",
+        keywordExpr: "CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE '' END",
       };
     case 'CAR_YEAR':
       // JS：year_produ 有值 → 當年 − year_produ；否則 0（F103 不動）。
@@ -389,7 +400,24 @@ export function buildStage2ScoreExpr(
     const whenClauses: string[] = [];
     for (const sr of colScores) {
       const sp = `${paramPrefix}_${pIdx++}`;
-      if (src.kind === 'category') {
+      if (src.kind === 'composite') {
+        // F105 / AD-E07-35：複合型（PROJECT_TP）。每 row 同時 AND 兩子條件：
+        //   ① codeExpr 字串區間 TRIM(code) BETWEEN level2_s/level2_e（varchar 原值，**不 Number() cast**，
+        //      對齊 legacy CAST AS VARCHAR BETWEEN 字串序）。
+        //   ② TRIM(keyword) = COALESCE(level1,'')（level1 NULL → '' → 比對非借新還舊 keyword ''）。
+        //   篩選：level2_s/level2_e 皆非 NULL（與 range 一致，缺 level2 之 row 跳過）。
+        if (sr.level2_s === null || sr.level2_e === null) continue;
+        params[`${sp}_lo`] = String(sr.level2_s).trim();
+        params[`${sp}_hi`] = String(sr.level2_e).trim();
+        params[`${sp}_v`] = sr.level1 === null || sr.level1 === undefined ? '' : String(sr.level1).trim();
+        params[`${sp}_s`] = sr.score;
+        const code = `TRIM(CAST(${src.codeExpr} AS text))`;
+        const keyword = `TRIM(CAST(${src.keywordExpr} AS text))`;
+        whenClauses.push(
+          `WHEN ${code} >= :${sp}_lo AND ${code} <= :${sp}_hi ` +
+            `AND ${keyword} = :${sp}_v THEN :${sp}_s`,
+        );
+      } else if (src.kind === 'category') {
         if (sr.level1 === null || sr.level1 === undefined) continue;
         // 類別型：trim 後字串相等（JS String(value) === String(level1).trim()）。
         // value 端為 SQL 表達式（已含 COALESCE）；以 TRIM 對齊（pool 值 / level1 兩端 trim 後比較）。

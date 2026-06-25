@@ -81,6 +81,17 @@ export interface CustomerCoreRow {
 }
 
 /**
+ * F105 / AD-E07-35：複合型計分值（PROJECT_TP）。
+ *   - code：spec_tp 代碼（缺值補 '01'），與 score row 之 level2_s/level2_e 字串區間比對。
+ *   - keyword：借新還舊衍生關鍵字（'A' 或 ''），與 score row 之 level1（NULL→''）相等比對。
+ * computeScore composite 分支以「code ∈ [level2_s, level2_e] 字串序 AND keyword === (level1??'')」第一命中取分。
+ */
+export interface CompositeValue {
+  code: string;
+  keyword: string;
+}
+
+/**
  * F104 / AD-E07-34：cus_sex NULL-safe int cast（JS）。
  *   空字串 / NULL / undefined / 非數值髒值（'C'/'D'）→ null（不產生 NaN 污染 range 比對，BR-F104-13）。
  */
@@ -1113,6 +1124,8 @@ export class AssignmentRunPipelineService {
    * 對應規則：
    *   - 區間型 score（level2_s / level2_e 有值）：value 落在區間內 → 取分
    *   - 類別型 score（level1 有值）：value 字串相等 → 取分
+   *   - 複合型 score（F105 / AD-E07-35，PROJECT_TP）：value={code,keyword}，code 字串區間 AND
+   *     keyword === (level1??'') 同時成立 → 取分
    */
   private computeScore(
     pool: ObPoolData,
@@ -1133,6 +1146,25 @@ export class AssignmentRunPipelineService {
           s.card_version === cardVersion &&
           s.column_name === col.column_name,
       );
+      // F105 / AD-E07-35：複合型（PROJECT_TP）——value 為 {code, keyword} 結構化物件。
+      //   每 row 同時 AND 兩子條件：code 字串區間 [level2_s, level2_e] AND keyword === (level1??'').trim()。
+      //   字串比較（**不 Number() cast**，對齊 PG codeExpr 字串序）；第一命中取分（break）。
+      if (typeof value === 'object' && value !== null && 'code' in value) {
+        const { code, keyword } = value;
+        const codeStr = String(code).trim();
+        const keywordStr = String(keyword).trim();
+        for (const sr of scoreRows) {
+          if (sr.level2_s === null || sr.level2_e === null) continue;
+          const lo = String(sr.level2_s).trim();
+          const hi = String(sr.level2_e).trim();
+          const lv1 = sr.level1 === null || sr.level1 === undefined ? '' : String(sr.level1).trim();
+          if (codeStr >= lo && codeStr <= hi && keywordStr === lv1) {
+            total += sr.score;
+            break;
+          }
+        }
+        continue;
+      }
       for (const sr of scoreRows) {
         if (sr.level1 !== null && sr.level1 !== undefined) {
           // 類別型
@@ -1174,16 +1206,21 @@ export class AssignmentRunPipelineService {
     cc: CustomerCoreRow | null,
     arCap: ArCapitalRow | null,
     cardType: string,
-  ): string | number {
+  ): string | number | CompositeValue {
     switch (columnName) {
       // ── ob_pool_data 直接取 ──
       case 'LIST_MONTH':
         // F104 BR-F104-12：per-card default（H/S→25；E/E5→12）。
         return pool.month_cnt ?? (cardDefault('LIST_MONTH', cardType) as number);
 
-      case 'PROJECT_TP':
-        // F104 BR-F104-01：spec_name '%借新還舊%' → 'A'；否則 spec_tp（缺值 '01'）。
-        return pool.spec_name?.includes('借新還舊') ? 'A' : (pool.spec_tp ?? '01');
+      case 'PROJECT_TP': {
+        // F105 / AD-E07-35：復原 legacy COMPOSITE 真語意（推翻 F104 OQ-F104-03 category 簡化）。
+        //   回傳結構化 {code, keyword}；computeScore composite 分支以兩子條件 AND 比對。
+        //   code：spec_tp 缺值補 '01'；keyword：spec_name 含借新還舊 → 'A'，否則 ''（F104 關鍵字修正保留）。
+        const code = pool.spec_tp ?? '01';
+        const keyword = pool.spec_name?.includes('借新還舊') ? 'A' : '';
+        return { code, keyword } as CompositeValue;
+      }
 
       case 'CAR_YEAR': {
         const yp = pool.year_produ ? parseInt(pool.year_produ, 10) : null;
