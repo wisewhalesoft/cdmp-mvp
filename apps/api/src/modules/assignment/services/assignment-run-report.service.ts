@@ -790,6 +790,11 @@ export class AssignmentRunReportService {
       csvSink.once('error', reject);
     });
 
+    // F064：寫入 UTF-8 BOM（U+FEFF）— 使 Excel 開啟 CSV 時正確判定 UTF-8 編碼；
+    //   否則 Excel 以系統 locale（中文 Windows = Big5）解 UTF-8 中文 → 亂碼。
+    //   （HTTP `charset=utf-8` 對 Excel 開啟下載的 .csv 無效，須靠檔案 BOM。）
+    csvSink.push('\uFEFF', 'utf8');
+
     // header row
     csvSink.push(
       EXPORT_HEADER_V2.map((h) => this.csvEscape(h)).join(',') + '\n',

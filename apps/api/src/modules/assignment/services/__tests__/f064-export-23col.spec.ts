@@ -149,6 +149,7 @@ function mockCursor(service: AssignmentRunReportService, rows: RawExportRow[]) {
 function parseCsv(body: string): string[][] {
   // 簡易 CSV 解析（支援 "..." quoting + escaped "")，本測試資料不含換行於欄位內
   return body
+    .replace(/^\uFEFF/, '') // F064：去除開頭 UTF-8 BOM（CSV 以 BOM 開頭供 Excel 正確判定 UTF-8 編碼）
     .split('\n')
     .filter((l) => l.length > 0)
     .map((line) => {
@@ -321,6 +322,14 @@ describe('F064 v2.0 — 匯出分派結果（23 欄）SQLite/Unit', () => {
       const rows = parseCsv(out.body as string);
       expect(rows[0].length).toBe(23);
       expect(rows[0]).toEqual([...EXPORT_HEADER_V2]);
+    });
+
+    it('TS-F064-BOM-001：CSV 以 UTF-8 BOM(U+FEFF) 開頭（Excel 開啟中文不亂碼）', async () => {
+      const run = await seedRun(env.runRepo);
+      mockCursor(env.service, [makeRaw()]);
+      const out = await env.service.exportResult(run.run_id, 'csv', 'actor-1');
+      // U+FEFF：缺此 BOM 時 Excel 以系統 locale(Big5) 解 UTF-8 中文 → 亂碼。
+      expect((out.body as string).charCodeAt(0)).toBe(0xfeff);
     });
 
     it('TS-F064-COLSEQ-001（unit）：xlsx 表頭恰 23 欄', async () => {
