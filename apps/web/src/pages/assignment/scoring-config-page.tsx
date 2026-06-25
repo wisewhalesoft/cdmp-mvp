@@ -30,6 +30,7 @@ import { listCardTypes, getCardTypeStats } from '@/api/card-type';
 import {
   CardType,
   CardLevelItem,
+  DecodeEntry,
   MatchType,
   MATCH_TYPE_VALUES,
   ScoringScoreItem,
@@ -110,6 +111,11 @@ interface ScoringDimUI {
    * F106 起前端不再提供 `?? 'active'` fallback，直接採後端真實 status。
    */
   status: 'active' | 'inactive';
+  /**
+   * F107 §5.1.1 / UI-6 / BR-6：該維度衍生碼 decode 說明（唯讀）。
+   * 純數值欄為 null/省略 → 前端優雅降級不渲染。
+   */
+  decode?: DecodeEntry | null;
 }
 
 /**
@@ -173,6 +179,46 @@ function deriveMatchType(scores: ScoringScoreItem[]): MatchType | undefined {
   if (hasLevel1) return 'CATEGORY';
   if (hasLevel2) return 'RANGE';
   return undefined;
+}
+
+/**
+ * F107 UI-1：由 decode 解析某 level1 原始碼之業務語意（碼旁並陳，原始碼保留）。
+ *   - 比對 decode.codes 中 level==='level1' 且 code===level1（trim 後字串相等）。
+ *   - 找不到 / decode 為 null / level1 為 null → 回 undefined（不渲染 decode 文字，優雅降級 BR-6）。
+ */
+function decodeLevel1Meaning(
+  decode: DecodeEntry | null | undefined,
+  level1: string | null,
+): string | undefined {
+  if (!decode || level1 === null) return undefined;
+  const key = String(level1).trim();
+  const hit = decode.codes.find(
+    (c) => c.level === 'level1' && c.code !== null && String(c.code).trim() === key,
+  );
+  return hit?.meaning;
+}
+
+/**
+ * F107 UI-1（PROJECT_TP composite）：取「非借新還舊」（level1=null code）語意。
+ *   PROJECT_TP 的 level1 為 NULL（空）時代表「非借新還舊」，由 decode codes 中 code===null 之 level1 項提供。
+ */
+function decodeLevel1NullMeaning(
+  decode: DecodeEntry | null | undefined,
+): string | undefined {
+  if (!decode) return undefined;
+  const hit = decode.codes.find((c) => c.level === 'level1' && c.code === null);
+  return hit?.meaning;
+}
+
+/**
+ * F107 UI-1（PROJECT_TP composite）：level2 說明（如「專案代碼 spec_tp」）。
+ */
+function decodeLevel2Meaning(
+  decode: DecodeEntry | null | undefined,
+): string | undefined {
+  if (!decode) return undefined;
+  const hit = decode.codes.find((c) => c.level === 'level2');
+  return hit?.meaning;
 }
 
 interface VersionUI {
@@ -1106,6 +1152,30 @@ function DimensionsTab({
                     >
                       {/* F054 v1.3 落差 1 / 4：colSpan 6 → 7（新增「類型」+「狀態」欄） */}
                       <td colSpan={7} className="px-5 py-3">
+                        {/* F107 UI-2 / AC-2：欄層 decode 摘要（來源欄 + 衍生規則，唯讀）。
+                            decode=null（純數值欄）→ 不渲染（優雅降級 BR-6 / UI-5）。 */}
+                        {d.decode && (
+                          <div
+                            data-testid={`dim-decode-summary-${d.columnName}`}
+                            className="mb-3 p-2.5 rounded-md bg-blue-50/60 border border-blue-100 text-xs text-gray-700 flex items-start gap-2"
+                          >
+                            <GitFork className="w-3.5 h-3.5 text-[#2563EB] mt-0.5 shrink-0" />
+                            <div className="flex flex-col gap-0.5">
+                              <span>
+                                <span className="text-gray-500">來源欄：</span>
+                                <code className="font-mono text-gray-800">
+                                  {d.decode.sourceField}
+                                </code>
+                              </span>
+                              <span>
+                                <span className="text-gray-500">衍生規則：</span>
+                                <span className="text-gray-800">
+                                  {d.decode.derivationRule}
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="text-gray-500">
@@ -1193,7 +1263,8 @@ function ScoresTab({
 }) {
   const [filterColumn, setFilterColumn] = useState<string>('ALL');
 
-  // 每筆 row 攜帶 matchType（由 dim 推導或後端回傳）以渲染 chip 欄
+  // 每筆 row 攜帶 matchType（由 dim 推導或後端回傳）以渲染 chip 欄；
+  // F107 UI-1：附 decode（維度層）以於 level1 碼旁並陳業務語意（原始碼保留）。
   const flatRows = useMemo(() => {
     const rows: Array<{
       columnName: string;
@@ -1202,6 +1273,7 @@ function ScoresTab({
       level2S: string | null;
       level2E: string | null;
       score: number;
+      decode: DecodeEntry | null | undefined;
     }> = [];
     dimensions.forEach((d) => {
       if (filterColumn !== 'ALL' && d.columnName !== filterColumn) return;
@@ -1214,6 +1286,7 @@ function ScoresTab({
           level2S: s.level2S,
           level2E: s.level2E,
           score: s.score,
+          decode: d.decode,
         });
       });
     });
@@ -1325,11 +1398,58 @@ function ScoresTab({
                     </span>
                   )}
                 </td>
+                {/* F107 UI-1：level1 原始碼保留 + 並陳 decode 業務語意（灰字）。
+                    decode=null / 該碼無對應語意 → 僅顯示原始碼（優雅降級 BR-6 / UI-5）。 */}
                 <td className="px-5 py-3 font-mono text-sm">
-                  {r.level1 ?? <span className="text-gray-300">—</span>}
+                  {(() => {
+                    const hasNullDecode =
+                      r.level1 === null && r.matchType === 'COMPOSITE';
+                    const meaning =
+                      r.level1 !== null
+                        ? decodeLevel1Meaning(r.decode, r.level1)
+                        : hasNullDecode
+                          ? decodeLevel1NullMeaning(r.decode)
+                          : undefined;
+                    return (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>
+                          {r.level1 ?? <span className="text-gray-300">—</span>}
+                        </span>
+                        {meaning && (
+                          <span
+                            data-testid={`score-row-${idx}-decode`}
+                            className="font-sans text-xs text-gray-500"
+                          >
+                            （{meaning}）
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </td>
+                {/* F107 UI-1（PROJECT_TP composite）：level2_s 旁標示「專案代碼 spec_tp」。 */}
                 <td className="px-5 py-3 font-mono text-sm">
-                  {r.level2S ?? <span className="text-gray-300">—</span>}
+                  {(() => {
+                    const level2Meaning =
+                      r.matchType === 'COMPOSITE' && r.level2S !== null
+                        ? decodeLevel2Meaning(r.decode)
+                        : undefined;
+                    return (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>
+                          {r.level2S ?? <span className="text-gray-300">—</span>}
+                        </span>
+                        {level2Meaning && (
+                          <span
+                            data-testid={`score-row-${idx}-decode-level2`}
+                            className="font-sans text-xs text-gray-500"
+                          >
+                            （{level2Meaning}）
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-5 py-3 font-mono text-sm">
                   {r.level2E ?? <span className="text-gray-300">—</span>}

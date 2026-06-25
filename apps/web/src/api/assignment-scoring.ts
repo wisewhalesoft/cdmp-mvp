@@ -47,6 +47,27 @@ export interface ScoringScoreItem {
   score: number;
 }
 
+/**
+ * F107 §5.1.1：衍生碼 decode 業務語意（唯讀；型別鏡像後端 scoring-decode.constants）。
+ */
+export interface DecodeCodeEntry {
+  /** 'level1' / 'level2'，對應 score 的 level1 / level2S(=level2E) */
+  level: 'level1' | 'level2';
+  /** 原始碼（'A' / 'AGENT' / '1' …）；null 表「空 / NULL 碼」語意 */
+  code: string | null;
+  /** 業務語意（中文） */
+  meaning: string;
+}
+
+export interface DecodeEntry {
+  /** 來源欄（人類可讀，如 'spec_tp + spec_name'） */
+  sourceField: string;
+  /** 衍生規則摘要（人類可讀） */
+  derivationRule: string;
+  /** 碼 → 業務語意 對照；個人/法人分流欄與純數值欄此陣列為空 */
+  codes: DecodeCodeEntry[];
+}
+
 export interface ScoringDimensionItem {
   columnName: string;
   columnLabel: string;
@@ -56,6 +77,11 @@ export interface ScoringDimensionItem {
   /** F106 AC-2 / UI-7：後端必回維度狀態（getScoring 一律回 active + inactive 全部維度） */
   status: 'active' | 'inactive';
   scores: ScoringScoreItem[];
+  /**
+   * F107 §5.1.1 / UI-6 / BR-6：該維度衍生碼 decode 說明（唯讀）。
+   * 純數值欄回 null/省略 → 前端優雅降級不渲染。前端純消費，不自建 decode 常數。
+   */
+  decode?: DecodeEntry | null;
 }
 
 export interface ScoringVersionInfo {
