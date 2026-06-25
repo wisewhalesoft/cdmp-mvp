@@ -4062,7 +4062,7 @@ SELECT tier_level FROM ob_tier
 
 #### AD-E07-10-L　客戶屬性與 loan 屬性 lookup 約定（v4.0，F104 全欄對齊 legacy SP）
 
-> **版本歷程**：v1.0 初版 → v3.5（F103，2026-06-24，通用 fallback + ADD_UN_CAPITAL + JS oracle 補齊） → **v4.0（F104，2026-06-24，依 `SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql` UTF-16LE 解碼逐欄稽核，多欄語意修正）**。F103 補述保留（下方）但部分映射**已被 F104 覆蓋**（欄名：`gender`→`cus_sex`；關鍵字：`'專案'`→`'借新還舊'`；SALES_STS：`'經銷商'`→`'中古車商'`；縣市來源：zip 欄→`*_city` 欄 + LEFT3；CUS_SEX：category→range；五欄新增 isCorp 分流），詳見本節。
+> **版本歷程**：v1.0 初版 → v3.5（F103，2026-06-24，通用 fallback + ADD_UN_CAPITAL + JS oracle 補齊） → v4.0（F104，2026-06-24，依 `SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql` UTF-16LE 解碼逐欄稽核，多欄語意修正） → **v5.0（F105，2026-06-25，PROJECT_TP 復原 COMPOSITE 真語意，新增 `kind:'composite'` 雙子式引擎路徑，AD-E07-35）**。F103/F104 補述保留（下方）但 PROJECT_TP 映射**已被 F105 覆蓋**（F104 category 簡化→F105 composite 真語意）；其餘欄不動。
 
 **設計原則**（繼承自 v1.0 / F103，不變）：
 - 外部 lookup 為 function **內部行為**，對呼叫方（`AssignmentScoringService`）完全透明
@@ -4074,14 +4074,14 @@ SELECT tier_level FROM ob_tier
 - **`cus_sex` NULL-safe cast 為硬性要求**（AD-E07-34）：dev 資料含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串），PG 裸 `::int` 對非數值拋例外導致整支月跑 SQL 掛掉；JS `Number()` 對非數值字串返回 NaN。
 - **cus_sex 兩處 default 刻意分離**（AD-E07-34 / BR-F104-13a）：(i) CUS_SEX **計分欄** default = `3`；(ii) 五欄**分流 gating** default = `'1'`（個人）；兩者不可混用同一 COALESCE。
 
-**column_name 對應規則表 v4.0**（legacy 真語意，F104 權威；引擎 alias `o`=ob_pool_data / `cc`=customer_core LEFT JOIN / `ar`=ob_arreturndf_min_cap LEFT JOIN；`<safe_int>` 定義見 AD-E07-34）：
+**column_name 對應規則表 v5.0**（legacy 真語意，F105 權威；引擎 alias `o`=ob_pool_data / `cc`=customer_core LEFT JOIN / `ar`=ob_arreturndf_min_cap LEFT JOIN；`<safe_int>` 定義見 AD-E07-34；`composite` match kind 定義見 AD-E07-35）：
 
-| column_name | kind | per-card 啟用（legacy SP 查證）| 取值表達式 / 邏輯 | 缺值 default | F103→F104 變更 |
-|-------------|------|-------------------------------|-------------------|-------------|----------------|
-| `CUS_SEX` | range | 全卡（H L97）| `COALESCE(<safe_int>(cc.cus_sex), 3)` BETWEEN `level2_s/level2_e` | `3`（**計分 default**，⚠️ 與分流 gating default `'1'` 分離）| `gender`→`cus_sex`；category→**range**；default `'3'`→`3` |
+| column_name | kind | per-card 啟用（legacy SP 查證）| 取值表達式 / 邏輯 | 缺值 default | 變更歷程 |
+|-------------|------|-------------------------------|-------------------|-------------|----------|
+| `CUS_SEX` | range | 全卡（H L97）| `COALESCE(<safe_int>(cc.cus_sex), 3)` BETWEEN `level2_s/level2_e` | `3`（**計分 default**，⚠️ 與分流 gating default `'1'` 分離）| F104：`gender`→`cus_sex`；category→**range**；default `'3'`→`3` |
 | `CAR_YEAR` | range | H/S/S5/E/E5（H L98）| `CASE WHEN year_produ 無效 THEN 0 ELSE 當年 − year_produ END` | `0` | 不動（F103 既有）|
 | `ADD_UN_CAPITAL` | range | H/E/E5（H L99）| `COALESCE(ar.add_un_capital, 0)` | `0` | 不動（F103 既有）|
-| `PROJECT_TP` | category | H/S/E/E5（H L100–101）| `CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE COALESCE(o.spec_tp,'01') END` 比對 `LEVEL1`；⚠️ legacy 真語意為複合條件（spec_tp BETWEEN AND 衍生=level1），本版維持 F103 category 單欄簡化，若 F067 差異顯示 PROJECT_TP 偏差再另立 story | `spec_tp`→`'01'`，`spec_name`→`''` | `'%專案%'`→`'%借新還舊%'` |
+| `PROJECT_TP` | **composite** | H/S/E/E5（H L100–101）| **雙子式**：`codeExpr = COALESCE(o.spec_tp,'01')`、`keywordExpr = CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE '' END`。每 score row 須 `TRIM(code) BETWEEN level2_s AND level2_e`（字串比較）**AND** `TRIM(keyword) = COALESCE(level1,'')`，兩子式皆成立才命中；第一命中取分（詳見 AD-E07-35）。| `spec_tp`→`'01'`，`spec_name`→`''`（keyword→`''`）| F104：`'%專案%'`→`'%借新還舊%'`（保留）；**F105：category 簡化→復原 COMPOSITE 真語意**（AD-E07-35，使用者 2026-06-25 重新拍板；OQ-F104-03 REOPENED→RESOLVED） |
 | `LIST_MONTH` | range | H/S/E/E5（H L102）；**M/HM 不啟用**（SP 查證：M/HM scoring block 無此欄）| `COALESCE(o.month_cnt, <per-card default>)` | per-card（見 AD-E07-33）H/S→25；E/E5→12；M/HM 不啟用 | 固定 25 → per-card |
 | `LOAN_RATE` | range | S5/E/E5（S5 L83；E L111；E5 L111）；**M/HM 不啟用**（SP 查證：M/HM scoring block 無此欄）| `COALESCE(CAST(o.loan_rate AS numeric), <per-card default>)` | per-card（見 AD-E07-33）S5→77；E/E5→12；其他→0；M/HM 不啟用 | 固定 0 → per-card |
 | `SALES_STS` | category | H/S/E（H L105）| `CASE o.sales_sts_na WHEN 'AGENT' THEN 'AGENT' WHEN '中古車商' THEN 'UCD' ELSE 'HFC' END` 比對 `LEVEL1` | `'HFC'`（ELSE 分支）| `'經銷商'`→`'中古車商'` |
@@ -4117,7 +4117,7 @@ flowchart TD
 
     KIND -->|"HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM\n（僅 S5/E5/M/HM 啟用，H/S/E 不計分）"| CITY["category：\nLEFT COALESCE NULLIF cc.*_city 空, card_default, 3\n★per-card default：S5→花蓮縣/金門縣；M/HM→臺北市/臺南市/高雄市"]
 
-    KIND -->|"PROJECT_TP（H/S/E/E5）"| PT["category：spec_name LIKE 借新還舊 → A\n否則 COALESCE spec_tp,'01'\n★legacy 真語意為複合條件（F104 §10 殘留風險）"]
+    KIND -->|"PROJECT_TP（H/S/E/E5）"| PT["composite（AD-E07-35）：\ncodeExpr=COALESCE spec_tp,'01'\nkeywordExpr=借新還舊?'A':''\n每 row：TRIM code BETWEEN level2_s/level2_e AND TRIM keyword=COALESCE level1,''\n第一命中取分（字串比較，F105 復原 legacy COMPOSITE 真語意）"]
 
     KIND -->|"SALES_STS（H/S/E）"| SS["category：CASE sales_sts_na\n'AGENT'→'AGENT'  '中古車商'→'UCD'  ELSE 'HFC'\n★F104 取代 '經銷商'"]
 
@@ -4274,6 +4274,158 @@ const isCorporate = gatingInt === null || (gatingInt !== 1 && gatingInt !== 2);
 > **非數值髒值（'C'/'D' 等有值非 1/2）の gating 行為（拍板 2026-06-24）**：`NULLIF('C','')='C'`（非空，不補 '1'）→ `safe_int('C')=null` → JS `gatingInt=null` → `isCorporate=true` → **法人分支（取 0 / per-card default）**。與「空字串/NULL → 個人」語意相反，兩者必須分開實作。PG/JS 兩路徑須一致；EQ DoD 場景須覆蓋「cus_sex='C' → **法人**分支 + CUS_SEX 計分欄 → 3」（而非個人）。
 
 **影響範圍**：`resolveColumnSource`（PG）/ `resolveColumnValue`（JS）/ `computeScore`（JS，`isCorporate` helper）。下游 `tsc --noEmit -p tsconfig.build.json` 必須零錯誤。
+
+---
+
+#### AD-E07-35　PROJECT_TP COMPOSITE match kind 引擎契約（F105，2026-06-25）
+
+**背景**：F104（OQ-F104-03）決定維持 category 單欄簡化並標注殘留風險。F067 差異報告（2026-06-24）確認 PROJECT_TP 為最大宗分差缺口（~43%，27 分 / 63 分），使用者 2026-06-25 重新拍板復原 COMPOSITE 真語意（OQ-F104-03 REOPENED→RESOLVED=復原）。
+
+**根因診斷**：F104 以 `kind='category'` 處理 PROJECT_TP，`buildStage2ScoreExpr` category 分支邏輯「`if (sr.level1 === null) continue`」使 `ob_levelcard_score` 中 16 個 `level1=NULL`（即非借新還舊代碼 row）全部跳過 → 73.9% 客戶 PROJECT_TP=0。legacy SP 真語意為每 row AND 兩個子條件，category 路徑無法表達「`level2` 字串區間 AND `level1` 衍生關鍵字」的複合匹配。
+
+**F105 決策：新增 `kind:'composite'` 作為 `ColumnSource` 第三 kind**（最小侵入，不影響既有 category/range 欄）。
+
+---
+
+**`ColumnSource` interface 擴充**：
+
+```typescript
+// F105 前（F104）
+export interface ColumnSource {
+  kind: 'range' | 'category';
+  expr: string;
+}
+
+// F105 後
+export interface ColumnSource {
+  kind: 'range' | 'category' | 'composite';
+  /** kind='range'/'category' 時使用，kind='composite' 時忽略。 */
+  expr?: string;
+  /** kind='composite' 專用：spec_tp 代碼 SQL 取值表達式（含 COALESCE 缺值處理）。 */
+  codeExpr?: string;
+  /** kind='composite' 專用：借新還舊衍生關鍵字 SQL 取值表達式（回傳 'A' 或 ''）。 */
+  keywordExpr?: string;
+}
+```
+
+---
+
+**`resolveColumnSource('PROJECT_TP', cardType)` 輸出**（PG 路徑）：
+
+```typescript
+{
+  kind: 'composite',
+  codeExpr:    "COALESCE(o.spec_tp, '01')",
+  keywordExpr: "CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE '' END",
+}
+```
+
+- `codeExpr`：`COALESCE(o.spec_tp, '01')`（缺值補 `'01'`，對齊 legacy `ISNULL(CAST(SPEC_TP AS VARCHAR),'01')`）。
+- `keywordExpr`：`CASE WHEN o.spec_name LIKE '%借新還舊%' THEN 'A' ELSE '' END`（F104 借新還舊關鍵字修正保留，`'%借新還舊%'` 而非 `'%專案%'`）。
+- `cardType` 參數對 composite 路徑目前無影響（PROJECT_TP 無 per-card default 差異），保留介面一致性。
+
+---
+
+**`buildStage2ScoreExpr` composite 分支（PG SQL）**：
+
+對每個 `column_name='PROJECT_TP'` 的 active score row，產生 WHEN 條件如下：
+
+```sql
+-- 單一 score row（level2_s='06', level2_e='06', level1=NULL, score=35）：
+WHEN (TRIM(CAST(<codeExpr> AS text)) >= :lo AND TRIM(CAST(<codeExpr> AS text)) <= :hi)
+  AND (TRIM(CAST(<keywordExpr> AS text)) = COALESCE(:lv1, ''))
+THEN :score
+
+-- 借新還舊 row（level2_s='06', level2_e='06', level1='A', score=37）：
+WHEN (TRIM(CAST(<codeExpr> AS text)) >= :lo AND TRIM(CAST(<codeExpr> AS text)) <= :hi)
+  AND (TRIM(CAST(<keywordExpr> AS text)) = COALESCE(:lv1, ''))
+THEN :score
+```
+
+以巢狀 `CASE … END` 包覆，依 score row 順序第一個命中即取分（`ELSE 0`），對齊既有 break 語意。
+
+**Binding 規則**（per score row）：
+- `:lo` ← `sr.level2_s`（varchar 原值，不 cast 數值，對齊 legacy 字串 BETWEEN）
+- `:hi` ← `sr.level2_e`（varchar 原值）
+- `:lv1` ← `sr.level1`（可為 NULL → `COALESCE(NULL,'')=''`，比對 keyword='' 即非借新還舊案件）
+- `:score` ← `sr.score`
+- 篩選條件：`sr.level2_s IS NOT NULL AND sr.level2_e IS NOT NULL`（與 range 分支一致，缺 level2 的 row 跳過）
+
+**字串比較說明**：`spec_tp` 代碼為補零兩碼（如 `'01'`/`'06'`/`'23'`），`level2_s/level2_e` 同為 varchar。SP 使用 `CAST AS VARCHAR BETWEEN`（字串序）。引擎**不得**對 level2 做 `Number()` cast，避免與既有 range 路徑混淆；`TRIM` 處理潛在空白補位。
+
+---
+
+**`resolveColumnValue` 對稱（JS oracle）**：
+
+PROJECT_TP case 回傳結構化值（含 `code` 與 `keyword`，供 composite 比對分支使用）：
+
+```typescript
+case 'PROJECT_TP': {
+  const code    = pool.spec_tp ?? '01';
+  const keyword = pool.spec_name?.includes('借新還舊') ? 'A' : '';
+  return { code, keyword } as CompositeValue;  // 新型別或 tagged union
+}
+```
+
+**`computeScore` composite 分支**：
+
+```typescript
+// kind='composite'（PROJECT_TP）
+if (typeof value === 'object' && value !== null && 'code' in value) {
+  const { code, keyword } = value as CompositeValue;
+  for (const sr of scoreRows) {
+    if (sr.level2_s === null || sr.level2_e === null) continue;
+    const codeStr    = String(code).trim();
+    const keywordStr = String(keyword).trim();
+    const lo = sr.level2_s;  // varchar 原值，字串比較
+    const hi = sr.level2_e;
+    const lv1 = sr.level1 === null ? '' : String(sr.level1).trim();
+    if (codeStr >= lo && codeStr <= hi && keywordStr === lv1) {
+      total += sr.score;
+      break;  // 第一命中取分
+    }
+  }
+}
+```
+
+> **實作彈性**：`CompositeValue` 型別（tagged union 或 `{ code: string; keyword: string }`）由 impl 自定義，EQ DoD 測試為最終驗收。`resolveColumnValue` 回傳型別若擴充為 `string | number | CompositeValue`，需同步修正 `computeScore` 呼叫端型別檢查。`tsc --noEmit -p tsconfig.build.json` 必須零錯誤（硬性 DoD）。
+
+---
+
+**SALES_STS 明確聲明（category-only，不受 F105 影響）**：
+
+`ob_levelcard_column.match_type='COMPOSITE'` 由 `backfill-match-type.sql` 自動回填（條件：有 `level1 IS NOT NULL AND level2_s IS NOT NULL` 的 score row）。SALES_STS score row 結構為 `level1 ∈ {'AGENT','UCD','HFC'}` + `level2_s/e = 1/2/3`（序號，非業務含義），但 legacy SP 匹配邏輯為純 `D.SALES_STS = LEVEL1`（H L105 / E L114），完全不使用 level2。現行引擎以 `kind='category'` 純 level1 相等比對，已正確計分。
+
+**⚠️ F105 明確不修改 SALES_STS 的 `resolveColumnSource` 回傳值（維持 `kind:'category'`）。任何 COMPOSITE match_type 標籤均不觸發新的 composite 邏輯於 SALES_STS。下游 impl 禁止對 SALES_STS 套用 composite 路徑。**
+
+---
+
+**EQ DoD 樣本（PG/JS 兩路徑必須一致）**：
+
+| spec_tp | spec_name | 期望命中 row（H 卡 v1）| 期望 PROJECT_TP 分數 |
+|---------|-----------|----------------------|---------------------|
+| `'06'` | `'借新還舊專案'` | `A\|06\|06\|37` | 37 |
+| `'06'` | `'一般專案'` | `NULL\|06\|06\|35` | 35 |
+| `'12'` | `'一般專案'` | `NULL\|12\|12\|28` | 28 |
+| `'22'` | `'借新還舊專案'` | `A\|22\|22\|37` | 37 |
+| `'22'` | `'一般專案'` | `NULL\|22\|22\|37` | 37 |
+| `NULL` | `NULL` | 代碼補 `'01'`，keyword=`''` → `NULL\|01\|01\|19` | 19 |
+| `'99'` | `'無代碼'` | 無 row 命中 | 0 |
+
+> 測試組須涵蓋「借新還舊 A row vs 非借新還舊 NULL row 同代碼共存」場景（如 `spec_tp='06'`），驗證 keyword AND 條件正確分流。
+
+---
+
+**影響範圍（F105，僅 PROJECT_TP）**：
+
+| 檔案 | 變更類型 |
+|------|---------|
+| `apps/api/src/modules/assignment/stage1/stage2to4-sql-builder.ts` | `ColumnSource` interface 擴充；`resolveColumnSource('PROJECT_TP')` 改 composite；`buildStage2ScoreExpr` 新增 composite 分支 |
+| `apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts` | `resolveColumnValue('PROJECT_TP')` 改回傳 `{code,keyword}`；`computeScore` 新增 composite 比對分支 |
+| 測試（`stage2to4-score-source-f104.pg.spec.ts` 延伸或新建 `f105` spec）| EQ DoD 樣本列（上表）全覆蓋 |
+| `tsc --noEmit -p tsconfig.build.json` | **硬性 DoD**，型別擴充後零錯誤 |
+
+> 其餘 `ColumnSource.kind='range'/'category'` 欄（SALES_STS / LIST_MONTH / CUS_SEX / EDUCAT_BACK 等）**不受本 AD 影響**，impl 禁止修改。
 
 ---
 
