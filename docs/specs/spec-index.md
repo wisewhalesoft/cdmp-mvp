@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.15"
-date: 2026-06-24
+version: "3.16"
+date: 2026-06-25
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.16 / 2026-06-25 / F105 PROJECT_TP composite 復原 + 計分衍生碼 Decode Dictionary + F067 tier 結案**：(1) **F105** 復原 PROJECT_TP COMPOSITE 真語意（推翻 F104 OQ-F104-03「只做關鍵字 category」簡化，使用者重新拍板）→ [architecture-spec.md](architecture-spec.md) AD-E07-10-L **v5.0** + 新增 **AD-E07-35**（引擎 `ColumnSource.kind:'composite'` 契約：`codeExpr=spec_tp` + `keywordExpr=借新還舊?'A':''`，每 row `code BETWEEN level2 字串 AND keyword=COALESCE(level1,'')`，兩路徑 EQ）；(2) **新建** [scorecard-derived-code-dictionary.md](scorecard-derived-code-dictionary.md)（**AD-E07-10-S**，業務簽核用 decode 層：每衍生碼 → 來源欄 + 規則 + 業務語意，補「config 有碼、語意在 engine code」可回溯缺口，如 `level1='A'`=借新還舊／`UCD`=中古車商；設計原則見 memory `feedback_scorecard_derived_code_traceability`）；(3) [F067 差異報告](implementation-log/F067-202606-cdmp-vs-legacy-diff.md) §6 **tier 維度 RESOLVED**（run `64555220` 三名單逐格對齊 legacy：001 T1=67.9 vs 69／002 59.1 vs 62.2／003 85.2 vs 83.8；靠 F104 引擎 + m302 SALES_STS + F105 composite 三段達成；config 本就對齊、真因＝raw score 偏低）。四維度（部門/員編/CR/tier）全可簽核。
 
 > **v3.15 / 2026-06-24 / F104 Stage 2 計分引擎 AD-E07-10-L 全欄對齊 legacy SP（AD 本身有 12+ 欄偏差，F103 對齊了有錯的 AD）**：深度稽核 legacy `SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql`（UTF-16LE 解碼）發現 AD-E07-10-L 本身與 legacy 真語意多欄偏差。依 5 個已核可 user story（US-159 AD 全欄修正 / US-160 CUS_SEX 分流引擎 / US-161 cc 新欄 contract / US-162 縣市欄 / US-163 202606 驗收）新建 1 個 feature spec，兩引擎路徑改對齊 **legacy SP**（非 AD 現況表）。本輪變更檔案：
 > - **新建 v1.0**：[F104-stage2-ad-e07-10-l-full-legacy-alignment.md](features/F104-stage2-ad-e07-10-l-full-legacy-alignment.md)（**純後端、無新前端頁、無新錯誤碼**。七類修正：PROJECT_TP `'%專案%'`→`'%借新還舊%'`／SALES_STS `'經銷商'`→`'中古車商'`／CUS_SEX category→range（**BR-13 NULL-safe cast**）／五欄 CUS_SEX 分流（個人自身屬性 vs 法人 0/default 保證人停用複刻）+ AGE >100 排除 + EDUCAT_BACK 補零 per-card default(E/S '02'、S5 '08')／三縣市欄改讀 `cc.*_city` + **`LEFT(...,3)` 比對** + per-card default／LIST_MONTH·LOAN_RATE per-card default／signature 加 cardType。引擎權威＝§5 legacy 真語意表（附 SP 行號出處）。JS↔SQL EQ = DoD）
