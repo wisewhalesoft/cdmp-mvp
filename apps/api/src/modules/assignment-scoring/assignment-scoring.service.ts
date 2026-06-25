@@ -25,6 +25,11 @@ import {
 } from './helpers/tier-mapping-mutex.helper';
 import { MatchType, MATCH_TYPE_VALUES } from './dto/match-type.enum';
 import { normalizeCharField } from '@/common/etl/normalize-char-field.util';
+// F107：decode 共用對照常數（與引擎衍生規則同源，AD-E07-10-S / BR-2）
+import {
+  DecodeEntry,
+  getDecodeForColumn,
+} from '@/modules/assignment/stage1/scoring-decode.constants';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Service
@@ -126,6 +131,12 @@ export interface ScoringDimensionItem {
   status: 'active' | 'inactive';
   scoreSummary: string;
   scores: ScoringScoreItem[];
+  /**
+   * F107 §5.1.1 / BR-1 / BR-6：該維度之衍生碼 decode 說明（唯讀）。
+   * 無對應 decode 之純數值欄（LIST_MONTH / CAR_YEAR / LOAN_RATE / ADD_UN_CAPITAL …）→ `null`，
+   * 前端優雅降級不渲染。內容同源自引擎衍生規則（scoring-decode.constants）。
+   */
+  decode: DecodeEntry | null;
 }
 
 export interface ScoringVersionInfo {
@@ -442,6 +453,8 @@ export class AssignmentScoringService {
           level2E: s.level2_e,
           score: s.score,
         })),
+        // F107 §5.1.1 / BR-1 / BR-6：附唯讀 decode；純數值欄回 null（前端優雅降級）。
+        decode: getDecodeForColumn(col.column_name ?? ''),
       };
     });
 
