@@ -28,6 +28,11 @@ const WORKYM = process.argv[2] || '202606';
 const CSV_DATE = process.argv[3] || '20260618';
 const MODE = process.argv[4] || 'plan';
 const DIR = path.join(__dirname, '..', 'reference', 'DumpData');
+// created_by/updated_by 必須為「有效 user UUID」——F079 部門比例 GET（DeptRatioService.getDeptRatios，
+//   F088 BR-11 設定者解析）會把 created_by 當 users.id(UUID) 做 In() 查找；非 UUID（如舊版 'legacy-import'）
+//   → PG `invalid input syntax for type uuid` → 500。預設用 dev seed admin（系統管理員）。
+const IMPORT_USER_ID =
+  process.env.IMPORT_USER_ID || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 function parseCsv(file) {
   const txt = fs.readFileSync(path.join(DIR, file)).toString('utf8').replace(/^﻿/, '');
@@ -106,7 +111,7 @@ function conn() {
       for (const r of dRows) {
         await c.query(
           'INSERT INTO ob_dept_pct (created_by_prog,created_by,created_at,updated_by_prog,updated_by,updated_at,project_workym,list_no,obdeptid,obdeptnm,ration) VALUES ($1,$2,$3,$1,$2,$3,$4,$5,$6,$7,$8)',
-          ['IMPORT', 'legacy-import', now, WORKYM, L, r.OBDEPTID, r.OBDEPTNM, r.RATION],
+          ['IMPORT', IMPORT_USER_ID, now, WORKYM, L, r.OBDEPTID, r.OBDEPTNM, r.RATION],
         );
       }
     }
@@ -115,7 +120,7 @@ function conn() {
       for (const r of eRows) {
         await c.query(
           'INSERT INTO ob_empl_set (created_by_prog,created_by,created_at,updated_by_prog,updated_by,updated_at,list_no,deptid_m,emplid,ration,prod_type) VALUES ($1,$2,$3,$1,$2,$3,$4,$5,$6,$7,$8)',
-          ['IMPORT', 'legacy-import', now, L, r.DEPTID_M, r.EMPLID, r.RATION, r.PROD_TYPE || null],
+          ['IMPORT', IMPORT_USER_ID, now, L, r.DEPTID_M, r.EMPLID, r.RATION, r.PROD_TYPE || null],
         );
       }
     }
