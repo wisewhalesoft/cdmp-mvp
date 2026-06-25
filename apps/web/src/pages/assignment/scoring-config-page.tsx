@@ -15,6 +15,7 @@ import {
   Layers3,
   Pencil,
   Ban,
+  Power,
   Check,
   Plus,
   Save,
@@ -38,6 +39,7 @@ import {
   deleteCardLevel,
   deleteTierMapping,
   disableDimension,
+  enableDimension,
   getCardLevels,
   getScoring,
   getTierMapping,
@@ -103,9 +105,9 @@ interface ScoringDimUI {
   matchType?: MatchType;
   scores: ScoringScoreItem[];
   /**
-   * F054 v1.3 落差 4：維度狀態（必填）
-   * 後端 ob_levelcard_column.status（m21 migration 落實），API 應必回；
-   * fetchAll mapper 提供 fallback 'active' 為防禦。
+   * F054 v1.3 落差 4 / F106 AC-2：維度狀態（必填）
+   * 後端 ob_levelcard_column.status（m21 migration 落實）一律回傳（含 inactive）；
+   * F106 起前端不再提供 `?? 'active'` fallback，直接採後端真實 status。
    */
   status: 'active' | 'inactive';
 }
@@ -228,11 +230,12 @@ function ScoringConfigShell() {
   const isLocked = false;
 
   // 計分維度數量（用於 Tab 計數 badge；只在已選 CARD_TYPE 時才查詢）
+  // F106 OQ-164-4 / BR-6：badge 只計 active 維度（inactive 仍顯示於清單但不計入 badge）。
   const dimensionsQuery = useQuery({
     queryKey: ['scoring', selectedCardItem?.cardType, 'dimensions'],
     queryFn: () =>
-      getScoring(selectedCardItem!.cardType as CardType).then(
-        (s) => s.dimensions,
+      getScoring(selectedCardItem!.cardType as CardType).then((s) =>
+        s.dimensions.filter((d) => d.status === 'active'),
       ),
     enabled: !!selectedCardItem?.cardType,
     retry: false,
@@ -445,6 +448,9 @@ export function ScoringConfigLegacyTabs({
   const [tierModalOpen, setTierModalOpen] = useState(false);
   const [disableModalOpen, setDisableModalOpen] = useState(false);
   const [disableTarget, setDisableTarget] = useState<ScoringDimUI | null>(null);
+  // F106 UI-3 / UI-4：啟用 inactive 維度的確認 Modal
+  const [enableModalOpen, setEnableModalOpen] = useState(false);
+  const [enableTarget, setEnableTarget] = useState<ScoringDimUI | null>(null);
 
   // v1.3 / v1.4 新增：編輯 / 刪除 Modal 狀態（每列觸發）
   const [dimEditTarget, setDimEditTarget] = useState<ScoringDimUI | null>(null);
@@ -482,11 +488,12 @@ export function ScoringConfigLegacyTabs({
     try {
       const scoring = await getScoring(ct);
       setVersion(scoring.version);
-      // F054 v1.3 落差 4：mapper 補 status fallback 'active'（後端應必回；防禦性）
+      // F106 UI-1 / AC-2：移除 `?? 'active'` fallback，直接採後端回傳的真實 status
+      // （getScoring 一律回傳 active + inactive 全部維度，每維度必含 status）。
       setDimensions(
         scoring.dimensions.map((d) => ({
           ...d,
-          status: (d as any).status ?? 'active',
+          status: d.status,
         })),
       );
 
@@ -625,6 +632,10 @@ export function ScoringConfigLegacyTabs({
                 setDisableTarget(d);
                 setDisableModalOpen(true);
               }}
+              onEnable={(d) => {
+                setEnableTarget(d);
+                setEnableModalOpen(true);
+              }}
             />
           )}
           {tab === 'score' && (
@@ -718,6 +729,25 @@ export function ScoringConfigLegacyTabs({
             setDisableTarget(null);
             await fetchAll(cardType);
             showToast({ type: 'success', message: '維度已停用' });
+          }}
+          runWriteOp={runWriteOp}
+        />
+      )}
+
+      {/* F106 UI-3 / UI-4：啟用 inactive 維度確認 Modal（對稱 DisableConfirmModal）*/}
+      {enableModalOpen && enableTarget && (
+        <EnableConfirmModal
+          target={enableTarget}
+          cardType={cardType}
+          onClose={() => {
+            setEnableModalOpen(false);
+            setEnableTarget(null);
+          }}
+          onConfirmed={async () => {
+            setEnableModalOpen(false);
+            setEnableTarget(null);
+            await fetchAll(cardType);
+            showToast({ type: 'success', message: '維度已啟用' });
           }}
           runWriteOp={runWriteOp}
         />
@@ -867,14 +897,19 @@ function DimensionsTab({
   onAdd,
   onEdit,
   onDisable,
+  onEnable,
 }: {
   dimensions: ScoringDimUI[];
   isLocked: boolean;
   onAdd: () => void;
   onEdit: (d: ScoringDimUI) => void;
   onDisable: (d: ScoringDimUI) => void;
+  /** F106 UI-3：啟用 inactive 維度（對稱 onDisable） */
+  onEnable: (d: ScoringDimUI) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // F106 OQ-164-4 / BR-6：表格底部「共 N 個維度」只計 active（與 Tab badge 一致）
+  const activeCount = dimensions.filter((d) => d.status === 'active').length;
   return (
     <div className="bg-white rounded-b-lg border border-[#E5E7EB] border-t-0 shadow-sm">
       <div className="overflow-x-auto">
@@ -910,10 +945,17 @@ function DimensionsTab({
                 d.matchType ?? deriveMatchType(d.scores);
               // F054 v1.3 AC-1b：ALL_SCORES_EMPTY 防護網
               const isAllScoresEmpty = !d.scores || d.scores.length === 0;
+              // F106 UI-2：inactive 列以列級灰底弱化，與 active 列一眼區分
+              const isInactive = d.status !== 'active';
               return (
                 <Fragment key={d.columnName}>
                   <tr
-                    className="border-b border-[#E5E7EB] hover:bg-gray-50/50 transition cursor-pointer"
+                    className={
+                      'border-b border-[#E5E7EB] transition cursor-pointer ' +
+                      (isInactive
+                        ? 'bg-gray-100/70 text-gray-500 hover:bg-gray-100'
+                        : 'hover:bg-gray-50/50')
+                    }
                     onClick={() =>
                       setExpanded((prev) => ({
                         ...prev,
@@ -921,6 +963,7 @@ function DimensionsTab({
                       }))
                     }
                     data-testid={`dim-row-${d.columnName}`}
+                    data-inactive={isInactive ? 'true' : undefined}
                   >
                     <td className="px-5 py-3 font-mono text-sm font-semibold text-gray-900">
                       {d.columnName}
@@ -999,7 +1042,8 @@ function DimensionsTab({
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {/* prototype 28 L1085-1093：icon-only pencil + ban，gap-1 兩顆按鈕 */}
+                      {/* prototype 28 L1085-1093：icon-only pencil + ban，gap-1 兩顆按鈕。
+                          F106 UI-3：inactive 列以「啟用」(Power) 取代「停用」(Ban)。 */}
                       <div className="inline-flex items-center gap-1">
                         <button
                           type="button"
@@ -1017,22 +1061,41 @@ function DimensionsTab({
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          data-testid={`disable-${d.columnName}`}
-                          title="停用"
-                          disabled={isLocked}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDisable(d);
-                          }}
-                          className={
-                            'action-btn p-1.5 text-gray-500 hover:text-[#F59E0B] hover:bg-amber-50 rounded transition ' +
-                            (isLocked ? 'opacity-30 cursor-not-allowed' : '')
-                          }
-                        >
-                          <Ban className="w-4 h-4" />
-                        </button>
+                        {isInactive ? (
+                          <button
+                            type="button"
+                            data-testid={`enable-${d.columnName}`}
+                            title="啟用"
+                            disabled={isLocked}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEnable(d);
+                            }}
+                            className={
+                              'action-btn p-1.5 text-gray-500 hover:text-[#10B981] hover:bg-green-50 rounded transition ' +
+                              (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                            }
+                          >
+                            <Power className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            data-testid={`disable-${d.columnName}`}
+                            title="停用"
+                            disabled={isLocked}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDisable(d);
+                            }}
+                            className={
+                              'action-btn p-1.5 text-gray-500 hover:text-[#F59E0B] hover:bg-amber-50 rounded transition ' +
+                              (isLocked ? 'opacity-30 cursor-not-allowed' : '')
+                            }
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1090,7 +1153,7 @@ function DimensionsTab({
         </span>
       </div>
       <div className="flex items-center justify-between px-5 py-3 border-t border-[#E5E7EB]">
-        <span className="text-sm text-gray-500">共 {dimensions.length} 個維度</span>
+        <span className="text-sm text-gray-500">共 {activeCount} 個維度</span>
         <button
           type="button"
           data-testid="btn-add-dim"
@@ -2973,6 +3036,110 @@ function DisableConfirmModal({
               className="px-4 py-2 text-sm font-medium text-white bg-[#F59E0B] rounded-lg hover:bg-amber-600 shadow-sm disabled:opacity-50"
             >
               {submitting ? '處理中...' : '確認停用'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * F106 UI-3 / UI-4：每列 Power → 啟用 inactive 維度（對稱 DisableConfirmModal，
+ * 文案 / 圖示 / 成功色調改為啟用語意，行為經 runWriteOp 呼叫 enableDimension）。
+ */
+function EnableConfirmModal({
+  target,
+  cardType,
+  onClose,
+  onConfirmed,
+  runWriteOp,
+}: {
+  target: ScoringDimUI;
+  cardType: CardType;
+  onClose: () => void;
+  onConfirmed: () => void;
+  runWriteOp: <T>(
+    op: () => Promise<T>,
+    onSuccess: string,
+    onError?: string,
+  ) => Promise<T>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleConfirm() {
+    setSubmitting(true);
+    try {
+      await runWriteOp(
+        () => enableDimension(cardType, target.columnName),
+        '維度已啟用',
+      );
+      onConfirmed();
+    } catch {
+      // 月跑鎖等錯誤已透過 toast 顯示
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          data-testid="enable-modal"
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md relative"
+        >
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+              <Power className="w-6 h-6 text-[#10B981]" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">啟用計分維度</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              確定啟用維度{' '}
+              <code className="font-mono font-semibold text-gray-800">
+                {target.columnName}
+              </code>
+              <br />
+              「<span className="font-semibold text-gray-800">{target.columnLabel}</span>」？
+            </p>
+          </div>
+          <div className="px-6 pb-2">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-gray-700">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-[#10B981] mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-[#10B981] mb-1">重新啟用（status=active）</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-gray-600">
+                    <li>狀態 inactive → active</li>
+                    <li>寫入 assignment_audit_log（action=ENABLE）</li>
+                    <li>啟用後該維度重新納入下一次月跑計分</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-[#E5E7EB] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-testid="enable-modal-confirm"
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#10B981] rounded-lg hover:bg-emerald-600 shadow-sm disabled:opacity-50"
+            >
+              {submitting ? '處理中...' : '確認啟用'}
             </button>
           </div>
         </div>

@@ -53,6 +53,8 @@ export interface ScoringDimensionItem {
   scoreSummary: string;
   /** F054 v1.3：後端必回此欄位（CATEGORY / RANGE / COMPOSITE） */
   matchType?: MatchType;
+  /** F106 AC-2 / UI-7：後端必回維度狀態（getScoring 一律回 active + inactive 全部維度） */
+  status: 'active' | 'inactive';
   scores: ScoringScoreItem[];
 }
 
@@ -129,6 +131,19 @@ export async function createDimension(payload: CreateDimensionPayload) {
 export async function disableDimension(cardType: CardType, columnName: string) {
   const res = await apiClient.put(
     `/assignment/scoring/dimensions/${encodeURIComponent(columnName)}/disable`,
+    undefined,
+    { params: { cardType } },
+  );
+  return res.data;
+}
+
+/**
+ * F106 §5.2 / UI-7：重新啟用停用（inactive）的計分維度（對稱 disableDimension）。
+ * PUT /assignment/scoring/dimensions/{columnName}/enable?cardType=
+ */
+export async function enableDimension(cardType: CardType, columnName: string) {
+  const res = await apiClient.put(
+    `/assignment/scoring/dimensions/${encodeURIComponent(columnName)}/enable`,
     undefined,
     { params: { cardType } },
   );
