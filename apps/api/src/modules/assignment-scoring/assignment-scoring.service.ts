@@ -119,6 +119,11 @@ export interface ScoringDimensionItem {
   columnLabel: string;
   /** v1.3 AC-7：寫入此欄位以對齊 ob_levelcard_column.match_type */
   matchType: MatchType | null;
+  /**
+   * F106 AC-2 / BR-1：維度狀態（'active' | 'inactive'）。
+   * getScoring 一律回傳全部維度（含 inactive），前端依此 status 渲染、不再 fallback。
+   */
+  status: 'active' | 'inactive';
   scoreSummary: string;
   scores: ScoringScoreItem[];
 }
@@ -199,6 +204,15 @@ export interface DisableDimensionResult {
   columnName: string;
   status: 'inactive';
   disabledAt: string;
+}
+
+// F106：啟用維度（對稱 disable，狀態與時間戳欄位方向相反）
+export interface EnableDimensionResult {
+  cardType: string;
+  cardVersion: number;
+  columnName: string;
+  status: 'active';
+  enabledAt: string;
 }
 
 // =========================
@@ -392,11 +406,13 @@ export class AssignmentScoringService {
 
     const cardVersion = version.card_version ?? 1;
 
+    // F106 BR-1 / AC-2（OQ-164-2）：移除 status='active' 過濾，一律回傳 active + inactive
+    // 全部維度（每維度於下方 mapper 補 status 欄位）。計分採計範圍不受影響——
+    // 計分引擎 / fn_calc_tier_level 仍只採 status='active'（BR-4）。
     const columns = await this.columnRepo.find({
       where: {
         card_type: cardType as any,
         card_version: cardVersion as any,
-        status: 'active' as any,
       },
     });
 
@@ -415,6 +431,10 @@ export class AssignmentScoringService {
         columnName: col.column_name ?? '',
         columnLabel: col.column_label ?? '',
         matchType: (col.match_type as MatchType) ?? null,
+        // F106 AC-2 / BR-1：每維度必含 status；非 'active' 一律視為 'inactive'
+        status: (col.status === 'active' ? 'active' : 'inactive') as
+          | 'active'
+          | 'inactive',
         scoreSummary: `${colScores.length} 個區間`,
         scores: colScores.map((s) => ({
           level1: s.level1,
@@ -771,6 +791,72 @@ export class AssignmentScoringService {
       columnName,
       status: 'inactive',
       disabledAt: new Date().toISOString(),
+    };
+  }
+
+  // =========================
+  // F106 — PUT /scoring/dimensions/:columnName/enable（重新啟用，對稱 disable）
+  // =========================
+  //
+  // 對應 spec：F106 §5.2 / §5.3 對稱性對照表 / BR-2 / BR-3 / BR-5
+  //   行為完全對稱於 disableDimension，僅狀態方向相反：
+  //     1. assertNotLocked()（月跑鎖 → 409 SCORING_VERSION_LOCKED）
+  //     2. assertCardTypeActive()（範圍鎖 → 404 CARD_TYPE_NOT_FOUND）
+  //     3. findOne(status='inactive')；找不到（含對已 active 維度啟用，BR-3）→ 404 SCORING_COLUMN_NOT_FOUND
+  //     4. status='inactive' → 'active'，save
+  //     5. writeAudit(action='ENABLE'，before {status:'inactive'} / after {status:'active'})
+  //     6. 回傳 { ..., status:'active', enabledAt }
+
+  async enableDimension(
+    cardType: string,
+    columnName: string,
+    actor: ActorContext,
+  ): Promise<EnableDimensionResult> {
+    await this.assertNotLocked();
+
+    // F106 §5.3：cardType 範圍鎖（對稱 disable）
+    await assertCardTypeActive(this.cardTypeRepo, cardType);
+
+    // findOne 限定 status='inactive'（方向相反於 disable 的 'active'）；
+    // 對已 active 維度啟用 → findOne 找不到 → 404（BR-3，對稱慣例，不採冪等 200）
+    const existing = await this.columnRepo.findOne({
+      where: {
+        card_type: cardType as any,
+        column_name: columnName as any,
+        status: 'inactive' as any,
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        error: SCORING_ERROR_CODES.SCORING_COLUMN_NOT_FOUND,
+        message: SCORING_ERROR_MESSAGES.SCORING_COLUMN_NOT_FOUND,
+      });
+    }
+
+    const before = { status: 'inactive' as const };
+
+    existing.status = 'active';
+    await this.columnRepo.save(existing);
+
+    const after = { status: 'active' as const };
+
+    const cardVersion = existing.card_version ?? 1;
+
+    await this.writeAudit(
+      actor,
+      'ENABLE',
+      'ob_levelcard_column',
+      `${cardType}|${cardVersion}|${columnName}`,
+      before,
+      after,
+    );
+
+    return {
+      cardType,
+      cardVersion,
+      columnName,
+      status: 'active',
+      enabledAt: new Date().toISOString(),
     };
   }
 
@@ -1627,7 +1713,7 @@ export class AssignmentScoringService {
 
   protected async writeAudit(
     actor: ActorContext,
-    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'DISABLE',
+    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'DISABLE' | 'ENABLE',
     entityType: string,
     entityId: string,
     beforeValue: Record<string, unknown> | null,
@@ -1638,7 +1724,7 @@ export class AssignmentScoringService {
       entity_type: entityType,
       entity_id: entityId,
       // assignment_audit_log.action enum 為 CREATE/UPDATE/DELETE/RUN，
-      // 沿用 F068 cast pattern 允許 DISABLE 寫入（DB schema varchar(10) 容許）
+      // 沿用 F068 cast pattern 允許 DISABLE / ENABLE 寫入（DB schema varchar(10) 容許）
       action: action as 'CREATE' | 'UPDATE' | 'DELETE',
       actor_id: actor.userId,
       actor_name: actorName,
