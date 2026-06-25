@@ -1530,6 +1530,182 @@ describe('ScoringConfigPage — F106 顯示 inactive 維度 + 啟用', () => {
   });
 });
 
+// =====================================================================
+// F107：計分卡設定頁顯示衍生碼業務語意（decode UI）
+//   - Tab 3 分數設定（ScoresTab）：level1 碼旁並陳 decode 業務語意（原始碼保留）
+//   - Tab 2 計分維度（DimensionsTab）：展開列顯示「來源欄 + 衍生規則」摘要
+//   - decode=null（純數值欄）→ 優雅降級不渲染（BR-6 / UI-5）
+// =====================================================================
+
+// 含 decode 的維度 fixture（PROJECT_TP composite / SALES_STS category / 純數值欄 LOAN_RATE）
+const DIMENSIONS_WITH_DECODE = [
+  {
+    columnName: 'PROJECT_TP',
+    columnLabel: '專案類別',
+    matchType: 'COMPOSITE' as const,
+    scoreSummary: '2 個區間',
+    status: 'active' as const,
+    scores: [
+      { level1: 'A', level2S: '06', level2E: '06', score: 37 },
+      { level1: null, level2S: '12', level2E: '12', score: 28 },
+    ],
+    decode: {
+      sourceField: 'spec_tp + spec_name',
+      derivationRule: 'spec_tp 代碼且是否借新還舊（spec_name 含「借新還舊」→ A，否則非借新還舊）',
+      codes: [
+        { level: 'level1' as const, code: 'A', meaning: '借新還舊' },
+        { level: 'level1' as const, code: null, meaning: '非借新還舊' },
+        { level: 'level2' as const, code: null, meaning: '專案代碼 spec_tp（兩碼，level2_s=level2_e）' },
+      ],
+    },
+  },
+  {
+    columnName: 'SALES_STS',
+    columnLabel: '業務註記',
+    matchType: 'CATEGORY' as const,
+    scoreSummary: '3 個區間',
+    status: 'active' as const,
+    scores: [
+      { level1: 'AGENT', level2S: null, level2E: null, score: 10 },
+      { level1: 'UCD', level2S: null, level2E: null, score: 5 },
+      { level1: 'HFC', level2S: null, level2E: null, score: 0 },
+    ],
+    decode: {
+      sourceField: 'ob_pool_data.sales_sts_na',
+      derivationRule: '轉成 AGENT / UCD / HFC',
+      codes: [
+        { level: 'level1' as const, code: 'AGENT', meaning: '代理商' },
+        { level: 'level1' as const, code: 'UCD', meaning: '中古車商' },
+        { level: 'level1' as const, code: 'HFC', meaning: '和潤自家' },
+      ],
+    },
+  },
+  {
+    columnName: 'LOAN_RATE',
+    columnLabel: '貸款成數',
+    matchType: 'RANGE' as const,
+    scoreSummary: '1 個區間',
+    status: 'active' as const,
+    scores: [{ level1: null, level2S: '0', level2E: '99', score: 8 }],
+    // 純數值欄：decode=null（優雅降級）
+    decode: null,
+  },
+];
+
+describe('ScoringConfigPage — F107 decode UI', () => {
+  beforeEach(() => {
+    mockedGetScoring.mockResolvedValue({
+      version: DEFAULT_VERSION_WITH_VALUES,
+      dimensions: DIMENSIONS_WITH_DECODE,
+    } as any);
+  });
+
+  it('TS-F107-FE-01（UI-1 / AC-1）：Tab 3 SALES_STS 列在碼旁並陳 decode 業務語意（原始碼保留）', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-row-0')).toBeInTheDocument();
+    });
+    // PROJECT_TP 2 列（idx 0,1），SALES_STS 由 idx 2 起：AGENT/UCD/HFC
+    // 找出 AGENT 列的 decode（業務語意「代理商」）
+    const agentRow = screen.getByTestId('score-row-2');
+    expect(agentRow.textContent).toContain('AGENT'); // 原始碼保留
+    expect(within(agentRow).getByTestId('score-row-2-decode').textContent).toContain(
+      '代理商',
+    );
+    // UCD 列（idx 3）→「中古車商」
+    expect(
+      within(screen.getByTestId('score-row-3')).getByTestId('score-row-3-decode')
+        .textContent,
+    ).toContain('中古車商');
+  });
+
+  it('TS-F107-FE-02（UI-1 / AC-1）：Tab 3 PROJECT_TP composite — level1=A 顯示「借新還舊」、level1=null 顯示「非借新還舊」、level2 標示專案代碼', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-row-0')).toBeInTheDocument();
+    });
+    // idx 0：level1='A' → 借新還舊；level2_s='06' → 專案代碼說明
+    const row0 = screen.getByTestId('score-row-0');
+    expect(within(row0).getByTestId('score-row-0-decode').textContent).toContain(
+      '借新還舊',
+    );
+    expect(
+      within(row0).getByTestId('score-row-0-decode-level2').textContent,
+    ).toContain('專案代碼');
+    // idx 1：level1=null → 非借新還舊
+    const row1 = screen.getByTestId('score-row-1');
+    expect(within(row1).getByTestId('score-row-1-decode').textContent).toContain(
+      '非借新還舊',
+    );
+  });
+
+  it('TS-F107-FE-03（UI-5 / BR-6 / AC-1 末項）：Tab 3 純數值欄（LOAN_RATE，decode=null）不渲染 decode 文字', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-row-0')).toBeInTheDocument();
+    });
+    // LOAN_RATE 為最後一列（PROJECT_TP 2 + SALES_STS 3 = idx 5）
+    const loanRow = screen.getByTestId('score-row-5');
+    expect(loanRow.textContent).toContain('LOAN_RATE');
+    // 無 decode 元素
+    expect(within(loanRow).queryByTestId('score-row-5-decode')).toBeNull();
+    expect(within(loanRow).queryByTestId('score-row-5-decode-level2')).toBeNull();
+  });
+
+  it('TS-F107-FE-04（UI-2 / AC-2）：Tab 2 展開有 decode 維度顯示「來源欄 + 衍生規則」摘要', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-row-SALES_STS')).toBeInTheDocument();
+    });
+    // 展開 SALES_STS 維度
+    fireEvent.click(screen.getByTestId('dim-row-SALES_STS'));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('dim-decode-summary-SALES_STS'),
+      ).toBeInTheDocument();
+    });
+    const summary = screen.getByTestId('dim-decode-summary-SALES_STS');
+    expect(summary.textContent).toContain('ob_pool_data.sales_sts_na'); // 來源欄
+    expect(summary.textContent).toContain('AGENT'); // 衍生規則摘要
+  });
+
+  it('TS-F107-FE-05（UI-5 / BR-6）：Tab 2 展開純數值欄（LOAN_RATE，decode=null）不渲染 decode 摘要', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-row-LOAN_RATE')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('dim-row-LOAN_RATE'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dim-detail-LOAN_RATE')).toBeInTheDocument();
+    });
+    // 展開但無 decode 摘要區塊
+    expect(
+      screen.queryByTestId('dim-decode-summary-LOAN_RATE'),
+    ).toBeNull();
+  });
+
+  it('TS-F107-FE-06（AC-3 / UI-4）：decode 為唯讀展示，無任何編輯 / 刪除入口', async () => {
+    render(wrap(<ScoringConfigPage />));
+    await switchToLegacyTabs();
+    fireEvent.click(screen.getByTestId('tab-score'));
+    await waitFor(() => {
+      expect(screen.getByTestId('score-row-2-decode')).toBeInTheDocument();
+    });
+    const decodeEl = screen.getByTestId('score-row-2-decode');
+    // decode 為純文字 span，無 input / button / 編輯入口
+    expect(decodeEl.querySelector('input')).toBeNull();
+    expect(decodeEl.querySelector('button')).toBeNull();
+  });
+});
+
 // ---- 錯誤碼拆分：v1.3 / v1.4 rename（前端字面字串）----
 
 describe('ScoringConfigPage — v1.3 / v1.4 錯誤碼 rename 對齊', () => {

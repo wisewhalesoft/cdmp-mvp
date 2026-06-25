@@ -278,4 +278,113 @@ describe('AssignmentScoringService — F053 getScoring', () => {
     expect(result.dimensions[0].scores).toEqual([]);
     expect(result.dimensions[0].scoreSummary).toBe('0 個區間');
   });
+
+  // =========================
+  // F107：每個 dimension 附唯讀 decode（AC-1 / AC-2 / BR-6）
+  // =========================
+  describe('F107 getScoring decode', () => {
+    function mockActiveVersion() {
+      versionRepo.findOne.mockResolvedValue({
+        card_type: 'H', card_name: '期中', card_version: 1,
+        sdate: '20190823', edate: '20991231', status: 'active',
+        created_by: null, created_at: null,
+      });
+      scoreRepo.find.mockResolvedValue([]);
+    }
+
+    it('TS-F107-B01：PROJECT_TP 維度附 decode（composite 碼意義 + 來源欄 + level2 專案代碼）', async () => {
+      mockActiveVersion();
+      columnRepo.find.mockResolvedValue([
+        { card_type: 'H', card_version: 1, column_name: 'PROJECT_TP', column_label: '專案類別', status: 'active' },
+      ]);
+
+      const result = await service.getScoring({ cardType: 'H' });
+      const dim = result.dimensions.find((d) => d.columnName === 'PROJECT_TP')!;
+
+      expect(dim.decode).not.toBeNull();
+      expect(dim.decode!.sourceField).toBe('spec_tp + spec_name');
+      expect(dim.decode!.derivationRule).toContain('借新還舊');
+      // A→借新還舊 / null→非借新還舊 / level2→專案代碼
+      const byKey = dim.decode!.codes.map((c) => `${c.level}:${c.code}:${c.meaning}`);
+      expect(byKey).toContain('level1:A:借新還舊');
+      expect(byKey).toContain('level1:null:非借新還舊');
+      expect(dim.decode!.codes.some((c) => c.level === 'level2' && c.meaning.includes('專案代碼'))).toBe(true);
+    });
+
+    it('TS-F107-B02：SALES_STS 維度 decode 含 AGENT/UCD/HFC 業務語意', async () => {
+      mockActiveVersion();
+      columnRepo.find.mockResolvedValue([
+        { card_type: 'H', card_version: 1, column_name: 'SALES_STS', column_label: '業務註記', status: 'active' },
+      ]);
+
+      const result = await service.getScoring({ cardType: 'H' });
+      const dim = result.dimensions.find((d) => d.columnName === 'SALES_STS')!;
+
+      expect(dim.decode!.sourceField).toBe('ob_pool_data.sales_sts_na');
+      const byCode = Object.fromEntries(dim.decode!.codes.map((c) => [c.code, c.meaning]));
+      expect(byCode.AGENT).toBe('代理商');
+      expect(byCode.UCD).toBe('中古車商');
+      expect(byCode.HFC).toBe('和潤自家');
+    });
+
+    it('TS-F107-B03：CUS_SEX 維度 decode 含 1男/2女/3法人', async () => {
+      mockActiveVersion();
+      columnRepo.find.mockResolvedValue([
+        { card_type: 'H', card_version: 1, column_name: 'CUS_SEX', column_label: '客戶性別', status: 'active' },
+      ]);
+
+      const result = await service.getScoring({ cardType: 'H' });
+      const dim = result.dimensions.find((d) => d.columnName === 'CUS_SEX')!;
+
+      expect(dim.decode!.sourceField).toBe('customer_core.cus_sex');
+      const byCode = Object.fromEntries(dim.decode!.codes.map((c) => [c.code, c.meaning]));
+      expect(byCode['1']).toBe('男（個人）');
+      expect(byCode['2']).toBe('女（個人）');
+      expect(byCode['3']).toBe('法人');
+    });
+
+    it('TS-F107-B04：個人/法人分流欄（AGE）decode 欄層摘要、codes 空陣列', async () => {
+      mockActiveVersion();
+      columnRepo.find.mockResolvedValue([
+        { card_type: 'H', card_version: 1, column_name: 'AGE', column_label: '年齡', status: 'active' },
+      ]);
+
+      const result = await service.getScoring({ cardType: 'H' });
+      const dim = result.dimensions.find((d) => d.columnName === 'AGE')!;
+
+      expect(dim.decode).not.toBeNull();
+      expect(dim.decode!.codes).toEqual([]);
+      expect(dim.decode!.derivationRule).toContain('個人/法人');
+    });
+
+    it('TS-F107-B05：純數值欄（LIST_MONTH / CAR_YEAR）decode=null（BR-6 優雅降級）', async () => {
+      mockActiveVersion();
+      columnRepo.find.mockResolvedValue([
+        { card_type: 'H', card_version: 1, column_name: 'LIST_MONTH', column_label: '月數差', status: 'active' },
+        { card_type: 'H', card_version: 1, column_name: 'CAR_YEAR', column_label: '車齡', status: 'active' },
+      ]);
+
+      const result = await service.getScoring({ cardType: 'H' });
+      for (const d of result.dimensions) {
+        expect(d.decode).toBeNull();
+      }
+    });
+
+    it('TS-F107-B06：每個 dimension 物件均含 decode 鍵（有 decode 為物件、無則 null）', async () => {
+      mockActiveVersion();
+      columnRepo.find.mockResolvedValue([
+        { card_type: 'H', card_version: 1, column_name: 'SALES_STS', column_label: '業務註記', status: 'active' },
+        { card_type: 'H', card_version: 1, column_name: 'LOAN_RATE', column_label: '貸款成數', status: 'active' },
+      ]);
+
+      const result = await service.getScoring({ cardType: 'H' });
+      for (const d of result.dimensions) {
+        expect(d).toHaveProperty('decode');
+      }
+      const sales = result.dimensions.find((d) => d.columnName === 'SALES_STS')!;
+      const loan = result.dimensions.find((d) => d.columnName === 'LOAN_RATE')!;
+      expect(sales.decode).not.toBeNull();
+      expect(loan.decode).toBeNull();
+    });
+  });
 });
