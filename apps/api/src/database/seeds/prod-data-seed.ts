@@ -1,7 +1,7 @@
 /**
  * 生產初始化資料 Seed（冪等）
  *
- * 對 E07 計分卡相關 6 表執行「表為空才 INSERT」的安全初始化：
+ * 對 E07 計分卡相關 6 表執行「加法式 reconcile」的安全初始化（B2 硬化）：
  *   ob_card_type, ob_levelcard_version, ob_levelcard_column,
  *   ob_levelcard_score, ob_levelcard_level, ob_tier
  *
@@ -13,17 +13,23 @@
  *   （計分卡資料從 reference/DumpData/*.csv 2026-05-05 dump 預先生成；
  *    pipelines 從 dev DB 2026-05-21 dump 後手 commit）
  *
- * 安全機制：
- *   - 每表先 SELECT COUNT(*)，若 > 0 則 SKIP，不覆寫業務既有資料
- *   - ob_levelcard_column 特例：用 UPDATE WHERE column_label IS NULL 補
- *     中文標籤（不洗現有 column_label）
- *   - ob_levelcard_column.match_type 在 score 載入後重新依資料推導
- *   - etl_pipelines 以 name 為 idempotency key，存在即 SKIP，不洗 production
- *     使用者手動編輯過的版本
+ * 安全機制（B2：取代舊「非空就整批 SKIP」）：
+ *   - 加法式 reconcile（reconcileTable）：逐 seed row 用自然鍵判存在，只 INSERT
+ *     「seed 有、DB 沒有」的缺 row。空表→全插（行為同舊版）；非空表→只補缺、
+ *     完全不碰既有 row（不洗業務 UI 改動）、冪等（再跑插 0）。自然鍵可空欄位用
+ *     IS NOT DISTINCT FROM 對 NULL 安全；表無 unique 約束 → WHERE 手動判（容忍重複列）。
+ *   - 漂移偵測（WARN-only）：自然鍵存在但值欄與 seed 不同 → console.warn，預設不改。
+ *   - opt-in repair：SEED_REPAIR_DRIFT=true 時把偵測到的漂移欄 UPDATE 回 seed 值。
+ *   - ob_levelcard_column 特例：用 UPDATE WHERE column_label IS NULL 補中文標籤
+ *     （不洗現有 column_label）；新 INSERT 的 column 之 match_type 僅對「新列」依
+ *     score 重新推導（不洗既有業務 match_type）。
+ *   - etl_pipelines / extraction_tasks 以 name 為 idempotency key，per-row 存在即 SKIP，
+ *     不洗 production 使用者手動編輯過的版本（非本輪 B2 範圍，維持原 per-row 行為）。
  *
  * 用法：
  *   docker compose --profile data-seed up data-seed
  *   或 local：npm run data-seed
+ *   修回漂移：SEED_REPAIR_DRIFT=true docker compose --profile data-seed up data-seed
  */
 
 import { DataSource, QueryRunner } from 'typeorm';
@@ -160,61 +166,274 @@ function loadJson<T>(file: string): T[] {
   return JSON.parse(raw) as T[];
 }
 
-async function tableCount(qr: QueryRunner, table: string): Promise<number> {
-  const r = await qr.query(`SELECT COUNT(*)::int AS n FROM ${table}`);
-  return r[0]?.n ?? 0;
+// ===========================================================================
+// B2：加法式 reconcile loader（取代「非空就整批 SKIP」）
+// ---------------------------------------------------------------------------
+// 三層機制（六張計分卡表共用）：
+//   ① 加法式 reconcile：逐 seed row 用自然鍵判存在，只 INSERT「seed 有、DB 沒有」
+//      的 row。空表→全插；非空表→只補缺、完全不碰既有 row、冪等（再跑插 0）。
+//      自然鍵可空欄位用 IS NOT DISTINCT FROM 對 NULL 安全；表無 unique 約束
+//      （只有 surrogate id PK）→ 用 WHERE NOT EXISTS 手動判（容忍重複列不報錯）。
+//   ② 漂移偵測（WARN-only）：自然鍵存在但值欄與 seed 不同 → console.warn 列出
+//      「表 / 自然鍵 / 欄 / seed 值 vs DB 值」，預設不改（保留業務 UI 改動）。
+//   ③ opt-in repair：SEED_REPAIR_DRIFT === 'true' 時把②偵測到的漂移欄 UPDATE 回
+//      seed 值（並 log 已修 N 筆）。
+//
+// 紅線：絕不預設覆寫既有 row；空表全插行為不可退化。
+// ===========================================================================
+
+/**
+ * 是否啟用漂移修復（每次呼叫時讀 env，使測試可逐案 toggle SEED_REPAIR_DRIFT）。
+ * 預設（未設 / 非 'true'）僅 WARN 不改。
+ */
+function repairDriftEnabled(): boolean {
+  return process.env.SEED_REPAIR_DRIFT === 'true';
 }
 
-async function seedCardTypes(qr: QueryRunner): Promise<void> {
-  const rows = loadJson<CardType>('ob-card-type.json');
-  const n = await tableCount(qr, 'ob_card_type');
-  if (n > 0) {
-    console.log(`  ob_card_type: SKIP（已有 ${n} 列）`);
-    return;
-  }
-  for (const r of rows) {
-    await qr.query(
-      `INSERT INTO ob_card_type (card_type, card_name, prod_kind, status, created_at, created_by, updated_at, updated_by)
-       VALUES ($1, $2, $3, $4, NOW(), 'PROD_SEED', NOW(), 'PROD_SEED')`,
-      [r.card_type, r.card_name, r.prod_kind, r.status],
-    );
-  }
-  console.log(`  ob_card_type: INSERT ${rows.length} 列`);
+/**
+ * reconcile 表描述子：
+ *   - table：實體表名
+ *   - keyColumns：自然鍵欄位（依序），用於存在性判斷與漂移定位
+ *   - valueColumns：「值欄」，存在時偵測漂移（不含自然鍵）
+ *   - extraInsertColumns：INSERT 時除 key+value 外尚需帶的固定欄位（如 created_at=NOW()）
+ *   - mapRow：把 seed JSON row 轉成 { [column]: value } 的扁平物件（涵蓋 key+value 欄）
+ */
+interface ReconcileSpec<T> {
+  table: string;
+  keyColumns: string[];
+  valueColumns: string[];
+  mapRow: (r: T) => Record<string, unknown>;
+  /** INSERT 額外欄位（key+value 之外），value 為 SQL 片段（如 'NOW()'）或 bind 值。 */
+  extraInsert?: Record<string, { sql: string } | { value: unknown }>;
+  /** 顯示用後綴（log）。 */
+  logSuffix?: string;
+  /** 每筆新 INSERT 後回呼（傳入 mapped row），供呼叫端蒐集新列自然鍵（如 match_type derive 範圍）。 */
+  onInserted?: (mapped: Record<string, unknown>) => void;
 }
 
-async function seedVersions(qr: QueryRunner): Promise<void> {
-  const rows = loadJson<LevelcardVersion>('ob-levelcard-version.json');
-  const n = await tableCount(qr, 'ob_levelcard_version');
-  if (n > 0) {
-    console.log(`  ob_levelcard_version: SKIP（已有 ${n} 列）`);
-    return;
+/** 以自然鍵尋找既有列（NULL-safe：可空鍵欄用 IS NOT DISTINCT FROM）。回傳所有 match 列（容忍重複）。 */
+async function findByKey<T>(
+  qr: QueryRunner,
+  spec: ReconcileSpec<T>,
+  mapped: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  for (const col of spec.keyColumns) {
+    params.push(mapped[col]);
+    // IS NOT DISTINCT FROM：NULL = NULL 視為相等（自然鍵可空欄位 NULL-safe）
+    where.push(`${col} IS NOT DISTINCT FROM $${params.length}`);
   }
-  for (const r of rows) {
-    await qr.query(
-      `INSERT INTO ob_levelcard_version (card_type, card_name, card_version, sdate, edate, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-      [r.card_type, r.card_name, r.card_version, r.sdate, r.edate, r.status],
-    );
-  }
-  console.log(`  ob_levelcard_version: INSERT ${rows.length} 列`);
+  const selectCols = [...spec.keyColumns, ...spec.valueColumns].join(', ');
+  return qr.query(
+    `SELECT ${selectCols} FROM ${spec.table} WHERE ${where.join(' AND ')}`,
+    params,
+  );
 }
 
-async function seedColumns(qr: QueryRunner): Promise<{ inserted: boolean }> {
-  const rows = loadJson<LevelcardColumn>('ob-levelcard-column.json');
-  const n = await tableCount(qr, 'ob_levelcard_column');
-  if (n === 0) {
-    for (const r of rows) {
+/** 把自然鍵組成可讀字串供 log。 */
+function keyDesc<T>(
+  spec: ReconcileSpec<T>,
+  mapped: Record<string, unknown>,
+): string {
+  return spec.keyColumns
+    .map((c) => `${c}=${JSON.stringify(mapped[c])}`)
+    .join(', ');
+}
+
+/**
+ * 加法式 reconcile + 漂移偵測 + opt-in repair（六表共用核心）。
+ * 回傳統計：inserted / driftDetected / repaired。
+ */
+async function reconcileTable<T>(
+  qr: QueryRunner,
+  rows: T[],
+  spec: ReconcileSpec<T>,
+): Promise<{ inserted: number; driftDetected: number; repaired: number }> {
+  const repair = repairDriftEnabled();
+  let inserted = 0;
+  let driftDetected = 0;
+  let repaired = 0;
+
+  for (const raw of rows) {
+    const mapped = spec.mapRow(raw);
+    const existing = await findByKey(qr, spec, mapped);
+
+    if (existing.length === 0) {
+      // ① 缺 row → INSERT
+      const cols: string[] = [];
+      const valueSql: string[] = [];
+      const params: unknown[] = [];
+      const addBind = (col: string, val: unknown) => {
+        cols.push(col);
+        params.push(val);
+        valueSql.push(`$${params.length}`);
+      };
+      for (const col of [...spec.keyColumns, ...spec.valueColumns]) {
+        addBind(col, mapped[col]);
+      }
+      for (const [col, def] of Object.entries(spec.extraInsert ?? {})) {
+        if ('sql' in def) {
+          cols.push(col);
+          valueSql.push(def.sql);
+        } else {
+          addBind(col, def.value);
+        }
+      }
       await qr.query(
-        `INSERT INTO ob_levelcard_column (card_type, card_version, column_name, column_label, status, match_type, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'RANGE', NOW(), NOW())`,
-        [r.card_type, r.card_version, r.column_name, r.column_label, r.status],
+        `INSERT INTO ${spec.table} (${cols.join(', ')}) VALUES (${valueSql.join(', ')})`,
+        params,
       );
+      inserted++;
+      spec.onInserted?.(mapped);
+      continue;
     }
-    console.log(`  ob_levelcard_column: INSERT ${rows.length} 列`);
-    return { inserted: true };
+
+    // ②③ 既有 row：偵測值欄漂移（以第一筆 match 為基準；重複列容忍）
+    const dbRow = existing[0];
+    const driftedCols: string[] = [];
+    for (const vcol of spec.valueColumns) {
+      const seedVal = mapped[vcol];
+      const dbVal = dbRow[vcol];
+      if (!valueEquals(seedVal, dbVal)) {
+        driftedCols.push(vcol);
+        driftDetected++;
+        console.warn(
+          `  [漂移] ${spec.table}（${keyDesc(spec, mapped)}）欄 ${vcol}：` +
+            `seed=${JSON.stringify(seedVal)} vs DB=${JSON.stringify(dbVal)}` +
+            (repair ? '（將修回 seed 值）' : '（未修）'),
+        );
+      }
+    }
+
+    if (repair && driftedCols.length > 0) {
+      const setSql: string[] = [];
+      const params: unknown[] = [];
+      for (const col of driftedCols) {
+        params.push(mapped[col]);
+        setSql.push(`${col} = $${params.length}`);
+      }
+      const where: string[] = [];
+      for (const col of spec.keyColumns) {
+        params.push(mapped[col]);
+        where.push(`${col} IS NOT DISTINCT FROM $${params.length}`);
+      }
+      await qr.query(
+        `UPDATE ${spec.table} SET ${setSql.join(', ')} WHERE ${where.join(' AND ')}`,
+        params,
+      );
+      repaired += driftedCols.length;
+    }
   }
-  // 既有資料：補中文 column_label（不洗業務調整過的值）
-  let updated = 0;
+
+  const suffix = spec.logSuffix ? `（${spec.logSuffix}）` : '';
+  let line = `  ${spec.table}: INSERT ${inserted} 缺列${suffix}`;
+  if (driftDetected > 0) {
+    line += repair
+      ? `；偵測 ${driftDetected} 筆值漂移（已修 ${repaired} 筆）`
+      : `；偵測 ${driftDetected} 筆值漂移（未修，設 SEED_REPAIR_DRIFT=true 可修回）`;
+  }
+  console.log(line);
+  return { inserted, driftDetected, repaired };
+}
+
+/** 值相等判斷：NULL-safe + 型別寬鬆（DB 數值欄可能回 string，seed 為 number）。 */
+function valueEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined) return b === null || b === undefined;
+  if (b === null || b === undefined) return false;
+  // 數值欄：PG numeric/integer 經 driver 可能回 string，與 seed number 比較需正規化。
+  if (typeof a === 'number' || typeof b === 'number') {
+    const na = Number(a);
+    const nb = Number(b);
+    if (!Number.isNaN(na) && !Number.isNaN(nb)) return na === nb;
+  }
+  return String(a) === String(b);
+}
+
+export async function seedCardTypes(qr: QueryRunner): Promise<void> {
+  const rows = loadJson<CardType>('ob-card-type.json');
+  await reconcileTable<CardType>(qr, rows, {
+    table: 'ob_card_type',
+    keyColumns: ['card_type'],
+    valueColumns: ['card_name', 'prod_kind', 'status'],
+    mapRow: (r) => ({
+      card_type: r.card_type,
+      card_name: r.card_name,
+      prod_kind: r.prod_kind,
+      status: r.status,
+    }),
+    extraInsert: {
+      created_at: { sql: 'NOW()' },
+      created_by: { value: 'PROD_SEED' },
+      updated_at: { sql: 'NOW()' },
+      updated_by: { value: 'PROD_SEED' },
+    },
+  });
+}
+
+export async function seedVersions(qr: QueryRunner): Promise<void> {
+  const rows = loadJson<LevelcardVersion>('ob-levelcard-version.json');
+  await reconcileTable<LevelcardVersion>(qr, rows, {
+    table: 'ob_levelcard_version',
+    keyColumns: ['card_type', 'card_version'],
+    valueColumns: ['card_name', 'sdate', 'edate', 'status'],
+    mapRow: (r) => ({
+      card_type: r.card_type,
+      card_version: r.card_version,
+      card_name: r.card_name,
+      sdate: r.sdate,
+      edate: r.edate,
+      status: r.status,
+    }),
+    extraInsert: {
+      created_at: { sql: 'NOW()' },
+      updated_at: { sql: 'NOW()' },
+    },
+  });
+}
+
+export interface ColumnKey {
+  card_type: string;
+  card_version: number;
+  column_name: string;
+}
+
+export async function seedColumns(
+  qr: QueryRunner,
+): Promise<{ insertedKeys: ColumnKey[] }> {
+  const rows = loadJson<LevelcardColumn>('ob-levelcard-column.json');
+  // 漂移偵測「值欄」=status（依設計）。新 INSERT 的 column 以 'RANGE' 佔位 match_type，
+  // 之後由 deriveMatchType 僅對「新補的列」依 score 推導正確值（不洗既有業務 match_type）。
+  const insertedKeys: ColumnKey[] = [];
+  await reconcileTable<LevelcardColumn>(qr, rows, {
+    table: 'ob_levelcard_column',
+    keyColumns: ['card_type', 'card_version', 'column_name'],
+    valueColumns: ['status'],
+    mapRow: (r) => ({
+      card_type: r.card_type,
+      card_version: r.card_version,
+      column_name: r.column_name,
+      status: r.status,
+    }),
+    extraInsert: {
+      // column_label / match_type 不納入漂移偵測（業務可調），INSERT 時帶 seed/佔位值。
+      column_label: { value: null }, // 由下方統一補（避免新列 label 漂移誤判）
+      match_type: { value: 'RANGE' },
+      created_at: { sql: 'NOW()' },
+      updated_at: { sql: 'NOW()' },
+    },
+    onInserted: (mapped) =>
+      insertedKeys.push({
+        card_type: mapped.card_type as string,
+        card_version: mapped.card_version as number,
+        column_name: mapped.column_name as string,
+      }),
+  });
+
+  // 既有「補 column_label IS NULL」邏輯保留：補中文標籤，不洗業務調整過的非 NULL 值。
+  // 同時涵蓋本次新 INSERT 的列（其 column_label 先以 NULL 佔位）。
+  let labelUpdated = 0;
   for (const r of rows) {
     if (r.column_label === null) continue;
     const res = await qr.query(
@@ -224,61 +443,79 @@ async function seedColumns(qr: QueryRunner): Promise<{ inserted: boolean }> {
           AND column_label IS NULL`,
       [r.column_label, r.card_type, r.card_version, r.column_name],
     );
-    updated += res[1] ?? 0;
+    labelUpdated += res[1] ?? 0;
   }
-  console.log(`  ob_levelcard_column: SKIP（已有 ${n} 列）；補 column_label ${updated} 列`);
-  return { inserted: false };
+  if (labelUpdated > 0) {
+    console.log(`  ob_levelcard_column: 補 column_label ${labelUpdated} 列`);
+  }
+  return { insertedKeys };
 }
 
-async function seedScores(qr: QueryRunner): Promise<void> {
+export async function seedScores(qr: QueryRunner): Promise<void> {
   const rows = loadJson<LevelcardScore>('ob-levelcard-score.json');
-  const n = await tableCount(qr, 'ob_levelcard_score');
-  if (n > 0) {
-    console.log(`  ob_levelcard_score: SKIP（已有 ${n} 列）`);
-    return;
-  }
-  for (const r of rows) {
-    await qr.query(
-      `INSERT INTO ob_levelcard_score (card_type, card_version, column_name, level1, level2_s, level2_e, score, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [r.card_type, r.card_version, r.column_name, r.level1, r.level2_s, r.level2_e, r.score],
-    );
-  }
-  console.log(`  ob_levelcard_score: INSERT ${rows.length} 列`);
+  await reconcileTable<LevelcardScore>(qr, rows, {
+    table: 'ob_levelcard_score',
+    keyColumns: [
+      'card_type',
+      'card_version',
+      'column_name',
+      'level1',
+      'level2_s',
+      'level2_e',
+    ],
+    valueColumns: ['score'],
+    mapRow: (r) => ({
+      card_type: r.card_type,
+      card_version: r.card_version,
+      column_name: r.column_name,
+      level1: r.level1,
+      level2_s: r.level2_s,
+      level2_e: r.level2_e,
+      score: r.score,
+    }),
+    extraInsert: {
+      created_at: { sql: 'NOW()' },
+      updated_at: { sql: 'NOW()' },
+    },
+  });
 }
 
-async function seedLevels(qr: QueryRunner): Promise<void> {
+export async function seedLevels(qr: QueryRunner): Promise<void> {
   const rows = loadJson<LevelcardLevel>('ob-levelcard-level.json');
-  const n = await tableCount(qr, 'ob_levelcard_level');
-  if (n > 0) {
-    console.log(`  ob_levelcard_level: SKIP（已有 ${n} 列）`);
-    return;
-  }
-  for (const r of rows) {
-    await qr.query(
-      `INSERT INTO ob_levelcard_level (card_type, card_version, score_s, score_e, card_level, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-      [r.card_type, r.card_version, r.score_s, r.score_e, r.card_level],
-    );
-  }
-  console.log(`  ob_levelcard_level: INSERT ${rows.length} 列`);
+  await reconcileTable<LevelcardLevel>(qr, rows, {
+    table: 'ob_levelcard_level',
+    keyColumns: ['card_type', 'card_version', 'score_s', 'score_e', 'card_level'],
+    // 設計指定值欄＝card_level，但其已全部納入自然鍵（score_s/e + card_level），
+    // 故自然鍵相等即整列相等 → 不可能漂移。valueColumns 留空避免 SELECT 欄重複。
+    valueColumns: [],
+    mapRow: (r) => ({
+      card_type: r.card_type,
+      card_version: r.card_version,
+      score_s: r.score_s,
+      score_e: r.score_e,
+      card_level: r.card_level,
+    }),
+    extraInsert: {
+      created_at: { sql: 'NOW()' },
+      updated_at: { sql: 'NOW()' },
+    },
+  });
 }
 
-async function seedTiers(qr: QueryRunner): Promise<void> {
+export async function seedTiers(qr: QueryRunner): Promise<void> {
   const rows = loadJson<Tier>('ob-tier.json');
-  const n = await tableCount(qr, 'ob_tier');
-  if (n > 0) {
-    console.log(`  ob_tier: SKIP（已有 ${n} 列）`);
-    return;
-  }
-  for (const r of rows) {
-    await qr.query(
-      `INSERT INTO ob_tier (list_nm, card_type, card_level, tier_level)
-       VALUES ($1, $2, $3, $4)`,
-      [r.list_nm, r.card_type, r.card_level, r.tier_level],
-    );
-  }
-  console.log(`  ob_tier: INSERT ${rows.length} 列（OBTIER 正規化後）`);
+  await reconcileTable<Tier>(qr, rows, {
+    table: 'ob_tier',
+    keyColumns: ['list_nm', 'card_type', 'card_level'],
+    valueColumns: ['tier_level'],
+    mapRow: (r) => ({
+      list_nm: r.list_nm,
+      card_type: r.card_type,
+      card_level: r.card_level,
+      tier_level: r.tier_level,
+    }),
+    logSuffix: 'OBTIER 正規化後',
+  });
 }
 
 async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
@@ -423,34 +660,56 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
   console.log(`  extraction_tasks: ${inserted} 新增 / ${skipped} 已存在`);
 }
 
-async function deriveMatchType(qr: QueryRunner): Promise<void> {
-  // 依 score 真實資料重新推導 ob_levelcard_column.match_type
-  // 已存在 match_type 仍會被覆寫——seed 階段以 dump 真實資料為準
-  const res = await qr.query(`
-    UPDATE ob_levelcard_column AS c
-       SET match_type = CASE
-         WHEN EXISTS (
-           SELECT 1 FROM ob_levelcard_score s
-            WHERE s.card_type = c.card_type AND s.card_version = c.card_version
-              AND s.column_name = c.column_name
-              AND s.level1 IS NOT NULL AND s.level2_s IS NOT NULL
-         ) THEN 'COMPOSITE'
-         WHEN EXISTS (
-           SELECT 1 FROM ob_levelcard_score s
-            WHERE s.card_type = c.card_type AND s.card_version = c.card_version
-              AND s.column_name = c.column_name
-              AND s.level1 IS NOT NULL AND s.level2_s IS NULL
-         ) THEN 'CATEGORY'
-         WHEN EXISTS (
-           SELECT 1 FROM ob_levelcard_score s
-            WHERE s.card_type = c.card_type AND s.card_version = c.card_version
-              AND s.column_name = c.column_name
-              AND s.level1 IS NULL AND s.level2_s IS NOT NULL
-         ) THEN 'RANGE'
-         ELSE 'RANGE'
-       END
-  `);
-  console.log(`  ob_levelcard_column.match_type: 重新推導完成（${res[1] ?? 0} 列）`);
+/**
+ * 依 score 真實資料推導 ob_levelcard_column.match_type。
+ *
+ * B2 變更：僅對「本次新 INSERT 的列」推導（傳入 keys），避免洗業務在 UI 手動調整過的
+ * 既有 match_type。新補的列以 'RANGE' 佔位 INSERT，本步驟依其 score 形態推回正確標籤
+ * （match_type 引擎不讀、僅標籤正確性，但別讓新 column 卡在 'RANGE'）。
+ *
+ * keys 為空 → 無新列，直接 no-op。
+ */
+export async function deriveMatchType(
+  qr: QueryRunner,
+  keys: ColumnKey[],
+): Promise<void> {
+  if (keys.length === 0) {
+    console.log(`  ob_levelcard_column.match_type: 無新列，SKIP derive`);
+    return;
+  }
+  let updated = 0;
+  for (const k of keys) {
+    const res = await qr.query(
+      `UPDATE ob_levelcard_column AS c
+         SET match_type = CASE
+           WHEN EXISTS (
+             SELECT 1 FROM ob_levelcard_score s
+              WHERE s.card_type = c.card_type AND s.card_version = c.card_version
+                AND s.column_name = c.column_name
+                AND s.level1 IS NOT NULL AND s.level2_s IS NOT NULL
+           ) THEN 'COMPOSITE'
+           WHEN EXISTS (
+             SELECT 1 FROM ob_levelcard_score s
+              WHERE s.card_type = c.card_type AND s.card_version = c.card_version
+                AND s.column_name = c.column_name
+                AND s.level1 IS NOT NULL AND s.level2_s IS NULL
+           ) THEN 'CATEGORY'
+           WHEN EXISTS (
+             SELECT 1 FROM ob_levelcard_score s
+              WHERE s.card_type = c.card_type AND s.card_version = c.card_version
+                AND s.column_name = c.column_name
+                AND s.level1 IS NULL AND s.level2_s IS NOT NULL
+           ) THEN 'RANGE'
+           ELSE 'RANGE'
+         END
+       WHERE c.card_type = $1 AND c.card_version = $2 AND c.column_name = $3`,
+      [k.card_type, k.card_version, k.column_name],
+    );
+    updated += res[1] ?? 0;
+  }
+  console.log(
+    `  ob_levelcard_column.match_type: 對 ${keys.length} 個新列重新推導完成（${updated} 列）`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -479,12 +738,9 @@ async function main(): Promise<void> {
     await seedScores(qr);
     await seedLevels(qr);
     await seedTiers(qr);
-    // 只在 column 首次 INSERT 才 derive match_type（避免洗業務手動調整）
-    if (columnsResult.inserted) {
-      await deriveMatchType(qr);
-    } else {
-      console.log(`  ob_levelcard_column.match_type: SKIP derive（column 已存在，保留業務值）`);
-    }
+    // 僅對本次新 INSERT 的 column 推導 match_type（避免洗業務手動調整既有列）。
+    // scores 已在上方載入，故 derive 時 score 形態可用。
+    await deriveMatchType(qr, columnsResult.insertedKeys);
     await seedExtractionTasks(qr);
     await seedEtlPipelines(qr);
     await qr.commitTransaction();
