@@ -16,3 +16,7 @@ dist
 
 # Legacy 參考用大型二進位（ground truth，留本機不入版控）
 reference/*.xlsx
+
+# F064 分派結果匯出產物（輸出檔，含真實客戶分派資料，留本機不入版控）
+/assignment_result_*.xlsx
+/assignment_result_*.csv
