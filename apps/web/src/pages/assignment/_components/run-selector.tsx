@@ -29,7 +29,8 @@ export interface RunSelectorProps {
   loading?: boolean;
 }
 
-function formatYm(ym: string): string {
+function formatYm(ym: string | null | undefined): string {
+  if (!ym) return '—';
   if (ym.length === 6) return `${ym.slice(0, 4)}-${ym.slice(4, 6)}`;
   return ym;
 }
@@ -59,13 +60,13 @@ function RunSummary({ run, label }: { run: RunListItem | undefined; label: 'A' |
       <div>
         <span className="text-gray-500">作業年月</span>
         <div className="font-mono font-semibold text-gray-700">
-          {formatYm(run.ym)}
+          {formatYm(run.projectWorkym)}
         </div>
       </div>
       <div>
         <span className="text-gray-500">總筆數</span>
         <div className="font-mono font-semibold text-gray-700 tabular-nums">
-          {(run.totalCount ?? 0).toLocaleString()}
+          {(run.totalCases ?? 0).toLocaleString()}
         </div>
       </div>
       <div>
@@ -136,8 +137,8 @@ export function RunSelector({
           >
             {runs.map((r) => (
               <option key={r.runId} value={r.runId}>
-                {r.runId.slice(0, 13)} — {formatYm(r.ym)}（
-                {(r.totalCount ?? 0).toLocaleString()} 筆）
+                {r.runId.slice(0, 13)} — {formatYm(r.projectWorkym)}（
+                {(r.totalCases ?? 0).toLocaleString()} 筆）
               </option>
             ))}
           </select>
@@ -162,8 +163,8 @@ export function RunSelector({
           >
             {runs.map((r) => (
               <option key={r.runId} value={r.runId}>
-                {r.runId.slice(0, 13)} — {formatYm(r.ym)}（
-                {(r.totalCount ?? 0).toLocaleString()} 筆）
+                {r.runId.slice(0, 13)} — {formatYm(r.projectWorkym)}（
+                {(r.totalCases ?? 0).toLocaleString()} 筆）
               </option>
             ))}
           </select>

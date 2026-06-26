@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  GitCompare,
   Download,
   AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  Users,
   AlertOctagon,
   CheckCircle2,
   ShieldAlert,
+  BarChart2,
+  Building2,
+  Layers,
+  Settings,
+  UserPlus,
+  UserMinus,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -25,27 +27,25 @@ import {
 import { RunSelector } from './_components/run-selector';
 
 /**
- * F067 NFR-005 不一致率警示閾值
- *
- * 不一致率 = customersChangedAssigneeCount / totalB；超過則顯示 algorithm-changed banner。
+ * F067 NFR-005 不一致率警示閾值（與後端 MISMATCH_ALERT_THRESHOLD 一致）。
+ * personnelMismatch.rate（0–1）> 0.03 → algorithm-changed 警示。
  */
 const NFR005_THRESHOLD = 0.03;
+
+const PREVIEW_LIMIT = 50;
 
 /**
  * F067 — 兩個月跑比對頁
  *
- * 對應 prototype: /prototypes/36-run-compare.html
+ * 對應 prototype: /prototypes/36-run-compare.html（6 區塊）
  *
- * 範圍：
- *   - 從 URL ?runA=&runB= 取兩個 runId
- *   - 顯示 summary 卡（total / delta / customers added/removed/reassigned）
- *   - personnelMismatch 表
- *   - customerDiff 表（前 100 列；完整匯出 xlsx）
- *   - 匯出 xlsx (3 sheet: summary / personnelMismatch / customerDiff)
+ * ⚠️ 2026-06-26 重寫：原頁面以虛構契約（summary.totalA / personnelMismatch[]）渲染，
+ * 與後端 CompareResponse 完全不符 → `undefined.toLocaleString()` 整頁白屏。
+ * 本版改為消費後端真實 shape（base/compare、summary.deptDiff/levelDiff、
+ * personnelMismatch.{list,rate,alert}、configDiff、customerDiff.{added,removed}）。
  *
  * RBAC: DirectorOrSectionChiefRoute
  */
-
 export function RunComparePage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -59,15 +59,15 @@ export function RunComparePage() {
   const [exporting, setExporting] = useState(false);
   const [availableRuns, setAvailableRuns] = useState<RunListItem[]>([]);
 
-  // 載入可比對的 runs（status=completed）
+  // 載入可比對的 runs（status=completed）供 selector 使用
   useEffect(() => {
     let aborted = false;
     void (async () => {
       try {
-        const data = await listRuns();
+        const res = await listRuns();
         if (!aborted) {
           setAvailableRuns(
-            (data.runs ?? []).filter((r) => r.status === 'completed'),
+            (res.runs ?? []).filter((r) => r.status === 'completed'),
           );
         }
       } catch {
@@ -94,8 +94,7 @@ export function RunComparePage() {
         if (!aborted) setData(result);
       } catch (err: unknown) {
         const e = err as { response?: { data?: { message?: string } } };
-        if (!aborted)
-          setError(e?.response?.data?.message ?? '比對失敗');
+        if (!aborted) setError(e?.response?.data?.message ?? '比對失敗');
       } finally {
         if (!aborted) setLoading(false);
       }
@@ -108,7 +107,6 @@ export function RunComparePage() {
   const handleCompare = (a: string, b: string) => {
     setSearchParams({ runA: a, runB: b }, { replace: true });
   };
-
   const handleChangeA = (a: string) => setSearchParams({ runA: a, runB });
   const handleChangeB = (b: string) => setSearchParams({ runA, runB: b });
 
@@ -125,24 +123,17 @@ export function RunComparePage() {
     }
   };
 
-  const deltaTotal = data?.summary.deltaTotal ?? 0;
-  const deltaPositive = deltaTotal > 0;
-
-  // F067 不一致率（algorithm-changed 警示）
-  const mismatchRate = (() => {
-    if (!data) return 0;
-    const totalB = data.summary.totalB ?? 0;
-    if (totalB <= 0) return 0;
-    return (data.summary.customersChangedAssigneeCount ?? 0) / totalB;
-  })();
-  // F067 identical 判定：personnelMismatch + customerDiff + changedAssignee 全為 0
-  //（addedCount/removedCount 可能反映兩 run 的客戶集合差異，不屬演算法不一致）
+  // ----- 衍生值（後端 rate 為 0–1 比例；alert 由後端裁定） -----
+  const pm = data?.personnelMismatch;
+  const mismatchRate = pm?.rate ?? 0;
+  const ratePct = mismatchRate * 100;
+  const customerDiff = data?.customerDiff;
   const isIdentical =
     !!data &&
-    (data.summary.customersChangedAssigneeCount ?? 0) === 0 &&
-    (data.personnelMismatch?.length ?? 0) === 0 &&
-    (data.customerDiff?.length ?? 0) === 0;
-  const algorithmChanged = !!data && !isIdentical && mismatchRate > NFR005_THRESHOLD;
+    (pm?.mismatchCount ?? 0) === 0 &&
+    (customerDiff?.added.length ?? 0) === 0 &&
+    (customerDiff?.removed.length ?? 0) === 0;
+  const algorithmChanged = !!pm?.alert && !isIdentical;
 
   return (
     <AppLayout
@@ -160,7 +151,6 @@ export function RunComparePage() {
       }
     >
       <main className="flex-1 p-6 space-y-4">
-        {/* Run Selector */}
         <RunSelector
           runs={availableRuns}
           runA={runA}
@@ -200,14 +190,12 @@ export function RunComparePage() {
             <div className="flex-1">
               <p className="font-semibold text-red-700">
                 人員配對不一致率{' '}
-                <span className="font-mono">
-                  {(mismatchRate * 100).toFixed(2)}%
-                </span>
+                <span className="font-mono">{ratePct.toFixed(2)}%</span>
                 （&gt; NFR-005 警示閾值 {(NFR005_THRESHOLD * 100).toFixed(0)}%）
               </p>
               <p className="text-xs text-gray-600 mt-1">
                 此次變更影響大量案件分派結果。可能因演算法版本變更或設定差異所致，
-                建議檢視設定差異區塊與下載不一致案件清單。
+                建議檢視「設定差異」區塊與下載不一致案件清單。
               </p>
               <div className="mt-2 inline-flex items-center gap-1 text-xs text-red-700">
                 <ShieldAlert className="w-3.5 h-3.5" />
@@ -254,157 +242,17 @@ export function RunComparePage() {
 
         {data && (
           <>
-            {/* Summary cards */}
-            <section
-              className="grid grid-cols-5 gap-3"
-              data-testid="compare-summary"
-            >
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-[11px] text-gray-500">Run A 總數</p>
-                <p className="text-2xl font-mono font-semibold text-gray-900">
-                  {data.summary.totalA.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-[11px] text-gray-500">Run B 總數</p>
-                <p className="text-2xl font-mono font-semibold text-gray-900">
-                  {data.summary.totalB.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-[11px] text-gray-500">差異</p>
-                <p
-                  data-testid="delta-total"
-                  className={`text-2xl font-mono font-bold flex items-center gap-1 ${
-                    deltaPositive
-                      ? 'text-green-700'
-                      : deltaTotal < 0
-                        ? 'text-red-700'
-                        : 'text-gray-600'
-                  }`}
-                >
-                  {deltaPositive ? (
-                    <TrendingUp className="w-5 h-5" />
-                  ) : deltaTotal < 0 ? (
-                    <TrendingDown className="w-5 h-5" />
-                  ) : null}
-                  {deltaTotal >= 0 ? '+' : ''}
-                  {deltaTotal.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-[11px] text-gray-500">新增/移除</p>
-                <p className="text-sm text-gray-700 font-mono">
-                  <span className="text-green-700">+{data.summary.customersAddedCount}</span>
-                  {' / '}
-                  <span className="text-red-700">-{data.summary.customersRemovedCount}</span>
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-[11px] text-gray-500">重新分派</p>
-                <p
-                  data-testid="reassigned-count"
-                  className="text-2xl font-mono font-semibold text-amber-700"
-                >
-                  {data.summary.customersChangedAssigneeCount}
-                </p>
-              </div>
-            </section>
-
-            {/* Personnel mismatch */}
-            {data.personnelMismatch && data.personnelMismatch.length > 0 && (
-              <section
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden"
-                data-testid="personnel-mismatch"
-              >
-                <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-cyan-800" />
-                  <h3 className="text-sm font-semibold text-gray-800">個別業務分派差異</h3>
-                  <span className="text-xs text-gray-400">
-                    （{data.personnelMismatch.length} 員工有差異）
-                  </span>
-                </div>
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                    <tr>
-                      <th className="text-left px-5 py-2 font-medium w-[20%]">員工編號</th>
-                      <th className="text-left px-5 py-2 font-medium">姓名</th>
-                      <th className="text-right px-5 py-2 font-medium w-[15%]">Run A</th>
-                      <th className="text-right px-5 py-2 font-medium w-[15%]">Run B</th>
-                      <th className="text-right px-5 py-2 font-medium w-[15%]">差異</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {data.personnelMismatch.map((p) => (
-                      <tr key={p.empId}>
-                        <td className="px-5 py-2 font-mono text-primary">{p.empId}</td>
-                        <td className="px-5 py-2 text-gray-900">{p.empName ?? '—'}</td>
-                        <td className="px-5 py-2 text-right font-mono">
-                          {p.countA.toLocaleString()}
-                        </td>
-                        <td className="px-5 py-2 text-right font-mono">
-                          {p.countB.toLocaleString()}
-                        </td>
-                        <td
-                          className={`px-5 py-2 text-right font-mono font-semibold ${
-                            p.delta > 0 ? 'text-green-700' : p.delta < 0 ? 'text-red-700' : 'text-gray-500'
-                          }`}
-                        >
-                          {p.delta > 0 ? '+' : ''}
-                          {p.delta}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            )}
-
-            {/* Customer diff */}
-            {data.customerDiff && data.customerDiff.length > 0 && (
-              <section
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden"
-                data-testid="customer-diff"
-              >
-                <div className="px-5 py-3 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-800">
-                    客戶分派差異
-                    <span className="text-xs text-gray-400 ml-1">
-                      （顯示前 {Math.min(100, data.customerDiff.length)} /
-                      共 {data.customerDiff.length} 筆，完整資料請匯出 XLSX）
-                    </span>
-                  </h3>
-                </div>
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                    <tr>
-                      <th className="text-left px-5 py-2 font-medium w-[24%]">customer_id</th>
-                      <th className="text-left px-5 py-2 font-medium w-[24%]">Run A 分派</th>
-                      <th className="text-left px-5 py-2 font-medium w-[24%]">Run B 分派</th>
-                      <th className="text-left px-5 py-2 font-medium w-[14%]">類型</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {data.customerDiff.slice(0, 100).map((c) => (
-                      <tr key={c.customerId}>
-                        <td className="px-5 py-2 font-mono text-xs text-primary">
-                          {c.customerId}
-                        </td>
-                        <td className="px-5 py-2 text-xs text-gray-700">
-                          {c.assigneeA ?? '—'}
-                        </td>
-                        <td className="px-5 py-2 text-xs text-gray-700">
-                          {c.assigneeB ?? '—'}
-                        </td>
-                        <td className="px-5 py-2">
-                          <DiffTypeBadge type={c.diffType} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            )}
+            <SummarySection data={data} />
+            <PersonnelMismatchSection
+              data={data}
+              ratePct={ratePct}
+              onExport={handleExport}
+              exporting={exporting}
+            />
+            <DeptCompareSection deptDiff={data.summary.deptDiff} />
+            <LevelCompareSection levelDiff={data.summary.levelDiff} />
+            <ConfigDiffSection configDiff={data.configDiff} />
+            <CustomerDiffSection customerDiff={data.customerDiff} />
           </>
         )}
       </main>
@@ -412,17 +260,582 @@ export function RunComparePage() {
   );
 }
 
-function DiffTypeBadge({ type }: { type: 'added' | 'removed' | 'reassigned' }) {
-  const config = {
-    added: { label: '新增', bg: 'bg-green-100', text: 'text-green-700' },
-    removed: { label: '移除', bg: 'bg-red-100', text: 'text-red-700' },
-    reassigned: { label: '重派', bg: 'bg-amber-100', text: 'text-amber-700' },
-  }[type];
+// =====================================================================
+// Section 1：Summary 比對（總筆數 / 部門數 / 等級數）
+// =====================================================================
+function SummarySection({ data }: { data: CompareRunsResponse }) {
+  const deptCountA = data.summary.deptDiff.filter((d) => d.baseCount > 0).length;
+  const deptCountB = data.summary.deptDiff.filter(
+    (d) => d.compareCount > 0,
+  ).length;
+  const levelCountA = data.summary.levelDiff.filter(
+    (l) => l.baseCount > 0,
+  ).length;
+  const levelCountB = data.summary.levelDiff.filter(
+    (l) => l.compareCount > 0,
+  ).length;
+
   return (
-    <span
-      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}
+    <section
+      data-testid="compare-summary"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
     >
-      {config.label}
-    </span>
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+        <BarChart2 className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-gray-800">Summary 比對</h3>
+        <span className="text-xs text-gray-400">總筆數 / 部門數 / 等級數</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-gray-200">
+        <SummaryStat
+          label="總分派筆數"
+          a={data.base.totalCases}
+          b={data.compare.totalCases}
+          diff={data.summary.totalDiff}
+          testid="summary-stat-total"
+        />
+        <SummaryStat
+          label="部門數"
+          a={deptCountA}
+          b={deptCountB}
+          diff={deptCountB - deptCountA}
+        />
+        <SummaryStat
+          label="等級數"
+          a={levelCountA}
+          b={levelCountB}
+          diff={levelCountB - levelCountA}
+        />
+      </div>
+    </section>
+  );
+}
+
+function SummaryStat({
+  label,
+  a,
+  b,
+  diff,
+  testid,
+}: {
+  label: string;
+  a: number;
+  b: number;
+  diff: number;
+  testid?: string;
+}) {
+  const diffClass =
+    diff > 0 ? 'text-green-700' : diff < 0 ? 'text-red-700' : 'text-gray-400';
+  return (
+    <div className="px-5 py-4" data-testid={testid}>
+      <div className="text-xs text-gray-500 mb-2">{label}</div>
+      <div className="grid grid-cols-2 gap-4 mb-2">
+        <div>
+          <div className="text-[10px] font-bold text-primary mb-0.5">A (Base)</div>
+          <div className="text-2xl font-bold text-gray-800 tabular-nums font-mono">
+            {a.toLocaleString()}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-green-700 mb-0.5">
+            B (Compare)
+          </div>
+          <div className="text-2xl font-bold text-gray-800 tabular-nums font-mono">
+            {b.toLocaleString()}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-gray-500">差異</span>
+        <span className={`font-mono font-semibold ${diffClass}`}>
+          {diff > 0 ? '+' : ''}
+          {diff.toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Section 2：人員配對一致性（NFR-005 主驗收區）
+// =====================================================================
+function PersonnelMismatchSection({
+  data,
+  ratePct,
+  onExport,
+  exporting,
+}: {
+  data: CompareRunsResponse;
+  ratePct: number;
+  onExport: () => void;
+  exporting: boolean;
+}) {
+  const pm = data.personnelMismatch;
+  const rateColor =
+    ratePct > 3 ? 'text-red-700' : ratePct > 1 ? 'text-amber-600' : 'text-green-700';
+  const barColor =
+    ratePct > 3 ? 'bg-red-500' : ratePct > 1 ? 'bg-amber-500' : 'bg-green-500';
+  const barWidth = Math.max(2, Math.min(100, (ratePct / 5) * 100));
+  const rows = pm.list.slice(0, 10);
+
+  return (
+    <section
+      data-testid="personnel-mismatch"
+      className="bg-white rounded-xl border-2 border-amber-300 overflow-hidden"
+    >
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-amber-50/50">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-amber-500" />
+          <h3 className="text-sm font-semibold text-gray-800">
+            人員配對一致性 diff
+          </h3>
+          <span className="text-xs px-1.5 py-0.5 bg-amber-500 text-white rounded-full font-bold">
+            NFR-005
+          </span>
+        </div>
+        <Button
+          type="button"
+          variant="primary"
+          data-testid="btn-download-mismatch"
+          loading={exporting}
+          loadingText="匯出中..."
+          onClick={onExport}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Download className="w-3.5 h-3.5" />
+            下載不一致案件清單
+          </span>
+        </Button>
+      </div>
+      <div className="px-5 py-5">
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div>
+            <div className="text-xs text-gray-500 mb-1">同批次總案件數</div>
+            <div className="text-2xl font-bold text-gray-800 tabular-nums font-mono">
+              {pm.totalCount.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-1">不一致案件數</div>
+            <div
+              data-testid="mismatch-count"
+              className="text-2xl font-bold text-gray-800 tabular-nums font-mono"
+            >
+              {pm.mismatchCount.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-1">人員配對不一致率</div>
+            <div
+              data-testid="mismatch-rate"
+              className={`text-2xl font-bold tabular-nums font-mono ${rateColor}`}
+            >
+              {ratePct.toFixed(2)}%
+            </div>
+            <div className="mt-1.5 h-3 bg-gray-100 rounded overflow-hidden">
+              <div
+                className={`h-full rounded ${barColor}`}
+                style={{ width: `${barWidth}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              NFR-005 警示門檻 3.00%
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 text-gray-500">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">appl_no</th>
+                <th className="text-left px-3 py-2 font-semibold text-primary">
+                  A：業務員
+                </th>
+                <th className="text-center px-3 py-2 text-gray-300">→</th>
+                <th className="text-left px-3 py-2 font-semibold text-green-700">
+                  B：業務員
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 font-mono">
+              {rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-3 py-6 text-center text-green-700 text-sm"
+                  >
+                    兩次月跑配對 100% 相同 — 演算法 deterministic 驗證通過
+                  </td>
+                </tr>
+              ) : (
+                rows.map((m) => (
+                  <tr key={m.applNo} className="hover:bg-amber-50/30">
+                    <td className="px-3 py-2 font-semibold text-gray-700">
+                      {m.applNo}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="px-2 py-0.5 rounded bg-red-100 text-red-700">
+                        {m.baseEmplId ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center text-gray-300">→</td>
+                    <td className="px-3 py-2">
+                      <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700">
+                        {m.compareEmplId ?? '—'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          {pm.mismatchCount > rows.length && (
+            <div className="px-3 py-2 border-t border-gray-200 text-xs text-gray-500 bg-gray-50/40">
+              顯示前 {rows.length} 筆 — 完整 {pm.mismatchCount.toLocaleString()}{' '}
+              筆請下載 Excel 清單
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =====================================================================
+// Section 3：部門分配比對
+// =====================================================================
+function DeptCompareSection({
+  deptDiff,
+}: {
+  deptDiff: CompareRunsResponse['summary']['deptDiff'];
+}) {
+  const max = Math.max(
+    1,
+    ...deptDiff.map((d) => Math.max(d.baseCount, d.compareCount)),
+  );
+  return (
+    <section
+      data-testid="dept-compare"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+    >
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+        <Building2 className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-gray-800">部門分配比對</h3>
+        <span className="text-xs text-gray-400">A vs B 各部門分派筆數</span>
+      </div>
+      <div className="px-5 py-5 space-y-4">
+        {deptDiff.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">無部門分配資料</p>
+        ) : (
+          deptDiff.map((d) => (
+            <div key={d.deptId}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-xs font-semibold text-gray-600">
+                  {d.deptId}
+                </span>
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                    A: {d.baseCount.toLocaleString()}
+                  </span>
+                  <span className="text-gray-300">vs</span>
+                  <span className="px-2 py-0.5 rounded bg-green-100 text-green-700">
+                    B: {d.compareCount.toLocaleString()}
+                  </span>
+                  <span
+                    className={`font-semibold ${
+                      d.diff > 0
+                        ? 'text-green-700'
+                        : d.diff < 0
+                          ? 'text-red-700'
+                          : 'text-gray-400'
+                    }`}
+                  >
+                    {d.diff > 0 ? '+' : ''}
+                    {d.diff.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="h-3 bg-gray-100 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded"
+                    style={{ width: `${(d.baseCount / max) * 100}%` }}
+                  />
+                </div>
+                <div className="h-3 bg-gray-100 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded"
+                    style={{ width: `${(d.compareCount / max) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+// =====================================================================
+// Section 4：等級（card_level）分佈比對
+// =====================================================================
+function LevelCompareSection({
+  levelDiff,
+}: {
+  levelDiff: CompareRunsResponse['summary']['levelDiff'];
+}) {
+  return (
+    <section
+      data-testid="level-compare"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+    >
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+        <Layers className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-gray-800">
+          CARD_LEVEL 分佈比對
+        </h3>
+      </div>
+      <div className="px-5 py-5">
+        {levelDiff.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">無等級分佈資料</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-gray-500">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">等級</th>
+                <th className="text-right px-3 py-2 font-medium text-primary">
+                  A (Base)
+                </th>
+                <th className="text-right px-3 py-2 font-medium text-green-700">
+                  B (Compare)
+                </th>
+                <th className="text-right px-3 py-2 font-medium">差異</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 font-mono">
+              {levelDiff.map((l) => (
+                <tr key={l.cardLevel}>
+                  <td className="px-3 py-2 font-semibold text-gray-700">
+                    {l.cardLevel || '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {l.baseCount.toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {l.compareCount.toLocaleString()}
+                  </td>
+                  <td
+                    className={`px-3 py-2 text-right tabular-nums font-semibold ${
+                      l.diff > 0
+                        ? 'text-green-700'
+                        : l.diff < 0
+                          ? 'text-red-700'
+                          : 'text-gray-400'
+                    }`}
+                  >
+                    {l.diff > 0 ? '+' : ''}
+                    {l.diff.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// =====================================================================
+// Section 5：設定差異（config 快照 diff）
+// =====================================================================
+function ConfigDiffSection({
+  configDiff,
+}: {
+  configDiff: CompareRunsResponse['configDiff'];
+}) {
+  const fmtRatio = (v: number | null) => (v === null ? '—' : String(v));
+  const rows: Array<{
+    key: string;
+    label: string;
+    from: string;
+    to: string;
+    critical?: boolean;
+  }> = [];
+
+  if (configDiff.cardVersionChanged) {
+    rows.push({
+      key: 'card_version',
+      label: 'card_version',
+      from: fmtRatio(configDiff.cardVersionChanged.from),
+      to: fmtRatio(configDiff.cardVersionChanged.to),
+      critical: true,
+    });
+  }
+  for (const d of configDiff.deptRatioChanges) {
+    rows.push({
+      key: `${d.listNo}__${d.deptId}`,
+      label: `${d.listNo} / ${d.deptId} 比例`,
+      from: fmtRatio(d.from),
+      to: fmtRatio(d.to),
+    });
+  }
+  if (configDiff.crRuleChanged) {
+    rows.push({
+      key: 'cr_rule',
+      label: 'cr_rule_enabled',
+      from: String(configDiff.crRuleChanged.from),
+      to: String(configDiff.crRuleChanged.to),
+    });
+  }
+
+  return (
+    <section
+      data-testid="config-diff"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+    >
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+        <Settings className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-gray-800">
+          設定差異（config 快照 diff）
+        </h3>
+      </div>
+      {rows.length === 0 ? (
+        <p
+          data-testid="config-diff-empty"
+          className="px-5 py-6 text-sm text-gray-400 text-center"
+        >
+          兩次月跑設定完全相同 — 無設定差異
+        </p>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {rows.map((r) => (
+            <div
+              key={r.key}
+              className={`px-5 py-3 flex items-center gap-4 ${
+                r.critical ? 'bg-red-50/40' : 'bg-amber-50/30'
+              }`}
+            >
+              <span className="text-sm font-mono font-semibold text-gray-800 flex-1">
+                {r.label}
+                {r.critical && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white">
+                    關鍵變更
+                  </span>
+                )}
+              </span>
+              <span className="px-2 py-0.5 rounded font-mono text-xs bg-blue-100 text-blue-700">
+                A: {r.from}
+              </span>
+              <span className="text-gray-400">→</span>
+              <span className="px-2 py-0.5 rounded font-mono text-xs bg-green-100 text-green-700">
+                B: {r.to}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// =====================================================================
+// Section 6：客戶層級差異（集合運算，依 appl_no）
+// =====================================================================
+function CustomerDiffSection({
+  customerDiff,
+}: {
+  customerDiff: CompareRunsResponse['customerDiff'];
+}) {
+  return (
+    <section
+      data-testid="customer-diff"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+    >
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+        <UserPlus className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-gray-800">
+          客戶層級差異（集合運算）
+        </h3>
+      </div>
+      <div className="px-5 py-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <DiffList
+          title="僅在 A — 已移除"
+          icon={<UserMinus className="w-4 h-4" />}
+          tone="red"
+          items={customerDiff.removed}
+          testid="customer-removed"
+        />
+        <DiffList
+          title="僅在 B — 新增"
+          icon={<UserPlus className="w-4 h-4" />}
+          tone="violet"
+          items={customerDiff.added}
+          testid="customer-added"
+        />
+      </div>
+    </section>
+  );
+}
+
+function DiffList({
+  title,
+  icon,
+  tone,
+  items,
+  testid,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  tone: 'red' | 'violet';
+  items: Array<{ applNo: string }>;
+  testid: string;
+}) {
+  const head =
+    tone === 'red'
+      ? 'bg-red-50 border-red-200 text-red-700'
+      : 'bg-violet-50 border-violet-200 text-violet-700';
+  const border = tone === 'red' ? 'border-red-200' : 'border-violet-200';
+  const preview = items.slice(0, PREVIEW_LIMIT);
+  return (
+    <div className={`border ${border} rounded-lg overflow-hidden`}>
+      <div
+        className={`px-3 py-2 border-b ${head} flex items-center justify-between`}
+      >
+        <span className="text-sm font-semibold inline-flex items-center gap-1">
+          {icon}
+          {title}
+        </span>
+        <span
+          data-testid={`${testid}-count`}
+          className="text-xs font-mono font-semibold"
+        >
+          {items.length.toLocaleString()} 筆
+        </span>
+      </div>
+      <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+        {items.length === 0 ? (
+          <div className="px-3 py-6 text-center text-xs text-gray-400">
+            無{tone === 'red' ? '移除' : '新增'}案件
+          </div>
+        ) : (
+          preview.map((c) => (
+            <div
+              key={c.applNo}
+              className="px-3 py-2 flex items-center gap-3 text-xs font-mono text-gray-700"
+            >
+              {c.applNo}
+            </div>
+          ))
+        )}
+      </div>
+      {items.length > preview.length && (
+        <div className="px-3 py-2 border-t border-gray-200 text-[11px] text-gray-500 bg-gray-50/40">
+          顯示前 {preview.length} 筆 — 完整 {items.length.toLocaleString()}{' '}
+          筆請匯出 XLSX
+        </div>
+      )}
+    </div>
   );
 }

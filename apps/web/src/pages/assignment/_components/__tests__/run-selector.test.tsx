@@ -15,33 +15,37 @@ import type { RunListItem } from '@/api/assignment-run';
  *   - runs=[] → 顯示無資料訊息
  */
 
+// 對齊真實後端契約：projectWorkym / totalCases（非 ym / totalCount）。
 const RUNS: RunListItem[] = [
   {
     runId: '7a1b2c3d-4e5f',
-    ym: '202604',
+    projectWorkym: '202604',
     status: 'completed',
-    triggeredBy: '張部長',
+    triggeredBy: 'uuid-a',
+    triggeredByName: '張部長',
     triggeredAt: '2026-04-24T10:00:00Z',
     finishedAt: '2026-04-24T11:02:00Z',
-    totalCount: 9120,
+    totalCases: 9120,
   },
   {
     runId: '550e8400-e29b',
-    ym: '202605',
+    projectWorkym: '202605',
     status: 'completed',
-    triggeredBy: '張部長',
+    triggeredBy: 'uuid-a',
+    triggeredByName: '張部長',
     triggeredAt: '2026-05-09T12:00:00Z',
     finishedAt: '2026-05-09T12:30:00Z',
-    totalCount: 9500,
+    totalCases: 9500,
   },
   {
     runId: 'ad4e5f6a-7b8c',
-    ym: '202603',
+    projectWorkym: '202603',
     status: 'completed',
-    triggeredBy: '李處長',
+    triggeredBy: 'uuid-b',
+    triggeredByName: '李處長',
     triggeredAt: '2026-03-20T09:00:00Z',
     finishedAt: '2026-03-20T09:45:00Z',
-    totalCount: 8780,
+    totalCases: 8780,
   },
 ];
 
@@ -118,6 +122,30 @@ describe('RunSelector', () => {
       <RunSelector runs={[]} runA="" runB="" onCompare={() => {}} />,
     );
     expect(screen.getByTestId('run-selector-empty')).toBeInTheDocument();
+  });
+
+  // 回歸：F067 比對功能異常根因 = formatYm(undefined) 崩潰（projectWorkym 缺值）。
+  it('run.projectWorkym 缺值時不崩潰（formatYm 防呆）', () => {
+    const badRuns = [
+      {
+        runId: 'bad-1',
+        status: 'completed',
+        triggeredBy: 'uuid-x',
+        triggeredAt: '2026-05-09T12:00:00Z',
+        finishedAt: '2026-05-09T12:30:00Z',
+      } as unknown as RunListItem,
+    ];
+    expect(() =>
+      render(
+        <RunSelector
+          runs={badRuns}
+          runA="bad-1"
+          runB="bad-1"
+          onCompare={() => {}}
+        />,
+      ),
+    ).not.toThrow();
+    expect(screen.getByTestId('select-run-a')).toBeInTheDocument();
   });
 
   it('A/B 選相同 run 時「重新比對」按鈕 disabled', () => {

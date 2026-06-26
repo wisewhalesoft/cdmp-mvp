@@ -214,12 +214,17 @@ export async function getRun(runId: string): Promise<RunProgressResponse> {
 
 export interface RunListItem {
   runId: string;
-  ym: string;
+  /** 作業年月（YYYYMM）— 對齊後端 RunSummary.projectWorkym */
+  projectWorkym: string;
   status: RunStatus;
+  /** 觸發者 UUID（assignment_run.triggered_by） */
   triggeredBy: string;
+  /** F065 BR-5：後端 join users.name 解析之觸發者名稱；查無對應 user 時為 null */
+  triggeredByName?: string | null;
   triggeredAt: string;
   finishedAt: string | null;
-  totalCount?: number;
+  /** 分派筆數 — 對齊後端 RunSummary.totalCases */
+  totalCases?: number | null;
 }
 
 export interface ListRunsResponse {
@@ -386,30 +391,57 @@ export async function getSnapshotByType(
 // F067 — GET 比對兩個月跑
 // =====================================================================
 
+/**
+ * F067 比對回應 — 對齊後端 `AssignmentRunReportService.CompareResponse`（authoritative）。
+ *
+ * ⚠️ 2026-06-26：原前端型別（runA/runB/summary.totalA…/personnelMismatch[]）與後端實際
+ * 回傳完全不符，導致比對頁 `data.summary.totalA.toLocaleString()` 讀 undefined → 整頁白屏。
+ * 已重寫為後端真實 shape（base/compare/summary.deptDiff…/personnelMismatch.list…）。
+ */
 export interface CompareRunsResponse {
-  runA: string;
-  runB: string;
+  base: { runId: string; projectWorkym: string; totalCases: number };
+  compare: { runId: string; projectWorkym: string; totalCases: number };
   summary: {
-    totalA: number;
-    totalB: number;
-    deltaTotal: number;
-    customersAddedCount: number;
-    customersRemovedCount: number;
-    customersChangedAssigneeCount: number;
+    totalDiff: number;
+    deptDiff: Array<{
+      deptId: string;
+      baseCount: number;
+      compareCount: number;
+      diff: number;
+    }>;
+    levelDiff: Array<{
+      cardLevel: string;
+      baseCount: number;
+      compareCount: number;
+      diff: number;
+    }>;
   };
-  personnelMismatch?: Array<{
-    empId: string;
-    empName?: string;
-    countA: number;
-    countB: number;
-    delta: number;
-  }>;
-  customerDiff?: Array<{
-    customerId: string;
-    assigneeA?: string | null;
-    assigneeB?: string | null;
-    diffType: 'added' | 'removed' | 'reassigned';
-  }>;
+  configDiff: {
+    cardVersionChanged: { from: number | null; to: number | null } | null;
+    deptRatioChanges: Array<{
+      listNo: string;
+      deptId: string;
+      from: number | null;
+      to: number | null;
+    }>;
+    crRuleChanged: { from: boolean | null; to: boolean | null } | null;
+  };
+  /** NFR-005 人員配對不一致：rate 為「比例」(0–1)，alert = rate > 0.03（後端裁定） */
+  personnelMismatch: {
+    list: Array<{
+      applNo: string;
+      baseEmplId: string | null;
+      compareEmplId: string | null;
+    }>;
+    mismatchCount: number;
+    totalCount: number;
+    rate: number;
+    alert: boolean;
+  };
+  customerDiff: {
+    added: Array<{ applNo: string }>;
+    removed: Array<{ applNo: string }>;
+  };
 }
 
 export async function compareRuns(

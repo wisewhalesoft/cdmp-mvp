@@ -139,19 +139,24 @@ export function RunHistoryPage() {
       list = list.filter(
         (r) =>
           r.runId.toLowerCase().includes(q) ||
-          (r.triggeredBy ?? '').toLowerCase().includes(q),
+          (r.triggeredBy ?? '').toLowerCase().includes(q) ||
+          (r.triggeredByName ?? '').toLowerCase().includes(q),
       );
     }
     return list;
   }, [runs, search, statusFilter, triggeredByFilter]);
 
-  // 觸發者下拉的 options（從現有 runs 萃取 unique）
+  // 觸發者下拉的 options（value=triggeredBy(UUID)、label=名稱；從現有 runs 萃取 unique）
   const triggeredByOptions = useMemo(() => {
-    const set = new Set<string>();
+    const map = new Map<string, string>();
     for (const r of runs) {
-      if (r.triggeredBy) set.add(r.triggeredBy);
+      if (r.triggeredBy) {
+        map.set(r.triggeredBy, r.triggeredByName ?? r.triggeredBy);
+      }
     }
-    return Array.from(set).sort();
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
   }, [runs]);
 
   const toggleSelect = (runId: string) => {
@@ -161,6 +166,12 @@ export function RunHistoryPage() {
       else if (next.size < 2) next.add(runId);
       return next;
     });
+  };
+
+  // F065 AC-1b：操作欄「比對基準」→ 將此列設為比對基準(runA)並勾選此列；
+  // 沿用「勾選 2 筆 → 比較選定」流程（再勾第二筆即可比對）。
+  const setCompareBase = (runId: string) => {
+    setSelected(new Set([runId]));
   };
 
   // Phase 3 P2-4：全選（取 filtered 前 2 個 completed runs）
@@ -265,8 +276,8 @@ export function RunHistoryPage() {
             >
               <option value="all">觸發者：全部</option>
               {triggeredByOptions.map((u) => (
-                <option key={u} value={u}>
-                  {u}
+                <option key={u.id} value={u.id}>
+                  {u.name}
                 </option>
               ))}
             </select>
@@ -333,6 +344,9 @@ export function RunHistoryPage() {
                 <tbody className="divide-y divide-gray-100">
                   {filteredRuns.map((r) => {
                     const isSelected = selected.has(r.runId);
+                    // F065 BR-1：running / pending = 執行中（in-flight），不可比對、操作欄僅查看進度
+                    const inFlight =
+                      r.status === 'running' || r.status === 'pending';
                     return (
                       <tr
                         key={r.runId}
@@ -345,21 +359,29 @@ export function RunHistoryPage() {
                             data-testid={`run-checkbox-${r.runId}`}
                             checked={isSelected}
                             onChange={() => toggleSelect(r.runId)}
-                            disabled={!isSelected && selected.size >= 2}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
+                            disabled={
+                              inFlight || (!isSelected && selected.size >= 2)
+                            }
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-30 disabled:cursor-not-allowed"
                           />
                         </td>
                         <td className="px-3 py-3 font-mono text-xs text-primary">
                           {r.runId}
                         </td>
-                        <td className="px-3 py-3 font-mono text-xs text-gray-700">
-                          {r.ym}
+                        <td
+                          data-testid={`run-row-ym-${r.runId}`}
+                          className="px-3 py-3 font-mono text-xs text-gray-700"
+                        >
+                          {r.projectWorkym}
                         </td>
                         <td className="px-3 py-3">
                           <StatusBadge status={r.status} />
                         </td>
-                        <td className="px-3 py-3 text-gray-600 text-xs">
-                          {r.triggeredBy}
+                        <td
+                          data-testid={`run-row-trigger-${r.runId}`}
+                          className="px-3 py-3 text-gray-600 text-xs"
+                        >
+                          {r.triggeredByName ?? r.triggeredBy}
                         </td>
                         <td className="px-3 py-3 text-gray-500 text-xs font-mono">
                           {formatDateTime(r.triggeredAt)}
@@ -370,42 +392,67 @@ export function RunHistoryPage() {
                         <td className="px-3 py-3 text-right text-gray-700 text-xs font-mono tabular-nums">
                           {formatDuration(r.triggeredAt, r.finishedAt)}
                         </td>
-                        <td className="px-3 py-3 text-right text-gray-700 text-xs font-mono tabular-nums">
-                          {r.totalCount?.toLocaleString() ?? '—'}
+                        <td
+                          data-testid={`run-row-count-${r.runId}`}
+                          className="px-3 py-3 text-right text-gray-700 text-xs font-mono tabular-nums"
+                        >
+                          {r.totalCases?.toLocaleString() ?? '—'}
                         </td>
                         <td className="px-3 py-3 text-right">
                           <div className="inline-flex items-center gap-1">
-                            <button
-                              type="button"
-                              title="進度"
-                              onClick={() =>
-                                navigate(`/assignment/run-progress?runId=${r.runId}`)
-                              }
-                              className="p-1.5 text-primary hover:bg-blue-50 rounded"
-                            >
-                              <Activity className="w-3.5 h-3.5" />
-                            </button>
-                            {r.status === 'completed' && (
+                            {inFlight ? (
+                              // 執行中 / 待執行：僅顯示「查看進度」
+                              <button
+                                type="button"
+                                data-testid={`run-progress-${r.runId}`}
+                                title="查看進度"
+                                onClick={() =>
+                                  navigate(
+                                    `/assignment/run-progress?runId=${r.runId}`,
+                                  )
+                                }
+                                className="p-1.5 text-primary hover:bg-blue-50 rounded"
+                              >
+                                <Activity className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              // completed / failed：快照 + 結果摘要(failed disabled) + 比對基準
                               <>
                                 <button
                                   type="button"
-                                  title="結果摘要"
+                                  data-testid={`run-snapshot-${r.runId}`}
+                                  title="檢視快照"
                                   onClick={() =>
-                                    navigate(`/assignment/run-summary?runId=${r.runId}`)
+                                    navigate(
+                                      `/assignment/snapshots?runId=${r.runId}`,
+                                    )
                                   }
-                                  className="p-1.5 text-primary hover:bg-blue-50 rounded"
+                                  className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded"
+                                >
+                                  <Camera className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`run-summary-${r.runId}`}
+                                  title="結果摘要"
+                                  disabled={r.status === 'failed'}
+                                  onClick={() =>
+                                    navigate(
+                                      `/assignment/run-summary?runId=${r.runId}`,
+                                    )
+                                  }
+                                  className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-500"
                                 >
                                   <FileBarChart className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   type="button"
-                                  title="快照詳情"
-                                  onClick={() =>
-                                    navigate(`/assignment/snapshots?runId=${r.runId}`)
-                                  }
-                                  className="p-1.5 text-primary hover:bg-blue-50 rounded"
+                                  data-testid={`run-compare-base-${r.runId}`}
+                                  title="比對基準"
+                                  onClick={() => setCompareBase(r.runId)}
+                                  className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 rounded"
                                 >
-                                  <Camera className="w-3.5 h-3.5" />
+                                  <GitCompare className="w-3.5 h-3.5" />
                                 </button>
                               </>
                             )}

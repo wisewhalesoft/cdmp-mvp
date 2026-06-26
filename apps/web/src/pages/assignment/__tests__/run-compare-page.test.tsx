@@ -27,29 +27,60 @@ const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 
+// ⚠️ 真實後端 CompareResponse shape（base/compare、summary.deptDiff/levelDiff、
+//    personnelMismatch.{list,rate,alert}、configDiff、customerDiff.{added,removed}）。
+//    舊測試以虛構 shape（summary.totalA…）造 mock → 測試綠但 prod 白屏（feedback_mock_real_system_contract）。
 const sampleCompare: CompareRunsResponse = {
-  runA: 'R001',
-  runB: 'R002',
+  base: { runId: 'R001', projectWorkym: '202604', totalCases: 1000 },
+  compare: { runId: 'R002', projectWorkym: '202605', totalCases: 1100 },
   summary: {
-    totalA: 1000,
-    totalB: 1100,
-    deltaTotal: 100,
-    customersAddedCount: 150,
-    customersRemovedCount: 50,
-    customersChangedAssigneeCount: 200,
+    totalDiff: 100,
+    deptDiff: [
+      { deptId: 'D01', baseCount: 500, compareCount: 540, diff: 40 },
+      { deptId: 'D02', baseCount: 500, compareCount: 560, diff: 60 },
+    ],
+    levelDiff: [
+      { cardLevel: 'A', baseCount: 600, compareCount: 620, diff: 20 },
+      { cardLevel: 'B', baseCount: 400, compareCount: 480, diff: 80 },
+    ],
   },
-  personnelMismatch: [
-    { empId: 'E001', empName: '張三', countA: 100, countB: 110, delta: 10 },
-  ],
-  customerDiff: [
-    {
-      customerId: 'C001',
-      assigneeA: 'E001',
-      assigneeB: 'E002',
-      diffType: 'reassigned',
-    },
-  ],
+  configDiff: {
+    cardVersionChanged: { from: 2, to: 3 },
+    deptRatioChanges: [{ listNo: 'L1', deptId: 'D01', from: 30, to: 32 }],
+    crRuleChanged: null,
+  },
+  personnelMismatch: {
+    list: [{ applNo: 'APPL0001', baseEmplId: 'E001', compareEmplId: 'E002' }],
+    mismatchCount: 200,
+    totalCount: 1000,
+    rate: 0.2,
+    alert: true,
+  },
+  customerDiff: {
+    added: [{ applNo: 'APPL_ADD_1' }],
+    removed: [{ applNo: 'APPL_RM_1' }],
+  },
 };
+
+function identical(): CompareRunsResponse {
+  return {
+    ...sampleCompare,
+    summary: { totalDiff: 0, deptDiff: [], levelDiff: [] },
+    configDiff: {
+      cardVersionChanged: null,
+      deptRatioChanges: [],
+      crRuleChanged: null,
+    },
+    personnelMismatch: {
+      list: [],
+      mismatchCount: 0,
+      totalCount: 1000,
+      rate: 0,
+      alert: false,
+    },
+    customerDiff: { added: [], removed: [] },
+  };
+}
 
 function renderPage(runA = 'R001', runB = 'R002') {
   return render(
@@ -76,26 +107,27 @@ describe('RunComparePage (F067)', () => {
     });
     mockedGetBusinessRole.mockReturnValue('director');
     mockedGetEffectiveIdentity.mockReturnValue('director');
-    // listRuns 預設 mock — selector 需要
     mockedListRuns.mockResolvedValue({
       runs: [
         {
           runId: 'R001',
-          ym: '202604',
+          projectWorkym: '202604',
           status: 'completed',
-          triggeredBy: 'D',
+          triggeredBy: 'uuid-d',
+          triggeredByName: '王部長',
           triggeredAt: '2026-04-24T10:00:00Z',
           finishedAt: '2026-04-24T11:00:00Z',
-          totalCount: 9120,
+          totalCases: 1000,
         },
         {
           runId: 'R002',
-          ym: '202605',
+          projectWorkym: '202605',
           status: 'completed',
-          triggeredBy: 'D',
+          triggeredBy: 'uuid-d',
+          triggeredByName: '王部長',
           triggeredAt: '2026-05-09T12:00:00Z',
           finishedAt: '2026-05-09T12:30:00Z',
-          totalCount: 9500,
+          totalCases: 1100,
         },
       ],
     });
@@ -110,24 +142,45 @@ describe('RunComparePage (F067)', () => {
     );
   });
 
-  it('渲染 summary 5 卡 + delta', async () => {
+  it('渲染 summary 區（真實 base/compare/totalDiff，不白屏）', async () => {
     mockedCompare.mockResolvedValue(sampleCompare);
     renderPage();
     await waitFor(() =>
       expect(screen.getByTestId('compare-summary')).toBeInTheDocument(),
     );
-    expect(screen.getByTestId('delta-total')).toHaveTextContent('+100');
-    expect(screen.getByTestId('reassigned-count')).toHaveTextContent('200');
+    const totalCard = screen.getByTestId('summary-stat-total');
+    expect(totalCard).toHaveTextContent('1,000');
+    expect(totalCard).toHaveTextContent('1,100');
+    expect(totalCard).toHaveTextContent('+100');
   });
 
-  it('渲染 personnelMismatch + customerDiff 表', async () => {
+  it('渲染 NFR-005 人員配對不一致率 + 不一致數', async () => {
     mockedCompare.mockResolvedValue(sampleCompare);
     renderPage();
     await waitFor(() =>
       expect(screen.getByTestId('personnel-mismatch')).toBeInTheDocument(),
     );
+    // rate 0.2(比例) → 20.00%
+    expect(screen.getByTestId('mismatch-rate')).toHaveTextContent('20.00%');
+    expect(screen.getByTestId('mismatch-count')).toHaveTextContent('200');
+    // 不一致清單以 baseEmplId / compareEmplId 呈現
+    expect(screen.getByText('APPL0001')).toBeInTheDocument();
+    expect(screen.getByText('E001')).toBeInTheDocument();
+    expect(screen.getByText('E002')).toBeInTheDocument();
+  });
+
+  it('渲染 dept / level / config / customer 區', async () => {
+    mockedCompare.mockResolvedValue(sampleCompare);
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('dept-compare')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('level-compare')).toBeInTheDocument();
+    expect(screen.getByTestId('config-diff')).toBeInTheDocument();
+    expect(screen.getByTestId('config-diff')).toHaveTextContent('card_version');
     expect(screen.getByTestId('customer-diff')).toBeInTheDocument();
-    expect(screen.getByText('C001')).toBeInTheDocument();
+    expect(screen.getByTestId('customer-added-count')).toHaveTextContent('1 筆');
+    expect(screen.getByTestId('customer-removed-count')).toHaveTextContent('1 筆');
   });
 
   it('匯出 XLSX 呼叫 downloadCompareExport(runA, runB)', async () => {
@@ -143,7 +196,51 @@ describe('RunComparePage (F067)', () => {
     );
   });
 
-  describe('Phase 2 改造', () => {
+  describe('banners', () => {
+    it('100% 相同顯示 identical banner', async () => {
+      mockedCompare.mockResolvedValue(identical());
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('identical-banner')).toBeInTheDocument(),
+      );
+      expect(
+        screen.queryByTestId('algorithm-changed-banner'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('alert=true（不一致率 > 3%）顯示 algorithm-changed banner', async () => {
+      mockedCompare.mockResolvedValue(sampleCompare);
+      renderPage();
+      await waitFor(() =>
+        expect(
+          screen.getByTestId('algorithm-changed-banner'),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it('alert=false（不一致率 < 3% 但有差異）不顯示 algorithm-changed banner', async () => {
+      mockedCompare.mockResolvedValue({
+        ...sampleCompare,
+        personnelMismatch: {
+          list: [{ applNo: 'A1', baseEmplId: 'E1', compareEmplId: 'E2' }],
+          mismatchCount: 10,
+          totalCount: 1000,
+          rate: 0.01,
+          alert: false,
+        },
+      });
+      renderPage();
+      await waitFor(() =>
+        expect(screen.getByTestId('compare-summary')).toBeInTheDocument(),
+      );
+      expect(
+        screen.queryByTestId('algorithm-changed-banner'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId('identical-banner')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('selector', () => {
     it('顯示 Run Selector（兩個 select）', async () => {
       mockedCompare.mockResolvedValue(sampleCompare);
       renderPage();
@@ -153,62 +250,7 @@ describe('RunComparePage (F067)', () => {
       expect(screen.getByTestId('select-run-b')).toBeInTheDocument();
     });
 
-    it('100% 相同（personnelMismatch=[]）顯示 identical banner', async () => {
-      mockedCompare.mockResolvedValue({
-        ...sampleCompare,
-        summary: {
-          ...sampleCompare.summary,
-          customersChangedAssigneeCount: 0,
-        },
-        personnelMismatch: [],
-        customerDiff: [],
-      });
-      renderPage();
-      await waitFor(() => {
-        expect(screen.getByTestId('identical-banner')).toBeInTheDocument();
-      });
-    });
-
-    it('不一致率 > 3% 顯示 algorithm-changed warning banner', async () => {
-      mockedCompare.mockResolvedValue({
-        ...sampleCompare,
-        summary: {
-          totalA: 1000,
-          totalB: 1100,
-          deltaTotal: 100,
-          customersAddedCount: 50,
-          customersRemovedCount: 50,
-          // 不一致 = 200 / 1100 = 18% > 3%
-          customersChangedAssigneeCount: 200,
-        },
-      });
-      renderPage();
-      await waitFor(() => {
-        expect(screen.getByTestId('algorithm-changed-banner')).toBeInTheDocument();
-      });
-    });
-
-    it('不一致率 < 3% 不顯示 algorithm-changed banner', async () => {
-      mockedCompare.mockResolvedValue({
-        ...sampleCompare,
-        summary: {
-          totalA: 10000,
-          totalB: 10100,
-          deltaTotal: 100,
-          customersAddedCount: 50,
-          customersRemovedCount: 50,
-          // 不一致 = 100 / 10100 = ~1% < 3%
-          customersChangedAssigneeCount: 100,
-        },
-      });
-      renderPage();
-      await waitFor(() => {
-        expect(screen.getByTestId('compare-summary')).toBeInTheDocument();
-      });
-      expect(screen.queryByTestId('algorithm-changed-banner')).not.toBeInTheDocument();
-    });
-
-    it('selector「交換 A/B」按鈕觸發重新 compareRuns(B, A)', async () => {
+    it('「交換 A/B」按鈕觸發重新 compareRuns(B, A)', async () => {
       mockedCompare.mockResolvedValue(sampleCompare);
       renderPage();
       await waitFor(() => {
@@ -217,7 +259,6 @@ describe('RunComparePage (F067)', () => {
       mockedCompare.mockClear();
       fireEvent.click(screen.getByTestId('btn-swap'));
       await waitFor(() => {
-        // 第 2 次 compare 呼叫應為 R002, R001
         const calls = mockedCompare.mock.calls;
         expect(calls.some((c) => c[0] === 'R002' && c[1] === 'R001')).toBe(true);
       });
