@@ -319,6 +319,10 @@ export class AssignmentRunReportService {
     const deptSummary: SummaryDeptRow[] = [];
     for (const deptId of allDeptIds) {
       const actualCount = deptActual.get(deptId) ?? 0;
+      // 排除「未分派部門」（actualCount=0）：部門於 ob_dept_pct 有設定比例但本次月跑無任何實際
+      // 分派時，其 deviation 恆為 -configRatio（假警示）、實際比例 0%，對使用者無意義 → 不列入
+      // deptSummary（連動上方「分派部門數」stat card、部門偏差 chart 與 NFR-005 footer 一次收斂）。
+      if (actualCount === 0) continue;
       const actualRatio =
         stage4Count === 0
           ? 0

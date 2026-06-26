@@ -241,6 +241,31 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       expect(d01.alert).toBe(false); // 嚴格 > 3
     });
 
+    it('TC-M05-SUMMARY-005：config-only 部門（actualCount=0）排除於 deptSummary', async () => {
+      // 部門 D99 於 ob_dept_pct 有設定比例，但本次月跑無任何實際分派（actualCount=0）。
+      // 「未分派部門」對使用者無意義（其 deviation 恆為 -configRatio 之假警示），須排除。
+      const run = await seedRun(env.runRepo);
+      await seedSnap(env.snapRepo, run.run_id, 'config', {
+        deptPct: [
+          { listNo: 'L1', deptId: 'D01', ration: '50' },
+          { listNo: 'L1', deptId: 'D99', ration: '50' }, // 有設定、無實際分派
+        ],
+      });
+      await seedSnap(env.snapRepo, run.run_id, 'input_list', { cases: [] });
+      await seedSnap(env.snapRepo, run.run_id, 'result', {
+        assignments: [
+          { applNo: 'A1', deptId: 'D01', cardLevel: 'A' },
+          { applNo: 'A2', deptId: 'D01', cardLevel: 'A' },
+        ],
+      });
+
+      const s = await env.service.getSummary(run.run_id);
+
+      // D99（actual=0）不出現；deptSummary 僅含實際有分派之部門
+      expect(s.deptSummary.map((x) => x.deptId)).toEqual(['D01']);
+      expect(s.deptSummary.every((x) => x.actualCount > 0)).toBe(true);
+    });
+
     it('TC-M05-SUMMARY-004：warnings 段含 skipped_cases', async () => {
       const run = await seedRun(env.runRepo, {
         warning_summary: 'BR-12_EDGE_CARD_TYPE_SKIPPED',
