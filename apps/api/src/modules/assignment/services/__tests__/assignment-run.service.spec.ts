@@ -39,6 +39,7 @@ async function buildModule(): Promise<{
   runRepo: Repository<AssignmentRun>;
   listRepo: Repository<ObListDefinition>;
   auditRepo: Repository<AssignmentAuditLog>;
+  userRepo: Repository<User>;
   ds: DataSource;
   app: TestingModule;
 }> {
@@ -82,6 +83,7 @@ async function buildModule(): Promise<{
     runRepo: app.get(getRepositoryToken(AssignmentRun)),
     listRepo: app.get(getRepositoryToken(ObListDefinition)),
     auditRepo: app.get(getRepositoryToken(AssignmentAuditLog)),
+    userRepo: app.get(getRepositoryToken(User)),
     ds: app.get(DataSource),
     app,
   };
@@ -262,6 +264,48 @@ describe('AssignmentRunService', () => {
       const rows = await env.service.listRuns({ ym: YM });
       expect(rows).toHaveLength(2);
       expect(rows[0].status).toBe('pending'); // 較新的在前
+    });
+
+    // F065 BR-5：triggered_by(UUID) → users.name 解析為 triggeredByName
+    it('listRuns：以 triggered_by(UUID) join users.name 回傳 triggeredByName', async () => {
+      const user = await env.userRepo.save(
+        env.userRepo.create({
+          name: '王部長',
+          email: 'director-f065@cdmp.test',
+          password_hash: 'x',
+          role: 'user',
+        } as Partial<User>),
+      );
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'completed',
+          triggered_by: user.id,
+          created_at: new Date('2026-06-01'),
+        } as Partial<AssignmentRun>),
+      );
+
+      const rows = await env.service.listRuns({ ym: YM });
+      const row = rows.find((r) => r.runId === saved.run_id);
+      expect(row).toBeDefined();
+      expect(row?.triggeredBy).toBe(user.id); // 原 UUID 保留
+      expect(row?.triggeredByName).toBe('王部長'); // 解析後名稱
+    });
+
+    // F065 BR-5：查無對應 user → triggeredByName = null（graceful）
+    it('listRuns：triggered_by 無對應 user → triggeredByName=null', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'completed',
+          triggered_by: '00000000-0000-0000-0000-0000000000aa',
+          created_at: new Date('2026-06-02'),
+        } as Partial<AssignmentRun>),
+      );
+
+      const rows = await env.service.listRuns({ ym: YM });
+      const row = rows.find((r) => r.runId === saved.run_id);
+      expect(row?.triggeredByName ?? null).toBeNull();
     });
 
     it('getRunById：找不到 → 404 ASSIGNMENT_RUN_NOT_FOUND', async () => {

@@ -6,9 +6,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { User } from '@/database/entities/user.entity';
 import { AssignmentRunGuardService } from './assignment-run-guard.service';
 import { MonthlyRunReadinessService } from './monthly-run-readiness.service';
 import { RunQueueProducer } from '../queue/run-queue.producer';
@@ -26,6 +27,8 @@ export interface RunSummary {
   projectWorkym: string;
   status: AssignmentRun['status'];
   triggeredBy: string;
+  /** F065 BR-5：triggered_by(UUID) → users.name 解析結果；查無對應 user 時為 null */
+  triggeredByName?: string | null;
   triggeredAt: Date;
   startedAt: Date | null;
   finishedAt: Date | null;
@@ -68,6 +71,14 @@ export class AssignmentRunService {
      * @Optional：少數舊 unit test harness 未提供 producer（其 triggerRun 測試會自行提供 fake）。
      */
     @Optional() private readonly queueProducer?: RunQueueProducer,
+    /**
+     * F065 BR-5：triggered_by(UUID) → users.name 解析所需的 users repo。
+     * @Optional：少數舊 unit test harness 未提供 User repo（缺漏時 graceful 跳過解析，
+     * triggeredByName = null，不影響清單其餘欄位）。
+     */
+    @Optional()
+    @InjectRepository(User)
+    private readonly userRepo?: Repository<User>,
   ) {}
 
   /**
@@ -169,7 +180,30 @@ export class AssignmentRunService {
       qb.where('r.project_workym = :ym', { ym: opts.ym });
     }
     const rows = await qb.getMany();
-    return rows.map((r) => this.toSummary(r));
+    const summaries = rows.map((r) => this.toSummary(r));
+    await this.resolveTriggeredByNames(summaries);
+    return summaries;
+  }
+
+  /**
+   * F065 BR-5：批次將 summaries 的 triggered_by(UUID) join users.name → triggeredByName。
+   *   - 單一 IN 查詢避免 N+1；查無對應 user 之 triggered_by → triggeredByName = null。
+   *   - userRepo 未注入（舊 test harness）→ graceful 跳過（保持 toSummary 設的 null）。
+   */
+  private async resolveTriggeredByNames(summaries: RunSummary[]): Promise<void> {
+    if (!this.userRepo || summaries.length === 0) return;
+    const ids = Array.from(
+      new Set(summaries.map((s) => s.triggeredBy).filter(Boolean)),
+    );
+    if (ids.length === 0) return;
+    const users = await this.userRepo.find({
+      where: { id: In(ids) },
+      select: ['id', 'name'],
+    });
+    const nameById = new Map(users.map((u) => [u.id, u.name]));
+    for (const s of summaries) {
+      s.triggeredByName = nameById.get(s.triggeredBy) ?? null;
+    }
   }
 
   /**
@@ -284,6 +318,7 @@ export class AssignmentRunService {
       projectWorkym: r.project_workym,
       status: r.status,
       triggeredBy: r.triggered_by,
+      triggeredByName: null,
       triggeredAt: r.created_at,
       startedAt: r.started_at,
       finishedAt: r.finished_at,
