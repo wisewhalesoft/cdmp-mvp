@@ -287,7 +287,10 @@ export function RunSummaryPage() {
                   {data.deptSummary?.length ?? data.deptBreakdown?.length ?? 0}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {(data.deptSummary ?? []).slice(0, 5).map((d) => d.deptId).join(' / ') || '—'}
+                  {(data.deptSummary ?? [])
+                    .slice(0, 5)
+                    .map((d) => d.deptName ?? d.deptId)
+                    .join(' / ') || '—'}
                 </div>
               </div>
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">

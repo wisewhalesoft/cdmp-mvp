@@ -97,8 +97,16 @@ export function DeptDeviationChart({ rows }: DeptDeviationChartProps) {
               }`}
             >
               <div className="flex items-center justify-between text-xs mb-2">
-                <span className="font-mono font-semibold text-gray-800">
-                  {r.deptId}
+                {/* 部門名稱為主、代號為輔（代號對 user 無意義）；查無名稱時退回顯示代號。 */}
+                <span className="inline-flex items-baseline gap-1.5">
+                  <span className="font-semibold text-gray-800">
+                    {r.deptName ?? r.deptId}
+                  </span>
+                  {r.deptName && (
+                    <span className="font-mono text-[10px] text-gray-400">
+                      {r.deptId}
+                    </span>
+                  )}
                 </span>
                 <span className="inline-flex items-center gap-2 text-gray-600">
                   <span>

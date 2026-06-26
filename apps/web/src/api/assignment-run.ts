@@ -247,6 +247,8 @@ export async function listRuns(ym?: string): Promise<ListRunsResponse> {
  */
 export interface SummaryDeptRow {
   deptId: string;
+  /** 部門名稱（後端 ob_dept_pct.obdeptnm 即時解析）；查無對應 → null，前端 fallback 顯示代號。 */
+  deptName?: string | null;
   configRatio: number;
   actualCount: number;
   actualRatio: number;

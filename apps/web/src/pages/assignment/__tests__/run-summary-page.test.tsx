@@ -140,6 +140,7 @@ describe('RunSummaryPage (F063)', () => {
         deptSummary: [
           {
             deptId: 'D01',
+            deptName: '業務一部',
             configRatio: 30,
             actualCount: 285,
             actualRatio: 28.5,
@@ -148,6 +149,7 @@ describe('RunSummaryPage (F063)', () => {
           },
           {
             deptId: 'D02',
+            deptName: '業務二部',
             configRatio: 25,
             actualCount: 290,
             actualRatio: 29,
@@ -164,6 +166,8 @@ describe('RunSummaryPage (F063)', () => {
       expect(
         screen.getByTestId('dept-deviation-D02').getAttribute('data-alert'),
       ).toBe('true');
+      // 部門以名稱顯示（代號對 user 無意義）— 出現於偏差 chart 與「分派部門數」副標
+      expect(screen.getAllByText(/業務一部/).length).toBeGreaterThan(0);
     });
 
     it('levelDistribution 渲染 CARD_LEVEL donut legend', async () => {
