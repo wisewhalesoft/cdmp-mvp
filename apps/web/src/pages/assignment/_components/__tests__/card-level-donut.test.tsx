@@ -11,10 +11,11 @@ import type { SummaryLevelRow } from '@/api/assignment-run';
  * 純 div + conic-gradient（避免引入 recharts 依賴；與 stage0-bar 一致風格）
  */
 
+// 尺度對齊真實後端契約（F063 §5.1）：ratio 為 0–100 百分比（800/2000=40，非 0.4）。
 const ROWS: SummaryLevelRow[] = [
-  { cardLevel: 'A', count: 800, ratio: 0.4 },
-  { cardLevel: 'B', count: 700, ratio: 0.35 },
-  { cardLevel: 'C', count: 500, ratio: 0.25 },
+  { cardLevel: 'A', count: 800, ratio: 40 },
+  { cardLevel: 'B', count: 700, ratio: 35 },
+  { cardLevel: 'C', count: 500, ratio: 25 },
 ];
 
 describe('CardLevelDonut', () => {
@@ -30,12 +31,13 @@ describe('CardLevelDonut', () => {
     expect(screen.getByTestId('card-legend-C')).toBeInTheDocument();
   });
 
-  it('legend 顯示 cardLevel + count + ratio', () => {
+  it('legend 顯示 cardLevel + count + 佔比（count/total，不重複 ×100）', () => {
     render(<CardLevelDonut rows={ROWS} />);
     const a = screen.getByTestId('card-legend-A');
     expect(a.textContent).toContain('A');
     expect(a.textContent).toContain('800');
-    expect(a.textContent).toContain('40');
+    expect(a.textContent).toContain('40'); // 800/2000 = 40.0%
+    expect(a.textContent).not.toContain('4000'); // 防 >1000% bug（不可 ratio×100）
   });
 
   it('總計顯示加總 count', () => {

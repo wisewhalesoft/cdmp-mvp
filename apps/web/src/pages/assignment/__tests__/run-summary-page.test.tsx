@@ -140,18 +140,18 @@ describe('RunSummaryPage (F063)', () => {
         deptSummary: [
           {
             deptId: 'D01',
-            configRatio: 0.3,
+            configRatio: 30,
             actualCount: 285,
-            actualRatio: 0.285,
-            deviation: -0.015,
+            actualRatio: 28.5,
+            deviation: -1.5,
             alert: false,
           },
           {
             deptId: 'D02',
-            configRatio: 0.25,
+            configRatio: 25,
             actualCount: 290,
-            actualRatio: 0.29,
-            deviation: 0.04,
+            actualRatio: 29,
+            deviation: 4,
             alert: true,
           },
         ],
@@ -172,8 +172,8 @@ describe('RunSummaryPage (F063)', () => {
         projectWorkym: '202605',
         deptSummary: [],
         levelDistribution: [
-          { cardLevel: 'A', count: 800, ratio: 0.4 },
-          { cardLevel: 'B', count: 1200, ratio: 0.6 },
+          { cardLevel: 'A', count: 800, ratio: 40 },
+          { cardLevel: 'B', count: 1200, ratio: 60 },
         ],
       });
       renderPage();
@@ -224,10 +224,10 @@ describe('RunSummaryPage (F063)', () => {
         deptSummary: [
           {
             deptId: 'D01',
-            configRatio: 0.25,
+            configRatio: 25,
             actualCount: 290,
-            actualRatio: 0.29,
-            deviation: 0.04,
+            actualRatio: 29,
+            deviation: 4,
             alert: true,
           },
         ],
@@ -248,10 +248,10 @@ describe('RunSummaryPage (F063)', () => {
         deptSummary: [
           {
             deptId: 'D01',
-            configRatio: 0.3,
+            configRatio: 30,
             actualCount: 285,
-            actualRatio: 0.285,
-            deviation: -0.015,
+            actualRatio: 28.5,
+            deviation: -1.5,
             alert: false,
           },
         ],
@@ -264,7 +264,7 @@ describe('RunSummaryPage (F063)', () => {
       expect(screen.queryByTestId('nfr005-alert-note')).toBeNull();
     });
 
-    it('匯出區顯示 AD-E07-11 注意事項', async () => {
+    it('匯出區不再顯示 AD-E07-11 注意事項說明（對使用者無意義已移除）', async () => {
       mockedGetSummary.mockResolvedValue({
         runId: 'R001',
         projectWorkym: '202605',
@@ -273,9 +273,11 @@ describe('RunSummaryPage (F063)', () => {
         stage4Count: 100,
       });
       renderPage();
+      // 匯出區仍渲染（以 export 按鈕為錨點），但 AD-E07-11 說明區塊已移除
       await waitFor(() =>
-        expect(screen.getByText(/匯出注意事項（AD-E07-11）/)).toBeInTheDocument(),
+        expect(screen.getByTestId('btn-export-xlsx')).toBeInTheDocument(),
       );
+      expect(screen.queryByText(/匯出注意事項（AD-E07-11）/)).toBeNull();
     });
 
     it('匯出 button 文案改為「匯出 Excel (streaming)」', async () => {

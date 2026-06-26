@@ -17,17 +17,24 @@ export interface DeptDeviationChartProps {
 }
 
 /**
- * 警示閾值：3%（NFR-005）
+ * 警示閾值：3 個百分點（NFR-005）。
+ * ⚠️ 後端 configRatio / actualRatio / deviation 皆為 **0–100 百分比尺度**（F063 §5.1 契約、
+ *    後端測試 TC-M05-SUMMARY 鎖定 configRatio:50 / actualRatio:60 / deviation:10）。閾值同尺度。
  */
-const ALERT_THRESHOLD = 0.03;
+const ALERT_THRESHOLD = 3;
 
+/**
+ * 後端值已是 0–100 百分比 → 直接格式化、**不可再 ×100**（否則 >1000% 顯示 bug）。
+ * 對齊 prototype 33-run-summary.html renderDeptChart 之 `toFixed(1)`。
+ */
 function pct(n: number): string {
-  return (n * 100).toFixed(2) + '%';
+  return n.toFixed(1) + '%';
 }
 
+/** 偏差色階（對齊 prototype deviationStyle，0–100 尺度）：≤1 綠 / 1~3 橙 / >3 紅。 */
 function deviationColor(deviation: number, alert: boolean): string {
-  if (alert) return 'bg-red-500';
-  if (Math.abs(deviation) <= 0.01) return 'bg-green-500';
+  if (alert || Math.abs(deviation) > ALERT_THRESHOLD) return 'bg-red-500';
+  if (Math.abs(deviation) <= 1) return 'bg-green-500';
   return 'bg-amber-500';
 }
 
@@ -70,7 +77,7 @@ export function DeptDeviationChart({ rows }: DeptDeviationChartProps) {
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
-            警示 &gt; {Math.round(ALERT_THRESHOLD * 100)}% (NFR-005)
+            警示 &gt; {ALERT_THRESHOLD}% (NFR-005)
           </span>
         </div>
       </div>
@@ -104,7 +111,7 @@ export function DeptDeviationChart({ rows }: DeptDeviationChartProps) {
                     className={
                       r.alert
                         ? 'text-red-700 font-semibold inline-flex items-center gap-0.5'
-                        : Math.abs(r.deviation) > 0.01
+                        : Math.abs(r.deviation) > 1
                           ? 'text-amber-700 font-semibold'
                           : 'text-gray-500'
                     }
@@ -113,10 +120,14 @@ export function DeptDeviationChart({ rows }: DeptDeviationChartProps) {
                     偏差 {r.deviation >= 0 ? '+' : ''}
                     {pct(r.deviation)}
                   </span>
+                  {/* 實際分派筆數（對齊 prototype renderDeptChart 標題列「(X 筆)」） */}
+                  <span className="text-gray-500 tabular-nums font-mono">
+                    （{r.actualCount.toLocaleString()} 筆）
+                  </span>
                 </span>
               </div>
               <div className="space-y-1">
-                {/* config bar */}
+                {/* config bar（淺色） */}
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-gray-400 w-12">設定</span>
                   <div className="flex-1 h-2 bg-gray-100 rounded">
@@ -125,11 +136,8 @@ export function DeptDeviationChart({ rows }: DeptDeviationChartProps) {
                       style={{ width: `${configPctWidth}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-gray-500 font-mono w-14 text-right">
-                    {r.actualCount.toLocaleString()} 筆
-                  </span>
                 </div>
-                {/* actual bar */}
+                {/* actual bar（依偏差變色） */}
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-gray-400 w-12">實際</span>
                   <div className="flex-1 h-2 bg-gray-100 rounded">
@@ -138,9 +146,6 @@ export function DeptDeviationChart({ rows }: DeptDeviationChartProps) {
                       style={{ width: `${actualPctWidth}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-gray-500 w-14 text-right">
-                    {/* spacer keep alignment */}
-                  </span>
                 </div>
               </div>
             </div>

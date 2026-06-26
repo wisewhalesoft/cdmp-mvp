@@ -38,13 +38,16 @@ export function CardLevelDonut({ rows }: CardLevelDonutProps) {
 
   const totalCount = rows.reduce((s, r) => s + r.count, 0);
 
-  // conic-gradient stop accumulator
-  let acc = 0;
+  // conic-gradient stop accumulator。
+  // ⚠️ 一律以 count/totalCount 計算扇形角度（與 legend 佔比同分母），**不可用 r.ratio**：
+  //    後端 ratio 為 0–100 百分比尺度，`acc += r.ratio` 會讓累加值遠超 1 → 角度爆量。
+  //    對齊 prototype renderCardLevelDonut 與既有正常之 tier-level-chart.tsx。
+  let acc = 0; // 累加 count
   const stops = rows
     .map((r, i) => {
-      const start = acc * 360;
-      acc += r.ratio;
-      const end = acc * 360;
+      const start = totalCount === 0 ? 0 : (acc / totalCount) * 360;
+      acc += r.count;
+      const end = totalCount === 0 ? 0 : (acc / totalCount) * 360;
       const color = COLORS[i % COLORS.length];
       return `${color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`;
     })
@@ -103,7 +106,7 @@ export function CardLevelDonut({ rows }: CardLevelDonutProps) {
                 {r.count.toLocaleString()} 筆
               </span>
               <span className="font-mono text-primary tabular-nums">
-                {(r.ratio * 100).toFixed(2)}%
+                {(totalCount === 0 ? 0 : (r.count / totalCount) * 100).toFixed(1)}%
               </span>
             </div>
           ))}

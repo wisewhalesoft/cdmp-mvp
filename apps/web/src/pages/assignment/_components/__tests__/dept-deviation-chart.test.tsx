@@ -10,21 +10,22 @@ import type { SummaryDeptRow } from '@/api/assignment-run';
  * 對應 prototype 33-run-summary.html L247-262
  */
 
+// 尺度對齊真實後端契約（F063 §5.1）：configRatio / actualRatio / deviation 皆為 0–100 百分比。
 const ROWS: SummaryDeptRow[] = [
   {
     deptId: 'D01',
-    configRatio: 0.3,
+    configRatio: 30,
     actualCount: 285,
-    actualRatio: 0.285,
-    deviation: -0.015,
+    actualRatio: 28.5,
+    deviation: -1.5,
     alert: false,
   },
   {
     deptId: 'D02',
-    configRatio: 0.25,
+    configRatio: 25,
     actualCount: 290,
-    actualRatio: 0.29,
-    deviation: 0.04,
+    actualRatio: 29,
+    deviation: 4,
     alert: true,
   },
 ];
@@ -49,12 +50,20 @@ describe('DeptDeviationChart', () => {
     expect(d01.getAttribute('data-alert')).toBe('false');
   });
 
-  it('顯示設定比例 vs 實際比例 + deviation', () => {
+  it('顯示設定比例 vs 實際比例（0–100 尺度，不重複 ×100）', () => {
     render(<DeptDeviationChart rows={ROWS} />);
     const d01 = screen.getByTestId('dept-deviation-D01');
-    // 0.3 → 30.00%；0.285 → 28.50%；deviation -1.50%
-    expect(d01.textContent).toContain('30.00');
-    expect(d01.textContent).toContain('28.50');
+    // 後端回 0–100 百分比 → 直接顯示 30.0% / 28.5%；不可再 ×100（>1000% bug 防護）
+    expect(d01.textContent).toContain('30.0');
+    expect(d01.textContent).toContain('28.5');
+    expect(d01.textContent).not.toContain('3000');
+    expect(d01.textContent).not.toContain('2850');
+  });
+
+  it('於標題列顯示實際分派筆數（actualCount）', () => {
+    render(<DeptDeviationChart rows={ROWS} />);
+    const d01 = screen.getByTestId('dept-deviation-D01');
+    expect(d01.textContent).toContain('285');
   });
 
   it('legend 顯示 3 色（正常/偏差/警示）', () => {

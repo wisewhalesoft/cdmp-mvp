@@ -11,7 +11,6 @@ import {
   UserCheck,
   AlertTriangle,
   AlertCircle,
-  Info,
   Lock,
   Clock,
   TrendingUp,
@@ -446,22 +445,6 @@ export function RunSummaryPage() {
                         匯出 CSV
                       </span>
                     </Button>
-                  </div>
-                </div>
-
-                {/* 匯出注意事項（AD-E07-11） */}
-                <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50/50 border border-amber-100 rounded-lg text-xs text-gray-600">
-                  <Info className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-gray-700 mb-0.5">
-                      匯出注意事項（AD-E07-11）
-                    </p>
-                    <p>
-                      大檔案採 exceljs streaming mode 直接寫入，記憶體不會 OOM。資料來源為
-                      ob_monthly_run_result 多表 join (ob_pool_data_list / ob_emphire /
-                      ob_list_definition)，每次匯出將寫入 assignment_audit_log 稽核紀錄。匯出超過 5
-                      分鐘將回傳 EXPORT_FILE_EXPIRED 錯誤。
-                    </p>
                   </div>
                 </div>
               </div>
