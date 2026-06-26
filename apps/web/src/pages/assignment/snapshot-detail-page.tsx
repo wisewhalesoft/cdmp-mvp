@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   Camera,
   FileText,
   ListChecks,
@@ -22,6 +21,7 @@ import {
   type SnapshotConfigPayload,
 } from './_components/snapshot-config-view';
 import { SnapshotArrayView } from './_components/snapshot-array-view';
+import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 
 /**
  * F066 — 月跑快照詳情頁
@@ -108,23 +108,7 @@ export function SnapshotDetailPage() {
 
   return (
     <AppLayout
-      headerLeft={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/history')}
-            className="text-gray-400 hover:text-gray-700"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">快照詳情</h1>
-          {runId && (
-            <code className="font-mono text-xs text-primary px-2 py-0.5 bg-blue-50 rounded">
-              {runId}
-            </code>
-          )}
-        </div>
-      }
+      headerLeft={<RunPageBreadcrumb leaf="快照詳情" />}
     >
       <main className="flex-1 p-6 space-y-4">
         {/* Phase 3 P2-2: Run Info Bar — READ-ONLY + 下載 / 以此比對 */}

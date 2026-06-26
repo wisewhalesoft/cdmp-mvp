@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Clock,
   Loader2,
-  ArrowLeft,
   XOctagon,
   FileBarChart,
   Camera,
@@ -32,6 +31,7 @@ import {
   type StepperStage,
 } from './_components/stage-stepper';
 import { ElapsedTimer } from './_components/elapsed-timer';
+import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 import { getBusinessRole } from '@/stores/auth-store';
 
 /**
@@ -190,14 +190,7 @@ export function RunProgressPage() {
     <AppLayout
       headerLeft={
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/history')}
-            className="text-gray-400 hover:text-gray-700"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">月跑執行進度</h1>
+          <RunPageBreadcrumb leaf="執行進度" />
           {data && <StatusBadge status={data.status} />}
         </div>
       }

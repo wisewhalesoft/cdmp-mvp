@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   Download,
   AlertTriangle,
   AlertOctagon,
@@ -25,6 +24,7 @@ import {
   type RunListItem,
 } from '@/api/assignment-run';
 import { RunSelector } from './_components/run-selector';
+import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 
 /**
  * F067 NFR-005 不一致率警示閾值（與後端 MISMATCH_ALERT_THRESHOLD 一致）。
@@ -47,7 +47,6 @@ const PREVIEW_LIMIT = 50;
  * RBAC: DirectorOrSectionChiefRoute
  */
 export function RunComparePage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const runA = searchParams.get('runA') ?? '';
@@ -137,18 +136,7 @@ export function RunComparePage() {
 
   return (
     <AppLayout
-      headerLeft={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/history')}
-            className="text-gray-400 hover:text-gray-700"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">結果比對</h1>
-        </div>
-      }
+      headerLeft={<RunPageBreadcrumb leaf="結果比對" />}
     >
       <main className="flex-1 p-6 space-y-4">
         <RunSelector

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   CheckCircle,
   History,
   Download,
@@ -29,6 +28,7 @@ import {
 import { DeptDeviationChart } from './_components/dept-deviation-chart';
 import { CardLevelDonut } from './_components/card-level-donut';
 import { TierLevelChart } from './_components/tier-level-chart';
+import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 import {
   ScoringWarningBanner,
   type ScoringWarningSummary,
@@ -151,23 +151,7 @@ export function RunSummaryPage() {
 
   return (
     <AppLayout
-      headerLeft={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/assignment/history')}
-            className="text-gray-400 hover:text-gray-700"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-semibold text-gray-800">結果摘要</h1>
-          {data && (
-            <code className="font-mono text-xs text-primary px-2 py-0.5 bg-blue-50 rounded">
-              {data.runId}
-            </code>
-          )}
-        </div>
-      }
+      headerLeft={<RunPageBreadcrumb leaf="結果摘要" />}
     >
       <main className="flex-1 p-6 space-y-4">
         {loading && (
