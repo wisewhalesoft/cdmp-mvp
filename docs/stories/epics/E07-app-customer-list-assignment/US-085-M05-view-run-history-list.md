@@ -43,7 +43,8 @@
 ## 技術備註
 
 - 清單資料來源：AssignmentRun 表（分頁查詢）
-- 僅顯示 status = 'completed' 或 'failed' 的月跑（'pending'/'running' 顯示於執行進度頁）
+- 清單顯示**所有狀態**的月跑（completed / failed / running / pending）；running/pending 列僅提供「查看進度」入口（導向執行進度頁 US-082），且不可勾選比對。（2026-06-26 修正：原為「僅顯示 completed/failed」，與 prototype 34 + 實作不符，經業務拍板改為全狀態顯示）
+- 觸發者顯示**名稱**：後端以 triggered_by（UUID）join users.name 解析（回應欄位 triggeredByName）
 
 ---
 
