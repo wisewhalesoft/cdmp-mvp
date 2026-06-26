@@ -35,6 +35,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { User } from '@/database/entities/user.entity';
 
 const YM = '202605';
@@ -73,7 +74,7 @@ async function buildModule(): Promise<Env> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog, ObEmplSet, ObEmphire, User],
+        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog, ObEmplSet, ObEmphire, ObDeptPct, User],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
@@ -82,6 +83,7 @@ async function buildModule(): Promise<Env> {
         AssignmentAuditLog,
         ObEmplSet,
         ObEmphire,
+        ObDeptPct,
         User,
       ]),
     ],

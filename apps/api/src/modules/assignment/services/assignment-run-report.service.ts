@@ -12,6 +12,7 @@ import * as ExcelJS from 'exceljs';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import {
   SectionChiefScopeService,
@@ -20,6 +21,8 @@ import {
 
 export interface SummaryDeptRow {
   deptId: string;
+  /** 部門名稱（ob_dept_pct.obdeptnm 即時解析）；查無對應 → null（前端 fallback 顯示代號）。 */
+  deptName: string | null;
   configRatio: number;
   actualCount: number;
   actualRatio: number;
@@ -241,6 +244,9 @@ export class AssignmentRunReportService {
     private readonly snapshotRepo: Repository<AssignmentRunSnapshot>,
     @InjectRepository(AssignmentAuditLog)
     private readonly auditRepo: Repository<AssignmentAuditLog>,
+    // F063：部門名稱即時解析來源（obdeptid → obdeptnm，by project_workym）
+    @InjectRepository(ObDeptPct)
+    private readonly deptPctRepo: Repository<ObDeptPct>,
     private readonly scope: SectionChiefScopeService,
     // F064 v2.0 / AD-E07-31：匯出多表 join 下推 + server-side cursor streaming（I-EXP-STREAM-01）
     private readonly dataSource: DataSource,
@@ -316,6 +322,20 @@ export class AssignmentRunReportService {
     const allDeptIds = this.scope.shouldFilter(actor)
       ? new Set<string>(deptActual.keys())
       : new Set<string>([...deptActual.keys(), ...deptConfigRatio.keys()]);
+
+    // 部門名稱即時解析（by run 的 project_workym）：部門代號（如 XVE1）對 user 無意義，
+    // 改以 ob_dept_pct.obdeptnm 顯示。名稱為顯示用、不影響分析值；同代號多名單取第一個非空名稱；
+    // 查無對應 → null（前端 fallback 顯示代號）。即時查表故對既有 run 亦立即生效（不依賴快照）。
+    const deptNameMap = new Map<string, string>();
+    const deptPctRows = await this.deptPctRepo.find({
+      where: { project_workym: run.project_workym },
+    });
+    for (const d of deptPctRows) {
+      const name = (d.obdeptnm ?? '').trim();
+      if (!name) continue;
+      if (!deptNameMap.has(d.obdeptid)) deptNameMap.set(d.obdeptid, name);
+    }
+
     const deptSummary: SummaryDeptRow[] = [];
     for (const deptId of allDeptIds) {
       const actualCount = deptActual.get(deptId) ?? 0;
@@ -336,6 +356,7 @@ export class AssignmentRunReportService {
         AssignmentRunReportService.DEVIATION_ALERT_THRESHOLD;
       deptSummary.push({
         deptId,
+        deptName: deptNameMap.get(deptId) ?? null,
         configRatio,
         actualCount,
         actualRatio,

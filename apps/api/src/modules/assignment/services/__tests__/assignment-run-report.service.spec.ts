@@ -39,6 +39,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -49,6 +50,7 @@ interface Env {
   runRepo: Repository<AssignmentRun>;
   snapRepo: Repository<AssignmentRunSnapshot>;
   auditRepo: Repository<AssignmentAuditLog>;
+  deptPctRepo: Repository<ObDeptPct>;
   app: TestingModule;
 }
 
@@ -64,6 +66,7 @@ async function buildModule(): Promise<Env> {
           AssignmentAuditLog,
           ObEmplSet,
           ObEmphire,
+          ObDeptPct,
           User,
         ],
         synchronize: true,
@@ -74,6 +77,7 @@ async function buildModule(): Promise<Env> {
         AssignmentAuditLog,
         ObEmplSet,
         ObEmphire,
+        ObDeptPct,
         User,
       ]),
     ],
@@ -85,6 +89,7 @@ async function buildModule(): Promise<Env> {
     runRepo: app.get(getRepositoryToken(AssignmentRun)),
     snapRepo: app.get(getRepositoryToken(AssignmentRunSnapshot)),
     auditRepo: app.get(getRepositoryToken(AssignmentAuditLog)),
+    deptPctRepo: app.get(getRepositoryToken(ObDeptPct)),
     app,
   };
 }
@@ -136,6 +141,7 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
     await env.auditRepo.createQueryBuilder().delete().execute();
     await env.snapRepo.createQueryBuilder().delete().execute();
     await env.runRepo.createQueryBuilder().delete().execute();
+    await env.deptPctRepo.createQueryBuilder().delete().execute();
   });
 
   // -------------------------------------------------------------------------
@@ -264,6 +270,43 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       // D99（actual=0）不出現；deptSummary 僅含實際有分派之部門
       expect(s.deptSummary.map((x) => x.deptId)).toEqual(['D01']);
       expect(s.deptSummary.every((x) => x.actualCount > 0)).toBe(true);
+    });
+
+    it('TC-M05-SUMMARY-006：deptSummary.deptName 由 ob_dept_pct 即時解析（代號→名稱）', async () => {
+      // 部門代號（XVE1）對 user 無意義 → 以 ob_dept_pct.obdeptnm 即時解析名稱（非快照）。
+      // 查無對應名稱（XVE2）→ deptName null（前端 fallback 顯示代號）。
+      const run = await seedRun(env.runRepo);
+      await env.deptPctRepo.save(
+        env.deptPctRepo.create({
+          project_workym: YM,
+          list_no: 'L1',
+          obdeptid: 'XVE1',
+          obdeptnm: '業務一部',
+          ration: '100.00',
+          created_by_prog: 'TEST',
+          created_by: 'tester',
+          created_at: new Date(),
+          updated_by_prog: 'TEST',
+          updated_by: 'tester',
+          updated_at: new Date(),
+        } as Partial<ObDeptPct>),
+      );
+      await seedSnap(env.snapRepo, run.run_id, 'config', {
+        deptPct: [{ listNo: 'L1', deptId: 'XVE1', ration: '100' }],
+      });
+      await seedSnap(env.snapRepo, run.run_id, 'input_list', { cases: [] });
+      await seedSnap(env.snapRepo, run.run_id, 'result', {
+        assignments: [
+          { applNo: 'A1', deptId: 'XVE1', cardLevel: 'A' },
+          { applNo: 'A2', deptId: 'XVE2', cardLevel: 'A' }, // 無 ob_dept_pct 對應
+        ],
+      });
+
+      const s = await env.service.getSummary(run.run_id);
+      const xve1 = s.deptSummary.find((x) => x.deptId === 'XVE1');
+      const xve2 = s.deptSummary.find((x) => x.deptId === 'XVE2');
+      expect(xve1?.deptName).toBe('業務一部');
+      expect(xve2?.deptName).toBeNull();
     });
 
     it('TC-M05-SUMMARY-004：warnings 段含 skipped_cases', async () => {
