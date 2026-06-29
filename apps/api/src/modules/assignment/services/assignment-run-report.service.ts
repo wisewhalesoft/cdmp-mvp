@@ -154,6 +154,36 @@ export interface FormattedExportRow {
 }
 
 /**
+ * F108 / AD-E07-v3.7 §2：樞紐分析聚合結構（部門名稱 × 員編 × 名單代號 計數）。
+ *
+ * I-PIV-MEM-01：記憶體中**只保留小型聚合計數**（部門 × 員編 × 名單代號量級），
+ *   不全載 7.7 萬筆明細列。各 Map 由 `accumulatePivot` 於既有匯出串流迴圈內 in-place 累加。
+ */
+export interface PivotAggregation {
+  /** 原子計數：cell[deptName][emplid][listNo] = count */
+  cell: Map<string, Map<string, Map<string, number>>>;
+  /** 部門 × 名單 小計：deptByList[deptName][listNo] */
+  deptByList: Map<string, Map<string, number>>;
+  /** 全體 × 名單 欄總計：grandByList[listNo] */
+  grandByList: Map<string, number>;
+  /** 部門跨名單總計（「總計欄」部門列分母）：deptTotal[deptName] */
+  deptTotal: Map<string, number>;
+  /** 員編跨名單總計（「總計欄」員編列分子）：cellTotal[deptName][emplid] */
+  cellTotal: Map<string, Map<string, number>>;
+  /** 全體跨名單總計（grand total）*/
+  grandTotal: number;
+  /** 出現過的名單代號集合（確定性排序後為欄軸）*/
+  listNos: Set<string>;
+  /** 出現過的部門名稱集合（確定性排序後為外層列軸）*/
+  deptNames: Set<string>;
+  /** 各部門出現過的員編集合（確定性排序後為內層列軸）*/
+  emplidsPerDept: Map<string, Set<string>>;
+}
+
+/** F108：emphire join-miss / emplid 空值之歸組標籤（對齊 Excel 樞紐空白項，BR-F108-03）。 */
+const PIVOT_BLANK_LABEL = '(空白)';
+
+/**
  * F064 v2.0 匯出 join SQL spec（buildExportQuery 產出）。
  * sql / params 由 streaming producer 餵 TypeORM queryRunner.stream()（I-EXP-NOOFFSET-01）。
  */
@@ -780,6 +810,9 @@ export class AssignmentRunReportService {
     headerRow.font = { bold: true };
     headerRow.commit();
 
+    // F108 / I-PIV-MEM-01：樞紐聚合狀態（只存計數，不全載明細列）。
+    const pivotAgg = this.createPivotAggregation();
+
     const writeAndFinish = (async () => {
       const source = await this.cursorRows(query);
       for await (const raw of source as AsyncIterable<RawExportRow>) {
@@ -787,14 +820,192 @@ export class AssignmentRunReportService {
         onRow(formatted);
         // 以字串型別逐欄寫入（防 Excel 將指派日 / 進件日誤判為數字序號，I-EXP-FMT-01）
         sheet.addRow(formatted.row).commit();
+        // F108 / I-PIV-SOURCE-01：同步累加樞紐計數（同一 scoped cursor，無第 2 次查詢）。
+        this.accumulatePivot(raw, pivotAgg);
       }
       sheet.commit();
+
+      // F108 / I-PIV-SHEET-01：第 2 頁「樞紐分析」必須在 sheet 1 commit 後再 add/write/commit
+      //   （WorkbookWriter streaming：每個 worksheet 於 commit 時即壓入 ZIP；AD-E07-v3.7 §5）。
+      const pivotSheet = workbook.addWorksheet('樞紐分析');
+      this.writePivotSheet(pivotSheet, pivotAgg);
+      pivotSheet.commit();
+
       await workbook.commit();
       await sinkEnd;
     })();
 
     await this.raceTimeout(writeAndFinish, timeoutMs);
     return Buffer.concat(chunks);
+  }
+
+  // -------------------------------------------------------------------------
+  // F108 樞紐分析（% of parent row 靜態交叉表）
+  // -------------------------------------------------------------------------
+
+  /** F108 / AD-E07-v3.7 §8.1：初始化空的 PivotAggregation 結構。 */
+  private createPivotAggregation(): PivotAggregation {
+    return {
+      cell: new Map(),
+      deptByList: new Map(),
+      grandByList: new Map(),
+      deptTotal: new Map(),
+      cellTotal: new Map(),
+      grandTotal: 0,
+      listNos: new Set(),
+      deptNames: new Set(),
+      emplidsPerDept: new Map(),
+    };
+  }
+
+  /**
+   * F108 / AD-E07-v3.7 §3.1 / §8.2：讀取 RawExportRow 三欄（emphire_dept_name / emplid / list_no），
+   * 正規化分組鍵（null / 空字串 → '(空白)'；list_no 空 → 跳過），in-place 累加各計數器。
+   *
+   * I-PIV-MEM-01：只更新 Map 計數，**不保留明細列**（不 push raw、不 Buffer.concat）。
+   */
+  private accumulatePivot(raw: RawExportRow, agg: PivotAggregation): void {
+    const listKey = raw.list_no ? String(raw.list_no) : '';
+    if (!listKey) return; // list_no 空 → 不計入聚合（AD-E07-v3.7 §3.1）
+    const deptKey = raw.emphire_dept_name
+      ? String(raw.emphire_dept_name)
+      : PIVOT_BLANK_LABEL;
+    const emplidKey = raw.emplid ? String(raw.emplid) : PIVOT_BLANK_LABEL;
+
+    // cell[dept][emplid][list]++
+    let byEmplid = agg.cell.get(deptKey);
+    if (!byEmplid) {
+      byEmplid = new Map();
+      agg.cell.set(deptKey, byEmplid);
+    }
+    let byList = byEmplid.get(emplidKey);
+    if (!byList) {
+      byList = new Map();
+      byEmplid.set(emplidKey, byList);
+    }
+    byList.set(listKey, (byList.get(listKey) ?? 0) + 1);
+
+    // deptByList[dept][list]++
+    let dbl = agg.deptByList.get(deptKey);
+    if (!dbl) {
+      dbl = new Map();
+      agg.deptByList.set(deptKey, dbl);
+    }
+    dbl.set(listKey, (dbl.get(listKey) ?? 0) + 1);
+
+    // grandByList[list]++
+    agg.grandByList.set(listKey, (agg.grandByList.get(listKey) ?? 0) + 1);
+
+    // deptTotal[dept]++
+    agg.deptTotal.set(deptKey, (agg.deptTotal.get(deptKey) ?? 0) + 1);
+
+    // cellTotal[dept][emplid]++
+    let ct = agg.cellTotal.get(deptKey);
+    if (!ct) {
+      ct = new Map();
+      agg.cellTotal.set(deptKey, ct);
+    }
+    ct.set(emplidKey, (ct.get(emplidKey) ?? 0) + 1);
+
+    // grandTotal++
+    agg.grandTotal += 1;
+
+    // 確定性排序用集合
+    agg.listNos.add(listKey);
+    agg.deptNames.add(deptKey);
+    let eset = agg.emplidsPerDept.get(deptKey);
+    if (!eset) {
+      eset = new Set();
+      agg.emplidsPerDept.set(deptKey, eset);
+    }
+    eset.add(emplidKey);
+  }
+
+  /**
+   * F108 / AD-E07-v3.7 §3.3：除零保護。
+   *   - 分母 = 0（0/0）→ 回 null（空白儲存格，不輸出 0.0%）
+   *   - 分母 > 0 → 回 numerator / denominator（分子 0 → 0 → Excel numFmt 顯示 0.0%）
+   */
+  private pctOrBlank(numerator: number, denominator: number): number | null {
+    if (denominator === 0) return null;
+    return numerator / denominator;
+  }
+
+  /**
+   * F108 / AD-E07-v3.7 §8.3：將已完成的 PivotAggregation 寫入 WorkbookWriter 第 2 頁。
+   * 必須在 sheet 1 commit() 後、workbook.commit() 前呼叫。
+   *
+   * 確定性排序（I-PIV-DET-01）：listNo 字串升冪 / 部門 localeCompare（'(空白)' 最後）/ 員編字串升冪。
+   * 數值 = % of parent row（部門列 ÷ 欄總計、員編列 ÷ 所屬部門同欄、總計列 = 1）；numFmt='0.0%'。
+   */
+  private writePivotSheet(
+    pivotSheet: ExcelJS.Worksheet,
+    agg: PivotAggregation,
+  ): void {
+    const sortedListNos = [...agg.listNos].sort();
+    const sortedDepts = [...agg.deptNames].sort((a, b) => {
+      if (a === PIVOT_BLANK_LABEL) return 1; // '(空白)' 固定排最後（OQ-F108-01）
+      if (b === PIVOT_BLANK_LABEL) return -1;
+      return a.localeCompare(b);
+    });
+    // 數值欄數 = 名單代號欄 + 1（總計欄）
+    const numericCells = sortedListNos.length + 1;
+
+    const writeRow = (
+      label: string,
+      values: Array<number | null>,
+    ): void => {
+      const row = pivotSheet.addRow([label, ...values]);
+      for (let c = 2; c <= 1 + numericCells; c++) {
+        row.getCell(c).numFmt = '0.0%';
+      }
+      row.commit();
+    };
+
+    // R1：部門代號 / (全部)（對齊 legacy 頁篩選 axisPage）
+    pivotSheet.addRow(['部門代號', '(全部)']).commit();
+    // R2：空列
+    pivotSheet.addRow([]).commit();
+    // R3：計數 - 案號 / 欄標籤
+    pivotSheet.addRow(['計數 - 案號', '欄標籤']).commit();
+    // R4：列標籤 / <listNo 升冪> / 總計
+    pivotSheet.addRow(['列標籤', ...sortedListNos, '總計']).commit();
+
+    // 資料列：部門列（÷ 欄總計）→ 其全部員編列（÷ 所屬部門同欄）
+    for (const dept of sortedDepts) {
+      const deptByList = agg.deptByList.get(dept);
+      const deptValues: Array<number | null> = sortedListNos.map((l) =>
+        this.pctOrBlank(deptByList?.get(l) ?? 0, agg.grandByList.get(l) ?? 0),
+      );
+      const deptGrand = this.pctOrBlank(
+        agg.deptTotal.get(dept) ?? 0,
+        agg.grandTotal,
+      );
+      writeRow(dept, [...deptValues, deptGrand]);
+
+      const cellByEmplid = agg.cell.get(dept);
+      const cellTotal = agg.cellTotal.get(dept);
+      const sortedEmplids = [...(agg.emplidsPerDept.get(dept) ?? [])].sort();
+      for (const emplid of sortedEmplids) {
+        const byList = cellByEmplid?.get(emplid);
+        const empValues: Array<number | null> = sortedListNos.map((l) =>
+          this.pctOrBlank(byList?.get(l) ?? 0, deptByList?.get(l) ?? 0),
+        );
+        const empGrand = this.pctOrBlank(
+          cellTotal?.get(emplid) ?? 0,
+          agg.deptTotal.get(dept) ?? 0,
+        );
+        writeRow(emplid, [...empValues, empGrand]);
+      }
+    }
+
+    // 總計列：每欄 grandByList[L] / grandByList[L] = 1（0/0 → 空白，BR-F108-11）
+    const grandValues: Array<number | null> = sortedListNos.map((l) => {
+      const g = agg.grandByList.get(l) ?? 0;
+      return this.pctOrBlank(g, g);
+    });
+    const grandGrand = this.pctOrBlank(agg.grandTotal, agg.grandTotal);
+    writeRow('總計', [...grandValues, grandGrand]);
   }
 
   /**
