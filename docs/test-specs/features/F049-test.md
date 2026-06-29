@@ -1,20 +1,25 @@
 ---
 type: test-design-feature
 feature_id: F049
-feature_name: Stage 0 每日分派數量估算（v1.3）
+feature_name: Stage 0 試算頁業務化重設計（部門維度每日分派可行性）
 priority: P0-MVP
 related_spec: /docs/specs/features/F049-stage0-daily-estimate.md
-spec_version: "1.4"
+spec_version: "2.0"
 covers:
   - F049
   - US-071
   - US-132
   - US-135
+  - US-166
+  - US-167
+  - US-168
+  - US-169
+  - US-170
 date: 2026-05-21
-last_updated: 2026-05-26
+last_updated: 2026-06-29
 ---
 
-# F049：Stage 0 每日分派數量估算（v1.4）— 測試設計
+# F049：Stage 0 試算頁業務化重設計（v2.0）— 測試設計
 
 > **v1.4 測試設計更新（2026-05-26 / estimate 升級為完整 Stage 1 dry-run，對齊 F092）**：F049 v1.4 / [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 將 per-list estimate 由「欄位篩選版 COUNT」升級為「完整 Stage 1 鏈 dry-run COUNT（≡ 月跑案件數）」。本版**僅更新 TS-F049-EST-010**（整合層）：原預期固定值 `≈ 241,978`（欄位篩選版上界）已過時 → 改為「dry-run COUNT === 月跑 Stage 1（不再 assert 固定值）；完整鏈後 COUNT ≤ 241,978；dev `ob_pool_data_list` 空時去重不減、但 month_cnt / 特殊 DELETE 仍可能減」，並標記為 **Integration DEFERRED**（需真實 PG + ob_pool_data_list seed）。完整鏈三步驟（month_cnt / 去重 / 特殊 DELETE）之單元測試由 F091-test 覆蓋，本檔不重複。其餘案例群組（CAL / V13F / EST-001~009）不變。
 >
@@ -977,3 +982,1019 @@ last_updated: 2026-05-26
   - KPI total 顯示「—」
   - 無寫死 9500 / 9,500 出現
   - 圖表空狀態（不渲染假資料）
+
+---
+
+# Part B — v2.0 業務化重設計測試設計（US-166~170）
+
+> **v2.0 新增（2026-06-29）**：覆蓋 F049 Part B §14–§22 / AD-E07-v3.6 / US-166–170 之驗收標準。分為五個後端群組（DEPT / GAP / SCOPE / FEAS / INVAR）、一個邊緣案例群組（EDGE）、兩個前端群組（AGG / FE）與一個術語清理群組（TERM）。**總新增場景：43 個**。
+>
+> **安全性紅線（SCOPE 群組）**：TS-F049-SCOPE-002 為後端 scope leak regression guard，任何未來使非轄區部門資料出現在 response 中的修改都應使此測試 FAIL。
+>
+> **數值 oracle 已手算（DEPT/GAP 群組）**：所有 dpm/ration 計算採 `dept_real = Σ(list_total × ration/100 × dpm/1000)`，最終 `Math.round()` 一次。實數 gap 先算再捨入（`gap_real = org_real − Σ dept_real`）——不可 assert `Σ Math.round(dept_real) === Math.round(org_real)`（捨入容差最大 ±部門數 件）。
+>
+> **SQLite/PG 移植性標記（依 AD-E07-v3.6 §8）**：頭count 批次查詢以 `SELECT TRIM(dept_code), COUNT(*) FROM ob_emphire WHERE resign_date IS NULL GROUP BY TRIM(dept_code)` 為準，SQLite / PG 均支援；headcount 全取後 JS `trim()` 做 map 亦可避免 SQL 差異。`TRIM(p.obdeptid)` 比對在兩 DB 均相容。EXTRACT(DOW) 類查詢不需在部門投影中使用（已由 `computeWorkingDayRatios` 純函式承擔）。
+
+---
+
+## 五、後端部門投影公式（DEPT，BR-8 / §16.1）
+
+> **設計依據**：F049 §16.1 / §16.3 / BR-8；AD-E07-v3.6 §5 in-memory 部門投影；US-167 AC-1
+> **測試策略**：`computeDeptEstimate` service method，以 SQLite in-memory seed `ob_list_definition`、`ob_dept_pct`、`ob_emphire`、`ob_calendar`；部門投影為 in-memory 計算，無需 PG TestContainer（除非需 EXTRACT(DOW)）。
+
+---
+
+### TS-F049-DEPT-001：兩份名單 × 兩個部門 × 一個工作日的完整公式驗算（手算 oracle）
+
+- **關聯需求**：F049 §16.1 BR-8；US-167 AC-1 / TC-167-01
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+
+**Fixture 定義（手算 oracle）**：
+
+| 欄位 | 值 |
+|---|---|
+| 名單 A `list_total` | 1,000 件 |
+| 名單 B `list_total` | 500 件 |
+| 名單 A D001 `ration` | 40% |
+| 名單 A D002 `ration` | 60% |
+| 名單 B D001 `ration` | 25% |
+| 名單 B D002 `ration` | 75% |
+| 工作日千分位 `dpm` | 50‰ |
+
+**公式計算（實數）**：
+```
+dept_real[D001] = (1000 × 0.40 × 0.050) + (500 × 0.25 × 0.050) = 20.000 + 6.250 = 26.250
+dept_real[D002] = (1000 × 0.60 × 0.050) + (500 × 0.75 × 0.050) = 30.000 + 18.750 = 48.750
+org_real        = (1000 + 500) × 0.050 = 75.000
+gap_real        = 75.000 − (26.250 + 48.750) = 0.000
+```
+
+**捨入後期望值**：
+- `cases[D001] = Math.round(26.250) = 26`
+- `cases[D002] = Math.round(48.750) = 49`
+- `orgTotal = Math.round(75.000) = 75`
+- `gap = Math.round(0.000) = 0`（缺口列不顯示）
+
+- **前置條件**：
+  - SQLite in-memory seed：
+    - `ob_list_definition`：兩筆 active 名單（LIST-A / LIST-B），`stage0_estimate_count` 分別為 1000 / 500
+    - `ob_dept_pct`：如 Fixture 表（LIST-A: D001=40%, D002=60%；LIST-B: D001=25%, D002=75%）
+    - `ob_emphire`：D001 10 人、D002 10 人在職（`resign_date IS NULL`）
+    - `ob_calendar`：2026-05-04（週一，`rest_flg='0'`），dpm 計算後 = 50‰（月內僅此 1 工作日以簡化測試）
+  - 呼叫 `computeDeptEstimate('202605', { calendarSource: 'weekday', startDate: '2026-05-04', endDate: '2026-05-04' })`
+- **步驟**：
+  1. 取得 response，找到 `days[0]`（2026-05-04）
+  2. 驗證 `days[0].isWorkday === true`
+  3. 驗證 `days[0].deptCells.length === 2`
+  4. 驗證 `deptCells` 依 `deptCode ASC` 排序（D001 在前，D002 在後）
+  5. 驗證 `deptCells[0].deptCode === 'D001'`、`deptCells[0].cases === 26`
+  6. 驗證 `deptCells[1].deptCode === 'D002'`、`deptCells[1].cases === 49`
+  7. 驗證 `days[0].orgTotal === 75`
+  8. 驗證 `days[0].gap === 0`（gap=0，不顯示缺口）
+  9. **捨入容差確認**：assert `deptCells[0].cases + deptCells[1].cases` 在 `[74, 76]` 範圍內（±1 件容差），**不 assert 嚴格等於 orgTotal**
+- **預期結果**：
+  - D001.cases = 26；D002.cases = 49；orgTotal = 75；gap = 0
+  - deptCells 依 deptCode ASC 排序（I-DEPT-ORDER-01）
+- **DB 需求**：SQLite 可覆蓋（in-memory 計算無 SQL 聚合）
+
+---
+
+### TS-F049-DEPT-002：休息日全部門件數 = 0 / per_person = null / gap = 0（BR-8 / TC-167-03）
+
+- **關聯需求**：F049 §16.1（`dpm=0` 休息日）；BR-8；US-167 AC-1；TC-167-03
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - 同 TS-F049-DEPT-001 seed；另新增一天 2026-05-03（週日，`rest_flg='1'`）
+  - 呼叫 `computeDeptEstimate` 含 2026-05-03
+- **步驟**：
+  1. 找到 `days` 中 2026-05-03 日期項目
+  2. 驗證 `isWorkday === false`
+  3. 驗證 `deptCells` 為空陣列（`[]`）
+  4. 驗證 `orgTotal === 0`、`deptAssignedTotal === 0`、`gap === 0`
+  5. 驗證 2026-05-04（工作日）的 `deptCells` 非空（contrast）
+- **預期結果**：
+  - 休息日：deptCells 空、orgTotal=0、gap=0
+  - 工作日：deptCells 含部門列（對比驗證）
+
+---
+
+### TS-F049-DEPT-003：per-list `ration` 來自 `ob_dept_pct`（非 legacy MIN(LIST_NO) 共用比例 — BR-8 regression）
+
+- **關聯需求**：F049 BR-8（「ration 為 per-list，取自 ob_dept_pct；刻意不採 legacy MIN(LIST_NO) 共用比例」）；AD-E07-29 一致性
+- **測試類型**：Regression / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - 兩份名單 LIST-A（D001=40%）/ LIST-B（D001=60%）
+  - `ob_dept_pct` 各自獨立設定（per-list，無 MIN(LIST_NO) 共用表）
+  - `stage0_estimate_count` LIST-A=1000、LIST-B=1000
+  - 工作日 dpm=50‰
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate`
+  2. 取得 D001 件數：`dept_real[D001] = (1000×0.40×0.05) + (1000×0.60×0.05) = 20 + 30 = 50`
+  3. 驗證 `deptCells[0].cases === 50`
+  4. **Regression guard**：確認計算使用各自名單的 ration（LIST-A=40% / LIST-B=60%），不使用 MIN(LIST_NO)=40% 共用（若使用共用比例，D001 will be `(1000+1000)×0.40×0.05 = 40`，測試應在 40 ≠ 50 時 FAIL）
+- **預期結果**：
+  - D001.cases = 50（per-list 各自比例的加總）
+  - 若使用 MIN(LIST_NO) 共用比例，D001.cases = 40 → 測試 FAIL（regression guard 生效）
+
+---
+
+### TS-F049-DEPT-004：單一名單鑽探模式（listNo 指定）公式不變，僅名單集合縮減
+
+- **關聯需求**：F049 AC-AGG-2；US-167 AC-4；§14.2 L2 聚合層
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - 三份名單 LIST-A/B/C，各有 ob_dept_pct
+  - 呼叫 `computeDeptEstimate('202605', { listNo: 'LIST-B' })`（single-list 模式）
+- **步驟**：
+  1. 驗證 `response.mode === 'single-list'`
+  2. 驗證 `response.listNo === 'LIST-B'`
+  3. 驗證 `deptCells` 中的 cases 僅反映 LIST-B 的 list_total 與 ration（不含 LIST-A / LIST-C 貢獻）
+  4. 對比：呼叫 aggregated 模式的 deptCells，cases 值較大（含三份名單）
+- **預期結果**：
+  - `mode === 'single-list'`；`listNo === 'LIST-B'`
+  - cases 值 < aggregated 模式值（僅一份名單貢獻）
+
+---
+
+## 六、後端缺口機制（GAP，BR-9/10/11 / §16.2~16.3）
+
+> **設計依據**：F049 §16.2 / §16.3（捨入規則）/ BR-9 / BR-10 / BR-11；US-167 AC-2 / AC-5
+
+---
+
+### TS-F049-GAP-001：比例 60%（未達 100%）→ gap = 20、缺口列顯示（TC-167-02）
+
+- **關聯需求**：F049 §16.2 / AC-GAP-1 / BR-10；US-167 AC-2；TC-167-02
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+
+**手算 oracle**：
+```
+list_total = 1000, D001 ration=60%, dpm=50‰
+dept_real[D001] = 1000 × 0.60 × 0.050 = 30.000 → cases = 30
+org_real  = 1000 × 0.050 = 50.000 → orgTotal = 50
+gap_real  = 50.000 − 30.000 = 20.000 → gap = 20
+```
+
+- **前置條件**：
+  - 名單 LIST-A：list_total=1000，`ob_dept_pct` 僅 D001=60%（D002 無設定）
+  - ob_calendar 一個工作日，dpm=50‰
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate`
+  2. 找到工作日那天的 `days[0]`
+  3. 驗證 `deptCells.length === 1`（只有 D001 有比例）
+  4. 驗證 `deptCells[0].cases === 30`
+  5. 驗證 `orgTotal === 50`
+  6. 驗證 `gap === 20`（`gap_real` 先算再 `Math.round`）
+  7. 驗證 D002 **不出現在** `deptCells` 中（`deptCells.find(c => c.deptCode === 'D002') === undefined`）
+- **預期結果**：
+  - cases[D001]=30；orgTotal=50；gap=20
+  - D002 完全不在 response 中（AC-DEPT-2）
+  - gap > 0 → 前端應顯示缺口列（後端已正確提供 gap 值）
+
+---
+
+### TS-F049-GAP-002：比例 70%（D001=30% + D002=40%）→ gap = 30、不另出名單層警示（TC-167-04）
+
+- **關聯需求**：F049 §16.2 / AC-GAP-3 / BR-11；US-167 AC-5；TC-167-04
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+
+**手算 oracle**：
+```
+list_total = 2000, D001=30%, D002=40%, dpm=50‰
+dept_real[D001] = 2000 × 0.30 × 0.050 = 30.000 → cases = 30
+dept_real[D002] = 2000 × 0.40 × 0.050 = 40.000 → cases = 40
+org_real  = 2000 × 0.050 = 100.000 → orgTotal = 100
+gap_real  = 100 − (30 + 40) = 30.000 → gap = 30
+```
+
+- **前置條件**：名單 LIST-B：list_total=2000，D001=30%，D002=40%，dpm=50‰
+- **步驟**：
+  1. 驗證 `deptCells[0].cases === 30`（D001）
+  2. 驗證 `deptCells[1].cases === 40`（D002）
+  3. 驗證 `orgTotal === 100`
+  4. 驗證 `gap === 30`
+  5. 驗證 response 中**無** `listWarning`、`ratioShortfall`、或任何名單層警示欄位（BR-11：統一表現為 gap）
+  6. 驗證 `warnings[]` 中**無** `RATIO_BELOW_100` 或類似碼（缺口不以 warnings 呈現，以 gap 欄位承載）
+- **預期結果**：
+  - gap=30；無名單層警示；缺口統一以 `gap` 欄位表示
+
+---
+
+### TS-F049-GAP-003：完全無 ob_dept_pct 比例 → deptCells=[] / gap = org_total（全額缺口）
+
+- **關聯需求**：F049 AC-DEPT-2 / AC-GAP-1；BR-10（缺口≥0 恆成立）；§22.2 邊緣案例
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：名單 LIST-A：list_total=500，**ob_dept_pct 完全無任何列**；dpm=50‰
+- **步驟**：
+  1. 驗證 `deptCells` 為空陣列（`[]`）
+  2. 驗證 `orgTotal = Math.round(500 × 0.050) = 25`
+  3. 驗證 `deptAssignedTotal === 0`
+  4. 驗證 `gap === 25`（= orgTotal，全額未分派）
+- **預期結果**：
+  - deptCells 空；gap = orgTotal = 25
+  - org_total 仍正確顯示（不依賴任何比例，BR-9）
+
+---
+
+### TS-F049-GAP-004：比例 100% → gap = 0，缺口列不顯示
+
+- **關聯需求**：F049 AC-GAP-2；BR-10（gap=0 不顯示）
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+
+**手算 oracle**：
+```
+list_total = 1000, D001=40%, D002=60%, dpm=50‰
+gap_real = 0 → gap = 0
+```
+
+- **前置條件**：D001=40% + D002=60%（總和 100%），list_total=1000，dpm=50‰
+- **步驟**：
+  1. 驗證 `gap === 0`
+  2. 驗證後端 response 中 `gap === 0`（前端需依此判斷不渲染缺口列）
+- **預期結果**：gap=0；前端不渲染缺口列
+
+---
+
+### TS-F049-GAP-005：捨入容差確認 — gap 由 gap_real 捨入，不 assert Σ 部門捨入值 === orgTotal
+
+- **關聯需求**：F049 §16.3 裁定（Math.round / ±N 容差）；OQ-E07-STAGE0-ROUND
+- **測試類型**：Boundary / Unit
+- **測試層**：Unit（純函式驗證）
+
+**設計一個有捨入殘差的 case**：
+```
+list_total = 1000, D001=33%, D002=33%, D003=33%, dpm=50‰
+dept_real[D001] = 1000×0.33×0.05 = 16.500 → Math.round = 17
+dept_real[D002] = 16.500 → 17
+dept_real[D003] = 16.500 → 17
+org_real        = 1000×0.05 = 50.000 → orgTotal = 50
+gap_real        = 50 − (16.5+16.5+16.5) = 50 − 49.5 = 0.500 → gap = Math.round(0.5) = 1
+```
+注意：Σ rounded dept cells = 17+17+17 = 51 > orgTotal = 50（捨入殘差 +1）
+
+- **前置條件**：LIST-A：D001=33%，D002=33%，D003=33%（總 99%），list_total=1000，dpm=50‰
+- **步驟**：
+  1. 驗證 `deptCells[0].cases === 17`（D001）
+  2. 驗證 `deptCells[1].cases === 17`（D002）
+  3. 驗證 `deptCells[2].cases === 17`（D003）
+  4. 驗證 `orgTotal === 50`
+  5. 驗證 `gap === 1`（gap_real=0.5 → Math.round(0.5)=1）
+  6. **不 assert** `17+17+17 === orgTotal`（容差正常）
+  7. 驗證 `Σ deptCells.cases + gap = 17+17+17+1 = 52`（此為正常捨入結果，接受）
+- **預期結果**：
+  - 捨入後 Σ 部門件數（51）≠ orgTotal（50）為正常現象
+  - gap=1（由 gap_real 獨立捨入）
+  - **重要**：測試框架不應 assert `sum(deptCells.cases) + gap === orgTotal`
+
+---
+
+### TS-F049-GAP-006：org_total 不依賴任何部門比例（BR-9 regression guard）
+
+- **關聯需求**：F049 BR-9（`org_total = Σ list_total × dpm / 1000`，不依賴比例）；AC-DEPT-1
+- **測試類型**：Regression / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - 兩份名單：LIST-A（list_total=1000，D001=0%，無比例設定）；LIST-B（list_total=500，D001=40%）
+  - dpm=50‰
+- **步驟**：
+  1. 驗證 `orgTotal = Math.round((1000 + 500) × 0.050) = 75`
+  2. **Regression guard**：確認 orgTotal 不因 LIST-A 無比例設定而被排除（若誤用 `Σ dept_assigned` 算 orgTotal，則 orgTotal = Math.round(500×0.40×0.05) = 10，測試應在 10 ≠ 75 時 FAIL）
+- **預期結果**：orgTotal = 75（含 LIST-A 全量）
+
+---
+
+## 七、後端 scope 隔離層（SCOPE，BR-12/13/14 / §17）【SECURITY-CRITICAL】
+
+> **設計依據**：F049 §17 / BR-12 / BR-13 / BR-14；AD-E07-v3.6 §4（Guard 接線）/ §6（service scope filter 邏輯）；US-168 AC-2/AC-3/AC-6
+>
+> **安全性紅線**：TS-F049-SCOPE-002 是 **MUST-HAVE regression guard**——任何未來修改若導致非轄區部門資料出現在處長 response 中，此測試必須 FAIL。設計原則：assert response 物件中**完全不含** 非轄區 deptCode（非遮罩、非 null 值，而是完全不存在）。
+
+---
+
+### TS-F049-SCOPE-001：處長 scope=XVE1 → response 只含 XVE1 部門列（正向）
+
+- **關聯需求**：F049 AC-SCOPE-2 / BR-13；US-168 AC-2；TC-168-02
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory + mock getScopeDeptCode）
+- **前置條件**：
+  - SQLite seed：ob_dept_pct 含三部門 XVE1（40%）/ XVE2（35%）/ XVE3（25%）
+  - ob_emphire：XVE1=27 人、XVE2=28 人、XVE3=22 人在職
+  - actor mock：`{ userId: 'user-sc-01', businessRole: 'section_chief', role: 'user' }`
+  - `getScopeDeptCode('user-sc-01')` mock → `'XVE1'`
+  - 呼叫 `computeDeptEstimate('202605', { actor })`
+- **步驟**：
+  1. 驗證 `response.scope.scoped === true`
+  2. 驗證 `response.scope.deptCode === 'XVE1'`
+  3. 驗證 `response.departments.length === 1`
+  4. 驗證 `response.departments[0].deptCode === 'XVE1'`
+  5. 驗證工作日的 `deptCells.length === 1`
+  6. 驗證 `deptCells[0].deptCode === 'XVE1'`
+- **預期結果**：
+  - departments 只有 XVE1；deptCells 只有 XVE1
+
+---
+
+### TS-F049-SCOPE-002：【SECURITY REGRESSION GUARD】處長 scope=XVE1 — XVE2/XVE3 完全不存在於 response
+
+- **關聯需求**：F049 AC-SCOPE-2 / AC-SCOPE-3 / AC-SCOPE-6 / BR-13（「其他部門列完全不存在，非遮罩」）；I-DEPT-SCOPE-01；US-168 AC-6
+- **測試類型**：Regression（Security）/ Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：同 TS-F049-SCOPE-001（三部門 seed）；actor scope = XVE1
+- **步驟**：
+  1. 取得完整 response JSON
+  2. 將 response 序列化為字串：`const responseStr = JSON.stringify(response)`
+  3. 驗證 `responseStr` **不含** `'XVE2'`（非轄區部門代號完全不出現）
+  4. 驗證 `responseStr` **不含** `'XVE3'`
+  5. 驗證 `responseStr` **不含** `'28'`（XVE2 的在職人數 28，不得洩漏）
+  6. 驗證 `responseStr` **不含** `'22'`（XVE3 在職人數 22，不得洩漏）
+  7. 驗證 `departments.every(d => d.deptCode === 'XVE1')` 為 true
+  8. 對 `days` 每一天驗證 `deptCells.every(c => c.deptCode === 'XVE1')` 為 true
+- **預期結果**：
+  - JSON response 中完全不出現 XVE2 / XVE3 字串（含部門名稱、headcount、cases、perPerson）
+  - **此 test 應在 scope filter 未正確套用時 FAIL**（不可偽造）
+
+---
+
+### TS-F049-SCOPE-003：處長 scope=null → HTTP 200 空結果 + SCOPE_UNRESOLVED warning（非 403/500）
+
+- **關聯需求**：F049 AC-SCOPE-5 / BR-14；US-168 AC-5；TC-168-04；AD-E07-v3.6 §6
+- **測試類型**：Negative / Unit
+- **測試層**：Unit（mock getScopeDeptCode → null）
+- **前置條件**：
+  - actor mock：`businessRole='section_chief'`
+  - `getScopeDeptCode(userId)` mock → `null`（email 對不上 ob_emphire）
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate('202605', { actor })`
+  2. 驗證**不拋出例外**（不 500）
+  3. 驗證 response.departments === `[]`
+  4. 驗證 `days[].deptCells` 每一天均為 `[]`（或整個 days 為空）
+  5. 驗證 `warnings` 含 `{ code: 'SCOPE_UNRESOLVED' }`
+  6. 驗證 response HTTP status 為 200（由 controller 測試確認）
+- **預期結果**：
+  - 正常回傳 200；departments 空；SCOPE_UNRESOLVED warning；不 crash
+
+---
+
+### TS-F049-SCOPE-004：部長 / admin → 所有部門可見，不套 scope filter
+
+- **關聯需求**：F049 AC-SCOPE-4；BR-12；US-168 AC-4；TC-168-05
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - 三部門 seed（XVE1/XVE2/XVE3）
+  - actor mock：`{ businessRole: 'director', role: 'user' }`
+- **步驟**：
+  1. 驗證 `response.scope.scoped === false`
+  2. 驗證 `departments.length === 3`（全部門）
+  3. 驗證 `deptCells.length === 3`（工作日）
+  4. 驗證 departments 含 XVE1、XVE2、XVE3 三者
+- **預期結果**：部長看全部門；scope.scoped=false
+
+---
+
+### TS-F049-SCOPE-005：後端 scope filter 為安全邊界 — 繞過前端仍只得轄區資料（AC-SCOPE-3）
+
+- **關聯需求**：F049 AC-SCOPE-3 / BR-13；I-DEPT-SCOPE-01；US-168 AC-3；TC-168-03
+- **測試類型**：Security / Unit（Controller 層）
+- **測試層**：Unit（Controller + MockedService）
+- **前置條件**：
+  - Controller 以 `req.user = { businessRole: 'section_chief', userId: 'sc-01' }` 呼叫
+  - service mock：`getScopeDeptCode('sc-01')` → `'XVE1'`
+  - 嘗試在 query params 帶 `dept=XVE2`（即使 API 設計不接受此 param，驗證 scope 不被繞過）
+- **步驟**：
+  1. 直接呼叫 Controller 的 `deptEstimate` handler
+  2. 驗證 service 的 `computeDeptEstimate` 被以含 `actor.businessRole='section_chief'` 的參數呼叫
+  3. 驗證 service scope filter 結果：XVE2 不在 response
+  4. **Logger 驗證**：確認 logger.log 含 `'section_chief scope applied dept_code=XVE1'`（AC-SCOPE-3 log 要求）
+- **預期結果**：
+  - XVE2 不在 response（不可透過 query params 繞過）
+  - server log 有 scope 套用紀錄
+
+---
+
+### TS-F049-SCOPE-006：處長模式 orgTotal / deptAssignedTotal / gap 為 null（BR-13）
+
+- **關聯需求**：F049 BR-13；AD-E07-v3.6 §4.3（處長模式：orgTotal=null, deptAssignedTotal=null, gap=null）
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：actor scope=XVE1（section_chief）
+- **步驟**：
+  1. 驗證 `days[0].orgTotal === null`（工作日）
+  2. 驗證 `days[0].deptAssignedTotal === null`
+  3. 驗證 `days[0].gap === null`
+  4. 驗證 `deptCells[0].cases` 為數字（部門件數仍正常計算）
+- **預期結果**：
+  - 處長看不到全部門合計（null 代替數字）
+  - 部門自身件數仍正常
+
+---
+
+## 八、後端可行性層（FEAS，BR-15/16 / §18）
+
+> **設計依據**：F049 §18.1 / §18.2 / BR-15 / BR-16；AD-E07-v3.6 §6（OQ-F049-06 裁定：全部在職，不過濾 jfun_nm）
+
+---
+
+### TS-F049-FEAS-001：正常人均計算 — per_person = round(cases ÷ headcount)（TC-169-01）
+
+- **關聯需求**：F049 §18.1 / AC-FEAS-1 / BR-15；US-169 AC-1；TC-169-01
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+
+**手算 oracle**：
+```
+D001.cases = 120, D001.active_headcount = 10
+per_person = Math.round(120 / 10) = 12
+```
+
+- **前置條件**：
+  - seed ob_emphire：D001 有 10 名 `resign_date IS NULL` 在職員工（含各種 jfun_nm，不限電訪職）
+  - `computeDeptEstimate` 結果：D001 工作日 cases = 120
+- **步驟**：
+  1. 取得 deptCells[D001].perPerson
+  2. 驗證 `perPerson === 12`
+  3. 驗證 headcount 計算包含所有在職員工（不論 jfun_nm）
+  4. 驗證休息日 D001 `perPerson === null`（非 0，不做除法）
+- **預期結果**：
+  - perPerson=12；休息日 null
+
+---
+
+### TS-F049-FEAS-002：headcount=0 → perPerson=null + DEPT_HEADCOUNT_ZERO warning（TC-169-02）
+
+- **關聯需求**：F049 AC-FEAS-2 / BR-16；US-169 AC-2；TC-169-02；AD-E07-v3.6 §3.7
+- **測試類型**：Negative / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - ob_emphire：D005 部門**無任何** `resign_date IS NULL` 員工（可能 ETL 未同步）
+  - D005 在 ob_dept_pct 有比例設定（D005=50%）；list_total=1000；dpm=50‰
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate`
+  2. 驗證 D005 的 `cases = Math.round(1000×0.50×0.05) = 25`（件數正常計算）
+  3. 驗證 D005 的 `perPerson === null`（不除零，不出 Infinity/NaN）
+  4. 驗證 `warnings` 含 `{ code: 'DEPT_HEADCOUNT_ZERO', deptCode: 'D005' }`
+  5. 驗證**不拋例外**（頁面不 crash）
+  6. 其他有 headcount 的部門 perPerson 正常（contrast）
+- **預期結果**：
+  - D005.perPerson=null；DEPT_HEADCOUNT_ZERO warning；其他部門不受影響
+
+---
+
+### TS-F049-FEAS-003：per_person 超門檻 → overThreshold=true（TC-169-03）
+
+- **關聯需求**：F049 AC-FEAS-3；US-169 AC-3；TC-169-03；AD-E07-v3.6 §3（env var `STAGE0_MAX_CASES_PER_PERSON_PER_DAY`）
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（mock env var）
+
+**手算 oracle**：
+```
+D002.cases = 200, headcount = 10
+per_person = Math.round(200/10) = 20
+threshold = 15（env var）
+20 > 15 → overThreshold = true
+```
+
+- **前置條件**：
+  - env `STAGE0_MAX_CASES_PER_PERSON_PER_DAY=15`
+  - D002：cases=200（透過 list_total/ration/dpm 計算出），headcount=10
+- **步驟**：
+  1. 驗證 `response.threshold === 15`
+  2. 驗證 D002 `perPerson === 20`
+  3. 驗證 D002 `overThreshold === true`
+- **預期結果**：
+  - threshold=15；perPerson=20>15 → overThreshold=true
+
+---
+
+### TS-F049-FEAS-004：threshold=null（env 未設定）→ overThreshold=false，不 crash（TC-169-05）
+
+- **關聯需求**：F049 AC-FEAS-4；US-169 AC-4；TC-169-05；AD-E07-v3.6 §3 OQ-F049-03
+- **測試類型**：Negative / Unit
+- **測試層**：Unit（env var 未設定）
+- **前置條件**：`STAGE0_MAX_CASES_PER_PERSON_PER_DAY` 未設定（預設 null）
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate`
+  2. 驗證 `response.threshold === null`
+  3. 驗證所有 deptCells 的 `overThreshold === false`（無紅色警示）
+  4. 驗證**不拋例外**
+- **預期結果**：threshold=null；overThreshold 恆 false；不 crash
+
+---
+
+### TS-F049-FEAS-005：headcount 查詢使用 TRIM(dept_code)（SQLite/PG 移植性）
+
+- **關聯需求**：F049 §18.1；AD-E07-v3.6 §8 TRIM 注意事項；OQ-167-03（代號空間）
+- **測試類型**：Positive / Unit（SQLite 移植性）
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - ob_emphire seed：dept_code 含尾端空白 `'XVE1 '`（varchar 尾白）；5 名在職
+  - ob_dept_pct：`obdeptid='XVE1'`（無空白）
+- **步驟**：
+  1. 驗證 headcount 查詢以 `TRIM(dept_code)` 分組
+  2. 驗證 XVE1 的 `activeHeadcount === 5`（空白被 TRIM 後正確比對）
+  3. 驗證 perPerson 計算正常（非 null）
+- **預期結果**：
+  - 尾白不影響 headcount 計數（TRIM 生效）
+  - SQLite 與 PG 均應通過此測試
+
+---
+
+### TS-F049-FEAS-006：處長 scope 下 headcount 僅計其轄區（US-169 AC-5）
+
+- **關聯需求**：F049 §18.1（處長 scope）/ AC-FEAS-1；US-169 AC-5；BR-12
+- **測試類型**：Positive / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - ob_emphire：XVE1=10 人、XVE2=5 人在職
+  - 處長 actor scope = XVE1
+- **步驟**：
+  1. 驗證 `departments[0].activeHeadcount === 10`（僅 XVE1）
+  2. 驗證 XVE2 不在 departments（scope 隔離一致）
+  3. 驗證 XVE1 perPerson 以 10 人為分母
+- **預期結果**：scope filter 對 headcount 查詢一致（不洩漏 XVE2 的 5 人資訊）
+
+---
+
+## 九、後端不變量（INVAR，I-RUN-EST-01 / §22.1）
+
+> **設計依據**：F049 §22.1 I-RUN-EST-01；AD-E07-v3.6 §7；AD-E07-29 §3.4
+
+---
+
+### TS-F049-INVAR-001：computeDeptEstimate 使用 computeWorkingDayRatios 輸出（不分叉）
+
+- **關聯需求**：F049 §22.1 I-RUN-EST-01；AD-E07-v3.6 §7（三消費者共用單一函式）
+- **測試類型**：Positive（不變量）/ Unit
+- **測試層**：Unit（spy 驗證）
+- **前置條件**：spy `Stage0EstimateService.computeWorkingDayRatios`
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate('202605', { calendarSource: 'weekday' })`
+  2. 驗證 `computeWorkingDayRatios` **被呼叫**（spy call count ≥ 1）
+  3. 取得 spy 回傳的 `ratios[]`（每日千分位）
+  4. 驗證 `days[].isWorkday` 與 `ratios` 的工作日清單一致（同一 calendar 結果）
+  5. **Regression guard**（靜態）：grep `computeDeptEstimate` 的實作，確認不含 `FLOOR(1000 /`、`1000 %`、`ORDER BY calendar_date DESC` 等 ratio 計算邏輯（該邏輯應只在 `computeWorkingDayRatios` 中）
+- **預期結果**：
+  - computeWorkingDayRatios 被呼叫（非跳過）
+  - computeDeptEstimate 不自己重算 ratio
+
+---
+
+### TS-F049-INVAR-002：list_total 來自 stage0_estimate_count（F088 物化）或 fallback estimateListCount（同源）
+
+- **關聯需求**：F049 §22.1 I-RUN-EST-01（list_total 與月跑 Stage 1 同源）；AD-E07-v3.6 §5 階段 A
+- **測試類型**：Positive（不變量）/ Unit（兩個子場景）
+- **測試層**：Unit（SQLite in-memory）
+
+**子場景 2a：stage0_estimate_count 已物化 → primary source**
+- **前置條件**：ob_list_definition.stage0_estimate_count = 8500（非 NULL）
+- **步驟**：
+  1. spy `estimateListCount`（fallback 函式）
+  2. 呼叫 `computeDeptEstimate`
+  3. 驗證 `estimateListCount` **未被呼叫**（spy call count = 0）
+  4. 驗證 dept 計算使用 8500 作為 list_total
+- **預期結果**：物化值優先，不觸發 fallback
+
+**子場景 2b：stage0_estimate_count IS NULL → fallback estimateListCount**
+- **前置條件**：ob_list_definition.stage0_estimate_count = NULL
+- **步驟**：
+  1. spy `estimateListCount` mock → return 7000
+  2. 呼叫 `computeDeptEstimate`
+  3. 驗證 `estimateListCount` **被呼叫**（spy call count ≥ 1）
+  4. 驗證 dept 計算使用 7000 作為 list_total
+- **預期結果**：fallback 觸發；使用 estimateListCount 回傳值
+
+---
+
+## 十、後端邊緣案例（EDGE，§22.2）
+
+---
+
+### TS-F049-EDGE-001：某份名單 fallback 逾時 → STAGE0_LIST_ESTIMATE_PARTIAL warning，其他名單正常
+
+- **關聯需求**：F049 §22.2；AD-E07-v3.6 §5 OQ-F049-02（fallback timeout per-list 不阻擋整體）
+- **測試類型**：Negative / Unit
+- **測試層**：Unit（mock estimateListCount）
+- **前置條件**：
+  - 三份名單：LIST-A（stage0_estimate_count=1000 物化）、LIST-B（NULL → fallback）、LIST-C（stage0_estimate_count=500 物化）
+  - `estimateListCount('LIST-B')` mock → timeout（超過 30s timeout）
+  - `STAGE0_DEPT_ESTIMATE_TIMEOUT_MS=30000`
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate`（並行 fallback，LIST-B 超時）
+  2. 驗證 response 正常回傳（不 throw）
+  3. 驗證 `warnings` 含 `{ code: 'STAGE0_LIST_ESTIMATE_PARTIAL', listNo: 'LIST-B' }`
+  4. 驗證 dept 計算正常使用 LIST-A（1000）+ LIST-C（500）= 1500 合計（LIST-B 排除）
+  5. 驗證 `orgTotal = Math.round(1500 × dpm/1000)`（LIST-B 不納入）
+- **預期結果**：
+  - LIST-B 逾時被排除；其他名單正常計算；warnings 記錄 PARTIAL
+
+---
+
+### TS-F049-EDGE-002：0 筆 active 名單 → departments=[] / days[].deptCells=[] / 無 warnings
+
+- **關聯需求**：F049 AC-AGG-3；§22.2 邊緣案例（當月 0 筆 active 名單）
+- **測試類型**：Negative / Unit
+- **測試層**：Unit（SQLite in-memory：ob_list_definition 空或全 inactive）
+- **前置條件**：ob_list_definition 無任何 `status='active'` 列
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate('202605')`
+  2. 驗證 `departments === []`
+  3. 驗證 `days` 中每一天 `deptCells === []`
+  4. 驗證 `mode === 'aggregated'`
+  5. 驗證 `warnings` 不含 DEPT_HEADCOUNT_ZERO 或 SCOPE_UNRESOLVED（空名單時無此警告）
+- **預期結果**：空結果；無警告；不 crash
+
+---
+
+### TS-F049-EDGE-003：處長轄區 obdeptid 在該名單 ob_dept_pct 無比例設定 → 部門列為空、gap=org_total
+
+- **關聯需求**：F049 §22.2（「處長轄區某 obdeptid 在 ob_dept_pct 無該名單比例」）；BR-13
+- **測試類型**：Negative / Unit
+- **測試層**：Unit（SQLite in-memory）
+- **前置條件**：
+  - actor scope=XVE1
+  - 當月名單：LIST-A 的 ob_dept_pct 僅有 XVE2=50%，XVE1 無設定
+  - list_total=1000；dpm=50‰
+- **步驟**：
+  1. 驗證 `deptCells === []`（XVE1 無比例 → 不顯示）
+  2. 由於處長模式 orgTotal=null，驗證 response.days[0].orgTotal === null
+  3. 驗證 `warnings` 無 SCOPE_UNRESOLVED（scope 已解析成功）
+- **預期結果**：
+  - 處長看到空 deptCells（自己轄區在該名單無比例）
+  - 不 crash；不出現 XVE2 資料
+
+---
+
+## 十一、前端聚合層元件（AGG，US-166）
+
+> **測試策略**：RTL + MSW；stub `GET /api/v1/assignment/stage0/dept-estimate` 回傳部門矩陣；目標元件 `Stage0EstimatePage`（v2.0 重設計版）。
+
+---
+
+### TS-F049-AGG-001：頁面預設進入全名單彙總模式（TC-166-01）
+
+- **關聯需求**：F049 AC-AGG-1；US-166 AC-1；TC-166-01
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub `GET /api/v1/assignment/stage0/dept-estimate?ym=202605` → aggregated 模式 response（含 3 部門）
+  - MSW stub lists → 3 筆 active 名單
+- **步驟**：
+  1. render `<Stage0EstimatePage />`
+  2. 等待 dept-estimate 請求完成（`waitFor`）
+  3. 驗證頁面標示「所有啟用名單彙總」或等效業務文案（`data-testid="mode-indicator"`）
+  4. 驗證名單篩選下拉包含「全部名單」選項且為選中狀態
+  5. 驗證部門矩陣顯示 3 個部門列
+- **預期結果**：
+  - 預設全名單彙總；mode indicator 顯示；部門矩陣正確
+
+---
+
+### TS-F049-AGG-002：切換至單一名單鑽探 → mode 更新、deptCells 更新（TC-166-02）
+
+- **關聯需求**：F049 AC-AGG-2；US-166 AC-2 / AC-3；TC-166-02
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate：aggregated 模式 D001=100 件；single-list LIST-B 模式 D001=40 件
+- **步驟**：
+  1. 初載 aggregated，驗證 D001 件數 = 100
+  2. 選取 LIST-B → 驗證 API 被以 `listNo=LIST-B` 重呼叫
+  3. 驗證 mode indicator 更新為「單一名單 LIST-B」
+  4. 驗證 D001 件數更新為 40
+  5. 切回「全部名單」→ 驗證回 aggregated（D001=100）
+- **預期結果**：
+  - 切換後 mode indicator 更新；deptCells 數值更新；切回正確回 aggregated
+
+---
+
+### TS-F049-AGG-003：0 active 名單 → 空狀態文案 / 所有欄「—」（TC-166-03）
+
+- **關聯需求**：F049 AC-AGG-3；US-166 AC-4；TC-166-03
+- **測試類型**：Negative / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate → `departments: [], days: []`（空結果）
+  - MSW stub lists → 空陣列
+- **步驟**：
+  1. render `<Stage0EstimatePage />`
+  2. 驗證空狀態文案出現（「本月尚無啟用名單」或等效）
+  3. 驗證所有估算欄顯示「—」
+  4. 驗證無任何數字渲染
+- **預期結果**：空狀態文案；所有欄「—」
+
+---
+
+### TS-F049-AGG-004：估算完成不寫入 DB（TC-166-04 / AC-AGG-5）
+
+- **關聯需求**：F049 AC-AGG-5 / BR-1；US-166 AC-6；TC-166-04
+- **測試類型**：Positive / Unit（Service 層）
+- **測試層**：Unit（SQLite in-memory，spy DB write methods）
+- **前置條件**：spy `ObPoolDataList` repository `save`/`insert`；spy `AssignmentRun` repository write；`computeDeptEstimate` 正常執行
+- **步驟**：
+  1. 呼叫 `computeDeptEstimate`
+  2. 驗證 `ObPoolDataList.save/insert` **未被呼叫**（spy call count = 0）
+  3. 驗證 `AssignmentRun` 相關 write **未被呼叫**
+  4. 驗證 ob_list_definition `stage0_estimate_count` 欄位未被更新（唯讀）
+- **預期結果**：整個 computeDeptEstimate 為純讀操作，不寫任何表
+
+---
+
+### TS-F049-AGG-005：月份切換 → 以新月份重新 fetch dept-estimate
+
+- **關聯需求**：F049 AC-AGG-4；US-166 AC-5
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate `ym=202605` → 30 件；`ym=202606` → 45 件
+- **步驟**：
+  1. 初載 202605，驗證某部門件數 = 30
+  2. 觸發月份切換至 202606
+  3. 等待新 fetch 完成
+  4. 驗證 dept-estimate API 以 `ym=202606` 重呼叫
+  5. 驗證部門件數更新為 45
+- **預期結果**：月份切換觸發重算；數據完整更新
+
+---
+
+## 十二、前端部門矩陣元件（FE，US-167/168/169）
+
+---
+
+### TS-F049-FE-001：部門矩陣渲染 — 部門列 / 人均欄 / org_total 合計列 / gap 橘色徽章
+
+- **關聯需求**：F049 AC-DEPT-1 / AC-GAP-1 / AC-FEAS-1；US-167 AC-1 / AC-3；US-169 AC-1
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate → 工作日含：
+    - deptCells: `[{ deptCode: 'D001', cases: 120, perPerson: 12, overThreshold: false }]`
+    - orgTotal: 200, deptAssignedTotal: 120, gap: 80
+- **步驟**：
+  1. 驗證 D001 部門列存在（`data-testid="dept-row-D001"`）
+  2. 驗證 D001 件數 = 120（`data-testid="cases-D001"`）
+  3. 驗證 D001 人均件數 = 12（`data-testid="per-person-D001"`）
+  4. 驗證 org_total 合計列顯示 200
+  5. 驗證 gap 橘色徽章顯示「尚有 80 件未分派到部門」（gap > 0）
+- **預期結果**：矩陣正確渲染；gap 橘色標示
+
+---
+
+### TS-F049-FE-002：gap=0 → 缺口列不渲染（AC-GAP-2）
+
+- **關聯需求**：F049 AC-GAP-2；US-167 AC-2
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：MSW stub dept-estimate → gap: 0
+- **步驟**：
+  1. 驗證 `data-testid="gap-row"` **不存在**（`=== null`）
+- **預期結果**：gap=0 時缺口列完全不渲染（DOM 不存在）
+
+---
+
+### TS-F049-FE-003：處長唯讀 banner — scope=XVE1，不含 orgTotal 合計列
+
+- **關聯需求**：F049 AC-SCOPE-1 / BR-13；US-168 AC-1 / AC-2；TC-168-01
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate → `scope: { role: 'section_chief', deptCode: 'XVE1', scoped: true }`；`departments: [{deptCode:'XVE1'}]`；`days[0].orgTotal: null`
+- **步驟**：
+  1. 驗證唯讀 banner 出現（`data-testid="section-chief-readonly-banner"`）
+  2. 驗證 banner 含「唯讀模式」或「您轄區部門」文案
+  3. 驗證「全部門合計」列**不存在**（`data-testid="org-total-row"` === null）
+  4. 驗證 XVE1 部門列正常顯示
+  5. 驗證**無**可修改設定的操作按鈕
+- **預期結果**：
+  - 唯讀 banner 顯示；全部門合計列不渲染；XVE1 資料正常
+
+---
+
+### TS-F049-FE-004：處長 scope=null → 友善提示訊息，數值顯示「—」（TC-168-04）
+
+- **關聯需求**：F049 AC-SCOPE-5；US-168 AC-5；TC-168-04
+- **測試類型**：Negative / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate → `departments: [], warnings: [{ code: 'SCOPE_UNRESOLVED', message: '...' }]`
+- **步驟**：
+  1. 驗證友善提示訊息出現（「無法識別您的轄區部門」或等效文案）
+  2. 驗證所有估算欄顯示「—」
+  3. 驗證頁面不 crash（no error boundary）
+- **預期結果**：友善提示；「—」顯示；不 crash
+
+---
+
+### TS-F049-FE-005：overThreshold=true → 人均欄紅色顯示 + 提示文字
+
+- **關聯需求**：F049 AC-FEAS-3；US-169 AC-3；TC-169-03
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate → `threshold: 15`；D002 deptCells: `{ perPerson: 20, overThreshold: true }`
+- **步驟**：
+  1. 找到 D002 人均欄（`data-testid="per-person-D002"`）
+  2. 驗證欄位含紅色 class（`bg-red-*` 或 `text-red-*`）
+  3. 驗證提示文字含「超過每人每日上限 15 件」
+- **預期結果**：紅色標示 + 提示文字
+
+---
+
+### TS-F049-FE-006：派案日曆下拉切換功能正常（TERM-3 functional，AC-TERM-3）
+
+- **關聯需求**：F049 AC-TERM-3；US-170 AC-7；TC-170-04（功能不變）
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate 根據 `calendarSource` 回傳不同 `deptCells.cases`（weekday=100；all=130）
+- **步驟**：
+  1. 找到「派案日曆」下拉（非「工作日來源」，TERM 已清理標籤）
+  2. 驗證選項含業務語言標籤（「只排上班日」/ 「也排連假日」/ 「連週末都排」）
+  3. 切換至「連週末都排」（all）
+  4. 驗證 dept-estimate API 被以 `calendarSource=all` 重呼叫
+  5. 驗證 deptCells.cases 更新為 130（功能行為不變）
+- **預期結果**：業務標籤顯示；切換後 API 重呼叫；結果更新
+
+---
+
+## 十三、前端術語清理（TERM，US-170 / §19）
+
+> **設計依據**：F049 §19.1 黑名單 / §19.2 移除元件 / §19.3 業務語言替代；US-170 AC-1~8；TC-170-01~05
+>
+> **測試重點**：TC-170-01（DOM 全文掃描）為自動化 regression test，**必須持續運行**以防術語反向污染。
+
+---
+
+### TS-F049-TERM-001：DOM 全文掃描 — §19.1 黑名單字串均不出現（TC-170-01 / AC-TERM-1）
+
+- **關聯需求**：F049 §19.1 / AC-TERM-1；US-170 AC-1/2/3；TC-170-01
+- **測試類型**：Regression / Component（RTL + MSW）
+- **測試層**：Component（全頁掃描）
+- **前置條件**：
+  - render `<Stage0EstimatePage />` 於彙總模式
+  - MSW stub dept-estimate → 完整 response（含 warnings / gap / threshold 等）
+  - MSW stub pool-warn → poolCount < threshold（觸發 pool 警示）
+
+**黑名單掃描項目（§19.1）**：
+```
+const BLACKLIST = [
+  'rest_flg', 'rest_flg=0',
+  'base ratio', 'base+1', 'base+1（餘數補）', 'ratioPerMille',
+  'remainder', '餘數',
+  'ob_assign_set', 'ob_pool_data', 'ob_pool_data_list', 'OBPOOLDATA',
+  'STAGE0_POOL_WARN_THRESHOLD', 'calendar_date',
+  'AD-E07-8', 'AD-E07-29',
+  'GET /api/v1/',
+];
+```
+
+- **步驟**：
+  1. render 完整頁面，等待所有 MSW 回應完成
+  2. 取得 `document.body.textContent`（可見文字）
+  3. 對每個 `BLACKLIST` 項目驗證：`bodyTextContent.includes(term) === false`
+  4. 附加：掃描所有 `aria-label`、`title`、`placeholder` 屬性（tooltip / hint 區域）
+  5. 驗證所有 data-testid 屬性中無技術術語洩漏（data attributes 不算可見文字，但防止 debug 字串滲入）
+- **預期結果**：
+  - BLACKLIST 所有項目均不出現於可見文字
+  - **此為持續性 regression guard**：任何後續修改若重新引入技術術語，此測試 FAIL
+
+---
+
+### TS-F049-TERM-002：KPI 區無 base ratio / remainder 卡片（TC-170-02 / AC-TERM-2）
+
+- **關聯需求**：F049 §19.2 / AC-TERM-2；US-170 AC-4；TC-170-02
+- **測試類型**：Regression / Component（RTL）
+- **測試層**：Component
+- **步驟**：
+  1. render `<Stage0EstimatePage />`
+  2. 驗證 KPI 區域**不含**標題為 `base ratio`、`base (‰)`、`remainder 餘數`、`餘數` 的卡片元素
+  3. 驗證 `document.body.textContent` 不含 `'base ratio'`、`'remainder'`
+- **預期結果**：base ratio / remainder KPI 卡片已移除
+
+---
+
+### TS-F049-TERM-003：每日列無 base+1 徽章 / 工作日顯示「工作日」/ 休息日顯示「休息日（不派案）」（TC-170-03 / AC-TERM-2 / AC-TERM-1）
+
+- **關聯需求**：F049 §19.3 / AC-TERM-2；US-170 AC-4/5；TC-170-03
+- **測試類型**：Regression / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：MSW stub dept-estimate → 含工作日與休息日
+- **步驟**：
+  1. 驗證工作日列的日別欄含「工作日」（不含 `rest_flg=0`）
+  2. 驗證休息日列的日別欄含「休息日（不派案）」（不含「跳過」或 `N (週末·國定假日)`）
+  3. 驗證**不存在**含 `base+1` 或 `餘數補` 的徽章元素
+  4. bar chart 圖例：驗證圖例**不含**「工作日 base」/ 「工作日 base+1（餘數補）」（改為單一「工作日」圖例）
+- **預期結果**：
+  - 日別標籤業務化；base+1 徽章不存在
+
+---
+
+### TS-F049-TERM-004：Pool 偏低警示為業務語言（TC-170-05 / AC-TERM-4）
+
+- **關聯需求**：F049 §19.3 / AC-TERM-4；US-170 AC-8；TC-170-05
+- **測試類型**：Positive / Component（RTL + MSW）
+- **測試層**：Component
+- **前置條件**：
+  - MSW stub dept-estimate → `poolCount: 500`（< 預設 threshold 1000）；`poolWarning: 'POOL_COUNT_LOW'`
+- **步驟**：
+  1. 等待橘色警示橫幅出現
+  2. 驗證警示文字含「筆」或「筆數偏低」業務文案
+  3. 驗證警示文字**不含** `OBPOOLDATA`、`STAGE0_POOL_WARN_THRESHOLD`、`ob_pool_data`
+  4. 驗證警示文字含數字（poolCount 的實際數值）
+- **預期結果**：業務語言警示；無技術術語
+
+---
+
+### TS-F049-TERM-005：AD-E07-8 公式框不顯示（AC-TERM-2 / US-170 AC-2）
+
+- **關聯需求**：F049 §19.2 / AC-TERM-2；US-170 AC-2
+- **測試類型**：Regression / Component（RTL）
+- **測試層**：Component
+- **步驟**：
+  1. render `<Stage0EstimatePage />`
+  2. 驗證頁面**不含** `FLOOR(1000 / working_days)` 文字
+  3. 驗證頁面**不含** `1000 mod working_days` 文字
+  4. 驗證頁面**不含** `round(ratioPerMille / 1000` 文字
+  5. 驗證頁面**不含** `AD-E07-8` 字串
+- **預期結果**：演算法公式框完全不顯示
+
+---
+
+## 自動化就緒度總覽（v2.0 新增）
+
+| 群組 | 案例數 | 自動化適合度 | 測試層 | DB 需求 |
+|---|---|---|---|---|
+| TS-F049-DEPT-001~004 | 4 | 高 | Unit（SQLite）| SQLite in-memory |
+| TS-F049-GAP-001~006 | 6 | 高 | Unit（SQLite）| SQLite in-memory |
+| TS-F049-SCOPE-001 | 1 | 高 | Unit（SQLite + mock）| SQLite in-memory |
+| TS-F049-SCOPE-002（Security Regression）| 1 | 高 | Unit（SQLite + mock）| SQLite in-memory |
+| TS-F049-SCOPE-003~006 | 4 | 高 | Unit | SQLite / mock |
+| TS-F049-FEAS-001~006 | 6 | 高 | Unit（SQLite）| SQLite in-memory |
+| TS-F049-INVAR-001~002 | 2 | 高 | Unit（spy）| SQLite in-memory |
+| TS-F049-EDGE-001~003 | 3 | 高 | Unit（mock / SQLite）| SQLite in-memory |
+| TS-F049-AGG-001~005 | 5 | 高 | Component（RTL + MSW）| 無（MSW stub）|
+| TS-F049-FE-001~006 | 6 | 高 | Component（RTL + MSW）| 無（MSW stub）|
+| TS-F049-TERM-001~005 | 5 | 高 | Component（RTL）| 無（MSW stub）|
+| **v2.0 合計** | **43** | — | — | — |
+
+> **PostgreSQL TestContainer 不需求**：AD-E07-v3.6 §5 裁定部門投影為 in-memory 計算（JS Math.round），`TRIM(dept_code)` 在 SQLite/PG 均支援。唯一需 PG 的操作（EXTRACT DOW for `weekday-only` calendarSource）已由既有 TS-F049-CAL-002 覆蓋，不在 v2.0 新增範圍。
+>
+> **SCOPE-002 為 MUST-RUN**：此測試不得設為 skip 或 pending；任何修改應確保此測試維持綠燈。
+
+---
+
+## AC ↔ 測試場景追溯矩陣（v2.0）
+
+| AC / BR | 說明 | 測試場景 |
+|---|---|---|
+| AC-AGG-1 | 預設全名單彙總模式 | TS-F049-AGG-001 |
+| AC-AGG-2 | 切換至單一名單 / 切回 | TS-F049-AGG-002、TS-F049-DEPT-004 |
+| AC-AGG-3 | 0 active 名單空狀態 | TS-F049-AGG-003、TS-F049-EDGE-002 |
+| AC-AGG-4 | 月份切換重算 | TS-F049-AGG-005 |
+| AC-AGG-5 / BR-1 | 唯讀不寫入 | TS-F049-AGG-004 |
+| AC-DEPT-1 | 部門件數顯示 | TS-F049-DEPT-001、TS-F049-FE-001 |
+| AC-DEPT-2 | 未設比例部門不顯示 | TS-F049-GAP-001、TS-F049-GAP-003 |
+| AC-GAP-1 | gap>0 缺口標示 | TS-F049-GAP-001、TS-F049-GAP-002、TS-F049-FE-001 |
+| AC-GAP-2 | gap=0 不顯示缺口列 | TS-F049-GAP-004、TS-F049-FE-002 |
+| AC-GAP-3 / BR-11 | 未達 100% 統一為 gap | TS-F049-GAP-002 |
+| AC-SCOPE-1 | 處長可進入（200）| TS-F049-SCOPE-001、TS-F049-FE-003 |
+| AC-SCOPE-2 / BR-13 | 處長只見轄區 | TS-F049-SCOPE-001、TS-F049-SCOPE-002、TS-F049-FE-003 |
+| AC-SCOPE-3 / I-DEPT-SCOPE-01 | 後端為安全邊界 | TS-F049-SCOPE-002、TS-F049-SCOPE-005 |
+| AC-SCOPE-4 | 部長/admin 不受限 | TS-F049-SCOPE-004 |
+| AC-SCOPE-5 / BR-14 | scope=null 友善降級 | TS-F049-SCOPE-003、TS-F049-FE-004 |
+| AC-FEAS-1 / BR-15 | 人均件數顯示 | TS-F049-FEAS-001、TS-F049-FE-001 |
+| AC-FEAS-2 / BR-16 | headcount=0 不 crash | TS-F049-FEAS-002 |
+| AC-FEAS-3 | 超門檻紅色警示 | TS-F049-FEAS-003、TS-F049-FE-005 |
+| AC-FEAS-4 | 門檻未設定降級 | TS-F049-FEAS-004 |
+| AC-TERM-1 / §19.1 | DOM 黑名單掃描 | TS-F049-TERM-001 |
+| AC-TERM-2 / §19.2 | 移除 base/remainder KPI / base+1 徽章 | TS-F049-TERM-002、TS-F049-TERM-003、TS-F049-TERM-005 |
+| AC-TERM-3 | 派案日曆功能不變 | TS-F049-FE-006 |
+| AC-TERM-4 | Pool 警示業務語言 | TS-F049-TERM-004 |
+| BR-7 | 預設全名單彙總 | TS-F049-AGG-001 |
+| BR-8 | per-list ration 來自 ob_dept_pct | TS-F049-DEPT-001、TS-F049-DEPT-003 |
+| BR-9 | org_total 不依賴比例 | TS-F049-GAP-006 |
+| BR-10 | gap = org_total − Σ dept；gap≥0 | TS-F049-GAP-001~005 |
+| BR-11 | 未達 100% 統一為 gap | TS-F049-GAP-002 |
+| BR-12 | 處長唯讀 + service scope filter | TS-F049-SCOPE-001~005 |
+| BR-13 | 處長 response 只含轄區（非遮罩）| TS-F049-SCOPE-002、TS-F049-SCOPE-006 |
+| BR-14 | scope=null → 200 空結果 | TS-F049-SCOPE-003、TS-F049-FE-004 |
+| BR-15 | 人均 = round(cases÷headcount) | TS-F049-FEAS-001~003 |
+| BR-16 | DEPT_HEADCOUNT_ZERO / SCOPE_UNRESOLVED warnings | TS-F049-FEAS-002、TS-F049-SCOPE-003 |
+| I-RUN-EST-01 | 不分叉 computeWorkingDayRatios | TS-F049-INVAR-001 |
+| I-DEPT-SCOPE-01 | scope filter 在 service 層強制 | TS-F049-SCOPE-002、TS-F049-SCOPE-005 |
+| I-DEPT-ORDER-01 | deptCells 依 deptCode ASC | TS-F049-DEPT-001 |
+| §22.2 邊緣：0 active 名單 | 空結果 | TS-F049-EDGE-002 |
+| §22.2 邊緣：無 ob_dept_pct | gap = org_total | TS-F049-GAP-003 |
+| §22.2 邊緣：partial fallback timeout | STAGE0_LIST_ESTIMATE_PARTIAL | TS-F049-EDGE-001 |
+| §22.2 邊緣：rest day | deptCells=[], orgTotal=0 | TS-F049-DEPT-002 |
+| §22.2 邊緣：headcount=0 | perPerson=null | TS-F049-FEAS-002 |
+| §22.2 邊緣：threshold=null | overThreshold=false | TS-F049-FEAS-004 |
+| §22.2 邊緣：scope=null | 200 空 + SCOPE_UNRESOLVED | TS-F049-SCOPE-003 |
+| §22.2 邊緣：處長轄區無比例 | deptCells=[] | TS-F049-EDGE-003 |
