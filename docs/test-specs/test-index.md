@@ -1,16 +1,18 @@
 ---
 type: test-design-index
-version: "2.29"
+version: "2.30"
 status: draft
 last_updated: 2026-06-29
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102, F103, F104]
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102, F103, F104, F108]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：78 份（4 策略文件 + 67 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1844 個（前 1801 + **F049 v2.0 Stage 0 業務化重設計 Part B +43**：DEPT 4 + GAP 6 + SCOPE 6 + FEAS 6 + INVAR 2 + EDGE 3 + AGG 5 + FE 6 + TERM 5，合計 1844）
+> **測試文件總數**：79 份（4 策略文件 + 68 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
+> **總測試場景數**：1884 個（前 1844 + **F108 匯出新增「樞紐分析」頁籤 +40**：SHEET 4 + HEADER 4 + PARENTROW 7 + ZEROBLANK 3 + DET 4 + BLANK 3 + SCOPE 3 + EMPTY 3 + REGRESSION 4 + STATIC 3 + PG 2，合計 1884）
+>
+> **v2.30 F108 匯出新增「樞紐分析」頁籤（2026-06-29）**：新增 F108 test spec（**40 個場景**）。延伸 F064 v2.1 xlsx 匯出，新增第 2 頁籤「樞紐分析」靜態交叉表（% of parent row，部門×員編×名單代號）。DoD = **PARENTROW-001**（spec §6.2 Worked Example oracle 全 18 格，浮點誤差 < 1e-9）+ **SCOPE-001**（SCOPE 紅線：樞紐不洩漏轄區外部門/員編）+ **REGRESSION 群組**（第 1 頁 23 欄不受影響 + CSV 不含樞紐）+ `tsc --noEmit` 乾淨。分層：**SHEET 4**（2 頁結構 + CSV 不含樞紐 + 靜態 grep）+ **HEADER 4**（R1 部門代號/(全部) / R2 空 / R3 計數-案號/欄標籤 / R4 列標籤/listNo 升冪/總計）+ **PARENTROW 7**（oracle 全 18 格 + 部門列加總 100% + 員編列加總 100% + 總計列 + 總計欄部門層 + 總計欄員編層 + numFmt='0.0%'）+ **ZEROBLANK 3**（0/正數→0.0% / 0/0→null / 部門層 vs 員編層區分）+ **DET 4**（listNo 升冪 / 部門 localeCompare / 員編升冪 / (空白) 最後）+ **BLANK 3**（emphire join-miss + §6.4 oracle 重算 + emplid null 歸組）+ **SCOPE 3**（section_chief scoped + director bypass + 靜態 grep）+ **EMPTY 3**（0 列時 2 頁仍存在 + 標頭 + HTTP 200）+ **REGRESSION 4**（23 欄 + 列數 + CSV + 靜態 grep，DoD 紅線）+ **STATIC 3**（commit 時序 + 記憶體安全 + tsc gate）+ **PG 2**（選配：真實 run 84486ddd + 32/34/15/18% 分佈）。**2 個案例需 Postgres**（PG-001/002，選配慢速套件）。Mock 策略：沿用 f064-export-23col.spec.ts 模式（mock `cursorRows`，用 exceljs `Workbook.xlsx.load(buffer)` 讀回斷言）。TC-171-01~12 全部覆蓋（AC-1~8 + I-PIV-SHEET-01/PARENTROW-01/SOURCE-01/MEM-01/DET-01 全覆蓋）。
 >
 > **v2.29 F049 v2.0 Stage 0 業務化重設計 Part B（2026-06-29）**：更新 `features/F049-test.md`，**新增 43 個場景**。DEPT 4（手算 oracle）+ GAP 6（缺口機制 + 捨入容差）+ SCOPE 6【SECURITY-CRITICAL：SCOPE-002 JSON.stringify 全掃非轄區字串 MUST-HAVE】+ FEAS 6（人均、headcount=0、超門檻、threshold=null、TRIM 移植性、scope headcount 隔離）+ INVAR 2（I-RUN-EST-01 spy + list_total 物化/fallback）+ EDGE 3（partial timeout / 0 名單 / 轄區無比例）+ AGG 5（AGG-001~005 前端 RTL+MSW）+ FE 6（FE-001~006：矩陣/gap/處長 banner/scope=null/overThreshold/派案日曆）+ TERM 5（TERM-001 DOM 黑名單 MUST-RUN regression + TERM-002~005）。全部 OQ 已裁定；oracle 手算寫定；所有 43 個場景 SQLite 可覆蓋（無強制 PG）。總場景數 1801→**1844**；F049-test.md YAML spec_version=2.0 + covers US-166~170。
 > **v2.28 F104 Stage 2 全欄對齊 legacy SP（2026-06-24）**：新增 F104 test spec（**82 個場景**）。F103 等於對齊了一份有偏差的 AD-E07-10-L；本輪修正兩路徑（PG `resolveColumnSource`/`buildStage2ScoreExpr` + JS `resolveColumnValue`/`computeScore`）使其對齊 legacy SP 真語意。DoD = **EQ 12**（JS↔PG 逐列等價，PG 真庫，§8 矩陣全覆蓋）+ **cus_sex NULL-safe cast**（髒值 'C'/'D' 不拋例外，高嚴重度）+ **兩 default 分離**（計分 3 / gating 個人）+ **per-card default 逐格**（AD-E07-33 矩陣）。分層：**KW 6**（PROJECT_TP 借新還舊 + SALES_STS 中古車商，舊關鍵字全清）+ **SEX 4**（CUS_SEX category→range + safe-cast）+ **BRANCH 10**（五欄 isCorp 分流：個人取自身/法人 0-default/空→個人/髒值→法人）+ **SAFE 6**（cus_sex NULL-safe cast SQL 不拋例外）+ **AGE100 5**（>100 排除 + 法人 0）+ **EDU 7**（補零 + range 字串 BETWEEN + per-card default S→'02'/S5→'08'）+ **CITY 10**（三縣市欄 LEFT3 + per-card default）+ **PCD 8**（LIST_MONTH/LOAN_RATE per-card default）+ **EQ 12**（DoD）+ **SIG 4**（簽章加 cardType + CustomerCoreRow 改名）+ **UPGRADE 5**（202606 重跑 + 10 筆抽樣手算）+ **REG 5**（F103/F100/F101/F102 不退化 + tsc gate + 舊欄名靜態掃描）。**約 48 案例需 Postgres**（與 F098~F103 pg.spec 序列）。**test-designer 連 DB 查證**：EDUCAT_BACK=range（0 cat/29 range，level2 字串 BETWEEN）✅、三縣市欄=category ✅、CUS_SEX=range ✅、cc 新欄存在 ✅、cus_sex 髒值分佈（'C'/'D'/'8'/空）✅。**legacy SP 查證**：'C' 髒值 → 法人（`NOT IN('1','2')`），**OQ-TDS-F104-01 待 architect 確認**（AD line 4103 散文與算式矛盾，建議釘法人）；E5 無 CAREA_NO1 唯有 CELLULAR、HM 複用 M 設定。命名鎖定：`resolveColumnSource(columnName, cardType)` / `resolveColumnValue(pool, columnName, cc, arCap, cardType)` / `isCorporate` / `calcAgeYears` 加 >100 守門 / CustomerCoreRow 新欄名（cus_sex/carea_no1/carea_no2/cellular/hpost_city/cpost_city/co_city）。
@@ -49,7 +51,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 >
 > **v2.25 F064 匯出分派結果 23 欄對齊 legacy（2026-06-17）**：新增 F064 test spec（**63 個場景**）。對應 F064 v2.0（US-155，supersedes US-084）三項 SCHEMA GAP 修正：(GAP-1) 移除 `custo_no`/`cust_name`/`card_level`/`score`；(GAP-2) 資料來源改 `ob_monthly_run_result` 多表 join；(GAP-3) 進件日 source = `ob_pool_data.appl_date`（v2.1 前誤為 ob_pool_data_list）。所有 OQ 已裁定（AD-E07-31）。分層：**COLSRC 6** + **COLSEQ 4** + **REGRESSION 6** + **FMT 8** + **CR 4** + **JOINMISS 5** + **OVERDUE 2** + **STREAM 5** + **SCOPE 5** + **STATUS 4** + **AUDIT 3** + **DET 2** + **APLDATE 2** + **STATIC 4** + **AUTH 3**。Mock 換向：`snapshotRepo.find()` → `DataSource.query()`/`queryRunner.stream()`。
 >
-> **最後更新**：2026-06-17
+> **最後更新**：2026-06-29
 
 ---
 
@@ -190,8 +192,9 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **E07 月跑執行模型 小計** | | | **6 files** | **306** | |
 | **E07 M04 分派匯出** | | | | | |
 | F064 | 匯出分派結果（23 欄 legacy 對齊，**v2.1**）——COLSRC 6 + COLSEQ 4 + REGRESSION 6（破壞性排除 DoD 紅線）+ FMT 8（日期格式邊界）+ CR 4 + JOINMISS 5 + OVERDUE 2 + STREAM 5 + SCOPE 5 + STATUS 4 + AUDIT 3 + DET 2 + APLDATE 2 + STATIC **5** + AUTH 3 + **LINEAGE 5**（v2.1：pool 表換源 ob_pool_data 不掉列 DoD 紅線）；GAP-1/2/3 + OQ F064-1~4 全部裁定；BR-F064-16 join ob_pool_data 2-key；不讀 snapshot；CSV PassThrough streaming；scope WHERE SQL 注入；DoD 紅線 = REGRESSION + LINEAGE-001 + 23 欄表頭 + tsc 乾淨 | P0-MVP | [F064-test.md](features/F064-test.md) | 69 | Draft |
-| **E07 M04 小計** | | | **1 file** | **69** | |
-| **總合計** | | | **73 files** | **1801** | |
+| F108 | 匯出新增「樞紐分析」頁籤（xlsx 第 2 頁靜態交叉表；% of parent row；部門×員編×名單代號；格式 0.0%；0/0→空白；I-PIV-SHEET-01/PARENTROW-01/SOURCE-01/MEM-01/DET-01；SCOPE 紅線；TC-171-01~12 全覆蓋）——SHEET 4 + HEADER 4 + PARENTROW 7（spec §6.2 oracle 全 18 格）+ ZEROBLANK 3 + DET 4 + BLANK 3（§6.4 oracle）+ SCOPE 3（SCOPE 紅線 DoD）+ EMPTY 3 + REGRESSION 4（DoD 紅線）+ STATIC 3 + PG 2（選配）；mock cursorRows 模式；exceljs load(buffer) 讀回斷言；**2 案例需 PG**（選配）；DoD 紅線 = PARENTROW-001 oracle + SCOPE-001 紅線 + REGRESSION 全綠 + tsc 乾淨 | P0-MVP | [F108-test.md](features/F108-test.md) | 40 | Draft |
+| **E07 M04 小計** | | | **2 files** | **109** | |
+| **總合計** | | | **74 files** | **1841** | |
 
 ---
 
