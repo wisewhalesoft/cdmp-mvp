@@ -1,4 +1,10 @@
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { Stage0EstimatePage } from '../stage0-estimate-page';
@@ -7,13 +13,16 @@ import { ToastProvider } from '@/components/ui/toast';
 import * as runApi from '@/api/assignment-run';
 import * as listApi from '@/api/assignment-list';
 import * as authStore from '@/stores/auth-store';
-import type { DailyEstimateResponse } from '@/api/assignment-run';
+import type {
+  DeptEstimateResponse,
+  DeptEstimateDay,
+} from '@/api/assignment-run';
 
 /**
- * F049 v1.3 Stage 0 試算頁（Design A + 對齊 prototype 30-stage0-estimate.html）
+ * F049 v2.0 Stage 0 試算頁（部門維度每日分派可行性）— 前端 Component 測試
  *
- * 涵蓋 TS-F049-V13F-001~005 / 008 / 009（page 層 Component 測試）。
- * V13F-006（純函式）/ V13F-007（bar chart 渲染）在 stage0-bar-chart.test.tsx。
+ * 涵蓋 test-design Part B 前端群組：AGG（聚合層）/ FE（部門矩陣）/ TERM（術語清理）。
+ * 後端 DEPT/GAP/SCOPE/FEAS/INVAR/EDGE 由 stage0-dept-estimate.service.spec.ts 覆蓋。
  */
 
 vi.mock('@/api/assignment-run');
@@ -30,14 +39,12 @@ vi.mock('@/stores/auth-store', async () => {
   };
 });
 
-const mockedGetDaily = vi.mocked(runApi.getDailyEstimate);
-const mockedGetListEstimate = vi.mocked(runApi.getListEstimate);
+const mockedGetDept = vi.mocked(runApi.getDeptEstimate);
 const mockedListLists = vi.mocked(listApi.listLists);
 const mockedGetCurrentWorkYm = vi.mocked(listApi.getCurrentWorkYm);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 
-// ---- 工具：建構 active list ----
 function activeList(listNo: string, listNm: string) {
   return {
     listNo,
@@ -61,7 +68,7 @@ function activeList(listNo: string, listNm: string) {
 
 function listsResp(lists: ReturnType<typeof activeList>[]) {
   return {
-    selectedYm: '202605',
+    selectedYm: '202606',
     currentWorkYm: '202605',
     isHistorical: false,
     isFuture: false,
@@ -78,28 +85,69 @@ function listsResp(lists: ReturnType<typeof activeList>[]) {
   };
 }
 
-// ---- 工具：建構 Design A daily-estimate response ----
-function dailyResp(
-  overrides: Partial<DailyEstimateResponse> = {},
-): DailyEstimateResponse {
-  const workingDays = overrides.workingDays ?? 20;
-  const ratio = workingDays > 0 ? Math.floor(1000 / workingDays) : 0;
+function workday(
+  date: string,
+  weekday: string,
+  cells: DeptEstimateDay['deptCells'],
+  org: number,
+  gap: number,
+): DeptEstimateDay {
   return {
-    ym: '202605',
+    date,
+    weekday,
+    isWorkday: true,
+    orgTotal: org,
+    deptAssignedTotal: org - gap,
+    gap,
+    deptCells: cells,
+  };
+}
+function restday(date: string, weekday: string): DeptEstimateDay {
+  return {
+    date,
+    weekday,
+    isWorkday: false,
+    orgTotal: 0,
+    deptAssignedTotal: 0,
+    gap: 0,
+    deptCells: [],
+  };
+}
+
+function deptResp(
+  overrides: Partial<DeptEstimateResponse> = {},
+): DeptEstimateResponse {
+  return {
+    ym: '202606',
+    mode: 'aggregated',
+    listNo: null,
     calendarSource: 'weekday',
-    startDate: '2026-05-01',
-    endDate: '2026-05-31',
-    workingDays,
-    baseRatio: ratio,
-    remainder: workingDays > 0 ? 1000 % workingDays : 0,
-    poolCount: 50000,
-    warning: null,
-    dailyEstimates: [
-      { date: '2026-05-01', weekday: '五', isWorkday: false, skipReason: '國定假日', ratioPerMille: 0 },
-      { date: '2026-05-02', weekday: '六', isWorkday: false, skipReason: '週末', ratioPerMille: 0 },
-      { date: '2026-05-04', weekday: '一', isWorkday: true, skipReason: null, ratioPerMille: ratio },
-      { date: '2026-05-05', weekday: '二', isWorkday: true, skipReason: null, ratioPerMille: ratio },
+    startDate: '2026-06-01',
+    endDate: '2026-06-30',
+    scope: { role: 'director', deptCode: null, scoped: false },
+    departments: [
+      { deptCode: 'XVE1', deptName: '北區電銷一課', activeHeadcount: 27 },
+      { deptCode: 'XVE2', deptName: '北區電銷二課', activeHeadcount: 28 },
+      { deptCode: 'XVE3', deptName: '中區電銷課', activeHeadcount: 22 },
     ],
+    days: [
+      workday(
+        '2026-06-01',
+        '一',
+        [
+          { deptCode: 'XVE1', cases: 405, perPerson: 15, overThreshold: false },
+          { deptCode: 'XVE2', cases: 364, perPerson: 13, overThreshold: false },
+          { deptCode: 'XVE3', cases: 220, perPerson: 10, overThreshold: false },
+        ],
+        989,
+        0,
+      ),
+      restday('2026-06-07', '日'),
+    ],
+    threshold: 18,
+    warnings: [],
+    poolCount: 50000,
+    poolWarning: null,
     ...overrides,
   };
 }
@@ -116,7 +164,7 @@ function renderPage() {
   );
 }
 
-describe('Stage0EstimatePage (v1.3 Design A)', () => {
+describe('Stage0EstimatePage（F049 v2.0 部門維度）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGetUser.mockReturnValue({
@@ -130,237 +178,409 @@ describe('Stage0EstimatePage (v1.3 Design A)', () => {
     mockedGetBusinessRole.mockReturnValue('director');
     mockedListLists.mockResolvedValue(
       listsResp([
-        activeList('OB202605001', '汽車期中'),
-        activeList('OB202605002', '機車期中'),
+        activeList('OB202606001', '汽車期中名單'),
+        activeList('OB202606002', '信貸滿期名單'),
       ]),
     );
-    mockedGetDaily.mockResolvedValue(dailyResp());
-    mockedGetListEstimate.mockResolvedValue({ listNo: 'OB202605001', count: 8500 });
-    // F097：Context 初始化錨點月（targetWorkYm = 202606）
+    mockedGetDept.mockResolvedValue(deptResp());
     mockedGetCurrentWorkYm.mockResolvedValue({ currentWorkYm: '202605' });
   });
   afterEach(() => cleanup());
 
-  it('左側顯示試算輸入面板 + 右側 4 KPI', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('input-list-no')).toBeInTheDocument();
+  // =====================================================================
+  // 十一、AGG — 聚合層
+  // =====================================================================
+  describe('AGG — 聚合層（US-166）', () => {
+    it('TS-F049-AGG-001：預設全名單彙總；mode indicator + 3 部門列', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('dept-row-XVE1')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('mode-indicator').textContent).toContain(
+        '所有啟用名單彙總',
+      );
+      const filter = screen.getByTestId('list-filter') as HTMLSelectElement;
+      expect(filter.value).toBe('ALL');
+      expect(Array.from(filter.options)[0].textContent).toContain('全部名單');
+      expect(screen.getByTestId('dept-row-XVE1')).toBeInTheDocument();
+      expect(screen.getByTestId('dept-row-XVE2')).toBeInTheDocument();
+      expect(screen.getByTestId('dept-row-XVE3')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('kpi-working-days')).toBeInTheDocument();
-    expect(screen.getByTestId('kpi-total-estimate')).toBeInTheDocument();
-    expect(screen.getByTestId('kpi-base')).toBeInTheDocument();
-    expect(screen.getByTestId('kpi-remainder')).toBeInTheDocument();
-  });
 
-  it('working_days KPI 顯示後端 workingDays', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-working-days').textContent).toContain('20');
-    });
-  });
+    it('TS-F049-AGG-002：切換單一名單 → API 帶 listNo 重呼叫；mode/件數更新；切回彙總', async () => {
+      mockedGetDept.mockImplementation(async (_ym, opts) => {
+        if (opts?.listNo === 'OB202606002') {
+          return deptResp({
+            mode: 'single-list',
+            listNo: 'OB202606002',
+            departments: [
+              { deptCode: 'XVE1', deptName: '北區電銷一課', activeHeadcount: 10 },
+            ],
+            days: [
+              workday(
+                '2026-06-01',
+                '一',
+                [{ deptCode: 'XVE1', cases: 40, perPerson: 4, overThreshold: false }],
+                40,
+                0,
+              ),
+            ],
+          });
+        }
+        return deptResp({
+          departments: [
+            { deptCode: 'XVE1', deptName: '北區電銷一課', activeHeadcount: 10 },
+          ],
+          days: [
+            workday(
+              '2026-06-01',
+              '一',
+              [{ deptCode: 'XVE1', cases: 100, perPerson: 10, overThreshold: false }],
+              100,
+              0,
+            ),
+          ],
+        });
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('cases-XVE1').textContent).toContain('100');
+      });
 
-  it('base ratio KPI 顯示後端 baseRatio（千分位）', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-base').textContent).toContain('50');
-    });
-  });
+      fireEvent.change(screen.getByTestId('list-filter'), {
+        target: { value: 'OB202606002' },
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('cases-XVE1').textContent).toContain('40');
+      });
+      expect(screen.getByTestId('mode-indicator').textContent).toContain(
+        '單一名單',
+      );
+      expect(screen.getByTestId('mode-indicator').textContent).toContain(
+        '信貸滿期名單',
+      );
+      const last = mockedGetDept.mock.calls[mockedGetDept.mock.calls.length - 1];
+      expect(last[1]).toMatchObject({ listNo: 'OB202606002' });
 
-  // ---- TS-F049-V13F-001：自動選第一筆 active 名單；無空選項 ----
-  it('TS-F049-V13F-001：初載自動選第一筆 active 名單；selector 無空選項；KPI total=per-list COUNT', async () => {
-    renderPage();
-    await waitFor(() => {
-      const sel = screen.getByTestId('input-list-no') as HTMLSelectElement;
-      expect(sel.value).toBe('OB202605001');
+      // 切回全部名單 → aggregated（100）
+      fireEvent.change(screen.getByTestId('list-filter'), {
+        target: { value: 'ALL' },
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('cases-XVE1').textContent).toContain('100');
+      });
+      expect(screen.getByTestId('mode-indicator').textContent).toContain(
+        '所有啟用名單彙總',
+      );
     });
-    const sel = screen.getByTestId('input-list-no') as HTMLSelectElement;
-    expect(
-      Array.from(sel.options).some((o) => o.value === ''),
-    ).toBe(false);
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('8,500');
-    });
-  });
 
-  // ---- TS-F049-V13F-002：無寫死 9500 ----
-  it('TS-F049-V13F-002：KPI total 來自 per-list COUNT，頁面不出現 9500', async () => {
-    mockedListLists.mockResolvedValue(listsResp([activeList('OB202605004', '機車滿期')]));
-    mockedGetListEstimate.mockResolvedValue({ listNo: 'OB202605004', count: 12345 });
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('12,345');
+    it('TS-F049-AGG-003：0 active 名單 → 空狀態 + KPI「—」', async () => {
+      mockedListLists.mockResolvedValue(listsResp([]));
+      mockedGetDept.mockResolvedValue(
+        deptResp({ departments: [], days: [] }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('kpi-working-days').textContent).toContain('—');
+      expect(screen.getByTestId('kpi-total-cases').textContent).toContain('—');
     });
-    expect(document.body.textContent).not.toContain('9,500');
-    expect(document.body.textContent).not.toContain('9500');
-  });
 
-  // ---- TS-F092-UPG-001 / UPG-002：Stage 0 total 來自升級後完整鏈 dry-run COUNT（前端值流不變）----
-  // F092 將 per-list estimate 後端語意由「欄位篩選版上界」升級為「完整 Stage 1 dry-run」（含期別/去重/特殊排除），
-  // API 契約 { listNo, count } 不變；前端僅渲染 API 回傳之 count（無寫死）。本案例驗證：
-  //   - total 顯示 API count（升級後通常較舊版小，此處 8,200 模擬精確值）
-  //   - 每日件數以 total 重算（round(ratioPerMille/1000 × total)），不寫死任何估算值
-  it('TS-F092-UPG-001：Stage 0 total 完全來自 API count（完整鏈 dry-run），每日件數依 total 重算', async () => {
-    mockedListLists.mockResolvedValue(listsResp([activeList('OB202606001', '汽車期中')]));
-    // 升級後精確 count（含去重 / 期別 / 特殊排除，通常 ≤ 舊欄位篩選版）
-    mockedGetListEstimate.mockResolvedValue({ listNo: 'OB202606001', count: 8200 });
-    mockedGetDaily.mockResolvedValue(dailyResp({ workingDays: 20, baseRatio: 50 }));
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('8,200');
-    });
-    // 每日件數 = round(50/1000 × 8200) = 410，前端依 total 重算（值流驗證）
-    await waitFor(() => {
-      expect(screen.getByTestId('stage0-daily-table').textContent).toContain('410');
-    });
-    // regression guard：不得出現舊版寫死估算值
-    expect(document.body.textContent).not.toContain('9,500');
-  });
-
-  // ---- TS-F049-V13F-003：切換 calendarSource → 重新呼叫 daily-estimate（帶新參數）----
-  it('TS-F049-V13F-003：切換 calendarSource=all → 重新呼叫 daily-estimate 帶 calendarSource=all；KPI 更新', async () => {
-    mockedGetDaily.mockImplementation(async (_ym, opts) => {
-      if (opts?.calendarSource === 'all') {
-        return dailyResp({ calendarSource: 'all', workingDays: 31 });
-      }
-      return dailyResp({ workingDays: 20 });
-    });
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-working-days').textContent).toContain('20');
-    });
-    fireEvent.change(screen.getByTestId('input-calendar-source'), {
-      target: { value: 'all' },
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-working-days').textContent).toContain('31');
-    });
-    // 驗證最後一次呼叫帶 calendarSource=all
-    const calls = mockedGetDaily.mock.calls;
-    expect(calls[calls.length - 1][1]).toMatchObject({ calendarSource: 'all' });
-  });
-
-  // ---- TS-F049-V13F-004：切換起訖日 → 重新呼叫 daily-estimate ----
-  it('TS-F049-V13F-004：切換起訖日 → daily-estimate 帶新 startDate/endDate', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-working-days')).toBeInTheDocument();
-    });
-    fireEvent.change(screen.getByTestId('input-start-date'), {
-      target: { value: '2026-05-11' },
-    });
-    fireEvent.change(screen.getByTestId('input-end-date'), {
-      target: { value: '2026-05-22' },
-    });
-    await waitFor(() => {
-      const calls = mockedGetDaily.mock.calls;
-      const last = calls[calls.length - 1][1];
-      expect(last).toMatchObject({
-        startDate: '2026-05-11',
-        endDate: '2026-05-22',
+    it('TS-F049-AGG-005：月份切換 → 以新月份重新 fetch dept-estimate', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(mockedGetDept).toHaveBeenCalledWith(
+          '202606',
+          expect.anything(),
+        );
+      });
+      fireEvent.click(screen.getByTestId('month-picker-next'));
+      await waitFor(() => {
+        expect(mockedGetDept).toHaveBeenCalledWith(
+          '202607',
+          expect.anything(),
+        );
       });
     });
   });
 
-  // ---- TS-F049-V13F-005：切換 selector → total 換成新名單 COUNT；每日件數重算 ----
-  it('TS-F049-V13F-005：切換名單 → total 換成新 COUNT；每日件數前端重算', async () => {
-    mockedGetListEstimate.mockImplementation(async (listNo: string) => {
-      if (listNo === 'OB202605002') return { listNo, count: 12345 };
-      return { listNo, count: 8500 };
+  // =====================================================================
+  // 十二、FE — 部門矩陣
+  // =====================================================================
+  describe('FE — 部門矩陣（US-167/168/169）', () => {
+    it('TS-F049-FE-001：部門列 / 人均欄 / org_total 合計列 / gap 橘色徽章', async () => {
+      mockedGetDept.mockResolvedValue(
+        deptResp({
+          departments: [
+            { deptCode: 'D001', deptName: '北一課', activeHeadcount: 10 },
+          ],
+          days: [
+            workday(
+              '2026-06-01',
+              '一',
+              [{ deptCode: 'D001', cases: 120, perPerson: 12, overThreshold: false }],
+              200,
+              80,
+            ),
+          ],
+        }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('dept-row-D001')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('cases-D001').textContent).toContain('120');
+      expect(screen.getByTestId('per-person-D001').textContent).toContain('12');
+      // 全名單總量合計列
+      const orgRow = screen.getByTestId('org-total-row');
+      expect(orgRow.textContent).toContain('200');
+      // 缺口橘色徽章
+      const gapRow = screen.getByTestId('gap-row');
+      expect(gapRow.textContent).toContain('80');
+      expect(gapRow.textContent).toContain('未分派');
     });
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('8,500');
+
+    it('TS-F049-FE-002：gap=0 → 缺口列不渲染（DOM 不存在）', async () => {
+      mockedGetDept.mockResolvedValue(
+        deptResp({
+          days: [
+            workday(
+              '2026-06-01',
+              '一',
+              [{ deptCode: 'XVE1', cases: 400, perPerson: 15, overThreshold: false }],
+              400,
+              0,
+            ),
+          ],
+        }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('dept-row-XVE1')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('gap-row')).not.toBeInTheDocument();
     });
-    fireEvent.change(screen.getByTestId('input-list-no'), {
-      target: { value: 'OB202605002' },
+
+    it('TS-F049-FE-003：處長唯讀 banner；無 org_total 合計列；XVE1 列正常', async () => {
+      mockedGetBusinessRole.mockReturnValue('section_chief');
+      mockedGetDept.mockResolvedValue(
+        deptResp({
+          scope: { role: 'section_chief', deptCode: 'XVE1', scoped: true },
+          departments: [
+            { deptCode: 'XVE1', deptName: '北區電銷一課', activeHeadcount: 27 },
+          ],
+          days: [
+            {
+              date: '2026-06-01',
+              weekday: '一',
+              isWorkday: true,
+              orgTotal: null,
+              deptAssignedTotal: null,
+              gap: null,
+              deptCells: [
+                { deptCode: 'XVE1', cases: 405, perPerson: 15, overThreshold: false },
+              ],
+            },
+          ],
+        }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('section-chief-readonly-banner'),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('org-total-row')).not.toBeInTheDocument();
+      expect(screen.getByTestId('dept-row-XVE1')).toBeInTheDocument();
     });
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('12,345');
+
+    it('TS-F049-FE-004：處長 scope=null → 友善提示，不 crash', async () => {
+      mockedGetBusinessRole.mockReturnValue('section_chief');
+      mockedGetDept.mockResolvedValue(
+        deptResp({
+          scope: { role: 'section_chief', deptCode: null, scoped: true },
+          departments: [],
+          days: [],
+          warnings: [
+            { code: 'SCOPE_UNRESOLVED', message: '無法識別您的轄區部門' },
+          ],
+        }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('scope-unresolved-card'),
+        ).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('scope-unresolved-card').textContent).toContain(
+        '無法識別您的轄區部門',
+      );
+      expect(screen.getByTestId('scope-unresolved-card').textContent).toContain(
+        '—',
+      );
+    });
+
+    it('TS-F049-FE-005：overThreshold → 人均欄紅色 + 提示文字', async () => {
+      mockedGetDept.mockResolvedValue(
+        deptResp({
+          threshold: 15,
+          departments: [
+            { deptCode: 'D002', deptName: '北二課', activeHeadcount: 10 },
+          ],
+          days: [
+            workday(
+              '2026-06-01',
+              '一',
+              [{ deptCode: 'D002', cases: 200, perPerson: 20, overThreshold: true }],
+              200,
+              0,
+            ),
+          ],
+        }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('per-person-D002')).toBeInTheDocument();
+      });
+      const cell = screen.getByTestId('per-person-D002');
+      expect(cell.className).toMatch(/text-red-600/);
+      expect(cell.getAttribute('title')).toContain('超過每人每日上限 15 件');
+    });
+
+    it('TS-F049-FE-006：派案日曆切換 → 帶 calendarSource=all 重呼叫；業務標籤', async () => {
+      mockedGetDept.mockImplementation(async (_ym, opts) => {
+        const cases = opts?.calendarSource === 'all' ? 130 : 100;
+        return deptResp({
+          calendarSource: opts?.calendarSource ?? 'weekday',
+          departments: [
+            { deptCode: 'XVE1', deptName: '北區電銷一課', activeHeadcount: 10 },
+          ],
+          days: [
+            workday(
+              '2026-06-01',
+              '一',
+              [{ deptCode: 'XVE1', cases, perPerson: 1, overThreshold: false }],
+              cases,
+              0,
+            ),
+          ],
+        });
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('cases-XVE1').textContent).toContain('100');
+      });
+      const select = screen.getByTestId('calendar-select');
+      // 業務標籤
+      expect(select.textContent).toContain('只排上班日');
+      expect(select.textContent).toContain('連週末都排（全月每天）');
+      fireEvent.change(select, { target: { value: 'all' } });
+      await waitFor(() => {
+        expect(screen.getByTestId('cases-XVE1').textContent).toContain('130');
+      });
+      const last = mockedGetDept.mock.calls[mockedGetDept.mock.calls.length - 1];
+      expect(last[1]).toMatchObject({ calendarSource: 'all' });
     });
   });
 
-  // ---- TS-F049-V13F-008：表格 pill badge ----
-  it('TS-F049-V13F-008：表格 pill badge — 工作日 Y(rest_flg=0) / 跳過 N(skipReason) / 餘數補', async () => {
-    // remainder>0 → 部分工作日 bonus；用 21 工作日場景之 ratio 模型
-    mockedGetDaily.mockResolvedValue(
-      dailyResp({
-        workingDays: 20,
-        baseRatio: 50,
-        remainder: 1,
-        dailyEstimates: [
-          { date: '2026-05-01', weekday: '五', isWorkday: false, skipReason: '國定假日', ratioPerMille: 0 },
-          { date: '2026-05-02', weekday: '六', isWorkday: false, skipReason: '週末', ratioPerMille: 0 },
-          { date: '2026-05-04', weekday: '一', isWorkday: true, skipReason: null, ratioPerMille: 50 },
-          { date: '2026-05-29', weekday: '五', isWorkday: true, skipReason: null, ratioPerMille: 51 }, // bonus
-        ],
-      }),
-    );
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('stage0-daily-table')).toBeInTheDocument();
+  // =====================================================================
+  // 十三、TERM — 術語清理（US-170 / §19）
+  // =====================================================================
+  describe('TERM — 術語清理（US-170）', () => {
+    const BLACKLIST = [
+      'rest_flg',
+      'base ratio',
+      'base+1',
+      'ratioPerMille',
+      'remainder',
+      '餘數',
+      'ob_assign_set',
+      'ob_pool_data',
+      'OBPOOLDATA',
+      'STAGE0_POOL_WARN_THRESHOLD',
+      'calendar_date',
+      'AD-E07-8',
+      'AD-E07-29',
+      'GET /api/v1/',
+    ];
+
+    it('TS-F049-TERM-001：DOM 全文掃描 — §19.1 黑名單字串均不出現', async () => {
+      mockedGetDept.mockResolvedValue(
+        deptResp({ poolCount: 500, poolWarning: 'POOL_COUNT_LOW' }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('mode-indicator')).toBeInTheDocument();
+      });
+      const body = document.body.textContent ?? '';
+      for (const term of BLACKLIST) {
+        expect(body).not.toContain(term);
+      }
     });
-    const table = screen.getByTestId('stage0-daily-table');
-    expect(table.textContent).toContain('Y (rest_flg=0)');
-    expect(table.textContent).toContain('N (國定假日)');
-    expect(table.textContent).toContain('N (週末)');
-    expect(table.textContent).toContain('base+1（餘數補）');
+
+    it('TS-F049-TERM-002：KPI 區無 base ratio / remainder 卡片', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('kpi-working-days')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('kpi-base')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('kpi-remainder')).not.toBeInTheDocument();
+      const body = document.body.textContent ?? '';
+      expect(body).not.toContain('base ratio');
+      expect(body).not.toContain('remainder');
+    });
+
+    it('TS-F049-TERM-003：休息日「休息日（不派案）」；無 base+1 徽章；工作日業務語言', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('calendar-grid')).toBeInTheDocument();
+      });
+      const body = document.body.textContent ?? '';
+      expect(body).toContain('休息日（不派案）');
+      expect(body).toContain('工作日');
+      expect(body).not.toContain('跳過');
+      expect(body).not.toContain('base+1');
+      expect(body).not.toContain('餘數補');
+    });
+
+    it('TS-F049-TERM-004：Pool 偏低警示為業務語言、無技術詞彙', async () => {
+      mockedGetDept.mockResolvedValue(
+        deptResp({ poolCount: 500, poolWarning: 'POOL_COUNT_LOW' }),
+      );
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('pool-low-warning')).toBeInTheDocument();
+      });
+      const warn = screen.getByTestId('pool-low-warning');
+      expect(warn.textContent).toContain('筆');
+      expect(warn.textContent).toContain('500');
+      expect(warn.textContent).not.toContain('OBPOOLDATA');
+      expect(warn.textContent).not.toContain('STAGE0_POOL_WARN_THRESHOLD');
+      expect(warn.textContent).not.toContain('ob_pool_data');
+    });
+
+    it('TS-F049-TERM-005：AD-E07-8 公式框不顯示', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('mode-indicator')).toBeInTheDocument();
+      });
+      const body = document.body.textContent ?? '';
+      expect(body).not.toContain('FLOOR(1000');
+      expect(body).not.toContain('1000 mod');
+      expect(body).not.toContain('AD-E07-8');
+    });
   });
 
-  // ---- TS-F049-V13F-009：空狀態 ----
-  it('TS-F049-V13F-009：無 active 名單 → selector disabled；KPI total 顯示「—」；無 9500', async () => {
-    mockedListLists.mockResolvedValue(listsResp([]));
+  // ---- smoke ----
+  it('渲染部門負載總覽 + 月曆 + KPI（director）', async () => {
     renderPage();
     await waitFor(() => {
-      const sel = screen.getByTestId('input-list-no') as HTMLSelectElement;
-      expect(sel.disabled).toBe(true);
+      expect(screen.getByTestId('dept-summary-table')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('kpi-total-estimate').textContent).toContain('—');
-    expect(document.body.textContent).not.toContain('9,500');
-  });
-
-  // ---- regression：pool 警示 / 處長唯讀 ----
-  it('Pool 偏低警示 banner（warning=POOL_COUNT_LOW）', async () => {
-    mockedGetDaily.mockResolvedValue(
-      dailyResp({ poolCount: 800, warning: 'POOL_COUNT_LOW' }),
-    );
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('pool-low-warning')).toBeInTheDocument();
-    });
-  });
-
-  it('warning=null 不顯示 pool 警示', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('kpi-working-days')).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId('pool-low-warning')).not.toBeInTheDocument();
-  });
-
-  it('每日明細表格含 calendar_date / 累積 / 餘數補', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('stage0-daily-table')).toBeInTheDocument();
-    });
-    const table = screen.getByTestId('stage0-daily-table');
-    expect(table.textContent).toContain('calendar_date');
-    expect(table.textContent).toContain('累積');
-    expect(table.textContent).toContain('餘數補');
-  });
-
-  it('右側顯示每日預估 bar chart', async () => {
-    renderPage();
-    await waitFor(() => {
-      const bars = screen.getAllByTestId(/^bar-/);
-      expect(bars.length).toBeGreaterThan(0);
-    });
-  });
-
-  it('section_chief 顯示處長唯讀提示', async () => {
-    mockedGetBusinessRole.mockReturnValue('section_chief');
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByTestId('director-readonly-banner')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('calendar-grid')).toBeInTheDocument();
+    expect(screen.getByTestId('kpi-working-days')).toBeInTheDocument();
+    // 全部門合計 pill 存在（director）
+    expect(screen.getByTestId('dept-pill-ALL')).toBeInTheDocument();
   });
 });

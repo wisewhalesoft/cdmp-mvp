@@ -143,12 +143,12 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: ClipboardCheck,
             requires: 'director_or_section_chief',
           },
-          // M03 Stage 0 試算：director only
+          // M03 Stage 0 試算：F049 v2.0 / US-168 放寬至 director + section_chief（處長唯讀）
           {
             to: '/assignment/estimate',
             label: 'Stage 0 試算',
             icon: Calculator,
-            requires: 'director_only',
+            requires: 'director_or_section_chief',
           },
           // M04 觸發月跑：director only
           {

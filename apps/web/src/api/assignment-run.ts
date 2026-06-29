@@ -92,6 +92,93 @@ export async function getListEstimate(listNo: string): Promise<ListEstimateRespo
 }
 
 // =====================================================================
+// F049 v2.0 Part B — Stage 0 部門維度每日分派可行性矩陣
+// （對齊後端 Stage0DeptEstimateResult / AD-E07-v3.6 §4.1）
+// =====================================================================
+
+export interface DeptEstimateWarning {
+  code:
+    | 'DEPT_HEADCOUNT_ZERO'
+    | 'SCOPE_UNRESOLVED'
+    | 'STAGE0_LIST_ESTIMATE_PARTIAL';
+  deptCode?: string;
+  listNo?: string;
+  message?: string;
+}
+
+export interface DeptEstimateCell {
+  deptCode: string;
+  cases: number;
+  perPerson: number | null;
+  overThreshold: boolean;
+}
+
+export interface DeptEstimateDay {
+  date: string;
+  weekday: string;
+  isWorkday: boolean;
+  /** 全名單總量；休息日 = 0；處長模式 = null */
+  orgTotal: number | null;
+  deptAssignedTotal: number | null;
+  /** 未分派到部門的件數；休息日 = 0；處長模式 = null */
+  gap: number | null;
+  deptCells: DeptEstimateCell[];
+}
+
+export interface DeptEstimateDepartment {
+  deptCode: string;
+  deptName: string;
+  activeHeadcount: number;
+}
+
+export interface DeptEstimateScope {
+  role: 'director' | 'section_chief' | 'admin';
+  deptCode: string | null;
+  scoped: boolean;
+}
+
+export interface DeptEstimateResponse {
+  ym: string;
+  mode: 'aggregated' | 'single-list';
+  listNo: string | null;
+  calendarSource: CalendarSource;
+  startDate: string;
+  endDate: string;
+  scope: DeptEstimateScope;
+  departments: DeptEstimateDepartment[];
+  days: DeptEstimateDay[];
+  /** 每人每日上限；未設定為 null */
+  threshold: number | null;
+  warnings: DeptEstimateWarning[];
+  poolCount: number;
+  poolWarning: 'POOL_COUNT_LOW' | null;
+}
+
+export interface DeptEstimateParams {
+  calendarSource?: CalendarSource;
+  listNo?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export async function getDeptEstimate(
+  ym?: string,
+  opts: DeptEstimateParams = {},
+): Promise<DeptEstimateResponse> {
+  const params: Record<string, string> = {};
+  if (ym) params.ym = ym;
+  if (opts.calendarSource) params.calendarSource = opts.calendarSource;
+  if (opts.listNo) params.listNo = opts.listNo;
+  if (opts.startDate) params.startDate = opts.startDate;
+  if (opts.endDate) params.endDate = opts.endDate;
+  const response = await apiClient.get<DeptEstimateResponse>(
+    '/assignment/stage0/dept-estimate',
+    { params },
+  );
+  return response.data;
+}
+
+// =====================================================================
 // F061 — POST 觸發月跑
 // =====================================================================
 

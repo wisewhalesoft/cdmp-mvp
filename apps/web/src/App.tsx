@@ -230,13 +230,13 @@ export function App() {
             </DirectorOrSectionChiefRoute>
           }
         />
-        {/* M03 Stage 0 試算：director only（共享分派作業月份） */}
+        {/* M03 Stage 0 試算：F049 v2.0 / US-168 放寬至 director + section_chief（處長唯讀） */}
         <Route
           path="/assignment/estimate"
           element={
-            <DirectorRoute>
+            <DirectorOrSectionChiefRoute>
               <Stage0EstimatePage />
-            </DirectorRoute>
+            </DirectorOrSectionChiefRoute>
           }
         />
         {/* M04 觸發月跑：director only（共享分派作業月份） */}

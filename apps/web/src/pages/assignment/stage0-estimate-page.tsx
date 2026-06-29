@@ -1,48 +1,70 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Calculator,
   AlertTriangle,
   CalendarCheck,
+  Inbox,
+  Gauge,
   Users,
-  Divide,
-  PlusCircle,
-  Table,
+  GitPullRequestDraft,
   Eye,
-  Check,
-  X,
-  Plus,
+  ScanEye,
+  Lock,
+  Building2,
+  CalendarDays,
+  Calendar,
+  Layers,
+  FileText,
+  UserX,
+  Table,
+  ChevronDown,
+  Info,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { MonthPicker } from '@/components/e07/MonthPicker';
 import { useAssignmentWorkYm } from '@/contexts/assignment-work-ym-context';
 import {
-  getDailyEstimate,
-  getListEstimate,
-  type DailyEstimateResponse,
+  getDeptEstimate,
+  type DeptEstimateResponse,
+  type DeptEstimateDay,
+  type CalendarSource,
 } from '@/api/assignment-run';
 import { listLists } from '@/api/assignment-list';
-import {
-  Stage0InputPanel,
-  type Stage0Input,
-} from './_components/stage0-input-panel';
-import {
-  Stage0BarChart,
-  computeAdE07Distribution,
-  type Stage0Row,
-} from './_components/stage0-bar-chart';
-import { getBusinessRole } from '@/stores/auth-store';
 
 /**
- * F049 Stage 0 試算頁（Phase 2 全面改造）
+ * F049 v2.0 Stage 0 試算頁（部門維度每日分派可行性）
  *
- * 對應 prototype 30-stage0-estimate.html
+ * 對應 prototype 30-stage0-estimate.html（業務化重設計版）/ US-166~170 / AD-E07-v3.6。
  *
- * 區塊：
- *   - 處長唯讀提示 banner（businessRole='section_chief'）
- *   - 試算說明 banner
- *   - 左 4 欄：Stage0InputPanel（LIST_NO/總筆數/起訖日/工作日來源）
- *   - 右 8 欄：4 KPI + Pool 警示 + bar chart + 明細表（calendar_date/星期/工作日/預估件數/累積/餘數補）
+ * 主視角：本月全名單彙總後，各部門每天要分派幾件、平均每位電訪員一天要打幾通。
+ *   - 預設「全名單彙總」；名單篩選可鑽探單一名單（US-166）。
+ *   - 月曆 + 部門切換器（全部門合計顯示總量＋缺口；單一部門顯示件數＋人均）。
+ *   - 處長唯讀、僅見轄區、不見全部門合計；scope=null 友善降級（US-168）。
+ *   - 已移除所有技術術語（US-170）：底層計算保留，不暴露給使用者。
  */
+
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+const CALENDAR_OPTIONS: Array<{
+  value: CalendarSource;
+  label: string;
+  help: string;
+}> = [
+  {
+    value: 'weekday',
+    label: '只排上班日',
+    help: '僅安排週一至週五的正常上班日，排除週末與國定假日。',
+  },
+  {
+    value: 'weekday-only',
+    label: '也排連假日（週末除外）',
+    help: '安排週一至週五，含國定假日（連假當天照樣派案）。',
+  },
+  {
+    value: 'all',
+    label: '連週末都排（全月每天）',
+    help: '整個月每天都安排派案，含週末與假日；可評估假日派案情境。',
+  },
+];
 
 function toYYYYMMRaw(yyyyMm: string): string {
   return yyyyMm.replace('-', '');
@@ -52,52 +74,67 @@ function toHyphen(yyyymm: string): string {
   return `${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`;
 }
 
-export function Stage0EstimatePage() {
-  const businessRole = getBusinessRole();
-  const isSectionChief = businessRole === 'section_chief';
+interface DeptStat {
+  deptCode: string;
+  deptName: string;
+  headcount: number;
+  monthCases: number;
+  peak: number | null;
+  avg: number | null;
+}
 
-  // F097 / US-137：分派作業月份取自共享 Context（target_work_ym）
+/** 由 days[] 聚合各部門本月件數、尖峰／平均人均。 */
+function computeDeptStats(data: DeptEstimateResponse): DeptStat[] {
+  const workdays = data.days.filter((d) => d.isWorkday);
+  return data.departments.map((dep) => {
+    const dailyCases = workdays.map(
+      (d) => d.deptCells.find((c) => c.deptCode === dep.deptCode)?.cases ?? 0,
+    );
+    const monthCases = dailyCases.reduce((s, v) => s + v, 0);
+    let peak: number | null = null;
+    let avg: number | null = null;
+    if (dep.activeHeadcount > 0 && workdays.length) {
+      const pps = dailyCases.map((c) => Math.round(c / dep.activeHeadcount));
+      peak = Math.max(...pps);
+      avg = Math.round(pps.reduce((a, b) => a + b, 0) / pps.length);
+    }
+    return {
+      deptCode: dep.deptCode,
+      deptName: dep.deptName,
+      headcount: dep.activeHeadcount,
+      monthCases,
+      peak,
+      avg,
+    };
+  });
+}
+
+export function Stage0EstimatePage() {
   const { currentWorkYm, targetWorkYm, setTargetWorkYm } = useAssignmentWorkYm();
-  const ym = toHyphen(targetWorkYm); // 本頁內部沿用 YYYY-MM
-  const [dailyData, setDailyData] = useState<DailyEstimateResponse | null>(null);
+  const ym = toHyphen(targetWorkYm); // YYYY-MM（顯示用）
+
+  const [data, setData] = useState<DeptEstimateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lists, setLists] = useState<Array<{ listNo: string; listNm: string }>>(
     [],
   );
-  const hasActiveList = lists.length > 0;
+  const [listFilter, setListFilter] = useState<string>('ALL');
+  const [calendarSource, setCalendarSource] = useState<CalendarSource>('weekday');
+  const [selectedDept, setSelectedDept] = useState<string>('ALL');
 
-  const [input, setInput] = useState<Stage0Input>({
-    listNo: '',
-    totalCount: 0, // F049 v1.3：移除寫死 9500；total 一律來自選取名單 per-list COUNT
-    startDate: '',
-    endDate: '',
-    calendarSource: 'weekday',
-  });
-  const [listEstimating, setListEstimating] = useState(false);
-
-  // 載入 lists（依 ym）→ 自動選第一筆 active 名單（AC-4-Default）
+  // 載入當月 active 名單（供名單篩選下拉）
   useEffect(() => {
     if (!ym) return;
     let aborted = false;
     void (async () => {
       try {
-        const data = await listLists({ ym: toYYYYMMRaw(ym) });
+        const resp = await listLists({ ym: toYYYYMMRaw(ym) });
         if (aborted) return;
-        const active = (data.lists ?? [])
+        const active = (resp.lists ?? [])
           .filter((l) => l.status === 'active')
           .map((l) => ({ listNo: l.listNo, listNm: l.listNm }));
         setLists(active);
-        // 自動選第一筆 active 名單（input.listNo 未設或不在清單中時）
-        setInput((prev) => {
-          const stillValid = active.some((l) => l.listNo === prev.listNo);
-          if (stillValid) return prev;
-          return {
-            ...prev,
-            listNo: active[0]?.listNo ?? '',
-            totalCount: active.length === 0 ? 0 : prev.totalCount,
-          };
-        });
       } catch {
         if (!aborted) setLists([]);
       }
@@ -107,7 +144,7 @@ export function Stage0EstimatePage() {
     };
   }, [ym]);
 
-  // 載入 daily-estimate（calendarSource / startDate / endDate 納入依賴 → 切換即重抓重算）
+  // 載入部門維度試算矩陣（ym / calendarSource / listFilter 變化即重抓）
   useEffect(() => {
     if (!ym) return;
     let aborted = false;
@@ -115,20 +152,11 @@ export function Stage0EstimatePage() {
       setLoading(true);
       setError(null);
       try {
-        const result = await getDailyEstimate(toYYYYMMRaw(ym), {
-          calendarSource: input.calendarSource,
-          startDate: input.startDate || undefined,
-          endDate: input.endDate || undefined,
+        const resp = await getDeptEstimate(toYYYYMMRaw(ym), {
+          calendarSource,
+          listNo: listFilter === 'ALL' ? undefined : listFilter,
         });
-        if (!aborted) {
-          setDailyData(result);
-          // 起訖日未設時，以後端回顯之整月範圍回填（供 input 顯示，不再觸發重抓）
-          setInput((prev) => ({
-            ...prev,
-            startDate: prev.startDate || result.startDate,
-            endDate: prev.endDate || result.endDate,
-          }));
-        }
+        if (!aborted) setData(resp);
       } catch (err: unknown) {
         const e = err as { response?: { data?: { message?: string } } };
         if (!aborted)
@@ -140,96 +168,245 @@ export function Stage0EstimatePage() {
     return () => {
       aborted = true;
     };
-  }, [ym, input.calendarSource, input.startDate, input.endDate]);
+  }, [ym, calendarSource, listFilter]);
 
-  // input.listNo 變化 → 呼叫 list-estimate 取得該 LIST_NO COUNT，套用到 totalCount
+  const isSectionChief = data?.scope.scoped === true;
+  const scopeUnresolved =
+    isSectionChief &&
+    (data?.warnings.some((w) => w.code === 'SCOPE_UNRESOLVED') ?? false);
+  const hasActiveList = lists.length > 0;
+
+  const deptStats = useMemo<DeptStat[]>(
+    () => (data ? computeDeptStats(data) : []),
+    [data],
+  );
+
+  // 處長鎖定轄區；部長預設「全部門合計」，部門被移除時退回 ALL
   useEffect(() => {
-    if (!input.listNo) {
-      setInput((prev) => (prev.totalCount === 0 ? prev : { ...prev, totalCount: 0 }));
-      return;
+    if (!data) return;
+    if (isSectionChief) {
+      setSelectedDept(data.departments[0]?.deptCode ?? '');
+    } else if (
+      selectedDept !== 'ALL' &&
+      !data.departments.some((d) => d.deptCode === selectedDept)
+    ) {
+      setSelectedDept('ALL');
     }
-    let aborted = false;
-    setListEstimating(true);
-    void (async () => {
-      try {
-        const r = await getListEstimate(input.listNo);
-        if (!aborted) {
-          const count = r.count ?? r.estimatedCount ?? 0;
-          setInput((prev) => ({ ...prev, totalCount: count }));
-        }
-      } catch {
-        // 忽略；保留既有 totalCount
-      } finally {
-        if (!aborted) setListEstimating(false);
-      }
-    })();
-    return () => {
-      aborted = true;
-    };
-  }, [input.listNo]);
+  }, [data, isSectionChief]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 每日件數 = round(ratioPerMille/1000 × total)（前端消費後端 ratioPerMille）
-  const distribution = useMemo<Stage0Row[]>(() => {
-    if (!dailyData?.dailyEstimates) return [];
-    return computeAdE07Distribution(input.totalCount, dailyData.dailyEstimates);
-  }, [dailyData, input.totalCount]);
+  const workingDays = data?.days.filter((d) => d.isWorkday).length ?? 0;
+  const calLabel =
+    CALENDAR_OPTIONS.find((o) => o.value === calendarSource)?.label ?? '';
+  const calHelp =
+    CALENDAR_OPTIONS.find((o) => o.value === calendarSource)?.help ?? '';
 
-  const workingDays = dailyData?.workingDays ?? 0;
-  // KPI base / remainder 直接採後端千分位值（AD-E07-8）
-  const base = dailyData?.baseRatio ?? 0;
-  const remainder = dailyData?.remainder ?? 0;
-  // 空狀態：無 active 名單 → KPI total 顯示「—」
-  const totalDisplay = hasActiveList ? input.totalCount.toLocaleString() : '—';
+  const orgMonthTotal = useMemo(() => {
+    if (!data) return 0;
+    return data.days
+      .filter((d) => d.isWorkday)
+      .reduce((s, d) => s + (d.orgTotal ?? 0), 0);
+  }, [data]);
+  const gapMonth = useMemo(() => {
+    if (!data) return 0;
+    return data.days
+      .filter((d) => d.isWorkday)
+      .reduce((s, d) => s + (d.gap ?? 0), 0);
+  }, [data]);
+  const scopeMonthCases = deptStats[0]?.monthCases ?? 0;
+  const peakAll = useMemo(() => {
+    const peaks = deptStats.map((s) => s.peak).filter((v): v is number => v !== null);
+    return peaks.length ? Math.max(...peaks) : null;
+  }, [deptStats]);
+  const threshold = data?.threshold ?? null;
+  const peakOver = threshold !== null && peakAll !== null && peakAll > threshold;
+  const zeroHeadcountDepts = data?.departments.filter((d) => d.activeHeadcount === 0) ?? [];
+
+  const monthPicker = ym ? (
+    <div className="flex items-center gap-2" data-testid="stage0-month-picker">
+      <span className="text-xs text-gray-500 whitespace-nowrap">
+        分派作業月份
+      </span>
+      <MonthPicker
+        value={ym}
+        currentYm={toHyphen(currentWorkYm) || ym}
+        onChange={(next) => setTargetWorkYm(next.replace('-', ''))}
+      />
+    </div>
+  ) : undefined;
+
+  // ---- 處長 scope=null 友善降級 ----
+  if (scopeUnresolved) {
+    return (
+      <AppLayout title="Stage 0 試算" actions={monthPicker}>
+        <main className="flex-1 p-6">
+          <div
+            data-testid="scope-unresolved-card"
+            className="bg-white rounded-xl border border-gray-200 p-10 flex flex-col items-center text-center"
+          >
+            <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+              <UserX className="w-7 h-7 text-amber-500" />
+            </div>
+            <h3 className="text-base font-semibold text-gray-800 mb-1">
+              無法識別您的轄區部門
+            </h3>
+            <p className="text-sm text-gray-500 max-w-md">
+              系統找不到您對應的轄區部門資料，因此無法顯示估算結果。請聯繫系統管理員確認您的帳號設定。
+            </p>
+            <div className="mt-5 grid grid-cols-4 gap-3 w-full max-w-md opacity-60">
+              {['可分派天數', '轄區件數', '尖峰人均', '在職人數'].map((lbl) => (
+                <div
+                  key={lbl}
+                  className="bg-gray-50 rounded-lg border border-gray-200 p-3 text-center"
+                >
+                  <div className="text-xl font-bold text-gray-300">—</div>
+                  <div className="text-[10px] text-gray-400 mt-1">{lbl}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      </AppLayout>
+    );
+  }
+
+  // ---- 處長 scope 命中但轄區整期 0 件 → 友善空狀態（AC-DEPT-2）----
+  if (isSectionChief && data && data.departments.length === 0) {
+    return (
+      <AppLayout title="Stage 0 試算" actions={monthPicker}>
+        <main className="flex-1 p-6">
+          <div
+            data-testid="scope-empty-card"
+            className="bg-white rounded-xl border border-gray-200 p-10 flex flex-col items-center text-center"
+          >
+            <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+              <Inbox className="w-7 h-7 text-gray-400" />
+            </div>
+            <h3 className="text-base font-semibold text-gray-800 mb-1">
+              本月您的轄區尚無分派預估
+            </h3>
+            <p className="text-sm text-gray-500 max-w-md">
+              目前沒有名單分派到您的轄區部門，因此沒有可顯示的每日工作量。待名單設定部門比例後即會顯示。
+            </p>
+          </div>
+        </main>
+      </AppLayout>
+    );
+  }
 
   return (
-    <AppLayout
-      title="Stage 0 試算"
-      actions={
-        ym ? (
-          <div
-            className="flex items-center gap-2"
-            data-testid="stage0-month-picker"
-          >
-            <span className="text-xs text-gray-500 whitespace-nowrap">
-              分派作業月份
-            </span>
-            <MonthPicker
-              value={ym}
-              currentYm={toHyphen(currentWorkYm) || ym}
-              onChange={(next) => setTargetWorkYm(next.replace('-', ''))}
-            />
-          </div>
-        ) : undefined
-      }
-    >
+    <AppLayout title="Stage 0 試算" actions={monthPicker}>
       <main className="flex-1 p-6 space-y-4">
+        {/* 處長唯讀提示 banner */}
         {isSectionChief && (
           <div
-            data-testid="director-readonly-banner"
+            data-testid="section-chief-readonly-banner"
             className="rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm"
           >
             <Eye className="w-4 h-4 text-purple-700 mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="font-semibold text-purple-900">
-                處長角色為唯讀檢視（Stage 0 為部長 / Admin 月跑前置試算）
+                唯讀模式：僅顯示您轄區部門
+                {data?.departments[0] ? `（${data.departments[0].deptName}）` : ''}
+                的預估資料
               </p>
-              <p className="text-xs text-purple-800 mt-0.5">
-                您可查看試算結果，但部長 / Admin 才能依此調整月跑參數。
+              <p className="text-xs text-purple-700 mt-0.5">
+                此頁僅供檢視，不提供任何修改設定的操作；您看到的是轄區部門的每日工作量與人均負荷。
               </p>
             </div>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 bg-purple-100 text-purple-700">
+              <ScanEye className="w-3 h-3" />
+              轄區檢視
+            </span>
           </div>
         )}
 
-        <div className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
-          <Calculator className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+        {/* 頁面說明 + 顯示模式 chip */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p className="font-semibold text-primary">
-              Daily estimate 不寫入 ob_assign_set
+            <h2 className="text-lg font-semibold text-gray-800">
+              本月每日分派工作量試算
+            </h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              彙總本月所有啟用名單，預估各部門每天要分派幾件、平均每位電訪員一天要打幾通，協助判斷工作量是否合理。
             </p>
-            <p className="text-xs text-gray-600 mt-0.5">
-              本頁為 F049 試算預覽，演算法 = FLOOR(1000/工作日) + 餘數補最近日期（AD-E07-8）。
-              實際寫入由月跑 Stage 0 正式執行（F061）。
+          </div>
+          <span
+            data-testid="mode-indicator"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-primary border border-blue-100"
+          >
+            {listFilter === 'ALL' ? (
+              <>
+                <Layers className="w-3.5 h-3.5" />
+                顯示模式：所有啟用名單彙總
+              </>
+            ) : (
+              <>
+                <FileText className="w-3.5 h-3.5" />
+                顯示模式：單一名單{' '}
+                {lists.find((l) => l.listNo === listFilter)?.listNm ?? ''}（
+                {listFilter}）
+              </>
+            )}
+          </span>
+        </div>
+
+        {/* 控制列：名單篩選 + 派案日曆 */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-2 gap-5">
+          <div>
+            <label
+              htmlFor="stage0-list-filter"
+              className="block text-sm font-medium text-gray-700 mb-1.5"
+            >
+              名單篩選
+            </label>
+            <div className="relative">
+              <select
+                id="stage0-list-filter"
+                data-testid="list-filter"
+                value={listFilter}
+                disabled={!hasActiveList}
+                onChange={(e) => setListFilter(e.target.value)}
+                className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="ALL">全部名單（彙總）</option>
+                {lists.map((l) => (
+                  <option key={l.listNo} value={l.listNo}>
+                    {l.listNm}（{l.listNo}）
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              預設彙總本月所有啟用名單；可改為查看單一名單。
             </p>
+          </div>
+          <div>
+            <label
+              htmlFor="stage0-calendar"
+              className="block text-sm font-medium text-gray-700 mb-1.5"
+            >
+              派案日曆
+            </label>
+            <div className="relative">
+              <select
+                id="stage0-calendar"
+                data-testid="calendar-select"
+                value={calendarSource}
+                onChange={(e) =>
+                  setCalendarSource(e.target.value as CalendarSource)
+                }
+                className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none"
+              >
+                {CALENDAR_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">{calHelp}</p>
           </div>
         </div>
 
@@ -243,218 +420,667 @@ export function Stage0EstimatePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-12 gap-5">
-          {/* 左：輸入面板 */}
-          <div className="col-span-4">
-            <Stage0InputPanel
-              lists={lists}
-              value={input}
-              onChange={setInput}
-              disabled={!hasActiveList}
+        {/* 系統資料池偏低警示（業務語言） */}
+        {data?.poolWarning === 'POOL_COUNT_LOW' && (
+          <div
+            data-testid="pool-low-warning"
+            className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700"
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-700">
+                系統資料池筆數偏低（目前 {data.poolCount.toLocaleString()} 筆）
+              </p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                可能影響估算準確度，請聯繫 IT 確認本月資料是否已完成更新。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 缺口提示 banner（部長 / Admin；gap>0 才渲染） */}
+        {!isSectionChief && gapMonth > 0 && (
+          <div
+            data-testid="gap-row"
+            className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-gray-700"
+          >
+            <GitPullRequestDraft className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-orange-700">
+                本月尚有 {gapMonth.toLocaleString()} 件未分派到任何部門
+              </p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                部分名單的部門比例未設定或未達 100%。系統不會自動補差；如需分派，請至各名單的部門比例設定補齊。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 人員資料警示（在職人數為 0） */}
+        {zeroHeadcountDepts.length > 0 && (
+          <div
+            data-testid="headcount-zero-warning"
+            className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-gray-700"
+          >
+            <UserX className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-orange-700">
+                部分部門在職人數為 0，無法計算人均
+              </p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {zeroHeadcountDepts
+                  .map((d) => `${d.deptName}（${d.deptCode}）`)
+                  .join('、')}{' '}
+                在職人數為 0，請確認人員資料是否已同步；該部門暫不顯示人均。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* KPI 卡片 */}
+        <div className="grid grid-cols-4 gap-3" data-testid="kpi-grid">
+          <KpiCard
+            testId="kpi-working-days"
+            label="本月可分派天數"
+            value={hasActiveList ? String(workingDays) : '—'}
+            sub={`依「${calLabel}」計算`}
+            icon={<CalendarCheck className="w-4 h-4 text-blue-500" />}
+          />
+          {isSectionChief ? (
+            <KpiCard
+              testId="kpi-scope-cases"
+              label="轄區本月件數"
+              value={hasActiveList ? scopeMonthCases.toLocaleString() : '—'}
+              sub="您轄區部門本月分派合計"
+              icon={<Inbox className="w-4 h-4 text-emerald-500" />}
             />
+          ) : (
+            <KpiCard
+              testId="kpi-total-cases"
+              label="本月全名單總量"
+              value={hasActiveList ? orgMonthTotal.toLocaleString() : '—'}
+              sub={
+                listFilter === 'ALL'
+                  ? '本月所有啟用名單合計'
+                  : '本名單預估件數'
+              }
+              icon={<Inbox className="w-4 h-4 text-emerald-500" />}
+            />
+          )}
+          <KpiCard
+            testId="kpi-peak-per-person"
+            label="尖峰人均／日"
+            value={!hasActiveList || peakAll === null ? '—' : String(peakAll)}
+            sub={
+              threshold !== null
+                ? `每人每日上限 ${threshold} 件`
+                : '尚未設定上限'
+            }
+            icon={
+              <Gauge
+                className={`w-4 h-4 ${peakOver ? 'text-red-500' : 'text-emerald-500'}`}
+              />
+            }
+            danger={peakOver}
+          />
+          {isSectionChief ? (
+            <KpiCard
+              testId="kpi-headcount"
+              label="轄區在職人數"
+              value={
+                hasActiveList
+                  ? String(data?.departments[0]?.activeHeadcount ?? 0)
+                  : '—'
+              }
+              sub="在職電訪人員"
+              icon={<Users className="w-4 h-4 text-purple-500" />}
+            />
+          ) : (
+            <KpiCard
+              testId="kpi-unassigned"
+              label="尚未分派件數"
+              value={hasActiveList ? gapMonth.toLocaleString() : '—'}
+              sub={
+                gapMonth > 0
+                  ? '部分名單比例未設定或未達 100%'
+                  : '所有件數已分派至部門'
+              }
+              icon={
+                <GitPullRequestDraft
+                  className={`w-4 h-4 ${gapMonth > 0 ? 'text-orange-500' : 'text-emerald-500'}`}
+                />
+              }
+              warn={gapMonth > 0}
+            />
+          )}
+        </div>
+
+        {/* 空狀態：本月無啟用名單 */}
+        {!hasActiveList && !loading && (
+          <div
+            data-testid="empty-state"
+            className="bg-white rounded-xl border border-gray-200 p-10 text-center"
+          >
+            <p className="text-sm text-gray-500">
+              本月尚無啟用名單，請先於名單定義頁建立並啟用名單。
+            </p>
           </div>
+        )}
 
-          {/* 右：KPI + Pool warn + bar chart + table */}
-          <div className="col-span-8 space-y-4">
-            {/* Pool 偏低警示 */}
-            {dailyData?.warning === 'POOL_COUNT_LOW' && (
-              <div
-                data-testid="pool-low-warning"
-                className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700"
-              >
-                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                <div>
-                  <p className="font-semibold text-amber-800">
-                    Pool 資料筆數偏低（現有 {dailyData.poolCount} 筆）
-                  </p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    低於閾值 STAGE0_POOL_WARN_THRESHOLD = 1000，
-                    請確認資料擷取任務（OBPOOLDATA）已正常執行。
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* 4 KPI 卡 */}
-            <div className="grid grid-cols-4 gap-3">
-              <div
-                data-testid="kpi-working-days"
-                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">working_days 工作日</span>
-                  <CalendarCheck className="w-4 h-4 text-blue-500" />
-                </div>
-                <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {workingDays}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">本月可分派天數</p>
-              </div>
-              <div
-                data-testid="kpi-total-estimate"
-                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">total 總筆數</span>
-                  <Users className="w-4 h-4 text-emerald-500" />
-                </div>
-                <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {totalDisplay}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {!hasActiveList
-                    ? '無 active 名單'
-                    : listEstimating
-                      ? '即時試算中...'
-                      : '符合 LIST_NO 篩選條件'}
-                </p>
-              </div>
-              <div
-                data-testid="kpi-base"
-                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">base ratio</span>
-                  <Divide className="w-4 h-4 text-purple-500" />
-                </div>
-                <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {hasActiveList ? base : '—'}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">FLOOR(1000/工作日) ‰</p>
-              </div>
-              <div
-                data-testid="kpi-remainder"
-                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">remainder 餘數</span>
-                  <PlusCircle className="w-4 h-4 text-amber-500" />
-                </div>
-                <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                  {hasActiveList ? remainder : '—'}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">補至最近 N 個工作日</p>
-              </div>
+        {/* 部門負載總覽 */}
+        {hasActiveList && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-gray-800">
+                部門負載總覽
+              </h3>
+              <span className="text-xs text-gray-400">
+                {isSectionChief
+                  ? '您的轄區部門負載概況'
+                  : '點部門列可在下方月曆查看該課每日明細'}
+              </span>
             </div>
-
-            {/* Bar chart */}
-            <Stage0BarChart rows={distribution} />
-
-            {/* Daily detail table */}
-            <div
-              data-testid="stage0-daily-table"
-              className="bg-white rounded-lg border border-gray-200 shadow-sm"
-            >
-              <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-2">
-                <Table className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold text-gray-800">
-                  每日試算明細
-                </h3>
-                <span className="text-xs text-gray-400 ml-2">
-                  GET /api/v1/assignment/stage0/daily-estimate?ym=
-                  {toYYYYMMRaw(ym)}
-                </span>
-              </div>
-              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-gray-50/95 backdrop-blur z-10">
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
-                        calendar_date
-                      </th>
-                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
-                        星期
-                      </th>
-                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
-                        工作日
-                      </th>
-                      <th className="text-right px-5 py-2 font-semibold text-gray-600">
-                        預估件數
-                      </th>
-                      <th className="text-right px-5 py-2 font-semibold text-gray-600">
-                        累積
-                      </th>
-                      <th className="text-left px-5 py-2 font-semibold text-gray-600">
-                        餘數補
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {loading && (
-                      <tr>
-                        <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
-                          試算中...
-                        </td>
-                      </tr>
-                    )}
-                    {!loading && distribution.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
-                          無試算資料
-                        </td>
-                      </tr>
-                    )}
-                    {distribution.map((r) => (
+            <div className="overflow-x-auto">
+              <table
+                className="w-full text-sm"
+                data-testid="dept-summary-table"
+              >
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/40 text-xs text-gray-500 uppercase tracking-wider">
+                    <th className="text-left px-5 py-2.5 font-medium">部門</th>
+                    <th className="text-right px-5 py-2.5 font-medium">
+                      在職人數
+                    </th>
+                    <th className="text-right px-5 py-2.5 font-medium">
+                      本月件數
+                    </th>
+                    <th className="text-right px-5 py-2.5 font-medium">
+                      平均人均·日
+                    </th>
+                    <th className="text-right px-5 py-2.5 font-medium">
+                      尖峰人均·日
+                    </th>
+                    <th className="text-center px-5 py-2.5 font-medium">
+                      負載狀態
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {deptStats.map((s) => {
+                    const over =
+                      threshold !== null && s.peak !== null && s.peak > threshold;
+                    const badge = loadBadge(s.peak, threshold);
+                    const clickable = !isSectionChief;
+                    return (
                       <tr
-                        key={r.date}
-                        className={r.isWorkday ? '' : 'bg-gray-50/50'}
+                        key={s.deptCode}
+                        data-testid={`dept-row-${s.deptCode}`}
+                        onClick={
+                          clickable
+                            ? () => setSelectedDept(s.deptCode)
+                            : undefined
+                        }
+                        className={`${clickable ? 'cursor-pointer' : ''} hover:bg-blue-50/30`}
                       >
-                        <td
-                          className={`px-5 py-2 font-mono text-xs ${
-                            r.isWorkday ? 'text-gray-700' : 'text-gray-400'
-                          }`}
-                        >
-                          {r.date}
-                        </td>
-                        <td className="px-5 py-2 text-xs text-gray-600">
-                          {r.weekday}
-                        </td>
-                        <td className="px-5 py-2 text-xs">
-                          {r.isWorkday ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
-                              <Check className="w-3 h-3" />Y (rest_flg=0)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500">
-                              <X className="w-3 h-3" />N ({r.skipReason})
-                            </span>
-                          )}
+                        <td className="px-5 py-3">
+                          <div className="text-sm font-medium text-gray-800">
+                            {s.deptName}
+                            {clickable && selectedDept === s.deptCode && (
+                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-primary">
+                                月曆檢視中
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-400 font-mono">
+                            {s.deptCode}
+                          </div>
                         </td>
                         <td
-                          className={`px-5 py-2 text-right font-mono ${
-                            r.isWorkday
-                              ? 'text-gray-900 font-semibold'
-                              : 'text-gray-300'
-                          }`}
+                          className={`px-5 py-3 text-right tabular-nums ${s.headcount === 0 ? 'text-orange-600 font-semibold' : 'text-gray-700'}`}
                         >
-                          {r.isWorkday ? r.estimate : '—'}
+                          {s.headcount === 0 ? '0（待同步）' : s.headcount}
                         </td>
                         <td
-                          className={`px-5 py-2 text-right font-mono ${
-                            r.isWorkday ? 'text-gray-600' : 'text-gray-300'
-                          }`}
+                          data-testid={`cases-${s.deptCode}`}
+                          className="px-5 py-3 text-right tabular-nums text-gray-700"
                         >
-                          {r.isWorkday ? r.cumulative.toLocaleString() : '—'}
+                          {s.monthCases.toLocaleString()}
                         </td>
-                        <td className="px-5 py-2 text-xs">
-                          {r.isBonus ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
-                              <Plus className="w-3 h-3" />
-                              base+1（餘數補）
-                            </span>
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
+                        <td className="px-5 py-3 text-right tabular-nums text-gray-600">
+                          {s.avg === null ? '—' : s.avg}
+                        </td>
+                        <td
+                          data-testid={`per-person-${s.deptCode}`}
+                          title={
+                            over
+                              ? `超過每人每日上限 ${threshold} 件`
+                              : undefined
+                          }
+                          className={`px-5 py-3 text-right tabular-nums ${over ? 'text-red-600 font-semibold' : 'text-gray-700'}`}
+                        >
+                          {s.peak === null ? '—' : s.peak}
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.cls}`}
+                          >
+                            {badge.txt}
+                          </span>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })}
+                  {deptStats.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-5 py-6 text-center text-sm text-gray-400"
+                      >
+                        本月名單尚未設定任何部門比例，所有件數歸入未分派缺口。
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {/* 全名單總量合計列（處長不顯示，BR-13） */}
+                {!isSectionChief && (
+                  <tfoot>
+                    <tr
+                      data-testid="org-total-row"
+                      className="border-t-2 border-gray-200 bg-gray-50/70 text-sm font-bold"
+                    >
+                      <td className="px-5 py-2.5 text-gray-700">全名單總量</td>
+                      <td></td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-gray-900">
+                        {orgMonthTotal.toLocaleString()}
+                      </td>
+                      <td></td>
+                      <td></td>
+                      <td className="px-5 py-2.5 text-center text-xs text-gray-500">
+                        {gapMonth > 0 ? `缺口 ${gapMonth.toLocaleString()}` : '—'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
           </div>
+        )}
+
+        {/* 部門每日分派明細（月曆 + 部門切換） */}
+        {hasActiveList && data && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-3 flex-wrap">
+              <CalendarDays className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-gray-800">
+                部門每日分派明細
+              </h3>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* 部門切換器 */}
+              <div
+                className="flex items-center gap-2 flex-wrap"
+                data-testid="dept-switcher"
+              >
+                <span className="text-xs text-gray-500 mr-1">檢視部門</span>
+                {isSectionChief ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-cyan-200 bg-cyan-50 text-cyan-700">
+                    <Lock className="w-3.5 h-3.5" />
+                    {data.departments[0]?.deptName ?? '—'}（轄區）
+                  </span>
+                ) : (
+                  [{ deptCode: 'ALL', deptName: '全部門合計' }, ...data.departments].map(
+                    (p) => {
+                      const active = selectedDept === p.deptCode;
+                      return (
+                        <button
+                          key={p.deptCode}
+                          data-testid={`dept-pill-${p.deptCode}`}
+                          onClick={() => setSelectedDept(p.deptCode)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                            active
+                              ? 'border-primary bg-blue-50 text-primary'
+                              : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {p.deptCode === 'ALL' && (
+                            <Layers className="w-3.5 h-3.5" />
+                          )}
+                          {p.deptName}
+                        </button>
+                      );
+                    },
+                  )
+                )}
+              </div>
+
+              {/* 月曆 */}
+              <CalendarGrid
+                ym={ym}
+                days={data.days}
+                selectedDept={isSectionChief ? data.departments[0]?.deptCode ?? '' : selectedDept}
+                isAll={!isSectionChief && selectedDept === 'ALL'}
+                threshold={threshold}
+              />
+
+              {/* 輔助每日明細表 */}
+              <details className="border border-gray-200 rounded-lg">
+                <summary className="cursor-pointer select-none px-4 py-2.5 text-xs font-medium text-gray-600 flex items-center gap-1.5 hover:bg-gray-50">
+                  <Table className="w-3.5 h-3.5" />
+                  每日明細表（點擊展開）
+                </summary>
+                <AuxDailyTable
+                  days={data.days}
+                  selectedDept={
+                    isSectionChief
+                      ? data.departments[0]?.deptCode ?? ''
+                      : selectedDept
+                  }
+                  isAll={!isSectionChief && selectedDept === 'ALL'}
+                  threshold={threshold}
+                />
+              </details>
+            </div>
+          </div>
+        )}
+
+        {/* footer note（業務語言） */}
+        <div className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+          <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <p>
+            此試算不觸發正式分派，僅供工作量評估參考；實際分派件數以月跑執行結果為準。
+          </p>
         </div>
       </main>
     </AppLayout>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 子元件
+// ---------------------------------------------------------------------------
+
+interface KpiCardProps {
+  testId: string;
+  label: string;
+  value: string;
+  sub: string;
+  icon: React.ReactNode;
+  danger?: boolean;
+  warn?: boolean;
+}
+function KpiCard({ testId, label, value, sub, icon, danger, warn }: KpiCardProps) {
+  const valClass = danger
+    ? 'text-red-600'
+    : warn
+      ? 'text-orange-600'
+      : 'text-gray-900';
+  return (
+    <div
+      data-testid={testId}
+      className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-500">{label}</span>
+        {icon}
+      </div>
+      <div className={`text-2xl font-bold tabular-nums ${valClass}`}>{value}</div>
+      <p className="text-xs text-gray-400 mt-1">{sub}</p>
+    </div>
+  );
+}
+
+function loadBadge(
+  peak: number | null,
+  threshold: number | null,
+): { txt: string; cls: string } {
+  if (peak === null) return { txt: '待補人力', cls: 'bg-orange-100 text-orange-700' };
+  if (threshold !== null && peak > threshold)
+    return { txt: '偏高', cls: 'bg-red-100 text-red-700' };
+  if (threshold !== null && peak > threshold * 0.8)
+    return { txt: '適中', cls: 'bg-amber-100 text-amber-700' };
+  return { txt: '正常', cls: 'bg-emerald-100 text-emerald-700' };
+}
+
+interface CalendarGridProps {
+  ym: string; // YYYY-MM
+  days: DeptEstimateDay[];
+  selectedDept: string;
+  isAll: boolean;
+  threshold: number | null;
+}
+function CalendarGrid({ ym, days, selectedDept, isAll, threshold }: CalendarGridProps) {
+  const map = new Map<string, DeptEstimateDay>();
+  for (const d of days) map.set(d.date, d);
+  const [y, m] = ym.split('-').map(Number);
+  const firstDow = new Date(y, m - 1, 1).getDay();
+  const dim = new Date(y, m, 0).getDate();
+  const depName = isAll
+    ? '全部門合計（全名單總量）'
+    : selectedDept || '—';
+
+  const cells: React.ReactNode[] = [];
+  for (let i = 0; i < firstDow; i++)
+    cells.push(<div key={`blank-${i}`} className="min-h-[80px]" />);
+  for (let dn = 1; dn <= dim; dn++) {
+    const ymd = `${ym}-${String(dn).padStart(2, '0')}`;
+    const d = map.get(ymd);
+    if (!d || !d.isWorkday) {
+      cells.push(
+        <div
+          key={ymd}
+          className="min-h-[80px] border border-gray-200 rounded-lg p-1.5 bg-gray-50 flex flex-col"
+        >
+          <span className="text-[11px] font-semibold text-gray-400">{dn}</span>
+          <div className="flex-1 flex items-center justify-center text-[11px] text-gray-400 text-center leading-tight">
+            休息日
+            <br />
+            （不派案）
+          </div>
+        </div>,
+      );
+      continue;
+    }
+    if (isAll) {
+      cells.push(
+        <div
+          key={ymd}
+          className="min-h-[80px] border border-gray-200 rounded-lg p-1.5 flex flex-col"
+        >
+          <span className="text-[11px] font-semibold text-gray-500">{dn}</span>
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="text-base font-bold text-gray-900 tabular-nums">
+              {(d.orgTotal ?? 0).toLocaleString()}
+            </div>
+            {(d.gap ?? 0) > 0 && (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 mt-1">
+                缺口 {(d.gap ?? 0).toLocaleString()}
+              </span>
+            )}
+          </div>
+        </div>,
+      );
+    } else {
+      const cell = d.deptCells.find((c) => c.deptCode === selectedDept);
+      const cases = cell?.cases ?? 0;
+      const pp = cell?.perPerson ?? null;
+      const over = pp !== null && threshold !== null && pp > threshold;
+      cells.push(
+        <div
+          key={ymd}
+          className={`min-h-[80px] border rounded-lg p-1.5 flex flex-col ${over ? 'bg-red-50 border-red-200' : 'border-gray-200'}`}
+        >
+          <span className="text-[11px] font-semibold text-gray-500">{dn}</span>
+          <div className="flex-1 flex flex-col items-center justify-center gap-1">
+            <div
+              className={`text-base font-bold tabular-nums ${over ? 'text-red-700' : 'text-gray-900'}`}
+            >
+              {cases.toLocaleString()}
+            </div>
+            <span
+              className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                pp === null
+                  ? 'bg-orange-100 text-orange-600'
+                  : over
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              人均 {pp === null ? '—' : pp}
+            </span>
+          </div>
+        </div>,
+      );
+    }
+  }
+
+  return (
+    <div data-testid="calendar-grid">
+      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <Calendar className="w-3.5 h-3.5" />
+          {ym} 月曆 · 目前檢視：
+          <span className="font-semibold text-gray-700">{depName}</span>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-gray-500 flex-wrap">
+          <span className="inline-flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm bg-white border border-gray-300" />
+            工作日
+          </span>
+          {isAll ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-flex px-1 rounded bg-orange-100 text-orange-600 text-[10px] font-medium">
+                缺口
+              </span>
+              未分派到部門
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-200" />
+              人均超過每日上限
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm bg-gray-200" />
+            休息日（不派案）
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+        {WEEKDAYS.map((w, i) => (
+          <div
+            key={w}
+            className={`text-center text-[11px] font-semibold py-0.5 ${i === 0 ? 'text-rose-500' : i === 6 ? 'text-blue-500' : 'text-gray-400'}`}
+          >
+            {w}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">{cells}</div>
+    </div>
+  );
+}
+
+interface AuxDailyTableProps {
+  days: DeptEstimateDay[];
+  selectedDept: string;
+  isAll: boolean;
+  threshold: number | null;
+}
+function AuxDailyTable({ days, selectedDept, isAll, threshold }: AuxDailyTableProps) {
+  let cum = 0;
+  return (
+    <div className="overflow-x-auto border-t border-gray-200">
+      <table className="w-full text-sm" data-testid="aux-daily-table">
+        <thead>
+          <tr className="border-b border-gray-200 bg-gray-50/40 text-xs text-gray-500">
+            <th className="text-left px-4 py-2 font-medium">日期</th>
+            <th className="text-center px-3 py-2 font-medium">星期</th>
+            <th className="text-right px-3 py-2 font-medium">
+              {isAll ? '全名單總量' : '預估件數'}
+            </th>
+            <th className="text-right px-3 py-2 font-medium">
+              {isAll ? '缺口' : '人均·日'}
+            </th>
+            <th className="text-right px-3 py-2 font-medium">累積</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d) => {
+            if (!d.isWorkday) {
+              return (
+                <tr
+                  key={d.date}
+                  className="border-b border-gray-200 bg-gray-50/50"
+                >
+                  <td className="px-4 py-1.5 font-mono text-xs text-gray-400">
+                    {d.date.slice(5)}
+                  </td>
+                  <td className="px-3 py-1.5 text-center text-xs text-gray-500">
+                    {d.weekday}
+                  </td>
+                  <td
+                    colSpan={3}
+                    className="px-3 py-1.5 text-center text-xs text-gray-400"
+                  >
+                    休息日（不派案）
+                  </td>
+                </tr>
+              );
+            }
+            if (isAll) {
+              cum += d.orgTotal ?? 0;
+              return (
+                <tr key={d.date} className="border-b border-gray-200">
+                  <td className="px-4 py-1.5 font-mono text-xs text-gray-700">
+                    {d.date.slice(5)}
+                  </td>
+                  <td className="px-3 py-1.5 text-center text-xs text-gray-600">
+                    {d.weekday}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-gray-800 font-medium">
+                    {(d.orgTotal ?? 0).toLocaleString()}
+                  </td>
+                  <td
+                    className={`px-3 py-1.5 text-right tabular-nums ${(d.gap ?? 0) > 0 ? 'text-orange-600' : 'text-gray-300'}`}
+                  >
+                    {(d.gap ?? 0) > 0 ? (d.gap ?? 0).toLocaleString() : '—'}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-xs text-gray-400">
+                    {cum.toLocaleString()}
+                  </td>
+                </tr>
+              );
+            }
+            const cell = d.deptCells.find((c) => c.deptCode === selectedDept);
+            const cases = cell?.cases ?? 0;
+            const pp = cell?.perPerson ?? null;
+            const over = pp !== null && threshold !== null && pp > threshold;
+            cum += cases;
+            return (
+              <tr key={d.date} className="border-b border-gray-200">
+                <td className="px-4 py-1.5 font-mono text-xs text-gray-700">
+                  {d.date.slice(5)}
+                </td>
+                <td className="px-3 py-1.5 text-center text-xs text-gray-600">
+                  {d.weekday}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-gray-800 font-medium">
+                  {cases.toLocaleString()}
+                </td>
+                <td
+                  className={`px-3 py-1.5 text-right tabular-nums ${pp === null ? 'text-orange-600' : over ? 'text-red-600 font-semibold' : 'text-gray-600'}`}
+                >
+                  {pp === null ? '—' : pp}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-xs text-gray-400">
+                  {cum.toLocaleString()}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
