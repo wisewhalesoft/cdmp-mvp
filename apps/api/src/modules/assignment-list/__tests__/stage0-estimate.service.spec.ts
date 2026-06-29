@@ -21,10 +21,15 @@ import {
   type CalendarSource,
 } from '../stage0-estimate.service';
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -43,7 +48,17 @@ async function buildModule(): Promise<{
         type: 'better-sqlite3',
         database: ':memory:',
         // F092：Stage0EstimateService 升級為完整鏈 dry-run，注入 ObPoolDataList（去重查詢）
-        entities: [ObListDefinition, ObPoolData, ObPoolDataList, ObCalendar],
+        // F049 v2.0：部門投影層 + 處長 scope → 注入 ObDeptPct / ObEmphire / SectionChiefScopeService
+        entities: [
+          ObListDefinition,
+          ObPoolData,
+          ObPoolDataList,
+          ObCalendar,
+          ObDeptPct,
+          ObEmphire,
+          ObEmplSet,
+          User,
+        ],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
@@ -51,9 +66,13 @@ async function buildModule(): Promise<{
         ObPoolData,
         ObPoolDataList,
         ObCalendar,
+        ObDeptPct,
+        ObEmphire,
+        ObEmplSet,
+        User,
       ]),
     ],
-    providers: [Stage0EstimateService],
+    providers: [Stage0EstimateService, SectionChiefScopeService],
   }).compile();
 
   await app.init();

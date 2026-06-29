@@ -32,12 +32,17 @@ import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { Stage0EstimateService } from '../stage0-estimate.service';
+import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import * as chainModule from '@/modules/assignment/stage1/stage1-filter-chain';
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
+import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202606';
@@ -58,7 +63,16 @@ async function buildModule(): Promise<Env> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [ObListDefinition, ObPoolData, ObPoolDataList, ObCalendar],
+        entities: [
+          ObListDefinition,
+          ObPoolData,
+          ObPoolDataList,
+          ObCalendar,
+          ObDeptPct,
+          ObEmphire,
+          ObEmplSet,
+          User,
+        ],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
@@ -66,9 +80,13 @@ async function buildModule(): Promise<Env> {
         ObPoolData,
         ObPoolDataList,
         ObCalendar,
+        ObDeptPct,
+        ObEmphire,
+        ObEmplSet,
+        User,
       ]),
     ],
-    providers: [Stage0EstimateService],
+    providers: [Stage0EstimateService, SectionChiefScopeService],
   }).compile();
 
   await app.init();

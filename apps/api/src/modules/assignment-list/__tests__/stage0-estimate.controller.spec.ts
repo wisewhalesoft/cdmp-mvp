@@ -39,6 +39,7 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
   let serviceMock: {
     calculateDailyEstimate: ReturnType<typeof vi.fn>;
     estimateListCount: ReturnType<typeof vi.fn>;
+    computeDeptEstimate: ReturnType<typeof vi.fn>;
   };
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
@@ -60,6 +61,22 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
       estimateListCount: vi.fn().mockResolvedValue({
         listNo: 'OB202605001',
         count: 8500,
+      }),
+      // F049 v2.0 Part B：部門維度每日分派可行性矩陣
+      computeDeptEstimate: vi.fn().mockResolvedValue({
+        ym: '202605',
+        mode: 'aggregated',
+        listNo: null,
+        calendarSource: 'weekday',
+        startDate: '2026-05-01',
+        endDate: '2026-05-31',
+        scope: { role: 'director', deptCode: null, scoped: false },
+        departments: [],
+        days: [],
+        threshold: null,
+        warnings: [],
+        poolCount: 50000,
+        poolWarning: null,
       }),
     };
 
@@ -210,6 +227,16 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
       expect(res.body.count).toBe(8500);
     });
 
+    // F049 v2.0 / AD-E07-v3.6 §4：移除 @RequireDirector → 處長亦可（BR-12，名單層總量）
+    it('section_chief → 200（移除 @RequireDirector 後處長可存取，名單層總量）', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/list-definitions/OB202605001/estimate',
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.count).toBe(8500);
+    });
+
     it('找不到 listNo → 404', async () => {
       currentUser = director;
       serviceMock.estimateListCount.mockRejectedValueOnce(
@@ -223,6 +250,72 @@ describe('Stage0EstimateController — RBAC + Routes', () => {
       );
       expect(res.status).toBe(404);
       expect(res.body.error).toBe(ERROR_CODES.ASSIGNMENT_LIST_NOT_FOUND);
+    });
+  });
+
+  // =====================================================================
+  // F049 v2.0 Part B：GET /stage0/dept-estimate（DirectorOrSectionChief + actor 傳遞）
+  // =====================================================================
+  describe('GET /stage0/dept-estimate', () => {
+    it('director → 200，computeDeptEstimate 以 actor=director 呼叫（預設 weekday）', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/dept-estimate',
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe('aggregated');
+      expect(serviceMock.computeDeptEstimate).toHaveBeenCalledWith(
+        '202605',
+        expect.objectContaining({
+          calendarSource: 'weekday',
+          actor: expect.objectContaining({ businessRole: 'director' }),
+        }),
+      );
+    });
+
+    // TS-F049-SCOPE-005：處長可進入（200），actor 帶 businessRole=section_chief 傳給 service
+    it('section_chief → 200（唯讀可進入），actor.businessRole=section_chief 傳入 service', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/dept-estimate',
+      );
+      expect(res.status).toBe(200);
+      expect(serviceMock.computeDeptEstimate).toHaveBeenCalledWith(
+        '202605',
+        expect.objectContaining({
+          actor: expect.objectContaining({ businessRole: 'section_chief' }),
+        }),
+      );
+    });
+
+    it('plain user → 403 E07_ROLE_NOT_ASSIGNED（class 級 DirectorOrSectionChief 攔截）', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/dept-estimate',
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it('未登入 → 401', async () => {
+      authShouldThrow401 = true;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/dept-estimate',
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it('帶 ym / calendarSource / listNo query → 傳給 service', async () => {
+      currentUser = director;
+      await request(app.getHttpServer()).get(
+        '/api/v1/assignment/stage0/dept-estimate?ym=202606&calendarSource=all&listNo=OB202606001',
+      );
+      expect(serviceMock.computeDeptEstimate).toHaveBeenCalledWith(
+        '202606',
+        expect.objectContaining({
+          calendarSource: 'all',
+          listNo: 'OB202606001',
+        }),
+      );
     });
   });
 });

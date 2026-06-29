@@ -5,11 +5,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import {
+  SectionChiefScopeService,
+  type ActorUser,
+} from '@/modules/assignment/services/section-chief-scope.service';
 // F092 / AD-E07-23 §23.5：per-list 估算升級為完整 Stage 1 篩選鏈唯讀 dry-run，
 // 與月跑共用同一 executeStage1Chain（消除 estimate / run 雙軌 drift）。
 // 以 namespace import 引用，確保 dry-run 路徑與 AssignmentRunPipelineService 月跑同源，
@@ -66,6 +72,84 @@ export interface CalculateDailyEstimateOptions {
 export interface Stage0ListCountResult {
   listNo: string;
   count: number;
+}
+
+// ===========================================================================
+// F049 v2.0 Part B：部門維度每日分派可行性（AD-E07-v3.6）
+// ===========================================================================
+
+/** actor 型別（複用 SectionChiefScopeService.ActorUser；對外導出供 controller / test 使用）。 */
+export type ActorLike = ActorUser;
+
+export interface ComputeDeptEstimateOptions {
+  calendarSource?: CalendarSource;
+  startDate?: string; // YYYY-MM-DD（選填，預設 ym 整月第一天；僅限縮 days[] 顯示子集）
+  endDate?: string; // YYYY-MM-DD（選填，預設 ym 整月最後一天）
+  listNo?: string; // absent = aggregated（全名單彙總）；指定 = single-list 鑽探
+  actor?: ActorLike | null;
+}
+
+/** §21 BR-16 / OQ-F049-07：結構性警告（非 HTTP 錯誤碼）。 */
+export interface Stage0DeptWarning {
+  code:
+    | 'DEPT_HEADCOUNT_ZERO'
+    | 'SCOPE_UNRESOLVED'
+    | 'STAGE0_LIST_ESTIMATE_PARTIAL';
+  deptCode?: string;
+  listNo?: string;
+  message?: string;
+}
+
+export interface Stage0DeptCell {
+  deptCode: string;
+  /** Math.round(dept_real)；休息日 = 0 */
+  cases: number;
+  /** Math.round(cases / activeHeadcount)；headcount=0 → null；休息日 → null */
+  perPerson: number | null;
+  /** perPerson > threshold；threshold=null → false */
+  overThreshold: boolean;
+}
+
+export interface Stage0DeptDay {
+  date: string; // YYYY-MM-DD
+  weekday: string;
+  isWorkday: boolean;
+  /** 全名單總量（不依賴部門比例）；休息日 = 0；處長模式 = null（無全部門合計語意，BR-13） */
+  orgTotal: number | null;
+  /** Σ 已設定比例部門件數；休息日 = 0；處長模式 = null */
+  deptAssignedTotal: number | null;
+  /** org_total − deptAssignedTotal（恆 ≥ 0）；休息日 = 0；處長模式 = null */
+  gap: number | null;
+  /** 已設定比例部門列，依 deptCode ASC（I-DEPT-ORDER-01）；休息日 = [] */
+  deptCells: Stage0DeptCell[];
+}
+
+export interface Stage0Department {
+  deptCode: string;
+  deptName: string;
+  activeHeadcount: number;
+}
+
+export interface Stage0DeptScope {
+  role: 'director' | 'section_chief' | 'admin';
+  deptCode: string | null;
+  scoped: boolean;
+}
+
+export interface Stage0DeptEstimateResult {
+  ym: string;
+  mode: 'aggregated' | 'single-list';
+  listNo: string | null;
+  calendarSource: CalendarSource;
+  startDate: string;
+  endDate: string;
+  scope: Stage0DeptScope;
+  departments: Stage0Department[];
+  days: Stage0DeptDay[];
+  threshold: number | null;
+  warnings: Stage0DeptWarning[];
+  poolCount: number;
+  poolWarning: 'POOL_COUNT_LOW' | null;
 }
 
 const WEEKDAY_TW = ['日', '一', '二', '三', '四', '五', '六'];
@@ -187,6 +271,13 @@ export class Stage0EstimateService {
     private readonly poolDataListRepo: Repository<ObPoolDataList>,
     @InjectRepository(ObCalendar)
     private readonly calendarRepo: Repository<ObCalendar>,
+    // F049 v2.0 Part B：部門投影層（per-list 部門比例 + 在職人數）
+    @InjectRepository(ObDeptPct)
+    private readonly deptPctRepo: Repository<ObDeptPct>,
+    @InjectRepository(ObEmphire)
+    private readonly emphireRepo: Repository<ObEmphire>,
+    // §17 處長唯讀 scope（複用 listLists 之 getScopeDeptCode → ob_dept_pct.obdeptid 模式）
+    private readonly scopeService: SectionChiefScopeService,
   ) {}
 
   /**
@@ -353,6 +444,341 @@ export class Stage0EstimateService {
         message: ERROR_MESSAGES.STAGE0_ESTIMATE_TIMEOUT,
       });
     }
+  }
+
+  /**
+   * F049 v2.0 Part B（§14~§22 / AD-E07-v3.6）：部門維度每日分派可行性投影。
+   *
+   * 分層（每層只在前一層之上加法，不分叉底層）：
+   *   L0 千分位 ratio（computeWorkingDayRatios，整月工作日，I-RUN-EST-01 唯一來源）
+   *   L1 per-list 估算 list_total[L]（primary：stage0_estimate_count 物化；fallback：estimateListCount）
+   *   L2 聚合（全名單彙總 / 單一名單鑽探）
+   *   L3 部門投影 dept_real = Σ_L(list_total × ration/100 × dpm/1000)；org / gap
+   *   L4 處長唯讀 scope（service 層強制 dept filter，安全邊界）
+   *   L5 可行性 per_person = round(cases / active_headcount) + 門檻警示
+   *
+   * 唯讀：不寫入任何分派紀錄（AC-AGG-5 / BR-1）。捨入：最終每格 Math.round 一次（§16.3）。
+   */
+  async computeDeptEstimate(
+    ym: string,
+    opts: ComputeDeptEstimateOptions = {},
+  ): Promise<Stage0DeptEstimateResult> {
+    const calendarSource: CalendarSource = opts.calendarSource ?? 'weekday';
+    const month = this.monthRange(ym);
+    const monthStartYmd = this.formatDate(month.startDate);
+    const monthEndYmd = this.formatDate(month.endDate);
+    const startYmd = opts.startDate ?? monthStartYmd;
+    const endYmd = opts.endDate ?? monthEndYmd;
+    const mode: 'aggregated' | 'single-list' = opts.listNo
+      ? 'single-list'
+      : 'aggregated';
+    const actor = opts.actor ?? null;
+    const warnings: Stage0DeptWarning[] = [];
+
+    // ---- L4 scope 判定（§17 / AD-E07-v3.6 §6）----
+    const isSectionChief =
+      actor?.businessRole === 'section_chief' && actor?.role !== 'admin';
+    const scopeRole: Stage0DeptScope['role'] =
+      actor?.role === 'admin'
+        ? 'admin'
+        : actor?.businessRole === 'section_chief'
+          ? 'section_chief'
+          : 'director';
+    let scopeDeptCode: string | null = null;
+    if (isSectionChief) {
+      scopeDeptCode = await this.scopeService.getScopeDeptCode(actor!.userId);
+      if (scopeDeptCode === null) {
+        warnings.push({
+          code: 'SCOPE_UNRESOLVED',
+          message:
+            '無法識別您的轄區部門，請聯繫系統管理員確認帳號 ob_emphire 設定。',
+        });
+        this.logger.warn(
+          '[Stage0Estimate] section_chief scope applied: null → empty result',
+        );
+      } else {
+        this.logger.log(
+          `[Stage0Estimate] section_chief scope applied dept_code=${scopeDeptCode}`,
+        );
+      }
+    }
+    const scope: Stage0DeptScope = {
+      role: scopeRole,
+      deptCode: isSectionChief ? scopeDeptCode : null,
+      scoped: isSectionChief,
+    };
+
+    // ---- L0 整月 ratio（dpm）；複用 computeWorkingDayRatios（不分叉，I-RUN-EST-01）----
+    const monthRows = await this.calendarRepo.find({
+      where: { calendar_date: Between(monthStartYmd as never, monthEndYmd as never) },
+      order: { calendar_date: 'ASC' },
+    });
+    const ratios = computeWorkingDayRatios(
+      monthRows.map((r) => ({
+        calendar_date: r.calendar_date,
+        rest_flg: r.rest_flg,
+      })),
+      calendarSource,
+    );
+    const dpmMap = new Map<string, number>();
+    for (const r of ratios) dpmMap.set(r.casedt, r.ratioPerMille);
+
+    // 顯示範圍（startDate..endDate；含休息日）
+    const rangeRows = monthRows.filter((r) => {
+      const ymd = this.formatDate(this.toUtcDate(r.calendar_date));
+      return ymd >= startYmd && ymd <= endYmd;
+    });
+
+    // ---- L1 / L2 名單集合 + list_total ----
+    let lists = await this.listRepo.find({
+      where: { project_workym: ym, status: 'active' },
+    });
+    if (mode === 'single-list') {
+      lists = lists.filter((l) => l.list_no === opts.listNo);
+    }
+    const listNos = lists.map((l) => l.list_no);
+
+    const listTotals = new Map<string, number>();
+    const fallbackLists: ObListDefinition[] = [];
+    for (const l of lists) {
+      if (l.stage0_estimate_count != null) {
+        listTotals.set(l.list_no, l.stage0_estimate_count);
+      } else {
+        fallbackLists.push(l);
+      }
+    }
+    if (fallbackLists.length > 0) {
+      const timeoutMs = this.resolveDeptTimeoutMs();
+      await Promise.all(
+        fallbackLists.map(async (l) => {
+          try {
+            const r = await this.raceTimeout(
+              this.estimateListCount(l.list_no),
+              timeoutMs,
+            );
+            listTotals.set(l.list_no, r.count);
+          } catch {
+            warnings.push({
+              code: 'STAGE0_LIST_ESTIMATE_PARTIAL',
+              listNo: l.list_no,
+              message: `名單 ${l.list_no} 估算逾時，已從本次合計排除。`,
+            });
+          }
+        }),
+      );
+    }
+
+    // ---- L3 ob_dept_pct（批次）+ scope filter ----
+    let deptPctRows: ObDeptPct[] =
+      listNos.length > 0
+        ? await this.deptPctRepo.find({
+            where: { project_workym: ym, list_no: In(listNos) },
+          })
+        : [];
+    if (isSectionChief) {
+      deptPctRows =
+        scopeDeptCode === null
+          ? []
+          : deptPctRows.filter((r) => (r.obdeptid ?? '').trim() === scopeDeptCode);
+    }
+
+    const rationMap = new Map<string, Map<string, number>>();
+    const deptNameMap = new Map<string, string>();
+    const deptCodeSet = new Set<string>();
+    for (const r of deptPctRows) {
+      const deptCode = (r.obdeptid ?? '').trim();
+      if (!deptCode) continue;
+      deptCodeSet.add(deptCode);
+      if (!rationMap.has(r.list_no)) rationMap.set(r.list_no, new Map());
+      rationMap.get(r.list_no)!.set(deptCode, parseFloat(String(r.ration)) || 0);
+      const nm = (r.obdeptnm ?? '').trim();
+      if (nm && !deptNameMap.has(deptCode)) deptNameMap.set(deptCode, nm);
+    }
+    const deptCodes = Array.from(deptCodeSet).sort((a, b) =>
+      a.localeCompare(b),
+    ); // I-DEPT-ORDER-01
+
+    // ---- L5 在職人數（批次 TRIM(dept_code) COUNT，SQLite/PG 相容）----
+    // departments 之建立延後至逐日投影之後：須先知道每個候選部門整期 cases 總和，
+    // 才能隱藏「整期 0 件」部門（AC-DEPT-2），並只對保留部門發 DEPT_HEADCOUNT_ZERO。
+    const staffMap = await this.loadDeptStaff();
+
+    const threshold = this.resolvePerPersonThreshold();
+    const poolCount = await this.poolRepo.count();
+    const poolWarnThreshold = this.resolveWarnThreshold();
+    const poolWarning: 'POOL_COUNT_LOW' | null =
+      poolCount < poolWarnThreshold ? 'POOL_COUNT_LOW' : null;
+
+    // ---- 逐日部門投影（§16.1 / §16.3）----
+    const days: Stage0DeptDay[] = rangeRows.map((row) => {
+      const d = this.toUtcDate(row.calendar_date);
+      const date = this.formatDate(d);
+      const weekday = WEEKDAY_TW[d.getUTCDay()];
+      const { isWorkday } = resolveCalendarDay(d, row.rest_flg, calendarSource);
+      const dpm = isWorkday ? (dpmMap.get(date) ?? 0) : 0;
+
+      if (!isWorkday) {
+        return {
+          date,
+          weekday,
+          isWorkday: false,
+          orgTotal: isSectionChief ? null : 0,
+          deptAssignedTotal: isSectionChief ? null : 0,
+          gap: isSectionChief ? null : 0,
+          deptCells: [],
+        };
+      }
+
+      let orgReal = 0;
+      const deptReal = new Map<string, number>();
+      for (const deptCode of deptCodes) deptReal.set(deptCode, 0);
+      for (const l of lists) {
+        const total = listTotals.get(l.list_no);
+        if (total == null) continue; // fallback 逾時排除
+        orgReal += (total * dpm) / 1000;
+        const lr = rationMap.get(l.list_no);
+        if (lr) {
+          for (const [deptCode, pct] of lr) {
+            deptReal.set(
+              deptCode,
+              (deptReal.get(deptCode) ?? 0) + ((total * pct) / 100) * dpm / 1000,
+            );
+          }
+        }
+      }
+
+      let assignedReal = 0;
+      const deptCells: Stage0DeptCell[] = deptCodes.map((deptCode) => {
+        const real = deptReal.get(deptCode) ?? 0;
+        assignedReal += real;
+        const cases = Math.round(real);
+        const headcount = staffMap.get(deptCode)?.count ?? 0;
+        const perPerson = headcount > 0 ? Math.round(cases / headcount) : null;
+        const overThreshold =
+          perPerson !== null && threshold !== null && perPerson > threshold;
+        return { deptCode, cases, perPerson, overThreshold };
+      });
+
+      return {
+        date,
+        weekday,
+        isWorkday: true,
+        orgTotal: isSectionChief ? null : Math.round(orgReal),
+        deptAssignedTotal: isSectionChief ? null : Math.round(assignedReal),
+        gap: isSectionChief ? null : Math.round(orgReal - assignedReal),
+        deptCells,
+      };
+    });
+
+    // ---- 整期 0 件部門隱藏（AC-DEPT-2）----
+    // 算每個候選部門整期（顯示工作日）cases 合計，只保留 > 0 者，並從每日 deptCells 移除。
+    // 排除者 cases 恆為 0（實機驗證：非電銷部門 ration=0）→ 不改變 org_total / deptAssignedTotal / gap
+    // （若存在 ration>0 但每日捨入為 0 之極小部門，其 <0.5/日 殘差落於 §16.3 容差內）。
+    const deptCaseTotals = new Map<string, number>();
+    for (const day of days) {
+      for (const cell of day.deptCells) {
+        deptCaseTotals.set(
+          cell.deptCode,
+          (deptCaseTotals.get(cell.deptCode) ?? 0) + cell.cases,
+        );
+      }
+    }
+    const keptDeptCodes = deptCodes.filter(
+      (dc) => (deptCaseTotals.get(dc) ?? 0) > 0,
+    );
+    const keptSet = new Set(keptDeptCodes);
+    for (const day of days) {
+      if (day.deptCells.length > 0) {
+        day.deptCells = day.deptCells.filter((c) => keptSet.has(c.deptCode));
+      }
+    }
+
+    // departments[]：只列保留部門（deptCode ASC 已於 deptCodes 排序，I-DEPT-ORDER-01）；
+    // 僅對「保留且在職人數 0」之部門發 DEPT_HEADCOUNT_ZERO（被隱藏的 0 件部門不發警告）。
+    const departments: Stage0Department[] = keptDeptCodes.map((deptCode) => {
+      const staff = staffMap.get(deptCode);
+      const activeHeadcount = staff?.count ?? 0;
+      if (activeHeadcount === 0) {
+        warnings.push({
+          code: 'DEPT_HEADCOUNT_ZERO',
+          deptCode,
+          message: `${deptCode} 在職人數為 0，請確認 ob_emphire 資料是否已同步。`,
+        });
+      }
+      return {
+        deptCode,
+        deptName: deptNameMap.get(deptCode) ?? staff?.name ?? deptCode,
+        activeHeadcount,
+      };
+    });
+
+    return {
+      ym,
+      mode,
+      listNo: mode === 'single-list' ? (opts.listNo ?? null) : null,
+      calendarSource,
+      startDate: startYmd,
+      endDate: endYmd,
+      scope,
+      departments,
+      days,
+      threshold,
+      warnings,
+      poolCount,
+      poolWarning,
+    };
+  }
+
+  /** 在職人數 + 部門名稱（批次 TRIM(dept_code) GROUP BY；SQLite / PG 均相容）。 */
+  private async loadDeptStaff(): Promise<
+    Map<string, { count: number; name: string | null }>
+  > {
+    const rows = await this.emphireRepo
+      .createQueryBuilder('e')
+      .select('TRIM(e.dept_code)', 'dept_code')
+      .addSelect('COUNT(*)', 'cnt')
+      .addSelect('MAX(e.dept_name)', 'dept_name')
+      .where('e.resign_date IS NULL')
+      .andWhere('e.dept_code IS NOT NULL')
+      .groupBy('TRIM(e.dept_code)')
+      .getRawMany<{ dept_code: string; cnt: string; dept_name: string | null }>();
+    const map = new Map<string, { count: number; name: string | null }>();
+    for (const r of rows) {
+      const code = (r.dept_code ?? '').trim();
+      if (!code) continue;
+      map.set(code, {
+        count: parseInt(String(r.cnt), 10) || 0,
+        name: r.dept_name,
+      });
+    }
+    return map;
+  }
+
+  /** Promise 逾時保護（per-list fallback；超時則 reject，呼叫端記 PARTIAL warning）。 */
+  private raceTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
+    const t = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('STAGE0_DEPT_ESTIMATE_TIMEOUT')),
+        ms,
+      );
+    });
+    return Promise.race([p, t]).finally(() => clearTimeout(timer));
+  }
+
+  /** OQ-F049-03：每人每日上限門檻（env；未設 / 非正整數 → null = 不標紅）。 */
+  private resolvePerPersonThreshold(): number | null {
+    const raw = process.env.STAGE0_MAX_CASES_PER_PERSON_PER_DAY;
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  /** OQ-F049-02：部門投影 fallback 整體逾時（env；預設 30000ms）。 */
+  private resolveDeptTimeoutMs(): number {
+    const raw = process.env.STAGE0_DEPT_ESTIMATE_TIMEOUT_MS;
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : 30_000;
   }
 
   // -------------------------------------------------------------------------
