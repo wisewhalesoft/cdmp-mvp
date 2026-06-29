@@ -341,7 +341,8 @@
       "PowerShell(cd C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api; npx vitest run src/database/seeds src/modules/assignment-scoring src/modules/etl/__tests__/fn-calc-tier-level.spec.ts 2>&1 > $env:TEMP\\\\b2run4.txt; Write-Output \"exit=$LASTEXITCODE\")",
       "PowerShell(cd C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api; npx vitest run src/database/seeds src/modules/assignment-scoring src/modules/etl/__tests__/fn-calc-tier-level.spec.ts 2>&1 > $env:TEMP\\\\b2run5.txt; \\(Get-Content $env:TEMP\\\\b2run5.txt | Select-String -Pattern \"六張表\" -Context 0,12 | Select-Object -First 1\\))",
       "PowerShell(cd C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api; npx tsc --noEmit -p tsconfig.build.json 2>&1 | Select-Object -First 30; Write-Output \"EXIT=$LASTEXITCODE\")",
-      "PowerShell(cd C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api; npx tsc --noEmit -p tsconfig.build.json 2>&1 | Select-Object -First 15; Write-Output \"TSC_EXIT=$LASTEXITCODE\")"
+      "PowerShell(cd C:\\\\Users\\\\cacab\\\\Claude\\\\cdmp-mvp\\\\apps\\\\api; npx tsc --noEmit -p tsconfig.build.json 2>&1 | Select-Object -First 15; Write-Output \"TSC_EXIT=$LASTEXITCODE\")",
+      "Bash(taskkill //F //IM node.exe)"
     ],
     "defaultMode": "default"
   },
