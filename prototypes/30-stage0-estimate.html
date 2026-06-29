@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stage 0 試算 — 客戶名單分派 - CDMP</title>
+  <!--
+    F049 v2.0 Stage 0 試算頁業務化重設計（部門維度每日分派可行性）
+    對應 US-166（全名單彙總預設）/ US-167（部門每日件數 + 缺口）/ US-168（處長唯讀 scope）/
+    US-169（人均每日件數可行性）/ US-170（術語清理）。
+    設計重點：
+      - 預設「全名單彙總」部門 × 日矩陣；名單篩選器可鑽探單一名單。
+      - 矩陣每格＝預估件數 + 人均/日；人均超過門檻紅色。
+      - 缺口（全名單總量 vs 已分派部門合計）每日標示、月合計呈現、不自動補差。
+      - 處長＝唯讀、僅見轄區部門、不見全部門合計；scope=null 友善降級。
+      - 已移除所有技術術語（工作日旗標 / 千分位底數 / 餘數補日 / 內部權重欄位名 /
+        資料表名 / API 路徑 / 演算法公式框 / 寫入說明）。底層計算行為保留，只是不暴露給使用者。
+    UI ground truth for Phase 6 React 實作。
+  -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -14,9 +27,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .modal-backdrop { background: rgba(0,0,0,0.5); }
-    .nav-section-title { font-size: 0.7rem; letter-spacing: 0.05em; }
-    .bar-cell { display: inline-block; height: 8px; border-radius: 4px; min-width: 4px; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+    .cal-head { text-align: center; font-size: 11px; font-weight: 600; padding: 2px 0; color: #6B7280; }
+    .cal-cell { min-height: 88px; border: 1px solid #E5E7EB; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; }
+    .cal-blank { border: none; min-height: 88px; }
+    .cal-rest { background: #F9FAFB; }
+    .cal-over { background: #FEF2F2; border-color: #FECACA; }
+    .cal-datenum { font-size: 11px; font-weight: 600; line-height: 1; }
+    .has-tip { position: relative; }
+    .has-tip .tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #111827; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 30; }
+    .has-tip:hover .tip { opacity: 1; }
+    .sort-head { cursor: pointer; user-select: none; }
+    .sort-head:hover { color: #2563EB; }
   </style>
 </head>
 <body class="bg-bg min-h-screen">
@@ -91,7 +114,7 @@
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
     <h1 class="text-base font-semibold text-gray-800">Stage 0 試算</h1>
     <div class="flex items-center gap-4">
-      <!-- 分派作業月份 MonthPicker（仿 27 名單定義頁 header 樣式；F097 §5.1，預設下月 target_work_ym） -->
+      <!-- 分派作業月份 MonthPicker -->
       <div class="flex items-center gap-2" data-testid="stage0-month-picker">
         <span class="text-xs text-gray-500 whitespace-nowrap">分派作業月份</span>
         <div class="flex items-center gap-1">
@@ -109,256 +132,212 @@
         <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
           <option value="admin">系統管理者</option>
           <option value="director">業務部長</option>
-          <option value="section_chief">業務處長</option>
-          <option value="user">一般使用者</option>
+          <option value="section_chief">業務處長（唯讀）</option>
+          <option value="user">一般使用者（無權）</option>
         </select>
       </div>
       <div id="role-badge-container"></div>
-      <span class="text-sm text-gray-600" id="user-name">王部長</span>
+      <span class="text-sm text-gray-600" id="user-name">張部長</span>
     </div>
   </header>
 
   <!-- ===== Main ===== -->
   <main class="ml-56 pt-14">
 
-    <!-- 角色封鎖卡片（處長 / 業務員顯示） -->
-    <div id="roleBlockedBanner" class="hidden p-6">
+    <!-- 角色封鎖卡片（一般使用者顯示） -->
+    <div id="blockedBanner" class="hidden p-6">
       <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
         <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
           <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
         </div>
         <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
-        <p class="text-sm text-gray-500 max-w-md">「Stage 0 試算」為部長 / Admin 專屬功能，用於月跑前估算 OBPOOLDATA 抓取量與耗時。處長與業務員無此操作權限。</p>
+        <p class="text-sm text-gray-500 max-w-md">「Stage 0 試算」供業務部長與業務處長於月跑前評估每日工作量配置。一般使用者無此檢視權限。</p>
         <a href="27-list-definition.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
           <i data-lucide="list" class="w-4 h-4"></i>返回名單定義
         </a>
       </div>
     </div>
 
-    <div id="mainContent">
-    <!-- Demo Bar -->
-    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-gray-400 mr-1">Demo:</span>
-      <button onclick="showDemoState('normal')" id="demo-normal" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常試算</button>
-      <button onclick="showDemoState('weekend-skip')" id="demo-weekend-skip" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">週末跳過</button>
-      <button onclick="showDemoState('holiday-skip')" id="demo-holiday-skip" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">國定假日跳過</button>
-    </div>
+    <div id="mainWrap">
+      <!-- Demo Bar -->
+      <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-gray-400 mr-1">Demo 場景：</span>
+        <button onclick="applyScenario('normal')" id="demo-normal" class="demo-btn px-2.5 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">正常彙總</button>
+        <button onclick="applyScenario('gap')" id="demo-gap" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">有缺口（比例未設）</button>
+        <button onclick="applyScenario('overload')" id="demo-overload" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">人均超載（紅）</button>
+        <button onclick="applyScenario('holiday')" id="demo-holiday" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">連假情境（含週末）</button>
+        <button onclick="applyScenario('headcount0')" id="demo-headcount0" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">某部門未配置人力</button>
+        <button onclick="applyScenario('scopeNull')" id="demo-scopeNull" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">處長無轄區</button>
+        <span class="ml-auto text-[10px] text-gray-400">切換「部長／處長／一般使用者」請用右上角角色選單 · mock 互動不發 API</span>
+      </div>
 
-    <div class="p-6">
-
-      <!-- 試算說明 banner -->
-      <div class="mb-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-gray-700">
-        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-        <div>
-          <p class="font-semibold text-primary">Daily estimate 不寫入 ob_assign_set</p>
-          <p class="text-xs text-gray-600 mt-0.5">本頁為 F049 試算預覽，演算法 = FLOOR(1000/工作日) + 餘數補最近日期（AD-E07-8）。實際寫入由月跑 Stage 0 正式執行（F061）。</p>
+      <!-- 處長無轄區（scope=null）友善降級 -->
+      <div id="scopeNullCard" class="hidden p-6">
+        <div class="bg-white rounded-xl border border-border p-10 flex flex-col items-center text-center">
+          <div class="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+            <i data-lucide="user-x" class="w-7 h-7 text-warning"></i>
+          </div>
+          <h3 class="text-base font-semibold text-gray-800 mb-1">無法識別您的轄區部門</h3>
+          <p class="text-sm text-gray-500 max-w-md">系統找不到您對應的轄區部門資料，因此無法顯示估算結果。請聯繫系統管理員確認您的帳號設定。</p>
+          <div class="mt-5 grid grid-cols-4 gap-3 w-full max-w-md opacity-50">
+            <div class="bg-gray-50 rounded-lg border border-border p-3 text-center"><div class="text-xl font-bold text-gray-300">—</div><div class="text-[10px] text-gray-400 mt-1">可分派天數</div></div>
+            <div class="bg-gray-50 rounded-lg border border-border p-3 text-center"><div class="text-xl font-bold text-gray-300">—</div><div class="text-[10px] text-gray-400 mt-1">轄區件數</div></div>
+            <div class="bg-gray-50 rounded-lg border border-border p-3 text-center"><div class="text-xl font-bold text-gray-300">—</div><div class="text-[10px] text-gray-400 mt-1">尖峰人均</div></div>
+            <div class="bg-gray-50 rounded-lg border border-border p-3 text-center"><div class="text-xl font-bold text-gray-300">—</div><div class="text-[10px] text-gray-400 mt-1">在職人數</div></div>
+          </div>
         </div>
       </div>
 
-      <div class="grid grid-cols-12 gap-5">
+      <div id="contentArea" class="p-6 space-y-4">
 
-        <!-- ===== 左：輸入區 ===== -->
-        <div class="col-span-4">
-          <div class="bg-white rounded-lg border border-border shadow-sm sticky top-20">
-            <div class="px-5 py-4 border-b border-border bg-gradient-to-br from-blue-50/40 to-white">
-              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                <i data-lucide="settings-2" class="w-4 h-4 text-primary"></i>
-                試算輸入
-              </h3>
-              <p class="text-xs text-gray-500 mt-0.5">調整參數即時預覽結果</p>
+        <!-- 處長唯讀提示 banner -->
+        <div id="readOnlyBanner" class="hidden rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm">
+          <i data-lucide="eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
+          <div class="flex-1">
+            <p class="font-semibold text-purple-900" id="readOnlyTitle">唯讀模式：僅顯示您轄區部門（北區電銷一課）的預估資料</p>
+            <p class="text-xs text-purple-700 mt-0.5">此頁僅供檢視，不提供任何修改設定的操作；您看到的是轄區部門的每日工作量與人均負荷。</p>
+          </div>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0" style="background:#EDE9FE;color:#6D28D9;">
+            <i data-lucide="scan-eye" class="w-3 h-3"></i>轄區檢視
+          </span>
+        </div>
+
+        <!-- 頁面說明 + 顯示模式 chip -->
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-800">本月每日分派工作量試算</h2>
+            <p class="text-sm text-gray-500 mt-0.5">彙總本月所有啟用名單，預估各部門每天要分派幾件、平均每位電訪員一天要打幾通，協助判斷工作量是否合理。</p>
+          </div>
+          <span id="modeChip" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-primary border border-blue-100">
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>顯示模式：所有啟用名單彙總
+          </span>
+        </div>
+
+        <!-- 控制列：名單篩選 + 派案日曆 -->
+        <div class="bg-white rounded-xl border border-border p-4 grid grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">名單篩選</label>
+            <div class="relative">
+              <select id="inListFilter" onchange="onListFilterChange(this.value)" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+                <option value="ALL">全部名單（彙總）</option>
+                <option value="OB202606001">汽車期中名單（OB202606001）</option>
+                <option value="OB202606002">信貸滿期名單（OB202606002）</option>
+                <option value="OB202606004">機車中度逾期名單（OB202606004）</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
             </div>
-            <div class="p-5 space-y-4">
-
-              <!-- LIST_NO -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">名單 LIST_NO</label>
-                <div class="relative">
-                  <select id="inListNo" onchange="recompute()" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
-                    <option value="OB202605001">OB202605001 — 汽車期中名單</option>
-                    <option value="OB202605002">OB202605002 — 汽車中分名單</option>
-                    <option value="OB202605004">OB202605004 — 機車滿期名單</option>
-                    <option value="OB202605005">OB202605005 — 信貸中度逾期名單</option>
-                  </select>
-                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                </div>
-                <p class="text-xs text-gray-400 mt-1">僅顯示 status='active' 的名單</p>
-              </div>
-
-              <!-- 預估總筆數 -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">預估總筆數</label>
-                <input id="inTotalCount" type="number" value="9500" oninput="recompute()" min="0"
-                  class="w-full px-3 py-2 text-sm border border-border rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                <p class="text-xs text-gray-400 mt-1">來自 ob_pool_data 篩選結果（LIST_NO 篩選條件 COUNT）</p>
-              </div>
-
-              <!-- 起訖日期 -->
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1.5">起始日</label>
-                  <input id="inStart" type="date" value="2026-05-01" onchange="recompute()"
-                    class="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1.5">結束日</label>
-                  <input id="inEnd" type="date" value="2026-05-31" onchange="recompute()"
-                    class="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                </div>
-              </div>
-
-              <!-- 工作日來源 -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">工作日來源</label>
-                <div class="relative">
-                  <select id="inCalendarSrc" onchange="recompute()" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
-                    <option value="weekday">工作日（rest_flg='0'）— 排除週末與國定假日</option>
-                    <option value="weekday-only">僅排除週末</option>
-                    <option value="all">不排除（含週末與國定假日）</option>
-                  </select>
-                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                </div>
-                <p class="text-xs text-gray-400 mt-1">資料表 <code>ob_calendar</code>（E04+E05 ETL 同步）</p>
-              </div>
-
-              <!-- 演算法說明 -->
-              <div class="p-3 bg-gray-50 rounded-lg text-xs text-gray-600 font-mono leading-relaxed">
-                <div class="flex items-center gap-1.5 text-gray-500 font-sans font-medium mb-1.5">
-                  <i data-lucide="function-square" class="w-3.5 h-3.5"></i>
-                  AD-E07-8 演算法
-                </div>
-                base = FLOOR(1000 / working_days)<br>
-                rem  = 1000 mod working_days<br>
-                per_date = base<br>
-                <span class="text-primary">最後 rem 個工作日: per_date = base + 1</span>
-              </div>
-
-              <!-- API ref -->
-              <div class="text-xs text-gray-400 pt-2 border-t border-border">
-                <code>GET /api/v1/assignment/stage0/daily-estimate?ym=<span data-target-ym-compact>202606</span></code>
-              </div>
+            <p class="text-xs text-gray-400 mt-1">預設彙總本月所有啟用名單；可改為查看單一名單。</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">派案日曆</label>
+            <div class="relative">
+              <select id="inCalendar" onchange="onCalendarChange(this.value)" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none">
+                <option value="weekday">只排上班日</option>
+                <option value="weekday-only">也排連假日（週末除外）</option>
+                <option value="all">連週末都排（全月每天）</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
             </div>
+            <p id="calHelp" class="text-xs text-gray-400 mt-1">僅安排週一至週五的正常上班日，排除週末與國定假日。</p>
           </div>
         </div>
 
-        <!-- ===== 右：試算結果 ===== -->
-        <div class="col-span-8 space-y-4">
-
-          <!-- Pool 偏低警示 -->
-          <div id="poolWarn" class="hidden flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700">
-            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
-            <div>
-              <p class="font-semibold text-warning">Pool 資料筆數偏低（現有 800 筆）</p>
-              <p class="text-xs text-gray-600 mt-0.5">低於閾值 STAGE0_POOL_WARN_THRESHOLD = 1000，請確認資料擷取任務（OBPOOLDATA）已正常執行。</p>
-            </div>
+        <!-- 系統資料池偏低警示（業務語言） -->
+        <div id="poolWarn" class="hidden flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-gray-700">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-warning">系統資料池筆數偏低（目前 <span id="poolWarnCount">800</span> 筆）</p>
+            <p class="text-xs text-gray-600 mt-0.5">可能影響估算準確度，請聯繫 IT 確認本月資料是否已完成更新。</p>
           </div>
-
-          <!-- KPI -->
-          <div class="grid grid-cols-4 gap-3">
-            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-500">working_days 工作日</span>
-                <i data-lucide="calendar-check" class="w-4 h-4 text-blue-500"></i>
-              </div>
-              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiWorkdays">21</div>
-              <p class="text-xs text-gray-400 mt-1">分派作業月份可分派天數</p>
-            </div>
-            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-500">total_estimate 總筆數</span>
-                <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
-              </div>
-              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiTotal">9,500</div>
-              <p class="text-xs text-gray-400 mt-1">符合 LIST_NO 篩選條件</p>
-            </div>
-            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-500">base ratio</span>
-                <i data-lucide="divide" class="w-4 h-4 text-purple-500"></i>
-              </div>
-              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiBase">47</div>
-              <p class="text-xs text-gray-400 mt-1">FLOOR(1000/工作日) ‰</p>
-            </div>
-            <div class="bg-white rounded-lg border border-border shadow-sm p-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-500">remainder 餘數</span>
-                <i data-lucide="plus-circle" class="w-4 h-4 text-amber-500"></i>
-              </div>
-              <div class="text-2xl font-bold text-gray-900 tabular-nums" id="kpiRem">13</div>
-              <p class="text-xs text-gray-400 mt-1">補至最近 N 個工作日</p>
-            </div>
-          </div>
-
-          <!-- 圖表（純 div bar） -->
-          <div class="bg-white rounded-lg border border-border shadow-sm">
-            <div class="px-5 py-4 border-b border-border flex items-center justify-between">
-              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                <i data-lucide="bar-chart-3" class="w-4 h-4 text-primary"></i>
-                每日預估筆數
-              </h3>
-              <div class="flex items-center gap-3 text-xs text-gray-500">
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-blue-500"></span>工作日 (base)</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-blue-700"></span>工作日 (base+1)</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-gray-300"></span>跳過</span>
-              </div>
-            </div>
-            <div id="chartContainer" class="p-5 grid grid-cols-7 gap-2"></div>
-          </div>
-
-          <!-- 表格 -->
-          <div class="bg-white rounded-lg border border-border shadow-sm">
-            <div class="px-5 py-4 border-b border-border">
-              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                <i data-lucide="table" class="w-4 h-4 text-primary"></i>
-                每日試算明細
-              </h3>
-            </div>
-            <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
-              <table class="w-full text-sm">
-                <thead class="sticky top-0 bg-gray-50/95 backdrop-blur z-10">
-                  <tr class="border-b border-border">
-                    <th class="text-left px-5 py-3 font-semibold text-gray-600">calendar_date</th>
-                    <th class="text-left px-5 py-3 font-semibold text-gray-600">星期</th>
-                    <th class="text-left px-5 py-3 font-semibold text-gray-600">工作日</th>
-                    <th class="text-right px-5 py-3 font-semibold text-gray-600">預估件數</th>
-                    <th class="text-right px-5 py-3 font-semibold text-gray-600">累積</th>
-                    <th class="text-left px-5 py-3 font-semibold text-gray-600">餘數補</th>
-                  </tr>
-                </thead>
-                <tbody id="dailyTbody"></tbody>
-              </table>
-            </div>
-          </div>
-
         </div>
-      </div>
 
-      <!-- footer note -->
-      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
-        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-        <div>
-          <p class="font-medium text-gray-700 mb-0.5">Stage 0 試算說明</p>
-          <p>F049 純為唯讀計算（BR-1），不寫入 <code>ob_assign_set</code>、不建立 <code>assignment_run</code>；單一 LIST_NO 試算逾時上限 10 秒（BR-3，500 STAGE0_ESTIMATE_TIMEOUT）；Pool 警示閾值由環境變數 <code>STAGE0_POOL_WARN_THRESHOLD</code> 控制（預設 1000，BR-4）。實際寫入由 F061 月跑 Stage 0 在背景執行。</p>
+        <!-- 缺口提示 banner（部長 / Admin） -->
+        <div id="gapBanner" class="hidden flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-gray-700">
+          <i data-lucide="git-pull-request-draft" class="w-4 h-4 text-orange-500 mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-orange-700">本月尚有 <span id="gapBannerCount">0</span> 件未分派到任何部門</p>
+            <p class="text-xs text-gray-600 mt-0.5">部分名單的部門比例未設定或未達 100%。系統不會自動補差；如需分派，請至各名單的部門比例設定補齊。</p>
+          </div>
         </div>
-      </div>
 
-    </div>
-    </div><!-- /#mainContent -->
+        <!-- 人員資料警示（在職人數為 0） -->
+        <div id="headcountWarn" class="hidden flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-gray-700">
+          <i data-lucide="user-minus" class="w-4 h-4 text-orange-500 mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold text-orange-700">部分部門在職人數為 0，無法計算人均</p>
+            <p class="text-xs text-gray-600 mt-0.5" id="headcountWarnList"></p>
+          </div>
+        </div>
+
+        <!-- KPI 卡片 -->
+        <div id="kpiGrid" class="grid grid-cols-4 gap-3"></div>
+
+        <!-- 部門負載總覽 -->
+        <div class="bg-white rounded-xl border border-border overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-border flex items-center gap-2">
+            <i data-lucide="building-2" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-sm font-semibold text-gray-800">部門負載總覽</h3>
+            <span class="text-xs text-gray-400" id="deptSummaryHint">點欄位標題可排序，快速找出工作量偏高的部門</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead id="deptSummaryHead"></thead>
+              <tbody id="deptSummaryBody" class="divide-y divide-border"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 部門每日分派明細（月曆 + 部門切換） -->
+        <div class="bg-white rounded-xl border border-border overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-border flex items-center gap-3 flex-wrap">
+            <i data-lucide="calendar-days" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-sm font-semibold text-gray-800">部門每日分派明細</h3>
+            <div id="calLegend" class="ml-auto flex items-center gap-3 text-[11px] text-gray-500 flex-wrap"></div>
+          </div>
+          <div class="p-5 space-y-4">
+            <!-- 部門切換器 -->
+            <div id="deptSwitcher" class="flex items-center gap-2 flex-wrap"></div>
+            <!-- 月曆 -->
+            <div id="calendarGrid"></div>
+            <!-- 輔助每日明細表（可展開） -->
+            <details class="border border-border rounded-lg">
+              <summary class="cursor-pointer select-none px-4 py-2.5 text-xs font-medium text-gray-600 flex items-center gap-1.5 hover:bg-gray-50">
+                <i data-lucide="table" class="w-3.5 h-3.5"></i>每日明細表（點擊展開）
+              </summary>
+              <div class="overflow-x-auto border-t border-border">
+                <table class="w-full text-sm">
+                  <thead id="auxHead"></thead>
+                  <tbody id="auxBody"></tbody>
+                  <tfoot id="auxFoot"></tfoot>
+                </table>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- footer note（業務語言） -->
+        <div class="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <p>此試算不觸發正式分派，僅供工作量評估參考；實際分派件數以月跑執行結果為準。</p>
+        </div>
+
+      </div><!-- /#contentArea -->
+    </div><!-- /#mainWrap -->
   </main>
 
   <script>
-    // ===== 分派作業月份 MonthPicker（F097：target_work_ym，預設下月）=====
-    // 仿 27-list-definition.html header MonthPicker（prev/select/next）。
-    // 註：本頁試算行事曆 mock 仍以 2026-05 區間示範（demo 資料可混月）；picker 提供共享 target_work_ym 語意與 API ?ym= 連動。
+    // ===================================================================
+    // 分派作業月份 MonthPicker（F097：target_work_ym，預設下月）
+    // ===================================================================
     function pad2(n) { return n < 10 ? '0' + n : '' + n; }
     function shiftYm(ym, delta) {
       const [y, m] = ym.split('-').map(Number);
       const d = new Date(y, m - 1 + delta, 1);
       return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
     }
-    const CURRENT_WORK_YM = '2026-05';                          // 系統錨點月（demo 固定）
-    const DEFAULT_TARGET_WORK_YM = shiftYm(CURRENT_WORK_YM, 1); // 預設作業月 = 下月 → 2026-06
+    const CURRENT_WORK_YM = '2026-05';
+    const DEFAULT_TARGET_WORK_YM = shiftYm(CURRENT_WORK_YM, 1); // 2026-06
     const mpState = { current: DEFAULT_TARGET_WORK_YM, min: shiftYm(CURRENT_WORK_YM, -12), max: shiftYm(CURRENT_WORK_YM, 12) };
-    function ymCompact(ym) { return ym.replace('-', ''); }      // '2026-06' → '202606'
 
     function dsBuildMonthOptions() {
       const sel = document.getElementById('mp-select');
@@ -371,7 +350,7 @@
         opt.value = cur;
         let suffix;
         if (cur < anchor) suffix = '（歷史）';
-        else if (cur === anchor) suffix = '（錨點月）';
+        else if (cur === anchor) suffix = '（本月）';
         else if (cur === DEFAULT_TARGET_WORK_YM) suffix = '（下月・分派作業月）';
         else suffix = '（未來）';
         opt.textContent = `${cur}${suffix}`;
@@ -394,200 +373,602 @@
       const next = document.getElementById('mp-next');
       if (prev) prev.disabled = mpState.current <= mpState.min;
       if (next) next.disabled = mpState.current >= mpState.max;
-      // 將選定之 target_work_ym 同步到頁面所有月份呈現處（API ?ym= 等）
-      const compact = ymCompact(mpState.current);
-      document.querySelectorAll('[data-target-ym-compact]').forEach(el => el.textContent = compact);
+      state.ym = mpState.current;
+      recomputeWithScope();
     }
 
-    // ===== Mock: 2026-05 行事曆 =====
-    // 每日：date, weekday, isWorkday (依 mode 不同)
+    // ===================================================================
+    // Mock 資料
+    // ===================================================================
+    const DEPTS_BASE = [
+      { code: 'XVE1', name: '北區電銷一課', chief: '李處長', headcount: 27 },
+      { code: 'XVE2', name: '北區電銷二課', chief: '王處長', headcount: 28 },
+      { code: 'XVE3', name: '中區電銷課',   chief: '陳處長', headcount: 22 },
+      { code: 'XVE4', name: '南區電銷課',   chief: '黃處長', headcount: 14 }
+    ];
+    const SCOPE_DEPT = 'XVE1';                  // 業務處長（李處長）轄區
+    const HOLIDAYS = { '2026-05-01': '勞動節', '2026-06-19': '端午節', '2026-01-01': '元旦' };
+    const LIST_NAMES = {
+      OB202606001: '汽車期中名單',
+      OB202606002: '信貸滿期名單',
+      OB202606004: '機車中度逾期名單'
+    };
+
+    const state = {
+      ym: DEFAULT_TARGET_WORK_YM,
+      calSource: 'weekday',
+      listFilter: 'ALL',
+      role: 'director',
+      scopeNull: false,
+      threshold: 18,          // 每人每日上限（業務設定；未設定時為 null → 不標紅）
+      scenario: 'normal',
+      poolLow: false,
+      selectedDept: 'ALL'     // 月曆當前檢視部門：'ALL'（全部門合計）或部門代號；處長鎖定轄區
+    };
+
+    let computed = null;
+    let sortState = { key: 'peak', dir: 'desc' };
+
+    function currentDepts() {
+      let d = DEPTS_BASE.map(x => ({ ...x }));
+      if (state.scenario === 'headcount0') d.push({ code: 'AM000', name: '數位專案組', chief: '—', headcount: 0 });
+      return d;
+    }
+    function baseLists() {
+      return [
+        { listNo: 'OB202606001', name: LIST_NAMES.OB202606001, total: 12000, ration: { XVE1: 35, XVE2: 30, XVE3: 20, XVE4: 15 } },
+        { listNo: 'OB202606002', name: LIST_NAMES.OB202606002, total: 9000,  ration: { XVE1: 30, XVE2: 25, XVE3: 25, XVE4: 20 } },
+        { listNo: 'OB202606004', name: LIST_NAMES.OB202606004, total: 7500,  ration: { XVE1: 40, XVE2: 30, XVE3: 20, XVE4: 10 } }
+      ];
+    }
+    function currentLists() {
+      let lists = baseLists().map(l => ({ ...l, ration: { ...l.ration } }));
+      if (state.scenario === 'gap') {
+        lists[2].ration = { XVE1: 40, XVE2: 30 };           // 合計 70% → 30% 缺口
+      } else if (state.scenario === 'overload') {
+        lists.forEach(l => l.total = Math.round(l.total * 1.7));
+      } else if (state.scenario === 'headcount0') {
+        lists.forEach(l => { l.ration.AM000 = 8; l.ration.XVE4 = Math.max(0, (l.ration.XVE4 || 0) - 8); });
+      }
+      if (state.listFilter !== 'ALL') lists = lists.filter(l => l.listNo === state.listFilter);
+      return lists;
+    }
+
+    // ===================================================================
+    // 行事曆 + 每日分派權重（內部計算，不對使用者顯示底層權重概念）
+    // ===================================================================
+    function monthRange(ym) {
+      const [y, m] = ym.split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();
+      return { start: `${ym}-01`, end: `${ym}-${pad2(last)}` };
+    }
     function buildCalendar(start, end, mode) {
       const days = [];
-      let d = new Date(start);
-      const ed = new Date(end);
-      // 國定假日（mock）
-      const holidays = ['2026-05-01']; // 勞動節
+      let d = new Date(start + 'T00:00:00');
+      const ed = new Date(end + 'T00:00:00');
+      const wk = ['日', '一', '二', '三', '四', '五', '六'];
       while (d <= ed) {
-        const ymd = d.toISOString().slice(0, 10);
-        const dow = d.getDay(); // 0=Sun, 6=Sat
-        const wkLabels = ['日','一','二','三','四','五','六'];
-        const isHoliday = holidays.includes(ymd);
+        const ymd = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        const dow = d.getDay();
         const isWeekend = (dow === 0 || dow === 6);
-        let isWorkday = false;
-        let skipReason = null;
-        if (mode === 'all') {
-          isWorkday = true;
-        } else if (mode === 'weekday-only') {
-          isWorkday = !isWeekend;
-          if (isWeekend) skipReason = '週末';
-        } else {
-          // weekday: skip both
-          isWorkday = !isWeekend && !isHoliday;
-          if (isWeekend) skipReason = '週末';
-          else if (isHoliday) skipReason = '國定假日';
-        }
-        days.push({ date: ymd, dow, weekday: wkLabels[dow], isWorkday, skipReason, isWeekend, isHoliday });
+        const holiday = HOLIDAYS[ymd];
+        let isWorkday, restReason = null;
+        if (mode === 'all') { isWorkday = true; }
+        else if (mode === 'weekday-only') { isWorkday = !isWeekend; if (isWeekend) restReason = '週末'; }
+        else { isWorkday = !isWeekend && !holiday; if (isWeekend) restReason = '週末'; else if (holiday) restReason = holiday; }
+        days.push({ date: ymd, dow, weekday: wk[dow], isWorkday, restReason });
         d.setDate(d.getDate() + 1);
       }
       return days;
     }
+    function assignDailyShare(days) {
+      const wd = days.filter(d => d.isWorkday);
+      const n = wd.length;
+      if (n === 0) { days.forEach(d => d.share = 0); return; }
+      const base = Math.floor(1000 / n);
+      const rem = 1000 % n;
+      const bonus = new Set([...wd].sort((a, b) => b.date.localeCompare(a.date)).slice(0, rem).map(d => d.date));
+      days.forEach(d => d.share = d.isWorkday ? (bonus.has(d.date) ? base + 1 : base) : 0);
+    }
 
     function recompute() {
-      const total = parseInt(document.getElementById('inTotalCount').value || '0', 10);
-      const start = document.getElementById('inStart').value;
-      const end = document.getElementById('inEnd').value;
-      const mode = document.getElementById('inCalendarSrc').value;
+      const { start, end } = monthRange(state.ym);
+      const days = buildCalendar(start, end, state.calSource);
+      assignDailyShare(days);
+      const lists = currentLists();
+      const depts = currentDepts();
+      const orgMonthTotal = lists.reduce((s, l) => s + l.total, 0);
 
-      const cal = buildCalendar(start, end, mode);
-      const workdays = cal.filter(d => d.isWorkday);
-      const wd = workdays.length;
-      const base = wd > 0 ? Math.floor(1000 / wd) : 0;
-      const rem = wd > 0 ? (1000 % wd) : 0;
-
-      // 餘數補最近 rem 個工作日（DESC，前 rem 個）
-      // 排序工作日 by date DESC，前 rem 個 ratio = base+1
-      const sortedDesc = [...workdays].sort((a, b) => b.date.localeCompare(a.date));
-      const bonusSet = new Set(sortedDesc.slice(0, rem).map(d => d.date));
-
-      // 對每天分配
-      const ratios = cal.map(d => {
-        if (!d.isWorkday) return { ...d, ratio: 0, count: 0, isBonus: false };
-        const ratio = bonusSet.has(d.date) ? base + 1 : base;
-        return { ...d, ratio, count: 0, isBonus: bonusSet.has(d.date) };
-      });
-
-      // 每日件數 = ratio / 1000 * total
       let cum = 0;
-      ratios.forEach(d => {
-        d.count = Math.round((d.ratio / 1000) * total);
-        cum += d.count;
-        d.cumulative = cum;
+      days.forEach(d => {
+        d.deptCases = {}; d.perPerson = {};
+        if (!d.isWorkday) { d.orgCases = 0; d.assigned = 0; d.gap = 0; d.cum = cum; depts.forEach(dep => { d.deptCases[dep.code] = 0; d.perPerson[dep.code] = null; }); return; }
+        let orgReal = 0, assignedReal = 0;
+        const deptReal = {};
+        depts.forEach(dep => deptReal[dep.code] = 0);
+        lists.forEach(l => {
+          orgReal += l.total * d.share / 1000;
+          depts.forEach(dep => { const r = l.ration[dep.code] || 0; deptReal[dep.code] += l.total * r / 100 * d.share / 1000; });
+        });
+        depts.forEach(dep => { d.deptCases[dep.code] = Math.round(deptReal[dep.code]); assignedReal += deptReal[dep.code]; });
+        d.orgCases = Math.round(orgReal);
+        d.assigned = Math.round(assignedReal);
+        d.gap = Math.max(0, Math.round(orgReal - assignedReal));
+        cum += d.orgCases; d.cum = cum;
+        depts.forEach(dep => { d.perPerson[dep.code] = dep.headcount > 0 ? Math.round(d.deptCases[dep.code] / dep.headcount) : null; });
       });
 
-      // KPI 更新
-      document.getElementById('kpiWorkdays').textContent = wd;
-      document.getElementById('kpiTotal').textContent = total.toLocaleString();
-      document.getElementById('kpiBase').textContent = base;
-      document.getElementById('kpiRem').textContent = rem;
+      computed = { days, lists, depts, orgMonthTotal, workingDays: days.filter(d => d.isWorkday).length };
+    }
 
-      // 圖表
-      const chart = document.getElementById('chartContainer');
-      const maxCount = Math.max(...ratios.map(r => r.count), 1);
-      chart.innerHTML = ratios.map(d => {
-        const heightPct = d.isWorkday ? Math.max((d.count / maxCount) * 100, 8) : 12;
-        const color = d.isWorkday ? (d.isBonus ? 'bg-blue-700' : 'bg-blue-500') : 'bg-gray-300';
-        return `
-          <div class="flex flex-col items-center gap-1.5">
-            <div class="text-[10px] font-mono ${d.isWorkday ? 'text-gray-700 font-semibold' : 'text-gray-300'}">${d.isWorkday ? d.count : '—'}</div>
-            <div class="w-full h-20 flex items-end">
-              <div class="w-full ${color} rounded-t" style="height: ${heightPct}%" title="${d.date} ${d.weekday} ${d.isWorkday ? d.count + '件' : (d.skipReason || '')}"></div>
-            </div>
-            <div class="text-[10px] font-mono text-gray-500">${d.date.slice(8)}</div>
-            <div class="text-[10px] ${d.dow === 0 ? 'text-rose-500' : d.dow === 6 ? 'text-blue-500' : 'text-gray-400'}">${d.weekday}</div>
-          </div>
-        `;
-      }).join('');
+    // ===================================================================
+    // 部門統計（負載總覽用）
+    // ===================================================================
+    function deptStats(depts) {
+      const wds = computed.days.filter(d => d.isWorkday);
+      return depts.map(dep => {
+        const monthCases = wds.reduce((s, d) => s + (d.deptCases[dep.code] || 0), 0);
+        let peak = null, avg = null;
+        if (dep.headcount > 0 && wds.length) {
+          const pps = wds.map(d => Math.round((d.deptCases[dep.code] || 0) / dep.headcount));
+          peak = Math.max(...pps);
+          avg = Math.round(pps.reduce((a, b) => a + b, 0) / pps.length);
+        }
+        return { ...dep, monthCases, peak, avg };
+      });
+    }
+    function loadBadge(peak) {
+      const t = state.threshold;
+      if (peak === null) return { txt: '待補人力', cls: 'bg-orange-100 text-orange-700' };
+      if (t !== null && peak > t) return { txt: '偏高', cls: 'bg-red-100 text-red-700' };
+      if (t !== null && peak > t * 0.8) return { txt: '適中', cls: 'bg-amber-100 text-amber-700' };
+      return { txt: '正常', cls: 'bg-emerald-100 text-emerald-700' };
+    }
 
-      // 表格
-      const tbody = document.getElementById('dailyTbody');
-      tbody.innerHTML = ratios.map(d => `
-        <tr class="border-b border-border ${d.isWorkday ? '' : 'bg-gray-50/50'}">
-          <td class="px-5 py-2.5 font-mono text-xs ${d.isWorkday ? 'text-gray-700' : 'text-gray-400'}">${d.date}</td>
-          <td class="px-5 py-2.5">
-            <span class="${d.dow === 0 ? 'text-rose-500' : d.dow === 6 ? 'text-blue-500' : 'text-gray-700'}">${d.weekday}</span>
-          </td>
-          <td class="px-5 py-2.5">
-            ${d.isWorkday
-              ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700"><i data-lucide="check" class="w-3 h-3"></i>Y (rest_flg=0)</span>'
-              : `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"><i data-lucide="x" class="w-3 h-3"></i>N (${d.skipReason})</span>`
-            }
-          </td>
-          <td class="px-5 py-2.5 text-right tabular-nums ${d.isWorkday ? 'text-gray-900 font-semibold' : 'text-gray-300'}">${d.isWorkday ? d.count : '—'}</td>
-          <td class="px-5 py-2.5 text-right tabular-nums ${d.isWorkday ? 'text-gray-700' : 'text-gray-300'}">${d.isWorkday ? d.cumulative.toLocaleString() : '—'}</td>
-          <td class="px-5 py-2.5">
-            ${d.isBonus ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700"><i data-lucide="plus" class="w-3 h-3"></i>base+1（餘數補）</span>' : '<span class="text-gray-300">—</span>'}
-          </td>
-        </tr>
-      `).join('');
+    // ===================================================================
+    // Render
+    // ===================================================================
+    function activeDeptsFor(isChief) {
+      return isChief ? computed.depts.filter(d => d.code === SCOPE_DEPT) : computed.depts;
+    }
+
+    function renderAll() {
+      const role = state.role;
+      const isUser = role === 'user';
+      const isChief = role === 'section_chief';
+      const scopeNull = isChief && state.scopeNull;
+
+      document.getElementById('blockedBanner').classList.toggle('hidden', !isUser);
+      document.getElementById('mainWrap').classList.toggle('hidden', isUser);
+      if (isUser) { lucide.createIcons(); return; }
+
+      document.getElementById('scopeNullCard').classList.toggle('hidden', !scopeNull);
+      document.getElementById('contentArea').classList.toggle('hidden', scopeNull);
+      document.getElementById('readOnlyBanner').classList.toggle('hidden', !isChief);
+      if (scopeNull) { lucide.createIcons(); return; }
+
+      if (isChief) {
+        const dep = DEPTS_BASE.find(d => d.code === SCOPE_DEPT);
+        document.getElementById('readOnlyTitle').textContent = `唯讀模式：僅顯示您轄區部門（${dep.name}）的預估資料`;
+      }
+
+      const activeDepts = activeDeptsFor(isChief);
+      ensureSelectedDept(activeDepts, isChief);
+      renderModeChip();
+      renderKpis(activeDepts, isChief);
+      renderDeptSummary(activeDepts, isChief);
+      renderDeptSwitcher(activeDepts, isChief);
+      renderCalLegend(isChief);
+      renderCalendar(isChief);
+      renderAuxTable(isChief);
+      renderPoolWarn();
+      renderGapAndHeadcount(activeDepts, isChief);
       lucide.createIcons();
     }
 
-    // ===== Role toggle (B7 standard 4-role) =====
+    // 確保當前檢視部門在可選範圍內（處長鎖定轄區；部長預設全部門合計）
+    function ensureSelectedDept(activeDepts, isChief) {
+      if (isChief) { state.selectedDept = activeDepts.length ? activeDepts[0].code : SCOPE_DEPT; return; }
+      if (state.selectedDept !== 'ALL' && !activeDepts.some(d => d.code === state.selectedDept)) state.selectedDept = 'ALL';
+    }
+    function selectDept(code) { state.selectedDept = code; renderAll(); }
+
+    function renderModeChip() {
+      const chip = document.getElementById('modeChip');
+      if (state.listFilter === 'ALL') {
+        chip.innerHTML = '<i data-lucide="layers" class="w-3.5 h-3.5"></i>顯示模式：所有啟用名單彙總';
+      } else {
+        chip.innerHTML = `<i data-lucide="file-text" class="w-3.5 h-3.5"></i>顯示模式：單一名單 ${LIST_NAMES[state.listFilter]}（${state.listFilter}）`;
+      }
+    }
+
+    function kpiCard(label, value, sub, opts) {
+      opts = opts || {};
+      const valClass = opts.danger ? 'text-red-600' : (opts.warn ? 'text-orange-600' : 'text-gray-900');
+      const icon = opts.icon || 'circle';
+      const iconColor = opts.iconColor || 'text-blue-500';
+      return `
+        <div class="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-gray-500">${label}</span>
+            <i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i>
+          </div>
+          <div class="text-2xl font-bold tabular ${valClass}">${value}</div>
+          <p class="text-xs text-gray-400 mt-1">${sub}</p>
+        </div>`;
+    }
+
+    function renderKpis(activeDepts, isChief) {
+      const grid = document.getElementById('kpiGrid');
+      const stats = deptStats(activeDepts);
+      const calLabel = { weekday: '只排上班日', 'weekday-only': '也排連假日', all: '連週末都排' }[state.calSource];
+      const peaks = stats.map(s => s.peak).filter(v => v !== null);
+      const peakAll = peaks.length ? Math.max(...peaks) : null;
+      const over = state.threshold !== null && peakAll !== null && peakAll > state.threshold;
+      const cards = [];
+
+      cards.push(kpiCard('本月可分派天數', computed.workingDays, `依「${calLabel}」計算`, { icon: 'calendar-check', iconColor: 'text-blue-500' }));
+
+      if (isChief) {
+        const scope = stats[0] || { monthCases: 0, headcount: 0 };
+        cards.push(kpiCard('轄區本月件數', scope.monthCases.toLocaleString(), '您轄區部門本月分派合計', { icon: 'inbox', iconColor: 'text-emerald-500' }));
+        cards.push(kpiCard('轄區尖峰人均／日', peakAll === null ? '—' : peakAll, state.threshold !== null ? `每人每日上限 ${state.threshold} 件` : '尚未設定上限', { icon: 'gauge', iconColor: over ? 'text-red-500' : 'text-emerald-500', danger: over }));
+        cards.push(kpiCard('轄區在職人數', (scope.headcount || 0), '在職電訪人員', { icon: 'users', iconColor: 'text-purple-500' }));
+      } else {
+        cards.push(kpiCard('本月全名單總量', computed.orgMonthTotal.toLocaleString(), state.listFilter === 'ALL' ? '本月所有啟用名單合計' : '本名單預估件數', { icon: 'inbox', iconColor: 'text-emerald-500' }));
+        cards.push(kpiCard('尖峰人均／日', peakAll === null ? '—' : peakAll, state.threshold !== null ? `每人每日上限 ${state.threshold} 件` : '尚未設定上限', { icon: 'gauge', iconColor: over ? 'text-red-500' : 'text-emerald-500', danger: over }));
+        const gapMonth = computed.days.reduce((s, d) => s + (d.gap || 0), 0);
+        cards.push(kpiCard('尚未分派件數', gapMonth.toLocaleString(), gapMonth > 0 ? '部分名單比例未設定或未達 100%' : '所有件數已分派至部門', { icon: 'git-pull-request-draft', iconColor: gapMonth > 0 ? 'text-orange-500' : 'text-emerald-500', warn: gapMonth > 0 }));
+      }
+      grid.innerHTML = cards.join('');
+    }
+
+    function renderDeptSummary(activeDepts, isChief) {
+      const head = document.getElementById('deptSummaryHead');
+      const body = document.getElementById('deptSummaryBody');
+      const hint = document.getElementById('deptSummaryHint');
+      hint.textContent = isChief ? '您的轄區部門負載概況' : '點欄位標題可排序找出過載部門；點部門列可在下方月曆查看該課每日明細';
+
+      let stats = deptStats(activeDepts);
+      if (!isChief) {
+        const dir = sortState.dir === 'asc' ? 1 : -1;
+        stats = stats.slice().sort((a, b) => {
+          const va = a[sortState.key] === null ? -1 : a[sortState.key];
+          const vb = b[sortState.key] === null ? -1 : b[sortState.key];
+          return (va - vb) * dir;
+        });
+      }
+
+      const sortIcon = (k) => sortState.key === k ? (sortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      const th = (k, label, extra) => isChief
+        ? `<th class="${extra}">${label}</th>`
+        : `<th class="${extra} sort-head" onclick="sortSummary('${k}')">${label}${sortIcon(k)}</th>`;
+
+      head.innerHTML = `
+        <tr class="border-b border-border bg-gray-50/40 text-xs text-gray-500 uppercase tracking-wider">
+          <th class="text-left px-5 py-2.5 font-medium">部門</th>
+          <th class="text-left px-5 py-2.5 font-medium">處長</th>
+          ${th('headcount', '在職人數', 'text-right px-5 py-2.5 font-medium')}
+          ${th('monthCases', '本月件數', 'text-right px-5 py-2.5 font-medium')}
+          ${th('avg', '平均人均·日', 'text-right px-5 py-2.5 font-medium')}
+          ${th('peak', '尖峰人均·日', 'text-right px-5 py-2.5 font-medium')}
+          <th class="text-center px-5 py-2.5 font-medium">負載狀態</th>
+        </tr>`;
+
+      body.innerHTML = stats.map(s => {
+        const badge = loadBadge(s.peak);
+        const t = state.threshold;
+        const peakCls = (t !== null && s.peak !== null && s.peak > t) ? 'text-red-600 font-semibold' : 'text-gray-700';
+        const hcCls = s.headcount === 0 ? 'text-orange-600 font-semibold' : 'text-gray-700';
+        const rowClick = isChief ? '' : ` onclick="selectDept('${s.code}')"`;
+        const rowCls = isChief ? 'hover:bg-blue-50/30' : 'hover:bg-blue-50/30 cursor-pointer';
+        const selMark = (!isChief && state.selectedDept === s.code) ? '<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-primary">月曆檢視中</span>' : '';
+        return `
+          <tr class="${rowCls}"${rowClick}>
+            <td class="px-5 py-3">
+              <div class="text-sm font-medium text-gray-800">${s.name}${selMark}</div>
+              <div class="text-[11px] text-gray-400 font-mono">${s.code}</div>
+            </td>
+            <td class="px-5 py-3 text-xs text-gray-600"><i data-lucide="user-cog" class="w-3 h-3 inline mr-0.5 text-purple-600"></i>${s.chief}</td>
+            <td class="px-5 py-3 text-right tabular ${hcCls}">${s.headcount === 0 ? '0（待同步）' : s.headcount}</td>
+            <td class="px-5 py-3 text-right tabular text-gray-700">${s.monthCases.toLocaleString()}</td>
+            <td class="px-5 py-3 text-right tabular text-gray-600">${s.avg === null ? '—' : s.avg}</td>
+            <td class="px-5 py-3 text-right tabular ${peakCls}">${s.peak === null ? '—' : s.peak}</td>
+            <td class="px-5 py-3 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.cls}">${badge.txt}</span></td>
+          </tr>`;
+      }).join('');
+    }
+
+    function sortSummary(key) {
+      if (sortState.key === key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+      else { sortState.key = key; sortState.dir = 'desc'; }
+      renderDeptSummary(activeDeptsFor(false), false);
+      lucide.createIcons();
+    }
+
+    // ===================================================================
+    // 部門切換器（tab pills；處長鎖定轄區、無「全部門合計」）
+    // ===================================================================
+    function renderDeptSwitcher(activeDepts, isChief) {
+      const el = document.getElementById('deptSwitcher');
+      if (isChief) {
+        const dep = activeDepts[0];
+        el.innerHTML = `<span class="text-xs text-gray-500 mr-1">檢視部門</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-cyan-200 bg-cyan-50 text-cyan-700">
+            <i data-lucide="lock" class="w-3.5 h-3.5"></i>${dep ? dep.name : '—'}（轄區）
+          </span>
+          <span class="text-[11px] text-gray-400">處長僅檢視轄區部門，無「全部門合計」</span>`;
+        return;
+      }
+      const pills = [{ code: 'ALL', name: '全部門合計' }].concat(activeDepts.map(d => ({ code: d.code, name: d.name })));
+      el.innerHTML = `<span class="text-xs text-gray-500 mr-1">檢視部門</span>` + pills.map(p => {
+        const active = state.selectedDept === p.code;
+        const cls = active ? 'border-primary bg-blue-50 text-primary' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50';
+        const icon = p.code === 'ALL' ? '<i data-lucide="layers" class="w-3.5 h-3.5"></i>' : '';
+        return `<button onclick="selectDept('${p.code}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition ${cls}">${icon}${p.name}</button>`;
+      }).join('');
+    }
+
+    function renderCalLegend(isChief) {
+      const el = document.getElementById('calLegend');
+      const isAll = !isChief && state.selectedDept === 'ALL';
+      if (isAll) {
+        el.innerHTML = `<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-white border border-gray-300"></span>工作日（全名單總量）</span>
+          <span class="inline-flex items-center gap-1"><span class="inline-flex px-1 rounded bg-orange-100 text-orange-600 text-[10px] font-medium">缺口</span>未分派到部門</span>
+          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200"></span>休息日（不派案）</span>`;
+      } else {
+        el.innerHTML = `<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-white border border-gray-300"></span>工作日</span>
+          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-200"></span>人均超過每日上限</span>
+          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200"></span>休息日（不派案）</span>`;
+      }
+    }
+
+    // ===================================================================
+    // 月曆主視覺（一次渲染一個部門切片，或全部門合計切片）
+    // ===================================================================
+    function dowCls(dow) { return dow === 0 ? 'text-rose-500' : dow === 6 ? 'text-blue-500' : 'text-gray-400'; }
+
+    function renderCalendar(isChief) {
+      const grid = document.getElementById('calendarGrid');
+      const sel = state.selectedDept;
+      const isAll = !isChief && sel === 'ALL';
+      const t = state.threshold;
+      const map = {}; computed.days.forEach(d => map[d.date] = d);
+      const [y, m] = state.ym.split('-').map(Number);
+      const firstDow = new Date(y, m - 1, 1).getDay();
+      const dim = new Date(y, m, 0).getDate();
+      const wkHead = ['日', '一', '二', '三', '四', '五', '六'];
+      const headHtml = wkHead.map((w, i) => `<div class="cal-head ${i === 0 ? 'text-rose-500' : i === 6 ? 'text-blue-500' : ''}">${w}</div>`).join('');
+
+      let cells = '';
+      for (let i = 0; i < firstDow; i++) cells += `<div class="cal-blank"></div>`;
+      for (let dn = 1; dn <= dim; dn++) {
+        const ymd = `${state.ym}-${pad2(dn)}`;
+        const d = map[ymd];
+        const dow = new Date(y, m - 1, dn).getDay();
+        const dnCls = dowCls(dow);
+        if (!d || !d.isWorkday) {
+          cells += `<div class="cal-cell cal-rest">
+            <span class="cal-datenum ${dnCls}">${dn}</span>
+            <div class="flex-1 flex items-center justify-center text-[11px] text-gray-400 text-center leading-tight">休息日<br>（不派案）</div>
+          </div>`;
+          continue;
+        }
+        if (isAll) {
+          const gapBadge = d.gap > 0 ? `<span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 mt-1">缺口 ${d.gap.toLocaleString()}</span>` : '';
+          cells += `<div class="cal-cell cal-work">
+            <span class="cal-datenum ${dnCls}">${dn}</span>
+            <div class="flex-1 flex flex-col items-center justify-center">
+              <div class="text-base font-bold text-gray-900 tabular">${d.orgCases.toLocaleString()}</div>
+              ${gapBadge}
+            </div>
+          </div>`;
+        } else {
+          const cases = d.deptCases[sel] || 0;
+          const pp = d.perPerson[sel];
+          const over = (pp !== null && t !== null && pp > t);
+          let ppHtml;
+          if (pp === null) ppHtml = `<span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600">人均 —</span>`;
+          else ppHtml = `<span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${over ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">人均 ${pp}</span>`;
+          cells += `<div class="cal-cell ${over ? 'cal-over' : 'cal-work'}">
+            <span class="cal-datenum ${dnCls}">${dn}</span>
+            <div class="flex-1 flex flex-col items-center justify-center gap-1">
+              <div class="text-base font-bold ${over ? 'text-red-700' : 'text-gray-900'} tabular">${cases.toLocaleString()}</div>
+              ${ppHtml}
+            </div>
+          </div>`;
+        }
+      }
+      const trail = (7 - ((firstDow + dim) % 7)) % 7;
+      for (let i = 0; i < trail; i++) cells += `<div class="cal-blank"></div>`;
+
+      const depName = isAll ? '全部門合計（全名單總量）' : ((computed.depts.find(d => d.code === sel) || {}).name || '');
+      grid.innerHTML = `
+        <div class="flex items-center gap-2 mb-2 text-xs text-gray-500">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>${state.ym} 月曆 · 目前檢視：<span class="font-semibold text-gray-700">${depName}</span>${isAll ? '（每日顯示總量＋缺口）' : '（每日顯示件數＋人均）'}
+        </div>
+        <div class="cal-grid mb-1.5">${headHtml}</div>
+        <div class="cal-grid">${cells}</div>`;
+    }
+
+    // ===================================================================
+    // 輔助每日明細表（隨檢視部門 / 全部門合計切換欄位）
+    // ===================================================================
+    function dowC(d) { return d.dow === 0 ? 'text-rose-500' : d.dow === 6 ? 'text-blue-500' : 'text-gray-600'; }
+    function auxRestRow(d, span) {
+      return `<tr class="border-b border-border bg-gray-50/50">
+        <td class="px-4 py-1.5 font-mono text-xs text-gray-400">${d.date.slice(5)}</td>
+        <td class="px-3 py-1.5 text-center text-xs ${dowC(d)}">${d.weekday}</td>
+        <td colspan="${span}" class="px-3 py-1.5 text-center text-xs text-gray-400">休息日（不派案）· ${d.restReason}</td></tr>`;
+    }
+    function renderAuxTable(isChief) {
+      const head = document.getElementById('auxHead');
+      const body = document.getElementById('auxBody');
+      const foot = document.getElementById('auxFoot');
+      const sel = state.selectedDept;
+      const isAll = !isChief && sel === 'ALL';
+      const t = state.threshold;
+      const wds = computed.days.filter(d => d.isWorkday);
+
+      if (isAll) {
+        head.innerHTML = `<tr class="border-b border-border bg-gray-50/40 text-xs text-gray-500">
+          <th class="text-left px-4 py-2 font-medium">日期</th><th class="text-center px-3 py-2 font-medium">星期</th>
+          <th class="text-right px-3 py-2 font-medium">全名單總量</th><th class="text-right px-3 py-2 font-medium">缺口</th><th class="text-right px-3 py-2 font-medium">累積</th></tr>`;
+        let cum = 0;
+        body.innerHTML = computed.days.map(d => {
+          if (!d.isWorkday) return auxRestRow(d, 3);
+          cum += d.orgCases;
+          return `<tr class="border-b border-border">
+            <td class="px-4 py-1.5 font-mono text-xs text-gray-700">${d.date.slice(5)}</td>
+            <td class="px-3 py-1.5 text-center text-xs ${dowC(d)}">${d.weekday}</td>
+            <td class="px-3 py-1.5 text-right tabular text-gray-800 font-medium">${d.orgCases.toLocaleString()}</td>
+            <td class="px-3 py-1.5 text-right tabular ${d.gap > 0 ? 'text-orange-600' : 'text-gray-300'}">${d.gap > 0 ? d.gap.toLocaleString() : '—'}</td>
+            <td class="px-3 py-1.5 text-right tabular text-xs text-gray-400">${cum.toLocaleString()}</td></tr>`;
+        }).join('');
+        const orgM = wds.reduce((s, d) => s + d.orgCases, 0), gapM = wds.reduce((s, d) => s + d.gap, 0);
+        foot.innerHTML = `<tr class="border-t-2 border-gray-200 bg-gray-50/70 text-sm font-bold">
+          <td class="px-4 py-2 text-gray-700">本月合計</td><td></td>
+          <td class="px-3 py-2 text-right tabular text-gray-900">${orgM.toLocaleString()}</td>
+          <td class="px-3 py-2 text-right tabular ${gapM > 0 ? 'text-orange-600' : 'text-gray-300'}">${gapM > 0 ? gapM.toLocaleString() : '—'}</td>
+          <td class="px-3 py-2 text-right tabular text-gray-400">${orgM.toLocaleString()}</td></tr>`;
+      } else {
+        const dep = computed.depts.find(d => d.code === sel);
+        head.innerHTML = `<tr class="border-b border-border bg-gray-50/40 text-xs text-gray-500">
+          <th class="text-left px-4 py-2 font-medium">日期</th><th class="text-center px-3 py-2 font-medium">星期</th>
+          <th class="text-right px-3 py-2 font-medium">預估件數</th><th class="text-right px-3 py-2 font-medium">人均·日</th><th class="text-right px-3 py-2 font-medium">累積</th></tr>`;
+        let cum = 0;
+        body.innerHTML = computed.days.map(d => {
+          if (!d.isWorkday) return auxRestRow(d, 3);
+          const cases = d.deptCases[sel] || 0; const pp = d.perPerson[sel]; const over = (pp !== null && t !== null && pp > t);
+          cum += cases;
+          const ppTxt = pp === null ? '<span class="text-orange-600">—</span>' : (over ? `<span class="text-red-600 font-semibold">${pp}</span>` : pp);
+          return `<tr class="border-b border-border">
+            <td class="px-4 py-1.5 font-mono text-xs text-gray-700">${d.date.slice(5)}</td>
+            <td class="px-3 py-1.5 text-center text-xs ${dowC(d)}">${d.weekday}</td>
+            <td class="px-3 py-1.5 text-right tabular text-gray-800 font-medium">${cases.toLocaleString()}</td>
+            <td class="px-3 py-1.5 text-right tabular">${ppTxt}</td>
+            <td class="px-3 py-1.5 text-right tabular text-xs text-gray-400">${cum.toLocaleString()}</td></tr>`;
+        }).join('');
+        const monthC = wds.reduce((s, d) => s + (d.deptCases[sel] || 0), 0);
+        const avg = dep && dep.headcount > 0 && wds.length ? Math.round((monthC / wds.length) / dep.headcount) : null;
+        foot.innerHTML = `<tr class="border-t-2 border-gray-200 bg-gray-50/70 text-sm font-bold">
+          <td class="px-4 py-2 text-gray-700">本月合計</td><td></td>
+          <td class="px-3 py-2 text-right tabular text-gray-900">${monthC.toLocaleString()}</td>
+          <td class="px-3 py-2 text-right tabular text-gray-600">日均 ${avg === null ? '—' : avg}</td>
+          <td class="px-3 py-2 text-right tabular text-gray-400">${monthC.toLocaleString()}</td></tr>`;
+      }
+    }
+
+    function renderPoolWarn() {
+      const el = document.getElementById('poolWarn');
+      el.classList.toggle('hidden', !state.poolLow);
+      if (state.poolLow) document.getElementById('poolWarnCount').textContent = '800';
+    }
+
+    function renderGapAndHeadcount(activeDepts, isChief) {
+      // 缺口 banner（部長 / admin）
+      const gapBanner = document.getElementById('gapBanner');
+      if (isChief) gapBanner.classList.add('hidden');
+      else {
+        const gapMonth = computed.days.reduce((s, d) => s + (d.gap || 0), 0);
+        gapBanner.classList.toggle('hidden', gapMonth <= 0);
+        if (gapMonth > 0) document.getElementById('gapBannerCount').textContent = gapMonth.toLocaleString();
+      }
+      // 在職人數為 0
+      const hcWarn = document.getElementById('headcountWarn');
+      const zero = activeDepts.filter(d => d.headcount === 0);
+      hcWarn.classList.toggle('hidden', zero.length === 0);
+      if (zero.length) document.getElementById('headcountWarnList').textContent =
+        zero.map(d => `${d.name}（${d.code}）`).join('、') + ' 在職人數為 0，請確認人員資料是否已同步；該部門暫不顯示人均。';
+    }
+
+    // ===================================================================
+    // 互動
+    // ===================================================================
+    function onListFilterChange(v) { state.listFilter = v; recomputeWithScope(); }
+    function onCalendarChange(v) {
+      state.calSource = v;
+      const help = { weekday: '僅安排週一至週五的正常上班日，排除週末與國定假日。', 'weekday-only': '安排週一至週五，含國定假日（連假當天照樣派案）。', all: '整個月每天都安排派案，含週末與假日；可評估假日派案情境。' }[v];
+      document.getElementById('calHelp').textContent = help;
+      recomputeWithScope();
+    }
+
+    function recomputeWithScope() { recompute(); renderAll(); }
+
+    function applyScenario(name) {
+      ['normal', 'gap', 'overload', 'holiday', 'headcount0', 'scopeNull'].forEach(s => {
+        const btn = document.getElementById('demo-' + s);
+        if (!btn) return;
+        if (s === name) btn.className = 'demo-btn px-2.5 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
+        else btn.className = 'demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
+      });
+
+      state.scopeNull = false;
+      state.poolLow = false;
+      state.listFilter = 'ALL';
+      document.getElementById('inListFilter').value = 'ALL';
+      state.calSource = 'weekday';
+
+      if (name === 'normal') { state.scenario = 'normal'; }
+      else if (name === 'gap') { state.scenario = 'gap'; }
+      else if (name === 'overload') { state.scenario = 'overload'; }
+      else if (name === 'holiday') { state.scenario = 'normal'; state.calSource = 'all'; }
+      else if (name === 'headcount0') { state.scenario = 'headcount0'; setRoleSilent('director'); state.poolLow = true; }
+      else if (name === 'scopeNull') { state.scenario = 'normal'; setRoleSilent('section_chief'); state.scopeNull = true; }
+
+      document.getElementById('inCalendar').value = state.calSource;
+      onCalendarChange(state.calSource); // sets help + recompute via scope
+    }
+
+    // ===================================================================
+    // 角色
+    // ===================================================================
     const ROLE_META = {
       admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
       director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
       section_chief: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog',  name: '李處長' },
       user:          { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',      name: '陳業務' }
     };
-    let currentRole = 'director';
     function renderRoleBadge(role) {
-      const m = ROLE_META[role] || ROLE_META.sales;
+      const m = ROLE_META[role] || ROLE_META.director;
       return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
     }
-    function setRole(role) {
-      currentRole = role;
+    function applyRoleUi(role) {
       const sw = document.getElementById('role-switcher'); if (sw) sw.value = role;
       document.getElementById('role-badge-container').innerHTML = renderRoleBadge(role);
       document.getElementById('user-name').textContent = ROLE_META[role].name;
-      // Stage 0 守衛：處長 + 業務員 整頁封鎖
-      const blocked = (role === 'section_chief' || role === 'user');
-      document.getElementById('mainContent').classList.toggle('hidden', blocked);
-      document.getElementById('roleBlockedBanner').classList.toggle('hidden', !blocked);
-      // 無權限角色：分派作業月份 MonthPicker disabled（整頁封鎖時無意義）
-      const mpSelect = document.getElementById('mp-select');
-      const mpPrev = document.getElementById('mp-prev');
-      const mpNext = document.getElementById('mp-next');
-      if (mpSelect) mpSelect.disabled = blocked;
-      if (mpPrev) mpPrev.disabled = blocked || mpState.current <= mpState.min;
-      if (mpNext) mpNext.disabled = blocked || mpState.current >= mpState.max;
-      lucide.createIcons();
     }
-    document.addEventListener('DOMContentLoaded', function(){
+    function setRoleSilent(role) {
+      state.role = role;
+      if (role !== 'section_chief') state.scopeNull = false;
+      state.selectedDept = role === 'section_chief' ? SCOPE_DEPT : 'ALL';
+      applyRoleUi(role);
+    }
+    function setRole(role) {
+      state.role = role;
+      if (role !== 'section_chief') state.scopeNull = false;
+      state.selectedDept = role === 'section_chief' ? SCOPE_DEPT : 'ALL';
+      applyRoleUi(role);
+      recomputeWithScope();
+    }
+
+    // ===================================================================
+    // Init
+    // ===================================================================
+    document.addEventListener('DOMContentLoaded', function () {
       dsBuildMonthOptions();
-      onMonthChanged();
-      setRole('director');
-    });
-
-    // ===== Demo state =====
-    function showDemoState(state) {
-      ['normal','weekend-skip','holiday-skip'].forEach(s => {
-        const btn = document.getElementById('demo-' + s);
-        if (s === state) btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
-        else btn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
-      });
-
-      const poolWarn = document.getElementById('poolWarn');
-      poolWarn.classList.add('hidden');
-
-      if (state === 'normal') {
-        document.getElementById('inTotalCount').value = 9500;
-        document.getElementById('inStart').value = '2026-05-01';
-        document.getElementById('inEnd').value = '2026-05-31';
-        document.getElementById('inCalendarSrc').value = 'weekday';
-      } else if (state === 'weekend-skip') {
-        // 強調週末跳過效果，使用較短日期區間
-        document.getElementById('inTotalCount').value = 5000;
-        document.getElementById('inStart').value = '2026-05-04';
-        document.getElementById('inEnd').value = '2026-05-17';
-        document.getElementById('inCalendarSrc').value = 'weekday-only';
-      } else if (state === 'holiday-skip') {
-        // 強調 5/1 勞動節跳過
-        document.getElementById('inTotalCount').value = 800; // 同時觸發 pool 偏低警示
-        document.getElementById('inStart').value = '2026-04-27';
-        document.getElementById('inEnd').value = '2026-05-08';
-        document.getElementById('inCalendarSrc').value = 'weekday';
-        poolWarn.classList.remove('hidden');
-      }
+      const prev = document.getElementById('mp-prev'); if (prev) prev.disabled = mpState.current <= mpState.min;
+      const next = document.getElementById('mp-next'); if (next) next.disabled = mpState.current >= mpState.max;
+      applyRoleUi('director');
       recompute();
-    }
-
-    // ===== Init =====
-    recompute();
-    lucide.createIcons();
+      renderAll();
+      lucide.createIcons();
+    });
   </script>
+
   <script>
     // ===== Sidebar collapsible：客戶名單分派 =====
-    (function() {
+    (function () {
       const assignmentPages = [
         '27-list-definition.html', '28-scoring-config.html', '30-stage0-estimate.html', '31-trigger-run.html', '32-run-progress.html',
         '33-run-summary.html', '34-run-history.html', '35-snapshot-detail.html',
@@ -596,32 +977,21 @@
       const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
       const isAssignmentPage = assignmentPages.includes(currentPage);
 
-      window.toggleAssignmentSection = function() {
+      window.toggleAssignmentSection = function () {
         const header = document.getElementById('assignment-section-header');
         const expanded = header.getAttribute('aria-expanded') === 'true';
         setAssignmentExpanded(!expanded, true);
       };
-
       function setAssignmentExpanded(expanded, persist) {
         const section = document.getElementById('assignment-section');
         const chevron = document.getElementById('assignment-chevron');
         const header = document.getElementById('assignment-section-header');
         if (!section || !chevron || !header) return;
-        if (expanded) {
-          section.style.maxHeight = section.scrollHeight + 'px';
-          chevron.style.transform = 'rotate(90deg)';
-          header.setAttribute('aria-expanded', 'true');
-        } else {
-          section.style.maxHeight = '0px';
-          chevron.style.transform = 'rotate(0deg)';
-          header.setAttribute('aria-expanded', 'false');
-        }
-        if (persist) {
-          localStorage.setItem('cdmp.sidebar.assignment.expanded', expanded ? '1' : '0');
-        }
+        if (expanded) { section.style.maxHeight = section.scrollHeight + 'px'; chevron.style.transform = 'rotate(90deg)'; header.setAttribute('aria-expanded', 'true'); }
+        else { section.style.maxHeight = '0px'; chevron.style.transform = 'rotate(0deg)'; header.setAttribute('aria-expanded', 'false'); }
+        if (persist) localStorage.setItem('cdmp.sidebar.assignment.expanded', expanded ? '1' : '0');
       }
-
-      document.addEventListener('DOMContentLoaded', function() {
+      document.addEventListener('DOMContentLoaded', function () {
         const stored = localStorage.getItem('cdmp.sidebar.assignment.expanded');
         const shouldExpand = isAssignmentPage || stored === '1';
         setAssignmentExpanded(shouldExpand, false);
