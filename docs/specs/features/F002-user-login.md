@@ -5,14 +5,16 @@ feature-id: F002
 source-story: US-002
 epic: E01 — 驗證與登入
 priority: P0-MVP
-version: "2.0"
-date: 2026-05-16
+version: "2.0.1"
+date: 2026-06-26
 status: Draft
 ---
 
 # F002: User 登入
 
-**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-05-16
+**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-06-26
+
+> **v2.0.1（2026-06-26 / US-168 對齊 F049 v2.0）**：§4.6.2 Controller Guard 對應表將原「名單瀏覽 F048~F049 GET」拆分——F049 Stage 0 試算（部門矩陣 + per-list COUNT）獨立成列，授權為 `DirectorOrSectionChiefGuard` + service 層 dept scope filter（處長唯讀、限縮轄區 `obdeptid`），取代 v1.x 之 `DirectorGuard`（部長專屬）。其餘 §4.6 內容不變。
 
 > **v2.0 / 2026-05-16 破壞性變更（E07 合併重構 AD-E07 v3.0）**：本版本廢除舊 `users.is_sales_manager` 欄位（DROP）並廢除 v1.4 短期過渡 `users.e07_role` 欄位，整合為**單一欄位** `users.business_role VARCHAR(20) NULL`（enum：`'director'` / `'section_chief'` / `NULL`，DB CHECK constraint 強制）。系統實質身份共 **4 種 label**：「系統管理者」/「業務部長」/「業務處長」/「一般使用者」（廢除 v1.x「業務主管」中間語意層）。`SalesManagerGuard` 全數廢除，改用 `DirectorGuard` / `SectionChiefGuard` / `DirectorOrSectionChiefGuard` 三 Guard 體系。新增錯誤碼 `E07_ROLE_NOT_ASSIGNED`（403，明示需聯絡 admin 補設）取代舊 `AUTH_FORBIDDEN` 攔截一般使用者時的模糊語意。詳見 §4.5 / §4.6 / §11；變更入口統一走 [F006a](F006a-update-business-role.md) PATCH `/api/v1/accounts/:id/business-role`。
 
@@ -190,7 +192,8 @@ status: Draft
 | 端點分類 | Feature ID | HTTP Method | Guard | 備註 |
 |---------|-----------|-------------|-------|------|
 | **名單 CRUD（寫入）** | F050~F052、F077（寫入） | POST/PUT/DELETE | `DirectorGuard` | 處長僅讀，不可建立/修改/刪除名單 |
-| **名單瀏覽** | F048~F049、F077（GET） | GET | `DirectorOrSectionChiefGuard` | 部長 + 處長皆可瀏覽 |
+| **名單瀏覽** | F048、F077（GET） | GET | `DirectorOrSectionChiefGuard` | 部長 + 處長皆可瀏覽 |
+| **Stage 0 試算（部門矩陣 + per-list COUNT）** | F049（GET，v2.0 / US-168） | GET | `DirectorOrSectionChiefGuard` + service 層 dept scope filter | 部長 / admin 看全部門；處長唯讀且 service 強制限縮至其轄區 `obdeptid`（複用 `getScopeDeptCode → ob_dept_pct.obdeptid`）；scope=null → 200 空結果非 403。取代 v1.x `DirectorGuard`（部長專屬）|
 | **M02 計分卡寫入** | F053~F060（POST/PUT/DELETE）、F069（寫入） | POST/PUT/DELETE | `DirectorGuard` | |
 | **M02 計分卡讀取** | F053~F060（GET）、F069（GET） | GET | `DirectorOrSectionChiefGuard` | |
 | **M03a 部門比例 CRUD** | F079~F081 | 全 method | `DirectorGuard` | 處長僅讀（GET 拆分後改用 `DirectorOrSectionChiefGuard`） |

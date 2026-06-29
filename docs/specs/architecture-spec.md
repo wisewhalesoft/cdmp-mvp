@@ -1,10 +1,15 @@
 ---
 type: architecture-spec
-version: "2.23"
+version: "2.24"
 status: draft
-last_updated: 2026-06-05
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101]
+last_updated: 2026-06-26
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105]
 ---
+
+> **v2.24 / 2026-06-26 變更摘要（AD-E07-36 F049 v2.0 Stage 0 試算頁業務化重設計）**：
+>
+> 新增 **§5.15「Stage 0 試算頁業務化重設計（F049 v2.0 / AD-E07-36）」** 與決策記錄 [`implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md`](implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md)。核心決策：(1) **OQ-F049-01**：新增獨立端點 `GET /api/v1/assignment/stage0/dept-estimate`（一次回整月部門矩陣，total-agnostic `daily-estimate` 不動，I-RUN-EST-01 分工保留）；(2) **OQ-F049-02**：`list_total[L]` 優先取 F088 物化 `stage0_estimate_count`（O(1)），NULL 時並行 fallback 即時 COUNT（30s 整體 timeout + per-list 失敗寫 `STAGE0_LIST_ESTIMATE_PARTIAL` warning 不阻擋整體回應），部門投影 / 缺口 / 人均 in-memory 合成（31×8 cells）；(3) **OQ-F049-03**：env var `STAGE0_MAX_CASES_PER_PERSON_PER_DAY`，預設 null → 不標紅（AC-FEAS-4 降級）；(4) **OQ-F049-04**：`dept-estimate` 新端點無 `@RequireDirector()`（DirectorOrSectionChief）；`list-definitions/:listNo/estimate` 移除 `@RequireDirector()`；`daily-estimate` 不動（director only）；actor 由 `req.user` 傳入 service；service 呼叫 `SectionChiefScopeService.getScopeDeptCode` 套 dept scope filter（鏡像 `listLists`）；scope=null → 200 空結果 + `SCOPE_UNRESOLVED` warning；(5) **OQ-F049-05**：production ETL 後 SQL 查核清單（pre-prod check，非 build blocker）；(6) **OQ-F049-06 RESOLVED（PO）**：人均分母 = 全部在職員工，不過濾 `jfun_nm`；(7) **OQ-F049-07**：`warnings[]` 結構性欄位（`DEPT_HEADCOUNT_ZERO` / `SCOPE_UNRESOLVED` / `STAGE0_LIST_ESTIMATE_PARTIAL`），不擴充 audit enum，無新 migration。延伸 **I-RUN-EST-01**（L3 投影層第三消費者）；新增 **I-DEPT-SCOPE-01**（service 層為安全邊界）與 **I-DEPT-ORDER-01**（deptCells deptCode ASC 確定性排序）。covers 補入 F102~F105。
+>
 
 > **v2.23 / 2026-06-05 變更摘要（AD-E07-29 F101 月跑 Stage 3/4 真實比例分派）**：
 >
@@ -59,7 +64,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程、**5.13 月跑執行模型重構**、**§5.14 Stage 3/4 真實比例分派**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、10. 技術棧決策 |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程、**5.13 月跑執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、10. 技術棧決策 |
 | TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、**5.13.7（cdmp-worker 容器 / pg-boss schema / docker-compose 變更 / dev synchronize vs prod migration）**、**AD-E07-28 §7~8（pg-boss schema migration 固定、worker entrypoint、不引入 Redis）**、10. 技術棧決策 |
@@ -2374,6 +2379,65 @@ F063 摘要頁（US-083）`AssignmentRunReportService.getSummary()` 的 `warning
 修訂 **AD-E07-28 P3 Stage 4 範圍**（`runStage4Sql` senior swap 移除，由 F101 ration 分派取代）；
 **不影響** AD-E07-28 P1/P2；延伸 **I-RUN-EST-01**（ASSIGNDAY 層）；**不影響** AD-E07-27（workym 語意）；
 **不影響** AD-E07-26（Stage 1 特例規則仍 JS）。
+
+---
+
+### 5.15 Stage 0 試算頁業務化重設計（F049 v2.0 / AD-E07-36）
+
+> 完整決策、7 個 OQ 裁示、端點 DTO、Guard 接線、SQLite/PG 移植性：見
+> [`implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md`](implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md)。
+> 本節為架構主文概要，供 Test Designer / TDD Developer 快速定位。
+
+#### 5.15.1 新增端點（AD-E07-36 OQ-F049-01）
+
+| 端點 | 授權（Guard）| 用途 |
+|---|---|---|
+| `GET /api/v1/assignment/stage0/dept-estimate` | `DirectorOrSectionChiefGuard`（新，無 `@RequireDirector()`）| 部門 × 日期件數矩陣 + 缺口 + 人均，處長 scope-filtered |
+| `GET /api/v1/assignment/stage0/daily-estimate` | `@RequireDirector()`（不動）| 純 calendar + ratio，total-agnostic（v1.x，I-RUN-EST-01）|
+| `GET /api/v1/assignment/list-definitions/:listNo/estimate` | `DirectorOrSectionChiefGuard`（移除 `@RequireDirector()`）| per-list 完整 Stage 1 dry-run COUNT（F092）|
+
+#### 5.15.2 計算分層（I-RUN-EST-01 延伸）
+
+```mermaid
+graph TD
+    L0["L0 computeWorkingDayRatios\n（不動，Stage 4 / daily-estimate 共用）"]
+    L1["L1 estimateListCount / stage0_estimate_count\n（F092 dry-run ≡ 月跑 Stage 1）"]
+    L2["L2 聚合層\n全部 active 名單 / 單一 listNo"]
+    L3["L3 部門投影層\ndept_real = Σ list_total × ration / 100 × dpm / 1000\nin-memory 合成（31×8 cells）"]
+    L4["L4 範圍隔離層\nSectionChiefScopeService.getScopeDeptCode\nservice 層強制 filter（I-DEPT-SCOPE-01）"]
+    L5["L5 可行性層\nper_person = round（dept_daily ÷ headcount）\nCOUNT ob_emphire WHERE resign_date IS NULL"]
+
+    L0 --> L3
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L5
+```
+
+#### 5.15.3 不變式
+
+| 不變式 | 說明 |
+|---|---|
+| **I-RUN-EST-01**（延伸）| `computeWorkingDayRatios` 為唯一 ratio 計算來源；`dept-estimate` 為第三消費者，不分叉底層 |
+| **I-DEPT-SCOPE-01**（新增）| 處長 scope filter 在 service 層強制套用，後端為安全邊界，前端遮罩僅 UX |
+| **I-DEPT-ORDER-01**（新增）| `deptCells` 依 `deptCode ASC` 確定性排序；`days` 依 `date ASC` |
+
+#### 5.15.4 Guard 變更摘要（OQ-F049-04）
+
+```mermaid
+graph LR
+    subgraph 舊
+        OLD1["dailyEstimate\n@RequireDirector()"]
+        OLD2["estimateListCount\n@RequireDirector()"]
+    end
+    subgraph 新
+        NEW1["dept-estimate\n（新）DirectorOrSectionChief\nclass 基準閘"]
+        NEW2["estimateListCount\n移除 @RequireDirector()\nDirectorOrSectionChief"]
+        NEW3["dailyEstimate\n@RequireDirector() 不動"]
+    end
+    OLD1 -->|不動| NEW3
+    OLD2 -->|開放處長| NEW2
+```
 
 ---
 

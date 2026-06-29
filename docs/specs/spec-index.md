@@ -1,13 +1,21 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.18"
-date: 2026-06-25
+version: "3.19"
+date: 2026-06-26
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.19 / 2026-06-26 / F049 v2.0 Stage 0 試算頁業務化重設計（per-list 技術視角 → 部門維度每日分派可行性）**：依 5 個已核可 user story（US-166~US-170）**升版既有 F049**（非新建編號——Stage 0 試算為同一頁面之重設計，index 既有 F049↔Stage 0 映射）。本輪變更檔案：
+> - **升 v2.0**：[F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md)（新增 **Part B §14~§23**，於 v1.x 千分位 ratio 引擎 / per-list dry-run / calendarSource **之上**加聚合 + 部門投影層，**不分叉底層**。新 AC 命名 AC-AGG/AC-DEPT/AC-GAP/AC-SCOPE/AC-FEAS/AC-TERM + BR-7~BR-16，全可追溯至 US-166~170 AC-ID（§22.3 對照表）。**(1)** §15 全名單彙總預設 + 單一名單鑽探（US-166，**supersedes US-071 AC-1/2/3/4-Default**，取消 v1.3 自動選第一筆）；**(2)** §16 部門投影 `dept_daily = Σ_L list_total×ration/100×dpm/1000`（per-list ration 取自 `ob_dept_pct`，與 F101 一致）+ **保住總量＋標示缺口**模型（`org_total` 不依賴比例必正確、`gap=org_total−Σ部門` 標示不補差、gap=0 不顯示）（US-167）；**(3)** §17 處長唯讀 dept scope 隔離，複用 `listLists` 既有 `getScopeDeptCode→EXISTS ob_dept_pct.obdeptid=scope` 模式，授權放寬 `DirectorGuard`→`DirectorOrSectionChiefGuard`、service 為安全邊界、scope=null→200 空結果（US-168）；**(4)** §18 人均每日件數 `round(部門件數÷在職人數)`、`active_headcount=COUNT(ob_emphire dept_code=D AND resign_date IS NULL)`、headcount=0→「—」、超門檻標紅（US-169）；**(5)** §19 術語清理移除黑名單（rest_flg/base/remainder/ratioPerMille/ob_assign_set/OBPOOLDATA/STAGE0_POOL_WARN_THRESHOLD/AD-E07-8/API 路徑…）+ 業務語言替代（US-170）。**estimate≡run I-RUN-EST-01** 列硬約束。**OQ-167-01 裁定**＝`Math.round` 於最終每格實數。**OQ-167-03（HIGH-RISK）已 spec-writer 對 dev DB 實證**：`ob_emphire.dept_code`（在職）↔`ob_dept_pct.obdeptid` 同代號空間同粒度（各 8 distinct、100% 重疊、無孤兒碼、每 obdeptid 在職人數>0、4 處長各對應 1 distinct dept_code）→§20；殘留 production 複核交架構師。）
+> - **新建圖表**：[diagrams/F049-stage0-dept-projection-flow.mmd](diagrams/F049-stage0-dept-projection-flow.mmd)（Part B 部門每日分派量資料流 flowchart：名單→per-list COUNT→×ration→×千分位→部門/日矩陣→÷在職人數；含 mode/scope filter/缺口/人均門檻分支；mermaid 已驗證）
+> - **同步既有 spec（本 feature 負責）**：[F002-user-login.md](features/F002-user-login.md) v2.0→**v2.0.1**（§4.6.2 Guard 對應表將「名單瀏覽 F048~F049 GET」拆分，F049 Stage 0 試算獨立成列＝`DirectorOrSectionChiefGuard`+service dept scope filter，US-168）
+> - **7 個架構師 OQ（spec-writer 附建議預設，交 system-architect）**：OQ-F049-01（部門矩陣端點拓樸，建議新增獨立唯讀端點、`daily-estimate` 保持 total-agnostic）／OQ-F049-02（SQL 下推 vs in-memory + `list_total` 來源，建議取 F088 物化 `estimateCases` + in-memory 小矩陣合成）／OQ-F049-03（人均門檻儲存，建議 env `STAGE0_MAX_CASES_PER_PERSON_PER_DAY` 預設 null 不標紅）／OQ-F049-04（guard 接線，建議移除 method 級 `@RequireDirector()` 落回 class 級 + service 套 scope）／OQ-F049-05（**OQ-167-03 production 複核**，dev 已 100% 對齊、預期免 mapping 層）／OQ-F049-06（人均分母口徑全在職 vs 限電訪職，建議依 US-169 字面全在職）／OQ-F049-07（警告落點 response `warnings[]` vs 擴 audit enum，建議 `warnings[]` 不擴 enum）
+> - **刻意未動（邊界，交 system-architect / 其他 agent）**：`architecture-spec.md` / AD-E07-8 / AD-E07-29 / `data-model.md`（system-architect 範疇；部門投影 SQL / ratio 共用機制 / 門檻儲存 / 端點拓樸 / guard 實作 = §23 OQ）；`error-handling.md`（無新錯誤碼，沿用 `STAGE0_ESTIMATE_TIMEOUT` / `ASSIGNMENT_LIST_NOT_FOUND`；scope=null 為 200 非錯誤）；code / test / `prototypes/30-stage0-estimate.html`（tdd-implementation / test-designer / UI-UX 範疇）；v1.x 千分位 ratio 演算法 / per-list dry-run / calendarSource 對應（原樣保留為 Part B 底座）
+> - **本輪無殘留使用者待裁 open question**（OQ-167-01 spec-writer 已裁定 Math.round；OQ-167-03 已實證並轉為架構師 production 複核 OQ-F049-05；其餘 7 OQ 均屬架構師 HOW、附建議預設）
+>
 > **v3.18 / 2026-06-25 / F107 計分卡設定頁顯示衍生碼業務語意（decode UI — 落實可回溯性設計原則的 UI 層）**：依已核可 US-165 新建 1 個 feature spec，把已存在的 decode 對照（AD-E07-10-S `scorecard-derived-code-dictionary.md`）呈現在計分卡設定頁，補「config 有碼（如 PROJECT_TP `level1='A'`）、語意只活在引擎 code / markdown」之 UI 呈現缺口。本輪變更檔案：
 > - **新建 v1.0**：[F107-scoring-derived-code-decode-ui.md](features/F107-scoring-derived-code-decode-ui.md)（**唯讀疊加說明、不改計分採計、無新錯誤碼、無新 DB 欄位 / migration、無新側欄/路由**；三項變更：**(1)** **後端同源供給**（OQ-decode-1）`getScoring()` 每個 dimension 新增唯讀 `decode`（`sourceField` + `derivationRule` + `codes[]`）；decode map 為**與引擎 `resolveColumnSource` 同源之後端共用對照常數**（非前端常數、非 config 表）；**(2)** 前端 Tab 3「分數設定」碼層**並陳 decode 業務語意**（原始碼保留利稽核：`A`→借新還舊／`AGENT/UCD/HFC`→代理商/中古車商/和潤自家／CUS_SEX `1/2/3`／三縣市），Tab 2「計分維度」欄層加「來源欄 + 衍生規則」摘要；**(3)** 涵蓋**全部衍生欄**（OQ-decode-2：PROJECT_TP/SALES_STS/CUS_SEX/三縣市/五欄個人法人分流 gating）。**核心 DoD＝OQ-decode-4 同步斷言**「UI/API decode ≡ 引擎衍生規則 + AD-E07-10-S 一致」（防 UI 說 A、引擎做 B 走鐘，BR-4）。與 F106「啟用維度」/ `matchType` 比對型說明**正交**、與 A1/F106 啟用功能不混。OQ-decode-1~4 已全數拍板（spec §13）；殘留 3 個架構師 OQ（decode 常數落點 / AD 同步契約定錨 / 回傳粒度，§10，均附建議預設）交 system-architect）
 > - **新建圖表**：[diagrams/F107-decode-ui-flow.mmd](diagrams/F107-decode-ui-flow.mmd)（decode 同源供給 sequenceDiagram：Tab 切換 → GET /assignment/scoring（唯讀 Guard）→ getScoring 查 columns/scores → 逐維度由 SCORING_DECODE 常數取 decode（無對應→null 優雅降級）→ 旁註 BR-4 同步斷言（decode ≡ resolveColumnSource + AD-E07-10-S §2）→ 回傳每維度附 decode → Tab 3 碼層並陳業務語意（原始碼保留）/ Tab 2 欄層來源欄+規則摘要；全程唯讀；mermaid 已驗證）
@@ -173,8 +181,8 @@ status: Draft
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
 | Feature 文件（E07） | 51 |
-| Mermaid 圖表 | 45 |
-| **總計** | **150** |
+| Mermaid 圖表 | 46 |
+| **總計** | **151** |
 
 ---
 
@@ -284,7 +292,7 @@ status: Draft
 | Feature ID | 文件 | 標題 | 來源 Story | 優先級 |
 |------------|------|------|-----------|--------|
 | F048 | [F048-view-list-definition.md](features/F048-view-list-definition.md) | M01 名單定義入口（月份 + 階段總覽，v2.0 升版合併 US-104/105 入口骨架） | US-070, US-104, US-105 | P0-MVP |
-| F049 | [F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) | Stage 0 每日分派數量估算（含單一 LIST_NO 案件試算） | US-071 | P0-MVP |
+| F049 | [F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md) | **Stage 0 試算頁業務化重設計（v2.0 / 2026-06-26 / US-166~170：per-list 技術視角 → 部門維度每日分派可行性。Part B §14~§23：全名單彙總預設 + 單一名單鑽探（US-166，supersedes US-071 AC-1/2/3/4-Default）／部門投影 `Σ list_total×ration×千分位` + 保住總量＋標示缺口（US-167）／處長唯讀 dept scope 隔離 複用 `getScopeDeptCode→ob_dept_pct.obdeptid`（US-168）／人均每日件數 ÷ 在職人數 + 門檻標紅（US-169）／術語清理移除黑名單（US-170）。estimate≡run I-RUN-EST-01 硬約束（部門投影只在 `computeWorkingDayRatios` 之上加法、不分叉）。OQ-167-03 已對 dev DB 實證：`ob_emphire.dept_code`↔`ob_dept_pct.obdeptid` 同代號空間同粒度（8=8 distinct、100% 重疊）。含單一 LIST_NO 案件試算）** | US-071, US-166, US-167, US-168, US-169, US-170 | P0-MVP（**v2.0**）|
 | F050 | [F050-create-list-definition.md](features/F050-create-list-definition.md) | **草稿階段建立名單定義（v2.3.1 / 2026-05-28 / US-144：最低條件數修正 — 「≥1 條件」門檻僅計非系統固定 condition，best_case 不計入，計數於 inject 前看使用者 payload，AC-10 / BR-6 / §5.4 重寫，沿用 `VALIDATION_ERROR` 422；v2.3 best_case 系統固定條件 — BR-14 `injectSystemFixedConditions` 注入契約 + AC-17，`createList` 驗證後強制注入 / 正規化 `best_case → ['Y']`，竄改靜默修正回 201；v2.1 whitelist-driven 重構：`condition_payload` 為 source of truth + columnName 白名單驗證 `CONDITION_COLUMN_NOT_IN_WHITELIST` + list_period_* reserved `RESERVED_FIELD_IN_CONDITIONS` + 舊名單複製防呆 `LEGACY_LIST_NOT_COPYABLE` + 5 個 entity column 降為 backward-compat 衍生欄位；解除 GAP-LIST §A1~A6）** | US-106, US-107, US-120, US-121, US-125, US-144 | P0-MVP（**v2.3.1**）|
 | F051 | [F051-edit-list-definition.md](features/F051-edit-list-definition.md) | **草稿階段編輯名單定義（v2.2.1 / 2026-05-28 / US-144：最低條件數修正 — 鏡像 F050 v2.3.1，「≥1 條件」僅計非系統固定 condition，僅在提供 conditionPayload 時套用，AC-6 / BR-6 補述；v2.2 對齊 F050 v2.3 — BR-14 + AC-14，`updateList` 對「有提供 conditionPayload」之名單同套 `injectSystemFixedConditions`，竄改靜默修正回 200，舊名單 `condition_payload IS NULL` 維持唯讀不注入；v2.1 condition_payload 覆寫式 + 舊名單條件區塊唯讀 `LEGACY_LIST_CONDITION_READONLY`；限 `stage = 'draft'`）** | US-106, US-107, US-121, US-123, US-144 | P0-MVP（**v2.2.1**）|
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
@@ -453,7 +461,8 @@ status: Draft
 
 | 文件 | 說明 | 圖表類型 | 相關 Feature |
 |------|------|---------|-------------|
-| [diagrams/F049-stage0-estimate-flow.mmd](diagrams/F049-stage0-estimate-flow.mmd) | Stage 0 每日分派數量估算流程 | Sequence | F049 |
+| [diagrams/F049-stage0-estimate-flow.mmd](diagrams/F049-stage0-estimate-flow.mmd) | Stage 0 每日分派數量估算流程（v1.x per-list 試算） | Sequence | F049 |
+| [diagrams/F049-stage0-dept-projection-flow.mmd](diagrams/F049-stage0-dept-projection-flow.mmd) | **F049 v2.0 Part B 部門每日分派量資料流（名單 → per-list COUNT → ×ration → ×千分位 → 部門/日矩陣 → ÷在職人數；含 scope filter + 缺口分支 + 人均門檻；mermaid 已驗證）** | Flowchart | F049, F079, F088 |
 | [diagrams/F061-assignment-run-flow.mmd](diagrams/F061-assignment-run-flow.mmd) | 月跑 Stage 0~4 執行引擎流程 | Flowchart | F061 |
 | [diagrams/F066-snapshot-detail-flow.mmd](diagrams/F066-snapshot-detail-flow.mmd) | 執行快照詳情載入流程 | Sequence | F066 |
 | [diagrams/F067-run-comparison-flow.mmd](diagrams/F067-run-comparison-flow.mmd) | 兩次執行結果差異比對流程 | Sequence | F067 |

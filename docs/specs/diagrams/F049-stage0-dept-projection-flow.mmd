@@ -1,0 +1,49 @@
+%% F049 v2.0 Part B — Stage 0 試算頁業務化重設計：部門每日分派量資料流
+%% 名單 → per-list COUNT → 乘 ration → 乘 千分位 → 部門乘日矩陣 → 除 在職人數；含 scope filter 與 缺口分支
+flowchart TB
+    subgraph L0L1["L0 + L1 既有引擎（不分叉，I-RUN-EST-01）"]
+        DPM["每日千分位 dpm<br/>computeWorkingDayRatios<br/>與月跑 Stage 4 ASSIGNDAY 共用"]
+        LT["每份名單估算件數 list_total L<br/>per-list Stage1 dry-run COUNT<br/>建議取 F088 物化 estimateCases"]
+    end
+
+    MODE{"顯示模式 US-166"}
+    MODE -->|"全名單彙總 預設"| SALL["名單集合 S 等於 全部 active"]
+    MODE -->|"單一名單鑽探"| SONE["名單集合 S 等於 選定 list_no"]
+
+    RAT["部門比例 ration L D<br/>ob_dept_pct per-list 百分比 0 到 100<br/>來源 F079"]
+
+    SALL --> PROJ
+    SONE --> PROJ
+    LT --> PROJ
+    RAT --> PROJ
+    DPM --> PROJ
+    PROJ["L3 部門投影 US-167<br/>dept_daily 等於 加總 list_total 乘 比例 乘 千分位<br/>休息日 千分位為 0 故全部門為 0"]
+
+    PROJ --> ORG["org_total 全名單總量<br/>加總 list_total 乘 千分位<br/>不依賴部門比例 必正確"]
+    ORG --> GAPQ{"缺口判定 US-167<br/>gap 等於 org_total 減 已分派部門合計"}
+    GAPQ -->|"gap 大於 0"| GAPSHOW["橘色缺口列<br/>尚有 X 件未分派到部門<br/>不自動補差"]
+    GAPQ -->|"gap 等於 0"| NOGAP["不顯示缺口列"]
+
+    PROJ --> HC["L5 可行性 US-169<br/>人均 等於 round 部門件數 除 在職人數"]
+    EMP["在職人數 active_headcount D<br/>ob_emphire dept_code 等於 D<br/>且 resign_date IS NULL"]
+    EMP --> HC
+    HC --> HCZERO{"在職人數 等於 0"}
+    HCZERO -->|"是"| DASH["人均顯示破折號<br/>橘色提示 DEPT_HEADCOUNT_ZERO<br/>不出 Infinity 或 NaN"]
+    HCZERO -->|"否"| THQ{"超過每人每日上限門檻"}
+    THQ -->|"是"| RED["紅色警示<br/>超過每人每日上限"]
+    THQ -->|"否 或 門檻未設定"| NORMAL["人均正常顯示"]
+
+    PROJ --> SCOPEQ{"L4 範圍隔離 US-168<br/>actor 角色"}
+    SCOPEQ -->|"處長 section_chief"| SFLT["scope filter<br/>getScopeDeptCode 反查 ob_emphire<br/>只保留 obdeptid 等於 scope 之部門列<br/>不顯示全部門合計"]
+    SCOPEQ -->|"scope 為 null"| SNULL["200 空結果<br/>友善訊息 SCOPE_UNRESOLVED<br/>不回 403 不回 500"]
+    SCOPEQ -->|"部長 director 或 admin"| SALLDEPT["全部門列 加 全部門合計"]
+
+    GAPSHOW --> OUT
+    NOGAP --> OUT
+    DASH --> OUT
+    RED --> OUT
+    NORMAL --> OUT
+    SFLT --> OUT
+    SNULL --> OUT
+    SALLDEPT --> OUT
+    OUT["唯讀回傳 部門乘日矩陣<br/>不寫入任何分派表 BR-1<br/>顯示層套術語清理 US-170"]
