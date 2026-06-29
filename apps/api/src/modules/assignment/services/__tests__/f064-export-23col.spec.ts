@@ -39,6 +39,7 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -65,6 +66,7 @@ async function buildModule(): Promise<Env> {
           AssignmentAuditLog,
           ObEmplSet,
           ObEmphire,
+          ObDeptPct,
           User,
         ],
         synchronize: true,
@@ -75,6 +77,7 @@ async function buildModule(): Promise<Env> {
         AssignmentAuditLog,
         ObEmplSet,
         ObEmphire,
+        ObDeptPct,
         User,
       ]),
     ],
