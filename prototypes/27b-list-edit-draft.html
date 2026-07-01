@@ -492,16 +492,26 @@
     // v1.7 / US-144：每筆新增 isSystemFixed 旗標（best_case = true，其餘 = false）；
     //                前端鎖定列 + dropdown 排除由此旗標驅動（不 hardcode 字串 best_case）
     // ============================================================
+    // v1.7 / US-144 + F109 / US-172：每筆標記 dataSource（'ob_pool_data' 案件資料 / 'customer_core' 客戶資料）
     const FIELDS = [
-      { columnName: 'prod_kind',   displayName: '產品類別',         fieldType: 'categorical', isActive: true,  isSystemFixed: false },
-      { columnName: 'caseyear',    displayName: '進件 / 滿期年數',  fieldType: 'categorical', isActive: true,  isSystemFixed: false },
-      { columnName: 'spec_tp',     displayName: '專案類別',         fieldType: 'categorical', isActive: true,  isSystemFixed: false },
-      { columnName: 'case_status', displayName: '案件結清期別',     fieldType: 'categorical', isActive: true,  isSystemFixed: false },
-      { columnName: 'settle_src',  displayName: '他行代償',         fieldType: 'categorical', isActive: true,  isSystemFixed: false },
-      { columnName: 'best_case',   displayName: '優質案件',         fieldType: 'categorical', isActive: true,  isSystemFixed: true  },  // v1.7 / US-144：系統固定條件，值鎖定 Y；對應原系統 OBPOOLDATA.BEST_CASE / OBMLISTDF.PROD_BEST 硬編碼 'Y'
-      { columnName: 'month_cnt',   displayName: '撈取月份計數',     fieldType: 'numeric',     isActive: true,  isSystemFixed: false },
-      { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true,  isSystemFixed: false },
-      { columnName: 'payt_term',   displayName: '還款期別',         fieldType: 'numeric',     isActive: false, isSystemFixed: false }
+      { columnName: 'prod_kind',   displayName: '產品類別',         fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'caseyear',    displayName: '進件 / 滿期年數',  fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'spec_tp',     displayName: '專案類別',         fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'case_status', displayName: '案件結清期別',     fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'settle_src',  displayName: '他行代償',         fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'best_case',   displayName: '優質案件',         fieldType: 'categorical', isActive: true,  isSystemFixed: true,  dataSource: 'ob_pool_data' },  // v1.7 / US-144：系統固定條件，值鎖定 Y；對應原系統 OBPOOLDATA.BEST_CASE / OBMLISTDF.PROD_BEST 硬編碼 'Y'
+      { columnName: 'month_cnt',   displayName: '撈取月份計數',     fieldType: 'numeric',     isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'payt_term',   displayName: '還款期別',         fieldType: 'numeric',     isActive: false, isSystemFixed: false, dataSource: 'ob_pool_data' },
+      // ── F109 / US-172：客戶資料（customer_core）來源篩選欄位（共 8 欄，可跨群組與案件欄位並存）──
+      { columnName: 'gender',              displayName: '性別',     fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },
+      { columnName: 'date_of_birth',       displayName: '年齡',     fieldType: 'numeric',     isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },  // 由生日即時計算實足年齡，BETWEEN 最小–最大
+      { columnName: 'occupation_desc',     displayName: '職業別',   fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },
+      { columnName: 'education_desc',      displayName: '教育程度', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },
+      { columnName: 'marital_status_desc', displayName: '婚姻狀況', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },
+      { columnName: 'customer_type_desc',  displayName: '身分別',   fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },
+      { columnName: 'monthly_income_desc', displayName: '收入區間', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' },
+      { columnName: 'cpost_city',          displayName: '居住城市', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core' }
     ];
 
     // v1.7 / US-144 AC-3：系統固定篩選條件預設值（force-present 於 condition_payload，值鎖定為 ['Y']）
@@ -532,7 +542,17 @@
       spec_tp:     [ { v: '02', l: '中古車', active: true }, { v: '04', l: '原融代償', active: true }, { v: '05', l: '在庫融資', active: true }, { v: '06', l: '專案融資', active: true }, { v: '11', l: '保單', active: true }, { v: '12', l: '信貸', active: true } ],
       case_status: [ { v: '01', l: '期中（不含當月滿期）', active: true }, { v: '02', l: '中結', active: true }, { v: '03', l: '滿期（含當月滿期）', active: true }, { v: '04', l: '滿期（已結清）', active: true } ],
       settle_src:  [ { v: 'Y', l: '含他行代償', active: true }, { v: 'N', l: '不含他行代償', active: true } ],
-      best_case:   [ { v: 'Y', l: '優質案件', active: true }, { v: 'N', l: '非優質案件', active: true } ]  // v2.1.1 / US-129 AC-1
+      best_case:   [ { v: 'Y', l: '優質案件', active: true }, { v: 'N', l: '非優質案件', active: true } ],  // v2.1.1 / US-129 AC-1
+      // ── F109 / US-172：客戶資料（customer_core）categorical 欄位可選值 ──
+      // 性別為 code→label（AC-5）；其餘 *_desc 欄位 customer_core 儲存值即中文，故 value = label。
+      gender:              [ { v: '1', l: '男', active: true }, { v: '2', l: '女', active: true }, { v: '3', l: '法人', active: true } ],
+      monthly_income_desc: [ { v: '20,000以下', l: '20,000以下', active: true }, { v: '20,001~30,000', l: '20,001~30,000', active: true }, { v: '30,001~40,000', l: '30,001~40,000', active: true }, { v: '40,001~50,000', l: '40,001~50,000', active: true }, { v: '50,001~60,000', l: '50,001~60,000', active: true }, { v: '60,001~70,000', l: '60,001~70,000', active: true }, { v: '70,001~80,000', l: '70,001~80,000', active: true }, { v: '80,001以上', l: '80,001以上', active: true }, { v: '未確定', l: '未確定', active: true } ],
+      cpost_city:          [ { v: '臺北市', l: '臺北市', active: true }, { v: '新北市', l: '新北市', active: true }, { v: '桃園市', l: '桃園市', active: true }, { v: '臺中市', l: '臺中市', active: true }, { v: '臺南市', l: '臺南市', active: true }, { v: '高雄市', l: '高雄市', active: true }, { v: '基隆市', l: '基隆市', active: true }, { v: '新竹市', l: '新竹市', active: true }, { v: '嘉義市', l: '嘉義市', active: true }, { v: '新竹縣', l: '新竹縣', active: true }, { v: '苗栗縣', l: '苗栗縣', active: true }, { v: '彰化縣', l: '彰化縣', active: true }, { v: '南投縣', l: '南投縣', active: true }, { v: '雲林縣', l: '雲林縣', active: true }, { v: '嘉義縣', l: '嘉義縣', active: true }, { v: '屏東縣', l: '屏東縣', active: true }, { v: '宜蘭縣', l: '宜蘭縣', active: true }, { v: '花蓮縣', l: '花蓮縣', active: true }, { v: '臺東縣', l: '臺東縣', active: true }, { v: '澎湖縣', l: '澎湖縣', active: true }, { v: '金門縣', l: '金門縣', active: true }, { v: '連江縣', l: '連江縣', active: true } ],
+      customer_type_desc:  [ { v: '個人', l: '個人', active: true }, { v: '法人', l: '法人', active: true }, { v: '外籍人士', l: '外籍人士', active: true }, { v: '虛擬車商編號', l: '虛擬車商編號', active: true } ],
+      marital_status_desc: [ { v: '未婚', l: '未婚', active: true }, { v: '已婚', l: '已婚', active: true }, { v: '離婚', l: '離婚', active: true }, { v: '喪偶', l: '喪偶', active: true }, { v: '不詳', l: '不詳', active: true } ],
+      education_desc:      [ { v: '博士', l: '博士', active: true }, { v: '碩士', l: '碩士', active: true }, { v: '大學', l: '大學', active: true }, { v: '專科', l: '專科', active: true }, { v: '高中職', l: '高中職', active: true }, { v: '國中', l: '國中', active: true }, { v: '國小', l: '國小', active: true }, { v: '其他', l: '其他（含不詳）', active: true } ],
+      // 職業別共 55 種，示範前 10 筆
+      occupation_desc:     [ { v: '軍公教', l: '軍公教', active: true }, { v: '教師', l: '教師', active: true }, { v: '醫師', l: '醫師', active: true }, { v: '護理人員', l: '護理人員', active: true }, { v: '工程師', l: '工程師', active: true }, { v: '會計師', l: '會計師', active: true }, { v: '律師', l: '律師', active: true }, { v: '服務業', l: '服務業', active: true }, { v: '製造業', l: '製造業', active: true }, { v: '自營商', l: '自營商', active: true } ]
     };
 
     // ============================================================
@@ -826,15 +846,20 @@
       if (!dd.classList.contains('hidden')) renderAddFieldList('');
     }
     function filterAddFieldDropdown(kw) { renderAddFieldList(kw); }
+    // F109 / US-172：可選欄位依資料來源分組呈現（案件資料 / 客戶資料），使用者可跨群組選取
     function renderAddFieldList(kw) {
       const ul = document.getElementById('addFieldList');
       const k = (kw || '').toLowerCase().trim();
       const avail = availableFields().filter(f => !k || f.columnName.toLowerCase().includes(k) || f.displayName.includes(k));
       if (avail.length === 0) {
-        ul.innerHTML = '<li class="px-3 py-4 text-center text-xs text-gray-400">所有 active 欄位皆已加入條件中</li>';
+        ul.innerHTML = '<li class="px-3 py-4 text-center text-xs text-gray-400">所有可選欄位皆已加入條件中</li>';
         return;
       }
-      ul.innerHTML = avail.map(f => {
+      const GROUPS = [
+        { key: 'ob_pool_data',  label: '案件資料', table: 'ob_pool_data',  icon: 'folder'  },
+        { key: 'customer_core', label: '客戶資料', table: 'customer_core', icon: 'contact' }
+      ];
+      const fieldItem = (f) => {
         const typeBg = f.fieldType === 'categorical' ? '#DBEAFE' : f.fieldType === 'numeric' ? '#EDE9FE' : '#CFFAFE';
         const typeFg = f.fieldType === 'categorical' ? '#1D4ED8' : f.fieldType === 'numeric' ? '#6D28D9' : '#0E7490';
         return `
@@ -846,9 +871,21 @@
               </div>
               <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${typeBg};color:${typeFg};">${f.fieldType}</span>
             </button>
-          </li>
-        `;
-      }).join('');
+          </li>`;
+      };
+      let html = '';
+      GROUPS.forEach(g => {
+        const items = avail.filter(f => (f.dataSource || 'ob_pool_data') === g.key);
+        if (items.length === 0) return;
+        html += `
+          <li class="px-3 pt-2 pb-1 flex items-center gap-1.5 bg-gray-50/70 border-b border-border/60">
+            <i data-lucide="${g.icon}" class="w-3 h-3 text-gray-400"></i>
+            <span class="text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">${g.label}</span>
+            <span class="ml-auto text-[10px] font-mono text-gray-300 normal-case">${g.table}</span>
+          </li>`;
+        html += items.map(fieldItem).join('');
+      });
+      ul.innerHTML = html;
       lucide.createIcons();
     }
     document.addEventListener('click', function(e) {
@@ -964,7 +1001,7 @@
             const isInactive = opt && !opt.active;
             const chipCls = isInactive ? 'val-chip val-chip-inactive' : 'val-chip';
             const icon = isInactive ? '<i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i>' : '';
-            return `<span class="${chipCls}">${icon}${v} · ${label}<button type="button" onclick="toggleCatValue(${c.id}, '${v}')"><i data-lucide="x" class="w-3 h-3"></i></button></span>`;
+            return `<span class="${chipCls}">${icon}${v === label ? label : v + ' · ' + label}<button type="button" onclick="toggleCatValue(${c.id}, '${v}')"><i data-lucide="x" class="w-3 h-3"></i></button></span>`;
           }).join(' ');
           const dropdownOpts = opts.map(o => {
             const selected = selectedVals.includes(o.v);
@@ -972,7 +1009,7 @@
             const tip = c.columnName === 'case_status' && CASE_STATUS_TOOLTIPS[o.v] ? ` title="${CASE_STATUS_TOOLTIPS[o.v]}"` : '';
             return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}"${tip}>
               <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
-              <span class="font-mono text-xs text-gray-500 w-8">${o.v}</span>
+              ${o.v === o.l ? '' : `<span class="font-mono text-xs text-gray-500 w-8 shrink-0">${o.v}</span>`}
               <span class="text-gray-700">${o.l}${inactiveTag}</span>
             </label>`;
           }).join('');
