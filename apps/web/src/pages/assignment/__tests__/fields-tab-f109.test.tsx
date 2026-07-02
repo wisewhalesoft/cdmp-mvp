@@ -4,7 +4,7 @@
  * 對應 prototype: /prototypes/37-base-code.html（L190-194 來源 filter、L214 資料來源欄）
  * 渲染 FieldBasePage（tab=fields → FieldsTab），mock listFields 回傳含 dataSource 之 fixture。
  */
-import { render, screen, fireEvent, within, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FieldBasePage } from '../field-base-page';
