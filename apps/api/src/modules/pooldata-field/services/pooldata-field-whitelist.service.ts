@@ -43,6 +43,8 @@ export interface PooldataFieldItem {
   isActive: boolean;
   // F075 v1.7 / US-144 AC-19：系統固定欄位旗標（best_case=true，其餘=false）
   isSystemFixed: boolean;
+  // F109 / US-172 / AC-2：資料來源（'ob_pool_data' 案件資料 / 'customer_core' 客戶資料）
+  dataSource: 'ob_pool_data' | 'customer_core';
   createdAt: string;
   updatedAt: string;
 }
@@ -483,6 +485,8 @@ export class PooldataFieldWhitelistService {
       // F075 v1.7 / US-144 AC-19：camelCase isSystemFixed（DB 欄位 is_system_fixed）；
       //   舊資料 / 未設定時防呆為 false
       isSystemFixed: row.isSystemFixed ?? false,
+      // F109 / US-172 / AC-2：資料來源（DB 欄位 data_source）；舊資料 / 未設定時防呆為 'ob_pool_data'
+      dataSource: row.dataSource ?? 'ob_pool_data',
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

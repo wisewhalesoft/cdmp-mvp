@@ -36,6 +36,26 @@ export class PooldataFieldWhitelist {
   is_active: boolean;
 
   /**
+   * F109 / US-172 / AD-E07-37 §4.1：篩選欄位資料來源。
+   *
+   * `'ob_pool_data'`（案件資料，既有 7 筆 + 經 API 新增者一律 DEFAULT）/
+   * `'customer_core'`（客戶資料，F109 seed 之 8 欄）。
+   *
+   * 對齊 m305 migration（PG: VARCHAR(20) NOT NULL DEFAULT 'ob_pool_data'
+   *   + CHECK (data_source IN ('ob_pool_data','customer_core')) / SQLite: 無 CHECK，應用層保證）。
+   *
+   * 驅動：M06 列表「資料來源」欄 + F050/F051「新增條件」選單分組（依 dataSource 旗標渲染）；
+   *   Stage 1 條件式 LEFT JOIN customer_core 之 data_source 判定固化來源（stampConditionDataSource）。
+   */
+  @Column({
+    name: 'data_source',
+    type: 'varchar',
+    length: 20,
+    default: 'ob_pool_data',
+  })
+  dataSource: 'ob_pool_data' | 'customer_core';
+
+  /**
    * US-144 / AD-E07-18 §18.12.3：系統固定篩選欄位旗標。
    *
    * `is_system_fixed = true` 之欄位（目前唯一：`best_case`）：
