@@ -84,22 +84,31 @@ docker compose logs -f api
 （真實業務資料仍需之後接來源跑 ETL / 月跑才會有。）
 
 ```bash
+# 0) 建 .env（docker compose 會自動讀取，故之後指令不必再帶環境變數）
+#    金鑰用 openssl 現產；產一次、存好、別遺失/別再換（換掉=已補的 datasource 密碼全部解不開）
+cat > .env <<EOF
+NODE_ENV=production
+AES_ENCRYPTION_KEY=$(openssl rand -hex 32)
+JWT_SECRET=$(openssl rand -hex 32)
+EOF
+grep -qxF '.env' .gitignore || echo '.env' >> .gitignore   # 確保金鑰不進 git
+cat .env                                                     # 看一眼產出的值
+
 # 1) 先只起 DB（fresh 部署可先 docker compose down -v 清空 volume），等 healthy
 docker compose up -d postgres
 
 # 2) 一鍵 bootstrap：migration(建全表+篩選欄位) → seed(帳號) → seed-datasource(9個空殼) → data-seed(計分卡/pipeline/擷取任務)
 #    datasource 一律建空殼（密碼留空），部署後於 UI「資料來源」逐一補密碼並測試連線
-NODE_ENV=production \
-AES_ENCRYPTION_KEY=<64位hex> JWT_SECRET=<jwt密鑰> \
 docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
 
 # 3) 起 api / worker / web（synchronize 已關，schema 來自 migration baseline）
-NODE_ENV=production AES_ENCRYPTION_KEY=<同上> JWT_SECRET=<同上> docker compose up -d
+docker compose up -d
 ```
 
-> - `AES_ENCRYPTION_KEY` 在 bootstrap 與 api/worker 之間**必須一致**（datasource 密碼加解密），否則 UI 測試連線會失敗。
+> - 步驟 2、3 不必再帶 `NODE_ENV` / `AES_ENCRYPTION_KEY` / `JWT_SECRET` —— `docker compose` 會自動套用同目錄的 `.env`，三個服務共用同一把 `AES_ENCRYPTION_KEY`（datasource 密碼加解密），自然一致。
+> - **顧好 `.env`**：UI 補的 datasource 密碼用這把 key 加密；刪除 / 更換 / 遺失 = 密碼全部作廢需重補。已在 `.gitignore`，另請自行備份金鑰。
 > - migration baseline（`1711360000000-BaselineSchema` + `1711360000001-BaselineReferenceData`）為 schema 與篩選欄位/角色的唯一來源；計分卡 6 表由 `data-seed` 從 `seeds/data/*.json` 灌。
-> - 重跑 `bootstrap` 安全（冪等）。本機開發不需此流程：`NODE_ENV` 預設 `development`，`docker compose up -d` 仍以 `synchronize` 建表。
+> - 重跑 `bootstrap` 安全（冪等）。本機開發不需此流程：不建 `.env`，`NODE_ENV` 預設 `development`，`docker compose up -d` 仍以 `synchronize` 建表。
 
 ### Test — 一鍵跑測試
 
