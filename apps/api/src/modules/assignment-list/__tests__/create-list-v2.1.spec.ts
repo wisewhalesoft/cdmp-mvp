@@ -646,10 +646,11 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
       YM,
     );
     expect(res.listNo).not.toBe(src.listNo);
-    // 新名單 condition_payload = 前端送入的 payload
+    // 新名單 condition_payload = 前端送入的 payload（F109 / AD-E07-37 §6：stampConditionDataSource
+    //   固化 dataSource；prod_kind → ob_pool_data）
     const saved = await env.listRepo.findOne({ where: { list_no: res.listNo } });
     expect(saved!.condition_payload).toEqual({
-      conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+      conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'], dataSource: 'ob_pool_data' }],
       logic: 'AND',
     });
   });

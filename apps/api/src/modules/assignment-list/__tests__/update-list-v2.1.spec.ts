@@ -515,8 +515,15 @@ describe('F051 v2.1 updateList integration (Phase 5a 波7)', () => {
     expect(last.entity_type).toBe('ob_list_definition');
     expect(last.action).toBe('UPDATE');
     expect(last.entity_id).toBe(listNo);
+    // before_value：直接 seedList 插入之原始 payload（未經 service stamp）→ 無 dataSource
     expect((last.before_value as any).condition_payload).toEqual(beforePayload);
-    expect((last.after_value as any).condition_payload).toEqual(newPayload);
+    // after_value：經 updateList 之 stampConditionDataSource 固化 dataSource（F109 / AD-E07-37 §6；spec_tp→ob_pool_data）
+    expect((last.after_value as any).condition_payload).toEqual({
+      conditions: [
+        { columnName: 'spec_tp', fieldType: 'categorical', values: ['11', '12'], dataSource: 'ob_pool_data' },
+      ],
+      logic: 'AND',
+    });
   });
 
   // ==================================================================
