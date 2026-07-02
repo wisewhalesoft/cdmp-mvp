@@ -125,6 +125,18 @@ docker compose up -d
 > - migration baseline（`1711360000000-BaselineSchema` + `1711360000001-BaselineReferenceData`）為 schema 與篩選欄位/角色的唯一來源；計分卡 6 表由 `data-seed` 從 `seeds/data/*.json` 灌。
 > - 重跑 `bootstrap` 安全（冪等）。本機開發不需此流程：不建 `.env`，`NODE_ENV` 預設 `development`，`docker compose up -d` 仍以 `synchronize` 建表。
 
+### 服務常駐 / 重開機自動啟動
+
+- **重開機自動起來**：`postgres` / `api` / `worker` / `web` 皆設 `restart: unless-stopped`，主機或 Docker daemon 重啟後會自動拉回（除非你手動 `docker stop`）。`bootstrap` 是一次性任務，**刻意不設** restart。
+  - 政策要生效需**重建一次容器**：`docker compose up -d`（既有容器不會自動套用新政策）。
+  - 確認：`docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' cdmp-api cdmp-postgres cdmp-worker cdmp-web`（應為 `unless-stopped`）。
+- **Docker daemon 開機自啟**（Linux 主機層，只需做一次）：
+  ```bash
+  systemctl is-enabled docker || sudo systemctl enable docker
+  ```
+- **資料持久化**：DB 存於具名 volume `pgdata`，重啟 / 重建容器 / 主機重開機都**不會掉**。只有 `docker compose down -v`（帶 `-v`）才會清空。UI 補的 datasource 密碼、跑出來的業務資料都在 `pgdata` 裡。
+- 平常維運：`docker compose restart <服務>` 重啟單一服務；`docker compose up -d` 套用 compose 變更；**都不需重跑 bootstrap**（除非清庫）。
+
 ### Test — 一鍵跑測試
 
 測試環境使用獨立的 `docker-compose.test.yml`，透過 `--profile` 選擇要跑的測試範圍。
