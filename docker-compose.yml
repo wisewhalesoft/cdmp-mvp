@@ -98,52 +98,11 @@ services:
     depends_on:
       - api
 
-  seed:
-    build:
-      context: ./apps/api
-      target: dev
-    container_name: cdmp-seed
-    environment:
-      DB_TYPE: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: cdmp
-      DB_PASSWORD: cdmp_secret
-      DB_NAME: cdmp_dev
-    command: npx ts-node -r tsconfig-paths/register src/database/seeds/seed.ts
-    depends_on:
-      postgres:
-        condition: service_healthy
-    profiles:
-      - seed
-
-  # E07 計分卡 6 表初始化 + F075/F076 篩選欄位白名單 seed migration（冪等）
-  # 流程：(1) typeorm migration:run — 套用所有未跑的 schema/seed migration（含 m22 / m24 / m28
-  #        F075 v1.4.6 5 欄對齊）；(2) prod-data-seed — ob_levelcard 6 表初始化
-  # 用法：docker compose --profile data-seed up data-seed
-  data-seed:
-    build:
-      context: ./apps/api
-      target: dev
-    container_name: cdmp-data-seed
-    environment:
-      DB_TYPE: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: cdmp
-      DB_PASSWORD: cdmp_secret
-      DB_NAME: cdmp_dev
-    command:
-      - sh
-      - -c
-      - "npm run migration:run && npx ts-node -r tsconfig-paths/register src/database/seeds/prod-data-seed.ts"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    profiles:
-      - data-seed
-
   # 一鍵部署 bootstrap（冪等）：baseline migration → 帳號(users) → datasource 空殼(9個) → 計分卡/pipeline/擷取任務。
+  # 取代舊 seed / data-seed 兩個 profile（已移除）；如需單獨重跑某步，於容器內執行對應 npm script：
+  #   docker exec cdmp-api npm run seed            # 只重建測試帳號
+  #   docker exec cdmp-api npm run seed-datasource # 只補 datasource 空殼
+  #   docker exec cdmp-api npm run data-seed       # 只 reconcile 計分卡 / pipeline / 擷取任務
   # 正式部署（fresh DB）流程：
   #   1) docker compose up -d postgres            # 等 healthy
   #   2) NODE_ENV=production docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit

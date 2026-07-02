@@ -39,27 +39,29 @@ cdmp-mvp/
 ### Development — 一鍵啟動 (DB + API + Frontend)
 
 ```bash
-# 啟動所有服務 (PostgreSQL + API + Frontend)
+# 啟動所有服務 (PostgreSQL + API + Frontend)；dev 預設 NODE_ENV=development，synchronize 自動建表
 docker compose up -d
 
-# 首次啟動需執行 Seed 建立測試帳號
-docker compose --profile seed up seed
+# 首次啟動：建測試帳號（synchronize 已建 schema，故不需 migration）
+docker exec cdmp-api npm run seed
 
-# E07 計分卡 6 表初始化（從 reference/DumpData 載入；冪等：表為空才 INSERT）
-docker compose --profile data-seed up data-seed
+# 需要 E07 計分卡 / pipeline / 擷取任務時（需先有 datasource；冪等 reconcile）
+docker exec cdmp-api npm run seed-datasource   # datasource 空殼（可選，供擷取任務 FK）
+docker exec cdmp-api npm run data-seed         # 計分卡 6 表 + pipeline + 擷取任務
 ```
 
+> 正式/新環境部署請改用下方「一鍵 Bootstrap」（一次建好全部，含 migration）。
+
 啟動完成後開啟瀏覽器：
-- Frontend: http://localhost:5173
+- Frontend: http://localhost:5174
 - API: http://localhost:3000/api/v1
 
 | Service | Container | Port | Description |
 |---------|-----------|------|-------------|
 | postgres | cdmp-postgres | 5432 | PostgreSQL 16 (cdmp_dev) |
 | api | cdmp-api | 3000 | NestJS backend (hot reload via volume mount) |
-| web | cdmp-web | 5173 | React frontend (HMR via volume mount) |
-| seed | cdmp-seed | — | 一次性 seed script — 測試帳號（需手動觸發） |
-| data-seed | cdmp-data-seed | — | 一次性 seed script — E07 計分卡 6 表初始化資料（需手動觸發） |
+| web | cdmp-web | 5174 | React frontend（對外 5174，容器內 5173）|
+| bootstrap | cdmp-bootstrap | — | 一次性一鍵建置（`--profile bootstrap`，見「正式部署」）|
 
 ```bash
 # 停止所有服務
@@ -169,7 +171,7 @@ npm run web:test
 
 ## E07 計分卡初始資料
 
-`data-seed` profile 將 `reference/DumpData/` 中 2026-05-05 dump 匯入 E07 計分卡相關 6 表，作為新環境部署的初始資料：
+`data-seed`（`docker exec cdmp-api npm run data-seed`，或由 bootstrap 自動執行）將 `reference/DumpData/` 中 dump 匯入 E07 計分卡相關 6 表，作為新環境部署的初始資料：
 
 | Table | 來源 dump | 載入筆數 | 特殊處理 |
 |-------|-----------|---------|---------|
