@@ -83,6 +83,21 @@ docker compose logs -f api
 `bootstrap` 冪等，一次建好：**全部資料表**＋帳號＋資料來源＋擷取任務＋ETL Pipeline＋篩選欄位＋計分卡設定。
 （真實業務資料仍需之後接來源跑 ETL / 月跑才會有。）
 
+**取得 / 更新程式碼：**
+
+```bash
+# 首次部署：clone（需 GitHub 存取權；HTTPS 會提示帳號/PAT，或改用 SSH URL）
+git clone https://github.com/wisewhalesoft/cdmp-mvp.git
+cd cdmp-mvp
+
+# 已部署過：更新到最新 main
+#   .env 已 gitignore、web 5174 已進 repo → pull 應乾淨
+#   若被本機改動擋住：git stash && git pull && git stash pop
+git pull
+```
+
+**建置與啟動（首次或重建 DB 時）：**
+
 ```bash
 # 0) 建 .env（docker compose 會自動讀取，故之後指令不必再帶環境變數）
 #    金鑰用 openssl 現產；產一次、存好、別遺失/別再換（換掉=已補的 datasource 密碼全部解不開）
