@@ -1,10 +1,14 @@
 ---
 type: architecture-spec
-version: "2.24"
+version: "2.25"
 status: draft
-last_updated: 2026-06-26
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105]
+last_updated: 2026-07-02
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109]
 ---
+
+> **v2.25 / 2026-07-02 變更摘要（AD-E07-37 F109 客戶資料來源篩選欄位）**：
+>
+> 新增 **§5.16「客戶資料來源篩選欄位（F109 / AD-E07-37）」** 與決策記錄 [`implementation-log/AD-E07-37-f109-customer-source-filter.md`](implementation-log/AD-E07-37-f109-customer-source-filter.md)。核心決策：(1) **OQ-F109-01**：condition 之 `data_source` 判定採雙層機制——寫入時固化進 `condition_payload.conditions[].dataSource`（`createList`/`updateList` 新增 `stampConditionDataSource` 步驟，置於 `injectSystemFixedConditions` 之後）為主，讀取時對缺值（F109 上線前既有名單）以靜態常數 `CUSTOMER_CORE_COLUMN_NAMES` fallback，兩者皆不 runtime 查白名單（維持 F075 BR-4）；(2) **OQ-F109-02**：composer `buildStage1WhereConditions(list)` 簽名不變，customer_core 條件（AGE / LEFT3 衍生 + 直接比對）改由新函式 `buildCustomerCoreClause`（`stage1-customer-core-clause.ts`）產生，由 `buildStage1Sql`（PG 下推）與 `executeStage1Chain`（chain 路徑）**共用同一份 SQL 產生邏輯**取得等價保證（而非各自實作再測試守住）；`Stage1SqlCore` 新增 `customerCoreJoin` 欄位，條件式注入 `LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no`；(3) **OQ-F109-03**：`customer_core.gender`（非 `cus_sex`）值域乾淨（`1`/`2`/`3` + 少量雜訊碼），遵循 story 直接 `IN` 比對；(4) **OQ-F109-04**：JOIN 兩側索引已齊備（`idx_customer_core_source_no` UNIQUE + `idx_ob_pool_data_custo_no`），無需新 migration；(5) **OQ-F109-05**：維持 seed-only，不擴充 `available-columns` / `POST` 可寫 `dataSource`。新增 migration m305（schema）/ m306（8 欄白名單 + 7 欄可選值 seed）。covers 補入 F108/F109。
 
 > **v2.24 / 2026-06-26 變更摘要（AD-E07-36 F049 v2.0 Stage 0 試算頁業務化重設計）**：
 >
@@ -2438,6 +2442,61 @@ graph LR
     OLD1 -->|不動| NEW3
     OLD2 -->|開放處長| NEW2
 ```
+
+---
+
+### 5.16 客戶資料來源篩選欄位（F109 / AD-E07-37）
+
+> 完整決策（5 個 OQ 裁定）、程式碼契約（`buildCustomerCoreClause` 簽名 + SQL 模板）、migration 計畫、不變式：見
+> [`implementation-log/AD-E07-37-f109-customer-source-filter.md`](implementation-log/AD-E07-37-f109-customer-source-filter.md)。
+> 本節為架構主文概要，供 Test Designer / TDD Developer 快速定位。
+
+#### 5.16.1 背景
+
+F075 白名單新增第二個資料來源「客戶資料」（`customer_core`），F109 新增 8 個篩選欄位（性別 / 年齡 / 職業別 / 教育程度 / 婚姻狀況 / 身分別 / 收入區間 / 居住城市）。核心挑戰：Stage 1 現行 SQL 組裝（`buildStage1WhereConditions` / `buildStage1Sql` / `executeStage1Chain`）僅認識單一來源表 `ob_pool_data`，須擴充為條件式 `LEFT JOIN customer_core`（僅名單引用 customer_core 欄位時注入）並保持 PG 下推路徑與 chain 路徑等價。
+
+#### 5.16.2 資料流
+
+```mermaid
+graph TD
+    A["condition_payload.conditions[]"] --> B{"resolveConditionDataSource(cond)\n固化值優先 / 靜態 Set fallback"}
+    B -->|ob_pool_data| C["buildStage1WhereConditions\n（composer，簽名/邏輯不變）"]
+    B -->|customer_core| D["buildCustomerCoreClause（新模組）\nAGE / LEFT3 衍生 + 直接比對"]
+    C --> E["WHERE clauses（AND 合併）"]
+    D --> E
+    D -->|join≠null| F["條件式 LEFT JOIN customer_core cc\nON cc.source_customer_no = o.custo_no"]
+    E --> G["stage1-sql-executor.ts\nINSERT…SELECT / SELECT COUNT(*)\n（PG 下推 與 chain 路徑共用同一份 SQL 產生邏輯）"]
+    F --> G
+
+    classDef unchanged fill:#e8e8e8,stroke:#888
+    classDef new fill:#d4f4dd,stroke:#2a9d5c
+    class C unchanged
+    class D,F new
+```
+
+#### 5.16.3 5 個 OQ 裁定摘要
+
+| OQ | 裁定 |
+|---|---|
+| OQ-F109-01（data_source 判定機制） | 雙層：寫入時固化進 `condition_payload.conditions[].dataSource`（`stampConditionDataSource`，置於 `injectSystemFixedConditions` 之後）+ 讀取時對缺值 fallback 至靜態常數 `CUSTOMER_CORE_COLUMN_NAMES`；皆不 runtime 查白名單（F075 BR-4 相容） |
+| OQ-F109-02（衍生運算式落點 + 簽名） | composer 簽名不變；新函式 `buildCustomerCoreClause(conditions, workdt, baseAlias, warnings)` 由 `buildStage1Sql` 與 `executeStage1Chain` 共用同一份 SQL（等價由同一程式碼保證，非兩份實作對測） |
+| OQ-F109-03（gender 欄位） | Phase 0 dev 實查 `customer_core.gender` 值域乾淨（1/2/3+少量雜訊），遵循 story 用 `gender`，不改綁 `cus_sex` |
+| OQ-F109-04（JOIN 索引） | 兩側索引已存在（`idx_customer_core_source_no` UNIQUE / `idx_ob_pool_data_custo_no`），無需新 migration；UNIQUE 索引亦保證 JOIN 基數 ≤1:1（I-CC-JOIN-CARD-01） |
+| OQ-F109-05（UI 新增任意欄位） | 維持 seed-only，`available-columns` / `POST` 不擴充 |
+
+#### 5.16.4 不變式
+
+| 不變式 | 說明 |
+|---|---|
+| **I-CC-DATASOURCE-01** | `data_source` 決定性解析，Stage 1 永不 runtime 查白名單做 JOIN 決策 |
+| **I-CC-JOIN-CARD-01** | `source_customer_no` UNIQUE 保證 LEFT JOIN 基數 ≤1:1，不列膨脹 |
+| **I-CC-NULL-EXCLUDE-01** | customer_core 條件不得 COALESCE；NULL 恆經 SQL 三值邏輯自然排除 |
+| **I-CC-COMPOSER-SCOPE-01** | composer 僅負責 `ob_pool_data` 側 fragment，customer_core 側一律由 `buildCustomerCoreClause` 產生 |
+| **I-CC-PARAM-NS-01** | `buildCustomerCoreClause` 參數一律 `cc` 前綴，與 composer 既有前綴零碰撞 |
+
+#### 5.16.5 測試邊界
+
+`customer_core` 僅存在於 PostgreSQL（SQLite 測試 DB 無此表）；含 customer_core 條件之 Stage 1 測試（AC-6~AC-11）僅能寫在 `.pg.spec.ts`。純案件資料 regression（AC-11 無 customer_core 條件不注入 JOIN）可在既有 SQLite 測試中驗證。
 
 ---
 

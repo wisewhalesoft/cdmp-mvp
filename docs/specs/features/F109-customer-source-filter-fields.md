@@ -284,7 +284,7 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
 | Stage 0 試算（F049） | `assignment-list/stage0-estimate.service.ts` → `buildStage1Sql`（`SELECT COUNT(*)`） | 同上；estimate ≡ run（I-RUN-EST-01） |
 | 名單試算 / 預覽 | 名單建立 / 編輯之案件數預覽（若走 Stage 0 estimate / count 路徑） | 同上 |
 
-> 非 PG 路徑（SQLite 測試 / in-memory）走 `stage1-filter-chain.ts` + `stage1-sql-executor.ts`，其 JS oracle 亦須實作等價之 customer_core JOIN + NULL 排除（等價基準 = PG 下推）。
+> ⚠️ **AD-E07-37 取代本段 JS-oracle 等價要求**：架構師裁定 `customer_core` 為 **PG-only**（該表無 TypeORM entity、SQLite 測試庫不建立），customer_core 篩選以單一 `buildCustomerCoreClause` 產生 PG SQL fragment（AGE / LEFT3 / NULL 排除），**無獨立 JS-object oracle 實作**。三處消費點（月跑 / Stage0 試算 / preview）皆走 PG 下推，等價由「單一程式碼源」而非「兩份實作對拍」保證。含 customer_core 條件之測試一律 `.pg.spec.ts`；純案件資料名單之 SQLite chain 行為不變（regression guard）。
 
 ## 7. UI/UX 需求
 
