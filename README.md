@@ -85,10 +85,9 @@ docker compose logs -f api
 # 1) 先只起 DB（fresh 部署可先 docker compose down -v 清空 volume），等 healthy
 docker compose up -d postgres
 
-# 2) 一鍵 bootstrap：migration(建全表+篩選欄位) → seed(帳號) → seed-datasource(env) → data-seed(計分卡/pipeline/擷取任務)
-#    OB 來源連線用 OB_DS_* 帶入；未帶則建 placeholder（部署後於 UI 補連線）
+# 2) 一鍵 bootstrap：migration(建全表+篩選欄位) → seed(帳號) → seed-datasource(9個空殼) → data-seed(計分卡/pipeline/擷取任務)
+#    datasource 一律建空殼（密碼留空），部署後於 UI「資料來源」逐一補密碼並測試連線
 NODE_ENV=production \
-OB_DS_HOST=<OB主機> OB_DS_DATABASE=<OB庫> OB_DS_USERNAME=<帳號> OB_DS_PASSWORD=<密碼> \
 AES_ENCRYPTION_KEY=<64位hex> JWT_SECRET=<jwt密鑰> \
 docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
 

@@ -142,13 +142,12 @@ services:
     profiles:
       - data-seed
 
-  # 一鍵部署 bootstrap（冪等）：baseline migration → 帳號(users) → datasource(env) → 計分卡/pipeline/擷取任務。
+  # 一鍵部署 bootstrap（冪等）：baseline migration → 帳號(users) → datasource 空殼(9個) → 計分卡/pipeline/擷取任務。
   # 正式部署（fresh DB）流程：
   #   1) docker compose up -d postgres            # 等 healthy
-  #   2) NODE_ENV=production OB_DS_HOST=... OB_DS_DATABASE=... OB_DS_USERNAME=... OB_DS_PASSWORD=... \
-  #      docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
+  #   2) NODE_ENV=production docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
   #   3) NODE_ENV=production docker compose up -d # 起 api/worker/web（synchronize 已關，schema 來自 migration）
-  # OB_DS_* 未帶 → 建 placeholder datasource，部署後於 UI「資料來源」補連線並測試。
+  # datasource 一律建空殼（密碼留空），部署後於 UI「資料來源」逐一補密碼並測試連線。
   bootstrap:
     build:
       context: ./apps/api
@@ -163,13 +162,6 @@ services:
       DB_NAME: cdmp_dev
       # 必須與 api/worker 共用同一把（datasource 密碼加密）
       AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
-      # OB 來源資料庫連線（未設則建 placeholder）
-      OB_DS_TYPE: ${OB_DS_TYPE:-sqlserver}
-      OB_DS_HOST: ${OB_DS_HOST:-}
-      OB_DS_PORT: ${OB_DS_PORT:-1433}
-      OB_DS_DATABASE: ${OB_DS_DATABASE:-}
-      OB_DS_USERNAME: ${OB_DS_USERNAME:-}
-      OB_DS_PASSWORD: ${OB_DS_PASSWORD:-}
       # 選填：指定 etl_pipelines/datasource created_by 的 admin email（預設用 seed admin）
       ETL_SEED_USER_EMAIL: ${ETL_SEED_USER_EMAIL:-}
     command: npm run bootstrap

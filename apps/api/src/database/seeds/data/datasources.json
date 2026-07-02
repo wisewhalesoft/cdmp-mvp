@@ -1,0 +1,11 @@
+[
+  { "name": "APYHFC16.OB", "type": "sqlserver", "host": "172.20.202.193", "port": 1433, "database_name": "OB", "username": "CDMPT", "description": "APYHFC16.OB" },
+  { "name": "APYHFC16.CF", "type": "sqlserver", "host": "172.20.202.193", "port": 1433, "database_name": "CF", "username": "CDMPT", "description": "客戶主檔(和潤企金)" },
+  { "name": "APYHFC16.LC", "type": "sqlserver", "host": "172.20.202.193", "port": 1433, "database_name": "LC", "username": "CDMPT", "description": "和潤企金" },
+  { "name": "APYHFC16.ZZIPPROD", "type": "sqlserver", "host": "172.20.202.193", "port": 1433, "database_name": "ZZIPPROD", "username": "CDMPT", "description": "客戶主檔(小車/機車/商品)" },
+  { "name": "APYHFC51.CF", "type": "sqlserver", "host": "172.20.202.204", "port": 1433, "database_name": "CF", "username": "CDMPT", "description": "和勁企金" },
+  { "name": "APYHFC51.LC", "type": "sqlserver", "host": "172.20.202.204", "port": 1433, "database_name": "LC", "username": "CDMPT", "description": "和勁企金" },
+  { "name": "APYHFC51.ZZIPPROD", "type": "sqlserver", "host": "172.20.202.204", "port": 1433, "database_name": "ZZIPPROD", "username": "CDMPT", "description": "客戶主檔(和勁重車)" },
+  { "name": "APYHFC71.CF", "type": "sqlserver", "host": "172.20.202.205", "port": 1433, "database_name": "CF", "username": "CDMPT", "description": "興業企金" },
+  { "name": "APYHFC71.LC", "type": "sqlserver", "host": "172.20.202.205", "port": 1433, "database_name": "LC", "username": "CDMPT", "description": "興業企金" }
+]

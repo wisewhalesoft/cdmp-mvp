@@ -1,29 +1,40 @@
 /**
- * Datasource seed（env 驅動，冪等）
+ * Datasource seed（空殼、冪等）
  *
- * 建立 ETL 來源資料庫連線 `APYHFC16.OB`（名稱固定：extraction-tasks.json / etl-pipelines.json
- * 以此名查找，`prod-data-seed.ts::seedExtractionTasks` 找不到即 fail-fast）。
- * 密碼以 `CryptoUtil.encrypt`（AES-256-GCM）寫入 encrypted_password，須與 API 同一把
- * `AES_ENCRYPTION_KEY`，否則 UI「測試連線」會解密失敗。
+ * 從 `seeds/data/datasources.json` 建立所有 ETL 來源連線（名稱/主機/埠/資料庫/帳號），
+ * 密碼一律留空（placeholder，加密空字串），**由部署者於 UI「資料來源」逐一補密碼並測試連線**。
+ * 中繼資料非機密可入 repo；密碼不落地（不進 git / 不進 env / 不進 DB 明文）。
  *
- * 連線來源（env）：
- *   OB_DS_HOST / OB_DS_PORT(預設 1433) / OB_DS_DATABASE / OB_DS_USERNAME / OB_DS_PASSWORD
- *   OB_DS_TYPE(預設 sqlserver)
- * 若 OB_DS_HOST 未設 → 建立 placeholder（host/database='CHANGE_ME'），bootstrap 仍完成、
- *   資料來源資源存在，部署者於 UI 補連線並「測試連線」即可（不阻擋一鍵部署）。
+ * 名稱固定對齊 seeds/data/extraction-tasks.json / etl-pipelines.json 的 datasourceName
+ * （尤其 `APYHFC16.OB`；prod-data-seed 的 seedExtractionTasks 依名查找，找不到即 fail-fast）。
  *
- * created_by：ETL_SEED_USER_EMAIL → dev admin UUID → 任一 active admin（同 prod-data-seed 規則），
- *   故須在 seed.ts（users）之後執行。
+ * 冪等：以 name（排除軟刪除）判存在 → 已存在則 SKIP（**不覆寫使用者已在 UI 補好的密碼**）。
+ * created_by：ETL_SEED_USER_EMAIL → dev admin UUID → 任一 active admin，故須在 seed.ts 之後跑。
  *
- * 用法：npm run seed-datasource（bootstrap 內串接）
+ * 用法：npm run seed-datasource（bootstrap 內串接）。需 AES_ENCRYPTION_KEY（加密 placeholder）。
  */
 import { DataSource, QueryRunner } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { CryptoUtil } from '../../common/crypto/crypto.util';
 
-// 名稱固定，對齊 seeds/data/extraction-tasks.json 與 etl-pipelines.json 的 datasourceName
-const DATASOURCE_NAME = 'APYHFC16.OB';
 const DEV_ADMIN_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+interface DatasourceSeed {
+  name: string;
+  type: string;
+  host: string;
+  port: number;
+  database_name: string;
+  username: string;
+  description: string | null;
+}
+
+function loadDatasources(): DatasourceSeed[] {
+  const raw = readFileSync(resolve(__dirname, 'data', 'datasources.json'), 'utf-8');
+  return JSON.parse(raw) as DatasourceSeed[];
+}
 
 async function resolveCreatedBy(qr: QueryRunner): Promise<string> {
   const envEmail = process.env.ETL_SEED_USER_EMAIL?.trim();
@@ -43,58 +54,48 @@ async function resolveCreatedBy(qr: QueryRunner): Promise<string> {
   );
 }
 
-async function seedDatasource(qr: QueryRunner): Promise<void> {
-  const host = process.env.OB_DS_HOST?.trim() || 'CHANGE_ME';
-  const databaseName = process.env.OB_DS_DATABASE?.trim() || 'CHANGE_ME';
-  const isPlaceholder = host === 'CHANGE_ME' || databaseName === 'CHANGE_ME';
-  const type = process.env.OB_DS_TYPE?.trim() || 'sqlserver';
-  const port = parseInt(process.env.OB_DS_PORT || '1433', 10);
-  const username = process.env.OB_DS_USERNAME?.trim() || 'CHANGE_ME';
-  const password = process.env.OB_DS_PASSWORD ?? '';
-
-  // 冪等：(name, database_name) 大小寫不敏感、排除軟刪除（對齊 datasource.service.createDatasource）
-  const existing = await qr.query(
-    `SELECT id FROM datasources
-      WHERE LOWER(name) = LOWER($1) AND deleted_at IS NULL
-      LIMIT 1`,
-    [DATASOURCE_NAME],
-  );
-  if (existing[0]?.id) {
-    console.log(`  Skip: datasource '${DATASOURCE_NAME}' 已存在 (id=${existing[0].id})`);
-    return;
-  }
-
+async function seedDatasources(qr: QueryRunner): Promise<void> {
+  const rows = loadDatasources();
   const createdBy = await resolveCreatedBy(qr);
-  const encryptedPassword = CryptoUtil.encrypt(password);
+  // placeholder：加密空字串（decrypt → ''）；使用者於 UI 補真實密碼後即覆蓋
+  const placeholderPassword = CryptoUtil.encrypt('');
 
-  await qr.query(
-    `INSERT INTO datasources
-       (id, name, type, host, port, database_name, username, encrypted_password,
-        description, status, last_tested_at, created_by, created_at, updated_at, deleted_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'unknown',NULL,$10,NOW(),NOW(),NULL)`,
-    [
-      randomUUID(),
-      DATASOURCE_NAME,
-      type,
-      host,
-      port,
-      databaseName,
-      username,
-      encryptedPassword,
-      isPlaceholder
-        ? 'OB 來源資料庫（bootstrap placeholder，請於 UI 補連線並測試）'
-        : 'OB 來源資料庫（bootstrap 自動建立）',
-      createdBy,
-    ],
-  );
-
-  if (isPlaceholder) {
-    console.warn(
-      `  ⚠ 建立 placeholder datasource '${DATASOURCE_NAME}'（未設 OB_DS_HOST/OB_DS_DATABASE）。\n` +
-        `    請在 UI「資料來源」補上實際 OB 連線並「測試連線」後才能跑 ETL。`,
+  let created = 0;
+  let skipped = 0;
+  for (const ds of rows) {
+    const existing = await qr.query(
+      `SELECT id FROM datasources WHERE LOWER(name) = LOWER($1) AND deleted_at IS NULL LIMIT 1`,
+      [ds.name],
     );
-  } else {
-    console.log(`  Created: datasource '${DATASOURCE_NAME}' (${type} ${host}:${port}/${databaseName})`);
+    if (existing[0]?.id) {
+      skipped++;
+      continue; // 不覆寫既有（保住 UI 已補的密碼）
+    }
+    await qr.query(
+      `INSERT INTO datasources
+         (id, name, type, host, port, database_name, username, encrypted_password,
+          description, status, last_tested_at, created_by, created_at, updated_at, deleted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'unknown',NULL,$10,NOW(),NOW(),NULL)`,
+      [
+        randomUUID(),
+        ds.name,
+        ds.type,
+        ds.host,
+        ds.port,
+        ds.database_name,
+        ds.username,
+        placeholderPassword,
+        ds.description ?? null,
+        createdBy,
+      ],
+    );
+    created++;
+  }
+  console.log(`  datasources: ${created} 新增（空殼）/ ${skipped} 已存在（未動）`);
+  if (created > 0) {
+    console.warn(
+      `  ⚠ 已建立 ${created} 個 datasource 空殼（密碼留空）。請於 UI「資料來源」逐一補密碼並「測試連線」後才能跑 ETL。`,
+    );
   }
 }
 
@@ -116,7 +117,7 @@ async function main(): Promise<void> {
   await qr.connect();
   await qr.startTransaction();
   try {
-    await seedDatasource(qr);
+    await seedDatasources(qr);
     await qr.commitTransaction();
     console.log('Datasource seed complete.');
   } catch (err) {
