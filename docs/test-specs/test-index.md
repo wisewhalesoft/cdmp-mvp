@@ -1,16 +1,18 @@
 ---
 type: test-design-index
-version: "2.30"
+version: "2.31"
 status: draft
-last_updated: 2026-06-29
-covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102, F103, F104, F108]
+last_updated: 2026-07-02
+covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102, F103, F104, F108, F109]
 ---
 
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：79 份（4 策略文件 + 68 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份）
-> **總測試場景數**：1884 個（前 1844 + **F108 匯出新增「樞紐分析」頁籤 +40**：SHEET 4 + HEADER 4 + PARENTROW 7 + ZEROBLANK 3 + DET 4 + BLANK 3 + SCOPE 3 + EMPTY 3 + REGRESSION 4 + STATIC 3 + PG 2，合計 1884）
+> **測試文件總數**：80 份（4 策略文件 + 68 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份 + **F109 test 1 份**）
+> **總測試場景數**：1978 個（前 1884 + **F109 新增「客戶資料」來源篩選欄位 +94**：WL 8 + OPT 10 + DESC 2 + GENDER 3 + DATASRC 7 + JOIN 8 + NULLEXC 7 + AGE 8 + CITY 4 + AND 3 + DEACT 3 + EQ 6 + PARAM 2 + JOINCARD 2 + COMPSCOPE 2 + API 2 + MIGSEED 3 + FRONTEND 7 + REG 5 + STATIC 2，合計 1978）
+>
+> **v2.31 F109 新增「客戶資料」來源篩選欄位（2026-07-02）**：新增 F109 test spec（**94 個場景**）。F075 白名單引入第二個資料來源「客戶資料」（`customer_core`），新增 8 個篩選欄位（性別/年齡/職業別/教育程度/婚姻狀況/身分別/收入區間/居住城市）。**架構裁定（AD-E07-37）：customer_core 為 PG-only**（無 TypeORM Entity、僅存在 PostgreSQL），所有含 customer_core 條件之測試一律 `.pg.spec.ts`（**約 38 案例強制需 Postgres**，與 F098~F104 pg.spec 序列執行）；純案件資料 regression guard 維持 SQLite。核心紅線：**NULLEXC 群組**（AC-8 三變體：無對應客戶／客戶欄本身 NULL／無客戶條件不觸發，三者獨立驗證）+ **JOIN-003「EMPTY_CONDITIONS 陷阱」**（AD 特別點名：僅含 customer_core 條件之名單不可被誤判整批 skip）+ **EQ 群組**（BR-10 三處消費一致 DoD：`buildStage1Sql` PG 下推 ↔ `executeStage1Chain` 同一 PG DB 逐列等價）+ **AGE-004 決定性**（BR-5：同一 `project_workym` 重跑年齡結果一致，供 F067 apples-to-apples）。分層：**WL 8**（data_source schema + API dataSource + seed-only 邊界）+ **OPT 10**（7 categorical 欄位可選值 seed，dev 實測真實值 3/55/8/5/4/9/22）+ **DESC 2**（6 個 `_desc` 欄 value=label 查詢層對比）+ **GENDER 3**（唯一 code→label 欄位）+ **DATASRC 7**（OQ-F109-01：`resolveConditionDataSource` 雙層機制 + `stampConditionDataSource` 寫入路徑）+ **JOIN 8**（AC-11/BR-2：條件式 LEFT JOIN 觸發 + EMPTY_CONDITIONS 陷阱 + 命名空間隔離）+ **NULLEXC 7**（AC-8/BR-3/BR-4 核心紅線）+ **AGE 8**（AC-6/BR-5：衍生 AGE 運算式 + 前端 min/max 驗證 + 決定性）+ **CITY 4**（AC-7/BR-6：`LEFT(cpost_city,3)` 縣市級）+ **AND 3**（AC-10/BR-8：跨來源 AND）+ **DEACT 3**（AC-9/BR-9：停用不回溯）+ **EQ 6**（BR-10 DoD）+ **PARAM 2**（I-CC-PARAM-NS-01）+ **JOINCARD 2**（I-CC-JOIN-CARD-01：`source_customer_no` UNIQUE 索引基數保證）+ **COMPSCOPE 2**（I-CC-COMPOSER-SCOPE-01：composer 不得內建 `cc.` 前綴邏輯）+ **API 2**+ **MIGSEED 3**（m305/m306 冪等）+ **FRONTEND 7**（M06 資料來源欄 + F050/F051 來源分組 dropdown + 年齡表單）+ **REG 5**（既有 40+ composer 測試 + F100~F104 pg.spec 不退化 + tsc gate）+ **STATIC 2**（命名鎖定）。所有 5 個架構 Open Question（OQ-F109-01~05）已由 AD-E07-37 裁定；5 個不變式（I-CC-DATASOURCE-01/JOIN-CARD-01/NULL-EXCLUDE-01/COMPOSER-SCOPE-01/PARAM-NS-01）逐一對應測試場景。
 >
 > **v2.30 F108 匯出新增「樞紐分析」頁籤（2026-06-29）**：新增 F108 test spec（**40 個場景**）。延伸 F064 v2.1 xlsx 匯出，新增第 2 頁籤「樞紐分析」靜態交叉表（% of parent row，部門×員編×名單代號）。DoD = **PARENTROW-001**（spec §6.2 Worked Example oracle 全 18 格，浮點誤差 < 1e-9）+ **SCOPE-001**（SCOPE 紅線：樞紐不洩漏轄區外部門/員編）+ **REGRESSION 群組**（第 1 頁 23 欄不受影響 + CSV 不含樞紐）+ `tsc --noEmit` 乾淨。分層：**SHEET 4**（2 頁結構 + CSV 不含樞紐 + 靜態 grep）+ **HEADER 4**（R1 部門代號/(全部) / R2 空 / R3 計數-案號/欄標籤 / R4 列標籤/listNo 升冪/總計）+ **PARENTROW 7**（oracle 全 18 格 + 部門列加總 100% + 員編列加總 100% + 總計列 + 總計欄部門層 + 總計欄員編層 + numFmt='0.0%'）+ **ZEROBLANK 3**（0/正數→0.0% / 0/0→null / 部門層 vs 員編層區分）+ **DET 4**（listNo 升冪 / 部門 localeCompare / 員編升冪 / (空白) 最後）+ **BLANK 3**（emphire join-miss + §6.4 oracle 重算 + emplid null 歸組）+ **SCOPE 3**（section_chief scoped + director bypass + 靜態 grep）+ **EMPTY 3**（0 列時 2 頁仍存在 + 標頭 + HTTP 200）+ **REGRESSION 4**（23 欄 + 列數 + CSV + 靜態 grep，DoD 紅線）+ **STATIC 3**（commit 時序 + 記憶體安全 + tsc gate）+ **PG 2**（選配：真實 run 84486ddd + 32/34/15/18% 分佈）。**2 個案例需 Postgres**（PG-001/002，選配慢速套件）。Mock 策略：沿用 f064-export-23col.spec.ts 模式（mock `cursorRows`，用 exceljs `Workbook.xlsx.load(buffer)` 讀回斷言）。TC-171-01~12 全部覆蓋（AC-1~8 + I-PIV-SHEET-01/PARENTROW-01/SOURCE-01/MEM-01/DET-01 全覆蓋）。
 >
@@ -69,7 +71,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
   - **E06 Customer 360**：F046（客戶搜尋與清單）、F047（單一客戶詳情）
   - **E07 客戶名單分派（M01 名單定義）**：F048（查看本月名單清單 Kanban v2.0）、F049（Stage 0 業務化重設計 v2.0）、F050（新增名單定義 v2.2）、F051（編輯名單定義 v2.1）、F052（停用名單定義 v2.1）、F061（月跑計分執行 v1.4）、F077（月份切換與五階段總覽 v1.3）、F081（Rollback 至草稿 v1.3）、F085（Rollback 至部門比例 v1.3）、F089（Rollback 至簽核 v1.3）
   - **E07 客戶名單分派（M02 計分設定）**：F053（查看計分維度）、F054（編輯計分維度與分數）、F055（編輯 CARD_LEVEL 門檻）、F056（編輯 TIER_LEVEL 對應表）
-  - **E07 客戶名單分派（M06 篩選欄位管理）**：F075（POOLDATA 篩選欄位白名單管理 v1.6）、F076（類別型欄位可選值管理 v1.6）
+  - **E07 客戶名單分派（M06 篩選欄位管理）**：F075（POOLDATA 篩選欄位白名單管理 v1.6）、F076（類別型欄位可選值管理 v1.6）、F109（新增「客戶資料」來源篩選欄位，customer_core 8 欄）
   - **E07 客戶名單分派（M07 角色整合）**：F073/F074（E02 角色整合）
 - 2 項非功能需求（NFR-001 安全性、NFR-002 效能），共 10 個子需求（含 NFR-002.6 E04 清單、NFR-002.7 E04 儀表板、NFR-002.8 E04 排程；新增 F026 raw data 預覽效能）
 - 65 個錯誤碼的驗證覆蓋（新增 C360_CUSTOMER_NOT_FOUND、C360_SEARCH_MIN_LENGTH for E06；新增 PIPELINE_VERSION_ALREADY_PUBLISHED for F037；累計含 PIPELINE_VERSION_NOT_FOUND、PIPELINE_PUBLISH_REQUIRES_TEST、PIPELINE_INVALID_CONNECTION、PIPELINE_NAME_EXISTS、PIPELINE_NOT_FOUND、PIPELINE_RUNNING、PIPELINE_NO_DEFINITION、PIPELINE_DRAFT_CANNOT_ENABLE、PIPELINE_TARGET_TABLE_NOT_FOUND、VALIDATION_INVALID_CRON、DATASOURCE_SCHEMA_LOAD_FAILED、DATASOURCE_TABLE_LOAD_FAILED、EXTRACTION_RAW_TABLE_NOT_FOUND、EXTRACTION_TABLE_CREATE_FAILED、EXTRACTION_BATCH_WRITE_FAILED）
@@ -163,7 +165,8 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **E07 M07 小計** | | | **1 file** | **63** | |
 | **E07 M06 篩選欄位管理** | | | | | |
 | F075 | POOLDATA 篩選欄位白名單管理（含 v1.4 available-columns 端點、suggestedFieldType 推斷、dropdown Modal；v1.5 +2；v1.6 +3 M-A1 seed；**v1.7 +11 is_system_fixed / deactivation guard / M06 UI**） | P0-MVP | [F075-test.md](features/F075-test.md) | 64 | Draft |
-| **E07 M06 小計** | | | **1 file** | **64** | |
+| F109 | 新增「客戶資料」來源篩選欄位（`customer_core` 8 欄；data_source 概念 + 條件式 LEFT JOIN + NULL 排除三變體 + AGE/LEFT3 衍生 + PG-only 邊界 AD-E07-37） | P1 | [F109-test.md](features/F109-test.md) | 94 | Draft |
+| **E07 M06 小計** | | | **2 files** | **158** | |
 | **E07 M08 Whitelist-Driven 重構** | | | | | |
 | F050 | 建立名單定義（v2.1 30；v2.1.1 +45；v2.2 +19 SS/SIG；**v2.3/v2.3.1 +33 US-144 injectSystemFixedConditions / min-count / migration m295/m296 / Stage1 / frontend locked row**） | P0-MVP | [F050-test.md](features/F050-test.md) | 127 | Draft |
 | F051 | 編輯名單定義（v2.1 19；**v2.2/v2.2.1 +6 US-144 updateList inject / tamper-normalization / min-count**） | P0-MVP | [F051-test.md](features/F051-test.md) | 25 | Draft |
@@ -194,7 +197,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | F064 | 匯出分派結果（23 欄 legacy 對齊，**v2.1**）——COLSRC 6 + COLSEQ 4 + REGRESSION 6（破壞性排除 DoD 紅線）+ FMT 8（日期格式邊界）+ CR 4 + JOINMISS 5 + OVERDUE 2 + STREAM 5 + SCOPE 5 + STATUS 4 + AUDIT 3 + DET 2 + APLDATE 2 + STATIC **5** + AUTH 3 + **LINEAGE 5**（v2.1：pool 表換源 ob_pool_data 不掉列 DoD 紅線）；GAP-1/2/3 + OQ F064-1~4 全部裁定；BR-F064-16 join ob_pool_data 2-key；不讀 snapshot；CSV PassThrough streaming；scope WHERE SQL 注入；DoD 紅線 = REGRESSION + LINEAGE-001 + 23 欄表頭 + tsc 乾淨 | P0-MVP | [F064-test.md](features/F064-test.md) | 69 | Draft |
 | F108 | 匯出新增「樞紐分析」頁籤（xlsx 第 2 頁靜態交叉表；% of parent row；部門×員編×名單代號；格式 0.0%；0/0→空白；I-PIV-SHEET-01/PARENTROW-01/SOURCE-01/MEM-01/DET-01；SCOPE 紅線；TC-171-01~12 全覆蓋）——SHEET 4 + HEADER 4 + PARENTROW 7（spec §6.2 oracle 全 18 格）+ ZEROBLANK 3 + DET 4 + BLANK 3（§6.4 oracle）+ SCOPE 3（SCOPE 紅線 DoD）+ EMPTY 3 + REGRESSION 4（DoD 紅線）+ STATIC 3 + PG 2（選配）；mock cursorRows 模式；exceljs load(buffer) 讀回斷言；**2 案例需 PG**（選配）；DoD 紅線 = PARENTROW-001 oracle + SCOPE-001 紅線 + REGRESSION 全綠 + tsc 乾淨 | P0-MVP | [F108-test.md](features/F108-test.md) | 40 | Draft |
 | **E07 M04 小計** | | | **2 files** | **109** | |
-| **總合計** | | | **74 files** | **1841** | |
+| **總合計** | | | **75 files** | **1935** | |
 
 ---
 
@@ -240,6 +243,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | 時區（E04 / E05） | F018 今日統計、F024 今日統計、F027 todayProcessed | todayInTaipei() 種子資料工廠函式，CI 設定 TZ=Asia/Taipei |
 | 視覺化畫布函式庫（F029） | F029 前端 E2E 場景（TS-F029-029 ~ 031） | 依賴 React Flow（或同等函式庫）；建議搭配 Playwright 或 Cypress 進行拖拉操作模擬 |
 | ETL 執行引擎（F042-F044） | 節點狀態回寫、UPSERT 寫入、customer_core 驗證 | Test Container（AppDB PostgreSQL）；F043 RawDataExtract 需額外 raw table 模擬；F044 部分批次失敗需 Mock queryRunner 或注入錯誤觸發機制 |
+| `customer_core` PG-only（F109） | 含 customer_core 條件之 Stage 1 篩選測試（NULLEXC/AGE/CITY/AND/EQ/JOINCARD 群組） | 無 TypeORM Entity、僅存在 PostgreSQL；一律 `.pg.spec.ts` 真實連線，SQLite 環境不建表；與 F098~F104 pg.spec 共用 `cdmp_test` DB 序列執行 |
 
 ---
 
@@ -251,7 +255,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 1. `test-index.md`（本文件）— 瞭解整體範圍與優先級
 2. 對應的 `features/F###-test.md` — 取得具體測試場景
 
-**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → **F073-F074-E02**（E07 角色整合先行，Guard 設計影響後續 E07 實作） → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056** → **F075**
+**建議載入順序：** F001 → F002 → **F002SM** → F003 → **F045** → F004 → F005 → F006 → F008 → **F073-F074-E02**（E07 角色整合先行，Guard 設計影響後續 E07 實作） → F009 → F010 → F007 → F011 → F012 → F013 → F015 → F014 → F016 → F017 → F018 → F019 → F020 → F021 → F022 → F023 → F024 → F025 → F026 → F027 → F028 → F029 → F030 → F031 → F032 → F033 → F037 → F034 → F035 → F036 → F038 → F042 → F043 → F044 → **F046 → F047** → **F053 → F054 → F055 → F056** → **F075 → F076 → F109**（F109 依賴 F075「data_source」欄位擴充 + F076 可選值 seed 機制，須在兩者之後載入；F109 另依賴 F050/F051 條件選單分組 UI）
 
 **F002SM Sales Manager Badge 特殊注意：**
 - 後端 `LoginResult.user` DTO 須補充 `isSalesManager: boolean`；TS-F002SM-001 / TS-F002SM-006 驗證欄位存在性與 boolean 型別（不可為字串）
@@ -412,6 +416,14 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **Regression Guard v2.0**：`regression/M06-regression-guards.md` v2.0 含 5 個 guard（NAMING-001/002 + F068-001/002 + SIDEBAR-001），每次 F075 / F068 相關 PR 後需重新執行
 - **v1.5 新增（2026-05-20）**：TS-F075-049（whitelist seed 含 case_status，共 6 筆）、TS-F075-050（GET /whitelist?active=true 回傳 case_status）
 
+**E07 M06 F109「客戶資料」來源篩選欄位特殊注意（AD-E07-37 PG-only 裁定，2026-07-02）：**
+- **PG-only 核心限制**：`customer_core` 無 TypeORM Entity、僅存在 PostgreSQL（SQLite 測試 DB 無此表）。**所有含 customer_core 條件的測試一律寫在 `.pg.spec.ts`**；純案件資料 regression guard（`customerCoreJoin === null`）維持 SQLite。**不可**在既有 SQLite composer/chain 單元測試中加入 customer_core 情境（會因表不存在直接失敗）。
+- **「JS oracle」正名**：`executeStage1Chain` 本質上也是透過 TypeORM 對真實 DB 執行 SQL，非記憶體 JS 述詞評估；EQ 群組「PG 下推 vs JS oracle 等價」測試**兩條路徑皆須連同一 PG DB**，不是「PG vs SQLite」比較。
+- **EMPTY_CONDITIONS 陷阱（JOIN-003，高風險）**：composer 對純 customer_core 名單本身仍會回報 `EMPTY_CONDITIONS`（因迴圈全部 `continue`），呼叫端須同時檢查 `customerCoreClause.whereFragments` 才能正確判斷是否真正 skip；否則「僅性別 IN [1]」這類純客戶條件名單會被誤判整批 skip。
+- **NULL 排除語意不得 COALESCE**：客戶條件欄位一律不得 COALESCE 為可匹配之預設值（與 `ob_pool_data` 欄位之 COALESCE JS-parity 策略相反）；NULL 排除語意由 SQL 三值邏輯自然達成。
+- **CI 序列執行**：F109 pg.spec 須與 F098/F099/F100/F101/F102/F103/F104 pg.spec 共用 `cdmp_test` DB 序列執行（禁並行）。
+- **命名鎖定**：`resolveConditionDataSource` / `stampConditionDataSource` / `CUSTOMER_CORE_COLUMN_NAMES` / `buildCustomerCoreClause` / `customerCoreJoin`（`Stage1SqlCore` 新欄位）/ 參數前綴 `cc`（`ccCat{n}`/`ccAgeMin`/`ccAgeMax`/`ccWorkdt`）/ `gender`（**非** F104 之 `cus_sex`，兩者為 `customer_core` 上獨立欄位）。
+
 **E07 M08 Whitelist-Driven 重構特殊注意（F050/F051/F076/F068-deprecated）：**
 - **新 error codes（v2.1）**：`CONDITION_COLUMN_NOT_IN_WHITELIST`（422）、`RESERVED_FIELD_IN_CONDITIONS`（400）、`LEGACY_LIST_CONDITION_READONLY`（422）、`LEGACY_LIST_NOT_COPYABLE`（422）；`WHITELIST_OPTION_INACTIVE` 為非阻擋 warning（201/200 + warnings array）
 - **廢棄 error codes**：`LIST_FILTER_FIELD_NOT_IN_WHITELIST`、`CASE_STATUS_REQUIRED`；仍可能共存於舊 code path，需確認刪除範圍
@@ -556,6 +568,7 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-07-02 | **F109 新增「客戶資料」來源篩選欄位測試設計新增（v2.31）**：新增 `features/F109-test.md`，**94 個場景**。F075 白名單引入第二個資料來源「客戶資料」（`customer_core`），新增 8 個篩選欄位（性別/年齡/職業別/教育程度/婚姻狀況/身分別/收入區間/居住城市）。**架構裁定（AD-E07-37）：customer_core 為 PG-only**（無 TypeORM Entity、僅存在 PostgreSQL），所有含 customer_core 條件之測試一律 `.pg.spec.ts`（**約 38 案例強制需 Postgres**，與 F098~F104 pg.spec 序列執行）；純案件資料 regression guard 維持 SQLite。核心紅線：NULLEXC 群組（AC-8 三變體，無對應客戶／客戶欄本身 NULL／無客戶條件不觸發）+ JOIN-003「EMPTY_CONDITIONS 陷阱」（僅含 customer_core 條件之名單不可誤判整批 skip，AD 特別點名）+ EQ 群組（BR-10 三處消費一致 DoD）+ AGE-004 決定性（BR-5，供 F067 apples-to-apples）。分層：WL 8 + OPT 10 + DESC 2 + GENDER 3 + DATASRC 7（OQ-F109-01 雙層機制）+ JOIN 8 + NULLEXC 7 + AGE 8 + CITY 4 + AND 3 + DEACT 3 + EQ 6 + PARAM 2（I-CC-PARAM-NS-01）+ JOINCARD 2（I-CC-JOIN-CARD-01）+ COMPSCOPE 2（I-CC-COMPOSER-SCOPE-01）+ API 2 + MIGSEED 3 + FRONTEND 7 + REG 5 + STATIC 2。所有 5 個架構 Open Question（OQ-F109-01~05）已由 AD-E07-37 裁定。總場景數 1884→**1978**；總文件數 79→80 | Test Designer Agent |
 | 2026-06-29 | **F049 v2.0 Stage 0 業務化重設計 Part B 測試設計新增（v2.29）**：更新 `features/F049-test.md`，**新增 43 個場景**，涵蓋 F049 §14–§22 / US-166–170 / AD-E07-v3.6 之 Part B 測試設計。DEPT 4（BR-8 per-list ration 手算 oracle：DEPT-001 兩名單×兩部門完整驗算 / DEPT-002 休息日 deptCells=[] / DEPT-003 per-list regression guard vs MIN(LIST_NO) / DEPT-004 single-list 鑽探）+ GAP 6（BR-9/10/11：GAP-001 60% gap=20 手算 / GAP-002 70% gap=30 無名單層警示 / GAP-003 完全無比例 gap=orgTotal / GAP-004 gap=0 不顯示 / GAP-005 捨入容差不 assert Σ=orgTotal / GAP-006 org_total 不依賴比例 regression）+ SCOPE 6【SECURITY-CRITICAL】（BR-12/13/14 / I-DEPT-SCOPE-01：**SCOPE-002 安全紅線 regression guard** JSON.stringify 掃描非轄區字串完全不存在 / SCOPE-001 正向 / SCOPE-003 scope=null 200+warning / SCOPE-004 部長全部門 / SCOPE-005 後端為安全邊界不可繞過 / SCOPE-006 處長 orgTotal=null）+ FEAS 6（BR-15/16：FEAS-001 per_person=12 手算 / FEAS-002 headcount=0 perPerson=null+DEPT_HEADCOUNT_ZERO / FEAS-003 overThreshold=true / FEAS-004 threshold=null 降級 / FEAS-005 TRIM(dept_code) SQLite/PG 移植性 / FEAS-006 處長 scope 下 headcount 隔離）+ INVAR 2（I-RUN-EST-01：INVAR-001 spy computeWorkingDayRatios 被呼叫 / INVAR-002 stage0_estimate_count 物化 vs fallback 兩子場景）+ EDGE 3（EDGE-001 fallback 逾時 STAGE0_LIST_ESTIMATE_PARTIAL / EDGE-002 0 active 名單空結果 / EDGE-003 處長轄區無比例 deptCells=[]）+ AGG 5（AC-AGG：AGG-001 預設彙總 / AGG-002 切換 single-list / AGG-003 0 名單空狀態 / AGG-004 不寫 DB spy / AGG-005 月份切換重算）+ FE 6（FE-001 矩陣渲染+gap橘色 / FE-002 gap=0 缺口列不渲染 / FE-003 處長唯讀 banner / FE-004 scope=null 友善提示 / FE-005 overThreshold 紅色 / FE-006 派案日曆業務標籤功能不變）+ TERM 5（AC-TERM：**TERM-001 DOM 黑名單全文掃描 MUST-RUN** / TERM-002 KPI 卡片移除 / TERM-003 base+1 徽章不存在 / TERM-004 Pool 警示業務語言 / TERM-005 AD-E07-8 公式框不顯示）。**全部 OQ 已裁定**（AD-E07-v3.6 7 個 OQ 全解）；手算 oracle 寫定於 DEPT-001/GAP-001/GAP-002/GAP-005/FEAS-001/FEAS-003；所有場景可用 SQLite in-memory（無強制 PG）。**SCOPE-002 為最高優先 MUST-HAVE**：未來任何導致非轄區資料洩漏之修改均須使此 test FAIL。總場景數 1801→1844；F049-test.md YAML 更新 spec_version=2.0 + covers US-166~170 | Test Designer Agent |
 | 2026-06-05 | **F101 Stage 3/4 真實比例分派測試設計新增（v2.23）**：新增 `features/F101-test.md`，**51 個場景**，取代 F100 placeholder Stage 4。分層：DEPT 8（Stage 3 手算 oracle 2分處×2Tier×3課，diff=0/1/2 邊界，OB202606001 多分處回歸，Pipeline 順序不變式）+ EMPL 9（Stage 4 手算 oracle 2課×2Tier×3員工，ADD_CNT 均攤，is_cr Y/N 同池，emplid/emplid_deptid 寫入，T5 不分流）+ ASGD 5（ASSIGNDAY per-casedt FLOOR，最末全吸收，DIVIDE_LEFT round-robin，estimate≡run，無 calendar fallback）+ EQ 8（**DoD 門檻 AC-15**：JS `executeV2` ↔ PG SQL 下推逐列四元組等價，8 代表性名單涵蓋多分處/多Tier/差額觸發/兩階段補足/無ration/無員工/無calendar/is_cr 混合）+ IDEM 3（Stage 3 前清除，is_cr 保留，兩次 run_id 四元組完全相同）+ FALL 6（三類警告 skipped_cases.warnings[] + warning_summary；JSONB 合并不覆蓋 cases；不寫 audit_log）+ REG 5（emplid≠NULL 回歸，**I-NO-ST4-EXCHANGE** senior swap 行為層驗證，is_cr 不改值）+ DET 3（**I-DET-01** 全程無 NEWID/random 靜態掃描，ob_assign_set 無引用 AC-18，senior swap CTE 移除）+ UPGR 4（分派差異報告，業務驗收 NFR-005）。**全部 OQ 已裁定**（OQ-F101-01~05，AD-E07-29 權威）；oracle 件數手算寫死於文件（Seed 1~4 Stage 3，Seed A~D Stage 4）；**44 案例強制需 Postgres**；CI 必須序列跑 F098/F099/F100/F101 pg.spec（禁並行）。總場景數 1567→1618；總文件數 70→71 | Test Designer Agent |
 | 2026-06-02 | **F100 Stage 2~4 SQL 下推 + v2 真實計分引擎 P3 測試設計新增（v2.22）**：新增 `features/F100-test.md`，**52 個場景，僅涵蓋 AD-E07-28 P3**（Stage 2 計分 `SUM(CASE…)` + `LEFT JOIN customer_core` 補完 / score→level→tier / Stage 3 CR `EXISTS` / Stage 4 st4_exchange 視窗函式），不設計 P1/P2（已完成提交）。**與 P1/P2 本質差異：P3 非純等價變更**——計分引擎由 v1 簡化版升級為 v2 真實版（customer_core 欄位 v1 回 `''` 不計分 → v2 LEFT JOIN 補上），**故 oracle = 手算預期矩陣（§一，寫死數字人複核），非跑 v1 JS**（跑 v1 會把升級補上的正確分判 fail）。分層：EQ 8（DoD AC-8，每案標 (a) 升級差異 / (b) 下推等價）+ SCORE 7 + CJOIN 4 + LEVTIER 5 + CR 5 + EXCH 8（`CEIL` 非 SP `ROUND`、保底 1、`PARTITION BY list_no`、deterministic 選案；SP 配對交換 out-of-scope）+ RUNEST 2 + NOLOAD 3 + IDEM 3 + UPGR 4（F067 升級差異報告 + 業務驗收 gate，上線硬性前置）+ RG 3。**約 40 案例強制需 Postgres**（視窗函式 / `SUM(CASE…)` / `LEFT JOIN` / `EXISTS` 在 SQLite 不具代表性）。**4 個待確認 OQ**：OQ-F100-T1（transaction 範圍 spec 未明 → IDEM-003 blocked）、T2（score=NULL 之 tier fallback 語意）、T3（customer_core entity 不存在 → P3 前置 blocker）、T4（計分欄位映射對齊 §3.10 表）。總場景數由 1515 增至 1567；總文件數 69→70 | Test Designer Agent |
