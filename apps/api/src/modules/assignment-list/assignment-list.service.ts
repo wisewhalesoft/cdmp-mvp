@@ -248,6 +248,42 @@ export class AssignmentListService {
     return { ...payload, conditions } as T;
   }
 
+  // -------------------------------------------------------------------------
+  // F109 / US-172 / AD-E07-37 §6：寫入時固化每個 condition 之 dataSource
+  // -------------------------------------------------------------------------
+
+  /**
+   * 依當下 active 白名單逐 condition 蓋上 `dataSource`（'ob_pool_data' | 'customer_core'）。
+   *
+   * 插入順序（AD §6，強制）：validate → injectSystemFixedConditions → **stampConditionDataSource**
+   *   → copyFromListNo → deriveBackwardCompatColumns。
+   *   須在 injectSystemFixedConditions **之後**，確保系統固定注入之 best_case 條件亦被蓋章
+   *   （best_case 為 ob_pool_data 來源）。
+   *
+   * 白名單查無對應列（欄位事後刪除等）→ fallback 'ob_pool_data'（與 resolveConditionDataSource 讀取時
+   *   靜態 Set fallback 互補；8 個 customer_core 欄名在白名單存在時必被正確蓋為 'customer_core'）。
+   *
+   * immutable：回傳新物件，不 mutate 傳入參數。
+   */
+  private async stampConditionDataSource<
+    T extends ObListDefinitionConditionPayload,
+  >(payload: T): Promise<T> {
+    if (!Array.isArray(payload.conditions)) return payload;
+    const activeRows = await this.whitelistRepo.find({
+      where: { is_active: true },
+    });
+    const dataSourceMap = new Map<string, 'ob_pool_data' | 'customer_core'>(
+      activeRows.map((r) => [r.column_name, r.dataSource ?? 'ob_pool_data']),
+    );
+    const conditions: ObListDefinitionConditionItem[] = payload.conditions.map(
+      (c) => ({
+        ...c,
+        dataSource: dataSourceMap.get(c.columnName) ?? 'ob_pool_data',
+      }),
+    );
+    return { ...payload, conditions } as T;
+  }
+
   /**
    * F050 v2.1 / AD-E07-18 §18.6：condition_payload → 5 個 backward-compat entity column 衍生
    *
@@ -619,6 +655,12 @@ export class AssignmentListService {
         dto.conditionPayload,
         systemFixedFields,
       );
+
+      // 2c. F109 / US-172 / AD-E07-37 §6：固化每個 condition 之 dataSource（含系統固定 best_case）。
+      //     在 injectSystemFixedConditions 之後、deriveBackwardCompatColumns 之前執行。
+      dto.conditionPayload = await this.stampConditionDataSource(
+        dto.conditionPayload,
+      );
     }
 
     // 3. v2.1 / AC-5 / 拍板 Q4：copyFromListNo legacy 防呆
@@ -830,6 +872,11 @@ export class AssignmentListService {
       dto.conditionPayload = this.injectSystemFixedConditions(
         dto.conditionPayload!,
         systemFixedFields,
+      );
+
+      // 7c. F109 / US-172 / AD-E07-37 §6：固化每個 condition 之 dataSource（含系統固定 best_case）。
+      dto.conditionPayload = await this.stampConditionDataSource(
+        dto.conditionPayload!,
       );
 
       // 8. derive backward-compat

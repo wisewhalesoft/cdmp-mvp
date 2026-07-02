@@ -24,6 +24,16 @@ export interface ObListDefinitionConditionItem {
   max?: number;
   dateStart?: string;
   dateEnd?: string;
+  /**
+   * F109 / US-172 / AD-E07-37 §OQ-F109-01：condition 之資料來源（寫入時固化）。
+   *
+   * createList / updateList 之 `stampConditionDataSource` 於寫入時依當下白名單蓋章
+   * （'ob_pool_data' | 'customer_core'）；Stage 1 讀取路徑以 `resolveConditionDataSource`
+   * 決定性解析（固化值優先，缺漏時以 CUSTOMER_CORE_COLUMN_NAMES 靜態 Set fallback）。
+   *
+   * F109 上線前既有 condition_payload 無此 key（fallback 天然覆蓋，不需 backfill migration）。
+   */
+  dataSource?: 'ob_pool_data' | 'customer_core';
 }
 
 export interface ObListDefinitionConditionPayload {

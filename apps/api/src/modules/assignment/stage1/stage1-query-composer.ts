@@ -59,7 +59,45 @@ export interface Stage1QueryFragment {
  *
  * 不符合者一律 skip 並 push warning（不 throw），避免 SQL Injection。
  */
-const SAFE_COLUMN_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/;
+export const SAFE_COLUMN_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/;
+
+/**
+ * F109 / US-172 / AD-E07-37 §OQ-F109-01：customer_core 來源 8 個篩選欄名靜態集合。
+ *
+ * 用於 `resolveConditionDataSource` 之防禦性 fallback（涵蓋 F109 上線前無 `dataSource`
+ * 固化值之既有 condition_payload）。**不可**增減或改名（feedback_tdd_naming_drift）；
+ * 與 spec §5.2 8 欄逐字對齊（STATIC-001 / DATASRC-004 守門）。
+ */
+export const CUSTOMER_CORE_COLUMN_NAMES: ReadonlySet<string> = new Set([
+  'gender',
+  'date_of_birth',
+  'occupation_desc',
+  'education_desc',
+  'marital_status_desc',
+  'customer_type_desc',
+  'monthly_income_desc',
+  'cpost_city',
+]);
+
+/**
+ * 決定性解析單一 condition 之資料來源（AD-E07-37 §OQ-F109-01 雙層機制，I-CC-DATASOURCE-01）：
+ *   1. 固化值優先：`cond.dataSource` 為合法值（'customer_core' / 'ob_pool_data'）→ 直接採用。
+ *   2. 靜態 Set fallback：缺漏時比對 CUSTOMER_CORE_COLUMN_NAMES；命中 → 'customer_core'，否則 'ob_pool_data'。
+ *
+ * 純函式，**永不** runtime 查詢 pooldata_field_whitelist（沿用 F075 BR-4；白名單欄位事後停用後
+ * 仍決定性）。
+ */
+export function resolveConditionDataSource(cond: {
+  columnName: string;
+  dataSource?: 'ob_pool_data' | 'customer_core';
+}): 'ob_pool_data' | 'customer_core' {
+  if (cond.dataSource === 'customer_core' || cond.dataSource === 'ob_pool_data') {
+    return cond.dataSource;
+  }
+  return CUSTOMER_CORE_COLUMN_NAMES.has(cond.columnName)
+    ? 'customer_core'
+    : 'ob_pool_data';
+}
 
 /**
  * §18.5.1：caseyear 「不限年數」wildcard 代碼。
@@ -146,6 +184,12 @@ function buildPathA(
   let paramIdx = 0;
 
   for (const cond of payload.conditions) {
+    // F109 / AD-E07-37 §5.1 / I-CC-COMPOSER-SCOPE-01：customer_core 來源條件委派
+    //   buildCustomerCoreClause（cc.* fragment + LEFT JOIN），composer 僅負責 ob_pool_data 側。
+    //   靜默 continue（不建 fragment、不發 warning）；避免對 ob_pool_data（無 gender 等欄）
+    //   建出 SQL 出錯的偽 fragment。
+    if (resolveConditionDataSource(cond) === 'customer_core') continue;
+
     if (cond.fieldType === 'categorical') {
       const built = buildCategoricalFragment(cond, paramIdx, warnings);
       if (built) {

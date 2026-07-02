@@ -38,6 +38,7 @@ import {
   type Stage1ComposerWarning,
   type Stage1SkipReason,
 } from './stage1-query-composer';
+import { buildCustomerCoreClause } from './stage1-customer-core-clause';
 import { matchesSpecialRule, type SpecialRuleId } from './special-rules';
 
 // ---------------------------------------------------------------------------
@@ -374,8 +375,19 @@ export async function executeStage1Chain(
   // 本名單套用之特例規則 ID（與 F095 deriveAppliedSpecialRules 一致；skip 名單亦回報）
   const appliedRuleIds = computeAppliedRuleIds(list);
 
-  // §18.5.2：空 conditions / wildcard 後零有效 fragment → 整 list skip，不繼續下游步驟
-  if (fieldFragment.skipReason === 'EMPTY_CONDITIONS') {
+  // ①b F109 / AD-E07-37 §5.4：customer_core 條件式 LEFT JOIN + cc.* fragments（與 buildStage1Sql 共用同一函式）。
+  const ccConditions = list.condition_payload?.conditions ?? [];
+  const customerCoreClause = buildCustomerCoreClause(
+    ccConditions,
+    workdt,
+    'ob_pool_data',
+    warnings,
+  );
+
+  // 統一 EMPTY_CONDITIONS 判定（AD §5.4）：composer 側與 customer_core 側**皆**無有效 fragment 才 skip。
+  //   僅含 customer_core 條件之名單（fieldFragment.where===null 但 customerCoreClause 有 fragment）
+  //   不得誤判整批 skip（JOIN-003 陷阱紅線）。無 customer_core 條件時退化為與 F109 前完全等價。
+  if (fieldFragment.where === null && customerCoreClause.whereFragments.length === 0) {
     return {
       count: 0,
       cases: opts.dryRun ? undefined : [],
@@ -395,13 +407,27 @@ export async function executeStage1Chain(
     whereClauses.push(`(${fieldFragment.where})`);
     Object.assign(params, fieldFragment.params);
   }
+  // ①b customer_core fragments（cc.* / AGE / LEFT3）；已各自以 (...) 包裹，直接併入 AND 清單。
+  for (const f of customerCoreClause.whereFragments) {
+    whereClauses.push(f);
+  }
+  Object.assign(params, customerCoreClause.params);
   if (monthCntFragment) {
     whereClauses.push(`(${monthCntFragment.fragment})`);
     Object.assign(params, monthCntFragment.params);
   }
 
-  // ③ 撈 pool（欄位篩選 + month_cnt fragment）
+  // ③ 撈 pool（欄位篩選 + customer_core + month_cnt fragment）
   const qb = poolRepo.createQueryBuilder('ob_pool_data');
+  // F109：條件式注入 customer_core LEFT JOIN（原始表名字串，非 relation path；customer_core 無 entity）。
+  //   getMany() 只 hydrate ObPoolData 自身欄位（未 leftJoinAndSelect），cc.* 不污染回傳型別。
+  if (customerCoreClause.join) {
+    qb.leftJoin(
+      'customer_core',
+      'cc',
+      'cc.source_customer_no = ob_pool_data.custo_no',
+    );
+  }
   if (whereClauses.length > 0) {
     qb.where(whereClauses.join(' AND '), params);
   }

@@ -35,6 +35,7 @@ import {
   type Stage1ChainWarning,
 } from './stage1-filter-chain';
 import { buildStage1WhereConditions } from './stage1-query-composer';
+import { buildCustomerCoreClause } from './stage1-customer-core-clause';
 import { matchesSpecialRule } from './special-rules';
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,11 @@ export interface Stage1SqlCore {
   skipReason?: 'EMPTY_CONDITIONS';
   /** 非阻擋型 warning（沿用 composer + month_cnt skip 等，與 executeStage1Chain 一致）。 */
   warnings: Stage1ChainWarning[];
+  /**
+   * F109 / AD-E07-37 §5.2：customer_core 條件式 LEFT JOIN 子句；
+   *   null = 本名單無 customer_core 條件（呼叫端不注入 JOIN，純案件資料名單行為/效能不變，AC-11）。
+   */
+  customerCoreJoin: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,11 +89,24 @@ export async function buildStage1Sql(
   const warnings: Stage1ChainWarning[] = [];
   const fromAlias = 'o' as const;
 
-  // ① 欄位篩選（沿用既有 composer，AC-2①；EMPTY_CONDITIONS → skip）
+  // ① 欄位篩選（沿用既有 composer，AC-2①；composer 對 customer_core 條件靜默 skip，見 §5.1）
   const fieldFragment = buildStage1WhereConditions(list);
   for (const w of fieldFragment.warnings) warnings.push(w);
 
-  if (fieldFragment.skipReason === 'EMPTY_CONDITIONS') {
+  // ①b F109 / AD-E07-37 §5.2：customer_core 條件式 LEFT JOIN + cc.* fragments（AGE/LEFT3/直接比對）。
+  const ccConditions = list.condition_payload?.conditions ?? [];
+  const customerCoreClause = buildCustomerCoreClause(
+    ccConditions,
+    workdt,
+    fromAlias,
+    warnings,
+  );
+
+  // 統一 EMPTY_CONDITIONS 判定（AD §5.2 步驟 3）：composer 側與 customer_core 側**皆**無有效 fragment
+  //   才 skip。當名單僅含 customer_core 條件（如 gender IN [1]），composer 側 where=null 但
+  //   customerCoreClause.whereFragments.length>0 → 不 skip（修正純方案 (a) 之 EMPTY_CONDITIONS 陷阱）。
+  //   無 customer_core 條件時 whereFragments 恆為 []，此判斷退化為與 F109 前完全等價（zero behavior change）。
+  if (fieldFragment.where === null && customerCoreClause.whereFragments.length === 0) {
     return {
       where: null,
       params: {},
@@ -95,6 +114,7 @@ export async function buildStage1Sql(
       skip: true,
       skipReason: 'EMPTY_CONDITIONS',
       warnings,
+      customerCoreJoin: null,
     };
   }
 
@@ -107,6 +127,12 @@ export async function buildStage1Sql(
     clauses.push(`(${fieldFragment.where})`);
     Object.assign(params, fieldFragment.params);
   }
+
+  // ①b customer_core fragments（cc.* / AGE / LEFT3），於 month_cnt 之前併入（AND 交換律，順序不影響正確性）。
+  for (const f of customerCoreClause.whereFragments) {
+    clauses.push(f);
+  }
+  Object.assign(params, customerCoreClause.params);
 
   // ② MONTH_CNT 期別過濾（沿用 buildMonthCntFragment，AC-2②；缺值 / interval<=0 → skip + warning）
   const monthCntFragment = buildMonthCntFragment(list, warnings);
@@ -209,5 +235,6 @@ export async function buildStage1Sql(
     fromAlias,
     skip: false,
     warnings,
+    customerCoreJoin: customerCoreClause.join,
   };
 }

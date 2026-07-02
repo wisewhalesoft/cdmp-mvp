@@ -92,6 +92,8 @@ export async function runStage1SqlInsert(
   //   子查詢只暴露 cr_id/cr_nm/is_cr/appl_date → WHERE 之 "col" 仍唯一解析至 o。
   //   詳見 impl log「偏離 spec/AD」段（AD-E07-30 §3.1 述「ob_pool_data_list.cr_id 帶入」，惟未言明
   //   Stage 1 SELECT 源表為 ob_pool_data → 以 scoped LEFT JOIN 補足，語意忠實於 legacy SP）。
+  // F109 / AD-E07-37 §5.3：customer_core LEFT JOIN 插在既有 pdl CR JOIN 之前（順序不影響正確性）。
+  //   核心不引用 customer_core 條件時 core.customerCoreJoin 為 null → 不注入（純案件資料名單 SQL 不變）。
   const selectSql =
     `INSERT INTO ob_monthly_run_result ` +
     `(run_id, list_no, orgno, appl_no, custo_no, settle_src, cr_id, cr_nm, is_cr, appl_date, result_status, created_at, updated_at) ` +
@@ -99,6 +101,7 @@ export async function runStage1SqlInsert(
     `pdl.cr_id, pdl.cr_nm, COALESCE(pdl.is_cr, 'N'), COALESCE(pdl.appl_date, o.appl_date), 'PENDING', ` +
     `CURRENT_TIMESTAMP, CURRENT_TIMESTAMP ` +
     `FROM ob_pool_data o ` +
+    `${core.customerCoreJoin ? core.customerCoreJoin + ' ' : ''}` +
     `LEFT JOIN (SELECT orgno, appl_no, cr_id, cr_nm, is_cr, appl_date FROM ob_pool_data_list WHERE list_no = :insListNo) pdl ` +
     `ON pdl.orgno = o.orgno AND pdl.appl_no = o.appl_no ` +
     `WHERE ${core.where}`;
@@ -131,7 +134,12 @@ export async function estimateStage1SqlCount(
     return { count: 0, core };
   }
 
-  const countSql = `SELECT COUNT(*) AS cnt FROM ob_pool_data o WHERE ${core.where}`;
+  // F109 / AD-E07-37 §5.3：條件式 customer_core LEFT JOIN（null 時不注入）。
+  //   source_customer_no UNIQUE（I-CC-JOIN-CARD-01）保證 1:0/1:1 基數，COUNT 不因 JOIN 膨脹。
+  const countSql =
+    `SELECT COUNT(*) AS cnt FROM ob_pool_data o ` +
+    `${core.customerCoreJoin ? core.customerCoreJoin + ' ' : ''}` +
+    `WHERE ${core.where}`;
   const [sql, parameters] = escape(manager, countSql, core.params);
 
   const rows = (await manager.query(sql, parameters)) as Array<{

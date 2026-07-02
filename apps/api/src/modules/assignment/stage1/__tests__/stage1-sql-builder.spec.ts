@@ -291,3 +291,62 @@ describe('F099 GMT — guard 移轉（作廢 RGv2-005，trigger 仍 JS）', () =
     expect(SPECIAL_RULES_SRC).not.toMatch(/includes\(\s*['"]年資['"]\s*\)/);
   });
 });
+
+// ===========================================================================
+// F109 / AD-E07-37 — customerCoreJoin + 統一 EMPTY_CONDITIONS（unit，不需 PG）
+// ===========================================================================
+
+describe('F109 buildStage1Sql — customerCoreJoin / EMPTY_CONDITIONS（JOIN-002/003/006/008）', () => {
+  const ccList = (conditions: unknown[]) =>
+    makeList({
+      condition_payload: { logic: 'AND', conditions } as ObListDefinition['condition_payload'],
+    });
+
+  it('TS-F109-JOIN-002：純案件資料名單 → customerCoreJoin=null、where 不含 cc./customer_core（regression）', async () => {
+    const core = await buildStage1Sql(makeList(), WORKDT, mockPdlRepo());
+    expect(core.customerCoreJoin).toBeNull();
+    expect(core.where ?? '').not.toContain('cc.');
+    expect(core.where ?? '').not.toContain('customer_core');
+  });
+
+  it('TS-F109-JOIN-003【EMPTY_CONDITIONS 陷阱】：僅含 gender(customer_core) → skip=false、customerCoreJoin 非 null、where 含 cc.gender', async () => {
+    const core = await buildStage1Sql(
+      ccList([
+        { columnName: 'gender', fieldType: 'categorical', values: ['1'], dataSource: 'customer_core' },
+      ]),
+      WORKDT,
+      mockPdlRepo(),
+    );
+    expect(core.skip).toBe(false);
+    expect(core.skipReason).toBeUndefined();
+    expect(core.customerCoreJoin).toBe(
+      'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no',
+    );
+    expect(core.where).toContain('(cc.gender IN (:...ccCat0))');
+    expect(core.params.ccCat0).toEqual(['1']);
+  });
+
+  it('TS-F109-JOIN-006：混合 prod_kind(案件) + gender(客戶) → where 同時含裸欄名與 cc.，customerCoreJoin 恰 1', async () => {
+    const core = await buildStage1Sql(
+      ccList([
+        { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'], dataSource: 'ob_pool_data' },
+        { columnName: 'gender', fieldType: 'categorical', values: ['1'], dataSource: 'customer_core' },
+      ]),
+      WORKDT,
+      mockPdlRepo(),
+    );
+    expect(core.skip).toBe(false);
+    expect(core.where).toContain('"prod_kind" IN');
+    expect(core.where).toContain('(cc.gender IN');
+    expect(core.customerCoreJoin).toBe(
+      'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no',
+    );
+  });
+
+  it('TS-F109-JOIN-008：真正空條件（conditions=[]）→ skip=true、skipReason=EMPTY_CONDITIONS、customerCoreJoin=null（regression）', async () => {
+    const core = await buildStage1Sql(ccList([]), WORKDT, mockPdlRepo());
+    expect(core.skip).toBe(true);
+    expect(core.skipReason).toBe('EMPTY_CONDITIONS');
+    expect(core.customerCoreJoin).toBeNull();
+  });
+});

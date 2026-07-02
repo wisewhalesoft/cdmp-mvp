@@ -786,3 +786,42 @@ describe('Stage1QueryComposer 波 7 — US-144 best_case 系統注入後 Stage 1
     expect(paramValues).toContainEqual(['Y']);
   });
 });
+
+// ===========================================================================
+// F109 / AD-E07-37 §5.1 — composer 對 customer_core 條件靜默 skip（I-CC-COMPOSER-SCOPE-01）
+// ===========================================================================
+
+describe('F109 composer — customer_core 條件靜默 skip', () => {
+  it('TS-F109-JOIN-004：僅含 gender(customer_core) 條件 → composer 全 skip（where=null / EMPTY_CONDITIONS），warnings 不含 gender 相關', () => {
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'gender', fieldType: 'categorical', values: ['1'], dataSource: 'customer_core' },
+        ],
+      } as ObListDefinition['condition_payload'],
+    });
+    const frag = buildStage1WhereConditions(list);
+    expect(frag.where).toBeNull();
+    expect(frag.skipReason).toBe('EMPTY_CONDITIONS');
+    // 靜默 continue：不得對 gender 產生任何 warning（非 INVALID_COLUMN_NAME 等）
+    expect(frag.warnings.some((w) => w.columnName === 'gender')).toBe(false);
+  });
+
+  it('TS-F109-COMPSCOPE-002：customer_core 條件靜默 skip；未知欄名(非白名單非cc) 仍走既有 composer 路徑', () => {
+    // customer_core 條件（cpost_city，靠 fallback 判定）+ 案件 prod_kind → 只保留 prod_kind fragment
+    const list = makeList({
+      condition_payload: {
+        logic: 'AND',
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'], dataSource: 'ob_pool_data' },
+          { columnName: 'cpost_city', fieldType: 'categorical', values: ['臺北市'], dataSource: 'customer_core' },
+        ],
+      } as ObListDefinition['condition_payload'],
+    });
+    const frag = buildStage1WhereConditions(list);
+    expect(frag.where).toContain('"prod_kind" IN');
+    expect(frag.where ?? '').not.toContain('cpost_city'); // customer_core 欄不入 composer fragment
+    expect(frag.warnings.some((w) => w.columnName === 'cpost_city')).toBe(false);
+  });
+});
