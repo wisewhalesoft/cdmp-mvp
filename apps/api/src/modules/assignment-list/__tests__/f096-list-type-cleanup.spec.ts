@@ -39,7 +39,6 @@ import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
-import { DeactivatePooldataWhitelistListType1711360000293 } from '@/database/migrations/1711360000293-DeactivatePooldataWhitelistListType';
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 
 const YM = '202605';
@@ -164,10 +163,10 @@ describe('F096：list_type 白名單停用（行為 / regression）', () => {
     await seedWhitelistWithListType(env.whitelistRepo);
   });
 
+  // F096 list_type 停用行為：原 m293 migration（UPDATE is_active=false WHERE column_name='list_type'）
+  // 已 squash 進 baseline，故此處內聯等價操作（透過 repo，DB 無關 boolean 映射）。
   async function runM293Up() {
-    const qr = env.ds.createQueryRunner();
-    await new DeactivatePooldataWhitelistListType1711360000293().up(qr);
-    await qr.release();
+    await env.whitelistRepo.update({ column_name: 'list_type' }, { is_active: false });
   }
 
   // -------------------- API regression（dropdown 來源） --------------------
