@@ -118,6 +118,12 @@ docker compose --profile bootstrap up bootstrap --build --abort-on-container-exi
 
 # 3) 起 api / worker / web（synchronize 已關，schema 來自 migration baseline）
 docker compose up -d
+
+# 4) 主機層：確認 Docker daemon 開機自啟（只需做一次；否則重開機後容器不會被拉起）
+systemctl is-enabled docker || sudo systemctl enable docker
+
+# 5) 驗證常駐服務 restart 政策生效（每行應顯示 unless-stopped）
+docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' cdmp-api cdmp-postgres cdmp-worker cdmp-web
 ```
 
 > - 步驟 2、3 不必再帶 `NODE_ENV` / `AES_ENCRYPTION_KEY` / `JWT_SECRET` —— `docker compose` 會自動套用同目錄的 `.env`，三個服務共用同一把 `AES_ENCRYPTION_KEY`（datasource 密碼加解密），自然一致。
