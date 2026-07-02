@@ -1,10 +1,12 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.16"
-date: 2026-05-28
+version: "1.17"
+date: 2026-07-02
 status: Draft
 ---
+
+> **v1.17（2026-07-02 / US-172 / F109 / AD-E07-37）**：`field_whitelist`（`pooldata_field_whitelist` 實體）新增 `data_source VARCHAR(20) NOT NULL DEFAULT 'ob_pool_data'` 欄位（合法值 `'ob_pool_data'` / `'customer_core'`，CHECK 限兩值），標記篩選欄位資料來源；既有 7 筆 backfill `'ob_pool_data'`，F109 新增 8 個客戶屬性欄位為 `'customer_core'`（gender / date_of_birth / occupation_desc / education_desc / marital_status_desc / customer_type_desc / monthly_income_desc / cpost_city，來自 `customer_core`，`ob_pool_data.custo_no = customer_core.source_customer_no` 關聯）。補 `data_source` 業務規則（Stage 1 條件式 LEFT JOIN customer_core + NULL 排除，F109 §6）＋ F109 seed 延伸段（白名單 8 欄 + `categorical_field_value` 7 欄可選值）。型別 / CHECK / migration / backfill / condition data_source 判定機制由 system-architect owns（AD-E07-37 / OQ-F109-01）。
 
 > **v1.16（2026-05-28 / US-144 / AD-E07-18 §18.12）**：`pooldata_field_whitelist`（`field_whitelist` 實體）新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位，標記系統固定篩選條件（F075 v1.7 / migration m295 M-B1）；seed 更新：`best_case.is_system_fixed = true`，其餘 6 筆 `= false`；補充 is_system_fixed 業務規則（BR-15 不可停用 / BR-16 dropdown 排除）；seed 備注對齊 m293 list_type 停用狀態。
 
@@ -2175,6 +2177,7 @@ PK：`calendar_date`
 | field_type | VARCHAR(20) | NOT NULL | 欄位類別列舉：`numeric` / `categorical` / `date`（CHECK constraint 限三值） |
 | is_active | BOOLEAN | NOT NULL DEFAULT TRUE | 啟用狀態；停用後新名單表單不再顯示，但既有名單條件不受影響（F075 BR-3） |
 | is_system_fixed | BOOLEAN | NOT NULL DEFAULT FALSE | **v1.7 新增（2026-05-28 / US-144 / AD-E07-18 §18.12 / migration m295）**：標記此欄位為「系統固定篩選條件」；`true` 時：(1) F050 v2.3 / F051 v2.2 `injectSystemFixedConditions` 於 createList / updateList 強制注入且不可移除；(2) F075 BR-15 不可停用（422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`）；(3) F050 / F051「新增條件」dropdown 排除（BR-16）。目前唯一 `true` 值：`best_case`（優質案件，對齊舊系統 `OBMLISTDF.PROD_BEST` 恆 `'Y'` 業務語意）。PG 型別 `BOOLEAN`；SQLite 映射為 `INTEGER 0/1`（TypeORM boolean column） |
+| data_source | VARCHAR(20) | NOT NULL DEFAULT 'ob_pool_data' | **v1.17 新增（2026-07-02 / US-172 / F109 / AD-E07-37）**：標記此篩選欄位之資料來源，合法值 `'ob_pool_data'`（案件資料）/ `'customer_core'`（客戶資料，CHECK constraint 限兩值）。既有 7 筆 seed backfill `'ob_pool_data'`；F109 新增 8 個客戶屬性欄位為 `'customer_core'`。`GET /api/v1/pooldata-fields` 回應暴露 `dataSource`；M06 列表以「資料來源」欄呈現、F050 / F051「新增條件」選單依此分組（案件資料 / 客戶資料）。**月跑 Stage 1 語意**：名單 `condition_payload` 含 ≥ 1 個 `data_source = 'customer_core'` 之 condition 時，Stage 1 條件式注入 `LEFT JOIN customer_core cc ON ob_pool_data.custo_no = cc.source_customer_no`，LEFT JOIN 後客戶欄位 NULL → 案件排除（F109 §6 BR-2 / BR-3）。型別 / CHECK / migration ordering / 既有列 backfill 由 system-architect owns（AD-E07-37 / OQ-F109-01） |
 | created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
 | updated_at | TIMESTAMP | NOT NULL | 最後更新時間（UTC） |
 | created_by | UUID | NULL | 建立者 user_id（[ASSUMPTION] 由 system-architect 確認是否必填） |
@@ -2187,6 +2190,7 @@ PK：`calendar_date`
 - 與 PostgreSQL `ob_pool_data` 之欄位名稱為字串映射關係，不維護外鍵約束（F075 BR-8）
 - 月跑 Stage 1 不 join 本表做欄位有效性驗證，直接讀取 `ob_list_definition.condition_payload`（避免停用後月跑失敗）
 - **`is_system_fixed = true` 欄位不可停用**（F075 BR-15）；service 層回 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；前端 M06 管理頁停用按鈕 disabled（F075 AC-20）
+- **`data_source` 決定 Stage 1 JOIN 策略（v1.17 / F109）**：`'customer_core'` 之欄位被名單引用時，Stage 1 條件式 LEFT JOIN `customer_core`（NULL = 排除）；`'ob_pool_data'` 欄位維持單表 `FROM ob_pool_data o`。condition 之 `data_source` 判定機制（固化於 condition_payload vs runtime 查詢 vs 靜態常數）由 system-architect 決定（AD-E07-37 / OQ-F109-01），須與「Stage 1 不 join 白名單做有效性驗證」相容
 
 **索引**：`column_name`（PK）、`(field_type, is_active)`（多選元件查詢）
 
@@ -2194,9 +2198,15 @@ PK：`calendar_date`
 - 6 筆 `is_active = true, is_system_fixed = false`：prod_kind（categorical）/ spec_tp（categorical）/ caseyear（categorical）/ settle_src（categorical）/ case_status（categorical）/ list_type（categorical，is_active=false per AD-E07-26 §26.7 m293）
 - 1 筆 `is_active = true, is_system_fixed = true`：best_case（categorical，display_name「優質案件」；系統固定篩選條件，F050 v2.3 / F051 v2.2 強制注入）
 - （list_type 已於 m293 停用，is_active=false，is_system_fixed=false；best_case 由 m295 M-B1 設 is_system_fixed=true）
+- 以上既有 seed 一律 `data_source = 'ob_pool_data'`（v1.17 / F109 backfill）
 
-**相關功能**：[F075](features/F075-manage-pooldata-field-whitelist.md)、[F076](features/F076-manage-categorical-field-values.md)（FK 父表）
-**相關架構決策**：AD-E07-18 §18.12（migration M-B1 / M-B2 規格）
+**F109 Seed 延伸（v1.17 / 2026-07-02 / US-172）**：新增 8 筆 `is_active = true, is_system_fixed = false, data_source = 'customer_core'`（欄位來自 `customer_core`，透過 `ob_pool_data.custo_no = customer_core.source_customer_no` 關聯）：
+- gender（categorical，性別，code→label 1/2/3）、date_of_birth（numeric，年齡，衍生 AGE 以 `project_workym` 月首日為基準）、occupation_desc（categorical，職業別）、education_desc（categorical，教育程度）、marital_status_desc（categorical，婚姻狀況）、customer_type_desc（categorical，身分別）、monthly_income_desc（categorical，收入區間）、cpost_city（categorical，居住城市，衍生 `LEFT(cpost_city,3)` 縣市級）
+- 對應 `categorical_field_value` 補 7 個 categorical 欄位可選值（性別 3 / 職業別 55 / 教育程度 8 / 婚姻狀況 5 / 身分別 4 / 收入區間 9 / 居住城市 22；6 個 `_desc` 欄 value=label，僅 gender code→label）
+- migration ordering / 既有列 backfill / CHECK constraint 由 system-architect owns（AD-E07-37）
+
+**相關功能**：[F075](features/F075-manage-pooldata-field-whitelist.md)、[F076](features/F076-manage-categorical-field-values.md)（FK 父表）、[F109](features/F109-customer-source-filter-fields.md)（`data_source` 概念 + customer_core 8 欄）
+**相關架構決策**：AD-E07-18 §18.12（migration M-B1 / M-B2 規格）、AD-E07-37（F109 `data_source` + 條件式 JOIN，待 system-architect）
 
 ---
 

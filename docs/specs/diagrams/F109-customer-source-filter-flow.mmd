@@ -1,0 +1,33 @@
+%% F109：月跑 Stage 1 客戶資料（customer_core）條件式 LEFT JOIN 與 NULL 排除語意決策流程
+%% 相關 spec：features/F109-customer-source-filter-fields.md §6（BR-2 條件式 JOIN / BR-3 NULL 排除 / BR-10 三處消費一致）
+flowchart TD
+    Start([Stage 1 組裝 SQL<br/>月跑 / Stage 0 試算 / 名單試算]) --> Parse[解析 condition_payload.conditions<br/>逐一判定 data_source]
+
+    Parse --> HasCust{存在<br/>data_source = customer_core<br/>之 condition？}
+
+    HasCust -->|否| NoJoin[FROM ob_pool_data o<br/>不注入 JOIN<br/>行為與 F109 前完全相同]
+    NoJoin --> CaseOnly[僅套用案件資料條件<br/>o.col IN / BETWEEN]
+    CaseOnly --> Result([產出入選案件集合])
+
+    HasCust -->|是| Join[注入單一<br/>LEFT JOIN customer_core cc<br/>ON o.custo_no = cc.source_customer_no]
+
+    Join --> Derive[組裝客戶條件 fragment<br/>依 field_type / 衍生欄]
+
+    Derive --> Gender[性別 gender<br/>cc.gender IN 代碼 1/2/3]
+    Derive --> Age[年齡 date_of_birth 衍生 AGE<br/>基準日 = project_workym 月首日 workdt<br/>age BETWEEN min AND max]
+    Derive --> City[居住城市 cpost_city 衍生<br/>LEFT cc.cpost_city 3 IN 縣市清單]
+    Derive --> Desc[其餘 _desc 欄<br/>cc.col IN value=label]
+
+    Gender --> Null{客戶欄位為 NULL？<br/>無對應客戶 或 欄本身 NULL}
+    Age --> Null
+    City --> Null
+    Desc --> Null
+
+    Null -->|是| Exclude[條件求值 NULL/false<br/>WHERE 過濾 → 案件排除<br/>等同 INNER JOIN 效果<br/>客戶條件欄不得 COALESCE]
+    Null -->|否| Match[值符合條件]
+
+    Exclude --> AndLogic
+    Match --> AndLogic[與案件資料條件 AND 連接<br/>任一不符合即排除]
+    AndLogic --> Result
+
+    Result --> Consistency[[三處消費一致 BR-10<br/>PG 下推 buildStage1Sql<br/>≡ JS oracle stage1-filter-chain<br/>estimate ≡ run I-RUN-EST-01]]

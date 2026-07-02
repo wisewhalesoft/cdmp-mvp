@@ -1,13 +1,21 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.19"
-date: 2026-06-26
+version: "3.20"
+date: 2026-07-02
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.20 / 2026-07-02 / F109 新增「客戶資料」來源篩選欄位（US-172）**：依已核可 US-172 **新建 F109**（M06 篩選欄位）。本輪變更檔案：
+> - **新建 v1.0**：[F109-customer-source-filter-fields.md](features/F109-customer-source-filter-fields.md)（白名單引入 `data_source` 概念〔`ob_pool_data` / `customer_core`〕+ API 暴露 `dataSource` + M06 列表來源欄 + 名單定義來源分組；新增 8 個 `customer_core` 篩選欄位〔性別 code→label / 年齡衍生 AGE 基準＝`project_workym` 月首日 / 居住城市 `LEFT(cpost_city,3)` 縣市級 / 5 個 `_desc` value=label〕；F076 seed 7 categorical 欄位可選值〔3/55/8/5/4/9/22〕；月跑 Stage 1 **條件式** LEFT JOIN customer_core〔`custo_no=source_customer_no`〕+ **NULL=排除** 核心語意〔BR-2/BR-3〕+ 三處消費一致〔月跑 / Stage 0 試算 / 名單試算，BR-10〕。US-172 4 個 OQ〔年齡基準 / 城市 seed / 性別機制 / 空表限制〕已裁示落規格）
+> - **新建圖表**：[diagrams/F109-customer-source-filter-flow.mmd](diagrams/F109-customer-source-filter-flow.mmd)（Stage 1 條件式 JOIN + NULL 排除決策 flowchart；mermaid 已驗證）
+> - **支援文件更新（本 feature 負責）**：`data-model.md` v1.16→**v1.17**（`field_whitelist` 新增 `data_source` 欄位 + F109 seed 延伸段）；spec-index feature 表 + 圖表表登錄 F109
+> - **error-handling.md**：無新錯誤碼（審查結論：`CONDITION_COLUMN_NOT_IN_WHITELIST` 涵蓋客戶欄位白名單驗證、`WHITELIST_OPTION_INACTIVE` 涵蓋可選值停用警告、年齡 min/max 前端驗證沿用既有；`customer_core` 空表為已知限制不建前置檢查〔OQ-172-04〕）
+> - **刻意未動（邊界，交 system-architect / 其他 agent）**：`architecture-spec.md` / AD-E07-37（`data_source` schema 型別 / CHECK / migration ordering / 既有列 backfill / condition data_source 判定機制 / 條件式 JOIN 與衍生運算式〔AGE、LEFT3〕SQL 落點 / composer 簽名變更 / PG↔JS 等價 / customer_core 索引 = §12 OQ-F109-01~05）；code / test / prototype（tdd-implementation / test-designer / ui-ux 範疇；prototype 昨已 commit e4c441f）
+> - **殘留使用者待裁 open question**：無（US-172 4 個 OQ 已由使用者全數拍板；F109 §12 OQ-F109-01~05 均屬架構師 HOW，附建議預設）
+>
 > **v3.19 / 2026-06-26 / F049 v2.0 Stage 0 試算頁業務化重設計（per-list 技術視角 → 部門維度每日分派可行性）**：依 5 個已核可 user story（US-166~US-170）**升版既有 F049**（非新建編號——Stage 0 試算為同一頁面之重設計，index 既有 F049↔Stage 0 映射）。本輪變更檔案：
 > - **升 v2.0**：[F049-stage0-daily-estimate.md](features/F049-stage0-daily-estimate.md)（新增 **Part B §14~§23**，於 v1.x 千分位 ratio 引擎 / per-list dry-run / calendarSource **之上**加聚合 + 部門投影層，**不分叉底層**。新 AC 命名 AC-AGG/AC-DEPT/AC-GAP/AC-SCOPE/AC-FEAS/AC-TERM + BR-7~BR-16，全可追溯至 US-166~170 AC-ID（§22.3 對照表）。**(1)** §15 全名單彙總預設 + 單一名單鑽探（US-166，**supersedes US-071 AC-1/2/3/4-Default**，取消 v1.3 自動選第一筆）；**(2)** §16 部門投影 `dept_daily = Σ_L list_total×ration/100×dpm/1000`（per-list ration 取自 `ob_dept_pct`，與 F101 一致）+ **保住總量＋標示缺口**模型（`org_total` 不依賴比例必正確、`gap=org_total−Σ部門` 標示不補差、gap=0 不顯示）（US-167）；**(3)** §17 處長唯讀 dept scope 隔離，複用 `listLists` 既有 `getScopeDeptCode→EXISTS ob_dept_pct.obdeptid=scope` 模式，授權放寬 `DirectorGuard`→`DirectorOrSectionChiefGuard`、service 為安全邊界、scope=null→200 空結果（US-168）；**(4)** §18 人均每日件數 `round(部門件數÷在職人數)`、`active_headcount=COUNT(ob_emphire dept_code=D AND resign_date IS NULL)`、headcount=0→「—」、超門檻標紅（US-169）；**(5)** §19 術語清理移除黑名單（rest_flg/base/remainder/ratioPerMille/ob_assign_set/OBPOOLDATA/STAGE0_POOL_WARN_THRESHOLD/AD-E07-8/API 路徑…）+ 業務語言替代（US-170）。**estimate≡run I-RUN-EST-01** 列硬約束。**OQ-167-01 裁定**＝`Math.round` 於最終每格實數。**OQ-167-03（HIGH-RISK）已 spec-writer 對 dev DB 實證**：`ob_emphire.dept_code`（在職）↔`ob_dept_pct.obdeptid` 同代號空間同粒度（各 8 distinct、100% 重疊、無孤兒碼、每 obdeptid 在職人數>0、4 處長各對應 1 distinct dept_code）→§20；殘留 production 複核交架構師。）
 > - **新建圖表**：[diagrams/F049-stage0-dept-projection-flow.mmd](diagrams/F049-stage0-dept-projection-flow.mmd)（Part B 部門每日分派量資料流 flowchart：名單→per-list COUNT→×ration→×千分位→部門/日矩陣→÷在職人數；含 mode/scope filter/缺口/人均門檻分支；mermaid 已驗證）
@@ -180,9 +188,9 @@ status: Draft
 | Feature 文件（E05） | 17 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 51 |
-| Mermaid 圖表 | 46 |
-| **總計** | **151** |
+| Feature 文件（E07） | 52 |
+| Mermaid 圖表 | 47 |
+| **總計** | **153** |
 
 ---
 
@@ -414,6 +422,7 @@ status: Draft
 | ~~F068~~ | ~~[F068-edit-base-code.md](features/F068-edit-base-code.md)~~ | ~~E07 相關代碼維護（PROD_KIND / SPEC_TP / CASE_STATUS）~~ | ~~US-092~~ | P0-MVP | **DEPRECATED v1.3（2026-05-20 / F050 v2.1 重構 / J2）— 由 F075 v1.5 + F076 v1.5 + US-124 + US-125 承接；保留歷史內容 + banner** |
 | F075 | [F075-manage-pooldata-field-whitelist.md](features/F075-manage-pooldata-field-whitelist.md) | POOLDATA 篩選欄位白名單管理（含 `field_type` metadata；**v1.7 / 2026-05-28 / US-144**：新增 `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位（`best_case = true`）+ BR-15 系統固定欄位不可停用 → 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE` + BR-16 從名單「新增條件」可選池排除 + GET API 暴露 `isSystemFixed`（AC-18/19/20）；**v1.6 / 2026-05-20**：seed 擴充為 **7 筆全部啟用**，新增 `best_case`（categorical），對應 US-128 / US-129；**v1.5**：seed 補 `case_status`，6 筆，對應 US-125 AC-5；v1.4.7：available-columns 補 `columnDescription` + Modal 自動填入；v1.4 UI 命名改「篩選欄位管理」+ `GET /available-columns` dropdown 唯一新增路徑 + `suggestedFieldType` 推斷；v1.4.3 case 對齊小寫 snake_case） | US-102, US-125, US-128, US-129, US-144 | P0-MVP | **v1.7** |
 | F076 | [F076-manage-categorical-field-values.md](features/F076-manage-categorical-field-values.md) | 類別型欄位可選值管理（**v1.5 / 2026-05-20**：AC-3 seed 補 `case_status` 4 筆（01/02/03/04，業務語意對照引用 F050 v2.1 §5.1.1）+ caseyear 確認 8 筆（0~6 + 99，J5 拍板）+ spec_tp 升真實 OBMCODEDF dump **52 筆**（TBL_ID='12'，取代 m24 placeholder 3 筆，E5 ✅ Resolved；2026-05-21 二次更正：原為 TBL_ID='02' 32 筆筆誤）；v1.4.5 多欄位 accordion master 架構；v1.3 PO 決議 F076-C 軟停用機制：§5.0 schema 補 `deactivation_reason` ENUM `'manual'`/`'field_type_changed'` + §5.4 deactivate 端點 + reason 必填 200 字 + `WHITELIST_OPTION_INACTIVE` 警告紀錄 cross-ref） | US-103, US-125 | P0-MVP | **v1.5** |
+| F109 | [F109-customer-source-filter-fields.md](features/F109-customer-source-filter-fields.md) | 新增「客戶資料」來源篩選欄位（**v1.0 / 2026-07-02 / US-172**）：白名單新增 `data_source` 概念（`ob_pool_data` 案件資料 / `customer_core` 客戶資料，既有 7 筆預設 `ob_pool_data`）+ API 暴露 `dataSource` + M06 列表「資料來源」欄 + 名單定義「新增條件」選單依來源分組；新增 8 個 `data_source='customer_core'` 欄位（性別 code→label / 年齡衍生 AGE 以 `project_workym` 月首日為基準 / 居住城市 `LEFT(cpost_city,3)` 縣市級 22 / 5 個 `_desc` value=label）；F076 seed 7 個 categorical 欄位可選值（3/55/8/5/4/9/22）；月跑 Stage 1 條件式 LEFT JOIN customer_core（`custo_no=source_customer_no`）+ NULL 排除語意（BR-2/BR-3）+ 三處消費一致（月跑/Stage 0 試算/名單試算，BR-10）。5 個架構 OQ（OQ-F109-01~05）交 system-architect（AD-E07-37）。 | US-172 | P1 | **v1.0** |
 
 #### M07 角色與可見範圍（E07 重構批次 1，2026-05-15）
 
@@ -468,6 +477,7 @@ status: Draft
 | [diagrams/F067-run-comparison-flow.mmd](diagrams/F067-run-comparison-flow.mmd) | 兩次執行結果差異比對流程 | Sequence | F067 |
 | [diagrams/F073-role-matrix.mmd](diagrams/F073-role-matrix.mmd) | E07 角色 × 模組權限矩陣決策流程（Guard 檢查順序） | Flowchart | F073, F074, F002 §4.6 |
 | [diagrams/F075-whitelist-flow.mmd](diagrams/F075-whitelist-flow.mmd) | POOLDATA 篩選欄位白名單管理流程（seed / 列表 / CRUD） | Flowchart | F075, F076 |
+| [diagrams/F109-customer-source-filter-flow.mmd](diagrams/F109-customer-source-filter-flow.mmd) | **F109 v1.0 客戶資料來源篩選：Stage 1 條件式 LEFT JOIN customer_core 與 NULL 排除語意決策流程（含年齡 AGE / 居住城市 LEFT3 衍生欄 + AND 跨來源組合 + 三處消費一致 I-RUN-EST-01）** | Flowchart | F109, F075, F076, F050 |
 | [diagrams/F077-month-switch-flow.mmd](diagrams/F077-month-switch-flow.mmd) | M01 月份切換 + 唯讀判斷 + lockState 渲染流程 | Flowchart | F077, F048 |
 | [diagrams/F050-draft-create-flow.mmd](diagrams/F050-draft-create-flow.mmd) | F050 v2.0 草稿建立名單流程（含「從上月複製」分支與 feature flag gating） | Flowchart | F050 v2.0, F077 |
 | [diagrams/F078-draft-advance-flow.mmd](diagrams/F078-draft-advance-flow.mmd) | F078 v1.0 草稿推進至部門比例設定流程（含 6 項前置條件嚴格驗證 + feature flag gating） | Flowchart | F078, F050 v2.0, F077 |
