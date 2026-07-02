@@ -24,7 +24,7 @@
             "subtitle": "APYHFC16.OB / raw_970da79c",
             "extractionRef": {
               "datasourceName": "APYHFC16.OB",
-              "sourceTable": "raw_970da79c"
+              "sourceTable": "OB_ARRETURNDF_MIN_CAP"
             }
           }
         },
@@ -109,7 +109,7 @@
             "subtitle": "APYHFC16.OB / raw_dfb3b313",
             "extractionRef": {
               "datasourceName": "APYHFC16.OB",
-              "sourceTable": "raw_dfb3b313"
+              "sourceTable": "OBCALENDAR"
             }
           }
         },
@@ -194,7 +194,7 @@
             "subtitle": "APYHFC16.OB / raw_e1e951d7",
             "extractionRef": {
               "datasourceName": "APYHFC16.OB",
-              "sourceTable": "raw_e1e951d7"
+              "sourceTable": "OBEMPHIRE"
             }
           }
         },
@@ -364,7 +364,7 @@
             "subtitle": "APYHFC16.OB / raw_6d58393b",
             "extractionRef": {
               "datasourceName": "APYHFC16.OB",
-              "sourceTable": "raw_6d58393b"
+              "sourceTable": "OBPOOLDATA"
             }
           }
         },
@@ -1009,7 +1009,7 @@
             "subtitle": "APYHFC16.OB / raw_33dc3771",
             "extractionRef": {
               "datasourceName": "APYHFC16.OB",
-              "sourceTable": "raw_33dc3771"
+              "sourceTable": "OBPOOLDATA_LIST"
             },
             "sourceFilter": {
               "column": "ASSIGNDAY",
@@ -1698,7 +1698,11 @@
             "nodeType": "raw_data_extract",
             "label": "[和潤]ZZIP",
             "rawTable": "raw_101f6b3e",
-            "subtitle": "[和潤]小車/機車/商品客戶主檔擷取"
+            "subtitle": "[和潤]小車/機車/商品客戶主檔擷取",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCUST_M"
+            }
           }
         },
         {
@@ -1712,7 +1716,11 @@
             "nodeType": "raw_data_extract",
             "label": "[和勁]ZZIP",
             "rawTable": "raw_35d85504",
-            "subtitle": "[和勁]重車客戶主檔擷取"
+            "subtitle": "[和勁]重車客戶主檔擷取",
+            "extractionRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCUST_M"
+            }
           }
         },
         {
@@ -1776,7 +1784,11 @@
                 "outputAlias": "education_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1800,7 +1812,11 @@
                 "outputAlias": "occupation_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1824,7 +1840,11 @@
                 "outputAlias": "job_title_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1848,7 +1868,11 @@
                 "outputAlias": "marital_status_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1872,7 +1896,11 @@
                 "outputAlias": "customer_type_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1896,7 +1924,11 @@
                 "outputAlias": "income_source_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1920,7 +1952,11 @@
                 "outputAlias": "industry_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1944,7 +1980,11 @@
                 "outputAlias": "job_level_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1968,7 +2008,11 @@
                 "outputAlias": "monthly_income_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -1992,7 +2036,11 @@
                 "outputAlias": "education_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2016,7 +2064,11 @@
                 "outputAlias": "occupation_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2040,7 +2092,11 @@
                 "outputAlias": "job_title_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2064,7 +2120,11 @@
                 "outputAlias": "marital_status_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2088,7 +2148,11 @@
                 "outputAlias": "customer_type_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2112,7 +2176,11 @@
                 "outputAlias": "job_level_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2136,7 +2204,11 @@
                 "outputAlias": "monthly_income_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMCODE_D"
+            }
           }
         },
         {
@@ -2248,7 +2320,11 @@
                 "outputAlias": "hpost_city"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMPOST_M"
+            }
           }
         },
         {
@@ -2271,7 +2347,11 @@
                 "outputAlias": "cpost_city"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMPOST_M"
+            }
           }
         },
         {
@@ -2294,7 +2374,11 @@
                 "outputAlias": "co_city"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "ZZIP_BAMPOST_M"
+            }
           }
         },
         {
@@ -2644,7 +2728,11 @@
             "nodeType": "raw_data_extract",
             "label": "[和潤]MLMC",
             "rawTable": "raw_1138803c",
-            "subtitle": "[和潤]企金客戶主檔擷取"
+            "subtitle": "[和潤]企金客戶主檔擷取",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.CF",
+              "sourceTable": "MLMCUSTOMER"
+            }
           }
         },
         {
@@ -2658,7 +2746,11 @@
             "nodeType": "raw_data_extract",
             "label": "[和勁]MLMC",
             "rawTable": "raw_aec93e7c",
-            "subtitle": "[和勁]企金客戶主檔擷取"
+            "subtitle": "[和勁]企金客戶主檔擷取",
+            "extractionRef": {
+              "datasourceName": "APYHFC51.CF",
+              "sourceTable": "MLMCUSTOMER"
+            }
           }
         },
         {
@@ -2693,7 +2785,11 @@
             "nodeType": "raw_data_extract",
             "label": "[興業]MLMC",
             "rawTable": "raw_50172f04",
-            "subtitle": "[興業]客戶主檔擷取"
+            "subtitle": "[興業]客戶主檔擷取",
+            "extractionRef": {
+              "datasourceName": "APYHFC71.CF",
+              "sourceTable": "MLMCUSTOMER"
+            }
           }
         },
         {
@@ -2717,7 +2813,11 @@
                 "outputAlias": "customer_type_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2741,7 +2841,11 @@
                 "outputAlias": "employee_count_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2765,7 +2869,11 @@
                 "outputAlias": "is_listed_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2788,7 +2896,11 @@
                 "outputAlias": "industry_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC16.CF",
+              "sourceTable": "MLSTDINDUMF"
+            }
           }
         },
         {
@@ -2812,7 +2924,11 @@
                 "outputAlias": "customer_type_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2836,7 +2952,11 @@
                 "outputAlias": "employee_count_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2860,7 +2980,11 @@
                 "outputAlias": "is_listed_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2883,7 +3007,11 @@
                 "outputAlias": "industry_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC51.CF",
+              "sourceTable": "MLSTDINDUMF"
+            }
           }
         },
         {
@@ -2907,7 +3035,11 @@
                 "outputAlias": "customer_type_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC71.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2931,7 +3063,11 @@
                 "outputAlias": "employee_count_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC71.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2955,7 +3091,11 @@
                 "outputAlias": "is_listed_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC71.CF",
+              "sourceTable": "MLMCODE"
+            }
           }
         },
         {
@@ -2978,7 +3118,11 @@
                 "outputAlias": "industry_desc"
               }
             ],
-            "noMatchStrategy": "null"
+            "noMatchStrategy": "null",
+            "lookupRef": {
+              "datasourceName": "APYHFC71.CF",
+              "sourceTable": "MLSTDINDUMF"
+            }
           }
         },
         {

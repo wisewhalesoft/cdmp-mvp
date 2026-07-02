@@ -127,9 +127,10 @@ describe('data/etl-pipelines.json E07-OBPOOLDATA_LIST-Load', () => {
       operator: '<',
       valueExpr: 'currentMonthFirstDay',
     });
-    // rawTable / extractionRef 與 dev DB OBPOOLDATA_LIST-Extract raw_table_name 等價
-    expect(e1.data.rawTable).toBe('raw_33dc3771');
-    expect(e1.data.extractionRef.sourceTable).toBe('raw_33dc3771');
+    // Fix B：extractionRef 指向「真來源表」(datasource + sourceTable)，供 resolveRawTable 於 runtime
+    // 動態解出當前 raw_table_name（不再綁死 UUID 衍生名）；rawTable 僅保留為 fallback。
+    expect(e1.data.rawTable).toBe('raw_33dc3771'); // 靜態 fallback
+    expect(e1.data.extractionRef.sourceTable).toBe('OBPOOLDATA_LIST'); // 真來源表（非 raw 名）
     expect(e1.data.extractionRef.datasourceName).toBe('APYHFC16.OB');
   });
 
