@@ -24,15 +24,18 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NODE_ENV: development
+      # 本機 dev 預設 development（synchronize 建表）；正式部署以 shell/.env 設 NODE_ENV=production
+      # 關閉 synchronize（schema 改由 baseline migration 提供，見 bootstrap 服務）。
+      NODE_ENV: ${NODE_ENV:-development}
       DB_TYPE: postgres
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: cdmp
       DB_PASSWORD: cdmp_secret
       DB_NAME: cdmp_dev
-      JWT_SECRET: cdmp-dev-jwt-secret-key-2026
-      AES_ENCRYPTION_KEY: 2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2
+      JWT_SECRET: ${JWT_SECRET:-cdmp-dev-jwt-secret-key-2026}
+      # datasource 密碼加解密金鑰：api/worker/bootstrap 必須共用同一把（否則測試連線解密失敗）
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
       PORT: 3000
       # F050 v2.0 / F075 v1.4 / F076 v1.3 — E07 refactor phase 3 feature flag
       # 受保護端點：F075 寫入 + available-columns / F050 v2.0 草稿 / F076 寫入
@@ -58,14 +61,14 @@ services:
     container_name: cdmp-worker
     command: npx ts-node -r tsconfig-paths/register src/worker-main.ts
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV:-development}
       DB_TYPE: postgres
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: cdmp
       DB_PASSWORD: cdmp_secret
       DB_NAME: cdmp_dev
-      AES_ENCRYPTION_KEY: 2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
       # worker 才是真正執行 pipeline 者（AC-8 / TS-F098-WORKER-003）
       ENABLE_E07_REFACTOR_PHASE3: "true"
       ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL: "true"
@@ -138,6 +141,45 @@ services:
         condition: service_healthy
     profiles:
       - data-seed
+
+  # 一鍵部署 bootstrap（冪等）：baseline migration → 帳號(users) → datasource(env) → 計分卡/pipeline/擷取任務。
+  # 正式部署（fresh DB）流程：
+  #   1) docker compose up -d postgres            # 等 healthy
+  #   2) NODE_ENV=production OB_DS_HOST=... OB_DS_DATABASE=... OB_DS_USERNAME=... OB_DS_PASSWORD=... \
+  #      docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
+  #   3) NODE_ENV=production docker compose up -d # 起 api/worker/web（synchronize 已關，schema 來自 migration）
+  # OB_DS_* 未帶 → 建 placeholder datasource，部署後於 UI「資料來源」補連線並測試。
+  bootstrap:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-bootstrap
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: cdmp
+      DB_PASSWORD: cdmp_secret
+      DB_NAME: cdmp_dev
+      # 必須與 api/worker 共用同一把（datasource 密碼加密）
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
+      # OB 來源資料庫連線（未設則建 placeholder）
+      OB_DS_TYPE: ${OB_DS_TYPE:-sqlserver}
+      OB_DS_HOST: ${OB_DS_HOST:-}
+      OB_DS_PORT: ${OB_DS_PORT:-1433}
+      OB_DS_DATABASE: ${OB_DS_DATABASE:-}
+      OB_DS_USERNAME: ${OB_DS_USERNAME:-}
+      OB_DS_PASSWORD: ${OB_DS_PASSWORD:-}
+      # 選填：指定 etl_pipelines/datasource created_by 的 admin email（預設用 seed admin）
+      ETL_SEED_USER_EMAIL: ${ETL_SEED_USER_EMAIL:-}
+    command: npm run bootstrap
+    volumes:
+      - ./apps/api/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - bootstrap
 
 volumes:
   pgdata:

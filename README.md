@@ -75,6 +75,31 @@ docker compose up -d --build
 docker compose logs -f api
 ```
 
+### 正式部署 — 一鍵 Bootstrap（Production）
+
+正式/類正式環境（`NODE_ENV=production`，關閉 `synchronize`，schema 由 migration 提供）。
+`bootstrap` 冪等，一次建好：**全部資料表**＋帳號＋資料來源＋擷取任務＋ETL Pipeline＋篩選欄位＋計分卡設定。
+（真實業務資料仍需之後接來源跑 ETL / 月跑才會有。）
+
+```bash
+# 1) 先只起 DB（fresh 部署可先 docker compose down -v 清空 volume），等 healthy
+docker compose up -d postgres
+
+# 2) 一鍵 bootstrap：migration(建全表+篩選欄位) → seed(帳號) → seed-datasource(env) → data-seed(計分卡/pipeline/擷取任務)
+#    OB 來源連線用 OB_DS_* 帶入；未帶則建 placeholder（部署後於 UI 補連線）
+NODE_ENV=production \
+OB_DS_HOST=<OB主機> OB_DS_DATABASE=<OB庫> OB_DS_USERNAME=<帳號> OB_DS_PASSWORD=<密碼> \
+AES_ENCRYPTION_KEY=<64位hex> JWT_SECRET=<jwt密鑰> \
+docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
+
+# 3) 起 api / worker / web（synchronize 已關，schema 來自 migration baseline）
+NODE_ENV=production AES_ENCRYPTION_KEY=<同上> JWT_SECRET=<同上> docker compose up -d
+```
+
+> - `AES_ENCRYPTION_KEY` 在 bootstrap 與 api/worker 之間**必須一致**（datasource 密碼加解密），否則 UI 測試連線會失敗。
+> - migration baseline（`1711360000000-BaselineSchema` + `1711360000001-BaselineReferenceData`）為 schema 與篩選欄位/角色的唯一來源；計分卡 6 表由 `data-seed` 從 `seeds/data/*.json` 灌。
+> - 重跑 `bootstrap` 安全（冪等）。本機開發不需此流程：`NODE_ENV` 預設 `development`，`docker compose up -d` 仍以 `synchronize` 建表。
+
 ### Test — 一鍵跑測試
 
 測試環境使用獨立的 `docker-compose.test.yml`，透過 `--profile` 選擇要跑的測試範圍。

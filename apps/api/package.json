@@ -12,13 +12,15 @@
     "test:cov": "vitest run --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
-    "migration:generate": "npm run typeorm -- migration:generate",
-    "migration:run": "npm run typeorm -- migration:run",
-    "migration:revert": "npm run typeorm -- migration:revert",
+    "migration:generate": "npm run typeorm -- migration:generate -d src/database/data-source.ts",
+    "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
     "seed": "ts-node -r tsconfig-paths/register src/database/seeds/seed.ts",
     "seed:test": "cross-env DB_PORT=5433 DB_NAME=cdmp_test ts-node -r tsconfig-paths/register src/database/seeds/seed.ts",
+    "seed-datasource": "ts-node -r tsconfig-paths/register src/database/seeds/seed-datasource.ts",
     "data-seed": "ts-node -r tsconfig-paths/register src/database/seeds/prod-data-seed.ts",
-    "data-seed:regen-json": "node src/database/seeds/transformers/csv-to-json.mjs"
+    "data-seed:regen-json": "node src/database/seeds/transformers/csv-to-json.mjs",
+    "bootstrap": "npm run migration:run && npm run seed && npm run seed-datasource && npm run data-seed"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
