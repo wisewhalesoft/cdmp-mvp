@@ -88,7 +88,8 @@ services:
       target: dev
     container_name: cdmp-web
     ports:
-      - "5173:5173"
+      # host 5174（避開 5173）→ 容器內仍 5173
+      - "5174:5173"
     environment:
       VITE_API_URL: http://api:3000
     volumes:
