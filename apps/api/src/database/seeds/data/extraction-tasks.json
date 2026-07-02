@@ -59,5 +59,145 @@
       "_comment": "F090 / AD-E07-21 DP-AD21-1 歷史限定：ASSIGNDAY < 本月第一天，排除本月資料以消除與月跑並發衝突。此欄位於 extract 設定僅供文件參照；實際過濾於 E07-OBPOOLDATA_LIST-Load pipeline 的 raw_data_extract node.sourceFilter 套用"
     },
     "description": "F090 / AD-E07-21：legacy 派案歷史表 OBPOOLDATA_LIST 全量抓取（建議月跑前 1 號 01:00 執行，早於 OBPOOLDATA 02:00；BR-6 不可於月跑 Stage 1 進行中執行）"
+  },
+  {
+    "id": "9dd0eca5-d1fb-4cda-b702-2ddd9497aef5",
+    "name": "[和勁]企金代碼定義擷取",
+    "datasourceName": "APYHFC51.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLMCODE",
+    "rawTableName": "raw_9dd0eca5",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "aec93e7c-3d26-4481-a3d7-a2a58e412ffd",
+    "name": "[和勁]企金客戶主檔擷取",
+    "datasourceName": "APYHFC51.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLMCUSTOMER",
+    "rawTableName": "raw_aec93e7c",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "3acd58e7-2a57-4aaa-9724-adb9cf20524d",
+    "name": "[和勁]企金產業別代碼定義擷取",
+    "datasourceName": "APYHFC51.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLSTDINDUMF",
+    "rawTableName": "raw_3acd58e7",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "6fce5258-b5fc-4ad2-83ae-6d5a761bf9b1",
+    "name": "[和勁]重車代碼定義擷取",
+    "datasourceName": "APYHFC51.ZZIPPROD",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "ZZIP_BAMCODE_D",
+    "rawTableName": "raw_6fce5258",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "35d85504-1ea4-468f-8ded-a96b09876e44",
+    "name": "[和勁]重車客戶主檔擷取",
+    "datasourceName": "APYHFC51.ZZIPPROD",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "ZZIP_BAMCUST_M",
+    "rawTableName": "raw_35d85504",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "e5a2345c-7db5-44e6-a842-283bbb093dc5",
+    "name": "[和潤]小車/機車/商品代碼定義擷取",
+    "datasourceName": "APYHFC16.ZZIPPROD",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "ZZIP_BAMCODE_D",
+    "rawTableName": "raw_e5a2345c",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "101f6b3e-f290-4a86-9a1f-bb493b612a0a",
+    "name": "[和潤]小車/機車/商品客戶主檔擷取",
+    "datasourceName": "APYHFC16.ZZIPPROD",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "ZZIP_BAMCUST_M",
+    "rawTableName": "raw_101f6b3e",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "8b80671e-5c01-4c9e-a0e2-aec791756cd4",
+    "name": "[和潤]企金代碼定義擷取",
+    "datasourceName": "APYHFC16.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLMCODE",
+    "rawTableName": "raw_8b80671e",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "1138803c-c363-4dd6-804c-2ccd1840e4f2",
+    "name": "[和潤]企金客戶主檔擷取",
+    "datasourceName": "APYHFC16.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLMCUSTOMER",
+    "rawTableName": "raw_1138803c",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "b9558d10-dcf0-4b70-9d90-5a55ae96b00a",
+    "name": "[和潤]企金產業別代碼定義擷取",
+    "datasourceName": "APYHFC16.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLSTDINDUMF",
+    "rawTableName": "raw_b9558d10",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "b4a48f10-d366-4172-867d-62dfc4f8fe98",
+    "name": "[和潤]郵遞區號代碼定義擷取",
+    "datasourceName": "APYHFC16.ZZIPPROD",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "ZZIP_BAMPOST_M",
+    "rawTableName": "raw_b4a48f10",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "9dcaf414-6d6f-4e1c-8e20-4b46a5f42e11",
+    "name": "[興業]代碼定義擷取",
+    "datasourceName": "APYHFC71.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLMCODE",
+    "rawTableName": "raw_9dcaf414",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "50172f04-d4ce-4120-ac3e-b56c8b72a2e9",
+    "name": "[興業]客戶主檔擷取",
+    "datasourceName": "APYHFC71.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLMCUSTOMER",
+    "rawTableName": "raw_50172f04",
+    "schedule": "0 0 15 * *"
+  },
+  {
+    "id": "afe6a874-70ba-4789-9429-1da6e806bf69",
+    "name": "[興業]產業別代碼定義擷取",
+    "datasourceName": "APYHFC71.CF",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "MLSTDINDUMF",
+    "rawTableName": "raw_afe6a874",
+    "schedule": "0 0 15 * *"
   }
 ]

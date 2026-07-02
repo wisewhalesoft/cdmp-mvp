@@ -3,7 +3,7 @@
  * 由 docker compose data-seed（prod-data-seed.ts）自動、冪等建立。
  *
  * 測試對象：
- *   - data/extraction-tasks.json（5 個 E07 擷取任務 seed 來源）
+ *   - data/extraction-tasks.json（19 個擷取任務：5 個 E07 核心 + 14 個客戶來源）
  *   - data/etl-pipelines.json（補 E07-OBPOOLDATA_LIST-Load）
  *   - prod-data-seed.ts: seedExtractionTasks（冪等 by name / resolve datasource / resolve user / direct INSERT）
  *
@@ -41,16 +41,20 @@ const APYHFC16_DATASOURCE_ID = 'af5f69a7-c3e4-41fe-b1e5-16b23f9509f8';
 describe('data/extraction-tasks.json', () => {
   const tasks = loadJson<ExtractionTaskSeed>('extraction-tasks.json');
 
-  it('涵蓋全部 5 個 E07 extraction task', () => {
-    expect(tasks).toHaveLength(5);
-    const names = tasks.map((t) => t.name).sort();
-    expect(names).toEqual([
+  it('涵蓋 5 個 E07 核心 + 14 個客戶來源 = 19 個 extraction task', () => {
+    expect(tasks).toHaveLength(19);
+    const names = tasks.map((t) => t.name);
+    for (const n of [
       'E07-OBARRETURNDF_MIN_CAP-Extract',
       'E07-OBCALENDAR-Extract',
       'E07-OBEMPHIRE-Extract',
       'E07-OBPOOLDATA-Extract',
       'E07-OBPOOLDATA_LIST-Extract',
-    ]);
+    ]) {
+      expect(names, `缺少核心 ${n}`).toContain(n);
+    }
+    // 客戶來源 task（非 E07-，和勁/和潤/興業 × 代碼/客戶/產業別/重車/郵遞區號）= 14
+    expect(names.filter((n) => !n.startsWith('E07-'))).toHaveLength(14);
   });
 
   it('每個 task 的 id / source_table / raw_table_name / schedule 與 dev DB API 建立者等價', () => {
@@ -193,14 +197,14 @@ describe('seedExtractionTasks', () => {
     return qr.calls.filter((c: any) => /INSERT\s+INTO\s+extraction_tasks/i.test(c.sql));
   }
 
-  it('全部不存在 → INSERT 5 筆，每筆含固定 id + 衍生 raw_table_name', async () => {
+  it('全部不存在 → INSERT 全部 19 筆，核心 5 筆含固定 id + 衍生 raw_table_name', async () => {
     const qr = createMockQr({ existingTaskNames: [] });
     await seedExtractionTasks(qr);
 
     const inserts = insertCalls(qr);
-    expect(inserts).toHaveLength(5);
+    expect(inserts).toHaveLength(19);
 
-    // 驗證每筆 INSERT 帶正確 id 與 raw_table_name
+    // 驗證核心 5 筆 INSERT 帶正確 id 與 raw_table_name
     for (const expected of DEV_DB_TASKS) {
       const call = inserts.find((c: any) => c.params?.includes(expected.id));
       expect(call, `未 INSERT ${expected.name}`).toBeDefined();
@@ -210,24 +214,24 @@ describe('seedExtractionTasks', () => {
   });
 
   it('全部已存在 → 0 INSERT（冪等 SKIP，不洗 production）', async () => {
-    const allNames = DEV_DB_TASKS.map((t) => t.name);
+    const allNames = loadJson<ExtractionTaskSeed>('extraction-tasks.json').map((t) => t.name);
     const qr = createMockQr({ existingTaskNames: allNames });
     await seedExtractionTasks(qr);
     expect(insertCalls(qr)).toHaveLength(0);
   });
 
-  it('部分已存在 → 只 INSERT 缺少者', async () => {
+  it('部分已存在 → 只 INSERT 缺少者（19 - 2 = 17）', async () => {
     const qr = createMockQr({ existingTaskNames: ['E07-OBPOOLDATA-Extract', 'E07-OBEMPHIRE-Extract'] });
     await seedExtractionTasks(qr);
     const inserts = insertCalls(qr);
-    expect(inserts).toHaveLength(3);
+    expect(inserts).toHaveLength(17);
     // 已存在的不應被 INSERT
     expect(inserts.find((c: any) => c.params?.includes('6d58393b-9a21-486a-a971-012160d25a32'))).toBeUndefined();
     // 缺少的應 INSERT
     expect(inserts.find((c: any) => c.params?.includes('33dc3771-bae0-4303-9fb3-aff2cd5ad72e'))).toBeDefined();
   });
 
-  it('datasource APYHFC16.OB 透過 name 解析 datasource_id（每筆 INSERT 帶相同 datasource_id）', async () => {
+  it('每筆 INSERT 帶其 datasourceName 逐一解析出的 datasource_id（per-task 解析）', async () => {
     const qr = createMockQr({ existingTaskNames: [], datasourceId: APYHFC16_DATASOURCE_ID });
     await seedExtractionTasks(qr);
     for (const call of insertCalls(qr)) {
@@ -235,9 +239,9 @@ describe('seedExtractionTasks', () => {
     }
   });
 
-  it('datasource 不存在 → 拋錯且不 INSERT（fail-fast，避免建立懸空 FK）', async () => {
+  it('task 引用的 datasource 不存在 → 拋錯且不 INSERT（fail-fast，避免建立懸空 FK）', async () => {
     const qr = createMockQr({ existingTaskNames: [], datasourceId: null });
-    await expect(seedExtractionTasks(qr)).rejects.toThrow(/APYHFC16\.OB/);
+    await expect(seedExtractionTasks(qr)).rejects.toThrow(/datasource/);
     expect(insertCalls(qr)).toHaveLength(0);
   });
 });

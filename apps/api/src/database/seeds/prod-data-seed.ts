@@ -606,24 +606,27 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
     return;
   }
 
-  // 解析 datasource_id（同一 datasource APYHFC16.OB；by name 動態解析）
-  const datasourceName = rows[0].datasourceName;
-  const dsResult = await qr.query(
-    `SELECT id FROM datasources WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
-    [datasourceName],
-  );
-  const datasourceId: string | undefined = dsResult[0]?.id;
-  if (!datasourceId) {
-    throw new Error(
-      `extraction_tasks seed 中止：找不到 datasource '${datasourceName}'。` +
-        `請先建立該 datasource（E07 ETL 來源 OB DB），或調整 extraction-tasks.json 的 datasourceName。`,
-    );
-  }
-
   const userId = await resolveSeedUserId(qr);
-  console.log(
-    `  extraction_tasks: 使用 datasource ${datasourceId}（${datasourceName}）、user ${userId} 作為 created_by`,
-  );
+
+  // 逐 task 解析各自的 datasource（19 個 task 跨 APYHFC16/51/71 × OB/CF/LC/ZZIPPROD；快取避免重複查）
+  const dsCache = new Map<string, string>();
+  const resolveDs = async (name: string): Promise<string> => {
+    const cached = dsCache.get(name);
+    if (cached) return cached;
+    const r = await qr.query(
+      `SELECT id FROM datasources WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+      [name],
+    );
+    const id: string | undefined = r[0]?.id;
+    if (!id) {
+      throw new Error(
+        `extraction_tasks seed 中止：找不到 task 引用的 datasource '${name}'。` +
+          `請先確認 seed-datasource 已建立該來源（seeds/data/datasources.json）。`,
+      );
+    }
+    dsCache.set(name, id);
+    return id;
+  };
 
   let inserted = 0;
   let skipped = 0;
@@ -634,9 +637,9 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
     );
     if (existing.length > 0) {
       skipped++;
-      console.log(`    ${t.name}: SKIP（已存在）`);
       continue;
     }
+    const datasourceId = await resolveDs(t.datasourceName);
     await qr.query(
       `INSERT INTO extraction_tasks
          (id, name, datasource_id, mode, status, source_table, source_schema,
@@ -655,7 +658,7 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
       ],
     );
     inserted++;
-    console.log(`    ${t.name}: INSERT（id=${t.id}, raw=${t.rawTableName}）`);
+    console.log(`    ${t.name}: INSERT（ds=${t.datasourceName}, raw=${t.rawTableName}）`);
   }
   console.log(`  extraction_tasks: ${inserted} 新增 / ${skipped} 已存在`);
 }
