@@ -76,7 +76,7 @@ describe('PipelineSchedulerService', () => {
     const pipeline = makePipeline({ schedule: '0 2 * * *' });
     mockQueryBuilder.getMany.mockResolvedValue([pipeline]);
 
-    await service.scanAndExecute(new Date('2026-01-01T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerSchedule).toHaveBeenCalledWith(
       'pipeline-1',
@@ -89,7 +89,7 @@ describe('PipelineSchedulerService', () => {
     const pipeline = makePipeline({ schedule: '0 2 * * *' });
     mockQueryBuilder.getMany.mockResolvedValue([pipeline]);
 
-    await service.scanAndExecute(new Date('2026-01-01T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerSchedule).toHaveBeenCalledWith(
       pipeline.id,
@@ -101,7 +101,7 @@ describe('PipelineSchedulerService', () => {
   it('should only query active pipelines (running excluded by DB filter)', async () => {
     mockQueryBuilder.getMany.mockResolvedValue([]);
 
-    await service.scanAndExecute(new Date('2026-01-01T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
 
     expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
       'p.status = :status',
@@ -115,7 +115,7 @@ describe('PipelineSchedulerService', () => {
     // Draft pipelines are not returned by the query since we filter status='active'
     mockQueryBuilder.getMany.mockResolvedValue([]);
 
-    await service.scanAndExecute(new Date('2026-01-01T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerSchedule).not.toHaveBeenCalled();
   });
@@ -124,7 +124,7 @@ describe('PipelineSchedulerService', () => {
     const pipeline = makePipeline({ schedule: '0 2 * * *' });
     mockQueryBuilder.getMany.mockResolvedValue([pipeline]);
 
-    await service.scanAndExecute(new Date('2026-01-01T03:00:00Z'));
+    await service.scanAndExecute(new Date('2026-01-01T03:00:00+08:00'));
 
     expect(mockExecutionService.triggerSchedule).not.toHaveBeenCalled();
   });
@@ -149,7 +149,7 @@ describe('PipelineSchedulerService', () => {
       .mockRejectedValueOnce(new Error('fail'))
       .mockResolvedValueOnce({ logId: 'log-2', message: 'ok' });
 
-    await service.scanAndExecute(new Date('2026-01-01T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerSchedule).toHaveBeenCalledTimes(2);
     errorSpy.mockRestore();

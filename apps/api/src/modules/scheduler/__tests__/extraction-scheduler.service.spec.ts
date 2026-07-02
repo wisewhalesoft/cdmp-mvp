@@ -80,8 +80,8 @@ describe('ExtractionSchedulerService', () => {
     const task = makeTask({ schedule: '0 2 * * *' });
     mockQueryBuilder.getMany.mockResolvedValue([task]);
 
-    // fakeNow = 2026-03-18T02:00:00Z matches "0 2 * * *"
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    // fakeNow = 2026-03-18 02:00 台灣時間(+08:00) matches "0 2 * * *"（tz: Asia/Taipei）
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).toHaveBeenCalledWith(
       'task-1',
@@ -95,7 +95,7 @@ describe('ExtractionSchedulerService', () => {
     const task = makeTask({ created_by: 'owner-xyz', schedule: '0 2 * * *' });
     mockQueryBuilder.getMany.mockResolvedValue([task]);
 
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).toHaveBeenCalledWith(
       expect.any(String),
@@ -110,7 +110,7 @@ describe('ExtractionSchedulerService', () => {
     const taskB = makeTask({ id: 'task-b', schedule: '0 2 * * *', created_by: 'user-b' });
     mockQueryBuilder.getMany.mockResolvedValue([taskA, taskB]);
 
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).toHaveBeenCalledTimes(2);
     expect(mockExecutionService.triggerRun).toHaveBeenCalledWith('task-a', 'schedule', 'user-a');
@@ -122,7 +122,7 @@ describe('ExtractionSchedulerService', () => {
     // The query filters enabled=false, so repository returns empty
     mockQueryBuilder.getMany.mockResolvedValue([]);
 
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).not.toHaveBeenCalled();
   });
@@ -131,7 +131,7 @@ describe('ExtractionSchedulerService', () => {
   it('should not trigger running tasks (filtered by DB query)', async () => {
     mockQueryBuilder.getMany.mockResolvedValue([]);
 
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).not.toHaveBeenCalled();
   });
@@ -140,7 +140,7 @@ describe('ExtractionSchedulerService', () => {
   it('should query with correct filter conditions (enabled, not deleted, not running)', async () => {
     mockQueryBuilder.getMany.mockResolvedValue([]);
 
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockTaskRepository.createQueryBuilder).toHaveBeenCalledWith('task');
     expect(mockQueryBuilder.where).toHaveBeenCalledWith('task.enabled = :enabled', { enabled: true });
@@ -153,7 +153,7 @@ describe('ExtractionSchedulerService', () => {
     const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
     mockQueryBuilder.getMany.mockRejectedValue(new Error('DB connection lost'));
 
-    await expect(service.scanAndExecute(new Date('2026-03-18T02:00:00Z'))).resolves.not.toThrow();
+    await expect(service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'))).resolves.not.toThrow();
 
     expect(errorSpy).toHaveBeenCalled();
     expect(mockExecutionService.triggerRun).not.toHaveBeenCalled();
@@ -165,8 +165,8 @@ describe('ExtractionSchedulerService', () => {
     const task = makeTask({ schedule: '0 2 * * *' });
     mockQueryBuilder.getMany.mockResolvedValue([task]);
 
-    // fakeNow = 03:00 does NOT match "0 2 * * *"
-    await service.scanAndExecute(new Date('2026-03-18T03:00:00Z'));
+    // fakeNow = 03:00 台灣時間 does NOT match "0 2 * * *"
+    await service.scanAndExecute(new Date('2026-03-18T03:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).not.toHaveBeenCalled();
   });
@@ -182,7 +182,7 @@ describe('ExtractionSchedulerService', () => {
       .mockRejectedValueOnce(new Error('task-a failed'))
       .mockResolvedValueOnce({ logId: 'log-2' });
 
-    await service.scanAndExecute(new Date('2026-03-18T02:00:00Z'));
+    await service.scanAndExecute(new Date('2026-03-18T02:00:00+08:00'));
 
     expect(mockExecutionService.triggerRun).toHaveBeenCalledTimes(2);
     expect(mockExecutionService.triggerRun).toHaveBeenCalledWith('task-b', 'schedule', 'user-b');

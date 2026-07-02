@@ -74,7 +74,7 @@ describe('EditPipelineModal (F093)', () => {
     expect(Number(hour.value)).toBe(2);
     expect(Number(minute.value)).toBe(0);
     const preview = screen.getByTestId('schedule-preview');
-    expect(preview.textContent).toContain('每日 02:00 UTC');
+    expect(preview.textContent).toContain('每日 02:00 (UTC+8)');
     expect(preview.textContent).toContain('0 2 * * *');
   });
 
@@ -101,7 +101,7 @@ describe('EditPipelineModal (F093)', () => {
     fireEvent.change(screen.getByTestId('schedule-minute-input'), { target: { value: '0' } });
     const preview = screen.getByTestId('schedule-preview');
     expect(preview.textContent).toContain('0 2 * * *');
-    expect(preview.textContent).toContain('每日 02:00 UTC');
+    expect(preview.textContent).toContain('每日 02:00 (UTC+8)');
   });
 
   // TS-F093-FE-008: cron builder — 每小時第 30 分

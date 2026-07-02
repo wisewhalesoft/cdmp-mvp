@@ -63,13 +63,13 @@ function describeCron(
   const pad = (n: number) => n.toString().padStart(2, '0');
   switch (frequency) {
     case 'hourly':
-      return `每小時的第 ${pad(minute)} 分 UTC`;
+      return `每小時的第 ${pad(minute)} 分 (UTC+8)`;
     case 'daily':
-      return `每日 ${pad(hour)}:${pad(minute)} UTC`;
+      return `每日 ${pad(hour)}:${pad(minute)} (UTC+8)`;
     case 'weekly':
-      return `每週${WEEKDAY_OPTIONS[weekday]?.label || weekday} ${pad(hour)}:${pad(minute)} UTC`;
+      return `每週${WEEKDAY_OPTIONS[weekday]?.label || weekday} ${pad(hour)}:${pad(minute)} (UTC+8)`;
     case 'monthly':
-      return `每月 ${dayOfMonth} 日 ${pad(hour)}:${pad(minute)} UTC`;
+      return `每月 ${dayOfMonth} 日 ${pad(hour)}:${pad(minute)} (UTC+8)`;
     default:
       return '';
   }

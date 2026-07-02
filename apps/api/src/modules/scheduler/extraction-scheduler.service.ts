@@ -58,7 +58,8 @@ export class ExtractionSchedulerService {
       const checkDate = new Date(now.getTime() + 1000);
       const interval = CronExpressionParser.parse(cronExpression, {
         currentDate: checkDate,
-        tz: 'UTC',
+        // 排程 cron 以台灣時間（UTC+8）解讀，與前端顯示一致（extraction 與 pipeline 一致）
+        tz: 'Asia/Taipei',
       });
       const prev = interval.prev().toDate();
       // Compare truncated to minute
