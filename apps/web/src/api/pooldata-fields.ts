@@ -31,6 +31,12 @@ export interface PooldataField {
    * 後端舊回應未含此欄位時前端應視為 false。
    */
   isSystemFixed?: boolean;
+  /**
+   * F109 / US-172 AC-2：資料來源（'ob_pool_data' 案件資料 / 'customer_core' 客戶資料）。
+   * 驅動 M06 列表「資料來源」欄 badge + 工具列來源篩選 + F050/F051「新增條件」選單分組
+   * （依 dataSource 旗標渲染，不 hardcode 欄位字串）。後端舊回應未含此欄位時前端應視為 'ob_pool_data'。
+   */
+  dataSource?: 'ob_pool_data' | 'customer_core';
   createdAt: string;
   updatedAt: string;
   createdBy?: string;

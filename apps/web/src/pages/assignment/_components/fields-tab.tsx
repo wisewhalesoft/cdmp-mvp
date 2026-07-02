@@ -18,6 +18,8 @@ import {
   RotateCcw,
   Filter,
   Lock,
+  Folder,
+  Contact,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -91,6 +93,38 @@ function FieldTypeBadge({ type }: { type: FieldType }) {
   );
 }
 
+/**
+ * F109 / US-172 AC-2：資料來源 badge（prototype 37-base-code.html L650-656）。
+ *   customer_core → 綠色「客戶資料」；ob_pool_data → 灰色「案件資料」。依 dataSource 旗標渲染。
+ */
+const DATA_SOURCE_CONFIG: Record<
+  'ob_pool_data' | 'customer_core',
+  { label: string; icon: typeof Folder; bg: string; text: string }
+> = {
+  ob_pool_data: { label: '案件資料', icon: Folder, bg: 'bg-slate-100', text: 'text-slate-600' },
+  customer_core: { label: '客戶資料', icon: Contact, bg: 'bg-emerald-100', text: 'text-emerald-700' },
+};
+
+function DataSourceBadge({
+  source,
+  columnName,
+}: {
+  source: 'ob_pool_data' | 'customer_core';
+  columnName: string;
+}) {
+  const cfg = DATA_SOURCE_CONFIG[source];
+  const Icon = cfg.icon;
+  return (
+    <span
+      data-testid={`data-source-badge-${columnName}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}
+    >
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
 export function FieldsTab() {
   const { showToast } = useToast();
   const identity = getEffectiveIdentity();
@@ -102,6 +136,10 @@ export function FieldsTab() {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | FieldType>('all');
+  // F109 / US-172：資料來源篩選（案件資料 / 客戶資料）
+  const [sourceFilter, setSourceFilter] = useState<
+    'all' | 'ob_pool_data' | 'customer_core'
+  >('all');
 
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
@@ -166,6 +204,10 @@ export function FieldsTab() {
     if (typeFilter !== 'all') {
       list = list.filter((f) => f.fieldType === typeFilter);
     }
+    // F109 / US-172：資料來源篩選（缺值防呆為 'ob_pool_data'）
+    if (sourceFilter !== 'all') {
+      list = list.filter((f) => (f.dataSource ?? 'ob_pool_data') === sourceFilter);
+    }
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -174,7 +216,7 @@ export function FieldsTab() {
       );
     }
     return list;
-  }, [fields, search, typeFilter]);
+  }, [fields, search, typeFilter, sourceFilter]);
 
   const fieldStats = useMemo(() => {
     const active = fields.filter((f) => f.isActive).length;
@@ -419,6 +461,7 @@ export function FieldsTab() {
     setSearch('');
     setTypeFilter('all');
     setActiveFilter('all');
+    setSourceFilter('all');
   };
 
   const submitDisabled =
@@ -492,6 +535,21 @@ export function FieldsTab() {
             <option value="numeric">numeric（數值型）</option>
             <option value="date">date（日期型）</option>
           </select>
+          {/* F109 / US-172：資料來源篩選（prototype 37-base-code.html L190-194） */}
+          <select
+            data-testid="filter-data-source"
+            value={sourceFilter}
+            onChange={(e) =>
+              setSourceFilter(
+                e.target.value as 'all' | 'ob_pool_data' | 'customer_core',
+              )
+            }
+            className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="all">來源：全部</option>
+            <option value="ob_pool_data">案件資料</option>
+            <option value="customer_core">客戶資料</option>
+          </select>
           <select
             data-testid="filter-active"
             value={activeFilter}
@@ -555,12 +613,13 @@ export function FieldsTab() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase">
                 <tr>
-                  <th className="text-left px-5 py-3 font-semibold w-[20%]">columnName</th>
-                  <th className="text-left px-5 py-3 font-semibold w-[22%]">displayName</th>
-                  <th className="text-left px-5 py-3 font-semibold w-[12%]">fieldType</th>
-                  <th className="text-left px-5 py-3 font-semibold w-[10%]">狀態</th>
-                  <th className="text-left px-5 py-3 font-semibold w-[14%]">建立時間</th>
-                  <th className="text-right px-5 py-3 font-semibold w-[22%]">操作</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[18%]">columnName</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[18%]">displayName</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[11%]">fieldType</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[12%]">資料來源</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[9%]">狀態</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[13%]">建立時間</th>
+                  <th className="text-right px-5 py-3 font-semibold w-[19%]">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -589,6 +648,12 @@ export function FieldsTab() {
                     </td>
                     <td className="px-5 py-3">
                       <FieldTypeBadge type={f.fieldType} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <DataSourceBadge
+                        source={f.dataSource ?? 'ob_pool_data'}
+                        columnName={f.columnName}
+                      />
                     </td>
                     <td className="px-5 py-3">
                       {f.isActive ? (

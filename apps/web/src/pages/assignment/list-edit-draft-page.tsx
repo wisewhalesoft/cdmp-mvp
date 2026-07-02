@@ -16,6 +16,8 @@ import {
   Info,
   UndoDot,
   ArrowLeft,
+  Folder,
+  Contact,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -105,6 +107,19 @@ const LEGACY_ENTITY_DISPLAY: Record<string, string> = {
   case_status: '案件結清期別',
   settle_src: '他行代償',
 };
+
+/**
+ * F109 / US-172 AC-3：「新增條件」選單依 dataSource 分組（prototype 27b，同 27a L647-676）。
+ */
+const SOURCE_GROUPS: ReadonlyArray<{
+  key: 'ob_pool_data' | 'customer_core';
+  label: string;
+  table: string;
+  Icon: typeof Folder;
+}> = [
+  { key: 'ob_pool_data', label: '案件資料', table: 'ob_pool_data', Icon: Folder },
+  { key: 'customer_core', label: '客戶資料', table: 'customer_core', Icon: Contact },
+];
 
 export function ListEditDraftPage() {
   const navigate = useNavigate();
@@ -786,26 +801,51 @@ export function ListEditDraftPage() {
                                   所有 active 欄位皆已加入條件中
                                 </li>
                               ) : (
-                                availableFields.map((f) => (
-                                  <li key={f.columnName}>
-                                    <button
-                                      type="button"
-                                      data-testid={`add-field-${f.columnName}`}
-                                      onClick={() => addConditionByCol(f.columnName)}
-                                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2"
-                                    >
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium text-gray-800">
-                                          {f.displayName}
-                                        </div>
-                                        <code className="text-[10px] font-mono text-gray-500">
-                                          {f.columnName}
-                                        </code>
+                                // F109 / US-172 AC-3：依 dataSource 分組（案件資料 / 客戶資料），空群組不渲染標題
+                                SOURCE_GROUPS.map((g) => {
+                                  const items = availableFields.filter(
+                                    (f) => (f.dataSource ?? 'ob_pool_data') === g.key,
+                                  );
+                                  if (items.length === 0) return null;
+                                  return (
+                                    <li key={g.key}>
+                                      <div
+                                        data-testid={`add-field-group-${g.key}`}
+                                        className="px-3 pt-2 pb-1 flex items-center gap-1.5 bg-gray-50/70 border-b border-gray-100"
+                                      >
+                                        <g.Icon className="w-3 h-3 text-gray-400" />
+                                        <span className="text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">
+                                          {g.label}
+                                        </span>
+                                        <span className="ml-auto text-[10px] font-mono text-gray-300 normal-case">
+                                          {g.table}
+                                        </span>
                                       </div>
-                                      {renderTypeBadge(f.fieldType)}
-                                    </button>
-                                  </li>
-                                ))
+                                      <ul>
+                                        {items.map((f) => (
+                                          <li key={f.columnName}>
+                                            <button
+                                              type="button"
+                                              data-testid={`add-field-${f.columnName}`}
+                                              onClick={() => addConditionByCol(f.columnName)}
+                                              className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2"
+                                            >
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium text-gray-800">
+                                                  {f.displayName}
+                                                </div>
+                                                <code className="text-[10px] font-mono text-gray-500">
+                                                  {f.columnName}
+                                                </code>
+                                              </div>
+                                              {renderTypeBadge(f.fieldType)}
+                                            </button>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </li>
+                                  );
+                                })
                               )}
                             </ul>
                           </div>

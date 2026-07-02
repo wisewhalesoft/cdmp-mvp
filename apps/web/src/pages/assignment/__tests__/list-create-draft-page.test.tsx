@@ -793,3 +793,75 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F109 / US-172 — 「新增條件」選單依 dataSource 分組（AC-3 / FE-004~006）
+// ═══════════════════════════════════════════════════════════════════════════
+describe('F109 ListCreateDraftPage — 新增條件選單依 dataSource 分組', () => {
+  // 含案件（prod_kind）+ 客戶（gender categorical / date_of_birth numeric）+ 系統固定（best_case）
+  const f109Fixture: ListFieldsResponse = {
+    fields: [
+      { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, isSystemFixed: false, dataSource: 'ob_pool_data', createdAt: '', updatedAt: '' },
+      { columnName: 'best_case', displayName: '優質案件', fieldType: 'categorical', isActive: true, isSystemFixed: true, dataSource: 'ob_pool_data', createdAt: '', updatedAt: '' },
+      { columnName: 'gender', displayName: '性別', fieldType: 'categorical', isActive: true, isSystemFixed: false, dataSource: 'customer_core', createdAt: '', updatedAt: '' },
+      { columnName: 'date_of_birth', displayName: '年齡', fieldType: 'numeric', isActive: true, isSystemFixed: false, dataSource: 'customer_core', createdAt: '', updatedAt: '' },
+    ],
+  };
+
+  beforeEach(() => {
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    mockedListFields.mockResolvedValue(f109Fixture);
+    mockedListOptions.mockResolvedValue({ options: [] });
+  });
+
+  async function openDropdown() {
+    renderPage();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    return screen.getByTestId('add-field-dropdown');
+  }
+
+  it('TS-F109-FE-004：dropdown 含「案件資料」「客戶資料」兩群組標題，各群組含對應欄位', async () => {
+    const dropdown = await openDropdown();
+    // 兩群組標題
+    expect(within(dropdown).getByTestId('add-field-group-ob_pool_data')).toBeInTheDocument();
+    expect(within(dropdown).getByTestId('add-field-group-customer_core')).toBeInTheDocument();
+    expect(within(dropdown).getByText('案件資料')).toBeInTheDocument();
+    expect(within(dropdown).getByText('客戶資料')).toBeInTheDocument();
+    // 案件資料含 prod_kind；客戶資料含 gender + date_of_birth
+    expect(within(dropdown).getByTestId('add-field-prod_kind')).toBeInTheDocument();
+    expect(within(dropdown).getByTestId('add-field-gender')).toBeInTheDocument();
+    expect(within(dropdown).getByTestId('add-field-date_of_birth')).toBeInTheDocument();
+  });
+
+  it('TS-F109-FE-004b：可跨群組選取並存（先加 prod_kind 再加 gender，兩條件列共存）', async () => {
+    await openDropdown();
+    fireEvent.click(screen.getByTestId('add-field-prod_kind'));
+    await waitFor(() => expect(screen.getByTestId('condition-row-0')).toBeInTheDocument());
+    // 重開 dropdown 加 gender（客戶資料群組）
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('add-field-gender'));
+    await waitFor(() => expect(screen.getByTestId('condition-row-1')).toBeInTheDocument());
+    // 兩條件列共存
+    expect(screen.getByTestId('condition-row-0')).toBeInTheDocument();
+    expect(screen.getByTestId('condition-row-1')).toBeInTheDocument();
+  });
+
+  it('TS-F109-FE-005：is_system_fixed（best_case）排除於可選池，與來源分組正交', async () => {
+    const dropdown = await openDropdown();
+    // best_case 為 ob_pool_data 但 isSystemFixed → 不出現在 dropdown
+    expect(within(dropdown).queryByTestId('add-field-best_case')).toBeNull();
+    // 案件資料群組仍存在（含 prod_kind），證明群組本身有但 best_case 被排除
+    expect(within(dropdown).getByTestId('add-field-group-ob_pool_data')).toBeInTheDocument();
+  });
+
+  it('TS-F109-FE-006：年齡（date_of_birth numeric）→ 渲染 min/max 數值輸入（非多選）', async () => {
+    await openDropdown();
+    fireEvent.click(screen.getByTestId('add-field-date_of_birth'));
+    await waitFor(() => expect(screen.getByTestId('condition-row-0')).toBeInTheDocument());
+    expect(screen.getByTestId('input-numeric-min-0')).toBeInTheDocument();
+    expect(screen.getByTestId('input-numeric-max-0')).toBeInTheDocument();
+  });
+});
