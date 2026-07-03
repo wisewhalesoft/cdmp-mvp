@@ -100,11 +100,14 @@ git pull
 
 ```bash
 # 0) 建 .env（docker compose 會自動讀取，故之後指令不必再帶環境變數）
-#    金鑰用 openssl 現產；產一次、存好、別遺失/別再換（換掉=已補的 datasource 密碼全部解不開）
+#    可改 cp .env.deploy.example .env 後填值；或用下面 openssl 現產（產一次、存好、別更換）
 cat > .env <<EOF
 NODE_ENV=production
 AES_ENCRYPTION_KEY=$(openssl rand -hex 32)
 JWT_SECRET=$(openssl rand -hex 32)
+# 內網網址（nginx 反向代理）— 見「內網網址 / 對外 port」段
+COMPOSE_PROFILES=proxy
+VITE_ALLOWED_HOSTS=testcdmp.hfcfinance.com.tw
 EOF
 grep -qxF '.env' .gitignore || echo '.env' >> .gitignore   # 確保金鑰不進 git
 cat .env                                                     # 看一眼產出的值
