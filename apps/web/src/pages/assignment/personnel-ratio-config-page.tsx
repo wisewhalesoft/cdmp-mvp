@@ -147,7 +147,8 @@ export function PersonnelRatioConfigPage() {
     let aborted = false;
     void (async () => {
       try {
-        const data = await getPersonnelRatios(listNo);
+        // 設定頁隱藏離職員工（離職無法設定比例）；彙總頁不傳此旗標仍顯示離職。
+        const data = await getPersonnelRatios(listNo, undefined, { excludeResigned: true });
         if (aborted) return;
         setDepartments(data.departments ?? []);
         setLatestRejection(data.latestRejection ?? null);

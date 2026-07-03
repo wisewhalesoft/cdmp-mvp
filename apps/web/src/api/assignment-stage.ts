@@ -189,9 +189,13 @@ export interface SetPersonnelRatiosResponse {
 export async function getPersonnelRatios(
   listNo: string,
   deptCode?: string,
+  opts?: { excludeResigned?: boolean },
 ): Promise<GetPersonnelRatiosResponse> {
   const params: Record<string, string> = {};
   if (deptCode) params.deptCode = deptCode;
+  // 個別比例設定頁傳 true：後端只回在職員工（離職無法設比例、顯示無意義）。
+  // 完成彙總頁不傳，維持「顯示離職 + X 位離職不計」既有行為。
+  if (opts?.excludeResigned) params.excludeResigned = 'true';
   const response = await apiClient.get<GetPersonnelRatiosResponse>(
     `/assignment/ratios/personnel/${listNo}`,
     { params },

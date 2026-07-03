@@ -334,25 +334,30 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     });
   });
 
-  it('員工含離職時顯示「已離職」徽章 + ration disabled', async () => {
+  it('設定頁向 API 要求排除離職員工（excludeResigned），畫面不顯示離職列', async () => {
+    // 後端在 excludeResigned=true 下只回在職員工；設定頁不再顯示離職列（離職無法設比例）。
     mockedGetPersonnelRatios.mockResolvedValue(
       buildPersonnelResponse([
         buildDepartment({
           deptCode: 'D01',
           deptName: '北一處',
-          activeCount: 2,
+          activeCount: 1,
           employees: [
             { empId: 'E001', empName: '在職員', ration: 100, isResigned: false, createdBy: 'd1' },
-            { empId: 'E099', empName: '離職員', ration: null, isResigned: true, createdBy: null },
           ],
         }),
       ]),
     );
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId('empl-resigned-badge-E099')).toBeInTheDocument();
+      expect(screen.getByText('在職員')).toBeInTheDocument();
     });
-    expect(screen.queryByTestId('empl-resigned-badge-E001')).not.toBeInTheDocument();
+    // 設定頁明確要求後端排除離職員工
+    expect(mockedGetPersonnelRatios).toHaveBeenCalledWith('OB202605007', undefined, {
+      excludeResigned: true,
+    });
+    // 後端已排除 → 無任何離職徽章
+    expect(screen.queryByTestId('empl-resigned-badge-E099')).not.toBeInTheDocument();
   });
 
   it('名單階段不是 personnel_ratio 時顯示警告', async () => {

@@ -71,11 +71,17 @@ export class PersonnelRatioService {
    * GET /api/v1/assignment/ratios/personnel/{listNo}
    *
    * 處長視角：scopeByCreator helper 在 service 層統一 filter（v1.3 決議 #4）。
+   *
+   * opts.excludeResigned=true（個別比例設定頁用）：employees[] 只回在職員工，
+   *   離職者不列出（離職無法設定比例、顯示無意義）。activeCount / allResigned /
+   *   deptSum / sumValidated 不受影響（本就以在職為分母）。預設 false 以保留
+   *   完成彙總頁（ready-summary）「顯示離職＋X 位離職不計」之既有行為。
    */
   async getPersonnelRatios(
     listNo: string,
     deptCodeQuery: string | null,
     actor: ActorUser,
+    opts: { excludeResigned?: boolean } = {},
   ): Promise<Record<string, unknown>> {
     const list = await this.findListOrThrow(listNo);
     const sysDate = todayYmd();
@@ -187,7 +193,9 @@ export class PersonnelRatioService {
       const activeEmps = emps.filter((e) => isEmphireActive(e.resign_date, sysDate));
       const activeCount = activeEmps.length;
 
-      const employees = emps.map((e) => {
+      // excludeResigned：設定頁只列在職員工（離職無法設比例）；預設保留全部供彙總頁顯示。
+      const listedEmps = opts.excludeResigned ? activeEmps : emps;
+      const employees = listedEmps.map((e) => {
         const row = setMap.get(e.emp_id.trim());
         return {
           empId: e.emp_id.trim(),

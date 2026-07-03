@@ -48,15 +48,21 @@ export class PersonnelRatioController {
   async get(
     @Param('listNo') listNo: string,
     @Query('deptCode') deptCode: string | undefined,
+    @Query('excludeResigned') excludeResigned: string | undefined,
     @Req() req: Request,
   ) {
     const user = (req as any).user;
-    return this.service.getPersonnelRatios(listNo, deptCode ?? null, {
-      userId: user.userId,
-      role: user.role,
-      businessRole: user.businessRole,
-      ipAddress: req.ip ?? null,
-    });
+    return this.service.getPersonnelRatios(
+      listNo,
+      deptCode ?? null,
+      {
+        userId: user.userId,
+        role: user.role,
+        businessRole: user.businessRole,
+        ipAddress: req.ip ?? null,
+      },
+      { excludeResigned: excludeResigned === 'true' || excludeResigned === '1' },
+    );
   }
 
   @Put(':listNo')
