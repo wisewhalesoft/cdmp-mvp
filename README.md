@@ -143,6 +143,23 @@ docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' cdmp-api cdmp-p
 - **資料持久化**：DB 存於具名 volume `pgdata`，重啟 / 重建容器 / 主機重開機都**不會掉**。只有 `docker compose down -v`（帶 `-v`）才會清空。UI 補的 datasource 密碼、跑出來的業務資料都在 `pgdata` 裡。
 - 平常維運：`docker compose restart <服務>` 重啟單一服務；`docker compose up -d` 套用 compose 變更；**都不需重跑 bootstrap**（除非清庫）。
 
+### 內網網址 / 對外 port
+
+前端為同源設計：瀏覽器只連「網站本身」，`/api/*` 由 web 容器（Vite）自動 proxy 到 api → **不需 CORS、不需改 API 位址**。要讓內網網址（DNS 已指到本機）直接以 `http://你的網址/` 開站：
+
+1. 請 IT 把 DNS 指到本機 IP（你已申請）。
+2. 在專案根目錄 `.env` 加兩行：
+   ```
+   WEB_PORT=80                              # 對外開 80，網址免加 :5174
+   VITE_ALLOWED_HOSTS=cdmp.intra.company    # 你的內網網址（多個逗號分隔）
+   ```
+3. 重建 web：`docker compose up -d --build web`
+4. 瀏覽器開 `http://cdmp.intra.company/` 即進站；登入 / API 皆走同源自動 proxy，無需其他設定。
+
+> - **Vite 6 會擋未列的 Host**（顯示 `Blocked request. This host is not allowed`）→ 一定要在 `VITE_ALLOWED_HOSTS` 列出你的網址（不設則預設允許全部 host，內網信任環境可接受）。
+> - port 80 需主機未被佔用：`ss -tlnp | grep ':80 '` 確認。
+> - 目前 web 由 Vite dev server 提供（與整體 dev-target 部署一致，可用）。若要更正式（HTTPS / 靜態檔 / 快取），在前面加 nginx 反向代理（`/`→web:5173、`/api`→api:3000）或改用 `vite build` 靜態產物，屬後續強化。
+
 ### Test — 一鍵跑測試
 
 測試環境使用獨立的 `docker-compose.test.yml`，透過 `--profile` 選擇要跑的測試範圍。
