@@ -145,20 +145,30 @@ docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' cdmp-api cdmp-p
 
 ### 內網網址 / 對外 port
 
-前端為同源設計：瀏覽器只連「網站本身」，`/api/*` 由 web 容器（Vite）自動 proxy 到 api → **不需 CORS、不需改 API 位址**。要讓內網網址（DNS 已指到本機）直接以 `http://你的網址/` 開站：
+前端為同源設計：瀏覽器只連「網站本身」，`/api/*` proxy 到 api → **不需 CORS、不需改 API 位址**。DNS 指到本機後，要以 `http://你的網址/` 開站有兩種做法，擇一：
 
-1. 請 IT 把 DNS 指到本機 IP（你已申請）。
-2. 在專案根目錄 `.env` 加兩行：
-   ```
-   WEB_PORT=80                              # 對外開 80，網址免加 :5174
-   VITE_ALLOWED_HOSTS=cdmp.intra.company    # 你的內網網址（多個逗號分隔）
-   ```
-3. 重建 web：`docker compose up -d --build web`
-4. 瀏覽器開 `http://cdmp.intra.company/` 即進站；登入 / API 皆走同源自動 proxy，無需其他設定。
+**方案 A — 直接開 web 於 80（最簡單）**
 
-> - **Vite 6 會擋未列的 Host**（顯示 `Blocked request. This host is not allowed`）→ 一定要在 `VITE_ALLOWED_HOSTS` 列出你的網址（不設則預設允許全部 host，內網信任環境可接受）。
+`.env` 加兩行後 `docker compose up -d --build web`：
+```
+WEB_PORT=80                              # 對外開 80，網址免加 :5174
+VITE_ALLOWED_HOSTS=cdmp.intra.company    # 你的內網網址（多個逗號分隔）
+```
+
+**方案 B — nginx 反向代理（推薦，單一入口、可加 HTTPS/快取）**
+
+多一個 `nginx` 服務（`profile: proxy`）監聽 80：`/api` 直轉 api:3000、其餘轉 web:5173(Vite)。設定見 `nginx/cdmp.conf`。`.env` 設：
+```
+COMPOSE_PROFILES=proxy                   # 讓 up 一起帶起 nginx
+VITE_ALLOWED_HOSTS=cdmp.intra.company    # nginx 轉發時 Vite 仍會檢查 Host
+# 方案 B 不需 WEB_PORT=80（入口改由 nginx 提供；web 維持內部 5173）
+```
+然後 `docker compose up -d --build`。瀏覽器開 `http://cdmp.intra.company/` 即進站。
+
+> - **Vite 6 會擋未列的 Host**（`Blocked request. This host is not allowed`）→ 務必在 `VITE_ALLOWED_HOSTS` 列出你的網址（不設則預設允許全部 host，內網信任環境可接受）。
 > - port 80 需主機未被佔用：`ss -tlnp | grep ':80 '` 確認。
-> - 目前 web 由 Vite dev server 提供（與整體 dev-target 部署一致，可用）。若要更正式（HTTPS / 靜態檔 / 快取），在前面加 nginx 反向代理（`/`→web:5173、`/api`→api:3000）或改用 `vite build` 靜態產物，屬後續強化。
+> - HTTPS：`nginx/cdmp.conf` 底部已留 443 server 範本，取得憑證後填路徑並掛 `./nginx/certs` 即可。
+> - web 目前由 Vite dev server 提供（與整體 dev-target 部署一致，可用）。要再更正式可改用 `vite build` 靜態產物由 nginx 直接服務，屬後續強化。
 
 ### Test — 一鍵跑測試
 
