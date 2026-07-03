@@ -16,6 +16,7 @@ import { RatioValidationService } from '@/modules/assignment/services/ratio-vali
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import { activeEmphireCondition, todayYmd } from '@/common/emphire/emphire-active.util';
 import type { SetDeptRatioDto } from './dto/set-dept-ratio.dto';
 
 /**
@@ -74,13 +75,16 @@ export class DeptRatioService {
     isReadOnly: boolean;
   }> {
     const list = await this.findListOrThrow(listNo);
+    const sysDate = todayYmd();
 
     // 在職部門（dept_code 去重 + RTRIM；BR-6）
+    // 在職判定對齊 legacy（resign_date NULL 或 >= 系統日；哨兵 9999-12-31 = 永久在職），
+    // 不可用 `resign_date IS NULL`（真實資料無 NULL → 會判全員離職 → 空清單）。
     const activeDeptsRaw = await this.emphireRepo
       .createQueryBuilder('e')
       .select('e.dept_code', 'dept_code')
       .addSelect('MAX(e.dept_name)', 'dept_name')
-      .where('e.resign_date IS NULL')
+      .where(activeEmphireCondition('e'), { sysDate })
       .groupBy('e.dept_code')
       .orderBy('e.dept_code', 'ASC')
       .getRawMany<{ dept_code: string; dept_name: string }>();
@@ -97,7 +101,7 @@ export class DeptRatioService {
       .createQueryBuilder('e')
       .select('TRIM(e.dept_code)', 'dept_code')
       .addSelect('TRIM(e.emp_nm)', 'emp_nm')
-      .where('e.resign_date IS NULL')
+      .where(activeEmphireCondition('e'), { sysDate })
       .andWhere(`TRIM(e.jfun_nm) = '處長'`)
       .orderBy('TRIM(e.dept_code)', 'ASC')
       .addOrderBy('CASE WHEN e.hire_date IS NULL THEN 1 ELSE 0 END', 'ASC')

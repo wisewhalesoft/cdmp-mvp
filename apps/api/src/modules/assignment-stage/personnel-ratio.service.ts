@@ -19,6 +19,11 @@ import { StageTransitionService } from '@/modules/assignment/services/stage-tran
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import {
+  activeEmphireCondition,
+  isEmphireActive,
+  todayYmd,
+} from '@/common/emphire/emphire-active.util';
 import type { SetPersonnelRatioDto, AppliedTemplateDto } from './dto/set-personnel-ratio.dto';
 
 interface ActorUser {
@@ -73,6 +78,7 @@ export class PersonnelRatioService {
     actor: ActorUser,
   ): Promise<Record<string, unknown>> {
     const list = await this.findListOrThrow(listNo);
+    const sysDate = todayYmd();
 
     const isSectionChief = this.isSectionChiefOnly(actor);
     // 處長視角下，先反查其轄區 dept_code（spec F082 BR-3 修訂；email 對 ob_emphire.email
@@ -86,8 +92,10 @@ export class PersonnelRatioService {
       .createQueryBuilder('e')
       .select(['e.emp_id', 'e.emp_nm', 'e.dept_code', 'e.dept_name', 'e.resign_date'])
       .orderBy('e.dept_code', 'ASC')
-      .addOrderBy('CASE WHEN e.resign_date IS NULL THEN 0 ELSE 1 END', 'ASC')
+      // 在職者排前（對齊 legacy 在職語意；勿用 `resign_date IS NULL`）
+      .addOrderBy(`CASE WHEN ${activeEmphireCondition('e')} THEN 0 ELSE 1 END`, 'ASC')
       .addOrderBy('e.emp_id', 'ASC')
+      .setParameter('sysDate', sysDate)
       .getMany();
 
     // 各部門處長（沿用 F079 BR-14 定義；jfun_nm='處長' + hire_date ASC 取最早入職者）
@@ -95,7 +103,7 @@ export class PersonnelRatioService {
       .createQueryBuilder('e')
       .select('TRIM(e.dept_code)', 'dept_code')
       .addSelect('TRIM(e.emp_nm)', 'emp_nm')
-      .where('e.resign_date IS NULL')
+      .where(activeEmphireCondition('e'), { sysDate })
       .andWhere(`TRIM(e.jfun_nm) = '處長'`)
       .orderBy('TRIM(e.dept_code)', 'ASC')
       .addOrderBy('CASE WHEN e.hire_date IS NULL THEN 1 ELSE 0 END', 'ASC')
@@ -176,7 +184,7 @@ export class PersonnelRatioService {
       const setMap = new Map<string, ObEmplSet>();
       for (const r of setRows) setMap.set(r.emplid.trim(), r);
 
-      const activeEmps = emps.filter((e) => e.resign_date == null);
+      const activeEmps = emps.filter((e) => isEmphireActive(e.resign_date, sysDate));
       const activeCount = activeEmps.length;
 
       const employees = emps.map((e) => {
@@ -186,7 +194,7 @@ export class PersonnelRatioService {
           empName: (e.emp_nm ?? '').trim() || e.emp_id.trim(),
           ration: row ? Number(row.ration) : null,
           createdBy: row?.created_by ?? null,
-          isResigned: e.resign_date != null,
+          isResigned: !isEmphireActive(e.resign_date, sysDate),
         };
       });
 
@@ -293,6 +301,7 @@ export class PersonnelRatioService {
     await this.runGuard.assertNoRunningRun();
 
     const list = await this.findListOrThrow(listNo);
+    const sysDate = todayYmd();
     this.assertNotHistorical(list.project_workym, currentWorkYm);
     this.assertListActive(list);
     await this.stageTransition.assertStageEquals(listNo, 'personnel_ratio');
@@ -319,7 +328,7 @@ export class PersonnelRatioService {
     const empMap = new Map<string, ObEmphire>();
     for (const e of emphireRows) empMap.set(e.emp_id.trim(), e);
 
-    const activeCount = emphireRows.filter((e) => e.resign_date == null).length;
+    const activeCount = emphireRows.filter((e) => isEmphireActive(e.resign_date, sysDate)).length;
 
     // 處長轄區檢查（spec F082 BR-3 修訂）：
     // 改為依 users.email <-> ob_emphire.email + jfun_nm='處長' 反查 dept_code。
@@ -341,7 +350,7 @@ export class PersonnelRatioService {
       const row = empMap.get(e.empId);
       if (!row) {
         invalidEmpIds.push(e.empId);
-      } else if (row.resign_date != null) {
+      } else if (!isEmphireActive(row.resign_date, sysDate)) {
         resignedEmpIds.push(e.empId);
       }
     }

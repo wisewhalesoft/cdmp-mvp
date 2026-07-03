@@ -12,6 +12,7 @@ import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
+import { activeEmphireCondition, todayYmd } from '@/common/emphire/emphire-active.util';
 import {
   SectionChiefScopeService,
   type ActorUser,
@@ -738,7 +739,8 @@ export class Stage0EstimateService {
       .select('TRIM(e.dept_code)', 'dept_code')
       .addSelect('COUNT(*)', 'cnt')
       .addSelect('MAX(e.dept_name)', 'dept_name')
-      .where('e.resign_date IS NULL')
+      // 在職判定對齊 legacy（NULL 或 resign_date >= 系統日；哨兵 9999-12-31）；勿用 `IS NULL`。
+      .where(activeEmphireCondition('e'), { sysDate: todayYmd() })
       .andWhere('e.dept_code IS NOT NULL')
       .groupBy('TRIM(e.dept_code)')
       .getRawMany<{ dept_code: string; cnt: string; dept_name: string | null }>();

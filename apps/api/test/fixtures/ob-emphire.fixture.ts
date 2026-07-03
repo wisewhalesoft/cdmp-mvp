@@ -9,6 +9,14 @@
 
 import type { ObEmphire } from '@/database/entities/ob-emphire.entity';
 
+/**
+ * 「在職」哨兵值 —— 對齊真實來源系統 contract（OBEMPHIRE.RESIGN_DATE 以 '9999-12-31'
+ * 表示「從未離職」，而非 NULL）。歷史地雷見 memory feedback_mock_real_system_contract：
+ * 舊 fixture 以 null=active，與真機不符，導致 unit test 全綠但真機把全員判離職。
+ * 在職判定一律走 @/common/emphire/emphire-active.util（NULL 或 >= 系統日皆在職）。
+ */
+export const ACTIVE_RESIGN_SENTINEL = new Date('9999-12-31T00:00:00Z');
+
 export interface BuildEmphireOptions {
   emp_id?: string;
   emp_nm?: string;
@@ -20,7 +28,7 @@ export interface BuildEmphireOptions {
   jfun_id?: string | null;
   jfun_nm?: string | null;
   hire_date?: Date | null;
-  resign_date?: Date | null; // null = active，有值 = 離職
+  resign_date?: Date | null; // 預設 = 哨兵 '9999-12-31'（在職）；傳過去日期 = 離職；null 亦視為在職
   email?: string | null;
   is_auth?: string | null;
 }
@@ -43,7 +51,7 @@ export function buildEmphire(opts: BuildEmphireOptions = {}): ObEmphire {
     jfun_id: opts.jfun_id ?? null,
     jfun_nm: opts.jfun_nm ?? null,
     hire_date: opts.hire_date ?? new Date('2020-01-01'),
-    resign_date: opts.resign_date ?? null,
+    resign_date: opts.resign_date ?? ACTIVE_RESIGN_SENTINEL,
     email: opts.email ?? `${id.toLowerCase()}@cdmp.test`,
     is_auth: opts.is_auth ?? 'Y',
   };

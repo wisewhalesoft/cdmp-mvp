@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { User } from '@/database/entities/user.entity';
+import { activeEmphireCondition, todayYmd } from '@/common/emphire/emphire-active.util';
 
 export interface ActorUser {
   userId: string;
@@ -43,7 +44,7 @@ export class SectionChiefScopeService {
    *
    * 條件：
    *   - users.email 對應某個 ob_emphire 員工的 email（trimmed + case-insensitive）
-   *   - 該員工在職（resign_date IS NULL）
+   *   - 該員工在職（resign_date 為 NULL 或 >= 系統日；哨兵 9999-12-31 = 永久在職）
    *   - 該員工 jfun_nm = '處長'
    *
    * @returns 對應的 dept_code（trimmed），或 null 表示對不上 / 非處長身份
@@ -54,7 +55,8 @@ export class SectionChiefScopeService {
     const emp = await this.emphireRepo
       .createQueryBuilder('e')
       .where('LOWER(TRIM(e.email)) = LOWER(:email)', { email: user.email.trim() })
-      .andWhere('e.resign_date IS NULL')
+      // 在職判定對齊 legacy（NULL 或 resign_date >= 系統日；哨兵 9999-12-31）；勿用 `IS NULL`。
+      .andWhere(activeEmphireCondition('e'), { sysDate: todayYmd() })
       .getOne();
     if (!emp) return null;
     if ((emp.jfun_nm ?? '').trim() !== '處長') return null;
