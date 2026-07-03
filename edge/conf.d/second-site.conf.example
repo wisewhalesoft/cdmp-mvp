@@ -1,0 +1,77 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  加第二站範本（純參考，nginx 不會載入本檔——只載 *.conf，本檔為 .conf.example）
+# ══════════════════════════════════════════════════════════════════════════
+#  步驟：
+#   1) 複製成正式檔（副檔名 .conf）：
+#        cp second-site.conf.example crm.hfcfinance.com.tw.conf
+#   2) 改下面的 server_name、後端容器名（set $upstream_* 與 proxy_pass 的 port）
+#   3) 讓 edge 連得到該站容器：在 edge/docker-compose.yml 的 networks 加該站 compose 的
+#      「<專案目錄名>_default」（見該檔註解範例）
+#   4) 重載：docker compose -f edge/docker-compose.yml up -d
+#
+#  憑證：wildcard *.hfcfinance.com.tw 同一張即涵蓋所有子網域；若該站是別的網域，改成該站憑證路徑。
+#  $connection_upgrade 定義於 00-map.conf（共用），本檔直接用即可。
+# ══════════════════════════════════════════════════════════════════════════
+
+# HTTP → HTTPS 轉址
+server {
+    listen 80;
+    server_name REPLACE.hfcfinance.com.tw;          # ← 改成該站網址
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name REPLACE.hfcfinance.com.tw;          # ← 改成該站網址
+
+    ssl_certificate     /etc/nginx/certs/2026/STAR_hfcfinance.com.tw.pem;
+    ssl_certificate_key /etc/nginx/certs/2026/STAR_hfcfinance.com.tw.key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+
+    client_max_body_size 50m;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  情境 A：前後端分離（同源 /api，像 CDMP）—— 用這個就刪掉下方情境 B
+    # ─────────────────────────────────────────────────────────────────────
+    location /api/ {
+        set $upstream_api REPLACE-api;              # ← 該站 API 容器名
+        proxy_pass http://$upstream_api:3000;       # ← 該站 API 容器內 port
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+    location / {
+        set $upstream_web REPLACE-web;              # ← 該站前端容器名
+        proxy_pass http://$upstream_web:5173;       # ← 該站前端容器內 port
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  情境 B：整站單一後端（無 /api 分離）—— 若用這個，刪掉上方情境 A 的兩個 location，
+    #  取消下面註解：
+    # ─────────────────────────────────────────────────────────────────────
+    # location / {
+    #     set $upstream REPLACE-app;                # ← 該站容器名
+    #     proxy_pass http://$upstream:8080;         # ← 該站容器內 port
+    #     proxy_set_header Host $host;
+    #     proxy_set_header X-Real-IP $remote_addr;
+    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #     proxy_set_header X-Forwarded-Proto $scheme;
+    #     proxy_http_version 1.1;
+    #     proxy_set_header Upgrade $http_upgrade;
+    #     proxy_set_header Connection $connection_upgrade;
+    # }
+}

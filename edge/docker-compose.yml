@@ -21,6 +21,7 @@ services:
       - ../certs:/etc/nginx/certs:ro
     networks:
       - cdmp
+      # - othersite          # ← 新站：取消註解，並在下方 networks 補對應項
 
 networks:
   # 接上 CDMP compose 的預設網路（讓 edge 連得到 cdmp-web / cdmp-api）。
@@ -28,3 +29,7 @@ networks:
   cdmp:
     external: true
     name: cdmp-mvp_default
+  # 新站範例（取消註解、name 改成該站 compose 的 <專案目錄名>_default）：
+  # othersite:
+  #   external: true
+  #   name: othersite_default
