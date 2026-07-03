@@ -384,7 +384,12 @@
       "Bash(echo \"=== tsc exit code: $? ===\")",
       "Bash(docker restart *)",
       "Bash(curl -s -X POST http://localhost:3000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@cdmp.test\",\"password\":\"P@ssw0rd123\"}')",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(xxd)",
+      "Bash(awk -F',' '{print $7}')",
+      "Bash(node *)",
+      "Bash(echo \"=== api tsc exit: $? ===\")"
     ],
     "defaultMode": "default"
   },
