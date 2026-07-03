@@ -104,23 +104,6 @@ services:
     depends_on:
       - api
 
-  # 反向代理（內網網址單一入口，對外 port 80）。/api → api:3000、其餘 → web:5173(Vite)。
-  # 預設不啟動（不影響本機開發）；正式機於 .env 設 COMPOSE_PROFILES=proxy 即隨 up 一起啟動。
-  # 啟用 nginx 後無需再設 WEB_PORT=80（入口改由 nginx 提供）。設定：nginx/cdmp.conf。
-  nginx:
-    image: nginx:alpine
-    container_name: cdmp-nginx
-    restart: unless-stopped
-    ports:
-      - "${HTTP_PORT:-80}:80"
-    volumes:
-      - ./nginx/cdmp.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - web
-      - api
-    profiles:
-      - proxy
-
   # 一鍵部署 bootstrap（冪等）：baseline migration → 帳號(users) → datasource 空殼(9個) → 計分卡/pipeline/擷取任務。
   # 取代舊 seed / data-seed 兩個 profile（已移除）；如需單獨重跑某步，於容器內執行對應 npm script：
   #   docker exec cdmp-api npm run seed            # 只重建測試帳號

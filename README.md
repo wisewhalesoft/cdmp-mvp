@@ -105,8 +105,7 @@ cat > .env <<EOF
 NODE_ENV=production
 AES_ENCRYPTION_KEY=$(openssl rand -hex 32)
 JWT_SECRET=$(openssl rand -hex 32)
-# 內網網址（nginx 反向代理）— 見「內網網址 / 對外 port」段
-COMPOSE_PROFILES=proxy
+# 內網網址：前門 edge 代理轉發的 Host，Vite 需允許（見「內網網址 / SSL / 多站前門」段）
 VITE_ALLOWED_HOSTS=testcdmp.hfcfinance.com.tw
 EOF
 grep -qxF '.env' .gitignore || echo '.env' >> .gitignore   # 確保金鑰不進 git
@@ -146,32 +145,30 @@ docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' cdmp-api cdmp-p
 - **資料持久化**：DB 存於具名 volume `pgdata`，重啟 / 重建容器 / 主機重開機都**不會掉**。只有 `docker compose down -v`（帶 `-v`）才會清空。UI 補的 datasource 密碼、跑出來的業務資料都在 `pgdata` 裡。
 - 平常維運：`docker compose restart <服務>` 重啟單一服務；`docker compose up -d` 套用 compose 變更；**都不需重跑 bootstrap**（除非清庫）。
 
-### 內網網址 / 對外 port
+### 內網網址 / SSL / 多站前門（edge 反向代理）
 
-前端為同源設計：瀏覽器只連「網站本身」，`/api/*` proxy 到 api → **不需 CORS、不需改 API 位址**。DNS 指到本機後，要以 `http://你的網址/` 開站有兩種做法，擇一：
+前端為同源設計：瀏覽器只連「網站本身」，`/api/*` proxy 到 api → **不需 CORS、不需改 API 位址**。對外由**專職 edge 代理**（`edge/`）獨佔 80/443、終結 SSL（wildcard 憑證）、依 Host 分流到各站後端。CDMP 為其中一站；未來加站不用改本 compose。
 
-**方案 A — 直接開 web 於 80（最簡單）**
+**部署（以 `testcdmp.hfcfinance.com.tw` 為例）：**
 
-`.env` 加兩行後 `docker compose up -d --build web`：
-```
-WEB_PORT=80                              # 對外開 80，網址免加 :5174
-VITE_ALLOWED_HOSTS=cdmp.intra.company    # 你的內網網址（多個逗號分隔）
-```
+1. 憑證放 `certs/2026/`（fullchain `.pem` + 私鑰 `.key.pem`；`certs/` 已 gitignore，私鑰不入版控）。站台設定見 `edge/conf.d/<站台>.conf`。
+2. `.env` 設 `VITE_ALLOWED_HOSTS=testcdmp.hfcfinance.com.tw`（edge 轉發時 Vite 6 仍檢查 Host）。
+3. 起 CDMP（web/api 在 `cdmp-mvp_default` 網路供 edge 連入）：`docker compose up -d --build`
+4. 起 edge 前門（獨立 compose，吃 `certs/` + `edge/conf.d/`）：
+   ```bash
+   docker compose -f edge/docker-compose.yml up -d
+   ```
+5. 瀏覽器開 **https://testcdmp.hfcfinance.com.tw/**（http 自動 301 轉 https）。
 
-**方案 B — nginx 反向代理（推薦，單一入口、可加 HTTPS/快取）**
+**加第二站（例 `othersite.hfcfinance.com.tw`）：**
+- 複製 `edge/conf.d/testcdmp.hfcfinance.com.tw.conf` → 改 `server_name` + 後端容器名（如 `/` → 該站 web、`/api` → 該站 api）。
+- 在 `edge/docker-compose.yml` 的 `networks` 加該站的 `<專案>_default`（讓 edge 連得到它的容器）。
+- `docker compose -f edge/docker-compose.yml up -d` 重載。同一張 wildcard 憑證即涵蓋所有 `*.hfcfinance.com.tw`。
 
-多一個 `nginx` 服務（`profile: proxy`）監聽 80：`/api` 直轉 api:3000、其餘轉 web:5173(Vite)。設定見 `nginx/cdmp.conf`。`.env` 設：
-```
-COMPOSE_PROFILES=proxy                   # 讓 up 一起帶起 nginx
-VITE_ALLOWED_HOSTS=cdmp.intra.company    # nginx 轉發時 Vite 仍會檢查 Host
-# 方案 B 不需 WEB_PORT=80（入口改由 nginx 提供；web 維持內部 5173）
-```
-然後 `docker compose up -d --build`。瀏覽器開 `http://cdmp.intra.company/` 即進站。
-
-> - **Vite 6 會擋未列的 Host**（`Blocked request. This host is not allowed`）→ 務必在 `VITE_ALLOWED_HOSTS` 列出你的網址（不設則預設允許全部 host，內網信任環境可接受）。
-> - port 80 需主機未被佔用：`ss -tlnp | grep ':80 '` 確認。
-> - HTTPS：`nginx/cdmp.conf` 底部已留 443 server 範本，取得憑證後填路徑並掛 `./nginx/certs` 即可。
-> - web 目前由 Vite dev server 提供（與整體 dev-target 部署一致，可用）。要再更正式可改用 `vite build` 靜態產物由 nginx 直接服務，屬後續強化。
+> - **Vite 6 會擋未列的 Host** → `VITE_ALLOWED_HOSTS` 要列出網址（不設則允許全部 host）。
+> - edge 獨佔 80/443：主機這兩個 port 需淨空（`ss -tlnp | grep -E ':80 |:443 '`）。
+> - **換憑證**：新檔放 `certs/`、（如路徑變）改 `edge/conf.d`，`docker compose -f edge/docker-compose.yml restart`。
+> - web 目前由 Vite dev server 提供；要更正式可改 `vite build` 靜態產物由 edge 直接服務，屬後續強化。
 
 ### Test — 一鍵跑測試
 

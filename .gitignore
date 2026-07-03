@@ -7,6 +7,12 @@ dist
 *.tsbuildinfo
 .mcp.json
 
+# TLS 憑證與私鑰（絕不入版控）
+certs/
+*.key.pem
+*.key
+*.pem
+
 # 個人工作文件 / 進度報告（不入版控）
 進度報告*.md
 *-Peter-v*.md
