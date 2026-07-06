@@ -328,6 +328,45 @@ describe('AssignmentRunService', () => {
       expect(res.status).toBe('completed');
       expect(res.projectWorkym).toBe(YM);
     });
+
+    // F062：getRunById 亦應 join users.name → triggeredByName（與 listRuns 一致）。
+    // 進度頁「觸發者」欄需顯示名稱而非 UUID；「總筆數」讀 totalCases。
+    it('getRunById：以 triggered_by(UUID) join users.name 回傳 triggeredByName', async () => {
+      const user = await env.userRepo.save(
+        env.userRepo.create({
+          name: '李處長',
+          email: 'chief-f062@cdmp.test',
+          password_hash: 'x',
+          role: 'user',
+        } as Partial<User>),
+      );
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'completed',
+          triggered_by: user.id,
+          total_cases: 9500,
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      const res = await env.service.getRunById(saved.run_id);
+      expect(res.triggeredBy).toBe(user.id); // 原 UUID 保留
+      expect(res.triggeredByName).toBe('李處長'); // 解析後名稱
+      expect(res.totalCases).toBe(9500);
+    });
+
+    it('getRunById：triggered_by 無對應 user → triggeredByName=null（graceful）', async () => {
+      const saved = await env.runRepo.save(
+        env.runRepo.create({
+          project_workym: YM,
+          status: 'completed',
+          triggered_by: '00000000-0000-0000-0000-0000000000ff',
+          created_at: new Date(),
+        } as Partial<AssignmentRun>),
+      );
+      const res = await env.service.getRunById(saved.run_id);
+      expect(res.triggeredByName ?? null).toBeNull();
+    });
   });
 
   describe('cancelRun (F062 Phase 2)', () => {

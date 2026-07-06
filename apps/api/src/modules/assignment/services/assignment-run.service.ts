@@ -219,7 +219,10 @@ export class AssignmentRunService {
         message: ERROR_MESSAGES.ASSIGNMENT_RUN_NOT_FOUND,
       });
     }
-    return this.toSummary(row);
+    const summary = this.toSummary(row);
+    // F062：與 listRuns 一致解析 triggered_by(UUID) → users.name（進度頁「觸發者」欄顯示名稱而非 UUID）
+    await this.resolveTriggeredByNames([summary]);
+    return summary;
   }
 
   /**
