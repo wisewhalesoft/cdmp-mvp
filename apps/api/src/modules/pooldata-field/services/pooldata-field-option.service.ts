@@ -34,6 +34,7 @@ export interface ActorContext {
 export interface PooldataOptionItem {
   optionValue: string;
   optionLabel: string;
+  displayOrder: number;
   isActive: boolean;
   deactivationReason: 'manual' | 'field_type_changed' | null;
 }
@@ -52,6 +53,7 @@ export interface CreatePooldataOptionResult {
   columnName: string;
   optionValue: string;
   optionLabel: string;
+  displayOrder: number;
   isActive: true;
 }
 
@@ -109,7 +111,7 @@ export class PooldataFieldOptionService {
 
     const rows = await this.optionRepo.find({
       where,
-      order: { option_value: 'ASC' },
+      order: { display_order: 'ASC', option_value: 'ASC' },
     });
 
     return {
@@ -140,11 +142,20 @@ export class PooldataFieldOptionService {
       });
     }
 
+    // 新增選項預設接續在既有最大 display_order 之後（append at end）
+    const [lastByOrder] = await this.optionRepo.find({
+      where: { column_name: columnName },
+      order: { display_order: 'DESC' },
+      take: 1,
+    });
+    const nextDisplayOrder = (lastByOrder?.display_order ?? -1) + 1;
+
     const now = new Date();
     const row = this.optionRepo.create({
       column_name: columnName,
       option_value: input.optionValue,
       option_label: input.optionLabel,
+      display_order: nextDisplayOrder,
       is_active: true,
       deactivation_reason: null,
       created_at: now,
@@ -155,6 +166,7 @@ export class PooldataFieldOptionService {
     await this._writeAudit(actor, 'CREATE', columnName, input.optionValue, null, {
       optionValue: saved.option_value,
       optionLabel: saved.option_label,
+      displayOrder: saved.display_order,
       isActive: saved.is_active,
     });
 
@@ -162,6 +174,7 @@ export class PooldataFieldOptionService {
       columnName,
       optionValue: saved.option_value,
       optionLabel: saved.option_label,
+      displayOrder: saved.display_order,
       isActive: true,
     };
   }
@@ -250,6 +263,61 @@ export class PooldataFieldOptionService {
   }
 
   // ========================
+  // F076 §5.5 — PATCH /pooldata-fields/:columnName/options/reorder
+  // ========================
+
+  async reorderOptions(
+    columnName: string,
+    orderedValues: string[],
+    actor: ActorContext,
+  ): Promise<ListPooldataOptionsResult> {
+    await this.whitelistService.assertCategorical(columnName);
+
+    const rows = await this.optionRepo.find({ where: { column_name: columnName } });
+
+    // 稽核 before：依「舊排序」（display_order, option_value）還原停用前的 optionValue 順序
+    const previousOrder = [...rows]
+      .sort((a, b) => {
+        if (a.display_order !== b.display_order) {
+          return a.display_order - b.display_order;
+        }
+        return a.option_value.localeCompare(b.option_value);
+      })
+      .map((r) => r.option_value);
+
+    const rowsByValue = new Map(rows.map((r) => [r.option_value, r]));
+    const now = new Date();
+    const updatedRows: PooldataFieldOption[] = [];
+
+    // display_order = 陣列索引；未列在 orderedValues 內的既有值維持原 display_order 不動
+    // stale client 傳入不存在的 optionValue → 寬容跳過，不拋錯（避免 500）
+    orderedValues.forEach((optionValue, index) => {
+      const row = rowsByValue.get(optionValue);
+      if (!row) {
+        return;
+      }
+      row.display_order = index;
+      row.updated_at = now;
+      updatedRows.push(row);
+    });
+
+    if (updatedRows.length > 0) {
+      await this.optionRepo.save(updatedRows);
+    }
+
+    await this._writeAudit(
+      actor,
+      'UPDATE',
+      columnName,
+      '__reorder__',
+      { order: previousOrder },
+      { order: orderedValues },
+    );
+
+    return this.listOptions(columnName, { includeInactive: 'true' });
+  }
+
+  // ========================
   // 內部 helper
   // ========================
 
@@ -273,6 +341,7 @@ export class PooldataFieldOptionService {
     return {
       optionValue: row.option_value,
       optionLabel: row.option_label,
+      displayOrder: row.display_order,
       isActive: row.is_active,
       deactivationReason: row.deactivation_reason,
     };

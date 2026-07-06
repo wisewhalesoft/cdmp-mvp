@@ -1,6 +1,6 @@
 // F076 v1.3 / 2026-05-17 / architecture-spec §E07 M06：類別型欄位可選值
-// 對應 migration：1711360000210-CreatePooldataFieldOption.ts
-// ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
+// 對應 schema：1711360000000-BaselineSchema.ts（含 display_order 排序欄位）
+// ⚠️ Entity 必須與 baseline migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn } from 'typeorm';
 import { dateColumnType } from '@/common/database/column-types';
@@ -32,6 +32,13 @@ export class PooldataFieldOption {
 
   @Column({ name: 'option_label', type: 'varchar', length: 100 })
   option_label: string;
+
+  /**
+   * 排序功能（F076 持久化排序）；display_order = 陣列索引，數值越小越靠前。
+   * 新增選項預設接續在既有最大值之後（append at end）；由 §5.5 reorder 端點批次覆寫。
+   */
+  @Column({ name: 'display_order', type: 'int', default: 0 })
+  display_order: number;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   is_active: boolean;

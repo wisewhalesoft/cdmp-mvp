@@ -25,6 +25,7 @@ import { CreatePooldataOptionDto } from '../dto/create-pooldata-option.dto';
 import { UpdatePooldataOptionDto } from '../dto/update-pooldata-option.dto';
 import { DeactivatePooldataOptionDto } from '../dto/deactivate-pooldata-option.dto';
 import { ListPooldataOptionsQueryDto } from '../dto/list-pooldata-options-query.dto';
+import { ReorderPooldataOptionsDto } from '../dto/reorder-pooldata-options.dto';
 
 /**
  * F076 v1.3：類別型欄位可選值 Controller
@@ -40,6 +41,7 @@ import { ListPooldataOptionsQueryDto } from '../dto/list-pooldata-options-query.
  *   - POST  /                          F076 §5.2 新增
  *   - PATCH /:optionValue              F076 §5.3 重新啟用（DTO 限 isActive=true）
  *   - PATCH /:optionValue/deactivate   F076 §5.4 停用專屬（reason 必填 ≤200 字）
+ *   - PATCH /reorder                   F076 §5.5 排序（orderedValues 完整陣列；先於 :optionValue 註冊）
  */
 @Controller('api/v1/pooldata-fields/:columnName/options')
 @UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
@@ -80,6 +82,23 @@ export class PooldataFieldOptionController {
       { optionValue: dto.optionValue, optionLabel: dto.optionLabel },
       actor,
     );
+  }
+
+  // ===== F076 §5.5 — 排序（先註冊以免被 :optionValue 攔截）=====
+
+  @Patch('reorder')
+  @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+  async reorderOptions(
+    @Param('columnName') columnName: string,
+    @Body() dto: ReorderPooldataOptionsDto,
+    @Req() req: any,
+  ) {
+    const actor = {
+      userId: req.user.userId,
+      ipAddress: req.ip ?? null,
+    };
+    return this.service.reorderOptions(columnName, dto.orderedValues, actor);
   }
 
   // ===== F076 §5.4 — deactivate 專屬（先註冊以免被 :optionValue 攔截）=====

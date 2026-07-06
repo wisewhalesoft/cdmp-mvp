@@ -1283,6 +1283,7 @@ CREATE TABLE public.pooldata_field_option (
     option_label character varying(100) NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
     deactivation_reason character varying(30),
+    display_order integer DEFAULT 0 NOT NULL,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
