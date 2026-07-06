@@ -228,7 +228,7 @@ export function CreateCardLevelModal({
             {/* CARD_TYPE disabled */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                CARD_TYPE
+                計分卡類型
               </label>
               <input
                 data-testid="level-modal-card-type"
@@ -248,7 +248,7 @@ export function CreateCardLevelModal({
                 htmlFor="level-modal-card-level-input"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                CARD_LEVEL 等級代碼 <span className="text-red-600">*</span>
+                等級代碼 <span className="text-red-600">*</span>
               </label>
               <input
                 id="level-modal-card-level-input"
@@ -276,10 +276,6 @@ export function CreateCardLevelModal({
                   {cardLevelError}
                 </p>
               )}
-              <p className="text-xs text-gray-400 mt-1">
-                單一大寫英文字元（A~Z），對應{' '}
-                <code>ob_levelcard_level.card_level VARCHAR(1)</code>（BR-8）
-              </p>
             </div>
 
             {/* score_s / score_e */}
@@ -289,7 +285,7 @@ export function CreateCardLevelModal({
                   htmlFor="level-modal-score-s-input"
                   className="block text-sm font-medium text-gray-700 mb-1.5"
                 >
-                  score_s（下限）<span className="text-red-600">*</span>
+                  卡片分數起始值 <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="level-modal-score-s-input"
@@ -309,7 +305,7 @@ export function CreateCardLevelModal({
                   htmlFor="level-modal-score-e-input"
                   className="block text-sm font-medium text-gray-700 mb-1.5"
                 >
-                  score_e（上限）<span className="text-red-600">*</span>
+                  卡片分數終止值 <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="level-modal-score-e-input"
@@ -349,20 +345,9 @@ export function CreateCardLevelModal({
                     </p>
                   </>
                 ) : (
-                  <>
-                    <p className="font-medium text-gray-800">
-                      BR-1（v1.5 修訂）：新區間不可與既有等級重疊；允許 gap，相鄰等級不強制連續
-                    </p>
-                    <p className="text-gray-600 mt-0.5">
-                      目前已有：
-                      {sortedLevels.map((l, i) => (
-                        <span key={l.cardLevel}>
-                          {i > 0 && '、'}
-                          <strong>{l.cardLevel}</strong>（{l.scoreS}~{l.scoreE}）
-                        </span>
-                      ))}
-                    </p>
-                  </>
+                  <p className="font-medium text-gray-800">
+                    新區間不可與既有等級重疊；允許 gap，相鄰等級不強制連續
+                  </p>
                 )}
               </div>
             </div>

@@ -138,18 +138,16 @@ describe('CreateTierMappingModal — F056 v1.5', () => {
     fireEvent.change(document.getElementById('tier-tier-level')!, {
       target: { value: 'T1' },
     });
-    fireEvent.change(document.getElementById('tier-list-nm')!, {
-      target: { value: '高資產卡' },
-    });
 
     fireEvent.click(screen.getByTestId('btn-tier-confirm'));
 
     await waitFor(() => {
+      // LIST_NM 欄位已移除（不參與 PK/join），一律送 null
       expect(api.createTierMapping).toHaveBeenLastCalledWith({
         cardType: 'H',
         cardLevel: 'A',
         tierLevel: 'T1',
-        listNm: '高資產卡',
+        listNm: null,
       });
     });
   });

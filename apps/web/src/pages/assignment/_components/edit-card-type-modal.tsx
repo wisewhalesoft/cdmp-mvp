@@ -162,7 +162,7 @@ export function EditCardTypeModal({
                 htmlFor="edit-card-type-code"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                card_type 代碼
+                計分卡代碼
               </label>
               <input
                 id="edit-card-type-code"
@@ -181,7 +181,7 @@ export function EditCardTypeModal({
                 htmlFor="edit-card-type-name"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                card_name 名稱 <span className="text-red-600">*</span>
+                計分卡名稱 <span className="text-red-600">*</span>
               </label>
               <input
                 id="edit-card-type-name"
@@ -202,7 +202,7 @@ export function EditCardTypeModal({
                 htmlFor="edit-card-type-prodkind"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                PROD_KIND 產品類別 <span className="text-red-600">*</span>
+                產品類別 <span className="text-red-600">*</span>
               </label>
               <div className="relative">
                 <select
@@ -227,9 +227,6 @@ export function EditCardTypeModal({
                   {prodKindError}
                 </p>
               )}
-              <p className="text-xs text-gray-400 mt-1">
-                來源：篩選欄位（pooldata_field_option, column_name=&#39;prod_kind&#39;）
-              </p>
             </div>
           </div>
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">

@@ -77,9 +77,9 @@ describe('CreateCardTypeModal — F070', () => {
     const onClose = vi.fn();
     render(wrap(<CreateCardTypeModal open onClose={onClose} />));
 
-    const codeInput = screen.getByLabelText(/card_type 代碼/) as HTMLInputElement;
-    const nameInput = screen.getByLabelText(/card_name 名稱/) as HTMLInputElement;
-    const prodInput = screen.getByLabelText(/PROD_KIND/) as HTMLSelectElement;
+    const codeInput = screen.getByLabelText(/計分卡代碼/) as HTMLInputElement;
+    const nameInput = screen.getByLabelText(/計分卡名稱/) as HTMLInputElement;
+    const prodInput = screen.getByLabelText(/產品類別/) as HTMLSelectElement;
 
     fireEvent.change(codeInput, { target: { value: 'x1' } });
     fireEvent.change(nameInput, { target: { value: '測試' } });
@@ -109,13 +109,13 @@ describe('CreateCardTypeModal — F070', () => {
     const onClose = vi.fn();
     render(wrap(<CreateCardTypeModal open onClose={onClose} />));
 
-    fireEvent.change(screen.getByLabelText(/card_type 代碼/), {
+    fireEvent.change(screen.getByLabelText(/計分卡代碼/), {
       target: { value: 'H' },
     });
-    fireEvent.change(screen.getByLabelText(/card_name 名稱/), {
+    fireEvent.change(screen.getByLabelText(/計分卡名稱/), {
       target: { value: '重複' },
     });
-    fireEvent.change(screen.getByLabelText(/PROD_KIND/), {
+    fireEvent.change(screen.getByLabelText(/產品類別/), {
       target: { value: '01' },
     });
     fireEvent.click(screen.getByText('確認新增'));
@@ -148,13 +148,13 @@ describe('CreateCardTypeModal — F070', () => {
       ),
     );
 
-    fireEvent.change(screen.getByLabelText(/card_type 代碼/), {
+    fireEvent.change(screen.getByLabelText(/計分卡代碼/), {
       target: { value: 'X1' },
     });
-    fireEvent.change(screen.getByLabelText(/card_name 名稱/), {
+    fireEvent.change(screen.getByLabelText(/計分卡名稱/), {
       target: { value: '測試' },
     });
-    fireEvent.change(screen.getByLabelText(/PROD_KIND/), {
+    fireEvent.change(screen.getByLabelText(/產品類別/), {
       target: { value: '01' },
     });
     fireEvent.click(screen.getByText('確認新增'));

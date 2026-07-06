@@ -60,17 +60,17 @@ describe('EditCardTypeModal — F071', () => {
 
     expect(screen.getByTestId('edit-card-type-modal')).toBeInTheDocument();
     const codeInput = screen.getByLabelText(
-      /card_type 代碼/,
+      /計分卡代碼/,
     ) as HTMLInputElement;
     expect(codeInput.value).toBe('H');
     expect(codeInput).toBeDisabled();
 
     const nameInput = screen.getByLabelText(
-      /card_name 名稱/,
+      /計分卡名稱/,
     ) as HTMLInputElement;
     expect(nameInput.value).toBe('期中');
 
-    const prodInput = screen.getByLabelText(/PROD_KIND/) as HTMLSelectElement;
+    const prodInput = screen.getByLabelText(/產品類別/) as HTMLSelectElement;
     expect(prodInput.value).toBe('01');
   });
 
@@ -86,7 +86,7 @@ describe('EditCardTypeModal — F071', () => {
       wrap(<EditCardTypeModal open target={TARGET} onClose={() => {}} />),
     );
 
-    fireEvent.change(screen.getByLabelText(/card_name 名稱/), {
+    fireEvent.change(screen.getByLabelText(/計分卡名稱/), {
       target: { value: '' },
     });
     fireEvent.click(screen.getByText('儲存變更'));
@@ -138,10 +138,10 @@ describe('EditCardTypeModal — F071', () => {
       ),
     );
 
-    fireEvent.change(screen.getByLabelText(/card_name 名稱/), {
+    fireEvent.change(screen.getByLabelText(/計分卡名稱/), {
       target: { value: '新名稱' },
     });
-    fireEvent.change(screen.getByLabelText(/PROD_KIND/), {
+    fireEvent.change(screen.getByLabelText(/產品類別/), {
       target: { value: '02' },
     });
     fireEvent.click(screen.getByText('儲存變更'));

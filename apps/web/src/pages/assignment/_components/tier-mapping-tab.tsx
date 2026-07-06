@@ -142,26 +142,9 @@ export function TierMappingTabV15({
       {/* Mode Banner */}
       <ModeBanner standardCount={standardCount} fallbackCount={fallbackCount} />
 
-      {/* Fallback 規則說明 banner（永遠顯示） */}
-      <div className="mx-4 mt-2 mb-1 flex items-start gap-2 p-3 bg-purple-50/60 border border-purple-200 rounded-lg text-xs text-gray-700">
-        <GitFork size={16} className="text-purple-600 mt-0.5 shrink-0" />
-        <div>
-          <p className="font-semibold text-purple-700">Fallback 規則說明</p>
-          <p className="text-gray-600 mt-0.5">
-            當 CARD_TYPE 為不分等級型卡別時，CARD_LEVEL 留空（NULL）即為 fallback
-            規則 — 不分等級直接對應 TIER_LEVEL。v1.5：同一 CARD_TYPE 之 Standard
-            與 Fallback 規則互斥，不可同時存在；違反時 422{' '}
-            <code>CARD_TYPE_FALLBACK_STANDARD_MUTEX</code>。
-          </p>
-        </div>
-      </div>
-
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/40 flex items-center gap-3">
         <span className="text-sm text-gray-500">
           共 {mappings.length} 筆對應
-        </span>
-        <span className="text-xs text-gray-400 ml-2">
-          資料表 <code>ob_tier</code> · PK (card_type, card_level)
         </span>
         <button
           data-testid="btn-add-tier-v15"
@@ -180,13 +163,10 @@ export function TierMappingTabV15({
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/60">
               <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                CARD_LEVEL
+                等級代碼
               </th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                TIER_LEVEL
-              </th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                LIST_NM
+                TIER 代碼
               </th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">
                 規則類型
@@ -199,14 +179,14 @@ export function TierMappingTabV15({
           <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-sm text-gray-400">
+                <td colSpan={4} className="py-12 text-center text-sm text-gray-400">
                   載入中…
                 </td>
               </tr>
             )}
             {!query.isLoading && sortedMappings.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-sm text-gray-400">
+                <td colSpan={4} className="py-12 text-center text-sm text-gray-400">
                   <Inbox
                     size={32}
                     className="text-gray-300 mx-auto mb-2"
@@ -261,13 +241,6 @@ export function TierMappingTabV15({
                         <AlertCircle size={10} />
                         待遷移
                       </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-xs text-gray-500">
-                    {m.listNm ? (
-                      m.listNm
-                    ) : (
-                      <span className="text-gray-300">—</span>
                     )}
                   </td>
                   <td className="px-5 py-3">
@@ -382,9 +355,6 @@ function ModeBanner({
       <div>
         <p className="font-medium text-gray-800">
           目前 CARD_TYPE 採用 Standard 規則（{standardCount} 筆）
-        </p>
-        <p className="text-gray-700 mt-0.5">
-          CARD_LEVEL 分等級對應 TIER_LEVEL
         </p>
       </div>
     </div>

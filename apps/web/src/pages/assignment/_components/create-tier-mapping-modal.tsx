@@ -67,7 +67,6 @@ export function CreateTierMappingModal({
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [cardLevel, setCardLevel] = useState('');
   const [tierLevel, setTierLevel] = useState('');
-  const [listNm, setListNm] = useState('');
   const [mutexError, setMutexError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -79,7 +78,6 @@ export function CreateTierMappingModal({
       setMode(standardDisabled ? 'fallback' : 'standard');
       setCardLevel('');
       setTierLevel('');
-      setListNm('');
       setMutexError(null);
       setValidationError(null);
     }
@@ -151,7 +149,7 @@ export function CreateTierMappingModal({
       cardType,
       cardLevel: mode === 'fallback' ? null : cardLevel,
       tierLevel,
-      listNm: listNm === '' ? null : listNm,
+      listNm: null,
     });
   }
 
@@ -292,7 +290,7 @@ export function CreateTierMappingModal({
                 htmlFor="tier-card-type"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                CARD_TYPE
+                計分卡類型
               </label>
               <input
                 id="tier-card-type"
@@ -313,7 +311,7 @@ export function CreateTierMappingModal({
                   htmlFor="tier-card-level"
                   className="block text-sm font-medium text-gray-700 mb-1.5"
                 >
-                  CARD_LEVEL <span className="text-red-600">*</span>
+                  等級代碼 <span className="text-red-600">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -362,7 +360,7 @@ export function CreateTierMappingModal({
                 htmlFor="tier-tier-level"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                TIER_LEVEL <span className="text-red-600">*</span>
+                TIER 代碼 <span className="text-red-600">*</span>
               </label>
               <div className="relative">
                 <select
@@ -385,28 +383,6 @@ export function CreateTierMappingModal({
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 固定列舉 T1~T10，不允許自由輸入（v1.5 規格 / BR-2）
-              </p>
-            </div>
-
-            {/* LIST_NM */}
-            <div>
-              <label
-                htmlFor="tier-list-nm"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
-              >
-                LIST_NM（選填）
-              </label>
-              <input
-                id="tier-list-nm"
-                type="text"
-                maxLength={30}
-                value={listNm}
-                onChange={(e) => setListNm(e.target.value)}
-                placeholder="例：高資產卡 A 級"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                最多 30 字元；不參與 PK 與 join
               </p>
             </div>
 

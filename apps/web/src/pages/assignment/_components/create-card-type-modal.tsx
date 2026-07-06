@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Info, X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import {
   createCardType,
@@ -167,7 +167,7 @@ export function CreateCardTypeModal({ open, onClose, onCreated }: Props) {
                 htmlFor="create-card-type-code"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                card_type 代碼 <span className="text-red-600">*</span>
+                計分卡代碼 <span className="text-red-600">*</span>
               </label>
               <input
                 id="create-card-type-code"
@@ -192,7 +192,7 @@ export function CreateCardTypeModal({ open, onClose, onCreated }: Props) {
                 htmlFor="create-card-type-name"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                card_name 名稱 <span className="text-red-600">*</span>
+                計分卡名稱 <span className="text-red-600">*</span>
               </label>
               <input
                 id="create-card-type-name"
@@ -214,7 +214,7 @@ export function CreateCardTypeModal({ open, onClose, onCreated }: Props) {
                 htmlFor="create-card-type-prodkind"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                PROD_KIND 產品類別 <span className="text-red-600">*</span>
+                產品類別 <span className="text-red-600">*</span>
               </label>
               <div className="relative">
                 <select
@@ -240,19 +240,6 @@ export function CreateCardTypeModal({ open, onClose, onCreated }: Props) {
                   {prodKindError}
                 </p>
               )}
-              <p className="text-xs text-gray-400 mt-1">
-                來源：篩選欄位（pooldata_field_option, column_name=&#39;prod_kind&#39;）
-              </p>
-            </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-700 flex items-start gap-2">
-              <Info size={16} className="text-blue-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium text-gray-700 mb-1">自動建立提示</p>
-                <p>
-                  新增後系統將於同 transaction 自動建立 v1 計分版本：sdate = 今日、edate
-                  = 20991231。Tab 2~5 將顯示空狀態，等待您新增各項設定。
-                </p>
-              </div>
             </div>
           </div>
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">

@@ -721,19 +721,6 @@ describe('ScoringConfigPage — DimensionsTab 編輯 / icon-only 停用', () => 
 // 新增分數區間入口由 Tab 2 DimensionModal 整合式編輯器取代。
 // 舊測試 TS-F054-E05/E06/E07 已不再適用，改寫為 NEW-01~NEW-04 覆蓋新行為。
 describe('ScoringConfigPage — ScoresTab v1.3 唯讀總覽（落差 1-3）', () => {
-  it('TS-F054-NEW-01：ScoresTab 頂部顯示唯讀總覽說明條', async () => {
-    render(wrap(<ScoringConfigPage />));
-    await switchToLegacyTabs();
-    fireEvent.click(screen.getByTestId('tab-score'));
-    // 落差 5 補修：banner 文字改為「唯讀總覽（v1.3 規格）」並附 inline link
-    await waitFor(() => {
-      expect(
-        screen.getByText('唯讀總覽（v1.3 規格）'),
-      ).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('scores-tab-goto-dim')).toBeInTheDocument();
-  });
-
   it('TS-F054-NEW-02：ScoresTab 表頭含「比對模式」欄，每列顯示 matchType chip', async () => {
     render(wrap(<ScoringConfigPage />));
     await switchToLegacyTabs();
@@ -805,8 +792,8 @@ describe('ScoringConfigPage — prototype 28 對齊（落差 1 / 2 / 5 / 8）', 
       (th) => th.textContent?.trim(),
     );
     expect(headers).toEqual([
-      'column_name',
-      'column_label',
+      '欄位代碼',
+      '欄位名稱',
       '類型',
       '比對模式',
       '分數區間摘要',
@@ -880,23 +867,6 @@ describe('ScoringConfigPage — prototype 28 對齊（落差 1 / 2 / 5 / 8）', 
     const chip = screen.getByTestId('dim-matchtype-CELLULAR');
     expect(chip.getAttribute('data-matchtype')).toBe('CATEGORY');
     expect(chip.textContent?.trim()).toBe('類別');
-  });
-
-  it('TS-F054-NEW-14：DimensionsTab 表格下方顯示 matchType 推導說明條（落差 8）', async () => {
-    render(wrap(<ScoringConfigPage />));
-    await switchToLegacyTabs();
-    await waitFor(() => {
-      expect(
-        screen.getByTestId('dim-matchtype-derivation-note'),
-      ).toBeInTheDocument();
-    });
-    const note = screen.getByTestId('dim-matchtype-derivation-note');
-    // 對應 prototype 28 line 341 文案核心關鍵字
-    expect(note.textContent).toContain('比對模式');
-    expect(note.textContent).toContain('CATEGORY');
-    expect(note.textContent).toContain('RANGE');
-    expect(note.textContent).toContain('COMPOSITE');
-    expect(note.textContent).toContain('自動推導');
   });
 });
 

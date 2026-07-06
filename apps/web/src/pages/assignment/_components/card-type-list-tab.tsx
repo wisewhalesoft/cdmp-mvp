@@ -146,16 +146,16 @@ export function CardTypeListTab({ isLocked = false }: Props) {
               <tr className="border-b border-gray-200 bg-gray-50/60">
                 <th className="w-8 px-3 py-3" aria-label="選中標示" />
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                  card_type
+                  計分卡代碼
                 </th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                  card_name
+                  計分卡名稱
                 </th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                  PROD_KIND
+                  產品類別
                 </th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">
-                  status
+                  狀態
                 </th>
                 <th className="text-right px-5 py-3 font-semibold text-gray-600">
                   操作

@@ -62,9 +62,7 @@ import {
 import { RunLockBanner } from './_components/run-lock-banner';
 // Iter 5b 新增（F056 v1.5 Tab 5 改造）
 import { TierMappingTabV15 } from './_components/tier-mapping-tab';
-// Iter 7（review fix）：footer note 樣式對齊
 // Iter 8（prototype B 排列）：拔除 VersionStrip（已刪除 _components/version-strip.tsx）。
-import { ScoringConfigFooterNote } from './_components/footer-note';
 // v1.5 (US-097) 新增 CARD_LEVEL 等級 Modal
 import { CreateCardLevelModal } from './_components/create-card-level-modal';
 // F054 v1.3 落差 6：純前端區間重疊偵測（UX 提示，不阻擋儲存）
@@ -257,7 +255,7 @@ export function ScoringConfigPage() {
 type TopTabKey = 'cardtype' | 'dim' | 'score' | 'level' | 'tier';
 
 const TOP_TAB_LABELS: Record<TopTabKey, { label: string; icon: any }> = {
-  cardtype: { label: 'CARD_TYPE', icon: CreditCard },
+  cardtype: { label: '計分卡類型', icon: CreditCard },
   dim: { label: '計分維度', icon: Layers },
   score: { label: '分數設定', icon: Hash },
   level: { label: 'CARD_LEVEL 門檻', icon: BarChart3 },
@@ -398,12 +396,6 @@ function ScoringConfigShell() {
                 );
               },
             )}
-            <span className="ml-auto pr-3 text-xs text-gray-400">
-              資料來源{' '}
-              <code className="text-gray-500">
-                ob_card_type / ob_levelcard_* / ob_tier
-              </code>
-            </span>
           </div>
         </div>
 
@@ -424,7 +416,6 @@ function ScoringConfigShell() {
           <ScoringConfigLegacyTabs
             forceCardType={selectedCardItem!.cardType}
             forceTab={topTab as TabKey}
-            onSwitchTab={(t) => setTopTab(t)}
           />
         )}
         {needsSelection && hasSelection && topTab === 'tier' && (
@@ -432,9 +423,6 @@ function ScoringConfigShell() {
           // Iter 8：移除 selectedCardItem prop（VersionStrip 已拔除）
           <TierMappingTabV15 isLocked={isLocked} />
         )}
-
-        {/* Iter 7（review 差異 #29）：footer note 提升到 Shell，所有 Tab 都看得到 */}
-        <ScoringConfigFooterNote />
       </main>
     </AppLayout>
   );
@@ -451,15 +439,9 @@ function ScoringConfigShell() {
 export function ScoringConfigLegacyTabs({
   forceCardType,
   forceTab,
-  onSwitchTab,
 }: {
   forceCardType?: string;
   forceTab?: TabKey;
-  /**
-   * F054 v1.3 落差 1：ScoresTab「前往 Tab 2 編輯」CTA 或 row external-link
-   * 需要切換到外層 Shell 的 dim Tab；由 Shell 提供 callback。
-   */
-  onSwitchTab?: (tab: TabKey) => void;
 } = {}) {
   const [cardType, setCardTypeInternal] = useState<CardType>(
     (forceCardType as CardType) ?? 'H',
@@ -687,11 +669,7 @@ export function ScoringConfigLegacyTabs({
           {tab === 'score' && (
             // F054 v1.3 落差 1-3 + 9：ScoresTab 為純唯讀總覽，無 row 操作 / 底部 CTA
             // 編輯入口收回 Tab 2 維度列的編輯按鈕（DimensionModal 整合式編輯器）
-            // 落差 5 補修：傳入 onGoToDimEditor 供 banner inline link 切回 Tab 2
-            <ScoresTab
-              dimensions={dimensions}
-              onGoToDimEditor={() => onSwitchTab?.('dim')}
-            />
+            <ScoresTab dimensions={dimensions} />
           )}
           {tab === 'level' && (
             <CardLevelsTab
@@ -962,8 +940,8 @@ function DimensionsTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#E5E7EB] bg-gray-50/60">
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">column_label</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">欄位代碼</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">欄位名稱</th>
               {/* F054 v1.3 落差 1：score-derived 「類型」欄（類別 / 數值 / —）；
                   非 match_type chip，由 rows[0] 推導：level2_s 有值即 數值，否則 類別 */}
               <th className="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
@@ -1211,17 +1189,6 @@ function DimensionsTab({
           </tbody>
         </table>
       </div>
-      {/* F054 v1.3 落差 8：DimensionsTab 表格下方說明條（對應 prototype 28 line 339-342）
-          「比對模式（matchType）」由 service / PostgreSQL function 依分數區間自動推導 */}
-      <div
-        data-testid="dim-matchtype-derivation-note"
-        className="px-4 py-2 border-t border-[#E5E7EB] bg-blue-50/30 text-xs text-gray-600 flex items-start gap-2"
-      >
-        <Info className="w-3.5 h-3.5 text-[#2563EB] mt-0.5 shrink-0" />
-        <span>
-          「比對模式（matchType）」由分數區間自動推導（CATEGORY=純類別 / RANGE=純區間 / COMPOSITE=混合）；本欄為唯讀展示，無人工切換功能。
-        </span>
-      </div>
       <div className="flex items-center justify-between px-5 py-3 border-t border-[#E5E7EB]">
         <span className="text-sm text-gray-500">共 {activeCount} 個維度</span>
         <button
@@ -1255,11 +1222,8 @@ function DimensionsTab({
 
 function ScoresTab({
   dimensions,
-  onGoToDimEditor,
 }: {
   dimensions: ScoringDimUI[];
-  // 落差 5 補修：banner inline link「Tab 2 計分維度」需切外層 topTab
-  onGoToDimEditor: () => void;
 }) {
   const [filterColumn, setFilterColumn] = useState<string>('ALL');
 
@@ -1295,28 +1259,7 @@ function ScoresTab({
 
   return (
     <div className="bg-white rounded-b-lg border border-[#E5E7EB] border-t-0 shadow-sm">
-      {/* 1. 唯讀總覽說明條（prototype 28 L376-383）— 落差 5 補修：
-              Eye icon + 「唯讀總覽（v1.3 規格）」文字 + inline link 跳 Tab 2 */}
-      <div className="mx-4 mt-3 mb-1 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2">
-        <Eye className="w-4 h-4 text-[#2563EB] mt-0.5 shrink-0" />
-        <div className="flex-1 text-xs text-gray-700">
-          <p className="font-medium text-gray-800">唯讀總覽（v1.3 規格）</p>
-          <p className="text-gray-600 mt-0.5">
-            本 Tab 為跨維度的分數區間總覽，僅供查閱。所有新增 / 編輯 / 停用操作請至{' '}
-            <button
-              type="button"
-              data-testid="scores-tab-goto-dim"
-              onClick={() => onGoToDimEditor()}
-              className="text-[#2563EB] hover:underline font-medium"
-            >
-              Tab 2 計分維度
-            </button>
-            {' '}點擊各維度的「編輯」按鈕進入整合式設定 Modal。
-          </p>
-        </div>
-      </div>
-
-      {/* 2. 維度欄位篩選 */}
+      {/* 維度欄位篩選 */}
       <div className="px-4 py-3 border-b border-[#E5E7EB] bg-gray-50/40 flex items-center gap-3">
         <label className="text-xs text-gray-500">維度欄位</label>
         <div className="relative">
@@ -1335,9 +1278,6 @@ function ScoresTab({
           </select>
           <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
-        <span className="ml-auto text-xs text-gray-400">
-          資料表 <code>ob_levelcard_score</code>
-        </span>
       </div>
 
       {/* 3. 表格（落差 9：對齊 prototype 28 line 387-397 — 6 欄唯讀，無「操作」欄）
@@ -1346,12 +1286,12 @@ function ScoresTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#E5E7EB] bg-gray-50/60">
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">欄位代碼</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">比對模式</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">level1</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">level2_s</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-600">level2_e</th>
-              <th className="text-right px-5 py-3 font-semibold text-gray-600">score</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">類別值</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">數值區間起始值</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-600">數值區間終止值</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-600">分數</th>
             </tr>
           </thead>
           <tbody>
@@ -1613,9 +1553,6 @@ function CardLevelsTab({
             <h4 className="text-sm font-semibold text-gray-700">
               總分區間 → CARD_LEVEL 對應
             </h4>
-            <span className="text-xs text-gray-400 ml-2">
-              資料表 <code>ob_levelcard_level</code>
-            </span>
             {/* v1.5 (US-097)：表頭右側「+ 新增等級」按鈕，無論列表是否為空均存在 */}
             <button
               type="button"
@@ -1636,9 +1573,9 @@ function CardLevelsTab({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#E5E7EB] bg-gray-50/60">
-                  <th className="text-left px-5 py-3 font-semibold text-gray-600">card_level</th>
-                  <th className="text-left px-5 py-3 font-semibold text-gray-600">score_s（下限）</th>
-                  <th className="text-left px-5 py-3 font-semibold text-gray-600">score_e（上限）</th>
+                  <th className="text-left px-5 py-3 font-semibold text-gray-600">等級代碼</th>
+                  <th className="text-left px-5 py-3 font-semibold text-gray-600">卡片分數起始值</th>
+                  <th className="text-left px-5 py-3 font-semibold text-gray-600">卡片分數終止值</th>
                   <th className="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
                 </tr>
               </thead>
@@ -1805,9 +1742,6 @@ function CardLevelsTab({
               <Eye className="w-4 h-4 text-[#2563EB]" />
               預估各等級分佈
             </h4>
-            <p className="text-xs text-gray-500 mt-0.5">
-              基於目前 ob_pool_data_list（debounce 300ms）
-            </p>
           </div>
           <div className="p-5 space-y-3" data-testid="preview-distribution">
             {previewLoading && (
@@ -1853,12 +1787,6 @@ function CardLevelsTab({
             {!previewLoading && !preview && drafts.length > 0 && (
               <p className="text-xs text-gray-400">無預覽資料</p>
             )}
-            <div className="pt-3 border-t border-[#E5E7EB] flex items-center justify-between text-xs text-gray-500">
-              <span>樣本來源</span>
-              <span data-testid="preview-source" className="font-mono">
-                ob_pool_data n = {distributionTotal ?? 0}
-              </span>
-            </div>
           </div>
         </div>
       </div>
@@ -2168,7 +2096,7 @@ function DimensionModal({
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    column_name <span className="text-[#EF4444]">*</span>
+                    欄位代碼 <span className="text-[#EF4444]">*</span>
                   </label>
                   <input
                     type="text"
@@ -2182,7 +2110,7 @@ function DimensionModal({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    column_label <span className="text-[#EF4444]">*</span>
+                    欄位名稱 <span className="text-[#EF4444]">*</span>
                   </label>
                   <input
                     type="text"
@@ -2263,21 +2191,21 @@ function DimensionModal({
                       <tr className="border-b border-[#E5E7EB] bg-gray-50/60 text-xs">
                         {(matchType === 'CATEGORY' || matchType === 'COMPOSITE') && (
                           <th className="text-left px-3 py-2 font-semibold text-gray-600">
-                            level1（類別）
+                            類別值
                           </th>
                         )}
                         {(matchType === 'RANGE' || matchType === 'COMPOSITE') && (
                           <>
                             <th className="text-left px-3 py-2 font-semibold text-gray-600">
-                              level2_s
+                              數值區間起始值
                             </th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-600">
-                              level2_e
+                              數值區間終止值
                             </th>
                           </>
                         )}
                         <th className="text-right px-3 py-2 font-semibold text-gray-600">
-                          score
+                          分數
                         </th>
                         <th className="w-12 px-3 py-2"></th>
                       </tr>
@@ -3404,7 +3332,7 @@ function DimensionEditModal({
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    column_name（不可修改）
+                    欄位代碼（不可修改）
                   </label>
                   <input
                     type="text"
@@ -3415,7 +3343,7 @@ function DimensionEditModal({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    column_label <span className="text-[#EF4444]">*</span>
+                    欄位名稱 <span className="text-[#EF4444]">*</span>
                   </label>
                   <input
                     type="text"
@@ -3495,21 +3423,21 @@ function DimensionEditModal({
                     <tr className="border-b border-[#E5E7EB] bg-gray-50/60 text-xs">
                       {(matchType === 'CATEGORY' || matchType === 'COMPOSITE') && (
                         <th className="text-left px-3 py-2 font-semibold text-gray-600">
-                          level1（類別）
+                          類別值
                         </th>
                       )}
                       {(matchType === 'RANGE' || matchType === 'COMPOSITE') && (
                         <>
                           <th className="text-left px-3 py-2 font-semibold text-gray-600">
-                            level2_s
+                            數值區間起始值
                           </th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-600">
-                            level2_e
+                            數值區間終止值
                           </th>
                         </>
                       )}
                       <th className="text-right px-3 py-2 font-semibold text-gray-600">
-                        score
+                        分數
                       </th>
                       <th className="w-12 px-3 py-2"></th>
                     </tr>
