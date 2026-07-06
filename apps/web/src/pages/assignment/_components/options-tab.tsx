@@ -3,12 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   AlertTriangle,
-  Info,
   Plus,
   Ban,
   RotateCcw,
-  ListChecks,
   List,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -18,6 +18,7 @@ import {
   createOption,
   deactivateOption,
   reactivateOption,
+  reorderOptions,
   type PooldataField,
   type PooldataOption,
 } from '@/api/pooldata-fields';
@@ -104,6 +105,7 @@ export function OptionsTab() {
   const [deactivating, setDeactivating] = useState(false);
 
   const [reactivatingValue, setReactivatingValue] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -194,7 +196,7 @@ export function OptionsTab() {
     const valTrim = newValue.trim();
     const labelTrim = newLabel.trim();
     if (!valTrim || !labelTrim) {
-      setCreateError('optionValue 與 optionLabel 為必填');
+      setCreateError('顯示名稱與欄位值為必填');
       return;
     }
     setCreating(true);
@@ -203,13 +205,13 @@ export function OptionsTab() {
         optionValue: valTrim,
         optionLabel: labelTrim,
       });
-      showToast(`可選值 ${valTrim} 已建立`, 'success');
+      showToast(`可選值『${labelTrim}』已建立`, 'success');
       setShowAddModal(false);
       void fetchAll();
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
       let msg = e?.response?.data?.message ?? '建立失敗';
-      if (e?.response?.status === 409) msg = '此 optionValue 已存在';
+      if (e?.response?.status === 409) msg = '此欄位值已存在';
       setCreateError(msg);
     } finally {
       setCreating(false);
@@ -260,6 +262,51 @@ export function OptionsTab() {
     }
   };
 
+  /**
+   * #12 可選值排序：上/下移一位。以完整 options 清單（含停用）為排序基準，
+   * 僅在目前可見的相鄰項之間交換位置，套用後之順序即 F050/F051 名單定義多選元件之顯示順序。
+   * 樂觀更新本地狀態，失敗則重新載入還原。
+   */
+  const moveOption = async (optionValue: string, direction: 'up' | 'down') => {
+    if (!currentItem || !selectedCol || reordering) return;
+    const full = currentItem.options;
+    const visibleIndices = full
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => showInactive || o.isActive)
+      .map(({ i }) => i);
+    const posInVisible = visibleIndices.findIndex(
+      (i) => full[i].optionValue === optionValue,
+    );
+    if (posInVisible < 0) return;
+    const targetPos = direction === 'up' ? posInVisible - 1 : posInVisible + 1;
+    if (targetPos < 0 || targetPos >= visibleIndices.length) return;
+
+    const a = visibleIndices[posInVisible];
+    const b = visibleIndices[targetPos];
+    const nextFull = [...full];
+    [nextFull[a], nextFull[b]] = [nextFull[b], nextFull[a]];
+
+    // 樂觀更新
+    setItems((prev) =>
+      prev.map((it) =>
+        it.field.columnName === selectedCol ? { ...it, options: nextFull } : it,
+      ),
+    );
+    setReordering(true);
+    try {
+      await reorderOptions(
+        selectedCol,
+        nextFull.map((o) => o.optionValue),
+      );
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      showToast(e?.response?.data?.message ?? '排序更新失敗', 'error');
+      void fetchAll(); // 還原為伺服器狀態
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const globalStats = useMemo(() => {
     let active = 0;
     let inactive = 0;
@@ -274,26 +321,6 @@ export function OptionsTab() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Scope 提示 banner（prototype L249-258） */}
-      <div
-        data-testid="field-options-scope-hint"
-        className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700"
-      >
-        <ListChecks className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-        <div>
-          <p className="font-semibold text-primary">F076 v1.5 — 類別型欄位可選值</p>
-          <p className="text-gray-600 mt-0.5">
-            針對 F075 白名單中{' '}
-            <code className="font-mono">field_type = 'categorical'</code>{' '}
-            的欄位維護可選值（<code className="font-mono">option_value</code> +{' '}
-            <code className="font-mono">option_label</code>），
-            供 F050/F051 名單表單之多選元件動態載入。
-            v2.1 起 caseyear / case_status / prod_kind / spec_tp / settle_src
-            之可選值統一在此維護（F068 廢除後）。
-          </p>
-        </div>
-      </div>
-
       {error && (
         <div
           data-testid="options-error"
@@ -374,16 +401,16 @@ export function OptionsTab() {
                           />
                           <div className="flex-1 min-w-0">
                             <div
-                              className={`font-mono text-xs ${
+                              className={`text-xs truncate ${
                                 isActive
                                   ? 'text-primary font-semibold'
                                   : 'text-gray-700'
                               }`}
                             >
-                              {field.columnName}
-                            </div>
-                            <div className="text-[11px] text-gray-500 truncate">
                               {field.displayName}
+                            </div>
+                            <div className="text-[11px] text-gray-400 font-mono truncate">
+                              {field.columnName}
                             </div>
                           </div>
                           <span
@@ -411,20 +438,19 @@ export function OptionsTab() {
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-xs text-gray-500 shrink-0">當前欄位：</span>
-                  <code
-                    data-testid="current-column-name"
-                    className="font-mono text-sm font-semibold text-primary"
+                  <span
+                    data-testid="current-column-display"
+                    className="text-sm font-semibold text-primary truncate"
                   >
-                    {currentItem?.field.columnName ?? '—'}
-                  </code>
+                    {currentItem?.field.displayName ?? '—'}
+                  </span>
                   {currentItem && (
-                    <span className="text-sm text-gray-700 truncate">
-                      （
-                      <span data-testid="current-column-display">
-                        {currentItem.field.displayName}
-                      </span>
-                      ）
-                    </span>
+                    <code
+                      data-testid="current-column-name"
+                      className="font-mono text-xs text-gray-400 shrink-0"
+                    >
+                      （{currentItem.field.columnName}）
+                    </code>
                   )}
                 </div>
                 <label className="ml-auto inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
@@ -469,25 +495,25 @@ export function OptionsTab() {
                   <table className="w-full text-sm" data-testid="options-table">
                     <thead>
                       <tr className="border-b border-gray-200 bg-gray-50/60">
-                        <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[18%]">
-                          option_value
-                        </th>
                         <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[28%]">
-                          option_label
+                          顯示名稱
                         </th>
-                        <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[18%]">
+                        <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[16%]">
+                          欄位值
+                        </th>
+                        <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[16%]">
                           狀態
                         </th>
-                        <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[20%]">
+                        <th className="text-left px-5 py-2.5 font-semibold text-gray-600 w-[16%]">
                           停用原因
                         </th>
-                        <th className="text-right px-5 py-2.5 font-semibold text-gray-600 w-[16%]">
+                        <th className="text-right px-5 py-2.5 font-semibold text-gray-600 w-[24%]">
                           操作
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleOptions.map((o) => {
+                      {visibleOptions.map((o, idx) => {
                         const isFieldTypeChanged =
                           !o.isActive && o.deactivatedReason === 'field_type_changed';
                         return (
@@ -497,13 +523,13 @@ export function OptionsTab() {
                               o.isActive ? '' : 'opacity-70'
                             }`}
                           >
+                            <td className="px-5 py-2.5 text-sm text-gray-800">
+                              {o.optionLabel}
+                            </td>
                             <td className="px-5 py-2.5">
-                              <code className="font-mono text-sm text-gray-800">
+                              <code className="font-mono text-xs text-gray-500">
                                 {o.optionValue}
                               </code>
-                            </td>
-                            <td className="px-5 py-2.5 text-sm text-gray-700">
-                              {o.optionLabel}
                             </td>
                             <td className="px-5 py-2.5">
                               <StatusBadgeOpt option={o} />
@@ -516,7 +542,32 @@ export function OptionsTab() {
                               )}
                             </td>
                             <td className="px-5 py-2.5 text-right">
-                              {o.isActive ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  data-testid={`btn-move-up-${o.optionValue}`}
+                                  disabled={!canWrite || reordering || idx === 0}
+                                  onClick={() => void moveOption(o.optionValue, 'up')}
+                                  title="上移"
+                                  className="p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`btn-move-down-${o.optionValue}`}
+                                  disabled={
+                                    !canWrite ||
+                                    reordering ||
+                                    idx === visibleOptions.length - 1
+                                  }
+                                  onClick={() => void moveOption(o.optionValue, 'down')}
+                                  title="下移"
+                                  className="p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronDown className="w-4 h-4" />
+                                </button>
+                                {o.isActive ? (
                                 <button
                                   type="button"
                                   disabled={!canWrite}
@@ -554,6 +605,7 @@ export function OptionsTab() {
                                   啟用
                                 </button>
                               )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -605,34 +657,6 @@ export function OptionsTab() {
         </div>
       )}
 
-      {/*
-       * F076 v1.5 商業規則摘要 footer
-       * 對齊 prototype 37-base-code.html line 310-320
-       */}
-      <div
-        data-testid="field-options-rules-footer"
-        className="rounded-lg p-3 bg-blue-50/50 border border-blue-100 text-xs text-gray-600 flex items-start gap-2"
-      >
-        <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-        <div>
-          <p className="font-medium text-gray-700 mb-0.5">F076 v1.5 商業規則摘要</p>
-          <ul className="list-disc list-inside space-y-0.5">
-            <li>
-              <strong>BR-1</strong>：
-              <code className="font-mono">(column_name, option_value)</code> 複合唯一鍵；
-              違反回 422 <code className="font-mono">OPTION_VALUE_DUPLICATE</code>。
-            </li>
-            <li>
-              <strong>BR-3 / BR-4</strong>：停用「不回溯」既有名單；inactive 值保留供歷史追溯與「上月複製」UI 警示。
-            </li>
-            <li>
-              <strong>v1.5 新增</strong>：caseyear / case_status / prod_kind / spec_tp / settle_src
-              之可選值統一在此管理（取代 F068 <code className="font-mono">ob_code_df</code>）。
-            </li>
-          </ul>
-        </div>
-      </div>
-
       {/* ===== Create option modal ===== */}
       {showAddModal && (
         <div className="fixed inset-0 z-50" data-testid="create-option-modal">
@@ -644,8 +668,8 @@ export function OptionsTab() {
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-base font-semibold text-gray-800">新增可選值</h3>
-                <p className="text-xs text-gray-500 mt-0.5 font-mono">
-                  欄位 {selectedCol} · POST /api/v1/pooldata-fields/{selectedCol}/options
+                <p className="text-xs text-gray-500 mt-0.5">
+                  欄位：{currentItem?.field.displayName ?? selectedCol}
                 </p>
               </div>
               <div className="p-6 space-y-3">
@@ -659,21 +683,7 @@ export function OptionsTab() {
                 )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    option_value <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    data-testid="input-option-value"
-                    value={newValue}
-                    onChange={(e) => setNewValue(e.target.value)}
-                    maxLength={64}
-                    placeholder="例：04"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    option_label <span className="text-danger">*</span>
+                    顯示名稱 <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -683,6 +693,20 @@ export function OptionsTab() {
                     maxLength={100}
                     placeholder="例：房屋貸款"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    欄位值 <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    data-testid="input-option-value"
+                    value={newValue}
+                    onChange={(e) => setNewValue(e.target.value)}
+                    maxLength={64}
+                    placeholder="例：04"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -724,7 +748,7 @@ export function OptionsTab() {
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-gray-800">停用可選值</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">F076 §5.4 · reason 必填</p>
+                  <p className="text-xs text-gray-500 mt-0.5">請填寫停用原因</p>
                 </div>
               </div>
               <div className="p-6 space-y-3">

@@ -106,11 +106,14 @@ describe('OptionsTab — master-detail 兩欄佈局（對齊 prototype 37-base-c
     expect(screen.getByTestId('column-item-caseyear')).toBeInTheDocument();
   });
 
-  it('options-tab-4：預設選中第一個欄位（detail 顯示 current column name）', async () => {
+  it('options-tab-4：預設選中第一個欄位（detail 以顯示名稱為主，欄位名稱置於括號）', async () => {
     renderAt();
+    // 顯示名稱為主
     await waitFor(() =>
-      expect(screen.getByTestId('current-column-name').textContent).toBe('prod_kind'),
+      expect(screen.getByTestId('current-column-display').textContent).toBe('產品類別'),
     );
+    // 欄位名稱以括號呈現
+    expect(screen.getByTestId('current-column-name').textContent).toContain('prod_kind');
     expect(screen.getByTestId('column-item-prod_kind').getAttribute('data-state')).toBe(
       'active',
     );
@@ -119,7 +122,7 @@ describe('OptionsTab — master-detail 兩欄佈局（對齊 prototype 37-base-c
   it('options-tab-5：?col=caseyear deep link 自動選中該欄位', async () => {
     renderAt('/assignment/field-base?tab=options&col=caseyear');
     await waitFor(() =>
-      expect(screen.getByTestId('current-column-name').textContent).toBe('caseyear'),
+      expect(screen.getByTestId('current-column-name').textContent).toContain('caseyear'),
     );
     expect(screen.getByTestId('column-item-caseyear').getAttribute('data-state')).toBe(
       'active',
@@ -132,7 +135,7 @@ describe('OptionsTab — master-detail 兩欄佈局（對齊 prototype 37-base-c
     await waitFor(() => screen.getByTestId('column-item-caseyear'));
     fireEvent.click(screen.getByTestId('column-item-caseyear'));
     await waitFor(() =>
-      expect(screen.getByTestId('current-column-name').textContent).toBe('caseyear'),
+      expect(screen.getByTestId('current-column-name').textContent).toContain('caseyear'),
     );
     expect(getLastSearch()).toContain('col=caseyear');
   });
@@ -160,27 +163,72 @@ describe('OptionsTab — master-detail 兩欄佈局（對齊 prototype 37-base-c
     expect(screen.getByTestId('column-item-caseyear')).toBeInTheDocument();
   });
 
-  it('options-tab-9：F076 v1.5 商業規則 footer 含 5 個關鍵欄位名 + 取代 F068 文字', async () => {
+  it('options-tab-9：不再顯示開發者導向的 F076 商業規則 footer', async () => {
     renderAt();
     await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
-    const footer = screen.getByTestId('field-options-rules-footer');
-    expect(footer).toHaveTextContent('F076');
-    expect(footer).toHaveTextContent('BR-1');
-    expect(footer).toHaveTextContent('BR-3');
-    expect(footer.textContent).toMatch(/不回溯/);
-    expect(footer).toHaveTextContent('caseyear');
-    expect(footer).toHaveTextContent('case_status');
-    expect(footer).toHaveTextContent('prod_kind');
-    expect(footer).toHaveTextContent('spec_tp');
-    expect(footer).toHaveTextContent('settle_src');
-    expect(footer.textContent).toMatch(/取代\s*F068|F068.*ob_code_df/);
+    expect(
+      screen.queryByTestId('field-options-rules-footer'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/商業規則摘要/)).not.toBeInTheDocument();
   });
 
-  it('options-tab-10：Scope 提示 banner 顯示 F076 v1.5 標題', async () => {
+  it('options-tab-10：不再顯示 F076 scope 提示 banner', async () => {
     renderAt();
     await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
-    const banner = screen.getByTestId('field-options-scope-hint');
-    expect(banner).toHaveTextContent('F076 v1.5');
-    expect(banner).toHaveTextContent('類別型欄位可選值');
+    expect(
+      screen.queryByTestId('field-options-scope-hint'),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('OptionsTab — 可選值排序（#12）與中文欄位（#11）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(authStore.getEffectiveIdentity).mockReturnValue('director');
+    mockedListFields.mockResolvedValue({
+      fields: [
+        {
+          columnName: 'prod_kind',
+          displayName: '產品類別',
+          fieldType: 'categorical',
+          isActive: true,
+          createdAt: '2026-05-01T00:00:00Z',
+          updatedAt: '2026-05-01T00:00:00Z',
+        },
+      ],
+    });
+    const threeOpts = [
+      { columnName: 'prod_kind', optionValue: '01', optionLabel: '汽車', isActive: true, displayOrder: 0, createdAt: '', updatedAt: '' },
+      { columnName: 'prod_kind', optionValue: '02', optionLabel: '房屋', isActive: true, displayOrder: 1, createdAt: '', updatedAt: '' },
+      { columnName: 'prod_kind', optionValue: '03', optionLabel: '信用', isActive: true, displayOrder: 2, createdAt: '', updatedAt: '' },
+    ];
+    mockedListOptions.mockResolvedValue({ options: threeOpts });
+  });
+  afterEach(() => cleanup());
+
+  it('options-sort-1：可選值表以「顯示名稱 / 欄位值」為欄位標題（顯示名稱在前）', async () => {
+    renderAt();
+    expect(await screen.findByTestId('options-table')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '顯示名稱' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '欄位值' })).toBeInTheDocument();
+  });
+
+  it('options-sort-2：第一列「上移」disabled、最後一列「下移」disabled', async () => {
+    renderAt();
+    await screen.findByTestId('options-table');
+    expect((screen.getByTestId('btn-move-up-01') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('btn-move-down-03') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('btn-move-down-01') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('options-sort-3：點「下移」以新順序呼叫 reorderOptions', async () => {
+    const mockedReorder = vi.mocked(poolApi.reorderOptions);
+    mockedReorder.mockResolvedValue({ options: [] });
+    renderAt();
+    await screen.findByTestId('options-table');
+    fireEvent.click(screen.getByTestId('btn-move-down-01'));
+    await waitFor(() =>
+      expect(mockedReorder).toHaveBeenCalledWith('prod_kind', ['02', '01', '03']),
+    );
   });
 });
