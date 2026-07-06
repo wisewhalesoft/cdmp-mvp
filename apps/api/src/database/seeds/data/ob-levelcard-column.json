@@ -327,5 +327,47 @@
     "column_name": "CPOST_NUM_NM",
     "column_label": "車主通訊地郵遞區號",
     "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "column_label": "有無戶藉電話",
+    "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "column_label": "有無通訊電話",
+    "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "column_label": "車主公司郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "AGE",
+    "column_label": "年齡",
+    "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "column_label": "車主戶籍地郵遞區號",
+    "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "column_label": "車主通訊地郵遞區號",
+    "status": "active"
   }
 ]

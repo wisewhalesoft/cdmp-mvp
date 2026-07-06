@@ -46,5 +46,13 @@
     "sdate": "20191125",
     "edate": "20991231",
     "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_name": "機車期中",
+    "card_version": 1,
+    "sdate": "20191125",
+    "edate": "20991231",
+    "status": "active"
   }
 ]

@@ -3328,5 +3328,716 @@
     "level2_s": null,
     "level2_e": null,
     "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "南海諸",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 1
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "釣魚臺",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 26
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "25",
+    "score": 26
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "26",
+    "level2_e": "47",
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "AGE",
+    "level1": null,
+    "level2_s": "48",
+    "level2_e": "200",
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CAREA_NO1",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 27
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "0",
+    "level2_e": "0",
+    "score": 13
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CAREA_NO2",
+    "level1": null,
+    "level2_s": "1",
+    "level2_e": "1",
+    "score": 64
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 20
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 20
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 17
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 56
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CO_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 25
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "屏東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "彰化縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新竹市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "新竹縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 29
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "桃園市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "澎湖縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺北市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺中市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺南市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺南縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "臺東縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "花蓮縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "苗栗縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 27
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "連江縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "金門縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "雲林縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "HPOST_NUM_NM",
+    "level1": "高雄市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 28
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "南投縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 21
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "嘉義市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "嘉義縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 31
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "基隆市",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "宜蘭縣",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 35
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "column_name": "CPOST_NUM_NM",
+    "level1": "釣魚臺",
+    "level2_s": null,
+    "level2_e": null,
+    "score": 30
   }
 ]

@@ -152,5 +152,33 @@
     "score_s": 0,
     "score_e": 142,
     "card_level": "D"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "score_s": 170,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "score_s": 150,
+    "score_e": 169,
+    "card_level": "B"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "score_s": 143,
+    "score_e": 149,
+    "card_level": "C"
+  },
+  {
+    "card_type": "HM",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 142,
+    "card_level": "D"
   }
 ]
