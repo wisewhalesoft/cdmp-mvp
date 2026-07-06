@@ -155,9 +155,9 @@ async function seedEmpl(opts: { emplid: string; deptidM: string; ration: number 
   } as never);
 }
 
-async function seedEmphire(opts: { empId: string; resignDate?: string | null }): Promise<void> {
+async function seedEmphire(opts: { empId: string; resignDate?: string | null; idNo?: string | null }): Promise<void> {
   await emphireRepo.insert({
-    emp_id: opts.empId, emp_nm: `E-${opts.empId}`,
+    emp_id: opts.empId, emp_nm: `E-${opts.empId}`, id_no: opts.idNo ?? `ID-${opts.empId}`,
     resign_date: opts.resignDate ? (`${opts.resignDate}` as never) : null,
   } as never);
 }
@@ -627,26 +627,25 @@ describe('F102 S1SRC — Stage 1 帶入 CR 三欄（PG 真庫）', () => {
     } as never);
   }
 
-  it('S1SRC-001/002：Stage 1 INSERT 後 result cr_id/cr_nm/is_cr/appl_date 帶入；pool cr_id=NULL → result NULL', async (c) => {
+  it('S1SRC-001/002：Stage 1 由 agent_id 推導 cr_id/cr_nm（is_cr 初始 N）；無承辦人/離職 → NULL', async (c) => {
     ensurePg(c);
     await seedListDef();
-    // ob_pool_data：2 件（A1 對應 pool list 有 cr_id；A2 pool list 無 cr_id）。
-    for (const applNo of ['A1', 'A2']) {
+    // 承辦人 E001 在職（id_no=ID-E001）；E_OFF 離職（不得成為 CR業代）。
+    await seedEmphire({ empId: 'E001', resignDate: null });
+    await seedEmphire({ empId: 'E_OFF', resignDate: '2026-06-01', idNo: 'ID-E_OFF' });
+    // ob_pool_data：A1 承辦人在職 → 有 CR業代；A2 無承辦人；A3 承辦人已離職 → 無 CR業代。
+    const pools: Array<{ applNo: string; agentId: string | null }> = [
+      { applNo: 'A1', agentId: 'ID-E001' },
+      { applNo: 'A2', agentId: null },
+      { applNo: 'A3', agentId: 'ID-E_OFF' },
+    ];
+    for (const p of pools) {
       await poolRepo.insert({
-        orgno: '01', appl_no: applNo, custo_no: `C${applNo}`, sta_code: '01',
-        dept_id: 'XVF1', list_type: '01', settle_src: '01', prod_kind: 'A',
+        orgno: '01', appl_no: p.applNo, custo_no: `C${p.applNo}`, sta_code: '01',
+        dept_id: 'XVF1', list_type: '01', settle_src: '01', prod_kind: 'A', agent_id: p.agentId,
         month_cnt: 1, appl_date: new Date('2025-01-01T00:00:00Z'), _cdmp_extracted_at: new Date(),
       } as never);
     }
-    // ob_pool_data_list：A1 有 cr_id；A2 cr_id NULL。
-    await poolListRepo.insert({
-      list_no: LIST, orgno: '01', appl_no: 'A1', custo_no: 'CA1', settle_src: '01',
-      cr_id: 'E001', cr_nm: '業代一', is_cr: 'Y', appl_date: new Date('2025-02-02T00:00:00Z'),
-    } as never);
-    await poolListRepo.insert({
-      list_no: LIST, orgno: '01', appl_no: 'A2', custo_no: 'CA2', settle_src: '01',
-      cr_id: null, cr_nm: null, is_cr: 'N', appl_date: new Date('2025-03-03T00:00:00Z'),
-    } as never);
 
     const list = await ds!.getRepository(ObListDefinition).findOneByOrFail({ list_no: LIST });
     const workdt = new Date('2026-07-01T00:00:00Z');
@@ -654,13 +653,16 @@ describe('F102 S1SRC — Stage 1 帶入 CR 三欄（PG 真庫）', () => {
 
     const a1 = await fetchResult('A1');
     const a2 = await fetchResult('A2');
+    const a3 = await fetchResult('A3');
+    // A1：agent_id → 在職 E001 → cr_id='E001'、cr_nm='CR'+emp_nm；Stage 1 is_cr 初始 'N'（cr-priority 才改 Y）。
     expect(a1.cr_id).toBe('E001');
-    expect(a1.cr_nm).toBe('業代一');
-    expect(a1.is_cr).toBe('Y');
+    expect(a1.cr_nm).toBe('CRE-E001');
+    expect(a1.is_cr).toBe('N');
     expect(a1.appl_date).not.toBeNull();
-    // A2：pool list cr_id NULL → result cr_id NULL；is_cr COALESCE 'N'。
+    // A2：無承辦人 → cr_id NULL。 A3：承辦人離職 → 不列為 CR業代 → cr_id NULL。
     expect(a2.cr_id).toBeNull();
     expect(a2.is_cr).toBe('N');
+    expect(a3.cr_id).toBeNull();
   });
 });
 

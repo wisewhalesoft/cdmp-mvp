@@ -32,6 +32,7 @@ import { DataSource, Repository, EntityManager } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
+import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { executeStage1Chain } from '../stage1-filter-chain';
@@ -221,6 +222,7 @@ beforeAll(async () => {
         ObPoolDataList,
         ObMonthlyRunResult,
         AssignmentRun,
+        ObEmphire,
       ],
       synchronize: true,
     });

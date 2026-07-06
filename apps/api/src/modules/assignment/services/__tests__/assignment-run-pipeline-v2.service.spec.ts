@@ -209,7 +209,15 @@ async function seedList(
 
 async function seedPool(
   repo: Repository<ObPoolData>,
-  opts: { applNo: string; commission?: string; monthCnt?: number; prodKind?: string },
+  opts: {
+    applNo: string;
+    commission?: string;
+    monthCnt?: number;
+    prodKind?: string;
+    // F102（2026-07-06）：CR業代來源 = ob_pool_data.agent_id → 在職 ob_emphire(id_no) → emp_id。
+    agentId?: string | null;
+    applDate?: string | null;
+  },
 ): Promise<void> {
   await repo.save(
     repo.create({
@@ -227,6 +235,8 @@ async function seedPool(
       // Phase 5b：seedList 預設 condition_payload.prod_kind=['A']，
       // seedPool 須對應 prod_kind='A' 以通過 Stage 1 SQL 過濾。
       prod_kind: opts.prodKind ?? 'A',
+      agent_id: opts.agentId ?? null,
+      appl_date: opts.applDate ? new Date(`${opts.applDate}T00:00:00Z`) : null,
       _cdmp_extracted_at: new Date(),
     } as Partial<ObPoolData>),
   );
@@ -271,45 +281,16 @@ async function seedEmpl(
   );
 }
 
-/**
- * F102：seed ob_pool_data_list 之 CR 三欄 + appl_date（Stage 1 由本表帶入 result，I-CR-COLSRC-01）。
- * JS 路徑（executeV2）由 poolDataListRepo 讀回 cr_id/cr_nm/is_cr/appl_date。
- */
-async function seedPoolList(
-  repo: Repository<ObPoolDataList>,
-  opts: {
-    listNo: string;
-    applNo: string;
-    crId?: string | null;
-    crNm?: string | null;
-    isCr?: string;
-    applDate?: string | null;
-  },
-): Promise<void> {
-  await repo.save(
-    repo.create({
-      list_no: opts.listNo,
-      orgno: '01',
-      appl_no: opts.applNo,
-      custo_no: `C${opts.applNo}`,
-      settle_src: '01',
-      cr_id: opts.crId ?? null,
-      cr_nm: opts.crNm ?? null,
-      is_cr: opts.isCr ?? 'N',
-      appl_date: opts.applDate ? new Date(`${opts.applDate}T00:00:00Z`) : null,
-    } as Partial<ObPoolDataList>),
-  );
-}
-
-/** F102：seed ob_emphire（CR 失效規則步驟 2 離職清空之來源；resign_date null=在職）。 */
+/** F102：seed ob_emphire（CR業代來源＝id_no↔agent_id；resign_date null=在職）。id_no 預設 'ID-<empId>'。 */
 async function seedEmphire(
   repo: Repository<ObEmphire>,
-  opts: { empId: string; resignDate?: string | null },
+  opts: { empId: string; resignDate?: string | null; idNo?: string | null },
 ): Promise<void> {
   await repo.save(
     repo.create({
       emp_id: opts.empId,
       emp_nm: `EMP-${opts.empId}`,
+      id_no: opts.idNo ?? `ID-${opts.empId}`,
       resign_date: opts.resignDate ? new Date(`${opts.resignDate}T00:00:00Z`) : null,
     } as Partial<ObEmphire>),
   );
@@ -663,16 +644,10 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
     it('cr_enabled=true：有效 CR 案件優先指派 emplid=cr_id + is_cr=Y；新件 is_cr=N', async () => {
       await seedCardType(env.cardTypeRepo, 'T1');
       await seedList(env.listRepo, { listNo: 'OB202605001', cardType: 'T1', crEnabled: true });
-      // CR 案件 A_CR（cr_id=E001，appl_date 近期、業代在職）；新件 A001（無 cr_id）。
-      await seedPool(env.poolRepo, { applNo: 'A_CR' });
+      // CR 案件 A_CR（承辦人 agent_id=ID-E001 → 在職業代 E001，appl_date 近期）；新件 A001（無承辦人）。
+      await seedPool(env.poolRepo, { applNo: 'A_CR', agentId: 'ID-E001', applDate: '2025-03-01' });
       await seedPool(env.poolRepo, { applNo: 'A001' });
-      await seedPoolList(env.poolDataListRepo, {
-        listNo: 'OB202605001', applNo: 'A_CR', crId: 'E001', crNm: '業代一', isCr: 'Y', applDate: '2025-03-01',
-      });
-      await seedPoolList(env.poolDataListRepo, {
-        listNo: 'OB202605001', applNo: 'A001', crId: null, crNm: null, isCr: 'N', applDate: '2025-03-01',
-      });
-      await seedEmphire(env.emphireRepo, { empId: 'E001', resignDate: null }); // 在職
+      await seedEmphire(env.emphireRepo, { empId: 'E001', resignDate: null }); // 在職，id_no=ID-E001
       await seedDeptPct(env.deptPctRepo, { listNo: 'OB202605001', deptId: 'D001', ration: '100.0' });
       // E001 在 ob_empl_set 有 ration>0（deptid_m=XVE1）→ CR 優先指派；E_OTHER 供比例池分派新件。
       await seedEmpl(env.emplSetRepo, {
@@ -704,15 +679,9 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
     it('cr_enabled=false：is_cr 全強制 N（BR-F102-02）', async () => {
       await seedCardType(env.cardTypeRepo, 'T1');
       await seedList(env.listRepo, { listNo: 'OB202605001', cardType: 'T1', crEnabled: false });
-      await seedPool(env.poolRepo, { applNo: 'A_CR' });
+      // A_CR 承辦人在職（agent_id=ID-E001 → E001），但 cr_enabled=false → 強制清 N。
+      await seedPool(env.poolRepo, { applNo: 'A_CR', agentId: 'ID-E001', applDate: '2025-03-01' });
       await seedPool(env.poolRepo, { applNo: 'A001' });
-      // 來源 ob_pool_data_list 有 is_cr='Y'，但 cr_enabled=false → 強制清 N。
-      await seedPoolList(env.poolDataListRepo, {
-        listNo: 'OB202605001', applNo: 'A_CR', crId: 'E001', crNm: '業代一', isCr: 'Y', applDate: '2025-03-01',
-      });
-      await seedPoolList(env.poolDataListRepo, {
-        listNo: 'OB202605001', applNo: 'A001', crId: null, crNm: null, isCr: 'N', applDate: '2025-03-01',
-      });
       await seedEmphire(env.emphireRepo, { empId: 'E001', resignDate: null });
       await seedDeptPct(env.deptPctRepo, { listNo: 'OB202605001', deptId: 'D001', ration: '100.0' });
       await seedEmpl(env.emplSetRepo, {
@@ -736,11 +705,8 @@ describe('AssignmentRunPipelineService — F061 v2.0 真實邏輯', () => {
     it('cr_enabled=true：逾2年清空（appl_date < twoYearsAgo）→ is_cr=N、cr_id 清空', async () => {
       await seedCardType(env.cardTypeRepo, 'T1');
       await seedList(env.listRepo, { listNo: 'OB202605001', cardType: 'T1', crEnabled: true });
-      await seedPool(env.poolRepo, { applNo: 'A_OLD' });
-      // appl_date '2023-01-01' < twoYearsAgo '2023-05-01' → 步驟 1 清空。
-      await seedPoolList(env.poolDataListRepo, {
-        listNo: 'OB202605001', applNo: 'A_OLD', crId: 'E001', crNm: '業代一', isCr: 'Y', applDate: '2023-01-01',
-      });
+      // appl_date '2023-01-01' < twoYearsAgo '2023-05-01' → 步驟 1 清空（承辦人 agent_id=ID-E001）。
+      await seedPool(env.poolRepo, { applNo: 'A_OLD', agentId: 'ID-E001', applDate: '2023-01-01' });
       await seedEmphire(env.emphireRepo, { empId: 'E001', resignDate: null });
       await seedDeptPct(env.deptPctRepo, { listNo: 'OB202605001', deptId: 'D001', ration: '100.0' });
       await seedEmpl(env.emplSetRepo, {

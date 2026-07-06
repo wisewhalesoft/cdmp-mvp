@@ -17,6 +17,7 @@ import type { ObListDefinition } from '@/database/entities/ob-list-definition.en
 import type { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import type { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { buildStage1Sql, type Stage1SqlCore } from './stage1-sql-builder';
+import { toYmd } from '@/common/emphire/emphire-active.util';
 
 /** INSERT…SELECT 寫入 ob_monthly_run_result 之欄位常數（Stage 1 範圍，AD-E07-25 / A-0）。 */
 export interface RunStage1SqlContext {
@@ -79,36 +80,36 @@ export async function runStage1SqlInsert(
   // run_id / list_no 為常數參數；orgno / appl_no / custo_no / settle_src / appl_date 取自 o；
   // created_at / updated_at = NOW()。
   //
-  // F102（I-CR-COLSRC-01）：CR 步驟（cr-priority-sql.ts）讀寫 cr_id/cr_nm/is_cr/appl_date，
-  //   須由 Stage 1 帶入 result 工作集。⚠️ ob_pool_data（alias o，Stage 1 篩選源表）**無** cr_id/cr_nm/is_cr
-  //   三欄（亦無 appl_date 之外的 CR 欄位）—— 此三欄存於 ob_pool_data_list（legacy 派案歷史，同 PK
-  //   orgno+appl_no+list_no），對齊 legacy SP `#OBPOOLDATA_LIST` 取自 OBPOOLDATA_LIST。
-  //   故 LEFT JOIN ob_pool_data_list（同 orgno+appl_no，本 list_no 限定）帶入 cr_id/cr_nm/is_cr；
-  //   pdl 無對應列時三欄為 NULL（is_cr COALESCE 'N'，與 cr_enabled=false 強制清 N 語意相容）。
-  //   appl_date 優先取 pdl（CR 失效規則之來源），無則退 o.appl_date（兩表皆有 appl_date 欄位）。
-  //   ⚠️ JOIN **必以子查詢只選 CR 四欄 + PK**（非整表 LEFT JOIN）—— ob_pool_data 與 ob_pool_data_list
-  //   有數十個同名欄位（prod_kind / list_type / custo_no …），composer WHERE 以無 alias 之 "col" 引用
-  //   （單表時無歧義），若整表 join 進來會觸發 `column reference "prod_kind" is ambiguous`（已驗）。
-  //   子查詢只暴露 cr_id/cr_nm/is_cr/appl_date → WHERE 之 "col" 仍唯一解析至 o。
-  //   詳見 impl log「偏離 spec/AD」段（AD-E07-30 §3.1 述「ob_pool_data_list.cr_id 帶入」，惟未言明
-  //   Stage 1 SELECT 源表為 ob_pool_data → 以 scoped LEFT JOIN 補足，語意忠實於 legacy SP）。
-  // F109 / AD-E07-37 §5.3：customer_core LEFT JOIN 插在既有 pdl CR JOIN 之前（順序不影響正確性）。
-  //   核心不引用 customer_core 條件時 core.customerCoreJoin 為 null → 不注入（純案件資料名單 SQL 不變）。
+  // F102 CR業代來源（2026-07-06 修正，對齊 legacy `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list`）：
+  //   CR業代 = 案件承辦人 `ob_pool_data.agent_id` → `ob_emphire`（以 id_no=身分證對映，且在職）→ emp_id。
+  //   legacy st1：`CR_ID = CASE WHEN 抽案 THEN '' ELSE B.EMP_ID END`
+  //             `FROM OBPOOLDATA A LEFT JOIN OBEMPHIRE B ON A.AGENT_ID=B.ID AND RESIGN_DATE>=GETDATE()`。
+  //   ⚠️ 舊實作（AD-E07-30）誤把 cr_id 取自 `ob_pool_data_list`（legacy 派案歷史）且 JOIN 綁 `list_no=當前名單`，
+  //   但派案歷史掛在**歷史 list_no** 下，當前月（如 202607）在 ob_pool_data_list 無列 → cr_id 全 NULL → 0 CR。
+  //   改以 agent_id 現算（legacy st1 語意），任何月份皆可得 CR，不依賴歷史派案是否已載入。
+  //   （在職判定用哨兵語意 resign_date NULL 或 >= 名單月首日；見 emphire-active.util。抽案例外
+  //    OBCASE_LIST_RECYCLE CDMP 暫無對映表，先略。）
+  //   is_cr 初始 'N'（F102 cr-priority-sql 之優先分配步驟才改 'Y'）；appl_date 取 o.appl_date（失效規則來源）。
+  //   ⚠️ 子查詢只選 id_no/emp_id/emp_nm，避免與 ob_pool_data 同名欄位（無）觸發歧義；ON 以 TRIM 比對。
+  // F109 / AD-E07-37 §5.3：customer_core LEFT JOIN 插在 CR JOIN 之前（順序不影響正確性）。
+  const crSysDate = toYmd(workdt) ?? '';
   const selectSql =
     `INSERT INTO ob_monthly_run_result ` +
     `(run_id, list_no, orgno, appl_no, custo_no, settle_src, cr_id, cr_nm, is_cr, appl_date, result_status, created_at, updated_at) ` +
     `SELECT :insRunId, :insListNo, o.orgno, o.appl_no, o.custo_no, o.settle_src, ` +
-    `pdl.cr_id, pdl.cr_nm, COALESCE(pdl.is_cr, 'N'), COALESCE(pdl.appl_date, o.appl_date), 'PENDING', ` +
+    `cremp.emp_id, CASE WHEN cremp.emp_id IS NOT NULL THEN 'CR' || cremp.emp_nm ELSE NULL END, 'N', o.appl_date, 'PENDING', ` +
     `CURRENT_TIMESTAMP, CURRENT_TIMESTAMP ` +
     `FROM ob_pool_data o ` +
     `${core.customerCoreJoin ? core.customerCoreJoin + ' ' : ''}` +
-    `LEFT JOIN (SELECT orgno, appl_no, cr_id, cr_nm, is_cr, appl_date FROM ob_pool_data_list WHERE list_no = :insListNo) pdl ` +
-    `ON pdl.orgno = o.orgno AND pdl.appl_no = o.appl_no ` +
+    `LEFT JOIN (SELECT TRIM(id_no) AS agent_ref, emp_id, emp_nm FROM ob_emphire ` +
+    `WHERE resign_date IS NULL OR resign_date >= :crSysDate) cremp ` +
+    `ON COALESCE(TRIM(o.agent_id), '') <> '' AND cremp.agent_ref = TRIM(o.agent_id) ` +
     `WHERE ${core.where}`;
 
   const [sql, parameters] = escape(manager, selectSql, {
     insRunId: ctx.runId,
     insListNo: ctx.listNo,
+    crSysDate,
     ...core.params,
   });
 

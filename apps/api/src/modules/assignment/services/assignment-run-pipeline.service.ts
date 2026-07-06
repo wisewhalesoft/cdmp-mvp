@@ -42,6 +42,7 @@ import {
   type CrPreassignedCase,
 } from '@/modules/assignment/stage1/stage3to4-ration';
 import { computeWorkingDayRatios } from '@/modules/assignment-list/stage0-estimate.service';
+import { isEmphireActive } from '@/common/emphire/emphire-active.util';
 import {
   clearStage3Fields,
   runStage3to4RationSql,
@@ -700,6 +701,15 @@ export class AssignmentRunPipelineService {
     // F102：@SYS_DT = project_workym + '01'（名單月第一天，'YYYY-MM-DD'）。
     const { sysDate } = computeCrSysDates(ym);
 
+    // F102 CR業代來源（2026-07-06 對齊 legacy st1_list + SQL 路徑）：在職員工 id_no → emp_id 索引。
+    //   在職判定用 sysDate（名單月首日）＝與 SQL 路徑 crSysDate 同基準。
+    const activeAgentByIdNo = new Map<string, { emp_id: string; emp_nm: string | null }>();
+    for (const e of allEmphire) {
+      if (!isEmphireActive(e.resign_date, sysDate)) continue;
+      const idno = (e.id_no ?? '').trim();
+      if (idno) activeAgentByIdNo.set(idno, { emp_id: e.emp_id, emp_nm: e.emp_nm });
+    }
+
     for (const { list, pool } of stage1Cases) {
       // ===== Stage 2 v2.0：真實計分 =====
       const activeVer = allVersions.find((v) => v.card_type === list.card_type);
@@ -743,22 +753,21 @@ export class AssignmentRunPipelineService {
       });
 
       // ===== F102 CR 前置步驟（在 Stage 3/4 比例分派之前，I-CR-ORDER-01）=====
-      // Stage 1 帶入之 cr_id/cr_nm/is_cr/appl_date 存於 ob_pool_data_list（I-CR-COLSRC-01）；
-      // 本 JS 路徑由 ob_pool_data_list（同 orgno+appl_no，本 list_no 限定）讀回 CR 三欄。
-      const crSourceRows = await this.poolDataListRepo.find({
-        where: { list_no: list.list_no },
-        select: ['orgno', 'appl_no', 'cr_id', 'cr_nm', 'is_cr', 'appl_date'],
-      });
+      // CR業代來源（2026-07-06 對齊 legacy st1_list + SQL 路徑 stage1-sql-executor）：
+      //   由 ob_pool_data.agent_id → 在職 ob_emphire(id_no) → emp_id 現算（cr_nm='CR'+emp_nm、is_cr 初始 'N'）。
+      //   舊版讀 ob_pool_data_list 派案歷史且綁歷史 list_no，當前月無列 → cr_id 全 NULL → 0 CR（已修）。
       const crByKey = new Map<
         string,
         { cr_id: string | null; cr_nm: string | null; is_cr: string; appl_date: string | null }
       >();
-      for (const s of crSourceRows) {
-        crByKey.set(`${s.orgno} ${s.appl_no}`, {
-          cr_id: s.cr_id ?? null,
-          cr_nm: s.cr_nm ?? null,
-          is_cr: s.is_cr ?? 'N',
-          appl_date: s.appl_date ? toYmd(s.appl_date) : null,
+      for (const p of pool) {
+        const agentId = (p.agent_id ?? '').trim();
+        const emp = agentId ? activeAgentByIdNo.get(agentId) : undefined;
+        crByKey.set(`${p.orgno} ${p.appl_no}`, {
+          cr_id: emp?.emp_id ?? null,
+          cr_nm: emp ? `CR${(emp.emp_nm ?? '').trim()}` : null,
+          is_cr: 'N',
+          appl_date: p.appl_date ? toYmd(p.appl_date) : null,
         });
       }
 

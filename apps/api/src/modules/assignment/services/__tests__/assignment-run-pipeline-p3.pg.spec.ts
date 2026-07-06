@@ -225,11 +225,14 @@ async function seedList(opts: { listNo: string; cardType: string; crEnabled?: bo
     updated_by_prog: 'TEST', updated_by: 'tester', updated_at: now,
   } as Partial<ObListDefinition>));
 }
-async function seedPool(opts: { applNo: string; custoNo?: string; monthCnt?: number; specTp?: string | null }): Promise<void> {
+async function seedPool(opts: { applNo: string; custoNo?: string; monthCnt?: number; specTp?: string | null; agentId?: string | null; applDate?: string | null }): Promise<void> {
   await R.pool.save(R.pool.create({
     orgno: '01', appl_no: opts.applNo, custo_no: opts.custoNo ?? `C${opts.applNo}`,
     sta_code: '01', dept_id: 'D001', list_type: '01', settle_src: '01',
     month_cnt: opts.monthCnt ?? 1, spec_tp: opts.specTp ?? null, prod_kind: 'A',
+    // F102（2026-07-06）：CR業代來源 = agent_id → 在職 ob_emphire(id_no) → emp_id。
+    agent_id: opts.agentId ?? null,
+    appl_date: opts.applDate ? new Date(`${opts.applDate}T00:00:00Z`) : null,
     _cdmp_extracted_at: new Date(),
   } as Partial<ObPoolData>));
 }
@@ -254,20 +257,10 @@ async function seedCustomerCore(opts: { src: string; cusSex?: string; dob?: stri
     [opts.src, opts.cusSex ?? null, opts.dob ?? null],
   );
 }
-/** F102：seed ob_pool_data_list 之 CR 三欄 + appl_date（Stage 1 由本表帶入 result，I-CR-COLSRC-01）。 */
-async function seedPoolList(opts: {
-  listNo: string; applNo: string; crId?: string | null; crNm?: string | null; isCr?: string; applDate?: string;
-}): Promise<void> {
-  await R.poolList.save(R.poolList.create({
-    list_no: opts.listNo, orgno: '01', appl_no: opts.applNo, custo_no: `C${opts.applNo}`, settle_src: '01',
-    cr_id: opts.crId ?? null, cr_nm: opts.crNm ?? null, is_cr: opts.isCr ?? 'N',
-    appl_date: opts.applDate ? new Date(`${opts.applDate}T00:00:00Z`) : null,
-  } as Partial<ObPoolDataList>));
-}
-/** F102：seed ob_emphire（CR 失效規則步驟 2 離職清空來源；resignDate null=在職）。 */
-async function seedEmphire(opts: { empId: string; resignDate?: string | null }): Promise<void> {
+/** F102：seed ob_emphire（CR業代來源＝id_no↔agent_id；resignDate null=在職）。id_no 預設 'ID-<empId>'。 */
+async function seedEmphire(opts: { empId: string; resignDate?: string | null; idNo?: string | null }): Promise<void> {
   await R.emphire.save(R.emphire.create({
-    emp_id: opts.empId, emp_nm: `E-${opts.empId}`,
+    emp_id: opts.empId, emp_nm: `E-${opts.empId}`, id_no: opts.idNo ?? `ID-${opts.empId}`,
     resign_date: opts.resignDate ? new Date(`${opts.resignDate}T00:00:00Z`) : null,
   } as Partial<ObEmphire>));
 }
@@ -391,12 +384,11 @@ describe('F100 EQ — runPipeline 端到端 Stage 1~4 SQL 下推（PG DoD）', (
     await seedStandardCard(false);
     await seedDeptPct(LON);
     await seedEmpl(LON, 'E_CR', 'T1'); // E_CR 在 ob_empl_set（deptid_m='D001'，ration 100>0）
-    await seedEmphire({ empId: 'E_CR', resignDate: null }); // 在職
+    await seedEmphire({ empId: 'E_CR', resignDate: null }); // 在職，id_no=ID-E_CR
     // ob_pool_data + ob_pool_data_list（Stage 1 帶入 CR 三欄）。
-    await seedPool({ applNo: 'A_CR', monthCnt: 2, specTp: '01' });
+    // A_CR 承辦人 agent_id=ID-E_CR → 在職業代 E_CR；A_NEW 無承辦人。
+    await seedPool({ applNo: 'A_CR', monthCnt: 2, specTp: '01', agentId: 'ID-E_CR', applDate: '2025-03-01' });
     await seedPool({ applNo: 'A_NEW', monthCnt: 2, specTp: '01' });
-    await seedPoolList({ listNo: LON, applNo: 'A_CR', crId: 'E_CR', crNm: '業代', isCr: 'Y', applDate: '2025-03-01' });
-    await seedPoolList({ listNo: LON, applNo: 'A_NEW', crId: null, crNm: null, isCr: 'N', applDate: '2025-03-01' });
     const runId = await seedRun();
     await service.runPipeline(runId, YM);
     const rows = await R.result.find({ where: { run_id: runId, list_no: LON } });
@@ -417,9 +409,8 @@ describe('F100 EQ — runPipeline 端到端 Stage 1~4 SQL 下推（PG DoD）', (
     await seedDeptPct(LOFF);
     await seedEmpl(LOFF, 'E_CR', 'T1');
     await seedEmphire({ empId: 'E_CR', resignDate: null });
-    await seedPool({ applNo: 'A_CR', monthCnt: 2, specTp: '01' });
-    // 來源 is_cr='Y'，但 cr_enabled=false → 強制清 N。
-    await seedPoolList({ listNo: LOFF, applNo: 'A_CR', crId: 'E_CR', crNm: '業代', isCr: 'Y', applDate: '2025-03-01' });
+    // A_CR 承辦人在職，但 cr_enabled=false → 強制清 N。
+    await seedPool({ applNo: 'A_CR', monthCnt: 2, specTp: '01', agentId: 'ID-E_CR', applDate: '2025-03-01' });
     const runId = await seedRun();
     await service.runPipeline(runId, YM);
     const rows = await R.result.find({ where: { run_id: runId, list_no: LOFF } });
