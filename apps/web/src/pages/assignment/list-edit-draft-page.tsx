@@ -38,6 +38,7 @@ import {
   type FieldType,
 } from '@/api/pooldata-fields';
 import { listCardTypes, type CardTypeListItem } from '@/api/card-type';
+import { FIELD_DISPLAY, fieldDisplayName, STAGE_LABEL } from './_utils/labels';
 
 /**
  * F051 v2.1 — 編輯草稿名單頁（Phase 5d 波 9 全重寫）
@@ -98,15 +99,6 @@ function isConditionComplete(c: BuilderCondition): boolean {
   }
   return false;
 }
-
-// LEGACY entity column display map（對齊 prototype 27b L835-841）
-const LEGACY_ENTITY_DISPLAY: Record<string, string> = {
-  prod_kind: '產品類別',
-  caseyear: '進件 / 滿期年數',
-  spec_tp: '專案類別',
-  case_status: '案件結清期別',
-  settle_src: '他行代償',
-};
 
 /**
  * F109 / US-172 AC-3：「新增條件」選單依 dataSource 分組（prototype 27b，同 27a L647-676）。
@@ -494,17 +486,17 @@ export function ListEditDraftPage() {
   );
 
   function renderTypeBadge(fieldType: ConditionFieldType) {
-    const colors: Record<ConditionFieldType, { bg: string; text: string }> = {
-      categorical: { bg: 'bg-blue-100', text: 'text-blue-700' },
-      numeric: { bg: 'bg-violet-100', text: 'text-violet-700' },
-      date: { bg: 'bg-cyan-100', text: 'text-cyan-700' },
+    const meta: Record<ConditionFieldType, { bg: string; text: string; label: string }> = {
+      categorical: { bg: 'bg-blue-100', text: 'text-blue-700', label: '類別' },
+      numeric: { bg: 'bg-violet-100', text: 'text-violet-700', label: '數值' },
+      date: { bg: 'bg-cyan-100', text: 'text-cyan-700', label: '日期' },
     };
-    const c = colors[fieldType];
+    const c = meta[fieldType];
     return (
       <span
         className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text}`}
       >
-        {fieldType}
+        {c.label}
       </span>
     );
   }
@@ -564,11 +556,10 @@ export function ListEditDraftPage() {
                 <h3 className="text-base font-semibold text-amber-900">無法編輯篩選條件</h3>
                 <p className="text-sm text-gray-700 mt-1">
                   名單 <code className="font-mono text-primary">{list.listNo}</code> 已進入「
-                  <span className="font-semibold">{list.stage}</span>」階段，根據 F051 v2.1 規格僅 draft 階段可寫入 conditionPayload（K1 約束）。
+                  <span className="font-semibold">{STAGE_LABEL[list.stage] ?? list.stage}</span>」階段，僅草稿階段可修改篩選條件。
                 </p>
                 <p className="text-sm text-gray-700 mt-2">
-                  如需修改篩選條件，請先執行{' '}
-                  <span className="font-semibold text-danger">Rollback</span> 回到草稿階段（K3：rollback 後 conditionPayload 重新可寫入），再回此頁編輯。
+                  如需修改篩選條件，請先將名單退回草稿階段，再回此頁編輯。
                 </p>
                 <div className="mt-4 flex items-center gap-2">
                   <button
@@ -582,12 +573,12 @@ export function ListEditDraftPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      showToast('Rollback 流程：從名單列表頁的對應階段管理頁觸發；rollback 將清空當前 stage 之比例 / 簽核資料。', 'warning')
+                      showToast('退回流程：從名單列表頁的對應階段管理頁觸發；退回將清空目前階段的比例 / 簽核資料。', 'warning')
                     }
                     className="inline-flex items-center gap-1.5 px-4 py-2 border border-danger text-danger text-sm rounded-md hover:bg-red-50"
                   >
                     <UndoDot className="w-4 h-4" />
-                    了解 Rollback 流程
+                    了解退回流程
                   </button>
                 </div>
               </div>
@@ -617,7 +608,7 @@ export function ListEditDraftPage() {
                   </div>
                   <div className="grid grid-cols-12 gap-4">
                     <div className="col-span-3">
-                      <label className="block text-xs text-gray-500 mb-1">LIST_NO（唯讀）</label>
+                      <label className="block text-xs text-gray-500 mb-1">名單編號（唯讀）</label>
                       <div className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md font-mono text-sm text-gray-700 w-full">
                         <Hash className="w-4 h-4 text-gray-400" />
                         <span>{list.listNo}</span>
@@ -1059,11 +1050,11 @@ export function ListEditDraftPage() {
                       <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                       <div className="flex-1">
                         <p className="font-semibold text-amber-900">
-                          {inactiveDetails.length} 個可選值已停用，將被保留但月跑 Stage 1 不會匹配
+                          {inactiveDetails.length} 個可選值已停用，將被保留但月跑分派時不會匹配
                         </p>
                         <p className="text-xs text-amber-800 mt-0.5">
                           {inactiveDetails
-                            .map((d) => `${d.columnName}.${d.value}（${d.label}）`)
+                            .map((d) => `${fieldDisplayName(d.columnName)}：${d.label}`)
                             .join('、')}
                         </p>
                         <p className="text-xs text-amber-700 mt-1">
@@ -1153,7 +1144,7 @@ export function ListEditDraftPage() {
 //   對齊 prototype 27b L842-882 5 個 entity column fallback 顯示
 // ============================================================================
 function ReadOnlyConditionSummary({ list }: { list: AssignmentListItem }) {
-  const fallback: Array<{ col: keyof typeof LEGACY_ENTITY_DISPLAY; values: string }> = [];
+  const fallback: Array<{ col: keyof typeof FIELD_DISPLAY; values: string }> = [];
   if (list.prodKind) fallback.push({ col: 'prod_kind', values: list.prodKind });
   if (list.caseYear) fallback.push({ col: 'caseyear', values: list.caseYear });
   if (list.specTp) fallback.push({ col: 'spec_tp', values: list.specTp });
@@ -1174,7 +1165,7 @@ function ReadOnlyConditionSummary({ list }: { list: AssignmentListItem }) {
   return (
     <div data-testid="readonly-condition-summary" className="space-y-2">
       {fallback.map((row, idx) => {
-        const displayName = LEGACY_ENTITY_DISPLAY[row.col];
+        const displayName = FIELD_DISPLAY[row.col];
         const rawVals = row.values.split('$$').filter(Boolean);
         return (
           <div key={row.col}>

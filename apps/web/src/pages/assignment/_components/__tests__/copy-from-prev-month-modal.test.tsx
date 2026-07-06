@@ -15,7 +15,7 @@ import type { AssignmentListItem } from '@/api/assignment-list';
  *   - open=false → 不渲染
  *   - 列出上月名單清單（含 listNo / listNm / prodKind / crEnabled / 條件）
  *   - 點 row「使用此名單」→ onCopy(list)
- *   - 載入中顯示 loading；空清單顯示「上月無 active 名單」
+ *   - 載入中顯示 loading；空清單顯示「上月無啟用中名單」
  */
 
 describe('computePrevYm (pure)', () => {
@@ -156,7 +156,7 @@ describe('CopyFromPrevMonthModal (component)', () => {
     expect(screen.getByTestId('copy-modal-loading')).toBeInTheDocument();
   });
 
-  it('lists=[] 顯示「上月無 active 名單」', () => {
+  it('lists=[] 顯示「上月無啟用中名單」', () => {
     render(
       <CopyFromPrevMonthModal
         open

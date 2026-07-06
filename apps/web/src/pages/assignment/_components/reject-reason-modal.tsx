@@ -72,10 +72,10 @@ export function RejectReasonModal({
                 {listNo ? (
                   <>
                     名單 <code className="font-mono text-primary">{listNo}</code>{' '}
-                    stage: approval → personnel_ratio（清空 ob_empl_set）
+                    將退回「個別業務比例」階段，並清除已設定的業務員比例
                   </>
                 ) : (
-                  'stage: approval → personnel_ratio（清空 ob_empl_set）'
+                  '名單將退回「個別業務比例」階段，並清除已設定的業務員比例'
                 )}
               </p>
             </div>
@@ -87,9 +87,9 @@ export function RejectReasonModal({
                 <p className="font-semibold">拒絕後將觸發：</p>
                 <ul className="list-disc pl-4 mt-1 space-y-0.5">
                   <li>名單退回「個別業務比例」階段</li>
-                  <li>清空所有部門的個別業務員 RATION</li>
+                  <li>清空所有部門的個別業務員比例</li>
                   <li>部門比例保留不變</li>
-                  <li>拒絕原因於下次編輯頁主動顯示（latestRejection banner）</li>
+                  <li>拒絕原因於下次編輯頁主動顯示</li>
                 </ul>
               </div>
             </div>

@@ -7,6 +7,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import type { AssignmentListItem } from '@/api/assignment-list';
+import { fieldDisplayName, stageLabel } from '../_utils/labels';
 
 /**
  * F050 Phase 3 P2-6 — 從上月複製名單 modal
@@ -47,13 +48,13 @@ export interface CopyFromPrevMonthModalProps {
 
 function formatConditionSummary(list: AssignmentListItem): string {
   const parts: string[] = [];
-  if (list.prodKind) parts.push(`PROD_KIND=${list.prodKind}`);
+  if (list.prodKind) parts.push(`${fieldDisplayName('prod_kind')}：${list.prodKind}`);
   if (list.specTp)
-    parts.push(`SPEC_TP=${list.specTp.split('$$').filter(Boolean).join(',')}`);
+    parts.push(`${fieldDisplayName('spec_tp')}：${list.specTp.split('$$').filter(Boolean).join('、')}`);
   if (list.caseYear)
-    parts.push(`CASEYEAR=${list.caseYear.split('$$').filter(Boolean).join(',')}`);
+    parts.push(`${fieldDisplayName('caseyear')}：${list.caseYear.split('$$').filter(Boolean).join('、')}`);
   if (list.caseStatus)
-    parts.push(`CASE_STATUS=${list.caseStatus.split('$$').filter(Boolean).join(',')}`);
+    parts.push(`${fieldDisplayName('case_status')}：${list.caseStatus.split('$$').filter(Boolean).join('、')}`);
   if (parts.length === 0) return '無條件';
   return parts.slice(0, 3).join(' / ') + (parts.length > 3 ? ' …' : '');
 }
@@ -89,7 +90,7 @@ export function CopyFromPrevMonthModal({
                   從上月複製名單
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  上月（<code className="font-mono text-primary">{prevYm}</code>）active 名單清單；點「使用此名單」帶入欄位至新名單
+                  上月（<code className="font-mono text-primary">{prevYm}</code>）啟用中名單；點「使用此名單」帶入欄位至新名單
                 </p>
               </div>
             </div>
@@ -122,7 +123,7 @@ export function CopyFromPrevMonthModal({
               >
                 <ClipboardList className="w-8 h-8 text-gray-400 mb-2" />
                 <p className="text-sm text-gray-500">
-                  上月（{prevYm}）無 active 名單可複製
+                  上月（{prevYm}）無啟用中名單可複製
                 </p>
               </div>
             )}
@@ -159,8 +160,7 @@ export function CopyFromPrevMonthModal({
                         {formatConditionSummary(l)}
                       </p>
                       <p className="text-[11px] text-gray-400 mt-1">
-                        建立者 {l.createdBy} · 階段{' '}
-                        <span className="font-mono">{l.stage}</span>
+                        建立者 {l.createdBy} · 階段 {stageLabel(l.stage)}
                       </p>
                     </div>
                     <button
@@ -180,7 +180,7 @@ export function CopyFromPrevMonthModal({
 
           <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/50 flex items-center justify-between">
             <p className="text-xs text-gray-500">
-              複製後僅帶入欄位（CR 開關 / 篩選條件 / 商品 / 期別）；名稱與 LIST_NO 重新建立。
+              複製後僅帶入欄位（CR 開關 / 篩選條件 / 商品 / 期別）；名稱與名單編號重新建立。
             </p>
             <button
               type="button"

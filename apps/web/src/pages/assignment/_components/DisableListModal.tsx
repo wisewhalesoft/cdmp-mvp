@@ -57,7 +57,7 @@ export function DisableListModal({
               確認停用名單{' '}
               <code className="font-mono text-blue-700">{target.listNo}</code>？
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">F052 v2.1 · 軟刪除（限 draft 階段）</p>
+            <p className="text-xs text-gray-500 mt-0.5">軟刪除（限草稿階段）</p>
           </div>
           <button
             type="button"

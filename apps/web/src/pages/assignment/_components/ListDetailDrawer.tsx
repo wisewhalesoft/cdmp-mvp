@@ -43,6 +43,7 @@ import {
   type ConditionItem,
   type AppliedSpecialRule,
 } from '@/api/assignment-list';
+import { fieldDisplayName } from '../_utils/labels';
 
 export interface ListDetailDrawerProps {
   listNo: string | null;
@@ -224,19 +225,19 @@ function UserConditions({ data }: { data: FullSnapshotResponse }) {
         {data.list.legacyEntityFallback && (
           <ul className="mt-3 space-y-1 text-xs text-gray-700">
             {data.list.legacyEntityFallback.prodKind !== null && (
-              <li>prod_kind: {data.list.legacyEntityFallback.prodKind}</li>
+              <li>{fieldDisplayName('prod_kind')}：{data.list.legacyEntityFallback.prodKind}</li>
             )}
             {data.list.legacyEntityFallback.caseyear !== null && (
-              <li>caseyear: {data.list.legacyEntityFallback.caseyear}</li>
+              <li>{fieldDisplayName('caseyear')}：{data.list.legacyEntityFallback.caseyear}</li>
             )}
             {data.list.legacyEntityFallback.specTp !== null && (
-              <li>spec_tp: {data.list.legacyEntityFallback.specTp}</li>
+              <li>{fieldDisplayName('spec_tp')}：{data.list.legacyEntityFallback.specTp}</li>
             )}
             {data.list.legacyEntityFallback.caseStatus !== null && (
-              <li>case_status: {data.list.legacyEntityFallback.caseStatus}</li>
+              <li>{fieldDisplayName('case_status')}：{data.list.legacyEntityFallback.caseStatus}</li>
             )}
             {data.list.legacyEntityFallback.settleSrc !== null && (
-              <li>settle_src: {data.list.legacyEntityFallback.settleSrc}</li>
+              <li>{fieldDisplayName('settle_src')}：{data.list.legacyEntityFallback.settleSrc}</li>
             )}
           </ul>
         )}
@@ -251,16 +252,15 @@ function UserConditions({ data }: { data: FullSnapshotResponse }) {
     <ul className="space-y-2 text-xs text-gray-700">
       {conditions.map((c: ConditionItem, idx: number) => (
         <li key={idx} className="border border-gray-200 rounded p-2">
-          <div className="font-mono font-semibold text-blue-700">{c.columnName}</div>
-          <div className="text-gray-500 mt-0.5">type: {c.fieldType}</div>
+          <div className="font-semibold text-gray-800">{fieldDisplayName(c.columnName)}</div>
           {c.fieldType === 'categorical' && (
-            <div className="mt-0.5">values: {(c.values ?? []).join(', ')}</div>
+            <div className="text-gray-600 mt-0.5">{(c.values ?? []).join('、')}</div>
           )}
           {c.fieldType === 'numeric' && (
-            <div className="mt-0.5">range: {c.min}~{c.max}</div>
+            <div className="text-gray-600 mt-0.5">{c.min} ~ {c.max}</div>
           )}
           {c.fieldType === 'date' && (
-            <div className="mt-0.5">range: {c.dateStart}~{c.dateEnd}</div>
+            <div className="text-gray-600 mt-0.5">{c.dateStart} ~ {c.dateEnd}</div>
           )}
         </li>
       ))}

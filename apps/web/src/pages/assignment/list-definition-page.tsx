@@ -46,6 +46,7 @@ import { ReadyCtaBanner } from './_components/ReadyCtaBanner';
 import { DisableListModal } from './_components/DisableListModal';
 import { RejectReasonModal } from './_components/reject-reason-modal';
 import { readAndClearPendingToast } from './_utils/pending-toast';
+import { fieldDisplayName } from './_utils/labels';
 
 /**
  * F048 v2.0 / F050 v2.2 / F049 v1.1 / F052 v2.1 / F061 v1.4 / F077 v1.3 / F081/F085/F089
@@ -124,15 +125,15 @@ function renderConditionChips(conditions: ConditionItem[]): { chips: string[]; e
     if (c.fieldType === 'categorical') {
       const vs = (c.values ?? []).slice(0, 2).join('/');
       const more = (c.values?.length ?? 0) > 2 ? `+${(c.values?.length ?? 0) - 2}` : '';
-      return `${c.columnName}: ${vs}${more}`;
+      return `${fieldDisplayName(c.columnName)}：${vs}${more}`;
     }
     if (c.fieldType === 'numeric') {
-      return `${c.columnName}: ${c.min}~${c.max}`;
+      return `${fieldDisplayName(c.columnName)}：${c.min}~${c.max}`;
     }
     if (c.fieldType === 'date') {
-      return `${c.columnName}: ${c.dateStart}~${c.dateEnd}`;
+      return `${fieldDisplayName(c.columnName)}：${c.dateStart}~${c.dateEnd}`;
     }
-    return c.columnName;
+    return fieldDisplayName(c.columnName);
   });
   return { chips, extra: Math.max(0, conditions.length - 2) };
 }
@@ -260,7 +261,7 @@ export function ListDefinitionPage() {
   const setYm = (next: string) => setTargetWorkYm(toYYYYMMRaw(next));
   const currentWorkYm = toYYYYMM(ctxCurrentWorkYm);
   const [data, setData] = useState<ListListsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -363,7 +364,6 @@ export function ListDefinitionPage() {
     (stageCounts.personnel_ratio ?? 0) +
     (stageCounts.approval ?? 0);
   const readyCount = stageCounts.ready ?? 0;
-  const readyPct = totalActive === 0 ? 0 : Math.round((readyCount / totalActive) * 100);
   const remaining = totalActive - readyCount;
 
   // Handlers
@@ -594,10 +594,9 @@ export function ListDefinitionPage() {
               </h3>
               <span className="text-xs text-gray-500">|</span>
               <span className="text-xs text-gray-600">
-                ready{' '}
+                已完成{' '}
                 <span className="font-semibold text-green-700">{readyCount}</span> /{' '}
                 <span className="font-semibold">{totalActive}</span>
-                <span className="ml-1 font-semibold text-green-700">{readyPct}%</span>
               </span>
             </div>
             <span className="text-xs text-gray-500">
@@ -627,7 +626,7 @@ export function ListDefinitionPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜尋名單名稱或 LIST_NO..."
+              placeholder="搜尋名單名稱或編號…"
               className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -739,7 +738,6 @@ export function ListDefinitionPage() {
           description={
             <div className="space-y-2 text-xs text-gray-600">
               <p>名單將進入「準備完成」階段，並於下次月跑觸發時參與分派。</p>
-              <p>assignment_approval 將寫入 1 筆 approve 紀錄。</p>
             </div>
           }
           confirmLabel="確認核准"

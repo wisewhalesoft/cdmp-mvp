@@ -202,9 +202,9 @@ describe('F048 v2.0 Kanban 主頁 — 渲染（TS-F048-K-001~008）', () => {
     expect(card.textContent).toContain('車貸催收名單');
     // CR badge（crEnabled=true）
     expect(within(card).getByText(/CR/)).toBeTruthy();
-    // condition chips：case_status 與 caseyear 兩個欄位
-    expect(card.textContent).toContain('case_status');
-    expect(card.textContent).toContain('caseyear');
+    // condition chips：case_status 與 caseyear 兩個欄位（以中文顯示名稱呈現，不裸露欄位代碼）
+    expect(card.textContent).toContain('案件結清期別');
+    expect(card.textContent).toContain('進件 / 滿期年數');
   });
 
   it('K-003 conditionPayload IS NULL → 卡片顯示 LEGACY badge', async () => {

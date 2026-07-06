@@ -44,6 +44,7 @@ import {
   CopyFromPrevMonthModal,
   computePrevYm,
 } from './_components/copy-from-prev-month-modal';
+import { fieldDisplayName } from './_utils/labels';
 
 /**
  * F050 v2.1 — 建立草稿名單頁（Phase 5d 波 8 重寫）
@@ -376,7 +377,7 @@ export function ListCreateDraftPage() {
     }
     const incomplete = conditions.find((c) => !isConditionComplete(c));
     if (incomplete) {
-      return '部分條件尚未填寫完整（categorical 需至少 1 個值；numeric 需 min/max；date 需起迄）';
+      return '部分條件尚未填寫完整';
     }
     return null;
   }, [listNm, listPeriodStart, listPeriodEnd, listInterval, conditions]);
@@ -554,17 +555,17 @@ export function ListCreateDraftPage() {
 
   // ─── Render helpers ───
   function renderTypeBadge(fieldType: ConditionFieldType) {
-    const colors: Record<ConditionFieldType, { bg: string; text: string }> = {
-      categorical: { bg: 'bg-blue-100', text: 'text-blue-700' },
-      numeric: { bg: 'bg-violet-100', text: 'text-violet-700' },
-      date: { bg: 'bg-cyan-100', text: 'text-cyan-700' },
+    const meta: Record<ConditionFieldType, { bg: string; text: string; label: string }> = {
+      categorical: { bg: 'bg-blue-100', text: 'text-blue-700', label: '類別' },
+      numeric: { bg: 'bg-violet-100', text: 'text-violet-700', label: '數值' },
+      date: { bg: 'bg-cyan-100', text: 'text-cyan-700', label: '日期' },
     };
-    const c = colors[fieldType];
+    const c = meta[fieldType];
     return (
       <span
         className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text}`}
       >
-        {fieldType}
+        {c.label}
       </span>
     );
   }
@@ -661,7 +662,7 @@ export function ListCreateDraftPage() {
               {/* LIST_NO 預覽（對齊 prototype 27a L180-187） */}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
-                  LIST_NO（系統自動產生）
+                  名單編號（系統自動產生）
                 </label>
                 <div className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md font-mono text-sm text-gray-500">
                   <Hash className="w-4 h-4 text-gray-400" />
@@ -745,7 +746,7 @@ export function ListCreateDraftPage() {
                 <h2 className="text-base font-semibold text-gray-800">撈案期間</h2>
                 <span
                   className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200"
-                  title="list_period_start / list_period_end / list_interval 為名單一級保留欄位，系統獨立處理，不可作為動態篩選條件（BR-8 / J8）"
+                  title="開始撈取期數、結束撈取期數、間隔期數為名單一級保留欄位，系統獨立處理，不可作為動態篩選條件。"
                 >
                   <ShieldCheck className="w-3 h-3 mr-0.5" />
                   一級保留欄位
@@ -955,8 +956,7 @@ export function ListCreateDraftPage() {
                     </div>
                   </div>
                   <p className="text-[11px] text-gray-500">
-                    此條件由系統固定為 Y（優質案件），無法移除或修改（對應原系統
-                    <code className="font-mono mx-1">OBPOOLDATA.BEST_CASE = 'Y'</code>）。
+                    此條件由系統固定為 Y（優質案件），無法移除或修改。
                   </p>
                 </div>
               ))}
@@ -1110,11 +1110,11 @@ export function ListCreateDraftPage() {
                   <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="font-semibold text-amber-900">
-                      {inactiveDetails.length} 個可選值已停用，將被保留但月跑 Stage 1 不會匹配
+                      {inactiveDetails.length} 個可選值已停用，將被保留但月跑分派時不會匹配
                     </p>
                     <p className="text-xs text-amber-800 mt-0.5">
                       {inactiveDetails
-                        .map((d) => `${d.columnName}.${d.value}（${d.label}）`)
+                        .map((d) => `${fieldDisplayName(d.columnName)}：${d.label}`)
                         .join('、')}
                     </p>
                     <p className="text-xs text-amber-700 mt-1">
@@ -1147,7 +1147,7 @@ export function ListCreateDraftPage() {
                       筆案件
                     </p>
                     <p className="text-xs text-blue-700/80 mt-0.5">
-                      基於上月 POOLDATA 樣本估算（mock）。完整試算請使用 Stage 0 試算頁。
+                      基於上月案件樣本估算。完整試算請使用 Stage 0 試算頁。
                     </p>
                   </div>
                   <Link
@@ -1440,14 +1440,13 @@ function AdvanceConfirmModal({
               <h3 className="text-base font-semibold text-gray-800">
                 儲存並推進至部門比例階段？
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">F078 原子性上線約束流程</p>
             </div>
           </div>
           <div className="p-5 space-y-3">
             <p className="text-sm text-gray-700">推進後將同時：</p>
             <ul className="text-sm text-gray-600 space-y-1.5 pl-5 list-disc">
-              <li>建立 LIST_NO 並寫入草稿快照</li>
-              <li>鎖定篩選條件與 CR 開關（僅能 Rollback 退回後再修改）</li>
+              <li>建立名單編號並寫入草稿快照</li>
+              <li>鎖定篩選條件與 CR 開關（僅能退回後再修改）</li>
               <li>進入部門比例設定階段，處長將收到通知</li>
             </ul>
             <div className="rounded-md bg-gray-50 border border-gray-200 p-3 text-xs space-y-1">
@@ -1475,15 +1474,15 @@ function AdvanceConfirmModal({
                   <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="font-semibold text-amber-900">
-                      條件含已停用選項，推進後月跑 Stage 1 將忽略這些值
+                      條件含已停用選項，推進後月跑分派時將忽略這些值
                     </p>
                     <p className="mt-1 text-amber-800">
-                      推進後條件即被固化（離化），如需重填需先{' '}
-                      <strong>Rollback 至草稿</strong>。
+                      推進後條件即被固化，如需重填需先{' '}
+                      <strong>退回至草稿</strong>。
                     </p>
                     <p className="mt-1 text-amber-700">
                       {inactiveDetails
-                        .map((d) => `${d.columnName}.${d.value}（${d.label}）`)
+                        .map((d) => `${fieldDisplayName(d.columnName)}：${d.label}`)
                         .join('、')}
                     </p>
                   </div>
