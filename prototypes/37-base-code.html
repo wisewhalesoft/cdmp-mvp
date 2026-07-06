@@ -112,40 +112,24 @@
     <!-- 標題列 -->
     <div class="px-6 pt-5 pb-3">
       <h1 class="text-xl font-semibold text-gray-800">篩選欄位</h1>
-      <p class="text-sm text-gray-500 mt-1">F075 v1.5 白名單 + F076 v1.5 類別型欄位可選值（v2.1 取代 F068 代碼維護）</p>
-    </div>
-
-    <!-- v2.1 廢除通知（顯示一次） -->
-    <div class="px-6 mb-3">
-      <div class="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-        <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
-        <div class="flex-1">
-          <p class="font-semibold text-amber-900">F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）已於 v2.1 廢除</p>
-          <p class="mt-0.5">PROD_KIND / SPEC_TP / CASE_STATUS 之可選值已遷移至本頁「可選值管理」（F076 v1.5）；舊 <code>ob_code_df</code> 表中對應 <code>tbl_id</code> 之資料於 Phase 3a migration 後刪除。caseyear 與 settle_src 之可選值亦由本頁統一管理（J1 / J2 / E4 / E5）。</p>
-        </div>
-      </div>
+      <p class="text-sm text-gray-500 mt-1">管理可用於名單定義的篩選欄位與其可選值</p>
     </div>
 
     <!-- Tab 導覽 -->
     <div class="px-6">
       <div class="bg-white border border-border border-b-0 rounded-t-lg">
-        <div class="flex items-center justify-between px-4 border-b border-border">
+        <div class="flex items-center px-4 border-b border-border">
           <div class="flex items-center gap-1">
             <button id="tabFields" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('fields')">
               <i data-lucide="filter" class="w-3.5 h-3.5 inline mr-1.5 -mt-0.5"></i>
               欄位管理
-              <span class="ml-1.5 text-[10px] text-gray-400">F075</span>
               <span class="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full" id="fieldsCnt">17</span>
             </button>
             <button id="tabOptions" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('options')">
               <i data-lucide="list-checks" class="w-3.5 h-3.5 inline mr-1.5 -mt-0.5"></i>
               可選值管理
-              <span class="ml-1.5 text-[10px] text-gray-400">F076</span>
               <span class="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full" id="optionsCnt">13</span>
             </button>
-          </div>
-          <div class="pr-3 text-[10px] text-gray-400">
-            <span id="tabUrlHint">URL: ?tab=fields</span>
           </div>
         </div>
       </div>
@@ -157,35 +141,18 @@
     <div id="panelFields" class="px-6 pb-6">
       <div class="bg-white border border-border border-t-0 rounded-b-lg shadow-sm">
 
-        <!-- Scope 提示 -->
-        <div class="mx-4 mt-4 mb-3 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700">
-          <i data-lucide="filter" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-          <div>
-            <p class="font-semibold text-primary">F075 v1.5 — 篩選欄位白名單</p>
-            <p class="text-gray-600 mt-0.5">
-              管理可作為名單條件的欄位；每欄位標記 <code>field_type</code>（categorical / numeric / date），驅動 F050/F051 名單表單之條件元件型態。
-              停用為軟刪除（<code>is_active = false</code>），不回溯既有名單條件（BR-3）。
-              資料表 <code>pooldata_field_whitelist</code>。
-            </p>
-            <p class="text-gray-600 mt-1">
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle" style="background:#D1FAE5;color:#047857;"><i data-lucide="contact" class="w-2.5 h-2.5"></i>F109 / US-172</span>
-              每欄位另標記 <code>data_source</code>：<strong>案件資料</strong>（<code>ob_pool_data</code>）或 <strong>客戶資料</strong>（<code>customer_core</code>）。客戶資料 8 欄透過 <code>ob_pool_data.custo_no = customer_core.source_customer_no</code> 關聯，月跑 Stage 1 以 LEFT JOIN 串接（NULL 視為排除）。
-            </p>
-          </div>
-        </div>
-
         <!-- 工具列 -->
         <div class="mx-4 mb-3 flex items-center gap-3 flex-wrap">
           <div class="relative flex-1 min-w-[240px] max-w-[400px]">
             <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-            <input id="fieldSearch" oninput="renderFields()" type="text" placeholder="搜尋 column_name / display_name..."
+            <input id="fieldSearch" oninput="renderFields()" type="text" placeholder="搜尋顯示名稱 / 欄位名稱..."
               class="w-full pl-9 pr-3 py-1.5 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
           </div>
           <select id="fieldTypeFilter" onchange="renderFields()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white">
-            <option value="all">類別：全部</option>
-            <option value="categorical">categorical</option>
-            <option value="numeric">numeric</option>
-            <option value="date">date</option>
+            <option value="all">欄位類型：全部</option>
+            <option value="categorical">類別型（categorical）</option>
+            <option value="numeric">數值型（numeric）</option>
+            <option value="date">日期型（date）</option>
           </select>
           <select id="fieldSourceFilter" onchange="renderFields()" class="pl-3 pr-8 py-1.5 text-sm border border-border rounded-md bg-white">
             <option value="all">來源：全部</option>
@@ -208,30 +175,17 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-border bg-gray-50/60">
-                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[14%]">column_name</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[16%]">display_name</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[11%]">field_type</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[16%]">顯示名稱</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[14%]">欄位名稱</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[11%]">欄位類型</th>
                 <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[12%]">資料來源</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[20%]">columnDescription</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[20%]">欄位描述</th>
                 <th class="text-left px-5 py-3 font-semibold text-gray-600 w-[9%]">狀態</th>
                 <th class="text-right px-5 py-3 font-semibold text-gray-600 w-[18%]">操作</th>
               </tr>
             </thead>
             <tbody id="fieldsTbody"></tbody>
           </table>
-        </div>
-
-        <div class="mx-4 mb-4 mt-3 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-[11px] text-gray-600">
-          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-          <div>
-            <p class="font-medium text-gray-700 mb-0.5">F075 v1.5 商業規則摘要</p>
-            <ul class="list-disc list-inside space-y-0.5">
-              <li><strong>BR-1</strong>：<code>column_name</code> 為唯一鍵，新增時不分啟用 / 停用一律檢查重複（違反回 409 <code>POOLDATA_FIELD_DUPLICATE</code>）。</li>
-              <li><strong>BR-3</strong>：停用「不回溯」既有名單條件，F050/F051 寫入時驗證 <code>is_active = true</code>；F048 列表頁讀取既有名單時不阻擋。</li>
-              <li><strong>BR-4</strong>：<code>field_type</code> 由 categorical 改為其他類別時，<strong>不自動刪除</strong> F076 既有可選值（軟停用，<code>deactivation_reason = 'field_type_changed'</code>）。</li>
-              <li><strong>BR-8（v1.5）</strong>：<code>list_period_start</code> / <code>list_period_end</code> / <code>list_interval</code> 為一級保留欄位，禁止入白名單（J8）。</li>
-            </ul>
-          </div>
         </div>
 
       </div>
@@ -242,22 +196,6 @@
     <!-- ============================================================ -->
     <div id="panelOptions" class="px-6 pb-6 hidden">
       <div class="bg-white border border-border border-t-0 rounded-b-lg shadow-sm">
-
-        <!-- Scope 提示 -->
-        <div class="mx-4 mt-4 mb-3 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700">
-          <i data-lucide="list-checks" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-          <div>
-            <p class="font-semibold text-primary">F076 v1.5 — 類別型欄位可選值</p>
-            <p class="text-gray-600 mt-0.5">
-              針對 F075 白名單中 <code>field_type = 'categorical'</code> 的欄位維護可選值（<code>option_value</code> + <code>option_label</code>），供 F050/F051 名單表單之多選元件動態載入。
-              v2.1 起 caseyear / case_status / prod_kind / spec_tp / settle_src 之可選值統一在此維護（F068 廢除後）。
-            </p>
-            <p class="text-gray-600 mt-1">
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle" style="background:#D1FAE5;color:#047857;"><i data-lucide="contact" class="w-2.5 h-2.5"></i>F109 / US-172</span>
-              客戶資料（<code>customer_core</code>）7 個 categorical 欄位亦於此維護：<strong>性別</strong>為 code→label（<code>option_value</code>＝代碼 1/2/3、<code>option_label</code>＝男/女/法人）；其餘 <code>*_desc</code> 欄位（職業別 / 教育 / 婚姻 / 身分別 / 收入 / 居住城市）於 <code>customer_core</code> 已存中文，故 <code>option_value</code> 即為該中文值（value＝label）。系統首次部署自動 seed，為冪等操作。
-            </p>
-          </div>
-        </div>
 
         <!-- 左：欄位清單 + 右：可選值清單 -->
         <div class="grid grid-cols-12 gap-0 border-t border-border">
@@ -278,10 +216,10 @@
           <!-- 右欄：選定欄位之可選值清單 -->
           <section class="col-span-8">
             <div class="px-5 py-3 border-b border-border flex items-center gap-3 flex-wrap">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 min-w-0">
                 <span class="text-xs text-gray-500">當前欄位：</span>
-                <code id="curColName" class="font-mono text-sm font-semibold text-primary">caseyear</code>
-                <span class="text-sm text-gray-700">（<span id="curColDisplay">進件 / 滿期年數</span>）</span>
+                <span id="curColDisplay" class="text-sm font-semibold text-primary truncate">進件 / 滿期年數</span>
+                <code id="curColName" class="font-mono text-xs text-gray-400">（caseyear）</code>
                 <span id="curColSource"></span>
               </div>
               <label class="ml-auto inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
@@ -296,11 +234,11 @@
               <table class="w-full text-sm">
                 <thead>
                   <tr class="border-b border-border bg-gray-50/60">
-                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[20%]">option_value</th>
-                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[35%]">option_label</th>
-                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[15%]">狀態</th>
-                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[15%]">停用原因</th>
-                    <th class="text-right px-5 py-2.5 font-semibold text-gray-600 w-[15%]">操作</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[32%]">顯示名稱</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[16%]">欄位值</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[14%]">狀態</th>
+                    <th class="text-left px-5 py-2.5 font-semibold text-gray-600 w-[16%]">停用原因</th>
+                    <th class="text-right px-5 py-2.5 font-semibold text-gray-600 w-[22%]">操作</th>
                   </tr>
                 </thead>
                 <tbody id="optionsTbody"></tbody>
@@ -308,18 +246,6 @@
             </div>
           </section>
 
-        </div>
-
-        <div class="mx-4 my-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-[11px] text-gray-600">
-          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-          <div>
-            <p class="font-medium text-gray-700 mb-0.5">F076 v1.5 商業規則摘要</p>
-            <ul class="list-disc list-inside space-y-0.5">
-              <li><strong>BR-1</strong>：<code>(column_name, option_value)</code> 複合唯一鍵；違反回 422 <code>OPTION_VALUE_DUPLICATE</code>。</li>
-              <li><strong>BR-3 / BR-4</strong>：停用「不回溯」既有名單；inactive 值保留供歷史追溯與「上月複製」UI 警示。</li>
-              <li><strong>v1.5 新增</strong>：caseyear / case_status / prod_kind / spec_tp / settle_src 之可選值統一在此管理（取代 F068 ob_code_df）。</li>
-            </ul>
-          </div>
         </div>
 
       </div>
@@ -336,42 +262,48 @@
         <div class="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h3 class="text-lg font-semibold text-gray-900">新增篩選欄位</h3>
-            <p class="text-xs text-gray-500 mt-0.5">POST /api/v1/pooldata-fields</p>
           </div>
           <button onclick="closeModal('createFieldModal')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
         </div>
         <div class="px-6 py-5 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">columnName <span class="text-danger">*</span></label>
-            <select class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-              <option>請選擇 OBPOOLDATA 既有欄位...</option>
-              <option>year_cnt</option>
-              <option>month_cnt</option>
-              <option>cust_age</option>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">選擇欄位 <span class="text-danger">*</span></label>
+            <select onchange="onCreateFieldColumnPicked(this)" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <option value="">請選擇欄位…</option>
+              <option value="risk_level" data-desc="風險等級">風險等級（risk_level）· 類別</option>
+              <option value="month_cnt" data-desc="撈取月份計數">撈取月份計數（month_cnt）· 數值</option>
+              <option value="cust_birth" data-desc="">客戶生日（cust_birth）· 日期</option>
             </select>
-            <p class="text-xs text-gray-400 mt-1">自 OBPOOLDATA 既有但尚未加入白名單之欄位中選擇（dropdown 模式，移植自 v1.4.7）。完整 columnDescription 自動填入。</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">fieldType <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">欄位名稱</label>
+            <div class="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg bg-gray-50 text-gray-700 font-mono">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-gray-400"></i>
+              <span id="cfColName">—</span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">欄位類型 <span class="text-danger">*</span></label>
             <div class="grid grid-cols-3 gap-2">
               <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
-                <input type="radio" name="newFieldType" value="categorical" class="mt-0.5">
-                <div><div class="text-sm font-medium text-gray-800">categorical</div><div class="text-[11px] text-gray-500 mt-0.5">多選列表</div></div>
+                <input type="radio" name="newFieldType" value="categorical" class="mt-0.5" checked>
+                <div><div class="text-sm font-medium text-gray-800">類別型</div><div class="text-[11px] text-gray-500 mt-0.5">多選列表</div></div>
               </label>
               <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
                 <input type="radio" name="newFieldType" value="numeric" class="mt-0.5">
-                <div><div class="text-sm font-medium text-gray-800">numeric</div><div class="text-[11px] text-gray-500 mt-0.5">min/max</div></div>
+                <div><div class="text-sm font-medium text-gray-800">數值型</div><div class="text-[11px] text-gray-500 mt-0.5">數值範圍</div></div>
               </label>
               <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
                 <input type="radio" name="newFieldType" value="date" class="mt-0.5">
-                <div><div class="text-sm font-medium text-gray-800">date</div><div class="text-[11px] text-gray-500 mt-0.5">日期範圍</div></div>
+                <div><div class="text-sm font-medium text-gray-800">日期型</div><div class="text-[11px] text-gray-500 mt-0.5">日期範圍</div></div>
               </label>
             </div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">displayName <span class="text-danger">*</span></label>
-            <input type="text" maxlength="50" placeholder="例：撈取月份計數"
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">顯示名稱 <span class="text-danger">*</span></label>
+            <input id="cfDisplayName" type="text" maxlength="100" placeholder="例：風險等級"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <p class="text-[11px] text-gray-400 mt-1">選欄位後自動帶入該欄位描述；若無描述請自行輸入</p>
           </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
@@ -390,21 +322,20 @@
         <div class="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h3 class="text-lg font-semibold text-gray-900">新增可選值</h3>
-            <p class="text-xs text-gray-500 mt-0.5">欄位 <code id="createOptColCode" class="font-mono">caseyear</code> · POST /api/v1/pooldata-fields/:column/options</p>
+            <p class="text-xs text-gray-500 mt-0.5">欄位：<span id="createOptColCode">進件 / 滿期年數</span></p>
           </div>
           <button onclick="closeModal('createOptionModal')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
         </div>
         <div class="px-6 py-5 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">option_value <span class="text-danger">*</span></label>
-            <input id="newOptValue" type="text" maxlength="20" placeholder="例：7"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <p class="text-xs text-gray-400 mt-1">對應 <code>ob_pool_data</code> 中該欄位的實際儲存值（VARCHAR(20)）</p>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">option_label <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">顯示名稱 <span class="text-danger">*</span></label>
             <input id="newOptLabel" type="text" maxlength="100" placeholder="例：7 年"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">欄位值 <span class="text-danger">*</span></label>
+            <input id="newOptValue" type="text" maxlength="20" placeholder="例：7"
+              class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
           </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
@@ -488,7 +419,6 @@
       document.getElementById('tabOptions').classList.toggle('text-gray-500', isFields);
       document.getElementById('panelFields').classList.toggle('hidden', !isFields);
       document.getElementById('panelOptions').classList.toggle('hidden', isFields);
-      document.getElementById('tabUrlHint').textContent = 'URL: ?tab=' + tab;
       // URL 同步（不 reload）
       const url = new URL(location.href);
       url.searchParams.set('tab', tab);
@@ -640,12 +570,12 @@
     // ============================================================
     function fieldTypeBadge(type) {
       const map = {
-        categorical: { bg:'#DBEAFE', fg:'#1D4ED8', icon:'list' },
-        numeric:     { bg:'#EDE9FE', fg:'#6D28D9', icon:'hash' },
-        date:        { bg:'#CFFAFE', fg:'#0E7490', icon:'calendar' }
+        categorical: { bg:'#DBEAFE', fg:'#1D4ED8', icon:'list',     label:'類別' },
+        numeric:     { bg:'#EDE9FE', fg:'#6D28D9', icon:'hash',     label:'數值' },
+        date:        { bg:'#CFFAFE', fg:'#0E7490', icon:'calendar', label:'日期' }
       };
-      const m = map[type] || { bg:'#F3F4F6', fg:'#6B7280', icon:'help-circle' };
-      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${type}</span>`;
+      const m = map[type] || { bg:'#F3F4F6', fg:'#6B7280', icon:'help-circle', label:type };
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
     }
     // F109 / US-172：資料來源 badge（案件資料 = ob_pool_data / 客戶資料 = customer_core）
     function dataSourceBadge(source) {
@@ -699,8 +629,8 @@
         }
         return `
         <tr class="border-b border-border hover:bg-blue-50/20 ${f.isActive ? '' : 'opacity-60'}" data-testid="field-row-${f.columnName}" data-system-fixed="${f.isSystemFixed ? 'true' : 'false'}">
-          <td class="px-5 py-3"><code class="font-mono text-sm text-gray-800">${f.columnName}</code></td>
           <td class="px-5 py-3 text-sm text-gray-700">${f.displayName}${systemFixedBadge}</td>
+          <td class="px-5 py-3"><code class="font-mono text-xs text-gray-500">${f.columnName}</code></td>
           <td class="px-5 py-3">${fieldTypeBadge(f.fieldType)}</td>
           <td class="px-5 py-3">${dataSourceBadge(f.dataSource || 'ob_pool_data')}</td>
           <td class="px-5 py-3 text-xs text-gray-500 leading-relaxed">${f.columnDescription || '<span class="text-gray-300 italic">未設定</span>'}</td>
@@ -743,6 +673,15 @@
       renderFields();
       showToast(f.isActive ? 'success' : 'warning', f.isActive ? '欄位已啟用' : '欄位已停用', `${col}（停用「不回溯」既有名單）`);
     }
+    // 選欄位後：欄位名稱唯讀帶入、顯示名稱自動帶入該欄位描述（無描述則留空供輸入，未輸入才帶）
+    function onCreateFieldColumnPicked(sel) {
+      const opt = sel.options[sel.selectedIndex];
+      const col = sel.value;
+      const desc = opt ? (opt.getAttribute('data-desc') || '') : '';
+      document.getElementById('cfColName').textContent = col || '—';
+      const disp = document.getElementById('cfDisplayName');
+      if (disp && !disp.value.trim()) disp.value = desc;
+    }
     function openCreateFieldModal() { document.getElementById('createFieldModal').classList.remove('hidden'); }
     function submitCreateField() { closeModal('createFieldModal'); showToast('success','新增欄位成功（demo）','實作時將 POST /api/v1/pooldata-fields 並重新整理列表'); }
 
@@ -784,8 +723,8 @@
               <button onclick="selectOptionColumn('${f.columnName}')" class="w-full text-left px-4 py-2.5 flex items-center gap-2 ${active ? 'bg-blue-50 border-l-2 border-primary' : 'hover:bg-gray-50 border-l-2 border-transparent'}">
                 <i data-lucide="list" class="w-3.5 h-3.5 ${active ? 'text-primary' : 'text-gray-400'}"></i>
                 <div class="flex-1 min-w-0">
-                  <div class="font-mono text-xs ${active ? 'text-primary font-semibold' : 'text-gray-700'}">${f.columnName}</div>
-                  <div class="text-[11px] text-gray-500 truncate">${f.displayName}</div>
+                  <div class="text-xs truncate ${active ? 'text-primary font-semibold' : 'text-gray-700'}">${f.displayName}</div>
+                  <div class="text-[11px] text-gray-400 font-mono truncate">${f.columnName}</div>
                 </div>
                 <span class="text-[10px] px-1.5 py-0.5 rounded ${active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}">${optCnt}</span>
               </button>
@@ -800,16 +739,15 @@
       if (!OPTIONS[col]) return;
       curOptionColumn = col;
       const f = FIELDS.find(x => x.columnName === col);
-      document.getElementById('curColName').textContent = col;
+      document.getElementById('curColName').textContent = '（' + col + '）';
       document.getElementById('curColDisplay').textContent = f ? f.displayName : '';
       document.getElementById('curColSource').innerHTML = f ? dataSourceBadge(f.dataSource || 'ob_pool_data') : '';
-      document.getElementById('createOptColCode').textContent = col;
+      document.getElementById('createOptColCode').textContent = f ? f.displayName : col;
       // URL 同步
       const url = new URL(location.href);
       url.searchParams.set('tab', 'options');
       url.searchParams.set('column', col);
       history.replaceState({}, '', url);
-      document.getElementById('tabUrlHint').textContent = 'URL: ?tab=options&column=' + col;
       renderOptionColumns();
       renderOptionValues();
     }
@@ -823,14 +761,18 @@
         tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-8 text-center text-sm text-gray-400">尚無可選值${showInactive ? '' : '（含已停用值，請勾選上方 toggle 查看）'}</td></tr>`;
         return;
       }
-      tbody.innerHTML = filtered.map(o => `
+      tbody.innerHTML = filtered.map((o, idx) => `
         <tr class="border-b border-border hover:bg-blue-50/20 ${o.active ? '' : 'opacity-60'}">
-          <td class="px-5 py-2.5"><code class="font-mono text-sm text-gray-800">${o.v}</code>${o.special ? ' <span class="ml-1 text-[10px] text-amber-600 font-medium">SPECIAL</span>' : ''}</td>
-          <td class="px-5 py-2.5 text-sm text-gray-700">${o.l}</td>
+          <td class="px-5 py-2.5 text-sm text-gray-800">${o.l}</td>
+          <td class="px-5 py-2.5"><code class="font-mono text-xs text-gray-500">${o.v}</code>${o.special ? ' <span class="ml-1 text-[10px] text-amber-600 font-medium">SPECIAL</span>' : ''}</td>
           <td class="px-5 py-2.5">${activeBadge(o.active)}</td>
           <td class="px-5 py-2.5 text-xs text-gray-500">${o.reason || '<span class="text-gray-300">—</span>'}</td>
           <td class="px-5 py-2.5 text-right">
-            <button data-write-action onclick="toggleOption('${o.v}')" class="px-2 py-1 text-[11px] ${o.active ? 'text-warning border-amber-200 hover:bg-amber-50' : 'text-success border-green-200 hover:bg-green-50'} border rounded-md"><i data-lucide="${o.active ? 'ban' : 'check'}" class="w-3 h-3 inline -mt-0.5"></i> ${o.active ? '停用' : '啟用'}</button>
+            <div class="inline-flex items-center gap-1">
+              <button data-write-action onclick="moveOption('${o.v}','up')" ${idx === 0 ? 'disabled' : ''} title="上移" class="p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded ${idx === 0 ? 'opacity-30 cursor-not-allowed' : ''}"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+              <button data-write-action onclick="moveOption('${o.v}','down')" ${idx === filtered.length - 1 ? 'disabled' : ''} title="下移" class="p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded ${idx === filtered.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+              <button data-write-action onclick="toggleOption('${o.v}')" class="px-2 py-1 text-[11px] ${o.active ? 'text-warning border-amber-200 hover:bg-amber-50' : 'text-success border-green-200 hover:bg-green-50'} border rounded-md"><i data-lucide="${o.active ? 'ban' : 'check'}" class="w-3 h-3 inline -mt-0.5"></i> ${o.active ? '停用' : '啟用'}</button>
+            </div>
           </td>
         </tr>
       `).join('');
@@ -847,13 +789,27 @@
       renderOptionValues();
       showToast(o.active ? 'success' : 'warning', o.active ? '可選值已啟用' : '可選值已停用', `${curOptionColumn} = ${v}（${o.l}）。停用「不回溯」既有名單條件。`);
     }
+    // #12 可選值排序：於目前可見的相鄰項之間交換位置（名單定義多選元件將依此順序顯示）
+    function moveOption(v, dir) {
+      const opts = OPTIONS[curOptionColumn] || [];
+      const showInactive = document.getElementById('showInactiveOptToggle').checked;
+      const visibleIdx = opts.map((o, i) => ({ o, i })).filter(({ o }) => showInactive || o.active).map(({ i }) => i);
+      const pos = visibleIdx.findIndex(i => opts[i].v === v);
+      if (pos < 0) return;
+      const target = dir === 'up' ? pos - 1 : pos + 1;
+      if (target < 0 || target >= visibleIdx.length) return;
+      const a = visibleIdx[pos], b = visibleIdx[target];
+      [opts[a], opts[b]] = [opts[b], opts[a]];
+      renderOptionValues();
+      showToast('success', '排序已更新', `${curOptionColumn}：可選值順序已調整（名單定義多選元件將依此顯示）`);
+    }
     function openCreateOptionModal() { document.getElementById('createOptionModal').classList.remove('hidden'); }
     function submitCreateOption() {
       const v = (document.getElementById('newOptValue').value || '').trim();
       const l = (document.getElementById('newOptLabel').value || '').trim();
-      if (!v || !l) { showToast('error','驗證失敗','option_value 與 option_label 皆為必填'); return; }
+      if (!v || !l) { showToast('error','驗證失敗','顯示名稱與欄位值皆為必填'); return; }
       const opts = OPTIONS[curOptionColumn] || (OPTIONS[curOptionColumn] = []);
-      if (opts.some(o => o.v === v)) { showToast('error','OPTION_VALUE_DUPLICATE','此 option_value 已存在'); return; }
+      if (opts.some(o => o.v === v)) { showToast('error','欄位值重複','此欄位值已存在'); return; }
       opts.push({ v, l, active: true, reason: null });
       document.getElementById('newOptValue').value = '';
       document.getElementById('newOptLabel').value = '';
