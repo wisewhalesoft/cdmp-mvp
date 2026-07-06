@@ -216,7 +216,7 @@
           <div class="flex items-center gap-1">
             <button id="tab-cardtype" class="tab-btn active px-4 py-3 text-sm font-medium" onclick="switchTab('cardtype')">
               <i data-lucide="credit-card" class="w-3.5 h-3.5 inline mr-1"></i>
-              CARD_TYPE
+              計分卡類型
               <span id="cardtypeCount" class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-blue-50 text-primary rounded-full">6</span>
             </button>
             <button id="tab-dim" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800" onclick="switchTab('dim')">
@@ -236,9 +236,6 @@
               <i data-lucide="layers-3" class="w-3.5 h-3.5 inline mr-1"></i>
               TIER_LEVEL 對應
             </button>
-          </div>
-          <div class="flex items-center gap-2 pr-3">
-            <span class="text-xs text-gray-400">資料來源 <code class="text-xs text-gray-500">ob_card_type / ob_levelcard_* / ob_tier</code></span>
           </div>
         </div>
       </div>
@@ -268,10 +265,10 @@
             <thead>
               <tr class="border-b border-border bg-gray-50/60">
                 <th class="w-8 px-3 py-3"></th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">card_type</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">card_name</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">PROD_KIND</th>
-                <th class="text-left px-5 py-3 font-semibold text-gray-600">status</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">計分卡代碼</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">計分卡名稱</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">產品類別</th>
+                <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
                 <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
               </tr>
             </thead>
@@ -298,8 +295,8 @@
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-gray-50/60">
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">column_label</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">欄位代碼</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">欄位名稱</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">類型</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">比對模式</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">分數區間摘要</th>
@@ -309,10 +306,6 @@
               </thead>
               <tbody id="dim-tbody"></tbody>
             </table>
-          </div>
-          <div class="px-4 py-2 border-t border-border bg-blue-50/30 text-xs text-gray-600 flex items-start gap-2">
-            <i data-lucide="info" class="w-3.5 h-3.5 text-primary mt-0.5 shrink-0"></i>
-            <span>「比對模式（matchType）」由 PostgreSQL function 依分數區間自動推導（CATEGORY=純類別 / RANGE=純區間 / COMPOSITE=混合）；本欄為唯讀展示，無人工切換功能。</span>
           </div>
           <div class="flex items-center justify-between px-5 py-3 border-t border-border">
             <span id="dimTotal" class="text-sm text-gray-500">共 8 個維度</span>
@@ -344,35 +337,22 @@
               </select>
               <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
             </div>
-            <span class="text-xs text-gray-400 ml-auto">資料表 <code>ob_levelcard_score</code> · 邏輯主鍵 (card_type, card_version, column_name, level1, level2_s, level2_e)</span>
-          </div>
-
-          <!-- v1.3 唯讀總覽提示 -->
-          <div class="mx-4 mt-3 mb-1 flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-gray-700">
-            <i data-lucide="eye" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-            <div>
-              <p class="font-medium text-gray-800">唯讀總覽（v1.3 規格）</p>
-              <p class="text-gray-600 mt-0.5">本 Tab 為跨維度的分數區間總覽，僅供查閱。所有新增 / 編輯 / 停用操作請至 <button onclick="switchTab('dim')" class="text-primary hover:underline font-medium">Tab 2 計分維度</button> 點擊各維度的「編輯」按鈕進入整合式設定 Modal。</p>
-            </div>
           </div>
 
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-gray-50/60">
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">column_name</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">欄位代碼</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">比對模式</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">level1</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">level2_s</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">level2_e</th>
-                  <th class="text-right px-5 py-3 font-semibold text-gray-600">score</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">類別值</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">數值區間起始值</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">數值區間終止值</th>
+                  <th class="text-right px-5 py-3 font-semibold text-gray-600">分數</th>
                 </tr>
               </thead>
               <tbody id="score-tbody"></tbody>
             </table>
-          </div>
-          <div class="px-4 py-3 border-t border-border flex items-center justify-between">
-            <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>級距規則由維度自動推導：類別（level1 only）/ 區間（level2_s~level2_e）/ 複合（兩者皆有）；區間不可重疊（BR-3）</p>
           </div>
         </div>
       </div>
@@ -393,7 +373,6 @@
             <div class="col-span-2 border-r border-border">
               <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
                 <h4 class="text-sm font-semibold text-gray-700">總分區間 → CARD_LEVEL 對應</h4>
-                <span class="text-xs text-gray-400 ml-2">資料表 <code>ob_levelcard_level</code></span>
                 <button id="btnAddLevel" data-testid="btn-add-level" onclick="openLevelModal()"
                   class="ml-auto write-btn inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                   <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -404,10 +383,9 @@
                 <table class="w-full text-sm">
                   <thead>
                     <tr class="border-b border-border bg-gray-50/60">
-                      <th class="text-left px-5 py-3 font-semibold text-gray-600">card_level</th>
-                      <th class="text-left px-5 py-3 font-semibold text-gray-600">等級名稱</th>
-                      <th class="text-left px-5 py-3 font-semibold text-gray-600">score_s（下限）</th>
-                      <th class="text-left px-5 py-3 font-semibold text-gray-600">score_e（上限）</th>
+                      <th class="text-left px-5 py-3 font-semibold text-gray-600">等級代碼</th>
+                      <th class="text-left px-5 py-3 font-semibold text-gray-600">卡片分數起始值</th>
+                      <th class="text-left px-5 py-3 font-semibold text-gray-600">卡片分數終止值</th>
                       <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
                     </tr>
                   </thead>
@@ -428,7 +406,6 @@
                   <i data-lucide="eye" class="w-4 h-4 text-primary"></i>
                   預估各等級分佈
                 </h4>
-                <p class="text-xs text-gray-500 mt-0.5">基於目前 ob_pool_data（最多 60 秒快取）</p>
               </div>
               <div class="p-5 space-y-3">
                 <div class="flex items-center justify-between">
@@ -451,10 +428,6 @@
                   <span class="font-semibold text-gray-900 tabular-nums">500 人</span>
                 </div>
                 <div class="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div class="h-2 bg-rose-500" style="width: 6%"></div></div>
-                <div class="pt-3 border-t border-border flex items-center justify-between text-xs text-gray-500">
-                  <span>樣本來源</span>
-                  <span class="font-mono">ob_pool_data n = 9,500</span>
-                </div>
               </div>
             </div>
           </div>
@@ -476,18 +449,8 @@
           <!-- Mode Banner -->
           <div id="tierModeBanner" class="mx-4 mt-3 mb-2 flex items-start gap-2 p-3 rounded-lg text-xs"></div>
 
-          <!-- Fallback 規則說明 -->
-          <div class="mx-4 mt-2 mb-1 flex items-start gap-2 p-3 bg-purple-50/60 border border-purple-200 rounded-lg text-xs text-gray-700">
-            <i data-lucide="git-fork" class="w-4 h-4 text-purple-600 mt-0.5 shrink-0"></i>
-            <div>
-              <p class="font-semibold text-purple-700">Fallback 規則說明</p>
-              <p class="text-gray-600 mt-0.5">當 CARD_TYPE 為不分等級型卡別時，CARD_LEVEL 留空（NULL）即為 fallback 規則 — 不分等級直接對應 TIER_LEVEL。v1.5 新增：同一 CARD_TYPE 之 Standard 與 Fallback 規則互斥，不可同時存在；違反時 422 <code>CARD_TYPE_FALLBACK_STANDARD_MUTEX</code>。</p>
-            </div>
-          </div>
-
           <div class="px-4 py-3 border-b border-border bg-gray-50/40 flex items-center gap-3">
             <span id="tierCount" class="text-sm text-gray-500">共 0 筆對應</span>
-            <span class="text-xs text-gray-400 ml-2">資料表 <code>ob_tier</code> · PK (card_type, card_level)</span>
             <button id="btnAddTier" onclick="openTierModal()" class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               新增對應
@@ -498,9 +461,8 @@
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-gray-50/60">
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">CARD_LEVEL</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">TIER_LEVEL</th>
-                  <th class="text-left px-5 py-3 font-semibold text-gray-600">LIST_NM</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">等級代碼</th>
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">TIER 代碼</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">規則類型</th>
                   <th class="text-right px-5 py-3 font-semibold text-gray-600">操作</th>
                 </tr>
@@ -511,15 +473,6 @@
           <div class="px-4 py-3 border-t border-border flex items-center justify-between">
             <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>月跑 Stage 2 完成 CARD_LEVEL 計算後，依此表 join 寫入 ob_pool_data_list.tier_level</p>
           </div>
-        </div>
-      </div>
-
-      <!-- footer note -->
-      <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
-        <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-        <div>
-          <p class="font-medium text-gray-700 mb-0.5">計分卡設定操作說明</p>
-          <p>覆寫式編輯（無草稿、無 rollback），歷史追溯依賴月跑 config 快照（F066）。月跑執行中（<code>assignment_run.status IN ('pending','running')</code>）所有編輯功能將被鎖定（409 SCORING_VERSION_LOCKED）。複雜計分邏輯由 PostgreSQL function <code>fn_calc_tier_level</code> 實作（AD-E07-3）。CARD_TYPE 停用為級聯 hard delete，刪除 6 張下游表後不可復原；歷史月跑快照（assignment_run_snapshot）保留。</p>
         </div>
       </div>
 
@@ -543,20 +496,20 @@
         </div>
         <div class="px-6 py-5 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">card_type 代碼 <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">計分卡代碼 <span class="text-danger">*</span></label>
             <input id="createCardTypeCode" type="text" maxlength="5" placeholder="例：HC"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
             <p id="createCardTypeCodeError" class="hidden text-xs text-danger mt-1"></p>
             <p class="text-xs text-gray-400 mt-1">最多 5 字元（VARCHAR(5)），英數字，建立後不可修改</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">card_name 名稱 <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">計分卡名稱 <span class="text-danger">*</span></label>
             <input id="createCardTypeName" type="text" maxlength="30" placeholder="例：高資產卡"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
             <p id="createCardTypeNameError" class="hidden text-xs text-danger mt-1"></p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">PROD_KIND 產品類別 <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">產品類別 <span class="text-danger">*</span></label>
             <div class="relative">
               <select id="createCardTypeProdKind" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-lg bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
                 <option value="">請選擇</option>
@@ -566,16 +519,7 @@
               </select>
               <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
             </div>
-            <p id="createCardTypeProdKindError" class="hidden text-xs text-danger mt-1"></p>
-            <p class="text-xs text-gray-400 mt-1">來源：篩選欄位 (<code>pooldata_field_option</code>, <code>column_name='prod_kind'</code>)</p>
-          </div>
-          <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-700 flex items-start gap-2">
-            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-            <div>
-              <p class="font-medium text-gray-700 mb-1">自動建立提示</p>
-              <p>新增後系統將於同 transaction 自動建立 v1 計分版本：<code>sdate = 今日</code>、<code>edate = 20991231</code>。Tab 2~5 將顯示空狀態，等待您新增各項設定。</p>
-            </div>
-          </div>
+            <p id="createCardTypeProdKindError" class="hidden text-xs text-danger mt-1"></p>          </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button onclick="closeModal('createCardTypeModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
@@ -598,19 +542,19 @@
         </div>
         <div class="px-6 py-5 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">card_type 代碼</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">計分卡代碼</label>
             <input id="editCardTypeCode" type="text" disabled
               class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono bg-gray-50 text-gray-500 cursor-not-allowed">
             <p class="text-xs text-gray-400 mt-1"><i data-lucide="info" class="w-3 h-3 inline"></i> 代碼建立後不可修改（若需更名請停用後重新建立）</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">card_name 名稱 <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">計分卡名稱 <span class="text-danger">*</span></label>
             <input id="editCardTypeName" type="text" maxlength="30"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
             <p id="editCardTypeNameError" class="hidden text-xs text-danger mt-1"></p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">PROD_KIND 產品類別 <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">產品類別 <span class="text-danger">*</span></label>
             <div class="relative">
               <select id="editCardTypeProdKind" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-lg bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
                 <option value="01">🚗  01 汽車</option>
@@ -618,9 +562,7 @@
                 <option value="03">📦  03 一般商品</option>
               </select>
               <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-            </div>
-            <p class="text-xs text-gray-400 mt-1">來源：篩選欄位 (<code>pooldata_field_option</code>, <code>column_name='prod_kind'</code>)</p>
-          </div>
+            </div>          </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button onclick="closeModal('editCardTypeModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50 transition">取消</button>
@@ -762,13 +704,13 @@
             </h4>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-medium text-gray-700 mb-1">column_name <span class="text-danger">*</span></label>
+                <label class="block text-xs font-medium text-gray-700 mb-1">欄位代碼 <span class="text-danger">*</span></label>
                 <input id="dimEditorColName" type="text" maxlength="30" placeholder="例：CONTRACT_YEARS"
                   class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
                 <p class="text-[11px] text-gray-400 mt-1">最多 30 字元（VARCHAR(30)）</p>
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-700 mb-1">column_label <span class="text-danger">*</span></label>
+                <label class="block text-xs font-medium text-gray-700 mb-1">欄位名稱 <span class="text-danger">*</span></label>
                 <input id="dimEditorColLabel" type="text" maxlength="30" placeholder="例：契約年資"
                   class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
               </div>
@@ -828,10 +770,10 @@
               <table class="w-full text-sm border border-border rounded-lg">
                 <thead>
                   <tr class="border-b border-border bg-gray-50/60 text-xs">
-                    <th id="dimEditorThLevel1" class="text-left px-3 py-2 font-semibold text-gray-600">level1（類別）</th>
-                    <th id="dimEditorThLevel2s" class="text-left px-3 py-2 font-semibold text-gray-600">level2_s</th>
-                    <th id="dimEditorThLevel2e" class="text-left px-3 py-2 font-semibold text-gray-600">level2_e</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">score</th>
+                    <th id="dimEditorThLevel1" class="text-left px-3 py-2 font-semibold text-gray-600">類別值</th>
+                    <th id="dimEditorThLevel2s" class="text-left px-3 py-2 font-semibold text-gray-600">數值區間起始值</th>
+                    <th id="dimEditorThLevel2e" class="text-left px-3 py-2 font-semibold text-gray-600">數值區間終止值</th>
+                    <th class="text-right px-3 py-2 font-semibold text-gray-600">分數</th>
                     <th class="w-12 px-3 py-2"></th>
                   </tr>
                 </thead>
@@ -938,14 +880,14 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">CARD_TYPE</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">計分卡類型</label>
             <input id="tierModalCardType" type="text" disabled
               class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono bg-gray-50 text-gray-500 cursor-not-allowed">
             <p class="text-xs text-gray-400 mt-1">由 Tab 1 選中狀態帶入，不可修改</p>
           </div>
 
           <div id="tierCardLevelWrap">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">CARD_LEVEL <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">等級代碼 <span class="text-danger">*</span></label>
             <div class="relative">
               <select id="tierModalCardLevel" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-lg bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
                 <option value="">請選擇</option>
@@ -965,7 +907,7 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">TIER_LEVEL <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">TIER 代碼 <span class="text-danger">*</span></label>
             <div class="relative">
               <select id="tierModalTierLevel" class="w-full pl-3 pr-9 py-2 text-sm border border-border rounded-lg bg-white font-mono appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
                 <option value="">請選擇</option>
@@ -985,12 +927,6 @@
             <p class="text-xs text-gray-400 mt-1"><i data-lucide="info" class="w-3 h-3 inline"></i> 固定列舉 T1~T10，不允許自由輸入（v1.5 規格 / BR-2）</p>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">LIST_NM（選填）</label>
-            <input type="text" maxlength="30" placeholder="例：高資產卡 A 級"
-              class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <p class="text-xs text-gray-400 mt-1">最多 30 字元；不參與 PK 與 join</p>
-          </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button onclick="closeModal('tierModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-gray-50">取消</button>
@@ -1014,7 +950,7 @@
         <div class="px-6 py-5 space-y-4">
           <!-- CARD_TYPE：由 Tab 1 selectedCardType 帶入，disabled（BR-7 範圍鎖） -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">CARD_TYPE</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">計分卡類型</label>
             <input id="levelModalCardType" data-testid="level-modal-card-type" type="text" disabled
               class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono bg-gray-50 text-gray-500 cursor-not-allowed">
             <p class="text-xs text-gray-400 mt-1">由 Tab 1 選中狀態帶入，不可修改（BR-7 CARD_TYPE 範圍鎖）</p>
@@ -1022,23 +958,22 @@
 
           <!-- CARD_LEVEL：單一大寫英文字元，pattern ^[A-Z]$（BR-8） -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">CARD_LEVEL 等級代碼 <span class="text-danger">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">等級代碼 <span class="text-danger">*</span></label>
             <input id="levelModalCardLevel" data-testid="level-modal-card-level" type="text" maxlength="1" autocomplete="off"
               class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               oninput="this.value = this.value.toUpperCase()">
             <p id="levelModalCardLevelError" class="hidden text-xs text-danger mt-1"></p>
-            <p class="text-xs text-gray-400 mt-1">單一大寫英文字元（A~Z），對應 <code>ob_levelcard_level.card_level VARCHAR(1)</code>（BR-8）</p>
           </div>
 
           <!-- score_s / score_e -->
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">score_s（下限）<span class="text-danger">*</span></label>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">卡片分數起始值 <span class="text-danger">*</span></label>
               <input id="levelModalScoreS" data-testid="level-modal-score-s" type="number" min="0"
                 class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">score_e（上限）<span class="text-danger">*</span></label>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">卡片分數終止值 <span class="text-danger">*</span></label>
               <input id="levelModalScoreE" data-testid="level-modal-score-e" type="number" min="0"
                 class="w-full px-3 py-2 text-sm border border-border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
             </div>
@@ -1646,7 +1581,7 @@
       const list = levelsByType[ct] || [];
       const tbody = document.getElementById('level-tbody');
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-sm text-gray-400">
+        tbody.innerHTML = `<tr><td colspan="4" class="py-12 text-center text-sm text-gray-400">
           <i data-lucide="inbox" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
           <p>目前無 CARD_LEVEL 等級門檻設定</p>
           <p class="text-xs text-gray-400 mt-1">請點擊「+ 新增等級」開始</p>
@@ -1659,7 +1594,6 @@
         tbody.innerHTML = list.map(l => `
           <tr class="border-b border-border hover:bg-gray-50/50 transition">
             <td class="px-5 py-3"><span class="inline-flex items-center justify-center w-8 h-8 text-sm font-semibold rounded-md ${l.cardLevel === 'A' ? 'bg-emerald-100 text-emerald-700' : l.cardLevel === 'B' ? 'bg-blue-100 text-blue-700' : l.cardLevel === 'C' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">${l.cardLevel}</span></td>
-            <td class="px-5 py-3 text-gray-900">${levelNames[l.cardLevel] || l.cardLevel}</td>
             <td class="px-5 py-3"><input type="number" value="${l.scoreS}" class="w-24 px-2 py-1 text-sm border border-border rounded-md font-mono"></td>
             <td class="px-5 py-3"><input type="number" value="${l.scoreE}" class="w-24 px-2 py-1 text-sm border border-border rounded-md font-mono"></td>
             <td class="px-5 py-3 text-right">
@@ -1695,13 +1629,13 @@
         banner.innerHTML = `<i data-lucide="git-fork" class="w-4 h-4 text-purple-600 mt-0.5 shrink-0"></i><div><p class="font-medium text-purple-800">目前 CARD_TYPE 採用 Fallback 規則（${fallbackCount} 筆）</p><p class="text-purple-700 mt-0.5">不分等級直接對應 TIER_LEVEL</p></div>`;
       } else {
         banner.className = 'mx-4 mt-3 mb-2 flex items-start gap-2 p-3 rounded-lg text-xs bg-blue-50 border border-blue-100';
-        banner.innerHTML = `<i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i><div><p class="font-medium text-gray-800">目前 CARD_TYPE 採用 Standard 規則（${standardCount} 筆）</p><p class="text-gray-700 mt-0.5">CARD_LEVEL 分等級對應 TIER_LEVEL</p></div>`;
+        banner.innerHTML = `<i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i><div><p class="font-medium text-gray-800">目前 CARD_TYPE 採用 Standard 規則（${standardCount} 筆）</p></div>`;
       }
 
       countEl.textContent = `共 ${list.length} 筆對應`;
 
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-sm text-gray-400">
+        tbody.innerHTML = `<tr><td colspan="4" class="py-12 text-center text-sm text-gray-400">
           <i data-lucide="inbox" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
           <p>目前無 TIER_LEVEL 對應</p>
           <p class="text-xs text-gray-400 mt-1">請點擊上方「+ 新增對應」開始</p>
@@ -1727,7 +1661,6 @@
           <tr class="border-b border-border hover:bg-gray-50/50 transition ${fallbackRow ? 'bg-purple-50/50' : ''}">
             <td class="px-5 py-3">${levelCell}</td>
             <td class="px-5 py-3"><span class="font-mono font-semibold text-gray-900">${t.tierLevel}</span>${legacyBadge}</td>
-            <td class="px-5 py-3 text-xs text-gray-500">${t.listNm ?? '<span class="text-gray-300">—</span>'}</td>
             <td class="px-5 py-3">${tierBadge}</td>
             <td class="px-5 py-3 text-right">
               <button class="action-btn write-btn p-1.5 text-gray-500 hover:text-danger hover:bg-red-50 rounded action-btn disabled:opacity-40 disabled:cursor-not-allowed">
@@ -2074,8 +2007,7 @@
       if (list.length === 0) {
         body.innerHTML = `<p class="font-medium text-gray-800">將建立第一個等級</p><p class="text-gray-600 mt-0.5">建議從 A 級開始（最高分），score_e 通常設為 999</p>`;
       } else {
-        const ranges = list.map(l => `<strong>${l.cardLevel}</strong>（${l.scoreS}~${l.scoreE}）`).join('、');
-        body.innerHTML = `<p class="font-medium text-gray-800">BR-1（v1.5 修訂）：新區間不可與既有等級重疊；允許 gap，相鄰等級不強制連續</p><p class="text-gray-600 mt-0.5">目前已有：${ranges}</p>`;
+        body.innerHTML = `<p class="font-medium text-gray-800">新區間不可與既有等級重疊；允許 gap，相鄰等級不強制連續</p>`;
       }
     }
 
