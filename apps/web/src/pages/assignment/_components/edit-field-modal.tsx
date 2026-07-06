@@ -30,12 +30,12 @@ const FIELD_TYPE_CARDS: Array<{
 }> = [
   {
     type: 'categorical',
-    label: 'categorical',
-    hint: '類別（多選列表）',
+    label: '類別型',
+    hint: '多選列表',
     Icon: Tags,
   },
-  { type: 'numeric', label: 'numeric', hint: '數值（min/max）', Icon: Hash },
-  { type: 'date', label: 'date', hint: '日期（日期範圍）', Icon: Calendar },
+  { type: 'numeric', label: '數值型', hint: '數值範圍', Icon: Hash },
+  { type: 'date', label: '日期型', hint: '日期範圍', Icon: Calendar },
 ];
 
 export interface EditFieldModalProps {
@@ -82,9 +82,6 @@ export function EditFieldModal({
             <h3 className="text-base font-semibold text-gray-800">
               編輯篩選欄位
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5 font-mono">
-              PATCH /api/v1/pooldata-fields/{field.columnName}
-            </p>
           </div>
 
           <div className="p-6 space-y-4">
@@ -97,10 +94,10 @@ export function EditFieldModal({
               </div>
             )}
 
-            {/* ===== columnName 唯讀 chip（PK 不可變更，prototype L287-295） ===== */}
+            {/* ===== 欄位名稱 唯讀 chip（不可變更） ===== */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                columnName <span className="text-danger">*</span>
+                欄位名稱
               </label>
               <div
                 className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-700 font-mono"
@@ -108,16 +105,14 @@ export function EditFieldModal({
               >
                 <Lock className="w-3.5 h-3.5 text-gray-400" />
                 <span>{field.columnName}</span>
-                <span className="ml-auto text-[10px] text-gray-400">
-                  PK 不可變更
-                </span>
+                <span className="ml-auto text-[10px] text-gray-400">不可變更</span>
               </div>
             </div>
 
-            {/* ===== fieldType radio（**無系統推斷 hint** — AC-14 限定新增流程） ===== */}
+            {/* ===== fieldType radio ===== */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                fieldType <span className="text-danger">*</span>
+                欄位類型 <span className="text-danger">*</span>
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {FIELD_TYPE_CARDS.map(({ type, label, hint, Icon }) => (
@@ -155,7 +150,7 @@ export function EditFieldModal({
             {/* ===== displayName ===== */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                displayName <span className="text-danger">*</span>
+                顯示名稱 <span className="text-danger">*</span>
               </label>
               <input
                 type="text"
@@ -166,9 +161,6 @@ export function EditFieldModal({
                 placeholder="例：風險等級"
                 className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <p className="text-[10px] text-gray-400 mt-1">
-                業務可讀中文標籤，最多 100 字元
-              </p>
             </div>
           </div>
 

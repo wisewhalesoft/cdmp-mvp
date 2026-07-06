@@ -11,7 +11,7 @@
  *   - listFields() 在 mount 時呼叫
  *   - 新增 Modal dropdown 既有 columnDescription 自動填入 hint（v1.4.7 沿用）
  */
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { FieldsTab } from '../fields-tab';
@@ -72,38 +72,34 @@ describe('FieldsTab — Phase 5d 波 4', () => {
     expect(screen.getByTestId('btn-create-field')).toBeInTheDocument();
   });
 
-  it('fields-tab-3：F075 v1.5 商業規則 footer 4 條 BR（含 BR-8 list_period_* 一級保留欄位 J8）', async () => {
+  it('fields-tab-3：不再顯示開發者導向的商業規則 footer', async () => {
     renderTab();
     await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
-    // prototype L226-237 之 4 條 BR
-    expect(screen.getByTestId('field-whitelist-rules-footer')).toBeInTheDocument();
-    const footer = screen.getByTestId('field-whitelist-rules-footer');
-    expect(footer).toHaveTextContent('F075 v1.5 商業規則摘要');
-    expect(footer).toHaveTextContent('BR-1');
-    expect(footer).toHaveTextContent('BR-3');
-    expect(footer).toHaveTextContent('BR-4');
-    // BR-8 v1.5 新增（prototype L234）— list_period_* 為一級保留欄位（J8）
-    expect(footer).toHaveTextContent('BR-8');
-    expect(footer).toHaveTextContent('list_period_start');
-    expect(footer).toHaveTextContent('list_period_end');
-    expect(footer).toHaveTextContent('list_interval');
-    expect(footer).toHaveTextContent('一級保留欄位');
+    expect(
+      screen.queryByTestId('field-whitelist-rules-footer'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/商業規則摘要/)).not.toBeInTheDocument();
   });
 
-  it('fields-tab-4：渲染 field row 顯示 columnName / displayName / fieldType', async () => {
+  it('fields-tab-4：渲染 field row 顯示 顯示名稱 / 欄位名稱', async () => {
     renderTab();
     await waitFor(() => {
-      expect(screen.getByText('prod_kind')).toBeInTheDocument();
+      // 顯示名稱（產品類別）在左、欄位名稱（prod_kind）在右，皆渲染
       expect(screen.getByText('產品類別')).toBeInTheDocument();
+      expect(screen.getByText('prod_kind')).toBeInTheDocument();
     });
+    // 表頭改為中文
+    expect(screen.getByRole('columnheader', { name: '顯示名稱' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '欄位名稱' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '欄位類型' })).toBeInTheDocument();
   });
 
-  it('fields-tab-5：Scope 提示 banner 顯示 F075 v1.5 標題（對齊 prototype L173-183）', async () => {
+  it('fields-tab-5：不再顯示 F075 scope 提示 banner', async () => {
     renderTab();
     await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
-    const banner = screen.getByTestId('field-whitelist-scope-hint');
-    expect(banner).toHaveTextContent('F075 v1.5');
-    expect(banner).toHaveTextContent('POOLDATA 篩選欄位白名單');
+    expect(
+      screen.queryByTestId('field-whitelist-scope-hint'),
+    ).not.toBeInTheDocument();
   });
 
   it('fields-tab-6：active 列「停用」按鈕含 icon + 文字標籤（對齊 prototype L607）', async () => {
@@ -132,5 +128,100 @@ describe('FieldsTab — Phase 5d 波 4', () => {
       expect(screen.getByTestId('btn-reactivate-payt_term')).toBeInTheDocument(),
     );
     expect(screen.getByTestId('btn-reactivate-payt_term')).toHaveTextContent('啟用');
+  });
+
+  it('fields-tab-8：新增 modal 以顯示名稱選擇欄位，欄位名稱唯讀，提交衍生 displayName', async () => {
+    const mockedListAvailable = vi.mocked(poolApi.listAvailableColumns);
+    const mockedCreate = vi.mocked(poolApi.createField);
+    mockedListAvailable.mockResolvedValue({
+      availableColumns: [
+        {
+          columnName: 'risk_level',
+          dataType: 'varchar',
+          suggestedFieldType: 'categorical',
+          columnDescription: '風險等級',
+        },
+      ],
+    });
+    mockedCreate.mockResolvedValue({
+      columnName: 'risk_level',
+      displayName: '風險等級',
+      fieldType: 'categorical',
+      isActive: true,
+      createdAt: '2026-07-01T00:00:00Z',
+      updatedAt: '2026-07-01T00:00:00Z',
+    } as never);
+
+    renderTab();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-create-field'));
+    await waitFor(() => expect(mockedListAvailable).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    const option = await screen.findByTestId('dropdown-option-risk_level');
+    // 下拉選項同時顯示 顯示名稱（欄位描述）與 欄位名稱
+    expect(option).toHaveTextContent('風險等級');
+    expect(option).toHaveTextContent('risk_level');
+    fireEvent.click(option);
+
+    // 欄位名稱唯讀 chip 顯示選定 columnName
+    expect(screen.getByTestId('readonly-column-name')).toHaveTextContent('risk_level');
+    // 顯示名稱自動帶入該欄位之 ETL 描述（columnDescription），可再修改
+    expect(
+      (screen.getByTestId('input-display-name') as HTMLInputElement).value,
+    ).toBe('風險等級');
+
+    fireEvent.click(screen.getByTestId('btn-submit-create-field'));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith({
+        columnName: 'risk_level',
+        displayName: '風險等級',
+        fieldType: 'categorical',
+      }),
+    );
+  });
+
+  it('fields-tab-9：欄位無描述時顯示名稱留空、需手動輸入才能建立', async () => {
+    const mockedListAvailable = vi.mocked(poolApi.listAvailableColumns);
+    const mockedCreate = vi.mocked(poolApi.createField);
+    // year_cnt 無 columnDescription（來源無 MS_Description）
+    mockedListAvailable.mockResolvedValue({
+      availableColumns: [
+        { columnName: 'year_cnt', dataType: 'int', suggestedFieldType: 'numeric' },
+      ],
+    });
+    mockedCreate.mockResolvedValue({
+      columnName: 'year_cnt',
+      displayName: '進件年數',
+      fieldType: 'numeric',
+      isActive: true,
+      createdAt: '2026-07-01T00:00:00Z',
+      updatedAt: '2026-07-01T00:00:00Z',
+    } as never);
+
+    renderTab();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-create-field'));
+    await waitFor(() => expect(mockedListAvailable).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    fireEvent.click(await screen.findByTestId('dropdown-option-year_cnt'));
+
+    // 無描述 → 顯示名稱留空、建立鈕 disabled
+    const input = screen.getByTestId('input-display-name') as HTMLInputElement;
+    expect(input.value).toBe('');
+    expect(
+      (screen.getByTestId('btn-submit-create-field') as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    // 手動輸入顯示名稱後即可建立
+    fireEvent.change(input, { target: { value: '進件年數' } });
+    fireEvent.click(screen.getByTestId('btn-submit-create-field'));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith({
+        columnName: 'year_cnt',
+        displayName: '進件年數',
+        fieldType: 'numeric',
+      }),
+    );
   });
 });

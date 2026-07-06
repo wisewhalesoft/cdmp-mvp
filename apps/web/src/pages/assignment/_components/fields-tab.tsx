@@ -7,19 +7,16 @@ import {
   Hash,
   Calendar,
   Tags,
-  Info,
   ChevronDown,
-  Sparkles,
-  UserCheck,
   Inbox,
   SearchX,
   Loader2,
   Pencil,
   RotateCcw,
-  Filter,
   Lock,
   Folder,
   Contact,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -143,7 +140,6 @@ export function FieldsTab() {
 
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
-  const [newDisplay, setNewDisplay] = useState('');
   const [newType, setNewType] = useState<FieldType>('categorical');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -157,10 +153,32 @@ export function FieldsTab() {
   const [availableColumnsError, setAvailableColumnsError] =
     useState<AvailableColumnsError | null>(null);
   const [selectedColumnMeta, setSelectedColumnMeta] = useState<AvailableColumn | null>(null);
-  const [hasUserOverridden, setHasUserOverridden] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
+  // 顯示名稱：可編輯，選欄位後自動帶入 ETL 欄位描述（無描述則留空供手動輸入）
+  const [newDisplay, setNewDisplay] = useState('');
   const [showAutofilledHint, setShowAutofilledHint] = useState(false);
+
+  /**
+   * 下拉選單瀏覽用之欄位標籤：優先以 OBPOOLDATA 欄位描述呈現，無描述時退回欄位名稱。
+   * （實際存入的顯示名稱以下方可編輯欄位 newDisplay 為準）
+   */
+  const columnDisplayName = (col: AvailableColumn): string =>
+    col.columnDescription?.trim() || col.columnName;
+
+  /**
+   * 選定欄位後自動帶入「顯示名稱」= 該欄位 ETL 描述（columnDescription）。
+   *   - 使用者已輸入則不覆寫
+   *   - 該欄位無描述 → 留空，供使用者自行輸入（對齊原自動帶出邏輯）
+   */
+  const autoFillDisplayNameFromColumn = (meta: AvailableColumn | null) => {
+    if (!meta) return;
+    if (newDisplay.trim().length > 0) return;
+    const desc = meta.columnDescription?.trim();
+    if (!desc) return;
+    setNewDisplay(desc);
+    setShowAutofilledHint(true);
+  };
 
   const [disableTarget, setDisableTarget] = useState<PooldataField | null>(null);
   const [disableActiveCount, setDisableActiveCount] = useState<number | null>(null);
@@ -228,24 +246,15 @@ export function FieldsTab() {
   }, [fields]);
 
   const resetCreateForm = () => {
-    setNewDisplay('');
     setNewType('categorical');
     setCreateError(null);
     setSelectedColumnMeta(null);
-    setHasUserOverridden(false);
     setDropdownOpen(false);
     setDropdownSearch('');
     setAvailableColumns([]);
     setAvailableColumnsError(null);
+    setNewDisplay('');
     setShowAutofilledHint(false);
-  };
-
-  const autoFillDisplayNameFromColumn = (meta: AvailableColumn | null) => {
-    if (!meta) return;
-    if (newDisplay.trim().length > 0) return;
-    if (!meta.columnDescription) return;
-    setNewDisplay(meta.columnDescription);
-    setShowAutofilledHint(true);
   };
 
   const loadAvailableColumns = async () => {
@@ -290,7 +299,6 @@ export function FieldsTab() {
   const onColumnSelected = (col: AvailableColumn) => {
     setSelectedColumnMeta(col);
     setNewType(col.suggestedFieldType);
-    setHasUserOverridden(false);
     setDropdownOpen(false);
     setDropdownSearch('');
     setCreateError(null);
@@ -299,13 +307,17 @@ export function FieldsTab() {
 
   const onFieldTypeChange = (t: FieldType) => {
     setNewType(t);
-    setHasUserOverridden(true);
   };
 
   const filteredAvailableColumns = useMemo(() => {
     const q = dropdownSearch.trim().toLowerCase();
     if (!q) return availableColumns;
-    return availableColumns.filter((c) => c.columnName.toLowerCase().includes(q));
+    // 依欄位名稱或顯示名稱（欄位描述）搜尋
+    return availableColumns.filter(
+      (c) =>
+        c.columnName.toLowerCase().includes(q) ||
+        (c.columnDescription ?? '').toLowerCase().includes(q),
+    );
   }, [availableColumns, dropdownSearch]);
 
   const handleCreate = async () => {
@@ -316,7 +328,7 @@ export function FieldsTab() {
     }
     const dispTrim = newDisplay.trim();
     if (!dispTrim) {
-      setCreateError('displayName 為必填');
+      setCreateError('顯示名稱為必填');
       return;
     }
     setCreating(true);
@@ -481,24 +493,6 @@ export function FieldsTab() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Scope 提示 banner（prototype 37-base-code.html L173-183） */}
-      <div
-        data-testid="field-whitelist-scope-hint"
-        className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-700"
-      >
-        <Filter className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-        <div>
-          <p className="font-semibold text-primary">F075 v1.5 — POOLDATA 篩選欄位白名單</p>
-          <p className="text-gray-600 mt-0.5">
-            管理可作為名單條件的 <code className="font-mono">OBPOOLDATA</code> 欄位；
-            每欄位標記 <code className="font-mono">field_type</code>
-            （categorical / numeric / date），驅動 F050/F051 名單表單之條件元件型態。
-            停用為軟刪除（<code className="font-mono">is_active = false</code>），不回溯既有名單條件（BR-3）。
-            資料表 <code className="font-mono">pooldata_field_whitelist</code>。
-          </p>
-        </div>
-      </div>
-
       {error && (
         <div
           data-testid="fields-error"
@@ -520,7 +514,7 @@ export function FieldsTab() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜尋 columnName / displayName"
+              placeholder="搜尋顯示名稱 / 欄位名稱"
               className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -530,10 +524,10 @@ export function FieldsTab() {
             onChange={(e) => setTypeFilter(e.target.value as 'all' | FieldType)}
             className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            <option value="all">類別：全部</option>
-            <option value="categorical">categorical（類別型）</option>
-            <option value="numeric">numeric（數值型）</option>
-            <option value="date">date（日期型）</option>
+            <option value="all">欄位類型：全部</option>
+            <option value="categorical">類別型（categorical）</option>
+            <option value="numeric">數值型（numeric）</option>
+            <option value="date">日期型（date）</option>
           </select>
           {/* F109 / US-172：資料來源篩選（prototype 37-base-code.html L190-194） */}
           <select
@@ -613,9 +607,9 @@ export function FieldsTab() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase">
                 <tr>
-                  <th className="text-left px-5 py-3 font-semibold w-[18%]">columnName</th>
-                  <th className="text-left px-5 py-3 font-semibold w-[18%]">displayName</th>
-                  <th className="text-left px-5 py-3 font-semibold w-[11%]">fieldType</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[18%]">顯示名稱</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[18%]">欄位名稱</th>
+                  <th className="text-left px-5 py-3 font-semibold w-[11%]">欄位類型</th>
                   <th className="text-left px-5 py-3 font-semibold w-[12%]">資料來源</th>
                   <th className="text-left px-5 py-3 font-semibold w-[9%]">狀態</th>
                   <th className="text-left px-5 py-3 font-semibold w-[13%]">建立時間</th>
@@ -630,7 +624,6 @@ export function FieldsTab() {
                     data-system-fixed={f.isSystemFixed ? 'true' : 'false'}
                     className={`hover:bg-gray-50/50 ${!f.isActive ? 'bg-gray-50/30 opacity-80' : ''}`}
                   >
-                    <td className="px-5 py-3 font-mono text-primary">{f.columnName}</td>
                     <td className="px-5 py-3 text-gray-900">
                       <span className="inline-flex items-center gap-1.5">
                         {f.displayName}
@@ -646,6 +639,7 @@ export function FieldsTab() {
                         )}
                       </span>
                     </td>
+                    <td className="px-5 py-3 font-mono text-gray-500 text-xs">{f.columnName}</td>
                     <td className="px-5 py-3">
                       <FieldTypeBadge type={f.fieldType} />
                     </td>
@@ -733,44 +727,6 @@ export function FieldsTab() {
         )}
       </section>
 
-      {/*
-       * F075 v1.5 商業規則摘要 footer
-       * 對齊 prototype 37-base-code.html line 226-237
-       * BR-1 / BR-3 / BR-4 沿用 v1.4；BR-8 為 v1.5 新增（list_period_* 為一級保留欄位 J8）
-       */}
-      <div
-        data-testid="field-whitelist-rules-footer"
-        className="rounded-lg p-3 bg-blue-50/50 border border-blue-100 text-xs text-gray-600 flex items-start gap-2"
-      >
-        <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-        <div>
-          <p className="font-medium text-gray-700 mb-0.5">F075 v1.5 商業規則摘要</p>
-          <ul className="list-disc list-inside space-y-0.5">
-            <li>
-              <strong>BR-1</strong>：<code className="font-mono">column_name</code> 為唯一鍵，
-              新增時不分啟用 / 停用一律檢查重複
-              （違反回 409 <code className="font-mono">POOLDATA_FIELD_DUPLICATE</code>）。
-            </li>
-            <li>
-              <strong>BR-3</strong>：停用「不回溯」既有名單條件，F050/F051 寫入時驗證
-              <code className="font-mono"> is_active = true</code>；F048 列表頁讀取既有名單時不阻擋。
-            </li>
-            <li>
-              <strong>BR-4</strong>：<code className="font-mono">field_type</code> 由 categorical 改為其他類別時，
-              <strong>不自動刪除</strong> F076 既有可選值
-              （軟停用，<code className="font-mono">deactivation_reason = 'field_type_changed'</code>）。
-            </li>
-            <li>
-              <strong>BR-8（v1.5）</strong>：
-              <code className="font-mono">list_period_start</code> /{' '}
-              <code className="font-mono">list_period_end</code> /{' '}
-              <code className="font-mono">list_interval</code> 為一級保留欄位，
-              禁止入白名單（J8）。
-            </li>
-          </ul>
-        </div>
-      </div>
-
       {/* ===== Create field modal ===== */}
       {showCreate && (
         <div className="fixed inset-0 z-50" data-testid="create-field-modal">
@@ -782,7 +738,6 @@ export function FieldsTab() {
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-base font-semibold text-gray-800">新增篩選欄位</h3>
-                <p className="text-xs text-gray-500 mt-0.5">POST /api/v1/pooldata-fields</p>
               </div>
               <div className="p-6 space-y-4">
                 {createError && (
@@ -796,7 +751,7 @@ export function FieldsTab() {
 
                 <div data-testid="field-column-name-section">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    columnName <span className="text-danger">*</span>
+                    選擇欄位 <span className="text-danger">*</span>
                   </label>
                   <div className="relative">
                     <button
@@ -808,12 +763,10 @@ export function FieldsTab() {
                       onClick={() => setDropdownOpen((v) => !v)}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-left"
                     >
-                      <span
-                        className={`font-mono ${
-                          selectedColumnMeta ? 'text-gray-800' : 'text-gray-400'
-                        }`}
-                      >
-                        {selectedColumnMeta?.columnName ?? '請選擇欄位…'}
+                      <span className={selectedColumnMeta ? 'text-gray-800' : 'text-gray-400'}>
+                        {selectedColumnMeta
+                          ? columnDisplayName(selectedColumnMeta)
+                          : '請選擇欄位…'}
                       </span>
                       <ChevronDown
                         className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${
@@ -835,8 +788,8 @@ export function FieldsTab() {
                               data-testid="dropdown-column-name-search"
                               value={dropdownSearch}
                               onChange={(e) => setDropdownSearch(e.target.value)}
-                              placeholder="搜尋 columnName…"
-                              className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+                              placeholder="搜尋顯示名稱 / 欄位名稱…"
+                              className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                             />
                           </div>
                         </div>
@@ -893,14 +846,19 @@ export function FieldsTab() {
                                 }
                                 data-testid={`dropdown-option-${col.columnName}`}
                                 onClick={() => onColumnSelected(col)}
-                                className="px-3 py-1.5 text-sm hover:bg-blue-50 cursor-pointer flex items-center justify-between gap-2"
+                                className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex items-center justify-between gap-2"
                               >
-                                <span className="font-mono text-gray-800">
-                                  {col.columnName}
-                                </span>
-                                <span className="text-[10px] text-gray-400 font-mono">
-                                  {col.dataType}
-                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-gray-800 truncate">
+                                    {columnDisplayName(col)}
+                                  </div>
+                                  {columnDisplayName(col) !== col.columnName && (
+                                    <div className="text-[11px] text-gray-400 font-mono truncate">
+                                      {col.columnName}
+                                    </div>
+                                  )}
+                                </div>
+                                <FieldTypeBadge type={col.suggestedFieldType} />
                               </li>
                             ))}
                           </ul>
@@ -908,56 +866,26 @@ export function FieldsTab() {
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    自 OBPOOLDATA 既有但尚未加入清單之欄位中選擇；停用欄位亦不會出現（防繞過唯一性檢查）
-                  </p>
                 </div>
 
                 {selectedColumnMeta && (
-                  <div
-                    data-testid="field-type-hint"
-                    data-state={hasUserOverridden ? 'user-overridden' : 'suggested'}
-                  >
-                    {!hasUserOverridden ? (
-                      <div
-                        data-hint-variant="suggested"
-                        className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-gray-700 leading-relaxed">
-                          <span className="font-semibold text-primary">系統推斷：</span>
-                          <code className="font-mono text-primary font-semibold">
-                            {selectedColumnMeta.suggestedFieldType}
-                          </code>
-                          <span className="text-gray-500">（依 dataType=</span>
-                          <code className="font-mono text-gray-600">
-                            {selectedColumnMeta.dataType}
-                          </code>
-                          <span className="text-gray-500">）；請確認是否正確</span>
-                        </span>
-                      </div>
-                    ) : (
-                      <div
-                        data-hint-variant="user-overridden"
-                        className="flex items-start gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-xs"
-                      >
-                        <UserCheck className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
-                        <span className="text-gray-600 leading-relaxed">
-                          <span className="font-semibold text-gray-700">使用者選擇</span>
-                          <span className="text-gray-400">（系統原推斷 </span>
-                          <code className="font-mono text-gray-500">
-                            {selectedColumnMeta.suggestedFieldType}
-                          </code>
-                          <span className="text-gray-400">）</span>
-                        </span>
-                      </div>
-                    )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      欄位名稱
+                    </label>
+                    <div
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-700 font-mono"
+                      data-testid="readonly-column-name"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-gray-400" />
+                      <span>{selectedColumnMeta.columnName}</span>
+                    </div>
                   </div>
                 )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    fieldType <span className="text-danger">*</span>
+                    欄位類型 <span className="text-danger">*</span>
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {(['categorical', 'numeric', 'date'] as const).map((t) => (
@@ -986,7 +914,7 @@ export function FieldsTab() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    displayName <span className="text-danger">*</span>
+                    顯示名稱 <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -1000,18 +928,19 @@ export function FieldsTab() {
                     placeholder="例：風險等級"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                  {showAutofilledHint && (
+                  {showAutofilledHint ? (
                     <p
                       data-testid="displayname-autofilled-hint"
                       className="text-[11px] text-primary mt-1 inline-flex items-center gap-1"
                     >
                       <Sparkles className="w-3 h-3" />
-                      已從 OBPOOLDATA <code className="font-mono">columnDescription</code> 自動填入，可直接覆寫
+                      已自動帶入欄位描述，可直接修改
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      選欄位後自動帶入該欄位描述；若無描述請自行輸入
                     </p>
                   )}
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    業務可讀中文標籤，最多 100 字元（toast 與表格顯示以此為主）
-                  </p>
                 </div>
               </div>
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
