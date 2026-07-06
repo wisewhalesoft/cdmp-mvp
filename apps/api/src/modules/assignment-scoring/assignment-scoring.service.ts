@@ -30,6 +30,8 @@ import {
   DecodeEntry,
   getDecodeForColumn,
 } from '@/modules/assignment/stage1/scoring-decode.constants';
+// F055 preview（本次修正）：重用月跑 Stage 2 計分下推（單一真源，F104 已對齊 legacy SP）。
+import { buildStage2ScoreExpr } from '@/modules/assignment/stage1/stage2to4-sql-builder';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Service
@@ -945,13 +947,25 @@ export class AssignmentScoringService {
       });
     }
 
-    // F055 §5.2 / risk-1：preview 以既有 score 套用新門檻試算分佈（非重呼 fn_calc_tier_level）。
+    // F055 §5.2 / AC-3：preview 以「現行 ob_pool_data 套用該 cardType active 計分設定即時計分」
+    //   後，再依前端傳入的新門檻分桶試算分佈（非重呼 fn_calc_tier_level、非讀月跑 snapshot）。
     //
-    // ⚠️ 效能修正（2026-06-02 OOM 事故）：原實作 `poolDataListRepo.find()` 會把整張
-    // ob_pool_data_list（生產規模可達數百萬列）全數 hydrate 進 Node 記憶體再於 JS 分桶，
-    // 導致 heap 撞 ~2GB 上限 → 進程 OOM 崩潰 → 該頁所有在途 API 收到 500（違反 CLAUDE.md
-    // 「巨量資料勿用 in-memory，須 streaming / SQL 下推」鐵則）。改為將分桶 COUNT 下推
-    // PostgreSQL：單一 GROUP BY 聚合僅回傳各等級計數，記憶體佔用與資料量脫鉤。
+    // ⚠️ F094 死欄修正（本次）：舊實作分桶 `ob_pool_data_list.score IS NOT NULL`，但自 F094 起
+    //   月跑計分結果改寫入 `ob_monthly_run_result.score`，`ob_pool_data_list.score` 恆為 NULL
+    //   → preview 各等級永遠回 0（bug）。且舊實作無 cardType 維度（等級碼／分數區間本為 per-card_type，
+    //   須以該 cardType 的計分卡設定算分才有意義）。改為重用月跑 Stage 2 計分下推
+    //   （buildStage2ScoreExpr；F104 已對齊 legacy SP，維持單一真源，避免重造公式導致靜默偏差），
+    //   對每列 ob_pool_data 以該 cardType active version 之 active 計分維度即時算分。
+    //
+    // ⚠️ 效能鐵則（2026-06-02 OOM 事故）：ob_pool_data 生產 ~780 萬列 / ~14GB，嚴禁 `.find()`
+    //   全表 hydrate 進 Node（heap OOM → 進程崩潰 → 整頁 API 500，違反 CLAUDE.md 巨量資料鐵則）。
+    //   一律 SQL 下推：單一 GROUP BY 聚合僅回各等級 COUNT，記憶體佔用與資料量脫鉤。
+    //
+    // ⚠️ DB_TYPE：計分下推（LATERAL / customer_core LEFT JOIN / to_jsonb）為 PG 專用，與月跑
+    //   Stage 2（runStage2and3Sql）同源；SQLite e2e 不具代表性（沿用既有 PG-only 認定）。
+    //
+    // TODO F055 BR-2 cache：AC-3 / BR-2 允許最多 60 秒應用層快取；目前每次即時查詢（前端已
+    //   debounce 300ms）。低風險時再評估加入，暫不納入本次修正範圍。
     const distribution: Record<string, number> = {};
     for (const l of parsedLevels) {
       distribution[l.cardLevel] = 0;
@@ -962,31 +976,97 @@ export class AssignmentScoringService {
       return { distribution };
     }
 
-    // 動態組裝 first-match-wins 的 CASE 分桶（等級區間不重疊由 BR-3 保證）。
-    // score 為 NULL（尚未計分）的列一律不計入任何等級；所有使用者輸入均以參數化
-    // 佔位符傳入，杜絕 SQL injection。
+    // 取該 cardType 之 active 計分版本（對齊 createCardLevel / 月跑 pipeline：status='active'）。
+    const version = await this.versionRepo.findOne({
+      where: { card_type: input.cardType as any, status: 'active' as any },
+    });
+    const cardVersion = version?.card_version ?? null;
+
+    // 無 active 計分版本 → 無從計分 → 回全 0（優雅降級；同「無等級 → 全 0」慣例）。
+    //   preview 為 debounce 唯讀試算，缺版本時不拋 404 干擾前端即時更新（correctness：全 0 非誤導，
+    //   因確實無設定可套用）。
+    if (cardVersion === null) {
+      return { distribution };
+    }
+
+    // 該 version 之 active 計分維度 + score 區間（buildStage2ScoreExpr 內部再依 column_name 過濾 scoreRows）。
+    const activeColumns = await this.columnRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+        status: 'active' as any,
+      },
+    });
+    const scoreRows = await this.scoreRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+      },
+    });
+
+    // 重用月跑 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
+    const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
+      buildStage2ScoreExpr(
+        input.cardType,
+        cardVersion,
+        activeColumns,
+        scoreRows,
+        'sc',
+      );
+
+    // cardVersion 非 null 時 scoreExpr 必非 null（'0' 或 SUM(CASE…)）；防禦性 fallback。
+    if (scoreExpr === null) {
+      return { distribution };
+    }
+
+    // 動態組裝 first-match-wins 的 CASE 分桶（等級區間不重疊由 BR-1 保證）。
+    //   score 為 NULL（該列無從計分）→ 所有 WHEN 皆 UNKNOWN → ELSE NULL → 不計入任何等級。
+    //   使用者輸入之門檻 / 等級碼一律命名參數化（:lvl_*），杜絕 SQL injection。
     const whenClauses: string[] = [];
-    const params: Array<number | string> = [];
+    const bucketParams: Record<string, unknown> = {};
+    let bi = 0;
     for (const l of parsedLevels) {
-      params.push(l.scoreS, l.scoreE, l.cardLevel);
-      const n = params.length;
+      const p = `lvl_${bi++}`;
+      bucketParams[`${p}_lo`] = l.scoreS;
+      bucketParams[`${p}_hi`] = l.scoreE;
+      bucketParams[`${p}_lbl`] = l.cardLevel;
       whenClauses.push(
-        `WHEN score >= $${n - 2} AND score <= $${n - 1} THEN $${n}`,
+        `WHEN s.score >= :${p}_lo AND s.score <= :${p}_hi THEN :${p}_lbl`,
       );
     }
 
-    const bucketRows: Array<{ bucket: string; cnt: number | string }> =
-      await this.poolDataListRepo.query(
-        `SELECT bucket, COUNT(*)::int AS cnt
-           FROM (
-             SELECT CASE ${whenClauses.join(' ')} ELSE NULL END AS bucket
-               FROM ob_pool_data_list
-              WHERE score IS NOT NULL
-           ) sub
-          WHERE bucket IS NOT NULL
-          GROUP BY bucket`,
-        params,
+    // customer_core / ob_arreturndf_min_cap LEFT JOIN 僅在對應維度 active 時注入（與 runStage2and3Sql 同）。
+    const customerCoreJoin = needsCustomerCore
+      ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
+      : '';
+    const arCapitalJoin = needsArCapital
+      ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
+      : '';
+
+    // 單一 GROUP BY 聚合：LATERAL 先算每列 score（(scoreExpr)::int，與月跑同式），外層 CASE 分桶再 COUNT。
+    const sql =
+      `SELECT bucket, COUNT(*)::int AS cnt ` +
+      `FROM ( ` +
+      `SELECT CASE ${whenClauses.join(' ')} ELSE NULL END AS bucket ` +
+      `FROM ob_pool_data o ` +
+      `${customerCoreJoin} ` +
+      `${arCapitalJoin} ` +
+      `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s ` +
+      `) sub ` +
+      `WHERE bucket IS NOT NULL ` +
+      `GROUP BY bucket`;
+
+    // 命名參數（:sc_* + :lvl_*）→ positional（PG $n）；由 driver 轉譯（與 stage2to4-sql-executor 同機制，SQLG-003）。
+    const allParams = { ...scoreParams, ...bucketParams };
+    const [escaped, parameters] =
+      this.poolDataListRepo.manager.connection.driver.escapeQueryWithParameters(
+        sql,
+        allParams,
+        {},
       );
+
+    const bucketRows: Array<{ bucket: string; cnt: number | string }> =
+      await this.poolDataListRepo.query(escaped, parameters);
 
     for (const r of bucketRows) {
       if (Object.prototype.hasOwnProperty.call(distribution, r.bucket)) {
