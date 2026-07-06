@@ -389,7 +389,9 @@
       "Bash(xxd)",
       "Bash(awk -F',' '{print $7}')",
       "Bash(node *)",
-      "Bash(echo \"=== api tsc exit: $? ===\")"
+      "Bash(echo \"=== api tsc exit: $? ===\")",
+      "Bash(git commit -m ' *)",
+      "Bash(docker exec cdmp-postgres psql -U cdmp -d cdmp_dev -t -A -F, -c ' *)"
     ],
     "defaultMode": "default"
   },
