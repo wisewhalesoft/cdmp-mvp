@@ -154,6 +154,11 @@ export interface PooldataOption {
   optionValue: string;
   optionLabel: string;
   isActive: boolean;
+  /**
+   * 可選值排序序位（越小越前）。驅動 F050/F051 名單定義多選元件之顯示順序。
+   * 後端依 (display_order, option_value) 排序回傳；後端舊回應未含此欄位時前端視為 0。
+   */
+  displayOrder?: number;
   createdAt: string;
   updatedAt: string;
   deactivatedReason?: string | null;
@@ -232,6 +237,23 @@ export async function reactivateOption(
   const response = await apiClient.patch<PooldataOption>(
     `${BASE}/${columnName}/options/${optionValue}`,
     { isActive: true, ...data },
+  );
+  return response.data;
+}
+
+/**
+ * F076：調整可選值顯示順序。
+ * PATCH /api/v1/pooldata-fields/:columnName/options/reorder
+ * body `{ orderedValues }` 為欲套用的完整 option_value 排序陣列（display_order = 索引）。
+ * 回傳套用後之完整可選值清單（含停用值，依新順序）。
+ */
+export async function reorderOptions(
+  columnName: string,
+  orderedValues: string[],
+): Promise<ListOptionsResponse> {
+  const response = await apiClient.patch<ListOptionsResponse>(
+    `${BASE}/${columnName}/options/reorder`,
+    { orderedValues },
   );
   return response.data;
 }

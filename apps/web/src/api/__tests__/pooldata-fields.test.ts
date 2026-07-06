@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { apiClient } from '../client';
-import { reactivateOption, deactivateOption } from '../pooldata-fields';
+import { reactivateOption, deactivateOption, reorderOptions } from '../pooldata-fields';
 
 vi.mock('../client', () => ({
   apiClient: {
@@ -47,6 +47,15 @@ describe('pooldata-fields API client', () => {
     expect(mockedPatch).toHaveBeenCalledWith(
       '/api/v1/pooldata-fields/prod_kind/options/01/deactivate',
       { isActive: false, reason: '與新代碼合併' },
+    );
+  });
+
+  it('reorder-1：reorderOptions PATCH /options/reorder，body 帶 orderedValues 陣列', async () => {
+    mockedPatch.mockResolvedValue({ data: { options: [] } });
+    await reorderOptions('prod_kind', ['02', '01', '03']);
+    expect(mockedPatch).toHaveBeenCalledWith(
+      '/api/v1/pooldata-fields/prod_kind/options/reorder',
+      { orderedValues: ['02', '01', '03'] },
     );
   });
 });
