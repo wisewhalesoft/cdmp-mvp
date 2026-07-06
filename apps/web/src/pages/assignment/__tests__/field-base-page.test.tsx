@@ -71,14 +71,14 @@ describe('FieldBasePage — Phase 5d 波 3', () => {
   });
   afterEach(() => cleanup());
 
-  it('field-base-1：標題「篩選欄位」+ 副標題對齊 prototype L126-128', () => {
+  it('field-base-1：標題「篩選欄位」+ 使用者友善副標題', () => {
     renderAt();
-    // prototype L126：<h1>篩選欄位</h1>
     expect(screen.getByRole('heading', { name: '篩選欄位' })).toBeInTheDocument();
-    // prototype L127：副標題完整文字
+    // 開發者導向副標題（F075/F076/F068 代碼）已移除，改為業務語意描述
     expect(
-      screen.getByText('F075 v1.5 白名單 + F076 v1.5 類別型欄位可選值（v2.1 取代 F068 代碼維護）'),
+      screen.getByText('管理可用於名單定義的篩選欄位與其可選值'),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/F075 v1.5 白名單/)).not.toBeInTheDocument();
   });
 
   it('field-base-2：渲染 2 個 Tab button（欄位管理 + 可選值管理）對齊 prototype L142-164', () => {
@@ -106,12 +106,10 @@ describe('FieldBasePage — Phase 5d 波 3', () => {
     expect(screen.queryByTestId('panel-fields')).not.toBeInTheDocument();
   });
 
-  it('field-base-6：v2.1 廢除通知 banner 顯示對齊 prototype L130-139 amber-50 文字', () => {
+  it('field-base-6：不再顯示開發者導向的 F068 廢除通知 banner', () => {
     renderAt();
-    // prototype L135 之標題完整文字（不可改字）
-    expect(
-      screen.getByText('F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）已於 v2.1 廢除'),
-    ).toBeInTheDocument();
+    expect(screen.queryByTestId('v2.1-deprecation-banner')).not.toBeInTheDocument();
+    expect(screen.queryByText(/已於 v2.1 廢除/)).not.toBeInTheDocument();
   });
 
   it('field-base-7：header breadcrumb 客戶名單分派 → 篩選欄位（對齊 prototype L84-89）', () => {
