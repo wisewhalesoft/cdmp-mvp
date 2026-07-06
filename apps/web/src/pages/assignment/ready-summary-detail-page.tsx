@@ -292,7 +292,7 @@ export function ReadySummaryDetailPage() {
       }
     >
       <main className="flex-1 p-6 space-y-4">
-        <StageBreadcrumb currentStage="ready" featureIds="F088 v1.1 / F089" />
+        <StageBreadcrumb currentStage="ready" />
 
         {loading && (
           <div
@@ -310,7 +310,7 @@ export function ReadySummaryDetailPage() {
           >
             <p className="font-semibold mb-1">找不到名單</p>
             <p className="text-xs">
-              找不到 listNo = <code className="font-mono">{listNo}</code>。
+              找不到名單編號 <code className="font-mono">{listNo}</code>。
             </p>
           </div>
         )}
@@ -324,8 +324,8 @@ export function ReadySummaryDetailPage() {
               >
                 <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <div className="flex-1">
-                  <p className="font-semibold text-amber-900">
-                    名單目前階段為 <strong>{list.stage}</strong>，不在準備完成階段
+                  <p className="font-semibold text-amber-900 inline-flex items-center gap-1 flex-wrap">
+                    名單目前階段為 <StageBadge stage={list.stage as Stage} />，不在準備完成階段
                   </p>
                 </div>
               </div>
@@ -342,7 +342,7 @@ export function ReadySummaryDetailPage() {
                     </span>
                   </h1>
                   <p className="text-xs text-gray-500 mt-1">
-                    本名單已通過部長核准，等待月跑啟動 Stage 1~3 計算（亦可由部長 / Admin Rollback 重新審核）。
+                    本名單已通過部長核准，等待執行月跑進行後續計算（亦可由部長／系統管理者退回重新審核）。
                   </p>
                 </div>
                 {lastApprove && (
@@ -405,7 +405,7 @@ export function ReadySummaryDetailPage() {
                     {history.length}
                   </p>
                   <p className="text-[10px] text-gray-500">
-                    {approveCount} approve · {rejectCount} reject
+                    {approveCount} 核准 · {rejectCount} 拒絕
                   </p>
                 </div>
               </div>
@@ -420,7 +420,7 @@ export function ReadySummaryDetailPage() {
               createdBy={list.createdBy}
               createdAt={list.createdAt.slice(0, 10)}
               conditions={splitConditionsFromList(list)}
-              crEnabled={true}
+              crEnabled={list.crEnabled ?? false}
             />
 
             {/* 部門比例唯讀表 */}
@@ -440,7 +440,7 @@ export function ReadySummaryDetailPage() {
                       <th className="text-left px-4 py-2 font-medium">部門名稱</th>
                       <th className="text-left px-4 py-2 font-medium">處長</th>
                       <th className="text-left px-4 py-2 font-medium">設定者</th>
-                      <th className="text-right px-4 py-2 font-medium">RATION</th>
+                      <th className="text-right px-4 py-2 font-medium">比例</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -512,7 +512,7 @@ export function ReadySummaryDetailPage() {
                           <th className="text-left px-3 py-2 font-medium">員工編號</th>
                           <th className="text-left px-3 py-2 font-medium">姓名</th>
                           <th className="text-right px-3 py-2 font-medium">
-                            RATION（部門內）
+                            部門內比例
                           </th>
                           <th className="text-right px-3 py-2 font-medium">
                             名單分配占比
@@ -574,7 +574,7 @@ export function ReadySummaryDetailPage() {
                 className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
               >
                 <ArrowLeft className="w-4 h-4" />
-                返回 ready 名單清單
+                返回準備完成名單清單
               </button>
               <div className="flex items-center gap-2">
                 {canRollback && !stageMismatch && (
@@ -610,14 +610,14 @@ export function ReadySummaryDetailPage() {
       <ConfirmModal
         open={showRollback}
         variant="warning"
-        title={`Rollback 名單 ${listNo} 至簽核階段？`}
+        title={`退回名單 ${listNo} 至簽核階段？`}
         description={
           <div className="space-y-2 text-xs text-amber-700">
             <p>名單將退回 <strong>簽核</strong> 階段；準備完成的設定保留不變。</p>
-            <p>assignment_approval 紀錄保留。</p>
+            <p>核准紀錄保留。</p>
           </div>
         }
-        confirmLabel="確認 Rollback"
+        confirmLabel="確認退回"
         loading={rollbacking}
         loadingText="退回中..."
         onConfirm={handleRollbackConfirm}

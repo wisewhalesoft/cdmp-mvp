@@ -759,6 +759,12 @@ export function Stage0EstimatePage() {
                 ym={ym}
                 days={data.days}
                 selectedDept={isSectionChief ? data.departments[0]?.deptCode ?? '' : selectedDept}
+                deptName={
+                  isSectionChief
+                    ? data.departments[0]?.deptName
+                    : data.departments.find((d) => d.deptCode === selectedDept)
+                        ?.deptName
+                }
                 isAll={!isSectionChief && selectedDept === 'ALL'}
                 threshold={threshold}
               />
@@ -848,8 +854,10 @@ interface CalendarGridProps {
   selectedDept: string;
   isAll: boolean;
   threshold: number | null;
+  /** 已解析的部門名稱（顯示用；selectedDept 為代號，由父層以 departments 對照） */
+  deptName?: string;
 }
-function CalendarGrid({ ym, days, selectedDept, isAll, threshold }: CalendarGridProps) {
+function CalendarGrid({ ym, days, selectedDept, isAll, threshold, deptName }: CalendarGridProps) {
   const map = new Map<string, DeptEstimateDay>();
   for (const d of days) map.set(d.date, d);
   const [y, m] = ym.split('-').map(Number);
@@ -857,7 +865,7 @@ function CalendarGrid({ ym, days, selectedDept, isAll, threshold }: CalendarGrid
   const dim = new Date(y, m, 0).getDate();
   const depName = isAll
     ? '全部門合計（全名單總量）'
-    : selectedDept || '—';
+    : deptName || selectedDept || '—';
 
   const cells: React.ReactNode[] = [];
   for (let i = 0; i < firstDow; i++)

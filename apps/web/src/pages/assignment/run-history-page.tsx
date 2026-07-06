@@ -250,7 +250,7 @@ export function RunHistoryPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜尋 runId / 觸發人"
+                placeholder="搜尋執行編號 / 觸發人"
                 className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -263,10 +263,10 @@ export function RunHistoryPage() {
               className="px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="all">狀態：全部</option>
-              <option value="completed">completed — 已完成</option>
-              <option value="failed">failed — 失敗</option>
-              <option value="running">running — 執行中</option>
-              <option value="pending">pending — 待執行</option>
+              <option value="completed">已完成</option>
+              <option value="failed">失敗</option>
+              <option value="running">執行中</option>
+              <option value="pending">排程中</option>
             </select>
             <select
               data-testid="filter-triggered-by"
@@ -326,11 +326,11 @@ export function RunHistoryPage() {
                         data-testid="checkbox-select-all"
                         checked={selected.size > 0}
                         onChange={handleSelectAll}
-                        title="全選 / 全清（最多 2 個 completed run）"
+                        title="全選 / 全清（最多 2 筆已完成月跑）"
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
                       />
                     </th>
-                    <th className="text-left px-3 py-3 font-semibold w-[18%]">runId</th>
+                    <th className="text-left px-3 py-3 font-semibold w-[18%]">執行編號</th>
                     <th className="text-left px-3 py-3 font-semibold w-[8%]">月份</th>
                     <th className="text-left px-3 py-3 font-semibold w-[9%]">狀態</th>
                     <th className="text-left px-3 py-3 font-semibold w-[10%]">觸發人</th>

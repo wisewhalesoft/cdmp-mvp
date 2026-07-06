@@ -34,6 +34,16 @@ export interface PreCheckItem {
   detail?: string;
 }
 
+const ETL_SOURCE_LABELS: Record<
+  'pooldata' | 'emphire' | 'calendar' | 'arreturndf',
+  string
+> = {
+  pooldata: '客戶名單池',
+  emphire: '在職名單',
+  calendar: '工作日曆',
+  arreturndf: '最低回收上限',
+};
+
 export function buildPreChecksFromReadiness(
   readiness: ReadinessResponse,
 ): PreCheckItem[] {
@@ -43,12 +53,12 @@ export function buildPreChecksFromReadiness(
   items.push({
     id: 'list-defined',
     label: '名單定義已建立',
-    description: '本月（active 名單）至少 1 筆 ob_list_definition',
+    description: '本月至少需有 1 筆已啟用名單',
     status: readiness.totalActiveLists >= 1 ? 'pass' : 'fail',
     detail:
       readiness.totalActiveLists >= 1
-        ? `共 ${readiness.totalActiveLists} 筆 active 名單`
-        : '尚無 active 名單；請先建立名單並推進至 ready 階段',
+        ? `共 ${readiness.totalActiveLists} 筆已啟用名單`
+        : '尚無已啟用名單；請先建立名單並推進至準備完成階段',
   });
 
   // 2. 部門比例 100%（隱含於 ready）
@@ -58,11 +68,11 @@ export function buildPreChecksFromReadiness(
   items.push({
     id: 'dept-ratio-100',
     label: '部門比例加總 = 100%',
-    description: '每個 active LIST_NO 之 ob_dept_pct 加總 = 100% (F079)',
+    description: '每個名單的部門比例加總須為 100%',
     status: deptFails.length === 0 ? 'pass' : 'fail',
     detail:
       deptFails.length === 0
-        ? '所有名單已通過部門比例設定（推進至 dept_ratio 之後階段）'
+        ? '所有名單已通過部門比例設定'
         : `${deptFails.length} 筆名單尚未完成部門比例：${deptFails.map((l) => l.listNo).join(', ')}`,
   });
 
@@ -73,19 +83,19 @@ export function buildPreChecksFromReadiness(
   items.push({
     id: 'personnel-ratio-100',
     label: '人員比例加總 = 100%',
-    description: '每個 (LIST_NO × 部門) 之 ob_empl_set 加總 = 100% (F082)',
+    description: '每個名單各部門的人員比例加總須為 100%',
     status: personnelFails.length === 0 ? 'pass' : 'fail',
     detail:
       personnelFails.length === 0
         ? '所有名單已通過個別業務比例設定'
-        : `${personnelFails.length} 筆名單尚在 personnel_ratio / approval 階段`,
+        : `${personnelFails.length} 筆名單尚在個別業務比例 / 簽核階段`,
   });
 
   // 4. 計分版本 active
   items.push({
     id: 'scoring-active',
-    label: '計分版本 active',
-    description: 'ob_levelcard_version 至少 1 筆 status="active"',
+    label: '計分版本已啟用',
+    description: '至少需有 1 個已啟用的計分版本',
     status: readiness.scoringActive ? 'pass' : 'fail',
     detail: readiness.scoringActive
       ? '已啟用計分版本'
@@ -97,13 +107,13 @@ export function buildPreChecksFromReadiness(
   const blockingRun = rs === 'pending' || rs === 'running';
   items.push({
     id: 'no-running-run',
-    label: '無 pending / running 月跑',
-    description: '同月僅允許一個 pending/running 月跑（BR-2）',
+    label: '無進行中的月跑',
+    description: '同一月份僅能有一個進行中的月跑',
     status: blockingRun ? 'fail' : 'pass',
     detail: blockingRun
-      ? `當月 assignment_run.status = ${rs}，請等待完成或先取消後再觸發`
+      ? '當月已有月跑進行中，請等待完成或先取消後再觸發'
       : rs === 'completed'
-        ? '當月已有 completed 月跑紀錄（如需重跑請聯絡 Admin）'
+        ? '當月已有完成的月跑紀錄（如需重跑請聯絡系統管理者）'
         : '當月無進行中月跑',
   });
 
@@ -117,11 +127,13 @@ export function buildPreChecksFromReadiness(
   items.push({
     id: 'etl-synced',
     label: 'ETL 同步狀態',
-    description: 'E04+E05 雙層 ETL 已完成本月資料載入',
+    description: '本月來源資料已完成同步',
     status: etlAllCompleted ? 'pass' : 'fail',
     detail: etlAllCompleted
-      ? '4 個關鍵 ETL pipeline 已 completed'
-      : `${etlFails.length} 個 ETL 未完成：${etlFails.join(', ')}`,
+      ? '4 項來源資料均已同步完成'
+      : `${etlFails.length} 項來源資料未完成：${etlFails
+          .map((k) => ETL_SOURCE_LABELS[k])
+          .join('、')}`,
   });
 
   return items;
@@ -186,7 +198,7 @@ export function PreCheckList({ readiness, loading = false }: PreCheckListProps) 
       <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800 inline-flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-primary" />
-          前置條件檢查（F061 AC-1）
+          前置條件檢查
         </h3>
         <span
           data-testid="pre-check-summary"
@@ -226,7 +238,7 @@ export function PreCheckList({ readiness, loading = false }: PreCheckListProps) 
                   <span
                     className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}
                   >
-                    {it.status === 'pass' ? 'PASS' : it.status === 'fail' ? 'FAIL' : 'WARN'}
+                    {it.status === 'pass' ? '通過' : it.status === 'fail' ? '失敗' : '警示'}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">{it.description}</p>

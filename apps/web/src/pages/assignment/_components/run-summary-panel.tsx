@@ -72,7 +72,7 @@ export function RunSummaryPanel({
               分派作業月份
             </p>
             <p className="font-mono text-sm font-semibold text-gray-900">
-              {formatYm(workYm)}（{workYm}）
+              {formatYm(workYm)}
             </p>
           </div>
           <div>
@@ -88,7 +88,7 @@ export function RunSummaryPanel({
           <div className="px-3 py-2 flex items-center justify-between text-xs text-gray-600 border-b border-gray-200">
             <span className="inline-flex items-center gap-1">
               <ClipboardList className="w-3 h-3 text-gray-500" />
-              將執行的 ready 名單
+              將執行的名單
               <span
                 data-testid="active-list-count"
                 className="ml-1 px-1.5 py-0.5 bg-blue-50 text-primary rounded font-medium"
@@ -108,7 +108,7 @@ export function RunSummaryPanel({
           </div>
           {lists.length === 0 ? (
             <div className="p-6 text-xs text-center text-gray-400">
-              本月尚無 ready 名單（無法觸發月跑）
+              本月尚無可執行名單（無法觸發月跑）
             </div>
           ) : (
             <ul className="divide-y divide-gray-200">

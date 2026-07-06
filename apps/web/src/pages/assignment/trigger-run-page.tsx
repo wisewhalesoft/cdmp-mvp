@@ -68,9 +68,8 @@ function buildRunSummaryLists(
     .map((l) => ({
       listNo: l.listNo,
       listNm: l.listNm,
-      // estimatedCount 預設 0（後端尚未在 listLists 提供 per-list 預估數）；
-      // P3 可改用 Stage 0 single-list estimate batch 補上實際數字
-      estimatedCount: 0,
+      // 預估件數取自 listLists 回傳的物化 Stage 0 估算（approve→ready 時寫入 estimateCases）
+      estimatedCount: l.estimateCases ?? 0,
     }));
 }
 
@@ -150,7 +149,7 @@ export function TriggerRunPage() {
       const status = e?.response?.status;
       let msg = e?.response?.data?.message ?? '月跑觸發失敗';
       if (status === 409) msg = '當月已有月跑執行中或已完成';
-      else if (status === 503) msg = '功能未啟用（ENABLE_E07_REFACTOR_PHASE3=false）';
+      else if (status === 503) msg = '此功能尚未開放';
       showToast(msg, 'error');
       setShowConfirm(false);
     } finally {
@@ -192,7 +191,7 @@ export function TriggerRunPage() {
               <div className="flex-1">
                 <p className="font-semibold text-purple-900">處長角色為唯讀檢視</p>
                 <p className="text-xs text-purple-800 mt-0.5">
-                  您可查看本月月跑前置檢查與三份快照規劃，但無法觸發月跑（僅部長 / Admin 可執行）。
+                  您可查看本月月跑前置檢查與執行規劃，但無法觸發月跑（僅業務部長可執行）。
                 </p>
               </div>
             </div>
@@ -210,11 +209,7 @@ export function TriggerRunPage() {
                   月跑執行中（無法重複觸發）
                 </p>
                 <p className="text-xs text-amber-800 mt-1">
-                  本月（{ym}）assignment_run 處於{' '}
-                  <span className="font-semibold">
-                    {readiness?.monthlyRunStatus}
-                  </span>{' '}
-                  狀態；同月僅允許一個 pending/running 月跑（BR-2）。
+                  本月已有月跑正在進行，需等其完成後才能再次觸發。
                 </p>
                 <button
                   type="button"
@@ -237,18 +232,16 @@ export function TriggerRunPage() {
                     <Clock className="w-3 h-3" />
                     分派作業月份 {ym}
                   </span>
-                  <span className="text-xs text-gray-400">project_workym</span>
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">
                   觸發 {ym.slice(0, 4)}-{ym.slice(4, 6)} 月跑
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  啟動全流程 Stage 0~4 + 三份快照原子性寫入。
-                  本次將處理{' '}
+                  啟動客戶名單分派計算。本次將處理{' '}
                   <span className="font-semibold text-gray-900">
                     {summaryLists.length}
                   </span>{' '}
-                  個 ready 名單。
+                  個名單。
                 </p>
                 <div className="mt-3 flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                   <span>
@@ -257,12 +250,12 @@ export function TriggerRunPage() {
                   </span>
                   <span>
                     <Clock className="w-3 h-3 inline mr-0.5" />
-                    預估執行時間 &lt; 30 分鐘 (NFR-003, 10 萬筆)
+                    預估執行時間 &lt; 30 分鐘
                   </span>
                   <span>
                     <GitBranch className="w-3 h-3 inline mr-0.5" />
                     計分版本{' '}
-                    {readiness?.scoringActive ? 'active' : 'inactive'}
+                    {readiness?.scoringActive ? '已啟用' : '未啟用'}
                   </span>
                 </div>
               </div>
@@ -281,7 +274,6 @@ export function TriggerRunPage() {
                       啟動月跑
                     </span>
                   </Button>
-                  <p className="text-xs text-gray-400">POST /api/v1/assignment/runs</p>
                 </div>
               )}
             </div>
@@ -292,16 +284,10 @@ export function TriggerRunPage() {
             <Layers className="w-4 h-4 text-primary mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold text-primary">
-                啟動後將原子性寫入三份快照（AD-E07-2）
+                啟動後會一次完成本次分派並保存紀錄
               </p>
               <p className="text-xs text-gray-600 mt-0.5">
-                於同一 DB Transaction 中：
-                <code className="font-mono">config</code>（本次設定）+{' '}
-                <code className="font-mono">input_list</code>（候選名單）+{' '}
-                <code className="font-mono">result</code>（最終分派）。
-                任一失敗整體 Rollback，
-                <code className="font-mono">assignment_run.status = 'failed'</code>。
-                歷史快照不可變，不被覆蓋（BR-3）。
+                系統會一次寫入本次設定、候選名單與分派結果；任一步驟失敗則整體取消、不留下部分資料，歷史紀錄不會被覆蓋。
               </p>
             </div>
           </div>
@@ -330,11 +316,11 @@ export function TriggerRunPage() {
         description={
           <div className="space-y-2 text-xs text-gray-600">
             <p>
-              將執行 <strong>{summaryLists.length}</strong> 個 ready 名單之客戶分派計算並寫入 3 份快照。
+              將執行 <strong>{summaryLists.length}</strong> 個名單的客戶分派計算。
             </p>
             <p className="flex items-center gap-1 justify-center text-amber-700">
               <AlertTriangle className="w-3 h-3" />
-              觸發後可至執行進度頁取消（director only）
+              觸發後可至執行進度頁取消（僅業務部長可執行）
             </p>
           </div>
         }

@@ -145,7 +145,7 @@ describe('RunHistoryPage (F065)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('run-row-R001')).toBeInTheDocument(),
     );
-    fireEvent.change(screen.getByPlaceholderText(/搜尋 runId/), {
+    fireEvent.change(screen.getByPlaceholderText(/搜尋執行編號/), {
       target: { value: 'R002' },
     });
     expect(screen.queryByTestId('run-row-R001')).not.toBeInTheDocument();

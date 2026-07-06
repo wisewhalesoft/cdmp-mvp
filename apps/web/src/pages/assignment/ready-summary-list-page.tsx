@@ -131,7 +131,7 @@ export function ReadySummaryListPage() {
       }
     >
       <main className="flex-1 p-6 space-y-4">
-        <StageBreadcrumb currentStage="ready" featureIds="F088 v1.1 / F089" />
+        <StageBreadcrumb currentStage="ready" />
 
         {isSectionChief && (
           <div
@@ -140,9 +140,9 @@ export function ReadySummaryListPage() {
           >
             <Eye className="w-4 h-4 text-purple-700 mt-0.5 shrink-0" />
             <div className="flex-1 text-purple-900">
-              <p className="font-semibold">處長僅可查看自己轄區之 ready 名單</p>
+              <p className="font-semibold">處長僅可查看自己轄區之準備完成名單</p>
               <p className="text-xs text-purple-700 mt-0.5">
-                下方清單已過濾為您轄區內可見的名單；其他部門的設定僅部長 / Admin 可見。
+                下方清單已過濾為您轄區內可見的名單；其他部門的設定僅部長／系統管理者可見。
               </p>
             </div>
           </div>
@@ -166,7 +166,7 @@ export function ReadySummaryListPage() {
                     </div>
                     <div>
                       <h2 className="text-lg font-semibold text-gray-800">
-                        本月所有名單均已 ready · 可執行月跑
+                        本月所有名單均已準備完成 · 可執行月跑
                       </h2>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {ym} 共 <strong>{readyLists.length}</strong> 筆名單已準備完成，待觸發月跑
@@ -199,10 +199,10 @@ export function ReadySummaryListPage() {
                   <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                   <div className="flex-1 text-sm text-amber-900">
                     <p className="font-semibold">
-                      本月仍有 <span>{notReadyLists.length}</span> 筆名單未進入 ready 階段，無法執行月跑
+                      本月仍有 <span>{notReadyLists.length}</span> 筆名單未進入準備完成階段，無法執行月跑
                     </p>
                     <p className="text-xs text-amber-800 mt-1">
-                      未 ready 名單：
+                      尚未完成名單：
                       <span className="font-mono ml-1">
                         {notReadyLists.map((l) => l.listNo).join(', ')}
                       </span>
@@ -252,10 +252,10 @@ export function ReadySummaryListPage() {
                   <AlertTriangle className="w-8 h-8 text-amber-600" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                  本月尚無 ready 名單
+                  本月尚無準備完成名單
                 </h3>
                 <p className="text-sm text-gray-500 max-w-md">
-                  本月共有 {totalActive} 筆名單，但都未進入 ready 階段；請先完成各階段。
+                  本月共有 {totalActive} 筆名單，但都尚未進入準備完成階段；請先完成各階段。
                 </p>
                 <Button
                   type="button"
@@ -277,7 +277,7 @@ export function ReadySummaryListPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-base font-semibold text-gray-800 inline-flex items-center gap-2">
                     <ListChecks className="w-4 h-4 text-green-700" />
-                    已 ready 名單清單
+                    已完成名單清單
                     <span className="text-xs text-gray-400 font-normal">
                       （依 created_at 倒序）
                     </span>
@@ -311,7 +311,7 @@ export function ReadySummaryListPage() {
                           </span>
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-700">
                             <CheckCircle2 className="w-3 h-3" />
-                            ready
+                            準備完成
                           </span>
                         </div>
                         <p className="text-sm font-medium text-gray-800 truncate">

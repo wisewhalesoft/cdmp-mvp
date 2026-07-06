@@ -347,7 +347,7 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     expect(stat.textContent).toContain('1 位離職不計');
   });
 
-  it('stat：簽核紀錄顯示 approve · reject 拆分', async () => {
+  it('stat：簽核紀錄顯示 核准 · 拒絕 拆分', async () => {
     renderPage();
     await waitFor(() => {
       expect(
@@ -356,7 +356,7 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     });
     expect(
       screen.getByTestId('detail-stat-history-count').textContent,
-    ).toContain('1 approve · 0 reject');
+    ).toContain('1 核准 · 0 拒絕');
   });
 
   it('部門比例表含「處長」欄（李處長）', async () => {
