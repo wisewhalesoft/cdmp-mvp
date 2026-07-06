@@ -109,6 +109,31 @@ describe('RunProgressPage (F062 polling)', () => {
     expect(screen.getByRole('button', { name: /查看結果摘要/ })).toBeInTheDocument();
   });
 
+  it('Run Summary Card 以後端真實契約顯示作業年月 / 觸發者名稱 / 總筆數', async () => {
+    // 對齊後端 getRunById 實際回傳（projectWorkym / triggeredByName / totalCases），
+    // 而非舊契約 ym / triggeredBy(UUID) / totals.totalCount（feedback_mock_real_system_contract）。
+    mockedGetRun.mockResolvedValue({
+      runId: '261e66df-8e7b-45f8-ab2c-a3f559acf3d3',
+      projectWorkym: '202606',
+      status: 'completed',
+      triggeredBy: '261e66df-8e7b-45f8-ab2c-a3f559acf3d3',
+      triggeredByName: '李處長',
+      triggeredAt: '2026-06-10T10:00:00.000Z',
+      finishedAt: '2026-06-10T10:15:00.000Z',
+      totalCases: 55863,
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getAllByTestId('run-status-completed').length).toBeGreaterThan(0),
+    );
+    // 作業年月：projectWorkym（不空白）
+    expect(screen.getByText('202606')).toBeInTheDocument();
+    // 觸發者：顯示名稱、非 UUID
+    expect(screen.getByText('李處長')).toBeInTheDocument();
+    // 總筆數：totalCases 格式化（不空白）
+    expect(screen.getByText('55,863')).toBeInTheDocument();
+  });
+
   it('failed 狀態顯示 error message', async () => {
     mockedGetRun.mockResolvedValue({
       runId: 'R001',

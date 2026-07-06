@@ -265,13 +265,19 @@ export type RunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface RunProgressResponse {
   runId: string;
-  ym: string;
+  /** 後端 getRunById 回傳欄位（作業年月）；ym 為 legacy alias，實際後端未回傳。 */
+  projectWorkym?: string;
+  ym?: string;
   status: RunStatus;
   triggeredBy: string;
+  /** F062：triggered_by(UUID) → users.name 解析結果；查無對應 user 為 null。 */
+  triggeredByName?: string | null;
   triggeredAt: string;
   startedAt?: string | null;
   finishedAt?: string | null;
   durationMs?: number | null;
+  /** 最終分派總筆數（後端 total_cases）；running 中可能為 null。 */
+  totalCases?: number | null;
   errorMessage?: string | null;
   // Stage 進度（backend 可能擴充）
   stages?: Array<{

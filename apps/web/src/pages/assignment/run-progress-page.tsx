@@ -265,13 +265,13 @@ export function RunProgressPage() {
                   <div>
                     <div className="text-xs text-gray-500 mb-1">作業年月</div>
                     <div className="text-sm font-semibold text-gray-800 font-mono">
-                      {data.ym}
+                      {data.projectWorkym ?? data.ym ?? '—'}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">觸發者</div>
                     <div className="text-sm font-medium text-gray-800">
-                      {data.triggeredBy}
+                      {data.triggeredByName ?? data.triggeredBy}
                     </div>
                   </div>
                   <div>
@@ -291,7 +291,8 @@ export function RunProgressPage() {
                   <div>
                     <div className="text-xs text-gray-500 mb-1">總筆數</div>
                     <div className="text-sm font-semibold text-gray-800 tabular-nums">
-                      {data.totals?.totalCount?.toLocaleString() ?? '—'}
+                      {(data.totalCases ?? data.totals?.totalCount)?.toLocaleString() ??
+                        '—'}
                     </div>
                   </div>
                 </div>
