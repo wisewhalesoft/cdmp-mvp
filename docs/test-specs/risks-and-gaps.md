@@ -1206,3 +1206,51 @@ last_updated: 2026-07-08
 - **影響**：若真實來源存在矩陣未涵蓋之罕見型別（例如已淘汰之 `sql_variant`、`hierarchyid`、`geography`/`geometry` 等特殊型別，機率低但非零），`mapToMssqlType` 之 fallback（`NVARCHAR(MAX)`）雖不至於拋錯，但可能非最適合的映射選擇。
 - **建議**：建議 tdd-implementation 執行 P4e 前，若可連線真實 ZZIP/MLMC 來源，優先查詢 5 張表之實際 `INFORMATION_SCHEMA.COLUMNS.DATA_TYPE` 分布，核對是否被 §一 TYPEMAP 矩陣完整涵蓋（比照 P4d 對 `etl-pipelines.json` 之查證精神），若發現矩陣未涵蓋的型別，於 impl log 記錄並補充對應分支。
 - **風險等級**：中（fallback 機制已存在，不至於功能完全阻斷；僅是型別選擇最適性未經真實資料驗證，若矩陣涵蓋不足會在建表當下立即以拋錯或型別警告形式暴露，訊號明確不會靜默通過）
+
+---
+
+## MSSQL 全面遷移 P3a 風險與待決問題（AD-E07-42，2026-07-08 新增，P3 首片）
+
+> 完整測試設計見 [infrastructure/AD-E07-42-P3a-test.md](infrastructure/AD-E07-42-P3a-test.md)。本節彙整 P3a（Stage 1 篩選 raw SQL 引擎移植）範圍內識別之風險；3b Stage 2~3 計分／3c 比例分派／3d CR 優先分派／3e `fn_calc_tier_level` 收尾之風險留待各自測試設計文件記錄。
+
+### R-MSSQL-P3A-01（🔴🔴 最高，本輪查證出之保證語法錯誤，AD 完全未提及，直接推翻 AD §1.1「executor 不需重新設計」表述）：`stage1-sql-executor.ts:100` 之 `'CR' || cremp.emp_nm` 為 PG 專屬字串串接運算子，T-SQL 不支援
+
+- **問題**：AD-E07-42 §1.1 將 `stage1-sql-executor.ts` 定性為「組裝外殼...不需要重新設計 executor 層架構」，僅要求呼叫端新增 `DB_TYPE==='mssql'` 分支呼叫既有 executor。test-designer 逐行查證該檔案之 `runStage1SqlInsert` 函式，發現其 `selectSql` 字面量本身內嵌 PG `||` 字串串接運算子（`CASE WHEN cremp.emp_id IS NOT NULL THEN 'CR' || cremp.emp_nm ELSE NULL END`，用於組裝 CR 業代顯示名稱 `cr_nm`）。T-SQL **不支援** `||` 運算子（非僅語意不同，而是非合法語法），此陳述式在 MSSQL 上會 100% 拋語法錯誤，且此站點完全未出現在 AD §2.1 之逐站點方言轉換清單中。
+- **影響**：若 tdd-implementation 依 AD 字面理解「executor 只需呼叫端加分支」而未檢視 executor 自身 SQL 模板內容，P3a 之 MSSQL run 路徑會於「有 CR 業代命中」的名單上 100% 拋語法錯誤（非邊界情境，任何命中 CR 業代之名單皆會觸發），且此錯誤與「呼叫端接線是否正確」完全無關，即使 §二 DISPATCH 群組已正確接線，本站點仍會導致整個 INSERT…SELECT 陳述式失敗。
+- **建議**：`infrastructure/AD-E07-42-P3a-test.md` §三 CONCAT 已設計 3 案例（原始碼靜態守門 MUST-FIX + 中文姓名旗艦 EQ + 未命中防禦）。建議 system-architect 於下次修訂 AD-E07-42 時，將此站點正式補入 §2.1 表格（風險等級應標示為「高」而非表格目前完全未提及），並重新評估 §1.1「executor 層不需重新設計」之表述是否需要修正為「executor 之 SQL 模板本身亦含 dialect-specific 內容，需平行 mssql 版本或 dialect-aware 模板切換」。
+- **風險等級**：高（已有明確 MUST-FIX 靜態守門可攔截；但風險本質是「保證失敗」而非「語意可能不一致」，若 tdd-implementation 跳過閱讀本文件逐字依 AD 原文實作，會在測試階段才發現，而非架構設計階段）
+
+### R-MSSQL-P3A-02（🔴🔴 高，AD 建議公式引數順序反轉，套用後年齡計算得負值）：AD §2.1 表格建議之 AGE 轉換公式 `DATEDIFF(YEAR,@ccWorkdt,cc.date_of_birth)` 引數順序反轉
+
+- **問題**：AD-E07-42 §2.1 表格建議 MSSQL AGE 轉換公式為 `DATEDIFF(YEAR,@ccWorkdt,cc.date_of_birth) - CASE WHEN (MONTH(cc.date_of_birth)>MONTH(@ccWorkdt)) OR (...) THEN 1 ELSE 0 END`。test-designer 自行推導 T-SQL `DATEDIFF(datepart,startdate,enddate)` 語意（= `enddate` 之 `datepart` 分量 − `startdate` 之 `datepart` 分量），以 `startdate=@ccWorkdt`（如 2026-07-01）、`enddate=cc.date_of_birth`（如 1996-07-01）代入，結果為 `1996−2026=−30`（負值），而非預期之 `+30` 歲。正確引數順序應為 `DATEDIFF(YEAR, cc.date_of_birth, @ccWorkdt)`（對調兩引數）。AD 建議之 `CASE` 子句（「未達當年生日不計」判斷）方向本身正確，僅 `DATEDIFF` 兩引數順序需對調。
+- **影響**：若 tdd-implementation 逐字套用 AD 建議公式，`stage1-customer-core-clause-mssql.ts` 之 AGE 條件（`BETWEEN :ccAgeMin AND :ccAgeMax`）會恆對負值年齡求值，除非業務刻意將 `min`/`max` 也設為負值（不可能，UI 輸入為非負年齡），否則此條件會**恆排除全部客戶**（除非剛好 min≤負值≤max，機率極低）——此為靜默功能失效（查詢執行成功、無錯誤訊息，僅結果永遠為空/近乎空），比語法錯誤更難被發現。此公式同時被 AD §2.2（Stage 2 計分之 AGE 欄位，另一獨立站點）引用「同 §2.1 轉換公式」，若本輪未修正，該符號錯誤會複製到 3b 子切片。
+- **建議**：`infrastructure/AD-E07-42-P3a-test.md` §四 `AGE-MSSQL-001` 已設計 MUST-FIX 旗艦紅燈守門（已知年齡具體數值斷言，若 AD 公式未修正必為紅燈）。**強烈建議 system-architect 立即修訂 AD-E07-42 §2.1 表格**（並同步檢查 §2.2 是否需要對應修訂或加註提醒），避免 3b 子切片之 test-designer/tdd-implementation 沿用同一錯誤公式（本專案既有記憶模式：「正則轉字元類別...空字串邊界」「AD 建議之單行等價轉換公式」皆需自行推導，本例為同一模式之再次驗證，且是本文件目前發現中唯一「非邊界情境、而是主值符號整體錯誤」之案例）。
+- **風險等級**：高（已有 MUST-FIX 旗艦守門可攔截於測試階段；但若測試案例被跳過或未執行〔例如僅執行 EQ 群組未執行 AGE 群組〕，此缺陷屬於靜默功能失效類型，正式環境上線後可能長期無人察覺客戶年齡篩選條件實質上恆不生效）
+
+### R-MSSQL-P3A-03（中，不可逐字複用 P4a 既有正則轉換公式）：year-above 前導數字**擷取**與 P4a 已驗證之全字串**驗證**語意層級不同
+
+- **問題**：P4a `type-cast-handler-mssql.ts` 已驗證的 `NOT LIKE '%[^0-9]%'` + `LEN(x)>0` 手法，解的是「驗證整個字串是否全為數字」（布林判斷）。Stage 1 year-above 之 `SUBSTRING(o.year_produ FROM '^[0-9]+')`（PG，無 `$` 錨點）要解的是「擷取字串**開頭**連續數字子字串」（例：`'1980abc'` → `'1980'`），語意層級為擷取而非驗證。AD §2.1 表格對此站點僅描述「`PATINDEX`/`LIKE` 字元類別（前導數字擷取，比照 P4a 已驗證之 `~ '^[0-9]+$'`→`NOT LIKE '%[^0-9]%'` 手法延伸）」，用詞「延伸」容易被誤讀為「可直接沿用同一公式」，但若逐字套用 P4a 之全字串驗證公式，`'1980abc'` 會被誤判為「非全數字→視為 NaN→保留」，與 JS oracle 對前導數字之「解析出 1980→排除」語意矛盾（本文件 §五 `YEARABOVE-007` 已設計對應紅燈案例）。
+- **影響**：若 tdd-implementation 誤用驗證公式取代擷取公式，含「前導數字+尾隨字母」形式之 `year_produ` 值（真實資料是否存在此形式待 tdd-impl 查證，本文件無法靜態確認）會被誤判保留而非依前導數字排除，造成 year-above 特例名單之案件篩選結果偏多（應排除卻未排除）。
+- **建議**：`infrastructure/AD-E07-42-P3a-test.md` §五 YEARABOVE 已逐一設計對稱 PG PORT-001~007 之 8 個案例，並特別標注 `YEARABOVE-004`（空字串陷阱，`PATINDEX` 對空字串與「全字串皆數字」字面皆回傳 0）與 `YEARABOVE-007`（前導數字+尾隨字母，驗證擷取語意）為 MUST-FIX 旗艦案例。建議 system-architect 於下次修訂時將 AD §2.1 表格此站點之描述由「延伸」改為更明確的「需自行推導擷取公式，不可直接沿用驗證公式」，避免用詞歧義。
+- **風險等級**：中（已有明確測試守門；真實 `year_produ` 資料中「前導數字+尾隨字母」形式之實際出現頻率未知，待 tdd-impl 查證，若該形式在真實資料中從未出現，此風險之實際業務影響會低於測試設計階段之理論評估）
+
+### R-MSSQL-P3A-04（中高，Harness 環境依賴，AD 未涉及）：Stage 1 raw SQL 產出裸表名僅能解析至 `dbo`，且 `dbo` 已由 baseline migration 建有與 P1b2/P4 系列共用之六張表，既有 PG spec 之「DROP+re-synchronize」模式不可原樣移植
+
+- **問題**：test-designer 逐行查證 `1751884800000-MssqlBaselineSchema.ts`，確認 `ob_pool_data`/`ob_pool_data_list`/`ob_list_definition`/`assignment_run`/`ob_monthly_run_result`/`customer_core` 六張表皆已於 `dbo` schema 建有 CREATE TABLE。`stage1-sql-builder.ts`/`stage1-customer-core-clause.ts`/`stage1-sql-executor.ts` 產出之 SQL 全數使用裸表名（無 schema 前綴），僅能解析至連線 login 之 DEFAULT_SCHEMA（`dbo`，同 P1b2/P1b3 已確立之限制），故無法比照 `AD-E07-39-P1b1-test.md` 之獨立 `p1b1` schema 隔離策略。既有 F099/F109 PG spec 之慣例（`synchronize:true` 建立拋棄式副本表 + `afterAll` `DROP TABLE ... CASCADE`）若原樣移植至 MSSQL `dbo`，會摧毀 P1b2 parity 測試與 P4a~e ETL 測試共用依賴之持久化 baseline 結構。
+- **影響**：若 tdd-implementation 未意識到此差異，直接依 PG spec 慣例撰寫 `beforeAll`/`afterAll`（`DROP TABLE`/重 `synchronize`），會在 CI 或本機併行/循序執行其餘 `.mssql.spec.ts` 套件時，破壞其餘套件對這六張表結構穩定存在之隱含假設，產生難以追查的跨檔案間歇性失敗。
+- **建議**：`infrastructure/AD-E07-42-P3a-test.md` §零 0.2 已明確設計「共用既有表 + 前綴隔離寫入列 + 精準 DELETE（禁止 DROP/TRUNCATE）」策略（移植自 P4d §0.3 之 PG 側對稱建構原則），並於 §十四 `STATIC-001` 設計 MUST-FIX 靜態守門掃描此禁令。建議 tdd-implementation 執行本輪測試前，先以 `TS-MSSQL-P3A-GATE-002` 確認六表已存在（bootstrap 已完成），若否應先執行 baseline migration 而非自行建表。
+- **風險等級**：中高（已有明確 Harness 設計與靜態守門降低風險；但此類「跨測試檔案共用持久化表」之協調慣例目前僅存在於本文件與 P1b1/P1b2/P1b3 之零星記錄中，尚無專案級共用文件統一說明，建議中長期建立一份跨 MSSQL 測試套件共用之 Harness 慣例索引，避免每個子切片各自重新發現同一限制）
+
+### R-MSSQL-P3A-05（中，AD 明確授權之開放式決策點，非阻擋）：`buildCustomerCoreClause` 現行由 `buildStage1Sql`（PG 下推）與 `executeStage1Chain`（JS oracle）共用同一函式，MSSQL 上是否需要讓 `executeStage1Chain` 也 dialect-aware 化，AD 未涉及
+
+- **問題**：`stage1-customer-core-clause.ts` 檔頭註解明載此函式「PG 下推與 chain 路徑共用同一函式」，此設計在 PG 上使兩路徑天然等價。P3a 為 `buildStage1Sql` 建構 mssql 版時，`executeStage1Chain`（`stage1-filter-chain.ts`，AD §1.1 檔案改動清單未列此檔）若未同步 dialect-aware 化，`executeStage1Chain` 在 MSSQL 連線下呼叫 customer_core 條件會嘗試執行 PG 專屬 `AGE()`/`EXTRACT()`/`::date` 語法而拋錯。由於 §二 DISPATCH 群組已將 MSSQL 環境正確接線至 mssql 下推路徑（非 `executeStage1Chain`），此問題在**生產路徑**上不會發生；但在**測試設計方法論**上，直接影響 P3a customer_core EQ 群組能否沿用 F109 PG spec 之 `chainPks()`/`estimateCount()` 雙路徑比對模式。
+- **影響**：測試設計層面：若 tdd-implementation 未意識到此限制，直接複製 F109 PG spec 之 `chainPks()` 呼叫模式到 mssql spec 檔案，會在 customer_core 條件案例上遇到執行期語法錯誤（非測試邏輯錯誤，而是誤用工具）。生產路徑層面：只要 §二 DISPATCH 群組確實接線正確，此問題不影響生產行為。
+- **建議**：`infrastructure/AD-E07-42-P3a-test.md` §0.3 已記錄兩種可行路徑（dialect-aware 化 `stage1-filter-chain.ts` vs 維持不變改用手算 JS oracle），§十 CCEQ 群組依預設路徑（不改動 `stage1-filter-chain.ts`，改用測試檔內手算 oracle）設計，並於 `GATE-003`/`CCEQ-GATE-001` 要求 tdd-implementation 於 impl log 記錄實際選擇。此為 AD 明確留給下游決定 HOW 層級細節之開放點，非阻擋項。
+- **風險等級**：低-中（已有明確測試方法論設計降低「無法執行」之風險；純屬測試方法論選擇，不影響生產行為正確性，僅需 tdd-implementation 於 impl log 落實記錄以維持未來可維護性）
+
+### R-MSSQL-P3A-06（低，待 tdd-impl 真庫驗證項）：`customer_core.source_customer_no` UNIQUE 約束於 MSSQL baseline migration 未查得對應索引/約束陳述式
+
+- **問題**：test-designer grep `1751884800000-MssqlBaselineSchema.ts` 之 `customer_core` 相關陳述式，僅確認 `CREATE TABLE`/`DROP TABLE`，未見 `source_customer_no` 之 UNIQUE INDEX/CONSTRAINT 陳述式（PG baseline `1711360000000-BaselineSchema.ts` 則明確有 `customer_core_source_customer_no_key UNIQUE (source_customer_no)`）。此為工具查證之限制（該行極長，Grep 工具可能省略），**非**確認性結論，記為待查證項。
+- **影響**：若 MSSQL baseline 確實遺漏此約束，I-CC-JOIN-CARD-01（JOIN 基數 ≤1:1 保證 COUNT 不因 JOIN 膨脹）於 MSSQL 上僅依賴 fixture 資料紀律（測試/種子資料不刻意製造重複 `source_customer_no`），而非資料庫層防線；若未來真實 ETL（P4d 56 節點 pipeline）之 UPSERT 邏輯出現 bug 導致重複列，MSSQL 上不會被資料庫約束攔截，而 PG 上會立即因 UNIQUE 違反而報錯（訊號不對稱）。
+- **建議**：`infrastructure/AD-E07-42-P3a-test.md` §一 `GATE-004` 已設計決策關卡直接查詢 `sys.indexes`/`sys.key_constraints` 確認。若確認不存在，建議 system-architect 評估是否需要補一支收尾 migration 補齊此約束（與 P3a 範圍無關，屬 P4/baseline 收尾項）。
+- **風險等級**：低（P4d 之 target-load UPSERT 邏輯已有自身去重機制把關，此約束為資料庫層第二道防線而非唯一防線；純屬待查證的環境事實缺口，非功能性風險）
