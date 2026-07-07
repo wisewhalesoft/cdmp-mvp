@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EtlPipelineExecutionService } from '../etl-pipeline-execution.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
@@ -95,6 +96,8 @@ describe('EtlPipelineExecutionService', () => {
         { provide: getRepositoryToken(EtlPipelineLog), useValue: mockLogRepository },
         { provide: getRepositoryToken(EtlPipelineVersion), useValue: mockVersionRepository },
         { provide: DataSource, useValue: mockDataSource },
+        // AD-E07-41 P4c：createDispatcher 依 DB_TYPE 分支需 ConfigService；預設 sqlite → PG handler 分支
+        { provide: ConfigService, useValue: { get: (_k: string, d?: unknown) => d } },
       ],
     }).compile();
 

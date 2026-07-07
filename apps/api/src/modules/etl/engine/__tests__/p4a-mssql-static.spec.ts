@@ -104,10 +104,14 @@ describe('P4a REG-002 (5 個 PG handler 未被改為 mssql)', () => {
   });
 });
 
-describe('P4a DISPATCH-002 (createDispatcher 未接 DB_TYPE 分支，9 個 PG handler 不變)', () => {
+describe('P4a DISPATCH-002 (createDispatcher — 9 個 PG handler 於預設分支不變)', () => {
+  // 🔴 AD-E07-41 P4c（DISPATCH-001）已落地 createDispatcher 之 DB_TYPE 分支（P4a 原「延後未接線」狀態於本輪結束）。
+  //    P4a 原斷言「無 mssql 分支」已不適用；改為驗證 PG handler 於預設（非 mssql）分支仍逐一註冊、順序不變。
   const svc = read(path.resolve(__dirname, '../../etl-pipeline-execution.service.ts'));
-  it('createDispatcher 仍註冊 9 個 PG handler，無 mssql 分支', () => {
-    const registers = [...svc.matchAll(/dispatcher\.register\(new\s+(\w+)\(\)\)/g)].map((m) => m[1]);
+  it('9 個 PG handler 於預設分支仍逐一註冊、順序不變', () => {
+    const registers = [...svc.matchAll(/dispatcher\.register\(new\s+(\w+)\(\)\)/g)]
+      .map((m) => m[1])
+      .filter((n) => !n.endsWith('Mssql'));
     expect(registers).toEqual([
       'ExtractHandler',
       'MergeHandler',
@@ -119,7 +123,5 @@ describe('P4a DISPATCH-002 (createDispatcher 未接 DB_TYPE 分支，9 個 PG ha
       'TargetLoadHandler',
       'LookupHandler',
     ]);
-    expect(svc.includes('HandlerMssql')).toBe(false);
-    expect(svc).not.toMatch(/DB_TYPE.*===.*'mssql'/);
   });
 });

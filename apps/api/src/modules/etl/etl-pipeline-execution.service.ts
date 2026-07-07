@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository, DataSource } from 'typeorm';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
@@ -25,6 +26,15 @@ import {
   ConditionalHandler,
   TargetLoadHandler,
   LookupHandler,
+  ExtractHandlerMssql,
+  MergeHandlerMssql,
+  DedupHandlerMssql,
+  TypeCastHandlerMssql,
+  DerivedFieldHandlerMssql,
+  FieldMappingHandlerMssql,
+  ConditionalHandlerMssql,
+  TargetLoadHandlerMssql,
+  LookupHandlerMssql,
 } from './engine';
 
 @Injectable()
@@ -39,13 +49,32 @@ export class EtlPipelineExecutionService {
     @InjectRepository(EtlPipelineVersion)
     private readonly versionRepository: Repository<EtlPipelineVersion>,
     private readonly dataSource: DataSource,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
-   * Create a NodeDispatcher with all registered handlers
+   * Create a NodeDispatcher with all registered handlers.
+   *
+   * AD-E07-41 P4c（DISPATCH-001 落地）：依 `DB_TYPE` 分支註冊 PG 版或 MSSQL 版 9 個 handler
+   * （P4a/P4b 皆延後至本輪「9 個 handler 全數到齊」一次接上）。沿用 `app.module.ts`/`data-source.ts`
+   * 已建立之 `configService.get<string>('DB_TYPE', 'sqlite')` 慣例（DISPATCH-003）。
+   * `DB_TYPE!=='mssql'`（含 `postgres`/`sqlite`/未設定）維持原 9 個 PG handler 逐位元組不變。
    */
   private createDispatcher(): NodeDispatcher {
     const dispatcher = new NodeDispatcher();
+    const useMssql = this.configService.get<string>('DB_TYPE', 'sqlite') === 'mssql';
+    if (useMssql) {
+      dispatcher.register(new ExtractHandlerMssql());
+      dispatcher.register(new MergeHandlerMssql());
+      dispatcher.register(new DedupHandlerMssql());
+      dispatcher.register(new TypeCastHandlerMssql());
+      dispatcher.register(new DerivedFieldHandlerMssql());
+      dispatcher.register(new FieldMappingHandlerMssql());
+      dispatcher.register(new ConditionalHandlerMssql());
+      dispatcher.register(new TargetLoadHandlerMssql());
+      dispatcher.register(new LookupHandlerMssql());
+      return dispatcher;
+    }
     dispatcher.register(new ExtractHandler());
     dispatcher.register(new MergeHandler());
     dispatcher.register(new DedupHandler());

@@ -53,10 +53,12 @@ describe('P4a HELPER-MSSQL', () => {
     try {
       await createMssqlTempTable(qr, name, `SELECT * FROM (VALUES (1,N'a')) AS v(id, memo)`);
       const cols = await getMssqlTempTableColumns(qr, name);
-      expect(cols).toEqual([
+      // AD-E07-41 P4c（CATALOG-GATE-001 選項甲）additive 擴充 dataType；既有 name/columnId 語意不變。
+      expect(cols.map((c) => ({ name: c.name, columnId: c.columnId }))).toEqual([
         { name: 'id', columnId: 1 },
         { name: 'memo', columnId: 2 },
       ]);
+      expect(cols.every((c) => typeof c.dataType === 'string' && c.dataType.length > 0)).toBe(true);
     } finally {
       await dropMssqlTempTableIfExists(qr, name);
     }

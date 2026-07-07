@@ -38,10 +38,16 @@ export async function dropMssqlTempTableIfExists(
 
 /**
  * 暫存表欄位內省結果（AD §3.1 回傳型別）。
+ *
+ * P4c（CATALOG-GATE-001 選項甲）additive 擴充：新增 `dataType`（SQL Server 型別名，如
+ * `varchar`/`nvarchar`/`int`/`datetime2`），供 target-load 之 `NULLIF(TRIM())` VARCHAR 判斷用
+ * （inputColumnTypes/varcharColumns）。既有 `name`/`columnId` 語意不變（additive-only，STATIC-003）。
  */
 export interface MssqlTempTableColumn {
   name: string;
   columnId: number;
+  /** SQL Server 型別名（小寫，如 `varchar`/`nvarchar`/`int`/`datetime2`）。P4c 新增。 */
+  dataType: string;
 }
 
 /**
@@ -137,13 +143,18 @@ export async function getMssqlTempTableColumns(
   tempTableName: string,
 ): Promise<MssqlTempTableColumn[]> {
   const rows = await queryRunner.query(
-    `SELECT c.name AS column_name, c.column_id
+    `SELECT c.name AS column_name, c.column_id, t.name AS data_type
        FROM tempdb.sys.columns c
+       JOIN tempdb.sys.types t ON c.user_type_id = t.user_type_id
       WHERE c.object_id = OBJECT_ID('tempdb..' + @0)
       ORDER BY c.column_id`,
     [tempTableName],
   );
-  return rows.map((r: any) => ({ name: r.column_name, columnId: r.column_id }));
+  return rows.map((r: any) => ({
+    name: r.column_name,
+    columnId: r.column_id,
+    dataType: r.data_type,
+  }));
 }
 
 /**
