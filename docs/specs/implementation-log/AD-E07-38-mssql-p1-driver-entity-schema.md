@@ -5,7 +5,7 @@ feature-id: N/A（非 F-numbered feature；資料庫平台全面遷移之基礎�
 source-stories: N/A（使用者直接拍板三項硬約束，非 product-analyst story 流程）
 epic: cross-cutting（跨全模組之資料庫平台遷移，非單一 E07 業務 epic；見 §0 範圍說明）
 module: Infrastructure — Database Platform Migration（PostgreSQL → MSSQL，Phase 1 of 6）
-version: "1.0"
+version: "1.1"
 date: 2026-07-07
 status: approved
 author: system-architect
@@ -327,3 +327,27 @@ D-1 提出的兩個新 helper 是否必要，取決於 TypeORM mssql driver 對�
 ### 7.4 Bootstrap/seed 腳本 PG-specific 邏輯未逐行 diff
 
 `seed.ts`/`seed-datasource.ts`/`prod-data-seed.ts` 是否含 `ON CONFLICT`/`information_schema` 等 PG-specific 語法，本 AD 僅列為 P1b 稽核範圍，未逐行查證（超出 architect 職責，屬 tdd-implementation 執行細節）；要求 P1b DoD 以「四支腳本對 MSSQL 全部跑通且產出與 PG 版本等值的參考資料筆數」作為驗收，讓實作過程自然發現並修正殘留的 PG-only 語法。
+
+**已於 [AD-E07-39](AD-E07-39-mssql-p1b-full-baseline.md) §7 查明具體證據**：`seed-datasource.ts`/`prod-data-seed.ts` 確實含大量 `$1` positional param + `LIMIT` 子句（未見 `ON CONFLICT`，不需 `MERGE` 改寫）；`seed.ts` 已用 TypeORM repo 方法、風險低。
+
+---
+
+## 11. Errata（2026-07-07，P1b 查證後更新，v1.0→v1.1）
+
+P1a 型別探針與 P1b 全 entity 掃描（詳見 [AD-E07-39](AD-E07-39-mssql-p1b-full-baseline.md)）發現以下 3 點推翻/更新本文件 v1.0 的假設。**後續讀者請以本節 + AD-E07-39 為準，不要沿用下列已過時的原始描述**：
+
+### Errata-1（對應 §2 D-2 型別對照表）：遺漏 `type:'timestamp'` 裸字面值類別，風險等級應為「高」非「低」
+
+原 §2 D-2 表格只列出 `uuid`/`bigint`/`text`/`bytea`/`dateColumnType`/`jsonColumnType`/`surrogatePkType`/`boolean` 幾類，**未涵蓋「entity 直接寫 `type:'timestamp'` 字面值、繞過 `dateColumnType` helper」這個獨立類別**。P1b 全 entity 掃描發現 3 個檔案共 4 處此問題（`ob-assign-config.entity.ts`、`ob-arreturndf-min-cap.entity.ts`、`assignment-run-stage-log.entity.ts`）。
+
+**風險等級修正**：這**不是**單純「型別不支援、會拋錯」的低風險項（如原文對 boolean 的預期）。MSSQL 的字面值 `timestamp` 是 `rowversion` 的舊式同義詞——一種 8-byte 自動遞增二進位版本戳記，唯讀、無法寫入 Date 值，**且不保證會拋錯**（可能靜默建出語意完全錯誤的欄位，事後才在寫入/讀取時才出錯或更糟——資料被靜默寫壞）。此風險等級應歸類為「高」，詳細清單與修法見 AD-E07-39 §0 F-1 / §1。
+
+### Errata-2（對應 §4.2 Migration 檔案/§4 schema 兩軌人工稽核清單）：filtered index 遷移前提已失效
+
+原文假設「舊 PG baseline 需要人工逐一核對、補寫等價 filtered index」。**此假設已於 2026-07-07 失效**：`ob_pool_data_list` 的唯一 filtered index（`idx_ob_pool_data_list_score_notnull`，m298）因 `score` 欄位已成死欄（F055 preview 改查 `ob_pool_data` 後不再需要）而被移除——entity、`BaselineSchema.ts`、dev DB 三方已同步移除。P1b 全文掃描 `BaselineSchema.ts` 確認目前**零** filtered/partial index。**Schema 兩軌流程之人工稽核清單可省略此步驟**，詳見 AD-E07-39 §0 F-2 / §6。
+
+### Errata-3（對應 §2 D-2）：varchar + 中文字元編碼是完全未涵蓋的新風險維度
+
+原 §2 D-2 型別對照表未討論 `varchar` 欄位本身（僅討論 `uuid`/`text`/`boolean`/`bigint` 等「型別名稱不相容」的問題）。P1b 盤點發現一個更根本的風險：全庫大量 `varchar` 欄位承載中文資料，SQL Server `VARCHAR`（非 Unicode）依 collation 對應 code page 儲存，其編碼轉換路徑（tedious driver 如何處理 Big5 碼頁）**從未在本專案驗證過**，有潛在 mojibake 風險，且若真的需要全面改 `nvarchar`，波及面可能是本次 P1（P1a+P1b）中最大的單一改動項（大於 uuid/text/boolean/timestamp 47 處的總和）。此風險已定調為「實驗先行」（先跑 smoke test 才決定是否需要系統性轉換），完整設計見 AD-E07-39 §0 F-4 / §4.4。
+
+**交叉引用**：本 errata 對應的完整分析、掃描證據與修法設計，一律以 [AD-E07-39-mssql-p1b-full-baseline.md](AD-E07-39-mssql-p1b-full-baseline.md) 為權威來源。

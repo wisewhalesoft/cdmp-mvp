@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.21"
+version: "3.22"
 date: 2026-07-07
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.22 / 2026-07-07 / MSSQL 全面遷移 P1b（全 37 Entity Baseline）架構設計**：延續 AD-E07-38（P1），P1a 型別探針完成並 commit（`b495cd8`）後對全 37 entity 進行完整型別轉換、900-byte 索引鍵掃描、B1 正式裁定。新增 **[`implementation-log/AD-E07-39-mssql-p1b-full-baseline.md`](implementation-log/AD-E07-39-mssql-p1b-full-baseline.md)**，固化：(1) 5 項新查證事實 F-1~F-5（`type:'timestamp'` 裸字面值 4 處＝危險的 rowversion 陷阱非單純不支援；舊 baseline 唯一 filtered index 已於 7/7 移除、schema 兩軌流程簡化；`prod-data-seed.ts`/`seed-datasource.ts` 確認為 `$n`+`LIMIT` 而非 `ON CONFLICT`；🆕 varchar+中文編碼風險採實驗先行；D1 entities 陣列漂移純陣列統一修法）；(2) 全 37 entity 型別轉換清單（47 處，含新增之 timestamp 4 處）；(3) 900-byte 索引鍵全面掃描結論＝**全庫僅 `token_blocklist.token` 一例超標（B1）**，其餘皆安全；(4) B1 正式裁定＝`token`→`token_hash`、新增 `hashColumnType`（mssql=`binary(32)`/pg=`bytea`/sqlite=`blob`）、三 driver 統一改 hash 不做 driver-conditional；(5) varchar 中文編碼 test-first 決策流程（相符維持現狀／不符則全面轉 nvarchar）；(6) `ALL_ENTITIES` 統一陣列解 D1；(7) schema 兩軌流程更新（filtered index 步驟省略）；(8) P1b1/P1b2/P1b3 三個實作切片與 DoD；新增 4 個不變式（I-MSSQL-PK-BYTELIMIT-01/HASH-DETERMINISM-01/VARCHAR-ENCODING-01/ENTITY-LIST-PARITY-01）。**同步修訂** `implementation-log/AD-E07-38-mssql-p1-driver-entity-schema.md`（v1.0→v1.1）：新增 §11 Errata，標注 3 項被新事實推翻/更新的原始假設（Errata-1 timestamp 類別遺漏且風險應為「高」；Errata-2 filtered index 遷移前提失效；Errata-3 varchar+中文編碼為 D-2 未涵蓋之新風險維度），交叉引用 AD-E07-39。**刻意未動**：`architecture-spec.md`（理由同 v3.21，P1 系列尚未實作落地）。
 
 > **v3.21 / 2026-07-07 / MSSQL 全面遷移 P1（Driver / Entity / Schema 基礎層）架構設計**：非 F-numbered feature（資料庫平台遷移基礎建設，由使用者直接拍板三項硬約束驅動：完全消除 PostgreSQL／佇列自建 T-SQL／目標 SQL Server 2022 + `Chinese_Taiwan_Stroke_BIN` collation）。新增 **[`implementation-log/AD-E07-38-mssql-p1-driver-entity-schema.md`](implementation-log/AD-E07-38-mssql-p1-driver-entity-schema.md)**，固化 P1 七項設計決策：(1) 三個 TypeORM 設定點（`data-source.ts`/`app.module.ts`/`worker-app.module.ts`）dialect 三分支 + `column-types.ts` 三既有 helper（`dateColumnType`/`jsonColumnType`/`surrogatePkType`）擴充 mssql 分支 + 新增 `uuidColumnType`/`longTextColumnType`；(2) entity 型別逐項對照（uuid 18 處/bigint 2 處/text 17 處/bytea 0 處，helper 覆蓋 29+3+5 檔）；(3) BIN collation 約束（字串比較語意不回歸=正確決策；識別碼大小寫敏感→全小寫+守門測試 I-MSSQL-CASE-01）；(4) schema 兩軌建置流程（dev synchronize 產草稿→人工稽核→prod baseline；`fn_calc_tier_level` 視為死碼、P1 不建立）；(5) Pattern B `$n`→named param 核心 6 處 + `pg_advisory_xact_lock`→`sp_getapplock` 對應表（回傳碼↔`55P03`）；(6) P1a/P1b/P1c 三個實作切片與 DoD；(7) 判定不需要 spec-writer（行為不變、無新業務規則）。**刻意未動**：`architecture-spec.md`（本輪為多階段遷移之 Phase 1 設計、尚未實作落地，暫不改動「現行系統架構」主檔，待 P1 實作完成或遷移進度足夠成熟後再議是否併入；system-architect 判斷保留彈性）。另發現**第 5 個 PG-only 機制**（`assignment-run-report.service.ts` F064 匯出之 PostgreSQL native server-side cursor）已移入 Phase 3/4 待辦。
 
