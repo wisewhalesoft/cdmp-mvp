@@ -1039,3 +1039,51 @@ last_updated: 2026-07-08
 - **影響**：若 tdd-implementation 僅依 AD §3.2 表格文字逐項改寫，會遺漏 (a)~(d) 四處，其中 (b) `mergePhone` 正則因高頻使用（7/12 derived_field 表達式）若遺漏將導致 P4d 端對端測試大量失敗，屬於高可見度但易被表格文字遺漏的風險。
 - **建議**：`infrastructure/AD-E07-41-P4a-test.md` 已將此四處逐一納入對應群組（EXTRACT-RESOLVE 子群組、DERIVED-UNIT-003/EQ-004~008、DERIVED-UNIT-005/EQ-009、FIELDMAP-UNIT-004），已足以在 P4a 階段攔截；建議 system-architect 於下次修訂 AD-E07-41 §3.2 時同步補列此四處，避免影響尚未設計測試之 P4b/c 若有類似「表格文字未窮盡私有方法內嵌轉換站點」之遺漏模式。
 - **風險等級**：低（已於本輪測試設計完整補齊，不構成 P4a 阻擋；記錄用意在於提醒此為本專案 MSSQL 遷移系列之可預期重演模式，供未來子切片測試設計時優先主動 grep 覆核，而非僅信任 AD 表格文字定範圍）
+
+---
+
+## MSSQL 全面遷移 P4b 風險與待決問題（AD-E07-41，2026-07-08 新增，P4 第二片）
+
+> 完整測試設計見 [infrastructure/AD-E07-41-P4b-test.md](infrastructure/AD-E07-41-P4b-test.md)。本節彙整 P4b（Handler 群組二：merge/lookup，含 `UPDATE...FROM` 重構）範圍內識別之風險；P4c/d/e 之風險留待各自測試設計文件記錄。
+
+### R-MSSQL-P4B-01（🔴🔴 最高，本輪查證出之最基礎、保證失敗的未提及站點）：`lookup-handler.ts` 之 `ALTER TABLE ADD COLUMN IF NOT EXISTS ... TEXT` 為 T-SQL 保證語法錯誤，AD 與任務書皆完全未提及
+
+- **問題**：`lookup-handler.ts` 於 `null`/`skip_row`/`default_value` 三種 `noMatchStrategy` 分支皆執行 `ALTER TABLE "${inputTable}" ADD COLUMN IF NOT EXISTS "${alias}" TEXT`（每個 outputColumn 一次）。T-SQL `ALTER TABLE` 新增欄位語法為 `ALTER TABLE t ADD col_name data_type`——**不接受 `COLUMN` 保留字於此位置，亦無 `IF NOT EXISTS` 子句**（PG 9.6+ 專屬語法糖，SQL Server 從未支援）。且目標型別 `TEXT` 為 SQL Server 已棄用型別，與後續 `TRIM`/字串比較操作相容性差。test-designer grep `apps/api/src/database/seeds/data/etl-pipelines.json` 確認真實 customer_core pipeline **31 個 lookup 節點、每節點恰 1 個 outputColumn**，即完整月跑會執行 31 次此陳述式。AD-E07-41 §3.2 lookup-handler 列僅提及「`UPDATE...FROM` 重構」「`::text`→`CAST`」「`DELETE...WHERE NOT EXISTS` 不需改」三點，**完全未提及此 `ALTER TABLE` 站點**；上層任務書同樣僅點名 `UPDATE...FROM` 重構，未提及此站點。
+- **影響**：若 tdd-implementation 僅依 AD §3.2 表格文字與任務書逐項改寫，會完全遺漏此站點——這不是語意風險（如 `UPDATE...FROM` 翻譯錯誤仍可能「恰好」執行但結果錯誤），而是**保證編譯期/執行期語法錯誤**，一旦觸及即 100% 崩潰，且是本切片測試覆蓋率要求最高的 handler（lookup，31 個真實節點）之**每一次呼叫**皆會觸發的必經路徑。風險優先權高於任務書已明確點名的 `UPDATE...FROM` 重構本身。
+- **建議**：`infrastructure/AD-E07-41-P4b-test.md` 已將此站點獨立立為文件最優先章節（§一 ALTERCOL，8 個案例）：`ALTERCOL-UNIT-001~003`（🔴 MUST-FIX，分別鎖定「不得含 `ADD COLUMN`」「不得含 `IF NOT EXISTS`」「型別須為 `NVARCHAR(MAX)` 非裸 `TEXT`」）+ `ALTERCOL-GATE-001`（🔴 決策關卡，欄位存在性冪等檢查之實作位置——JS 端 `getMssqlTempTableColumns` 預查 vs SQL 端條件式 `IF NOT EXISTS (SELECT...) BEGIN...END`——不預設答案，要求 impl log 明確記錄）+ `ALTERCOL-MSSQL-001~003`（真實 MSSQL 執行 + 冪等性 + 多欄位鏈式新增規模驗證）+ `ALTERCOL-TRAP-001`（陷阱佐證，手動組裝 naive SQL 對真實 MSSQL 執行證實拋錯，非假設性風險）。強烈建議 system-architect 於下次修訂 AD-E07-41 §3.2 時同步補列此站點，並建議未來若有 P4c（`target-load-handler.ts` 之兩段式 UPDATE/INSERT）等其餘 handler 若有類似「動態欄位新增」模式，優先查證是否有同型 `ADD COLUMN IF NOT EXISTS` 陷阱。
+- **風險等級**：高（已有明確測試守門可完整攔截，非阻擋 P4b 本身；記錄為「高」而非「中」是因為此站點的失敗機率遠高於其餘查證站點——不需要特定邊界輸入即會觸發，只要 lookup 節點被執行就必然觸及，且完全未被 AD/任務書提及，若無 test-designer 主動 grep 查證，極可能被下游完全遺漏至 P4d 端對端測試才被發現，屆時除錯成本遠高於 P4b 階段單元測試層級)
+
+### R-MSSQL-P4B-02（🔴 高，任務書明確點名，本輪查證出具體翻譯陷阱）：`UPDATE...FROM` 重構——PG 目標別名「就地宣告」語法為 PG 特有，逐字翻譯會拋 `Invalid object name`
+
+- **問題**：PG `UPDATE "${inputTable}" _src SET ... FROM (${lookupSubQuery}) _lk WHERE ...` 中，`_src` 是**於 `UPDATE` 子句內就地宣告的別名**——這是 PostgreSQL 特有語法糖，UPDATE 目標不需要另外列於 `FROM` 子句。T-SQL 的 `UPDATE` 陳述式**沒有**這種「目標別名可於 SET 子句前就地宣告」的語法；若 tdd-implementation 僅替換 `::text`→`CAST` 等表面方言關鍵字、保留 `UPDATE _src SET ... FROM (subquery) _lk WHERE ...` 這個結構本身（即把 `"${inputTable}"` 換成 `##${inputTable}` 但未把它併入 `FROM`），T-SQL 會因為 `_src` 從未經任何 `FROM`/`JOIN` 宣告而在編譯期拋出 `Invalid object name '_src'` 或 `Must declare the scalar variable "_src"`。正確改寫需將 target 顯式併入 `FROM`/`JOIN`：`UPDATE _src SET ... FROM ##input AS _src JOIN (subquery) AS _lk ON <原 WHERE 條件>`。
+- **影響**：此 `UPDATE...FROM` 陳述式是 `noMatchStrategy='null'` 分支（真實 customer_core 100% 使用之唯一分支）與 `skip_row` 分支共用的核心骨幹，若翻譯錯誤，31 個 lookup 節點全數崩潰，且錯誤發生在 handler 執行期（非 TypeScript 編譯期），只有跑到真實 MSSQL 連線時才會浮現。除了「目標別名未宣告」這個保證失敗的陷阱外，即使正確改寫，仍需額外驗證 JOIN 條件是否忠實對應原 `WHERE` 之 TRIM 雙邊比對邏輯（避免笛卡兒積或漏判），任務書已明確點名此風險。
+- **建議**：`infrastructure/AD-E07-41-P4b-test.md` §二 UPDATEFROM（10 個案例）已設計 `UPDATEFROM-UNIT-001`（🔴 MUST-FIX，目標別名須於 FROM 宣告）+ `UPDATEFROM-TRAP-001`（🔴 陷阱佐證，手動組裝 naive SQL 對真實 MSSQL 執行證實拋錯）+ `UPDATEFROM-EQ-001`（🔴 旗艦案例，多列 lookup 來源逐列取得正確對應值，防笛卡兒積核心）+ `UPDATEFROM-EQ-003`（`lookupFilter` 誤配防禦，25/31 真實節點使用此欄位）等 6 個真實 MSSQL EQ 案例。
+- **風險等級**：高（已有明確測試守門可攔截，且任務書已預先點名此風險方向，本輪查證進一步精確化「究竟會怎麼失敗」與「正確改寫的具體形狀」，降低 tdd-implementation 摸索成本）
+
+### R-MSSQL-P4B-03（中，真實資料查證：三個分支/模式於真實 pipeline 0% 觸發，測試密度應相應調整）：`lookup-handler.ts` 之 dual-input mode、`skip_row`、`default_value` 三者於真實 customer_core pipeline 完全未被使用
+
+- **問題**：test-designer grep `etl-pipelines.json` 之 31 個 lookup 節點設定，確認：(a) 全部 31 個節點 `data.lookupRef` 皆有值且無任何節點之上游邊連接至 `lookup-input` handle → **100% legacy mode**，dual-input mode 於真實 pipeline 0% 觸發；(b) 全部 31 個節點 `noMatchStrategy` 欄位皆為 `'null'`（或未設定、走預設）→ `skip_row`（`INNER JOIN` + `DELETE...WHERE NOT EXISTS`）與 `default_value` 兩分支 0% 觸發。
+- **影響**：若測試設計對三者投入與 `null` 分支同等密度，會誤導資源分配——`null` 分支（LEFT JOIN 語意，經 `UPDATE...FROM` 重構之核心路徑）才是 P4d 端對端測試會真實驗證、且真實月跑會執行的路徑，理應獲得最高測試密度與最多真實 MSSQL EQ 案例；另外三者若完全不覆蓋則存在「未來若其他 pipeline 用到這些分支才第一次發現破損」之風險，但過度投入亦非高效資源分配。
+- **建議**：`infrastructure/AD-E07-41-P4b-test.md` 已比照 P4a `FIELDMAP-UNIT-004`（boolean defaultValue 防禦性覆蓋）之既定精神分層——`null` 分支獲得 §二 UPDATEFROM 全部 EQ 案例 + §八 LOOKUP-EQ 之 5 個真實代表情境案例（仿真實 `lk_edu1`/`lk_hcity` 節點設定）；`skip_row`/`default_value`/dual-input 三者僅設計 UNIT 文字結構驗證 + 各保留 1~3 個真實 MSSQL 執行案例證明語法正確可執行（`SKIP-MSSQL-001~003`/`DEFAULT-MSSQL-001`/`LOOKUP-UNIT-003`），不視為 P4d 端對端可自然覆蓋之路徑。
+- **風險等級**：中（非功能性缺陷，屬測試資源分配之設計決策；若未依真實資料查證盲目均攤測試密度，會在有限開發時程下錯置驗證重點於低價值路徑）
+
+### R-MSSQL-P4B-04（中，真實資料查證，已設計旗艦案例）：真實 4 個 merge 節點 100% 為同名 key（`sameKeyName=true`）且含鏈式合併（`m2→m3`），`sameKeyName=false` 分支 0% 觸發
+
+- **問題**：test-designer grep `etl-pipelines.json` 之 4 個 merge 節點（`m1`~`m4`）設定，確認全部 `conditions[0].leftColumn === conditions[0].rightColumn`（`CUSTO_NO`/`CUSTID`×2/`source_customer_no`），即 100% 為 `sameKeyName=true` 之 COALESCE + `_left`/`_right` 衍生欄位路徑。其中 `m2`（`CUSTID` merge）之輸出直接作為 `m3`（同樣以 `CUSTID` merge）之左輸入，形成鏈式合併——`merge-handler.ts` 現行已有「Skip upstream `_left`/`_right` key columns」之防禦邏輯（避免 `m3` 重複處理 `m2` 產生的衍生欄位而衝突），此邏輯之 mssql 版正確性（欄位清單改由 `getMssqlTempTableColumns` 取得後）**必須**在真實 MSSQL 環境下以真實對應之鏈式情境驗證，因為此類「上游衍生欄位需被跳過」的邏輯錯誤不會拋出任何語法錯誤，只會靜默產生重複/衝突欄位或錯誤覆蓋值。
+- **影響**：若 mssql 版之欄位清單改由 `getMssqlTempTableColumns` 取得後，該防禦邏輯的字串比對（`col === '${leftKey}_left'`）因大小寫或欄位順序差異而失效，會在 P4d 端對端測試（真實觸及 `m2→m3`）產生難以追溯根因的欄位污染，且因是 4 個真實 merge 節點中唯二構成鏈式關係者，此風險並非邊界情況而是**必經路徑**。
+- **建議**：`infrastructure/AD-E07-41-P4b-test.md` 之 `MERGE-EQ-005`（🔴 旗艦案例）已設計專門模擬 `m2→m3` 真實鏈式場景之真實 MSSQL 驗證，斷言 `m3` 輸出既不含 `m2` 殘留之 `_left`/`_right` 衍生欄位，也正確產生 `m3` 自身這一層新的 `_left`/`_right` 衍生欄位。`sameKeyName=false` 路徑（`MERGE-EQ-006`）列為防禦性覆蓋，測試密度低於此旗艦案例。
+- **風險等級**：中（已有明確旗艦測試案例可攔截，非阻擋；但因是真實資料中唯二鏈式合併關係、且錯誤模式為靜默資料污染而非拋錯，風險等級不宜降至「低」）
+
+### R-MSSQL-P4B-05（低，AD 表格文字範圍再次低估，已逐檔查證補齊，非阻擋，重演模式延續）：AD §3.2 merge/lookup 兩列之表格文字皆未提及數個實際存在之 catalog 查詢/共用依賴站點
+
+- **問題**：延續 P4a 已記錄之「AD 逐 handler 改寫要點表遺漏站點」重演模式（`R-MSSQL-P4A-06`），本輪查證發現：(a) `merge-handler.ts` 之 `getColumns()` 現查詢 `information_schema.columns WHERE table_name=$1`，AD §3.2 merge 列僅籠統稱「`createMssqlTempTable` 包裝」，未明說此欄位內省細節須依 I-MSSQL-TEMP-METADATA-01 改用 `getMssqlTempTableColumns`；(b) `lookup-handler.ts` legacy mode 另有一處 `SELECT table_name FROM information_schema.tables WHERE table_name=$1`（驗證 raw 表存在性）之 catalog 站點，AD §3.2 lookup 列完全未提及；(c) `lookup-handler-mssql.ts` 之 legacy mode 解析理應複用 P4a 已產出並預留之 `resolveRawTableMssql`（P4a impl log 已明文標註此意圖），但 AD 本身在 P4b 範圍描述中未重申此依賴關係，存在被下游誤解為「需要重新實作」之風險。
+- **影響**：(a)(b) 若被遺漏，會分別導致 merge 欄位內省失敗（違反 I-MSSQL-TEMP-METADATA-01）與 lookup 之 catalog 大小寫不符（違反 I-MSSQL-CATALOG-CASE-01）；(c) 若被誤解為需要重新實作，會產生兩份邏輯不同步的解析函式，未來 P4a 若修正 `resolveRawTableMssql` 之 bug，`lookup-handler-mssql.ts` 若使用了自己的複製版本則不會同步受益。
+- **建議**：`infrastructure/AD-E07-41-P4b-test.md` 已將 (a) 納入 `MERGE-UNIT-002`、(b) 納入 `RESOLVE-003`、(c) 納入 `RESOLVE-001`（靜態守門，明確要求 import 既有函式而非重新實作），已足以在 P4b 階段攔截。建議 system-architect 於下次修訂 AD-E07-41 時，於 §3.2 表格新增一欄「共用依賴」明確標注每個 handler 對前一切片產出物的複用關係，降低此類遺漏之重演機率。
+- **風險等級**：低（已於本輪測試設計完整補齊，不構成 P4b 阻擋；記錄用意與 `R-MSSQL-P4A-06` 相同，提醒此為可預期重演模式）
+
+### R-MSSQL-P4B-06（低，現況記錄延續，非阻擋）：`dbo` schema 佔用範圍第三度擴大
+
+- **問題**：`R-MSSQL-P4A-05` 已記錄 `dbo` 獨佔保留慣例自 P1b2/P1b3 延伸至 P4-0/P4a。本輪查證確認 `lookup-handler.ts` legacy mode（100% 真實用法）之 raw 對照表解析同樣**必須**落於 `dbo`（裸表名無法透過 TypeORM schema 選項重新導向，同 P4a EXTRACT 群組之限制），代表此慣例第三度延伸至 P4b。
+- **影響**：與 `R-MSSQL-P4A-05` 相同——若 CI 尚無 `.mssql.spec.ts` 序列化 lane，P4b 之 lookup 相關真實 MSSQL 案例將再次疊加對同一既有風險的曝險。
+- **建議**：`infrastructure/AD-E07-41-P4b-test.md` §0.2 已將 `dbo` 佔用範圍限縮至最小（僅 lookup legacy-mode 案例，merge 與 lookup 之防禦性分支完全以 `##` fixture 繞開），沿用 P4a 已建立之隨機化尾碼命名 + `afterAll` 主動清除設計。根本解法（CI 序列化 lane）非本輪新問題，超出 test-designer 職責範圍，僅延續記錄提醒。
+- **風險等級**：低（已有範圍限縮設計降低曝險機率，屬既有已記錄風險之第三度疊加提醒，非本輪新增之根本問題）
