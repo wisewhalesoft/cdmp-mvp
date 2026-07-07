@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 ---
 
 # 風險與缺口
@@ -991,3 +991,51 @@ last_updated: 2026-07-07
 - **影響**：純文件可讀性問題——若有讀者直接信任該「總合計」列而非頂部敘述性統計，會得到過時數字；不影響任何測試案例本身之正確性或可執行性。
 - **建議**：非本輪範圍（逐表加總核對需要通讀全表 200+ 列，風險與本次任務目標不成比例），僅記錄提醒：未來若有專門的文件整理輪次，應將此列與頂部敘述性統計對齊，或考慮改為由頂部敘述性統計作為唯一權威來源、移除易漂移的重複加總列。
 - **風險等級**：低（純文件維護債務，非測試設計或功能缺陷）
+
+---
+
+## MSSQL 全面遷移 P4a 風險與待決問題（AD-E07-41，2026-07-08 新增，P4 首片）
+
+> 完整測試設計見 [infrastructure/AD-E07-41-P4a-test.md](infrastructure/AD-E07-41-P4a-test.md)。P4（ETL 引擎 MSSQL 化）依 AD-E07-41「是否需要 spec-writer」章節裁定跳過 spec-writer——業務轉換規則完全不變，僅置換底層執行機制。本節彙整 P4a（Handler 群組一：extract/field_mapping/derived_field/type_cast/conditional）範圍內識別之風險；P4b/c/d/e 之風險留待各自測試設計文件記錄。
+
+### R-MSSQL-P4A-01（🔴 高，本輪查證出之最基礎未驗證前提）：全部 5 個 handler 私有 SQL 組裝方法內嵌雙引號識別碼，MSSQL BIN collation + tedious driver 是否支援雙引號分隔識別碼語法從未被驗證過
+
+- **問題**：`extract-handler.ts`/`field-mapping-handler.ts`/`derived-field-handler.ts`/`type-cast-handler.ts`/`conditional-handler.ts` 之私有方法（`buildSourceFilterClause`/`toSql`/`resolveCaseWhenSql`/`buildCaseSql`/`resolveWhen`/`resolveValue`）**全數**大量產生 `"${col}"` 形式之雙引號識別碼字面值。AD-E07-41 全文（含 §3.2 逐 handler 改寫要點表）完全未提及識別碼引號風格是否需要轉換為方括號 `[col]`。test-designer 已 grep 本專案全部既有 `*.mssql.spec.ts`（P1a~P2c 全系列），確認**零**案例曾以原始 `queryRunner.query()` 測試過雙引號識別碼語法於本專案實際連線設定（tedious driver 之 `QUOTED_IDENTIFIER` 設定）下是否可行——既有 spike 測試（`mssql-temp-foundation.mssql.spec.ts`/`mssql-temp-foundation-spike2.mssql.spec.ts`）皆使用 `VALUES (...) AS v(id, memo)` 形式之未加引號識別碼，未觸及此問題。
+- **影響**：若 MSSQL 預設設定不支援雙引號分隔識別碼，則全部 5 個 handler 產生之 SQL 100% 無法執行（每一條 `CREATE`/`SELECT` 陳述式皆含至少一個雙引號識別碼），影響範圍不僅限於 P4a，將直接擴及尚未設計測試的 P4b（merge/lookup）與 P4c（dedup/target-load，兩者現行 PG 原始碼同樣大量使用雙引號識別碼）。這是比任何個別方言轉換站點（LPAD/正則/cast）更基礎、更高優先權的風險，若未及早驗證，後續所有依賴「僅需替換外層關鍵字」假設所設計之測試與實作皆可能建立在錯誤前提上。
+- **建議**：`infrastructure/AD-E07-41-P4a-test.md` 之 `QUOTE-001~003`（🔴 決策關卡）已置於文件最優先位置，要求 tdd-implementation 在展開任何 handler 改寫工作**之前**先執行此探測。若 FAIL，應立即回報 system-architect 更新 AD-E07-41（範圍將擴大至新增一個全域識別碼轉換層，影響 P4a/b/c 全部），不應由 tdd-implementation 自行決定範圍是否擴大或逕行採用權宜寫法。
+- **風險等級**：高（若失敗，屬封鎖級發現且影響範圍跨越 P4a/b/c 三個子切片；若通過則零額外成本，QUOTE-003 已為兩種結果分別定義後續行動）
+
+### R-MSSQL-P4A-02（中，AD 建議公式有誤，已由 test-designer 查證並設計 MUST-FIX 守門）：AD §3.2 建議之 LPAD→`RIGHT(REPLICATE(char,n)+col,n)` 轉換公式於輸入字串長度 ≥ n 時與 PG 語意不一致
+
+- **問題**：PG `LPAD(string, length, fill)` 於輸入字串長度已 ≥ 目標長度時，語意為「截斷保留字串**前** length 碼」（例：`LPAD('12345',3,'0')='123'`）。AD-E07-41 §3.2 建議之 T-SQL 等價寫法 `RIGHT(REPLICATE(char,n) + col, n)` 僅正確處理輸入長度 < n 之補零情境；當輸入長度 ≥ n 時，此公式會回傳字串**後** n 碼（例：`RIGHT('000'+'12345',3)` 實際計算為 `RIGHT('00012345',3)='345'`），與 PG 語意方向相反。真實 customer_core pipeline 之唯一 `padStart` 用法為 `padStart(CUSTOM_MK, 2, '0')`（目標長度僅 2），若來源欄位 `CUSTOM_MK` 之實際資料長度曾超過 2 碼，此翻譯錯誤會導致衍生欄位值與 legacy/PG 版本不一致，且此類欄位截斷型 bug 通常不會拋出任何執行期錯誤（無語法錯誤、無型別錯誤），僅產生靜默錯誤資料，極難察覺。
+- **影響**：若 tdd-implementation 逐字照抄 AD §3.2 之建議公式而未自行推導完整語意，會產出一個看似合理、單元測試若僅覆蓋「補零」情境（輸入短於目標長度）則完全無法揪出的潛藏 bug。
+- **建議**：`infrastructure/AD-E07-41-P4a-test.md` 之 `DERIVED-UNIT-002`（🔴 MUST-FIX，對「逐字照抄 AD 建議公式」之實作預期為紅燈）+ `DERIVED-EQ-001`（🔴 旗艦真實案例，手算 oracle 驗證截斷方向）已設計正確公式：`CASE WHEN LEN(col) >= n THEN LEFT(col, n) ELSE RIGHT(REPLICATE(char,n) + col, n) END`。建議 system-architect 於下次修訂 AD-E07-41 §3.2 時同步修正此建議寫法，避免其餘尚未設計測試的 P4b/c/d 若有類似 padStart 使用場景時重蹈覆轍。
+- **風險等級**：中（已有明確測試守門可攔截，且真實 customer_core 資料是否實際觸發此邊界〔`CUSTOM_MK` 是否曾超過 2 碼〕待 P4d 端對端以真實資料驗證，目前僅為程式碼層級之翻譯正確性風險，非已知已發生之資料錯誤）
+
+### R-MSSQL-P4A-03（中，任務書明確點名，已設計對應守門）：`getValidationRegex` 空字串邊界之 T-SQL `LIKE` 「空匹配真值」陷阱
+
+- **問題**：`type-cast-handler.ts` 之 `getValidationRegex` 對 DECIMAL/INTEGER 目標型別使用 PG 正則 `^-?[0-9]+$` 等，`+` 量詞要求至少 1 位數字，故空字串輸入之驗證結果為 `false`（PG `'' ~ '^-?[0-9]+$'` = `false`）。若 tdd-implementation 將此正則 naive 翻譯為 T-SQL `col NOT LIKE '%[^0-9]%'`（字元類別「不存在非數字字元」），此運算式對空字串求值為 **`TRUE`**（空字串中确实不存在任何非數字字元，`LIKE` 為空真式），若未額外補上 `LEN(col) > 0` 守門條件，會導致空字串被誤判為合法整數/小數，與 PG 版行為相反，屬於典型「正則轉字元類別」過程中容易遺漏的邊界陷阱。
+- **影響**：若未攔截，空字串輸入之欄位在型別轉換階段會被賦予非預期之數值（如 `0`）而非維持 `NULL`，可能影響下游計分/篩選邏輯對「未填寫」與「填寫為 0」兩種語意的區分。
+- **建議**：`infrastructure/AD-E07-41-P4a-test.md` 之 `CAST-EQ-002`（🔴 旗艦案例，任務書原文明確點名此邊界）+ `CAST-EQ-003`（DECIMAL 版）+ `CAST-EQ-005`（純負號 `-` 邊界，同類陷阱）已設計對應真實 MSSQL 驗證案例；`CAST-UNIT-003` 已完成 §5.4 要求之覆核結論——DECIMAL/INTEGER/DATE 三目標型別皆屬簡單字元類別型（無 lookahead、無 alternation），可用 `LIKE`/`SUBSTRING`/`LEN`/`CHARINDEX` 組合達成，另需留意 DATE 正則本身無 `$` 結尾錨點（僅前綴比對，`'9999-99-99'`/`'2024-01-01garbage'` 兩引擎皆應「通過格式檢查」而非被 MSSQL 版意外「改善」為真實曆法驗證，已設計 `CAST-EQ-006`/`007` 防止過度修正）。
+- **風險等級**：中（已有明確測試守門可攔截，屬程式碼翻譯正確性風險而非已知已發生問題；DATE 型別於真實 customer_core pipeline 目前未被實際使用，僅 DECIMAL 為兩個 type_cast 節點之真實用法，已於文件附註中說明範圍界定）
+
+### R-MSSQL-P4A-04（高，AD 明文授權但需 process 紀律配合，同型於既往 P2c MOUNT-001/P2b DISPATCH-006）：`##` 暫存表顯式清理呼叫之掛載位置未定案，AD 僅建議「可能位置」
+
+- **問題**：AD-E07-41 §1.3 強制性驗證 (iii) 僅稱「`pipeline-runner.ts` 或個別 handler 於成功與失敗兩路徑皆需有顯式清理呼叫...建議統一收在 `pipeline-runner` 層級 try/finally，或各 handler 自理」——這是系統架構師刻意留給下游決定的實作彈性（AD §1.2 已明文凍結 `pipeline-runner.ts` 本身不可修改，但未言明 `node-output-store.ts` 是否同受此凍結約束）。test-designer 查證 `pipeline-runner.ts` 現行已透過 `NodeOutputStore.cleanupAll(queryRunner)` 在**成功路徑**（`:164`）與**失敗路徑**（`:158`）統一呼叫清理，但該函式現行實作為 PG 專屬 `DROP TABLE IF EXISTS "${table}"` 字面值、無 driver 分支；`node-output-store.ts` 本身不在 AD §1.2 明文列出的凍結清單（僅 `NodeDispatcher`/`node-dispatcher.ts`/`types.ts`/`pipeline-runner.ts` 四者），故理論上可視為天然、唯一已貫穿兩路徑之收斂點，但 AD 未明確指名此檔案即為建議掛載位置。
+- **影響**：若 tdd-implementation 未參考此發現，逕自在 5 個 mssql handler 內各自撰寫 try/finally 清理邏輯（AD 建議的另一選項），會產生 5 份重複邏輯（違背 §3.1 建立共用 helper 之初衷精神），且若未來 P4b/c 之 handler 忘記在自己的 try/finally 內補上呼叫，會產生清理遺漏但不易被單一測試檔案發現（因為每個 handler 各自獨立測試時可能都正確，只有整條 pipeline 串接時才會暴露遺漏）。
+- **建議**：`infrastructure/AD-E07-41-P4a-test.md` 之 `CLEANUP-001/002`（黑盒 spy，不預設呼叫者位置，比照既有 P2c `MOUNT-002~006` 精神）+ `CLEANUP-003`（🔴 MUST-FIX 決策記錄，要求 impl log 之 Architectural Decisions 段落明確記錄選擇）已設計為不因掛載位置選擇不同而需重寫測試；本文件並建議（非強制）優先評估 `NodeOutputStore.cleanupAll()` 分支方案，理由是該處為現成、天然、已驗證貫穿兩路徑之單一收斂點，可讓 P4b/c 之 handler 完全不需要各自關心清理邏輯。
+- **風險等級**：高（同型於 P2c MOUNT-002 之「文件紀律」風險——若未記錄，非功能性缺陷，但會累積成長期可維護性負債；且本案額外疊加「若選擇各自 handler 自理，P4b/c 存在遺漏風險難以被單一 handler 測試檔案發現」之技術風險，故評為高於單純文件紀律問題）
+
+### R-MSSQL-P4A-05（低，現況記錄，非阻擋）：`dbo` schema 獨佔保留慣例已隨 P4 系列事實上擴大適用範圍，若 CI 尚無 `.mssql.spec.ts` 序列化 lane，風險持續疊加
+
+- **問題**：P1b2/P1b3 曾將 `dbo` 定義為「該文件套件獨佔保留 schema」，P2a/P2b/P2c 則刻意另建 `p2a_sync`/`p2a_baseline` 等專屬 schema 避開 `dbo`。P4-0（customer_core 已建於 `dbo`）與本輪 P4a（`extract-handler.ts`/`resolve-raw-table.ts` 之裸表名無法透過 TypeORM `schema` 選項重新導向，比照 P1b3 raw SQL 腳本之同類限制，必須落於 `dbo`）代表「`dbo` 獨佔保留」慣例自 P4 起已事實上延伸為「MSSQL 遷移 P4 全系列（P4-0/P4a/P4c/P4d）共用」，而非僅 P1b2/P1b3 專屬。P1b3 既有 risk（`R-MSSQL-P1B3-03`）已建議「新增序列化執行 lane（比照既有 `.pg.spec.ts` 序列慣例）涵蓋全部 `*.mssql.spec.ts`」，惟未查證此建議是否已被 CI 落實。
+- **影響**：若 CI 尚未有此序列化 lane，P4a 之 EXTRACT 群組（新增 dbo 佔用）將再次疊加對同一既有風險的曝險（多個測試套件平行對 `dbo` 進行 DDL 操作可能互相干擾）。
+- **建議**：本文件已透過 §0.2 之設計將 `dbo` 佔用範圍限縮至最小（僅 EXTRACT 群組，其餘 4 個 handler 完全以 `##` fixture 繞開，且 raw 表 fixture 採隨機化尾碼命名 + `afterAll` 主動清除縮短佔用時間窗），但根本解法（CI 序列化 lane）超出 test-designer 職責範圍，非本輪新問題，僅延續記錄提醒。
+- **風險等級**：低（已有一定程度之範圍限縮設計降低曝險機率，且非本輪新增之根本問題，屬既有已記錄風險之疊加提醒）
+
+### R-MSSQL-P4A-06（低，AD 表格文字範圍低估，已逐檔查證補齊，非阻擋）：AD §3.2 逐 handler 改寫要點表遺漏多個實際存在（部分為高頻使用）之轉換站點
+
+- **問題**：test-designer 逐檔 grep 現行 5 個 PG handler 原始碼及真實 `etl-pipelines.json`（customer_core 53 節點種子資料）後，發現 AD §3.2 表格文字未列出但確實存在之站點：(a) `resolve-raw-table.ts`（`extract-handler.ts` 之直接依賴，含 `$1`/`$2`/`NULLS LAST`/`LIMIT 1` 站點）整份檔案未被提及；(b) `derived-field-handler.ts` 之 `mergePhone()` DSL 函式內嵌 `~ '^0+$'` 正則，經查證 customer_core 53 節點中實際出現 **7 次**（為該 handler 最高頻表達式，多於 AD 唯一提及的 `padStart`，僅出現 1 次）；(c) `derived-field-handler.ts` 之 `gen_random_uuid()` DSL 函式（實際使用 1 次），AD 表格完全未列（僅上層任務書文字有提及，AD 正文本身缺漏）；(d) `field-mapping-handler.ts` 之 `toSqlLiteral()` 對 boolean `defaultValue` 產生裸 `TRUE`/`FALSE` 字面值（T-SQL 不支援，同型於 P1b3 已踩雷之「裸布林字面值」），AD field_mapping 列完全未提及 `defaultValue` 轉譯邏輯本身。此為本專案 MSSQL 遷移系列第 N 次出現「AD 對 raw SQL 改寫範圍之風險評估低估實際範圍」，與 P1b3（低估 5 類站點）、P1c（低估兩站點可測性差異）同型態重演。
+- **影響**：若 tdd-implementation 僅依 AD §3.2 表格文字逐項改寫，會遺漏 (a)~(d) 四處，其中 (b) `mergePhone` 正則因高頻使用（7/12 derived_field 表達式）若遺漏將導致 P4d 端對端測試大量失敗，屬於高可見度但易被表格文字遺漏的風險。
+- **建議**：`infrastructure/AD-E07-41-P4a-test.md` 已將此四處逐一納入對應群組（EXTRACT-RESOLVE 子群組、DERIVED-UNIT-003/EQ-004~008、DERIVED-UNIT-005/EQ-009、FIELDMAP-UNIT-004），已足以在 P4a 階段攔截；建議 system-architect 於下次修訂 AD-E07-41 §3.2 時同步補列此四處，避免影響尚未設計測試之 P4b/c 若有類似「表格文字未窮盡私有方法內嵌轉換站點」之遺漏模式。
+- **風險等級**：低（已於本輪測試設計完整補齊，不構成 P4a 阻擋；記錄用意在於提醒此為本專案 MSSQL 遷移系列之可預期重演模式，供未來子切片測試設計時優先主動 grep 覆核，而非僅信任 AD 表格文字定範圍）
