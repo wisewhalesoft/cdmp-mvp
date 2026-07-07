@@ -9,7 +9,13 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Datasource } from './datasource.entity';
-import { dateColumnType } from '@/common/database/column-types';
+import {
+  dateColumnType,
+  uuidColumnType,
+  boolColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 @Entity('extraction_tasks')
 export class ExtractionTask {
@@ -19,7 +25,7 @@ export class ExtractionTask {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   datasource_id: string;
 
   @ManyToOne(() => Datasource)
@@ -68,13 +74,13 @@ export class ExtractionTask {
   @Column({ type: 'int', default: 0 })
   execution_count: number;
 
-  @Column({ type: 'text', nullable: true, default: null })
+  @Column({ type: longTextColumnType, length: longTextColumnLength, nullable: true, default: null })
   error_message: string | null;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ type: boolColumnType, default: true })
   enabled: boolean;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   created_by: string;
 
   @ManyToOne(() => User)

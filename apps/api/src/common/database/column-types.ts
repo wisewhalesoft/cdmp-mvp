@@ -88,3 +88,23 @@ export const longTextColumnType: ColumnType =
   process.env.DB_TYPE === 'mssql' ? 'nvarchar' : 'text';
 export const longTextColumnLength: string | undefined =
   process.env.DB_TYPE === 'mssql' ? 'MAX' : undefined;
+
+/**
+ * Hash-based PK 型別（B1 / AD-E07-39 §3.1；token_blocklist 專用）。
+ * - PostgreSQL: 'bytea'
+ * - better-sqlite3: 'blob'
+ * - MSSQL: 'binary'（固定長度 32 bytes，SHA-256 摘要；索引鍵僅 32 bytes，遠低於 900-byte 上限）
+ *
+ * ⚠️ AD-E07-39 §2/§3：token_blocklist.token（nvarchar(2048) PK = 4096 bytes）為全庫唯一超過
+ *    MSSQL clustered index 900-byte 上限之案例（P1a CRUD-003b 實測 2048 字元 JWT INSERT 失敗）。
+ *    B1 裁定：改以 sha256(token) 之 32-byte 定長雜湊為 PK，與 token 原始長度脫鉤。
+ *    三個 driver 一致改 hash（不做 driver-conditional 分岔，AD §3.2）。
+ */
+export const hashColumnType: ColumnType =
+  process.env.DB_TYPE === 'mssql'
+    ? 'binary'
+    : process.env.DB_TYPE === 'sqlite'
+      ? 'blob'
+      : 'bytea';
+export const hashColumnLength: number | undefined =
+  process.env.DB_TYPE === 'mssql' ? 32 : undefined;

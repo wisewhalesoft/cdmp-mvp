@@ -11,7 +11,12 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-import { dateColumnType } from '@/common/database/column-types';
+import {
+  dateColumnType,
+  uuidColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 import { AssignmentRun } from './assignment-run.entity';
 
 /**
@@ -39,7 +44,7 @@ import { AssignmentRun } from './assignment-run.entity';
 @Entity('ob_monthly_run_result')
 export class ObMonthlyRunResult {
   // ----- PK：月跑 ID + 名單 + 機構 + 案件申請號 -----
-  @PrimaryColumn({ name: 'run_id', type: 'uuid' })
+  @PrimaryColumn({ name: 'run_id', type: uuidColumnType })
   run_id: string;
 
   @PrimaryColumn({ name: 'list_no', type: 'varchar', length: 100 })
@@ -55,7 +60,7 @@ export class ObMonthlyRunResult {
   @Column({ name: 'custo_no', type: 'varchar', length: 11, nullable: true })
   custo_no: string | null;
 
-  @Column({ name: 'settle_src', type: 'text', default: 'N' })
+  @Column({ name: 'settle_src', type: longTextColumnType, length: longTextColumnLength, default: 'N' })
   settle_src: string;
 
   // ----- Stage 2 計分結果 -----

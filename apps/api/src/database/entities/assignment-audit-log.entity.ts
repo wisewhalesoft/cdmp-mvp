@@ -2,7 +2,7 @@
 // 3 年保留（AD-E07-3），INSERT-only
 
 import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
-import { dateColumnType, jsonColumnType } from '@/common/database/column-types';
+import { dateColumnType, jsonColumnType, uuidColumnType } from '@/common/database/column-types';
 
 @Index('idx_assignment_audit_log_entity', ['entity_type', 'entity_id'])
 @Index('idx_assignment_audit_log_actor', ['actor_id', 'created_at'])
@@ -38,7 +38,7 @@ export class AssignmentAuditLog {
     | 'REVOKE_ROLE'
     | 'SCORING_INTEGRITY_WARN';
 
-  @Column({ name: 'actor_id', type: 'uuid' })
+  @Column({ name: 'actor_id', type: uuidColumnType })
   actor_id: string;
 
   @Column({ name: 'actor_name', type: 'varchar', length: 100 })

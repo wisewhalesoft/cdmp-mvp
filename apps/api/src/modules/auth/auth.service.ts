@@ -12,6 +12,7 @@ import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { PasswordResetToken } from '@/database/entities/password-reset-token.entity';
 import { HashUtil } from '@/common/hash/hash.util';
+import { hashToken } from '@/common/hash/token-hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
 import { EmailUtil } from '@/common/email/email.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
@@ -122,14 +123,17 @@ export class AuthService {
       ? new Date(decoded.exp * 1000)
       : new Date(Date.now() + 8 * 60 * 60 * 1000);
 
+    // B1 / AD-E07-39 §3.3：以 sha256(token) 之 32-byte hash 為鍵（service 層單一入口點轉換）。
+    const token_hash = hashToken(token);
+
     // Upsert: ignore if token already in blocklist (idempotent)
     const existing = await this.tokenBlocklistRepository.findOne({
-      where: { token },
+      where: { token_hash },
     });
     if (!existing) {
       await this.tokenBlocklistRepository.save(
         this.tokenBlocklistRepository.create({
-          token,
+          token_hash,
           user_id: userId,
           expires_at: expiresAt,
         }),
@@ -139,7 +143,7 @@ export class AuthService {
 
   async isTokenRevoked(token: string): Promise<boolean> {
     const entry = await this.tokenBlocklistRepository.findOne({
-      where: { token },
+      where: { token_hash: hashToken(token) },
     });
     return entry !== null;
   }

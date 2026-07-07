@@ -7,6 +7,7 @@ import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { PasswordResetToken } from '@/database/entities/password-reset-token.entity';
 import { HashUtil } from '@/common/hash/hash.util';
+import { hashToken } from '@/common/hash/token-hash.util';
 import { JwtUtil } from '@/common/jwt/jwt.util';
 import { EmailUtil } from '@/common/email/email.util';
 import { JwtService } from '@nestjs/jwt';
@@ -466,9 +467,10 @@ describe('AuthService', () => {
 
       await authService.logout('some-jwt-token', 'user-123');
 
+      // B1 / AD-E07-39 §3.3：寫入 token_hash（sha256），非明文 token。
       expect(mockTokenBlocklistRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          token: 'some-jwt-token',
+          token_hash: hashToken('some-jwt-token'),
           user_id: 'user-123',
         }),
       );
@@ -492,11 +494,15 @@ describe('AuthService', () => {
 
     it('should be idempotent ??skip if token already in blocklist', async () => {
       mockTokenBlocklistRepository.findOne.mockResolvedValue({
-        token: 'already-revoked',
+        token_hash: hashToken('already-revoked'),
       });
 
       await authService.logout('already-revoked', 'user-123');
 
+      // B1 / AD-E07-39 §3.3：以 token_hash 查詢存在性。
+      expect(mockTokenBlocklistRepository.findOne).toHaveBeenCalledWith({
+        where: { token_hash: hashToken('already-revoked') },
+      });
       expect(mockTokenBlocklistRepository.save).not.toHaveBeenCalled();
     });
   });
@@ -504,11 +510,15 @@ describe('AuthService', () => {
   describe('isTokenRevoked', () => {
     it('should return true if token is in blocklist', async () => {
       mockTokenBlocklistRepository.findOne.mockResolvedValue({
-        token: 'revoked-token',
+        token_hash: hashToken('revoked-token'),
       });
 
       const result = await authService.isTokenRevoked('revoked-token');
       expect(result).toBe(true);
+      // B1 / AD-E07-39 §3.3：以 token_hash 查詢。
+      expect(mockTokenBlocklistRepository.findOne).toHaveBeenCalledWith({
+        where: { token_hash: hashToken('revoked-token') },
+      });
     });
 
     it('should return false if token is not in blocklist', async () => {

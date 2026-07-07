@@ -2,6 +2,12 @@
 // AD-E07-5: Key-Value 全域設定表（CR 回分等開關）
 
 import { Entity, PrimaryColumn, Column } from 'typeorm';
+import {
+  dateColumnType,
+  uuidColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 /**
  * [DEPRECATED-F102] ob_assign_config — Key-Value 全域設定表。
@@ -19,15 +25,16 @@ export class ObAssignConfig {
   @PrimaryColumn({ name: 'config_key', type: 'varchar', length: 50 })
   config_key: string;
 
-  @Column({ name: 'config_value', type: 'text' })
+  @Column({ name: 'config_value', type: longTextColumnType, length: longTextColumnLength })
   config_value: string;
 
-  @Column({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  // F-1（AD-E07-39 §0）：裸 'timestamp' 於 MSSQL = rowversion（唯讀 8-byte 版本戳記，非日期）→ 必改 dateColumnType。
+  @Column({ name: 'updated_at', type: dateColumnType, default: () => 'CURRENT_TIMESTAMP' })
   updated_at: Date;
 
-  @Column({ name: 'updated_by', type: 'uuid', nullable: true })
+  @Column({ name: 'updated_by', type: uuidColumnType, nullable: true })
   updated_by: string | null;
 
-  @Column({ name: 'description', type: 'text', nullable: true })
+  @Column({ name: 'description', type: longTextColumnType, length: longTextColumnLength, nullable: true })
   description: string | null;
 }

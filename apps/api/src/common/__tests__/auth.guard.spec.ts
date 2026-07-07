@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UnauthorizedException, ExecutionContext } from '@nestjs/common';
 import { AuthGuard } from '../guards/auth.guard';
+import { hashToken } from '../hash/token-hash.util';
 import { ERROR_CODES } from '../errors/error-codes';
 
 describe('AuthGuard', () => {
@@ -145,8 +146,9 @@ describe('AuthGuard', () => {
       userId: 'user-123',
       role: 'admin',
     });
+    // B1 / AD-E07-39 §3.3：blocklist 以 token_hash（sha256）為鍵。
     mockTokenBlocklistRepository.findOne.mockResolvedValue({
-      token: 'revoked-token',
+      token_hash: hashToken('revoked-token'),
     });
 
     const context = createMockContext('Bearer revoked-token');
@@ -158,5 +160,9 @@ describe('AuthGuard', () => {
       expect(error).toBeInstanceOf(UnauthorizedException);
       expect(error.response.error).toBe(ERROR_CODES.TOKEN_REVOKED);
     }
+    // Guard 內部須以 hashToken(rawToken) 查詢，而非明文 token。
+    expect(mockTokenBlocklistRepository.findOne).toHaveBeenCalledWith({
+      where: { token_hash: hashToken('revoked-token') },
+    });
   });
 });

@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType, jsonColumnType } from '@/common/database/column-types';
+import { dateColumnType, jsonColumnType, boolColumnType } from '@/common/database/column-types';
 
 /**
  * condition_payload JSONB schema（F050 v2.1 / AD-E07-18 §18.4）。
@@ -148,7 +148,7 @@ export class ObListDefinition {
 
   // E07 重構 P1 B2 補完（2026-05-16）— per-LIST CR 回分開關，取代 F059 全域 OBASSIGNSET
   // 對應 migration m18：1711360000182-AddObListDefinitionCrEnabled
-  @Column({ name: 'cr_enabled', type: 'boolean', default: false })
+  @Column({ name: 'cr_enabled', type: boolColumnType, default: false })
   cr_enabled: boolean;
 
   // F050 v2.1（2026-05-20 / AD-E07-18 §18.4）— 名單篩選條件 source of truth

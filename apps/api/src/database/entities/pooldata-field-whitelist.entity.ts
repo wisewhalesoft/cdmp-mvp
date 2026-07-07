@@ -3,7 +3,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, boolColumnType } from '@/common/database/column-types';
 
 /**
  * pooldata_field_whitelist — POOLDATA 篩選欄位白名單（含 field_type metadata）
@@ -32,7 +32,7 @@ export class PooldataFieldWhitelist {
   @Column({ name: 'field_type', type: 'varchar', length: 20 })
   field_type: 'numeric' | 'categorical' | 'date';
 
-  @Column({ name: 'is_active', type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: boolColumnType, default: true })
   is_active: boolean;
 
   /**
@@ -66,7 +66,7 @@ export class PooldataFieldWhitelist {
    *
    * 對齊 m295 migration（PG: BOOLEAN NOT NULL DEFAULT false / SQLite: INTEGER NOT NULL DEFAULT 0）。
    */
-  @Column({ name: 'is_system_fixed', type: 'boolean', default: false })
+  @Column({ name: 'is_system_fixed', type: boolColumnType, default: false })
   isSystemFixed: boolean;
 
   @Column({ name: 'created_at', type: dateColumnType })

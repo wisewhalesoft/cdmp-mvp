@@ -8,7 +8,12 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
-import { dateColumnType } from '@/common/database/column-types';
+import {
+  dateColumnType,
+  uuidColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 @Entity('datasources')
 export class Datasource {
@@ -33,7 +38,7 @@ export class Datasource {
   @Column({ length: 100 })
   username: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: longTextColumnType, length: longTextColumnLength })
   encrypted_password: string;
 
   @Column({ type: 'varchar', length: 500, nullable: true, default: null })
@@ -45,7 +50,7 @@ export class Datasource {
   @Column({ type: dateColumnType, nullable: true, default: null })
   last_tested_at: Date | null;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   created_by: string;
 
   @ManyToOne(() => User)

@@ -3,6 +3,12 @@
 
 import { Entity, PrimaryGeneratedColumn, Column, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { AssignmentRun } from './assignment-run.entity';
+import {
+  dateColumnType,
+  uuidColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 // Q3：UNIQUE (run_id, stage_no) 防同 stage 重複 INSERT；Stage 重跑改用 UPDATE
 @Index('uq_assignment_run_stage_log_run_stage', ['run_id', 'stage_no'], { unique: true })
@@ -11,7 +17,7 @@ export class AssignmentRunStageLog {
   @PrimaryGeneratedColumn({ type: 'bigint' })
   id: string;
 
-  @Column({ name: 'run_id', type: 'uuid' })
+  @Column({ name: 'run_id', type: uuidColumnType })
   run_id: string;
 
   @ManyToOne(() => AssignmentRun, { onDelete: 'CASCADE' })
@@ -24,15 +30,16 @@ export class AssignmentRunStageLog {
   @Column({ name: 'status', type: 'varchar', length: 10 })
   status: 'running' | 'completed' | 'failed';
 
-  @Column({ name: 'started_at', type: 'timestamp' })
+  // F-1（AD-E07-39 §0）：裸 'timestamp' 於 MSSQL = rowversion（唯讀 8-byte 版本戳記，非日期）→ 必改 dateColumnType。
+  @Column({ name: 'started_at', type: dateColumnType })
   started_at: Date;
 
-  @Column({ name: 'finished_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'finished_at', type: dateColumnType, nullable: true })
   finished_at: Date | null;
 
   @Column({ name: 'processed_count', type: 'integer', nullable: true })
   processed_count: number | null;
 
-  @Column({ name: 'error_message', type: 'text', nullable: true })
+  @Column({ name: 'error_message', type: longTextColumnType, length: longTextColumnLength, nullable: true })
   error_message: string | null;
 }

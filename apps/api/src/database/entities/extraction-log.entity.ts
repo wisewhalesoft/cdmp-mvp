@@ -8,14 +8,19 @@ import {
 } from 'typeorm';
 import { ExtractionTask } from './extraction-task.entity';
 import { User } from './user.entity';
-import { dateColumnType } from '@/common/database/column-types';
+import {
+  dateColumnType,
+  uuidColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 @Entity('extraction_logs')
 export class ExtractionLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   task_id: string;
 
   @ManyToOne(() => ExtractionTask)
@@ -40,13 +45,13 @@ export class ExtractionLog {
   @Column({ type: 'int', default: 0 })
   total_count: number;
 
-  @Column({ type: 'text', nullable: true, default: null })
+  @Column({ type: longTextColumnType, length: longTextColumnLength, nullable: true, default: null })
   error_message: string | null;
 
   @Column({ type: 'varchar', length: 20 })
   triggered_by: 'schedule' | 'manual' | 'retry';
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   created_by: string;
 
   @ManyToOne(() => User)

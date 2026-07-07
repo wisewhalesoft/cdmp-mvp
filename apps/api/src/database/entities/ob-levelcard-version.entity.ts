@@ -4,7 +4,12 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
-import { dateColumnType, surrogatePkType } from '@/common/database/column-types';
+import {
+  dateColumnType,
+  surrogatePkType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 @Entity('ob_levelcard_version')
 export class ObLevelcardVersion {
@@ -32,7 +37,7 @@ export class ObLevelcardVersion {
   @Column({ name: 'updated_at', type: dateColumnType, nullable: true })
   updated_at: Date | null; // U_SYSDT
 
-  @Column({ name: 'card_type', type: 'text', nullable: true })
+  @Column({ name: 'card_type', type: longTextColumnType, length: longTextColumnLength, nullable: true })
   card_type: string | null;
 
   @Column({ name: 'card_name', type: 'varchar', length: 20, nullable: true })

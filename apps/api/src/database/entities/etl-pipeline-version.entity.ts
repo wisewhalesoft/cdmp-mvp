@@ -8,14 +8,14 @@ import {
 } from 'typeorm';
 import { EtlPipeline } from './etl-pipeline.entity';
 import { User } from './user.entity';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, uuidColumnType } from '@/common/database/column-types';
 
 @Entity('etl_pipeline_versions')
 export class EtlPipelineVersion {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   pipeline_id: string;
 
   @ManyToOne(() => EtlPipeline)
@@ -34,7 +34,7 @@ export class EtlPipelineVersion {
   @Column({ type: 'varchar', length: 500, nullable: true, default: null })
   change_summary: string | null;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   created_by: string;
 
   @ManyToOne(() => User)

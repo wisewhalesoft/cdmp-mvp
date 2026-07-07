@@ -2,7 +2,7 @@
 
 import { Entity, PrimaryGeneratedColumn, Column, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { AssignmentRun } from './assignment-run.entity';
-import { dateColumnType, jsonColumnType } from '@/common/database/column-types';
+import { dateColumnType, jsonColumnType, uuidColumnType } from '@/common/database/column-types';
 
 @Index('idx_assignment_run_snapshot_run_type', ['run_id', 'snapshot_type'])
 @Entity('assignment_run_snapshot')
@@ -10,7 +10,7 @@ export class AssignmentRunSnapshot {
   @PrimaryGeneratedColumn('uuid')
   snapshot_id: string;
 
-  @Column({ name: 'run_id', type: 'uuid' })
+  @Column({ name: 'run_id', type: uuidColumnType })
   run_id: string;
 
   @ManyToOne(() => AssignmentRun, { onDelete: 'CASCADE' })

@@ -71,6 +71,17 @@ const E07_ENTITIES = [
   PooldataFieldWhitelist, PooldataFieldOption,
 ];
 
+// D1 / AD-E07-39 §5（I-MSSQL-ENTITY-LIST-PARITY-01）：三個 dialect 分支共用「單一」entity 清單，
+// 防止任一分支單獨維護部分清單（P1a 過渡態 mssql 分支曾僅掛 4 entity）而漂移。
+const ALL_ENTITIES = [
+  User, TokenBlocklist, PasswordResetToken,
+  Datasource, DatasourceHealthLog,
+  ExtractionTask, ExtractionLog,
+  EtlPipeline, EtlPipelineLog, EtlPipelineVersion,
+  Role,
+  ...E07_ENTITIES,
+];
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -86,21 +97,20 @@ const E07_ENTITIES = [
           return {
             type: 'better-sqlite3' as any,
             database: ':memory:',
-            entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role, ...E07_ENTITIES],
+            entities: ALL_ENTITIES,
             synchronize: true,
           };
         }
 
         // AD-E07-38 D-1：顯式 mssql 分支（不再隱式 fallback）。
-        // ⚠️ P1a 過渡態：mssql 分支僅掛 auth 最小 4 entity（User/Role/TokenBlocklist/PasswordResetToken）。
-        //    其餘 33 個 entity 尚未完成 D-2 型別修正（uuid/text 字面值），P1b 才擴為全 37 entity。
-        //    因僅載 4 entity，本分支下「完整 AppModule」（各業務模組 forFeature 其餘 entity）無法啟動；
-        //    P1a 可啟動的 API 面 = auth slice（AuthModule/AccountsModule），見 AD-E07-38-P1a-impl.md。
+        // AD-E07-39 D1（§5）：P1b 起 mssql 分支載入全 37 entity（共用 ALL_ENTITIES），
+        //   完整 AppModule（各業務模組 forFeature）於本分支可啟動。
         if (dbType === 'mssql') {
           return {
             type: 'mssql',
             host: configService.get<string>('DB_HOST', 'localhost'),
-            port: configService.get<number>('DB_PORT', 1433),
+            // ⚠️ env 之 DB_PORT 為字串；tedious 要求 number（否則 "config.options.port must be of type number"）→ 強制 Number()。
+            port: Number(configService.get('DB_PORT', 1433)),
             username: configService.get<string>('DB_USERNAME', 'sa'),
             password: configService.get<string>('DB_PASSWORD'),
             database: configService.get<string>('DB_NAME', 'CDMP'),
@@ -109,7 +119,7 @@ const E07_ENTITIES = [
               trustServerCertificate:
                 configService.get<string>('DB_MSSQL_TRUST_CERT', 'true') === 'true',
             },
-            entities: [User, Role, TokenBlocklist, PasswordResetToken],
+            entities: ALL_ENTITIES,
             synchronize: configService.get<string>('NODE_ENV') !== 'production',
           };
         }
@@ -121,7 +131,7 @@ const E07_ENTITIES = [
           username: configService.get<string>('DB_USERNAME', 'cdmp'),
           password: configService.get<string>('DB_PASSWORD', 'cdmp'),
           database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: [User, TokenBlocklist, PasswordResetToken, Datasource, DatasourceHealthLog, ExtractionTask, ExtractionLog, EtlPipeline, EtlPipelineLog, EtlPipelineVersion, Role, ...E07_ENTITIES],
+          entities: ALL_ENTITIES,
           synchronize: configService.get<string>('NODE_ENV') !== 'production',
         };
       },

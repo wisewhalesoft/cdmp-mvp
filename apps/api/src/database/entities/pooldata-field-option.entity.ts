@@ -3,7 +3,7 @@
 // ⚠️ Entity 必須與 baseline migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, boolColumnType } from '@/common/database/column-types';
 
 /**
  * pooldata_field_option — 類別型欄位可選值（F075 categorical 欄位之子表）
@@ -40,7 +40,7 @@ export class PooldataFieldOption {
   @Column({ name: 'display_order', type: 'int', default: 0 })
   display_order: number;
 
-  @Column({ name: 'is_active', type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: boolColumnType, default: true })
   is_active: boolean;
 
   /**

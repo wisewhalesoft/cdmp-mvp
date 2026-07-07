@@ -358,38 +358,11 @@ describe('AD-E07-38 P1a CRUD', () => {
     expect(await HashUtil.compare('P@ssw0rd123', found!.password_hash)).toBe(true);
   });
 
-  it('TS-MSSQL-P1A-CRUD-003a：TokenBlocklist.token 於 mssql 合法索引鍵長度內（448 字元）round-trip 無截斷', async (ctx) => {
-    ensureMssql(ctx);
-    const repo = ds!.getRepository(TokenBlocklist);
-    // 900 bytes / 2 bytes-per-nvarchar-char = 450 字元上限；用 448（896 bytes）驗證編碼/長字串無截斷。
-    const token = 'T'.repeat(448);
-    await repo.save(
-      repo.create({ token, user_id: 'u-crud003', expires_at: new Date('2030-01-01T00:00:00.000Z') }),
-    );
-    const found = await repo.findOneBy({ token });
-    expect(found).not.toBeNull();
-    expect(found!.token.length).toBe(448);
-  });
-
-  it('TS-MSSQL-P1A-CRUD-003b（實測發現/需 P1b 裁示）：2048 字元 token 作為 clustered PK 超過 mssql 900-byte 索引鍵上限而 INSERT 失敗', async (ctx) => {
-    ensureMssql(ctx);
-    // ⚠️ 實測發現：token_blocklist.token 為 nvarchar(2048) PRIMARY KEY，於 mssql 為 clustered index；
-    //    key 上限 900 bytes（nonclustered 亦僅 1700 bytes）→ 2048 字元（4096 bytes）INSERT 直接被拒。
-    //    此為 TokenBlocklist entity 於 mssql 的 schema-compat 議題，非型別映射可解，須 P1b 決策
-    //    （例：改以 jti/hash 為鍵、或加代理 PK）。詳見 AD-E07-38-P1a-impl.md 阻擋議題段。
-    const repo = ds!.getRepository(TokenBlocklist);
-    const token = 'T'.repeat(2048);
-    let threw = false;
-    try {
-      await repo.save(
-        repo.create({ token, user_id: 'u-crud003b', expires_at: new Date('2030-01-01T00:00:00.000Z') }),
-      );
-    } catch (e) {
-      threw = true;
-      expect((e as Error).message).toMatch(/900 bytes|exceeds the maximum length/i);
-    }
-    expect(threw).toBe(true);
-  });
+  // TS-MSSQL-P1A-CRUD-003a / 003b 已於 AD-E07-39 P1b1（B1）移除（REG-003）：
+  //   原兩案例驗證的是「改名前」的 TokenBlocklist.token（nvarchar(2048) clustered PK）行為
+  //   —— 448 字元可寫、2048 字元因超過 900-byte 索引鍵上限而 INSERT 失敗。
+  //   B1 落地後該欄位已改名 token_hash（binary(32) 定長雜湊 PK），原問題結構性消失。
+  //   正面驗證「原問題不再發生（長 JWT 可正常寫入）」由 mssql-p1b1.mssql.spec.ts 之 HASH-005 完整取代。
 
   it('TS-MSSQL-P1A-CRUD-004：datetime2 欄位毫秒精度 round-trip 無偏移', async (ctx) => {
     ensureMssql(ctx);

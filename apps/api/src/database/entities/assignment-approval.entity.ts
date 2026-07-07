@@ -3,7 +3,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, uuidColumnType } from '@/common/database/column-types';
 
 /**
  * assignment_approval — 名單簽核紀錄（每次 approve / reject 寫入一筆）
@@ -31,7 +31,7 @@ export class AssignmentApproval {
   @Column({ name: 'reject_reason', type: 'varchar', length: 500, nullable: true })
   reject_reason: string | null;
 
-  @Column({ name: 'approver_id', type: 'uuid' })
+  @Column({ name: 'approver_id', type: uuidColumnType })
   approver_id: string;
 
   @Column({ name: 'approver_name', type: 'varchar', length: 100, nullable: true })

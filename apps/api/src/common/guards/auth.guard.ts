@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Request } from 'express';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { User } from '@/database/entities/user.entity';
+import { hashToken } from '@/common/hash/token-hash.util';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 @Injectable()
@@ -38,9 +39,9 @@ export class AuthGuard implements CanActivate {
     try {
       const payload = this.jwtService.verify(token);
 
-      // Check token blocklist
+      // Check token blocklist（B1 / AD-E07-39 §3.3：以 sha256(token) hash 查詢）
       const revoked = await this.tokenBlocklistRepository.findOne({
-        where: { token },
+        where: { token_hash: hashToken(token) },
       });
       if (revoked) {
         throw new UnauthorizedException({

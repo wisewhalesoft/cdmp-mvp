@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, longTextColumnType, longTextColumnLength } from '@/common/database/column-types';
 
 @Entity('ob_pool_data')
 export class ObPoolData {
@@ -211,7 +211,7 @@ export class ObPoolData {
   @Column({ name: 'appl_date', type: dateColumnType, nullable: true })
   appl_date: Date | null;
 
-  @Column({ name: 'apmacc_memo', type: 'text', nullable: true })
+  @Column({ name: 'apmacc_memo', type: longTextColumnType, length: longTextColumnLength, nullable: true })
   apmacc_memo: string | null;
 
   @Column({ name: 'sales_sts_na', type: 'varchar', length: 30, nullable: true })
@@ -363,7 +363,7 @@ export class ObPoolData {
   @Column({ name: 'year_cnt', type: 'integer', nullable: true })
   year_cnt: number | null;
 
-  @Column({ name: 'settle_src', type: 'text' })
+  @Column({ name: 'settle_src', type: longTextColumnType, length: longTextColumnLength })
   settle_src: string;
 
   @Column({ name: 'spec_tp', type: 'varchar', length: 2, nullable: true })

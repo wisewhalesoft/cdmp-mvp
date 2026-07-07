@@ -8,7 +8,13 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
-import { dateColumnType } from '@/common/database/column-types';
+import {
+  dateColumnType,
+  uuidColumnType,
+  boolColumnType,
+  longTextColumnType,
+  longTextColumnLength,
+} from '@/common/database/column-types';
 
 @Entity('etl_pipelines')
 export class EtlPipeline {
@@ -18,7 +24,7 @@ export class EtlPipeline {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'text', nullable: true, default: null })
+  @Column({ type: longTextColumnType, length: longTextColumnLength, nullable: true, default: null })
   description: string | null;
 
   @Column({ type: 'int', default: 1 })
@@ -48,10 +54,10 @@ export class EtlPipeline {
   @Column({ type: 'int', default: 0 })
   execution_count: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: boolColumnType, default: false })
   enabled: boolean;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: uuidColumnType })
   created_by: string;
 
   @ManyToOne(() => User)
