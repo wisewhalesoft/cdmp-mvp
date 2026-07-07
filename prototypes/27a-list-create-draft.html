@@ -171,7 +171,7 @@
 
           <!-- LIST_NO 預覽 -->
           <div>
-            <label class="block text-xs text-gray-500 mb-1">LIST_NO（系統自動產生）</label>
+            <label class="block text-xs text-gray-500 mb-1">名單編號（系統自動產生）</label>
             <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-md font-mono text-sm text-gray-500">
               <i data-lucide="hash" class="w-4 h-4 text-gray-400"></i>
               OB202605<span class="text-gray-400">XXX</span>
@@ -198,11 +198,7 @@
             <div class="col-span-6">
               <label for="cardType" class="block text-sm font-medium text-gray-700 mb-1.5">
                 卡別 <span class="text-[10px] text-gray-400 font-normal">選填</span>
-                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200" title="v2.1.1 / US-126 / AC-16：options 來自 ob_card_type，建立模式僅列 status='active'">
-                  <i data-lucide="database" class="w-2.5 h-2.5 mr-0.5"></i>來自 ob_card_type
-                </span>
               </label>
-              <!-- 正常狀態：下拉選單（v2.1.1 / US-126 / AC-16） -->
               <select id="cardType" data-testid="select-cardType"
                 class="w-full px-3 py-2 border border-border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
                 <option value="" selected>— 未選擇 —</option>
@@ -212,10 +208,6 @@
                 <option value="S5">S5 — 主力催收（02 中信）</option>
                 <option value="S6">S6 — 重點戶（02 中信）</option>
               </select>
-              <p class="text-[10px] text-gray-400 mt-1">
-                <i data-lucide="info" class="w-3 h-3 inline -mt-0.5"></i>
-                送出 DTO 時僅傳 card_type 代碼字串（如 <code class="font-mono text-gray-500">"S5"</code>），不含名稱顯示文字。
-              </p>
 
               <!--
                 ============================================================
@@ -240,7 +232,7 @@
           <div class="flex items-center gap-2">
             <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">2</span>
             <h2 class="text-base font-semibold text-gray-800">撈案期間</h2>
-            <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200" title="list_period_start / list_period_end / list_interval 為名單一級保留欄位，系統獨立處理，不可作為動態篩選條件（BR-8 / J8）。前端 dropdown 不列出，後端 defense-in-depth 拒絕。">
+            <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200" title="開始撈取期數、結束撈取期數、間隔期數為名單一級保留欄位，系統獨立處理，不可作為動態篩選條件。">
               <i data-lucide="shield-check" class="w-3 h-3 mr-0.5"></i>一級保留欄位
             </span>
           </div>
@@ -307,7 +299,7 @@
               <i data-lucide="filter" class="w-6 h-6 text-gray-400"></i>
             </div>
             <p class="text-sm text-gray-500">尚未新增任何篩選條件</p>
-            <p class="text-xs text-gray-400 mt-1">除系統固定的「優質案件」外，至少需新增 1 個篩選條件方可儲存。F075 v1.7 白名單提供 <span id="activeFieldsCnt">15</span> 個可選欄位（含 F109 客戶資料 8 欄）。</p>
+            <p class="text-xs text-gray-400 mt-1">除系統固定的「優質案件」外，至少需新增 1 個篩選條件方可儲存。可選用 <span id="activeFieldsCnt">15</span> 個篩選欄位（含客戶資料 8 欄）。</p>
           </div>
 
           <!-- 條件列表 -->
@@ -317,7 +309,7 @@
           <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑 Stage 1 不會匹配</p>
+              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑分派時不會匹配</p>
               <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
               <p class="text-xs text-amber-700 mt-1">如需重新啟用請至 <a href="37-base-code.html?tab=options" class="underline font-medium">「篩選欄位 &gt; 可選值管理」</a>。</p>
             </div>
@@ -328,7 +320,7 @@
             <i data-lucide="calculator" class="w-5 h-5 text-primary shrink-0"></i>
             <div class="flex-1">
               <p class="font-semibold text-primary">依此條件預估命中 <span id="previewCount" class="text-lg">0</span> 筆案件</p>
-              <p class="text-xs text-blue-700/80 mt-0.5">基於上月 POOLDATA 樣本估算（mock）。完整試算請使用 Stage 0 試算頁。</p>
+              <p class="text-xs text-blue-700/80 mt-0.5">基於上月案件樣本估算。完整試算請使用 Stage 0 試算頁。</p>
             </div>
             <a href="30-stage0-estimate.html" class="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100">
               開啟 Stage 0 試算
@@ -341,7 +333,7 @@
           <div class="flex items-center gap-2">
             <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-semibold inline-flex items-center justify-center">4</span>
             <h2 class="text-base font-semibold text-gray-800">CR 回分規則</h2>
-            <span class="text-[10px] text-gray-400 ml-1">per-LIST 設定</span>
+            <span class="text-[10px] text-gray-400 ml-1">依名單設定</span>
           </div>
           <div class="flex items-start justify-between gap-4 p-3 bg-gray-50/50 rounded-lg border border-border/60">
             <div class="flex-1">
@@ -391,14 +383,14 @@
       <div class="px-5 py-4 border-b border-border flex items-center justify-between">
         <div>
           <h3 class="text-base font-semibold text-gray-800">選擇要複製的上月名單</h3>
-          <p class="text-xs text-gray-500 mt-0.5">2026-04 已準備完成（ready）名單 · 共 <span id="copyListCount">3</span> 份可複製</p>
+          <p class="text-xs text-gray-500 mt-0.5">2026-04 已準備完成名單 · 共 <span id="copyListCount">3</span> 份可複製</p>
         </div>
         <button onclick="closeCopyModal()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="p-5 max-h-[55vh] overflow-y-auto space-y-2" id="copyListContainer"></div>
       <div class="px-5 py-3 border-t border-border bg-gray-50/50 text-[11px] text-gray-500">
-        <p><i data-lucide="info" class="w-3 h-3 inline -mt-0.5"></i> 複製後僅帶入 CR 開關 + 篩選條件；名稱與 LIST_NO 將重新建立。</p>
-        <p class="mt-1"><i data-lucide="alert-triangle" class="w-3 h-3 inline -mt-0.5 text-warning"></i> 舊格式名單（v2.0 遷移資料 / <code>condition_payload IS NULL</code>）不可作為複製來源；defense-in-depth 後端會回 422 <code>LEGACY_LIST_NOT_COPYABLE</code>（拍板 Q4）。</p>
+        <p><i data-lucide="info" class="w-3 h-3 inline -mt-0.5"></i> 複製後僅帶入 CR 開關 + 篩選條件；名稱與名單編號將重新建立。</p>
+        <p class="mt-1"><i data-lucide="alert-triangle" class="w-3 h-3 inline -mt-0.5 text-warning"></i> 舊格式名單不可作為複製來源。</p>
       </div>
     </div>
   </div>
@@ -412,14 +404,13 @@
         </div>
         <div>
           <h3 class="text-base font-semibold text-gray-800">儲存並推進至部門比例階段？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F078 原子性上線約束流程</p>
         </div>
       </div>
       <div class="p-5 space-y-3">
         <p class="text-sm text-gray-700">推進後將同時：</p>
         <ul class="text-sm text-gray-600 space-y-1.5 pl-5 list-disc">
-          <li>建立 LIST_NO 並寫入草稿快照</li>
-          <li>鎖定篩選條件與 CR 開關（僅能 Rollback 退回後再修改）</li>
+          <li>建立名單編號並寫入草稿快照</li>
+          <li>鎖定篩選條件與 CR 開關（僅能退回後再修改）</li>
           <li>進入部門比例設定階段，處長將收到通知</li>
         </ul>
         <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
@@ -432,8 +423,8 @@
           <div class="flex items-start gap-2">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-amber-900">條件含已停用選項，推進後月跑 Stage 1 將忽略這些值</p>
-              <p class="mt-1 text-amber-800">推進後條件即被固化（離化），如需重填需先 <strong>Rollback 至草稿</strong>。</p>
+              <p class="font-semibold text-amber-900">條件含已停用選項，推進後月跑分派時將忽略這些值</p>
+              <p class="mt-1 text-amber-800">推進後條件即被固化，如需重填需先 <strong>退回至草稿</strong>。</p>
               <p class="mt-1 text-amber-700" id="advInactiveDetail"></p>
             </div>
           </div>
@@ -658,7 +649,7 @@
                 <div class="text-sm font-medium text-gray-800">${f.displayName}</div>
                 <code class="text-[10px] font-mono text-gray-500">${f.columnName}</code>
               </div>
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${typeBg};color:${typeFg};">${f.fieldType}</span>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${typeBg};color:${typeFg};">${ftLabel(f.fieldType)}</span>
             </button>
           </li>`;
       };
@@ -735,6 +726,10 @@
       document.getElementById(`valDrop-${id}`).classList.toggle('hidden');
     }
 
+    // 欄位型別 / 欄位名稱中文顯示（不對使用者裸露 categorical / numeric / date 與欄位代碼）
+    function ftLabel(ft) { return ft === 'categorical' ? '類別' : ft === 'numeric' ? '數值' : '日期'; }
+    function fieldDisplayName(col) { const f = FIELDS.find(x => x.columnName === col); return f ? f.displayName : col; }
+
     function renderConditions() {
       const list = document.getElementById('condList');
       const empty = document.getElementById('condEmpty');
@@ -783,7 +778,7 @@
               </div>
               <p class="text-[11px] text-gray-500 flex items-start gap-1">
                 <i data-lucide="info" class="w-3 h-3 mt-0.5 shrink-0"></i>
-                <span>此條件由系統固定為 <code class="font-mono text-gray-600">Y（優質案件）</code>，無法移除或修改。對應原系統固定條件（<code class="font-mono">OBPOOLDATA.BEST_CASE = 'Y'</code>），確保所有名單僅篩選優質案件。</span>
+                <span>此條件由系統固定為 Y（優質案件），無法移除或修改，確保所有名單僅篩選優質案件。</span>
               </p>
             </div>
           `;
@@ -794,7 +789,7 @@
             <span class="text-[10px] font-mono text-gray-400 w-6">#${idx + 1}</span>
             <span class="font-medium text-sm text-gray-800">${f.displayName}</span>
             <code class="text-[10px] font-mono text-gray-500">${f.columnName}</code>
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${f.fieldType==='categorical'?'#DBEAFE':f.fieldType==='numeric'?'#EDE9FE':'#CFFAFE'};color:${f.fieldType==='categorical'?'#1D4ED8':f.fieldType==='numeric'?'#6D28D9':'#0E7490'};">${f.fieldType}</span>
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${f.fieldType==='categorical'?'#DBEAFE':f.fieldType==='numeric'?'#EDE9FE':'#CFFAFE'};color:${f.fieldType==='categorical'?'#1D4ED8':f.fieldType==='numeric'?'#6D28D9':'#0E7490'};">${ftLabel(f.fieldType)}</span>
           </div>
         `;
 
@@ -885,13 +880,13 @@
         const opts = FIELD_VALUES[c.columnName] || [];
         (c.values || []).forEach(v => {
           const opt = opts.find(o => o.v === v);
-          if (opt && !opt.active) warned.push(`${c.columnName}.${v}（${opt.l}）`);
+          if (opt && !opt.active) warned.push(`${fieldDisplayName(c.columnName)}：${opt.l}`);
         });
       });
       const box = document.getElementById('inactiveValueWarn');
       if (warned.length === 0) { box.classList.add('hidden'); return; }
       box.classList.remove('hidden');
-      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑 Stage 1 不會匹配`;
+      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑分派時不會匹配`;
       document.getElementById('inactiveWarnDetail').textContent = warned.join('、');
     }
 
@@ -958,7 +953,7 @@
               <i data-lucide="archive" class="w-6 h-6 text-gray-400"></i>
             </div>
             <p class="text-sm text-gray-600 font-medium">上月無可複製名單</p>
-            <p class="text-xs text-gray-400 mt-1">舊格式名單於 Phase 3a 完成資料轉換後將可複製</p>
+            <p class="text-xs text-gray-400 mt-1">舊格式名單完成資料轉換後將可複製</p>
           </div>`;
       } else {
         container.innerHTML = copyable.map(L => {
@@ -1030,10 +1025,10 @@
       if (Number(e) < Number(s)) { showToast('error', '結束期數需大於等於開始期數'); return false; }
       // v1.7 / US-144：最小條件數只計入「非系統固定」條件（best_case 不計入）
       const userConditions = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); });
-      if (userConditions.length === 0) { showToast('error', '請至少新增 1 個篩選條件（優質案件為系統固定，不計入）', '對應 422 訊息：「篩選條件不得為空，請至少設定一個欄位」'); return false; }
+      if (userConditions.length === 0) { showToast('error', '請至少新增 1 個篩選條件（優質案件為系統固定，不計入）', '篩選條件不得為空，請至少設定一個欄位'); return false; }
       const incomplete = conditions.find(c => !isConditionComplete(c));
       if (incomplete) {
-        showToast('error', '部分條件尚未填寫完整', 'categorical 需至少 1 個值；numeric 需 min/max；date 需起迄');
+        showToast('error', '部分條件尚未填寫完整');
         return false;
       }
       return true;
@@ -1070,7 +1065,7 @@
         const opts = FIELD_VALUES[c.columnName] || [];
         (c.values || []).forEach(v => {
           const opt = opts.find(o => o.v === v);
-          if (opt && !opt.active) details.push(`${c.columnName}.${v}（${opt.l}）`);
+          if (opt && !opt.active) details.push(`${fieldDisplayName(c.columnName)}：${opt.l}`);
         });
       });
       return details;
@@ -1112,7 +1107,7 @@
     function confirmAdvance() {
       closeAdvanceModal();
       const newNo = 'OB202605' + String(12).padStart(3, '0');
-      showToast('success', `${newNo} 已建立並推進至部門比例`, '處長將收到通知；條件已固化，如需修改請先 Rollback');
+      showToast('success', `${newNo} 已建立並推進至部門比例`, '處長將收到通知；條件已固化，如需修改請先退回');
       setTimeout(() => { location.href = '27-list-definition.html'; }, 1500);
     }
 

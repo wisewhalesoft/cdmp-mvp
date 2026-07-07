@@ -77,7 +77,7 @@
       <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300"></i>
       <span class="font-semibold text-gray-800" id="hdrTitle">準備完成階段</span>
       <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style="background:#D1FAE5;color:#047857;">
-        <i data-lucide="check-circle-2" class="w-3 h-3"></i>ready 階段
+        <i data-lucide="check-circle-2" class="w-3 h-3"></i>準備完成
       </span>
       <span class="ml-1 font-mono text-xs text-gray-400" id="hdrListNo"></span>
     </div>
@@ -124,19 +124,16 @@
       <span class="step-item"><span class="step-dot step-done"><i data-lucide="check" class="w-3 h-3"></i></span><span class="text-gray-500">簽核</span></span>
       <span class="step-arrow">›</span>
       <span class="step-item"><span class="step-dot step-current">5</span><span class="font-semibold text-primary">準備完成</span></span>
-      <span class="ml-auto inline-flex items-center gap-1 text-[10px] text-gray-400">
-        <i data-lucide="git-branch" class="w-3 h-3"></i>F088 v1.1 / F089
-      </span>
     </div>
 
     <!-- Demo Bar -->
     <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
       <span class="text-xs text-gray-400 mr-1">View 模式：</span>
-      <button onclick="loadMode('list')" id="mode-list" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">A · 清單頁（所有 ready 名單）</button>
+      <button onclick="loadMode('list')" id="mode-list" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">A · 清單頁（所有準備完成名單）</button>
       <button onclick="loadMode('detail')" id="mode-detail" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">B · 詳情頁（OB202605002）</button>
       <button onclick="loadMode('detail_proxy')" id="mode-detail_proxy" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">B · 詳情頁（含「部長代設定」）</button>
       <span class="mx-2 text-gray-300">|</span>
-      <button onclick="loadMode('list_partial')" id="mode-list_partial" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">A · 部分名單尚未 ready</button>
+      <button onclick="loadMode('list_partial')" id="mode-list_partial" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">A · 部分名單尚未準備完成</button>
       <span class="ml-auto text-[10px] text-gray-400">mock · 不發 API</span>
     </div>
 
@@ -147,7 +144,7 @@
           <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
         </div>
         <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
-        <p class="text-sm text-gray-500 max-w-md">「準備完成」階段摘要由部長 / 處長 / Admin 操作；業務員不參與此階段。</p>
+        <p class="text-sm text-gray-500 max-w-md">「準備完成」階段摘要由部長 / 處長 / 系統管理者操作；業務員不參與此階段。</p>
         <a href="27-list-definition.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
           <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
         </a>
@@ -162,7 +159,7 @@
         <i data-lucide="scan-eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
         <div class="flex-1">
           <p class="font-semibold text-purple-900">處長僅可查看自己轄區之個別業務比例</p>
-          <p class="text-xs text-purple-700 mt-0.5">下方部門 accordion 已過濾為您轄區內的部門；其他部門的設定僅部長 / Admin 可見。</p>
+          <p class="text-xs text-purple-700 mt-0.5">下方部門清單已過濾為您轄區內的部門；其他部門的設定僅部長／系統管理者可見。</p>
         </div>
       </div>
 
@@ -176,7 +173,7 @@
                 <i data-lucide="check-circle-2" class="w-6 h-6"></i>
               </div>
               <div>
-                <h2 class="text-lg font-semibold text-gray-800" id="mrTitle">本月所有名單均已 ready · 可執行月跑</h2>
+                <h2 class="text-lg font-semibold text-gray-800" id="mrTitle">本月所有名單均已準備完成 · 可執行月跑</h2>
                 <p class="text-xs text-gray-500 mt-0.5" id="mrSubtitle">2026-05 共 <strong id="mrReadyCount">3</strong> 筆名單已準備完成，預計月跑時間 2026-05-20 02:00</p>
               </div>
             </div>
@@ -194,8 +191,8 @@
           <div class="flex items-start gap-3">
             <i data-lucide="alert-triangle" class="w-5 h-5 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1 text-sm text-amber-900">
-              <p class="font-semibold">本月仍有 <span id="notReadyCount">2</span> 筆名單未進入 ready 階段，無法執行月跑</p>
-              <p class="text-xs text-amber-800 mt-1">未 ready 名單：<span id="notReadyList" class="font-mono"></span></p>
+              <p class="font-semibold">本月仍有 <span id="notReadyCount">2</span> 筆名單未進入準備完成階段，無法執行月跑</p>
+              <p class="text-xs text-amber-800 mt-1">尚未完成名單：<span id="notReadyList" class="font-mono"></span></p>
               <p class="text-xs text-amber-700 mt-1">請先完成上述名單的「個別業務比例」與「簽核」階段。</p>
             </div>
           </div>
@@ -205,7 +202,7 @@
         <section class="bg-white rounded-xl border border-border p-5">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-base font-semibold text-gray-800 inline-flex items-center gap-2">
-              <i data-lucide="list-checks" class="w-4 h-4 text-success"></i>已 ready 名單清單
+              <i data-lucide="list-checks" class="w-4 h-4 text-success"></i>已完成名單清單
               <span class="text-xs text-gray-400 font-normal">（依 created_at 倒序）</span>
             </h3>
             <span id="readyListCount" class="text-xs text-gray-500"></span>
@@ -219,7 +216,7 @@
         <!-- 返回連結 -->
         <div class="flex items-center justify-between">
           <button onclick="loadMode('list')" class="text-sm text-gray-500 hover:text-primary inline-flex items-center gap-1">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>返回 ready 名單清單
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>返回準備完成名單清單
           </button>
           <div id="detailActions" class="flex items-center gap-2">
             <button id="btnRollback" type="button" onclick="openRollbackModal()"
@@ -241,7 +238,7 @@
                 <span id="detailListNm">2026-05 業務二部 主力催收</span>
                 <span class="ml-2 text-base text-gray-500 font-normal">— <span class="font-mono" id="detailListNo">OB202605002</span></span>
               </h1>
-              <p class="text-xs text-gray-500 mt-1">本名單已通過部長核准，等待月跑啟動 Stage 1~3 計算（亦可由部長 / Admin Rollback 重新審核）。</p>
+              <p class="text-xs text-gray-500 mt-1">本名單已通過部長核准，等待執行月跑進行後續計算（亦可由部長／系統管理者退回重新審核）。</p>
             </div>
             <div class="text-right">
               <p class="text-[10px] text-gray-400 uppercase tracking-wider">最終核准資訊</p>
@@ -267,7 +264,7 @@
             <div class="text-center">
               <p class="text-[10px] text-gray-400 uppercase tracking-wider">簽核紀錄</p>
               <p class="text-xl font-semibold text-success tabular mt-0.5">1</p>
-              <p class="text-[10px] text-gray-500">approve · 0 reject</p>
+              <p class="text-[10px] text-gray-500">核准 · 0 拒絕</p>
             </div>
           </div>
         </section>
@@ -279,9 +276,9 @@
             篩選條件
           </h2>
           <div class="flex flex-wrap gap-2">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="package" class="w-3 h-3 text-gray-400"></i>PROD_KIND <span class="text-gray-400 mx-0.5">in</span> <span class="font-mono">(信貸)</span></span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="layers" class="w-3 h-3 text-gray-400"></i>LIST_TYPE <span class="text-gray-400 mx-0.5">=</span> <span class="font-mono">主力</span></span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="hash" class="w-3 h-3 text-gray-400"></i>MONTH_CNT <span class="text-gray-400 mx-0.5">in</span> <span class="font-mono">(M2~M4)</span></span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="package" class="w-3 h-3 text-gray-400"></i>產品類別 <span class="text-gray-400 mx-0.5">包含</span> <span>信貸</span></span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="layers" class="w-3 h-3 text-gray-400"></i>案件結清期別 <span class="text-gray-400 mx-0.5">為</span> <span>主力</span></span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-gray-50 border border-border text-gray-700"><i data-lucide="hash" class="w-3 h-3 text-gray-400"></i>撈取月份計數 <span class="text-gray-400 mx-0.5">包含</span> <span>M2~M4</span></span>
             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-green-50 border border-green-200 text-green-700 font-medium"><i data-lucide="recycle" class="w-3 h-3"></i>CR 啟用</span>
           </div>
         </section>
@@ -305,7 +302,7 @@
                   <th class="text-left px-4 py-2 font-medium">部門名稱</th>
                   <th class="text-left px-4 py-2 font-medium">處長</th>
                   <th class="text-left px-4 py-2 font-medium">設定者</th>
-                  <th class="text-right px-4 py-2 font-medium">RATION</th>
+                  <th class="text-right px-4 py-2 font-medium">比例</th>
                 </tr>
               </thead>
               <tbody id="detailDeptBody" class="divide-y divide-border bg-white"></tbody>
@@ -357,7 +354,7 @@
     </div>
   </main>
 
-  <!-- ===== Modal：Rollback ready → approval（F089） ===== -->
+  <!-- ===== Modal：退回簽核 ===== -->
   <div id="rollbackModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-pop-in">
       <div class="px-5 py-4 border-b border-border flex items-center gap-2">
@@ -366,7 +363,6 @@
         </div>
         <div class="flex-1">
           <h3 class="text-base font-semibold text-gray-800">退回簽核階段？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F089 · stage: ready → approval（destructive）</p>
         </div>
         <button onclick="closeRollbackModal()" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
@@ -376,12 +372,12 @@
         <div class="rounded-lg bg-red-50/60 border border-red-200 p-3 flex items-start gap-2">
           <i data-lucide="alert-octagon" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
           <div class="text-xs text-red-900">
-            <p class="font-semibold">Rollback 後將觸發：</p>
+            <p class="font-semibold">退回後將進行：</p>
             <ul class="list-disc pl-4 mt-1 space-y-0.5 text-red-800">
               <li>名單從「月跑可觸發清單」中 <strong>移除</strong></li>
-              <li>Hard delete <code class="font-mono">assignment_approval</code>（共 <span id="rollbackApprovalCount">1</span> 筆核准紀錄）</li>
-              <li>名單退回 approval 階段，部長 / Admin 需重新審閱</li>
-              <li>稽核日誌將寫入完整快照供日後追溯</li>
+              <li>刪除本名單的核准紀錄（共 <span id="rollbackApprovalCount">1</span> 筆）</li>
+              <li>名單退回簽核階段，部長／系統管理者需重新審閱</li>
+              <li>稽核日誌將寫入完整紀錄供日後追溯</li>
             </ul>
           </div>
         </div>
@@ -389,14 +385,14 @@
         <div class="rounded-lg bg-blue-50/50 border border-blue-200 p-3 flex items-start gap-2">
           <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
           <div class="text-xs text-blue-900">
-            <p><strong>與 F081 / F085 Rollback 差異</strong>：本 Rollback <strong>不清空</strong> <code class="font-mono">ob_dept_pct</code> 或 <code class="font-mono">ob_empl_set</code> 設定資料；僅刪除核准紀錄使名單退回審閱中。重新審閱時資料保留供部長判斷。</p>
+            <p><strong>退回不會清空設定</strong>：本次退回<strong>不會清空</strong>部門比例或個別業務比例設定；僅刪除核准紀錄使名單退回審閱中。重新審閱時設定資料保留供部長判斷。</p>
           </div>
         </div>
 
         <label class="flex items-start gap-2 cursor-pointer select-none mt-2 p-2 hover:bg-gray-50 rounded">
           <input type="checkbox" id="rollbackConfirm" onchange="document.getElementById('btnRollbackConfirm').disabled = !this.checked"
             class="mt-0.5 w-4 h-4 rounded border-gray-300 text-danger focus:ring-danger">
-          <span class="text-sm text-gray-700">我確認 Rollback 並刪除核准紀錄（部長 / Admin 需重新審閱）</span>
+          <span class="text-sm text-gray-700">我確認退回並刪除核准紀錄（部長／系統管理者需重新審閱）</span>
         </label>
       </div>
       <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
@@ -474,6 +470,7 @@
       { listNo: 'OB202605002', listNm: '2026-05 業務二部 主力催收',  deptCount: 5, empCount: 17, estimateCases: 12400, createdBy: '王部長',  approvedAt: '2026-05-14 18:05', scope: ['XTC0','XTC1','XTC2','XTC3','XTC4'] },
       { listNo: 'OB202605006', listNm: '2026-05 業務一部 重點戶',    deptCount: 3, empCount: 9,  estimateCases: 5600,  createdBy: '李處長',  approvedAt: '2026-05-15 10:42', scope: ['XTC0','XTC1','XTC2'] }
     ];
+    const STAGE_LABEL_ZH = { draft: '草稿', dept_ratio: '部門比例', personnel_ratio: '個別業務比例', approval: '待簽核', ready: '準備完成' };
     const NOT_READY_LISTS = [
       { listNo: 'OB202605007', listNm: '2026-05 業務三部 退回重做', stage: 'personnel_ratio' },
       { listNo: 'OB202605008', listNm: '2026-05 業務二部 即將到期', stage: 'approval' }
@@ -581,7 +578,7 @@
       if (ALL_READY) {
         mrIcon.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-green-100 text-success';
         mrIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-6 h-6"></i>';
-        mrTitle.textContent = '本月所有名單均已 ready · 可執行月跑';
+        mrTitle.textContent = '本月所有名單均已準備完成 · 可執行月跑';
         document.getElementById('mrReadyCount').textContent = lists.length;
         mrSubtitle.innerHTML = `2026-05 共 <strong>${lists.length}</strong> 筆名單已準備完成，預計月跑時間 2026-05-20 02:00`;
         partial.classList.add('hidden');
@@ -589,11 +586,11 @@
       } else {
         mrIcon.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-amber-100 text-warning';
         mrIcon.innerHTML = '<i data-lucide="alert-triangle" class="w-6 h-6"></i>';
-        mrTitle.textContent = '本月仍有名單未進入 ready · 月跑暫不可執行';
-        mrSubtitle.innerHTML = `已 ready：<strong>${lists.length}</strong> 筆 · 未 ready：<strong>${NOT_READY_LISTS.length}</strong> 筆，待全部完成方可月跑`;
+        mrTitle.textContent = '本月仍有名單未進入準備完成 · 月跑暫不可執行';
+        mrSubtitle.innerHTML = `已完成：<strong>${lists.length}</strong> 筆 · 未完成：<strong>${NOT_READY_LISTS.length}</strong> 筆，待全部完成方可月跑`;
         partial.classList.remove('hidden');
         document.getElementById('notReadyCount').textContent = NOT_READY_LISTS.length;
-        document.getElementById('notReadyList').innerHTML = NOT_READY_LISTS.map(l => `${l.listNo}（${l.stage}）`).join('、');
+        document.getElementById('notReadyList').innerHTML = NOT_READY_LISTS.map(l => `${l.listNo}（${STAGE_LABEL_ZH[l.stage] || l.stage}）`).join('、');
         if (btnRun) btnRun.disabled = true;
       }
 
@@ -607,8 +604,8 @@
             <div class="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
               <i data-lucide="scan-eye" class="w-8 h-8 text-purple-600"></i>
             </div>
-            <h3 class="text-lg font-semibold text-gray-800 mb-1">您的轄區暫無 ready 名單</h3>
-            <p class="text-sm text-gray-500 max-w-md">處長僅可查看自己轄區之 ready 名單。可能尚未有名單核准完成，或本月名單均不在您轄區內。</p>
+            <h3 class="text-lg font-semibold text-gray-800 mb-1">您的轄區暫無準備完成名單</h3>
+            <p class="text-sm text-gray-500 max-w-md">處長僅可查看自己轄區之準備完成名單。可能尚未有名單核准完成，或本月名單均不在您轄區內。</p>
           </div>`;
         return;
       }
@@ -620,7 +617,7 @@
               <div class="flex items-center gap-2 mb-1">
                 <span class="font-mono text-xs text-gray-500">${l.listNo}</span>
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-success">
-                  <i data-lucide="check-circle-2" class="w-2.5 h-2.5"></i>ready
+                  <i data-lucide="check-circle-2" class="w-2.5 h-2.5"></i>準備完成
                 </span>
               </div>
               <h4 class="text-base font-semibold text-gray-800">${l.listNm}</h4>
@@ -745,7 +742,7 @@
                     <tr>
                       <th class="text-left px-3 py-2 font-medium">員工編號</th>
                       <th class="text-left px-3 py-2 font-medium">姓名</th>
-                      <th class="text-right px-3 py-2 font-medium">RATION（部門內）</th>
+                      <th class="text-right px-3 py-2 font-medium">部門內比例</th>
                       <th class="text-right px-3 py-2 font-medium">名單分配占比</th>
                     </tr>
                   </thead>
@@ -804,7 +801,7 @@
     }
 
     // ============================================================
-    // Modal：Rollback（F089）
+    // Modal：退回簽核
     // ============================================================
     function openRollbackModal() {
       document.getElementById('rollbackModal').classList.remove('hidden');
@@ -815,8 +812,8 @@
     function closeRollbackModal() { document.getElementById('rollbackModal').classList.add('hidden'); }
     function confirmRollback() {
       closeRollbackModal();
-      toast(`已 Rollback ${currentListNo}：核准紀錄已 hard delete，名單退回 approval 階段`, 'warning');
-      setTimeout(() => toast('（保留 ob_dept_pct 與 ob_empl_set 設定資料）', 'info'), 600);
+      toast(`已退回 ${currentListNo}：核准紀錄已刪除，名單退回簽核階段`, 'warning');
+      setTimeout(() => toast('（保留部門比例與個別業務比例設定資料）', 'info'), 600);
       setTimeout(() => loadMode('list'), 1800);
     }
 

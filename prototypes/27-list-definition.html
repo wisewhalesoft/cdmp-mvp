@@ -253,8 +253,7 @@
               <h3 class="text-sm font-semibold text-gray-800"><span id="readyHeader">2026-05 月份準備度</span></h3>
               <span class="text-xs text-gray-500">|</span>
               <span class="text-xs text-gray-600">
-                ready <span id="readyCount" class="font-semibold text-success">0</span> / <span id="readyTotal" class="font-semibold">0</span>
-                <span class="ml-1 font-semibold text-success" id="readyPctLabel">0%</span>
+                已完成 <span id="readyCount" class="font-semibold text-success">0</span> / <span id="readyTotal" class="font-semibold">0</span>
               </span>
             </div>
             <span class="text-xs text-gray-500" id="readyHint">尚有 <span id="readyRemain" class="font-semibold text-warning">0</span> 份未完成準備</span>
@@ -274,7 +273,7 @@
         <section class="bg-white rounded-xl border border-border p-3 flex items-center gap-2 flex-wrap">
           <div class="relative flex-1 max-w-md min-w-[240px]">
             <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-            <input id="searchInput" type="text" oninput="renderAll()" placeholder="搜尋名單名稱或 LIST_NO..." class="w-full pl-9 pr-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+            <input id="searchInput" type="text" oninput="renderAll()" placeholder="搜尋名單名稱或編號…" class="w-full pl-9 pr-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
           </div>
           <div class="flex items-center gap-2 ml-auto">
             <!-- v2.3: 移除「Stage 0 試算」與「執行月跑」（消除重複入口；改由 Ready CTA 提供） -->
@@ -304,7 +303,7 @@
         </div>
         <div>
           <h3 class="text-base font-semibold text-gray-800">確認停用名單 <code id="deactListNo" class="font-mono text-primary">OB202605001</code>？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F052 v2.0 · 軟刪除（限 draft 階段）</p>
+          <p class="text-xs text-gray-500 mt-0.5">軟刪除（限草稿階段）</p>
         </div>
       </div>
       <div class="p-5 space-y-3">
@@ -340,7 +339,6 @@
         </div>
         <div>
           <h3 class="text-base font-semibold text-gray-800">推進至部門比例設定階段？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F078 · 原子性上線約束流程</p>
         </div>
       </div>
       <div class="p-5 space-y-3">
@@ -350,7 +348,7 @@
           <li>進入部門比例設定階段，處長將收到通知</li>
         </ul>
         <div class="rounded-md bg-gray-50 border border-border p-3 text-xs space-y-1">
-          <div class="flex justify-between"><span class="text-gray-500">LIST_NO</span><span class="text-primary font-mono" id="advListNo">—</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">名單編號</span><span class="text-primary font-mono" id="advListNo">—</span></div>
           <div class="flex justify-between"><span class="text-gray-500">名稱</span><span class="text-gray-800 font-medium" id="advName">—</span></div>
           <div class="flex justify-between"><span class="text-gray-500">條件數</span><span class="text-gray-800 font-medium" id="advCondCount">0</span></div>
         </div>
@@ -411,12 +409,8 @@
             <i data-lucide="pencil" class="w-2.5 h-2.5"></i>建立 / 編輯階段可調整
           </span>
         </div>
-        <p class="text-xs text-gray-500 mb-3">完整條件列表（含每個 condition 的 field、type、values / range）</p>
+        <p class="text-xs text-gray-500 mb-3">名單套用的完整篩選條件</p>
         <div id="drawerConditionsList" class="space-y-2"></div>
-        <div class="mt-4 p-3 rounded-md bg-gray-50 border border-border text-[11px] text-gray-500">
-          <span class="font-semibold">logic：</span><span id="drawerLogic" class="font-mono">AND</span>
-          <span class="ml-3 font-semibold">condition_payload 來源：</span><span id="drawerPayloadSource" class="font-mono text-primary">condition_payload</span>
-        </div>
 
         <!-- ============================================================
              F095：系統特例排除規則（唯讀，依 list_nm 讀時推導）
@@ -455,8 +449,7 @@
         <div id="drawerHistoryContent"></div>
       </div>
     </div>
-    <div class="px-5 py-3 border-t border-border bg-gray-50/50 flex items-center justify-between">
-      <span class="text-[10px] text-gray-400">資料：<code class="font-mono">GET /assignment/list-definitions/<span id="drawerApiHint">—</span>/full-snapshot</code></span>
+    <div class="px-5 py-3 border-t border-border bg-gray-50/50 flex items-center justify-end">
       <button onclick="closeDrawer()" class="px-4 py-1.5 text-sm text-gray-600 hover:bg-white rounded-md border border-border">關閉</button>
     </div>
   </aside>
@@ -784,11 +777,9 @@
       const cnt = { draft:0, dept_ratio:0, personnel_ratio:0, approval:0, ready:0 };
       rows.forEach(r => cnt[r.stage]++);
       const ready = cnt.ready;
-      const pct = total === 0 ? 0 : Math.round(ready / total * 100);
       document.getElementById('readyHeader').textContent = `${mpState.current} 月份準備度`;
       document.getElementById('readyCount').textContent = ready;
       document.getElementById('readyTotal').textContent = total;
-      document.getElementById('readyPctLabel').textContent = pct + '%';
       document.getElementById('readyRemain').textContent = total - ready;
       STAGES_ORDER.forEach(s => {
         const seg = document.querySelector(`#readyBar .ready-seg[data-stage="${s}"]`);
@@ -1040,7 +1031,6 @@
         ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-success rounded-full text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>CR 啟用</span>'
         : '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>CR 停用</span>';
       document.getElementById('drawerMeta').textContent = `建立者：${row.createdBy} · 建立日：${row.createdAt} · 月份：${row.ym}`;
-      document.getElementById('drawerApiHint').textContent = listNo;
       renderDrawerConditions(row);
       renderSpecialRules(row.listNm);  // F095：依 list_nm 推導系統特例排除規則（唯讀）
       renderDrawerDept(row);
@@ -1062,8 +1052,6 @@
     function renderDrawerConditions(row) {
       const list = document.getElementById('drawerConditionsList');
       list.innerHTML = '';
-      document.getElementById('drawerLogic').textContent = row.conditionPayload ? (row.conditionPayload.logic || 'AND') : 'AND';
-      document.getElementById('drawerPayloadSource').textContent = row.conditionPayload == null ? 'legacy entity column fallback' : 'condition_payload (JSONB)';
       if (row.conditionPayload == null) {
         const fb = row.legacyEntityFallback || {};
         Object.keys(fb).forEach(col => {
@@ -1074,9 +1062,8 @@
               <div class="flex items-center gap-2 mb-1">
                 <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-slate-600 border border-slate-200"><i data-lucide="archive" class="w-2.5 h-2.5"></i>LEGACY</span>
                 <span class="text-sm font-medium text-gray-800">${dn}</span>
-                <code class="text-[10px] font-mono text-gray-500">${col}</code>
               </div>
-              <div class="text-xs text-gray-600">values: <span class="font-mono">${values.join(', ')}</span></div>
+              <div class="text-xs text-gray-600">${values.join('、')}</div>
             </div>`;
         });
         if (Object.keys(fb).length === 0) list.innerHTML = '<p class="text-xs text-gray-400 italic">無條件</p>';
@@ -1101,9 +1088,7 @@
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold">${i + 1}</span>
                 <span class="text-sm font-medium text-gray-800">${dn}</span>
-                <code class="text-[10px] font-mono text-gray-500">${c.columnName}</code>
               </div>
-              <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">${c.fieldType}</span>
             </div>
             <div class="text-xs">${detail}</div>
           </div>`;
@@ -1161,7 +1146,6 @@
             </tfoot>
           </table>
         </div>
-        <p class="text-[10px] text-gray-400 mt-2 italic">資料來源：mock placeholder（落地時由 /full-snapshot.dept_ratios 提供）</p>
       `;
       lucide.createIcons();
     }
@@ -1215,7 +1199,6 @@
             </tfoot>
           </table>
         </div>
-        <p class="text-[10px] text-gray-400 mt-2 italic">資料來源：mock placeholder（落地時由 /full-snapshot.personnel_ratios 提供）</p>
       `;
       lucide.createIcons();
     }
@@ -1247,7 +1230,6 @@
             </li>
           `).join('')}
         </ol>
-        <p class="text-[10px] text-gray-400 mt-3 italic">資料來源：mock placeholder（落地時由 /full-snapshot.audit_trail 提供，依 created_at ASC 排序）</p>
       `;
       lucide.createIcons();
     }

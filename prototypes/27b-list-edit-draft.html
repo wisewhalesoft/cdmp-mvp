@@ -143,14 +143,14 @@
         </div>
         <div class="flex-1">
           <h3 class="text-base font-semibold text-amber-900">無法編輯篩選條件</h3>
-          <p class="text-sm text-gray-700 mt-1">名單 <code id="notDraftListNo" class="font-mono text-primary">OB202605008</code> 已進入「<span id="notDraftStage" class="font-semibold">部門比例</span>」階段，根據 F051 v2.1 規格僅 <code>draft</code> 階段可寫入 <code>condition_payload</code>（K1 約束）。</p>
-          <p class="text-sm text-gray-700 mt-2">如需修改篩選條件，請先執行 <span class="font-semibold text-danger">Rollback</span> 回到草稿階段（K3：rollback 後 condition_payload 重新可寫入），再回此頁編輯。</p>
+          <p class="text-sm text-gray-700 mt-1">名單 <code id="notDraftListNo" class="font-mono text-primary">OB202605008</code> 已進入「<span id="notDraftStage" class="font-semibold">部門比例</span>」階段，僅草稿階段可修改篩選條件。</p>
+          <p class="text-sm text-gray-700 mt-2">如需修改篩選條件，請先將名單退回草稿階段，再回此頁編輯。</p>
           <div class="mt-4 flex items-center gap-2">
             <a href="27-list-definition.html" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
               <i data-lucide="arrow-left" class="w-4 h-4"></i>返回名單定義
             </a>
-            <button onclick="showToast('info','Rollback 流程','從名單列表頁的對應階段管理頁觸發；rollback 將清空當前 stage 之比例 / 簽核資料。')" class="inline-flex items-center gap-1.5 px-4 py-2 border border-danger text-danger text-sm rounded-md hover:bg-red-50">
-              <i data-lucide="undo-2" class="w-4 h-4"></i>了解 Rollback 流程
+            <button onclick="showToast('info','退回流程','從名單列表頁的對應階段管理頁觸發；退回將清空目前階段的比例 / 簽核資料。')" class="inline-flex items-center gap-1.5 px-4 py-2 border border-danger text-danger text-sm rounded-md hover:bg-red-50">
+              <i data-lucide="undo-2" class="w-4 h-4"></i>了解退回流程
             </button>
           </div>
         </div>
@@ -175,11 +175,11 @@
       <!-- Demo 場景切換器（v2.1.1：5 個場景，新增 ⑤ inactive 卡別） -->
       <div class="mb-4 bg-white border border-border rounded-lg px-4 py-2 flex items-center gap-2 flex-wrap text-xs">
         <span class="text-gray-400 mr-1">Demo 場景：</span>
-        <button onclick="loadList('OB202605001')" id="demo-btn-1" class="demo-btn px-2.5 py-1 border rounded">① 雙條件 + draft</button>
-        <button onclick="loadList('OB202605002')" id="demo-btn-2" class="demo-btn px-2.5 py-1 border rounded">② 含 INACTIVE values</button>
-        <button onclick="loadList('OB202604099')" id="demo-btn-3" class="demo-btn px-2.5 py-1 border rounded">③ NULL 舊名單（read-only）</button>
-        <button onclick="loadList('OB202605003')" id="demo-btn-4" class="demo-btn px-2.5 py-1 border rounded">④ stage=dept_ratio（已推進）</button>
-        <button onclick="loadList('OB202605004')" id="demo-btn-5" class="demo-btn px-2.5 py-1 border rounded">⑤ 含已停用卡別（US-127）</button>
+        <button onclick="loadList('OB202605001')" id="demo-btn-1" class="demo-btn px-2.5 py-1 border rounded">① 雙條件（草稿）</button>
+        <button onclick="loadList('OB202605002')" id="demo-btn-2" class="demo-btn px-2.5 py-1 border rounded">② 含已停用值</button>
+        <button onclick="loadList('OB202604099')" id="demo-btn-3" class="demo-btn px-2.5 py-1 border rounded">③ 舊格式名單（唯讀）</button>
+        <button onclick="loadList('OB202605003')" id="demo-btn-4" class="demo-btn px-2.5 py-1 border rounded">④ 已推進（部門比例）</button>
+        <button onclick="loadList('OB202605004')" id="demo-btn-5" class="demo-btn px-2.5 py-1 border rounded">⑤ 含已停用卡別</button>
         <span class="text-[10px] text-gray-400 ml-auto">或於 URL 加 ?listNo=...</span>
       </div>
 
@@ -193,11 +193,11 @@
           </div>
           <div class="grid grid-cols-12 gap-4">
             <div class="col-span-3">
-              <label class="block text-xs text-gray-500 mb-1">LIST_NO（唯讀）</label>
+              <label class="block text-xs text-gray-500 mb-1">名單編號（唯讀）</label>
               <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-border rounded-md font-mono text-sm text-gray-700 w-full">
                 <i data-lucide="hash" class="w-4 h-4 text-gray-400"></i>
                 <span id="roListNo">OB202605001</span>
-                <i data-lucide="lock" class="w-3 h-3 text-gray-400 ml-auto" title="F051：建立後不允許變更"></i>
+                <i data-lucide="lock" class="w-3 h-3 text-gray-400 ml-auto" title="建立後不允許變更"></i>
               </div>
             </div>
             <div class="col-span-6">
@@ -216,9 +216,6 @@
             <div class="col-span-3">
               <label for="cardType" class="block text-sm font-medium text-gray-700 mb-1.5">
                 卡別 <span class="text-[10px] text-gray-400 font-normal">選填</span>
-                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200" title="v2.1.1 / US-127 / AC-16：options 來自 ob_card_type；含名單現存 inactive 值 disabled 保留">
-                  <i data-lucide="database" class="w-2.5 h-2.5 mr-0.5"></i>來自 ob_card_type
-                </span>
               </label>
               <!-- options 由 renderCardTypeOptions(L.cardType) 在 loadList 中動態 build；
                    active 5 個 + （若名單現存 inactive）追加 disabled option（v2.1.1 / US-127 / AC-16） -->
@@ -320,7 +317,7 @@
           <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑 Stage 1 不會匹配</p>
+              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑分派時不會匹配</p>
               <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
               <p class="text-xs text-amber-700 mt-1">如需重新啟用請至 <a href="37-base-code.html?tab=options" class="underline font-medium">「篩選欄位 &gt; 可選值管理」</a>。</p>
             </div>
@@ -397,11 +394,11 @@
         </div>
         <div>
           <h3 class="text-base font-semibold text-gray-800">停用名單 <code id="deactListNo" class="font-mono text-primary">OB202605001</code>？</h3>
-          <p class="text-xs text-gray-500 mt-0.5">F052 軟刪除，僅 draft 階段可執行</p>
+          <p class="text-xs text-gray-500 mt-0.5">軟刪除，僅草稿階段可執行</p>
         </div>
       </div>
       <div class="p-5 space-y-3">
-        <p class="text-sm text-gray-700">停用後此名單將不會出現在月跑 Stage 1 候選名單中，僅可於「已停用」分頁查詢。停用為軟刪除，紀錄保留供稽核。</p>
+        <p class="text-sm text-gray-700">停用後此名單將不會出現在月跑分派候選名單中，僅可於「已停用」分頁查詢。停用為軟刪除，紀錄保留供稽核。</p>
       </div>
       <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
         <button onclick="closeDeactivateModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
@@ -869,7 +866,7 @@
                 <div class="text-sm font-medium text-gray-800">${f.displayName}</div>
                 <code class="text-[10px] font-mono text-gray-500">${f.columnName}</code>
               </div>
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${typeBg};color:${typeFg};">${f.fieldType}</span>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${typeBg};color:${typeFg};">${ftLabel(f.fieldType)}</span>
             </button>
           </li>`;
       };
@@ -930,6 +927,10 @@
       document.getElementById(`valDrop-${id}`).classList.toggle('hidden');
     }
 
+    // 欄位型別 / 欄位名稱中文顯示（不對使用者裸露 categorical / numeric / date 與欄位代碼）
+    function ftLabel(ft) { return ft === 'categorical' ? '類別' : ft === 'numeric' ? '數值' : '日期'; }
+    function fieldDisplayName(col) { const f = FIELDS.find(x => x.columnName === col); return f ? f.displayName : col; }
+
     function renderConditions() {
       const list = document.getElementById('condList');
       const empty = document.getElementById('condEmpty');
@@ -976,7 +977,7 @@
               </div>
               <p class="text-[11px] text-gray-500 flex items-start gap-1">
                 <i data-lucide="info" class="w-3 h-3 mt-0.5 shrink-0"></i>
-                <span>此條件由系統固定為 <code class="font-mono text-gray-600">Y（優質案件）</code>，無法移除或修改。對應原系統固定條件（<code class="font-mono">OBPOOLDATA.BEST_CASE = 'Y'</code>），確保所有名單僅篩選優質案件。</span>
+                <span>此條件由系統固定為 Y（優質案件），無法移除或修改，確保所有名單僅篩選優質案件。</span>
               </p>
             </div>
           `;
@@ -987,7 +988,7 @@
             <span class="text-[10px] font-mono text-gray-400 w-6">#${idx + 1}</span>
             <span class="font-medium text-sm text-gray-800">${f.displayName}</span>
             <code class="text-[10px] font-mono text-gray-500">${f.columnName}</code>
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${f.fieldType==='categorical'?'#DBEAFE':f.fieldType==='numeric'?'#EDE9FE':'#CFFAFE'};color:${f.fieldType==='categorical'?'#1D4ED8':f.fieldType==='numeric'?'#6D28D9':'#0E7490'};">${f.fieldType}</span>
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium" style="background:${f.fieldType==='categorical'?'#DBEAFE':f.fieldType==='numeric'?'#EDE9FE':'#CFFAFE'};color:${f.fieldType==='categorical'?'#1D4ED8':f.fieldType==='numeric'?'#6D28D9':'#0E7490'};">${ftLabel(f.fieldType)}</span>
           </div>
         `;
 
@@ -1071,13 +1072,13 @@
         const opts = FIELD_VALUES[c.columnName] || [];
         (c.values || []).forEach(v => {
           const opt = opts.find(o => o.v === v);
-          if (opt && !opt.active) warned.push(`${c.columnName}.${v}（${opt.l}）`);
+          if (opt && !opt.active) warned.push(`${fieldDisplayName(c.columnName)}：${opt.l}`);
         });
       });
       const box = document.getElementById('inactiveValueWarn');
       if (warned.length === 0) { box.classList.add('hidden'); return; }
       box.classList.remove('hidden');
-      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑 Stage 1 不會匹配`;
+      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑分派時不會匹配`;
       document.getElementById('inactiveWarnDetail').textContent = warned.join('、');
     }
 
@@ -1184,7 +1185,7 @@
         const userConditions = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); });
         if (userConditions.length === 0) { showToast('error','請至少新增 1 個篩選條件（優質案件為系統固定，不計入）'); return; }
         const incomplete = conditions.find(c => !isConditionComplete(c));
-        if (incomplete) { showToast('error','部分條件尚未填寫完整','categorical 需至少 1 個值；numeric 需 min/max；date 需起迄'); return; }
+        if (incomplete) { showToast('error','部分條件尚未填寫完整'); return; }
         body.conditionPayload = {
           conditions: conditions.map(c => {
             const base = { columnName: c.columnName, fieldType: c.fieldType };
