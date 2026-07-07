@@ -1181,3 +1181,28 @@ last_updated: 2026-07-08
 - **影響**：若 5433 可達且 `TIEBREAK-003` 實際執行後發現分支 B（內容不一致），依 AD §4.3 裁定此為「已知、可解釋之低機率邊界差異，非 bug」，但仍需要 tdd-implementation 確實依測試設計要求將觀察結果記入 impl log 並回報使用者——這一步驟依賴人工紀律（比照本專案既有 `TLDEDUP-GATE-001` 等決策關卡之共通弱點：無法被自動化強制執行，僅能靠流程要求）。
 - **建議**：`TIEBREAK-003` 已明確要求「不可略過不記錄」，比照既有決策關卡文件化守門慣例。若 tdd-implementation 執行後確實觀察到分支 B，建議比照本專案既有 F067 差異報告揭露慣例，將該具體案例（客戶代號、差異欄位、兩側完整列內容）整理後主動回報使用者，而非僅記入 impl log 內部文件了事。
 - **風險等級**：低（AD 已明確裁定此為非阻擋之已知邊界情境；記錄用意在於提醒此類「探測結果依賴人工紀律回報」之殘留不確定性，供 QA/PM 於 P4d 完成後追蹤確認決策關卡是否確實被落實記錄）
+
+---
+
+## MSSQL 全面遷移 P4e 風險與待決問題（AD-E07-41，2026-07-08 新增，P4 最後一片，P4 全範圍完成）
+
+### R-MSSQL-P4E-01（🔴 高，本輪範圍界定之刻意排除，同檔案同缺陷但非 bulk-load 直接依賴）：`RawDataService` 之 `getColumnMetadata`/`getIndexedColumns`/`getRawData` 資料查詢三方法，與 §二 ISPG-GATE 已修復之三方法同屬一個二元 gate 缺陷，但本輪未納入範圍
+
+- **問題**：test-designer 逐檔查證確認 `raw-data.service.ts` 現行 `isPostgres: boolean` 二元 gate 缺陷，實際影響範圍遠大於 P4e 測試設計已納入的 `createRawTable`/`tableExists`/`getTableColumns` 三方法——`getColumnMetadata`（`getRawData` API 內部呼叫，非 PG 分支呼叫 `PRAGMA table_info`）、`getIndexedColumns`（非 PG 分支呼叫 `PRAGMA index_list`）、`getRawData` 資料查詢本身（非 PG 分支使用 `LIMIT ? OFFSET ?` 語法，MSSQL 不支援 `LIMIT` 且 `?` 佔位符非 T-SQL 慣例）三者同樣會在 `DB_TYPE=mssql` 下誤入 SQLite 分支並拋錯。`infrastructure/AD-E07-41-P4e-test.md` §二 ISPG-GATE 刻意將範圍限縮於「`executeExtraction()` 寫入流程之直接前置依賴」三方法，因為這三個未涵蓋的方法只服務 `getRawData()`（raw data 瀏覽 UI 之後端 API），與 bulk-load 寫入路徑無直接依賴關係，逾越 P4e 任務書「只設計 raw staging bulk-load 機制」之明確範圍界定。
+- **影響**：P4e 完成後，MSSQL cutover 若同時上線 raw data 瀏覽 UI（E04 既有功能），該 API 會因這三個方法之二元 gate 缺陷而 100% 失敗（`getRawData` 幾乎必然呼叫 `getColumnMetadata`，且大表排序時可能呼叫 `getIndexedColumns`），且目前無任何測試守門攔截此缺口。
+- **建議**：建議 system-architect/PM 評估是否需要另立一個小型子切片（例如「P4f」或併入 raw data 瀏覽 UI 之獨立 MSSQL 相容性任務）補齊 `getColumnMetadata`/`getIndexedColumns`/`getRawData` 三方法之 mssql 分支（型別對應與正確 T-SQL 分頁語法 `OFFSET ... FETCH NEXT ... ROWS ONLY`），並比照本文件 §二 ISPG-GATE 之陷阱佐證 + 目標行為雙軌模式設計測試。
+- **風險等級**：高（功能面完全阻斷但範圍明確、修法路徑清楚，非模糊不確定風險；目前無測試覆蓋，若未主動追蹤可能被遺忘直到 cutover 後才由使用者回報功能異常）
+
+### R-MSSQL-P4E-02（中高，範圍界定之刻意排除）：`insertBatch()` 非 full-mode（incremental）路徑之 mssql 相容性缺口——`?` 佔位符與 T-SQL 2100 參數上限
+
+- **問題**：`extraction-execution.service.ts` 之 `canStream` 判定式要求 `task.mode === 'full'` 才會走 bulk-load 快速路徑；incremental 模式（含首次尚無 `raw_table_name` 或非全量擷取之情境）恆走既有 `insertBatch()` 迴圈。該方法現行非 PG 分支使用 `?` 佔位符（SQLite 慣例，非 T-SQL `@0,@1,...` 具名/位置參數語法）且 `maxRowsPerInsert` 計算僅為 PG 家族設計 `PG_PARAM_LIMIT=65000`，MSSQL 的 SQL 文字參數上限實際為 **2100**（遠低於 PG），若不修正批次切片邏輯，寬欄位來源（比照既有 OBPOOLDATA 122 欄教訓）極易在單次 INSERT 就超出上限拋錯。
+- **影響**：incremental 模式擷取（非本輪 P4e DoD 範圍，AD §6/§9 P4e DoD 字面僅描述 full-mode COPY→bulk 替換）於 MSSQL AppDB 上會持續失敗，直到此缺口另行修復。
+- **建議**：與 R-MSSQL-P4E-01 同理，建議另立子切片處理，修法方向為 `insertBatch()` 新增 mssql 分支（`@0,@1,...` 具名參數 + `MSSQL_PARAM_LIMIT=2000`〔留 buffer〕之切片邏輯，比照既有 PG 分支之 buffer 設計精神）。
+- **風險等級**：中高（incremental 模式是否為 MSSQL cutover 上線初期之必要功能，需與業務確認優先權；純技術修法路徑清楚，非模糊風險）
+
+### R-MSSQL-P4E-03（中，測試設計階段之已知資訊限制）：TYPEMAP 型別矩陣為代表性合成設計，非逐一核對 `ZZIP_BAMCUST_M`/`MLMCUSTOMER` 真實來源欄位型別
+
+- **問題**：本專案 repo 內（`etl-pipelines.json`/`extraction-tasks.json`）僅記錄這 5 張真實來源表之 `sourceTable` 名稱與部分欄位對照，並無逐欄 `DATA_TYPE` 之靜態清單——該資訊需即時連線真實外部 MSSQL 來源查詢 `INFORMATION_SCHEMA.COLUMNS` 才能取得，test-designer 於文件撰寫階段無法靜態取得，故 `AD-E07-41-P4e-test.md` §一 TYPEMAP 之型別矩陣採比照既有 `mapToPostgresType` 涵蓋型別家族之代表性合成設計（見該文件查證發現 7）。
+- **影響**：若真實來源存在矩陣未涵蓋之罕見型別（例如已淘汰之 `sql_variant`、`hierarchyid`、`geography`/`geometry` 等特殊型別，機率低但非零），`mapToMssqlType` 之 fallback（`NVARCHAR(MAX)`）雖不至於拋錯，但可能非最適合的映射選擇。
+- **建議**：建議 tdd-implementation 執行 P4e 前，若可連線真實 ZZIP/MLMC 來源，優先查詢 5 張表之實際 `INFORMATION_SCHEMA.COLUMNS.DATA_TYPE` 分布，核對是否被 §一 TYPEMAP 矩陣完整涵蓋（比照 P4d 對 `etl-pipelines.json` 之查證精神），若發現矩陣未涵蓋的型別，於 impl log 記錄並補充對應分支。
+- **風險等級**：中（fallback 機制已存在，不至於功能完全阻斷；僅是型別選擇最適性未經真實資料驗證，若矩陣涵蓋不足會在建表當下立即以拋錯或型別警告形式暴露，訊號明確不會靜默通過）
