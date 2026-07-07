@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.26"
+version: "3.27"
 date: 2026-07-08
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.27 / 2026-07-08 / MSSQL 全面遷移 P3（Raw SQL 引擎移植：Stage 1-4 篩選/計分/分派 + CR）架構設計**：P4（ETL 引擎 MSSQL 化）全數完成——9 個 handler 全 MSSQL 化、customer_core 56 節點 pipeline 端對端跑通並修復 FINDING-P4D-01、bulk-load 完成，**customer_core 現於 MSSQL 上有真實資料**，解除先前 P3 設計階段查出之封鎖性缺口（Stage 2 計分 9/15 對照欄位依賴 customer_core，原僅能靠測試自建 throwaway fixture 驗證的過渡態）。新增 **[`implementation-log/AD-E07-42-mssql-p3-raw-sql-engine.md`](implementation-log/AD-E07-42-mssql-p3-raw-sql-engine.md)**，固化架構師先前完整產出之 P3 設計文字：(1) driver 組織沿用 P4 已確立之「PG 檔不動、平行 `*-mssql.ts`、executor 層薄分支」原則，延伸至 5 個 Stage 1-4/CR raw SQL builder（`stage1-sql-builder.ts`/`stage1-customer-core-clause.ts`/`stage2to4-sql-builder.ts`/`stage3to4-ration-sql.ts`/`cr-priority-sql.ts`）；(2) 逐 Stage 方言轉換清單（3a Stage 1：AGE→DATEDIFF／regex→PATINDEX／既有 ANSI 語法不變；**3b Stage 2~3（風險最高）**：`~` 正則×3／`age()`／`to_jsonb()->>'col'` 動態 fallback（live production path，非死碼）；3c Stage 3/4：VALUES-CTE derived table／視窗函式 1:1 可攜；3d CR：UPDATE-FROM+視窗函式+CTE 三重疊加；3e `fn_calc_tier_level` 收尾，P1b2 已斷言不建立，僅剩清理）；(3) **`to_jsonb` 動態 fallback 修法**（I-MSSQL-DYNAMIC-FALLBACK-01）＝SQL 生成前 TypeScript 端 `INFORMATION_SCHEMA.COLUMNS`（大寫）內省，非執行期動態模擬，與 P4 FINDING-P4D-01「生成期解決優於執行期魔法」教訓對齊；(4) EQ 測試策略——因 customer_core 已有真實資料，3b 可直接對真實資料做完整 JS↔MSSQL 逐列等價（不再是過渡態限定），新增建議比照 F067 模式重跑計分逐欄比對；(5) P3a~3e 五個子切片與 DoD + 判定不需要 spec-writer；新增 3 個不變式（I-MSSQL-ENGINE-EQ-01/REGEX-CHARCLASS-01/DYNAMIC-FALLBACK-01），沿用 I-MSSQL-CATALOG-CASE-01/DECIMAL-NORMALIZE-01（AD-E07-41）。**架構師判斷無需使用者裁示之新事項**（customer_core 缺口已由 P4 解除，非本輪新增議題）。**刻意未動**：`architecture-spec.md`（理由同前）。
 
 > **v3.26 / 2026-07-08 / MSSQL P4d FINDING-P4D-01（DECIMAL 溢位缺陷）與 AD-E07-41 v1.1→v1.2 修訂**：P4d 端對端驗證（56 節點 customer_core pipeline 對真實 MSSQL 容器完整跑通）抓到真實缺陷 **FINDING-P4D-01**：`type_cast` 之 `DECIMAL` 目標型別固定映射 `DECIMAL(38,10)`，數字型輸入（如所得級距碼）強制補 10 位小數，流入下游窄 `varchar` 目標欄（`customer_core.monthly_income_code varchar(5)`）時 MSSQL 算術溢位（PG `NUMERIC` 無界保留輸入 scale，不受影響）；此為 P4a/P4c 孤立單元測試測不到、僅 P4d 三節點組合端對端才暴露之整合缺陷。架構師裁定修法：**於 `type_cast`（非 `target_load`）修正**——`TRY_CAST(...AS DECIMAL(38,10))` 保留作合法性驗證關卡（NULL-on-invalid 語意不變），實際輸出改為去尾零正規化字串（`NULLIF(RTRIM(RTRIM(CONVERT(VARCHAR(50),...),'0'),'.'),'')`），忠實還原 PG NUMERIC 之自然（最小）表示法；理由：`toMssqlType('DECIMAL')` 僅單一呼叫點、改動完全封閉於 `type-cast-handler-mssql.ts`、trailing-zero-strip 為補零之精確反運算（非近似）、架構上將精度決定延後至目標欄型別已知的時機（與 PG 行為對齊）。**就地修訂 `implementation-log/AD-E07-41-mssql-p4-etl-engine.md`（v1.1→v1.2）**：(1) 新增 §5.6 完整記錄缺陷、修法程式碼、裁定理由、影響面確認（Grep 已查證 `toMssqlType('DECIMAL')` 無其他呼叫點）；(2) 新增不變式 `I-MSSQL-DECIMAL-NORMALIZE-01`；(3) §9 新增 **P4a-fix** 子切片（P4d 後的收尾小切片，含既有測試更新與 fixture 數字化回歸驗證要點）；(4) §0/§8/§9 同步修正「53 節點」為 P4d 實測確認之「56 節點」（純數字校正，非設計變更）。**架構師判斷此為純技術缺陷修正，不需使用者事前知情或裁示**（與 tie-breaker 邊界案例性質不同：有明確修法、修完即完全解決、無殘留業務含糊地帶），已直接裁定並記錄。**刻意未動**：`architecture-spec.md`（理由同前）。
 
