@@ -25,6 +25,11 @@ import {
   todayYmd,
 } from '@/common/emphire/emphire-active.util';
 import type { SetPersonnelRatioDto, AppliedTemplateDto } from './dto/set-personnel-ratio.dto';
+import {
+  acquireAutoAdvanceLock,
+  assertMssqlLockPrecondition,
+  resolveLockDbKind,
+} from './auto-advance-lock.util';
 
 interface ActorUser {
   userId: string;
@@ -459,10 +464,11 @@ export class PersonnelRatioService {
    * F084 v2.0 auto-advance 偵測 + 推進（於 setPersonnelRatios tx 內呼叫；AD-E07-19 §19.3.3 [4]）。
    *
    * 步驟：
-   *   [4a] 取得 blocking advisory lock（PostgreSQL 限定；lock_timeout=5000ms）；
-   *        - lock 等待逾時（55P03 lock_not_available）→ catch 不 rethrow、autoAdvanced=false、
-   *          不帶 failReason、跳過後續（tx 照常 commit，[1]~[3] 寫入保留）
-   *        - **SQLite 相容**：DB_TYPE !== 'postgres' 時跳過 advisory lock，直接做偵測+推進
+   *   [4a] 取得 blocking lock（AD-E07-38 P1c 跨 driver 三分支，auto-advance-lock.util）；
+   *        - postgres：advisory lock + lock_timeout=5000ms；55P03 逾時 → 降級 no-op
+   *        - mssql   ：sp_getapplock @LockOwner='Transaction'；回傳碼 -1 逾時 → 降級 no-op、其餘錯誤碼 rethrow
+   *        - other（sqlite 測試 infra）：跳過鎖，直接做偵測+推進
+   *        逾時降級皆：catch 不 rethrow、autoAdvanced=false、不帶 failReason、tx 照常 commit（[1]~[3] 寫入保留）
    *   [4b] tx 內月跑 guard（runGuard.isRunning() 回 boolean）→ true 則 autoAdvanced=false +
    *        autoAdvanceFailReason='ASSIGNMENT_RUN_ALREADY_RUNNING'、跳過後續（PUT 仍 200，不 rollback）
    *   [4c] assertAllDeptsSumEquals100WithMgr（讀 tx 內 [1]~[3] 剛寫入的 ob_empl_set）；
@@ -485,19 +491,20 @@ export class PersonnelRatioService {
       return noAdvance;
     }
 
-    // [4a] blocking advisory lock（僅 PostgreSQL；SQLite 跳過）
-    if (this.isPostgres()) {
-      try {
-        await mgr.query(`SET LOCAL lock_timeout = '5000ms'`);
-        await mgr.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [listNo]);
-      } catch (err) {
-        if (this.isPgLockNotAvailable(err)) {
-          // lock 等待逾時：不 rethrow、降級 no-op、不帶 failReason、tx 照常 commit（寫入保留）
-          this.logger.warn(`auto-advance lock 等待逾時（55P03），listNo=${listNo}，降級 no-op`);
-          return noAdvance;
-        }
-        throw err;
-      }
+    // [4a] blocking lock（AD-E07-38 P1c 跨 driver 三分支：pg advisory / mssql sp_getapplock / sqlite no-op）
+    //   - postgres：pg_advisory_xact_lock + lock_timeout；55P03 → 降級 no-op
+    //   - mssql   ：sp_getapplock @LockOwner='Transaction'；回傳碼 -1 → 降級 no-op；-2/-3/-999 → rethrow
+    //   - other   ：sqlite 測試 infra 無此鎖原語 → 跳過（直接偵測+推進）
+    //   逾時（pg 55P03 / mssql -1）皆：不 rethrow、降級 no-op、不帶 failReason、tx 照常 commit（寫入保留）。
+    const lockKind = resolveLockDbKind(process.env.DB_TYPE);
+    if (lockKind === 'mssql') {
+      // I-MSSQL-LOCK-01（LOCK-010）：mssql lock 前置條件——須在顯式交易內。
+      assertMssqlLockPrecondition(mgr);
+    }
+    const lockOutcome = await acquireAutoAdvanceLock(mgr, lockKind, listNo);
+    if (lockOutcome === 'timeout') {
+      this.logger.warn(`auto-advance lock 等待逾時，listNo=${listNo}，降級 no-op`);
+      return noAdvance;
     }
 
     // [4b] tx 內月跑 guard（輕量版，回 boolean）
@@ -559,17 +566,6 @@ export class PersonnelRatioService {
   /** ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL flag（prod 預設 off；沿用 feature-flag 環境變數機制）。 */
   private isAutoAdvanceEnabled(): boolean {
     return (process.env.ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL ?? '').toLowerCase() === 'true';
-  }
-
-  /** 是否為 PostgreSQL（決定是否執行 advisory lock；SQLite 測試 infra 降級跳過）。 */
-  private isPostgres(): boolean {
-    const dbType = (process.env.DB_TYPE ?? 'postgres').toLowerCase();
-    return dbType === 'postgres' || dbType === 'postgresql' || dbType === 'pg';
-  }
-
-  /** 判斷是否為 PostgreSQL lock 等待逾時（55P03 lock_not_available）。 */
-  private isPgLockNotAvailable(err: unknown): boolean {
-    return !!err && typeof err === 'object' && (err as { code?: string }).code === '55P03';
   }
 
   /**

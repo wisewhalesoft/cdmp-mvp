@@ -1353,17 +1353,23 @@ export class AssignmentRunPipelineService {
     ];
     if (custoNos.length > 0) {
       try {
-        const rows: CustomerCoreRow[] = await manager.query(
-          `SELECT source_customer_no, cus_sex, date_of_birth, education_code,
-                  hpost_city, cpost_city, co_city,
-                  carea_no1, carea_no2, cellular
-           FROM customer_core
-           WHERE source_customer_no = ANY($1)`,
-          [custoNos],
-        );
+        // AD-E07-38 P1c / Pattern B（I-MSSQL-PARAM-01）：`= ANY($1)` → `IN (:...custoNos)`
+        // + driver.escapeQueryWithParameters（PG $n / SQLite ? / MSSQL @n），跨 driver 可攜；
+        // :...custoNos 於各 driver 展開為對應數量之 positional placeholder，語意等價 ANY(array)。
+        const [sql, parameters] =
+          manager.connection.driver.escapeQueryWithParameters(
+            `SELECT source_customer_no, cus_sex, date_of_birth, education_code,
+                    hpost_city, cpost_city, co_city,
+                    carea_no1, carea_no2, cellular
+             FROM customer_core
+             WHERE source_customer_no IN (:...custoNos)`,
+            { custoNos },
+            {},
+          );
+        const rows: CustomerCoreRow[] = await manager.query(sql, parameters);
         for (const r of rows) ccMap.set(r.source_customer_no, r);
       } catch {
-        // SQLite 測試環境無 customer_core 表 → 空 Map（OQ-3 graceful degrade）。
+        // 表不存在（SQLite 測試環境 / MSSQL baseline 無 customer_core，PG-only）→ 空 Map（OQ-3 graceful degrade）。
       }
     }
 
@@ -1372,13 +1378,18 @@ export class AssignmentRunPipelineService {
     ];
     if (applNos.length > 0) {
       try {
-        const rows: ArCapitalRow[] = await manager.query(
-          `SELECT appl_no, add_un_capital FROM ob_arreturndf_min_cap WHERE appl_no = ANY($1)`,
-          [applNos],
-        );
+        // AD-E07-38 P1c / Pattern B（I-MSSQL-PARAM-01）：`= ANY($1)` → `IN (:...applNos)`
+        // + driver.escapeQueryWithParameters（跨 driver 可攜）。
+        const [sql, parameters] =
+          manager.connection.driver.escapeQueryWithParameters(
+            `SELECT appl_no, add_un_capital FROM ob_arreturndf_min_cap WHERE appl_no IN (:...applNos)`,
+            { applNos },
+            {},
+          );
+        const rows: ArCapitalRow[] = await manager.query(sql, parameters);
         for (const r of rows) arMap.set(r.appl_no, r);
       } catch {
-        // SQLite 測試環境無 ob_arreturndf_min_cap 表 → 空 Map（OQ-3 graceful degrade）。
+        // 表不存在（SQLite 測試環境無 ob_arreturndf_min_cap）→ 空 Map（OQ-3 graceful degrade）。
       }
     }
 

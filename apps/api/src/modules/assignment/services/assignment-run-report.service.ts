@@ -555,7 +555,11 @@ export class AssignmentRunReportService {
     runId: string,
     actor?: ActorUser | null,
   ): Promise<ExportQuerySpec> {
-    const params: unknown[] = [runId];
+    // AD-E07-38 P1c / Pattern B（I-MSSQL-PARAM-01 / PARAM-012）：
+    //   主參數 `$1` → `:runId`；scope 巢狀 `$2..$N` → `:...emplIds`；兩者組成**單一**具名參數
+    //   SQL 字串，交由**同一次** driver.escapeQueryWithParameters 展開（PG $n / SQLite ? / MSSQL @n）。
+    //   不可拆兩段個別編號（否則 positional 基準不同步 → 錯誤 SQL）。
+    const namedParams: Record<string, unknown> = { runId };
     let scopeClause = '';
     let scopedByCreator = false;
 
@@ -565,13 +569,11 @@ export class AssignmentRunReportService {
       const emplids = [...scope];
       if (emplids.length === 0) {
         // 無轄區 → 永不匹配（BR-F064-14：仍回 200 + 僅表頭）。1=0 確保 0 列。
+        // ⚠️ 空陣列不可走 IN (:...emplIds)（展開為 IN () 於多數 dialect 為語法錯誤，見 ESCAPE-004）。
         scopeClause = ' AND 1 = 0';
       } else {
-        const placeholders = emplids
-          .map((_, i) => `$${params.length + i + 1}`)
-          .join(', ');
-        scopeClause = ` AND r.emplid IN (${placeholders})`;
-        params.push(...emplids);
+        scopeClause = ' AND r.emplid IN (:...emplIds)';
+        namedParams.emplIds = emplids;
       }
     }
 
@@ -614,11 +616,20 @@ export class AssignmentRunReportService {
              ON e.emp_id = r.emplid
       LEFT JOIN ob_list_definition d
              ON d.list_no = r.list_no
-      WHERE r.run_id = $1${scopeClause}
+      WHERE r.run_id = :runId${scopeClause}
       ORDER BY r.list_no, r.orgno, r.appl_no
     `;
 
-    return { sql, params, scopedByCreator };
+    // 單一次 escapeQueryWithParameters 展開 :runId 與 :...emplIds（PARAM-012）；
+    // cursorRows 於 PG 端沿用展開後之 $1..$N + positional params（行為不變）。
+    const [expandedSql, params] =
+      this.dataSource.manager.connection.driver.escapeQueryWithParameters(
+        sql,
+        namedParams,
+        {},
+      );
+
+    return { sql: expandedSql, params, scopedByCreator };
   }
 
   /** F064 v2.0：server-side cursor 每批 FETCH 列數（記憶體與往返次數權衡）。 */

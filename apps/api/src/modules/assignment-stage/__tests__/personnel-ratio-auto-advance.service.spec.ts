@@ -514,6 +514,86 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
     expect(mgr.query).not.toHaveBeenCalled();
     expect(stageTransition.advanceToInMgr).not.toHaveBeenCalled();
   });
+
+  // =========================================================================
+  // AD-E07-38 P1c — DISPATCH（跨 driver 鎖分派契約 + §0.5 二元 gate 缺口守門）
+  // =========================================================================
+
+  function queryCallsText(): string {
+    return mgr.query.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+  }
+
+  // DISPATCH-001（🔴 MUST-FIX 守門）：DB_TYPE='mssql' → 確實呼叫 sp_getapplock（非略過）
+  it('TS-MSSQL-P1C-DISPATCH-001：mssql 時 tryAutoAdvance 呼叫 sp_getapplock（非二元 gate 略過）', async () => {
+    process.env.DB_TYPE = 'mssql';
+    mgr.query.mockResolvedValue([{ lockResult: 0 }]); // 取鎖成功
+
+    const res = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    expect(queryCallsText()).toContain('sp_getapplock');
+    expect(res.autoAdvanced).toBe(true);
+  });
+
+  // DISPATCH-002：DB_TYPE='postgres' 不回歸（仍呼叫 pg_advisory_xact_lock）
+  it('TS-MSSQL-P1C-DISPATCH-002：postgres 仍呼叫 pg_advisory_xact_lock', async () => {
+    process.env.DB_TYPE = 'postgres';
+    mgr.query.mockResolvedValue([]);
+
+    await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    expect(queryCallsText()).toContain('pg_advisory_xact_lock');
+  });
+
+  // DISPATCH-003：DB_TYPE='sqlite'（other）不回歸（仍跳過鎖，不含鎖 SQL）
+  it('TS-MSSQL-P1C-DISPATCH-003：sqlite 跳過鎖（mgr.query 不含鎖 SQL）', async () => {
+    process.env.DB_TYPE = 'sqlite';
+
+    const res = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    expect(mgr.query).not.toHaveBeenCalled();
+    expect(res.autoAdvanced).toBe(true);
+  });
+
+  // DISPATCH-004：三分支「成功取鎖」對外回傳值形狀一致
+  it('TS-MSSQL-P1C-DISPATCH-004：pg/mssql/sqlite 取鎖成功 → 回傳形狀完全一致', async () => {
+    const expected = { autoAdvanced: true, newStage: 'approval', autoAdvanceFailReason: null };
+
+    process.env.DB_TYPE = 'postgres';
+    mgr.query.mockResolvedValue([]);
+    const pg = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    process.env.DB_TYPE = 'mssql';
+    mgr.query.mockReset();
+    mgr.query.mockResolvedValue([{ lockResult: 1 }]);
+    const ms = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    process.env.DB_TYPE = 'sqlite';
+    const lite = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    expect(pg).toMatchObject(expected);
+    expect(ms).toMatchObject(expected);
+    expect(lite).toMatchObject(expected);
+  });
+
+  // DISPATCH-005：pg 55P03 與 mssql -1 逾時降級 no-op 之回傳形狀一致（不帶 failReason、不 rethrow）
+  it('TS-MSSQL-P1C-DISPATCH-005：pg 55P03 與 mssql -1 逾時降級形狀一致', async () => {
+    const expected = { autoAdvanced: false, newStage: null, autoAdvanceFailReason: null };
+
+    process.env.DB_TYPE = 'postgres';
+    mgr.query
+      .mockResolvedValueOnce([]) // SET LOCAL lock_timeout
+      .mockRejectedValueOnce({ code: '55P03', message: 'lock not available' });
+    const pg = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    process.env.DB_TYPE = 'mssql';
+    mgr.query.mockReset();
+    mgr.query.mockResolvedValue([{ lockResult: -1 }]); // sp_getapplock 逾時
+    const ms = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
+
+    expect(pg).toMatchObject(expected);
+    expect(ms).toMatchObject(expected);
+    expect(stageTransition.advanceToInMgr).not.toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================
