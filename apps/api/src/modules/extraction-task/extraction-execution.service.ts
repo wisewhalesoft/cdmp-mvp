@@ -178,20 +178,26 @@ export class ExtractionExecutionService {
       const allColumns = [...columnNames, '_cdmp_extracted_at'];
       const primaryKeyCol = metadata.find((c) => c.isPrimary)?.name || null;
 
-      // Fast path: full mode + streaming-capable source (MSSQL) + COPY-capable
-      // target (PostgreSQL). A single forward cursor (O(n)) replaces OFFSET
-      // pagination (O(n²)), and COPY FROM STDIN replaces per-batch INSERT.
-      // Any other combination keeps the original readBatch + insertBatch loop.
+      // Fast path: full mode + streaming-capable source (MSSQL) + bulk-load-capable
+      // target. A single forward cursor (O(n)) replaces OFFSET pagination (O(n²)),
+      // and a long-lived bulk writer replaces per-batch INSERT. The target writer
+      // is PG `COPY FROM STDIN` (supportsCopy) OR MSSQL tedious bulk (supportsBulk)
+      // — AD-E07-41 P4e (DISPATCH): without recognising supportsBulk here, the new
+      // MSSQL bulk mechanism would be dead code (never dispatched). Any other
+      // combination keeps the original readBatch + insertBatch loop.
+      const targetSupportsBulkLoad =
+        this.rawDataService.supportsCopy() ||
+        this.rawDataService.supportsBulk?.() === true;
       const canStream =
         task.mode === 'full' &&
         !!task.raw_table_name &&
-        this.rawDataService.supportsCopy() &&
+        targetSupportsBulkLoad &&
         typeof this.executor.supportsStreaming === 'function' &&
         typeof this.executor.streamBatches === 'function' &&
         (await this.executor.supportsStreaming(task.datasource_id));
 
       if (canStream) {
-        extractedCount = await this.streamExtractWithCopy(task, totalCount, allColumns);
+        extractedCount = await this.streamExtractWithWriter(task, totalCount, allColumns);
       } else {
         while (true) {
           const batch = await this.executor.readBatch({
@@ -295,19 +301,20 @@ export class ExtractionExecutionService {
 
   /**
    * Full-mode fast path: stream the whole source table over one forward cursor
-   * and pipe each batch into a single long-lived COPY FROM STDIN writer.
-   * Progress is persisted at most ~once per second (vs once per batch) to avoid
-   * thousands of AppDB UPDATEs. Returns the number of rows extracted.
+   * and pipe each batch into a single long-lived bulk-load writer — PG
+   * `COPY FROM STDIN` (openCopyWriter) or MSSQL tedious bulk (openBulkWriter),
+   * dispatched on the target's capability. Progress is persisted at most ~once
+   * per second (vs once per batch) to avoid thousands of AppDB UPDATEs. Returns
+   * the number of rows extracted.
    */
-  private async streamExtractWithCopy(
+  private async streamExtractWithWriter(
     task: ExtractionTask,
     totalCount: number,
     allColumns: string[],
   ): Promise<number> {
-    const writer = await this.rawDataService.openCopyWriter(
-      task.raw_table_name!,
-      allColumns,
-    );
+    const writer = this.rawDataService.supportsBulk?.() === true
+      ? await this.rawDataService.openBulkWriter(task.raw_table_name!, allColumns)
+      : await this.rawDataService.openCopyWriter(task.raw_table_name!, allColumns);
     let extractedCount = 0;
     let lastProgressAt = 0;
     try {

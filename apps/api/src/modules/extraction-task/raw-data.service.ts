@@ -51,7 +51,16 @@ export interface RawDataResponse {
 
 @Injectable()
 export class RawDataService {
+  // AD-E07-41 P4e (ISPG-GATE): the target AppDB driver is a three-state value.
+  // The old two-state `isPostgres` boolean conflated MSSQL with SQLite (a `false`
+  // for MSSQL wrongly routed createRawTable/tableExists/getTableColumns into the
+  // SQLite branch — AUTOINCREMENT / sqlite_master / PRAGMA, none valid on T-SQL).
+  // `isPostgres` is kept (derived) so the out-of-scope read paths (getRawData
+  // LIMIT/OFFSET, getColumnMetadata, getIndexedColumns) behave byte-identically
+  // for postgres/sqlite; the three write-path dependencies switch on `dbType`.
+  private readonly dbType: 'postgres' | 'mssql' | 'sqlite';
   private readonly isPostgres: boolean;
+  private readonly isMssql: boolean;
 
   constructor(
     @InjectDataSource()
@@ -63,7 +72,14 @@ export class RawDataService {
   ) {
     // Detect database type from the TypeORM DataSource driver
     const driverType = (this.dataSource.options as any).type;
-    this.isPostgres = driverType === 'postgres';
+    this.dbType =
+      driverType === 'postgres'
+        ? 'postgres'
+        : driverType === 'mssql'
+          ? 'mssql'
+          : 'sqlite';
+    this.isPostgres = this.dbType === 'postgres';
+    this.isMssql = this.dbType === 'mssql';
   }
 
   /**
@@ -184,6 +200,15 @@ export class RawDataService {
       return result[0].exists === true || result[0].exists === 't';
     }
 
+    if (this.isMssql) {
+      // MSSQL has no `sqlite_master`; OBJECT_ID is the established P1a catalog probe.
+      const result = await this.dataSource.query(
+        `SELECT OBJECT_ID('dbo.' + @0, 'U') AS oid`,
+        [rawTableName],
+      );
+      return result[0].oid != null;
+    }
+
     const result = await this.dataSource.query(
       `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
       [rawTableName],
@@ -202,6 +227,18 @@ export class RawDataService {
         `SELECT column_name FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = $1
          ORDER BY ordinal_position`,
+        [rawTableName],
+      );
+      return columns.map((col: any) => col.column_name);
+    }
+
+    if (this.isMssql) {
+      // MSSQL has no PRAGMA; INFORMATION_SCHEMA must be UPPERCASE under BIN
+      // collation (I-MSSQL-CATALOG-CASE-01).
+      const columns = await this.dataSource.query(
+        `SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @0
+         ORDER BY ORDINAL_POSITION`,
         [rawTableName],
       );
       return columns.map((col: any) => col.column_name);
@@ -238,6 +275,8 @@ export class RawDataService {
     if (!hasPrimary) {
       if (this.isPostgres) {
         columnDefs.push('_cdmp_id SERIAL PRIMARY KEY');
+      } else if (this.isMssql) {
+        columnDefs.push('_cdmp_id INT IDENTITY(1,1) PRIMARY KEY');
       } else {
         columnDefs.push('_cdmp_id INTEGER PRIMARY KEY AUTOINCREMENT');
       }
@@ -247,7 +286,9 @@ export class RawDataService {
       const safeName = this.sanitizeColumnName(col.name);
       const mappedType = this.isPostgres
         ? this.mapToPostgresType(col.dataType)
-        : this.mapToSqliteType(col.dataType);
+        : this.isMssql
+          ? this.mapToMssqlType(col.dataType)
+          : this.mapToSqliteType(col.dataType);
       // Single PK can use inline PRIMARY KEY; composite PK uses table-level constraint
       if (col.isPrimary && primaryColumns.length === 1) {
         columnDefs.push(`"${safeName}" ${mappedType} PRIMARY KEY`);
@@ -259,6 +300,8 @@ export class RawDataService {
     // Always add _cdmp_extracted_at
     if (this.isPostgres) {
       columnDefs.push(`_cdmp_extracted_at TIMESTAMP DEFAULT NOW()`);
+    } else if (this.isMssql) {
+      columnDefs.push(`_cdmp_extracted_at DATETIME2 DEFAULT SYSUTCDATETIME()`);
     } else {
       columnDefs.push(`_cdmp_extracted_at TEXT DEFAULT (datetime('now'))`);
     }
@@ -269,8 +312,17 @@ export class RawDataService {
       columnDefs.push(`PRIMARY KEY (${pkNames})`);
     }
 
-    const sql = `CREATE TABLE IF NOT EXISTS "${rawTableName}" (${columnDefs.join(', ')})`;
-    await this.dataSource.query(sql);
+    const columnsSql = columnDefs.join(', ');
+    if (this.isMssql) {
+      // T-SQL has no `CREATE TABLE IF NOT EXISTS`; guard with OBJECT_ID instead.
+      await this.dataSource.query(
+        `IF OBJECT_ID('dbo.${rawTableName}', 'U') IS NULL CREATE TABLE "${rawTableName}" (${columnsSql})`,
+      );
+    } else {
+      await this.dataSource.query(
+        `CREATE TABLE IF NOT EXISTS "${rawTableName}" (${columnsSql})`,
+      );
+    }
   }
 
   /**
@@ -369,6 +421,16 @@ export class RawDataService {
    */
   supportsCopy(): boolean {
     return this.isPostgres;
+  }
+
+  /**
+   * Whether the target AppDB supports typed bulk-load (SQL Server, via the
+   * `mssql` package `Table` + `request.bulk()`). Mutually exclusive with
+   * `supportsCopy()` — postgres uses COPY, mssql uses bulk, sqlite (test env)
+   * falls back to parameterized INSERT.
+   */
+  supportsBulk(): boolean {
+    return this.isMssql;
   }
 
   /**
@@ -476,6 +538,167 @@ export class RawDataService {
         try { await queryRunner.release(); } catch { /* ignore */ }
       },
     };
+  }
+
+  /**
+   * Open a typed bulk-load writer for a SQL Server raw table (MSSQL only), using
+   * the `mssql` package `Table` + `request.bulk()`. Returns the same `CopyWriter`
+   * shape as `openCopyWriter` so the orchestrator can dispatch on capability with
+   * an identical call site (writeRows / finish / abort).
+   *
+   * AD-E07-41 P4e probe conclusions (real SQL Server, see impl log §4 Probe):
+   *  - BULKWRITE-GATE-001: TypeORM mssql `QueryRunner.databaseConnection` is
+   *    `undefined` (unlike PG's node-postgres client), so the PG手法 does NOT
+   *    transfer. `request.bulk()` also requires the `Table` to be built from the
+   *    *same* `mssql` module instance that owns the request (getTediousType maps
+   *    by object identity — a foreign instance throws
+   *    `c.type.declaration is not a function`). We therefore open a dedicated
+   *    `mssql.ConnectionPool` here (the documented fallback), matching PG's
+   *    dedicated-queryRunner lifecycle.
+   *  - BATCH-GATE-001: multiple independent `request.bulk()` calls against the
+   *    same physical table succeed and accumulate, so each `writeRows` triggers a
+   *    fresh bulk over a fresh `Table` → memory stays bounded (no single
+   *    accumulating in-memory structure).
+   *  - PROBE-013: bcp rejects a bulk column type that does not match the target
+   *    (`Invalid column type from bcp client`); it does NOT silently truncate. We
+   *    therefore resolve each column's physical type from INFORMATION_SCHEMA and
+   *    declare the bulk Table to match exactly.
+   *
+   * 🔴 NEVER routes values through the PG COPY TEXT escaper (which turns a real
+   * tab into the two literal characters backslash+t); that would corrupt real
+   * control characters under the typed bulk protocol. Value coercion here is a
+   * separate, escape-free function (NOESCAPE-GATE-001 / STATIC-003).
+   */
+  async openBulkWriter(
+    rawTableName: string,
+    columns: string[],
+  ): Promise<CopyWriter> {
+    this.validateTableName(rawTableName);
+    if (!this.isMssql) {
+      throw new Error('openBulkWriter is only supported for MSSQL (SQL Server) targets');
+    }
+    if (columns.length === 0) {
+      throw new Error(`Cannot open bulk writer for "${rawTableName}" with no columns`);
+    }
+
+    // Lazy require (mirrors mssql-executor.ts) so non-mssql environments never load it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sql = require('mssql');
+
+    const safeCols = columns.map((c) => this.sanitizeColumnName(c));
+
+    // Resolve each target column's physical type so the bulk Table declaration
+    // matches the raw table exactly (PROBE-013).
+    const typeRows: any[] = await this.dataSource.query(
+      `SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type
+         FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @0`,
+      [rawTableName],
+    );
+    const typeByName = new Map<string, string>();
+    for (const r of typeRows) {
+      typeByName.set(String(r.column_name).toLowerCase(), String(r.data_type).toLowerCase());
+    }
+    const colTypes = safeCols.map((c) =>
+      this.mapToBulkColumnType(sql, typeByName.get(c.toLowerCase()) ?? 'nvarchar'),
+    );
+
+    const pool = new sql.ConnectionPool(this.buildMssqlConnectionConfig());
+    await pool.connect();
+
+    const buildTable = () => {
+      const table = new sql.Table(rawTableName);
+      table.create = false;
+      safeCols.forEach((c, i) => {
+        table.columns.add(c, colTypes[i].type, { nullable: true });
+      });
+      return table;
+    };
+
+    // Typed-protocol value coercion (NO backslash-escaping — see class note).
+    // NULL/undefined → SQL NULL; string columns stringify non-strings (e.g. a
+    // numeric source column mapped to NVARCHAR(MAX)); empty string stays ''.
+    const coerce = (value: any, isStringCol: boolean): any => {
+      if (value === undefined || value === null) return null;
+      if (!isStringCol) return value;
+      if (Buffer.isBuffer(value)) return value.toString();
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === 'object') return JSON.stringify(value);
+      return typeof value === 'string' ? value : String(value);
+    };
+
+    let closed = false;
+    const closePool = async (): Promise<void> => {
+      if (closed) return;
+      closed = true;
+      try { await pool.close(); } catch { /* ignore */ }
+    };
+
+    return {
+      async writeRows(rows: Record<string, any>[]): Promise<void> {
+        if (rows.length === 0) return;
+        const table = buildTable();
+        for (const row of rows) {
+          table.rows.add(...safeCols.map((c, i) => coerce(row[c], colTypes[i].isString)));
+        }
+        await pool.request().bulk(table);
+      },
+      async finish(): Promise<void> {
+        await closePool();
+      },
+      async abort(): Promise<void> {
+        // Never throws (hard contract). Already-flushed batches remain in the
+        // target table (each writeRows is an independent bulk); no rollback.
+        await closePool();
+      },
+    };
+  }
+
+  /** Build an `mssql` ConnectionPool config from the TypeORM DataSource options. */
+  private buildMssqlConnectionConfig(): any {
+    const o: any = this.dataSource.options;
+    return {
+      server: o.host,
+      port: o.port,
+      user: o.username,
+      password: o.password,
+      database: o.database,
+      options: {
+        encrypt: o.options?.encrypt ?? false,
+        trustServerCertificate: o.options?.trustServerCertificate ?? true,
+        // Pin useUTC (tedious/mssql-executor default) so a DATETIME2 value written
+        // via bulk stores the same wall-clock the app reads back — a JS Date is a
+        // UTC instant, and a write/read tz mismatch would shift datetime columns.
+        useUTC: true,
+      },
+    };
+  }
+
+  /**
+   * Map a raw-table physical `DATA_TYPE` (from INFORMATION_SCHEMA) to the `mssql`
+   * bulk `Table` column type + whether it is a string column (needs stringify
+   * coercion). Kept in sync with `mapToMssqlType` (the DDL side): strings and the
+   * decimal/numeric/money family are all NVARCHAR(MAX) in the raw table.
+   */
+  private mapToBulkColumnType(sql: any, dataType: string): { type: any; isString: boolean } {
+    const lower = dataType.toLowerCase();
+    if (lower === 'bigint') return { type: sql.BigInt, isString: false };
+    if (lower === 'tinyint') return { type: sql.TinyInt, isString: false };
+    if (lower === 'smallint') return { type: sql.SmallInt, isString: false };
+    if (lower === 'int') return { type: sql.Int, isString: false };
+    if (lower === 'bit') return { type: sql.Bit, isString: false };
+    if (lower === 'float') return { type: sql.Float, isString: false };
+    if (lower === 'real') return { type: sql.Real, isString: false };
+    if (lower === 'uniqueidentifier') return { type: sql.UniqueIdentifier, isString: false };
+    if (lower === 'time') return { type: sql.Time, isString: false };
+    if (lower.includes('datetime') || lower === 'date') {
+      return { type: sql.DateTime2, isString: false };
+    }
+    if (lower.includes('binary') || lower === 'image') {
+      return { type: sql.VarBinary(sql.MAX), isString: false };
+    }
+    // varchar/nvarchar/char/nchar/text/ntext/xml + decimal/numeric/money → NVARCHAR(MAX)
+    return { type: sql.NVarChar(sql.MAX), isString: true };
   }
 
   /**
@@ -651,5 +874,78 @@ export class RawDataService {
     }
     // Default: VARCHAR for char, varchar, nchar, nvarchar, etc.
     return 'TEXT';
+  }
+
+  /**
+   * Map external database types to SQL Server (MSSQL) raw-staging table types.
+   * Mirrors the `lower.includes(...)` structure of the postgres/sqlite mappers.
+   *
+   * AD-E07-41 P4e design constraints:
+   *  - Strings → `NVARCHAR(MAX)`: source lengths are unknown (ColumnMetadata has
+   *    no length/precision), so avoid truncation; N-prefix keeps Chinese/Unicode
+   *    correct under BIN collation (I-MSSQL-COLLATE-01).
+   *  - decimal/numeric/money → `NVARCHAR(MAX)` (TYPEMAP-003 / MUST-FIX): MSSQL has
+   *    no unbounded decimal, and a fixed `DECIMAL(38,10)` would re-open the
+   *    FINDING-P4D-01 precision-overflow defect family at the raw DDL level. Text
+   *    preserves the source's literal precision losslessly (PG uses unbounded
+   *    NUMERIC; text is the equivalent that loses no precision on MSSQL).
+   *  - datetime family → `DATETIME2` (not the deprecated lower-precision datetime).
+   *  - `_cdmp_id` uses `IDENTITY(1,1)`, `_cdmp_extracted_at` uses `SYSUTCDATETIME()`
+   *    (see createRawTable) — neither belongs here.
+   */
+  private mapToMssqlType(dataType: string): string {
+    const lower = dataType.toLowerCase();
+    if (lower.includes('serial')) {
+      return 'INT';
+    }
+    if (lower.includes('uniqueidentifier') || lower.includes('uuid')) {
+      return 'UNIQUEIDENTIFIER';
+    }
+    if (lower.includes('bigint')) {
+      return 'BIGINT';
+    }
+    if (lower.includes('tinyint')) {
+      return 'TINYINT';
+    }
+    if (lower.includes('smallint')) {
+      return 'SMALLINT';
+    }
+    if (lower.includes('int')) {
+      return 'INT';
+    }
+    if (lower.includes('bool') || lower.includes('bit')) {
+      return 'BIT';
+    }
+    if (
+      lower.includes('decimal') ||
+      lower.includes('numeric') ||
+      lower.includes('money')
+    ) {
+      // FINDING-P4D-01 同型缺陷家族防線：文字保真，不映射固定精度 DECIMAL(p,s)。
+      return 'NVARCHAR(MAX)';
+    }
+    if (lower.includes('float') || lower.includes('double')) {
+      return 'FLOAT';
+    }
+    if (lower.includes('real')) {
+      return 'REAL';
+    }
+    if (
+      lower.includes('binary') ||
+      lower.includes('image') ||
+      lower.includes('bytea') ||
+      lower.includes('blob')
+    ) {
+      return 'VARBINARY(MAX)';
+    }
+    if (lower.includes('datetime') || lower.includes('timestamp') || lower === 'date') {
+      return 'DATETIME2';
+    }
+    if (lower === 'time') {
+      return 'TIME';
+    }
+    // Default: NVARCHAR(MAX) covers varchar/nvarchar/char/nchar/text/ntext/xml
+    // and any unrecognised type (wide, lenient — matches the other two mappers).
+    return 'NVARCHAR(MAX)';
   }
 }
