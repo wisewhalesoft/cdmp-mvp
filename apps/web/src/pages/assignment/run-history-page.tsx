@@ -204,7 +204,7 @@ export function RunHistoryPage() {
       <main className="flex-1 p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-gray-500">
-            月份 <code className="font-mono text-primary">{toYYYYMM(toYYYYMMRaw(ym))}</code> 之所有月跑。可選 2 個進行比對。
+            月份 <span className="font-medium text-primary">{toYYYYMM(toYYYYMMRaw(ym))}</span> 之所有月跑。可選 2 個進行比對。
           </p>
           <div className="flex items-center gap-2">
             <Button
