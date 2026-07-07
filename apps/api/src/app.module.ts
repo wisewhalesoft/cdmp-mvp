@@ -59,6 +59,9 @@ import { ObCardType } from './database/entities/ob-card-type.entity';
 // P1 B5：F075 / F076 POOLDATA 篩選欄位白名單 + 類別型可選值 entity
 import { PooldataFieldWhitelist } from './database/entities/pooldata-field-whitelist.entity';
 import { PooldataFieldOption } from './database/entities/pooldata-field-option.entity';
+// AD-E07-40 P2a：自建 T-SQL 佇列 QueueJob entity（取代 pg-boss）。所有 driver 通用建立，
+//   API 程序之 RunQueueProducer.send/cancel 需 DataSource 存取此表（PG 上為無害空表，見 AD §9.3）。
+import { QueueJob } from './database/entities/queue-job.entity';
 
 const E07_ENTITIES = [
   ObCodeDf, ObListDefinition, ObDeptPct, ObEmplSet,
@@ -80,6 +83,8 @@ const ALL_ENTITIES = [
   EtlPipeline, EtlPipelineLog, EtlPipelineVersion,
   Role,
   ...E07_ENTITIES,
+  // AD-E07-40 P2a：佇列基礎建設 entity（非 E07 業務表；三 dialect 通用建立）。
+  QueueJob,
 ];
 
 @Module({

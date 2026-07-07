@@ -216,13 +216,18 @@ async function countTables(schema: string): Promise<number> {
   return Number(r[0].n);
 }
 
+// AD-E07-40 P2a：queue_job（佇列基礎建設表）非 P1b2 之 36 表業務 baseline 範疇，且其兩軌索引刻意分歧
+//   （synchronize 一般索引 vs migration filtered index，見 AD-E07-40-P2a-test SCHEMA-010），
+//   不可納入本套件之 parity 比對；一律於 dbo 讀取端排除，改由 P2a 專屬套件獨立驗證。
+const EXCLUDED_TABLES = "('typeorm_migrations', 'queue_job')";
+
 async function fetchColumns(schema: string): Promise<ColumnRow[]> {
   return ds!.query(
     `SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE,
             CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE,
             DATETIME_PRECISION, IS_NULLABLE, COLUMN_DEFAULT
      FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA = @0 AND TABLE_NAME <> 'typeorm_migrations'`,
+     WHERE TABLE_SCHEMA = @0 AND TABLE_NAME NOT IN ${EXCLUDED_TABLES}`,
     [schema],
   );
 }
@@ -237,7 +242,7 @@ async function fetchIndexRows(schema: string): Promise<IndexColumnRow[]> {
      JOIN sys.schemas s ON t.schema_id = s.schema_id
      JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND ic.is_included_column = 0
      JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
-     WHERE s.name = @0 AND i.index_id > 0 AND t.name <> 'typeorm_migrations'
+     WHERE s.name = @0 AND i.index_id > 0 AND t.name NOT IN ${EXCLUDED_TABLES}
      ORDER BY t.name, i.name, ic.key_ordinal`,
     [schema],
   );
@@ -246,7 +251,7 @@ async function fetchIndexRows(schema: string): Promise<IndexColumnRow[]> {
 async function fetchTableNames(schema: string): Promise<string[]> {
   const rows: Array<{ table_name: string }> = await ds!.query(
     `SELECT TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES
-     WHERE TABLE_SCHEMA = @0 AND TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME <> 'typeorm_migrations'`,
+     WHERE TABLE_SCHEMA = @0 AND TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME NOT IN ${EXCLUDED_TABLES}`,
     [schema],
   );
   return rows.map((r) => r.table_name);
@@ -323,17 +328,18 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     ensureMssql(ctx);
     const rows: Array<{ table_name: string }> = await ds!.query(
       `SELECT TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES
-       WHERE TABLE_SCHEMA='dbo' AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME <> 'typeorm_migrations'`,
+       WHERE TABLE_SCHEMA='dbo' AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME NOT IN ${EXCLUDED_TABLES}`,
     );
     expect(rows.length).toBe(EXPECTED_ENTITY_COUNT);
     expect(rows.length).toBe(ds!.entityMetadatas.length);
   });
 
-  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 2 筆（schema + reference-data baseline），第二次 migration:run 為 no-op', async (ctx) => {
+  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 3 筆（schema + reference-data + queue_job baseline），第二次 migration:run 為 no-op', async (ctx) => {
     ensureMssql(ctx);
-    // AD-E07-39 P1b3 新增 MssqlBaselineReferenceData（migrations/mssql/*1751884800001*）→ mssql baseline 由 1 支變 2 支。
+    // AD-E07-39 P1b3 新增 MssqlBaselineReferenceData（*1751884800001*）→ 由 1 支變 2 支；
+    // AD-E07-40 P2a 再新增 MssqlQueueJobSchema（*1751884800002*）→ 2 支變 3 支（皆 migrations/mssql/* glob 自動載入）。
     const before = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(before[0].n)).toBe(2);
+    expect(Number(before[0].n)).toBe(3);
 
     const second = runTypeormCli('migration:run');
     expect(second.status, `stderr=${second.stderr}`).toBe(0);
@@ -341,7 +347,7 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(out).toMatch(/No migrations are pending/i);
 
     const after = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(after[0].n)).toBe(2);
+    expect(Number(after[0].n)).toBe(3);
   });
 
   it('TS-MSSQL-P1B2-BASELINE-004：CLI datasource synchronize=false 且以 NODE_ENV=production 執行（無 synchronize 混淆）', (ctx) => {
@@ -529,11 +535,13 @@ describe('AD-E07-39 P1b2 TIERFN', () => {
 // ===========================================================================
 describe('AD-E07-39 P1b2 FILTER', () => {
   const countFiltered = async (schema: string) => {
+    // AD-E07-40 P2a：排除 queue_job——其 baseline migration 刻意含 filtered index（claim/sweep 熱路徑），
+    //   非 36 表業務 baseline 之 F-2「無 filtered index」範疇（由 P2a SCHEMA-012 獨立驗證）。
     const r = await ds!.query(
       `SELECT COUNT(*) AS n FROM sys.indexes i
        JOIN sys.tables t ON i.object_id = t.object_id
        JOIN sys.schemas s ON t.schema_id = s.schema_id
-       WHERE s.name = @0 AND i.has_filter = 1`,
+       WHERE s.name = @0 AND i.has_filter = 1 AND t.name NOT IN ${EXCLUDED_TABLES}`,
       [schema],
     );
     return Number(r[0].n);
@@ -602,7 +610,7 @@ describe('AD-E07-39 P1b2 CASE-BASELINE', () => {
     const rows = await ds!.query(
       `SELECT t.name AS name FROM sys.tables t
        JOIN sys.schemas s ON t.schema_id = s.schema_id
-       WHERE s.name = 'dbo' AND t.name <> 'typeorm_migrations'`,
+       WHERE s.name = 'dbo' AND t.name NOT IN ${EXCLUDED_TABLES}`,
     );
     expect(rows.length).toBe(EXPECTED_ENTITY_COUNT);
     for (const r of rows) expect(r.name, r.name).toMatch(/^[a-z0-9_]+$/);
@@ -714,19 +722,17 @@ describe('AD-E07-39 P1b2 STATIC', () => {
     expect(dsSrc).toMatch(/'migrations',\s*'mssql'/);
   });
 
-  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉兩支 baseline 後 dbo 全 36 表與 migration 紀錄乾淨移除', async (ctx) => {
+  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉三支 baseline 後 dbo 全表與 migration 紀錄乾淨移除', async (ctx) => {
     ensureMssql(ctx);
-    // P1b3 起 mssql 有 2 支 baseline（schema + reference-data）→ 需 revert 兩次：
-    //   #1 逆轉 reference-data（down 為 no-op，僅移除該筆紀錄，表仍在）；#2 逆轉 schema（DROP 全 36 表）。
-    const revert1 = runTypeormCli('migration:revert');
-    expect(revert1.status, `#1 stderr=${revert1.stderr}`).toBe(0);
-    const out1 = `${revert1.stdout ?? ''}${revert1.stderr ?? ''}`;
-    expect(out1).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
-    const revert2 = runTypeormCli('migration:revert');
-    expect(revert2.status, `#2 stderr=${revert2.stderr}`).toBe(0);
-    const out2 = `${revert2.stdout ?? ''}${revert2.stderr ?? ''}`;
-    expect(out2).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
-    // 兩支 baseline 皆逆轉：36 業務表移除、typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
+    // P1b3 起 mssql 有 2 支 baseline；AD-E07-40 P2a 再加 queue_job → 3 支 → 需 revert 三次（TypeORM 由新到舊逆轉）：
+    //   #1 逆轉 queue_job（DROP queue_job）；#2 逆轉 reference-data（down 為 no-op，僅移除紀錄）；#3 逆轉 schema（DROP 全 36 表）。
+    for (let i = 1; i <= 3; i++) {
+      const revert = runTypeormCli('migration:revert');
+      expect(revert.status, `#${i} stderr=${revert.stderr}`).toBe(0);
+      const out = `${revert.stdout ?? ''}${revert.stderr ?? ''}`;
+      expect(out).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
+    }
+    // 三支 baseline 皆逆轉：36 業務表 + queue_job 移除、typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
     const business = await countTables(DBO); // 含 typeorm_migrations
     const migRows = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
     expect(Number(migRows[0].n)).toBe(0);

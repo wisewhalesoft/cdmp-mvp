@@ -702,7 +702,9 @@ describe('AD-E07-39 P1b1 ENTITY（D1）', () => {
       const appDs = moduleRef.get(DataSource);
       expect(appDs.isInitialized).toBe(true);
       // 各業務模組 forFeature 解析成功（否則 compile 於 provider 實例化即拋 EntityMetadataNotFound）。
-      expect(appDs.entityMetadatas.length).toBe(EXPECTED_ENTITY_COUNT);
+      // AD-E07-40 P2a：app.module ALL_ENTITIES 於 36 個業務 entity 之外新增 1 個佇列基礎建設 entity（QueueJob）→ 37。
+      //   本區域測「真實 AppModule」故用 +1；P1b1 之本地 ALL_ENTITIES（36 業務表 baseline）之計數不受影響。
+      expect(appDs.entityMetadatas.length).toBe(EXPECTED_ENTITY_COUNT + 1);
       expect((appDs.options as { type: string }).type).toBe('mssql');
     } finally {
       await moduleRef?.close();
@@ -959,7 +961,8 @@ describe('AD-E07-39 P1b1 REG（靜態閘）', () => {
   it('TS-MSSQL-P1B1-REG-004（I-MSSQL-HELPER-SCOPE-01 延伸）：全 entity 內無重複 process.env.DB_TYPE 條件判斷', () => {
     const entitiesDir = join(__dirname, '..', 'entities');
     const files = readdirSync(entitiesDir).filter((f) => f.endsWith('.entity.ts'));
-    expect(files.length).toBe(36);
+    // AD-E07-40 P2a：新增 queue-job.entity.ts（佇列基礎建設 entity）→ 37（36 業務 + 1 佇列）。
+    expect(files.length).toBe(37);
     for (const f of files) {
       const content = readFileSync(join(entitiesDir, f), 'utf8');
       expect(content.includes('process.env.DB_TYPE'), f).toBe(false);

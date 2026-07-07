@@ -145,9 +145,10 @@ async function tableCount(name: string): Promise<number> {
 }
 
 async function dboBusinessTableCount(): Promise<number> {
+  // AD-E07-40 P2a：queue_job（佇列基礎建設表）非 36 表業務 baseline 範疇（由 P2a 專屬套件驗證），一律排除。
   const r = await ds!.query(
     `SELECT COUNT(*) AS n FROM sys.tables t JOIN sys.schemas s ON t.schema_id=s.schema_id
-     WHERE s.name='dbo' AND t.name <> 'typeorm_migrations'`,
+     WHERE s.name='dbo' AND t.name NOT IN ('typeorm_migrations', 'queue_job')`,
   );
   return Number(r[0].n);
 }
@@ -239,14 +240,14 @@ describe('AD-E07-39 P1b3 DIALECT', () => {
 // ALIAS（6）— B2 npm alias 修復
 // ===========================================================================
 describe('AD-E07-39 P1b3 ALIAS', () => {
-  it('TS-MSSQL-P1B3-ALIAS-001（🔴 B2 核心）：字面 npm run migration:run 對 mssql exit 0、36 表、2 筆 migration', async (ctx) => {
+  it('TS-MSSQL-P1B3-ALIAS-001（🔴 B2 核心）：字面 npm run migration:run 對 mssql exit 0、36 表、3 筆 migration', async (ctx) => {
     ensureMssql(ctx);
     expect(migrationRun!.status, `stderr=${migrationRun!.stderr}`).toBe(0);
     expect(ok(migrationRun)).toMatch(/has been executed successfully/);
     expect(ok(migrationRun)).not.toMatch(/17750|Could not load the DLL/i);
     expect(await dboBusinessTableCount()).toBe(36);
-    // P1b3 移植 reference-data → 2 支 mssql baseline（schema + reference-data）。
-    expect(await tableCount('typeorm_migrations')).toBe(2);
+    // P1b3 移植 reference-data → 2 支；AD-E07-40 P2a 再加 queue_job baseline → 3 支 mssql baseline（皆 glob 自動載入）。
+    expect(await tableCount('typeorm_migrations')).toBe(3);
   });
 
   it('TS-MSSQL-P1B3-ALIAS-003：字面 npm run seed 對 mssql exit 0（4 帳號）', async (ctx) => {
@@ -687,16 +688,19 @@ describe('AD-E07-39 P1b3 ALIAS（破壞性，末端執行）', () => {
     expect(await tableCount('ob_levelcard_score')).toBe(SEED.score.length);
     expect(await tableCount('roles')).toBe(2);
     expect(await tableCount('pooldata_field_option')).toBe(186);
-    expect(await tableCount('typeorm_migrations')).toBe(2);
+    expect(await tableCount('typeorm_migrations')).toBe(3);
   });
 
-  it('TS-MSSQL-P1B3-ALIAS-002：字面 npm run migration:revert 對稱可用（逆轉兩支 baseline → dbo 淨空）', async (ctx) => {
+  it('TS-MSSQL-P1B3-ALIAS-002：字面 npm run migration:revert 對稱可用（逆轉三支 baseline → dbo 淨空）', async (ctx) => {
     ensureMssql(ctx);
-    const r1 = runNpm('migration:revert'); // reference-data（down no-op）
+    // AD-E07-40 P2a：3 支 baseline → 逆轉三次（TypeORM 由新到舊）：queue_job → reference-data（down no-op）→ schema（DROP 全表）。
+    const r1 = runNpm('migration:revert'); // queue_job（DROP queue_job）
     expect(r1.status, `#1 stderr=${r1.stderr}`).toBe(0);
-    const r2 = runNpm('migration:revert'); // schema（DROP 全表）
+    const r2 = runNpm('migration:revert'); // reference-data（down no-op）
     expect(r2.status, `#2 stderr=${r2.stderr}`).toBe(0);
-    expect(ok(r1) + ok(r2)).not.toMatch(/17750|Could not load the DLL|QueryFailedError/i);
+    const r3 = runNpm('migration:revert'); // schema（DROP 全表）
+    expect(r3.status, `#3 stderr=${r3.stderr}`).toBe(0);
+    expect(ok(r1) + ok(r2) + ok(r3)).not.toMatch(/17750|Could not load the DLL|QueryFailedError/i);
     expect(await dboBusinessTableCount()).toBe(0);
     expect(await tableCount('typeorm_migrations')).toBe(0);
   });
