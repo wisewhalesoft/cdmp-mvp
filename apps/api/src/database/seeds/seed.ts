@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from '../entities/user.entity';
 import { ObAssignConfig } from '../entities/ob-assign-config.entity';
+import { seedConnectionOptions, isMssql } from './seed-connection';
 
 const SEED_ACCOUNTS = [
   {
@@ -56,17 +57,14 @@ const SEED_ASSIGN_CONFIGS: Array<{
 }> = [];
 
 async function seed() {
-  const dbType = process.env.DB_TYPE || 'postgres';
+  // AD-E07-39 P1b3：DataSource 依 DB_TYPE 切 postgres / mssql（原硬編碼 'postgres' 無視 DB_TYPE）。
+  // mssql 部署走 bootstrap（migration:run 已建表）→ 不 synchronize（避免對既有 baseline schema 產生
+  //   非預期 ALTER）；postgres / sqlite 維持 synchronize:true 之既有 dev 行為（dev DB 靠 synchronize 建表）。
   const dataSource = new DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    username: process.env.DB_USERNAME || 'cdmp',
-    password: process.env.DB_PASSWORD || 'cdmp_secret',
-    database: process.env.DB_NAME || 'cdmp_dev',
+    ...seedConnectionOptions(),
     entities: [User, ObAssignConfig],
-    synchronize: true,
-  });
+    synchronize: !isMssql(),
+  } as any);
 
   await dataSource.initialize();
   console.log('Database connected.');

@@ -33,8 +33,24 @@
  */
 
 import { DataSource, QueryRunner } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { seedConnectionOptions, pquery, top1 } from './seed-connection';
+
+/**
+ * 可攜 NULL-safe 自然鍵條件（取代 PG 專屬 `IS NOT DISTINCT FROM`）：
+ *   - value 為 NULL → 產生 `col IS NULL`（不綁參數）
+ *   - value 非 NULL → 產生 `col = ?`（綁值）
+ * 語意等同 IS NOT DISTINCT FROM（NULL=NULL 相等），且三 driver 皆可攜。
+ * ⚠️ 不可用 `(col = ? OR (col IS NULL AND ? IS NULL))`：PG 對「僅出現於 `? IS NULL` 的參數」無型別錨點，
+ *    會拋 `could not determine data type of parameter`（MSSQL 容忍、PG 不容忍）。
+ */
+function keyMatch(col: string, value: unknown, params: unknown[]): string {
+  if (value === null || value === undefined) return `${col} IS NULL`;
+  params.push(value);
+  return `${col} = ?`;
+}
 
 interface CardType {
   card_type: string;
@@ -134,19 +150,25 @@ export function deriveRawTableName(id: string): string {
  */
 const DEV_ADMIN_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
-async function resolveSeedUserId(qr: QueryRunner): Promise<string> {
+export async function resolveSeedUserId(qr: QueryRunner): Promise<string> {
+  const t1 = top1();
   const envEmail = process.env.ETL_SEED_USER_EMAIL?.trim();
   if (envEmail) {
-    const r = await qr.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [envEmail]);
+    const r = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM users WHERE email = ?${t1.suffix}`,
+      [envEmail],
+    );
     if (r[0]?.id) return r[0].id;
     throw new Error(
       `etl_pipelines seed 中止：ETL_SEED_USER_EMAIL='${envEmail}' 對應 user 不存在。`,
     );
   }
-  const devCheck = await qr.query(`SELECT id FROM users WHERE id = $1`, [DEV_ADMIN_UUID]);
+  const devCheck = await pquery(qr, `SELECT id FROM users WHERE id = ?`, [DEV_ADMIN_UUID]);
   if (devCheck[0]?.id) return DEV_ADMIN_UUID;
-  const fallback = await qr.query(
-    `SELECT id FROM users WHERE role='admin' AND status='active' ORDER BY created_at ASC LIMIT 1`,
+  const fallback = await pquery(
+    qr,
+    `SELECT ${t1.prefix}id FROM users WHERE role='admin' AND status='active' ORDER BY created_at ASC${t1.suffix}`,
   );
   if (fallback[0]?.id) return fallback[0].id;
   throw new Error(
@@ -220,12 +242,11 @@ async function findByKey<T>(
   const where: string[] = [];
   const params: unknown[] = [];
   for (const col of spec.keyColumns) {
-    params.push(mapped[col]);
-    // IS NOT DISTINCT FROM：NULL = NULL 視為相等（自然鍵可空欄位 NULL-safe）
-    where.push(`${col} IS NOT DISTINCT FROM $${params.length}`);
+    where.push(keyMatch(col, mapped[col], params)); // 可攜 NULL-safe
   }
   const selectCols = [...spec.keyColumns, ...spec.valueColumns].join(', ');
-  return qr.query(
+  return pquery(
+    qr,
     `SELECT ${selectCols} FROM ${spec.table} WHERE ${where.join(' AND ')}`,
     params,
   );
@@ -267,7 +288,7 @@ async function reconcileTable<T>(
       const addBind = (col: string, val: unknown) => {
         cols.push(col);
         params.push(val);
-        valueSql.push(`$${params.length}`);
+        valueSql.push('?');
       };
       for (const col of [...spec.keyColumns, ...spec.valueColumns]) {
         addBind(col, mapped[col]);
@@ -280,7 +301,8 @@ async function reconcileTable<T>(
           addBind(col, def.value);
         }
       }
-      await qr.query(
+      await pquery(
+        qr,
         `INSERT INTO ${spec.table} (${cols.join(', ')}) VALUES (${valueSql.join(', ')})`,
         params,
       );
@@ -310,15 +332,15 @@ async function reconcileTable<T>(
       const setSql: string[] = [];
       const params: unknown[] = [];
       for (const col of driftedCols) {
+        setSql.push(`${col} = ?`);
         params.push(mapped[col]);
-        setSql.push(`${col} = $${params.length}`);
       }
       const where: string[] = [];
       for (const col of spec.keyColumns) {
-        params.push(mapped[col]);
-        where.push(`${col} IS NOT DISTINCT FROM $${params.length}`);
+        where.push(keyMatch(col, mapped[col], params)); // 可攜 NULL-safe
       }
-      await qr.query(
+      await pquery(
+        qr,
         `UPDATE ${spec.table} SET ${setSql.join(', ')} WHERE ${where.join(' AND ')}`,
         params,
       );
@@ -364,9 +386,9 @@ export async function seedCardTypes(qr: QueryRunner): Promise<void> {
       status: r.status,
     }),
     extraInsert: {
-      created_at: { sql: 'NOW()' },
+      created_at: { value: new Date() },
       created_by: { value: 'PROD_SEED' },
-      updated_at: { sql: 'NOW()' },
+      updated_at: { value: new Date() },
       updated_by: { value: 'PROD_SEED' },
     },
   });
@@ -387,8 +409,8 @@ export async function seedVersions(qr: QueryRunner): Promise<void> {
       status: r.status,
     }),
     extraInsert: {
-      created_at: { sql: 'NOW()' },
-      updated_at: { sql: 'NOW()' },
+      created_at: { value: new Date() },
+      updated_at: { value: new Date() },
     },
   });
 }
@@ -420,8 +442,8 @@ export async function seedColumns(
       // column_label / match_type 不納入漂移偵測（業務可調），INSERT 時帶 seed/佔位值。
       column_label: { value: null }, // 由下方統一補（避免新列 label 漂移誤判）
       match_type: { value: 'RANGE' },
-      created_at: { sql: 'NOW()' },
-      updated_at: { sql: 'NOW()' },
+      created_at: { value: new Date() },
+      updated_at: { value: new Date() },
     },
     onInserted: (mapped) =>
       insertedKeys.push({
@@ -436,14 +458,17 @@ export async function seedColumns(
   let labelUpdated = 0;
   for (const r of rows) {
     if (r.column_label === null) continue;
-    const res = await qr.query(
+    const res = await pquery(
+      qr,
       `UPDATE ob_levelcard_column
-          SET column_label = $1, updated_at = NOW()
-        WHERE card_type = $2 AND card_version = $3 AND column_name = $4
+          SET column_label = ?, updated_at = ?
+        WHERE card_type = ? AND card_version = ? AND column_name = ?
           AND column_label IS NULL`,
-      [r.column_label, r.card_type, r.card_version, r.column_name],
+      [r.column_label, new Date(), r.card_type, r.card_version, r.column_name],
     );
-    labelUpdated += res[1] ?? 0;
+    // PROBE-001：mssql driver 之 UPDATE `qr.query()` 回傳 undefined（非 PG 的 [rows, affected] tuple）→
+    //   `res[1]` 會對 undefined 取索引而拋錯。以 optional chaining 防禦（log 筆數在 mssql 恆 0，不影響實際 UPDATE）。
+    labelUpdated += res?.[1] ?? 0;
   }
   if (labelUpdated > 0) {
     console.log(`  ob_levelcard_column: 補 column_label ${labelUpdated} 列`);
@@ -474,8 +499,8 @@ export async function seedScores(qr: QueryRunner): Promise<void> {
       score: r.score,
     }),
     extraInsert: {
-      created_at: { sql: 'NOW()' },
-      updated_at: { sql: 'NOW()' },
+      created_at: { value: new Date() },
+      updated_at: { value: new Date() },
     },
   });
 }
@@ -496,8 +521,8 @@ export async function seedLevels(qr: QueryRunner): Promise<void> {
       card_level: r.card_level,
     }),
     extraInsert: {
-      created_at: { sql: 'NOW()' },
-      updated_at: { sql: 'NOW()' },
+      created_at: { value: new Date() },
+      updated_at: { value: new Date() },
     },
   });
 }
@@ -518,13 +543,15 @@ export async function seedTiers(qr: QueryRunner): Promise<void> {
   });
 }
 
-async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
+export async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
   const rows = loadJson<EtlPipelineSeed>('etl-pipelines.json');
+  const t1 = top1();
   // 先檢查是否有任何 pipeline 需要 INSERT（避免無需 admin 也觸發 user lookup）
   let needInsert = false;
   for (const p of rows) {
-    const exists = await qr.query(
-      `SELECT 1 FROM etl_pipelines WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    const exists = await pquery(
+      qr,
+      `SELECT ${t1.prefix}1 AS one FROM etl_pipelines WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
       [p.name],
     );
     if (exists.length === 0) {
@@ -540,8 +567,9 @@ async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
   let inserted = 0;
   let skipped = 0;
   for (const p of rows) {
-    const existing = await qr.query(
-      `SELECT id FROM etl_pipelines WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    const existing = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM etl_pipelines WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
       [p.name],
     );
     if (existing.length > 0) {
@@ -549,16 +577,21 @@ async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
       console.log(`    ${p.name}: SKIP（已存在）`);
       continue;
     }
-    const inserted_pipeline = await qr.query(
-      `INSERT INTO etl_pipelines (name, description, version, step_count, status, schedule, enabled, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-       RETURNING id`,
-      [p.name, p.description, p.version, p.step_count, p.status, p.schedule, p.enabled, userId],
+    // RETURNING id（PG 專屬）→ 改於 JS 端產生 uuid 顯式帶入（PG uuid / MSSQL uniqueidentifier 皆可攜）。
+    // NOW() → JS Date bind。
+    const pipelineId = randomUUID();
+    const now = new Date();
+    await pquery(
+      qr,
+      `INSERT INTO etl_pipelines (id, name, description, version, step_count, status, schedule, enabled, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [pipelineId, p.name, p.description, p.version, p.step_count, p.status, p.schedule, p.enabled, userId, now, now],
     );
-    const pipelineId = inserted_pipeline[0].id;
-    await qr.query(
+    // $n::text（PG 專屬 cast）移除——definition 欄為 simple-json（PG text / MSSQL ntext），字串直接寫入。
+    await pquery(
+      qr,
       `INSERT INTO etl_pipeline_versions (pipeline_id, version, definition, status, change_summary, created_by, created_at)
-       VALUES ($1, $2, $3::text, $4, $5, $6, NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         pipelineId,
         p.version,
@@ -566,6 +599,7 @@ async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
         p.version_status,
         'seeded by prod-data-seed',
         userId,
+        now,
       ],
     );
     inserted++;
@@ -588,11 +622,13 @@ async function seedEtlPipelines(qr: QueryRunner): Promise<void> {
 export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
   const rows = loadJson<ExtractionTaskSeed>('extraction-tasks.json');
 
+  const t1 = top1();
   // 先檢查是否有任何 task 需 INSERT（避免無需 datasource/user 也觸發 lookup）
   let needInsert = false;
   for (const t of rows) {
-    const exists = await qr.query(
-      `SELECT id FROM extraction_tasks WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    const exists = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM extraction_tasks WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
       [t.name],
     );
     if (exists.length === 0) {
@@ -613,8 +649,9 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
   const resolveDs = async (name: string): Promise<string> => {
     const cached = dsCache.get(name);
     if (cached) return cached;
-    const r = await qr.query(
-      `SELECT id FROM datasources WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    const r = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM datasources WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
       [name],
     );
     const id: string | undefined = r[0]?.id;
@@ -631,8 +668,9 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
   let inserted = 0;
   let skipped = 0;
   for (const t of rows) {
-    const existing = await qr.query(
-      `SELECT id FROM extraction_tasks WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    const existing = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM extraction_tasks WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
       [t.name],
     );
     if (existing.length > 0) {
@@ -640,11 +678,14 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
       continue;
     }
     const datasourceId = await resolveDs(t.datasourceName);
-    await qr.query(
+    const now = new Date();
+    // 裸布林字面 `true`（MSSQL T-SQL 不接受）→ 綁定 JS boolean（pg→boolean / mssql→bit 1）。NOW()→JS Date。
+    await pquery(
+      qr,
       `INSERT INTO extraction_tasks
          (id, name, datasource_id, mode, status, source_table, source_schema,
           raw_table_name, schedule, enabled, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'scheduled', $5, $6, $7, $8, true, $9, NOW(), NOW())`,
+       VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         t.id,
         t.name,
@@ -654,7 +695,10 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
         t.sourceSchema,
         t.rawTableName,
         t.schedule,
+        true,
         userId,
+        now,
+        now,
       ],
     );
     inserted++;
@@ -682,33 +726,38 @@ export async function deriveMatchType(
   }
   let updated = 0;
   for (const k of keys) {
-    const res = await qr.query(
-      `UPDATE ob_levelcard_column AS c
+    // MSSQL 不支援 `UPDATE tbl AS alias SET ...`；改以「表名完整限定」相關子查詢（PG/MSSQL 皆可攜、無 alias）。
+    const res = await pquery(
+      qr,
+      `UPDATE ob_levelcard_column
          SET match_type = CASE
            WHEN EXISTS (
              SELECT 1 FROM ob_levelcard_score s
-              WHERE s.card_type = c.card_type AND s.card_version = c.card_version
-                AND s.column_name = c.column_name
+              WHERE s.card_type = ob_levelcard_column.card_type
+                AND s.card_version = ob_levelcard_column.card_version
+                AND s.column_name = ob_levelcard_column.column_name
                 AND s.level1 IS NOT NULL AND s.level2_s IS NOT NULL
            ) THEN 'COMPOSITE'
            WHEN EXISTS (
              SELECT 1 FROM ob_levelcard_score s
-              WHERE s.card_type = c.card_type AND s.card_version = c.card_version
-                AND s.column_name = c.column_name
+              WHERE s.card_type = ob_levelcard_column.card_type
+                AND s.card_version = ob_levelcard_column.card_version
+                AND s.column_name = ob_levelcard_column.column_name
                 AND s.level1 IS NOT NULL AND s.level2_s IS NULL
            ) THEN 'CATEGORY'
            WHEN EXISTS (
              SELECT 1 FROM ob_levelcard_score s
-              WHERE s.card_type = c.card_type AND s.card_version = c.card_version
-                AND s.column_name = c.column_name
+              WHERE s.card_type = ob_levelcard_column.card_type
+                AND s.card_version = ob_levelcard_column.card_version
+                AND s.column_name = ob_levelcard_column.column_name
                 AND s.level1 IS NULL AND s.level2_s IS NOT NULL
            ) THEN 'RANGE'
            ELSE 'RANGE'
          END
-       WHERE c.card_type = $1 AND c.card_version = $2 AND c.column_name = $3`,
+       WHERE card_type = ? AND card_version = ? AND column_name = ?`,
       [k.card_type, k.card_version, k.column_name],
     );
-    updated += res[1] ?? 0;
+    updated += res?.[1] ?? 0; // PROBE-001：mssql UPDATE 回傳 undefined，防禦性 optional chaining。
   }
   console.log(
     `  ob_levelcard_column.match_type: 對 ${keys.length} 個新列重新推導完成（${updated} 列）`,
@@ -717,16 +766,12 @@ export async function deriveMatchType(
 
 async function main(): Promise<void> {
   console.log('Prod data seed starting...');
+  // AD-E07-39 P1b3：依 DB_TYPE 切 postgres / mssql（原硬編碼 'postgres'）。seed 僅資料、synchronize:false。
   const dataSource = new DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    username: process.env.DB_USERNAME || 'cdmp',
-    password: process.env.DB_PASSWORD || 'cdmp_secret',
-    database: process.env.DB_NAME || 'cdmp_dev',
+    ...seedConnectionOptions(),
     // synchronize: false — seed 不負責 schema，僅資料；entity 不需 import
     synchronize: false,
-  });
+  } as any);
   await dataSource.initialize();
   console.log(`Connected to ${process.env.DB_NAME || 'cdmp_dev'}.`);
 

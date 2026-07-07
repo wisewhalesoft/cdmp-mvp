@@ -18,6 +18,7 @@ import { randomUUID } from 'crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CryptoUtil } from '../../common/crypto/crypto.util';
+import { seedConnectionOptions, pquery, top1 } from './seed-connection';
 
 const DEV_ADMIN_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
@@ -36,17 +37,23 @@ function loadDatasources(): DatasourceSeed[] {
   return JSON.parse(raw) as DatasourceSeed[];
 }
 
-async function resolveCreatedBy(qr: QueryRunner): Promise<string> {
+export async function resolveCreatedBy(qr: QueryRunner): Promise<string> {
+  const t1 = top1();
   const envEmail = process.env.ETL_SEED_USER_EMAIL?.trim();
   if (envEmail) {
-    const r = await qr.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [envEmail]);
+    const r = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM users WHERE email = ?${t1.suffix}`,
+      [envEmail],
+    );
     if (r[0]?.id) return r[0].id;
     throw new Error(`seed-datasource 中止：ETL_SEED_USER_EMAIL='${envEmail}' 對應 user 不存在。`);
   }
-  const devCheck = await qr.query(`SELECT id FROM users WHERE id = $1`, [DEV_ADMIN_UUID]);
+  const devCheck = await pquery(qr, `SELECT id FROM users WHERE id = ?`, [DEV_ADMIN_UUID]);
   if (devCheck[0]?.id) return DEV_ADMIN_UUID;
-  const fallback = await qr.query(
-    `SELECT id FROM users WHERE role='admin' AND status='active' ORDER BY created_at ASC LIMIT 1`,
+  const fallback = await pquery(
+    qr,
+    `SELECT ${t1.prefix}id FROM users WHERE role='admin' AND status='active' ORDER BY created_at ASC${t1.suffix}`,
   );
   if (fallback[0]?.id) return fallback[0].id;
   throw new Error(
@@ -54,7 +61,7 @@ async function resolveCreatedBy(qr: QueryRunner): Promise<string> {
   );
 }
 
-async function seedDatasources(qr: QueryRunner): Promise<void> {
+export async function seedDatasources(qr: QueryRunner): Promise<void> {
   const rows = loadDatasources();
   const createdBy = await resolveCreatedBy(qr);
   // placeholder：加密空字串（decrypt → ''）；使用者於 UI 補真實密碼後即覆蓋
@@ -62,20 +69,25 @@ async function seedDatasources(qr: QueryRunner): Promise<void> {
 
   let created = 0;
   let skipped = 0;
+  const t1 = top1();
+  const now = new Date();
   for (const ds of rows) {
-    const existing = await qr.query(
-      `SELECT id FROM datasources WHERE LOWER(name) = LOWER($1) AND deleted_at IS NULL LIMIT 1`,
+    const existing = await pquery(
+      qr,
+      `SELECT ${t1.prefix}id FROM datasources WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL${t1.suffix}`,
       [ds.name],
     );
     if (existing[0]?.id) {
       skipped++;
       continue; // 不覆寫既有（保住 UI 已補的密碼）
     }
-    await qr.query(
+    // NOW() → JS Date bind（三 driver 可攜，免 SQL 端函式差異）。
+    await pquery(
+      qr,
       `INSERT INTO datasources
          (id, name, type, host, port, database_name, username, encrypted_password,
           description, status, last_tested_at, created_by, created_at, updated_at, deleted_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'unknown',NULL,$10,NOW(),NOW(),NULL)`,
+       VALUES (?,?,?,?,?,?,?,?,?,'unknown',NULL,?,?,?,NULL)`,
       [
         randomUUID(),
         ds.name,
@@ -87,6 +99,8 @@ async function seedDatasources(qr: QueryRunner): Promise<void> {
         placeholderPassword,
         ds.description ?? null,
         createdBy,
+        now,
+        now,
       ],
     );
     created++;
@@ -101,15 +115,11 @@ async function seedDatasources(qr: QueryRunner): Promise<void> {
 
 async function main(): Promise<void> {
   console.log('Datasource seed starting...');
+  // AD-E07-39 P1b3：依 DB_TYPE 切 postgres / mssql（原硬編碼 'postgres'）。seed 僅資料、synchronize:false。
   const dataSource = new DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    username: process.env.DB_USERNAME || 'cdmp',
-    password: process.env.DB_PASSWORD || 'cdmp_secret',
-    database: process.env.DB_NAME || 'cdmp_dev',
+    ...seedConnectionOptions(),
     synchronize: false,
-  });
+  } as any);
   await dataSource.initialize();
   console.log(`Connected to ${process.env.DB_NAME || 'cdmp_dev'}.`);
 

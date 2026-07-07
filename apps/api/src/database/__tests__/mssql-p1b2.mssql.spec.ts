@@ -329,10 +329,11 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(rows.length).toBe(ds!.entityMetadatas.length);
   });
 
-  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 1 筆，第二次 migration:run 為 no-op', async (ctx) => {
+  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 2 筆（schema + reference-data baseline），第二次 migration:run 為 no-op', async (ctx) => {
     ensureMssql(ctx);
+    // AD-E07-39 P1b3 新增 MssqlBaselineReferenceData（migrations/mssql/*1751884800001*）→ mssql baseline 由 1 支變 2 支。
     const before = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(before[0].n)).toBe(1);
+    expect(Number(before[0].n)).toBe(2);
 
     const second = runTypeormCli('migration:run');
     expect(second.status, `stderr=${second.stderr}`).toBe(0);
@@ -340,7 +341,7 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(out).toMatch(/No migrations are pending/i);
 
     const after = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(after[0].n)).toBe(1);
+    expect(Number(after[0].n)).toBe(2);
   });
 
   it('TS-MSSQL-P1B2-BASELINE-004：CLI datasource synchronize=false 且以 NODE_ENV=production 執行（無 synchronize 混淆）', (ctx) => {
@@ -713,17 +714,22 @@ describe('AD-E07-39 P1b2 STATIC', () => {
     expect(dsSrc).toMatch(/'migrations',\s*'mssql'/);
   });
 
-  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 後 dbo 全 36 表與 migration 紀錄乾淨移除', async (ctx) => {
+  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉兩支 baseline 後 dbo 全 36 表與 migration 紀錄乾淨移除', async (ctx) => {
     ensureMssql(ctx);
-    const revert = runTypeormCli('migration:revert');
-    expect(revert.status, `stderr=${revert.stderr}`).toBe(0);
-    const out = `${revert.stdout ?? ''}${revert.stderr ?? ''}`;
-    expect(out).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
-    // 36 業務表移除（typeorm_migrations 表本身仍在，但該筆紀錄移除）。
+    // P1b3 起 mssql 有 2 支 baseline（schema + reference-data）→ 需 revert 兩次：
+    //   #1 逆轉 reference-data（down 為 no-op，僅移除該筆紀錄，表仍在）；#2 逆轉 schema（DROP 全 36 表）。
+    const revert1 = runTypeormCli('migration:revert');
+    expect(revert1.status, `#1 stderr=${revert1.stderr}`).toBe(0);
+    const out1 = `${revert1.stdout ?? ''}${revert1.stderr ?? ''}`;
+    expect(out1).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
+    const revert2 = runTypeormCli('migration:revert');
+    expect(revert2.status, `#2 stderr=${revert2.stderr}`).toBe(0);
+    const out2 = `${revert2.stdout ?? ''}${revert2.stderr ?? ''}`;
+    expect(out2).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
+    // 兩支 baseline 皆逆轉：36 業務表移除、typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
     const business = await countTables(DBO); // 含 typeorm_migrations
     const migRows = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
     expect(Number(migRows[0].n)).toBe(0);
-    // 僅剩 typeorm_migrations（1 張）或 0：業務 36 表已全數 drop。
     expect(business).toBeLessThanOrEqual(1);
   });
 });
