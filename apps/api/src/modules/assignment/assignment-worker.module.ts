@@ -5,6 +5,7 @@ import { AssignmentModule } from './assignment.module';
 import { RunQueueConsumer } from './queue/run-queue.consumer';
 import { OrphanReaper } from './queue/orphan-reaper';
 import { MssqlQueueService } from './queue/mssql-queue.service';
+import { MssqlQueueExpiryReaper } from './queue/mssql-queue-expiry-reaper';
 
 /**
  * F098 / AD-E07-28 P1 / §5：cdmp-worker 程序專用 module。
@@ -27,6 +28,13 @@ import { MssqlQueueService } from './queue/mssql-queue.service';
   ],
   // AD-E07-40 P2b（§4.2）：worker 之 RunQueueConsumer mssql 分支（輪詢 loop）需 MssqlQueueService。
   // AssignmentModule 亦已 export 之；此處於 worker scope 顯式註冊，語意明確、與 AD §4.2 清單一致。
-  providers: [RunQueueConsumer, OrphanReaper, MssqlQueueService],
+  // AD-E07-40 P2c（§4.3 / MOUNT-001 = AD-5）：MssqlQueueExpiryReaper 為獨立 provider，掛於 worker 程序，
+  //   啟動 + 定期呼叫 MssqlQueueService.expireSweep()（僅 mssql 分支）。OrphanReaper 零改動（只用不改）。
+  providers: [
+    RunQueueConsumer,
+    OrphanReaper,
+    MssqlQueueService,
+    MssqlQueueExpiryReaper,
+  ],
 })
 export class AssignmentWorkerModule {}
