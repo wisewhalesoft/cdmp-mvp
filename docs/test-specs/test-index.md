@@ -1,6 +1,6 @@
 ---
 type: test-design-index
-version: "2.33"
+version: "2.34"
 status: draft
 last_updated: 2026-07-07
 covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F035, F036, F037, F038, F039, F040, F041, F042, F043, F044, F045, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F061, F064, F068, F073, F074, F075, F076, F077, F081, F085, F089, F090, F091, F092, F094, F095, F096, F097, F098, F099, F100, F101, F102, F103, F104, F108, F109]
@@ -9,8 +9,10 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 # CDMP MVP — 測試設計索引
 
 > **專案**：CDMP（Customer Data Management Platform）v1.0 MVP
-> **測試文件總數**：82 份（4 策略文件 + 68 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份 + F109 test 1 份 + **Infrastructure test 2 份**）
-> **總測試場景數**：2051 個（前 2008 + **AD-E07-39 P1b1 MSSQL 遷移全 Entity 型別修正 +43**：CHI 5 + TYPE 8 + HASH 12 + ENTITY 6 + DEFAULT 2 + CASE/COLLATE 4 + PKWIDTH 2 + REG 4，合計 2051）
+> **測試文件總數**：83 份（4 策略文件 + 68 Feature 測試文件 + F039 策略文件 1 份 + F040/F041 測試文件 2 份 + 整合測試 2 份 + Migration 測試 1 份 + Regression Guard 1 份 + F109 test 1 份 + **Infrastructure test 3 份**）
+> **總測試場景數**：2090 個（前 2051 + **AD-E07-39 P1b2 MSSQL 遷移 Prod Baseline Migration + Dev/Prod Parity 驗證 +39**：BASELINE 6 + PARITY 10 + TIERFN 3 + FILTER 3 + COLLATE-BASELINE 3 + CASE-BASELINE 2 + HASH-BASELINE 3 + STATIC 4 + REG 5，合計 2090）
+>
+> **v2.34 MSSQL 全面遷移 P1b2 Prod Baseline Migration + Dev/Prod Parity 驗證測試設計（2026-07-07）**：新增 `infrastructure/AD-E07-39-P1b2-test.md`（**39 個場景**）。對應 AD-E07-39 §6/§8/§9（銜接 P1b1，**跳過 spec-writer**）之 P1b2 切片（prod 手寫 T-SQL baseline migration 產出 + dev/prod 兩軌結構化 parity 驗證）。**核心紅線**：**PARITY-001~007**（不變式 I-MSSQL-BASELINE-PARITY-01：`INFORMATION_SCHEMA.COLUMNS`/`sys.indexes`+`sys.index_columns`/`sys.check_constraints` 兩路徑結構化 diff 為空，含欄位/索引集合對稱差、複合索引欄位順序守門）+ **PARITY-009（🔴 comparator 敏感度驗證：人工注入合成差異必須被偵測到，防止「永遠回報空 diff」的無效比對工具）**+ **STATIC-001（🔴 P1b1 impl log §5.6 本機 MSSQL 容器 `sp_executesql` 拋 17750 caveat 之直接靜態守門）**。**★ 兩路徑 Harness 方案**（回應核心設計挑戰）：因 `docker/mssql-init.sql` 查證 `cdmp` login 僅獲 `db_owner`（資料庫層級角色），**無**伺服器層級 `CREATE DATABASE` 權限，故不採「兩個獨立資料庫」方案，改於同一 `CDMP_TEST` 資料庫內以 **schema 區隔**：Path A（synchronize）＝新建專屬 schema `p1b2_sync`（TypeORM `schema` 連線選項自動前綴 DDL）；Path B（baseline migration）＝**直接使用 `dbo`**（不新建 schema——因手寫 migration 為 raw SQL，TypeORM 不會改寫其中的表名前綴，會落在連線 session 的 default schema，即 `dbo`，此**恰好與 prod 真實部署路徑完全一致**，非模擬近似）；`dbo` 於 `CDMP_TEST` 設為本文件獨佔保留 schema，其餘測試套件不得使用。分層：**BASELINE 6**（字面 CLI `npm run migration:run` 於 `NODE_ENV=production` 建出 36 表零錯誤 + migration 冪等 + FK 正確 + `dbo` 前置乾淨守門）+ **PARITY 10**（DoD 核心：欄位/索引屬性 diff + 欄位/索引集合對稱差 + check_constraints 聯合零值 + 複合索引欄位順序 + comparator 自我一致性 + **comparator 敏感度驗證** + 結構化輸出格式）+ **TIERFN 3**（`fn_calc_tier_level` 動態 OBJECT_ID 為 NULL + 靜態掃描 + 雙路徑對照）+ **FILTER 3**（F-2：`has_filter=1` 兩路徑皆零 + 靜態掃描）+ **COLLATE-BASELINE 3**（I-MSSQL-COLLATE-01 於 baseline 路徑：collation 唯一值 + 無逐欄覆寫 + 靜態掃描 `COLLATE` 關鍵字零命中）+ **CASE-BASELINE 2**（I-MSSQL-CASE-01 於 baseline 路徑）+ **HASH-BASELINE 3**（B1 於 baseline 路徑：`token_hash binary(32)` 結構 + PK 寬度 32 bytes + 與 PARITY 交叉引用零 diff）+ **STATIC 4**（`sp_executesql` 零命中 + 非 pg_dump 專屬語法（`::`/`SERIAL`/`RETURNING`/`gen_random_uuid()`等）零命中 + migration 檔案合法性 + 建議項 `down()` round-trip）+ **REG 5**（tsc gate + P1a/P1b1/既有套件不回歸 + `dbo` 清理閉環驗證）。表數沿用 P1b1 已修正之 **36**（非 AD 原文 37，算術 off-by-one）。**明確排除** P1b3（bootstrap/seed 三支腳本改寫）與 P1c（`sp_getapplock`/Pattern B），留待各自測試設計；P1b1 已完成之 entity 層/synchronize 路徑驗證本輪不重複，僅在 HASH-BASELINE 群組驗證 B1 於**新路徑**（baseline migration）之正確性。
 >
 > **v2.33 MSSQL 全面遷移 P1b1 全 Entity 型別修正測試設計（2026-07-07）**：新增 `infrastructure/AD-E07-39-P1b1-test.md`（**43 個場景**）。對應 AD-E07-39（system-architect 產出，銜接 AD-E07-38，**跳過 spec-writer**，AD-E07-38 §3 D-7 已裁定）之 P1b1 切片（全 37 entity 型別轉換 47 處 + B1 `token_blocklist` 改 `token_hash binary(32)` + D1 全 entity 統一載入 + varchar 中文編碼 smoke test）。核心紅線：**TYPE-005/006/007**（🔴F-1：4 處裸 `type:'timestamp'` 字面值為 `rowversion` 舊式同義詞之靜默地雷，修復後須明確驗證為 `datetime2` 而非 `rowversion`，並以全表掃描 + 正面 Date 寫入雙重佐證）+ **CHI-DECISION-001**（🔴F-4：中文編碼 test-first 決策閘門，「借新還舊」/「中古車商」逐字元 round-trip，兩種結果皆已定義後續行動，「不符」分支並標出後續 varchar→nvarchar 測試設計方向供未來接手）+ **HASH-E2E-001**（B1 DoD 核心：`token_blocklist` 改 hash PK 後之真實 JWT 撤銷流程端對端測試，login→logout→同 token 再請求應 401，且不再受 P1a 已實測發現之 900-byte 索引鍵上限限制）+ **PKWIDTH-001/002**（新不變式 I-MSSQL-PK-BYTELIMIT-01：以動態查詢 `sys.indexes`/`sys.index_columns` 取代人工估算表格，長期防禦未來新增欄位違反索引鍵寬度上限）。分層：**CHI 5**（varchar 中文編碼 smoke，可最先獨立執行）+ **TYPE 8**（uuid 18 處/text 17 處/boolean 8 處矩陣驗證 + F-1 timestamp 4 處紅線 + 全域掃描 + bigint 2 處）+ **HASH 12**（`hashToken` 決定性/SHA-256 正確性 + token_hash 型別 + PK 寬度正面驗證 + 既有測試遷移 + 4 個 E2E 撤銷流程案例 + 三 driver helper 回歸）+ **ENTITY 6**（D1：`app.module.ts`/`worker-app.module.ts` mssql 分支統一載入全 37 entity，取代 P1a 過渡態之硬寫 4-entity 陣列；I-MSSQL-ENTITY-LIST-PARITY-01 靜態守門）+ **DEFAULT 2**（8 處 `CURRENT_TIMESTAMP` default smoke）+ **CASE/COLLATE 4**（I-MSSQL-CASE-01/COLLATE-01 全 37 表擴大版）+ **PKWIDTH 2** + **REG 4**（tsc gate + 既有 pg.spec 套件回歸 + **P1a 既有案例 `TS-MSSQL-P1A-CRUD-003b` 因 B1 欄位改名產生之遺留矛盾處置** + I-MSSQL-HELPER-SCOPE-01 全 37 entity 延伸）。**明確排除** P1b2（`I-MSSQL-BASELINE-PARITY-01`、`fn_calc_tier_level` 最終驗證、prod baseline migration）與 P1b3（bootstrap/seed 三支腳本改寫）及 P1c（`sp_getapplock`/Pattern B），留待各自測試設計。測試環境：完全沿用 P1a 既有 `mssql-env-preload.ts`/`.env.test.mssql`，新增 `p1b1` SQL schema 隔離慣例（與 `p1a` 並存）。總場景數 2008→**2051**；總文件數 81→82。
 >
@@ -204,8 +206,9 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 | **Infrastructure — 資料庫平台遷移（cross-cutting，非 F-numbered）** | | | | | |
 | AD-E07-38-P1a | MSSQL 全面遷移 P1a 最小可連線＋登入（三設定點 mssql 分支 + auth 4-entity 子集 + 型別探測 uuid/text/bigint/datetime2/bit + I-MSSQL-CASE-01 大小寫守門 + I-MSSQL-HELPER-SCOPE-01；不需 spec-writer，AD §3 D-7 裁定） | P0-MVP | [infrastructure/AD-E07-38-P1a-test.md](infrastructure/AD-E07-38-P1a-test.md) | 30 | Draft |
 | AD-E07-39-P1b1 | MSSQL 全面遷移 P1b1 全 Entity 型別修正（全 37 entity 型別轉換 47 處含 F-1 timestamp 紅線 + B1 token_blocklist 改 token_hash binary(32) + D1 全 entity 統一載入 + F-4 varchar 中文編碼 test-first 決策閘門 + I-MSSQL-PK-BYTELIMIT-01 動態守門；不需 spec-writer） | P0-MVP | [infrastructure/AD-E07-39-P1b1-test.md](infrastructure/AD-E07-39-P1b1-test.md) | 43 | Draft |
-| **Infrastructure 小計** | | | **2 files** | **73** | |
-| **總合計** | | | **77 files** | **2008** | |
+| AD-E07-39-P1b2 | MSSQL 全面遷移 P1b2 Prod Baseline Migration + Dev/Prod Parity 驗證（I-MSSQL-BASELINE-PARITY-01 結構化 diff 核心 + comparator 敏感度驗證 + fn_calc_tier_level 未建立 + 無 filtered index + collation/case/B1 於 baseline 路徑守門 + sp_executesql/pg_dump 語法靜態規避；兩路徑 harness＝schema 隔離非獨立 DB，因 cdmp login 無 CREATE DATABASE 權限；不需 spec-writer） | P0-MVP | [infrastructure/AD-E07-39-P1b2-test.md](infrastructure/AD-E07-39-P1b2-test.md) | 39 | Draft |
+| **Infrastructure 小計** | | | **3 files** | **112** | |
+| **總合計** | | | **78 files** | **2047** | |
 
 ---
 
@@ -552,6 +555,17 @@ covers: [F001, F002, F002SM, F003, F004, F005, F006, F007, F008, F009, F010, F01
 - **I-MSSQL-PK-BYTELIMIT-01 為動態守門，非人工試算表**：`TS-MSSQL-P1B1-PKWIDTH-001` 以 `sys.indexes`/`sys.index_columns`/`sys.columns` 即時查詢計算全表索引鍵位元組寬度，未來任何新增 entity/欄位皆自動涵蓋，不需修改測試程式碼——此設計哲學亦適用於 F-4 若判定需 nvarchar 轉換後的欄寬加倍情境（自動重新驗證，非人工重算）。
 - **I-MSSQL-ENTITY-LIST-PARITY-01（D1）**：`app.module.ts`/`worker-app.module.ts` 之 mssql 分支目前仍硬寫 P1a 過渡態之 4-entity 陣列（已於原始碼註解明確標註「P1a 過渡態」），P1b1 需改為與 sqlite/postgres 分支共用同一份 entity 清單來源（`app.module.ts` 建議顯式陣列 `ALL_ENTITIES`；`worker-app.module.ts` 建議改回引用既有 glob `entities` 變數，非另立陣列）。
 - **測試環境完全沿用 P1a**：不新增 gating helper/`.env.test.mssql`，僅新增 `p1b1` SQL schema 隔離慣例（與既有 `p1a` 並存）。
+
+**MSSQL 全面遷移 P1b2 特殊注意（AD-E07-39，銜接 P1b1，跳過 spec-writer）：**
+- **範圍嚴格限 P1b2**：`infrastructure/AD-E07-39-P1b2-test.md` 只設計「prod 手寫 T-SQL baseline migration 產出 + dev/prod 兩軌結構化 parity 驗證 + fn_calc_tier_level 未建立 + 無 filtered index + collation/大小寫/B1 於 baseline 路徑守門 + sp_executesql/pg_dump 語法靜態規避」；bootstrap/seed 三支腳本改寫（P1b3）、`sp_getapplock`/Pattern B（P1c）**不在範圍**，勿提前實作。
+- **🔴 權限約束直接決定 Harness 設計，非任意選擇**：已查證 `docker/mssql-init.sql`，`cdmp` login 於 `CDMP`/`CDMP_TEST` 僅獲資料庫層級 `db_owner` 角色，**未**授予伺服器層級 `dbcreator`/`sysadmin`，**無法 `CREATE DATABASE`**。故 parity harness 不得採「兩個獨立資料庫」方案（會於真實容器因權限不足直接失敗），必須在同一 `CDMP_TEST` 內以 schema 區隔兩路徑。
+- **兩路徑 schema 刻意不對稱**：Path A（synchronize）新建專屬 schema `p1b2_sync`（TypeORM `schema` 連線選項自動前綴 DDL）；Path B（baseline migration）**直接使用 `dbo`，不新建 schema**——因手寫 migration 內的 raw SQL 字串不會被 TypeORM 改寫表名前綴，會落在連線 session 的 default schema（`dbo`，`mssql-init.sql` 建立 `cdmp` user 時未指定 `WITH DEFAULT_SCHEMA`），此**恰好與 prod 真實部署路徑完全一致**（`data-source.ts` 之 mssql 分支同樣未設定 `schema` 選項）。**下游 agent 不可誤解為「兩路徑應使用對稱命名的 schema（如 `p1b2_baseline`）」而額外新建 schema 給 Path B**——那樣反而會脫離「與 prod 實際路徑一致」的驗證意義。
+- **`dbo` 於 `CDMP_TEST` 為本文件獨佔保留 schema**：`beforeAll` 須先斷言 `dbo` 目前為空（防止殘留污染），`afterAll` 須清空回空（含額外清理 `typeorm_migrations` bookkeeping 表，此表為 P1b1 `dropAllTablesInSchema` 從未處理過的新物件，因 P1b1 從未實際跑過 migration）；其餘既有/未來測試套件不得使用 `dbo`，見 `TS-MSSQL-P1B2-REG-005` 閉環驗證。
+- **PARITY 群組為 DoD 核心，comparator 敏感度驗證（`PARITY-009`）不可省略**：「兩路徑 diff 為空」的結論唯有在證明 comparator 具備真實偵測能力（對人工注入的合成差異必須回報非空 diff）之後才可信；若跳過此案例直接驗收 PARITY-001~007 全綠，存在「comparator 永遠回報空 diff（形同 no-op）」而誤判通過的風險。
+- **靜態守門延續 P1b1 caveat**：`TS-MSSQL-P1B2-STATIC-001`（`sp_executesql` 零命中）直接對應 P1b1 impl log §5.6 已查證之本機 MSSQL 容器已知限制（`EXEC sp_executesql` 拋 17750，一般 DDL/`EXEC('...')` 正常）；此案例失敗代表 migration 本身於本機測試容器無法正確執行，須於 code review/CI 階段攔截，而非等 BASELINE-001 執行期間才發現不易理解的錯誤代碼。
+- **表數沿用 P1b1 已修正之 36**：AD-E07-39 §6/§8 原文仍用「37」，本文件與 P1b1 一致，一律動態對齊 `ALL_ENTITIES.length`/`entityMetadatas.length`，不寫死任何數字。
+- **P1b1 已完成項目本輪不重複驗證**：全 entity 型別轉換 47 處、B1 entity 層設計、D1 全 entity 統一載入之原始驗證皆屬 P1b1 範圍；本文件僅在 `HASH-BASELINE` 群組驗證 B1 於**新路徑**（baseline migration 手寫 SQL）之正確性，其餘型別/D1 驗證不重跑。
+- **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（`TS-MSSQL-P1B2-REG-001`；`feedback_vitest_no_typecheck`）。
 - **實作後跑 `tsc --noEmit -p tsconfig.build.json`**（TS-MSSQL-P1B1-REG-001；`hashColumnType`/`ALL_ENTITIES`/`TokenBlocklist.token_hash: Buffer` 型別變更後所有呼叫端需同步更新）。
 
 **輔助參考：**

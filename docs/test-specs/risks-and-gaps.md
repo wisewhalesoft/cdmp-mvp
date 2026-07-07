@@ -803,3 +803,32 @@ last_updated: 2026-07-07
 - **問題**：AD §4.5 順手觀察——`ob-levelcard-version.entity.ts` 之 `card_type` 欄位為既有 PG 版本就存在的型別不一致（語意上是短碼，卻用 `text`），非本次遷移引入。P1b1 套用 `longTextColumnType` 後會變成 `nvarchar(MAX)`，語意浪費但不影響正確性。
 - **建議**：AD 已明確列為「非必須」，本文件之 `TS-MSSQL-P1B1-TYPE-003`（longText 矩陣驗證）僅驗證其符合 helper 轉換後的型別正確性，不額外要求改為 `varchar(5)`；若未來排程修正，屬獨立技術債清理項，非 P1b1 範圍。
 - **風險等級**：低（非阻擋，明確排除於本輪範圍外）
+
+---
+
+## MSSQL 全面遷移 P1b2 風險與待決問題（AD-E07-39，2026-07-07 新增）
+
+### R-MSSQL-P1B2-01（中，權限約束已查證，非假設）：`cdmp` login 無 `CREATE DATABASE` 權限，parity harness 必須採 schema 隔離而非獨立資料庫
+
+- **問題**：查證 `docker/mssql-init.sql`，`cdmp` login 於 `CDMP`／`CDMP_TEST` 兩個資料庫皆僅被加入資料庫層級 `db_owner` 角色，未獲任何伺服器層級角色（`dbcreator`/`sysadmin`）或 `CREATE ANY DATABASE` 權限。`db_owner` 角色成員資格不隱含 `CREATE DATABASE` 權限。
+- **影響**：若 tdd-implementation 直覺採用「建立兩個獨立測試資料庫分別跑 synchronize 與 baseline migration 再比對」的方案，將於真實 MSSQL 容器因權限不足直接失敗（`CREATE DATABASE permission denied`），且此錯誤在本機開發環境不易第一時間聯想到權限問題（容易誤判為連線設定錯誤）。
+- **建議**：`infrastructure/AD-E07-39-P1b2-test.md` §零已明確設計為同一 `CDMP_TEST` 資料庫內以 schema 區隔（Path A=`p1b2_sync` 新建 schema／Path B=`dbo` 直接使用資料庫預設 schema），此設計利用「手寫 migration 之 raw SQL 不受 TypeORM `schema` 連線選項改寫、落於連線 session 的 default schema」之特性，恰好不需要任何額外權限即可達成，且與 prod 真實部署路徑（同樣落於 `dbo`）完全一致，非退而求其次的近似方案。
+- **風險等級**：中（若不遵循此設計、誤用獨立資料庫方案，會在 tdd-implementation 階段才發現權限問題，浪費一輪實作嘗試）
+
+### R-MSSQL-P1B2-02（中，測試設計品質風險）：Parity comparator 若未經敏感度驗證，「diff 為空」的結論不可信
+
+- **問題**：`INFORMATION_SCHEMA.COLUMNS`/`sys.indexes`/`sys.check_constraints` 兩路徑「diff 為空」的斷言，其可信度完全取決於 comparator 本身是否具備真實的差異偵測能力。一個實作有誤、永遠回傳空陣列的 comparator，會讓所有 PARITY 案例「全部通過」，但完全沒有驗證到任何實質內容。
+- **建議**：`TS-MSSQL-P1B2-PARITY-008`（comparator 自我一致性：同源比對必為空）與 `TS-MSSQL-P1B2-PARITY-009`（🔴 comparator 敏感度：人工注入合成差異必須被偵測到非空 diff）已設計為必要的「測試工具本身的測試」，提醒 tdd-implementation **不可省略**此二案例，且應優先於其餘 PARITY 案例確認 comparator 邏輯正確，避免後續案例的「綠燈」建立在不可信的基礎上。
+- **風險等級**：中（若省略，後續所有 parity 相關結論的可信度存疑，但不阻擋開發，屬測試設計品質提醒）
+
+### R-MSSQL-P1B2-03（低，環境紀律約定，非程式碼強制）：`dbo` schema 保留慣例依賴人工紀律，CI 平行執行時有交叉污染風險
+
+- **問題**：本輪設計要求 `CDMP_TEST.dbo` 由 P1b2 測試套件獨佔使用（因 baseline migration 的 raw SQL 天然落於 `dbo`），此為約定俗成的紀律（`beforeAll` 前置守門 + `afterAll` 清理），並非資料庫層級的存取控制強制。若未來 CI 將多支 `.mssql.spec.ts` 平行執行於同一 `CDMP_TEST` 資料庫，且新增另一支同樣使用 `dbo` 的測試檔，將產生交叉污染。
+- **建議**：目前既有 P1a／P1b1 套件皆已養成「raw SQL 一律明確 schema 前綴」的習慣，不使用 `dbo`，故現況無風險；提醒 DevOps/CI owner 未來新增 MSSQL 測試檔案時遵循此約定，或考慮於 CI pipeline 層級強制 `.mssql.spec.ts` 序列執行（比照既有 F098~F109 `.pg.spec.ts` 序列執行慣例，見 `feedback_pg_spec_parallel_timeout`）。
+- **風險等級**：低（現況無實際污染，僅為未來擴充時的提醒）
+
+### OQ-MSSQL-P1B2-01（非阻擋，供 tdd-implementation 裁量）：`down()` migration round-trip（`STATIC-004`）是否本輪納入
+
+- **問題**：AD-E07-39 §8 P1b2 DoD 僅要求「baseline migration 建表成功」與「parity diff 為空」，未明文要求 `down()` 逆向遷移的正確性。`TS-MSSQL-P1B2-STATIC-004` 屬本文件基於 TypeORM migration 標準 up/down 契約額外建議之案例，非 AD 硬性要求。
+- **建議**：tdd-implementation 可視工作量權衡是否本輪納入；若延後，應明確記錄為技術債（例如「baseline migration 目前僅驗證 up() 路徑，down() 未經測試」），避免日後需要 revert 時才發現 down() 邏輯有缺陷。
+- **風險等級**：低（非阻擋，已於測試設計中明確標註為「建議項，非 AD 硬性 DoD」）
