@@ -46,6 +46,13 @@ export interface RunQueueTuning {
    * 邊界查一次」，本值僅在需要時做節流，預設 0（每個邊界都查）。
    */
   cancelPollIntervalMs: number;
+  /**
+   * AD-E07-40 P2b（§4.2）：mssql 自建佇列輪詢間隔（毫秒）。
+   * 僅 mssql 路徑之 `RunQueueConsumer` 輪詢 loop（`startMssqlPolling`）使用；
+   * pg-boss（postgres）路徑不使用（boss.work 內部自行排程）。
+   * 預設 2000ms，可 env `RUN_QUEUE_POLL_INTERVAL_MS` 覆蓋（AD §9.1 建議 P2b 端對端量測後調整）。
+   */
+  pollIntervalMs: number;
 }
 
 export const DEFAULT_RUN_QUEUE_TUNING: RunQueueTuning = {
@@ -54,6 +61,7 @@ export const DEFAULT_RUN_QUEUE_TUNING: RunQueueTuning = {
   orphanThresholdMs:
     Number(process.env.RUN_QUEUE_ORPHAN_THRESHOLD_MS) || 14400 * 1000,
   cancelPollIntervalMs: Number(process.env.RUN_QUEUE_CANCEL_POLL_INTERVAL_MS) || 0,
+  pollIntervalMs: Number(process.env.RUN_QUEUE_POLL_INTERVAL_MS) || 2000,
 };
 
 /**

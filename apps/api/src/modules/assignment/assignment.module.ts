@@ -36,6 +36,7 @@ import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment
 import { SystemModule } from '@/modules/system/system.module';
 import { RunQueueProducer } from './queue/run-queue.producer';
 import { CancellationPoller } from './queue/cancellation-poller';
+import { MssqlQueueService } from './queue/mssql-queue.service';
 import {
   pgBossProvider,
   runQueueTuningProvider,
@@ -103,6 +104,10 @@ import {
     // API 程序之 pipeline 雖也注入，但 API 程序不執行 pipeline → 無副作用（既有 pipeline
     // unit test 未提供此 provider，@Optional 維持 undefined → baseline 不變）。
     CancellationPoller,
+    // AD-E07-40 P2b（CONFIG-006 MUST-FIX）：API 程序之 RunQueueProducer 之 mssql 分支（send/cancel）
+    // 需注入 MssqlQueueService；AD §4.2 檔案改動清單漏列 assignment.module（僅列 worker module），
+    // 此為文件缺口補正。DB_TYPE≠mssql 時 producer 走 boss 路徑，此 provider 建立但不使用（無害）。
+    MssqlQueueService,
     pgBossProvider,
     runQueueTuningProvider,
   ],
@@ -115,6 +120,8 @@ import {
     AssignmentRunPipelineService,
     RunQueueProducer,
     CancellationPoller,
+    // worker module 之 RunQueueConsumer mssql 分支亦需 MssqlQueueService（透過 import AssignmentModule 取得）。
+    MssqlQueueService,
     pgBossProvider,
     runQueueTuningProvider,
   ],

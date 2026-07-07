@@ -4,6 +4,7 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentModule } from './assignment.module';
 import { RunQueueConsumer } from './queue/run-queue.consumer';
 import { OrphanReaper } from './queue/orphan-reaper';
+import { MssqlQueueService } from './queue/mssql-queue.service';
 
 /**
  * F098 / AD-E07-28 P1 / §5：cdmp-worker 程序專用 module。
@@ -24,6 +25,8 @@ import { OrphanReaper } from './queue/orphan-reaper';
     AssignmentModule,
     TypeOrmModule.forFeature([AssignmentRun]),
   ],
-  providers: [RunQueueConsumer, OrphanReaper],
+  // AD-E07-40 P2b（§4.2）：worker 之 RunQueueConsumer mssql 分支（輪詢 loop）需 MssqlQueueService。
+  // AssignmentModule 亦已 export 之；此處於 worker scope 顯式註冊，語意明確、與 AD §4.2 清單一致。
+  providers: [RunQueueConsumer, OrphanReaper, MssqlQueueService],
 })
 export class AssignmentWorkerModule {}
