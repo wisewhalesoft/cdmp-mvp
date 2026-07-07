@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-05-20
+last_updated: 2026-07-07
 ---
 
 # 風險與缺口
@@ -738,3 +738,37 @@ last_updated: 2026-05-20
 - **問題**：legacy SP 用 `ROUND(×0.1)`，現行 JS / spec AC-5 用 `Math.ceil(×0.1)` + 保底 1。OQ-F100-01 裁定對齊 JS（CEIL），下推 SQL 須用 `CEIL`；若誤用 `ROUND`/`FLOOR`，11 件時得 1（應 2）。
 - **處置**：EXCH-006（11→2）/ EXCH-004（保底 1）；oracle = `Math.max(1, Math.ceil(n*0.1))`。
 - **風險等級**：高（交換數量錯 → 分派結果偏差）
+
+---
+
+## MSSQL 全面遷移 P1a 風險與待決問題（AD-E07-38，2026-07-07 新增）
+
+> 完整測試設計見 [infrastructure/AD-E07-38-P1a-test.md](infrastructure/AD-E07-38-P1a-test.md)。P1（P1a/P1b/P1c）依 AD §3 D-7 裁定跳過 spec-writer——純底層儲存/驅動置換，無新業務行為。本節彙整 P1a 範圍內識別之風險與待決項；P1b/P1c 之風險另由各自測試設計文件記錄。
+
+### R-MSSQL-P1A-01（中）：MSSQL 測試環境無 test-only port/DB 分離，恐污染 dev 資料
+
+- **問題**：既有 PostgreSQL 測試慣例（`docker-compose.test.yml` 之 `postgres-test`）以獨立 port（5433）與獨立 DB（`cdmp_test`）與 dev 用 PostgreSQL（5432/`cdmp`）分離。但現行 `docker-compose.yml` 之 `mssql`/`mssql-init` 服務（P0 已建立）僅建立**單一** `CDMP` 資料庫於 port 1433，供本機 dev smoke 測試使用，**無**對應之 `mssql-test`/獨立 test DB 服務。
+- **影響**：若 P1a 之 `.mssql.spec.ts` 直接對此唯一 `CDMP` 資料庫執行 `synchronize:true`（建表/清表），恐與開發者手動操作驗證的資料互相污染；且 CI 若共用同一容器，多次測試執行/並行執行時亦有 race 風險。
+- **建議**：比照 `postgres-test` 慣例，於 `docker-compose.test.yml` 新增 `mssql-test` 服務（獨立 port，如 14330）+ 獨立 DB（如 `CDMP_TEST`），或至少於 `mssql-init.sql` 增加建立第二個測試專用資料庫；此決策超出 test-designer 職責範圍（屬 DevOps/CI 基礎設施），已於 `infrastructure/AD-E07-38-P1a-test.md` §零標註，留待 tdd-implementation 落地時與 DevOps 確認。
+- **風險等級**：中（P1a 單機驗證尚可接受風險自負，但進入 CI 常態化執行前須解決，否則测试不可重複執行/不可並行）
+
+### R-MSSQL-P1A-02（低，待裁）：未知 `DB_TYPE` 值之隱式 fallback 行為未經明確裁定
+
+- **問題**：AD-E07-38 §3 D-1 之三分支重構 pseudocode，最終仍以無條件 `return {type:'postgres',...}` 作為未匹配 `sqlite`/`mssql` 時的隱式 fallback（註解「過渡期保留至 Phase 6 cutover 才移除」），並非顯式 exhaustive 判斷或主動拋錯。
+- **影響**：若使用者將 `DB_TYPE` 誤打成其他字串（如 `'mssq'`），系統會靜默落入 postgres 分支而非提示設定錯誤，可能造成除錯困難（連線目標與預期不符卻無錯誤訊息）。
+- **建議**：TS-MSSQL-P1A-REG-003 已設計為「記錄現況」而非斷言此為正確行為；是否需改為顯式 `throw` 或增加設定驗證，留待 tdd-implementation 或後續 AD 修訂裁定，非 P1a 阻擋項。
+- **風險等級**：低（現況為既有程式碼既已存在的隱式 fallback 模式之延伸，非本次新增之回歸風險）
+
+### R-MSSQL-P1A-03（低，僅文件可讀性）：AD-E07-38 之 Agent Loading Guide 章節編號與實際標題編號不符
+
+- **問題**：AD-E07-38 開頭 Agent Loading Guide 表寫「Test Designer 需載入 §3、§6（P1a/b/c 切片與 DoD）、§7（不變式）、§8（測試邊界）」，但實際文件標題為 `## 3. 架構決策彙總（D-1~D-7）`（P1a/b/c DoD 其實是 §3 內的 D-6 子節，非獨立 §6）、`## 5. 不變式`（非 §7）、`## 6. 測試邊界`（非 §8）；文件本身無 §8 標題。
+- **影響**：僅影響依號碼定位章節的閱讀效率，不影響內容正確性——test-designer 已直接通讀全文並依實際標題內容產出測試設計，未依錯位號碼漏讀或誤讀任何段落。
+- **建議**：建議 system-architect 於下次修訂 AD-E07-38 時同步修正 Agent Loading Guide 表之章節號；不阻擋 P1a/P1b/P1c 任何測試設計或實作工作。
+- **風險等級**：低（純文件一致性問題）
+
+### OQ-MSSQL-P1A-01（待 tdd-implementation 實測後定案）：`uuidColumnType`/`longTextColumnType` 兩個新 helper 是否需要新增
+
+- **問題**：AD §3 D-1 明確標註「不可假設」——裸 `type:'uuid'` 是否被 mssql driver 正確映射 `uniqueidentifier`、裸 `type:'text'` 是否誤落已棄用之原生 `TEXT` 型別（而非 `nvarchar(max)`），兩者皆須以真實 MSSQL 容器驗證後才能定案，不可憑文件推斷。
+- **影響**：若判定需要，`uuidColumnType` 影響 18 處／14 檔（P1b 範圍）、`longTextColumnType` 影響 17 處／13 檔（P1b 範圍）之逐檔改寫工作量；若判定不需要，可簡化 P1b 設計、略過該部分改寫。
+- **建議**：P1a 測試設計已提供 TS-MSSQL-P1A-TYPE-001（uuid 探測，使用既有 production `User.id`）與 TYPE-002（text 探測，使用測試專屬合成 probe 表）兩個探測案例，並於 TYPE-007 設計決策關卡；tdd-implementation 執行後應將結論記錄於 implementation-log，供 P1b test-designer 直接引用，不重新探測。
+- **風險等級**：中（影響 P1b 工作量估計與測試設計範圍，但有明確探測方法可解，非阻擋性模糊需求）
