@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.22"
+version: "3.23"
 date: 2026-07-07
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.23 / 2026-07-07 / MSSQL 全面遷移 P2（自建 T-SQL 佇列，取代 pg-boss）架構設計**：P1（P1a/P1b1/P1b2/P1b3/P1c）全數 commit、CI 骨架建好後，進入全計畫最高風險項——佇列自建 T-SQL（硬約束②，不得新增 Redis/BullMQ）。新增 **[`implementation-log/AD-E07-40-mssql-p2-self-built-queue.md`](implementation-log/AD-E07-40-mssql-p2-self-built-queue.md)**，固化：(1) 關鍵前提差異——P0 `mssql-smoke.mjs` 已對 Linux 容器實測驗證 `UPDLOCK/READPAST/ROWLOCK+OUTPUT` 佇列 claim 核心語法（純 T-SQL DML，不受 P1c `sp_getapplock` 曾踩之 17750 DLL 缺失影響）→ P2 核心機制可於本機完整測試；(2) `dbo.queue_job` schema（entity + filtered index 走手寫 baseline，沿用 AD-E07-39 兩軌策略）；(3) 五個原子操作 T-SQL（claim/complete/expire sweep/cancel/send）；(4) pg-boss 契約對齊表——`RUN_QUEUE_NAME`/`RunJobPayload`/`RETRY_LIMIT=0`/`BATCH_SIZE=1`/`send`/`cancel` 簽章不變，**`OrphanReaper`/`CancellationPoller` 重新查證確認零改動**；(5) 單 worker 輪詢 loop 設計 + `processPayload` 共用邏輯防止 pg-boss/mssql 兩路徑語意漂移 + 完整檔案改動清單；(6) driver-conditional 策略（RESOLVED：postgres 分支 cutover 前維持 pg-boss 不變，不強行統一 push/pull 介面）；(7) 併發正確性驗證 harness（本專案首次自寫此類測試，含 **pool.max≥K 假陽性陷阱**防範）；(8) P2a/P2b/P2c 三個實作切片與 DoD + 判定不需要 spec-writer。新增 4 個不變式（I-MSSQL-QUEUE-CLAIM-01/SERIAL-01/PAYLOAD-UNITY-01/TEST-CONCURRENCY-01）。**刻意未動**：`architecture-spec.md`（理由同 v3.21/v3.22，P 系列尚未 cutover 落地）。
 
 > **v3.22 / 2026-07-07 / MSSQL 全面遷移 P1b（全 37 Entity Baseline）架構設計**：延續 AD-E07-38（P1），P1a 型別探針完成並 commit（`b495cd8`）後對全 37 entity 進行完整型別轉換、900-byte 索引鍵掃描、B1 正式裁定。新增 **[`implementation-log/AD-E07-39-mssql-p1b-full-baseline.md`](implementation-log/AD-E07-39-mssql-p1b-full-baseline.md)**，固化：(1) 5 項新查證事實 F-1~F-5（`type:'timestamp'` 裸字面值 4 處＝危險的 rowversion 陷阱非單純不支援；舊 baseline 唯一 filtered index 已於 7/7 移除、schema 兩軌流程簡化；`prod-data-seed.ts`/`seed-datasource.ts` 確認為 `$n`+`LIMIT` 而非 `ON CONFLICT`；🆕 varchar+中文編碼風險採實驗先行；D1 entities 陣列漂移純陣列統一修法）；(2) 全 37 entity 型別轉換清單（47 處，含新增之 timestamp 4 處）；(3) 900-byte 索引鍵全面掃描結論＝**全庫僅 `token_blocklist.token` 一例超標（B1）**，其餘皆安全；(4) B1 正式裁定＝`token`→`token_hash`、新增 `hashColumnType`（mssql=`binary(32)`/pg=`bytea`/sqlite=`blob`）、三 driver 統一改 hash 不做 driver-conditional；(5) varchar 中文編碼 test-first 決策流程（相符維持現狀／不符則全面轉 nvarchar）；(6) `ALL_ENTITIES` 統一陣列解 D1；(7) schema 兩軌流程更新（filtered index 步驟省略）；(8) P1b1/P1b2/P1b3 三個實作切片與 DoD；新增 4 個不變式（I-MSSQL-PK-BYTELIMIT-01/HASH-DETERMINISM-01/VARCHAR-ENCODING-01/ENTITY-LIST-PARITY-01）。**同步修訂** `implementation-log/AD-E07-38-mssql-p1-driver-entity-schema.md`（v1.0→v1.1）：新增 §11 Errata，標注 3 項被新事實推翻/更新的原始假設（Errata-1 timestamp 類別遺漏且風險應為「高」；Errata-2 filtered index 遷移前提失效；Errata-3 varchar+中文編碼為 D-2 未涵蓋之新風險維度），交叉引用 AD-E07-39。**刻意未動**：`architecture-spec.md`（理由同 v3.21，P1 系列尚未實作落地）。
 
