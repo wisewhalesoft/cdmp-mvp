@@ -772,3 +772,34 @@ last_updated: 2026-07-07
 - **影響**：若判定需要，`uuidColumnType` 影響 18 處／14 檔（P1b 範圍）、`longTextColumnType` 影響 17 處／13 檔（P1b 範圍）之逐檔改寫工作量；若判定不需要，可簡化 P1b 設計、略過該部分改寫。
 - **建議**：P1a 測試設計已提供 TS-MSSQL-P1A-TYPE-001（uuid 探測，使用既有 production `User.id`）與 TYPE-002（text 探測，使用測試專屬合成 probe 表）兩個探測案例，並於 TYPE-007 設計決策關卡；tdd-implementation 執行後應將結論記錄於 implementation-log，供 P1b test-designer 直接引用，不重新探測。
 - **風險等級**：中（影響 P1b 工作量估計與測試設計範圍，但有明確探測方法可解，非阻擋性模糊需求）
+
+---
+
+## MSSQL 全面遷移 P1b1 風險與待決問題（AD-E07-39，2026-07-07 新增）
+
+> 完整測試設計見 [infrastructure/AD-E07-39-P1b1-test.md](infrastructure/AD-E07-39-P1b1-test.md)。銜接 P1a（已完成，30 場景），同樣跳過 spec-writer。本節僅記錄 P1b1 範圍內新識別之風險；P1b2/P1b3/P1c 之風險留待各自測試設計文件記錄。
+
+### R-MSSQL-P1B1-01（中，待 CHI 群組實測後定案）：F-4 varchar→nvarchar 若判定需要，為本次 P1 全範圍最大單一不確定工作量
+
+- **問題**：AD §4.4／§10.1 明確標註「實驗先行，不預先假設結果」——若 `TS-MSSQL-P1B1-CHI-001~004` 判定 varchar 中文編碼不符（mojibake），將觸發全庫 varchar→nvarchar 系統性轉換，波及面預估遠大於本輪 47 處 uuid/text/boolean/timestamp 轉換總和（`ob_pool_data`/`ob_pool_data_list` 等寬表單表可達百餘欄）。
+- **影響**：若觸發，P1b1 原定範圍（本文件 43 場景）將不足以涵蓋新增工作，需要獨立一輪測試設計（本文件 CHI-DECISION-001 已標出後續測試設計方向，但未實際撰寫）；且若 dev DB 既有資料已在錯誤編碼下寫入，可能需要重新 ETL 抽取而非單純 `ALTER COLUMN`。
+- **建議**：`TS-MSSQL-P1B1-CHI-DECISION-001` 已設計決策關卡，兩種結果皆有明確後續行動；tdd-implementation 應**優先執行 CHI 群組**（不依賴其他群組），儘早取得結論以利範圍估算，避免其餘工作進行過半才發現需要大幅擴大範圍。
+- **風險等級**：中（有明確探測方法可解，但若觸發則工作量影響為本次 P1 最大，需及早排程因應）
+
+### R-MSSQL-P1B1-02（低，實作評估項）：全 37 表 `synchronize:true` 於 CI 環境之執行時間未經實測，P1a 之 60000ms timeout 未必足夠
+
+- **問題**：P1a 全域 `vi.setConfig({ testTimeout: 60000 })` 僅實測涵蓋 4 表 synchronize；P1b1 全 37 表（含索引、FK、複合鍵）之 synchronize 耗時預期明顯更長，若沿用同一 timeout 未經驗證，可能在 CI 資源競爭下產生 `feedback_pg_spec_parallel_timeout` 教訓所述之偽陽性逾時失敗。
+- **建議**：tdd-implementation 落地時應為 P1b1 `.mssql.spec.ts` 之 `beforeAll` 單獨設定更高 timeout（如 120000ms），而非沿用 P1a 全域設定值，見 `infrastructure/AD-E07-39-P1b1-test.md` §零.3。
+- **風險等級**：低（純執行環境調校，非邏輯正確性風險）
+
+### R-MSSQL-P1B1-03（低，測試套件自我一致性）：P1a 既有案例 `TS-MSSQL-P1A-CRUD-003b` 因 B1 欄位改名將產生遺留矛盾
+
+- **問題**：`mssql-p1a.mssql.spec.ts` 現有案例斷言 `token_blocklist.token`（2048 字元 nvarchar PK）因 900-byte 索引鍵上限而 INSERT 失敗；B1 完成後該欄位已改名為 `token_hash`（`binary(32)`），此案例若原封不動保留將因參照不存在的欄位而編譯/執行失敗。
+- **建議**：`TS-MSSQL-P1B1-REG-003` 已設計處置方案（建議移除並以 `HASH-005` 取代其驗證意圖）；提醒 tdd-implementation 於 B1 落地當下同步處理，避免兩份 `.mssql.spec.ts` 檔案（P1a／P1b1）出現互相矛盾或編譯失敗的殘留案例。
+- **風險等級**：低（有明確處置方案，純執行順序提醒）
+
+### OQ-MSSQL-P1B1-01（非阻擋，供未來排程）：`ob-levelcard-version.card_type` 型別不一致（`text` vs 其餘 entity 之 `varchar(5)`）是否本輪一併修正
+
+- **問題**：AD §4.5 順手觀察——`ob-levelcard-version.entity.ts` 之 `card_type` 欄位為既有 PG 版本就存在的型別不一致（語意上是短碼，卻用 `text`），非本次遷移引入。P1b1 套用 `longTextColumnType` 後會變成 `nvarchar(MAX)`，語意浪費但不影響正確性。
+- **建議**：AD 已明確列為「非必須」，本文件之 `TS-MSSQL-P1B1-TYPE-003`（longText 矩陣驗證）僅驗證其符合 helper 轉換後的型別正確性，不額外要求改為 `varchar(5)`；若未來排程修正，屬獨立技術債清理項，非 P1b1 範圍。
+- **風險等級**：低（非阻擋，明確排除於本輪範圍外）
