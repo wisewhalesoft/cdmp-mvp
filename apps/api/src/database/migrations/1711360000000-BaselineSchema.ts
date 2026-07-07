@@ -1781,11 +1781,6 @@ CREATE INDEX idx_ob_assign_set_workdt_list ON public.ob_assign_set USING btree (
 CREATE INDEX idx_ob_pool_data_list_assignday_custo ON public.ob_pool_data_list USING btree (assignday, custo_no);
 
 
---
--- Name: idx_ob_pool_data_list_score_notnull; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_ob_pool_data_list_score_notnull ON public.ob_pool_data_list USING btree (score) WHERE (score IS NOT NULL);
 
 
 --

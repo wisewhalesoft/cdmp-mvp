@@ -21,23 +21,13 @@ import { dateColumnType } from '@/common/database/column-types';
  * ⚠️ Entity 必須與 migration 保持一致（m297）：任一邊改動，另一邊同步修。
  */
 /**
- * idx_ob_pool_data_list_score_notnull（2026-06-02）— F055 CARD_LEVEL preview 分佈試算加速。
- *
- * AssignmentScoringService.previewCardLevels 將分桶 COUNT 下推 PostgreSQL：
- *   SELECT CASE ... END AS bucket FROM ob_pool_data_list WHERE score IS NOT NULL ...
- * 本表為 ETL legacy 派案歷史（dev 7.8M 列 / ~14GB）。無索引時上述聚合需全表 seq scan
- * （dev 實測 ~16-50s）—— 雖已不再像舊 find() 全表載入 Node 造成 heap OOM／進程崩潰，
- * 但仍拖慢 debounce preview。partial index (score) WHERE score IS NOT NULL：尚未計分
- * （score=NULL）的列不入索引 —— dev 現況全 NULL → 空索引、查詢即時回 0；生產有分數後
- * 走 index-only scan（僅掃窄 score 欄、不碰 14GB 寬表）。
- *
- * ⚠️ Entity 必須與 migration 保持一致（m298）：任一邊改動，另一邊同步修。
+ * 註（2026-07-07）：F055 preview 自 #18 修正起改查 ob_pool_data（非本表 score），
+ * 本表 score 已為死欄；原用於加速 preview 的部分索引
+ * idx_ob_pool_data_list_score_notnull（m298）已不再被任何查詢使用，一併移除
+ * （entity / BaselineSchema / dev DB 同步移除）。
  */
 @Entity('ob_pool_data_list')
 @Index('idx_ob_pool_data_list_assignday_custo', ['assignday', 'custo_no'])
-@Index('idx_ob_pool_data_list_score_notnull', ['score'], {
-  where: 'score IS NOT NULL',
-})
 export class ObPoolDataList {
   @Column({ name: 'created_by_prog', type: 'varchar', length: 20, nullable: true })
   created_by_prog: string | null; // A_PRGID
