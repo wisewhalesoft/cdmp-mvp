@@ -15,7 +15,7 @@
  *   - 點擊 backdrop / 右上 X / 「關閉」按鈕關閉 Drawer
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   X,
   Filter,
@@ -43,7 +43,19 @@ import {
   type ConditionItem,
   type AppliedSpecialRule,
 } from '@/api/assignment-list';
-import { fieldDisplayName } from '../_utils/labels';
+import { useConditionDecoder } from '../_hooks/use-condition-decoder';
+
+/** 拆解 legacy 多值字串（'$$' 分隔）並逐值解碼，回傳中文「、」串接（查無回傳原碼）。 */
+function decodeLegacyMulti(
+  decode: (v: string) => string,
+  raw: string,
+): string {
+  return raw
+    .split('$$')
+    .filter(Boolean)
+    .map((v) => decode(v))
+    .join('、');
+}
 
 export interface ListDetailDrawerProps {
   listNo: string | null;
@@ -213,38 +225,74 @@ function ConditionsPanel({ data }: { data: FullSnapshotResponse }) {
   );
 }
 
+/** LEGACY fallback 之固定 5 欄（whitelist snake_case），供 decoder 預載 options。 */
+const LEGACY_FALLBACK_COLUMNS = [
+  'prod_kind',
+  'caseyear',
+  'spec_tp',
+  'case_status',
+  'settle_src',
+];
+
 /** 使用者自設篩選條件（含 LEGACY fallback / 無條件） */
 function UserConditions({ data }: { data: FullSnapshotResponse }) {
-  if (data.list.conditionPayload === null) {
+  const isLegacy = data.list.conditionPayload === null;
+  // 彙整本名單引用之欄位（LEGACY 為固定 5 欄），驅動 decoder 延遲載入 options。
+  const columns = useMemo(
+    () =>
+      isLegacy
+        ? LEGACY_FALLBACK_COLUMNS
+        : (data.list.conditionPayload?.conditions ?? []).map((c) => c.columnName),
+    [isLegacy, data.list.conditionPayload],
+  );
+  const decoder = useConditionDecoder(columns);
+
+  if (isLegacy) {
+    const fb = data.list.legacyEntityFallback;
     return (
       <div>
         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-slate-600 border border-slate-200">
           <Archive className="w-2.5 h-2.5" />
           LEGACY
         </span>
-        {data.list.legacyEntityFallback && (
+        {fb && (
           <ul className="mt-3 space-y-1 text-xs text-gray-700">
-            {data.list.legacyEntityFallback.prodKind !== null && (
-              <li>{fieldDisplayName('prod_kind')}：{data.list.legacyEntityFallback.prodKind}</li>
+            {fb.prodKind !== null && (
+              <li>
+                {decoder.decodeField('prod_kind')}：
+                {decodeLegacyMulti((v) => decoder.decodeValue('prod_kind', v), fb.prodKind)}
+              </li>
             )}
-            {data.list.legacyEntityFallback.caseyear !== null && (
-              <li>{fieldDisplayName('caseyear')}：{data.list.legacyEntityFallback.caseyear}</li>
+            {fb.caseyear !== null && (
+              <li>
+                {decoder.decodeField('caseyear')}：
+                {decodeLegacyMulti((v) => decoder.decodeValue('caseyear', v), fb.caseyear)}
+              </li>
             )}
-            {data.list.legacyEntityFallback.specTp !== null && (
-              <li>{fieldDisplayName('spec_tp')}：{data.list.legacyEntityFallback.specTp}</li>
+            {fb.specTp !== null && (
+              <li>
+                {decoder.decodeField('spec_tp')}：
+                {decodeLegacyMulti((v) => decoder.decodeValue('spec_tp', v), fb.specTp)}
+              </li>
             )}
-            {data.list.legacyEntityFallback.caseStatus !== null && (
-              <li>{fieldDisplayName('case_status')}：{data.list.legacyEntityFallback.caseStatus}</li>
+            {fb.caseStatus !== null && (
+              <li>
+                {decoder.decodeField('case_status')}：
+                {decodeLegacyMulti((v) => decoder.decodeValue('case_status', v), fb.caseStatus)}
+              </li>
             )}
-            {data.list.legacyEntityFallback.settleSrc !== null && (
-              <li>{fieldDisplayName('settle_src')}：{data.list.legacyEntityFallback.settleSrc}</li>
+            {fb.settleSrc !== null && (
+              <li>
+                {decoder.decodeField('settle_src')}：
+                {decodeLegacyMulti((v) => decoder.decodeValue('settle_src', v), fb.settleSrc)}
+              </li>
             )}
           </ul>
         )}
       </div>
     );
   }
-  const conditions = data.list.conditionPayload.conditions ?? [];
+  const conditions = data.list.conditionPayload?.conditions ?? [];
   if (conditions.length === 0) {
     return <p className="text-sm text-gray-500 italic">無篩選條件</p>;
   }
@@ -252,9 +300,11 @@ function UserConditions({ data }: { data: FullSnapshotResponse }) {
     <ul className="space-y-2 text-xs text-gray-700">
       {conditions.map((c: ConditionItem, idx: number) => (
         <li key={idx} className="border border-gray-200 rounded p-2">
-          <div className="font-semibold text-gray-800">{fieldDisplayName(c.columnName)}</div>
+          <div className="font-semibold text-gray-800">{decoder.decodeField(c.columnName)}</div>
           {c.fieldType === 'categorical' && (
-            <div className="text-gray-600 mt-0.5">{(c.values ?? []).join('、')}</div>
+            <div className="text-gray-600 mt-0.5">
+              {decoder.decodeValues(c.columnName, c.values ?? []).join('、')}
+            </div>
           )}
           {c.fieldType === 'numeric' && (
             <div className="text-gray-600 mt-0.5">{c.min} ~ {c.max}</div>

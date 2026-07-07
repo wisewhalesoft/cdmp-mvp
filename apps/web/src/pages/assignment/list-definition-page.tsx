@@ -46,7 +46,10 @@ import { ReadyCtaBanner } from './_components/ReadyCtaBanner';
 import { DisableListModal } from './_components/DisableListModal';
 import { RejectReasonModal } from './_components/reject-reason-modal';
 import { readAndClearPendingToast } from './_utils/pending-toast';
-import { fieldDisplayName } from './_utils/labels';
+import {
+  useConditionDecoder,
+  type ConditionDecoder,
+} from './_hooks/use-condition-decoder';
 
 /**
  * F048 v2.0 / F050 v2.2 / F049 v1.1 / F052 v2.1 / F061 v1.4 / F077 v1.3 / F081/F085/F089
@@ -117,23 +120,29 @@ const STAGE_BAR_COLOR: Record<ListStage, string> = {
 };
 
 /**
- * Condition chips 短描述：取前 2 個 condition，超過顯示 +N
+ * Condition chips 短描述：取前 2 個 condition，超過顯示 +N。
+ * 欄位名稱與（類別型）值代碼皆經 decoder 轉為使用者友善中文；查無對照回傳原始代碼。
  */
-function renderConditionChips(conditions: ConditionItem[]): { chips: string[]; extra: number } {
+function renderConditionChips(
+  conditions: ConditionItem[],
+  decoder: ConditionDecoder,
+): { chips: string[]; extra: number } {
   const head = conditions.slice(0, 2);
   const chips = head.map((c) => {
+    const name = decoder.decodeField(c.columnName);
     if (c.fieldType === 'categorical') {
-      const vs = (c.values ?? []).slice(0, 2).join('/');
-      const more = (c.values?.length ?? 0) > 2 ? `+${(c.values?.length ?? 0) - 2}` : '';
-      return `${fieldDisplayName(c.columnName)}：${vs}${more}`;
+      const all = c.values ?? [];
+      const vs = decoder.decodeValues(c.columnName, all.slice(0, 2)).join('/');
+      const more = all.length > 2 ? `+${all.length - 2}` : '';
+      return `${name}：${vs}${more}`;
     }
     if (c.fieldType === 'numeric') {
-      return `${fieldDisplayName(c.columnName)}：${c.min}~${c.max}`;
+      return `${name}：${c.min}~${c.max}`;
     }
     if (c.fieldType === 'date') {
-      return `${fieldDisplayName(c.columnName)}：${c.dateStart}~${c.dateEnd}`;
+      return `${name}：${c.dateStart}~${c.dateEnd}`;
     }
-    return fieldDisplayName(c.columnName);
+    return name;
   });
   return { chips, extra: Math.max(0, conditions.length - 2) };
 }
@@ -141,6 +150,7 @@ function renderConditionChips(conditions: ConditionItem[]): { chips: string[]; e
 interface KanbanCardProps {
   list: AssignmentListItem;
   identity: EffectiveIdentity;
+  decoder: ConditionDecoder;
   isHistorical: boolean;
   isLocked: boolean;
   onView: (l: AssignmentListItem) => void;
@@ -159,6 +169,7 @@ interface KanbanCardProps {
 function KanbanCard({
   list,
   identity,
+  decoder,
   isHistorical,
   isLocked,
   onView,
@@ -175,7 +186,7 @@ function KanbanCard({
 }: KanbanCardProps) {
   const isLegacy = list.conditionPayload === null;
   const conditions = list.conditionPayload?.conditions ?? [];
-  const { chips, extra } = renderConditionChips(conditions);
+  const { chips, extra } = renderConditionChips(conditions, decoder);
 
   return (
     <div
@@ -318,6 +329,16 @@ export function ListDefinitionPage() {
 
   const isHistorical = data?.isHistorical ?? false;
   const isLocked = data?.lockState?.locked ?? false;
+
+  // 條件 chip 代碼 → 中文解碼器：彙整全部名單引用之欄位，延遲載入對應 options。
+  const conditionColumns = useMemo(
+    () =>
+      (data?.lists ?? []).flatMap(
+        (l) => l.conditionPayload?.conditions?.map((c) => c.columnName) ?? [],
+      ),
+    [data],
+  );
+  const decoder = useConditionDecoder(conditionColumns);
 
   const filteredByStage = useMemo(() => {
     const all = data?.lists ?? [];
@@ -697,6 +718,7 @@ export function ListDefinitionPage() {
                         key={l.listNo}
                         list={l}
                         identity={identity}
+                        decoder={decoder}
                         isHistorical={isHistorical}
                         isLocked={isLocked}
                         onView={handleView}

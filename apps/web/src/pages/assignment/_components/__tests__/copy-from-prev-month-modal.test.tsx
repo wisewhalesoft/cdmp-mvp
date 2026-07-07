@@ -1,10 +1,38 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {
   CopyFromPrevMonthModal,
   computePrevYm,
 } from '../copy-from-prev-month-modal';
 import type { AssignmentListItem } from '@/api/assignment-list';
+import * as pooldataFieldsApi from '@/api/pooldata-fields';
+import * as cardTypeApi from '@/api/card-type';
+import { __resetConditionDecoderCache } from '../../_hooks/use-condition-decoder';
+import {
+  DECODER_FIELDS,
+  DECODER_CARD_TYPES,
+  optionsResponseFor,
+} from '../../_hooks/__tests__/condition-decoder-fixtures';
+
+vi.mock('@/api/pooldata-fields', async () => {
+  const actual = await vi.importActual<typeof pooldataFieldsApi>('@/api/pooldata-fields');
+  return { ...actual, listFields: vi.fn(), listOptions: vi.fn() };
+});
+vi.mock('@/api/card-type', async () => {
+  const actual = await vi.importActual<typeof cardTypeApi>('@/api/card-type');
+  return { ...actual, listCardTypes: vi.fn() };
+});
+
+const mockedListFields = vi.mocked(pooldataFieldsApi.listFields);
+const mockedListOptions = vi.mocked(pooldataFieldsApi.listOptions);
+const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
+
+beforeEach(() => {
+  __resetConditionDecoderCache();
+  mockedListFields.mockResolvedValue(DECODER_FIELDS);
+  mockedListOptions.mockImplementation(async (col: string) => optionsResponseFor(col));
+  mockedListCardTypes.mockResolvedValue(DECODER_CARD_TYPES);
+});
 
 /**
  * F050 Phase 3 P2-6 — 從上月複製名單 modal
@@ -199,5 +227,28 @@ describe('CopyFromPrevMonthModal (component)', () => {
     );
     const row1 = screen.getByTestId('copy-row-OB202604001');
     expect(row1.textContent).toContain('CR');
+  });
+
+  it('條件摘要解碼欄位名稱與值（spec_tp 01→本牌/新車、caseYear 3$$4→3 年、4 年；未知碼 raw fallback）', async () => {
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        onCopy={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    // options 載入後值代碼解碼為中文
+    await waitFor(() => {
+      const row1 = screen.getByTestId('copy-row-OB202604001');
+      expect(row1.textContent).toContain('專案類別：本牌/新車');
+      expect(row1.textContent).toContain('3 年、4 年');
+    });
+    const row1 = screen.getByTestId('copy-row-OB202604001');
+    // prod_kind 'A1' 非白名單可選值 → raw fallback（顯示原碼），不裸露欄位代碼
+    expect(row1.textContent).toContain('產品類別：A1');
+    expect(row1.textContent).not.toContain('prod_kind');
   });
 });

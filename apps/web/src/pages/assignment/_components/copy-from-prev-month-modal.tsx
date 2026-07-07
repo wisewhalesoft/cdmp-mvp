@@ -7,7 +7,14 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import type { AssignmentListItem } from '@/api/assignment-list';
-import { fieldDisplayName, stageLabel } from '../_utils/labels';
+import { stageLabel } from '../_utils/labels';
+import {
+  useConditionDecoder,
+  type ConditionDecoder,
+} from '../_hooks/use-condition-decoder';
+
+/** 條件摘要涉及之欄位（whitelist snake_case），供 decoder 預載對應 options。 */
+const COPY_SUMMARY_COLUMNS = ['prod_kind', 'spec_tp', 'caseyear', 'case_status'];
 
 /**
  * F050 Phase 3 P2-6 — 從上月複製名單 modal
@@ -46,15 +53,34 @@ export interface CopyFromPrevMonthModalProps {
   onClose: () => void;
 }
 
-function formatConditionSummary(list: AssignmentListItem): string {
+/** 名單條件摘要：欄位名稱與（類別型）值代碼皆解碼為中文；查無對照回傳原始代碼。 */
+function formatConditionSummary(
+  list: AssignmentListItem,
+  decoder: ConditionDecoder,
+): string {
   const parts: string[] = [];
-  if (list.prodKind) parts.push(`${fieldDisplayName('prod_kind')}：${list.prodKind}`);
+  if (list.prodKind)
+    parts.push(
+      `${decoder.decodeField('prod_kind')}：${decoder.decodeValue('prod_kind', list.prodKind)}`,
+    );
   if (list.specTp)
-    parts.push(`${fieldDisplayName('spec_tp')}：${list.specTp.split('$$').filter(Boolean).join('、')}`);
+    parts.push(
+      `${decoder.decodeField('spec_tp')}：${decoder
+        .decodeValues('spec_tp', list.specTp.split('$$').filter(Boolean))
+        .join('、')}`,
+    );
   if (list.caseYear)
-    parts.push(`${fieldDisplayName('caseyear')}：${list.caseYear.split('$$').filter(Boolean).join('、')}`);
+    parts.push(
+      `${decoder.decodeField('caseyear')}：${decoder
+        .decodeValues('caseyear', list.caseYear.split('$$').filter(Boolean))
+        .join('、')}`,
+    );
   if (list.caseStatus)
-    parts.push(`${fieldDisplayName('case_status')}：${list.caseStatus.split('$$').filter(Boolean).join('、')}`);
+    parts.push(
+      `${decoder.decodeField('case_status')}：${decoder
+        .decodeValues('case_status', list.caseStatus.split('$$').filter(Boolean))
+        .join('、')}`,
+    );
   if (parts.length === 0) return '無條件';
   return parts.slice(0, 3).join(' / ') + (parts.length > 3 ? ' …' : '');
 }
@@ -67,6 +93,7 @@ export function CopyFromPrevMonthModal({
   onCopy,
   onClose,
 }: CopyFromPrevMonthModalProps) {
+  const decoder = useConditionDecoder(COPY_SUMMARY_COLUMNS);
   if (!open) return null;
 
   return (
@@ -157,7 +184,7 @@ export function CopyFromPrevMonthModal({
                         )}
                       </div>
                       <p className="text-xs text-gray-600 break-all">
-                        {formatConditionSummary(l)}
+                        {formatConditionSummary(l, decoder)}
                       </p>
                       <p className="text-[11px] text-gray-400 mt-1">
                         建立者 {l.createdBy} · 階段 {stageLabel(l.stage)}

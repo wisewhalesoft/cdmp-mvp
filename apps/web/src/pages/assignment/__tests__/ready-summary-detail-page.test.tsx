@@ -6,8 +6,16 @@ import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
 import * as assignmentRunApi from '@/api/assignment-run';
+import * as pooldataFieldsApi from '@/api/pooldata-fields';
+import * as cardTypeApi from '@/api/card-type';
 import * as authStore from '@/stores/auth-store';
 import type { AssignmentListItem, ListListsResponse } from '@/api/assignment-list';
+import { __resetConditionDecoderCache } from '../_hooks/use-condition-decoder';
+import {
+  DECODER_FIELDS,
+  DECODER_CARD_TYPES,
+  optionsResponseFor,
+} from '../_hooks/__tests__/condition-decoder-fixtures';
 
 /**
  * 29d 模式 B：單一 ready 名單詳情頁面測試
@@ -19,6 +27,14 @@ vi.mock('@/api/assignment-list');
 vi.mock('@/api/assignment-stage');
 vi.mock('@/api/assignment-run');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
+vi.mock('@/api/pooldata-fields', async () => {
+  const actual = await vi.importActual<typeof pooldataFieldsApi>('@/api/pooldata-fields');
+  return { ...actual, listFields: vi.fn(), listOptions: vi.fn() };
+});
+vi.mock('@/api/card-type', async () => {
+  const actual = await vi.importActual<typeof cardTypeApi>('@/api/card-type');
+  return { ...actual, listCardTypes: vi.fn() };
+});
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
   return {
@@ -38,6 +54,9 @@ const mockedRollbackApproval = vi.mocked(assignmentStageApi.rollbackToApproval);
 const mockedGetListEstimate = vi.mocked(assignmentRunApi.getListEstimate);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
+const mockedListFields = vi.mocked(pooldataFieldsApi.listFields);
+const mockedListOptions = vi.mocked(pooldataFieldsApi.listOptions);
+const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
 
 const list: AssignmentListItem = {
   listNo: 'OB202605002',
@@ -93,6 +112,10 @@ function renderPage(listNo = 'OB202605002') {
 describe('ReadySummaryDetailPage (29d 模式 B)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetConditionDecoderCache();
+    mockedListFields.mockResolvedValue(DECODER_FIELDS);
+    mockedListOptions.mockImplementation(async (col: string) => optionsResponseFor(col));
+    mockedListCardTypes.mockResolvedValue(DECODER_CARD_TYPES);
     mockedGetUser.mockReturnValue({
       id: 'd1',
       name: 'Director',
@@ -303,6 +326,27 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     });
     expect(mockedListLists).toHaveBeenCalledWith({ ym: '202606' });
     expect(screen.queryByTestId('list-not-found')).not.toBeInTheDocument();
+  });
+
+  it('篩選條件 chip 解碼欄位名稱與值（含 card_type 走 listCardTypes；未知碼 raw fallback）', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('list-summary-card')).toBeInTheDocument();
+    });
+    // spec_tp 01→本牌/新車；settle_src N→不含他行代償；caseyear 2→2 年
+    await waitFor(() => {
+      const card = screen.getByTestId('list-summary-card');
+      expect(card.textContent).toContain('專案類別：本牌/新車');
+      expect(card.textContent).toContain('不含他行代償');
+      expect(card.textContent).toContain('2 年');
+      // card_type M3 → listCardTypes 之 cardName「滿期卡」，欄位名「卡別」
+      expect(card.textContent).toContain('卡別：滿期卡');
+    });
+    const card = screen.getByTestId('list-summary-card');
+    // prod_kind 'A1' 非白名單可選值 → raw fallback（顯示原碼），且不再裸露開發者 SQL 字串
+    expect(card.textContent).toContain('產品類別：A1');
+    expect(card.textContent).not.toContain('PROD_KIND');
+    expect(card.textContent).not.toContain('SETTLE_SRC');
   });
 
   it('麵包屑：含「名單定義」根節點與「準備完成摘要 — 詳情」leaf + listNo', async () => {

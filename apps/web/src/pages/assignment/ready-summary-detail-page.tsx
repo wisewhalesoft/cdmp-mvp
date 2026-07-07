@@ -41,6 +41,13 @@ import {
 import { ApprovalHistoryTimeline } from './_components/approval-history-timeline';
 import { StageBreadcrumb } from './_components/stage-breadcrumb';
 import { getBusinessRole } from '@/stores/auth-store';
+import {
+  useConditionDecoder,
+  type ConditionDecoder,
+} from './_hooks/use-condition-decoder';
+
+/** 篩選條件摘要涉及之欄位（whitelist snake_case）；card_type 另由 listCardTypes 解。 */
+const READY_SUMMARY_COLUMNS = ['prod_kind', 'spec_tp', 'caseyear', 'settle_src'];
 
 /**
  * F088 / F089 — 準備完成單一名單詳情頁（29d 模式 B）
@@ -59,19 +66,39 @@ import { getBusinessRole } from '@/stores/auth-store';
  *   - 操作：返回 / 退回簽核 (director only) / 執行月跑
  */
 
-function splitConditionsFromList(list: AssignmentListItem): string[] {
+/**
+ * 將名單一級欄位攤平為篩選條件 chip 文字（欄位名稱 + 值皆解碼為中文）。
+ * 查無對照之代碼一律回傳原始碼（decoder 的 raw fallback），永不空白 / 臆測翻譯。
+ */
+function splitConditionsFromList(
+  list: AssignmentListItem,
+  decoder: ConditionDecoder,
+): string[] {
   const conditions: string[] = [];
-  if (list.prodKind) conditions.push(`PROD_KIND = ${list.prodKind}`);
+  if (list.prodKind)
+    conditions.push(
+      `${decoder.decodeField('prod_kind')}：${decoder.decodeValue('prod_kind', list.prodKind)}`,
+    );
   if (list.specTp) {
     const items = list.specTp.split('$$').filter(Boolean);
-    conditions.push(`SPEC_TP in (${items.join(', ')})`);
+    conditions.push(
+      `${decoder.decodeField('spec_tp')}：${decoder.decodeValues('spec_tp', items).join('、')}`,
+    );
   }
   if (list.caseYear) {
     const items = list.caseYear.split('$$').filter(Boolean);
-    conditions.push(`CASEYEAR in (${items.join(', ')})`);
+    conditions.push(
+      `${decoder.decodeField('caseyear')}：${decoder.decodeValues('caseyear', items).join('、')}`,
+    );
   }
-  if (list.cardType) conditions.push(`CARD_TYPE = ${list.cardType}`);
-  if (list.settleSrc) conditions.push(`SETTLE_SRC = ${list.settleSrc}`);
+  if (list.cardType)
+    conditions.push(
+      `${decoder.decodeField('card_type')}：${decoder.decodeValue('card_type', list.cardType)}`,
+    );
+  if (list.settleSrc)
+    conditions.push(
+      `${decoder.decodeField('settle_src')}：${decoder.decodeValue('settle_src', list.settleSrc)}`,
+    );
   return conditions;
 }
 
@@ -101,6 +128,9 @@ export function ReadySummaryDetailPage() {
   const businessRole = getBusinessRole();
   const isSectionChief = businessRole === 'section_chief';
   const canRollback = !isSectionChief; // F089 director only
+
+  // 篩選條件 chip 代碼 → 中文解碼器（欄位固定 5 項；card_type 走 listCardTypes）。
+  const decoder = useConditionDecoder(READY_SUMMARY_COLUMNS);
 
   useEffect(() => {
     if (!listNo) return;
@@ -419,7 +449,7 @@ export function ReadySummaryDetailPage() {
               description="（建立時設定，已鎖定）"
               createdBy={list.createdBy}
               createdAt={list.createdAt.slice(0, 10)}
-              conditions={splitConditionsFromList(list)}
+              conditions={splitConditionsFromList(list, decoder)}
               crEnabled={list.crEnabled ?? false}
             />
 

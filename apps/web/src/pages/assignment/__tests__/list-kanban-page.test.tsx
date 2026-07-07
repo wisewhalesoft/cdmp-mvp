@@ -25,15 +25,31 @@ import { AssignmentWorkYmProvider } from '@/contexts/assignment-work-ym-context'
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
+import * as pooldataFieldsApi from '@/api/pooldata-fields';
+import * as cardTypeApi from '@/api/card-type';
 import * as authStore from '@/stores/auth-store';
 import type {
   ListListsResponse,
   AssignmentListItem,
 } from '@/api/assignment-list';
+import { __resetConditionDecoderCache } from '../_hooks/use-condition-decoder';
+import {
+  DECODER_FIELDS,
+  DECODER_CARD_TYPES,
+  optionsResponseFor,
+} from '../_hooks/__tests__/condition-decoder-fixtures';
 
 vi.mock('@/api/assignment-list');
 vi.mock('@/api/assignment-stage');
 vi.mock('@/api/auth', () => ({ logout: vi.fn().mockResolvedValue({}) }));
+vi.mock('@/api/pooldata-fields', async () => {
+  const actual = await vi.importActual<typeof pooldataFieldsApi>('@/api/pooldata-fields');
+  return { ...actual, listFields: vi.fn(), listOptions: vi.fn() };
+});
+vi.mock('@/api/card-type', async () => {
+  const actual = await vi.importActual<typeof cardTypeApi>('@/api/card-type');
+  return { ...actual, listCardTypes: vi.fn() };
+});
 vi.mock('@/stores/auth-store', async () => {
   const actual = await vi.importActual('@/stores/auth-store');
   return {
@@ -52,6 +68,9 @@ const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedApproveList = vi.mocked(assignmentStageApi.approveList);
 const mockedRejectList = vi.mocked(assignmentStageApi.rejectList);
+const mockedListFields = vi.mocked(pooldataFieldsApi.listFields);
+const mockedListOptions = vi.mocked(pooldataFieldsApi.listOptions);
+const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
 
 function makeItem(over: Partial<AssignmentListItem>): AssignmentListItem {
   return {
@@ -118,6 +137,11 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetConditionDecoderCache();
+  // 條件 chip 解碼器 API（欄位 / 值 / 卡別）代表性 seed
+  mockedListFields.mockResolvedValue(DECODER_FIELDS);
+  mockedListOptions.mockImplementation(async (col: string) => optionsResponseFor(col));
+  mockedListCardTypes.mockResolvedValue(DECODER_CARD_TYPES);
   mockedGetUser.mockReturnValue({
     id: 'u-1',
     name: '王部長',
@@ -205,6 +229,49 @@ describe('F048 v2.0 Kanban 主頁 — 渲染（TS-F048-K-001~008）', () => {
     // condition chips：case_status 與 caseyear 兩個欄位（以中文顯示名稱呈現，不裸露欄位代碼）
     expect(card.textContent).toContain('案件結清期別');
     expect(card.textContent).toContain('進件 / 滿期年數');
+    // 值代碼亦解碼為中文（case_status 01→期中(不含當月滿期)、02→中結；caseyear 3→3 年）
+    await waitFor(() => {
+      const c = screen.getByTestId('kanban-card-OB202605001');
+      expect(c.textContent).toContain('期中(不含當月滿期)');
+      expect(c.textContent).toContain('3 年');
+    });
+  });
+
+  it('K-002b 值代碼未對照 → raw fallback（顯示原始代碼，不空白 / 不臆測）', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [
+          makeItem({
+            listNo: 'OB202605001',
+            conditionPayload: {
+              conditions: [
+                { columnName: 'case_status', fieldType: 'categorical', values: ['77'] },
+              ],
+              logic: 'AND',
+            },
+          }),
+        ],
+        stageCounts: {
+          draft: 1,
+          dept_ratio: 0,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('kanban-card-OB202605001')).toBeTruthy();
+    });
+
+    const card = screen.getByTestId('kanban-card-OB202605001');
+    // 欄位名稱正常解碼；未知值代碼 '77' 以原始代碼顯示（raw fallback）
+    expect(card.textContent).toContain('案件結清期別');
+    expect(card.textContent).toContain('77');
   });
 
   it('K-003 conditionPayload IS NULL → 卡片顯示 LEGACY badge', async () => {
