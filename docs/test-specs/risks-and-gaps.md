@@ -1087,3 +1087,51 @@ last_updated: 2026-07-08
 - **影響**：與 `R-MSSQL-P4A-05` 相同——若 CI 尚無 `.mssql.spec.ts` 序列化 lane，P4b 之 lookup 相關真實 MSSQL 案例將再次疊加對同一既有風險的曝險。
 - **建議**：`infrastructure/AD-E07-41-P4b-test.md` §0.2 已將 `dbo` 佔用範圍限縮至最小（僅 lookup legacy-mode 案例，merge 與 lookup 之防禦性分支完全以 `##` fixture 繞開），沿用 P4a 已建立之隨機化尾碼命名 + `afterAll` 主動清除設計。根本解法（CI 序列化 lane）非本輪新問題，超出 test-designer 職責範圍，僅延續記錄提醒。
 - **風險等級**：低（已有範圍限縮設計降低曝險機率，屬既有已記錄風險之第三度疊加提醒，非本輪新增之根本問題）
+
+---
+
+## MSSQL 全面遷移 P4c 風險與待決問題（AD-E07-41，2026-07-08 新增，P4 第三片，P4 最複雜切片）
+
+> 完整測試設計見 [infrastructure/AD-E07-41-P4c-test.md](infrastructure/AD-E07-41-P4c-test.md)。本節彙整 P4c（Handler 群組三：dedup/target-load，含 tie-breaker + customer_core UPSERT 兩段式 + target-load 三種 loadMode 全覆蓋）範圍內識別之風險；P4d/e 之風險留待各自測試設計文件記錄。
+
+### R-MSSQL-P4C-01（🔴🔴 最高，本輪查證出之範圍擴大核心依據）：`target-load-handler.ts` 服務範圍遠超 customer_core，AD §5.1/§9 P4c DoD 完全未提及 `fullMode`/`partition_replace` 兩條真實路徑
+
+- **問題**：test-designer grep `apps/api/src/database/seeds/data/etl-pipelines.json` 全部 6 條 pipeline（非僅 customer_core），確認 `target_load` 節點被 6 條 pipeline 共用：`ob_arreturndf_min_cap`/`ob_calendar`/`ob_emphire`/`ob_pool_data` 四者 `fullMode:true`（TRUNCATE + 批次 INSERT，含 PK 防禦性去重）；`ob_pool_data_list` 為 `loadMode:'partition_replace'`（DELETE 指定分區 + INSERT 附加分區值）；僅 customer_core 為 `fullMode:false`（AD §5.1 唯一文字描述之 UPSERT 路徑）。AD-E07-41 §5.1「Customer_core UPSERT 專節」與 §9 P4c DoD「customer_core UPSERT 兩段式陳述式測試」文字範圍完全未提及另外 5 條 pipeline 所依賴的 `fullMode`/`partition_replace` 兩條路徑，而這 3 種模式共用同一份 `target-load-handler.ts`／即將同一份 `target-load-handler-mssql.ts`。
+- **影響**：`createDispatcher()` 之 `DB_TYPE` 分支於本輪（P4c）首次接線（P4a/P4b 皆決議延後），cutover 後全部 6 條 pipeline 會直接呼叫同一個 mssql 版 `TargetLoadHandler` 實例。若 tdd-implementation 僅依 AD 文字範圍實作 customer_core UPSERT 路徑，另外 5 條既有生產 pipeline（E03/E04 raw data landing 之既有機制，涉及 F017–F026 等既有 feature）會在 MSSQL 上因缺少 `fullMode`/`partition_replace` 對應邏輯而 100% 執行失敗，且 P4d（端對端測試）範圍僅限 customer_core 53 節點，**不會**觸及這 5 條 pipeline，代表此缺口在現行 P4 子切片規劃下完全沒有任何測試能於上線前攔截，只會在真實 cutover 後才暴露。
+- **建議**：`infrastructure/AD-E07-41-P4c-test.md` 已主動擴大範圍，新增 §四 FULLMODE（11 案例，含 `FULLMODE-MSSQL-002` composite PK 旗艦案例仿 `ob_pool_data` 之 `orgno`+`appl_no` PK）+ §五 PARTITION（6 案例，仿 `ob_pool_data_list` 之 `data_source` 分區欄），皆以真實既有 `dbo` baseline 表（`ob_calendar`/`ob_emphire`/`ob_arreturndf_min_cap`）或合成 throwaway 表（過重之 `ob_pool_data`/`ob_pool_data_list`）驗證。強烈建議 system-architect 於下次修訂 AD-E07-41 §5/§9 時同步補列此兩條路徑之正式 DoD 描述，並評估是否需要新增一個涵蓋這 5 條既有 pipeline 之獨立端對端驗證切片（目前 P4d 範圍未涵蓋）。
+- **風險等級**：高（已有明確測試守門可攔截 handler 層級之邏輯正確性，但真實 5 條生產 pipeline 之端對端驗證仍存在缺口，非 test-designer 單輪測試設計可完全填補，需 system-architect 裁示是否擴大 P4d 範圍或另開子切片）
+
+### R-MSSQL-P4C-02（🔴🔴 高，本輪查證出之第二高風險，與 AD §4 核心設計同型但完全未被涵蓋）：`target-load-handler.ts` 內部另有兩處未記載的 `DISTINCT ON` 去重站點，語意上與 I-MSSQL-DEDUP-TIEBREAK-01 所述之 tie-breaker 風險完全同型
+
+- **問題**：`target-load-handler.ts` 除了呼叫上游 `dedup-handler.ts` 外，自身內部**另有兩處** `DISTINCT ON`：(a) `fullMode` 路徑之 `SELECT DISTINCT ON (${pkColList}) ... ORDER BY ${pkColList}`（防禦性 PK 去重，因來源端 MSSQL schema 未必有 PK constraint）；(b) customer_core UPSERT 路徑之 `SELECT DISTINCT ON ("source_customer_no") ... ORDER BY "source_customer_no"`（PG 原始碼註解明確承認「handles collisions caused by `NULLIF(TRIM())` normalization」——即上游 `dedup-handler.ts` 之 d3 節點在 TRIM 正規化**之前**依原始字串去重，`'A12345 '` 與 `'A12345'` 當下被視為兩個不同 key 皆存活，只有到了 `target-load-handler.ts` 自身做 TRIM 正規化後才會碰撞，這是 d3 從未見過的**新**碰撞）。兩處 `ORDER BY` 皆**僅含 key 本身**，無任何次要排序鍵，與 AD §4.1 描述的 `dedup-handler.ts` 原始 PG `DISTINCT ON` 問題（僅有主鍵排序、`ctid` 才是隱性決勝依據）性質完全相同，但 AD §4/§5.1/I-MSSQL-DEDUP-TIEBREAK-01 條文字面完全未提及這兩處站點，該不變式敘述僅以「Dedup 邏輯」一詞帶過，容易讓讀者誤解為僅指 `dedup-handler.ts` 本身。
+- **影響**：若 tdd-implementation 將這兩處 `DISTINCT ON` 樸素翻譯為 `ROW_NUMBER() OVER(PARTITION BY key ORDER BY key)`（無額外決定性鍵），語法上合法可執行、不會拋錯，但對同 key 值之多列，「哪一列勝出」屬未定義/查詢計畫相依行為——這正是一種**不會被單元測試的「執行成功」斷言揪出、只有比對「勝出列內容」才會發現**的靜默資料正確性風險，且 (b) 情境已由 PG 原始碼註解證實為真實會發生的資料碰撞（非理論假設）。
+- **建議**：`infrastructure/AD-E07-41-P4c-test.md` 已將此發現獨立立為 §二 TLDEDUP（11 案例，緊接於 §一 DEDUP 之後）：`TLDEDUP-UNIT-001/002`（🔴🔴 MUST-FIX，兩處皆須含顯式決定性鍵）+ `TLDEDUP-GATE-001`（決策關卡，不預設具體實作但要求 impl log 記錄）+ `TLDEDUP-EQ-001`（🔴 旗艦案例，直接模擬 PG 註解描述的 TRIM 碰撞情境）+ `TLDEDUP-TRAP-001`（陷阱佐證，論證型案例，明確標注「待 tdd-impl 真庫驗證」因其非決定性本質難以於單次測試穩定重現）。強烈建議 system-architect 於下次修訂 AD-E07-41 時，將 I-MSSQL-DEDUP-TIEBREAK-01 條文字面明確擴大涵蓋此二站點，避免未來讀者依字面誤判範圍已窮盡。
+- **風險等級**：高（已有明確測試守門可攔截，但因是「靜默資料正確性」而非「拋錯」型風險，若 test-designer 未主動逐檔查證，極可能被下游完全遺漏至上線後才由業務比對資料時發現，除錯成本遠高於本輪單元測試層級；(b) 情境已有 PG 原始碼註解證實為真實會發生，非假設性風險）
+
+### R-MSSQL-P4C-03（中，本輪查證出之全新清理責任模型）：`target-load-handler.ts` 內部暫存表之清理獨立於 P4a 已建立的 `NodeOutputStore.cleanupAll()` 機制之外，屬全新責任
+
+- **問題**：`target-load-handler.ts` 執行完畢回傳 `{ tempTable: '', rowCount }`（空字串），其內部建立的 enriched `tempTable` 與 `dedupTable`（`fullMode`/UPSERT 兩處）**從未**透過 `DataSet.tempTable` 向 `NodeOutputStore` 註冊。P4a `CLEANUP-003` 決議之 `NodeOutputStore.cleanupAll()` 機制（依 `store` 內容 + `createdTables` 累積集合清理）天生只能清理曾被註冊過的表，**不會**、也**不應該被期待**涵蓋這兩張表——這與 P4a/P4b 其餘 8 個 handler（皆透過 `DataSet.tempTable` 交由 pipeline 層級統一收斂）之清理責任模型不同，是 target-load 獨有的例外。PG 版本現行也僅於**成功路徑尾端**呼叫 `DROP TABLE IF EXISTS`，若核心 DML（`UPSERT`/`INSERT`/`DELETE`）之 `try/catch` 捕捉錯誤後 `throw`，PG 版同樣不會執行到後續清理——這在 PG 上無害（session/交易結束自動回收暫存表），但在 MSSQL `##global temp` 上完全不成立（P4-spike-2 POINT4 已實證 `##` 於連線池 `release()` 後仍殘留）。
+- **影響**：若 tdd-implementation 逕自假設「只要接上 P4a 已建立的 `NodeOutputStore.cleanupAll()` 機制，全部 9 個 handler 的暫存表清理就已一致處理」，會遺漏 target-load 內部這兩張表的失敗路徑清理，導致每次 UPSERT/fullMode 失敗（如型別轉換錯誤、NOT NULL 違反）皆會在 `tempdb` 累積一組未清理的 `##` 表，長期執行下有 `tempdb` 空間洩漏風險，且此類洩漏不會被既有 `CLEANUP-003`/`CLEANUP-004` 系列測試（僅涵蓋透過 `NodeOutputStore` 註冊路徑）發現。
+- **建議**：`infrastructure/AD-E07-41-P4c-test.md` 已設計 §七 CLEANUP（5 案例）：`CLEANUP-UNIT-001/002`（🔴 MUST-FIX，黑盒 spy 驗證成功路徑清理）+ `CLEANUP-GATE-001`（🔴 決策關卡，要求 impl log 明確記錄「本 handler 不依賴 pipeline 層級清理」此一與其餘 8 個 handler 不同的事實）+ `CLEANUP-MSSQL-002`（真實 MSSQL 人為觸發失敗，驗證失敗路徑清理）。
+- **風險等級**：中（已有明確測試守門可攔截；風險本質為長期資源洩漏而非立即功能性失敗，不阻擋 P4c 交付，但若遺漏，問題會在生產環境長期運行後才逐漸顯現，除錯難度較高）
+
+### R-MSSQL-P4C-04（中，AD 完全未提及之 catalog 站點 + 既有共用 helper 欄位缺口）：`getPrimaryKeyColumns()`（`fullMode` 專屬）與 `inputColumnTypes`/`varcharColumns`（`NULLIF(TRIM())` 判斷用）兩處站點，後者需要既有共用 helper 未涵蓋之欄位型別資訊
+
+- **問題**：(a) `getPrimaryKeyColumns()` 為 `fullMode` 路徑呼叫的 catalog 查詢站點（`information_schema.table_constraints` JOIN `information_schema.key_column_usage`），AD §3.2/§5.1 完全未提及，且需正確處理 composite PK（`ob_pool_data` 之 `orgno`+`appl_no`）之 `ordinal_position` 排序。(b) `inputColumnTypes`（用於判斷 `varcharColumns` 以決定是否套用 `NULLIF(TRIM())` 正規化）需要輸入暫存表各欄位之 `data_type`，但 P4a 建立的共用 helper `getMssqlTempTableColumns` 回傳型別 `MssqlTempTableColumn { name, columnId }` **不含** `data_type`——這是 P4a/P4b 兩輪皆未出現過的需求（該兩輪 9 個 handler 中的 7 個僅需欄位名/順序），本輪為首次需要型別資訊之站點。
+- **影響**：(a) 若遺漏或翻譯錯誤，`fullMode` 路徑之 composite PK 去重會產生錯誤結果或直接拋錯，影響 `ob_pool_data` 這條真實 pipeline。(b) 若簡單假設「所有欄位都套用 `NULLIF(TRIM())`」而跳過型別判斷，會對數值/日期型欄位誤套用字串函式導致型別錯誤；若 tdd-implementation 在沒有既有指引下自行決定是否修改共用 helper，可能與 P4a/P4b 已完成之 7 個既有呼叫端產生不一致的 helper 版本認知。
+- **建議**：`infrastructure/AD-E07-41-P4c-test.md` 已將 (a) 納入 §四 FULLMODE 之 `FULLMODE-UNIT-001/002`，(b) 設計為 `CATALOG-GATE-001`（🔴 決策關卡：additive 擴充既有 `MssqlTempTableColumn` 型別新增 `dataType` 欄位供全部呼叫端共用，或 target-load 內另寫專屬查詢，兩案皆可接受但須 impl log 記錄選擇），並設計 `STATIC-003` 確保若選擇擴充路徑，既有欄位語意不被破壞。建議 system-architect 於下次修訂 AD-E07-41 §3.1 時考慮是否將 `dataType` 一併納入共用 helper 的正式設計範圍，減少未來子切片各自決策的認知負擔。
+- **風險等級**：中（已有明確測試守門可攔截，屬程式碼翻譯正確性風險而非已知已發生問題；(a) 影響範圍明確界定於 `ob_pool_data` 一條 pipeline，(b) 為決策關卡而非阻擋項）
+
+### R-MSSQL-P4C-05（低，現況記錄延續，非阻擋，本輪首次直接涉及真實生產表）：`dbo` schema 佔用範圍第四度擴大，且本輪首次直接對真實既有生產 baseline 表寫入測試資料
+
+- **問題**：`R-MSSQL-P4A-05`/`R-MSSQL-P4B-06` 已記錄 `dbo` 獨佔保留慣例自 P1b2/P1b3 依序延伸至 P4-0/P4a/P4b。本輪查證確認：customer_core UPSERT EQ 案例、`fullMode` 單一 PK 代表案例（`ob_calendar`/`ob_emphire`/`ob_arreturndf_min_cap`）皆**直接使用既有真實生產 baseline 表**，而非如 P4a/P4b 一貫的合成 `##`/throwaway `dbo` fixture——這是 MSSQL 遷移系列測試首次直接對「非本輪新建」之既有真實表寫入業務性測試資料。
+- **影響**：若測試案例之資料隔離/清理設計不夠精確（如誤用整表 `TRUNCATE` 而非精準刪除本案例寫入列），有風險影響同一 CI 執行週期內其他驗證這些表之既有測試套件（`mssql-p1b2`/`mssql-p1b3`/`mssql-p4-0` 系列）。經查證，該些既有套件僅驗證存在性與型別、未寫入業務資料，故 `fullMode` 案例採 `TRUNCATE`（語意本身即為全量替換）風險可控；但若 CI 尚無 `.mssql.spec.ts` 序列化 lane，仍存在多套件平行操作同一真實表的理論風險。
+- **建議**：`infrastructure/AD-E07-41-P4c-test.md` §0.2 已明確設計隔離策略（客戶資料表以顯著前綴 + `afterEach` 精準刪除；`ob_calendar`/`ob_emphire`/`ob_arreturndf_min_cap` 因語意上即為 `fullMode` 全量替換且經查證非其他套件驗證資料之對象，`TRUNCATE` 安全）；`ob_pool_data`/`ob_pool_data_list` 因逾百欄過重，改用合成 throwaway 表繞開此風險。根本解法（CI 序列化 lane）非本輪新問題，超出 test-designer 職責範圍，僅延續記錄提醒。
+- **風險等級**：低（已有明確隔離設計降低曝險機率；記錄用意在於提醒本輪測試首次觸及「真實既有生產表」此一性質轉變，供 tdd-implementation 執行時格外留意資料隔離的精確性）
+
+### R-MSSQL-P4C-06（低，AD 表格文字範圍再次低估，已逐檔查證補齊，非阻擋，第三次重演）：AD §5.1 對 `target-load-handler.ts` 之描述完全聚焦於 UPSERT 陳述式本身，未提及其共用之上游/下游輔助邏輯站點
+
+- **問題**：延續 `R-MSSQL-P4A-06`/`R-MSSQL-P4B-05` 已記錄之「AD 逐 handler 改寫要點表遺漏站點」重演模式，本輪查證發現 AD §5.1 之 customer_core UPSERT 描述僅涵蓋兩段式 `UPDATE`/`INSERT` 陳述式本身，完全未提及：(a) 上游 enriched `tempTable` 建立時之 `NULLIF(TRIM())` 正規化與系統字面值 cast（`::TIMESTAMP`/`::UUID`）；(b) ghost gate 之 `LENGTH(TRIM())`；(c) `notNullTargetCols` 之 catalog 查詢。這些站點雖然個別而言翻譯難度不高（多為既有 Pattern B/型別轉換原則之直接應用），但數量分散、容易在逐項核對 AD 文字時被遺漏。
+- **影響**：若被遺漏，會分別導致寫入 customer_core 之系統時間戳記/UUID 欄位型別錯誤、ghost gate 判斷失效（過短 `source_customer_no` 未被正確排除）、NOT NULL 守門查詢語法錯誤。
+- **建議**：`infrastructure/AD-E07-41-P4c-test.md` 已將 (a)(b)(c) 分別納入 §八 LITERAL、`UPSERT-UNIT-004`、§六 CATALOG，已足以在 P4c 階段攔截。建議 system-architect 於下次修訂 AD-E07-41 時，於 §3.2/§5.1 表格新增「輔助站點」欄位，明確列出每個 handler 除核心陳述式外之全部字串函式/cast/catalog 依賴，降低此類遺漏之重演機率（此為本專案 MSSQL 遷移系列第三次記錄同型態問題）。
+- **風險等級**：低（已於本輪測試設計完整補齊，不構成 P4c 阻擋；記錄用意在於提醒此為可預期重演模式，供未來 P4d/P4e 或其他子切片測試設計時優先主動 grep 覆核，而非僅信任 AD 表格文字定範圍）
