@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.20"
-date: 2026-07-02
+version: "3.21"
+date: 2026-07-07
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.21 / 2026-07-07 / MSSQL 全面遷移 P1（Driver / Entity / Schema 基礎層）架構設計**：非 F-numbered feature（資料庫平台遷移基礎建設，由使用者直接拍板三項硬約束驅動：完全消除 PostgreSQL／佇列自建 T-SQL／目標 SQL Server 2022 + `Chinese_Taiwan_Stroke_BIN` collation）。新增 **[`implementation-log/AD-E07-38-mssql-p1-driver-entity-schema.md`](implementation-log/AD-E07-38-mssql-p1-driver-entity-schema.md)**，固化 P1 七項設計決策：(1) 三個 TypeORM 設定點（`data-source.ts`/`app.module.ts`/`worker-app.module.ts`）dialect 三分支 + `column-types.ts` 三既有 helper（`dateColumnType`/`jsonColumnType`/`surrogatePkType`）擴充 mssql 分支 + 新增 `uuidColumnType`/`longTextColumnType`；(2) entity 型別逐項對照（uuid 18 處/bigint 2 處/text 17 處/bytea 0 處，helper 覆蓋 29+3+5 檔）；(3) BIN collation 約束（字串比較語意不回歸=正確決策；識別碼大小寫敏感→全小寫+守門測試 I-MSSQL-CASE-01）；(4) schema 兩軌建置流程（dev synchronize 產草稿→人工稽核→prod baseline；`fn_calc_tier_level` 視為死碼、P1 不建立）；(5) Pattern B `$n`→named param 核心 6 處 + `pg_advisory_xact_lock`→`sp_getapplock` 對應表（回傳碼↔`55P03`）；(6) P1a/P1b/P1c 三個實作切片與 DoD；(7) 判定不需要 spec-writer（行為不變、無新業務規則）。**刻意未動**：`architecture-spec.md`（本輪為多階段遷移之 Phase 1 設計、尚未實作落地，暫不改動「現行系統架構」主檔，待 P1 實作完成或遷移進度足夠成熟後再議是否併入；system-architect 判斷保留彈性）。另發現**第 5 個 PG-only 機制**（`assignment-run-report.service.ts` F064 匯出之 PostgreSQL native server-side cursor）已移入 Phase 3/4 待辦。
 
 > **v3.20 / 2026-07-02 / F109 新增「客戶資料」來源篩選欄位（US-172）**：依已核可 US-172 **新建 F109**（M06 篩選欄位）。本輪變更檔案：
 > - **新建 v1.0**：[F109-customer-source-filter-fields.md](features/F109-customer-source-filter-fields.md)（白名單引入 `data_source` 概念〔`ob_pool_data` / `customer_core`〕+ API 暴露 `dataSource` + M06 列表來源欄 + 名單定義來源分組；新增 8 個 `customer_core` 篩選欄位〔性別 code→label / 年齡衍生 AGE 基準＝`project_workym` 月首日 / 居住城市 `LEFT(cpost_city,3)` 縣市級 / 5 個 `_desc` value=label〕；F076 seed 7 categorical 欄位可選值〔3/55/8/5/4/9/22〕；月跑 Stage 1 **條件式** LEFT JOIN customer_core〔`custo_no=source_customer_no`〕+ **NULL=排除** 核心語意〔BR-2/BR-3〕+ 三處消費一致〔月跑 / Stage 0 試算 / 名單試算，BR-10〕。US-172 4 個 OQ〔年齡基準 / 城市 seed / 性別機制 / 空表限制〕已裁示落規格）
