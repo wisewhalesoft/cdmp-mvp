@@ -199,7 +199,7 @@ const ZZIP_HIT = {
   INCOME_SOURCE: 'S1',
   INDUSTRY: 'I1',
   JOB_LEVEL: 'L1',
-  MONTH_INCOME: 'B3', // 非數字碼：命中 income lookup 但 type_cast→NULL（規避 DECIMAL(38,10)→varchar(5) 溢位，見 impl log FINDING-P4D-01）
+  MONTH_INCOME: '3', // 數字碼（真實 legacy 所得級距）：命中 income lookup（→ '中所得'）且 type_cast DECIMAL 經去尾零正規化為 '3'（AD-E07-41 §5.6 修 FINDING-P4D-01，不再溢位 varchar(5)）
   HPOST_NUM: '100',
   CPOST_NUM: '100',
   CO_NUM: '100',
@@ -216,7 +216,7 @@ function bamcodeRows(): Record<string, string | null>[] {
     { TBL_ID: 'Y0', TBL_CD: 'S1', TBL_DESC1: '薪資所得' },
     { TBL_ID: 'AA', TBL_CD: 'I1', TBL_DESC1: '製造業' },
     { TBL_ID: 'A6', TBL_CD: 'L1', TBL_DESC1: '中級主管' },
-    { TBL_ID: 'A3', TBL_CD: 'B3', TBL_DESC1: '中所得' },
+    { TBL_ID: 'A3', TBL_CD: '3', TBL_DESC1: '中所得' }, // income lookup（lk_income1: TBL_ID='A3' match MONTH_INCOME='3'）→ '中所得'
   ];
 }
 

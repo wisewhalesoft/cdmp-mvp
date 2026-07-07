@@ -59,10 +59,11 @@ export class TypeCastHandlerMssql implements NodeExecutor {
         // 全程 TRY_CAST（AD §5.3 統一防禦；nvarchar 轉型必然合法，TRY_CAST 對非 NULL 輸入不回 NULL）
         const sv = `TRY_CAST("${col}" AS ${TEXT_CAST})`;
         const validation = this.buildValidation(rule.targetType, sv);
-        // 兩階段：先短路 NULL、再格式驗證，通過才 TRY_CAST（invalid 值 TRY_CAST 回 NULL，不拋錯）
+        // 兩階段：先短路 NULL、再格式驗證，通過才轉型（invalid 值 TRY_CAST 回 NULL，不拋錯）
+        const castExpr = this.castExpression(rule.targetType, sv, mssqlType);
         selectParts.push(
           `CASE WHEN "${col}" IS NOT NULL THEN ` +
-            `CASE WHEN ${validation} THEN TRY_CAST(${sv} AS ${mssqlType}) ELSE NULL END ` +
+            `CASE WHEN ${validation} THEN ${castExpr} ELSE NULL END ` +
             `ELSE NULL END AS "${col}"`,
         );
       } else {
@@ -93,6 +94,34 @@ export class TypeCastHandlerMssql implements NodeExecutor {
       default:
         return 'NVARCHAR(4000)';
     }
+  }
+
+  /**
+   * 目標型別之轉型表達式（FINDING-P4D-01 / AD-E07-41 v1.2 §5.6，不變式 I-MSSQL-DECIMAL-NORMALIZE-01）。
+   *
+   * 🔴 DECIMAL 特例：`toMssqlType('DECIMAL')` = `DECIMAL(38, 10)` 使 `TRY_CAST('3' AS DECIMAL(38,10))`
+   *   = `3.0000000000`（固定 10 位小數）。下游 target_load 隱式轉入短欄（如 customer_core
+   *   `monthly_income_code varchar(5)`）→ '3.0000000000'（12 字元）→ 算術溢位、pipeline tl1 掛。
+   *   PG `NUMERIC` 無固定尾零（`'3'::NUMERIC` → '3'），故 PG 路徑不受影響、byte-identical 不動。
+   *
+   *   修法：`TRY_CAST(.. AS DECIMAL(38,10))` 保留為「合法性關卡」（invalid → NULL），輸出改「去尾零
+   *   正規化字串」——先 `CONVERT(VARCHAR(50), ..)` 為字串，`RTRIM(.., '0')` 剝尾端 0，`RTRIM(.., '.')`
+   *   剝殘留小數點，`NULLIF(.., '')` 保底空字串 → NULL。使 MSSQL 輸出與 PG 對齊：
+   *     '3'→'3'；'1.5'→'1.5'；'3.10'→'3.1'；'0.055'→'0.055'；'007'→'7'（DECIMAL 前導零本就正規化）；
+   *     'abc'→NULL（driven by 外層 validation 關卡，不進本式）。
+   *
+   *   （TRY_CAST 對合法但超界值 → NULL；CONVERT/RTRIM/NULLIF 對 NULL 皆傳遞 NULL，行為與原一致。）
+   *
+   * INTEGER / DATE / 其餘：維持原 `TRY_CAST(sv AS mssqlType)`（無固定尾零問題）。
+   *
+   * @param sv 已為字串型別之欄位表達式（`TRY_CAST("col" AS NVARCHAR(4000))`）
+   * @param mssqlType `toMssqlType(targetType)` 之方言型別（DECIMAL 為 `DECIMAL(38, 10)`）
+   */
+  private castExpression(targetType: string, sv: string, mssqlType: string): string {
+    if (targetType === 'DECIMAL') {
+      return `NULLIF(RTRIM(RTRIM(CONVERT(VARCHAR(50), TRY_CAST(${sv} AS ${mssqlType})), '0'), '.'), '')`;
+    }
+    return `TRY_CAST(${sv} AS ${mssqlType})`;
   }
 
   /**

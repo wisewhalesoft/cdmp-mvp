@@ -462,20 +462,24 @@ describe('P4d 破壞性/自癒（真實 MSSQL）', () => {
     await restoreMainState();
   });
 
-  it('FINDING-P4D-01（🔴 跨引擎業務級差異）：數字型 MONTH_INCOME 使 tl1 於 MSSQL 溢位失敗（PG 不受影響）', async () => {
+  it('FINDING-P4D-01（🔴 跨引擎業務級差異已修，AD §5.6）：數字型 MONTH_INCOME 經去尾零正規化，tl1 不再溢位、customer_core 寫入 income', async () => {
     if (gate()) return;
     await deleteCustomerRows(h.qr!);
-    // 將 ZH 的 MONTH_INCOME 改為數字 '3'（真實 legacy 所得級距為數字碼）
+    // 將 ZH 的 MONTH_INCOME 明確設為數字 '3'（真實 legacy 所得級距為數字碼；fixture 亦已預設 '3'）
     await h.qr!.query(
       `UPDATE "${RAW_EXTRACT.e1}" SET "MONTH_INCOME" = N'3' WHERE "CUSTO_NO" = @0`,
       [CUST.ZH],
     );
     const r = await runPipeline(uniqueLogId());
     const tl1 = r.nodeLogs.find((l) => l.nodeId === 'tl1')!;
-    expect(tl1.status).toBe('failed');
-    // DECIMAL(38,10)→varchar(5)（monthly_income_code）算術溢位
-    expect(tl1.errorMessage || '').toMatch(/overflow|truncat/i);
-    console.log('[P4d FINDING-P4D-01] tl1 error =', tl1.errorMessage);
+    // 去尾零正規化：DECIMAL(38,10) '3'→'3'（非 '3.0000000000'）→ 塞入 monthly_income_code varchar(5) 不溢位
+    expect(tl1.status).toBe('completed');
+    expect(tl1.errorMessage ?? '').not.toMatch(/overflow|truncat/i);
+    const zh = await readCode(CUST.ZH);
+    expect(zh).not.toBeNull();
+    expect(zh.monthly_income_code).toBe('3'); // 去尾零字串成功寫入短欄（PG 側 NUMERIC 亦渲染為 '3'，EQ 一致）
+    expect(zh.monthly_income_desc).toBe('中所得'); // income lookup（TBL_ID='A3' match '3'）仍命中
+    console.log('[P4d FINDING-P4D-01] tl1 status =', tl1.status, '| monthly_income_code =', zh.monthly_income_code);
     await restoreMainState();
   });
 });

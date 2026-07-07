@@ -457,6 +457,25 @@ describe('P4a CAST-UNIT (type-cast-handler-mssql)', () => {
     expect(dateSql).toContain('LEN(TRY_CAST("x" AS NVARCHAR(4000))) >= 10');
   });
 
+  it('CAST-UNIT-007 (🔴 §5.6 I-MSSQL-DECIMAL-NORMALIZE-01): DECIMAL 走去尾零正規化式，INTEGER/DATE 維持裸 TRY_CAST', async () => {
+    const decSql = await cast('DECIMAL');
+    // DECIMAL 目標：TRY_CAST(.. AS DECIMAL(38, 10)) 保留為合法性關卡（CAST-UNIT-002 仍成立），
+    // 外層包 CONVERT(VARCHAR(50))→RTRIM 去尾零→NULLIF 保底（FINDING-P4D-01 修法）
+    expect(decSql).toContain('AS DECIMAL(38, 10)'); // 合法性關卡子字串未被移除
+    expect(decSql).toContain('CONVERT(VARCHAR(50)');
+    expect(decSql).toContain("RTRIM(");
+    expect(decSql).toContain("'0'"); // 剝尾端 0
+    expect(decSql).toContain("'.'"); // 剝殘留小數點
+    expect(decSql).toContain('NULLIF(');
+    // INTEGER / DATE：無去尾零包裹（維持原裸 TRY_CAST）
+    const intSql = await cast('INTEGER');
+    expect(intSql).not.toContain('CONVERT(VARCHAR(50)');
+    expect(intSql).toContain('TRY_CAST(TRY_CAST("x" AS NVARCHAR(4000)) AS INT)');
+    const dateSql = await cast('DATE');
+    expect(dateSql).not.toContain('CONVERT(VARCHAR(50)');
+    expect(dateSql).toContain('TRY_CAST(TRY_CAST("x" AS NVARCHAR(4000)) AS DATE)');
+  });
+
   it('CAST-UNIT-005: 輸入欄位改由 getMssqlTempTableColumns（無 information_schema.columns）', async () => {
     const qr = createMssqlMock({ columns: ['x'], rowCount: 3 });
     await h.execute(

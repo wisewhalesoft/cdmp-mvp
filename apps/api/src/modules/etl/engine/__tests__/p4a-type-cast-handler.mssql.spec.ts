@@ -132,15 +132,39 @@ describe('P4a CAST-EQ', () => {
     await cleanup(out, inName);
   });
 
-  it('CAST-EQ-010: VARCHAR→DECIMAL 代表性 fixture 逐列與手算相符（保留小數）', async (ctx) => {
+  it('CAST-EQ-010: VARCHAR→DECIMAL 代表性 fixture 逐列去尾零字串正確（AD §5.6 I-MSSQL-DECIMAL-NORMALIZE-01）', async (ctx) => {
     if (!guard(ctx)) return;
     const { out, inName } = await execCast('DECIMAL', `(VALUES (N'0.055'),(N'1.5'),(N'123'),(N'abc')) AS v(v)`);
     const rows = await h.qr!.query(`SELECT v FROM ${out.tempTable}`);
-    const vals = rows.map((r: any) => (r.v == null ? null : Number(r.v)));
-    // 順序不保證 → 以集合比對（含非法 'abc' → NULL）
-    expect(vals.filter((x: any) => x !== null).sort((a: number, b: number) => a - b)).toEqual([0.055, 1.5, 123]);
-    expect(vals.filter((x: any) => x === null).length).toBe(1);
+    const vals = rows.map((r: any) => r.v);
+    // 去尾零字串（非 DECIMAL(38,10) 之固定 10 位小數 '123.0000000000'）；含非法 'abc' → NULL。順序不保證 → 集合比對
+    const nonNull = vals.filter((x: any) => x != null).sort();
+    expect(nonNull).toEqual(['0.055', '1.5', '123'].sort());
+    expect(vals.filter((x: any) => x == null).length).toBe(1);
+    // 數值語意亦相符（去尾零不改變數值）
+    expect(nonNull.map(Number).sort((a: number, b: number) => a - b)).toEqual([0.055, 1.5, 123]);
     await cleanup(out, inName);
+  });
+
+  it('CAST-EQ-012 (🔴 §5.6 去尾零正規化): DECIMAL 邊界逐值 — 尾零/前導零/單值/非法（FINDING-P4D-01 修法佐證）', async (ctx) => {
+    if (!guard(ctx)) return;
+    // 每筆為 [輸入, 去尾零預期輸出]；證明 DECIMAL(38,10) 固定尾零已正規化為短字串（不再溢位下游短 varchar）
+    const cases: [string, string | null][] = [
+      ['3', '3'], // FINDING-P4D-01 核心：'3'→'3'（非 '3.0000000000'）
+      ['1.5', '1.5'], // 有效小數保留
+      ['3.10', '3.1'], // 尾零剝除
+      ['0.055', '0.055'], // 小數不誤剝有效位
+      ['007', '7'], // 前導零 → DECIMAL 正規化
+      ['30', '30'], // 整數尾零保留（. 之前不剝）
+      ['0', '0'], // 單一零保留
+      ['abc', null], // 非法 → 外層 validation 擋 → NULL
+    ];
+    for (const [input, expected] of cases) {
+      const { out, inName } = await execCast('DECIMAL', `(VALUES (N'${input}')) AS v(v)`);
+      const rows = await h.qr!.query(`SELECT v FROM ${out.tempTable}`);
+      expect(rows[0].v, `DECIMAL 正規化: '${input}' → ${expected === null ? 'NULL' : `'${expected}'`}`).toBe(expected);
+      await cleanup(out, inName);
+    }
   });
 
   it('CAST-EQ-011: NULL 輸入 → NULL（短路，不進正則驗證）', async (ctx) => {
