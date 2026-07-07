@@ -219,7 +219,11 @@ async function countTables(schema: string): Promise<number> {
 // AD-E07-40 P2a：queue_job（佇列基礎建設表）非 P1b2 之 36 表業務 baseline 範疇，且其兩軌索引刻意分歧
 //   （synchronize 一般索引 vs migration filtered index，見 AD-E07-40-P2a-test SCHEMA-010），
 //   不可納入本套件之 parity 比對；一律於 dbo 讀取端排除，改由 P2a 專屬套件獨立驗證。
-const EXCLUDED_TABLES = "('typeorm_migrations', 'queue_job')";
+// AD-E07-41 P4-0：customer_core（客戶資料主檔）為 PG-only 表、無 TypeORM entity（AD-E06-1），synchronize 路徑（Path A）
+//   天生不建，僅 baseline migration（Path B/dbo）建之——刻意的 migration-only 表。若納入 parity 會使兩軌表集合不相等
+//   （破壞 I-MSSQL-BASELINE-PARITY-01）而誤報，故比照 queue_job 之精神列為白名單例外，一律於 dbo 讀取端排除；
+//   其物理存在與結構正確性由本檔 CUSTOMER-CORE 群組獨立正向驗證。
+const EXCLUDED_TABLES = "('typeorm_migrations', 'queue_job', 'customer_core')";
 
 async function fetchColumns(schema: string): Promise<ColumnRow[]> {
   return ds!.query(
@@ -685,6 +689,135 @@ describe('AD-E07-39 P1b2 HASH-BASELINE', () => {
       ...idxCmp.setDiffs.filter((d) => d.table === 'token_blocklist'),
     ];
     expect(tbIdxDiffs).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// 七之二、CUSTOMER-CORE — AD-E07-41 P4-0 migration-only 客戶主檔（Path B 專屬）
+//   customer_core 為 PG-only、無 entity；本群組正向驗證其僅存在於 baseline migration 路徑（dbo），
+//   且欄位型別/唯一索引/PK 忠實對齊 PG DDL；同時證明其自 parity 讀取端被正確排除（白名單例外）。
+//   ⚠️ 必置於 STATIC（八）之前——STATIC-004 會 revert 全部 migration（清空 dbo），之後 dbo 已無此表。
+// ===========================================================================
+describe('AD-E07-41 P4-0 CUSTOMER-CORE', () => {
+  // PG BaselineSchema customer_core 完整 92 欄。
+  const EXPECTED_CC_COLUMN_COUNT = 92;
+
+  async function fetchCustomerCoreColumns(schema: string): Promise<Record<string, ColumnRow & { DATA_TYPE: string }>> {
+    const rows: Array<ColumnRow & { DATA_TYPE: string }> = await ds!.query(
+      `SELECT COLUMN_NAME AS column_name, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH,
+              NUMERIC_PRECISION, NUMERIC_SCALE, IS_NULLABLE
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = @0 AND TABLE_NAME = 'customer_core'`,
+      [schema],
+    );
+    const map: Record<string, ColumnRow & { DATA_TYPE: string }> = {};
+    for (const r of rows) map[r.column_name] = r;
+    return map;
+  }
+
+  it('TS-MSSQL-P4-0-CC-001（🔴 DoD）：dbo.customer_core 經 baseline migration 建立（OBJECT_ID 非 NULL）', async (ctx) => {
+    ensureMssql(ctx);
+    const r = await ds!.query(`SELECT OBJECT_ID('dbo.customer_core') AS oid`);
+    expect(r[0].oid).not.toBeNull();
+  });
+
+  it('TS-MSSQL-P4-0-CC-002：dbo.customer_core 欄位數 = 92（忠實對齊 PG DDL 全欄）', async (ctx) => {
+    ensureMssql(ctx);
+    const cols = await fetchCustomerCoreColumns(DBO);
+    expect(Object.keys(cols).length).toBe(EXPECTED_CC_COLUMN_COUNT);
+  });
+
+  it('TS-MSSQL-P4-0-CC-003（🔴 型別對照）：關鍵欄位型別符合 P1b 型別對照慣例', async (ctx) => {
+    ensureMssql(ctx);
+    const cols = await fetchCustomerCoreColumns(DBO);
+    // uuid → uniqueidentifier
+    expect(cols['customer_id'].DATA_TYPE).toBe('uniqueidentifier');
+    expect(cols['_etl_pipeline_id'].DATA_TYPE).toBe('uniqueidentifier');
+    // character varying(N) → varchar(N)（長度保真）
+    expect(cols['source_customer_no'].DATA_TYPE).toBe('varchar');
+    expect(cols['source_customer_no'].CHARACTER_MAXIMUM_LENGTH).toBe(20);
+    expect(cols['name'].DATA_TYPE).toBe('varchar');
+    expect(cols['name'].CHARACTER_MAXIMUM_LENGTH).toBe(100);
+    expect(cols['data_source'].DATA_TYPE).toBe('varchar');
+    expect(cols['data_source'].CHARACTER_MAXIMUM_LENGTH).toBe(50);
+    // character(1)（固定長）→ char(1)，不可誤譯為 varchar
+    expect(cols['debt_flag'].DATA_TYPE).toBe('char');
+    expect(cols['debt_flag'].CHARACTER_MAXIMUM_LENGTH).toBe(1);
+    expect(cols['fine_flag'].DATA_TYPE).toBe('char');
+    // smallint / integer 保真
+    expect(cols['address_anomaly_flag'].DATA_TYPE).toBe('smallint');
+    expect(cols['mainland_flag'].DATA_TYPE).toBe('smallint');
+    expect(cols['approved_income'].DATA_TYPE).toBe('int');
+    // numeric(p,s) 保真
+    expect(cols['work_years'].DATA_TYPE).toBe('numeric');
+    expect(Number(cols['work_years'].NUMERIC_PRECISION)).toBe(8);
+    expect(Number(cols['work_years'].NUMERIC_SCALE)).toBe(2);
+    expect(cols['capital'].DATA_TYPE).toBe('numeric');
+    expect(Number(cols['capital'].NUMERIC_PRECISION)).toBe(12);
+    expect(Number(cols['capital'].NUMERIC_SCALE)).toBe(0);
+    // 裸 timestamp → datetime2；date 保真
+    expect(cols['source_created_at'].DATA_TYPE).toBe('datetime2');
+    expect(cols['_etl_loaded_at'].DATA_TYPE).toBe('datetime2');
+    expect(cols['date_of_birth'].DATA_TYPE).toBe('date');
+  });
+
+  it('TS-MSSQL-P4-0-CC-004：NOT NULL 約束對齊（PK + 必填欄 NO、其餘 YES）', async (ctx) => {
+    ensureMssql(ctx);
+    const cols = await fetchCustomerCoreColumns(DBO);
+    for (const notNullCol of ['customer_id', 'source_customer_no', 'customer_type_code', 'name', 'data_source', '_etl_loaded_at', '_etl_pipeline_id']) {
+      expect(cols[notNullCol].IS_NULLABLE, notNullCol).toBe('NO');
+    }
+    for (const nullableCol of ['english_name', 'gender', 'date_of_birth', 'co_city']) {
+      expect(cols[nullableCol].IS_NULLABLE, nullableCol).toBe('YES');
+    }
+  });
+
+  it('TS-MSSQL-P4-0-CC-005：dbo.customer_core PK = customer_id、UNIQUE 索引 = source_customer_no', async (ctx) => {
+    ensureMssql(ctx);
+    const rows: Array<{ index_name: string; is_primary_key: boolean; is_unique: boolean; column_name: string }> =
+      await ds!.query(
+        `SELECT i.name AS index_name, i.is_primary_key, i.is_unique, c.name AS column_name
+         FROM sys.indexes i
+         JOIN sys.tables t ON i.object_id = t.object_id
+         JOIN sys.schemas s ON t.schema_id = s.schema_id
+         JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND ic.is_included_column = 0
+         JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+         WHERE s.name = 'dbo' AND t.name = 'customer_core' AND i.index_id > 0`,
+      );
+    const pk = rows.filter((r) => r.is_primary_key);
+    expect(pk.length).toBe(1);
+    expect(pk[0].column_name).toBe('customer_id');
+    const uq = rows.filter((r) => r.is_unique && !r.is_primary_key);
+    expect(uq.length).toBe(1);
+    expect(uq[0].column_name).toBe('source_customer_no');
+  });
+
+  it('TS-MSSQL-P4-0-CC-006（🔴 migration-only 證明）：synchronize 路徑（p1b2_sync）不建 customer_core', async (ctx) => {
+    ensureMssql(ctx);
+    // 無 entity → Path A（synchronize）天生不建；證明其為刻意的 migration-only 表。
+    const r = await ds!.query(`SELECT OBJECT_ID('${SYNC_SCHEMA}.customer_core') AS oid`);
+    expect(r[0].oid).toBeNull();
+  });
+
+  it('TS-MSSQL-P4-0-CC-007（白名單例外閉環）：customer_core 物理存在於 dbo，但自 parity 讀取端被排除', async (ctx) => {
+    ensureMssql(ctx);
+    // 物理存在（Path B）。
+    const oid = await ds!.query(`SELECT OBJECT_ID('dbo.customer_core') AS oid`);
+    expect(oid[0].oid).not.toBeNull();
+    // 但 parity 表集合讀取端（EXCLUDED_TABLES）將其排除 → 兩軌仍相等（36），不誤報。
+    const tableNames = await fetchTableNames(DBO);
+    expect(tableNames).not.toContain('customer_core');
+    expect(tableNames.length).toBe(EXPECTED_ENTITY_COUNT);
+  });
+
+  it('TS-MSSQL-P4-0-CC-008（靜態守門）：baseline migration 原始碼含 customer_core CREATE TABLE 且以 NEWID/getdate 翻譯 PG 預設', () => {
+    const src = readFileSync(MIGRATION_SRC_PATH, 'utf8');
+    expect(src).toMatch(/CREATE TABLE "customer_core"/);
+    expect(src).toMatch(/"customer_id" uniqueidentifier NOT NULL CONSTRAINT "DF_customer_core_customer_id" DEFAULT NEWID\(\)/);
+    expect(src).toMatch(/"_etl_loaded_at" datetime2 NOT NULL CONSTRAINT "DF_customer_core_etl_loaded_at" DEFAULT getdate\(\)/);
+    expect(src).toMatch(/UNIQUE \("source_customer_no"\)/);
+    // 對稱 down：DROP TABLE customer_core。
+    expect(src).toMatch(/DROP TABLE "customer_core"/);
   });
 });
 

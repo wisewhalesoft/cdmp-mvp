@@ -146,9 +146,12 @@ async function tableCount(name: string): Promise<number> {
 
 async function dboBusinessTableCount(): Promise<number> {
   // AD-E07-40 P2a：queue_job（佇列基礎建設表）非 36 表業務 baseline 範疇（由 P2a 專屬套件驗證），一律排除。
+  // AD-E07-41 P4-0：customer_core（PG-only、無 entity 之客戶主檔）為刻意的 migration-only 表——baseline migration
+  //   會建之於 dbo，但非 36 表業務 baseline 之 entity 集合範疇；比照 queue_job 自業務表計數排除（其結構由 P1b2
+  //   CUSTOMER-CORE 群組獨立驗證），使「migration:run 後 dbo 業務表數 = 36」之斷言不受此 migration-only 表影響。
   const r = await ds!.query(
     `SELECT COUNT(*) AS n FROM sys.tables t JOIN sys.schemas s ON t.schema_id=s.schema_id
-     WHERE s.name='dbo' AND t.name NOT IN ('typeorm_migrations', 'queue_job')`,
+     WHERE s.name='dbo' AND t.name NOT IN ('typeorm_migrations', 'queue_job', 'customer_core')`,
   );
   return Number(r[0].n);
 }
