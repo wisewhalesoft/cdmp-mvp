@@ -91,6 +91,29 @@ const E07_ENTITIES = [
           };
         }
 
+        // AD-E07-38 D-1：顯式 mssql 分支（不再隱式 fallback）。
+        // ⚠️ P1a 過渡態：mssql 分支僅掛 auth 最小 4 entity（User/Role/TokenBlocklist/PasswordResetToken）。
+        //    其餘 33 個 entity 尚未完成 D-2 型別修正（uuid/text 字面值），P1b 才擴為全 37 entity。
+        //    因僅載 4 entity，本分支下「完整 AppModule」（各業務模組 forFeature 其餘 entity）無法啟動；
+        //    P1a 可啟動的 API 面 = auth slice（AuthModule/AccountsModule），見 AD-E07-38-P1a-impl.md。
+        if (dbType === 'mssql') {
+          return {
+            type: 'mssql',
+            host: configService.get<string>('DB_HOST', 'localhost'),
+            port: configService.get<number>('DB_PORT', 1433),
+            username: configService.get<string>('DB_USERNAME', 'sa'),
+            password: configService.get<string>('DB_PASSWORD'),
+            database: configService.get<string>('DB_NAME', 'CDMP'),
+            options: {
+              encrypt: configService.get<string>('DB_MSSQL_ENCRYPT', 'true') === 'true',
+              trustServerCertificate:
+                configService.get<string>('DB_MSSQL_TRUST_CERT', 'true') === 'true',
+            },
+            entities: [User, Role, TokenBlocklist, PasswordResetToken],
+            synchronize: configService.get<string>('NODE_ENV') !== 'production',
+          };
+        }
+
         return {
           type: 'postgres',
           host: configService.get<string>('DB_HOST', 'localhost'),

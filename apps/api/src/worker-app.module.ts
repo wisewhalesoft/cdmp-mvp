@@ -3,6 +3,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as path from 'path';
 import { AssignmentWorkerModule } from './modules/assignment/assignment-worker.module';
+import { User } from './database/entities/user.entity';
+import { Role } from './database/entities/role.entity';
+import { TokenBlocklist } from './database/entities/token-blocklist.entity';
+import { PasswordResetToken } from './database/entities/password-reset-token.entity';
 
 /**
  * F098 / AD-E07-28 P1 / §5：cdmp-worker 程序的根 module。
@@ -34,6 +38,28 @@ import { AssignmentWorkerModule } from './modules/assignment/assignment-worker.m
             database: ':memory:',
             entities,
             synchronize: true,
+          };
+        }
+
+        // AD-E07-38 D-1：顯式 mssql 分支（不再隱式 fallback）。
+        // ⚠️ P1a 過渡態：僅掛 auth 最小 4 entity（glob 全量會對未修正型別的 33 entity synchronize 而失敗）。
+        //    P1b 才恢復 glob 全 37 entity。完整 WorkerAppModule（含 AssignmentWorkerModule forFeature）
+        //    於本分支無法啟動，屬 P1a 已知邊界，見 AD-E07-38-P1a-impl.md。
+        if (dbType === 'mssql') {
+          return {
+            type: 'mssql',
+            host: configService.get<string>('DB_HOST', 'localhost'),
+            port: configService.get<number>('DB_PORT', 1433),
+            username: configService.get<string>('DB_USERNAME', 'sa'),
+            password: configService.get<string>('DB_PASSWORD'),
+            database: configService.get<string>('DB_NAME', 'CDMP'),
+            options: {
+              encrypt: configService.get<string>('DB_MSSQL_ENCRYPT', 'true') === 'true',
+              trustServerCertificate:
+                configService.get<string>('DB_MSSQL_TRUST_CERT', 'true') === 'true',
+            },
+            entities: [User, Role, TokenBlocklist, PasswordResetToken],
+            synchronize: configService.get<string>('NODE_ENV') !== 'production',
           };
         }
 

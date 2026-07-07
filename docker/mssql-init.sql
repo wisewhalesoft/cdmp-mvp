@@ -24,3 +24,22 @@ GO
 
 PRINT 'CDMP ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP','Collation'));
 GO
+
+-- AD-E07-38 P1a（R-MSSQL-P1A-01）：獨立 CDMP_TEST 資料庫，供 *.mssql.spec.ts 使用，
+-- 與 dev 用 CDMP 隔離（避免測試 synchronize 污染開發者手動資料）。collation 比照 CDMP。
+IF DB_ID('CDMP_TEST') IS NULL
+  CREATE DATABASE CDMP_TEST COLLATE Chinese_Taiwan_Stroke_BIN;
+GO
+
+USE CDMP_TEST;
+GO
+
+IF USER_ID('cdmp') IS NULL
+  CREATE USER cdmp FOR LOGIN cdmp;
+GO
+
+ALTER ROLE db_owner ADD MEMBER cdmp;
+GO
+
+PRINT 'CDMP_TEST ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_TEST','Collation'));
+GO

@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, boolColumnType } from '@/common/database/column-types';
 import type { UserRole } from '@/common/constants/roles';
 
 @Entity('users')
@@ -40,7 +40,7 @@ export class User {
   // E07 業務主管旗標（AD-E02-1，OQ-E07-19）
   // Migration: 1711360000130-CreateObAssignConfigSetAndUserFlag.ts
   // ⚠️ DEPRECATED v2.11（m14 / 2026-05-16）：由 business_role 取代；待所有 callsite 改用 business_role 後移除欄位
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: boolColumnType, default: false })
   is_sales_manager: boolean;
 
   // E07 業務角色（AD-E07 v3.0 / m14 / 2026-05-16 新增）
