@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.25"
+version: "3.26"
 date: 2026-07-08
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.26 / 2026-07-08 / MSSQL P4d FINDING-P4D-01（DECIMAL 溢位缺陷）與 AD-E07-41 v1.1→v1.2 修訂**：P4d 端對端驗證（56 節點 customer_core pipeline 對真實 MSSQL 容器完整跑通）抓到真實缺陷 **FINDING-P4D-01**：`type_cast` 之 `DECIMAL` 目標型別固定映射 `DECIMAL(38,10)`，數字型輸入（如所得級距碼）強制補 10 位小數，流入下游窄 `varchar` 目標欄（`customer_core.monthly_income_code varchar(5)`）時 MSSQL 算術溢位（PG `NUMERIC` 無界保留輸入 scale，不受影響）；此為 P4a/P4c 孤立單元測試測不到、僅 P4d 三節點組合端對端才暴露之整合缺陷。架構師裁定修法：**於 `type_cast`（非 `target_load`）修正**——`TRY_CAST(...AS DECIMAL(38,10))` 保留作合法性驗證關卡（NULL-on-invalid 語意不變），實際輸出改為去尾零正規化字串（`NULLIF(RTRIM(RTRIM(CONVERT(VARCHAR(50),...),'0'),'.'),'')`），忠實還原 PG NUMERIC 之自然（最小）表示法；理由：`toMssqlType('DECIMAL')` 僅單一呼叫點、改動完全封閉於 `type-cast-handler-mssql.ts`、trailing-zero-strip 為補零之精確反運算（非近似）、架構上將精度決定延後至目標欄型別已知的時機（與 PG 行為對齊）。**就地修訂 `implementation-log/AD-E07-41-mssql-p4-etl-engine.md`（v1.1→v1.2）**：(1) 新增 §5.6 完整記錄缺陷、修法程式碼、裁定理由、影響面確認（Grep 已查證 `toMssqlType('DECIMAL')` 無其他呼叫點）；(2) 新增不變式 `I-MSSQL-DECIMAL-NORMALIZE-01`；(3) §9 新增 **P4a-fix** 子切片（P4d 後的收尾小切片，含既有測試更新與 fixture 數字化回歸驗證要點）；(4) §0/§8/§9 同步修正「53 節點」為 P4d 實測確認之「56 節點」（純數字校正，非設計變更）。**架構師判斷此為純技術缺陷修正，不需使用者事前知情或裁示**（與 tie-breaker 邊界案例性質不同：有明確修法、修完即完全解決、無殘留業務含糊地帶），已直接裁定並記錄。**刻意未動**：`architecture-spec.md`（理由同前）。
 
 > **v3.25 / 2026-07-08 / MSSQL P4-Spike 封鎖發現與 AD-E07-41 v1.0→v1.1 架構修訂**：P4-spike（真實 TypeORM `QueryRunner` 環境實測，記錄於 `docs/specs/implementation-log/AD-E07-41-P4-spike-impl.md`）發現**封鎖級事實**，推翻 AD-E07-41 v1.0 §1.1/§3 核心前提——`#local temp` 無法跨 `queryRunner.query()` 存活（TypeORM+node-mssql 於每次 request 間 reset session），CTAS→SELECT INTO 架構原設計不能照搬；`tempdb.sys.columns`+`OBJECT_ID` 內省、`DISTINCT ON`+ctid→`ROW_NUMBER`+`IDENTITY` tie-breaker、中文 round-trip 三項驗證皆通過；附帶發現 `INFORMATION_SCHEMA` 於 BIN collation 下大小寫敏感須用大寫。架構師裁示**採 `##global temp`**（已實測全程存活/內省/中文/去重全套證據，改動最小）取代原 `#local temp` 設計，具名 staging 表方案保留為已預先設計好的 fallback。**就地修訂 `implementation-log/AD-E07-41-mssql-p4-etl-engine.md`（v1.0→v1.1）**：(1) §1.1 修正 temp table 存活性假設、新增 §1.3 完整記錄 spike 發現+裁示理由+強制後續驗證要求；(2) §2 P4-spike 狀態更新為已完成（(b)(d)通過/(a)(c)失敗）；(3) §3/§4 全部 `#`→`##`、新增 `dropMssqlTempTableIfExists` 顯式清理函式；(4) §5 新增 §5.5 `INFORMATION_SCHEMA` 大小寫方言點；(5) §9 新增 **P4-spike-2**（`##global` 併發+崩潰清理驗證，含連線池假陽性陷阱提醒）子切片，**必須先過才可進入 P4a/b/c**；(6) §10 不變式更新——`I-MSSQL-TEMPTABLE-PREFIX-01` 由 **`I-MSSQL-TEMPTABLE-GLOBAL-01`** 取代，新增 `I-MSSQL-TEMPTABLE-CLEANUP-01`（顯式清理安全網）、`I-MSSQL-CATALOG-CASE-01`（系統目錄視圖大寫）；(7) 新增 §12 時程影響評估——**結論：影響小（+1.5–3 人天，原估算 27–46→28.5–49，變動約 5–7%，不構成需重新告知使用者時程的顯著變化）**，並附方案 B 對照組（+5–10 人天，變動 15–20%，屬「顯著」等級）量化本次選 A 的理由。**架構師判斷 tie-breaker 語意（I-MSSQL-DEDUP-TIEBREAK-01）與本次裁示皆不需使用者事前核准**，已在 AD 內部完成裁示並可直接推進 P4-spike-2。**刻意未動**：`architecture-spec.md`（理由同前）。
 

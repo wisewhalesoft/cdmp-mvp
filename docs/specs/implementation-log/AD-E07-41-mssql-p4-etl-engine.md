@@ -5,7 +5,7 @@ feature-id: N/A（非 F-numbered feature；資料庫平台全面遷移之基礎�
 source-stories: N/A（延續 AD-E07-38/39/40 之使用者拍板三項硬約束；本輪額外拍板：customer_core ETL 提前於 P3 之前完成，接受 27–46 人天估算）
 epic: cross-cutting（跨全模組之資料庫平台遷移，非單一 E07 業務 epic）
 module: Infrastructure — Database Platform Migration（PostgreSQL → MSSQL，Phase 4 of 6：ETL 引擎，因 P3 Stage 2 計分依賴 customer_core 真實資料而拉前）
-version: "1.1"
+version: "1.2"
 date: 2026-07-08
 status: approved
 author: system-architect
@@ -23,9 +23,12 @@ invariants:
   - I-MSSQL-CATALOG-CASE-01（新增，v1.1）
   - I-MSSQL-DEDUP-TIEBREAK-01（新增）
   - I-MSSQL-ETL-EQ-01（新增）
+  - I-MSSQL-DECIMAL-NORMALIZE-01（新增，v1.2，FINDING-P4D-01 修法）
 ---
 
 > **🔴 v1.1 修訂通知（2026-07-08）**：P4-spike 實測推翻本文件原 §1.1「單一 QueryRunner ⇒ `#local temp` 可跨節點存活」之核心前提（封鎖級發現，完整記錄見 `docs/specs/implementation-log/AD-E07-41-P4-spike-impl.md`）。架構師已裁示補救路線（§1.3：改用 `##global temp`），本文件已就地修訂 §1.1/§2/§3/§4/§5/§9/§10 反映新設計，**不另立獨立 errata 章節**（因原設計尚未有任何下游程式碼實作，直接修訂內文對讀者更有效）。新增 §12 時程影響評估。
+>
+> **🔴 v1.2 修訂通知（2026-07-08）**：P4d 端對端驗證抓到 **FINDING-P4D-01**（真實 MSSQL 實測佐證，記錄於 `docs/specs/implementation-log/AD-E07-41-P4d-impl.md`）——`type_cast` 之 `DECIMAL` 目標型別固定映射 `DECIMAL(38,10)`，數字型輸入（如所得級距碼 `'3'`）強制補 10 位小數 → 流入下游窄 `varchar` 目標欄時 MSSQL 算術溢位（PG `NUMERIC` 無此問題）。屬純技術缺陷（非業務決策），架構師已裁定修法，見新增 §5.6，新增不變式 I-MSSQL-DECIMAL-NORMALIZE-01。另同步修正文件內「53 節點」為 P4d 實測確認之**「56 節點」**（55 邊；非阻擋性數字修正）。
 
 # AD-E07-41：MSSQL 全面遷移 P4（ETL 引擎 MSSQL 化，含 customer_core 真實資料）架構設計
 
@@ -42,9 +45,11 @@ invariants:
 
 ## 0. 背景：為何 P4 拉到 P3 之前
 
-原六階段遷移計畫中，Phase 4（ETL 引擎 MSSQL 化）排在 Raw SQL 引擎移植（P3）之後。P3 設計階段查證 Stage 2 計分有 9/15 個對照欄位依賴 `customer_core`（`CUS_SEX`/`AGE`/`EDUCAT_BACK`/`CAREA_NO1`/`CAREA_NO2`/`CELLULAR`/三縣市欄），而 `customer_core` 資料完全由「ETL for Customer Core」pipeline（53 節點）灌入，該表本身雖已規劃補入 MSSQL baseline（空表 schema），但**真實資料**需要 ETL 引擎本身可在 MSSQL 上執行。
+原六階段遷移計畫中，Phase 4（ETL 引擎 MSSQL 化）排在 Raw SQL 引擎移植（P3）之後。P3 設計階段查證 Stage 2 計分有 9/15 個對照欄位依賴 `customer_core`（`CUS_SEX`/`AGE`/`EDUCAT_BACK`/`CAREA_NO1`/`CAREA_NO2`/`CELLULAR`/三縣市欄），而 `customer_core` 資料完全由「ETL for Customer Core」pipeline（**56 節點**，v1.2 修正：原估 53，P4d 端對端實測確認為 56 節點/55 邊，見 §0 尾註）灌入，該表本身雖已規劃補入 MSSQL baseline（空表 schema），但**真實資料**需要 ETL 引擎本身可在 MSSQL 上執行。
 
-架構師先前對「customer_core-only 最小子集」是否可行做過逐 handler 實地盤點（讀取 `apps/api/src/database/seeds/data/etl-pipelines.json` 之 53 節點 nodeType 分布、`apps/api/src/modules/etl/engine/handlers/*.ts` 全部 9 個 handler 原始碼），結論：**不存在可控最小子集**——customer_core pipeline 用盡全部 9 種 handler 類型，且全部 9 個 handler 共用同一套「`CREATE TEMP TABLE AS SELECT`」PG-only 架構骨幹，改一個等於要動全部。工作量估算 27–46 人天。使用者已核准接受此量體，拉前執行。本 AD 即為此工作之正式架構設計。
+架構師先前對「customer_core-only 最小子集」是否可行做過逐 handler 實地盤點（讀取 `apps/api/src/database/seeds/data/etl-pipelines.json` 之節點 nodeType 分布、`apps/api/src/modules/etl/engine/handlers/*.ts` 全部 9 個 handler 原始碼），結論：**不存在可控最小子集**——customer_core pipeline 用盡全部 9 種 handler 類型，且全部 9 個 handler 共用同一套「`CREATE TEMP TABLE AS SELECT`」PG-only 架構骨幹，改一個等於要動全部。工作量估算 27–46 人天。使用者已核准接受此量體，拉前執行。本 AD 即為此工作之正式架構設計。
+
+> **節點數修正**：本 AD v1.0/v1.1 沿用架構師盤點階段之估算「53 節點」；P4d 端對端測試（`_p4d-fixtures.ts::deriveExtractSchemas`）程式化掃描 `etl-pipelines.json` 實際 DAG 得 `{raw_data_extract:5, derived_field:7, lookup:31, merge:4, dedup:3, type_cast:2, field_mapping:2, conditional:1, target_load:1}`＝**56 節點**。本文件其餘章節之「53 節點」字樣（§8/§9）已同步修正為 56，純數字校正、不影響任何設計決策。
 
 ---
 
@@ -308,6 +313,41 @@ WHERE <ghost gate 條件>
 
 P4-spike 實測：BIN collation 下，小寫 `information_schema.columns`/`information_schema.tables` 直接拋 `Invalid object name`——**必須改大寫 `INFORMATION_SCHEMA.COLUMNS`/`INFORMATION_SCHEMA.TABLES`**。此為現行 PG 碼（全部小寫，符合 I-MSSQL-CASE-01 之使用者物件小寫慣例）在**系統目錄視圖**這個特例上的例外：`INFORMATION_SCHEMA` 是 MSSQL 內建 schema 名稱，非使用者建立物件，不受 I-MSSQL-CASE-01（使用者物件一律小寫）約束，需另立不變式 **I-MSSQL-CATALOG-CASE-01**（見 §10）。P4a 各 handler 之 `information_schema.tables`/`information_schema.columns` 查詢站點（見 §3.2 表格與 Pattern B 站點清單）於轉換時須一併修正大小寫，非只轉具名參數。
 
+### 5.6 🆕 v1.2　FINDING-P4D-01：`type_cast` DECIMAL 目標型別溢位修法
+
+**缺陷**（P4d 端對端真庫實測佐證，記錄於 `docs/specs/implementation-log/AD-E07-41-P4d-impl.md`）：`type-cast-handler-mssql.ts` 之 `toMssqlType('DECIMAL')` 固定回傳 `DECIMAL(38, 10)`。`TRY_CAST('3' AS DECIMAL(38,10))` 得 `3.0000000000`（強制補 10 位小數）；此值若流入下游窄 `varchar` 目標欄（如 `customer_core.monthly_income_code varchar(5)`），MSSQL 隱式轉換時拋 `Arithmetic overflow error converting numeric to data type varchar`，導致 `target_load` 節點失敗、整條 pipeline 失敗。**PG 不受影響**（`CAST('3' AS NUMERIC)` 保留輸入 scale → `'3'`，轉 `varchar(5)` 不溢位）。真實 legacy 所得級距碼為數字，故 MSSQL 正式遷移時任何具數字所得碼之客戶皆會使 customer_core ETL 失敗——**P4a/P4c 孤立單元測試測不到，僅 P4d 端對端（type_cast→field_mapping→target_load 三節點組合流入短 varchar）才暴露**，正是端對端測試存在的價值。
+
+**裁定修法：於 `type_cast`（非 `target_load`）修正，改用「合法性驗證＋去尾零正規化字串」，不再直接輸出定值 `DECIMAL(38,10)`。**
+
+```ts
+// type-cast-handler-mssql.ts 新增私有方法，取代 execute() 內原本直接使用
+// `TRY_CAST(${sv} AS ${mssqlType})` 之處（DECIMAL 分支專用，INTEGER/DATE 不受影響）
+private castExpression(targetType: string, sv: string, mssqlType: string): string {
+  if (targetType === 'DECIMAL') {
+    // FINDING-P4D-01 修法：TRY_CAST(...AS DECIMAL(38,10)) 僅作合法性驗證關卡（NULL-on-invalid
+    // 語意不變，沿用既有 toMssqlType 回傳值），實際輸出改為去尾零正規化字串，忠實還原 PG NUMERIC
+    // 之自然（最小）表示法——不強制補零、不四捨五入、不溢位窄 varchar 目標。
+    return `NULLIF(RTRIM(RTRIM(CONVERT(VARCHAR(50), TRY_CAST(${sv} AS ${mssqlType})), '0'), '.'), '')`;
+  }
+  return `TRY_CAST(${sv} AS ${mssqlType})`;
+}
+```
+`execute()` 內 `TRY_CAST(${sv} AS ${mssqlType})`（原第 65 行）改呼叫 `this.castExpression(rule.targetType, sv, mssqlType)`。
+
+**為何在 type_cast 修（非 target-load）——裁定理由**：
+1. **改動完全封閉於單一檔案**：`toMssqlType('DECIMAL')` 僅被 `type-cast-handler-mssql.ts` 內部使用（已 Grep 全庫確認，無其他 handler 或 production 檔案呼叫此函式），修法不需要讓 `target-load-handler-mssql.ts` 變成「target-schema 欄寬感知」——後者現行對任何欄位皆是通用、型別無關的 INSERT/UPDATE，維持這個通用性可讀性更高、風險更低。
+2. **數學上精確、非近似**：`DECIMAL(38,10)` 的補零是右側補零（尾數補 0），去尾零字串化是其精確反運算——只要原始輸入的小數位數 ≤10（此為使用 `DECIMAL(38,10)` 作為驗證關卡的既有前提，非本次修法新增的限制），trailing-zero-strip 可 100% 精確還原原始值的自然表示法，不是近似或有損轉換。
+3. **架構上更正確**：把「這個值最終要以什麼精度/寬度呈現」的決定，從 type_cast（此時尚不知道最終目標欄是誰）延後到 target-load 的隱式/顯式轉換（此時目標欄型別已由 `target-table-schemas.ts` 明確定義）——這與 PG `NUMERIC` 本身「延遲精度決定」的行為完全對齊，而非引入新語意。
+4. **`TRY_CAST(...AS DECIMAL(38,10))` 合法性驗證關卡不變**：無效輸入（如 `'abc'`）仍然 `TRY_CAST` 回 `NULL`，`CONVERT`/`RTRIM` 對 `NULL` 自然傳播為 `NULL`（T-SQL 標準行為），既有「不合法→NULL」語意零改變。
+
+**影響面確認（Grep 已查證，供 tdd-implementation 核對）**：
+- `toMssqlType('DECIMAL')` 僅一處呼叫點（`type-cast-handler-mssql.ts:58`），修法不擴及 `INTEGER`/`DATE` 分支。
+- `target-table-schemas.ts` 之 `DECIMAL(8,2)`/`DECIMAL(8,0)`/`DECIMAL(12,0)` 等欄位定義屬**另一套**目標表 schema 契約（非 `type_cast` 節點使用），不受本修法影響；型別正規化字串寫入這類真正的 DECIMAL 目標欄時，MSSQL 對「合法數字字串→DECIMAL(p,s)」之隱式/顯式轉換行為與 PG 對「NUMERIC 值→NUMERIC(p,s)」一致（依目標欄自身精度四捨五入/截斷，屬預期行為、非本缺陷範圍）。
+- 既有測試需同步更新（非新增缺陷，是必要的測試維護）：`p4a-type-cast-handler.mssql.spec.ts`（`CAST-EQ-010` 等斷言之「保留小數」預期值，由「讀回 DECIMAL 型別再比較」改為「讀回正規化字串比較」）；`p4a-mssql-unit.spec.ts`（`CAST-UNIT-002` 對生成 SQL 含 `'AS DECIMAL(38, 10)'` 子字串之斷言，預期仍成立——修法後該子字串仍存在於 `castExpression` 內層，僅外層多包一層正規化，但**須實測確認**不可假設）。
+- `_p4d-fixtures.ts:202` 之 `MONTH_INCOME: 'B3'`（P4d 為規避此缺陷而暫採之非數字繞過值）修法後應改回**數字 `'3'`**，作為 FINDING-P4D-01 缺陷已解之回歸證明（PG 側同一值需同步驗證 EQ：`'3'`→`monthly_income_code='3'`，兩引擎一致）。
+
+**是否需要 spec-writer 判斷**：不需要——此為技術缺陷修正（type_cast 內部型別轉換機制），業務規則（所得級距碼對照、customer_core 欄位定義）完全不變，比照 §9「是否需要 spec-writer」既有理由。
+
 ---
 
 ## 6. Bulk-Load：5 個來源表 raw Staging 寫入端
@@ -345,7 +385,7 @@ CREATE TABLE dbo.customer_core (
 |---|---|---|---|
 | 單一 handler 單元測試 | `engine-node-executors.spec.ts` 等 | 新增對應 `.mssql.spec.ts` 或擴充既有矩陣（比照 P1/P2/P3 慣例） | 逐 handler 驗證 CTAS→SELECT INTO 改寫後行為等價（含 §2 spike 驗證過的 metadata 內省機制） |
 | Pipeline 引擎核心 | `engine-core.spec.ts` | 對應 mssql 分支測試 | `NodeDispatcher`/`pipeline-runner` 本身不變（§1.1），主要驗證組裝點的 driver 分支正確 |
-| customer_core 53 節點端對端 | 無（現行僅 PG 上跑過） | **新增**：對真實 MSSQL 容器完整跑一次 53 節點 pipeline，比對輸出與 PG 版本結果 | 這是 P4 唯一的「大型端對端」測試，建議比照 F067 模式：兩邊各跑一次，逐欄逐列比對 `customer_core` 最終落地資料（**§4.3 已知的 tie-breaker 邊界案例**若真實觸發，個別核對後記錄，不視為 bug） |
+| customer_core 56 節點端對端（v1.2 修正節點數，見 §0） | 無（現行僅 PG 上跑過） | **新增**：對真實 MSSQL 容器完整跑一次 56 節點 pipeline，比對輸出與 PG 版本結果 | 這是 P4 唯一的「大型端對端」測試，建議比照 F067 模式：兩邊各跑一次，逐欄逐列比對 `customer_core` 最終落地資料（**§4.3 已知的 tie-breaker 邊界案例**若真實觸發，個別核對後記錄，不視為 bug；**v1.2**：實際執行已發現並解決 FINDING-P4D-01，見 §5.6，證明此測試層級之必要性——P4a/P4c 孤立測試無法暴露的整合缺陷） |
 | Dedup tie-breaker 專項 | 無 | §2(d) spike + 獨立測試案例（含時間戳記相同的合成測試資料） | 驗證 §4 改寫的確定性與 §4.3 討論的「低機率邊界差異」 |
 
 ---
@@ -359,10 +399,11 @@ graph LR
   Spike2 --> Group1[P4a Handler 群組一：extract/field_mapping/derived_field/type_cast/conditional（CTAS 直接替換型）]
   Spike2 --> Group2[P4b Handler 群組二：merge/lookup（含 UPDATE-FROM 重構）]
   Spike2 --> Group3[P4c dedup + target-load（含 tie-breaker + ON CONFLICT→兩段式）]
-  Group1 --> E2E[P4d customer_core 53 節點端對端]
+  Group1 --> E2E[P4d customer_core 56 節點端對端 ✅已完成/發現 FINDING-P4D-01]
   Group2 --> E2E
   Group3 --> E2E
-  E2E --> Bulk[P4e Bulk-load（raw staging 寫入端）]
+  E2E --> Fix[🆕 P4a-fix FINDING-P4D-01 DECIMAL 溢位修法 §5.6]
+  Fix --> Bulk[P4e Bulk-load（raw staging 寫入端）]
 ```
 
 ### P4-0 — customer_core Schema 補齊
@@ -403,11 +444,23 @@ graph LR
 
 **DoD**：§2(d) spike 結論落地為正式測試；customer_core UPSERT 兩段式陳述式測試（新增列、既有列更新、ghost gate 條件）通過。
 
-### P4d — customer_core 53 節點端對端
+### P4d — customer_core 56 節點端對端（✅ 已完成，2026-07-08，發現 FINDING-P4D-01）
 
 **範圍**：§8 端對端測試。
 
-**DoD**：53 節點 pipeline 對真實 MSSQL 容器完整跑通，`customer_core` 落地資料與 PG 版本逐欄逐列比對；§4.3 邊界案例若觸發則記錄（非阻擋）。
+**DoD**：56 節點 pipeline 對真實 MSSQL 容器完整跑通，`customer_core` 落地資料與 PG 版本逐欄逐列比對；§4.3 邊界案例若觸發則記錄（非阻擋）。**結果**：端對端機制本身達成 DoD（56 節點全數 completed，`##global temp` 全程貫穿驗證，tie-breaker 決定性驗證通過）；過程中發現 FINDING-P4D-01（DECIMAL 溢位缺陷，見 §5.6），本輪以非數字 fixture 值規避、鎖定測試證明缺陷存在，修法另立 P4a-fix 子切片。
+
+### 🆕 P4a-fix — FINDING-P4D-01 修法（P4d 後的 P4a 收尾小切片）
+
+**範圍**：§5.6 全部（`type-cast-handler-mssql.ts` 之 `castExpression` 新增 + `execute()` 呼叫點改寫）。
+
+**DoD**：
+1. 生產碼修法落地（§5.6 程式碼區塊）。
+2. `p4a-type-cast-handler.mssql.spec.ts` 之 `CAST-EQ-010` 等既有測試更新為正規化字串預期值，通過。
+3. `p4a-mssql-unit.spec.ts` 之 `CAST-UNIT-002`（生成 SQL 含 `DECIMAL(38, 10)` 子字串斷言）實測確認是否仍成立，不成立則同步更新。
+4. `_p4d-fixtures.ts` 之 `MONTH_INCOME` 改回數字 `'3'`，P4d 端對端重跑，`monthly_income_code` 正確寫入 `'3'`（不再溢位），PG 側同一 fixture 值同步驗證 EQ 一致。
+5. P4a 既有全套件（9 個 handler 之 mssql 版單元/整合測試）回歸不破。
+6. `tsc --noEmit -p tsconfig.build.json` 乾淨。
 
 ### P4e — Bulk-Load（raw Staging 寫入端）
 
@@ -431,6 +484,7 @@ graph LR
 | **I-MSSQL-CATALOG-CASE-01**（新增，v1.1） | `INFORMATION_SCHEMA`（及其下 `TABLES`/`COLUMNS` 等視圖）於 BIN collation 下須以**大寫**引用，不受 I-MSSQL-CASE-01（使用者物件一律小寫）約束——兩者是不同層級的命名慣例，不可混用同一條規則 |
 | **I-MSSQL-DEDUP-TIEBREAK-01** | Dedup 邏輯之 tie-breaker（原 PG `ctid`）一律以 `SELECT INTO` 之 `IDENTITY(INT,1,1)` 語法捕捉列寫入暫存表順序取代（v1.1：暫存表本身已改為 `##`，語法/邏輯不變，僅承載媒介改變），語意為「忠實翻譯物理/邏輯寫入順序」而非「重新定義業務優先權」；若端對端測試（P4d）發現真實資料中因此產生與 PG 版本不同的「勝出列」，須記錄為已知邊界案例（非 bug），並反映於上線前的差異報告 |
 | **I-MSSQL-ETL-EQ-01** | 每個 ETL handler 的 mssql 版本，以及 customer_core 端對端 pipeline，必須有對應測試與 PG 版本（或其產出結果）比對，比照 P3 之 I-MSSQL-ENGINE-EQ-01 精神；不得僅憑語法轉換表核對即宣稱完成 |
+| **I-MSSQL-DECIMAL-NORMALIZE-01**（新增，v1.2，FINDING-P4D-01） | `type_cast` 節點之 `DECIMAL` 目標型別，MSSQL 版輸出一律為「合法性驗證通過後之去尾零正規化字串」（`NULLIF(RTRIM(RTRIM(CONVERT(VARCHAR(50), TRY_CAST(...AS DECIMAL(38,10))),'0'),'.'),'')`），**不得**直接輸出固定 scale 之 `DECIMAL(38,10)` 定值本身——後者對流入窄 `varchar` 目標欄之場景會因強制補零而溢位，且無法在數學上等價於 PG 無界 `NUMERIC` 的自然（最小）表示法。未來任何新增之 `DECIMAL` type_cast 使用場景皆須遵循此規則，不得為求方便還原舊有定值輸出 |
 
 ---
 
@@ -448,6 +502,7 @@ graph LR
 - ~~P4-spike（§2）若任一項驗證失敗...~~（v1.1：已發生，見 §1.3，已裁示補救路線）。
 - Bulk-load（§6）吞吐量未知，需 POC 量測，不預先承諾效能數字。
 - 🆕 v1.1：P4-spike-2（§9）若發現 `##global temp` 在真實併發/崩潰情境下有實質問題，須切換至 §1.3 選項 B（具名 staging 表），屆時時程衝擊需重新評估並告知使用者（見 §12 對照組數字）。
+- 🆕 v1.2：**FINDING-P4D-01**（`type_cast` DECIMAL 溢位，§5.6）——**純技術缺陷（非業務決策），不需使用者事前知情或裁示**，已由架構師直接裁定修法（P4a-fix 子切片）。與 §11.1 tie-breaker 邊界案例的性質不同：tie-breaker 是「無法事先窮盡驗證、需觀察真實資料後才有意義」的低機率語意議題；FINDING-P4D-01 是「有明確技術修法、修完即完全解決、無殘留業務含糊地帶」的一般缺陷修正，比照專案內其餘工程缺陷（如 P1a/P1b 型別探針發現的問題）處理慣例，不升級為需使用者裁示事項。
 
 ---
 
