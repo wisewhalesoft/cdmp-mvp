@@ -927,3 +927,28 @@ last_updated: 2026-07-07
 - **影響**：若新 queue_job migration 檔本身有 timestamp 排序錯誤、或與既有鏈某處產生非預期互動（低機率，因新 migration 為 glob 自動載入、不需手動註冊陣列，不同於 P1b1 的 `ALL_ENTITIES` 手動陣列類問題），現有測試設計不會捕捉到；此類問題最終仍會在真正對 `dbo` 執行完整 `npm run migration:run` 時（例如 P2c 整合測試、或實際部署前的 CI 驗證）才會被發現。
 - **建議**：非阻擋 P2a，可選擇性由 P2c（或部署前置檢查）追加一次「對已含 P1b baseline + P1b3 reference data 的 `dbo` 疊加執行完整 `npm run migration:run`，確認 queue_job migration 正確接在鏈尾且零錯誤」的字面 CLI 案例（比照 P1b2 BASELINE-001 之呼叫方式）；tdd-implementation 若有餘裕亦可在 P2a 階段順手補上，非強制。
 - **風險等級**：低（新 migration 為 glob 自動載入而非手動陣列註冊，出錯機率遠低於已發生過問題的類似場景；且此驗證與 P2a 核心目標——單表結構正確性 + 併發正確性——正交，延後不影響 P2a DoD 本身可否判定達成）
+
+---
+
+## MSSQL 全面遷移 P2b 風險與待決問題（AD-E07-40，2026-07-07 新增，P2 第二片）
+
+### R-MSSQL-P2B-01（🔴 高，本輪最重要發現，與 P1c DISPATCH-001 同型陷阱重演）：`RunQueueProducer.send`/`cancel`／`RunQueueConsumer.onModuleInit` 三處現行程式碼皆為「`this.boss` 是否為 `null`」二元 gate，`DB_TYPE='mssql'` 環境下 `this.boss` 必然為 `null`，與現行 sqlite 測試環境訊號完全相同
+
+- **問題**：直接查證三處現行程式碼——`producer.send()`＝`if (!this.boss) { throw new Error(...) }`；`producer.cancel()`＝`if (!this.boss) return;`；`consumer.onModuleInit()`＝`if (!this.boss) { logger.warn(...); return; }`——皆是「`boss` 是否為 `null`」之二元判斷，無 else if 分支。而 pg-boss 本就不支援 MSSQL，`createPgBoss()` 對非 postgres 環境一律回傳 `null`，故 `DB_TYPE='mssql'` 下 `this.boss` **必然為 null**，與現行測試環境（sqlite，未 override）判斷 `boss` 為 `null` 時的訊號**完全相同、無法區分**。
+- **影響**：若 tdd-implementation 只在三處程式碼「內部」新增 mssql 分支邏輯（例如加一段 `if (dbType==='mssql') {...}`）卻未同步把既有二元 gate 本身改為三分支判斷順序，新增的 mssql 分支程式碼可能被放在既有 `if (!this.boss)` 判斷「之後」而變成永遠不會執行到的死碼——mssql 環境下 `send()` 會誤拋出「pg-boss 實例未提供」錯誤（觸發現行防呆訊息，而非真正呼叫 `mssqlQueue.send`）、`cancel()` 會誤靜默 no-op、`onModuleInit()` 會誤 warn+return 完全不啟動輪詢（worker 永遠不消費任何 job，且僅一行 warn log，非常難以察覺，直到有人發現月跑卡在 pending 才會回頭排查）。此為 `AD-E07-38-P1c` 之 `DISPATCH-001`（`isPostgres()` 二元 gate 陷阱）在自建佇列子系統的同型態重演，證明此類陷阱在本專案「新增第 N 個 driver 分支」場景具有一定的重複發生率，值得列為通用施工檢查項。
+- **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `DISPATCH-001~003`（🔴 MUST-FIX）已針對「目標狀態」設計 spy 斷言（驗證呼叫了哪個依賴，而非僅驗證最終回傳值），對現行未修改程式碼刻意設計為紅燈，逼 tdd-implementation 確實把三處二元 gate 改為三分支（先判斷 mssql、再判斷 boss 是否存在，最後才是現行防呆分支）；`DISPATCH-005` 同時守住「未知/sqlite 環境不可被誤判為 mssql」之反向邊界。
+- **風險等級**：高（若遺漏，mssql 環境下月跑觸發/取消/消費三大功能皆可能靜默失效，且現行程式碼結構下沒有任何自然的執行期錯誤會提示此問題——`onModuleInit` 分支尤其危險，僅記一行 warn log）
+
+### R-MSSQL-P2B-02（🔴 高，test-designer 查證出之 AD 文件本身缺口，非既有程式碼問題）：AD §4.2 檔案改動清單僅列 `assignment-worker.module.ts` 加入 `MssqlQueueService`，未列 `assignment.module.ts`，但 `RunQueueProducer`（mssql 分支之直接依賴）依現行結構註冊於 API 程序
+
+- **問題**：AD-E07-40 §4.2「檔案改動清單」明確只列一處 provider 註冊改動：「`assignment-worker.module.ts` | `providers` 加入 `MssqlQueueService`」。然而查證既有 `f098-static-guards.spec.ts` 之 `TS-F098-WORKER-004`（已鎖定驗證多輪未變）：`RunQueueProducer` 是註冊在 **`assignment.module.ts`**（API 程序），而非 `assignment-worker.module.ts`（worker 程序）；`RunQueueConsumer`/`OrphanReaper` 才是 worker-only。`RunQueueProducer.send()`/`cancel()` 之 mssql 分支需要呼叫 `MssqlQueueService` 的方法，但 AD 文件的檔案改動清單完全沒有提到 API 程序（`assignment.module.ts`）也需要能取得這個依賴。
+- **影響**：若 tdd-implementation 字面依照 AD §4.2 清單只改 `assignment-worker.module.ts`，`assignment.module.ts`（API 程序）不會有 `MssqlQueueService` 可注入——`RunQueueProducer` 建構時若採用強制依賴注入（非 `@Optional()`），API 程序啟動會直接因缺少 provider 而崩潰；若採用 `@Optional()` 寬鬆處理，則會在 `DB_TYPE='mssql'` 環境下呼叫 `send()`/`cancel()` 時因該依賴為 `undefined` 而拋出執行期錯誤或靜默失效——不論哪種情形，使用者透過 API 觸發月跑（`POST /api/v1/assignment/runs`）這個最基本的操作在 mssql 環境下會直接故障，且問題根源（AD 文件本身遺漏）不容易在 code review 時被發現，因為改動者很自然地會「依 AD 清單逐項核對」而非額外檢查清單本身是否完整。
+- **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `DISPATCH-006`（🔴 MUST-FIX，新增，非 P2a 涵蓋範圍）已設計為靜態守門，直接掃描 `assignment.module.ts` 之 `providers`/`imports` 是否含 `MssqlQueueService`；此案例對「僅依 AD §4.2 字面清單實作」之版本預期為紅燈。建議 system-architect 於下次修訂 AD-E07-40 時於 §4.2 補上此行（`assignment.module.ts | providers 加入 MssqlQueueService（供 API 程序之 RunQueueProducer mssql 分支使用）`），避免未來 P2c 或其他讀者重新踩雷。
+- **風險等級**：高（阻擋性——若未修正，mssql 環境下 API 程序的月跑觸發功能直接故障，屬 P2b DoD #3「端對端」案例會自然揭露此問題，但若 tdd-implementation 未跑 E2E 群組、只跑 unit 群組就自認完成，可能會被遺漏；DISPATCH-006 提供更早、更便宜的靜態守門防線）
+
+### R-MSSQL-P2B-03（中，實作細節陷阱，非既有測試/AD 缺陷）：pg-boss 路徑 `job.data` 為已解析物件，mssql 路徑 `claimed.payload`（P2a 已驗證）為原始 JSON 字串，`processPayload` 共用重構時容易漏做 `JSON.parse`
+
+- **問題**：P2a 已驗證 `MssqlQueueService.claimNext()` 回傳之 `payload` 欄位型別為 **`string`**（`queue_job.payload` 欄位存的是 `JSON.stringify(RunJobPayload)`，見 AD-E07-40-P2a-impl.md 與 `TS-MSSQL-P2A-CLAIM-006`）；而 pg-boss 的 `job.data` 是 pg-boss 套件本身已完成 JSON 解析後的物件。`processPayload(jobId, payload)` 若設計為統一接受「已解析物件」形狀（`{runId, ym}`），mssql 路徑的呼叫端（`pollOnce`）**必須**在呼叫 `processPayload` 之前額外執行一次 `JSON.parse(claimed.payload)`，這是 pg-boss 與 mssql 兩條路徑轉接層之間唯一的資料形狀落差，容易在專注於「兩路徑呼叫同一函式」（I-MSSQL-QUEUE-PAYLOAD-UNITY-01）這個大方向時被忽略這個小細節。
+- **影響**：若漏做 `JSON.parse`，`processPayload` 收到的 `payload` 參數會是原始字串而非物件，後續 `payload.runId`/`payload.ym` 存取皆為 `undefined`——由於 `processPayload` 內部對 `runId`/`ym` 缺失已有既有防禦邏輯（既有 F098「job payload 不完整」分支：記 log、視為已處理、不拋例外），此 bug 不會讓程序崩潰或拋出明顯錯誤，而是**每一個 mssql 環境下的月跑 job 都會被靜默判定為「payload 不完整」並直接略過**，不執行任何 pipeline——是一個會被輕易誤判為「測試通過但功能完全不動」的隱蔽性 bug。
+- **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `PAYLOAD-008`（🔴）已針對此設計專屬案例，明確以字串形式的 fake `claimed.payload` 驅動 `pollOnce()`，斷言 `processPayload` 收到的是**已還原之物件**而非原始字串。
+- **風險等級**：中（若遺漏，功能性影響嚴重——mssql 環境下月跑完全不執行——但因表現為「安靜略過」而非崩潰，較難在偶然的手動測試中被發現，屬於需要專屬自動化案例才能可靠捕捉的類型）
