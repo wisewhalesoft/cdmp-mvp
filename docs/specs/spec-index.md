@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.23"
-date: 2026-07-07
+version: "3.24"
+date: 2026-07-08
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.24 / 2026-07-08 / MSSQL 全面遷移 P4（ETL 引擎 MSSQL 化，含 customer_core 真實資料）架構設計**：P3（Raw SQL 引擎移植）設計階段查出 Stage 2 計分 9/15 個對照欄位依賴 `customer_core`，而該表資料完全由「ETL for Customer Core」53 節點 pipeline 灌入；架構師逐 handler 實地盤點（讀 `etl-pipelines.json` 全部 53 節點 nodeType 分布 + 全部 9 個 ETL handler 原始碼）後確認**不存在可控最小子集**——customer_core pipeline 用盡 ETL 引擎全部 9 種 handler，且全部共用同一套 `CREATE TEMP TABLE AS SELECT` PG-only 架構骨幹，估算 27–46 人天，實質等於 Phase 4 大半。使用者核准拉前於 P3 之前執行，接受此工作量。新增 **[`implementation-log/AD-E07-41-mssql-p4-etl-engine.md`](implementation-log/AD-E07-41-mssql-p4-etl-engine.md)**，固化：(1) driver 組織——沿用 P3「PG 檔不動、mssql 平行檔」精神，9 個 handler 各自平行 `*-mssql.ts`，組裝點（`etl-pipeline-execution.service.ts`）依 `DB_TYPE` 分支註冊；`NodeDispatcher`/`pipeline-runner.ts` 不動（driver-agnostic）；(2) **P4-spike 四項技術驗證**（`SELECT INTO #temp` 可行／`information_schema.columns` 對區域暫存表地雷確認+`tempdb.sys.columns`+`OBJECT_ID` 替代方案／單一 QueryRunner 全程存活／`DISTINCT ON`+`ctid`→`ROW_NUMBER()` 改寫可行），**必須在真實 TypeORM QueryRunner 環境驗證**（先前 standalone `mssql` 套件腳本驗證因非真實引擎環境而放棄）；(3) CTAS→`SELECT INTO` 轉換抽共用 helper（`temp-table.util.ts`，內省統一走 `tempdb.sys.columns`）；(4) **Dedup tie-breaker 改寫**＝`ctid`→`SELECT INTO` 專用 `IDENTITY(INT,1,1)` 捕捉寫入順序，架構師判斷為「忠實語意翻譯非業務規則重新定義」不需使用者事前核准，但記錄為 §11 需留意項；(5) `ON CONFLICT`→兩段式 UPDATE+INSERT-WHERE-NOT-EXISTS（不採 MERGE）；Pattern B/cast/正則逐項轉換；(6) bulk-load（COPY→tedious `Request.bulk`，來源端 `mssql-executor.ts` 已相容不需改）；(7) customer_core schema 補齊 MSSQL baseline（獨立最先執行的小顆粒切片）；(8) EQ/端對端測試策略（53 節點 pipeline 端對端比對 PG 結果）；(9) P4-0/spike/a/b/c/d/e 七個子切片與 DoD + 判定不需要 spec-writer。新增 4 個不變式（I-MSSQL-TEMP-METADATA-01/TEMPTABLE-PREFIX-01/DEDUP-TIEBREAK-01/ETL-EQ-01）。**刻意未動**：`architecture-spec.md`（理由同前，P 系列尚未 cutover 落地）。
 
 > **v3.23 / 2026-07-07 / MSSQL 全面遷移 P2（自建 T-SQL 佇列，取代 pg-boss）架構設計**：P1（P1a/P1b1/P1b2/P1b3/P1c）全數 commit、CI 骨架建好後，進入全計畫最高風險項——佇列自建 T-SQL（硬約束②，不得新增 Redis/BullMQ）。新增 **[`implementation-log/AD-E07-40-mssql-p2-self-built-queue.md`](implementation-log/AD-E07-40-mssql-p2-self-built-queue.md)**，固化：(1) 關鍵前提差異——P0 `mssql-smoke.mjs` 已對 Linux 容器實測驗證 `UPDLOCK/READPAST/ROWLOCK+OUTPUT` 佇列 claim 核心語法（純 T-SQL DML，不受 P1c `sp_getapplock` 曾踩之 17750 DLL 缺失影響）→ P2 核心機制可於本機完整測試；(2) `dbo.queue_job` schema（entity + filtered index 走手寫 baseline，沿用 AD-E07-39 兩軌策略）；(3) 五個原子操作 T-SQL（claim/complete/expire sweep/cancel/send）；(4) pg-boss 契約對齊表——`RUN_QUEUE_NAME`/`RunJobPayload`/`RETRY_LIMIT=0`/`BATCH_SIZE=1`/`send`/`cancel` 簽章不變，**`OrphanReaper`/`CancellationPoller` 重新查證確認零改動**；(5) 單 worker 輪詢 loop 設計 + `processPayload` 共用邏輯防止 pg-boss/mssql 兩路徑語意漂移 + 完整檔案改動清單；(6) driver-conditional 策略（RESOLVED：postgres 分支 cutover 前維持 pg-boss 不變，不強行統一 push/pull 介面）；(7) 併發正確性驗證 harness（本專案首次自寫此類測試，含 **pool.max≥K 假陽性陷阱**防範）；(8) P2a/P2b/P2c 三個實作切片與 DoD + 判定不需要 spec-writer。新增 4 個不變式（I-MSSQL-QUEUE-CLAIM-01/SERIAL-01/PAYLOAD-UNITY-01/TEST-CONCURRENCY-01）。**刻意未動**：`architecture-spec.md`（理由同 v3.21/v3.22，P 系列尚未 cutover 落地）。
 
