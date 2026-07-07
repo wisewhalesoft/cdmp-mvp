@@ -832,3 +832,41 @@ last_updated: 2026-07-07
 - **問題**：AD-E07-39 §8 P1b2 DoD 僅要求「baseline migration 建表成功」與「parity diff 為空」，未明文要求 `down()` 逆向遷移的正確性。`TS-MSSQL-P1B2-STATIC-004` 屬本文件基於 TypeORM migration 標準 up/down 契約額外建議之案例，非 AD 硬性要求。
 - **建議**：tdd-implementation 可視工作量權衡是否本輪納入；若延後，應明確記錄為技術債（例如「baseline migration 目前僅驗證 up() 路徑，down() 未經測試」），避免日後需要 revert 時才發現 down() 邏輯有缺陷。
 - **風險等級**：低（非阻擋，已於測試設計中明確標註為「建議項，非 AD 硬性 DoD」）
+
+---
+
+## MSSQL 全面遷移 P1b3 風險與待決問題（AD-E07-39，2026-07-07 新增）
+
+### R-MSSQL-P1B3-01（🔴 高，DoD 範圍衝突，決策關卡）：`roles`/`pooldata_field_whitelist`/`pooldata_field_option` 三表資料來源不在 P1b1/P1b2/P1b3 任一輪改動範圍內
+
+- **問題**：AD-E07-39 §8 P1b3 DoD #2 原文要求「參考資料筆數與 PG 版本一致（roles、users、datasource 空殼、whitelist/option、計分卡表、etl_pipelines、extraction_tasks）」。實際逐檔查證後發現：`roles`（admin/user 2 筆）與 `pooldata_field_whitelist`/`pooldata_field_option`（17/186 筆）之資料現況唯一來源為 **PG-only** 之 `apps/api/src/database/migrations/1711360000001-BaselineReferenceData.ts`（`INSERT INTO public.roles (...) VALUES (...) ON CONFLICT (role_code) DO NOTHING` 等 PG 專屬語法），該檔案：(a) 不在 P1b1（entity 型別轉換）範圍；(b) 不在 P1b2（MSSQL baseline migration，經查證僅含 36 `CREATE TABLE` + index + FK，零 `INSERT`）範圍；(c) 不在 P1b3 三支腳本（`seed.ts`/`seed-datasource.ts`/`prod-data-seed.ts`，皆不觸及這三張表）範圍。
+- **影響**：即使 P1b3 三支腳本完美改寫、`npm run bootstrap` 對 MSSQL 全流程零錯誤跑通，`roles`/`pooldata_field_whitelist`/`pooldata_field_option` 三表在 MSSQL 側仍會是 **0 筆**，與 DoD #2 文字要求的「筆數與 PG 版本一致」直接矛盾。若 tdd-implementation 未察覺此落差，可能誤判 DoD #2 已達成（因三支腳本改寫本身可以毫無錯誤地完成）。
+- **建議**：測試設計已將此落差顯性化為 `TS-MSSQL-P1B3-COUNT-011`／`TS-MSSQL-P1B3-COUNT-012` 兩個「決策關卡」案例（探測性質，預期結果為 0 筆並記錄根因，而非直接判定失敗或强行通過）。需人類（system-architect 或 product owner）decide 其中一條路徑：(a) P1b3 收尾階段新增第四支腳本（例如 `seed-reference-data.ts`）專門移植這三表資料，改寫為可攜 SQL；(b) 追溯修改 P1b2 之 MSSQL baseline migration，於 `up()` 追加這三表的 `INSERT`（需另評估是否違反「P1b2 已 commit 完成」之既定狀態，可能需要新的 migration 檔案而非修改既有檔案）；(c) 明確記錄為已知技術債，DoD #2 範圍縮減為僅六類已驗證表（users/datasource/計分卡 6 表/etl_pipelines/extraction_tasks），另開後續任務處理 roles/whitelist/option。
+- **風險等級**：高（直接影響 DoD #2 是否可判定「已達成」；若不處理，MSSQL 上任何依賴 `roles`/`pooldata_field_whitelist`/`pooldata_field_option` 的功能於全新 MSSQL 部署皆無法運作——`roles` 表為空表示系統連基本的 admin/user 角色都不存在，嚴重度高於 whitelist/option）
+
+### R-MSSQL-P1B3-02（中，測試設計品質風險，最高風險轉換站點）：`ob_levelcard_score` 之 NULL 自然鍵分量（`IS NOT DISTINCT FROM`）若轉換有誤，冪等性會在單一表悄然失效
+
+- **問題**：`prod-data-seed.ts` 之 `reconcileTable` 泛用引擎以 `${col} IS NOT DISTINCT FROM $${params.length}` 實作自然鍵存在性判斷（NULL-safe），供六張計分卡表共用。實測 `ob-levelcard-score.json`（449 筆真實生產種子資料）中 **212 筆 `level1=NULL`**、214 筆 `level2_s=NULL`——是全部六表中唯一大量依賴此 NULL-safe 語意的表。若 tdd-implementation 轉換時誤用裸 `=` 取代（`IS NOT DISTINCT FROM` 在 MSSQL 確實不受支援於部分版本，容易被直覺地簡化為 `=`），SQL 標準語意下 `NULL = NULL` 為 unknown（非 true），會導致這 212+214 筆列每次重跑 `data-seed`/`bootstrap` 皆被誤判為「不存在」而重複 INSERT。
+- **影響**：此 bug 只會在含 NULL 自然鍵分量的表上出現；其餘 5 張計分卡表（`ob_card_type`/`ob_levelcard_version`/`ob_levelcard_level`/`ob_tier`，其鍵欄位皆非 NULL）與 `ob_levelcard_column` 之 `status` 值欄比對不受影響，會表面正常通過測試，掩蓋 `ob_levelcard_score` 單一表的冪等性失效，且該失效需累積跑第二次 bootstrap 才會被列數異常揭露（第一次全插無法區分正確與錯誤實作）。
+- **建議**：`TS-MSSQL-P1B3-SITE-005`（NULL-safe 自然鍵比對）與 `TS-MSSQL-P1B3-IDEM-001`（六表總列數重跑後不變）為必要防線，缺一不可——前者定位問題所在表，後者提供整體冪等性的量化證據。建議轉換方向優先考慮標準 SQL 可攜寫法 `(col = @p OR (col IS NULL AND @p IS NULL))`，三 driver（PG/sqlite/MSSQL）皆可攜、不需 driver-conditional 分支，且行為與 PG 原生 `IS NOT DISTINCT FROM` 完全等價。
+- **風險等級**：中高（有明確測試案例防線，但若被跳過，此為典型「測試覆蓋率數字看起來足夠、實際遺漏最關鍵資料表」之陷阱）
+
+### R-MSSQL-P1B3-03（中，Harness 設計限制，升級自 R-MSSQL-P1B2-03）：raw SQL seed 腳本無法透過 TypeORM `schema` 選項隔離，P1b3 與 P1b2 之 `dbo` 獨佔假設產生現實衝突
+
+- **問題**：P1b2 之兩路徑 harness（`p1b2_sync` schema／`dbo`）之所以可行，是因為 Path A 走 TypeORM `synchronize()`（DDL 由 TypeORM 依 `schema` 連線選項動態加前綴）。P1b3 三支腳本的 SQL 全為未加前綴的裸表名字串（`qr.query('... FROM ob_card_type', ...)`），TypeORM 的 `schema` 選項**不會**改寫這類字串——SQL Server 對裸表名一律依登入使用者的 `DEFAULT_SCHEMA` 屬性解析（`cdmp` login 為 `dbo`，且 SQL Server 無等價 Postgres `SET search_path` 之連線期動態覆寫機制）。故 P1b3 之 ALIAS/SITE/BOOT/COUNT/IDEM 五群組**必定**落在 `dbo`，與 P1b2 既有「`dbo` 由其測試套件獨佔保留」的假設直接衝突。
+- **影響**：`R-MSSQL-P1B2-03`（該項原評「低風險：現況無實際污染，僅為未來擴充提醒」）在 P1b3 出現後從「理論風險」轉為「現實存在的執行順序需求」——若 vitest 依預設 file-parallelism 平行執行 `mssql-p1b2.mssql.spec.ts` 與 `mssql-p1b3.mssql.spec.ts`，兩者會在同一 `dbo` 同時建表/寫入資料，產生物件已存在錯誤或資料錯亂，且各自「執行前斷言 dbo 為空」的檢查無法攔截平行啟動時間窗內的競爭情況。
+- **建議**：新增序列化執行 lane（例如 `npm run test:mssql:serial`，以 `--no-file-parallelism` 或等價 vitest 設定涵蓋全部 `*.mssql.spec.ts`），比照既有 `.pg.spec.ts` 之 F098~F109 序列執行慣例（`feedback_pg_spec_parallel_timeout`）。此為 CI/DevOps 層級的執行順序約定，非測試程式碼本身能防禦（`beforeAll` 之「斷言 dbo 為空」僅能攔截「已髒污」的情況，無法攔截「同時啟動」的競爭情況）。
+- **風險等級**：中（若未落地序列化執行，CI 平行跑 MSSQL 測試套件時會產生難以重現的間歇性失敗，且錯誤訊息不易直接聯想到「兩個測試檔案搶同一個 dbo」）
+
+### OQ-MSSQL-P1B3-01（非阻擋，供 tdd-implementation 裁量）：`NOW()`/`IS NOT DISTINCT FROM` 轉換方向——可攜寫法 vs driver-conditional 分支
+
+- **問題**：AD-E07-39 §7 及本文件皆建議「盡量收斂、不製造新分岔」（沿用 B1 token_blocklist 三 driver 統一改 hash 的設計哲學），故 `NOW()`（可改為 JS `new Date()` 綁定參數，三 driver 皆可攜）與 `IS NOT DISTINCT FROM`（可改為 `(col = @p OR (col IS NULL AND @p IS NULL))`，三 driver 皆可攜）理論上都存在不需要 driver-conditional 分支的可攜寫法，但 AD 本身未對 P1b3 這兩處明確裁定「必須可攜」或「允許 driver 分支」。
+- **建議**：測試設計已將對應案例（`SITE-004`/`SITE-005`/`SITE-006`/`SITE-007`）設計為行為驗證（檢查資料是否正確寫入/比對是否正確），不綁定特定 SQL 語法字面值，故不論 tdd-implementation 選擇可攜寫法或 driver-conditional 分支，測試都能驗證正確性；但 `TS-MSSQL-P1B3-REG-002`（既有 PG reconcile spec 不回歸）若選擇可攜寫法，需確保 PG 端行為未受影響；若選擇 driver-conditional 分支，需確保未違反本專案既定的「不製造新分岔」設計哲學（僅供留意，非阻擋）。
+- **風險等級**：低（不阻擋，測試設計已具容錯彈性）
+
+### OQ-MSSQL-P1B3-02（非阻擋）：`qr.query()` 對 UPDATE 語句於 mssql driver 之回傳形狀未經驗證
+
+- **問題**：`prod-data-seed.ts` 兩處（`labelUpdated += res[1] ?? 0`、`updated += res[1] ?? 0`）依賴 PG driver 對 `qr.query()` 執行 UPDATE 語句時回傳 `[rows, affectedCount]` tuple 之慣例。TypeORM mssql driver（tedious）之回傳形狀本專案未曾驗證，可能非相同 tuple 形狀。
+- **影響**：若形狀不同，`res[1]` 恆為 `undefined`（`?? 0` 已防禦不拋錯），僅導致 log 訊息可能恆顯示「0 列修復」即使實際 UPDATE 已成功——純觀測性/除錯體驗落差，不影響功能正確性（UPDATE 本身是否成功由 SITE-007/SITE-008 之資料狀態斷言驗證，不依賴此回傳值）。
+- **建議**：`TS-MSSQL-P1B3-PROBE-001` 已設計為探測型案例記錄實際結果；若確認回傳形狀不同，可選擇性改用 `queryRunner.query(sql, params, true)`（TypeORM 部分版本支援 `useStructuredResult` 參數取得統一形狀）或直接改為對受影響列數不敏感的 log 訊息設計，非阻擋，可延後處理。
+- **風險等級**：低（非阻擋，純觀測性落差）
