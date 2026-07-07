@@ -902,3 +902,28 @@ last_updated: 2026-07-07
 - **影響**：站點 1 的具名參數轉換本身可以完全正確，但因來源表不存在，MSSQL 上永遠只能驗證到「錯誤路徑」（invalid object name），無法像站點 2 一樣驗證「資料列內容/筆數等價」；若 tdd-implementation 或未來讀者未留意此差異，可能誤以為兩站點驗收標準應該相同，或誤判站點 1 測試「覆蓋不足」。
 - **建議**：`TS-MSSQL-P1C-PARAM-003` 已明確區分「表不存在錯誤」與「SQL 語法/參數繫結錯誤」兩種失敗模式，僅要求前者、拒絕後者；本文件與 test-index.md 特殊注意段落已記錄此落差，供 tdd-implementation 與未來 Phase 3/4（customer_core 若日後決定遷移至 MSSQL 時）參考。
 - **風險等級**：低（不阻擋，測試設計已具備正確的區分邏輯，僅為文件認知落差記錄）
+
+---
+
+## MSSQL 全面遷移 P2a 風險與待決問題（AD-E07-40，2026-07-07 新增，P2 首片）
+
+### R-MSSQL-P2A-01（🔴 高，已查證非假設，本輪最關鍵發現）：TypeORM mssql `DataSourceOptions.pool.max` 預設值為 1，未顯式設定「必然」導致併發 harness 退化為序列化，非僅「可能」
+
+- **問題**：直接查證 `node_modules/typeorm/driver/sqlserver/SqlServerConnectionOptions.d.ts`（`pool?: { max?: number (default=1); ... }`），確認 TypeORM mssql driver 之連線池上限**預設僅 1 條連線**。AD-E07-40 §6.2 原文措辭「若未設定足夠的 pool size，K 個請求**可能**被連線池排隊、變相序列化執行」在本專案的真實情況遠比「可能」更嚴重——任何未明確覆寫 `pool.max` 的 `DataSource`，其 K 個併發 `claimNext()` 呼叫**保證**被序列化（連線池僅 1 條連線可用）。
+- **影響**：若 tdd-implementation 未注意到此預設值細節，即使記得「要設 pool.max」也可能誤判「不設定也還好，反正是預設值不是 0」，實際上預設值本身就是最嚴重的退化情境；且若沿用專案內其他既有 `.mssql.spec.ts`（P1a/P1b1/P1b2/P1b3/P1c）目前使用的 `DataSource`（皆未特別設定 `pool.max`，因這些套件從未做過併發測試，沿用預設 1 完全無害），若 CONC 群組不慎重用了那些既有的共用 helper `DataSource` 建構函式而未加上 `pool.max` 覆寫，會直接產生假陽性綠燈且無任何提示。
+- **建議**：`TS-MSSQL-P2A-CONC-001`（前置守門，配置斷言）+ `TS-MSSQL-P2A-CONC-006`（🔴 決策關卡，故意以預設 `pool.max=1` 重跑計數斷言證明其無鑑別力，逼出必須依賴 `CONC-004` 時間戳證據的結論）已設計為兩道防線；tdd-implementation 建構 CONC 群組專屬 `DataSource` 時**不可**沿用既有 `.mssql.spec.ts` 之共用 helper 而不覆寫 `pool`，且程式碼註解須明確引用 `I-MSSQL-QUEUE-TEST-CONCURRENCY-01`。
+- **風險等級**：高（若遺漏，P2a 全計畫最關鍵的「佇列併發正確性」驗證會是建立在無效基礎上的假陽性綠燈，且此類問題極難在 code review 肉眼發現，只有專門設計的反證案例如 CONC-006 才能揭露）
+
+### R-MSSQL-P2A-02（中，comparator 適用邊界，非既有工具缺陷）：既有 `schema-parity.ts` 索引比對器（`diffIndexSets`/`IndexRecord`）不含 `has_filter`/`filter_definition`，不可直接套用於 `queue_job` 之 filtered vs 一般索引比對
+
+- **問題**：`queue_job` 之 Path A（synchronize，entity `@Index` 產生之一般索引）與 Path B（baseline migration 手寫之 filtered index）**同名**（`idx_queue_job_pending`/`idx_queue_job_active_expiry`）但**欄位組成刻意不同**（見 AD §1：Path A 之 `idx_queue_job_pending`=(queue_name,state)，Path B 之同名索引=(queue_name,created_at) WHERE state='created'）。P1b2 為 36 表「應完全一致」情境設計的 `diffIndexSets`/`IndexRecord` 型別不含 `has_filter`/`filter_definition` 欄位，且比對 key 含欄位組成——若 tdd-implementation 直覺沿用 P1b2 的「`isEmptyComparison(diffIndexSets(...))` 應為 true」模式套用於 queue_job 索引，會得到充滿雜訊、且無法真正捕捉 filtered 屬性差異的誤導性結果。
+- **影響**：若未察覺此差異，可能誤判索引比對「有差異就是 bug」而嘗試「修正」成兩路徑完全一致（違背 AD §1 的刻意設計——Path A 為 dev-only 產物，Path B 才是 prod 真實部署的 filtered index，兩者本來就不該相同）；或反過來誤用一個不含 `has_filter` 欄位的比較邏輯，即使 Path B 的 filtered 屬性錯誤（如漏寫 `WHERE` 子句、變成一般索引）也不會被任何測試發現。
+- **建議**：`TS-MSSQL-P2A-SCHEMA-010`（決策關卡，文件化守門，程式碼註解引用）已明確要求改用 `TS-MSSQL-P2A-SCHEMA-011`/`SCHEMA-012` 兩組獨立、各自明確斷言欄位組成 + `has_filter` + `filter_definition` 的案例，不對索引集合套用「diff 應為空」判定；若未來其他表也出現「Path A 一般索引／Path B filtered index」的兩軌設計模式，應複用本輪的「獨立斷言」手法而非擴充 `schema-parity.ts` 既有比較器（該比較器的既有語意——兩路徑應完全一致——與 filtered index 場景的設計意圖根本衝突，不宜勉強擴充）。
+- **風險等級**：中（若遺漏，索引正確性驗證存在盲區；不影響本輪其餘 SCHEMA/CONC/操作性群組之有效性）
+
+### R-MSSQL-P2A-03（低，範圍缺口記錄，非阻擋）：queue_job baseline migration 之結構驗證改用獨立 `p2a_baseline` schema，未驗證其正確疊加進 `dbo` 既有 36 表 migration 鏈
+
+- **問題**：P1b2/P1b3 之 Path B（baseline migration 驗證）刻意使用 `dbo`（因手寫 migration 之 raw SQL 表名無法被 TypeORM `schema` 選項重新導向，落在連線 session 預設 schema，與 prod 真實部署路徑完全一致）。P2a 為避免與 P1b2/P1b3 既有的「`dbo` 全套 36 表 baseline 建置/清空」流程範圍重疊，改用獨立 `p2a_baseline` schema 程式化呼叫新 queue_job migration 之 `up()`，此法完整驗證了 migration 檔案本身的欄位/filtered index 正確性，但**未驗證**「這支新 migration 檔實際疊加進 `dbo` 既有完整 migration 鏈（P1b baseline + P1b3 reference data）之後，`npm run migration:run` 是否仍能無錯誤地依序執行到底」。
+- **影響**：若新 queue_job migration 檔本身有 timestamp 排序錯誤、或與既有鏈某處產生非預期互動（低機率，因新 migration 為 glob 自動載入、不需手動註冊陣列，不同於 P1b1 的 `ALL_ENTITIES` 手動陣列類問題），現有測試設計不會捕捉到；此類問題最終仍會在真正對 `dbo` 執行完整 `npm run migration:run` 時（例如 P2c 整合測試、或實際部署前的 CI 驗證）才會被發現。
+- **建議**：非阻擋 P2a，可選擇性由 P2c（或部署前置檢查）追加一次「對已含 P1b baseline + P1b3 reference data 的 `dbo` 疊加執行完整 `npm run migration:run`，確認 queue_job migration 正確接在鏈尾且零錯誤」的字面 CLI 案例（比照 P1b2 BASELINE-001 之呼叫方式）；tdd-implementation 若有餘裕亦可在 P2a 階段順手補上，非強制。
+- **風險等級**：低（新 migration 為 glob 自動載入而非手動陣列註冊，出錯機率遠低於已發生過問題的類似場景；且此驗證與 P2a 核心目標——單表結構正確性 + 併發正確性——正交，延後不影響 P2a DoD 本身可否判定達成）
