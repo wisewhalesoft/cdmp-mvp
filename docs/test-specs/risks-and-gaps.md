@@ -870,3 +870,35 @@ last_updated: 2026-07-07
 - **影響**：若形狀不同，`res[1]` 恆為 `undefined`（`?? 0` 已防禦不拋錯），僅導致 log 訊息可能恆顯示「0 列修復」即使實際 UPDATE 已成功——純觀測性/除錯體驗落差，不影響功能正確性（UPDATE 本身是否成功由 SITE-007/SITE-008 之資料狀態斷言驗證，不依賴此回傳值）。
 - **建議**：`TS-MSSQL-P1B3-PROBE-001` 已設計為探測型案例記錄實際結果；若確認回傳形狀不同，可選擇性改用 `queryRunner.query(sql, params, true)`（TypeORM 部分版本支援 `useStructuredResult` 參數取得統一形狀）或直接改為對受影響列數不敏感的 log 訊息設計，非阻擋，可延後處理。
 - **風險等級**：低（非阻擋，純觀測性落差）
+
+---
+
+## MSSQL 全面遷移 P1c 風險與待決問題（AD-E07-38，2026-07-07 新增，P1 最後一片）
+
+### R-MSSQL-P1C-01（高，決策關卡，直接影響 LOCK 群組其餘案例是否可行）：`DECLARE @lockResult INT; EXEC @lockResult = sp_getapplock ...; SELECT @lockResult` 多陳述式批次能否經 TypeORM `manager.query()` 正確取得回傳碼，本專案未曾驗證
+
+- **問題**：AD §3 D-5 之 T-SQL 對應表示範 `EXEC @lockResult = sp_getapplock ...`，此為 T-SQL 之 OUTPUT-style 呼叫慣例，需搭配 `DECLARE`/`SELECT` 包裝成多陳述式批次才能透過 TypeORM 通用的 `manager.query(sql, params)` 取得回傳碼（TypeORM 本身無原生機制直接讀取 stored procedure 的 RETURN 值）。此包裝方式在本專案（含既有 P1a~P1b3 之 MSSQL 測試）從未使用過，其回傳形狀（例如是否確實為 `[{ lockResult: 0 }]`）未經實測。
+- **影響**：若此包裝方式行不通（例如 tedious driver 對多陳述式批次的結果集合併行為與預期不同），`personnel-ratio.service.ts` 之 mssql 分支將無法用單純 SQL 字串取得鎖定結果，需改用 `mssql` npm 套件的 `Request.output()` 機制繞過 TypeORM 通用 `.query()`，這會是比純 SQL 字串轉換更大幅度的程式碼改動（引入套件特定 API，脫離現行「一律走 `manager.query()`」的慣例）。
+- **建議**：`TS-MSSQL-P1C-LOCK-001` 已設計為前提探測案例，置於 LOCK 群組最前面（其餘 LOCK-002~012 案例之斷言方式依賴此案例的實測結果）；tdd-implementation 應優先執行此案例，儘早確認包裝方式可行性，避免後續案例基於錯誤假設設計/實作。
+- **風險等級**：高（若不可行，直接影響 P1c DoD #2 之實作路徑選擇，且發現時機若拖到後期會造成部分已完成程式碼需重寫）
+
+### R-MSSQL-P1C-02（🔴 高，MUST-FIX，現行程式碼真實缺口，非假設性風險）：`personnel-ratio.service.ts` 現行 `isPostgres()` 為二元 gate，`DB_TYPE='mssql'` 在未修改的現行程式碼下會被誤判與 `sqlite` 同路徑「完全跳過鎖」
+
+- **問題**：test-designer 查證 `personnel-ratio.service.ts:565-568`：`isPostgres()` 僅回傳 `dbType==='postgres'||'postgresql'||'pg'`；`tryAutoAdvance` [4a] 現行結構為 `if (this.isPostgres()) { ...走鎖... }`，**無 else 分支**。這代表 `DB_TYPE='mssql'` 目前會被 `isPostgres()` 判為 `false`，與 `sqlite` 落入同一條「完全跳過鎖」路徑，而非呼叫 `sp_getapplock`。
+- **影響**：若 tdd-implementation 僅新增一段 `sp_getapplock` 呼叫程式碼，卻未同步把這個二元 gate 改為三分支（`postgres`→advisory lock／`mssql`→`sp_getapplock`／其餘→no-op），新增的 `sp_getapplock` 程式碼會是**永遠不會被觸發的死碼**，`I-MSSQL-LOCK-01` 在 MSSQL 上形同未落地，且不會有任何測試失敗提示此問題（除非測試明確斷言分支確實被呼叫，而非僅驗證最終回傳值形狀）。
+- **建議**：`TS-MSSQL-P1C-DISPATCH-001` 已設計為刻意針對「目標狀態」斷言（spy `mgr.query` 呼叫參數含 `sp_getapplock` 字串），對現行未修改程式碼**預期為紅燈**，作為守門測試；tdd-implementation 完成三分支改寫後此案例應轉綠燈。
+- **風險等級**：高（若遺漏，P1c 核心目標——MSSQL 上的鎖保護——完全不生效，且此類「新增程式碼但忘記接線」的缺陷極難在 code review 中肉眼發現）
+
+### OQ-MSSQL-P1C-01（決策關卡，AD 文字本身之未驗證宣稱，不預設答案）：`@LockOwner='Transaction'` 前置條件未處於顯式交易時之真實 MSSQL 行為
+
+- **問題**：AD §3 D-5 聲稱「`@LockOwner='Transaction'` 要求呼叫當下必須已在顯式交易內...否則 `sp_getapplock` 直接報錯（可視為額外安全網）」，但此描述在本 AD 內**未標註為已查證事實**，且 test-designer 對 SQL Server 官方文件之 `sp_getapplock` 行為（`@LockOwner='Transaction'` 於隱含單陳述式交易下的實際釋放時機）並無十足把握確認其為報錯而非靜默降級。
+- **影響**：若真實行為是「未報錯，僅隱含單陳述式交易結束後立即釋放鎖」而非「直接報錯」，則 `I-MSSQL-LOCK-01` 這個不變式**完全不受資料庫保護**，純粹依賴呼叫端（`tryAutoAdvance`）自律遵守「必須在 `dataSource.transaction()` 內呼叫」的約定；若未來有人在重構時不慎在交易外呼叫此方法，鎖會在單一陳述式後就失去保護效果，且不會有任何錯誤或警告提示，形成難以察覺的併發安全性回歸。
+- **建議**：`TS-MSSQL-P1C-LOCK-009` 已設計為探測型決策關卡案例，記錄真實結果並依兩種分支給出後續行動（若報錯→資料庫已提供保護，可不額外處理；若未報錯→`TS-MSSQL-P1C-LOCK-010` 要求新增程式碼層防禦性斷言，如檢查 `queryRunner.isTransactionActive`）；tdd-implementation 應在此案例實測後於 implementation-log 記錄結論，供未來重構此段程式碼者參考，避免重新踩雷。
+- **風險等級**：中（若判定為「未報錯」分支且未補防禦性斷言，屬於潛伏性風險，日常運作不會觸發，但一旦觸發後果是併發安全性完全失效且無錯誤提示）
+
+### OQ-MSSQL-P1C-02（低，範圍認知落差，不阻擋 P1c）：`customer_core` 為 PG-only 表，站點 1 之 Pattern B 轉換無法在 MSSQL 上做真正的「資料列等價性」驗證
+
+- **問題**：AD §3 D-5 之站點清單將站點 1（`customer_core` `ANY($1)`）與站點 2（`ob_arreturndf_min_cap` `ANY($1)`）並列，以相同的「低難度，改用 `IN(:...arr)`」描述帶過，未提及兩者之來源表在 MSSQL 遷移範圍內的地位完全不同——`customer_core` 為 AD-E07-37 已裁定之 PG-only 表（無 entity、不在 P1b 全 37 entity baseline、不在 MSSQL baseline migration），而 `ob_arreturndf_min_cap` 已隨 P1b 完整遷移至 MSSQL。
+- **影響**：站點 1 的具名參數轉換本身可以完全正確，但因來源表不存在，MSSQL 上永遠只能驗證到「錯誤路徑」（invalid object name），無法像站點 2 一樣驗證「資料列內容/筆數等價」；若 tdd-implementation 或未來讀者未留意此差異，可能誤以為兩站點驗收標準應該相同，或誤判站點 1 測試「覆蓋不足」。
+- **建議**：`TS-MSSQL-P1C-PARAM-003` 已明確區分「表不存在錯誤」與「SQL 語法/參數繫結錯誤」兩種失敗模式，僅要求前者、拒絕後者；本文件與 test-index.md 特殊注意段落已記錄此落差，供 tdd-implementation 與未來 Phase 3/4（customer_core 若日後決定遷移至 MSSQL 時）參考。
+- **風險等級**：低（不阻擋，測試設計已具備正確的區分邏輯，僅為文件認知落差記錄）
