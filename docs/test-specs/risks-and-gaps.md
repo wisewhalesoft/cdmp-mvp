@@ -952,3 +952,42 @@ last_updated: 2026-07-07
 - **影響**：若漏做 `JSON.parse`，`processPayload` 收到的 `payload` 參數會是原始字串而非物件，後續 `payload.runId`/`payload.ym` 存取皆為 `undefined`——由於 `processPayload` 內部對 `runId`/`ym` 缺失已有既有防禦邏輯（既有 F098「job payload 不完整」分支：記 log、視為已處理、不拋例外），此 bug 不會讓程序崩潰或拋出明顯錯誤，而是**每一個 mssql 環境下的月跑 job 都會被靜默判定為「payload 不完整」並直接略過**，不執行任何 pipeline——是一個會被輕易誤判為「測試通過但功能完全不動」的隱蔽性 bug。
 - **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `PAYLOAD-008`（🔴）已針對此設計專屬案例，明確以字串形式的 fake `claimed.payload` 驅動 `pollOnce()`，斷言 `processPayload` 收到的是**已還原之物件**而非原始字串。
 - **風險等級**：中（若遺漏，功能性影響嚴重——mssql 環境下月跑完全不執行——但因表現為「安靜略過」而非崩潰，較難在偶然的手動測試中被發現，屬於需要專屬自動化案例才能可靠捕捉的類型）
+
+---
+
+## MSSQL 全面遷移 P2c 風險與待決問題（AD-E07-40，2026-07-07 新增，P2 最後一片）
+
+### R-MSSQL-P2C-01（中，測試技巧不對稱，非既有程式碼缺陷）：`MssqlQueueService.expireSweep()` 無 injectable `now` 參數，與 `OrphanReaper.reap(now)` 之注入時鐘機制不對稱
+
+- **問題**：P2a 已定案 `expireSweep()` 簽章為 `async expireSweep(): Promise<void>`（`mssql-queue.service.ts:113`），完全不接受任何時間參數，逾時判定一律以 DB 端 `SYSUTCDATETIME()` 為準；而 `OrphanReaper.reap(now: Date = new Date())` 允許呼叫端傳入固定時間直接控制「是否逾時」之判定。P2c 任務指示原文期待「比照 `OrphanReaper.reap(now)` 既有的『注入時鐘』測試慣例」設計 sweep 定時掃描測試，但此慣例**無法直接套用**於 `expireSweep()` 本身。
+- **影響**：若 tdd-implementation 或未來維護者誤以為兩者可用同一套 harness 工具（例如嘗試呼叫 `expireSweep(fixedNow)` 傳入參數），會直接因型別不符而編譯失敗；若改為嘗試以 mock 系統時鐘（如 `vi.setSystemTime()`）控制 DB 端 `SYSUTCDATETIME()` 判定，則完全無效（DB 端時鐘不受 Node.js 進程時鐘 mock 影響），可能導致測試設計者誤判「時間控制機制失效」而錯誤地引入真實 `sleep`，拖慢測試套件。
+- **建議**：`infrastructure/AD-E07-40-P2c-test.md` §0.3 已明確記錄此不對稱性，RECOVERY 群組統一採 P2a `SWEEP-001` 已驗證之技術——`claimNext()` 後以獨立 SQL `UPDATE ... SET expire_at = DATEADD(SECOND,-N,expire_at)` 直接竄改種子列，避免真實等待。
+- **風險等級**：中（純測試設計/技巧層級風險，不影響產品邏輯正確性，但若未及早澄清可能導致下游浪費時間嘗試不可行的 harness 設計，或誤引入真實 sleep 拖慢 CI）
+
+### R-MSSQL-P2C-02（🔴 高，AD 明文授權但需 process 紀律配合）：expire sweep 掛載機制未定案（AD §4.3 明確交 tdd-implementation 依現行風格擇一），若未於 impl log 記錄選擇，未來讀者/下游測試無從得知實際掛載於何處
+
+- **問題**：AD-E07-40 §4.3 原文明確列出兩種掛載方案且不強制擇一：「搭 `OrphanReaper` 既有 `reaperIntervalMs` 定時器一起跑」或「讓 `MssqlQueueService` 自行內部啟動 timer」。這是 system-architect 刻意授權的實作彈性（非遺漏），但也意味著測試設計無法像 P2a/P2b 那樣針對具體 class/method 命名做靜態鎖定守門。
+- **影響**：若 tdd-implementation 選定方案後未在 impl log 明確記錄（比照既有 P2b impl log 之 AD-1~AD-4 編號慣例），未來任何需要理解「sweep 何時被觸發」的維護者（含 P2c 之後的 F067 業務驗收、任何排查「殭屍 job 為何未被清理」的 on-call 工程師）需要重新讀程式碼追蹤，缺乏文件錨點；若日後有第二輪重構想要「把兩層回收合併成單一機制」，也需要先知道目前的真實掛載點在哪。
+- **建議**：`infrastructure/AD-E07-40-P2c-test.md` 之 `MOUNT-001`（🔴 決策關卡）已明確要求 tdd-implementation 於 `AD-E07-40-P2c-impl.md` 之 Architectural Decisions 段落記錄選擇（建議編號 AD-5，接續 P2b 之 AD-1~AD-4）；MOUNT 群組其餘案例（002~006）皆設計為黑盒 spy 驗證，不因掛載點選擇不同而需要重寫測試。
+- **風險等級**：高（若未記錄，不是功能性缺陷，但會累積成長期可維護性負債；由於是「文件紀律」而非「自動化可偵測」的風險，唯一防線是流程要求，故評為高——單純依賴良好意願不足以保證落實）
+
+### R-MSSQL-P2C-03（低，現況記錄，非阻擋）：`docker-compose.yml` `worker:` service 現行**零個** `RUN_QUEUE_*` 環境變數（不僅 `RUN_QUEUE_POLL_INTERVAL_MS` 缺席）
+
+- **問題**：test-designer 直接 grep 查證 `docker-compose.yml`，確認 `worker:` service 之 `environment:` 區塊目前**完全沒有**任何 `RUN_QUEUE_*` 開頭之環境變數——不僅 AD §7 DoD #4 明文要求的 `RUN_QUEUE_POLL_INTERVAL_MS` 缺席，`RunQueueTuning` 其餘 4 個既存欄位（`jobExpireInSeconds`/`reaperIntervalMs`/`orphanThresholdMs`/`cancelPollIntervalMs`，各自皆已在程式碼層支援對應 `process.env.RUN_QUEUE_*` 覆蓋）亦全數未曝露於 compose，prod 部署目前完全依賴程式碼內建之預設值（4 小時 job expire、60 秒 reaper 週期、4 小時 orphan 閾值、0ms cancel poll、2000ms consumer poll）。
+- **影響**：若未來需要調整任一佇列參數（例如 AD §9.1 提及之「量測後可能需調整 `pollIntervalMs` 預設值」），目前唯一手段是修改程式碼常數並重新部署映像，而非透過 compose/env 熱調整，運維彈性受限。此非本輪功能缺陷，但為部署一致性缺口。
+- **建議**：`infrastructure/AD-E07-40-P2c-test.md` 之 `STATIC-001`（🔴 DoD #4）依 AD 字面範圍僅要求補上 `RUN_QUEUE_POLL_INTERVAL_MS`；`STATIC-004` 為建議性決策關卡，提醒若 P2c 掛載機制引入新的週期設定亦應一併考慮 env 化與 compose 曝露，但明確標註為非阻擋。建議另立小型維運任務（非本輪範圍）一次補齊其餘 4 個既存變數。
+- **風險等級**：低（純運維彈性缺口，不影響功能正確性，且已有明確安全的程式碼內建預設值兜底）
+
+### R-MSSQL-P2C-04（低，殘留議題延續，AD §9.2 已記錄）：兩層回收機制（佇列層 `queue_job.state`／業務層 `assignment_run.status`）無自動化一致性告警，若未來任一層邏輯出現 bug 導致兩者長期不一致，目前無監控可偵測
+
+- **問題**：AD-E07-40 §9.2 已明文記錄此殘留議題：「若未來任一層邏輯有 bug 導致兩者不一致（如業務層已標 failed 但佇列層該筆仍卡在 active），目前設計沒有告警機制偵測此不一致」。`infrastructure/AD-E07-40-P2c-test.md` 之 `RECOVERY-004`/`005`（獨立性直接反證）與 `RECOVERY-006`（冪等終態）驗證的是「當前實作邏輯正確時兩者最終會一致」，但不構成「持續監控」——這是測試設計的固有局限（測試驗證邏輯正確性於特定時間點，非提供 runtime 監控能力）。
+- **影響**：若未來重構（例如引入第三種佇列狀態、或修改 `OrphanReaper` 閾值邏輯）不慎破壞兩層一致性的隱含假設，現行測試套件會在該次修改的 CI 中捕捉到（因為 `RECOVERY` 群組會重跑），但若該修改恰好未觸發任何既有測試場景之邊界（例如新增了一個測試未涵蓋的中間狀態），則可能在 prod 累積出「業務已標記失敗但佇列殭屍列持續累積」或反向的情形，且無 runtime 告警。
+- **建議**：AD §9.2 已列為 P2c 之後的**可選強化項**（非本輪阻擋），例如定期比對兩表狀態一致性的健康檢查。本文件不為此設計額外案例（超出 P2c 明確範圍），僅延續記錄，供未來排入維運看板時參考。
+- **風險等級**：低（AD 本身已定性為可選強化、非阻擋；RECOVERY 群組已提供足夠的邏輯正確性驗證作為第一道防線）
+
+### R-MSSQL-P2C-05（低，文件維護提醒，非本輪造成）：`test-index.md` 之「總合計」彙總列（82 files / 2252）與檔案頂部敘述性總數（本輪更新後為 88 files / 2320）已長期不同步
+
+- **問題**：`test-index.md` 涵蓋率表末端存在一個字面「總合計」列（第 226 行附近，`| **總合計** | | | **82 files** | **2252** | |`），此列在 test-designer 本輪介入之前即已與檔案頂部 YAML 前後之敘述性統計數字（本輪之前為 87 files / 2295）存在顯著落差（43 個場景、5 個檔案之差），研判為過去數個版本未同步更新逐表加總所致的既有長期 drift，非本輪 P2c 新增測試設計造成。
+- **影響**：純文件可讀性問題——若有讀者直接信任該「總合計」列而非頂部敘述性統計，會得到過時數字；不影響任何測試案例本身之正確性或可執行性。
+- **建議**：非本輪範圍（逐表加總核對需要通讀全表 200+ 列，風險與本次任務目標不成比例），僅記錄提醒：未來若有專門的文件整理輪次，應將此列與頂部敘述性統計對齊，或考慮改為由頂部敘述性統計作為唯一權威來源、移除易漂移的重複加總列。
+- **風險等級**：低（純文件維護債務，非測試設計或功能缺陷）
