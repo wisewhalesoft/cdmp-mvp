@@ -35,3 +35,124 @@ export async function dropMssqlTempTableIfExists(
     [tempTableName],
   );
 }
+
+/**
+ * 暫存表欄位內省結果（AD §3.1 回傳型別）。
+ */
+export interface MssqlTempTableColumn {
+  name: string;
+  columnId: number;
+}
+
+/**
+ * 於 `SELECT ... FROM ...` 之**頂層** `FROM` 之前插入 `INTO ##name`（AD §3.1）。
+ *
+ * 不採「字串搜尋替換第一個出現的 FROM」——巢狀子查詢（`SELECT a.id FROM (SELECT id FROM t) a`）
+ * 的第一個 `FROM` 才是頂層，內層子查詢的 `FROM` 不可誤植。故以括號深度 + 引號狀態掃描，
+ * 只在深度 0、非字串/識別碼字面值內、以完整字（word boundary）匹配的第一個 `FROM` 之前插入。
+ *
+ * @param tempTableName 已含 `##` 前綴之完整全域暫存表名
+ * @param selectSql     `SELECT ... FROM ...`（不含 INTO 子句本身）
+ */
+function buildSelectIntoSql(tempTableName: string, selectSql: string): string {
+  const idx = findTopLevelFromIndex(selectSql);
+  if (idx < 0) {
+    throw new Error(
+      `createMssqlTempTable：selectSql 找不到頂層 FROM，無法插入 INTO 子句：${selectSql}`,
+    );
+  }
+  return `${selectSql.slice(0, idx)}INTO ${tempTableName} ${selectSql.slice(idx)}`;
+}
+
+function isIdentChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+}
+
+/** 掃描頂層（括號深度 0、非字串/雙引號識別碼內）第一個完整字 `FROM` 的起始索引；找不到回 -1。 */
+function findTopLevelFromIndex(sql: string): number {
+  let depth = 0;
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (inSingle) {
+      if (ch === "'") inSingle = false;
+      continue;
+    }
+    if (inDouble) {
+      if (ch === '"') inDouble = false;
+      continue;
+    }
+    if (ch === "'") {
+      inSingle = true;
+      continue;
+    }
+    if (ch === '"') {
+      inDouble = true;
+      continue;
+    }
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+    if (ch === ')') {
+      depth--;
+      continue;
+    }
+    if (depth === 0 && (ch === 'F' || ch === 'f')) {
+      const word = sql.slice(i, i + 4);
+      if (
+        /^from$/i.test(word) &&
+        !isIdentChar(sql[i - 1]) &&
+        !isIdentChar(sql[i + 4])
+      ) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
+ * 建立全域暫存表（`SELECT ... INTO ##temp FROM ...`，I-MSSQL-TEMPTABLE-GLOBAL-01）。
+ * v1.1：P4-spike 發現 `#local` 不跨 `queryRunner.query()` 存活（封鎖級，見 AD §1.3），改用 `##global`。
+ *
+ * @param tempTableName 呼叫端已含 `##` 前綴之完整暫存表名
+ * @param selectSql     `SELECT ... FROM ...`（不含 INTO 子句，由本函式插入頂層 FROM 之前）
+ */
+export async function createMssqlTempTable(
+  queryRunner: QueryRunner,
+  tempTableName: string,
+  selectSql: string,
+): Promise<void> {
+  await queryRunner.query(buildSelectIntoSql(tempTableName, selectSql));
+}
+
+/**
+ * 內省暫存表欄位（`tempdb.sys.columns` + `OBJECT_ID`，I-MSSQL-TEMP-METADATA-01；對 `#`／`##` 皆適用）。
+ * 依 `column_id` 序回傳，直接原樣映射 SQL `ORDER BY` 結果（不於 JS 端重新排序）。
+ */
+export async function getMssqlTempTableColumns(
+  queryRunner: QueryRunner,
+  tempTableName: string,
+): Promise<MssqlTempTableColumn[]> {
+  const rows = await queryRunner.query(
+    `SELECT c.name AS column_name, c.column_id
+       FROM tempdb.sys.columns c
+      WHERE c.object_id = OBJECT_ID('tempdb..' + @0)
+      ORDER BY c.column_id`,
+    [tempTableName],
+  );
+  return rows.map((r: any) => ({ name: r.column_name, columnId: r.column_id }));
+}
+
+/**
+ * 列數查詢（各 handler 共用，取代 PG 版 `SELECT COUNT(*)::int`；T-SQL 無 `::int` 語法）。
+ */
+export async function countMssqlTempTableRows(
+  queryRunner: QueryRunner,
+  tempTableName: string,
+): Promise<number> {
+  const rows = await queryRunner.query(`SELECT COUNT(*) AS cnt FROM ${tempTableName}`);
+  return Number(rows[0].cnt);
+}

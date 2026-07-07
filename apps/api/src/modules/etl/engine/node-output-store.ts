@@ -6,12 +6,27 @@
 
 import { DataSet } from './types';
 import { QueryRunner } from 'typeorm';
+import * as mssqlTempTable from './handlers/mssql/temp-table.util';
 
 export class NodeOutputStore {
   private store = new Map<string, DataSet>();
 
+  /**
+   * AD-E07-41 P4a（CLEANUP-003 決策）：累積「本次 pipeline run 曾建立過」的暫存表名。
+   *
+   * `store` 於 `release()`（下游消費完上游後）會移除引用，故 `cleanupAll` 走 `store` 只看得到
+   * 尚未釋放的節點。PG `CREATE TEMP TABLE` 於 session/交易結束自動回收，已釋放的中間表不需再顯式 DROP；
+   * 但 MSSQL `##global temp` 於連線池 `release()` 後仍殘留（P4-spike-2 POINT4 實證），必須把
+   * **所有曾建立**的 `##` 表都顯式清掉，否則已釋放的中間節點暫存表會洩漏到 session 結束。
+   * 因此 mssql 分支改走此累積集合；PG/sqlite 分支維持原行為（走 `store`）逐位元組不變。
+   */
+  private createdTables = new Set<string>();
+
   set(nodeId: string, dataset: DataSet): void {
     this.store.set(nodeId, dataset);
+    if (dataset.tempTable) {
+      this.createdTables.add(dataset.tempTable);
+    }
   }
 
   get(nodeId: string): DataSet | undefined {
@@ -47,9 +62,26 @@ export class NodeOutputStore {
   }
 
   /**
-   * 清理所有 temp tables（DROP TABLE IF EXISTS）
+   * 清理所有 temp tables（成功/失敗兩路徑皆由 pipeline-runner 呼叫）。
+   *
+   * - MSSQL（`DB_TYPE==='mssql'`）：顯式 `dropMssqlTempTableIfExists` 清掉**所有曾建立**的 `##` 表
+   *   （I-MSSQL-TEMPTABLE-CLEANUP-01；含已 `release()` 的中間節點，見 `createdTables` 註解）。
+   * - PG/sqlite：維持原行為（僅清 `store` 內尚存者，`DROP TABLE IF EXISTS "..."`）逐位元組不變。
    */
   async cleanupAll(queryRunner: QueryRunner): Promise<void> {
+    if (process.env.DB_TYPE === 'mssql') {
+      for (const table of this.createdTables) {
+        try {
+          await mssqlTempTable.dropMssqlTempTableIfExists(queryRunner, table);
+        } catch {
+          // Ignore errors during cleanup (table may already be dropped/auto-reclaimed)
+        }
+      }
+      this.createdTables.clear();
+      this.store.clear();
+      return;
+    }
+
     const tables = this.getAllTempTables();
     for (const table of tables) {
       try {
@@ -66,5 +98,6 @@ export class NodeOutputStore {
    */
   clear(): void {
     this.store.clear();
+    this.createdTables.clear();
   }
 }
