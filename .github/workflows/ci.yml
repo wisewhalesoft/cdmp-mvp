@@ -1,0 +1,207 @@
+name: CI
+
+# P0 安全網（MSSQL 全面遷移）：從零建置的 GitHub Actions CI。
+# 在後續高風險 phase（自建佇列 / 引擎移植）之前先就位。
+#
+# Lane 結構（互相獨立、無 needs → 一個失敗不會取消其他 → 等效 fail-fast: false）：
+#   1. lint-typecheck-unit  無 DB service。tsc 型別 gate + SQLite in-memory 單元（npm test）。
+#   2. pg-specs             postgres:16 service。跑全部 *.pg.spec.ts（+ f098 pg-integration）。
+#   3. mssql-specs          SQL Server 2022 service + init。跑全部 *.mssql.spec.ts。
+#   4. web-unit             apps/web 的 vitest（jsdom）。
+#
+# 設計註記：
+#   - vitest skip（describe.skip / ctx.skip）本來就不算 fail；DB 不可達或 Linux mssql 容器
+#     sp_getapplock 17750 DLL 缺失導致的並發鎖測試 skip，一律視為通過。
+#   - Node pin 在 22 LTS（對齊 @types/node ^22）。B2 曾揭露 Node 24 + workspace hoisting 下
+#     typeorm CLI 有問題（已由 apps/api/scripts/typeorm.cjs launcher 繞過），CI 用 LTS 更保險。
+#   - monorepo：root `npm ci`（npm workspaces）一次裝好並 hoist 到 root node_modules；
+#     各 lane 於 apps/api|apps/web 以 `npx` 解析 hoisted bin。
+
+on:
+  push:
+  pull_request:
+
+# 同一 ref 的新 push 取消尚在跑的舊 run（節省 runner）。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lane 1：型別 gate + SQLite in-memory 單元測試（無 DB service，最快、最常紅）
+  # ---------------------------------------------------------------------------
+  lint-typecheck-unit:
+    name: Typecheck + SQLite unit (apps/api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (npm workspaces)
+        run: npm ci
+
+      # memory 教訓（feedback_vitest_no_typecheck）：vitest 不做型別檢查；
+      # 此 tsc gate 必要，否則 prod build 掛掉 → API 500。
+      - name: Typecheck (tsc --noEmit)
+        working-directory: apps/api
+        run: npx tsc --noEmit -p tsconfig.build.json
+
+      # npm test = `vitest run`，DB_TYPE=sqlite（test/setup.ts）。
+      # 亦會 collect 到 *.pg.spec.ts / *.mssql.spec.ts，但此 lane 無 DB → 它們 skip（=通過）。
+      - name: Unit tests (SQLite in-memory)
+        working-directory: apps/api
+        run: npm test
+
+  # ---------------------------------------------------------------------------
+  # Lane 2：真 PostgreSQL 整合（*.pg.spec.ts）
+  #   spec 連線讀 PG_BOSS_TEST_*（預設 127.0.0.1:5433 / cdmp / cdmp_secret / cdmp_test），
+  #   對齊 docker-compose.test.yml 的 postgres-test。
+  # ---------------------------------------------------------------------------
+  pg-specs:
+    name: PostgreSQL integration (*.pg.spec.ts)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: cdmp_test
+          POSTGRES_USER: cdmp
+          POSTGRES_PASSWORD: cdmp_secret
+        # host 5433 → 對齊 spec 預設 PG_BOSS_TEST_PORT=5433
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U cdmp -d cdmp_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (npm workspaces)
+        run: npm ci
+
+      # 序列化（--no-file-parallelism）：memory 教訓 feedback_pg_spec_parallel_timeout
+      # ——PG spec「單跑過、合跑 fail」多為 CPU 競爭下 testTimeout 超時；序列化 + 各 spec 唯一 schema 隔離。
+      # 正選檔案：所有 *.pg.spec.ts + f098-pg-integration.spec.ts（檔名非 .pg.spec 但需真 PG）。
+      - name: PG specs (serialized)
+        working-directory: apps/api
+        env:
+          PG_BOSS_TEST_HOST: 127.0.0.1
+          PG_BOSS_TEST_PORT: "5433"
+          PG_BOSS_TEST_USER: cdmp
+          PG_BOSS_TEST_PASSWORD: cdmp_secret
+          PG_BOSS_TEST_DB: cdmp_test
+        run: npx vitest run --no-file-parallelism "pg.spec" "f098-pg-integration"
+
+  # ---------------------------------------------------------------------------
+  # Lane 3：真 SQL Server 2022 整合（*.mssql.spec.ts）
+  #   spec 連線讀 MSSQL_TEST_* → DB_* → 預設 localhost:1433 / cdmp / Cdmp_Dev_2026! / CDMP_TEST
+  #   （見 src/database/__tests__/mssql-env-preload.ts）。此處以 DB_* 對應 .env.test.mssql。
+  # ---------------------------------------------------------------------------
+  mssql-specs:
+    name: SQL Server 2022 integration (*.mssql.spec.ts)
+    runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          # dev-only 測試密碼（對齊 docker-compose 的 MSSQL_SA_PASSWORD 預設）；非 prod、非機密。
+          MSSQL_SA_PASSWORD: "Cdmp_Sa_2026!"
+          MSSQL_PID: Developer
+          # 對齊來源系統硬性要求（init SQL 亦於 CREATE DATABASE 明確 COLLATE，belt-and-suspenders）。
+          MSSQL_COLLATION: Chinese_Taiwan_Stroke_BIN
+        ports:
+          - 1433:1433
+        # 註：mssql server 映像無合適 healthcheck binary；改由下方 init step 的 retry loop 等待就緒。
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (npm workspaces)
+        run: npm ci
+
+      # 鏡像 docker-compose.yml 的 mssql-init 服務：等 mssql 就緒後用 sqlcmd 跑 docker/mssql-init.sql，
+      # 建 CDMP_TEST 資料庫（BIN collation）+ cdmp login/user。
+      # 新版 mssql server 映像不再內建 sqlcmd → 以 mssql-tools 容器（--network host 連到 host 上已發佈的 1433）執行，
+      # 與 compose 相同工具路徑 /opt/mssql-tools/bin/sqlcmd。
+      - name: Init MSSQL (CDMP_TEST + cdmp login)
+        env:
+          MSSQL_SA_PASSWORD: "Cdmp_Sa_2026!"
+        run: |
+          set -euo pipefail
+          echo "Waiting for SQL Server to accept connections..."
+          for i in $(seq 1 60); do
+            if docker run --rm --network host mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S localhost,1433 -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" -b >/dev/null 2>&1; then
+              echo "SQL Server is up (attempt $i)."
+              break
+            fi
+            echo "waiting-for-mssql ($i)"
+            sleep 3
+          done
+          echo "Applying docker/mssql-init.sql ..."
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE/docker/mssql-init.sql:/init/mssql-init.sql:ro" \
+            mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S localhost,1433 -U sa -P "$MSSQL_SA_PASSWORD" -i /init/mssql-init.sql -b
+
+      # 序列化（--no-file-parallelism），對齊 PG lane 理由。
+      # Linux mssql 容器 sp_getapplock/sp_executesql 取鎖路徑拋 17750 DLL 缺失 → 相關並發鎖測試 ctx.skip
+      # 附 reason；skip 不算 fail，lane 仍綠。
+      - name: MSSQL specs (serialized)
+        working-directory: apps/api
+        env:
+          DB_TYPE: mssql
+          DB_HOST: localhost
+          DB_PORT: "1433"
+          DB_USERNAME: cdmp
+          DB_PASSWORD: "Cdmp_Dev_2026!"
+          DB_NAME: CDMP_TEST
+          DB_MSSQL_ENCRYPT: "true"
+          DB_MSSQL_TRUST_CERT: "true"
+        run: npx vitest run --no-file-parallelism "mssql.spec"
+
+  # ---------------------------------------------------------------------------
+  # Lane 4（輕量）：前端 apps/web 單元測試（vitest + jsdom）。
+  #   注意：apps/web 的 `tsc -b` build 目前有 pre-existing 型別債，故此 lane 只跑 `npm test`
+  #   （vitest 不做型別檢查），不跑 web build。待 web 型別債清理後再考慮加 web typecheck gate。
+  # ---------------------------------------------------------------------------
+  web-unit:
+    name: Web unit (apps/web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (npm workspaces)
+        run: npm ci
+
+      - name: Web unit tests (vitest / jsdom)
+        working-directory: apps/web
+        run: npm test
