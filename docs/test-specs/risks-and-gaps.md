@@ -1092,7 +1092,7 @@ last_updated: 2026-07-08
 
 ## MSSQL 全面遷移 P4c 風險與待決問題（AD-E07-41，2026-07-08 新增，P4 第三片，P4 最複雜切片）
 
-> 完整測試設計見 [infrastructure/AD-E07-41-P4c-test.md](infrastructure/AD-E07-41-P4c-test.md)。本節彙整 P4c（Handler 群組三：dedup/target-load，含 tie-breaker + customer_core UPSERT 兩段式 + target-load 三種 loadMode 全覆蓋）範圍內識別之風險；P4d/e 之風險留待各自測試設計文件記錄。
+> 完整測試設計見 [infrastructure/AD-E07-41-P4c-test.md](infrastructure/AD-E07-41-P4c-test.md)。本節彙整 P4c（Handler 群組三：dedup/target-load，含 tie-breaker + customer_core UPSERT 兩段式 + target-load 三種 loadMode 全覆蓋）範圍內識別之風險；P4e 之風險留待其測試設計文件記錄，P4d 風險見下一節。
 
 ### R-MSSQL-P4C-01（🔴🔴 最高，本輪查證出之範圍擴大核心依據）：`target-load-handler.ts` 服務範圍遠超 customer_core，AD §5.1/§9 P4c DoD 完全未提及 `fullMode`/`partition_replace` 兩條真實路徑
 
@@ -1135,3 +1135,49 @@ last_updated: 2026-07-08
 - **影響**：若被遺漏，會分別導致寫入 customer_core 之系統時間戳記/UUID 欄位型別錯誤、ghost gate 判斷失效（過短 `source_customer_no` 未被正確排除）、NOT NULL 守門查詢語法錯誤。
 - **建議**：`infrastructure/AD-E07-41-P4c-test.md` 已將 (a)(b)(c) 分別納入 §八 LITERAL、`UPSERT-UNIT-004`、§六 CATALOG，已足以在 P4c 階段攔截。建議 system-architect 於下次修訂 AD-E07-41 時，於 §3.2/§5.1 表格新增「輔助站點」欄位，明確列出每個 handler 除核心陳述式外之全部字串函式/cast/catalog 依賴，降低此類遺漏之重演機率（此為本專案 MSSQL 遷移系列第三次記錄同型態問題）。
 - **風險等級**：低（已於本輪測試設計完整補齊，不構成 P4c 阻擋；記錄用意在於提醒此為可預期重演模式，供未來 P4d/P4e 或其他子切片測試設計時優先主動 grep 覆核，而非僅信任 AD 表格文字定範圍）
+
+## MSSQL 全面遷移 P4d 風險與待決問題（AD-E07-41，2026-07-08 新增，P4 收官切片）
+
+> 完整測試設計見 [infrastructure/AD-E07-41-P4d-test.md](infrastructure/AD-E07-41-P4d-test.md)。本節彙整 P4d（customer_core 56 節點端對端，真實 DAG 執行 + PG EQ 比對 + tie-breaker 業務級偵測）範圍內識別之風險；P4e（bulk-load raw staging 寫入端）之風險留待其測試設計文件記錄。**P4（P4a/b/c/d）至此全數完成測試設計**。
+
+### R-MSSQL-P4D-01（🔴🔴 最高，本輪查證出之 fixture 範圍擴大核心依據）：任務書「5 來源」僅描述 extract 節點，31 個 lookup 節點另依賴 9 張獨立來源表，真實 fixture 需求為 14 張 raw 表
+
+- **問題**：test-designer 逐一 grep `etl-pipelines.json` 全部 31 個 `lookup` 節點之 `lookupRef`/`lookupSource` 欄位，確認除 5 個 `raw_data_extract` 節點對應之 5 張 raw 表外，另有 **9 張獨立的 lookup 來源 raw 表**（`ZZIP_BAMCODE_D`×2 法人、`ZZIP_BAMPOST_M`、`MLMCODE`×3 法人、`MLSTDINDUMF`×3 法人），任務書「5 來源 2 ZZIP+3 MLMC」與初始理解僅涵蓋 extract 節點，完全未提及這 9 張表。
+- **影響**：若 fixture 僅依任務書字面建 5 張表，31 個 lookup 節點（56 節點中占比最高，55%）會因來源表不存在而 100% 拋 `Invalid object name`，pipeline 無法端對端跑通，P4d 核心 DoD（§三 E2E-RUN）完全無法達成。
+- **建議**：`infrastructure/AD-E07-41-P4d-test.md` §0.3 已將全部 14 張 raw 表（含各自欄位需求之衍生原則）納入 Harness 設計，並設計 `GATE-001`/`GATE-003` 決策關卡要求 tdd-implementation 以程式化方式（非人工臆測）從 `etl-pipelines.json` 逐節點掃描產生欄位/值域清單。
+- **風險等級**：高（已有明確測試守門與 Harness 設計可攔截；若 tdd-implementation 未仔細閱讀 §0.3 而僅依任務書原始描述構造 fixture，會在 P4d 執行第一時間即發現大量節點失敗，除錯成本雖不低但訊號明確，不會靜默通過）
+
+### R-MSSQL-P4D-02（🔴🔴 高，本輪查證出之 dry-run 假陽性陷阱）：`target-load-handler(-mssql).ts` 於 `isTestRun===true` 時完全跳過寫入，但 `nodeLogs` 仍顯示「成功」，E2E harness 若誤用極易產生具欺騙性的假陽性
+
+- **問題**：`target-load-handler.ts`/`target-load-handler-mssql.ts` 皆有 `if (context.isTestRun) return { tempTable: '', rowCount: input.rowCount }` 分支——`EtlPipelineExecutionService.triggerTest()`（對應 UI「測試執行」功能）會將 `EtlPipelineLog.is_test_run` 設為 `true` 並透傳至 `PipelineRunnerConfig.isTestRun`。若 E2E harness 誤用 `triggerTest` 而非 `triggerExecute`（兩者 API 外觀高度相似，命名容易混淆），或於 §0.2 方案乙手動建構 `PipelineRunnerConfig` 時遺漏顯式設定 `isTestRun: false`，pipeline 會回報全部 56 節點 `completed` 且 `outputRowCount` 顯示與正常執行相同的數字，但 `customer_core` 實際上一列也未寫入。
+- **影響**：若 P4d 測試僅依賴 `nodeLogs` 斷言（如 §三 E2E-RUN-001 若僅檢查 `status==='completed'` 而不直接查詢 `customer_core` 實際列數），會在此陷阱下產生「全綠但功能完全未驗證」的最危險型態假陽性——比測試失敗更難被發現，因為表面訊號一切正常。
+- **建議**：`infrastructure/AD-E07-41-P4d-test.md` 已設計三層防線：(a) §三 `E2E-RUN-004`/`007` 直接查詢 `customer_core` 實際列數與 `nodeLogs.outputRowCount` 交叉核對，不僅信任 nodeLogs；(b) §四 `ISTESTRUN-001`（靜態守門）+ `ISTESTRUN-002`（🔴🔴 陷阱佐證對照組，刻意以 `isTestRun=true` 跑一次證明陷阱真實存在）；(c) §十三 `STATIC-003`（原始碼靜態 grep，確認全部 DoD 核心測試檔皆顯式 `isTestRun: false`）。三層防線分別作用於「執行期資料驗證」「執行期陷阱佐證」「原始碼靜態掃描」，任一層被繞過仍有其餘兩層攔截。
+- **風險等級**：高（已有三層明確測試守門可攔截；此類「表面成功、實際未執行」陷阱之根本影響已透過本文件之逐檔查證於測試設計階段提前發現並設計防線，未待 tdd-implementation 階段才意外踩雷）
+
+### R-MSSQL-P4D-03（🔴 高，依本專案內真實先例設計，非臆測）：PG 對照側（EQ-PG 群組）之可達性不可預設，5433 於前一切片（P4a）實測時確實不可達
+
+- **問題**：P4a impl log（`AD-E07-41-P4a-impl.md` 偏差段落 `EXTRACT-RESOLVE DUAL-DB`）明確記錄「CDMP_TEST 實測缺 `extraction_tasks`/`datasources` baseline」且「唯一可達 PG 為 dev DB（5432），5433 不可達，不可注入測試列污染 dev」，最終該輪 PG 對照側完全跳過。這是本專案 MSSQL 遷移系列**已發生過**的真實環境限制，非假設性風險。
+- **影響**：若任務書「PG 5433/dev 5432 可達」之措辭被誤讀為「兩者擇一皆可用於寫入測試資料」，可能導致 tdd-implementation 誤用 dev DB（5432）進行 P4d EQ-PG 群組之寫入測試，污染開發資料庫；若嚴格要求 EQ-PG 群組必須執行才算 P4d 完成，則在 5433 不可達的環境下 P4d 會被不必要地阻擋（即使 MSSQL-only 端對端已完全驗證通過）。
+- **建議**：`infrastructure/AD-E07-41-P4d-test.md` §0.5 已明確設計 degradable 政策：EQ-PG（§六）與 TIEBREAK 跨引擎比對（§五 `TIEBREAK-003`）僅在 5433 可達時執行，不可達時 `describe.skip` + 明確 `SKIP_REASON`，**絕不**回退至 5432（dev DB）；§三 E2E-RUN（MSSQL-only）為唯一不可退讓之硬性 DoD。tdd-implementation 執行本輪測試前應先確認 `docker compose -f docker-compose.test.yml up -d postgres-test` 是否已啟動，若最終 P4d 完成時 EQ-PG 群組仍為 skip 狀態，應於 impl log 明確記錄原因，不視為 P4d 未完成。
+- **風險等級**：中高（已有明確 degradable 設計降低「阻擋整體交付」之風險；但 AD §9 P4d DoD 字面「與 PG 版本逐欄逐列比對」若未能於任何一次 tdd-implementation 執行中真正跑過，該項 DoD 實質上仍未被驗證過，僅是測試設計層面已為其可能發生的環境限制預作準備，建議 tdd-implementation 執行前優先嘗試啟動 `postgres-test`，若持續不可達應主動回報使用者評估是否需要調整本機/CI 環境）
+
+### R-MSSQL-P4D-04（中，AD 與任務書共同沿用之舊估算數字與真實資料不符）：真實 pipeline 節點數為 56，AD §0/§8 與任務書皆沿用「53 節點」
+
+- **問題**：test-designer 逐一讀取 `etl-pipelines.json`「ETL for Customer Core」之 `definition.nodes`，實測 `nodeType` 分佈為 `raw_data_extract:5, derived_field:7, lookup:31, merge:4, dedup:3, type_cast:2, field_mapping:2, conditional:1, target_load:1`，合計 **56**（非 53），邊數 55。AD-E07-41 全文（§0「53 節點」、§8「53 節點端對端」）與本輪任務書描述皆沿用同一「53」數字，推測為 pipeline 早期設計版本之估算值，未隨後續節點增修同步更新。
+- **影響**：純文件層面不一致，不影響任何測試邏輯正確性（本文件全數以真實 56 為準）；但若未來讀者（含 system-architect 下次修訂 AD 時）依 AD 文字「53」去核對測試設計文件之案例數或範圍完整性，可能產生不必要的困惑或誤判範圍缺漏。
+- **建議**：本文件 §零 查證發現 1、§十三 `STATIC-001` 已明確記錄真實數字並設計事實鎖定守門（讀取 JSON 動態核對，非寫死字面值，未來若節點數再變動會自動反映而非又一次產生文件漂移）。建議 system-architect 於下次修訂 AD-E07-41 時，將全文「53 節點」字面更正為「56 節點」，或改用「customer_core pipeline」之描述避免寫死具體數字。
+- **風險等級**：低（不影響功能正確性，純文件一致性問題；已設計動態守門避免未來再次漂移）
+
+### R-MSSQL-P4D-05（中，P4c 已記錄之範圍缺口，P4d 明確不處理，此處交叉引用避免被誤判已解決）：`target-load-handler.ts` 服務之另外 5 條既有生產 pipeline（`fullMode`/`partition_replace`）之端對端驗證，P4d 範圍不涵蓋
+
+- **問題**：`R-MSSQL-P4C-01` 已記錄 `target-load-handler.ts` 被 6 條 pipeline 共用，其中 5 條（`ob_arreturndf_min_cap`/`ob_calendar`/`ob_emphire`/`ob_pool_data`/`ob_pool_data_list`）依賴 P4c 已補齊之 `fullMode`/`partition_replace` 路徑，並指出「P4d（端對端測試）範圍僅限 customer_core，不會觸及這 5 條 pipeline」。本輪任務書明確將 P4d 範圍限定為「customer_core pipeline 端對端」，確認此缺口**依然存在，且本輪任務書之範圍界定本身即是此缺口延續之直接原因**（非 test-designer 本輪疏漏）。
+- **影響**：這 5 條既有生產 pipeline（E03/E04 raw data landing 既有機制）於 MSSQL 上之 handler 級邏輯正確性已由 P4c §四 FULLMODE/§五 PARTITION 之單元/整合測試涵蓋，但「作為完整 DAG 端對端執行」（含這些 pipeline 各自的其餘節點，如 raw_data_extract/field_mapping 等與 target_load 協同）仍無任何自動化測試涵蓋，僅能仰賴人工於 cutover 前手動驗證或另開子切片。
+- **建議**：交叉引用 `R-MSSQL-P4C-01` 之既有建議（system-architect 評估是否需要為這 5 條 pipeline 新增獨立端對端驗證子切片）。本文件不主動擴大範圍納入（任務書已明確排除，逾越 test-designer 職責邊界），僅於此處重申此缺口於 P4d 完成後依然存在，避免被誤判為「P4（P4a/b/c/d）全數完成」代表全部 6 條 pipeline 皆有端對端覆蓋。
+- **風險等級**：中（缺口本身之核心邏輯已有 P4c handler 級測試把關，端對端層級缺口非立即阻擋風險；但若無 system-architect 主動裁示，此缺口可能被長期遺忘直到 cutover 後才暴露，建議列入 P4 全系列收尾時之待辦追蹤）
+
+### R-MSSQL-P4D-06（低，AD §4.3 已裁定為非阻擋，本文件已設計偵測機制，此處記錄殘留不確定性）：tie-breaker 跨引擎（PG vs MSSQL）勝出列內容是否一致，本質上無法於測試設計階段預先斷言，需等待真實執行觀察
+
+- **問題**：`TIEBREAK-003` 之設計本質是「探測型」案例，依 AD §4.3 裁定不預設答案；本文件已設計為兩分支皆合法通過的結構，但此案例**是否真的在真實 fixture 下觸發分歧**，唯有 tdd-implementation 實際執行後才能得知，測試設計階段無法提前判定。
+- **影響**：若 5433 可達且 `TIEBREAK-003` 實際執行後發現分支 B（內容不一致），依 AD §4.3 裁定此為「已知、可解釋之低機率邊界差異，非 bug」，但仍需要 tdd-implementation 確實依測試設計要求將觀察結果記入 impl log 並回報使用者——這一步驟依賴人工紀律（比照本專案既有 `TLDEDUP-GATE-001` 等決策關卡之共通弱點：無法被自動化強制執行，僅能靠流程要求）。
+- **建議**：`TIEBREAK-003` 已明確要求「不可略過不記錄」，比照既有決策關卡文件化守門慣例。若 tdd-implementation 執行後確實觀察到分支 B，建議比照本專案既有 F067 差異報告揭露慣例，將該具體案例（客戶代號、差異欄位、兩側完整列內容）整理後主動回報使用者，而非僅記入 impl log 內部文件了事。
+- **風險等級**：低（AD 已明確裁定此為非阻擋之已知邊界情境；記錄用意在於提醒此類「探測結果依賴人工紀律回報」之殘留不確定性，供 QA/PM 於 P4d 完成後追蹤確認決策關卡是否確實被落實記錄）
