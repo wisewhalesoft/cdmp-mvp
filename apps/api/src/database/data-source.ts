@@ -41,6 +41,16 @@ loadDotEnv(path.resolve(__dirname, '../../.env'));
 const dbType = process.env.DB_TYPE === 'mssql' ? 'mssql' : 'postgres';
 const defaultPort = dbType === 'mssql' ? '1433' : '5432';
 
+// AD-E07-39 P1b2：兩軌 baseline 各自獨立 glob，互不撿取對方的 baseline migration。
+//   - mssql：專屬子目錄 migrations/mssql/*（手寫 T-SQL baseline，MssqlBaselineSchema）。
+//   - postgres：維持 migrations/*.{ts,js}（非遞迴、單層 * 不含子目錄 → 不會撿到 mssql baseline）。
+// 若共用單一 glob，mssql migration:run 會嘗試跑 PG baseline（public schema / uuid / jsonb 等）→ 失敗，
+// 且 typeorm_migrations 會多出非預期紀錄（違反 BASELINE-003「恰 1 筆」）。
+const migrationsGlob =
+  dbType === 'mssql'
+    ? [path.join(__dirname, 'migrations', 'mssql', '*.{ts,js}')]
+    : [path.join(__dirname, 'migrations', '*.{ts,js}')];
+
 const commonOptions = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || defaultPort, 10),
@@ -48,7 +58,7 @@ const commonOptions = {
   password: process.env.DB_PASSWORD || 'cdmp_secret',
   database: process.env.DB_NAME || (dbType === 'mssql' ? 'CDMP' : 'cdmp_dev'),
   entities: [path.join(__dirname, 'entities', '*.entity.{ts,js}')],
-  migrations: [path.join(__dirname, 'migrations', '*.{ts,js}')],
+  migrations: migrationsGlob,
   migrationsTableName: 'typeorm_migrations',
   synchronize: false, // CLI 跑 migration 時必須 false
   logging: (process.env.TYPEORM_LOG === 'true'
