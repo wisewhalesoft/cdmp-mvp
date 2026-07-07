@@ -5,7 +5,7 @@ feature-id: N/A（非 F-numbered feature；資料庫平台全面遷移之基礎�
 source-stories: N/A（延續 AD-E07-38/39/40 之使用者拍板三項硬約束；本輪額外拍板：customer_core ETL 提前於 P3 之前完成，接受 27–46 人天估算）
 epic: cross-cutting（跨全模組之資料庫平台遷移，非單一 E07 業務 epic）
 module: Infrastructure — Database Platform Migration（PostgreSQL → MSSQL，Phase 4 of 6：ETL 引擎，因 P3 Stage 2 計分依賴 customer_core 真實資料而拉前）
-version: "1.0"
+version: "1.1"
 date: 2026-07-08
 status: approved
 author: system-architect
@@ -17,11 +17,15 @@ invariants:
   - I-MSSQL-COLLATE-01（繼承自 AD-E07-38）
   - I-MSSQL-BASELINE-PARITY-01（繼承自 AD-E07-38，延伸至 customer_core）
   - I-MSSQL-PARAM-01（繼承自 AD-E07-38）
-  - I-MSSQL-TEMP-METADATA-01（新增）
-  - I-MSSQL-TEMPTABLE-PREFIX-01（新增）
+  - I-MSSQL-TEMP-METADATA-01（v1.1：確認對 # 與 ## 皆適用）
+  - I-MSSQL-TEMPTABLE-GLOBAL-01（v1.1 取代 I-MSSQL-TEMPTABLE-PREFIX-01：P4-spike 發現 #local 不存活，改用 ##global）
+  - I-MSSQL-TEMPTABLE-CLEANUP-01（新增，v1.1）
+  - I-MSSQL-CATALOG-CASE-01（新增，v1.1）
   - I-MSSQL-DEDUP-TIEBREAK-01（新增）
   - I-MSSQL-ETL-EQ-01（新增）
 ---
+
+> **🔴 v1.1 修訂通知（2026-07-08）**：P4-spike 實測推翻本文件原 §1.1「單一 QueryRunner ⇒ `#local temp` 可跨節點存活」之核心前提（封鎖級發現，完整記錄見 `docs/specs/implementation-log/AD-E07-41-P4-spike-impl.md`）。架構師已裁示補救路線（§1.3：改用 `##global temp`），本文件已就地修訂 §1.1/§2/§3/§4/§5/§9/§10 反映新設計，**不另立獨立 errata 章節**（因原設計尚未有任何下游程式碼實作，直接修訂內文對讀者更有效）。新增 §12 時程影響評估。
 
 # AD-E07-41：MSSQL 全面遷移 P4（ETL 引擎 MSSQL 化，含 customer_core 真實資料）架構設計
 
@@ -46,14 +50,14 @@ invariants:
 
 ## 1. 整體策略：Driver 組織方式
 
-### 1.1 既有架構事實（已查證）
+### 1.1 既有架構事實（已查證；🔴 v1.1：temp table 存活性假設已被 P4-spike 推翻，見 §1.3）
 
-- 每個 handler 是實作 `NodeExecutor` 介面（`nodeType: string; execute(context): Promise<DataSet>`）的 class，經 `NodeDispatcher.register(executor)` 以 `nodeType` 字串註冊，執行期依 `nodeType` 動態取用（`node-dispatcher.ts`）。
-- `NodeExecutionContext` 內含 `queryRunner: QueryRunner`——**已確認全程單一 QueryRunner 貫穿整條 pipeline 執行**（`pipeline-runner.ts` 簽章持有單一 `QueryRunner` 參數並逐節點傳遞），MSSQL 區域暫存表（`#temp`，session-scoped）在此架構下可正確存活跨節點，不需要重新設計連線管理（此點已於前次盤點確認，非本次新風險）。
-- 資料傳遞介面 `DataSet { tempTable: string; rowCount: number }`——節點間只傳「暫存表名稱」，不傳實際資料列，此抽象本身是 driver-agnostic，**不需要改**。
+- 每個 handler 是實作 `NodeExecutor` 介面（`nodeType: string; execute(context): Promise<DataSet>`）的 class，經 `NodeDispatcher.register(executor)` 以 `nodeType` 字串註冊，執行期依 `nodeType` 動態取用（`node-dispatcher.ts`）。**（v1.1：不受 spike 影響，維持成立）**
+- `NodeExecutionContext` 內含 `queryRunner: QueryRunner`——**已確認全程單一 QueryRunner 貫穿整條 pipeline 執行**（`pipeline-runner.ts` 簽章持有單一 `QueryRunner` 參數並逐節點傳遞，`@@SPID` 全程恆定，P4-spike 已驗證此點成立、非連線池切換問題）。**（v1.1 修正）**：原設計據此推論「同一 QueryRunner ⇒ 區域暫存表（`#temp`，session-scoped）可正確存活跨節點」，**P4-spike 實測推翻此推論**——TypeORM+node-mssql(tedious) 於每次 `queryRunner.query()` 之間會 reset session 狀態，`#local temp` 於下一次呼叫即消失（即使包在同一 `startTransaction()` 內亦然）。單一 QueryRunner 貫穿執行本身仍然成立，只是「單一 QueryRunner ⇒ session-scoped 物件存活」這條推論不成立。裁示與補救見 §1.3。
+- 資料傳遞介面 `DataSet { tempTable: string; rowCount: number }`——節點間只傳「暫存表名稱」，不傳實際資料列，此抽象本身是 driver-agnostic，**不需要改**（v1.1：抽象本身維持不變，僅 `tempTable` 字串所指向的實際 MSSQL 物件類型由 §1.3 裁示調整）。
 - 組裝點（handler 實例化＋註冊進 `NodeDispatcher`）位於 `etl-pipeline-execution.service.ts`（已查證為 `new ExtractHandler(...)`/`dispatcher.register(...)` 等呼叫的所在檔案）。
 
-### 1.2 決策：平行 mssql Handler 檔案，於組裝點依 `DB_TYPE` 切換註冊哪一組（RESOLVED）
+### 1.2 決策：平行 mssql Handler 檔案，於組裝點依 `DB_TYPE` 切換註冊哪一組（RESOLVED，v1.1：不受 spike 影響，維持有效）
 
 沿用 P3（Raw SQL 引擎）已確立的「PG 檔不動、mssql 平行檔」精神，延伸至 handler 層級：
 
@@ -71,9 +75,45 @@ dispatcher.register(useMssql ? new LookupHandlerMssql(...) : new LookupHandler(.
 
 postgres 分支（現行 9 個 `*.ts` 原始檔）**完全不動**，cutover 前零風險。
 
+### 1.3 🔴 P4-Spike 封鎖發現與資料介質裁示（RESOLVED，2026-07-08，推翻 v1.0 之 §1.1/§3/§4 核心前提）
+
+**P4-spike 結論**（完整記錄見 `docs/specs/implementation-log/AD-E07-41-P4-spike-impl.md`，真實 MSSQL 容器＋TypeORM `DataSource.createQueryRunner()` 實測，9 個測試全綠）：
+
+- 🔴 **封鎖**：`#local temp` 無法跨 `queryRunner.query()` 存活。`SELECT INTO #foo` 成功（CTAS 語法本身可行），但緊接的下一次 `.query()` 對 `#foo` 拋 `Invalid object name '#foo'`。單一 batch（同一次 `.query()` 內多語句）可存活，但 CTAS 架構的本質是「每個 handler 各自一次獨立 `.query()` 呼叫」，因此無法照原設計運作。
+- ✅ `tempdb.sys.columns` + `OBJECT_ID('tempdb..' + @0)` 內省機制正確可靠，對 `#` 與 `##` 皆適用（I-MSSQL-TEMP-METADATA-01 成立不變）。
+- ✅ `DISTINCT ON`+`ctid` → `ROW_NUMBER()`+`IDENTITY` tie-breaker 改寫之 SQL 邏輯正確（§4 設計不變，僅承載媒介由 `#`→`##`）。
+- ✅ 中文（Big5/BIN）於暫存表 round-trip 正確。
+- ✅ **`##global temp` 已實測可跨多次 `.query()` 存活**（`##a→##b→查詢` 全程存活鏈），且 `tempdb.sys.columns` 內省與中文 round-trip 對 `##` 同樣正確。
+- 附帶發現：`INFORMATION_SCHEMA`（大寫）於 BIN collation 下對小寫 `information_schema` 拋 `Invalid object name`——見 §5.5。
+
+**候選補救方案**（spike 已取得可行性證據，交架構師裁示）：
+
+| 選項 | 證據狀態 | 改動幅度 |
+|---|---|---|
+| A. `##global temp` | 已端到端實測（存活/內省/中文/去重全套） | 最小——維持 CTAS→SELECT INTO 架構，僅 `#`→`##` + 補顯式清理 |
+| B. 具名實體 staging 表（專屬 schema，engine 顯式 CREATE/DROP，以 logId 為鍵） | 未實測，理論上最穩健（完全不依賴 driver session 語意） | 較大——需設計 staging schema、命名、生命週期、失敗清理（含類似 `OrphanReaper` 的孤兒清理機制） |
+| C. 停用 node-mssql 連線 reset | 未找到乾淨開關，可行性未證 | 已排除（風險高，不採用） |
+
+**架構師裁示：採 A（`##global temp`），附加強制性驗證與顯式清理要求，並將 B 保留為已預先設計好的 fallback（若 A 的補充驗證發現問題，可直接切換不需從零設計）。**
+
+**裁示理由**：
+1. **證據品質不對稱**：A 已被 spike 用與 production 完全相同的路徑（TypeORM `QueryRunner`、真實 MSSQL 容器、多節點鏈）端到端證實可行；B 目前只有「理論上更穩健」的論證，未經任何實測。兩者都要投入驗證成本的前提下，優先採用已有實證的選項。
+2. **改動幅度**：A 維持 CTAS→SELECT INTO 這個既有 P4 設計的核心骨架（§3 全部 9 個 handler 的改寫要點僅需 `#`→`##` 字面置換 + 補清理呼叫），B 需要重新設計一整套具名表 schema/命名/生命週期/清理機制。對照 §0 已經是「拉前執行、時程已經吃緊」的背景，A 對時程衝擊較小（量化評估見 §12）。
+3. **殘留風險有界且可針對性驗證**：A 的殘留未知（連線池於真實併發下的行為、worker 崩潰後 `tempdb` 是否確實被 SQL Server 自動回收）是**具體、可用一個小型 spike 驗證清楚的技術問題**，不是「整個機制原理上不確定」——這與這次已踩雷的 `#local` 不同：`#local` 的問題是 driver 行為本身（session reset）直接推翻假設；`##global` 的殘留問題是「已驗證機制在更大壓力情境下是否依然穩固」，屬加固驗證而非重新開一個未知賭注。
+4. **不採 B 的理由，非「B 不好」，而是「A 若驗證通過，用不到 B 的額外成本；A 若驗證失敗，B 已在本 AD 完整記錄設計方向，可直接接手，沒有從零開始的損失」**——這是風險對沖，不是賭一把。
+
+**強制性後續驗證**（見 §9 新增之 P4-spike-2 子切片，**必須通過才可進入 P4a 大規模改寫**）：
+- **(i) 連線池＋併發**：模擬同一 `DB_TYPE=mssql` worker 程序內，兩個不同 `logId`（不同 pipeline run）之 `##` 暫存表**同時**存在，確認彼此不互相干擾——`##` 本質上是 instance-wide 可見，此為選項 A 的已知取捨，需要至少確認「可見」不等於「被誤用」（各自查詢只看到自己 `logId` 對應的表，因命名已含 `logId` 理論上不會撞名，但需要實測 correction）。
+- **(ii) Worker 崩潰清理**：模擬 pipeline 執行到一半、持有 `##` 暫存表的連線被強制中斷，確認：① SQL Server 依官方文件行為（建立 session 結束＋無其他 session 引用時自動 drop）確實在合理時間內清掉該 `##` 表，不會無限期殘留於 `tempdb`；② 即使自動清理有延遲，後續同 `logId` 的重跑不會因表名衝突而失敗。
+- **(iii) 顯式清理作為安全網（不完全依賴 SQL Server 自動回收）**：`pipeline-runner.ts` 或個別 handler 於**成功與失敗兩條路徑**皆需有 `DROP TABLE IF EXISTS ##xxx` 的顯式清理，不得只依賴驅動/引擎的隱性生命週期管理——這是「假設驅動生命週期的機制已經咬過一次人」後的直接教訓，即使 SQL Server 官方文件保證 `##` 的自動回收行為，仍額外加一層應用層顯式清理作為防禦（見不變式 I-MSSQL-TEMPTABLE-CLEANUP-01）。
+
+若 P4-spike-2 發現 (i)(ii) 有實質問題無法排除，觸發切換至選項 B（本 AD 屆時需再次更新，但方向已在此記錄，非從零開始）。
+
 ---
 
 ## 2. 🔴 P4-Spike（第一切片，De-risk，在真實 TypeORM QueryRunner 環境驗證）
+
+> **狀態：已執行完成（2026-07-08），結果＝(b)(d) 通過、(a)(c) 失敗，觸發 §1.3 架構裁示**。本節保留原始驗證項目定義（供追溯 spike 設計意圖），完整結果記錄於 `docs/specs/implementation-log/AD-E07-41-P4-spike-impl.md` 與本文件 §1.3。
 
 ### 2.0 背景：為何是獨立切片、且必須在真實 QueryRunner 環境
 
@@ -100,9 +140,9 @@ ORDER BY c.column_id;
 **(d) `DISTINCT ON`+`ctid`→`ROW_NUMBER() OVER(...)`+確定性 tie-breaker 改寫可行**
 驗證：對一組含重複鍵值、部分時間戳記相同的測試資料，比較 PG `DISTINCT ON (key) ... ORDER BY key, ts DESC NULLS LAST, ctid ASC` 與 MSSQL 改寫版（見 §4）在**時間戳記不同**與**時間戳記相同**兩種情境下，是否選出邏輯上一致的「保留列」（見 §4 的 tie-breaker 語意討論——「一致」的判定標準是兩者都能決定性地選出恰好一列，而非要求選出「同一實體列」，因為 ctid 與新 identity 序列本質上是兩套不同的實體排序基準，見 §4.3）。
 
-### 2.2 Spike DoD
+### 2.2 Spike DoD（實際結果，v1.1 更新）
 
-以上 (a)(b)(c)(d) 四點在真實 MSSQL 容器、經 TypeORM `QueryRunner`（非 standalone `mssql` 套件腳本）實測，全部通過，方可進入 §9 P4 後續子切片。若 (b) 的 `tempdb.sys.columns` 方案驗證失敗（不可靠），需回頭重新設計欄位內省機制（列為 spike 失敗的 fallback 觸發點，不預先假設一定成功）。
+原 DoD 要求四點全數通過。**實際結果**：(b)(d) 通過；(a) 失敗（`#local temp` 不存活，封鎖級）；(c) 因依賴 (a) 一併視為未達成（暫存表鏈本身跑不起來，無從驗證是否「存活到最後一步」）。**此為 spike 存在的目的之一**（及早暴露此類問題，而非保證一定通過）——已依 §1.3 裁示補救路線，新增 P4-spike-2（§9）驗證 `##global temp` 方案的殘留風險後，方可進入 P4a。
 
 ---
 
@@ -118,18 +158,22 @@ export interface MssqlTempTableColumn {
   columnId: number;
 }
 
-/** 建立區域暫存表（SELECT INTO #temp），沿用 makeTempTableName 加 '#' 前綴（I-MSSQL-TEMPTABLE-PREFIX-01）。 */
+/**
+ * 建立全域暫存表（SELECT INTO ##temp，I-MSSQL-TEMPTABLE-GLOBAL-01）。
+ * v1.1：P4-spike 發現 #local temp 不跨 queryRunner.query() 存活（封鎖級，見 §1.3），
+ *   改用 ##global temp（已實測跨多次 .query() 存活）。
+ */
 export async function createMssqlTempTable(
   queryRunner: QueryRunner,
-  tempTableName: string, // 呼叫端已含 '#' 前綴
+  tempTableName: string, // 呼叫端已含 '##' 前綴
   selectSql: string, // 'SELECT ... FROM ...'（不含 INTO 子句本身，由本函式插入）
 ): Promise<void> {
-  // SELECT INTO 語法：SELECT <cols> INTO #temp FROM ...
+  // SELECT INTO 語法：SELECT <cols> INTO ##temp FROM ...
   // 插入點＝第一個頂層 FROM 之前（呼叫端以片段組裝，非字串搜尋替換，避免誤判巢狀查詢的 FROM）
   await queryRunner.query(buildSelectIntoSql(tempTableName, selectSql));
 }
 
-/** 內省暫存表欄位（tempdb.sys.columns 方案，I-MSSQL-TEMP-METADATA-01）。 */
+/** 內省暫存表欄位（tempdb.sys.columns 方案，I-MSSQL-TEMP-METADATA-01；對 # 與 ## 皆適用）。 */
 export async function getMssqlTempTableColumns(
   queryRunner: QueryRunner,
   tempTableName: string,
@@ -149,9 +193,22 @@ export async function countMssqlTempTableRows(queryRunner: QueryRunner, tempTabl
   const rows = await queryRunner.query(`SELECT COUNT(*) AS cnt FROM ${tempTableName}`);
   return Number(rows[0].cnt);
 }
+
+/**
+ * 🆕 v1.1：顯式清理（I-MSSQL-TEMPTABLE-CLEANUP-01）。`##global temp` 雖有 SQL Server 隱性生命週期
+ * 管理（session 結束＋無引用時自動 drop），仍須於成功與失敗兩條路徑顯式呼叫，不完全依賴隱性回收
+ * （`#local` 存活性假設已被推翻一次，不應對 `##global` 的隱性回收行為做同等無驗證的信任）。
+ * IF EXISTS 防禦：已被自動回收或從未成功建立時，呼叫不報錯。
+ */
+export async function dropMssqlTempTableIfExists(queryRunner: QueryRunner, tempTableName: string): Promise<void> {
+  await queryRunner.query(
+    `IF OBJECT_ID('tempdb..' + @0) IS NOT NULL DROP TABLE ${tempTableName}`,
+    [tempTableName],
+  );
+}
 ```
 
-**理由**：§2 已確認 9 個 handler 全部需要「建暫存表」+「查暫存表欄位」+「查暫存表列數」三件事，且 §2 的 `tempdb.sys.columns` 方案是本次遷移中**技術上最不直覺、最容易寫錯**的一段——若讓 9 個 handler 各自實作一份，任何一處寫錯都要單獨除錯；集中一個 helper，正確性只需驗證一次（P4-spike 已驗證），其餘 9 個 handler 只需正確呼叫。
+**理由**：§2 已確認 9 個 handler 全部需要「建暫存表」+「查暫存表欄位」+「查暫存表列數」+（v1.1 新增）「顯式清理暫存表」四件事，且 `tempdb.sys.columns` 方案是本次遷移中**技術上最不直覺、最容易寫錯**的一段——若讓 9 個 handler 各自實作一份，任何一處寫錯都要單獨除錯；集中一個 helper，正確性只需驗證一次（P4-spike 已驗證），其餘 9 個 handler 只需正確呼叫。
 
 ### 3.2 各 Handler 改寫要點
 
@@ -167,7 +224,7 @@ export async function countMssqlTempTableRows(queryRunner: QueryRunner, tempTabl
 | `lookup-handler.ts` | `UPDATE "${inputTable}" _src SET ... FROM (${lookupSubQuery}) _lk WHERE TRIM(_src.col::text)=TRIM(_lk.col::text)`；`DELETE FROM ... WHERE NOT EXISTS (...)` | `UPDATE...FROM` 重構（比照 P3 已建立之轉換模式）；`::text` → `CAST(...AS NVARCHAR(...))`；`DELETE...WHERE NOT EXISTS` ANSI 相容不需改 |
 | `target-load-handler.ts` | 見 §5.1（customer_core UPSERT 專節） | |
 
-**暫存表命名**（**I-MSSQL-TEMPTABLE-PREFIX-01**）：沿用既有 `makeTempTableName(nodeId, logId)` 邏輯不變，僅呼叫端在 MSSQL 分支組出實際 SQL 時於名稱前加 `#`（區域暫存表前綴）——`makeTempTableName` 本身（`types.ts`）**不動**，前綴只在 mssql handler 內組 SQL 字串時添加，維持該函式 driver-agnostic。
+**暫存表命名**（**I-MSSQL-TEMPTABLE-GLOBAL-01**，v1.1 取代原 I-MSSQL-TEMPTABLE-PREFIX-01）：沿用既有 `makeTempTableName(nodeId, logId)` 邏輯不變，僅呼叫端在 MSSQL 分支組出實際 SQL 時於名稱前加 `##`（**全域**暫存表前綴，v1.1 由 `#` 改為 `##`，見 §1.3 裁示）——`makeTempTableName` 本身（`types.ts`）**不動**，前綴只在 mssql handler 內組 SQL 字串時添加，維持該函式 driver-agnostic。既有 `logId` 已保證跨 pipeline run 不撞名，此性質延續至 `##` 全域命名空間下依然成立（併發下的實測驗證見 §9 P4-spike-2）。
 
 ---
 
@@ -184,17 +241,20 @@ CREATE TEMP TABLE "..." AS SELECT DISTINCT ON (key) * FROM input
 ### 4.2 MSSQL 改寫（RESOLVED）
 
 ```sql
-SELECT IDENTITY(INT,1,1) AS _seq, * INTO #raw FROM (<原始 SELECT，不含 DISTINCT ON>) src;
+SELECT IDENTITY(INT,1,1) AS _seq, * INTO ##raw_<nodeId>_<logId8> FROM (<原始 SELECT，不含 DISTINCT ON>) src;
 -- _seq：SELECT INTO 專用 IDENTITY 語法，捕捉列寫入暫存表的順序（等同 ctid 扮演的角色）
+-- v1.1：## 非 #（P4-spike 發現 #local 不存活，見 §1.3）；全域命名空間，靠既有 makeTempTableName
+--   之 logId 保證跨 run 不撞名（I-MSSQL-TEMPTABLE-GLOBAL-01）
 
 WITH ranked AS (
   SELECT *, ROW_NUMBER() OVER (
     PARTITION BY <key>
     ORDER BY <timestamp> DESC, /* NULL 最後 */ CASE WHEN <timestamp> IS NULL THEN 1 ELSE 0 END, _seq ASC
   ) AS rn
-  FROM #raw
+  FROM ##raw_<nodeId>_<logId8>
 )
-SELECT * INTO #dedup FROM ranked WHERE rn = 1;
+SELECT * INTO ##dedup_<nodeId>_<logId8> FROM ranked WHERE rn = 1;
+-- 完成後兩張暫存表皆須經 dropMssqlTempTableIfExists 顯式清理（I-MSSQL-TEMPTABLE-CLEANUP-01）
 ```
 `_seq`（`IDENTITY(INT,1,1)`，`SELECT INTO` 專用語法，非欄位屬性宣告）扮演與 `ctid` 相同的角色：捕捉「列寫入本次暫存表的順序」，作為時間戳記完全相同時的決定性決勝依據。`NULLS LAST` 於 MSSQL 需改用 `CASE WHEN ... IS NULL THEN 1 ELSE 0 END` 排在 `ORDER BY` 次要鍵補齊（MSSQL `ORDER BY` 預設 NULL 排最前，需額外一個排序鍵手動補上「NULL 最後」語意）。
 
@@ -244,6 +304,10 @@ WHERE <ghost gate 條件>
 
 **需 tdd-implementation 於實作前先攤開 `getValidationRegex(targetType)` 全部目標型別分支**（本次架構設計未逐一列舉每個 pattern，因原始碼未在本次查證範圍內完整展開）。**設計原則**（比照 P3 已確立之原則）：若全部 pattern 皆為簡單字元類別型（如 `^[0-9]+$`／`^-?[0-9]+(\.[0-9]+)?$` 這類數字格式驗證），可用 MSSQL `LIKE`/`PATINDEX` 字元類別 wildcard 達成；**若任一 pattern 含真正的複雜 regex 語法**（如 lookahead、非字元類別的分支 alternation `|`、量詞組合），需個別評估改寫方案（多數情況下數字/日期格式驗證仍可用字元類別窮舉達成，僅在少數情況需要拆成多個 `LIKE`/`PATINDEX` 條件的 AND/OR 組合）。**此為 P4 執行期間的一個待確認細節，非架構層級阻擋項**，但列入 §9 P4 子切片的稽核清單。
 
+### 5.5 🆕 `INFORMATION_SCHEMA` 大小寫（BIN Collation 下的額外方言點，P4-spike 附帶發現）
+
+P4-spike 實測：BIN collation 下，小寫 `information_schema.columns`/`information_schema.tables` 直接拋 `Invalid object name`——**必須改大寫 `INFORMATION_SCHEMA.COLUMNS`/`INFORMATION_SCHEMA.TABLES`**。此為現行 PG 碼（全部小寫，符合 I-MSSQL-CASE-01 之使用者物件小寫慣例）在**系統目錄視圖**這個特例上的例外：`INFORMATION_SCHEMA` 是 MSSQL 內建 schema 名稱，非使用者建立物件，不受 I-MSSQL-CASE-01（使用者物件一律小寫）約束，需另立不變式 **I-MSSQL-CATALOG-CASE-01**（見 §10）。P4a 各 handler 之 `information_schema.tables`/`information_schema.columns` 查詢站點（見 §3.2 表格與 Pattern B 站點清單）於轉換時須一併修正大小寫，非只轉具名參數。
+
 ---
 
 ## 6. Bulk-Load：5 個來源表 raw Staging 寫入端
@@ -290,10 +354,11 @@ CREATE TABLE dbo.customer_core (
 
 ```mermaid
 graph LR
-  Pre[P4-0 customer_core schema 補齊 §7] --> Spike[P4-spike 四項驗證 §2]
-  Spike --> Group1[P4a Handler 群組一：extract/field_mapping/derived_field/type_cast/conditional（CTAS 直接替換型）]
-  Spike --> Group2[P4b Handler 群組二：merge/lookup（含 UPDATE-FROM 重構）]
-  Spike --> Group3[P4c dedup + target-load（含 tie-breaker + ON CONFLICT→兩段式）]
+  Pre[P4-0 customer_core schema 補齊 §7] --> Spike[P4-spike 四項驗證 §2 ✅已完成/發現封鎖]
+  Spike --> Spike2[🆕 P4-spike-2 ##global 併發+崩潰清理驗證 §1.3]
+  Spike2 --> Group1[P4a Handler 群組一：extract/field_mapping/derived_field/type_cast/conditional（CTAS 直接替換型）]
+  Spike2 --> Group2[P4b Handler 群組二：merge/lookup（含 UPDATE-FROM 重構）]
+  Spike2 --> Group3[P4c dedup + target-load（含 tie-breaker + ON CONFLICT→兩段式）]
   Group1 --> E2E[P4d customer_core 53 節點端對端]
   Group2 --> E2E
   Group3 --> E2E
@@ -304,9 +369,21 @@ graph LR
 
 **範圍**：§7。**DoD**：`OBJECT_ID('dbo.customer_core')` 非 NULL；空表 LEFT JOIN 查詢正確執行不報錯（比照 P3 §3.4 第一層驗證）。
 
-### P4-spike — 四項技術驗證（**必須先過，才可進入其餘子切片**）
+### P4-spike — 四項技術驗證（**✅ 已完成，2026-07-08**）
 
-**範圍**：§2 全部四項。**DoD**：§2.2（四項在真實 QueryRunner 環境全數通過）。
+**範圍**：§2 全部四項。**結果**：(b)(d) 通過、(a)(c) 失敗（封鎖級，見 §1.3），已觸發架構裁示，補救路線見下方 P4-spike-2。
+
+### 🆕 P4-spike-2 — `##global temp` 併發＋崩潰清理驗證（**新增子切片，必須先過才可進入 P4a/b/c**）
+
+**範圍**：§1.3「強制性後續驗證」(i)(ii)(iii) 三項。
+
+**DoD**：
+1. (i) 併發：模擬同一 worker 程序內兩個不同 `logId` 的 `##` 暫存表同時存在，確認彼此資料不互相污染（各自查詢只看到自己 `logId` 對應的表）。
+2. (ii) 崩潰清理：模擬持有 `##` 表的連線被強制中斷，確認 SQL Server 在合理時間內自動清理，或至少不導致後續同鍵重跑失敗。
+3. (iii) 顯式清理：`dropMssqlTempTableIfExists`（§3.1）於成功/失敗兩條路徑皆確實被呼叫到，比照 `try/finally` 或 pipeline-runner 層級的統一收尾。
+4. 若 (i)(ii) 發現無法排除之實質問題，觸發切換至 §1.3 選項 B（具名 staging 表），並回頭更新本 AD。
+
+**測試環境要求**：比照 AD-E07-40（P2）§6.2 之連線池陷阱教訓——若要驗證「兩個 logId 並發」，須確保測試連線池 size 足夠讓兩者真正並發執行，而非被連線池排隊變相序列化（同一類假陽性風險，此處一併提醒）。
 
 ### P4a — Handler 群組一（CTAS 直接替換型：extract/field_mapping/derived_field/type_cast/conditional）
 
@@ -348,14 +425,18 @@ graph LR
 
 | ID | 說明 |
 |---|---|
-| **I-MSSQL-TEMP-METADATA-01** | 任何對 MSSQL 區域暫存表（`#temp`）的欄位內省，一律使用 `tempdb.sys.columns` + `OBJECT_ID('tempdb..#tableName')`，**禁止**使用 `INFORMATION_SCHEMA.COLUMNS WHERE table_name='#tableName'` 做精確比對（後者因 MSSQL 對區域暫存表在 tempdb 內部自動附加系統隨機尾碼而不可靠） |
-| **I-MSSQL-TEMPTABLE-PREFIX-01** | MSSQL 版 ETL handler 產生之暫存表名稱，一律沿用既有 `makeTempTableName(nodeId, logId)` 命名邏輯本身不變，僅在組裝實際 SQL 字串時額外加 `#` 前綴（區域暫存表），命名規則本身不得為 mssql 分支另行設計 |
-| **I-MSSQL-DEDUP-TIEBREAK-01** | Dedup 邏輯之 tie-breaker（原 PG `ctid`）一律以 `SELECT INTO` 之 `IDENTITY(INT,1,1)` 語法捕捉列寫入暫存表順序取代，語意為「忠實翻譯物理/邏輯寫入順序」而非「重新定義業務優先權」；若端對端測試（P4d）發現真實資料中因此產生與 PG 版本不同的「勝出列」，須記錄為已知邊界案例（非 bug），並反映於上線前的差異報告 |
+| **I-MSSQL-TEMP-METADATA-01** | 任何對 MSSQL 暫存表（`#`／`##`）的欄位內省，一律使用 `tempdb.sys.columns` + `OBJECT_ID('tempdb..' + @0)`，**禁止**使用 `INFORMATION_SCHEMA.COLUMNS WHERE table_name=...` 做精確比對（後者因 MSSQL 對暫存表在 tempdb 內部之命名規則而不可靠）；v1.1 確認此機制對 `#` 與 `##` 皆適用 |
+| **I-MSSQL-TEMPTABLE-GLOBAL-01**（v1.1 取代 I-MSSQL-TEMPTABLE-PREFIX-01） | MSSQL 版 ETL handler 之節點間資料傳遞介質一律使用**全域暫存表（`##`）**，不得使用區域暫存表（`#`）——P4-spike 實測 `#local` 不跨 `queryRunner.query()` 存活（封鎖級發現，見 §1.3）。暫存表名稱沿用既有 `makeTempTableName(nodeId, logId)` 命名邏輯本身不變，僅組裝 SQL 字串時前綴改 `##`；`makeTempTableName` 函式本身（`types.ts`）不動 |
+| **I-MSSQL-TEMPTABLE-CLEANUP-01**（新增，v1.1） | `##global temp` 雖有 SQL Server 隱性生命週期管理（session 結束＋無引用時自動 drop），但 pipeline-runner／handler 仍須於**成功與失敗兩條路徑**顯式呼叫 `dropMssqlTempTableIfExists`（`IF OBJECT_ID(...) IS NOT NULL DROP TABLE ...`）作為安全網，不得只依賴驅動/引擎的隱性行為（`#local` 存活性假設已被推翻一次，不應對 `##global` 的隱性回收行為做同等無驗證的信任） |
+| **I-MSSQL-CATALOG-CASE-01**（新增，v1.1） | `INFORMATION_SCHEMA`（及其下 `TABLES`/`COLUMNS` 等視圖）於 BIN collation 下須以**大寫**引用，不受 I-MSSQL-CASE-01（使用者物件一律小寫）約束——兩者是不同層級的命名慣例，不可混用同一條規則 |
+| **I-MSSQL-DEDUP-TIEBREAK-01** | Dedup 邏輯之 tie-breaker（原 PG `ctid`）一律以 `SELECT INTO` 之 `IDENTITY(INT,1,1)` 語法捕捉列寫入暫存表順序取代（v1.1：暫存表本身已改為 `##`，語法/邏輯不變，僅承載媒介改變），語意為「忠實翻譯物理/邏輯寫入順序」而非「重新定義業務優先權」；若端對端測試（P4d）發現真實資料中因此產生與 PG 版本不同的「勝出列」，須記錄為已知邊界案例（非 bug），並反映於上線前的差異報告 |
 | **I-MSSQL-ETL-EQ-01** | 每個 ETL handler 的 mssql 版本，以及 customer_core 端對端 pipeline，必須有對應測試與 PG 版本（或其產出結果）比對，比照 P3 之 I-MSSQL-ENGINE-EQ-01 精神；不得僅憑語法轉換表核對即宣稱完成 |
 
 ---
 
 ## 11. 風險與需使用者留意的點
+
+> **v1.1**：P4-spike 封鎖發現（`#local temp` 不存活）與架構師裁示（改用 `##global temp`）已完整記錄於 §1.3，此處不重複；§12 為新增之時程影響評估。
 
 ### 11.1 需使用者留意（不阻擋 P4 啟動，但應告知）
 
@@ -364,5 +445,27 @@ graph LR
 ### 11.2 其餘技術風險（架構師已有因應設計，非需使用者裁示，記錄供 test-designer/tdd-implementation 留意）
 
 - §5.4 `type-cast-handler.ts` 的 `getValidationRegex` 逐目標型別複雜度尚未完整攤開核實，可能在 P4a 執行時發現超出簡單字元類別可處理的 pattern，屬執行期細節風險非架構層級阻擋。
-- P4-spike（§2）若任一項驗證失敗（尤其 (b) `tempdb.sys.columns` 方案），需要回頭重新設計，屬本 AD 中風險密度最高的單一切片，建議優先執行、儘早暴露問題。
+- ~~P4-spike（§2）若任一項驗證失敗...~~（v1.1：已發生，見 §1.3，已裁示補救路線）。
 - Bulk-load（§6）吞吐量未知，需 POC 量測，不預先承諾效能數字。
+- 🆕 v1.1：P4-spike-2（§9）若發現 `##global temp` 在真實併發/崩潰情境下有實質問題，須切換至 §1.3 選項 B（具名 staging 表），屆時時程衝擊需重新評估並告知使用者（見 §12 對照組數字）。
+
+---
+
+## 12. 🆕 時程影響評估（P4-Spike 封鎖發現後，v1.1）
+
+**結論：時程影響小，非顯著超支。**
+
+原 27–46 人天估算（§0）建立在「CTAS→SELECT INTO」架構可直接搬遷的假設上。P4-spike 推翻此假設的部分，僅是「承載媒介由 `#`→`##`」，**不是整個資料傳遞策略的重新設計**——選擇方案 A（`##global temp`）而非方案 B（具名 staging 表）正是為了把時程衝擊壓到最低：
+
+| 額外工作項 | 估算（人天） | 說明 |
+|---|---|---|
+| P4-spike-2（併發＋崩潰清理驗證） | 1–2 | 新增子切片，範圍明確、有具體驗證項目 |
+| 9 個 handler 之 `#`→`##` + 顯式清理呼叫 | 0.5–1 | 純字面置換 + 每個 handler 加一次清理呼叫，非架構重寫 |
+| `INFORMATION_SCHEMA` 大小寫修正（§5.5） | 0（已計入原 P4a Pattern B 轉換工作量） | 屬於原本就要做的轉換工作範圍內，只是多發現一個必須修正的細節 |
+| **總計新增** | **1.5–3 人天** | |
+
+修正後估算區間：**28.5–49 人天**（原 27–46 人天 + 1.5–3 人天），**相對原估算變動幅度約 5–7%，不構成需要重新與使用者討論時程的顯著變化**。
+
+**對照組（若改選方案 B）**：具名 staging 表需額外 5–10 人天（設計 staging schema、命名、生命週期、失敗清理機制，比照 `OrphanReaper` 新建孤兒清理服務），總計約 32–56 人天，相對原估算變動幅度達 15–20%，屬於「顯著」等級——**這是本次選擇方案 A 而非方案 B 的量化理由之一**（§1.3 已敘述定性理由，此處補充定量佐證）。
+
+**建議**：不需要因本次裁示重新與使用者討論時程，可直接依更新後設計推進 P4-spike-2。若 P4-spike-2 觸發 §1.3 所述「切換至方案 B」的 fallback，屆時的時程衝擊才需要重新告知使用者（因為那時才會真的產生上表「對照組」的較大增量）。
