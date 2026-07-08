@@ -1300,3 +1300,42 @@ last_updated: 2026-07-08
 - **影響**：純屬 HOW 層級實作細節，不影響業務語意（幽靈欄位仍應產生 `+0`，BR-F103-08 語意不變），但若 tdd-implementation 選型不當（如逐欄查詢造成 N+1），會產生非預期效能開銷。
 - **建議**：`infrastructure/AD-E07-42-P3b-test.md` §0.4 已列出至少兩種可行選項（呼叫端 `async` 預查 + 第三參數注入 / 模組層級快取單例），不預設答案，§一 GATE-002 要求 tdd-implementation 於 impl log 記錄實際選擇。§七 FALLBACK 群組測試案例設計為純黑盒行為驗證，不綁定簽章形狀。
 - **風險等級**：低-中（架構授權之彈性，主要風險為「若未於 impl log 記錄選擇，未來讀者難以追溯」之文件紀律風險，非功能正確性風險）
+
+## MSSQL 全面遷移 P5c 風險與待決問題（AD-E07-43，2026-07-08 新增，P5 全量 CI + 業務簽核第三片，接續 P5b）
+
+> 完整測試設計見 [infrastructure/AD-E07-43-P5c-test.md](infrastructure/AD-E07-43-P5c-test.md)。本節彙整 P5c（MONTHRUN-DIFF 真實完整月跑跨引擎逐列比對）範圍內識別之風險；P5d（datetime2 業務裁示）/P5e（F067 式簽核報告與業務簽核本身）/P5f（部署 bootstrap）為業務/維運流程，非 test-designer 職責範圍，風險另由對應流程承接人記錄。⚠️ **本節同時是 risks-and-gaps.md 自 P3c 起累積之既有文件紀律缺口的部分補救**——`infrastructure/AD-E07-42-P3c-test.md`／`AD-E07-42-P3d-test.md`／`AD-E07-43-P5b-test.md` 三份測試設計文件目前於本檔案**皆無對應風險段落**（僅 P3a/P3b 有），建議未來一次性稽核補齊，非本輪 P5c 範圍但一併記錄供追蹤。
+
+### R-MSSQL-P5C-01（🔴🔴 高，決策關卡，交 system-architect/業務裁定，非 test-designer 或 tdd-implementation 可自行裁定）：Tier 1（JS oracle vs MSSQL）是否足以滿足 I-MSSQL-SIGNOFF-GATE-01 條文字面「PG/MSSQL 結果一致」要求
+
+- **問題**：AD-E07-43 §6 I-MSSQL-SIGNOFF-GATE-01 條文字面明確要求「MONTHRUN-DIFF 對至少一個完整生產規模月跑顯示 **PG/MSSQL** 結果一致」，但現行環境約束（`postgres-test` 5433 本機不可達、`dev PG` 5432 視為唯讀不可注入測試）使得「PG 實際執行結果」現行不可直接取得。test-designer 裁定之 Tier 1（JS oracle vs MSSQL 全鏈比對）雖有 P3a-d 逐站點 EQ 佐證其可信度（JS oracle 已被專案自身程式碼註解標註為「golden oracle，與 PG SQL 下推逐列確定性等價」），但嚴格而言 JS oracle 是「PG 版本應該產出什麼」的程式碼層級代理，不是「PG 版本實際執行產出什麼」的直接觀測，兩者是否可視為等價證據，屬於證據力道判斷，非技術查證可單方面裁定。
+- **影響**：若 architect/業務最終認定 Tier 1 不足以滿足字面要求，cutover 前需額外投入 Tier 2（等待 5433 恢復可達）或 Tier 3（PG 快照資料工程，額外腳本工作量）才能完成簽核，可能影響 cutover 排程；若未經明確裁定就逕行以 Tier 1 結果簽核，可能在未來稽核時被質疑證據力道不足。
+- **建議**：`infrastructure/AD-E07-43-P5c-test.md` §一 GATE-002（決策關卡）+ §六 REPORT-004（MUST-FIX）已要求最終差異報告於最顯著位置明確聲明實際涵蓋之 Tier 範圍，並列出待裁示選項，供 P5e 簽核流程之業務利害關係人於報告呈現時一併裁定，不由本文件或 tdd-implementation 逕自認定「已經夠好」。
+- **風險等級**：高（直接影響 P5e 簽核是否成立、進而影響 cutover 排程，且屬於本專案既有慣例「業務簽核不可由工程團隊自行認定已足夠」之核心紅線，AD 本身亦於 §5 P5e DoD 明文強調此點）
+
+### R-MSSQL-P5C-02（中，已知限制之新情境延伸，非本文件新發現但屬本文件首次需要在「全鏈組合」層級妥善處理其後果）：`executeStage1Chain` 內部 customer_core 片段為 PG-only SQL，限制 Tier 1 JS oracle 對含 customer_core 條件名單之直接可用性
+
+- **問題**：P3a 已查證 `buildCustomerCoreClause`（`executeStage1Chain` 內部呼叫）含 `AGE()`/`EXTRACT()`/`::date` 等 PG-only SQL 字面，若對 MSSQL 連線之 repo 執行、且名單篩選條件包含 customer_core 維度，會拋語法錯誤。P5c 為首次需要在「完整月跑全鏈」情境下處理此限制之切片（P3a 當時僅需獨立驗證 Stage 1 本身、可直接繞開；P5c 需要含 customer_core 條件之名單仍完整流入 Stage 2-4/CR 比對）。
+- **影響**：若 tdd-implementation 未正確理解此限制、誤將含 customer_core 條件之名單導入 `runStage1JsChain` 直接呼叫路徑，會導致腳本執行期間拋錯而非優雅處理，且可能誤判為新缺陷（而非已知限制）浪費除錯時間。
+- **建議**：`infrastructure/AD-E07-43-P5c-test.md` §0.4 已設計「Stage 1 單次執行（走 MSSQL 下推）、雙寫兩個 run_id」之繞開機制，§一 GATE-004（Regression / Static Guard）要求腳本原始碼掃描確認名單分流邏輯確實存在。
+- **風險等級**：中（已有明確設計因應方案，剩餘風險為「tdd-implementation 落地時是否確實遵循此分流設計」之執行面待辦，非設計缺陷本身）
+
+### R-MSSQL-P5C-03（中，Probe，不預設答案，交 P5d 業務裁示）：`appl_date` 非午夜時間分量對「逾 2 年清空」邊界判定之影響，於完整鏈路層級仍未解決
+
+- **問題**：P3d `DATECAST-003` 已於單站點層級記錄此為未驗證假設；P5c §四 DATECAST-BOUNDARY 群組於完整鏈路組合層級重新揭露，但同樣不預設答案、不代業務裁定可接受度。production `ob_pool_data_list.appl_date` 是否確實可能帶有非午夜時間分量，仍待 P5d（業務/維運協助查詢真實樣本）確認。
+- **影響**：若 production 確實存在非午夜時間分量、且 JS oracle 與 MSSQL 對此邊界判定產生分歧，可能使「逾 2 年清空」規則於邊界案件產生跨引擎不一致結果，影響 CR 業代指派正確性（低機率但非零，取決於 production 實際資料分布）。
+- **建議**：`infrastructure/AD-E07-43-P5c-test.md` §四 DATECAST-BOUNDARY（3 案例）+ §六 REPORT-005 已設計獨立記錄段落，明確標註「待 P5d 業務裁示」而非併入一般差異表，避免與真正需要修復之缺陷混淆。此風險之最終解決依賴 AD §4「需使用者/業務裁示事項」#1（P5d）而非本文件範圍。
+- **風險等級**：中（已有明確揭露機制，最終風險接受度取決於 production 實際資料分布與業務對「日粒度 vs 秒粒度」判定之容忍度，非 test-designer 可獨立評估）
+
+### R-MSSQL-P5C-04（低，記錄性，AD 文件內部落差）：AD-E07-43 §3.1 與 §5 對 MONTHRUN-DIFF 比對欄位計數之字面落差（10 欄 vs 「9 個關鍵欄位」）
+
+- **問題**：AD §3.1（方法敘述）列出 10 個比對欄位（含 `cr_nm`），但 §5 P5c DoD 條文字面稱「9 個關鍵欄位」且逐一列舉時漏列 `cr_nm`。
+- **影響**：極低——`cr_nm` 為 `cr_id` 之衍生展示欄，納入比對成本極低，不會產生誤判風險；純屬文件精確度問題。
+- **建議**：`infrastructure/AD-E07-43-P5c-test.md` §一 GATE-003 已裁定採兩者聯集（10 欄）為設計範圍。建議 system-architect 下次修訂 AD-E07-43 時同步此落差。
+- **風險等級**：低（不影響測試設計完整性或正確性，僅為文件精確度之待清理項）
+
+### R-MSSQL-P5C-05（中-高，環境約束，本專案 MSSQL 遷移系列已重複發生之已知限制）：`postgres-test`（5433）持續不可達，限制本文件 Tier 2/3 之真實執行
+
+- **問題**：本專案 MSSQL 遷移系列自 P4a 起即反覆記錄「`postgres-test`（5433）本機不可達、`dev PG`（5432）視為唯讀不可注入測試」之環境限制（見 `AD-E07-41-P4a-impl.md` `EXTRACT-RESOLVE DUAL-DB` 偏差段落），P5c 為此限制影響範圍最大之切片——因為 I-MSSQL-SIGNOFF-GATE-01 明確要求「PG/MSSQL」比對，此環境限制直接決定本文件只能以 Tier 1（JS oracle）作為現行唯一可執行路徑（見 R-MSSQL-P5C-01）。
+- **影響**：若此環境限制於 cutover 前始終未解決（5433 未恢復可達、亦未投入 Tier 3 資料工程），P5e 業務簽核將只能基於 Tier 1 證據進行，此為 R-MSSQL-P5C-01 之根本成因。
+- **建議**：`infrastructure/AD-E07-43-P5c-test.md` §一 GATE-001 已設計 `pgPortReachable()` 探測案例，§七 PG-ENHANCE 群組已設計 degradable 機制（5433 恢復可達時可立即啟用 Tier 2，無需重新設計）。建議另立小型維運任務評估 `postgres-test` 容器於本機環境不可達之根本原因是否可修復（非本文件範圍，但直接影響本文件證據力道上限）。
+- **風險等級**：中-高（非本文件可獨立解決，但直接決定本文件所能提供之最高證據等級；建議記入 P5e 簽核流程之風險登記，供業務利害關係人評估是否可接受）
