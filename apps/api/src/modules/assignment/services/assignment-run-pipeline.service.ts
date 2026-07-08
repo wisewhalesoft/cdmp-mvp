@@ -64,6 +64,8 @@ import {
   type CrEmphire,
 } from '@/modules/assignment/stage1/cr-priority';
 import { runCrPrioritySql } from '@/modules/assignment/stage1/cr-priority-sql';
+// AD-E07-42 P3d：CR 優先分派前置步驟 MSSQL 下推平行版（DB_TYPE='mssql' 走此路，I-CR-ORDER-01）。
+import { runCrPrioritySqlMssql } from '@/modules/assignment/stage1/cr-priority-sql-mssql';
 
 /**
  * F103 / AD-E07-v3.5 §6.1：JS oracle 計分之 customer_core / ob_arreturndf_min_cap plain-object
@@ -1104,21 +1106,24 @@ export class AssignmentRunPipelineService {
   }
 
   /**
-   * AD-E07-42 P3b+P3c：MSSQL Stage 2~4 計分 + 比例分派下推。
+   * AD-E07-42 P3b+P3c+P3d：MSSQL Stage 2~4 計分 + CR 前置 + 比例分派下推。
    *
-   * 對每份「Stage 1 已 INSERT 列」之 list，以 MSSQL 三步下推（消 re-hydrate heap，I-NOLOAD-01）：
+   * 對每份「Stage 1 已 INSERT 列」之 list，以 MSSQL 四步下推（消 re-hydrate heap，I-NOLOAD-01；
+   * 對稱 PG `executeStage2to4Pushdown` 四步，順序 I-CR-ORDER-01：計分 → 清除 → CR 前置 → 比例分派）：
    *   ① Stage 2~3 計分：`runStage2and3SqlMssql`（score / card_level / tier_level，P3b）。
    *   ② Stage 3 前清除：`clearStage3Fields`（純 ANSI，PG/MSSQL 共用，DISPATCH-002 真庫驗證；
    *      dept_id/emplid/emplid_deptid/assignday=NULL，保留 is_cr，重跑安全護欄）。
-   *   ③ Stage 3/4/ASSIGNDAY 真實比例分派：`runStage3to4RationSqlMssql`（P3c，dept ration + empl
-   *      ration + ASSIGNDAY 千分比；案件池 WHERE is_cr<>'Y' 扣量 I-CR-DEDUCT-01）。
+   *   ③ P3d CR 前置：`runCrPrioritySqlMssql`（cr_enabled=false → 強制 is_cr='N'；true → 步驟 1/2/3
+   *      失效清空 + CR 優先指派 cr_id→emplid、is_cr='Y'）。必在清除之後、比例分派之前（I-CR-ORDER-01）。
+   *   ④ Stage 3/4/ASSIGNDAY 真實比例分派：`runStage3to4RationSqlMssql`（P3c，dept ration + empl
+   *      ration + ASSIGNDAY 千分比；案件池 WHERE is_cr<>'Y' 扣量 I-CR-DEDUCT-01、CR 案件納 ASSIGNDAY
+   *      散佈 I-CR-ASSIGNDAY-01）。
    *
-   * **範圍限 P3b+P3c**：3d（CR 優先分派 `runCrPrioritySql`）/ 3e（tier 收尾）之 MSSQL 化屬 P3d，
-   * 尚未移植 → 本方法**刻意不**呼叫 PG-only 之 `runCrPrioritySql`（逐字對 MSSQL 執行會語法錯，
-   * DISPATCH-003 負向守門）；is_cr 由 Stage 1 帶入後保留（無 CR 前置動態指派）。經 P3c 後
-   * mssql 月跑之 dept_id/emplid/emplid_deptid/assignday 不再恆 NULL（DISPATCH-005 DoD）。
-   * fallback schema 檢查一次性查回 ob_pool_data 欄位集合共用予各 list（FALLBACK-005 N+1 禁止）。
-   * 最後讀回有界子集供快照 payload。
+   * **範圍限 P3b+P3c+P3d**：3e（tier 收尾）之 MSSQL 化尚未移植。經 P3d 後 mssql 月跑之 CR 三欄
+   * （cr_id→emplid、dept_id、is_cr）不再恆維持 Stage 1 帶入原值（DISPATCH-004 DoD）。CR 前置一律走
+   * MSSQL 平行版 `runCrPrioritySqlMssql`（**不**呼叫 PG-only 版，逐字對 MSSQL 執行會語法錯，
+   * DISPATCH-005 靜態守門）。fallback schema 檢查一次性查回 ob_pool_data 欄位集合共用予各 list
+   * （FALLBACK-005 N+1 禁止）。最後讀回有界子集供快照 payload。
    */
   private async executeStage2to3PushdownMssql(
     stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }>,
@@ -1167,10 +1172,19 @@ export class AssignmentRunPipelineService {
       await runStage2and3SqlMssql(manager, ctx, poolColumns);
 
       // ② Stage 3 前清除（dept_id/emplid/assignday=NULL，保留 is_cr）。純 ANSI，PG/MSSQL 共用。
-      //    ⚠️ 刻意**不**呼叫 PG-only 之 CR 前置下推（P3d 範圍；DISPATCH-003 負向守門）。
       await clearStage3Fields(manager, { runId, listNo: list.list_no });
 
-      // ③ P3c Stage 3/4/ASSIGNDAY 真實比例分派（案件池 WHERE is_cr<>'Y'，扣量 I-CR-DEDUCT-01）。
+      // ③ P3d CR 前置：cr_enabled=false → 強制 is_cr='N'；true → 步驟 1/2/3（失效清空 + 優先指派）。
+      //    必在清除之後、比例分派之前（I-CR-ORDER-01），對稱 PG executeStage2to4Pushdown。
+      const { sysDate } = computeCrSysDates(ym);
+      await runCrPrioritySqlMssql(manager, {
+        runId,
+        listNo: list.list_no,
+        crEnabled: !!list.cr_enabled,
+        sysDate,
+      });
+
+      // ④ P3c Stage 3/4/ASSIGNDAY 真實比例分派（案件池 WHERE is_cr<>'Y'，扣量 I-CR-DEDUCT-01）。
       const deptRations: DeptRation[] = (
         await this.deptPctRepo.find({
           where: { project_workym: ym, list_no: list.list_no },

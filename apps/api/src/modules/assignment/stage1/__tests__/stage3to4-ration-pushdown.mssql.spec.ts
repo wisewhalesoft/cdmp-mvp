@@ -454,8 +454,12 @@ describe('P3c DISPATCH — Stage 3/4 接線 mssql 月跑鏈路', () => {
     expect(methodSrc).toContain('clearStage3Fields');
   });
 
-  it('TS-MSSQL-P3C-DISPATCH-003：mssql 呼叫鏈刻意不呼叫 runCrPrioritySql（P3d 範圍，逐字執行會語法錯）', () => {
-    expect(methodSrc).not.toContain('runCrPrioritySql');
+  it('TS-MSSQL-P3C-DISPATCH-003（P3d 已閉環，負向守門翻轉為正向）：mssql 呼叫鏈呼叫 runCrPrioritySqlMssql，且不呼叫 PG-only 版 runCrPrioritySql(', () => {
+    // P3d（AD-E07-42-P3d）已將 CR 前置 mssql 化並接線，此處負向守門正式翻轉：
+    //   mssql 路徑改呼叫平行版 runCrPrioritySqlMssql；仍不得呼叫 PG-only 之 bare runCrPrioritySql(
+    //   （逐字對 MSSQL 執行 `::date` 會語法錯）。詳見 cr-priority-pushdown.mssql.spec.ts DISPATCH 群組。
+    expect(methodSrc).toContain('runCrPrioritySqlMssql');
+    expect(methodSrc).not.toMatch(/runCrPrioritySql\(/); // bare PG 版呼叫（runCrPrioritySqlMssql( 不匹配）。
   });
 
   it('TS-MSSQL-P3C-DISPATCH-004：resolveStage2to4Strategy 三態互斥（postgres/mssql/其餘）', () => {

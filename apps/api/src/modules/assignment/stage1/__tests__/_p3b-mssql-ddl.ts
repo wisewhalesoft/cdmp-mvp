@@ -39,7 +39,11 @@ function extractCreateTable(table: string): string {
   return m[1];
 }
 
-/** 12 依賴表之零 drift CREATE TABLE DDL（自 baseline migration 解析）。 */
+/**
+ * 依賴表之零 drift CREATE TABLE DDL（自 baseline migration 解析）。
+ * P3d（AD-E07-42）新增 `ob_emphire`（步驟 2 JOIN 來源）+ `ob_empl_set`（步驟 3 CTE 來源）——
+ *   本輪首次以 raw SQL 直接 JOIN 觸及兩表；additive，既有 P3b/P3c 引用之鍵不受影響。
+ */
 export const MSSQL_BASELINE_DDL: Record<string, string> = {
   ob_pool_data: extractCreateTable('ob_pool_data'),
   ob_pool_data_list: extractCreateTable('ob_pool_data_list'),
@@ -53,4 +57,6 @@ export const MSSQL_BASELINE_DDL: Record<string, string> = {
   ob_levelcard_level: extractCreateTable('ob_levelcard_level'),
   ob_tier: extractCreateTable('ob_tier'),
   ob_arreturndf_min_cap: extractCreateTable('ob_arreturndf_min_cap'),
+  ob_emphire: extractCreateTable('ob_emphire'),
+  ob_empl_set: extractCreateTable('ob_empl_set'),
 };
