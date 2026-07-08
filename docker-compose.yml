@@ -160,8 +160,20 @@ services:
       - "1433:1433"
     volumes:
       - mssqldata:/var/opt/mssql
+    # AD-E07-44 P6a：server 映像不含 sqlcmd，改以 bash /dev/tcp 埠存活探測（liveness）。
+    #   真正的「SQL 就緒 + CDMP 庫/login 已建」由 mssql-init 完成（service_completed_successfully）保證，
+    #   故 P6a 生產服務（api-mssql/worker-mssql/bootstrap-mssql）依賴 mssql-init 完成而非僅本 healthcheck。
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/1433' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     profiles:
+      # AD-E07-44 P6a：mssql-prod / mssql-bootstrap 也需本服務（生產部署路徑共用同一 mssql 容器）。
       - mssql
+      - mssql-prod
+      - mssql-bootstrap
 
   # 一次性 init：等 mssql 起來後建 CDMP 資料庫（BIN collation）+ app 專用 login。
   # 用 mssql-tools18 映像（內含 sqlcmd）；新版 server 映像不再內建 tools，故以本服務的 retry loop 取代 healthcheck。
@@ -185,7 +197,138 @@ services:
         done;
         /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -i /init/mssql-init.sql
     profiles:
+      # AD-E07-44 P6a：生產部署路徑亦須先跑 init 建庫/login。
       - mssql
+      - mssql-prod
+      - mssql-bootstrap
+
+  # ==========================================================================
+  # === AD-E07-44 P6a：MSSQL 生產部署路徑（additive、profile-gated）===
+  # 對齊現行 postgres 版一鍵部署，但 **不翻動 postgres 預設**（分階段：預設切換由 P6b 處理）。
+  # 預設 `docker compose up` 完全不受影響；本區塊只有在顯式帶入 profile 時才啟動。
+  #
+  # 正式部署（fresh MSSQL 庫）流程：
+  #   0) cp .env.mssql.example .env  並填入 AES_ENCRYPTION_KEY / JWT_SECRET（見該檔）
+  #   1) docker compose --profile mssql-bootstrap up mssql mssql-init --build   # 等 mssql-init 建庫/login
+  #   2) docker compose --profile mssql-bootstrap run --rm bootstrap-mssql       # 一鍵 migration+seed（冪等）
+  #   3) docker compose --profile mssql-prod up -d                                # 起 api-mssql/worker-mssql/web-mssql
+  # 之後於 UI「資料來源」逐一補 datasource 密碼並測試連線 → 觸發 ETL 首次灌入（P6c）。
+  #
+  # bootstrap 之 npm script 本身依 DB_TYPE 分派（seeds 已 driver-portable，AD-E07-39 P1b3），
+  # 故 MSSQL 路徑與 PG 路徑共用同一 `npm run bootstrap`，差異僅在傳入的環境變數。
+  # ==========================================================================
+  bootstrap-mssql:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-bootstrap-mssql
+    environment:
+      # 正式部署關 synchronize（schema 由 baseline migration 提供）。
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_TYPE: mssql
+      DB_HOST: mssql
+      DB_PORT: 1433
+      DB_USERNAME: ${DB_MSSQL_USERNAME:-cdmp}
+      DB_PASSWORD: ${DB_MSSQL_PASSWORD:-Cdmp_Dev_2026!}
+      DB_NAME: ${DB_MSSQL_NAME:-CDMP}
+      DB_MSSQL_ENCRYPT: ${DB_MSSQL_ENCRYPT:-true}
+      DB_MSSQL_TRUST_CERT: ${DB_MSSQL_TRUST_CERT:-true}
+      # 必須與 api-mssql/worker-mssql 共用同一把（datasource 密碼加解密）。
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
+      # 選填：指定 etl_pipelines/datasource created_by 的 admin email（預設用 seed admin）。
+      ETL_SEED_USER_EMAIL: ${ETL_SEED_USER_EMAIL:-}
+    command: npm run bootstrap
+    volumes:
+      - ./apps/api/src:/app/src
+    depends_on:
+      mssql-init:
+        condition: service_completed_successfully
+    profiles:
+      - mssql-bootstrap
+
+  api-mssql:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-api-mssql
+    restart: unless-stopped
+    ports:
+      # 預設沿用 3000；與 dev postgres api 並存測試時以 MSSQL_API_PORT 覆寫（如 3100）。
+      - "${MSSQL_API_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_TYPE: mssql
+      DB_HOST: mssql
+      DB_PORT: 1433
+      DB_USERNAME: ${DB_MSSQL_USERNAME:-cdmp}
+      DB_PASSWORD: ${DB_MSSQL_PASSWORD:-Cdmp_Dev_2026!}
+      DB_NAME: ${DB_MSSQL_NAME:-CDMP}
+      DB_MSSQL_ENCRYPT: ${DB_MSSQL_ENCRYPT:-true}
+      DB_MSSQL_TRUST_CERT: ${DB_MSSQL_TRUST_CERT:-true}
+      JWT_SECRET: ${JWT_SECRET:-cdmp-dev-jwt-secret-key-2026}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
+      PORT: 3000
+      ENABLE_E07_REFACTOR_PHASE3: "true"
+      ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL: "true"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./apps/api/test:/app/test
+    depends_on:
+      mssql-init:
+        condition: service_completed_successfully
+    profiles:
+      - mssql-prod
+
+  worker-mssql:
+    build:
+      context: ./apps/api
+      target: dev
+    container_name: cdmp-worker-mssql
+    restart: unless-stopped
+    command: npx ts-node -r tsconfig-paths/register src/worker-main.ts
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_TYPE: mssql
+      DB_HOST: mssql
+      DB_PORT: 1433
+      DB_USERNAME: ${DB_MSSQL_USERNAME:-cdmp}
+      DB_PASSWORD: ${DB_MSSQL_PASSWORD:-Cdmp_Dev_2026!}
+      DB_NAME: ${DB_MSSQL_NAME:-CDMP}
+      DB_MSSQL_ENCRYPT: ${DB_MSSQL_ENCRYPT:-true}
+      DB_MSSQL_TRUST_CERT: ${DB_MSSQL_TRUST_CERT:-true}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
+      ENABLE_E07_REFACTOR_PHASE3: "true"
+      ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL: "true"
+      # mssql 自建佇列輪詢間隔（RunQueueConsumer.startMssqlPolling；DB_TYPE=mssql 生效）。
+      RUN_QUEUE_POLL_INTERVAL_MS: ${RUN_QUEUE_POLL_INTERVAL_MS:-2000}
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./apps/api/test:/app/test
+    depends_on:
+      mssql-init:
+        condition: service_completed_successfully
+    # 刻意無 ports：worker 不對外提供 HTTP（比照 postgres worker）。
+    profiles:
+      - mssql-prod
+
+  web-mssql:
+    build:
+      context: ./apps/web
+      target: dev
+    container_name: cdmp-web-mssql
+    restart: unless-stopped
+    ports:
+      - "${MSSQL_WEB_PORT:-5174}:5173"
+    environment:
+      VITE_API_URL: http://api-mssql:3000
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./packages/shared:/packages/shared
+    depends_on:
+      - api-mssql
+    profiles:
+      - mssql-prod
 
 volumes:
   pgdata:
