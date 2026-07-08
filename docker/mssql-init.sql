@@ -104,3 +104,28 @@ GO
 
 PRINT 'CDMP_PATTERNB ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_PATTERNB','Collation'));
 GO
+
+-- AD-E07-43 P5b（REG-006 / I-MSSQL-CI-BOOTSTRAP-01）：其餘 5 條生產 ETL pipeline 端對端驗證專用之隔離資料庫。
+-- P5b 的 4 條 fullMode pipeline（ob_arreturndf_min_cap / ob_calendar / ob_emphire / ob_pool_data）之
+-- target_load 走 TRUNCATE + INSERT 全量替換，1 條 partition_replace（ob_pool_data_list）走 DELETE + INSERT。
+-- 這 4 張 fullMode 目標表（ob_pool_data / ob_pool_data_list / ob_emphire / ob_calendar）恰與 P3a/P3c/P3d
+-- CI 依賴之 CDMP_TEST.dbo 共用 baseline 表高度重疊；若 P5b 於 CDMP_TEST.dbo 執行 TRUNCATE，會在
+-- --no-file-parallelism 序列中清空後續 P3 系列所需之共用 baseline 表列（乃至整表狀態），造成跨 spec 干擾。
+-- 故 P5b 亦比照 P1b2/P1b3/pattern-b 隔離一個 fresh 庫，target/raw fixture 皆由 p5b harness 自建（idempotent，
+-- 不依賴 migration:run），與共用 CDMP_TEST.dbo 完全解耦；collation 比照 CDMP_TEST。
+IF DB_ID('CDMP_P5B') IS NULL
+  CREATE DATABASE CDMP_P5B COLLATE Chinese_Taiwan_Stroke_BIN;
+GO
+
+USE CDMP_P5B;
+GO
+
+IF USER_ID('cdmp') IS NULL
+  CREATE USER cdmp FOR LOGIN cdmp;
+GO
+
+ALTER ROLE db_owner ADD MEMBER cdmp;
+GO
+
+PRINT 'CDMP_P5B ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_P5B','Collation'));
+GO
