@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.27"
+version: "3.28"
 date: 2026-07-08
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.28 / 2026-07-08 / MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）計畫**：P3（Raw SQL 引擎移植，3a~3e）全數完成並 push——**MSSQL 月跑全鏈（Stage1 篩選→Stage2~3 計分→Stage3/4 比例→CR）現已全部有值**。進入 cutover 前最後關卡 P5：非新業務邏輯，而是「證明 MSSQL 忠實重現 PG」之全量驗證+業務簽核。新增 **[`implementation-log/AD-E07-43-mssql-p5-ci-signoff.md`](implementation-log/AD-E07-43-mssql-p5-ci-signoff.md)**，固化：(1) **🔴 P5a（優先度最高、槓桿最大）CI mssql-specs 缺 dbo baseline bootstrap 之修法**——查證確認 `.github/workflows/ci.yml` 的 `mssql-specs` job 僅建空 `CDMP_TEST` 資料庫、未跑 `migration:run`，導致 P3a 的 52 個案例被 GATE-002 靜默 skip（CI 綠燈但實際未真跑）；裁定**加 CI 層 `migration:run` bootstrap 步驟（非讓 P3a 回頭改自建）**，理由：一次修復全面受益+驗證 migration 檔案本身正確性+與 P3b~d 既有雙模式 harness 相容成本最低；另需一併排查已知的 P1b2「wipe dbo」測試排序風險；(2) P5b 其餘 5 條生產 ETL pipeline（`E07-OBPOOLDATA-Load` 等，P4d 僅端對端驗證 customer_core 一條）之 MSSQL 驗證，為 P5c 前置依賴；(3) P5c **MONTHRUN-DIFF**——真實觸發 PG/MSSQL 完整月跑，逐列比對 score/tier/card/dept_id/emplid/assignday/cr 九欄，**manual/script 執行（比照 F101/F102/F104 前例，非新 CI 測試）**；(4) P5d datetime2 時區 production 查證（P3d 已發現 tedious 以本機時區存 datetime2，非午夜 `appl_date` 可能使逾2年清空邊界與 JS oracle 分歧）；(5) P5e F067 式業務簽核報告（基準修正為「MSSQL vs PG」而非「vs legacy」，legacy 對齊已在既有 PG 版 F067 完成）；(6) P5f（可選）MSSQL 部署 bootstrap 對齊 PG 版一鍵部署。新增 2 個不變式（I-MSSQL-CI-BOOTSTRAP-01／I-MSSQL-SIGNOFF-GATE-01，後者明訂 cutover 需 MONTHRUN-DIFF 一致 + 業務簽核雙條件）；判定不需要 spec-writer。**明確彙整 2 項需使用者/業務裁示事項**（datetime2 時區查證與裁示；F067 簽核本身），其餘子切片（P5a/b/f）判斷純技術執行可直接推進。**刻意未動**：`architecture-spec.md`（理由同前）。
 
 > **v3.27 / 2026-07-08 / MSSQL 全面遷移 P3（Raw SQL 引擎移植：Stage 1-4 篩選/計分/分派 + CR）架構設計**：P4（ETL 引擎 MSSQL 化）全數完成——9 個 handler 全 MSSQL 化、customer_core 56 節點 pipeline 端對端跑通並修復 FINDING-P4D-01、bulk-load 完成，**customer_core 現於 MSSQL 上有真實資料**，解除先前 P3 設計階段查出之封鎖性缺口（Stage 2 計分 9/15 對照欄位依賴 customer_core，原僅能靠測試自建 throwaway fixture 驗證的過渡態）。新增 **[`implementation-log/AD-E07-42-mssql-p3-raw-sql-engine.md`](implementation-log/AD-E07-42-mssql-p3-raw-sql-engine.md)**，固化架構師先前完整產出之 P3 設計文字：(1) driver 組織沿用 P4 已確立之「PG 檔不動、平行 `*-mssql.ts`、executor 層薄分支」原則，延伸至 5 個 Stage 1-4/CR raw SQL builder（`stage1-sql-builder.ts`/`stage1-customer-core-clause.ts`/`stage2to4-sql-builder.ts`/`stage3to4-ration-sql.ts`/`cr-priority-sql.ts`）；(2) 逐 Stage 方言轉換清單（3a Stage 1：AGE→DATEDIFF／regex→PATINDEX／既有 ANSI 語法不變；**3b Stage 2~3（風險最高）**：`~` 正則×3／`age()`／`to_jsonb()->>'col'` 動態 fallback（live production path，非死碼）；3c Stage 3/4：VALUES-CTE derived table／視窗函式 1:1 可攜；3d CR：UPDATE-FROM+視窗函式+CTE 三重疊加；3e `fn_calc_tier_level` 收尾，P1b2 已斷言不建立，僅剩清理）；(3) **`to_jsonb` 動態 fallback 修法**（I-MSSQL-DYNAMIC-FALLBACK-01）＝SQL 生成前 TypeScript 端 `INFORMATION_SCHEMA.COLUMNS`（大寫）內省，非執行期動態模擬，與 P4 FINDING-P4D-01「生成期解決優於執行期魔法」教訓對齊；(4) EQ 測試策略——因 customer_core 已有真實資料，3b 可直接對真實資料做完整 JS↔MSSQL 逐列等價（不再是過渡態限定），新增建議比照 F067 模式重跑計分逐欄比對；(5) P3a~3e 五個子切片與 DoD + 判定不需要 spec-writer；新增 3 個不變式（I-MSSQL-ENGINE-EQ-01/REGEX-CHARCLASS-01/DYNAMIC-FALLBACK-01），沿用 I-MSSQL-CATALOG-CASE-01/DECIMAL-NORMALIZE-01（AD-E07-41）。**架構師判斷無需使用者裁示之新事項**（customer_core 缺口已由 P4 解除，非本輪新增議題）。**刻意未動**：`architecture-spec.md`（理由同前）。
 
