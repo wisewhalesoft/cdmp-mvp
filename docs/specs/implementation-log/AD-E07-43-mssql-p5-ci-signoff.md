@@ -5,7 +5,7 @@ feature-id: N/A（非 F-numbered feature；資料庫平台全面遷移之收官�
 source-stories: N/A（延續 AD-E07-38~42 之使用者拍板三項硬約束；P5 為 cutover 前最終驗證與簽核關卡）
 epic: cross-cutting（跨全模組之資料庫平台遷移，非單一 E07 業務 epic）
 module: Infrastructure — Database Platform Migration（PostgreSQL → MSSQL，Phase 5 of 6：全量 CI + 業務簽核，非大量新 code）
-version: "1.2"
+version: "1.3"
 date: 2026-07-08
 status: approved
 author: system-architect
@@ -19,13 +19,16 @@ invariants:
   - I-MSSQL-ENGINE-EQ-01（繼承自 AD-E07-42）
   - I-MSSQL-CI-BOOTSTRAP-01（新增）
   - I-MSSQL-SIGNOFF-GATE-01（新增）
-  - I-ETL-ATOMIC-LOAD-01（新增，v1.1，ATOMIC 資料完整性風險修法目標原則）
-  - I-MSSQL-DATE-TZ-01（新增，v1.2，MSSQL date/datetime/datetime2/smalldatetime/time 連線層 useUTC 一致性原則）
+  - I-ETL-ATOMIC-LOAD-01（新增，v1.1；v1.3 擴大範圍至 customer_core UPSERT 兩段式路徑，見 §7.6）
+  - I-MSSQL-DATE-TZ-01（新增，v1.2；v1.3 標記為已驗證滿足，見 §8.9）
+  - I-MSSQL-NVARCHAR-DISPLAY-01（新增，v1.3，中文顯示欄位須依來源 legacy nvarchar 宣告採用 dialect-aware nvarchar helper，見 §9）
 ---
 
 > **🔴 v1.1 修訂通知（2026-07-08）**：P5b 端對端驗證真庫實測發現 **ATOMIC 資料完整性風險**（潛在封鎖級，兩引擎共通、非本次遷移引入之既有架構缺口）——`target-load-handler`（PG／MSSQL 皆然）之 fullMode/partition_replace 路徑，TRUNCATE/DELETE 先提交、後續單句 INSERT 若因髒資料失敗則不回滾，導致目標表/分區既存生產資料被清空且未重建。新增 **§7** 完整記錄發現、修法評估、範圍歸屬裁定；新增不變式 I-ETL-ATOMIC-LOAD-01；§4 需使用者裁示事項新增第 3 項。
 >
 > **🔴🔴 v1.2 修訂通知（2026-07-08）**：P5c 真實 PG vs MSSQL 逐列比對揭露 **assignday 全部 −1 日之跨引擎 cutover-blocker**（其餘 9 個關鍵欄位含 CR/比例分派全鏈皆 0-diff）。已定位到**逐行原始碼級根因**：TypeORM `SqlServerDriver` 建立 MSSQL 連線池時，若應用程式未顯式設定 `options.useUTC`，會**強制覆寫為 `false`**，蓋過 tedious 函式庫本身 `true` 的內建預設值，導致 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 欄位讀寫改用本地時區分量而非 UTC 分量。新增 **§8** 完整記錄根因鏈、程式碼證據、修法評估、範圍歸屬（新增 P5h／P5i 子切片）；新增不變式 I-MSSQL-DATE-TZ-01；§1 子切片總覽、§4 裁示事項、§5 DoD、§6 不變式表同步更新。
+>
+> **✅ v1.3 修訂通知（2026-07-08）**：**P5h（useUTC 修法）與 P5g（ATOMIC 交易包裝）皆已實作完成並真庫重驗通過**——assignday 於 198+9,376 案樣本達 0-diff、全量 mssql 回歸 673 通過零邏輯回歸；ATOMIC 修法涵蓋 fullMode/partition_replace/customer_core UPSERT 三路徑（範圍較 v1.1 原不變式擴大，見 §7.6）、真庫探測證實 TRUNCATE 交易可回滾。**正式簽核報告已產出**：[`AD-E07-43-P5e-f067-signoff.md`](AD-E07-43-P5e-f067-signoff.md)。**P5i（varchar→nvarchar）裁定完成**：新增 §9，經比對真實 legacy MSSQL schema（`reference/TableSchema/OB/*.sql`）確認為**真實生產風險（非 P5b/P5c 測試 harness 假象）**——legacy 明確宣告 `SPEC_NAME`/`CAR_NAME`/`BROKER`/`EMP_NM`/`DEPT_NAME` 等欄位為 `nvarchar`，CDMP 之 schema 產生器 `parse-ob-schema.mjs::mapType()` 設計上（為當初純 PG 目標而設計，PG 無 nvarchar/varchar 之分）將 `nvarchar`/`varchar(N≤255)` 一律收斂為泛用 `varchar`，MSSQL 目標下遺失 Unicode 安全性；使用者已裁示「varchar 自主做」，交 tdd-implementation 依 §9 方法論修正，不需另行業務裁示。§1/§4/§5/§6 同步更新反映 P5h/P5g/P5e/P5i 完成狀態。
 
 # AD-E07-43：MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）計畫
 
@@ -34,9 +37,9 @@ invariants:
 | Agent 角色 | 需載入章節 |
 |-----------|-----------|
 | Test Designer | §2（P5a/b 技術驗證定義）、§3（MONTHRUN-DIFF/F067 執行方式）、§6（不變式） |
-| TDD Developer | §2（P5a CI bootstrap 修法、P5b 其餘 5 條 pipeline 驗證、P5f 部署 bootstrap）、**§7（ATOMIC 修法，待使用者裁示後啟動）** |
+| TDD Developer | §2（P5a CI bootstrap 修法、P5b 其餘 5 條 pipeline 驗證、P5f 部署 bootstrap）、**§7（ATOMIC 修法，✅ 已完成）**、**§9（P5i varchar→nvarchar，待執行）** |
 | DevOps / CI/CD | §2（CI 修法細節）、§5（子切片 DoD） |
-| Product Analyst | §4（需使用者/業務裁示事項，彙整版）、§3（F067 簽核）、**§7（ATOMIC 風險，生產影響評估）**、**§8（assignday −1 日，cutover-blocker）** |
+| Product Analyst | §4（需使用者/業務裁示事項，彙整版）、§3（F067 簽核，✅ 已產出正式報告）、**§7（ATOMIC 風險，✅ 已修復）**、**§8（assignday −1 日，✅ 已修復）**、**§9（varchar/nvarchar，裁定完成）** |
 
 ---
 
@@ -52,27 +55,27 @@ P5 是 cutover（Phase 6）前的最後一道關卡：**不是新業務邏輯開
 
 ```mermaid
 graph LR
-  P5a[P5a CI mssql-specs dbo bootstrap 修法] --> P5b[P5b 其餘 5 條 ETL pipeline MSSQL 驗證 ✅已完成/發現 ATOMIC]
-  P5b --> P5c[P5c MONTHRUN-DIFF 真實跨引擎逐列比對 ✅已完成/發現 assignday −1 日]
-  P5c --> P5h[🆕 P5h useUTC 連線層修法 + P5c 重驗 §8]
-  P5h -.吸收裁決.-> P5d[P5d datetime2 時區 production 查證（根因已定位，範圍收斂）]
-  P5h --> P5e[P5e F067 式業務簽核報告]
-  P5f[P5f MSSQL 部署 bootstrap 對齊] -.可平行.-> P5e
-  P5g[P5g ATOMIC 資料完整性修法 §7] -.不阻擋 P5a~f/P5c/P5e，待使用者裁示是否/何時排入.-> P5e
-  P5i[🆕 P5i varchar byte / nvarchar schema 評估 §8.7] -.獨立分支，不阻擋.-> P5e
+  P5a[P5a CI bootstrap 修法 ✅] --> P5b[P5b 5 條 ETL pipeline 驗證 ✅/發現 ATOMIC]
+  P5b --> P5c[P5c MONTHRUN-DIFF ✅/發現 assignday −1 日]
+  P5c --> P5h[P5h useUTC 修法 ✅完成+重驗 0-diff §8]
+  P5h -.吸收裁決.-> P5d[P5d datetime2 時區查證 ✅隨 P5h 結案]
+  P5g[P5g ATOMIC 交易包裝 ✅完成 §7] --> P5e[P5e F067 簽核報告 ✅已產出]
+  P5h --> P5e
+  P5f[P5f MSSQL 部署 bootstrap 對齊] -.可平行，未啟動.-> P5e
+  P5i[P5i varchar→nvarchar ✅裁定=真實需修 §9] -.獨立分支，不阻擋，待 tdd-impl 執行.-> P5e
 ```
 
-| 子切片 | 一句話定位 | 依賴 | 執行方式 |
-|---|---|---|---|
-| **P5a** | CI mssql-specs 缺 dbo baseline bootstrap，導致 P3a 等 52 個案例靜默 skip 而非真跑 | 無（可立即開始） | test-designer 定義驗收標準 → tdd-implementation 執行（CI 設定 + 一份測試檔調查） |
-| **P5b** | customer_core 以外之其餘 5 條生產 pipeline，尚未證明能在 MSSQL 端到端跑通 | P5a（需 dbo 有完整 baseline 才能跑） | script/manual（比照 P4d `DISPATCHE2E-001` 手法重用） |
-| **P5c** | 真實觸發一次完整月跑，PG vs MSSQL 逐列比對 score/tier/card/dept_id/emplid/assignday/cr | P5b（月跑需要 `ob_pool_data` 等來源表先有真實資料） | **manual/script**（比照 F101/F102/F104 前例，非新 CI 測試） |
-| **P5d** | tedious datetime2 本機時區儲存，非午夜 `appl_date` 可能使「逾2年清空」邊界與 JS oracle 分歧 | 可與 P5b/P5c 平行進行資料查證；**根因已由 P5h 定位，範圍收斂為「確認 P5h 修法已覆蓋」** | **manual 查證 + 使用者/業務裁示**（見 §4，v1.2 起與 P5h 併同結案） |
-| **P5e** | F067 式業務簽核報告產出 + 簽核 | P5c 結果 + **P5h 完成（assignday 達 0-diff）** + P5d 裁示 | architect 產出報告草稿 → **使用者/業務簽核**（見 §4） |
-| **P5f**（可選、優先度較低） | MSSQL 版一鍵部署 bootstrap，比照 PG 版（`migration:run && seed && seed-datasource && data-seed`） | 無（可平行） | tdd-implementation（機械式腳本工作） |
-| **P5g** | ATOMIC 資料完整性修法（交易包裝，見 §7） | 無（不阻擋，待使用者裁示排程） | tdd-implementation（待核准後啟動） |
-| **🆕 P5h**（🔴 cutover-blocker，優先度最高） | 4 個 MSSQL TypeORM 連線站點補 `useUTC: true`，解決 assignday −1 日；重跑全量 mssql specs + 重驗 P5c | P5c（已完成，提供根因觸發證據） | tdd-implementation（連線設定修改 + 全量回歸 + P5c 重跑），見 §8 |
-| **🆕 P5i**（次要，可另排程） | varchar byte 語意（BIN collation 中文顯示欄溢位風險）評估是否改 `nvarchar` | 無（獨立、不阻擋） | system-architect 設計 → tdd-implementation（若核准 schema 變更），見 §8.7 |
+| 子切片 | 一句話定位 | 狀態 |
+|---|---|---|
+| **P5a** | CI mssql-specs 缺 dbo baseline bootstrap，導致 P3a 等 52 個案例靜默 skip 而非真跑 | ✅ 已完成（見 P5a-impl.md） |
+| **P5b** | customer_core 以外之其餘 5 條生產 pipeline，端到端 MSSQL 驗證 | ✅ 已完成，發現 ATOMIC 風險（見 P5b-impl.md） |
+| **P5c** | 真實觸發一次完整月跑，PG vs MSSQL 逐列比對 score/tier/card/dept_id/emplid/assignday/cr | ✅ 已完成，發現 assignday −1 日（見 P5c-impl.md） |
+| **P5d** | datetime2 本機時區儲存查證 | ✅ 隨 P5h 結案（根因已定位於連線層，非時區組態決策） |
+| **P5e** | F067 式業務簽核報告產出 + 簽核 | ✅ 正式報告已產出（[`AD-E07-43-P5e-f067-signoff.md`](AD-E07-43-P5e-f067-signoff.md)），**待使用者簽核** |
+| **P5f**（可選、優先度較低） | MSSQL 版一鍵部署 bootstrap | 未啟動（不阻擋） |
+| **P5g** | ATOMIC 資料完整性修法（交易包裝，見 §7） | ✅ 已完成並真庫重驗（見 P5g-impl.md） |
+| **P5h**（🔴 曾為 cutover-blocker） | 4 個 MSSQL TypeORM 連線站點補 `useUTC: true`，解決 assignday −1 日 | ✅ 已完成並真庫重驗 0-diff（見 P5h-impl.md，§8） |
+| **P5i**（次要，非阻擋） | varchar byte 語意，評估是否改 `nvarchar` | ✅ 裁定完成＝**真實生產風險，需修**（§9），使用者已裁示自主執行 |
 
 **CI 4 job 全綠**（原待辦第 3 項）不列為獨立子切片，而是**貫穿全 P5 的持續性 DoD**：P5a 完成後應立即達成，其餘子切片進行中須保持不破。
 
@@ -149,15 +152,15 @@ graph LR
 
 ## 4. 需使用者/業務裁示事項（彙整，供你帶回使用者）
 
-| # | 事項 | 為何非 architect 可獨立裁定 | 建議行動 |
+| # | 事項 | 狀態（v1.3） | 原裁示理由 |
 |---|---|---|---|
-| 1 | **datetime2 時區查證（P5d）**：production `ob_pool_data_list.appl_date`（及其他餵入日期邊界判斷之來源欄位）是否帶有非午夜時間分量？MSSQL cutover 後之伺服器/連線時區組態如何設定？ | 需要實際查詢 production 資料庫內容（architect 唯讀評估權限下無法直接存取生產環境資料，且時區組態屬維運/基礎設施決策範疇）。**v1.2 更新**：P5c 已直接查證 production `appl_date`（真實 115,197 案，100% 非午夜），且 §8 已定位到根因級解法（連線層 `useUTC:true`）；此項裁示範圍**收斂為**「確認 P5h 之 4 站點修法已完整套用、且重跑後 assignday／CR 兩年門檻等邊界案例達 0-diff」，不再需要業務自行查詢樣本或另立時區組態 | P5h 完成後由 architect/tdd-implementation 於重驗報告中一併結案，業務僅需確認驗收結果，無需另行查證 |
-| 2 | **F067 式業務簽核（P5e）**：MSSQL vs PG 月跑結果比對報告之最終簽核 | 比照本專案一貫做法（F067/F101/F102/F104 皆由業務簽核，非 architect 自行認定「夠好了」） | P5c + **P5h**（assignday 修法驗證）完成後由 architect 產出報告草稿，交付簽核 |
-| 3 | **🔴🔴 ATOMIC 資料完整性風險修法（見 §7）**：ETL fullMode/partition_replace 之「TRUNCATE/DELETE 先提交、INSERT 失敗不回滾」導致生產資料清空風險，是否核准修法（推薦：交易包裝）、排入時程（新增 P5g，或提升為獨立 hardening 任務）、修法期間之風險承受度 | 這是**現行 PostgreSQL 生產系統今天就存在的行為改變提案**（失敗語意由「靜默清空」改為「安全失敗、舊資料保留」），影響範圍不限於 MSSQL 遷移本身；是否/何時修、修法期間能否接受現狀風險，屬業務層級之風險接受度判斷，非純技術決策 | 見 §7.4 精簡摘要（可直接帶回使用者） |
-| 4 | **🔴🔴 assignday −1 日 / useUTC 連線層修法（見 §8）**：cutover-blocker，是否核准以「4 個 MSSQL 連線站點補 `useUTC:true`」修正、是否接受此為切換前必修項、修法完成後之驗收條件（重驗 P5c 達 assignday 0-diff） | 這是影響 MSSQL 部署下**全系統** date/datetime2 讀寫語意的連線層設定變更提案，雖是「修正為與 PG 一致」，但仍屬會改變生產資料日期正確性之技術變更，且是否接受「以此驗收條件視為 cutover-ready」屬業務層級之風險/時程判斷 | 見 §8.8 精簡摘要（可直接帶回使用者） |
-| 5 | **varchar byte 語意 / nvarchar schema 評估（見 §8.7，次要，P5i）**：MSSQL BIN collation 下長中文顯示欄位是否改 `nvarchar` | 屬 schema 設計決策，涉及 migration 變更成本與時程排序判斷，非純技術對錯問題（已確認非計分/CR/分派輸入，不影響 cutover-blocker 判定） | 建議獨立排入 P5i、低優先序，不需立即裁示，可與 P5e 簽核平行處理 |
+| 1 | **datetime2 時區查證（P5d）** | ✅ **已結案**：P5h 修法（連線層 `useUTC:true`）已於 198+9,376 案樣本重驗達 0-diff，datetime2 wall-clock round-trip 亦確認忠實（P5h-impl §3.4）。不再需要業務查驗或另立時區組態 | （歷史）需查詢 production 資料庫內容+裁決時區組態 |
+| 2 | **F067 式業務簽核（P5e）** | ✅ **報告已產出**（[`AD-E07-43-P5e-f067-signoff.md`](AD-E07-43-P5e-f067-signoff.md)），**待使用者正式簽署**（唯一仍待人工動作之項目） | 比照 F101/F102/F104 慣例，由業務簽核而非 architect 自行認定 |
+| 3 | **🔴🔴 ATOMIC 資料完整性風險修法（見 §7）** | ✅ **已修復並真庫重驗**（P5g，含範圍擴張至 customer_core UPSERT，見 §7.6）。**殘餘待業務知悉**：MSSQL 標準 Read Committed 下並行查詢於載入期間會被阻塞（非讀空表），7.8M 生產規模阻塞時間未實測（見 §7.7） | 現行 PG 生產系統今天就存在的行為改變提案，屬業務風險接受度判斷 |
+| 4 | **🔴🔴 assignday −1 日 / useUTC 連線層修法（見 §8）** | ✅ **已修復並真庫重驗**（P5h，198+9,376 案樣本 0-diff、全量回歸 673 通過零邏輯回歸） | cutover-blocker，影響 MSSQL 部署下全系統日期正確性 |
+| 5 | **varchar byte 語意 / nvarchar schema 評估（見 §9，P5i）** | ✅ **裁定完成**：經比對真實 legacy MSSQL schema 確認為**真實生產風險**（非測試 harness 假象），根因＝`parse-ob-schema.mjs` 生成器設計性收斂 nvarchar→varchar。使用者已裁示「自主做」，不需另行業務裁示，交 tdd-implementation 依 §9 方法論執行 | （已解除）原屬 schema 設計決策，現使用者已授權 architect 自主裁定 |
 
-**架構師判斷：其餘 P5 子切片（P5a/P5b/P5f）皆為純技術執行，不需要使用者裁示，可直接推進。**
+**架構師判斷：P5a/P5b/P5f 為純技術執行，P5g/P5h/P5i 已由使用者裁示/授權完成裁定與修復。唯一仍待人工動作者為 #2（F067 報告之正式簽署）。**
 
 ---
 
@@ -179,28 +182,36 @@ graph LR
 2. `ob_monthly_run_result` 全部案件之 9 個關鍵欄位（score/tier/card/dept_id/emplid/emplid_deptid/assignday/cr_id/is_cr）逐列比對完成。
 3. 產出比對結果文件（impl-log 風格），任何差異皆有具體案件級記錄與可解釋性判斷。
 
-### P5d DoD
-1. 至少一筆 production（或 production-like）`appl_date` 樣本之時間分量查證結果記錄。
-2. 使用者/業務對「是否接受此差異／時區組態如何設定」給出裁示。
+### P5d DoD（✅ 完成，隨 P5h 結案）
+1. ✅ production `appl_date` 樣本之時間分量查證結果記錄（P5c：115,197/115,197 案 100% 非午夜）。
+2. ✅ 根因定位為連線層設定缺陷（P5h），非需業務裁決之時區組態選擇；不再需要業務另行裁示。
 
 ### P5e DoD
-1. F067 式簽核報告產出（含 §3.2 結構）。
-2. 業務簽核完成（或明確記錄尚待簽核，作為 cutover 前置阻擋項）。
+1. ✅ F067 式簽核報告正式產出：[`AD-E07-43-P5e-f067-signoff.md`](AD-E07-43-P5e-f067-signoff.md)。
+2. ⏳ **業務簽核尚待進行**（報告已就緒，簽核為唯一剩餘人工動作，非技術阻擋項）。
 
-### P5f DoD（可選）
+### P5f DoD（可選，未啟動）
 1. MSSQL 版 `npm run bootstrap` 等價流程可對全新 MSSQL 資料庫成功建置（含業務資料表空、參考資料齊全）。
 
-### P5h DoD（🔴 cutover-blocker，見 §8）
-1. 4 個 MSSQL TypeORM 連線站點（`app.module.ts` / `worker-app.module.ts` / `database/data-source.ts` / `database/seeds/seed-connection.ts`）之 `options` 區塊皆顯式加入 `useUTC: true`。
-2. 全量 `*.mssql.spec.ts`（P1/P2/P3/P4/P5b 既有套件）重跑，確認零回歸（含任何未來新增之 date/datetime2 round-trip 靜態案例）。
-3. §8.4 列出之 4 個受影響站點（`stage0-estimate.service.ts`／`assignment-run-pipeline.service.ts::toYmd`／`cr-priority.ts::toYmd`／`emphire-active.util.ts::toYmd`）以既有／新增測試驗證：對 MSSQL `date`/`datetime2` 欄位讀值後之 `getUTC*()` 正規化結果與 PG 端一致（0 偏移）。
-4. 重跑 P5c MONTHRUN-DIFF（至少涵蓋原 6 名單 9,376 案樣本），確認 `assignday` 由 0% 一致率轉為 **100% 一致（0-diff）**，10/10 欄位全數 0-diff（或差異皆為已知可解釋之今日參考日效應，如 §2.3 score）。
-5. 補測 P5c 原未涵蓋之邊界案例（CR 兩年門檻邊界日、`appl_date` 本地時間 < 08:00 之案件），確認 `cr-priority.ts`/`assignment-run-pipeline.service.ts::toYmd` 兩處潛在受影響站點無隱藏偏移。
-6. `assignment-run-report.service.ts::formatApplDate`/`formatAssignday` 之註解更正（現有註解對 PG 行為描述有誤，見 §8.4 附記），本地 getter 用法是否需同步改為 UTC getter 以維持與其餘站點一致之慣例，由 tdd-implementation 於修法時一併評估（非阻擋項，因該路徑之 Date 分支經確認為罕至防禦分支）。
+### P5g DoD（✅ 完成，見 §7）
+1. ✅ `target-load-handler.ts`（PG）／`target-load-handler-mssql.ts`（MSSQL）之 fullMode／partition_replace／customer_core UPSERT 三路徑加交易保護。
+2. ✅ 真庫探測確認 MSSQL `TRUNCATE` 交易內可回滾；P5b 原「資料遺失」斷言（ATOMIC-001~004）翻轉為「資料保留」並重驗通過。
+3. ✅ 6 條 target_load pipeline 全數覆蓋（`etl-pipelines.json` 靜態核對無遺漏）；`tsc` 乾淨；全量 ETL MSSQL 套件零回歸。
+4. ⚠️ 殘餘 follow-up（非阻擋，見 §7.7）：7.8M 生產規模之交易日誌/鎖阻塞未實測，建議 cutover 前量測。
 
-### P5i DoD（次要，可另排程）
-1. 系統性盤點所有中文顯示用途之 MSSQL `varchar(N)` 欄位（`spec_name`/`car_name`/`broker` 已知，需擴大 Grep entity 定義找出其餘）。
-2. 產出「改 `nvarchar`」vs「維持 `varchar` + byte-aware 截斷防禦」之成本/效益比較，交使用者裁示（不阻擋 P5e）。
+### P5h DoD（✅ 完成，曾為 🔴 cutover-blocker，見 §8）
+1. ✅ 4 個 MSSQL TypeORM 連線站點（`app.module.ts` / `worker-app.module.ts` / `database/data-source.ts` / `database/seeds/seed-connection.ts`）之 `options` 區塊皆顯式加入 `useUTC: true`。
+2. ✅ 全量 `*.mssql.spec.ts`（P1/P2/P3/P4/P5b 既有套件）重跑，673 通過、零邏輯回歸（2 個 hook 逾時經隔離重跑證實為環境性、非邏輯回歸）。
+3. ✅ §8.4 列出之 4 個受影響站點修法覆蓋分析完成（P5h-impl §5）：SQL 下推路徑不受影響、JS 路徑由連線層修法覆蓋。
+4. ✅ 重跑 P5c MONTHRUN-DIFF（198 案 + 9,376 案樣本），`assignday` 由 0% 轉為 **100%（0-diff）**，達成 10/10 欄位一致（score 5 案為既知今日參考日效應）。**27,796 案大 CR 名單之 assignday 未於本輪重跑**（見 §8.9 誠實揭露）。
+5. ✅ CR 兩年門檻邊界／datetime2 round-trip 補測完成，無隱藏偏移（SQL 端比較不受 useUTC 影響）。
+6. ✅ `assignment-run-report.service.ts` 註解已更正；評估後**刻意不改 getter**（跨引擎無單一正解，見 §8.9），列為匯出層 follow-up。
+
+### P5i DoD（✅ 裁定完成，見 §9）
+1. ✅ 裁定「真實生產風險 vs 測試 harness 假象」：**確認為真實生產風險**（比對 legacy DDL 逐行核對，見 §9.3）。
+2. ✅ 根因定位：`parse-ob-schema.mjs::mapType()`（第 77-87 行）設計性收斂 nvarchar→varchar；已直接驗證 `ob_pool_data`／`ob_pool_data_list`（~20+ 欄）／`ob_emphire`（4 欄）受影響。
+3. ✅ 使用者已裁示「自主做」，不需業務裁示；已產出機械式修復方法論（§9.5，含 dialect-aware helper + 產生器修正 + 全量重掃）交 tdd-implementation 執行。
+4. ⏳ 其餘 10 個同產生器 entity 之完整受影響欄位清單，待 tdd-implementation 依 §9.5 步驟 3（重跑產生器比對差異）產出，非本輪人工窮舉。
 
 ### 是否需要 spec-writer（RESOLVED：不需要）
 
@@ -218,8 +229,9 @@ graph LR
 | **I-MSSQL-ENGINE-EQ-01** | AD-E07-42 | 每個 raw SQL 下推函式須有對應等價測試；P5c MONTHRUN-DIFF 是此不變式在**完整月跑層級**（而非單一函式層級）的最終驗收 |
 | **I-MSSQL-CI-BOOTSTRAP-01**（新增） | 本 AD | CI `mssql-specs` lane 執行任何 `*.mssql.spec.ts` 前，必須先完成完整 MSSQL baseline（`migration:run`）；任何會清空/重建共用 `dbo` schema 之測試，必須確保不使同一 CI 執行序中其他 spec 所依賴之 baseline 表消失（自身還原、隔離範圍、或明確排序控制三擇一），不得以「反正 CI 會重跑」為由放任此類副作用 |
 | **I-MSSQL-SIGNOFF-GATE-01**（新增） | 本 AD | Phase 6（cutover）不得在以下兩條件皆滿足前啟動：(a) MONTHRUN-DIFF（P5c）對至少一個完整生產規模月跑顯示 PG/MSSQL 結果一致（差異皆為已記錄、可解釋之邊界案例，非未解釋之不一致）；(b) F067 式業務簽核（P5e）已由使用者/業務利害關係人明確完成，非僅由 architect 或工程團隊自行認定「已足夠好」 |
-| **I-ETL-ATOMIC-LOAD-01**（新增，v1.1） | 本 AD §7 | `target_load` 節點之 fullMode（TRUNCATE+INSERT）與 partition_replace（DELETE+INSERT）路徑，破壞性陳述式（TRUNCATE/DELETE）與其後之 INSERT 必須同屬一個交易；INSERT 失敗時必須完整回滾至破壞性陳述式執行前之狀態（既存資料不得遺失）。此為 PG／MSSQL 兩引擎共通適用之原則，修法須兩引擎對稱落地，不得僅修其一 |
-| **I-MSSQL-DATE-TZ-01**（新增，v1.2） | 本 AD §8 | 任何建構 MSSQL TypeORM `DataSource`/`TypeOrmModuleOptions` 之站點，`options` 區塊必須顯式設定 `useUTC: true`，使 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 型別之讀寫（tedious `readDate`/`readDateTime`/`readDateTime2`/`readSmallDateTime`/`readTime` 與對應寫入路徑）一致採 UTC 分量建構/解析，與 PG（node-postgres `date` 型別預設回傳 UTC 午夜 Date 之既有慣例）語意對齊。新增任何 MSSQL 連線建構點（TypeORM 或直接使用 `mssql`/tedious 套件）時須比照套用；凡「讀取 DB Date 欄位後以 `getUTCFullYear/getUTCMonth/getUTCDate` 正規化為 'YYYY-MM-DD' 字串」之程式碼（即本專案既有主流慣例，見 §8.4），其正確性前提即為本不變式成立 |
+| **I-ETL-ATOMIC-LOAD-01**（新增，v1.1；**擴大範圍，v1.3**） | 本 AD §7 | `target_load` 節點之 **(1) fullMode**（TRUNCATE+INSERT）、**(2) partition_replace**（DELETE+INSERT）、**(3) customer_core UPSERT 兩段式**（`UPDATE...FROM` + `INSERT...WHERE NOT EXISTS`，v1.3 新納入）三條寫入路徑，破壞性/多段陳述式與其後續陳述式必須同屬一個交易；任一陳述式失敗時必須完整回滾至交易開始前之狀態（既存資料不得遺失、不得停留於部分套用之不一致中間態）。此為 PG／MSSQL 兩引擎共通適用之原則，修法須兩引擎對稱落地，不得僅修其一。**✅ 已於 P5g 落地並真庫重驗（`AD-E07-43-P5g-impl.md`）** |
+| **I-MSSQL-DATE-TZ-01**（新增，v1.2；**✅ 已驗證滿足，v1.3**） | 本 AD §8 | 任何建構 MSSQL TypeORM `DataSource`/`TypeOrmModuleOptions` 之站點，`options` 區塊必須顯式設定 `useUTC: true`，使 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 型別之讀寫（tedious `readDate`/`readDateTime`/`readDateTime2`/`readSmallDateTime`/`readTime` 與對應寫入路徑）一致採 UTC 分量建構/解析，與 PG（node-postgres `date` 型別預設回傳 UTC 午夜 Date 之既有慣例）語意對齊。新增任何 MSSQL 連線建構點（TypeORM 或直接使用 `mssql`/tedious 套件）時須比照套用；凡「讀取 DB Date 欄位後以 `getUTCFullYear/getUTCMonth/getUTCDate` 正規化為 'YYYY-MM-DD' 字串」之程式碼（即本專案既有主流慣例，見 §8.4），其正確性前提即為本不變式成立。**✅ 已於 P5h 落地並真庫重驗 0-diff（`AD-E07-43-P5h-impl.md`）** |
+| **I-MSSQL-NVARCHAR-DISPLAY-01**（新增，v1.3） | 本 AD §9 | 任何來源 legacy MSSQL schema（`reference/TableSchema/OB/*.sql`）宣告為 `nvarchar(N)` 之欄位，CDMP entity／schema 產生器（`parse-ob-schema.mjs`）與 baseline migration 必須採用 dialect-aware 之 nvarchar helper（mssql=`nvarchar`／pg=`varchar`／sqlite=`text`），不得收斂為與來源 `varchar` 相同之泛用 TypeORM `'varchar'` 型別，以避免 MSSQL BIN collation 下之 byte-length 語意造成 Unicode 顯示內容截斷。新增任何 `ob_*` schema 產生器輸出或手寫 MSSQL entity 時須比照檢查來源宣告 |
 
 ---
 
@@ -273,6 +285,16 @@ TRUNCATE/DELETE 為獨立陳述式、**先提交**；後續 INSERT 若因 NOT NU
 > **成本**：核心修法（交易保護）預估 3–5 人天（兩引擎對稱、範圍明確）；後續強化（前置驗證）另估，非本次必要。
 >
 > **是否阻擋目前進度**：不阻擋。P5 既定的 CI/驗證/簽核工作可依原計畫推進；此修法建議另立子切片（P5g）追蹤，但何時排入、是否要在正式切換 MSSQL 前完成，請裁示。
+
+### 7.6 ✅ v1.3：P5g 修法完成與範圍擴張（customer_core UPSERT）
+
+**修法已實作完成並真庫重驗通過**（`AD-E07-43-P5g-impl.md`）：`target-load-handler.ts`（PG）與 `target-load-handler-mssql.ts`（MSSQL）之 fullMode／partition_replace 路徑加交易保護，採推薦方案 (a)。真庫探測確認 MSSQL `TRUNCATE` 於顯式交易內可回滾（T-SQL 特性，與 MySQL 不同）；失敗後 `rollback` 正確復原既存資料。
+
+**🆕 範圍擴張（P5g 實作中主動發現）**：原 v1.1 不變式 `I-ETL-ATOMIC-LOAD-01` 文字僅列 fullMode／partition_replace 兩路徑，未涵蓋 `customer_core` 之兩段式 UPSERT（`UPDATE...FROM` + `INSERT...WHERE NOT EXISTS`，MSSQL 版）——此路徑同樣無交易保護，若 `UPDATE` 成功、`INSERT` 失敗，會產生「既有客戶列已更新、新客戶列缺失」之不一致中間態，屬同一根因家族（多陳述式操作缺乏交易保護）。PG 版 UPSERT 為單句 `ON CONFLICT`，天生原子、不受影響。tdd-implementation 基於「同一 handler、同一修法機制」原則主動一併納入交易保護，並以真實可觸發路徑（非 mock，長度溢位觸發 INSERT 失敗）驗證修復正確。**不變式 `I-ETL-ATOMIC-LOAD-01` 正式擴大範圍**（見 §6 更新後文字）。
+
+### 7.7 殘餘 follow-up：MSSQL 標準 Read Committed 之並行讀者阻塞（非阻擋，供業務知悉）
+
+真庫雙連線探測（P5g-impl §四）發現：MSSQL 標準 Read Committed（未啟用 `READ_COMMITTED_SNAPSHOT`）下，架構師 §7.2 之「讀者不會讀到空表」結論**成立**，但精確化為：**並行查詢會被阻塞**（實測 ~712ms）直到載入交易提交，而非 PG MVCC 之「立即讀到舊資料、無感知等待」。7.8M 列生產規模之阻塞時間未實測。**建議 cutover 前以生產規模量測**；若阻塞不可接受，可評估對目標資料庫啟用 `READ_COMMITTED_SNAPSHOT`（使 MSSQL 讀取行為對稱 PG 之快照讀、不阻塞）——此為獨立 DB 組態決策，非本修法之必要前提，記錄供業務/維運參考（已納入 P5e 簽核報告 §7 待知悉事項）。
 
 ---
 
@@ -375,3 +397,79 @@ P5c §6 觀察：MSSQL `Chinese_Taiwan_Stroke_BIN`（non-Unicode BIN collation�
 > **是否切換前必修**：**是**。這是目前 MSSQL 與 PG 版本 10 個關鍵比對欄位中唯一尚未達到「逐列一致」的項目，直接影響每月分派日期的正確性，屬於正式切換前的必修阻塞項。修正後預期可達成 10/10 欄位完全一致，具備進入下一階段（正式業務簽核）的條件。
 >
 > **附帶次要事項**：另發現一個與日期無關的顯示欄位長度問題（部分中文顯示欄位在 MSSQL 上位元組計算方式與 PG 不同，長中文值可能被截斷）——已確認**不影響**計分、分派、CR 等核心業務邏輯，純屬顯示/匯出欄位，可獨立另案處理，不影響本次切換時程判斷。
+
+### 8.9 ✅ v1.3：修法完成與驗證結果
+
+**已實作完成並真庫重驗通過**（`AD-E07-43-P5h-impl.md`）：4 個連線站點（`app.module.ts`/`worker-app.module.ts`/`database/data-source.ts`/`database/seeds/seed-connection.ts`）皆補 `useUTC: true`；`assignday` 於 198 案 + 9,376 案樣本由 0% 轉為 **100%（0-diff）**；全量 `*.mssql.spec.ts` 673 通過、零邏輯回歸；`tsc` 乾淨。P5d（datetime2 時區查證）隨本次結案（§6 收斂結論已驗證成立，見 P5h-impl §6）。§8.4 列出之 4 個潛伏風險站點（`stage0-estimate.service.ts`／`cr-priority.ts`／`assignment-run-pipeline.service.ts::toYmd`／`emphire-active.util.ts::toYmd`）修法覆蓋分析完成（P5h-impl §5）：MSSQL 下推路徑於 SQL 端比較不受 `useUTC` 影響，JS 路徑由連線層修法一併覆蓋。
+
+**唯一殘餘 follow-up（非阻擋，已記錄於 P5e 簽核報告）**：匯出功能 `assignment-run-report.service.ts::formatApplDate` 之 Date 分支在 MSSQL wall-clock ≥16:00（本地時間）情境下仍有跨引擎顯示格式漂移風險——此為匯出顯示層問題，與本節（引擎/簽核路徑）之 10 欄核心比對結果無關，架構師評估後**刻意不修改此 getter**（跨引擎無單一正解：PG 場景需本地 getter 正確、MSSQL 場景需 UTC getter 正確，改任一側會使另一引擎在邊界時分漂移），已更正其誤述之註解，並將「SQL 端格式化為字串」列為根治 follow-up。
+
+**27,796 案大 CR 名單之 `assignday` 未於本輪重跑逐列驗證**（其餘 9 欄含 CR 全鏈已於 P5c 驗證 100% 一致，且與 198/9,376 案樣本同根因同修法覆蓋範圍）——此為誠實揭露之樣本涵蓋邊界，非未解決之疑慮，已記錄於 P5e 簽核報告 §7，非阻擋簽核。
+
+---
+
+## 9. ✅ P5i 裁定：varchar → nvarchar 中文顯示欄位（真實生產風險，非測試 harness 假象）
+
+### 9.1 裁定結論
+
+**真實生產風險，需修——非 P5b/P5c 測試 harness 假象。** 已透過比對真實 legacy MSSQL 來源 schema（`reference/TableSchema/OB/*.sql`）與 CDMP 現行 MSSQL entity 定義，**逐行確認**根因位於 CDMP 自身的 schema 產生器，與「PG UTF-8 資料複製進 MSSQL varchar」之測試流程無關。
+
+### 9.2 根因（逐行原始碼證據）
+
+CDMP 之 13 個 `ob_*` entity 檔案（`ob-pool-data.entity.ts`／`ob-pool-data-list.entity.ts`／`ob-emphire.entity.ts`／`ob-calendar.entity.ts`／`ob-tier.entity.ts`／`ob-dept-pct.entity.ts`／`ob-empl-set.entity.ts`／`ob-levelcard-*.entity.ts`／`ob-code-df.entity.ts`／`ob-list-definition.entity.ts`）皆由 `apps/api/scripts/parse-ob-schema.mjs` 自 `reference/TableSchema/OB/*.sql`（legacy MSSQL 生產 schema 之真實 dump）自動產生。該產生器之 `mapType()` 函式（第 77-87 行）**設計上明確**將來源 `nvarchar` 與 `varchar` 一律收斂為泛用 TypeORM `'varchar'`（N≤255 時）：
+
+```js
+// 產生器檔頭註解（第 14 行）：
+//   - nvarchar/varchar(N) → varchar(N)；N>255 改 text
+case 'nvarchar':
+case 'varchar': {
+  ...
+  return { type: 'varchar', length: String(n) };   // nvarchar 與 varchar 輸出相同型別
+}
+```
+
+**此設計在產生器僅以 PostgreSQL 為目標時完全正確且無害**（PG 無獨立 nvarchar 型別，PG `varchar` 本身即為字元長度、Unicode 安全）；但納入 MSSQL 為第二目標後，同一 TypeORM `'varchar'` 型別字串映射為 MSSQL **原生 byte-length、collation 綁定**之 `varchar`，**silently 遺失來源 `nvarchar` 原有之 Unicode 安全性**。N>255 之欄位因走 `longTextColumnType`（已正確做 dialect-aware 映射：mssql=`nvarchar`／pg=`text`）而不受影響，此問題僅限 **N≤255 且來源宣告為 `nvarchar` 之欄位**。
+
+### 9.3 真實案例逐行核對（非推論，直接讀取 legacy DDL 原始檔）
+
+| 表 | 欄位 | Legacy 原始宣告（`reference/TableSchema/OB/*.sql`） | CDMP entity 現行型別 |
+|---|---|---|---|
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `SPEC_NAME` | `[nvarchar](45)` | `varchar(45)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `CAR_NAME` | `[nvarchar](30)` | `varchar(30)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `BROKER` | `[nvarchar](60)` | `varchar(60)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `BROKER_AGENT` | `[nvarchar](60)` | `varchar(60)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `DEPT_NAME` | `[nvarchar](30)` | `varchar(30)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `SALES` / `PROMOTER` / `PROMOTER_DEPT` | `[nvarchar](60)` | `varchar(60)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `CUST_NAME` | `[nvarchar](90)` | `varchar(90)` |
+| `OBPOOLDATA` / `OBPOOLDATA_LIST` | `COLL_EMPL`／`PAY_USER`／`CAR_MODEL`／`PAY_ADD`／`MEMO1` 等 | `[nvarchar](50~255)` | `varchar(50~255)` |
+| `OBEMPHIRE` | `EMP_NM` | `[nvarchar](50)` | `varchar(50)` |
+| `OBEMPHIRE` | `DEPT_NAME` | `[nvarchar](30)` | `varchar(30)` |
+| `OBEMPHIRE` | `TITLE_NAME` | `[nvarchar](30)` | `varchar(30)` |
+| `OBEMPHIRE` | `JFUN_NM` | `[nvarchar](15)` | `varchar(15)` |
+
+**對照組（佐證此非隨意設計、而是 legacy 有意識的 byte 預算）**：`OBPOOLDATA.DLR_NAME`／`BRNH_NAME`（經銷商/分行名稱）與 `PROD_KIND_NAME` 在 legacy 中**確實宣告為 `varchar`**（非 `nvarchar`）——顯示 legacy 設計者對「這欄會裝多長中文」是逐欄評估過的，非統一套用同一型別；CDMP 產生器抹平了這個逐欄區分。
+
+**結論**：`ob_emphire`（全系統在職判定 single source of truth、員工/部門/職稱顯示名稱）與 `ob_pool_data`／`ob_pool_data_list`（案件顯示/匯出核心表）之 Chinese 顯示欄位，在**真實 legacy 生產資料**中即可能達到宣告長度上限之字元數（如 45 個中文字的 `SPEC_NAME`），於 MSSQL BIN collation `varchar(45)` 下僅能容納 22 個中文字（每字 2 bytes）即溢位——**這是回退遷移前 legacy 已存在、CDMP 遷移意外引入的資料完整性倒退，不是測試流程的副作用**。
+
+### 9.4 為何不是 P5b/P5c 測試 harness 假象
+
+協調者假說（P5b/P5c 把 PG 之 UTF-8 資料複製進 MSSQL varchar，複製流程本身才是問題根源）**已被排除**：問題根因在 entity **原始型別宣告**（`ob-pool-data.entity.ts:55` 等），與資料如何寫入無關——即使資料是透過正式 ETL pipeline（非測試複製）寫入，只要值的中文字元數超過宣告長度之半，MSSQL 端一樣會截斷/報錯。测試複製流程只是**提前暴露**了這個一直存在、尚未被真實生產資料觸發過的缺陷（因 MSSQL 尚未上生產）。
+
+### 9.5 影響面與修復方法論
+
+**已直接驗證受影響**：`ob_pool_data`／`ob_pool_data_list`（各 ~20+ 欄）、`ob_emphire`（4 欄）。**其餘 10 個同產生器產出之 entity**（`ob_calendar`／`ob_tier`／`ob_dept_pct`／`ob_empl_set`／`ob_levelcard_*`／`ob_code_df`／`ob_list_definition`）**理論上同構受影響，範圍待系統性掃描確認**（非本次逐一人工核對，因產生器邏輯一致，適合機械式掃描而非人工列舉，以免遺漏）。
+
+**確認不影響**：計分/分派/CR 決策路徑讀取之欄位（`spec_tp`／`loan_rate`／`year_produ`／`month_cnt`／`dept_id`／`emplid` 等皆為代碼/數值型或 legacy 本就宣告 `varchar` 之欄位），P5c/P5h 之 10 欄核心比對結果不受影響——**確認非 cutover-blocker**。
+
+**推薦修復方法論**（機械式、非逐欄手改，降低遺漏風險）：
+1. 於 `column-types.ts` 新增 `nvarcharColumnType(length)` dialect-aware helper（mssql=`'nvarchar'`／pg=`'varchar'`／sqlite=`'text'`），比照既有 `longTextColumnType` 之成熟模式。
+2. 修改 `parse-ob-schema.mjs::mapType()`：`nvarchar` 與 `varchar` 不再輸出相同結果——來源 `nvarchar(N≤255)` 改輸出參照 `nvarcharColumnType`，來源 `varchar(N≤255)` 維持現行 literal `'varchar'`。
+3. 重跑產生器對 `reference/TableSchema/OB/*.sql` 全部 13 個來源檔案，比對新舊輸出差異，取得**完整、無遺漏**之受影響欄位清單（取代人工列舉）。
+4. 新增 MSSQL baseline migration，對受影響既有欄位執行 `ALTER COLUMN ... NVARCHAR(N)`。
+5. 比照既有 `I-MSSQL-VARCHAR-ENCODING-01`（AD-E07-39）之 test-first 實驗精神，先以真實中文長字串驗證修復後可正確往返（round-trip），再推廣套用。
+
+### 9.6 範圍歸屬與是否需使用者裁示
+
+**使用者已裁示「varchar 自主做」**——本項不需另行業務裁示，architect 裁定完成後直接交付 tdd-implementation 依 §9.5 方法論執行。**非 cutover-blocker**（已確認不影響核心 10 欄比對），可與 cutover 準備平行推進，但因屬**真實資料完整性風險**（而非僅測試假象），**建議排入 cutover 前完成**，而非無限期擱置。
+
+新增不變式 `I-MSSQL-NVARCHAR-DISPLAY-01`（見 §6）。
