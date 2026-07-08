@@ -1254,3 +1254,49 @@ last_updated: 2026-07-08
 - **影響**：若 MSSQL baseline 確實遺漏此約束，I-CC-JOIN-CARD-01（JOIN 基數 ≤1:1 保證 COUNT 不因 JOIN 膨脹）於 MSSQL 上僅依賴 fixture 資料紀律（測試/種子資料不刻意製造重複 `source_customer_no`），而非資料庫層防線；若未來真實 ETL（P4d 56 節點 pipeline）之 UPSERT 邏輯出現 bug 導致重複列，MSSQL 上不會被資料庫約束攔截，而 PG 上會立即因 UNIQUE 違反而報錯（訊號不對稱）。
 - **建議**：`infrastructure/AD-E07-42-P3a-test.md` §一 `GATE-004` 已設計決策關卡直接查詢 `sys.indexes`/`sys.key_constraints` 確認。若確認不存在，建議 system-architect 評估是否需要補一支收尾 migration 補齊此約束（與 P3a 範圍無關，屬 P4/baseline 收尾項）。
 - **風險等級**：低（P4d 之 target-load UPSERT 邏輯已有自身去重機制把關，此約束為資料庫層第二道防線而非唯一防線；純屬待查證的環境事實缺口，非功能性風險）
+
+## MSSQL 全面遷移 P3b 風險與待決問題（AD-E07-42，2026-07-08 新增，P3 第二片，本 AD §6.1 明文「風險最高單一區塊」）
+
+> 完整測試設計見 [infrastructure/AD-E07-42-P3b-test.md](infrastructure/AD-E07-42-P3b-test.md)。本節彙整 P3b（Stage 2~3 計分 raw SQL 引擎移植）範圍內識別之風險；3c 比例分派／3d CR 優先分派／3e `fn_calc_tier_level` 收尾之風險留待各自測試設計文件記錄。
+
+### R-MSSQL-P3B-01（🔴🔴 高，test-designer 全新查證出之隱蔽架構退化缺口，AD 完全未提及，同型於 P3a/P1c/P2b 已反覆出現之 DISPATCH 陷阱）：`resolveStage2to4Strategy` 現行二元-ish gate 使 `DB_TYPE='mssql'` 靜默落入 in-memory JS 執行路徑而非 SQL 下推
+
+- **問題**：`assignment-run-pipeline.service.ts:174-180` 現行邏輯 `DB_TYPE==='postgres' → 'pushdown'；否則依 ASSIGNMENT_PIPELINE_V2 選 'v2Inmemory'/'v1Inmemory'`。`DB_TYPE='mssql'` 落入 else 分支。與 P3a/P1c/P2b 已知陷阱不同之處：本站點**不會拋錯**（`executeV2` 為 DB-agnostic 純 TypeORM repo 查詢，可在 MSSQL 上正常執行且計分結果正確），純屬「功能正確但違反 I-NOLOAD-01 架構意圖（re-hydrate 全 pool 回 heap）」之隱蔽缺口，不會被任何功能正確性測試揪出，僅能靠明確 spy 呼叫路徑之 DISPATCH 測試發現。
+- **影響**：MSSQL 生產環境下若此缺口未修復，月跑會持續以 in-memory 全量載入方式執行（而非 SQL 下推），在大規模資料量下重現 P3 系列意圖解決之效能/記憶體問題（呼應 `project_monthly_run_inprocess_execution.md` 記錄之历史 OOM 教訓）。
+- **建議**：`infrastructure/AD-E07-42-P3b-test.md` §二 DISPATCH 已設計 4 案 MUST-FIX 守門（對現行未修改程式碼刻意設計為紅燈），要求 `Stage2to4Strategy` 型別升級為三態（`pushdownPg`/`pushdownMssql`/`v1Inmemory`/`v2Inmemory` 之明確區分）。
+- **風險等級**：高（不影響功能正確性，但直接違反 P3 系列最核心之架構目標 I-NOLOAD-01；且因不拋錯、不產生錯誤資料，極易在 code review 或功能測試中被忽略，只能靠專門設計的 spy 測試攔截）
+
+### R-MSSQL-P3B-02（🔴🔴 高，AD 已提及風險存在但未點出具體語意區分，易致誤判為需要全新設計）：三處 `~ '^[0-9]+$'` 正則站點語意與 P3a year-above 站點不同，可直接複用 P4a 已驗證公式
+
+- **問題**：AD §2.2 表格將 `SAFE_INT_CUS_SEX`/`IS_PERSONAL_GATING`/EDUCAT_BACK `numExpr` 三處標「風險：高」，但未明確指出這三處與 P3a year-above 站點（`^[0-9]+` 無錨點前導擷取）語意層級不同——本三處皆為 `^[0-9]+$`（含 `$` 錨點，全字串驗證），與 P4a `type-cast-handler-mssql.ts` 已驗證之 `getValidationRegex` 手法（`NOT LIKE '%[^0-9]%'` + `LEN(x)>0` + `TRY_CAST`）屬**同一語意層級**，理論上可直接複用而非如 P3a 般自行推導 `PATINDEX` 新公式。若 tdd-implementation 因 AD「高風險」標籤誤判為需要重新設計，會產生不必要之重工，且重新設計反而可能重新踩 P4a 已解決之空字串陷阱。
+- **影響**：若誤解此區分，可能導致額外開發成本；反之若正確複用但未逐一驗證三處各自實際輸入（原始欄位 vs `COALESCE(NULLIF(...),'1')` 包裝 vs 巢狀 `CASE` 補零字串），仍可能遺漏各站點特有邊界（如 EDUCAT_BACK 之非數字補零字串 `'AB'`）。
+- **建議**：`infrastructure/AD-E07-42-P3b-test.md` §三/四/五/六 REGEX-SAFESEX/GATING/EDUCAT/META 四群組已明確記錄語意區分，並針對三處各自組合輸入逐一設計邊界案例（合計 18 案）。
+- **風險等級**：中高（主要為認知/效率風險，非功能正確性風險；若複用得當，三處轉換之技術難度低於 AD 標籤暗示之程度）
+
+### R-MSSQL-P3B-03（🔴 高，test-designer 全新查證出之靜默偏差缺口，AD 提醒「須各自驗證」但未點出具體參數混淆風險）：Stage 2 AGE/CAR_YEAR 之參考日期為「今日」而非 Stage 1 之 `ccWorkdt`，複製貼上易誤植錯誤參數
+
+- **問題**：Stage 2 計分之 AGE（PG `age(cc.date_of_birth)` 單引數，隱含 `CURRENT_DATE`）與 CAR_YEAR（`EXTRACT(YEAR FROM CURRENT_DATE)`）皆以「執行當下實際日期」為參考，JS golden oracle 對應為 `calcAgeYears(dob, new Date())`；Stage 1 篩選之 AGE 站點則明確以 `:ccWorkdt`（月跑工作月）為參考日。AD §2.2 表格文字提醒「須各自轉換與各自驗證，不可假設改一處兩處都對」，但未明講兩處參考日期參數本身不同。P3a 已驗證之 `DATEDIFF(YEAR, dob, @ccWorkdt) - CASE...` 公式**形狀**可複用於本站點，但若複製貼上時未將 `@ccWorkdt` 替換為 `SYSDATETIME()`/`GETDATE()`，會計算出「以月跑工作月為基準的年齡/車齡」而非「以執行當下實際日期為基準」，且**不會拋錯**（兩者皆是合法日期運算，僅數值系統性偏移）。
+- **影響**：跨月份查驗（如月底跑上月資料）時，AGE/CAR_YEAR 計分結果會產生月份相依之系統性偏差，且無明顯錯誤徵兆，可能長期潛伏至業務端發現分數異常才被追查。
+- **建議**：`infrastructure/AD-E07-42-P3b-test.md` §七 AGESCORE-META-001（MUST-FIX 旗艦守門）與 §八 CARYEAR-002 已設計「刻意以非當月工作月驗證計分結果不隨之變動」之測試手法，直接攔截此類參數混淆。
+- **風險等級**：高（靜默錯誤、無崩潰徵兆，且發生條件〔複製貼上既有驗證過的公式〕相當自然，任何未特別留意此細節的實作方式都可能踩入）
+
+### R-MSSQL-P3B-04（🔴🔴 高，test-designer 全新查證出之精度缺陷，AD 未點名此具體站點，屬 FINDING-P4D-01 同型缺陷家族新發生位置）：LOAN_RATE `CAST(o.loan_rate AS numeric)` 無精度宣告，T-SQL 預設精度會四捨五入去除小數
+
+- **問題**：`stage2to4-sql-builder.ts:277` 之 `CAST(o.loan_rate AS numeric)`（PG，無精度宣告）。test-designer 查證 `ob_pool_data.loan_rate` 之 MSSQL baseline 型別為 `numeric(5,2)`（保留 2 位小數）。PG 未限定精度之 `numeric` 對已具型別來源值原樣保留；但 T-SQL 未指定精度之裸 `NUMERIC` 等同 `NUMERIC(18,0)`，若逐字翻譯，會將如 `12.50` 四捨五入為 `13`，使 LOAN_RATE range 計分比對之數值系統性偏移，且不拋錯（靜默數值錯誤）。此為 I-MSSQL-DECIMAL-NORMALIZE-01 揭示之 FINDING-P4D-01（P4d ETL type_cast 節點之數值精度缺陷）同型缺陷家族，僅發生位置從 ETL 節點換成計分 SQL 本身，AD 通用原則已涵蓋但未在 §2.2 表格逐站點清單中點名此具體站點。
+- **影響**：LOAN_RATE 為 F103/F104 計分維度之一，若精度受損，會使部分案件之計分結果落入錯誤 score row（尤其小數邊界附近之 range 比對），影響 card_level/tier_level 進而影響分派結果。
+- **建議**：`infrastructure/AD-E07-42-P3b-test.md` §十四 DECIMAL-LOANRATE-001（MUST-FIX 旗艦守門，已知具體數值斷言：`12.50` 命中 `[12.00,12.99]` 之 score row）+ §一 GATE-004（決策關卡，要求 impl log 記錄採用之精度宣告方式，建議 `NUMERIC(5,2)` 對齊來源欄位）。
+- **風險等級**：高（直接影響計分正確性，且與 FINDING-P4D-01 同型，建議 system-architect 於未來 AD 修訂時，將「裸 `CAST(...AS numeric)` 逐站點掃描」納入標準檢查清單，而非僅在通用原則段落提及）
+
+### R-MSSQL-P3B-05（中，Harness 環境依賴延伸，本輪已依任務指示設計改善方案）：P3b 新增依賴 6 張計分專屬表，延續 P3a「共用既有 dbo 表」策略但新增自建/自清機制
+
+- **問題**：P3b 除 P3a 已依賴之 6 張共用表外，額外依賴 `ob_levelcard_version`/`ob_levelcard_column`/`ob_levelcard_score`/`ob_levelcard_level`/`ob_tier`/`ob_arreturndf_min_cap` 6 張計分專屬表（皆已查證存在於 MSSQL baseline）。P3a impl log 明文記錄「正式 CI 需先 bootstrap dbo baseline 才能執行本套件 DB 案例」為已知盲點。
+- **影響**：若 P3b 沿用 P3a 相同策略（僅共用既有表、不自建），CI 環境若尚未執行過 baseline migration，P3b 套件會無法獨立執行，重演 P3a 已知盲點。
+- **建議**：`infrastructure/AD-E07-42-P3b-test.md` §零 0.2 已依任務指示設計改善方案——`beforeAll` 冪等自建（零 drift DDL，逐字複製 baseline migration 陳述式）+ `afterAll` 條件式清理（本次自建之表 DROP 還原；原本已存在之共用表僅前綴 DELETE，絕不 DROP/TRUNCATE）。§二十三 HARNESS 群組已設計 5 案驗證此機制（含冪等性守門）。**待 tdd-impl 真庫驗證**：本機 CDMP_TEST dbo 平時已含全部 12 表（P1b2/P4 系列已建立），自建分支需人為製造缺表情境才能驗證（比照 P3a impl log「取得真庫證據」之暫時性驗證手法）。
+- **風險等級**：中（已有明確改善設計，剩餘風險僅為「自建分支實際未在真正缺表環境下驗證過」之執行面待辦，非設計缺陷）
+
+### R-MSSQL-P3B-06（低-中，開放式決策點，AD 未涉及，架構上留給下游決定）：`resolveColumnSource` 之 `to_jsonb` fallback 改為 TS 端 schema 檢查後，函式簽章需調整以容納非同步 IO 結果
+
+- **問題**：現行 `resolveColumnSource(columnName, cardType)` 為同步純函式。I-MSSQL-DYNAMIC-FALLBACK-01 要求 fallback 分支於 SQL 生成前以 `INFORMATION_SCHEMA.COLUMNS` 查詢決定欄位存在性，此查詢為非同步 IO，與現行函式簽章不相容，AD 未具體規定簽章調整方式。
+- **影響**：純屬 HOW 層級實作細節，不影響業務語意（幽靈欄位仍應產生 `+0`，BR-F103-08 語意不變），但若 tdd-implementation 選型不當（如逐欄查詢造成 N+1），會產生非預期效能開銷。
+- **建議**：`infrastructure/AD-E07-42-P3b-test.md` §0.4 已列出至少兩種可行選項（呼叫端 `async` 預查 + 第三參數注入 / 模組層級快取單例），不預設答案，§一 GATE-002 要求 tdd-implementation 於 impl log 記錄實際選擇。§七 FALLBACK 群組測試案例設計為純黑盒行為驗證，不綁定簽章形狀。
+- **風險等級**：低-中（架構授權之彈性，主要風險為「若未於 impl log 記錄選擇，未來讀者難以追溯」之文件紀律風險，非功能正確性風險）
