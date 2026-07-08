@@ -508,6 +508,17 @@ describe('P3b DISPATCH — resolveStage2to4Strategy 三態（MUST-FIX）', () =>
     svc.versionRepo = { find: async () => [{ card_type: 'ZP3BD', card_version: CARD_VER, status: 'active' }] };
     svc.resultRepo = resultRepo;
     svc.dataSource = ds;
+    // AD-E07-42 P3c：executeStage2to3PushdownMssql 已擴為含 Stage 3/4 比例分派鏈（clearStage3Fields +
+    //   runStage3to4RationSqlMssql）→ 需額外提供 calendarRepo / deptPctRepo / emplSetRepo / rationWarnings
+    //   相依（本測試聚焦「計分下推真實寫入 score」，比例分派輸入皆空 → 不影響 score 斷言）。
+    svc.calendarRepo = {
+      createQueryBuilder: () => ({
+        select: () => ({ where: () => ({ getRawMany: async () => [] }) }),
+      }),
+    };
+    svc.deptPctRepo = { find: async () => [] };
+    svc.emplSetRepo = { find: async () => [] };
+    svc.rationWarnings = [];
     // active version 需含 999001，改以 loadCardDef 直接餵；此處以私有方法路徑證明下推被呼叫。
     const rows = await svc.executeStage2to3PushdownMssql([{ list: { list_no: L, card_type: 'ZP3BD' }, inserted: 1 }], '202606', RUN_ID);
     expect(Array.isArray(rows)).toBe(true);

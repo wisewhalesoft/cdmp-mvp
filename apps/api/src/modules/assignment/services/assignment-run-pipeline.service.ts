@@ -21,6 +21,8 @@ import {
   runStage2and3SqlMssql,
   fetchPoolDataColumnsMssql,
 } from '@/modules/assignment/stage1/stage2to4-sql-executor-mssql';
+// AD-E07-42 P3c：Stage 3/4 比例分派 MSSQL 下推平行版（DB_TYPE='mssql' 走此路，I-NOLOAD-01）。
+import { runStage3to4RationSqlMssql } from '@/modules/assignment/stage1/stage3to4-ration-sql-mssql';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
@@ -475,9 +477,10 @@ export class AssignmentRunPipelineService {
         );
         stage4ResultsPersisted = true;
       } else if (strategy === 'pushdownMssql') {
-        // AD-E07-42 P3b：MSSQL Stage 2~3 計分下推（score/card_level/tier_level）。
-        //   Stage 3c/3d/3e（比例分派 / CR / tier 收尾）之 MSSQL 化屬 P3c/P3d 範圍，尚未移植 →
-        //   本路徑僅補計分，dept_id/emplid/assignday 暫留 NULL（不呼叫 PG-only ration/CR SQL）。
+        // AD-E07-42 P3b+P3c：MSSQL Stage 2~3 計分下推 + Stage 3/4 比例分派下推
+        //   （score/card_level/tier_level + dept_id/emplid/emplid_deptid/assignday）。
+        //   Stage 3d/3e（CR 優先分派 / tier 收尾）之 MSSQL 化屬 P3d，尚未移植 → 本路徑刻意不呼叫
+        //   PG-only 之 runCrPrioritySql（is_cr 由 Stage 1 帶入後保留；DISPATCH-003）。
         stage4Results = await this.executeStage2to3PushdownMssql(
           stage1WrittenLists,
           ym,
@@ -1101,14 +1104,21 @@ export class AssignmentRunPipelineService {
   }
 
   /**
-   * AD-E07-42 P3b：MSSQL Stage 2~3 計分下推（score / card_level / tier_level）。
+   * AD-E07-42 P3b+P3c：MSSQL Stage 2~4 計分 + 比例分派下推。
    *
-   * 對每份「Stage 1 已 INSERT 列」之 list，以 MSSQL `runStage2and3SqlMssql` 補計分（消 re-hydrate heap，
-   * I-NOLOAD-01）。**範圍限 P3b**：Stage 3c（比例分派）/ 3d（CR）/ 3e（tier 收尾）之 MSSQL 化屬
-   * P3c/P3d，尚未移植 → 本方法**不**呼叫 PG-only 之 clearStage3Fields / runCrPrioritySql /
-   * runStage3to4RationSql（逐字翻譯前對 MSSQL 執行會語法錯或語意偏差）；dept_id/emplid/assignday
-   * 暫留 Stage 1 寫入之 NULL。fallback schema 檢查一次性查回 ob_pool_data 欄位集合共用予各 list
-   * （FALLBACK-005 N+1 禁止）。最後讀回有界子集供快照 payload。
+   * 對每份「Stage 1 已 INSERT 列」之 list，以 MSSQL 三步下推（消 re-hydrate heap，I-NOLOAD-01）：
+   *   ① Stage 2~3 計分：`runStage2and3SqlMssql`（score / card_level / tier_level，P3b）。
+   *   ② Stage 3 前清除：`clearStage3Fields`（純 ANSI，PG/MSSQL 共用，DISPATCH-002 真庫驗證；
+   *      dept_id/emplid/emplid_deptid/assignday=NULL，保留 is_cr，重跑安全護欄）。
+   *   ③ Stage 3/4/ASSIGNDAY 真實比例分派：`runStage3to4RationSqlMssql`（P3c，dept ration + empl
+   *      ration + ASSIGNDAY 千分比；案件池 WHERE is_cr<>'Y' 扣量 I-CR-DEDUCT-01）。
+   *
+   * **範圍限 P3b+P3c**：3d（CR 優先分派 `runCrPrioritySql`）/ 3e（tier 收尾）之 MSSQL 化屬 P3d，
+   * 尚未移植 → 本方法**刻意不**呼叫 PG-only 之 `runCrPrioritySql`（逐字對 MSSQL 執行會語法錯，
+   * DISPATCH-003 負向守門）；is_cr 由 Stage 1 帶入後保留（無 CR 前置動態指派）。經 P3c 後
+   * mssql 月跑之 dept_id/emplid/emplid_deptid/assignday 不再恆 NULL（DISPATCH-005 DoD）。
+   * fallback schema 檢查一次性查回 ob_pool_data 欄位集合共用予各 list（FALLBACK-005 N+1 禁止）。
+   * 最後讀回有界子集供快照 payload。
    */
   private async executeStage2to3PushdownMssql(
     stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }>,
@@ -1118,6 +1128,9 @@ export class AssignmentRunPipelineService {
     const allColumns = await this.columnRepo.find();
     const allScores = await this.scoreRepo.find();
     const allVersions = await this.versionRepo.find({ where: { status: 'active' } });
+
+    // P3c：ASSIGNDAY 工作日千分比（與 PG 路徑 / Stage 0 試算同源，I-RUN-EST-01）。
+    const workingDays = await this.loadWorkingDayRatios(ym);
 
     const manager = this.dataSource.manager;
     // I-MSSQL-DYNAMIC-FALLBACK-01 / FALLBACK-005：一次性查 ob_pool_data 欄位集合（跨 list 共用）。
@@ -1141,6 +1154,7 @@ export class AssignmentRunPipelineService {
             )
           : [];
 
+      // ① Stage 2~3 計分（P3b）。
       const ctx: Stage2to4ListContext = {
         runId,
         listNo: list.list_no,
@@ -1151,6 +1165,38 @@ export class AssignmentRunPipelineService {
         ym,
       };
       await runStage2and3SqlMssql(manager, ctx, poolColumns);
+
+      // ② Stage 3 前清除（dept_id/emplid/assignday=NULL，保留 is_cr）。純 ANSI，PG/MSSQL 共用。
+      //    ⚠️ 刻意**不**呼叫 PG-only 之 CR 前置下推（P3d 範圍；DISPATCH-003 負向守門）。
+      await clearStage3Fields(manager, { runId, listNo: list.list_no });
+
+      // ③ P3c Stage 3/4/ASSIGNDAY 真實比例分派（案件池 WHERE is_cr<>'Y'，扣量 I-CR-DEDUCT-01）。
+      const deptRations: DeptRation[] = (
+        await this.deptPctRepo.find({
+          where: { project_workym: ym, list_no: list.list_no },
+        })
+      )
+        .map((d) => ({ obdeptid: d.obdeptid, ration: Number(d.ration) }))
+        .filter((d) => d.ration > 0);
+      const emplRations: EmplRation[] = (
+        await this.emplSetRepo.find({ where: { list_no: list.list_no } })
+      )
+        .map((e) => ({
+          emplid: e.emplid,
+          deptid_m: e.deptid_m,
+          ration: Number(e.ration),
+        }))
+        .filter((e) => e.ration > 0);
+
+      const warnings = await runStage3to4RationSqlMssql(manager, {
+        runId,
+        listNo: list.list_no,
+        ym,
+        deptRations,
+        emplRations,
+        workingDays,
+      });
+      this.rationWarnings.push(...warnings);
     }
 
     if (stage1WrittenLists.length === 0) return [];
