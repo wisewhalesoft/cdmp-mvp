@@ -773,10 +773,16 @@ export class AssignmentRunReportService {
   /**
    * 進件日 → YYYY/MM/DD（斜線分隔字串）。原始為 Date 物件或 'YYYY-MM-DD' 字串（I-EXP-FMT-01）。
    *
-   * ⚠️ PostgreSQL `date` 欄位經 node-postgres 解析為**本地時區午夜** Date 物件
-   *    （非 UTC）。故 Date 分支須用本地 getter（getFullYear/getMonth/getDate），
-   *    否則 UTC+8 環境 `'2025-03-01'` 讀回 `2025-03-01T00:00+08:00` → getUTCDate() 漂移為 02-28
-   *    （feedback_typeorm_between_timezone 同源教訓）。字串分支取前 10 碼。
+   * ⚠️ AD-E07-43 P5h 更正（原註解誤述 PG 行為）：appl_date 於 PG 為 `timestamp`、MSSQL 為
+   *    `datetime2`（dateColumnType），非 `date`；且 appl_date 恆帶非午夜時分（P5c §5）。
+   *    - PG：node-postgres 將 `timestamp without time zone` 解析為 Date 時，其**本地時區分量**
+   *      即為 DB 儲存之 wall-clock（'2015-05-18 15:24' → 本地 15:24），故 Date 分支用本地
+   *      getter（getFullYear/getMonth/getDate）取得正確 wall-clock 日期。
+   *    - MSSQL（P5h：連線層 useUTC:true）：tedious 以 **UTC 分量**建構 Date（UTC 分量＝wall-clock），
+   *      此時應以 UTC getter 取 wall-clock 日期。兩引擎之 wall-clock 落在不同分量，**無單一 getter
+   *      對兩者皆正確**（改任一側 getter 會使另一引擎於邊界時分〔PG <08:00 / MSSQL ≥16:00〕漂移），
+   *      故本連線層切片刻意不改此匯出 Date 分支之 getter；根治方向＝於 SQL 端格式化為字串走字串分支
+   *      （P5h impl log 列為 follow-up，非阻擋）。字串分支取前 10 碼，不受此影響。
    */
   private formatApplDate(v: Date | string | null | undefined): string {
     if (v === null || v === undefined) return '';

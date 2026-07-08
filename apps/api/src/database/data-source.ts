@@ -75,6 +75,9 @@ const AppDataSource =
           encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
           trustServerCertificate:
             (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',
+          // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（CLI migration:run 連線；
+          //   與主應用/worker 連線語意一致，避免 date/datetime2 讀寫時區分歧）。理由同 app.module.ts。
+          useUTC: true,
         },
       })
     : new DataSource({

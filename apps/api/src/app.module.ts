@@ -123,6 +123,11 @@ const ALL_ENTITIES = [
               encrypt: configService.get<string>('DB_MSSQL_ENCRYPT', 'true') === 'true',
               trustServerCertificate:
                 configService.get<string>('DB_MSSQL_TRUST_CERT', 'true') === 'true',
+              // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true。若未設，TypeORM SqlServerDriver
+              //   會覆寫 tedious 內建 true 預設為 false → date/datetime2 讀寫改本地時區分量，
+              //   使 getUTC*() 正規化於 UTC+ 時區（Asia/Taipei）取到前一日（assignday −1）。
+              //   設 true 讓「DB Date 回 UTC 午夜」之全庫既有慣例於 MSSQL 成立、與 PG 對齊。
+              useUTC: true,
             },
             entities: ALL_ENTITIES,
             synchronize: configService.get<string>('NODE_ENV') !== 'production',

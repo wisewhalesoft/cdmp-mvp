@@ -273,7 +273,10 @@ async function main(): Promise<void> {
     username: MSSQL.username,
     password: MSSQL.password,
     database: MSSQL.database,
-    options: { encrypt: MSSQL.encrypt, trustServerCertificate: MSSQL.trustServerCertificate },
+    // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：本 script 自建 DataSource，繞過主應用 forRootAsync，
+    //   故須比照 4 個生產連線站點顯式補 useUTC:true——否則 TypeORM SqlServerDriver 仍會覆寫為 false，
+    //   ob_calendar.calendar_date 讀回本地午夜 Date → assignday 仍 −1，無法驗證修法。
+    options: { encrypt: MSSQL.encrypt, trustServerCertificate: MSSQL.trustServerCertificate, useUTC: true },
     requestTimeout: 300000,
     connectionTimeout: 60000,
     entities: [

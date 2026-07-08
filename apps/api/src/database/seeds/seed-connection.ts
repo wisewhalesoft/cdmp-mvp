@@ -39,6 +39,9 @@ export function seedConnectionOptions(): Record<string, unknown> {
       options: {
         encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
         trustServerCertificate: (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',
+        // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（seed 腳本連線；
+        //   與主應用/worker/CLI 連線語意一致）。理由同 data-source.ts。
+        useUTC: true,
       },
     };
   }

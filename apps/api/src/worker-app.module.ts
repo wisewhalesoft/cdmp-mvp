@@ -53,6 +53,9 @@ import { AssignmentWorkerModule } from './modules/assignment/assignment-worker.m
               encrypt: configService.get<string>('DB_MSSQL_ENCRYPT', 'true') === 'true',
               trustServerCertificate:
                 configService.get<string>('DB_MSSQL_TRUST_CERT', 'true') === 'true',
+              // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（worker 執行月跑 Stage 4 ASSIGNDAY，
+              //   此連線為 assignday 讀 ob_calendar.calendar_date 的實際生產路徑）。理由同 app.module.ts。
+              useUTC: true,
             },
             entities,
             synchronize: configService.get<string>('NODE_ENV') !== 'production',
