@@ -5,7 +5,7 @@ feature-id: N/A（非 F-numbered feature；資料庫平台全面遷移之收官�
 source-stories: N/A（延續 AD-E07-38~42 之使用者拍板三項硬約束；P5 為 cutover 前最終驗證與簽核關卡）
 epic: cross-cutting（跨全模組之資料庫平台遷移，非單一 E07 業務 epic）
 module: Infrastructure — Database Platform Migration（PostgreSQL → MSSQL，Phase 5 of 6：全量 CI + 業務簽核，非大量新 code）
-version: "1.1"
+version: "1.2"
 date: 2026-07-08
 status: approved
 author: system-architect
@@ -20,9 +20,12 @@ invariants:
   - I-MSSQL-CI-BOOTSTRAP-01（新增）
   - I-MSSQL-SIGNOFF-GATE-01（新增）
   - I-ETL-ATOMIC-LOAD-01（新增，v1.1，ATOMIC 資料完整性風險修法目標原則）
+  - I-MSSQL-DATE-TZ-01（新增，v1.2，MSSQL date/datetime/datetime2/smalldatetime/time 連線層 useUTC 一致性原則）
 ---
 
 > **🔴 v1.1 修訂通知（2026-07-08）**：P5b 端對端驗證真庫實測發現 **ATOMIC 資料完整性風險**（潛在封鎖級，兩引擎共通、非本次遷移引入之既有架構缺口）——`target-load-handler`（PG／MSSQL 皆然）之 fullMode/partition_replace 路徑，TRUNCATE/DELETE 先提交、後續單句 INSERT 若因髒資料失敗則不回滾，導致目標表/分區既存生產資料被清空且未重建。新增 **§7** 完整記錄發現、修法評估、範圍歸屬裁定；新增不變式 I-ETL-ATOMIC-LOAD-01；§4 需使用者裁示事項新增第 3 項。
+>
+> **🔴🔴 v1.2 修訂通知（2026-07-08）**：P5c 真實 PG vs MSSQL 逐列比對揭露 **assignday 全部 −1 日之跨引擎 cutover-blocker**（其餘 9 個關鍵欄位含 CR/比例分派全鏈皆 0-diff）。已定位到**逐行原始碼級根因**：TypeORM `SqlServerDriver` 建立 MSSQL 連線池時，若應用程式未顯式設定 `options.useUTC`，會**強制覆寫為 `false`**，蓋過 tedious 函式庫本身 `true` 的內建預設值，導致 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 欄位讀寫改用本地時區分量而非 UTC 分量。新增 **§8** 完整記錄根因鏈、程式碼證據、修法評估、範圍歸屬（新增 P5h／P5i 子切片）；新增不變式 I-MSSQL-DATE-TZ-01；§1 子切片總覽、§4 裁示事項、§5 DoD、§6 不變式表同步更新。
 
 # AD-E07-43：MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）計畫
 
@@ -33,7 +36,7 @@ invariants:
 | Test Designer | §2（P5a/b 技術驗證定義）、§3（MONTHRUN-DIFF/F067 執行方式）、§6（不變式） |
 | TDD Developer | §2（P5a CI bootstrap 修法、P5b 其餘 5 條 pipeline 驗證、P5f 部署 bootstrap）、**§7（ATOMIC 修法，待使用者裁示後啟動）** |
 | DevOps / CI/CD | §2（CI 修法細節）、§5（子切片 DoD） |
-| Product Analyst | §4（需使用者/業務裁示事項，彙整版）、§3（F067 簽核）、**§7（ATOMIC 風險，生產影響評估）** |
+| Product Analyst | §4（需使用者/業務裁示事項，彙整版）、§3（F067 簽核）、**§7（ATOMIC 風險，生產影響評估）**、**§8（assignday −1 日，cutover-blocker）** |
 
 ---
 
@@ -50,11 +53,13 @@ P5 是 cutover（Phase 6）前的最後一道關卡：**不是新業務邏輯開
 ```mermaid
 graph LR
   P5a[P5a CI mssql-specs dbo bootstrap 修法] --> P5b[P5b 其餘 5 條 ETL pipeline MSSQL 驗證 ✅已完成/發現 ATOMIC]
-  P5b --> P5c[P5c MONTHRUN-DIFF 真實跨引擎逐列比對]
-  P5d[P5d datetime2 時區 production 查證] -.業務裁示.-> P5e
-  P5c --> P5e[P5e F067 式業務簽核報告]
+  P5b --> P5c[P5c MONTHRUN-DIFF 真實跨引擎逐列比對 ✅已完成/發現 assignday −1 日]
+  P5c --> P5h[🆕 P5h useUTC 連線層修法 + P5c 重驗 §8]
+  P5h -.吸收裁決.-> P5d[P5d datetime2 時區 production 查證（根因已定位，範圍收斂）]
+  P5h --> P5e[P5e F067 式業務簽核報告]
   P5f[P5f MSSQL 部署 bootstrap 對齊] -.可平行.-> P5e
-  P5g[🆕 P5g ATOMIC 資料完整性修法 §7] -.不阻擋 P5a~f/P5c/P5e，待使用者裁示是否/何時排入.-> P5e
+  P5g[P5g ATOMIC 資料完整性修法 §7] -.不阻擋 P5a~f/P5c/P5e，待使用者裁示是否/何時排入.-> P5e
+  P5i[🆕 P5i varchar byte / nvarchar schema 評估 §8.7] -.獨立分支，不阻擋.-> P5e
 ```
 
 | 子切片 | 一句話定位 | 依賴 | 執行方式 |
@@ -62,9 +67,12 @@ graph LR
 | **P5a** | CI mssql-specs 缺 dbo baseline bootstrap，導致 P3a 等 52 個案例靜默 skip 而非真跑 | 無（可立即開始） | test-designer 定義驗收標準 → tdd-implementation 執行（CI 設定 + 一份測試檔調查） |
 | **P5b** | customer_core 以外之其餘 5 條生產 pipeline，尚未證明能在 MSSQL 端到端跑通 | P5a（需 dbo 有完整 baseline 才能跑） | script/manual（比照 P4d `DISPATCHE2E-001` 手法重用） |
 | **P5c** | 真實觸發一次完整月跑，PG vs MSSQL 逐列比對 score/tier/card/dept_id/emplid/assignday/cr | P5b（月跑需要 `ob_pool_data` 等來源表先有真實資料） | **manual/script**（比照 F101/F102/F104 前例，非新 CI 測試） |
-| **P5d** | tedious datetime2 本機時區儲存，非午夜 `appl_date` 可能使「逾2年清空」邊界與 JS oracle 分歧 | 可與 P5b/P5c 平行進行資料查證 | **manual 查證 + 使用者/業務裁示**（見 §4） |
-| **P5e** | F067 式業務簽核報告產出 + 簽核 | P5c 結果 + P5d 裁示 | architect 產出報告草稿 → **使用者/業務簽核**（見 §4） |
+| **P5d** | tedious datetime2 本機時區儲存，非午夜 `appl_date` 可能使「逾2年清空」邊界與 JS oracle 分歧 | 可與 P5b/P5c 平行進行資料查證；**根因已由 P5h 定位，範圍收斂為「確認 P5h 修法已覆蓋」** | **manual 查證 + 使用者/業務裁示**（見 §4，v1.2 起與 P5h 併同結案） |
+| **P5e** | F067 式業務簽核報告產出 + 簽核 | P5c 結果 + **P5h 完成（assignday 達 0-diff）** + P5d 裁示 | architect 產出報告草稿 → **使用者/業務簽核**（見 §4） |
 | **P5f**（可選、優先度較低） | MSSQL 版一鍵部署 bootstrap，比照 PG 版（`migration:run && seed && seed-datasource && data-seed`） | 無（可平行） | tdd-implementation（機械式腳本工作） |
+| **P5g** | ATOMIC 資料完整性修法（交易包裝，見 §7） | 無（不阻擋，待使用者裁示排程） | tdd-implementation（待核准後啟動） |
+| **🆕 P5h**（🔴 cutover-blocker，優先度最高） | 4 個 MSSQL TypeORM 連線站點補 `useUTC: true`，解決 assignday −1 日；重跑全量 mssql specs + 重驗 P5c | P5c（已完成，提供根因觸發證據） | tdd-implementation（連線設定修改 + 全量回歸 + P5c 重跑），見 §8 |
+| **🆕 P5i**（次要，可另排程） | varchar byte 語意（BIN collation 中文顯示欄溢位風險）評估是否改 `nvarchar` | 無（獨立、不阻擋） | system-architect 設計 → tdd-implementation（若核准 schema 變更），見 §8.7 |
 
 **CI 4 job 全綠**（原待辦第 3 項）不列為獨立子切片，而是**貫穿全 P5 的持續性 DoD**：P5a 完成後應立即達成，其餘子切片進行中須保持不破。
 
@@ -143,9 +151,11 @@ graph LR
 
 | # | 事項 | 為何非 architect 可獨立裁定 | 建議行動 |
 |---|---|---|---|
-| 1 | **datetime2 時區查證（P5d）**：production `ob_pool_data_list.appl_date`（及其他餵入日期邊界判斷之來源欄位）是否帶有非午夜時間分量？MSSQL cutover 後之伺服器/連線時區組態如何設定？ | 需要實際查詢 production 資料庫內容（architect 唯讀評估權限下無法直接存取生產環境資料，且時區組態屬維運/基礎設施決策範疇），且若查證結果為「確有非午夜時間分量」，「逾 2 年清空」邊界的 JS oracle vs MSSQL 分歧影響範圍需業務判斷是否可接受 | 請業務/維運協助查詢一筆或多筆真實 `appl_date` 樣本；若確認皆為午夜（如整批匯入時統一補值），此項可直接結案；若否，需評估分歧筆數規模，決定是否需要調整判定邏輯或接受此已知落差 |
-| 2 | **F067 式業務簽核（P5e）**：MSSQL vs PG 月跑結果比對報告之最終簽核 | 比照本專案一貫做法（F067/F101/F102/F104 皆由業務簽核，非 architect 自行認定「夠好了」） | P5c 完成後由 architect 產出報告草稿，交付簽核 |
+| 1 | **datetime2 時區查證（P5d）**：production `ob_pool_data_list.appl_date`（及其他餵入日期邊界判斷之來源欄位）是否帶有非午夜時間分量？MSSQL cutover 後之伺服器/連線時區組態如何設定？ | 需要實際查詢 production 資料庫內容（architect 唯讀評估權限下無法直接存取生產環境資料，且時區組態屬維運/基礎設施決策範疇）。**v1.2 更新**：P5c 已直接查證 production `appl_date`（真實 115,197 案，100% 非午夜），且 §8 已定位到根因級解法（連線層 `useUTC:true`）；此項裁示範圍**收斂為**「確認 P5h 之 4 站點修法已完整套用、且重跑後 assignday／CR 兩年門檻等邊界案例達 0-diff」，不再需要業務自行查詢樣本或另立時區組態 | P5h 完成後由 architect/tdd-implementation 於重驗報告中一併結案，業務僅需確認驗收結果，無需另行查證 |
+| 2 | **F067 式業務簽核（P5e）**：MSSQL vs PG 月跑結果比對報告之最終簽核 | 比照本專案一貫做法（F067/F101/F102/F104 皆由業務簽核，非 architect 自行認定「夠好了」） | P5c + **P5h**（assignday 修法驗證）完成後由 architect 產出報告草稿，交付簽核 |
 | 3 | **🔴🔴 ATOMIC 資料完整性風險修法（見 §7）**：ETL fullMode/partition_replace 之「TRUNCATE/DELETE 先提交、INSERT 失敗不回滾」導致生產資料清空風險，是否核准修法（推薦：交易包裝）、排入時程（新增 P5g，或提升為獨立 hardening 任務）、修法期間之風險承受度 | 這是**現行 PostgreSQL 生產系統今天就存在的行為改變提案**（失敗語意由「靜默清空」改為「安全失敗、舊資料保留」），影響範圍不限於 MSSQL 遷移本身；是否/何時修、修法期間能否接受現狀風險，屬業務層級之風險接受度判斷，非純技術決策 | 見 §7.4 精簡摘要（可直接帶回使用者） |
+| 4 | **🔴🔴 assignday −1 日 / useUTC 連線層修法（見 §8）**：cutover-blocker，是否核准以「4 個 MSSQL 連線站點補 `useUTC:true`」修正、是否接受此為切換前必修項、修法完成後之驗收條件（重驗 P5c 達 assignday 0-diff） | 這是影響 MSSQL 部署下**全系統** date/datetime2 讀寫語意的連線層設定變更提案，雖是「修正為與 PG 一致」，但仍屬會改變生產資料日期正確性之技術變更，且是否接受「以此驗收條件視為 cutover-ready」屬業務層級之風險/時程判斷 | 見 §8.8 精簡摘要（可直接帶回使用者） |
+| 5 | **varchar byte 語意 / nvarchar schema 評估（見 §8.7，次要，P5i）**：MSSQL BIN collation 下長中文顯示欄位是否改 `nvarchar` | 屬 schema 設計決策，涉及 migration 變更成本與時程排序判斷，非純技術對錯問題（已確認非計分/CR/分派輸入，不影響 cutover-blocker 判定） | 建議獨立排入 P5i、低優先序，不需立即裁示，可與 P5e 簽核平行處理 |
 
 **架構師判斷：其餘 P5 子切片（P5a/P5b/P5f）皆為純技術執行，不需要使用者裁示，可直接推進。**
 
@@ -180,6 +190,18 @@ graph LR
 ### P5f DoD（可選）
 1. MSSQL 版 `npm run bootstrap` 等價流程可對全新 MSSQL 資料庫成功建置（含業務資料表空、參考資料齊全）。
 
+### P5h DoD（🔴 cutover-blocker，見 §8）
+1. 4 個 MSSQL TypeORM 連線站點（`app.module.ts` / `worker-app.module.ts` / `database/data-source.ts` / `database/seeds/seed-connection.ts`）之 `options` 區塊皆顯式加入 `useUTC: true`。
+2. 全量 `*.mssql.spec.ts`（P1/P2/P3/P4/P5b 既有套件）重跑，確認零回歸（含任何未來新增之 date/datetime2 round-trip 靜態案例）。
+3. §8.4 列出之 4 個受影響站點（`stage0-estimate.service.ts`／`assignment-run-pipeline.service.ts::toYmd`／`cr-priority.ts::toYmd`／`emphire-active.util.ts::toYmd`）以既有／新增測試驗證：對 MSSQL `date`/`datetime2` 欄位讀值後之 `getUTC*()` 正規化結果與 PG 端一致（0 偏移）。
+4. 重跑 P5c MONTHRUN-DIFF（至少涵蓋原 6 名單 9,376 案樣本），確認 `assignday` 由 0% 一致率轉為 **100% 一致（0-diff）**，10/10 欄位全數 0-diff（或差異皆為已知可解釋之今日參考日效應，如 §2.3 score）。
+5. 補測 P5c 原未涵蓋之邊界案例（CR 兩年門檻邊界日、`appl_date` 本地時間 < 08:00 之案件），確認 `cr-priority.ts`/`assignment-run-pipeline.service.ts::toYmd` 兩處潛在受影響站點無隱藏偏移。
+6. `assignment-run-report.service.ts::formatApplDate`/`formatAssignday` 之註解更正（現有註解對 PG 行為描述有誤，見 §8.4 附記），本地 getter 用法是否需同步改為 UTC getter 以維持與其餘站點一致之慣例，由 tdd-implementation 於修法時一併評估（非阻擋項，因該路徑之 Date 分支經確認為罕至防禦分支）。
+
+### P5i DoD（次要，可另排程）
+1. 系統性盤點所有中文顯示用途之 MSSQL `varchar(N)` 欄位（`spec_name`/`car_name`/`broker` 已知，需擴大 Grep entity 定義找出其餘）。
+2. 產出「改 `nvarchar`」vs「維持 `varchar` + byte-aware 截斷防禦」之成本/效益比較，交使用者裁示（不阻擋 P5e）。
+
 ### 是否需要 spec-writer（RESOLVED：不需要）
 
 理由與 P1~P4 一致——P5 全範圍皆為「證明既有已核可行為在 MSSQL 上忠實重現」的驗證工作，沒有任何新業務規則、新使用者可見行為。P5c/P5e 雖然涉及業務簽核，但簽核的對象是「既有行為的跨引擎一致性」，不是「新功能的驗收標準」，性質上仍是驗證而非規格定義。P5 比照既有模式，直接 system-architect → test-designer/manual script → tdd-implementation（P5a/P5b/P5f）；P5c/P5d/P5e 為 manual/業務流程，不需要 test-designer/tdd-implementation 參與。
@@ -197,6 +219,7 @@ graph LR
 | **I-MSSQL-CI-BOOTSTRAP-01**（新增） | 本 AD | CI `mssql-specs` lane 執行任何 `*.mssql.spec.ts` 前，必須先完成完整 MSSQL baseline（`migration:run`）；任何會清空/重建共用 `dbo` schema 之測試，必須確保不使同一 CI 執行序中其他 spec 所依賴之 baseline 表消失（自身還原、隔離範圍、或明確排序控制三擇一），不得以「反正 CI 會重跑」為由放任此類副作用 |
 | **I-MSSQL-SIGNOFF-GATE-01**（新增） | 本 AD | Phase 6（cutover）不得在以下兩條件皆滿足前啟動：(a) MONTHRUN-DIFF（P5c）對至少一個完整生產規模月跑顯示 PG/MSSQL 結果一致（差異皆為已記錄、可解釋之邊界案例，非未解釋之不一致）；(b) F067 式業務簽核（P5e）已由使用者/業務利害關係人明確完成，非僅由 architect 或工程團隊自行認定「已足夠好」 |
 | **I-ETL-ATOMIC-LOAD-01**（新增，v1.1） | 本 AD §7 | `target_load` 節點之 fullMode（TRUNCATE+INSERT）與 partition_replace（DELETE+INSERT）路徑，破壞性陳述式（TRUNCATE/DELETE）與其後之 INSERT 必須同屬一個交易；INSERT 失敗時必須完整回滾至破壞性陳述式執行前之狀態（既存資料不得遺失）。此為 PG／MSSQL 兩引擎共通適用之原則，修法須兩引擎對稱落地，不得僅修其一 |
+| **I-MSSQL-DATE-TZ-01**（新增，v1.2） | 本 AD §8 | 任何建構 MSSQL TypeORM `DataSource`/`TypeOrmModuleOptions` 之站點，`options` 區塊必須顯式設定 `useUTC: true`，使 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 型別之讀寫（tedious `readDate`/`readDateTime`/`readDateTime2`/`readSmallDateTime`/`readTime` 與對應寫入路徑）一致採 UTC 分量建構/解析，與 PG（node-postgres `date` 型別預設回傳 UTC 午夜 Date 之既有慣例）語意對齊。新增任何 MSSQL 連線建構點（TypeORM 或直接使用 `mssql`/tedious 套件）時須比照套用；凡「讀取 DB Date 欄位後以 `getUTCFullYear/getUTCMonth/getUTCDate` 正規化為 'YYYY-MM-DD' 字串」之程式碼（即本專案既有主流慣例，見 §8.4），其正確性前提即為本不變式成立 |
 
 ---
 
@@ -250,3 +273,105 @@ TRUNCATE/DELETE 為獨立陳述式、**先提交**；後續 INSERT 若因 NOT NU
 > **成本**：核心修法（交易保護）預估 3–5 人天（兩引擎對稱、範圍明確）；後續強化（前置驗證）另估，非本次必要。
 >
 > **是否阻擋目前進度**：不阻擋。P5 既定的 CI/驗證/簽核工作可依原計畫推進；此修法建議另立子切片（P5g）追蹤，但何時排入、是否要在正式切換 MSSQL 前完成，請裁示。
+
+---
+
+## 8. 🔴🔴 assignday 全部 −1 日（P5c 發現，cutover-blocker，連線層根因）
+
+### 8.1 現象（真庫實測佐證，3 樣本一致）
+
+P5c 真實 PG vs MSSQL 逐列比對（`AD-E07-43-P5c-impl.md`，115,197 案生產月跑之案件集釘選、共 3 樣本 198／9,376／27,796 案）：其餘 9 個關鍵欄位（`score`/`card_level`/`tier_level`/`is_cr`/`cr_id`/`cr_nm`/`dept_id`/`emplid`/`emplid_deptid`）逐列 **0-diff**（含 CR 全鏈 1,996 案、比例分派全鏈），唯 `assignday` **全部 100% 一致地早一天**（PG `2026-07-01` → MSSQL `2026-06-30`）。`dept_id`/`emplid` 分派本身正確（0-diff），僅日期標籤系統性 −1，證明是**單純的日期正規化缺陷**、非分派演算法錯誤。
+
+### 8.2 根因鏈（逐行原始碼證據，非經驗推論）
+
+本次採**原始碼追蹤**方式定位根因（非僅依賴 P5c 之執行期探測），三層證據鏈完整：
+
+1. **驅動層讀取行為（tedious）**：`node_modules/tedious/lib/value-parser.js:752-763`（`readDate` 函式）：
+   ```js
+   function readDate(buf, offset, useUTC) {
+     ...
+     if (useUTC) {
+       return new Result(new Date(Date.UTC(2000, 0, days - 730118)), offset);
+     } else {
+       return new Result(new Date(2000, 0, days - 730118), offset);  // 本地時區分量
+     }
+   }
+   ```
+   `useUTC:true` → 建構 UTC 午夜 Date（與 PG 一致）；`useUTC:false` → 建構**本地時區午夜** Date（P5c 實測之現象根源）。`readDateTime`/`readDateTime2`/`readSmallDateTime`/`readTime`（同檔 664-786 行）皆為同一模式，故此缺陷**不限於 `date` 型別**，`datetime2`（如 `appl_date`）之讀寫亦受同一開關支配。
+
+2. **tedious 函式庫本身預設值**：`node_modules/tedious/lib/connection.js:485` — tedious 自身的內建預設為 **`useUTC: true`**。若無任何上層覆寫，tedious 原生行為即與 PG 一致、不會有此缺陷。
+
+3. **🔴 真正根因：TypeORM `SqlServerDriver` 強制覆寫為 `false`**：`node_modules/typeorm/driver/sqlserver/SqlServerDriver.js:918-924`（`createPool()`）：
+   ```js
+   // set default useUTC option if it hasn't been set
+   if (!connectionOptions.options) {
+       connectionOptions.options = { useUTC: false };
+   }
+   else if (!connectionOptions.options.useUTC) {
+       Object.assign(connectionOptions.options, { useUTC: false });
+   }
+   ```
+   **只要應用程式的 `DataSourceOptions.options` 未顯式設定真值的 `useUTC`，TypeORM 會主動把它設為 `false`**——這是 TypeORM 自己的預設策略，**蓋過**了 tedious 本身更安全的 `true` 預設。經逐一檢查本專案 4 個建構 MSSQL TypeORM 連線的站點（`apps/api/src/app.module.ts:122-126`、`apps/api/src/worker-app.module.ts:52-56`、`apps/api/src/database/data-source.ts:74-78`、`apps/api/src/database/seeds/seed-connection.ts:39-42`），**全部只設定 `encrypt`/`trustServerCertificate`，未設定 `useUTC`**——故全部落入 TypeORM 的 `false` 覆寫。這就是 P5c 實測「MSSQL date 欄回本地午夜 Date、`getUTCDate()` 讀到前一日」現象的**完整、可逐行覆核的根因**。
+
+### 8.3 修法評估（三候選 a/b/c）
+
+| 選項 | 做法 | 正確性/涵蓋面 | 是否需動凍結檔 | 成本 |
+|---|---|---|---|---|
+| **(a) 逐檔案改讀取端正規化邏輯** | 把 `stage0-estimate.service.ts`/`assignment-run-pipeline.service.ts` 內 `getUTC*()` 改為本地 getter（`getFullYear/getMonth/getDate`），使其與「MSSQL 現況回本地午夜 Date」的行為相容 | **不完整**：僅覆蓋協調者原點名之 2 處；Grep 另找出至少 4 個同構風險站點未覆蓋（見 §8.4），且未來新寫程式碼仍可能重蹈覆轍（連線層事實本身仍是錯的） | **是**（凍結檔） | 中（多檔案分頭改，且需個別驗證正確性） |
+| **(b) 讀取端一律轉字串** | 所有日期欄位讀取後立即轉 `'YYYY-MM-DD'` 字串，driver 無關 | 完整但成本高：需逐一改寫 TypeORM entity 屬性存取/QueryBuilder 別名/raw SQL executor 輸出，且不解決寫入方向 | 是（多處） | 高 |
+| **(c) 🔴 連線層 `useUTC: true`** | 於 4 個 MSSQL 連線建構站點之 `options` 顯式補 `useUTC: true` | **完整**：一次修正涵蓋所有現在與未來經由主應用 TypeORM 連線的 date/datetime/datetime2/smalldatetime/time 讀寫（含尚未觸發症狀的潛在站點），且讀寫方向同步修正 | **否**（凍結檔零修改） | 極低（4 處各 1 行設定） |
+
+### 8.4 架構師推薦：(c) 連線層 `useUTC: true`，理由與影響面盤點
+
+**推薦 (c)**，且評估後認為這不只是「成本最低」的選項，更是**唯一能對齊本專案既有程式碼慣例、且完整覆蓋影響面**的選項：
+
+1. **本專案既有程式碼的主流慣例，本來就假設「DB 回傳 UTC 午夜 Date」**——這不是新規範，而是既有事實。Grep `getUTCFullYear|getUTCMonth|getUTCDate` 找到以下站點皆是「讀取 DB Date 欄位 → 用 UTC getter 正規化為 YYYY-MM-DD 字串」的同構模式，且各自著有明確註解表明是刻意為之（引用既有 `feedback_typeorm_between_timezone` 教訓）：
+   - `apps/api/src/modules/assignment-list/stage0-estimate.service.ts`（`toUtc()`/`toUtcDate()` 等 4 處，Stage 0 試算，**凍結檔**，原 P5c 已點名）
+   - `apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts:1850-1859`（模組級 `toYmd()`，供 **CR 失效規則之「逾 2 年清空」邊界比較**使用，**凍結檔，本次新發現、原 P5c 報告未點名**）
+   - `apps/api/src/modules/assignment/stage1/cr-priority.ts:89-99`（`toYmd()`，供 **CR 優先指派**之 `appl_date`/`resign_date` 比較使用，**本次新發現**）
+   - `apps/api/src/common/emphire/emphire-active.util.ts:21-31`（`toYmd()`，**全系統在職判定 single source of truth**，用於部門比例/個別比例/Stage 0/處長轄區等多處，**本次新發現，影響面最廣**）
+
+   這 4 個站點（含 2 個凍結檔）目前在 MSSQL 上**理論上都帶有與 assignday 同一根因的偏移風險**，只是 P5c 之 27,796 案 CR 樣本恰好未踩到症狀——原因是 `date` 型別（如 `ob_calendar.calendar_date`，恆為午夜）100% 觸發偏移，但 `datetime2` 型別（如 `appl_date`，恆帶非午夜時分，P5c §5 已證實 production 100% 非午夜）僅在**本地時刻早於 08:00**（Asia/Taipei，UTC+8）時才會因減 8 小時而跨日；本次樣本未覆蓋到此邊界時段的案件，不代表邏輯無風險，僅是**尚未被觸發**的潛伏缺陷。**這是採用 (c) 而非逐點補丁 (a) 的關鍵理由**：(a) 只堵住已知會噴血的 2 個站點，(c) 一次性讓「假設 DB 回 UTC 午夜」這個**本專案既有、正確、廣泛使用的慣例**在 MSSQL 上成立。
+
+2. **發現一處反向慣例、建議一併複查（非阻擋）**：`apps/api/src/modules/assignment/services/assignment-run-report.service.ts:758-794`（`formatAssignday`/`formatApplDate`，匯出格式化用）採**本地 getter**（`getFullYear/getMonth/getDate`），其註解宣稱「PostgreSQL `date` 欄位經 node-postgres 解析為本地時區午夜 Date（非 UTC）」——此描述與 P5c 之實測結果（PG 端 `getUTCDate()` 正確、**證明 node-postgres 回傳 UTC 午夜**）不符，應屬過時或誤植的註解。該分支自身註解說明為「罕至防禦分支」（`assignday` 實際多為 varchar），故**目前非活躍風險**；但 (c) 修法後 MSSQL 也將回傳 UTC 午夜 Date，若此分支曾被誤認為「MSSQL 專屬正確寫法」而被複製到其他地方，將造成新的不一致。**建議 P5h 執行時一併更正註解**，非阻擋項。
+
+3. **不影響 PG**：`useUTC` 為 MSSQL/tedious 專屬連線選項，PG 分支 `DataSourceOptions` 無此欄位，新增不影響 PG 連線行為，PG 側零回歸風險。
+
+4. **已有部分先例，但不能誤認為已覆蓋**：P4e（`raw-data.service.ts::buildMssqlConnectionConfig`，AD-E07-41）已對其專屬 bulk-load `ConnectionPool` 顯式 pin `useUTC: true`。但該連線池是**繞過 TypeORM、直接以 `require('mssql')` 自建**（詳見 AD-E07-41-P4e-impl.md §三 BULKWRITE-GATE-001），**未經過** `SqlServerDriver.createPool()` 的強制覆寫邏輯，故 P4e 當時完全沒有踩到、也不可能踩到本次發現的「TypeORM 主連線被強制 `useUTC:false`」這個更根本的缺口。**P4e 的既有修正不能涵蓋本次發現**，兩者是同一個 `useUTC` 語意問題家族下的兩個獨立站點，須分別確認。
+
+### 8.5 與 P3d／P4e 是否同源、能否統一修
+
+**同源**：三者根因鏈完全一致——tedious 的 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 型別讀寫皆依賴連線層 `useUTC` 決定要不要用 UTC 分量。P4e（bulk pool 8 小時偏移）、P5c（assignday −1 日）是**同一顆連線設定地雷在兩個不同連線建構路徑（自建 `mssql` pool vs TypeORM 主連線）分別炸開**；P3d（`appl_date` 非午夜時分之邊界疑慮）本身不是獨立缺陷，而是「若 useUTC 語意不一致，非午夜時分的 datetime2 值更容易在邊界比較中出錯」的**風險放大因子**，根因仍是同一顆。
+
+**統一修法建議**：本次（P5h）直接把**全部 4 個** TypeORM 連線站點補上 `useUTC: true`，一次性統一解決 assignday（本次）與 P5d 遺留的「datetime2 時區 production 組態」懸案——P5d 原本待辦是「查真實 production `appl_date` 資料 + 裁決 cutover 時區組態」，現在根因已定位到程式碼層級的連線設定缺陷（而非需要一個「選時區」的組態決策），P5d 的裁示內容因此**收斂**為「確認 P5h 之 4 站點修法已完整套用、且重驗後相關邊界案例（CR 兩年門檻、`appl_date` < 08:00 本地時刻案件）達 0-diff」，可與 P5h 併同結案（見 §1 更新後之依賴圖與 §4 item 1）。
+
+### 8.6 範圍歸屬裁定
+
+**新增子切片 P5h**（🔴 cutover-blocker、優先度最高），涵蓋：
+1. 4 站點 `useUTC: true` 補丁。
+2. 全量 mssql specs 回歸（含既有 P1~P5b 套件零回歸驗證）。
+3. §8.4 列出之 4 個受影響站點 + `assignment-run-report.service.ts` 註解複查（非阻擋）。
+4. 重跑 P5c MONTHRUN-DIFF，驗證 assignday 達 0-diff、10/10 欄位全綠。
+5. 吸收 P5d 剩餘範圍（datetime2 production 時區裁示），與 P5h 併同結案。
+
+**依賴關係**：P5h 依賴 P5c（已完成，提供觸發證據與重驗基準）；P5e（F067 簽核）依賴 P5h 完成（因 assignday 目前是 10 欄中唯一未達成 0-diff 者，簽核報告需等 P5h 驗證通過後才能宣稱「MSSQL 忠實重現 PG」）；P5h **不阻擋** P5a/P5b/P5f/P5g 既定推進。
+
+### 8.7 附帶：varchar byte 語意評估（次要，P5i，見 §6 P5i DoD）
+
+P5c §6 觀察：MSSQL `Chinese_Taiwan_Stroke_BIN`（non-Unicode BIN collation）下 `varchar(N)` **以位元組計長**（中文 2 bytes/字），PG `varchar(45)` 以字元計長，兩者語意不同。已確認：(1) 此類欄位（`ob_pool_data.spec_name`/`car_name`/`broker` 等）**非計分/CR/分派輸入**（計分讀 `spec_tp`/`loan_rate`/`year_produ`/`month_cnt` 等其他欄位），純顯示/匯出用途；(2) 不影響 P5c 之 10 欄比對結果；(3) 長中文值於 MSSQL 寫入路徑確有截斷/失敗風險（P5c 本輪已用 byte-aware 截斷防禦處理 seed 資料，3,064 列受影響）。
+
+**評估結論：非 cutover-blocker，獨立為 P5i、低優先序**，兩個候選方向：(1) 改 `nvarchar`（正確解，但屬 schema 變更，需修 baseline migration + `column-types.ts` helper，成本較高、需另評估）；(2) 維持 `varchar` + ETL/寫入端 byte-aware 截斷（成本低，但屬防禦而非根治，長期仍有資料失真風險）。建議方向為 (1)，但排入 P5i 獨立處理，不卡 P5h/P5e 時程。
+
+### 8.8 精簡摘要（可直接帶回使用者）
+
+> **現象**：MSSQL 版月跑的「分派日（ASSIGNDAY）」全部比 PG 版早一天（如 PG 7/1 → MSSQL 6/30），Stage 0 每日試算的日期標籤也同樣錯位。其餘計分/分派/CR 相關 9 個關鍵欄位在真實資料逐列比對下完全一致（0 差異，含 27,796 筆大名單、1,996 筆 CR 案），僅日期標籤本身有此系統性 −1 日缺陷。
+>
+> **根因**：已定位到程式碼層級的精確根因——資料庫連線程式庫（TypeORM）在建立 MSSQL 連線時，若設定檔未明確指定「日期以世界標準時間（UTC）表示」，會自動改用「以台灣本地時間表示」；本系統目前所有 MSSQL 連線設定皆未明確指定，因而落入此狀態，導致日期換算回文字時系統性少算一天。PostgreSQL 版因驅動預設行為不同，不受影響。
+>
+> **推薦修法**：在 4 個資料庫連線設定進入點，各新增 1 行明確設定（指定「日期一律以 UTC 表示」），**不需更動任何月跑核心運算程式碼**。此為連線層級的低風險修正，且與先前 P4e 階段在批次匯入功能上已採用、驗證過的手法屬同一家族（但涵蓋範圍更完整，一併解決先前遺留的「datetime2 時區」查證懸案）。
+>
+> **成本估計**：技術修改本身極小（4 處各 1 行設定），主要成本在**驗證**——需重跑全量 MSSQL 自動化測試（預期無回歸）+ 重跑一次真實資料跨引擎逐列比對以確認分派日欄位變成零差異。預估 **1.5–2.5 人天**。
+>
+> **是否切換前必修**：**是**。這是目前 MSSQL 與 PG 版本 10 個關鍵比對欄位中唯一尚未達到「逐列一致」的項目，直接影響每月分派日期的正確性，屬於正式切換前的必修阻塞項。修正後預期可達成 10/10 欄位完全一致，具備進入下一階段（正式業務簽核）的條件。
+>
+> **附帶次要事項**：另發現一個與日期無關的顯示欄位長度問題（部分中文顯示欄位在 MSSQL 上位元組計算方式與 PG 不同，長中文值可能被截斷）——已確認**不影響**計分、分派、CR 等核心業務邏輯，純屬顯示/匯出欄位，可獨立另案處理，不影響本次切換時程判斷。
