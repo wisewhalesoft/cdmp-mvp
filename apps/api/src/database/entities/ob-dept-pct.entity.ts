@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, nvarcharColumnType } from '@/common/database/column-types';
 
 @Entity('ob_dept_pct')
 export class ObDeptPct {
@@ -37,7 +37,7 @@ export class ObDeptPct {
   @PrimaryColumn({ name: 'obdeptid', type: 'varchar', length: 6 })
   obdeptid: string;
 
-  @Column({ name: 'obdeptnm', type: 'varchar', length: 10 })
+  @Column({ name: 'obdeptnm', type: nvarcharColumnType, length: 10 })
   obdeptnm: string;
 
   // scale 1→2 對齊 spec F079 BR-2 之「容忍 ±0.01% 雙小數精度」與 FE RatioInput step=0.01

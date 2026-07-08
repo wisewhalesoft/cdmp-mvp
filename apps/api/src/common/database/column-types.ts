@@ -90,6 +90,28 @@ export const longTextColumnLength: string | undefined =
   process.env.DB_TYPE === 'mssql' ? 'MAX' : undefined;
 
 /**
+ * Unicode 顯示字串型別（用於 `@Column({ type: nvarcharColumnType, length: N })`；N≤255 之中文顯示欄位）。
+ * AD-E07-43 §9 / I-MSSQL-NVARCHAR-DISPLAY-01（P5i）。
+ * - PostgreSQL / better-sqlite3: 'varchar'（與現行 literal 'varchar' 逐值等價 → 零回歸）
+ * - MSSQL: 'nvarchar'（Unicode 安全；避免 Chinese_Taiwan_Stroke_BIN collation 下 byte-length 截斷）
+ *
+ * ⚠️ 根因（AD §9.2）：來源 legacy MSSQL schema（reference/TableSchema/OB/*.sql）明確宣告 SPEC_NAME／
+ *    CAR_NAME／BROKER／EMP_NM／DEPT_NAME 等中文顯示欄位為 `nvarchar(N)`，但 schema 產生器
+ *    parse-ob-schema.mjs::mapType() 為當初純 PG 目標而將 nvarchar/varchar 收斂為泛用 'varchar'。
+ *    MSSQL 目標下同一 'varchar' 型別以 byte 計長（中文 2 bytes/字），nvarchar(45) 只能容 22 個中文字即截斷。
+ *    本 helper 使「來源宣告為 nvarchar」之欄位於 MSSQL 還原 Unicode 安全，PG/sqlite 維持 varchar 不變。
+ *
+ * ⚠️ 形式差異（刻意）：AD §9.5 步驟 1 以 `nvarcharColumnType(length)` 描述「結果型別為 nvarchar(N)」；
+ *    length 已由 @Column 之 length 選項獨立承載，故比照既有 longTextColumnType 採 const（非 function），
+ *    使既有 entity 逐行僅需將 `type: 'varchar'` 改為 `type: nvarcharColumnType`，length 保留不動、diff 最小。
+ *
+ * ⚠️ sqlite 分支取 'varchar'（非 AD §9.5 建議之 'text'）：現行 entity 對此類欄位為 literal 'varchar'，
+ *    sqlite 亦落 'varchar'；為守「sqlite 零回歸」硬約束，本 helper 於 sqlite 維持 'varchar'（與現況逐值等價）。
+ */
+export const nvarcharColumnType: ColumnType =
+  process.env.DB_TYPE === 'mssql' ? 'nvarchar' : 'varchar';
+
+/**
  * Hash-based PK 型別（B1 / AD-E07-39 §3.1；token_blocklist 專用）。
  * - PostgreSQL: 'bytea'
  * - better-sqlite3: 'blob'

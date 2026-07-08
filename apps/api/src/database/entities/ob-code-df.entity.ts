@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType } from '@/common/database/column-types';
+import { dateColumnType, nvarcharColumnType } from '@/common/database/column-types';
 
 @Entity('ob_code_df')
 export class ObCodeDf {
@@ -21,10 +21,10 @@ export class ObCodeDf {
   @PrimaryColumn({ name: 'tbl_cd', type: 'varchar', length: 4 })
   tbl_cd: string;
 
-  @Column({ name: 'tbl_desc1', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'tbl_desc1', type: nvarcharColumnType, length: 40, nullable: true })
   tbl_desc1: string | null;
 
-  @Column({ name: 'tbl_desc2', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'tbl_desc2', type: nvarcharColumnType, length: 40, nullable: true })
   tbl_desc2: string | null;
 
   @Column({ name: 'tbl_val1', type: 'numeric', precision: 12, scale: 0, nullable: true })
@@ -34,22 +34,22 @@ export class ObCodeDf {
   @Column({ name: 'tbl_val2', type: dateColumnType, nullable: true })
   tbl_val2: Date | null;
 
-  @Column({ name: 'tbl_val3', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'tbl_val3', type: nvarcharColumnType, length: 40, nullable: true })
   tbl_val3: string | null;
 
-  @Column({ name: 'tbl_val4', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'tbl_val4', type: nvarcharColumnType, length: 40, nullable: true })
   tbl_val4: string | null;
 
-  @Column({ name: 'tbl_val5', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'tbl_val5', type: nvarcharColumnType, length: 40, nullable: true })
   tbl_val5: string | null;
 
-  @Column({ name: 'tbl_val6', type: 'varchar', length: 80, nullable: true })
+  @Column({ name: 'tbl_val6', type: nvarcharColumnType, length: 80, nullable: true })
   tbl_val6: string | null;
 
-  @Column({ name: 'tbl_val7', type: 'varchar', length: 80, nullable: true })
+  @Column({ name: 'tbl_val7', type: nvarcharColumnType, length: 80, nullable: true })
   tbl_val7: string | null;
 
-  @Column({ name: 'tbl_val8', type: 'varchar', length: 80, nullable: true })
+  @Column({ name: 'tbl_val8', type: nvarcharColumnType, length: 80, nullable: true })
   tbl_val8: string | null;
 
   @Column({ name: 'stadt', type: 'varchar', length: 8, nullable: true })

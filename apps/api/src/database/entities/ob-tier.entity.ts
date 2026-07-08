@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
-import { surrogatePkType } from '@/common/database/column-types';
+import { surrogatePkType, nvarcharColumnType } from '@/common/database/column-types';
 
 // AD-E07-13：UNIQUE (card_type, COALESCE(card_level, '')) 由 migration 用 raw SQL 建立
 // （TypeORM @Index 不支援 COALESCE 表達式，dev synchronize 不會建此索引；prod 用 migration）
@@ -15,7 +15,7 @@ export class ObTier {
   @PrimaryGeneratedColumn({ type: surrogatePkType })
   id: string;
 
-  @Column({ name: 'list_nm', type: 'varchar', length: 30, nullable: true })
+  @Column({ name: 'list_nm', type: nvarcharColumnType, length: 30, nullable: true })
   list_nm: string | null;
 
   // 遷移時補 NOT NULL（依 SP join 邏輯，與 migration 一致）

@@ -44,6 +44,8 @@ describe('AD-E07-38 P1a REG-002 — column-types 既有分支值不因新增 mss
     expect(m.uuidColumnType).toBe('uuid');
     expect(m.longTextColumnType).toBe('text');
     expect(m.longTextColumnLength).toBeUndefined();
+    // P5i / I-MSSQL-NVARCHAR-DISPLAY-01：sqlite 維持 'varchar'（與現行 literal 'varchar' 逐值等價，零回歸）
+    expect(m.nvarcharColumnType).toBe('varchar');
   });
 
   it('postgres 分支值不變（timestamp / jsonb / bigint）', async () => {
@@ -55,6 +57,8 @@ describe('AD-E07-38 P1a REG-002 — column-types 既有分支值不因新增 mss
     expect(m.uuidColumnType).toBe('uuid');
     expect(m.longTextColumnType).toBe('text');
     expect(m.longTextColumnLength).toBeUndefined();
+    // P5i：postgres 維持 'varchar'（與現行 literal 'varchar' 逐值等價，零回歸）
+    expect(m.nvarcharColumnType).toBe('varchar');
   });
 
   it('mssql 分支值正確（datetime2 / simple-json / bigint / bit / uniqueidentifier / nvarchar+MAX）', async () => {
@@ -66,6 +70,8 @@ describe('AD-E07-38 P1a REG-002 — column-types 既有分支值不因新增 mss
     expect(m.uuidColumnType).toBe('uniqueidentifier');
     expect(m.longTextColumnType).toBe('nvarchar');
     expect(m.longTextColumnLength).toBe('MAX');
+    // P5i / I-MSSQL-NVARCHAR-DISPLAY-01：mssql 取 'nvarchar'（Unicode 安全，避免 BIN collation byte 截斷）
+    expect(m.nvarcharColumnType).toBe('nvarchar');
   });
 });
 

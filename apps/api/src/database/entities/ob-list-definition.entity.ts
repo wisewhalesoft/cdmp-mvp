@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType, jsonColumnType, boolColumnType } from '@/common/database/column-types';
+import { dateColumnType, jsonColumnType, boolColumnType, nvarcharColumnType } from '@/common/database/column-types';
 
 /**
  * condition_payload JSONB schema（F050 v2.1 / AD-E07-18 §18.4）。
@@ -69,7 +69,7 @@ export class ObListDefinition {
   @PrimaryColumn({ name: 'list_no', type: 'varchar', length: 11 })
   list_no: string;
 
-  @Column({ name: 'list_nm', type: 'varchar', length: 45 })
+  @Column({ name: 'list_nm', type: nvarcharColumnType, length: 45 })
   list_nm: string;
 
   @Column({ name: 'prod_kind', type: 'varchar', length: 255 })
@@ -115,13 +115,13 @@ export class ObListDefinition {
   @Column({ name: 'casenumber', type: 'varchar', length: 50, nullable: true })
   casenumber: string | null;
 
-  @Column({ name: 'name', type: 'varchar', length: 50, nullable: true })
+  @Column({ name: 'name', type: nvarcharColumnType, length: 50, nullable: true })
   name: string | null;
 
   @Column({ name: 'caseyear', type: 'varchar', length: 255, nullable: true })
   caseyear: string | null;
 
-  @Column({ name: 'caseyearnm', type: 'varchar', length: 10, nullable: true })
+  @Column({ name: 'caseyearnm', type: nvarcharColumnType, length: 10, nullable: true })
   caseyearnm: string | null;
 
   @Column({ name: 'settle_src', type: 'varchar', length: 6, nullable: true })

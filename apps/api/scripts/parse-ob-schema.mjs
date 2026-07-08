@@ -11,8 +11,10 @@
  *
  * 輸出規則：
  *   - SQL Server identifier (CAPS) → snake_case
- *   - nvarchar/varchar(N) → varchar(N)；N>255 改 text
- *   - nvarchar(MAX) → text
+ *   - varchar(N) → varchar(N)；N>255 改 text
+ *   - nvarchar(N≤255) → nvarcharColumnType（AD-E07-43 §9 / I-MSSQL-NVARCHAR-DISPLAY-01；
+ *       mssql=nvarchar(N) Unicode 安全、pg/sqlite=varchar(N) 等價；保留 legacy 逐欄 nvarchar vs varchar 區分）
+ *   - nvarchar(MAX)/varchar(N>255) → text（entity 手動改 longTextColumnType → mssql=nvarchar(MAX)，本就 Unicode 安全）
  *   - datetime → timestamp
  *   - numeric(p,s) → numeric(p,s)
  *   - money → numeric(19,4)
@@ -80,9 +82,13 @@ function mapType(sqlType, length, precision, scale) {
     case 'nvarchar':
     case 'varchar': {
       const lenStr = length != null ? String(length).toUpperCase() : null;
+      // N>255 或 MAX → text（entity 端改 longTextColumnType → mssql=nvarchar(MAX)，本就 Unicode 安全）
       if (lenStr === null || lenStr === 'MAX' || lenStr === '-1') return { type: 'text' };
       const n = parseInt(lenStr, 10);
       if (Number.isNaN(n) || n > 255) return { type: 'text' };
+      // AD-E07-43 §9：保留 legacy 逐欄 nvarchar vs varchar 區分（不再一律收斂為 'varchar'）。
+      // 來源 nvarchar(N≤255) → dialect-aware nvarcharColumnType（mssql=nvarchar / pg,sqlite=varchar）。
+      if (t === 'nvarchar') return { type: 'varchar', length: String(n), isNvarchar: true };
       return { type: 'varchar', length: String(n) };
     }
     case 'char':
@@ -194,6 +200,7 @@ if (mappingsMode) {
     return 'string'; // varchar, text, char, uuid
   };
 
+  const usesNvarchar = cols.some((c) => c.isNvarchar);
   const lines = [];
   lines.push('// 自動產生 by parse-ob-schema.mjs --entity');
   lines.push(`// 來源：${sqlPath}`);
@@ -201,6 +208,9 @@ if (mappingsMode) {
   lines.push('// ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修');
   lines.push('');
   lines.push("import { Entity, Column, PrimaryColumn, Index } from 'typeorm';");
+  if (usesNvarchar) {
+    lines.push("import { nvarcharColumnType } from '@/common/database/column-types';");
+  }
   lines.push('');
   lines.push(`@Entity('${tableName}')`);
   lines.push(`export class ${className} {`);
@@ -208,7 +218,9 @@ if (mappingsMode) {
     const c = cols[i];
     const finalName = renameMap[c.rawName] || c.name;
     const isPk = pkCols.includes(finalName);
-    const opts = [`name: '${finalName}'`, `type: '${c.type}'`];
+    // AD-E07-43 §9：來源 nvarchar(N≤255) 之中文顯示欄位用 dialect-aware nvarcharColumnType（不加引號）。
+    const typeExpr = c.isNvarchar ? 'nvarcharColumnType' : `'${c.type}'`;
+    const opts = [`name: '${finalName}'`, `type: ${typeExpr}`];
     if (c.length) opts.push(`length: ${c.length}`);
     if (c.precision != null) opts.push(`precision: ${c.precision}`);
     if (c.scale != null) opts.push(`scale: ${c.scale}`);
@@ -235,7 +247,9 @@ if (mappingsMode) {
     if (c.precision != null) parts.push(`precision: ${c.precision}`);
     if (c.scale != null) parts.push(`scale: ${c.scale}`);
     parts.push(`isNullable: ${c.isNullable}`);
-    const commentSuffix = c.rawName ? `  // ${c.rawName}` : c._comment ? `  // ${c._comment}` : '';
+    // AD-E07-43 §9：標記來源 nvarchar 欄位（MSSQL baseline 手寫 T-SQL 須改 nvarchar(N)；PG 維持 varchar）。
+    const nvarcharNote = c.isNvarchar ? ' ← nvarchar' : '';
+    const commentSuffix = c.rawName ? `  // ${c.rawName}${nvarcharNote}` : c._comment ? `  // ${c._comment}` : '';
     tsLines.push(`        { ${parts.join(', ')} },${commentSuffix}`);
   }
   console.log(tsLines.join('\n'));

@@ -4,7 +4,7 @@
 // ⚠️ Entity 必須與 migration 保持一致：任一邊改動，另一邊同步修
 
 import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
-import { dateColumnType, longTextColumnType, longTextColumnLength } from '@/common/database/column-types';
+import { dateColumnType, longTextColumnType, longTextColumnLength, nvarcharColumnType } from '@/common/database/column-types';
 
 @Entity('ob_pool_data')
 export class ObPoolData {
@@ -37,25 +37,25 @@ export class ObPoolData {
   @Column({ name: 'custo_no', type: 'varchar', length: 11 })
   custo_no: string;
 
-  @Column({ name: 'cust_name', type: 'varchar', length: 90, nullable: true })
+  @Column({ name: 'cust_name', type: nvarcharColumnType, length: 90, nullable: true })
   cust_name: string | null;
 
   @Column({ name: 'lic_no', type: 'varchar', length: 10, nullable: true })
   lic_no: string | null;
 
-  @Column({ name: 'sta_code_na', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'sta_code_na', type: nvarcharColumnType, length: 40, nullable: true })
   sta_code_na: string | null;
 
-  @Column({ name: 'project_tp', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'project_tp', type: nvarcharColumnType, length: 40, nullable: true })
   project_tp: string | null;
 
   @Column({ name: 'spec_no', type: 'varchar', length: 10, nullable: true })
   spec_no: string | null;
 
-  @Column({ name: 'spec_name', type: 'varchar', length: 45, nullable: true })
+  @Column({ name: 'spec_name', type: nvarcharColumnType, length: 45, nullable: true })
   spec_name: string | null;
 
-  @Column({ name: 'dept_name', type: 'varchar', length: 30, nullable: true })
+  @Column({ name: 'dept_name', type: nvarcharColumnType, length: 30, nullable: true })
   dept_name: string | null;
 
   @Column({ name: 'pay_resouc_code', type: 'varchar', length: 2, nullable: true })
@@ -67,13 +67,13 @@ export class ObPoolData {
   @Column({ name: 'extend_day', type: 'numeric', precision: 2, scale: 0, nullable: true })
   extend_day: string | null;
 
-  @Column({ name: 'pay_resouc', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'pay_resouc', type: nvarcharColumnType, length: 40, nullable: true })
   pay_resouc: string | null;
 
-  @Column({ name: 'commute', type: 'varchar', length: 90, nullable: true })
+  @Column({ name: 'commute', type: nvarcharColumnType, length: 90, nullable: true })
   commute: string | null;
 
-  @Column({ name: 'cycle_pay_na', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'cycle_pay_na', type: nvarcharColumnType, length: 40, nullable: true })
   cycle_pay_na: string | null;
 
   @Column({ name: 'cycle_pay_val', type: 'varchar', length: 2, nullable: true })
@@ -130,7 +130,7 @@ export class ObPoolData {
   @Column({ name: 'dept_id', type: 'varchar', length: 6 })
   dept_id: string;
 
-  @Column({ name: 'pay_way_na', type: 'varchar', length: 30, nullable: true })
+  @Column({ name: 'pay_way_na', type: nvarcharColumnType, length: 30, nullable: true })
   pay_way_na: string | null;
 
   @Column({ name: 'brnh_no', type: 'varchar', length: 5, nullable: true })
@@ -139,40 +139,40 @@ export class ObPoolData {
   @Column({ name: 'dlr_no', type: 'varchar', length: 4, nullable: true })
   dlr_no: string | null;
 
-  @Column({ name: 'broker', type: 'varchar', length: 60, nullable: true })
+  @Column({ name: 'broker', type: nvarcharColumnType, length: 60, nullable: true })
   broker: string | null;
 
   @Column({ name: 'sales_no', type: 'varchar', length: 14, nullable: true })
   sales_no: string | null;
 
-  @Column({ name: 'broker_agent', type: 'varchar', length: 60, nullable: true })
+  @Column({ name: 'broker_agent', type: nvarcharColumnType, length: 60, nullable: true })
   broker_agent: string | null;
 
   @Column({ name: 'hfs_sales', type: 'varchar', length: 14, nullable: true })
   hfs_sales: string | null;
 
-  @Column({ name: 'sales', type: 'varchar', length: 60, nullable: true })
+  @Column({ name: 'sales', type: nvarcharColumnType, length: 60, nullable: true })
   sales: string | null;
 
   @Column({ name: 'agent_head_id', type: 'varchar', length: 11, nullable: true })
   agent_head_id: string | null;
 
-  @Column({ name: 'promoter_dept', type: 'varchar', length: 60, nullable: true })
+  @Column({ name: 'promoter_dept', type: nvarcharColumnType, length: 60, nullable: true })
   promoter_dept: string | null;
 
   @Column({ name: 'agent_id', type: 'varchar', length: 11, nullable: true })
   agent_id: string | null;
 
-  @Column({ name: 'promoter', type: 'varchar', length: 60, nullable: true })
+  @Column({ name: 'promoter', type: nvarcharColumnType, length: 60, nullable: true })
   promoter: string | null;
 
   @Column({ name: 'brand_no', type: 'varchar', length: 2, nullable: true })
   brand_no: string | null;
 
-  @Column({ name: 'brand_name', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'brand_name', type: nvarcharColumnType, length: 40, nullable: true })
   brand_name: string | null;
 
-  @Column({ name: 'car_name', type: 'varchar', length: 30, nullable: true })
+  @Column({ name: 'car_name', type: nvarcharColumnType, length: 30, nullable: true })
   car_name: string | null;
 
   @Column({ name: 'inquiry', type: 'varchar', length: 10, nullable: true })
@@ -184,10 +184,10 @@ export class ObPoolData {
   @Column({ name: 'manager_limit', type: 'varchar', length: 2, nullable: true })
   manager_limit: string | null;
 
-  @Column({ name: 'spec_mk_na', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'spec_mk_na', type: nvarcharColumnType, length: 40, nullable: true })
   spec_mk_na: string | null;
 
-  @Column({ name: 'spec_type_na', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'spec_type_na', type: nvarcharColumnType, length: 40, nullable: true })
   spec_type_na: string | null;
 
   @Column({ name: 'atm_business', type: 'varchar', length: 4, nullable: true })
@@ -214,7 +214,7 @@ export class ObPoolData {
   @Column({ name: 'apmacc_memo', type: longTextColumnType, length: longTextColumnLength, nullable: true })
   apmacc_memo: string | null;
 
-  @Column({ name: 'sales_sts_na', type: 'varchar', length: 30, nullable: true })
+  @Column({ name: 'sales_sts_na', type: nvarcharColumnType, length: 30, nullable: true })
   sales_sts_na: string | null;
 
   @Column({ name: 'sub_code', type: 'varchar', length: 2, nullable: true })
@@ -235,7 +235,7 @@ export class ObPoolData {
   @Column({ name: 'rate_choice', type: 'varchar', length: 30, nullable: true })
   rate_choice: string | null;
 
-  @Column({ name: 'per_info', type: 'varchar', length: 30, nullable: true })
+  @Column({ name: 'per_info', type: nvarcharColumnType, length: 30, nullable: true })
   per_info: string | null;
 
   @Column({ name: 'tie_down_num', type: 'integer', nullable: true })
@@ -277,13 +277,13 @@ export class ObPoolData {
   @Column({ name: 'prod_type', type: 'varchar', length: 2, nullable: true })
   prod_type: string | null;
 
-  @Column({ name: 'prod_type_name', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'prod_type_name', type: nvarcharColumnType, length: 40, nullable: true })
   prod_type_name: string | null;
 
   @Column({ name: 'prod_class', type: 'varchar', length: 2, nullable: true })
   prod_class: string | null;
 
-  @Column({ name: 'prod_class_name', type: 'varchar', length: 40, nullable: true })
+  @Column({ name: 'prod_class_name', type: nvarcharColumnType, length: 40, nullable: true })
   prod_class_name: string | null;
 
   // PROD_KIND/PROD_KIND_NAME/BEST_CASE 在 OBPOOLDATA 源頭實際有空字串
@@ -321,16 +321,16 @@ export class ObPoolData {
   @Column({ name: 'overdue_day', type: 'integer', nullable: true })
   overdue_day: number | null;
 
-  @Column({ name: 'coll_empl', type: 'varchar', length: 50, nullable: true })
+  @Column({ name: 'coll_empl', type: nvarcharColumnType, length: 50, nullable: true })
   coll_empl: string | null;
 
-  @Column({ name: 'car_model', type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'car_model', type: nvarcharColumnType, length: 100, nullable: true })
   car_model: string | null;
 
-  @Column({ name: 'pay_user', type: 'varchar', length: 90, nullable: true })
+  @Column({ name: 'pay_user', type: nvarcharColumnType, length: 90, nullable: true })
   pay_user: string | null;
 
-  @Column({ name: 'pay_add', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'pay_add', type: nvarcharColumnType, length: 255, nullable: true })
   pay_add: string | null;
 
   @Column({ name: 'fleet_car', type: 'varchar', length: 1, nullable: true })
@@ -342,7 +342,7 @@ export class ObPoolData {
   @Column({ name: 'sales_tel', type: 'varchar', length: 20, nullable: true })
   sales_tel: string | null;
 
-  @Column({ name: 'memo1', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'memo1', type: nvarcharColumnType, length: 255, nullable: true })
   memo1: string | null;
 
   @Column({ name: 'caseyear', type: 'varchar', length: 4, nullable: true })
