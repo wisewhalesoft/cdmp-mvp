@@ -143,26 +143,38 @@ export class TargetLoadHandlerMssql implements NodeExecutor {
           .join(', ');
         const escapedPartitionValue = partitionValue.replace(/'/g, "''");
 
-        // 1. per-partition 截斷（只刪本分區，保護其他來源列）
-        try {
-          await context.queryRunner.query(
-            `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
-          );
-        } catch (err: any) {
-          throw new Error(
-            `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
-          );
-        }
-
         // 2. 單條 INSERT…SELECT，每列填 partitionValue
         const selectColsForInsert = insertColumns.map((c) => `"${c}"`).join(', ');
         const selectSql = `SELECT ${selectColsForInsert}, '${escapedPartitionValue}' AS "${partitionColumn}" FROM "${tempTable}"`;
         const insertSql = `INSERT INTO "${targetTable}" (${insertColumnList}) ${selectSql}`;
 
+        // I-ETL-ATOMIC-LOAD-01：DELETE 與其後 INSERT 同屬一交易——INSERT 失敗整個回滾至 DELETE 前
+        // （既存分區資料保留），非「已刪除、未重填」的資料遺失中間態。T-SQL DELETE/TRUNCATE 於交易內
+        // 皆可回滾（真庫實證）。交易只包 clear+insert；## 暫存表建於交易外，rollback 後仍存在、由 finally 清理。
+        await context.queryRunner.startTransaction();
         try {
-          await context.queryRunner.query(insertSql);
-        } catch (err: any) {
-          throw new Error(`partition_replace INSERT 失敗：${err.message}`);
+          // 1. per-partition 截斷（只刪本分區，保護其他來源列）
+          try {
+            await context.queryRunner.query(
+              `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
+            );
+          } catch (err: any) {
+            throw new Error(
+              `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
+            );
+          }
+          try {
+            await context.queryRunner.query(insertSql);
+          } catch (err: any) {
+            throw new Error(`partition_replace INSERT 失敗：${err.message}`);
+          }
+          await context.queryRunner.commitTransaction();
+        } catch (err) {
+          // 兩引擎一致：catch 必先 rollback 再 re-throw（正確性不依賴引擎寬容度）。
+          if (context.queryRunner.isTransactionActive) {
+            await context.queryRunner.rollbackTransaction();
+          }
+          throw err;
         }
 
         return { tempTable: '', rowCount: input.rowCount };
@@ -189,17 +201,28 @@ export class TargetLoadHandlerMssql implements NodeExecutor {
           insertSourceTable = dedupTable;
         }
 
-        try {
-          await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
-        } catch (err: any) {
-          throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
-        }
-
         const insertSql = `INSERT INTO "${targetTable}" (${columnList}) SELECT ${columnList} FROM "${insertSourceTable}"`;
+
+        // I-ETL-ATOMIC-LOAD-01：TRUNCATE 與其後 INSERT 同屬一交易——INSERT 失敗整個回滾至 TRUNCATE 前
+        // （既存資料保留）。T-SQL TRUNCATE 於交易內可回滾（真庫實證）。去重 ## 表建於交易外。
+        await context.queryRunner.startTransaction();
         try {
-          await context.queryRunner.query(insertSql);
-        } catch (err: any) {
-          throw new Error(`fullMode INSERT 失敗：${err.message}`);
+          try {
+            await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
+          } catch (err: any) {
+            throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
+          }
+          try {
+            await context.queryRunner.query(insertSql);
+          } catch (err: any) {
+            throw new Error(`fullMode INSERT 失敗：${err.message}`);
+          }
+          await context.queryRunner.commitTransaction();
+        } catch (err) {
+          if (context.queryRunner.isTransactionActive) {
+            await context.queryRunner.rollbackTransaction();
+          }
+          throw err;
         }
 
         return { tempTable: '', rowCount: totalRows };
@@ -258,10 +281,18 @@ export class TargetLoadHandlerMssql implements NodeExecutor {
         `WHERE ${ghostGate} ` +
         `AND NOT EXISTS (SELECT 1 FROM "${targetTable}" tgt WHERE tgt."source_customer_no" = src."source_customer_no")`;
 
+      // I-ETL-ATOMIC-LOAD-01（★發現 1 範圍擴張）：兩段式 UPDATE+INSERT 須同屬一交易——若 UPDATE
+      // 成功但 INSERT 失敗，整個回滾（既有列恢復更新前值、新列不寫入），而非停留在「既有列已更新、
+      // 新列缺失」的不一致中間態。PG 版 UPSERT 為單句 ON CONFLICT 天生原子，兩引擎於此對稱包交易。
+      await context.queryRunner.startTransaction();
       try {
         await context.queryRunner.query(updateSql);
         await context.queryRunner.query(insertSql);
+        await context.queryRunner.commitTransaction();
       } catch (err: any) {
+        if (context.queryRunner.isTransactionActive) {
+          await context.queryRunner.rollbackTransaction();
+        }
         throw new Error(`UPSERT 失敗：${err.message}`);
       }
 

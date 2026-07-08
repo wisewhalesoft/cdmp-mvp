@@ -65,7 +65,12 @@ function createMock(opts: MockOpts = {}) {
     }
     return [];
   });
-  return { query, calls } as any;
+  // P5g：handler 交易包裝需 transaction API（真實 QueryRunner 皆有）；no-op stub 不影響 SQL 生成斷言。
+  const mock: any = { query, calls, isTransactionActive: false };
+  mock.startTransaction = vi.fn(async () => { mock.isTransactionActive = true; });
+  mock.commitTransaction = vi.fn(async () => { mock.isTransactionActive = false; });
+  mock.rollbackTransaction = vi.fn(async () => { mock.isTransactionActive = false; });
+  return mock;
 }
 
 function makeCtx(

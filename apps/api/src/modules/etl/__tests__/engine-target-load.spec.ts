@@ -66,7 +66,13 @@ function createMockQueryRunner(opts: {
     return [];
   });
 
-  return { query, calls } as any;
+  // P5g：handler 之交易包裝需 queryRunner 具備 transaction API（真實 QueryRunner 皆有）。
+  // no-op stub 維持既有 SQL 生成斷言（transaction 方法不進 calls）。
+  const mock: any = { query, calls, isTransactionActive: false };
+  mock.startTransaction = vi.fn(async () => { mock.isTransactionActive = true; });
+  mock.commitTransaction = vi.fn(async () => { mock.isTransactionActive = false; });
+  mock.rollbackTransaction = vi.fn(async () => { mock.isTransactionActive = false; });
+  return mock;
 }
 
 function makeTargetLoadContext(

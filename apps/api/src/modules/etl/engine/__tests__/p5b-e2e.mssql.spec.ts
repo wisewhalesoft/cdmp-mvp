@@ -433,10 +433,13 @@ describe('P5b PARTITION-WIRING — DELETE+INSERT 分區語意接線（真實 MSS
 });
 
 // ===========================================================================
-// §六 ATOMIC — TRUNCATE/DELETE 後 INSERT 失敗之資料完整性（probe，report-not-fix）
+// §六 ATOMIC — TRUNCATE/DELETE 後 INSERT 失敗之資料完整性
+// ⚠️ P5g 交易包裝修法後：斷言由分支 A（資料遺失、count=0）翻轉為分支 B（資料保留）。
+//    修法前之 probe 結論（分支 A）見 AD-E07-43-P5b-impl §六 ATOMIC；本輪解凍
+//    target-load-handler(-mssql).ts 加交易保護後，既存列於 INSERT 失敗時完整保留。
 // ===========================================================================
-describe('P5b ATOMIC — 先破壞後重建之資料完整性 probe（真實 MSSQL）', () => {
-  it('ATOMIC-001（MUST-FIX probe）：ob_calendar 3 既存列 + rest_flg 空字串髒批 → tl1 失敗後實際列數', async () => {
+describe('P5b ATOMIC — 先破壞後重建之資料完整性（P5g 修法後＝分支 B 資料保留）', () => {
+  it('ATOMIC-001（P5g 回歸）：ob_calendar 3 既存列 + rest_flg 空字串髒批 → tl1 失敗但既存列保留', async () => {
     if (gate()) return;
     await clearTarget(h.qr!, 'calendar');
     await insertStale('calendar', 3);
@@ -451,13 +454,14 @@ describe('P5b ATOMIC — 先破壞後重建之資料完整性 probe（真實 MSS
     const tl1 = r.nodeLogs.find((l) => l.nodeId === 'tl1')!;
     expect(tl1.status).toBe('failed');
     const count = await countTarget(h.qr!, 'calendar');
-    console.log('[P5b ATOMIC-001] ob_calendar count after TRUNCATE+failed INSERT =', count, '| tl1.err =', tl1.errorMessage);
-    // 分支 A（資料遺失）：count=0（TRUNCATE 已提交、INSERT 整句失敗）
-    expect(count).toBe(0);
+    console.log('[P5b ATOMIC-001] ob_calendar count after TRUNCATE+failed INSERT+rollback =', count, '| tl1.err =', tl1.errorMessage);
+    // P5g 交易包裝後＝分支 B（資料保留）：TRUNCATE 與 INSERT 同屬一交易、INSERT 失敗整個回滾，
+    // 3 筆既存列完整保留（修法前為分支 A：count=0 資料遺失）。
+    expect(count).toBe(3);
     await restoreHappy('calendar');
   });
 
-  it('ATOMIC-002（MUST-FIX probe）：ob_pool_data composite PK + custo_no 空字串 → tl1 失敗後實際列數', async () => {
+  it('ATOMIC-002（P5g 回歸）：ob_pool_data composite PK + custo_no 空字串 → tl1 失敗但既存列保留', async () => {
     if (gate()) return;
     await clearTarget(h.qr!, 'pooldata');
     await insertStale('pooldata', 3);
@@ -472,12 +476,13 @@ describe('P5b ATOMIC — 先破壞後重建之資料完整性 probe（真實 MSS
     const tl1 = r.nodeLogs.find((l) => l.nodeId === 'tl1')!;
     expect(tl1.status).toBe('failed');
     const count = await countTarget(h.qr!, 'pooldata');
-    console.log('[P5b ATOMIC-002] ob_pool_data count after TRUNCATE+failed INSERT =', count, '| tl1.err =', tl1.errorMessage);
-    expect(count).toBe(0);
+    console.log('[P5b ATOMIC-002] ob_pool_data count after TRUNCATE+failed INSERT+rollback =', count, '| tl1.err =', tl1.errorMessage);
+    // P5g 分支 B：既存 3 列保留（結論不因 composite PK 表結構複雜度改變）。
+    expect(count).toBe(3);
     await restoreHappy('pooldata');
   });
 
-  it('ATOMIC-003（數值溢位 probe）：add_un_capital 16 位數 → numeric(15,0) 溢位、tl1 失敗', async () => {
+  it('ATOMIC-003（P5g 回歸，數值溢位）：add_un_capital 16 位數 → numeric(15,0) 溢位、tl1 失敗但既存列保留', async () => {
     if (gate()) return;
     await clearTarget(h.qr!, 'arreturndf');
     await insertStale('arreturndf', 3);
@@ -492,12 +497,13 @@ describe('P5b ATOMIC — 先破壞後重建之資料完整性 probe（真實 MSS
     expect(tl1.status).toBe('failed');
     expect(tl1.errorMessage ?? '').toMatch(/overflow|arithmetic|convert|numeric/i);
     const count = await countTarget(h.qr!, 'arreturndf');
-    console.log('[P5b ATOMIC-003] ob_arreturndf count after TRUNCATE+failed INSERT =', count, '| tl1.err =', tl1.errorMessage);
-    expect(count).toBe(0);
+    console.log('[P5b ATOMIC-003] ob_arreturndf count after TRUNCATE+failed INSERT+rollback =', count, '| tl1.err =', tl1.errorMessage);
+    // P5g 分支 B：既存 3 列保留（隱式轉換溢位路徑同樣受交易保護）。
+    expect(count).toBe(3);
     await restoreHappy('arreturndf');
   });
 
-  it('ATOMIC-004（partition_replace probe）：PARTITION-003 撞 PK → DELETE 已執行、INSERT 失敗後 etl_load 分區列數', async () => {
+  it('ATOMIC-004（P5g 回歸，partition_replace）：撞 PK → INSERT 失敗、DELETE 回滾、etl_load 分區既存列保留', async () => {
     if (gate()) return;
     await clearTarget(h.qr!, 'pooldata_list');
     await insertStale('pooldata_list', 3, { dataSource: 'etl_load' });
@@ -513,16 +519,18 @@ describe('P5b ATOMIC — 先破壞後重建之資料完整性 probe（真實 MSS
     expect(tl1.status).toBe('failed');
     const etlLoad = await countTarget(h.qr!, 'pooldata_list', `data_source='etl_load'`);
     const other = await countTarget(h.qr!, 'pooldata_list', `data_source='${FIX_POOLDATA_LIST.otherPartition}'`);
-    console.log('[P5b ATOMIC-004] etl_load partition after DELETE+failed INSERT =', etlLoad, '| other partition =', other);
-    expect(etlLoad).toBe(0); // DELETE 已提交、INSERT 整句失敗
+    console.log('[P5b ATOMIC-004] etl_load partition after DELETE+failed INSERT+rollback =', etlLoad, '| other partition =', other);
+    // P5g 分支 B：DELETE 與 INSERT 同屬一交易、INSERT 撞 PK 失敗整個回滾 → etl_load 分區 3 筆既存列保留
+    // （修法前為分支 A：etl_load=0 資料遺失）。他分區本就不在 DELETE WHERE 條件內，恆保留。
+    expect(etlLoad).toBe(3);
     expect(other).toBe(1); // 他分區不受 DELETE 影響
     await clearTarget(h.qr!, 'pooldata_list');
     await restoreHappy('pooldata_list');
   });
 
-  it('ATOMIC-005（PG degradable 於 EQ-PG 檔）：交叉引用，MSSQL 側分支 A 已由 001~004 判定', async () => {
+  it('ATOMIC-005（PG degradable 於 EQ-PG 檔）：交叉引用；MSSQL 側 P5g 修法後＝分支 B（資料保留）', async () => {
     if (gate()) return;
-    // PG 對稱探測見 p5b-eqpg.mssql.spec.ts EQPG-ATOMIC；此處僅記錄 MSSQL 側結論＝分支 A（資料遺失）
+    // PG 對稱驗證見 p5g-pgtxn.spec.ts（degradable）；MSSQL 側分支 B 已由 001~004 回歸鎖定（P5g 交易包裝）
     expect(true).toBe(true);
   });
 });

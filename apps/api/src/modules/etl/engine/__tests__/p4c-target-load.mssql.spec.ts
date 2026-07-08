@@ -427,6 +427,11 @@ describe('P4c CLEANUP / CATALOG (真實 MSSQL)', () => {
     const proxy: any = {
       query: (sql: string, params?: any[]) =>
         /INSERT INTO "customer_core"|UPDATE tgt SET/.test(sql) ? Promise.reject(new Error('forced upsert failure')) : realQr.query(sql, params),
+      // P5g：交易 API 委派真實 QueryRunner（真實 rollback，確保失敗後 ## 清理仍成功）。
+      startTransaction: () => realQr.startTransaction(),
+      commitTransaction: () => realQr.commitTransaction(),
+      rollbackTransaction: () => realQr.rollbackTransaction(),
+      get isTransactionActive() { return realQr.isTransactionActive; },
     };
     const fx = await fixture(`(N'${p}001',N'01',N'X',N'etl_load')`, 'source_customer_no,customer_type_code,name,data_source');
     await expect(

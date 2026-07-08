@@ -78,12 +78,10 @@ describe('P5b STATIC — 事實鎖定', () => {
     }
   });
 
-  it('STATIC-004：凍結檔（target-load-handler-mssql / pipeline-runner / node-dispatcher）本輪未被 P5b 異動', () => {
-    for (const rel of [
-      '../handlers/target-load-handler-mssql.ts',
-      '../pipeline-runner.ts',
-      '../node-dispatcher.ts',
-    ]) {
+  it('STATIC-004：凍結檔（pipeline-runner / node-dispatcher）未被 ATOMIC 修法異動（P5g handler-only 決策）', () => {
+    // ⚠️ P5g 解凍 target-load-handler-mssql.ts（加交易包裝，見 p5g STATIC-001）；本斷言僅保留
+    //    pipeline-runner / node-dispatcher 之凍結守門——P5g GATE-001 選 handler-only，兩檔續凍。
+    for (const rel of ['../pipeline-runner.ts', '../node-dispatcher.ts']) {
       const src = fs.readFileSync(path.resolve(HERE, rel), 'utf8');
       expect(src).not.toMatch(/P5b|AD-E07-43/);
     }

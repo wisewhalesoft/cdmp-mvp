@@ -132,17 +132,6 @@ export class TargetLoadHandler implements NodeExecutor {
         .join(', ');
       const escapedPartitionValue = partitionValue.replace(/'/g, "''");
 
-      // 1. per-partition 截斷（只刪本分區，保護其他來源列）
-      try {
-        await context.queryRunner.query(
-          `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
-        );
-      } catch (err: any) {
-        throw new Error(
-          `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
-        );
-      }
-
       // 2. 單條 INSERT…SELECT，每列填 partitionValue
       // In-DB 的 INSERT…SELECT 不帶任何 bind 參數，不受 PG 65535 參數上限約束，
       // 故無需分批；單條語句一次搬移全部列為 O(n)（取代原 LIMIT/OFFSET 分批——
@@ -151,11 +140,35 @@ export class TargetLoadHandler implements NodeExecutor {
       const selectSql = `SELECT ${selectColsForInsert}, '${escapedPartitionValue}' AS "${partitionColumn}" FROM "${tempTable}"`;
       const insertSql = `INSERT INTO "${targetTable}" (${insertColumnList}) ${selectSql}`;
 
+      // I-ETL-ATOMIC-LOAD-01：DELETE 與其後 INSERT 必須同屬一個交易——INSERT 失敗則整個回滾
+      // 至 DELETE 前狀態（既存分區資料保留），而非留在「已刪除、未重填」的資料遺失中間態。
+      // 交易只包 clear+insert（enriched 暫存表建立於交易外），避免長交易鎖表。
+      await context.queryRunner.startTransaction();
       try {
-        await context.queryRunner.query(insertSql);
+        // 1. per-partition 截斷（只刪本分區，保護其他來源列）
+        try {
+          await context.queryRunner.query(
+            `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
+          );
+        } catch (err: any) {
+          throw new Error(
+            `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
+          );
+        }
+        try {
+          await context.queryRunner.query(insertSql);
+        } catch (err: any) {
+          throw new Error(`partition_replace INSERT 失敗：${err.message}`);
+        }
+        await context.queryRunner.commitTransaction();
         totalUpserted = input.rowCount;
-      } catch (err: any) {
-        throw new Error(`partition_replace INSERT 失敗：${err.message}`);
+      } catch (err) {
+        // PG：交易中止會毒化連線（後續語句被拒直到 ROLLBACK），故 catch 必須先 rollback 再
+        // re-throw，否則 pipeline-runner 外層 cleanupAll 會連帶失敗（CLEANUPTXN）。
+        if (context.queryRunner.isTransactionActive) {
+          await context.queryRunner.rollbackTransaction();
+        }
+        throw err;
       }
 
       await context.queryRunner.query(`DROP TABLE IF EXISTS "${tempTable}"`);
@@ -188,22 +201,34 @@ export class TargetLoadHandler implements NodeExecutor {
         insertSourceTable = dedupTable;
       }
 
-      try {
-        await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
-      } catch (err: any) {
-        throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
-      }
-
       // 單條 INSERT…SELECT（理由同 partition_replace）：In-DB 搬移無 bind 參數，
       // 不需分批，O(n) 取代原 LIMIT/OFFSET 分批的 O(n²)。
       const selectSql = `SELECT ${columnList} FROM "${insertSourceTable}"`;
       const insertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql}`;
 
+      // I-ETL-ATOMIC-LOAD-01：TRUNCATE 與其後 INSERT 必須同屬一個交易——INSERT 失敗則整個回滾
+      // 至 TRUNCATE 前狀態（既存資料保留），而非留在「已清空、未重填」的資料遺失中間態。
+      // 交易只包 clear+insert（去重暫存表建立於交易外），避免長交易鎖表。
+      await context.queryRunner.startTransaction();
       try {
-        await context.queryRunner.query(insertSql);
+        try {
+          await context.queryRunner.query(`TRUNCATE TABLE "${targetTable}"`);
+        } catch (err: any) {
+          throw new Error(`fullMode TRUNCATE 失敗：${err.message}`);
+        }
+        try {
+          await context.queryRunner.query(insertSql);
+        } catch (err: any) {
+          throw new Error(`fullMode INSERT 失敗：${err.message}`);
+        }
+        await context.queryRunner.commitTransaction();
         totalUpserted = totalRows;
-      } catch (err: any) {
-        throw new Error(`fullMode INSERT 失敗：${err.message}`);
+      } catch (err) {
+        // PG：catch 必須先 rollback 再 re-throw（CLEANUPTXN，見 partition_replace 段說明）。
+        if (context.queryRunner.isTransactionActive) {
+          await context.queryRunner.rollbackTransaction();
+        }
+        throw err;
       }
 
       if (insertSourceTable !== tempTable) {
@@ -269,10 +294,18 @@ export class TargetLoadHandler implements NodeExecutor {
     const selectSql = `SELECT ${columnList} FROM "${dedupTable}" WHERE ${ghostGate}`;
     const upsertSql = `INSERT INTO "${targetTable}" (${columnList}) ${selectSql} ON CONFLICT ("source_customer_no") DO UPDATE SET ${updateCols}`;
 
+    // I-ETL-ATOMIC-LOAD-01：PG UPSERT 為單句 INSERT…ON CONFLICT，天生原子；交易包裝屬「錦上添花」
+    // （與 MSSQL 兩段式 UPDATE+INSERT 路徑對稱、統一失敗語意），不改變既有正確性。
+    await context.queryRunner.startTransaction();
     try {
       await context.queryRunner.query(upsertSql);
+      await context.queryRunner.commitTransaction();
       totalUpserted = validCount;
     } catch (err: any) {
+      // PG：catch 必須先 rollback 再 re-throw（CLEANUPTXN，見 partition_replace 段說明）。
+      if (context.queryRunner.isTransactionActive) {
+        await context.queryRunner.rollbackTransaction();
+      }
       throw new Error(`UPSERT 失敗：${err.message}`);
     }
 
