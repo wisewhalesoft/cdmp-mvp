@@ -23,6 +23,12 @@ import { AssignmentRunReportService } from '../assignment-run-report.service';
 
 vi.setConfig({ testTimeout: 60000 });
 
+// AD-E07-43 P5a（I-MSSQL-CI-BOOTSTRAP-01）：本套件假設 dbo 為空——PARAM-003 斷言 customer_core 缺表、
+//   PARAM-007/016 於 dbo 建/丟 baseline 名稱之簡化表。CI bootstrap 後 CDMP_TEST.dbo 已有完整 baseline
+//   （customer_core 存在 → PARAM-003 失敗；且其 DROP 會殃及 baseline）。故隔離至專屬 fresh empty 庫
+//   （CDMP_PATTERNB，永不 bootstrap，由 docker/mssql-init.sql 建立），保「dbo 空」前提、且不碰共用 baseline。
+const PATTERNB_DATABASE = process.env.MSSQL_PATTERNB_DB ?? 'CDMP_PATTERNB';
+
 let reachable = false;
 let ds: DataSource | null = null;
 
@@ -53,7 +59,7 @@ beforeAll(async () => {
       port: MSSQL.port,
       username: MSSQL.username,
       password: MSSQL.password,
-      database: MSSQL.database,
+      database: PATTERNB_DATABASE,
       options: {
         encrypt: MSSQL.encrypt,
         trustServerCertificate: MSSQL.trustServerCertificate,

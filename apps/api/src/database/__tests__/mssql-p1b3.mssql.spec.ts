@@ -53,6 +53,11 @@ const API_ROOT = join(__dirname, '..', '..', '..'); // apps/api
 const SEEDS_DIR = join(__dirname, '..', 'seeds');
 const DATA_DIR = join(SEEDS_DIR, 'data');
 
+// AD-E07-43 P5a（I-MSSQL-CI-BOOTSTRAP-01）：本套件跑真實全套 bootstrap（migration:run + seed*3）並於
+//   beforeAll/afterAll 清空 dbo，故隔離至專屬資料庫（CDMP_P1B3，由 docker/mssql-init.sql 建立、fresh empty），
+//   不碰共用之 CDMP_TEST.dbo（後者由 CI bootstrap 建 baseline 供 P3a/P5b 沿用）。
+const P1B3_DATABASE = process.env.MSSQL_P1B3_DB ?? 'CDMP_P1B3';
+
 // AES key（seed-datasource CryptoUtil.encrypt / BOOT-003 decrypt 共用；child + in-process 一致）。
 const AES_KEY = randomBytes(32).toString('hex');
 
@@ -62,7 +67,7 @@ function childEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
     DB_TYPE: 'mssql',
     DB_HOST: MSSQL.host,
     DB_PORT: String(MSSQL.port),
-    DB_NAME: MSSQL.database,
+    DB_NAME: P1B3_DATABASE,
     DB_USERNAME: MSSQL.username,
     DB_PASSWORD: MSSQL.password,
     DB_MSSQL_ENCRYPT: String(MSSQL.encrypt),
@@ -171,7 +176,7 @@ beforeAll(async () => {
       port: MSSQL.port,
       username: MSSQL.username,
       password: MSSQL.password,
-      database: MSSQL.database,
+      database: P1B3_DATABASE,
       options: { encrypt: MSSQL.encrypt, trustServerCertificate: MSSQL.trustServerCertificate },
       synchronize: false,
     });

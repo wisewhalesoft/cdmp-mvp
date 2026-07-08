@@ -43,3 +43,64 @@ GO
 
 PRINT 'CDMP_TEST ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_TEST','Collation'));
 GO
+
+-- AD-E07-43 P5a（I-MSSQL-CI-BOOTSTRAP-01）：P1b2 / P1b3 baseline-migration 測試專用之隔離資料庫。
+-- 這兩支 spec 會對其連線的資料庫執行真實 CLI `migration:run`（P1b3 再加全套 seed），並於 beforeAll/afterAll
+-- 反覆清空 dbo（P1b2 更斷言「起始 dbo 為空」）。若它們沿用 CDMP_TEST，會把 CI bootstrap 建於
+-- CDMP_TEST.dbo 的 baseline（P3a/P5b 依賴之 36 業務表 + queue_job + customer_core）清掉，導致下游 spec skip。
+-- 故各自隔離一庫（fresh、empty），與共用之 CDMP_TEST.dbo 完全解耦；collation 比照 CDMP_TEST。
+IF DB_ID('CDMP_P1B2') IS NULL
+  CREATE DATABASE CDMP_P1B2 COLLATE Chinese_Taiwan_Stroke_BIN;
+GO
+
+USE CDMP_P1B2;
+GO
+
+IF USER_ID('cdmp') IS NULL
+  CREATE USER cdmp FOR LOGIN cdmp;
+GO
+
+ALTER ROLE db_owner ADD MEMBER cdmp;
+GO
+
+PRINT 'CDMP_P1B2 ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_P1B2','Collation'));
+GO
+
+IF DB_ID('CDMP_P1B3') IS NULL
+  CREATE DATABASE CDMP_P1B3 COLLATE Chinese_Taiwan_Stroke_BIN;
+GO
+
+USE CDMP_P1B3;
+GO
+
+IF USER_ID('cdmp') IS NULL
+  CREATE USER cdmp FOR LOGIN cdmp;
+GO
+
+ALTER ROLE db_owner ADD MEMBER cdmp;
+GO
+
+PRINT 'CDMP_P1B3 ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_P1B3','Collation'));
+GO
+
+-- AD-E07-43 P5a：pattern-b（P1c PARAM）同屬「假設 dbo 為空、於 dbo 建/丟 baseline 名稱之表」的測試——
+-- 其 PARAM-003 斷言 customer_core 缺表錯誤，PARAM-007/016 建立並於 afterAll DROP 簡化版
+-- ob_arreturndf_min_cap / ob_monthly_run_result / ob_pool_data / ob_emphire / ob_list_definition。
+-- 若沿用 CDMP_TEST，bootstrap 後 customer_core 已存在（PARAM-003 失敗）、且其 DROP 會殃及 baseline。
+-- 故亦隔離一個 fresh、empty 之庫（永不 bootstrap），保其「dbo 空」設計前提。
+IF DB_ID('CDMP_PATTERNB') IS NULL
+  CREATE DATABASE CDMP_PATTERNB COLLATE Chinese_Taiwan_Stroke_BIN;
+GO
+
+USE CDMP_PATTERNB;
+GO
+
+IF USER_ID('cdmp') IS NULL
+  CREATE USER cdmp FOR LOGIN cdmp;
+GO
+
+ALTER ROLE db_owner ADD MEMBER cdmp;
+GO
+
+PRINT 'CDMP_PATTERNB ready: collation=' + CONVERT(varchar(128), DATABASEPROPERTYEX('CDMP_PATTERNB','Collation'));
+GO

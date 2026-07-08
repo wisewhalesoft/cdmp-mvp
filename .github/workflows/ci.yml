@@ -166,6 +166,27 @@ jobs:
             mcr.microsoft.com/mssql-tools \
             /opt/mssql-tools/bin/sqlcmd -S localhost,1433 -U sa -P "$MSSQL_SA_PASSWORD" -i /init/mssql-init.sql -b
 
+      # AD-E07-43 P5a（I-MSSQL-CI-BOOTSTRAP-01）：跑任何 *.mssql.spec.ts 前，先對 CDMP_TEST 執行
+      # migration:run，建出完整 MSSQL baseline（36 業務表 + queue_job + customer_core + 參考資料）。
+      # 未先 bootstrap 時，P3a（及後續 P5b 5 條 pipeline）等「複用既有 dbo baseline」之 DB 案例會因 dbo
+      # 缺表而 GATE skip（CI 綠燈假信心）。此步驟同時額外驗證 migration 檔案本身可正確執行。
+      # 會清空/建丟 dbo baseline 名稱表之測試（P1b2 / P1b3 / pattern-b）已各自隔離至
+      # CDMP_P1B2 / CDMP_P1B3 / CDMP_PATTERNB（見 docker/mssql-init.sql），不會動到此處 bootstrap 於
+      # CDMP_TEST.dbo 的表 → 執行序無關、CI 與本機皆可獨立重跑。
+      - name: Bootstrap MSSQL baseline (migration:run → CDMP_TEST.dbo)
+        working-directory: apps/api
+        env:
+          DB_TYPE: mssql
+          DB_HOST: localhost
+          DB_PORT: "1433"
+          DB_USERNAME: cdmp
+          DB_PASSWORD: "Cdmp_Dev_2026!"
+          DB_NAME: CDMP_TEST
+          DB_MSSQL_ENCRYPT: "true"
+          DB_MSSQL_TRUST_CERT: "true"
+          NODE_ENV: production
+        run: npm run migration:run
+
       # 序列化（--no-file-parallelism），對齊 PG lane 理由。
       # Linux mssql 容器 sp_getapplock/sp_executesql 取鎖路徑拋 17750 DLL 缺失 → 相關並發鎖測試 ctx.skip
       # 附 reason；skip 不算 fail，lane 仍綠。

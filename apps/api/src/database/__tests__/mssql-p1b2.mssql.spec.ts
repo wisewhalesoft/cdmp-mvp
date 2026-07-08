@@ -104,6 +104,11 @@ vi.setConfig({ testTimeout: 180000 });
 
 const SYNC_SCHEMA = 'p1b2_sync'; // Path A
 const DBO = 'dbo'; // Path B（baseline migration，對應 prod 部署路徑）
+// AD-E07-43 P5a（I-MSSQL-CI-BOOTSTRAP-01）：本套件執行真實 CLI migration:run 並反覆清空 dbo，
+//   故隔離至專屬資料庫（CDMP_P1B2，由 docker/mssql-init.sql 建立、fresh empty），不碰共用之
+//   CDMP_TEST.dbo——後者由 CI bootstrap 建 baseline 供 P3a/P5b 沿用。Path B 仍走「連線之 DB 的 dbo、
+//   無 schema override」＝真實 prod 部署路徑，僅資料庫名不同（parity/baseline 語意不受影響）。
+const P1B2_DATABASE = process.env.MSSQL_P1B2_DB ?? 'CDMP_P1B2';
 const MIGRATION_REL = join('src', 'database', 'migrations', 'mssql', '1751884800000-MssqlBaselineSchema.ts');
 const MIGRATION_SRC_PATH = join(__dirname, '..', 'migrations', 'mssql', '1751884800000-MssqlBaselineSchema.ts');
 const DATA_SOURCE_PATH = join(__dirname, '..', 'data-source.ts');
@@ -130,7 +135,7 @@ function mssqlOptions(schema?: string) {
     port: MSSQL.port,
     username: MSSQL.username,
     password: MSSQL.password,
-    database: MSSQL.database,
+    database: P1B2_DATABASE,
     ...(schema ? { schema } : {}),
     options: {
       encrypt: MSSQL.encrypt,
@@ -173,7 +178,7 @@ function runTypeormCli(command: string): ReturnType<typeof spawnSync> {
         DB_TYPE: 'mssql',
         DB_HOST: MSSQL.host,
         DB_PORT: String(MSSQL.port),
-        DB_NAME: MSSQL.database,
+        DB_NAME: P1B2_DATABASE,
         DB_USERNAME: MSSQL.username,
         DB_PASSWORD: MSSQL.password,
         DB_MSSQL_ENCRYPT: String(MSSQL.encrypt),
@@ -311,7 +316,7 @@ afterAll(async () => {
 // 一、BASELINE — Baseline Migration 建置成功
 // ===========================================================================
 describe('AD-E07-39 P1b2 BASELINE', () => {
-  it('TS-MSSQL-P1B2-BASELINE-006（前置守門）：建置前 CDMP_TEST.dbo 為空', (ctx) => {
+  it('TS-MSSQL-P1B2-BASELINE-006（前置守門）：建置前隔離庫（CDMP_P1B2）.dbo 為空', (ctx) => {
     ensureMssql(ctx);
     expect(
       dboInitialTableCount,
@@ -877,7 +882,7 @@ describe('AD-E07-39 P1b2 STATIC', () => {
 // 九、REG — 回歸 + dbo 保留慣例閉環（REG-005 為最後一個 test，清 dbo 並斷言歸零）
 // ===========================================================================
 describe('AD-E07-39 P1b2 REG', () => {
-  it('TS-MSSQL-P1B2-REG-005（dbo 保留慣例閉環）：清理後 CDMP_TEST.dbo 資料表數量歸零', async (ctx) => {
+  it('TS-MSSQL-P1B2-REG-005（dbo 保留慣例閉環）：清理後隔離庫（CDMP_P1B2）.dbo 資料表數量歸零', async (ctx) => {
     ensureMssql(ctx);
     // STATIC-004 已 revert 業務表；此處清空 dbo 剩餘（typeorm_migrations 等）並斷言 0。
     await dropAllTablesInSchema(ds!, DBO);
