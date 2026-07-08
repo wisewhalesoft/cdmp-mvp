@@ -16,6 +16,11 @@ import {
   runStage2and3Sql,
   type Stage2to4ListContext,
 } from '@/modules/assignment/stage1/stage2to4-sql-executor';
+// AD-E07-42 P3b：Stage 2~3 計分 MSSQL 下推平行版（DB_TYPE='mssql' 走此路，I-NOLOAD-01）。
+import {
+  runStage2and3SqlMssql,
+  fetchPoolDataColumnsMssql,
+} from '@/modules/assignment/stage1/stage2to4-sql-executor-mssql';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
@@ -148,13 +153,18 @@ export function calcAgeYears(dateOfBirth: Date | string, now: Date): number {
 }
 
 /**
- * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28）。
+ * Stage 2~4 執行策略決策（Bug A 修復 / AD-E07-28；AD-E07-42 P3b 三態化）。
  *
- * - `pushdown`    ：PG SQL 下推（P3，Stage 1 INSERT + Stage 2~4 UPDATE，I-NOLOAD-01）。
- * - `v2Inmemory`  ：非 PG（SQLite 測試 / in-memory）真實計分 golden oracle（executeV2）。
- * - `v1Inmemory`  ：非 PG v1 簡化計分（executeV1，向後相容）。
+ * - `pushdownPg`   ：PG SQL 下推（P3，Stage 1 INSERT + Stage 2~4 UPDATE，I-NOLOAD-01）。
+ * - `pushdownMssql`：MSSQL SQL 下推（AD-E07-42 P3b：Stage 2~3 計分下推；I-NOLOAD-01）。
+ * - `v2Inmemory`   ：非 PG/MSSQL（SQLite 測試 / in-memory）真實計分 golden oracle（executeV2）。
+ * - `v1Inmemory`   ：非 PG/MSSQL v1 簡化計分（executeV1，向後相容）。
  */
-export type Stage2to4Strategy = 'pushdown' | 'v2Inmemory' | 'v1Inmemory';
+export type Stage2to4Strategy =
+  | 'pushdownPg'
+  | 'pushdownMssql'
+  | 'v2Inmemory'
+  | 'v1Inmemory';
 
 /**
  * 依環境決定 Stage 2~4 執行策略（純函式，無副作用，供 unit 測試免真 PG）。
@@ -175,7 +185,11 @@ export function resolveStage2to4Strategy(env: {
   DB_TYPE?: string;
   ASSIGNMENT_PIPELINE_V2?: string;
 }): Stage2to4Strategy {
-  if (env.DB_TYPE === 'postgres') return 'pushdown';
+  // AD-E07-42 P3b（I-NOLOAD-01 / DISPATCH-001~004）：三態互斥。原二元 gate 使 mssql 落入 else 分支、
+  //   靜默走 in-memory JS 計分（executeV2/V1，re-hydrate 全 pool 回 heap），功能正確但架構退化 →
+  //   升級為三態，mssql 走 SQL 下推（pushdownMssql）。ASSIGNMENT_PIPELINE_V2 對 PG/MSSQL 皆已無意義。
+  if (env.DB_TYPE === 'postgres') return 'pushdownPg';
+  if (env.DB_TYPE === 'mssql') return 'pushdownMssql';
   return env.ASSIGNMENT_PIPELINE_V2 === 'true' ? 'v2Inmemory' : 'v1Inmemory';
 }
 
@@ -326,7 +340,9 @@ export class AssignmentRunPipelineService {
       DB_TYPE: process.env.DB_TYPE,
       ASSIGNMENT_PIPELINE_V2: process.env.ASSIGNMENT_PIPELINE_V2,
     });
-    const useStage2to4Pushdown = strategy === 'pushdown';
+    // AD-E07-42 P3b（DISPATCH-004）：pushdownPg / pushdownMssql 皆為 SQL 下推路徑（非 in-memory heap）。
+    const useStage2to4Pushdown =
+      strategy === 'pushdownPg' || strategy === 'pushdownMssql';
 
     try {
       await this.runRepo.update(
@@ -451,8 +467,18 @@ export class AssignmentRunPipelineService {
       // F100 P3：下推路徑之 Stage 2~4 已直接 UPDATE ob_monthly_run_result（無 heap 物化）；
       //   stage4ResultsPersisted=true → 後段不再 save()（避免雙寫 / 覆寫已下推之計分）。
       let stage4ResultsPersisted = false;
-      if (strategy === 'pushdown') {
+      if (strategy === 'pushdownPg') {
         stage4Results = await this.executeStage2to4Pushdown(
+          stage1WrittenLists,
+          ym,
+          runId,
+        );
+        stage4ResultsPersisted = true;
+      } else if (strategy === 'pushdownMssql') {
+        // AD-E07-42 P3b：MSSQL Stage 2~3 計分下推（score/card_level/tier_level）。
+        //   Stage 3c/3d/3e（比例分派 / CR / tier 收尾）之 MSSQL 化屬 P3c/P3d 範圍，尚未移植 →
+        //   本路徑僅補計分，dept_id/emplid/assignday 暫留 NULL（不呼叫 PG-only ration/CR SQL）。
+        stage4Results = await this.executeStage2to3PushdownMssql(
           stage1WrittenLists,
           ym,
           runId,
@@ -467,10 +493,9 @@ export class AssignmentRunPipelineService {
       // Bug A 修復：下推路徑 total_cases 改取 SQL COUNT（resultRepo.count by run_id），
       //   不靠 stage4Results.length（下推路徑該陣列現為快照用之有界讀回，且全載違反 I-NOLOAD）。
       //   非 PG（in-memory）路徑 stage4Results 即記憶體內全列 → .length 即真實筆數。
-      const totalCases =
-        strategy === 'pushdown'
-          ? await this.resultRepo.count({ where: { run_id: runId } })
-          : stage4Results.length;
+      const totalCases = useStage2to4Pushdown
+        ? await this.resultRepo.count({ where: { run_id: runId } })
+        : stage4Results.length;
 
       // 三份快照 + ob_monthly_run_result 原子寫入
       const configPayload = await this.buildConfigPayload(ym, validLists);
@@ -1072,6 +1097,63 @@ export class AssignmentRunPipelineService {
     //   記錄，下游 F063/F064/F066/F067 + CR 偵測依賴完整 assignments）；僅讀回機制改輕量化。
     const writtenListNos = stage1WrittenLists.map(({ list }) => list.list_no);
     if (writtenListNos.length === 0) return [];
+    return this.readResultRowsForSnapshot(runId);
+  }
+
+  /**
+   * AD-E07-42 P3b：MSSQL Stage 2~3 計分下推（score / card_level / tier_level）。
+   *
+   * 對每份「Stage 1 已 INSERT 列」之 list，以 MSSQL `runStage2and3SqlMssql` 補計分（消 re-hydrate heap，
+   * I-NOLOAD-01）。**範圍限 P3b**：Stage 3c（比例分派）/ 3d（CR）/ 3e（tier 收尾）之 MSSQL 化屬
+   * P3c/P3d，尚未移植 → 本方法**不**呼叫 PG-only 之 clearStage3Fields / runCrPrioritySql /
+   * runStage3to4RationSql（逐字翻譯前對 MSSQL 執行會語法錯或語意偏差）；dept_id/emplid/assignday
+   * 暫留 Stage 1 寫入之 NULL。fallback schema 檢查一次性查回 ob_pool_data 欄位集合共用予各 list
+   * （FALLBACK-005 N+1 禁止）。最後讀回有界子集供快照 payload。
+   */
+  private async executeStage2to3PushdownMssql(
+    stage1WrittenLists: Array<{ list: ObListDefinition; inserted: number }>,
+    ym: string,
+    runId: string,
+  ): Promise<Partial<ObMonthlyRunResult>[]> {
+    const allColumns = await this.columnRepo.find();
+    const allScores = await this.scoreRepo.find();
+    const allVersions = await this.versionRepo.find({ where: { status: 'active' } });
+
+    const manager = this.dataSource.manager;
+    // I-MSSQL-DYNAMIC-FALLBACK-01 / FALLBACK-005：一次性查 ob_pool_data 欄位集合（跨 list 共用）。
+    const poolColumns =
+      stage1WrittenLists.length > 0
+        ? await fetchPoolDataColumnsMssql(manager)
+        : new Set<string>();
+
+    for (const { list } of stage1WrittenLists) {
+      const cardType = list.card_type ?? '';
+      const activeVer = allVersions.find((v) => v.card_type === cardType);
+      const cardVersion =
+        activeVer && activeVer.card_version !== null ? activeVer.card_version : null;
+      const activeColumns =
+        activeVer && cardVersion !== null
+          ? allColumns.filter(
+              (c) =>
+                c.card_type === cardType &&
+                c.card_version === cardVersion &&
+                c.status === 'active',
+            )
+          : [];
+
+      const ctx: Stage2to4ListContext = {
+        runId,
+        listNo: list.list_no,
+        cardType,
+        cardVersion,
+        activeColumns,
+        scoreRows: allScores,
+        ym,
+      };
+      await runStage2and3SqlMssql(manager, ctx, poolColumns);
+    }
+
+    if (stage1WrittenLists.length === 0) return [];
     return this.readResultRowsForSnapshot(runId);
   }
 

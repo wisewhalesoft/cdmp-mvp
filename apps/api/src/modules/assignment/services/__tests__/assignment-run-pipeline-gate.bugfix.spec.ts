@@ -21,22 +21,22 @@ import { describe, it, expect } from 'vitest';
 import { resolveStage2to4Strategy } from '../assignment-run-pipeline.service';
 
 describe('Bug A — resolveStage2to4Strategy（PG 一律下推，gate=DB_TYPE）', () => {
-  it('PG + ASSIGNMENT_PIPELINE_V2 未設 → pushdown（修復核心：不再落入壞掉的 v1-PG fallback）', () => {
+  it('PG + ASSIGNMENT_PIPELINE_V2 未設 → pushdownPg（修復核心：不再落入壞掉的 v1-PG fallback）', () => {
     expect(
       resolveStage2to4Strategy({ DB_TYPE: 'postgres', ASSIGNMENT_PIPELINE_V2: undefined }),
-    ).toBe('pushdown');
+    ).toBe('pushdownPg');
   });
 
-  it('PG + ASSIGNMENT_PIPELINE_V2=true → pushdown（行為不變）', () => {
+  it('PG + ASSIGNMENT_PIPELINE_V2=true → pushdownPg（行為不變）', () => {
     expect(
       resolveStage2to4Strategy({ DB_TYPE: 'postgres', ASSIGNMENT_PIPELINE_V2: 'true' }),
-    ).toBe('pushdown');
+    ).toBe('pushdownPg');
   });
 
-  it('PG + ASSIGNMENT_PIPELINE_V2=false → pushdown（PG flag 已對 PG 無意義）', () => {
+  it('PG + ASSIGNMENT_PIPELINE_V2=false → pushdownPg（PG flag 已對 PG 無意義）', () => {
     expect(
       resolveStage2to4Strategy({ DB_TYPE: 'postgres', ASSIGNMENT_PIPELINE_V2: 'false' }),
-    ).toBe('pushdown');
+    ).toBe('pushdownPg');
   });
 
   it('非 PG（sqlite）+ ASSIGNMENT_PIPELINE_V2=true → v2Inmemory（非 PG 仍由 flag 選 v1/v2）', () => {
