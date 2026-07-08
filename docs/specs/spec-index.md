@@ -1,12 +1,14 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.28"
+version: "3.29"
 date: 2026-07-08
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.29 / 2026-07-08 / MSSQL P5b ATOMIC 資料完整性風險（潛在封鎖級）與 AD-E07-43 v1.0→v1.1 修訂**：P5b（其餘 5 條生產 ETL pipeline 端對端 MSSQL 驗證）真庫實測發現 **ATOMIC 資料完整性風險**——`target-load-handler`（**PG／MSSQL 兩版結構對稱，非本次遷移引入**）之 fullMode（`TRUNCATE`+`INSERT`）／partition_replace（`DELETE`+`INSERT`）路徑，`pipeline-runner.ts` 全程無交易保護（TypeORM `QueryRunner` autocommit），TRUNCATE/DELETE 先提交、後續單句 INSERT 若因髒資料（NOT NULL 違反／數值溢位／撞 PK）整句失敗**不會回滾**，導致目標表/分區既存生產資料被清空且未重建（真庫 4 種目標表形狀一致驗證：`ATOMIC-001~004`）；5 條 pipeline 皆無 `type_cast` 節點防線。生產影響：月度 ETL 遇單筆髒資料，`ob_pool_data`（7.8M 列）等來源表可能被整批清空，下游月跑讀空表。架構師評估三候選修法：**推薦 (a) 交易包裝**（TRUNCATE/DELETE+INSERT 同交易，失敗完整回滾；成本低、雙引擎對稱可落地、與既有單句大陳述式架構相容、且 Read Committed 隔離下已能取得 (b) 方案「中間態不可見」的主要效益）為必要立即修法；**(c) 前置驗證**（TRY_CAST/NOT-NULL 壞列導向 skip）為緊接之獨立 hardening（(a) 單獨無法解決「來源恆有髒列則整表載入從此卡住」的可用性問題）；**(b) Swap 全量**記錄為已評估但不建議之選項（額外儲存/複雜度成本高、主要效益已由 (a) 取得）。**範圍歸屬裁定**：獨立新增子切片 **P5g**（非阻擋既有 P5a~f/P5c MONTHRUN-DIFF/P5e F067 簽核之推進），因兩引擎共通（非 MSSQL 遷移回歸）但藉本次嚴謹端對端測試方法論才被驗證揭露，且在既有 PG/MSSQL 平行維護框架下修法成本低，不建議與遷移脫鉤處理。**架構師判斷需使用者知情裁示**（生產行為改變提案：失敗語意由「靜默清空」改為「安全失敗、舊資料保留」，且現行 PG 生產系統今天就受影響，是否/何時修屬業務風險接受度判斷）。**就地修訂 `implementation-log/AD-E07-43-mssql-p5-ci-signoff.md`（v1.0→v1.1）**：新增 §7 完整記錄發現/修法評估表/推薦理由/範圍歸屬/可帶回使用者之精簡摘要；新增不變式 `I-ETL-ATOMIC-LOAD-01`；§4 需使用者裁示事項新增第 3 項；mermaid 圖新增 P5g 節點。**刻意未動**：`architecture-spec.md`（理由同前）。
 
 > **v3.28 / 2026-07-08 / MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）計畫**：P3（Raw SQL 引擎移植，3a~3e）全數完成並 push——**MSSQL 月跑全鏈（Stage1 篩選→Stage2~3 計分→Stage3/4 比例→CR）現已全部有值**。進入 cutover 前最後關卡 P5：非新業務邏輯，而是「證明 MSSQL 忠實重現 PG」之全量驗證+業務簽核。新增 **[`implementation-log/AD-E07-43-mssql-p5-ci-signoff.md`](implementation-log/AD-E07-43-mssql-p5-ci-signoff.md)**，固化：(1) **🔴 P5a（優先度最高、槓桿最大）CI mssql-specs 缺 dbo baseline bootstrap 之修法**——查證確認 `.github/workflows/ci.yml` 的 `mssql-specs` job 僅建空 `CDMP_TEST` 資料庫、未跑 `migration:run`，導致 P3a 的 52 個案例被 GATE-002 靜默 skip（CI 綠燈但實際未真跑）；裁定**加 CI 層 `migration:run` bootstrap 步驟（非讓 P3a 回頭改自建）**，理由：一次修復全面受益+驗證 migration 檔案本身正確性+與 P3b~d 既有雙模式 harness 相容成本最低；另需一併排查已知的 P1b2「wipe dbo」測試排序風險；(2) P5b 其餘 5 條生產 ETL pipeline（`E07-OBPOOLDATA-Load` 等，P4d 僅端對端驗證 customer_core 一條）之 MSSQL 驗證，為 P5c 前置依賴；(3) P5c **MONTHRUN-DIFF**——真實觸發 PG/MSSQL 完整月跑，逐列比對 score/tier/card/dept_id/emplid/assignday/cr 九欄，**manual/script 執行（比照 F101/F102/F104 前例，非新 CI 測試）**；(4) P5d datetime2 時區 production 查證（P3d 已發現 tedious 以本機時區存 datetime2，非午夜 `appl_date` 可能使逾2年清空邊界與 JS oracle 分歧）；(5) P5e F067 式業務簽核報告（基準修正為「MSSQL vs PG」而非「vs legacy」，legacy 對齊已在既有 PG 版 F067 完成）；(6) P5f（可選）MSSQL 部署 bootstrap 對齊 PG 版一鍵部署。新增 2 個不變式（I-MSSQL-CI-BOOTSTRAP-01／I-MSSQL-SIGNOFF-GATE-01，後者明訂 cutover 需 MONTHRUN-DIFF 一致 + 業務簽核雙條件）；判定不需要 spec-writer。**明確彙整 2 項需使用者/業務裁示事項**（datetime2 時區查證與裁示；F067 簽核本身），其餘子切片（P5a/b/f）判斷純技術執行可直接推進。**刻意未動**：`architecture-spec.md`（理由同前）。
 
