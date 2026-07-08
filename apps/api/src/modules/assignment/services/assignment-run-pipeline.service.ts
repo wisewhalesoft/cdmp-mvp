@@ -10,6 +10,8 @@ import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { executeStage1Chain } from '@/modules/assignment/stage1/stage1-filter-chain';
 import { runStage1SqlInsert } from '@/modules/assignment/stage1/stage1-sql-executor';
+import { runStage1SqlInsertMssql } from '@/modules/assignment/stage1/stage1-sql-executor-mssql';
+import type { Stage1SqlCore } from '@/modules/assignment/stage1/stage1-sql-builder';
 import {
   runStage2and3Sql,
   type Stage2to4ListContext,
@@ -175,6 +177,27 @@ export function resolveStage2to4Strategy(env: {
 }): Stage2to4Strategy {
   if (env.DB_TYPE === 'postgres') return 'pushdown';
   return env.ASSIGNMENT_PIPELINE_V2 === 'true' ? 'v2Inmemory' : 'v1Inmemory';
+}
+
+/**
+ * Stage 1 案件挑選路徑（AD-E07-42 P3a DISPATCH）：
+ *   - `pushdownPg`   ：DB_TYPE='postgres' → buildStage1Sql / runStage1SqlInsert（PG 下推）。
+ *   - `pushdownMssql`：DB_TYPE='mssql'    → buildStage1SqlMssql / runStage1SqlInsertMssql（MSSQL 下推）。
+ *   - `jsChain`      ：其餘（SQLite 測試 / 未設）→ executeStage1Chain（JS golden oracle）。
+ */
+export type Stage1Strategy = 'pushdownPg' | 'pushdownMssql' | 'jsChain';
+
+/**
+ * 依 DB_TYPE 決定 Stage 1 執行策略（純函式，無副作用，供 unit 測試免真 DB；DISPATCH-001~004）。
+ *
+ * 三分支互斥（DISPATCH-004）：single input 恰對映一條路徑。原二元 gate（postgres vs 其餘一律 JS chain）
+ * 於 mssql 環境會誤入 JS chain（executeStage1Chain 之 PG-only CAST/SUBSTRING 對 MSSQL 無代表性且部分不支援）
+ * → 本函式將其升級為三分支，使 mssql 走 buildStage1SqlMssql 下推（DISPATCH-001）。
+ */
+export function resolveStage1Strategy(dbType?: string): Stage1Strategy {
+  if (dbType === 'postgres') return 'pushdownPg';
+  if (dbType === 'mssql') return 'pushdownMssql';
+  return 'jsChain';
 }
 
 /**
@@ -1434,9 +1457,13 @@ export class AssignmentRunPipelineService {
   ): Promise<
     { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
   > {
-    const dbType = process.env.DB_TYPE;
-    if (dbType === 'postgres') {
+    // AD-E07-42 P3a DISPATCH：三分支（postgres/mssql/其餘），取代原二元 gate（見 resolveStage1Strategy）。
+    const strategy = resolveStage1Strategy(process.env.DB_TYPE);
+    if (strategy === 'pushdownPg') {
       return this.runStage1SqlPushdown(list, workdt, runId, skipHydration);
+    }
+    if (strategy === 'pushdownMssql') {
+      return this.runStage1SqlPushdownMssql(list, workdt, runId, skipHydration);
     }
     const jsResult = await this.runStage1JsChain(list, workdt);
     if (jsResult.skipped) return jsResult;
@@ -1466,7 +1493,44 @@ export class AssignmentRunPipelineService {
       this.poolDataListRepo,
       { runId, listNo: list.list_no },
     );
+    return this.finalizeStage1Pushdown(inserted, core, list, runId, skipHydration);
+  }
 
+  /**
+   * AD-E07-42 P3a：MSSQL Stage 1 下推路徑（runStage1SqlInsertMssql；builder = buildStage1SqlMssql）。
+   * 尾段（warning / skip / hydration）與 PG 路徑共用 finalizeStage1Pushdown（行為完全一致）。
+   */
+  private async runStage1SqlPushdownMssql(
+    list: ObListDefinition,
+    workdt: Date,
+    runId: string,
+    skipHydration = false,
+  ): Promise<
+    { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
+  > {
+    const { inserted, core } = await runStage1SqlInsertMssql(
+      this.dataSource.manager,
+      list,
+      workdt,
+      this.poolDataListRepo,
+      { runId, listNo: list.list_no },
+    );
+    return this.finalizeStage1Pushdown(inserted, core, list, runId, skipHydration);
+  }
+
+  /**
+   * PG / MSSQL 下推共用尾段：warning 紀錄 → EMPTY_CONDITIONS skip → 0 列 → skipHydration →
+   * re-hydrate Stage 1 已挑選有界子集（I-NOLOAD-01）。dialect 差異僅在 insert 函式（上游），本段一致。
+   */
+  private async finalizeStage1Pushdown(
+    inserted: number,
+    core: Stage1SqlCore,
+    list: ObListDefinition,
+    runId: string,
+    skipHydration: boolean,
+  ): Promise<
+    { skipped: true } | { skipped: false; pool: ObPoolData[]; inserted: number }
+  > {
     for (const w of core.warnings) {
       this.logger.warn(
         `[Stage1] sql warning list_no=${list.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,

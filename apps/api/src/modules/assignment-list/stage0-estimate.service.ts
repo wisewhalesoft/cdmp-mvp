@@ -25,6 +25,8 @@ import * as stage1Chain from '@/modules/assignment/stage1/stage1-filter-chain';
 // F099 / AD-E07-28 P2：estimate 改與月跑 run 共用 buildStage1Sql core（I-RUN-EST-01）。
 // PG 走 SELECT COUNT(*) 下推；非 PG（SQLite 測試）沿用 executeStage1Chain dry-run（JS oracle）。
 import { estimateStage1SqlCount } from '@/modules/assignment/stage1/stage1-sql-executor';
+// AD-E07-42 P3a：MSSQL Stage 1 estimate 下推（DB_TYPE='mssql' 分支，DISPATCH-002）。
+import { estimateStage1SqlCountMssql } from '@/modules/assignment/stage1/stage1-sql-executor-mssql';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 /**
@@ -804,10 +806,14 @@ export class Stage0EstimateService {
   private async dryRunChainCount(def: ObListDefinition): Promise<number> {
     const workdt = this.deriveWorkdt(def.project_workym);
 
-    // F099 P2：PG 走 SELECT COUNT(*) 下推（與月跑 run 之 INSERT…SELECT 共用 buildStage1Sql core，
-    // I-RUN-EST-01）；非 PG（SQLite 測試）沿用 executeStage1Chain dry-run（JS oracle，PG-only CAST 不適用）。
-    if (process.env.DB_TYPE === 'postgres') {
-      const { count, core } = await estimateStage1SqlCount(
+    // F099 P2 / AD-E07-42 P3a：PG 與 MSSQL 皆走 SELECT COUNT(*) 下推（與月跑 run 之 INSERT…SELECT 共用
+    // 同源 buildStage1Sql[Mssql] core，I-RUN-EST-01）；非 PG/MSSQL（SQLite 測試）沿用 executeStage1Chain
+    // dry-run（JS oracle，PG-only CAST 不適用）。DISPATCH-002：三分支中 mssql 走 estimateStage1SqlCountMssql。
+    const dbType = process.env.DB_TYPE;
+    if (dbType === 'postgres' || dbType === 'mssql') {
+      const estimateFn =
+        dbType === 'mssql' ? estimateStage1SqlCountMssql : estimateStage1SqlCount;
+      const { count, core } = await estimateFn(
         this.poolRepo.manager,
         def,
         workdt,
