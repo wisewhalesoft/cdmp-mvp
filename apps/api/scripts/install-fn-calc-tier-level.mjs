@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 /**
+ * ⚠️ DEPRECATED（AD-E07-42 P3e，2026-07-08）：已確認死碼且已 dangling-broken。
+ *   本腳本原從 `1711360000141-CreateFnCalcTierLevel.ts` 抽 SQL 安裝 fn_calc_tier_level，
+ *   但該 migration 已於 baseline 收斂（`1711360000000-BaselineSchema.ts`）中移除，MIG_PATH
+ *   已指向不存在之檔案 → 執行必失敗。tier 現由計分引擎（P3b）計算，此函式為 PG-only legacy
+ *   死碼（MSSQL baseline 不建立；見 fn-calc-tier-level-p3e-deadcode.spec.ts 守門）。
+ *   保留（不刪）以符 PG 路徑零風險原則，待 Phase 6 cutover 隨整批 PG 產物移除。
+ *
  * E07 Track D — 安裝 fn_calc_tier_level function 到 dev DB
  *
  * dev 走 synchronize:true 不跑 migration，但 plpgsql function 不在 entity 範圍，

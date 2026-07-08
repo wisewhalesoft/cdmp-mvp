@@ -1,4 +1,9 @@
 /**
+ * ⚠️ DEPRECATED（AD-E07-42 P3e，2026-07-08）：PG-only legacy 測試。fn_calc_tier_level 已確認死碼
+ *   （tier 改由計分引擎 P3b 計算；MSSQL baseline 不建立此函式）。本測試直測 PG plpgsql 函式、
+ *   連不上 dev PG 時整組優雅 skip；保留為 cutover 前 PG 安全網，待 Phase 6 隨整批 PG 測試移除。
+ *   死碼防重引入守門見 `src/database/__tests__/fn-calc-tier-level-p3e-deadcode.spec.ts`。
+ *
  * E07 Track D — fn_calc_tier_level Integration Tests
  *
  * 連 dev PostgreSQL 直接呼叫 plpgsql 函式驗證行為。每個 it 用 BEGIN/ROLLBACK 隔離。

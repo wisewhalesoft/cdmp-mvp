@@ -1,4 +1,13 @@
 -- =============================================================================
+-- ⚠️ DEPRECATED（AD-E07-42 P3e，2026-07-08）：已確認死碼，勿再引用於任何 live 路徑。
+--   tier 已於 migration 162 統一 T1–T5、改由計分引擎（P3b `runStage2and3Sql` /
+--   `runStage2and3SqlMssql`）以 score→card_level（ob_levelcard_level）→tier_level
+--   （ob_tier NULL-aware JOIN）計算。本檔為 PG-only legacy，MSSQL baseline 不建立此函式
+--   （P1b2 已斷言 `OBJECT_ID('dbo.fn_calc_tier_level') = NULL`）。
+--   PG 路徑零風險原則（§2.5）：本檔與 PG baseline migration 之 CREATE FUNCTION 刻意保留，
+--   待 Phase 6 cutover 隨整批 PG 產物一併移除。防重引入守門：
+--   `src/database/__tests__/fn-calc-tier-level-p3e-deadcode.spec.ts`。
+-- =============================================================================
 -- fn_calc_tier_level — F061 Stage 2 計分 PostgreSQL function
 --
 -- 對應 spec：
