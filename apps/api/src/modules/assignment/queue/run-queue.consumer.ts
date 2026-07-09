@@ -58,8 +58,13 @@ export class RunQueueConsumer implements OnModuleInit, OnModuleDestroy {
     @Inject(RUN_QUEUE_TUNING)
     private readonly tuning: RunQueueTuning = DEFAULT_RUN_QUEUE_TUNING,
     // AD-E07-40 P2b：driver 判定 + mssql 佇列封裝（@Optional：postgres / sqlite 路徑不需要）。
-    @Optional() private readonly config: ConfigService | null = null,
-    @Optional() private readonly mssqlQueue: MssqlQueueService | null = null,
+    // 🔴 必須明確 @Inject：參數型別為 union（`X | null`）時 emitDecoratorMetadata 只 emit `Object`，
+    //    NestJS 無法用型別解析 provider → @Optional 注入 null。worker 跑 mssql 時 mssqlQueue 為 null
+    //    會使 startMssqlPolling → claimNext 崩潰（postgres 路徑因 driverIsMssql=false 從不觸發、故長期未爆）。
+    @Optional() @Inject(ConfigService) private readonly config: ConfigService | null = null,
+    @Optional()
+    @Inject(MssqlQueueService)
+    private readonly mssqlQueue: MssqlQueueService | null = null,
   ) {}
 
   /**

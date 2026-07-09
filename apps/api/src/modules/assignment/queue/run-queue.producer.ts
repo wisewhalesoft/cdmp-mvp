@@ -31,8 +31,12 @@ export class RunQueueProducer {
     private readonly tuning: RunQueueTuning = DEFAULT_RUN_QUEUE_TUNING,
     // AD-E07-40 P2b：driver 判定（DB_TYPE，比照 createPgBoss 既有寫法）+ mssql 佇列封裝。
     // 兩者 @Optional：pg-boss（postgres）與 sqlite 測試路徑不需要，維持既有行為不變。
-    @Optional() private readonly config: ConfigService | null = null,
-    @Optional() private readonly mssqlQueue: MssqlQueueService | null = null,
+    // 🔴 必須明確 @Inject：union 型別（`X | null`）使 emitDecoratorMetadata 只 emit `Object`，
+    //    NestJS 型別解析失敗 → @Optional 注入 null；mssql 入列時 mssqlQueue 為 null 會使 send 崩潰。
+    @Optional() @Inject(ConfigService) private readonly config: ConfigService | null = null,
+    @Optional()
+    @Inject(MssqlQueueService)
+    private readonly mssqlQueue: MssqlQueueService | null = null,
   ) {}
 
   /**

@@ -48,8 +48,12 @@ export class MssqlQueueExpiryReaper
     @Inject(RUN_QUEUE_TUNING)
     private readonly tuning: RunQueueTuning = DEFAULT_RUN_QUEUE_TUNING,
     // @Optional：postgres / sqlite 路徑不需要（且 MOUNT 單元測試直接建構、注入 fake）。
-    @Optional() private readonly config: ConfigService | null = null,
-    @Optional() private readonly mssqlQueue: MssqlQueueService | null = null,
+    // 🔴 必須明確 @Inject：union 型別（`X | null`）使 emitDecoratorMetadata 只 emit `Object`，
+    //    NestJS 型別解析失敗 → @Optional 注入 null；mssql 下 expireSweep 依賴之會崩潰。
+    @Optional() @Inject(ConfigService) private readonly config: ConfigService | null = null,
+    @Optional()
+    @Inject(MssqlQueueService)
+    private readonly mssqlQueue: MssqlQueueService | null = null,
   ) {}
 
   /**
