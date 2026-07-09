@@ -19,14 +19,16 @@ const IMPL_LOG = path.resolve(
 const read = (p: string) => fs.readFileSync(p, 'utf8');
 
 describe('P4d STATIC — 事實鎖定', () => {
-  it('STATIC-001：真實 pipeline 節點數 56、邊數 55、nodeType 分佈鎖定', () => {
+  it('STATIC-001：真實 pipeline 節點數 34、邊數 33、nodeType 分佈鎖定（F110/US-173 收斂後）', () => {
+    // F110/US-173：31 個 lookup 依字典表實例收斂為 9 個 code_decode（56→34 節點、55→33 邊）。
+    // 收斂前事實（節點 56/邊 55/lookup 31）見 git 歷史 + `__fixtures__/customer-core-pre-collapse.json`。
     const def = loadCustomerCoreDef();
-    expect(def.nodes.length).toBe(56);
-    expect(def.edges.length).toBe(55);
+    expect(def.nodes.length).toBe(34);
+    expect(def.edges.length).toBe(33);
     const dist: Record<string, number> = {};
     for (const n of def.nodes) dist[n.data.nodeType] = (dist[n.data.nodeType] || 0) + 1;
     expect(dist).toEqual({
-      raw_data_extract: 5, derived_field: 7, lookup: 31, merge: 4, dedup: 3,
+      raw_data_extract: 5, derived_field: 7, code_decode: 9, merge: 4, dedup: 3,
       type_cast: 2, field_mapping: 2, conditional: 1, target_load: 1,
     });
   });

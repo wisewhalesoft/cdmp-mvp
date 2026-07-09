@@ -1678,9 +1678,9 @@
   },
   {
     "name": "ETL for Customer Core",
-    "description": "��X 5 �ӷ��]2 ZZIP + 3 MLMC�^�� customer_core �ؼЪ�",
-    "version": 13,
-    "step_count": 53,
+    "description": "整合 5 個來源（2 ZZIP + 3 MLMC）之客戶主檔至 customer_core 目標表；F110/US-173：31 個 lookup 節點依字典表實例收斂為 9 個 code_decode 節點（單趟多欄位代碼解碼）",
+    "version": 14,
+    "step_count": 34,
     "status": "active",
     "schedule": null,
     "enabled": true,
@@ -1764,451 +1764,219 @@
           }
         },
         {
-          "id": "lk_edu1",
+          "id": "cd_zzip1",
           "type": "pipelineNode",
           "position": {
             "x": 320,
             "y": 50
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_edu",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[和潤]ZZIP代碼解碼",
+            "subtitle": "9 組代碼對照(TBL_ID)",
             "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'A2'",
-            "matchColumn": "EDUCAT_BACK",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
-              {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "education_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC16.ZZIPPROD",
               "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_occ1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 480,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_occ",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'A4'",
-            "matchColumn": "VOCATION_CODE",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+            },
+            "mappings": [
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "occupation_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_job1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 640,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_job",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'A5'",
-            "matchColumn": "JOB_TITLE",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "EDUCAT_BACK",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A2'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "education_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "job_title_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_marry1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 800,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_marry",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = '33'",
-            "matchColumn": "CMARRY_MK",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "VOCATION_CODE",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A4'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "occupation_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "marital_status_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_ctype1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 960,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_ctype",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = '55'",
-            "matchColumn": "CUSTOM_MK",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "JOB_TITLE",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A5'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "job_title_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "customer_type_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_incsrc1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 1120,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_incsrc",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'Y0'",
-            "matchColumn": "INCOME_SOURCE",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "CMARRY_MK",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = '33'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "marital_status_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "income_source_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_indus1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 1280,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_indus",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'AA'",
-            "matchColumn": "INDUSTRY",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "CUSTOM_MK",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = '55'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "customer_type_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "industry_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_joblv1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 1440,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_joblv",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'A6'",
-            "matchColumn": "JOB_LEVEL",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "INCOME_SOURCE",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'Y0'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "income_source_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "job_level_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_income1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 1600,
-            "y": 50
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤_income",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_e5a2345c",
-            "lookupFilter": "\"TBL_ID\" = 'A3'",
-            "matchColumn": "MONTH_INCOME",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "INDUSTRY",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'AA'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "industry_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "monthly_income_desc"
+                "matchColumn": "JOB_LEVEL",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A6'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "job_level_desc"
+                  }
+                ]
+              },
+              {
+                "matchColumn": "MONTH_INCOME",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A3'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "monthly_income_desc"
+                  }
+                ]
               }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
+            ]
           }
         },
         {
-          "id": "lk_edu2",
+          "id": "cd_zzip2",
           "type": "pipelineNode",
           "position": {
             "x": 320,
             "y": 200
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_edu",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[和勁]ZZIP代碼解碼",
+            "subtitle": "7 組代碼對照(TBL_ID)",
             "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = 'A2'",
-            "matchColumn": "EDUCAT_BACK",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
-              {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "education_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC51.ZZIPPROD",
               "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_occ2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 480,
-            "y": 200
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_occ",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = 'A4'",
-            "matchColumn": "VOCATION_CODE",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+            },
+            "mappings": [
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "occupation_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_job2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 640,
-            "y": 200
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_job",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = 'A5'",
-            "matchColumn": "JOB_TITLE",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "EDUCAT_BACK",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A2'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "education_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "job_title_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_marry2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 800,
-            "y": 200
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_marry",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = '33'",
-            "matchColumn": "CMARRY_MK",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "VOCATION_CODE",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A4'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "occupation_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "marital_status_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_ctype2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 960,
-            "y": 200
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_ctype",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = '55'",
-            "matchColumn": "CUSTOM_MK",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "JOB_TITLE",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A5'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "job_title_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "customer_type_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_joblv2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 1120,
-            "y": 200
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_joblv",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = 'A6'",
-            "matchColumn": "JOB_LEVEL",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "CMARRY_MK",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = '33'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "marital_status_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "job_level_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
-          }
-        },
-        {
-          "id": "lk_income2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 1280,
-            "y": 200
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁_income",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_6fce5258",
-            "lookupFilter": "\"TBL_ID\" = 'A3'",
-            "matchColumn": "MONTH_INCOME",
-            "lookupMatchColumn": "TBL_CD",
-            "outputColumns": [
+                "matchColumn": "CUSTOM_MK",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = '55'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "customer_type_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "TBL_DESC1",
-                "outputAlias": "monthly_income_desc"
+                "matchColumn": "JOB_LEVEL",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A6'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "job_level_desc"
+                  }
+                ]
+              },
+              {
+                "matchColumn": "MONTH_INCOME",
+                "lookupMatchColumn": "TBL_CD",
+                "filter": "\"TBL_ID\" = 'A3'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "TBL_DESC1",
+                    "outputAlias": "monthly_income_desc"
+                  }
+                ]
               }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMCODE_D"
-            }
+            ]
           }
         },
         {
@@ -2301,84 +2069,53 @@
           }
         },
         {
-          "id": "lk_hcity",
+          "id": "cd_zip_city",
           "type": "pipelineNode",
           "position": {
             "x": 2240,
             "y": 260
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_郵遞_戶籍縣市",
-            "subtitle": "郵遞區號對照(POSTAL_NO)",
+            "nodeType": "code_decode",
+            "label": "郵遞區號縣市解碼",
+            "subtitle": "3 組(戶籍/通訊/公司)",
             "lookupSource": "raw_b4a48f10",
-            "matchColumn": "HPOST_NUM",
-            "lookupMatchColumn": "POSTAL_NO",
-            "outputColumns": [
-              {
-                "lookupColumn": "POSTAL_ADD",
-                "outputAlias": "hpost_city"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC16.ZZIPPROD",
               "sourceTable": "ZZIP_BAMPOST_M"
-            }
-          }
-        },
-        {
-          "id": "lk_ccity",
-          "type": "pipelineNode",
-          "position": {
-            "x": 2320,
-            "y": 260
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_郵遞_通訊縣市",
-            "subtitle": "郵遞區號對照(POSTAL_NO)",
-            "lookupSource": "raw_b4a48f10",
-            "matchColumn": "CPOST_NUM",
-            "lookupMatchColumn": "POSTAL_NO",
-            "outputColumns": [
+            },
+            "mappings": [
               {
-                "lookupColumn": "POSTAL_ADD",
-                "outputAlias": "cpost_city"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMPOST_M"
-            }
-          }
-        },
-        {
-          "id": "lk_cocity",
-          "type": "pipelineNode",
-          "position": {
-            "x": 2400,
-            "y": 260
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_郵遞_公司縣市",
-            "subtitle": "郵遞區號對照(POSTAL_NO)",
-            "lookupSource": "raw_b4a48f10",
-            "matchColumn": "CO_NUM",
-            "lookupMatchColumn": "POSTAL_NO",
-            "outputColumns": [
+                "matchColumn": "HPOST_NUM",
+                "lookupMatchColumn": "POSTAL_NO",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "POSTAL_ADD",
+                    "outputAlias": "hpost_city"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "POSTAL_ADD",
-                "outputAlias": "co_city"
+                "matchColumn": "CPOST_NUM",
+                "lookupMatchColumn": "POSTAL_NO",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "POSTAL_ADD",
+                    "outputAlias": "cpost_city"
+                  }
+                ]
+              },
+              {
+                "matchColumn": "CO_NUM",
+                "lookupMatchColumn": "POSTAL_NO",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "POSTAL_ADD",
+                    "outputAlias": "co_city"
+                  }
+                ]
               }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.ZZIPPROD",
-              "sourceTable": "ZZIP_BAMPOST_M"
-            }
+            ]
           }
         },
         {
@@ -2793,336 +2530,252 @@
           }
         },
         {
-          "id": "lk_m_ctype1",
+          "id": "cd_mlmc1",
           "type": "pipelineNode",
           "position": {
             "x": 160,
             "y": 500
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤M_ctype",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[和潤]MLMC代碼解碼",
+            "subtitle": "3 組(SYSCD=CF)",
             "lookupSource": "raw_8b80671e",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
-            "matchColumn": "CUTYPE",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
-              {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "customer_type_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC16.CF",
               "sourceTable": "MLMCODE"
-            }
-          }
-        },
-        {
-          "id": "lk_m_emp1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 320,
-            "y": 500
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤M_emp",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_8b80671e",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
-            "matchColumn": "EMPLOYEE",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
+            },
+            "mappings": [
               {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "employee_count_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.CF",
-              "sourceTable": "MLMCODE"
-            }
-          }
-        },
-        {
-          "id": "lk_m_listed1",
-          "type": "pipelineNode",
-          "position": {
-            "x": 480,
-            "y": 500
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤M_listed",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_8b80671e",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
-            "matchColumn": "LISTED",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
+                "matchColumn": "CUTYPE",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "customer_type_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "is_listed_desc"
+                "matchColumn": "EMPLOYEE",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "employee_count_desc"
+                  }
+                ]
+              },
+              {
+                "matchColumn": "LISTED",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "is_listed_desc"
+                  }
+                ]
               }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC16.CF",
-              "sourceTable": "MLMCODE"
-            }
+            ]
           }
         },
         {
-          "id": "lk_m_indus1",
+          "id": "cd_mlind1",
           "type": "pipelineNode",
           "position": {
             "x": 640,
             "y": 500
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和潤M_indus",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[和潤]MLMC行業解碼",
+            "subtitle": "INDUID→行業別",
             "lookupSource": "raw_b9558d10",
-            "matchColumn": "INDUID",
-            "lookupMatchColumn": "INDUID",
-            "outputColumns": [
-              {
-                "lookupColumn": "INDUNM",
-                "outputAlias": "industry_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC16.CF",
               "sourceTable": "MLSTDINDUMF"
-            }
+            },
+            "mappings": [
+              {
+                "matchColumn": "INDUID",
+                "lookupMatchColumn": "INDUID",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "INDUNM",
+                    "outputAlias": "industry_desc"
+                  }
+                ]
+              }
+            ]
           }
         },
         {
-          "id": "lk_m_ctype2",
+          "id": "cd_mlmc2",
           "type": "pipelineNode",
           "position": {
             "x": 160,
             "y": 650
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁M_ctype",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[和勁]MLMC代碼解碼",
+            "subtitle": "3 組(SYSCD=CF)",
             "lookupSource": "raw_9dd0eca5",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
-            "matchColumn": "CUTYPE",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
-              {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "customer_type_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC51.CF",
               "sourceTable": "MLMCODE"
-            }
-          }
-        },
-        {
-          "id": "lk_m_emp2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 320,
-            "y": 650
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁M_emp",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_9dd0eca5",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
-            "matchColumn": "EMPLOYEE",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
+            },
+            "mappings": [
               {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "employee_count_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.CF",
-              "sourceTable": "MLMCODE"
-            }
-          }
-        },
-        {
-          "id": "lk_m_listed2",
-          "type": "pipelineNode",
-          "position": {
-            "x": 480,
-            "y": 650
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁M_listed",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_9dd0eca5",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
-            "matchColumn": "LISTED",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
+                "matchColumn": "CUTYPE",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "customer_type_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "is_listed_desc"
+                "matchColumn": "EMPLOYEE",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "employee_count_desc"
+                  }
+                ]
+              },
+              {
+                "matchColumn": "LISTED",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "is_listed_desc"
+                  }
+                ]
               }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC51.CF",
-              "sourceTable": "MLMCODE"
-            }
+            ]
           }
         },
         {
-          "id": "lk_m_indus2",
+          "id": "cd_mlind2",
           "type": "pipelineNode",
           "position": {
             "x": 640,
             "y": 650
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_和勁M_indus",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[和勁]MLMC行業解碼",
+            "subtitle": "INDUID→行業別",
             "lookupSource": "raw_3acd58e7",
-            "matchColumn": "INDUID",
-            "lookupMatchColumn": "INDUID",
-            "outputColumns": [
-              {
-                "lookupColumn": "INDUNM",
-                "outputAlias": "industry_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC51.CF",
               "sourceTable": "MLSTDINDUMF"
-            }
+            },
+            "mappings": [
+              {
+                "matchColumn": "INDUID",
+                "lookupMatchColumn": "INDUID",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "INDUNM",
+                    "outputAlias": "industry_desc"
+                  }
+                ]
+              }
+            ]
           }
         },
         {
-          "id": "lk_m_ctype3",
+          "id": "cd_mlmc3",
           "type": "pipelineNode",
           "position": {
             "x": 160,
             "y": 800
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_興業M_ctype",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[興業]MLMC代碼解碼",
+            "subtitle": "3 組(SYSCD=CF)",
             "lookupSource": "raw_9dcaf414",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
-            "matchColumn": "CUTYPE",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
-              {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "customer_type_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC71.CF",
               "sourceTable": "MLMCODE"
-            }
-          }
-        },
-        {
-          "id": "lk_m_emp3",
-          "type": "pipelineNode",
-          "position": {
-            "x": 320,
-            "y": 800
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_興業M_emp",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_9dcaf414",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
-            "matchColumn": "EMPLOYEE",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
+            },
+            "mappings": [
               {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "employee_count_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC71.CF",
-              "sourceTable": "MLMCODE"
-            }
-          }
-        },
-        {
-          "id": "lk_m_listed3",
-          "type": "pipelineNode",
-          "position": {
-            "x": 480,
-            "y": 800
-          },
-          "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_興業M_listed",
-            "subtitle": "代碼對照表對照",
-            "lookupSource": "raw_9dcaf414",
-            "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
-            "matchColumn": "LISTED",
-            "lookupMatchColumn": "MCODE",
-            "outputColumns": [
+                "matchColumn": "CUTYPE",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "customer_type_desc"
+                  }
+                ]
+              },
               {
-                "lookupColumn": "MNAME1",
-                "outputAlias": "is_listed_desc"
+                "matchColumn": "EMPLOYEE",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "employee_count_desc"
+                  }
+                ]
+              },
+              {
+                "matchColumn": "LISTED",
+                "lookupMatchColumn": "MCODE",
+                "filter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "MNAME1",
+                    "outputAlias": "is_listed_desc"
+                  }
+                ]
               }
-            ],
-            "noMatchStrategy": "null",
-            "lookupRef": {
-              "datasourceName": "APYHFC71.CF",
-              "sourceTable": "MLMCODE"
-            }
+            ]
           }
         },
         {
-          "id": "lk_m_indus3",
+          "id": "cd_mlind3",
           "type": "pipelineNode",
           "position": {
             "x": 640,
             "y": 800
           },
           "data": {
-            "nodeType": "lookup",
-            "label": "Lookup_興業M_indus",
-            "subtitle": "代碼對照表對照",
+            "nodeType": "code_decode",
+            "label": "[興業]MLMC行業解碼",
+            "subtitle": "INDUID→行業別",
             "lookupSource": "raw_afe6a874",
-            "matchColumn": "INDUID",
-            "lookupMatchColumn": "INDUID",
-            "outputColumns": [
-              {
-                "lookupColumn": "INDUNM",
-                "outputAlias": "industry_desc"
-              }
-            ],
-            "noMatchStrategy": "null",
             "lookupRef": {
               "datasourceName": "APYHFC71.CF",
               "sourceTable": "MLSTDINDUMF"
-            }
+            },
+            "mappings": [
+              {
+                "matchColumn": "INDUID",
+                "lookupMatchColumn": "INDUID",
+                "outputColumns": [
+                  {
+                    "lookupColumn": "INDUNM",
+                    "outputAlias": "industry_desc"
+                  }
+                ]
+              }
+            ]
           }
         },
         {
@@ -3809,53 +3462,13 @@
           "target": "df_zzip_ctype_pad1"
         },
         {
-          "id": "edge-df_zzip_ctype_pad1-lk_edu1",
+          "id": "edge-df_zzip_ctype_pad1-cd_zzip1",
           "source": "df_zzip_ctype_pad1",
-          "target": "lk_edu1"
+          "target": "cd_zzip1"
         },
         {
-          "id": "edge-lk_edu1-lk_occ1",
-          "source": "lk_edu1",
-          "target": "lk_occ1"
-        },
-        {
-          "id": "edge-lk_occ1-lk_job1",
-          "source": "lk_occ1",
-          "target": "lk_job1"
-        },
-        {
-          "id": "edge-lk_job1-lk_marry1",
-          "source": "lk_job1",
-          "target": "lk_marry1"
-        },
-        {
-          "id": "edge-lk_marry1-lk_ctype1",
-          "source": "lk_marry1",
-          "target": "lk_ctype1"
-        },
-        {
-          "id": "edge-lk_ctype1-lk_incsrc1",
-          "source": "lk_ctype1",
-          "target": "lk_incsrc1"
-        },
-        {
-          "id": "edge-lk_incsrc1-lk_indus1",
-          "source": "lk_incsrc1",
-          "target": "lk_indus1"
-        },
-        {
-          "id": "edge-lk_indus1-lk_joblv1",
-          "source": "lk_indus1",
-          "target": "lk_joblv1"
-        },
-        {
-          "id": "edge-lk_joblv1-lk_income1",
-          "source": "lk_joblv1",
-          "target": "lk_income1"
-        },
-        {
-          "id": "edge-lk_income1-m1",
-          "source": "lk_income1",
+          "id": "edge-cd_zzip1-m1",
+          "source": "cd_zzip1",
           "target": "m1",
           "targetHandle": "left-input"
         },
@@ -3865,43 +3478,13 @@
           "target": "df_zzip_ctype_pad2"
         },
         {
-          "id": "edge-df_zzip_ctype_pad2-lk_edu2",
+          "id": "edge-df_zzip_ctype_pad2-cd_zzip2",
           "source": "df_zzip_ctype_pad2",
-          "target": "lk_edu2"
+          "target": "cd_zzip2"
         },
         {
-          "id": "edge-lk_edu2-lk_occ2",
-          "source": "lk_edu2",
-          "target": "lk_occ2"
-        },
-        {
-          "id": "edge-lk_occ2-lk_job2",
-          "source": "lk_occ2",
-          "target": "lk_job2"
-        },
-        {
-          "id": "edge-lk_job2-lk_marry2",
-          "source": "lk_job2",
-          "target": "lk_marry2"
-        },
-        {
-          "id": "edge-lk_marry2-lk_ctype2",
-          "source": "lk_marry2",
-          "target": "lk_ctype2"
-        },
-        {
-          "id": "edge-lk_ctype2-lk_joblv2",
-          "source": "lk_ctype2",
-          "target": "lk_joblv2"
-        },
-        {
-          "id": "edge-lk_joblv2-lk_income2",
-          "source": "lk_joblv2",
-          "target": "lk_income2"
-        },
-        {
-          "id": "edge-lk_income2-m1",
-          "source": "lk_income2",
+          "id": "edge-cd_zzip2-m1",
+          "source": "cd_zzip2",
           "target": "m1",
           "targetHandle": "right-input"
         },
@@ -3921,74 +3504,44 @@
           "target": "tc_zzip"
         },
         {
-          "id": "edge-tc_zzip-lk_hcity",
+          "id": "edge-tc_zzip-cd_zip_city",
           "source": "tc_zzip",
-          "target": "lk_hcity"
+          "target": "cd_zip_city"
         },
         {
-          "id": "edge-lk_hcity-lk_ccity",
-          "source": "lk_hcity",
-          "target": "lk_ccity"
-        },
-        {
-          "id": "edge-lk_ccity-lk_cocity",
-          "source": "lk_ccity",
-          "target": "lk_cocity"
-        },
-        {
-          "id": "edge-lk_cocity-fm1",
-          "source": "lk_cocity",
+          "id": "edge-cd_zip_city-fm1",
+          "source": "cd_zip_city",
           "target": "fm1"
         },
         {
-          "id": "edge-e3-lk_m_ctype1",
+          "id": "edge-e3-cd_mlmc1",
           "source": "e3",
-          "target": "lk_m_ctype1"
+          "target": "cd_mlmc1"
         },
         {
-          "id": "edge-lk_m_ctype1-lk_m_emp1",
-          "source": "lk_m_ctype1",
-          "target": "lk_m_emp1"
+          "id": "edge-cd_mlmc1-cd_mlind1",
+          "source": "cd_mlmc1",
+          "target": "cd_mlind1"
         },
         {
-          "id": "edge-lk_m_emp1-lk_m_listed1",
-          "source": "lk_m_emp1",
-          "target": "lk_m_listed1"
-        },
-        {
-          "id": "edge-lk_m_listed1-lk_m_indus1",
-          "source": "lk_m_listed1",
-          "target": "lk_m_indus1"
-        },
-        {
-          "id": "edge-lk_m_indus1-m2",
-          "source": "lk_m_indus1",
+          "id": "edge-cd_mlind1-m2",
+          "source": "cd_mlind1",
           "target": "m2",
           "targetHandle": "left-input"
         },
         {
-          "id": "edge-e4-lk_m_ctype2",
+          "id": "edge-e4-cd_mlmc2",
           "source": "e4",
-          "target": "lk_m_ctype2"
+          "target": "cd_mlmc2"
         },
         {
-          "id": "edge-lk_m_ctype2-lk_m_emp2",
-          "source": "lk_m_ctype2",
-          "target": "lk_m_emp2"
+          "id": "edge-cd_mlmc2-cd_mlind2",
+          "source": "cd_mlmc2",
+          "target": "cd_mlind2"
         },
         {
-          "id": "edge-lk_m_emp2-lk_m_listed2",
-          "source": "lk_m_emp2",
-          "target": "lk_m_listed2"
-        },
-        {
-          "id": "edge-lk_m_listed2-lk_m_indus2",
-          "source": "lk_m_listed2",
-          "target": "lk_m_indus2"
-        },
-        {
-          "id": "edge-lk_m_indus2-m2",
-          "source": "lk_m_indus2",
+          "id": "edge-cd_mlind2-m2",
+          "source": "cd_mlind2",
           "target": "m2",
           "targetHandle": "right-input"
         },
@@ -3999,28 +3552,18 @@
           "targetHandle": "left-input"
         },
         {
-          "id": "edge-e5-lk_m_ctype3",
+          "id": "edge-e5-cd_mlmc3",
           "source": "e5",
-          "target": "lk_m_ctype3"
+          "target": "cd_mlmc3"
         },
         {
-          "id": "edge-lk_m_ctype3-lk_m_emp3",
-          "source": "lk_m_ctype3",
-          "target": "lk_m_emp3"
+          "id": "edge-cd_mlmc3-cd_mlind3",
+          "source": "cd_mlmc3",
+          "target": "cd_mlind3"
         },
         {
-          "id": "edge-lk_m_emp3-lk_m_listed3",
-          "source": "lk_m_emp3",
-          "target": "lk_m_listed3"
-        },
-        {
-          "id": "edge-lk_m_listed3-lk_m_indus3",
-          "source": "lk_m_listed3",
-          "target": "lk_m_indus3"
-        },
-        {
-          "id": "edge-lk_m_indus3-m3",
-          "source": "lk_m_indus3",
+          "id": "edge-cd_mlind3-m3",
+          "source": "cd_mlind3",
           "target": "m3",
           "targetHandle": "right-input"
         },

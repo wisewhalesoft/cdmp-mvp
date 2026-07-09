@@ -1,0 +1,988 @@
+{
+  "pipelineName": "ETL for Customer Core",
+  "originalVersion": 13,
+  "originalStepCount": 53,
+  "originalNodeCount": 56,
+  "newVersion": 14,
+  "newStepCount": 34,
+  "collapseGroups": [
+    {
+      "newNodeId": "cd_zzip1",
+      "dictSource": "raw_e5a2345c",
+      "replaced": [
+        "lk_edu1",
+        "lk_occ1",
+        "lk_job1",
+        "lk_marry1",
+        "lk_ctype1",
+        "lk_incsrc1",
+        "lk_indus1",
+        "lk_joblv1",
+        "lk_income1"
+      ]
+    },
+    {
+      "newNodeId": "cd_zzip2",
+      "dictSource": "raw_6fce5258",
+      "replaced": [
+        "lk_edu2",
+        "lk_occ2",
+        "lk_job2",
+        "lk_marry2",
+        "lk_ctype2",
+        "lk_joblv2",
+        "lk_income2"
+      ]
+    },
+    {
+      "newNodeId": "cd_zip_city",
+      "dictSource": "raw_b4a48f10",
+      "replaced": [
+        "lk_hcity",
+        "lk_ccity",
+        "lk_cocity"
+      ]
+    },
+    {
+      "newNodeId": "cd_mlmc1",
+      "dictSource": "raw_8b80671e",
+      "replaced": [
+        "lk_m_ctype1",
+        "lk_m_emp1",
+        "lk_m_listed1"
+      ]
+    },
+    {
+      "newNodeId": "cd_mlind1",
+      "dictSource": "raw_b9558d10",
+      "replaced": [
+        "lk_m_indus1"
+      ]
+    },
+    {
+      "newNodeId": "cd_mlmc2",
+      "dictSource": "raw_9dd0eca5",
+      "replaced": [
+        "lk_m_ctype2",
+        "lk_m_emp2",
+        "lk_m_listed2"
+      ]
+    },
+    {
+      "newNodeId": "cd_mlind2",
+      "dictSource": "raw_3acd58e7",
+      "replaced": [
+        "lk_m_indus2"
+      ]
+    },
+    {
+      "newNodeId": "cd_mlmc3",
+      "dictSource": "raw_9dcaf414",
+      "replaced": [
+        "lk_m_ctype3",
+        "lk_m_emp3",
+        "lk_m_listed3"
+      ]
+    },
+    {
+      "newNodeId": "cd_mlind3",
+      "dictSource": "raw_afe6a874",
+      "replaced": [
+        "lk_m_indus3"
+      ]
+    }
+  ],
+  "originalLookups": {
+    "lk_edu1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "EDUCAT_BACK",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "education_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A2'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_occ1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "VOCATION_CODE",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "occupation_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A4'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_job1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "JOB_TITLE",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "job_title_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A5'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_marry1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "CMARRY_MK",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "marital_status_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = '33'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_ctype1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "CUSTOM_MK",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "customer_type_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = '55'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_incsrc1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "INCOME_SOURCE",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "income_source_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'Y0'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_indus1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "INDUSTRY",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "industry_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'AA'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_joblv1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "JOB_LEVEL",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "job_level_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A6'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_income1": {
+      "lookupSource": "raw_e5a2345c",
+      "matchColumn": "MONTH_INCOME",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "monthly_income_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A3'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_edu2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "EDUCAT_BACK",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "education_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A2'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_occ2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "VOCATION_CODE",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "occupation_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A4'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_job2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "JOB_TITLE",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "job_title_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A5'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_marry2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "CMARRY_MK",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "marital_status_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = '33'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_ctype2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "CUSTOM_MK",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "customer_type_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = '55'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_joblv2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "JOB_LEVEL",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "job_level_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A6'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_income2": {
+      "lookupSource": "raw_6fce5258",
+      "matchColumn": "MONTH_INCOME",
+      "lookupMatchColumn": "TBL_CD",
+      "outputColumns": [
+        {
+          "lookupColumn": "TBL_DESC1",
+          "outputAlias": "monthly_income_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "\"TBL_ID\" = 'A3'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMCODE_D"
+      }
+    },
+    "lk_hcity": {
+      "lookupSource": "raw_b4a48f10",
+      "matchColumn": "HPOST_NUM",
+      "lookupMatchColumn": "POSTAL_NO",
+      "outputColumns": [
+        {
+          "lookupColumn": "POSTAL_ADD",
+          "outputAlias": "hpost_city"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMPOST_M"
+      }
+    },
+    "lk_ccity": {
+      "lookupSource": "raw_b4a48f10",
+      "matchColumn": "CPOST_NUM",
+      "lookupMatchColumn": "POSTAL_NO",
+      "outputColumns": [
+        {
+          "lookupColumn": "POSTAL_ADD",
+          "outputAlias": "cpost_city"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMPOST_M"
+      }
+    },
+    "lk_cocity": {
+      "lookupSource": "raw_b4a48f10",
+      "matchColumn": "CO_NUM",
+      "lookupMatchColumn": "POSTAL_NO",
+      "outputColumns": [
+        {
+          "lookupColumn": "POSTAL_ADD",
+          "outputAlias": "co_city"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.ZZIPPROD",
+        "sourceTable": "ZZIP_BAMPOST_M"
+      }
+    },
+    "lk_m_ctype1": {
+      "lookupSource": "raw_8b80671e",
+      "matchColumn": "CUTYPE",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "customer_type_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_emp1": {
+      "lookupSource": "raw_8b80671e",
+      "matchColumn": "EMPLOYEE",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "employee_count_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_listed1": {
+      "lookupSource": "raw_8b80671e",
+      "matchColumn": "LISTED",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "is_listed_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_indus1": {
+      "lookupSource": "raw_b9558d10",
+      "matchColumn": "INDUID",
+      "lookupMatchColumn": "INDUID",
+      "outputColumns": [
+        {
+          "lookupColumn": "INDUNM",
+          "outputAlias": "industry_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupRef": {
+        "datasourceName": "APYHFC16.CF",
+        "sourceTable": "MLSTDINDUMF"
+      }
+    },
+    "lk_m_ctype2": {
+      "lookupSource": "raw_9dd0eca5",
+      "matchColumn": "CUTYPE",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "customer_type_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_emp2": {
+      "lookupSource": "raw_9dd0eca5",
+      "matchColumn": "EMPLOYEE",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "employee_count_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_listed2": {
+      "lookupSource": "raw_9dd0eca5",
+      "matchColumn": "LISTED",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "is_listed_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_indus2": {
+      "lookupSource": "raw_3acd58e7",
+      "matchColumn": "INDUID",
+      "lookupMatchColumn": "INDUID",
+      "outputColumns": [
+        {
+          "lookupColumn": "INDUNM",
+          "outputAlias": "industry_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupRef": {
+        "datasourceName": "APYHFC51.CF",
+        "sourceTable": "MLSTDINDUMF"
+      }
+    },
+    "lk_m_ctype3": {
+      "lookupSource": "raw_9dcaf414",
+      "matchColumn": "CUTYPE",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "customer_type_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'CU'",
+      "lookupRef": {
+        "datasourceName": "APYHFC71.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_emp3": {
+      "lookupSource": "raw_9dcaf414",
+      "matchColumn": "EMPLOYEE",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "employee_count_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = 'BM'",
+      "lookupRef": {
+        "datasourceName": "APYHFC71.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_listed3": {
+      "lookupSource": "raw_9dcaf414",
+      "matchColumn": "LISTED",
+      "lookupMatchColumn": "MCODE",
+      "outputColumns": [
+        {
+          "lookupColumn": "MNAME1",
+          "outputAlias": "is_listed_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupFilter": "TRIM(\"SYSCD\") = 'CF' AND TRIM(\"DATAID\") = '03'",
+      "lookupRef": {
+        "datasourceName": "APYHFC71.CF",
+        "sourceTable": "MLMCODE"
+      }
+    },
+    "lk_m_indus3": {
+      "lookupSource": "raw_afe6a874",
+      "matchColumn": "INDUID",
+      "lookupMatchColumn": "INDUID",
+      "outputColumns": [
+        {
+          "lookupColumn": "INDUNM",
+          "outputAlias": "industry_desc"
+        }
+      ],
+      "noMatchStrategy": "null",
+      "lookupRef": {
+        "datasourceName": "APYHFC71.CF",
+        "sourceTable": "MLSTDINDUMF"
+      }
+    }
+  },
+  "originalEdges": [
+    {
+      "id": "edge-e1-df_zzip_ctype_pad1",
+      "source": "e1",
+      "target": "df_zzip_ctype_pad1"
+    },
+    {
+      "id": "edge-df_zzip_ctype_pad1-lk_edu1",
+      "source": "df_zzip_ctype_pad1",
+      "target": "lk_edu1"
+    },
+    {
+      "id": "edge-lk_edu1-lk_occ1",
+      "source": "lk_edu1",
+      "target": "lk_occ1"
+    },
+    {
+      "id": "edge-lk_occ1-lk_job1",
+      "source": "lk_occ1",
+      "target": "lk_job1"
+    },
+    {
+      "id": "edge-lk_job1-lk_marry1",
+      "source": "lk_job1",
+      "target": "lk_marry1"
+    },
+    {
+      "id": "edge-lk_marry1-lk_ctype1",
+      "source": "lk_marry1",
+      "target": "lk_ctype1"
+    },
+    {
+      "id": "edge-lk_ctype1-lk_incsrc1",
+      "source": "lk_ctype1",
+      "target": "lk_incsrc1"
+    },
+    {
+      "id": "edge-lk_incsrc1-lk_indus1",
+      "source": "lk_incsrc1",
+      "target": "lk_indus1"
+    },
+    {
+      "id": "edge-lk_indus1-lk_joblv1",
+      "source": "lk_indus1",
+      "target": "lk_joblv1"
+    },
+    {
+      "id": "edge-lk_joblv1-lk_income1",
+      "source": "lk_joblv1",
+      "target": "lk_income1"
+    },
+    {
+      "id": "edge-lk_income1-m1",
+      "source": "lk_income1",
+      "target": "m1",
+      "targetHandle": "left-input"
+    },
+    {
+      "id": "edge-e2-df_zzip_ctype_pad2",
+      "source": "e2",
+      "target": "df_zzip_ctype_pad2"
+    },
+    {
+      "id": "edge-df_zzip_ctype_pad2-lk_edu2",
+      "source": "df_zzip_ctype_pad2",
+      "target": "lk_edu2"
+    },
+    {
+      "id": "edge-lk_edu2-lk_occ2",
+      "source": "lk_edu2",
+      "target": "lk_occ2"
+    },
+    {
+      "id": "edge-lk_occ2-lk_job2",
+      "source": "lk_occ2",
+      "target": "lk_job2"
+    },
+    {
+      "id": "edge-lk_job2-lk_marry2",
+      "source": "lk_job2",
+      "target": "lk_marry2"
+    },
+    {
+      "id": "edge-lk_marry2-lk_ctype2",
+      "source": "lk_marry2",
+      "target": "lk_ctype2"
+    },
+    {
+      "id": "edge-lk_ctype2-lk_joblv2",
+      "source": "lk_ctype2",
+      "target": "lk_joblv2"
+    },
+    {
+      "id": "edge-lk_joblv2-lk_income2",
+      "source": "lk_joblv2",
+      "target": "lk_income2"
+    },
+    {
+      "id": "edge-lk_income2-m1",
+      "source": "lk_income2",
+      "target": "m1",
+      "targetHandle": "right-input"
+    },
+    {
+      "id": "edge-m1-d1",
+      "source": "m1",
+      "target": "d1"
+    },
+    {
+      "id": "edge-d1-df1",
+      "source": "d1",
+      "target": "df1"
+    },
+    {
+      "id": "edge-df1-tc_zzip",
+      "source": "df1",
+      "target": "tc_zzip"
+    },
+    {
+      "id": "edge-tc_zzip-lk_hcity",
+      "source": "tc_zzip",
+      "target": "lk_hcity"
+    },
+    {
+      "id": "edge-lk_hcity-lk_ccity",
+      "source": "lk_hcity",
+      "target": "lk_ccity"
+    },
+    {
+      "id": "edge-lk_ccity-lk_cocity",
+      "source": "lk_ccity",
+      "target": "lk_cocity"
+    },
+    {
+      "id": "edge-lk_cocity-fm1",
+      "source": "lk_cocity",
+      "target": "fm1"
+    },
+    {
+      "id": "edge-e3-lk_m_ctype1",
+      "source": "e3",
+      "target": "lk_m_ctype1"
+    },
+    {
+      "id": "edge-lk_m_ctype1-lk_m_emp1",
+      "source": "lk_m_ctype1",
+      "target": "lk_m_emp1"
+    },
+    {
+      "id": "edge-lk_m_emp1-lk_m_listed1",
+      "source": "lk_m_emp1",
+      "target": "lk_m_listed1"
+    },
+    {
+      "id": "edge-lk_m_listed1-lk_m_indus1",
+      "source": "lk_m_listed1",
+      "target": "lk_m_indus1"
+    },
+    {
+      "id": "edge-lk_m_indus1-m2",
+      "source": "lk_m_indus1",
+      "target": "m2",
+      "targetHandle": "left-input"
+    },
+    {
+      "id": "edge-e4-lk_m_ctype2",
+      "source": "e4",
+      "target": "lk_m_ctype2"
+    },
+    {
+      "id": "edge-lk_m_ctype2-lk_m_emp2",
+      "source": "lk_m_ctype2",
+      "target": "lk_m_emp2"
+    },
+    {
+      "id": "edge-lk_m_emp2-lk_m_listed2",
+      "source": "lk_m_emp2",
+      "target": "lk_m_listed2"
+    },
+    {
+      "id": "edge-lk_m_listed2-lk_m_indus2",
+      "source": "lk_m_listed2",
+      "target": "lk_m_indus2"
+    },
+    {
+      "id": "edge-lk_m_indus2-m2",
+      "source": "lk_m_indus2",
+      "target": "m2",
+      "targetHandle": "right-input"
+    },
+    {
+      "id": "edge-m2-m3",
+      "source": "m2",
+      "target": "m3",
+      "targetHandle": "left-input"
+    },
+    {
+      "id": "edge-e5-lk_m_ctype3",
+      "source": "e5",
+      "target": "lk_m_ctype3"
+    },
+    {
+      "id": "edge-lk_m_ctype3-lk_m_emp3",
+      "source": "lk_m_ctype3",
+      "target": "lk_m_emp3"
+    },
+    {
+      "id": "edge-lk_m_emp3-lk_m_listed3",
+      "source": "lk_m_emp3",
+      "target": "lk_m_listed3"
+    },
+    {
+      "id": "edge-lk_m_listed3-lk_m_indus3",
+      "source": "lk_m_listed3",
+      "target": "lk_m_indus3"
+    },
+    {
+      "id": "edge-lk_m_indus3-m3",
+      "source": "lk_m_indus3",
+      "target": "m3",
+      "targetHandle": "right-input"
+    },
+    {
+      "id": "edge-m3-d2",
+      "source": "m3",
+      "target": "d2"
+    },
+    {
+      "id": "edge-d2-tc1",
+      "source": "d2",
+      "target": "tc1"
+    },
+    {
+      "id": "edge-tc1-df2",
+      "source": "tc1",
+      "target": "df2"
+    },
+    {
+      "id": "edge-df2-fm2",
+      "source": "df2",
+      "target": "fm2"
+    },
+    {
+      "id": "edge-fm1-m4",
+      "source": "fm1",
+      "target": "m4",
+      "targetHandle": "left-input"
+    },
+    {
+      "id": "edge-fm2-df_mlmc_ctype_map",
+      "source": "fm2",
+      "target": "df_mlmc_ctype_map"
+    },
+    {
+      "id": "edge-df_mlmc_ctype_map-m4",
+      "source": "df_mlmc_ctype_map",
+      "target": "m4",
+      "targetHandle": "right-input"
+    },
+    {
+      "id": "edge-m4-cd1",
+      "source": "m4",
+      "target": "cd1"
+    },
+    {
+      "id": "edge-cd1-df_ctype_desc_std",
+      "source": "cd1",
+      "target": "df_ctype_desc_std"
+    },
+    {
+      "id": "edge-df_ctype_desc_std-df3",
+      "source": "df_ctype_desc_std",
+      "target": "df3"
+    },
+    {
+      "id": "edge-df3-d3",
+      "source": "df3",
+      "target": "d3"
+    },
+    {
+      "id": "edge-d3-tl1",
+      "source": "d3",
+      "target": "tl1"
+    }
+  ],
+  "originalNodeIds": [
+    "e1",
+    "e2",
+    "df_zzip_ctype_pad1",
+    "df_zzip_ctype_pad2",
+    "lk_edu1",
+    "lk_occ1",
+    "lk_job1",
+    "lk_marry1",
+    "lk_ctype1",
+    "lk_incsrc1",
+    "lk_indus1",
+    "lk_joblv1",
+    "lk_income1",
+    "lk_edu2",
+    "lk_occ2",
+    "lk_job2",
+    "lk_marry2",
+    "lk_ctype2",
+    "lk_joblv2",
+    "lk_income2",
+    "m1",
+    "d1",
+    "df1",
+    "tc_zzip",
+    "lk_hcity",
+    "lk_ccity",
+    "lk_cocity",
+    "fm1",
+    "e3",
+    "e4",
+    "m2",
+    "e5",
+    "lk_m_ctype1",
+    "lk_m_emp1",
+    "lk_m_listed1",
+    "lk_m_indus1",
+    "lk_m_ctype2",
+    "lk_m_emp2",
+    "lk_m_listed2",
+    "lk_m_indus2",
+    "lk_m_ctype3",
+    "lk_m_emp3",
+    "lk_m_listed3",
+    "lk_m_indus3",
+    "m3",
+    "d2",
+    "tc1",
+    "df2",
+    "fm2",
+    "df_mlmc_ctype_map",
+    "m4",
+    "cd1",
+    "df_ctype_desc_std",
+    "df3",
+    "d3",
+    "tl1"
+  ],
+  "originalNonLookupNodeIds": [
+    "e1",
+    "e2",
+    "df_zzip_ctype_pad1",
+    "df_zzip_ctype_pad2",
+    "m1",
+    "d1",
+    "df1",
+    "tc_zzip",
+    "fm1",
+    "e3",
+    "e4",
+    "m2",
+    "e5",
+    "m3",
+    "d2",
+    "tc1",
+    "df2",
+    "fm2",
+    "df_mlmc_ctype_map",
+    "m4",
+    "cd1",
+    "df_ctype_desc_std",
+    "df3",
+    "d3",
+    "tl1"
+  ]
+}
