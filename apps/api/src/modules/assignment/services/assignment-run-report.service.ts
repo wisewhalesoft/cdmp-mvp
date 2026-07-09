@@ -577,6 +577,24 @@ export class AssignmentRunReportService {
       }
     }
 
+    // AD-E07-43 P5-followup（I-EXP-APLDATE-FMT-01 / GATE-001）：進件日於 **SQL 端**格式化為
+    //   'YYYY-MM-DD' 字串，繞開 formatApplDate 之 JS Date getter 跨引擎歧義（P5h §7 AD-3）：
+    //   MSSQL（useUTC:true）之 datetime2 wall-clock ≥16:00 經本地 getter 會 +1 日；PG timestamp <08:00
+    //   經 UTC getter 會 −1 日——無單一 JS getter 對兩引擎皆正確。CONVERT / to_char 對 DB 儲存值於
+    //   SQL 端直接運算，不經 tedious / node-postgres 之 JS Date 轉換 → 兩引擎皆得正確 wall-clock 日期；
+    //   產出字串走 formatApplDate 之字串分支（slice(0,10)），與時區無關。
+    // ⚠️ GATE-001：dialect 運算式必須 **inline 於本方法體**（含字面 `o.appl_date`），使既有 sliceFn
+    //   靜態測試（TS-F064-APLDATE-002）仍能切片到 `o.appl_date`；勿抽外部 helper。
+    // ⚠️ GATE-003：sqlite（及其他非 pg/mssql 預設分支）維持裸 `o.appl_date`——匯出功能之生產 runtime
+    //   僅 pg/mssql；sqlite 單元測試 mock cursorRows，此 SQL 從不對 sqlite 執行。
+    const dbType = this.dataSource.options.type;
+    const applDateExpr =
+      dbType === 'mssql'
+        ? 'CONVERT(varchar(10), o.appl_date, 120)'
+        : dbType === 'postgres'
+          ? `to_char(o.appl_date, 'YYYY-MM-DD')`
+          : 'o.appl_date';
+
     // I-EXP-LINEAGE-01（F064 v2.1 修正）：pool 屬性取自 **ob_pool_data o**（共享池，PK=orgno+appl_no），
     // **非** ob_pool_data_list（per-list 去重表）。月跑 Stage 1 為
     //   INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o
@@ -590,7 +608,7 @@ export class AssignmentRunReportService {
         r.assignday                          AS assignday,
         r.list_no                            AS list_no,
         d.list_nm                            AS list_nm,
-        o.appl_date                          AS appl_date,
+        ${applDateExpr}                      AS appl_date,
         r.cr_id                              AS cr_id,
         r.cr_nm                              AS cr_nm,
         r.is_cr                              AS is_cr,

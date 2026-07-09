@@ -16,6 +16,7 @@ import {
   uuidColumnType,
   longTextColumnType,
   longTextColumnLength,
+  nvarcharColumnType,
 } from '@/common/database/column-types';
 import { AssignmentRun } from './assignment-run.entity';
 
@@ -80,7 +81,12 @@ export class ObMonthlyRunResult {
   @Column({ name: 'cr_id', type: 'varchar', length: 20, nullable: true })
   cr_id: string | null;
 
-  @Column({ name: 'cr_nm', type: 'varchar', length: 50, nullable: true })
+  // AD-E07-43 P5-followup（I-MSSQL-NVARCHAR-DISPLAY-01）：cr_nm 承接自 ob_pool_data_list.cr_nm
+  //   （已 nvarchar）／ob_emphire.emp_nm（已 nvarchar），寫入來源為 Stage 1 `'CR' + emp_nm`。
+  //   MSSQL BIN collation 下 varchar 以 byte 計長，長中文姓名（>25 字）會於 set-based INSERT…SELECT
+  //   整批拋 truncation 錯（非顯示截斷）。改用 nvarcharColumnType（mssql=nvarchar；pg/sqlite=varchar
+  //   逐值等價、零回歸）。承 P5i 全域慣例，此表非產生器 entity 故 P5i 未涵蓋，本 slice 補齊。
+  @Column({ name: 'cr_nm', type: nvarcharColumnType, length: 50, nullable: true })
   cr_nm: string | null;
 
   // F102 / AD-E07-30：CR 失效規則步驟 1（逾2年清空）以名單月 - 2 年比對 appl_date。
