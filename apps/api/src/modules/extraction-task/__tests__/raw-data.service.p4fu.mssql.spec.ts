@@ -91,7 +91,7 @@ const MIXED_COLS: ColumnMetadata[] = [
   { name: 'i', dataType: 'int', isPrimary: false }, // INT
   { name: 'big', dataType: 'bigint', isPrimary: false }, // BIGINT
   { name: 'flag', dataType: 'bit', isPrimary: false }, // BIT
-  { name: 'dt', dataType: 'datetime', isPrimary: false }, // DATETIME2
+  { name: 'dt', dataType: 'datetime', isPrimary: false }, // NVARCHAR(MAX) (FINDING-P6C-01：時序保真)
   { name: 'amt', dataType: 'decimal', isPrimary: false }, // NVARCHAR(MAX) (TYPEMAP-003)
 ];
 
@@ -223,7 +223,7 @@ describe('P4fu GETCOLMETA (real MSSQL)', () => {
     expect(meta.length).toBe(cols.length);
   });
 
-  it('GETCOLMETA-003: dataType 回傳 INFORMATION_SCHEMA 原生字面（int/nvarchar/bigint/bit/datetime2）', async (ctx) => {
+  it('GETCOLMETA-003: dataType 回傳 INFORMATION_SCHEMA 原生字面（int/nvarchar/bigint/bit；來源 datetime → nvarchar）', async (ctx) => {
     if (!guard(ctx)) return;
     const t = rawName();
     await svc.createRawTable(t, MIXED_COLS);
@@ -234,8 +234,10 @@ describe('P4fu GETCOLMETA (real MSSQL)', () => {
     expect(byName.i).toBe('int');
     expect(byName.big).toBe('bigint');
     expect(byName.flag).toBe('bit');
-    expect(byName.dt).toBe('datetime2');
+    // FINDING-P6C-01：來源業務 datetime 欄改映射 NVARCHAR(MAX)（保真）→ DATA_TYPE 回報 'nvarchar'
+    expect(byName.dt).toBe('nvarchar');
     expect(byName.amt).toBe('nvarchar'); // decimal → NVARCHAR(MAX)，DATA_TYPE 回報 'nvarchar'
+    // 系統欄 _cdmp_extracted_at 仍為 DATETIME2（恆 SYSUTCDATETIME 有效值，不受本修法影響）
     expect(byName._cdmp_extracted_at).toBe('datetime2');
   });
 });

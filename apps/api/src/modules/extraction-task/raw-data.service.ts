@@ -430,7 +430,20 @@ export class RawDataService {
       const valueTuples = chunk.map((row, r) => {
         const names = safeCols.map((_c, ci) => {
           const key = `r${r}c${ci}`;
-          params[key] = row[columns[ci]] ?? null;
+          let v = row[columns[ci]] ?? null;
+          // AD-E07-P6c / FINDING-P6C-01: raw date/time columns are now NVARCHAR(MAX)
+          // (see mapToMssqlType). A JS `Date` bound as a parameter would be
+          // implicit-converted by SQL Server into nvarchar using the locale-default
+          // style-0 format ('Mar  4 2020  5:06AM' — lossy: seconds dropped, non-ISO,
+          // unparseable by `new Date()`), diverging from the bulk path's ISO coercion
+          // and losing precision. Coerce Date → ISO here (MSSQL only) so the
+          // parameterized (incremental / non-streaming) path stores the SAME faithful
+          // ISO string the bulk fast-path does. pg/sqlite keep binding native Date
+          // (their raw date columns stay TIMESTAMP/TEXT — no regression).
+          if (this.isMssql && v instanceof Date) {
+            v = v.toISOString();
+          }
+          params[key] = v;
           return `:${key}`;
         });
         return `(${names.join(', ')})`;
@@ -989,9 +1002,24 @@ export class RawDataService {
    *    FINDING-P4D-01 precision-overflow defect family at the raw DDL level. Text
    *    preserves the source's literal precision losslessly (PG uses unbounded
    *    NUMERIC; text is the equivalent that loses no precision on MSSQL).
-   *  - datetime family → `DATETIME2` (not the deprecated lower-precision datetime).
+   *  - date/datetime/timestamp/time family → `NVARCHAR(MAX)` (AD-E07-P6c / FINDING-P6C-01,
+   *    same defect family as decimal): a source datetime read by tedious (`useUTC:true`)
+   *    can surface a JS `Date` shifted below `datetime2`'s year-0001 floor (legacy
+   *    minimum-date sentinels), or a legacy string-encoded dirty date ('0000-00-00',
+   *    ''), neither of which fits a typed `DATETIME2`/`TIME` bulk column — real-DB
+   *    reproduced the exact `OLE DB provider 'STREAM' ... returned invalid data for
+   *    column '[!BulkInsert].<col>'` at ~1.02M/3.6M rows of P6c's first real ETL load.
+   *    Text captures every legacy value faithfully (raw staging is a lossless 中繼);
+   *    clean ISO values still implicit-convert to the typed target date columns
+   *    downstream (real-DB verified), dirty values are the downstream pipeline's
+   *    concern (see impl log — no DATE type_cast rule exists today). Only date/time
+   *    are widened (proven temporal transport hazard); int/bigint/float/bit stay
+   *    typed (no analogous hazard — see impl log §int/float decision).
    *  - `_cdmp_id` uses `IDENTITY(1,1)`, `_cdmp_extracted_at` uses `SYSUTCDATETIME()`
-   *    (see createRawTable) — neither belongs here.
+   *    (see createRawTable) — neither belongs here. `_cdmp_extracted_at` is a real
+   *    `DATETIME2` column (always a valid SYSUTCDATETIME/ISO value), so
+   *    `mapToBulkColumnType` KEEPS its datetime2/date branch for it; this widening
+   *    only affects business source columns declared by createRawTable.
    */
   private mapToMssqlType(dataType: string): string {
     const lower = dataType.toLowerCase();
@@ -1038,11 +1066,17 @@ export class RawDataService {
     ) {
       return 'VARBINARY(MAX)';
     }
-    if (lower.includes('datetime') || lower.includes('timestamp') || lower === 'date') {
-      return 'DATETIME2';
-    }
-    if (lower === 'time') {
-      return 'TIME';
+    if (
+      lower.includes('datetime') ||
+      lower.includes('timestamp') ||
+      lower === 'date' ||
+      lower === 'time'
+    ) {
+      // FINDING-P6C-01（date 版之 FINDING-P4D-01 同型缺陷家族防線）：文字保真，不映射
+      // 固定範圍的 DATETIME2/TIME。真實 legacy 日期／時間值（UTC 位移至 year<1 之最小日
+      // 哨兵、字串化髒日期）塞不進 typed bulk 欄，會拋 'returned invalid data'。詳見類別
+      // 註解與 impl log。
+      return 'NVARCHAR(MAX)';
     }
     // Default: NVARCHAR(MAX) covers varchar/nvarchar/char/nchar/text/ntext/xml
     // and any unrecognised type (wide, lenient — matches the other two mappers).

@@ -89,7 +89,7 @@ const MIXED_COLS: ColumnMetadata[] = [
   { name: 'i', dataType: 'int', isPrimary: false }, // INT
   { name: 'big', dataType: 'bigint', isPrimary: false }, // BIGINT
   { name: 'flag', dataType: 'bit', isPrimary: false }, // BIT
-  { name: 'dt', dataType: 'datetime', isPrimary: false }, // DATETIME2
+  { name: 'dt', dataType: 'datetime', isPrimary: false }, // NVARCHAR(MAX) (FINDING-P6C-01：時序保真)
   { name: 'amt', dataType: 'decimal', isPrimary: false }, // NVARCHAR(MAX) (TYPEMAP-003)
 ];
 const MIXED_ALL = ['s', 'i', 'big', 'flag', 'dt', 'amt', '_cdmp_extracted_at'];

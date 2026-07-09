@@ -60,11 +60,17 @@ describe('P4e TYPEMAP — mapToMssqlType', () => {
     }
   });
 
-  it('TYPEMAP-005: 日期時間家族 → DATETIME2；time → TIME', () => {
-    for (const t of ['date', 'datetime', 'datetime2', 'smalldatetime', 'timestamp']) {
-      expect(mapMssql(t), t).toBe('DATETIME2');
+  it('TYPEMAP-005 (AD-E07-P6c / FINDING-P6C-01): 日期時間家族 + time 一律 NVARCHAR(MAX)（保真，不映射 typed DATETIME2/TIME）', () => {
+    // 真實 legacy 日期值（UTC 位移至 year<1 最小日哨兵、字串化髒日期）塞不進 typed
+    // DATETIME2 bulk 欄 → P6c 首次灌入於 ~1.02M/3.6M 列拋 'returned invalid data'。
+    // 比照 decimal（TYPEMAP-003），改文字保真；不得再出現固定 DATETIME2/TIME 字面。
+    for (const t of ['date', 'datetime', 'datetime2', 'smalldatetime', 'timestamp', 'time']) {
+      expect(mapMssql(t), t).toBe('NVARCHAR(MAX)');
     }
-    expect(mapMssql('time')).toBe('TIME');
+    // 明確反證：不得再映射 typed 時序型別
+    for (const t of ['date', 'datetime', 'timestamp', 'time']) {
+      expect(mapMssql(t), t).not.toMatch(/DATETIME2|\bTIME\b/);
+    }
   });
 
   it('TYPEMAP-006: 二進位家族 → VARBINARY(MAX)', () => {
