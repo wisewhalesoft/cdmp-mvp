@@ -8,11 +8,13 @@
 
 ## 🔴 前置硬閘 P6-0：SQL Server 版本確認（未通過前，禁止 P6a 之後任何步驟）
 
-依 AD-E07-44 §2：P1-P5 全部驗證基準為 **SQL Server 2022 容器**，但 project memory 記載實機**可能為
-2016 SP3**。若實機 < 2017，已使用之 `TRIM()`（2017+ 簡化語法）會在生產環境報錯（`'TRIM' is not a
-recognized built-in function name`），即使 P1-P5 全綠。
+依 AD-E07-44 §2：P1-P5 驗證基準為 **SQL Server 2022**；已使用 `TRIM()`（2017+ 簡化語法）於 6+ 核心檔，
+若實機 < 2017 會在生產報錯（`'TRIM' is not a recognized built-in function name`），即使 P1-P5 全綠。
 
-**動作**：向 DBA 取得實機 `SELECT @@VERSION` 之權威輸出。
+**✅ 2026-07-08 dev 實機已確認**：dev `172.20.202.212` = **SQL Server 2022（major 16, 16.0.4235.2）
+Standard Edition / Chinese_Taiwan_Stroke_BIN** → P6-0 於 dev 通過。
+
+**動作（正式 prod 庫仍須逐一確認）**：向 DBA 取得**正式 prod 實機** `SELECT @@VERSION` 權威輸出。
 - **≥ 2017（含 2019/2022）**：記錄版本來源 → P6-0 關閉 → 進 P6a。
 - **= 2016（含 SP3）**：**停止部署**，回 AD-E07-44 §2.4 執行 TRIM 全站點改寫 + 針對真實 2016 環境重驗
   P1-P5 全套件（估 5-10 人天），完成後才可解除本閘。
@@ -27,10 +29,9 @@ recognized built-in function name`），即使 P1-P5 全綠。
    - `AES_ENCRYPTION_KEY`（`openssl rand -hex 32`；**產一次、永久保存、勿更換** —— 換掉會使已補的
      datasource 密碼全部作廢）。
    - `JWT_SECRET`（`openssl rand -hex 32`）。
-   - `DB_MSSQL_USERNAME` / `DB_MSSQL_PASSWORD` / `DB_MSSQL_NAME`：填實機 SQL login 與目標庫（預設庫名 `CDMP`）。
-   - `MSSQL_SA_PASSWORD`：改為強密碼（正式環境）。
+   - `DB_HOST` / `DB_PORT` / `DB_USERNAME` / `DB_PASSWORD` / `DB_NAME`：外部 MSSQL 實機位址、app SQL login 與目標庫（預設庫名 `CDMP`）。
 2. **資料庫 collation**：目標庫必為 `Chinese_Taiwan_Stroke_BIN`（BIN 大小寫敏感，對齊來源系統硬性要求）。
-   本機 compose 由 `docker/mssql-init.sql` 於建庫時指定；正式外部 MSSQL 請由 DBA 確認建庫 collation。
+   由 DBA 於建庫時指定此 collation；bootstrap 前確認。
 3. **時區**：api/worker/bootstrap 之 mssql 連線一律 `useUTC:true`（程式內建，見 `data-source.ts`）。
 
 ---
@@ -43,15 +44,28 @@ script（seeds 已 driver-portable，AD-E07-39 P1b3），差異僅在傳入環�
 流程 = `migration:run`（37+ 表 baseline：schema / reference-data / queue_job）→ `seed`（4 帳號）→
 `seed-datasource`（9 datasource 空殼，密碼留空）→ `data-seed`（計分卡 6 表 / etl_pipelines / extraction_tasks）。
 
-```bash
-# 1) 起 mssql + 建庫/login（mssql-init 冪等：IF NULL 才建 CDMP / cdmp login）
-docker compose --profile mssql-bootstrap up -d mssql mssql-init --build
-#    等 cdmp-mssql-init 顯示 "CDMP ready: collation=Chinese_Taiwan_Stroke_BIN" 且 Exited(0)
+> **部署模型 = 外部 SQL Server（非本機 docker 容器）。** dev/prod 為獨立 SQL Server 實例（如
+> `172.20.202.212:1433`）；目標庫（collation `Chinese_Taiwan_Stroke_BIN`）與 app login 由 DBA 事前建好。
+> 本機 docker mssql 容器（曾為「等不到 2022 的臨時替代」）已於 2026-07-08 移除；bootstrap 直接對外部庫執行。
+> `docker/mssql-init.sql` 僅供 CI 用（自建隔離測試庫），與正式部署無關。
 
-# 2) 一鍵 bootstrap（對全新空庫）；冪等，可安全重跑
-docker compose --profile mssql-bootstrap run --rm bootstrap-mssql
-#    期望：三支 migration "has been executed successfully"、四步 exit 0、無 17750 / DLL / QueryFailedError
+```bash
+# 對「外部 MSSQL 目標庫」跑一鍵 bootstrap（冪等、可安全重跑）。連線由環境變數提供（勿把密碼寫進 repo）。
+cd apps/api
+export DB_TYPE=mssql \
+       DB_HOST=<外部 MSSQL host> DB_PORT=1433 \
+       DB_USERNAME=<app login> DB_PASSWORD=<app password> DB_NAME=CDMP \
+       DB_MSSQL_ENCRYPT=true DB_MSSQL_TRUST_CERT=true \
+       NODE_ENV=production \
+       AES_ENCRYPTION_KEY=<openssl rand -hex 32；產一次永久保存> \
+       JWT_SECRET=<openssl rand -hex 32>
+npm run bootstrap   # migration:run → seed → seed-datasource → data-seed（四步、依 DB_TYPE 分派）
+#    期望：三支 migration "has been executed successfully"、四步 exit 0、"Prod data seed complete."
 ```
+
+> ✅ **2026-07-08 dev 實機驗證**：上述流程對 dev `172.20.202.212`（2022 Standard / BIN）空庫 CDMP 跑通 →
+> 39 表 + 設定資料齊（users 4 / datasources 9 / 計分卡 449 / tier 27 / pipeline 6 / extraction 19 / migrations 3）
+> + 業務表全空，與本機驗收完全一致。
 
 **DoD（驗收，比照 postgres 版 6 項設定資料齊）**：對全新空庫執行後
 - `users` = 4（admin/disabled/user/manager 可登入）
@@ -69,19 +83,16 @@ docker compose --profile mssql-bootstrap run --rm bootstrap-mssql
 
 ## P6b：docker-compose / 環境變數切換至 MSSQL
 
-P6a 之部署路徑為 **additive、profile-gated**，預設 `docker compose up`（postgres）不受影響。正式上線時：
+bootstrap 完成後，讓 **api / worker 以 `DB_TYPE=mssql` 指向外部 MSSQL 目標庫**啟動（與 bootstrap 相同的
+DB 連線環境變數 + `AES_ENCRYPTION_KEY`/`JWT_SECRET`；worker 額外 `RUN_QUEUE_POLL_INTERVAL_MS`）。部署載體
+（PM2 / systemd / container orchestrator / 內部 docker）由維運既有慣例決定 —— 關鍵是傳入正確的 mssql 連線
+env，程式已 driver 分派、`useUTC:true` 內建。
 
-```bash
-# 起長駐 MSSQL 生產堆疊（api-mssql / worker-mssql / web-mssql，皆 DB_TYPE=mssql 指向 mssql 服務）
-docker compose --profile mssql-prod up -d
-```
+- **佇列**：`DB_TYPE=mssql` 時 worker 走自建 T-SQL 輪詢佇列（`RunQueueConsumer.startMssqlPolling`），不需 pg-boss。
+- **回退**：P6e 之前生產庫尚未對外服務，可清庫重跑 bootstrap + ETL（皆冪等）；程式 PG 分支仍在（P6f 前）。
 
-- api-mssql / worker-mssql 於 `mssql-init` 完成後才啟動（`service_completed_successfully`）。
-- 與 dev postgres 堆疊並存測試時，以 `MSSQL_API_PORT` / `MSSQL_WEB_PORT` 覆寫 host port 避免衝突。
-- **回退**：改回不帶 profile 的 `docker compose up -d`（postgres 服務與程式碼皆保留，數分鐘內還原）。
-
-> 註：將 postgres 服務降級為選用預設（翻預設）之 compose 檔正式改動，由 AD-E07-44 P6b 正式處理；
-> P6a 僅提供 additive 路徑，不翻預設。
+> 註：本機 dev docker-compose 仍為 postgres 預設堆疊（`api/postgres/web/worker`），供本地開發用；MSSQL 部署
+> 走上述外部連線模型，不再有 docker-compose mssql profile（2026-07-08 移除臨時本機容器設定）。
 
 ---
 
@@ -118,7 +129,7 @@ CDMP 至今無正式生產資料（AD-E07-44 §0）；生產資料來源 = 從 l
 **Go-Live checklist（全數勾選才上線）**：
 - [ ] P6-0 版本確認通過（≥2017，或 2016 修復+重驗完成）。
 - [ ] P6a bootstrap DoD 6 項設定資料齊、業務表空、`typeorm_migrations`=3。
-- [ ] P6b `docker compose --profile mssql-prod up -d` 全服務 healthy、登入 OK。
+- [ ] P6b api / worker 以 `DB_TYPE=mssql`（外部庫）啟動、全服務 healthy、登入 OK。
 - [ ] P6c 9 個 datasource 皆「測試連線」成功、ETL 首次灌入完成且列數合理。
 - [ ] P6d 正式月跑完成、F067 式比對業務簽核通過。
 - [ ] AES_ENCRYPTION_KEY / JWT_SECRET 已安全保存（異地備援）。
@@ -137,23 +148,20 @@ P6f（移除 `pg-boss`/`pg-copy-streams` 內部使用與 PG 版 handler/builder�
 
 ## 附錄 A：常用維運指令
 
+於 `apps/api`、export 好上述 mssql 連線 env（含 `AES_ENCRYPTION_KEY`）後執行（皆冪等）：
+
 ```bash
-# 只重建帳號 / 只補 datasource 空殼 / 只 reconcile 計分卡・pipeline・擷取任務（皆冪等）
-docker compose --profile mssql-bootstrap run --rm -e RUN_ONLY=seed bootstrap-mssql   # 見下方註
-docker exec cdmp-api-mssql npm run seed
-docker exec cdmp-api-mssql npm run seed-datasource
-docker exec cdmp-api-mssql npm run data-seed
+cd apps/api   # 先 export DB_TYPE=mssql / DB_HOST=<外部> / ... / AES_ENCRYPTION_KEY（同 bootstrap）
 
-# 修回計分卡漂移（把 UI 誤改回 seed 值）
-docker exec -e SEED_REPAIR_DRIFT=true cdmp-api-mssql npm run data-seed
+npm run bootstrap          # 一鍵四步（migration:run + seed + seed-datasource + data-seed）
+# 或單獨重跑某步：
+npm run seed               # 只重建帳號
+npm run seed-datasource    # 只補 datasource 空殼
+npm run data-seed          # 只 reconcile 計分卡 / pipeline / 擷取任務
 
-# 逆轉 baseline（回退 schema；由新到舊三次）
-docker exec cdmp-api-mssql npm run migration:revert   # 重複三次
+SEED_REPAIR_DRIFT=true npm run data-seed   # 修回計分卡漂移（把 UI 誤改回 seed 值）
+npm run migration:revert   # 逆轉 baseline（回退 schema；由新到舊，重複三次）
 ```
-
-> 註：`bootstrap-mssql` 服務 command 固定為 `npm run bootstrap`（四步）。若要單獨重跑某步，請在已啟動的
-> `cdmp-api-mssql` 容器內 `docker exec` 對應 npm script（如上），或用 `docker compose --profile mssql-bootstrap
-> run --rm bootstrap-mssql`（冪等，安全重跑全流程）。
 
 ## 附錄 B：環境變數對照（.env.mssql.example）
 
@@ -162,9 +170,8 @@ docker exec cdmp-api-mssql npm run migration:revert   # 重複三次
 | `NODE_ENV` | production 關 synchronize（schema 靠 migration） | production |
 | `AES_ENCRYPTION_KEY` | datasource 密碼加解密（三服務共用同一把） | dev 預設，正式須換 |
 | `JWT_SECRET` | 登入 JWT 簽章 | dev 預設，正式須換 |
-| `DB_MSSQL_USERNAME` / `DB_MSSQL_PASSWORD` | MSSQL app login | cdmp / Cdmp_Dev_2026! |
-| `DB_MSSQL_NAME` | 目標資料庫 | CDMP |
+| `DB_HOST` / `DB_PORT` | 外部 MSSQL 位址 | —（實機）/ 1433 |
+| `DB_USERNAME` / `DB_PASSWORD` | MSSQL app login | cdmp / —（實機） |
+| `DB_NAME` | 目標資料庫 | CDMP |
 | `DB_MSSQL_ENCRYPT` / `DB_MSSQL_TRUST_CERT` | 傳輸加密 / 憑證信任 | true / true |
-| `MSSQL_SA_PASSWORD` | mssql / mssql-init 容器 SA | Cdmp_Sa_2026!（正式須換） |
 | `RUN_QUEUE_POLL_INTERVAL_MS` | worker 自建佇列輪詢間隔（mssql 生效） | 2000 |
-| `MSSQL_API_PORT` / `MSSQL_WEB_PORT` | 與 dev 並存時的 host port 覆寫 | 3000 / 5174 |
