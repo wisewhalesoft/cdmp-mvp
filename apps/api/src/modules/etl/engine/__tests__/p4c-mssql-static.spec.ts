@@ -122,7 +122,7 @@ describe('P4c STATIC-004 (createDispatcher DB_TYPE 分支落地)', () => {
     expect(svc).toMatch(/DB_TYPE/);
     expect(svc).toContain("=== 'mssql'");
   });
-  it('9 個 mssql handler 皆有註冊', () => {
+  it('mssql handler 皆有註冊（F110/US-173 後為 10 個，既有 9 個 + CodeDecodeHandlerMssql）', () => {
     const mssqlRegs = [...svc.matchAll(/dispatcher\.register\(new\s+(\w+Mssql)\(\)\)/g)].map((m) => m[1]);
     expect(new Set(mssqlRegs)).toEqual(
       new Set([
@@ -135,13 +135,14 @@ describe('P4c STATIC-004 (createDispatcher DB_TYPE 分支落地)', () => {
         'ConditionalHandlerMssql',
         'TargetLoadHandlerMssql',
         'LookupHandlerMssql',
+        'CodeDecodeHandlerMssql',
       ]),
     );
-    expect(mssqlRegs.length).toBe(9);
+    expect(mssqlRegs.length).toBe(10);
   });
-  it('PG handler 9 個仍保留（預設分支）', () => {
+  it('PG handler 皆保留（預設分支，F110/US-173 後為 10 個）', () => {
     const pgRegs = [...svc.matchAll(/dispatcher\.register\(new\s+(\w+)\(\)\)/g)].map((m) => m[1]).filter((n) => !n.endsWith('Mssql'));
-    expect(pgRegs.length).toBe(9);
+    expect(pgRegs.length).toBe(10);
   });
 });
 

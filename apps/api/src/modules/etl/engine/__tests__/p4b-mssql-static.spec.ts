@@ -131,7 +131,7 @@ describe('P4b REG-002 (PG merge/lookup handler 未被改為 mssql)', () => {
 // =====================================================================
 describe('P4b DISPATCH-002 (createDispatcher — 9 個 PG handler 預設分支不變)', () => {
   const svc = read(path.resolve(__dirname, '../../etl-pipeline-execution.service.ts'));
-  it('9 個 PG handler 於預設分支仍逐一註冊、順序不變', () => {
+  it('PG handler 於預設分支仍逐一註冊、順序不變（F110/US-173 後為 10 個，既有 9 個順序不變 + CodeDecodeHandler 附加於末）', () => {
     const registers = [...svc.matchAll(/dispatcher\.register\(new\s+(\w+)\(\)\)/g)]
       .map((m) => m[1])
       .filter((n) => !n.endsWith('Mssql'));
@@ -145,6 +145,7 @@ describe('P4b DISPATCH-002 (createDispatcher — 9 個 PG handler 預設分支�
       'ConditionalHandler',
       'TargetLoadHandler',
       'LookupHandler',
+      'CodeDecodeHandler',
     ]);
   });
 });

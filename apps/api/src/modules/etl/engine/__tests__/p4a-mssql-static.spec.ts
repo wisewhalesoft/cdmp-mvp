@@ -108,7 +108,7 @@ describe('P4a DISPATCH-002 (createDispatcher — 9 個 PG handler 於預設分�
   // 🔴 AD-E07-41 P4c（DISPATCH-001）已落地 createDispatcher 之 DB_TYPE 分支（P4a 原「延後未接線」狀態於本輪結束）。
   //    P4a 原斷言「無 mssql 分支」已不適用；改為驗證 PG handler 於預設（非 mssql）分支仍逐一註冊、順序不變。
   const svc = read(path.resolve(__dirname, '../../etl-pipeline-execution.service.ts'));
-  it('9 個 PG handler 於預設分支仍逐一註冊、順序不變', () => {
+  it('PG handler 於預設分支仍逐一註冊、順序不變（F110/US-173 後為 10 個，既有 9 個順序不變 + CodeDecodeHandler 附加於末）', () => {
     const registers = [...svc.matchAll(/dispatcher\.register\(new\s+(\w+)\(\)\)/g)]
       .map((m) => m[1])
       .filter((n) => !n.endsWith('Mssql'));
@@ -122,6 +122,7 @@ describe('P4a DISPATCH-002 (createDispatcher — 9 個 PG handler 於預設分�
       'ConditionalHandler',
       'TargetLoadHandler',
       'LookupHandler',
+      'CodeDecodeHandler',
     ]);
   });
 });

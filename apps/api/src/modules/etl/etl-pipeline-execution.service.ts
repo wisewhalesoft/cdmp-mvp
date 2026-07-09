@@ -35,6 +35,8 @@ import {
   ConditionalHandlerMssql,
   TargetLoadHandlerMssql,
   LookupHandlerMssql,
+  CodeDecodeHandler,
+  CodeDecodeHandlerMssql,
 } from './engine';
 
 @Injectable()
@@ -73,6 +75,7 @@ export class EtlPipelineExecutionService {
       dispatcher.register(new ConditionalHandlerMssql());
       dispatcher.register(new TargetLoadHandlerMssql());
       dispatcher.register(new LookupHandlerMssql());
+      dispatcher.register(new CodeDecodeHandlerMssql());
       return dispatcher;
     }
     dispatcher.register(new ExtractHandler());
@@ -84,6 +87,7 @@ export class EtlPipelineExecutionService {
     dispatcher.register(new ConditionalHandler());
     dispatcher.register(new TargetLoadHandler());
     dispatcher.register(new LookupHandler());
+    dispatcher.register(new CodeDecodeHandler());
     return dispatcher;
   }
 
