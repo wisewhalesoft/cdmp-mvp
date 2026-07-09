@@ -1,10 +1,14 @@
 ---
 type: architecture-spec
-version: "2.25"
+version: "2.26"
 status: draft
-last_updated: 2026-07-02
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109]
+last_updated: 2026-07-09
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110]
 ---
+
+> **v2.26 / 2026-07-09 變更摘要（AD-E05-7 `code_decode` 節點架構，F110 / US-173）**：
+>
+> 新增 **AD-E05-7「`code_decode` 節點架構設計」**（本節末，緊接 AD-E05-6 之後）：新增第 14 種 ETL 轉換節點類型 `code_decode`（`lookup` 之泛用化——對同一張字典表在一次資料流掃描中以任意數量 mapping 完成多欄代碼解碼），取代原本需要 N 個各自「就地全表 UPDATE」的 `lookup` 節點鏈。核心決策：(1) 單趟多 LEFT JOIN、dialect-neutral 語意設計；(2) **SELECT INTO 新暫存表**（比照 `derived_field`）為核心效能決策，取代 `lookup` 現行「就地 ALTER+UPDATE」策略（`lookup` 本身不變、不淘汰）；(3) PG／MSSQL 雙 Handler 檔案並行（`code-decode-handler.ts` / `code-decode-handler-mssql.ts`），比照 P4 既有慣例；(4) 節點連線規則沿用 AD-E05-4（Transform 類別，單一必要輸入 + 選用 `lookup-input` 第二輸入，比照 `lookup`）；(5) 新增不變式 I-CODEDECODE-JOIN-FILTER-01 / I-CODEDECODE-DEDUP-TIEBREAK-01 / I-CODEDECODE-NORMALIZE-01 / I-CODEDECODE-COLLISION-01 / I-CODEDECODE-EQ-01。完整 SQL 形狀（filter-in-derived-table、`_cdmp_id` tie-break、`OPTION (HASH JOIN)`）與 `customer_core` pipeline definition 收斂 migration 設計，見 [`implementation-log/AD-E07-41-mssql-p4-etl-engine.md`](implementation-log/AD-E07-41-mssql-p4-etl-engine.md) §13（v1.3 新增）。§3 節點目錄（原「13 種轉換節點」）同步更新為 14 種。covers 補入 F110。
 
 > **v2.25 / 2026-07-02 變更摘要（AD-E07-37 F109 客戶資料來源篩選欄位）**：
 >
@@ -925,7 +929,7 @@ graph TD
 - **執行方式**：Promise-based 背景作業；API 層建立 EtlPipelineLog 並更新 Pipeline 狀態後立即回傳 202；節點執行邏輯在背景 Promise chain 中循序執行
 - **節點執行順序**：依 definition 的 edges（有向無環圖 DAG）進行拓撲排序後循序執行
 - **Extract 節點**：讀取 AppDB 內的 `raw_{task_id_short}` 動態表，以 Raw SQL 查詢（不使用 ORM Entity）
-- **Transform 節點**：在應用記憶體中執行 13 種轉換邏輯（Merge/FieldMapping/Format/Conditional/NullHandler/TypeCast/Filter/Deduplicate/Lookup/String/Masking/Aggregate/DerivedColumn）
+- **Transform 節點**：在應用記憶體中執行 14 種轉換邏輯（Merge/FieldMapping/Format/Conditional/NullHandler/TypeCast/Filter/Deduplicate/Lookup/CodeDecode/String/Masking/Aggregate/DerivedColumn）——`CodeDecode`（`code_decode`，AD-E05-7 / F110）為 `Lookup` 之泛用化，新增於 `lookup` 之後，`lookup` 本身不變、不淘汰
 - **Load 節點**：以 UPSERT（主鍵衝突時 UPDATE，否則 INSERT）寫入目標表（`customer_core` 等）；自動填充 ETL 追蹤欄位（`data_source`、`_etl_loaded_at`、`_etl_pipeline_id`）
 - **進度更新**：每個節點執行完成後更新 EtlPipelineLog.node_logs（JSONB）與 processed_count；前端以 5 秒 Polling 讀取進度
 - **逾時機制**：Pipeline 執行最長 2 小時；超時由 Cleanup Cron 偵測並標記為 `failed`
@@ -1042,6 +1046,30 @@ graph TD
 擴展時執行引擎（Pipeline Execution Service）的 UPSERT 邏輯無需修改，僅需：①在 `target-table.service.ts` Registry 中新增 schema 物件、②執行 DB Migration 建立目標表、③新增對應的擷取任務（E04）。
 
 **架構挑戰**：多實例部署時，Scheduler 可能同時執行導致重複健康檢查與重複擷取觸發。MVP 單機部署不受影響；若未來水平擴展，需引入分散式鎖定機制（見第 8 節）。
+
+#### `code_decode` 節點架構設計（AD-E05-7，F110 / US-173）
+
+> 完整 SQL 形狀（MSSQL/PG dialect 細節、duplicate-key tie-break、migration 設計）見 [`implementation-log/AD-E07-41-mssql-p4-etl-engine.md`](implementation-log/AD-E07-41-mssql-p4-etl-engine.md) §13。本節僅記錄架構層級決策（Why + What，非 How）。
+
+**問題背景**：`customer_core` Pipeline 有 31 個 `lookup` 節點，其中 5 組（依字典表實例分組）各自對**同一張**小型字典表（約 3,000 列）以不同 filter 取出一欄描述。每個 `lookup` 節點是「就地全表 `ALTER TABLE ADD` + `UPDATE ... JOIN`」，在大分支（約 360 萬列）上每個 5–11 分鐘，19 個此類節點使解碼耗時逾 45 分鐘、整條 Pipeline 逼近 1.5 小時（US-173 背景）。
+
+**AD-E05-7a：泛用單趟多重解碼設計（dialect-neutral）**——新增第 14 種轉換節點類型 `code_decode`：對**同一張**字典表，在**一次資料流掃描**中，以任意數量組「代碼欄位 → 描述欄位」mapping（每組可各自帶任意 filter：單一等式、複合條件、或無 filter）一次完成解碼，取代一組打同一字典表的 `lookup` 節點鏈。節點級只保留單一共用字典來源（`lookupRef`/`lookupSource`，解析規則與 `lookup` 完全一致）；比對欄、filter、輸出欄下沉至 per-mapping。固定 LEFT JOIN／NULL 語意（無對應 ⇒ 描述欄 NULL、不刪列），不提供 `noMatchStrategy`/`defaultValue`（單趟多 mapping 下 `skip_row` 之刪列語意與其他 mapping 保留列語意衝突，無法共存於一次掃描）。完整 config schema／等價契約／`lookup`⇒`code_decode` 決定性收斂對應見 [F110](features/F110-etl-code-decode-node.md) §5～§7（spec 層權威定義，本節不重複）。
+
+**AD-E05-7b：`SELECT INTO` 新暫存表（非就地 `ALTER`+`UPDATE`）為核心效能決策**——`code_decode` 比照 `derived_field` 之「單一 minimally-logged 全表寫出」策略，而非比照 `lookup` 現行「就地新增欄位 + `UPDATE...FROM` 逐列更新」策略。理由：`lookup` 的就地 UPDATE 策略之所以合理，是因為它假設「一次只加一組欄位」，代價可接受；但 `code_decode` 一次要加 N 組欄位（customer_core 最多 9 組），若沿用就地策略需 N 次循序 `UPDATE...FROM`（僅省去 N-1 次全表複製，仍是 N 次全表隨機堆積寫入，效益有限）。改為單一 `SELECT <passthrough 欄位> , <N 組 LEFT JOIN 解碼欄位> INTO 新暫存表 FROM 主表 <N 個 LEFT JOIN>` 的單一循序寫入，一次寫完全部 N 組欄位。**實測依據**：360 萬列全表 `SELECT INTO`（minimally-logged）約 30 秒等級 vs. 單一 `lookup` 就地 UPDATE 5–11 分鐘（P6c 真實 dev MSSQL 量測，`OPTION (HASH JOIN)` 修法前）；即使 `lookup` 現行版本已加上 `OPTION (HASH JOIN)` 修法後降至數十秒等級，N=9 組仍需 N 次獨立全表 UPDATE 循序執行，`code_decode` 单一掃描一次完成 N 組解碼在**節點數**與**排程/暫存表管理開銷**上更精簡（對應 US-173 AC-3／F110 AC-11 之 3 分鐘門檻）。`lookup` 節點本身不因此變更（`lookup` 在單組 mapping 情境下就地 UPDATE 仍是合理選擇，兩節點類型並存、各自適用不同情境，見 AC-8/BR-10）。
+
+**AD-E05-7c：PG + MSSQL 雙 Handler 檔案並行**——比照 AD-E07-41 P4 既有慣例（§1.2），新增 `code-decode-handler.ts`（PG）與 `code-decode-handler-mssql.ts`（MSSQL）兩個平行檔案，不在同一 class 內用 if/else 切兩種 SQL 產生邏輯；組裝點（`etl-pipeline-execution.service.ts` 之 `createDispatcher()`）依 `DB_TYPE` 分支各自 `dispatcher.register(...)`，與現行 9 個 handler 之註冊方式一致（新增第 10 對）。
+
+**AD-E05-7d：節點連線規則**——`code_decode` 屬 Transform 類別節點，沿用既有節點連線規則（AD-E05-4）不新增例外：可接受 Extract/Transform 上游、可連往 Transform/Load 下游、禁止自身循環。輸入 handle 比照 `lookup` 之雙 handle 設計（`default`：主資料流，必要；`lookup-input`：選用第二輸入，供上游節點直接提供字典 DataSet，向下相容模式則由 `lookupRef`/`lookupSource` 動態解析）；輸出為單一 handle（單一新暫存表，非多輸出）。
+
+**AD-E05-7e：不變式**
+
+| ID | 說明 |
+|---|---|
+| **I-CODEDECODE-JOIN-FILTER-01** | 每組 mapping 的 filter 必須套用於「LEFT JOIN 右側的字典衍生子查詢（derived table）內部」，不得以主查詢層級的 `WHERE` 對已 LEFT JOIN 完成的結果做後置過濾——後者會使無對應列的字典欄位（NULL）被 WHERE 條件濾除，LEFT JOIN 語意實質退化為 INNER JOIN，違反 F110 AC-3／BR-3 |
+| **I-CODEDECODE-DEDUP-TIEBREAK-01** | 字典子集（套用該 mapping filter 後）出現重複比對鍵時，必須在 LEFT JOIN 之前以確定性規則（`ROW_NUMBER() OVER (PARTITION BY 正規化鍵 ORDER BY 決定性排序鍵) = 1`）預先去重為每鍵至多一列，禁止未去重直接 JOIN（會使主表列數因字典重複鍵而增生／fan-out，於 360 萬列主表上為災難性錯誤） |
+| **I-CODEDECODE-NORMALIZE-01** | 每一組 JOIN 比對鍵等式與每一個輸出值，正規化（TRIM + 文字轉型）須與 `LookupExecutor`（F043 §4.8）完全相同，此為 F110 §7.4 逐格等價契約的前提 |
+| **I-CODEDECODE-COLLISION-01** | 輸出 SELECT 清單必須以「顯式欄位枚舉」組成（比照 `derived_field` 現行做法排除將被覆蓋之既有欄位），禁止使用 `SELECT *`／`m.*` 萬用字元——`outputAlias` 與既有輸入欄同名時會產生實體表重複欄名錯誤 |
+| **I-CODEDECODE-EQ-01** | 比照 I-MSSQL-ETL-EQ-01：`customer_core` 每一個收斂後的 `code_decode` 節點，皆須有對應測試與其所取代之等價 `lookup` 節點鏈輸出逐格比對，不得僅憑 SQL 轉換表核對即宣稱完成 |
 
 #### Orphan Recovery 模組（F038 新增）
 

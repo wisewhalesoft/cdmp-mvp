@@ -2,23 +2,27 @@
 spec-id: F043
 title: ETL 節點執行器
 feature-id: F043
-source-story: US-056, US-057, US-058
+source-story: US-056, US-057, US-058, US-173
 epic: E05
 priority: P0-MVP
-version: "1.3"
-date: 2026-04-15
+version: "1.4"
+date: 2026-07-09
 status: Draft
 ---
 
 # F043: ETL 節點執行器
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-15
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-09
+
+> **v1.4（2026-07-09 / US-173）**：新增第 9 種轉換節點 `code_decode`（§4.9，`lookup` 的泛用化：同一字典表單趟多欄解碼）；完整規格見 [F110](F110-etl-code-decode-node.md)。§1 節點數 8→9、`target_load` 改列第 10 種；§6 補 code_decode 邊界。`lookup`（§4.8）本身不變。
 
 ## 1. 功能摘要
 
-定義 ETL Pipeline 中 8 種節點處理器（NodeExecutor）的業務邏輯：`raw_data_extract`、`merge`、`dedup`、`type_cast`、`derived_field`、`field_mapping`、`conditional`、`lookup`。每種處理器實作 `NodeExecutor` 介面（定義於 [F042](F042-etl-execution-engine.md)），接收 `NodeExecutionContext` 並回傳 `DataSet`。
+定義 ETL Pipeline 中 9 種節點處理器（NodeExecutor）的業務邏輯：`raw_data_extract`、`merge`、`dedup`、`type_cast`、`derived_field`、`field_mapping`、`conditional`、`lookup`、`code_decode`。每種處理器實作 `NodeExecutor` 介面（定義於 [F042](F042-etl-execution-engine.md)），接收 `NodeExecutionContext` 並回傳 `DataSet`。
 
-第 9 種節點 `target_load` 因涉及資料庫 UPSERT 與追蹤欄位填充，獨立定義於 [F044](F044-etl-target-load.md)。
+其中 `code_decode`（§4.9）為 `lookup`（§4.8）的**泛用化（generalization）**：對**同一張**對照字典表在**一次資料流掃描**中執行多組「代碼 → 描述」解碼，取代一組打同一字典表的 `lookup` 節點；本目錄僅列其摘要，完整規格見 [F110](F110-etl-code-decode-node.md)。
+
+第 10 種節點 `target_load` 因涉及資料庫 UPSERT 與追蹤欄位填充，獨立定義於 [F044](F044-etl-target-load.md)。
 
 ## 2. 前置條件
 
@@ -667,6 +671,62 @@ Seed Pipeline 中 Lookup 節點尚未使用（代碼描述查找為後續階段�
 
 ---
 
+### 4.9 CodeDecodeExecutor (`code_decode`)
+
+> **目錄摘要**；完整規格（config schema、語意、等價契約、customer_core 套用附錄）見 **[F110](F110-etl-code-decode-node.md)**。
+
+`code_decode` 是 `lookup`（§4.8）的**泛用化**：對**同一張**對照字典表，在**一次資料流掃描**中，以任意數量、任意 filter 的多組 mapping 同時解碼，一次補齊所有描述欄。存在理由為效能——把一組打同一張小字典（約 3,000 列）的 lookup 各自對大分支（約 360 萬列）的「就地全表 UPDATE」（每個 5–11 分鐘），收斂為「一次掃描 + N 個 LEFT JOIN」。`code_decode` 為**新增**節點類型，不修改、不淘汰 `lookup`（兩者並存）。
+
+**節點設定參數：**
+
+```typescript
+interface CodeDecodeConfig {
+  nodeType: 'code_decode';
+  label: string;
+  // 共用對照字典來源（單一字典表；解析規則與 §4.8 lookup 完全一致）
+  lookupSource?: string;          // raw table 名稱（如 'raw_e5a2345c'），有 lookupRef 時作為 fallback
+  lookupRef?: {                   // 邏輯參照，動態查詢 extraction_tasks 取得 raw_table_name
+    datasourceName: string;
+    sourceTable: string;
+  };
+  lookupSourceId?: string;        // taskId（UUID），選用
+  mappings: CodeDecodeMapping[];  // 至少 1 組
+  subtitle?: string;
+}
+
+interface CodeDecodeMapping {
+  matchColumn: string;            // 主資料集比對欄（對應 lookup 的 matchColumn）
+  lookupMatchColumn: string;      // 對照表比對欄（對應 lookup 的 lookupMatchColumn）
+  filter?: string;                // 選用：對字典表的 SQL 布林過濾式（對應 lookup 的 lookupFilter）
+  outputColumns: { lookupColumn: string; outputAlias: string }[];  // 至少 1 個（對應 lookup 的 outputColumns）
+}
+```
+
+> **與 lookup 的設定對應**：節點級只保留共用字典來源（`lookupRef` / `lookupSource` / `lookupSourceId`）；「比對欄 / filter / 輸出欄」下沉至 per-mapping，欄位名刻意沿用 lookup，使「一組同字典 lookup ⇔ 一個 code_decode」為零重塑的 1:1 對應（見 [F110 §7](F110-etl-code-decode-node.md)）。
+
+**處理邏輯（摘要）：**
+
+1. 解析**單一**對照字典表（雙輸入 `lookup-input`，或向下相容模式 `lookupRef` 動態解析 → `lookupSource` fallback，與 §4.8 相同），供全部 mapping 共用。
+2. 一次資料流掃描中，對每個 mapping：以（套用該 mapping `filter` 後的）字典子集，於 `matchColumn = lookupMatchColumn` 做 **LEFT JOIN**，將 `outputColumns` 填入對應 `outputAlias`；無對應 ⇒ NULL（**固定 LEFT JOIN，不提供 `noMatchStrategy` / `defaultValue`**）。
+3. join key 與輸出值的 **TRIM + 文字 cast**、重複 key 取首筆，**與 §4.8 lookup 完全相同**（等價前提）。
+4. 輸出 = 全部輸入欄位 + 全部 mapping 的 `outputAlias`；`rowCount` 與輸入相同（不刪列）。
+
+**輸入：**
+- 向下相容模式：`{ 'default': DataSet }`
+- 雙輸入模式：`{ 'default': DataSet, 'lookup-input': DataSet }`
+
+**輸出：** `DataSet`，包含主資料集所有原始欄位 + 全部 mapping 的 `outputAlias` 欄位。
+
+**等價契約（硬性）：** 輸出須與其所取代的等價 `lookup` 節點鏈**逐格（cell-for-cell）完全一致**（含查無對應時皆為 NULL）；PG 與 MSSQL 輸出 byte-identical。詳見 [F110 §4 / §7](F110-etl-code-decode-node.md)。
+
+**錯誤處理：** 沿用 lookup 的節點級失敗慣例（無新錯誤碼）。缺主資料流 / `mappings` 為空 / mapping 缺 `matchColumn`·`lookupMatchColumn`·`outputColumns` / 跨 mapping `outputAlias` 重複 / 字典來源不可解析 / filter 語法錯誤 → 節點 `'failed'`（措辭見 [F110 §13](F110-etl-code-decode-node.md)）。
+
+**Seed Pipeline 中的實例：** Seed Pipeline 尚未使用；`customer_core` Pipeline 之套用（31 個 lookup 依字典表實例分組收斂為 9 個 code_decode 節點）見 [F110 §14](F110-etl-code-decode-node.md)（informative）。
+
+**實體執行策略**（`SELECT INTO` vs 就地 `UPDATE`、`##temp`、MSSQL/PG 方言）交 system-architect（AD-E07-41）。
+
+---
+
 ## 5. 節點間資料流概覽（Seed Pipeline）
 
 ```
@@ -697,6 +757,10 @@ e5(raw_50172f04) ─────────────────────
 | lookup 主資料集 key 值為 null | lookup | 該列的 outputColumns 欄位補 null（null key 不匹配任何對照列） |
 | lookup 對照資料集有重複 key | lookup | 取首筆匹配列（lookup Map 中先入者為主） |
 | lookup 雙輸入模式忽略 lookupSource/lookupFilter | lookup | 即使設定中仍有 lookupSource 值，雙輸入模式不使用 |
+| code_decode 某 mapping 字典子集（filter 後）為空 | code_decode | 該 mapping 全部 outputAlias 補 null，rowCount 與主資料集相同 |
+| code_decode mapping 主表 key 為 null / 查無對應 | code_decode | 該列該 mapping 的 outputAlias 補 null（LEFT JOIN，不刪列） |
+| code_decode 跨 mapping outputAlias 重複 | code_decode | 節點 `'failed'`（別名唯一性違反，見 [F110 §10](F110-etl-code-decode-node.md)） |
+| code_decode 單一 mapping | code_decode | 合法；語意等同單一等價 lookup（見 [F110 §6.4](F110-etl-code-decode-node.md)） |
 
 ## 7. 驗收標準
 
@@ -942,6 +1006,7 @@ e5(raw_50172f04) ─────────────────────
 ## 8. 相關文件
 
 - 執行引擎框架：[F042-etl-execution-engine.md](F042-etl-execution-engine.md)
+- Code Decode 節點（§4.9 完整規格）：[F110-etl-code-decode-node.md](F110-etl-code-decode-node.md)
 - Target Load：[F044-etl-target-load.md](F044-etl-target-load.md)
 - 目標表定義：[F036-target-tables.md](F036-target-tables.md)
 - Pipeline 編輯器（Lookup JSON schema / UI）：[F029-pipeline-editor.md](F029-pipeline-editor.md)（8.4.9 節）

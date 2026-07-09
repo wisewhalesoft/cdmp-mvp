@@ -5,13 +5,13 @@ feature-id: N/A（非 F-numbered feature；資料庫平台全面遷移之基礎�
 source-stories: N/A（延續 AD-E07-38/39/40 之使用者拍板三項硬約束；本輪額外拍板：customer_core ETL 提前於 P3 之前完成，接受 27–46 人天估算）
 epic: cross-cutting（跨全模組之資料庫平台遷移，非單一 E07 業務 epic）
 module: Infrastructure — Database Platform Migration（PostgreSQL → MSSQL，Phase 4 of 6：ETL 引擎，因 P3 Stage 2 計分依賴 customer_core 真實資料而拉前）
-version: "1.2"
-date: 2026-07-08
+version: "1.3"
+date: 2026-07-09
 status: approved
 author: system-architect
 covers: []
 depends-on: [AD-E07-38, AD-E07-39, AD-E07-40]
-related: [F103, F104, F105]
+related: [F103, F104, F105, F110]
 invariants:
   - I-MSSQL-CASE-01（繼承自 AD-E07-38）
   - I-MSSQL-COLLATE-01（繼承自 AD-E07-38）
@@ -24,11 +24,19 @@ invariants:
   - I-MSSQL-DEDUP-TIEBREAK-01（新增）
   - I-MSSQL-ETL-EQ-01（新增）
   - I-MSSQL-DECIMAL-NORMALIZE-01（新增，v1.2，FINDING-P4D-01 修法）
+  - I-CODEDECODE-JOIN-FILTER-01（新增，v1.3，F110/US-173）
+  - I-CODEDECODE-DEDUP-TIEBREAK-01（新增，v1.3）
+  - I-CODEDECODE-NORMALIZE-01（新增，v1.3）
+  - I-CODEDECODE-COLLISION-01（新增，v1.3）
+  - I-CODEDECODE-EQ-01（新增，v1.3）
+  - I-CODEDECODE-MIGRATION-01（新增，v1.3）
 ---
 
 > **🔴 v1.1 修訂通知（2026-07-08）**：P4-spike 實測推翻本文件原 §1.1「單一 QueryRunner ⇒ `#local temp` 可跨節點存活」之核心前提（封鎖級發現，完整記錄見 `docs/specs/implementation-log/AD-E07-41-P4-spike-impl.md`）。架構師已裁示補救路線（§1.3：改用 `##global temp`），本文件已就地修訂 §1.1/§2/§3/§4/§5/§9/§10 反映新設計，**不另立獨立 errata 章節**（因原設計尚未有任何下游程式碼實作，直接修訂內文對讀者更有效）。新增 §12 時程影響評估。
 >
 > **🔴 v1.2 修訂通知（2026-07-08）**：P4d 端對端驗證抓到 **FINDING-P4D-01**（真實 MSSQL 實測佐證，記錄於 `docs/specs/implementation-log/AD-E07-41-P4d-impl.md`）——`type_cast` 之 `DECIMAL` 目標型別固定映射 `DECIMAL(38,10)`，數字型輸入（如所得級距碼 `'3'`）強制補 10 位小數 → 流入下游窄 `varchar` 目標欄時 MSSQL 算術溢位（PG `NUMERIC` 無此問題）。屬純技術缺陷（非業務決策），架構師已裁定修法，見新增 §5.6，新增不變式 I-MSSQL-DECIMAL-NORMALIZE-01。另同步修正文件內「53 節點」為 P4d 實測確認之**「56 節點」**（55 邊；非阻擋性數字修正）。
+>
+> **🆕 v1.3 新增通知（2026-07-09，F110 / US-173）**：新增 **§13「`code_decode` Handler 設計」**（純新增章節，不修訂前述內容）。`customer_core` 現行 31 個 `lookup` 節點中，5 組（依字典表實例分組）各自對同一張小型字典表以不同 filter 解碼，收斂為新節點類型 `code_decode`（9 個節點）：單趟多 LEFT JOIN 取代 N 個各自就地全表 UPDATE 的 `lookup` 節點鏈。§13 解決 F110 spec §15 OQ-F110-01～05（實體執行策略／雙輸入模式／pipeline definition migration／欄名碰撞／dispatcher 註冊），並定義 `customer_core` pipeline definition 收斂之成對 PG/MSSQL data-update migration 設計（本專案第一支此類 migration，§13.6 建立慣例）。架構層級決策（Why/What）見 `architecture-spec.md` AD-E05-7；本節為 SQL 層級（How）之權威定義。
 
 # AD-E07-41：MSSQL 全面遷移 P4（ETL 引擎 MSSQL 化，含 customer_core 真實資料）架構設計
 
@@ -37,9 +45,10 @@ invariants:
 | Agent 角色 | 需載入章節 |
 |-----------|-----------|
 | Test Designer | §2（P4-spike 四項驗證 DoD）、§8（EQ/端對端測試策略）、§9（P4 子切片與 DoD）、§10（不變式） |
-| TDD Developer | §1（driver 組織方式）、§3（CTAS→SELECT INTO + 共用 helper）、§4（dedup tie-breaker 改寫）、§5（ON CONFLICT/Pattern B/cast/正則逐項轉換）、§6（bulk-load）、§7（customer_core schema） |
-| DevOps / CI/CD | §6（bulk-load 部署面）、§9（P4 子切片 DoD） |
+| TDD Developer | §1（driver 組織方式）、§3（CTAS→SELECT INTO + 共用 helper）、§4（dedup tie-breaker 改寫）、§5（ON CONFLICT/Pattern B/cast/正則逐項轉換）、§6（bulk-load）、§7（customer_core schema）、**§13（`code_decode` handler SQL 形狀 + migration 設計，F110/US-173）** |
+| DevOps / CI/CD | §6（bulk-load 部署面）、§9（P4 子切片 DoD）、**§13.6（pipeline definition migration 部署順序）** |
 | Product Analyst | §11（風險與需使用者留意的點） |
+| Test Designer（F110） | **§13.1（OQ-F110-01~05 裁示）、§13.2/§13.3（SQL 形狀，供 EQ 測試設計）、§13.5（不變式）** |
 
 ---
 
@@ -524,3 +533,299 @@ graph LR
 **對照組（若改選方案 B）**：具名 staging 表需額外 5–10 人天（設計 staging schema、命名、生命週期、失敗清理機制，比照 `OrphanReaper` 新建孤兒清理服務），總計約 32–56 人天，相對原估算變動幅度達 15–20%，屬於「顯著」等級——**這是本次選擇方案 A 而非方案 B 的量化理由之一**（§1.3 已敘述定性理由，此處補充定量佐證）。
 
 **建議**：不需要因本次裁示重新與使用者討論時程，可直接依更新後設計推進 P4-spike-2。若 P4-spike-2 觸發 §1.3 所述「切換至方案 B」的 fallback，屆時的時程衝擊才需要重新告知使用者（因為那時才會真的產生上表「對照組」的較大增量）。
+
+---
+
+## 13. 🆕 v1.3　`code_decode` Handler 設計（F110 / US-173，OQ-F110-01～05 解決）
+
+### 13.0 背景與範圍
+
+`customer_core` Pipeline 現行 31 個 `lookup` 節點中，5 組（依字典表實例分組）各自對**同一張**小型字典表（約 3,000 列）以不同 filter 各取一欄描述，每組各自為一條 `lookup` 序列鏈，每個節點是「就地全表 `ALTER TABLE ADD` + `UPDATE...FROM` 」（P6c 實測 `OPTION (HASH JOIN)` 修法前單節點 5–11 分鐘／360 萬列）。[F110](../features/F110-etl-code-decode-node.md)（spec）與 [US-173](../../stories/epics/E05-etl-pipeline/US-173-code-decode-node.md)（story）已定案新增節點類型 `code_decode`：對同一字典表在一次資料流掃描中以任意數量 mapping 完成多欄解碼。本節解決 F110 §15.2 之 **OQ-F110-01～05**（架構師裁示），並定義 `customer_core` pipeline definition 收斂之 migration 設計。架構層級決策（Why/What）另見 `architecture-spec.md` AD-E05-7；本節為 SQL 層級（How）之權威定義，兩者互為對應——閱讀本節前建議先讀 AD-E05-7 之四項決策（§7a～§7d）。
+
+**新增檔案**（本節設計，tdd-implementation 落地）：
+- `apps/api/src/modules/etl/engine/handlers/code-decode-handler.ts`（PG）
+- `apps/api/src/modules/etl/engine/handlers/code-decode-handler-mssql.ts`（MSSQL）
+- `apps/api/src/database/migrations/<ts>-UpdateCustomerCoreCodeDecode.ts`（PG data-update migration）
+- `apps/api/src/database/migrations/mssql/<ts>-MssqlUpdateCustomerCoreCodeDecode.ts`（MSSQL data-update migration）
+- `apps/api/src/database/migrations/shared/customer-core-code-decode-definition.ts`（PG/MSSQL 共用之 pipeline definition payload，§13.6.2）
+
+### 13.1 OQ-F110-01～05 逐一裁示
+
+| OQ | 裁示 |
+|---|---|
+| **OQ-F110-01**（實體執行策略） | **`SELECT INTO`／`CREATE TEMP TABLE AS SELECT` 新暫存表**（比照 `derived_field`），**非**就地 `ALTER`+`UPDATE`（`lookup` 現行策略）。單一循序全表寫出，N 個 LEFT JOIN 一次補齊全部 mapping 之描述欄。詳細 SQL 形狀見 §13.2（MSSQL）／§13.3（PG）。 |
+| **OQ-F110-02**（雙輸入模式） | **支援**，比照 `lookup` 之 `lookup-input` 選用 handle（對稱設計，符合 F110 §6.1／spec-writer 建議）。字典來源解析：`inputs['lookup-input']` 存在 ⇒ 全部 mapping 共用該上游 DataSet（`##`/temp table）；不存在 ⇒ 向下相容模式（`lookupRef` 動態解析 → `lookupSource` fallback，重用既有 `resolveRawTableMssql`/`resolveRawTable`，不新增解析路徑）。**`customer_core` 全部 9 個節點皆為向下相容模式**（§14 informative 附錄），雙輸入模式目前無實際呼叫方，設計上支援但暫無 E2E 覆蓋，留待 test-designer 評估是否需要合成測試。 |
+| **OQ-F110-03**（pipeline definition migration） | 見 §13.6（本節新增之完整設計：`etl-pipelines.json` 編輯設計 + 成對 PG/MSSQL data-update migration，含 `down()` 還原機制）。 |
+| **OQ-F110-04**（`outputAlias` 與既有輸入欄同名） | SELECT 清單以**顯式欄位枚舉**組成（比照 `derived_field` 現行 `derivedOutputCols` 排除法），輸出結果**以該 mapping 解碼值為準**（既有同名欄位不進入 passthrough 清單，效果等同「覆蓋」）。**不使用 `SELECT *`／`m.*`**——`code_decode` 一次新增 K 個欄位（K = 全部 mapping 的 `outputColumns` 總數），K 之中任一與既有輸入欄同名時，`SELECT *, ... AS "同名欄"` 會產生實體表重複欄名錯誤（`derived_field` 一次只新增少量欄位即已採此排除法，`code_decode` 欄位數更多、更不可省略）。詳見 §13.2 步驟 2。 |
+| **OQ-F110-05**（NodeExecutor 註冊／dispatcher／F029 UI） | `CodeDecodeHandler implements NodeExecutor { readonly nodeType = 'code_decode' }`（PG）與 `CodeDecodeHandlerMssql`（MSSQL），於 `etl-pipeline-execution.service.ts` 之 `createDispatcher()` 依 `DB_TYPE` 分支各自 `dispatcher.register(...)`，新增第 10 對（`NodeDispatcher`/`node-dispatcher.ts`/`pipeline-runner.ts` 本身不變，driver-agnostic 抽象已封裝於個別 handler，同 §1.2 既有模式）。F029 畫布編輯器 UI：**本輪不需要**——`customer_core` 之 9 個 `code_decode` 節點由 migration／seed 建立（比照現行 31 個 `lookup` 節點皆為 seed-authored、非畫布手動編輯），F029 對 `code_decode` 的視覺化設定為後續獨立 story，非本次架構範圍。 |
+
+### 13.2 MSSQL Handler SQL 形狀（`code-decode-handler-mssql.ts`）
+
+**核心策略**：`SELECT <顯式欄位枚舉> INTO ##新暫存表 FROM ##主表 m <N 個 LEFT JOIN，每組 mapping 一個> OPTION (HASH JOIN)`，執行後對輸入 `##主表` 依既有 `NodeOutputStore.release()` 引用計數 eager-drop（P6c 既有機制，`b5f79be`，本節點不需額外處理，見 §13.4）。
+
+**Critical #1 — filter 必須套在 LEFT JOIN 右側的字典衍生子查詢內部，不得置於主查詢的 `WHERE`**：若寫成 `... FROM m LEFT JOIN dict d1 ON <key match> WHERE d1."TBL_ID" = 'A2'`，`WHERE` 對「LEFT JOIN 已完成之結果」做後置過濾——無對應列（`d1.*` 為 NULL，含 `d1."TBL_ID"` 為 NULL）會被 `WHERE d1."TBL_ID" = 'A2'` 濾除，LEFT JOIN 語意實質退化為 INNER JOIN，違反 F110 AC-3／BR-3（無對應須保留列、欄位補 NULL）。正確作法（兩種等價寫法擇一，本設計採後者）：
+  - (a) 併入 JOIN 的 `ON` 子句：`LEFT JOIN dict d1 ON d1."TBL_ID"='A2' AND <key match>`；
+  - (b) **（採用）** filter 套用於字典衍生子查詢內部（JOIN 右側是「已篩選＋已去重」的 derived table，`ON` 子句僅剩純鍵值等式）——與現行 `lookup-handler-mssql.ts` 之 `lookupSubQuery = SELECT * FROM dict WHERE <filter>` 做法一致，直接沿用同一慣例，且與 Critical #2 的去重子查詢天然疊加為同一層（見下）。
+
+**Critical #2 — 字典子集重複鍵不得使主表 fan-out，須於 JOIN 前確定性去重**：字典衍生子查詢在套用 filter 後，以 `ROW_NUMBER() OVER (PARTITION BY 正規化鍵 ORDER BY 決定性排序鍵) = 1` 預先去重為每鍵至多一列，再與主表 LEFT JOIN。**決定性排序鍵**：優先使用字典來源表（`raw_*`）之 `_cdmp_id`（AD-E04-8／`raw-data.service.ts` `SYSTEM_COLUMNS`——來源表無自身可用主鍵時，擷取引擎自動附加之 auto-increment 代理鍵，語意即「擷取寫入順序」，與 F043 §6 對 `lookup` 重複鍵之既有定義「取首筆匹配列（Map 中先入者為主）」精神一致，且 PG/MSSQL 兩側之 `_cdmp_id` 皆源自同一次 E04 擷取序列，兩引擎排序結果一致）。**`_cdmp_id` 是否存在需 tdd-implementation 逐一核對 5 張字典表**（AD-E04-8：僅「來源無可用主鍵」時才附加；若來源本身有自然主鍵則不附加）——handler 於執行期以 `INFORMATION_SCHEMA.COLUMNS`（大寫，I-MSSQL-CATALOG-CASE-01）對字典表做一次性內省，`_cdmp_id` 存在則 `ORDER BY d."_cdmp_id" ASC`，不存在則 fallback `ORDER BY (SELECT NULL)`（T-SQL `ROW_NUMBER()` 語法要求非空 `ORDER BY`，`(SELECT NULL)` 為「無意義穩定排序」慣用寫法，與 `lookup` 現行 `UPDATE...FROM` 對重複鍵之「未定義但單一結果」風險等級相同，非本次新增的迴歸風險，屬既有已知邊界情境，比照 AD-E07-41 §4.3 tie-breaker 邊界案例之既有先例處理，不視為 P6d 上線阻擋項）。
+
+**Critical #3 — 正規化須與 `LookupExecutor` 完全相同**：JOIN 鍵值等式與輸出值一律 `TRIM(TRY_CAST(expr AS NVARCHAR(4000)))`（直接複製 `lookup-handler-mssql.ts` 現行 `trimCast()` helper，不重新實作）。
+
+**MSSQL SQL 模板**（以 customer_core #1「[和潤] ZZIP 教育程度」等 9 組 mapping 為例，示範第 1、第 2 組；其餘 7 組結構相同）：
+
+```sql
+SELECT
+  <主表既有欄位，顯式枚舉，排除全部 outputAlias 同名者>,
+  "_cd_m1"."education_desc"    AS "education_desc",
+  "_cd_m2"."occupation_desc"   AS "occupation_desc",
+  -- ... 共 9 組 mapping，各一欄（本例每組 outputColumns 長度為 1）
+  "_cd_m9"."monthly_income_desc" AS "monthly_income_desc"
+INTO ##cd_<nodeId>_<logId8>
+FROM "##<主表暫存表>" m
+LEFT JOIN (
+  SELECT * FROM (
+    SELECT
+      TRIM(TRY_CAST(d."TBL_CD" AS NVARCHAR(4000)))    AS "_cd_key",
+      TRIM(TRY_CAST(d."TBL_DESC1" AS NVARCHAR(4000)))  AS "education_desc",
+      ROW_NUMBER() OVER (
+        PARTITION BY TRIM(TRY_CAST(d."TBL_CD" AS NVARCHAR(4000)))
+        ORDER BY d."_cdmp_id" ASC   -- 或 fallback (SELECT NULL)，見 Critical #2
+      ) AS "_cd_rn"
+    FROM "raw_e5a2345c" d
+    WHERE "TBL_ID" = 'A2'          -- mapping.filter 原樣沿用（未限定別名之欄名於單表 scope 下可正確解析，見下方說明）
+  ) _ranked
+  WHERE "_cd_rn" = 1
+) "_cd_m1" ON "_cd_m1"."_cd_key" = TRIM(TRY_CAST(m."EDUCAT_BACK" AS NVARCHAR(4000)))
+LEFT JOIN (
+  SELECT * FROM (
+    SELECT
+      TRIM(TRY_CAST(d."TBL_CD" AS NVARCHAR(4000)))    AS "_cd_key",
+      TRIM(TRY_CAST(d."TBL_DESC1" AS NVARCHAR(4000)))  AS "occupation_desc",
+      ROW_NUMBER() OVER (
+        PARTITION BY TRIM(TRY_CAST(d."TBL_CD" AS NVARCHAR(4000)))
+        ORDER BY d."_cdmp_id" ASC
+      ) AS "_cd_rn"
+    FROM "raw_e5a2345c" d
+    WHERE "TBL_ID" = 'A4'
+  ) _ranked
+  WHERE "_cd_rn" = 1
+) "_cd_m2" ON "_cd_m2"."_cd_key" = TRIM(TRY_CAST(m."VOCATION_CODE" AS NVARCHAR(4000)))
+-- ... 其餘 7 組同構
+OPTION (HASH JOIN)
+```
+
+**`OPTION (HASH JOIN)` 涵蓋全部 N 個 JOIN**：T-SQL 之 `OPTION (HASH JOIN)` 為陳述式層級 query hint（非單一 JOIN 的 table hint），強制該陳述式內**全部**（此例 9 個）JOIN 一律使用 hash join 演算法，一次宣告即可覆蓋群組 #1 的全部 9 組 mapping（比照 P6c `lookup-handler-mssql.ts` 既有單一 JOIN 用法之直接推廣，見該檔 `I-MSSQL-LOOKUP-HASHJOIN-01` 註解）。每個 JOIN 之 build side（字典衍生子查詢，套用 filter 後通常僅數十至數百列）遠小於 probe side（主表，最大分支 360 萬列），為 hash join 之教科書適用情境；build side 之記憶體用量與 JOIN 組數成正比但基數極小（9 組 × 數百列量級），非本次效能風險來源。**殘留風險（需 P6d 端對端驗證確認，非架構阻擋）**：單一陳述式內同時存在最多 9 個 JOIN 時，MSSQL query optimizer 是否確實對每一個 JOIN 都採用 hash join、或在某些 JOIN 上改採其他計畫，需以真實 dev CDMP 3.6M 列資料實測驗證（比照 AD-E07-41 一貫的「不預先承諾未實測效能數字」原則，見 §11.2）。
+
+**`##temp` 生命週期確認（不重新引入 tempdb 尖峰問題）**：`code_decode` 每節點僅產生**一個**新輸出 `##` 暫存表（單一 `SELECT INTO`），字典表本身是一般實體表（非 `##temp`，不佔用本次 pipeline run 的 tempdb 暫存表配額）。輸入端 `##主表` 於下游（下一節點）消費完成、refcount 歸零時，由既有 `NodeOutputStore.release()` eager-drop 機制（P6c，`b5f79be`）自動 DROP，`code_decode` 節點**不需新增任何 cleanup 邏輯**——直接沿用 P6c 既有機制即可維持「同時存活 ~2–3 張暫存表」的 tempdb 峰值控制（AD-E07-41 §3.1 起即有的 `I-MSSQL-TEMPTABLE-CLEANUP-01`／`dropMssqlTempTableIfExists` 對本節點的新輸出 `##` 表同樣適用，由 `pipeline-runner.ts` 既有成功/失敗兩路徑呼叫，不需改動）。31 個 `lookup` 節點收斂為 9 個 `code_decode` 節點後，pipeline 全程同時存活的暫存表數量**只會減少、不會增加**（原本每個 `lookup` 皆是「就地修改、不產生新表」，`code_decode` 每節點產生 1 張新表但立即在下游消費後被 eager-drop，淨效果與現行機制相容）。
+
+### 13.3 PG Handler SQL 形狀（`code-decode-handler.ts`）
+
+**與 MSSQL 版結構逐一對應**（僅暫存表建立語法與型別轉型語法不同，JOIN／filter／去重／欄位枚舉邏輯**完全同構**，此為達成 AC-9／BR-11「PG/MSSQL byte-identical」的設計基礎——結構愈一致，逐格 EQ 愈容易維持且愈容易審查）：
+
+| 面向 | MSSQL | PostgreSQL |
+|---|---|---|
+| 暫存表建立 | `SELECT ... INTO ##temp FROM ...`（`createMssqlTempTable` helper） | `CREATE TEMP TABLE "temp" AS SELECT ... FROM ...`（比照 `derived-field-handler.ts` 現行寫法） |
+| TRIM+cast | `TRIM(TRY_CAST(expr AS NVARCHAR(4000)))` | `TRIM(expr::text)`（沿用 `lookup-handler.ts` PG 版既有寫法） |
+| 去重 tie-break | `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY d."_cdmp_id" ASC)` | 語法完全相同（PG 原生支援同一 ANSI window function 語法，無需改寫） |
+| filter 位置 | 字典衍生子查詢內部 `WHERE` | 相同（字典衍生子查詢內部 `WHERE`） |
+| 欄位枚舉 | `INFORMATION_SCHEMA.COLUMNS`（大寫，I-MSSQL-CATALOG-CASE-01） | `information_schema.columns WHERE table_name = $1`（小寫，沿用 `derived-field-handler.ts` PG 版現行寫法） |
+| JOIN 演算法 hint | `OPTION (HASH JOIN)` | **不需要**——PG 對「大表 probe × 小表 build」之 hash join 選擇原生穩健（`lookup-handler.ts` PG 版註解已載明：PostgreSQL 對此情境無需額外 hint），故 PG 版模板省略此行，其餘結構不變 |
+
+**PG SQL 模板**（同一組 mapping #1）：
+
+```sql
+CREATE TEMP TABLE "cd_<nodeId>_<logId8>" AS
+SELECT
+  <主表既有欄位，顯式枚舉，排除全部 outputAlias 同名者>,
+  "_cd_m1"."education_desc" AS "education_desc",
+  -- ... 其餘 8 組
+FROM "<主表暫存表>" m
+LEFT JOIN (
+  SELECT * FROM (
+    SELECT
+      TRIM(d."TBL_CD"::text)   AS "_cd_key",
+      TRIM(d."TBL_DESC1"::text) AS "education_desc",
+      ROW_NUMBER() OVER (
+        PARTITION BY TRIM(d."TBL_CD"::text)
+        ORDER BY d."_cdmp_id" ASC
+      ) AS "_cd_rn"
+    FROM "raw_e5a2345c" d
+    WHERE "TBL_ID" = 'A2'
+  ) _ranked
+  WHERE "_cd_rn" = 1
+) "_cd_m1" ON "_cd_m1"."_cd_key" = TRIM(m."EDUCAT_BACK"::text)
+-- ... 其餘 8 組同構
+;
+```
+
+**`_cdmp_id` 缺席 fallback（PG）**：`ORDER BY (SELECT NULL)` 於 PG 亦為合法窗函數 `ORDER BY` 表達式（語意同 MSSQL：無意義穩定排序），兩引擎 fallback 寫法一致，不需分別設計。
+
+### 13.4 Dispatcher 註冊
+
+```ts
+// etl-pipeline-execution.service.ts createDispatcher()，新增第 10 對（現行 9 對不動）
+if (useMssql) {
+  // ...既有 9 個 register 不動...
+  dispatcher.register(new CodeDecodeHandlerMssql());
+  return dispatcher;
+}
+// ...既有 9 個 register 不動...
+dispatcher.register(new CodeDecodeHandler());
+return dispatcher;
+```
+
+`NodeDispatcher`／`node-dispatcher.ts`／`types.ts`／`pipeline-runner.ts` 不動（同 §1.2 既有原則：driver 差異完全封裝於個別 handler）。
+
+### 13.5 不變式（新增，補充 §10）
+
+| ID | 說明 |
+|---|---|
+| **I-CODEDECODE-JOIN-FILTER-01** | mapping filter 必須套用於 LEFT JOIN 右側之字典衍生子查詢內部，禁止置於主查詢層級對已 JOIN 結果做 `WHERE` 後置過濾（見 §13.2 Critical #1） |
+| **I-CODEDECODE-DEDUP-TIEBREAK-01** | 字典衍生子查詢於 JOIN 前必須以 `ROW_NUMBER() OVER (PARTITION BY 正規化鍵 ORDER BY 決定性排序鍵) = 1` 去重；決定性排序鍵優先 `_cdmp_id ASC`（若字典表存在該欄，需逐表核對），否則 fallback `(SELECT NULL)`（見 §13.2 Critical #2） |
+| **I-CODEDECODE-NORMALIZE-01** | 全部 JOIN 鍵值等式與輸出值之正規化，一律 `TRIM+文字轉型`，與 `LookupExecutor`（F043 §4.8）／`trimCast()` 完全相同（見 §13.2 Critical #3） |
+| **I-CODEDECODE-COLLISION-01** | 輸出 SELECT 清單以顯式欄位枚舉組成，禁止 `SELECT *`／`m.*`，`outputAlias` 與既有輸入欄同名時以解碼值覆蓋（見 §13.1 OQ-F110-04） |
+| **I-CODEDECODE-EQ-01** | 比照 I-MSSQL-ETL-EQ-01：`customer_core` 每個收斂後的 `code_decode` 節點皆須有對應測試與其取代之等價 `lookup` 節點鏈輸出逐格比對 |
+| **I-CODEDECODE-MIGRATION-01** | pipeline definition 之 data-update migration，PG／MSSQL 兩支必須從單一共用 TS 模組匯入同一份 definition payload 物件（§13.6.2），確保 `JSON.stringify()` 結果 byte-identical；`down()` 僅刪除本次 `up()` 新增的版本列並還原指標欄位，不得改動既有（收斂前）版本列之內容——因而 `down()` 不需在 migration 檔內重複內嵌舊版 31-lookup JSON（§13.6.3） |
+
+### 13.6 Migration 設計（`customer_core` Pipeline Definition 收斂）
+
+> **範圍聲明**：本節為**設計**（approach／SQL 形狀／不變式），非最終落地檔案——`etl-pipelines.json` 之實際編輯與兩支 migration `.ts` 檔案之撰寫屬 tdd-implementation 範疇，依本節設計落地。
+
+#### 13.6.1 `etl-pipelines.json` 編輯設計（fresh-deploy 路徑）
+
+**現況查證**（供 tdd-implementation 核對，避免對著錯誤基準改）：`etl-pipelines.json` 內 `name: "ETL for Customer Core"` 之 pipeline 條目，`version: 13`、**`step_count: 53`（已查證為過時值——`definition.nodes` 陣列實際長度為 56，與 AD-E07-41 §0 尾註 P4d 端對端實測確認之「56 節點」一致；`step_count: 53` 為既有資料落差，非本次新增，建議本次一併修正而非沿用過時值）**、`description` 欄位為亂碼（UTF-8/Big5 編碼損毀，見下）。
+
+**節點收斂對應**（31 個 `lookup` → 9 個 `code_decode`，依字典表實例分組，逐一對應 F110 §14 informative 附錄）：
+
+| # | 新節點 ID（建議） | 字典表 | 收斂之舊 `lookup` 節點 ID（依序） | mapping 數 | 原串接位置 |
+|---|---|---|---|---|---|
+| 1 | `cd_zzip1` | `raw_e5a2345c` | `lk_edu1,lk_occ1,lk_job1,lk_marry1,lk_ctype1,lk_incsrc1,lk_indus1,lk_joblv1,lk_income1` | 9 | `df_zzip_ctype_pad1` → **cd_zzip1** → `m1`（`left-input`） |
+| 2 | `cd_zzip2` | `raw_6fce5258` | `lk_edu2,lk_occ2,lk_job2,lk_marry2,lk_ctype2,lk_joblv2,lk_income2` | 7 | `df_zzip_ctype_pad2` → **cd_zzip2** → `m1`（`right-input`） |
+| 3 | `cd_zip_city` | `raw_b4a48f10` | `lk_hcity,lk_ccity,lk_cocity` | 3 | `tc_zzip` → **cd_zip_city** → `fm1` |
+| 4 | `cd_mlmc1` | `raw_8b80671e` | `lk_m_ctype1,lk_m_emp1,lk_m_listed1` | 3 | `e3` → **cd_mlmc1** → `cd_mlind1` |
+| 5 | `cd_mlind1` | `raw_b9558d10` | `lk_m_indus1` | 1 | **cd_mlmc1** → **cd_mlind1** → `m2`（`left-input`） |
+| 6 | `cd_mlmc2` | `raw_9dd0eca5` | `lk_m_ctype2,lk_m_emp2,lk_m_listed2` | 3 | `e4` → **cd_mlmc2** → `cd_mlind2` |
+| 7 | `cd_mlind2` | `raw_3acd58e7` | `lk_m_indus2` | 1 | **cd_mlmc2** → **cd_mlind2** → `m2`（`right-input`） |
+| 8 | `cd_mlmc3` | `raw_9dcaf414` | `lk_m_ctype3,lk_m_emp3,lk_m_listed3` | 3 | `e5` → **cd_mlmc3** → `cd_mlind3` |
+| 9 | `cd_mlind3` | `raw_afe6a874` | `lk_m_indus3` | 1 | **cd_mlmc3** → **cd_mlind3** → `m3`（`right-input`） |
+
+節點數：1+1+1+3+3 = 9；mapping／舊節點數：9+7+3+9+3 = 31（與 F110 §14.1 informative 附錄逐一一致，已對照 `etl-pipelines.json` 現行 `edges` 陣列逐條核實，非估算）。`m2 → m3`（`left-input`）既有 edge 不變。**#4／#6／#8 的 3 組 mapping 依序取自 `lk_m_ctype{n}/lk_m_emp{n}/lk_m_listed{n}`（皆 `raw_8b80671e`／`raw_9dd0eca5`／`raw_9dcaf414` 之複合 filter `TRIM("SYSCD")='CF' AND TRIM("DATAID")='xx'`）；#5／#7／#9 為原串接鏈中**緊接其後、但指向不同字典表**（`raw_b9558d10`／`raw_3acd58e7`／`raw_afe6a874`）的 `lk_m_indus{n}` 單一 mapping——**同一條原始序列鏈（如 `e3→lk_m_ctype1→lk_m_emp1→lk_m_listed1→lk_m_indus1→m2`）因中途切換字典表實例，依「依不同字典表實例分組」規則（F110 §14 / US-173 已定案）須拆為兩個 `code_decode` 節點（`cd_mlmc1` 接 `cd_mlind1`），不可合併為一**——此為 tdd-implementation 最容易誤判之處，特別標註。
+
+**每個新節點之 config**：`lookupSource`/`lookupRef`/`lookupSourceId` 取自該組舊節點之共用值（F110 §7.2 節點級對應）；`mappings[i]` 依序逐一搬移 `matchColumn`/`lookupMatchColumn`/`filter`(= 舊 `lookupFilter`)/`outputColumns`（F110 §7.2 mapping 級對應，零重塑）。
+
+**其他編輯**：`step_count` 由 56（實際節點數，非沿用過時的 53）改為 **34**（56 − 31 + 9）；`version` 由 13 → **14**；`description` 之亂碼字串**不嘗試逆向解碼修復**（本專案已有「憑 mojibake 猜中文導致高風險 bug」之教訓，見既有專案記憶 `feedback_sp_utf16le_decode.md` / F091 事故），改以全新撰寫之乾淨 UTF-8 繁體中文文字取代，語意涵蓋「整合 5 個來源（2 ZZIP + 3 MLMC）至 customer_core 目標表」原意 + 補述本次收斂（例如：「整合 5 個來源（2 ZZIP + 3 MLMC）至 customer_core 目標表；F110/US-173：31 個 lookup 收斂為 9 個 code_decode 節點」），確切文字由 tdd-implementation 撰寫，不需比對亂碼字元。
+
+#### 13.6.2 共用 Definition Payload 模組（PG/MSSQL byte-identical 之設計基礎）
+
+新增 `apps/api/src/database/migrations/shared/customer-core-code-decode-definition.ts`（**刻意放在 `migrations/shared/` 子目錄，不落在 `migrations/*.{ts,js}` 或 `migrations/mssql/*.{ts,js}` 任一 glob 範圍內**——見 `data-source.ts` §「兩軌各自獨立 glob」；若誤放於 glob 範圍內，`migration:run` 會將其誤判為一支缺少 `MigrationInterface` 實作的 migration 而報錯）：
+
+```ts
+// apps/api/src/database/migrations/shared/customer-core-code-decode-definition.ts
+import etlPipelines from '../../seeds/data/etl-pipelines.json';
+
+const CUSTOMER_CORE_PIPELINE_NAME = 'ETL for Customer Core';
+
+const pipeline = etlPipelines.find((p: any) => p.name === CUSTOMER_CORE_PIPELINE_NAME);
+if (!pipeline) {
+  throw new Error(
+    `customer-core-code-decode-definition: 找不到 etl-pipelines.json 中 name='${CUSTOMER_CORE_PIPELINE_NAME}' 的 pipeline —— ` +
+    `此模組假設 §13.6.1 之 JSON 編輯已先落地（definition 已含 9 個 code_decode 節點）`,
+  );
+}
+
+/** §13.6.1 編輯後的新 definition（單一事實來源，PG/MSSQL migration 皆從此匯入，確保 JSON.stringify 結果 byte-identical）。 */
+export const CUSTOMER_CORE_CODE_DECODE_DEFINITION = pipeline.definition;
+export const CUSTOMER_CORE_NEW_STEP_COUNT = pipeline.step_count; // 34（§13.6.1）
+export const CUSTOMER_CORE_NEW_VERSION = pipeline.version;       // 14（§13.6.1）
+export const CUSTOMER_CORE_PIPELINE_NAME_EXPORT = CUSTOMER_CORE_PIPELINE_NAME;
+
+/** down() 還原用：收斂前（31-lookup）已知歷史值，與現行（本次修改前）etl-pipelines.json 逐位元組相符，無需另行內嵌完整 JSON。 */
+export const CUSTOMER_CORE_PRE_MIGRATION_VERSION = 13;
+export const CUSTOMER_CORE_PRE_MIGRATION_STEP_COUNT = 53; // 沿用既有（過時）值，非本次修正後的 56 —— down() 還原「修改前的既有狀態」，非「修改前的正確狀態」
+```
+
+**設計理由**：`etl-pipelines.json`（tdd-implementation 已依 §13.6.1 編輯完成）是唯一事實來源（single source of truth）——fresh-deploy 之 `prod-data-seed.ts` 直接讀此檔 INSERT；本模組直接從同一檔案匯出 `definition` 物件供兩支 migration 匯入，兩支 migration 對 `JSON.stringify(CUSTOMER_CORE_CODE_DECODE_DEFINITION)` 之結果**必然** byte-identical（同一 JS 物件參照，非各自複製維護兩份），杜絕人工複製貼上導致的 PG/MSSQL definition 漂移風險（I-CODEDECODE-MIGRATION-01）。
+
+#### 13.6.3 成對 Data-Update Migration 設計（本專案第一支此類 migration，建立慣例）
+
+**背景**：`prod-data-seed.ts`（`seedEtlPipelines`）對已存在同名 pipeline 之情境為**整筆略過**（`SELECT ... WHERE name=? AND deleted_at IS NULL` 命中即 `skip`，不覆寫）——這對「新機器全新部署」正確（migration 先跑、此時 `etl_pipelines` 為空，`etl-pipelines.json` 之新 definition 由 data-seed 直接 INSERT 即完整落地，本 migration 之 `up()` guard 會判斷 pipeline 不存在而 no-op）；但對「**已部署、已有舊 31-lookup definition 資料的既有環境**」（dev CDMP MSSQL、未來 prod）**不會自動更新**——這正是本 migration 存在的理由：**patch 已部署環境**，`etl-pipelines.json` 編輯本身只影響 fresh-deploy 路徑。
+
+**版本列策略：新增一列（`version=14`），不覆寫既有 `version=13` 列**（而非直接 `UPDATE` 既有列之 `definition` 欄位）。理由：
+1. **執行期版本選擇邏輯已查證**（`etl-pipeline-execution.service.ts` `validateDefinition()`／`executePipeline()`）：一律 `ORDER BY version DESC LIMIT 1` 取用**最新版本列**（不論其 `status`），故只要新增一列 `version=14`（`status='published'`，涵蓋排程執行依 AD-E05-1 對「最新 `published` 版本」之既有設計期待），下一次無論手動／排程／測試觸發，即自動採用新 definition，不需改動執行引擎任何程式碼。
+2. **`down()` 不需重建/內嵌舊 JSON**：因為舊 `version=13` 列從未被本 migration 觸碰（新增列，非覆寫），回滾只需刪除新增的 `version=14` 列 + 把 `etl_pipelines.version`／`step_count` 指標欄位改回 13／53 即可精確還原——US-173 已定案之「回滾機制改以成對 data-update migration 的 `down()` 還原」（見 US-173 待解決問題區塊）在此設計下是**低風險、零內容重建**的操作，而非「在 down() 內重新寫一份完整的 31-lookup JSON」（後者需要人工覆核兩份 JSON 逐位元組相符，風險高、維護成本高）。
+3. 與 `EtlPipelineVersion` 既有版本歷史語意（AD-E05-3：`draft→testing→published`，版本號遞增）**保持一致**——一支 fresh-deploy 產生的資料庫與一支「既有環境套用本 migration」的資料庫，最終皆恰好在 `pipeline_id` 下有一列 `version=14`／`code_decode` definition（差別僅在 fresh-deploy 沒有 `version=13` 的歷史列），未來若需要用 F033 版本歷史／diff 功能查閱，語意仍成立。
+
+**`up()` 設計（PG／MSSQL 兩支邏輯完全同構，僅 SQL 參數化語法不同——PG `$1,$2,...`／MSSQL `@0,@1,...`，各自直接使用該 driver 之原生 placeholder，不引入跨方言抽象層，比照 AD-E07-38 Pattern B 既有慣例）**：
+
+```ts
+// 二支檔案（PG / MSSQL）共通邏輯骨架，示意（非最終程式碼，供 tdd-implementation 依此落地）
+import {
+  CUSTOMER_CORE_CODE_DECODE_DEFINITION,
+  CUSTOMER_CORE_NEW_VERSION,       // 14
+  CUSTOMER_CORE_NEW_STEP_COUNT,    // 34
+  CUSTOMER_CORE_PRE_MIGRATION_VERSION,     // 13
+  CUSTOMER_CORE_PRE_MIGRATION_STEP_COUNT,  // 53
+} from '../shared/customer-core-code-decode-definition'; // MSSQL 檔位於 migrations/mssql/，相對路徑多一層 '../../shared/...'
+
+export class UpdateCustomerCoreCodeDecode<ts> implements MigrationInterface {
+  name = 'UpdateCustomerCoreCodeDecode<ts>';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    const rows = await queryRunner.query(
+      `SELECT id, version FROM etl_pipelines WHERE name = <param> AND deleted_at IS NULL`,
+      ['ETL for Customer Core'],
+    );
+    if (rows.length === 0) return; // fresh-deploy：pipeline 尚未 seed，本 migration no-op（data-seed 會直接灌入新版）
+    const { id: pipelineId, version: currentVersion } = rows[0];
+    if (Number(currentVersion) >= CUSTOMER_CORE_NEW_VERSION) return; // 已套用過（冪等 guard）
+
+    const [{ created_by: createdBy }] = await queryRunner.query(
+      `SELECT created_by FROM etl_pipelines WHERE id = <param>`, [pipelineId],
+    ); // 沿用既有 pipeline 之 created_by，保證為合法 FK，不需另行解析 admin user
+
+    await queryRunner.query(
+      `INSERT INTO etl_pipeline_versions (pipeline_id, version, definition, status, change_summary, created_by, created_at)
+       VALUES (<param>, <param>, <param>, 'published', <param>, <param>, <param>)`,
+      [
+        pipelineId,
+        CUSTOMER_CORE_NEW_VERSION,
+        JSON.stringify(CUSTOMER_CORE_CODE_DECODE_DEFINITION),
+        'F110/US-173：31 個 lookup 收斂為 9 個 code_decode 節點（data-update migration）',
+        createdBy,
+        new Date(),
+      ],
+    );
+    await queryRunner.query(
+      `UPDATE etl_pipelines SET version = <param>, step_count = <param>, updated_at = <param> WHERE id = <param>`,
+      [CUSTOMER_CORE_NEW_VERSION, CUSTOMER_CORE_NEW_STEP_COUNT, new Date(), pipelineId],
+    );
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    const rows = await queryRunner.query(
+      `SELECT id, version FROM etl_pipelines WHERE name = <param> AND deleted_at IS NULL`,
+      ['ETL for Customer Core'],
+    );
+    if (rows.length === 0) return;
+    const { id: pipelineId, version: currentVersion } = rows[0];
+    if (Number(currentVersion) !== CUSTOMER_CORE_NEW_VERSION) return; // 非本 migration 造成的狀態，不動
+
+    await queryRunner.query(
+      `DELETE FROM etl_pipeline_versions WHERE pipeline_id = <param> AND version = <param>`,
+      [pipelineId, CUSTOMER_CORE_NEW_VERSION],
+    );
+    await queryRunner.query(
+      `UPDATE etl_pipelines SET version = <param>, step_count = <param>, updated_at = <param> WHERE id = <param>`,
+      [CUSTOMER_CORE_PRE_MIGRATION_VERSION, CUSTOMER_CORE_PRE_MIGRATION_STEP_COUNT, new Date(), pipelineId],
+    );
+  }
+}
+```
+
+（`<param>` 為示意佔位，PG 檔實際寫 `$1,$2,...`、MSSQL 檔實際寫 `@0,@1,...`；`definition` 欄為 TypeORM `simple-json`（PG `text`／MSSQL `ntext`），直接寫入 `JSON.stringify(...)` 字串即可，兩引擎皆由 ORM 之欄位型別統一處理讀取端反序列化，不需迴避。）
+
+**冪等性**：`up()` 之 `currentVersion >= 14` guard 防止重複套用（例如 migration 追蹤表被清空後誤重跑）；`down()` 之 `currentVersion !== 14` guard 防止對「未套用過本 migration」或「已被後續 migration 再次變更」的資料誤操作。兩個 guard 皆遵循本專案既有 migration 風格（`BaselineReferenceData1711360000001` 之「僅於符合前置狀態時才動作」慣例）。
+
+**部署順序確認（DevOps）**：比照既有 bootstrap 流程（`migration:run` → `seed-datasource` → `data-seed`，見專案既有 `deploy/migration-baseline-bootstrap` 設計），本 migration 屬 `migration:run` 階段。fresh-deploy：此時 `etl_pipelines` 尚空，`up()` no-op，其後 `data-seed` 直接以新 JSON INSERT 完整落地（單一 `version=14` 列，無歷史列）。既有環境升級：`migration:run` 執行本 migration 時 pipeline 已存在（`version=13`），`up()` 依上述邏輯新增 `version=14` 列並更新指標欄位；其後 `data-seed` 對此 pipeline 因已存在而略過（不受影響）。**dev（本機 docker Postgres）目前走 `synchronize:true`、不執行 `migration:run`**（既有專案已知限制，見既有專案記憶 `project_dev_db_synchronize_no_migration_runner.md`）——本 migration 對該環境不生效，若需在該環境驗證 `code_decode` 行為，需比照既有慣例手動套用等價 SQL 或改用 dev CDMP（MSSQL）環境驗證；**MSSQL track（dev CDMP／未來 prod）與 PG track（若／當 prod 仍在 PG 上）之部署皆會實際執行 migration**，此為本 migration 存在之主要目的。
+
+**建立之慣例（供未來第二支 data-update migration 参考）**：①資料 payload 以獨立共用模組匯出，migration 檔案本身不內嵌大型 JSON 字面值；②傾向「新增列 + 更新指標欄位」而非「就地覆寫既有列」，讓 `down()` 不需重建歷史內容；③兩個方向（`up`/`down`）皆以「讀出目前狀態 → 判斷是否已符合預期 → 條件式動作」為 guard 模式，不假設遷移只會被執行恰好一次。
