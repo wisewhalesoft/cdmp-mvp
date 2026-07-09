@@ -148,15 +148,49 @@ describe('P4e ISPG-GATE (real MSSQL)', () => {
     expect(await svc.tableExists(comp)).toBe(true);
   });
 
-  it('CREATETABLE-FINDING (範圍外，flag 非自行重設計): 字串來源 PK → NVARCHAR(MAX) 無法作 MSSQL PK/index key', async (ctx) => {
+  it('CREATETABLE-FINDING (P4-followup PKFINDING-002/006 candidate b): 字串來源 PK → _cdmp_id surrogate，CUST_NO 降為非 PK NVARCHAR(MAX)', async (ctx) => {
     if (!guard(ctx)) return;
-    // NVARCHAR(MAX)/MAX 型別不可作為 PRIMARY KEY / index key（MSSQL 硬限制）。
-    // 真實來源（客戶編號多為字串型 PK）於 MSSQL 走 createRawTable 會在此拋錯 →
-    // 記入 impl log「範圍外家族」，建議後續：PK 字串欄改有界 NVARCHAR(≤450) 或忽略來源 PK 一律用 _cdmp_id。
+    // AD-E07-41 P4-followup GATE-001 裁定 = candidate (b)：字串來源 PK 之映射型別為
+    // NVARCHAR(MAX)，無法作 index key（#1919）→ 改用 _cdmp_id IDENTITY surrogate 作 PK，
+    // CUST_NO 保留 NVARCHAR(MAX) 但降為一般欄（不設 DB 唯一約束，pipeline dedup 負責）。
+    // 舊斷言（rejects.toThrow）已依修法目標行為更新，非保留。
     const t = rawName();
     await expect(
       svc.createRawTable(t, [{ name: 'CUST_NO', dataType: 'varchar', isPrimary: true }]),
-    ).rejects.toThrow();
+    ).resolves.toBeUndefined();
+    expect(await svc.tableExists(t)).toBe(true);
+
+    // _cdmp_id 為 IDENTITY surrogate PK
+    const cols = await svc.getTableColumns(t);
+    expect(cols).toEqual(['_cdmp_id', 'CUST_NO', '_cdmp_extracted_at']);
+
+    // CUST_NO 型別仍為 NVARCHAR(MAX)（max_length = -1）
+    const meta = await ds!.query(
+      `SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @0 AND COLUMN_NAME = 'CUST_NO'`,
+      [t],
+    );
+    expect(meta[0].DATA_TYPE).toBe('nvarchar');
+    expect(meta[0].CHARACTER_MAXIMUM_LENGTH).toBe(-1); // MAX
+
+    // PK 建於 _cdmp_id，非 CUST_NO；CUST_NO 不是任何 index key
+    const idx = await ds!.query(
+      `SELECT c.name AS col, i.is_primary_key AS pk
+         FROM sys.indexes i
+         JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+         JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.object_id = OBJECT_ID('dbo.' + @0)`,
+      [t],
+    );
+    const pkCols = idx.filter((r: any) => r.pk).map((r: any) => r.col);
+    expect(pkCols).toEqual(['_cdmp_id']);
+    expect(idx.map((r: any) => r.col)).not.toContain('CUST_NO');
+
+    // 資料完整寫入/讀回，含 >900 bytes 之長字串（candidate b 結構性優勢：不受 index-key byte 限制）
+    const long = '客'.repeat(600); // 600 中文字 → 1200 bytes，超過 900-byte clustered 上限
+    await ds!.query(`INSERT INTO "${t}" (CUST_NO) VALUES (@0)`, [long]);
+    const back = await ds!.query(`SELECT CUST_NO FROM "${t}"`);
+    expect(back[0].CUST_NO).toBe(long);
   });
 
   it('DROPTABLE-001 (Regression): dropTable / truncateTable 免改動於 mssql 可執行', async (ctx) => {

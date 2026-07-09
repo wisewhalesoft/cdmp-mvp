@@ -138,23 +138,41 @@ describe('P4e ISPG/TYPEMAP — createRawTable 生成 DDL 三分支', () => {
     expect(ddl).not.toContain('IDENTITY');
   });
 
-  it('CREATETABLE-003 (單一/複合 PK 於 mssql 分支語法正確)', async () => {
+  it('CREATETABLE-003 (單一非 MAX PK inline；純 int 複合 PK table-level 於 mssql 分支語法正確)', async () => {
     const single = makeCap('mssql');
     await single.svc.createRawTable('raw_deadbeef', [
       { name: 'ID', dataType: 'int', isPrimary: true },
       { name: 'V', dataType: 'varchar', isPrimary: false },
     ]);
     const d1: string = single.q.mock.calls[0][0];
-    expect(d1).toContain('"ID" INT PRIMARY KEY');
-    expect(d1).not.toContain('IDENTITY'); // 有來源 PK → 不加 _cdmp_id
+    expect(d1).toContain('"ID" INT PRIMARY KEY'); // int 非 MAX → 保留原生 PK
+    expect(d1).not.toContain('IDENTITY'); // 有可用來源 PK → 不加 _cdmp_id
 
+    // 純 int/bigint 複合 PK（皆非 MAX 型別）→ table-level PRIMARY KEY 不變
     const composite = makeCap('mssql');
     await composite.svc.createRawTable('raw_deadbeef', [
       { name: 'K1', dataType: 'int', isPrimary: true },
-      { name: 'K2', dataType: 'varchar', isPrimary: true },
+      { name: 'K2', dataType: 'bigint', isPrimary: true },
     ]);
     const d2: string = composite.q.mock.calls[0][0];
     expect(d2).toContain('PRIMARY KEY ("K1", "K2")');
+    expect(d2).not.toContain('IDENTITY');
+  });
+
+  it('CREATETABLE-003b (P4-followup PKFINDING-010 candidate b): 含字串鍵之複合 PK → _cdmp_id surrogate，來源鍵降為一般欄', async () => {
+    // 混合複合 PK（1 int + 1 varchar）：varchar → NVARCHAR(MAX) 無法作 index key →
+    // 整個複合 PK 降級，改用 _cdmp_id surrogate；K1/K2 皆為一般欄、無 table-level PK。
+    const mixed = makeCap('mssql');
+    await mixed.svc.createRawTable('raw_deadbeef', [
+      { name: 'K1', dataType: 'int', isPrimary: true },
+      { name: 'K2', dataType: 'varchar', isPrimary: true },
+    ]);
+    const d: string = mixed.q.mock.calls[0][0];
+    expect(d).toContain('_cdmp_id INT IDENTITY(1,1) PRIMARY KEY');
+    expect(d).not.toContain('PRIMARY KEY ("K1"'); // 無 table-level 來源鍵 PK
+    expect(d).toContain('"K1" INT'); // K1 一般欄
+    expect(d).toContain('"K2" NVARCHAR(MAX)'); // K2 一般欄（MAX）
+    expect(d).not.toMatch(/"K2" NVARCHAR\(MAX\) PRIMARY KEY/);
   });
 });
 

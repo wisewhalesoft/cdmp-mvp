@@ -42,7 +42,10 @@ export const MSSQL = {
   port: Number(process.env.MSSQL_TEST_PORT ?? process.env.DB_PORT ?? 1433),
   username: process.env.MSSQL_TEST_USER ?? process.env.DB_USERNAME ?? 'cdmp',
   password: process.env.MSSQL_TEST_PASSWORD ?? process.env.DB_PASSWORD ?? 'Cdmp_Dev_2026!',
-  database: process.env.MSSQL_TEST_DB ?? 'CDMP_TEST',
+  // Honor .env.test.mssql's DB_NAME (dev CDMP) when no explicit test-DB override is
+  // set, so `npx vitest run` (no inline env) targets the DB the env file specifies;
+  // final fallback stays CDMP_TEST for the local docker container default.
+  database: process.env.MSSQL_TEST_DB ?? process.env.DB_NAME ?? 'CDMP_TEST',
   encrypt:
     (process.env.DB_MSSQL_ENCRYPT ?? 'true') === 'true',
   trustServerCertificate:
