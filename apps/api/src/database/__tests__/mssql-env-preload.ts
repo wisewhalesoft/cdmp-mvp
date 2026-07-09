@@ -10,6 +10,15 @@
  *    僅影響 .mssql.spec.ts；其餘 spec 不 import 本模組，維持 sqlite。
  */
 import * as net from 'net';
+import * as dotenv from 'dotenv';
+
+/**
+ * 載入本機/dev MSSQL 連線（`apps/api/.env.test.mssql`，gitignored、密碼不入版控；範本見 `.env.test.mssql.example`）。
+ * dotenv 預設「不覆寫已存在的 env」→ inline env / CI 提供的值優先，本檔僅補未設者；
+ * 兩者皆無時，下方 MSSQL 物件的內建預設（localhost:1433 / CDMP_TEST）作最終 fallback。
+ * 對指向新 dev / prod MSSQL：只需改 `.env.test.mssql` 單一處，所有 *.mssql.spec.ts 自動沿用。
+ */
+dotenv.config({ path: '.env.test.mssql' });
 
 /** 記住覆寫前的值，供測試結束還原（避免污染同 worker 後續 SQLite spec 之 synchronize）。 */
 export const PREV_DB_TYPE = process.env.DB_TYPE;
