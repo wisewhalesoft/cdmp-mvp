@@ -49,6 +49,12 @@ import { AssignmentWorkerModule } from './modules/assignment/assignment-worker.m
             username: configService.get<string>('DB_USERNAME', 'sa'),
             password: configService.get<string>('DB_PASSWORD'),
             database: configService.get<string>('DB_NAME', 'CDMP'),
+            // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious requestTimeout 預設僅 15s，對月跑（Stage 1~4
+            //   百萬列 SQL 下推）遠遠不足（PG 無 statement timeout 故不逾時）。env
+            //   DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr；truthy 值避免 0 被 falsy-coalescing 退回預設）。
+            requestTimeout: Number(
+              configService.get('DB_MSSQL_REQUEST_TIMEOUT', 3600000),
+            ),
             options: {
               encrypt: configService.get<string>('DB_MSSQL_ENCRYPT', 'true') === 'true',
               trustServerCertificate:

@@ -36,6 +36,9 @@ export function seedConnectionOptions(): Record<string, unknown> {
     return {
       type: 'mssql',
       ...common,
+      // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious 預設 15s 對 seed 大批寫入不足（PG 無 statement timeout）。
+      //   env DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr）。理由同 data-source.ts。
+      requestTimeout: Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
       options: {
         encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
         trustServerCertificate: (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',

@@ -707,6 +707,10 @@ export class RawDataService {
       user: o.username,
       password: o.password,
       database: o.database,
+      // P6c / I-MSSQL-REQ-TIMEOUT-01：bulk pool 沿用 DataSource 的 requestTimeout（app.module 已設，
+      //   env DB_MSSQL_REQUEST_TIMEOUT 覆蓋、預設 1hr）。避免大批 bulk request 撞 tedious 15s 預設。
+      requestTimeout:
+        o.requestTimeout ?? Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
       options: {
         encrypt: o.options?.encrypt ?? false,
         trustServerCertificate: o.options?.trustServerCertificate ?? true,

@@ -71,6 +71,9 @@ const AppDataSource =
     ? new DataSource({
         type: 'mssql',
         ...commonOptions,
+        // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious requestTimeout 預設 15s，對長 migration / 大批
+        //   資料操作不足（PG 無 statement timeout）。env DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr）。
+        requestTimeout: Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
         options: {
           encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
           trustServerCertificate:
