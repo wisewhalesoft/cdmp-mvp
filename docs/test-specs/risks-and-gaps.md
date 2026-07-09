@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-07-08
+last_updated: 2026-07-09
 ---
 
 # 風險與缺口
@@ -1339,3 +1339,35 @@ last_updated: 2026-07-08
 - **影響**：若此環境限制於 cutover 前始終未解決（5433 未恢復可達、亦未投入 Tier 3 資料工程），P5e 業務簽核將只能基於 Tier 1 證據進行，此為 R-MSSQL-P5C-01 之根本成因。
 - **建議**：`infrastructure/AD-E07-43-P5c-test.md` §一 GATE-001 已設計 `pgPortReachable()` 探測案例，§七 PG-ENHANCE 群組已設計 degradable 機制（5433 恢復可達時可立即啟用 Tier 2，無需重新設計）。建議另立小型維運任務評估 `postgres-test` 容器於本機環境不可達之根本原因是否可修復（非本文件範圍，但直接影響本文件證據力道上限）。
 - **風險等級**：中-高（非本文件可獨立解決，但直接決定本文件所能提供之最高證據等級；建議記入 P5e 簽核流程之風險登記，供業務利害關係人評估是否可接受）
+
+## MSSQL 全面遷移 P5 收尾顯示層 follow-up 風險與待決問題（AD-E07-43，2026-07-09 新增，P5h/P5i 明文記錄之 follow-up 正式解凍）
+
+> 完整測試設計見 [infrastructure/AD-E07-43-P5-followup-display-test.md](infrastructure/AD-E07-43-P5-followup-display-test.md)。本節彙整兩項獨立顯示層 follow-up（`ob_monthly_run_result.cr_nm` varchar→nvarchar；`assignment-run-report.service.ts::formatApplDate` 匯出 SQL 端格式化）之風險。⚠️ **命名更正記錄**：任務指示原稱本切片為「P4-followup」，test-designer 逐行查證兩項來源皆明文記錄於 `AD-E07-43-P5i-impl.md`／`AD-E07-43-P5h-impl.md`（P5 階段），非 P4，已更正檔名為 `AD-E07-43-P5-followup-display-test.md`，與既有 `AD-E07-41-P4-followup-rawdata-test.md`（不同階段、不同主題）之命名慣例保持一致但不混淆。
+
+### R-MSSQL-P5FU-01（🔴🔴 高，test-designer 本輪真庫新查證，改變 AD/impl log 原始風險定性）：`cr_nm` varchar→nvarchar 並非單純顯示截斷風險，而是 Stage 1 月跑批次寫入之潛在可用性風險
+
+- **問題**：`cr_nm` 之唯一寫入站點（`stage1-sql-executor(.ts/-mssql.ts)`）為單一 set-based `INSERT INTO ob_monthly_run_result ... SELECT ...` 陳述式（非逐列 cursor）。真庫探針證實 SQL Server 對 `varchar(N)` 容量溢位之 INSERT 採**明確拋錯**（`String or binary data would be truncated`），非靜默截斷。若任一列之 `'CR'+emp_nm` 超過 50 bytes，會使**整批 Stage 1 INSERT 失敗**（該名單整批案件寫入失敗），而非僅該列顯示錯誤或該列被跳過——此為比 P5i 原始 framing（「中文顯示欄位截斷」）更嚴重的可用性風險等級。
+- **影響**：若 MSSQL cutover 後某月遇到超長 CR 業代姓名（現行系統無長度前端驗證機制），可能導致該名單整批 Stage 1 寫入失敗、月跑中斷，需人工排查方能定位根因（錯誤訊息不會直接指向「業代姓名過長」，需追查至 SQL 層級錯誤）。
+- **建議**：`infrastructure/AD-E07-43-P5-followup-display-test.md` §四 CRNM-WRITEPATH 群組（WRITEPATH-001/002）已設計透過真實生產寫入路徑（非孤立探針表）驗證修法前後對照，並要求 impl log 明確記錄「整批失敗」現象供 architect 知悉。修法（nvarchar 化）本身即可完全消除此風險（25 字元→實質不可能觸頂的容量）。
+- **風險等級**：高（機率極低但影響面為整批月跑中斷，且修復成本低——僅需採用既有 `nvarcharColumnType` helper，無需新架構）；已有明確修法方向，非開放性問題
+
+### R-MSSQL-P5FU-02（低，記錄性，佐證修法優先度非高危）：`cr_nm` 現行實際觸發機率極低，已用真實生產資料驗證
+
+- **問題**：PG `cdmp_dev`（production-representative，2026-07-09 唯讀查詢）實測 `ob_pool_data_list.cr_nm` 現有最長值僅 **5 字元**（`'CR'+3 中文字`），距 50-byte（25 中文字）容量上限尚遠；`ob_monthly_run_result.cr_nm` 現有 26,695 筆非空值列，確認此為真實高頻使用路徑但資料形態穩定短小。
+- **影響**：極低——現行業代姓名長度分佈與容量上限有充分安全邊際，R-MSSQL-P5FU-01 之風險屬「防禦性修復未來風險」而非「現行已發生或迫近之事故」。
+- **建議**：`infrastructure/AD-E07-43-P5-followup-display-test.md` §三 CRNM-PRODSCALE-001 已記錄此數字。建議修法仍應完成（成本低、對齊 P5i 已建立之全域 nvarchar 慣例、消除未來風險），但排程優先度可低於真正 cutover-blocker 項目，與任務標籤「P2-TechDebt（非阻擋 cutover）」一致。
+- **風險等級**：低（不影響修法必要性判斷，僅供優先度排序參考）
+
+### R-MSSQL-P5FU-03（🔴🔴 高，test-designer 本輪真庫新查證，量化既有 P5h follow-up 之實際曝險面）：`appl_date` 匯出跨引擎 getter 偏移之危險帶並非邊緣案例，production 資料 15.4% 落入危險帶
+
+- **問題**：P5h impl log 原將此 follow-up 描述為「跨引擎無單一正解、匯出顯示層、非阻擋」，未量化實際曝險面。test-designer 本輪對 PG `cdmp_dev`（生產資料代表性樣本，MSSQL 尚無業務資料）之 `ob_pool_data.appl_date`（1,679,489 列，100% 非 NULL）小時分佈實測：wall-clock **≥16:00**（P5h code comment 描述之危險帶）者共 **258,461 列（15.4%）**——並非罕見邊界案例，而是近六分之一真實生產資料。cutover 後若不修，這些案件之 MSSQL 匯出「進件日」欄將系統性 +1 日。
+- **影響**：若 MSSQL cutover 後此 follow-up 未同步修復，F064/F108 匯出功能將對約 15.4% 案件產生錯誤的「進件日」顯示值（+1 日），可能影響業務對帳、稽核與月結報表之正確性判讀，且屬於「系統性偏移」（非隨機錯誤）不易被使用者以肉眼發現規律。
+- **建議**：`infrastructure/AD-E07-43-P5-followup-display-test.md` §六 APLFMT-BOUNDARY 已用真 MSSQL 逐秒驗證精確邊界（15:59:59 正確／16:00:00 起錯誤）並確認 `CONVERT`/`FORMAT` SQL 端格式化方案於全部樣本（含邊界）皆正確；§七 APLFMT-EXPORT 已設計端對端匯出驗證。建議 architect/業務重新評估此 follow-up 之排程優先度——雖然本身不影響引擎計分/分派/簽核路徑（P5h 原始判定「非阻擋 cutover」之理由本身仍然成立），但對「MSSQL cutover 後匯出資料正確性」之實際使用者體感影響遠高於原始 framing，建議列為 cutover 後**儘速**（而非「有空再做」）排程項目。
+- **風險等級**：高（量化後之曝險面顯著，但修法方案已明確、驗證已完成、無需額外設計工作，純屬排程優先度之業務判斷）
+
+### R-MSSQL-P5FU-04（中，test-designer 本輪新查證，既有測試資產隱性約束）：既有 `f064-export-23col.spec.ts` sliceFn 靜態測試對 `appl_date` 修法程式碼位置有隱性約束
+
+- **問題**：`TS-F064-APLDATE-002` 等既有測試以原始碼文字切片（`sliceFn`，非執行）比對 `buildExportQuery()` 方法體是否含 `o.appl_date` 子字串。若 tdd-implementation 將 dialect-aware 格式化邏輯抽為外部 helper 函式（而非在方法體內 inline 組裝字面常數），會使既有靜態測試因抓不到字面文字而誤判回歸，即使實際 SQL 邏輯完全正確。
+- **影響**：若未注意此隱性約束，可能導致 tdd-implementation 誤以為既有測試發現了新缺陷而額外除錯，或反向地為了讓測試通過而被迫採用較不理想的程式碼組織方式。
+- **建議**：`infrastructure/AD-E07-43-P5-followup-display-test.md` §一 GATE-001 已明確要求 inline 組裝為預設方向，並提供「若選擇外部 helper 則同步更新測試斷言方式」之替代路徑，非強制唯一解。
+- **風險等級**：中（已有明確設計因應方案，純屬 tdd-implementation 落地時需留意之既有測試耦合關係，非設計缺陷）
