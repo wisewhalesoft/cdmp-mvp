@@ -133,7 +133,9 @@ export class PipelineRunner {
           await onLogUpdate(nodeLogs, 'running');
 
           // Release upstream outputs if no longer needed
-          this.releaseUpstreamIfDone(nodeId, upstreamMap, refCount);
+          // P6c / I-MSSQL-TEMPTABLE-EAGER-DROP-01：傳入 queryRunner，使 MSSQL 於 refcount 歸零當下
+          //   即 DROP 上游 ##temp（壓低 tempdb 峰值）；PG/sqlite 僅移除記憶體引用、行為不變。
+          await this.releaseUpstreamIfDone(nodeId, upstreamMap, refCount, queryRunner);
         } catch (err: any) {
           nodeLog.status = 'failed';
           nodeLog.durationMs = Date.now() - startTime;
@@ -196,19 +198,22 @@ export class PipelineRunner {
   }
 
   /**
-   * Release upstream node outputs when all downstream nodes have consumed them
+   * Release upstream node outputs when all downstream nodes have consumed them.
+   * MSSQL 於此處即時 DROP 上游 ##temp（見 NodeOutputStore.release 之
+   * I-MSSQL-TEMPTABLE-EAGER-DROP-01）；故須傳入 queryRunner 並 await。
    */
-  private releaseUpstreamIfDone(
+  private async releaseUpstreamIfDone(
     nodeId: string,
     upstreamMap: Map<string, string[]>,
     refCount: Map<string, number>,
-  ): void {
+    queryRunner: QueryRunner,
+  ): Promise<void> {
     const upstreams = upstreamMap.get(nodeId) ?? [];
     for (const upstreamId of upstreams) {
       const remaining = (refCount.get(upstreamId) ?? 1) - 1;
       refCount.set(upstreamId, remaining);
       if (remaining <= 0) {
-        this.outputStore.release(upstreamId);
+        await this.outputStore.release(upstreamId, queryRunner);
       }
     }
   }

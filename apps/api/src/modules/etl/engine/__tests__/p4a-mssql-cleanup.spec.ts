@@ -109,4 +109,31 @@ describe('P4a CLEANUP UNIT (黑盒 spy)', () => {
     expect(dropped).not.toContain(tn('t1'));
     expect(dropped).not.toContain(tn('c1'));
   });
+
+  it('EAGER-DROP (P6c / I-MSSQL-TEMPTABLE-EAGER-DROP-01): 上游 ## 於下游消費完當下即 DROP，不延到 cleanupAll（tempdb 峰值下降）', async () => {
+    let dropsWhenLastNodeRan = -1;
+    // c1（尾端節點）執行時「已發生的 DROP 次數」。延到 cleanupAll 才清 → 此時應為 0；
+    // eager drop 下鏈 e1→f1→d1→t1→c1：e1(f1完成後)/f1(d1完成後)/d1(t1完成後) 三張已即時 DROP → 應為 3。
+    const capturingConditional: NodeExecutor = {
+      nodeType: 'conditional',
+      execute: async () => {
+        dropsWhenLastNodeRan = dropSpy.mock.calls.length;
+        return { tempTable: tn('c1'), rowCount: 3 };
+      },
+    };
+    const runner = new PipelineRunner(
+      buildDispatcher({ conditional: capturingConditional }),
+      new NodeOutputStore(),
+    );
+    const logs = await runner.run(buildDefinition(), CONFIG, mockQr(3), noop);
+
+    expect(logs.every((l) => l.status === 'completed')).toBe(true);
+    // 核心斷言：尾端節點執行時，上游 3 張 ## 已即時 DROP（證明未延到 cleanupAll → tempdb 不累積全部）。
+    expect(dropsWhenLastNodeRan).toBe(3);
+    // 總清理仍恰 5 次、各表 1 次（eager 4 張 + cleanupAll 收尾端 c1，無重複清）——與 CLEANUP-001 一致。
+    expect(dropSpy).toHaveBeenCalledTimes(5);
+    expect(new Set(dropSpy.mock.calls.map((c) => c[1]))).toEqual(
+      new Set(['e1', 'f1', 'd1', 't1', 'c1'].map(tn)),
+    );
+  });
 });

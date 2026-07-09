@@ -34,10 +34,35 @@ export class NodeOutputStore {
   }
 
   /**
-   * 釋放單個節點的 temp table 引用（不做 SQL DROP，由 cleanupAll 統一處理）
+   * 釋放單個節點的 temp table 引用。
+   *
+   * P6c / I-MSSQL-TEMPTABLE-EAGER-DROP-01：MSSQL `##global temp` 累積在 **tempdb**，若延到
+   * `cleanupAll`（pipeline 結束）才清，大 pipeline 於整個 run 期間會**同時保留全部節點的暫存表**
+   * → tempdb 峰值 = Σ(所有節點輸出)，3.6M 列 × NVARCHAR(MAX) 直接撐爆 tempdb（P6c 實測第 2 節點即爆）。
+   * 故本函式於 refcount 歸零（`releaseUpstreamIfDone`＝所有下游都消費完上游）之當下**立即 DROP**，
+   * 把 tempdb 峰值壓到「同時存活的 ~2–3 張」。DROP 成功後從 `createdTables` 移除，避免 `cleanupAll`
+   * 重複清（否則 CLEANUP-001「各表恰清 1 次」不成立）。DROP 失敗不阻斷 pipeline——保留於 `createdTables`，
+   * 由結束時的 `cleanupAll` 再試（`IF OBJECT_ID` 冪等）。
+   *
+   * PG/sqlite 維持原行為（僅移除記憶體引用；PG `CREATE TEMP TABLE` 由 session/交易自動回收，
+   * `cleanupAll` 為安全網）逐位元組不變——`store.delete` 於任何 await 前同步完成。
    */
-  release(nodeId: string): void {
+  async release(nodeId: string, queryRunner?: QueryRunner): Promise<void> {
+    const ds = this.store.get(nodeId);
     this.store.delete(nodeId);
+    if (
+      process.env.DB_TYPE === 'mssql' &&
+      queryRunner &&
+      ds?.tempTable &&
+      this.createdTables.has(ds.tempTable)
+    ) {
+      try {
+        await mssqlTempTable.dropMssqlTempTableIfExists(queryRunner, ds.tempTable);
+        this.createdTables.delete(ds.tempTable);
+      } catch {
+        // 即時 DROP 失敗不阻斷 pipeline；保留於 createdTables，cleanupAll 結束時再試。
+      }
+    }
   }
 
   has(nodeId: string): boolean {
