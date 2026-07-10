@@ -401,6 +401,23 @@ export class AssignmentScoringService {
   ) {}
 
   // =========================
+  // F055 — previewCardLevels 之 BR-2 應用層快取
+  // =========================
+  //
+  // AC-3 / BR-2：preview 允許最多 60 秒應用層快取。等級調整（level band 編輯）時前端會 debounce
+  //   逐 keystroke 重打 preview，每個不同的 levels 都會觸發一次全表即時計分掃描（ob_pool_data ~168 萬列，
+  //   ~80s），使頁面不可用。關鍵洞察：**每列分數只取決於 (cardType, cardVersion)**——levels 僅是把這些
+  //   分數「分桶」而已。故只需快取「分數 histogram」（level 無關），之後每次改門檻皆為純記憶體重新分桶（即時）。
+  //
+  //   快取鍵＝`${cardType}:${cardVersion}`；值＝該 (cardType,cardVersion) 之分數 histogram（各不同 score
+  //   的列數）+ 逾時時間戳。命中且未逾時 → 完全略過 DB（columnRepo/scoreRepo/histogram 掃描全免）。
+  private static readonly CARD_LEVEL_HISTOGRAM_TTL_MS = 60_000;
+  private readonly cardLevelHistogramCache = new Map<
+    string,
+    { histogram: Array<{ score: number; cnt: number }>; expiresAt: number }
+  >();
+
+  // =========================
   // F053 — GET /scoring
   // =========================
 
@@ -968,8 +985,8 @@ export class AssignmentScoringService {
     // ⚠️ DB_TYPE：計分下推（LATERAL / customer_core LEFT JOIN / to_jsonb）為 PG 專用，與月跑
     //   Stage 2（runStage2and3Sql）同源；SQLite e2e 不具代表性（沿用既有 PG-only 認定）。
     //
-    // TODO F055 BR-2 cache：AC-3 / BR-2 允許最多 60 秒應用層快取；目前每次即時查詢（前端已
-    //   debounce 300ms）。低風險時再評估加入，暫不納入本次修正範圍。
+    // BR-2 快取（本次新增）：改快取「分數 histogram」（level 無關），之後每次改門檻皆純記憶體重新分桶。
+    //   histogram 每列＝一個相異 score 及其列數（cnt）；分桶僅在記憶體進行（見下方 in-memory 分桶）。
     const distribution: Record<string, number> = {};
     for (const l of parsedLevels) {
       distribution[l.cardLevel] = 0;
@@ -993,115 +1010,135 @@ export class AssignmentScoringService {
       return { distribution };
     }
 
-    // 該 version 之 active 計分維度 + score 區間（buildStage2ScoreExpr 內部再依 column_name 過濾 scoreRows）。
-    const activeColumns = await this.columnRepo.find({
-      where: {
-        card_type: input.cardType as any,
-        card_version: cardVersion as any,
-        status: 'active' as any,
-      },
-    });
-    const scoreRows = await this.scoreRepo.find({
-      where: {
-        card_type: input.cardType as any,
-        card_version: cardVersion as any,
-      },
-    });
+    // ── BR-2 應用層快取查表 ──────────────────────────────────────────────────
+    //   histogram 只取決於 (cardType, cardVersion)（分數為此二者之函數，與 levels 無關）；
+    //   同一 (cardType,cardVersion) 於 TTL 內命中 → 完全略過 DB（含 columnRepo/scoreRepo/掃描）。
+    const cacheKey = `${input.cardType}:${cardVersion}`;
+    const nowMs = Date.now();
+    const cached = this.cardLevelHistogramCache.get(cacheKey);
 
-    // 重用月跑 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
-    //
-    // GAP 1（MSSQL 遷移）：本 preview 原僅 PG（LATERAL / ::int / to_jsonb / POSIX regex），對 MSSQL
-    //   執行即 500。改依「執行本查詢之連線方言」分派——PG 沿用 buildStage2ScoreExpr（SQL byte-identical
-    //   不動）；MSSQL 重用月跑 Stage 2 MSSQL 下推 buildStage2ScoreExprMssql（AD-E07-42 P3b，已與 PG
-    //   逐列等價：`~ '^[0-9]+$'` → `NOT LIKE '%[^0-9]%'` + TRY_CAST、to_jsonb 動態 fallback → 生成前查
-    //   INFORMATION_SCHEMA.COLUMNS 之 schema 檢查）。非 pg/mssql（sqlite 單元測試）沿用 PG 分支
-    //   （此 SQL 從不對 sqlite 執行；與月跑 stage2to4-sql-executor 之 PG-only 認定一致）。
-    const isMssql =
-      this.poolDataListRepo.manager.connection.options?.type === 'mssql';
+    let histogram: Array<{ score: number; cnt: number }>;
+    if (cached && cached.expiresAt > nowMs) {
+      // 快取命中且未逾時 → 純記憶體重新分桶，不下任何 SQL（level band 編輯即時）。
+      histogram = cached.histogram;
+    } else {
+      // 快取未命中／已逾時 → 掃描一次算出 histogram，入快取（TTL=60s）。
+      //
+      // 該 version 之 active 計分維度 + score 區間（buildStage2ScoreExpr 內部再依 column_name 過濾 scoreRows）。
+      const activeColumns = await this.columnRepo.find({
+        where: {
+          card_type: input.cardType as any,
+          card_version: cardVersion as any,
+          status: 'active' as any,
+        },
+      });
+      const scoreRows = await this.scoreRepo.find({
+        where: {
+          card_type: input.cardType as any,
+          card_version: cardVersion as any,
+        },
+      });
 
-    const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
-      isMssql
-        ? buildStage2ScoreExprMssql(
-            input.cardType,
-            cardVersion,
-            activeColumns,
-            scoreRows,
-            'sc',
-            await fetchPoolDataColumnsMssql(this.poolDataListRepo.manager),
-          )
-        : buildStage2ScoreExpr(
-            input.cardType,
-            cardVersion,
-            activeColumns,
-            scoreRows,
-            'sc',
-          );
+      // 重用月跑 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
+      //
+      // GAP 1（MSSQL 遷移）：本 preview 原僅 PG（LATERAL / ::int / to_jsonb / POSIX regex），對 MSSQL
+      //   執行即 500。改依「執行本查詢之連線方言」分派——PG 沿用 buildStage2ScoreExpr（SQL byte-identical
+      //   不動）；MSSQL 重用月跑 Stage 2 MSSQL 下推 buildStage2ScoreExprMssql（AD-E07-42 P3b，已與 PG
+      //   逐列等價：`~ '^[0-9]+$'` → `NOT LIKE '%[^0-9]%'` + TRY_CAST、to_jsonb 動態 fallback → 生成前查
+      //   INFORMATION_SCHEMA.COLUMNS 之 schema 檢查）。非 pg/mssql（sqlite 單元測試）沿用 PG 分支
+      //   （此 SQL 從不對 sqlite 執行；與月跑 stage2to4-sql-executor 之 PG-only 認定一致）。
+      const isMssql =
+        this.poolDataListRepo.manager.connection.options?.type === 'mssql';
 
-    // cardVersion 非 null 時 scoreExpr 必非 null（'0' 或 SUM(CASE…)）；防禦性 fallback。
-    if (scoreExpr === null) {
-      return { distribution };
+      const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
+        isMssql
+          ? buildStage2ScoreExprMssql(
+              input.cardType,
+              cardVersion,
+              activeColumns,
+              scoreRows,
+              'sc',
+              await fetchPoolDataColumnsMssql(this.poolDataListRepo.manager),
+            )
+          : buildStage2ScoreExpr(
+              input.cardType,
+              cardVersion,
+              activeColumns,
+              scoreRows,
+              'sc',
+            );
+
+      // cardVersion 非 null 時 scoreExpr 必非 null（'0' 或 SUM(CASE…)）；防禦性 fallback（不入快取）。
+      if (scoreExpr === null) {
+        return { distribution };
+      }
+
+      // customer_core / ob_arreturndf_min_cap LEFT JOIN 僅在對應維度 active 時注入（與 runStage2and3Sql 同）。
+      const customerCoreJoin = needsCustomerCore
+        ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
+        : '';
+      const arCapitalJoin = needsArCapital
+        ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
+        : '';
+
+      // histogram 查詢：對每列即時計分（cast INT，與月跑同式），依 score 聚合 COUNT（level 無關）。
+      //   NULL 分數（該列無從計分）以 `WHERE s.score IS NOT NULL` 排除——語意等同舊實作之
+      //   `WHERE bucket IS NOT NULL`（NULL score → 所有 WHEN UNKNOWN → 不計入任何桶）；亦避免
+      //   in-memory `Number(null)===0` 誤落入含 0 之桶。
+      //   方言差異（GAP 1）：PG `CROSS JOIN LATERAL` + `(expr)::int` + `COUNT(*)::int`；
+      //   MSSQL `CROSS APPLY` + `CAST((expr) AS INT)` + `COUNT(*)`（與 stage2to4-sql-executor-mssql 之
+      //   CROSSAPPLY-001 / DECIMAL-SCOREINT-001 同式）。分桶已移至記憶體 → SQL 不再含 :lvl_* 參數。
+      const countExpr = isMssql ? 'COUNT(*)' : 'COUNT(*)::int';
+      const scoreApply = isMssql
+        ? `CROSS APPLY (SELECT CAST((${scoreExpr}) AS INT) AS score) s `
+        : `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s `;
+
+      const sql =
+        `SELECT s.score AS score, ${countExpr} AS cnt ` +
+        `FROM ob_pool_data o ` +
+        `${customerCoreJoin} ` +
+        `${arCapitalJoin} ` +
+        `${scoreApply}` +
+        `WHERE s.score IS NOT NULL ` +
+        `GROUP BY s.score`;
+
+      // 命名參數（僅 :sc_*，分桶已移至記憶體）→ positional（PG $n）；由 driver 轉譯（SQLG-003 同機制）。
+      const [escaped, parameters] =
+        this.poolDataListRepo.manager.connection.driver.escapeQueryWithParameters(
+          sql,
+          scoreParams,
+          {},
+        );
+
+      const histogramRows: Array<{ score: number | string; cnt: number | string }> =
+        await this.poolDataListRepo.query(escaped, parameters);
+
+      histogram = histogramRows.map((r) => ({
+        score: Number(r.score),
+        cnt: Number(r.cnt),
+      }));
+
+      // 🔴 TTL 自「查詢完成之當下」起算，非查詢前捕捉的 nowMs——histogram 掃描本身可達數十秒，
+      //   若用 nowMs 則 expiresAt≈查詢剛結束即到期，快取形同 dead-on-arrival（下一次預覽仍重掃）。
+      this.cardLevelHistogramCache.set(cacheKey, {
+        histogram,
+        expiresAt:
+          Date.now() + AssignmentScoringService.CARD_LEVEL_HISTOGRAM_TTL_MS,
+      });
     }
 
-    // 動態組裝 first-match-wins 的 CASE 分桶（等級區間不重疊由 BR-1 保證）。
-    //   score 為 NULL（該列無從計分）→ 所有 WHEN 皆 UNKNOWN → ELSE NULL → 不計入任何等級。
-    //   使用者輸入之門檻 / 等級碼一律命名參數化（:lvl_*），杜絕 SQL injection。
-    const whenClauses: string[] = [];
-    const bucketParams: Record<string, unknown> = {};
-    let bi = 0;
-    for (const l of parsedLevels) {
-      const p = `lvl_${bi++}`;
-      bucketParams[`${p}_lo`] = l.scoreS;
-      bucketParams[`${p}_hi`] = l.scoreE;
-      bucketParams[`${p}_lbl`] = l.cardLevel;
-      whenClauses.push(
-        `WHEN s.score >= :${p}_lo AND s.score <= :${p}_hi THEN :${p}_lbl`,
-      );
-    }
-
-    // customer_core / ob_arreturndf_min_cap LEFT JOIN 僅在對應維度 active 時注入（與 runStage2and3Sql 同）。
-    const customerCoreJoin = needsCustomerCore
-      ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
-      : '';
-    const arCapitalJoin = needsArCapital
-      ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
-      : '';
-
-    // 單一 GROUP BY 聚合：先算每列 score（cast INT，與月跑同式），外層 CASE 分桶再 COUNT。
-    //   方言差異（GAP 1）：PG `CROSS JOIN LATERAL` + `(expr)::int` + `COUNT(*)::int`；
-    //   MSSQL `CROSS APPLY` + `CAST((expr) AS INT)` + `COUNT(*)`（與 stage2to4-sql-executor-mssql 之
-    //   CROSSAPPLY-001 / DECIMAL-SCOREINT-001 同式）。PG 分支輸出與修正前逐字元一致（STATIC-002）。
-    const countExpr = isMssql ? 'COUNT(*)' : 'COUNT(*)::int';
-    const scoreApply = isMssql
-      ? `CROSS APPLY (SELECT CAST((${scoreExpr}) AS INT) AS score) s `
-      : `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s `;
-
-    const sql =
-      `SELECT bucket, ${countExpr} AS cnt ` +
-      `FROM ( ` +
-      `SELECT CASE ${whenClauses.join(' ')} ELSE NULL END AS bucket ` +
-      `FROM ob_pool_data o ` +
-      `${customerCoreJoin} ` +
-      `${arCapitalJoin} ` +
-      `${scoreApply}` +
-      `) sub ` +
-      `WHERE bucket IS NOT NULL ` +
-      `GROUP BY bucket`;
-
-    // 命名參數（:sc_* + :lvl_*）→ positional（PG $n）；由 driver 轉譯（與 stage2to4-sql-executor 同機制，SQLG-003）。
-    const allParams = { ...scoreParams, ...bucketParams };
-    const [escaped, parameters] =
-      this.poolDataListRepo.manager.connection.driver.escapeQueryWithParameters(
-        sql,
-        allParams,
-        {},
-      );
-
-    const bucketRows: Array<{ bucket: string; cnt: number | string }> =
-      await this.poolDataListRepo.query(escaped, parameters);
-
-    for (const r of bucketRows) {
-      if (Object.prototype.hasOwnProperty.call(distribution, r.bucket)) {
-        distribution[r.bucket] = Number(r.cnt);
+    // ── in-memory 分桶（與舊 SQL CASE 語意逐一等價）─────────────────────────────
+    //   first-match-wins：對每個 score 依 parsedLevels 順序找「第一個」包含它的區間即 break
+    //   （等級區間不重疊由 BR-1 保證，但 first-match-then-break 確保與舊 CASE 完全等價）。
+    //   inclusive：scoreS <= score <= scoreE（含兩端，與舊 `>= :lo AND <= :hi` 同）。
+    //   NULL：已於 histogram WHERE 排除，此處 histogram 不含 NULL score。
+    //   distribution 各等級預設 0（上方已初始化），命中累加（histogram 每列代表多列 → 用 += 累加）。
+    for (const row of histogram) {
+      for (const l of parsedLevels) {
+        if (row.score >= l.scoreS && row.score <= l.scoreE) {
+          distribution[l.cardLevel] += row.cnt;
+          break;
+        }
       }
     }
 

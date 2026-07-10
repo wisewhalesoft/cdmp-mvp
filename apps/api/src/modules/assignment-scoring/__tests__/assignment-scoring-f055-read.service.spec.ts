@@ -7,17 +7,21 @@
  *     - cardVersion 未傳 → 取 active 版本
  *     - 無 active 版本 → 404 SCORING_VERSION_NOT_FOUND
  *
- *   GET /card-levels/preview (§5.2 / AC-3)
- *     ── 本次修正（F094 死欄）：preview 不再讀 `ob_pool_data_list.score`（自 F094 起恆 NULL），
- *        改為「重用月跑 Stage 2 計分下推（buildStage2ScoreExpr），對每列 ob_pool_data 以該 cardType
- *        active version 即時算分」後，依前端門檻分桶 COUNT（單一 GROUP BY 聚合，SQL 下推、不 hydrate）。
- *     - TS-F055-013：distribution 依 SQL 分桶結果組裝、加總正確、含全部請求等級
+ *   GET /card-levels/preview (§5.2 / AC-3 / BR-2)
+ *     ── F094 死欄修正：preview 不再讀 `ob_pool_data_list.score`（自 F094 起恆 NULL），改為
+ *        「重用月跑 Stage 2 計分下推（buildStage2ScoreExpr），對每列 ob_pool_data 以該 cardType
+ *        active version 即時算分」。
+ *     ── BR-2 快取（本次）：SQL 改回傳「分數 histogram」（每列＝相異 score 及其列數，level 無關，
+ *        `GROUP BY s.score`），分桶改在記憶體（first-match-wins / inclusive / NULL 於 WHERE 排除）。
+ *        histogram 以 `${cardType}:${cardVersion}` 為鍵、TTL 60s 快取；改門檻於 TTL 內即時重分桶、不重掃。
+ *     - TS-F055-013：distribution 依 histogram in-memory 分桶、加總正確、含全部請求等級
  *     - TS-F055-014：URL-encoded levels JSON 正確解析
  *     - BE-F055-003：無命中列時 distribution 各等級=0
  *     - 無 active 計分版本 → distribution 全零且不下 SQL（優雅降級）
  *     - levels JSON 解析失敗 → 422 VALIDATION_ERROR
- *     - REG-F094：SQL 須讀 `ob_pool_data`（活表）且不得再讀死欄 `ob_pool_data_list`
- *     - REG-OOM：不得 find() 全表載入 Node，須以 query() 下推 SQL 分桶
+ *     - REG-F094：SQL 須讀 `ob_pool_data`（活表）histogram（GROUP BY s.score），不得讀死欄 `ob_pool_data_list`
+ *     - REG-OOM：不得 find() 全表載入 Node，須以 query() 下推 SQL 聚合
+ *     - BR-2 cache：同鍵不同 levels 於 TTL 內只掃一次；first-match/inclusive 分桶正確；逾 TTL 重掃
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -208,14 +212,15 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
 
   // ===== GET /card-levels/preview =====
 
-  it('TS-F055-013：preview distribution 依 SQL 分桶結果組裝、加總正確、含全部請求等級', async () => {
+  it('TS-F055-013：preview distribution 依 histogram in-memory 分桶、加總正確、含全部請求等級', async () => {
     mockActiveVersion('H', 1);
-    // SQL 端（ob_pool_data 即時計分 + 分桶）回傳的 GROUP BY 結果：A=20 / B=40 / C=30 / D=10。
+    // SQL 端回傳的是「分數 histogram」（level 無關，每列＝一相異 score 及其列數），
+    // 分桶改在記憶體進行：A(243-999)←250:20 / B(214-242)←220:40 / C(185-213)←200:30 / D(0-184)←100:10。
     poolDataListRepo.query.mockResolvedValue([
-      { bucket: 'A', cnt: 20 },
-      { bucket: 'B', cnt: 40 },
-      { bucket: 'C', cnt: 30 },
-      { bucket: 'D', cnt: 10 },
+      { score: 250, cnt: 20 },
+      { score: 220, cnt: 40 },
+      { score: 200, cnt: 30 },
+      { score: 100, cnt: 10 },
     ]);
 
     const levels = JSON.stringify([
@@ -233,13 +238,14 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
       0,
     );
     expect(total).toBe(100);
-    // 單一 GROUP BY 聚合、僅一次 query
+    // 單一 histogram 聚合、僅一次 query
     expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
   });
 
   it('TS-F055-014：URL-encoded levels 範例字串能正確解析', async () => {
     mockActiveVersion('H', 1);
-    poolDataListRepo.query.mockResolvedValue([{ bucket: 'A', cnt: 1 }]);
+    // histogram：score 500 落入 A(243-999)。
+    poolDataListRepo.query.mockResolvedValue([{ score: 500, cnt: 1 }]);
 
     // spec 5.2 範例：levels=%5B%7B%22cardLevel%22%3A%22A%22%2C%22scoreS%22%3A243%2C%22scoreE%22%3A999%7D%5D
     const encoded =
@@ -316,7 +322,8 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
 
   it('REG-F094：preview SQL 讀 ob_pool_data（活表即時計分），不得再讀死欄來源 ob_pool_data_list', async () => {
     mockActiveVersion('H', 1);
-    poolDataListRepo.query.mockResolvedValue([{ bucket: 'A', cnt: 3 }]);
+    // histogram 形（score/cnt）；本測僅驗 SQL 形狀 + 讀取來源。
+    poolDataListRepo.query.mockResolvedValue([{ score: 500, cnt: 3 }]);
 
     await service.previewCardLevels({
       cardType: 'H',
@@ -324,10 +331,13 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     });
 
     const sql = poolDataListRepo.query.mock.calls[0][0] as string;
-    // 自 ob_pool_data 即時算分（LATERAL 子查詢 + 分桶 CASE + GROUP BY）
+    // 自 ob_pool_data 即時算分（LATERAL 子查詢 + histogram GROUP BY s.score，分桶已移至記憶體）
     expect(sql).toContain('ob_pool_data ');
     expect(sql).toMatch(/CROSS JOIN LATERAL/i);
-    expect(sql).toMatch(/GROUP BY bucket/i);
+    expect(sql).toMatch(/GROUP BY s\.score/i);
+    // histogram 化：SQL 不再含分桶 CASE / :lvl_* 門檻參數（分桶在記憶體）
+    expect(sql).not.toMatch(/:lvl_/);
+    expect(sql).not.toMatch(/GROUP BY bucket/i);
     // 不得再自死欄來源 ob_pool_data_list 分桶（F094 起該表 score 恆 NULL）
     expect(sql).not.toContain('ob_pool_data_list');
     // 以該 cardType 之 active 計分設定算分（讀 active column + score 區間）
@@ -364,7 +374,8 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     poolDataListRepo.manager.query = vi
       .fn()
       .mockResolvedValue([{ name: 'loan_rate' }]);
-    poolDataListRepo.query.mockResolvedValue([{ bucket: 'A', cnt: 5 }]);
+    // histogram：score 500 落入 A(0-999)。
+    poolDataListRepo.query.mockResolvedValue([{ score: 500, cnt: 5 }]);
 
     const result = await service.previewCardLevels({
       cardType: 'H',
@@ -379,11 +390,133 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     expect(sql).toContain('AS INT)');
     expect(sql).not.toMatch(/LATERAL/i);
     expect(sql).not.toContain('::int');
-    // 仍自活表 ob_pool_data 即時算分 + 分桶 GROUP BY（不讀死欄來源 ob_pool_data_list）。
+    // 仍自活表 ob_pool_data 即時算分 + histogram GROUP BY s.score（不讀死欄來源 ob_pool_data_list）。
     expect(sql).toContain('ob_pool_data ');
     expect(sql).not.toContain('ob_pool_data_list');
-    expect(sql).toMatch(/GROUP BY bucket/i);
+    expect(sql).toMatch(/GROUP BY s\.score/i);
     // fallback schema 檢查恰一次（O(1) INFORMATION_SCHEMA 查詢，非逐欄 N+1）。
     expect(poolDataListRepo.manager.query).toHaveBeenCalledTimes(1);
+  });
+
+  // ===== F055 BR-2：≤60s 應用層 histogram 快取 =====
+
+  it('BR-2 cache：同一 (cardType,cardVersion) 於 TTL 內不同 levels 只掃描一次（histogram 快取），兩次皆正確分桶', async () => {
+    mockActiveVersion('H', 1);
+    // histogram（level 無關）僅第一次掃描時查一次；第二次改門檻應命中快取、不再下 SQL。
+    poolDataListRepo.query.mockResolvedValue([
+      { score: 250, cnt: 20 },
+      { score: 220, cnt: 40 },
+      { score: 200, cnt: 30 },
+      { score: 100, cnt: 10 },
+    ]);
+
+    // 第一次：4 級門檻（cache miss → 掃描一次）
+    const r1 = await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([
+        { cardLevel: 'A', scoreS: 243, scoreE: 999 },
+        { cardLevel: 'B', scoreS: 214, scoreE: 242 },
+        { cardLevel: 'C', scoreS: 185, scoreE: 213 },
+        { cardLevel: 'D', scoreS: 0, scoreE: 184 },
+      ]),
+    });
+    expect(r1.distribution).toEqual({ A: 20, B: 40, C: 30, D: 10 });
+
+    // 第二次：不同門檻（合併為 2 級）→ cache hit，純記憶體重新分桶：
+    //   HI(210-999)←250:20 + 220:40 = 60；LO(0-209)←200:30 + 100:10 = 40。
+    const r2 = await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([
+        { cardLevel: 'HI', scoreS: 210, scoreE: 999 },
+        { cardLevel: 'LO', scoreS: 0, scoreE: 209 },
+      ]),
+    });
+    expect(r2.distribution).toEqual({ HI: 60, LO: 40 });
+
+    // 兩次呼叫、histogram 只掃一次（第二次全記憶體分桶）。
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
+    // 計分維度讀取（columnRepo/scoreRepo）僅在首次 cache miss 時發生。
+    expect(columnRepo.find).toHaveBeenCalledTimes(1);
+    expect(scoreRepo.find).toHaveBeenCalledTimes(1);
+  });
+
+  it('BR-1 in-memory 分桶：first-match-wins（區間重疊時取第一命中）+ inclusive 兩端邊界', async () => {
+    mockActiveVersion('H', 1);
+    // 刻意重疊 X(100-300) / Y(200-400) 以驗 first-match-then-break；並取各邊界值驗 inclusive。
+    poolDataListRepo.query.mockResolvedValue([
+      { score: 100, cnt: 1 },  // X 下界(inclusive) → X
+      { score: 200, cnt: 2 },  // 落在 X∩Y → first-match → X
+      { score: 300, cnt: 4 },  // X 上界(inclusive)，亦落在 Y → first-match → X
+      { score: 301, cnt: 8 },  // 僅 Y
+      { score: 400, cnt: 16 }, // Y 上界(inclusive) → Y
+    ]);
+
+    const result = await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([
+        { cardLevel: 'X', scoreS: 100, scoreE: 300 },
+        { cardLevel: 'Y', scoreS: 200, scoreE: 400 },
+      ]),
+    });
+
+    // X = 1+2+4 = 7（含下界 100、上界 300、且重疊 200/300 first-match 歸 X）
+    // Y = 8+16 = 24（301 僅 Y、400 上界 inclusive）
+    expect(result.distribution).toEqual({ X: 7, Y: 24 });
+  });
+
+  it('BR-2 cache：逾 60s TTL 後快取失效、重新掃描', async () => {
+    mockActiveVersion('H', 1);
+    poolDataListRepo.query.mockResolvedValue([{ score: 500, cnt: 3 }]);
+    const levels = JSON.stringify([{ cardLevel: 'A', scoreS: 0, scoreE: 999 }]);
+
+    const nowSpy = vi.spyOn(Date, 'now');
+
+    // t=0：cache miss → 掃描一次
+    nowSpy.mockReturnValue(1_000_000);
+    const r1 = await service.previewCardLevels({ cardType: 'H', levels });
+    expect(r1.distribution).toEqual({ A: 3 });
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
+
+    // t=+59s：仍在 TTL 內 → cache hit、不重掃
+    nowSpy.mockReturnValue(1_000_000 + 59_000);
+    await service.previewCardLevels({ cardType: 'H', levels });
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
+
+    // t=+61s：逾 60s TTL → cache miss、重新掃描
+    nowSpy.mockReturnValue(1_000_000 + 61_000);
+    await service.previewCardLevels({ cardType: 'H', levels });
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(2);
+
+    nowSpy.mockRestore();
+  });
+
+  it('BR-2 cache（回歸）：TTL 自「查詢完成之當下」起算，慢 histogram 掃描後快取不得 dead-on-arrival', async () => {
+    // 🔴 防回歸：expiresAt 曾誤用「查詢前」捕捉之 nowMs，當 histogram 掃描本身耗時 ~TTL（真庫 ~60s）時，
+    //   expiresAt≈查詢剛結束即到期，下一次預覽仍重掃（快取形同無效）。此測模擬掃描期間 Date.now 推進 70s。
+    mockActiveVersion('H', 1);
+    const nowSpy = vi.spyOn(Date, 'now');
+    nowSpy.mockReturnValue(1_000_000);
+    // histogram 查詢執行期間 Date.now 推進到 +70s（模擬慢掃描），且僅回一次直方圖
+    poolDataListRepo.query.mockImplementation(async () => {
+      nowSpy.mockReturnValue(1_000_000 + 70_000);
+      return [{ score: 500, cnt: 3 }];
+    });
+
+    // 首次：cache miss → 掃描一次；expiresAt 須為 (1_000_000+70_000)+60_000 = 1_130_000（非誤用 nowMs 之 1_060_000）
+    await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([{ cardLevel: 'A', scoreS: 0, scoreE: 999 }]),
+    });
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
+
+    // t=+90s（查詢完成後 +20s，遠在 130s 到期前）：若誤用 nowMs 則已於 +60s 過期→誤重掃；正確應命中快取。
+    nowSpy.mockReturnValue(1_000_000 + 90_000);
+    await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([{ cardLevel: 'B', scoreS: 0, scoreE: 999 }]),
+    });
+    expect(poolDataListRepo.query).toHaveBeenCalledTimes(1); // 仍只掃一次 = 快取有效
+
+    nowSpy.mockRestore();
   });
 });
