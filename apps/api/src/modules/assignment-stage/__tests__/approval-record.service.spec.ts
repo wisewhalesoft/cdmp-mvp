@@ -28,6 +28,7 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
+import { User } from '@/database/entities/user.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
@@ -57,6 +58,7 @@ async function buildModule(): Promise<Env> {
           ObEmphire,
           AssignmentAuditLog,
           AssignmentApproval,
+          User,
         ],
         synchronize: true,
       }),
@@ -67,6 +69,7 @@ async function buildModule(): Promise<Env> {
         ObEmphire,
         AssignmentAuditLog,
         AssignmentApproval,
+        User,
       ]),
     ],
     providers: [

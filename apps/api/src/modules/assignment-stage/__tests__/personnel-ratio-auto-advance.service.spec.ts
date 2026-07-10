@@ -158,6 +158,7 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
     };
     // section_chief actor 的轄區 = XTE0（與 dtoForXTE0 一致）；通過轄區檢查
     scopeService = { getScopeDeptCode: vi.fn().mockResolvedValue('XTE0') };
+    const userRepo = { findOne: vi.fn().mockResolvedValue(null) };
 
     svc = new PersonnelRatioService(
       dataSource,
@@ -166,6 +167,7 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
       emplSetRepo,
       emphireRepo,
       approvalRepo,
+      userRepo,
       ratioValidation,
       personnelRatioValidation,
       stageTransition,
@@ -824,6 +826,7 @@ describe('StageActionService.advancePersonnelRatioToApproval — F084 v2.0 fallb
     const deptPctRepo = { find: vi.fn().mockResolvedValue([]), findOne: vi.fn() };
     const emplSetRepo = { find: vi.fn().mockResolvedValue([]) };
     const approvalRepo = { createQueryBuilder: vi.fn() };
+    const userRepo = { find: vi.fn().mockResolvedValue([]) };
     const ratioValidation = { assertEachInRange: vi.fn() };
     const stage0Estimate = { estimateListCount: vi.fn().mockResolvedValue({ count: 0 }) };
     svc = new StageActionService(
@@ -831,6 +834,7 @@ describe('StageActionService.advancePersonnelRatioToApproval — F084 v2.0 fallb
       deptPctRepo,
       emplSetRepo,
       approvalRepo,
+      userRepo,
       stageTransition,
       ratioValidation,
       personnelRatioValidation,

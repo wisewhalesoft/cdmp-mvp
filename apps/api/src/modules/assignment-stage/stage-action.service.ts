@@ -6,12 +6,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import type { EntityManager } from 'typeorm';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
+import { User } from '@/database/entities/user.entity';
+import { isUuid } from '@/common/uuid.util';
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
@@ -55,6 +57,8 @@ export class StageActionService {
     private readonly emplSetRepo: Repository<ObEmplSet>,
     @InjectRepository(AssignmentApproval)
     private readonly approvalRepo: Repository<AssignmentApproval>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly stageTransition: StageTransitionService,
     private readonly ratioValidation: RatioValidationService,
     private readonly personnelRatioValidation: PersonnelRatioValidationService,
@@ -451,12 +455,25 @@ export class StageActionService {
       .addOrderBy('a.created_at', 'DESC')
       .getMany();
 
+    // 簽核者姓名解析：approver_name 於寫入時存的是 user id（UUID，見 approve/reject 分支），
+    // 顯示層需姓名而非 UUID。批次 JOIN users 解析（對齊 assignment-list.service listLists 模式）。
+    // 🔴 isUuid 過濾避免非 GUID 值餵入 users.id(uniqueidentifier) 查詢拋「Invalid GUID」500。
+    const approverIds = Array.from(
+      new Set(rows.map((r) => r.approver_id).filter(isUuid)),
+    );
+    const nameById = new Map<string, string>();
+    if (approverIds.length > 0) {
+      const users = await this.userRepo.find({ where: { id: In(approverIds) } });
+      for (const u of users) nameById.set(u.id, u.name);
+    }
+
     const history: ApprovalHistoryItem[] = rows.map((r) => ({
       approvalId: r.approval_id,
       action: r.action,
       rejectReason: r.reject_reason,
       approverId: r.approver_id,
-      approverName: r.approver_name,
+      // 解析姓名優先；查無 user 時退回原存值（保留既有 fallback 行為，不回退為空）
+      approverName: nameById.get(r.approver_id) ?? r.approver_name,
       approverRole: r.approver_role,
       approvedAt: r.approved_at,
     }));

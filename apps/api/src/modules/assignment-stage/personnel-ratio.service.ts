@@ -13,6 +13,8 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
+import { User } from '@/database/entities/user.entity';
+import { isUuid } from '@/common/uuid.util';
 import { RatioValidationService } from '@/modules/assignment/services/ratio-validation.service';
 import { PersonnelRatioValidationService } from '@/modules/assignment/services/personnel-ratio-validation.service';
 import { StageTransitionService } from '@/modules/assignment/services/stage-transition.service';
@@ -65,6 +67,8 @@ export class PersonnelRatioService {
     private readonly emphireRepo: Repository<ObEmphire>,
     @InjectRepository(AssignmentApproval)
     private readonly approvalRepo: Repository<AssignmentApproval>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly ratioValidation: RatioValidationService,
     private readonly personnelRatioValidation: PersonnelRatioValidationService,
     private readonly stageTransition: StageTransitionService,
@@ -385,10 +389,18 @@ export class PersonnelRatioService {
       .limit(1)
       .getOne();
     if (!latest || latest.action !== 'reject') return null;
+    // 拒絕者姓名解析：approver_name 於寫入時存的是 user id（UUID），顯示層需姓名。
+    // 對齊 stage-action.service getApprovalHistory / assignment-list listLists 模式；
+    // 🔴 isUuid 過濾避免非 GUID 值餵入 users.id(uniqueidentifier) 查詢拋「Invalid GUID」500。
+    let rejectorName = latest.approver_name;
+    if (isUuid(latest.approver_id)) {
+      const u = await this.userRepo.findOne({ where: { id: latest.approver_id } });
+      if (u) rejectorName = u.name;
+    }
     return {
       rejectReason: latest.reject_reason ?? '',
       rejectorId: latest.approver_id,
-      rejectorName: latest.approver_name,
+      rejectorName,
       rejectorRole: latest.approver_role,
       rejectedAt: latest.approved_at,
     };

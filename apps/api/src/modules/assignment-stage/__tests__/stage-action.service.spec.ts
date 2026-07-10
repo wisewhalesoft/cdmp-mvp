@@ -21,6 +21,7 @@ describe('StageActionService', () => {
   let deptPctRepo: any;
   let emplSetRepo: any;
   let approvalRepo: any;
+  let userRepo: any;
   let stageTransition: any;
   let ratioValidation: any;
   let personnelRatioValidation: any;
@@ -39,6 +40,7 @@ describe('StageActionService', () => {
         getMany: vi.fn().mockResolvedValue([]),
       }),
     };
+    userRepo = { find: vi.fn().mockResolvedValue([]) };
     stageTransition = {
       advanceTo: vi.fn().mockImplementation(async (_l, _f, _t, _u, pre, post) => {
         const mgr = {
@@ -69,6 +71,7 @@ describe('StageActionService', () => {
       deptPctRepo,
       emplSetRepo,
       approvalRepo,
+      userRepo,
       stageTransition,
       ratioValidation,
       personnelRatioValidation,
@@ -279,5 +282,59 @@ describe('StageActionService', () => {
     } catch (e: any) {
       expect(e.response.error).toBe(ERROR_CODES.ASSIGNMENT_LIST_INACTIVE);
     }
+  });
+
+  // getApprovalHistory：approver_name 於寫入時存的是 UUID → 讀取時解析為 users.name
+  it('getApprovalHistory：approver_id 為存在 user → approverName 解析為姓名（非 UUID）', async () => {
+    const uid = 'd4e5f6a7-b8c9-0123-def4-567890123456';
+    listRepo.findOne.mockResolvedValue(okList('ready'));
+    approvalRepo.createQueryBuilder.mockReturnValue({
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      addOrderBy: vi.fn().mockReturnThis(),
+      getMany: vi.fn().mockResolvedValue([
+        {
+          approval_id: 'a1',
+          action: 'approve',
+          reject_reason: null,
+          approver_id: uid,
+          approver_name: uid, // 寫入時存 UUID（bug 現況）
+          approver_role: 'director',
+          approved_at: new Date('2026-05-14T18:05:00Z'),
+        },
+      ]),
+    });
+    userRepo.find.mockResolvedValue([{ id: uid, name: '游馥瑄' }]);
+
+    const res = await svc.getApprovalHistory('L1');
+    expect(userRepo.find).toHaveBeenCalled();
+    expect(res.history[0].approverName).toBe('游馥瑄');
+    expect(res.history[0].approverId).toBe(uid);
+  });
+
+  // 查無對應 user → 退回原存值（不回退為空、不 500）
+  it('getApprovalHistory：approver_id 查無 user → approverName 退回原存值', async () => {
+    listRepo.findOne.mockResolvedValue(okList('ready'));
+    approvalRepo.createQueryBuilder.mockReturnValue({
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      addOrderBy: vi.fn().mockReturnThis(),
+      getMany: vi.fn().mockResolvedValue([
+        {
+          approval_id: 'a2',
+          action: 'approve',
+          reject_reason: null,
+          approver_id: 'legacy-import', // 非 UUID → isUuid 過濾、不查 users
+          approver_name: 'Legacy Approver',
+          approver_role: 'director',
+          approved_at: new Date('2026-05-14T18:05:00Z'),
+        },
+      ]),
+    });
+
+    const res = await svc.getApprovalHistory('L1');
+    // 非 UUID 不餵入 users 查詢（避免 MSSQL Invalid GUID 500）
+    expect(userRepo.find).not.toHaveBeenCalled();
+    expect(res.history[0].approverName).toBe('Legacy Approver');
   });
 });

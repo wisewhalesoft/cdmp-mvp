@@ -24,6 +24,7 @@ describe('PersonnelRatioService (F082 + F083)', () => {
   let emplSetRepo: any;
   let emphireRepo: any;
   let approvalRepo: any;
+  let userRepo: any;
   let scopeService: any;
   let stageTransition: any;
   let ratioValidation: any;
@@ -73,6 +74,7 @@ describe('PersonnelRatioService (F082 + F083)', () => {
         getOne: vi.fn().mockResolvedValue(null),
       })),
     };
+    userRepo = { findOne: vi.fn().mockResolvedValue(null) };
     stageTransition = { assertStageEquals: vi.fn().mockResolvedValue(undefined) };
     ratioValidation = { assertEachInRange: vi.fn() };
     personnelRatioValidation = { assertDeptSumEquals100: vi.fn() };
@@ -90,6 +92,7 @@ describe('PersonnelRatioService (F082 + F083)', () => {
       emplSetRepo,
       emphireRepo,
       approvalRepo,
+      userRepo,
       ratioValidation,
       personnelRatioValidation,
       stageTransition,
@@ -271,6 +274,50 @@ describe('PersonnelRatioService (F082 + F083)', () => {
       expect(e).toBeInstanceOf(ForbiddenException);
       expect(e.response.error).toBe(ERROR_CODES.LIST_HISTORICAL_READONLY);
     }
+  });
+
+  // GET latestRejection：拒絕者姓名解析（approver_name 於寫入時存的是 UUID）
+  it('GET latestRejection：rejectorName 解析為 users.name（非 UUID）', async () => {
+    const uid = 'd4e5f6a7-b8c9-0123-def4-567890123456';
+    listRepo.findOne.mockResolvedValue(validList);
+    const emphireChain = {
+      select: vi.fn().mockReturnThis(),
+      addSelect: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      andWhere: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      addOrderBy: vi.fn().mockReturnThis(),
+      groupBy: vi.fn().mockReturnThis(),
+      setParameter: vi.fn().mockReturnThis(),
+      getMany: vi.fn().mockResolvedValue([]),
+      getRawMany: vi.fn().mockResolvedValue([]),
+    };
+    emphireRepo.createQueryBuilder = vi.fn(() => emphireChain);
+    emplSetRepo.createQueryBuilder = vi.fn(() => ({
+      where: vi.fn().mockReturnThis(),
+      andWhere: vi.fn().mockReturnThis(),
+      getMany: vi.fn().mockResolvedValue([]),
+    }));
+    approvalRepo.createQueryBuilder = vi.fn(() => ({
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      addOrderBy: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      getOne: vi.fn().mockResolvedValue({
+        action: 'reject',
+        reject_reason: '比例不合理',
+        approver_id: uid,
+        approver_name: uid, // 寫入時存 UUID（bug 現況）
+        approver_role: 'director',
+        approved_at: new Date('2026-05-15T13:42:00Z'),
+      }),
+    }));
+    userRepo.findOne.mockResolvedValue({ id: uid, name: '游馥瑄' });
+
+    const res: any = await svc.getPersonnelRatios('L1', null, validActor);
+    expect(userRepo.findOne).toHaveBeenCalled();
+    expect(res.latestRejection.rejectorName).toBe('游馥瑄');
+    expect(res.latestRejection.rejectorId).toBe(uid);
   });
 
   // =====================================================================
