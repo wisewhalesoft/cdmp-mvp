@@ -43,7 +43,8 @@ import { ReorderPooldataOptionsDto } from '../dto/reorder-pooldata-options.dto';
  *   - PATCH /:optionValue/deactivate   F076 §5.4 停用專屬（reason 必填 ≤200 字）
  *   - PATCH /reorder                   F076 §5.5 排序（orderedValues 完整陣列；先於 :optionValue 註冊）
  */
-@Controller('api/v1/pooldata-fields/:columnName/options')
+// 路徑不含 'api/v1'（全域已 setGlobalPrefix('api/v1')；修雙前綴歷史 bug，同 whitelist controller）。
+@Controller('pooldata-fields/:columnName/options')
 @UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class PooldataFieldOptionController {

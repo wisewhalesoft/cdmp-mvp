@@ -51,7 +51,9 @@ import { ListPooldataFieldsQueryDto } from '../dto/list-pooldata-fields-query.dt
  *   動態 `:columnName` 路由之前；否則 'available-columns' 會被誤判為 columnName 路徑參數。
  *   對應回歸測試：TS-F075-E2E-008。
  */
-@Controller('api/v1/pooldata-fields')
+// 路徑不含 'api/v1'——全域已 setGlobalPrefix('api/v1')，此處再寫會變雙前綴 /api/v1/api/v1/...
+// （修正既有歷史 bug；與其餘所有 controller 慣例一致。前端 pooldata-fields.ts BASE 同步改為 '/pooldata-fields'）。
+@Controller('pooldata-fields')
 @UseGuards(AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard)
 @RequireDirectorOrSectionChief()
 export class PooldataFieldWhitelistController {

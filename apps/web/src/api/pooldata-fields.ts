@@ -7,12 +7,11 @@ import { apiClient } from './client';
  *   - F075 v1.4: pooldata-fields CRUD + available-columns（含 F076-C 級聯停用）
  *   - F076 v1.3: pooldata-fields/:columnName/options CRUD
  *
- * 注意：backend controller path 為 'api/v1/pooldata-fields'（雙重前綴歷史 bug）
- *       FE baseURL='/api/v1' + path='/api/v1/...' → 實際 URL '/api/v1/api/v1/...'
- *       此 bug 不在 F075 v1.4 PR 範圍內（會影響既有所有端點），予以保留。
+ * 註：雙重前綴歷史 bug 已修——backend controller 改為 @Controller('pooldata-fields')（去掉 'api/v1'），
+ *     FE BASE 同步改為 '/pooldata-fields'；apiClient baseURL='/api/v1' → 實際 URL '/api/v1/pooldata-fields'。
  */
 
-const BASE = '/api/v1/pooldata-fields';
+const BASE = '/pooldata-fields';
 
 // =====================================================================
 // F075 — pooldata-fields (whitelist)
