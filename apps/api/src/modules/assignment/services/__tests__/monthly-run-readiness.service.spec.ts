@@ -6,48 +6,70 @@ import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 
 /**
  * MonthlyRunReadinessService（F088 §5.2 / F061 月跑前置條件）
  *
  * calculateReadiness(workYm) → {
- *   workYm,
- *   totalActiveLists: status='active' AND stage != 'draft' 之名單數
- *   readyCount: 上者中 stage='ready' 之筆數
- *   notReadyLists: 上者中 stage != 'ready' 者清單（含 listNo / listNm / stage）
- *   allReady: readyCount === totalActiveLists
- *   monthlyRunStatus: 'none' | 'pending' | 'running' | 'completed' | 'failed'
+ *   workYm, totalActiveLists, readyCount, notReadyLists, allReady,
+ *   monthlyRunStatus, scoringActive, etlStatus
  * }
+ *
+ * etlStatus 對應（改為依 pipeline definition 的 `target_load` targetTable，脫離顯示名）：
+ *   ob_pool_data→pooldata / ob_emphire→emphire / ob_calendar→calendar /
+ *   ob_arreturndf_min_cap→arreturndf
  */
 describe('MonthlyRunReadinessService', () => {
   let service: MonthlyRunReadinessService;
   let listRepo: any;
   let runRepo: any;
-  let versionRepo: any;
+  let versionRepo: any; // ObLevelcardVersion（scoringActive）
   let etlLogRepo: any;
   let etlPipelineRepo: any;
+  let etlVersionRepo: any; // EtlPipelineVersion（definition → target_load）
+
+  /** 建 log query builder mock（新邏輯：where/orderBy/limit/getMany，無 join）。 */
+  const makeLogQb = (logs: any[]) => ({
+    innerJoin: vi.fn().mockReturnThis(),
+    innerJoinAndSelect: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    andWhere: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    getMany: vi.fn().mockResolvedValue(logs),
+  });
+
+  /** 便捷：以 target_load 目標表建一支 pipeline + 其 version 定義。 */
+  const pipelineWithTarget = (id: string, targetTable: string) => ({
+    pipeline: { id, version: 1 },
+    version: {
+      pipeline_id: id,
+      version: 1,
+      definition: {
+        nodes: [
+          { data: { nodeType: 'raw_data_extract' } },
+          { data: { nodeType: 'target_load', targetTable } },
+        ],
+        edges: [],
+      },
+    },
+  });
 
   beforeEach(() => {
     listRepo = { find: vi.fn() };
     runRepo = { findOne: vi.fn() };
     versionRepo = { count: vi.fn().mockResolvedValue(1) };
-    etlLogRepo = {
-      createQueryBuilder: vi.fn().mockReturnValue({
-        innerJoinAndSelect: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        andWhere: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        getMany: vi.fn().mockResolvedValue([]),
-      }),
-    };
+    etlLogRepo = { createQueryBuilder: vi.fn().mockReturnValue(makeLogQb([])) };
     etlPipelineRepo = { find: vi.fn().mockResolvedValue([]) };
+    etlVersionRepo = { find: vi.fn().mockResolvedValue([]) };
     service = new MonthlyRunReadinessService(
       listRepo as Repository<ObListDefinition>,
       runRepo as Repository<AssignmentRun>,
       versionRepo as Repository<ObLevelcardVersion>,
       etlLogRepo as Repository<EtlPipelineLog>,
       etlPipelineRepo as Repository<EtlPipeline>,
+      etlVersionRepo as Repository<EtlPipelineVersion>,
     );
   });
 
@@ -85,8 +107,6 @@ describe('MonthlyRunReadinessService', () => {
   it('排除 stage = draft 名單（spec BR-5：不計入 totalActiveLists）', async () => {
     listRepo.find.mockResolvedValue([
       { list_no: 'L1', list_nm: 'A', stage: 'ready', status: 'active', project_workym: '202605' },
-      // draft 不計入 totalActiveLists（service 透過 find where 過濾，repo find 仍回傳所有
-      // matched 結果。Mock 已模擬 service 預期的 query result）
     ]);
     runRepo.findOne.mockResolvedValue(null);
 
@@ -140,7 +160,6 @@ describe('MonthlyRunReadinessService', () => {
     it('etlStatus 回傳 4 個 key（pooldata / emphire / calendar / arreturndf）', async () => {
       listRepo.find.mockResolvedValue([]);
       runRepo.findOne.mockResolvedValue(null);
-      versionRepo.count.mockResolvedValue(1);
 
       const res = await service.calculateReadiness('202605');
       expect(res.etlStatus).toBeDefined();
@@ -153,7 +172,6 @@ describe('MonthlyRunReadinessService', () => {
     it('每個 etlStatus 項目皆有 status / lastRunAt 欄位', async () => {
       listRepo.find.mockResolvedValue([]);
       runRepo.findOne.mockResolvedValue(null);
-      versionRepo.count.mockResolvedValue(1);
 
       const res = await service.calculateReadiness('202605');
       const keys = ['pooldata', 'emphire', 'calendar', 'arreturndf'] as const;
@@ -167,18 +185,12 @@ describe('MonthlyRunReadinessService', () => {
       }
     });
 
-    it('沒有任何 etl_pipeline_logs → 全部 status="missing", lastRunAt=null', async () => {
+    it('沒有任何 pipeline / log → 全部 status="missing", lastRunAt=null', async () => {
       listRepo.find.mockResolvedValue([]);
       runRepo.findOne.mockResolvedValue(null);
-      versionRepo.count.mockResolvedValue(1);
-      etlLogRepo.createQueryBuilder.mockReturnValue({
-        innerJoinAndSelect: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        andWhere: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        getMany: vi.fn().mockResolvedValue([]),
-      });
+      etlPipelineRepo.find.mockResolvedValue([]);
+      etlVersionRepo.find.mockResolvedValue([]);
+      etlLogRepo.createQueryBuilder.mockReturnValue(makeLogQb([]));
 
       const res = await service.calculateReadiness('202605');
       expect((res.etlStatus as any).pooldata.status).toBe('missing');
@@ -186,56 +198,82 @@ describe('MonthlyRunReadinessService', () => {
       expect((res.etlStatus as any).pooldata.lastRunAt).toBeNull();
     });
 
-    it('pooldata 最新 log status=completed → etlStatus.pooldata.status="completed" + lastRunAt', async () => {
+    it('pooldata 最新 log completed → 依 target_load(ob_pool_data) 對應 → status="completed" + lastRunAt', async () => {
       listRepo.find.mockResolvedValue([]);
       runRepo.findOne.mockResolvedValue(null);
-      versionRepo.count.mockResolvedValue(1);
+      const p = pipelineWithTarget('p-pool', 'ob_pool_data');
+      etlPipelineRepo.find.mockResolvedValue([p.pipeline]);
+      etlVersionRepo.find.mockResolvedValue([p.version]);
       const finishedAt = new Date('2026-05-15T03:00:00Z');
-      etlLogRepo.createQueryBuilder.mockReturnValue({
-        innerJoinAndSelect: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        andWhere: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        getMany: vi.fn().mockResolvedValue([
-          {
-            status: 'completed',
-            finished_at: finishedAt,
-            pipeline: { name: 'OBPOOLDATA' },
-          },
-        ]),
-      });
+      etlLogRepo.createQueryBuilder.mockReturnValue(
+        makeLogQb([{ status: 'completed', finished_at: finishedAt, pipeline_id: 'p-pool' }]),
+      );
 
       const res = await service.calculateReadiness('202605');
       expect((res.etlStatus as any).pooldata.status).toBe('completed');
       expect((res.etlStatus as any).pooldata.lastRunAt).toBe(finishedAt.toISOString());
     });
 
-    // 回歸守門：calculateEtlStatus 在 JS 端讀 `l.pipeline?.name` 做 keyword 比對，
-    // 因此 join 必須 hydrate 關聯。裸 `innerJoin` 只過濾不載入 → pipeline 永遠
-    // undefined → 4 個 source 全 fallback 成 'missing'（prod 實測：DB 最新 log
-    // 皆 completed，readiness 卻全回 missing，月跑觸發頁 ETL pre-check 被誤鎖）。
-    // mock 無法用資料行為區分兩者（getMany 一律回預先塞好 pipeline 的物件），
-    // 故直接斷言呼叫了 innerJoinAndSelect、且未退回裸 innerJoin。
-    it('回歸：必須以 innerJoinAndSelect hydrate pipeline（禁裸 innerJoin）', async () => {
+    // 🔴 回歸（本次 bug）：pipeline 顯示名改成中文（dev CDMP 實況：「電銷人事行事曆 ETL」等）
+    //   時，舊的英文 name regex（/calendar/i 等）比不到 → 4 項全誤報 missing（即使 ETL 已 completed）。
+    //   改依 definition 的 target_load targetTable 對應後，中文名也能正確識別。
+    it('回歸：pipeline 顯示名為中文，仍依 target_load(ob_calendar) 正確對應 completed', async () => {
       listRepo.find.mockResolvedValue([]);
       runRepo.findOne.mockResolvedValue(null);
-      versionRepo.count.mockResolvedValue(1);
-      const qb = {
-        innerJoin: vi.fn().mockReturnThis(),
-        innerJoinAndSelect: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        andWhere: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        getMany: vi.fn().mockResolvedValue([]),
-      };
-      etlLogRepo.createQueryBuilder.mockReturnValue(qb);
+      const p = pipelineWithTarget('p-cal', 'ob_calendar');
+      // 顯示名為中文（不含任何英文 keyword）——舊 regex 會漏，新邏輯依 target 表命中。
+      (p.pipeline as any).name = '電銷人事行事曆 ETL';
+      etlPipelineRepo.find.mockResolvedValue([p.pipeline]);
+      etlVersionRepo.find.mockResolvedValue([p.version]);
+      const finishedAt = new Date('2026-07-10T02:00:00Z');
+      etlLogRepo.createQueryBuilder.mockReturnValue(
+        makeLogQb([{ status: 'completed', finished_at: finishedAt, pipeline_id: 'p-cal' }]),
+      );
 
-      await service.calculateReadiness('202605');
+      const res = await service.calculateReadiness('202607');
+      expect((res.etlStatus as any).calendar.status).toBe('completed');
+      expect((res.etlStatus as any).calendar.lastRunAt).toBe(finishedAt.toISOString());
+    });
 
-      expect(qb.innerJoinAndSelect).toHaveBeenCalledWith('log.pipeline', 'pipeline');
-      expect(qb.innerJoin).not.toHaveBeenCalled();
+    // 🔴 回歸：pooldata 必須精確對 ob_pool_data，不得被 ob_pool_data_list（歷史資料 pipeline）誤匹配
+    //   （舊 regex /pooldata/i 會同時命中 OBPOOLDATA 與 OBPOOLDATA_LIST）。
+    it('回歸：pooldata 精確對 ob_pool_data，不被 ob_pool_data_list 誤匹配', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      const pool = pipelineWithTarget('p-pool', 'ob_pool_data');
+      const list = pipelineWithTarget('p-list', 'ob_pool_data_list');
+      etlPipelineRepo.find.mockResolvedValue([pool.pipeline, list.pipeline]);
+      etlVersionRepo.find.mockResolvedValue([pool.version, list.version]);
+      const poolFinished = new Date('2026-07-10T01:00:00Z');
+      const listFinished = new Date('2026-07-10T05:00:00Z'); // 更新，但屬 pool_data_list，不應影響 pooldata
+      etlLogRepo.createQueryBuilder.mockReturnValue(
+        makeLogQb([
+          { status: 'running', finished_at: listFinished, pipeline_id: 'p-list' },
+          { status: 'completed', finished_at: poolFinished, pipeline_id: 'p-pool' },
+        ]),
+      );
+
+      const res = await service.calculateReadiness('202607');
+      expect((res.etlStatus as any).pooldata.status).toBe('completed');
+      expect((res.etlStatus as any).pooldata.lastRunAt).toBe(poolFinished.toISOString());
+    });
+
+    it('取當前版 definition（pipeline.version）對應 target_load', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      // pipeline 當前版=2；v1 target=ob_emphire（舊）、v2 target=ob_emphire（現）——取 v2。
+      etlPipelineRepo.find.mockResolvedValue([{ id: 'p-emp', version: 2 }]);
+      etlVersionRepo.find.mockResolvedValue([
+        { pipeline_id: 'p-emp', version: 1, definition: { nodes: [{ data: { nodeType: 'target_load', targetTable: 'ob_emphire' } }], edges: [] } },
+        { pipeline_id: 'p-emp', version: 2, definition: { nodes: [{ data: { nodeType: 'target_load', targetTable: 'ob_emphire' } }], edges: [] } },
+      ]);
+      const finishedAt = new Date('2026-07-09T10:39:07Z');
+      etlLogRepo.createQueryBuilder.mockReturnValue(
+        makeLogQb([{ status: 'completed', finished_at: finishedAt, pipeline_id: 'p-emp' }]),
+      );
+
+      const res = await service.calculateReadiness('202607');
+      expect((res.etlStatus as any).emphire.status).toBe('completed');
     });
   });
 });

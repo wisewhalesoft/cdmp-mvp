@@ -21,6 +21,7 @@ import { ObLevelcardLevel } from '@/database/entities/ob-levelcard-level.entity'
 import { ObTier } from '@/database/entities/ob-tier.entity';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
 import { AssignmentRunGuardService } from './services/assignment-run-guard.service';
@@ -72,6 +73,7 @@ import {
       ObTier,
       EtlPipeline,
       EtlPipelineLog,
+      EtlPipelineVersion,
       User,
       TokenBlocklist,
     ]),
