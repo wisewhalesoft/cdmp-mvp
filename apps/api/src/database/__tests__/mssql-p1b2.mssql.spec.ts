@@ -738,13 +738,25 @@ describe('AD-E07-41 P4-0 CUSTOMER-CORE', () => {
     // uuid → uniqueidentifier
     expect(cols['customer_id'].DATA_TYPE).toBe('uniqueidentifier');
     expect(cols['_etl_pipeline_id'].DATA_TYPE).toBe('uniqueidentifier');
-    // character varying(N) → varchar(N)（長度保真）
+    // character varying(N) → varchar(N)（ASCII 鍵/代碼/pipeline 名，長度保真）
     expect(cols['source_customer_no'].DATA_TYPE).toBe('varchar');
     expect(cols['source_customer_no'].CHARACTER_MAXIMUM_LENGTH).toBe(20);
-    expect(cols['name'].DATA_TYPE).toBe('varchar');
-    expect(cols['name'].CHARACTER_MAXIMUM_LENGTH).toBe(100);
+    expect(cols['customer_type_code'].DATA_TYPE).toBe('varchar');
     expect(cols['data_source'].DATA_TYPE).toBe('varchar');
     expect(cols['data_source'].CHARACTER_MAXIMUM_LENGTH).toBe(50);
+    // AD-E07-43 P6c（I-MSSQL-NVARCHAR-DISPLAY-01 家族）：中文自由文字顯示欄 varchar(N)→nvarchar(N)，寬度（字元數）不變。
+    //   避免 Chinese_Taiwan_Stroke_BIN collation 下 byte 計長截斷（maturity_mailing_address 59 中文字於 varchar(100) 實爆）。
+    for (const [col, len] of [
+      ['name', 100], ['maturity_mailing_address', 100], ['residential_address', 100], ['company_name', 100],
+      ['owner_name', 50], ['education_desc', 50], ['business_item', 100], ['co_city', 20],
+    ] as const) {
+      expect(cols[col].DATA_TYPE, col).toBe('nvarchar');
+      expect(cols[col].CHARACTER_MAXIMUM_LENGTH, col).toBe(len);
+    }
+    // 對照：ASCII 代碼/鍵/電話/zip 欄維持 varchar（不誤轉，避 cross-type join）。
+    for (const kept of ['maturity_mailing_zip', 'occupation_code', 'mobile_phone', 'gender', 'owner_id']) {
+      expect(cols[kept].DATA_TYPE, kept).toBe('varchar');
+    }
     // character(1)（固定長）→ char(1)，不可誤譯為 varchar
     expect(cols['debt_flag'].DATA_TYPE).toBe('char');
     expect(cols['debt_flag'].CHARACTER_MAXIMUM_LENGTH).toBe(1);
