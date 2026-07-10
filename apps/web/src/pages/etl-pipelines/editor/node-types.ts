@@ -23,6 +23,7 @@ export const TRANSFORM_NODES: ToolboxNodeDef[] = [
   { type: 'filter', label: '篩選 (Filter)', category: 'transform', icon: 'Filter' },
   { type: 'dedup', label: '去重', category: 'transform', icon: 'CopyMinus' },
   { type: 'lookup', label: '查找 (Lookup)', category: 'transform', icon: 'Search' },
+  { type: 'code_decode', label: '代碼解碼 (Code Decode)', category: 'transform', icon: 'BookMarked' },
   { type: 'string_process', label: '字串處理', category: 'transform', icon: 'TextCursor' },
   { type: 'encrypt', label: '加密脫敏', category: 'transform', icon: 'Shield' },
   { type: 'aggregate', label: '聚合', category: 'transform', icon: 'Sigma' },

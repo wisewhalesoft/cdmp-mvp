@@ -76,4 +76,64 @@ last_updated: 2026-07-10
 - 真實 MSSQL EQ-MSSQL / EQ-PG-BYTEIDENTICAL / PERF-NFR 群組（`.mssql.spec.ts`，需真實連線）。
 - `etl-pipelines.json` 收斂（31 lookup → 9 code_decode，version 13→14、step_count →34）+ 成對 PG/MSSQL
   data-update migration + 共用 definition 模組（AD §13.6）。
-- F029 畫布編輯器 UI（後續獨立 story）。
+- ~~F029 畫布編輯器 UI（後續獨立 story）~~ → **已由下方 SLICE 5 落地**。
+
+---
+
+# F110 SLICE 5 — Frontend 編輯器節點註冊（pipeline-editor）
+
+> **範圍（SLICE 5）**：僅 frontend（`apps/web/src/pages/etl-pipelines/editor/*`）——將 `code_decode`
+> 註冊為第 14 種 pipeline-editor 節點，使其可從節點工具箱拖入畫布、於畫布渲染（雙輸入 handle）、
+> 於屬性面板編輯（共用字典來源 + N 組 mapping），並正確參與欄位流 / badge / tooltip 統計。
+> **一律鏡射既有 `lookup` 節點的 frontend 模式**（code_decode 為 lookup 的泛化 → N mappings）。
+> **不含（其他切片）**：backend handler（SLICE 1 已完成）、migration、`etl-pipelines.json` 收斂。
+
+## Prototype 參照結論
+
+- pipeline-editor prototype = `prototypes/18-pipeline-editor.html`；其僅示範 `lookup` 節點（雙輸入 handle、
+  對照來源 dual/backward-compat 兩模式、輸出欄位清單），**無 `code_decode` 專屬原型**。
+- spec §15 OQ-F110-05 明訂「F029 編輯器對 code_decode 的視覺化設定為後續 story」。
+- 依專案規則「若節點面板無對應原型 → 沿用既有 in-app 模式」：本切片**逐一鏡射 in-app `lookup` 模式**
+  （工具箱項目 / 雙輸入 handle / 屬性面板 dual-vs-compat 來源 / 輸出欄位子清單），僅將單一 mapping
+  泛化為可增減的 N 組 mapping。導覽階層無變更（節點類型，非新頁面／路由 → **不動 sidebar**）。
+
+## Test Results Summary
+
+| Scenario / 群組 | 說明 | Status |
+|-----------------|------|--------|
+| code_decode computeNodeOutputColumns | 輸出欄 = 輸入欄 + 全部 mapping outputAlias（含多輸出、空 mapping 透傳） | PASS |
+| code_decode computeNodeFieldStats + Badge | meta `{type:'code_decode',decodeCount,outputCount}` → amber「+N 解碼欄位」badge | PASS |
+| code_decode buildTooltipContent | `type:'code_decode'`（source / mappingCount / decodeCount / 代碼欄→別名列） | PASS |
+
+- 新測試檔：`editor/__tests__/code-decode-field-stats.test.ts`（5 tests，先紅後綠）。
+- editor `__tests__` 全套重跑：**69 / 70 pass**（唯一失敗 `load-properties.test.tsx` 之 category E `(10)`
+  為 pre-existing，git stash 驗證乾淨樹同樣失敗）。
+- `apps/web` 全 etl-pipelines 重跑：**165 / 167 pass**（2 pre-existing 失敗＝load-properties + target-tables-page，
+  皆 customer_core schema 欄數 drift，git stash 驗證與本切片無關）。
+- `apps/web` `tsc -b`：baseline 70 → after **70**，**新增錯誤 = 0**（diff 僅 node-types.ts 89→90 與
+  pipeline-node.tsx 20→21 兩筆 pre-existing 錯誤因新增 import/陣列列位移，非新錯誤）。
+
+## Files Changed
+
+| File Path | Change Type | Description |
+|-----------|------------|-------------|
+| apps/web/src/pages/etl-pipelines/editor/node-types.ts | modified | `TRANSFORM_NODES` 新增 `code_decode` 項（label「代碼解碼 (Code Decode)」、icon `BookMarked`、category transform，緊接 lookup 之後） |
+| apps/web/src/pages/etl-pipelines/editor/pipeline-node.tsx | modified | import + ICON_MAP 加 `BookMarked`；單輸入 handle 排除 code_decode；lookup 雙輸入 handle 區塊改為 `lookup \|\| code_decode`（main `default` 33% + `lookup-input` 67%） |
+| apps/web/src/pages/etl-pipelines/editor/toolbox.tsx | modified | import + ICON_MAP 加 `BookMarked`（工具箱項目由 TRANSFORM_NODES 自動渲染） |
+| apps/web/src/pages/etl-pipelines/editor/properties-panel.tsx | modified | switch 加 `case 'code_decode'`；新增 `CodeDecodeProperties`（共用字典來源 dual/compat + N 組 mapping：matchColumn / lookupMatchColumn / 選用 filter / 輸出欄位子清單，均可增減） |
+| apps/web/src/pages/etl-pipelines/editor/node-field-stats.ts | modified | 兩個 `switch(nodeType)` 皆加 code_decode：`computeNodeOutputColumns`（輸入欄 + mapping aliases）、`computeNodeFieldStats`（`code_decode` meta）；`NodeFieldStatsMeta` / `getBadgeDescriptor` / `BadgeTooltipContent` / `buildTooltipContent` 同步新增 code_decode 分支 |
+| apps/web/src/pages/etl-pipelines/editor/badge-tooltip.tsx | modified | `TooltipBody` switch 加 `case 'code_decode'` + 新增 `CodeDecodeTooltip`（字典來源 / 組數 / 代碼欄→別名列） |
+| apps/web/src/pages/etl-pipelines/editor/__tests__/code-decode-field-stats.test.ts | new | code_decode 欄位流 / badge / tooltip 單元測試（鏡射 lookup 契約，5 tests） |
+
+## 如何鏡射 lookup（逐點對照）
+
+1. **palette**：TRANSFORM_NODES 新增一列，與 lookup 同 category/結構；工具箱由該陣列自動列出。
+2. **canvas handle**：lookup 的雙輸入（`default` 33% 主資料 + `lookup-input` 67% 對照）條件擴為
+   `lookup || code_decode`，並自單輸入分支排除 code_decode → 畫布連線與 lookup 完全一致。
+3. **properties**：沿用 lookup 的「dual-input 唯讀 vs backward-compat 下拉 + subtitle 自動同步」來源區塊；
+   將 lookup 的單組（matchColumn / lookupMatchColumn / lookupFilter / outputColumns[]）泛化為可增減的
+   `mappings[]`，每組內含 outputColumns 子清單（保留 lookup 的完整表達力，spec §5.2）。
+4. **field-stats**：lookup 於 `computeNodeOutputColumns` 讀 `data.outputColumns`；code_decode 改讀
+   `data.mappings[].outputColumns[].outputAlias`，輸出 = 輸入欄 ∪ 全部 alias（LEFT JOIN 不減列，spec AC-2）。
+   badge 採 amber「+N 解碼欄位」（transform 色系），tooltip 列出「代碼欄 → 別名」對。
+5. **additive**：`lookup` 節點類型完全未改（BR-10 / AC-8）；`code_decode` 純新增。

@@ -220,6 +220,8 @@ function TooltipBody({ content }: { content: BadgeTooltipContent }) {
       return <ConditionalTooltip content={content} />;
     case 'load':
       return <LoadTooltip content={content} />;
+    case 'code_decode':
+      return <CodeDecodeTooltip content={content} />;
     case 'passthrough':
       return <PassthroughTooltip content={content} />;
   }
@@ -548,6 +550,44 @@ function LoadTooltip({ content }: { content: Extract<BadgeTooltipContent, { type
             <FieldRow key={f} name={f} dotColor="bg-green-500" mono />
           ))}
           <TruncatedHint count={content.remainingCount} />
+        </>
+      )}
+    </>
+  );
+}
+
+// ─── Code Decode ─────────────────────────────────────────────
+
+function CodeDecodeTooltip({ content }: { content: Extract<BadgeTooltipContent, { type: 'code_decode' }> }) {
+  return (
+    <>
+      <TooltipHeader>Code Decode - 代碼解碼</TooltipHeader>
+      {content.source && (
+        <div className="text-[12px] mb-1.5">
+          <span className="font-medium text-gray-700">對照字典：</span>
+          <span className="text-amber-500 font-semibold font-mono">{content.source}</span>
+        </div>
+      )}
+      <div className="text-[12px] text-gray-500 mb-2">
+        <span className="font-semibold text-amber-500">{content.mappingCount}</span> 組解碼 ·
+        新增 <span className="font-semibold text-amber-500">{content.decodeCount}</span> 個描述欄位
+      </div>
+      {content.outputs.length > 0 && (
+        <>
+          <SectionTitle>解碼欄位（代碼欄 → 描述欄）</SectionTitle>
+          {content.outputs.map((o) => (
+            <div
+              key={`${o.matchColumn}>${o.alias}`}
+              className="flex items-center gap-1.5 py-[3px] text-[12px]"
+              data-testid="tooltip-field-item"
+            >
+              <span className="w-[5px] h-[5px] rounded-full flex-shrink-0 bg-amber-500" />
+              <span className="font-mono text-[11px]">{o.matchColumn}</span>
+              <span className="text-gray-400 text-[11px]">→</span>
+              <span className="font-mono text-[11px] text-amber-600">{o.alias}</span>
+            </div>
+          ))}
+          <TruncatedHint count={content.remainingCount} label="個描述欄位" />
         </>
       )}
     </>

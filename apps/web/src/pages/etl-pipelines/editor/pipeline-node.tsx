@@ -11,6 +11,7 @@ import {
   Filter,
   CopyMinus,
   Search,
+  BookMarked,
   TextCursor,
   Shield,
   Sigma,
@@ -33,6 +34,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Filter,
   CopyMinus,
   Search,
+  BookMarked,
   TextCursor,
   Shield,
   Sigma,
@@ -79,15 +81,18 @@ function PipelineNodeComponent({ id, data, selected }: NodeProps & { data: Pipel
       data-testid="pipeline-node"
     >
       {/* Input Handle - not for extract nodes */}
-      {nodeDef.category !== 'extract' && data.nodeType !== 'merge' && data.nodeType !== 'lookup' && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
-        />
-      )}
-      {/* Lookup node: dual input handles (main data + lookup source) */}
-      {data.nodeType === 'lookup' && (
+      {nodeDef.category !== 'extract' &&
+        data.nodeType !== 'merge' &&
+        data.nodeType !== 'lookup' &&
+        data.nodeType !== 'code_decode' && (
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="!w-2 !h-2 !bg-gray-400 !border-white !border-2"
+          />
+        )}
+      {/* Lookup / Code Decode nodes: dual input handles (main data + shared lookup dictionary) */}
+      {(data.nodeType === 'lookup' || data.nodeType === 'code_decode') && (
         <>
           <Handle
             type="target"

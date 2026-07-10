@@ -92,6 +92,8 @@ export function PropertiesPanel({
         return <DedupProperties nodeData={nodeData} onChange={updateData} />;
       case 'lookup':
         return <LookupProperties nodeData={nodeData} rawTables={rawTables} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
+      case 'code_decode':
+        return <CodeDecodeProperties nodeData={nodeData} rawTables={rawTables} onChange={updateData} nodeId={selectedNode.id} nodes={nodes} edges={edges} />;
       case 'string_process':
         return <StringProcessProperties nodeData={nodeData} onChange={updateData} />;
       case 'encrypt':
@@ -1603,6 +1605,241 @@ function LookupProperties({
           />
         </div>
       )}
+    </>
+  );
+}
+
+// --- 6b. Code Decode Properties (F110 — generalization of Lookup to N mappings) ---
+
+interface CodeDecodeOutputColumn {
+  lookupColumn: string;
+  outputAlias: string;
+}
+
+interface CodeDecodeMapping {
+  matchColumn: string;
+  lookupMatchColumn: string;
+  filter?: string;
+  outputColumns: CodeDecodeOutputColumn[];
+}
+
+function CodeDecodeProperties({
+  nodeData,
+  rawTables,
+  onChange,
+  nodeId,
+  nodes,
+  edges,
+}: SimplePropsBase & { rawTables: RawTableItem[]; nodeId: string; nodes: Node[]; edges: Edge[] }) {
+  const lookupSource = (nodeData.lookupSource as string) || '';
+  const mappings = (nodeData.mappings as CodeDecodeMapping[]) || [];
+
+  // Detect if a shared-dictionary edge is connected (dual-input mode, mirrors lookup)
+  const lookupEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'lookup-input');
+  const hasLookupInput = !!lookupEdge;
+
+  const getLookupSourceLabel = () => {
+    if (!lookupEdge) return null;
+    const node = nodes.find((n) => n.id === lookupEdge.source);
+    if (!node) return null;
+    const data = node.data as Record<string, unknown>;
+    return (data.label as string) || lookupEdge.source;
+  };
+
+  const lookupSourceLabel = getLookupSourceLabel();
+
+  // Auto-sync subtitle with shared dictionary source (mirrors lookup)
+  useEffect(() => {
+    if (hasLookupInput && lookupSourceLabel) {
+      onChange({ subtitle: lookupSourceLabel });
+    } else if (!hasLookupInput) {
+      const selected = rawTables.find((t) => t.rawTableName === lookupSource);
+      onChange({ subtitle: selected?.taskName || lookupSource || undefined });
+    }
+  }, [hasLookupInput, lookupSourceLabel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateMapping = (index: number, updates: Partial<CodeDecodeMapping>) => {
+    const newMappings = mappings.map((m, i) => (i === index ? { ...m, ...updates } : m));
+    onChange({ mappings: newMappings });
+  };
+
+  const addMapping = () => {
+    onChange({
+      mappings: [
+        ...mappings,
+        { matchColumn: '', lookupMatchColumn: '', filter: '', outputColumns: [{ lookupColumn: '', outputAlias: '' }] },
+      ],
+    });
+  };
+
+  const removeMapping = (index: number) => {
+    onChange({ mappings: mappings.filter((_, i) => i !== index) });
+  };
+
+  const addOutputColumn = (mappingIndex: number) => {
+    const mapping = mappings[mappingIndex];
+    updateMapping(mappingIndex, {
+      outputColumns: [...(mapping.outputColumns || []), { lookupColumn: '', outputAlias: '' }],
+    });
+  };
+
+  const removeOutputColumn = (mappingIndex: number, outputIndex: number) => {
+    const mapping = mappings[mappingIndex];
+    updateMapping(mappingIndex, {
+      outputColumns: (mapping.outputColumns || []).filter((_, i) => i !== outputIndex),
+    });
+  };
+
+  const updateOutputColumn = (
+    mappingIndex: number,
+    outputIndex: number,
+    updates: Partial<CodeDecodeOutputColumn>,
+  ) => {
+    const mapping = mappings[mappingIndex];
+    const newCols = (mapping.outputColumns || []).map((c, i) =>
+      i === outputIndex ? { ...c, ...updates } : c,
+    );
+    updateMapping(mappingIndex, { outputColumns: newCols });
+  };
+
+  return (
+    <>
+      {/* Shared dictionary source (single, all mappings share it — F110 §5 / BR-1) */}
+      {hasLookupInput ? (
+        <div>
+          <label className={labelClass}>共用對照字典來源</label>
+          <div className="text-sm text-gray-700 bg-gray-50 border border-[#E5E7EB] rounded-lg px-3 py-2" data-testid="code-decode-source-connected">
+            {lookupSourceLabel || '上游節點'}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className={labelClass}>共用對照字典來源</label>
+            <select
+              className={selectClass}
+              value={lookupSource}
+              onChange={(e) => {
+                const selected = rawTables.find((t) => t.rawTableName === e.target.value);
+                onChange({
+                  lookupSource: e.target.value,
+                  subtitle: selected?.taskName || undefined,
+                });
+              }}
+              data-testid="code-decode-source-input"
+            >
+              <option value="">選擇對照字典表</option>
+              {rawTables.map((t) => (
+                <option key={t.rawTableName} value={t.rawTableName}>
+                  {t.rawTableName}（{t.taskName}）
+                </option>
+              ))}
+            </select>
+            {(() => {
+              const selectedInfo = rawTables.find((t) => t.rawTableName === lookupSource);
+              return selectedInfo ? (
+                <>
+                  <p className="text-xs text-gray-400 mt-1">
+                    來源：{selectedInfo.datasourceName} / {selectedInfo.sourceTable}
+                  </p>
+                  {selectedInfo.lastExecutionAt && (
+                    <p className="text-xs text-gray-400">
+                      最後擷取：{new Date(selectedInfo.lastExecutionAt).toLocaleString('zh-TW')}
+                    </p>
+                  )}
+                </>
+              ) : null;
+            })()}
+          </div>
+          <p className="text-xs text-blue-500 mt-1">提示：可將 Extract / Filter 節點連接至 lookup-input 端口以取代手動設定</p>
+        </>
+      )}
+
+      {/* Decode mappings — each = one code→description group (generalizes a single lookup) */}
+      <div className="text-xs font-medium text-gray-500 mb-2">解碼 mapping（至少 1 組）</div>
+      {mappings.map((mapping, index) => (
+        <div key={index} className="border border-[#E5E7EB] rounded-lg p-3 space-y-3" data-testid={`code-decode-mapping-${index}`}>
+          <ItemHeader index={index} label="解碼" onRemove={() => removeMapping(index)} />
+          <div>
+            <label className={smallLabelClass}>比對欄位（主表）</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={mapping.matchColumn}
+              onChange={(e) => updateMapping(index, { matchColumn: e.target.value })}
+              placeholder="主表的比對欄位"
+              data-testid={`code-decode-mapping-${index}-match-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>比對欄位（對照表）</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={mapping.lookupMatchColumn}
+              onChange={(e) => updateMapping(index, { lookupMatchColumn: e.target.value })}
+              placeholder="對照表的比對欄位"
+              data-testid={`code-decode-mapping-${index}-lookup-match-column`}
+            />
+          </div>
+          <div>
+            <label className={smallLabelClass}>過濾條件（選用）</label>
+            <input
+              type="text"
+              className={smallInputClass}
+              value={mapping.filter || ''}
+              onChange={(e) => updateMapping(index, { filter: e.target.value })}
+              placeholder="例: TBL_ID = 'A2'"
+              data-testid={`code-decode-mapping-${index}-filter`}
+            />
+          </div>
+          <div className="text-xs font-medium text-gray-400 ml-1">輸出欄位</div>
+          {(mapping.outputColumns || []).map((col, outputIndex) => (
+            <div key={outputIndex} className="ml-2 border-l-2 border-[#E5E7EB] pl-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">輸出 #{outputIndex + 1}</span>
+                {(mapping.outputColumns || []).length > 1 && (
+                  <button
+                    type="button"
+                    className="text-xs text-red-400 hover:text-red-600"
+                    onClick={() => removeOutputColumn(index, outputIndex)}
+                  >
+                    移除
+                  </button>
+                )}
+              </div>
+              <div>
+                <label className={smallLabelClass}>對照表欄位</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={col.lookupColumn}
+                  onChange={(e) => updateOutputColumn(index, outputIndex, { lookupColumn: e.target.value })}
+                  data-testid={`code-decode-mapping-${index}-output-${outputIndex}-column`}
+                />
+              </div>
+              <div>
+                <label className={smallLabelClass}>輸出別名</label>
+                <input
+                  type="text"
+                  className={smallInputClass}
+                  value={col.outputAlias}
+                  onChange={(e) => updateOutputColumn(index, outputIndex, { outputAlias: e.target.value })}
+                  data-testid={`code-decode-mapping-${index}-output-${outputIndex}-alias`}
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="ml-2 text-xs text-[#2563EB] hover:underline"
+            onClick={() => addOutputColumn(index)}
+          >
+            + 新增輸出欄位
+          </button>
+        </div>
+      ))}
+      <AddButton onClick={addMapping} label="新增解碼 mapping" />
     </>
   );
 }

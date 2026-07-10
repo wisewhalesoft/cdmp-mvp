@@ -24,8 +24,29 @@ export type NodeFieldStatsMeta =
   | { type: 'field_mapping'; inputCount: number; outputCount: number; droppedCount: number }
   | { type: 'type_cast'; castCount: number }
   | { type: 'conditional'; ruleCount: number }
+  | { type: 'code_decode'; decodeCount: number; outputCount: number }
   | { type: 'target_load'; loadCount: number }
   | { type: 'passthrough'; outputCount: number };
+
+// ─── code_decode config shapes (F110 §5, editor-side loose types) ──
+/** One "code → description" output within a code_decode mapping */
+interface CodeDecodeOutputColumnLike {
+  lookupColumn?: string;
+  outputAlias?: string;
+}
+/** One mapping in a code_decode node (generalization of a single lookup) */
+interface CodeDecodeMappingLike {
+  matchColumn?: string;
+  lookupMatchColumn?: string;
+  filter?: string;
+  outputColumns?: CodeDecodeOutputColumnLike[];
+}
+/** Flatten a code_decode node's mappings to their contributed output aliases. */
+function codeDecodeOutputAliases(mappings: CodeDecodeMappingLike[]): string[] {
+  return mappings
+    .flatMap((m) => (m.outputColumns || []).map((c) => c.outputAlias || c.lookupColumn || ''))
+    .filter(Boolean);
+}
 
 export interface NodeFieldStats {
   nodeType: string;
@@ -128,6 +149,11 @@ export async function computeNodeOutputColumns(
           .map((c) => c.outputAlias || c.lookupColumn || '')
           .filter(Boolean);
         return [...inputColumns, ...added];
+      }
+      case 'code_decode': {
+        // Generalization of lookup: input columns + every mapping's outputAliases (LEFT JOIN, no row drop)
+        const mappings = (data.mappings as CodeDecodeMappingLike[]) || [];
+        return [...inputColumns, ...codeDecodeOutputAliases(mappings)];
       }
       case 'merge':
         return inputColumns;
@@ -276,6 +302,17 @@ export async function computeNodeFieldStats(
           meta: { type: 'conditional', ruleCount: rules.length },
         };
       }
+      case 'code_decode': {
+        const mappings = (data.mappings as CodeDecodeMappingLike[]) || [];
+        if (mappings.length === 0 && inputColumns.length === 0) return null;
+        const decodeCount = codeDecodeOutputAliases(mappings).length;
+        return {
+          nodeType,
+          inputFieldCount: inputColumns.length,
+          outputFieldCount: outputColumns.length,
+          meta: { type: 'code_decode', decodeCount, outputCount: outputColumns.length },
+        };
+      }
       case 'target_load': {
         if (inputColumns.length === 0) return null;
         return {
@@ -345,6 +382,12 @@ export function getBadgeDescriptor(stats: NodeFieldStats): BadgeDescriptor {
     case 'conditional':
       return {
         label: `${meta.ruleCount} 條件規則`,
+        colorClass: 'bg-amber-500/10 text-amber-700',
+        dotClass: 'bg-amber-500',
+      };
+    case 'code_decode':
+      return {
+        label: `+${meta.decodeCount} 解碼欄位`,
         colorClass: 'bg-amber-500/10 text-amber-700',
         dotClass: 'bg-amber-500',
       };
@@ -484,6 +527,14 @@ export type BadgeTooltipContent =
       targetTable: string;
       fieldCount: number;
       fields: string[];
+      remainingCount: number;
+    }
+  | {
+      type: 'code_decode';
+      source: string;
+      mappingCount: number;
+      decodeCount: number;
+      outputs: { matchColumn: string; alias: string }[];
       remainingCount: number;
     }
   | {
@@ -635,6 +686,30 @@ export async function buildTooltipContent(
           targetTable,
           fieldCount: inputColumns.length,
           fields: showFields,
+          remainingCount: remaining,
+        };
+      }
+      case 'code_decode': {
+        const mappings = (data.mappings as CodeDecodeMappingLike[]) || [];
+        const ref = data.lookupRef as { datasourceName?: string; sourceTable?: string } | undefined;
+        const source =
+          (data.lookupSource as string) ||
+          (ref ? `${ref.datasourceName || ''}/${ref.sourceTable || ''}` : '') ||
+          '';
+        const flat = mappings.flatMap((m) =>
+          (m.outputColumns || []).map((c) => ({
+            matchColumn: m.matchColumn || '',
+            alias: c.outputAlias || c.lookupColumn || '',
+          })),
+        );
+        const showOutputs = flat.slice(0, FIELD_LIST_MAX);
+        const remaining = Math.max(0, flat.length - FIELD_LIST_MAX);
+        return {
+          type: 'code_decode',
+          source,
+          mappingCount: mappings.length,
+          decodeCount: flat.length,
+          outputs: showOutputs,
           remainingCount: remaining,
         };
       }
