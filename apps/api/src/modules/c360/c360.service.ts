@@ -50,7 +50,13 @@ export class C360Service {
     };
   }
 
-  async getStatsSqlite(): Promise<{
+  /**
+   * CASE-based 可攜統計查詢（sqlite + MSSQL 共用）。
+   * PG 專屬的 `COUNT(*) FILTER (WHERE ...)` 於 SQLite/MSSQL 皆非法（MSSQL 拋
+   * "Incorrect syntax near 'WHERE'"）→ 改用逐版本相容的 `SUM(CASE WHEN ...)`；
+   * `foreign` 為保留字須以雙引號識別碼（PG/MSSQL/sqlite 皆接受）。
+   */
+  async getStatsPortable(): Promise<{
     total: number;
     individual: number;
     corporate: number;
@@ -80,9 +86,10 @@ export class C360Service {
     corporate: number;
     foreign: number;
   }> {
-    const isSqlite = this.dataSource.options.type === 'better-sqlite3';
-    if (isSqlite) {
-      return this.getStatsSqlite();
+    const dbType = this.dataSource.options.type;
+    // MSSQL 與 sqlite 皆不支援 PG 的 COUNT(*) FILTER → 走 CASE-based 可攜版；PG 維持 FILTER 版不變。
+    if (dbType === 'better-sqlite3' || dbType === 'mssql') {
+      return this.getStatsPortable();
     }
     return this.getStats();
   }
@@ -104,6 +111,7 @@ export class C360Service {
     const pageSize = query.pageSize ?? 20;
     const offset = (page - 1) * pageSize;
     const isSqlite = this.dataSource.options.type === 'better-sqlite3';
+    const isMssql = this.dataSource.options.type === 'mssql';
 
     // Validate keyword minimum length
     if (query.keyword && !query.idNumber && query.keyword.length < 2) {
@@ -113,44 +121,48 @@ export class C360Service {
       });
     }
 
-    let whereClauses: string[] = [];
-    let params: any[] = [];
-    let paramIndex = 1;
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+    // 佔位符依方言（依 push 順序取下一個）：sqlite `?`、MSSQL `@n`(0-based)、PG `$n`(1-based)。
+    // i = 目前 params 長度 = 該參數之 0-based 索引。PG/sqlite 產出與原邏輯逐字相同。
+    const ph = (): string => {
+      const i = params.length;
+      return isSqlite ? '?' : isMssql ? `@${i}` : `$${i + 1}`;
+    };
 
     // Search priority: idNumber > keyword
     if (query.idNumber) {
-      if (isSqlite) {
-        whereClauses.push(`source_customer_no = ?`);
-        params.push(query.idNumber);
-      } else {
-        whereClauses.push(`source_customer_no = $${paramIndex++}`);
-        params.push(query.idNumber);
-      }
+      const p = ph();
+      params.push(query.idNumber);
+      whereClauses.push(`source_customer_no = ${p}`);
     } else if (query.keyword && query.keyword.length >= 2) {
-      if (isSqlite) {
-        // SQLite fallback: LIKE search
-        whereClauses.push(`(name LIKE ? OR english_name LIKE ?)`);
-        params.push(`%${query.keyword}%`, `%${query.keyword}%`);
+      if (isSqlite || isMssql) {
+        // sqlite/MSSQL 無設定 PG 全文索引 → LIKE 後援（大小寫依 collation；MSSQL BIN 為大小寫敏感）。
+        const p1 = ph();
+        params.push(`%${query.keyword}%`);
+        const p2 = ph();
+        params.push(`%${query.keyword}%`);
+        whereClauses.push(`(name LIKE ${p1} OR english_name LIKE ${p2})`);
       } else {
-        whereClauses.push(
-          `to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(english_name, '')) @@ plainto_tsquery('simple', $${paramIndex++})`,
-        );
+        const p = ph();
         params.push(query.keyword);
+        whereClauses.push(
+          `to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(english_name, '')) @@ plainto_tsquery('simple', ${p})`,
+        );
       }
     }
 
     // Type filter
     if (query.type) {
       const types = query.type.split(',').map((t) => t.trim());
-      if (isSqlite) {
-        const placeholders = types.map(() => '?').join(', ');
-        whereClauses.push(`customer_type_code IN (${placeholders})`);
-        params.push(...types);
-      } else {
-        const placeholders = types.map(() => `$${paramIndex++}`).join(', ');
-        whereClauses.push(`customer_type_code IN (${placeholders})`);
-        params.push(...types);
-      }
+      const placeholders = types
+        .map((t) => {
+          const p = ph();
+          params.push(t);
+          return p;
+        })
+        .join(', ');
+      whereClauses.push(`customer_type_code IN (${placeholders})`);
     }
 
     const whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -163,27 +175,25 @@ export class C360Service {
     const total = parseInt(countResult[0].total, 10) || 0;
     const totalPages = Math.ceil(total / pageSize) || 0;
 
-    // Data query
+    // Data query（分頁佔位符接於 where 參數之後）
+    const selectSql =
+      `SELECT customer_id, name, customer_type_code, customer_type_desc,\n` +
+      `               source_customer_no, mobile_phone, company_name\n` +
+      `        FROM customer_core ${whereStr}\n` +
+      `        ORDER BY name ASC`;
     let dataQuery: string;
     let dataParams: any[];
 
     if (isSqlite) {
-      dataQuery = `
-        SELECT customer_id, name, customer_type_code, customer_type_desc,
-               source_customer_no, mobile_phone, company_name
-        FROM customer_core ${whereStr}
-        ORDER BY name ASC
-        LIMIT ? OFFSET ?
-      `;
+      dataQuery = `${selectSql}\n        LIMIT ? OFFSET ?`;
       dataParams = [...params, pageSize, offset];
+    } else if (isMssql) {
+      // MSSQL：LIMIT/OFFSET 不合法 → OFFSET/FETCH（需 ORDER BY，已具備）。佔位符 0-based 接續。
+      const n = params.length;
+      dataQuery = `${selectSql}\n        OFFSET @${n} ROWS FETCH NEXT @${n + 1} ROWS ONLY`;
+      dataParams = [...params, offset, pageSize]; // OFFSET 值先、FETCH NEXT 值後
     } else {
-      dataQuery = `
-        SELECT customer_id, name, customer_type_code, customer_type_desc,
-               source_customer_no, mobile_phone, company_name
-        FROM customer_core ${whereStr}
-        ORDER BY name ASC
-        LIMIT $${paramIndex++} OFFSET $${paramIndex++}
-      `;
+      dataQuery = `${selectSql}\n        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       dataParams = [...params, pageSize, offset];
     }
 
@@ -224,8 +234,9 @@ export class C360Service {
       });
     }
 
-    const isSqlite = this.dataSource.options.type === 'better-sqlite3';
-    const param = isSqlite ? '?' : '$1';
+    const dbType = this.dataSource.options.type;
+    // 佔位符依方言：sqlite `?`、MSSQL `@0`(0-based)、PG `$1`(1-based)。
+    const param = dbType === 'better-sqlite3' ? '?' : dbType === 'mssql' ? '@0' : '$1';
     const rows = await this.dataSource.query(
       `SELECT * FROM customer_core WHERE customer_id = ${param}`,
       [customerId],
