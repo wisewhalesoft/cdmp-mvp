@@ -110,6 +110,29 @@ describe('DeptRatioService (F079)', () => {
     expect(res.isReadOnly).toBe(false);
   });
 
+  // 準備完成摘要：excludeZeroRatio 隱藏 0% 部門
+  it('GET excludeZeroRatio=true → 隱藏比例 = 0% 之部門（設定頁不傳則全顯示）', async () => {
+    listRepo.findOne.mockResolvedValue({
+      list_no: 'L1',
+      list_nm: 'X',
+      project_workym: '202605',
+      stage: 'ready',
+      status: 'active',
+    });
+    // XTC0 配置 60%；XTD0（在職部門）無配置 → ration 0
+    deptPctRepo.find.mockResolvedValue([
+      { obdeptid: 'XTC0', obdeptnm: '業務一部', ration: '60' },
+    ]);
+
+    const all = await svc.getDeptRatios('L1');
+    expect(all.deptRatios.map((d) => d.obdeptId).sort()).toEqual(['XTC0', 'XTD0']);
+    expect(all.deptRatios.find((d) => d.obdeptId === 'XTD0')!.ration).toBe(0);
+
+    const filtered = await svc.getDeptRatios('L1', { excludeZeroRatio: true });
+    expect(filtered.deptRatios.map((d) => d.obdeptId)).toEqual(['XTC0']);
+    expect(filtered.deptRatios.every((d) => d.ration > 0)).toBe(true);
+  });
+
   // F088 v1.3 BR-11：設定者 / 部長代設定 解析
   it('F088 GET：設定者解析 — director 設定 → proxyByDirector=true；section_chief → false', async () => {
     listRepo.findOne.mockResolvedValue({

@@ -71,9 +71,16 @@ export interface SetDeptRatiosResponse {
   savedBy: string;
 }
 
-export async function getDeptRatios(listNo: string): Promise<GetDeptRatiosResponse> {
+export async function getDeptRatios(
+  listNo: string,
+  opts?: { excludeZeroRatio?: boolean },
+): Promise<GetDeptRatiosResponse> {
+  const params: Record<string, string> = {};
+  // 準備完成摘要等唯讀檢視傳 true：後端隱藏比例 = 0% 之部門（設定頁不傳，維持全部顯示）。
+  if (opts?.excludeZeroRatio) params.excludeZeroRatio = 'true';
   const response = await apiClient.get<GetDeptRatiosResponse>(
     `/assignment/ratios/dept/${listNo}`,
+    { params },
   );
   return response.data;
 }

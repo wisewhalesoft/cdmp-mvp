@@ -169,8 +169,10 @@ export function ReadySummaryDetailPage() {
     let aborted = false;
     void (async () => {
       try {
+        // excludeZeroRatio：準備完成摘要隱藏比例 = 0% 之部門（部門比例表 + 個別比例
+        // accordion 皆由 depts 驅動，故一併過濾）。
         const [d, p] = await Promise.all([
-          getDeptRatios(listNo),
+          getDeptRatios(listNo, { excludeZeroRatio: true }),
           getPersonnelRatios(listNo),
         ]);
         if (aborted) return;

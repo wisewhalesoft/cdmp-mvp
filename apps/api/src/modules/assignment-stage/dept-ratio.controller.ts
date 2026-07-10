@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -41,8 +42,13 @@ export class DeptRatioController {
   ) {}
 
   @Get(':listNo')
-  async getDeptRatios(@Param('listNo') listNo: string) {
-    return this.service.getDeptRatios(listNo);
+  async getDeptRatios(
+    @Param('listNo') listNo: string,
+    @Query('excludeZeroRatio') excludeZeroRatio?: string,
+  ) {
+    return this.service.getDeptRatios(listNo, {
+      excludeZeroRatio: excludeZeroRatio === 'true' || excludeZeroRatio === '1',
+    });
   }
 
   @Put(':listNo')

@@ -226,6 +226,15 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     });
   });
 
+  it('以 excludeZeroRatio 載入部門比例（隱藏 0% 部門，含個別比例區塊由 depts 驅動）', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(mockedGetDeptRatios).toHaveBeenCalledWith('OB202605002', {
+        excludeZeroRatio: true,
+      });
+    });
+  });
+
   it('顯示簽核歷史（含 approve 紀錄）', async () => {
     renderPage();
     await waitFor(() => {

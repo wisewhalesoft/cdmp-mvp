@@ -56,7 +56,10 @@ export class DeptRatioService {
    *
    * Response：listNo / listNm / projectWorkym / stage / deptRatios[] / total / isReadOnly
    */
-  async getDeptRatios(listNo: string): Promise<{
+  async getDeptRatios(
+    listNo: string,
+    opts: { excludeZeroRatio?: boolean } = {},
+  ): Promise<{
     listNo: string;
     listNm: string;
     projectWorkym: string;
@@ -158,14 +161,20 @@ export class DeptRatioService {
         };
       });
 
-    const total = deptRatios.reduce((acc, d) => acc + d.ration, 0);
+    // excludeZeroRatio（準備完成摘要等唯讀檢視用）：隱藏比例 = 0% 之部門。
+    // 設定頁（dept_ratio 階段）不傳此旗標，仍顯示全部在職部門供指派。
+    const visibleDeptRatios = opts.excludeZeroRatio
+      ? deptRatios.filter((d) => d.ration > 0)
+      : deptRatios;
+
+    const total = visibleDeptRatios.reduce((acc, d) => acc + d.ration, 0);
 
     return {
       listNo,
       listNm: list.list_nm,
       projectWorkym: list.project_workym ?? '',
       stage: list.stage,
-      deptRatios,
+      deptRatios: visibleDeptRatios,
       total: Math.round(total * 100) / 100,
       isReadOnly: list.stage !== 'dept_ratio' || list.status !== 'active',
     };
