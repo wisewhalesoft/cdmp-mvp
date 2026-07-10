@@ -214,6 +214,49 @@ export async function setPersonnelRatios(
   return response.data;
 }
 
+// ---------------------------------------------------------------------------
+// 「從本月其他名單複製」個別業務比例來源（設定頁 UX 優化）
+// ---------------------------------------------------------------------------
+
+export interface PersonnelRatioCopySourceEmployee {
+  empId: string;
+  empName: string;
+  ration: number;
+}
+
+export interface PersonnelRatioCopySource {
+  /** 來源名單編號 */
+  listNo: string;
+  /** 來源名單名稱 */
+  listNm: string;
+  /** 該部門已設定比例之在職業務員數 */
+  memberCount: number;
+  /** 該部門比例加總（供預覽是否 = 100%） */
+  deptSum: number;
+  employees: PersonnelRatioCopySourceEmployee[];
+}
+
+export interface GetPersonnelRatioCopySourcesResponse {
+  listNo: string;
+  deptCode: string;
+  sources: PersonnelRatioCopySource[];
+}
+
+/**
+ * 取得可供複製的「本月其他名單」個別業務比例來源（依部門）。
+ * 後端僅回本月在職員工之比例，且排除本名單自身；處長視角受轄區把關。
+ */
+export async function getPersonnelRatioCopySources(
+  listNo: string,
+  deptCode: string,
+): Promise<GetPersonnelRatioCopySourcesResponse> {
+  const response = await apiClient.get<GetPersonnelRatioCopySourcesResponse>(
+    `/assignment/ratios/personnel/${listNo}/copy-sources`,
+    { params: { deptCode } },
+  );
+  return response.data;
+}
+
 // =====================================================================
 // Stage transitions（F078 / F080 / F081 / F084 / F085 / F086 / F087 / F089）
 // =====================================================================

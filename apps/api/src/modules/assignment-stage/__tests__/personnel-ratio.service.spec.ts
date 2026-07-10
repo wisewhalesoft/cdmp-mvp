@@ -272,4 +272,81 @@ describe('PersonnelRatioService (F082 + F083)', () => {
       expect(e.response.error).toBe(ERROR_CODES.LIST_HISTORICAL_READONLY);
     }
   });
+
+  // =====================================================================
+  // getCopySources（從本月其他名單複製）
+  // =====================================================================
+  describe('getCopySources', () => {
+    function mockEmplSetQb(rawRows: any[]) {
+      emplSetRepo.createQueryBuilder = vi.fn(() => ({
+        innerJoin: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        addSelect: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        addOrderBy: vi.fn().mockReturnThis(),
+        getRawMany: vi.fn().mockResolvedValue(rawRows),
+      }));
+    }
+
+    it('回傳同月其他名單、僅在職員工之比例（依來源名單分組）', async () => {
+      listRepo.findOne.mockResolvedValue(validList); // project_workym 202605
+      emphireRepo.find.mockResolvedValue([
+        { emp_id: 'EMP001', emp_nm: '張三', dept_code: 'XTC0', resign_date: null },
+        { emp_id: 'EMP002', emp_nm: '李四', dept_code: 'XTC0', resign_date: null },
+        { emp_id: 'EMP003', emp_nm: '已離職', dept_code: 'XTC0', resign_date: new Date('2020-01-01') },
+      ]);
+      mockEmplSetQb([
+        { list_no: 'L2', emplid: 'EMP001', ration: '60', list_nm: '名單二' },
+        { list_no: 'L2', emplid: 'EMP002', ration: '40', list_nm: '名單二' },
+        { list_no: 'L2', emplid: 'EMP003', ration: '10', list_nm: '名單二' }, // 離職 → 濾除
+      ]);
+
+      const res: any = await svc.getCopySources('L1', 'XTC0', validActor);
+      expect(res.deptCode).toBe('XTC0');
+      expect(res.sources).toHaveLength(1);
+      expect(res.sources[0].listNo).toBe('L2');
+      expect(res.sources[0].listNm).toBe('名單二');
+      expect(res.sources[0].memberCount).toBe(2); // 離職 EMP003 濾除
+      expect(res.sources[0].deptSum).toBe(100);
+      expect(res.sources[0].employees).toEqual([
+        { empId: 'EMP001', empName: '張三', ration: 60 },
+        { empId: 'EMP002', empName: '李四', ration: 40 },
+      ]);
+    });
+
+    it('deptCode 空字串 → 回空 sources（不丟錯、不查詢）', async () => {
+      listRepo.findOne.mockResolvedValue(validList);
+      const res: any = await svc.getCopySources('L1', '', validActor);
+      expect(res.sources).toEqual([]);
+      expect(res.deptCode).toBe('');
+    });
+
+    it('處長轄區與請求部門不符 → 403 PERSONNEL_RATIO_OUT_OF_SCOPE', async () => {
+      listRepo.findOne.mockResolvedValue(validList);
+      scopeService.getScopeDeptCode.mockResolvedValue('XTC9'); // 轄區 != 請求 dept
+      const sectionChiefActor = {
+        userId: 'sc1',
+        role: 'user',
+        businessRole: 'section_chief',
+        ipAddress: null,
+      };
+      await expect(
+        svc.getCopySources('L1', 'XTC0', sectionChiefActor),
+      ).rejects.toMatchObject({
+        response: { error: ERROR_CODES.PERSONNEL_RATIO_OUT_OF_SCOPE },
+      });
+    });
+
+    it('本月其他名單皆未設定本部門比例 → 回空 sources', async () => {
+      listRepo.findOne.mockResolvedValue(validList);
+      emphireRepo.find.mockResolvedValue([
+        { emp_id: 'EMP001', emp_nm: '張三', dept_code: 'XTC0', resign_date: null },
+      ]);
+      mockEmplSetQb([]);
+      const res: any = await svc.getCopySources('L1', 'XTC0', validActor);
+      expect(res.sources).toEqual([]);
+    });
+  });
 });

@@ -44,6 +44,27 @@ export class PersonnelRatioController {
     private readonly systemService: SystemService,
   ) {}
 
+  /**
+   * GET /api/v1/assignment/ratios/personnel/{listNo}/copy-sources?deptCode=XXX
+   *
+   * 「從本月其他名單複製」來源清單（設定頁 UX 優化）。宣告於 `:listNo` 之前避免歧義
+   * （兩段路徑；NestJS 依段數區分，無實際衝突，此順序僅為明確）。
+   */
+  @Get(':listNo/copy-sources')
+  async copySources(
+    @Param('listNo') listNo: string,
+    @Query('deptCode') deptCode: string | undefined,
+    @Req() req: Request,
+  ) {
+    const user = (req as any).user;
+    return this.service.getCopySources(listNo, deptCode ?? '', {
+      userId: user.userId,
+      role: user.role,
+      businessRole: user.businessRole,
+      ipAddress: req.ip ?? null,
+    });
+  }
+
   @Get(':listNo')
   async get(
     @Param('listNo') listNo: string,

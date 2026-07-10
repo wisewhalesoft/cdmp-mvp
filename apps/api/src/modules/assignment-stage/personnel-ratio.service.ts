@@ -255,6 +255,119 @@ export class PersonnelRatioService {
   }
 
   /**
+   * GET /api/v1/assignment/ratios/personnel/{listNo}/copy-sources?deptCode=XXX
+   *
+   * 「從本月其他名單複製」來源清單（UX 優化）：回傳與本名單同 project_workym 之其他
+   * active 名單中，已於指定 deptCode 設定個別業務比例（ob_empl_set）者，供處長 / 部長在
+   * 設定頁一鍵複製既有比例分佈作為起點。
+   *
+   * 約束：
+   *   - 只回「本月在職員工」（依 sysDate 判定）之比例，使複製後員工集合與當前表單一致；
+   *     來源名單若含現已離職 / 非本部門員工之列，一律濾除。
+   *   - 排除本名單自身（list_no != listNo）。
+   *   - 處長視角：deptCode 必須等於其轄區（scopeService.getScopeDeptCode），否則 403
+   *     PERSONNEL_RATIO_OUT_OF_SCOPE（與 setPersonnelRatios 同一把關）。
+   *   - deptCode 空字串 → 回空來源（不丟錯）。
+   */
+  async getCopySources(
+    listNo: string,
+    deptCodeRaw: string,
+    actor: ActorUser,
+  ): Promise<{
+    listNo: string;
+    deptCode: string;
+    sources: Array<{
+      listNo: string;
+      listNm: string;
+      memberCount: number;
+      deptSum: number;
+      employees: Array<{ empId: string; empName: string; ration: number }>;
+    }>;
+  }> {
+    const list = await this.findListOrThrow(listNo);
+    const deptCode = (deptCodeRaw ?? '').trim();
+    if (!deptCode) {
+      return { listNo, deptCode: '', sources: [] };
+    }
+
+    // 處長轄區把關（與 setPersonnelRatios 一致）
+    if (this.isSectionChiefOnly(actor)) {
+      const scope = await this.scopeService.getScopeDeptCode(actor.userId);
+      if (!scope || scope !== deptCode) {
+        throw new ForbiddenException({
+          error: ERROR_CODES.PERSONNEL_RATIO_OUT_OF_SCOPE,
+          message: ERROR_MESSAGES.PERSONNEL_RATIO_OUT_OF_SCOPE,
+        });
+      }
+    }
+
+    const sysDate = todayYmd();
+    const workym = list.project_workym ?? '';
+
+    // 本月在職員工（emp_id → emp_nm），供顯示與「僅回在職員工比例」過濾
+    const emphireRows = await this.emphireRepo.find({ where: { dept_code: deptCode } });
+    const activeEmpMap = new Map<string, string>();
+    for (const e of emphireRows) {
+      if (isEmphireActive(e.resign_date, sysDate)) {
+        activeEmpMap.set(e.emp_id.trim(), (e.emp_nm ?? '').trim() || e.emp_id.trim());
+      }
+    }
+
+    // 其他名單之 ob_empl_set（同月、active、同 dept、非本名單），join list_nm
+    const rows = await this.emplSetRepo
+      .createQueryBuilder('s')
+      .innerJoin(ObListDefinition, 'l', 'l.list_no = s.list_no')
+      .select('s.list_no', 'list_no')
+      .addSelect('s.emplid', 'emplid')
+      .addSelect('s.ration', 'ration')
+      .addSelect('l.list_nm', 'list_nm')
+      .where('TRIM(s.deptid_m) = :deptCode', { deptCode })
+      .andWhere('s.list_no != :listNo', { listNo })
+      .andWhere('l.project_workym = :workym', { workym })
+      .andWhere("l.status = 'active'")
+      .orderBy('s.list_no', 'ASC')
+      .addOrderBy('s.emplid', 'ASC')
+      .getRawMany<{ list_no: string; emplid: string; ration: string; list_nm: string }>();
+
+    const byList = new Map<
+      string,
+      {
+        listNo: string;
+        listNm: string;
+        employees: Array<{ empId: string; empName: string; ration: number }>;
+      }
+    >();
+    for (const r of rows) {
+      const empId = (r.emplid ?? '').trim();
+      // 僅保留當月在職員工之列（複製後員工集合與當前表單一致）
+      if (!activeEmpMap.has(empId)) continue;
+      const srcListNo = (r.list_no ?? '').trim();
+      let entry = byList.get(srcListNo);
+      if (!entry) {
+        entry = { listNo: srcListNo, listNm: (r.list_nm ?? '').trim(), employees: [] };
+        byList.set(srcListNo, entry);
+      }
+      entry.employees.push({
+        empId,
+        empName: activeEmpMap.get(empId) ?? empId,
+        ration: Number(r.ration),
+      });
+    }
+
+    const sources = Array.from(byList.values())
+      .filter((s) => s.employees.length > 0)
+      .map((s) => ({
+        listNo: s.listNo,
+        listNm: s.listNm,
+        memberCount: s.employees.length,
+        deptSum: Math.round(s.employees.reduce((a, e) => a + e.ration, 0) * 100) / 100,
+        employees: s.employees,
+      }));
+
+    return { listNo, deptCode, sources };
+  }
+
+  /**
    * F087 v1.1 BR-11：取最新一筆 approval；若 action='reject' 回傳；'approve' / 無紀錄 → null
    */
   private async findLatestRejection(listNo: string): Promise<{
