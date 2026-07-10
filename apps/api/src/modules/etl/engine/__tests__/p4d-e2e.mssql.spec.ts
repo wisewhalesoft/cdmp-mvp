@@ -1,5 +1,8 @@
 /**
- * AD-E07-41 P4d — customer_core 56 節點端對端整合測試（真實 MSSQL，方案乙：直接建構 NodeDispatcher）。
+ * AD-E07-41 P4d — customer_core 34 節點端對端整合測試（真實 MSSQL，方案乙：直接建構 NodeDispatcher）。
+ *
+ * F110 collapse：31 個就地 `lookup` 節點 → 9 個泛用 `code_decode` 節點（56→34 節點）。code_decode ≡ lookup
+ * 之逐格等價已由 p4f EQ 測試證明；本檔僅更新結構性斷言（節點數/handler 型別/node-id），解碼 OUTPUT 斷言不變。
  *
  * 覆蓋（真實 MSSQL）：
  *   §二 DISPATCH-E2E-001（透過真實 createDispatcher）｜§三 E2E-RUN-001..007｜§四 ISTESTRUN-002
@@ -33,14 +36,16 @@ import { DerivedFieldHandlerMssql } from '../handlers/derived-field-handler-mssq
 import { FieldMappingHandlerMssql } from '../handlers/field-mapping-handler-mssql';
 import { ConditionalHandlerMssql } from '../handlers/conditional-handler-mssql';
 import { TargetLoadHandlerMssql } from '../handlers/target-load-handler-mssql';
-import { LookupHandlerMssql } from '../handlers/lookup-handler-mssql';
+import { CodeDecodeHandlerMssql } from '../handlers/code-decode-handler-mssql';
 import { EtlPipelineExecutionService } from '../../etl-pipeline-execution.service';
 
-vi.setConfig({ testTimeout: 120000 });
+// hookTimeout：beforeAll 需連遠端 dev CDMP + 建 14 張 fixture 表（逐列 INSERT，多次網路往返）+ 跑一次 pipeline，
+// 遠端連線遠超 vitest 預設 10s hookTimeout（testTimeout 不涵蓋 hook）→ 明確放寬。
+vi.setConfig({ testTimeout: 120000, hookTimeout: 180000 });
 
 const PIPELINE_ID = '11111111-1111-1111-1111-111111111111';
 const NODE_TYPES_9 = [
-  'raw_data_extract', 'derived_field', 'lookup', 'merge', 'dedup',
+  'raw_data_extract', 'derived_field', 'code_decode', 'merge', 'dedup',
   'type_cast', 'field_mapping', 'conditional', 'target_load',
 ];
 
@@ -73,7 +78,7 @@ function buildMssqlDispatcher(): NodeDispatcher {
   d.register(new FieldMappingHandlerMssql());
   d.register(new ConditionalHandlerMssql());
   d.register(new TargetLoadHandlerMssql());
-  d.register(new LookupHandlerMssql());
+  d.register(new CodeDecodeHandlerMssql());
   return d;
 }
 
@@ -147,12 +152,12 @@ describe('P4d GATE — 前置守門（真實 MSSQL）', () => {
     expect(et[0].oid).not.toBeNull();
   });
 
-  it('GATE-004：56 節點 DAG 無環（topologicalSort 不觸發 cycle）', async () => {
+  it('GATE-004：34 節點 DAG 無環（topologicalSort 不觸發 cycle）', async () => {
     if (gate()) return;
     const def = loadCustomerCoreDef();
     const { hasCycle, sorted } = topologicalSort(def.nodes, def.edges);
     expect(hasCycle).toBe(false);
-    expect(sorted.length).toBe(56);
+    expect(sorted.length).toBe(34);
   });
 });
 
@@ -160,9 +165,9 @@ describe('P4d GATE — 前置守門（真實 MSSQL）', () => {
 // §三 E2E-RUN（DoD 核心）
 // ===========================================================================
 describe('P4d E2E-RUN — 端對端跑通（真實 MSSQL，DoD 核心）', () => {
-  it('E2E-001（DoD 核心）：56 節點全部 completed，無 failed/skipped', async () => {
+  it('E2E-001（DoD 核心）：34 節點全部 completed，無 failed/skipped', async () => {
     if (gate()) return;
-    expect(mainRun.nodeLogs.length).toBe(56);
+    expect(mainRun.nodeLogs.length).toBe(34);
     const bad = mainRun.nodeLogs.filter((l) => l.status !== 'completed');
     expect(bad.map((b) => `${b.nodeId}:${b.status}:${b.errorMessage ?? ''}`)).toEqual([]);
   });
@@ -189,9 +194,9 @@ describe('P4d E2E-RUN — 端對端跑通（真實 MSSQL，DoD 核心）', () =>
     for (const code of SURVIVING_CODES) expect(await readCode(code)).not.toBeNull();
   });
 
-  it('E2E-006（觀察性）：記錄 56 節點端對端耗時', async () => {
+  it('E2E-006（觀察性）：記錄 34 節點端對端耗時', async () => {
     if (gate()) return;
-    console.log('[P4d E2E-006] 56-node durationMs =', mainRun.durationMs);
+    console.log('[P4d E2E-006] 34-node durationMs =', mainRun.durationMs);
     expect(mainRun.durationMs).toBeGreaterThan(0);
   });
 
@@ -208,8 +213,8 @@ describe('P4d E2E-RUN — 端對端跑通（真實 MSSQL，DoD 核心）', () =>
 // ===========================================================================
 // §八 LOOKUPHIT / LOOKUPMISS
 // ===========================================================================
-describe('P4d LOOKUP — 命中/未命中（真實 MSSQL）', () => {
-  it('LOOKUPHIT-001（基準對照組）：ZH 全部相關 lookup 命中（desc 欄非 NULL）', async () => {
+describe('P4d LOOKUP — 解碼命中/未命中（code_decode，真實 MSSQL）', () => {
+  it('LOOKUPHIT-001（基準對照組）：ZH 全部相關 code_decode 解碼命中（desc 欄非 NULL）', async () => {
     if (gate()) return;
     const zh = await readCode(CUST.ZH);
     expect(zh).not.toBeNull();
@@ -226,17 +231,17 @@ describe('P4d LOOKUP — 命中/未命中（真實 MSSQL）', () => {
   it('LOOKUPMISS-001（DoD 核心）：ZM education_desc 未命中為 NULL，其餘欄正常、整列不排除', async () => {
     if (gate()) return;
     const zm = await readCode(CUST.ZM);
-    expect(zm).not.toBeNull(); // 單一 lookup 未命中不排除整列
+    expect(zm).not.toBeNull(); // 單一 code_decode mapping 未命中不排除整列
     expect(zm.education_desc).toBeNull(); // EDUCAT_BACK='E9' 未命中
     expect(zm.occupation_desc).toBe('工程師'); // 其餘仍命中
     expect(zm.industry_desc).toBe('製造業');
     expect(zm.name).toBe('林小明');
   });
 
-  it('LOOKUPMISS-002：不同客戶各自不同 lookup 未命中彼此互不干擾', async () => {
+  it('LOOKUPMISS-002：不同客戶各自不同 code_decode mapping 未命中彼此互不干擾', async () => {
     if (gate()) return;
     const zm = await readCode(CUST.ZM); // education 未命中
-    const ml = await readCode(CUST.ML); // MLMC-only：無 education/occupation lookup（本就 NULL）
+    const ml = await readCode(CUST.ML); // MLMC-only：無 education/occupation 解碼來源（本就 NULL）
     expect(zm.education_desc).toBeNull();
     expect(zm.industry_desc).toBe('製造業'); // ZM 的 industry 命中
     expect(ml.industry_desc).toBe('資訊服務業'); // ML 的 industry 命中（MLMC 分支）
@@ -248,14 +253,14 @@ describe('P4d LOOKUP — 命中/未命中（真實 MSSQL）', () => {
 // §七 CHARSET — 中文 round-trip
 // ===========================================================================
 describe('P4d CHARSET — 中文 round-trip（真實 MSSQL）', () => {
-  it('CHARSET-001（DoD 核心）：ZH 中文姓名經 56 節點正確 round-trip', async () => {
+  it('CHARSET-001（DoD 核心）：ZH 中文姓名經 34 節點正確 round-trip', async () => {
     if (gate()) return;
     const zh = await readCode(CUST.ZH);
     expect(zh.name).toBe('陳大文');
     expect(zh.residential_address).toBe('台北市中正區忠孝東路一段1號');
   });
 
-  it('CHARSET-002：lookup 中文 outputAlias（education_desc/customer_type_desc）正確 round-trip', async () => {
+  it('CHARSET-002：code_decode 中文 outputAlias（education_desc/customer_type_desc）正確 round-trip', async () => {
     if (gate()) return;
     const zh = await readCode(CUST.ZH);
     expect(zh.education_desc).toBe('高中');
@@ -394,8 +399,8 @@ describe('P4d CLEANUP-E2E — ## 全清（真實 MSSQL）', () => {
 // ===========================================================================
 // §二 DISPATCH-E2E — 透過真實 createDispatcher（補充 smoke）
 // ===========================================================================
-describe('P4d DISPATCH-E2E — 真實 createDispatcher 驅動 56 節點（真實 MSSQL）', () => {
-  it('DISPATCHE2E-001（補充 DoD）：EtlPipelineExecutionService.createDispatcher(DB_TYPE=mssql) 產生之 dispatcher 跑通 56 節點且 customer_core 有列', async () => {
+describe('P4d DISPATCH-E2E — 真實 createDispatcher 驅動 34 節點（真實 MSSQL）', () => {
+  it('DISPATCHE2E-001（補充 DoD）：EtlPipelineExecutionService.createDispatcher(DB_TYPE=mssql) 產生之 dispatcher 跑通 34 節點且 customer_core 有列', async () => {
     if (gate()) return;
     const cfg = { get: (k: string, d?: unknown) => (k === 'DB_TYPE' ? 'mssql' : d) };
     const svc = new EtlPipelineExecutionService(
@@ -404,7 +409,7 @@ describe('P4d DISPATCH-E2E — 真實 createDispatcher 驅動 56 節點（真實
     const dispatcher: NodeDispatcher = (svc as any).createDispatcher();
     await deleteCustomerRows(h.qr!);
     const r = await runPipeline(uniqueLogId(), { dispatcher });
-    expect(r.nodeLogs.length).toBe(56);
+    expect(r.nodeLogs.length).toBe(34);
     expect(r.nodeLogs.every((l) => l.status === 'completed')).toBe(true);
     expect(await countP4d()).toBe(SURVIVING_CODES.length); // 間接證明 isTestRun 未被誤設 true
   });
@@ -446,14 +451,14 @@ describe('P4d 破壞性/自癒（真實 MSSQL）', () => {
   it('E2E-005（DoD 核心，容錯路徑）：中游節點失敗 → 下游 skipped、customer_core 不新增、## 清空', async () => {
     if (gate()) return;
     await deleteCustomerRows(h.qr!);
-    // 破壞 lk_m_indus1 之來源 raw 表（DROP）→ 該 lookup 節點拋錯
+    // 破壞 cd_mlind1（[和潤]MLMC行業解碼）之來源對照 raw 表（DROP）→ 該 code_decode 節點拋「對照表不存在」
     await h.qr!.query(`IF OBJECT_ID('dbo.raw_b9558d10','U') IS NOT NULL DROP TABLE "raw_b9558d10"`);
     const logId = uniqueLogId();
     const r = await runPipeline(logId);
     const failed = r.nodeLogs.filter((l) => l.status === 'failed');
     const skipped = r.nodeLogs.filter((l) => l.status === 'skipped');
     expect(failed.length).toBe(1);
-    expect(failed[0].nodeId).toBe('lk_m_indus1');
+    expect(failed[0].nodeId).toBe('cd_mlind1');
     expect(skipped.length).toBeGreaterThan(0);
     // tl1 未執行到 → customer_core 無本次新增
     expect(await countP4d()).toBe(0);
@@ -478,7 +483,7 @@ describe('P4d 破壞性/自癒（真實 MSSQL）', () => {
     const zh = await readCode(CUST.ZH);
     expect(zh).not.toBeNull();
     expect(zh.monthly_income_code).toBe('3'); // 去尾零字串成功寫入短欄（PG 側 NUMERIC 亦渲染為 '3'，EQ 一致）
-    expect(zh.monthly_income_desc).toBe('中所得'); // income lookup（TBL_ID='A3' match '3'）仍命中
+    expect(zh.monthly_income_desc).toBe('中所得'); // income code_decode（cd_zzip1 mapping TBL_ID='A3' match MONTH_INCOME='3'）仍命中
     console.log('[P4d FINDING-P4D-01] tl1 status =', tl1.status, '| monthly_income_code =', zh.monthly_income_code);
     await restoreMainState();
   });
