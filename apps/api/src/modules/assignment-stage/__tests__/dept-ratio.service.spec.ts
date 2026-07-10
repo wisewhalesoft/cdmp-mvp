@@ -120,12 +120,12 @@ describe('DeptRatioService (F079)', () => {
       status: 'active',
     });
     deptPctRepo.find.mockResolvedValue([
-      { obdeptid: 'XTC0', obdeptnm: '業務一部', ration: '60', created_by: 'u-director' },
-      { obdeptid: 'XTD0', obdeptnm: '業務二部', ration: '40', created_by: 'u-chief' },
+      { obdeptid: 'XTC0', obdeptnm: '業務一部', ration: '60', created_by: '0d1a0000-0000-4000-8000-000000000001' },
+      { obdeptid: 'XTD0', obdeptnm: '業務二部', ration: '40', created_by: '0c1e0000-0000-4000-8000-000000000002' },
     ]);
     userRepo.find.mockResolvedValue([
-      { id: 'u-director', name: '張部長', role: 'user', business_role: 'director' },
-      { id: 'u-chief', name: '李處長', role: 'user', business_role: 'section_chief' },
+      { id: '0d1a0000-0000-4000-8000-000000000001', name: '張部長', role: 'user', business_role: 'director' },
+      { id: '0c1e0000-0000-4000-8000-000000000002', name: '李處長', role: 'user', business_role: 'section_chief' },
     ]);
 
     const res = await svc.getDeptRatios('OB202605001');

@@ -17,6 +17,7 @@ import { StageTransitionService } from '@/modules/assignment/services/stage-tran
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { activeEmphireCondition, todayYmd } from '@/common/emphire/emphire-active.util';
+import { isUuid } from '@/common/uuid.util';
 import type { SetDeptRatioDto } from './dto/set-dept-ratio.dto';
 
 /**
@@ -125,8 +126,10 @@ export class DeptRatioService {
 
     // F088 v1.3 BR-11：設定者解析 — ob_dept_pct.created_by → users（姓名 + business_role）
     //   批次查避免 N+1；proxyByDirector = 設定者為部長（business_role='director'）或 admin。
+    // 🔴 ob_dept_pct.created_by 為 varchar，可能存非 GUID 值（legacy-import / seed 標記）；以 isUuid 過濾，
+    //    避免餵入 users.id(uniqueidentifier) 查詢而拋「Invalid GUID」500（見 common/uuid.util）。
     const setterIds = Array.from(
-      new Set(existing.map((e) => e.created_by).filter((id): id is string => !!id)),
+      new Set(existing.map((e) => e.created_by).filter(isUuid)),
     );
     const setterById = new Map<string, User>();
     if (setterIds.length > 0) {

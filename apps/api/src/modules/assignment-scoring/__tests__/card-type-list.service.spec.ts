@@ -211,7 +211,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         prod_kind: '01',
         status: 'active',
         created_at: fixedDate,
-        created_by: 'sm-uuid',
+        created_by: '5a1e0000-0000-4000-8000-000000000003',
       },
     ]);
     versionRepo.find.mockResolvedValue([
@@ -223,7 +223,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         status: 'active',
       },
     ]);
-    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: 'Sales Manager' }]);
+    userRepo.find.mockResolvedValue([{ id: '5a1e0000-0000-4000-8000-000000000003', name: 'Sales Manager' }]);
 
     const result = await service.listCardTypes({ status: 'active' });
 
@@ -244,7 +244,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         prod_kind: '01',
         status: 'active',
         created_at: new Date('2019-08-23T00:00:00.000Z'),
-        created_by: 'sm-uuid',
+        created_by: '5a1e0000-0000-4000-8000-000000000003',
       },
     ]);
     versionRepo.find.mockResolvedValue([
@@ -264,7 +264,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         status: 'active',
       },
     ]);
-    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: 'Sales Manager' }]);
+    userRepo.find.mockResolvedValue([{ id: '5a1e0000-0000-4000-8000-000000000003', name: 'Sales Manager' }]);
 
     const result = await service.listCardTypes({ status: 'active' });
     const h = result.cardTypes[0];
@@ -282,7 +282,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         prod_kind: '01',
         status: 'active',
         created_at: new Date('2019-08-23T00:00:00.000Z'),
-        created_by: 'sm-uuid',
+        created_by: '5a1e0000-0000-4000-8000-000000000003',
       },
     ]);
     versionRepo.find.mockResolvedValue([
@@ -294,7 +294,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         status: 'active',
       },
     ]);
-    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: '王小明' }]);
+    userRepo.find.mockResolvedValue([{ id: '5a1e0000-0000-4000-8000-000000000003', name: '王小明' }]);
 
     const result = await service.listCardTypes({ status: 'active' });
 
@@ -309,11 +309,11 @@ describe('CardTypeService — F069 listCardTypes', () => {
         prod_kind: '01',
         status: 'active',
         created_at: new Date('2019-08-23T00:00:00.000Z'),
-        created_by: 'sm-uuid',
+        created_by: '5a1e0000-0000-4000-8000-000000000003',
       },
     ]);
     versionRepo.find.mockResolvedValue([]); // 沒有任何版本
-    userRepo.find.mockResolvedValue([{ id: 'sm-uuid', name: 'Sales Manager' }]);
+    userRepo.find.mockResolvedValue([{ id: '5a1e0000-0000-4000-8000-000000000003', name: 'Sales Manager' }]);
 
     const result = await service.listCardTypes({ status: 'active' });
     const x = result.cardTypes[0];
@@ -334,7 +334,7 @@ describe('CardTypeService — F069 listCardTypes', () => {
         prod_kind: '01',
         status: 'active',
         created_at: new Date('2019-08-23T00:00:00.000Z'),
-        created_by: 'unknown-user',
+        created_by: '00000000-0000-4000-8000-0000deadbeef',
       },
     ]);
     versionRepo.find.mockResolvedValue([
@@ -351,6 +351,37 @@ describe('CardTypeService — F069 listCardTypes', () => {
     const result = await service.listCardTypes({ status: 'active' });
 
     expect(result.cardTypes[0].createdBy).toBeNull();
+  });
+
+  // 🔴 回歸：created_by 為非 GUID varchar 標記（seed 'PROD_SEED'）不得餵入 users.id(uniqueidentifier)
+  //   查詢，否則 MSSQL tedious 拋「Invalid GUID」→ 整個列表 500（見 common/uuid.util isUuid 守門）。
+  it('Metadata：createdBy 為非 UUID（seed PROD_SEED）→ 不查 users、createdBy null、不 500', async () => {
+    cardTypeRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_name: '期中',
+        prod_kind: '01',
+        status: 'active',
+        created_at: new Date('2019-08-23T00:00:00.000Z'),
+        created_by: 'PROD_SEED',
+      },
+    ]);
+    versionRepo.find.mockResolvedValue([
+      {
+        card_type: 'H',
+        card_version: 1,
+        sdate: '20190823',
+        edate: '20991231',
+        status: 'active',
+      },
+    ]);
+    // 模擬真實 DB 行為：若真以非 GUID 值查 users 會被拒（Invalid GUID）→ 舊 code 會 500。
+    userRepo.find.mockRejectedValue(new Error('Validation failed for parameter. Invalid GUID.'));
+
+    const result = await service.listCardTypes({ status: 'active' });
+
+    expect(result.cardTypes[0].createdBy).toBeNull();
+    expect(userRepo.find).not.toHaveBeenCalled();
   });
 
   /**

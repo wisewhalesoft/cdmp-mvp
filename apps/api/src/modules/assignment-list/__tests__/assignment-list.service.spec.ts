@@ -628,7 +628,7 @@ describe('AssignmentListService', () => {
       const userRepo = listRepo.manager.getRepository(User);
       await userRepo.save(
         userRepo.create({
-          id: 'approver-uuid-001',
+          id: 'ab110000-0000-4000-8000-000000000004',
           name: '張部長',
           email: 'approver@cdmp.test',
           password_hash: 'x',
@@ -659,7 +659,7 @@ describe('AssignmentListService', () => {
       ] as any);
       const apprRepo = listRepo.manager.getRepository(AssignmentApproval);
       await apprRepo.save([
-        { list_no: listNo, action: 'approve', reject_reason: null, approver_id: 'approver-uuid-001', approver_name: 'approver-uuid-001', approver_role: 'director', approved_at: new Date('2026-05-14T18:05:00Z'), created_at: new Date('2026-05-14T18:05:00Z') },
+        { list_no: listNo, action: 'approve', reject_reason: null, approver_id: 'ab110000-0000-4000-8000-000000000004', approver_name: 'ab110000-0000-4000-8000-000000000004', approver_role: 'director', approved_at: new Date('2026-05-14T18:05:00Z'), created_at: new Date('2026-05-14T18:05:00Z') },
       ] as any);
 
       const res = await service.listLists({ ym: YM });

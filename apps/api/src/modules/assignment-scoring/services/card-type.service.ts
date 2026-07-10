@@ -26,6 +26,7 @@ import {
   assertProdKindActive,
   sdateToday,
 } from '../helpers/prod-kind.helper';
+import { isUuid } from '@/common/uuid.util';
 
 /**
  * F069 / F070 / F071 / F072：CARD_TYPE 計分卡類型主檔 CRUD Service
@@ -241,8 +242,11 @@ export class CardTypeService {
     }
 
     // Iter 9：JOIN users 取 createdBy name
+    // 🔴 created_by 為 varchar，可能存非 GUID 標記（seed 之 'PROD_SEED' 等）；以 isUuid 過濾，避免將
+    //   非 GUID 值餵入 users.id(uniqueidentifier) 查詢而拋「Invalid GUID」500（見 common/uuid.util）。
+    //   非 UUID 之 created_by → 顯示名稱 null。
     const createdByIds = Array.from(
-      new Set(cards.map((c) => c.created_by).filter((id): id is string => !!id)),
+      new Set(cards.map((c) => c.created_by).filter(isUuid)),
     );
     const users =
       createdByIds.length === 0

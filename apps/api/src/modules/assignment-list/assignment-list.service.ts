@@ -26,6 +26,7 @@ import { SectionChiefScopeService } from '@/modules/assignment/services/section-
 // F095 / AD-E07-26 §26.5：與 F091 月跑共用同一 trigger pure utility（read-time 推導，無新 DB 欄位）
 import { deriveAppliedSpecialRules } from '@/modules/assignment/stage1/special-rules';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+import { isUuid } from '@/common/uuid.util';
 import type { CreateListDto } from './dto/create-list.dto';
 import type { UpdateListDto } from './dto/update-list.dto';
 import type {
@@ -528,11 +529,14 @@ export class AssignmentListService {
 
     // 建立者 / 核准者姓名解析：created_by / approver_id 為 user id（A_USERID），
     // 清單頁需顯示姓名而非 UUID。對齊 card-type.service Iter 9「JOIN users」模式；批次查避免 N+1。
+    // 🔴 ob_list_definition.created_by 為 varchar，可能存非 GUID 值（legacy / seed 標記）；以 isUuid 過濾，
+    //    避免餵入 users.id(uniqueidentifier) 查詢而拋「Invalid GUID」500（見 common/uuid.util）。
+    //    approver_id 本即 GUID，通過 isUuid 無虞；顯示層仍以 `?? r.created_by` 保留原值 fallback。
     const userIds = Array.from(
       new Set([
         ...records.map((r) => r.created_by),
         ...approverIdMap.values(),
-      ].filter((id): id is string => !!id)),
+      ].filter(isUuid)),
     );
     const creatorNameById = new Map<string, string>();
     if (userIds.length > 0) {
