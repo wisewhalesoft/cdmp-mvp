@@ -38,7 +38,7 @@ export function PersonnelProgressBanner({
             </span>
           </p>
           <p className="text-xs text-gray-500 mt-0.5">
-            每部門在職員工 RATION 加總 = 100% 才視為完成；全部完成方可推進至簽核
+            每部門在職員工分配比例加總 = 100% 才視為完成；全部完成方可推進至簽核
           </p>
         </div>
       </div>

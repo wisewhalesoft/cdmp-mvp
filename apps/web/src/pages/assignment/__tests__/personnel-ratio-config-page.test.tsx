@@ -38,6 +38,7 @@ vi.mock('@/stores/auth-store', async () => {
 
 const mockedListLists = vi.mocked(assignmentListApi.listLists);
 const mockedGetPersonnelRatios = vi.mocked(assignmentStageApi.getPersonnelRatios);
+const mockedGetCopySources = vi.mocked(assignmentStageApi.getPersonnelRatioCopySources);
 const mockedAdvanceApproval = vi.mocked(assignmentStageApi.advanceToApproval);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
@@ -143,6 +144,11 @@ describe('PersonnelRatioConfigPage (29b)', () => {
       businessRole: 'director',
     } as any);
     mockedListLists.mockResolvedValue(mockListsResp);
+    mockedGetCopySources.mockResolvedValue({
+      listNo: 'OB202605007',
+      deptCode: '',
+      sources: [],
+    });
     mockedGetPersonnelRatios.mockResolvedValue(
       buildPersonnelResponse([
         buildDepartment({ deptCode: 'D01', deptName: '北一處', deptRatio: 50 }),
@@ -368,6 +374,31 @@ describe('PersonnelRatioConfigPage (29b)', () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('stage-mismatch-warning')).toBeInTheDocument();
+    });
+  });
+
+  it('部門有在職員工時顯示「從本月其他名單複製」按鈕，點擊載入來源', async () => {
+    mockedGetPersonnelRatios.mockResolvedValue(
+      buildPersonnelResponse([
+        buildDepartment({
+          deptCode: 'D01',
+          deptName: '北一處',
+          activeCount: 1,
+          employees: [
+            { empId: 'E001', empName: '甲', ration: 100, isResigned: false, createdBy: 'd1' },
+          ],
+        }),
+      ]),
+    );
+    renderPage();
+    const btn = await screen.findByTestId('btn-copy-from-list-D01');
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(mockedGetCopySources).toHaveBeenCalledWith('OB202605007', 'D01');
+    });
+    // 空來源 → modal 顯示空態
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-dept-modal-empty')).toBeInTheDocument();
     });
   });
 
