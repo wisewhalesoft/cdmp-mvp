@@ -67,14 +67,21 @@ export class OrphanRecoveryService implements OnApplicationBootstrap {
     );
   }
 
+  // 🔴 三分支（避免 binary postgres-vs-else 使 MSSQL 誤落 sqlite 的 datetime('now')/julianday()
+  //    致 T-SQL 語法錯——比照 assignment-run-pipeline.service 既有修法）。MSSQL 連線 useUTC:true，
+  //    故用 SYSUTCDATETIME()（UTC）；duration 用 DATEDIFF_BIG(避 int 毫秒溢位，目標 SQL2022 支援)。
   private get nowExpr(): string {
-    return this.dataSource.options.type === 'postgres' ? 'NOW()' : "datetime('now')";
+    const t = this.dataSource.options.type;
+    if (t === 'postgres') return 'NOW()';
+    if (t === 'mssql') return 'SYSUTCDATETIME()';
+    return "datetime('now')"; // sqlite
   }
 
   private get durationExpr(): string {
-    return this.dataSource.options.type === 'postgres'
-      ? 'EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000'
-      : "CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER)";
+    const t = this.dataSource.options.type;
+    if (t === 'postgres') return 'EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000';
+    if (t === 'mssql') return 'DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME())';
+    return "CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER)"; // sqlite
   }
 
   private async recoverExtractionTasks(): Promise<RecoveryResult> {

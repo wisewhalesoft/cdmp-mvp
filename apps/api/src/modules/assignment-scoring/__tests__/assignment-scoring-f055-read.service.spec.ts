@@ -353,4 +353,37 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     expect(poolDataListRepo.find).not.toHaveBeenCalled();
     expect(poolDataListRepo.query).toHaveBeenCalledTimes(1);
   });
+
+  // ===== MSSQL 遷移 GAP 1：previewCardLevels 方言分派守門 =====
+
+  it('GAP1-MSSQL：連線方言為 mssql → SQL 走 CROSS APPLY + CAST(... AS INT) + COUNT(*)，無 LATERAL / ::int', async () => {
+    mockActiveVersion('H', 1);
+    // MSSQL 分支：連線 options.type='mssql'（PG 分支 mock 無 options → undefined，仍走 PG）。
+    poolDataListRepo.manager.connection.options = { type: 'mssql' };
+    // fetchPoolDataColumnsMssql 以 manager.query 查 INFORMATION_SCHEMA（fallback schema 檢查，一次性）。
+    poolDataListRepo.manager.query = vi
+      .fn()
+      .mockResolvedValue([{ name: 'loan_rate' }]);
+    poolDataListRepo.query.mockResolvedValue([{ bucket: 'A', cnt: 5 }]);
+
+    const result = await service.previewCardLevels({
+      cardType: 'H',
+      levels: JSON.stringify([{ cardLevel: 'A', scoreS: 0, scoreE: 999 }]),
+    });
+
+    expect(result.distribution).toEqual({ A: 5 });
+
+    const sql = poolDataListRepo.query.mock.calls[0][0] as string;
+    // MSSQL 方言：CROSS APPLY（非 LATERAL）、CAST(... AS INT)（非 (expr)::int）、COUNT(*)（非 COUNT(*)::int）。
+    expect(sql).toMatch(/CROSS APPLY/i);
+    expect(sql).toContain('AS INT)');
+    expect(sql).not.toMatch(/LATERAL/i);
+    expect(sql).not.toContain('::int');
+    // 仍自活表 ob_pool_data 即時算分 + 分桶 GROUP BY（不讀死欄來源 ob_pool_data_list）。
+    expect(sql).toContain('ob_pool_data ');
+    expect(sql).not.toContain('ob_pool_data_list');
+    expect(sql).toMatch(/GROUP BY bucket/i);
+    // fallback schema 檢查恰一次（O(1) INFORMATION_SCHEMA 查詢，非逐欄 N+1）。
+    expect(poolDataListRepo.manager.query).toHaveBeenCalledTimes(1);
+  });
 });

@@ -662,8 +662,15 @@ export class AssignmentRunReportService {
    *
    * 回傳 objectMode Readable（push raw row 物件）；xlsx / CSV producer 以 `for await` 共用消費。
    * SQLite（單元 / Integration 測試）無 native cursor → 由測試 mock 本方法（cursorRows）。
+   *
+   * GAP 2（MSSQL 遷移）：MSSQL 無 PG 之 `DECLARE … NO SCROLL CURSOR … FETCH n` 語法（第一句
+   *   DECLARE 即拋語法錯誤 500）→ dbType==='mssql' 改走 `cursorRowsMssql`（OFFSET/FETCH 分頁）。
+   *   PG 路徑（以下本體）保持位元組不變。
    */
   protected async cursorRows(query: ExportQuerySpec): Promise<Readable> {
+    if (this.dataSource.options.type === 'mssql') {
+      return this.cursorRowsMssql(query);
+    }
     const batch = AssignmentRunReportService.EXPORT_FETCH_BATCH;
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -716,6 +723,84 @@ export class AssignmentRunReportService {
       },
     });
     // 消費端提前中止（error / destroy）→ 確保 cursor / tx / queryRunner 釋放
+    readable.once('close', () => {
+      void cleanup();
+    });
+    return readable;
+  }
+
+  /**
+   * F064 GAP 2（MSSQL 遷移）：MSSQL cursorRows 分支 — 以 T-SQL `OFFSET @k ROWS FETCH NEXT n
+   *   ROWS ONLY` 逐批分頁，複刻 PG server-side cursor 之語義（每往返取 n 列、逐列 yield、streaming
+   *   不全載）。選 OFFSET/FETCH 而非 T-SQL cursor 之因：PG 路徑本為「每往返 FETCH n 列」，OFFSET/FETCH
+   *   NEXT n 同為「每往返 n 列」→ 批次往返行為與 PG 一致（純 T-SQL cursor 之 `FETCH NEXT` 每往返僅 1 列，
+   *   反而偏離 PG 之批次語義）。
+   *
+   * 列集合／順序與 PG 路徑逐列相同：SQL 主體（含 `ORDER BY r.list_no, r.orgno, r.appl_no` 與 23 欄
+   *   投影）完全沿用 buildExportQuery 產出、僅於尾端追加分頁子句 → 投影與排序不變，下游 formatRow /
+   *   xlsx / CSV 串流無差異。
+   *
+   * 參數：query.sql 已由 escapeQueryWithParameters 展開為 @0..@{N-1}（positional）；OFFSET 佔位取
+   *   下一個位置 @N（[...query.params, offset]），不與既有 runId / emplIds 佔位衝突（PARAM 索引依
+   *   TypeORM SqlServerQueryRunner 之 array-index 綁定：@k ↔ params[k]）。
+   *
+   * 一致性：匯出對象為**已完成**月跑之 result 快照（run 完成後 ob_monthly_run_result 不再異動）→ 各頁
+   *   間免快照隔離即穩定，故不需 transaction（PG 之 tx 僅為 cursor 生命週期所需）。
+   *
+   * ⚠️ 效能：OFFSET/FETCH 每頁重跑 join+sort（O(n²)）；對匯出實際量級（數萬列，實測 202606≈55,863）
+   *   可接受。若未來出現超大匯出（數百萬列）效能問題，替代方案＝`DECLARE export_cursor CURSOR
+   *   FORWARD_ONLY READ_ONLY FOR <sql>; OPEN; FETCH NEXT …; CLOSE; DEALLOCATE`（單次 sort、O(n)，
+   *   代價為每列一往返）——排序／投影同為此 SQL，列集合／順序同樣保持與 PG 逐列相同。
+   */
+  private async cursorRowsMssql(query: ExportQuerySpec): Promise<Readable> {
+    const batch = AssignmentRunReportService.EXPORT_FETCH_BATCH;
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+
+    // OFFSET 佔位＝既有參數之後的下一個位置索引（@0..@{N-1} 已用 → @N）。
+    const offsetParamIndex = query.params.length;
+    const pagedSql = `${query.sql}\n      OFFSET @${offsetParamIndex} ROWS FETCH NEXT ${batch} ROWS ONLY`;
+
+    let offset = 0;
+    let ended = false;
+    const cleanup = async (): Promise<void> => {
+      if (ended) return;
+      ended = true;
+      await queryRunner.release();
+    };
+
+    const readable = new Readable({
+      objectMode: true,
+      read() {
+        void (async () => {
+          try {
+            const rows: RawExportRow[] = await queryRunner.query(pagedSql, [
+              ...query.params,
+              offset,
+            ]);
+            if (!rows || rows.length === 0) {
+              await cleanup();
+              this.push(null);
+              return;
+            }
+            // 先推進 offset（同步），再逐列 push；下一次 read() 讀取新 offset。
+            offset += rows.length;
+            for (const row of rows) {
+              this.push(row);
+            }
+            // 短批（< batch）＝最後一頁：本批推畢即結束，省一次空往返。
+            if (rows.length < batch) {
+              await cleanup();
+              this.push(null);
+            }
+          } catch (err) {
+            await cleanup();
+            this.destroy(err as Error);
+          }
+        })();
+      },
+    });
+    // 消費端提前中止（error / destroy）→ 釋放 queryRunner
     readable.once('close', () => {
       void cleanup();
     });

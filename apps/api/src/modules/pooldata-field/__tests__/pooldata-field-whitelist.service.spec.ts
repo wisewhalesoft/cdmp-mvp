@@ -104,6 +104,8 @@ describe('PooldataFieldWhitelistService', () => {
     };
     dataSource = {
       transaction: vi.fn(async (cb: any) => cb(fakeManager)),
+      // getAvailableColumns 依 options.type 分方言（PG/MSSQL/sqlite）；預設 postgres 走既有 PG-path。
+      options: { type: 'postgres' },
     };
 
     const module: TestingModule = await Test.createTestingModule({

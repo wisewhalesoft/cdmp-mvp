@@ -370,16 +370,21 @@ export class PooldataFieldWhitelistService {
    * 前端依錯誤碼分流顯示對應訊息（FEATURE_NOT_ENABLED / OBPOOLDATA_NOT_READY / 5xx）。
    */
   async getAvailableColumns(): Promise<GetAvailableColumnsResult> {
-    // Step 1：確認 ob_pool_data 表存在（SQLite test env 無 information_schema → catch → 視為 not_ready）
-    const tableExists = await this.dataSource
-      .query(
-        `SELECT 1
+    // MSSQL 方言：catalog 須大寫 INFORMATION_SCHEMA（BIN collation 大小寫敏感，I-MSSQL-CATALOG-CASE-01）、
+    //   schema 為 'dbo'（非 PG 'public'）、`LIMIT`→`TOP`。SQLite test env 無 information_schema → catch。
+    const isMssql = this.dataSource.options.type === 'mssql';
+    // Step 1：確認 ob_pool_data 表存在
+    const tableExistsSql = isMssql
+      ? `SELECT TOP 1 1 AS x
+           FROM INFORMATION_SCHEMA.TABLES
+          WHERE TABLE_SCHEMA = 'dbo'
+            AND TABLE_NAME = 'ob_pool_data'`
+      : `SELECT 1
            FROM information_schema.tables
           WHERE table_schema = 'public'
             AND table_name = 'ob_pool_data'
-          LIMIT 1`,
-      )
-      .catch(() => null);
+          LIMIT 1`;
+    const tableExists = await this.dataSource.query(tableExistsSql).catch(() => null);
 
     if (!tableExists || tableExists.length === 0) {
       throw new ServiceUnavailableException({
@@ -390,17 +395,25 @@ export class PooldataFieldWhitelistService {
 
     // Step 2：NOT IN 子查詢取欄位清單；真實 SQL 錯誤不再吞，直接由 NestJS exception filter 攔截
     // v1.4.7：與 Step 3（ExtractionTask 查詢）以 Promise.all 平行化（無相依），降低總延遲
-    const [rows, extractionTask] = await Promise.all([
-      this.dataSource.query(
-        `SELECT c.column_name, c.data_type
+    const columnsSql = isMssql
+      ? `SELECT c.COLUMN_NAME AS column_name, c.DATA_TYPE AS data_type
+           FROM INFORMATION_SCHEMA.COLUMNS c
+          WHERE c.TABLE_SCHEMA = 'dbo'
+            AND c.TABLE_NAME = 'ob_pool_data'
+            AND c.COLUMN_NAME NOT IN (
+              SELECT w.column_name FROM pooldata_field_whitelist w
+            )
+          ORDER BY c.COLUMN_NAME ASC`
+      : `SELECT c.column_name, c.data_type
            FROM information_schema.columns c
           WHERE c.table_schema = 'public'
             AND c.table_name = 'ob_pool_data'
             AND c.column_name NOT IN (
               SELECT w.column_name FROM pooldata_field_whitelist w
             )
-          ORDER BY c.column_name ASC`,
-      ) as Promise<
+          ORDER BY c.column_name ASC`;
+    const [rows, extractionTask] = await Promise.all([
+      this.dataSource.query(columnsSql) as Promise<
         Array<{ column_name: string | null; data_type: string | null }>
       >,
       this.extractionTaskRepo.findOne({

@@ -14,9 +14,12 @@
  *   DROP/TRUNCATE baseline」：對真實 dbo baseline 表 seed 一組 P5FU 前綴列（valid GUID run_id、appl_date
  *   為真 datetime2 邊界值），跑真實 buildExportQuery（WHERE run_id=@guid 隔離），afterAll 精準 DELETE。
  *   appl_date 為 baseline 原生 datetime2 欄 → CONVERT 對真實日期型別運算（非字串短路）。
- * §一 GATE：cursorRows PG 專屬 cursor 於 MSSQL 不可用 → EXPORT 群組 spy cursorRows 直接 manager.query
- *   （僅替換 streaming plumbing，buildExportQuery SQL / formatRow / CSV·xlsx 產出皆為真實生產路徑）。
- * Gating：連不上 dev CDMP → ctx.skip。
+ * §一 GATE：GAP 2 已補——cursorRows 具 MSSQL 分支（OFFSET/FETCH 分頁，複刻 PG cursor 之批次
+ *   streaming）。EXPORT 群組**不再 spy cursorRows**，改跑真實生產 cursorRows(MSSQL) → 匯出全鏈
+ *   （buildExportQuery SQL / cursorRowsMssql 分頁串流 / formatRow / CSV·xlsx 產出）皆為真實生產路徑。
+ *   另加 STREAM 群組直接消費 cursorRows 之 Readable，斷言逐列順序＝ORDER BY r.list_no,r.orgno,r.appl_no，
+ *   並以臨時縮小 EXPORT_FETCH_BATCH 驗證多頁分頁迴圈（offset 推進 + 短批 EOF）確實運作。
+ * Gating：連不上 dev CDMP → ctx.skip（真庫測試；無真 MSSQL 誠實跳過，不假綠）。
  */
 
 import {
@@ -90,6 +93,39 @@ async function runExportQuery(): Promise<Array<Record<string, unknown>>> {
     }
   ).buildExportQuery(RUN, { userId: 'admin', role: 'admin', businessRole: 'admin' });
   return ds!.manager.query(q.sql, q.params);
+}
+
+/**
+ * 走**真實生產** cursorRows(MSSQL OFFSET/FETCH 分支)，消費其 Readable，回傳逐列 appl_no（yield 順序）。
+ * batchOverride：臨時覆蓋 static EXPORT_FETCH_BATCH（runtime 可寫；finally 還原）以強制多頁分頁迴圈。
+ */
+async function streamApplNos(batchOverride?: number): Promise<string[]> {
+  const svc = makeService();
+  const query = await (
+    svc as never as {
+      buildExportQuery: (
+        runId: string,
+        actor: unknown,
+      ) => Promise<{ sql: string; params: unknown[] }>;
+    }
+  ).buildExportQuery(RUN, { userId: 'admin', role: 'admin', businessRole: 'admin' });
+  const clazz = AssignmentRunReportService as unknown as {
+    EXPORT_FETCH_BATCH: number;
+  };
+  const originalBatch = clazz.EXPORT_FETCH_BATCH;
+  if (batchOverride !== undefined) clazz.EXPORT_FETCH_BATCH = batchOverride;
+  try {
+    const stream = await (
+      svc as never as { cursorRows: (q: unknown) => Promise<Readable> }
+    ).cursorRows(query);
+    const applNos: string[] = [];
+    for await (const raw of stream as AsyncIterable<{ appl_no: unknown }>) {
+      applNos.push(String(raw.appl_no));
+    }
+    return applNos;
+  } finally {
+    clazz.EXPORT_FETCH_BATCH = originalBatch;
+  }
 }
 
 function parseCsv(body: string): string[][] {
@@ -209,15 +245,7 @@ describe('AD-E07-43 P5FU — appl_date SQL 端格式化（I-EXP-APLDATE-FMT-01�
     it('TS-P5FU-APLFMT-EXPORT-001：exportResult(csv) 16:00 案件「進件日」= 2026/07/01', async (ctx) => {
       ensure(ctx);
       const svc = makeService();
-      // cursorRows PG cursor 語法於 MSSQL 不可用 → 以 manager.query 執行真實 buildExportQuery SQL
-      vi.spyOn(
-        svc as never as { cursorRows: (q: unknown) => Promise<Readable> },
-        'cursorRows',
-      ).mockImplementation(async (q: unknown) => {
-        const query = q as { sql: string; params: unknown[] };
-        const rows = await ds!.manager.query(query.sql, query.params);
-        return Readable.from(rows as Iterable<unknown>);
-      });
+      // GAP 2 補完後：cursorRows 具 MSSQL(OFFSET/FETCH) 分支 → 直接跑真實生產路徑，不再 spy。
       const out = await svc.exportResult(RUN, 'csv');
       const rows = parseCsv(out.body as string);
       expect(rows[0][5]).toBe('進件日'); // 表頭欄 6
@@ -235,14 +263,7 @@ describe('AD-E07-43 P5FU — appl_date SQL 端格式化（I-EXP-APLDATE-FMT-01�
     it('TS-P5FU-APLFMT-EXPORT-002：exportResult(xlsx) 同案件同欄位同斷言（共用 formatRow）', async (ctx) => {
       ensure(ctx);
       const svc = makeService();
-      vi.spyOn(
-        svc as never as { cursorRows: (q: unknown) => Promise<Readable> },
-        'cursorRows',
-      ).mockImplementation(async (q: unknown) => {
-        const query = q as { sql: string; params: unknown[] };
-        const rows = await ds!.manager.query(query.sql, query.params);
-        return Readable.from(rows as Iterable<unknown>);
-      });
+      // GAP 2 補完後：不再 spy cursorRows，走真實 MSSQL(OFFSET/FETCH) 串流。
       const out = await svc.exportResult(RUN, 'xlsx');
       const buf = out.body as Buffer;
       const wb = new (await import('exceljs')).Workbook();
@@ -259,6 +280,24 @@ describe('AD-E07-43 P5FU — appl_date SQL 端格式化（I-EXP-APLDATE-FMT-01�
         }
       });
       expect(found).toBe(true);
+    });
+  });
+
+  describe('STREAM（真實 cursorRows MSSQL OFFSET/FETCH 串流；GAP 2）', () => {
+    // 5 樣本 list_no=P5FUEXP、orgno=OB 相同 → ORDER BY list_no,orgno,appl_no 即 appl_no 遞增。
+    const EXPECTED_ORDER = ['P5FUE01', 'P5FUE02', 'P5FUE03', 'P5FUE04', 'P5FUE05'];
+
+    it('TS-P5FU-STREAM-001：預設批次 cursorRows(MSSQL) 逐列 yield，順序＝ORDER BY list_no,orgno,appl_no', async (ctx) => {
+      ensure(ctx);
+      const applNos = await streamApplNos();
+      expect(applNos).toEqual(EXPECTED_ORDER);
+    });
+
+    it('TS-P5FU-STREAM-002：縮小批次(=2)強制多頁分頁迴圈（offset 推進 + 短批 EOF），順序不變', async (ctx) => {
+      ensure(ctx);
+      // 5 列 / 每頁 2 → 3 頁（2+2+1）：驗 OFFSET @k 跨頁推進正確且短批（<batch）正常收尾。
+      const applNos = await streamApplNos(2);
+      expect(applNos).toEqual(EXPECTED_ORDER);
     });
   });
 });

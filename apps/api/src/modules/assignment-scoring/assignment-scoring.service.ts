@@ -32,6 +32,10 @@ import {
 } from '@/modules/assignment/stage1/scoring-decode.constants';
 // F055 preview（本次修正）：重用月跑 Stage 2 計分下推（單一真源，F104 已對齊 legacy SP）。
 import { buildStage2ScoreExpr } from '@/modules/assignment/stage1/stage2to4-sql-builder';
+// F055 MSSQL gap（GAP 1）：Stage 2 計分下推之 MSSQL 平行版 + fallback 欄位 schema 檢查
+//   （AD-E07-42 P3b；已與 PG 版逐列等價，供 previewCardLevels MSSQL 分支重用，非另造公式）。
+import { buildStage2ScoreExprMssql } from '@/modules/assignment/stage1/stage2to4-sql-builder-mssql';
+import { fetchPoolDataColumnsMssql } from '@/modules/assignment/stage1/stage2to4-sql-executor-mssql';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Service
@@ -1005,14 +1009,33 @@ export class AssignmentScoringService {
     });
 
     // 重用月跑 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
+    //
+    // GAP 1（MSSQL 遷移）：本 preview 原僅 PG（LATERAL / ::int / to_jsonb / POSIX regex），對 MSSQL
+    //   執行即 500。改依「執行本查詢之連線方言」分派——PG 沿用 buildStage2ScoreExpr（SQL byte-identical
+    //   不動）；MSSQL 重用月跑 Stage 2 MSSQL 下推 buildStage2ScoreExprMssql（AD-E07-42 P3b，已與 PG
+    //   逐列等價：`~ '^[0-9]+$'` → `NOT LIKE '%[^0-9]%'` + TRY_CAST、to_jsonb 動態 fallback → 生成前查
+    //   INFORMATION_SCHEMA.COLUMNS 之 schema 檢查）。非 pg/mssql（sqlite 單元測試）沿用 PG 分支
+    //   （此 SQL 從不對 sqlite 執行；與月跑 stage2to4-sql-executor 之 PG-only 認定一致）。
+    const isMssql =
+      this.poolDataListRepo.manager.connection.options?.type === 'mssql';
+
     const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
-      buildStage2ScoreExpr(
-        input.cardType,
-        cardVersion,
-        activeColumns,
-        scoreRows,
-        'sc',
-      );
+      isMssql
+        ? buildStage2ScoreExprMssql(
+            input.cardType,
+            cardVersion,
+            activeColumns,
+            scoreRows,
+            'sc',
+            await fetchPoolDataColumnsMssql(this.poolDataListRepo.manager),
+          )
+        : buildStage2ScoreExpr(
+            input.cardType,
+            cardVersion,
+            activeColumns,
+            scoreRows,
+            'sc',
+          );
 
     // cardVersion 非 null 時 scoreExpr 必非 null（'0' 或 SUM(CASE…)）；防禦性 fallback。
     if (scoreExpr === null) {
@@ -1043,15 +1066,23 @@ export class AssignmentScoringService {
       ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
       : '';
 
-    // 單一 GROUP BY 聚合：LATERAL 先算每列 score（(scoreExpr)::int，與月跑同式），外層 CASE 分桶再 COUNT。
+    // 單一 GROUP BY 聚合：先算每列 score（cast INT，與月跑同式），外層 CASE 分桶再 COUNT。
+    //   方言差異（GAP 1）：PG `CROSS JOIN LATERAL` + `(expr)::int` + `COUNT(*)::int`；
+    //   MSSQL `CROSS APPLY` + `CAST((expr) AS INT)` + `COUNT(*)`（與 stage2to4-sql-executor-mssql 之
+    //   CROSSAPPLY-001 / DECIMAL-SCOREINT-001 同式）。PG 分支輸出與修正前逐字元一致（STATIC-002）。
+    const countExpr = isMssql ? 'COUNT(*)' : 'COUNT(*)::int';
+    const scoreApply = isMssql
+      ? `CROSS APPLY (SELECT CAST((${scoreExpr}) AS INT) AS score) s `
+      : `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s `;
+
     const sql =
-      `SELECT bucket, COUNT(*)::int AS cnt ` +
+      `SELECT bucket, ${countExpr} AS cnt ` +
       `FROM ( ` +
       `SELECT CASE ${whenClauses.join(' ')} ELSE NULL END AS bucket ` +
       `FROM ob_pool_data o ` +
       `${customerCoreJoin} ` +
       `${arCapitalJoin} ` +
-      `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s ` +
+      `${scoreApply}` +
       `) sub ` +
       `WHERE bucket IS NOT NULL ` +
       `GROUP BY bucket`;
