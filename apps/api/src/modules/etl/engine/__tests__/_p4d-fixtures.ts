@@ -24,11 +24,20 @@ const PIPELINE_JSON = path.resolve(
   '../../../../database/seeds/data/etl-pipelines.json',
 );
 
-/** 讀取真實 "ETL for Customer Core" pipeline 定義（本 fixture 全部真實資料事實之唯一來源）。 */
+/**
+ * 讀取 customer_core pipeline 定義（本 fixture 全部真實資料事實之唯一來源）。
+ *
+ * ⚠️ 以 `target_load` 目標表 `customer_core` 定位（非顯示名）——pipeline 顯示名已改中文
+ *    「客戶資料 ETL」（以 dev CDMP 為主），改名不影響定位。
+ */
 export function loadCustomerCoreDef(): { nodes: any[]; edges: any[] } {
   const arr = JSON.parse(fs.readFileSync(PIPELINE_JSON, 'utf8'));
-  const p = arr.find((x: any) => x.name === 'ETL for Customer Core');
-  if (!p) throw new Error('etl-pipelines.json 找不到 "ETL for Customer Core"');
+  const targetIs = (def: any, tbl: string) =>
+    (def?.nodes ?? []).some(
+      (n: any) => n?.data?.nodeType === 'target_load' && n?.data?.targetTable === tbl,
+    );
+  const p = arr.find((x: any) => targetIs(x.definition, 'customer_core'));
+  if (!p) throw new Error('etl-pipelines.json 找不到 target_load=customer_core 之 pipeline');
   return p.definition;
 }
 

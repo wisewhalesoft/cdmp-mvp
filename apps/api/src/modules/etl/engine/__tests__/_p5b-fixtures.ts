@@ -138,11 +138,20 @@ function allPipelines(): any[] {
   return _cache!;
 }
 
-/** 讀取某 pipeline 之 definition（nodes/edges）。 */
+/**
+ * 讀取某 pipeline 之 definition（nodes/edges）。
+ *
+ * ⚠️ 以 `target_load` 目標表定位（非顯示名）——pipeline 顯示名已改中文（以 dev CDMP 為主），
+ *    改名不影響定位。P5B_PIPELINES[key].name 僅保留為文件/標籤用途。
+ */
 export function loadPipelineDef(key: PipelineKey): { nodes: any[]; edges: any[] } {
-  const name = P5B_PIPELINES[key].name;
-  const p = allPipelines().find((x) => x.name === name);
-  if (!p) throw new Error(`etl-pipelines.json 找不到 "${name}"`);
+  const target = P5B_PIPELINES[key].targetTable;
+  const p = allPipelines().find((x) =>
+    (x.definition?.nodes ?? []).some(
+      (n: any) => n?.data?.nodeType === 'target_load' && n?.data?.targetTable === target,
+    ),
+  );
+  if (!p) throw new Error(`etl-pipelines.json 找不到 target_load=${target} 之 pipeline`);
   return p.definition;
 }
 

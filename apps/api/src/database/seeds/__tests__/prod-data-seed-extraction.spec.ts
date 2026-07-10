@@ -87,24 +87,31 @@ describe('data/extraction-tasks.json', () => {
 });
 
 // === etl-pipelines.json：OBPOOLDATA_LIST-Load ===
-describe('data/etl-pipelines.json E07-OBPOOLDATA_LIST-Load', () => {
+describe('data/etl-pipelines.json 名單歷史資料 Load（target_load=ob_pool_data_list）', () => {
   const pipelines = loadJson<any>('etl-pipelines.json');
-  const list = pipelines.find((p: any) => p.name === 'E07-OBPOOLDATA_LIST-Load');
+  // ⚠️ pipeline 顯示名已改中文（以 dev CDMP 為主）；一律以 target_load 目標表定位（穩定、脫離顯示名）。
+  const targetOf = (p: any): string | undefined =>
+    (p.definition?.nodes ?? []).find(
+      (n: any) => n?.data?.nodeType === 'target_load',
+    )?.data?.targetTable;
+  const byTarget = (tbl: string) => pipelines.find((p: any) => targetOf(p) === tbl);
+  const list = byTarget('ob_pool_data_list');
 
-  it('已新增 E07-OBPOOLDATA_LIST-Load', () => {
+  it('已新增 名單歷史資料 pipeline（target_load=ob_pool_data_list）', () => {
     expect(list).toBeDefined();
   });
 
-  it('既有 5 個 E07 pipeline 仍存在（不破壞）', () => {
-    const names = pipelines.map((p: any) => p.name);
-    for (const n of [
-      'E07-OBARRETURNDF_MIN_CAP-Load',
-      'E07-OBCALENDAR-Load',
-      'E07-OBEMPHIRE-Load',
-      'E07-OBPOOLDATA-Load',
-      'ETL for Customer Core',
+  it('6 個 pipeline 皆存在（依 target_load 目標表；不破壞）', () => {
+    const targets = pipelines.map(targetOf);
+    for (const t of [
+      'ob_arreturndf_min_cap',
+      'ob_calendar',
+      'ob_emphire',
+      'ob_pool_data',
+      'ob_pool_data_list',
+      'customer_core',
     ]) {
-      expect(names, `缺少 ${n}`).toContain(n);
+      expect(targets, `缺少 target_load=${t} 之 pipeline`).toContain(t);
     }
   });
 

@@ -22,6 +22,8 @@ import {
 import { UpdateCustomerCoreCodeDecode1751884800003 } from '../1751884800003-UpdateCustomerCoreCodeDecode';
 import { MssqlUpdateCustomerCoreCodeDecode1751884800003 } from '../mssql/1751884800003-MssqlUpdateCustomerCoreCodeDecode';
 
+// migration WHERE 子句用之 pipeline 名稱維持英文（歷史一次性 data-update，針對既有英文部署）；
+// 與 shared 模組 CUSTOMER_CORE_PIPELINE_NAME_EXPORT 對齊。json 定位改以 target_load=customer_core。
 const PIPELINE_NAME = 'ETL for Customer Core';
 const ETL_JSON_PATH = resolve(__dirname, '..', '..', 'seeds', 'data', 'etl-pipelines.json');
 
@@ -31,8 +33,14 @@ const fixture: any = JSON.parse(
 
 function loadCustomerCorePipeline(): any {
   const all = JSON.parse(readFileSync(ETL_JSON_PATH, 'utf-8'));
-  const p = all.find((x: any) => x.name === PIPELINE_NAME);
-  if (!p) throw new Error('pipeline not found');
+  // ⚠️ pipeline 顯示名已改中文（客戶資料 ETL，以 dev CDMP 為主）；以 target_load 目標表
+  //    `customer_core` 定位（穩定、脫離顯示名）。
+  const p = all.find((x: any) =>
+    (x.definition?.nodes ?? []).some(
+      (n: any) => n?.data?.nodeType === 'target_load' && n?.data?.targetTable === 'customer_core',
+    ),
+  );
+  if (!p) throw new Error('pipeline (target_load=customer_core) not found');
   return p;
 }
 

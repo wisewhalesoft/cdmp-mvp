@@ -1,11 +1,11 @@
 [
   {
-    "name": "E07-OBARRETURNDF_MIN_CAP-Load",
+    "name": "電銷案件財務撥款資料 ETL",
     "description": "raw OB_ARRETURNDF_MIN_CAP → ob_arreturndf_min_cap（fullMode 全量替換，AD-E07-12 / AD-E07-10 lookup 約定）",
     "version": 1,
     "step_count": 3,
     "status": "active",
-    "schedule": "30 2 1 * *",
+    "schedule": "30 4 * * *",
     "enabled": false,
     "version_status": "draft",
     "definition": {
@@ -85,12 +85,12 @@
     }
   },
   {
-    "name": "E07-OBCALENDAR-Load",
+    "name": "電銷人事行事曆 ETL",
     "description": "raw OBCALENDAR → ob_calendar（fullMode 全量替換，AD-E07-12）",
     "version": 1,
     "step_count": 3,
     "status": "active",
-    "schedule": "30 4 1 1 *",
+    "schedule": "30 4 * * *",
     "enabled": false,
     "version_status": "draft",
     "definition": {
@@ -170,12 +170,12 @@
     }
   },
   {
-    "name": "E07-OBEMPHIRE-Load",
+    "name": "電銷業務人員 ETL",
     "description": "raw OBEMPHIRE → ob_emphire（fullMode 全量替換，AD-E07-12）",
     "version": 1,
     "step_count": 4,
     "status": "active",
-    "schedule": "30 3 * * *",
+    "schedule": "30 4 * * *",
     "enabled": false,
     "version_status": "draft",
     "definition": {
@@ -340,12 +340,12 @@
     }
   },
   {
-    "name": "E07-OBPOOLDATA-Load",
+    "name": "電銷名單來源案件資料 ETL",
     "description": "raw OBPOOLDATA → ob_pool_data（fullMode 全量替換，AD-E07-12）",
     "version": 1,
     "step_count": 3,
     "status": "active",
-    "schedule": null,
+    "schedule": "0 4 * * *",
     "enabled": false,
     "version_status": "draft",
     "definition": {
@@ -985,12 +985,12 @@
     }
   },
   {
-    "name": "E07-OBPOOLDATA_LIST-Load",
+    "name": "電銷名單歷史資料 ETL",
     "description": "F090 v2.0 / AD-E07-25 §25.3（單源化）：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_load 後 INSERT，每列填 data_source=etl_load（單一來源批次標記）；fullMode 仍 false，引擎層不 TRUNCATE（BR-3）。月跑改寫 ob_monthly_run_result（F094），本表為 ETL 單一來源",
     "version": 1,
     "step_count": 3,
     "status": "active",
-    "schedule": null,
+    "schedule": "0 3 * * *",
     "enabled": false,
     "version_status": "draft",
     "definition": {
@@ -1677,12 +1677,12 @@
     }
   },
   {
-    "name": "ETL for Customer Core",
+    "name": "客戶資料 ETL",
     "description": "整合 5 個來源（2 ZZIP + 3 MLMC）之客戶主檔至 customer_core 目標表；F110/US-173：31 個 lookup 節點依字典表實例收斂為 9 個 code_decode 節點（單趟多欄位代碼解碼）",
     "version": 14,
     "step_count": 34,
     "status": "active",
-    "schedule": null,
+    "schedule": "0 2 * * *",
     "enabled": true,
     "version_status": "published",
     "definition": {

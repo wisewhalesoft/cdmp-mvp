@@ -22,12 +22,27 @@ const PIPELINE_NAMES: Record<string, string> = {
   pooldata_list: 'E07-OBPOOLDATA_LIST-Load',
 };
 
+// ⚠️ pipeline 顯示名已改中文（以 dev CDMP 為主）；一律以 target_load 目標表定位（穩定、脫離顯示名）。
+//    PIPELINE_NAMES 保留為 key 集合/文件用途。
+const PIPELINE_TARGETS: Record<string, string> = {
+  arreturndf: 'ob_arreturndf_min_cap',
+  calendar: 'ob_calendar',
+  emphire: 'ob_emphire',
+  pooldata: 'ob_pool_data',
+  pooldata_list: 'ob_pool_data_list',
+};
+
 function loadAll(): any[] {
   return JSON.parse(fs.readFileSync(PIPELINE_JSON, 'utf8'));
 }
 function pipe(key: string): any {
-  const p = loadAll().find((x) => x.name === PIPELINE_NAMES[key]);
-  if (!p) throw new Error(`找不到 ${PIPELINE_NAMES[key]}`);
+  const target = PIPELINE_TARGETS[key];
+  const p = loadAll().find((x) =>
+    (x.definition?.nodes ?? []).some(
+      (n: any) => n?.data?.nodeType === 'target_load' && n?.data?.targetTable === target,
+    ),
+  );
+  if (!p) throw new Error(`找不到 target_load=${target} 之 pipeline`);
   return p;
 }
 function fm1(key: string): any {

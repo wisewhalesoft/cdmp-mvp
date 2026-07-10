@@ -33,6 +33,20 @@ interface EtlPipelineSeed {
   [key: string]: unknown;
 }
 
+/**
+ * 從 etl-pipelines.json **定位** customer_core pipeline 的依據＝其 `target_load` 目標表
+ * `customer_core`（穩定、脫離顯示名）。
+ *
+ * ⚠️ pipeline 顯示名已改中文「客戶資料 ETL」（以 dev CDMP 為主）；不可再以英文名 find（會拋錯 →
+ *    migration 載入失敗 → 部署 migration 步驟整個掛掉）。
+ */
+const CUSTOMER_CORE_TARGET_TABLE = 'customer_core';
+
+/**
+ * migration WHERE 子句用之 pipeline 名稱。**維持英文** 'ETL for Customer Core'：本 migration 為
+ * 歷史一次性 data-update，針對「收斂前以英文名建立之既有部署」；fresh 部署（migration 先於 seed → 無列）
+ * 與 dev CDMP（已中文名 + 已 F110）皆為 no-op，不受影響。
+ */
 const CUSTOMER_CORE_PIPELINE_NAME = 'ETL for Customer Core';
 
 const ETL_PIPELINES_JSON_PATH = resolve(
@@ -48,13 +62,17 @@ const etlPipelines: EtlPipelineSeed[] = JSON.parse(
   readFileSync(ETL_PIPELINES_JSON_PATH, 'utf-8'),
 );
 
-const pipeline = etlPipelines.find(
-  (p) => p.name === CUSTOMER_CORE_PIPELINE_NAME,
+const pipeline = etlPipelines.find((p) =>
+  (p.definition?.nodes ?? []).some(
+    (n: any) =>
+      n?.data?.nodeType === 'target_load' &&
+      n?.data?.targetTable === CUSTOMER_CORE_TARGET_TABLE,
+  ),
 );
 if (!pipeline) {
   throw new Error(
     `customer-core-code-decode-definition: 找不到 etl-pipelines.json 中 ` +
-      `name='${CUSTOMER_CORE_PIPELINE_NAME}' 的 pipeline —— ` +
+      `target_load 目標表='${CUSTOMER_CORE_TARGET_TABLE}' 的 pipeline —— ` +
       `本模組假設 AD-E07-41 §13.6.1 之 JSON 編輯已先落地（definition 已含 9 個 code_decode 節點）`,
   );
 }

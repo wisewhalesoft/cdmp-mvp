@@ -5,13 +5,15 @@
  *   ob_card_type, ob_levelcard_version, ob_levelcard_column,
  *   ob_levelcard_score, ob_levelcard_level, ob_tier
  *
- * 並 upsert 5 個 E07 ETL pipelines 至 etl_pipelines + etl_pipeline_versions：
- *   E07-OBEMPHIRE-Load, E07-OBCALENDAR-Load,
- *   E07-OBARRETURNDF_MIN_CAP-Load, E07-OBPOOLDATA-Load, ETL for Customer Core
+ * 並 upsert 6 個 ETL pipelines 至 etl_pipelines + etl_pipeline_versions（以 dev CDMP 為主，
+ * 顯示名為中文，target_load 目標表分別為 ob_emphire / ob_calendar / ob_arreturndf_min_cap /
+ * ob_pool_data / ob_pool_data_list / customer_core）：
+ *   電銷業務人員 ETL、電銷人事行事曆 ETL、電銷案件財務撥款資料 ETL、
+ *   電銷名單來源案件資料 ETL、電銷名單歷史資料 ETL、客戶資料 ETL
  *
  * 來源資料：apps/api/src/database/seeds/data/*.json
- *   （計分卡資料從 reference/DumpData/*.csv 2026-05-05 dump 預先生成；
- *    pipelines 從 dev DB 2026-05-21 dump 後手 commit）
+ *   （計分卡資料對齊 dev PG active；pipelines 以 dev CDMP(MSSQL) 為主，名稱/描述/排程同步、
+ *    definition 與英文版逐節點相同——僅顯示名由英文改中文）
  *
  * 安全機制（B2：取代舊「非空就整批 SKIP」）：
  *   - 加法式 reconcile（reconcileTable）：逐 seed row 用自然鍵判存在，只 INSERT
