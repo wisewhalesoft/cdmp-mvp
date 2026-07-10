@@ -45,7 +45,7 @@
     "card_type": "H",
     "card_version": 1,
     "column_name": "ADD_UN_CAPITAL",
-    "column_label": "累積未償本金",
+    "column_label": "累積未償本金（驗收）",
     "status": "active"
   },
   {

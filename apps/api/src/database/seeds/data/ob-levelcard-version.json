@@ -43,7 +43,7 @@
     "card_type": "M",
     "card_name": "機車",
     "card_version": 1,
-    "sdate": "20191125",
+    "sdate": "20260515",
     "edate": "20991231",
     "status": "active"
   },
@@ -51,7 +51,39 @@
     "card_type": "HM",
     "card_name": "機車期中",
     "card_version": 1,
-    "sdate": "20191125",
+    "sdate": "20260703",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "HB",
+    "card_name": "汽車期中_B專案",
+    "card_version": 1,
+    "sdate": "20260703",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "HC",
+    "card_name": "一般商品期中",
+    "card_version": 1,
+    "sdate": "20260703",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "SEB",
+    "card_name": "汽車中結滿期_B專案",
+    "card_version": 1,
+    "sdate": "20260703",
+    "edate": "20991231",
+    "status": "active"
+  },
+  {
+    "card_type": "SEC",
+    "card_name": "一般商品中結滿期",
+    "card_version": 1,
+    "sdate": "20260703",
     "edate": "20991231",
     "status": "active"
   }

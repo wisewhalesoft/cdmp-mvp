@@ -34,5 +34,35 @@
     "card_name": "機車",
     "prod_kind": "02",
     "status": "active"
+  },
+  {
+    "card_type": "HB",
+    "card_name": "汽車期中_B專案",
+    "prod_kind": "01",
+    "status": "active"
+  },
+  {
+    "card_type": "HC",
+    "card_name": "一般商品期中",
+    "prod_kind": "03",
+    "status": "active"
+  },
+  {
+    "card_type": "HM",
+    "card_name": "機車期中",
+    "prod_kind": "02",
+    "status": "active"
+  },
+  {
+    "card_type": "SEB",
+    "card_name": "汽車中結滿期_B專案",
+    "prod_kind": "01",
+    "status": "active"
+  },
+  {
+    "card_type": "SEC",
+    "card_name": "一般商品中結滿期",
+    "prod_kind": "03",
+    "status": "active"
   }
 ]

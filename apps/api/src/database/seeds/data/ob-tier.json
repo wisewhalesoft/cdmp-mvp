@@ -160,5 +160,29 @@
     "card_type": "M5",
     "card_level": null,
     "tier_level": "T5"
+  },
+  {
+    "list_nm": null,
+    "card_type": "HB",
+    "card_level": "A",
+    "tier_level": "T1"
+  },
+  {
+    "list_nm": null,
+    "card_type": "HC",
+    "card_level": "A",
+    "tier_level": "T1"
+  },
+  {
+    "list_nm": null,
+    "card_type": "SEB",
+    "card_level": "A",
+    "tier_level": "T1"
+  },
+  {
+    "list_nm": null,
+    "card_type": "SEC",
+    "card_level": "A",
+    "tier_level": "T1"
   }
 ]

@@ -180,5 +180,33 @@
     "score_s": 0,
     "score_e": 142,
     "card_level": "D"
+  },
+  {
+    "card_type": "HB",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "HC",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "SEB",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 999,
+    "card_level": "A"
+  },
+  {
+    "card_type": "SEC",
+    "card_version": 1,
+    "score_s": 0,
+    "score_e": 999,
+    "card_level": "A"
   }
 ]
