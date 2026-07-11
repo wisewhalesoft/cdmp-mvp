@@ -1251,20 +1251,20 @@ export class AssignmentRunReportService {
       }
     }
 
-    const baseSnap = await this.loadAllPayloads(runA);
-    const cmpSnap = await this.loadAllPayloads(runB);
-
-    const baseListRaw: ResultAssignment[] = Array.isArray(
-      (baseSnap.resultPayload as any)?.assignments,
-    )
-      ? (baseSnap.resultPayload as any).assignments
-      : [];
-    const cmpListRaw: ResultAssignment[] = Array.isArray(
-      (cmpSnap.resultPayload as any)?.assignments,
-    )
-      ? (cmpSnap.resultPayload as any).assignments
-      : [];
-    // F067 v1.1 scope filter — 兩邊都套
+    // ⚡ 效能（I-COMPARE-SQL-01）：以輕量 SQL 讀 result 列（僅比對所需 4 欄）取代 loadAllPayloads
+    //   載入「兩個」run 的巨大 result 快照 JSON blob（各 115K 筆；MSSQL ntext 讀取 + JSON.parse
+    //   約 45s/run → 比對頁逾時）。實測讀 115K×4 欄 0.77s/run。config 仍需比對 → 只另載小型 config
+    //   快照（非 result/input_list）。下游 aggregateBy / calcPersonnelMismatch / customerDiff /
+    //   scope filter 全沿用（JS 端邏輯不變）。同 getSummary 重構（見 I-SUMMARY-SQL-01）。
+    const baseListRaw = await this.loadResultAssignments(runA);
+    const cmpListRaw = await this.loadResultAssignments(runB);
+    const baseConfigSnap = await this.snapshotRepo.findOne({
+      where: { run_id: runA, snapshot_type: 'config' },
+    });
+    const cmpConfigSnap = await this.snapshotRepo.findOne({
+      where: { run_id: runB, snapshot_type: 'config' },
+    });
+    // F067 v1.1 scope filter — 兩邊都套（JS 端，行為不變）
     const baseList = await this.scope.filterByEmplId<ResultAssignment>(
       baseListRaw,
       actor,
@@ -1278,10 +1278,10 @@ export class AssignmentRunReportService {
     const sumDept = this.aggregateBy(baseList, cmpList, (x) => x.deptId);
     const sumLevel = this.aggregateBy(baseList, cmpList, (x) => x.cardLevel);
 
-    // 設定 diff
+    // 設定 diff（只載小型 config 快照）
     const configDiff = this.diffConfig(
-      baseSnap.configPayload,
-      cmpSnap.configPayload,
+      (baseConfigSnap?.payload as Record<string, unknown> | undefined) ?? null,
+      (cmpConfigSnap?.payload as Record<string, unknown> | undefined) ?? null,
     );
 
     // 人員配對 diff（NFR-005）
@@ -1526,19 +1526,33 @@ export class AssignmentRunReportService {
     return run;
   }
 
-  private async loadAllPayloads(runId: string): Promise<{
-    configPayload: Record<string, unknown> | null;
-    inputListPayload: Record<string, unknown> | null;
-    resultPayload: Record<string, unknown> | null;
-  }> {
-    const snaps = await this.snapshotRepo.find({ where: { run_id: runId } });
-    const byType = new Map<string, Record<string, unknown>>();
-    for (const s of snaps) byType.set(s.snapshot_type, s.payload);
-    return {
-      configPayload: byType.get('config') ?? null,
-      inputListPayload: byType.get('input_list') ?? null,
-      resultPayload: byType.get('result') ?? null,
-    };
+  /**
+   * 輕量讀取某 run 之 result 列（僅比對所需欄位）供 compareRuns 使用，取代載入巨大 result 快照
+   * JSON blob（I-COMPARE-SQL-01）。回傳 shape 對齊 ResultAssignment（下游 JS 聚合不變）。
+   */
+  private async loadResultAssignments(
+    runId: string,
+  ): Promise<ResultAssignment[]> {
+    const rows = await this.dataSource
+      .getRepository(ObMonthlyRunResult)
+      .createQueryBuilder('r')
+      .select('r.appl_no', 'applNo')
+      .addSelect('r.dept_id', 'deptId')
+      .addSelect('r.card_level', 'cardLevel')
+      .addSelect('r.emplid', 'emplid')
+      .where('r.run_id = :runId', { runId })
+      .getRawMany<{
+        applNo: string | null;
+        deptId: string | null;
+        cardLevel: string | null;
+        emplid: string | null;
+      }>();
+    return rows.map((r) => ({
+      applNo: r.applNo ?? undefined,
+      deptId: r.deptId,
+      cardLevel: r.cardLevel,
+      emplid: r.emplid,
+    }));
   }
 
   private csvEscape(v: unknown): string {

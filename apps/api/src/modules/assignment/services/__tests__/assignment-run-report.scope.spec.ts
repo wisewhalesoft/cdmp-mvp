@@ -360,17 +360,19 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
       );
       await seedSnap(env.snapRepo, runB.run_id, 'config', { deptPct: [] });
       await seedSnap(env.snapRepo, runB.run_id, 'input_list', { cases: [] });
+      // base: A1->E1, A2->E2, A3->E3, A4->E4
+      // cmp:  A1->E1 (same), A2->E1 (改派；E1/E2 都在 SC 轄區), A3->E3
+      // 對 SC 視角：base 留 A1(E1)/A2(E2)；cmp 留 A1(E1)/A2(E1)
+      //   → common = {A1, A2}, A2 不一致 → mismatch=1 / total=2
+      const cmpAssignments = [
+        { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1', listNo: 'L1' },
+        { applNo: 'A2', deptId: 'D01', cardLevel: 'A', emplid: 'E1', listNo: 'L1' },
+        { applNo: 'A3', deptId: 'D02', cardLevel: 'A', emplid: 'E3', listNo: 'L1' },
+      ];
       await seedSnap(env.snapRepo, runB.run_id, 'result', {
-        // base: A1->E1, A2->E2, A3->E3, A4->E4
-        // cmp:  A1->E1 (same), A2->E1 (改派；E1/E2 都在 SC 轄區), A3->E3
-        // 對 SC 視角：base 留 A1(E1)/A2(E2)；cmp 留 A1(E1)/A2(E1)
-        //   → common = {A1, A2}, A2 不一致 → mismatch=1 / total=2
-        assignments: [
-          { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1', listNo: 'L1' },
-          { applNo: 'A2', deptId: 'D01', cardLevel: 'A', emplid: 'E1', listNo: 'L1' },
-          { applNo: 'A3', deptId: 'D02', cardLevel: 'A', emplid: 'E3', listNo: 'L1' },
-        ],
+        assignments: cmpAssignments,
       });
+      await seedResults(env.resultRepo, runB.run_id, cmpAssignments);
       return { runA, runB };
     }
 

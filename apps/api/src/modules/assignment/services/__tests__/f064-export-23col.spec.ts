@@ -306,16 +306,18 @@ describe('F064 v2.0 — 匯出分派結果（23 欄）SQLite/Unit', () => {
       expect(qBody).toContain('r.emplid IN');
     });
 
-    it('TS-F064-STATIC-003：compareRuns 仍讀 snapshot；getSummary 改 SQL 聚合（I-SUMMARY-SQL-01）', () => {
-      // getSummary 效能重構：不再 loadAllPayloads（巨大 result/input_list 快照 → 45s 逾時），
-      //   改以 SQL 聚合 ob_monthly_run_result（<1s）；僅載小型 config 快照取 deptPct。
+    it('TS-F064-STATIC-003：getSummary / compareRuns 皆改輕量讀取，不再載巨大快照（I-SUMMARY-SQL-01 / I-COMPARE-SQL-01）', () => {
+      // 效能重構：getSummary 改 SQL 聚合 ob_monthly_run_result（<1s）；compareRuns 改輕量 SQL 讀
+      //   result 列（loadResultAssignments）取代載入兩 run 的巨大 result/input_list 快照（~45s/run）。
+      //   兩者皆不再 loadAllPayloads（已移除）；僅另載小型 config 快照供比對設定 diff。
+      // 'loadAllPayloads(' = 呼叫或定義（已移除）；註解仍可提及故不檢查裸字。
+      expect(SERVICE_SRC).not.toContain('loadAllPayloads(');
       const getSummary = sliceFn(SERVICE_SRC, 'async getSummary(');
-      expect(getSummary).not.toContain('loadAllPayloads(');
       expect(getSummary).toContain('getRepository(ObMonthlyRunResult)');
       expect(getSummary).toContain("snapshot_type: 'config'");
-      // compareRuns 仍讀 snapshot（不受本次重構影響）。
       const compareRuns = sliceFn(SERVICE_SRC, 'async compareRuns(');
-      expect(compareRuns).toContain('loadAllPayloads(');
+      expect(compareRuns).toContain('loadResultAssignments(');
+      expect(compareRuns).toContain("snapshot_type: 'config'");
     });
   });
 
