@@ -115,11 +115,11 @@ describe('AD-E07-43 P5 收尾 — 顯示層靜態守門', () => {
     it('TS-P5FU-APLFMT-STATIC-002：appl_date 依 dialect 分流 inline（mssql=CONVERT/120、postgres=to_char）', () => {
       // dialect 分流以 dataSource.options.type
       expect(body).toContain('this.dataSource.options.type');
-      // mssql 分支：CONVERT(varchar(10), o.appl_date, 120)
+      // mssql 分支：CONVERT(varchar(10), o.appl_date, 120)（PG 已移除，僅餘 mssql + sqlite 裸欄 fallback）
       expect(body).toContain('CONVERT(varchar(10), o.appl_date, 120)');
       expect(/CONVERT\(varchar\(10\), o\.appl_date, 120\)/.test(body)).toBe(true);
-      // postgres 分支：to_char(o.appl_date, 'YYYY-MM-DD')
-      expect(body).toContain("to_char(o.appl_date, 'YYYY-MM-DD')");
+      // PG 全面移除：不再有 postgres to_char 分支
+      expect(body).not.toContain("to_char(o.appl_date");
       // 字面量須 inline 於方法體（GATE-001）——上面 sliceFn 已為方法體切片，通過即代表 inline。
       // 且 SELECT 以插值使用該運算式
       expect(body).toContain('${applDateExpr}');

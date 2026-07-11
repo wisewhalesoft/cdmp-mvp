@@ -7,7 +7,6 @@ const SAFE_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * 取多張資料表的「真實筆數」（快速 metadata 查詢，非 `COUNT(*)` 全表掃描）。
  *
  * - MSSQL：`sys.partitions.rows`（維護於 DML，對使用者表為精確值；大表亦毫秒回，避免 7.9M 全掃）。
- * - PostgreSQL：`pg_class.reltuples`（估計值；ANALYZE/autovacuum 更新）。
  * - SQLite（測試）：逐表 `COUNT(*)`（測試資料量小）。
  *
  * 查無之表回 0。用於 ETL 目標表現況顯示 + 月跑準備度「空表」檢查（0 = 表為空 / 未載入）。
@@ -30,14 +29,6 @@ export async function getTableRowCounts(
         WHERE t.name IN (${placeholders})
         GROUP BY t.name`,
       names,
-    );
-    for (const r of rows) out.set(r.tbl, Number(r.n));
-  } else if (dbType === 'postgres') {
-    const rows: Array<{ tbl: string; n: string | number }> = await ds.query(
-      `SELECT relname AS tbl, reltuples::bigint AS n
-         FROM pg_class
-        WHERE relkind = 'r' AND relname = ANY($1)`,
-      [names],
     );
     for (const r of rows) out.set(r.tbl, Number(r.n));
   } else {
